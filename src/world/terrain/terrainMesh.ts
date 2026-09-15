@@ -3,17 +3,20 @@ import { computeVertexColors } from "./terrainColors";
 import type { TerrainSample, TerrainSampler } from "./terrainSampler";
 
 export interface TerrainChunkOptions {
+  name: string;
   size: number;
   subdivisions: number;
   sampleTerrain: TerrainSampler;
+  originX: number;
+  originZ: number;
 }
 
 /** Builds a displaced, vertex-colored ground mesh from a terrain sampler. No textures involved. */
 export function createTerrainChunk(scene: Scene, options: TerrainChunkOptions): GroundMesh {
-  const { size, subdivisions, sampleTerrain } = options;
+  const { name, size, subdivisions, sampleTerrain, originX, originZ } = options;
 
   const ground = MeshBuilder.CreateGround(
-    "terrain",
+    name,
     { width: size, height: size, subdivisions, updatable: true },
     scene,
   );
@@ -25,7 +28,9 @@ export function createTerrainChunk(scene: Scene, options: TerrainChunkOptions): 
 
   const samples: TerrainSample[] = new Array(positions.length / 3);
   for (let i = 0; i < positions.length; i += 3) {
-    const sample = sampleTerrain(positions[i], positions[i + 2]);
+    const worldX = originX + positions[i];
+    const worldZ = originZ + positions[i + 2];
+    const sample = sampleTerrain(worldX, worldZ);
     positions[i + 1] = sample.height;
     samples[i / 3] = sample;
   }
@@ -42,6 +47,7 @@ export function createTerrainChunk(scene: Scene, options: TerrainChunkOptions): 
   ground.updateVerticesData(VertexBuffer.NormalKind, normals);
   ground.setVerticesData(VertexBuffer.ColorKind, computeVertexColors(positions, normals, samples));
 
+  ground.position.set(originX, 0, originZ);
   ground.updateCoordinateHeights();
 
   return ground;

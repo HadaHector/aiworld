@@ -17,6 +17,7 @@ const camera = createThirdPersonCamera(scene, canvas, character.mesh);
 
 scene.onBeforeRenderObservable.add(() => {
   character.update(engine.getDeltaTime() / 1000, camera);
+  world.updateChunks(character.mesh.position.x, character.mesh.position.z);
 });
 
 engine.runRenderLoop(() => {
