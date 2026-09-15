@@ -1,16 +1,16 @@
 import { MeshBuilder, VertexBuffer, VertexData, type GroundMesh, type Scene } from "@babylonjs/core";
-import type { HeightSampler } from "./noise";
 import { computeVertexColors } from "./terrainColors";
+import type { TerrainSample, TerrainSampler } from "./terrainSampler";
 
 export interface TerrainChunkOptions {
   size: number;
   subdivisions: number;
-  heightSampler: HeightSampler;
+  sampleTerrain: TerrainSampler;
 }
 
-/** Builds a displaced, vertex-colored ground mesh from a height sampler. No textures involved. */
+/** Builds a displaced, vertex-colored ground mesh from a terrain sampler. No textures involved. */
 export function createTerrainChunk(scene: Scene, options: TerrainChunkOptions): GroundMesh {
-  const { size, subdivisions, heightSampler } = options;
+  const { size, subdivisions, sampleTerrain } = options;
 
   const ground = MeshBuilder.CreateGround(
     "terrain",
@@ -23,8 +23,11 @@ export function createTerrainChunk(scene: Scene, options: TerrainChunkOptions): 
     throw new Error("Ground mesh has no position data");
   }
 
+  const samples: TerrainSample[] = new Array(positions.length / 3);
   for (let i = 0; i < positions.length; i += 3) {
-    positions[i + 1] = heightSampler(positions[i], positions[i + 2]);
+    const sample = sampleTerrain(positions[i], positions[i + 2]);
+    positions[i + 1] = sample.height;
+    samples[i / 3] = sample;
   }
 
   const indices = ground.getIndices();
@@ -37,7 +40,7 @@ export function createTerrainChunk(scene: Scene, options: TerrainChunkOptions): 
 
   ground.updateVerticesData(VertexBuffer.PositionKind, positions);
   ground.updateVerticesData(VertexBuffer.NormalKind, normals);
-  ground.setVerticesData(VertexBuffer.ColorKind, computeVertexColors(positions, normals));
+  ground.setVerticesData(VertexBuffer.ColorKind, computeVertexColors(positions, normals, samples));
 
   ground.updateCoordinateHeights();
 

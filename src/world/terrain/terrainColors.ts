@@ -1,56 +1,59 @@
 import { Color3, type FloatArray } from "@babylonjs/core";
+import { smoothstep } from "../mathUtils";
+import type { BiomeColorBands } from "../biomes/biomeTypes";
+import type { TerrainSample } from "./terrainSampler";
 
-const SAND = new Color3(0.76, 0.7, 0.5);
-const GRASS = new Color3(0.33, 0.52, 0.25);
-const ROCK = new Color3(0.45, 0.42, 0.4);
-const SNOW = new Color3(0.95, 0.95, 0.97);
-
-const SAND_HEIGHT = -1;
-const GRASS_HEIGHT = 1.7;
-const ROCK_HEIGHT = 4.5;
-const SNOW_HEIGHT = 7;
-const SLOPE_ROCK_THRESHOLD = 0.75; // normal.y below this is treated as a steep slope
-
-function smoothstep(edge0: number, edge1: number, x: number): number {
-  const t = Math.min(1, Math.max(0, (x - edge0) / (edge1 - edge0)));
-  return t * t * (3 - 2 * t);
-}
+const OCEAN_FLOOR_COLOR = new Color3(0.18, 0.22, 0.28);
 
 function lerpColor(a: Color3, b: Color3, t: number): Color3 {
   return Color3.Lerp(a, b, t);
 }
 
-/** Bands a color by height, then blends toward rock on steep slopes. */
-function colorForVertex(height: number, normalY: number): Color3 {
+/** Bands a color by height within one biome's palette, then blends toward rock on steep slopes. */
+function colorForBands(height: number, normalY: number, bands: BiomeColorBands): Color3 {
   let color: Color3;
-  if (height < SAND_HEIGHT) {
-    color = SAND;
-  } else if (height < GRASS_HEIGHT) {
-    color = lerpColor(SAND, GRASS, smoothstep(SAND_HEIGHT, GRASS_HEIGHT, height));
-  } else if (height < ROCK_HEIGHT) {
-    color = lerpColor(GRASS, ROCK, smoothstep(GRASS_HEIGHT, ROCK_HEIGHT, height));
-  } else if (height < SNOW_HEIGHT) {
-    color = lerpColor(ROCK, SNOW, smoothstep(ROCK_HEIGHT, SNOW_HEIGHT, height));
+  if (height < bands.height0) {
+    color = bands.color0;
+  } else if (height < bands.height1) {
+    color = lerpColor(bands.color0, bands.color1, smoothstep(bands.height0, bands.height1, height));
+  } else if (height < bands.height2) {
+    color = lerpColor(bands.color1, bands.color2, smoothstep(bands.height1, bands.height2, height));
+  } else if (height < bands.height3) {
+    color = lerpColor(bands.color2, bands.color3, smoothstep(bands.height2, bands.height3, height));
   } else {
-    color = SNOW;
+    color = bands.color3;
   }
 
-  if (normalY < SLOPE_ROCK_THRESHOLD) {
-    const slopeT = smoothstep(SLOPE_ROCK_THRESHOLD, 0.3, normalY);
-    color = lerpColor(color, ROCK, slopeT);
+  if (normalY < bands.slopeThreshold) {
+    const slopeT = smoothstep(bands.slopeThreshold, 0.3, normalY);
+    color = lerpColor(color, bands.slopeColor, slopeT);
   }
 
   return color;
 }
 
-/** Computes an RGBA vertex-color buffer (flat array) from position/normal buffers. */
-export function computeVertexColors(positions: FloatArray, normals: FloatArray): number[] {
+/** Computes an RGBA vertex-color buffer (flat array) from position/normal buffers and resolved terrain samples. */
+export function computeVertexColors(positions: FloatArray, normals: FloatArray, samples: TerrainSample[]): number[] {
   const colors: number[] = [];
+
   for (let i = 0; i < positions.length; i += 3) {
     const height = positions[i + 1];
     const normalY = normals[i + 1];
-    const color = colorForVertex(height, normalY);
+    const sample = samples[i / 3];
+
+    let color = colorForBands(height, normalY, sample.primaryBiome.colors);
+    if (sample.biomeBlend > 0) {
+      const secondaryColor = colorForBands(height, normalY, sample.secondaryBiome.colors);
+      color = lerpColor(color, secondaryColor, sample.biomeBlend);
+    }
+
+    const oceanTint = 1 - smoothstep(-0.3, 0.05, sample.landmass);
+    if (oceanTint > 0) {
+      color = lerpColor(color, OCEAN_FLOOR_COLOR, oceanTint);
+    }
+
     colors.push(color.r, color.g, color.b, 1);
   }
+
   return colors;
 }

@@ -1,29 +1,34 @@
 import { HemisphericLight, Vector3, type Scene } from "@babylonjs/core";
-import { createHeightSampler, type HeightSampler } from "./terrain/noise";
 import { createTerrainChunk } from "./terrain/terrainMesh";
+import { createTerrainSampler, type TerrainSampler } from "./terrain/terrainSampler";
+import { createOceanPlane } from "./terrain/ocean";
 
 export interface World {
-  heightAt: HeightSampler;
+  heightAt: (worldX: number, worldZ: number) => number;
+  sampleTerrain: TerrainSampler;
 }
 
-const TERRAIN_SEED = 1337;
-const TERRAIN_SIZE = 200;
-const TERRAIN_SUBDIVISIONS = 150;
+const WORLD_SEED = 1337;
+const TERRAIN_SIZE = 900;
+const TERRAIN_SUBDIVISIONS = 340;
 
 /**
- * Orchestrates world content. Currently just terrain — this is the extension point for
- * biomes, structures, props, and eventually a curation workflow over generated variations.
+ * Orchestrates world content: continent shape, Voronoi biome zones, and terrain built from both.
+ * sampleTerrain is exposed for future props/structures/gameplay systems to query biome/land at a point.
  */
 export function createWorld(scene: Scene): World {
   const light = new HemisphericLight("sunLight", new Vector3(0.3, 1, 0.2), scene);
   light.intensity = 0.9;
 
-  const heightAt = createHeightSampler(TERRAIN_SEED);
+  const sampleTerrain = createTerrainSampler(WORLD_SEED);
   createTerrainChunk(scene, {
     size: TERRAIN_SIZE,
     subdivisions: TERRAIN_SUBDIVISIONS,
-    heightSampler: heightAt,
+    sampleTerrain,
   });
+  createOceanPlane(scene, { size: TERRAIN_SIZE });
 
-  return { heightAt };
+  const heightAt = (worldX: number, worldZ: number) => sampleTerrain(worldX, worldZ).height;
+
+  return { heightAt, sampleTerrain };
 }
