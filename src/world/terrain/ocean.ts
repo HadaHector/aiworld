@@ -1,5 +1,5 @@
 import { Color3, MeshBuilder, StandardMaterial, type Mesh, type Scene } from "@babylonjs/core";
-import { SEA_LEVEL } from "../continent";
+import { SEA_LEVEL } from "../cells/areaField";
 
 export interface OceanOptions {
   size: number;

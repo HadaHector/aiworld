@@ -10,7 +10,7 @@ import {
 import type { HeightSampler } from "../world/terrain/noise";
 import { createInput } from "./input";
 
-const SPEED = 6; // world units per second
+const SPEED = 60; // world units per second (10x boosted for dev/exploration convenience)
 const CAPSULE_HEIGHT = 1.8;
 const CAPSULE_RADIUS = 0.4;
 

@@ -10,11 +10,13 @@
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
+    "@types/d3-delaunay": "^6.0.4",
     "typescript": "~6.0.2",
     "vite": "^8.3.0"
   },
   "dependencies": {
     "@babylonjs/core": "^9.26.1",
+    "d3-delaunay": "^6.0.4",
     "simplex-noise": "^4.0.3"
   }
 }

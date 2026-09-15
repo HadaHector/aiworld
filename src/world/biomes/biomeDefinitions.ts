@@ -16,7 +16,7 @@ const plains: BiomeDefinition = {
     slopeThreshold: 0.75,
     slopeColor: new Color3(0.45, 0.42, 0.4),
   },
-  height: { baseElevation: 2, amplitudeScale: 0.3, frequencyScale: 1.0 },
+  height: { baseElevation: 0, amplitudeScale: 0.25, frequencyScale: 1.0 },
   borderType: "smooth",
   spawnWeight: 3,
 };
@@ -36,7 +36,7 @@ const forest: BiomeDefinition = {
     slopeThreshold: 0.72,
     slopeColor: new Color3(0.3, 0.29, 0.28),
   },
-  height: { baseElevation: 3, amplitudeScale: 0.45, frequencyScale: 1.3 },
+  height: { baseElevation: 0.5, amplitudeScale: 0.35, frequencyScale: 1.3 },
   borderType: "smooth",
   spawnWeight: 2,
 };
@@ -56,7 +56,7 @@ const hills: BiomeDefinition = {
     slopeThreshold: 0.78,
     slopeColor: new Color3(0.48, 0.45, 0.42),
   },
-  height: { baseElevation: 4.5, amplitudeScale: 0.55, frequencyScale: 1.0 },
+  height: { baseElevation: 1.5, amplitudeScale: 0.5, frequencyScale: 1.0 },
   borderType: "smooth",
   spawnWeight: 2,
 };
@@ -76,7 +76,7 @@ const desert: BiomeDefinition = {
     slopeThreshold: 0.7,
     slopeColor: new Color3(0.68, 0.5, 0.32),
   },
-  height: { baseElevation: 2, amplitudeScale: 0.3, frequencyScale: 0.7, persistence: 0.5 },
+  height: { baseElevation: 0, amplitudeScale: 0.3, frequencyScale: 0.7, persistence: 0.5 },
   borderType: "smooth",
   spawnWeight: 1.5,
 };
@@ -96,7 +96,7 @@ const mountains: BiomeDefinition = {
     slopeThreshold: 0.8,
     slopeColor: new Color3(0.3, 0.29, 0.28),
   },
-  height: { baseElevation: 11, amplitudeScale: 1.3, frequencyScale: 1.1, octaves: 5, persistence: 0.45 },
+  height: { baseElevation: 6, amplitudeScale: 1.0, frequencyScale: 1.1, octaves: 5, persistence: 0.45 },
   borderType: "smooth",
   spawnWeight: 1,
 };
@@ -116,7 +116,7 @@ const tundra: BiomeDefinition = {
     slopeThreshold: 0.73,
     slopeColor: new Color3(0.6, 0.6, 0.62),
   },
-  height: { baseElevation: 3.5, amplitudeScale: 0.4, frequencyScale: 0.9 },
+  height: { baseElevation: 1, amplitudeScale: 0.3, frequencyScale: 0.9 },
   borderType: "smooth",
   spawnWeight: 1,
 };

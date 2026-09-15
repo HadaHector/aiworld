@@ -2,6 +2,7 @@ import { HemisphericLight, Vector3, type Scene } from "@babylonjs/core";
 import { createTerrainChunk } from "./terrain/terrainMesh";
 import { createTerrainSampler, type TerrainSampler } from "./terrain/terrainSampler";
 import { createOceanPlane } from "./terrain/ocean";
+import { WORLD_EXTENT } from "./cells/config";
 
 export interface World {
   heightAt: (worldX: number, worldZ: number) => number;
@@ -9,11 +10,11 @@ export interface World {
 }
 
 const WORLD_SEED = 1337;
-const TERRAIN_SIZE = 900;
-const TERRAIN_SUBDIVISIONS = 340;
+const TERRAIN_SIZE = WORLD_EXTENT;
+const TERRAIN_SUBDIVISIONS = 320;
 
 /**
- * Orchestrates world content: continent shape, Voronoi biome zones, and terrain built from both.
+ * Orchestrates world content: the cell-based continent/area system, and terrain built from it.
  * sampleTerrain is exposed for future props/structures/gameplay systems to query biome/land at a point.
  */
 export function createWorld(scene: Scene): World {

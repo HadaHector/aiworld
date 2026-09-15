@@ -1,7 +1,7 @@
 import { deriveSeed } from "../rng";
 import { smoothstep, lerp } from "../mathUtils";
-import { createContinentSampler, SEA_LEVEL } from "../continent";
-import { createBiomeField } from "../biomes/biomeMap";
+import { createAreaSampler, SEA_LEVEL } from "../cells/areaField";
+import { createBedrockSampler } from "../bedrock";
 import type { BiomeDefinition, BiomeHeightParams } from "../biomes/biomeTypes";
 import { createBaseNoise2D, fbm, DEFAULT_FBM_PARAMS, type FbmParams } from "./noise";
 
@@ -36,33 +36,35 @@ function paramsFor(heightParams: BiomeHeightParams): FbmParams {
 
 /** Composes continent shape + biome zoning + height noise into one queryable per-position sample. */
 export function createTerrainSampler(seed: number): TerrainSampler {
-  const continent = createContinentSampler(seed);
-  const biomeField = createBiomeField(seed, continent);
+  const areaSampler = createAreaSampler(seed);
+  const bedrock = createBedrockSampler(seed);
   const noise2D = createBaseNoise2D(deriveSeed(seed, HEIGHT_SALT));
   const oceanNoise2D = createBaseNoise2D(deriveSeed(seed, OCEAN_SALT));
 
   return function sampleTerrain(worldX: number, worldZ: number): TerrainSample {
-    const continentSample = continent(worldX, worldZ);
-    const biomeSample = biomeField.sampleAt(worldX, worldZ);
+    const area = areaSampler(worldX, worldZ);
 
-    const primaryHeight = fbm(noise2D, worldX, worldZ, paramsFor(biomeSample.primary.height));
-    const blendedHeight =
-      biomeSample.blend > 0
-        ? lerp(primaryHeight, fbm(noise2D, worldX, worldZ, paramsFor(biomeSample.secondary.height)), biomeSample.blend)
-        : primaryHeight;
+    const primaryDetail = fbm(noise2D, worldX, worldZ, paramsFor(area.primaryBiome.height));
+    const blendedDetail =
+      area.biomeBlend > 0
+        ? lerp(primaryDetail, fbm(noise2D, worldX, worldZ, paramsFor(area.secondaryBiome.height)), area.biomeBlend)
+        : primaryDetail;
+
+    const bedrockHeight = bedrock(worldX, worldZ);
+    const landHeight = bedrockHeight + blendedDetail;
 
     const oceanNoise = oceanNoise2D(worldX * OCEAN_FLOOR_NOISE_FREQUENCY, worldZ * OCEAN_FLOOR_NOISE_FREQUENCY) * OCEAN_FLOOR_NOISE_SCALE;
     const oceanFloorHeight = SEA_LEVEL + OCEAN_FLOOR_DEPTH + oceanNoise;
-    const landBlend = smoothstep(-1, 1, continentSample.landmass);
-    const height = lerp(oceanFloorHeight, blendedHeight, landBlend);
+    const landBlend = smoothstep(-1, 1, area.landmass);
+    const height = lerp(oceanFloorHeight, landHeight, landBlend);
 
     return {
       height,
-      primaryBiome: biomeSample.primary,
-      secondaryBiome: biomeSample.secondary,
-      biomeBlend: biomeSample.blend,
-      isLand: continentSample.isLand,
-      landmass: continentSample.landmass,
+      primaryBiome: area.primaryBiome,
+      secondaryBiome: area.secondaryBiome,
+      biomeBlend: area.biomeBlend,
+      isLand: area.isLand,
+      landmass: area.landmass,
     };
   };
 }
