@@ -27,9 +27,12 @@ export interface BiomeDefinition {
   name: string;
   colors: BiomeColorBands;
   outputs: BiomeOutputs;
-  /** A per-biome declared preference, not yet branched on — all generation is smooth-blended this milestone. */
+  /** A per-biome declared preference. "mountain" generates boundary hills along a qualifying edge
+   *  (see cells/areaField.ts); "river"/"cliff"/"wall" remain reserved, unbranched. */
   borderType: BorderType;
   spawnWeight: number;
   /** Reserved extension point for future prop scattering; unused today. */
   propDensity?: number;
+  /** Probability (0-1) any given cell inside an area of this biome becomes a lake cell. Unset/0 = never. */
+  lakeChance?: number;
 }

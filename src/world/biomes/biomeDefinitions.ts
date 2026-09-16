@@ -38,17 +38,18 @@ const plains: BiomeDefinition = {
     color0: new Color3(0.76, 0.7, 0.5),
     height0: 3,
     color1: new Color3(0.33, 0.52, 0.25),
-    height1: 5.7,
+    height1: 10,
     color2: new Color3(0.76, 0.7, 0.5),
-    height2: 8.5,
+    height2: 15,
     color3: new Color3(0.33, 0.52, 0.25),
-    height3: 11,
+    height3: 20,
     slopeThreshold: 0.75,
     slopeColor: new Color3(0.45, 0.42, 0.4),
   },
-  outputs: { height: detailHeightPipeline({ amplitude: 4.75, frequency: 0.001, offset: 0 }) },
+  outputs: { height: detailHeightPipeline({ amplitude: 12.75, frequency: 0.002, offset: 7.5 }) },
   borderType: "mountain",
-  spawnWeight: 3,
+  spawnWeight: 2,
+  lakeChance: 0.05,
 };
 
 const forest: BiomeDefinition = {
@@ -56,19 +57,20 @@ const forest: BiomeDefinition = {
   name: "Forest",
   colors: {
     color0: new Color3(0.35, 0.28, 0.18),
-    height0: 3.5,
+    height0: 10,
     color1: new Color3(0.14, 0.32, 0.12),
-    height1: 6.5,
+    height1: 40,
     color2: new Color3(0.3, 0.34, 0.24),
-    height2: 9,
+    height2: 60,
     color3: new Color3(0.3, 0.29, 0.28),
-    height3: 12,
+    height3: 70,
     slopeThreshold: 0.72,
     slopeColor: new Color3(0.3, 0.29, 0.28),
   },
-  outputs: { height: detailHeightPipeline({ amplitude: 6.45, frequency: 0.0064, offset: 0.5 }) },
+  outputs: { height: detailHeightPipeline({ amplitude: 40.45, frequency: 0.0014, offset: 27 }) },
   borderType: "mountain",
   spawnWeight: 2,
+  lakeChance: 0.04,
 };
 
 const hills: BiomeDefinition = {
@@ -89,9 +91,10 @@ const hills: BiomeDefinition = {
   // Target relief ~10m typical/high with well-separated bumps (same peak-spacing fix as mountains
   // below - wider wavelength, lower persistence so higher octaves stay texture, not competing
   // bumps), measured via FORCE_BIOME_ID (devConfig.ts).
-  outputs: { height: detailHeightPipeline({ amplitude: 5.9, frequency: 0.0041, offset: 2, octaves: 5, persistence: 0.42 }) },
+  outputs: { height: detailHeightPipeline({ amplitude: 60, frequency: 0.0021, offset: 50, octaves: 5, persistence: 0.35 }) },
   borderType: "mountain",
   spawnWeight: 2,
+  lakeChance: 0.03,
 };
 
 const desert: BiomeDefinition = {
@@ -109,9 +112,10 @@ const desert: BiomeDefinition = {
     slopeThreshold: 0.7,
     slopeColor: new Color3(0.68, 0.5, 0.32),
   },
-  outputs: { height: detailHeightPipeline({ amplitude: 6.1, frequency: 0.0026, offset: 2, persistence: 0.5 }) },
+  outputs: { height: detailHeightPipeline({ amplitude: 10.1, frequency: 0.0026, offset: 4, persistence: 0.1 }) },
   borderType: "mountain",
-  spawnWeight: 1.5,
+  spawnWeight: 2,
+  lakeChance: 0.03, // oases
 };
 
 const mountains: BiomeDefinition = {
@@ -121,13 +125,13 @@ const mountains: BiomeDefinition = {
   // p10=12.7, p50=18.0, p90=23.3, p99=26.6, max=32.0.
   colors: {
     color0: new Color3(0.4, 0.38, 0.36),
-    height0: 10,
+    height0: 20,
     color1: new Color3(0.35, 0.33, 0.32),
-    height1: 15,
+    height1: 60,
     color2: new Color3(0.3, 0.29, 0.28),
-    height2: 20,
+    height2: 80,
     color3: new Color3(0.97, 0.97, 0.99),
-    height3: 26,
+    height3: 100,
     slopeThreshold: 0.8,
     slopeColor: new Color3(0.3, 0.29, 0.28),
   },
@@ -138,10 +142,11 @@ const mountains: BiomeDefinition = {
   // competing peaks at their own shorter wavelength - that competing-peaks effect, not the
   // amplitude, was what made it read as crumpled rather than grand.
   outputs: {
-    height: detailHeightPipeline({ amplitude: 60, frequency: 0.0015, offset: 12, octaves: 6, persistence: 0.42 }),
+    height: detailHeightPipeline({ amplitude: 60, frequency: 0.0015, offset: 60, octaves: 6, persistence: 0.42 }),
   },
   borderType: "mountain", // generates boundary hills along any edge shared with a differently-bordered biome
   spawnWeight: 1,
+  lakeChance: 0.01, // rare tarns/crater lakes
 };
 
 const tundra: BiomeDefinition = {
@@ -162,6 +167,7 @@ const tundra: BiomeDefinition = {
   outputs: { height: detailHeightPipeline({ amplitude: 2.1, frequency: 0.0162, offset: 1 }) },
   borderType: "mountain",
   spawnWeight: 1,
+  lakeChance: 0.05,
 };
 
 /**
@@ -203,22 +209,25 @@ const canyon: BiomeDefinition = {
   outputs: {
     height: {
       noises: [
-        { name: "plateau", type: "fbm", octaves: 4, frequency: 0.005, amplitude: 3.5, persistence: 0.4, lacunarity: 2.0 },
-        { name: "carve", type: "ridged", octaves: 3, frequency: 0.012, amplitude: 1, persistence: 0.45, lacunarity: 2.0 },
+        { name: "plateau", type: "fbm", octaves: 4, frequency: 0.005, amplitude: 3, persistence: 0.4, lacunarity: 2.0 },
+        { name: "carve", type: "ridged", octaves: 1, frequency: 0.002, amplitude: 6, persistence: 0.45, lacunarity: 2.0 },
       ],
       steps: [
         { output: "plateauRaw", op: "sample", noise: "plateau" },
-        { output: "plateauLevel", op: "offset", input: "plateauRaw", amount: 60 },
+        { output: "plateauLevel", op: "offset", input: "plateauRaw", amount: 100 },
         { output: "carveRaw", op: "sample", noise: "carve" },
-        { output: "carveNorm", op: "remap", input: "carveRaw", inMin: 0, inMax: 1.6525, outMin: 0, outMax: 1 },
-        { output: "carveSharp", op: "power", input: "carveNorm", exponent: 3 },
-        { output: "carveDepth", op: "scale", input: "carveSharp", factor: 50 },
-        { output: "result", op: "subtract", a: "plateauLevel", b: "carveDepth" },
+        { output: "carveNorm", op: "remap", input: "carveRaw", inMin: 0, inMax: 2, outMin: 0, outMax: 1 },
+        { output: "carveSharp", op: "power", input: "carveNorm", exponent: 4 },
+        { output: "carveDepth", op: "scale", input: "carveSharp", factor: 4 },
+        { output: "carved", op: "subtract", a: "plateauLevel", b: "carveDepth" },
+        { output: "carvedClamped", op: "clamp", input: "carved", min: 3, max: 60 },
+        { output: "result", op: "add", a: "carvedClamped", "b": "plateauRaw" },
       ],
     },
   },
   borderType: "mountain", // generates boundary hills along any edge shared with a differently-bordered biome
-  spawnWeight: 1,
+  spawnWeight: 0.5,
+  lakeChance: 0.02,
 };
 
 /**
@@ -246,16 +255,17 @@ const swamp: BiomeDefinition = {
   },
   outputs: {
     height: {
-      noises: [{ name: "detail", type: "fbm", octaves: 3, frequency: 0.02, amplitude: 1.2, persistence: 0.35, lacunarity: 2.0 }],
+      noises: [{ name: "detail", type: "fbm", octaves: 3, frequency: 0.01, amplitude: 5.2, persistence: 0.35, lacunarity: 2.0 }],
       steps: [
         { output: "raw", op: "sample", noise: "detail" },
-        { output: "flattened", op: "clamp", input: "raw", min: -0.4, max: 0.4 },
-        { output: "result", op: "offset", input: "flattened", amount: 1.5 },
+        //{ output: "flattened", op: "clamp", input: "raw", min: -0.4, max: 0.4 },
+        { output: "result", op: "offset", input: "raw", amount: -3.5 },
       ],
     },
   },
   borderType: "mountain",
-  spawnWeight: 1,
+  spawnWeight: 1.5,
+  lakeChance: 0.15,
 };
 
 export const BIOME_REGISTRY: BiomeDefinition[] = [plains, forest, hills, desert, mountains, tundra, canyon, swamp];

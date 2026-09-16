@@ -19,9 +19,9 @@ const CHUNK_SIZE = 50;
 const CHUNK_SUBDIVISIONS = 20;
 const UNLOAD_HYSTERESIS = CHUNK_SIZE; // unload radius = load radius + this, a 1-chunk buffer band
 
-export const DEFAULT_DRAW_DISTANCE = 150;
+export const DEFAULT_DRAW_DISTANCE = 400;
 export const MIN_DRAW_DISTANCE = 100;
-export const MAX_DRAW_DISTANCE = 600;
+export const MAX_DRAW_DISTANCE = 2000;
 
 /**
  * Orchestrates world content: the cell-based continent/area system, and terrain streamed in as

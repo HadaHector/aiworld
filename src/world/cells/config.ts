@@ -2,7 +2,7 @@
 // that CELLS_PER_AREA * CELL_SPACING^2 ~= 10 km^2 per zone, which combined with a 20-30 zone
 // range per continent lands continents in the "hundreds of km^2" target range.
 export const CELL_SPACING = 1000; // world units, nominal pre-relaxation point spacing
-export const LLOYD_RELAX_ITERATIONS = 2;
+export const LLOYD_RELAX_ITERATIONS = 1;
 export const CELL_BOUNDS_MARGIN = CELL_SPACING * 2;
 
 // Content-first sizing: the user sets how many continents and how large they are; world size is
@@ -15,7 +15,7 @@ export const CELLS_PER_AREA = 10;
 // measured across the weighted-frontier BFS growth algorithm: p99 ~= 1.7-2.3, worst observed
 // single sample 2.6. 3.0 leaves >15% headroom above the worst case so growth never hits the
 // generated region's edge (the original cause of the "world border cuts the continent" bug).
-export const GROWTH_RADIUS_SAFETY_FACTOR = 3.0;
+export const GROWTH_RADIUS_SAFETY_FACTOR = 1.5;
 
 // Minimum guaranteed open ocean between any two continents' safety-radius circles.
 export const CONTINENT_OCEAN_GAP = CELL_SPACING * 6;
@@ -28,7 +28,7 @@ export const CONTINENT_OCEAN_GAP = CELL_SPACING * 6;
 // different biomes' height noise together - this measurably flattens terrain (averaging reduces
 // variance) and pulls height closer to a shared mean near sea level, which is what caused the
 // "everything is flat" / lake-edge z-fighting bug.
-export const COAST_BORDER_WIDTH = 30;
+export const COAST_BORDER_WIDTH = 200;
 export const AREA_BORDER_WIDTH = 30;
 
 // Coastline wavelength (how broad the coastal wobble is) still scales with CELL_SPACING - that's
@@ -41,7 +41,19 @@ export const AREA_BORDER_WIDTH = 30;
 // sea-level speckling everywhere. Keeping amplitude well under the border width confines jitter's
 // effect to genuinely near-edge points, where it belongs.
 export const COAST_NOISE_FREQUENCY = 1.1 / CELL_SPACING;
-export const COAST_NOISE_AMPLITUDE = COAST_BORDER_WIDTH * 0.6;
+export const COAST_NOISE_AMPLITUDE = COAST_BORDER_WIDTH * 4;
+
+// Lake-shore blend width - a cell-scale border, so it stays small (like AREA_BORDER_WIDTH), not
+// scaled with CELL_SPACING. Amplitude is an expression of width, same discipline as
+// COAST_NOISE_AMPLITUDE/BOUNDARY_HILL_EDGE_NOISE_AMPLITUDE, so lake-shore jitter can't reach past
+// a point that's geometrically deep inside solid dry land or deep inside the lake.
+export const LAKE_BORDER_WIDTH = 100;
+export const LAKE_NOISE_FREQUENCY = 1 / CELL_SPACING;
+export const LAKE_NOISE_AMPLITUDE = LAKE_BORDER_WIDTH * 3;
+
+// Rivers per continent, and how many cells long each one's path walk runs (see cells/riverGeneration.ts).
+export const RIVERS_PER_CONTINENT_RANGE: [number, number] = [3, 5];
+export const RIVER_LENGTH_RANGE: [number, number] = [8, 10];
 
 // Salts for deriving independent sub-seeds from one root world seed (see ../rng.ts deriveSeed).
 export const GRID_JITTER_SALT = 601;
@@ -55,3 +67,9 @@ export const CONTINENT_COUNT_SALT = 608;
 export const AREAS_PER_CONTINENT_SALT = 609;
 export const CONTINENT_LAYOUT_SALT = 610;
 export const CONTINENT_SEED_BASE = 700; // continentSeed[i] = deriveSeed(seed, CONTINENT_SEED_BASE + i)
+
+export const LAKE_ROLL_SALT = 613;
+export const LAKE_EDGE_NOISE_SALT = 614;
+export const RIVER_SOURCE_SALT = 615;
+export const RIVER_LENGTH_SALT = 616;
+export const RIVER_WALK_SALT = 617;

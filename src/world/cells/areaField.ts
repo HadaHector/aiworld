@@ -3,13 +3,28 @@ import { computeCellBounds, generateCellDiagram, type CellPoint } from "./cellGr
 import { planWorld, type ContinentPlan } from "./continentLayout";
 import { pickStartCell, growLandmass } from "./regionGrowth";
 import { partitionIntoAreas, assignAreaBiomes } from "./areaAssignment";
+import { generateRiversForContinent } from "./riverGeneration";
+import { cellPairKey } from "./cellPairKey";
 import { createBaseNoise2D } from "../terrain/noise";
-import { deriveSeed } from "../rng";
+import { deriveSeed, mulberry32 } from "../rng";
 import { smoothstep } from "../mathUtils";
 import type { BiomeDefinition } from "../biomes/biomeTypes";
 import { BIOME_REGISTRY } from "../biomes/biomeDefinitions";
 import { BOUNDARY_HILL_STYLES, type BoundaryHillStyle } from "../biomes/boundaryHillStyles";
-import { CELL_SPACING, CELL_BOUNDS_MARGIN, COAST_NOISE_FREQUENCY, COAST_NOISE_AMPLITUDE, COAST_BORDER_WIDTH, AREA_BORDER_WIDTH, EDGE_NOISE_SALT } from "./config";
+import {
+  CELL_SPACING,
+  CELL_BOUNDS_MARGIN,
+  COAST_NOISE_FREQUENCY,
+  COAST_NOISE_AMPLITUDE,
+  COAST_BORDER_WIDTH,
+  AREA_BORDER_WIDTH,
+  EDGE_NOISE_SALT,
+  LAKE_BORDER_WIDTH,
+  LAKE_NOISE_FREQUENCY,
+  LAKE_NOISE_AMPLITUDE,
+  LAKE_ROLL_SALT,
+  LAKE_EDGE_NOISE_SALT,
+} from "./config";
 import { BOUNDARY_HILL_WIDTH, BOUNDARY_HILL_EDGE_NOISE_AMPLITUDE, BOUNDARY_HILL_STYLE_SALT } from "../terrain/boundaryHills/boundaryHillsConfig";
 
 export const SEA_LEVEL = 0;
@@ -24,6 +39,8 @@ export interface AreaSample {
   biomeBlend: number;
   borderGap: number;
   boundaryHillStyle: BoundaryHillStyle | null;
+  lakeFactor: number;
+  isRiverEdge: boolean;
 }
 
 export type AreaSampler = (worldX: number, worldZ: number) => AreaSample;
@@ -93,6 +110,9 @@ export function createAreaSampler(seed: number): AreaWorld {
   const landCells = new Set<number>();
   const cellToAreaId = new Map<number, number>();
   const areaBiomes: BiomeDefinition[] = [];
+  const lakeCells = new Set<number>();
+  const usedRiverCells = new Set<number>();
+  const riverEdges = new Set<number>();
   let areaIdOffset = 0;
 
   for (const continent of layout.continents) {
@@ -103,8 +123,34 @@ export function createAreaSampler(seed: number): AreaWorld {
     const localAreaId = partitionIntoAreas(continent.seed, adjacency, continentCells, continent.areaCount);
     localAreaId.forEach((id, cellIndex) => cellToAreaId.set(cellIndex, id + areaIdOffset));
 
-    areaBiomes.push(...assignAreaBiomes(continent.seed, continent.areaCount));
+    const continentBiomes = assignAreaBiomes(continent.seed, continent.areaCount);
+    areaBiomes.push(...continentBiomes);
     areaIdOffset += continent.areaCount;
+
+    // Rolled per-cell, one shared stream per continent (matches growLandmass/partitionIntoAreas/
+    // assignAreaBiomes's own convention of seeding fresh off continent.seed, not one stream spanning
+    // the whole world) - never lets the continent's own land-growth start cell become a lake, since
+    // that's where continent 0 sits (the player spawns at heightAt(0,0)) and could otherwise spawn
+    // the player inside a lake.
+    const lakeRng = mulberry32(deriveSeed(continent.seed, LAKE_ROLL_SALT));
+    for (const cellIndex of continentCells) {
+      const roll = lakeRng();
+      if (cellIndex === startIndex) continue;
+      const biome = continentBiomes[localAreaId.get(cellIndex)!];
+      if (roll < (biome.lakeChance ?? 0)) lakeCells.add(cellIndex);
+    }
+
+    const riverPaths = generateRiversForContinent({
+      continentSeed: continent.seed,
+      adjacency,
+      continentCells,
+      landCells,
+      lakeCells,
+      usedRiverCells,
+    });
+    for (const path of riverPaths) {
+      for (let i = 0; i < path.length - 1; i++) riverEdges.add(cellPairKey(path[i], path[i + 1]));
+    }
   }
 
   // landField is built from a filtered point array, so its query indices need remapping back to
@@ -120,6 +166,7 @@ export function createAreaSampler(seed: number): AreaWorld {
   const oceanField: VoronoiField = createVoronoiField(oceanPoints, CELL_SPACING * 1.5);
 
   const coastNoise2D = createBaseNoise2D(deriveSeed(seed, EDGE_NOISE_SALT));
+  const lakeNoise2D = createBaseNoise2D(deriveSeed(seed, LAKE_EDGE_NOISE_SALT));
 
   function areaIdOf(landFieldIndex: number): number {
     if (landFieldIndex === -1) return -1;
@@ -128,6 +175,22 @@ export function createAreaSampler(seed: number): AreaWorld {
 
   function areaBiomeOf(areaId: number): BiomeDefinition {
     return areaId === -1 ? (areaBiomes[0] ?? BIOME_REGISTRY[0]) : (areaBiomes[areaId] ?? BIOME_REGISTRY[0]);
+  }
+
+  function cellIdOf(landFieldIndex: number): number {
+    return landFieldIndex === -1 ? -1 : landIndexRemap[landFieldIndex];
+  }
+
+  /** Signed lake-shore blend: 0 deep in dry land, 1 deep in a lake cell, smooth transition at the
+   *  shore. Unlike computeBorderBlend (always positive, used to lerp two biomes together), this
+   *  branches on which side is the lake since the transition needs to go both directions. */
+  function computeLakeFactor(primaryCellId: number, secondaryCellId: number, borderGap: number, jitter: number): number {
+    const primaryIsLake = lakeCells.has(primaryCellId);
+    if (secondaryCellId === -1) return primaryIsLake ? 1 : 0;
+    const secondaryIsLake = lakeCells.has(secondaryCellId);
+    if (primaryIsLake === secondaryIsLake) return primaryIsLake ? 1 : 0; // an ordinary dry-dry (or lake-lake) cell seam, not a shore
+    const signedGap = (primaryIsLake ? 1 : -1) * borderGap + jitter;
+    return smoothstep(-LAKE_BORDER_WIDTH, LAKE_BORDER_WIDTH, signedGap);
   }
 
   function sampleArea(worldX: number, worldZ: number): AreaSample {
@@ -153,9 +216,31 @@ export function createAreaSampler(seed: number): AreaWorld {
     // is Infinity (voronoiField.ts), so this naturally comes out Infinity too - no special-casing
     // needed, resolveBoundaryHillStyle's width check rejects it the same as any far-interior point.
     const borderGap = nearLand.secondNearestDistance - nearLand.nearestDistance;
-    const boundaryHillStyle = resolveBoundaryHillStyle(seed, primaryBiome, secondaryBiome, primaryAreaId, secondaryAreaId, borderGap);
 
-    return { landmass, isLand: landmass > 0, primaryBiome, secondaryBiome, biomeBlend, borderGap, boundaryHillStyle };
+    const primaryCellId = cellIdOf(nearLand.nearestIndex);
+    const secondaryCellId = nearLand.secondNearestIndex === -1 ? primaryCellId : cellIdOf(nearLand.secondNearestIndex);
+    const lakeJitter = lakeNoise2D(worldX * LAKE_NOISE_FREQUENCY, worldZ * LAKE_NOISE_FREQUENCY) * LAKE_NOISE_AMPLITUDE;
+    const lakeFactor = computeLakeFactor(primaryCellId, secondaryCellId, borderGap, lakeJitter);
+    const isRiverEdge = secondaryCellId !== -1 && riverEdges.has(cellPairKey(primaryCellId, secondaryCellId));
+
+    // Rivers take precedence over boundary hills at the same border - a curated river edge can
+    // land on a border that also qualifies for a hill (every biome is mountain-type today), which
+    // would otherwise add a bump and subtract a carve at the identical spot.
+    const boundaryHillStyle = isRiverEdge
+      ? null
+      : resolveBoundaryHillStyle(seed, primaryBiome, secondaryBiome, primaryAreaId, secondaryAreaId, borderGap);
+
+    return {
+      landmass,
+      isLand: landmass > 0,
+      primaryBiome,
+      secondaryBiome,
+      biomeBlend,
+      borderGap,
+      boundaryHillStyle,
+      lakeFactor,
+      isRiverEdge,
+    };
   }
 
   return { sampleArea, worldExtent: layout.worldExtent, continents: layout.continents };

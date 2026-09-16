@@ -15,7 +15,7 @@ export function createThirdPersonCamera(scene: Scene, canvas: HTMLCanvasElement,
   camera.lowerRadiusLimit = 6;
   camera.upperRadiusLimit = 800; // generous zoom-out range for dev/exploration, whole continent should fit
   camera.lowerBetaLimit = 0.05; // allow near top-down for inspecting large-scale shape
-  camera.upperBetaLimit = Math.PI / 2.3;
+  camera.upperBetaLimit = Math.PI / 1.9;
   camera.wheelPrecision = 40;
   camera.panningSensibility = 0; // disable panning, orbit only
 
