@@ -1,4 +1,5 @@
 import type { Color3 } from "@babylonjs/core";
+import type { PipelineDef } from "../terrain/pipeline/pipelineTypes";
 
 /** Reserved for future differentiated border generation; only "smooth" is generated today. */
 export type BorderType = "smooth" | "mountain" | "river" | "cliff" | "wall";
@@ -16,19 +17,16 @@ export interface BiomeColorBands {
   slopeColor: Color3;
 }
 
-export interface BiomeHeightParams {
-  baseElevation: number;
-  amplitudeScale: number;
-  frequencyScale: number;
-  persistence?: number;
-  octaves?: number;
+export interface BiomeOutputs {
+  height: PipelineDef;
+  // Future, unimplemented: wetness?: PipelineDef; material?: PipelineDef;
 }
 
 export interface BiomeDefinition {
   id: string;
   name: string;
   colors: BiomeColorBands;
-  height: BiomeHeightParams;
+  outputs: BiomeOutputs;
   /** A per-biome declared preference, not yet branched on — all generation is smooth-blended this milestone. */
   borderType: BorderType;
   spawnWeight: number;

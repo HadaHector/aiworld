@@ -3,8 +3,10 @@ import { smoothstep, lerp } from "../mathUtils";
 import { createAreaSampler, SEA_LEVEL } from "../cells/areaField";
 import { createBedrockSampler } from "../bedrock";
 import type { ContinentPlan } from "../cells/continentLayout";
-import type { BiomeDefinition, BiomeHeightParams } from "../biomes/biomeTypes";
-import { createBaseNoise2D, fbm, DEFAULT_FBM_PARAMS, type FbmParams } from "./noise";
+import type { BiomeDefinition } from "../biomes/biomeTypes";
+import { BIOME_REGISTRY } from "../biomes/biomeDefinitions";
+import { createBaseNoise2D } from "./noise";
+import { compilePipeline, type CompiledPipeline } from "./pipeline/pipelineCompiler";
 
 export interface TerrainSample {
   height: number;
@@ -34,34 +36,30 @@ const OCEAN_FLOOR_NOISE_SCALE = 1.5;
 // this is a genuine floor, not a tuning knob: land height can never read below this, guaranteed.
 const MIN_LAND_HEIGHT = 1;
 
-const HEIGHT_SALT = 401;
 const OCEAN_SALT = 402;
 
-function paramsFor(heightParams: BiomeHeightParams): FbmParams {
-  return {
-    ...DEFAULT_FBM_PARAMS,
-    baseAmplitude: DEFAULT_FBM_PARAMS.baseAmplitude * heightParams.amplitudeScale,
-    baseFrequency: DEFAULT_FBM_PARAMS.baseFrequency * heightParams.frequencyScale,
-    offset: heightParams.baseElevation,
-    persistence: heightParams.persistence ?? DEFAULT_FBM_PARAMS.persistence,
-    octaves: heightParams.octaves ?? DEFAULT_FBM_PARAMS.octaves,
-  };
+function compileHeightPipelines(seed: number): Map<string, CompiledPipeline> {
+  const compiled = new Map<string, CompiledPipeline>();
+  for (const biome of BIOME_REGISTRY) {
+    compiled.set(biome.id, compilePipeline(biome.outputs.height, seed, biome.id));
+  }
+  return compiled;
 }
 
 /** Composes continent shape + biome zoning + height noise into one queryable per-position sample. */
 export function createTerrainSampler(seed: number): TerrainWorld {
   const { sampleArea, worldExtent, continents } = createAreaSampler(seed);
   const bedrock = createBedrockSampler(seed);
-  const noise2D = createBaseNoise2D(deriveSeed(seed, HEIGHT_SALT));
   const oceanNoise2D = createBaseNoise2D(deriveSeed(seed, OCEAN_SALT));
+  const heightPipelines = compileHeightPipelines(seed);
 
   function sampleTerrain(worldX: number, worldZ: number): TerrainSample {
     const area = sampleArea(worldX, worldZ);
 
-    const primaryDetail = fbm(noise2D, worldX, worldZ, paramsFor(area.primaryBiome.height));
+    const primaryDetail = heightPipelines.get(area.primaryBiome.id)!(worldX, worldZ);
     const blendedDetail =
       area.biomeBlend > 0
-        ? lerp(primaryDetail, fbm(noise2D, worldX, worldZ, paramsFor(area.secondaryBiome.height)), area.biomeBlend)
+        ? lerp(primaryDetail, heightPipelines.get(area.secondaryBiome.id)!(worldX, worldZ), area.biomeBlend)
         : primaryDetail;
 
     const bedrockHeight = bedrock(worldX, worldZ);
