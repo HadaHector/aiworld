@@ -108,7 +108,7 @@ export function createDebugMap(
   const viewportCache = new Map<string, Viewport>();
 
   let visible = false;
-  let viewMode: "world" | "continent" = "world";
+  let viewMode: "world" | "continent" = "continent";
   let markerX = 0;
   let markerZ = 0;
   let heading = 0;

@@ -1,6 +1,7 @@
 import { mulberry32, deriveSeed } from "../rng";
 import { BIOME_REGISTRY } from "../biomes/biomeDefinitions";
 import type { BiomeDefinition } from "../biomes/biomeTypes";
+import { resolveForcedBiome } from "../devConfig";
 import { AREA_SEED_SALT, AREA_GROWTH_SALT, AREA_BIOME_SALT } from "./config";
 
 function computeLandDistances(seeds: number[], landCells: Set<number>, adjacency: number[][]): Map<number, number> {
@@ -113,6 +114,9 @@ function pickWeightedBiome(rng: () => number): BiomeDefinition {
 
 /** Assigns one biome per area (not per cell) via weighted roulette, so every cell in an area shares its look. */
 export function assignAreaBiomes(seed: number, areaCount: number): BiomeDefinition[] {
+  const forced = resolveForcedBiome();
+  if (forced) return new Array(areaCount).fill(forced);
+
   const rng = mulberry32(deriveSeed(seed, AREA_BIOME_SALT));
   const biomes: BiomeDefinition[] = [];
 
