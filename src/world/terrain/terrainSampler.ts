@@ -16,6 +16,11 @@ export interface TerrainSample {
 
 export type TerrainSampler = (worldX: number, worldZ: number) => TerrainSample;
 
+export interface TerrainWorld {
+  sampleTerrain: TerrainSampler;
+  worldExtent: number;
+}
+
 const OCEAN_FLOOR_DEPTH = -14;
 const OCEAN_FLOOR_NOISE_FREQUENCY = 0.03;
 const OCEAN_FLOOR_NOISE_SCALE = 1.5;
@@ -35,14 +40,14 @@ function paramsFor(heightParams: BiomeHeightParams): FbmParams {
 }
 
 /** Composes continent shape + biome zoning + height noise into one queryable per-position sample. */
-export function createTerrainSampler(seed: number): TerrainSampler {
-  const areaSampler = createAreaSampler(seed);
+export function createTerrainSampler(seed: number): TerrainWorld {
+  const { sampleArea, worldExtent } = createAreaSampler(seed);
   const bedrock = createBedrockSampler(seed);
   const noise2D = createBaseNoise2D(deriveSeed(seed, HEIGHT_SALT));
   const oceanNoise2D = createBaseNoise2D(deriveSeed(seed, OCEAN_SALT));
 
-  return function sampleTerrain(worldX: number, worldZ: number): TerrainSample {
-    const area = areaSampler(worldX, worldZ);
+  function sampleTerrain(worldX: number, worldZ: number): TerrainSample {
+    const area = sampleArea(worldX, worldZ);
 
     const primaryDetail = fbm(noise2D, worldX, worldZ, paramsFor(area.primaryBiome.height));
     const blendedDetail =
@@ -66,5 +71,7 @@ export function createTerrainSampler(seed: number): TerrainSampler {
       isLand: area.isLand,
       landmass: area.landmass,
     };
-  };
+  }
+
+  return { sampleTerrain, worldExtent };
 }

@@ -1,5 +1,6 @@
 import { createVoronoiField, type VoronoiField } from "./voronoiField";
 import { computeCellBounds, generateCellDiagram, type CellPoint } from "./cellGrid";
+import { planWorld } from "./continentLayout";
 import { pickStartCell, growLandmass } from "./regionGrowth";
 import { partitionIntoAreas, assignAreaBiomes } from "./areaAssignment";
 import { createBaseNoise2D } from "../terrain/noise";
@@ -7,18 +8,7 @@ import { deriveSeed } from "../rng";
 import { smoothstep } from "../mathUtils";
 import type { BiomeDefinition } from "../biomes/biomeTypes";
 import { BIOME_REGISTRY } from "../biomes/biomeDefinitions";
-import {
-  WORLD_EXTENT,
-  CELL_SPACING,
-  CELL_BOUNDS_MARGIN,
-  TARGET_LAND_CELLS,
-  TARGET_AREA_COUNT,
-  COAST_NOISE_FREQUENCY,
-  COAST_NOISE_AMPLITUDE,
-  COAST_BORDER_WIDTH,
-  AREA_BORDER_WIDTH,
-  EDGE_NOISE_SALT,
-} from "./config";
+import { CELL_SPACING, CELL_BOUNDS_MARGIN, COAST_NOISE_FREQUENCY, COAST_NOISE_AMPLITUDE, COAST_BORDER_WIDTH, AREA_BORDER_WIDTH, EDGE_NOISE_SALT } from "./config";
 
 export const SEA_LEVEL = 0;
 const WORLD_CENTER_X = 0;
@@ -34,22 +24,39 @@ export interface AreaSample {
 
 export type AreaSampler = (worldX: number, worldZ: number) => AreaSample;
 
+export interface AreaWorld {
+  sampleArea: AreaSampler;
+  worldExtent: number;
+}
+
 function computeBorderBlend(nearestDistance: number, secondNearestDistance: number, jitter: number): number {
   const gap = secondNearestDistance - nearestDistance + jitter;
   const t = 1 - smoothstep(0, AREA_BORDER_WIDTH, gap);
   return t * 0.5;
 }
 
-/** Composes the cell diagram, land growth, and area partitioning into one queryable per-position sample. */
-export function createAreaSampler(seed: number): AreaSampler {
-  const bounds = computeCellBounds(WORLD_CENTER_X, WORLD_CENTER_Z, WORLD_EXTENT, CELL_BOUNDS_MARGIN);
+/** Composes the cell diagram, multi-continent land growth, and area partitioning into one queryable per-position sample. */
+export function createAreaSampler(seed: number): AreaWorld {
+  const layout = planWorld(seed);
+  const bounds = computeCellBounds(WORLD_CENTER_X, WORLD_CENTER_Z, layout.worldExtent, CELL_BOUNDS_MARGIN);
   const { points, adjacency } = generateCellDiagram(seed, bounds, CELL_SPACING);
 
-  const startIndex = pickStartCell(seed, points, WORLD_CENTER_X, WORLD_CENTER_Z, CELL_SPACING);
-  const landCells = growLandmass(seed, adjacency, startIndex, TARGET_LAND_CELLS);
+  const landCells = new Set<number>();
+  const cellToAreaId = new Map<number, number>();
+  const areaBiomes: BiomeDefinition[] = [];
+  let areaIdOffset = 0;
 
-  const cellToAreaId = partitionIntoAreas(seed, adjacency, landCells, TARGET_AREA_COUNT);
-  const areaBiomes = assignAreaBiomes(seed, TARGET_AREA_COUNT);
+  for (const continent of layout.continents) {
+    const startIndex = pickStartCell(continent.seed, points, continent.centerX, continent.centerZ, CELL_SPACING, landCells);
+    const continentCells = growLandmass(continent.seed, adjacency, startIndex, continent.cellCount, landCells);
+    continentCells.forEach((index) => landCells.add(index));
+
+    const localAreaId = partitionIntoAreas(continent.seed, adjacency, continentCells, continent.areaCount);
+    localAreaId.forEach((id, cellIndex) => cellToAreaId.set(cellIndex, id + areaIdOffset));
+
+    areaBiomes.push(...assignAreaBiomes(continent.seed, continent.areaCount));
+    areaIdOffset += continent.areaCount;
+  }
 
   // landField is built from a filtered point array, so its query indices need remapping back to
   // the original cell indices that cellToAreaId is keyed by.
@@ -72,12 +79,15 @@ export function createAreaSampler(seed: number): AreaSampler {
     return areaBiomes[areaId] ?? BIOME_REGISTRY[0];
   }
 
-  return function sampleArea(worldX: number, worldZ: number): AreaSample {
+  function sampleArea(worldX: number, worldZ: number): AreaSample {
     const nearLand = landField.query(worldX, worldZ);
     const nearOcean = oceanField.query(worldX, worldZ);
     const jitter = coastNoise2D(worldX * COAST_NOISE_FREQUENCY, worldZ * COAST_NOISE_FREQUENCY) * COAST_NOISE_AMPLITUDE;
 
-    const edgeGap = nearOcean.nearestDistance - nearLand.nearestDistance + jitter;
+    // Beyond both fields' search range (e.g. far outside the generated world) neither distance is
+    // finite; treat that as open ocean rather than letting Infinity - Infinity produce NaN.
+    const bothUnresolved = nearLand.nearestIndex === -1 && nearOcean.nearestIndex === -1;
+    const edgeGap = bothUnresolved ? -Infinity : nearOcean.nearestDistance - nearLand.nearestDistance + jitter;
     const landmass = smoothstep(-COAST_BORDER_WIDTH, COAST_BORDER_WIDTH, edgeGap) * 2 - 1;
 
     const primaryBiome = areaBiomeOf(nearLand.nearestIndex);
@@ -86,5 +96,7 @@ export function createAreaSampler(seed: number): AreaSampler {
       nearLand.secondNearestIndex === -1 ? 0 : computeBorderBlend(nearLand.nearestDistance, nearLand.secondNearestDistance, jitter);
 
     return { landmass, isLand: landmass > 0, primaryBiome, secondaryBiome, biomeBlend };
-  };
+  }
+
+  return { sampleArea, worldExtent: layout.worldExtent };
 }

@@ -14,21 +14,30 @@ function weightedPick(rng: () => number, candidates: number[], weights: number[]
   return candidates[candidates.length - 1];
 }
 
-/** Picks a cell near (centerX, centerZ) to anchor the landmass close to world origin. */
-export function pickStartCell(seed: number, points: CellPoint[], centerX: number, centerZ: number, spacing: number): number {
+/** Picks a cell near (centerX, centerZ) to anchor a landmass there, excluding any already-claimed cells. */
+export function pickStartCell(
+  seed: number,
+  points: CellPoint[],
+  centerX: number,
+  centerZ: number,
+  spacing: number,
+  excluded: ReadonlySet<number> = new Set(),
+): number {
   const rng = mulberry32(deriveSeed(seed, START_CELL_SALT));
   const maxDistSq = (spacing * 1.5) ** 2;
 
   const candidates = points
     .map((p, index) => ({ index, distSq: (p.x - centerX) ** 2 + (p.z - centerZ) ** 2 }))
-    .filter((c) => c.distSq <= maxDistSq)
+    .filter((c) => c.distSq <= maxDistSq && !excluded.has(c.index))
     .map((c) => c.index);
 
   if (candidates.length === 0) {
-    // Fallback: closest point to center, guaranteed to exist for any non-empty point set.
-    let closest = 0;
+    // Fallback: closest non-excluded point to center, guaranteed to exist as long as the point set
+    // has room left outside `excluded`.
+    let closest = -1;
     let closestDistSq = Infinity;
     points.forEach((p, index) => {
+      if (excluded.has(index)) return;
       const distSq = (p.x - centerX) ** 2 + (p.z - centerZ) ** 2;
       if (distSq < closestDistSq) {
         closestDistSq = distSq;
@@ -44,11 +53,19 @@ export function pickStartCell(seed: number, points: CellPoint[], centerX: number
 /**
  * Frontier-based randomized BFS, weighted toward candidates touching more already-selected
  * neighbors — biases growth toward compact, believable blobs while staying genuinely randomized.
+ * `claimed` cells (grown by an earlier continent) are never selected, making multi-continent
+ * growth non-overlapping by construction rather than merely improbable.
  */
-export function growLandmass(seed: number, adjacency: number[][], startIndex: number, targetCount: number): Set<number> {
+export function growLandmass(
+  seed: number,
+  adjacency: number[][],
+  startIndex: number,
+  targetCount: number,
+  claimed: ReadonlySet<number> = new Set(),
+): Set<number> {
   const rng = mulberry32(deriveSeed(seed, GROWTH_SALT));
   const selected = new Set<number>([startIndex]);
-  const frontier = new Set<number>(adjacency[startIndex]);
+  const frontier = new Set<number>(adjacency[startIndex].filter((n) => !claimed.has(n)));
 
   while (selected.size < targetCount && frontier.size > 0) {
     const candidates = [...frontier];
@@ -62,7 +79,7 @@ export function growLandmass(seed: number, adjacency: number[][], startIndex: nu
     frontier.delete(picked);
 
     for (const n of adjacency[picked]) {
-      if (!selected.has(n)) frontier.add(n);
+      if (!selected.has(n) && !claimed.has(n)) frontier.add(n);
     }
   }
 
