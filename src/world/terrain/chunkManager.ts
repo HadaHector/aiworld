@@ -14,6 +14,7 @@ export interface ChunkManagerOptions {
 export interface ChunkManager {
   loadInitial: (x: number, z: number) => void;
   update: (x: number, z: number) => void;
+  setRadii: (loadRadius: number, unloadRadius: number) => void;
   dispose: () => void;
 }
 
@@ -28,7 +29,10 @@ function chunkKey(cx: number, cz: number): string {
 
 /** Streams terrain chunk meshes in/out around a moving position based on a load/unload radius. */
 export function createChunkManager(options: ChunkManagerOptions): ChunkManager {
-  const { scene, sampleTerrain, chunkSize, chunkSubdivisions, loadRadius, unloadRadius } = options;
+  const { scene, sampleTerrain, chunkSize, chunkSubdivisions } = options;
+
+  let loadRadius = options.loadRadius;
+  let unloadRadius = options.unloadRadius;
 
   const loaded = new Map<string, GroundMesh>();
   const queued = new Set<string>();
@@ -36,6 +40,8 @@ export function createChunkManager(options: ChunkManagerOptions): ChunkManager {
 
   let lastPlayerChunkX: number | null = null;
   let lastPlayerChunkZ: number | null = null;
+  let lastX = 0;
+  let lastZ = 0;
 
   function chunkCenter(cx: number, cz: number): { x: number; z: number } {
     return { x: (cx + 0.5) * chunkSize, z: (cz + 0.5) * chunkSize };
@@ -121,9 +127,14 @@ export function createChunkManager(options: ChunkManagerOptions): ChunkManager {
     }
     lastPlayerChunkX = Math.floor(x / chunkSize);
     lastPlayerChunkZ = Math.floor(z / chunkSize);
+    lastX = x;
+    lastZ = z;
   }
 
   function update(x: number, z: number): void {
+    lastX = x;
+    lastZ = z;
+
     const playerChunkX = Math.floor(x / chunkSize);
     const playerChunkZ = Math.floor(z / chunkSize);
 
@@ -137,6 +148,15 @@ export function createChunkManager(options: ChunkManagerOptions): ChunkManager {
     drainOneFromQueue(x, z);
   }
 
+  function setRadii(nextLoadRadius: number, nextUnloadRadius: number): void {
+    loadRadius = nextLoadRadius;
+    unloadRadius = nextUnloadRadius;
+    // Re-evaluate immediately against the last known position so a draw-distance change takes
+    // effect right away instead of waiting for the next chunk-boundary crossing.
+    enqueueMissingChunks(lastX, lastZ);
+    unloadOutOfRangeChunks(lastX, lastZ);
+  }
+
   function dispose(): void {
     for (const mesh of loaded.values()) {
       mesh.dispose();
@@ -146,5 +166,5 @@ export function createChunkManager(options: ChunkManagerOptions): ChunkManager {
     buildQueue.length = 0;
   }
 
-  return { loadInitial, update, dispose };
+  return { loadInitial, update, setRadii, dispose };
 }

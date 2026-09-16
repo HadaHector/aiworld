@@ -1,6 +1,6 @@
 import { createVoronoiField, type VoronoiField } from "./voronoiField";
 import { computeCellBounds, generateCellDiagram, type CellPoint } from "./cellGrid";
-import { planWorld } from "./continentLayout";
+import { planWorld, type ContinentPlan } from "./continentLayout";
 import { pickStartCell, growLandmass } from "./regionGrowth";
 import { partitionIntoAreas, assignAreaBiomes } from "./areaAssignment";
 import { createBaseNoise2D } from "../terrain/noise";
@@ -27,6 +27,7 @@ export type AreaSampler = (worldX: number, worldZ: number) => AreaSample;
 export interface AreaWorld {
   sampleArea: AreaSampler;
   worldExtent: number;
+  continents: ContinentPlan[];
 }
 
 function computeBorderBlend(nearestDistance: number, secondNearestDistance: number, jitter: number): number {
@@ -98,5 +99,5 @@ export function createAreaSampler(seed: number): AreaWorld {
     return { landmass, isLand: landmass > 0, primaryBiome, secondaryBiome, biomeBlend };
   }
 
-  return { sampleArea, worldExtent: layout.worldExtent };
+  return { sampleArea, worldExtent: layout.worldExtent, continents: layout.continents };
 }

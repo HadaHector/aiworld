@@ -17,6 +17,7 @@ const CAPSULE_RADIUS = 0.4;
 export interface Character {
   mesh: Mesh;
   update: (deltaSeconds: number, camera: ArcRotateCamera) => void;
+  teleport: (worldX: number, worldZ: number) => void;
   dispose: () => void;
 }
 
@@ -57,9 +58,15 @@ export function createCharacter(scene: Scene, heightAt: HeightSampler): Characte
     mesh.position.y = heightAt(mesh.position.x, mesh.position.z) + CAPSULE_HEIGHT / 2;
   }
 
+  function teleport(worldX: number, worldZ: number): void {
+    mesh.position.x = worldX;
+    mesh.position.z = worldZ;
+    mesh.position.y = heightAt(worldX, worldZ) + CAPSULE_HEIGHT / 2;
+  }
+
   function dispose(): void {
     input.dispose();
   }
 
-  return { mesh, update, dispose };
+  return { mesh, update, teleport, dispose };
 }

@@ -1,8 +1,9 @@
 import { createEngine, createScene } from "./core/engine";
-import { createWorld } from "./world/world";
+import { createWorld, DEFAULT_DRAW_DISTANCE, MIN_DRAW_DISTANCE, MAX_DRAW_DISTANCE } from "./world/world";
 import { createCharacter } from "./player/characterController";
 import { createThirdPersonCamera } from "./player/thirdPersonCamera";
 import { createDebugMap } from "./debug/debugMap";
+import { createSettingsPanel } from "./debug/settingsPanel";
 
 const canvas = document.getElementById("renderCanvas");
 if (!(canvas instanceof HTMLCanvasElement)) {
@@ -15,7 +16,16 @@ const scene = createScene(engine);
 const world = createWorld(scene);
 const character = createCharacter(scene, world.heightAt);
 const camera = createThirdPersonCamera(scene, canvas, character.mesh);
-const debugMap = createDebugMap(world.sampleTerrain, world.worldExtent);
+const debugMap = createDebugMap(world.sampleTerrain, world.worldExtent, world.continents, (worldX, worldZ) => {
+  character.teleport(worldX, worldZ);
+});
+
+createSettingsPanel({
+  min: MIN_DRAW_DISTANCE,
+  max: MAX_DRAW_DISTANCE,
+  initial: DEFAULT_DRAW_DISTANCE,
+  onChange: (value) => world.setDrawDistance(value),
+});
 
 window.addEventListener("keydown", (e) => {
   if (e.key.toLowerCase() === "m") {
@@ -26,7 +36,7 @@ window.addEventListener("keydown", (e) => {
 scene.onBeforeRenderObservable.add(() => {
   character.update(engine.getDeltaTime() / 1000, camera);
   world.updateChunks(character.mesh.position.x, character.mesh.position.z);
-  debugMap.updateMarker(character.mesh.position.x, character.mesh.position.z);
+  debugMap.updateMarker(character.mesh.position.x, character.mesh.position.z, camera.alpha);
 });
 
 engine.runRenderLoop(() => {

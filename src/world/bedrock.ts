@@ -11,7 +11,7 @@ const BEDROCK_PARAMS: FbmParams = {
   baseAmplitude: 2.5,
   persistence: 0.5,
   lacunarity: 2.0,
-  offset: 2,
+  offset: 6, // raised so bedrock alone rarely approaches sea level; see MIN_LAND_HEIGHT in terrainSampler.ts
 };
 
 /**

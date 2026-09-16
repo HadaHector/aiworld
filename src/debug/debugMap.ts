@@ -1,16 +1,28 @@
 import { Color3 } from "@babylonjs/core";
-import type { TerrainSampler } from "../world/terrain/terrainSampler";
+import type { TerrainSample, TerrainSampler } from "../world/terrain/terrainSampler";
 import type { BiomeColorBands } from "../world/biomes/biomeTypes";
+import type { ContinentPlan } from "../world/cells/continentLayout";
+import { SEA_LEVEL } from "../world/cells/areaField";
+import { GROWTH_RADIUS_SAFETY_FACTOR } from "../world/cells/config";
 
 const SAMPLE_RESOLUTION = 400; // internal sample grid, kept modest since this is a debug tool
-const DISPLAY_SIZE_CSS = "min(85vw, 85vh)"; // large, centered, capped to fit the viewport
+const DISPLAY_SIZE_CSS = "min(85vw, 80vh)"; // large, centered, capped to fit the viewport
 const OCEAN_COLOR = new Color3(0.09, 0.32, 0.45);
+const LAKE_COLOR = new Color3(0.45, 0.68, 0.88); // lighter blue: inland water below sea level, distinct from open ocean
 const MARKER_COLOR = "rgb(255, 60, 60)";
 const MARKER_RADIUS_PX = 4;
+const HEADING_LENGTH_PX = 14;
+const CONTINENT_VIEW_MARGIN = 1.5; // margin beyond a continent's true (non-safety-inflated) radius
+
+interface Viewport {
+  centerX: number;
+  centerZ: number;
+  halfSize: number;
+}
 
 export interface DebugMap {
   toggle: () => void;
-  updateMarker: (worldX: number, worldZ: number) => void;
+  updateMarker: (worldX: number, worldZ: number, headingRadians: number) => void;
 }
 
 function pickBandColor(height: number, bands: BiomeColorBands): Color3 {
@@ -20,12 +32,31 @@ function pickBandColor(height: number, bands: BiomeColorBands): Color3 {
   return bands.color3;
 }
 
+function colorForSample(sample: TerrainSample): Color3 {
+  if (!sample.isLand) return OCEAN_COLOR;
+  if (sample.height < SEA_LEVEL) return LAKE_COLOR;
+  return pickBandColor(sample.height, sample.primaryBiome.colors);
+}
+
+function distanceSq(ax: number, az: number, bx: number, bz: number): number {
+  const dx = ax - bx;
+  const dz = az - bz;
+  return dx * dx + dz * dz;
+}
+
 /**
- * A large, full-screen-ish top-down debug map showing every generated continent at once.
- * Rendered once (lazily, on first open) since a full-world sample pass is relatively expensive;
- * a small live marker is cheaply redrawn on top of the cached base image every frame while visible.
+ * A large, full-screen-ish top-down debug map. Two views: "World" (every continent at once) and
+ * "Continent" (zoomed to whichever continent is nearest the player, revealing individual area
+ * shapes). Each view's base image is rendered once (lazily, on first need) and cached, since a
+ * full sample pass is relatively expensive; a small live marker with a heading indicator is
+ * cheaply redrawn on top every frame while visible. Click anywhere on the map to teleport there.
  */
-export function createDebugMap(sampleTerrain: TerrainSampler, worldExtent: number): DebugMap {
+export function createDebugMap(
+  sampleTerrain: TerrainSampler,
+  worldExtent: number,
+  continents: ContinentPlan[],
+  onTeleport: (worldX: number, worldZ: number) => void,
+): DebugMap {
   const overlay = document.createElement("div");
   overlay.style.cssText = `
     position: fixed; inset: 0; z-index: 1000; display: none;
@@ -35,45 +66,107 @@ export function createDebugMap(sampleTerrain: TerrainSampler, worldExtent: numbe
   `;
 
   const label = document.createElement("div");
-  label.textContent = "Map (M or Esc to close)";
+  label.textContent = "Map (M or Esc to close, click to teleport)";
   label.style.cssText = "font-size: 14px;";
   overlay.appendChild(label);
+
+  const tabs = document.createElement("div");
+  tabs.style.cssText = "display: flex; gap: 6px;";
+  overlay.appendChild(tabs);
+
+  function createTabButton(text: string): HTMLButtonElement {
+    const button = document.createElement("button");
+    button.textContent = text;
+    button.style.cssText = `
+      font-family: sans-serif; font-size: 12px; padding: 4px 12px; border-radius: 3px;
+      border: 1px solid rgba(255,255,255,0.4); background: rgba(255,255,255,0.1); color: #eee;
+      cursor: pointer;
+    `;
+    tabs.appendChild(button);
+    return button;
+  }
+
+  const worldTabButton = createTabButton("World");
+  const continentTabButton = createTabButton("Continent");
 
   const displayCanvas = document.createElement("canvas");
   displayCanvas.width = SAMPLE_RESOLUTION;
   displayCanvas.height = SAMPLE_RESOLUTION;
   displayCanvas.style.cssText = `
     width: ${DISPLAY_SIZE_CSS}; height: ${DISPLAY_SIZE_CSS};
-    border: 2px solid rgba(255,255,255,0.6); border-radius: 4px;
+    border: 2px solid rgba(255,255,255,0.6); border-radius: 4px; cursor: crosshair;
   `;
   overlay.appendChild(displayCanvas);
   document.body.appendChild(overlay);
 
-  const baseCanvas = document.createElement("canvas");
-  baseCanvas.width = SAMPLE_RESOLUTION;
-  baseCanvas.height = SAMPLE_RESOLUTION;
-
-  const baseCtx = baseCanvas.getContext("2d");
   const displayCtx = displayCanvas.getContext("2d");
-  if (!baseCtx || !displayCtx) {
+  if (!displayCtx) {
     throw new Error("2D canvas context unavailable");
   }
 
-  let rendered = false;
+  const baseCanvasCache = new Map<string, HTMLCanvasElement>();
+  const viewportCache = new Map<string, Viewport>();
+
   let visible = false;
+  let viewMode: "world" | "continent" = "world";
   let markerX = 0;
   let markerZ = 0;
+  let heading = 0;
 
-  const renderBaseMap = (): void => {
-    const imageData = baseCtx.createImageData(SAMPLE_RESOLUTION, SAMPLE_RESOLUTION);
-    const half = worldExtent / 2;
+  const worldViewport: Viewport = { centerX: 0, centerZ: 0, halfSize: worldExtent / 2 };
+
+  function nearestContinent(): ContinentPlan | null {
+    if (continents.length === 0) return null;
+    let best = continents[0];
+    let bestDistSq = distanceSq(markerX, markerZ, best.centerX, best.centerZ);
+    for (const c of continents) {
+      const d = distanceSq(markerX, markerZ, c.centerX, c.centerZ);
+      if (d < bestDistSq) {
+        bestDistSq = d;
+        best = c;
+      }
+    }
+    return best;
+  }
+
+  function continentViewKey(c: ContinentPlan): string {
+    return `continent:${c.centerX},${c.centerZ}`;
+  }
+
+  function activeViewport(): Viewport {
+    if (viewMode === "world") return worldViewport;
+    const c = nearestContinent();
+    if (!c) return worldViewport;
+    const key = continentViewKey(c);
+    const cached = viewportCache.get(key);
+    if (cached) return cached;
+    const trueRadius = c.radius / GROWTH_RADIUS_SAFETY_FACTOR;
+    const viewport: Viewport = { centerX: c.centerX, centerZ: c.centerZ, halfSize: trueRadius * CONTINENT_VIEW_MARGIN };
+    viewportCache.set(key, viewport);
+    return viewport;
+  }
+
+  function activeViewKey(): string {
+    if (viewMode === "world") return "world";
+    const c = nearestContinent();
+    return c ? continentViewKey(c) : "world";
+  }
+
+  function renderBaseMap(viewport: Viewport): HTMLCanvasElement {
+    const canvas = document.createElement("canvas");
+    canvas.width = SAMPLE_RESOLUTION;
+    canvas.height = SAMPLE_RESOLUTION;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("2D canvas context unavailable");
+
+    const imageData = ctx.createImageData(SAMPLE_RESOLUTION, SAMPLE_RESOLUTION);
 
     for (let py = 0; py < SAMPLE_RESOLUTION; py++) {
       for (let px = 0; px < SAMPLE_RESOLUTION; px++) {
-        const worldX = (px / SAMPLE_RESOLUTION) * worldExtent - half;
-        const worldZ = (py / SAMPLE_RESOLUTION) * worldExtent - half;
+        const worldX = viewport.centerX + (px / SAMPLE_RESOLUTION) * viewport.halfSize * 2 - viewport.halfSize;
+        const worldZ = viewport.centerZ + (py / SAMPLE_RESOLUTION) * viewport.halfSize * 2 - viewport.halfSize;
         const sample = sampleTerrain(worldX, worldZ);
-        const color = sample.isLand ? pickBandColor(sample.height, sample.primaryBiome.colors) : OCEAN_COLOR;
+        const color = colorForSample(sample);
 
         const i = (py * SAMPLE_RESOLUTION + px) * 4;
         imageData.data[i] = Math.round(color.r * 255);
@@ -83,16 +176,53 @@ export function createDebugMap(sampleTerrain: TerrainSampler, worldExtent: numbe
       }
     }
 
-    baseCtx.putImageData(imageData, 0, 0);
-    rendered = true;
-  };
+    ctx.putImageData(imageData, 0, 0);
+    return canvas;
+  }
+
+  function getBaseCanvas(): HTMLCanvasElement {
+    const key = activeViewKey();
+    const cached = baseCanvasCache.get(key);
+    if (cached) return cached;
+    const canvas = renderBaseMap(activeViewport());
+    baseCanvasCache.set(key, canvas);
+    return canvas;
+  }
+
+  function worldToPixel(worldX: number, worldZ: number): { x: number; y: number } {
+    const viewport = activeViewport();
+    return {
+      x: ((worldX - viewport.centerX + viewport.halfSize) / (viewport.halfSize * 2)) * SAMPLE_RESOLUTION,
+      y: ((worldZ - viewport.centerZ + viewport.halfSize) / (viewport.halfSize * 2)) * SAMPLE_RESOLUTION,
+    };
+  }
+
+  function pixelToWorld(fracX: number, fracZ: number): { x: number; z: number } {
+    const viewport = activeViewport();
+    return {
+      x: viewport.centerX + fracX * viewport.halfSize * 2 - viewport.halfSize,
+      z: viewport.centerZ + fracZ * viewport.halfSize * 2 - viewport.halfSize,
+    };
+  }
+
+  function updateTabStyles(): void {
+    worldTabButton.style.background = viewMode === "world" ? "rgba(255,255,255,0.35)" : "rgba(255,255,255,0.1)";
+    continentTabButton.style.background = viewMode === "continent" ? "rgba(255,255,255,0.35)" : "rgba(255,255,255,0.1)";
+  }
 
   const redraw = (): void => {
-    displayCtx.drawImage(baseCanvas, 0, 0);
+    displayCtx.drawImage(getBaseCanvas(), 0, 0);
 
-    const half = worldExtent / 2;
-    const markerPxX = ((markerX + half) / worldExtent) * SAMPLE_RESOLUTION;
-    const markerPxZ = ((markerZ + half) / worldExtent) * SAMPLE_RESOLUTION;
+    const { x: markerPxX, y: markerPxZ } = worldToPixel(markerX, markerZ);
+
+    const dirX = -Math.cos(heading);
+    const dirZ = -Math.sin(heading);
+    displayCtx.strokeStyle = MARKER_COLOR;
+    displayCtx.lineWidth = 2;
+    displayCtx.beginPath();
+    displayCtx.moveTo(markerPxX, markerPxZ);
+    displayCtx.lineTo(markerPxX + dirX * HEADING_LENGTH_PX, markerPxZ + dirZ * HEADING_LENGTH_PX);
+    displayCtx.stroke();
 
     displayCtx.fillStyle = MARKER_COLOR;
     displayCtx.beginPath();
@@ -100,25 +230,44 @@ export function createDebugMap(sampleTerrain: TerrainSampler, worldExtent: numbe
     displayCtx.fill();
   };
 
-  const setVisible = (next: boolean): void => {
+  function setVisible(next: boolean): void {
     visible = next;
     overlay.style.display = visible ? "flex" : "none";
     if (visible) {
-      if (!rendered) renderBaseMap();
+      updateTabStyles();
       redraw();
     }
-  };
+  }
+
+  function setViewMode(mode: "world" | "continent"): void {
+    viewMode = mode;
+    updateTabStyles();
+    if (visible) redraw();
+  }
+
+  worldTabButton.addEventListener("click", () => setViewMode("world"));
+  continentTabButton.addEventListener("click", () => setViewMode("continent"));
 
   const toggle = (): void => setVisible(!visible);
 
-  const updateMarker = (worldX: number, worldZ: number): void => {
+  const updateMarker = (worldX: number, worldZ: number, headingRadians: number): void => {
     markerX = worldX;
     markerZ = worldZ;
+    heading = headingRadians;
     if (visible) redraw();
   };
 
   window.addEventListener("keydown", (e) => {
     if (e.key === "Escape" && visible) setVisible(false);
+  });
+
+  displayCanvas.addEventListener("click", (e) => {
+    const rect = displayCanvas.getBoundingClientRect();
+    const fracX = (e.clientX - rect.left) / rect.width;
+    const fracZ = (e.clientY - rect.top) / rect.height;
+    const { x, z } = pixelToWorld(fracX, fracZ);
+    onTeleport(x, z);
+    setVisible(false);
   });
 
   return { toggle, updateMarker };
