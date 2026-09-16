@@ -14,6 +14,16 @@ const MARKER_RADIUS_PX = 4;
 const HEADING_LENGTH_PX = 14;
 const CONTINENT_VIEW_MARGIN = 1.5; // margin beyond a continent's true (non-safety-inflated) radius
 
+// Emboss/relief shading: each land pixel is compared against its upper-left neighbor (one pixel
+// away, so the offset self-scales with zoom - a big offset in World view, a fine one in Continent
+// view), and darkened/lightened by the height difference, like a classic emboss filter or a
+// cartographic shaded-relief layer laid over land-cover color. Only meaningful at Continent-view
+// resolution (World view's per-pixel step is thousands of world units, so neighboring pixels are
+// essentially uncorrelated - shading there would just be noise/static, not relief), so it's only
+// enabled for that view. Water stays flat so land relief reads clearly against it.
+const EMBOSS_STRENGTH = 0.05; // world-height-units -> shade magnitude
+const EMBOSS_INTENSITY = 0.6; // shade -> brightness multiplier range (0.4x .. 1.6x at full shade)
+
 interface Viewport {
   centerX: number;
   centerZ: number;
@@ -152,7 +162,7 @@ export function createDebugMap(
     return c ? continentViewKey(c) : "world";
   }
 
-  function renderBaseMap(viewport: Viewport): HTMLCanvasElement {
+  function renderBaseMap(viewport: Viewport, embossEnabled: boolean): HTMLCanvasElement {
     const canvas = document.createElement("canvas");
     canvas.width = SAMPLE_RESOLUTION;
     canvas.height = SAMPLE_RESOLUTION;
@@ -160,6 +170,7 @@ export function createDebugMap(
     if (!ctx) throw new Error("2D canvas context unavailable");
 
     const imageData = ctx.createImageData(SAMPLE_RESOLUTION, SAMPLE_RESOLUTION);
+    const worldStepPerPixel = (viewport.halfSize * 2) / SAMPLE_RESOLUTION;
 
     for (let py = 0; py < SAMPLE_RESOLUTION; py++) {
       for (let px = 0; px < SAMPLE_RESOLUTION; px++) {
@@ -168,10 +179,18 @@ export function createDebugMap(
         const sample = sampleTerrain(worldX, worldZ);
         const color = colorForSample(sample);
 
+        let factor = 1;
+        if (embossEnabled && sample.isLand && sample.height >= SEA_LEVEL) {
+          const neighborHeight = sampleTerrain(worldX - worldStepPerPixel, worldZ - worldStepPerPixel).height;
+          const diff = sample.height - neighborHeight;
+          const shade = Math.max(-1, Math.min(1, diff * EMBOSS_STRENGTH));
+          factor = 1 + shade * EMBOSS_INTENSITY;
+        }
+
         const i = (py * SAMPLE_RESOLUTION + px) * 4;
-        imageData.data[i] = Math.round(color.r * 255);
-        imageData.data[i + 1] = Math.round(color.g * 255);
-        imageData.data[i + 2] = Math.round(color.b * 255);
+        imageData.data[i] = Math.max(0, Math.min(255, Math.round(color.r * 255 * factor)));
+        imageData.data[i + 1] = Math.max(0, Math.min(255, Math.round(color.g * 255 * factor)));
+        imageData.data[i + 2] = Math.max(0, Math.min(255, Math.round(color.b * 255 * factor)));
         imageData.data[i + 3] = 255;
       }
     }
@@ -184,7 +203,7 @@ export function createDebugMap(
     const key = activeViewKey();
     const cached = baseCanvasCache.get(key);
     if (cached) return cached;
-    const canvas = renderBaseMap(activeViewport());
+    const canvas = renderBaseMap(activeViewport(), viewMode === "continent");
     baseCanvasCache.set(key, canvas);
     return canvas;
   }
