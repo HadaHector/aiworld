@@ -7,6 +7,7 @@ export interface World {
   heightAt: (worldX: number, worldZ: number) => number;
   sampleTerrain: TerrainSampler;
   updateChunks: (playerX: number, playerZ: number) => void;
+  worldExtent: number;
 }
 
 const WORLD_SEED = 1337;
@@ -43,5 +44,5 @@ export function createWorld(scene: Scene): World {
   const heightAt = (worldX: number, worldZ: number) => sampleTerrain(worldX, worldZ).height;
   const updateChunks = (playerX: number, playerZ: number) => chunkManager.update(playerX, playerZ);
 
-  return { heightAt, sampleTerrain, updateChunks };
+  return { heightAt, sampleTerrain, updateChunks, worldExtent };
 }
