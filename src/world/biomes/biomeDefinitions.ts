@@ -47,7 +47,7 @@ const plains: BiomeDefinition = {
     slopeColor: new Color3(0.45, 0.42, 0.4),
   },
   outputs: { height: detailHeightPipeline({ amplitude: 4.75, frequency: 0.001, offset: 0 }) },
-  borderType: "smooth",
+  borderType: "mountain",
   spawnWeight: 3,
 };
 
@@ -67,7 +67,7 @@ const forest: BiomeDefinition = {
     slopeColor: new Color3(0.3, 0.29, 0.28),
   },
   outputs: { height: detailHeightPipeline({ amplitude: 6.45, frequency: 0.0064, offset: 0.5 }) },
-  borderType: "smooth",
+  borderType: "mountain",
   spawnWeight: 2,
 };
 
@@ -90,7 +90,7 @@ const hills: BiomeDefinition = {
   // below - wider wavelength, lower persistence so higher octaves stay texture, not competing
   // bumps), measured via FORCE_BIOME_ID (devConfig.ts).
   outputs: { height: detailHeightPipeline({ amplitude: 5.9, frequency: 0.0041, offset: 2, octaves: 5, persistence: 0.42 }) },
-  borderType: "smooth",
+  borderType: "mountain",
   spawnWeight: 2,
 };
 
@@ -110,7 +110,7 @@ const desert: BiomeDefinition = {
     slopeColor: new Color3(0.68, 0.5, 0.32),
   },
   outputs: { height: detailHeightPipeline({ amplitude: 6.1, frequency: 0.0026, offset: 2, persistence: 0.5 }) },
-  borderType: "smooth",
+  borderType: "mountain",
   spawnWeight: 1.5,
 };
 
@@ -140,7 +140,7 @@ const mountains: BiomeDefinition = {
   outputs: {
     height: detailHeightPipeline({ amplitude: 60, frequency: 0.0015, offset: 12, octaves: 6, persistence: 0.42 }),
   },
-  borderType: "smooth",
+  borderType: "mountain", // generates boundary hills along any edge shared with a differently-bordered biome
   spawnWeight: 1,
 };
 
@@ -160,7 +160,7 @@ const tundra: BiomeDefinition = {
     slopeColor: new Color3(0.6, 0.6, 0.62),
   },
   outputs: { height: detailHeightPipeline({ amplitude: 2.1, frequency: 0.0162, offset: 1 }) },
-  borderType: "smooth",
+  borderType: "mountain",
   spawnWeight: 1,
 };
 
@@ -217,7 +217,7 @@ const canyon: BiomeDefinition = {
       ],
     },
   },
-  borderType: "smooth",
+  borderType: "mountain", // generates boundary hills along any edge shared with a differently-bordered biome
   spawnWeight: 1,
 };
 
@@ -254,7 +254,7 @@ const swamp: BiomeDefinition = {
       ],
     },
   },
-  borderType: "smooth",
+  borderType: "mountain",
   spawnWeight: 1,
 };
 

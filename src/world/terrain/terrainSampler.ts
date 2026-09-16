@@ -7,6 +7,7 @@ import type { BiomeDefinition } from "../biomes/biomeTypes";
 import { BIOME_REGISTRY } from "../biomes/biomeDefinitions";
 import { createBaseNoise2D } from "./noise";
 import { compilePipeline, type CompiledPipeline } from "./pipeline/pipelineCompiler";
+import { createBoundaryHillEvaluator } from "./boundaryHills/boundaryHillsEvaluator";
 
 export interface TerrainSample {
   height: number;
@@ -52,6 +53,7 @@ export function createTerrainSampler(seed: number): TerrainWorld {
   const bedrock = createBedrockSampler(seed);
   const oceanNoise2D = createBaseNoise2D(deriveSeed(seed, OCEAN_SALT));
   const heightPipelines = compileHeightPipelines(seed);
+  const evaluateBoundaryHill = createBoundaryHillEvaluator(seed);
 
   function sampleTerrain(worldX: number, worldZ: number): TerrainSample {
     const area = sampleArea(worldX, worldZ);
@@ -61,9 +63,10 @@ export function createTerrainSampler(seed: number): TerrainWorld {
       area.biomeBlend > 0
         ? lerp(primaryDetail, heightPipelines.get(area.secondaryBiome.id)!(worldX, worldZ), area.biomeBlend)
         : primaryDetail;
+    const boundaryHill = evaluateBoundaryHill(area.boundaryHillStyle, area.borderGap, worldX, worldZ);
 
     const bedrockHeight = bedrock(worldX, worldZ);
-    const landHeight = Math.max(bedrockHeight + blendedDetail, MIN_LAND_HEIGHT);
+    const landHeight = Math.max(bedrockHeight + blendedDetail + boundaryHill, MIN_LAND_HEIGHT);
 
     const oceanNoise = oceanNoise2D(worldX * OCEAN_FLOOR_NOISE_FREQUENCY, worldZ * OCEAN_FLOOR_NOISE_FREQUENCY) * OCEAN_FLOOR_NOISE_SCALE;
     const oceanFloorHeight = SEA_LEVEL + OCEAN_FLOOR_DEPTH + oceanNoise;
