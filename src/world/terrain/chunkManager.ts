@@ -1,10 +1,12 @@
 import type { GroundMesh, Scene } from "@babylonjs/core";
 import { createTerrainChunk } from "./terrainMesh";
 import type { TerrainSampler } from "./terrainSampler";
+import type { MaterialLibrary } from "../materials/materialLibrary";
 
 export interface ChunkManagerOptions {
   scene: Scene;
   sampleTerrain: TerrainSampler;
+  materialLibrary: MaterialLibrary;
   chunkSize: number;
   chunkSubdivisions: number;
   loadRadius: number;
@@ -29,7 +31,7 @@ function chunkKey(cx: number, cz: number): string {
 
 /** Streams terrain chunk meshes in/out around a moving position based on a load/unload radius. */
 export function createChunkManager(options: ChunkManagerOptions): ChunkManager {
-  const { scene, sampleTerrain, chunkSize, chunkSubdivisions } = options;
+  const { scene, sampleTerrain, materialLibrary, chunkSize, chunkSubdivisions } = options;
 
   let loadRadius = options.loadRadius;
   let unloadRadius = options.unloadRadius;
@@ -78,6 +80,7 @@ export function createChunkManager(options: ChunkManagerOptions): ChunkManager {
       size: chunkSize,
       subdivisions: chunkSubdivisions,
       sampleTerrain,
+      materialLibrary,
       originX: center.x,
       originZ: center.z,
     });

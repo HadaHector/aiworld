@@ -41,6 +41,8 @@ export interface AreaSample {
   boundaryHillStyle: BoundaryHillStyle | null;
   lakeFactor: number;
   isRiverEdge: boolean;
+  riverTaper: number; // 0 at a river's mouth, 1 at its far end - meaningless unless isRiverEdge
+  riverGap: number; // distance to use for the river carve envelope - meaningless unless isRiverEdge
 }
 
 export type AreaSampler = (worldX: number, worldZ: number) => AreaSample;
@@ -112,7 +114,8 @@ export function createAreaSampler(seed: number): AreaWorld {
   const areaBiomes: BiomeDefinition[] = [];
   const lakeCells = new Set<number>();
   const usedRiverCells = new Set<number>();
-  const riverEdges = new Set<number>();
+  const riverEdges = new Map<number, number>(); // edge pair key -> taper fraction, 0 at the mouth, 1 at the far end
+  const oceanMouthCells = new Set<number>(); // river mouth cells whose own border touches open ocean - see sampleArea
   let areaIdOffset = 0;
 
   for (const continent of layout.continents) {
@@ -131,11 +134,13 @@ export function createAreaSampler(seed: number): AreaWorld {
     // assignAreaBiomes's own convention of seeding fresh off continent.seed, not one stream spanning
     // the whole world) - never lets the continent's own land-growth start cell become a lake, since
     // that's where continent 0 sits (the player spawns at heightAt(0,0)) and could otherwise spawn
-    // the player inside a lake.
+    // the player inside a lake. Also excludes any cell touching open ocean - a lake sitting right on
+    // the coastline would just read as a notch in the coast, not a distinct inland body of water.
     const lakeRng = mulberry32(deriveSeed(continent.seed, LAKE_ROLL_SALT));
     for (const cellIndex of continentCells) {
       const roll = lakeRng();
       if (cellIndex === startIndex) continue;
+      if (adjacency[cellIndex].some((n) => !landCells.has(n))) continue;
       const biome = continentBiomes[localAreaId.get(cellIndex)!];
       if (roll < (biome.lakeChance ?? 0)) lakeCells.add(cellIndex);
     }
@@ -149,7 +154,22 @@ export function createAreaSampler(seed: number): AreaWorld {
       usedRiverCells,
     });
     for (const path of riverPaths) {
-      for (let i = 0; i < path.length - 1; i++) riverEdges.add(cellPairKey(path[i], path[i + 1]));
+      // A river only ever carves along its curated cell-to-cell edges - an ocean-adjacent mouth's
+      // OWN border with the true coastline is a separate, independent piece of geometry (the
+      // landField/oceanField coastline) that would otherwise stay untouched, leaving a visible gap
+      // of ordinary land between the river's first carved edge and the open water it's meant to
+      // start from. Lakes don't have this problem (lake-shore blending already applies to any
+      // border touching a lake cell, not just curated edges) - mark ocean mouths so sampleArea can
+      // extend the same carve to their coastal border too.
+      const mouthCell = path[0];
+      if (adjacency[mouthCell].some((n) => !landCells.has(n))) oceanMouthCells.add(mouthCell);
+
+      // Widest at the mouth (t=0), narrowing toward the far end (t=1) - see riverEvaluator.ts.
+      const totalEdges = path.length - 1;
+      for (let i = 0; i < totalEdges; i++) {
+        const t = totalEdges > 1 ? i / (totalEdges - 1) : 0;
+        riverEdges.set(cellPairKey(path[i], path[i + 1]), t);
+      }
     }
   }
 
@@ -221,7 +241,24 @@ export function createAreaSampler(seed: number): AreaWorld {
     const secondaryCellId = nearLand.secondNearestIndex === -1 ? primaryCellId : cellIdOf(nearLand.secondNearestIndex);
     const lakeJitter = lakeNoise2D(worldX * LAKE_NOISE_FREQUENCY, worldZ * LAKE_NOISE_FREQUENCY) * LAKE_NOISE_AMPLITUDE;
     const lakeFactor = computeLakeFactor(primaryCellId, secondaryCellId, borderGap, lakeJitter);
-    const isRiverEdge = secondaryCellId !== -1 && riverEdges.has(cellPairKey(primaryCellId, secondaryCellId));
+
+    const riverTaperLookup = secondaryCellId === -1 ? undefined : riverEdges.get(cellPairKey(primaryCellId, secondaryCellId));
+    let isRiverEdge = riverTaperLookup !== undefined;
+    let riverTaper = riverTaperLookup ?? 0;
+    let riverGap = isRiverEdge ? borderGap : Infinity;
+
+    // Extend an ocean-mouthed river's carve to its own coastline border too, using the same
+    // (unjittered) distance the coastline itself uses - otherwise the channel stops at the first
+    // curated edge, leaving a visible gap of ordinary land between the river and the open water it
+    // starts from. Only wins if it's the closer/more relevant signal at this point.
+    if (oceanMouthCells.has(primaryCellId)) {
+      const coastGap = nearOcean.nearestDistance - nearLand.nearestDistance;
+      if (coastGap < riverGap) {
+        isRiverEdge = true;
+        riverTaper = 0; // the mouth's own widest point
+        riverGap = coastGap;
+      }
+    }
 
     // Rivers take precedence over boundary hills at the same border - a curated river edge can
     // land on a border that also qualifies for a hill (every biome is mountain-type today), which
@@ -240,6 +277,8 @@ export function createAreaSampler(seed: number): AreaWorld {
       boundaryHillStyle,
       lakeFactor,
       isRiverEdge,
+      riverTaper,
+      riverGap,
     };
   }
 

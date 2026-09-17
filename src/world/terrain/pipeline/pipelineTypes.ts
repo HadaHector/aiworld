@@ -24,6 +24,7 @@ export type NoiseSpec = FbmNoiseSpec | RidgedNoiseSpec | BillowNoiseSpec;
 export type PipelineStep =
   | { output: string; op: "sample"; noise: string }
   | { output: string; op: "constant"; value: number }
+  | { output: string; op: "input"; name: string } // reads a named value from an external context bag, 0 if absent
   | { output: string; op: "scale"; input: string; factor: number }
   | { output: string; op: "offset"; input: string; amount: number }
   | { output: string; op: "power"; input: string; exponent: number }
@@ -34,6 +35,8 @@ export type PipelineStep =
   | { output: string; op: "add"; a: string; b: string }
   | { output: string; op: "subtract"; a: string; b: string }
   | { output: string; op: "multiply"; a: string; b: string }
+  | { output: string; op: "max"; a: string; b: string }
+  | { output: string; op: "min"; a: string; b: string }
   | { output: string; op: "lerp"; a: string; b: string; t: number };
 
 /**

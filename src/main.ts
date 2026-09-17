@@ -17,7 +17,7 @@ const scene = createScene(engine);
 const world = createWorld(scene);
 const character = createCharacter(scene, world.heightAt);
 const camera = createThirdPersonCamera(scene, canvas, character.mesh);
-const debugMap = createDebugMap(world.sampleTerrain, world.worldExtent, world.continents, (worldX, worldZ) => {
+const debugMap = createDebugMap(world.sampleTerrain, world.worldExtent, world.continents, world.materialLibrary, (worldX, worldZ) => {
   character.teleport(worldX, worldZ);
 });
 

@@ -68,4 +68,4 @@ const jaggedCrumple: BoundaryHillStyle = {
   },
 };
 
-export const BOUNDARY_HILL_STYLES: BoundaryHillStyle[] = [jaggedCrumple]; //jaggedRidge, rollingFbm, roundedBillow, jaggedCrumple
+export const BOUNDARY_HILL_STYLES: BoundaryHillStyle[] = [jaggedRidge, rollingFbm, roundedBillow, jaggedCrumple ];

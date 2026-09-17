@@ -3,10 +3,12 @@ import { createBaseNoise2D, fbm, type Noise2D, type FbmParams } from "../noise";
 import { ridgedNoise2D, billowNoise2D, type OctaveNoiseParams } from "./noiseGenerators";
 import type { NoiseSpec, PipelineDef, PipelineStep } from "./pipelineTypes";
 
-/** A compiled pipeline is just a fancier Noise2D - same shape, arbitrary internal machinery. */
-export type CompiledPipeline = Noise2D;
+/** A compiled pipeline samples world-space noise like a Noise2D, but can also pull in named
+ *  external values (e.g. "height", "slope", a biome flag) via an optional context bag - used by
+ *  material weight pipelines; height pipelines never pass one, so their behavior is unchanged. */
+export type CompiledPipeline = (worldX: number, worldZ: number, context?: Record<string, number>) => number;
 
-type StepFn = (worldX: number, worldZ: number, slots: Float64Array) => void;
+type StepFn = (worldX: number, worldZ: number, slots: Float64Array, context: Record<string, number> | undefined) => void;
 
 function hashString(value: string): number {
   let hash = 0x811c9dc5;
@@ -17,12 +19,12 @@ function hashString(value: string): number {
   return hash >>> 0;
 }
 
-function deriveNoiseSeed(rootSeed: number, biomeId: string, noiseName: string): number {
-  return deriveSeed(deriveSeed(rootSeed, hashString(biomeId)), hashString(noiseName));
+function deriveNoiseSeed(rootSeed: number, namespace: string, noiseName: string): number {
+  return deriveSeed(deriveSeed(rootSeed, hashString(namespace)), hashString(noiseName));
 }
 
-function compileNoiseSpec(spec: NoiseSpec, rootSeed: number, biomeId: string): Noise2D {
-  const seed = deriveNoiseSeed(rootSeed, biomeId, spec.name);
+function compileNoiseSpec(spec: NoiseSpec, rootSeed: number, namespace: string): Noise2D {
+  const seed = deriveNoiseSeed(rootSeed, namespace, spec.name);
   const baseNoise2D = createBaseNoise2D(seed);
   const octaveParams: OctaveNoiseParams = {
     octaves: spec.octaves,
@@ -51,12 +53,12 @@ function compileStep(
   slotIndex: Map<string, number>,
   noiseSamplers: Map<string, Noise2D>,
   outSlot: number,
-  biomeId: string,
+  namespace: string,
 ): StepFn {
   const resolveSlot = (name: string): number => {
     const index = slotIndex.get(name);
     if (index === undefined) {
-      throw new Error(`Pipeline for biome "${biomeId}" references unknown step/noise "${name}"`);
+      throw new Error(`Pipeline "${namespace}" references unknown step/noise "${name}"`);
     }
     return index;
   };
@@ -65,7 +67,7 @@ function compileStep(
     case "sample": {
       const noise2D = noiseSamplers.get(step.noise);
       if (!noise2D) {
-        throw new Error(`Pipeline for biome "${biomeId}" references unknown step/noise "${step.noise}"`);
+        throw new Error(`Pipeline "${namespace}" references unknown step/noise "${step.noise}"`);
       }
       return (worldX, worldZ, slots): void => {
         slots[outSlot] = noise2D(worldX, worldZ);
@@ -75,6 +77,12 @@ function compileStep(
       const value = step.value;
       return (_worldX, _worldZ, slots): void => {
         slots[outSlot] = value;
+      };
+    }
+    case "input": {
+      const name = step.name;
+      return (_worldX, _worldZ, slots, context): void => {
+        slots[outSlot] = context?.[name] ?? 0;
       };
     }
     case "scale": {
@@ -146,6 +154,20 @@ function compileStep(
         slots[outSlot] = slots[aSlot] * slots[bSlot];
       };
     }
+    case "max": {
+      const aSlot = resolveSlot(step.a);
+      const bSlot = resolveSlot(step.b);
+      return (_worldX, _worldZ, slots): void => {
+        slots[outSlot] = Math.max(slots[aSlot], slots[bSlot]);
+      };
+    }
+    case "min": {
+      const aSlot = resolveSlot(step.a);
+      const bSlot = resolveSlot(step.b);
+      return (_worldX, _worldZ, slots): void => {
+        slots[outSlot] = Math.min(slots[aSlot], slots[bSlot]);
+      };
+    }
     case "lerp": {
       const aSlot = resolveSlot(step.a);
       const bSlot = resolveSlot(step.b);
@@ -163,19 +185,19 @@ function compileStep(
  * operating on a shared, pre-allocated scratch buffer indexed by step position - no per-sample
  * string/Map lookups on the hot path.
  */
-export function compilePipeline(def: PipelineDef, rootSeed: number, biomeId: string): CompiledPipeline {
+export function compilePipeline(def: PipelineDef, rootSeed: number, namespace: string): CompiledPipeline {
   const noiseSamplers = new Map<string, Noise2D>();
   for (const noiseSpec of def.noises) {
-    noiseSamplers.set(noiseSpec.name, compileNoiseSpec(noiseSpec, rootSeed, biomeId));
+    noiseSamplers.set(noiseSpec.name, compileNoiseSpec(noiseSpec, rootSeed, namespace));
   }
 
   if (def.steps.length === 0) {
-    throw new Error(`Pipeline for biome "${biomeId}" has no steps`);
+    throw new Error(`Pipeline "${namespace}" has no steps`);
   }
 
   const slotIndex = new Map<string, number>();
   const stepFns: StepFn[] = def.steps.map((step, i) => {
-    const fn = compileStep(step, slotIndex, noiseSamplers, i, biomeId);
+    const fn = compileStep(step, slotIndex, noiseSamplers, i, namespace);
     slotIndex.set(step.output, i);
     return fn;
   });
@@ -183,9 +205,9 @@ export function compilePipeline(def: PipelineDef, rootSeed: number, biomeId: str
   const slots = new Float64Array(stepFns.length);
   const lastSlot = stepFns.length - 1;
 
-  return (worldX: number, worldZ: number): number => {
+  return (worldX: number, worldZ: number, context?: Record<string, number>): number => {
     for (let i = 0; i < stepFns.length; i++) {
-      stepFns[i](worldX, worldZ, slots);
+      stepFns[i](worldX, worldZ, slots, context);
     }
     return slots[lastSlot];
   };

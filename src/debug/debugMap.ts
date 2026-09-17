@@ -1,9 +1,9 @@
 import { Color3 } from "@babylonjs/core";
 import type { TerrainSample, TerrainSampler } from "../world/terrain/terrainSampler";
-import type { BiomeColorBands } from "../world/biomes/biomeTypes";
 import type { ContinentPlan } from "../world/cells/continentLayout";
 import { SEA_LEVEL } from "../world/cells/areaField";
 import { GROWTH_RADIUS_SAFETY_FACTOR } from "../world/cells/config";
+import type { MaterialLibrary } from "../world/materials/materialLibrary";
 
 const SAMPLE_RESOLUTION = 400; // internal sample grid, kept modest since this is a debug tool
 const DISPLAY_SIZE_CSS = "min(85vw, 80vh)"; // large, centered, capped to fit the viewport
@@ -24,6 +24,13 @@ const CONTINENT_VIEW_MARGIN = 1.5; // margin beyond a continent's true (non-safe
 const EMBOSS_STRENGTH = 0.05; // world-height-units -> shade magnitude
 const EMBOSS_INTENSITY = 0.6; // shade -> brightness multiplier range (0.4x .. 1.6x at full shade)
 
+// Material detail (rock/snow/valley variety, same as materialLibrary.resolveMaterialIndex uses in
+// 3D) is only computed at Continent-view resolution, for the same reason emboss is: World view's
+// per-pixel step is thousands of world units, far too coarse for a slope/curvature estimate to
+// mean anything. World view instead shows each biome's own flat base color (getBiomeBaseColor).
+const SLOPE_SAMPLE_STEP_PX = 1; // matches emboss's own "one pixel, self-scales with zoom" approach
+const CURVATURE_RADIUS_WORLD = 10; // matches materialContext.ts's RELIEF_CURVATURE_RADIUS_STEPS*step
+
 interface Viewport {
   centerX: number;
   centerZ: number;
@@ -33,19 +40,6 @@ interface Viewport {
 export interface DebugMap {
   toggle: () => void;
   updateMarker: (worldX: number, worldZ: number, headingRadians: number) => void;
-}
-
-function pickBandColor(height: number, bands: BiomeColorBands): Color3 {
-  if (height < bands.height0) return bands.color0;
-  if (height < bands.height1) return bands.color1;
-  if (height < bands.height2) return bands.color2;
-  return bands.color3;
-}
-
-function colorForSample(sample: TerrainSample): Color3 {
-  if (!sample.isLand) return OCEAN_COLOR;
-  if (sample.height < SEA_LEVEL) return LAKE_COLOR;
-  return pickBandColor(sample.height, sample.primaryBiome.colors);
 }
 
 function distanceSq(ax: number, az: number, bx: number, bz: number): number {
@@ -65,6 +59,7 @@ export function createDebugMap(
   sampleTerrain: TerrainSampler,
   worldExtent: number,
   continents: ContinentPlan[],
+  materialLibrary: MaterialLibrary,
   onTeleport: (worldX: number, worldZ: number) => void,
 ): DebugMap {
   const overlay = document.createElement("div");
@@ -162,7 +157,15 @@ export function createDebugMap(
     return c ? continentViewKey(c) : "world";
   }
 
-  function renderBaseMap(viewport: Viewport, embossEnabled: boolean): HTMLCanvasElement {
+  /** Clamped grid lookup - reuses the one sampleTerrain pass below for every neighbor query
+   *  (emboss, slope, curvature) instead of paying for fresh sampleTerrain calls per neighbor. */
+  function gridHeightAt(samples: TerrainSample[], px: number, py: number): number {
+    const cx = Math.min(SAMPLE_RESOLUTION - 1, Math.max(0, px));
+    const cy = Math.min(SAMPLE_RESOLUTION - 1, Math.max(0, py));
+    return samples[cy * SAMPLE_RESOLUTION + cx].height;
+  }
+
+  function renderBaseMap(viewport: Viewport, detailEnabled: boolean): HTMLCanvasElement {
     const canvas = document.createElement("canvas");
     canvas.width = SAMPLE_RESOLUTION;
     canvas.height = SAMPLE_RESOLUTION;
@@ -171,17 +174,69 @@ export function createDebugMap(
 
     const imageData = ctx.createImageData(SAMPLE_RESOLUTION, SAMPLE_RESOLUTION);
     const worldStepPerPixel = (viewport.halfSize * 2) / SAMPLE_RESOLUTION;
+    const curvatureRadiusPx = Math.max(1, Math.round(CURVATURE_RADIUS_WORLD / worldStepPerPixel));
 
+    // Pass 1: sample every pixel's terrain once into a flat grid - everything below (emboss,
+    // slope, slope-facing, curvature) derives from THIS grid via neighbor lookups, not fresh
+    // sampleTerrain calls, so the total sample count stays exactly what it was before any of this
+    // detail existed (SAMPLE_RESOLUTION^2), regardless of how many neighbors a signal needs.
+    const samples: TerrainSample[] = new Array(SAMPLE_RESOLUTION * SAMPLE_RESOLUTION);
     for (let py = 0; py < SAMPLE_RESOLUTION; py++) {
       for (let px = 0; px < SAMPLE_RESOLUTION; px++) {
         const worldX = viewport.centerX + (px / SAMPLE_RESOLUTION) * viewport.halfSize * 2 - viewport.halfSize;
         const worldZ = viewport.centerZ + (py / SAMPLE_RESOLUTION) * viewport.halfSize * 2 - viewport.halfSize;
-        const sample = sampleTerrain(worldX, worldZ);
-        const color = colorForSample(sample);
+        samples[py * SAMPLE_RESOLUTION + px] = sampleTerrain(worldX, worldZ);
+      }
+    }
+
+    // Pass 2: color each pixel from the grid.
+    for (let py = 0; py < SAMPLE_RESOLUTION; py++) {
+      for (let px = 0; px < SAMPLE_RESOLUTION; px++) {
+        const sample = samples[py * SAMPLE_RESOLUTION + px];
+        let color: Color3;
+
+        if (!sample.isLand) {
+          color = OCEAN_COLOR;
+        } else if (sample.height < SEA_LEVEL) {
+          color = LAKE_COLOR;
+        } else if (detailEnabled) {
+          const worldX = viewport.centerX + (px / SAMPLE_RESOLUTION) * viewport.halfSize * 2 - viewport.halfSize;
+          const worldZ = viewport.centerZ + (py / SAMPLE_RESOLUTION) * viewport.halfSize * 2 - viewport.halfSize;
+
+          // Analytic heightmap normal from a one-pixel-step gradient (mirrors the mesh's own
+          // per-vertex ComputeNormals closely enough for a preview at this resolution).
+          const west = gridHeightAt(samples, px - SLOPE_SAMPLE_STEP_PX, py);
+          const east = gridHeightAt(samples, px + SLOPE_SAMPLE_STEP_PX, py);
+          const north = gridHeightAt(samples, px, py - SLOPE_SAMPLE_STEP_PX);
+          const south = gridHeightAt(samples, px, py + SLOPE_SAMPLE_STEP_PX);
+          const dHdx = (east - west) / (2 * worldStepPerPixel * SLOPE_SAMPLE_STEP_PX);
+          const dHdz = (south - north) / (2 * worldStepPerPixel * SLOPE_SAMPLE_STEP_PX);
+          const invLen = 1 / Math.sqrt(dHdx * dHdx + dHdz * dHdz + 1);
+
+          const farNorth = gridHeightAt(samples, px, py - curvatureRadiusPx);
+          const farSouth = gridHeightAt(samples, px, py + curvatureRadiusPx);
+          const farEast = gridHeightAt(samples, px + curvatureRadiusPx, py);
+          const farWest = gridHeightAt(samples, px - curvatureRadiusPx, py);
+          const reliefCurvature = (farNorth + farSouth + farEast + farWest) / 4 - sample.height;
+
+          const context: Record<string, number> = {
+            height: sample.height,
+            slope: invLen,
+            slopeFacing: dHdz * invLen,
+            landmass: sample.landmass,
+            lakeFactor: sample.lakeFactor,
+            riverGap: sample.riverGap,
+            reliefCurvature,
+          };
+          const materialIndex = materialLibrary.resolveMaterialIndex(worldX, worldZ, context, sample.primaryBiome.id);
+          color = materialLibrary.getMaterialColor(materialIndex);
+        } else {
+          color = materialLibrary.getBiomeBaseColor(sample.primaryBiome.id);
+        }
 
         let factor = 1;
-        if (embossEnabled && sample.isLand && sample.height >= SEA_LEVEL) {
-          const neighborHeight = sampleTerrain(worldX - worldStepPerPixel, worldZ - worldStepPerPixel).height;
+        if (detailEnabled) {
+          const neighborHeight = gridHeightAt(samples, px - 1, py - 1);
           const diff = sample.height - neighborHeight;
           const shade = Math.max(-1, Math.min(1, diff * EMBOSS_STRENGTH));
           factor = 1 + shade * EMBOSS_INTENSITY;

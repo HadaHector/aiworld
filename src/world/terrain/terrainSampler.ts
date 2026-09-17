@@ -17,6 +17,13 @@ export interface TerrainSample {
   biomeBlend: number;
   isLand: boolean;
   landmass: number;
+  lakeFactor: number;
+  isRiverEdge: boolean;
+  /** Distance to the river's own carve envelope - Infinity wherever isRiverEdge is false. Unlike
+   *  isRiverEdge (flat true/false across the entire, possibly ~100-unit-wide, river corridor -
+   *  see riverConfig.ts's RIVER_WIDTH_MOUTH), this is the continuous signal to use for anything
+   *  that should hug the actual waterline, not the whole channel. */
+  riverGap: number;
 }
 
 export type TerrainSampler = (worldX: number, worldZ: number) => TerrainSample;
@@ -80,7 +87,7 @@ export function createTerrainSampler(seed: number): TerrainWorld {
     // lake-lerp last guarantees a lake reads as a clean flat body regardless of what a river/hill
     // did nearby, and a river's carve gets smoothly swallowed as it approaches a lake it feeds -
     // reading correctly as the river disappearing into the lake, not a competing dip on top of it.
-    const riverCarve = evaluateRiver(area.isRiverEdge, area.borderGap, worldX, worldZ);
+    const riverCarve = evaluateRiver(area.isRiverEdge, area.riverTaper, area.riverGap, worldX, worldZ);
     const landHeightRivered = landHeightFloored - riverCarve;
     const landHeight = lerp(landHeightRivered, LAKE_TARGET_HEIGHT, area.lakeFactor);
 
@@ -96,6 +103,9 @@ export function createTerrainSampler(seed: number): TerrainWorld {
       biomeBlend: area.biomeBlend,
       isLand: area.isLand,
       landmass: area.landmass,
+      lakeFactor: area.lakeFactor,
+      isRiverEdge: area.isRiverEdge,
+      riverGap: area.riverGap,
     };
   }
 

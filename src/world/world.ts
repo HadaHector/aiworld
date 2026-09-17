@@ -2,6 +2,7 @@ import { HemisphericLight, Vector3, type Scene } from "@babylonjs/core";
 import { createChunkManager } from "./terrain/chunkManager";
 import { createTerrainSampler, type TerrainSampler } from "./terrain/terrainSampler";
 import { createOceanPlane } from "./terrain/ocean";
+import { createMaterialLibrary, type MaterialLibrary } from "./materials/materialLibrary";
 import type { ContinentPlan } from "./cells/continentLayout";
 
 export interface World {
@@ -11,6 +12,7 @@ export interface World {
   setDrawDistance: (loadRadius: number) => void;
   worldExtent: number;
   continents: ContinentPlan[];
+  materialLibrary: MaterialLibrary;
 }
 
 const WORLD_SEED = 1337;
@@ -34,10 +36,12 @@ export function createWorld(scene: Scene): World {
   light.intensity = 0.9;
 
   const { sampleTerrain, worldExtent, continents } = createTerrainSampler(WORLD_SEED);
+  const materialLibrary = createMaterialLibrary(scene, WORLD_SEED, CHUNK_SIZE);
 
   const chunkManager = createChunkManager({
     scene,
     sampleTerrain,
+    materialLibrary,
     chunkSize: CHUNK_SIZE,
     chunkSubdivisions: CHUNK_SUBDIVISIONS,
     loadRadius: DEFAULT_DRAW_DISTANCE,
@@ -51,5 +55,5 @@ export function createWorld(scene: Scene): World {
   const updateChunks = (playerX: number, playerZ: number) => chunkManager.update(playerX, playerZ);
   const setDrawDistance = (loadRadius: number) => chunkManager.setRadii(loadRadius, loadRadius + UNLOAD_HYSTERESIS);
 
-  return { heightAt, sampleTerrain, updateChunks, setDrawDistance, worldExtent, continents };
+  return { heightAt, sampleTerrain, updateChunks, setDrawDistance, worldExtent, continents, materialLibrary };
 }
