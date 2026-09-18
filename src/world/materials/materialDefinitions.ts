@@ -1032,6 +1032,57 @@ const mountainsScreeValleyLayer: MaterialLayer = {
   },
 };
 
+// The floor of a mountain valley, as opposed to its sides: scree above is curvature-only, so it
+// paints the whole basin including the sloping walls, while this also demands flatness. The two
+// therefore separate the way the real thing does - loose rubble on the valley sides, finer washed
+// gravel settled on the flat bottom - and blend where the floor meets the walls.
+//
+// Thresholds come from the mountains biome's own measured distribution rather than round numbers:
+// curvature there runs p75 2.0 / p90 3.6 / p95 4.7, and normalY p50 0.78 / p75 0.91.
+const mountainsValleyGravelLayer: MaterialLayer = {
+  id: "mountains-valley-gravel",
+  material: gravelMaterial,
+  weight: {
+    noises: [],
+    steps: [
+      { output: "curvature", op: "input", name: "reliefCurvature" },
+      { output: "basinRaw", op: "remap", input: "curvature", inMin: 1.5, inMax: 4.5, outMin: 0, outMax: 1 },
+      { output: "basin", op: "clamp", input: "basinRaw", min: 0, max: 1 },
+      { output: "slope", op: "input", name: "slope" },
+      { output: "flatRaw", op: "remap", input: "slope", inMin: 0.78, inMax: 0.92, outMin: 0, outMax: 1 },
+      { output: "flat", op: "clamp", input: "flatRaw", min: 0, max: 1 },
+      { output: "result", op: "multiply", a: "basin", b: "flat" },
+    ],
+  },
+};
+
+// Alpine meadow: flat ground low enough to be below the treeline. Mountain height runs p5 63 /
+// p50 108, and the snow layer starts biting around an effective 75, so grass has to live in the
+// bottom ~15% of the range to read as being below the snow rather than fighting it - hence full
+// grass under 55, gone by 85. A low-frequency noise breaks the elevation band up so its edge is a
+// ragged patchwork rather than a clean contour line, the same trick snowMountainsLayer uses on the
+// snowline.
+const mountainsMeadowGrassLayer: MaterialLayer = {
+  id: "mountains-meadow-grass",
+  material: grassMaterial,
+  weight: {
+    noises: [{ name: "patches", type: "fbm", octaves: 2, frequency: 0.012, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
+    steps: [
+      { output: "height", op: "input", name: "height" },
+      { output: "lowRaw", op: "remap", input: "height", inMin: 85, inMax: 55, outMin: 0, outMax: 1 },
+      { output: "low", op: "clamp", input: "lowRaw", min: 0, max: 1 },
+      { output: "slope", op: "input", name: "slope" },
+      { output: "flatRaw", op: "remap", input: "slope", inMin: 0.86, inMax: 0.95, outMin: 0, outMax: 1 },
+      { output: "flat", op: "clamp", input: "flatRaw", min: 0, max: 1 },
+      { output: "lowFlat", op: "multiply", a: "low", b: "flat" },
+      { output: "patchRaw", op: "sample", noise: "patches" },
+      { output: "patchNorm", op: "remap", input: "patchRaw", inMin: -0.8, inMax: 0.8, outMin: 0.35, outMax: 1 },
+      { output: "patch", op: "clamp", input: "patchNorm", min: 0, max: 1 },
+      { output: "result", op: "multiply", a: "lowFlat", b: "patch" },
+    ],
+  },
+};
+
 // Tundra's detail amplitude (~2.1) is far gentler than plains' (~12.75), so its valley threshold
 // is scaled down proportionally rather than reused as-is - a basin this shallow would never clear
 // plains' own thresholds.
@@ -1093,7 +1144,7 @@ export const PER_BIOME_MATERIAL_LAYERS: Record<string, MaterialLayer[]> = {
   forest: [forestMossNorthLayer, forestLeafLitterValleyLayer],
   hills: [hillsNorthFadeLayer, hillsSouthDryLayer, hillsValleyWeedsLayer, hillsLakeShoreGrassLayer, hillsLakeGravelLayer],
   desert: [desertDuneShadowLayer, desertSiltValleyLayer, desertGravelPlainLayer],
-  mountains: [snowMountainsLayer, mountainsScreeValleyLayer],
+  mountains: [snowMountainsLayer, mountainsScreeValleyLayer, mountainsValleyGravelLayer, mountainsMeadowGrassLayer],
   tundra: [snowTundraLayer, tundraFrostValleyLayer],
   canyon: [canyonSiltValleyLayer],
   swamp: [swampGrassTuftRidgeLayer],
