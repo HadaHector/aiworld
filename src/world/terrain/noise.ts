@@ -44,11 +44,40 @@ export function createTilingOctaveSampler(seed: number, period: number): OctaveS
   const angleScale = TAU / period;
   const radiusScale = period / TAU;
 
+  // A pixel's angle on the torus depends only on its coordinate - every octave of that pixel walks
+  // the same two circles and differs only in radius. Since the bake steps over integer pixel
+  // coordinates, the unit-circle positions can simply be tabulated, removing four trig calls per
+  // octave per pixel. That was the single biggest cost in the bake (a 4-noise, 9-octave material
+  // was paying ~36M sin/cos per texture); non-integer or out-of-range inputs still fall through to
+  // real trig, so the sampler stays correct for any caller.
+  const tableSize = Number.isInteger(period) && period > 0 && period <= 8192 ? period : 0;
+  const cosTable = new Float64Array(tableSize);
+  const sinTable = new Float64Array(tableSize);
+  for (let i = 0; i < tableSize; i++) {
+    cosTable[i] = Math.cos(i * angleScale);
+    sinTable[i] = Math.sin(i * angleScale);
+  }
+
   return (x: number, y: number, frequency: number): number => {
     const radius = radiusScale * frequency;
-    const theta = x * angleScale;
-    const phi = y * angleScale;
-    return noise4D(radius * Math.cos(theta), radius * Math.sin(theta), radius * Math.cos(phi), radius * Math.sin(phi));
+    let cosX: number;
+    let sinX: number;
+    let cosY: number;
+    let sinY: number;
+    if ((x | 0) === x && (y | 0) === y && x >= 0 && y >= 0 && x < tableSize && y < tableSize) {
+      cosX = cosTable[x];
+      sinX = sinTable[x];
+      cosY = cosTable[y];
+      sinY = sinTable[y];
+    } else {
+      const theta = x * angleScale;
+      const phi = y * angleScale;
+      cosX = Math.cos(theta);
+      sinX = Math.sin(theta);
+      cosY = Math.cos(phi);
+      sinY = Math.sin(phi);
+    }
+    return noise4D(radius * cosX, radius * sinX, radius * cosY, radius * sinY);
   };
 }
 

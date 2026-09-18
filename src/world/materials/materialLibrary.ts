@@ -21,7 +21,13 @@ import { TEXTURE_RESOLUTION, writeProceduralTexturePixels } from "./textureGen";
 // practice. 25 spreads each material's baked detail - cracks, ripples, leaf clusters - across a
 // bigger stretch of ground before it repeats, so the pattern reads as a large-scale surface
 // feature instead of an obviously-tiled close-up texture.
-const TEXTURE_WORLD_TILE_SIZE = 25;
+//
+// 50 rather than 25 now that textures bake at 1024 instead of 256: at 25/256 a tile was 0.098 world
+// units per texel, and 50/1024 is 0.049 - so this spends the extra resolution on BOTH a 2x sharper
+// surface and a repeat that comes round half as often. Tiling repetition is the main artifact left
+// on large flat ground (the seam itself is gone), and it is purely a function of this number, so
+// this is the dial to turn if the pattern still reads as a grid.
+const TEXTURE_WORLD_TILE_SIZE = 50;
 
 // Below this, no layer's weight is trusted and the base material wins outright - used only by the
 // legacy single-winner resolveMaterialIndex (the debug map's read path). The blended path

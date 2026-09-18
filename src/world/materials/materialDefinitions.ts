@@ -1,11 +1,22 @@
 import { Color3 } from "@babylonjs/core";
 import type { ColorTuple, NoiseSpec, PipelineDef, PipelineStep } from "../terrain/pipeline/pipelineTypes";
-import type { TextureDef } from "./textureGen";
+import { TEXTURE_RESOLUTION, type TextureDef } from "./textureGen";
 
 export interface MaterialDef {
   id: string;
   name: string;
   texture: TextureDef;
+}
+
+/**
+ * Noise `frequency` is in cycles per *input unit*, and texture pipelines are sampled in pixels - so
+ * a raw frequency silently rescales every material whenever TEXTURE_RESOLUTION changes. Authoring
+ * in cycles per TILE instead keeps a material's real-world look fixed: the tile always covers
+ * TEXTURE_WORLD_TILE_SIZE world units, whatever resolution it is baked at, so raising the
+ * resolution buys sharper pixels and room for finer detail rather than shrinking everything.
+ */
+function tileFreq(cyclesPerTile: number): number {
+  return cyclesPerTile / TEXTURE_RESOLUTION;
 }
 
 /** Color3 is convenient to author in; the pipeline deliberately knows nothing about Babylon. */
@@ -33,16 +44,16 @@ function maskSteps(input: string, at: number, off: number, output: string): Pipe
 // The shared noises every material draws on. Amplitude is 1 with persistence 0.5, so an N-octave
 // fbm spans roughly +/-(2 - 0.5^(N-1)): +/-1.75 for 3 octaves, +/-1.5 for 2. Those are the numbers
 // the maskSteps calls below use as their `at`/`off` ends.
-const MOTTLE_NOISE: NoiseSpec = { name: "mottle", type: "fbm", octaves: 3, frequency: 0.05, amplitude: 1, persistence: 0.5, lacunarity: 2.0 };
+const MOTTLE_NOISE: NoiseSpec = { name: "mottle", type: "fbm", octaves: 3, frequency: tileFreq(13), amplitude: 1, persistence: 0.5, lacunarity: 2.0 };
 const MOTTLE_SPAN = 1.75;
 
 /** A tighter grain than MOTTLE_NOISE, for materials that read as too soft/blurry with only one
  *  (broad) noise scale in play. */
-const FINE_GRAIN_NOISE: NoiseSpec = { name: "grain", type: "fbm", octaves: 2, frequency: 0.18, amplitude: 1, persistence: 0.5, lacunarity: 2.0 };
+const FINE_GRAIN_NOISE: NoiseSpec = { name: "grain", type: "fbm", octaves: 2, frequency: tileFreq(46), amplitude: 1, persistence: 0.5, lacunarity: 2.0 };
 
 /** Gentle, large-area tonal shifts (sun-bleached patches, soft shadowing) - meant to read as a big
  *  soft area of slightly different tone, not a repeating close-up pattern. */
-const BROAD_TONE_NOISE: NoiseSpec = { name: "broad", type: "fbm", octaves: 2, frequency: 0.012, amplitude: 1, persistence: 0.5, lacunarity: 2.0 };
+const BROAD_TONE_NOISE: NoiseSpec = { name: "broad", type: "fbm", octaves: 2, frequency: tileFreq(3), amplitude: 1, persistence: 0.5, lacunarity: 2.0 };
 const TWO_OCTAVE_SPAN = 1.5;
 
 /** A plain two-color mottled material: one noise fades between two colors, drives a flat roughness,
@@ -106,8 +117,8 @@ const rockMaterial: MaterialDef = {
       noises: [
         MOTTLE_NOISE,
         FINE_GRAIN_NOISE,
-        { name: "cracks", type: "worley", frequency: 0.02, amplitude: 1, mode: "edge" },
-        { name: "lichen", type: "billow", octaves: 2, frequency: 0.025, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+        { name: "cracks", type: "worley", frequency: tileFreq(5), amplitude: 1, mode: "edge" },
+        { name: "lichen", type: "billow", octaves: 2, frequency: tileFreq(6.4), amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
       ],
       steps: [
         { output: "mottle", op: "sample", noise: "mottle" },
@@ -158,43 +169,175 @@ const rockMaterial: MaterialDef = {
 // "f1" - a naturally grain-shaped blob, not the soft billow blobs used elsewhere for organic
 // growth). No ridged dune-ripple layer any more - it read as an artificial, overly-regular wave
 // pattern rather than sand.
+// --- Sahara set -------------------------------------------------------------------------------
+// Erg sand, its shaded lee faces, the gravel reg that actually covers most of the real Sahara, and
+// the cracked silt left in wadi floors. All four share one warm ochre family so they read as one
+// place rather than four unrelated surfaces.
+//
+// Note on ripples: real aeolian ripples are strongly directional, and this pipeline has no way to
+// stretch or rotate a noise yet (no domain warp, no coordinate inputs), so `ripples` here is an
+// isotropic billow standing in for the undulation. It gives sand relief without pretending to be
+// wind-aligned - directional ripples need the warp ops that are still to come.
+const SAND_RIPPLE_NOISE: NoiseSpec = { name: "ripples", type: "billow", octaves: 2, frequency: tileFreq(20), amplitude: 1, persistence: 0.5, lacunarity: 2.0 };
+
 const sandMaterial: MaterialDef = {
   id: "sand",
-  name: "Sand",
+  name: "Desert Sand",
   texture: {
-    bumpStrength: 0.5,
+    bumpStrength: 1.6,
+    pipeline: {
+      noises: [BROAD_TONE_NOISE, MOTTLE_NOISE, FINE_GRAIN_NOISE, SAND_RIPPLE_NOISE],
+      steps: [
+        { output: "broad", op: "sample", noise: "broad" },
+        ...maskSteps("broad", TWO_OCTAVE_SPAN, -TWO_OCTAVE_SPAN, "broadMask"),
+        { output: "mottle", op: "sample", noise: "mottle" },
+        ...maskSteps("mottle", MOTTLE_SPAN, -MOTTLE_SPAN, "mottleMask"),
+        { output: "grain", op: "sample", noise: "grain" },
+        ...maskSteps("grain", TWO_OCTAVE_SPAN, -TWO_OCTAVE_SPAN, "grainMask"),
+        { output: "ripple", op: "sample", noise: "ripples" },
+        ...maskSteps("ripple", 1.2, -0.6, "rippleMask"),
+
+        // One combined tone, dominated by the big drifts, then run through a ramp. A ramp rather
+        // than a two-color mix because sand doesn't read as a blend between two tones - it runs
+        // shadowed red-ochre, through mid sand, to a near-white bleached crest.
+        { output: "toneBroad", op: "scale", input: "broadMask", factor: 0.5 },
+        { output: "toneMottle", op: "scale", input: "mottleMask", factor: 0.3 },
+        { output: "tonePart", op: "add", a: "toneBroad", b: "toneMottle" },
+        { output: "toneRipple", op: "scale", input: "rippleMask", factor: 0.2 },
+        { output: "tone", op: "add", a: "tonePart", b: "toneRipple" },
+        {
+          output: "sandTone",
+          op: "colorRamp",
+          input: "tone",
+          stops: [
+            { at: 0.0, color: [0.48, 0.34, 0.19] },
+            { at: 0.3, color: [0.71, 0.55, 0.31] },
+            { at: 0.6, color: [0.85, 0.71, 0.45] },
+            { at: 0.85, color: [0.93, 0.84, 0.62] },
+            { at: 1.0, color: [0.97, 0.92, 0.76] },
+          ],
+        },
+        // A faint iron-stained cast in the darker hollows, so the ramp doesn't read as pure greyscale-to-tan.
+        { output: "ironColor", op: "color", value: [0.62, 0.38, 0.22] },
+        { output: "ironAmount", op: "invert", input: "tone" },
+        { output: "ironBlend", op: "scale", input: "ironAmount", factor: 0.22 },
+        { output: "diffuse", op: "mix", a: "sandTone", b: "ironColor", t: "ironBlend" },
+
+        // Loose crest sand is a touch less matte than the packed, damper trough sand.
+        { output: "roughTrough", op: "constant", value: 0.72 },
+        { output: "roughCrest", op: "constant", value: 0.58 },
+        { output: "roughness", op: "mix", a: "roughTrough", b: "roughCrest", t: "tone" },
+
+        { output: "dunes", op: "scale", input: "broadMask", factor: 0.5 },
+        { output: "rippleRelief", op: "scale", input: "rippleMask", factor: 0.32 },
+        { output: "dunedRipples", op: "add", a: "dunes", b: "rippleRelief" },
+        { output: "grainRelief", op: "scale", input: "grainMask", factor: 0.18 },
+        { output: "height", op: "add", a: "dunedRipples", b: "grainRelief" },
+      ],
+      outputs: { diffuse: "diffuse", roughness: "roughness", height: "height" },
+    },
+  },
+};
+
+/** Reg / serir - the wind-swept gravel plain that covers far more of the Sahara than dunes do:
+ *  a lag of dark, desert-varnished pebbles sitting on ochre sand. */
+const desertGravelMaterial: MaterialDef = {
+  id: "desertGravel",
+  name: "Desert Gravel",
+  texture: {
+    bumpStrength: 2.2,
     pipeline: {
       noises: [
         MOTTLE_NOISE,
         BROAD_TONE_NOISE,
-        { name: "grains", type: "worley", frequency: 0.12, amplitude: 1, mode: "f1" },
+        { name: "pebbles", type: "worley", frequency: tileFreq(38), amplitude: 1, mode: "f1" },
       ],
       steps: [
         { output: "mottle", op: "sample", noise: "mottle" },
         ...maskSteps("mottle", MOTTLE_SPAN, -MOTTLE_SPAN, "mottleMask"),
         { output: "broad", op: "sample", noise: "broad" },
         ...maskSteps("broad", TWO_OCTAVE_SPAN, -TWO_OCTAVE_SPAN, "broadMask"),
-        // Worley f1 is ~0 at each scattered point, so this is 1 at a grain and 0 by 0.4 away.
-        { output: "grainDist", op: "sample", noise: "grains" },
-        ...maskSteps("grainDist", 0, 0.4, "grainMask"),
+        // f1 is ~0 at each scattered point, so this is 1 on a pebble and 0 in the sand between.
+        { output: "pebbleDist", op: "sample", noise: "pebbles" },
+        ...maskSteps("pebbleDist", 0, 0.55, "pebbleMask"),
 
-        { output: "sandDark", op: "color", value: [0.76, 0.68, 0.48] },
-        { output: "sandLight", op: "color", value: [0.86, 0.78, 0.58] },
-        { output: "sand", op: "mix", a: "sandDark", b: "sandLight", t: "mottleMask" },
-        { output: "shadeColor", op: "color", value: [0.7, 0.61, 0.42] },
-        { output: "shadeBlend", op: "scale", input: "broadMask", factor: 0.6 },
-        { output: "sandShaded", op: "mix", a: "sand", b: "shadeColor", t: "shadeBlend" },
-        { output: "grainColor", op: "color", value: [0.44, 0.37, 0.26] },
-        { output: "diffuse", op: "mix", a: "sandShaded", b: "grainColor", t: "grainMask" },
+        { output: "bedDark", op: "color", value: [0.55, 0.42, 0.26] },
+        { output: "bedLight", op: "color", value: [0.70, 0.57, 0.37] },
+        { output: "bed", op: "mix", a: "bedDark", b: "bedLight", t: "broadMask" },
+        // Desert varnish darkens exposed stone over centuries - the pebbles are much darker than
+        // the sand they sit on, and vary among themselves via the shared mottle.
+        {
+          output: "pebbleColor",
+          op: "colorRamp",
+          input: "mottleMask",
+          stops: [
+            { at: 0.0, color: [0.24, 0.19, 0.15] },
+            { at: 0.5, color: [0.35, 0.28, 0.21] },
+            { at: 1.0, color: [0.47, 0.38, 0.29] },
+          ],
+        },
+        { output: "diffuse", op: "mix", a: "bed", b: "pebbleColor", t: "pebbleMask" },
 
-        { output: "roughSand", op: "constant", value: 0.6 },
-        { output: "roughGrain", op: "constant", value: 0.82 },
-        { output: "roughness", op: "mix", a: "roughSand", b: "roughGrain", t: "grainMask" },
+        { output: "roughSand", op: "constant", value: 0.8 },
+        { output: "roughPebble", op: "constant", value: 0.62 },
+        { output: "roughness", op: "mix", a: "roughSand", b: "roughPebble", t: "pebbleMask" },
 
-        // Grains are little stones sitting proud of the sand, so they add height rather than cut it.
-        { output: "drift", op: "scale", input: "mottleMask", factor: 0.45 },
-        { output: "grainRelief", op: "scale", input: "grainMask", factor: 0.5 },
-        { output: "height", op: "add", a: "drift", b: "grainRelief" },
+        { output: "bedRelief", op: "scale", input: "mottleMask", factor: 0.2 },
+        { output: "pebbleRelief", op: "scale", input: "pebbleMask", factor: 0.8 },
+        { output: "height", op: "add", a: "bedRelief", b: "pebbleRelief" },
+      ],
+      outputs: { diffuse: "diffuse", roughness: "roughness", height: "height" },
+    },
+  },
+};
+
+/** The pale, cracked silt floor of a wadi or playa - the one place in a desert where dried mud
+ *  genuinely belongs. Cracks are grooves: they darken the color and cut down into the height. */
+const desertSiltMaterial: MaterialDef = {
+  id: "desertSilt",
+  name: "Desert Silt",
+  texture: {
+    bumpStrength: 1.4,
+    pipeline: {
+      noises: [
+        MOTTLE_NOISE,
+        FINE_GRAIN_NOISE,
+        { name: "cracks", type: "worley", frequency: tileFreq(7), amplitude: 1, mode: "edge" },
+      ],
+      steps: [
+        { output: "mottle", op: "sample", noise: "mottle" },
+        ...maskSteps("mottle", MOTTLE_SPAN, -MOTTLE_SPAN, "mottleMask"),
+        { output: "grain", op: "sample", noise: "grain" },
+        ...maskSteps("grain", TWO_OCTAVE_SPAN, -TWO_OCTAVE_SPAN, "grainMask"),
+        { output: "crackEdge", op: "sample", noise: "cracks" },
+        ...maskSteps("crackEdge", 0, 0.1, "crackMask"),
+
+        {
+          output: "siltTone",
+          op: "colorRamp",
+          input: "mottleMask",
+          stops: [
+            { at: 0.0, color: [0.63, 0.55, 0.42] },
+            { at: 0.5, color: [0.76, 0.69, 0.55] },
+            { at: 1.0, color: [0.85, 0.79, 0.66] },
+          ],
+        },
+        { output: "dustColor", op: "color", value: [0.80, 0.74, 0.60] },
+        { output: "dustBlend", op: "scale", input: "grainMask", factor: 0.25 },
+        { output: "dusted", op: "mix", a: "siltTone", b: "dustColor", t: "dustBlend" },
+        { output: "crackColor", op: "color", value: [0.30, 0.24, 0.17] },
+        { output: "diffuse", op: "mix", a: "dusted", b: "crackColor", t: "crackMask" },
+
+        { output: "roughSilt", op: "constant", value: 0.82 },
+        { output: "roughCrack", op: "constant", value: 0.9 },
+        { output: "roughness", op: "mix", a: "roughSilt", b: "roughCrack", t: "crackMask" },
+
+        // Curled plates standing above the crack network between them.
+        { output: "bed", op: "constant", value: 0.62 },
+        { output: "plateRelief", op: "scale", input: "mottleMask", factor: 0.38 },
+        { output: "plates", op: "add", a: "bed", b: "plateRelief" },
+        { output: "crackDepth", op: "scale", input: "crackMask", factor: 0.62 },
+        { output: "height", op: "subtract", a: "plates", b: "crackDepth" },
       ],
       outputs: { diffuse: "diffuse", roughness: "roughness", height: "height" },
     },
@@ -214,7 +357,7 @@ const snowMaterial: MaterialDef = {
       noises: [
         MOTTLE_NOISE,
         BROAD_TONE_NOISE,
-        { name: "sparkle", type: "billow", octaves: 2, frequency: 0.22, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+        { name: "sparkle", type: "billow", octaves: 2, frequency: tileFreq(56), amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
       ],
       steps: [
         { output: "mottle", op: "sample", noise: "mottle" },
@@ -278,8 +421,8 @@ const mudMaterial: MaterialDef = {
     pipeline: {
       noises: [
         MOTTLE_NOISE,
-        { name: "cracks", type: "worley", frequency: 0.015, amplitude: 1, mode: "edge" },
-        { name: "damp", type: "billow", octaves: 2, frequency: 0.03, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+        { name: "cracks", type: "worley", frequency: tileFreq(4), amplitude: 1, mode: "edge" },
+        { name: "damp", type: "billow", octaves: 2, frequency: tileFreq(7.7), amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
       ],
       steps: [
         { output: "mottle", op: "sample", noise: "mottle" },
@@ -350,7 +493,7 @@ const mossMaterial: MaterialDef = {
       noises: [
         MOTTLE_NOISE,
         FINE_GRAIN_NOISE,
-        { name: "clumps", type: "billow", octaves: 2, frequency: 0.1, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+        { name: "clumps", type: "billow", octaves: 2, frequency: tileFreq(26), amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
       ],
       steps: [
         { output: "mottle", op: "sample", noise: "mottle" },
@@ -405,7 +548,7 @@ const leafLitterMaterial: MaterialDef = {
     bumpStrength: 0.5,
     pipeline: {
       noises: [
-        { name: "blobs", type: "fbm", octaves: 2, frequency: 0.02, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+        { name: "blobs", type: "fbm", octaves: 2, frequency: tileFreq(5.1), amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
         MOTTLE_NOISE,
       ],
       steps: [
@@ -437,10 +580,48 @@ const leafLitterMaterial: MaterialDef = {
   },
 };
 
+/** The leeward face of a dune: the same sand, but in its own shadow - deeper and redder, with the
+ *  ripples smoothed out, since the slip face is loose sand avalanching rather than wind-worked. */
 const duneShadowMaterial: MaterialDef = {
   id: "duneShadow",
   name: "Dune Shadow",
-  texture: twoToneTexture(new Color3(0.62, 0.52, 0.34), new Color3(0.72, 0.6, 0.4), 0.62, 1.75),
+  texture: {
+    bumpStrength: 1.1,
+    pipeline: {
+      noises: [BROAD_TONE_NOISE, MOTTLE_NOISE, FINE_GRAIN_NOISE],
+      steps: [
+        { output: "broad", op: "sample", noise: "broad" },
+        ...maskSteps("broad", TWO_OCTAVE_SPAN, -TWO_OCTAVE_SPAN, "broadMask"),
+        { output: "mottle", op: "sample", noise: "mottle" },
+        ...maskSteps("mottle", MOTTLE_SPAN, -MOTTLE_SPAN, "mottleMask"),
+        { output: "grain", op: "sample", noise: "grain" },
+        ...maskSteps("grain", TWO_OCTAVE_SPAN, -TWO_OCTAVE_SPAN, "grainMask"),
+
+        { output: "toneBroad", op: "scale", input: "broadMask", factor: 0.6 },
+        { output: "toneMottle", op: "scale", input: "mottleMask", factor: 0.4 },
+        { output: "tone", op: "add", a: "toneBroad", b: "toneMottle" },
+        // The same ramp family as sandMaterial, shifted darker and redder so a slip face reads as
+        // the shaded side of the *same* dune rather than a different material sitting next to it.
+        {
+          output: "diffuse",
+          op: "colorRamp",
+          input: "tone",
+          stops: [
+            { at: 0.0, color: [0.38, 0.26, 0.15] },
+            { at: 0.45, color: [0.55, 0.40, 0.24] },
+            { at: 1.0, color: [0.70, 0.55, 0.35] },
+          ],
+        },
+
+        { output: "roughness", op: "constant", value: 0.7 },
+
+        { output: "slipFace", op: "scale", input: "broadMask", factor: 0.65 },
+        { output: "sandGrain", op: "scale", input: "grainMask", factor: 0.25 },
+        { output: "height", op: "add", a: "slipFace", b: "sandGrain" },
+      ],
+      outputs: { diffuse: "diffuse", roughness: "roughness", height: "height" },
+    },
+  },
 };
 
 const screeMaterial: MaterialDef = {
@@ -773,15 +954,40 @@ const desertDuneShadowLayer: MaterialLayer = {
   },
 };
 
-const desertDampSandValleyLayer: MaterialLayer = {
-  id: "desert-damp-sand-valley",
-  material: mudMaterial,
+// Wadi floors: the low, flat ground between dunes, where the rare runoff drops its silt and then
+// dries and cracks. This used to reuse swamp's own mud material, which read as wet green-brown bog
+// in the middle of a desert - desertSiltMaterial is the same idea in the right palette.
+const desertSiltValleyLayer: MaterialLayer = {
+  id: "desert-silt-valley",
+  material: desertSiltMaterial,
   weight: {
     noises: [],
     steps: [
       { output: "curvature", op: "input", name: "reliefCurvature" },
       { output: "raw", op: "remap", input: "curvature", inMin: 0.2, inMax: 1.0, outMin: 0, outMax: 1 },
       { output: "result", op: "clamp", input: "raw", min: 0, max: 1 },
+    ],
+  },
+};
+
+// Reg/serir gravel plains. Unlike every other layer in this file, the weight is driven by an actual
+// noise rather than only terrain-derived inputs - gravel plain versus dune field is a matter of
+// where the wind happened to strip the sand away, not of slope or height, so a very low-frequency
+// fbm (about one patch per 250 world units) decides it. Gated on flatness so it never creeps up a
+// dune face.
+const desertGravelPlainLayer: MaterialLayer = {
+  id: "desert-gravel-plain",
+  material: desertGravelMaterial,
+  weight: {
+    noises: [{ name: "patches", type: "fbm", octaves: 2, frequency: 0.004, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
+    steps: [
+      { output: "patchRaw", op: "sample", noise: "patches" },
+      { output: "patch", op: "remap", input: "patchRaw", inMin: 0.1, inMax: 0.9, outMin: 0, outMax: 1 },
+      { output: "patchClamped", op: "clamp", input: "patch", min: 0, max: 1 },
+      { output: "slope", op: "input", name: "slope" },
+      { output: "flatRaw", op: "remap", input: "slope", inMin: 0.93, inMax: 0.99, outMin: 0, outMax: 1 },
+      { output: "flat", op: "clamp", input: "flatRaw", min: 0, max: 1 },
+      { output: "result", op: "multiply", a: "patchClamped", b: "flat" },
     ],
   },
 };
@@ -861,7 +1067,7 @@ export const PER_BIOME_MATERIAL_LAYERS: Record<string, MaterialLayer[]> = {
   plains: [plainsNorthFadeLayer, plainsSouthDryLayer, plainsValleyWeedsLayer],
   forest: [forestMossNorthLayer, forestLeafLitterValleyLayer],
   hills: [hillsNorthFadeLayer, hillsSouthDryLayer, hillsValleyWeedsLayer, hillsLakeShoreGrassLayer, hillsLakeGravelLayer],
-  desert: [desertDuneShadowLayer, desertDampSandValleyLayer],
+  desert: [desertDuneShadowLayer, desertSiltValleyLayer, desertGravelPlainLayer],
   mountains: [snowMountainsLayer, mountainsScreeValleyLayer],
   tundra: [snowTundraLayer, tundraFrostValleyLayer],
   canyon: [canyonSiltValleyLayer],

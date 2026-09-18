@@ -1,7 +1,7 @@
 import { compileOutputs } from "../terrain/pipeline/pipelineCompiler";
 import type { PipelineDef } from "../terrain/pipeline/pipelineTypes";
 
-export const TEXTURE_RESOLUTION = 256;
+export const TEXTURE_RESOLUTION = 1024;
 
 /** Used when a texture's pipeline declares no `roughness` output. Matte-ish, matching the bulk of
  *  this project's ground materials. */
@@ -34,6 +34,14 @@ export interface TextureDef {
 function clamp01(value: number): number {
   return Math.min(1, Math.max(0, value));
 }
+
+/**
+ * The resolution every authored `bumpStrength` is calibrated against. The bump comes from the
+ * height difference between *adjacent pixels*, so the same feature on a finer grid produces
+ * proportionally smaller steps - without this, raising TEXTURE_RESOLUTION would silently flatten
+ * every normal map in the project rather than just sharpening it.
+ */
+const BUMP_REFERENCE_RESOLUTION = 256;
 
 /**
  * Writes one material's tileable textures (no image assets, matching this project's fully-procedural
@@ -91,13 +99,14 @@ export function writeProceduralTexturePixels(colorBuffer: Uint8Array, normalBuff
   }
 
   const wrap = TEXTURE_RESOLUTION - 1;
+  const bumpGain = texture.bumpStrength * (TEXTURE_RESOLUTION / BUMP_REFERENCE_RESOLUTION);
   for (let y = 0; y < TEXTURE_RESOLUTION; y++) {
     for (let x = 0; x < TEXTURE_RESOLUTION; x++) {
       const centerHeight = heights[y * TEXTURE_RESOLUTION + x];
       const dx = heights[y * TEXTURE_RESOLUTION + ((x + 1) & wrap)] - centerHeight;
       const dy = heights[(((y + 1) & wrap) * TEXTURE_RESOLUTION) + x] - centerHeight;
-      const nx = -dx * texture.bumpStrength;
-      const ny = -dy * texture.bumpStrength;
+      const nx = -dx * bumpGain;
+      const ny = -dy * bumpGain;
       const nz = 1;
       const invLen = 1 / Math.sqrt(nx * nx + ny * ny + nz * nz);
 
