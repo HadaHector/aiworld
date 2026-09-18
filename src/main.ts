@@ -5,6 +5,7 @@ import { createThirdPersonCamera } from "./player/thirdPersonCamera";
 import { createDebugMap } from "./debug/debugMap";
 import { createSettingsPanel } from "./debug/settingsPanel";
 import { createZoneLabel } from "./debug/zoneLabel";
+import { createTextureBrowser } from "./debug/textureBrowser";
 
 const canvas = document.getElementById("renderCanvas");
 if (!(canvas instanceof HTMLCanvasElement)) {
@@ -29,10 +30,14 @@ createSettingsPanel({
 });
 
 const zoneLabel = createZoneLabel();
+const textureBrowser = createTextureBrowser(world.materialLibrary);
 
 window.addEventListener("keydown", (e) => {
   if (e.key.toLowerCase() === "m") {
     debugMap.toggle();
+  }
+  if (e.key.toLowerCase() === "t") {
+    textureBrowser.toggle();
   }
 });
 

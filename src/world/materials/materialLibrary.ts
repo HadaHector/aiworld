@@ -67,7 +67,25 @@ export interface MaterialLibrary {
   /** A biome's own base material's swatch, with no overlay layers evaluated - what the debug
    *  map's coarse World view shows, since resolving overlays isn't worth it at that zoom level. */
   getBiomeBaseColor: (biomeId: string) => Color3;
+  /** Every deduplicated material's baked color+roughness and normal-map pixels (RGBA,
+   *  TEXTURE_RESOLUTION² each), for the texture browser dev tool - views into the same buffers
+   *  uploaded to the GPU, not a fresh render. */
+  listMaterialTextures: () => MaterialTexturePreview[];
 }
+
+export interface MaterialTexturePreview {
+  id: string;
+  name: string;
+  colorPixels: Uint8Array;
+  normalPixels: Uint8Array;
+}
+
+// Blinn-Phong shininess range the blended roughness (0=smooth..1=matte) maps into - not a real
+// BRDF, just enough to make rock/snow read a hair shinier than matte grass. Kept low-key
+// deliberately (SPECULAR_INTENSITY) so terrain doesn't read as wet plastic.
+const SPECULAR_MIN_SHININESS = 4.0;
+const SPECULAR_MAX_SHININESS = 48.0;
+const SPECULAR_INTENSITY = 0.25;
 
 const VERTEX_SHADER = `#version 300 es
 precision highp float;
@@ -89,6 +107,7 @@ uniform float tileScale;
 
 out vec2 vUV;
 out vec3 vNormal;
+out vec3 vWorldPosition;
 out vec4 vMatIndices0;
 out vec4 vMatIndices1;
 out vec4 vMatIndices2;
@@ -100,6 +119,7 @@ void main() {
   vec4 worldPosition = world * vec4(position, 1.0);
   gl_Position = projection * view * worldPosition;
   vNormal = normalize((world * vec4(normal, 0.0)).xyz);
+  vWorldPosition = worldPosition.xyz;
   vUV = uv * tileScale;
   vMatIndices0 = matIndices0;
   vMatIndices1 = matIndices1;
@@ -116,6 +136,7 @@ precision highp sampler2DArray;
 
 in vec2 vUV;
 in vec3 vNormal;
+in vec3 vWorldPosition;
 in vec4 vMatIndices0;
 in vec4 vMatIndices1;
 in vec4 vMatIndices2;
@@ -124,30 +145,72 @@ in vec4 vMatWeights1;
 in vec4 vMatWeights2;
 
 uniform sampler2DArray materialAtlas;
+uniform sampler2DArray normalAtlas;
 uniform vec3 lightDirection;
 uniform float lightIntensity;
+uniform vec3 cameraPosition;
+uniform float specularMinShininess;
+uniform float specularMaxShininess;
+uniform float specularIntensity;
 
 out vec4 outColor;
 
 void main() {
   vec3 n = normalize(vNormal);
-  float ndl = dot(n, normalize(lightDirection)) * 0.5 + 0.5;
+
+  vec4 albedo = texture(materialAtlas, vec3(vUV, vMatIndices0.x)) * vMatWeights0.x
+    + texture(materialAtlas, vec3(vUV, vMatIndices0.y)) * vMatWeights0.y
+    + texture(materialAtlas, vec3(vUV, vMatIndices0.z)) * vMatWeights0.z
+    + texture(materialAtlas, vec3(vUV, vMatIndices0.w)) * vMatWeights0.w
+    + texture(materialAtlas, vec3(vUV, vMatIndices1.x)) * vMatWeights1.x
+    + texture(materialAtlas, vec3(vUV, vMatIndices1.y)) * vMatWeights1.y
+    + texture(materialAtlas, vec3(vUV, vMatIndices1.z)) * vMatWeights1.z
+    + texture(materialAtlas, vec3(vUV, vMatIndices1.w)) * vMatWeights1.w
+    + texture(materialAtlas, vec3(vUV, vMatIndices2.x)) * vMatWeights2.x
+    + texture(materialAtlas, vec3(vUV, vMatIndices2.y)) * vMatWeights2.y
+    + texture(materialAtlas, vec3(vUV, vMatIndices2.z)) * vMatWeights2.z
+    + texture(materialAtlas, vec3(vUV, vMatIndices2.w)) * vMatWeights2.w;
+
+  vec3 tangentNormal = (texture(normalAtlas, vec3(vUV, vMatIndices0.x)).rgb * 2.0 - 1.0) * vMatWeights0.x
+    + (texture(normalAtlas, vec3(vUV, vMatIndices0.y)).rgb * 2.0 - 1.0) * vMatWeights0.y
+    + (texture(normalAtlas, vec3(vUV, vMatIndices0.z)).rgb * 2.0 - 1.0) * vMatWeights0.z
+    + (texture(normalAtlas, vec3(vUV, vMatIndices0.w)).rgb * 2.0 - 1.0) * vMatWeights0.w
+    + (texture(normalAtlas, vec3(vUV, vMatIndices1.x)).rgb * 2.0 - 1.0) * vMatWeights1.x
+    + (texture(normalAtlas, vec3(vUV, vMatIndices1.y)).rgb * 2.0 - 1.0) * vMatWeights1.y
+    + (texture(normalAtlas, vec3(vUV, vMatIndices1.z)).rgb * 2.0 - 1.0) * vMatWeights1.z
+    + (texture(normalAtlas, vec3(vUV, vMatIndices1.w)).rgb * 2.0 - 1.0) * vMatWeights1.w
+    + (texture(normalAtlas, vec3(vUV, vMatIndices2.x)).rgb * 2.0 - 1.0) * vMatWeights2.x
+    + (texture(normalAtlas, vec3(vUV, vMatIndices2.y)).rgb * 2.0 - 1.0) * vMatWeights2.y
+    + (texture(normalAtlas, vec3(vUV, vMatIndices2.z)).rgb * 2.0 - 1.0) * vMatWeights2.z
+    + (texture(normalAtlas, vec3(vUV, vMatIndices2.w)).rgb * 2.0 - 1.0) * vMatWeights2.w;
+  tangentNormal = normalize(tangentNormal);
+
+  // Screen-space-derivative TBN (no authored per-vertex tangents needed) - standard technique for
+  // bump-mapping a surface, like terrain, that never got its own tangent vertex attribute.
+  vec3 dp1 = dFdx(vWorldPosition);
+  vec3 dp2 = dFdy(vWorldPosition);
+  vec2 duv1 = dFdx(vUV);
+  vec2 duv2 = dFdy(vUV);
+  vec3 dp2perp = cross(dp2, n);
+  vec3 dp1perp = cross(n, dp1);
+  vec3 tangent = dp2perp * duv1.x + dp1perp * duv2.x;
+  vec3 bitangent = dp2perp * duv1.y + dp1perp * duv2.y;
+  float invMax = inversesqrt(max(dot(tangent, tangent), dot(bitangent, bitangent)));
+  mat3 tbn = mat3(tangent * invMax, bitangent * invMax, n);
+  vec3 worldNormal = normalize(tbn * tangentNormal);
+
+  vec3 lightDir = normalize(lightDirection);
+  float ndl = dot(worldNormal, lightDir) * 0.5 + 0.5;
   float diffuse = ndl * lightIntensity;
 
-  vec3 color = texture(materialAtlas, vec3(vUV, vMatIndices0.x)).rgb * vMatWeights0.x
-    + texture(materialAtlas, vec3(vUV, vMatIndices0.y)).rgb * vMatWeights0.y
-    + texture(materialAtlas, vec3(vUV, vMatIndices0.z)).rgb * vMatWeights0.z
-    + texture(materialAtlas, vec3(vUV, vMatIndices0.w)).rgb * vMatWeights0.w
-    + texture(materialAtlas, vec3(vUV, vMatIndices1.x)).rgb * vMatWeights1.x
-    + texture(materialAtlas, vec3(vUV, vMatIndices1.y)).rgb * vMatWeights1.y
-    + texture(materialAtlas, vec3(vUV, vMatIndices1.z)).rgb * vMatWeights1.z
-    + texture(materialAtlas, vec3(vUV, vMatIndices1.w)).rgb * vMatWeights1.w
-    + texture(materialAtlas, vec3(vUV, vMatIndices2.x)).rgb * vMatWeights2.x
-    + texture(materialAtlas, vec3(vUV, vMatIndices2.y)).rgb * vMatWeights2.y
-    + texture(materialAtlas, vec3(vUV, vMatIndices2.z)).rgb * vMatWeights2.z
-    + texture(materialAtlas, vec3(vUV, vMatIndices2.w)).rgb * vMatWeights2.w;
+  float roughness = albedo.a;
+  vec3 viewDir = normalize(cameraPosition - vWorldPosition);
+  vec3 halfVec = normalize(viewDir + lightDir);
+  float ndh = max(dot(worldNormal, halfVec), 0.0);
+  float shininess = mix(specularMaxShininess, specularMinShininess, roughness);
+  float specular = pow(ndh, shininess) * (1.0 - roughness) * specularIntensity;
 
-  outColor = vec4(color * diffuse, 1.0);
+  outColor = vec4(albedo.rgb * diffuse + vec3(specular) * lightIntensity, 1.0);
 }
 `;
 
@@ -192,31 +255,76 @@ export function createMaterialLibrary(
     for (const layer of layers) ensureMaterial(layer.material);
   }
 
-  const pixelBuffer = new Uint8Array(TEXTURE_RESOLUTION * TEXTURE_RESOLUTION * 4 * materialDefs.length);
+  const colorBuffer = new Uint8Array(TEXTURE_RESOLUTION * TEXTURE_RESOLUTION * 4 * materialDefs.length);
+  const normalBuffer = new Uint8Array(TEXTURE_RESOLUTION * TEXTURE_RESOLUTION * 4 * materialDefs.length);
   const materialColors: Color3[] = [];
   for (let i = 0; i < materialDefs.length; i++) {
     const def = materialDefs[i];
-    writeProceduralTexturePixels(pixelBuffer, i, seed, def.id, def.texture);
-    materialColors.push(Color3.Lerp(def.texture.baseColor, def.texture.variationColor, 0.5));
+    writeProceduralTexturePixels(colorBuffer, normalBuffer, i, seed, def.id, def.texture);
+
+    // A true representative swatch (the debug map's only use for this) - averaged straight from
+    // the just-baked pixels rather than re-deriving one from the texture's own layer colors, since
+    // how much of the bake each layer actually covers depends on the height blend, not just its
+    // declared color.
+    const pixelCount = TEXTURE_RESOLUTION * TEXTURE_RESOLUTION;
+    const layerOffset = i * pixelCount * 4;
+    let r = 0;
+    let g = 0;
+    let b = 0;
+    for (let p = 0; p < pixelCount; p++) {
+      r += colorBuffer[layerOffset + p * 4];
+      g += colorBuffer[layerOffset + p * 4 + 1];
+      b += colorBuffer[layerOffset + p * 4 + 2];
+    }
+    materialColors.push(new Color3(r / pixelCount / 255, g / pixelCount / 255, b / pixelCount / 255));
   }
 
-  const materialAtlas = RawTexture2DArray.CreateRGBATexture(pixelBuffer, TEXTURE_RESOLUTION, TEXTURE_RESOLUTION, materialDefs.length, scene, true, false);
+  const materialAtlas = RawTexture2DArray.CreateRGBATexture(colorBuffer, TEXTURE_RESOLUTION, TEXTURE_RESOLUTION, materialDefs.length, scene, true, false);
   materialAtlas.wrapU = Texture.WRAP_ADDRESSMODE;
   materialAtlas.wrapV = Texture.WRAP_ADDRESSMODE;
+
+  const normalAtlas = RawTexture2DArray.CreateRGBATexture(normalBuffer, TEXTURE_RESOLUTION, TEXTURE_RESOLUTION, materialDefs.length, scene, true, false);
+  normalAtlas.wrapU = Texture.WRAP_ADDRESSMODE;
+  normalAtlas.wrapV = Texture.WRAP_ADDRESSMODE;
 
   Effect.ShadersStore["terrainBlendVertexShader"] = VERTEX_SHADER;
   Effect.ShadersStore["terrainBlendFragmentShader"] = FRAGMENT_SHADER;
 
   const terrainMaterial = new ShaderMaterial("terrainBlend", scene, "terrainBlend", {
     attributes: ["position", "normal", "uv", "matIndices0", "matIndices1", "matIndices2", "matWeights0", "matWeights1", "matWeights2"],
-    uniforms: ["world", "view", "projection", "tileScale", "lightDirection", "lightIntensity"],
-    samplers: ["materialAtlas"],
+    uniforms: [
+      "world",
+      "view",
+      "projection",
+      "tileScale",
+      "lightDirection",
+      "lightIntensity",
+      "cameraPosition",
+      "specularMinShininess",
+      "specularMaxShininess",
+      "specularIntensity",
+    ],
+    samplers: ["materialAtlas", "normalAtlas"],
   });
   terrainMaterial.setTexture("materialAtlas", materialAtlas);
+  terrainMaterial.setTexture("normalAtlas", normalAtlas);
   terrainMaterial.setFloat("tileScale", chunkSize / TEXTURE_WORLD_TILE_SIZE);
   terrainMaterial.setVector3("lightDirection", lightDirection);
   terrainMaterial.setFloat("lightIntensity", lightIntensity);
+  terrainMaterial.setFloat("specularMinShininess", SPECULAR_MIN_SHININESS);
+  terrainMaterial.setFloat("specularMaxShininess", SPECULAR_MAX_SHININESS);
+  terrainMaterial.setFloat("specularIntensity", SPECULAR_INTENSITY);
   terrainMaterial.backFaceCulling = true;
+
+  // cameraPosition isn't one of ShaderMaterial's automatically-bound uniform names (only the
+  // world/view/projection matrix family is), so it needs a manual per-frame update for the
+  // specular term's view direction - scene.activeCamera doesn't exist yet on the very first tick
+  // (main.ts creates the camera after the world), hence the guard.
+  scene.onBeforeRenderObservable.add(() => {
+    if (scene.activeCamera) {
+      terrainMaterial.setVector3("cameraPosition", scene.activeCamera.position);
+    }
+  });
 
   interface CompiledLayer {
     materialIndex: number;
@@ -322,5 +430,17 @@ export function createMaterialLibrary(
     return getMaterialColor(biomeBaseIndex.get(biomeId) ?? defaultIndex);
   }
 
-  return { terrainMaterial, buildMaterialBlend, resolveMaterialIndex, getMaterialColor, getBiomeBaseColor };
+  const layerSize = TEXTURE_RESOLUTION * TEXTURE_RESOLUTION * 4;
+  const texturePreviews: MaterialTexturePreview[] = materialDefs.map((def, i) => ({
+    id: def.id,
+    name: def.name,
+    colorPixels: colorBuffer.subarray(i * layerSize, (i + 1) * layerSize),
+    normalPixels: normalBuffer.subarray(i * layerSize, (i + 1) * layerSize),
+  }));
+
+  function listMaterialTextures(): MaterialTexturePreview[] {
+    return texturePreviews;
+  }
+
+  return { terrainMaterial, buildMaterialBlend, resolveMaterialIndex, getMaterialColor, getBiomeBaseColor, listMaterialTextures };
 }

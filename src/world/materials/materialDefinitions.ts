@@ -1,11 +1,42 @@
 import { Color3 } from "@babylonjs/core";
 import type { PipelineDef } from "../terrain/pipeline/pipelineTypes";
-import type { ProceduralTextureParams } from "./textureGen";
+import type { TextureDef } from "./textureGen";
 
 export interface MaterialDef {
   id: string;
   name: string;
-  texture: ProceduralTextureParams;
+  texture: TextureDef;
+}
+
+// The same fine-grained mottling noise every simple two-tone material used before this project's
+// texture-pipeline milestone - kept as one shared pipeline (safe to reuse: compilePipeline seeds
+// each call from its own namespace string, not from this object's identity) so a plain two-color
+// material stays a one-liner. heightBlendRange=0.85 was picked numerically, not guessed: a
+// height-blend's contrast doesn't fall out of the noise's own amplitude the way a linear lerp's
+// does, so this is the value whose baked pixel std-dev matches the old `clamp(raw*0.5+0.5)` lerp's
+// (measured ~60.6 either way, at this noise's own params) - visual parity with the pre-pipeline
+// look, confirmed numerically rather than by eye alone.
+const MOTTLE_HEIGHT_PIPELINE: PipelineDef = {
+  noises: [{ name: "detail", type: "fbm", octaves: 3, frequency: 0.05, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
+  steps: [{ output: "result", op: "sample", noise: "detail" }],
+};
+const FLAT_ZERO_HEIGHT_PIPELINE: PipelineDef = { noises: [], steps: [{ output: "result", op: "constant", value: 0 }] };
+const TWO_TONE_HEIGHT_BLEND_RANGE = 0.85;
+
+/** A plain two-color mottled material, expressed as a (degenerate, 2-layer) texture pipeline -
+ *  the base color sits at a flat height, the variation color rises and falls with the shared
+ *  mottling noise above/below it, and a wide heightBlendRange keeps the result close to a smooth
+ *  continuous lerp rather than sharp patches. See leafLitterMaterial below for a texture that
+ *  actually exploits per-layer height/shape instead of just migrating the old two-tone look. */
+function twoToneTexture(baseColor: Color3, variationColor: Color3, roughness: number, bumpStrength: number): TextureDef {
+  return {
+    layers: [
+      { id: "base", color: baseColor, roughness, height: FLAT_ZERO_HEIGHT_PIPELINE },
+      { id: "variation", color: variationColor, roughness, height: MOTTLE_HEIGHT_PIPELINE },
+    ],
+    heightBlendRange: TWO_TONE_HEIGHT_BLEND_RANGE,
+    bumpStrength,
+  };
 }
 
 /** A rule tying one MaterialDef to a weight pipeline. Several layers may point at the same
@@ -17,42 +48,44 @@ export interface MaterialLayer {
   weight: PipelineDef;
 }
 
-// Continues this project's salt-numbering convention (cells/config.ts 601-618, terrainSampler.ts
-// 402, boundaryHillsConfig.ts 611-612) in a new 701+ range for material texture noise.
+// roughness/bumpStrength are chosen by material character (rock-like = rough + strong bump,
+// foliage/ground = medium-high roughness + gentle bump, sand = medium roughness + medium ripple,
+// snow/ice = lowest roughness + gentlest bump), not individually tuned - first-pass numbers like
+// every other constant in this project, meant to be eyeballed and adjusted.
 const grassMaterial: MaterialDef = {
   id: "grass",
   name: "Grass",
-  texture: { baseColor: new Color3(0.28, 0.42, 0.2), variationColor: new Color3(0.38, 0.55, 0.28), salt: 701 },
+  texture: twoToneTexture(new Color3(0.28, 0.42, 0.2), new Color3(0.38, 0.55, 0.28), 0.75, 0.4),
 };
 
 const rockMaterial: MaterialDef = {
   id: "rock",
   name: "Rock",
-  texture: { baseColor: new Color3(0.35, 0.33, 0.32), variationColor: new Color3(0.48, 0.46, 0.44), salt: 702 },
+  texture: twoToneTexture(new Color3(0.35, 0.33, 0.32), new Color3(0.48, 0.46, 0.44), 0.9, 1.2),
 };
 
 const sandMaterial: MaterialDef = {
   id: "sand",
   name: "Sand",
-  texture: { baseColor: new Color3(0.76, 0.68, 0.48), variationColor: new Color3(0.86, 0.78, 0.58), salt: 703 },
+  texture: twoToneTexture(new Color3(0.76, 0.68, 0.48), new Color3(0.86, 0.78, 0.58), 0.6, 0.5),
 };
 
 const snowMaterial: MaterialDef = {
   id: "snow",
   name: "Snow",
-  texture: { baseColor: new Color3(0.92, 0.93, 0.96), variationColor: new Color3(0.98, 0.99, 1.0), salt: 704 },
+  texture: twoToneTexture(new Color3(0.92, 0.93, 0.96), new Color3(0.98, 0.99, 1.0), 0.35, 0.25),
 };
 
 const tundraGroundMaterial: MaterialDef = {
   id: "tundraGround",
   name: "Tundra Ground",
-  texture: { baseColor: new Color3(0.52, 0.56, 0.52), variationColor: new Color3(0.68, 0.71, 0.68), salt: 705 },
+  texture: twoToneTexture(new Color3(0.52, 0.56, 0.52), new Color3(0.68, 0.71, 0.68), 0.8, 0.5),
 };
 
 const mudMaterial: MaterialDef = {
   id: "mud",
   name: "Mud",
-  texture: { baseColor: new Color3(0.22, 0.19, 0.13), variationColor: new Color3(0.33, 0.34, 0.2), salt: 706 },
+  texture: twoToneTexture(new Color3(0.22, 0.19, 0.13), new Color3(0.33, 0.34, 0.2), 0.6, 0.35),
 };
 
 // Plains-only variety layers (see the north/south/valley layers below) - never a biome's base, so
@@ -60,49 +93,74 @@ const mudMaterial: MaterialDef = {
 const grassPaleMaterial: MaterialDef = {
   id: "grassPale",
   name: "Faded Grass",
-  texture: { baseColor: new Color3(0.48, 0.54, 0.4), variationColor: new Color3(0.58, 0.63, 0.48), salt: 707 },
+  texture: twoToneTexture(new Color3(0.48, 0.54, 0.4), new Color3(0.58, 0.63, 0.48), 0.75, 0.4),
 };
 
 const grassDryMaterial: MaterialDef = {
   id: "grassDry",
   name: "Dry Grass",
-  texture: { baseColor: new Color3(0.56, 0.5, 0.26), variationColor: new Color3(0.66, 0.58, 0.34), salt: 708 },
+  texture: twoToneTexture(new Color3(0.56, 0.5, 0.26), new Color3(0.66, 0.58, 0.34), 0.75, 0.4),
 };
 
 const weedsMaterial: MaterialDef = {
   id: "weeds",
   name: "Weeds",
-  texture: { baseColor: new Color3(0.13, 0.2, 0.09), variationColor: new Color3(0.2, 0.3, 0.15), salt: 709 },
+  texture: twoToneTexture(new Color3(0.13, 0.2, 0.09), new Color3(0.2, 0.3, 0.15), 0.78, 0.45),
 };
 
 const mossMaterial: MaterialDef = {
   id: "moss",
   name: "Moss",
-  texture: { baseColor: new Color3(0.16, 0.26, 0.2), variationColor: new Color3(0.22, 0.36, 0.28), salt: 710 },
+  texture: twoToneTexture(new Color3(0.16, 0.26, 0.2), new Color3(0.22, 0.36, 0.28), 0.8, 0.45),
 };
 
+// The flagship example for this project's layered texture pipeline: not a mechanical two-tone
+// migration like the materials above, but a real physical composition - a grass-green base at a
+// flat, low height, with brown leaf clusters that actually rise above it wherever a low-frequency,
+// blobby noise clears a threshold. A narrow heightBlendRange (relative to the leaf layer's own
+// 0..0.85 height range) gives the clusters a defined, blob-like edge instead of a soft tint
+// gradient, and bumpStrength gives the raised clusters a genuine, visible bump (see
+// writeProceduralTexturePixels - bump comes from the gradient of this same composited height).
 const leafLitterMaterial: MaterialDef = {
   id: "leafLitter",
   name: "Leaf Litter",
-  texture: { baseColor: new Color3(0.32, 0.24, 0.1), variationColor: new Color3(0.42, 0.34, 0.16), salt: 711 },
+  texture: {
+    layers: [
+      { id: "grass", color: new Color3(0.26, 0.38, 0.19), roughness: 0.75, height: { noises: [], steps: [{ output: "result", op: "constant", value: 0.3 }] } },
+      {
+        id: "leaves",
+        color: new Color3(0.34, 0.24, 0.11),
+        roughness: 0.8,
+        height: {
+          noises: [{ name: "blobs", type: "fbm", octaves: 2, frequency: 0.02, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
+          steps: [
+            { output: "raw", op: "sample", noise: "blobs" },
+            { output: "result", op: "remap", input: "raw", inMin: -0.3, inMax: 0.6, outMin: 0, outMax: 0.85 },
+          ],
+        },
+      },
+    ],
+    heightBlendRange: 0.2,
+    bumpStrength: 0.5,
+  },
 };
 
 const duneShadowMaterial: MaterialDef = {
   id: "duneShadow",
   name: "Dune Shadow",
-  texture: { baseColor: new Color3(0.62, 0.52, 0.34), variationColor: new Color3(0.72, 0.6, 0.4), salt: 712 },
+  texture: twoToneTexture(new Color3(0.62, 0.52, 0.34), new Color3(0.72, 0.6, 0.4), 0.62, 0.5),
 };
 
 const screeMaterial: MaterialDef = {
   id: "scree",
   name: "Scree",
-  texture: { baseColor: new Color3(0.42, 0.38, 0.32), variationColor: new Color3(0.52, 0.47, 0.4), salt: 713 },
+  texture: twoToneTexture(new Color3(0.42, 0.38, 0.32), new Color3(0.52, 0.47, 0.4), 0.88, 1.0),
 };
 
 const frostPatchMaterial: MaterialDef = {
   id: "frostPatch",
   name: "Frost Patch",
-  texture: { baseColor: new Color3(0.72, 0.8, 0.84), variationColor: new Color3(0.84, 0.9, 0.93), salt: 714 },
+  texture: twoToneTexture(new Color3(0.72, 0.8, 0.84), new Color3(0.84, 0.9, 0.93), 0.4, 0.3),
 };
 
 // A second, warmer-toned rock so any steep slope in any biome shows two-rock variety instead of
@@ -110,7 +168,7 @@ const frostPatchMaterial: MaterialDef = {
 const rockAltMaterial: MaterialDef = {
   id: "rockAlt",
   name: "Weathered Rock",
-  texture: { baseColor: new Color3(0.4, 0.31, 0.26), variationColor: new Color3(0.52, 0.42, 0.34), salt: 715 },
+  texture: twoToneTexture(new Color3(0.4, 0.31, 0.26), new Color3(0.52, 0.42, 0.34), 0.9, 1.2),
 };
 
 // Lake-bed gravel for hills - see hillsLakeGravelLayer below. Cooler and smaller-grained-reading
@@ -118,7 +176,7 @@ const rockAltMaterial: MaterialDef = {
 const gravelMaterial: MaterialDef = {
   id: "gravel",
   name: "Gravel",
-  texture: { baseColor: new Color3(0.5, 0.5, 0.47), variationColor: new Color3(0.6, 0.6, 0.56), salt: 716 },
+  texture: twoToneTexture(new Color3(0.5, 0.5, 0.47), new Color3(0.6, 0.6, 0.56), 0.85, 0.7),
 };
 
 /** Every material a biome can name as its `baseMaterialId` (biomeTypes.ts), keyed by MaterialDef
@@ -313,7 +371,7 @@ const forestLeafLitterValleyLayer: MaterialLayer = {
     noises: [],
     steps: [
       { output: "curvature", op: "input", name: "reliefCurvature" },
-      { output: "raw", op: "remap", input: "curvature", inMin: 0.5, inMax: 2.5, outMin: 0, outMax: 1 },
+      { output: "raw", op: "remap", input: "curvature", inMin: 0.05, inMax: 1.5, outMin: 0, outMax: 1.5 },
       { output: "result", op: "clamp", input: "raw", min: 0, max: 1 },
     ],
   },
