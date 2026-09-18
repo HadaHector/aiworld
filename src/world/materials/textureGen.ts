@@ -108,7 +108,12 @@ export function writeProceduralTexturePixels(colorBuffer: Uint8Array, normalBuff
   const compiledLayers: CompiledPaintLayer[] = texture.layers.map((layer) => ({
     color: layer.color,
     roughness: layer.roughness,
-    evaluate: compilePipeline(layer.height, seed, `texture-${materialId}-${layer.id}`),
+    // tilePeriod is what makes the bake seamless: every noise in the layer becomes exactly periodic
+    // over one texture tile, so the pixel at RESOLUTION-1 genuinely neighbors the pixel at 0. Before
+    // this, the wrap was a hard discontinuity in both color and normals, and because
+    // TEXTURE_WORLD_TILE_SIZE divides CHUNK_SIZE it landed exactly on chunk boundaries - which is
+    // what the "chunk border seams" turned out to be.
+    evaluate: compilePipeline(layer.height, seed, `texture-${materialId}-${layer.id}`, { tilePeriod: TEXTURE_RESOLUTION }),
   }));
 
   const gridSize = TEXTURE_RESOLUTION + 1;

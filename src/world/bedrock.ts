@@ -1,4 +1,4 @@
-import { createBaseNoise2D, fbm, type FbmParams } from "./terrain/noise";
+import { createWorldOctaveSampler, fbm, type FbmParams } from "./terrain/noise";
 import { deriveSeed } from "./rng";
 
 export type BedrockSampler = (worldX: number, worldZ: number) => number;
@@ -21,9 +21,9 @@ const BEDROCK_PARAMS: FbmParams = {
  * tuned independently of which biome happens to occupy a given cell.
  */
 export function createBedrockSampler(seed: number): BedrockSampler {
-  const noise2D = createBaseNoise2D(deriveSeed(seed, BEDROCK_SALT));
+  const sample = createWorldOctaveSampler(deriveSeed(seed, BEDROCK_SALT));
 
   return function sampleBedrock(worldX: number, worldZ: number): number {
-    return fbm(noise2D, worldX, worldZ, BEDROCK_PARAMS);
+    return fbm(sample, worldX, worldZ, BEDROCK_PARAMS);
   };
 }

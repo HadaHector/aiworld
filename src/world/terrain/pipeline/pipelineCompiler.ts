@@ -1,5 +1,5 @@
 import { deriveSeed } from "../../rng";
-import { createBaseNoise2D, fbm, type Noise2D, type FbmParams } from "../noise";
+import { createTilingOctaveSampler, createWorldOctaveSampler, fbm, type Noise2D, type FbmParams } from "../noise";
 import { ridgedNoise2D, billowNoise2D, worleyNoise2D, type OctaveNoiseParams } from "./noiseGenerators";
 import type { NoiseSpec, PipelineDef, PipelineStep } from "./pipelineTypes";
 
@@ -23,11 +23,11 @@ function deriveNoiseSeed(rootSeed: number, namespace: string, noiseName: string)
   return deriveSeed(deriveSeed(rootSeed, hashString(namespace)), hashString(noiseName));
 }
 
-function compileNoiseSpec(spec: NoiseSpec, rootSeed: number, namespace: string): Noise2D {
+function compileNoiseSpec(spec: NoiseSpec, rootSeed: number, namespace: string, tilePeriod: number | undefined): Noise2D {
   const seed = deriveNoiseSeed(rootSeed, namespace, spec.name);
 
   if (spec.type === "worley") {
-    const sample = worleyNoise2D(seed, spec.frequency);
+    const sample = worleyNoise2D(seed, spec.frequency, tilePeriod);
     const amplitude = spec.amplitude;
     const mode = spec.mode;
     return (worldX: number, worldZ: number): number => {
@@ -36,7 +36,7 @@ function compileNoiseSpec(spec: NoiseSpec, rootSeed: number, namespace: string):
     };
   }
 
-  const baseNoise2D = createBaseNoise2D(seed);
+  const octaveSampler = tilePeriod === undefined ? createWorldOctaveSampler(seed) : createTilingOctaveSampler(seed, tilePeriod);
   const octaveParams: OctaveNoiseParams = {
     octaves: spec.octaves,
     baseFrequency: spec.frequency,
@@ -48,12 +48,12 @@ function compileNoiseSpec(spec: NoiseSpec, rootSeed: number, namespace: string):
   switch (spec.type) {
     case "fbm": {
       const fbmParams: FbmParams = { ...octaveParams, offset: 0 };
-      return (worldX: number, worldZ: number): number => fbm(baseNoise2D, worldX, worldZ, fbmParams);
+      return (worldX: number, worldZ: number): number => fbm(octaveSampler, worldX, worldZ, fbmParams);
     }
     case "ridged":
-      return ridgedNoise2D(baseNoise2D, octaveParams);
+      return ridgedNoise2D(octaveSampler, octaveParams);
     case "billow":
-      return billowNoise2D(baseNoise2D, octaveParams);
+      return billowNoise2D(octaveSampler, octaveParams);
   }
 }
 
@@ -195,11 +195,17 @@ function compileStep(
  * once via `fbm()`/ridged/billow loops; steps are compiled once into a flat array of closures
  * operating on a shared, pre-allocated scratch buffer indexed by step position - no per-sample
  * string/Map lookups on the hot path.
+ *
+ * `options.tilePeriod` makes every noise in the pipeline exactly periodic over that many input
+ * units (see createTilingOctaveSampler in ../noise.ts). Only texture baking wants this - textures
+ * are sampled over a fixed 256px tile that has to wrap without a seam - so height and
+ * material-weight pipelines simply omit it and keep ordinary infinite-domain world-space noise.
  */
-export function compilePipeline(def: PipelineDef, rootSeed: number, namespace: string): CompiledPipeline {
+export function compilePipeline(def: PipelineDef, rootSeed: number, namespace: string, options?: { tilePeriod: number }): CompiledPipeline {
+  const tilePeriod = options?.tilePeriod;
   const noiseSamplers = new Map<string, Noise2D>();
   for (const noiseSpec of def.noises) {
-    noiseSamplers.set(noiseSpec.name, compileNoiseSpec(noiseSpec, rootSeed, namespace));
+    noiseSamplers.set(noiseSpec.name, compileNoiseSpec(noiseSpec, rootSeed, namespace, tilePeriod));
   }
 
   if (def.steps.length === 0) {
