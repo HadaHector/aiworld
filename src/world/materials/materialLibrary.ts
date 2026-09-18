@@ -11,10 +11,13 @@ import {
 } from "./materialDefinitions";
 import { TEXTURE_RESOLUTION, writeProceduralTexturePixels } from "./textureGen";
 
-// World units per texture repeat. Chosen so CHUNK_SIZE (world.ts, 50) divides it evenly - every
-// chunk boundary then falls exactly on a tile boundary too, so the tiled pattern stays in phase
-// across chunks with no custom per-vertex UVs needed (see terrainMesh.ts).
-const TEXTURE_WORLD_TILE_SIZE = 10;
+// World units per texture repeat. Must divide CHUNK_SIZE (world.ts, 50) evenly - every chunk
+// boundary then falls exactly on a tile boundary too, so the tiled pattern stays in phase across
+// chunks with no custom per-vertex UVs needed (see terrainMesh.ts). 25 (rather than the smaller
+// 10 this started at) spreads each material's baked detail - cracks, ripples, leaf clusters -
+// across a bigger stretch of ground before it repeats, so the pattern reads as a large-scale
+// surface feature instead of an obviously-tiled close-up texture.
+const TEXTURE_WORLD_TILE_SIZE = 25;
 
 // Below this, no layer's weight is trusted and the base material wins outright - used only by the
 // legacy single-winner resolveMaterialIndex (the debug map's read path). The blended path
