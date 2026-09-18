@@ -1,5 +1,5 @@
 import { Color3 } from "@babylonjs/core";
-import type { PipelineDef } from "../terrain/pipeline/pipelineTypes";
+import type { ColorTuple, NoiseSpec, PipelineDef, PipelineStep } from "../terrain/pipeline/pipelineTypes";
 import type { TextureDef } from "./textureGen";
 
 export interface MaterialDef {
@@ -8,78 +8,64 @@ export interface MaterialDef {
   texture: TextureDef;
 }
 
-// The same fine-grained mottling noise every simple two-tone material used before this project's
-// texture-pipeline milestone - kept as one shared pipeline (safe to reuse: compilePipeline seeds
-// each call from its own namespace string, not from this object's identity) so a plain two-color
-// material stays a one-liner. heightBlendRange=0.85 was picked numerically, not guessed: a
-// height-blend's contrast doesn't fall out of the noise's own amplitude the way a linear lerp's
-// does, so this is the value whose baked pixel std-dev matches the old `clamp(raw*0.5+0.5)` lerp's
-// (measured ~60.6 either way, at this noise's own params) - visual parity with the pre-pipeline
-// look, confirmed numerically rather than by eye alone.
-const MOTTLE_HEIGHT_PIPELINE: PipelineDef = {
-  noises: [{ name: "detail", type: "fbm", octaves: 3, frequency: 0.05, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
-  steps: [{ output: "result", op: "sample", noise: "detail" }],
-};
-const FLAT_ZERO_HEIGHT_PIPELINE: PipelineDef = { noises: [], steps: [{ output: "result", op: "constant", value: 0 }] };
-const TWO_TONE_HEIGHT_BLEND_RANGE = 0.85;
-
-// A second, higher-frequency fbm layer - same shape as MOTTLE_HEIGHT_PIPELINE, just a tighter
-// grain, for materials that read as too soft/blurry with only one (broad) noise scale in play.
-const FINE_GRAIN_HEIGHT_PIPELINE: PipelineDef = {
-  noises: [{ name: "grain", type: "fbm", octaves: 2, frequency: 0.18, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
-  steps: [{ output: "result", op: "sample", noise: "grain" }],
-};
-
-// A third, lower-frequency fbm layer for gentle, large-area tonal shifts (sun-bleached patches,
-// soft shadowing) - broader and gentler than MOTTLE_HEIGHT_PIPELINE, meant to read as a big, soft
-// area of slightly different tone, not a repeating close-up pattern.
-const BROAD_TONE_HEIGHT_PIPELINE: PipelineDef = {
-  noises: [{ name: "broad", type: "fbm", octaves: 2, frequency: 0.012, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
-  steps: [{ output: "result", op: "sample", noise: "broad" }],
-};
-
-/** A natural, non-directional crack/fracture network (see WorleyNoiseSpec in pipelineTypes.ts) -
- *  the "edge" mode is near 0 exactly along a cell boundary and grows away from it, so remapping it
- *  with inMin above inMax (here inMax=0) inverts the sense: right on a boundary -> full height,
- *  a little off it -> 0 and below. Deliberately not ridged noise: ridged's creases follow the
- *  underlying gradient field and read as directional waves, not the irregular polygonal fracture
- *  pattern real cracked rock/mud actually shows. */
-function crackHeightPipeline(frequency: number, edgeWidth: number, peak: number): PipelineDef {
-  return {
-    noises: [{ name: "web", type: "worley", frequency, amplitude: 1, mode: "edge" }],
-    steps: [
-      { output: "raw", op: "sample", noise: "web" },
-      { output: "result", op: "remap", input: "raw", inMin: edgeWidth, inMax: 0, outMin: 0, outMax: peak },
-    ],
-  };
+/** Color3 is convenient to author in; the pipeline deliberately knows nothing about Babylon. */
+function rgb(color: Color3): ColorTuple {
+  return [color.r, color.g, color.b];
 }
 
-/** Rounded, grain/pebble-like blobs centered on each cell's own point (see WorleyNoiseSpec's "f1"
- *  mode) - a more geometric, grain-like shape than billow's soft blobs, better suited to actual
- *  small stones/pebbles than an organic growth pattern like lichen or moss tufts. */
-function grainHeightPipeline(frequency: number, radius: number, peak: number): PipelineDef {
-  return {
-    noises: [{ name: "grain", type: "worley", frequency, amplitude: 1, mode: "f1" }],
-    steps: [
-      { output: "raw", op: "sample", noise: "grain" },
-      { output: "result", op: "remap", input: "raw", inMin: radius, inMax: 0, outMin: 0, outMax: peak },
-    ],
-  };
+/**
+ * Steps turning a raw signal into a 0..1 mask: the value `at` maps to 1, the value `off` maps to 0,
+ * clamped outside that span. `at` may be either side of `off` - passing `at` below `off` inverts
+ * the sense, which is how a Worley "edge" distance (near 0 exactly on a crack) becomes a mask that
+ * is 1 on the crack and 0 away from it.
+ *
+ * Masks are the backbone of authoring here: each one is computed once and then reused to drive
+ * diffuse, roughness and height independently - which is the whole point of this design. A crack
+ * mask can darken the color, roughen the surface AND cut the height down, all from one signal.
+ */
+function maskSteps(input: string, at: number, off: number, output: string): PipelineStep[] {
+  return [
+    { output: `${output}Raw`, op: "remap", input, inMin: off, inMax: at, outMin: 0, outMax: 1 },
+    { output, op: "clamp", input: `${output}Raw`, min: 0, max: 1 },
+  ];
 }
 
-/** A plain two-color mottled material, expressed as a (degenerate, 2-layer) texture pipeline -
- *  the base color sits at a flat height, the variation color rises and falls with the shared
- *  mottling noise above/below it, and a wide heightBlendRange keeps the result close to a smooth
- *  continuous lerp rather than sharp patches. See leafLitterMaterial below for a texture that
- *  actually exploits per-layer height/shape instead of just migrating the old two-tone look. */
+// The shared noises every material draws on. Amplitude is 1 with persistence 0.5, so an N-octave
+// fbm spans roughly +/-(2 - 0.5^(N-1)): +/-1.75 for 3 octaves, +/-1.5 for 2. Those are the numbers
+// the maskSteps calls below use as their `at`/`off` ends.
+const MOTTLE_NOISE: NoiseSpec = { name: "mottle", type: "fbm", octaves: 3, frequency: 0.05, amplitude: 1, persistence: 0.5, lacunarity: 2.0 };
+const MOTTLE_SPAN = 1.75;
+
+/** A tighter grain than MOTTLE_NOISE, for materials that read as too soft/blurry with only one
+ *  (broad) noise scale in play. */
+const FINE_GRAIN_NOISE: NoiseSpec = { name: "grain", type: "fbm", octaves: 2, frequency: 0.18, amplitude: 1, persistence: 0.5, lacunarity: 2.0 };
+
+/** Gentle, large-area tonal shifts (sun-bleached patches, soft shadowing) - meant to read as a big
+ *  soft area of slightly different tone, not a repeating close-up pattern. */
+const BROAD_TONE_NOISE: NoiseSpec = { name: "broad", type: "fbm", octaves: 2, frequency: 0.012, amplitude: 1, persistence: 0.5, lacunarity: 2.0 };
+const TWO_OCTAVE_SPAN = 1.5;
+
+/** A plain two-color mottled material: one noise fades between two colors, drives a flat roughness,
+ *  and doubles as the surface relief. See rockMaterial and leafLitterMaterial for textures that
+ *  actually exploit independent diffuse/roughness/height instead of the simple two-tone case. */
 function twoToneTexture(baseColor: Color3, variationColor: Color3, roughness: number, bumpStrength: number): TextureDef {
   return {
-    layers: [
-      { id: "base", color: baseColor, roughness, height: FLAT_ZERO_HEIGHT_PIPELINE },
-      { id: "variation", color: variationColor, roughness, height: MOTTLE_HEIGHT_PIPELINE },
-    ],
-    heightBlendRange: TWO_TONE_HEIGHT_BLEND_RANGE,
     bumpStrength,
+    pipeline: {
+      noises: [MOTTLE_NOISE],
+      steps: [
+        { output: "mottle", op: "sample", noise: "mottle" },
+        ...maskSteps("mottle", MOTTLE_SPAN, -MOTTLE_SPAN, "mottleMask"),
+        { output: "baseColor", op: "color", value: rgb(baseColor) },
+        { output: "variationColor", op: "color", value: rgb(variationColor) },
+        { output: "diffuse", op: "mix", a: "baseColor", b: "variationColor", t: "mottleMask" },
+        { output: "roughness", op: "constant", value: roughness },
+      ],
+      // height reuses the already-computed 0..1 mask - no extra step needed, an output can name any
+      // step. (bumpStrength at the call sites is ~3.5x what it was when height was the raw +/-1.75
+      // noise, since the mask compresses the same relief into a 1.0 span.)
+      outputs: { diffuse: "diffuse", roughness: "roughness", height: "mottleMask" },
+    },
   };
 }
 
@@ -99,46 +85,71 @@ export interface MaterialLayer {
 const grassMaterial: MaterialDef = {
   id: "grass",
   name: "Grass",
-  texture: twoToneTexture(new Color3(0.28, 0.42, 0.2), new Color3(0.38, 0.55, 0.28), 0.75, 0.4),
+  texture: twoToneTexture(new Color3(0.28, 0.42, 0.2), new Color3(0.38, 0.55, 0.28), 0.75, 1.4),
 };
 
-// Every accent layer below shares heightBlendRange with the calibrated mottle layer
-// (TWO_TONE_HEIGHT_BLEND_RANGE) rather than getting its own smaller range - a smaller blendRange
-// would also sharpen the mottle layer itself (its ~-1.75..1.75 spread was specifically calibrated
-// against 0.85, see twoToneTexture's comment), turning the familiar soft mottling into a harsh,
-// high-contrast patchwork as a side effect. Instead each accent's own height output is scaled well
-// past the mottle's own peak (~1.75) - roughly to 3+, comfortably outside blendRange's reach of it
-// - so it reliably wins where it's meant to show, without having to touch the shared blend range.
+// Rock: broad mottle, a FINER grain on top (the mottle alone read as too soft/uniform), natural
+// crack lines (Worley "edge" - an irregular fracture network, not ridged noise's directional
+// creases), and sparse lichen patches (billow, an organic growth shape rather than a geometric one).
 //
-// Rock: the usual mottle, a second FINER grain layer (fbm at a much higher frequency - the broad
-// mottle alone read as too soft/uniform, this adds actual close-up detail), natural crack lines
-// (Worley "edge" - an irregular fracture network, not ridged noise's directional creases), and
-// sparse lichen patches (billow, an organic growth shape rather than a geometric one).
+// This is the clearest demonstration of why diffuse/roughness/height are separate outputs: the
+// crack mask darkens the color, roughens the surface, AND is *subtracted* from the height, so
+// cracks are grooves. Under the old paint-layer design a feature could only show where it was the
+// tallest layer, which meant every crack in this project was silently baked as a raised ridge and
+// lit as one - measurably so (its darkest pixels sat at height 254.6/255, the maximum).
 const rockMaterial: MaterialDef = {
   id: "rock",
   name: "Rock",
   texture: {
-    layers: [
-      { id: "base", color: new Color3(0.35, 0.33, 0.32), roughness: 0.88, height: FLAT_ZERO_HEIGHT_PIPELINE },
-      { id: "mottle", color: new Color3(0.48, 0.46, 0.44), roughness: 0.9, height: MOTTLE_HEIGHT_PIPELINE },
-      { id: "grain", color: new Color3(0.4, 0.38, 0.37), roughness: 0.92, height: FINE_GRAIN_HEIGHT_PIPELINE },
-      { id: "cracks", color: new Color3(0.13, 0.12, 0.11), roughness: 0.95, height: crackHeightPipeline(0.02, 0.13, 2.8) },
-      {
-        id: "lichen",
-        color: new Color3(0.43, 0.47, 0.32),
-        roughness: 0.82,
-        height: {
-          noises: [{ name: "patches", type: "billow", octaves: 2, frequency: 0.025, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
-          steps: [
-            { output: "raw", op: "sample", noise: "patches" },
-            { output: "norm", op: "remap", input: "raw", inMin: 0.3, inMax: 1.3, outMin: 0, outMax: 3 },
-            { output: "result", op: "clamp", input: "norm", min: 0, max: 3 },
-          ],
-        },
-      },
-    ],
-    heightBlendRange: TWO_TONE_HEIGHT_BLEND_RANGE,
-    bumpStrength: 1.1,
+    bumpStrength: 1.65,
+    pipeline: {
+      noises: [
+        MOTTLE_NOISE,
+        FINE_GRAIN_NOISE,
+        { name: "cracks", type: "worley", frequency: 0.02, amplitude: 1, mode: "edge" },
+        { name: "lichen", type: "billow", octaves: 2, frequency: 0.025, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+      ],
+      steps: [
+        { output: "mottle", op: "sample", noise: "mottle" },
+        ...maskSteps("mottle", MOTTLE_SPAN, -MOTTLE_SPAN, "mottleMask"),
+        { output: "grain", op: "sample", noise: "grain" },
+        ...maskSteps("grain", TWO_OCTAVE_SPAN, -TWO_OCTAVE_SPAN, "grainMask"),
+        // `at` below `off` inverts: the Worley edge distance is ~0 exactly on a crack, so this is 1
+        // on the crack line and falls to 0 by 0.13 away from it.
+        { output: "crackEdge", op: "sample", noise: "cracks" },
+        ...maskSteps("crackEdge", 0, 0.13, "crackMask"),
+        { output: "lichenRaw", op: "sample", noise: "lichen" },
+        ...maskSteps("lichenRaw", 1.3, 0.3, "lichenMask"),
+
+        // --- diffuse: stone tone, grain detail, then cracks and lichen painted over it ---
+        { output: "stoneDark", op: "color", value: [0.35, 0.33, 0.32] },
+        { output: "stoneLight", op: "color", value: [0.48, 0.46, 0.44] },
+        { output: "stone", op: "mix", a: "stoneDark", b: "stoneLight", t: "mottleMask" },
+        { output: "grainColor", op: "color", value: [0.4, 0.38, 0.37] },
+        { output: "grainBlend", op: "scale", input: "grainMask", factor: 0.45 },
+        { output: "stoneGrained", op: "mix", a: "stone", b: "grainColor", t: "grainBlend" },
+        { output: "crackColor", op: "color", value: [0.13, 0.12, 0.11] },
+        { output: "cracked", op: "mix", a: "stoneGrained", b: "crackColor", t: "crackMask" },
+        { output: "lichenColor", op: "color", value: [0.43, 0.47, 0.32] },
+        { output: "diffuse", op: "mix", a: "cracked", b: "lichenColor", t: "lichenMask" },
+
+        // --- roughness: lichen is a touch softer than bare stone ---
+        { output: "roughStone", op: "constant", value: 0.9 },
+        { output: "roughLichen", op: "constant", value: 0.82 },
+        { output: "roughness", op: "mix", a: "roughStone", b: "roughLichen", t: "lichenMask" },
+
+        // --- height: mottle + grain relief on a raised bed, with the cracks cut down into it ---
+        // The bed offset is what keeps the result inside the 0..1 convention once cracks subtract.
+        { output: "bed", op: "constant", value: 0.55 },
+        { output: "mottleRelief", op: "scale", input: "mottleMask", factor: 0.3 },
+        { output: "bedded", op: "add", a: "bed", b: "mottleRelief" },
+        { output: "grainRelief", op: "scale", input: "grainMask", factor: 0.15 },
+        { output: "surface", op: "add", a: "bedded", b: "grainRelief" },
+        { output: "crackDepth", op: "scale", input: "crackMask", factor: 0.65 },
+        { output: "height", op: "subtract", a: "surface", b: "crackDepth" },
+      ],
+      outputs: { diffuse: "diffuse", roughness: "roughness", height: "height" },
+    },
   },
 };
 
@@ -151,14 +162,42 @@ const sandMaterial: MaterialDef = {
   id: "sand",
   name: "Sand",
   texture: {
-    layers: [
-      { id: "base", color: new Color3(0.76, 0.68, 0.48), roughness: 0.6, height: FLAT_ZERO_HEIGHT_PIPELINE },
-      { id: "mottle", color: new Color3(0.86, 0.78, 0.58), roughness: 0.6, height: MOTTLE_HEIGHT_PIPELINE },
-      { id: "broadTone", color: new Color3(0.7, 0.61, 0.42), roughness: 0.58, height: BROAD_TONE_HEIGHT_PIPELINE },
-      { id: "grains", color: new Color3(0.44, 0.37, 0.26), roughness: 0.82, height: grainHeightPipeline(0.12, 0.4, 3) },
-    ],
-    heightBlendRange: TWO_TONE_HEIGHT_BLEND_RANGE,
     bumpStrength: 0.5,
+    pipeline: {
+      noises: [
+        MOTTLE_NOISE,
+        BROAD_TONE_NOISE,
+        { name: "grains", type: "worley", frequency: 0.12, amplitude: 1, mode: "f1" },
+      ],
+      steps: [
+        { output: "mottle", op: "sample", noise: "mottle" },
+        ...maskSteps("mottle", MOTTLE_SPAN, -MOTTLE_SPAN, "mottleMask"),
+        { output: "broad", op: "sample", noise: "broad" },
+        ...maskSteps("broad", TWO_OCTAVE_SPAN, -TWO_OCTAVE_SPAN, "broadMask"),
+        // Worley f1 is ~0 at each scattered point, so this is 1 at a grain and 0 by 0.4 away.
+        { output: "grainDist", op: "sample", noise: "grains" },
+        ...maskSteps("grainDist", 0, 0.4, "grainMask"),
+
+        { output: "sandDark", op: "color", value: [0.76, 0.68, 0.48] },
+        { output: "sandLight", op: "color", value: [0.86, 0.78, 0.58] },
+        { output: "sand", op: "mix", a: "sandDark", b: "sandLight", t: "mottleMask" },
+        { output: "shadeColor", op: "color", value: [0.7, 0.61, 0.42] },
+        { output: "shadeBlend", op: "scale", input: "broadMask", factor: 0.6 },
+        { output: "sandShaded", op: "mix", a: "sand", b: "shadeColor", t: "shadeBlend" },
+        { output: "grainColor", op: "color", value: [0.44, 0.37, 0.26] },
+        { output: "diffuse", op: "mix", a: "sandShaded", b: "grainColor", t: "grainMask" },
+
+        { output: "roughSand", op: "constant", value: 0.6 },
+        { output: "roughGrain", op: "constant", value: 0.82 },
+        { output: "roughness", op: "mix", a: "roughSand", b: "roughGrain", t: "grainMask" },
+
+        // Grains are little stones sitting proud of the sand, so they add height rather than cut it.
+        { output: "drift", op: "scale", input: "mottleMask", factor: 0.45 },
+        { output: "grainRelief", op: "scale", input: "grainMask", factor: 0.5 },
+        { output: "height", op: "add", a: "drift", b: "grainRelief" },
+      ],
+      outputs: { diffuse: "diffuse", roughness: "roughness", height: "height" },
+    },
   },
 };
 
@@ -170,33 +209,61 @@ const snowMaterial: MaterialDef = {
   id: "snow",
   name: "Snow",
   texture: {
-    layers: [
-      { id: "base", color: new Color3(0.92, 0.93, 0.96), roughness: 0.35, height: FLAT_ZERO_HEIGHT_PIPELINE },
-      { id: "mottle", color: new Color3(0.98, 0.99, 1.0), roughness: 0.35, height: MOTTLE_HEIGHT_PIPELINE },
-      { id: "broadShading", color: new Color3(0.83, 0.87, 0.94), roughness: 0.32, height: BROAD_TONE_HEIGHT_PIPELINE },
-      {
-        id: "glints",
-        color: new Color3(1.0, 1.0, 1.0),
-        roughness: 0.12,
-        height: {
-          noises: [{ name: "sparkle", type: "billow", octaves: 2, frequency: 0.22, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
-          steps: [
-            { output: "raw", op: "sample", noise: "sparkle" },
-            { output: "norm", op: "remap", input: "raw", inMin: 1.1, inMax: 1.5, outMin: 0, outMax: 3 },
-            { output: "result", op: "clamp", input: "norm", min: 0, max: 3 },
+    bumpStrength: 1.0,
+    pipeline: {
+      noises: [
+        MOTTLE_NOISE,
+        BROAD_TONE_NOISE,
+        { name: "sparkle", type: "billow", octaves: 2, frequency: 0.22, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+      ],
+      steps: [
+        { output: "mottle", op: "sample", noise: "mottle" },
+        ...maskSteps("mottle", MOTTLE_SPAN, -MOTTLE_SPAN, "mottleMask"),
+        { output: "broad", op: "sample", noise: "broad" },
+        ...maskSteps("broad", TWO_OCTAVE_SPAN, -TWO_OCTAVE_SPAN, "broadMask"),
+        // Only the extreme upper tail, so glints stay tiny and sparse rather than a bright haze.
+        { output: "sparkleRaw", op: "sample", noise: "sparkle" },
+        ...maskSteps("sparkleRaw", 1.5, 1.1, "glintMask"),
+
+        // A colorRamp instead of a two-color mix: snow reads better as a short cool-to-warm-white
+        // gradient than as a straight blend between two endpoints.
+        {
+          output: "snowTone",
+          op: "colorRamp",
+          input: "mottleMask",
+          stops: [
+            { at: 0.0, color: [0.88, 0.9, 0.95] },
+            { at: 0.55, color: [0.94, 0.95, 0.97] },
+            { at: 1.0, color: [0.99, 0.99, 1.0] },
           ],
         },
-      },
-    ],
-    heightBlendRange: TWO_TONE_HEIGHT_BLEND_RANGE,
-    bumpStrength: 0.3,
+        { output: "shadowColor", op: "color", value: [0.83, 0.87, 0.94] },
+        { output: "shadowBlend", op: "scale", input: "broadMask", factor: 0.75 },
+        { output: "drifted", op: "mix", a: "snowTone", b: "shadowColor", t: "shadowBlend" },
+        { output: "glintColor", op: "color", value: [1.0, 1.0, 1.0] },
+        { output: "diffuse", op: "mix", a: "drifted", b: "glintColor", t: "glintMask" },
+
+        { output: "roughSnow", op: "constant", value: 0.35 },
+        { output: "roughGlint", op: "constant", value: 0.12 },
+        { output: "roughness", op: "mix", a: "roughSnow", b: "roughGlint", t: "glintMask" },
+
+        // Broad drifts set the large-scale relief, but at frequency 0.012 they barely change from
+        // pixel to pixel, so on their own they bake a completely flat normal map - the fine mottle
+        // is what actually gives snow any surface at all. Glints are optical, not geometric, so
+        // they contribute no height.
+        { output: "drifts", op: "scale", input: "broadMask", factor: 0.65 },
+        { output: "fineSnow", op: "scale", input: "mottleMask", factor: 0.35 },
+        { output: "height", op: "add", a: "drifts", b: "fineSnow" },
+      ],
+      outputs: { diffuse: "diffuse", roughness: "roughness", height: "height" },
+    },
   },
 };
 
 const tundraGroundMaterial: MaterialDef = {
   id: "tundraGround",
   name: "Tundra Ground",
-  texture: twoToneTexture(new Color3(0.52, 0.56, 0.52), new Color3(0.68, 0.71, 0.68), 0.8, 0.5),
+  texture: twoToneTexture(new Color3(0.52, 0.56, 0.52), new Color3(0.68, 0.71, 0.68), 0.8, 1.75),
 };
 
 // Mud: the usual mottle, a web of dry-cracked-mud fractures (Worley "edge" - the textbook natural
@@ -207,25 +274,45 @@ const mudMaterial: MaterialDef = {
   id: "mud",
   name: "Mud",
   texture: {
-    layers: [
-      { id: "base", color: new Color3(0.22, 0.19, 0.13), roughness: 0.55, height: FLAT_ZERO_HEIGHT_PIPELINE },
-      { id: "mottle", color: new Color3(0.33, 0.34, 0.2), roughness: 0.55, height: MOTTLE_HEIGHT_PIPELINE },
-      { id: "cracks", color: new Color3(0.14, 0.11, 0.07), roughness: 0.7, height: crackHeightPipeline(0.015, 0.16, 2.8) },
-      {
-        id: "wetPatches",
-        color: new Color3(0.15, 0.13, 0.09),
-        roughness: 0.22,
-        height: {
-          noises: [{ name: "damp", type: "billow", octaves: 2, frequency: 0.03, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
-          steps: [
-            { output: "raw", op: "sample", noise: "damp" },
-            { output: "result", op: "remap", input: "raw", inMin: 0.2, inMax: 1.3, outMin: 0, outMax: 3 },
-          ],
-        },
-      },
-    ],
-    heightBlendRange: TWO_TONE_HEIGHT_BLEND_RANGE,
-    bumpStrength: 0.5,
+    bumpStrength: 0.7,
+    pipeline: {
+      noises: [
+        MOTTLE_NOISE,
+        { name: "cracks", type: "worley", frequency: 0.015, amplitude: 1, mode: "edge" },
+        { name: "damp", type: "billow", octaves: 2, frequency: 0.03, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+      ],
+      steps: [
+        { output: "mottle", op: "sample", noise: "mottle" },
+        ...maskSteps("mottle", MOTTLE_SPAN, -MOTTLE_SPAN, "mottleMask"),
+        { output: "crackEdge", op: "sample", noise: "cracks" },
+        ...maskSteps("crackEdge", 0, 0.16, "crackMask"),
+        { output: "dampRaw", op: "sample", noise: "damp" },
+        ...maskSteps("dampRaw", 1.3, 0.2, "wetMask"),
+
+        { output: "mudDark", op: "color", value: [0.22, 0.19, 0.13] },
+        { output: "mudLight", op: "color", value: [0.33, 0.34, 0.2] },
+        { output: "mud", op: "mix", a: "mudDark", b: "mudLight", t: "mottleMask" },
+        { output: "crackColor", op: "color", value: [0.14, 0.11, 0.07] },
+        { output: "cracked", op: "mix", a: "mud", b: "crackColor", t: "crackMask" },
+        { output: "wetColor", op: "color", value: [0.15, 0.13, 0.09] },
+        { output: "diffuse", op: "mix", a: "cracked", b: "wetColor", t: "wetMask" },
+
+        // Wet patches are notably glossier than the dry mud around them.
+        { output: "roughDry", op: "constant", value: 0.55 },
+        { output: "roughWet", op: "constant", value: 0.22 },
+        { output: "roughness", op: "mix", a: "roughDry", b: "roughWet", t: "wetMask" },
+
+        // Dried mud curls up into plates with the cracks as grooves between them - so the crack
+        // mask is subtracted here, the same correctness fix described on rockMaterial. The bed
+        // offset keeps the result inside the 0..1 height convention once the cracks cut into it.
+        { output: "bed", op: "constant", value: 0.6 },
+        { output: "plateRelief", op: "scale", input: "mottleMask", factor: 0.4 },
+        { output: "plates", op: "add", a: "bed", b: "plateRelief" },
+        { output: "crackDepth", op: "scale", input: "crackMask", factor: 0.6 },
+        { output: "height", op: "subtract", a: "plates", b: "crackDepth" },
+      ],
+      outputs: { diffuse: "diffuse", roughness: "roughness", height: "height" },
+    },
   },
 };
 
@@ -234,19 +321,19 @@ const mudMaterial: MaterialDef = {
 const grassPaleMaterial: MaterialDef = {
   id: "grassPale",
   name: "Faded Grass",
-  texture: twoToneTexture(new Color3(0.48, 0.54, 0.4), new Color3(0.58, 0.63, 0.48), 0.75, 0.4),
+  texture: twoToneTexture(new Color3(0.48, 0.54, 0.4), new Color3(0.58, 0.63, 0.48), 0.75, 1.4),
 };
 
 const grassDryMaterial: MaterialDef = {
   id: "grassDry",
   name: "Dry Grass",
-  texture: twoToneTexture(new Color3(0.56, 0.5, 0.26), new Color3(0.66, 0.58, 0.34), 0.75, 0.4),
+  texture: twoToneTexture(new Color3(0.56, 0.5, 0.26), new Color3(0.66, 0.58, 0.34), 0.75, 1.4),
 };
 
 const weedsMaterial: MaterialDef = {
   id: "weeds",
   name: "Weeds",
-  texture: twoToneTexture(new Color3(0.13, 0.2, 0.09), new Color3(0.2, 0.3, 0.15), 0.78, 0.45),
+  texture: twoToneTexture(new Color3(0.13, 0.2, 0.09), new Color3(0.2, 0.3, 0.15), 0.78, 1.575),
 };
 
 // Moss: the usual mottle, a second finer grain layer (fbm at a higher frequency, the same "add a
@@ -258,76 +345,114 @@ const mossMaterial: MaterialDef = {
   id: "moss",
   name: "Moss",
   texture: {
-    layers: [
-      { id: "base", color: new Color3(0.16, 0.26, 0.2), roughness: 0.8, height: FLAT_ZERO_HEIGHT_PIPELINE },
-      { id: "mottle", color: new Color3(0.22, 0.36, 0.28), roughness: 0.8, height: MOTTLE_HEIGHT_PIPELINE },
-      { id: "grain", color: new Color3(0.19, 0.31, 0.24), roughness: 0.82, height: FINE_GRAIN_HEIGHT_PIPELINE },
-      {
-        id: "tufts",
-        color: new Color3(0.3, 0.44, 0.3),
-        roughness: 0.75,
-        height: {
-          noises: [{ name: "clumps", type: "billow", octaves: 2, frequency: 0.1, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
-          steps: [
-            { output: "raw", op: "sample", noise: "clumps" },
-            { output: "norm", op: "remap", input: "raw", inMin: 0.5, inMax: 1.4, outMin: 0, outMax: 3 },
-            { output: "result", op: "clamp", input: "norm", min: 0, max: 3 },
+    bumpStrength: 0.75,
+    pipeline: {
+      noises: [
+        MOTTLE_NOISE,
+        FINE_GRAIN_NOISE,
+        { name: "clumps", type: "billow", octaves: 2, frequency: 0.1, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+      ],
+      steps: [
+        { output: "mottle", op: "sample", noise: "mottle" },
+        ...maskSteps("mottle", MOTTLE_SPAN, -MOTTLE_SPAN, "mottleMask"),
+        { output: "grain", op: "sample", noise: "grain" },
+        ...maskSteps("grain", TWO_OCTAVE_SPAN, -TWO_OCTAVE_SPAN, "grainMask"),
+        { output: "clumpRaw", op: "sample", noise: "clumps" },
+        ...maskSteps("clumpRaw", 1.4, 0.5, "tuftMask"),
+
+        // Moss varies over a range of greens rather than between two, so a ramp fits it better.
+        {
+          output: "mossTone",
+          op: "colorRamp",
+          input: "mottleMask",
+          stops: [
+            { at: 0.0, color: [0.14, 0.23, 0.18] },
+            { at: 0.45, color: [0.19, 0.31, 0.24] },
+            { at: 1.0, color: [0.24, 0.39, 0.29] },
           ],
         },
-      },
-    ],
-    heightBlendRange: TWO_TONE_HEIGHT_BLEND_RANGE,
-    bumpStrength: 0.6,
+        { output: "grainShade", op: "color", value: [0.17, 0.28, 0.21] },
+        { output: "grainBlend", op: "scale", input: "grainMask", factor: 0.35 },
+        { output: "mossGrained", op: "mix", a: "mossTone", b: "grainShade", t: "grainBlend" },
+        { output: "tuftColor", op: "color", value: [0.3, 0.44, 0.3] },
+        { output: "diffuse", op: "mix", a: "mossGrained", b: "tuftColor", t: "tuftMask" },
+
+        { output: "roughMoss", op: "constant", value: 0.8 },
+        { output: "roughTuft", op: "constant", value: 0.75 },
+        { output: "roughness", op: "mix", a: "roughMoss", b: "roughTuft", t: "tuftMask" },
+
+        // Tufts genuinely stand proud of the mat, and the fine grain gives it a fuzzy micro-relief.
+        { output: "mat", op: "scale", input: "mottleMask", factor: 0.25 },
+        { output: "fuzz", op: "scale", input: "grainMask", factor: 0.2 },
+        { output: "bed", op: "add", a: "mat", b: "fuzz" },
+        { output: "tuftRelief", op: "scale", input: "tuftMask", factor: 0.55 },
+        { output: "height", op: "add", a: "bed", b: "tuftRelief" },
+      ],
+      outputs: { diffuse: "diffuse", roughness: "roughness", height: "height" },
+    },
   },
 };
 
-// The flagship example for this project's layered texture pipeline: not a mechanical two-tone
-// migration like the materials above, but a real physical composition - a grass-green base at a
-// flat, low height, with brown leaf clusters that actually rise above it wherever a low-frequency,
-// blobby noise clears a threshold. A narrow heightBlendRange (relative to the leaf layer's own
-// 0..0.85 height range) gives the clusters a defined, blob-like edge instead of a soft tint
-// gradient, and bumpStrength gives the raised clusters a genuine, visible bump (see
-// writeProceduralTexturePixels - bump comes from the gradient of this same composited height).
+// A real physical composition rather than a two-tone tint: grass at ground level, with brown leaf
+// clusters lying on top of it wherever a low-frequency blobby noise clears a threshold. The narrow
+// mask span (0.15..0.45 of the blob noise) is what gives the clusters a defined, blob-like edge
+// instead of a soft gradient, and they genuinely sit above the grass in the height output, so the
+// bump reads them as raised litter.
 const leafLitterMaterial: MaterialDef = {
   id: "leafLitter",
   name: "Leaf Litter",
   texture: {
-    layers: [
-      { id: "grass", color: new Color3(0.26, 0.38, 0.19), roughness: 0.75, height: { noises: [], steps: [{ output: "result", op: "constant", value: 0.3 }] } },
-      {
-        id: "leaves",
-        color: new Color3(0.34, 0.24, 0.11),
-        roughness: 0.8,
-        height: {
-          noises: [{ name: "blobs", type: "fbm", octaves: 2, frequency: 0.02, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
-          steps: [
-            { output: "raw", op: "sample", noise: "blobs" },
-            { output: "result", op: "remap", input: "raw", inMin: -0.3, inMax: 0.6, outMin: 0, outMax: 0.85 },
-          ],
-        },
-      },
-    ],
-    heightBlendRange: 0.2,
     bumpStrength: 0.5,
+    pipeline: {
+      noises: [
+        { name: "blobs", type: "fbm", octaves: 2, frequency: 0.02, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+        MOTTLE_NOISE,
+      ],
+      steps: [
+        { output: "blobRaw", op: "sample", noise: "blobs" },
+        ...maskSteps("blobRaw", 0.45, 0.15, "leafMask"),
+        { output: "mottle", op: "sample", noise: "mottle" },
+        ...maskSteps("mottle", MOTTLE_SPAN, -MOTTLE_SPAN, "mottleMask"),
+
+        // Both the grass and the leaves get their own tonal variation from the shared mottle, so
+        // neither reads as a flat sheet of color.
+        { output: "grassDark", op: "color", value: [0.22, 0.33, 0.16] },
+        { output: "grassLight", op: "color", value: [0.29, 0.42, 0.22] },
+        { output: "grass", op: "mix", a: "grassDark", b: "grassLight", t: "mottleMask" },
+        { output: "leafDark", op: "color", value: [0.28, 0.19, 0.09] },
+        { output: "leafLight", op: "color", value: [0.42, 0.29, 0.14] },
+        { output: "leaves", op: "mix", a: "leafDark", b: "leafLight", t: "mottleMask" },
+        { output: "diffuse", op: "mix", a: "grass", b: "leaves", t: "leafMask" },
+
+        { output: "roughGrass", op: "constant", value: 0.75 },
+        { output: "roughLeaf", op: "constant", value: 0.8 },
+        { output: "roughness", op: "mix", a: "roughGrass", b: "roughLeaf", t: "leafMask" },
+
+        { output: "groundLevel", op: "scale", input: "mottleMask", factor: 0.15 },
+        { output: "litter", op: "scale", input: "leafMask", factor: 0.85 },
+        { output: "height", op: "add", a: "groundLevel", b: "litter" },
+      ],
+      outputs: { diffuse: "diffuse", roughness: "roughness", height: "height" },
+    },
   },
 };
 
 const duneShadowMaterial: MaterialDef = {
   id: "duneShadow",
   name: "Dune Shadow",
-  texture: twoToneTexture(new Color3(0.62, 0.52, 0.34), new Color3(0.72, 0.6, 0.4), 0.62, 0.5),
+  texture: twoToneTexture(new Color3(0.62, 0.52, 0.34), new Color3(0.72, 0.6, 0.4), 0.62, 1.75),
 };
 
 const screeMaterial: MaterialDef = {
   id: "scree",
   name: "Scree",
-  texture: twoToneTexture(new Color3(0.42, 0.38, 0.32), new Color3(0.52, 0.47, 0.4), 0.88, 1.0),
+  texture: twoToneTexture(new Color3(0.42, 0.38, 0.32), new Color3(0.52, 0.47, 0.4), 0.88, 3.5),
 };
 
 const frostPatchMaterial: MaterialDef = {
   id: "frostPatch",
   name: "Frost Patch",
-  texture: twoToneTexture(new Color3(0.72, 0.8, 0.84), new Color3(0.84, 0.9, 0.93), 0.4, 0.3),
+  texture: twoToneTexture(new Color3(0.72, 0.8, 0.84), new Color3(0.84, 0.9, 0.93), 0.4, 1.05),
 };
 
 // A second, warmer-toned rock so any steep slope in any biome shows two-rock variety instead of
@@ -335,7 +460,7 @@ const frostPatchMaterial: MaterialDef = {
 const rockAltMaterial: MaterialDef = {
   id: "rockAlt",
   name: "Weathered Rock",
-  texture: twoToneTexture(new Color3(0.4, 0.31, 0.26), new Color3(0.52, 0.42, 0.34), 0.9, 1.2),
+  texture: twoToneTexture(new Color3(0.4, 0.31, 0.26), new Color3(0.52, 0.42, 0.34), 0.9, 4.2),
 };
 
 // Lake-bed gravel for hills - see hillsLakeGravelLayer below. Cooler and smaller-grained-reading
@@ -343,7 +468,7 @@ const rockAltMaterial: MaterialDef = {
 const gravelMaterial: MaterialDef = {
   id: "gravel",
   name: "Gravel",
-  texture: twoToneTexture(new Color3(0.5, 0.5, 0.47), new Color3(0.6, 0.6, 0.56), 0.85, 0.7),
+  texture: twoToneTexture(new Color3(0.5, 0.5, 0.47), new Color3(0.6, 0.6, 0.56), 0.85, 2.45),
 };
 
 /** Every material a biome can name as its `baseMaterialId` (biomeTypes.ts), keyed by MaterialDef

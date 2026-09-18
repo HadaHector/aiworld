@@ -38,8 +38,13 @@ export function createTextureBrowser(materialLibrary: MaterialLibrary): TextureB
 
     const ctx = canvas.getContext("2d");
     if (ctx) {
-      const imageData = new ImageData(new Uint8ClampedArray(pixels), TEXTURE_RESOLUTION, TEXTURE_RESOLUTION);
-      ctx.putImageData(imageData, 0, 0);
+      // Both buffers carry an unrelated payload in alpha (roughness in the color texture, height in
+      // the normal one), which putImageData would treat as transparency and blend into the page -
+      // making e.g. a low-height material's normal map look dark rather than showing its normals.
+      // Copy with alpha forced opaque so each swatch shows what the shader actually samples: RGB.
+      const rgbOnly = new Uint8ClampedArray(pixels);
+      for (let i = 3; i < rgbOnly.length; i += 4) rgbOnly[i] = 255;
+      ctx.putImageData(new ImageData(rgbOnly, TEXTURE_RESOLUTION, TEXTURE_RESOLUTION), 0, 0);
     }
 
     const sub = document.createElement("div");
