@@ -99,65 +99,90 @@ const grassMaterial: MaterialDef = {
   texture: twoToneTexture(new Color3(0.28, 0.42, 0.2), new Color3(0.38, 0.55, 0.28), 0.75, 1.4),
 };
 
-// Rock: broad mottle, a FINER grain on top (the mottle alone read as too soft/uniform), natural
-// crack lines (Worley "edge" - an irregular fracture network, not ridged noise's directional
-// creases), and sparse lichen patches (billow, an organic growth shape rather than a geometric one).
+// Bare rock: large rounded lumps (billow, which gives puffy forms rather than ridged noise's
+// directional creases), a second finer lump scale, and a micro grain on top. No crack network.
 //
-// This is the clearest demonstration of why diffuse/roughness/height are separate outputs: the
-// crack mask darkens the color, roughens the surface, AND is *subtracted* from the height, so
-// cracks are grooves. Under the old paint-layer design a feature could only show where it was the
-// tallest layer, which meant every crack in this project was silently baked as a raised ridge and
-// lit as one - measurably so (its darkest pixels sat at height 254.6/255, the maximum).
+// The interesting part is that the rock's *form is built first*, and everything else is derived
+// from it. `rockForm` is the surface shape; the diffuse ramp is keyed on that same value, so
+// hollows come out dark and tops light - a standing-in-for-ambient-occlusion shading that reads
+// as three-dimensional form far better than a normal map can at this scale, since a lump 250px
+// wide barely changes between adjacent pixels no matter how hard the bump is driven.
+//
+// Sediment then falls out of the form for free: it is simply "wherever the rock is low", so it
+// collects in the hollows the way loose grit actually does, and partially fills them in the height
+// output. Deriving one signal from another like this is exactly what the old paint-layer design
+// could not express - a layer's only way to exist was to out-rank the others in height.
+// Billow noise is strongly skewed toward its floor - measured over this tile, a 2-octave billow
+// runs p1 -1.44, median -0.85, p99 +0.57, nothing like the symmetric spread an fbm has. Masking it
+// against a naive -1..+1 squashed almost the whole surface into the bottom of the range, which made
+// the sediment (defined as "where the rock is low") swallow the texture and left stone showing only
+// as isolated blobs. These two ends come from that measured distribution instead.
+const BILLOW_LOW = -1.4;
+const BILLOW_HIGH = 0.45;
+
 const rockMaterial: MaterialDef = {
   id: "rock",
   name: "Rock",
   texture: {
-    bumpStrength: 1.65,
+    bumpStrength: 3.0,
     pipeline: {
       noises: [
         MOTTLE_NOISE,
         FINE_GRAIN_NOISE,
-        { name: "cracks", type: "worley", frequency: tileFreq(5), amplitude: 1, mode: "edge" },
-        { name: "lichen", type: "billow", octaves: 2, frequency: tileFreq(6.4), amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+        { name: "lumps", type: "billow", octaves: 2, frequency: tileFreq(4), amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+        { name: "knobs", type: "billow", octaves: 2, frequency: tileFreq(11), amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
       ],
       steps: [
-        { output: "mottle", op: "sample", noise: "mottle" },
-        ...maskSteps("mottle", MOTTLE_SPAN, -MOTTLE_SPAN, "mottleMask"),
+        { output: "lump", op: "sample", noise: "lumps" },
+        ...maskSteps("lump", BILLOW_HIGH, BILLOW_LOW, "lumpMask"),
+        { output: "knob", op: "sample", noise: "knobs" },
+        ...maskSteps("knob", BILLOW_HIGH, BILLOW_LOW, "knobMask"),
         { output: "grain", op: "sample", noise: "grain" },
         ...maskSteps("grain", TWO_OCTAVE_SPAN, -TWO_OCTAVE_SPAN, "grainMask"),
-        // `at` below `off` inverts: the Worley edge distance is ~0 exactly on a crack, so this is 1
-        // on the crack line and falls to 0 by 0.13 away from it.
-        { output: "crackEdge", op: "sample", noise: "cracks" },
-        ...maskSteps("crackEdge", 0, 0.13, "crackMask"),
-        { output: "lichenRaw", op: "sample", noise: "lichen" },
-        ...maskSteps("lichenRaw", 1.3, 0.3, "lichenMask"),
+        { output: "mottle", op: "sample", noise: "mottle" },
+        ...maskSteps("mottle", MOTTLE_SPAN, -MOTTLE_SPAN, "mottleMask"),
 
-        // --- diffuse: stone tone, grain detail, then cracks and lichen painted over it ---
-        { output: "stoneDark", op: "color", value: [0.35, 0.33, 0.32] },
-        { output: "stoneLight", op: "color", value: [0.48, 0.46, 0.44] },
-        { output: "stone", op: "mix", a: "stoneDark", b: "stoneLight", t: "mottleMask" },
-        { output: "grainColor", op: "color", value: [0.4, 0.38, 0.37] },
-        { output: "grainBlend", op: "scale", input: "grainMask", factor: 0.45 },
-        { output: "stoneGrained", op: "mix", a: "stone", b: "grainColor", t: "grainBlend" },
-        { output: "crackColor", op: "color", value: [0.13, 0.12, 0.11] },
-        { output: "cracked", op: "mix", a: "stoneGrained", b: "crackColor", t: "crackMask" },
-        { output: "lichenColor", op: "color", value: [0.43, 0.47, 0.32] },
-        { output: "diffuse", op: "mix", a: "cracked", b: "lichenColor", t: "lichenMask" },
+        // --- the rock's form, built first so everything below can be derived from it ---
+        { output: "lumpRelief", op: "scale", input: "lumpMask", factor: 0.75 },
+        { output: "knobRelief", op: "scale", input: "knobMask", factor: 0.33 },
+        { output: "lumpy", op: "add", a: "lumpRelief", b: "knobRelief" },
+        { output: "grainRelief", op: "scale", input: "grainMask", factor: 0.14 },
+        { output: "rockForm", op: "add", a: "lumpy", b: "grainRelief" },
 
-        // --- roughness: lichen is a touch softer than bare stone ---
-        { output: "roughStone", op: "constant", value: 0.9 },
-        { output: "roughLichen", op: "constant", value: 0.82 },
-        { output: "roughness", op: "mix", a: "roughStone", b: "roughLichen", t: "lichenMask" },
+        // Sediment is defined purely as "where the rock is low" - 1 in the deepest hollows, gone by
+        // the time the surface has risen to 0.42.
+        ...maskSteps("rockForm", 0.18, 0.32, "sedimentMask"),
 
-        // --- height: mottle + grain relief on a raised bed, with the cracks cut down into it ---
-        // The bed offset is what keeps the result inside the 0..1 convention once cracks subtract.
-        { output: "bed", op: "constant", value: 0.55 },
-        { output: "mottleRelief", op: "scale", input: "mottleMask", factor: 0.3 },
-        { output: "bedded", op: "add", a: "bed", b: "mottleRelief" },
-        { output: "grainRelief", op: "scale", input: "grainMask", factor: 0.15 },
-        { output: "surface", op: "add", a: "bedded", b: "grainRelief" },
-        { output: "crackDepth", op: "scale", input: "crackMask", factor: 0.65 },
-        { output: "height", op: "subtract", a: "surface", b: "crackDepth" },
+        // --- diffuse ---
+        // Stone color comes from the mottle, NOT from the form. Keying color directly on the lump
+        // shape made the texture read as soft cloud or marble: albedo that tracks height exactly is
+        // not what stone looks like. Real rock is fairly uniform in albedo with blotchy variation
+        // that has nothing to do with its bumps, and the form is read from lighting - which is the
+        // normal map's job here.
+        { output: "stoneDark", op: "color", value: [0.3, 0.29, 0.28] },
+        { output: "stoneLight", op: "color", value: [0.45, 0.44, 0.42] },
+        { output: "stoneBase", op: "mix", a: "stoneDark", b: "stoneLight", t: "mottleMask" },
+
+        // A gentle stand-in for ambient occlusion: only the deepest parts of the form darken, and
+        // gradually, rather than the whole surface being shaded by height.
+        ...maskSteps("rockForm", 0.05, 0.55, "hollowMask"),
+        { output: "occlusionColor", op: "color", value: [0.2, 0.19, 0.18] },
+        { output: "occlusionBlend", op: "scale", input: "hollowMask", factor: 0.5 },
+        { output: "stone", op: "mix", a: "stoneBase", b: "occlusionColor", t: "occlusionBlend" },
+
+        { output: "sedimentDark", op: "color", value: [0.36, 0.33, 0.27] },
+        { output: "sedimentLight", op: "color", value: [0.46, 0.43, 0.36] },
+        { output: "sediment", op: "mix", a: "sedimentDark", b: "sedimentLight", t: "mottleMask" },
+        { output: "diffuse", op: "mix", a: "stone", b: "sediment", t: "sedimentMask" },
+
+        // Loose grit is powdery and more matte than the bare stone it sits on.
+        { output: "roughStone", op: "constant", value: 0.82 },
+        { output: "roughSediment", op: "constant", value: 0.94 },
+        { output: "roughness", op: "mix", a: "roughStone", b: "roughSediment", t: "sedimentMask" },
+
+        // Sediment settles level, so it fills its hollows slightly rather than draping over them.
+        { output: "sedimentFill", op: "scale", input: "sedimentMask", factor: 0.1 },
+        { output: "height", op: "add", a: "rockForm", b: "sedimentFill" },
       ],
       outputs: { diffuse: "diffuse", roughness: "roughness", height: "height" },
     },
