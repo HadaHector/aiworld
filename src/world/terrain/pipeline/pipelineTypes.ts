@@ -19,7 +19,25 @@ export interface BillowNoiseSpec extends BaseNoiseSpec {
   type: "billow";
 }
 
-export type NoiseSpec = FbmNoiseSpec | RidgedNoiseSpec | BillowNoiseSpec;
+/**
+ * Cellular/Worley noise: scatters one jittered point per grid cell (cell size = 1/frequency) and,
+ * for a query position, finds the distance to the nearest ("f1") and second-nearest ("f2") point.
+ * "f1" is near 0 at each point and grows outward - reads as rounded, grain/pebble/cell-like blobs,
+ * a genuinely different shape than fbm's soft all-over mottle or ridged/billow's folded-sum crests.
+ * "edge" (f2-f1) is near 0 exactly along the boundary between two cells and grows away from it -
+ * a natural, irregular crack/fracture network with no directional bias, unlike ridged noise's
+ * creases (which follow the underlying gradient field and end up looking like directional waves,
+ * not the polygonal fracture patterns real cracked ground/rock actually shows).
+ */
+export interface WorleyNoiseSpec {
+  name: string;
+  type: "worley";
+  frequency: number;
+  amplitude: number;
+  mode: "f1" | "edge";
+}
+
+export type NoiseSpec = FbmNoiseSpec | RidgedNoiseSpec | BillowNoiseSpec | WorleyNoiseSpec;
 
 export type PipelineStep =
   | { output: string; op: "sample"; noise: string }

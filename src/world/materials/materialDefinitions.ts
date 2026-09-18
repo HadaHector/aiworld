@@ -23,6 +23,50 @@ const MOTTLE_HEIGHT_PIPELINE: PipelineDef = {
 const FLAT_ZERO_HEIGHT_PIPELINE: PipelineDef = { noises: [], steps: [{ output: "result", op: "constant", value: 0 }] };
 const TWO_TONE_HEIGHT_BLEND_RANGE = 0.85;
 
+// A second, higher-frequency fbm layer - same shape as MOTTLE_HEIGHT_PIPELINE, just a tighter
+// grain, for materials that read as too soft/blurry with only one (broad) noise scale in play.
+const FINE_GRAIN_HEIGHT_PIPELINE: PipelineDef = {
+  noises: [{ name: "grain", type: "fbm", octaves: 2, frequency: 0.18, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
+  steps: [{ output: "result", op: "sample", noise: "grain" }],
+};
+
+// A third, lower-frequency fbm layer for gentle, large-area tonal shifts (sun-bleached patches,
+// soft shadowing) - broader and gentler than MOTTLE_HEIGHT_PIPELINE, meant to read as a big, soft
+// area of slightly different tone, not a repeating close-up pattern.
+const BROAD_TONE_HEIGHT_PIPELINE: PipelineDef = {
+  noises: [{ name: "broad", type: "fbm", octaves: 2, frequency: 0.012, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
+  steps: [{ output: "result", op: "sample", noise: "broad" }],
+};
+
+/** A natural, non-directional crack/fracture network (see WorleyNoiseSpec in pipelineTypes.ts) -
+ *  the "edge" mode is near 0 exactly along a cell boundary and grows away from it, so remapping it
+ *  with inMin above inMax (here inMax=0) inverts the sense: right on a boundary -> full height,
+ *  a little off it -> 0 and below. Deliberately not ridged noise: ridged's creases follow the
+ *  underlying gradient field and read as directional waves, not the irregular polygonal fracture
+ *  pattern real cracked rock/mud actually shows. */
+function crackHeightPipeline(frequency: number, edgeWidth: number, peak: number): PipelineDef {
+  return {
+    noises: [{ name: "web", type: "worley", frequency, amplitude: 1, mode: "edge" }],
+    steps: [
+      { output: "raw", op: "sample", noise: "web" },
+      { output: "result", op: "remap", input: "raw", inMin: edgeWidth, inMax: 0, outMin: 0, outMax: peak },
+    ],
+  };
+}
+
+/** Rounded, grain/pebble-like blobs centered on each cell's own point (see WorleyNoiseSpec's "f1"
+ *  mode) - a more geometric, grain-like shape than billow's soft blobs, better suited to actual
+ *  small stones/pebbles than an organic growth pattern like lichen or moss tufts. */
+function grainHeightPipeline(frequency: number, radius: number, peak: number): PipelineDef {
+  return {
+    noises: [{ name: "grain", type: "worley", frequency, amplitude: 1, mode: "f1" }],
+    steps: [
+      { output: "raw", op: "sample", noise: "grain" },
+      { output: "result", op: "remap", input: "raw", inMin: radius, inMax: 0, outMin: 0, outMax: peak },
+    ],
+  };
+}
+
 /** A plain two-color mottled material, expressed as a (degenerate, 2-layer) texture pipeline -
  *  the base color sits at a flat height, the variation color rises and falls with the shared
  *  mottling noise above/below it, and a wide heightBlendRange keeps the result close to a smooth
@@ -58,10 +102,6 @@ const grassMaterial: MaterialDef = {
   texture: twoToneTexture(new Color3(0.28, 0.42, 0.2), new Color3(0.38, 0.55, 0.28), 0.75, 0.4),
 };
 
-// Rock: a mottled base, thin dark crack/vein lines (ridged noise's sharp creases, inverted and
-// power-sharpened so only the immediate crease reads as a crack, not the whole ridge), and sparse
-// lichen patches (billow, which reads as rounded blobs rather than ridged's creases or fbm's soft
-// mottle - the right shape for a scattered growth pattern).
 // Every accent layer below shares heightBlendRange with the calibrated mottle layer
 // (TWO_TONE_HEIGHT_BLEND_RANGE) rather than getting its own smaller range - a smaller blendRange
 // would also sharpen the mottle layer itself (its ~-1.75..1.75 spread was specifically calibrated
@@ -69,6 +109,11 @@ const grassMaterial: MaterialDef = {
 // high-contrast patchwork as a side effect. Instead each accent's own height output is scaled well
 // past the mottle's own peak (~1.75) - roughly to 3+, comfortably outside blendRange's reach of it
 // - so it reliably wins where it's meant to show, without having to touch the shared blend range.
+//
+// Rock: the usual mottle, a second FINER grain layer (fbm at a much higher frequency - the broad
+// mottle alone read as too soft/uniform, this adds actual close-up detail), natural crack lines
+// (Worley "edge" - an irregular fracture network, not ridged noise's directional creases), and
+// sparse lichen patches (billow, an organic growth shape rather than a geometric one).
 const rockMaterial: MaterialDef = {
   id: "rock",
   name: "Rock",
@@ -76,21 +121,8 @@ const rockMaterial: MaterialDef = {
     layers: [
       { id: "base", color: new Color3(0.35, 0.33, 0.32), roughness: 0.88, height: FLAT_ZERO_HEIGHT_PIPELINE },
       { id: "mottle", color: new Color3(0.48, 0.46, 0.44), roughness: 0.9, height: MOTTLE_HEIGHT_PIPELINE },
-      {
-        id: "cracks",
-        color: new Color3(0.13, 0.12, 0.11),
-        roughness: 0.95,
-        height: {
-          noises: [{ name: "veins", type: "ridged", octaves: 4, frequency: 0.06, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
-          steps: [
-            { output: "raw", op: "sample", noise: "veins" },
-            { output: "norm", op: "remap", input: "raw", inMin: 0, inMax: 1.9, outMin: 0, outMax: 1 },
-            { output: "inv", op: "invert", input: "norm" },
-            { output: "sharp", op: "power", input: "inv", exponent: 8 },
-            { output: "result", op: "scale", input: "sharp", factor: 3.5 },
-          ],
-        },
-      },
+      { id: "grain", color: new Color3(0.4, 0.38, 0.37), roughness: 0.92, height: FINE_GRAIN_HEIGHT_PIPELINE },
+      { id: "cracks", color: new Color3(0.13, 0.12, 0.11), roughness: 0.95, height: crackHeightPipeline(0.02, 0.13, 2.8) },
       {
         id: "lichen",
         color: new Color3(0.43, 0.47, 0.32),
@@ -110,9 +142,11 @@ const rockMaterial: MaterialDef = {
   },
 };
 
-// Sand: the base mottle plus broad, linear-ish dune ripples (ridged, low frequency - creases read
-// as ripple crests here) and a scatter of small dark grit/pebbles (billow, high frequency, only
-// the noise's upper tail so pebbles stay sparse rather than covering everything).
+// Sand: the usual mottle, a gentle broad tonal shift (fbm, very low frequency - large, soft
+// sun-bleached patches instead of a repeating ripple pattern), and small rounded grains (Worley
+// "f1" - a naturally grain-shaped blob, not the soft billow blobs used elsewhere for organic
+// growth). No ridged dune-ripple layer any more - it read as an artificial, overly-regular wave
+// pattern rather than sand.
 const sandMaterial: MaterialDef = {
   id: "sand",
   name: "Sand",
@@ -120,40 +154,18 @@ const sandMaterial: MaterialDef = {
     layers: [
       { id: "base", color: new Color3(0.76, 0.68, 0.48), roughness: 0.6, height: FLAT_ZERO_HEIGHT_PIPELINE },
       { id: "mottle", color: new Color3(0.86, 0.78, 0.58), roughness: 0.6, height: MOTTLE_HEIGHT_PIPELINE },
-      {
-        id: "ripples",
-        color: new Color3(0.66, 0.57, 0.38),
-        roughness: 0.68,
-        height: {
-          noises: [{ name: "dunes", type: "ridged", octaves: 2, frequency: 0.035, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
-          steps: [
-            { output: "raw", op: "sample", noise: "dunes" },
-            { output: "result", op: "remap", input: "raw", inMin: 0.1, inMax: 1.6, outMin: 0, outMax: 3 },
-          ],
-        },
-      },
-      {
-        id: "pebbles",
-        color: new Color3(0.4, 0.34, 0.24),
-        roughness: 0.82,
-        height: {
-          noises: [{ name: "grit", type: "billow", octaves: 2, frequency: 0.2, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
-          steps: [
-            { output: "raw", op: "sample", noise: "grit" },
-            { output: "norm", op: "remap", input: "raw", inMin: 0.9, inMax: 1.4, outMin: 0, outMax: 3 },
-            { output: "result", op: "clamp", input: "norm", min: 0, max: 3 },
-          ],
-        },
-      },
+      { id: "broadTone", color: new Color3(0.7, 0.61, 0.42), roughness: 0.58, height: BROAD_TONE_HEIGHT_PIPELINE },
+      { id: "grains", color: new Color3(0.44, 0.37, 0.26), roughness: 0.82, height: grainHeightPipeline(0.12, 0.4, 3) },
     ],
     heightBlendRange: TWO_TONE_HEIGHT_BLEND_RANGE,
-    bumpStrength: 0.6,
+    bumpStrength: 0.5,
   },
 };
 
-// Snow: the base mottle, broad wind-carved ridges (ridged, low frequency, a cool blue-white shadow
-// color rather than pure white - reads as wind-swept relief) and rare bright sparkle glints
-// (billow, high frequency, only the extreme upper tail so glints stay tiny and sparse).
+// Snow: the usual mottle, a gentle broad tonal shift (fbm, very low frequency, a cool blue-white
+// shadow color - soft, large drifts of shading rather than a repeating pattern), and rare bright
+// sparkle glints (billow, only the extreme upper tail so glints stay tiny and sparse). No ridged
+// wind-ridge layer any more - it read as patchy and artificial rather than smooth, windswept snow.
 const snowMaterial: MaterialDef = {
   id: "snow",
   name: "Snow",
@@ -161,18 +173,7 @@ const snowMaterial: MaterialDef = {
     layers: [
       { id: "base", color: new Color3(0.92, 0.93, 0.96), roughness: 0.35, height: FLAT_ZERO_HEIGHT_PIPELINE },
       { id: "mottle", color: new Color3(0.98, 0.99, 1.0), roughness: 0.35, height: MOTTLE_HEIGHT_PIPELINE },
-      {
-        id: "windRidges",
-        color: new Color3(0.8, 0.84, 0.93),
-        roughness: 0.3,
-        height: {
-          noises: [{ name: "ridges", type: "ridged", octaves: 3, frequency: 0.02, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
-          steps: [
-            { output: "raw", op: "sample", noise: "ridges" },
-            { output: "result", op: "remap", input: "raw", inMin: 0.2, inMax: 1.6, outMin: 0, outMax: 3 },
-          ],
-        },
-      },
+      { id: "broadShading", color: new Color3(0.83, 0.87, 0.94), roughness: 0.32, height: BROAD_TONE_HEIGHT_PIPELINE },
       {
         id: "glints",
         color: new Color3(1.0, 1.0, 1.0),
@@ -198,9 +199,10 @@ const tundraGroundMaterial: MaterialDef = {
   texture: twoToneTexture(new Color3(0.52, 0.56, 0.52), new Color3(0.68, 0.71, 0.68), 0.8, 0.5),
 };
 
-// Mud: the base mottle, a web of dry-cracked-mud creases (ridged, same sharpened-crease technique
-// as rock's cracks but coarser and gentler), and darker, notably glossier wet patches (billow,
-// broad and low-threshold, with a much lower roughness than the surrounding dry mud).
+// Mud: the usual mottle, a web of dry-cracked-mud fractures (Worley "edge" - the textbook natural
+// use for cellular noise, an irregular polygonal crack network, not ridged noise's directional
+// creases), and darker, notably glossier wet patches (billow, broad, with a much lower roughness
+// than the surrounding dry mud).
 const mudMaterial: MaterialDef = {
   id: "mud",
   name: "Mud",
@@ -208,21 +210,7 @@ const mudMaterial: MaterialDef = {
     layers: [
       { id: "base", color: new Color3(0.22, 0.19, 0.13), roughness: 0.55, height: FLAT_ZERO_HEIGHT_PIPELINE },
       { id: "mottle", color: new Color3(0.33, 0.34, 0.2), roughness: 0.55, height: MOTTLE_HEIGHT_PIPELINE },
-      {
-        id: "cracks",
-        color: new Color3(0.14, 0.11, 0.07),
-        roughness: 0.7,
-        height: {
-          noises: [{ name: "web", type: "ridged", octaves: 3, frequency: 0.045, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
-          steps: [
-            { output: "raw", op: "sample", noise: "web" },
-            { output: "norm", op: "remap", input: "raw", inMin: 0, inMax: 1.75, outMin: 0, outMax: 1 },
-            { output: "inv", op: "invert", input: "norm" },
-            { output: "sharp", op: "power", input: "inv", exponent: 6 },
-            { output: "result", op: "scale", input: "sharp", factor: 3 },
-          ],
-        },
-      },
+      { id: "cracks", color: new Color3(0.14, 0.11, 0.07), roughness: 0.7, height: crackHeightPipeline(0.015, 0.16, 2.8) },
       {
         id: "wetPatches",
         color: new Color3(0.15, 0.13, 0.09),
@@ -261,9 +249,11 @@ const weedsMaterial: MaterialDef = {
   texture: twoToneTexture(new Color3(0.13, 0.2, 0.09), new Color3(0.2, 0.3, 0.15), 0.78, 0.45),
 };
 
-// Moss: the base mottle, dark crevice lines (ridged, the same sharpened-crease technique as
-// rock/mud but finer and gentler - forest-floor moss reads more finely fissured than bare rock or
-// dry mud), and brighter clumpy tufts (billow, mid-frequency for small rounded clumps).
+// Moss: the usual mottle, a second finer grain layer (fbm at a higher frequency, the same "add a
+// close-up scale" fix as rock's - a fuzzy, textured surface instead of one soft blur), and
+// brighter clumpy tufts (billow, mid-frequency for small rounded clumps). No crack/crevice layer -
+// moss doesn't show sharp fractures the way bare rock or dry mud does, and a ridged crease pattern
+// here just read as an unrelated, out-of-place texture rather than anything moss-like.
 const mossMaterial: MaterialDef = {
   id: "moss",
   name: "Moss",
@@ -271,21 +261,7 @@ const mossMaterial: MaterialDef = {
     layers: [
       { id: "base", color: new Color3(0.16, 0.26, 0.2), roughness: 0.8, height: FLAT_ZERO_HEIGHT_PIPELINE },
       { id: "mottle", color: new Color3(0.22, 0.36, 0.28), roughness: 0.8, height: MOTTLE_HEIGHT_PIPELINE },
-      {
-        id: "crevices",
-        color: new Color3(0.08, 0.13, 0.1),
-        roughness: 0.85,
-        height: {
-          noises: [{ name: "web", type: "ridged", octaves: 3, frequency: 0.08, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
-          steps: [
-            { output: "raw", op: "sample", noise: "web" },
-            { output: "norm", op: "remap", input: "raw", inMin: 0, inMax: 1.75, outMin: 0, outMax: 1 },
-            { output: "inv", op: "invert", input: "norm" },
-            { output: "sharp", op: "power", input: "inv", exponent: 6 },
-            { output: "result", op: "scale", input: "sharp", factor: 3 },
-          ],
-        },
-      },
+      { id: "grain", color: new Color3(0.19, 0.31, 0.24), roughness: 0.82, height: FINE_GRAIN_HEIGHT_PIPELINE },
       {
         id: "tufts",
         color: new Color3(0.3, 0.44, 0.3),

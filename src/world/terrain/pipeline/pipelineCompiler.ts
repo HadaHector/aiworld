@@ -1,6 +1,6 @@
 import { deriveSeed } from "../../rng";
 import { createBaseNoise2D, fbm, type Noise2D, type FbmParams } from "../noise";
-import { ridgedNoise2D, billowNoise2D, type OctaveNoiseParams } from "./noiseGenerators";
+import { ridgedNoise2D, billowNoise2D, worleyNoise2D, type OctaveNoiseParams } from "./noiseGenerators";
 import type { NoiseSpec, PipelineDef, PipelineStep } from "./pipelineTypes";
 
 /** A compiled pipeline samples world-space noise like a Noise2D, but can also pull in named
@@ -25,6 +25,17 @@ function deriveNoiseSeed(rootSeed: number, namespace: string, noiseName: string)
 
 function compileNoiseSpec(spec: NoiseSpec, rootSeed: number, namespace: string): Noise2D {
   const seed = deriveNoiseSeed(rootSeed, namespace, spec.name);
+
+  if (spec.type === "worley") {
+    const sample = worleyNoise2D(seed, spec.frequency);
+    const amplitude = spec.amplitude;
+    const mode = spec.mode;
+    return (worldX: number, worldZ: number): number => {
+      const { f1, f2 } = sample(worldX, worldZ);
+      return (mode === "f1" ? f1 : f2 - f1) * amplitude;
+    };
+  }
+
   const baseNoise2D = createBaseNoise2D(seed);
   const octaveParams: OctaveNoiseParams = {
     octaves: spec.octaves,
