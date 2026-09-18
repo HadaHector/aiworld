@@ -11,12 +11,16 @@ import {
 } from "./materialDefinitions";
 import { TEXTURE_RESOLUTION, writeProceduralTexturePixels } from "./textureGen";
 
-// World units per texture repeat. Must divide CHUNK_SIZE (world.ts, 50) evenly - every chunk
-// boundary then falls exactly on a tile boundary too, so the tiled pattern stays in phase across
-// chunks with no custom per-vertex UVs needed (see terrainMesh.ts). 25 (rather than the smaller
-// 10 this started at) spreads each material's baked detail - cracks, ripples, leaf clusters -
-// across a bigger stretch of ground before it repeats, so the pattern reads as a large-scale
-// surface feature instead of an obviously-tiled close-up texture.
+// World units per texture repeat. The terrain shader derives texture coordinates straight from
+// world-space position (see VERTEX_SHADER's vUV) rather than each chunk's own 0..1 mesh UV, so
+// this has no divisibility constraint against CHUNK_SIZE any more and no per-chunk UV to keep in
+// phase - two chunks agree on a shared boundary vertex's texture coordinate because they compute
+// it from the literal same world position, not from two independently-built 0..1 UV spaces that
+// merely *should* line up. That was the actual fix for the chunk-border seams this replaced: the
+// old per-chunk-UV scheme was tileable in theory (integer uScale) but still exposed real seams in
+// practice. 25 spreads each material's baked detail - cracks, ripples, leaf clusters - across a
+// bigger stretch of ground before it repeats, so the pattern reads as a large-scale surface
+// feature instead of an obviously-tiled close-up texture.
 const TEXTURE_WORLD_TILE_SIZE = 25;
 
 // Below this, no layer's weight is trusted and the base material wins outright - used only by the
@@ -95,7 +99,6 @@ precision highp float;
 
 in vec3 position;
 in vec3 normal;
-in vec2 uv;
 in vec4 matIndices0;
 in vec4 matIndices1;
 in vec4 matIndices2;
@@ -123,7 +126,9 @@ void main() {
   gl_Position = projection * view * worldPosition;
   vNormal = normalize((world * vec4(normal, 0.0)).xyz);
   vWorldPosition = worldPosition.xyz;
-  vUV = uv * tileScale;
+  // Texture coordinates come straight from world-space position, not the mesh's own 0..1 UV - see
+  // TEXTURE_WORLD_TILE_SIZE's comment for why (this is what makes chunk boundaries seamless).
+  vUV = worldPosition.xz * tileScale;
   vMatIndices0 = matIndices0;
   vMatIndices1 = matIndices1;
   vMatIndices2 = matIndices2;
@@ -226,7 +231,6 @@ void main() {
 export function createMaterialLibrary(
   scene: Scene,
   seed: number,
-  chunkSize: number,
   lightDirection: Vector3,
   lightIntensity: number,
 ): MaterialLibrary {
@@ -294,7 +298,7 @@ export function createMaterialLibrary(
   Effect.ShadersStore["terrainBlendFragmentShader"] = FRAGMENT_SHADER;
 
   const terrainMaterial = new ShaderMaterial("terrainBlend", scene, "terrainBlend", {
-    attributes: ["position", "normal", "uv", "matIndices0", "matIndices1", "matIndices2", "matWeights0", "matWeights1", "matWeights2"],
+    attributes: ["position", "normal", "matIndices0", "matIndices1", "matIndices2", "matWeights0", "matWeights1", "matWeights2"],
     uniforms: [
       "world",
       "view",
@@ -311,7 +315,7 @@ export function createMaterialLibrary(
   });
   terrainMaterial.setTexture("materialAtlas", materialAtlas);
   terrainMaterial.setTexture("normalAtlas", normalAtlas);
-  terrainMaterial.setFloat("tileScale", chunkSize / TEXTURE_WORLD_TILE_SIZE);
+  terrainMaterial.setFloat("tileScale", 1 / TEXTURE_WORLD_TILE_SIZE);
   terrainMaterial.setVector3("lightDirection", lightDirection);
   terrainMaterial.setFloat("lightIntensity", lightIntensity);
   terrainMaterial.setFloat("specularMinShininess", SPECULAR_MIN_SHININESS);

@@ -36,7 +36,7 @@ export function createWorld(scene: Scene): World {
   light.intensity = 0.9;
 
   const { sampleTerrain, worldExtent, continents } = createTerrainSampler(WORLD_SEED);
-  const materialLibrary = createMaterialLibrary(scene, WORLD_SEED, CHUNK_SIZE, light.direction, light.intensity);
+  const materialLibrary = createMaterialLibrary(scene, WORLD_SEED, light.direction, light.intensity);
 
   const chunkManager = createChunkManager({
     scene,
