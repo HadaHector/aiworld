@@ -119,6 +119,13 @@ export function createTerrainChunk(scene: Scene, options: TerrainChunkOptions): 
 
   ground.updateVerticesData(VertexBuffer.PositionKind, positions);
   ground.updateVerticesData(VertexBuffer.NormalKind, normals);
+  // CreateGround computes its bounding box from the FLAT plane, and updateVerticesData leaves that
+  // box alone unless asked to (its third argument, updateExtends, defaults to false). Displacing Y
+  // therefore left every chunk claiming to be a zero-height plane at y=0 while its terrain sat
+  // hundreds of units above - so frustum culling dropped chunks the camera was standing right on
+  // top of, and they only reappeared when the camera tilted far enough down to bring y=0 into view.
+  // Most visible on peaks, where the gap between real and claimed height is largest.
+  ground.refreshBoundingInfo();
   ground.setVerticesData("matIndices0", matIndices0, false, 4);
   ground.setVerticesData("matIndices1", matIndices1, false, 4);
   ground.setVerticesData("matIndices2", matIndices2, false, 4);
