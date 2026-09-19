@@ -121,9 +121,17 @@ uniform float tileScale;
 out vec2 vUV;
 out vec3 vNormal;
 out vec3 vWorldPosition;
-out vec4 vMatIndices0;
-out vec4 vMatIndices1;
-out vec4 vMatIndices2;
+// flat, NOT smooth: these are sampler2DArray layer indices, and interpolating an index is
+// meaningless - a fractional layer just rounds to the nearest one. Within a biome every vertex
+// carries the same roster so interpolation was a no-op, but across a biome border the rosters
+// differ (slot 0 is Mud on a swamp vertex and Desert Sand on a desert one), and interpolating
+// between those two integers walked through every material lying numerically between them. That
+// painted a one-triangle-wide ribbon of unrelated materials - grey rock, silt - along every biome
+// boundary. flat makes each triangle use one vertex's roster outright, which is the clean hard
+// edge the design already accepts at biome borders.
+flat out vec4 vMatIndices0;
+flat out vec4 vMatIndices1;
+flat out vec4 vMatIndices2;
 out vec4 vMatWeights0;
 out vec4 vMatWeights1;
 out vec4 vMatWeights2;
@@ -152,9 +160,9 @@ precision highp sampler2DArray;
 in vec2 vUV;
 in vec3 vNormal;
 in vec3 vWorldPosition;
-in vec4 vMatIndices0;
-in vec4 vMatIndices1;
-in vec4 vMatIndices2;
+flat in vec4 vMatIndices0;
+flat in vec4 vMatIndices1;
+flat in vec4 vMatIndices2;
 in vec4 vMatWeights0;
 in vec4 vMatWeights1;
 in vec4 vMatWeights2;
