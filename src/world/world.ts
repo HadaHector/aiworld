@@ -5,6 +5,13 @@ import { createOceanPlane } from "./terrain/ocean";
 import { createMaterialLibrary, type MaterialLibrary } from "./materials/materialLibrary";
 import type { ContinentPlan } from "./cells/continentLayout";
 
+/** Coarse progress for the loading screen. `total` is 0 for phases with no countable steps. */
+export interface WorldLoadProgress {
+  phase: string;
+  completed: number;
+  total: number;
+}
+
 export interface World {
   heightAt: (worldX: number, worldZ: number) => number;
   sampleTerrain: TerrainSampler;
@@ -31,12 +38,37 @@ export const MAX_DRAW_DISTANCE = 2000;
  * cells/continentLayout.ts), not manually set. sampleTerrain is exposed for future
  * props/structures/gameplay systems to query biome/land at a point.
  */
-export function createWorld(scene: Scene): World {
+/**
+ * Resolves after the browser has had a chance to paint - two frames, one to flush the style/layout
+ * change and one to be sure it reached the screen.
+ *
+ * The timeout is not belt-and-braces: requestAnimationFrame does not fire at all in a background
+ * tab, so without it, loading the page in one would hang world creation indefinitely rather than
+ * merely skipping a repaint. Whichever fires first wins; missing a paint is fine, hanging is not.
+ */
+function nextPaint(): Promise<void> {
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (): void => {
+      if (settled) return;
+      settled = true;
+      resolve();
+    };
+    requestAnimationFrame(() => requestAnimationFrame(finish));
+    setTimeout(finish, 60);
+  });
+}
+
+export async function createWorld(scene: Scene, onProgress?: (progress: WorldLoadProgress) => void): Promise<World> {
   const light = new HemisphericLight("sunLight", new Vector3(0.3, 1, 0.2), scene);
   light.intensity = 0.9;
 
+  onProgress?.({ phase: "Shaping continents", completed: 0, total: 0 });
   const { sampleTerrain, worldExtent, continents } = createTerrainSampler(WORLD_SEED);
-  const materialLibrary = createMaterialLibrary(scene, WORLD_SEED, light.direction, light.intensity);
+
+  const materialLibrary = await createMaterialLibrary(scene, WORLD_SEED, light.direction, light.intensity, (done, total) => {
+    onProgress?.({ phase: "Baking material textures", completed: done, total });
+  });
 
   const chunkManager = createChunkManager({
     scene,
@@ -47,6 +79,11 @@ export function createWorld(scene: Scene): World {
     loadRadius: DEFAULT_DRAW_DISTANCE,
     unloadRadius: DEFAULT_DRAW_DISTANCE + UNLOAD_HYSTERESIS,
   });
+  // loadInitial blocks for a few hundred ms, so give the browser a frame to actually paint the
+  // "building terrain" message before it starts - otherwise the loading screen sits on the
+  // previous phase for the whole thing.
+  onProgress?.({ phase: "Building terrain", completed: 0, total: 0 });
+  await nextPaint();
   chunkManager.loadInitial(0, 0);
 
   createOceanPlane(scene, { size: worldExtent });

@@ -9,7 +9,8 @@ import {
   type MaterialDef,
   type MaterialLayer,
 } from "./materialDefinitions";
-import { TEXTURE_RESOLUTION, writeProceduralTexturePixels } from "./textureGen";
+import { TEXTURE_RESOLUTION } from "./textureGen";
+import { bakeMaterialTextures } from "./textureBakePool";
 
 // World units per texture repeat. The terrain shader derives texture coordinates straight from
 // world-space position (see VERTEX_SHADER's vUV) rather than each chunk's own 0..1 mesh UV, so
@@ -234,12 +235,13 @@ void main() {
  *  height pipelines use - see pipeline/pipelineCompiler.ts). Several layers - or a layer and a
  *  biome's own base - may resolve to the same MaterialDef (e.g. the two snow layers), so materials
  *  are deduplicated by id before building texture layers. */
-export function createMaterialLibrary(
+export async function createMaterialLibrary(
   scene: Scene,
   seed: number,
   lightDirection: Vector3,
   lightIntensity: number,
-): MaterialLibrary {
+  onProgress?: (done: number, total: number) => void,
+): Promise<MaterialLibrary> {
   const materialDefs: MaterialDef[] = [];
   const materialIndexById = new Map<string, number>();
 
@@ -270,27 +272,20 @@ export function createMaterialLibrary(
 
   const colorBuffer = new Uint8Array(TEXTURE_RESOLUTION * TEXTURE_RESOLUTION * 4 * materialDefs.length);
   const normalBuffer = new Uint8Array(TEXTURE_RESOLUTION * TEXTURE_RESOLUTION * 4 * materialDefs.length);
-  const materialColors: Color3[] = [];
-  for (let i = 0; i < materialDefs.length; i++) {
-    const def = materialDefs[i];
-    writeProceduralTexturePixels(colorBuffer, normalBuffer, i, seed, def.id, def.texture);
 
-    // A true representative swatch (the debug map's only use for this) - averaged straight from
-    // the just-baked pixels rather than re-deriving one from the texture's own layer colors, since
-    // how much of the bake each layer actually covers depends on the height blend, not just its
-    // declared color.
-    const pixelCount = TEXTURE_RESOLUTION * TEXTURE_RESOLUTION;
-    const layerOffset = i * pixelCount * 4;
-    let r = 0;
-    let g = 0;
-    let b = 0;
-    for (let p = 0; p < pixelCount; p++) {
-      r += colorBuffer[layerOffset + p * 4];
-      g += colorBuffer[layerOffset + p * 4 + 1];
-      b += colorBuffer[layerOffset + p * 4 + 2];
-    }
-    materialColors.push(new Color3(r / pixelCount / 255, g / pixelCount / 255, b / pixelCount / 255));
-  }
+  // Baked across a worker pool - this is by far the most expensive part of starting a world, and
+  // materials are fully independent of one another, so it parallelises exactly (see
+  // textureBakePool.ts). The averaged swatch colors come back with each result: they are averaged
+  // from the actual baked pixels rather than re-derived from a texture's declared colors, since how
+  // much of the bake each part of a pipeline covers is not knowable from the definition alone.
+  const { averageColors } = await bakeMaterialTextures(
+    materialDefs.map((def) => ({ id: def.id, texture: def.texture })),
+    seed,
+    colorBuffer,
+    normalBuffer,
+    onProgress,
+  );
+  const materialColors: Color3[] = averageColors.map(([r, g, b]) => new Color3(r, g, b));
 
   const materialAtlas = RawTexture2DArray.CreateRGBATexture(colorBuffer, TEXTURE_RESOLUTION, TEXTURE_RESOLUTION, materialDefs.length, scene, true, false);
   materialAtlas.wrapU = Texture.WRAP_ADDRESSMODE;
