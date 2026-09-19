@@ -109,8 +109,40 @@ export function createChunkManager(options: ChunkManagerOptions): ChunkManager {
     }
   }
 
+  /**
+   * Takes the queued chunk nearest the player, rather than the oldest.
+   *
+   * The candidate scan is a row-major sweep over a bounding box, so draining the queue in insertion
+   * order filled the view in visible column-by-column bands - obvious whenever a lot of chunks are
+   * pending at once, i.e. after a teleport or at speed. Picking by current distance instead makes
+   * terrain grow outward from the player in rings.
+   *
+   * Distance is measured against where the player is *now*, not where they were when the chunk was
+   * queued, so this also self-corrects when they keep moving: the queue reorders itself for free
+   * instead of working through a stale ordering. The scan is O(queue length) once per frame, over a
+   * queue of at most a few hundred entries.
+   */
+  function takeNearestQueued(x: number, z: number): ChunkCoord | undefined {
+    if (buildQueue.length === 0) return undefined;
+
+    let bestIndex = 0;
+    let bestDistanceSq = Infinity;
+    for (let i = 0; i < buildQueue.length; i++) {
+      const center = chunkCenter(buildQueue[i].cx, buildQueue[i].cz);
+      const dx = center.x - x;
+      const dz = center.z - z;
+      const distanceSq = dx * dx + dz * dz;
+      if (distanceSq < bestDistanceSq) {
+        bestDistanceSq = distanceSq;
+        bestIndex = i;
+      }
+    }
+
+    return buildQueue.splice(bestIndex, 1)[0];
+  }
+
   function drainOneFromQueue(x: number, z: number): void {
-    const next = buildQueue.shift();
+    const next = takeNearestQueued(x, z);
     if (!next) return;
 
     const key = chunkKey(next.cx, next.cz);
