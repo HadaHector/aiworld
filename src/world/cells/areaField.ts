@@ -38,6 +38,9 @@ export interface AreaSample {
   secondaryBiome: BiomeDefinition;
   biomeBlend: number;
   borderGap: number;
+  /** Distance past the nearest cell to the nearest cell of a DIFFERENT area - continuous, and the
+   *  basis of the boundary-hill falloff. Infinity when no other area is within the hill's reach. */
+  areaBorderGap: number;
   boundaryHillStyle: BoundaryHillStyle | null;
   lakeFactor: number;
   isRiverEdge: boolean;
@@ -84,20 +87,29 @@ function mixSeed(x: number): number {
  * - that's not a real border, just an internal seam, and must be excluded or hills would sprout as
  * spurious fragments scattered through every "mountain"-bordered area's interior.
  */
+/**
+ * The style for a border between two areas, seeded from the unordered pair so both sides of the
+ * same border agree - otherwise the style would swap as you stepped across, exactly where the hill
+ * is tallest.
+ *
+ * This no longer decides *whether* there is a hill. That used to be gated on "are the two nearest
+ * cells in different areas?", which is a binary predicate over the second-nearest cell's identity -
+ * and that identity flips abruptly along Voronoi bisectors. Paired with an amplitude that falls off
+ * smoothly with distance, it meant the hill switched on at whatever height the envelope happened to
+ * have there: measured cliffs of 12 units at one border and up to 92 elsewhere, in half a world
+ * unit. Presence is now decided by areaBorderDistance (see sampleArea), which is continuous.
+ */
 function resolveBoundaryHillStyle(
   seed: number,
   primaryBiome: BiomeDefinition,
-  secondaryBiome: BiomeDefinition,
+  otherBiome: BiomeDefinition,
   primaryAreaId: number,
-  secondaryAreaId: number,
-  borderGap: number,
+  otherAreaId: number,
 ): BoundaryHillStyle | null {
-  if (primaryAreaId === secondaryAreaId) return null;
-  if (primaryBiome.borderType !== "mountain" && secondaryBiome.borderType !== "mountain") return null;
-  if (borderGap > BOUNDARY_HILL_WIDTH + BOUNDARY_HILL_EDGE_NOISE_AMPLITUDE) return null;
+  if (primaryBiome.borderType !== "mountain" && otherBiome.borderType !== "mountain") return null;
 
-  const lo = Math.min(primaryAreaId, secondaryAreaId);
-  const hi = Math.max(primaryAreaId, secondaryAreaId);
+  const lo = Math.min(primaryAreaId, otherAreaId);
+  const hi = Math.max(primaryAreaId, otherAreaId);
   const pairKey = ((lo << 16) ^ hi) >>> 0;
   const pairSeed = mixSeed(deriveSeed(seed, BOUNDARY_HILL_STYLE_SALT) ^ pairKey);
   return BOUNDARY_HILL_STYLES[pairSeed % BOUNDARY_HILL_STYLES.length];
@@ -260,12 +272,29 @@ export function createAreaSampler(seed: number): AreaWorld {
       }
     }
 
+    // How far this point is from the border of its own area, as the gap to the nearest cell
+    // belonging to a DIFFERENT area. Unlike borderGap above - which is a cell-pair gap, and so
+    // measures the distance to the nearest cell seam whether or not that seam is an area border -
+    // this is a minimum over a fixed subset of cells, so it stays continuous even where the winning
+    // cell changes. That is the whole point: it is what lets the hill fade in instead of switching
+    // on. Beyond the envelope's own reach the answer cannot matter, so the search is capped there.
+    const hillReach = BOUNDARY_HILL_WIDTH + BOUNDARY_HILL_EDGE_NOISE_AMPLITUDE;
+    const nearestOtherArea = landField.queryNearestWhere(
+      worldX,
+      worldZ,
+      (index) => areaIdOf(index) !== primaryAreaId,
+      nearLand.nearestDistance + hillReach,
+    );
+    const areaBorderGap = nearestOtherArea.distance - nearLand.nearestDistance;
+    const otherAreaId = nearestOtherArea.index === -1 ? primaryAreaId : areaIdOf(nearestOtherArea.index);
+
     // Rivers take precedence over boundary hills at the same border - a curated river edge can
     // land on a border that also qualifies for a hill (every biome is mountain-type today), which
     // would otherwise add a bump and subtract a carve at the identical spot.
-    const boundaryHillStyle = isRiverEdge
-      ? null
-      : resolveBoundaryHillStyle(seed, primaryBiome, secondaryBiome, primaryAreaId, secondaryAreaId, borderGap);
+    const boundaryHillStyle =
+      isRiverEdge || nearestOtherArea.index === -1
+        ? null
+        : resolveBoundaryHillStyle(seed, primaryBiome, areaBiomeOf(otherAreaId), primaryAreaId, otherAreaId);
 
     return {
       landmass,
@@ -274,6 +303,7 @@ export function createAreaSampler(seed: number): AreaWorld {
       secondaryBiome,
       biomeBlend,
       borderGap,
+      areaBorderGap,
       boundaryHillStyle,
       lakeFactor,
       isRiverEdge,

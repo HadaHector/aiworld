@@ -77,7 +77,7 @@ export function createTerrainSampler(seed: number): TerrainWorld {
       area.biomeBlend > 0
         ? lerp(primaryDetail, heightPipelines.get(area.secondaryBiome.id)!(worldX, worldZ), area.biomeBlend)
         : primaryDetail;
-    const boundaryHill = evaluateBoundaryHill(area.boundaryHillStyle, area.borderGap, worldX, worldZ);
+    const boundaryHill = evaluateBoundaryHill(area.boundaryHillStyle, area.areaBorderGap, worldX, worldZ);
 
     const bedrockHeight = bedrock(worldX, worldZ);
     const landHeightFloored = Math.max(bedrockHeight + blendedDetail + boundaryHill, MIN_LAND_HEIGHT);
