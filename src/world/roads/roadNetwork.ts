@@ -12,6 +12,7 @@ import {
   ROAD_RESCUE_DETOUR_FACTOR,
   ROAD_ACCESS_ATTEMPTS,
   ROAD_SNAP_DISTANCE,
+  ROAD_SNAP_SAMPLE,
   ROAD_SIMPLIFY_TOLERANCE,
 } from "./roadConfig";
 
@@ -241,8 +242,10 @@ export function generateRoadNetwork(settlements: SettlementSite[], sampleTerrain
     const straightened = straighten(raw, chordIsClear, pathfinder.riverLengthAlong);
     // removeLoops after rounding: a hairpin tight enough that its arc crosses the line is rare but
     // real - measured at 6 across the network - and it is the same fix rivers already use.
-    const snapped = snapToNetwork(roundCorners(straightened, chordIsClear), snapIndex);
-    const points = simplify(removeLoops(snapped), ROAD_SIMPLIFY_TOLERANCE);
+    const snapped = snapToNetwork(roundCorners(straightened, chordIsClear), snapIndex, ROAD_SNAP_SAMPLE);
+    // Loops removed AFTER simplification, not before: dropping points can itself cross a line over
+    // itself, so the check has to see the line that will actually be drawn.
+    const points = removeLoops(simplify(snapped, ROAD_SIMPLIFY_TOLERANCE));
     const length = polylineLength(points);
 
     // Judged on the finished line rather than on the search, because that is the road that would

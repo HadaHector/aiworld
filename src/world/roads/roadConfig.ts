@@ -144,6 +144,9 @@ export const ROAD_RIVER_STRAIGHTEN_SLACK = 20;
 // grid step, so it catches two links that straightening split apart across one lattice cell and
 // leaves genuinely separate roads alone.
 export const ROAD_SNAP_DISTANCE = 50;
+// The line is resampled this finely before snapping, so a shared stretch follows the existing road
+// through its bends instead of chording across them. Well under the snap distance on purpose.
+export const ROAD_SNAP_SAMPLE = 12;
 
 export const ROAD_CORNER_RADIUS = 45;
 export const ROAD_CORNER_SEGMENTS = 6;

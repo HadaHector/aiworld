@@ -201,7 +201,31 @@ export function createSnapIndex(snapDistance: number): SnapIndex {
   };
 }
 
-/** Moves every point that lies within the snap distance of an already-built road onto it. */
-export function snapToNetwork(points: CellPoint[], index: SnapIndex): CellPoint[] {
-  return points.map((point) => index.snap(point) ?? point);
+/**
+ * Moves everything within the snap distance of an already-built road onto it.
+ *
+ * The line is resampled first, and that is the whole trick. Snapping only the vertices leaves the
+ * straight chord between two snapped vertices cutting across whatever the existing road does in
+ * between: measured at Mabraen Crossing, the road to Laemora had vertices lying exactly on the road
+ * to Rothwell Steps and still bowed about 25 units away from it between them, because the Rothwell
+ * road bends twice over that stretch and the chord does not. Two roads leaving one town, touching
+ * at two points and forming a long thin lens in between - which is exactly what it looks like.
+ *
+ * Resampling to well under the snap distance means the shared stretch is followed rather than
+ * merely met, and simplification afterwards throws away every point that adds nothing.
+ */
+export function snapToNetwork(points: CellPoint[], index: SnapIndex, step: number): CellPoint[] {
+  const dense: CellPoint[] = [];
+  for (let i = 0; i < points.length - 1; i++) {
+    const a = points[i];
+    const b = points[i + 1];
+    const length = Math.hypot(b.x - a.x, b.z - a.z);
+    const steps = Math.max(1, Math.ceil(length / step));
+    for (let k = 0; k < steps; k++) {
+      const u = k / steps;
+      dense.push({ x: a.x + (b.x - a.x) * u, z: a.z + (b.z - a.z) * u });
+    }
+  }
+  dense.push(points[points.length - 1]);
+  return dense.map((point) => index.snap(point) ?? point);
 }

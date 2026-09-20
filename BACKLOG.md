@@ -52,23 +52,19 @@ A decision, not a defect.
 
 ### Roads that share a town still run side by side for a while
 
-7.0% of road length is in a sustained run - over 250 units - within 12 to 150 units of another
-road. Every one of the worst cases is a pair of links that **share a settlement** and leave it
-within a few degrees of each other, so they stay close for a kilometre or more before diverging:
-Cennaciel->Brorraen beside Brorraen->Nisirwerin for 2349 units, and so on. A real network would run
-one road out of the town and fork it later.
+Down to 2.9% of road length in a sustained run - over 250 units - within 12 to 150 units of another
+road, from 11.2% when this was first measured. What remains is pairs of links that leave one
+settlement within a few degrees of each other and separate gradually.
 
-The reuse discount cannot fix this on its own, and two attempts to make it are already ruled out by
-measurement. Grading the discount outward in rings made it worse (roads exactly overlaid fell from
-41.6% to 39.2%), because cheap ground beside a road is an invitation to use the ground. Lowering
-ROAD_HEURISTIC_WEIGHT to 0.35 raised overlaid road from 41.6% to 46.2% but left parallel stretches
-at 22%, and cost time.
+Two approaches are already ruled out by measurement, so they should not be tried again. Grading the
+reuse discount outward in rings made it worse (roads exactly overlaid fell from 41.6% to 39.2%),
+because cheap ground beside a road is an invitation to use the ground rather than the road.
+Lowering ROAD_HEURISTIC_WEIGHT to 0.35 raised overlaid road to 46.2% but left parallel stretches at
+22% and cost time.
 
-What would actually fix it is splicing: where a new route follows an existing road, reuse that
-road's own shaped geometry instead of re-shaping the shared stretch. `snapToNetwork` is a partial
-version of that - it pulls individual points on, which took overlaid road from 62.1% to 71.1% - but
-a straightened link has sparse points, so the chord between two snapped ends still drifts away in
-the middle.
+What fixed most of it was resampling before snapping (see `snapToNetwork`). The rest would want a
+real splice - where a new route follows an existing road, adopt that road's own points rather than
+snapping a copy onto them - which would also stop the shared stretch being stored twice.
 
 ### Worker-based terrain chunk generation
 
