@@ -677,6 +677,56 @@ const gravelMaterial: MaterialDef = {
   texture: twoToneTexture(new Color3(0.5, 0.5, 0.47), new Color3(0.6, 0.6, 0.56), 0.85, 2.45),
 };
 
+/**
+ * A cart track: earth compacted by use.
+ *
+ * It exists because the obvious reuse does not work. mudMaterial is the right colour family, but
+ * its signature is a worley crack network - dried mud curling into plates - and at road scale that
+ * reads as a herringbone of dark chevrons running the length of every road, which is what it
+ * looked like before this material existed. A track is the opposite of cracked: it is earth pressed
+ * flat, so this is mottle and grain and nothing structural.
+ *
+ * Deliberately low relief. Height feeds the bump map, and a rutted normal map on a surface the
+ * player walks along would fight the fact that the geometry under it really is flat.
+ */
+const trackMaterial: MaterialDef = {
+  id: "track",
+  name: "Cart Track",
+  texture: {
+    bumpStrength: 0.55,
+    pipeline: {
+      noises: [MOTTLE_NOISE, FINE_GRAIN_NOISE, BROAD_TONE_NOISE],
+      steps: [
+        { output: "mottle", op: "sample", noise: "mottle" },
+        ...maskSteps("mottle", MOTTLE_SPAN, -MOTTLE_SPAN, "mottleMask"),
+        { output: "grain", op: "sample", noise: "grain" },
+        ...maskSteps("grain", TWO_OCTAVE_SPAN, -TWO_OCTAVE_SPAN, "grainMask"),
+        { output: "broad", op: "sample", noise: "broad" },
+        ...maskSteps("broad", TWO_OCTAVE_SPAN, -TWO_OCTAVE_SPAN, "broadMask"),
+
+        // Two earth tones, the darker one where the surface is damp and packed hardest.
+        { output: "packed", op: "color", value: [0.3, 0.24, 0.17] },
+        { output: "dusty", op: "color", value: [0.45, 0.38, 0.28] },
+        { output: "earth", op: "mix", a: "packed", b: "dusty", t: "mottleMask" },
+        // A little loose grit lightening the surface, at a much finer scale than the tone.
+        { output: "grit", op: "color", value: [0.5, 0.44, 0.34] },
+        { output: "gritAmount", op: "scale", input: "grainMask", factor: 0.35 },
+        { output: "diffuse", op: "mix", a: "earth", b: "grit", t: "gritAmount" },
+
+        { output: "roughness", op: "constant", value: 0.8 },
+
+        // Shallow relief only: broad undulation plus grain, no plates and no cracks.
+        { output: "bed", op: "constant", value: 0.45 },
+        { output: "swell", op: "scale", input: "broadMask", factor: 0.3 },
+        { output: "bedSwell", op: "add", a: "bed", b: "swell" },
+        { output: "tooth", op: "scale", input: "grainMask", factor: 0.2 },
+        { output: "height", op: "add", a: "bedSwell", b: "tooth" },
+      ],
+      outputs: { diffuse: "diffuse", roughness: "roughness", height: "height" },
+    },
+  },
+};
+
 /** Every material a biome can name as its `baseMaterialId` (biomeTypes.ts), keyed by MaterialDef
  *  id. Overlay-only materials (snow) live here too since materialLibrary.ts dedupes by id either way. */
 export const MATERIAL_REGISTRY: Record<string, MaterialDef> = {
@@ -686,6 +736,7 @@ export const MATERIAL_REGISTRY: Record<string, MaterialDef> = {
   snow: snowMaterial,
   tundraGround: tundraGroundMaterial,
   mud: mudMaterial,
+  track: trackMaterial,
 };
 
 export const DEFAULT_MATERIAL: MaterialDef = grassMaterial;
@@ -1134,7 +1185,59 @@ const swampGrassTuftRidgeLayer: MaterialLayer = {
 
 /** Layers checked on every face regardless of biome (kept few and cheap - this list's cost is
  *  paid at every single point in the world). */
-export const UNIVERSAL_MATERIAL_LAYERS: MaterialLayer[] = [rockLayer, rockAltLayer, shoreLayer];
+/**
+ * The road surface.
+ *
+ * Universal rather than per-biome, and that is a slot-budget decision as much as a design one. A
+ * two-way zone border's full material union was measured at 11 of the 12 slots, so one road
+ * material shared by every biome lands at exactly 12 and fits; a road layer per biome would want
+ * 13 and overflow. The cost is that a desert track and a forest track are the same surface, which
+ * is worth revisiting if the slot capacity is ever raised.
+ *
+ * The surface is its own material rather than a reused one - see trackMaterial for why mud, the
+ * obvious candidate, could not be it.
+ *
+ * The falloff is deliberately narrower than the graded shoulder. The terrain is levelled out to
+ * ROAD_HALF_WIDTH and then ramped back to the ground over a shoulder whose width depends on how
+ * deep the cut is; the SURFACE should stop at the running width, so the shoulder reads as a bank
+ * of whatever the surrounding biome is rather than as a road three times too wide. Weight 1 out to
+ * the running width, gone a couple of units past it.
+ */
+const roadLayer: MaterialLayer = {
+  id: "road",
+  material: trackMaterial,
+  weight: {
+    // Frequency 0.05 is a ~20-unit wavelength. It has to stay well clear of the terrain's own
+    // 2.5-unit vertex spacing: this layer's weight is evaluated per vertex, so noise finer than a
+    // few vertices does not fray the edge, it aliases - the first attempt used 0.25, a 4-unit
+    // wavelength, and painted a herringbone of triangle-aligned blotches all the way down every
+    // road. The other layers in this file sit at 0.03 for the same reason.
+    noises: [{ name: "roadEdge", type: "fbm", octaves: 2, frequency: 0.05, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
+    steps: [
+      { output: "roadGap", op: "input", name: "roadGap" },
+      // A little noise on the gap before the falloff, so the edge of the surface frays into the
+      // verge instead of being a drawn line - the same trick the coastline and the river banks use.
+      { output: "edgeRaw", op: "sample", noise: "roadEdge" },
+      { output: "edge", op: "scale", input: "edgeRaw", factor: 1.6 },
+      { output: "gap", op: "add", a: "roadGap", b: "edge" },
+      // Fading over three and a half units rather than two, for the same reason the shoulder has a
+      // floor: a transition narrower than the 2.5-unit vertex spacing cannot be blended smoothly by
+      // a per-vertex weight, it can only be stepped.
+      { output: "raw", op: "remap", input: "gap", inMin: 7.5, inMax: 4, outMin: 0, outMax: 1 },
+      { output: "surface", op: "clamp", input: "raw", min: 0, max: 1 },
+      // Weighted well above 1 so the surface actually reads as a road. Layer weights are conserved
+      // - they are scaled to sum to 1 and whatever is left over goes to the biome base - so a
+      // weight of 1 here means an even split with anything else firing at the same point. And
+      // something always is: a graded road is a cut, which is a local basin, so every biome's
+      // curvature-driven valley layer lights up along it and washed the track out to a muddy
+      // smear. This is not a cheat, it is the statement that a made surface wins over what would
+      // otherwise grow there.
+      { output: "result", op: "scale", input: "surface", factor: 5 },
+    ],
+  },
+};
+
+export const UNIVERSAL_MATERIAL_LAYERS: MaterialLayer[] = [rockLayer, rockAltLayer, shoreLayer, roadLayer];
 
 /** Layers checked only on faces whose own biome lists them, keyed by BiomeDefinition.id. This is
  *  what keeps per-face cost flat as more biomes grow their own layers: resolving a face only ever

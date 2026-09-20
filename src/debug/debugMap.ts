@@ -335,6 +335,7 @@ export function createDebugMap(
             landmass: sample.landmass,
             lakeFactor: sample.lakeFactor,
             riverGap: sample.riverGap,
+            roadGap: sample.roadGap,
             reliefCurvature,
           };
           const materialIndex = materialLibrary.resolveMaterialIndex(worldX, worldZ, context, sample.primaryBiome.id);

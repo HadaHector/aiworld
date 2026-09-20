@@ -64,6 +64,7 @@ export function buildVertexContext(
     landmass: sample.landmass,
     lakeFactor: sample.lakeFactor,
     riverGap: sample.riverGap,
+    roadGap: sample.roadGap,
     reliefCurvature: computeReliefCurvature(positions, gridSize, vertexIndex),
   };
 }

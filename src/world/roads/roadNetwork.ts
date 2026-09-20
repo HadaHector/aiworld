@@ -27,6 +27,11 @@ import {
   ROAD_WOBBLE_END_TAPER,
   ROAD_WOBBLE_SIMPLIFY_TOLERANCE,
   ROAD_WOBBLE_SALT,
+  ROAD_PROFILE_SMOOTH_REACH,
+  ROAD_PROFILE_SMOOTH_PASSES,
+  ROAD_PROFILE_MAX_GRADE,
+  ROAD_PROFILE_MAX_CUT,
+  ROAD_PROFILE_MAX_FILL,
 } from "./roadConfig";
 
 /** Why a road exists. Every link is routed the same way; this is which pass asked for it, and it
@@ -40,6 +45,9 @@ export interface RoadLink {
   from: number; // settlement id
   to: number;
   points: CellPoint[];
+  /** The road surface height at each point: the ground under it, smoothed along the road and held
+   *  to a walkable gradient. This is the level the terrain is brought to, not the level it has. */
+  heights: number[];
   /** Length along the shaped line, not the straight-line distance between the settlements. */
   length: number;
 }
@@ -165,6 +173,68 @@ function chooseLinks(settlements: SettlementSite[]): { all: Candidate[]; chosen:
   // have something to bundle onto - the build order is part of the topology, not an accident.
   const chosen = [...spanning, ...extras].sort((a, b) => a.length - b.length || a.from - b.from || a.to - b.to);
   return { all: candidates, chosen };
+}
+
+/**
+ * The height a road's surface should have along its length.
+ *
+ * Starts from the ground under the centreline, which is the only sensible reference, then does two
+ * things to it. Averaging over a window in ARC LENGTH rather than over a fixed number of points
+ * makes the smoothing independent of how densely the line happens to be stored - and it is stored
+ * very unevenly, a few units apart where the wander applies and hundreds apart on a bare straight.
+ *
+ * Then a two-way sweep holds the result to ROAD_PROFILE_MAX_GRADE. Smoothing alone does not do
+ * that: a long steady climb comes out of the average exactly as steep as it went in, since there is
+ * nothing local about it to average away. The sweep pulls high ground down against its neighbours
+ * from one end and then the other, which is the standard way to enforce a slope limit on a profile
+ * and needs no iteration to converge.
+ */
+function computeRoadProfile(points: CellPoint[], sampleTerrain: TerrainSampler): number[] {
+  const count = points.length;
+  const spans: number[] = new Array(count).fill(0);
+  for (let i = 0; i < count - 1; i++) {
+    spans[i] = Math.hypot(points[i + 1].x - points[i].x, points[i + 1].z - points[i].z);
+  }
+
+  const ground = points.map((point) => sampleTerrain(point.x, point.z).height);
+  let heights = ground.slice();
+
+  for (let pass = 0; pass < ROAD_PROFILE_SMOOTH_PASSES; pass++) {
+    const next = heights.slice();
+    for (let i = 0; i < count; i++) {
+      let sum = heights[i];
+      let weight = 1;
+      let reach = 0;
+      for (let j = i - 1; j >= 0 && reach < ROAD_PROFILE_SMOOTH_REACH; j--) {
+        reach += spans[j];
+        sum += heights[j];
+        weight++;
+      }
+      reach = 0;
+      for (let j = i + 1; j < count && reach < ROAD_PROFILE_SMOOTH_REACH; j++) {
+        reach += spans[j - 1];
+        sum += heights[j];
+        weight++;
+      }
+      next[i] = sum / weight;
+    }
+    heights = next;
+  }
+
+  for (let i = 1; i < count; i++) {
+    heights[i] = Math.min(heights[i], heights[i - 1] + spans[i - 1] * ROAD_PROFILE_MAX_GRADE);
+  }
+  for (let i = count - 2; i >= 0; i--) {
+    heights[i] = Math.min(heights[i], heights[i + 1] + spans[i] * ROAD_PROFILE_MAX_GRADE);
+  }
+
+  // Last, so it is the one that wins: the road may be steeper than the gradient limit, but it may
+  // not leave the ground.
+  for (let i = 0; i < count; i++) {
+    heights[i] = Math.min(ground[i] + ROAD_PROFILE_MAX_FILL, Math.max(ground[i] - ROAD_PROFILE_MAX_CUT, heights[i]));
+  }
+
+  return heights;
 }
 
 function polylineLength(points: CellPoint[]): number {
@@ -308,7 +378,15 @@ export function generateRoadNetwork(
         ROAD_WOBBLE_SIMPLIFY_TOLERANCE,
       ),
     );
-    links.push({ id: links.length, kind, from: candidate.from, to: candidate.to, points, length });
+    links.push({
+      id: links.length,
+      kind,
+      from: candidate.from,
+      to: candidate.to,
+      points,
+      heights: computeRoadProfile(points, sampleTerrain),
+      length,
+    });
     built.union(candidate.from, candidate.to);
     homeAccess[candidate.from] ||= settlements[candidate.from].areaId === settlements[candidate.to].areaId;
     homeAccess[candidate.to] ||= homeAccess[candidate.from];

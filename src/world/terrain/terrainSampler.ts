@@ -4,6 +4,15 @@ import { createAreaSampler, SEA_LEVEL, type AreaWeight, type AreaBounds } from "
 import { createBedrockSampler } from "../bedrock";
 import { generateSettlementSites, type SettlementSite } from "../settlements/settlementSites";
 import { generateRoadNetwork, type RoadNetwork } from "../roads/roadNetwork";
+import { createRoadField, type RoadField } from "../roads/roadField";
+import {
+  ROAD_HALF_WIDTH,
+  ROAD_SIDE_SLOPE,
+  ROAD_SHOULDER_MIN,
+  ROAD_SHOULDER_MAX,
+  ROAD_QUERY_RADIUS,
+  ROAD_GRADE_END_TAPER,
+} from "../roads/roadConfig";
 import type { ContinentPlan } from "../cells/continentLayout";
 import type { BiomeDefinition } from "../biomes/biomeTypes";
 import { BIOME_REGISTRY } from "../biomes/biomeDefinitions";
@@ -34,6 +43,9 @@ export interface TerrainSample {
   /** True distance to the nearest river centreline, Infinity past riverField's search radius.
    *  Continuous everywhere, so it is the signal to use for anything that has to vary smoothly. */
   riverGap: number;
+  /** True distance to the nearest road centreline, Infinity past the road field's search radius.
+   *  The material pipeline paints the road surface from this - there is no road mesh. */
+  roadGap: number;
 }
 
 export type TerrainSampler = (worldX: number, worldZ: number) => TerrainSample;
@@ -84,6 +96,12 @@ export function createTerrainSampler(seed: number): TerrainWorld {
   const evaluateBoundaryHill = createBoundaryHillEvaluator(seed);
   const carveRiver = createRiverEvaluator(seed);
 
+  // Bound after the fact, because roads are routed over the terrain as it is before any of them
+  // exist and then the terrain is brought to them - survey the land, then build the road. Until
+  // the network is generated below this is null and sampleTerrain simply reports ungraded ground,
+  // which is exactly what the router has to see.
+  let roadField: RoadField | null = null;
+
   function sampleTerrain(worldX: number, worldZ: number): TerrainSample {
     const area = sampleArea(worldX, worldZ);
 
@@ -115,10 +133,30 @@ export function createTerrainSampler(seed: number): TerrainWorld {
     );
     const landHeight = lerp(landHeightRivered, LAKE_TARGET_HEIGHT, area.lakeFactor);
 
+    // Roads are graded into the terrain rather than laid on top of it, so this is the last thing
+    // to touch the land height: a road cuts through a boundary hill and fills a dip, and it should
+    // win over both. It is deliberately above the ocean blend below, so a road can never raise the
+    // seabed - a road running into water simply disappears under it.
+    let gradedHeight = landHeight;
+    let roadGap = Infinity;
+    if (roadField) {
+      const road = roadField.query(worldX, worldZ);
+      roadGap = road.distance;
+      if (road.distance < ROAD_QUERY_RADIUS) {
+        // The shoulder is as wide as it has to be to get from the road's level back to the
+        // ground's at ROAD_SIDE_SLOPE, so its gradient is the constant and its width follows.
+        // A fixed width would be a wall wherever the cut or fill happened to be deep.
+        const drop = Math.abs(landHeight - road.height);
+        const shoulder = Math.min(ROAD_SHOULDER_MAX, Math.max(ROAD_SHOULDER_MIN, drop / ROAD_SIDE_SLOPE));
+        const blend = (1 - smoothstep(ROAD_HALF_WIDTH, ROAD_HALF_WIDTH + shoulder, road.distance)) * road.taper;
+        gradedHeight = lerp(landHeight, road.height, blend);
+      }
+    }
+
     const oceanNoise = oceanNoise2D(worldX * OCEAN_FLOOR_NOISE_FREQUENCY, worldZ * OCEAN_FLOOR_NOISE_FREQUENCY) * OCEAN_FLOOR_NOISE_SCALE;
     const oceanFloorHeight = SEA_LEVEL + OCEAN_FLOOR_DEPTH + oceanNoise;
     const landBlend = smoothstep(-1, 1, area.landmass);
-    const height = lerp(oceanFloorHeight, landHeight, landBlend);
+    const height = lerp(oceanFloorHeight, gradedHeight, landBlend);
 
     return {
       height,
@@ -133,6 +171,7 @@ export function createTerrainSampler(seed: number): TerrainWorld {
       areaBorderGap: area.areaBorderGap,
       isRiverEdge: area.isRiverEdge,
       riverGap: area.riverGap,
+      roadGap,
     };
   }
 
@@ -148,6 +187,7 @@ export function createTerrainSampler(seed: number): TerrainWorld {
   // Roads need the settlements to connect and the finished terrain to route over, so they come
   // last of all.
   const roads = generateRoadNetwork(seed, settlements, sampleTerrain);
+  roadField = createRoadField(roads.links, ROAD_QUERY_RADIUS, ROAD_GRADE_END_TAPER);
 
   return { sampleTerrain, worldExtent, continents, areaBounds, areaNames, settlements, roads };
 }

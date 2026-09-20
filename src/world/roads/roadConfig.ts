@@ -181,3 +181,55 @@ export const ROAD_WOBBLE_END_TAPER = 40;
 export const ROAD_WOBBLE_SIMPLIFY_TOLERANCE = 0.5;
 
 export const ROAD_WOBBLE_SALT = 703;
+
+// --- Grading the terrain to the road ---
+//
+// There is no road mesh. The road IS the terrain: the ground is brought to a smoothed surface
+// level along the centreline and the material pipeline paints it, exactly as rivers and boundary
+// hills already work. That is what keeps a road on the same geometry as everything around it -
+// one mesh, one material blend, no seam to hide and nothing to keep in step with the chunk under
+// it.
+
+// Half the width of the level running surface. A cart track, not a highway - the character capsule
+// is 1.8 units tall.
+export const ROAD_HALF_WIDTH = 4;
+
+// The shoulder is specified as a MAXIMUM SIDE GRADIENT, not a width, which is the same discipline
+// as RIVER_BANK_SLOPE and for the same reason: a fixed width produces a wall wherever the cut or
+// fill happens to be deep, and this project has shipped that bug once already. The width needed
+// follows from how far the ground has to move, so a road crossing flat ground has a shoulder of
+// almost nothing and one cutting into a hillside has a long one.
+export const ROAD_SIDE_SLOPE = 0.55;
+// The floor on shoulder width is set by the terrain mesh, not by taste. Chunk vertices are 2.5
+// units apart, so a bank two units wide falls between them and the mesh renders it as a row of
+// triangle-aligned notches zigzagging down the road - the feature is thinner than the geometry
+// that has to carry it. Six units is a couple of vertices either side, which the mesh can resolve.
+export const ROAD_SHOULDER_MIN = 6;
+// A cutting has to stop somewhere. Past this the shoulder stops widening and the cut face simply
+// gets steeper, which is what a real cutting does too.
+export const ROAD_SHOULDER_MAX = 26;
+
+export const ROAD_QUERY_RADIUS = ROAD_HALF_WIDTH + ROAD_SHOULDER_MAX;
+
+// The road's own surface is smoothed along its length before the ground is brought to it - a road
+// that simply copied the ground under it would be as bumpy as the ground, which is the whole thing
+// this is for. Averaged over this much arc length, twice.
+export const ROAD_PROFILE_SMOOTH_REACH = 26;
+export const ROAD_PROFILE_SMOOTH_PASSES = 2;
+// ...and then held to this gradient along the road, which is what actually guarantees a walkable
+// surface: smoothing alone leaves a long steady climb as steep as it found it.
+export const ROAD_PROFILE_MAX_GRADE = 0.14;
+// ...but never further from the ground under it than this. Smoothing over a window that happens to
+// span a canyon rim averages the profile up to something the ground nowhere near supports: measured
+// before this existed, a road on a rim came out 37 units above the terrain, which is not a road,
+// it is a viaduct - and the shoulder needed to get back down from it would have been a wall.
+//
+// Where the ground is too steep for both this and the gradient limit to hold, this wins and the
+// road is simply steeper there. A road that clings to a hillside is a road; one floating over it
+// is not, and the router has already capped how steep the route may be.
+export const ROAD_PROFILE_MAX_CUT = 7;
+export const ROAD_PROFILE_MAX_FILL = 5;
+
+// The grading fades out over the last stretch at each end, so a road meets the untouched ground
+// where it stops instead of ending in a step.
+export const ROAD_GRADE_END_TAPER = 45;
