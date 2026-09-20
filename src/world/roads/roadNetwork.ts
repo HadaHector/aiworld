@@ -2,14 +2,14 @@ import { Delaunay } from "d3-delaunay";
 import type { CellPoint } from "../cells/cellGrid";
 import type { TerrainSampler } from "../terrain/terrainSampler";
 import type { SettlementSite } from "../settlements/settlementSites";
-import { chaikin, simplify } from "../polyline";
+import { simplify, removeLoops } from "../polyline";
+import { straighten, roundCorners } from "./roadShaping";
 import { createRoadPathfinder, nodePoint } from "./roadPathfinder";
 import {
   ROAD_EXTRA_LINK_FRACTION,
   ROAD_MAX_LINK_LENGTH,
   ROAD_RESCUE_DETOUR_FACTOR,
   ROAD_ACCESS_ATTEMPTS,
-  ROAD_SMOOTHING_PASSES,
   ROAD_SIMPLIFY_TOLERANCE,
 } from "./roadConfig";
 
@@ -227,7 +227,17 @@ export function generateRoadNetwork(settlements: SettlementSite[], sampleTerrain
     raw[0] = { x: from.x, z: from.z };
     raw[raw.length - 1] = { x: to.x, z: to.z };
 
-    const points = simplify(chaikin(raw, ROAD_SMOOTHING_PASSES), ROAD_SIMPLIFY_TOLERANCE);
+    const zones = new Set([from.areaId, to.areaId]);
+    // Straightening may not wander into a zone the route it replaces did not already visit -
+    // otherwise a shortcut could cut a corner through the zone next door, undoing the containment
+    // the off-zone penalty bought.
+    for (const key of result.nodes) zones.add(pathfinder.zoneOfNode(key));
+    const chordIsClear = (a: CellPoint, b: CellPoint): boolean => pathfinder.chordIsClear(a, b, zones);
+
+    const straightened = straighten(raw, chordIsClear, pathfinder.riverLengthAlong);
+    // removeLoops after rounding: a hairpin tight enough that its arc crosses the line is rare but
+    // real - measured at 6 across the network - and it is the same fix rivers already use.
+    const points = simplify(removeLoops(roundCorners(straightened, chordIsClear)), ROAD_SIMPLIFY_TOLERANCE);
     links.push({ id: links.length, kind, from: candidate.from, to: candidate.to, points, length: polylineLength(points) });
     built.union(candidate.from, candidate.to);
     homeAccess[candidate.from] ||= settlements[candidate.from].areaId === settlements[candidate.to].areaId;

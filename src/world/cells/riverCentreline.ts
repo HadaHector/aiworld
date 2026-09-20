@@ -2,7 +2,7 @@ import type { CellPoint } from "./cellGrid";
 import { createBaseNoise2D } from "../terrain/noise";
 import { deriveSeed } from "../rng";
 import { smoothstep } from "../mathUtils";
-import { chaikin, simplify } from "../polyline";
+import { chaikin, simplify, removeLoops } from "../polyline";
 import {
   RIVER_MEANDER_SAMPLE_STEP,
   RIVER_MEANDER_MAX_AMPLITUDE,
@@ -50,53 +50,6 @@ function resample(vertices: CellPoint[], rooms: number[], step: number): { point
 /** How far a point may move sideways before it leaves the corridor of cells the river runs
  *  through - i.e. before it would be inside some other cell, and so possibly some other zone. */
 export type Clearance = (point: CellPoint) => number;
-
-/** Where two segments properly cross, or null. Shared endpoints do not count - consecutive
- *  segments always have one. */
-function crossingPoint(a: CellPoint, b: CellPoint, c: CellPoint, d: CellPoint): CellPoint | null {
-  const rx = b.x - a.x;
-  const rz = b.z - a.z;
-  const sx = d.x - c.x;
-  const sz = d.z - c.z;
-  const denominator = rx * sz - rz * sx;
-  if (denominator === 0) return null;
-
-  const t = ((c.x - a.x) * sz - (c.z - a.z) * sx) / denominator;
-  const u = ((c.x - a.x) * rz - (c.z - a.z) * rx) / denominator;
-  if (t <= 0 || t >= 1 || u <= 0 || u >= 1) return null;
-  return { x: a.x + rx * t, z: a.z + rz * t };
-}
-
-/**
- * Cuts out any loop the displacement created.
- *
- * Offsetting a line sideways makes it cross itself wherever the offset exceeds the local radius of
- * curvature, which at a sharp corner of the generated path is small. Measured, that left 1-11
- * crossings per seed - every one of them a cusp of 10-600 units of arc, never a real oxbow.
- * Bounding the amplitude by curvature would give up real meanders everywhere to prevent them; this
- * deletes exactly the offending loop and leaves the rest of the line untouched, and it is exact
- * rather than a margin that has to be tuned.
- */
-function removeLoops(points: CellPoint[]): CellPoint[] {
-  let current = points;
-  for (let guard = 0; guard < 64; guard++) {
-    let cut: { from: number; to: number; at: CellPoint } | null = null;
-    outer: for (let i = 0; i < current.length - 1 && !cut; i++) {
-      for (let j = i + 2; j < current.length - 1; j++) {
-        const at = crossingPoint(current[i], current[i + 1], current[j], current[j + 1]);
-        if (at) {
-          cut = { from: i, to: j, at };
-          break outer;
-        }
-      }
-    }
-    if (!cut) return current;
-    // Keep everything up to the first segment's start, the crossing itself, then resume after the
-    // second segment's start - which is precisely the loop between them, removed.
-    current = [...current.slice(0, cut.from + 1), cut.at, ...current.slice(cut.to + 1)];
-  }
-  return current;
-}
 
 export type CentrelineShaper = (
   vertices: CellPoint[],

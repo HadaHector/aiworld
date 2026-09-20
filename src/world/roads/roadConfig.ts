@@ -97,13 +97,23 @@ export const ROAD_EXTRA_LINK_FRACTION = 0.25;
 // route.
 export const ROAD_MAX_LINK_LENGTH = 5000;
 
-// Shaping the raw grid path. Chaikin rounds off the 45-degree staircase an 8-neighbour grid
-// produces; simplification then costs nothing visible and cuts the segment count that every later
-// stage pays per terrain sample.
+// Shaping the raw grid path. An 8-neighbour grid can only travel at multiples of 45 degrees, so
+// any other heading comes out as a staircase; straightening replaces each run of steps with the
+// longest straight line that is still road-worthy, and then corners are rounded.
 //
-// One pass, not two, and that is a measured choice rather than a taste one. Corner cutting moves
-// the line off the lattice the router checked, onto ground nothing ever sampled - so the smoother
-// the line, the less the grade limit means. Measured over the finished network, spans steeper than
-// ROAD_MAX_GRADE: 2.7% at one pass, 7.8% at two, 6.2% at three.
-export const ROAD_SMOOTHING_PASSES = 1;
+// The ladder of spans, in lattice steps, tried at each anchor - longest first, so the first that
+// passes is taken. Fixed rungs rather than a scan keep this to a few chord tests per anchor, and
+// the chords themselves are nearly free because the cells they cross are already cached.
+export const ROAD_STRAIGHTEN_SPAN_STEPS = [24, 16, 11, 8, 6, 4, 3, 2];
+
+// A corner is rounded by a fixed radius rather than by a fraction of its segments, which is what
+// Chaikin does. Once straightening has produced segments hundreds of units long, a fractional cut
+// would round the corner over hundreds of units and undo the straight runs it was given.
+// How much longer inside a river channel a straightened chord may be than the path it replaces.
+// Zero would refuse chords that shave a unit off a crossing for reasons that have nothing to do
+// with the river; a fraction of the corridor width leaves room for that and nothing more.
+export const ROAD_RIVER_STRAIGHTEN_SLACK = 20;
+
+export const ROAD_CORNER_RADIUS = 45;
+export const ROAD_CORNER_SEGMENTS = 6;
 export const ROAD_SIMPLIFY_TOLERANCE = 1.5;

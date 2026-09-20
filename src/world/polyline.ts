@@ -74,3 +74,51 @@ export function simplify(points: CellPoint[], tolerance: number): CellPoint[] {
 
   return points.filter((_, i) => keep[i] === 1);
 }
+
+/** Where two segments properly cross, or null. Shared endpoints do not count - consecutive
+ *  segments always have one. */
+export function crossingPoint(a: CellPoint, b: CellPoint, c: CellPoint, d: CellPoint): CellPoint | null {
+  const rx = b.x - a.x;
+  const rz = b.z - a.z;
+  const sx = d.x - c.x;
+  const sz = d.z - c.z;
+  const denominator = rx * sz - rz * sx;
+  if (denominator === 0) return null;
+
+  const t = ((c.x - a.x) * sz - (c.z - a.z) * sx) / denominator;
+  const u = ((c.x - a.x) * rz - (c.z - a.z) * rx) / denominator;
+  if (t <= 0 || t >= 1 || u <= 0 || u >= 1) return null;
+  return { x: a.x + rx * t, z: a.z + rz * t };
+}
+
+/**
+ * Cuts out any loop the displacement created.
+ *
+ * A river meander offsets a line sideways, which makes it cross itself wherever the offset exceeds
+ * the local radius of curvature; a road rounds a hairpin, which can do the same. Measured on
+ * rivers, 1-11 crossings per seed, every one a cusp of 10-600 units of arc rather than a real
+ * oxbow; on roads, 6 across the whole network.
+ * Bounding the amplitude by curvature would give up real meanders everywhere to prevent them; this
+ * deletes exactly the offending loop and leaves the rest of the line untouched, and it is exact
+ * rather than a margin that has to be tuned.
+ */
+export function removeLoops(points: CellPoint[]): CellPoint[] {
+  let current = points;
+  for (let guard = 0; guard < 64; guard++) {
+    let cut: { from: number; to: number; at: CellPoint } | null = null;
+    outer: for (let i = 0; i < current.length - 1 && !cut; i++) {
+      for (let j = i + 2; j < current.length - 1; j++) {
+        const at = crossingPoint(current[i], current[i + 1], current[j], current[j + 1]);
+        if (at) {
+          cut = { from: i, to: j, at };
+          break outer;
+        }
+      }
+    }
+    if (!cut) return current;
+    // Keep everything up to the first segment's start, the crossing itself, then resume after the
+    // second segment's start - which is precisely the loop between them, removed.
+    current = [...current.slice(0, cut.from + 1), cut.at, ...current.slice(cut.to + 1)];
+  }
+  return current;
+}

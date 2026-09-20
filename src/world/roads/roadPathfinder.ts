@@ -18,6 +18,11 @@ import {
 
 /** Grid coordinates packed into one number, so the open set and the caches can be plain Maps keyed
  *  by a primitive. The world is ~70 km across, so a 25-unit grid needs about 2800 either way. */
+/** Spacing of the finer lattice a straightened chord is validated on, and how often the chord is
+ *  sampled along its own length. */
+const FINE_LATTICE = ROAD_GRID / 4;
+const FINE_STEP = ROAD_GRID / 2;
+
 const KEY_OFFSET = 1 << 15;
 const KEY_STRIDE = 1 << 16;
 
@@ -128,6 +133,22 @@ export interface PathResult {
 
 export interface RoadPathfinder {
   findPath(request: PathRequest): PathResult;
+  /**
+   * Whether a straight run between two points is road-worthy: every lattice cell it passes through
+   * is buildable, no step between consecutive cells exceeds the grade limit, and it enters no zone
+   * that `zones` does not allow.
+   *
+   * Checked over the same lattice at the same resolution the route itself was checked over, which
+   * is the point - a straightened line is validated exactly as strictly as the line it replaces,
+   * unlike a smoothing pass, which moves the road onto ground nobody ever looked at.
+   */
+  chordIsClear(from: CellPoint, to: CellPoint, zones: Set<number>): boolean;
+  /** How much of a straight run lies inside a river channel. Straightening uses it to refuse a
+   *  chord that would spend longer in the water than the path it replaces. */
+  riverLengthAlong(from: CellPoint, to: CellPoint): number;
+  /** Which zone a routed node stands in, so a caller can allow straightening exactly the zones its
+   *  own route already passed through. */
+  zoneOfNode(key: number): number;
   /** How many distinct grid nodes have been sampled so far - the real cost of the whole pass. */
   sampleCount(): number;
 }
@@ -141,6 +162,9 @@ export interface RoadPathfinder {
  */
 export function createRoadPathfinder(sampleTerrain: TerrainSampler): RoadPathfinder {
   const ground = new Map<number, GroundNode>();
+  // A second, finer cache for validating straightened chords - see chordGroundIsClear. Kept apart
+  // from the lattice cache because the search must keep seeing exactly the lattice it plans on.
+  const fine = new Map<number, GroundNode>();
 
   function groundAt(key: number): GroundNode {
     const cached = ground.get(key);
@@ -179,6 +203,105 @@ export function createRoadPathfinder(sampleTerrain: TerrainSampler): RoadPathfin
     if (!zones.has(to.areaId)) multiplier *= ROAD_OFF_ZONE_PENALTY;
     if (onRoad) multiplier *= ROAD_REUSE_DISCOUNT;
     return distance * multiplier;
+  }
+
+  /** The lattice cells a straight run passes through, in order. Stepping at a quarter of the grid
+   *  is fine enough that consecutive distinct cells are always neighbours, which is what lets the
+   *  grade between them be judged exactly as a search step would be. */
+  function cellsAlong(from: CellPoint, to: CellPoint): number[] {
+    const length = Math.hypot(to.x - from.x, to.z - from.z);
+    const steps = Math.max(1, Math.ceil(length / (ROAD_GRID / 4)));
+    const cells: number[] = [];
+    for (let i = 0; i <= steps; i++) {
+      const u = i / steps;
+      const key = nodeKey(
+        Math.round((from.x + (to.x - from.x) * u) / ROAD_GRID),
+        Math.round((from.z + (to.z - from.z) * u) / ROAD_GRID),
+      );
+      if (cells.length === 0 || cells[cells.length - 1] !== key) cells.push(key);
+    }
+    return cells;
+  }
+
+  /**
+   * The second, finer gate: the chord's own ground rather than the ground at the lattice cells it
+   * passes near.
+   *
+   * The cheap test above judges a chord by cell centres, which can sit up to half a grid step to
+   * the side of the line - so a chord could pass while the ground the road would actually stand on
+   * is steeper. Measured, that let 4.4% of 35-unit spans exceed the grade limit against 0.5% for
+   * the unstraightened path. This walks the line itself, on its own finer cache, and is only
+   * reached for chords the cheap test has already accepted.
+   */
+  function fineGroundAt(x: number, z: number): GroundNode {
+    const key = nodeKey(Math.round(x / FINE_LATTICE), Math.round(z / FINE_LATTICE));
+    const cached = fine.get(key);
+    if (cached) return cached;
+    const sample = sampleTerrain(x, z);
+    const inRiver = sample.riverGap < ROAD_RIVER_CORRIDOR;
+    const node: GroundNode = {
+      height: sample.height,
+      areaId: sample.primaryAreaId,
+      inRiver,
+      blocked: !sample.isLand || sample.lakeFactor > ROAD_MAX_LAKE_FACTOR || (sample.height < ROAD_MIN_HEIGHT && !inRiver),
+    };
+    fine.set(key, node);
+    return node;
+  }
+
+  function chordGroundIsClear(from: CellPoint, to: CellPoint): boolean {
+    const length = Math.hypot(to.x - from.x, to.z - from.z);
+    const steps = Math.max(1, Math.ceil(length / FINE_STEP));
+    let previousHeight: number | null = null;
+    let previousInRiver = false;
+
+    for (let i = 0; i <= steps; i++) {
+      const u = i / steps;
+      const x = from.x + (to.x - from.x) * u;
+      const z = from.z + (to.z - from.z) * u;
+      const node = fineGroundAt(x, z);
+      if (node.blocked) return false;
+
+      if (previousHeight !== null && !node.inRiver && !previousInRiver) {
+        if (Math.abs(node.height - previousHeight) / (length / steps) > ROAD_MAX_GRADE) return false;
+      }
+      previousHeight = node.height;
+      previousInRiver = node.inRiver;
+    }
+    return true;
+  }
+
+  function riverLengthAlong(from: CellPoint, to: CellPoint): number {
+    const length = Math.hypot(to.x - from.x, to.z - from.z);
+    const steps = Math.max(1, Math.ceil(length / FINE_STEP));
+    let inside = 0;
+    for (let i = 0; i < steps; i++) {
+      const u = (i + 0.5) / steps;
+      if (fineGroundAt(from.x + (to.x - from.x) * u, from.z + (to.z - from.z) * u).inRiver) inside += length / steps;
+    }
+    return inside;
+  }
+
+  function chordIsClear(from: CellPoint, to: CellPoint, zones: Set<number>): boolean {
+    const cells = cellsAlong(from, to);
+    let previous: GroundNode | null = null;
+    let previousPoint: CellPoint | null = null;
+
+    for (const key of cells) {
+      const node = groundAt(key);
+      if (node.blocked) return false;
+      if (!zones.has(node.areaId)) return false;
+
+      const point = nodePoint(key);
+      if (previous && previousPoint) {
+        const distance = Math.hypot(point.x - previousPoint.x, point.z - previousPoint.z);
+        const grade = Math.abs(node.height - previous.height) / distance;
+        if (!node.inRiver && !previous.inRiver && grade > ROAD_MAX_GRADE) return false;
+      }
+      previous = node;
+      previousPoint = point;
+    }
+    return chordGroundIsClear(from, to);
   }
 
   function findPath({ from, to, zones, roadNodes, detourFactor }: PathRequest): PathResult {
@@ -250,5 +373,11 @@ export function createRoadPathfinder(sampleTerrain: TerrainSampler): RoadPathfin
     return { nodes: null, expansions, capped: expansions >= ROAD_MAX_EXPANSIONS };
   }
 
-  return { findPath, sampleCount: () => ground.size };
+  return {
+    findPath,
+    chordIsClear,
+    riverLengthAlong,
+    zoneOfNode: (key) => groundAt(key).areaId,
+    sampleCount: () => ground.size + fine.size,
+  };
 }
