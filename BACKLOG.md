@@ -66,18 +66,39 @@ What fixed most of it was resampling before snapping (see `snapToNetwork`). The 
 real splice - where a new route follows an existing road, adopt that road's own points rather than
 snapping a copy onto them - which would also stop the shared stretch being stored twice.
 
-### The road wander is baked into the polyline, and costs 13x the points
+### Road crossings are fords, and the road passes under the water
+
+Where a road crosses a river it is graded down the carved channel and back up, so it goes under the
+sea-level water plane for the width of the crossing. It reads as a ford, which is honest, but the
+beds run to -8 near a river mouth and nobody fords eight units of water.
+
+It does not dam anything - measured, 0 of 570 road samples inside a river bed are above sea level,
+because ROAD_PROFILE_MAX_FILL holds the road within five units of the ground it was routed over and
+that ground is the channel. The decision taken earlier stands: ford where the bed is shallow, a
+generated deck where it is not. A heightfield cannot express a road over water, so a deck would have
+to be its own mesh - the one place the everything-is-terrain rule has to give.
+
+### Two roads sharing a stretch can disagree about its height
+
+50 points of 82792 sit more than a unit off their own road's profile, away from a coast and away
+from an end taper; worst 8.1. They are places where two links were snapped onto the same line but
+computed their profiles separately: each smooths over a window in arc length, and beyond the shared
+stretch those windows cover different ground, so the profiles drift apart. The field then hands the
+terrain whichever segment is marginally nearer, which is a step wherever the winner changes.
+
+The fix is the splice already backlogged above for the geometry: a shared stretch should be one road
+with one profile, not two that happen to agree within a few units.
+
+### The road wander is stored rather than computed
 
 `wobble` displaces the straight parts of a road by a couple of units, which needs the line stored at
-a few units per point instead of a few hundred: the network went from 6128 points to 82792. Nothing
-today cares - it is a few megabytes and the debug map draws it in one path - but stage 2 indexes
-road segments the way `riverField` indexes river segments, and a bucket that held a handful of
-segments would now hold hundreds, every one of them tested per terrain sample.
+a few units per point rather than a few hundred: the network went from 6128 points to 82792, and the
+road field therefore holds 82548 segments.
 
-The wander is a pure function of world position, so it does not have to be stored at all. Stage 2
-could keep the sparse line and apply the displacement analytically when it evaluates distance to the
-road, which is both cheaper and exact. Worth doing before the road field is written rather than
-after.
+It has cost nothing measurable - a terrain sample on a road is 9 us against 35 us for one far out
+over ocean, because the field is a single bucket lookup and the buckets are small. The wander is a
+pure function of world position, so it could be applied analytically against a sparse line instead
+if the segment count ever becomes the thing that hurts. It is not today.
 
 ### Worker-based terrain chunk generation
 
