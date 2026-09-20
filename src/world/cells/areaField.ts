@@ -44,8 +44,18 @@ export interface AreaWeight {
   weight: number;
 }
 
+/** Axis-aligned world extent of one area, from the cells that make it up. */
+export interface AreaBounds {
+  minX: number;
+  minZ: number;
+  maxX: number;
+  maxZ: number;
+}
+
 export interface AreaSample {
   landmass: number;
+  /** The area owning the nearest cell - the one whose name the zone label shows. */
+  primaryAreaId: number;
   isLand: boolean;
   primaryBiome: BiomeDefinition;
   secondaryBiome: BiomeDefinition;
@@ -78,6 +88,9 @@ export interface AreaWorld {
   sampleArea: AreaSampler;
   worldExtent: number;
   continents: ContinentPlan[];
+  /** Where each area is, keyed by the id AreaSample reports. Built from the cell sites that make
+   *  the area up, so it is the area's own footprint rather than a fixed zoom guess. */
+  areaBounds: Map<number, AreaBounds>;
 }
 
 /**
@@ -402,6 +415,7 @@ export function createAreaSampler(seed: number): AreaWorld {
 
     return {
       landmass,
+      primaryAreaId,
       isLand: landmass > 0,
       primaryBiome,
       secondaryBiome,
@@ -417,5 +431,27 @@ export function createAreaSampler(seed: number): AreaWorld {
     };
   }
 
-  return { sampleArea, worldExtent: layout.worldExtent, continents: layout.continents };
+  // A cell's site is its centre, not its edge, so the footprint is grown by roughly half a cell to
+  // reach the borders - close enough for framing a view, and it avoids needing the Voronoi polygons
+  // here just to draw a map.
+  const areaBounds = new Map<number, AreaBounds>();
+  for (const [cellIndex, areaId] of cellToAreaId) {
+    const site = points[cellIndex];
+    const existing = areaBounds.get(areaId);
+    if (existing) {
+      existing.minX = Math.min(existing.minX, site.x - CELL_SPACING / 2);
+      existing.minZ = Math.min(existing.minZ, site.z - CELL_SPACING / 2);
+      existing.maxX = Math.max(existing.maxX, site.x + CELL_SPACING / 2);
+      existing.maxZ = Math.max(existing.maxZ, site.z + CELL_SPACING / 2);
+    } else {
+      areaBounds.set(areaId, {
+        minX: site.x - CELL_SPACING / 2,
+        minZ: site.z - CELL_SPACING / 2,
+        maxX: site.x + CELL_SPACING / 2,
+        maxZ: site.z + CELL_SPACING / 2,
+      });
+    }
+  }
+
+  return { sampleArea, worldExtent: layout.worldExtent, continents: layout.continents, areaBounds };
 }

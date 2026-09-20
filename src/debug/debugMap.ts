@@ -1,7 +1,7 @@
 import { Color3 } from "@babylonjs/core";
 import type { TerrainSample, TerrainSampler } from "../world/terrain/terrainSampler";
 import type { ContinentPlan } from "../world/cells/continentLayout";
-import { SEA_LEVEL } from "../world/cells/areaField";
+import { SEA_LEVEL, type AreaBounds } from "../world/cells/areaField";
 import { GROWTH_RADIUS_SAFETY_FACTOR } from "../world/cells/config";
 import type { MaterialLibrary } from "../world/materials/materialLibrary";
 
@@ -13,6 +13,14 @@ const MARKER_COLOR = "rgb(255, 60, 60)";
 const MARKER_RADIUS_PX = 4;
 const HEADING_LENGTH_PX = 14;
 const CONTINENT_VIEW_MARGIN = 1.5; // margin beyond a continent's true (non-safety-inflated) radius
+const ZONE_VIEW_MARGIN = 1.25; // margin beyond the zone's own footprint, so its borders stay visible
+const ZONE_MIN_HALF_SIZE = 600; // a one-cell zone would otherwise zoom in past anything useful
+
+// Zone view dims everything outside the zone the player is standing in. Without it the view is
+// just "Continent, but closer" - the whole point is to see where THIS zone begins and ends, and a
+// zone boundary is a blend rather than a line, so there is no outline to draw. Dimming the
+// surroundings instead shows the real, jittered shape the blend produces.
+const ZONE_OUTSIDE_DIM = 0.4;
 
 // Emboss/relief shading: each land pixel is compared against its upper-left neighbor (one pixel
 // away, so the offset self-scales with zoom - a big offset in World view, a fine one in Continent
@@ -37,6 +45,8 @@ interface Viewport {
   halfSize: number;
 }
 
+type ViewMode = "world" | "continent" | "zone";
+
 export interface DebugMap {
   toggle: () => void;
   updateMarker: (worldX: number, worldZ: number, headingRadians: number) => void;
@@ -49,9 +59,10 @@ function distanceSq(ax: number, az: number, bx: number, bz: number): number {
 }
 
 /**
- * A large, full-screen-ish top-down debug map. Two views: "World" (every continent at once) and
+ * A large, full-screen-ish top-down debug map. Three views: "World" (every continent at once),
  * "Continent" (zoomed to whichever continent is nearest the player, revealing individual area
- * shapes). Each view's base image is rendered once (lazily, on first need) and cached, since a
+ * shapes) and "Zone" (zoomed to the area the player is standing in, with everything outside it
+ * dimmed). Each view's base image is rendered once (lazily, on first need) and cached, since a
  * full sample pass is relatively expensive; a small live marker with a heading indicator is
  * cheaply redrawn on top every frame while visible. Click anywhere on the map to teleport there.
  */
@@ -60,6 +71,7 @@ export function createDebugMap(
   worldExtent: number,
   continents: ContinentPlan[],
   materialLibrary: MaterialLibrary,
+  areaBounds: Map<number, AreaBounds>,
   onTeleport: (worldX: number, worldZ: number) => void,
 ): DebugMap {
   const overlay = document.createElement("div");
@@ -93,6 +105,7 @@ export function createDebugMap(
 
   const worldTabButton = createTabButton("World");
   const continentTabButton = createTabButton("Continent");
+  const zoneTabButton = createTabButton("Zone");
 
   const displayCanvas = document.createElement("canvas");
   displayCanvas.width = SAMPLE_RESOLUTION;
@@ -113,12 +126,21 @@ export function createDebugMap(
   const viewportCache = new Map<string, Viewport>();
 
   let visible = false;
-  let viewMode: "world" | "continent" = "continent";
+  let viewMode: ViewMode = "continent";
+  // Which zone the Zone view is framed on. Held rather than recomputed per redraw so that walking
+  // across a border does not re-frame and re-render the map underneath the player mid-look; it is
+  // refreshed when the view is opened or switched to.
+  let zoneAreaId = -1;
   let markerX = 0;
   let markerZ = 0;
   let heading = 0;
 
   const worldViewport: Viewport = { centerX: 0, centerZ: 0, halfSize: worldExtent / 2 };
+
+  /** One extra terrain sample, only when the Zone view is opened or switched to. */
+  function areaIdAtMarker(): number {
+    return sampleTerrain(markerX, markerZ).primaryAreaId;
+  }
 
   function nearestContinent(): ContinentPlan | null {
     if (continents.length === 0) return null;
@@ -138,8 +160,33 @@ export function createDebugMap(
     return `continent:${c.centerX},${c.centerZ}`;
   }
 
+  function zoneViewport(areaId: number): Viewport | null {
+    const bounds = areaBounds.get(areaId);
+    if (!bounds) return null;
+    const halfSize = Math.max(
+      ZONE_MIN_HALF_SIZE,
+      (Math.max(bounds.maxX - bounds.minX, bounds.maxZ - bounds.minZ) / 2) * ZONE_VIEW_MARGIN,
+    );
+    return { centerX: (bounds.minX + bounds.maxX) / 2, centerZ: (bounds.minZ + bounds.maxZ) / 2, halfSize };
+  }
+
   function activeViewport(): Viewport {
+    if (viewMode === "zone") {
+      const key = `zone:${zoneAreaId}`;
+      const cached = viewportCache.get(key);
+      if (cached) return cached;
+      const viewport = zoneViewport(zoneAreaId);
+      // No zone here (standing at sea) - fall through to the continent framing rather than
+      // showing nothing.
+      if (!viewport) return continentViewport();
+      viewportCache.set(key, viewport);
+      return viewport;
+    }
     if (viewMode === "world") return worldViewport;
+    return continentViewport();
+  }
+
+  function continentViewport(): Viewport {
     const c = nearestContinent();
     if (!c) return worldViewport;
     const key = continentViewKey(c);
@@ -152,7 +199,12 @@ export function createDebugMap(
   }
 
   function activeViewKey(): string {
+    if (viewMode === "zone") return areaBounds.has(zoneAreaId) ? `zone:${zoneAreaId}` : continentViewKey2();
     if (viewMode === "world") return "world";
+    return continentViewKey2();
+  }
+
+  function continentViewKey2(): string {
     const c = nearestContinent();
     return c ? continentViewKey(c) : "world";
   }
@@ -165,7 +217,7 @@ export function createDebugMap(
     return samples[cy * SAMPLE_RESOLUTION + cx].height;
   }
 
-  function renderBaseMap(viewport: Viewport, detailEnabled: boolean): HTMLCanvasElement {
+  function renderBaseMap(viewport: Viewport, detailEnabled: boolean, focusAreaId: number): HTMLCanvasElement {
     const canvas = document.createElement("canvas");
     canvas.width = SAMPLE_RESOLUTION;
     canvas.height = SAMPLE_RESOLUTION;
@@ -235,11 +287,14 @@ export function createDebugMap(
         }
 
         let factor = 1;
+        // Outside the focused zone - dimmed so the zone's own shape reads. Applied before emboss
+        // so relief still shows through in the surroundings rather than flattening them.
+        if (focusAreaId !== -1 && sample.primaryAreaId !== focusAreaId) factor *= ZONE_OUTSIDE_DIM;
         if (detailEnabled) {
           const neighborHeight = gridHeightAt(samples, px - 1, py - 1);
           const diff = sample.height - neighborHeight;
           const shade = Math.max(-1, Math.min(1, diff * EMBOSS_STRENGTH));
-          factor = 1 + shade * EMBOSS_INTENSITY;
+          factor *= 1 + shade * EMBOSS_INTENSITY;
         }
 
         const i = (py * SAMPLE_RESOLUTION + px) * 4;
@@ -258,7 +313,9 @@ export function createDebugMap(
     const key = activeViewKey();
     const cached = baseCanvasCache.get(key);
     if (cached) return cached;
-    const canvas = renderBaseMap(activeViewport(), viewMode === "continent");
+    // Detail is off only in World view, where a pixel spans thousands of world units - see the
+    // note on SLOPE_SAMPLE_STEP_PX. Zone view is closer still than Continent, so it always wants it.
+    const canvas = renderBaseMap(activeViewport(), viewMode !== "world", viewMode === "zone" ? zoneAreaId : -1);
     baseCanvasCache.set(key, canvas);
     return canvas;
   }
@@ -280,8 +337,12 @@ export function createDebugMap(
   }
 
   function updateTabStyles(): void {
-    worldTabButton.style.background = viewMode === "world" ? "rgba(255,255,255,0.35)" : "rgba(255,255,255,0.1)";
-    continentTabButton.style.background = viewMode === "continent" ? "rgba(255,255,255,0.35)" : "rgba(255,255,255,0.1)";
+    const highlight = (button: HTMLButtonElement, active: boolean): void => {
+      button.style.background = active ? "rgba(255,255,255,0.35)" : "rgba(255,255,255,0.1)";
+    };
+    highlight(worldTabButton, viewMode === "world");
+    highlight(continentTabButton, viewMode === "continent");
+    highlight(zoneTabButton, viewMode === "zone");
   }
 
   const redraw = (): void => {
@@ -308,19 +369,22 @@ export function createDebugMap(
     visible = next;
     overlay.style.display = visible ? "flex" : "none";
     if (visible) {
+      if (viewMode === "zone") zoneAreaId = areaIdAtMarker();
       updateTabStyles();
       redraw();
     }
   }
 
-  function setViewMode(mode: "world" | "continent"): void {
+  function setViewMode(mode: ViewMode): void {
     viewMode = mode;
+    if (mode === "zone") zoneAreaId = areaIdAtMarker();
     updateTabStyles();
     if (visible) redraw();
   }
 
   worldTabButton.addEventListener("click", () => setViewMode("world"));
   continentTabButton.addEventListener("click", () => setViewMode("continent"));
+  zoneTabButton.addEventListener("click", () => setViewMode("zone"));
 
   const toggle = (): void => setVisible(!visible);
 

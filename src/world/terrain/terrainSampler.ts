@@ -1,6 +1,6 @@
 import { deriveSeed } from "../rng";
 import { smoothstep, lerp } from "../mathUtils";
-import { createAreaSampler, SEA_LEVEL, type AreaWeight } from "../cells/areaField";
+import { createAreaSampler, SEA_LEVEL, type AreaWeight, type AreaBounds } from "../cells/areaField";
 import { createBedrockSampler } from "../bedrock";
 import type { ContinentPlan } from "../cells/continentLayout";
 import type { BiomeDefinition } from "../biomes/biomeTypes";
@@ -13,6 +13,8 @@ import { RIVER_HILL_SUPPRESSION_INNER, RIVER_HILL_SUPPRESSION_OUTER } from "./ri
 
 export interface TerrainSample {
   height: number;
+  /** The area owning the nearest cell - see AreaSample. */
+  primaryAreaId: number;
   primaryBiome: BiomeDefinition;
   secondaryBiome: BiomeDefinition;
   biomeBlend: number;
@@ -35,6 +37,7 @@ export interface TerrainWorld {
   sampleTerrain: TerrainSampler;
   worldExtent: number;
   continents: ContinentPlan[];
+  areaBounds: Map<number, AreaBounds>;
 }
 
 const OCEAN_FLOOR_DEPTH = -14;
@@ -65,7 +68,7 @@ function compileHeightPipelines(seed: number): Map<string, CompiledPipeline> {
 
 /** Composes continent shape + biome zoning + height noise into one queryable per-position sample. */
 export function createTerrainSampler(seed: number): TerrainWorld {
-  const { sampleArea, worldExtent, continents } = createAreaSampler(seed);
+  const { sampleArea, worldExtent, continents, areaBounds } = createAreaSampler(seed);
   const bedrock = createBedrockSampler(seed);
   const oceanNoise2D = createBaseNoise2D(deriveSeed(seed, OCEAN_SALT));
   const heightPipelines = compileHeightPipelines(seed);
@@ -110,6 +113,7 @@ export function createTerrainSampler(seed: number): TerrainWorld {
 
     return {
       height,
+      primaryAreaId: area.primaryAreaId,
       primaryBiome: area.primaryBiome,
       secondaryBiome: area.secondaryBiome,
       biomeBlend: area.biomeBlend,
@@ -122,5 +126,5 @@ export function createTerrainSampler(seed: number): TerrainWorld {
     };
   }
 
-  return { sampleTerrain, worldExtent, continents };
+  return { sampleTerrain, worldExtent, continents, areaBounds };
 }

@@ -4,6 +4,7 @@ import { createTerrainSampler, type TerrainSampler } from "./terrain/terrainSamp
 import { createOceanPlane } from "./terrain/ocean";
 import { createMaterialLibrary, type MaterialLibrary } from "./materials/materialLibrary";
 import type { ContinentPlan } from "./cells/continentLayout";
+import type { AreaBounds } from "./cells/areaField";
 
 /** Coarse progress for the loading screen. `total` is 0 for phases with no countable steps. */
 export interface WorldLoadProgress {
@@ -19,6 +20,7 @@ export interface World {
   setDrawDistance: (loadRadius: number) => void;
   worldExtent: number;
   continents: ContinentPlan[];
+  areaBounds: Map<number, AreaBounds>;
   materialLibrary: MaterialLibrary;
 }
 
@@ -64,7 +66,7 @@ export async function createWorld(scene: Scene, onProgress?: (progress: WorldLoa
   light.intensity = 0.9;
 
   onProgress?.({ phase: "Shaping continents", completed: 0, total: 0 });
-  const { sampleTerrain, worldExtent, continents } = createTerrainSampler(WORLD_SEED);
+  const { sampleTerrain, worldExtent, continents, areaBounds } = createTerrainSampler(WORLD_SEED);
 
   const materialLibrary = await createMaterialLibrary(scene, WORLD_SEED, light.direction, light.intensity, (done, total) => {
     onProgress?.({ phase: "Baking material textures", completed: done, total });
@@ -92,5 +94,5 @@ export async function createWorld(scene: Scene, onProgress?: (progress: WorldLoa
   const updateChunks = (playerX: number, playerZ: number) => chunkManager.update(playerX, playerZ);
   const setDrawDistance = (loadRadius: number) => chunkManager.setRadii(loadRadius, loadRadius + UNLOAD_HYSTERESIS);
 
-  return { heightAt, sampleTerrain, updateChunks, setDrawDistance, worldExtent, continents, materialLibrary };
+  return { heightAt, sampleTerrain, updateChunks, setDrawDistance, worldExtent, continents, areaBounds, materialLibrary };
 }
