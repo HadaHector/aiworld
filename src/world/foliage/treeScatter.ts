@@ -20,6 +20,7 @@ import {
   TREE_SCALE_MAX,
   TREE_SINK,
   FOLIAGE_SALT,
+  type TreeKind,
 } from "./foliageConfig";
 
 /** What the scatter needs to know about the ground under a candidate. */
@@ -38,6 +39,7 @@ export interface TreePlacement {
   x: number;
   y: number;
   z: number;
+  kind: TreeKind;
   /** Uniform. Multiplies the whole placeholder model. */
   scale: number;
   /** Radians about Y. */
@@ -67,6 +69,7 @@ interface Candidate {
   gz: number;
   index: number;
   densityRoll: number;
+  kindRoll: number;
   scale: number;
   rotation: number;
   tint: number;
@@ -106,6 +109,7 @@ export function createTreeScatter(seed: number): TreeScatter {
         gz,
         index,
         densityRoll: rng(),
+        kindRoll: rng(),
         scale: TREE_SCALE_MIN + rng() * (TREE_SCALE_MAX - TREE_SCALE_MIN),
         rotation: rng() * Math.PI * 2,
         tint: rng(),
@@ -124,6 +128,33 @@ export function createTreeScatter(seed: number): TreeScatter {
     return a.index > b.index;
   }
 
+  /** What the zones here would grow between them before any of the fades below thin it. */
+  function blendedDensity(ground: TreeGround): number {
+    let density = 0;
+    for (const { biome, weight } of ground.sample.areaWeights) {
+      density += biome.treeDensity * weight;
+    }
+    return density;
+  }
+
+  /**
+   * Which shape of tree this one is.
+   *
+   * Weighted by each zone's *contribution to the trees here* rather than by its raw area weight,
+   * which is the difference between a desert bordering a forest getting half palms - it has almost
+   * no trees of its own to contribute - and getting the handful it is actually responsible for.
+   * Either way the border comes out as a mixed fringe rather than a line where one species stops.
+   */
+  function kindFor(ground: TreeGround, roll: number): TreeKind {
+    const weights = ground.sample.areaWeights;
+    let remaining = roll * blendedDensity(ground);
+    for (const { biome, weight } of weights) {
+      remaining -= biome.treeDensity * weight;
+      if (remaining <= 0) return biome.treeKind;
+    }
+    return weights[weights.length - 1].biome.treeKind;
+  }
+
   /**
    * How much of the lattice this ground actually grows, 0-1.
    *
@@ -136,19 +167,17 @@ export function createTreeScatter(seed: number): TreeScatter {
     if (!sample.isLand) return 0;
     if (sample.lakeFactor > TREE_MAX_LAKE_FACTOR) return 0;
 
-    let density = 0;
-    for (const { biome, weight } of sample.areaWeights) {
-      density += biome.treeDensity * weight;
-    }
+    const density = blendedDensity(ground);
     if (density <= 0) return 0;
 
-    density *= smoothstep(TREE_MIN_HEIGHT, TREE_SHORE_HEIGHT, ground.height);
-    density *= 1 - smoothstep(TREE_LINE_START, TREE_LINE_END, ground.height);
-    density *= 1 - smoothstep(TREE_EASY_SLOPE, TREE_MAX_SLOPE, ground.slope);
+    let thinned = density;
+    thinned *= smoothstep(TREE_MIN_HEIGHT, TREE_SHORE_HEIGHT, ground.height);
+    thinned *= 1 - smoothstep(TREE_LINE_START, TREE_LINE_END, ground.height);
+    thinned *= 1 - smoothstep(TREE_EASY_SLOPE, TREE_MAX_SLOPE, ground.slope);
     // roadGap is Infinity where no road is in range, which smoothstep clamps to 1.
-    density *= smoothstep(TREE_ROAD_CLEARANCE, TREE_ROAD_FADE, sample.roadGap);
+    thinned *= smoothstep(TREE_ROAD_CLEARANCE, TREE_ROAD_FADE, sample.roadGap);
     const patch = smoothstep(-0.4, 0.4, patchNoise(x * TREE_PATCH_FREQUENCY, z * TREE_PATCH_FREQUENCY));
-    return density * patch * TREE_PATCH_STRENGTH;
+    return thinned * patch * TREE_PATCH_STRENGTH;
   }
 
   return function scatterTrees(minX, minZ, maxX, maxZ, probe): TreePlacement[] {
@@ -204,6 +233,7 @@ export function createTreeScatter(seed: number): TreeScatter {
             x: candidate.x,
             y: ground.height - TREE_SINK,
             z: candidate.z,
+            kind: kindFor(ground, candidate.kindRoll),
             scale: candidate.scale,
             rotation: candidate.rotation,
             tint: candidate.tint,

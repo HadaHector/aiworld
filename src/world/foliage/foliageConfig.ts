@@ -62,13 +62,13 @@ export const TREE_SINK = 0.4;
 
 export const FOLIAGE_SALT = 801;
 
-// The placeholder model, in world units at scale 1. Total height ~18 - ten times the character,
-// which is the proportion that makes the walk between them feel like a wood rather than a park.
-export const TRUNK_HEIGHT = 8;
-export const TRUNK_DIAMETER_BOTTOM = 1.9;
-export const TRUNK_DIAMETER_TOP = 1.1;
-export const TRUNK_SIDES = 8;
-export const CANOPY_CENTRE_Y = 12.5;
-export const CANOPY_RADIUS = 6.5;
-/** Squashed a little, so it reads as a crown rather than a ball on a stick. */
-export const CANOPY_HEIGHT_RATIO = 0.82;
+/**
+ * Which shape of tree a biome grows. The shapes and their dimensions live in treeModels.ts; this
+ * is here so the biome registry can name one without depending on anything that draws.
+ *
+ * A tree picks its kind from the zone it stands in, weighted by how much of the trees around it
+ * that zone is responsible for - so a border between a pine zone and a broadleaf one comes out as
+ * a mixed fringe rather than a line where one species stops.
+ */
+export const TREE_KINDS = ["broadleaf", "pine", "palm"] as const;
+export type TreeKind = (typeof TREE_KINDS)[number];

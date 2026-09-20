@@ -208,6 +208,18 @@ Not currently a problem, and the fixes are known and independent: a billboard or
 past some distance, and splitting the field into a few buckets by direction so the frustum can
 reject whole groups.
 
+### Foliage undersides are lit by a constant, not by the sky
+
+The scene has one hemispheric light with no ground colour, so a downward-facing face receives
+nothing. Terrain never notices - it faces up - but a tree is full of surfaces that do not, and a
+palm is almost entirely made of them. `treeModels.ts` fakes the missing bounce with a flat
+emissive term (`FILL`), which is right for a placeholder and wrong in general: it does not vary
+with the sky, it brightens a tree in shadow as much as one in sun, and on a canopy it has to use a
+fixed colour from the palette because the per-instance tint is applied to diffuse only.
+
+The real fix is a ground colour on the scene light, or a second fill light, which relights the
+whole world and so belongs with whatever lighting pass comes next rather than with foliage.
+
 ### The medium and small foliage levels do not exist
 
 Bushes and grass are named in `foliageConfig.ts` and nothing else. They are deliberately not the
