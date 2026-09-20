@@ -1,6 +1,7 @@
 import { createVoronoiField, type VoronoiField } from "./voronoiField";
 import { computeCellBounds, generateCellDiagram, type CellPoint } from "./cellGrid";
 import { createRiverField } from "./riverField";
+import { createCentrelineShaper } from "./riverCentreline";
 import { planWorld, type ContinentPlan } from "./continentLayout";
 import { pickStartCell, growLandmass } from "./regionGrowth";
 import { partitionIntoAreas, assignAreaBiomes } from "./areaAssignment";
@@ -181,7 +182,7 @@ function resolveBoundaryHillStyle(
 export function createAreaSampler(seed: number): AreaWorld {
   const layout = planWorld(seed);
   const bounds = computeCellBounds(WORLD_CENTER_X, WORLD_CENTER_Z, layout.worldExtent, CELL_BOUNDS_MARGIN);
-  const { points, adjacency, seamMidpoint } = generateCellDiagram(seed, bounds, CELL_SPACING);
+  const { points, adjacency, seamBetween } = generateCellDiagram(seed, bounds, CELL_SPACING);
 
   const landCells = new Set<number>();
   const cellToAreaId = new Map<number, number>();
@@ -189,6 +190,7 @@ export function createAreaSampler(seed: number): AreaWorld {
   const lakeCells = new Set<number>();
   const usedRiverCells = new Set<number>();
   const riverPolylines: CellPoint[][] = [];
+  const shapeCentreline = createCentrelineShaper(seed);
   let areaIdOffset = 0;
 
   for (const continent of layout.continents) {
@@ -235,10 +237,45 @@ export function createAreaSampler(seed: number): AreaWorld {
       // river starts at its lake, trunk or coastline instead of a cell inland of it.
       const chain = mouthLink === -1 ? path : [mouthLink, ...path];
       const centreline: CellPoint[] = [];
+      // How far the river can wander sideways here without ceasing to run between the two cells it
+      // is following. Half the shared border's own length is the right measure: the centreline sits
+      // at that border's midpoint, so that is exactly the distance to the vertex where a third cell
+      // takes over. Since area borders are cell borders, staying inside it is also what stops a
+      // meander from swinging across a zone boundary.
+      const rooms: number[] = [];
       for (let i = 0; i < chain.length - 1; i++) {
-        centreline.push(seamMidpoint(chain[i], chain[i + 1]));
+        const seam = seamBetween(chain[i], chain[i + 1]);
+        centreline.push(seam.midpoint);
+        rooms.push(seam.halfLength);
       }
-      if (centreline.length >= 2) riverPolylines.push(centreline);
+      if (centreline.length >= 2) {
+        // Sites of the cells the path runs through, and of everything bordering them. Half the
+        // difference between the two nearest is the distance to the edge of the path's own
+        // territory, which is as far as a meander may push without leaving it.
+        const ownSites = chain.map((cell) => points[cell]);
+        const chainSet = new Set(chain);
+        const otherSites: CellPoint[] = [];
+        const seen = new Set<number>();
+        for (const cell of chain) {
+          for (const neighbour of adjacency[cell]) {
+            if (chainSet.has(neighbour) || seen.has(neighbour)) continue;
+            seen.add(neighbour);
+            otherSites.push(points[neighbour]);
+          }
+        }
+        const nearest = (sites: CellPoint[], p: CellPoint): number => {
+          let best = Infinity;
+          for (const site of sites) {
+            const d = (site.x - p.x) ** 2 + (site.z - p.z) ** 2;
+            if (d < best) best = d;
+          }
+          return Math.sqrt(best);
+        };
+        const clearanceAt = (p: CellPoint): number =>
+          otherSites.length === 0 ? Infinity : Math.max(0, (nearest(otherSites, p) - nearest(ownSites, p)) / 2);
+
+        riverPolylines.push(shapeCentreline(centreline, rooms, clearanceAt, riverPolylines.length));
+      }
     }
   }
 

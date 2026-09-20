@@ -68,6 +68,57 @@ export const RIVER_QUERY_RADIUS =
 export const RIVER_HILL_SUPPRESSION_INNER = 80;
 export const RIVER_HILL_SUPPRESSION_OUTER = RIVER_QUERY_RADIUS;
 
+// --- Meanders (riverCentreline.ts) ---------------------------------------------------------
+// The raw centreline is a handful of cell-border midpoints hundreds of units apart, so a river
+// reads as long straight runs meeting at angles. These shape it into something that wanders.
+
+// Arc step the raw chain is resampled at before being displaced. Sets how finely the wave can be
+// followed; below the detail wavelength by enough to resolve it.
+export const RIVER_MEANDER_SAMPLE_STEP = 40;
+
+// Ceiling on the sideways displacement. The ACTUAL amplitude is the smaller of this and a fraction
+// of the local corridor - see RIVER_MEANDER_ROOM_FRACTION - so this only binds where cells are
+// unusually large.
+export const RIVER_MEANDER_MAX_AMPLITUDE = 300;
+
+// Fraction of the local corridor half-width (half the distance between the two cells whose border
+// the river is following) the meander is allowed to use. This is the guard on zone boundaries:
+// area borders ARE cell borders, so a meander that stays well inside the corridor between two
+// cells cannot swing across into a neighbouring biome, however large the wave gets elsewhere.
+export const RIVER_MEANDER_ROOM_FRACTION = 1.0;
+
+// Fraction of the MEASURED clearance - the distance from a point on the raw line to the edge of the
+// cells the river's path runs through - the meander may use. This is the bound that actually holds
+// the river inside its own corridor, and therefore inside its own zones; the two above are
+// per-vertex estimates that only bind where a cell is unusually large. Measured, raising it much
+// past this starts putting centreline points into zones the straight river never touched.
+export const RIVER_MEANDER_CLEARANCE_FRACTION = 0.85;
+
+// Displacing a line sideways makes it cross itself wherever the offset exceeds the local radius of
+// curvature - the standard offset-curve cusp, and at a sharp corner of the generated path the
+// radius is small. Measured, that produced 1-11 crossings per seed, all of them tiny loops of
+// 10-600 units of arc. Bounding the amplitude by curvature would trade real meanders away to avoid
+// them; excising the loops afterwards costs nothing and is exact, so riverCentreline.ts does that
+// instead and no constant is needed here.
+
+// Wavelengths in ARC LENGTH along the river, not in world distance - that is what makes the wave
+// travel along the channel rather than being a noise field stamped over it. Two octaves: a long
+// swing plus a smaller wobble on top.
+export const RIVER_MEANDER_WAVELENGTH = 550;
+export const RIVER_MEANDER_DETAIL_WAVELENGTH = 210;
+export const RIVER_MEANDER_DETAIL_RATIO = 0.35;
+
+// Distance over which the displacement fades in from each end. The mouth point sits exactly on the
+// lake, trunk or coastline the river drains into, and must not be moved off it.
+export const RIVER_MEANDER_END_TAPER = 300;
+
+// Chaikin passes, then the deviation below which a point is dropped again. The rounding is what
+// removes the original chain's corners; the simplification is purely a cost control, and at a
+// couple of units it is invisible against a channel over a hundred units wide.
+export const RIVER_SMOOTHING_PASSES = 2;
+export const RIVER_SIMPLIFY_TOLERANCE = 1.5;
+
 // Continues cells/config.ts's salt sequence (601-610, 613-617) and boundaryHillsConfig.ts's 611-612 -
 // must not collide with any of those, or the "independent" noise fields become identical.
 export const RIVER_EDGE_NOISE_SALT = 618;
+export const RIVER_MEANDER_SALT = 619;

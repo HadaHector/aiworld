@@ -7,6 +7,12 @@ export interface CellPoint {
   z: number;
 }
 
+/** The Voronoi edge shared by two adjacent cells. */
+export interface CellSeam {
+  midpoint: CellPoint;
+  halfLength: number;
+}
+
 export interface CellBounds {
   xMin: number;
   zMin: number;
@@ -18,15 +24,18 @@ export interface CellDiagram {
   points: CellPoint[];
   adjacency: number[][];
   /**
-   * Midpoint of the Voronoi edge two adjacent cells share - the point on the ground exactly between
-   * them, which is where a river running along their border actually is.
+   * The Voronoi edge two adjacent cells share: its midpoint - the point on the ground exactly
+   * between them, which is where a river running along their border actually is - and half its
+   * length, which is how far anything following that border can move along it before reaching the
+   * vertex where a third cell takes over.
    *
-   * Deliberately NOT the midpoint of the two cells' sites: that is a point on the same bisector
-   * line, but the shared edge is only a bounded segment of that line and does not have to contain
-   * it. Falls back to the site midpoint when the shared edge cannot be recovered (cells clipped by
-   * the world bounds share their edge with the bounding box rather than with each other).
+   * The midpoint is deliberately NOT the midpoint of the two cells' sites: that is a point on the
+   * same bisector line, but the shared edge is only a bounded segment of that line and does not
+   * have to contain it. Falls back to the site midpoint, and to a conservative quarter of the site
+   * distance, when the shared edge cannot be recovered (cells clipped by the world bounds share
+   * their edge with the bounding box rather than with each other).
    */
-  seamMidpoint(a: number, b: number): CellPoint;
+  seamBetween(a: number, b: number): CellSeam;
 }
 
 export function computeCellBounds(centerX: number, centerZ: number, terrainSize: number, margin: number): CellBounds {
@@ -89,7 +98,7 @@ function vertexKey(x: number, z: number): string {
   return `${Math.round(x * 1e6)},${Math.round(z * 1e6)}`;
 }
 
-function buildSeamMidpoints(points: CellPoint[], bounds: CellBounds): (a: number, b: number) => CellPoint {
+function buildSeams(points: CellPoint[], bounds: CellBounds): (a: number, b: number) => CellSeam {
   const delaunay = Delaunay.from(
     points,
     (p) => p.x,
@@ -111,16 +120,23 @@ function buildSeamMidpoints(points: CellPoint[], bounds: CellBounds): (a: number
     return vertices;
   }
 
-  return function seamMidpoint(a: number, b: number): CellPoint {
+  return function seamBetween(a: number, b: number): CellSeam {
     const shared: CellPoint[] = [];
     const polyB = polygonOf(b);
     for (const [key, vertex] of polygonOf(a)) {
       if (polyB.has(key)) shared.push(vertex);
     }
     if (shared.length !== 2) {
-      return { x: (points[a].x + points[b].x) / 2, z: (points[a].z + points[b].z) / 2 };
+      const siteDistance = Math.hypot(points[a].x - points[b].x, points[a].z - points[b].z);
+      return {
+        midpoint: { x: (points[a].x + points[b].x) / 2, z: (points[a].z + points[b].z) / 2 },
+        halfLength: siteDistance / 4,
+      };
     }
-    return { x: (shared[0].x + shared[1].x) / 2, z: (shared[0].z + shared[1].z) / 2 };
+    return {
+      midpoint: { x: (shared[0].x + shared[1].x) / 2, z: (shared[0].z + shared[1].z) / 2 },
+      halfLength: Math.hypot(shared[0].x - shared[1].x, shared[0].z - shared[1].z) / 2,
+    };
   };
 }
 
@@ -139,7 +155,7 @@ export function generateCellDiagram(seed: number, bounds: CellBounds, spacing: n
   const jittered = generateJitteredGridPoints(seed, bounds, spacing);
   const relaxed = relaxPoints(jittered, bounds, LLOYD_RELAX_ITERATIONS);
   const adjacency = buildAdjacency(relaxed);
-  const seamMidpoint = buildSeamMidpoints(relaxed, bounds);
+  const seamBetween = buildSeams(relaxed, bounds);
 
-  return { points: relaxed, adjacency, seamMidpoint };
+  return { points: relaxed, adjacency, seamBetween };
 }
