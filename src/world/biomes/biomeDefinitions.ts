@@ -39,6 +39,7 @@ const plains: BiomeDefinition = {
   spawnWeight: 2,
   lakeChance: 0.05,
   baseMaterialId: "grass",
+  roadMaterialId: "track",
 };
 
 const forest: BiomeDefinition = {
@@ -50,6 +51,7 @@ const forest: BiomeDefinition = {
   spawnWeight: 2,
   lakeChance: 0.04,
   baseMaterialId: "grass",
+  roadMaterialId: "track",
 };
 
 const hills: BiomeDefinition = {
@@ -64,6 +66,7 @@ const hills: BiomeDefinition = {
   spawnWeight: 2,
   lakeChance: 0.03,
   baseMaterialId: "grass",
+  roadMaterialId: "track",
 };
 
 const desert: BiomeDefinition = {
@@ -75,6 +78,7 @@ const desert: BiomeDefinition = {
   spawnWeight: 2,
   lakeChance: 0.03, // oases
   baseMaterialId: "sand",
+  roadMaterialId: "trackSand",
 };
 
 const mountains: BiomeDefinition = {
@@ -94,6 +98,7 @@ const mountains: BiomeDefinition = {
   spawnWeight: 1,
   lakeChance: 0.01, // rare tarns/crater lakes
   baseMaterialId: "rock",
+  roadMaterialId: "trackStone",
 };
 
 const tundra: BiomeDefinition = {
@@ -105,6 +110,7 @@ const tundra: BiomeDefinition = {
   spawnWeight: 1,
   lakeChance: 0.05,
   baseMaterialId: "tundraGround",
+  roadMaterialId: "trackStone",
 };
 
 /**
@@ -150,6 +156,7 @@ const canyon: BiomeDefinition = {
   spawnWeight: 0.5,
   lakeChance: 0.02,
   baseMaterialId: "rock",
+  roadMaterialId: "trackSand",
 };
 
 /**
@@ -174,6 +181,7 @@ const swamp: BiomeDefinition = {
   spawnWeight: 1.5,
   lakeChance: 0.15,
   baseMaterialId: "mud",
+  roadMaterialId: "track",
 };
 
 export const BIOME_REGISTRY: BiomeDefinition[] = [plains, forest, hills, desert, mountains, tundra, canyon, swamp];

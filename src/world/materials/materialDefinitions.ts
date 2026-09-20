@@ -727,6 +727,21 @@ const trackMaterial: MaterialDef = {
   },
 };
 
+/** Compacted sand, for a track across desert or canyon. Darker and greyer than the sand around it,
+ *  which is the only way a track reads at all on ground that is already sand. */
+const trackSandMaterial: MaterialDef = {
+  id: "trackSand",
+  name: "Sand Track",
+  texture: twoToneTexture(new Color3(0.52, 0.44, 0.31), new Color3(0.62, 0.55, 0.41), 0.82, 0.9),
+};
+
+/** Grey gravel, for a track over rock or frozen ground. */
+const trackStoneMaterial: MaterialDef = {
+  id: "trackStone",
+  name: "Gravel Track",
+  texture: twoToneTexture(new Color3(0.38, 0.37, 0.35), new Color3(0.5, 0.49, 0.46), 0.85, 1.1),
+};
+
 /** Every material a biome can name as its `baseMaterialId` (biomeTypes.ts), keyed by MaterialDef
  *  id. Overlay-only materials (snow) live here too since materialLibrary.ts dedupes by id either way. */
 export const MATERIAL_REGISTRY: Record<string, MaterialDef> = {
@@ -737,6 +752,8 @@ export const MATERIAL_REGISTRY: Record<string, MaterialDef> = {
   tundraGround: tundraGroundMaterial,
   mud: mudMaterial,
   track: trackMaterial,
+  trackSand: trackSandMaterial,
+  trackStone: trackStoneMaterial,
 };
 
 export const DEFAULT_MATERIAL: MaterialDef = grassMaterial;
@@ -1188,11 +1205,16 @@ const swampGrassTuftRidgeLayer: MaterialLayer = {
 /**
  * The road surface.
  *
- * Universal rather than per-biome, and that is a slot-budget decision as much as a design one. A
- * two-way zone border's full material union was measured at 11 of the 12 slots, so one road
- * material shared by every biome lands at exactly 12 and fits; a road layer per biome would want
- * 13 and overflow. The cost is that a desert track and a forest track are the same surface, which
- * is worth revisiting if the slot capacity is ever raised.
+ * One layer, reaching everywhere, but what it paints is the zone's own `roadMaterialId` - so the
+ * shape of a road is universal and its surface is local. It is kept out of UNIVERSAL_MATERIAL_LAYERS
+ * for exactly that reason: a universal layer resolves to one material for the whole world, and this
+ * one cannot.
+ *
+ * Sharing matters. The roster at a point holds one entry per distinct material, so two zones that
+ * name the same track cost one slot between them at their border and two zones that name different
+ * ones cost two. Measured over every pair of biomes, sharing three surfaces rather than eight makes
+ * no difference to the worst case (13 slots either way, at hills+desert) but it does to how often
+ * the worst case is reached.
  *
  * The surface is its own material rather than a reused one - see trackMaterial for why mud, the
  * obvious candidate, could not be it.
@@ -1203,8 +1225,9 @@ const swampGrassTuftRidgeLayer: MaterialLayer = {
  * of whatever the surrounding biome is rather than as a road three times too wide. Weight 1 out to
  * the running width, gone a couple of units past it.
  */
-const roadLayer: MaterialLayer = {
+export const ROAD_MATERIAL_LAYER: MaterialLayer = {
   id: "road",
+  // The fallback, for a biome that names a material the registry does not have.
   material: trackMaterial,
   weight: {
     // Frequency 0.05 is a ~20-unit wavelength. It has to stay well clear of the terrain's own
@@ -1220,10 +1243,16 @@ const roadLayer: MaterialLayer = {
       { output: "edgeRaw", op: "sample", noise: "roadEdge" },
       { output: "edge", op: "scale", input: "edgeRaw", factor: 1.6 },
       { output: "gap", op: "add", a: "roadGap", b: "edge" },
-      // Fading over three and a half units rather than two, for the same reason the shoulder has a
-      // floor: a transition narrower than the 2.5-unit vertex spacing cannot be blended smoothly by
-      // a per-vertex weight, it can only be stepped.
-      { output: "raw", op: "remap", input: "gap", inMin: 7.5, inMax: 4, outMin: 0, outMax: 1 },
+      // Five units of fade, which is two terrain vertices. This weight is evaluated per vertex and
+      // interpolated across the triangle between, so a transition narrower than a couple of vertices
+      // cannot be blended - it can only be stepped.
+      //
+      // Not to be confused with the stepping visible where a road crosses tundra: that edge is the
+      // SNOWLINE, not this. Tundra's snow band runs from height 7 to 9.5 and the road cut drops the
+      // ground straight through it, so the snow layer switches over a couple of units of height and
+      // steps at its own vertex resolution. Widening this fade does not touch it - measured, the
+      // staircase is unchanged either way.
+      { output: "raw", op: "remap", input: "gap", inMin: 9, inMax: 4, outMin: 0, outMax: 1 },
       { output: "surface", op: "clamp", input: "raw", min: 0, max: 1 },
       // Weighted well above 1 so the surface actually reads as a road. Layer weights are conserved
       // - they are scaled to sum to 1 and whatever is left over goes to the biome base - so a
@@ -1237,7 +1266,7 @@ const roadLayer: MaterialLayer = {
   },
 };
 
-export const UNIVERSAL_MATERIAL_LAYERS: MaterialLayer[] = [rockLayer, rockAltLayer, shoreLayer, roadLayer];
+export const UNIVERSAL_MATERIAL_LAYERS: MaterialLayer[] = [rockLayer, rockAltLayer, shoreLayer];
 
 /** Layers checked only on faces whose own biome lists them, keyed by BiomeDefinition.id. This is
  *  what keeps per-face cost flat as more biomes grow their own layers: resolving a face only ever

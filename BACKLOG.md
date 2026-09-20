@@ -112,6 +112,21 @@ Note the transferable-`ArrayBuffer` constraint that applies to the texture pool 
 
 ## Known artifacts
 
+### A road cut steps other layers that key on height or curvature
+
+Where a road crosses tundra its edge is a hard staircase, and it is not the road's edge: it is the
+SNOWLINE. Tundra's snow layer remaps height 7 to 9.5, the road here sits at 7.5, and the cut drops
+the ground straight through that band - so snow switches over a couple of units of height and steps
+at the terrain's own 2.5-unit vertex resolution. Widening the road's material fade does not touch
+it; measured, the staircase is unchanged at 3.5 units of fade and at 5.
+
+The same thing happens more mildly against the pale grass band in plains, and will happen to any
+layer with a narrow threshold in height or reliefCurvature - a road is a cut, so it is both lower
+and a local basin, and it crosses those thresholds by construction.
+
+The general fix is wider thresholds on the layers themselves, which is a change to their look, not
+to roads. Worth doing together with the snowline rather than piecemeal.
+
 ### Lake shores are still a binary gate
 
 The last remaining discontinuity of a class that has been fixed everywhere else (area borders in
@@ -124,6 +139,17 @@ units, height -10 -> +64.
 
 The fix is the same move used for the others: derive the factor from a distance that is a minimum
 over a fixed subset, so it varies continuously even where the winning cell changes.
+
+### Two of 28 biome pairs need a 13th material slot
+
+Per-zone road surfaces push the worst two-area roster from 12 to 13 - measured, 2 of 28 biome pairs,
+worst at hills+desert. A three-area junction now needs up to 17 against 15 before, overflowing in 31
+of 56 combinations, though three-area junctions already overflowed.
+
+This is survivable because overflow now drops the LIGHTEST materials rather than the highest-numbered
+ones, so what is lost at a border is something contributing almost nothing. Raising the capacity is
+not a one-line change: slots are packed into vec4 vertex attributes, so 12 goes to 16, which means
+eight attributes and varyings instead of six and 32 texture fetches instead of 24.
 
 ### Material slot ordering costs ~0.25% of border pairs
 

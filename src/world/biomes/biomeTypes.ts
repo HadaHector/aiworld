@@ -27,4 +27,9 @@ export interface BiomeDefinition {
   /** MaterialDef id (materials/materialDefinitions.ts's MATERIAL_REGISTRY) this biome's ground
    *  texture falls back to wherever no overlay layer (rock/sand/snow) outweighs it. */
   baseMaterialId: string;
+  /** The surface a road through this zone is made of, as a MATERIAL_REGISTRY key. Roads are graded
+   *  into the terrain and painted by one layer that reaches everywhere, but what that layer paints
+   *  is the zone's own choice - a track through a desert is not a track through a forest. Biomes
+   *  may share one, and sharing is what keeps the material roster small at a border between them. */
+  roadMaterialId: string;
 }

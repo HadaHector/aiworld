@@ -6,6 +6,7 @@ import {
   DEFAULT_MATERIAL,
   MATERIAL_REGISTRY,
   PER_BIOME_MATERIAL_LAYERS,
+  ROAD_MATERIAL_LAYER,
   UNIVERSAL_MATERIAL_LAYERS,
   type MaterialDef,
   type MaterialLayer,
@@ -264,6 +265,14 @@ export async function createMaterialLibrary(
   for (const layer of UNIVERSAL_MATERIAL_LAYERS) {
     ensureMaterial(layer.material);
   }
+  ensureMaterial(ROAD_MATERIAL_LAYER.material);
+  // One entry per biome, exactly like biomeBaseIndex: the road layer is shared, the surface it
+  // paints is the zone's own.
+  const biomeRoadIndex = new Map<string, number>();
+  for (const biome of BIOME_REGISTRY) {
+    const def = MATERIAL_REGISTRY[biome.roadMaterialId] ?? ROAD_MATERIAL_LAYER.material;
+    biomeRoadIndex.set(biome.id, ensureMaterial(def));
+  }
   for (const layers of Object.values(PER_BIOME_MATERIAL_LAYERS)) {
     for (const layer of layers) ensureMaterial(layer.material);
   }
@@ -348,6 +357,7 @@ export async function createMaterialLibrary(
   // universal list plus THIS biome's own list, so per-vertex cost stays flat as more biomes grow
   // their own layers, instead of scaling with the total layer count across every biome combined.
   const compiledUniversalLayers = compileLayers(UNIVERSAL_MATERIAL_LAYERS);
+  const compiledRoadLayer = compileLayers([ROAD_MATERIAL_LAYER])[0];
   const compiledPerBiomeLayers = new Map<string, CompiledLayer[]>();
   for (const [biomeId, layers] of Object.entries(PER_BIOME_MATERIAL_LAYERS)) {
     compiledPerBiomeLayers.set(biomeId, compileLayers(layers));
@@ -359,7 +369,8 @@ export async function createMaterialLibrary(
   // three-area junction at most 14 - the rare overflow drops the weakest area's layers, never a
   // base (see buildMaterialBlend's emission order).
   const maxPerBiomeLayerCount = Math.max(0, ...Object.values(PER_BIOME_MATERIAL_LAYERS).map((layers) => layers.length));
-  const singleBiomeSlotCount = 1 + compiledUniversalLayers.length + maxPerBiomeLayerCount;
+  // +1 for the road, which is one material per biome and so one slot in a single-biome roster.
+  const singleBiomeSlotCount = 1 + compiledUniversalLayers.length + 1 + maxPerBiomeLayerCount;
   if (singleBiomeSlotCount > MATERIAL_SLOT_CAPACITY) {
     throw new Error(`MATERIAL_SLOT_CAPACITY (${MATERIAL_SLOT_CAPACITY}) is too small for a single biome needing ${singleBiomeSlotCount} slots - raise it`);
   }
@@ -424,11 +435,15 @@ export async function createMaterialLibrary(
     // swapping their blocks is very nearly a no-op. The shift this replaces was not.
     const orderedAreas = [...areaWeights].sort((a, b) => b.weight - a.weight || a.areaId - b.areaId);
 
+    // The road's weight is the same everywhere - the layer is one pipeline over roadGap - so it is
+    // evaluated once here and only its MATERIAL varies per area below.
+    const roadWeight = Math.max(0, compiledRoadLayer.evaluate(worldX, worldZ, context));
+
     const perAreaOverlays: { layers: CompiledLayer[]; weights: number[]; scale: number; share: number; biomeId: string }[] = [];
     for (const area of orderedAreas) {
       const layers = compiledPerBiomeLayers.get(area.biome.id) ?? [];
       const layerWeights: number[] = [];
-      let overlaySum = universalSum;
+      let overlaySum = universalSum + roadWeight;
       for (const layer of layers) {
         const weight = Math.max(0, layer.evaluate(worldX, worldZ, context));
         layerWeights.push(weight);
@@ -447,9 +462,14 @@ export async function createMaterialLibrary(
       add(compiledUniversalLayers[i].materialIndex, weight);
     }
 
-    // Then one contiguous block per area: its base, then its own layers.
+    // Then one contiguous block per area: its road surface, its base, then its own layers. The road
+    // comes first in the block because it is the one thing in it that is a made surface rather than
+    // something that grew, and so the one that should survive a roster overflow.
     for (const area of perAreaOverlays) {
-      let overlaySum = universalSum;
+      if (roadWeight > 0) {
+        add(biomeRoadIndex.get(area.biomeId) ?? defaultIndex, roadWeight * area.scale * area.share);
+      }
+      let overlaySum = universalSum + roadWeight;
       for (const weight of area.weights) overlaySum += weight;
       add(biomeBaseIndex.get(area.biomeId) ?? defaultIndex, Math.max(0, 1 - overlaySum * area.scale) * area.share);
       for (let i = 0; i < area.layers.length; i++) {
@@ -464,7 +484,26 @@ export async function createMaterialLibrary(
     // biome's base and layers in one block, so that swap misaligned every slot after it (blocks
     // differ in length), rendering ~25-30% of the blend as the wrong material in a dashed line
     // right down the border.
-    const emitted = order.slice().sort((a, b) => a - b);
+    // On overflow, drop the LIGHTEST materials rather than the highest-numbered ones.
+    //
+    // This used to sort the whole roster by material index and keep the first twelve, which meant
+    // an overflow discarded whichever materials happened to have been registered last - a property
+    // of declaration order in materialDefinitions, with no relation to whether the material was
+    // doing anything at that point. A zone naming its own road surface made overflow reachable at
+    // an ordinary two-way border (measured: 2 of 28 biome pairs need a 13th slot), so what gets
+    // dropped stopped being hypothetical.
+    //
+    // Selection by weight first, and only then the sort by material index that the slot layout
+    // depends on - two vertices seeing the same materials must still agree on which slot holds
+    // which, and that is what the index sort is for.
+    let kept = order;
+    if (kept.length > MATERIAL_SLOT_CAPACITY) {
+      kept = order
+        .slice()
+        .sort((a, b) => (weightByMaterial.get(b) ?? 0) - (weightByMaterial.get(a) ?? 0) || a - b)
+        .slice(0, MATERIAL_SLOT_CAPACITY);
+    }
+    const emitted = kept.slice().sort((a, b) => a - b);
     const slotCount = Math.min(emitted.length, MATERIAL_SLOT_CAPACITY);
     for (let slot = 0; slot < slotCount; slot++) {
       indices[slot] = emitted[slot];
@@ -485,6 +524,11 @@ export async function createMaterialLibrary(
         bestWeight = weight;
         bestIndex = layer.materialIndex;
       }
+    }
+    const roadWeight = compiledRoadLayer.evaluate(worldX, worldZ, context);
+    if (roadWeight > bestWeight) {
+      bestWeight = roadWeight;
+      bestIndex = biomeRoadIndex.get(biomeId) ?? defaultIndex;
     }
     if (applicableLayers) {
       for (const layer of applicableLayers) {
