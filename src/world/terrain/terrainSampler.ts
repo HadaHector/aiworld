@@ -9,6 +9,7 @@ import { createBaseNoise2D } from "./noise";
 import { compilePipeline, type CompiledPipeline } from "./pipeline/pipelineCompiler";
 import { createBoundaryHillEvaluator } from "./boundaryHills/boundaryHillsEvaluator";
 import { createRiverEvaluator } from "./rivers/riverEvaluator";
+import { RIVER_HILL_SUPPRESSION_INNER, RIVER_HILL_SUPPRESSION_OUTER } from "./rivers/riverConfig";
 
 export interface TerrainSample {
   height: number;
@@ -20,11 +21,11 @@ export interface TerrainSample {
   isLand: boolean;
   landmass: number;
   lakeFactor: number;
+  /** Only "close enough for a river valley to reach here" - the carve fades to nothing before this
+   *  goes false, so it is no longer a switch anything visible depends on. */
   isRiverEdge: boolean;
-  /** Distance to the river's own carve envelope - Infinity wherever isRiverEdge is false. Unlike
-   *  isRiverEdge (flat true/false across the entire, possibly ~100-unit-wide, river corridor -
-   *  see riverConfig.ts's RIVER_WIDTH_MOUTH), this is the continuous signal to use for anything
-   *  that should hug the actual waterline, not the whole channel. */
+  /** True distance to the nearest river centreline, Infinity past riverField's search radius.
+   *  Continuous everywhere, so it is the signal to use for anything that has to vary smoothly. */
   riverGap: number;
 }
 
@@ -82,7 +83,11 @@ export function createTerrainSampler(seed: number): TerrainWorld {
     for (const { biome, weight } of area.areaWeights) {
       blendedDetail += heightPipelines.get(biome.id)!(worldX, worldZ) * weight;
     }
-    const boundaryHill = evaluateBoundaryHill(area.boundaryHillStyle, area.areaBorderGap, worldX, worldZ);
+    // Faded out near a river rather than switched off by one - see RIVER_HILL_SUPPRESSION_INNER.
+    // riverGap is Infinity where there is no river within reach, which smoothstep clamps to 1.
+    const riverHillFade = smoothstep(RIVER_HILL_SUPPRESSION_INNER, RIVER_HILL_SUPPRESSION_OUTER, area.riverGap);
+    const boundaryHill =
+      evaluateBoundaryHill(area.boundaryHillStyle, area.areaBorderGap, worldX, worldZ) * riverHillFade;
 
     const bedrockHeight = bedrock(worldX, worldZ);
     const landHeightFloored = Math.max(bedrockHeight + blendedDetail + boundaryHill, MIN_LAND_HEIGHT);

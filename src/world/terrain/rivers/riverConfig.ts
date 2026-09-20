@@ -15,16 +15,19 @@ export const RIVER_BED_HEIGHT_MOUTH = -8;
 export const RIVER_BED_HEIGHT_SOURCE = -3;
 
 // Half-width of the FLAT part of the bed - the channel proper. Widest at the mouth, narrowing
-// toward the source; areaField.ts precomputes a 0 (mouth) to 1 (far end) taper per river edge from
-// the river's own path length, and the evaluator lerps between these with it.
+// toward the source; the taper is arc-length position along the river's own centreline, so it runs
+// evenly from 0 at the mouth to 1 at the source rather than stepping once per cell.
 //
-// The visible waterline sits further out than this, where the bank climbs back up through 0: with
-// a mouth bed at -8 and RIVER_BANK_SLOPE, that is another ~32 units, so the water is ~165 units
-// across at the mouth. That is what has to stay wide enough to register at Continent-view debug-map
-// resolution (~60 world units/pixel, measured), which is the constraint the old single width
-// constant was carrying alone.
-export const RIVER_BED_HALF_WIDTH_MOUTH = 50;
-export const RIVER_BED_HALF_WIDTH_SOURCE = 15;
+// These are TRUE distances. They used to be compared against a cell-pair gap (|PB| - |PA|), which
+// is about twice the perpendicular distance to the border between those two cells, so every width
+// constant here was silently rendering at half its stated value.
+//
+// The visible waterline sits further out than the flat bed, where the bank climbs back up through
+// 0: with a mouth bed at -8 and RIVER_BANK_SLOPE, that is another 32 units, so the water is ~124
+// units across at the mouth. That is what has to stay wide enough to register at Continent-view
+// debug-map resolution (~60 world units/pixel, measured).
+export const RIVER_BED_HALF_WIDTH_MOUTH = 30;
+export const RIVER_BED_HALF_WIDTH_SOURCE = 10;
 
 // Gradient of the bank climbing out of the channel, in height units per unit of distance. This is
 // the ONLY thing that sets how steep a riverbank is, and it is a gradient rather than a height
@@ -34,11 +37,9 @@ export const RIVER_BED_HALF_WIDTH_SOURCE = 15;
 export const RIVER_BANK_SLOPE = 0.25;
 
 // How far past the flat bed the valley is allowed to keep cutting. The bank normally meets the
-// terrain well inside this, and then nothing happens out here at all - the reach exists only as a
-// guarantee that the carve has reached zero before isRiverEdge itself switches off (which it does
-// abruptly, at the edge of the two cells sharing this river's seam). Without it, terrain high
-// enough that the bank had not yet caught up would drop a step at that switch.
-export const RIVER_VALLEY_REACH = 300;
+// terrain well inside this and nothing happens out here at all; the reach caps how wide a valley
+// very high ground can open up, and bounds the field's own search radius.
+export const RIVER_VALLEY_REACH = 200;
 
 // Fraction of the reach at which that forced fade-out begins. Inside it the profile is used as-is.
 export const RIVER_VALLEY_FADE_START = 0.6;
@@ -50,6 +51,22 @@ export const RIVER_VALLEY_FADE_START = 0.6;
 // old bell curve (where it was 0.01, about one world unit) and is scaled up to match.
 export const RIVER_EDGE_NOISE_FREQUENCY = 1 / 25;
 export const RIVER_EDGE_NOISE_AMPLITUDE_RATIO = 0.25;
+
+// How far riverField.ts has to look for a centreline. Past this the carve is zero by construction,
+// so the answer cannot matter - but it must cover the widest possible valley INCLUDING a jitter
+// that pulls the bank outward, or a point just outside would be reported as having no river at all
+// while still being inside its fade. Derived, never tuned independently.
+export const RIVER_QUERY_RADIUS =
+  RIVER_BED_HALF_WIDTH_MOUTH * (1 + RIVER_EDGE_NOISE_AMPLITUDE_RATIO) + RIVER_VALLEY_REACH;
+
+// Boundary hills are suppressed near a river: a hill's whole job is to raise a ridge along an area
+// border, and a river's centreline runs along cell borders, which are frequently the same line. The
+// suppression used to be a plain "is there a river here at all", which switched a hill on at full
+// height the instant that went false - measured, a 63 -> 165 unit step across two world units,
+// still the single worst discontinuity anywhere near a river once the carve itself was continuous.
+// Fading it over these two distances instead costs nothing and cannot step.
+export const RIVER_HILL_SUPPRESSION_INNER = 80;
+export const RIVER_HILL_SUPPRESSION_OUTER = RIVER_QUERY_RADIUS;
 
 // Continues cells/config.ts's salt sequence (601-610, 613-617) and boundaryHillsConfig.ts's 611-612 -
 // must not collide with any of those, or the "independent" noise fields become identical.

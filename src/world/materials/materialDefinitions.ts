@@ -740,12 +740,13 @@ const shoreLayer: MaterialLayer = {
       { output: "lakeFactor", op: "input", name: "lakeFactor" },
       { output: "lakeRaw", op: "remap", input: "lakeFactor", inMin: 0, inMax: 0.5, outMin: 0, outMax: 1 },
       { output: "lake", op: "clamp", input: "lakeRaw", min: 0, max: 1 },
-      // riverGap, not the flat isRiverEdge boolean - a river's carve can be up to
-      // RIVER_WIDTH_MOUTH=100 world units wide (riverConfig.ts), but the sandy bank should only
-      // hug the actual waterline, not the whole channel, so this needs its own much narrower fall-
-      // off distance rather than treating "is this a river edge at all" as a flat yes/no.
+      // riverGap, not the flat isRiverEdge boolean - that is true across a whole ~460-unit valley
+      // (riverConfig.ts), but the sandy bank should hug the waterline, so this needs its own much
+      // narrower falloff rather than treating "is there a river near here" as a flat yes/no. The
+      // waterline sits where the bank climbs through 0, which is ~62 units out at the mouth and
+      // ~22 at the source; this covers the near side of that band.
       { output: "riverGap", op: "input", name: "riverGap" },
-      { output: "riverRaw", op: "remap", input: "riverGap", inMin: 12, inMax: 0, outMin: 0, outMax: 1 },
+      { output: "riverRaw", op: "remap", input: "riverGap", inMin: 70, inMax: 30, outMin: 0, outMax: 1 },
       { output: "river", op: "clamp", input: "riverRaw", min: 0, max: 1 },
       { output: "coastOrLake", op: "max", a: "coast", b: "lake" },
       { output: "result", op: "max", a: "coastOrLake", b: "river" },

@@ -10,18 +10,18 @@ function isOceanAdjacent(cell: number, adjacency: number[][], landCells: Readonl
 }
 
 /**
- * The neighbour a mouth should be carved *towards*, or -1 when there is none to carve.
+ * The neighbour whose shared border the river's centreline should START at, or -1 if there is none.
  *
- * A river's carve only ever runs along the cell-to-cell borders of its own path, so a mouth cell's
- * border with the water it drains from is never carved - leaving a full cell's width of untouched
- * land between the channel and the lake or trunk river it is supposed to start at. areaField.ts
- * already handles this for ocean mouths by extending the carve to the coastline; a lake or
- * tributary mouth has an actual cell seam to use, so it just needs that seam registered as a river
- * edge like any other.
+ * A river's path is a chain of cells, and its centreline runs through the midpoint of each
+ * consecutive pair's shared border. Left alone, that line therefore begins at the border between
+ * the mouth cell and the SECOND cell - a full cell away from the water the river drains into, with
+ * untouched land in between. Prepending the water body itself to the chain puts the first point of
+ * the line on the shore where it belongs.
  *
- * Ocean mouths deliberately return -1: open ocean is not a cell, so there is no seam to register,
- * and areaField.ts's coastline extension covers them instead. Lakes are preferred over trunk
- * rivers when a mouth touches both, since a lake is the more meaningful source of the two.
+ * Open ocean is not a single cell, but the cells beyond the coastline are, and the coastline runs
+ * roughly along their border with the land - so an ocean neighbour works here exactly like a lake.
+ * Lakes are preferred when a mouth touches both, then a trunk river (which makes a tributary
+ * actually meet the river it was generated to join), then the sea.
  *
  * MUST be called before walkRiver, which adds this path's own cells to usedRiverCells - afterwards
  * a neighbour that merely happens to lie further along this same river would look like a trunk.
@@ -29,12 +29,15 @@ function isOceanAdjacent(cell: number, adjacency: number[][], landCells: Readonl
 function findMouthLink(
   cell: number,
   adjacency: number[][],
+  landCells: ReadonlySet<number>,
   lakeCells: ReadonlySet<number>,
   usedRiverCells: ReadonlySet<number>,
 ): number {
   const lake = adjacency[cell].find((n) => lakeCells.has(n));
   if (lake !== undefined) return lake;
-  return adjacency[cell].find((n) => usedRiverCells.has(n)) ?? -1;
+  const trunk = adjacency[cell].find((n) => usedRiverCells.has(n));
+  if (trunk !== undefined) return trunk;
+  return adjacency[cell].find((n) => !landCells.has(n)) ?? -1;
 }
 
 /** A valid river mouth is adjacent to open ocean, a lake, OR an already-placed river cell (a
@@ -91,8 +94,8 @@ function walkRiver(
   return path;
 }
 
-/** One generated river: its path through the cell graph, plus the neighbour its mouth drains into
- *  (-1 for an ocean mouth, which has no cell seam to carve - see findMouthLink). */
+/** One generated river: its path through the cell graph, plus the neighbour whose shared border its
+ *  centreline starts at - the lake, trunk river or stretch of sea it drains into. */
 export interface RiverPath {
   cells: number[];
   mouthLink: number;
@@ -116,8 +119,8 @@ export interface RiverGenParams {
  * (only touches one at the mouth), prefers to steer inland after its own mouth rather than
  * re-touching open ocean (falling back to a coastal step only when no inland option exists), and
  * never shares a cell with another river, so no two rivers can ever cross or merge. Each
- * path also carries the neighbour its mouth drains into, so the seam joining it to that lake or
- * trunk river can be carved as well (see findMouthLink).
+ * path also carries the neighbour it drains into, so its centreline can start at that shore rather
+ * than a cell away from it (see findMouthLink).
  */
 export function generateRiversForContinent(params: RiverGenParams): RiverPath[] {
   const { continentSeed, adjacency, continentCells, landCells, lakeCells, usedRiverCells } = params;
@@ -134,7 +137,7 @@ export function generateRiversForContinent(params: RiverGenParams): RiverPath[] 
     if (mouths.length === 0) break;
 
     const mouth = mouths[Math.floor(walkRng() * mouths.length)];
-    const mouthLink = findMouthLink(mouth, adjacency, lakeCells, usedRiverCells);
+    const mouthLink = findMouthLink(mouth, adjacency, landCells, lakeCells, usedRiverCells);
     const length = randomIntInRange(lengthRng, RIVER_LENGTH_RANGE);
     const path = walkRiver(walkRng, adjacency, continentCells, landCells, lakeCells, usedRiverCells, mouth, length);
     if (path.length >= 2) paths.push({ cells: path, mouthLink });

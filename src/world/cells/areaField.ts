@@ -1,10 +1,10 @@
 import { createVoronoiField, type VoronoiField } from "./voronoiField";
 import { computeCellBounds, generateCellDiagram, type CellPoint } from "./cellGrid";
+import { createRiverField } from "./riverField";
 import { planWorld, type ContinentPlan } from "./continentLayout";
 import { pickStartCell, growLandmass } from "./regionGrowth";
 import { partitionIntoAreas, assignAreaBiomes } from "./areaAssignment";
 import { generateRiversForContinent } from "./riverGeneration";
-import { cellPairKey } from "./cellPairKey";
 import { createBaseNoise2D } from "../terrain/noise";
 import { deriveSeed, mulberry32 } from "../rng";
 import { smoothstep } from "../mathUtils";
@@ -30,6 +30,7 @@ import {
   LAKE_EDGE_NOISE_SALT,
 } from "./config";
 import { BOUNDARY_HILL_WIDTH, BOUNDARY_HILL_EDGE_NOISE_AMPLITUDE, BOUNDARY_HILL_STYLE_SALT } from "../terrain/boundaryHills/boundaryHillsConfig";
+import { RIVER_QUERY_RADIUS } from "../terrain/rivers/riverConfig";
 
 export const SEA_LEVEL = 0;
 const WORLD_CENTER_X = 0;
@@ -180,15 +181,14 @@ function resolveBoundaryHillStyle(
 export function createAreaSampler(seed: number): AreaWorld {
   const layout = planWorld(seed);
   const bounds = computeCellBounds(WORLD_CENTER_X, WORLD_CENTER_Z, layout.worldExtent, CELL_BOUNDS_MARGIN);
-  const { points, adjacency } = generateCellDiagram(seed, bounds, CELL_SPACING);
+  const { points, adjacency, seamMidpoint } = generateCellDiagram(seed, bounds, CELL_SPACING);
 
   const landCells = new Set<number>();
   const cellToAreaId = new Map<number, number>();
   const areaBiomes: BiomeDefinition[] = [];
   const lakeCells = new Set<number>();
   const usedRiverCells = new Set<number>();
-  const riverEdges = new Map<number, number>(); // edge pair key -> taper fraction, 0 at the mouth, 1 at the far end
-  const oceanMouthCells = new Set<number>(); // river mouth cells whose own border touches open ocean - see sampleArea
+  const riverPolylines: CellPoint[][] = [];
   let areaIdOffset = 0;
 
   for (const continent of layout.continents) {
@@ -227,33 +227,22 @@ export function createAreaSampler(seed: number): AreaWorld {
       usedRiverCells,
     });
     for (const { cells: path, mouthLink } of riverPaths) {
-      // A river only ever carves along its curated cell-to-cell edges - an ocean-adjacent mouth's
-      // OWN border with the true coastline is a separate, independent piece of geometry (the
-      // landField/oceanField coastline) that would otherwise stay untouched, leaving a visible gap
-      // of ordinary land between the river's first carved edge and the open water it's meant to
-      // start from. Ocean is the one case with no cell seam to carve (open water is not a cell),
-      // so mark ocean mouths and let sampleArea extend the carve to their coastal border instead;
-      // lake and tributary mouths are handled by mouthLink just below.
-      const mouthCell = path[0];
-      if (adjacency[mouthCell].some((n) => !landCells.has(n))) oceanMouthCells.add(mouthCell);
-
-      // A lake or tributary mouth has the same gap for the same reason, but unlike open ocean it
-      // has a real cell seam to carve: the border between the mouth cell and the lake (or trunk
-      // river) it drains into. Registering that seam as an ordinary river edge at the mouth's own
-      // widest taper joins the two - Voronoi seams of the same cell meet at a shared vertex, which
-      // is exactly how consecutive edges of a path already connect to each other. Before this, a
-      // lake-mouthed river started a full cell's width away from its lake, and a tributary never
-      // touched the trunk it was generated to join at all.
-      if (mouthLink !== -1) riverEdges.set(cellPairKey(mouthCell, mouthLink), 0);
-
-      // Widest at the mouth (t=0), narrowing toward the far end (t=1) - see riverEvaluator.ts.
-      const totalEdges = path.length - 1;
-      for (let i = 0; i < totalEdges; i++) {
-        const t = totalEdges > 1 ? i / (totalEdges - 1) : 0;
-        riverEdges.set(cellPairKey(path[i], path[i + 1]), t);
+      // The centreline runs through the midpoint of each consecutive pair's shared Voronoi border -
+      // the actual point on the ground between the two cells, not the midpoint of their two sites,
+      // which is on the same bisector but need not lie on the bounded edge (see cellGrid.ts).
+      //
+      // Prepending the cell the mouth drains into puts the line's first point on that shore, so the
+      // river starts at its lake, trunk or coastline instead of a cell inland of it.
+      const chain = mouthLink === -1 ? path : [mouthLink, ...path];
+      const centreline: CellPoint[] = [];
+      for (let i = 0; i < chain.length - 1; i++) {
+        centreline.push(seamMidpoint(chain[i], chain[i + 1]));
       }
+      if (centreline.length >= 2) riverPolylines.push(centreline);
     }
   }
+
+  const riverField = createRiverField(riverPolylines, RIVER_QUERY_RADIUS);
 
   // landField is built from a filtered point array, so its query indices need remapping back to
   // the original cell indices that cellToAreaId is keyed by.
@@ -337,23 +326,15 @@ export function createAreaSampler(seed: number): AreaWorld {
     const lakeJitter = lakeNoise2D(worldX * LAKE_NOISE_FREQUENCY, worldZ * LAKE_NOISE_FREQUENCY) * LAKE_NOISE_AMPLITUDE;
     const lakeFactor = computeLakeFactor(primaryCellId, secondaryCellId, borderGap, lakeJitter);
 
-    const riverTaperLookup = secondaryCellId === -1 ? undefined : riverEdges.get(cellPairKey(primaryCellId, secondaryCellId));
-    let isRiverEdge = riverTaperLookup !== undefined;
-    let riverTaper = riverTaperLookup ?? 0;
-    let riverGap = isRiverEdge ? borderGap : Infinity;
-
-    // Extend an ocean-mouthed river's carve to its own coastline border too, using the same
-    // (unjittered) distance the coastline itself uses - otherwise the channel stops at the first
-    // curated edge, leaving a visible gap of ordinary land between the river and the open water it
-    // starts from. Only wins if it's the closer/more relevant signal at this point.
-    if (oceanMouthCells.has(primaryCellId)) {
-      const coastGap = nearOcean.nearestDistance - nearLand.nearestDistance;
-      if (coastGap < riverGap) {
-        isRiverEdge = true;
-        riverTaper = 0; // the mouth's own widest point
-        riverGap = coastGap;
-      }
-    }
+    // True distance to the nearest river centreline, and where along that river this is. Both come
+    // straight out of the geometry, so they are defined and continuous everywhere - there is no
+    // longer any "is this point on a river edge" predicate for the carve to switch on. isRiverEdge
+    // survives only as "close enough for the valley to reach", which riverEvaluator.ts fades to
+    // nothing before it becomes false.
+    const river = riverField.query(worldX, worldZ);
+    const isRiverEdge = river.distance < RIVER_QUERY_RADIUS;
+    const riverTaper = river.taper;
+    const riverGap = river.distance;
 
     // How far this point is from the border of its own area, as the gap to the nearest cell
     // belonging to a DIFFERENT area. Unlike borderGap above - which is a cell-pair gap, and so
@@ -371,11 +352,14 @@ export function createAreaSampler(seed: number): AreaWorld {
     const areaBorderGap = nearestOtherArea.distance - nearLand.nearestDistance;
     const otherAreaId = nearestOtherArea.index === -1 ? primaryAreaId : areaIdOf(nearestOtherArea.index);
 
-    // Rivers take precedence over boundary hills at the same border - a curated river edge can
-    // land on a border that also qualifies for a hill (every biome is mountain-type today), which
-    // would otherwise add a bump and subtract a carve at the identical spot.
+    // Rivers take precedence over boundary hills where they overlap - a river's centreline runs
+    // along cell borders, which are often area borders too (every biome is mountain-type today),
+    // and a hill would otherwise raise a bump exactly where the valley is cutting one away. That
+    // precedence is applied as a fade in terrainSampler rather than as a style gate here: deciding
+    // it by "is there a river near this point" made the hill appear at full height the moment that
+    // went false.
     const boundaryHillStyle =
-      isRiverEdge || nearestOtherArea.index === -1
+      nearestOtherArea.index === -1
         ? null
         : resolveBoundaryHillStyle(seed, primaryBiome, areaBiomeOf(otherAreaId), primaryAreaId, otherAreaId);
 
