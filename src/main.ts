@@ -36,6 +36,7 @@ createSettingsPanel({
   max: MAX_DRAW_DISTANCE,
   initial: DEFAULT_DRAW_DISTANCE,
   onChange: (value) => world.setDrawDistance(value),
+  toggles: [{ label: "Trees", initial: true, onChange: (on) => world.trees.setVisible(on) }],
 });
 
 const zoneLabel = createZoneLabel();

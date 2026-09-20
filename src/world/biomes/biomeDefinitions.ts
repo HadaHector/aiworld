@@ -37,6 +37,8 @@ const plains: BiomeDefinition = {
   outputs: { height: detailHeightPipeline({ amplitude: 12.75, frequency: 0.002, offset: 7.5 }) },
   borderType: "mountain",
   spawnWeight: 2,
+  // Lone trees and small groves in open grassland - the grove noise does most of the shaping.
+  treeDensity: 0.1,
   lakeChance: 0.05,
   baseMaterialId: "grass",
   roadMaterialId: "track",
@@ -49,6 +51,9 @@ const forest: BiomeDefinition = {
   outputs: { height: detailHeightPipeline({ amplitude: 40.45, frequency: 0.0014, offset: 27 }) },
   borderType: "mountain",
   spawnWeight: 2,
+  // Closed wood. The hard core still leaves a full TREE_SPACING between trunks, so this is dense
+  // to look at and still walkable.
+  treeDensity: 0.95,
   lakeChance: 0.04,
   baseMaterialId: "grass",
   roadMaterialId: "track",
@@ -64,6 +69,7 @@ const hills: BiomeDefinition = {
   outputs: { height: detailHeightPipeline({ amplitude: 60, frequency: 0.0021, offset: 50, octaves: 5, persistence: 0.35 }) },
   borderType: "mountain",
   spawnWeight: 2,
+  treeDensity: 0.32,
   lakeChance: 0.03,
   baseMaterialId: "grass",
   roadMaterialId: "track",
@@ -76,6 +82,8 @@ const desert: BiomeDefinition = {
   outputs: { height: detailHeightPipeline({ amplitude: 10.1, frequency: 0.0026, offset: 4, persistence: 0.1 }) },
   borderType: "mountain",
   spawnWeight: 2,
+  // All but bare; the few that survive read as something clinging on near an oasis.
+  treeDensity: 0.012,
   lakeChance: 0.03, // oases
   baseMaterialId: "sand",
   roadMaterialId: "trackSand",
@@ -96,6 +104,8 @@ const mountains: BiomeDefinition = {
   },
   borderType: "mountain", // generates boundary hills along any edge shared with a differently-bordered biome
   spawnWeight: 1,
+  // Wooded shoulders. The treeline fade bares the peaks without needing a number here.
+  treeDensity: 0.2,
   lakeChance: 0.01, // rare tarns/crater lakes
   baseMaterialId: "rock",
   roadMaterialId: "trackStone",
@@ -108,6 +118,7 @@ const tundra: BiomeDefinition = {
   outputs: { height: detailHeightPipeline({ amplitude: 2.1, frequency: 0.0162, offset: 1 }) },
   borderType: "mountain",
   spawnWeight: 1,
+  treeDensity: 0.035,
   lakeChance: 0.05,
   baseMaterialId: "tundraGround",
   roadMaterialId: "trackStone",
@@ -154,6 +165,7 @@ const canyon: BiomeDefinition = {
   },
   borderType: "mountain", // generates boundary hills along any edge shared with a differently-bordered biome
   spawnWeight: 0.5,
+  treeDensity: 0.05,
   lakeChance: 0.02,
   baseMaterialId: "rock",
   roadMaterialId: "trackSand",
@@ -179,6 +191,7 @@ const swamp: BiomeDefinition = {
   },
   borderType: "mountain",
   spawnWeight: 1.5,
+  treeDensity: 0.45,
   lakeChance: 0.15,
   baseMaterialId: "mud",
   roadMaterialId: "track",

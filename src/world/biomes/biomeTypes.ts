@@ -20,8 +20,10 @@ export interface BiomeDefinition {
    *  (see cells/areaField.ts); "river"/"cliff"/"wall" remain reserved, unbranched. */
   borderType: BorderType;
   spawnWeight: number;
-  /** Reserved extension point for future prop scattering; unused today. */
-  propDensity?: number;
+  /** How much of the tree lattice this biome actually grows, 0-1, before the slope, shore,
+   *  treeline, road and grove fades thin it further (see foliage/treeScatter.ts). 1 would be every
+   *  trunk the TREE_SPACING hard core allows - a closed wood - and 0 is treeless. */
+  treeDensity: number;
   /** Probability (0-1) any given cell inside an area of this biome becomes a lake cell. Unset/0 = never. */
   lakeChance?: number;
   /** MaterialDef id (materials/materialDefinitions.ts's MATERIAL_REGISTRY) this biome's ground

@@ -2,6 +2,7 @@ import { MeshBuilder, VertexBuffer, VertexData, type GroundMesh, type Scene } fr
 import type { TerrainSample, TerrainSampler } from "./terrainSampler";
 import { RELIEF_CURVATURE_RADIUS_STEPS, buildVertexContext } from "../materials/materialContext";
 import type { MaterialLibrary } from "../materials/materialLibrary";
+import type { TreeGround, TreePlacement, TreeScatter } from "../foliage/treeScatter";
 
 export interface TerrainChunkOptions {
   name: string;
@@ -11,6 +12,16 @@ export interface TerrainChunkOptions {
   originX: number;
   originZ: number;
   materialLibrary: MaterialLibrary;
+  scatterTrees: TreeScatter;
+}
+
+export interface TerrainChunk {
+  mesh: GroundMesh;
+  /** The trees standing on this chunk. Scattered here, not by a system of their own, because the
+   *  padded vertex grid below already holds the finished surface and a full TerrainSample at every
+   *  vertex - so placing a tree costs a lookup instead of another few terrain samples, and it
+   *  stands on exactly the triangle that gets drawn rather than on a second opinion about it. */
+  trees: TreePlacement[];
 }
 
 /**
@@ -27,8 +38,8 @@ export interface TerrainChunkOptions {
  * before the edge). Sampling a bit further out costs a bit more terrain sampling (pure and cheap)
  * but needs no coordination with neighboring chunks at all.
  */
-export function createTerrainChunk(scene: Scene, options: TerrainChunkOptions): GroundMesh {
-  const { name, size, subdivisions, sampleTerrain, originX, originZ, materialLibrary } = options;
+export function createTerrainChunk(scene: Scene, options: TerrainChunkOptions): TerrainChunk {
+  const { name, size, subdivisions, sampleTerrain, originX, originZ, materialLibrary, scatterTrees } = options;
 
   const ground = MeshBuilder.CreateGround(
     name,
@@ -136,5 +147,52 @@ export function createTerrainChunk(scene: Scene, options: TerrainChunkOptions): 
 
   ground.position.set(originX, 0, originZ);
 
-  return ground;
+  const step = size / subdivisions;
+
+  /**
+   * The ground under a point, read out of the grid that was just built rather than sampled again.
+   *
+   * Height is interpolated inside the actual triangle the point falls in - the same split the
+   * index buffer above uses - so a trunk sits on the rendered surface exactly, with none of the
+   * up-to-a-vertex error a bilinear or nearest read would leave on a slope. Normal and sample come
+   * from the nearest vertex, which is at most 1.25 units away and only ever feeds fades measured
+   * in tens of units.
+   */
+  function probeGround(worldX: number, worldZ: number): TreeGround | null {
+    const colF = (worldX - originX + size / 2) / step + pad;
+    const rowF = subdivisions - (worldZ - originZ + size / 2) / step + pad;
+    const col = Math.floor(colF);
+    const row = Math.floor(rowF);
+    if (col < 0 || row < 0 || col >= paddedSize - 1 || row >= paddedSize - 1) return null;
+
+    const u = colF - col;
+    const v = rowF - row;
+    const a = row * paddedSize + col;
+    const h00 = paddedPositions[a * 3 + 1];
+    const h10 = paddedPositions[(a + 1) * 3 + 1];
+    const h01 = paddedPositions[(a + paddedSize) * 3 + 1];
+    const h11 = paddedPositions[(a + paddedSize + 1) * 3 + 1];
+    // The quad splits along the u = v diagonal: one triangle is (col,row)-(col+1,row)-(col+1,row+1),
+    // the other (col,row)-(col,row+1)-(col+1,row+1).
+    const height =
+      u >= v ? h00 + u * (h10 - h00) + v * (h11 - h10) : h00 + v * (h01 - h00) + u * (h11 - h01);
+
+    const nearest = (row + (v >= 0.5 ? 1 : 0)) * paddedSize + (col + (u >= 0.5 ? 1 : 0));
+    const normalY = paddedNormals[nearest * 3 + 1];
+    return {
+      height,
+      slope: Math.sqrt(Math.max(0, 1 - normalY * normalY)),
+      sample: paddedSamples[nearest],
+    };
+  }
+
+  const trees = scatterTrees(
+    originX - size / 2,
+    originZ - size / 2,
+    originX + size / 2,
+    originZ + size / 2,
+    probeGround,
+  );
+
+  return { mesh: ground, trees };
 }

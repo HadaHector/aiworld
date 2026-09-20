@@ -2,11 +2,17 @@ import type { GroundMesh, Scene } from "@babylonjs/core";
 import { createTerrainChunk } from "./terrainMesh";
 import type { TerrainSampler } from "./terrainSampler";
 import type { MaterialLibrary } from "../materials/materialLibrary";
+import type { TreeScatter } from "../foliage/treeScatter";
+import type { TreeField } from "../foliage/treeField";
 
 export interface ChunkManagerOptions {
   scene: Scene;
   sampleTerrain: TerrainSampler;
   materialLibrary: MaterialLibrary;
+  scatterTrees: TreeScatter;
+  /** Trees live and die with the chunk they stand on, so streaming them needs no radius of its
+   *  own and they can never outlive the ground under them. */
+  trees: TreeField;
   chunkSize: number;
   chunkSubdivisions: number;
   loadRadius: number;
@@ -31,7 +37,7 @@ function chunkKey(cx: number, cz: number): string {
 
 /** Streams terrain chunk meshes in/out around a moving position based on a load/unload radius. */
 export function createChunkManager(options: ChunkManagerOptions): ChunkManager {
-  const { scene, sampleTerrain, materialLibrary, chunkSize, chunkSubdivisions } = options;
+  const { scene, sampleTerrain, materialLibrary, scatterTrees, trees, chunkSize, chunkSubdivisions } = options;
 
   let loadRadius = options.loadRadius;
   let unloadRadius = options.unloadRadius;
@@ -75,16 +81,18 @@ export function createChunkManager(options: ChunkManagerOptions): ChunkManager {
   function buildChunk(cx: number, cz: number): void {
     const key = chunkKey(cx, cz);
     const center = chunkCenter(cx, cz);
-    const mesh = createTerrainChunk(scene, {
+    const chunk = createTerrainChunk(scene, {
       name: `terrainChunk_${key}`,
       size: chunkSize,
       subdivisions: chunkSubdivisions,
       sampleTerrain,
       materialLibrary,
+      scatterTrees,
       originX: center.x,
       originZ: center.z,
     });
-    loaded.set(key, mesh);
+    loaded.set(key, chunk.mesh);
+    trees.setChunk(key, chunk.trees);
   }
 
   function enqueueMissingChunks(x: number, z: number): void {
@@ -105,6 +113,7 @@ export function createChunkManager(options: ChunkManagerOptions): ChunkManager {
       if (!withinRadius(cx, cz, x, z, unloadRadius)) {
         mesh.dispose();
         loaded.delete(key);
+        trees.clearChunk(key);
       }
     }
   }
@@ -164,6 +173,7 @@ export function createChunkManager(options: ChunkManagerOptions): ChunkManager {
     lastPlayerChunkZ = Math.floor(z / chunkSize);
     lastX = x;
     lastZ = z;
+    trees.flush();
   }
 
   function update(x: number, z: number): void {
@@ -181,6 +191,9 @@ export function createChunkManager(options: ChunkManagerOptions): ChunkManager {
     }
 
     drainOneFromQueue(x, z);
+    // One rebuild of the instance buffers per frame at most, however many chunks came and went -
+    // and none at all on the frames where nothing did.
+    trees.flush();
   }
 
   function setRadii(nextLoadRadius: number, nextUnloadRadius: number): void {
@@ -190,11 +203,13 @@ export function createChunkManager(options: ChunkManagerOptions): ChunkManager {
     // effect right away instead of waiting for the next chunk-boundary crossing.
     enqueueMissingChunks(lastX, lastZ);
     unloadOutOfRangeChunks(lastX, lastZ);
+    trees.flush();
   }
 
   function dispose(): void {
-    for (const mesh of loaded.values()) {
+    for (const [key, mesh] of loaded) {
       mesh.dispose();
+      trees.clearChunk(key);
     }
     loaded.clear();
     queued.clear();

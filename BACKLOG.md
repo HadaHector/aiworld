@@ -5,6 +5,17 @@ does not mean re-deriving why it matters. Newest first within each section.
 
 ## Performance
 
+### Rebuilding the tree instance buffers copies every tree
+
+`treeField.flush` rewrites the whole instance buffer from every loaded chunk whenever one chunk
+comes or goes. Measured at a 1200-unit draw distance (6236 trees): 0.2 ms median, which is fine -
+the matrices themselves are composed once at chunk build and only copied here, which is what took
+this down from 18.5 ms.
+
+It is still O(all trees) per chunk event, so it grows with draw distance while the actual change
+is one chunk. A swap-remove into a slot table would make it O(one chunk) and upload only the
+changed range, and is worth doing if the draw distance ceiling ever rises much above 2000.
+
 ### Ocean terrain samples are ~17x more expensive than land ones
 
 Measured per `sampleTerrain` call: land 12.5 us, near coast 11.1 us, deep ocean 62.7 us, far ocean
@@ -168,6 +179,41 @@ changes: a material entering the roster inserts in sorted position and shifts ev
 Not fixable with compacted slots. The clean fix is one slot per material - indices become
 compile-time constants and the whole class of bug disappears - at 36 texture fetches instead of 24,
 and 18-20 slots. Measured as affordable; deferred as a decision rather than a task.
+
+## Foliage
+
+### Trees do not know settlements are there
+
+A settlement site is a named point with nothing rendered on it yet, and the tree scatter has never
+heard of one - so a village clears no ground and the first buildings placed will land inside a
+wood. Cheap to fix when there is something to clear for: a bucket index of the settlements (the
+shape `roadField` already uses) and another fade on `densityAt`, but it means plumbing the
+settlement list down to chunk building.
+
+### Nothing collides with a tree
+
+The character samples terrain height and walks through trunks. The spacing guarantee
+(`TREE_SPACING`, measured closest pair 10.21) is what would make trunk collision cheap - a query
+only ever has to consider the 3x3 lattice block around the player - but there is no collision
+system to hang it on yet.
+
+### Every tree is drawn at full detail, at every distance
+
+One draw call each for trunks and canopies, ~112 triangles a tree, no LOD and no per-instance
+culling: 6236 trees at a 1200-unit draw distance is ~700k triangles, all of them submitted whether
+they are behind the camera or a mile away. The master meshes are marked
+`alwaysSelectAsActiveMesh`, so Babylon does not even test them.
+
+Not currently a problem, and the fixes are known and independent: a billboard or two-triangle LOD
+past some distance, and splitting the field into a few buckets by direction so the frustum can
+reject whole groups.
+
+### The medium and small foliage levels do not exist
+
+Bushes and grass are named in `foliageConfig.ts` and nothing else. They are deliberately not the
+tree system with a smaller radius: grass wants far more instances, far shorter view distance, no
+individual placement rules worth the cost, and probably to be drawn as camera-facing quads rather
+than geometry.
 
 ## Rendering
 

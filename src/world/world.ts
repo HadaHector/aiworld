@@ -3,6 +3,8 @@ import { createChunkManager } from "./terrain/chunkManager";
 import { createTerrainSampler, type TerrainSampler } from "./terrain/terrainSampler";
 import { createOceanPlane } from "./terrain/ocean";
 import { createMaterialLibrary, type MaterialLibrary } from "./materials/materialLibrary";
+import { createTreeScatter } from "./foliage/treeScatter";
+import { createTreeField, type TreeField } from "./foliage/treeField";
 import type { ContinentPlan } from "./cells/continentLayout";
 import type { AreaBounds } from "./cells/areaField";
 import type { SettlementSite } from "./settlements/settlementSites";
@@ -27,6 +29,7 @@ export interface World {
   settlements: SettlementSite[];
   roads: RoadNetwork;
   materialLibrary: MaterialLibrary;
+  trees: TreeField;
 }
 
 const WORLD_SEED = 1337;
@@ -77,10 +80,14 @@ export async function createWorld(scene: Scene, onProgress?: (progress: WorldLoa
     onProgress?.({ phase: "Baking material textures", completed: done, total });
   });
 
+  const trees = createTreeField(scene);
+
   const chunkManager = createChunkManager({
     scene,
     sampleTerrain,
     materialLibrary,
+    scatterTrees: createTreeScatter(WORLD_SEED),
+    trees,
     chunkSize: CHUNK_SIZE,
     chunkSubdivisions: CHUNK_SUBDIVISIONS,
     loadRadius: DEFAULT_DRAW_DISTANCE,
@@ -99,5 +106,5 @@ export async function createWorld(scene: Scene, onProgress?: (progress: WorldLoa
   const updateChunks = (playerX: number, playerZ: number) => chunkManager.update(playerX, playerZ);
   const setDrawDistance = (loadRadius: number) => chunkManager.setRadii(loadRadius, loadRadius + UNLOAD_HYSTERESIS);
 
-  return { heightAt, sampleTerrain, updateChunks, setDrawDistance, worldExtent, continents, areaBounds, areaNames, settlements, roads, materialLibrary };
+  return { heightAt, sampleTerrain, updateChunks, setDrawDistance, worldExtent, continents, areaBounds, areaNames, settlements, roads, materialLibrary, trees };
 }
