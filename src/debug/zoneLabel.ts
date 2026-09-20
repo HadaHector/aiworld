@@ -1,8 +1,10 @@
 export interface ZoneLabel {
-  update: (biomeName: string) => void;
+  update: (zoneName: string, biomeName: string) => void;
 }
 
-/** A small, always-visible dev-tool label showing which biome/zone the player currently stands in. */
+/** A small, always-visible dev-tool label showing which zone the player currently stands in, by its
+ *  generated name and the biome behind it - the name alone is not enough to tell what the ground is
+ *  doing, and the biome alone does not distinguish one of the 66 zones from another of the same kind. */
 export function createZoneLabel(): ZoneLabel {
   const container = document.createElement("div");
   container.style.cssText = `
@@ -14,12 +16,13 @@ export function createZoneLabel(): ZoneLabel {
   container.textContent = "Zone: -";
   document.body.appendChild(container);
 
-  let lastName: string | null = null;
+  let lastText: string | null = null;
 
-  const update = (biomeName: string): void => {
-    if (biomeName === lastName) return;
-    lastName = biomeName;
-    container.textContent = `Zone: ${biomeName}`;
+  const update = (zoneName: string, biomeName: string): void => {
+    const text = `Zone: ${zoneName} (${biomeName})`;
+    if (text === lastText) return;
+    lastText = text;
+    container.textContent = text;
   };
 
   return { update };

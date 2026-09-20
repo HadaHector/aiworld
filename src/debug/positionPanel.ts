@@ -1,7 +1,7 @@
 import type { ArcRotateCamera, Vector3 } from "@babylonjs/core";
 
 export interface PositionPanel {
-  update: (position: Vector3, camera: ArcRotateCamera, biomeName: string) => void;
+  update: (position: Vector3, camera: ArcRotateCamera, zoneName: string, biomeName: string) => void;
 }
 
 /** A location precise enough to put the camera back exactly where it was. */
@@ -27,8 +27,8 @@ function round(value: number, places: number): number {
  * than something bolted on ad hoc - a reported location is only useful if it can be reproduced
  * without hand-translating numbers into a teleport.
  */
-function formatSnapshot(snapshot: ViewSnapshot, biomeName: string, y: number): string {
-  const summary = `aiworld @ x=${snapshot.x} z=${snapshot.z} y=${round(y, 1)} | camera alpha=${snapshot.alpha} beta=${snapshot.beta} radius=${snapshot.radius} | biome=${biomeName}`;
+function formatSnapshot(snapshot: ViewSnapshot, zoneName: string, biomeName: string, y: number): string {
+  const summary = `aiworld @ x=${snapshot.x} z=${snapshot.z} y=${round(y, 1)} | camera alpha=${snapshot.alpha} beta=${snapshot.beta} radius=${snapshot.radius} | ${zoneName} (${biomeName})`;
   const call = `__aiworld.goto({ x: ${snapshot.x}, z: ${snapshot.z}, alpha: ${snapshot.alpha}, beta: ${snapshot.beta}, radius: ${snapshot.radius} })`;
   return `${summary}\n${call}`;
 }
@@ -65,7 +65,7 @@ export function createPositionPanel(): PositionPanel {
   container.appendChild(copyButton);
   document.body.appendChild(container);
 
-  let current: { snapshot: ViewSnapshot; biomeName: string; y: number } | null = null;
+  let current: { snapshot: ViewSnapshot; zoneName: string; biomeName: string; y: number } | null = null;
   let resetLabel: number | undefined;
 
   function flash(text: string): void {
@@ -99,7 +99,7 @@ export function createPositionPanel(): PositionPanel {
 
   copyButton.addEventListener("click", () => {
     if (!current) return;
-    const text = formatSnapshot(current.snapshot, current.biomeName, current.y);
+    const text = formatSnapshot(current.snapshot, current.zoneName, current.biomeName, current.y);
 
     // navigator.clipboard is the only path that copies both lines, but it is unavailable on
     // insecure origins and rejects when the document is not focused - so it needs a real fallback
@@ -117,7 +117,7 @@ export function createPositionPanel(): PositionPanel {
   // The camera is dragged every frame, so the readout would otherwise rewrite the DOM constantly.
   let lastText = "";
 
-  const update = (position: Vector3, camera: ArcRotateCamera, biomeName: string): void => {
+  const update = (position: Vector3, camera: ArcRotateCamera, zoneName: string, biomeName: string): void => {
     const snapshot: ViewSnapshot = {
       x: round(position.x, 1),
       z: round(position.z, 1),
@@ -125,7 +125,7 @@ export function createPositionPanel(): PositionPanel {
       beta: round(camera.beta, 3),
       radius: round(camera.radius, 1),
     };
-    current = { snapshot, biomeName, y: position.y };
+    current = { snapshot, zoneName, biomeName, y: position.y };
 
     // Heading is measured so that it reads like a compass bearing rather than a raw alpha, and
     // pitch as degrees above the horizon: 0 looking level, 90 looking straight down.

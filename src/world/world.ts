@@ -21,6 +21,7 @@ export interface World {
   worldExtent: number;
   continents: ContinentPlan[];
   areaBounds: Map<number, AreaBounds>;
+  areaNames: Map<number, string>;
   materialLibrary: MaterialLibrary;
 }
 
@@ -66,7 +67,7 @@ export async function createWorld(scene: Scene, onProgress?: (progress: WorldLoa
   light.intensity = 0.9;
 
   onProgress?.({ phase: "Shaping continents", completed: 0, total: 0 });
-  const { sampleTerrain, worldExtent, continents, areaBounds } = createTerrainSampler(WORLD_SEED);
+  const { sampleTerrain, worldExtent, continents, areaBounds, areaNames } = createTerrainSampler(WORLD_SEED);
 
   const materialLibrary = await createMaterialLibrary(scene, WORLD_SEED, light.direction, light.intensity, (done, total) => {
     onProgress?.({ phase: "Baking material textures", completed: done, total });
@@ -94,5 +95,5 @@ export async function createWorld(scene: Scene, onProgress?: (progress: WorldLoa
   const updateChunks = (playerX: number, playerZ: number) => chunkManager.update(playerX, playerZ);
   const setDrawDistance = (loadRadius: number) => chunkManager.setRadii(loadRadius, loadRadius + UNLOAD_HYSTERESIS);
 
-  return { heightAt, sampleTerrain, updateChunks, setDrawDistance, worldExtent, continents, areaBounds, materialLibrary };
+  return { heightAt, sampleTerrain, updateChunks, setDrawDistance, worldExtent, continents, areaBounds, areaNames, materialLibrary };
 }

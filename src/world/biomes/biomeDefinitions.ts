@@ -32,6 +32,7 @@ function detailHeightPipeline(params: {
 
 const plains: BiomeDefinition = {
   id: "plains",
+  voiceId: "verdant",
   name: "Plains",
   outputs: { height: detailHeightPipeline({ amplitude: 12.75, frequency: 0.002, offset: 7.5 }) },
   borderType: "mountain",
@@ -42,6 +43,7 @@ const plains: BiomeDefinition = {
 
 const forest: BiomeDefinition = {
   id: "forest",
+  voiceId: "shaded",
   name: "Forest",
   outputs: { height: detailHeightPipeline({ amplitude: 40.45, frequency: 0.0014, offset: 27 }) },
   borderType: "mountain",
@@ -52,6 +54,7 @@ const forest: BiomeDefinition = {
 
 const hills: BiomeDefinition = {
   id: "hills",
+  voiceId: "verdant",
   name: "Hills",
   // Target relief ~10m typical/high with well-separated bumps (same peak-spacing fix as mountains
   // below - wider wavelength, lower persistence so higher octaves stay texture, not competing
@@ -65,6 +68,7 @@ const hills: BiomeDefinition = {
 
 const desert: BiomeDefinition = {
   id: "desert",
+  voiceId: "arid",
   name: "Desert",
   outputs: { height: detailHeightPipeline({ amplitude: 10.1, frequency: 0.0026, offset: 4, persistence: 0.1 }) },
   borderType: "mountain",
@@ -75,6 +79,7 @@ const desert: BiomeDefinition = {
 
 const mountains: BiomeDefinition = {
   id: "mountains",
+  voiceId: "stony",
   name: "Mountains",
   // Target relief ~20-30m typical/high AND ~125m between major peaks (measured/eyeballed via
   // FORCE_BIOME_ID, see devConfig.ts - the first pass had the right height but peaks packed far
@@ -93,6 +98,7 @@ const mountains: BiomeDefinition = {
 
 const tundra: BiomeDefinition = {
   id: "tundra",
+  voiceId: "frozen",
   name: "Tundra",
   outputs: { height: detailHeightPipeline({ amplitude: 2.1, frequency: 0.0162, offset: 1 }) },
   borderType: "mountain",
@@ -109,6 +115,7 @@ const tundra: BiomeDefinition = {
  */
 const canyon: BiomeDefinition = {
   id: "canyon",
+  voiceId: "stony",
   name: "Canyon",
   // Plateau raised (bigger offset/amplitude) and the carve cut deeper (scale factor 9 -> 24) for
   // real 20-30m drama, measured via FORCE_BIOME_ID (devConfig.ts) same as mountains. Plateau
@@ -151,6 +158,7 @@ const canyon: BiomeDefinition = {
  */
 const swamp: BiomeDefinition = {
   id: "swamp",
+  voiceId: "murky",
   name: "Swamp",
   outputs: {
     height: {

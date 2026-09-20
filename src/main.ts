@@ -27,7 +27,7 @@ const world = await createWorld(scene, ({ phase, completed, total }) => {
 
 const character = createCharacter(scene, world.heightAt);
 const camera = createThirdPersonCamera(scene, canvas, character.mesh);
-const debugMap = createDebugMap(world.sampleTerrain, world.worldExtent, world.continents, world.materialLibrary, world.areaBounds, (worldX, worldZ) => {
+const debugMap = createDebugMap(world.sampleTerrain, world.worldExtent, world.continents, world.materialLibrary, world.areaBounds, world.areaNames, (worldX, worldZ) => {
   character.teleport(worldX, worldZ);
 });
 
@@ -75,9 +75,10 @@ scene.onBeforeRenderObservable.add(() => {
   character.update(engine.getDeltaTime() / 1000, camera);
   world.updateChunks(character.mesh.position.x, character.mesh.position.z);
   debugMap.updateMarker(character.mesh.position.x, character.mesh.position.z, camera.alpha);
-  const biomeName = world.sampleTerrain(character.mesh.position.x, character.mesh.position.z).primaryBiome.name;
-  zoneLabel.update(biomeName);
-  positionPanel.update(character.mesh.position, camera, biomeName);
+  const here = world.sampleTerrain(character.mesh.position.x, character.mesh.position.z);
+  const zoneName = world.areaNames.get(here.primaryAreaId) ?? "Uncharted";
+  zoneLabel.update(zoneName, here.primaryBiome.name);
+  positionPanel.update(character.mesh.position, camera, zoneName, here.primaryBiome.name);
 });
 
 // Render one frame explicitly before revealing the world, so the overlay never fades to a blank

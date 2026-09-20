@@ -38,6 +38,7 @@ export interface TerrainWorld {
   worldExtent: number;
   continents: ContinentPlan[];
   areaBounds: Map<number, AreaBounds>;
+  areaNames: Map<number, string>;
 }
 
 const OCEAN_FLOOR_DEPTH = -14;
@@ -68,7 +69,7 @@ function compileHeightPipelines(seed: number): Map<string, CompiledPipeline> {
 
 /** Composes continent shape + biome zoning + height noise into one queryable per-position sample. */
 export function createTerrainSampler(seed: number): TerrainWorld {
-  const { sampleArea, worldExtent, continents, areaBounds } = createAreaSampler(seed);
+  const { sampleArea, worldExtent, continents, areaBounds, areaNames } = createAreaSampler(seed);
   const bedrock = createBedrockSampler(seed);
   const oceanNoise2D = createBaseNoise2D(deriveSeed(seed, OCEAN_SALT));
   const heightPipelines = compileHeightPipelines(seed);
@@ -126,5 +127,5 @@ export function createTerrainSampler(seed: number): TerrainWorld {
     };
   }
 
-  return { sampleTerrain, worldExtent, continents, areaBounds };
+  return { sampleTerrain, worldExtent, continents, areaBounds, areaNames };
 }

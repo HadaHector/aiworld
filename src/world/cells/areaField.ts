@@ -2,6 +2,7 @@ import { createVoronoiField, type VoronoiField } from "./voronoiField";
 import { computeCellBounds, generateCellDiagram, type CellPoint } from "./cellGrid";
 import { createRiverField } from "./riverField";
 import { createCentrelineShaper } from "./riverCentreline";
+import { createNameGenerator } from "../naming/nameGenerator";
 import { planWorld, type ContinentPlan } from "./continentLayout";
 import { pickStartCell, growLandmass } from "./regionGrowth";
 import { partitionIntoAreas, assignAreaBiomes } from "./areaAssignment";
@@ -91,6 +92,10 @@ export interface AreaWorld {
   /** Where each area is, keyed by the id AreaSample reports. Built from the cell sites that make
    *  the area up, so it is the area's own footprint rather than a fixed zoom guess. */
   areaBounds: Map<number, AreaBounds>;
+  /** Each area's generated name, keyed the same way. Kept out of AreaSample deliberately: that is
+   *  built millions of times per chunk and would pay a map lookup for a string nothing but the UI
+   *  reads, which can look it up by primaryAreaId when it actually needs one. */
+  areaNames: Map<number, string>;
 }
 
 /**
@@ -453,5 +458,13 @@ export function createAreaSampler(seed: number): AreaWorld {
     }
   }
 
-  return { sampleArea, worldExtent: layout.worldExtent, continents: layout.continents, areaBounds };
+  // Named in ascending id so the set of names is stable: the generator re-rolls on a collision,
+  // which makes a later name depend on which earlier ones were already taken.
+  const nameGenerator = createNameGenerator(seed);
+  const areaNames = new Map<number, string>();
+  for (let areaId = 0; areaId < areaBiomes.length; areaId++) {
+    areaNames.set(areaId, nameGenerator.nameFor(areaBiomes[areaId].voiceId, areaId));
+  }
+
+  return { sampleArea, worldExtent: layout.worldExtent, continents: layout.continents, areaBounds, areaNames };
 }

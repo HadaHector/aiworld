@@ -1,4 +1,5 @@
 import type { PipelineDef } from "../terrain/pipeline/pipelineTypes";
+import type { VoiceId } from "../naming/nameGenerator";
 
 /** Reserved for future differentiated border generation; only "smooth" is generated today. */
 export type BorderType = "smooth" | "mountain" | "river" | "cliff" | "wall";
@@ -11,6 +12,9 @@ export interface BiomeOutputs {
 export interface BiomeDefinition {
   id: string;
   name: string;
+  /** Which phonetic palette this biome's zones are named from (naming/nameGenerator.ts). A property
+   *  of the biome rather than a lookup table elsewhere, so adding a biome cannot forget to set it. */
+  voiceId: VoiceId;
   outputs: BiomeOutputs;
   /** A per-biome declared preference. "mountain" generates boundary hills along a qualifying edge
    *  (see cells/areaField.ts); "river"/"cliff"/"wall" remain reserved, unbranched. */

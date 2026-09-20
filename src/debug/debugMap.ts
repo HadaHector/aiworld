@@ -72,6 +72,7 @@ export function createDebugMap(
   continents: ContinentPlan[],
   materialLibrary: MaterialLibrary,
   areaBounds: Map<number, AreaBounds>,
+  areaNames: Map<number, string>,
   onTeleport: (worldX: number, worldZ: number) => void,
 ): DebugMap {
   const overlay = document.createElement("div");
@@ -83,7 +84,8 @@ export function createDebugMap(
   `;
 
   const label = document.createElement("div");
-  label.textContent = "Map (M or Esc to close, click to teleport)";
+  const BASE_LABEL = "Map (M or Esc to close, click to teleport)";
+  label.textContent = BASE_LABEL;
   label.style.cssText = "font-size: 14px;";
   overlay.appendChild(label);
 
@@ -346,6 +348,11 @@ export function createDebugMap(
   }
 
   const redraw = (): void => {
+    // Named here rather than in the tab row: the Zone view is the only one framed on something with
+    // a name, and it is the one where "which of the 66 is this" is the actual question.
+    const zoneName = viewMode === "zone" ? areaNames.get(zoneAreaId) : undefined;
+    label.textContent = zoneName ? `${BASE_LABEL}  -  ${zoneName}` : BASE_LABEL;
+
     displayCtx.drawImage(getBaseCanvas(), 0, 0);
 
     const { x: markerPxX, y: markerPxZ } = worldToPixel(markerX, markerZ);
