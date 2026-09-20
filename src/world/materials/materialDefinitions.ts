@@ -1254,14 +1254,27 @@ export const ROAD_MATERIAL_LAYER: MaterialLayer = {
       // staircase is unchanged either way.
       { output: "raw", op: "remap", input: "gap", inMin: 9, inMax: 4, outMin: 0, outMax: 1 },
       { output: "surface", op: "clamp", input: "raw", min: 0, max: 1 },
-      // Weighted well above 1 so the surface actually reads as a road. Layer weights are conserved
-      // - they are scaled to sum to 1 and whatever is left over goes to the biome base - so a
-      // weight of 1 here means an even split with anything else firing at the same point. And
-      // something always is: a graded road is a cut, which is a local basin, so every biome's
-      // curvature-driven valley layer lights up along it and washed the track out to a muddy
-      // smear. This is not a cheat, it is the statement that a made surface wins over what would
-      // otherwise grow there.
-      { output: "result", op: "scale", input: "surface", factor: 5 },
+
+      // Weighted above 1 so the surface actually reads as a road. Layer weights are conserved -
+      // scaled to sum to 1, with whatever is left over going to the biome base - so a weight of 1
+      // here means an even split with anything else firing at the same point, and something always
+      // is: a graded road is a cut, which is a local basin, so every biome's curvature-driven
+      // valley layer lights up along it and washes the track out to a muddy smear.
+      //
+      // But the boost cannot be applied flat, because normalising turns it into a switch. A share
+      // of b*raw/(C + b*raw) with b = 5 and the competing weight C around 0.5 is already half the
+      // blend one tenth of the way into the fade: five units of intended transition collapse to
+      // about half a unit, and the edge of the road becomes a drawn line.
+      //
+      // Cubing before the boost is what buys the gradient back. The share a weight w earns is
+      // w/(C + w), which is steep near zero and flat near one - so to spend the fade evenly the
+      // weight has to start far below the competition and only overtake it late. Measured against
+      // C = 0.5, the share across the fade goes 0.00 / 0.07 / 0.39 / 0.68 / 0.84 / 0.91 rather than
+      // the flat boost's 0.00 / 0.67 / 0.80 / 0.86 / 0.89 / 0.91, which was a line with a smudge
+      // on it. Same 5 at the centre either way.
+      { output: "square", op: "multiply", a: "surface", b: "surface" },
+      { output: "cube", op: "multiply", a: "square", b: "surface" },
+      { output: "result", op: "scale", input: "cube", factor: 5 },
     ],
   },
 };

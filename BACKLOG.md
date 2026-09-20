@@ -120,12 +120,20 @@ the ground straight through that band - so snow switches over a couple of units 
 at the terrain's own 2.5-unit vertex resolution. Widening the road's material fade does not touch
 it; measured, the staircase is unchanged at 3.5 units of fade and at 5.
 
-The same thing happens more mildly against the pale grass band in plains, and will happen to any
-layer with a narrow threshold in height or reliefCurvature - a road is a cut, so it is both lower
-and a local basin, and it crosses those thresholds by construction.
+The same thing happens in plains, through `slopeFacing` rather than height. `plainsNorthFadeLayer`
+ramps from 0.08 to 0.35 and a road bank cut at ROAD_SIDE_SLOPE 0.55 has a facing of about 0.48, so
+faded grass fires at full strength along whichever side of the road faces that way - measured
+across a road at 2636,-3835, material 9 (Faded Grass) owns everything from 8 to 18 units out on one
+side while the other side is plain grass. A band two or three vertices wide, so it aliases into a
+staircase.
 
-The general fix is wider thresholds on the layers themselves, which is a change to their look, not
-to roads. Worth doing together with the snowline rather than piecemeal.
+Softening the bank does not fix it: to keep facing under 0.08 a road would need a gradient of 0.08,
+which is a 62-unit shoulder for a 5-unit cut. These layers are working as designed - they respond
+to which way ground faces, and a road makes two facing slopes right next to each other.
+
+The real fix is for layers keyed on slope, facing or curvature to ignore road-made relief, by
+reading roadGap and damping themselves near one. That is a change to how eight biomes look, not to
+roads, so it is a decision rather than a task.
 
 ### Lake shores are still a binary gate
 
