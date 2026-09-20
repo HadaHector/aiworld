@@ -190,9 +190,14 @@ export const ROAD_WOBBLE_SALT = 703;
 // one mesh, one material blend, no seam to hide and nothing to keep in step with the chunk under
 // it.
 
-// Half the width of the level running surface. A cart track, not a highway - the character capsule
-// is 1.8 units tall.
-export const ROAD_HALF_WIDTH = 4;
+// Half the width of the LEVEL GROUND, which is wider than the road anyone can see.
+//
+// The track itself is painted by roadLayer, at full strength out to 4 units and gone by 7.5. This
+// is deliberately a little past that, so the earth surface sits entirely on level ground with a
+// margin of flat verge around it rather than having its edge land on the start of the bank. The
+// two are set independently on purpose: widening the ground a road occupies should not widen the
+// road, and this is the constant to move if the flat swathe reads as too broad.
+export const ROAD_HALF_WIDTH = 8;
 
 // The shoulder is specified as a MAXIMUM SIDE GRADIENT, not a width, which is the same discipline
 // as RIVER_BANK_SLOPE and for the same reason: a fixed width produces a wall wherever the cut or
