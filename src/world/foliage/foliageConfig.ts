@@ -18,8 +18,10 @@ export const TREE_SPACING = 10;
 // percent of saturated, so more would only cost RNG.
 export const TREE_CANDIDATES_PER_CELL = 3;
 
-// Hard rejections. Everything else is a fade, because a hard line in a density field reads as a
-// drawn edge in the world - the same reason terrain here carves rather than switches.
+// The world's own rules, applied on top of whatever density map a biome asks for (see
+// BiomeOutputs.foliage): nothing grows in a road cut, in a lake or off a cliff, whatever the zone
+// would like. Everything but the lake test is a fade, because a hard line in a density field reads
+// as a drawn edge in the world - the same reason terrain here carves rather than switches.
 export const TREE_MAX_LAKE_FACTOR = 0.02;
 
 // A shore fade rather than a waterline: trees thin out as the ground approaches the water instead
@@ -43,13 +45,6 @@ export const TREE_MAX_SLOPE = 0.72;
 // leaves the shoulders wooded.
 export const TREE_LINE_START = 70;
 export const TREE_LINE_END = 95;
-
-// Groves and clearings. Without this a biome density of 0.12 is 12% of the lattice spread evenly -
-// lone trees at regular intervals, which reads as an orchard. A slow noise multiplying the density
-// instead gives stands of wood with open ground between them; it averages near 1 so it changes
-// where the trees are, not how many.
-export const TREE_PATCH_FREQUENCY = 0.004; // ~250 units between grove and clearing
-export const TREE_PATCH_STRENGTH = 1.8; // peak multiplier; the trough is 0, i.e. a real clearing
 
 // Per-tree variety. Uniform scale only - a placeholder that leans or squashes just looks broken.
 export const TREE_SCALE_MIN = 0.75;

@@ -1,6 +1,8 @@
 import { deriveSeed, mulberry32 } from "../rng";
 import { smoothstep } from "../mathUtils";
-import { createBaseNoise2D, type Noise2D } from "../terrain/noise";
+import { compileOutputs, type CompiledOutputs } from "../terrain/pipeline/pipelineCompiler";
+import { BIOME_REGISTRY } from "../biomes/biomeDefinitions";
+import type { BiomeDefinition } from "../biomes/biomeTypes";
 import type { TerrainSample } from "../terrain/terrainSampler";
 import {
   TREE_SPACING,
@@ -14,12 +16,11 @@ import {
   TREE_MAX_SLOPE,
   TREE_LINE_START,
   TREE_LINE_END,
-  TREE_PATCH_FREQUENCY,
-  TREE_PATCH_STRENGTH,
   TREE_SCALE_MIN,
   TREE_SCALE_MAX,
   TREE_SINK,
   FOLIAGE_SALT,
+  TREE_KINDS,
   type TreeKind,
 } from "./foliageConfig";
 
@@ -76,6 +77,18 @@ interface Candidate {
 }
 
 /**
+ * One biome's compiled density map.
+ *
+ * `offsetOf` holds where each kind's result lands in the graph's scratch buffer, or -1 for a kind
+ * this biome does not grow - so reading a species out of an evaluation is an indexed read rather
+ * than a name lookup, and a biome that grows two species still only runs its graph once.
+ */
+interface BiomeFoliage {
+  graph: CompiledOutputs;
+  offsetOf: Int32Array;
+}
+
+/**
  * Poisson-disk scatter that needs no global pass and no communication between chunks.
  *
  * Each lattice cell throws its darts from a seed derived from its own coordinates, and a dart is
@@ -90,9 +103,50 @@ interface Candidate {
  * density and buys the locality, which is the whole point - the alternative is a world-wide
  * sequential pass that cannot be streamed. TREE_SPACING is set against the density that comes out,
  * not against the density a maximal packing would have given.
+ *
+ * What survives the spacing rule is then thinned by the density map each biome declares (see
+ * BiomeOutputs.foliage), which is also what decides which species a surviving dart becomes.
  */
 export function createTreeScatter(seed: number): TreeScatter {
-  const patchNoise: Noise2D = createBaseNoise2D(deriveSeed(seed, FOLIAGE_SALT));
+  function compileFoliage(biome: BiomeDefinition): BiomeFoliage | null {
+    const def = biome.outputs.foliage;
+    if (!def) return null;
+
+    for (const name of Object.keys(def.outputs ?? {})) {
+      if (!(TREE_KINDS as readonly string[]).includes(name)) {
+        throw new Error(`Biome "${biome.id}" declares a foliage output "${name}", which is not a tree kind`);
+      }
+    }
+
+    const graph = compileOutputs(def, seed, `${biome.id}:foliage`);
+    const offsetOf = new Int32Array(TREE_KINDS.length).fill(-1);
+    let grows = false;
+    for (let k = 0; k < TREE_KINDS.length; k++) {
+      const ref = graph.output(TREE_KINDS[k]);
+      if (!ref) continue;
+      if (ref.type !== "scalar") {
+        throw new Error(`Biome "${biome.id}" foliage output "${TREE_KINDS[k]}" is a colour; a density has to be a scalar`);
+      }
+      offsetOf[k] = ref.offset;
+      grows = true;
+    }
+    return grows ? { graph, offsetOf } : null;
+  }
+
+  const foliageOf = new Map<string, BiomeFoliage | null>();
+  for (const biome of BIOME_REGISTRY) foliageOf.set(biome.id, compileFoliage(biome));
+
+  // Reused across candidates rather than rebuilt per call: this is the hottest thing in a chunk
+  // build after the terrain samples themselves.
+  const perKind = new Float64Array(TREE_KINDS.length);
+  const context: Record<string, number> = {
+    height: 0,
+    slope: 0,
+    riverGap: 0,
+    roadGap: 0,
+    lakeFactor: 0,
+    areaBorderGap: 0,
+  };
 
   function cellCandidates(gx: number, gz: number): Candidate[] {
     // Mixed before deriveSeed rather than added, so neighbouring cells - which differ by 1 in one
@@ -128,56 +182,77 @@ export function createTreeScatter(seed: number): TreeScatter {
     return a.index > b.index;
   }
 
-  /** What the zones here would grow between them before any of the fades below thin it. */
-  function blendedDensity(ground: TreeGround): number {
-    let density = 0;
-    for (const { biome, weight } of ground.sample.areaWeights) {
-      density += biome.treeDensity * weight;
+  /**
+   * Fills `perKind` with what every zone with a say here would grow, and returns the total.
+   *
+   * Each zone's graph runs once and every species it declares is read out of that one evaluation,
+   * then weighted by the zone's own say - the same weights the terrain blends height and materials
+   * by. So a wood does not stop at a zone border, it thins across it, and a border between two
+   * zones that favour different species comes out as a genuine mixture rather than a line.
+   */
+  function speciesDensities(ground: TreeGround, x: number, z: number): number {
+    const { sample } = ground;
+    perKind.fill(0);
+
+    context.height = ground.height;
+    context.slope = ground.slope;
+    context.riverGap = sample.riverGap;
+    context.roadGap = sample.roadGap;
+    context.lakeFactor = sample.lakeFactor;
+    context.areaBorderGap = sample.areaBorderGap;
+
+    let total = 0;
+    for (const { biome, weight } of sample.areaWeights) {
+      const foliage = foliageOf.get(biome.id);
+      if (!foliage) continue;
+      foliage.graph.run(x, z, context);
+      for (let k = 0; k < perKind.length; k++) {
+        const offset = foliage.offsetOf[k];
+        if (offset < 0) continue;
+        // Clamped at zero because a graph is free to ramp below it, and a negative density would
+        // eat another species' share of the mix rather than simply meaning "none of this one".
+        const density = Math.max(0, foliage.graph.slots[offset]) * weight;
+        perKind[k] += density;
+        total += density;
+      }
     }
-    return density;
+    return total;
+  }
+
+  /** Which species this one is, drawn from the mix `speciesDensities` just left in `perKind`. */
+  function kindFor(total: number, roll: number): TreeKind {
+    let remaining = roll * total;
+    for (let k = 0; k < perKind.length; k++) {
+      remaining -= perKind[k];
+      if (remaining <= 0) return TREE_KINDS[k];
+    }
+    // Only reachable on a rounding edge, where the last species with any share is the answer.
+    for (let k = perKind.length - 1; k >= 0; k--) {
+      if (perKind[k] > 0) return TREE_KINDS[k];
+    }
+    return TREE_KINDS[0];
   }
 
   /**
-   * Which shape of tree this one is.
+   * The world's own rules, applied on top of whatever a biome asked for.
    *
-   * Weighted by each zone's *contribution to the trees here* rather than by its raw area weight,
-   * which is the difference between a desert bordering a forest getting half palms - it has almost
-   * no trees of its own to contribute - and getting the handful it is actually responsible for.
-   * Either way the border comes out as a mixed fringe rather than a line where one species stops.
+   * These live here rather than in the biome definitions because they are not preferences: nothing
+   * grows in a road cut, in a lake or off a cliff, whatever the zone would like. Every one is a
+   * fade, because a hard line in a density field reads as a drawn edge in the world. A biome that
+   * wants a sharper treeline of its own can still write one - `height` and `slope` are inputs its
+   * graph can read.
    */
-  function kindFor(ground: TreeGround, roll: number): TreeKind {
-    const weights = ground.sample.areaWeights;
-    let remaining = roll * blendedDensity(ground);
-    for (const { biome, weight } of weights) {
-      remaining -= biome.treeDensity * weight;
-      if (remaining <= 0) return biome.treeKind;
-    }
-    return weights[weights.length - 1].biome.treeKind;
-  }
-
-  /**
-   * How much of the lattice this ground actually grows, 0-1.
-   *
-   * Every term is a fade. A biome's own figure is blended over every area with a say here (the
-   * same weights the terrain blends height and materials by), so a wood does not stop at a zone
-   * border - it thins across it.
-   */
-  function densityAt(ground: TreeGround, x: number, z: number): number {
+  function survivalFade(ground: TreeGround): number {
     const { sample } = ground;
     if (!sample.isLand) return 0;
     if (sample.lakeFactor > TREE_MAX_LAKE_FACTOR) return 0;
 
-    const density = blendedDensity(ground);
-    if (density <= 0) return 0;
-
-    let thinned = density;
-    thinned *= smoothstep(TREE_MIN_HEIGHT, TREE_SHORE_HEIGHT, ground.height);
-    thinned *= 1 - smoothstep(TREE_LINE_START, TREE_LINE_END, ground.height);
-    thinned *= 1 - smoothstep(TREE_EASY_SLOPE, TREE_MAX_SLOPE, ground.slope);
+    let fade = smoothstep(TREE_MIN_HEIGHT, TREE_SHORE_HEIGHT, ground.height);
+    fade *= 1 - smoothstep(TREE_LINE_START, TREE_LINE_END, ground.height);
+    fade *= 1 - smoothstep(TREE_EASY_SLOPE, TREE_MAX_SLOPE, ground.slope);
     // roadGap is Infinity where no road is in range, which smoothstep clamps to 1.
-    thinned *= smoothstep(TREE_ROAD_CLEARANCE, TREE_ROAD_FADE, sample.roadGap);
-    const patch = smoothstep(-0.4, 0.4, patchNoise(x * TREE_PATCH_FREQUENCY, z * TREE_PATCH_FREQUENCY));
-    return thinned * patch * TREE_PATCH_STRENGTH;
+    fade *= smoothstep(TREE_ROAD_CLEARANCE, TREE_ROAD_FADE, sample.roadGap);
+    return fade;
   }
 
   return function scatterTrees(minX, minZ, maxX, maxZ, probe): TreePlacement[] {
@@ -227,13 +302,15 @@ export function createTreeScatter(seed: number): TreeScatter {
 
           const ground = probe(candidate.x, candidate.z);
           if (!ground) continue;
-          if (candidate.densityRoll >= densityAt(ground, candidate.x, candidate.z)) continue;
+          const wanted = speciesDensities(ground, candidate.x, candidate.z);
+          if (wanted <= 0) continue;
+          if (candidate.densityRoll >= wanted * survivalFade(ground)) continue;
 
           trees.push({
             x: candidate.x,
             y: ground.height - TREE_SINK,
             z: candidate.z,
-            kind: kindFor(ground, candidate.kindRoll),
+            kind: kindFor(wanted, candidate.kindRoll),
             scale: candidate.scale,
             rotation: candidate.rotation,
             tint: candidate.tint,

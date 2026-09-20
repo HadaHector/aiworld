@@ -1,12 +1,29 @@
 import type { PipelineDef } from "../terrain/pipeline/pipelineTypes";
 import type { VoiceId } from "../naming/nameGenerator";
-import type { TreeKind } from "../foliage/foliageConfig";
 
 /** Reserved for future differentiated border generation; only "smooth" is generated today. */
 export type BorderType = "smooth" | "mountain" | "river" | "cliff" | "wall";
 
 export interface BiomeOutputs {
   height: PipelineDef;
+  /**
+   * How thickly this zone grows each kind of tree, as one graph with a named output per TreeKind
+   * (foliage/treeModels.ts) - so a zone is not one species at one density, it is a density *map*
+   * per species, and two species can share ground with the mix shifting across it.
+   *
+   * A kind with no output does not grow here. Each output reads as a 0-1 share of the scatter
+   * lattice (see foliage/treeScatter.ts) and the world's own rules - water, roads, cliffs, the
+   * treeline - thin whatever this asks for afterwards.
+   *
+   * One graph rather than one per species so shared work is shared: a "how wooded is it here"
+   * noise feeding both broadleaf and pine is evaluated once per sample, not once per output.
+   *
+   * Besides noise, the graph can read named values of the ground it is being asked about via
+   * `op: "input"` - "height", "slope", "riverGap", "roadGap", "lakeFactor" and "areaBorderGap" -
+   * which is what lets a zone put conifers up its slopes and broadleaf in its valleys, or gather
+   * palms at its water.
+   */
+  foliage?: PipelineDef;
   // Future, unimplemented: wetness?: PipelineDef; material?: PipelineDef;
 }
 
@@ -21,14 +38,6 @@ export interface BiomeDefinition {
    *  (see cells/areaField.ts); "river"/"cliff"/"wall" remain reserved, unbranched. */
   borderType: BorderType;
   spawnWeight: number;
-  /** How much of the tree lattice this biome actually grows, 0-1, before the slope, shore,
-   *  treeline, road and grove fades thin it further (see foliage/treeScatter.ts). 1 would be every
-   *  trunk the TREE_SPACING hard core allows - a closed wood - and 0 is treeless. */
-  treeDensity: number;
-  /** Which of the tree archetypes (foliage/treeModels.ts) this biome grows. A tree at a zone
-   *  border picks between its neighbours by how many of the trees there each one is responsible
-   *  for, so the two mix along the edge rather than meeting at a line. */
-  treeKind: TreeKind;
   /** Probability (0-1) any given cell inside an area of this biome becomes a lake cell. Unset/0 = never. */
   lakeChance?: number;
   /** MaterialDef id (materials/materialDefinitions.ts's MATERIAL_REGISTRY) this biome's ground
