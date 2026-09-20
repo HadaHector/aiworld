@@ -3,13 +3,15 @@ import type { CellPoint } from "../cells/cellGrid";
 import type { TerrainSampler } from "../terrain/terrainSampler";
 import type { SettlementSite } from "../settlements/settlementSites";
 import { simplify, removeLoops } from "../polyline";
-import { straighten, roundCorners } from "./roadShaping";
+import { straighten, roundCorners, snapToNetwork, createSnapIndex } from "./roadShaping";
 import { createRoadPathfinder, nodePoint } from "./roadPathfinder";
 import {
   ROAD_EXTRA_LINK_FRACTION,
   ROAD_MAX_LINK_LENGTH,
+  ROAD_MAX_PATH_RATIO,
   ROAD_RESCUE_DETOUR_FACTOR,
   ROAD_ACCESS_ATTEMPTS,
+  ROAD_SNAP_DISTANCE,
   ROAD_SIMPLIFY_TOLERANCE,
 } from "./roadConfig";
 
@@ -49,6 +51,8 @@ export interface RoadNetwork {
     unreachable: number;
     /** Ran out of expansion budget before finding a route that exists. */
     capped: number;
+    /** Routes found but rejected as too indirect to be a road - see ROAD_MAX_PATH_RATIO. */
+    tooIndirect: number;
     expansions: number;
     samples: number;
     /** Grid nodes reached by more than one link - the shared trunks, and so a direct measure of
@@ -172,7 +176,8 @@ export function generateRoadNetwork(settlements: SettlementSite[], sampleTerrain
       links: [],
       stats: {
         candidates: 0, attempted: 0, built: 0, access: 0, rescued: 0, unreached: 0,
-        withoutHomeAccess: 0, unreachable: 0, capped: 0, expansions: 0, samples: 0, sharedNodes: 0,
+        withoutHomeAccess: 0, unreachable: 0, capped: 0, tooIndirect: 0, expansions: 0, samples: 0,
+        sharedNodes: 0,
       },
     };
   }
@@ -181,6 +186,9 @@ export function generateRoadNetwork(settlements: SettlementSite[], sampleTerrain
   const pathfinder = createRoadPathfinder(sampleTerrain);
   const roadNodes = new Set<number>();
   const nodeUses = new Map<number, number>();
+  // Geometry of the roads already built, so a new one can be pulled onto a stretch it shares with
+  // them rather than rendering as a second road beside it.
+  const snapIndex = createSnapIndex(ROAD_SNAP_DISTANCE);
   const links: RoadLink[] = [];
   // Whether a settlement is reachable from its own zone - i.e. has a road to another settlement in
   // it. Tracked as links are built rather than recomputed, since the access pass below both reads
@@ -194,6 +202,7 @@ export function generateRoadNetwork(settlements: SettlementSite[], sampleTerrain
   });
   let unreachable = 0;
   let capped = 0;
+  let tooIndirect = 0;
   let expansions = 0;
 
   const built = createUnionFind(settlements.length);
@@ -216,11 +225,6 @@ export function generateRoadNetwork(settlements: SettlementSite[], sampleTerrain
       return false;
     }
 
-    for (const key of result.nodes) {
-      roadNodes.add(key);
-      nodeUses.set(key, (nodeUses.get(key) ?? 0) + 1);
-    }
-
     // The grid path snapped both ends to the lattice; the settlements are where they are, so the
     // real endpoints replace the snapped ones before anything is smoothed.
     const raw = result.nodes.map(nodePoint);
@@ -237,8 +241,27 @@ export function generateRoadNetwork(settlements: SettlementSite[], sampleTerrain
     const straightened = straighten(raw, chordIsClear, pathfinder.riverLengthAlong);
     // removeLoops after rounding: a hairpin tight enough that its arc crosses the line is rare but
     // real - measured at 6 across the network - and it is the same fix rivers already use.
-    const points = simplify(removeLoops(roundCorners(straightened, chordIsClear)), ROAD_SIMPLIFY_TOLERANCE);
-    links.push({ id: links.length, kind, from: candidate.from, to: candidate.to, points, length: polylineLength(points) });
+    const snapped = snapToNetwork(roundCorners(straightened, chordIsClear), snapIndex);
+    const points = simplify(removeLoops(snapped), ROAD_SIMPLIFY_TOLERANCE);
+    const length = polylineLength(points);
+
+    // Judged on the finished line rather than on the search, because that is the road that would
+    // actually be drawn. A rescue link is exempt: it exists precisely because nothing better was
+    // available.
+    const straight = Math.hypot(to.x - from.x, to.z - from.z);
+    if (kind === "link" && straight > 0 && length > straight * ROAD_MAX_PATH_RATIO) {
+      tooIndirect++;
+      return false;
+    }
+
+    // Only now that the link is accepted: a rejected route must leave no trace, or it would mark
+    // ground as carrying a road that was never built and pull later links toward it.
+    for (const key of result.nodes) {
+      roadNodes.add(key);
+      nodeUses.set(key, (nodeUses.get(key) ?? 0) + 1);
+    }
+    snapIndex.add(points);
+    links.push({ id: links.length, kind, from: candidate.from, to: candidate.to, points, length });
     built.union(candidate.from, candidate.to);
     homeAccess[candidate.from] ||= settlements[candidate.from].areaId === settlements[candidate.to].areaId;
     homeAccess[candidate.to] ||= homeAccess[candidate.from];
@@ -313,6 +336,7 @@ export function generateRoadNetwork(settlements: SettlementSite[], sampleTerrain
       withoutHomeAccess,
       unreachable,
       capped,
+      tooIndirect,
       expansions,
       samples: pathfinder.sampleCount(),
       sharedNodes,

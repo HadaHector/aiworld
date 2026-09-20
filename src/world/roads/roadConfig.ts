@@ -54,6 +54,16 @@ export const ROAD_OFF_ZONE_PENALTY = 5;
 // long links share a trunk, neither of which a "is there a road within N units" test can do.
 export const ROAD_REUSE_DISCOUNT = 0.15;
 
+// It is paid for the WORSE of a step's two ends, so it rewards travelling along a road rather than
+// merely touching one. Landing-only would let a path weave on and off and collect it every other
+// step - two diagonal steps with one discounted cost 56.9 against 70 for going straight, so
+// zigzagging would be cheaper than a straight line.
+//
+// Tried and rejected: grading the discount outward in rings, so a route passing nearby had a
+// gradient to slide down onto the road. It made things worse - running BESIDE a road became cheap
+// too, so roads exactly overlaid fell from 41.6% to 39.2% of nearby road length and parallel
+// stretches rose. Cheap ground next to a road is an invitation to use the ground, not the road.
+
 // Search bounds. The ellipse is the real limiter - it confines the search to a corridor around the
 // straight line - and the expansion cap is a backstop that currently never fires.
 //
@@ -92,6 +102,22 @@ export const ROAD_HEURISTIC_WEIGHT = 1;
 // forest of those guarantees everything reachable is connected, and the shortest of the leftovers
 // are added back so the network has loops and alternate routes instead of being a pure tree.
 export const ROAD_EXTRA_LINK_FRACTION = 0.25;
+
+// A route this much longer than the straight line between its two settlements is not a road anyone
+// would build - and, more to the point, it is not a road at all: a path that indirect is almost
+// entirely running along roads that already exist, so the connection it claims to make is one the
+// network already provides. Drawing it anyway is what put a second line beside half the roads on
+// the map.
+//
+// Measured at Kuhad, whose links all misbehaved: Kuhad -> Nemorn Bridge came out 5780 units for a
+// 2044 straight line, swinging far south before turning back north, because a boundary-hill ridge
+// stands between them - the direct line is in bounds and unblocked but has 11 steps over the grade
+// limit in 59. The right answer there is no direct road, not a road the long way round.
+//
+// Applied only to ordinary links, which are optional by nature - the network offers another way
+// round. An access or rescue link exists precisely because nothing better was available, and for
+// those an indirect road beats no road.
+export const ROAD_MAX_PATH_RATIO = 1.9;
 // Continents are separated by CONTINENT_OCEAN_GAP (6000), so this also keeps the triangulation from
 // proposing links across open ocean, which A* would spend its whole expansion budget failing to
 // route.
@@ -113,6 +139,11 @@ export const ROAD_STRAIGHTEN_SPAN_STEPS = [24, 16, 11, 8, 6, 4, 3, 2];
 // Zero would refuse chords that shave a unit off a crossing for reasons that have nothing to do
 // with the river; a fraction of the corridor width leaves room for that and nothing more.
 export const ROAD_RIVER_STRAIGHTEN_SLACK = 20;
+
+// How near an existing road a shaped point has to be before it is pulled onto it. Just under the
+// grid step, so it catches two links that straightening split apart across one lattice cell and
+// leaves genuinely separate roads alone.
+export const ROAD_SNAP_DISTANCE = 50;
 
 export const ROAD_CORNER_RADIUS = 45;
 export const ROAD_CORNER_SEGMENTS = 6;

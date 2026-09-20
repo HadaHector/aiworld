@@ -7,10 +7,10 @@ import {
   ROAD_GRADE_WEIGHT,
   ROAD_MIN_HEIGHT,
   ROAD_MAX_LAKE_FACTOR,
+  ROAD_REUSE_DISCOUNT,
   ROAD_RIVER_CORRIDOR,
   ROAD_RIVER_CROSSING_WEIGHT,
   ROAD_OFF_ZONE_PENALTY,
-  ROAD_REUSE_DISCOUNT,
   ROAD_MAX_DETOUR_FACTOR,
   ROAD_MAX_EXPANSIONS,
   ROAD_HEURISTIC_WEIGHT,
@@ -193,7 +193,7 @@ export function createRoadPathfinder(sampleTerrain: TerrainSampler): RoadPathfin
    * Inside a river channel the grade limit is suspended entirely: banks are cut at exactly
    * ROAD_MAX_GRADE, so enforcing it would make every river in the world impassable.
    */
-  function stepCost(from: GroundNode, to: GroundNode, distance: number, zones: Set<number>, onRoad: boolean): number {
+  function stepCost(from: GroundNode, to: GroundNode, distance: number, zones: Set<number>, roadFactor: number): number {
     const grade = Math.abs(to.height - from.height) / distance;
     if (!to.inRiver && grade > ROAD_MAX_GRADE) return Infinity;
 
@@ -201,8 +201,7 @@ export function createRoadPathfinder(sampleTerrain: TerrainSampler): RoadPathfin
     let multiplier = 1 + ROAD_GRADE_WEIGHT * (excess / ROAD_EASY_GRADE) ** 2;
     if (to.inRiver) multiplier += ROAD_RIVER_CROSSING_WEIGHT;
     if (!zones.has(to.areaId)) multiplier *= ROAD_OFF_ZONE_PENALTY;
-    if (onRoad) multiplier *= ROAD_REUSE_DISCOUNT;
-    return distance * multiplier;
+    return distance * multiplier * roadFactor;
   }
 
   /** The lattice cells a straight run passes through, in order. Stepping at a quarter of the grid
@@ -358,7 +357,9 @@ export function createRoadPathfinder(sampleTerrain: TerrainSampler): RoadPathfin
         if (toGround.blocked) continue;
 
         const distance = dx !== 0 && dz !== 0 ? ROAD_GRID * Math.SQRT2 : ROAD_GRID;
-        const step = stepCost(fromGround, toGround, distance, zones, roadNodes.has(nextKey));
+        // Both ends, not the destination alone - see ROAD_REUSE_DISCOUNT.
+        const onRoad = roadNodes.has(current) && roadNodes.has(nextKey);
+        const step = stepCost(fromGround, toGround, distance, zones, onRoad ? ROAD_REUSE_DISCOUNT : 1);
         if (!Number.isFinite(step)) continue;
 
         const candidate = costSoFar + step;
