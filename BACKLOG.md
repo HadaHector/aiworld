@@ -66,6 +66,19 @@ What fixed most of it was resampling before snapping (see `snapToNetwork`). The 
 real splice - where a new route follows an existing road, adopt that road's own points rather than
 snapping a copy onto them - which would also stop the shared stretch being stored twice.
 
+### The road wander is baked into the polyline, and costs 13x the points
+
+`wobble` displaces the straight parts of a road by a couple of units, which needs the line stored at
+a few units per point instead of a few hundred: the network went from 6128 points to 82792. Nothing
+today cares - it is a few megabytes and the debug map draws it in one path - but stage 2 indexes
+road segments the way `riverField` indexes river segments, and a bucket that held a handful of
+segments would now hold hundreds, every one of them tested per terrain sample.
+
+The wander is a pure function of world position, so it does not have to be stored at all. Stage 2
+could keep the sparse line and apply the displacement analytically when it evaluates distance to the
+road, which is both cheaper and exact. Worth doing before the road field is written rather than
+after.
+
 ### Worker-based terrain chunk generation
 
 Discussed in theory and backlogged by request. Texture baking already runs across a worker pool

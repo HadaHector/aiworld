@@ -3,7 +3,9 @@ import type { CellPoint } from "../cells/cellGrid";
 import type { TerrainSampler } from "../terrain/terrainSampler";
 import type { SettlementSite } from "../settlements/settlementSites";
 import { simplify, removeLoops } from "../polyline";
-import { straighten, roundCorners, snapToNetwork, createSnapIndex } from "./roadShaping";
+import { straighten, roundCorners, snapToNetwork, createSnapIndex, wobble } from "./roadShaping";
+import { createBaseNoise2D } from "../terrain/noise";
+import { deriveSeed } from "../rng";
 import { createRoadPathfinder, nodePoint } from "./roadPathfinder";
 import {
   ROAD_EXTRA_LINK_FRACTION,
@@ -14,6 +16,17 @@ import {
   ROAD_SNAP_DISTANCE,
   ROAD_SNAP_SAMPLE,
   ROAD_SIMPLIFY_TOLERANCE,
+  ROAD_WOBBLE_AMPLITUDE,
+  ROAD_WOBBLE_WAVELENGTH,
+  ROAD_WOBBLE_WAVELENGTH_LONG,
+  ROAD_WOBBLE_LONG_RATIO,
+  ROAD_WOBBLE_SAMPLE_STEP,
+  ROAD_WOBBLE_STRAIGHT_WINDOW,
+  ROAD_WOBBLE_TURN_FADE_START,
+  ROAD_WOBBLE_TURN_FADE_END,
+  ROAD_WOBBLE_END_TAPER,
+  ROAD_WOBBLE_SIMPLIFY_TOLERANCE,
+  ROAD_WOBBLE_SALT,
 } from "./roadConfig";
 
 /** Why a road exists. Every link is routed the same way; this is which pass asked for it, and it
@@ -171,7 +184,11 @@ function polylineLength(points: CellPoint[]): number {
  * Junctions and shared trunks are the output of that, not a separate step - which is why there is
  * no "is there a road within N units" test anywhere here.
  */
-export function generateRoadNetwork(settlements: SettlementSite[], sampleTerrain: TerrainSampler): RoadNetwork {
+export function generateRoadNetwork(
+  seed: number,
+  settlements: SettlementSite[],
+  sampleTerrain: TerrainSampler,
+): RoadNetwork {
   if (settlements.length < 2) {
     return {
       links: [],
@@ -182,6 +199,16 @@ export function generateRoadNetwork(settlements: SettlementSite[], sampleTerrain
       },
     };
   }
+
+  // One field for the whole world, sampled at world position rather than along each road - see the
+  // note on `wobble` for why that is what keeps shared roads sharing.
+  const wobbleNoise = createBaseNoise2D(deriveSeed(seed, ROAD_WOBBLE_SALT));
+  const displacement = (x: number, z: number): number =>
+    ((wobbleNoise(x / ROAD_WOBBLE_WAVELENGTH, z / ROAD_WOBBLE_WAVELENGTH) +
+      ROAD_WOBBLE_LONG_RATIO *
+        wobbleNoise(x / ROAD_WOBBLE_WAVELENGTH_LONG + 53.1, z / ROAD_WOBBLE_WAVELENGTH_LONG + 17.7)) /
+      (1 + ROAD_WOBBLE_LONG_RATIO)) *
+    ROAD_WOBBLE_AMPLITUDE;
 
   const { all, chosen } = chooseLinks(settlements);
   const pathfinder = createRoadPathfinder(sampleTerrain);
@@ -245,8 +272,8 @@ export function generateRoadNetwork(settlements: SettlementSite[], sampleTerrain
     const snapped = snapToNetwork(roundCorners(straightened, chordIsClear), snapIndex, ROAD_SNAP_SAMPLE);
     // Loops removed AFTER simplification, not before: dropping points can itself cross a line over
     // itself, so the check has to see the line that will actually be drawn.
-    const points = removeLoops(simplify(snapped, ROAD_SIMPLIFY_TOLERANCE));
-    const length = polylineLength(points);
+    const base = removeLoops(simplify(snapped, ROAD_SIMPLIFY_TOLERANCE));
+    const length = polylineLength(base);
 
     // Judged on the finished line rather than on the search, because that is the road that would
     // actually be drawn. A rescue link is exempt: it exists precisely because nothing better was
@@ -263,7 +290,24 @@ export function generateRoadNetwork(settlements: SettlementSite[], sampleTerrain
       roadNodes.add(key);
       nodeUses.set(key, (nodeUses.get(key) ?? 0) + 1);
     }
-    snapIndex.add(points);
+    // The wander is added last and the UNWOBBLED line is what later roads snap to, so a shared
+    // stretch shares one underlying line and both copies then pick up the same displacement from
+    // the same world position. Snapping to the wobbled line instead would wobble it twice.
+    snapIndex.add(base);
+    const points = removeLoops(
+      simplify(
+        wobble(
+          base,
+          displacement,
+          ROAD_WOBBLE_SAMPLE_STEP,
+          ROAD_WOBBLE_STRAIGHT_WINDOW,
+          ROAD_WOBBLE_TURN_FADE_START,
+          ROAD_WOBBLE_TURN_FADE_END,
+          ROAD_WOBBLE_END_TAPER,
+        ),
+        ROAD_WOBBLE_SIMPLIFY_TOLERANCE,
+      ),
+    );
     links.push({ id: links.length, kind, from: candidate.from, to: candidate.to, points, length });
     built.union(candidate.from, candidate.to);
     homeAccess[candidate.from] ||= settlements[candidate.from].areaId === settlements[candidate.to].areaId;

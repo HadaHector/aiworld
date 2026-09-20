@@ -147,7 +147,7 @@ export function createTerrainSampler(seed: number): TerrainWorld {
 
   // Roads need the settlements to connect and the finished terrain to route over, so they come
   // last of all.
-  const roads = generateRoadNetwork(settlements, sampleTerrain);
+  const roads = generateRoadNetwork(seed, settlements, sampleTerrain);
 
   return { sampleTerrain, worldExtent, continents, areaBounds, areaNames, settlements, roads };
 }

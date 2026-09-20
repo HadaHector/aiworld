@@ -229,3 +229,99 @@ export function snapToNetwork(points: CellPoint[], index: SnapIndex, step: numbe
   dense.push(points[points.length - 1]);
   return dense.map((point) => index.snap(point) ?? point);
 }
+
+/** A lateral displacement for a point, from a noise field. See `wobble`. */
+export type Wobble = (x: number, z: number) => number;
+
+/**
+ * Adds a small sideways wander to the straight parts of a road.
+ *
+ * Routed roads are straight because the cost function has no reason to make them anything else,
+ * and a line that is straight to the world unit reads as surveyed rather than trodden. This is the
+ * one part of a road's shape that answers to nothing but appearance, so it is kept small enough
+ * that it cannot argue with anything the router decided.
+ *
+ * Two properties are load-bearing:
+ *
+ * The displacement is a function of WORLD POSITION, not of distance along the road. That is the
+ * opposite of how river meanders are parameterised, and deliberately so: two roads sharing a
+ * stretch have the same tangent there, so a position-based field gives them the same displacement
+ * and they stay exactly on top of each other. Arc-length noise would give each its own phase and
+ * re-open the gap between shared roads that `snapToNetwork` exists to close.
+ *
+ * And it only applies where the road is already running straight. Where it is turning, the shape
+ * is the router's answer to the terrain, and wobbling it would be second-guessing a decision made
+ * for a reason. Straightness is measured over a window and faded rather than switched, so the
+ * wander dies away as a bend approaches instead of stopping at an edge.
+ */
+export function wobble(
+  points: CellPoint[],
+  displacement: Wobble,
+  sampleStep: number,
+  straightWindow: number,
+  turnFadeStart: number,
+  turnFadeEnd: number,
+  endTaper: number,
+): CellPoint[] {
+  if (points.length < 2) return points;
+
+  // Resampled fine enough to carry the wander - a wavelength needs several points or it comes out
+  // as a straight line through a few displaced corners.
+  const dense: CellPoint[] = [];
+  const arcs: number[] = [];
+  let travelled = 0;
+  for (let i = 0; i < points.length - 1; i++) {
+    const a = points[i];
+    const b = points[i + 1];
+    const length = Math.hypot(b.x - a.x, b.z - a.z);
+    if (length <= 0) continue;
+    const steps = Math.max(1, Math.ceil(length / sampleStep));
+    for (let k = 0; k < steps; k++) {
+      const u = k / steps;
+      dense.push({ x: a.x + (b.x - a.x) * u, z: a.z + (b.z - a.z) * u });
+      arcs.push(travelled + length * u);
+    }
+    travelled += length;
+  }
+  dense.push(points[points.length - 1]);
+  arcs.push(travelled);
+  if (dense.length < 3) return points;
+
+  const windowSteps = Math.max(1, Math.round(straightWindow / sampleStep));
+
+  return dense.map((point, i) => {
+    const backIndex = Math.max(0, i - windowSteps);
+    const forwardIndex = Math.min(dense.length - 1, i + windowSteps);
+    const back = dense[backIndex];
+    const forward = dense[forwardIndex];
+
+    const inX = point.x - back.x;
+    const inZ = point.z - back.z;
+    const outX = forward.x - point.x;
+    const outZ = forward.z - point.z;
+    const inLength = Math.hypot(inX, inZ);
+    const outLength = Math.hypot(outX, outZ);
+    if (inLength <= 0 || outLength <= 0) return point;
+
+    // How much the road turns across the window, in degrees. Straight is 0.
+    const cos = Math.min(1, Math.max(-1, (inX * outX + inZ * outZ) / (inLength * outLength)));
+    const turn = (Math.acos(cos) * 180) / Math.PI;
+    const straightness = 1 - smoothstepLocal(turnFadeStart, turnFadeEnd, turn);
+    if (straightness <= 0) return point;
+
+    // Held to zero at both ends, so a road still meets its settlements exactly where it was routed
+    // to and a junction does not come apart by a couple of units.
+    const arc = arcs[i];
+    const taper = smoothstepLocal(0, endTaper, arc) * smoothstepLocal(0, endTaper, travelled - arc);
+
+    const offset = displacement(point.x, point.z) * straightness * taper;
+    const nx = -(outZ + inZ) / (inLength + outLength);
+    const nz = (outX + inX) / (inLength + outLength);
+    return { x: point.x + nx * offset, z: point.z + nz * offset };
+  });
+}
+
+function smoothstepLocal(edge0: number, edge1: number, x: number): number {
+  const t = Math.min(1, Math.max(0, (x - edge0) / (edge1 - edge0)));
+  return t * t * (3 - 2 * t);
+}

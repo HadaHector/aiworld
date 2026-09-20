@@ -151,3 +151,33 @@ export const ROAD_SNAP_SAMPLE = 12;
 export const ROAD_CORNER_RADIUS = 45;
 export const ROAD_CORNER_SEGMENTS = 6;
 export const ROAD_SIMPLIFY_TOLERANCE = 1.5;
+
+// A small sideways wander on the straight parts, so a road reads as trodden rather than surveyed.
+// Everything else about a road's shape answers to the terrain; this is the one part that does not,
+// so it is kept small enough that it cannot argue with anything the router decided.
+export const ROAD_WOBBLE_AMPLITUDE = 2;
+export const ROAD_WOBBLE_WAVELENGTH = 10;
+// A second, longer wave at a lower weight. One wavelength of smooth noise still reads as regular;
+// beating two against each other makes the wander vary in size along the road, which is what stops
+// it looking like a ripple applied to a straight line. Longer rather than shorter on purpose - a
+// shorter one would need the line resampled finer still.
+export const ROAD_WOBBLE_WAVELENGTH_LONG = 31;
+export const ROAD_WOBBLE_LONG_RATIO = 0.6;
+// Several samples per wavelength, or the wander comes out as a straight line through a few
+// displaced corners. This is what the point count is spent on - see the note in roadNetwork.
+export const ROAD_WOBBLE_SAMPLE_STEP = 2.5;
+// How far either side the road has to be straight for the wander to apply, and the turn across
+// that window at which it fades out entirely. Where a road is turning, its shape is the router's
+// answer to the terrain, and wobbling it would be second-guessing a decision made for a reason.
+export const ROAD_WOBBLE_STRAIGHT_WINDOW = 30;
+export const ROAD_WOBBLE_TURN_FADE_START = 4;
+export const ROAD_WOBBLE_TURN_FADE_END = 14;
+// Faded to nothing at both ends so a road still meets its settlements exactly where it was routed.
+export const ROAD_WOBBLE_END_TAPER = 40;
+// Below the wander's own amplitude, or simplification would throw the wander away again. This is
+// what the point count is really set by: 0.25 gives 125k points across the network, 0.5 gives 83k
+// and 0.9 gives 50k, while the wander delivered on straight road barely moves (p90 1.34, 1.47,
+// 1.71). Coarser does not mean less wander, it means blockier wander.
+export const ROAD_WOBBLE_SIMPLIFY_TOLERANCE = 0.5;
+
+export const ROAD_WOBBLE_SALT = 703;
