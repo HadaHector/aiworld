@@ -23,11 +23,11 @@ const ZONE_MIN_HALF_SIZE = 600; // a one-cell zone would otherwise zoom in past 
 // surroundings instead shows the real, jittered shape the blend produces.
 const ZONE_OUTSIDE_DIM = 0.4;
 
-// Settlement markers. Drawn over the cached base image alongside the player marker, so toggling
-// them costs a redraw rather than a re-render of the map underneath.
-const SETTLEMENT_COLOR = "rgb(250, 230, 150)";
-const SETTLEMENT_OUTLINE = "rgba(0, 0, 0, 0.75)";
-const SETTLEMENT_RADIUS_PX = 3;
+// Settlement markers. Positioned as DOM elements over the canvas rather than drawn into it: the
+// canvas is a SAMPLE_RESOLUTION-square image stretched to ~85vw, so anything drawn into it is
+// magnified two or three times, and 9px text came out unreadably blurry. Text and a dot cost
+// nothing to position in CSS and render at the screen's own resolution.
+const SETTLEMENT_DOT_PX = 7;
 // Names are only legible where the map is zoomed in far enough for the dots to be spread out; in
 // World view the whole continent is a few dozen pixels across and every label would overlap.
 const SETTLEMENT_LABEL_MIN_HALF_SIZE = 12000;
@@ -137,10 +137,23 @@ export function createDebugMap(
   displayCanvas.width = SAMPLE_RESOLUTION;
   displayCanvas.height = SAMPLE_RESOLUTION;
   displayCanvas.style.cssText = `
-    width: ${DISPLAY_SIZE_CSS}; height: ${DISPLAY_SIZE_CSS};
+    display: block; width: 100%; height: 100%;
     border: 2px solid rgba(255,255,255,0.6); border-radius: 4px; cursor: crosshair;
+    box-sizing: border-box;
   `;
-  overlay.appendChild(displayCanvas);
+  // The canvas and the settlement markers share one positioning context, so a marker can be placed
+  // as a percentage of the map and follow it at whatever size DISPLAY_SIZE_CSS resolves to.
+  const mapFrame = document.createElement("div");
+  mapFrame.style.cssText = `position: relative; width: ${DISPLAY_SIZE_CSS}; height: ${DISPLAY_SIZE_CSS};`;
+  mapFrame.appendChild(displayCanvas);
+
+  const markerLayer = document.createElement("div");
+  // Inset by the canvas border, so a marker sits over the map image rather than over the frame.
+  // Transparent to the mouse, so click-to-teleport still reaches the canvas underneath.
+  markerLayer.style.cssText = "position: absolute; inset: 2px; pointer-events: none; overflow: hidden;";
+  mapFrame.appendChild(markerLayer);
+
+  overlay.appendChild(mapFrame);
   document.body.appendChild(overlay);
 
   const displayCtx = displayCanvas.getContext("2d");
@@ -373,32 +386,45 @@ export function createDebugMap(
     settlementToggle.style.background = showSettlements ? "rgba(255,255,255,0.35)" : "rgba(255,255,255,0.1)";
   }
 
-  /** Dots for every settlement in frame, with names once the view is close enough to read them. */
+  /** Dots for every settlement in frame, with names once the view is close enough to read them.
+   *  Rebuilt wholesale: 211 elements is nothing, and diffing them against the previous view would
+   *  be more code than it saves. */
   const drawSettlements = (): void => {
+    markerLayer.replaceChildren();
+    if (!showSettlements) return;
+
     const viewport = activeViewport();
     const labelled = viewport.halfSize <= SETTLEMENT_LABEL_MIN_HALF_SIZE;
-    displayCtx.font = "9px sans-serif";
-    displayCtx.textAlign = "center";
-    displayCtx.lineWidth = 2;
 
     for (const site of settlements) {
       const { x, y } = worldToPixel(site.x, site.z);
       if (x < 0 || y < 0 || x > SAMPLE_RESOLUTION || y > SAMPLE_RESOLUTION) continue;
+      const left = `${(x / SAMPLE_RESOLUTION) * 100}%`;
+      const top = `${(y / SAMPLE_RESOLUTION) * 100}%`;
 
-      displayCtx.beginPath();
-      displayCtx.arc(x, y, SETTLEMENT_RADIUS_PX, 0, Math.PI * 2);
-      displayCtx.fillStyle = SETTLEMENT_COLOR;
-      displayCtx.strokeStyle = SETTLEMENT_OUTLINE;
-      displayCtx.fill();
-      displayCtx.stroke();
+      const dot = document.createElement("div");
+      dot.style.cssText = `
+        position: absolute; left: ${left}; top: ${top};
+        width: ${SETTLEMENT_DOT_PX}px; height: ${SETTLEMENT_DOT_PX}px; margin: ${-SETTLEMENT_DOT_PX / 2}px 0 0 ${-SETTLEMENT_DOT_PX / 2}px;
+        border-radius: 50%; background: rgb(250, 230, 150); border: 1px solid rgba(0,0,0,0.75);
+        box-sizing: border-box;
+      `;
+      markerLayer.appendChild(dot);
 
       if (!labelled) continue;
+      const name = document.createElement("div");
+      name.textContent = site.name;
       // Outlined rather than boxed: a settlement sits on land of every possible colour, and a
       // filled label plate would hide the terrain the placement is meant to be judged against.
-      displayCtx.strokeText(site.name, x, y - SETTLEMENT_RADIUS_PX - 3);
-      displayCtx.fillText(site.name, x, y - SETTLEMENT_RADIUS_PX - 3);
+      name.style.cssText = `
+        position: absolute; left: ${left}; top: ${top};
+        transform: translate(-50%, -100%); margin-top: ${-SETTLEMENT_DOT_PX}px;
+        font-family: sans-serif; font-size: 11px; line-height: 1; white-space: nowrap;
+        color: rgb(252, 240, 190);
+        text-shadow: 0 0 3px #000, 0 0 3px #000, 1px 1px 2px #000;
+      `;
+      markerLayer.appendChild(name);
     }
-    displayCtx.textAlign = "start";
   };
 
   const redraw = (): void => {
@@ -408,7 +434,7 @@ export function createDebugMap(
     label.textContent = zoneName ? `${BASE_LABEL}  -  ${zoneName}` : BASE_LABEL;
 
     displayCtx.drawImage(getBaseCanvas(), 0, 0);
-    if (showSettlements) drawSettlements();
+    drawSettlements();
 
     const { x: markerPxX, y: markerPxZ } = worldToPixel(markerX, markerZ);
 
