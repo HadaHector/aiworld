@@ -4,6 +4,7 @@ import type { ContinentPlan } from "../world/cells/continentLayout";
 import { SEA_LEVEL, type AreaBounds } from "../world/cells/areaField";
 import { GROWTH_RADIUS_SAFETY_FACTOR } from "../world/cells/config";
 import type { MaterialLibrary } from "../world/materials/materialLibrary";
+import type { SettlementSite } from "../world/settlements/settlementSites";
 
 const SAMPLE_RESOLUTION = 400; // internal sample grid, kept modest since this is a debug tool
 const DISPLAY_SIZE_CSS = "min(85vw, 80vh)"; // large, centered, capped to fit the viewport
@@ -21,6 +22,15 @@ const ZONE_MIN_HALF_SIZE = 600; // a one-cell zone would otherwise zoom in past 
 // zone boundary is a blend rather than a line, so there is no outline to draw. Dimming the
 // surroundings instead shows the real, jittered shape the blend produces.
 const ZONE_OUTSIDE_DIM = 0.4;
+
+// Settlement markers. Drawn over the cached base image alongside the player marker, so toggling
+// them costs a redraw rather than a re-render of the map underneath.
+const SETTLEMENT_COLOR = "rgb(250, 230, 150)";
+const SETTLEMENT_OUTLINE = "rgba(0, 0, 0, 0.75)";
+const SETTLEMENT_RADIUS_PX = 3;
+// Names are only legible where the map is zoomed in far enough for the dots to be spread out; in
+// World view the whole continent is a few dozen pixels across and every label would overlap.
+const SETTLEMENT_LABEL_MIN_HALF_SIZE = 12000;
 
 // Emboss/relief shading: each land pixel is compared against its upper-left neighbor (one pixel
 // away, so the offset self-scales with zoom - a big offset in World view, a fine one in Continent
@@ -73,6 +83,7 @@ export function createDebugMap(
   materialLibrary: MaterialLibrary,
   areaBounds: Map<number, AreaBounds>,
   areaNames: Map<number, string>,
+  settlements: SettlementSite[],
   onTeleport: (worldX: number, worldZ: number) => void,
 ): DebugMap {
   const overlay = document.createElement("div");
@@ -109,6 +120,19 @@ export function createDebugMap(
   const continentTabButton = createTabButton("Continent");
   const zoneTabButton = createTabButton("Zone");
 
+  // In its own row: this is an overlay on whichever view is showing, not a fourth view.
+  const overlays = document.createElement("div");
+  overlays.style.cssText = "display: flex; gap: 6px;";
+  overlay.appendChild(overlays);
+  const settlementToggle = document.createElement("button");
+  settlementToggle.textContent = `Settlements (${settlements.length})`;
+  settlementToggle.style.cssText = `
+    font-family: sans-serif; font-size: 12px; padding: 4px 12px; border-radius: 3px;
+    border: 1px solid rgba(255,255,255,0.4); background: rgba(255,255,255,0.1); color: #eee;
+    cursor: pointer;
+  `;
+  overlays.appendChild(settlementToggle);
+
   const displayCanvas = document.createElement("canvas");
   displayCanvas.width = SAMPLE_RESOLUTION;
   displayCanvas.height = SAMPLE_RESOLUTION;
@@ -133,6 +157,7 @@ export function createDebugMap(
   // across a border does not re-frame and re-render the map underneath the player mid-look; it is
   // refreshed when the view is opened or switched to.
   let zoneAreaId = -1;
+  let showSettlements = true;
   let markerX = 0;
   let markerZ = 0;
   let heading = 0;
@@ -345,7 +370,36 @@ export function createDebugMap(
     highlight(worldTabButton, viewMode === "world");
     highlight(continentTabButton, viewMode === "continent");
     highlight(zoneTabButton, viewMode === "zone");
+    settlementToggle.style.background = showSettlements ? "rgba(255,255,255,0.35)" : "rgba(255,255,255,0.1)";
   }
+
+  /** Dots for every settlement in frame, with names once the view is close enough to read them. */
+  const drawSettlements = (): void => {
+    const viewport = activeViewport();
+    const labelled = viewport.halfSize <= SETTLEMENT_LABEL_MIN_HALF_SIZE;
+    displayCtx.font = "9px sans-serif";
+    displayCtx.textAlign = "center";
+    displayCtx.lineWidth = 2;
+
+    for (const site of settlements) {
+      const { x, y } = worldToPixel(site.x, site.z);
+      if (x < 0 || y < 0 || x > SAMPLE_RESOLUTION || y > SAMPLE_RESOLUTION) continue;
+
+      displayCtx.beginPath();
+      displayCtx.arc(x, y, SETTLEMENT_RADIUS_PX, 0, Math.PI * 2);
+      displayCtx.fillStyle = SETTLEMENT_COLOR;
+      displayCtx.strokeStyle = SETTLEMENT_OUTLINE;
+      displayCtx.fill();
+      displayCtx.stroke();
+
+      if (!labelled) continue;
+      // Outlined rather than boxed: a settlement sits on land of every possible colour, and a
+      // filled label plate would hide the terrain the placement is meant to be judged against.
+      displayCtx.strokeText(site.name, x, y - SETTLEMENT_RADIUS_PX - 3);
+      displayCtx.fillText(site.name, x, y - SETTLEMENT_RADIUS_PX - 3);
+    }
+    displayCtx.textAlign = "start";
+  };
 
   const redraw = (): void => {
     // Named here rather than in the tab row: the Zone view is the only one framed on something with
@@ -354,6 +408,7 @@ export function createDebugMap(
     label.textContent = zoneName ? `${BASE_LABEL}  -  ${zoneName}` : BASE_LABEL;
 
     displayCtx.drawImage(getBaseCanvas(), 0, 0);
+    if (showSettlements) drawSettlements();
 
     const { x: markerPxX, y: markerPxZ } = worldToPixel(markerX, markerZ);
 
@@ -392,6 +447,11 @@ export function createDebugMap(
   worldTabButton.addEventListener("click", () => setViewMode("world"));
   continentTabButton.addEventListener("click", () => setViewMode("continent"));
   zoneTabButton.addEventListener("click", () => setViewMode("zone"));
+  settlementToggle.addEventListener("click", () => {
+    showSettlements = !showSettlements;
+    updateTabStyles();
+    if (visible) redraw();
+  });
 
   const toggle = (): void => setVisible(!visible);
 

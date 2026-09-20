@@ -2,6 +2,7 @@ import { deriveSeed } from "../rng";
 import { smoothstep, lerp } from "../mathUtils";
 import { createAreaSampler, SEA_LEVEL, type AreaWeight, type AreaBounds } from "../cells/areaField";
 import { createBedrockSampler } from "../bedrock";
+import { generateSettlementSites, type SettlementSite } from "../settlements/settlementSites";
 import type { ContinentPlan } from "../cells/continentLayout";
 import type { BiomeDefinition } from "../biomes/biomeTypes";
 import { BIOME_REGISTRY } from "../biomes/biomeDefinitions";
@@ -26,6 +27,9 @@ export interface TerrainSample {
   /** Only "close enough for a river valley to reach here" - the carve fades to nothing before this
    *  goes false, so it is no longer a switch anything visible depends on. */
   isRiverEdge: boolean;
+  /** Distance past the nearest cell to the nearest cell of a DIFFERENT area - continuous, and
+   *  Infinity when no other area is within the boundary hills reach. See AreaSample. */
+  areaBorderGap: number;
   /** True distance to the nearest river centreline, Infinity past riverField's search radius.
    *  Continuous everywhere, so it is the signal to use for anything that has to vary smoothly. */
   riverGap: number;
@@ -39,6 +43,7 @@ export interface TerrainWorld {
   continents: ContinentPlan[];
   areaBounds: Map<number, AreaBounds>;
   areaNames: Map<number, string>;
+  settlements: SettlementSite[];
 }
 
 const OCEAN_FLOOR_DEPTH = -14;
@@ -69,7 +74,8 @@ function compileHeightPipelines(seed: number): Map<string, CompiledPipeline> {
 
 /** Composes continent shape + biome zoning + height noise into one queryable per-position sample. */
 export function createTerrainSampler(seed: number): TerrainWorld {
-  const { sampleArea, worldExtent, continents, areaBounds, areaNames } = createAreaSampler(seed);
+  const { sampleArea, worldExtent, continents, areaBounds, areaNames, landCellSites, nameGenerator } =
+    createAreaSampler(seed);
   const bedrock = createBedrockSampler(seed);
   const oceanNoise2D = createBaseNoise2D(deriveSeed(seed, OCEAN_SALT));
   const heightPipelines = compileHeightPipelines(seed);
@@ -122,10 +128,20 @@ export function createTerrainSampler(seed: number): TerrainWorld {
       isLand: area.isLand,
       landmass: area.landmass,
       lakeFactor: area.lakeFactor,
+      areaBorderGap: area.areaBorderGap,
       isRiverEdge: area.isRiverEdge,
       riverGap: area.riverGap,
     };
   }
 
-  return { sampleTerrain, worldExtent, continents, areaBounds, areaNames };
+  // After sampleTerrain exists, because choosing a site is entirely a question about the finished
+  // terrain - how level it is, how far above the water, how near a river.
+  const settlements = generateSettlementSites({
+    seed,
+    cellSites: landCellSites,
+    sampleTerrain,
+    nameFor: (biome, id) => nameGenerator.settlementNameFor(biome.voiceId, id),
+  });
+
+  return { sampleTerrain, worldExtent, continents, areaBounds, areaNames, settlements };
 }

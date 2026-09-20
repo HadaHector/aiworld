@@ -2,7 +2,7 @@ import { createVoronoiField, type VoronoiField } from "./voronoiField";
 import { computeCellBounds, generateCellDiagram, type CellPoint } from "./cellGrid";
 import { createRiverField } from "./riverField";
 import { createCentrelineShaper } from "./riverCentreline";
-import { createNameGenerator } from "../naming/nameGenerator";
+import { createNameGenerator, type NameGenerator } from "../naming/nameGenerator";
 import { planWorld, type ContinentPlan } from "./continentLayout";
 import { pickStartCell, growLandmass } from "./regionGrowth";
 import { partitionIntoAreas, assignAreaBiomes } from "./areaAssignment";
@@ -96,6 +96,12 @@ export interface AreaWorld {
    *  built millions of times per chunk and would pay a map lookup for a string nothing but the UI
    *  reads, which can look it up by primaryAreaId when it actually needs one. */
   areaNames: Map<number, string>;
+  /** Sites of every land cell that is not a lake, for anything that wants to scatter content over
+   *  the land without rebuilding the cell diagram to find out where the land is. */
+  landCellSites: CellPoint[];
+  /** The world name generator, so later systems name their own content out of the same pool and
+   *  cannot collide with a zone name. */
+  nameGenerator: NameGenerator;
 }
 
 /**
@@ -466,5 +472,18 @@ export function createAreaSampler(seed: number): AreaWorld {
     areaNames.set(areaId, nameGenerator.nameFor(areaBiomes[areaId].voiceId, areaId));
   }
 
-  return { sampleArea, worldExtent: layout.worldExtent, continents: layout.continents, areaBounds, areaNames };
+  const landCellSites: CellPoint[] = [];
+  for (const cellIndex of landCells) {
+    if (!lakeCells.has(cellIndex)) landCellSites.push(points[cellIndex]);
+  }
+
+  return {
+    sampleArea,
+    worldExtent: layout.worldExtent,
+    continents: layout.continents,
+    areaBounds,
+    areaNames,
+    landCellSites,
+    nameGenerator,
+  };
 }

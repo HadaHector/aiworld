@@ -221,6 +221,21 @@ function assemble(rng: () => number, voice: Voice): string {
   }
 }
 
+/**
+ * Words a settlement is called after, shared by every voice rather than declared per voice.
+ *
+ * The zones' `features` are landscape words and belong to the voice that named the land; a
+ * settlement is named by the people living in it, who all speak the same common tongue - so
+ * "Sonriel Crossing" and "Kharun Crossing" sitting on the same map is the point, not a collision.
+ */
+const SETTLEMENT_FEATURES = [
+  "Crossing", "Ford", "Hold", "Watch", "Rest", "Gate", "Market", "Landing", "Bridge", "Steps",
+];
+
+/** Bare word or word plus feature. Weighted towards bare, so the map does not read as a list of
+ *  compass points; the feature-bearing ones are what make the bare ones look deliberate. */
+const SETTLEMENT_FEATURE_CHANCE = 0.45;
+
 export interface NameGenerator {
   /**
    * A name for one thing, stable for a given (voice, id) pair and unique within this generator.
@@ -230,6 +245,15 @@ export interface NameGenerator {
    * collisions are rare, so the retry almost never runs.
    */
   nameFor(voiceId: VoiceId, id: number): string;
+  /**
+   * A name for a settlement, drawn from the same pool of taken names as everything else - a town
+   * and the zone it stands in must not share a name.
+   *
+   * Separate from `nameFor` because the zone templates are wrong for a place people live in: "The
+   * Drowned Marsh" is a region, not a village, and "Zaazmun's Sands" names a landscape after
+   * someone rather than naming a settlement at all.
+   */
+  settlementNameFor(voiceId: VoiceId, id: number): string;
 }
 
 const NAME_SALT = 701;
@@ -239,16 +263,16 @@ export function createNameGenerator(seed: number): NameGenerator {
   const cache = new Map<string, string>();
   const taken = new Set<string>();
 
-  function nameFor(voiceId: VoiceId, id: number): string {
-    const key = `${voiceId}:${id}`;
+  function generate(kind: string, voiceId: VoiceId, id: number, build: (rng: () => number, voice: Voice) => string): string {
+    const key = `${kind}:${voiceId}:${id}`;
     const cached = cache.get(key);
     if (cached) return cached;
 
     const voice = VOICES[voiceId] ?? VOICES.verdant;
     let name = "";
     for (let attempt = 0; attempt < 32; attempt++) {
-      const rng = mulberry32(deriveSeed(root, id * 8191 + attempt * 131 + voiceId.length));
-      name = assemble(rng, voice);
+      const rng = mulberry32(deriveSeed(root, id * 8191 + attempt * 131 + voiceId.length + kind.length));
+      name = build(rng, voice);
       if (!taken.has(name)) break;
     }
 
@@ -257,5 +281,16 @@ export function createNameGenerator(seed: number): NameGenerator {
     return name;
   }
 
-  return { nameFor };
+  function nameFor(voiceId: VoiceId, id: number): string {
+    return generate("zone", voiceId, id, assemble);
+  }
+
+  function settlementNameFor(voiceId: VoiceId, id: number): string {
+    return generate("settlement", voiceId, id, (rng, voice) => {
+      const word = buildName(rng, voice);
+      return rng() < SETTLEMENT_FEATURE_CHANCE ? `${word} ${pick(rng, SETTLEMENT_FEATURES)}` : word;
+    });
+  }
+
+  return { nameFor, settlementNameFor };
 }
