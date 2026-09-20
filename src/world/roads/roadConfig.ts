@@ -66,6 +66,13 @@ export const ROAD_MAX_DETOUR_FACTOR = 2.2;
 // because it is tried only after everything else has been built, it is also the one case where the
 // route can lean almost entirely on roads that already exist.
 export const ROAD_RESCUE_DETOUR_FACTOR = 4;
+
+// A settlement should be reachable from its own zone, not only by a road arriving from a
+// neighbouring one. The triangulation does not guarantee that - it connects nearest neighbours
+// wherever they are, so a settlement near a zone border routinely ends up with its only link
+// crossing into the zone next door. How many nearest same-zone settlements to try before giving
+// up: more than one, because the nearest is sometimes the one across a ridge.
+export const ROAD_ACCESS_ATTEMPTS = 4;
 // A rescue searches a corridor several times the area of a normal link, so it needs a budget to
 // match or it fails on the cap rather than on the ground.
 export const ROAD_RESCUE_MAX_EXPANSIONS = 30000;

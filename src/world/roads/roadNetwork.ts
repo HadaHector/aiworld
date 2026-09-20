@@ -8,13 +8,19 @@ import {
   ROAD_EXTRA_LINK_FRACTION,
   ROAD_MAX_LINK_LENGTH,
   ROAD_RESCUE_DETOUR_FACTOR,
+  ROAD_ACCESS_ATTEMPTS,
   ROAD_SMOOTHING_PASSES,
   ROAD_SIMPLIFY_TOLERANCE,
 } from "./roadConfig";
 
+/** Why a road exists. Every link is routed the same way; this is which pass asked for it, and it
+ *  is what a later stage would use to draw a local access track narrower than a trunk road. */
+export type RoadKind = "link" | "access" | "rescue";
+
 /** One road, as the line it runs along. */
 export interface RoadLink {
   id: number;
+  kind: RoadKind;
   from: number; // settlement id
   to: number;
   points: CellPoint[];
@@ -30,8 +36,14 @@ export interface RoadNetwork {
     candidates: number;
     attempted: number;
     built: number;
-    /** Links added by the second pass purely to stop settlements being unreachable by road. */
+    /** Links added so that a settlement is reachable from inside its own zone. */
+    access: number;
+    /** Links added by the last pass purely to stop settlements being unreachable by road. */
     rescued: number;
+    /** Settlements still with no road at all, and with no road to their own zone. Reported rather
+     *  than hidden: both are properties of the terrain, not of the plan. */
+    unreached: number;
+    withoutHomeAccess: number;
     /** No route at all inside the detour budget - almost always a link the triangulation proposed
      *  across water or over ground nothing can climb. */
     unreachable: number;
@@ -159,8 +171,8 @@ export function generateRoadNetwork(settlements: SettlementSite[], sampleTerrain
     return {
       links: [],
       stats: {
-        candidates: 0, attempted: 0, built: 0, rescued: 0, unreachable: 0, capped: 0,
-        expansions: 0, samples: 0, sharedNodes: 0,
+        candidates: 0, attempted: 0, built: 0, access: 0, rescued: 0, unreached: 0,
+        withoutHomeAccess: 0, unreachable: 0, capped: 0, expansions: 0, samples: 0, sharedNodes: 0,
       },
     };
   }
@@ -170,13 +182,23 @@ export function generateRoadNetwork(settlements: SettlementSite[], sampleTerrain
   const roadNodes = new Set<number>();
   const nodeUses = new Map<number, number>();
   const links: RoadLink[] = [];
+  // Whether a settlement is reachable from its own zone - i.e. has a road to another settlement in
+  // it. Tracked as links are built rather than recomputed, since the access pass below both reads
+  // and extends it.
+  const homeAccess = new Array<boolean>(settlements.length).fill(false);
+  const zoneMembers = new Map<number, number[]>();
+  settlements.forEach((settlement, id) => {
+    const members = zoneMembers.get(settlement.areaId);
+    if (members) members.push(id);
+    else zoneMembers.set(settlement.areaId, [id]);
+  });
   let unreachable = 0;
   let capped = 0;
   let expansions = 0;
 
   const built = createUnionFind(settlements.length);
 
-  function build(candidate: Candidate, rescue = false): boolean {
+  function build(candidate: Candidate, kind: RoadKind = "link"): boolean {
     const from = settlements[candidate.from];
     const to = settlements[candidate.to];
     const result = pathfinder.findPath({
@@ -184,7 +206,7 @@ export function generateRoadNetwork(settlements: SettlementSite[], sampleTerrain
       to,
       zones: new Set([from.areaId, to.areaId]),
       roadNodes,
-      detourFactor: rescue ? ROAD_RESCUE_DETOUR_FACTOR : undefined,
+      detourFactor: kind === "link" ? undefined : ROAD_RESCUE_DETOUR_FACTOR,
     });
     expansions += result.expansions;
 
@@ -206,12 +228,45 @@ export function generateRoadNetwork(settlements: SettlementSite[], sampleTerrain
     raw[raw.length - 1] = { x: to.x, z: to.z };
 
     const points = simplify(chaikin(raw, ROAD_SMOOTHING_PASSES), ROAD_SIMPLIFY_TOLERANCE);
-    links.push({ id: links.length, from: candidate.from, to: candidate.to, points, length: polylineLength(points) });
+    links.push({ id: links.length, kind, from: candidate.from, to: candidate.to, points, length: polylineLength(points) });
     built.union(candidate.from, candidate.to);
+    homeAccess[candidate.from] ||= settlements[candidate.from].areaId === settlements[candidate.to].areaId;
+    homeAccess[candidate.to] ||= homeAccess[candidate.from];
     return true;
   }
 
   for (const candidate of chosen) build(candidate);
+
+  // Access pass. A settlement whose every road arrives from a neighbouring zone is connected but
+  // not served: nothing leads to it from the land it belongs to. This gives each of those a road
+  // to its nearest same-zone settlement, which - since both ends are in one zone - is routed
+  // entirely inside it by the ordinary off-zone penalty, with no special case.
+  //
+  // Zones holding a single settlement are skipped: there is nothing in-zone to connect to, and
+  // that is a fact about the zone rather than a link that failed.
+  let access = 0;
+  for (let id = 0; id < settlements.length; id++) {
+    if (homeAccess[id]) continue;
+    const neighbours = zoneMembers.get(settlements[id].areaId) ?? [];
+    if (neighbours.length < 2) continue;
+
+    const nearest = neighbours
+      .filter((other) => other !== id)
+      .map((other) => ({
+        from: Math.min(id, other),
+        to: Math.max(id, other),
+        length: Math.hypot(settlements[other].x - settlements[id].x, settlements[other].z - settlements[id].z),
+      }))
+      .sort((a, b) => a.length - b.length)
+      .slice(0, ROAD_ACCESS_ATTEMPTS);
+
+    for (const candidate of nearest) {
+      if (build(candidate, "access")) {
+        access++;
+        break;
+      }
+    }
+  }
 
   // Whatever the plan said, what is connected is what got built. Every candidate that would join
   // two settlements the built roads left apart is retried with a far larger detour budget - a very
@@ -220,7 +275,17 @@ export function generateRoadNetwork(settlements: SettlementSite[], sampleTerrain
   let rescued = 0;
   for (const candidate of all) {
     if (built.connected(candidate.from, candidate.to)) continue;
-    if (build(candidate, true)) rescued++;
+    if (build(candidate, "rescue")) rescued++;
+  }
+
+  const reached = new Set<number>();
+  for (const link of links) {
+    reached.add(link.from);
+    reached.add(link.to);
+  }
+  let withoutHomeAccess = 0;
+  for (let id = 0; id < settlements.length; id++) {
+    if (!homeAccess[id] && (zoneMembers.get(settlements[id].areaId) ?? []).length > 1) withoutHomeAccess++;
   }
 
   let sharedNodes = 0;
@@ -231,8 +296,11 @@ export function generateRoadNetwork(settlements: SettlementSite[], sampleTerrain
     stats: {
       candidates: all.length,
       attempted: chosen.length,
-      rescued,
       built: links.length,
+      access,
+      rescued,
+      unreached: settlements.length - reached.size,
+      withoutHomeAccess,
       unreachable,
       capped,
       expansions,

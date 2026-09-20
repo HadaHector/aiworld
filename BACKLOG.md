@@ -35,12 +35,17 @@ What is left is either a coarser grid - measured, grid 40 builds MORE links from
 a wider step measures grade over a longer run and the grade term starts meaning less - or making
 `sampleTerrain` itself cheaper, or moving the whole pass to a worker.
 
-### 12 settlements cannot be reached by road
+### 22 settlements the roads cannot properly serve
 
-Measured at seed 1337: 195 of 211 settlements form three connected components, one per continent,
-and 12 are isolated. They are not on islands - the straight line to a neighbour is mostly dry - they
-are canyon-rim and mountain sites ringed by ground steeper than ROAD_MAX_GRADE. One measured case
-had a 57-unit cliff across a 24-unit span between two settlements 1422 apart.
+Measured at seed 1337, after the access pass: 199 of 211 settlements are on the road network in
+three components, one per continent. **12 have no road at all**, and a further **10 have roads but
+none from inside their own zone** - every route to their same-zone neighbours was impassable.
+
+They are not on islands: the straight line to a neighbour is mostly dry. They are canyon-rim and
+mountain sites ringed by ground steeper than ROAD_MAX_GRADE. One measured case had a 57-unit cliff
+across a 24-unit span between two settlements 1422 apart. Raising the expansion budget does not
+recover any of them (measured at 12k and 40k: identical results), so this is the terrain, not the
+search.
 
 Either they stay unreachable, which reads as deliberate, or stage 2's terrain work carves a way in.
 A decision, not a defect.
