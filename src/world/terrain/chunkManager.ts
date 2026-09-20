@@ -1,7 +1,9 @@
-import type { GroundMesh, Scene } from "@babylonjs/core";
+import type { GroundMesh, Mesh, Scene, StandardMaterial } from "@babylonjs/core";
 import { createTerrainChunk } from "./terrainMesh";
 import type { TerrainSampler } from "./terrainSampler";
 import type { MaterialLibrary } from "../materials/materialLibrary";
+import type { RoadChunkIndex } from "../roads/roadChunkIndex";
+import { createRoadChunk } from "../roads/roadMesh";
 
 export interface ChunkManagerOptions {
   scene: Scene;
@@ -11,6 +13,10 @@ export interface ChunkManagerOptions {
   chunkSubdivisions: number;
   loadRadius: number;
   unloadRadius: number;
+  /** Roads are streamed on exactly the same schedule as the terrain they lie on, so a road can
+   *  never be visible over ground that has not been built - and never outlive it either. */
+  roadIndex: RoadChunkIndex;
+  roadMaterial: StandardMaterial;
 }
 
 export interface ChunkManager {
@@ -31,12 +37,13 @@ function chunkKey(cx: number, cz: number): string {
 
 /** Streams terrain chunk meshes in/out around a moving position based on a load/unload radius. */
 export function createChunkManager(options: ChunkManagerOptions): ChunkManager {
-  const { scene, sampleTerrain, materialLibrary, chunkSize, chunkSubdivisions } = options;
+  const { scene, sampleTerrain, materialLibrary, chunkSize, chunkSubdivisions, roadIndex, roadMaterial } = options;
 
   let loadRadius = options.loadRadius;
   let unloadRadius = options.unloadRadius;
 
   const loaded = new Map<string, GroundMesh>();
+  const loadedRoads = new Map<string, Mesh>();
   const queued = new Set<string>();
   const buildQueue: ChunkCoord[] = [];
 
@@ -85,6 +92,14 @@ export function createChunkManager(options: ChunkManagerOptions): ChunkManager {
       originZ: center.z,
     });
     loaded.set(key, mesh);
+
+    const road = createRoadChunk(scene, {
+      name: `roadChunk_${key}`,
+      runs: roadIndex.runsIn(cx, cz),
+      sampleTerrain,
+      material: roadMaterial,
+    });
+    if (road) loadedRoads.set(key, road);
   }
 
   function enqueueMissingChunks(x: number, z: number): void {
@@ -105,6 +120,8 @@ export function createChunkManager(options: ChunkManagerOptions): ChunkManager {
       if (!withinRadius(cx, cz, x, z, unloadRadius)) {
         mesh.dispose();
         loaded.delete(key);
+        loadedRoads.get(key)?.dispose();
+        loadedRoads.delete(key);
       }
     }
   }
@@ -196,7 +213,11 @@ export function createChunkManager(options: ChunkManagerOptions): ChunkManager {
     for (const mesh of loaded.values()) {
       mesh.dispose();
     }
+    for (const mesh of loadedRoads.values()) {
+      mesh.dispose();
+    }
     loaded.clear();
+    loadedRoads.clear();
     queued.clear();
     buildQueue.length = 0;
   }

@@ -66,18 +66,28 @@ What fixed most of it was resampling before snapping (see `snapToNetwork`). The 
 real splice - where a new route follows an existing road, adopt that road's own points rather than
 snapping a copy onto them - which would also stop the shared stretch being stored twice.
 
-### The road wander is baked into the polyline, and costs 13x the points
+### Road crossings are fords, and the road goes under the water
+
+Where a road crosses a river it follows the carved channel down and back up, so it is submerged
+under the sea-level water plane for the width of the crossing. It reads as a ford, which is honest,
+but the beds run to -8 near a river mouth and nobody fords eight units of water.
+
+The decision taken earlier stands: ford where the bed is shallow, a generated deck where it is not.
+Neither needs a model - a deck is a quad strip with an arch - but both need the crossing depth
+measured first, and a heightfield cannot express a road over water, so the deck has to be its own
+mesh.
+
+### The road wander is stored rather than computed, and the chunk index holds 302k points
 
 `wobble` displaces the straight parts of a road by a couple of units, which needs the line stored at
-a few units per point instead of a few hundred: the network went from 6128 points to 82792. Nothing
-today cares - it is a few megabytes and the debug map draws it in one path - but stage 2 indexes
-road segments the way `riverField` indexes river segments, and a bucket that held a handful of
-segments would now hold hundreds, every one of them tested per terrain sample.
+a few units per point rather than a few hundred: the network went from 6128 points to 82792. The
+chunk index then resamples to 2.5 units for the mesh and holds 302205 points, which is the real
+memory cost - a few megabytes of small objects.
 
-The wander is a pure function of world position, so it does not have to be stored at all. Stage 2
-could keep the sparse line and apply the displacement analytically when it evaluates distance to the
-road, which is both cheaper and exact. Worth doing before the road field is written rather than
-after.
+The wander is a pure function of world position and the resample is deterministic, so neither has to
+be stored. A chunk could resample its own runs on demand from the sparse line and apply the
+displacement as it goes, trading a little build time for all of that memory. Worth doing if the
+index ever becomes the thing that hurts; it is not today.
 
 ### Worker-based terrain chunk generation
 

@@ -155,17 +155,17 @@ export const ROAD_SIMPLIFY_TOLERANCE = 1.5;
 // A small sideways wander on the straight parts, so a road reads as trodden rather than surveyed.
 // Everything else about a road's shape answers to the terrain; this is the one part that does not,
 // so it is kept small enough that it cannot argue with anything the router decided.
-export const ROAD_WOBBLE_AMPLITUDE = 2;
-export const ROAD_WOBBLE_WAVELENGTH = 10;
+export const ROAD_WOBBLE_AMPLITUDE = 30;
+export const ROAD_WOBBLE_WAVELENGTH = 200;
 // A second, longer wave at a lower weight. One wavelength of smooth noise still reads as regular;
 // beating two against each other makes the wander vary in size along the road, which is what stops
 // it looking like a ripple applied to a straight line. Longer rather than shorter on purpose - a
 // shorter one would need the line resampled finer still.
-export const ROAD_WOBBLE_WAVELENGTH_LONG = 31;
+export const ROAD_WOBBLE_WAVELENGTH_LONG = 400;
 export const ROAD_WOBBLE_LONG_RATIO = 0.6;
 // Several samples per wavelength, or the wander comes out as a straight line through a few
 // displaced corners. This is what the point count is spent on - see the note in roadNetwork.
-export const ROAD_WOBBLE_SAMPLE_STEP = 2.5;
+export const ROAD_WOBBLE_SAMPLE_STEP = 5;
 // How far either side the road has to be straight for the wander to apply, and the turn across
 // that window at which it fades out entirely. Where a road is turning, its shape is the router's
 // answer to the terrain, and wobbling it would be second-guessing a decision made for a reason.
@@ -181,3 +181,21 @@ export const ROAD_WOBBLE_END_TAPER = 40;
 export const ROAD_WOBBLE_SIMPLIFY_TOLERANCE = 0.5;
 
 export const ROAD_WOBBLE_SALT = 703;
+
+// --- The rendered road surface ---
+
+// Half the width of the ribbon. A cart track, not a highway: the character capsule is 1.8 units
+// tall, so 3 units either side is a road two carts can pass on.
+export const ROAD_MESH_HALF_WIDTH = 3;
+// How far the ribbon sits above the ground it is draped on. Small, because it follows the terrain
+// exactly rather than bridging it - it only has to clear the terrain's own triangles, whose
+// vertices are 2.5 units apart.
+export const ROAD_MESH_LIFT = 0.08;
+// Depth bias, in Babylon's polygon-offset units. Negative pulls toward the camera.
+export const ROAD_MESH_Z_OFFSET = -4;
+// Spacing of the ribbon's rungs. Well under the terrain's own 2.5-unit vertex spacing would be
+// wasteful; well over it and the road cuts through ground it should be lying on. Also has to stay
+// well under the chunk size, or a segment could cross a chunk without a point inside it.
+export const ROAD_MESH_POINT_SPACING = 2.5;
+// World units of road per texture repeat.
+export const ROAD_MESH_TEXTURE_LENGTH = 8;

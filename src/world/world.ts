@@ -2,6 +2,8 @@ import { HemisphericLight, Vector3, type Scene } from "@babylonjs/core";
 import { createChunkManager } from "./terrain/chunkManager";
 import { createTerrainSampler, type TerrainSampler } from "./terrain/terrainSampler";
 import { createOceanPlane } from "./terrain/ocean";
+import { createRoadChunkIndex } from "./roads/roadChunkIndex";
+import { createRoadMaterial } from "./roads/roadMesh";
 import { createMaterialLibrary, type MaterialLibrary } from "./materials/materialLibrary";
 import type { ContinentPlan } from "./cells/continentLayout";
 import type { AreaBounds } from "./cells/areaField";
@@ -77,6 +79,9 @@ export async function createWorld(scene: Scene, onProgress?: (progress: WorldLoa
     onProgress?.({ phase: "Baking material textures", completed: done, total });
   });
 
+  const roadIndex = createRoadChunkIndex(roads.links, CHUNK_SIZE);
+  const roadMaterial = createRoadMaterial(scene, WORLD_SEED);
+
   const chunkManager = createChunkManager({
     scene,
     sampleTerrain,
@@ -85,6 +90,8 @@ export async function createWorld(scene: Scene, onProgress?: (progress: WorldLoa
     chunkSubdivisions: CHUNK_SUBDIVISIONS,
     loadRadius: DEFAULT_DRAW_DISTANCE,
     unloadRadius: DEFAULT_DRAW_DISTANCE + UNLOAD_HYSTERESIS,
+    roadIndex,
+    roadMaterial,
   });
   // loadInitial blocks for a few hundred ms, so give the browser a frame to actually paint the
   // "building terrain" message before it starts - otherwise the loading screen sits on the
