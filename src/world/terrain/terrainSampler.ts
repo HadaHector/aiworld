@@ -69,7 +69,7 @@ export function createTerrainSampler(seed: number): TerrainWorld {
   const oceanNoise2D = createBaseNoise2D(deriveSeed(seed, OCEAN_SALT));
   const heightPipelines = compileHeightPipelines(seed);
   const evaluateBoundaryHill = createBoundaryHillEvaluator(seed);
-  const evaluateRiver = createRiverEvaluator(seed);
+  const carveRiver = createRiverEvaluator(seed);
 
   function sampleTerrain(worldX: number, worldZ: number): TerrainSample {
     const area = sampleArea(worldX, worldZ);
@@ -88,12 +88,14 @@ export function createTerrainSampler(seed: number): TerrainWorld {
     const landHeightFloored = Math.max(bedrockHeight + blendedDetail + boundaryHill, MIN_LAND_HEIGHT);
 
     // Both water carves apply AFTER the floor above (that clamp is unconditional - anything summed
-    // inside it just gets clamped back up). River (relative carve) before lake (absolute target):
-    // lake-lerp last guarantees a lake reads as a clean flat body regardless of what a river/hill
-    // did nearby, and a river's carve gets smoothly swallowed as it approaches a lake it feeds -
-    // reading correctly as the river disappearing into the lake, not a competing dip on top of it.
-    const riverCarve = evaluateRiver(area.isRiverEdge, area.riverTaper, area.riverGap, worldX, worldZ);
-    const landHeightRivered = landHeightFloored - riverCarve;
+    // inside it just gets clamped back up), and both are now absolute rather than relative: the
+    // river clips the terrain down to a valley profile and the lake lerps it to a level surface, so
+    // neither carries the surrounding terrain's own shape into the water. River before lake means a
+    // river's valley gets smoothly swallowed as it approaches the lake it feeds - reading correctly
+    // as the river disappearing into the lake, not a competing dip on top of it.
+    const landHeightRivered = carveRiver(
+      area.isRiverEdge, area.riverTaper, area.riverGap, worldX, worldZ, landHeightFloored,
+    );
     const landHeight = lerp(landHeightRivered, LAKE_TARGET_HEIGHT, area.lakeFactor);
 
     const oceanNoise = oceanNoise2D(worldX * OCEAN_FLOOR_NOISE_FREQUENCY, worldZ * OCEAN_FLOOR_NOISE_FREQUENCY) * OCEAN_FLOOR_NOISE_SCALE;
