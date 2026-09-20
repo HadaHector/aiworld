@@ -31,6 +31,21 @@ export const CONTINENT_OCEAN_GAP = CELL_SPACING * 6;
 export const COAST_BORDER_WIDTH = 200;
 export const AREA_BORDER_WIDTH = 30;
 
+// Per-area jitter for the biome blend. Each area samples the shared edge noise at its own hashed
+// offset, so neighbouring areas wobble independently and their border reads as an organic edge
+// rather than a clean Voronoi bisector. A single shared jitter would be added to every area's gap
+// equally and cancel out entirely, since only the DIFFERENCE between gaps decides the blend.
+//
+// Kept below AREA_BORDER_WIDTH for the same reason COAST_NOISE_AMPLITUDE is capped against
+// COAST_BORDER_WIDTH: jitter is added into the gap before the width smoothstep, so an amplitude
+// past the width could hand real weight to an area that is geometrically far away.
+export const AREA_BLEND_JITTER_AMPLITUDE = AREA_BORDER_WIDTH * 0.8;
+export const AREA_BLEND_NOISE_FREQUENCY = 2.2 / CELL_SPACING;
+// Offsets that separate one area's jitter sample from another's - arbitrary, just mutually prime-ish
+// so two areas never land on the same patch of noise.
+export const AREA_BLEND_OFFSET_X = 137.7;
+export const AREA_BLEND_OFFSET_Z = 91.3;
+
 // Coastline wavelength (how broad the coastal wobble is) still scales with CELL_SPACING - that's
 // purely a shape property, proportionate to cell/zone size. Amplitude must NOT scale independently
 // of the border width above: jitter is added directly into the blend-gap before the border-width

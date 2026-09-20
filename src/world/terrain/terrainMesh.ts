@@ -106,7 +106,7 @@ export function createTerrainChunk(scene: Scene, options: TerrainChunkOptions): 
       const context = buildVertexContext(paddedPositions, paddedNormals, paddedSamples, paddedSize, paddedIndex);
       const worldX = originX + positions[realIndex * 3];
       const worldZ = originZ + positions[realIndex * 3 + 2];
-      const { indices, weights } = materialLibrary.buildMaterialBlend(worldX, worldZ, context, sample.primaryBiome.id);
+      const { indices, weights } = materialLibrary.buildMaterialBlend(worldX, worldZ, context, sample.areaWeights);
 
       matIndices0.push(indices[0], indices[1], indices[2], indices[3]);
       matIndices1.push(indices[4], indices[5], indices[6], indices[7]);

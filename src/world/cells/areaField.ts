@@ -18,6 +18,10 @@ import {
   COAST_NOISE_AMPLITUDE,
   COAST_BORDER_WIDTH,
   AREA_BORDER_WIDTH,
+  AREA_BLEND_JITTER_AMPLITUDE,
+  AREA_BLEND_NOISE_FREQUENCY,
+  AREA_BLEND_OFFSET_X,
+  AREA_BLEND_OFFSET_Z,
   EDGE_NOISE_SALT,
   LAKE_BORDER_WIDTH,
   LAKE_NOISE_FREQUENCY,
@@ -31,12 +35,30 @@ export const SEA_LEVEL = 0;
 const WORLD_CENTER_X = 0;
 const WORLD_CENTER_Z = 0;
 
+/** One area's share of a point, as a weight in 0..1. */
+export interface AreaWeight {
+  areaId: number;
+  biome: BiomeDefinition;
+  weight: number;
+}
+
 export interface AreaSample {
   landmass: number;
   isLand: boolean;
   primaryBiome: BiomeDefinition;
   secondaryBiome: BiomeDefinition;
   biomeBlend: number;
+  /**
+   * Every area close enough to have a say here, weighted by how near its border is, strongest
+   * first, always summing to 1. Usually one entry; two near a border; three at a junction.
+   *
+   * This replaces "primary plus whichever area owns the second-nearest cell" as the basis for
+   * blending. The old pairing was decided by a cell identity that flips abruptly, which made the
+   * blend bimodal - measured ~49% of points within 40 units of a real border had no blend at all.
+   * Each weight here comes from a per-area distance, which is a minimum over a fixed subset of
+   * cells and therefore continuous, so an area fades in from zero rather than appearing.
+   */
+  areaWeights: AreaWeight[];
   borderGap: number;
   /** Distance past the nearest cell to the nearest cell of a DIFFERENT area - continuous, and the
    *  basis of the boundary-hill falloff. Infinity when no other area is within the hill's reach. */
@@ -56,10 +78,49 @@ export interface AreaWorld {
   continents: ContinentPlan[];
 }
 
-function computeBorderBlend(nearestDistance: number, secondNearestDistance: number, jitter: number): number {
-  const gap = secondNearestDistance - nearestDistance + jitter;
-  const t = 1 - smoothstep(0, AREA_BORDER_WIDTH, gap);
-  return t * 0.5;
+/**
+ * Weights for every area with a say at this point, normalised to sum to 1.
+ *
+ * `raw / sum(raw)` is the same shape compositeInto already uses for texture paint layers: whoever
+ * is nearest gets a raw of 1 and everyone else fades out over AREA_BORDER_WIDTH, then the set is
+ * normalised. At a two-way border both gaps are 0, so it is 50/50 from either side; at a three-way
+ * junction all three are 0, so it is a third each - the junction needs no special case, which is
+ * the whole reason for weighting every area rather than pairing two.
+ */
+function computeAreaWeights(
+  distanceByArea: Map<number, number>,
+  areaBiomeOf: (areaId: number) => BiomeDefinition,
+  jitterFor: (areaId: number) => number,
+): AreaWeight[] {
+  let nearest = Infinity;
+  for (const distance of distanceByArea.values()) {
+    if (distance < nearest) nearest = distance;
+  }
+
+  const weights: AreaWeight[] = [];
+  let total = 0;
+  for (const [areaId, distance] of distanceByArea) {
+    const gap = distance - nearest + jitterFor(areaId);
+    const raw = 1 - smoothstep(0, AREA_BORDER_WIDTH, gap);
+    if (raw <= 0) continue;
+    weights.push({ areaId, biome: areaBiomeOf(areaId), weight: raw });
+    total += raw;
+  }
+
+  // Jitter can in principle push every area past the width at once; fall back to the nearest rather
+  // than dividing by zero.
+  if (total <= 0) {
+    for (const [areaId, distance] of distanceByArea) {
+      if (distance === nearest) return [{ areaId, biome: areaBiomeOf(areaId), weight: 1 }];
+    }
+    return [];
+  }
+
+  for (const entry of weights) entry.weight /= total;
+  // Strongest first, tie-broken by id so two vertices that see the same set always emit it in the
+  // same order - consumers rely on that ordering to keep their material slots aligned.
+  weights.sort((a, b) => b.weight - a.weight || a.areaId - b.areaId);
+  return weights;
 }
 
 // deriveSeed(a, b) = (Math.imul(a^b, K) ^ (a+b)) >>> 0 always has bit 0 = 0: (a^b) and (a+b) share
@@ -237,11 +298,24 @@ export function createAreaSampler(seed: number): AreaWorld {
     const landmass = smoothstep(-COAST_BORDER_WIDTH, COAST_BORDER_WIDTH, edgeGap) * 2 - 1;
 
     const primaryAreaId = areaIdOf(nearLand.nearestIndex);
-    const secondaryAreaId = nearLand.secondNearestIndex === -1 ? primaryAreaId : areaIdOf(nearLand.secondNearestIndex);
     const primaryBiome = areaBiomeOf(primaryAreaId);
-    const secondaryBiome = nearLand.secondNearestIndex === -1 ? primaryBiome : areaBiomeOf(secondaryAreaId);
-    const biomeBlend =
-      nearLand.secondNearestIndex === -1 ? 0 : computeBorderBlend(nearLand.nearestDistance, nearLand.secondNearestDistance, jitter);
+
+    // Every area whose border is close enough to matter, not just the one owning the second-nearest
+    // cell. One sweep collects a per-area distance; each is a minimum over a fixed subset of cells,
+    // so it moves continuously and an area can fade in from zero weight instead of switching on.
+    const blendReach = AREA_BORDER_WIDTH + AREA_BLEND_JITTER_AMPLITUDE;
+    const distanceByArea = landField.queryNearestPerGroup(worldX, worldZ, areaIdOf, nearLand.nearestDistance + blendReach);
+    const areaWeights = computeAreaWeights(distanceByArea, areaBiomeOf, (areaId) =>
+      coastNoise2D(
+        worldX * AREA_BLEND_NOISE_FREQUENCY + areaId * AREA_BLEND_OFFSET_X,
+        worldZ * AREA_BLEND_NOISE_FREQUENCY + areaId * AREA_BLEND_OFFSET_Z,
+      ) * AREA_BLEND_JITTER_AMPLITUDE,
+    );
+
+    // Kept for consumers that just want "which zone is this, roughly" - the zone label and the
+    // debug map - and derived from the same weights so they cannot disagree with what is rendered.
+    const secondaryBiome = areaWeights.length > 1 ? areaWeights[1].biome : primaryBiome;
+    const biomeBlend = areaWeights.length > 1 ? 1 - areaWeights[0].weight : 0;
 
     // Raw, unjittered - boundary hills apply their own independent edge jitter rather than reusing
     // the coastline/area-blend jitter above. When there's no second neighbor, secondNearestDistance
@@ -302,6 +376,7 @@ export function createAreaSampler(seed: number): AreaWorld {
       primaryBiome,
       secondaryBiome,
       biomeBlend,
+      areaWeights,
       borderGap,
       areaBorderGap,
       boundaryHillStyle,

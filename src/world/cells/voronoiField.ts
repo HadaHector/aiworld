@@ -28,6 +28,17 @@ export interface VoronoiField {
    * something, which is exactly where the answer does not matter.
    */
   queryNearestWhere(x: number, z: number, accept: (index: number) => boolean, maxDistance: number): VoronoiNearest;
+  /**
+   * The distance to the nearest point of EACH distinct group within `maxDistance`, keyed by group
+   * id - one sweep rather than one query per group.
+   *
+   * Each entry is a minimum over a fixed subset of points, so it varies continuously with position
+   * even where the winning point within a group changes. That is what makes these usable as blend
+   * weights: a group's distance grows smoothly as its region recedes, so it can fade out rather
+   * than pop out. Unlike queryNearestWhere this cannot stop at its first hit - it has to sweep the
+   * whole radius to be sure it has seen every group.
+   */
+  queryNearestPerGroup(x: number, z: number, groupOf: (index: number) => number, maxDistance: number): Map<number, number>;
 }
 
 const MAX_RING = 12;
@@ -147,5 +158,48 @@ export function createVoronoiField(points: VoronoiPoint[], cellSize: number): Vo
     return { index: bestIndex, distance: Math.sqrt(bestDistSq) };
   }
 
-  return { query, queryNearestWhere };
+  function queryNearestPerGroup(x: number, z: number, groupOf: (index: number) => number, maxDistance: number): Map<number, number> {
+    const nearestSqByGroup = new Map<number, number>();
+
+    const centerGx = Math.floor(x / cellSize);
+    const centerGz = Math.floor(z / cellSize);
+    const maxDistanceSq = maxDistance * maxDistance;
+
+    for (let ring = 0; ring <= MAX_RING; ring++) {
+      // Same (ring - 1) lower bound as queryNearestWhere - see the note there. There is no
+      // best-so-far to bound against here, since every group still has to be found.
+      const ringBound = Math.max(0, ring - 1) * cellSize;
+      if (ringBound * ringBound >= maxDistanceSq) break;
+
+      for (let gx = centerGx - ring; gx <= centerGx + ring; gx++) {
+        for (let gz = centerGz - ring; gz <= centerGz + ring; gz++) {
+          const onRingEdge = Math.max(Math.abs(gx - centerGx), Math.abs(gz - centerGz)) === ring;
+          if (!onRingEdge) continue;
+
+          const bucket = buckets.get(bucketKey(gx, gz));
+          if (!bucket) continue;
+
+          for (const index of bucket) {
+            const point = points[index];
+            const dx = point.x - x;
+            const dz = point.z - z;
+            const distSq = dx * dx + dz * dz;
+            if (distSq > maxDistanceSq) continue;
+
+            const group = groupOf(index);
+            const best = nearestSqByGroup.get(group);
+            if (best === undefined || distSq < best) {
+              nearestSqByGroup.set(group, distSq);
+            }
+          }
+        }
+      }
+    }
+
+    const result = new Map<number, number>();
+    for (const [group, distSq] of nearestSqByGroup) result.set(group, Math.sqrt(distSq));
+    return result;
+  }
+
+  return { query, queryNearestWhere, queryNearestPerGroup };
 }

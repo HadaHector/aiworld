@@ -1,6 +1,6 @@
 import { deriveSeed } from "../rng";
 import { smoothstep, lerp } from "../mathUtils";
-import { createAreaSampler, SEA_LEVEL } from "../cells/areaField";
+import { createAreaSampler, SEA_LEVEL, type AreaWeight } from "../cells/areaField";
 import { createBedrockSampler } from "../bedrock";
 import type { ContinentPlan } from "../cells/continentLayout";
 import type { BiomeDefinition } from "../biomes/biomeTypes";
@@ -15,6 +15,8 @@ export interface TerrainSample {
   primaryBiome: BiomeDefinition;
   secondaryBiome: BiomeDefinition;
   biomeBlend: number;
+  /** Every area with a say at this point, strongest first, summing to 1 - see AreaSample. */
+  areaWeights: AreaWeight[];
   isLand: boolean;
   landmass: number;
   lakeFactor: number;
@@ -72,11 +74,14 @@ export function createTerrainSampler(seed: number): TerrainWorld {
   function sampleTerrain(worldX: number, worldZ: number): TerrainSample {
     const area = sampleArea(worldX, worldZ);
 
-    const primaryDetail = heightPipelines.get(area.primaryBiome.id)!(worldX, worldZ);
-    const blendedDetail =
-      area.biomeBlend > 0
-        ? lerp(primaryDetail, heightPipelines.get(area.secondaryBiome.id)!(worldX, worldZ), area.biomeBlend)
-        : primaryDetail;
+    // Weighted sum over every area with a say here, using the same weights the materials blend by,
+    // so height and texture always agree about where a border is. This replaced a two-way lerp on
+    // biomeBlend, which was driven by a cell identity that flipped abruptly and so left ~half of
+    // all real biome borders with no height blend at all - a hard switch between two biomes' noise.
+    let blendedDetail = 0;
+    for (const { biome, weight } of area.areaWeights) {
+      blendedDetail += heightPipelines.get(biome.id)!(worldX, worldZ) * weight;
+    }
     const boundaryHill = evaluateBoundaryHill(area.boundaryHillStyle, area.areaBorderGap, worldX, worldZ);
 
     const bedrockHeight = bedrock(worldX, worldZ);
@@ -101,6 +106,7 @@ export function createTerrainSampler(seed: number): TerrainWorld {
       primaryBiome: area.primaryBiome,
       secondaryBiome: area.secondaryBiome,
       biomeBlend: area.biomeBlend,
+      areaWeights: area.areaWeights,
       isLand: area.isLand,
       landmass: area.landmass,
       lakeFactor: area.lakeFactor,
