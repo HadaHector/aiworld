@@ -226,16 +226,25 @@ export function createAreaSampler(seed: number): AreaWorld {
       lakeCells,
       usedRiverCells,
     });
-    for (const path of riverPaths) {
+    for (const { cells: path, mouthLink } of riverPaths) {
       // A river only ever carves along its curated cell-to-cell edges - an ocean-adjacent mouth's
       // OWN border with the true coastline is a separate, independent piece of geometry (the
       // landField/oceanField coastline) that would otherwise stay untouched, leaving a visible gap
       // of ordinary land between the river's first carved edge and the open water it's meant to
-      // start from. Lakes don't have this problem (lake-shore blending already applies to any
-      // border touching a lake cell, not just curated edges) - mark ocean mouths so sampleArea can
-      // extend the same carve to their coastal border too.
+      // start from. Ocean is the one case with no cell seam to carve (open water is not a cell),
+      // so mark ocean mouths and let sampleArea extend the carve to their coastal border instead;
+      // lake and tributary mouths are handled by mouthLink just below.
       const mouthCell = path[0];
       if (adjacency[mouthCell].some((n) => !landCells.has(n))) oceanMouthCells.add(mouthCell);
+
+      // A lake or tributary mouth has the same gap for the same reason, but unlike open ocean it
+      // has a real cell seam to carve: the border between the mouth cell and the lake (or trunk
+      // river) it drains into. Registering that seam as an ordinary river edge at the mouth's own
+      // widest taper joins the two - Voronoi seams of the same cell meet at a shared vertex, which
+      // is exactly how consecutive edges of a path already connect to each other. Before this, a
+      // lake-mouthed river started a full cell's width away from its lake, and a tributary never
+      // touched the trunk it was generated to join at all.
+      if (mouthLink !== -1) riverEdges.set(cellPairKey(mouthCell, mouthLink), 0);
 
       // Widest at the mouth (t=0), narrowing toward the far end (t=1) - see riverEvaluator.ts.
       const totalEdges = path.length - 1;
