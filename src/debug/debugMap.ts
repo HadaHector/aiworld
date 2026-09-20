@@ -5,6 +5,7 @@ import { SEA_LEVEL, type AreaBounds } from "../world/cells/areaField";
 import { GROWTH_RADIUS_SAFETY_FACTOR } from "../world/cells/config";
 import type { MaterialLibrary } from "../world/materials/materialLibrary";
 import type { SettlementSite } from "../world/settlements/settlementSites";
+import type { RoadNetwork } from "../world/roads/roadNetwork";
 
 const SAMPLE_RESOLUTION = 400; // internal sample grid, kept modest since this is a debug tool
 const DISPLAY_SIZE_CSS = "min(85vw, 80vh)"; // large, centered, capped to fit the viewport
@@ -31,6 +32,14 @@ const SETTLEMENT_DOT_PX = 7;
 // Names are only legible where the map is zoomed in far enough for the dots to be spread out; in
 // World view the whole continent is a few dozen pixels across and every label would overlap.
 const SETTLEMENT_LABEL_MIN_HALF_SIZE = 12000;
+
+// Roads are drawn as SVG in the same layer, under the settlement markers. Vector rather than
+// canvas for the same reason the labels are DOM: the canvas is a small image stretched to fill the
+// screen, and a one-pixel line drawn into it comes out two or three pixels wide and soft.
+const ROAD_CASING_COLOR = "rgba(0, 0, 0, 0.55)";
+const ROAD_COLOR = "rgb(228, 196, 140)";
+const ROAD_WIDTH_PX = 1.4;
+const ROAD_CASING_WIDTH_PX = 3;
 
 // Emboss/relief shading: each land pixel is compared against its upper-left neighbor (one pixel
 // away, so the offset self-scales with zoom - a big offset in World view, a fine one in Continent
@@ -84,6 +93,7 @@ export function createDebugMap(
   areaBounds: Map<number, AreaBounds>,
   areaNames: Map<number, string>,
   settlements: SettlementSite[],
+  roads: RoadNetwork,
   onTeleport: (worldX: number, worldZ: number) => void,
 ): DebugMap {
   const overlay = document.createElement("div");
@@ -124,14 +134,20 @@ export function createDebugMap(
   const overlays = document.createElement("div");
   overlays.style.cssText = "display: flex; gap: 6px;";
   overlay.appendChild(overlays);
-  const settlementToggle = document.createElement("button");
-  settlementToggle.textContent = `Settlements (${settlements.length})`;
-  settlementToggle.style.cssText = `
-    font-family: sans-serif; font-size: 12px; padding: 4px 12px; border-radius: 3px;
-    border: 1px solid rgba(255,255,255,0.4); background: rgba(255,255,255,0.1); color: #eee;
-    cursor: pointer;
-  `;
-  overlays.appendChild(settlementToggle);
+  function createOverlayToggle(text: string): HTMLButtonElement {
+    const button = document.createElement("button");
+    button.textContent = text;
+    button.style.cssText = `
+      font-family: sans-serif; font-size: 12px; padding: 4px 12px; border-radius: 3px;
+      border: 1px solid rgba(255,255,255,0.4); background: rgba(255,255,255,0.1); color: #eee;
+      cursor: pointer;
+    `;
+    overlays.appendChild(button);
+    return button;
+  }
+
+  const settlementToggle = createOverlayToggle(`Settlements (${settlements.length})`);
+  const roadToggle = createOverlayToggle(`Roads (${roads.links.length})`);
 
   const displayCanvas = document.createElement("canvas");
   displayCanvas.width = SAMPLE_RESOLUTION;
@@ -171,6 +187,7 @@ export function createDebugMap(
   // refreshed when the view is opened or switched to.
   let zoneAreaId = -1;
   let showSettlements = true;
+  let showRoads = true;
   let markerX = 0;
   let markerZ = 0;
   let heading = 0;
@@ -384,13 +401,78 @@ export function createDebugMap(
     highlight(continentTabButton, viewMode === "continent");
     highlight(zoneTabButton, viewMode === "zone");
     settlementToggle.style.background = showSettlements ? "rgba(255,255,255,0.35)" : "rgba(255,255,255,0.1)";
+    roadToggle.style.background = showRoads ? "rgba(255,255,255,0.35)" : "rgba(255,255,255,0.1)";
   }
 
-  /** Dots for every settlement in frame, with names once the view is close enough to read them.
-   *  Rebuilt wholesale: 211 elements is nothing, and diffing them against the previous view would
-   *  be more code than it saves. */
-  const drawSettlements = (): void => {
+  /** Every road in frame as one SVG path, cased in dark so a pale line stays legible over sand and
+   *  over snow alike. One path for the lot: 266 links is a few thousand points, and a path element
+   *  each would be that many more nodes for the browser to lay out on every redraw. */
+  const drawRoads = (): SVGSVGElement | null => {
+    if (!showRoads) return null;
+    const viewport = activeViewport();
+    let d = "";
+
+    for (const link of roads.links) {
+      // Cheap reject on the link's own extent, so a zoomed-in view does not walk the whole world's
+      // points to draw the handful that are visible.
+      let minX = Infinity;
+      let maxX = -Infinity;
+      let minZ = Infinity;
+      let maxZ = -Infinity;
+      for (const point of link.points) {
+        if (point.x < minX) minX = point.x;
+        if (point.x > maxX) maxX = point.x;
+        if (point.z < minZ) minZ = point.z;
+        if (point.z > maxZ) maxZ = point.z;
+      }
+      if (
+        maxX < viewport.centerX - viewport.halfSize ||
+        minX > viewport.centerX + viewport.halfSize ||
+        maxZ < viewport.centerZ - viewport.halfSize ||
+        minZ > viewport.centerZ + viewport.halfSize
+      ) {
+        continue;
+      }
+
+      link.points.forEach((point, index) => {
+        const { x, y } = worldToPixel(point.x, point.z);
+        d += `${index === 0 ? "M" : "L"}${x.toFixed(1)} ${y.toFixed(1)}`;
+      });
+    }
+    if (d === "") return null;
+
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("viewBox", `0 0 ${SAMPLE_RESOLUTION} ${SAMPLE_RESOLUTION}`);
+    svg.setAttribute("preserveAspectRatio", "none");
+    svg.style.cssText = "position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible;";
+
+    for (const [color, width] of [
+      [ROAD_CASING_COLOR, ROAD_CASING_WIDTH_PX],
+      [ROAD_COLOR, ROAD_WIDTH_PX],
+    ] as [string, number][]) {
+      const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      path.setAttribute("d", d);
+      path.setAttribute("fill", "none");
+      path.setAttribute("stroke", color);
+      path.setAttribute("stroke-width", String(width));
+      path.setAttribute("stroke-linecap", "round");
+      path.setAttribute("stroke-linejoin", "round");
+      // Widths stay in screen pixels however far the viewBox is stretched, which is also what
+      // keeps a road the same weight in every view.
+      path.setAttribute("vector-effect", "non-scaling-stroke");
+      svg.appendChild(path);
+    }
+    return svg;
+  };
+
+  /** The whole overlay layer: roads underneath, then a dot for every settlement in frame, with
+   *  names once the view is close enough to read them. Rebuilt wholesale on each redraw - a few
+   *  hundred elements is nothing, and diffing against the previous view would be more code than it
+   *  saves. */
+  const drawOverlays = (): void => {
     markerLayer.replaceChildren();
+    const roadLayer = drawRoads();
+    if (roadLayer) markerLayer.appendChild(roadLayer);
     if (!showSettlements) return;
 
     const viewport = activeViewport();
@@ -434,7 +516,7 @@ export function createDebugMap(
     label.textContent = zoneName ? `${BASE_LABEL}  -  ${zoneName}` : BASE_LABEL;
 
     displayCtx.drawImage(getBaseCanvas(), 0, 0);
-    drawSettlements();
+    drawOverlays();
 
     const { x: markerPxX, y: markerPxZ } = worldToPixel(markerX, markerZ);
 
@@ -475,6 +557,11 @@ export function createDebugMap(
   zoneTabButton.addEventListener("click", () => setViewMode("zone"));
   settlementToggle.addEventListener("click", () => {
     showSettlements = !showSettlements;
+    updateTabStyles();
+    if (visible) redraw();
+  });
+  roadToggle.addEventListener("click", () => {
+    showRoads = !showRoads;
     updateTabStyles();
     if (visible) redraw();
   });

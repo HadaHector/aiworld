@@ -6,6 +6,7 @@ import { createMaterialLibrary, type MaterialLibrary } from "./materials/materia
 import type { ContinentPlan } from "./cells/continentLayout";
 import type { AreaBounds } from "./cells/areaField";
 import type { SettlementSite } from "./settlements/settlementSites";
+import type { RoadNetwork } from "./roads/roadNetwork";
 
 /** Coarse progress for the loading screen. `total` is 0 for phases with no countable steps. */
 export interface WorldLoadProgress {
@@ -24,6 +25,7 @@ export interface World {
   areaBounds: Map<number, AreaBounds>;
   areaNames: Map<number, string>;
   settlements: SettlementSite[];
+  roads: RoadNetwork;
   materialLibrary: MaterialLibrary;
 }
 
@@ -69,7 +71,7 @@ export async function createWorld(scene: Scene, onProgress?: (progress: WorldLoa
   light.intensity = 0.9;
 
   onProgress?.({ phase: "Shaping continents", completed: 0, total: 0 });
-  const { sampleTerrain, worldExtent, continents, areaBounds, areaNames, settlements } = createTerrainSampler(WORLD_SEED);
+  const { sampleTerrain, worldExtent, continents, areaBounds, areaNames, settlements, roads } = createTerrainSampler(WORLD_SEED);
 
   const materialLibrary = await createMaterialLibrary(scene, WORLD_SEED, light.direction, light.intensity, (done, total) => {
     onProgress?.({ phase: "Baking material textures", completed: done, total });
@@ -97,5 +99,5 @@ export async function createWorld(scene: Scene, onProgress?: (progress: WorldLoa
   const updateChunks = (playerX: number, playerZ: number) => chunkManager.update(playerX, playerZ);
   const setDrawDistance = (loadRadius: number) => chunkManager.setRadii(loadRadius, loadRadius + UNLOAD_HYSTERESIS);
 
-  return { heightAt, sampleTerrain, updateChunks, setDrawDistance, worldExtent, continents, areaBounds, areaNames, settlements, materialLibrary };
+  return { heightAt, sampleTerrain, updateChunks, setDrawDistance, worldExtent, continents, areaBounds, areaNames, settlements, roads, materialLibrary };
 }

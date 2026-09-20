@@ -3,6 +3,7 @@ import { smoothstep, lerp } from "../mathUtils";
 import { createAreaSampler, SEA_LEVEL, type AreaWeight, type AreaBounds } from "../cells/areaField";
 import { createBedrockSampler } from "../bedrock";
 import { generateSettlementSites, type SettlementSite } from "../settlements/settlementSites";
+import { generateRoadNetwork, type RoadNetwork } from "../roads/roadNetwork";
 import type { ContinentPlan } from "../cells/continentLayout";
 import type { BiomeDefinition } from "../biomes/biomeTypes";
 import { BIOME_REGISTRY } from "../biomes/biomeDefinitions";
@@ -44,6 +45,7 @@ export interface TerrainWorld {
   areaBounds: Map<number, AreaBounds>;
   areaNames: Map<number, string>;
   settlements: SettlementSite[];
+  roads: RoadNetwork;
 }
 
 const OCEAN_FLOOR_DEPTH = -14;
@@ -143,5 +145,9 @@ export function createTerrainSampler(seed: number): TerrainWorld {
     nameFor: (biome, id) => nameGenerator.settlementNameFor(biome.voiceId, id),
   });
 
-  return { sampleTerrain, worldExtent, continents, areaBounds, areaNames, settlements };
+  // Roads need the settlements to connect and the finished terrain to route over, so they come
+  // last of all.
+  const roads = generateRoadNetwork(settlements, sampleTerrain);
+
+  return { sampleTerrain, worldExtent, continents, areaBounds, areaNames, settlements, roads };
 }

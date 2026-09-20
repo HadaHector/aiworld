@@ -27,7 +27,7 @@ const world = await createWorld(scene, ({ phase, completed, total }) => {
 
 const character = createCharacter(scene, world.heightAt);
 const camera = createThirdPersonCamera(scene, canvas, character.mesh);
-const debugMap = createDebugMap(world.sampleTerrain, world.worldExtent, world.continents, world.materialLibrary, world.areaBounds, world.areaNames, world.settlements, (worldX, worldZ) => {
+const debugMap = createDebugMap(world.sampleTerrain, world.worldExtent, world.continents, world.materialLibrary, world.areaBounds, world.areaNames, world.settlements, world.roads, (worldX, worldZ) => {
   character.teleport(worldX, worldZ);
 });
 

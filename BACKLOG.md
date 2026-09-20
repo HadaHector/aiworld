@@ -24,6 +24,27 @@ Likely fix: at a point that far out the area weights cannot affect anything, bec
 height comes entirely from the ocean floor (`landBlend` is 0). Short-circuit the whole area-weight
 sweep once `landmass` is fully ocean, and verify no rendered terrain changes.
 
+### Road generation costs ~6 s at load
+
+The A* pass samples 435k distinct grid nodes, and a terrain sample is ~12.5 us, so the network
+costs roughly six seconds on top of the settlements' one. Everything cheap has already been done:
+the samples are cached across links, the search is confined to an ellipse around each straight
+line, and the heuristic is deliberately inadmissible to keep the frontier tight.
+
+What is left is either a coarser grid - measured, grid 40 builds MORE links from 257k samples, but
+a wider step measures grade over a longer run and the grade term starts meaning less - or making
+`sampleTerrain` itself cheaper, or moving the whole pass to a worker.
+
+### 12 settlements cannot be reached by road
+
+Measured at seed 1337: 195 of 211 settlements form three connected components, one per continent,
+and 12 are isolated. They are not on islands - the straight line to a neighbour is mostly dry - they
+are canyon-rim and mountain sites ringed by ground steeper than ROAD_MAX_GRADE. One measured case
+had a 57-unit cliff across a 24-unit span between two settlements 1422 apart.
+
+Either they stay unreachable, which reads as deliberate, or stage 2's terrain work carves a way in.
+A decision, not a defect.
+
 ### Worker-based terrain chunk generation
 
 Discussed in theory and backlogged by request. Texture baking already runs across a worker pool

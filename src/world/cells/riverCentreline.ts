@@ -2,6 +2,7 @@ import type { CellPoint } from "./cellGrid";
 import { createBaseNoise2D } from "../terrain/noise";
 import { deriveSeed } from "../rng";
 import { smoothstep } from "../mathUtils";
+import { chaikin, simplify } from "../polyline";
 import {
   RIVER_MEANDER_SAMPLE_STEP,
   RIVER_MEANDER_MAX_AMPLITUDE,
@@ -44,73 +45,6 @@ function resample(vertices: CellPoint[], rooms: number[], step: number): { point
   arcs.push(travelled);
   sampledRooms.push(rooms[rooms.length - 1]);
   return { points, arcs, rooms: sampledRooms, total: travelled };
-}
-
-/** Chaikin corner cutting, with both ends pinned - the mouth has to stay exactly on the shore it
- *  was placed on, and the source where the river was generated to end. */
-function chaikin(points: CellPoint[], passes: number): CellPoint[] {
-  let current = points;
-  for (let pass = 0; pass < passes; pass++) {
-    if (current.length < 3) return current;
-    const next: CellPoint[] = [current[0]];
-    for (let i = 0; i < current.length - 1; i++) {
-      const a = current[i];
-      const b = current[i + 1];
-      next.push({ x: a.x * 0.75 + b.x * 0.25, z: a.z * 0.75 + b.z * 0.25 });
-      next.push({ x: a.x * 0.25 + b.x * 0.75, z: a.z * 0.25 + b.z * 0.75 });
-    }
-    next.push(current[current.length - 1]);
-    current = next;
-  }
-  return current;
-}
-
-/**
- * Ramer-Douglas-Peucker. Resampling and two Chaikin passes leave points every few units, and
- * riverField tests every segment in a bucket against every terrain sample - so the segment count is
- * a direct cost on terrain generation. Dropping points that sit within a couple of units of the
- * line through their neighbours cuts that by an order of magnitude and is invisible against a
- * channel over a hundred units wide.
- */
-function simplify(points: CellPoint[], tolerance: number): CellPoint[] {
-  if (points.length < 3) return points;
-  const keep = new Uint8Array(points.length);
-  keep[0] = 1;
-  keep[points.length - 1] = 1;
-  const stack: [number, number][] = [[0, points.length - 1]];
-  const toleranceSq = tolerance * tolerance;
-
-  while (stack.length > 0) {
-    const [first, last] = stack.pop()!;
-    if (last <= first + 1) continue;
-    const a = points[first];
-    const b = points[last];
-    const dx = b.x - a.x;
-    const dz = b.z - a.z;
-    const lengthSq = dx * dx + dz * dz;
-
-    let worst = -1;
-    let worstDistSq = 0;
-    for (let i = first + 1; i < last; i++) {
-      const px = points[i].x - a.x;
-      const pz = points[i].z - a.z;
-      const u = lengthSq > 0 ? Math.min(1, Math.max(0, (px * dx + pz * dz) / lengthSq)) : 0;
-      const ox = px - u * dx;
-      const oz = pz - u * dz;
-      const distSq = ox * ox + oz * oz;
-      if (distSq > worstDistSq) {
-        worstDistSq = distSq;
-        worst = i;
-      }
-    }
-
-    if (worst >= 0 && worstDistSq > toleranceSq) {
-      keep[worst] = 1;
-      stack.push([first, worst], [worst, last]);
-    }
-  }
-
-  return points.filter((_, i) => keep[i] === 1);
 }
 
 /** How far a point may move sideways before it leaves the corridor of cells the river runs
