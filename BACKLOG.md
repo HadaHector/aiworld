@@ -5,6 +5,21 @@ does not mean re-deriving why it matters. Newest first within each section.
 
 ## Performance
 
+### Every loaded chunk is a shadow caster, however far past the shadow's own reach
+
+`chunkManager` registers every chunk it builds as a shadow caster, with no distance cutoff of its
+own - simplest correct thing to do, and cheap at the default draw distance (400: 6.46ms/frame with
+shadows against 1.53ms without, still 155fps). It stops being cheap at the top of the draw-distance
+slider: at 1200 (1806 chunks) shadows cost 44.8ms/frame against 6.77ms without - 22fps. Shadows
+themselves only reach SHADOW_FAR_DISTANCE (900 world units, see sunLighting.ts) before fading out,
+so every chunk loaded past that is paying to render into a shadow map that then discards it.
+
+Fix is straightforward: only register a chunk as a caster if it is within shadow reach of the
+POSITION IT WAS BUILT AT, and drop it from the caster list (not just the scene) once the unload
+radius pushes it out - right now a caster registered near the shadow's reach stays one for as long
+as the chunk stays loaded, however far the player then walks. Deferred because it only matters
+above the draw distances anyone plays at today.
+
 ### Rebuilding the tree instance buffers copies every tree
 
 `treeField.flush` rewrites the whole instance buffer from every loaded chunk whenever one chunk
@@ -207,18 +222,6 @@ they are behind the camera or a mile away. The master meshes are marked
 Not currently a problem, and the fixes are known and independent: a billboard or two-triangle LOD
 past some distance, and splitting the field into a few buckets by direction so the frustum can
 reject whole groups.
-
-### Foliage undersides are lit by a constant, not by the sky
-
-The scene has one hemispheric light with no ground colour, so a downward-facing face receives
-nothing. Terrain never notices - it faces up - but a tree is full of surfaces that do not, and a
-palm is almost entirely made of them. `treeModels.ts` fakes the missing bounce with a flat
-emissive term (`FILL`), which is right for a placeholder and wrong in general: it does not vary
-with the sky, it brightens a tree in shadow as much as one in sun, and on a canopy it has to use a
-fixed colour from the palette because the per-instance tint is applied to diffuse only.
-
-The real fix is a ground colour on the scene light, or a second fill light, which relights the
-whole world and so belongs with whatever lighting pass comes next rather than with foliage.
 
 ### The medium and small foliage levels do not exist
 

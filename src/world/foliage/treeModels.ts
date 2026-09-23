@@ -74,35 +74,29 @@ const PALM = {
 };
 
 /**
- * A floor under the shading, so a surface facing away from the light is dark rather than black.
- *
- * The scene is lit by one hemispheric light with no ground colour, which means a downward-facing
- * face receives nothing at all. Terrain never notices - it faces up - but a tree is full of
- * surfaces that do not, and a palm is almost entirely made of them: its fronds are near-horizontal
- * blades seen from underneath by anyone standing under it, so without this a palm reads as a black
- * star against the sky. Kept here rather than fixed by giving the scene light a ground colour,
- * which would relight the whole world to solve a foliage problem.
+ * A face pointed away from the sun - a frond's underside, the far side of a canopy - is lit by
+ * the scene's ambient light alone (see lighting/sunLighting.ts's HemisphericLight groundColor),
+ * not by anything foliage sets up for itself, so there is nothing left to do here but turn off
+ * the specular highlight a placeholder trunk or leaf would otherwise show, which just reads as
+ * plastic. This used to also fake the missing bounce with a flat emissive floor, before the scene
+ * light actually had a ground colour to give it one for real - see BACKLOG.md's old "foliage
+ * undersides" entry.
  */
-const FILL = 0.28;
-
-function foliageMaterial(scene: Scene, name: string, diffuse: Color3, fillFrom: Color3): StandardMaterial {
+function foliageMaterial(scene: Scene, name: string, diffuse: Color3): StandardMaterial {
   const material = new StandardMaterial(name, scene);
   material.diffuseColor = diffuse;
-  material.emissiveColor = fillFrom.scale(FILL);
-  // A specular highlight on a placeholder trunk just reads as plastic.
   material.specularColor = Color3.Black();
   return material;
 }
 
 function trunkMaterial(scene: Scene, kind: TreeKind, colour: Color3): StandardMaterial {
-  return foliageMaterial(scene, `tree_${kind}_trunkMaterial`, colour, colour);
+  return foliageMaterial(scene, `tree_${kind}_trunkMaterial`, colour);
 }
 
 /** Diffuse white, because the per-instance colour buffer is what actually tints a canopy - see
- *  treeField. The fill has to be a fixed colour from the palette instead, since it is added after
- *  the tint rather than multiplied by it. */
-function canopyMaterial(scene: Scene, kind: TreeKind, palette: Color3): StandardMaterial {
-  return foliageMaterial(scene, `tree_${kind}_canopyMaterial`, Color3.White(), palette);
+ *  treeField. */
+function canopyMaterial(scene: Scene, kind: TreeKind): StandardMaterial {
+  return foliageMaterial(scene, `tree_${kind}_canopyMaterial`, Color3.White());
 }
 
 function buildTrunk(
@@ -133,14 +127,14 @@ function buildTrunk(
  * multiply the draw calls by the number of tiers or fronds - a pine would cost three and a palm
  * seven, for geometry that is rigid.
  */
-function weld(scene: Scene, kind: TreeKind, palette: Color3, parts: Mesh[]): Mesh {
+function weld(scene: Scene, kind: TreeKind, parts: Mesh[]): Mesh {
   const merged = Mesh.MergeMeshes(parts, true, true, undefined, false, false);
   if (!merged) throw new Error(`Could not merge the canopy parts of the ${kind} tree`);
   merged.name = `tree_${kind}_canopy`;
   // Faceted rather than smooth: low-poly geometry shaded smooth reads as balloons, shaded flat it
   // reads as stylised foliage, which is much closer to what this is standing in for.
   merged.convertToFlatShadedMesh();
-  merged.material = canopyMaterial(scene, kind, palette);
+  merged.material = canopyMaterial(scene, kind);
   return merged;
 }
 
@@ -152,7 +146,7 @@ function buildBroadleaf(scene: Scene): TreeModel {
     ),
   );
   canopy.convertToFlatShadedMesh();
-  canopy.material = canopyMaterial(scene, "broadleaf", BROADLEAF.canopyDark);
+  canopy.material = canopyMaterial(scene, "broadleaf");
   return {
     trunk: buildTrunk(scene, "broadleaf", BROADLEAF),
     canopy,
@@ -173,7 +167,7 @@ function buildPine(scene: Scene): TreeModel {
   });
   return {
     trunk: buildTrunk(scene, "pine", PINE),
-    canopy: weld(scene, "pine", PINE.canopyDark, tiers),
+    canopy: weld(scene, "pine", tiers),
     canopyDark: PINE.canopyDark,
     canopyLight: PINE.canopyLight,
   };
@@ -196,7 +190,7 @@ function buildPalm(scene: Scene): TreeModel {
   }
   return {
     trunk: buildTrunk(scene, "palm", PALM),
-    canopy: weld(scene, "palm", PALM.canopyDark, fronds),
+    canopy: weld(scene, "palm", fronds),
     canopyDark: PALM.canopyDark,
     canopyLight: PALM.canopyLight,
   };

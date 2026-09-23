@@ -1,10 +1,11 @@
-import { HemisphericLight, Vector3, type Scene } from "@babylonjs/core";
+import type { Camera, Scene } from "@babylonjs/core";
 import { createChunkManager } from "./terrain/chunkManager";
 import { createTerrainSampler, type TerrainSampler } from "./terrain/terrainSampler";
 import { createOceanPlane } from "./terrain/ocean";
 import { createMaterialLibrary, type MaterialLibrary } from "./materials/materialLibrary";
 import { createTreeScatter } from "./foliage/treeScatter";
 import { createTreeField, type TreeField } from "./foliage/treeField";
+import { createSunLighting } from "./lighting/sunLighting";
 import type { ContinentPlan } from "./cells/continentLayout";
 import type { AreaBounds } from "./cells/areaField";
 import type { SettlementSite } from "./settlements/settlementSites";
@@ -30,6 +31,10 @@ export interface World {
   roads: RoadNetwork;
   materialLibrary: MaterialLibrary;
   trees: TreeField;
+  /** Camera near/far and the shadow generator's own frustum both depend on the real camera, which
+   *  main.ts creates after the world exists - call this once it does. */
+  attachCamera: (camera: Camera) => void;
+  setShadowsEnabled: (enabled: boolean) => void;
 }
 
 const WORLD_SEED = 1337;
@@ -70,17 +75,16 @@ function nextPaint(): Promise<void> {
 }
 
 export async function createWorld(scene: Scene, onProgress?: (progress: WorldLoadProgress) => void): Promise<World> {
-  const light = new HemisphericLight("sunLight", new Vector3(0.3, 1, 0.2), scene);
-  light.intensity = 0.9;
+  const sunLighting = createSunLighting(scene);
 
   onProgress?.({ phase: "Shaping continents", completed: 0, total: 0 });
   const { sampleTerrain, worldExtent, continents, areaBounds, areaNames, settlements, roads } = createTerrainSampler(WORLD_SEED);
 
-  const materialLibrary = await createMaterialLibrary(scene, WORLD_SEED, light.direction, light.intensity, (done, total) => {
+  const materialLibrary = await createMaterialLibrary(scene, WORLD_SEED, sunLighting, (done, total) => {
     onProgress?.({ phase: "Baking material textures", completed: done, total });
   });
 
-  const trees = createTreeField(scene);
+  const trees = createTreeField(scene, sunLighting.shadowGenerator);
 
   const chunkManager = createChunkManager({
     scene,
@@ -88,6 +92,7 @@ export async function createWorld(scene: Scene, onProgress?: (progress: WorldLoa
     materialLibrary,
     scatterTrees: createTreeScatter(WORLD_SEED),
     trees,
+    shadowGenerator: sunLighting.shadowGenerator,
     chunkSize: CHUNK_SIZE,
     chunkSubdivisions: CHUNK_SUBDIVISIONS,
     loadRadius: DEFAULT_DRAW_DISTANCE,
@@ -105,6 +110,25 @@ export async function createWorld(scene: Scene, onProgress?: (progress: WorldLoa
   const heightAt = (worldX: number, worldZ: number) => sampleTerrain(worldX, worldZ).height;
   const updateChunks = (playerX: number, playerZ: number) => chunkManager.update(playerX, playerZ);
   const setDrawDistance = (loadRadius: number) => chunkManager.setRadii(loadRadius, loadRadius + UNLOAD_HYSTERESIS);
+  const setShadowsEnabled = (enabled: boolean) => {
+    sunLighting.setShadowsEnabled(enabled);
+    materialLibrary.setShadowsEnabled(enabled);
+  };
 
-  return { heightAt, sampleTerrain, updateChunks, setDrawDistance, worldExtent, continents, areaBounds, areaNames, settlements, roads, materialLibrary, trees };
+  return {
+    heightAt,
+    sampleTerrain,
+    updateChunks,
+    setDrawDistance,
+    worldExtent,
+    continents,
+    areaBounds,
+    areaNames,
+    settlements,
+    roads,
+    materialLibrary,
+    trees,
+    attachCamera: sunLighting.attachCamera,
+    setShadowsEnabled,
+  };
 }

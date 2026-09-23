@@ -27,6 +27,9 @@ const world = await createWorld(scene, ({ phase, completed, total }) => {
 
 const character = createCharacter(scene, world.heightAt);
 const camera = createThirdPersonCamera(scene, canvas, character.mesh);
+// Camera near/far and the shadow generator's own frustum both need the real camera, which does
+// not exist until here - see World.attachCamera.
+world.attachCamera(camera);
 const debugMap = createDebugMap(world.sampleTerrain, world.worldExtent, world.continents, world.materialLibrary, world.areaBounds, world.areaNames, world.settlements, world.roads, (worldX, worldZ) => {
   character.teleport(worldX, worldZ);
 });
@@ -36,7 +39,10 @@ createSettingsPanel({
   max: MAX_DRAW_DISTANCE,
   initial: DEFAULT_DRAW_DISTANCE,
   onChange: (value) => world.setDrawDistance(value),
-  toggles: [{ label: "Trees", initial: true, onChange: (on) => world.trees.setVisible(on) }],
+  toggles: [
+    { label: "Trees", initial: true, onChange: (on) => world.trees.setVisible(on) },
+    { label: "Shadows", initial: true, onChange: (on) => world.setShadowsEnabled(on) },
+  ],
 });
 
 const zoneLabel = createZoneLabel();

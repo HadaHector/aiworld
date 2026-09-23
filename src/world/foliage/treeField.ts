@@ -1,5 +1,5 @@
 import { Matrix, Quaternion, Vector3, type Mesh } from "@babylonjs/core";
-import type { Scene } from "@babylonjs/core";
+import type { CascadedShadowGenerator, Scene } from "@babylonjs/core";
 import type { TreePlacement } from "./treeScatter";
 import { TREE_KINDS, type TreeKind } from "./foliageConfig";
 import { createTreeModel, type TreeModel } from "./treeModels";
@@ -51,7 +51,7 @@ interface Species {
  * Recomposing every tree on every chunk event instead cost 18.5ms at a 1200-unit draw distance -
  * a dropped frame every time a chunk came or went, which while walking is most of them.
  */
-export function createTreeField(scene: Scene): TreeField {
+export function createTreeField(scene: Scene, shadowGenerator: CascadedShadowGenerator): TreeField {
   const species = new Map<TreeKind, Species>();
   for (const kind of TREE_KINDS) {
     const model = createTreeModel(scene, kind);
@@ -61,6 +61,14 @@ export function createTreeField(scene: Scene): TreeField {
     // every chunk event (3.8ms at 6236 trees) to learn nothing.
     model.trunk.alwaysSelectAsActiveMesh = true;
     model.canopy.alwaysSelectAsActiveMesh = true;
+    // Cast once, for the life of the app - unlike terrain, an archetype's master meshes never come
+    // or go, only how many instances they hold. Receive too: both are ordinary StandardMaterial,
+    // so a scene light with a shadow generator lights and shadows them with no shader work of
+    // their own, unlike the terrain's hand-wired shader.
+    shadowGenerator.addShadowCaster(model.trunk);
+    shadowGenerator.addShadowCaster(model.canopy);
+    model.trunk.receiveShadows = true;
+    model.canopy.receiveShadows = true;
     species.set(kind, {
       model,
       capacity: 0,
@@ -205,6 +213,8 @@ export function createTreeField(scene: Scene): TreeField {
     dispose() {
       chunks.clear();
       for (const { model } of species.values()) {
+        shadowGenerator.removeShadowCaster(model.trunk);
+        shadowGenerator.removeShadowCaster(model.canopy);
         model.trunk.dispose();
         model.canopy.dispose();
       }
