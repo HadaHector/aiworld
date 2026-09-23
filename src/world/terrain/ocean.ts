@@ -20,6 +20,7 @@ export function createOceanPlane(scene: Scene, options: OceanOptions): Mesh {
   material.diffuseColor = new Color3(0.09, 0.32, 0.45);
   material.specularColor = new Color3(0.2, 0.25, 0.3);
   material.alpha = 0.75;
+  material.backFaceCulling = true;
   ocean.material = material;
 
   return ocean;

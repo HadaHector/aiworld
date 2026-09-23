@@ -19,13 +19,13 @@ export interface TreeModel {
 // made of, which is the whole point: a pine puts it in a narrow spire, a palm in a bare trunk with
 // everything at the top.
 const BROADLEAF = {
-  trunkHeight: 8,
-  trunkDiameterBottom: 1.9,
-  trunkDiameterTop: 1.1,
-  trunkSides: 8,
+  trunkHeight: 24,
+  trunkDiameterBottom: 4.9,
+  trunkDiameterTop: 2.9,
+  trunkSides: 12,
   trunkColour: new Color3(0.32, 0.23, 0.15),
-  canopyCentreY: 12.5,
-  canopyRadius: 6.5,
+  canopyCentreY: 33,
+  canopyRadius: 20,
   /** Squashed a little, so it reads as a crown rather than a ball on a stick. */
   canopyHeightRatio: 0.82,
   canopyDark: new Color3(0.15, 0.33, 0.13),
@@ -35,15 +35,16 @@ const BROADLEAF = {
 // Three cones of decreasing width, overlapping. One tall cone reads as a party hat; the steps
 // where one tier's skirt crosses the next are what make it a conifer.
 const PINE = {
-  trunkHeight: 5,
-  trunkDiameterBottom: 1.5,
-  trunkDiameterTop: 0.8,
+  trunkHeight: 10,
+  trunkDiameterBottom: 3.5,
+  trunkDiameterTop: 2.8,
   trunkSides: 7,
   trunkColour: new Color3(0.28, 0.17, 0.12),
   tiers: [
-    { diameter: 8.6, height: 7.5, baseY: 3 },
-    { diameter: 6.6, height: 6.5, baseY: 7.6 },
-    { diameter: 4.2, height: 5.8, baseY: 12.2 },
+    { diameter: 10.6, height: 7.5, baseY: 10 },
+    { diameter: 8.6, height: 7.5, baseY: 14 },
+    { diameter: 6.6, height: 7.5, baseY: 18 },
+    { diameter: 4.6, height: 7.5, baseY: 22 },
   ],
   tierSides: 8,
   canopyDark: new Color3(0.09, 0.24, 0.16),
@@ -54,8 +55,8 @@ const PINE = {
 // down from the crown; seven is enough to close the silhouette from any angle without the crown
 // turning into a solid disc.
 const PALM = {
-  trunkHeight: 13.5,
-  trunkDiameterBottom: 1.3,
+  trunkHeight: 23.5,
+  trunkDiameterBottom: 2.0,
   trunkDiameterTop: 0.9,
   trunkSides: 8,
   trunkColour: new Color3(0.44, 0.36, 0.25),
@@ -67,7 +68,7 @@ const PALM = {
   frondReach: 4.9,
   /** Radians the frond tips fall below horizontal. */
   frondDroop: 0.5,
-  crownY: 13.2,
+  crownY: 23.2,
   canopyDark: new Color3(0.2, 0.38, 0.15),
   canopyLight: new Color3(0.44, 0.59, 0.24),
 };

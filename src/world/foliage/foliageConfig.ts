@@ -11,7 +11,7 @@
 // (1.8 units tall) rather than against the canopy - the canopies overlap into a closed roof well
 // before the trunks get near each other, which is exactly the oversized, stroll-through-it look
 // this is after.
-export const TREE_SPACING = 10;
+export const TREE_SPACING = 20;
 
 // Darts thrown per lattice cell before the spacing rule thins them. The accepted set converges as
 // this rises (it is a Matern hard-core process - see treeScatter.ts), and by 3 it is within a few
