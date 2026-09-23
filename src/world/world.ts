@@ -5,9 +5,10 @@ import { createOceanPlane } from "./terrain/ocean";
 import { createMaterialLibrary, type MaterialLibrary } from "./materials/materialLibrary";
 import { createTreeScatter } from "./foliage/treeScatter";
 import { createTreeField, type TreeField } from "./foliage/treeField";
-import { createSunLighting } from "./lighting/sunLighting";
+import { createSunLighting, DEFAULT_DAY_NIGHT_CYCLE_MINUTES } from "./lighting/sunLighting";
+import { createSkyDome } from "./sky/skyDome";
 import type { ContinentPlan } from "./cells/continentLayout";
-import type { AreaBounds } from "./cells/areaField";
+import type { AreaBounds, AreaWeight } from "./cells/areaField";
 import type { SettlementSite } from "./settlements/settlementSites";
 import type { RoadNetwork } from "./roads/roadNetwork";
 
@@ -35,6 +36,19 @@ export interface World {
    *  main.ts creates after the world exists - call this once it does. */
   attachCamera: (camera: Camera) => void;
   setShadowsEnabled: (enabled: boolean) => void;
+  /** Re-blends the sky, fog colour and fog-start distance for wherever the player is now - see
+   *  sky/skyDome.ts. Cheap (a handful of Color3/float lerps over however many areas are in range),
+   *  so this is meant to be called every frame from the same sampleTerrain result main.ts already
+   *  takes for the zone label, not gated behind any dirty check of its own. */
+  updateAtmosphere: (areaWeights: AreaWeight[]) => void;
+  /** Advances the day-night cycle and re-blends lighting for wherever the player is now - see
+   *  lighting/sunLighting.ts's updateDayNight. Meant to be called every frame alongside
+   *  updateAtmosphere, with the same areaWeights and the frame's own delta time. */
+  updateDayNight: (deltaSeconds: number, areaWeights: AreaWeight[]) => void;
+  /** Jumps the clock to a given hour (0-24, wrapping) - what the settings-panel time-of-day slider
+   *  drives, so previewing the far side of a slow cycle doesn't mean actually waiting for it. */
+  setTimeOfDay: (hours: number) => void;
+  getTimeOfDay: () => number;
 }
 
 const WORLD_SEED = 1337;
@@ -43,9 +57,20 @@ const CHUNK_SIZE = 50;
 const CHUNK_SUBDIVISIONS = 20;
 const UNLOAD_HYSTERESIS = CHUNK_SIZE; // unload radius = load radius + this, a 1-chunk buffer band
 
-export const DEFAULT_DRAW_DISTANCE = 400;
+export const DEFAULT_DRAW_DISTANCE = 1200;
 export const MIN_DRAW_DISTANCE = 100;
 export const MAX_DRAW_DISTANCE = 2000;
+
+// Re-exported so main.ts's settings panel can label the time-of-day slider without reaching past
+// World's own public surface into lighting/sunLighting.ts directly.
+export { DEFAULT_DAY_NIGHT_CYCLE_MINUTES };
+
+// Fog's far edge is sized off the draw distance rather than a fixed world-unit band, so it always
+// meets the far edge of loaded chunks at the same fraction of the way there, whatever the slider
+// is set to - a fixed band either fogs out ground well short of the load radius (small setting) or
+// never reaches full fog before chunks stop loading at all (large setting). Where fog STARTS is a
+// per-biome fraction of this same draw distance instead - see BiomeAtmosphere.fogStartFraction.
+const FOG_END_FRACTION = 0.95;
 
 /**
  * Orchestrates world content: the cell-based continent/area system, and terrain streamed in as
@@ -85,6 +110,7 @@ export async function createWorld(scene: Scene, onProgress?: (progress: WorldLoa
   });
 
   const trees = createTreeField(scene, sunLighting.shadowGenerator);
+  const sky = createSkyDome(scene);
 
   const chunkManager = createChunkManager({
     scene,
@@ -107,13 +133,30 @@ export async function createWorld(scene: Scene, onProgress?: (progress: WorldLoa
 
   createOceanPlane(scene, { size: worldExtent });
 
+  // Tracked so updateAtmosphere can turn a biome's fogStartFraction into an actual distance without
+  // main.ts having to know or pass the draw distance itself every frame.
+  let drawDistance = DEFAULT_DRAW_DISTANCE;
+
   const heightAt = (worldX: number, worldZ: number) => sampleTerrain(worldX, worldZ).height;
   const updateChunks = (playerX: number, playerZ: number) => chunkManager.update(playerX, playerZ);
-  const setDrawDistance = (loadRadius: number) => chunkManager.setRadii(loadRadius, loadRadius + UNLOAD_HYSTERESIS);
+  const setDrawDistance = (loadRadius: number) => {
+    drawDistance = loadRadius;
+    chunkManager.setRadii(loadRadius, loadRadius + UNLOAD_HYSTERESIS);
+    scene.fogEnd = loadRadius * FOG_END_FRACTION;
+  };
+  // Sets the initial fog-end directly rather than through setDrawDistance, which would otherwise
+  // re-run chunkManager's own enqueue/unload pass a second time against the (0,0) it already
+  // loaded via loadInitial above. fogStart is set by the first updateAtmosphere call instead of
+  // here - it depends on the player's own zone, which does not exist until main.ts's first frame.
+  scene.fogEnd = DEFAULT_DRAW_DISTANCE * FOG_END_FRACTION;
   const setShadowsEnabled = (enabled: boolean) => {
     sunLighting.setShadowsEnabled(enabled);
     materialLibrary.setShadowsEnabled(enabled);
   };
+  // Reads sunLighting's own clock rather than taking timeHours as a parameter, so main.ts doesn't
+  // have to thread it through - callers just need to call updateDayNight first each frame (main.ts
+  // does) so this reads the frame's current time rather than the previous frame's.
+  const updateAtmosphere = (areaWeights: AreaWeight[]) => sky.update(areaWeights, drawDistance, sunLighting.getTimeHours(), sunLighting.direction);
 
   return {
     heightAt,
@@ -130,5 +173,9 @@ export async function createWorld(scene: Scene, onProgress?: (progress: WorldLoa
     trees,
     attachCamera: sunLighting.attachCamera,
     setShadowsEnabled,
+    updateAtmosphere,
+    updateDayNight: sunLighting.updateDayNight,
+    setTimeOfDay: sunLighting.setTimeHours,
+    getTimeOfDay: sunLighting.getTimeHours,
   };
 }

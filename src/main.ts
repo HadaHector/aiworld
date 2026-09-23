@@ -34,6 +34,15 @@ const debugMap = createDebugMap(world.sampleTerrain, world.worldExtent, world.co
   character.teleport(worldX, worldZ);
 });
 
+// "14:06" rather than a raw "14.1" - the slider steps in hundredths of an hour (step 0.1 below is
+// six minutes), which reads as noise unless it is put back into clock form.
+function formatClockHours(hours: number): string {
+  const wrapped = ((hours % 24) + 24) % 24;
+  const h = Math.floor(wrapped);
+  const m = Math.floor((wrapped - h) * 60);
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+}
+
 createSettingsPanel({
   min: MIN_DRAW_DISTANCE,
   max: MAX_DRAW_DISTANCE,
@@ -42,6 +51,17 @@ createSettingsPanel({
   toggles: [
     { label: "Trees", initial: true, onChange: (on) => world.trees.setVisible(on) },
     { label: "Shadows", initial: true, onChange: (on) => world.setShadowsEnabled(on) },
+  ],
+  sliders: [
+    {
+      label: "Time",
+      min: 0,
+      max: 24,
+      step: 0.1,
+      initial: world.getTimeOfDay(),
+      format: formatClockHours,
+      onChange: (hours) => world.setTimeOfDay(hours),
+    },
   ],
 });
 
@@ -96,13 +116,19 @@ window.addEventListener("keydown", (e) => {
 });
 
 scene.onBeforeRenderObservable.add(() => {
-  character.update(engine.getDeltaTime() / 1000, camera);
+  const deltaSeconds = engine.getDeltaTime() / 1000;
+  character.update(deltaSeconds, camera);
   world.updateChunks(character.mesh.position.x, character.mesh.position.z);
   debugMap.updateMarker(character.mesh.position.x, character.mesh.position.z, camera.alpha);
   const here = world.sampleTerrain(character.mesh.position.x, character.mesh.position.z);
   const zoneName = world.areaNames.get(here.primaryAreaId) ?? "Uncharted";
   zoneLabel.update(zoneName, here.primaryBiome.name);
   positionPanel.update(character.mesh.position, camera, zoneName, here.primaryBiome.name);
+  // Day-night first: it owns the clock, and updateAtmosphere reads that clock's current value
+  // (world.ts's updateAtmosphere calls sunLighting.getTimeHours() itself) - calling it after this
+  // is what makes that read this frame's time rather than last frame's.
+  world.updateDayNight(deltaSeconds, here.areaWeights);
+  world.updateAtmosphere(here.areaWeights);
 });
 
 // Render one frame explicitly before revealing the world, so the overlay never fades to a blank

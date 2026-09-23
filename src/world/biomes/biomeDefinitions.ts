@@ -1,6 +1,79 @@
-import type { BiomeDefinition } from "./biomeTypes";
+import { Color3 } from "@babylonjs/core";
+import type { BiomeAtmosphere, BiomeDayNight, BiomeDefinition } from "./biomeTypes";
 import type { PipelineDef } from "../terrain/pipeline/pipelineTypes";
 import type { TreeKind } from "../foliage/foliageConfig";
+import { coolNightTone, deriveNightIntensity } from "../lighting/dayNightMath";
+
+// Every other biome's fog starts at the same fraction of the draw distance the un-zoned default
+// used before biomes had a say in it - only a biome with something to say (the swamp) overrides it.
+const DEFAULT_FOG_START_FRACTION = 0.3;
+
+/** Shorthand for an atmosphere literal - every biome states its three colours plus how close its
+ *  fog sits in, so this is just Color3-from-tuple three times and a default rather than a helper
+ *  worth naming beyond that. */
+function atmosphere(
+  horizon: [number, number, number],
+  zenith: [number, number, number],
+  cloud: [number, number, number],
+  fogStartFraction = DEFAULT_FOG_START_FRACTION,
+): BiomeAtmosphere {
+  return { horizon: Color3.FromInts(...horizon), zenith: Color3.FromInts(...zenith), cloud: Color3.FromInts(...cloud), fogStartFraction };
+}
+
+// Shared by every biome that doesn't say otherwise - a plain, unsaturated day palette so a biome
+// only has to state colour where it actually wants to diverge from it (see e.g. forest/desert
+// below), the same pattern atmosphere()'s fogStartFraction default already uses. There is no
+// DEFAULT_*_NIGHT pair any more: night is derived from whatever the day colour/intensity turns out
+// to be (see dayNight() below and lighting/dayNightMath.ts), so a biome that tints its own day
+// colours gets an automatically-matching, consistently-cooler-and-dimmer night for free.
+const DEFAULT_AMBIENT_DAY: [number, number, number] = [176, 196, 214];
+const DEFAULT_AMBIENT_DAY_INTENSITY = 0.55;
+const DEFAULT_SUN_HORIZON: [number, number, number] = [255, 150, 90];
+const DEFAULT_SUN_ZENITH: [number, number, number] = [255, 248, 224];
+const DEFAULT_SUN_INTENSITY = 1.0;
+
+interface DayNightOverrides {
+  ambientDay?: [number, number, number];
+  ambientDayIntensity?: number;
+  sunHorizon?: [number, number, number];
+  sunZenith?: [number, number, number];
+  sunIntensity?: number;
+  /** Escape hatches for a biome that wants its night to diverge from the derived one outright,
+   *  rather than just inheriting a cooler/dimmer version of its day colours - unused today (every
+   *  biome's derived night already reads distinctly enough), kept because "derive it" should never
+   *  be a dead end if a future zone genuinely needs its own night. */
+  ambientNight?: [number, number, number];
+  ambientNightIntensity?: number;
+  moonColor?: [number, number, number];
+  moonIntensity?: number;
+}
+
+/** Shorthand for a day-night literal. Every biome states its own peak elevations - the one setting
+ *  the user asked for explicitly, since it is what makes a zone's sky read as equatorial (high,
+ *  harsh noon) or polar (low, grazing) - and its day colours; night is always the SAME rule applied
+ *  to those (see dayNightMath.ts's NIGHT_BRIGHTNESS/coolNightTone) unless explicitly overridden. */
+function dayNight(sunPeakElevation: number, moonPeakElevation: number, overrides: DayNightOverrides = {}): BiomeDayNight {
+  const ambientDay = Color3.FromInts(...(overrides.ambientDay ?? DEFAULT_AMBIENT_DAY));
+  const ambientDayIntensity = overrides.ambientDayIntensity ?? DEFAULT_AMBIENT_DAY_INTENSITY;
+  const sunZenithColor = Color3.FromInts(...(overrides.sunZenith ?? DEFAULT_SUN_ZENITH));
+  const sunIntensity = overrides.sunIntensity ?? DEFAULT_SUN_INTENSITY;
+  return {
+    sunPeakElevation,
+    moonPeakElevation,
+    ambientDay,
+    ambientDayIntensity,
+    sunHorizonColor: Color3.FromInts(...(overrides.sunHorizon ?? DEFAULT_SUN_HORIZON)),
+    sunZenithColor,
+    sunIntensity,
+    ambientNight: overrides.ambientNight ? Color3.FromInts(...overrides.ambientNight) : coolNightTone(ambientDay),
+    ambientNightIntensity: overrides.ambientNightIntensity ?? deriveNightIntensity(ambientDayIntensity),
+    // The moon's colour derives from the sun's ZENITH colour (its full-strength daylight hue), not
+    // its horizon one - moonlight doesn't have its own "moonrise/moonset" colour shift in this
+    // model, so there is only the one sun colour worth cooling into it.
+    moonColor: overrides.moonColor ? Color3.FromInts(...overrides.moonColor) : coolNightTone(sunZenithColor),
+    moonIntensity: overrides.moonIntensity ?? deriveNightIntensity(sunIntensity),
+  };
+}
 
 /** A single shared-shape "detail" pipeline: one fbm noise, offset by the biome's base elevation.
  *  Reproduces the pre-pipeline fbm arithmetic exactly (amplitude/frequency scaled off the old
@@ -99,6 +172,8 @@ const plains: BiomeDefinition = {
   lakeChance: 0.05,
   baseMaterialId: "grass",
   roadMaterialId: "track",
+  atmosphere: atmosphere([196, 214, 210], [88, 140, 202], [246, 248, 244]),
+  dayNight: dayNight(65, 45),
 };
 
 const forest: BiomeDefinition = {
@@ -136,6 +211,8 @@ const forest: BiomeDefinition = {
   lakeChance: 0.04,
   baseMaterialId: "grass",
   roadMaterialId: "track",
+  atmosphere: atmosphere([164, 186, 172], [70, 112, 132], [214, 222, 208]),
+  dayNight: dayNight(58, 38, { ambientDay: [168, 194, 176] }),
 };
 
 const hills: BiomeDefinition = {
@@ -173,6 +250,8 @@ const hills: BiomeDefinition = {
   lakeChance: 0.03,
   baseMaterialId: "grass",
   roadMaterialId: "track",
+  atmosphere: atmosphere([186, 206, 202], [72, 124, 186], [242, 244, 240]),
+  dayNight: dayNight(68, 46),
 };
 
 const desert: BiomeDefinition = {
@@ -207,6 +286,10 @@ const desert: BiomeDefinition = {
   lakeChance: 0.03, // oases
   baseMaterialId: "sand",
   roadMaterialId: "trackSand",
+  atmosphere: atmosphere([236, 202, 154], [138, 168, 208], [255, 250, 236]),
+  // A harsh, near-overhead noon and a moon that barely clears the dunes - the two extremes of the
+  // per-biome elevation range - plus a hotter horizon sun and a dim, sharp-cool night to match.
+  dayNight: dayNight(82, 30, { sunHorizon: [255, 120, 55], ambientDay: [214, 198, 164] }),
 };
 
 const mountains: BiomeDefinition = {
@@ -228,6 +311,9 @@ const mountains: BiomeDefinition = {
   lakeChance: 0.01, // rare tarns/crater lakes
   baseMaterialId: "rock",
   roadMaterialId: "trackStone",
+  atmosphere: atmosphere([202, 216, 226], [46, 92, 158], [252, 253, 255]),
+  // Thin, crisp air: sun and moon reach nearly the same height, and both read bright and clean.
+  dayNight: dayNight(55, 55, { sunZenith: [255, 255, 250] }),
 };
 
 const tundra: BiomeDefinition = {
@@ -243,6 +329,9 @@ const tundra: BiomeDefinition = {
   lakeChance: 0.05,
   baseMaterialId: "tundraGround",
   roadMaterialId: "trackStone",
+  atmosphere: atmosphere([222, 228, 232], [150, 178, 210], [255, 255, 255]),
+  // Polar reversal of the desert: a low, grazing noon sun and a big, bright midnight moon.
+  dayNight: dayNight(32, 62, { ambientDay: [210, 220, 230], sunZenith: [235, 240, 245] }),
 };
 
 /**
@@ -290,6 +379,8 @@ const canyon: BiomeDefinition = {
   lakeChance: 0.02,
   baseMaterialId: "rock",
   roadMaterialId: "trackSand",
+  atmosphere: atmosphere([224, 176, 140], [104, 132, 186], [250, 236, 222]),
+  dayNight: dayNight(78, 36, { sunHorizon: [255, 128, 68] }),
 };
 
 /**
@@ -316,6 +407,19 @@ const swamp: BiomeDefinition = {
   lakeChance: 0.15,
   baseMaterialId: "mud",
   roadMaterialId: "track",
+  // A close, low haze instead of the usual 30% - a swamp is the one zone that should never read as
+  // open country, whatever the draw-distance slider is set to.
+  atmosphere: atmosphere([176, 180, 152], [98, 114, 100], [200, 204, 180], 0.08),
+  // Canopy-filtered even at noon (a dimmer sunIntensity than anywhere else) and a murky,
+  // low-strength ambient that never gets properly bright even at midday - night then falls out of
+  // the ordinary derived rule already dimmer and murkier than anywhere else, rather than needing
+  // its own separate night numbers to say so twice.
+  dayNight: dayNight(45, 24, {
+    ambientDay: [150, 160, 140],
+    ambientDayIntensity: 0.42,
+    sunHorizon: [200, 150, 110],
+    sunIntensity: 0.7,
+  }),
 };
 
 export const BIOME_REGISTRY: BiomeDefinition[] = [plains, forest, hills, desert, mountains, tundra, canyon, swamp];

@@ -1,4 +1,7 @@
 import { CascadedShadowGenerator, Color3, DirectionalLight, HemisphericLight, Vector3, type Camera, type Scene } from "@babylonjs/core";
+import type { AreaWeight } from "../cells/areaField";
+import { lerp } from "../mathUtils";
+import { computeDayNightFactors, SUNRISE_HOUR, SUNSET_HOUR } from "./dayNightMath";
 
 /** How many slices the camera's view frustum is cut into, each rendered to its own shadow map
  *  layer at full resolution. More cascades buy sharper near shadows for the same total texel
@@ -22,7 +25,7 @@ const SHADOW_CASCADE_LAMBDA = 0.5;
 // its texels on ground nobody is looking closely at, at the expense of the near cascades that
 // matter. 900 comfortably clears DEFAULT_DRAW_DISTANCE (400) with room to grow into.
 const SHADOW_NEAR_DISTANCE = 1;
-const SHADOW_FAR_DISTANCE = 900;
+const SHADOW_FAR_DISTANCE = 1200;
 
 /** Fraction of light a fully shadowed surface still receives. Zero would be a flat silhouette
  *  wherever the sun can't reach, which reads wrong next to a lit sky - the ambient light already
@@ -43,11 +46,29 @@ export const SHADOW_EDGE_FADE = 60;
  *  near cascade would be nowhere near enough to clear self-shadowing acne in the far one. */
 const SHADOW_BIAS_TEXELS = 3;
 
+// A full sunrise-to-sunrise cycle, in real minutes, by default - deliberately slow (the user's own
+// call: "quite slow, like 4 hours") so a normal play session sees at most a slow drift rather than
+// a strobing day. The settings-panel time-of-day slider (see main.ts) is what makes trying the rest
+// of the cycle practical without actually waiting on this.
+export const DEFAULT_DAY_NIGHT_CYCLE_MINUTES = 240;
+
+const DEG2RAD = Math.PI / 180;
+
 export interface SunLighting {
-  /** Points TOWARD the sun - the convention every material's diffuse term already used before
-   *  shadows existed, kept unchanged so this is a drop-in replacement rather than a re-tune. */
+  /** Points TOWARD whichever body is currently lit - the sun by day, the moon by night. Same
+   *  convention every material's diffuse term already used before shadows existed. Mutated in
+   *  place by updateDayNight rather than reassigned, so anything holding this reference sees the
+   *  current frame's value without having to re-fetch it. */
   direction: Vector3;
+  /** Current light strength, 0 at the exact instant either body sits on the horizon. */
   intensity: number;
+  /** Current light colour - warm near the horizon, its zenith colour once well clear of it by day;
+   *  flat moonlight by night. Mutated in place, same as direction. */
+  color: Color3;
+  /** The sky-fill's current colour/strength, cross-faded between each in-range biome's day and
+   *  night values by how far through the cycle it is - see updateDayNight. */
+  ambientColor: Color3;
+  ambientIntensity: number;
   shadowGenerator: CascadedShadowGenerator;
   /** The view-space Z distance at each cascade's far edge, in the same units and sense as
    *  DirectionalLight's shadow camera - the terrain shader picks a cascade the identical way,
@@ -60,6 +81,18 @@ export interface SunLighting {
    *  is created after the world is (see world.ts) - call this once it exists. */
   attachCamera: (camera: Camera) => void;
   setShadowsEnabled: (enabled: boolean) => void;
+  /** Advances the clock by deltaSeconds (scaled by DEFAULT_DAY_NIGHT_CYCLE_MINUTES) and re-applies
+   *  it - blending every in-range area's own day-night settings exactly the way atmosphere blends
+   *  sky colours, so crossing a border fades lighting at the same rate it fades sky and fog. Meant
+   *  to be called every frame, same as World.updateAtmosphere. */
+  updateDayNight: (deltaSeconds: number, areaWeights: AreaWeight[]) => void;
+  /** Jumps the clock straight to a given hour (0-24, wrapping) without waiting for it to get there
+   *  - what the settings-panel time-of-day slider drives, so trying the far side of a 4-hour cycle
+   *  doesn't mean actually waiting two hours. Re-applies immediately against the last area weights
+   *  seen, so the scene updates the instant the slider moves rather than on the next frame's own
+   *  areaWeights (which, mid-drag, may not come until the player next moves). */
+  setTimeHours: (hours: number) => void;
+  getTimeHours: () => number;
 }
 
 /**
@@ -80,21 +113,38 @@ function computeCascadeSplits(near: number, far: number, count: number, lambda: 
 }
 
 /**
- * The world's one sun: a directional light casting cascaded shadows, plus a dim sky ambient so a
- * face turned away from it isn't pure black. Every shaded material - terrain's own shader, and
- * every StandardMaterial elsewhere (ocean, trees, the player) - reads its direction and intensity
- * from `direction`/`intensity` here rather than each picking its own, so the sun in the sky and
- * the shadows on the ground can never disagree about where the light is coming from.
+ * The world's one sun-and-moon: a single DirectionalLight re-coloured, re-aimed and re-strengthened
+ * across the day/night cycle rather than two separate lights swapped in and out - which is what
+ * lets the same CascadedShadowGenerator keep casting shadows for both with no extra wiring, and
+ * what makes "the sun shines by day, the moon by night" true by construction rather than a case
+ * this module has to detect and branch on for shadows specifically.
+ *
+ * Every shaded material - terrain's own shader, and every StandardMaterial elsewhere (ocean, trees,
+ * the player) - reads its direction/intensity/colour from this one object rather than each picking
+ * its own, so the light in the sky and the shadows and colour on the ground can never disagree.
  */
 export function createSunLighting(scene: Scene): SunLighting {
+  // Placeholder daytime values - overwritten by the first updateDayNight call a frame or two later
+  // (see world.ts), before anything is actually drawn. Kept non-degenerate (a real direction, a
+  // real intensity) only so nothing reads a zero/garbage light in the brief window between a
+  // material being built against these fields and the first real update.
   const direction = new Vector3(0.3, 1, 0.2).normalize();
-  const intensity = 0.95;
+  const color = new Color3(1, 1, 1);
+  const ambientColor = new Color3(0.69, 0.77, 0.84);
+  let intensity = 0.95;
+  let ambientIntensity = 0.5;
 
-  // Fill only - the directional light below is what actually reads as "the sun" and is the only
-  // one that casts a shadow. Without this, ground facing away from the sun would go to black
-  // rather than the soft grey a lit sky actually leaves it at.
-  const ambient = new HemisphericLight("skyAmbient", direction, scene);
-  ambient.intensity = 0.5;
+  // Fill only - the directional light below is what actually reads as "the sun" (or "the moon")
+  // and is the only one that casts a shadow. Without this, ground facing away from it would go to
+  // black rather than the soft glow a lit sky actually leaves it at.
+  //
+  // direction is fixed straight up, NOT re-aimed at the sun/moon each frame like the directional
+  // light below - a sky's ambient fill doesn't rotate with where the sun happens to be in it, only
+  // its colour and strength do. Re-aiming this at a low sun/moon used to leave the ground reading
+  // dim ambient "ground colour" at exactly the moments (dawn/dusk) it should be brightest.
+  const ambient = new HemisphericLight("skyAmbient", Vector3.Up(), scene);
+  ambient.intensity = ambientIntensity;
+  ambient.diffuse.copyFrom(ambientColor);
   // HemisphericLight blends between `diffuse` (its sky colour, for a face pointed toward
   // `direction`) and `groundColor` (for one pointed away) - which defaults to BLACK. Terrain never
   // noticed, since every terrain face points roughly up, toward the sky half; a tree is full of
@@ -102,13 +152,18 @@ export function createSunLighting(scene: Scene): SunLighting {
   // reading pure black from this light regardless of its intensity - raising intensity alone can
   // never fix a colour that's black at both ends of the multiply. This is the actual fix the
   // "foliage undersides" backlog entry called for, in place of treeModels.ts's flat emissive fill.
-  ambient.groundColor = new Color3(0.3, 0.32, 0.28);
+  // A fixed fraction of the current ambient colour rather than its own fixed colour, so a face
+  // pointed away from the sky dims and tints with everything else across the day/night cycle
+  // instead of staying one colour while diffuse changes around it.
+  ambientColor.scaleToRef(0.55, ambient.groundColor);
 
   // DirectionalLight.direction is the direction light TRAVELS, the opposite sense from `direction`
   // above (which every material reads as "toward the sun") - negated once, here, rather than
   // asking every caller to remember which convention it's using.
   const sun = new DirectionalLight("sun", direction.scale(-1), scene);
   sun.intensity = intensity;
+  sun.diffuse.copyFrom(color);
+  sun.specular.copyFrom(color);
   // A shadow-casting light needs a position to build its own view matrix from; direction is what
   // actually matters for a directional light, so this only has to be somewhere on the sun's side
   // of the world, not any particular distance.
@@ -154,5 +209,154 @@ export function createSunLighting(scene: Scene): SunLighting {
     sun.shadowEnabled = enabled;
   }
 
-  return { direction, intensity, shadowGenerator, cascadeSplits, cascadeBias, attachCamera, setShadowsEnabled };
+  // 0-24, wrapping. Starts at noon - the most legible default to spawn into rather than an
+  // arbitrary point mid-transition.
+  let timeHours = 12;
+  let lastAreaWeights: AreaWeight[] = [];
+
+  // Scratch accumulators for applyTimeOfDay's blend - module-lifetime, not per-call, since this
+  // runs every frame and a fresh Color3 per field per frame is pure garbage-collector pressure for
+  // no benefit (nothing outside this function ever sees these).
+  const blendAmbientDay = new Color3();
+  const blendAmbientNight = new Color3();
+  const blendSunHorizon = new Color3();
+  const blendSunZenith = new Color3();
+  const blendMoon = new Color3();
+
+  function applyTimeOfDay(areaWeights: AreaWeight[]): void {
+    if (areaWeights.length === 0) return;
+    lastAreaWeights = areaWeights;
+
+    let sunPeak = 0;
+    let moonPeak = 0;
+    let ambientDayIntensity = 0;
+    let ambientNightIntensity = 0;
+    let sunIntensityBlend = 0;
+    let moonIntensityBlend = 0;
+    blendAmbientDay.set(0, 0, 0);
+    blendAmbientNight.set(0, 0, 0);
+    blendSunHorizon.set(0, 0, 0);
+    blendSunZenith.set(0, 0, 0);
+    blendMoon.set(0, 0, 0);
+
+    for (const { biome, weight } of areaWeights) {
+      const d = biome.dayNight;
+      sunPeak += d.sunPeakElevation * weight;
+      moonPeak += d.moonPeakElevation * weight;
+      ambientDayIntensity += d.ambientDayIntensity * weight;
+      ambientNightIntensity += d.ambientNightIntensity * weight;
+      sunIntensityBlend += d.sunIntensity * weight;
+      moonIntensityBlend += d.moonIntensity * weight;
+      blendAmbientDay.r += d.ambientDay.r * weight;
+      blendAmbientDay.g += d.ambientDay.g * weight;
+      blendAmbientDay.b += d.ambientDay.b * weight;
+      blendAmbientNight.r += d.ambientNight.r * weight;
+      blendAmbientNight.g += d.ambientNight.g * weight;
+      blendAmbientNight.b += d.ambientNight.b * weight;
+      blendSunHorizon.r += d.sunHorizonColor.r * weight;
+      blendSunHorizon.g += d.sunHorizonColor.g * weight;
+      blendSunHorizon.b += d.sunHorizonColor.b * weight;
+      blendSunZenith.r += d.sunZenithColor.r * weight;
+      blendSunZenith.g += d.sunZenithColor.g * weight;
+      blendSunZenith.b += d.sunZenithColor.b * weight;
+      blendMoon.r += d.moonColor.r * weight;
+      blendMoon.g += d.moonColor.g * weight;
+      blendMoon.b += d.moonColor.b * weight;
+    }
+
+    // One sine over the full 24h, zero at both SUNRISE_HOUR and SUNSET_HOUR, positive between them
+    // (day) and negative outside (night) - both bodies' elevation and the ambient day/night
+    // cross-fade all derive from this single shared signal (see dayNightMath.ts), which is what
+    // guarantees they cross zero/0.5 at exactly the same instant as skyDome.ts's own sky/fog
+    // cross-fade rather than three independent formulas that could drift out of step with it.
+    const { isDay, elevationFactor, dayness } = computeDayNightFactors(timeHours);
+
+    // Hours since ITS OWN rise (0 at rise, half the arc at its own peak, the full arc at its own
+    // set) - day and night need their own version of this because they don't share a rise hour, so
+    // a single continuous formula (the way `raw` above works for elevation) can't cover both.
+    const bodyLocalHours = isDay ? timeHours - SUNRISE_HOUR : (((timeHours - SUNSET_HOUR) % 24) + 24) % 24;
+    const peakElevation = isDay ? sunPeak : moonPeak;
+    const elevationDeg = elevationFactor * peakElevation;
+    // Sweeps -90 (rise, due one side) through 0 (its own peak moment, overhead-ish) to +90 (set,
+    // due the other side) - the same shape for both bodies, just walked by each one's own
+    // bodyLocalHours over its own 12-hour arc.
+    const azimuthDeg = 15 * bodyLocalHours - 90;
+
+    const elevationRad = elevationDeg * DEG2RAD;
+    const azimuthRad = azimuthDeg * DEG2RAD;
+    const horizontal = Math.cos(elevationRad);
+    // Already unit length by construction (a spherical-to-Cartesian conversion), so no normalize
+    // needed - direction is mutated in place, not reassigned, so SunLighting.direction stays the
+    // same object every caller already holds a reference to.
+    direction.set(horizontal * Math.cos(azimuthRad), Math.sin(elevationRad), horizontal * Math.sin(azimuthRad));
+
+    if (isDay) {
+      // The one place colour genuinely varies across the day rather than just fading in and out -
+      // warm and low near the horizon, its full daylight colour once well clear of it.
+      color.r = lerp(blendSunHorizon.r, blendSunZenith.r, elevationFactor);
+      color.g = lerp(blendSunHorizon.g, blendSunZenith.g, elevationFactor);
+      color.b = lerp(blendSunHorizon.b, blendSunZenith.b, elevationFactor);
+    } else {
+      color.copyFrom(blendMoon);
+    }
+    // Zero at the instant either body sits exactly on the horizon - not a separate fade the code
+    // has to arrange, just what elevationFactor already is at that instant.
+    intensity = elevationFactor * (isDay ? sunIntensityBlend : moonIntensityBlend);
+
+    // Ambient doesn't switch bodies the way direct light does - it cross-fades smoothly through
+    // both twilights using the same raw signal, so the sky stays lit (dimly) through the moment
+    // direct light itself is at its own zero.
+    ambientColor.r = lerp(blendAmbientNight.r, blendAmbientDay.r, dayness);
+    ambientColor.g = lerp(blendAmbientNight.g, blendAmbientDay.g, dayness);
+    ambientColor.b = lerp(blendAmbientNight.b, blendAmbientDay.b, dayness);
+    ambientIntensity = lerp(ambientNightIntensity, ambientDayIntensity, dayness);
+
+    ambient.diffuse.copyFrom(ambientColor);
+    ambient.intensity = ambientIntensity;
+    ambientColor.scaleToRef(0.55, ambient.groundColor);
+
+    sun.diffuse.copyFrom(color);
+    sun.specular.copyFrom(color);
+    sun.intensity = intensity;
+    sun.direction.set(-direction.x, -direction.y, -direction.z);
+    sun.position.set(direction.x * 500, direction.y * 500, direction.z * 500);
+  }
+
+  function updateDayNight(deltaSeconds: number, areaWeights: AreaWeight[]): void {
+    const cycleSeconds = DEFAULT_DAY_NIGHT_CYCLE_MINUTES * 60;
+    timeHours = (timeHours + (deltaSeconds / cycleSeconds) * 24) % 24;
+    applyTimeOfDay(areaWeights);
+  }
+
+  function setTimeHours(hours: number): void {
+    timeHours = ((hours % 24) + 24) % 24;
+    // Re-applies against whatever areas were last seen rather than waiting for the next real
+    // update - the slider should show its effect the instant it moves, not on the player's next
+    // frame of movement (areaWeights only otherwise arrives via updateDayNight's own caller).
+    applyTimeOfDay(lastAreaWeights);
+  }
+
+  function getTimeHours(): number {
+    return timeHours;
+  }
+
+  return {
+    direction,
+    get intensity() {
+      return intensity;
+    },
+    color,
+    ambientColor,
+    get ambientIntensity() {
+      return ambientIntensity;
+    },
+    shadowGenerator,
+    cascadeSplits,
+    cascadeBias,
+    attachCamera,
+    setShadowsEnabled,
+    updateDayNight,
+    setTimeHours,
+    getTimeHours,
+  };
 }

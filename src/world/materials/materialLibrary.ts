@@ -179,6 +179,9 @@ uniform sampler2DArray materialAtlas;
 uniform sampler2DArray normalAtlas;
 uniform vec3 lightDirection;
 uniform float lightIntensity;
+uniform vec3 lightColor;
+uniform vec3 ambientColor;
+uniform float ambientIntensity;
 uniform vec3 cameraPosition;
 uniform float specularMinShininess;
 uniform float specularMaxShininess;
@@ -333,7 +336,13 @@ void main() {
   // still sand, just lit by the sky rather than the sun, which is what SHADOW_DARKNESS's floor is
   // standing in for (see computeShadow).
   float shadow = computeShadow(vWorldPosition, worldNormal);
-  vec3 lit = albedo.rgb * diffuse * shadow + vec3(specular) * lightIntensity * shadow;
+  // Ambient is not shadowed - it is sky-fill, not a beam the sun caster could block, and reaches a
+  // shadowed patch exactly as it reaches a lit one. Without this, night terrain (a dim moon,
+  // frequently in the 0-intensity instant right at moonrise/moonset) would read as pure black,
+  // since - unlike trees and ocean's StandardMaterial, which pick up the scene's HemisphericLight
+  // automatically - this shader has no light of its own besides lightColor/lightIntensity.
+  vec3 ambient = albedo.rgb * ambientColor * ambientIntensity;
+  vec3 lit = albedo.rgb * diffuse * lightColor * shadow + vec3(specular) * lightColor * lightIntensity * shadow + ambient;
 
   float fogDistance = length(vPositionFromCamera);
   float fogFactor = 1.0;
@@ -435,6 +444,9 @@ export async function createMaterialLibrary(
       "tileScale",
       "lightDirection",
       "lightIntensity",
+      "lightColor",
+      "ambientColor",
+      "ambientIntensity",
       "cameraPosition",
       "specularMinShininess",
       "specularMaxShininess",
@@ -455,8 +467,6 @@ export async function createMaterialLibrary(
   terrainMaterial.setTexture("materialAtlas", materialAtlas);
   terrainMaterial.setTexture("normalAtlas", normalAtlas);
   terrainMaterial.setFloat("tileScale", 1 / TEXTURE_WORLD_TILE_SIZE);
-  terrainMaterial.setVector3("lightDirection", sunLighting.direction);
-  terrainMaterial.setFloat("lightIntensity", sunLighting.intensity);
   terrainMaterial.setFloat("specularMinShininess", SPECULAR_MIN_SHININESS);
   terrainMaterial.setFloat("specularMaxShininess", SPECULAR_MAX_SHININESS);
   terrainMaterial.setFloat("specularIntensity", SPECULAR_INTENSITY);
@@ -474,6 +484,12 @@ export async function createMaterialLibrary(
   // (main.ts creates the camera after the world), hence the guard. Fog rides along here too; both
   // are safe this early in the frame because neither depends on anything the render loop hasn't
   // computed yet - unlike the shadow matrices below, which very much do.
+  //
+  // Light direction/colour/intensity and ambient colour/intensity ride along here too, now that
+  // the day-night cycle (sunLighting.updateDayNight) changes all five every frame - direction and
+  // the two colours are mutated in place rather than reassigned (see SunLighting's own fields), so
+  // reading them fresh here every frame is what actually picks up each frame's value; setting them
+  // once at creation, as this used to, would have frozen the terrain at whatever moment it started.
   scene.onBeforeRenderObservable.add(() => {
     if (scene.activeCamera) {
       terrainMaterial.setVector3("cameraPosition", scene.activeCamera.position);
@@ -483,6 +499,11 @@ export async function createMaterialLibrary(
     terrainMaterial.setFloat("fogStart", scene.fogStart);
     terrainMaterial.setFloat("fogEnd", scene.fogEnd);
     terrainMaterial.setFloat("fogDensity", scene.fogDensity);
+    terrainMaterial.setVector3("lightDirection", sunLighting.direction);
+    terrainMaterial.setFloat("lightIntensity", sunLighting.intensity);
+    terrainMaterial.setColor3("lightColor", sunLighting.color);
+    terrainMaterial.setColor3("ambientColor", sunLighting.ambientColor);
+    terrainMaterial.setFloat("ambientIntensity", sunLighting.ambientIntensity);
   });
 
   /**

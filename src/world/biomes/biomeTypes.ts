@@ -1,8 +1,58 @@
+import type { Color3 } from "@babylonjs/core";
 import type { PipelineDef } from "../terrain/pipeline/pipelineTypes";
 import type { VoiceId } from "../naming/nameGenerator";
 
 /** Reserved for future differentiated border generation; only "smooth" is generated today. */
 export type BorderType = "smooth" | "mountain" | "river" | "cliff" | "wall";
+
+/**
+ * A zone's own sky and haze. `horizon` doubles as this zone's fog colour - the sky dome is drawn
+ * at infinite distance, so if the two ever disagreed the join between fogged-out ground and sky
+ * would be a visible seam rather than the ground simply fading into it.
+ */
+export interface BiomeAtmosphere {
+  horizon: Color3;
+  zenith: Color3;
+  cloud: Color3;
+  /** Fraction of the draw distance at which fog begins - the counterpart to world.ts's
+   *  FOG_END_FRACTION, which stays fixed globally (fog always finishes just past the load radius,
+   *  whatever zone that happens to be). Pulling this in per biome is what lets a zone read as
+   *  hemmed-in and close (the swamp, low) without changing what "far" means everywhere else. */
+  fogStartFraction: number;
+}
+
+/**
+ * A zone's own lighting across the day/night cycle (see lighting/sunLighting.ts). The sun and moon
+ * are the same DirectionalLight re-coloured and re-aimed rather than two separate lights - which is
+ * also why there is one `sunPeakElevation`/`moonPeakElevation` pair rather than a single "how high
+ * does light get" number: a zone can want a harsh overhead noon and a low, barely-clearing moon (a
+ * desert) or the reverse (a tundra's grazing sun and big bright moon).
+ *
+ * Colour and elevation are the only two things this file states; sunLighting.ts turns them into an
+ * actual direction/intensity/colour by the current time of day, so a zone never has to state a
+ * literal time -> value curve itself. Every field here blends the same way atmosphere's colours do -
+ * weighted by whichever areas are in range of a point - so crossing a border fades lighting exactly
+ * as smoothly as it fades sky and fog.
+ */
+export interface BiomeDayNight {
+  /** Degrees above the horizon the sun reaches at true noon. */
+  sunPeakElevation: number;
+  /** Degrees above the horizon the moon reaches at true midnight. */
+  moonPeakElevation: number;
+  /** The ambient sky-fill's colour and strength at full day and full night - see
+   *  sunLighting.ts's updateDayNight for how these cross-fade across dawn and dusk. */
+  ambientDay: Color3;
+  ambientDayIntensity: number;
+  ambientNight: Color3;
+  ambientNightIntensity: number;
+  /** The sun's own colour low on the horizon (dawn/dusk) versus high overhead (noon) - the one
+   *  place light colour genuinely varies across the day rather than just fading in and out. */
+  sunHorizonColor: Color3;
+  sunZenithColor: Color3;
+  sunIntensity: number;
+  moonColor: Color3;
+  moonIntensity: number;
+}
 
 export interface BiomeOutputs {
   height: PipelineDef;
@@ -48,4 +98,6 @@ export interface BiomeDefinition {
    *  is the zone's own choice - a track through a desert is not a track through a forest. Biomes
    *  may share one, and sharing is what keeps the material roster small at a border between them. */
   roadMaterialId: string;
+  atmosphere: BiomeAtmosphere;
+  dayNight: BiomeDayNight;
 }

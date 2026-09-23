@@ -4,24 +4,39 @@ export interface SettingsToggle {
   onChange: (on: boolean) => void;
 }
 
+export interface SettingsSlider {
+  label: string;
+  min: number;
+  max: number;
+  step: number;
+  initial: number;
+  /** Formats the live value for the label - e.g. hours into a clock face. Defaults to the raw
+   *  number, same as the draw-distance slider has always shown. */
+  format?: (value: number) => string;
+  onChange: (value: number) => void;
+}
+
 export interface SettingsPanelOptions {
   min: number;
   max: number;
   initial: number;
   onChange: (value: number) => void;
   toggles?: SettingsToggle[];
+  /** Additional sliders beyond the built-in draw-distance one - each gets its own label + input,
+   *  laid out the same way. */
+  sliders?: SettingsSlider[];
 }
 
 /** A small, always-visible dev-tool panel with a draw-distance slider and any switches handed to it. */
 export function createSettingsPanel(options: SettingsPanelOptions): void {
-  const { min, max, initial, onChange, toggles = [] } = options;
+  const { min, max, initial, onChange, toggles = [], sliders = [] } = options;
 
   const container = document.createElement("div");
   container.style.cssText = `
     position: fixed; top: 16px; left: 16px; z-index: 900;
     background: rgba(0,0,0,0.6); border: 1px solid rgba(255,255,255,0.3); border-radius: 4px;
     padding: 6px 10px; font-family: sans-serif; font-size: 11px; color: #eee;
-    display: flex; align-items: center; gap: 8px;
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
   `;
 
   const label = document.createElement("span");
@@ -44,6 +59,30 @@ export function createSettingsPanel(options: SettingsPanelOptions): void {
 
   container.appendChild(label);
   container.appendChild(slider);
+
+  for (const extra of sliders) {
+    const extraLabel = document.createElement("span");
+    const format = extra.format ?? ((value: number) => String(value));
+    extraLabel.textContent = `${extra.label}: ${format(extra.initial)}`;
+    extraLabel.style.cssText = "white-space: nowrap; min-width: 105px;";
+
+    const extraSlider = document.createElement("input");
+    extraSlider.type = "range";
+    extraSlider.min = String(extra.min);
+    extraSlider.max = String(extra.max);
+    extraSlider.step = String(extra.step);
+    extraSlider.value = String(extra.initial);
+    extraSlider.style.cssText = "width: 140px;";
+
+    extraSlider.addEventListener("input", () => {
+      const value = Number(extraSlider.value);
+      extraLabel.textContent = `${extra.label}: ${format(value)}`;
+      extra.onChange(value);
+    });
+
+    container.appendChild(extraLabel);
+    container.appendChild(extraSlider);
+  }
 
   for (const toggle of toggles) {
     const wrapper = document.createElement("label");
