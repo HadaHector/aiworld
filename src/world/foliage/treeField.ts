@@ -69,6 +69,12 @@ export function createTreeField(scene: Scene, shadowGenerator: CascadedShadowGen
     shadowGenerator.addShadowCaster(model.canopy);
     model.trunk.receiveShadows = true;
     model.canopy.receiveShadows = true;
+    // Starts disabled - see flushSpecies's own setEnabled call for why. A species with nothing
+    // loaded yet would otherwise render its bare master mesh once, at its own default transform:
+    // the world origin, full size, untinted, because the per-instance colour buffer was never
+    // bound either. A phantom tree at (0,0,0) for any species the player hadn't walked near yet.
+    model.trunk.setEnabled(false);
+    model.canopy.setEnabled(false);
     species.set(kind, {
       model,
       capacity: 0,
@@ -84,6 +90,11 @@ export function createTreeField(scene: Scene, shadowGenerator: CascadedShadowGen
   const chunks = new Map<string, Map<TreeKind, Block>>();
   let count = 0;
   let dirty = false;
+  // The "Trees" settings-panel toggle and "this species has nothing loaded" are two independent
+  // reasons a master mesh should be disabled, tracked separately so neither can undo the other -
+  // toggling trees back on must not resurrect a phantom, and a species gaining its first instance
+  // must not stay hidden just because the toggle happened to be off at the time.
+  let globallyVisible = true;
 
   const scaling = new Vector3();
   const rotation = new Quaternion();
@@ -143,6 +154,16 @@ export function createTreeField(scene: Scene, shadowGenerator: CascadedShadowGen
     for (const blocks of chunks.values()) total += (blocks.get(kind) ?? EMPTY).count;
     entry.count = total;
 
+    const { trunk, canopy } = entry.model;
+    // hasThinInstances - and therefore whether Babylon draws this mesh via its thin-instance path
+    // at all, rather than as a single ordinary mesh at its own base transform - is defined as
+    // "thinInstanceCount > 0" (see Mesh.hasThinInstances), not "thinInstanceSetBuffer was ever
+    // called". A species with zero trees loaded is therefore NOT "using thin instances" by
+    // Babylon's own definition, whatever buffers it was handed earlier, and falls back to
+    // rendering its master mesh plainly - the phantom this now avoids outright by disabling the
+    // mesh instead of trying to make an empty instance buffer do that job.
+    trunk.setEnabled(globallyVisible && total > 0);
+    canopy.setEnabled(globallyVisible && total > 0);
     if (total === 0 && !entry.published) return;
 
     const moved = ensureCapacity(entry, total);
@@ -156,7 +177,6 @@ export function createTreeField(scene: Scene, shadowGenerator: CascadedShadowGen
       at += block.count;
     }
 
-    const { trunk, canopy } = entry.model;
     if (moved || !entry.published) {
       // The colour buffer goes first: setting a buffer republishes the instance count from its
       // length, so the matrix buffer - which is what actually decides how many trees are drawn -
@@ -202,9 +222,12 @@ export function createTreeField(scene: Scene, shadowGenerator: CascadedShadowGen
     },
     flush,
     setVisible(visible) {
-      for (const { model } of species.values()) {
-        model.trunk.setEnabled(visible);
-        model.canopy.setEnabled(visible);
+      globallyVisible = visible;
+      // Never enables a species with nothing loaded - see flushSpecies's own setEnabled call for
+      // why that mesh has to stay disabled regardless of this toggle.
+      for (const entry of species.values()) {
+        entry.model.trunk.setEnabled(visible && entry.count > 0);
+        entry.model.canopy.setEnabled(visible && entry.count > 0);
       }
     },
     get treeCount() {
