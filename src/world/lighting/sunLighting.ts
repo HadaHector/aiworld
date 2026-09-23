@@ -3,7 +3,7 @@ import { CascadedShadowGenerator, Color3, DirectionalLight, HemisphericLight, Ve
 /** How many slices the camera's view frustum is cut into, each rendered to its own shadow map
  *  layer at full resolution. More cascades buy sharper near shadows for the same total texel
  *  budget; four is the usual floor for a scene with any real draw distance. */
-export const SHADOW_CASCADE_COUNT = 4;
+export const SHADOW_CASCADE_COUNT = 3;
 
 /** Texels per cascade layer. Not measured yet - a first-pass number to look at and adjust once
  *  shadows are actually on screen, same as every other constant in this project. */
