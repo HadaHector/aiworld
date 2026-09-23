@@ -55,12 +55,29 @@ const positionPanel = createPositionPanel();
  * someone has to translate by hand; the rest is here so the console can poke at the live world
  * without the app having to be re-instrumented to investigate anything.
  */
+function gotoView({ x, z, alpha, beta, radius }: Partial<ViewSnapshot> & { x: number; z: number }): void {
+  character.teleport(x, z);
+  if (alpha !== undefined) camera.alpha = alpha;
+  if (beta !== undefined) camera.beta = beta;
+  if (radius !== undefined) camera.radius = radius;
+}
+
 (window as unknown as { __aiworld: unknown }).__aiworld = {
-  goto({ x, z, alpha, beta, radius }: Partial<ViewSnapshot> & { x: number; z: number }): void {
-    character.teleport(x, z);
-    if (alpha !== undefined) camera.alpha = alpha;
-    if (beta !== undefined) camera.beta = beta;
-    if (radius !== undefined) camera.radius = radius;
+  goto: gotoView,
+  /**
+   * `goto`, then force every chunk around the new position to build right away instead of
+   * streaming in one per frame - what a console session testing a spot always wants and `goto`
+   * alone never gave it, so every session was hand-writing the same `for` loop calling
+   * `updateChunks` a few thousand times afterward. `updateChunks` is already a no-op once its
+   * queue is empty (see chunkManager.ts's `takeNearestQueued`), so an iteration count generous
+   * enough for the worst case (a couple thousand chunks at the top of the draw-distance slider)
+   * costs nothing extra once the ordinary case (a few hundred) has already drained.
+   */
+  gotoLoaded(view: Partial<ViewSnapshot> & { x: number; z: number }, iterations = 6000): void {
+    gotoView(view);
+    for (let i = 0; i < iterations; i++) {
+      world.updateChunks(view.x, view.z);
+    }
   },
   world,
   character,

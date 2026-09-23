@@ -22,3 +22,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Probe scratch scripts (scripts/probe/README.md) - the harness itself is checked in
+scripts/probe/scratch.mjs
+scripts/probe/*.local.mjs

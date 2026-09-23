@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "probe": "node --experimental-strip-types --import ./scripts/probe/hook.mjs"
   },
   "devDependencies": {
     "@types/d3-delaunay": "^6.0.4",
