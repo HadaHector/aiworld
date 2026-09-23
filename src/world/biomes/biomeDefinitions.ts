@@ -92,7 +92,7 @@ const plains: BiomeDefinition = {
   name: "Plains",
   outputs: {
     height: detailHeightPipeline({ amplitude: 12.75, frequency: 0.002, offset: 7.5 }),
-    foliage: standDensity("broadleaf", { frequency: 0.0032, openAt: 0.12, fullAt: 0.62, peak: 0.55 }),
+    foliage: standDensity("broadleaf", { frequency: 0.0012, openAt: 0.12, fullAt: 0.62, peak: 0.55 }),
   },
   borderType: "mountain",
   spawnWeight: 2,
@@ -181,21 +181,23 @@ const desert: BiomeDefinition = {
   name: "Desert",
   outputs: {
     height: detailHeightPipeline({ amplitude: 10.1, frequency: 0.0026, offset: 4, persistence: 0.1 }),
+    // Barren, except along the water. There is no stray term and no baseline: away from a river
+    // this evaluates to zero and the zone grows nothing at all, which is the point of a desert.
     foliage: {
-      noises: [
-        { name: "strays", type: "fbm", octaves: 2, frequency: 0.0025, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
-      ],
+      noises: [{ name: "grove", type: "fbm", octaves: 2, frequency: 0.006, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
       steps: [
         { output: "water", op: "input", name: "riverGap" },
-        // Descending, so the ramp is full at the water and nothing by the time it is out of
-        // reach. riverGap is Infinity where there is no river at all, which runs off the bottom
-        // of this and clamps to zero - no branch needed for "this desert has no river".
-        { output: "oasisRamp", op: "remap", input: "water", inMin: 300, inMax: 60, outMin: 0, outMax: 0.6 },
-        { output: "oasis", op: "clamp", input: "oasisRamp", min: 0, max: 0.6 },
-        { output: "strayRaw", op: "sample", noise: "strays" },
-        { output: "strayRamp", op: "remap", input: "strayRaw", inMin: 0.45, inMax: 0.8, outMin: 0, outMax: 0.05 },
-        { output: "stray", op: "clamp", input: "strayRamp", min: 0, max: 0.05 },
-        { output: "palm", op: "max", a: "oasis", b: "stray" },
+        // The same band the riverside grass uses (see desertRiverGrassLayer): full on the bank,
+        // gone about forty units back from it. Descending, so the ramp is full at the water and
+        // nothing beyond its reach - and riverGap is Infinity where there is no river at all,
+        // which runs off the bottom of this and clamps to zero with no branch needed.
+        { output: "bankRamp", op: "remap", input: "water", inMin: 90, inMax: 45, outMin: 0, outMax: 1 },
+        { output: "bank", op: "clamp", input: "bankRamp", min: 0, max: 1 },
+        // Gathers the palms into clumps along the bank instead of spacing them evenly down it.
+        { output: "groveRaw", op: "sample", noise: "grove" },
+        { output: "groveRamp", op: "remap", input: "groveRaw", inMin: -0.5, inMax: 0.15, outMin: 0.15, outMax: 0.8 },
+        { output: "grove", op: "clamp", input: "groveRamp", min: 0.15, max: 0.8 },
+        { output: "palm", op: "multiply", a: "bank", b: "grove" },
       ],
       outputs: { palm: "palm" },
     },

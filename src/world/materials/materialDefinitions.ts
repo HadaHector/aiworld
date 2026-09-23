@@ -1086,6 +1086,46 @@ const desertGravelPlainLayer: MaterialLayer = {
   },
 };
 
+/**
+ * The one green thing in a desert: the strip of ground a river keeps alive.
+ *
+ * Driven by `riverGap` - true distance to the river centreline, continuous everywhere - rather
+ * than by any wetness flag, so the band is a smooth function of position with nothing to switch.
+ * Measured along a desert reach, the waterline sits at riverGap ~35-40 and the ground is fully dry
+ * by 50, so a ramp that is full at 45 and gone by 90 puts about forty units of green on dry bank
+ * and lets the `dry` gate below clip the rest off inside the channel.
+ *
+ * The edge noise matters more here than anywhere else in this file. Every other layer's boundary
+ * follows terrain, which is already irregular; this one follows a polyline, and without jitter it
+ * would read as a drawn offset curve running parallel to the water for kilometres.
+ *
+ * Boosted past 1 for the same reason as the lake shore: it has to beat the desert's own silt and
+ * gravel layers, which key on exactly the flat low ground a riverbank is made of.
+ */
+const desertRiverGrassLayer: MaterialLayer = {
+  id: "desert-river-grass",
+  material: grassMaterial,
+  weight: {
+    noises: [{ name: "bankEdge", type: "fbm", octaves: 3, frequency: 0.012, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
+    steps: [
+      { output: "gap", op: "input", name: "riverGap" },
+      { output: "edgeRaw", op: "sample", noise: "bankEdge" },
+      { output: "edge", op: "scale", input: "edgeRaw", factor: 14 },
+      { output: "jittered", op: "add", a: "gap", b: "edge" },
+      { output: "bandRaw", op: "remap", input: "jittered", inMin: 90, inMax: 45, outMin: 0, outMax: 1 },
+      { output: "band", op: "clamp", input: "bandRaw", min: 0, max: 1 },
+      { output: "boosted", op: "scale", input: "band", factor: 2.4 },
+      // SEA_LEVEL is 0 (areaField.ts). Grass stops at the water rather than carrying on down the
+      // bed, and fading it over the last couple of units means the handoff is a shoreline, not a
+      // contour line.
+      { output: "height", op: "input", name: "height" },
+      { output: "dryRaw", op: "remap", input: "height", inMin: -1, inMax: 1.5, outMin: 0, outMax: 1 },
+      { output: "dry", op: "clamp", input: "dryRaw", min: 0, max: 1 },
+      { output: "result", op: "multiply", a: "boosted", b: "dry" },
+    ],
+  },
+};
+
 // Ravines/gullies cutting into a mountainside collect loose rubble - distinct from the sheer-face
 // rock the universal rockLayer already paints on any steep slope in any biome.
 const mountainsScreeValleyLayer: MaterialLayer = {
@@ -1289,7 +1329,7 @@ export const PER_BIOME_MATERIAL_LAYERS: Record<string, MaterialLayer[]> = {
   plains: [plainsNorthFadeLayer, plainsSouthDryLayer, plainsValleyWeedsLayer],
   forest: [forestMossNorthLayer, forestLeafLitterValleyLayer],
   hills: [hillsNorthFadeLayer, hillsSouthDryLayer, hillsValleyWeedsLayer, hillsLakeShoreGrassLayer, hillsLakeGravelLayer],
-  desert: [desertDuneShadowLayer, desertSiltValleyLayer, desertGravelPlainLayer],
+  desert: [desertDuneShadowLayer, desertSiltValleyLayer, desertGravelPlainLayer, desertRiverGrassLayer],
   mountains: [snowMountainsLayer, mountainsScreeValleyLayer, mountainsValleyGravelLayer, mountainsMeadowGrassLayer],
   tundra: [snowTundraLayer, tundraFrostValleyLayer],
   canyon: [canyonSiltValleyLayer],
