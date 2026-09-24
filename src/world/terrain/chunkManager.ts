@@ -1,5 +1,5 @@
-import type { CascadedShadowGenerator, Mesh, Scene } from "@babylonjs/core";
-import { createTerrainChunk } from "./terrainMesh";
+import type { CascadedShadowGenerator, Scene } from "@babylonjs/core";
+import { createTerrainChunk, type TerrainChunk } from "./terrainMesh";
 import type { TerrainSampler } from "./terrainSampler";
 import type { MaterialLibrary } from "../materials/materialLibrary";
 import type { TreeScatter } from "../foliage/treeScatter";
@@ -14,8 +14,8 @@ export interface ChunkManagerOptions {
    *  own and they can never outlive the ground under them. */
   trees: TreeField;
   /** A chunk registers itself as a shadow caster the moment it is built and unregisters on unload,
-   *  so hills self-shadow their own valleys the same way anything else does - terrain is not a
-   *  special case to the shadow generator, just another mesh that comes and goes. */
+   *  so hills self-shadow their own valleys the same way anything else does. What it registers is
+   *  its shadow-only stand-in (see TerrainChunk.shadowMesh), not the mesh that is drawn. */
   shadowGenerator: CascadedShadowGenerator;
   chunkSize: number;
   chunkSubdivisions: number;
@@ -46,7 +46,7 @@ export function createChunkManager(options: ChunkManagerOptions): ChunkManager {
   let loadRadius = options.loadRadius;
   let unloadRadius = options.unloadRadius;
 
-  const loaded = new Map<string, Mesh>();
+  const loaded = new Map<string, TerrainChunk>();
   const queued = new Set<string>();
   const buildQueue: ChunkCoord[] = [];
 
@@ -95,9 +95,9 @@ export function createChunkManager(options: ChunkManagerOptions): ChunkManager {
       originX: center.x,
       originZ: center.z,
     });
-    loaded.set(key, chunk.mesh);
+    loaded.set(key, chunk);
     trees.setChunk(key, chunk.trees);
-    shadowGenerator.addShadowCaster(chunk.mesh);
+    shadowGenerator.addShadowCaster(chunk.shadowMesh);
   }
 
   function enqueueMissingChunks(x: number, z: number): void {
@@ -111,15 +111,15 @@ export function createChunkManager(options: ChunkManagerOptions): ChunkManager {
   }
 
   function unloadOutOfRangeChunks(x: number, z: number): void {
-    for (const [key, mesh] of loaded) {
+    for (const [key, chunk] of loaded) {
       const [cxStr, czStr] = key.split(",");
       const cx = Number(cxStr);
       const cz = Number(czStr);
       if (!withinRadius(cx, cz, x, z, unloadRadius)) {
-        mesh.dispose();
+        chunk.mesh.dispose();
         loaded.delete(key);
         trees.clearChunk(key);
-        shadowGenerator.removeShadowCaster(mesh);
+        shadowGenerator.removeShadowCaster(chunk.shadowMesh);
       }
     }
   }
@@ -213,10 +213,10 @@ export function createChunkManager(options: ChunkManagerOptions): ChunkManager {
   }
 
   function dispose(): void {
-    for (const [key, mesh] of loaded) {
-      mesh.dispose();
+    for (const [key, chunk] of loaded) {
+      chunk.mesh.dispose();
       trees.clearChunk(key);
-      shadowGenerator.removeShadowCaster(mesh);
+      shadowGenerator.removeShadowCaster(chunk.shadowMesh);
     }
     loaded.clear();
     queued.clear();

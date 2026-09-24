@@ -15,8 +15,15 @@ export interface TerrainChunkOptions {
   scatterTrees: TreeScatter;
 }
 
+/** A layer no camera has (cameras default to 0x0FFFFFFF), so a mesh on it is never drawn in the
+ *  main view. The shadow map does not check layer masks against its render list, so it still is. */
+const SHADOW_ONLY_LAYER = 0x10000000;
+
 export interface TerrainChunk {
   mesh: Mesh;
+  /** A position-and-normal-only stand-in for `mesh`, drawn only into the shadow map. A child of
+   *  `mesh`, so disposing `mesh` disposes it too. */
+  shadowMesh: Mesh;
   /** The trees standing on this chunk. Scattered here, not by a system of their own, because the
    *  padded vertex grid below already holds the finished surface and a full TerrainSample at every
    *  vertex - so placing a tree costs a lookup instead of another few terrain samples, and it
@@ -272,6 +279,41 @@ export function createTerrainChunk(scene: Scene, options: TerrainChunkOptions): 
   mesh.material = materialLibrary.terrainMaterial;
   mesh.position.set(originX, 0, originZ);
 
+  // The plain grid, 2 triangles per square: the 8-way split above only exists to carry material
+  // lists - its extra vertices are averages of the corners and add no height detail - so the depth
+  // pass can draw the same surface with a quarter of the vertices and triangles.
+  const shadowPositions: number[] = [];
+  const shadowNormals: number[] = [];
+  for (let row = 0; row < gridSize; row++) {
+    for (let col = 0; col < gridSize; col++) {
+      const p = padded(row, col);
+      shadowPositions.push(paddedPositions[p * 3], paddedPositions[p * 3 + 1], paddedPositions[p * 3 + 2]);
+      shadowNormals.push(paddedNormals[p * 3], paddedNormals[p * 3 + 1], paddedNormals[p * 3 + 2]);
+    }
+  }
+  const shadowIndices: number[] = [];
+  for (let row = 0; row < subdivisions; row++) {
+    for (let col = 0; col < subdivisions; col++) {
+      const a = row * gridSize + col;
+      shadowIndices.push(a + gridSize + 1, a + 1, a);
+      shadowIndices.push(a + gridSize, a + gridSize + 1, a);
+    }
+  }
+  const shadowMesh = new Mesh(`${name}_shadow`, scene);
+  const shadowData = new VertexData();
+  shadowData.positions = shadowPositions;
+  // Only for the shadow generator's normalBias; nothing else reads it.
+  shadowData.normals = shadowNormals;
+  shadowData.indices = shadowIndices;
+  shadowData.applyToMesh(shadowMesh);
+  // The shadow generator needs a material for its render state (face culling) even though it draws
+  // with its own depth shader; the terrain's keeps culling identical to the visible mesh.
+  shadowMesh.material = materialLibrary.terrainMaterial;
+  shadowMesh.layerMask = SHADOW_ONLY_LAYER;
+  shadowMesh.isPickable = false;
+  // Parented so it is disposed and enabled together with the visible mesh.
+  shadowMesh.parent = mesh;
+
   /**
    * The ground under a point, read out of the grid that was just built rather than sampled again.
    *
@@ -329,5 +371,5 @@ export function createTerrainChunk(scene: Scene, options: TerrainChunkOptions): 
     probeGround,
   );
 
-  return { mesh, trees };
+  return { mesh, shadowMesh, trees };
 }
