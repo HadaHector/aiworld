@@ -1,4 +1,4 @@
-import { Color3, Effect, Matrix, RawTexture2DArray, ShaderMaterial, Texture, type Scene } from "@babylonjs/core";
+import { Color3, Effect, Matrix, RawTexture2DArray, ShaderMaterial, StandardMaterial, Texture, type Material, type Scene } from "@babylonjs/core";
 import { BIOME_REGISTRY } from "../biomes/biomeDefinitions";
 import type { AreaWeight } from "../cells/areaField";
 import { compilePipeline, type CompiledPipeline } from "../terrain/pipeline/pipelineCompiler";
@@ -71,6 +71,13 @@ export interface MaterialLibrary {
   /** Stops the terrain fragment shader from sampling the shadow map at all - the companion half of
    *  SunLighting.setShadowsEnabled, which stops the map being rendered into in the first place. */
   setShadowsEnabled: (enabled: boolean) => void;
+  /** The material on terrain's shadow-only meshes (see terrainMesh.ts). Never drawn: the shadow
+   *  generator uses its own depth shader and only reads render state from it - face culling, and
+   *  fill mode, which is why it is not terrainMaterial: switching that to wireframe would otherwise
+   *  turn the terrain's shadows into wireframe too. */
+  shadowCasterMaterial: Material;
+  /** Draws the terrain as wireframe - a debug view for judging mesh density and level of detail. */
+  setWireframe: (enabled: boolean) => void;
 }
 
 export interface MaterialTexturePreview {
@@ -648,5 +655,21 @@ export async function createMaterialLibrary(
     terrainMaterial.setInt("shadowsEnabled", enabled ? 1 : 0);
   }
 
-  return { terrainMaterial, buildMaterialBlend, resolveMaterialIndex, getMaterialColor, getBiomeBaseColor, listMaterialTextures, setShadowsEnabled };
+  const shadowCasterMaterial = new StandardMaterial("terrainShadowCaster", scene);
+
+  function setWireframe(enabled: boolean): void {
+    terrainMaterial.wireframe = enabled;
+  }
+
+  return {
+    terrainMaterial,
+    buildMaterialBlend,
+    resolveMaterialIndex,
+    getMaterialColor,
+    getBiomeBaseColor,
+    listMaterialTextures,
+    setShadowsEnabled,
+    shadowCasterMaterial,
+    setWireframe,
+  };
 }

@@ -7,13 +7,22 @@ import type { TreeGround, TreePlacement, TreeScatter } from "../foliage/treeScat
 export interface TerrainChunkOptions {
   name: string;
   size: number;
+  /** Grid squares per side at this chunk's level of detail. */
   subdivisions: number;
+  /** Grid squares per side at full detail. `subdivisions` must divide it, and the ratio must divide
+   *  RELIEF_CURVATURE_RADIUS_STEPS, so every coarse vertex is also a full-detail one and relief
+   *  curvature can look out the same world distance at every level. */
+  detailSubdivisions: number;
   sampleTerrain: TerrainSampler;
   originX: number;
   originZ: number;
   materialLibrary: MaterialLibrary;
   scatterTrees: TreeScatter;
 }
+
+/** How far a skirt hangs below the lowest point a neighbour's edge can reach (see skirtDepth), so
+ *  it also covers the hairline cracks where one chunk's edge vertex sits mid-edge on another's. */
+const SKIRT_MARGIN = 0.5;
 
 /** A layer no camera has (cameras default to 0x0FFFFFFF), so a mesh on it is never drawn in the
  *  main view. The shadow map does not check layer masks against its render list, so it still is. */
@@ -88,12 +97,17 @@ function toSlots(weights: Map<number, number>, ownerList: MaterialList, allowed:
  * point, which drops out smoothly rather than turning up as a wrong material.
  */
 export function createTerrainChunk(scene: Scene, options: TerrainChunkOptions): TerrainChunk {
-  const { name, size, subdivisions, sampleTerrain, originX, originZ, materialLibrary, scatterTrees } = options;
+  const { name, size, subdivisions, detailSubdivisions, sampleTerrain, originX, originZ, materialLibrary, scatterTrees } = options;
 
   const gridSize = subdivisions + 1;
+  const detailRatio = detailSubdivisions / subdivisions;
+  const curvatureSteps = RELIEF_CURVATURE_RADIUS_STEPS / detailRatio;
+  if (!Number.isInteger(detailRatio) || !Number.isInteger(curvatureSteps)) {
+    throw new Error(`${subdivisions} subdivisions is not a level of detail ${detailSubdivisions} can be reduced to`);
+  }
   // One ring more than curvature needs, so the ring just outside the chunk (whose material weights
   // feed border vertices' lists) gets its own curvature from real terrain too.
-  const pad = RELIEF_CURVATURE_RADIUS_STEPS + 1;
+  const pad = curvatureSteps + 1;
   const paddedSize = gridSize + pad * 2;
   const step = size / subdivisions;
 
@@ -137,7 +151,7 @@ export function createTerrainChunk(scene: Scene, options: TerrainChunkOptions): 
   for (let row = -1; row <= gridSize; row++) {
     for (let col = -1; col <= gridSize; col++) {
       const index = padded(row, col);
-      const context = buildVertexContext(paddedPositions, paddedNormals, paddedSamples, paddedSize, index);
+      const context = buildVertexContext(paddedPositions, paddedNormals, paddedSamples, paddedSize, index, curvatureSteps);
       blends[(row + 1) * ringSize + (col + 1)] = materialLibrary.buildMaterialBlend(
         originX + paddedPositions[index * 3],
         originZ + paddedPositions[index * 3 + 2],
@@ -268,6 +282,80 @@ export function createTerrainChunk(scene: Scene, options: TerrainChunkOptions): 
     }
   }
 
+  /**
+   * How far this chunk's skirts hang. A neighbour one level finer or coarser draws the shared edge
+   * through different vertices, so the two edges part; wherever this chunk's edge is the higher
+   * one, its skirt is what fills the gap. Both cases are measured along this chunk's own edges:
+   *  - a coarser neighbour skips every other vertex and draws straight between the rest;
+   *  - a finer one adds a vertex between each pair, sampled exactly where it will sample it.
+   * The deepest gap found, plus SKIRT_MARGIN, is the depth - usually well under a metre, several
+   * metres only along cliffs.
+   */
+  function skirtDepth(): number {
+    let deepest = 0;
+    const edges: [number, number, number, number][] = [
+      [0, 0, 0, 1],
+      [subdivisions, 0, 0, 1],
+      [0, 0, 1, 0],
+      [0, subdivisions, 1, 0],
+    ];
+    for (const [row0, col0, dRow, dCol] of edges) {
+      const heightAt = (i: number): number => paddedPositions[padded(row0 + dRow * i, col0 + dCol * i) * 3 + 1];
+      if (subdivisions % 2 === 0) {
+        for (let i = 1; i < subdivisions; i += 2) {
+          deepest = Math.max(deepest, heightAt(i) - (heightAt(i - 1) + heightAt(i + 1)) / 2);
+        }
+      }
+      if (detailRatio > 1) {
+        const finer = subdivisions * 2;
+        for (let i = 0; i < subdivisions; i++) {
+          const row = (row0 + dRow * i) * 2 + dRow;
+          const col = (col0 + dCol * i) * 2 + dCol;
+          const localX = (col * size) / finer - size / 2;
+          const localZ = ((finer - row) * size) / finer - size / 2;
+          const between = sampleTerrain(originX + localX, originZ + localZ).height;
+          deepest = Math.max(deepest, (heightAt(i) + heightAt(i + 1)) / 2 - between);
+        }
+      }
+    }
+    return deepest + SKIRT_MARGIN;
+  }
+  const skirt = skirtDepth();
+
+  /** A copy of `vertex` `skirt` lower, with the same normal and materials, so a skirt looks
+   *  like the edge it hangs from. */
+  function pushDroppedVertex(vertex: number): number {
+    const index = positions.length / 3;
+    positions.push(positions[vertex * 3], positions[vertex * 3 + 1] - skirt, positions[vertex * 3 + 2]);
+    normals.push(normals[vertex * 3], normals[vertex * 3 + 1], normals[vertex * 3 + 2]);
+    for (let slot = 0; slot < 4; slot++) {
+      matIndices.push(matIndices[vertex * 4 + slot]);
+      matWeights.push(matWeights[vertex * 4 + slot]);
+    }
+    return index;
+  }
+
+  // Skirts: each edge segment hangs a quad straight down. Two-sided (both windings), because which
+  // side a gap is seen from depends on which neighbour's edge ends up higher. Each segment is one
+  // owner's (corner to midpoint), so its two vertices already share a material list.
+  const borderEdges: [number[], number[]][] = [];
+  for (let i = 0; i < subdivisions; i++) {
+    borderEdges.push([[0, i], [0, i + 1]], [[subdivisions, i], [subdivisions, i + 1]]);
+    borderEdges.push([[i, 0], [i + 1, 0]], [[i, subdivisions], [i + 1, subdivisions]]);
+  }
+  for (const [a, b] of borderEdges) {
+    const segments = [
+      [cornerVertex[a[0] * gridSize + a[1]], midpointVertex(a, b)],
+      [midpointVertex(b, a), cornerVertex[b[0] * gridSize + b[1]]],
+    ];
+    for (const [top0, top1] of segments) {
+      const low0 = pushDroppedVertex(top0);
+      const low1 = pushDroppedVertex(top1);
+      indices.push(top0, top1, low1, top0, low1, low0);
+      indices.push(top0, low1, top1, top0, low0, low1);
+    }
+  }
+
   const mesh = new Mesh(name, scene);
   const vertexData = new VertexData();
   vertexData.positions = positions;
@@ -299,6 +387,19 @@ export function createTerrainChunk(scene: Scene, options: TerrainChunkOptions): 
       shadowIndices.push(a + gridSize, a + gridSize + 1, a);
     }
   }
+  // The same skirts, so light cannot leak through a level-of-detail gap either.
+  for (const [a, b] of borderEdges) {
+    const top0 = a[0] * gridSize + a[1];
+    const top1 = b[0] * gridSize + b[1];
+    const low0 = shadowPositions.length / 3;
+    const low1 = low0 + 1;
+    for (const top of [top0, top1]) {
+      shadowPositions.push(shadowPositions[top * 3], shadowPositions[top * 3 + 1] - skirt, shadowPositions[top * 3 + 2]);
+      shadowNormals.push(shadowNormals[top * 3], shadowNormals[top * 3 + 1], shadowNormals[top * 3 + 2]);
+    }
+    shadowIndices.push(top0, top1, low1, top0, low1, low0);
+    shadowIndices.push(top0, low1, top1, top0, low0, low1);
+  }
   const shadowMesh = new Mesh(`${name}_shadow`, scene);
   const shadowData = new VertexData();
   shadowData.positions = shadowPositions;
@@ -306,36 +407,20 @@ export function createTerrainChunk(scene: Scene, options: TerrainChunkOptions): 
   shadowData.normals = shadowNormals;
   shadowData.indices = shadowIndices;
   shadowData.applyToMesh(shadowMesh);
-  // The shadow generator needs a material for its render state (face culling) even though it draws
-  // with its own depth shader; the terrain's keeps culling identical to the visible mesh.
-  shadowMesh.material = materialLibrary.terrainMaterial;
+  // The shadow generator needs a material for its render state even though it draws with its own
+  // depth shader - see MaterialLibrary.shadowCasterMaterial.
+  shadowMesh.material = materialLibrary.shadowCasterMaterial;
   shadowMesh.layerMask = SHADOW_ONLY_LAYER;
   shadowMesh.isPickable = false;
   // Parented so it is disposed and enabled together with the visible mesh.
   shadowMesh.parent = mesh;
 
-  /**
-   * The ground under a point, read out of the grid that was just built rather than sampled again.
-   *
-   * Height is interpolated inside the actual triangle the point falls in - the same 8-way split the
-   * mesh above uses - so a trunk sits on the rendered surface exactly. Normal and sample come from
-   * the nearest grid vertex, which is at most 1.25 units away and only ever feeds fades measured in
-   * tens of units.
-   */
-  function probeGround(worldX: number, worldZ: number): TreeGround | null {
-    const colF = (worldX - originX + size / 2) / step + pad;
-    const rowF = subdivisions - (worldZ - originZ + size / 2) / step + pad;
-    const col = Math.floor(colF);
-    const row = Math.floor(rowF);
-    if (col < 0 || row < 0 || col >= paddedSize - 1 || row >= paddedSize - 1) return null;
-
-    const u = colF - col;
-    const v = rowF - row;
-    const a = row * paddedSize + col;
-    const h00 = paddedPositions[a * 3 + 1];
-    const h10 = paddedPositions[(a + 1) * 3 + 1];
-    const h01 = paddedPositions[(a + paddedSize) * 3 + 1];
-    const h11 = paddedPositions[(a + paddedSize + 1) * 3 + 1];
+  /** Height inside one grid square, split the same 8 ways the visible mesh is. */
+  function heightInSquare(heightOf: (row: number, col: number) => number, row: number, col: number, u: number, v: number): number {
+    const h00 = heightOf(row, col);
+    const h10 = heightOf(row, col + 1);
+    const h01 = heightOf(row + 1, col);
+    const h11 = heightOf(row + 1, col + 1);
     const centre = (h00 + h10 + h01 + h11) / 4;
 
     // The quadrant nearest (u, v) is owned by that corner; inside it, the owner-to-centre diagonal
@@ -349,17 +434,58 @@ export function createTerrainChunk(scene: Scene, options: TerrainChunkOptions): 
     // Distances from the owner corner, measured toward the centre, each in 0..0.5.
     const du = Math.abs(u - ou);
     const dv = Math.abs(v - ov);
-    const height =
-      du >= dv
-        ? hOwner + (du - dv) * 2 * (hAlongU - hOwner) + dv * 2 * (centre - hOwner)
-        : hOwner + (dv - du) * 2 * (hAlongV - hOwner) + du * 2 * (centre - hOwner);
+    return du >= dv
+      ? hOwner + (du - dv) * 2 * (hAlongU - hOwner) + dv * 2 * (centre - hOwner)
+      : hOwner + (dv - du) * 2 * (hAlongV - hOwner) + du * 2 * (centre - hOwner);
+  }
 
-    const nearest = (row + (v >= 0.5 ? 1 : 0)) * paddedSize + (col + (u >= 0.5 ? 1 : 0));
-    const normalY = paddedNormals[nearest * 3 + 1];
+  /** A full-detail grid point's sample, taken from the padded grid when this chunk is at full
+   *  detail (it is the same point, sampled the same way) and sampled afresh otherwise. */
+  function detailSample(row: number, col: number): TerrainSample {
+    if (detailRatio === 1) return paddedSamples[padded(row, col)];
+    const localX = (col * size) / detailSubdivisions - size / 2;
+    const localZ = ((detailSubdivisions - row) * size) / detailSubdivisions - size / 2;
+    return sampleTerrain(originX + localX, originZ + localZ);
+  }
+
+  /**
+   * The ground under a tree candidate.
+   *
+   * Which trees grow is decided on the full-detail surface at every level of detail, so a chunk
+   * changing level re-scatters exactly the same trees: height is interpolated in the full-detail
+   * square the point falls in, slope is that square's gradient there, and the sample is its nearest
+   * corner's. Only where a trunk stands - `surfaceHeight` - comes from the grid actually drawn, so
+   * a far tree sits on the coarse ground rather than floating over or sunk into it.
+   */
+  function probeGround(worldX: number, worldZ: number): TreeGround | null {
+    const colF = (worldX - originX + size / 2) / step + pad;
+    const rowF = subdivisions - (worldZ - originZ + size / 2) / step + pad;
+    const col = Math.floor(colF);
+    const row = Math.floor(rowF);
+    if (col < 0 || row < 0 || col >= paddedSize - 1 || row >= paddedSize - 1) return null;
+    const paddedHeight = (r: number, c: number): number => paddedPositions[(r * paddedSize + c) * 3 + 1];
+    const surfaceHeight = heightInSquare(paddedHeight, row, col, colF - col, rowF - row);
+
+    const detailStep = size / detailSubdivisions;
+    const dColF = (worldX - originX + size / 2) / detailStep;
+    const dRowF = detailSubdivisions - (worldZ - originZ + size / 2) / detailStep;
+    const dCol = Math.floor(dColF);
+    const dRow = Math.floor(dRowF);
+    const u = dColF - dCol;
+    const v = dRowF - dRow;
+    const corners = [detailSample(dRow, dCol), detailSample(dRow, dCol + 1), detailSample(dRow + 1, dCol), detailSample(dRow + 1, dCol + 1)];
+    const [h00, h10, h01, h11] = corners.map((sample) => sample.height);
+    const height = heightInSquare((r, c) => corners[(r - dRow) * 2 + (c - dCol)].height, dRow, dCol, u, v);
+
+    // Rise per world unit along each grid axis, from the square's bilinear gradient at (u, v).
+    const gradU = ((h10 - h00) * (1 - v) + (h11 - h01) * v) / detailStep;
+    const gradV = ((h01 - h00) * (1 - u) + (h11 - h10) * u) / detailStep;
+    const gradient = Math.hypot(gradU, gradV);
     return {
       height,
-      slope: Math.sqrt(Math.max(0, 1 - normalY * normalY)),
-      sample: paddedSamples[nearest],
+      surfaceHeight,
+      slope: gradient / Math.sqrt(1 + gradient * gradient),
+      sample: corners[(v >= 0.5 ? 2 : 0) + (u >= 0.5 ? 1 : 0)],
     };
   }
 

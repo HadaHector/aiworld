@@ -1,5 +1,5 @@
 import type { Camera, Scene } from "@babylonjs/core";
-import { createChunkManager } from "./terrain/chunkManager";
+import { createChunkManager, type ChunkLodLevel } from "./terrain/chunkManager";
 import { createTerrainSampler, type TerrainSampler } from "./terrain/terrainSampler";
 import { createOceanPlane } from "./terrain/ocean";
 import { createMaterialLibrary, type MaterialLibrary } from "./materials/materialLibrary";
@@ -36,6 +36,8 @@ export interface World {
    *  main.ts creates after the world exists - call this once it does. */
   attachCamera: (camera: Camera) => void;
   setShadowsEnabled: (enabled: boolean) => void;
+  /** Draws the terrain as wireframe, to see mesh density and where each level of detail starts. */
+  setWireframe: (enabled: boolean) => void;
   /** Re-blends the sky, fog colour and fog-start distance for wherever the player is now - see
    *  sky/skyDome.ts. Cheap (a handful of Color3/float lerps over however many areas are in range),
    *  so this is meant to be called every frame from the same sampleTerrain result main.ts already
@@ -53,8 +55,14 @@ export interface World {
 
 const WORLD_SEED = 1337;
 
-const CHUNK_SIZE = 50;
-const CHUNK_SUBDIVISIONS = 20;
+const CHUNK_SIZE = 64;
+// Grid spacing doubles as distance doubles, which keeps a triangle about the same size on screen.
+// The last level runs out to the draw distance.
+const CHUNK_LOD_LEVELS: ChunkLodLevel[] = [
+  { subdivisions: 24, maxDistance: 200 },
+  { subdivisions: 12, maxDistance: 400 },
+  { subdivisions: 6, maxDistance: Infinity },
+];
 const UNLOAD_HYSTERESIS = CHUNK_SIZE; // unload radius = load radius + this, a 1-chunk buffer band
 
 export const DEFAULT_DRAW_DISTANCE = 800;
@@ -120,7 +128,7 @@ export async function createWorld(scene: Scene, onProgress?: (progress: WorldLoa
     trees,
     shadowGenerator: sunLighting.shadowGenerator,
     chunkSize: CHUNK_SIZE,
-    chunkSubdivisions: CHUNK_SUBDIVISIONS,
+    lodLevels: CHUNK_LOD_LEVELS,
     loadRadius: DEFAULT_DRAW_DISTANCE,
     unloadRadius: DEFAULT_DRAW_DISTANCE + UNLOAD_HYSTERESIS,
   });
@@ -174,6 +182,7 @@ export async function createWorld(scene: Scene, onProgress?: (progress: WorldLoa
     trees,
     attachCamera: sunLighting.attachCamera,
     setShadowsEnabled,
+    setWireframe: materialLibrary.setWireframe,
     updateAtmosphere,
     updateDayNight: sunLighting.updateDayNight,
     setTimeOfDay: sunLighting.setTimeHours,

@@ -26,8 +26,11 @@ import {
 
 /** What the scatter needs to know about the ground under a candidate. */
 export interface TreeGround {
-  /** Surface height, on the mesh the player will actually stand on. */
+  /** Height of the full-detail surface - what decides whether a tree grows here, so the decision
+   *  does not change with the level of detail the ground happens to be drawn at. */
   height: number;
+  /** Height of the ground as actually drawn, which is where the trunk is planted. */
+  surfaceHeight: number;
   /** Sine of the ground angle: 0 flat, 1 vertical. */
   slope: number;
   sample: TerrainSample;
@@ -308,7 +311,7 @@ export function createTreeScatter(seed: number): TreeScatter {
 
           trees.push({
             x: candidate.x,
-            y: ground.height - TREE_SINK,
+            y: ground.surfaceHeight - TREE_SINK,
             z: candidate.z,
             kind: kindFor(wanted, candidate.kindRoll),
             scale: candidate.scale,

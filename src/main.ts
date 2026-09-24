@@ -52,6 +52,7 @@ createSettingsPanel({
   toggles: [
     { label: "Trees", initial: true, onChange: (on) => world.trees.setVisible(on) },
     { label: "Shadows", initial: true, onChange: (on) => world.setShadowsEnabled(on) },
+    { label: "Wireframe", initial: false, onChange: (on) => world.setWireframe(on) },
   ],
   sliders: [
     {
@@ -88,7 +89,7 @@ function gotoView({ x, z, alpha, beta, radius }: Partial<ViewSnapshot> & { x: nu
   goto: gotoView,
   /**
    * `goto`, then force every chunk around the new position to build right away instead of
-   * streaming in one per frame - what a console session testing a spot always wants and `goto`
+   * streaming in over many frames - what a console session testing a spot always wants and `goto`
    * alone never gave it, so every session was hand-writing the same `for` loop calling
    * `updateChunks` a few thousand times afterward. `updateChunks` is already a no-op once its
    * queue is empty (see chunkManager.ts's `takeNearestQueued`), so an iteration count generous

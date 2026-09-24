@@ -1,8 +1,9 @@
 import type { FloatArray } from "@babylonjs/core";
 import type { TerrainSample } from "../terrain/terrainSampler";
 
-// How far out (in grid steps) reliefCurvature looks for its "surrounding ground" average. 4 steps
-// * (CHUNK_SIZE=50 / CHUNK_SUBDIVISIONS=20) = 10 world units - local enough to stay well inside
+// How far out (in full-detail grid steps) reliefCurvature looks for its "surrounding ground"
+// average - about 10 world units at the full-detail spacing set by world.ts's CHUNK_SIZE and
+// CHUNK_LOD_LEVELS, so it changes if that spacing does. Local enough to stay well inside
 // one area/biome, wide enough to read as a hillside trend rather than just re-deriving slope from
 // the immediately adjacent vertices. terrainMesh.ts pads its sampling grid by exactly this many
 // extra rings on every side specifically so this never has to clamp at a chunk edge - a query
@@ -19,7 +20,7 @@ export const RELIEF_CURVATURE_RADIUS_STEPS = 4;
  *  that need this to be accurate right up to a chunk's own boundary must pass a grid padded by at
  *  least RELIEF_CURVATURE_RADIUS_STEPS rings beyond what's actually rendered (see terrainMesh.ts),
  *  so the clamp never actually triggers for a real, rendered vertex. */
-function computeReliefCurvature(positions: FloatArray, gridSize: number, vertexIndex: number): number {
+function computeReliefCurvature(positions: FloatArray, gridSize: number, vertexIndex: number, radiusSteps: number): number {
   const row = Math.floor(vertexIndex / gridSize);
   const col = vertexIndex % gridSize;
 
@@ -31,10 +32,10 @@ function computeReliefCurvature(positions: FloatArray, gridSize: number, vertexI
 
   const center = heightAt(row, col);
   const neighborAvg =
-    (heightAt(row - RELIEF_CURVATURE_RADIUS_STEPS, col) +
-      heightAt(row + RELIEF_CURVATURE_RADIUS_STEPS, col) +
-      heightAt(row, col - RELIEF_CURVATURE_RADIUS_STEPS) +
-      heightAt(row, col + RELIEF_CURVATURE_RADIUS_STEPS)) /
+    (heightAt(row - radiusSteps, col) +
+      heightAt(row + radiusSteps, col) +
+      heightAt(row, col - radiusSteps) +
+      heightAt(row, col + radiusSteps)) /
     4;
 
   return neighborAvg - center;
@@ -45,6 +46,10 @@ function computeReliefCurvature(positions: FloatArray, gridSize: number, vertexI
  * engine's "input" step (pipeline/pipelineTypes.ts). Biome membership itself is NOT in here -
  * materialLibrary.ts's PER_BIOME_MATERIAL_LAYERS already scopes which layers run for a given
  * biome, so a layer never needs to check its own biome from inside the pipeline.
+ *
+ * `curvatureRadiusSteps` is RELIEF_CURVATURE_RADIUS_STEPS on a full-detail grid; a coarser grid
+ * passes proportionally fewer steps, so the radius stays the same distance in world units and a
+ * chunk's curvature-driven layers do not shift when it changes level of detail.
  */
 export function buildVertexContext(
   positions: FloatArray,
@@ -52,6 +57,7 @@ export function buildVertexContext(
   samples: TerrainSample[],
   gridSize: number,
   vertexIndex: number,
+  curvatureRadiusSteps = RELIEF_CURVATURE_RADIUS_STEPS,
 ): Record<string, number> {
   const sample = samples[vertexIndex];
   return {
@@ -65,7 +71,7 @@ export function buildVertexContext(
     lakeFactor: sample.lakeFactor,
     riverGap: sample.riverGap,
     roadGap: sample.roadGap,
-    reliefCurvature: computeReliefCurvature(positions, gridSize, vertexIndex),
+    reliefCurvature: computeReliefCurvature(positions, gridSize, vertexIndex, curvatureRadiusSteps),
   };
 }
 
