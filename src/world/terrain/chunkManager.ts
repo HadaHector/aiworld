@@ -1,4 +1,4 @@
-import type { CascadedShadowGenerator, GroundMesh, Scene } from "@babylonjs/core";
+import type { CascadedShadowGenerator, Mesh, Scene } from "@babylonjs/core";
 import { createTerrainChunk } from "./terrainMesh";
 import type { TerrainSampler } from "./terrainSampler";
 import type { MaterialLibrary } from "../materials/materialLibrary";
@@ -46,7 +46,7 @@ export function createChunkManager(options: ChunkManagerOptions): ChunkManager {
   let loadRadius = options.loadRadius;
   let unloadRadius = options.unloadRadius;
 
-  const loaded = new Map<string, GroundMesh>();
+  const loaded = new Map<string, Mesh>();
   const queued = new Set<string>();
   const buildQueue: ChunkCoord[] = [];
 

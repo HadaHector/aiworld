@@ -41,29 +41,19 @@ const TEXTURE_WORLD_TILE_SIZE = 50;
 const MATERIAL_WEIGHT_THRESHOLD = 0.05;
 
 /**
- * How many materials one vertex can blend at once.
- *
- * Which material occupies which slot is decided per vertex (see buildMaterialBlend) rather than
- * being fixed, because there are more materials in the atlas than there are slots. That is the only
- * reason any slot-ordering logic exists: with one slot per material the indices would be constants
- * and every vertex could compute its weights in complete isolation.
- *
- * The ordering has to agree between the vertices of a triangle, since the GPU interpolates the
- * weights while `flat` pins the indices to one vertex - a disagreement lands one vertex's weights
- * on another's materials. Slots are therefore laid out by material index, which is stable under
- * area weights changing order; it is not stable when the SET of materials changes, which is the
- * residual measured at ~0.25% of border-adjacent vertex pairs.
+ * How many materials one triangle blends. Each triangle draws the materials of one "owner" vertex
+ * (see terrainMesh.ts), so this is also the fragment shader's texture-read budget: two reads (colour
+ * and normal) per material.
  */
-const MATERIAL_SLOT_CAPACITY = 12;
+export const MATERIALS_PER_TRIANGLE = 3;
 
 export interface MaterialLibrary {
-  /** The single shader material every terrain chunk uses - blends MATERIAL_SLOT_CAPACITY materials
-   *  per vertex (see terrainMesh.ts), so no MultiMaterial/SubMesh split is needed any more. */
+  /** The single shader material every terrain chunk uses - blends MATERIALS_PER_TRIANGLE materials
+   *  per triangle (see terrainMesh.ts), so no MultiMaterial/SubMesh split is needed any more. */
   terrainMaterial: ShaderMaterial;
-  /** The material-index/weight roster for one point, weights summing to 1. Every area with a say
-   *  there contributes its own base and layers, scaled by that area's share, accumulated per
-   *  material and emitted in material-index order. */
-  buildMaterialBlend: (worldX: number, worldZ: number, context: Record<string, number>, areaWeights: AreaWeight[]) => { indices: number[]; weights: number[] };
+  /** Every material's weight at one point, keyed by material index and summing to 1. Every area
+   *  with a say there contributes its own base and layers, scaled by that area's share. */
+  buildMaterialBlend: (worldX: number, worldZ: number, context: Record<string, number>, areaWeights: AreaWeight[]) => Map<number, number>;
   /** Legacy single-winner resolution (highest-weight layer overall, thresholded) - kept only for
    *  the debug map, which renders one flat color per sample point and has no use for a blend. */
   resolveMaterialIndex: (worldX: number, worldZ: number, context: Record<string, number>, biomeId: string) => number;
@@ -102,12 +92,8 @@ precision highp float;
 
 in vec3 position;
 in vec3 normal;
-in vec4 matIndices0;
-in vec4 matIndices1;
-in vec4 matIndices2;
-in vec4 matWeights0;
-in vec4 matWeights1;
-in vec4 matWeights2;
+in vec4 matIndices;
+in vec4 matWeights;
 
 uniform mat4 world;
 uniform mat4 view;
@@ -122,20 +108,11 @@ out vec3 vWorldPosition;
 // distance from the camera) and its length is distance-from-camera for fog - one varying serving
 // both, rather than computing either separately in the fragment from vWorldPosition/cameraPosition.
 out vec3 vPositionFromCamera;
-// flat, NOT smooth: these are sampler2DArray layer indices, and interpolating an index is
-// meaningless - a fractional layer just rounds to the nearest one. Within a biome every vertex
-// carries the same roster so interpolation was a no-op, but across a biome border the rosters
-// differ (slot 0 is Mud on a swamp vertex and Desert Sand on a desert one), and interpolating
-// between those two integers walked through every material lying numerically between them. That
-// painted a one-triangle-wide ribbon of unrelated materials - grey rock, silt - along every biome
-// boundary. flat makes each triangle use one vertex's roster outright, which is the clean hard
-// edge the design already accepts at biome borders.
-flat out vec4 vMatIndices0;
-flat out vec4 vMatIndices1;
-flat out vec4 vMatIndices2;
-out vec4 vMatWeights0;
-out vec4 vMatWeights1;
-out vec4 vMatWeights2;
+// Material layer indices for this triangle. Every vertex of a triangle carries the same indices in
+// the same order (they are its owner vertex's - see terrainMesh.ts), so flat is not correcting a
+// disagreement here; it just avoids interpolating integers that are already identical.
+flat out vec4 vMatIndices;
+out vec4 vMatWeights;
 
 void main() {
   vec4 worldPosition = world * vec4(position, 1.0);
@@ -146,14 +123,13 @@ void main() {
   // Texture coordinates come straight from world-space position, not the mesh's own 0..1 UV - see
   // TEXTURE_WORLD_TILE_SIZE's comment for why (this is what makes chunk boundaries seamless).
   vUV = worldPosition.xz * tileScale;
-  vMatIndices0 = matIndices0;
-  vMatIndices1 = matIndices1;
-  vMatIndices2 = matIndices2;
-  vMatWeights0 = matWeights0;
-  vMatWeights1 = matWeights1;
-  vMatWeights2 = matWeights2;
+  vMatIndices = matIndices;
+  vMatWeights = matWeights;
 }
 `;
+
+// The vec4 components the fragment shader actually samples - one per blended material.
+const materialSlots = ["x", "y", "z", "w"].slice(0, MATERIALS_PER_TRIANGLE);
 
 const FRAGMENT_SHADER = `#version 300 es
 precision highp float;
@@ -169,12 +145,8 @@ in vec2 vUV;
 in vec3 vNormal;
 in vec3 vWorldPosition;
 in vec3 vPositionFromCamera;
-flat in vec4 vMatIndices0;
-flat in vec4 vMatIndices1;
-flat in vec4 vMatIndices2;
-in vec4 vMatWeights0;
-in vec4 vMatWeights1;
-in vec4 vMatWeights2;
+flat in vec4 vMatIndices;
+in vec4 vMatWeights;
 
 uniform sampler2DArray materialAtlas;
 uniform sampler2DArray normalAtlas;
@@ -282,31 +254,9 @@ float computeShadow(vec3 worldPos, vec3 worldNormal) {
 void main() {
   vec3 n = normalize(vNormal);
 
-  vec4 albedo = texture(materialAtlas, vec3(vUV, vMatIndices0.x)) * vMatWeights0.x
-    + texture(materialAtlas, vec3(vUV, vMatIndices0.y)) * vMatWeights0.y
-    + texture(materialAtlas, vec3(vUV, vMatIndices0.z)) * vMatWeights0.z
-    + texture(materialAtlas, vec3(vUV, vMatIndices0.w)) * vMatWeights0.w
-    + texture(materialAtlas, vec3(vUV, vMatIndices1.x)) * vMatWeights1.x
-    + texture(materialAtlas, vec3(vUV, vMatIndices1.y)) * vMatWeights1.y
-    + texture(materialAtlas, vec3(vUV, vMatIndices1.z)) * vMatWeights1.z
-    + texture(materialAtlas, vec3(vUV, vMatIndices1.w)) * vMatWeights1.w
-    + texture(materialAtlas, vec3(vUV, vMatIndices2.x)) * vMatWeights2.x
-    + texture(materialAtlas, vec3(vUV, vMatIndices2.y)) * vMatWeights2.y
-    + texture(materialAtlas, vec3(vUV, vMatIndices2.z)) * vMatWeights2.z
-    + texture(materialAtlas, vec3(vUV, vMatIndices2.w)) * vMatWeights2.w;
+  vec4 albedo = ${materialSlots.map((c) => `texture(materialAtlas, vec3(vUV, vMatIndices.${c})) * vMatWeights.${c}`).join("\n    + ")};
 
-  vec3 tangentNormal = (texture(normalAtlas, vec3(vUV, vMatIndices0.x)).rgb * 2.0 - 1.0) * vMatWeights0.x
-    + (texture(normalAtlas, vec3(vUV, vMatIndices0.y)).rgb * 2.0 - 1.0) * vMatWeights0.y
-    + (texture(normalAtlas, vec3(vUV, vMatIndices0.z)).rgb * 2.0 - 1.0) * vMatWeights0.z
-    + (texture(normalAtlas, vec3(vUV, vMatIndices0.w)).rgb * 2.0 - 1.0) * vMatWeights0.w
-    + (texture(normalAtlas, vec3(vUV, vMatIndices1.x)).rgb * 2.0 - 1.0) * vMatWeights1.x
-    + (texture(normalAtlas, vec3(vUV, vMatIndices1.y)).rgb * 2.0 - 1.0) * vMatWeights1.y
-    + (texture(normalAtlas, vec3(vUV, vMatIndices1.z)).rgb * 2.0 - 1.0) * vMatWeights1.z
-    + (texture(normalAtlas, vec3(vUV, vMatIndices1.w)).rgb * 2.0 - 1.0) * vMatWeights1.w
-    + (texture(normalAtlas, vec3(vUV, vMatIndices2.x)).rgb * 2.0 - 1.0) * vMatWeights2.x
-    + (texture(normalAtlas, vec3(vUV, vMatIndices2.y)).rgb * 2.0 - 1.0) * vMatWeights2.y
-    + (texture(normalAtlas, vec3(vUV, vMatIndices2.z)).rgb * 2.0 - 1.0) * vMatWeights2.z
-    + (texture(normalAtlas, vec3(vUV, vMatIndices2.w)).rgb * 2.0 - 1.0) * vMatWeights2.w;
+  vec3 tangentNormal = ${materialSlots.map((c) => `(texture(normalAtlas, vec3(vUV, vMatIndices.${c})).rgb * 2.0 - 1.0) * vMatWeights.${c}`).join("\n    + ")};
   tangentNormal = normalize(tangentNormal);
 
   // Screen-space-derivative TBN (no authored per-vertex tangents needed) - standard technique for
@@ -450,7 +400,7 @@ export async function createMaterialLibrary(
   Effect.ShadersStore["terrainBlendFragmentShader"] = FRAGMENT_SHADER;
 
   const terrainMaterial = new ShaderMaterial("terrainBlend", scene, "terrainBlend", {
-    attributes: ["position", "normal", "matIndices0", "matIndices1", "matIndices2", "matWeights0", "matWeights1", "matWeights2"],
+    attributes: ["position", "normal", "matIndices", "matWeights"],
     uniforms: [
       "world",
       "view",
@@ -588,55 +538,24 @@ export async function createMaterialLibrary(
     compiledPerBiomeLayers.set(biomeId, compileLayers(layers));
   }
 
-  // A single biome must always fit outright; beyond that the roster is assembled per point from
-  // whichever areas are in range, deduplicated by material, so there is no fixed layout to size
-  // against. Measured over every biome combination: two areas need at most 11 of the 12 slots, a
-  // three-area junction at most 14 - the rare overflow drops the weakest area's layers, never a
-  // base (see buildMaterialBlend's emission order).
-  const maxPerBiomeLayerCount = Math.max(0, ...Object.values(PER_BIOME_MATERIAL_LAYERS).map((layers) => layers.length));
-  // +1 for the road, which is one material per biome and so one slot in a single-biome roster.
-  const singleBiomeSlotCount = 1 + compiledUniversalLayers.length + 1 + maxPerBiomeLayerCount;
-  if (singleBiomeSlotCount > MATERIAL_SLOT_CAPACITY) {
-    throw new Error(`MATERIAL_SLOT_CAPACITY (${MATERIAL_SLOT_CAPACITY}) is too small for a single biome needing ${singleBiomeSlotCount} slots - raise it`);
-  }
-
-
   /**
-   * The material roster and weights for one point, blending every area that has a say there.
+   * Every material's weight at one point, blending every area that has a say there. Weights sum to
+   * 1; materials with no weight are left out.
    *
    * Each area contributes the result of the ordinary single-biome blend - its own base plus the
-   * universal layers plus its per-biome layers, weight-conserved exactly as before - scaled by that
-   * area's share. Universal layers appear once per area with the same weight, so they survive the
-   * sum unchanged and need no special case.
-   *
-   * Contributions accumulate per MATERIAL rather than per layer, which is what makes this fit: two
-   * layers pointing at the same MaterialDef, or two areas of the same biome, merge into one slot.
-   * Measured over every biome combination, a two-area border needs at most 11 of the 12 slots and a
-   * three-area junction at most 14 - so the emission order below matters, since the tail is what
-   * gets dropped in the rare overflow.
+   * universal layers plus its per-biome layers, weight-conserved - scaled by that area's share.
+   * Contributions accumulate per MATERIAL rather than per layer, so two layers pointing at the same
+   * MaterialDef, or two areas of the same biome, merge. Which of these a triangle actually draws is
+   * decided by the mesh builder (see terrainMesh.ts), not here.
    */
-  function buildMaterialBlend(worldX: number, worldZ: number, context: Record<string, number>, areaWeights: AreaWeight[]): { indices: number[]; weights: number[] } {
-    const indices = new Array<number>(MATERIAL_SLOT_CAPACITY).fill(0);
-    const weights = new Array<number>(MATERIAL_SLOT_CAPACITY).fill(0);
-    if (areaWeights.length === 0) return { indices, weights };
-
-    // Accumulated per material index, then emitted in a priority order that is a pure function of
-    // the (already deterministically ordered) area list - so two neighbouring vertices that see the
-    // same areas always lay their slots out identically.
+  function buildMaterialBlend(worldX: number, worldZ: number, context: Record<string, number>, areaWeights: AreaWeight[]): Map<number, number> {
     const weightByMaterial = new Map<number, number>();
-    const order: number[] = [];
+    if (areaWeights.length === 0) return weightByMaterial;
     const add = (materialIndex: number, weight: number): void => {
-      const existing = weightByMaterial.get(materialIndex);
-      if (existing === undefined) {
-        weightByMaterial.set(materialIndex, weight);
-        order.push(materialIndex);
-      } else {
-        weightByMaterial.set(materialIndex, existing + weight);
-      }
+      if (weight <= 0) return;
+      weightByMaterial.set(materialIndex, (weightByMaterial.get(materialIndex) ?? 0) + weight);
     };
 
-    // Universal layers first: they are shared by every area and so are the one part of the roster
-    // guaranteed to be present whatever the area set is.
     const universalWeights: number[] = [];
     let universalSum = 0;
     for (const layer of compiledUniversalLayers) {
@@ -645,27 +564,11 @@ export async function createMaterialLibrary(
       universalSum += weight;
     }
 
-    // Then every area's base, strongest area first, before any per-biome layer - a base is what
-    // actually reads as "which zone is this", so it must never be the thing an overflow drops.
-    // Emission order is what keeps neighbouring vertices agreeing on what each slot means, and it
-    // has to be grouped by AREA rather than by role. Adding every area's base, then the universal
-    // layers, then every area's layers put a newly-arrived area's base in the MIDDLE of the list,
-    // which shifted every later material down a slot - and those later materials carry real weight,
-    // so the shift painted a dashed line of wrong-material triangles along every border. Grouping
-    // by area means a newcomer appends its whole block at the end and displaces nothing.
-    //
-    // Areas go strongest first so the newcomer - always the weakest, since it is fading in from
-    // zero - is the one that lands last. The order can still flip between two areas of equal
-    // weight, but that is self-cancelling: at the flip their weights are equal by definition, so
-    // swapping their blocks is very nearly a no-op. The shift this replaces was not.
-    const orderedAreas = [...areaWeights].sort((a, b) => b.weight - a.weight || a.areaId - b.areaId);
-
     // The road's weight is the same everywhere - the layer is one pipeline over roadGap - so it is
     // evaluated once here and only its MATERIAL varies per area below.
     const roadWeight = Math.max(0, compiledRoadLayer.evaluate(worldX, worldZ, context));
 
-    const perAreaOverlays: { layers: CompiledLayer[]; weights: number[]; scale: number; share: number; biomeId: string }[] = [];
-    for (const area of orderedAreas) {
+    for (const area of areaWeights) {
       const layers = compiledPerBiomeLayers.get(area.biome.id) ?? [];
       const layerWeights: number[] = [];
       let overlaySum = universalSum + roadWeight;
@@ -676,66 +579,18 @@ export async function createMaterialLibrary(
       }
       // Same weight conservation as the single-biome case, applied within this area's own blend.
       const scale = overlaySum > 1 ? 1 / overlaySum : 1;
-      perAreaOverlays.push({ layers, weights: layerWeights, scale, share: area.weight, biomeId: area.biome.id });
-    }
-
-    // Universal layers occupy the first slots always - they are present for every area, so pinning
-    // them here means nothing downstream of them can be displaced by the area set changing.
-    for (let i = 0; i < compiledUniversalLayers.length; i++) {
-      let weight = 0;
-      for (const area of perAreaOverlays) weight += universalWeights[i] * area.scale * area.share;
-      add(compiledUniversalLayers[i].materialIndex, weight);
-    }
-
-    // Then one contiguous block per area: its road surface, its base, then its own layers. The road
-    // comes first in the block because it is the one thing in it that is a made surface rather than
-    // something that grew, and so the one that should survive a roster overflow.
-    for (const area of perAreaOverlays) {
-      if (roadWeight > 0) {
-        add(biomeRoadIndex.get(area.biomeId) ?? defaultIndex, roadWeight * area.scale * area.share);
+      const share = area.weight;
+      for (let i = 0; i < compiledUniversalLayers.length; i++) {
+        add(compiledUniversalLayers[i].materialIndex, universalWeights[i] * scale * share);
       }
-      let overlaySum = universalSum + roadWeight;
-      for (const weight of area.weights) overlaySum += weight;
-      add(biomeBaseIndex.get(area.biomeId) ?? defaultIndex, Math.max(0, 1 - overlaySum * area.scale) * area.share);
-      for (let i = 0; i < area.layers.length; i++) {
-        add(area.layers[i].materialIndex, area.weights[i] * area.scale * area.share);
+      add(biomeRoadIndex.get(area.biome.id) ?? defaultIndex, roadWeight * scale * share);
+      add(biomeBaseIndex.get(area.biome.id) ?? defaultIndex, Math.max(0, 1 - overlaySum * scale) * share);
+      for (let i = 0; i < layers.length; i++) {
+        add(layers[i].materialIndex, layerWeights[i] * scale * share);
       }
     }
 
-    // Slots are laid out by MATERIAL index, never by the order areas happened to be visited in.
-    // Two vertices that see the same set of materials therefore always agree on which slot holds
-    // which material, whatever their area weights are doing - and area weights swap order along the
-    // middle of every border, where the two areas sit at ~50/50. Laying out by area put each
-    // biome's base and layers in one block, so that swap misaligned every slot after it (blocks
-    // differ in length), rendering ~25-30% of the blend as the wrong material in a dashed line
-    // right down the border.
-    // On overflow, drop the LIGHTEST materials rather than the highest-numbered ones.
-    //
-    // This used to sort the whole roster by material index and keep the first twelve, which meant
-    // an overflow discarded whichever materials happened to have been registered last - a property
-    // of declaration order in materialDefinitions, with no relation to whether the material was
-    // doing anything at that point. A zone naming its own road surface made overflow reachable at
-    // an ordinary two-way border (measured: 2 of 28 biome pairs need a 13th slot), so what gets
-    // dropped stopped being hypothetical.
-    //
-    // Selection by weight first, and only then the sort by material index that the slot layout
-    // depends on - two vertices seeing the same materials must still agree on which slot holds
-    // which, and that is what the index sort is for.
-    let kept = order;
-    if (kept.length > MATERIAL_SLOT_CAPACITY) {
-      kept = order
-        .slice()
-        .sort((a, b) => (weightByMaterial.get(b) ?? 0) - (weightByMaterial.get(a) ?? 0) || a - b)
-        .slice(0, MATERIAL_SLOT_CAPACITY);
-    }
-    const emitted = kept.slice().sort((a, b) => a - b);
-    const slotCount = Math.min(emitted.length, MATERIAL_SLOT_CAPACITY);
-    for (let slot = 0; slot < slotCount; slot++) {
-      indices[slot] = emitted[slot];
-      weights[slot] = weightByMaterial.get(emitted[slot]) ?? 0;
-    }
-
-    return { indices, weights };
+    return weightByMaterial;
   }
 
   function resolveMaterialIndex(worldX: number, worldZ: number, context: Record<string, number>, biomeId: string): number {
