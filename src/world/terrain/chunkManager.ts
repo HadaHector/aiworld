@@ -1,8 +1,8 @@
 import type { CascadedShadowGenerator, Scene } from "@babylonjs/core";
-import { createTerrainChunk, type TerrainChunk } from "./terrainMesh";
-import type { TerrainSampler } from "./terrainSampler";
+import { buildChunkGeometry, type ChunkBuildContext, type ChunkBuildRequest, type ChunkGeometry } from "./chunkGeometry";
+import { createTerrainChunkMeshes, type TerrainChunkMeshes } from "./terrainMesh";
+import type { ChunkBuildPool } from "./chunkBuildPool";
 import type { MaterialLibrary } from "../materials/materialLibrary";
-import type { TreeScatter } from "../foliage/treeScatter";
 import type { TreeField } from "../foliage/treeField";
 
 /** One level of detail: chunks whose centre is within `maxDistance` of the player (and beyond the
@@ -19,21 +19,26 @@ const LOD_HYSTERESIS = 10;
 /** How far the player moves between checks of which loaded chunks need a different level. */
 const LOD_RECHECK_DISTANCE = 5;
 
-/** Chunks are built until this much of a frame has gone on it (always at least one). A full-detail
- *  chunk alone takes more than this; coarse ones take a fraction of it, so several fit. */
+/** Main-thread builds (no worker pool, or an immediate load) run until this much of a frame has
+ *  gone on them, always at least one. A full-detail chunk alone takes more than this; coarse ones
+ *  take a fraction of it, so several fit. */
 const BUILD_BUDGET_MS = 4;
 
 export interface ChunkManagerOptions {
   scene: Scene;
-  sampleTerrain: TerrainSampler;
+  /** The world, for building chunks on the main thread - at load, for immediate loads, and as the
+   *  fallback when there is no worker pool. */
+  buildContext: ChunkBuildContext;
+  /** Builds chunks off the main thread while walking around, so a full-detail chunk never costs a
+   *  frame. Null builds everything on the main thread instead. */
+  buildPool: ChunkBuildPool | null;
   materialLibrary: MaterialLibrary;
-  scatterTrees: TreeScatter;
   /** Trees live and die with the chunk they stand on, so streaming them needs no radius of its
    *  own and they can never outlive the ground under them. */
   trees: TreeField;
   /** A chunk registers itself as a shadow caster the moment it is built and unregisters on unload,
    *  so hills self-shadow their own valleys the same way anything else does. What it registers is
-   *  its shadow-only stand-in (see TerrainChunk.shadowMesh), not the mesh that is drawn. */
+   *  its shadow-only stand-in (see TerrainChunkMeshes.shadowMesh), not the mesh that is drawn. */
   shadowGenerator: CascadedShadowGenerator;
   chunkSize: number;
   /** Finest first; the last level's maxDistance should be Infinity. The first level's
@@ -45,7 +50,9 @@ export interface ChunkManagerOptions {
 
 export interface ChunkManager {
   loadInitial: (x: number, z: number) => void;
-  update: (x: number, z: number) => void;
+  /** `immediate` builds queued chunks on the main thread this call instead of handing them to the
+   *  workers - for a console session that wants a spot loaded now (see main.ts's gotoLoaded). */
+  update: (x: number, z: number, immediate?: boolean) => void;
   setRadii: (loadRadius: number, unloadRadius: number) => void;
   dispose: () => void;
 }
@@ -56,8 +63,13 @@ interface ChunkCoord {
 }
 
 interface LoadedChunk {
-  chunk: TerrainChunk;
+  meshes: TerrainChunkMeshes;
   level: number;
+}
+
+interface FinishedBuild extends ChunkCoord {
+  level: number;
+  geometry: ChunkGeometry;
 }
 
 function chunkKey(cx: number, cz: number): string {
@@ -69,12 +81,18 @@ function chunkKey(cx: number, cz: number): string {
  * rebuilds them at a coarser or finer level of detail as their distance changes.
  *
  * Neighbouring chunks at different levels draw their shared edge through different vertices; each
- * chunk's skirt (see terrainMesh.ts) covers the gap, so no chunk ever needs to know its
+ * chunk's skirt (see chunkGeometry.ts) covers the gap, so no chunk ever needs to know its
  * neighbours' levels. A chunk being rebuilt keeps its old mesh until the new one replaces it.
+ *
+ * While walking, chunks are built by the worker pool: the nearest queued chunks are handed out a
+ * few at a time, and each one that comes back is turned into meshes at the start of the next
+ * update. A result can be stale by then - the player moved on, or the chunk needs another level -
+ * so it is checked against where the player is at that point, not where they were when it was sent.
  */
 export function createChunkManager(options: ChunkManagerOptions): ChunkManager {
-  const { scene, sampleTerrain, materialLibrary, scatterTrees, trees, shadowGenerator, chunkSize, lodLevels } = options;
+  const { scene, buildContext, materialLibrary, trees, shadowGenerator, chunkSize, lodLevels } = options;
   const detailSubdivisions = lodLevels[0].subdivisions;
+  let buildPool = options.buildPool;
 
   let loadRadius = options.loadRadius;
   let unloadRadius = options.unloadRadius;
@@ -82,6 +100,10 @@ export function createChunkManager(options: ChunkManagerOptions): ChunkManager {
   const loaded = new Map<string, LoadedChunk>();
   const queued = new Set<string>();
   const buildQueue: ChunkCoord[] = [];
+  /** Chunks a worker is building, by key. */
+  const inFlight = new Set<string>();
+  const finished: FinishedBuild[] = [];
+  let disposed = false;
 
   let lastPlayerChunkX: number | null = null;
   let lastPlayerChunkZ: number | null = null;
@@ -129,28 +151,34 @@ export function createChunkManager(options: ChunkManagerOptions): ChunkManager {
     return candidates;
   }
 
-  function buildChunk(cx: number, cz: number, level: number): void {
-    const key = chunkKey(cx, cz);
+  function buildRequest(cx: number, cz: number, level: number): ChunkBuildRequest {
     const center = chunkCenter(cx, cz);
-    const chunk = createTerrainChunk(scene, {
-      name: `terrainChunk_${key}`,
+    return {
       size: chunkSize,
       subdivisions: lodLevels[level].subdivisions,
       detailSubdivisions,
-      sampleTerrain,
-      materialLibrary,
-      scatterTrees,
       originX: center.x,
       originZ: center.z,
-    });
+    };
+  }
+
+  /** Puts a built chunk in the world, replacing whatever version of it was there. */
+  function install(cx: number, cz: number, level: number, geometry: ChunkGeometry): void {
+    const key = chunkKey(cx, cz);
+    const center = chunkCenter(cx, cz);
+    const meshes = createTerrainChunkMeshes(scene, `terrainChunk_${key}`, geometry, center.x, center.z, materialLibrary);
     const previous = loaded.get(key);
     if (previous) {
-      previous.chunk.mesh.dispose();
-      shadowGenerator.removeShadowCaster(previous.chunk.shadowMesh);
+      previous.meshes.mesh.dispose();
+      shadowGenerator.removeShadowCaster(previous.meshes.shadowMesh);
     }
-    loaded.set(key, { chunk, level });
-    trees.setChunk(key, chunk.trees);
-    shadowGenerator.addShadowCaster(chunk.shadowMesh);
+    loaded.set(key, { meshes, level });
+    trees.setChunk(key, geometry.trees);
+    shadowGenerator.addShadowCaster(meshes.shadowMesh);
+  }
+
+  function buildNow(cx: number, cz: number, level: number): void {
+    install(cx, cz, level, buildChunkGeometry(buildRequest(cx, cz, level), buildContext));
   }
 
   function enqueue(cx: number, cz: number): void {
@@ -177,15 +205,15 @@ export function createChunkManager(options: ChunkManagerOptions): ChunkManager {
   }
 
   function unloadOutOfRangeChunks(x: number, z: number): void {
-    for (const [key, { chunk }] of loaded) {
+    for (const [key, { meshes }] of loaded) {
       const [cxStr, czStr] = key.split(",");
       const cx = Number(cxStr);
       const cz = Number(czStr);
       if (!withinRadius(cx, cz, x, z, unloadRadius)) {
-        chunk.mesh.dispose();
+        meshes.mesh.dispose();
         loaded.delete(key);
         trees.clearChunk(key);
-        shadowGenerator.removeShadowCaster(chunk.shadowMesh);
+        shadowGenerator.removeShadowCaster(meshes.shadowMesh);
       }
     }
   }
@@ -200,8 +228,8 @@ export function createChunkManager(options: ChunkManagerOptions): ChunkManager {
    *
    * Distance is measured against where the player is *now*, not where they were when the chunk was
    * queued, so this also self-corrects when they keep moving: the queue reorders itself for free
-   * instead of working through a stale ordering. The scan is O(queue length) once per frame, over a
-   * queue of at most a few hundred entries.
+   * instead of working through a stale ordering. The scan is O(queue length) per chunk taken, over
+   * a queue of at most a few hundred entries.
    */
   function takeNearestQueued(x: number, z: number): ChunkCoord | undefined {
     if (buildQueue.length === 0) return undefined;
@@ -222,32 +250,85 @@ export function createChunkManager(options: ChunkManagerOptions): ChunkManager {
     return buildQueue.splice(bestIndex, 1)[0];
   }
 
-  function drainQueue(x: number, z: number): void {
-    const start = performance.now();
-    do {
+  /**
+   * The next queued chunk that actually needs building, and at what level - or undefined once the
+   * queue is empty. Levels are decided here rather than when a chunk is queued, so one that sat in
+   * the queue while the player moved still comes out right, or turns out not to need a rebuild.
+   */
+  function takeNextBuild(x: number, z: number): (ChunkCoord & { level: number }) | undefined {
+    for (;;) {
       const next = takeNearestQueued(x, z);
-      if (!next) return;
-
+      if (!next) return undefined;
       const key = chunkKey(next.cx, next.cz);
       queued.delete(key);
-
-      if (!withinRadius(next.cx, next.cz, x, z, unloadRadius)) {
-        // Player moved on before this chunk was built; drop it instead of building then immediately disposing.
-        continue;
-      }
-      // Levels are decided when a chunk is built rather than when it is queued, so one that sat in
-      // the queue while the player moved still comes out right - or turns out not to need a rebuild.
+      // Player moved on before this chunk was built; drop it instead of building then immediately disposing.
+      if (!withinRadius(next.cx, next.cz, x, z, unloadRadius)) continue;
+      // Already on its way; once it lands, applyFinished queues it again if it needs another level.
+      if (inFlight.has(key)) continue;
       const current = loaded.get(key)?.level;
       const level = levelFor(next.cx, next.cz, x, z, current);
       if (level === current) continue;
+      return { ...next, level };
+    }
+  }
 
-      buildChunk(next.cx, next.cz, level);
+  function drainOnMainThread(x: number, z: number): void {
+    const start = performance.now();
+    do {
+      const next = takeNextBuild(x, z);
+      if (!next) return;
+      buildNow(next.cx, next.cz, next.level);
     } while (performance.now() - start < BUILD_BUDGET_MS);
+  }
+
+  function dispatchToWorkers(pool: ChunkBuildPool, x: number, z: number): void {
+    while (inFlight.size < pool.capacity) {
+      const next = takeNextBuild(x, z);
+      if (!next) return;
+      const { cx, cz, level } = next;
+      const key = chunkKey(cx, cz);
+      inFlight.add(key);
+      pool.build(buildRequest(cx, cz, level)).then(
+        (geometry) => finished.push({ cx, cz, level, geometry }),
+        (error: unknown) => {
+          inFlight.delete(key);
+          if (disposed) return;
+          // Whatever broke the worker would break every later build too, so fall back to the main
+          // thread for good rather than retrying into the same failure.
+          console.error("Chunk build worker failed; building on the main thread from now on.", error);
+          buildPool = null;
+          enqueue(cx, cz);
+        },
+      );
+    }
+  }
+
+  /** Installs whatever the workers finished since the last update, unless it is stale by now. */
+  function applyFinished(x: number, z: number): void {
+    for (const { cx, cz, level, geometry } of finished.splice(0)) {
+      const key = chunkKey(cx, cz);
+      inFlight.delete(key);
+      if (!withinRadius(cx, cz, x, z, unloadRadius)) continue;
+      const current = loaded.get(key)?.level;
+      // Built on the main thread in the meantime (an immediate load).
+      if (current === level) continue;
+      const wanted = levelFor(cx, cz, x, z, current);
+      if (current !== undefined && level !== wanted) {
+        // A rebuild overtaken by the player's movement: the version already there does until the
+        // right level is built.
+        enqueue(cx, cz);
+        continue;
+      }
+      install(cx, cz, level, geometry);
+      // A chunk that was missing goes in even at the wrong level, since that beats a hole, and is
+      // queued again for the right one.
+      if (level !== wanted) enqueue(cx, cz);
+    }
   }
 
   function loadInitial(x: number, z: number): void {
     for (const { cx, cz } of candidateChunksInRadius(x, z, loadRadius)) {
-      buildChunk(cx, cz, levelFor(cx, cz, x, z));
+      buildNow(cx, cz, levelFor(cx, cz, x, z));
     }
     lodCheckX = x;
     lodCheckZ = z;
@@ -258,9 +339,11 @@ export function createChunkManager(options: ChunkManagerOptions): ChunkManager {
     trees.flush();
   }
 
-  function update(x: number, z: number): void {
+  function update(x: number, z: number, immediate = false): void {
     lastX = x;
     lastZ = z;
+
+    applyFinished(x, z);
 
     const playerChunkX = Math.floor(x / chunkSize);
     const playerChunkZ = Math.floor(z / chunkSize);
@@ -275,7 +358,8 @@ export function createChunkManager(options: ChunkManagerOptions): ChunkManager {
       enqueueLevelChanges(x, z);
     }
 
-    drainQueue(x, z);
+    if (buildPool && !immediate) dispatchToWorkers(buildPool, x, z);
+    else drainOnMainThread(x, z);
     // One rebuild of the instance buffers per frame at most, however many chunks came and went -
     // and none at all on the frames where nothing did.
     trees.flush();
@@ -292,14 +376,16 @@ export function createChunkManager(options: ChunkManagerOptions): ChunkManager {
   }
 
   function dispose(): void {
-    for (const [key, { chunk }] of loaded) {
-      chunk.mesh.dispose();
+    disposed = true;
+    for (const [key, { meshes }] of loaded) {
+      meshes.mesh.dispose();
       trees.clearChunk(key);
-      shadowGenerator.removeShadowCaster(chunk.shadowMesh);
+      shadowGenerator.removeShadowCaster(meshes.shadowMesh);
     }
     loaded.clear();
     queued.clear();
     buildQueue.length = 0;
+    finished.length = 0;
   }
 
   return { loadInitial, update, setRadii, dispose };

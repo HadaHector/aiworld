@@ -99,7 +99,7 @@ function gotoView({ x, z, alpha, beta, radius }: Partial<ViewSnapshot> & { x: nu
   gotoLoaded(view: Partial<ViewSnapshot> & { x: number; z: number }, iterations = 6000): void {
     gotoView(view);
     for (let i = 0; i < iterations; i++) {
-      world.updateChunks(view.x, view.z);
+      world.updateChunks(view.x, view.z, true);
     }
   },
   world,

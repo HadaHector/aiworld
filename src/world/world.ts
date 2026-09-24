@@ -1,5 +1,6 @@
 import type { Camera, Scene } from "@babylonjs/core";
 import { createChunkManager, type ChunkLodLevel } from "./terrain/chunkManager";
+import { createChunkBuildPool } from "./terrain/chunkBuildPool";
 import { createTerrainSampler, type TerrainSampler } from "./terrain/terrainSampler";
 import { createOceanPlane } from "./terrain/ocean";
 import { createMaterialLibrary, type MaterialLibrary } from "./materials/materialLibrary";
@@ -22,7 +23,9 @@ export interface WorldLoadProgress {
 export interface World {
   heightAt: (worldX: number, worldZ: number) => number;
   sampleTerrain: TerrainSampler;
-  updateChunks: (playerX: number, playerZ: number) => void;
+  /** `immediate` builds whatever is queued on this thread now instead of handing it to the chunk
+   *  build workers - see ChunkManager.update. */
+  updateChunks: (playerX: number, playerZ: number, immediate?: boolean) => void;
   setDrawDistance: (loadRadius: number) => void;
   worldExtent: number;
   continents: ContinentPlan[];
@@ -110,6 +113,10 @@ function nextPaint(): Promise<void> {
 export async function createWorld(scene: Scene, onProgress?: (progress: WorldLoadProgress) => void): Promise<World> {
   const sunLighting = createSunLighting(scene);
 
+  // Started first: each worker spends a few seconds building its own copy of the world (see
+  // chunkBuild.worker.ts), which overlaps with this thread building its own below.
+  let buildPool = createChunkBuildPool(WORLD_SEED);
+
   onProgress?.({ phase: "Shaping continents", completed: 0, total: 0 });
   const { sampleTerrain, worldExtent, continents, areaBounds, areaNames, settlements, roads } = createTerrainSampler(WORLD_SEED);
 
@@ -120,11 +127,22 @@ export async function createWorld(scene: Scene, onProgress?: (progress: WorldLoa
   const trees = createTreeField(scene, sunLighting.shadowGenerator);
   const sky = createSkyDome(scene);
 
+  if (buildPool) {
+    onProgress?.({ phase: "Starting terrain workers", completed: 0, total: 0 });
+    try {
+      await buildPool.ready;
+    } catch (error) {
+      console.error("Chunk build workers failed to start; building terrain on the main thread.", error);
+      buildPool.dispose();
+      buildPool = null;
+    }
+  }
+
   const chunkManager = createChunkManager({
     scene,
-    sampleTerrain,
+    buildContext: { sampleTerrain, materialBlender: materialLibrary, scatterTrees: createTreeScatter(WORLD_SEED) },
+    buildPool,
     materialLibrary,
-    scatterTrees: createTreeScatter(WORLD_SEED),
     trees,
     shadowGenerator: sunLighting.shadowGenerator,
     chunkSize: CHUNK_SIZE,
@@ -147,7 +165,7 @@ export async function createWorld(scene: Scene, onProgress?: (progress: WorldLoa
   let drawDistance = DEFAULT_DRAW_DISTANCE;
 
   const heightAt = (worldX: number, worldZ: number) => sampleTerrain(worldX, worldZ).height;
-  const updateChunks = (playerX: number, playerZ: number) => chunkManager.update(playerX, playerZ);
+  const updateChunks = (playerX: number, playerZ: number, immediate?: boolean) => chunkManager.update(playerX, playerZ, immediate);
   const setDrawDistance = (loadRadius: number) => {
     drawDistance = loadRadius;
     chunkManager.setRadii(loadRadius, loadRadius + UNLOAD_HYSTERESIS);
