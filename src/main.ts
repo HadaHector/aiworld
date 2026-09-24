@@ -7,6 +7,7 @@ import { createSettingsPanel } from "./debug/settingsPanel";
 import { createZoneLabel } from "./debug/zoneLabel";
 import { createTextureBrowser } from "./debug/textureBrowser";
 import { createPositionPanel, type ViewSnapshot } from "./debug/positionPanel";
+import { createStatsPanel } from "./debug/statsPanel";
 import { createLoadingScreen } from "./ui/loadingScreen";
 
 const canvas = document.getElementById("renderCanvas");
@@ -68,6 +69,7 @@ createSettingsPanel({
 const zoneLabel = createZoneLabel();
 const textureBrowser = createTextureBrowser(world.materialLibrary);
 const positionPanel = createPositionPanel();
+createStatsPanel(scene, engine);
 
 /**
  * A deliberate, permanent debug surface. `goto` restores a view captured by the position panel's
