@@ -6,6 +6,7 @@ import { createOceanPlane } from "./terrain/ocean";
 import { createMaterialLibrary, type MaterialLibrary } from "./materials/materialLibrary";
 import { createTreeScatter } from "./foliage/treeScatter";
 import { createTreeField, type TreeField } from "./foliage/treeField";
+import { createGrassField, type GrassField } from "./foliage/grassField";
 import { createSunLighting, DEFAULT_DAY_NIGHT_CYCLE_MINUTES } from "./lighting/sunLighting";
 import { createSkyDome } from "./sky/skyDome";
 import type { ContinentPlan } from "./cells/continentLayout";
@@ -35,6 +36,7 @@ export interface World {
   roads: RoadNetwork;
   materialLibrary: MaterialLibrary;
   trees: TreeField;
+  grass: GrassField;
   /** Camera near/far and the shadow generator's own frustum both depend on the real camera, which
    *  main.ts creates after the world exists - call this once it does. */
   attachCamera: (camera: Camera) => void;
@@ -125,6 +127,7 @@ export async function createWorld(scene: Scene, onProgress?: (progress: WorldLoa
   });
 
   const trees = createTreeField(scene, sunLighting.shadowGenerator);
+  const grass = createGrassField(scene, WORLD_SEED, materialLibrary.litShading);
   const sky = createSkyDome(scene);
 
   if (buildPool) {
@@ -140,10 +143,11 @@ export async function createWorld(scene: Scene, onProgress?: (progress: WorldLoa
 
   const chunkManager = createChunkManager({
     scene,
-    buildContext: { sampleTerrain, materialBlender: materialLibrary, scatterTrees: createTreeScatter(WORLD_SEED) },
+    buildContext: { sampleTerrain, materialBlender: materialLibrary.blender, scatterTrees: createTreeScatter(WORLD_SEED), seed: WORLD_SEED },
     buildPool,
     materialLibrary,
     trees,
+    grass,
     shadowGenerator: sunLighting.shadowGenerator,
     chunkSize: CHUNK_SIZE,
     lodLevels: CHUNK_LOD_LEVELS,
@@ -198,6 +202,7 @@ export async function createWorld(scene: Scene, onProgress?: (progress: WorldLoa
     roads,
     materialLibrary,
     trees,
+    grass,
     attachCamera: sunLighting.attachCamera,
     setShadowsEnabled,
     setWireframe: materialLibrary.setWireframe,

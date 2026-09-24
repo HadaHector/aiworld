@@ -3,6 +3,7 @@ import type { TerrainSample, TerrainSampler } from "./terrainSampler";
 import { RELIEF_CURVATURE_RADIUS_STEPS, buildVertexContext } from "../materials/materialContext";
 import { MATERIALS_PER_TRIANGLE, type MaterialBlender } from "../materials/materialBlend";
 import type { TreeGround, TreePlacement, TreeScatter } from "../foliage/treeScatter";
+import { scatterGrass, type ChunkGrass } from "../foliage/grassScatter";
 
 /** Where a chunk is and at what level of detail - everything a build needs besides the world
  *  itself, and plain data, so it can be posted to a worker. */
@@ -21,7 +22,8 @@ export interface ChunkBuildRequest {
 /** The world a chunk is built from. A worker makes its own from the same seed. */
 export interface ChunkBuildContext {
   sampleTerrain: TerrainSampler;
-  materialBlender: Pick<MaterialBlender, "buildMaterialBlend">;
+  materialBlender: Pick<MaterialBlender, "buildMaterialBlend" | "materialDefs">;
+  seed: number;
   scatterTrees: TreeScatter;
 }
 
@@ -50,6 +52,9 @@ export interface ChunkGeometry {
    *  vertex - so placing a tree costs a lookup instead of another few terrain samples, and it
    *  stands on exactly the triangle that gets drawn rather than on a second opinion about it. */
   trees: TreePlacement[];
+  /** Only full-detail chunks carry grass: each kind is only drawn within its own fadeEnd of the
+   *  camera (see grassConfig.ts), inside the full-detail range. */
+  grass: ChunkGrass | null;
 }
 
 /** One material list, heaviest first, at most MATERIALS_PER_TRIANGLE long. */
@@ -111,7 +116,7 @@ function toSlots(weights: Map<number, number>, ownerList: MaterialList, allowed:
  */
 export function buildChunkGeometry(request: ChunkBuildRequest, context: ChunkBuildContext): ChunkGeometry {
   const { size, subdivisions, detailSubdivisions, originX, originZ } = request;
-  const { sampleTerrain, materialBlender, scatterTrees } = context;
+  const { sampleTerrain, materialBlender, scatterTrees, seed } = context;
 
   const gridSize = subdivisions + 1;
   const detailRatio = detailSubdivisions / subdivisions;
@@ -485,6 +490,23 @@ export function buildChunkGeometry(request: ChunkBuildRequest, context: ChunkBui
     probeGround,
   );
 
+  const grass =
+    detailRatio === 1
+      ? scatterGrass(
+          {
+            size,
+            subdivisions,
+            originX,
+            originZ,
+            blendAt,
+            surfaceHeight: (row, col, u, v) =>
+              heightInSquare((r, c) => paddedPositions[(r * paddedSize + c) * 3 + 1], row + pad, col + pad, u, v),
+          },
+          materialBlender.materialDefs,
+          seed,
+        )
+      : null;
+
   return {
     positions: new Float32Array(positions),
     normals: new Float32Array(normals),
@@ -495,5 +517,6 @@ export function buildChunkGeometry(request: ChunkBuildRequest, context: ChunkBui
     shadowNormals: new Float32Array(shadowNormals),
     shadowIndices: new Uint32Array(shadowIndices),
     trees,
+    grass,
   };
 }

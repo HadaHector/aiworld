@@ -1,7 +1,8 @@
-import { Color3, Effect, Matrix, RawTexture2DArray, ShaderMaterial, StandardMaterial, Texture, type Material, type Scene } from "@babylonjs/core";
+import { Color3, Effect, RawTexture2DArray, ShaderMaterial, StandardMaterial, Texture, type Material, type Scene } from "@babylonjs/core";
 import type { AreaWeight } from "../cells/areaField";
-import { SHADOW_CASCADE_COUNT, SHADOW_CASCADE_BLEND, SHADOW_DARKNESS, SHADOW_EDGE_FADE, SHADOW_MAP_SIZE, type SunLighting } from "../lighting/sunLighting";
-import { MATERIALS_PER_TRIANGLE, createMaterialBlender } from "./materialBlend";
+import type { SunLighting } from "../lighting/sunLighting";
+import { LIT_SHADING_GLSL, LIT_SHADING_SAMPLERS, LIT_SHADING_UNIFORMS, createLitShading, type LitShading } from "./litShading";
+import { MATERIALS_PER_TRIANGLE, createMaterialBlender, type MaterialBlender } from "./materialBlend";
 import { TEXTURE_RESOLUTION } from "./textureGen";
 import { WATER_ALPHA, WATER_DEEP_COLOR, WATER_SHALLOW_COLOR, WATER_TINT_FULL_DEPTH } from "../terrain/ocean";
 import { bakeMaterialTextures } from "./textureBakePool";
@@ -57,6 +58,11 @@ export interface MaterialLibrary {
   shadowCasterMaterial: Material;
   /** Draws the terrain as wireframe - a debug view for judging mesh density and level of detail. */
   setWireframe: (enabled: boolean) => void;
+  /** The shared light/shadow/fog feed - other world shaders (grass) register with it to be lit
+   *  exactly like the terrain. */
+  litShading: LitShading;
+  /** Which materials the ground is made of where - also what chunk builds read. */
+  blender: MaterialBlender;
 }
 
 export interface MaterialTexturePreview {
@@ -120,12 +126,7 @@ const materialSlots = ["x", "y", "z", "w"].slice(0, MATERIALS_PER_TRIANGLE);
 const FRAGMENT_SHADER = `#version 300 es
 precision highp float;
 precision highp sampler2DArray;
-precision highp sampler2DArrayShadow;
-
-#define NUM_CASCADES ${SHADOW_CASCADE_COUNT}
-#define CASCADE_BLEND ${SHADOW_CASCADE_BLEND.toFixed(4)}
-#define SHADOW_DARKNESS ${SHADOW_DARKNESS.toFixed(4)}
-#define SHADOW_EDGE_FADE ${SHADOW_EDGE_FADE.toFixed(4)}
+${LIT_SHADING_GLSL}
 
 in vec2 vUV;
 in vec3 vNormal;
@@ -136,106 +137,12 @@ in vec4 vMatWeights;
 
 uniform sampler2DArray materialAtlas;
 uniform sampler2DArray normalAtlas;
-uniform vec3 lightDirection;
-uniform float lightIntensity;
-uniform vec3 lightColor;
-uniform vec3 ambientColor;
-uniform float ambientIntensity;
 uniform float waterLevel;
-uniform vec3 cameraPosition;
 uniform float specularMinShininess;
 uniform float specularMaxShininess;
 uniform float specularIntensity;
 
-uniform bool shadowsEnabled;
-uniform highp sampler2DArrayShadow shadowMap;
-uniform mat4 lightMatrix[NUM_CASCADES];
-uniform float cascadeSplits[NUM_CASCADES];
-uniform float cascadeBias[NUM_CASCADES];
-uniform float shadowTexelSize;
-
-uniform int fogMode;
-uniform vec3 fogColor;
-uniform float fogStart;
-uniform float fogEnd;
-uniform float fogDensity;
-
 out vec4 outColor;
-
-/**
- * One cascade's worth of shadow, hardware-compared and box-filtered.
- *
- * texture() on a sampler2DArrayShadow returns the already-filtered fraction of the 2x2 texel
- * neighbourhood that is nearer the light than depth - one hardware comparison per tap, not a raw
- * depth read this code would have to compare by hand. The 3x3 loop around it is what turns that
- * single soft edge into a properly area-filtered one.
- */
-float sampleCascade(int cascade, vec3 worldPos) {
-  vec4 posFromLight = lightMatrix[cascade] * vec4(worldPos, 1.0);
-  vec3 clipSpace = posFromLight.xyz / posFromLight.w;
-  vec2 uv = clipSpace.xy * 0.5 + 0.5;
-  float depth = clamp(clipSpace.z * 0.5 + 0.5, 0.0, 0.9999);
-
-  float lit = 0.0;
-  for (int dx = -1; dx <= 1; dx++) {
-    for (int dy = -1; dy <= 1; dy++) {
-      vec2 offset = vec2(float(dx), float(dy)) * shadowTexelSize;
-      lit += texture(shadowMap, vec4(uv + offset, float(cascade), depth));
-    }
-  }
-  return lit / 9.0;
-}
-
-/**
- * Which of the four cascades - and, near a cascade boundary, how much of the next one too - a
- * fragment falls into, then the shadow those choices actually add up to.
- *
- * Cascade choice keys on view-space Z (vPositionFromCamera.z, forward depth from the camera - see
- * that varying's own comment) against cascadeSplits, which SunLighting computes with the exact
- * same closed-form split the shadow generator itself uses internally: the fragment shader has no
- * access to the generator's own numbers, so agreement here depends entirely on both sides doing
- * the identical arithmetic from the identical near/far/lambda inputs.
- *
- * Every seam a hard cascade choice would leave is instead a fade: CASCADE_BLEND blends this
- * cascade's sample toward the next one's over the last fraction of its own span, and
- * SHADOW_EDGE_FADE fades the whole effect back to fully lit over the last few units before the
- * far cascade's own edge, rather than the shadow switching off in one triangle.
- */
-float computeShadow(vec3 worldPos, vec3 worldNormal) {
-  if (!shadowsEnabled) return 1.0;
-
-  float viewDepth = vPositionFromCamera.z;
-  if (viewDepth > cascadeSplits[NUM_CASCADES - 1]) return 1.0;
-
-  int cascade = NUM_CASCADES - 1;
-  for (int i = 0; i < NUM_CASCADES; i++) {
-    if (viewDepth <= cascadeSplits[i]) { cascade = i; break; }
-  }
-
-  // Normal-offset bias: pushes the sampled point off the surface along its own normal before
-  // projecting into light space, rather than biasing the compared depth by a flat amount. A flat
-  // bias sized for the near cascade's fine texels is nowhere near enough to clear self-shadowing
-  // acne in the coarser far ones, and one sized for the far cascade would peel the near shadows
-  // away from their casters - cascadeBias is scaled per cascade for exactly this reason.
-  vec3 biasedPos = worldPos + worldNormal * cascadeBias[cascade];
-  float lit = sampleCascade(cascade, biasedPos);
-
-  if (cascade < NUM_CASCADES - 1) {
-    float prevSplit = cascade == 0 ? 0.0 : cascadeSplits[cascade - 1];
-    float span = cascadeSplits[cascade] - prevSplit;
-    float t = clamp((viewDepth - prevSplit) / span - (1.0 - CASCADE_BLEND), 0.0, CASCADE_BLEND) / CASCADE_BLEND;
-    float blend = t * t * (3.0 - 2.0 * t);
-    if (blend > 0.0) {
-      float nextLit = sampleCascade(cascade + 1, biasedPos);
-      lit = mix(lit, nextLit, blend);
-    }
-  }
-
-  float edgeT = clamp((cascadeSplits[NUM_CASCADES - 1] - viewDepth) / SHADOW_EDGE_FADE, 0.0, 1.0);
-  float edgeFade = edgeT * edgeT * (3.0 - 2.0 * edgeT);
-  float shadow = mix(SHADOW_DARKNESS, 1.0, lit);
-  return mix(1.0, shadow, edgeFade);
-}
 
 void main() {
   vec3 n = normalize(vNormal);
@@ -273,7 +180,7 @@ void main() {
   // Shadow darkens the light itself, not the surface it lands on - a shadowed patch of sand is
   // still sand, just lit by the sky rather than the sun, which is what SHADOW_DARKNESS's floor is
   // standing in for (see computeShadow).
-  float shadow = computeShadow(vWorldPosition, worldNormal);
+  float shadow = computeShadow(vWorldPosition, worldNormal, vPositionFromCamera.z);
   // Ambient is not shadowed - it is sky-fill, not a beam the sun caster could block, and reaches a
   // shadowed patch exactly as it reaches a lit one. Without this, night terrain (a dim moon,
   // frequently in the 0-intensity instant right at moonrise/moonset) would read as pure black,
@@ -294,17 +201,7 @@ void main() {
     lit = mix(lit, waterLit, ${WATER_ALPHA.toFixed(3)} * clamp(waterDepth / ${WATER_TINT_FULL_DEPTH.toFixed(3)}, 0.0, 1.0));
   }
 
-  float fogDistance = length(vPositionFromCamera);
-  float fogFactor = 1.0;
-  if (fogMode == 3) {
-    fogFactor = clamp((fogEnd - fogDistance) / max(fogEnd - fogStart, 0.0001), 0.0, 1.0);
-  } else if (fogMode == 1) {
-    fogFactor = clamp(1.0 / exp(fogDistance * fogDensity), 0.0, 1.0);
-  } else if (fogMode == 2) {
-    fogFactor = clamp(1.0 / exp(fogDistance * fogDistance * fogDensity * fogDensity), 0.0, 1.0);
-  }
-  vec3 finalColor = mix(fogColor, lit, fogFactor);
-
+  vec3 finalColor = applyFog(lit, length(vPositionFromCamera));
   outColor = vec4(finalColor, 1.0);
 }
 `;
@@ -359,28 +256,13 @@ export async function createMaterialLibrary(
       "view",
       "projection",
       "tileScale",
-      "lightDirection",
-      "lightIntensity",
-      "lightColor",
-      "ambientColor",
-      "ambientIntensity",
       "waterLevel",
-      "cameraPosition",
       "specularMinShininess",
       "specularMaxShininess",
       "specularIntensity",
-      "shadowsEnabled",
-      "lightMatrix",
-      "cascadeSplits",
-      "cascadeBias",
-      "shadowTexelSize",
-      "fogMode",
-      "fogColor",
-      "fogStart",
-      "fogEnd",
-      "fogDensity",
+      ...LIT_SHADING_UNIFORMS,
     ],
-    samplers: ["materialAtlas", "normalAtlas", "shadowMap"],
+    samplers: ["materialAtlas", "normalAtlas", ...LIT_SHADING_SAMPLERS],
   });
   terrainMaterial.setTexture("materialAtlas", materialAtlas);
   terrainMaterial.setTexture("normalAtlas", normalAtlas);
@@ -392,84 +274,8 @@ export async function createMaterialLibrary(
   terrainMaterial.setFloat("specularIntensity", SPECULAR_INTENSITY);
   terrainMaterial.backFaceCulling = true;
 
-  let shadowsEnabled = true;
-  terrainMaterial.setInt("shadowsEnabled", 1);
-  terrainMaterial.setFloats("cascadeSplits", sunLighting.cascadeSplits);
-  terrainMaterial.setFloats("cascadeBias", sunLighting.cascadeBias);
-  terrainMaterial.setFloat("shadowTexelSize", 1 / SHADOW_MAP_SIZE);
-
-  // cameraPosition isn't one of ShaderMaterial's automatically-bound uniform names (only the
-  // world/view/projection matrix family is), so it needs a manual per-frame update for the
-  // specular term's view direction - scene.activeCamera doesn't exist yet on the very first tick
-  // (main.ts creates the camera after the world), hence the guard. Fog rides along here too; both
-  // are safe this early in the frame because neither depends on anything the render loop hasn't
-  // computed yet - unlike the shadow matrices below, which very much do.
-  //
-  // Light direction/colour/intensity and ambient colour/intensity ride along here too, now that
-  // the day-night cycle (sunLighting.updateDayNight) changes all five every frame - direction and
-  // the two colours are mutated in place rather than reassigned (see SunLighting's own fields), so
-  // reading them fresh here every frame is what actually picks up each frame's value; setting them
-  // once at creation, as this used to, would have frozen the terrain at whatever moment it started.
-  scene.onBeforeRenderObservable.add(() => {
-    if (scene.activeCamera) {
-      terrainMaterial.setVector3("cameraPosition", scene.activeCamera.position);
-    }
-    terrainMaterial.setInt("fogMode", scene.fogMode);
-    terrainMaterial.setColor3("fogColor", scene.fogColor);
-    terrainMaterial.setFloat("fogStart", scene.fogStart);
-    terrainMaterial.setFloat("fogEnd", scene.fogEnd);
-    terrainMaterial.setFloat("fogDensity", scene.fogDensity);
-    terrainMaterial.setVector3("lightDirection", sunLighting.direction);
-    terrainMaterial.setFloat("lightIntensity", sunLighting.intensity);
-    terrainMaterial.setColor3("lightColor", sunLighting.color);
-    terrainMaterial.setColor3("ambientColor", sunLighting.ambientColor);
-    terrainMaterial.setFloat("ambientIntensity", sunLighting.ambientIntensity);
-  });
-
-  /**
-   * The shadow map's per-cascade matrices are NOT safe to read at the top of the frame. They
-   * describe where the generator pointed its shadow camera to cover THIS frame, and the generator
-   * only refits them to the camera during its own render pass, which Babylon runs after
-   * onBeforeRenderObservable, as part of rendering the main camera's view. Reading them there (this
-   * code's first shape) read last frame's fit instead of this one's: invisible while the camera sat
-   * still, since consecutive frames then fit identically, and a visibly wrong, lagging shadow the
-   * instant it moved - exactly what turned up once someone actually orbited the camera over a
-   * hillside.
-   *
-   * The shadow map's own onAfterRenderObservable is what actually pins this down: it fires once
-   * per cascade layer, strictly after that layer's render, which is strictly before the main pass
-   * that draws the terrain reads it - the same ordering a StandardMaterial's built-in shadow
-   * binding relies on without anyone having to arrange it by hand. Every cascade's matrix is
-   * computed together before layer 0 even starts (see the generator's own onBeforeBindObservable),
-   * so any one layer finishing is already enough to read all of them; the gate below just keeps
-   * the actual update to once per frame instead of once per cascade.
-   */
-  const shadowMap = sunLighting.shadowGenerator.getShadowMap();
-  let shadowMatricesStale = true;
-  scene.onBeforeRenderObservable.add(() => {
-    shadowMatricesStale = true;
-  });
-  shadowMap?.onAfterRenderObservable.add(() => {
-    if (!shadowMatricesStale || !shadowsEnabled) return;
-    shadowMatricesStale = false;
-
-    // The RenderTargetTexture itself is a colour attachment; the depth-stencil texture the
-    // generator creates alongside it (see CascadedShadowGenerator's own _createTargetRenderTexture)
-    // is the one WebGL actually built as a comparison texture, which is what a sampler2DArrayShadow
-    // uniform in GLSL requires - binding the colour one there is a real GL_INVALID_OPERATION, not a
-    // silently-wrong-looking result, since a shadow sampler can only ever read a comparison texture.
-    const depthTexture = shadowMap.depthStencilTexture;
-    if (!depthTexture) return;
-
-    terrainMaterial.setInternalTexture("shadowMap", depthTexture);
-    const matrices: Matrix[] = [];
-    for (let i = 0; i < SHADOW_CASCADE_COUNT; i++) {
-      matrices.push(sunLighting.shadowGenerator.getCascadeTransformMatrix(i) ?? Matrix.Identity());
-    }
-    terrainMaterial.setMatrices("lightMatrix", matrices);
-  });
-
-
+  const litShading = createLitShading(scene, sunLighting);
+  litShading.register(terrainMaterial);
 
   function getMaterialColor(materialIndex: number): Color3 {
     return materialColors[materialIndex] ?? materialColors[defaultIndex];
@@ -492,8 +298,7 @@ export async function createMaterialLibrary(
   }
 
   function setShadowsEnabled(enabled: boolean): void {
-    shadowsEnabled = enabled;
-    terrainMaterial.setInt("shadowsEnabled", enabled ? 1 : 0);
+    litShading.setShadowsEnabled(enabled);
   }
 
   const shadowCasterMaterial = new StandardMaterial("terrainShadowCaster", scene);
@@ -504,6 +309,8 @@ export async function createMaterialLibrary(
 
   return {
     terrainMaterial,
+    litShading,
+    blender,
     buildMaterialBlend,
     resolveMaterialIndex,
     getMaterialColor,

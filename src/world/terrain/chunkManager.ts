@@ -4,6 +4,7 @@ import { createTerrainChunkMeshes, type TerrainChunkMeshes } from "./terrainMesh
 import type { ChunkBuildPool } from "./chunkBuildPool";
 import type { MaterialLibrary } from "../materials/materialLibrary";
 import type { TreeField } from "../foliage/treeField";
+import type { GrassField } from "../foliage/grassField";
 
 /** One level of detail: chunks whose centre is within `maxDistance` of the player (and beyond the
  *  previous level's) are built with `subdivisions` squares per side. */
@@ -36,6 +37,8 @@ export interface ChunkManagerOptions {
   /** Trees live and die with the chunk they stand on, so streaming them needs no radius of its
    *  own and they can never outlive the ground under them. */
   trees: TreeField;
+  /** Like trees, grass comes and goes with its chunk - only full-detail chunks carry any. */
+  grass: GrassField;
   /** A chunk registers itself as a shadow caster the moment it is built and unregisters on unload,
    *  so hills self-shadow their own valleys the same way anything else does. What it registers is
    *  its shadow-only stand-in (see TerrainChunkMeshes.shadowMesh), not the mesh that is drawn. */
@@ -90,7 +93,7 @@ function chunkKey(cx: number, cz: number): string {
  * so it is checked against where the player is at that point, not where they were when it was sent.
  */
 export function createChunkManager(options: ChunkManagerOptions): ChunkManager {
-  const { scene, buildContext, materialLibrary, trees, shadowGenerator, chunkSize, lodLevels } = options;
+  const { scene, buildContext, materialLibrary, trees, grass, shadowGenerator, chunkSize, lodLevels } = options;
   const detailSubdivisions = lodLevels[0].subdivisions;
   let buildPool = options.buildPool;
 
@@ -174,6 +177,7 @@ export function createChunkManager(options: ChunkManagerOptions): ChunkManager {
     }
     loaded.set(key, { meshes, level });
     trees.setChunk(key, geometry.trees);
+    grass.setChunk(key, geometry.grass, center.x, center.z, chunkSize);
     shadowGenerator.addShadowCaster(meshes.shadowMesh);
   }
 
@@ -213,6 +217,7 @@ export function createChunkManager(options: ChunkManagerOptions): ChunkManager {
         meshes.mesh.dispose();
         loaded.delete(key);
         trees.clearChunk(key);
+        grass.clearChunk(key);
         shadowGenerator.removeShadowCaster(meshes.shadowMesh);
       }
     }
@@ -380,6 +385,7 @@ export function createChunkManager(options: ChunkManagerOptions): ChunkManager {
     for (const [key, { meshes }] of loaded) {
       meshes.mesh.dispose();
       trees.clearChunk(key);
+      grass.clearChunk(key);
       shadowGenerator.removeShadowCaster(meshes.shadowMesh);
     }
     loaded.clear();

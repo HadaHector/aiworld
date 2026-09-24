@@ -51,6 +51,7 @@ createSettingsPanel({
   onChange: (value) => world.setDrawDistance(value),
   toggles: [
     { label: "Trees", initial: true, onChange: (on) => world.trees.setVisible(on) },
+    { label: "Grass", initial: true, onChange: (on) => world.grass.setVisible(on) },
     { label: "Shadows", initial: true, onChange: (on) => world.setShadowsEnabled(on) },
     { label: "Wireframe", initial: false, onChange: (on) => world.setWireframe(on) },
   ],

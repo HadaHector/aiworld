@@ -31,6 +31,7 @@ self.onmessage = (event: MessageEvent<ChunkWorkerMessage>): void => {
       sampleTerrain: createTerrainSampler(message.seed).sampleTerrain,
       materialBlender: createMaterialBlender(message.seed),
       scatterTrees: createTreeScatter(message.seed),
+      seed: message.seed,
     };
     post({ type: "ready" });
     return;
@@ -49,6 +50,7 @@ self.onmessage = (event: MessageEvent<ChunkWorkerMessage>): void => {
       geometry.shadowPositions.buffer,
       geometry.shadowNormals.buffer,
       geometry.shadowIndices.buffer,
+      ...(geometry.grass ? [geometry.grass.instances.buffer] : []),
     ]);
   } catch (error) {
     post({ type: "failed", jobId: message.jobId, message: error instanceof Error ? error.message : String(error) });
