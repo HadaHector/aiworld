@@ -57,7 +57,7 @@ const CHUNK_SIZE = 50;
 const CHUNK_SUBDIVISIONS = 20;
 const UNLOAD_HYSTERESIS = CHUNK_SIZE; // unload radius = load radius + this, a 1-chunk buffer band
 
-export const DEFAULT_DRAW_DISTANCE = 1200;
+export const DEFAULT_DRAW_DISTANCE = 800;
 export const MIN_DRAW_DISTANCE = 100;
 export const MAX_DRAW_DISTANCE = 2000;
 
@@ -131,7 +131,8 @@ export async function createWorld(scene: Scene, onProgress?: (progress: WorldLoa
   await nextPaint();
   chunkManager.loadInitial(0, 0);
 
-  createOceanPlane(scene, { size: worldExtent });
+  // Only needs to reach past the farthest fog - it follows the camera (see ocean.ts).
+  createOceanPlane(scene, sunLighting, sky, materialLibrary.terrainMaterial, { size: MAX_DRAW_DISTANCE * 2.5 });
 
   // Tracked so updateAtmosphere can turn a biome's fogStartFraction into an actual distance without
   // main.ts having to know or pass the draw distance itself every frame.

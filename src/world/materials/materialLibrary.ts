@@ -13,6 +13,7 @@ import {
   type MaterialLayer,
 } from "./materialDefinitions";
 import { TEXTURE_RESOLUTION } from "./textureGen";
+import { WATER_ALPHA, WATER_DEEP_COLOR, WATER_SHALLOW_COLOR, WATER_TINT_FULL_DEPTH } from "../terrain/ocean";
 import { bakeMaterialTextures } from "./textureBakePool";
 
 // World units per texture repeat. The terrain shader derives texture coordinates straight from
@@ -182,6 +183,7 @@ uniform float lightIntensity;
 uniform vec3 lightColor;
 uniform vec3 ambientColor;
 uniform float ambientIntensity;
+uniform float waterLevel;
 uniform vec3 cameraPosition;
 uniform float specularMinShininess;
 uniform float specularMaxShininess;
@@ -344,6 +346,18 @@ void main() {
   vec3 ambient = albedo.rgb * ambientColor * ambientIntensity;
   vec3 lit = albedo.rgb * diffuse * lightColor * shadow + vec3(specular) * lightColor * lightIntensity * shadow + ambient;
 
+  // The water's body colour, painted onto ground below the waterline rather than by the water plane
+  // (which can't know how deep the water under a pixel is - see ocean.ts's WATER_ALPHA). Ramps from
+  // nothing at the shoreline to full strength at WATER_TINT_FULL_DEPTH, so the edge of the water
+  // fades out instead of ending in a hard line.
+  float waterDepth = waterLevel - vWorldPosition.y;
+  if (waterDepth > 0.0) {
+    float sunUp = max(normalize(lightDirection).y, 0.0);
+    vec3 waterBody = mix(vec3(${WATER_DEEP_COLOR.map((c) => c.toFixed(3)).join(", ")}), vec3(${WATER_SHALLOW_COLOR.map((c) => c.toFixed(3)).join(", ")}), 0.4 + 0.3 * sunUp);
+    vec3 waterLit = waterBody * (ambientColor * ambientIntensity + lightColor * lightIntensity * sunUp * 0.7);
+    lit = mix(lit, waterLit, ${WATER_ALPHA.toFixed(3)} * clamp(waterDepth / ${WATER_TINT_FULL_DEPTH.toFixed(3)}, 0.0, 1.0));
+  }
+
   float fogDistance = length(vPositionFromCamera);
   float fogFactor = 1.0;
   if (fogMode == 3) {
@@ -447,6 +461,7 @@ export async function createMaterialLibrary(
       "lightColor",
       "ambientColor",
       "ambientIntensity",
+      "waterLevel",
       "cameraPosition",
       "specularMinShininess",
       "specularMaxShininess",
@@ -467,6 +482,8 @@ export async function createMaterialLibrary(
   terrainMaterial.setTexture("materialAtlas", materialAtlas);
   terrainMaterial.setTexture("normalAtlas", normalAtlas);
   terrainMaterial.setFloat("tileScale", 1 / TEXTURE_WORLD_TILE_SIZE);
+  // Overwritten every frame by ocean.ts once the water exists; until then, nothing is underwater.
+  terrainMaterial.setFloat("waterLevel", -1e6);
   terrainMaterial.setFloat("specularMinShininess", SPECULAR_MIN_SHININESS);
   terrainMaterial.setFloat("specularMaxShininess", SPECULAR_MAX_SHININESS);
   terrainMaterial.setFloat("specularIntensity", SPECULAR_INTENSITY);

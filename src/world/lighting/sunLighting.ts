@@ -25,7 +25,7 @@ const SHADOW_CASCADE_LAMBDA = 0.5;
 // its texels on ground nobody is looking closely at, at the expense of the near cascades that
 // matter. 900 comfortably clears DEFAULT_DRAW_DISTANCE (400) with room to grow into.
 const SHADOW_NEAR_DISTANCE = 1;
-const SHADOW_FAR_DISTANCE = 1200;
+const SHADOW_FAR_DISTANCE = 800;
 
 /** Fraction of light a fully shadowed surface still receives. Zero would be a flat silhouette
  *  wherever the sun can't reach, which reads wrong next to a lit sky - the ambient light already

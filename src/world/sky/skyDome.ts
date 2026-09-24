@@ -184,6 +184,13 @@ export interface SkyDome {
    *  SunLighting.direction the terrain and shadows use) is what lets the sunrise/sunset glow sit on
    *  the correct side of the sky instead of as a uniform ring around the horizon. */
   update: (areaWeights: AreaWeight[], drawDistance: number, timeHours: number, sunDirection: Vector3) => void;
+  /** This frame's blended horizon/zenith colour - the same values sent to scene fog and the sky
+   *  shader's own zenith uniform, exposed for anything else that wants to read "what colour is the
+   *  sky right now" without recomputing the same blend (the ocean's fake sky reflection - see
+   *  terrain/ocean.ts). Live references mutated in place by update(), same pattern as
+   *  SunLighting.direction - read them fresh each frame rather than caching the object contents. */
+  horizon: Color3;
+  zenith: Color3;
   dispose: () => void;
 }
 
@@ -308,5 +315,5 @@ export function createSkyDome(scene: Scene): SkyDome {
     material.dispose();
   }
 
-  return { update, dispose };
+  return { update, horizon: fogColor, zenith, dispose };
 }
