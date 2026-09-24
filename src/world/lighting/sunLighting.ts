@@ -1,4 +1,4 @@
-import { CascadedShadowGenerator, Color3, DirectionalLight, HemisphericLight, Vector3, type Camera, type Scene } from "@babylonjs/core";
+import { CascadedShadowGenerator, Color3, DirectionalLight, HemisphericLight, Vector3, type AbstractMesh, type Camera, type Scene } from "@babylonjs/core";
 import type { AreaWeight } from "../cells/areaField";
 import { lerp } from "../mathUtils";
 import { computeDayNightFactors, SUNRISE_HOUR, SUNSET_HOUR } from "./dayNightMath";
@@ -112,6 +112,53 @@ function computeCascadeSplits(near: number, far: number, count: number, lambda: 
   return splits;
 }
 
+const cornerScratch = new Vector3();
+
+/**
+ * Babylon draws every enabled caster into every cascade with no culling at all, so each of the
+ * cascades redrew every loaded chunk - including all the ones behind the camera or far off to the
+ * side. Measured at 800 draw distance, that was ~93% of all vertices drawn per frame.
+ *
+ * Each cascade's transform maps its own box to [-1, 1]: the slice of the camera's view it covers,
+ * extended back along the light direction. A caster whose bounds fall entirely outside that box's
+ * sides can't shadow anything in it, so it's skipped for that cascade. The near side (toward the
+ * light) is deliberately not tested: the generator clamps depth there, so something between the
+ * light and the box - a hill up-sun of the view - still casts into it and has to be drawn.
+ *
+ * Meshes that opt out of frustum culling (alwaysSelectAsActiveMesh - the tree masters, whose own
+ * bounds cover one tree at the origin rather than their thousands of instances) are always kept.
+ */
+function cullCastersPerCascade(shadowGenerator: CascadedShadowGenerator): void {
+  const shadowMap = shadowGenerator.getShadowMap();
+  if (!shadowMap) return;
+  const perCascade: AbstractMesh[][] = [];
+  shadowMap.getCustomRenderList = (cascade, casters, casterCount) => {
+    const transform = shadowGenerator.getCascadeTransformMatrix(cascade);
+    if (!transform || !casters) return null;
+    const kept = (perCascade[cascade] ??= []);
+    kept.length = 0;
+    for (let i = 0; i < casterCount; i++) {
+      const mesh = casters[i] as AbstractMesh;
+      if (mesh.alwaysSelectAsActiveMesh) {
+        kept.push(mesh);
+        continue;
+      }
+      let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity, minZ = Infinity;
+      for (const corner of mesh.getBoundingInfo().boundingBox.vectorsWorld) {
+        Vector3.TransformCoordinatesToRef(corner, transform, cornerScratch);
+        minX = Math.min(minX, cornerScratch.x);
+        maxX = Math.max(maxX, cornerScratch.x);
+        minY = Math.min(minY, cornerScratch.y);
+        maxY = Math.max(maxY, cornerScratch.y);
+        minZ = Math.min(minZ, cornerScratch.z);
+      }
+      if (maxX < -1 || minX > 1 || maxY < -1 || minY > 1 || minZ > 1) continue;
+      kept.push(mesh);
+    }
+    return kept;
+  };
+}
+
 /**
  * The world's one sun-and-moon: a single DirectionalLight re-coloured, re-aimed and re-strengthened
  * across the day/night cycle rather than two separate lights swapped in and out - which is what
@@ -188,6 +235,7 @@ export function createSunLighting(scene: Scene): SunLighting {
   // its own separate, per-cascade bias (see materialLibrary.ts).
   shadowGenerator.bias = 0.002;
   shadowGenerator.normalBias = 0.3;
+  cullCastersPerCascade(shadowGenerator);
 
   const cascadeSplits = computeCascadeSplits(SHADOW_NEAR_DISTANCE, SHADOW_FAR_DISTANCE, SHADOW_CASCADE_COUNT, SHADOW_CASCADE_LAMBDA);
   const cascadeBias = cascadeSplits.map((split, i) => {
