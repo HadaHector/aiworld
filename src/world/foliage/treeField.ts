@@ -2,11 +2,17 @@ import { Matrix, Quaternion, Vector3, type Mesh } from "@babylonjs/core";
 import type { CascadedShadowGenerator, Scene } from "@babylonjs/core";
 import type { TreePlacement } from "./treeScatter";
 import type { TreeKindDef } from "./foliageConfig";
-import { createTreeModel, type TreeModel } from "./treeModels";
+import { createTreeModels, type TreeModel } from "./treeModels";
+import type { LitShading } from "../materials/litShading";
+
+function speciesKey(kind: string, variant: number, far: boolean): string {
+  return `${kind}#${variant}${far ? "~far" : ""}`;
+}
 
 export interface TreeField {
-  /** Replaces whatever trees were registered under this key. */
-  setChunk: (key: string, trees: TreePlacement[]) => void;
+  /** Replaces whatever trees were registered under this key. `level` is the chunk's level of detail
+   *  (0 the finest): beyond the first, trees are drawn with their cheaper far model, if they have one. */
+  setChunk: (key: string, trees: TreePlacement[], level: number) => void;
   clearChunk: (key: string) => void;
   /** Republishes the instance buffers if anything changed since the last call. Cheap when nothing did. */
   flush: () => void;
@@ -51,11 +57,26 @@ interface Species {
  * Recomposing every tree on every chunk event instead cost 18.5ms at a 1200-unit draw distance -
  * a dropped frame every time a chunk came or went, which while walking is most of them.
  */
-export function createTreeField(scene: Scene, shadowGenerator: CascadedShadowGenerator, treeKinds: TreeKindDef[]): TreeField {
+export function createTreeField(
+  scene: Scene,
+  shadowGenerator: CascadedShadowGenerator,
+  treeKinds: TreeKindDef[],
+  seed: number,
+  litShading: LitShading,
+): TreeField {
+  // One "species" per model: a primitive kind has one, a branching kind one per variant, and each is
+  // its own pair of master meshes with its own instances.
   const species = new Map<string, Species>();
-  for (const def of treeKinds) {
-    const kind = def.id;
-    const model = createTreeModel(scene, def);
+  const variantCount = new Map<string, number>();
+  const models = treeKinds.flatMap((def) => {
+    const kindModels = createTreeModels(scene, def, seed, litShading);
+    variantCount.set(def.id, kindModels.length);
+    return kindModels.flatMap((model, variant) => [
+      { key: speciesKey(def.id, variant, false), model },
+      ...(model.far ? [{ key: speciesKey(def.id, variant, true), model: model.far }] : []),
+    ]);
+  });
+  for (const { key: kind, model } of models) {
     // The instances cover every chunk that is loaded, which is a disc centred on the player - so a
     // master mesh is in view whenever anything is, and asking whether its bounding box intersects
     // the frustum can only ever answer yes. Computing that box meant transforming every instance on
@@ -63,9 +84,8 @@ export function createTreeField(scene: Scene, shadowGenerator: CascadedShadowGen
     model.trunk.alwaysSelectAsActiveMesh = true;
     model.canopy.alwaysSelectAsActiveMesh = true;
     // Cast once, for the life of the app - unlike terrain, an archetype's master meshes never come
-    // or go, only how many instances they hold. Receive too: both are ordinary StandardMaterial,
-    // so a scene light with a shadow generator lights and shadows them with no shader work of
-    // their own, unlike the terrain's hand-wired shader.
+    // or go, only how many instances they hold. Receive too: a primitive tree's StandardMaterial
+    // is shadowed by the scene light; a branching tree's shaders do it through the shared lighting.
     shadowGenerator.addShadowCaster(model.trunk);
     shadowGenerator.addShadowCaster(model.canopy);
     model.trunk.receiveShadows = true;
@@ -102,9 +122,20 @@ export function createTreeField(scene: Scene, shadowGenerator: CascadedShadowGen
   const position = new Vector3();
   const matrix = new Matrix();
 
-  function toBlocks(trees: TreePlacement[]): Map<string, Block> {
+  /** Which of its kind's models a tree is drawn with: hashed from where it stands, so it is the same
+   *  tree every time its chunk is built. */
+  function keyOf(tree: TreePlacement, far: boolean): string {
+    const variants = variantCount.get(tree.kind) ?? 1;
+    const hash = (Math.imul(Math.floor(tree.x * 8), 0x27d4eb2d) ^ Math.imul(Math.floor(tree.z * 8), 0x165667b1)) >>> 0;
+    const variant = variants === 1 ? 0 : (hash >>> 7) % variants;
+    const key = speciesKey(tree.kind, variant, far);
+    return species.has(key) ? key : speciesKey(tree.kind, variant, false);
+  }
+
+  function toBlocks(trees: TreePlacement[], far: boolean): Map<string, Block> {
+    const keys = trees.map((tree) => keyOf(tree, far));
     const tally = new Map<string, number>();
-    for (const tree of trees) tally.set(tree.kind, (tally.get(tree.kind) ?? 0) + 1);
+    for (const key of keys) tally.set(key, (tally.get(key) ?? 0) + 1);
 
     const blocks = new Map<string, Block>();
     const filled = new Map<string, number>();
@@ -113,10 +144,11 @@ export function createTreeField(scene: Scene, shadowGenerator: CascadedShadowGen
       filled.set(kind, 0);
     }
 
-    for (const tree of trees) {
-      const block = blocks.get(tree.kind)!;
-      const at = filled.get(tree.kind)!;
-      filled.set(tree.kind, at + 1);
+    trees.forEach((tree, index) => {
+      const key = keys[index];
+      const block = blocks.get(key)!;
+      const at = filled.get(key)!;
+      filled.set(key, at + 1);
 
       scaling.set(tree.scale, tree.scale, tree.scale);
       Quaternion.RotationYawPitchRollToRef(tree.rotation, 0, 0, rotation);
@@ -124,12 +156,12 @@ export function createTreeField(scene: Scene, shadowGenerator: CascadedShadowGen
       Matrix.ComposeToRef(scaling, rotation, position, matrix);
       matrix.copyToArray(block.matrices, at * 16);
 
-      const { canopyDark, canopyLight } = species.get(tree.kind)!.model;
-      block.colours[at * 4] = canopyDark.r + (canopyLight.r - canopyDark.r) * tree.tint;
-      block.colours[at * 4 + 1] = canopyDark.g + (canopyLight.g - canopyDark.g) * tree.tint;
-      block.colours[at * 4 + 2] = canopyDark.b + (canopyLight.b - canopyDark.b) * tree.tint;
+      const { tintDark, tintLight } = species.get(key)!.model;
+      block.colours[at * 4] = tintDark.r + (tintLight.r - tintDark.r) * tree.tint;
+      block.colours[at * 4 + 1] = tintDark.g + (tintLight.g - tintDark.g) * tree.tint;
+      block.colours[at * 4 + 2] = tintDark.b + (tintLight.b - tintDark.b) * tree.tint;
       block.colours[at * 4 + 3] = 1;
-    }
+    });
     return blocks;
   }
 
@@ -210,12 +242,12 @@ export function createTreeField(scene: Scene, shadowGenerator: CascadedShadowGen
   }
 
   return {
-    setChunk(key, trees) {
+    setChunk(key, trees, level) {
       if (trees.length === 0) {
         if (chunks.delete(key)) dirty = true;
         return;
       }
-      chunks.set(key, toBlocks(trees));
+      chunks.set(key, toBlocks(trees, level > 0));
       dirty = true;
     },
     clearChunk(key) {

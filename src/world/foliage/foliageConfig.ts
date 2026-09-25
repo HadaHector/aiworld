@@ -92,6 +92,116 @@ export type TreeCrown =
 export const TREE_CROWN_BUILDERS = ["sphereCrown", "tieredCones", "frondCrown"] as const;
 
 /**
+ * A tree built by a small structural generator (see treeGenerator.ts): a trunk with a flared base
+ * and roots diving into the ground, a handful of main branches each carrying a few twigs, and the
+ * foliage as clusters of crossed, textured cards at the ends of them - the way stylised game trees
+ * are made, rather than modelling leaves. Everything finer than a twig is in the textures, which are
+ * generated too (see treeTextures.ts). Lengths are metres, angles degrees.
+ */
+export interface BranchingTree {
+  model: "branching";
+  /** How many distinct trees are generated from this description; each placed tree is one of them. */
+  variants: number;
+  trunk: {
+    height: number;
+    /** Radius just above the flare, and at the top. */
+    radius: number;
+    topRadius: number;
+    /** How far the top leans off vertical, as a fraction of the height, and how much the trunk
+     *  wanders from side to side on the way up (metres). */
+    lean: number;
+    wobble: number;
+    /** The base swells to `flare` times the radius, easing back over the bottom `flareHeight` metres. */
+    flare: number;
+    flareHeight: number;
+    sides: number;
+    rings: number;
+  };
+  roots: {
+    count: number;
+    length: [number, number];
+    /** Radius where a root leaves the trunk, as a fraction of the trunk's radius. */
+    radius: number;
+    /** How far below the ground a root's end dives. */
+    drop: number;
+    sides: number;
+    rings: number;
+  };
+  branches: {
+    count: [number, number];
+    /** Branches leave the trunk between this fraction of its height and the top. */
+    from: number;
+    length: [number, number];
+    /** Radius where a branch leaves the trunk, as a fraction of the trunk's radius there. */
+    radius: number;
+    /** Angle from vertical a branch sets off at. */
+    angle: [number, number];
+    /** How far a branch bends back up towards its tip, as a fraction of its length. */
+    arc: number;
+    sides: number;
+    rings: number;
+    twigs: {
+      count: [number, number];
+      /** As a fraction of the branch's length. */
+      length: [number, number];
+      /** Angle off the branch. */
+      angle: [number, number];
+      sides: number;
+      rings: number;
+    };
+  };
+  leaves: {
+    /** Width of one leaf card. */
+    size: [number, number];
+    /** Crossed cards per cluster. */
+    cards: number;
+    /** A cluster sits at every branch and twig tip; this many more along each branch's outer half,
+     *  and this many on top of the trunk. */
+    alongBranch: number;
+    top: number;
+    /** How far a card may sit from its cluster's point. */
+    spread: number;
+  };
+  bark: BarkTexture;
+  foliage: FoliageTexture;
+}
+
+/** A generated bark texture - see treeTextures.ts. */
+export interface BarkTexture {
+  builder: "plates";
+  /** Groove and ridge colours; ridges catch the light, grooves stay dark. */
+  dark: ColorTuple;
+  light: ColorTuple;
+  /** Vertical plates across one texture repeat. */
+  plates: number;
+  /** Metres of trunk one texture repeat covers. */
+  tile: number;
+  bumpStrength: number;
+}
+
+/** A generated leaf-cluster atlas - four variants of one clump, see treeTextures.ts. */
+export interface FoliageTexture {
+  builder: "broadleaf";
+  /** Leaves range between these, the outer ones lighter where they catch the light. */
+  dark: ColorTuple;
+  light: ColorTuple;
+  /** Leaves per clump, and a leaf's size as a fraction of the clump. */
+  leaves: number;
+  leafLength: number;
+  leafWidth: number;
+}
+
+export const BARK_BUILDERS = ["plates"] as const;
+export const FOLIAGE_BUILDERS = ["broadleaf"] as const;
+
+/** The original placeholder trees: a trunk cylinder and a crown from one primitive builder. */
+export interface PrimitiveTree {
+  model: "primitive";
+  trunk: TreeTrunk;
+  crown: TreeCrown;
+}
+
+/**
  * A kind of tree a biome can grow, named by its foliage graph's outputs (see BiomeOutputs.foliage).
  *
  * A tree picks its kind from the zone it stands in, weighted by how much of the trees around it
@@ -100,11 +210,10 @@ export const TREE_CROWN_BUILDERS = ["sphereCrown", "tieredCones", "frondCrown"] 
  */
 export interface TreeKindDef {
   id: string;
-  trunk: TreeTrunk;
-  crown: TreeCrown;
-  /** The two ends of the palette a tree's tint mixes its canopy between. */
-  canopyDark: ColorTuple;
-  canopyLight: ColorTuple;
+  shape: PrimitiveTree | BranchingTree;
+  /** Each tree's foliage colour is multiplied by a random mix of these two: the canopy colour of a
+   *  primitive tree (whose canopy is white), and a shade of its texture for a branching one. */
+  tint: [ColorTuple, ColorTuple];
   /** Each tree is scaled uniformly by a random factor in this range. */
   scale: [number, number];
 }

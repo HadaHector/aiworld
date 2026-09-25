@@ -168,9 +168,28 @@ first level-of-detail ring), an optional `cluster: { scale, coverage }` for patc
 describing the baked blade texture. A flowering kind gives `blades.flowerHeads: { count, radius,
 colors: [...] }`, and each tuft's petals take one of its colours. At most 16 grass kinds in total.
 
-A tree is a `trunk` and a `crown` built by one of `sphereCrown`, `tieredCones` or `frondCrown`,
-plus the `canopyDark`/`canopyLight` its tint mixes between, and an optional `scale: [min, max]`
-(else `treeScale` from defaults.json5) each tree is sized by at random.
+Trees come in two models. `model: "branching"` (see `core/trees/broadleaf.json5`) is generated:
+a trunk with a flared base and roots diving into the ground, main branches carrying twigs, and leaf
+clumps - crossed cards cut out of a generated texture - at the branch and twig tips, along the outer
+branches and on top. Its sections:
+
+- `trunk`: `height`, `radius`/`topRadius`, `lean`, `wobble`, `flare`/`flareHeight`, `sides`, `rings`
+- `roots`: `count`, `length`, `radius` (of the trunk's), `drop` (how deep the ends dive), `sides`, `rings`
+- `branches`: `count`, `from` (fraction of the trunk's height), `length`, `radius`, `angle` (degrees
+  from vertical), `arc` (how much they curve back up), `sides`, `rings`, and `twigs` likewise
+- `leaves`: `size` of a card, `cards` per clump, clumps `alongBranch` and on `top`, `spread`
+- `bark`: the `plates` bark texture - `dark`/`light` colours, `plates` across, `tile` (metres per
+  repeat), `bumpStrength`
+- `foliage`: the `broadleaf` clump texture - `dark`/`light`, `leaves` per clump, `leafLength`/`leafWidth`
+- `variants`: how many different trees are generated from all this; each placed tree is one of them
+
+Trees in distant chunks are drawn with fewer sides and no twigs - the same tree, and the same leaves.
+
+`model: "primitive"` (the default; see `core/trees/pine.json5`) is a `trunk` cylinder and a `crown`
+built by one of `sphereCrown`, `tieredCones` or `frondCrown`.
+
+Both take `tint: [dark, light]` - each tree's foliage is multiplied by a random mix of the two - and
+an optional `scale: [min, max]` (else `treeScale` from defaults.json5) each tree is sized by at random.
 
 Whatever a biome's tree graph asks for, nothing grows in a lake or a road cut.
 

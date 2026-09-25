@@ -1,10 +1,36 @@
-// Every tree stands about 18 units tall, ten times the character - the proportion that makes
-// walking between them feel like a wood rather than a park. The kinds differ in what that height is
-// made of: a pine puts it in a narrow spire, a palm in a bare trunk with everything at the top.
+// A big, old broadleaf in the stylised-game manner: a thick, flared trunk standing on buttress roots,
+// a few heavy limbs, and a crown of large leaf clumps. Every tree is ten or more times the
+// character's height - the proportion that makes walking between them feel like a wood rather than
+// a park.
 {
-  trunk: { height: 24, diameterBottom: 4.9, diameterTop: 2.9, sides: 12, color: [0.32, 0.23, 0.15] },
-  // Squashed a little (heightRatio), so it reads as a crown rather than a ball on a stick.
-  crown: { builder: "sphereCrown", centreY: 33, radius: 20, heightRatio: 0.82 },
-  canopyDark: [0.15, 0.33, 0.13],
-  canopyLight: [0.38, 0.56, 0.21],
+  model: "branching",
+  variants: 4,
+  trunk: {
+    height: 19,
+    radius: 2.1,
+    topRadius: 1.0,
+    lean: 0.06,
+    wobble: 0.9,
+    flare: 1.9,
+    flareHeight: 3.5,
+    sides: 8,
+    rings: 8,
+  },
+  roots: { count: 5, length: [4, 6.5], radius: 0.5, drop: 1.6, sides: 4, rings: 3 },
+  branches: {
+    count: [5, 6],
+    from: 0.5,
+    length: [9, 13],
+    radius: 0.55,
+    angle: [48, 72],
+    arc: 0.35,
+    sides: 6,
+    rings: 4,
+    twigs: { count: [1, 2], length: [0.35, 0.55], angle: [30, 55], sides: 4, rings: 2 },
+  },
+  leaves: { size: [14, 20], cards: 3, alongBranch: 2, top: 3, spread: 1.8 },
+  bark: { builder: "plates", dark: [0.13, 0.09, 0.07], light: [0.46, 0.36, 0.26], plates: 7, tile: 3, bumpStrength: 4 },
+  foliage: { builder: "broadleaf", dark: [0.08, 0.22, 0.07], light: [0.42, 0.6, 0.18], leaves: 500, leafLength: 0.05, leafWidth: 0.025 },
+  // Each tree's leaves are multiplied by a random mix of these, so a wood is not one flat green.
+  tint: [[0.82, 0.9, 0.8], [1.12, 1.08, 0.96]],
 }

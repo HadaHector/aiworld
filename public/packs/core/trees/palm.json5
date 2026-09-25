@@ -15,6 +15,6 @@
     droop: 0.5,
     y: 23.2,
   },
-  canopyDark: [0.2, 0.38, 0.15],
-  canopyLight: [0.44, 0.59, 0.24],
+  // The canopy is white; each tree tints it with a random mix of these two.
+  tint: [[0.2, 0.38, 0.15], [0.44, 0.59, 0.24]],
 }

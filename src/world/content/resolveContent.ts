@@ -2,7 +2,16 @@ import JSON5 from "json5";
 import type { BiomeDayNight, BiomeDefinition, BorderType, BoundaryHillStyle } from "../biomes/biomeTypes";
 import type { MaterialDef, MaterialLayer } from "../materials/materialTypes";
 import type { GrassKindDef } from "../foliage/grassConfig";
-import { TREE_CROWN_BUILDERS, type TreeCrown, type TreeKindDef, type TreeRules } from "../foliage/foliageConfig";
+import {
+  BARK_BUILDERS,
+  FOLIAGE_BUILDERS,
+  TREE_CROWN_BUILDERS,
+  type BranchingTree,
+  type PrimitiveTree,
+  type TreeCrown,
+  type TreeKindDef,
+  type TreeRules,
+} from "../foliage/foliageConfig";
 import type { Voice } from "../naming/nameGenerator";
 import {
   WALL_TEXTURE_BUILDERS,
@@ -372,7 +381,20 @@ function readGrassKind(id: string, obj: RawObject, reader: Reader): GrassKindDef
 }
 
 function readTreeKind(id: string, obj: RawObject, reader: Reader, defaults: Defaults): TreeKindDef {
-  reader.onlyKeys(obj, "", ["trunk", "crown", "canopyDark", "canopyLight", "scale"]);
+  const model = obj.model === undefined ? "primitive" : reader.oneOf(obj, "model", "", ["primitive", "branching"] as const);
+  const common = ["model", "tint", "scale"];
+  const tint = reader.array(obj, "tint", "").map((c, i) => reader.colorValue(c, `tint[${i}]`));
+  if (tint.length !== 2) reader.fail("tint", "expected two colours: [darkest, lightest]");
+  return {
+    id,
+    shape: model === "branching" ? readBranchingTree(obj, reader, common) : readPrimitiveTree(obj, reader, common),
+    tint: [tint[0] ?? [1, 1, 1], tint[1] ?? [1, 1, 1]],
+    scale: obj.scale === undefined ? defaults.treeScale : reader.range(obj, "scale", "", { allowEqual: true }),
+  };
+}
+
+function readPrimitiveTree(obj: RawObject, reader: Reader, common: string[]): PrimitiveTree {
+  reader.onlyKeys(obj, "", [...common, "trunk", "crown"]);
   const trunk = reader.object(obj.trunk, "trunk");
   reader.onlyKeys(trunk, "trunk", ["height", "diameterBottom", "diameterTop", "sides", "color"]);
   const crown = reader.object(obj.crown, "crown");
@@ -412,7 +434,7 @@ function readTreeKind(id: string, obj: RawObject, reader: Reader, defaults: Defa
     };
   }
   return {
-    id,
+    model: "primitive",
     trunk: {
       height: reader.number(trunk, "height", "trunk", { min: 0 }),
       diameterBottom: reader.number(trunk, "diameterBottom", "trunk", { min: 0 }),
@@ -421,9 +443,93 @@ function readTreeKind(id: string, obj: RawObject, reader: Reader, defaults: Defa
       color: reader.color(trunk, "color", "trunk"),
     },
     crown: readCrown,
-    canopyDark: reader.color(obj, "canopyDark", ""),
-    canopyLight: reader.color(obj, "canopyLight", ""),
-    scale: obj.scale === undefined ? defaults.treeScale : reader.range(obj, "scale", "", { allowEqual: true }),
+  };
+}
+
+function readBranchingTree(obj: RawObject, reader: Reader, common: string[]): BranchingTree {
+  reader.onlyKeys(obj, "", [...common, "variants", "trunk", "roots", "branches", "leaves", "bark", "foliage"]);
+  const section = (key: string, keys: string[]): RawObject => {
+    const value = reader.object(obj[key], key);
+    reader.onlyKeys(value, key, keys);
+    return value;
+  };
+  const trunk = section("trunk", ["height", "radius", "topRadius", "lean", "wobble", "flare", "flareHeight", "sides", "rings"]);
+  const roots = section("roots", ["count", "length", "radius", "drop", "sides", "rings"]);
+  const branches = section("branches", ["count", "from", "length", "radius", "angle", "arc", "sides", "rings", "twigs"]);
+  const twigs = reader.object(branches.twigs, "branches.twigs");
+  reader.onlyKeys(twigs, "branches.twigs", ["count", "length", "angle", "sides", "rings"]);
+  const leaves = section("leaves", ["size", "cards", "alongBranch", "top", "spread"]);
+  const bark = section("bark", ["builder", "dark", "light", "plates", "tile", "bumpStrength"]);
+  const foliage = section("foliage", ["builder", "dark", "light", "leaves", "leafLength", "leafWidth"]);
+  const sides = (o: RawObject, path: string): number => reader.number(o, "sides", path, { min: 3, max: 16, integer: true });
+  const rings = (o: RawObject, path: string): number => reader.number(o, "rings", path, { min: 1, max: 16, integer: true });
+  const count = (o: RawObject, key: string, path: string): [number, number] => {
+    const range = reader.range(o, key, path, { allowEqual: true });
+    if (!Number.isInteger(range[0]) || !Number.isInteger(range[1])) reader.fail(`${path}.${key}`, "counts must be whole numbers");
+    return range;
+  };
+  return {
+    model: "branching",
+    variants: reader.number(obj, "variants", "", { min: 1, max: 16, integer: true }),
+    trunk: {
+      height: reader.number(trunk, "height", "trunk", { min: 1 }),
+      radius: reader.number(trunk, "radius", "trunk", { min: 0.05 }),
+      topRadius: reader.number(trunk, "topRadius", "trunk", { min: 0.01 }),
+      lean: reader.number(trunk, "lean", "trunk"),
+      wobble: reader.number(trunk, "wobble", "trunk", { min: 0 }),
+      flare: reader.number(trunk, "flare", "trunk", { min: 1 }),
+      flareHeight: reader.number(trunk, "flareHeight", "trunk", { min: 0.01 }),
+      sides: sides(trunk, "trunk"),
+      rings: rings(trunk, "trunk"),
+    },
+    roots: {
+      count: reader.number(roots, "count", "roots", { min: 0, integer: true }),
+      length: reader.range(roots, "length", "roots", { allowEqual: true }),
+      radius: reader.number(roots, "radius", "roots", { min: 0 }),
+      drop: reader.number(roots, "drop", "roots", { min: 0 }),
+      sides: sides(roots, "roots"),
+      rings: rings(roots, "roots"),
+    },
+    branches: {
+      count: count(branches, "count", "branches"),
+      from: reader.number(branches, "from", "branches", { min: 0, max: 1 }),
+      length: reader.range(branches, "length", "branches", { allowEqual: true }),
+      radius: reader.number(branches, "radius", "branches", { min: 0 }),
+      angle: reader.range(branches, "angle", "branches", { allowEqual: true }),
+      arc: reader.number(branches, "arc", "branches"),
+      sides: sides(branches, "branches"),
+      rings: rings(branches, "branches"),
+      twigs: {
+        count: count(twigs, "count", "branches.twigs"),
+        length: reader.range(twigs, "length", "branches.twigs", { allowEqual: true }),
+        angle: reader.range(twigs, "angle", "branches.twigs", { allowEqual: true }),
+        sides: sides(twigs, "branches.twigs"),
+        rings: rings(twigs, "branches.twigs"),
+      },
+    },
+    leaves: {
+      size: reader.range(leaves, "size", "leaves", { allowEqual: true }),
+      cards: reader.number(leaves, "cards", "leaves", { min: 1, max: 8, integer: true }),
+      alongBranch: reader.number(leaves, "alongBranch", "leaves", { min: 0, integer: true }),
+      top: reader.number(leaves, "top", "leaves", { min: 0, integer: true }),
+      spread: reader.number(leaves, "spread", "leaves", { min: 0 }),
+    },
+    bark: {
+      builder: reader.oneOf(bark, "builder", "bark", BARK_BUILDERS),
+      dark: reader.color(bark, "dark", "bark"),
+      light: reader.color(bark, "light", "bark"),
+      plates: reader.number(bark, "plates", "bark", { min: 2, integer: true }),
+      tile: reader.number(bark, "tile", "bark", { min: 0.1 }),
+      bumpStrength: reader.number(bark, "bumpStrength", "bark", { min: 0 }),
+    },
+    foliage: {
+      builder: reader.oneOf(foliage, "builder", "foliage", FOLIAGE_BUILDERS),
+      dark: reader.color(foliage, "dark", "foliage"),
+      light: reader.color(foliage, "light", "foliage"),
+      leaves: reader.number(foliage, "leaves", "foliage", { min: 1, integer: true }),
+      leafLength: reader.number(foliage, "leafLength", "foliage", { min: 0.01, max: 1 }),
+      leafWidth: reader.number(foliage, "leafWidth", "foliage", { min: 0.01, max: 1 }),
+    },
   };
 }
 

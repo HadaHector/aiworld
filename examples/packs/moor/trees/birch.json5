@@ -3,7 +3,7 @@
 {
   trunk: { height: 20, diameterBottom: 1.8, diameterTop: 0.9, sides: 8, color: "#d9d4c8" },
   crown: { builder: "sphereCrown", centreY: 22, radius: 8, heightRatio: 1.7 },
-  canopyDark: [0.3, 0.42, 0.16],
-  canopyLight: [0.55, 0.64, 0.26],
+  // The canopy is white; each tree tints it with a random mix of these two.
+  tint: [[0.3, 0.42, 0.16], [0.55, 0.64, 0.26]],
   scale: [0.7, 1.15],
 }

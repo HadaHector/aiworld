@@ -1,6 +1,27 @@
-import { Color3, Matrix, Mesh, MeshBuilder, StandardMaterial, type Scene } from "@babylonjs/core";
-import type { TreeCrown, TreeKindDef, TreeTrunk } from "./foliageConfig";
+import {
+  BoundingInfo,
+  Color3,
+  Effect,
+  Matrix,
+  Mesh,
+  MeshBuilder,
+  RawTexture,
+  ShaderMaterial,
+  StandardMaterial,
+  Texture,
+  Vector2,
+  Vector3,
+  VertexData,
+  type BaseTexture,
+  type Scene,
+} from "@babylonjs/core";
+import type { BranchingTree, PrimitiveTree, TreeCrown, TreeKindDef, TreeTrunk } from "./foliageConfig";
 import type { ColorTuple } from "../terrain/pipeline/pipelineTypes";
+import { LIT_SHADING_SAMPLERS, LIT_SHADING_UNIFORMS, type LitShading } from "../materials/litShading";
+import { deriveSeed } from "../rng";
+import { generateTree, type TreeDetail, type TreeGeometry } from "./treeGenerator";
+import { BARK_TEXTURE_SIZE, FOLIAGE_TEXTURE_SIZE, bakeBark, bakeFoliage } from "./treeTextures";
+import { BARK_FRAGMENT_SHADER, BARK_VERTEX_SHADER, LEAF_FRAGMENT_SHADER, LEAF_VERTEX_SHADER } from "./treeShaders";
 
 /**
  * One archetype's geometry, built in tree space: the base of the trunk sits at the origin and the
@@ -10,9 +31,11 @@ import type { ColorTuple } from "../terrain/pipeline/pipelineTypes";
 export interface TreeModel {
   trunk: Mesh;
   canopy: Mesh;
+  /** A cheaper model of the same tree for distant chunks, if the kind has one. */
+  far?: TreeModel;
   /** The two ends of the palette a tree's tint mixes its canopy between. */
-  canopyDark: Color3;
-  canopyLight: Color3;
+  tintDark: Color3;
+  tintLight: Color3;
 }
 
 /**
@@ -134,11 +157,132 @@ function buildCrown(scene: Scene, kind: string, crown: TreeCrown): Mesh {
   }
 }
 
-export function createTreeModel(scene: Scene, def: TreeKindDef): TreeModel {
+function createPrimitiveModel(scene: Scene, def: TreeKindDef, shape: PrimitiveTree): TreeModel {
   return {
-    trunk: buildTrunk(scene, def.id, def.trunk),
-    canopy: buildCrown(scene, def.id, def.crown),
-    canopyDark: color3(def.canopyDark),
-    canopyLight: color3(def.canopyLight),
+    trunk: buildTrunk(scene, def.id, shape.trunk),
+    canopy: buildCrown(scene, def.id, shape.crown),
+    tintDark: color3(def.tint[0]),
+    tintLight: color3(def.tint[1]),
   };
+}
+
+/** Wind blows this way (x, z) - the same way it blows through the grass. */
+const WIND_DIRECTION = new Vector2(0.8, 0.6).normalize();
+
+/**
+ * Leaf cards are cut out of their texture, and the shadow map has to cut them out the same way or
+ * each clump would cast a square shadow. Babylon's shadow pass alpha-tests with whatever texture a
+ * material hands it here, which a plain ShaderMaterial never does.
+ */
+class LeafMaterial extends ShaderMaterial {
+  alphaTexture: BaseTexture | null = null;
+
+  override getAlphaTestTexture(): BaseTexture | null {
+    return this.alphaTexture;
+  }
+}
+
+function createBranchingMaterials(
+  scene: Scene,
+  id: string,
+  shape: BranchingTree,
+  seed: number,
+  litShading: LitShading,
+): { bark: ShaderMaterial; leaves: LeafMaterial } {
+  const barkPixels = bakeBark(deriveSeed(seed, 0xba4c), shape.bark);
+  const barkColor = RawTexture.CreateRGBATexture(barkPixels.color, BARK_TEXTURE_SIZE, BARK_TEXTURE_SIZE, scene, true, false, Texture.TRILINEAR_SAMPLINGMODE);
+  const barkNormal = RawTexture.CreateRGBATexture(barkPixels.normal, BARK_TEXTURE_SIZE, BARK_TEXTURE_SIZE, scene, true, false, Texture.TRILINEAR_SAMPLINGMODE);
+  for (const texture of [barkColor, barkNormal]) {
+    texture.wrapU = Texture.WRAP_ADDRESSMODE;
+    texture.wrapV = Texture.WRAP_ADDRESSMODE;
+  }
+  const atlas = RawTexture.CreateRGBATexture(bakeFoliage(deriveSeed(seed, 0x1eaf), shape.foliage), FOLIAGE_TEXTURE_SIZE, FOLIAGE_TEXTURE_SIZE, scene, true, false, Texture.TRILINEAR_SAMPLINGMODE);
+  atlas.wrapU = Texture.CLAMP_ADDRESSMODE;
+  atlas.wrapV = Texture.CLAMP_ADDRESSMODE;
+  atlas.hasAlpha = true;
+
+  Effect.ShadersStore["treeBarkVertexShader"] = BARK_VERTEX_SHADER;
+  Effect.ShadersStore["treeBarkFragmentShader"] = BARK_FRAGMENT_SHADER;
+  Effect.ShadersStore["treeLeafVertexShader"] = LEAF_VERTEX_SHADER;
+  Effect.ShadersStore["treeLeafFragmentShader"] = LEAF_FRAGMENT_SHADER;
+
+  const bark = new ShaderMaterial(`tree_${id}_bark`, scene, "treeBark", {
+    attributes: ["position", "normal", "uv", "axis"],
+    uniforms: ["world", "view", "viewProjection", ...LIT_SHADING_UNIFORMS],
+    samplers: ["barkColor", "barkNormal", ...LIT_SHADING_SAMPLERS],
+  });
+  bark.setTexture("barkColor", barkColor);
+  bark.setTexture("barkNormal", barkNormal);
+  // Limbs are closed tubes, but their winding is not worth being careful about for the few
+  // back faces an open end could show.
+  bark.backFaceCulling = false;
+  litShading.register(bark);
+
+  const leaves = new LeafMaterial(`tree_${id}_leaves`, scene, "treeLeaf", {
+    attributes: ["position", "normal", "uv"],
+    uniforms: ["world", "view", "viewProjection", "time", "windDirection", "treeHeight", ...LIT_SHADING_UNIFORMS],
+    samplers: ["leafAtlas", ...LIT_SHADING_SAMPLERS],
+    needAlphaTesting: true,
+  });
+  leaves.alphaTexture = atlas;
+  leaves.setTexture("leafAtlas", atlas);
+  leaves.setVector2("windDirection", WIND_DIRECTION);
+  leaves.setFloat("treeHeight", shape.trunk.height * 1.8);
+  leaves.backFaceCulling = false;
+  litShading.register(leaves);
+  const start = performance.now();
+  scene.onBeforeRenderObservable.add(() => leaves.setFloat("time", (performance.now() - start) / 1000));
+
+  return { bark, leaves };
+}
+
+function createBranchingModels(scene: Scene, def: TreeKindDef, shape: BranchingTree, seed: number, litShading: LitShading): TreeModel[] {
+  const kindSeed = deriveSeed(seed, [...def.id].reduce((h, c) => (Math.imul(h, 31) + c.charCodeAt(0)) | 0, 7));
+  const materials = createBranchingMaterials(scene, def.id, shape, kindSeed, litShading);
+  const tintDark = color3(def.tint[0]);
+  const tintLight = color3(def.tint[1]);
+
+  const build = (geometry: TreeGeometry, name: string): TreeModel => {
+    const trunk = new Mesh(`${name}_wood`, scene);
+    const wood = new VertexData();
+    wood.positions = geometry.wood.positions;
+    wood.normals = geometry.wood.normals;
+    wood.uvs = geometry.wood.uvs;
+    wood.indices = geometry.wood.indices;
+    wood.applyToMesh(trunk);
+    trunk.setVerticesData("axis", geometry.wood.axes, false, 3);
+    trunk.material = materials.bark;
+
+    const canopy = new Mesh(`${name}_leaves`, scene);
+    const leafData = new VertexData();
+    leafData.positions = geometry.leaves.positions;
+    leafData.normals = geometry.leaves.normals;
+    leafData.uvs = geometry.leaves.uvs;
+    leafData.indices = geometry.leaves.indices;
+    leafData.applyToMesh(canopy);
+    canopy.material = materials.leaves;
+    // The leaves sway in the vertex shader, beyond where the vertex data alone would put them.
+    const reach = geometry.height * 0.6;
+    canopy.setBoundingInfo(new BoundingInfo(new Vector3(-reach, -2, -reach), new Vector3(reach, geometry.height + 2, reach)));
+
+    return { trunk, canopy, tintDark, tintLight };
+  };
+
+  const models: TreeModel[] = [];
+  for (let variant = 0; variant < shape.variants; variant++) {
+    const variantSeed = deriveSeed(kindSeed, variant + 1);
+    const detailed = (detail: TreeDetail): TreeModel => build(generateTree(shape, variantSeed, detail), `tree_${def.id}_${variant}_${detail}`);
+    models.push({ ...detailed("near"), far: detailed("far") });
+  }
+  return models;
+}
+
+/**
+ * Every model a tree kind is drawn with: one for a primitive tree, one per variant for a branching
+ * one, each a different tree generated from the same description.
+ */
+export function createTreeModels(scene: Scene, def: TreeKindDef, seed: number, litShading: LitShading): TreeModel[] {
+  return def.shape.model === "branching"
+    ? createBranchingModels(scene, def, def.shape, seed, litShading)
+    : [createPrimitiveModel(scene, def, def.shape)];
 }
