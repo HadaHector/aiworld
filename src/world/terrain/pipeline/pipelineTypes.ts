@@ -5,6 +5,9 @@ interface BaseNoiseSpec {
   octaves: number;
   persistence: number;
   lacunarity: number;
+  /** Stretches the noise's features by these factors along x and y - [1, 4] makes them four times
+   *  taller than wide (bark fissures, wood grain, streaks). A tiling texture still tiles. */
+  stretch?: [number, number];
 }
 
 export interface FbmNoiseSpec extends BaseNoiseSpec {
@@ -35,6 +38,8 @@ export interface WorleyNoiseSpec {
   frequency: number;
   amplitude: number;
   mode: "f1" | "edge";
+  /** As BaseNoiseSpec.stretch. */
+  stretch?: [number, number];
 }
 
 export type NoiseSpec = FbmNoiseSpec | RidgedNoiseSpec | BillowNoiseSpec | WorleyNoiseSpec;
@@ -65,7 +70,13 @@ export interface ColorRampStop {
  */
 export type PipelineStep =
   // --- scalar sources ---
-  | { output: string; op: "sample"; noise: string }
+  /**
+   * Samples a noise at this point - or, with `offset`, at this point moved by the values of two
+   * earlier scalar steps (in the pipeline's own input units: world units, or texture pixels). That
+   * is domain warping: offsetting by another noise bends the first one's features, so straight
+   * Worley cracks become wandering fissures and round blobs become swirls.
+   */
+  | { output: string; op: "sample"; noise: string; offset?: [string, string] }
   | { output: string; op: "constant"; value: number }
   | { output: string; op: "input"; name: string } // reads a named value from an external context bag, 0 if absent
   // --- color sources ---

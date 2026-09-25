@@ -1,4 +1,5 @@
 import type { ColorTuple } from "../terrain/pipeline/pipelineTypes";
+import type { TextureDef } from "../materials/textureGen";
 
 /**
  * Foliage comes in three levels - large (trees), medium (bushes), small (grass) - which are
@@ -166,17 +167,12 @@ export interface BranchingTree {
   foliage: FoliageTexture;
 }
 
-/** A generated bark texture - see treeTextures.ts. */
+/** A tree's bark: a texture graph like a ground material's (diffuse, roughness, height), with u
+ *  running around a limb and v along it. */
 export interface BarkTexture {
-  builder: "plates";
-  /** Groove and ridge colours; ridges catch the light, grooves stay dark. */
-  dark: ColorTuple;
-  light: ColorTuple;
-  /** Vertical plates across one texture repeat. */
-  plates: number;
   /** Metres of trunk one texture repeat covers. */
   tile: number;
-  bumpStrength: number;
+  texture: TextureDef;
 }
 
 /** A generated leaf-cluster atlas - four variants of one clump, see treeTextures.ts. */
@@ -191,7 +187,6 @@ export interface FoliageTexture {
   leafWidth: number;
 }
 
-export const BARK_BUILDERS = ["plates"] as const;
 export const FOLIAGE_BUILDERS = ["broadleaf"] as const;
 
 /** The original placeholder trees: a trunk cylinder and a crown from one primitive builder. */

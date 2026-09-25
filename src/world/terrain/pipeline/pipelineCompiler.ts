@@ -43,7 +43,7 @@ function compileNoiseSpec(spec: NoiseSpec, rootSeed: number, namespace: string, 
   const seed = deriveNoiseSeed(rootSeed, namespace, spec.name);
 
   if (spec.type === "worley") {
-    const sample = worleyNoise2D(seed, spec.frequency, tilePeriod);
+    const sample = worleyNoise2D(seed, spec.frequency, tilePeriod, spec.stretch?.[0], spec.stretch?.[1]);
     const amplitude = spec.amplitude;
     const mode = spec.mode;
     return (worldX: number, worldZ: number): number => {
@@ -52,7 +52,9 @@ function compileNoiseSpec(spec: NoiseSpec, rootSeed: number, namespace: string, 
     };
   }
 
-  const octaveSampler = tilePeriod === undefined ? createWorldOctaveSampler(seed) : createTilingOctaveSampler(seed, tilePeriod);
+  const [stretchX, stretchY] = spec.stretch ?? [1, 1];
+  const octaveSampler =
+    tilePeriod === undefined ? createWorldOctaveSampler(seed, stretchX, stretchY) : createTilingOctaveSampler(seed, tilePeriod, stretchX, stretchY);
   const octaveParams: OctaveNoiseParams = {
     octaves: spec.octaves,
     baseFrequency: spec.frequency,
@@ -163,8 +165,20 @@ function compileStep(
       if (!noise2D) {
         throw new Error(`Pipeline "${namespace}" references unknown step/noise "${step.noise}"`);
       }
+      if (!step.offset) {
+        return (x, y, slots): void => {
+          slots[o] = noise2D(x, y);
+        };
+      }
+      const offsetX = resolve(step.offset[0]);
+      const offsetY = resolve(step.offset[1]);
+      if (offsetX.type !== "scalar" || offsetY.type !== "scalar") {
+        throw new Error(`Pipeline "${namespace}" warps "${step.noise}" by a colour; an offset has to be a number`);
+      }
+      const ox = offsetX.offset;
+      const oy = offsetY.offset;
       return (x, y, slots): void => {
-        slots[o] = noise2D(x, y);
+        slots[o] = noise2D(x + slots[ox], y + slots[oy]);
       };
     }
     case "constant": {

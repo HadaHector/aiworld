@@ -29,7 +29,69 @@
     twigs: { count: [1, 2], length: [0.35, 0.55], angle: [30, 55], sides: 4, rings: 2 },
   },
   leaves: { size: [14, 20], cards: 3, alongBranch: 2, top: 3, spread: 1.8 },
-  bark: { builder: "plates", dark: [0.13, 0.09, 0.07], light: [0.46, 0.36, 0.26], plates: 7, tile: 3, bumpStrength: 4 },
+  // Bark as a texture graph. Fissures are the crest lines of ridged noise stretched several times
+  // taller than wide - long, wandering vertical lines that fork and rejoin - bent sideways by a slow
+  // noise: deep main fissures at a coarse scale, finer shallower cracks between them. The ridges
+  // left standing are rounded off from the same signals and streaked with fine fibres.
+  bark: {
+    tile: 6, // metres of trunk per texture repeat
+    texture: {
+      bumpStrength: 3,
+      pipeline: {
+        noises: [
+          { name: "mainFissures", type: "ridged", octaves: 1, tileCycles: 6, stretch: [1, 5], amplitude: 1, persistence: 0.5, lacunarity: 2 },
+          { name: "fineFissures", type: "ridged", octaves: 1, tileCycles: 14, stretch: [1, 6], amplitude: 1, persistence: 0.5, lacunarity: 2 },
+          { name: "bend", type: "fbm", octaves: 3, tileCycles: 3, stretch: [1, 2], amplitude: 1, persistence: 0.5, lacunarity: 2 },
+          { name: "fibres", type: "fbm", octaves: 3, tileCycles: 40, stretch: [1, 10], amplitude: 1, persistence: 0.5, lacunarity: 2 },
+          { name: "mottle", type: "fbm", octaves: 3, tileCycles: 5, amplitude: 1, persistence: 0.5, lacunarity: 2 },
+        ],
+        steps: [
+          // Push every point sideways by up to ~50 pixels before looking the fissures up.
+          { output: "bendRaw", op: "sample", noise: "bend" },
+          { output: "bendPx", op: "scale", input: "bendRaw", factor: 50 },
+          { output: "still", op: "constant", value: 0 },
+          // A one-octave ridged noise is 1 exactly on its crest line and falls away either side:
+          // 0 there, rising to 1 across the ridge.
+          { output: "mainCrest", op: "sample", noise: "mainFissures", offset: ["bendPx", "still"] },
+          { output: "mainRidge", op: "mask", input: "mainCrest", at: 0.55, off: 0.97 },
+          { output: "mainRound", op: "power", input: "mainRidge", exponent: 0.5 },
+          { output: "fineCrest", op: "sample", noise: "fineFissures", offset: ["bendPx", "still"] },
+          { output: "fineRidge", op: "mask", input: "fineCrest", at: 0.8, off: 0.985 },
+          // Fine cracks only cut a third as deep as the main fissures.
+          { output: "fineCut", op: "invert", input: "fineRidge" },
+          { output: "fineDepth", op: "scale", input: "fineCut", factor: 0.35 },
+          { output: "body", op: "subtract", a: "mainRound", b: "fineDepth" },
+          { output: "fibresRaw", op: "sample", noise: "fibres" },
+          { output: "fibre", op: "mask", input: "fibresRaw", at: 1.2, off: -1.2 },
+          { output: "mottleRaw", op: "sample", noise: "mottle" },
+          { output: "mottle", op: "mask", input: "mottleRaw", at: 1.75, off: -1.75 },
+
+          { output: "bodyHeight", op: "scale", input: "body", factor: 0.85 },
+          { output: "fibreHeight", op: "scale", input: "fibre", factor: 0.15 },
+          { output: "heightRaw", op: "add", a: "bodyHeight", b: "fibreHeight" },
+          { output: "height", op: "clamp", input: "heightRaw", min: 0, max: 1 },
+
+          // Fissures near black, ridge faces a warm grey-brown, lighter where the mottle says so.
+          { output: "toneBase", op: "scale", input: "height", factor: 0.8 },
+          { output: "toneMottle", op: "scale", input: "mottle", factor: 0.25 },
+          { output: "tone", op: "add", a: "toneBase", b: "toneMottle" },
+          {
+            output: "diffuse",
+            op: "colorRamp",
+            input: "tone",
+            stops: [
+              { at: 0.0, color: [0.04, 0.03, 0.025] },
+              { at: 0.3, color: [0.15, 0.1, 0.075] },
+              { at: 0.65, color: [0.3, 0.22, 0.16] },
+              { at: 1.0, color: [0.46, 0.37, 0.27] },
+            ],
+          },
+          { output: "roughness", op: "constant", value: 0.9 },
+        ],
+        outputs: { diffuse: "diffuse", roughness: "roughness", height: "height" },
+      },
+    },
+  },
   foliage: { builder: "broadleaf", dark: [0.08, 0.22, 0.07], light: [0.42, 0.6, 0.18], leaves: 500, leafLength: 0.05, leafWidth: 0.025 },
   // Each tree's leaves are multiplied by a random mix of these, so a wood is not one flat green.
   tint: [[0.82, 0.9, 0.8], [1.12, 1.08, 0.96]],

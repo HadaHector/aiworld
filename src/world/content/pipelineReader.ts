@@ -60,13 +60,20 @@ function readNoise(raw: unknown, reader: Reader, path: string, options: Pipeline
     frequency = reader.number(obj, "frequency", path, { min: 0 });
   }
   const amplitude = reader.number(obj, "amplitude", path);
+  let stretch: [number, number] | undefined;
+  if (obj.stretch !== undefined) {
+    const value = obj.stretch;
+    if (Array.isArray(value) && value.length === 2 && value.every((v) => typeof v === "number" && v > 0)) stretch = [value[0], value[1]];
+    else reader.fail(joinPath(path, "stretch"), "expected [x, y], both above 0");
+  }
 
   if (type === "worley") {
-    reader.onlyKeys(obj, path, ["name", "type", "amplitude", "mode", ...scaleKeys]);
-    return { name, type, frequency, amplitude, mode: reader.oneOf(obj, "mode", path, ["f1", "edge"] as const) };
+    reader.onlyKeys(obj, path, ["name", "type", "amplitude", "mode", "stretch", ...scaleKeys]);
+    return { name, type, frequency, amplitude, mode: reader.oneOf(obj, "mode", path, ["f1", "edge"] as const), ...(stretch ? { stretch } : {}) };
   }
-  reader.onlyKeys(obj, path, ["name", "type", "amplitude", "octaves", "persistence", "lacunarity", ...scaleKeys]);
+  reader.onlyKeys(obj, path, ["name", "type", "amplitude", "octaves", "persistence", "lacunarity", "stretch", ...scaleKeys]);
   return {
+    ...(stretch ? { stretch } : {}),
     name,
     type,
     frequency,
@@ -117,9 +124,20 @@ export function readPipeline(raw: unknown, reader: Reader, path: string, options
     const output = reader.string(step, "output", at);
     const op = reader.oneOf(step, "op", at, Object.keys(OP_FIELDS));
     const fields = OP_FIELDS[op];
-    reader.onlyKeys(step, at, ["output", "op", ...Object.keys(fields)]);
+    reader.onlyKeys(step, at, ["output", "op", ...Object.keys(fields), ...(op === "sample" ? ["offset"] : [])]);
 
     const read: RawObject = { output, op };
+    if (op === "sample" && step.offset !== undefined) {
+      const offset = step.offset;
+      if (!Array.isArray(offset) || offset.length !== 2 || !offset.every((name) => typeof name === "string")) {
+        reader.fail(joinPath(at, "offset"), "expected [stepX, stepY], the names of two earlier steps");
+      } else {
+        for (const name of offset as string[]) {
+          if (!outputs.has(name)) reader.fail(joinPath(at, "offset"), `no earlier step named "${name}"`);
+        }
+        read.offset = offset;
+      }
+    }
     for (const [key, kind] of Object.entries(fields)) {
       if (kind === "number") read[key] = reader.number(step, key, at);
       else if (kind === "text") read[key] = reader.string(step, key, at);

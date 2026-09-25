@@ -3,7 +3,6 @@ import type { BiomeDayNight, BiomeDefinition, BorderType, BoundaryHillStyle } fr
 import type { MaterialDef, MaterialLayer } from "../materials/materialTypes";
 import type { GrassKindDef } from "../foliage/grassConfig";
 import {
-  BARK_BUILDERS,
   FOLIAGE_BUILDERS,
   TREE_CROWN_BUILDERS,
   type BranchingTree,
@@ -26,6 +25,7 @@ import { ContentError, isObject, joinPath, Reader, type ContentIssue, type RawOb
 import { expandGenerators, FAILED_GENERATOR } from "./generators";
 import { readPipeline } from "./pipelineReader";
 import type { WorldContent } from "./worldContent";
+import type { TextureDef } from "../materials/textureGen";
 
 /** One pack as found on disk: its folder name and every .json5 file in it, by path inside it. */
 export interface PackSource {
@@ -319,16 +319,10 @@ function readUniversalLayer(id: string, obj: RawObject, reader: Reader): { layer
 
 function readMaterial(id: string, obj: RawObject, reader: Reader): MaterialDef {
   reader.onlyKeys(obj, "", ["name", "texture", "grass", "clearsGrass"]);
-  const failed = obj.texture === FAILED_GENERATOR;
-  const texture = failed ? { bumpStrength: 0, pipeline: FAILED_GENERATOR } : reader.object(obj.texture, "texture");
-  reader.onlyKeys(texture, "texture", ["bumpStrength", "pipeline"]);
   return {
     id,
     name: reader.string(obj, "name", ""),
-    texture: {
-      bumpStrength: reader.number(texture, "bumpStrength", "texture", { min: 0 }),
-      pipeline: readPipeline(texture.pipeline, reader, "texture.pipeline", { texture: true, requiredOutputs: ["diffuse"] }),
-    },
+    texture: readTexture(obj.texture, reader, "texture"),
     grass: reader.optionalArray(obj, "grass", "").map((raw, i) => {
       const path = `grass[${i}]`;
       const spec = reader.object(raw, path);
@@ -336,6 +330,18 @@ function readMaterial(id: string, obj: RawObject, reader: Reader): MaterialDef {
       return { kind: reader.string(spec, "kind", path), density: reader.number(spec, "density", path, { min: 0 }), color: reader.color(spec, "color", path) };
     }),
     clearsGrass: reader.optionalNumber(obj, "clearsGrass", "", 0, { min: 0 }),
+  };
+}
+
+/** A baked texture: a graph with a colour `diffuse` output and optional `roughness` and `height`,
+ *  and how strongly its height reads as bumps. Materials and bark both use it. */
+function readTexture(raw: unknown, reader: Reader, path: string): TextureDef {
+  const failed = raw === FAILED_GENERATOR;
+  const texture = failed ? { bumpStrength: 0, pipeline: FAILED_GENERATOR } : reader.object(raw, path);
+  reader.onlyKeys(texture, path, ["bumpStrength", "pipeline"]);
+  return {
+    bumpStrength: reader.number(texture, "bumpStrength", path, { min: 0 }),
+    pipeline: readPipeline(texture.pipeline, reader, `${path}.pipeline`, { texture: true, requiredOutputs: ["diffuse"] }),
   };
 }
 
@@ -459,7 +465,7 @@ function readBranchingTree(obj: RawObject, reader: Reader, common: string[]): Br
   const twigs = reader.object(branches.twigs, "branches.twigs");
   reader.onlyKeys(twigs, "branches.twigs", ["count", "length", "angle", "sides", "rings"]);
   const leaves = section("leaves", ["size", "cards", "alongBranch", "top", "spread"]);
-  const bark = section("bark", ["builder", "dark", "light", "plates", "tile", "bumpStrength"]);
+  const bark = section("bark", ["tile", "texture"]);
   const foliage = section("foliage", ["builder", "dark", "light", "leaves", "leafLength", "leafWidth"]);
   const sides = (o: RawObject, path: string): number => reader.number(o, "sides", path, { min: 3, max: 16, integer: true });
   const rings = (o: RawObject, path: string): number => reader.number(o, "rings", path, { min: 1, max: 16, integer: true });
@@ -515,12 +521,8 @@ function readBranchingTree(obj: RawObject, reader: Reader, common: string[]): Br
       spread: reader.number(leaves, "spread", "leaves", { min: 0 }),
     },
     bark: {
-      builder: reader.oneOf(bark, "builder", "bark", BARK_BUILDERS),
-      dark: reader.color(bark, "dark", "bark"),
-      light: reader.color(bark, "light", "bark"),
-      plates: reader.number(bark, "plates", "bark", { min: 2, integer: true }),
       tile: reader.number(bark, "tile", "bark", { min: 0.1 }),
-      bumpStrength: reader.number(bark, "bumpStrength", "bark", { min: 0 }),
+      texture: readTexture(bark.texture, reader, "bark.texture"),
     },
     foliage: {
       builder: reader.oneOf(foliage, "builder", "foliage", FOLIAGE_BUILDERS),

@@ -62,13 +62,15 @@ Without `outputs`, the result is the last step. A graph with several results nam
 
 **Noises**: `fbm`, `ridged`, `billow` (each with `octaves`, `frequency`, `amplitude`,
 `persistence`, `lacunarity`) and `worley` (`frequency`, `amplitude`, `mode: "f1" | "edge"`).
-In a texture, give `tileCycles` (cycles per texture tile) instead of `frequency`.
+In a texture, give `tileCycles` (cycles per texture tile) instead of `frequency`. Any noise can take
+`stretch: [x, y]` to elongate its features - `[1, 5]` makes them five times taller than wide (bark
+fissures, grain, streaks); a stretched texture still tiles.
 
 **Steps** (`input`, `a`, `b` and a `mix`'s `t` name earlier steps):
 
 | op | fields | |
 |---|---|---|
-| `sample` | `noise` | the named noise |
+| `sample` | `noise`, `offset?` | the named noise; with `offset: [stepX, stepY]`, sampled at this point moved by those two steps' values (domain warping - bends straight features into wandering ones) |
 | `constant` | `value` | a number |
 | `input` | `name` | a value of the ground at this point (below) |
 | `color` | `value` | a colour |
@@ -178,8 +180,8 @@ branches and on top. Its sections:
 - `branches`: `count`, `from` (fraction of the trunk's height), `length`, `radius`, `angle` (degrees
   from vertical), `arc` (how much they curve back up), `sides`, `rings`, and `twigs` likewise
 - `leaves`: `size` of a card, `cards` per clump, clumps `alongBranch` and on `top`, `spread`
-- `bark`: the `plates` bark texture - `dark`/`light` colours, `plates` across, `tile` (metres per
-  repeat), `bumpStrength`
+- `bark`: `tile` (metres of trunk per texture repeat) and `texture`, a texture graph exactly like a
+  material's - u runs around a limb, v along it
 - `foliage`: the `broadleaf` clump texture - `dark`/`light`, `leaves` per clump, `leafLength`/`leafWidth`
 - `variants`: how many different trees are generated from all this; each placed tree is one of them
 

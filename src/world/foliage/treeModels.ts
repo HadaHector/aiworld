@@ -20,7 +20,8 @@ import type { ColorTuple } from "../terrain/pipeline/pipelineTypes";
 import { LIT_SHADING_SAMPLERS, LIT_SHADING_UNIFORMS, type LitShading } from "../materials/litShading";
 import { deriveSeed } from "../rng";
 import { generateTree, type TreeDetail, type TreeGeometry } from "./treeGenerator";
-import { BARK_TEXTURE_SIZE, FOLIAGE_TEXTURE_SIZE, bakeBark, bakeFoliage } from "./treeTextures";
+import { FOLIAGE_TEXTURE_SIZE, bakeFoliage } from "./treeTextures";
+import { TEXTURE_RESOLUTION } from "../materials/textureGen";
 import { BARK_FRAGMENT_SHADER, BARK_VERTEX_SHADER, LEAF_FRAGMENT_SHADER, LEAF_VERTEX_SHADER } from "./treeShaders";
 
 /**
@@ -182,16 +183,23 @@ class LeafMaterial extends ShaderMaterial {
   }
 }
 
+/** A tree kind's bark, baked from its texture graph like a ground material (see textureGen.ts):
+ *  colour with roughness in alpha, and a normal map with height in alpha. */
+export interface BakedBark {
+  color: Uint8Array;
+  normal: Uint8Array;
+}
+
 function createBranchingMaterials(
   scene: Scene,
   id: string,
   shape: BranchingTree,
   seed: number,
+  bakedBark: BakedBark,
   litShading: LitShading,
 ): { bark: ShaderMaterial; leaves: LeafMaterial } {
-  const barkPixels = bakeBark(deriveSeed(seed, 0xba4c), shape.bark);
-  const barkColor = RawTexture.CreateRGBATexture(barkPixels.color, BARK_TEXTURE_SIZE, BARK_TEXTURE_SIZE, scene, true, false, Texture.TRILINEAR_SAMPLINGMODE);
-  const barkNormal = RawTexture.CreateRGBATexture(barkPixels.normal, BARK_TEXTURE_SIZE, BARK_TEXTURE_SIZE, scene, true, false, Texture.TRILINEAR_SAMPLINGMODE);
+  const barkColor = RawTexture.CreateRGBATexture(bakedBark.color, TEXTURE_RESOLUTION, TEXTURE_RESOLUTION, scene, true, false, Texture.TRILINEAR_SAMPLINGMODE);
+  const barkNormal = RawTexture.CreateRGBATexture(bakedBark.normal, TEXTURE_RESOLUTION, TEXTURE_RESOLUTION, scene, true, false, Texture.TRILINEAR_SAMPLINGMODE);
   for (const texture of [barkColor, barkNormal]) {
     texture.wrapU = Texture.WRAP_ADDRESSMODE;
     texture.wrapV = Texture.WRAP_ADDRESSMODE;
@@ -236,9 +244,16 @@ function createBranchingMaterials(
   return { bark, leaves };
 }
 
-function createBranchingModels(scene: Scene, def: TreeKindDef, shape: BranchingTree, seed: number, litShading: LitShading): TreeModel[] {
+function createBranchingModels(
+  scene: Scene,
+  def: TreeKindDef,
+  shape: BranchingTree,
+  seed: number,
+  bakedBark: BakedBark,
+  litShading: LitShading,
+): TreeModel[] {
   const kindSeed = deriveSeed(seed, [...def.id].reduce((h, c) => (Math.imul(h, 31) + c.charCodeAt(0)) | 0, 7));
-  const materials = createBranchingMaterials(scene, def.id, shape, kindSeed, litShading);
+  const materials = createBranchingMaterials(scene, def.id, shape, kindSeed, bakedBark, litShading);
   const tintDark = color3(def.tint[0]);
   const tintLight = color3(def.tint[1]);
 
@@ -281,8 +296,10 @@ function createBranchingModels(scene: Scene, def: TreeKindDef, shape: BranchingT
  * Every model a tree kind is drawn with: one for a primitive tree, one per variant for a branching
  * one, each a different tree generated from the same description.
  */
-export function createTreeModels(scene: Scene, def: TreeKindDef, seed: number, litShading: LitShading): TreeModel[] {
-  return def.shape.model === "branching"
-    ? createBranchingModels(scene, def, def.shape, seed, litShading)
-    : [createPrimitiveModel(scene, def, def.shape)];
+export function createTreeModels(scene: Scene, def: TreeKindDef, seed: number, bakedBark: BakedBark | undefined, litShading: LitShading): TreeModel[] {
+  if (def.shape.model === "branching") {
+    if (!bakedBark) throw new Error(`Tree kind "${def.id}" has no baked bark`);
+    return createBranchingModels(scene, def, def.shape, seed, bakedBark, litShading);
+  }
+  return [createPrimitiveModel(scene, def, def.shape)];
 }

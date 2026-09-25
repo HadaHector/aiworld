@@ -135,7 +135,7 @@ export async function createWorld(
     onProgress?.({ phase: "Baking material textures", completed: done, total });
   });
 
-  const trees = createTreeField(scene, sunLighting.shadowGenerator, content.treeKinds, WORLD_SEED, materialLibrary.litShading);
+  const trees = await createTreeField(scene, sunLighting.shadowGenerator, content.treeKinds, WORLD_SEED, materialLibrary.litShading);
   const grass = createGrassField(scene, WORLD_SEED, materialLibrary.litShading, content.grassKinds);
   const buildings = createSettlementRenderer(
     scene,

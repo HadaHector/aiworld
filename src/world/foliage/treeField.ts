@@ -2,7 +2,9 @@ import { Matrix, Quaternion, Vector3, type Mesh } from "@babylonjs/core";
 import type { CascadedShadowGenerator, Scene } from "@babylonjs/core";
 import type { TreePlacement } from "./treeScatter";
 import type { TreeKindDef } from "./foliageConfig";
-import { createTreeModels, type TreeModel } from "./treeModels";
+import { createTreeModels, type BakedBark, type TreeModel } from "./treeModels";
+import { bakeMaterialTextures } from "../materials/textureBakePool";
+import { TEXTURE_RESOLUTION } from "../materials/textureGen";
 import type { LitShading } from "../materials/litShading";
 
 function speciesKey(kind: string, variant: number, far: boolean): string {
@@ -57,19 +59,35 @@ interface Species {
  * Recomposing every tree on every chunk event instead cost 18.5ms at a 1200-unit draw distance -
  * a dropped frame every time a chunk came or went, which while walking is most of them.
  */
-export function createTreeField(
+export async function createTreeField(
   scene: Scene,
   shadowGenerator: CascadedShadowGenerator,
   treeKinds: TreeKindDef[],
   seed: number,
   litShading: LitShading,
-): TreeField {
+): Promise<TreeField> {
+  // Every branching kind's bark is a texture graph, baked on the same worker pool as the ground
+  // materials, all at once.
+  const barkKinds = treeKinds.filter((def) => def.shape.model === "branching");
+  const layer = TEXTURE_RESOLUTION * TEXTURE_RESOLUTION * 4;
+  const barkColors = new Uint8Array(layer * barkKinds.length);
+  const barkNormals = new Uint8Array(layer * barkKinds.length);
+  await bakeMaterialTextures(
+    barkKinds.map((def) => ({ id: `bark-${def.id}`, texture: (def.shape as Extract<TreeKindDef["shape"], { model: "branching" }>).bark.texture })),
+    seed,
+    barkColors,
+    barkNormals,
+  );
+  const bakedBark = new Map<string, BakedBark>(
+    barkKinds.map((def, i) => [def.id, { color: barkColors.subarray(i * layer, (i + 1) * layer), normal: barkNormals.subarray(i * layer, (i + 1) * layer) }]),
+  );
+
   // One "species" per model: a primitive kind has one, a branching kind one per variant, and each is
   // its own pair of master meshes with its own instances.
   const species = new Map<string, Species>();
   const variantCount = new Map<string, number>();
   const models = treeKinds.flatMap((def) => {
-    const kindModels = createTreeModels(scene, def, seed, litShading);
+    const kindModels = createTreeModels(scene, def, seed, bakedBark.get(def.id), litShading);
     variantCount.set(def.id, kindModels.length);
     return kindModels.flatMap((model, variant) => [
       { key: speciesKey(def.id, variant, false), model },

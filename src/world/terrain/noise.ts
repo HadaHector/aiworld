@@ -19,9 +19,10 @@ const TAU = Math.PI * 2;
 
 /** Ordinary infinite-domain sampling - `noise2D(x * frequency, y * frequency)`, exactly what every
  *  octave loop in this project did inline before OctaveSampler existed. */
-export function createWorldOctaveSampler(seed: number): OctaveSampler {
+export function createWorldOctaveSampler(seed: number, stretchX = 1, stretchY = 1): OctaveSampler {
   const noise2D = createNoise2D(mulberry32(seed));
-  return (x: number, y: number, frequency: number): number => noise2D(x * frequency, y * frequency);
+  if (stretchX === 1 && stretchY === 1) return (x: number, y: number, frequency: number): number => noise2D(x * frequency, y * frequency);
+  return (x: number, y: number, frequency: number): number => noise2D((x * frequency) / stretchX, (y * frequency) / stretchY);
 }
 
 /**
@@ -39,7 +40,7 @@ export function createWorldOctaveSampler(seed: number): OctaveSampler {
  * reproduces the apparent scale of the non-tiling sampler for ANY frequency (no integer constraint)
  * - which is what lets every material keep its already-tuned frequencies unchanged.
  */
-export function createTilingOctaveSampler(seed: number, period: number): OctaveSampler {
+export function createTilingOctaveSampler(seed: number, period: number, stretchX = 1, stretchY = 1): OctaveSampler {
   const noise4D = createNoise4D(mulberry32(seed));
   const angleScale = TAU / period;
   const radiusScale = period / TAU;
@@ -58,8 +59,17 @@ export function createTilingOctaveSampler(seed: number, period: number): OctaveS
     sinTable[i] = Math.sin(i * angleScale);
   }
 
+  // A stretched noise walks each axis's circle at its own radius: a smaller radius covers less
+  // noise per turn, so features along that axis come out longer - and each circle still closes, so
+  // the texture still tiles.
+  const radiusFactorX = 1 / stretchX;
+  const radiusFactorY = 1 / stretchY;
+  const stretched = stretchX !== 1 || stretchY !== 1;
+
   return (x: number, y: number, frequency: number): number => {
     const radius = radiusScale * frequency;
+    const radiusX = stretched ? radius * radiusFactorX : radius;
+    const radiusY = stretched ? radius * radiusFactorY : radius;
     let cosX: number;
     let sinX: number;
     let cosY: number;
@@ -77,7 +87,7 @@ export function createTilingOctaveSampler(seed: number, period: number): OctaveS
       cosY = Math.cos(phi);
       sinY = Math.sin(phi);
     }
-    return noise4D(radius * cosX, radius * sinX, radius * cosY, radius * sinY);
+    return noise4D(radiusX * cosX, radiusX * sinX, radiusY * cosY, radiusY * sinY);
   };
 }
 

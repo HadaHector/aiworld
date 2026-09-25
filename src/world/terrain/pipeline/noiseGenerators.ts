@@ -83,13 +83,25 @@ function wrapCell(value: number, cellsPerTile: number): number {
  * effective frequency snaps to match it - at the frequencies the core pack's materials actually use
  * this shifts feature scale by only a few percent.
  */
-export function worleyNoise2D(seed: number, frequency: number, tilePeriod?: number): (worldX: number, worldZ: number) => { f1: number; f2: number } {
-  const cellsPerTile = tilePeriod === undefined ? 0 : Math.max(1, Math.round(tilePeriod * frequency));
-  const effectiveFrequency = tilePeriod === undefined ? frequency : cellsPerTile / tilePeriod;
+export function worleyNoise2D(
+  seed: number,
+  frequency: number,
+  tilePeriod?: number,
+  stretchX = 1,
+  stretchY = 1,
+): (worldX: number, worldZ: number) => { f1: number; f2: number } {
+  // Stretching is a different cell count per axis - taller cells for a vertical stretch - and each
+  // axis rounds to a whole number of cells across the tile on its own.
+  const frequencyX = frequency / stretchX;
+  const frequencyY = frequency / stretchY;
+  const cellsX = tilePeriod === undefined ? 0 : Math.max(1, Math.round(tilePeriod * frequencyX));
+  const cellsY = tilePeriod === undefined ? 0 : Math.max(1, Math.round(tilePeriod * frequencyY));
+  const effectiveFrequencyX = tilePeriod === undefined ? frequencyX : cellsX / tilePeriod;
+  const effectiveFrequencyY = tilePeriod === undefined ? frequencyY : cellsY / tilePeriod;
 
   return (worldX: number, worldZ: number) => {
-    const x = worldX * effectiveFrequency;
-    const y = worldZ * effectiveFrequency;
+    const x = worldX * effectiveFrequencyX;
+    const y = worldZ * effectiveFrequencyY;
     const cellX = Math.floor(x);
     const cellY = Math.floor(y);
 
@@ -99,7 +111,7 @@ export function worleyNoise2D(seed: number, frequency: number, tilePeriod?: numb
       for (let dx = -1; dx <= 1; dx++) {
         const neighborX = cellX + dx;
         const neighborY = cellY + dy;
-        const offset = cellOffset(seed, wrapCell(neighborX, cellsPerTile), wrapCell(neighborY, cellsPerTile));
+        const offset = cellOffset(seed, wrapCell(neighborX, cellsX), wrapCell(neighborY, cellsY));
         const ddx = neighborX + offset.x - x;
         const ddy = neighborY + offset.y - y;
         const dist = Math.sqrt(ddx * ddx + ddy * ddy);

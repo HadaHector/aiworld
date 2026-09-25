@@ -65,7 +65,10 @@ class WoodBuilder {
   tube(points: V3[], radii: number[], sides: number, tile: number): void {
     const base = this.positions.length / 3;
     const ring = sides + 1;
-    const around = Math.max(1, Math.round((2 * Math.PI * radii[0]) / tile));
+    // Sized on the limb's average girth: its first ring can be a flared base twice the width of
+    // the rest, which would squeeze the bark sideways everywhere else.
+    const meanRadius = radii.reduce((sum, r) => sum + r, 0) / radii.length;
+    const around = Math.max(1, Math.round((2 * Math.PI * meanRadius) / tile));
     let normal: V3 = perpendicular(normalize(sub(points[1], points[0])));
     let v = 0;
 
