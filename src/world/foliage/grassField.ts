@@ -19,6 +19,9 @@ import { GRASS_TEXTURE_SIZE, bakeGrassTextures } from "./grassTextures";
 /** Wind blows this way (x, z), normalised. Weather will want to drive it. */
 const WIND_DIRECTION = new Vector2(0.8, 0.6).normalize();
 
+/** How far up a blade (as a fraction of its height) it fades from the ground's colour to its own. */
+const GRASS_ROOT_BLEND = 0.3;
+
 /** Vertices per tuft: three crossed quads. */
 const TUFT_QUADS = 3;
 
@@ -26,11 +29,14 @@ const VERTEX_SHADER = `#version 300 es
 precision highp float;
 
 in vec3 position;
+in vec3 normal;
 in vec2 uv;
 // Per tuft: chunk-local root (xyz) and kind * 16 + scale (w)...
 in vec4 grassA;
-// ...then colour (rgb) and turn about the vertical (w).
+// ...then colour (rgb) and turn about the vertical (w)...
 in vec4 grassB;
+// ...and the ground's colour at the root, 8 bits a channel packed into one float (-1: unknown).
+in float grassC;
 
 uniform mat4 world;
 uniform mat4 view;
@@ -45,8 +51,10 @@ uniform vec2 kindFade[${GRASS_KINDS.length}];
 uniform vec3 flowerColors[${FLOWER_COLORS.length}];
 
 out vec2 vUV;
+out vec3 vFaceNormal;
 out vec3 vColor;
 flat out vec3 vPetalColor;
+flat out vec4 vGroundColor;
 out vec3 vWorldPosition;
 out vec3 vPositionFromCamera;
 flat out float vKind;
@@ -71,6 +79,7 @@ void main() {
   float c = cos(grassB.w);
   float s = sin(grassB.w);
   vec3 turned = vec3(c * local.x - s * local.z, local.y, s * local.x + c * local.z);
+  vFaceNormal = vec3(c * normal.x - s * normal.z, 0.0, s * normal.x + c * normal.z);
 
   // Only the upper part moves, the root stays put; two out-of-step waves keep it from looking like
   // a metronome, phased by position so gusts roll across a meadow instead of hitting it all at once.
@@ -85,6 +94,9 @@ void main() {
   vPositionFromCamera = (view * worldPosition).xyz;
   vUV = uv;
   vColor = grassB.rgb;
+  vGroundColor = grassC < 0.0
+    ? vec4(0.0)
+    : vec4(floor(grassC / 65536.0), mod(floor(grassC / 256.0), 256.0), mod(grassC, 256.0), 255.0) / 255.0;
   // The turn angle is uniform random per tuft, so it picks the petal colour too.
   vPetalColor = flowerColors[int(fract(grassB.w * 13.37) * ${FLOWER_COLORS.length.toFixed(1)})];
   vKind = kind;
@@ -97,8 +109,10 @@ precision highp sampler2DArray;
 ${LIT_SHADING_GLSL}
 
 in vec2 vUV;
+in vec3 vFaceNormal;
 in vec3 vColor;
 flat in vec3 vPetalColor;
+flat in vec4 vGroundColor;
 in vec3 vWorldPosition;
 in vec3 vPositionFromCamera;
 flat in float vKind;
@@ -115,16 +129,35 @@ void main() {
   float lod = max(0.0, 0.5 * log2(max(dot(dFdx(texel), dFdx(texel)), dot(dFdy(texel), dFdy(texel)))));
   if (blade.a * (1.0 + 0.35 * lod) < 0.45) discard;
 
-  // Lit as the ground under it is (the terrain's half-Lambert with an upward normal), so a meadow
-  // reads as part of the hillside rather than a layer pasted over it. Darker towards the root,
-  // where the blades shade one another.
-  // Petals (the texture's G mask) take the tuft's petal colour instead of its stem colour.
+  // Darker towards the root, where the blades shade one another. Petals (the texture's G mask)
+  // take the tuft's petal colour instead of its stem colour.
   vec3 albedo = mix(vColor * mix(0.8, 1.0, vUV.y), vPetalColor, blade.g) * blade.r;
   vec3 up = vec3(0.0, 1.0, 0.0);
   vec3 lightDir = normalize(lightDirection);
-  float diffuse = (dot(up, lightDir) * 0.5 + 0.5) * lightIntensity;
+
+  // Each blade quad faces two ways; the side being looked at is the one lit. Its normal is tilted
+  // well up, so under a high sun both sides of a tuft stay near the ground's own brightness and a
+  // meadow still reads as part of the hillside - the lower the sun, the more the side facing it
+  // outshines the side facing away. That far side keeps a little light that comes through the
+  // blades from behind, so looking into the sun gives a dim, glowing meadow rather than a flat one.
+  // Turned toward the camera by where the camera is rather than by gl_FrontFacing, whose sense
+  // depends on winding conventions this does not need to care about.
+  vec3 face = normalize(vFaceNormal);
+  if (dot(face, cameraPosition - vWorldPosition) < 0.0) face = -face;
+  vec3 n = normalize(face + up * 0.6);
+  float direct = clamp(dot(n, lightDir) * 0.6 + 0.55, 0.0, 1.0);
+  float throughBlade = max(-dot(face, lightDir), 0.0) * 0.18;
+  float diffuse = (direct + throughBlade) * lightIntensity;
   float shadow = computeShadow(vWorldPosition, up, vPositionFromCamera.z);
   vec3 lit = albedo * diffuse * lightColor * shadow + albedo * ambientColor * ambientIntensity;
+
+  // The bottom of the blades fades into the ground they grow from, lit the way the terrain lights
+  // it (half-Lambert, upward normal), so a tuft does not end in a hard line against bare earth or
+  // sand. Skipped where the ground colour is not known (alpha 0).
+  if (vGroundColor.a > 0.0) {
+    vec3 groundLit = vGroundColor.rgb * ((dot(up, lightDir) * 0.5 + 0.5) * lightIntensity * lightColor * shadow + ambientColor * ambientIntensity);
+    lit = mix(groundLit, lit, smoothstep(0.0, ${GRASS_ROOT_BLEND.toFixed(3)}, vUV.y));
+  }
 
   outColor = vec4(applyFog(lit, length(vPositionFromCamera)), 1.0);
 }
@@ -149,6 +182,7 @@ interface GrassPatch {
 /** The three crossed quads every tuft is drawn from: unit width and height, root at the origin. */
 function tuftVertexData(): VertexData {
   const positions: number[] = [];
+  const normals: number[] = [];
   const uvs: number[] = [];
   const indices: number[] = [];
   for (let q = 0; q < TUFT_QUADS; q++) {
@@ -157,11 +191,14 @@ function tuftVertexData(): VertexData {
     const dz = Math.sin(angle) * 0.5;
     const base = positions.length / 3;
     positions.push(-dx, 0, -dz, dx, 0, dz, dx, 1, dz, -dx, 1, -dz);
+    // Horizontal, across the quad; the fragment shader flips it to whichever side is being seen.
+    for (let v = 0; v < 4; v++) normals.push(-Math.sin(angle), 0, Math.cos(angle));
     uvs.push(0, 0, 1, 0, 1, 1, 0, 1);
     indices.push(base, base + 1, base + 2, base, base + 2, base + 3);
   }
   const data = new VertexData();
   data.positions = positions;
+  data.normals = normals;
   data.uvs = uvs;
   data.indices = indices;
   return data;
@@ -194,7 +231,7 @@ export function createGrassField(scene: Scene, seed: number, litShading: LitShad
   Effect.ShadersStore["grassVertexShader"] = VERTEX_SHADER;
   Effect.ShadersStore["grassFragmentShader"] = FRAGMENT_SHADER;
   const material = new ShaderMaterial("grass", scene, "grass", {
-    attributes: ["position", "uv", "grassA", "grassB"],
+    attributes: ["position", "normal", "uv", "grassA", "grassB", "grassC"],
     uniforms: ["world", "view", "projection", "time", "windDirection", "kindShape", "kindFade", "flowerColors", ...LIT_SHADING_UNIFORMS],
     samplers: ["bladeAtlas", ...LIT_SHADING_SAMPLERS],
   });
@@ -261,6 +298,7 @@ export function createGrassField(scene: Scene, seed: number, litShading: LitShad
       const buffer = new Buffer(engine, instances, false, GRASS_INSTANCE_STRIDE, false, true);
       mesh.setVerticesBuffer(buffer.createVertexBuffer("grassA", 0, 4));
       mesh.setVerticesBuffer(buffer.createVertexBuffer("grassB", 4, 4));
+      mesh.setVerticesBuffer(buffer.createVertexBuffer("grassC", 8, 1));
       mesh.forcedInstanceCount = count;
       mesh.material = material;
       mesh.position.set(originX, 0, originZ);

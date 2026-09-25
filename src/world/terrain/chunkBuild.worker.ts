@@ -11,7 +11,10 @@ import { buildChunkGeometry, type ChunkBuildContext, type ChunkBuildRequest, typ
  * rebuilding it takes a few seconds once, at load, in parallel with everything else. Everything in
  * it is deterministic from the seed, so a chunk comes out identical to one built on the main thread.
  */
-export type ChunkWorkerMessage = { type: "init"; seed: number } | { type: "build"; jobId: number; request: ChunkBuildRequest };
+export type ChunkWorkerMessage =
+  | { type: "init"; seed: number }
+  | { type: "groundColors"; colors: [number, number, number][] }
+  | { type: "build"; jobId: number; request: ChunkBuildRequest };
 
 export type ChunkWorkerResponse =
   | { type: "ready" }
@@ -32,8 +35,15 @@ self.onmessage = (event: MessageEvent<ChunkWorkerMessage>): void => {
       materialBlender: createMaterialBlender(message.seed),
       scatterTrees: createTreeScatter(message.seed),
       seed: message.seed,
+      groundColors: null,
     };
     post({ type: "ready" });
+    return;
+  }
+  if (message.type === "groundColors") {
+    // Known only once the main thread has baked the material textures; every build after this uses
+    // them, since a worker handles its messages in order.
+    if (context) context.groundColors = message.colors;
     return;
   }
 

@@ -15,6 +15,8 @@ export interface ChunkBuildPool {
    *  without queueing so far ahead that a job is stale by the time it runs. */
   capacity: number;
   build: (request: ChunkBuildRequest) => Promise<ChunkGeometry>;
+  /** Hands every worker the materials' average colours (see ChunkBuildContext.groundColors). */
+  setGroundColors: (colors: [number, number, number][]) => void;
   dispose: () => void;
 }
 
@@ -82,11 +84,16 @@ export function createChunkBuildPool(seed: number): ChunkBuildPool | null {
     });
   }
 
+  function setGroundColors(colors: [number, number, number][]): void {
+    const message: ChunkWorkerMessage = { type: "groundColors", colors };
+    for (const worker of workers) worker.postMessage(message);
+  }
+
   function dispose(): void {
     for (const worker of workers) worker.terminate();
     for (const job of pending.values()) job.reject(new Error("Chunk build pool disposed"));
     pending.clear();
   }
 
-  return { ready, capacity: WORKER_COUNT * 2, build, dispose };
+  return { ready, capacity: WORKER_COUNT * 2, build, setGroundColors, dispose };
 }

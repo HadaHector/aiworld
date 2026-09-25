@@ -142,6 +142,10 @@ export async function createWorld(scene: Scene, onProgress?: (progress: WorldLoa
   );
   const sky = createSkyDome(scene);
 
+  // Sent now that the textures are baked; queued behind each worker's own world building if it is
+  // still busy with that, and ahead of any chunk it is asked to build.
+  buildPool?.setGroundColors(materialLibrary.averageColors);
+
   if (buildPool) {
     onProgress?.({ phase: "Starting terrain workers", completed: 0, total: 0 });
     try {
@@ -155,7 +159,13 @@ export async function createWorld(scene: Scene, onProgress?: (progress: WorldLoa
 
   const chunkManager = createChunkManager({
     scene,
-    buildContext: { sampleTerrain, materialBlender: materialLibrary.blender, scatterTrees: createTreeScatter(WORLD_SEED), seed: WORLD_SEED },
+    buildContext: {
+      sampleTerrain,
+      materialBlender: materialLibrary.blender,
+      scatterTrees: createTreeScatter(WORLD_SEED),
+      seed: WORLD_SEED,
+      groundColors: materialLibrary.averageColors,
+    },
     buildPool,
     materialLibrary,
     trees,

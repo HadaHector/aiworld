@@ -11,8 +11,16 @@ import {
 } from "./grassConfig";
 
 /** Floats per tuft in ChunkGrass.instances: x, y, z (chunk-local), kind * 16 + scale, then
- *  r, g, b, rotation (radians). Matches the two vec4 instance attributes in grassField.ts. */
-export const GRASS_INSTANCE_STRIDE = 8;
+ *  r, g, b, rotation (radians), then the ground's colour at the root packed into one float (see
+ *  packColor), or -1 where it is not known. Matches the instance attributes in grassField.ts. */
+export const GRASS_INSTANCE_STRIDE = 9;
+
+/** 8 bits a channel, as an integer up to 2^24 - exactly representable in a float, so it survives
+ *  the Float32Array and the GPU unchanged. */
+function packColor(r: number, g: number, b: number): number {
+  const channel = (v: number): number => Math.min(255, Math.max(0, Math.round(v * 255)));
+  return channel(r) * 65536 + channel(g) * 256 + channel(b);
+}
 
 /** A chunk's grass, ready to hand to the GPU as it is. */
 export interface ChunkGrass {
@@ -147,7 +155,14 @@ export interface GrassGround {
  * weight, interpolated across the grid square - times the cell's area, against one random draw;
  * the same draw then picks the kind in proportion to each kind's share of that density.
  */
-export function scatterGrass(ground: GrassGround, materialDefs: MaterialDef[], seed: number): ChunkGrass {
+export function scatterGrass(
+  ground: GrassGround,
+  materialDefs: MaterialDef[],
+  seed: number,
+  /** Each material's average colour, by index - what the ground under a tuft looks like, which the
+   *  bottom of its blades fade from. Null if not known yet. */
+  groundColors: [number, number, number][] | null,
+): ChunkGrass {
   const { size, subdivisions, originX, originZ, blendAt, surfaceHeight } = ground;
   const table = grassTableFor(materialDefs);
   const kindCount = GRASS_KINDS.length;
@@ -159,10 +174,24 @@ export function scatterGrass(ground: GrassGround, materialDefs: MaterialDef[], s
   const density = new Float32Array(gridSize * gridSize * kindCount);
   const color = new Float32Array(gridSize * gridSize * kindCount * 3);
   const totalDensity = new Float32Array(gridSize * gridSize);
+  // Per grid vertex: the ground's colour, its materials' average colours by weight.
+  const groundColor = new Float32Array(gridSize * gridSize * 3);
   for (let row = 0; row < gridSize; row++) {
     for (let col = 0; col < gridSize; col++) {
       const vertex = row * gridSize + col;
       const blend = blendAt(row, col);
+      if (groundColors) {
+        let weightSum = 0;
+        for (const [material, weight] of blend) {
+          const c = groundColors[material];
+          if (!c) continue;
+          groundColor[vertex * 3] += c[0] * weight;
+          groundColor[vertex * 3 + 1] += c[1] * weight;
+          groundColor[vertex * 3 + 2] += c[2] * weight;
+          weightSum += weight;
+        }
+        if (weightSum > 0) for (let c = 0; c < 3; c++) groundColor[vertex * 3 + c] /= weightSum;
+      }
       let clearing = 0;
       for (const [material, weight] of blend) clearing += (table.clears[material] ?? 0) * weight;
       const keep = Math.max(0, 1 - clearing);
@@ -255,7 +284,11 @@ export function scatterGrass(ground: GrassGround, materialDefs: MaterialDef[], s
       const scale = 0.75 + 0.5 * cellRandom(ix, iz, 4, seedMix);
       const rotation = cellRandom(ix, iz, 5, seedMix) * Math.PI * 2;
 
-      byKind[kind].push(x - originX, y, z - originZ, kind * 16 + scale, channel(0) * tint, channel(1) * tint, channel(2) * tint, rotation);
+      const groundChannel = (c: number): number =>
+        groundColor[v00 * 3 + c] * w00 + groundColor[v10 * 3 + c] * w10 + groundColor[v01 * 3 + c] * w01 + groundColor[v11 * 3 + c] * w11;
+      const root = groundColors ? packColor(groundChannel(0), groundChannel(1), groundChannel(2)) : -1;
+
+      byKind[kind].push(x - originX, y, z - originZ, kind * 16 + scale, channel(0) * tint, channel(1) * tint, channel(2) * tint, rotation, root);
       if (y < minY) minY = y;
       if (y > maxY) maxY = y;
     }

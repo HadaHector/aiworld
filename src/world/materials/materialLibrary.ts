@@ -41,6 +41,8 @@ export interface MaterialLibrary {
    *  material index - used by the debug map, which draws to a 2D canvas and has no Babylon
    *  Material/Texture of its own to sample from. */
   getMaterialColor: (materialIndex: number) => Color3;
+  /** Every material's average baked colour, by index - what grass roots fade from. */
+  averageColors: [number, number, number][];
   /** A biome's own base material's swatch, with no overlay layers evaluated - what the debug
    *  map's coarse World view shows, since resolving overlays isn't worth it at that zoom level. */
   getBiomeBaseColor: (biomeId: string) => Color3;
@@ -314,6 +316,7 @@ export async function createMaterialLibrary(
     buildMaterialBlend,
     resolveMaterialIndex,
     getMaterialColor,
+    averageColors,
     getBiomeBaseColor,
     listMaterialTextures,
     setShadowsEnabled,

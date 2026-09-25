@@ -24,6 +24,9 @@ export interface ChunkBuildContext {
   sampleTerrain: TerrainSampler;
   materialBlender: Pick<MaterialBlender, "buildMaterialBlend" | "materialDefs">;
   seed: number;
+  /** Each material's average baked colour by index, for grass roots (see scatterGrass). Null until
+   *  the material textures have been baked. */
+  groundColors: [number, number, number][] | null;
   scatterTrees: TreeScatter;
 }
 
@@ -116,7 +119,7 @@ function toSlots(weights: Map<number, number>, ownerList: MaterialList, allowed:
  */
 export function buildChunkGeometry(request: ChunkBuildRequest, context: ChunkBuildContext): ChunkGeometry {
   const { size, subdivisions, detailSubdivisions, originX, originZ } = request;
-  const { sampleTerrain, materialBlender, scatterTrees, seed } = context;
+  const { sampleTerrain, materialBlender, scatterTrees, seed, groundColors } = context;
 
   const gridSize = subdivisions + 1;
   const detailRatio = detailSubdivisions / subdivisions;
@@ -504,6 +507,7 @@ export function buildChunkGeometry(request: ChunkBuildRequest, context: ChunkBui
           },
           materialBlender.materialDefs,
           seed,
+          groundColors,
         )
       : null;
 
