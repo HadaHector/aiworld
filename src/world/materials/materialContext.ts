@@ -44,7 +44,7 @@ function computeReliefCurvature(positions: FloatArray, gridSize: number, vertexI
 /**
  * A named-value bag for one vertex, consumed by material weight pipelines via the pipeline
  * engine's "input" step (pipeline/pipelineTypes.ts). Biome membership itself is NOT in here -
- * materialLibrary.ts's PER_BIOME_MATERIAL_LAYERS already scopes which layers run for a given
+ * a biome's own ground.layers (materials/materialBlend.ts) already scopes which layers run for a given
  * biome, so a layer never needs to check its own biome from inside the pipeline.
  *
  * `curvatureRadiusSteps` is RELIEF_CURVATURE_RADIUS_STEPS on a full-detail grid; a coarser grid

@@ -1,0 +1,9 @@
+// Short, springy clumps fanning out from one root - tundra, faded grass, moss.
+{
+  width: 0.6,
+  height: 0.3,
+  sway: 0.1,
+  fadeStart: 20,
+  fadeEnd: 200,
+  blades: { count: 30, minHeight: 0.4, maxHeight: 0.9, baseWidth: 8, lean: 0.35, fan: true, seedHeads: false },
+}

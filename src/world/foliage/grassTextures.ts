@@ -1,5 +1,5 @@
 import { mulberry32 } from "../rng";
-import { GRASS_KINDS, GRASS_KIND_DEFS, type GrassKindDef } from "./grassConfig";
+import type { GrassKindDef } from "./grassConfig";
 
 export const GRASS_TEXTURE_SIZE = 256;
 
@@ -110,10 +110,10 @@ function drawBlades(pixels: Uint8Array, layer: number, def: GrassKindDef, seed: 
   }
 }
 
-/** Every grass kind's blade texture, one RGBA layer each in GRASS_KINDS order. Row 0 is the root
- *  (v = 0). Deterministic from the seed. */
-export function bakeGrassTextures(seed: number): Uint8Array {
-  const pixels = new Uint8Array(GRASS_TEXTURE_SIZE * GRASS_TEXTURE_SIZE * 4 * GRASS_KINDS.length);
-  GRASS_KINDS.forEach((kind, layer) => drawBlades(pixels, layer, GRASS_KIND_DEFS[kind], (seed ^ (0x9e37 * (layer + 1))) >>> 0));
+/** Every grass kind's blade texture, one RGBA layer each in list order. Row 0 is the root (v = 0).
+ *  Deterministic from the seed. */
+export function bakeGrassTextures(seed: number, grassKinds: GrassKindDef[]): Uint8Array {
+  const pixels = new Uint8Array(GRASS_TEXTURE_SIZE * GRASS_TEXTURE_SIZE * 4 * grassKinds.length);
+  grassKinds.forEach((kind, layer) => drawBlades(pixels, layer, kind, (seed ^ (0x9e37 * (layer + 1))) >>> 0));
   return pixels;
 }

@@ -15,6 +15,7 @@ import type { ContinentPlan } from "./cells/continentLayout";
 import type { AreaBounds, AreaWeight } from "./cells/areaField";
 import type { SettlementSite } from "./settlements/settlementSites";
 import type { RoadNetwork } from "./roads/roadNetwork";
+import type { WorldContent } from "./content/worldContent";
 
 /** Coarse progress for the loading screen. `total` is 0 for phases with no countable steps. */
 export interface WorldLoadProgress {
@@ -116,25 +117,30 @@ function nextPaint(): Promise<void> {
   });
 }
 
-export async function createWorld(scene: Scene, onProgress?: (progress: WorldLoadProgress) => void): Promise<World> {
+export async function createWorld(
+  scene: Scene,
+  content: WorldContent,
+  onProgress?: (progress: WorldLoadProgress) => void,
+): Promise<World> {
   const sunLighting = createSunLighting(scene);
 
   // Started first: each worker spends a few seconds building its own copy of the world (see
   // chunkBuild.worker.ts), which overlaps with this thread building its own below.
-  let buildPool = createChunkBuildPool(WORLD_SEED);
+  let buildPool = createChunkBuildPool(WORLD_SEED, content);
 
   onProgress?.({ phase: "Shaping continents", completed: 0, total: 0 });
-  const { sampleTerrain, worldExtent, continents, areaBounds, areaNames, settlements, roads, settlementLayouts } = createTerrainSampler(WORLD_SEED);
+  const { sampleTerrain, worldExtent, continents, areaBounds, areaNames, settlements, roads, settlementLayouts } = createTerrainSampler(WORLD_SEED, content);
 
-  const materialLibrary = await createMaterialLibrary(scene, WORLD_SEED, sunLighting, (done, total) => {
+  const materialLibrary = await createMaterialLibrary(scene, WORLD_SEED, content, sunLighting, (done, total) => {
     onProgress?.({ phase: "Baking material textures", completed: done, total });
   });
 
-  const trees = createTreeField(scene, sunLighting.shadowGenerator);
-  const grass = createGrassField(scene, WORLD_SEED, materialLibrary.litShading);
+  const trees = createTreeField(scene, sunLighting.shadowGenerator, content.treeKinds);
+  const grass = createGrassField(scene, WORLD_SEED, materialLibrary.litShading, content.grassKinds);
   const buildings = createSettlementRenderer(
     scene,
     settlementLayouts,
+    content.settlementStyles,
     WORLD_SEED,
     materialLibrary.litShading,
     sunLighting.shadowGenerator,
@@ -162,7 +168,8 @@ export async function createWorld(scene: Scene, onProgress?: (progress: WorldLoa
     buildContext: {
       sampleTerrain,
       materialBlender: materialLibrary.blender,
-      scatterTrees: createTreeScatter(WORLD_SEED),
+      scatterTrees: createTreeScatter(WORLD_SEED, content),
+      grassKinds: content.grassKinds,
       seed: WORLD_SEED,
       groundColors: materialLibrary.averageColors,
     },

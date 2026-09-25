@@ -269,20 +269,20 @@ export function createSkyDome(scene: Scene): SkyDome {
     let fogStartFraction = 0;
     for (const { biome, weight } of areaWeights) {
       const a = biome.atmosphere;
-      dayHorizon.r += a.horizon.r * weight;
-      dayHorizon.g += a.horizon.g * weight;
-      dayHorizon.b += a.horizon.b * weight;
-      dayZenith.r += a.zenith.r * weight;
-      dayZenith.g += a.zenith.g * weight;
-      dayZenith.b += a.zenith.b * weight;
-      dayCloud.r += a.cloud.r * weight;
-      dayCloud.g += a.cloud.g * weight;
-      dayCloud.b += a.cloud.b * weight;
+      dayHorizon.r += a.horizon[0] * weight;
+      dayHorizon.g += a.horizon[1] * weight;
+      dayHorizon.b += a.horizon[2] * weight;
+      dayZenith.r += a.zenith[0] * weight;
+      dayZenith.g += a.zenith[1] * weight;
+      dayZenith.b += a.zenith[2] * weight;
+      dayCloud.r += a.cloud[0] * weight;
+      dayCloud.g += a.cloud[1] * weight;
+      dayCloud.b += a.cloud[2] * weight;
       fogStartFraction += a.fogStartFraction * weight;
       const sunHorizon = biome.dayNight.sunHorizonColor;
-      twilightTint.r += sunHorizon.r * weight;
-      twilightTint.g += sunHorizon.g * weight;
-      twilightTint.b += sunHorizon.b * weight;
+      twilightTint.r += sunHorizon[0] * weight;
+      twilightTint.g += sunHorizon[1] * weight;
+      twilightTint.b += sunHorizon[2] * weight;
     }
 
     const { dayness, twilightFactor } = computeDayNightFactors(timeHours);

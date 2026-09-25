@@ -1,0 +1,7 @@
+// An example pack: a whole new zone - the moor - added without touching any code. Copy this folder
+// into public/packs/ to add it to the world (which reshuffles which biome each area rolls).
+{
+  name: "Moor",
+  description: "Rolling heather moorland with peat bogs, scattered birches and its own names.",
+  priority: 10,
+}

@@ -3,6 +3,7 @@ import type { AreaWeight } from "../cells/areaField";
 import type { SunLighting } from "../lighting/sunLighting";
 import { LIT_SHADING_GLSL, LIT_SHADING_SAMPLERS, LIT_SHADING_UNIFORMS, createLitShading, type LitShading } from "./litShading";
 import { MATERIALS_PER_TRIANGLE, createMaterialBlender, type MaterialBlender } from "./materialBlend";
+import type { WorldContent } from "../content/worldContent";
 import { TEXTURE_RESOLUTION } from "./textureGen";
 import { WATER_ALPHA, WATER_DEEP_COLOR, WATER_SHALLOW_COLOR, WATER_TINT_FULL_DEPTH } from "../terrain/ocean";
 import { bakeMaterialTextures } from "./textureBakePool";
@@ -217,10 +218,11 @@ void main() {
 export async function createMaterialLibrary(
   scene: Scene,
   seed: number,
+  content: WorldContent,
   sunLighting: SunLighting,
   onProgress?: (done: number, total: number) => void,
 ): Promise<MaterialLibrary> {
-  const blender = createMaterialBlender(seed);
+  const blender = createMaterialBlender(seed, content);
   const { materialDefs, defaultIndex, buildMaterialBlend, resolveMaterialIndex } = blender;
 
   const colorBuffer = new Uint8Array(TEXTURE_RESOLUTION * TEXTURE_RESOLUTION * 4 * materialDefs.length);

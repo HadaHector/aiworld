@@ -18,7 +18,7 @@ import {
 } from "../roads/roadConfig";
 import type { ContinentPlan } from "../cells/continentLayout";
 import type { BiomeDefinition } from "../biomes/biomeTypes";
-import { BIOME_REGISTRY } from "../biomes/biomeDefinitions";
+import type { WorldContent } from "../content/worldContent";
 import { createBaseNoise2D } from "./noise";
 import { compilePipeline, type CompiledPipeline } from "./pipeline/pipelineCompiler";
 import { createBoundaryHillEvaluator } from "./boundaryHills/boundaryHillsEvaluator";
@@ -83,22 +83,22 @@ const LAKE_TARGET_HEIGHT = SEA_LEVEL - 10;
 
 const OCEAN_SALT = 402;
 
-function compileHeightPipelines(seed: number): Map<string, CompiledPipeline> {
+function compileHeightPipelines(seed: number, biomes: BiomeDefinition[]): Map<string, CompiledPipeline> {
   const compiled = new Map<string, CompiledPipeline>();
-  for (const biome of BIOME_REGISTRY) {
+  for (const biome of biomes) {
     compiled.set(biome.id, compilePipeline(biome.outputs.height, seed, biome.id));
   }
   return compiled;
 }
 
 /** Composes continent shape + biome zoning + height noise into one queryable per-position sample. */
-export function createTerrainSampler(seed: number): TerrainWorld {
+export function createTerrainSampler(seed: number, content: WorldContent): TerrainWorld {
   const { sampleArea, worldExtent, continents, areaBounds, areaNames, landCellSites, nameGenerator } =
-    createAreaSampler(seed);
+    createAreaSampler(seed, content);
   const bedrock = createBedrockSampler(seed);
   const oceanNoise2D = createBaseNoise2D(deriveSeed(seed, OCEAN_SALT));
-  const heightPipelines = compileHeightPipelines(seed);
-  const evaluateBoundaryHill = createBoundaryHillEvaluator(seed);
+  const heightPipelines = compileHeightPipelines(seed, content.biomes);
+  const evaluateBoundaryHill = createBoundaryHillEvaluator(seed, content.boundaryHillStyles);
   const carveRiver = createRiverEvaluator(seed);
 
   // Bound after the fact, because roads are routed over the terrain as it is before any of them

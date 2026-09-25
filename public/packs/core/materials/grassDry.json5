@@ -1,0 +1,8 @@
+{
+  name: "Dry Grass",
+  texture: { generator: "twoTone", base: [0.56, 0.5, 0.26], variation: [0.66, 0.58, 0.34], roughness: 0.75, bumpStrength: 1.4 },
+  grass: [
+    { kind: "dry", density: 2.0, color: [0.72, 0.62, 0.34] },
+    { kind: "tuft", density: 0.4, color: [0.62, 0.56, 0.32] },
+  ],
+}

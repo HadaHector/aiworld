@@ -24,3 +24,15 @@ npm run probe -- scripts/probe/scratch.mjs
 file - Node's own resolver has no notion of it. Everything else here (bake pools, Babylon,
 anything DOM/WebGL) is out of reach, same as any Node script; probes are for logic that runs the
 same with or without a renderer.
+
+## World content
+
+Anything that generates world needs the content packs (`public/packs`). `loadContent.mjs` reads
+and resolves them exactly as the game does:
+
+```js
+import { loadContent } from "./loadContent.mjs";
+import { createTerrainSampler } from "../../src/world/terrain/terrainSampler.ts";
+
+const world = createTerrainSampler(1337, loadContent());
+```

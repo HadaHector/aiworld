@@ -1,0 +1,171 @@
+import { TEXTURE_RESOLUTION } from "../materials/textureGen";
+import { compileOutputs } from "../terrain/pipeline/pipelineCompiler";
+import type { ColorRampStop, NoiseSpec, PipelineDef, PipelineStep } from "../terrain/pipeline/pipelineTypes";
+import { joinPath, type RawObject, type Reader } from "./contentReader";
+import { FAILED_GENERATOR } from "./generators";
+
+const NOISE_TYPES = ["fbm", "ridged", "billow", "worley"] as const;
+
+/** The fields each op takes besides `output` and `op`: "ref" names an earlier step, "noise" a noise,
+ *  "number"/"text"/"color" a literal. */
+const OP_FIELDS: Record<string, Record<string, "ref" | "noise" | "number" | "text" | "color" | "stops">> = {
+  sample: { noise: "noise" },
+  constant: { value: "number" },
+  input: { name: "text" },
+  color: { value: "color" },
+  colorRamp: { input: "ref", stops: "stops" },
+  scale: { input: "ref", factor: "number" },
+  offset: { input: "ref", amount: "number" },
+  power: { input: "ref", exponent: "number" },
+  abs: { input: "ref" },
+  invert: { input: "ref" },
+  clamp: { input: "ref", min: "number", max: "number" },
+  remap: { input: "ref", inMin: "number", inMax: "number", outMin: "number", outMax: "number" },
+  luminance: { input: "ref" },
+  add: { a: "ref", b: "ref" },
+  subtract: { a: "ref", b: "ref" },
+  multiply: { a: "ref", b: "ref" },
+  max: { a: "ref", b: "ref" },
+  min: { a: "ref", b: "ref" },
+  lerp: { a: "ref", b: "ref", t: "number" },
+  mix: { a: "ref", b: "ref", t: "ref" },
+  /**
+   * Not an op of the compiler's own but shorthand for two of them: turns a raw signal into a 0..1
+   * mask, `at` mapping to 1 and `off` to 0, clamped outside. `at` may be either side of `off` -
+   * below it inverts the sense, which is how a Worley "edge" distance (near 0 exactly on a crack)
+   * becomes a mask that is 1 on the crack. Expands to a remap into `<output>Raw` and a clamp.
+   */
+  mask: { input: "ref", at: "number", off: "number" },
+};
+
+export interface PipelineReadOptions {
+  /** Texture pipelines are sampled in pixels, so a noise there may give its scale as `tileCycles` -
+   *  cycles per texture tile - instead of a raw `frequency`, which keeps a material's look fixed
+   *  whatever resolution it is baked at. */
+  texture?: boolean;
+  /** Output names the pipeline must declare (a texture's `diffuse`, say). */
+  requiredOutputs?: readonly string[];
+}
+
+function readNoise(raw: unknown, reader: Reader, path: string, options: PipelineReadOptions): NoiseSpec {
+  const obj = reader.object(raw, path);
+  const type = reader.oneOf(obj, "type", path, NOISE_TYPES);
+  const name = reader.string(obj, "name", path);
+  const scaleKeys = options.texture ? ["frequency", "tileCycles"] : ["frequency"];
+  let frequency = 0;
+  if (options.texture && reader.has(obj, "tileCycles")) {
+    if (reader.has(obj, "frequency")) reader.fail(path, "give either frequency or tileCycles, not both");
+    frequency = reader.number(obj, "tileCycles", path, { min: 0 }) / TEXTURE_RESOLUTION;
+  } else {
+    frequency = reader.number(obj, "frequency", path, { min: 0 });
+  }
+  const amplitude = reader.number(obj, "amplitude", path);
+
+  if (type === "worley") {
+    reader.onlyKeys(obj, path, ["name", "type", "amplitude", "mode", ...scaleKeys]);
+    return { name, type, frequency, amplitude, mode: reader.oneOf(obj, "mode", path, ["f1", "edge"] as const) };
+  }
+  reader.onlyKeys(obj, path, ["name", "type", "amplitude", "octaves", "persistence", "lacunarity", ...scaleKeys]);
+  return {
+    name,
+    type,
+    frequency,
+    amplitude,
+    octaves: reader.number(obj, "octaves", path, { min: 1, max: 12, integer: true }),
+    persistence: reader.number(obj, "persistence", path),
+    lacunarity: reader.number(obj, "lacunarity", path),
+  };
+}
+
+function readStops(raw: RawObject, reader: Reader, path: string): ColorRampStop[] {
+  const stops = reader.array(raw, "stops", path).map((item, i) => {
+    const at = joinPath(joinPath(path, "stops"), i);
+    const stop = reader.object(item, at);
+    reader.onlyKeys(stop, at, ["at", "color"]);
+    return { at: reader.number(stop, "at", at), color: reader.color(stop, "color", at) };
+  });
+  if (stops.length === 0) reader.fail(joinPath(path, "stops"), "a colour ramp needs at least one stop");
+  return stops;
+}
+
+/**
+ * Reads a pipeline graph (see terrain/pipeline/pipelineTypes.ts), expanding `mask` steps and
+ * `tileCycles`, checking every field and every name a step refers to, and finally compiling it once
+ * so anything the compiler itself objects to (a colour where a number has to be) is reported
+ * against the pack file rather than surfacing mid-generation.
+ */
+export function readPipeline(raw: unknown, reader: Reader, path: string, options: PipelineReadOptions = {}): PipelineDef {
+  if (raw === FAILED_GENERATOR) return { noises: [], steps: [] };
+  const obj = reader.object(raw, path);
+  reader.onlyKeys(obj, path, ["noises", "steps", "outputs"]);
+  const issuesBefore = reader.issues.length;
+
+  const noises = reader.optionalArray(obj, "noises", path).map((n, i) => readNoise(n, reader, joinPath(joinPath(path, "noises"), i), options));
+  const noiseNames = new Set<string>();
+  noises.forEach((noise, i) => {
+    if (noiseNames.has(noise.name)) reader.fail(joinPath(joinPath(path, "noises"), i), `a noise named "${noise.name}" already exists`);
+    noiseNames.add(noise.name);
+  });
+
+  const outputs = new Set<string>();
+  const steps: PipelineStep[] = [];
+  const rawSteps = reader.array(obj, "steps", path);
+  if (rawSteps.length === 0) reader.fail(joinPath(path, "steps"), "a pipeline needs at least one step");
+  rawSteps.forEach((rawStep, i) => {
+    const at = joinPath(joinPath(path, "steps"), i);
+    const step = reader.object(rawStep, at);
+    const output = reader.string(step, "output", at);
+    const op = reader.oneOf(step, "op", at, Object.keys(OP_FIELDS));
+    const fields = OP_FIELDS[op];
+    reader.onlyKeys(step, at, ["output", "op", ...Object.keys(fields)]);
+
+    const read: RawObject = { output, op };
+    for (const [key, kind] of Object.entries(fields)) {
+      if (kind === "number") read[key] = reader.number(step, key, at);
+      else if (kind === "text") read[key] = reader.string(step, key, at);
+      else if (kind === "color") read[key] = reader.color(step, key, at);
+      else if (kind === "stops") read[key] = readStops(step, reader, at);
+      else {
+        const name = reader.string(step, key, at);
+        read[key] = name;
+        if (kind === "noise" && name && !noiseNames.has(name)) reader.fail(joinPath(at, key), `no noise named "${name}" in this pipeline`);
+        if (kind === "ref" && name && !outputs.has(name)) reader.fail(joinPath(at, key), `no earlier step named "${name}"`);
+      }
+    }
+
+    if (op === "mask") {
+      steps.push({ output: `${output}Raw`, op: "remap", input: read.input as string, inMin: read.off as number, inMax: read.at as number, outMin: 0, outMax: 1 });
+      steps.push({ output, op: "clamp", input: `${output}Raw`, min: 0, max: 1 });
+      outputs.add(`${output}Raw`);
+    } else {
+      steps.push(read as unknown as PipelineStep);
+    }
+    outputs.add(output);
+  });
+
+  let namedOutputs: Record<string, string> | undefined;
+  if (obj.outputs !== undefined) {
+    const map = reader.object(obj.outputs, joinPath(path, "outputs"));
+    namedOutputs = {};
+    for (const [key, value] of Object.entries(map)) {
+      if (typeof value !== "string" || !outputs.has(value)) {
+        reader.fail(joinPath(joinPath(path, "outputs"), key), `must name a step of this pipeline, got ${JSON.stringify(value)}`);
+        continue;
+      }
+      namedOutputs[key] = value;
+    }
+  }
+  for (const required of options.requiredOutputs ?? []) {
+    if (!namedOutputs?.[required]) reader.fail(joinPath(path, "outputs"), `must declare a "${required}" output`);
+  }
+
+  const pipeline: PipelineDef = namedOutputs ? { noises, steps, outputs: namedOutputs } : { noises, steps };
+  if (reader.issues.length === issuesBefore) {
+    try {
+      compileOutputs(pipeline, 0, "check", options.texture ? { tilePeriod: TEXTURE_RESOLUTION } : undefined);
+    } catch (error) {
+      reader.fail(path, error instanceof Error ? error.message : String(error));
+    }
+  }
+  return pipeline;
+}

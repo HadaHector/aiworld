@@ -1,0 +1,9 @@
+{
+  name: "Grass",
+  texture: { generator: "twoTone", base: [0.28, 0.42, 0.2], variation: [0.38, 0.55, 0.28], roughness: 0.75, bumpStrength: 1.4 },
+  grass: [
+    { kind: "meadow", density: 3.0, color: [0.47, 0.66, 0.3] },
+    { kind: "tall", density: 0.2, color: [0.47, 0.8, 0.4] },
+    { kind: "flowers", density: 1.2, color: [0.4, 0.62, 0.26] },
+  ],
+}

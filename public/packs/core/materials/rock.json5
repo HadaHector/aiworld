@@ -1,0 +1,67 @@
+{
+  name: "Rock",
+  texture: {
+    bumpStrength: 3.0,
+    pipeline: {
+      noises: [
+        { name: "mottle", type: "fbm", octaves: 3, tileCycles: 13, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+        { name: "grain", type: "fbm", octaves: 2, tileCycles: 46, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+        { name: "lumps", type: "billow", octaves: 2, tileCycles: 4, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+        { name: "knobs", type: "billow", octaves: 2, tileCycles: 11, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+      ],
+      steps: [
+        { output: "lump", op: "sample", noise: "lumps" },
+        { output: "lumpMask", op: "mask", input: "lump", at: 0.45, off: -1.4 },
+        { output: "knob", op: "sample", noise: "knobs" },
+        { output: "knobMask", op: "mask", input: "knob", at: 0.45, off: -1.4 },
+        { output: "grain", op: "sample", noise: "grain" },
+        { output: "grainMask", op: "mask", input: "grain", at: 1.5, off: -1.5 },
+        { output: "mottle", op: "sample", noise: "mottle" },
+        { output: "mottleMask", op: "mask", input: "mottle", at: 1.75, off: -1.75 },
+
+        // --- the rock's form, built first so everything below can be derived from it ---
+        { output: "lumpRelief", op: "scale", input: "lumpMask", factor: 0.75 },
+        { output: "knobRelief", op: "scale", input: "knobMask", factor: 0.33 },
+        { output: "lumpy", op: "add", a: "lumpRelief", b: "knobRelief" },
+        { output: "grainRelief", op: "scale", input: "grainMask", factor: 0.14 },
+        { output: "rockForm", op: "add", a: "lumpy", b: "grainRelief" },
+
+        // Sediment is defined purely as "where the rock is low" - 1 in the deepest hollows, gone by
+        // the time the surface has risen to 0.42.
+        { output: "sedimentMask", op: "mask", input: "rockForm", at: 0.18, off: 0.32 },
+
+        // --- diffuse ---
+        // Stone color comes from the mottle, NOT from the form. Keying color directly on the lump
+        // shape made the texture read as soft cloud or marble: albedo that tracks height exactly is
+        // not what stone looks like. Real rock is fairly uniform in albedo with blotchy variation
+        // that has nothing to do with its bumps, and the form is read from lighting - which is the
+        // normal map's job here.
+        { output: "stoneDark", op: "color", value: [0.3, 0.29, 0.28] },
+        { output: "stoneLight", op: "color", value: [0.45, 0.44, 0.42] },
+        { output: "stoneBase", op: "mix", a: "stoneDark", b: "stoneLight", t: "mottleMask" },
+
+        // A gentle stand-in for ambient occlusion: only the deepest parts of the form darken, and
+        // gradually, rather than the whole surface being shaded by height.
+        { output: "hollowMask", op: "mask", input: "rockForm", at: 0.05, off: 0.55 },
+        { output: "occlusionColor", op: "color", value: [0.2, 0.19, 0.18] },
+        { output: "occlusionBlend", op: "scale", input: "hollowMask", factor: 0.5 },
+        { output: "stone", op: "mix", a: "stoneBase", b: "occlusionColor", t: "occlusionBlend" },
+
+        { output: "sedimentDark", op: "color", value: [0.36, 0.33, 0.27] },
+        { output: "sedimentLight", op: "color", value: [0.46, 0.43, 0.36] },
+        { output: "sediment", op: "mix", a: "sedimentDark", b: "sedimentLight", t: "mottleMask" },
+        { output: "diffuse", op: "mix", a: "stone", b: "sediment", t: "sedimentMask" },
+
+        // Loose grit is powdery and more matte than the bare stone it sits on.
+        { output: "roughStone", op: "constant", value: 0.82 },
+        { output: "roughSediment", op: "constant", value: 0.94 },
+        { output: "roughness", op: "mix", a: "roughStone", b: "roughSediment", t: "sedimentMask" },
+
+        // Sediment settles level, so it fills its hollows slightly rather than draping over them.
+        { output: "sedimentFill", op: "scale", input: "sedimentMask", factor: 0.1 },
+        { output: "height", op: "add", a: "rockForm", b: "sedimentFill" },
+      ],
+      outputs: { diffuse: "diffuse", roughness: "roughness", height: "height" },
+    },
+  },
+}

@@ -9,6 +9,9 @@ import { createTextureBrowser } from "./debug/textureBrowser";
 import { createPositionPanel, type ViewSnapshot } from "./debug/positionPanel";
 import { createStatsPanel } from "./debug/statsPanel";
 import { createLoadingScreen } from "./ui/loadingScreen";
+import { loadContent } from "./world/content/loadContent";
+import { ContentError, formatIssue } from "./world/content/contentReader";
+import type { WorldContent } from "./world/content/worldContent";
 
 const canvas = document.getElementById("renderCanvas");
 if (!(canvas instanceof HTMLCanvasElement)) {
@@ -17,12 +20,27 @@ if (!(canvas instanceof HTMLCanvasElement)) {
 
 const loadingScreen = createLoadingScreen();
 
+// Everything the world is generated from that is content rather than code - biomes, materials,
+// plants - comes from the packs in public/packs. A broken pack stops here, with every problem listed
+// on the loading screen, rather than halfway through generating a world from it.
+let content: WorldContent;
+try {
+  loadingScreen.update("Loading content packs", 0, 0);
+  content = await loadContent();
+} catch (error) {
+  loadingScreen.fail(
+    "The content packs could not be loaded",
+    error instanceof ContentError ? error.issues.map(formatIssue) : [String(error)],
+  );
+  throw error;
+}
+
 const engine = createEngine(canvas);
 const scene = createScene(engine);
 
 // World creation is async because material textures are baked across a worker pool (see
 // textureBakePool.ts), which is the bulk of startup time.
-const world = await createWorld(scene, ({ phase, completed, total }) => {
+const world = await createWorld(scene, content, ({ phase, completed, total }) => {
   loadingScreen.update(phase, completed, total);
 });
 

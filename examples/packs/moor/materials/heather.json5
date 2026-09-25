@@ -1,0 +1,37 @@
+// Heather ground: a dark purple-brown mat with greener patches, the colour of a moor at a distance.
+{
+  name: "Heather",
+  texture: {
+    bumpStrength: 1.6,
+    pipeline: {
+      noises: [
+        { name: "mottle", type: "fbm", octaves: 3, tileCycles: 13, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+        { name: "sprigs", type: "billow", octaves: 2, tileCycles: 30, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+      ],
+      steps: [
+        { output: "mottle", op: "sample", noise: "mottle" },
+        { output: "mottleMask", op: "mask", input: "mottle", at: 1.75, off: -1.75 },
+        { output: "sprigRaw", op: "sample", noise: "sprigs" },
+        { output: "sprigMask", op: "mask", input: "sprigRaw", at: 0.4, off: -1.2 },
+        {
+          output: "diffuse",
+          op: "colorRamp",
+          input: "mottleMask",
+          stops: [
+            { at: 0.0, color: [0.2, 0.14, 0.14] },
+            { at: 0.5, color: [0.33, 0.22, 0.26] },
+            { at: 0.8, color: [0.3, 0.32, 0.2] },
+            { at: 1.0, color: [0.36, 0.38, 0.24] },
+          ],
+        },
+        { output: "roughness", op: "constant", value: 0.85 },
+        { output: "height", op: "scale", input: "sprigMask", factor: 0.9 },
+      ],
+      outputs: { diffuse: "diffuse", roughness: "roughness", height: "height" },
+    },
+  },
+  grass: [
+    { kind: "heather", density: 2.2, color: [0.36, 0.3, 0.26] },
+    { kind: "tuft", density: 0.6, color: [0.52, 0.55, 0.36] },
+  ],
+}

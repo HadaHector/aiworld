@@ -1,0 +1,46 @@
+/** The leeward face of a dune: the same sand, but in its own shadow - deeper and redder, with the
+ *  ripples smoothed out, since the slip face is loose sand avalanching rather than wind-worked. */
+{
+  name: "Dune Shadow",
+  texture: {
+    bumpStrength: 1.1,
+    pipeline: {
+      noises: [
+        { name: "broad", type: "fbm", octaves: 2, tileCycles: 3, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+        { name: "mottle", type: "fbm", octaves: 3, tileCycles: 13, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+        { name: "grain", type: "fbm", octaves: 2, tileCycles: 46, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+      ],
+      steps: [
+        { output: "broad", op: "sample", noise: "broad" },
+        { output: "broadMask", op: "mask", input: "broad", at: 1.5, off: -1.5 },
+        { output: "mottle", op: "sample", noise: "mottle" },
+        { output: "mottleMask", op: "mask", input: "mottle", at: 1.75, off: -1.75 },
+        { output: "grain", op: "sample", noise: "grain" },
+        { output: "grainMask", op: "mask", input: "grain", at: 1.5, off: -1.5 },
+
+        { output: "toneBroad", op: "scale", input: "broadMask", factor: 0.6 },
+        { output: "toneMottle", op: "scale", input: "mottleMask", factor: 0.4 },
+        { output: "tone", op: "add", a: "toneBroad", b: "toneMottle" },
+        // The same ramp family as sand, shifted darker and redder so a slip face reads as
+        // the shaded side of the *same* dune rather than a different material sitting next to it.
+        {
+          output: "diffuse",
+          op: "colorRamp",
+          input: "tone",
+          stops: [
+            { at: 0.0, color: [0.38, 0.26, 0.15] },
+            { at: 0.45, color: [0.55, 0.40, 0.24] },
+            { at: 1.0, color: [0.70, 0.55, 0.35] },
+          ],
+        },
+
+        { output: "roughness", op: "constant", value: 0.7 },
+
+        { output: "slipFace", op: "scale", input: "broadMask", factor: 0.65 },
+        { output: "sandGrain", op: "scale", input: "grainMask", factor: 0.25 },
+        { output: "height", op: "add", a: "slipFace", b: "sandGrain" },
+      ],
+      outputs: { diffuse: "diffuse", roughness: "roughness", height: "height" },
+    },
+  },
+}

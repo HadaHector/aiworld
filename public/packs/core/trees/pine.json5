@@ -1,0 +1,17 @@
+// Cones of decreasing width, overlapping. One tall cone reads as a party hat; the steps where one
+// tier's skirt crosses the next are what make it a conifer.
+{
+  trunk: { height: 10, diameterBottom: 3.5, diameterTop: 2.8, sides: 7, color: [0.28, 0.17, 0.12] },
+  crown: {
+    builder: "tieredCones",
+    sides: 8,
+    tiers: [
+      { diameter: 10.6, height: 7.5, baseY: 10 },
+      { diameter: 8.6, height: 7.5, baseY: 14 },
+      { diameter: 6.6, height: 7.5, baseY: 18 },
+      { diameter: 4.6, height: 7.5, baseY: 22 },
+    ],
+  },
+  canopyDark: [0.09, 0.24, 0.16],
+  canopyLight: [0.19, 0.38, 0.21],
+}

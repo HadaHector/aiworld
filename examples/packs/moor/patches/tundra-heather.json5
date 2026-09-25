@@ -1,0 +1,8 @@
+// A patch adds to another pack's lists instead of replacing the whole definition: here, a little
+// of this pack's heather growing on core's tundra ground as well.
+{
+  target: "materials/tundraGround",
+  append: {
+    grass: [{ kind: "heather", density: 0.25, color: [0.4, 0.34, 0.3] }],
+  },
+}

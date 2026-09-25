@@ -1,23 +1,32 @@
 import { mulberry32 } from "../rng";
+import type { WallTexture } from "./settlementConfig";
 
-export const WOOD_TEXTURE_SIZE = 256;
+export const WALL_TEXTURE_SIZE = 256;
 /** World units one texture repeat covers, both ways. */
-export const WOOD_TEXTURE_WORLD_SIZE = 2;
-/** Boards per texture repeat, so each board is WOOD_TEXTURE_WORLD_SIZE / this tall. */
-const BOARDS = 8;
+export const WALL_TEXTURE_WORLD_SIZE = 2;
+
+/** Bakes a settlement style's wall texture (see WallTexture). */
+export function bakeWallTexture(seed: number, texture: WallTexture): Uint8Array {
+  switch (texture.builder) {
+    case "weatherboard":
+      return bakeWeatherboard(seed, texture);
+  }
+}
 
 /**
  * Horizontal weatherboards: each board its own tone, a lengthwise grain, a dark seam between
- * boards and the odd butt joint along one. Kept close to neutral warm wood - a building's own
- * colour (bare, weathered, painted, roof) comes from its vertex colour multiplying this.
+ * boards and the odd butt joint along one. Kept close to neutral - a building's own colour (bare,
+ * weathered, painted, roof) comes from its vertex colour multiplying this.
  */
-export function bakeWoodTexture(seed: number): Uint8Array {
-  const size = WOOD_TEXTURE_SIZE;
+function bakeWeatherboard(seed: number, texture: WallTexture): Uint8Array {
+  const size = WALL_TEXTURE_SIZE;
   const pixels = new Uint8Array(size * size * 4);
   const rng = mulberry32(seed);
-  const boardHeight = size / BOARDS;
+  const boardCount = texture.boards;
+  const boardHeight = size / boardCount;
+  const [red, green, blue] = texture.color;
 
-  const boards = Array.from({ length: BOARDS }, () => ({
+  const boards = Array.from({ length: boardCount }, () => ({
     tone: 0.85 + rng() * 0.25,
     grainPhase: rng() * 100,
     grainScale: 0.02 + rng() * 0.03,
@@ -38,9 +47,9 @@ export function bakeWoodTexture(seed: number): Uint8Array {
       else shade *= 0.92 + 0.08 * inBoard;
       if (Math.abs(x - board.joint) < 1.5) shade *= 0.55;
       const i = (y * size + x) * 4;
-      pixels[i] = Math.min(255, Math.round(shade * 0.66 * 255));
-      pixels[i + 1] = Math.min(255, Math.round(shade * 0.5 * 255));
-      pixels[i + 2] = Math.min(255, Math.round(shade * 0.34 * 255));
+      pixels[i] = Math.min(255, Math.round(shade * red * 255));
+      pixels[i + 1] = Math.min(255, Math.round(shade * green * 255));
+      pixels[i + 2] = Math.min(255, Math.round(shade * blue * 255));
       pixels[i + 3] = 255;
     }
   }

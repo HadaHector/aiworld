@@ -1,0 +1,32 @@
+// Wet black peat with glossy pools - the `twoTone` generator is not enough for the pools, so this
+// one is written out.
+{
+  name: "Peat",
+  texture: {
+    bumpStrength: 0.6,
+    pipeline: {
+      noises: [
+        { name: "mottle", type: "fbm", octaves: 3, tileCycles: 13, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+        { name: "pools", type: "billow", octaves: 2, tileCycles: 5, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+      ],
+      steps: [
+        { output: "mottle", op: "sample", noise: "mottle" },
+        { output: "mottleMask", op: "mask", input: "mottle", at: 1.75, off: -1.75 },
+        { output: "poolRaw", op: "sample", noise: "pools" },
+        { output: "poolMask", op: "mask", input: "poolRaw", at: -1.3, off: -0.9 },
+        { output: "dark", op: "color", value: [0.1, 0.08, 0.06] },
+        { output: "light", op: "color", value: [0.2, 0.15, 0.1] },
+        { output: "peat", op: "mix", a: "dark", b: "light", t: "mottleMask" },
+        { output: "water", op: "color", value: [0.07, 0.07, 0.07] },
+        { output: "diffuse", op: "mix", a: "peat", b: "water", t: "poolMask" },
+        // The pools are glossy, the peat around them matte.
+        { output: "roughPeat", op: "constant", value: 0.8 },
+        { output: "roughWater", op: "constant", value: 0.15 },
+        { output: "roughness", op: "mix", a: "roughPeat", b: "roughWater", t: "poolMask" },
+        { output: "height", op: "invert", input: "poolMask" },
+      ],
+      outputs: { diffuse: "diffuse", roughness: "roughness", height: "height" },
+    },
+  },
+  grass: [{ kind: "tall", density: 0.4, color: [0.45, 0.5, 0.3] }],
+}

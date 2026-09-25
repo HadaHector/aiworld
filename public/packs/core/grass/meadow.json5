@@ -1,0 +1,9 @@
+// Lush, even green lawn-to-meadow grass.
+{
+  width: 0.95,
+  height: 0.5,
+  sway: 0.18,
+  fadeStart: 15,
+  fadeEnd: 200,
+  blades: { count: 60, minHeight: 0.45, maxHeight: 0.95, baseWidth: 7, lean: 0.12, fan: false, seedHeads: false },
+}

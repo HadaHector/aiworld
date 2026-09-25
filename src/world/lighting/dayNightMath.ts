@@ -1,5 +1,6 @@
 import { Color3 } from "@babylonjs/core";
 import { lerp, smoothstep } from "../mathUtils";
+import type { ColorTuple } from "../terrain/pipeline/pipelineTypes";
 
 // Both bodies rise and set at the same two clock hours - "day and night can be the same length" -
 // so one pair of constants fixes both arcs' timing. Shared between sunLighting.ts (which needs the
@@ -63,12 +64,12 @@ export function computeDayNightFactors(timeHours: number): DayNightFactors {
 /** A day colour's hue shifted toward night's cool tint - brightness untouched, since for a
  *  Babylon light (ambient/moon) that is `intensity`'s job (see deriveNightIntensity) and for a flat
  *  sky/fog colour with no separate intensity it is deriveNightSkyColor's job below. */
-export function coolNightTone(day: Color3): Color3 {
-  return new Color3(
-    lerp(day.r, NIGHT_COOL_TINT.r, NIGHT_COOL_AMOUNT),
-    lerp(day.g, NIGHT_COOL_TINT.g, NIGHT_COOL_AMOUNT),
-    lerp(day.b, NIGHT_COOL_TINT.b, NIGHT_COOL_AMOUNT),
-  );
+export function coolNightTone(day: ColorTuple): ColorTuple {
+  return [
+    lerp(day[0], NIGHT_COOL_TINT.r, NIGHT_COOL_AMOUNT),
+    lerp(day[1], NIGHT_COOL_TINT.g, NIGHT_COOL_AMOUNT),
+    lerp(day[2], NIGHT_COOL_TINT.b, NIGHT_COOL_AMOUNT),
+  ];
 }
 
 export function deriveNightIntensity(dayIntensity: number): number {

@@ -1,27 +1,19 @@
 import { deriveSeed, mulberry32 } from "../rng";
 import { smoothstep } from "../mathUtils";
 import { compileOutputs, type CompiledOutputs } from "../terrain/pipeline/pipelineCompiler";
-import { BIOME_REGISTRY } from "../biomes/biomeDefinitions";
 import type { BiomeDefinition } from "../biomes/biomeTypes";
+import type { WorldContent } from "../content/worldContent";
 import type { TerrainSample } from "../terrain/terrainSampler";
 import {
   TREE_SPACING,
   TREE_CANDIDATES_PER_CELL,
   TREE_MAX_LAKE_FACTOR,
-  TREE_MIN_HEIGHT,
-  TREE_SHORE_HEIGHT,
   TREE_ROAD_CLEARANCE,
   TREE_ROAD_FADE,
-  TREE_EASY_SLOPE,
-  TREE_MAX_SLOPE,
-  TREE_LINE_START,
-  TREE_LINE_END,
-  TREE_SCALE_MIN,
-  TREE_SCALE_MAX,
   TREE_SINK,
   FOLIAGE_SALT,
-  TREE_KINDS,
-  type TreeKind,
+  type TreeKindDef,
+  type TreeRules,
 } from "./foliageConfig";
 
 /** What the scatter needs to know about the ground under a candidate. */
@@ -43,7 +35,8 @@ export interface TreePlacement {
   x: number;
   y: number;
   z: number;
-  kind: TreeKind;
+  /** A TreeKindDef id. */
+  kind: string;
   /** Uniform. Multiplies the whole placeholder model. */
   scale: number;
   /** Radians about Y. */
@@ -74,7 +67,8 @@ interface Candidate {
   index: number;
   densityRoll: number;
   kindRoll: number;
-  scale: number;
+  /** 0-1, where in its kind's scale range the tree lands - drawn before the kind is known. */
+  scaleRoll: number;
   rotation: number;
   tint: number;
 }
@@ -110,25 +104,27 @@ interface BiomeFoliage {
  * What survives the spacing rule is then thinned by the density map each biome declares (see
  * BiomeOutputs.foliage), which is also what decides which species a surviving dart becomes.
  */
-export function createTreeScatter(seed: number): TreeScatter {
+export function createTreeScatter(seed: number, content: Pick<WorldContent, "biomes" | "treeKinds">): TreeScatter {
+  const kindIds = content.treeKinds.map((kind) => kind.id);
+
   function compileFoliage(biome: BiomeDefinition): BiomeFoliage | null {
     const def = biome.outputs.foliage;
     if (!def) return null;
 
     for (const name of Object.keys(def.outputs ?? {})) {
-      if (!(TREE_KINDS as readonly string[]).includes(name)) {
+      if (!kindIds.includes(name)) {
         throw new Error(`Biome "${biome.id}" declares a foliage output "${name}", which is not a tree kind`);
       }
     }
 
     const graph = compileOutputs(def, seed, `${biome.id}:foliage`);
-    const offsetOf = new Int32Array(TREE_KINDS.length).fill(-1);
+    const offsetOf = new Int32Array(kindIds.length).fill(-1);
     let grows = false;
-    for (let k = 0; k < TREE_KINDS.length; k++) {
-      const ref = graph.output(TREE_KINDS[k]);
+    for (let k = 0; k < kindIds.length; k++) {
+      const ref = graph.output(kindIds[k]);
       if (!ref) continue;
       if (ref.type !== "scalar") {
-        throw new Error(`Biome "${biome.id}" foliage output "${TREE_KINDS[k]}" is a colour; a density has to be a scalar`);
+        throw new Error(`Biome "${biome.id}" foliage output "${kindIds[k]}" is a colour; a density has to be a scalar`);
       }
       offsetOf[k] = ref.offset;
       grows = true;
@@ -137,11 +133,11 @@ export function createTreeScatter(seed: number): TreeScatter {
   }
 
   const foliageOf = new Map<string, BiomeFoliage | null>();
-  for (const biome of BIOME_REGISTRY) foliageOf.set(biome.id, compileFoliage(biome));
+  for (const biome of content.biomes) foliageOf.set(biome.id, compileFoliage(biome));
 
   // Reused across candidates rather than rebuilt per call: this is the hottest thing in a chunk
   // build after the terrain samples themselves.
-  const perKind = new Float64Array(TREE_KINDS.length);
+  const perKind = new Float64Array(kindIds.length);
   const context: Record<string, number> = {
     height: 0,
     slope: 0,
@@ -167,7 +163,7 @@ export function createTreeScatter(seed: number): TreeScatter {
         index,
         densityRoll: rng(),
         kindRoll: rng(),
-        scale: TREE_SCALE_MIN + rng() * (TREE_SCALE_MAX - TREE_SCALE_MIN),
+        scaleRoll: rng(),
         rotation: rng() * Math.PI * 2,
         tint: rng(),
       });
@@ -223,36 +219,57 @@ export function createTreeScatter(seed: number): TreeScatter {
   }
 
   /** Which species this one is, drawn from the mix `speciesDensities` just left in `perKind`. */
-  function kindFor(total: number, roll: number): TreeKind {
+  function kindFor(total: number, roll: number): TreeKindDef {
     let remaining = roll * total;
     for (let k = 0; k < perKind.length; k++) {
       remaining -= perKind[k];
-      if (remaining <= 0) return TREE_KINDS[k];
+      if (remaining <= 0) return content.treeKinds[k];
     }
     // Only reachable on a rounding edge, where the last species with any share is the answer.
     for (let k = perKind.length - 1; k >= 0; k--) {
-      if (perKind[k] > 0) return TREE_KINDS[k];
+      if (perKind[k] > 0) return content.treeKinds[k];
     }
-    return TREE_KINDS[0];
+    return content.treeKinds[0];
+  }
+
+  function rulesFade(rules: TreeRules, ground: TreeGround): number {
+    let fade = smoothstep(rules.shore[0], rules.shore[1], ground.height);
+    fade *= 1 - smoothstep(rules.line[0], rules.line[1], ground.height);
+    fade *= 1 - smoothstep(rules.slope[0], rules.slope[1], ground.slope);
+    return fade;
   }
 
   /**
-   * The world's own rules, applied on top of whatever a biome asked for.
-   *
-   * These live here rather than in the biome definitions because they are not preferences: nothing
-   * grows in a road cut, in a lake or off a cliff, whatever the zone would like. Every one is a
-   * fade, because a hard line in a density field reads as a drawn edge in the world. A biome that
-   * wants a sharper treeline of its own can still write one - `height` and `slope` are inputs its
-   * graph can read.
+   * The rules applied on top of whatever a biome's density map asked for: each zone's own TreeRules
+   * (shore, treeline, slope), blended by the zones' weights, then the world's own - nothing grows
+   * in a lake or a road cut, whatever the zone would like. Every one but the lake is a fade,
+   * because a hard line in a density field reads as a drawn edge in the world.
    */
   function survivalFade(ground: TreeGround): number {
     const { sample } = ground;
     if (!sample.isLand) return 0;
     if (sample.lakeFactor > TREE_MAX_LAKE_FACTOR) return 0;
 
-    let fade = smoothstep(TREE_MIN_HEIGHT, TREE_SHORE_HEIGHT, ground.height);
-    fade *= 1 - smoothstep(TREE_LINE_START, TREE_LINE_END, ground.height);
-    fade *= 1 - smoothstep(TREE_EASY_SLOPE, TREE_MAX_SLOPE, ground.slope);
+    // Zones that do not set rules of their own share the defaults' object, so the usual case is a
+    // single rule set that needs no blending at all.
+    let first: TreeRules | null = null;
+    let firstFade = 0;
+    let mixed = false;
+    let blended = 0;
+    let weightSum = 0;
+    for (const { biome, weight } of sample.areaWeights) {
+      const zoneFade = rulesFade(biome.treeRules, ground);
+      if (first === null) {
+        first = biome.treeRules;
+        firstFade = zoneFade;
+      } else if (biome.treeRules !== first) {
+        mixed = true;
+      }
+      blended += zoneFade * weight;
+      weightSum += weight;
+    }
+    if (first === null) return 0;
+    let fade = mixed ? blended / weightSum : firstFade;
     // roadGap is Infinity where no road is in range, which smoothstep clamps to 1.
     fade *= smoothstep(TREE_ROAD_CLEARANCE, TREE_ROAD_FADE, sample.roadGap);
     return fade;
@@ -309,12 +326,13 @@ export function createTreeScatter(seed: number): TreeScatter {
           if (wanted <= 0) continue;
           if (candidate.densityRoll >= wanted * survivalFade(ground)) continue;
 
+          const kind = kindFor(wanted, candidate.kindRoll);
           trees.push({
             x: candidate.x,
             y: ground.surfaceHeight - TREE_SINK,
             z: candidate.z,
-            kind: kindFor(wanted, candidate.kindRoll),
-            scale: candidate.scale,
+            kind: kind.id,
+            scale: kind.scale[0] + candidate.scaleRoll * (kind.scale[1] - kind.scale[0]),
             rotation: candidate.rotation,
             tint: candidate.tint,
           });

@@ -1,0 +1,11 @@
+// Dry, hard, back-of-the-mouth. Plosives and long open vowels.
+{
+  onsets: ["k", "kh", "q", "t", "z", "s", "r", "m", "h", "j", "d", "b"],
+  nuclei: ["a", "aa", "u", "ai", "o", "ua"],
+  codas: ["r", "n", "m", "z", "kh", "d", "sh"],
+  finals: ["ar", "un", "im", "ad", "esh", "at", "ir"],
+  features: ["Waste", "Expanse", "Sands", "Reach", "Barrens", "Flats", "Dunes"],
+  qualities: ["Burning", "Empty", "Golden", "Silent", "Endless", "Bleached", "Scorched", "Red", "Thirsting"],
+  codaChance: 0.55,
+  thirdSyllableChance: 0.3,
+}

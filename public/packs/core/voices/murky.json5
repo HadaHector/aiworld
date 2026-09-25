@@ -1,0 +1,11 @@
+// Soft, wet, nasal. Few hard stops, heavy on liquids.
+{
+  onsets: ["m", "l", "gh", "w", "sl", "b", "n", "dr", "y", "v"],
+  nuclei: ["u", "oo", "o", "ou", "e", "ae"],
+  codas: ["m", "l", "gh", "n", "th"],
+  finals: ["oom", "ul", "ogh", "en", "ath", "ir", "ow"],
+  features: ["Mire", "Fen", "Marsh", "Bog", "Hollow", "Sink", "Reach"],
+  qualities: ["Sunken", "Drowned", "Green", "Quiet", "Rotting", "Low", "Fevered", "Weeping"],
+  codaChance: 0.45,
+  thirdSyllableChance: 0.35,
+}

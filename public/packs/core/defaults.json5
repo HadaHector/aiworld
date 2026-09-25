@@ -1,0 +1,42 @@
+// What a biome gets for anything it does not say itself. A pack's own defaults.json5 is merged over
+// this one section by section, so it can change a single value without restating the rest.
+{
+  // The ground wherever nothing else applies - always the first texture layer.
+  defaultMaterial: "grass",
+
+  sky: {
+    // Fraction of the draw distance at which fog begins. Only a biome with something to say (the
+    // swamp) overrides it; fog always ends just short of the draw distance, whatever the zone.
+    fogStart: 0.3,
+  },
+
+  // A plain, unsaturated day palette, so a biome only has to state colour where it actually wants to
+  // diverge. There are no night defaults: night is derived from whatever the day colour and
+  // intensity turn out to be (a cooler, dimmer version of them - see lighting/dayNightMath.ts), so a
+  // biome that tints its day gets a matching night for free.
+  light: {
+    ambientDay: "#b0c4d6",
+    ambientDayIntensity: 0.55,
+    sunHorizon: "#ff965a",
+    sunZenith: "#fff8e0",
+    sunIntensity: 1.0,
+  },
+
+  // Where trees thin out, for a biome with no treeRules of its own. Each is a [start, end] range
+  // the density fades across, so no cutoff line is drawn across the landscape.
+  treeRules: {
+    // Ground height: a shore fade rather than a waterline, so trees thin out as the ground
+    // approaches the water instead of marching down to it and stopping dead.
+    shore: [1.5, 6],
+    // Ground height: the treeline. Mountain peaks reach ~120 units, so this bares the top third of
+    // the big ones and leaves the shoulders wooded.
+    line: [70, 95],
+    // Sine of the ground angle (0 flat, 1 vertical): a hillside loses its trees gradually up the
+    // steep part and a cliff has none.
+    slope: [0.3, 0.72],
+  },
+
+  // Each tree is scaled by a random factor in this range, for a tree kind with no scale of its
+  // own. Uniform only - a placeholder that leans or squashes just looks broken.
+  treeScale: [0.75, 1.35],
+}

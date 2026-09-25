@@ -1,0 +1,57 @@
+// Open, rolling upland: heather on the rises, peat pooling in the hollows, the odd birch, and a
+// low grey sky that closes in sooner than anywhere but the swamp.
+{
+  name: "Moor",
+  voice: "misty",
+  spawnWeight: 1.5,
+  lakeChance: 0.08, // tarns
+  borderType: "mountain",
+  settlement: "timber", // core's style - a pack can use anything another pack defines
+
+  // Long, low swells rather than hills: wide wavelength, and enough persistence that the higher
+  // octaves still ripple the tops.
+  height: { generator: "detailHeight", amplitude: 18, frequency: 0.0016, offset: 14, octaves: 5, persistence: 0.45 },
+
+  // Birches only where a slow noise allows, and thinly even there - a moor is open ground.
+  trees: { generator: "standDensity", tree: "birch", frequency: 0.004, openAt: 0.25, fullAt: 0.7, peak: 0.3 },
+  treeRules: {
+    // Wind-scoured tops: the trees give out well below the core treeline.
+    line: [30, 42],
+  },
+
+  ground: {
+    base: "heather",
+    road: "track",
+    layers: [
+      // Peat collects wherever the ground dips - the same curvature signal the core valley layers
+      // use, but only on flat ground, so a hollow's sides stay heather.
+      {
+        id: "moor-peat-hollow",
+        material: "peat",
+        weight: {
+          steps: [
+            { output: "curvature", op: "input", name: "reliefCurvature" },
+            { output: "hollow", op: "mask", input: "curvature", at: 1.2, off: 0.2 },
+            { output: "slope", op: "input", name: "slope" },
+            { output: "flat", op: "mask", input: "slope", at: 0.96, off: 0.9 },
+            { output: "result", op: "multiply", a: "hollow", b: "flat" },
+          ],
+        },
+      },
+    ],
+  },
+
+  sky: {
+    horizon: "#a9b2b4",
+    zenith: "#6d8196",
+    cloud: "#d7dadb",
+    fogStart: 0.18,
+  },
+  light: {
+    sunPeak: 48,
+    moonPeak: 50,
+    ambientDay: "#a8b4bc",
+    sunZenith: "#f2efe6",
+    sunIntensity: 0.85,
+  },
+}

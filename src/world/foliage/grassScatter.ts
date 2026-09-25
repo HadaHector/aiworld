@@ -1,14 +1,6 @@
-import type { MaterialDef } from "../materials/materialDefinitions";
+import type { MaterialDef } from "../materials/materialTypes";
 import { SEA_LEVEL } from "../cells/areaField";
-import {
-  GRASS_BY_MATERIAL,
-  GRASS_CELL_SIZE,
-  GRASS_CLEARING_MATERIALS,
-  GRASS_KINDS,
-  GRASS_KIND_DEFS,
-  GRASS_SALT,
-  GRASS_WATER_CLEARANCE,
-} from "./grassConfig";
+import { GRASS_CELL_SIZE, GRASS_SALT, GRASS_WATER_CLEARANCE, type GrassKindDef } from "./grassConfig";
 
 /** Floats per tuft in ChunkGrass.instances: x, y, z (chunk-local), kind * 16 + scale, then
  *  r, g, b, rotation (radians), then the ground's colour at the root packed into one float (see
@@ -24,11 +16,11 @@ function packColor(r: number, g: number, b: number): number {
 
 /** A chunk's grass, ready to hand to the GPU as it is. */
 export interface ChunkGrass {
-  /** Grouped by kind, in GRASS_KINDS order, so each kind can be drawn (and culled by distance) on
+  /** Grouped by kind, in WorldContent.grassKinds order, so each kind can be drawn (and culled by distance) on
    *  its own straight from a slice of this. */
   instances: Float32Array;
   count: number;
-  /** How many of `instances` belong to each kind, in GRASS_KINDS order. */
+  /** How many of `instances` belong to each kind, in WorldContent.grassKinds order. */
   kindCounts: number[];
   /** Lowest and highest tuft root, for the chunk's bounding box. */
   minY: number;
@@ -47,7 +39,7 @@ interface GrassEntry {
 interface GrassTable {
   /** Per material index: what it grows. */
   grows: GrassEntry[][];
-  /** Per material index: how strongly it clears grass (GRASS_CLEARING_MATERIALS), 0 for most. */
+  /** Per material index: how strongly it clears grass (MaterialDef.clearsGrass), 0 for most. */
   clears: number[];
 }
 
@@ -55,20 +47,21 @@ const tablesByDefs = new WeakMap<MaterialDef[], GrassTable>();
 
 /** Every material index's grass specs, looked up once per material list rather than by id per
  *  tuft. */
-function grassTableFor(materialDefs: MaterialDef[]): GrassTable {
+function grassTableFor(materialDefs: MaterialDef[], grassKinds: GrassKindDef[]): GrassTable {
   let table = tablesByDefs.get(materialDefs);
   if (!table) {
+    const kindIndex = new Map(grassKinds.map((kind, index) => [kind.id, index]));
     table = {
       grows: materialDefs.map((def) =>
-        (GRASS_BY_MATERIAL[def.id] ?? []).map((spec) => ({
-          kind: GRASS_KINDS.indexOf(spec.kind),
+        def.grass.map((spec) => ({
+          kind: kindIndex.get(spec.kind)!,
           density: spec.density,
           r: spec.color[0],
           g: spec.color[1],
           b: spec.color[2],
         })),
       ),
-      clears: materialDefs.map((def) => GRASS_CLEARING_MATERIALS[def.id] ?? 0),
+      clears: materialDefs.map((def) => def.clearsGrass),
     };
     tablesByDefs.set(materialDefs, table);
   }
@@ -121,8 +114,8 @@ function noiseQuantile(fraction: number): number {
 
 /** How much of a clustered kind grows at a point: 1 inside a patch, 0 outside, a short fade
  *  between. Never above 1, so a material's density stays an upper bound for the early rejection. */
-function clusterFactor(x: number, z: number, kind: number, seedMix: number): number {
-  const cluster = GRASS_KIND_DEFS[GRASS_KINDS[kind]].cluster;
+function clusterFactor(x: number, z: number, kind: number, grassKinds: GrassKindDef[], seedMix: number): number {
+  const cluster = grassKinds[kind].cluster;
   if (!cluster) return 1;
   const n = valueNoise(x / cluster.scale, z / cluster.scale, 100 + kind, seedMix);
   // The fade straddles the threshold by 5% of the ground either side.
@@ -158,14 +151,15 @@ export interface GrassGround {
 export function scatterGrass(
   ground: GrassGround,
   materialDefs: MaterialDef[],
+  grassKinds: GrassKindDef[],
   seed: number,
   /** Each material's average colour, by index - what the ground under a tuft looks like, which the
    *  bottom of its blades fade from. Null if not known yet. */
   groundColors: [number, number, number][] | null,
 ): ChunkGrass {
   const { size, subdivisions, originX, originZ, blendAt, surfaceHeight } = ground;
-  const table = grassTableFor(materialDefs);
-  const kindCount = GRASS_KINDS.length;
+  const table = grassTableFor(materialDefs, grassKinds);
+  const kindCount = grassKinds.length;
   const gridSize = subdivisions + 1;
   const step = size / subdivisions;
 
@@ -218,7 +212,7 @@ export function scatterGrass(
   const minZ = originZ - size / 2;
   const maxZ = originZ + size / 2;
 
-  const byKind: number[][] = GRASS_KINDS.map(() => []);
+  const byKind: number[][] = grassKinds.map(() => []);
   let minY = Infinity;
   let maxY = -Infinity;
   const kindDensity = new Float64Array(kindCount);
@@ -250,7 +244,7 @@ export function scatterGrass(
       if (pick >= total * cellArea) continue;
 
       // A cell holds one tuft at most. Where the kinds together ask for more than that, each is scaled
-      // down in proportion - otherwise the first kinds in GRASS_KINDS would fill every cell and the
+      // down in proportion - otherwise the first kinds in the list would fill every cell and the
       // later ones would never grow at all.
       const share = total * cellArea > 1 ? 1 / (total * cellArea) : 1;
       let kind = -1;
@@ -264,7 +258,7 @@ export function scatterGrass(
         kindDensity[k] = d;
         // Patches thin a clustered kind where the tuft stands, but its colour still averages over
         // the unthinned density (kindDensity), which is what the colour sums were weighted by.
-        if (d > 0) d *= clusterFactor(x, z, k, seedMix);
+        if (d > 0) d *= clusterFactor(x, z, k, grassKinds, seedMix);
         remaining -= d * share;
         if (remaining < 0 && kind < 0) kind = k;
       }

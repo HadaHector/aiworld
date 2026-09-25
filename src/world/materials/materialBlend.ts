@@ -1,15 +1,7 @@
-import { BIOME_REGISTRY } from "../biomes/biomeDefinitions";
 import type { AreaWeight } from "../cells/areaField";
 import { compilePipeline, type CompiledPipeline } from "../terrain/pipeline/pipelineCompiler";
-import {
-  DEFAULT_MATERIAL,
-  MATERIAL_REGISTRY,
-  PER_BIOME_MATERIAL_LAYERS,
-  ROAD_MATERIAL_LAYER,
-  UNIVERSAL_MATERIAL_LAYERS,
-  type MaterialDef,
-  type MaterialLayer,
-} from "./materialDefinitions";
+import type { WorldContent } from "../content/worldContent";
+import type { MaterialDef, MaterialLayer } from "./materialTypes";
 
 // Below this, no layer's weight is trusted and the base material wins outright - used only by the
 // legacy single-winner resolveMaterialIndex (the debug map's read path). The blended path
@@ -42,41 +34,43 @@ export interface MaterialBlender {
   resolveMaterialIndex: (worldX: number, worldZ: number, context: Record<string, number>, biomeId: string) => number;
 }
 
-export function createMaterialBlender(seed: number): MaterialBlender {
+export function createMaterialBlender(seed: number, content: WorldContent): MaterialBlender {
   const materialDefs: MaterialDef[] = [];
   const materialIndexById = new Map<string, number>();
+  const definitionById = new Map(content.materials.map((def) => [def.id, def]));
 
-  function ensureMaterial(def: MaterialDef): number {
-    let index = materialIndexById.get(def.id);
+  // Only materials something actually uses get an index, and so a texture layer.
+  function ensureMaterial(id: string): number {
+    let index = materialIndexById.get(id);
     if (index === undefined) {
+      const def = definitionById.get(id);
+      if (!def) throw new Error(`Unknown material "${id}"`);
       index = materialDefs.length;
-      materialIndexById.set(def.id, index);
+      materialIndexById.set(id, index);
       materialDefs.push(def);
     }
     return index;
   }
 
-  const defaultIndex = ensureMaterial(DEFAULT_MATERIAL);
+  const defaultIndex = ensureMaterial(content.defaultMaterialId);
 
   const biomeBaseIndex = new Map<string, number>();
-  for (const biome of BIOME_REGISTRY) {
-    const def = MATERIAL_REGISTRY[biome.baseMaterialId] ?? DEFAULT_MATERIAL;
-    biomeBaseIndex.set(biome.id, ensureMaterial(def));
+  for (const biome of content.biomes) {
+    biomeBaseIndex.set(biome.id, ensureMaterial(biome.baseMaterialId));
   }
 
-  for (const layer of UNIVERSAL_MATERIAL_LAYERS) {
-    ensureMaterial(layer.material);
+  for (const layer of content.universalLayers) {
+    ensureMaterial(layer.materialId);
   }
-  ensureMaterial(ROAD_MATERIAL_LAYER.material);
+  ensureMaterial(content.roadLayer.materialId);
   // One entry per biome, exactly like biomeBaseIndex: the road layer is shared, the surface it
   // paints is the zone's own.
   const biomeRoadIndex = new Map<string, number>();
-  for (const biome of BIOME_REGISTRY) {
-    const def = MATERIAL_REGISTRY[biome.roadMaterialId] ?? ROAD_MATERIAL_LAYER.material;
-    biomeRoadIndex.set(biome.id, ensureMaterial(def));
+  for (const biome of content.biomes) {
+    biomeRoadIndex.set(biome.id, ensureMaterial(biome.roadMaterialId));
   }
-  for (const layers of Object.values(PER_BIOME_MATERIAL_LAYERS)) {
-    for (const layer of layers) ensureMaterial(layer.material);
+  for (const biome of content.biomes) {
+    for (const layer of biome.materialLayers) ensureMaterial(layer.materialId);
   }
 
   interface CompiledLayer {
@@ -86,7 +80,7 @@ export function createMaterialBlender(seed: number): MaterialBlender {
 
   function compileLayers(layers: MaterialLayer[]): CompiledLayer[] {
     return layers.map((layer) => ({
-      materialIndex: materialIndexById.get(layer.material.id)!,
+      materialIndex: materialIndexById.get(layer.materialId)!,
       evaluate: compilePipeline(layer.weight, seed, `material-${layer.id}`),
     }));
   }
@@ -94,11 +88,11 @@ export function createMaterialBlender(seed: number): MaterialBlender {
   // Compiled once per biome (not once globally) - every resolve function below only ever walks the
   // universal list plus THIS biome's own list, so per-vertex cost stays flat as more biomes grow
   // their own layers, instead of scaling with the total layer count across every biome combined.
-  const compiledUniversalLayers = compileLayers(UNIVERSAL_MATERIAL_LAYERS);
-  const compiledRoadLayer = compileLayers([ROAD_MATERIAL_LAYER])[0];
+  const compiledUniversalLayers = compileLayers(content.universalLayers);
+  const compiledRoadLayer = compileLayers([content.roadLayer])[0];
   const compiledPerBiomeLayers = new Map<string, CompiledLayer[]>();
-  for (const [biomeId, layers] of Object.entries(PER_BIOME_MATERIAL_LAYERS)) {
-    compiledPerBiomeLayers.set(biomeId, compileLayers(layers));
+  for (const biome of content.biomes) {
+    compiledPerBiomeLayers.set(biome.id, compileLayers(biome.materialLayers));
   }
 
   /**

@@ -80,7 +80,7 @@ function wrapCell(value: number, cellsPerTile: number): number {
  * integer cell grid, not a continuous noise field.
  *
  * Exact tiling needs a whole number of cells across the tile, so the cell count is rounded and the
- * effective frequency snaps to match it - at the frequencies materialDefinitions.ts actually uses
+ * effective frequency snaps to match it - at the frequencies the core pack's materials actually use
  * this shifts feature scale by only a few percent.
  */
 export function worleyNoise2D(seed: number, frequency: number, tilePeriod?: number): (worldX: number, worldZ: number) => { f1: number; f2: number } {

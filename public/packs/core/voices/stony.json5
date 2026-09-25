@@ -1,0 +1,11 @@
+// Heavy and blunt. Hard clusters, short vowels, stone-sounding.
+{
+  onsets: ["g", "k", "dr", "gr", "t", "br", "kr", "d", "th", "st", "b"],
+  nuclei: ["o", "a", "u", "au", "e"],
+  codas: ["rk", "g", "ch", "n", "rn", "ck", "m"],
+  finals: ["ock", "arn", "ung", "oth", "ek", "ar", "um"],
+  features: ["Crag", "Peaks", "Spur", "Ridge", "Horn", "Scarp", "Tor"],
+  qualities: ["Broken", "Grey", "High", "Iron", "Riven", "Old", "Cloven", "Thunder"],
+  codaChance: 0.75,
+  thirdSyllableChance: 0.2,
+}

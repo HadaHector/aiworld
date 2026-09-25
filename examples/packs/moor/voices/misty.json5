@@ -1,0 +1,11 @@
+// Soft and lilting: breathy onsets, diphthongs, and endings that trail off.
+{
+  onsets: ["b", "c", "d", "f", "g", "l", "m", "n", "r", "s", "t", "dh", "gw", "br", "cr"],
+  nuclei: ["a", "ae", "ai", "ea", "e", "i", "o", "ou", "ui"],
+  codas: ["n", "r", "l", "th", "ch", "dd"],
+  finals: ["an", "ach", "wen", "og", "ish", "ael", "ra", "y"],
+  features: ["Moor", "Fell", "Heath", "Mires", "Downs", "Tors", "Bog"],
+  qualities: ["Grey", "Weeping", "Misty", "Lonely", "Purple", "Windswept", "Silent", "Drowned"],
+  codaChance: 0.35,
+  thirdSyllableChance: 0.25,
+}

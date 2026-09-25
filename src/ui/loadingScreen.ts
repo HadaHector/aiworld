@@ -2,6 +2,8 @@ export interface LoadingScreen {
   /** `total` of 0 means "no countable steps" - the bar shows an indeterminate sweep instead. */
   update: (phase: string, completed: number, total: number) => void;
   hide: () => void;
+  /** Stops on a failure: `title` in place of the phase, and `lines` listed under it. */
+  fail: (title: string, lines: string[]) => void;
 }
 
 /**
@@ -32,5 +34,12 @@ export function createLoadingScreen(): LoadingScreen {
     window.setTimeout(() => root.remove(), 450);
   }
 
-  return { update, hide };
+  function fail(title: string, lines: string[]): void {
+    root?.classList.add("failed");
+    if (label) label.textContent = title;
+    const errors = document.getElementById("loadingErrors");
+    if (errors) errors.textContent = lines.join("\n");
+  }
+
+  return { update, hide, fail };
 }

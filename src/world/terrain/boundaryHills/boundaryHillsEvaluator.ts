@@ -2,7 +2,7 @@ import { deriveSeed } from "../../rng";
 import { smoothstep } from "../../mathUtils";
 import { createBaseNoise2D } from "../noise";
 import { compilePipeline, type CompiledPipeline } from "../pipeline/pipelineCompiler";
-import { BOUNDARY_HILL_STYLES, type BoundaryHillStyle } from "../../biomes/boundaryHillStyles";
+import type { BoundaryHillStyle } from "../../biomes/biomeTypes";
 import {
   BOUNDARY_HILL_WIDTH,
   BOUNDARY_HILL_PEAK_HEIGHT,
@@ -13,17 +13,17 @@ import {
 
 export type BoundaryHillEvaluator = (style: BoundaryHillStyle | null, borderGap: number, worldX: number, worldZ: number) => number;
 
-function compileBoundaryHillPipelines(seed: number): Map<string, CompiledPipeline> {
+function compileBoundaryHillPipelines(seed: number, styles: BoundaryHillStyle[]): Map<string, CompiledPipeline> {
   const compiled = new Map<string, CompiledPipeline>();
-  for (const style of BOUNDARY_HILL_STYLES) {
+  for (const style of styles) {
     compiled.set(style.id, compilePipeline(style.heightPipeline, seed, `boundary-${style.id}`));
   }
   return compiled;
 }
 
 /** Compiles all boundary-hill styles once per world, returning a per-position evaluator. */
-export function createBoundaryHillEvaluator(seed: number): BoundaryHillEvaluator {
-  const compiledStyles = compileBoundaryHillPipelines(seed);
+export function createBoundaryHillEvaluator(seed: number, styles: BoundaryHillStyle[]): BoundaryHillEvaluator {
+  const compiledStyles = compileBoundaryHillPipelines(seed, styles);
   // Dedicated, independent from areaField.ts's coastNoise2D - the hill's outer edge should wobble
   // on its own, not as a scaled copy of the coastline/area-border jitter.
   const edgeNoise2D = createBaseNoise2D(deriveSeed(seed, BOUNDARY_HILL_EDGE_NOISE_SALT));

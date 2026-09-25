@@ -1,0 +1,56 @@
+/**
+ * A cart track: earth compacted by use.
+ *
+ * It exists because the obvious reuse does not work. mud is the right colour family, but
+ * its signature is a worley crack network - dried mud curling into plates - and at road scale that
+ * reads as a herringbone of dark chevrons running the length of every road, which is what it
+ * looked like before this material existed. A track is the opposite of cracked: it is earth pressed
+ * flat, so this is mottle and grain and nothing structural.
+ *
+ * Deliberately low relief. Height feeds the bump map, and a rutted normal map on a surface the
+ * player walks along would fight the fact that the geometry under it really is flat.
+ */
+{
+  name: "Cart Track",
+  texture: {
+    bumpStrength: 0.55,
+    pipeline: {
+      noises: [
+        { name: "mottle", type: "fbm", octaves: 3, tileCycles: 13, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+        { name: "grain", type: "fbm", octaves: 2, tileCycles: 46, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+        { name: "broad", type: "fbm", octaves: 2, tileCycles: 3, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+      ],
+      steps: [
+        { output: "mottle", op: "sample", noise: "mottle" },
+        { output: "mottleMask", op: "mask", input: "mottle", at: 1.75, off: -1.75 },
+        { output: "grain", op: "sample", noise: "grain" },
+        { output: "grainMask", op: "mask", input: "grain", at: 1.5, off: -1.5 },
+        { output: "broad", op: "sample", noise: "broad" },
+        { output: "broadMask", op: "mask", input: "broad", at: 1.5, off: -1.5 },
+
+        // Two earth tones, the darker one where the surface is damp and packed hardest.
+        { output: "packed", op: "color", value: [0.3, 0.24, 0.17] },
+        { output: "dusty", op: "color", value: [0.45, 0.38, 0.28] },
+        { output: "earth", op: "mix", a: "packed", b: "dusty", t: "mottleMask" },
+        // A little loose grit lightening the surface, at a much finer scale than the tone.
+        { output: "grit", op: "color", value: [0.5, 0.44, 0.34] },
+        { output: "gritAmount", op: "scale", input: "grainMask", factor: 0.35 },
+        { output: "diffuse", op: "mix", a: "earth", b: "grit", t: "gritAmount" },
+
+        { output: "roughness", op: "constant", value: 0.8 },
+
+        // Shallow relief only: broad undulation plus grain, no plates and no cracks.
+        { output: "bed", op: "constant", value: 0.45 },
+        { output: "swell", op: "scale", input: "broadMask", factor: 0.3 },
+        { output: "bedSwell", op: "add", a: "bed", b: "swell" },
+        { output: "tooth", op: "scale", input: "grainMask", factor: 0.2 },
+        { output: "height", op: "add", a: "bedSwell", b: "tooth" },
+      ],
+      outputs: { diffuse: "diffuse", roughness: "roughness", height: "height" },
+    },
+  },
+  // Clears grass rather than merely growing none: a road cut is where valley layers fire too, so
+  // even at its centre the road is only some 60-70% of the blend. At 2, grass is gone wherever the
+  // road is half the blend or more, and thins out across the road's edge on the way in.
+  clearsGrass: 2,
+}

@@ -1,0 +1,9 @@
+/** Grey gravel, for a track over rock or frozen ground. */
+{
+  name: "Gravel Track",
+  texture: { generator: "twoTone", base: [0.38, 0.37, 0.35], variation: [0.5, 0.49, 0.46], roughness: 0.85, bumpStrength: 1.1 },
+  // Clears grass rather than merely growing none: a road cut is where valley layers fire too, so
+  // even at its centre the road is only some 60-70% of the blend. At 2, grass is gone wherever the
+  // road is half the blend or more, and thins out across the road's edge on the way in.
+  clearsGrass: 2,
+}

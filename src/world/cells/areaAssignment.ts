@@ -1,5 +1,4 @@
 import { mulberry32, deriveSeed } from "../rng";
-import { BIOME_REGISTRY } from "../biomes/biomeDefinitions";
 import type { BiomeDefinition } from "../biomes/biomeTypes";
 import { resolveForcedBiome } from "../devConfig";
 import { AREA_SEED_SALT, AREA_GROWTH_SALT, AREA_BIOME_SALT } from "./config";
@@ -100,29 +99,29 @@ export function partitionIntoAreas(seed: number, adjacency: number[][], landCell
   return assignment;
 }
 
-function pickWeightedBiome(rng: () => number): BiomeDefinition {
-  const totalWeight = BIOME_REGISTRY.reduce((sum, biome) => sum + biome.spawnWeight, 0);
+function pickWeightedBiome(rng: () => number, biomes: BiomeDefinition[]): BiomeDefinition {
+  const totalWeight = biomes.reduce((sum, biome) => sum + biome.spawnWeight, 0);
   let roll = rng() * totalWeight;
 
-  for (const biome of BIOME_REGISTRY) {
+  for (const biome of biomes) {
     roll -= biome.spawnWeight;
     if (roll <= 0) return biome;
   }
 
-  return BIOME_REGISTRY[BIOME_REGISTRY.length - 1];
+  return biomes[biomes.length - 1];
 }
 
 /** Assigns one biome per area (not per cell) via weighted roulette, so every cell in an area shares its look. */
-export function assignAreaBiomes(seed: number, areaCount: number): BiomeDefinition[] {
-  const forced = resolveForcedBiome();
+export function assignAreaBiomes(seed: number, areaCount: number, biomes: BiomeDefinition[]): BiomeDefinition[] {
+  const forced = resolveForcedBiome(biomes);
   if (forced) return new Array(areaCount).fill(forced);
 
   const rng = mulberry32(deriveSeed(seed, AREA_BIOME_SALT));
-  const biomes: BiomeDefinition[] = [];
+  const assigned: BiomeDefinition[] = [];
 
   for (let i = 0; i < areaCount; i++) {
-    biomes.push(pickWeightedBiome(rng));
+    assigned.push(pickWeightedBiome(rng, biomes));
   }
 
-  return biomes;
+  return assigned;
 }

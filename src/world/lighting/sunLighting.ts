@@ -295,21 +295,21 @@ export function createSunLighting(scene: Scene): SunLighting {
       ambientNightIntensity += d.ambientNightIntensity * weight;
       sunIntensityBlend += d.sunIntensity * weight;
       moonIntensityBlend += d.moonIntensity * weight;
-      blendAmbientDay.r += d.ambientDay.r * weight;
-      blendAmbientDay.g += d.ambientDay.g * weight;
-      blendAmbientDay.b += d.ambientDay.b * weight;
-      blendAmbientNight.r += d.ambientNight.r * weight;
-      blendAmbientNight.g += d.ambientNight.g * weight;
-      blendAmbientNight.b += d.ambientNight.b * weight;
-      blendSunHorizon.r += d.sunHorizonColor.r * weight;
-      blendSunHorizon.g += d.sunHorizonColor.g * weight;
-      blendSunHorizon.b += d.sunHorizonColor.b * weight;
-      blendSunZenith.r += d.sunZenithColor.r * weight;
-      blendSunZenith.g += d.sunZenithColor.g * weight;
-      blendSunZenith.b += d.sunZenithColor.b * weight;
-      blendMoon.r += d.moonColor.r * weight;
-      blendMoon.g += d.moonColor.g * weight;
-      blendMoon.b += d.moonColor.b * weight;
+      blendAmbientDay.r += d.ambientDay[0] * weight;
+      blendAmbientDay.g += d.ambientDay[1] * weight;
+      blendAmbientDay.b += d.ambientDay[2] * weight;
+      blendAmbientNight.r += d.ambientNight[0] * weight;
+      blendAmbientNight.g += d.ambientNight[1] * weight;
+      blendAmbientNight.b += d.ambientNight[2] * weight;
+      blendSunHorizon.r += d.sunHorizonColor[0] * weight;
+      blendSunHorizon.g += d.sunHorizonColor[1] * weight;
+      blendSunHorizon.b += d.sunHorizonColor[2] * weight;
+      blendSunZenith.r += d.sunZenithColor[0] * weight;
+      blendSunZenith.g += d.sunZenithColor[1] * weight;
+      blendSunZenith.b += d.sunZenithColor[2] * weight;
+      blendMoon.r += d.moonColor[0] * weight;
+      blendMoon.g += d.moonColor[1] * weight;
+      blendMoon.b += d.moonColor[2] * weight;
     }
 
     // One sine over the full 24h, zero at both SUNRISE_HOUR and SUNSET_HOUR, positive between them

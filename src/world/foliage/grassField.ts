@@ -12,7 +12,8 @@ import {
   type Scene,
 } from "@babylonjs/core";
 import { LIT_SHADING_GLSL, LIT_SHADING_SAMPLERS, LIT_SHADING_UNIFORMS, type LitShading } from "../materials/litShading";
-import { FLOWER_COLORS, GRASS_KINDS, GRASS_KIND_DEFS } from "./grassConfig";
+import type { GrassKindDef } from "./grassConfig";
+import type { ColorTuple } from "../terrain/pipeline/pipelineTypes";
 import { GRASS_INSTANCE_STRIDE, type ChunkGrass } from "./grassScatter";
 import { GRASS_TEXTURE_SIZE, bakeGrassTextures } from "./grassTextures";
 
@@ -25,7 +26,8 @@ const GRASS_ROOT_BLEND = 0.3;
 /** Vertices per tuft: three crossed quads. */
 const TUFT_QUADS = 3;
 
-const VERTEX_SHADER = `#version 300 es
+function vertexShader(kindCount: number, petalColorCount: number): string {
+  return `#version 300 es
 precision highp float;
 
 in vec3 position;
@@ -45,10 +47,12 @@ uniform vec3 cameraPosition;
 uniform float time;
 uniform vec2 windDirection;
 // Per kind: width, height, sway.
-uniform vec3 kindShape[${GRASS_KINDS.length}];
+uniform vec3 kindShape[${kindCount}];
 // Per kind: fade start, fade end.
-uniform vec2 kindFade[${GRASS_KINDS.length}];
-uniform vec3 flowerColors[${FLOWER_COLORS.length}];
+uniform vec2 kindFade[${kindCount}];
+// Per kind: where its petal colours start in petalColors, and how many it has.
+uniform vec2 kindPetals[${kindCount}];
+uniform vec3 petalColors[${petalColorCount}];
 
 out vec2 vUV;
 out vec3 vFaceNormal;
@@ -98,10 +102,12 @@ void main() {
     ? vec4(0.0)
     : vec4(floor(grassC / 65536.0), mod(floor(grassC / 256.0), 256.0), mod(grassC, 256.0), 255.0) / 255.0;
   // The turn angle is uniform random per tuft, so it picks the petal colour too.
-  vPetalColor = flowerColors[int(fract(grassB.w * 13.37) * ${FLOWER_COLORS.length.toFixed(1)})];
+  vec2 petals = kindPetals[int(kind)];
+  vPetalColor = petalColors[int(petals.x + floor(fract(grassB.w * 13.37) * petals.y))];
   vKind = kind;
 }
 `;
+}
 
 const FRAGMENT_SHADER = `#version 300 es
 precision highp float;
@@ -213,14 +219,19 @@ function tuftVertexData(): VertexData {
  * the vertex shader shrinks each tuft into the ground towards its kind's fadeEnd. Grass receives shadows but casts none - the cost
  * of adding every blade to the shadow map would dwarf the difference it makes.
  */
-export function createGrassField(scene: Scene, seed: number, litShading: LitShading): GrassField {
+export function createGrassField(
+  scene: Scene,
+  seed: number,
+  litShading: LitShading,
+  grassKinds: GrassKindDef[],
+): GrassField {
   const engine = scene.getEngine();
 
   const atlas = RawTexture2DArray.CreateRGBATexture(
-    bakeGrassTextures(seed),
+    bakeGrassTextures(seed, grassKinds),
     GRASS_TEXTURE_SIZE,
     GRASS_TEXTURE_SIZE,
-    GRASS_KINDS.length,
+    grassKinds.length,
     scene,
     true,
     false,
@@ -228,23 +239,35 @@ export function createGrassField(scene: Scene, seed: number, litShading: LitShad
   atlas.wrapU = Texture.CLAMP_ADDRESSMODE;
   atlas.wrapV = Texture.CLAMP_ADDRESSMODE;
 
-  Effect.ShadersStore["grassVertexShader"] = VERTEX_SHADER;
+  // Every kind's petal colours in one array, each kind reading its own run of it. Padded to one
+  // entry, since a GLSL array cannot be empty - a kind with no flowers never reads it anyway.
+  const petalColors: ColorTuple[] = [];
+  const kindPetals: number[] = [];
+  for (const kind of grassKinds) {
+    const colors = kind.blades.flowerHeads?.colors ?? [];
+    kindPetals.push(petalColors.length, colors.length);
+    petalColors.push(...colors);
+  }
+  if (petalColors.length === 0) petalColors.push([1, 1, 1]);
+
+  Effect.ShadersStore["grassVertexShader"] = vertexShader(grassKinds.length, petalColors.length);
   Effect.ShadersStore["grassFragmentShader"] = FRAGMENT_SHADER;
   const material = new ShaderMaterial("grass", scene, "grass", {
     attributes: ["position", "normal", "uv", "grassA", "grassB", "grassC"],
-    uniforms: ["world", "view", "projection", "time", "windDirection", "kindShape", "kindFade", "flowerColors", ...LIT_SHADING_UNIFORMS],
+    uniforms: ["world", "view", "projection", "time", "windDirection", "kindShape", "kindFade", "kindPetals", "petalColors", ...LIT_SHADING_UNIFORMS],
     samplers: ["bladeAtlas", ...LIT_SHADING_SAMPLERS],
   });
   material.setTexture("bladeAtlas", atlas);
   material.setArray2(
     "kindFade",
-    GRASS_KINDS.flatMap((kind) => [GRASS_KIND_DEFS[kind].fadeStart, GRASS_KIND_DEFS[kind].fadeEnd]),
+    grassKinds.flatMap((kind) => [kind.fadeStart, kind.fadeEnd]),
   );
   material.setArray3(
     "kindShape",
-    GRASS_KINDS.flatMap((kind) => [GRASS_KIND_DEFS[kind].width, GRASS_KIND_DEFS[kind].height, GRASS_KIND_DEFS[kind].sway]),
+    grassKinds.flatMap((kind) => [kind.width, kind.height, kind.sway]),
   );
-  material.setArray3("flowerColors", FLOWER_COLORS.flat());
+  material.setArray2("kindPetals", kindPetals);
+  material.setArray3("petalColors", petalColors.flat());
   material.setVector2("windDirection", WIND_DIRECTION);
   material.backFaceCulling = false;
   litShading.register(material);
@@ -287,13 +310,13 @@ export function createGrassField(scene: Scene, seed: number, litShading: LitShad
     const half = chunkSize / 2 + 1;
     const patches: GrassPatch[] = [];
     let first = 0;
-    GRASS_KINDS.forEach((kind, k) => {
+    grassKinds.forEach((def, k) => {
       const count = grass.kindCounts[k];
       if (count === 0) return;
       const instances = grass.instances.subarray(first * GRASS_INSTANCE_STRIDE, (first + count) * GRASS_INSTANCE_STRIDE);
       first += count;
 
-      const mesh = new Mesh(`grass_${kind}_${key}`, scene);
+      const mesh = new Mesh(`grass_${def.id}_${key}`, scene);
       tuft.applyToMesh(mesh);
       const buffer = new Buffer(engine, instances, false, GRASS_INSTANCE_STRIDE, false, true);
       mesh.setVerticesBuffer(buffer.createVertexBuffer("grassA", 0, 4));
@@ -303,7 +326,7 @@ export function createGrassField(scene: Scene, seed: number, litShading: LitShad
       mesh.material = material;
       mesh.position.set(originX, 0, originZ);
       mesh.isPickable = false;
-      const tallest = GRASS_KIND_DEFS[kind].height * 1.5;
+      const tallest = def.height * 1.5;
       mesh.setBoundingInfo(new BoundingInfo(new Vector3(-half, grass.minY - 1, -half), new Vector3(half, grass.maxY + tallest, half)));
       // Babylon counts a forced-instance draw as zero instances; the stats panel should see the grass.
       const drawnIndices = indicesPerTuft * count;
@@ -317,7 +340,7 @@ export function createGrassField(scene: Scene, seed: number, litShading: LitShad
         originX,
         originZ,
         // Any part of the chunk within this kind's range: its centre can be up to half a diagonal away.
-        reach: GRASS_KIND_DEFS[kind].fadeEnd + (chunkSize * Math.SQRT2) / 2,
+        reach: def.fadeEnd + (chunkSize * Math.SQRT2) / 2,
       });
     });
     chunks.set(key, patches);

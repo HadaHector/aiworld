@@ -1,5 +1,6 @@
 import type { ChunkBuildRequest, ChunkGeometry } from "./chunkGeometry";
 import type { ChunkWorkerMessage, ChunkWorkerResponse } from "./chunkBuild.worker";
+import type { WorldContent } from "../content/worldContent";
 
 /**
  * Walking around needs a few chunks a second, and each worker holds its own copy of the world
@@ -32,7 +33,7 @@ interface PendingJob {
  * Jobs go to whichever worker has the fewest outstanding, so a slow full-detail chunk does not
  * hold up the coarse ones queued behind it on the same worker.
  */
-export function createChunkBuildPool(seed: number): ChunkBuildPool | null {
+export function createChunkBuildPool(seed: number, content: WorldContent): ChunkBuildPool | null {
   let workers: Worker[];
   try {
     workers = Array.from(
@@ -64,7 +65,7 @@ export function createChunkBuildPool(seed: number): ChunkBuildPool | null {
             if (response.type === "built") job?.resolve(response.geometry);
             else job?.reject(new Error(response.message));
           };
-          const init: ChunkWorkerMessage = { type: "init", seed };
+          const init: ChunkWorkerMessage = { type: "init", seed, content };
           worker.postMessage(init);
         }),
     ),

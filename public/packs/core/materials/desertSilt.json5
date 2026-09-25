@@ -1,0 +1,52 @@
+/** The pale, cracked silt floor of a wadi or playa - the one place in a desert where dried mud
+ *  genuinely belongs. Cracks are grooves: they darken the color and cut down into the height. */
+{
+  name: "Desert Silt",
+  texture: {
+    bumpStrength: 1.4,
+    pipeline: {
+      noises: [
+        { name: "mottle", type: "fbm", octaves: 3, tileCycles: 13, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+        { name: "grain", type: "fbm", octaves: 2, tileCycles: 46, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+        { name: "cracks", type: "worley", tileCycles: 7, amplitude: 1, mode: "edge" },
+      ],
+      steps: [
+        { output: "mottle", op: "sample", noise: "mottle" },
+        { output: "mottleMask", op: "mask", input: "mottle", at: 1.75, off: -1.75 },
+        { output: "grain", op: "sample", noise: "grain" },
+        { output: "grainMask", op: "mask", input: "grain", at: 1.5, off: -1.5 },
+        { output: "crackEdge", op: "sample", noise: "cracks" },
+        { output: "crackMask", op: "mask", input: "crackEdge", at: 0, off: 0.1 },
+
+        {
+          output: "siltTone",
+          op: "colorRamp",
+          input: "mottleMask",
+          stops: [
+            { at: 0.0, color: [0.63, 0.55, 0.42] },
+            { at: 0.5, color: [0.76, 0.69, 0.55] },
+            { at: 1.0, color: [0.85, 0.79, 0.66] },
+          ],
+        },
+        { output: "dustColor", op: "color", value: [0.80, 0.74, 0.60] },
+        { output: "dustBlend", op: "scale", input: "grainMask", factor: 0.25 },
+        { output: "dusted", op: "mix", a: "siltTone", b: "dustColor", t: "dustBlend" },
+        { output: "crackColor", op: "color", value: [0.30, 0.24, 0.17] },
+        { output: "diffuse", op: "mix", a: "dusted", b: "crackColor", t: "crackMask" },
+
+        { output: "roughSilt", op: "constant", value: 0.82 },
+        { output: "roughCrack", op: "constant", value: 0.9 },
+        { output: "roughness", op: "mix", a: "roughSilt", b: "roughCrack", t: "crackMask" },
+
+        // Curled plates standing above the crack network between them.
+        { output: "bed", op: "constant", value: 0.62 },
+        { output: "plateRelief", op: "scale", input: "mottleMask", factor: 0.38 },
+        { output: "plates", op: "add", a: "bed", b: "plateRelief" },
+        { output: "crackDepth", op: "scale", input: "crackMask", factor: 0.62 },
+        { output: "height", op: "subtract", a: "plates", b: "crackDepth" },
+      ],
+      outputs: { diffuse: "diffuse", roughness: "roughness", height: "height" },
+    },
+  },
+  grass: [{ kind: "dry", density: 0.2, color: [0.64, 0.6, 0.36] }],
+}

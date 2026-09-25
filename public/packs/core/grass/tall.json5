@@ -1,0 +1,10 @@
+// The odd tall stalk standing out of a meadow - big enough to read from further away, so it is
+// given a much longer reach than the short grass around it.
+{
+  width: 0.75,
+  height: 1.35,
+  sway: 0.28,
+  fadeStart: 60,
+  fadeEnd: 400,
+  blades: { count: 15, minHeight: 0.55, maxHeight: 0.97, baseWidth: 4, lean: 0.18, fan: false, seedHeads: true },
+}

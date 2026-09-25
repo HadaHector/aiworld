@@ -1,0 +1,5 @@
+{
+  name: "Weeds",
+  texture: { generator: "twoTone", base: [0.13, 0.2, 0.09], variation: [0.2, 0.3, 0.15], roughness: 0.78, bumpStrength: 1.575 },
+  grass: [{ kind: "meadow", density: 3.0, color: [0.27, 0.4, 0.18] }],
+}

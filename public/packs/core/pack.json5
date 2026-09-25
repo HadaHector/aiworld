@@ -1,0 +1,7 @@
+{
+  name: "Core",
+  description: "The base world: every biome, material, plant and voice the game ships with.",
+  // Packs load in priority order, lowest first; a later pack replaces an earlier one's definition
+  // of the same id (a file with the same name in the same folder).
+  priority: 0,
+}

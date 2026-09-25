@@ -1,0 +1,67 @@
+{
+  name: "Plains",
+  voice: "verdant",
+  spawnWeight: 2,
+  lakeChance: 0.05,
+  borderType: "mountain",
+  settlement: "timber",
+  height: { generator: "detailHeight", amplitude: 12.75, frequency: 0.002, offset: 7.5 },
+  trees: { generator: "standDensity", tree: "broadleaf", frequency: 0.0012, openAt: 0.12, fullAt: 0.62, peak: 0.55 },
+  ground: {
+    base: "grass",
+    road: "track",
+    layers: [
+      // Plains-only ground variety. slopeFacing and reliefCurvature are both small, gentle signals on
+      // plains' own rolling hills (amplitude ~12.75), so these thresholds sit close to 0 rather than
+      // mirroring rock/snow's much steeper ones.
+      {
+        id: "plains-north-fade",
+        material: "grassPale",
+        weight: {
+          noises: [],
+          steps: [
+            { output: "facing", op: "input", name: "slopeFacing" },
+            { output: "raw", op: "remap", input: "facing", inMin: 0.08, inMax: 0.35, outMin: 0, outMax: 1 },
+            { output: "result", op: "clamp", input: "raw", min: 0, max: 1 },
+          ],
+        },
+      },
+
+      {
+        id: "plains-south-dry",
+        material: "grassDry",
+        weight: {
+          noises: [],
+          steps: [
+            { output: "facing", op: "input", name: "slopeFacing" },
+            { output: "facingSouth", op: "scale", input: "facing", factor: -1 },
+            { output: "raw", op: "remap", input: "facingSouth", inMin: 0.08, inMax: 0.35, outMin: 0, outMax: 1 },
+            { output: "result", op: "clamp", input: "raw", min: 0, max: 1 },
+          ],
+        },
+      },
+
+      {
+        id: "plains-valley-weeds",
+        material: "weeds",
+        weight: {
+          noises: [],
+          steps: [
+            { output: "curvature", op: "input", name: "reliefCurvature" },
+            { output: "raw", op: "remap", input: "curvature", inMin: 0.3, inMax: 1.5, outMin: 0, outMax: 1 },
+            { output: "result", op: "clamp", input: "raw", min: 0, max: 1 },
+          ],
+        },
+      },
+    ],
+  },
+  sky: {
+    horizon: "#c4d6d2",
+    zenith: "#588cca",
+    cloud: "#f6f8f4",
+  },
+  light: {
+    sunPeak: 65,
+    moonPeak: 45,
+  },
+}

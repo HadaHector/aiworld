@@ -1,0 +1,63 @@
+{
+  name: "Desert Sand",
+  texture: {
+    bumpStrength: 1.6,
+    pipeline: {
+      noises: [
+        { name: "broad", type: "fbm", octaves: 2, tileCycles: 3, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+        { name: "mottle", type: "fbm", octaves: 3, tileCycles: 13, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+        { name: "grain", type: "fbm", octaves: 2, tileCycles: 46, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+        { name: "ripples", type: "billow", octaves: 2, tileCycles: 20, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+      ],
+      steps: [
+        { output: "broad", op: "sample", noise: "broad" },
+        { output: "broadMask", op: "mask", input: "broad", at: 1.5, off: -1.5 },
+        { output: "mottle", op: "sample", noise: "mottle" },
+        { output: "mottleMask", op: "mask", input: "mottle", at: 1.75, off: -1.75 },
+        { output: "grain", op: "sample", noise: "grain" },
+        { output: "grainMask", op: "mask", input: "grain", at: 1.5, off: -1.5 },
+        { output: "ripple", op: "sample", noise: "ripples" },
+        { output: "rippleMask", op: "mask", input: "ripple", at: 1.2, off: -0.6 },
+
+        // One combined tone, dominated by the big drifts, then run through a ramp. A ramp rather
+        // than a two-color mix because sand doesn't read as a blend between two tones - it runs
+        // shadowed red-ochre, through mid sand, to a near-white bleached crest.
+        { output: "toneBroad", op: "scale", input: "broadMask", factor: 0.5 },
+        { output: "toneMottle", op: "scale", input: "mottleMask", factor: 0.3 },
+        { output: "tonePart", op: "add", a: "toneBroad", b: "toneMottle" },
+        { output: "toneRipple", op: "scale", input: "rippleMask", factor: 0.2 },
+        { output: "tone", op: "add", a: "tonePart", b: "toneRipple" },
+        {
+          output: "sandTone",
+          op: "colorRamp",
+          input: "tone",
+          stops: [
+            { at: 0.0, color: [0.48, 0.34, 0.19] },
+            { at: 0.3, color: [0.71, 0.55, 0.31] },
+            { at: 0.6, color: [0.85, 0.71, 0.45] },
+            { at: 0.85, color: [0.93, 0.84, 0.62] },
+            { at: 1.0, color: [0.97, 0.92, 0.76] },
+          ],
+        },
+        // A faint iron-stained cast in the darker hollows, so the ramp doesn't read as pure greyscale-to-tan.
+        { output: "ironColor", op: "color", value: [0.62, 0.38, 0.22] },
+        { output: "ironAmount", op: "invert", input: "tone" },
+        { output: "ironBlend", op: "scale", input: "ironAmount", factor: 0.22 },
+        { output: "diffuse", op: "mix", a: "sandTone", b: "ironColor", t: "ironBlend" },
+
+        // Loose crest sand is a touch less matte than the packed, damper trough sand.
+        { output: "roughTrough", op: "constant", value: 0.72 },
+        { output: "roughCrest", op: "constant", value: 0.58 },
+        { output: "roughness", op: "mix", a: "roughTrough", b: "roughCrest", t: "tone" },
+
+        { output: "dunes", op: "scale", input: "broadMask", factor: 0.5 },
+        { output: "rippleRelief", op: "scale", input: "rippleMask", factor: 0.32 },
+        { output: "dunedRipples", op: "add", a: "dunes", b: "rippleRelief" },
+        { output: "grainRelief", op: "scale", input: "grainMask", factor: 0.18 },
+        { output: "height", op: "add", a: "dunedRipples", b: "grainRelief" },
+      ],
+      outputs: { diffuse: "diffuse", roughness: "roughness", height: "height" },
+    },
+  },
+  grass: [{ kind: "dry", density: 0.05, color: [0.7, 0.66, 0.42] }],
+}

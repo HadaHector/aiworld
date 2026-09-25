@@ -1,0 +1,72 @@
+/**
+ * Subtracts a sharpened ridged "carve" from a broad "plateau": most of the zone stays near plateau
+ * height, but the thin ridge-crest lines (where the ridged fold peaks at every octave
+ * simultaneously) get carved deep, toward and through the world's MIN_LAND_HEIGHT floor. This is a
+ * genuinely different *shape* than any scalar retuning of a single fbm can produce.
+ */
+{
+  name: "Canyon",
+  voice: "stony",
+  spawnWeight: 0.5,
+  lakeChance: 0.02,
+  borderType: "mountain",
+  settlement: "timber", // generates boundary hills along any edge shared with a differently-bordered biome
+  // Plateau raised (bigger offset/amplitude) and the carve cut deeper (scale factor 9 -> 24) for
+  // real 20-30m drama, measured via FORCE_BIOME_ID (devConfig.ts) same as mountains. Plateau
+  // wavelength widened further (167m -> 200m) and persistence dropped (0.5 -> 0.4), same fix as
+  // mountains/hills, so the mesa top reads as broad and grand rather than crumpled.
+  // The carve needed a second pass: 6 octaves of ridged noise stacks 6 overlapping ridge networks
+  // (ridged noise puts a crest at every zero-crossing of the underlying noise, at every octave),
+  // which reads as a dense crumpled/veiny texture no matter how narrow each individual crest is -
+  // dropping to 3 octaves (and widening wavelength 40m -> 83m) leaves a few distinct, legible
+  // channels instead of many competing ones, verified by re-checking the actual screenshots this
+  // time rather than only the height distribution.
+  height: {
+    noises: [
+      { name: "plateau", type: "fbm", octaves: 4, frequency: 0.005, amplitude: 3, persistence: 0.4, lacunarity: 2.0 },
+      { name: "carve", type: "ridged", octaves: 1, frequency: 0.002, amplitude: 6, persistence: 0.45, lacunarity: 2.0 },
+    ],
+    steps: [
+      { output: "plateauRaw", op: "sample", noise: "plateau" },
+      { output: "plateauLevel", op: "offset", input: "plateauRaw", amount: 100 },
+      { output: "carveRaw", op: "sample", noise: "carve" },
+      { output: "carveNorm", op: "remap", input: "carveRaw", inMin: 0, inMax: 2, outMin: 0, outMax: 1 },
+      { output: "carveSharp", op: "power", input: "carveNorm", exponent: 4 },
+      { output: "carveDepth", op: "scale", input: "carveSharp", factor: 4 },
+      { output: "carved", op: "subtract", a: "plateauLevel", b: "carveDepth" },
+      { output: "carvedClamped", op: "clamp", input: "carved", min: 3, max: 60 },
+      { output: "result", op: "add", a: "carvedClamped", b: "plateauRaw" },
+    ],
+  },
+  trees: { generator: "standDensity", tree: "palm", frequency: 0.004, openAt: 0.25, fullAt: 0.7, peak: 0.3 },
+  ground: {
+    base: "rock",
+    road: "trackSand",
+    layers: [
+      // Canyon floors accumulate wind/water-blown silt - reuses the sand material rather than a new
+      // texture (the same sharing trick as snow and the desert valley layer above).
+      {
+        id: "canyon-silt-valley",
+        material: "sand",
+        weight: {
+          noises: [],
+          steps: [
+            { output: "curvature", op: "input", name: "reliefCurvature" },
+            { output: "raw", op: "remap", input: "curvature", inMin: 3, inMax: 12, outMin: 0, outMax: 1 },
+            { output: "result", op: "clamp", input: "raw", min: 0, max: 1 },
+          ],
+        },
+      },
+    ],
+  },
+  sky: {
+    horizon: "#e0b08c",
+    zenith: "#6884ba",
+    cloud: "#faecde",
+  },
+  light: {
+    sunPeak: 78,
+    moonPeak: 36,
+    sunHorizon: "#ff8044",
+  },
+}

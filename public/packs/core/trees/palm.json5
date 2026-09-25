@@ -1,0 +1,20 @@
+// A bare trunk carrying everything at the top. The fronds are flattened ellipsoids swept out and
+// down from the crown; seven is enough to close the silhouette from any angle without the crown
+// turning into a solid disc.
+{
+  trunk: { height: 23.5, diameterBottom: 2.0, diameterTop: 0.9, sides: 8, color: [0.44, 0.36, 0.25] },
+  crown: {
+    builder: "frondCrown",
+    count: 7,
+    length: 5.6,
+    width: 1.8,
+    thickness: 0.35,
+    // How far the root of a frond sits from the trunk's axis, before the droop is applied.
+    reach: 4.9,
+    // Radians the frond tips fall below horizontal.
+    droop: 0.5,
+    y: 23.2,
+  },
+  canopyDark: [0.2, 0.38, 0.15],
+  canopyLight: [0.44, 0.59, 0.24],
+}

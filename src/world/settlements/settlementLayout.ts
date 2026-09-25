@@ -8,16 +8,11 @@ import { deriveSeed, mulberry32 } from "../rng";
 import type { SettlementSite } from "./settlementSites";
 import { chooseGate, type SettlementGate } from "./gates";
 import {
-  HOUSE_GAP,
   HOUSE_FLOOR_ABOVE_STREET,
   HOUSE_MAX_CUT_FILL,
-  HOUSE_SETBACK,
-  HOUSE_VARIANTS,
   LAYOUT_SAMPLE_GRID,
   MAIN_STREET_WIDTH,
-  ROOF_PITCH,
   SETTLEMENT_LAYOUT_SALT,
-  SETTLEMENT_TIERS,
   SIDE_STREET_CLEARANCE,
   SIDE_STREET_SPACING,
   SIDE_STREET_WIDTH,
@@ -66,6 +61,8 @@ export interface SettlementSquare {
 
 export interface SettlementLayout {
   siteId: number;
+  /** The SettlementStyle its buildings are drawn in. */
+  styleId: string;
   x: number;
   z: number;
   radius: number;
@@ -459,7 +456,8 @@ function layoutSettlement(
 ): SettlementLayout {
   const rng = mulberry32(deriveSeed(seed, SETTLEMENT_LAYOUT_SALT + site.id));
   const between = ([lo, hi]: [number, number]): number => lo + rng() * (hi - lo);
-  const tier = SETTLEMENT_TIERS[site.tier];
+  const tier = site.style.tiers[site.tier];
+  const houseStyle = site.style.houses;
   const ground = createGround(sampleTerrain);
 
   // The square: a level patch at the centre, at the average height of the ground it covers.
@@ -573,7 +571,7 @@ function layoutSettlement(
     const across = Math.abs(-dx * uz + dz * ux) - hd;
     return Math.hypot(Math.max(0, along), Math.max(0, across));
   };
-  const totalWeight = HOUSE_VARIANTS.reduce((sum, v) => sum + v.weight, 0);
+  const totalWeight = houseStyle.variants.reduce((sum, v) => sum + v.weight, 0);
 
   for (const street of streets) {
     const arcs = arcLengths(street.points);
@@ -583,7 +581,7 @@ function layoutSettlement(
       let s = street.kind === "main" ? 4 : 6;
       while (s < total - 3) {
         let pick = rng() * totalWeight;
-        const variant = HOUSE_VARIANTS.find((v) => (pick -= v.weight) < 0) ?? HOUSE_VARIANTS[0];
+        const variant = houseStyle.variants.find((v) => (pick -= v.weight) < 0) ?? houseStyle.variants[0];
         const width = between(variant.width);
         const depth = between(variant.depth);
         if (rng() >= tier.plotFill) {
@@ -594,7 +592,7 @@ function layoutSettlement(
         // Normal pointing away from the street on this side; the house faces back along it.
         const nx = -at.tz * side;
         const nz = at.tx * side;
-        const offset = streetHalf + between(HOUSE_SETBACK) + depth / 2;
+        const offset = streetHalf + between(houseStyle.setback) + depth / 2;
         const x = at.x + nx * offset;
         const z = at.z + nz * offset;
         const ux = at.tx;
@@ -628,17 +626,17 @@ function layoutSettlement(
             width,
             depth,
             wallHeight: between(variant.wallHeight),
-            roofPitch: between(ROOF_PITCH),
+            roofPitch: between(houseStyle.roofPitch),
             tint: rng(),
           });
           return true;
         })();
-        s += placed ? width + between(HOUSE_GAP) : 2.5;
+        s += placed ? width + between(houseStyle.gap) : 2.5;
       }
     }
   }
 
-  return { siteId: site.id, x: site.x, z: site.z, radius: site.radius, gates: streetEnds, square, streets, houses };
+  return { siteId: site.id, styleId: site.style.id, x: site.x, z: site.z, radius: site.radius, gates: streetEnds, square, streets, houses };
 }
 
 /** Every settlement's layout. Deterministic from the seed, sites, gates and terrain. */

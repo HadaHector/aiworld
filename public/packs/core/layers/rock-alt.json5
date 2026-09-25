@@ -1,0 +1,21 @@
+// A second rock type in noise-selected patches, layered on top of the rock layer rather than
+// partitioning it: this pipeline recomputes the exact same slope weight independently (no shared
+// seed/complementary-mask trickery needed), then only inside patches picked by its own noise does
+// it nudge that weight a hair above what the rock layer computes for the same point, winning there;
+// everywhere else it's multiplied down to 0 and the rock layer wins as before.
+{
+  material: "rockAlt",
+  weight: {
+    noises: [{ name: "patch", type: "fbm", octaves: 2, frequency: 0.05, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
+    steps: [
+      { output: "slope", op: "input", name: "slope" },
+      { output: "slopeRaw", op: "remap", input: "slope", inMin: 0.85, inMax: 0.55, outMin: 0, outMax: 1 },
+      { output: "slopeW", op: "clamp", input: "slopeRaw", min: 0, max: 1 },
+      { output: "patchNoise", op: "sample", noise: "patch" },
+      { output: "maskRaw", op: "remap", input: "patchNoise", inMin: 0.15, inMax: 0.5, outMin: 0, outMax: 1 },
+      { output: "mask", op: "clamp", input: "maskRaw", min: 0, max: 1 },
+      { output: "boosted", op: "offset", input: "slopeW", amount: 0.01 },
+      { output: "result", op: "multiply", a: "boosted", b: "mask" },
+    ],
+  },
+}

@@ -1,0 +1,11 @@
+// Dark, close, sibilant. For deep forest and shadowed ground.
+{
+  onsets: ["s", "sh", "th", "v", "n", "gl", "d", "m", "z", "r", "br"],
+  nuclei: ["e", "i", "y", "u", "ae", "o"],
+  codas: ["sh", "n", "th", "l", "rn", "v"],
+  finals: ["esh", "orn", "yth", "ael", "ven", "ir", "un"],
+  features: ["Wood", "Thicket", "Shade", "Grove", "Deep", "Hollow", "Wold"],
+  qualities: ["Dark", "Tangled", "Old", "Whispering", "Close", "Black", "Sleeping", "Nine"],
+  codaChance: 0.5,
+  thirdSyllableChance: 0.35,
+}

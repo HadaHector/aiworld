@@ -1,0 +1,74 @@
+{
+  name: "Tundra",
+  voice: "frozen",
+  spawnWeight: 1,
+  lakeChance: 0.05,
+  borderType: "mountain",
+  settlement: "timber",
+  height: { generator: "detailHeight", amplitude: 2.1, frequency: 0.0162, offset: 1 },
+  trees: { generator: "standDensity", tree: "pine", frequency: 0.0028, openAt: 0.2, fullAt: 0.65, peak: 0.35 },
+  ground: {
+    base: "tundraGround",
+    road: "trackStone",
+    layers: [
+      // Snow only makes sense on specific biomes, and each biome's own height range is wildly different
+      // (tundra ~3.5-10.5, mountains ~20-100 - see biomeDefinitions.ts) so one global height threshold
+      // can't work for both; each biome below gets its own layer sharing the one `snowMaterial`, tuned
+      // to that biome's own height range. No biome-flag gate needed - PER_BIOME_MATERIAL_LAYERS below is
+      // itself the gate, so a mountains face never even evaluates tundra's layer or vice versa.
+      //
+      // Both layers do the same two things before their height remap: (1) sample a dedicated jitter
+      // noise and add it to height, so the snowline reads as an organically wavy band rather than a
+      // flat contour; (2) fold in reliefCurvature as a "valley" bias - a valley/basin (positive
+      // curvature) has its effective height nudged up, so snow clings to a real elevation lower than an
+      // open slope's there, while a ridge (negative curvature) gets nudged the other way and needs to
+      // climb higher to hold snow - snow drifts into and lingers in valleys, ridges wind-scour bare.
+      {
+        id: "snow-tundra",
+        material: "snow",
+        weight: {
+          noises: [{ name: "snowline", type: "fbm", octaves: 2, frequency: 0.03, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
+          steps: [
+            { output: "height", op: "input", name: "height" },
+            { output: "curvature", op: "input", name: "reliefCurvature" },
+            { output: "valleyBias", op: "scale", input: "curvature", factor: 4 },
+            { output: "biasedHeight", op: "add", a: "height", b: "valleyBias" },
+            { output: "jitterRaw", op: "sample", noise: "snowline" },
+            { output: "jitter", op: "scale", input: "jitterRaw", factor: 0.6 },
+            { output: "effectiveHeight", op: "add", a: "biasedHeight", b: "jitter" },
+            { output: "raw", op: "remap", input: "effectiveHeight", inMin: 7, inMax: 9.5, outMin: 0, outMax: 1 },
+            { output: "result", op: "clamp", input: "raw", min: 0, max: 1 },
+          ],
+        },
+      },
+
+      // Tundra's detail amplitude (~2.1) is far gentler than plains' (~12.75), so its valley threshold
+      // is scaled down proportionally rather than reused as-is - a basin this shallow would never clear
+      // plains' own thresholds.
+      {
+        id: "tundra-frost-valley",
+        material: "frostPatch",
+        weight: {
+          noises: [],
+          steps: [
+            { output: "curvature", op: "input", name: "reliefCurvature" },
+            { output: "raw", op: "remap", input: "curvature", inMin: 0.05, inMax: 0.25, outMin: 0, outMax: 1 },
+            { output: "result", op: "clamp", input: "raw", min: 0, max: 1 },
+          ],
+        },
+      },
+    ],
+  },
+  sky: {
+    horizon: "#dee4e8",
+    zenith: "#96b2d2",
+    cloud: "#ffffff",
+  },
+  // Polar reversal of the desert: a low, grazing noon sun and a big, bright midnight moon.
+  light: {
+    sunPeak: 32,
+    moonPeak: 62,
+    ambientDay: "#d2dce6",
+    sunZenith: "#ebf0f5",
+  },
+}

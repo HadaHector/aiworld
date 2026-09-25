@@ -1,0 +1,11 @@
+// Puffy rounded bumps.
+{
+  name: "Rounded Billow",
+  height: {
+    noises: [{ name: "puff", type: "billow", octaves: 3, frequency: 0.007, amplitude: 20, persistence: 0.4, lacunarity: 2.0 }],
+    steps: [
+      { output: "raw", op: "sample", noise: "puff" },
+      { output: "result", op: "offset", input: "raw", amount: 5 },
+    ],
+  },
+}

@@ -1,7 +1,7 @@
 import { mulberry32, deriveSeed } from "../rng";
 
 /**
- * A phonetic palette. Names are built from these rather than drawn from a word list, so the
+ * A phonetic palette, one per file in a pack's voices/ folder. Names are built from these rather than drawn from a word list, so the
  * generator can produce an unbounded number of names that still sound like they belong together -
  * and so that a new voice is a handful of sounds rather than a few hundred hand-written words.
  *
@@ -23,77 +23,6 @@ export interface Voice {
   /** Chance of a third syllable. Two syllables read as a name, three as a place. */
   thirdSyllableChance: number;
 }
-
-export const VOICES: Record<string, Voice> = {
-  // Dry, hard, back-of-the-mouth. Plosives and long open vowels.
-  arid: {
-    onsets: ["k", "kh", "q", "t", "z", "s", "r", "m", "h", "j", "d", "b"],
-    nuclei: ["a", "aa", "u", "ai", "o", "ua"],
-    codas: ["r", "n", "m", "z", "kh", "d", "sh"],
-    finals: ["ar", "un", "im", "ad", "esh", "at", "ir"],
-    features: ["Waste", "Expanse", "Sands", "Reach", "Barrens", "Flats", "Dunes"],
-    qualities: ["Burning", "Empty", "Golden", "Silent", "Endless", "Bleached", "Scorched", "Red", "Thirsting"],
-    codaChance: 0.55,
-    thirdSyllableChance: 0.3,
-  },
-  // Cold and consonant-clustered, with thin front vowels.
-  frozen: {
-    onsets: ["v", "sk", "thr", "n", "g", "br", "kr", "st", "h", "f", "sv"],
-    nuclei: ["i", "o", "e", "y", "ei", "u"],
-    codas: ["sk", "rn", "ld", "st", "g", "ff", "n"],
-    finals: ["vik", "orn", "eld", "isk", "ur", "and", "yr"],
-    features: ["Waste", "Wastes", "Reach", "Barrens", "Drift", "Hollow", "Shelf"],
-    qualities: ["Frozen", "Pale", "Bitter", "White", "Still", "Hollow", "Glass", "Starving"],
-    codaChance: 0.7,
-    thirdSyllableChance: 0.25,
-  },
-  // Soft, wet, nasal. Few hard stops, heavy on liquids.
-  murky: {
-    onsets: ["m", "l", "gh", "w", "sl", "b", "n", "dr", "y", "v"],
-    nuclei: ["u", "oo", "o", "ou", "e", "ae"],
-    codas: ["m", "l", "gh", "n", "th"],
-    finals: ["oom", "ul", "ogh", "en", "ath", "ir", "ow"],
-    features: ["Mire", "Fen", "Marsh", "Bog", "Hollow", "Sink", "Reach"],
-    qualities: ["Sunken", "Drowned", "Green", "Quiet", "Rotting", "Low", "Fevered", "Weeping"],
-    codaChance: 0.45,
-    thirdSyllableChance: 0.35,
-  },
-  // Open and rolling, vowel-forward, few clusters.
-  verdant: {
-    onsets: ["l", "m", "n", "s", "th", "br", "c", "f", "r", "w", "v"],
-    nuclei: ["a", "e", "i", "ia", "ae", "o", "ea"],
-    codas: ["l", "n", "s", "r", "th"],
-    finals: ["ell", "aen", "iel", "ora", "wen", "as", "erin"],
-    features: ["Meadows", "Downs", "Vale", "Weald", "Green", "Fields", "Reach"],
-    qualities: ["Wide", "Sunlit", "Gentle", "Long", "Quiet", "Fair", "Singing", "Amber"],
-    codaChance: 0.35,
-    thirdSyllableChance: 0.45,
-  },
-  // Heavy and blunt. Hard clusters, short vowels, stone-sounding.
-  stony: {
-    onsets: ["g", "k", "dr", "gr", "t", "br", "kr", "d", "th", "st", "b"],
-    nuclei: ["o", "a", "u", "au", "e"],
-    codas: ["rk", "g", "ch", "n", "rn", "ck", "m"],
-    finals: ["ock", "arn", "ung", "oth", "ek", "ar", "um"],
-    features: ["Crag", "Peaks", "Spur", "Ridge", "Horn", "Scarp", "Tor"],
-    qualities: ["Broken", "Grey", "High", "Iron", "Riven", "Old", "Cloven", "Thunder"],
-    codaChance: 0.75,
-    thirdSyllableChance: 0.2,
-  },
-  // Dark, close, sibilant. For deep forest and shadowed ground.
-  shaded: {
-    onsets: ["s", "sh", "th", "v", "n", "gl", "d", "m", "z", "r", "br"],
-    nuclei: ["e", "i", "y", "u", "ae", "o"],
-    codas: ["sh", "n", "th", "l", "rn", "v"],
-    finals: ["esh", "orn", "yth", "ael", "ven", "ir", "un"],
-    features: ["Wood", "Thicket", "Shade", "Grove", "Deep", "Hollow", "Wold"],
-    qualities: ["Dark", "Tangled", "Old", "Whispering", "Close", "Black", "Sleeping", "Nine"],
-    codaChance: 0.5,
-    thirdSyllableChance: 0.35,
-  },
-};
-
-export type VoiceId = keyof typeof VOICES;
 
 /** Name shapes, chosen per name. A world of nothing but bare words reads as a word list; a world
  *  of nothing but "the Adjective Noun" reads as a parody. Mixing them is what makes a map of 66
@@ -244,7 +173,7 @@ export interface NameGenerator {
    * because "Kharun Waste 2" gives the generation away immediately. With 66 zones over six voices
    * collisions are rare, so the retry almost never runs.
    */
-  nameFor(voiceId: VoiceId, id: number): string;
+  nameFor(voiceId: string, id: number): string;
   /**
    * A name for a settlement, drawn from the same pool of taken names as everything else - a town
    * and the zone it stands in must not share a name.
@@ -253,22 +182,23 @@ export interface NameGenerator {
    * Drowned Marsh" is a region, not a village, and "Zaazmun's Sands" names a landscape after
    * someone rather than naming a settlement at all.
    */
-  settlementNameFor(voiceId: VoiceId, id: number): string;
+  settlementNameFor(voiceId: string, id: number): string;
 }
 
 const NAME_SALT = 701;
 
-export function createNameGenerator(seed: number): NameGenerator {
+export function createNameGenerator(seed: number, voices: Record<string, Voice>): NameGenerator {
+  const fallbackVoice = Object.values(voices)[0];
   const root = deriveSeed(seed, NAME_SALT);
   const cache = new Map<string, string>();
   const taken = new Set<string>();
 
-  function generate(kind: string, voiceId: VoiceId, id: number, build: (rng: () => number, voice: Voice) => string): string {
+  function generate(kind: string, voiceId: string, id: number, build: (rng: () => number, voice: Voice) => string): string {
     const key = `${kind}:${voiceId}:${id}`;
     const cached = cache.get(key);
     if (cached) return cached;
 
-    const voice = VOICES[voiceId] ?? VOICES.verdant;
+    const voice = voices[voiceId] ?? fallbackVoice;
     let name = "";
     for (let attempt = 0; attempt < 32; attempt++) {
       const rng = mulberry32(deriveSeed(root, id * 8191 + attempt * 131 + voiceId.length + kind.length));
@@ -281,11 +211,11 @@ export function createNameGenerator(seed: number): NameGenerator {
     return name;
   }
 
-  function nameFor(voiceId: VoiceId, id: number): string {
+  function nameFor(voiceId: string, id: number): string {
     return generate("zone", voiceId, id, assemble);
   }
 
-  function settlementNameFor(voiceId: VoiceId, id: number): string {
+  function settlementNameFor(voiceId: string, id: number): string {
     return generate("settlement", voiceId, id, (rng, voice) => {
       const word = buildName(rng, voice);
       return rng() < SETTLEMENT_FEATURE_CHANCE ? `${word} ${pick(rng, SETTLEMENT_FEATURES)}` : word;

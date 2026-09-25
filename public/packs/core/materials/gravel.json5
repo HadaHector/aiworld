@@ -1,0 +1,6 @@
+// Lake-bed gravel for hills - see the hills-lake-gravel layer in biomes/hills.json5. Cooler and smaller-grained-reading
+// than rock/scree, since it's meant as a rounded lakebed material, not a boulder/rubble one.
+{
+  name: "Gravel",
+  texture: { generator: "twoTone", base: [0.5, 0.5, 0.47], variation: [0.6, 0.6, 0.56], roughness: 0.85, bumpStrength: 2.45 },
+}

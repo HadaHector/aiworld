@@ -4,6 +4,7 @@ import { RELIEF_CURVATURE_RADIUS_STEPS, buildVertexContext } from "../materials/
 import { MATERIALS_PER_TRIANGLE, type MaterialBlender } from "../materials/materialBlend";
 import type { TreeGround, TreePlacement, TreeScatter } from "../foliage/treeScatter";
 import { scatterGrass, type ChunkGrass } from "../foliage/grassScatter";
+import type { GrassKindDef } from "../foliage/grassConfig";
 
 /** Where a chunk is and at what level of detail - everything a build needs besides the world
  *  itself, and plain data, so it can be posted to a worker. */
@@ -19,7 +20,7 @@ export interface ChunkBuildRequest {
   originZ: number;
 }
 
-/** The world a chunk is built from. A worker makes its own from the same seed. */
+/** The world a chunk is built from. A worker makes its own from the same seed and content. */
 export interface ChunkBuildContext {
   sampleTerrain: TerrainSampler;
   materialBlender: Pick<MaterialBlender, "buildMaterialBlend" | "materialDefs">;
@@ -28,6 +29,7 @@ export interface ChunkBuildContext {
    *  the material textures have been baked. */
   groundColors: [number, number, number][] | null;
   scatterTrees: TreeScatter;
+  grassKinds: GrassKindDef[];
 }
 
 /** How far a skirt hangs below the lowest point a neighbour's edge can reach (see skirtDepth), so
@@ -119,7 +121,7 @@ function toSlots(weights: Map<number, number>, ownerList: MaterialList, allowed:
  */
 export function buildChunkGeometry(request: ChunkBuildRequest, context: ChunkBuildContext): ChunkGeometry {
   const { size, subdivisions, detailSubdivisions, originX, originZ } = request;
-  const { sampleTerrain, materialBlender, scatterTrees, seed, groundColors } = context;
+  const { sampleTerrain, materialBlender, scatterTrees, seed, groundColors, grassKinds } = context;
 
   const gridSize = subdivisions + 1;
   const detailRatio = detailSubdivisions / subdivisions;
@@ -506,6 +508,7 @@ export function buildChunkGeometry(request: ChunkBuildRequest, context: ChunkBui
               heightInSquare((r, c) => paddedPositions[(r * paddedSize + c) * 3 + 1], row + pad, col + pad, u, v),
           },
           materialBlender.materialDefs,
+          grassKinds,
           seed,
           groundColors,
         )

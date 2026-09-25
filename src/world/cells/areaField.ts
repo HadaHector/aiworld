@@ -10,9 +10,8 @@ import { generateRiversForContinent } from "./riverGeneration";
 import { createBaseNoise2D } from "../terrain/noise";
 import { deriveSeed, mulberry32 } from "../rng";
 import { smoothstep } from "../mathUtils";
-import type { BiomeDefinition } from "../biomes/biomeTypes";
-import { BIOME_REGISTRY } from "../biomes/biomeDefinitions";
-import { BOUNDARY_HILL_STYLES, type BoundaryHillStyle } from "../biomes/boundaryHillStyles";
+import type { BiomeDefinition, BoundaryHillStyle } from "../biomes/biomeTypes";
+import type { WorldContent } from "../content/worldContent";
 import {
   CELL_SPACING,
   CELL_BOUNDS_MARGIN,
@@ -188,6 +187,7 @@ function mixSeed(x: number): number {
  */
 function resolveBoundaryHillStyle(
   seed: number,
+  styles: BoundaryHillStyle[],
   primaryBiome: BiomeDefinition,
   otherBiome: BiomeDefinition,
   primaryAreaId: number,
@@ -199,11 +199,11 @@ function resolveBoundaryHillStyle(
   const hi = Math.max(primaryAreaId, otherAreaId);
   const pairKey = ((lo << 16) ^ hi) >>> 0;
   const pairSeed = mixSeed(deriveSeed(seed, BOUNDARY_HILL_STYLE_SALT) ^ pairKey);
-  return BOUNDARY_HILL_STYLES[pairSeed % BOUNDARY_HILL_STYLES.length];
+  return styles[pairSeed % styles.length];
 }
 
 /** Composes the cell diagram, multi-continent land growth, and area partitioning into one queryable per-position sample. */
-export function createAreaSampler(seed: number): AreaWorld {
+export function createAreaSampler(seed: number, content: WorldContent): AreaWorld {
   const layout = planWorld(seed);
   const bounds = computeCellBounds(WORLD_CENTER_X, WORLD_CENTER_Z, layout.worldExtent, CELL_BOUNDS_MARGIN);
   const { points, adjacency, seamBetween } = generateCellDiagram(seed, bounds, CELL_SPACING);
@@ -225,7 +225,7 @@ export function createAreaSampler(seed: number): AreaWorld {
     const localAreaId = partitionIntoAreas(continent.seed, adjacency, continentCells, continent.areaCount);
     localAreaId.forEach((id, cellIndex) => cellToAreaId.set(cellIndex, id + areaIdOffset));
 
-    const continentBiomes = assignAreaBiomes(continent.seed, continent.areaCount);
+    const continentBiomes = assignAreaBiomes(continent.seed, continent.areaCount, content.biomes);
     areaBiomes.push(...continentBiomes);
     areaIdOffset += continent.areaCount;
 
@@ -326,7 +326,7 @@ export function createAreaSampler(seed: number): AreaWorld {
   }
 
   function areaBiomeOf(areaId: number): BiomeDefinition {
-    return areaId === -1 ? (areaBiomes[0] ?? BIOME_REGISTRY[0]) : (areaBiomes[areaId] ?? BIOME_REGISTRY[0]);
+    return areaId === -1 ? (areaBiomes[0] ?? content.biomes[0]) : (areaBiomes[areaId] ?? content.biomes[0]);
   }
 
   function cellIdOf(landFieldIndex: number): number {
@@ -422,7 +422,7 @@ export function createAreaSampler(seed: number): AreaWorld {
     const boundaryHillStyle =
       nearestOtherArea.index === -1
         ? null
-        : resolveBoundaryHillStyle(seed, primaryBiome, areaBiomeOf(otherAreaId), primaryAreaId, otherAreaId);
+        : resolveBoundaryHillStyle(seed, content.boundaryHillStyles, primaryBiome, areaBiomeOf(otherAreaId), primaryAreaId, otherAreaId);
 
     return {
       landmass,
@@ -466,7 +466,7 @@ export function createAreaSampler(seed: number): AreaWorld {
 
   // Named in ascending id so the set of names is stable: the generator re-rolls on a collision,
   // which makes a later name depend on which earlier ones were already taken.
-  const nameGenerator = createNameGenerator(seed);
+  const nameGenerator = createNameGenerator(seed, content.voices);
   const areaNames = new Map<number, string>();
   for (let areaId = 0; areaId < areaBiomes.length; areaId++) {
     areaNames.set(areaId, nameGenerator.nameFor(areaBiomes[areaId].voiceId, areaId));

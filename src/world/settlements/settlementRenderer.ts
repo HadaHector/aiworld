@@ -2,26 +2,11 @@ import { Effect, Mesh, RawTexture, ShaderMaterial, Texture, VertexData, type Cas
 import { LIT_SHADING_GLSL, LIT_SHADING_SAMPLERS, LIT_SHADING_UNIFORMS, type LitShading } from "../materials/litShading";
 import { mulberry32 } from "../rng";
 import type { House, SettlementLayout } from "./settlementLayout";
-import { ROOF_OVERHANG } from "./settlementConfig";
-import { WOOD_TEXTURE_SIZE, WOOD_TEXTURE_WORLD_SIZE, bakeWoodTexture } from "./woodTexture";
+import type { SettlementStyle } from "./settlementConfig";
+import { WALL_TEXTURE_SIZE, WALL_TEXTURE_WORLD_SIZE, bakeWallTexture } from "./wallTexture";
 
 /** How far below its floor a house's walls reach, so the edge of its plot never shows a gap. */
 const FOUNDATION_DEPTH = 1.2;
-
-// Colours multiplying the wood texture.
-const WALL_TINTS: [number, number, number][] = [
-  [1.1, 1.05, 1.0], // bare
-  [0.95, 0.95, 0.92], // weathered
-  [0.78, 0.68, 0.58], // dark stain
-  [1.25, 1.2, 1.1], // limewashed
-];
-const ROOF_TINTS: [number, number, number][] = [
-  [0.72, 0.46, 0.36],
-  [0.55, 0.5, 0.46],
-  [0.62, 0.55, 0.42],
-];
-const DOOR_COLOR: [number, number, number] = [0.38, 0.26, 0.18];
-const WINDOW_COLOR: [number, number, number] = [0.12, 0.13, 0.15];
 
 const VERTEX_SHADER = `#version 300 es
 precision highp float;
@@ -131,7 +116,9 @@ function pushTriangle(
  * overhang, and a door (plus windows on wider houses) on the street side. Positions are relative to
  * the settlement's origin (ox, oz), so each settlement's mesh keeps its numbers small.
  */
-function addHouse(b: Builder, house: House, ox: number, oz: number): void {
+function addHouse(b: Builder, house: House, ox: number, oz: number, style: SettlementStyle): void {
+  const { wallTints, roofTints, door, window } = style.look;
+  const overhang = style.houses.roofOverhang;
   const rng = mulberry32(Math.floor(house.tint * 1e9));
   const fx = house.frontX;
   const fz = house.frontZ;
@@ -146,10 +133,10 @@ function addHouse(b: Builder, house: House, ox: number, oz: number): void {
 
   const y0 = house.y - FOUNDATION_DEPTH;
   const y1 = house.y + house.wallHeight;
-  const wallTint = WALL_TINTS[Math.floor(house.tint * WALL_TINTS.length) % WALL_TINTS.length];
-  const roofTint = ROOF_TINTS[Math.floor(rng() * ROOF_TINTS.length)];
-  const v = (y: number): number => (y - y0) / WOOD_TEXTURE_WORLD_SIZE;
-  const u = (d: number): number => d / WOOD_TEXTURE_WORLD_SIZE;
+  const wallTint = wallTints[Math.floor(house.tint * wallTints.length) % wallTints.length];
+  const roofTint = roofTints[Math.floor(rng() * roofTints.length)];
+  const v = (y: number): number => (y - y0) / WALL_TEXTURE_WORLD_SIZE;
+  const u = (d: number): number => d / WALL_TEXTURE_WORLD_SIZE;
 
   // Walls: front (+b), back (-b), and the two ends (+a, -a), each wound to face outward.
   const walls: { from: [number, number]; to: [number, number]; normal: [number, number] }[] = [
@@ -173,9 +160,9 @@ function addHouse(b: Builder, house: House, ox: number, oz: number): void {
   // Gable roof: ridge along the width, over the middle of the depth.
   const rise = Math.tan(house.roofPitch);
   const ridge = y1 + hd * rise;
-  const eaveB = hd + ROOF_OVERHANG;
-  const eaveY = y1 - ROOF_OVERHANG * rise;
-  const endA = hw + ROOF_OVERHANG;
+  const eaveB = hd + overhang;
+  const eaveY = y1 - overhang * rise;
+  const endA = hw + overhang;
   const slopeLength = Math.hypot(eaveB, ridge - eaveY);
   const cos = Math.cos(house.roofPitch);
   const sin = Math.sin(house.roofPitch);
@@ -205,7 +192,7 @@ function addHouse(b: Builder, house: House, ox: number, oz: number): void {
     [at(doorAt - 0.5, proud, house.y), at(doorAt + 0.5, proud, house.y), at(doorAt + 0.5, proud, doorTop), at(doorAt - 0.5, proud, doorTop)],
     front,
     [[0, 0], [0.5, 0], [0.5, 1], [0, 1]],
-    DOOR_COLOR,
+    door,
   );
   if (house.width > 6) {
     const sill = house.y + 1.1;
@@ -218,7 +205,7 @@ function addHouse(b: Builder, house: House, ox: number, oz: number): void {
         [at(centre - 0.4, proud, sill), at(centre + 0.4, proud, sill), at(centre + 0.4, proud, head), at(centre - 0.4, proud, head)],
         front,
         [[0, 0], [0.4, 0], [0.4, 0.4], [0, 0.4]],
-        WINDOW_COLOR,
+        window,
       );
     }
   }
@@ -232,31 +219,43 @@ function addHouse(b: Builder, house: House, ox: number, oz: number): void {
 export function createSettlementRenderer(
   scene: Scene,
   layouts: SettlementLayout[],
+  styles: SettlementStyle[],
   seed: number,
   litShading: LitShading,
   shadowGenerator: CascadedShadowGenerator,
   initialDrawDistance: number,
 ): SettlementRenderer {
-  const wood = RawTexture.CreateRGBATexture(bakeWoodTexture(seed), WOOD_TEXTURE_SIZE, WOOD_TEXTURE_SIZE, scene, true, false);
-  wood.wrapU = Texture.WRAP_ADDRESSMODE;
-  wood.wrapV = Texture.WRAP_ADDRESSMODE;
-
   Effect.ShadersStore["buildingVertexShader"] = VERTEX_SHADER;
   Effect.ShadersStore["buildingFragmentShader"] = FRAGMENT_SHADER;
-  const material = new ShaderMaterial("building", scene, "building", {
-    attributes: ["position", "normal", "uv", "color"],
-    uniforms: ["world", "view", "projection", ...LIT_SHADING_UNIFORMS],
-    samplers: ["woodTexture", ...LIT_SHADING_SAMPLERS],
-  });
-  material.setTexture("woodTexture", wood);
-  material.backFaceCulling = false;
-  litShading.register(material);
+
+  // One material per style, each with its own wall texture; made only for styles that built
+  // something, since a style whose biome never came up would bake a texture for nothing.
+  const styleById = new Map(styles.map((style) => [style.id, style]));
+  const materials = new Map<string, ShaderMaterial>();
+  function materialFor(style: SettlementStyle): ShaderMaterial {
+    let material = materials.get(style.id);
+    if (material) return material;
+    const texture = RawTexture.CreateRGBATexture(bakeWallTexture(seed, style.look.wallTexture), WALL_TEXTURE_SIZE, WALL_TEXTURE_SIZE, scene, true, false);
+    texture.wrapU = Texture.WRAP_ADDRESSMODE;
+    texture.wrapV = Texture.WRAP_ADDRESSMODE;
+    material = new ShaderMaterial(`building_${style.id}`, scene, "building", {
+      attributes: ["position", "normal", "uv", "color"],
+      uniforms: ["world", "view", "projection", ...LIT_SHADING_UNIFORMS],
+      samplers: ["woodTexture", ...LIT_SHADING_SAMPLERS],
+    });
+    material.setTexture("woodTexture", texture);
+    material.backFaceCulling = false;
+    litShading.register(material);
+    materials.set(style.id, material);
+    return material;
+  }
 
   const meshes: { mesh: Mesh; x: number; z: number; radius: number }[] = [];
   for (const layout of layouts) {
     if (layout.houses.length === 0) continue;
+    const style = styleById.get(layout.styleId)!;
     const builder: Builder = { positions: [], normals: [], uvs: [], colors: [], indices: [] };
-    for (const house of layout.houses) addHouse(builder, house, layout.x, layout.z);
+    for (const house of layout.houses) addHouse(builder, house, layout.x, layout.z, style);
     const mesh = new Mesh(`settlement_${layout.siteId}`, scene);
     const data = new VertexData();
     data.positions = builder.positions;
@@ -266,7 +265,7 @@ export function createSettlementRenderer(
     data.indices = builder.indices;
     data.applyToMesh(mesh);
     mesh.position.set(layout.x, 0, layout.z);
-    mesh.material = material;
+    mesh.material = materialFor(style);
     mesh.isPickable = false;
     shadowGenerator.addShadowCaster(mesh, false);
     meshes.push({ mesh, x: layout.x, z: layout.z, radius: layout.radius });

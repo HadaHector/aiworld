@@ -1,0 +1,10 @@
+/** Compacted sand, for a track across desert or canyon. Darker and greyer than the sand around it,
+ *  which is the only way a track reads at all on ground that is already sand. */
+{
+  name: "Sand Track",
+  texture: { generator: "twoTone", base: [0.52, 0.44, 0.31], variation: [0.62, 0.55, 0.41], roughness: 0.82, bumpStrength: 0.9 },
+  // Clears grass rather than merely growing none: a road cut is where valley layers fire too, so
+  // even at its centre the road is only some 60-70% of the blend. At 2, grass is gone wherever the
+  // road is half the blend or more, and thins out across the road's edge on the way in.
+  clearsGrass: 2,
+}

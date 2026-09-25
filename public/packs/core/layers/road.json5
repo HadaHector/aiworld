@@ -1,0 +1,75 @@
+/**
+ * The road surface.
+ *
+ * One layer, reaching everywhere, but what it paints is the zone's own `ground.road` - so the shape
+ * of a road is universal and its surface is local. That is what `roadSurface: true` marks: an
+ * ordinary universal layer paints one material for the whole world, and this one cannot.
+ *
+ * Sharing matters. The roster at a point holds one entry per distinct material, so two zones that
+ * name the same track cost one slot between them at their border and two zones that name different
+ * ones cost two. Measured over every pair of biomes, sharing three surfaces rather than eight makes
+ * no difference to the worst case (13 slots either way, at hills+desert) but it does to how often
+ * the worst case is reached.
+ *
+ * The surface is its own material rather than a reused one - see materials/track.json5 for why mud, the
+ * obvious candidate, could not be it.
+ *
+ * The falloff is deliberately narrower than the graded shoulder. The terrain is levelled out to
+ * ROAD_HALF_WIDTH and then ramped back to the ground over a shoulder whose width depends on how
+ * deep the cut is; the SURFACE should stop at the running width, so the shoulder reads as a bank
+ * of whatever the surrounding biome is rather than as a road three times too wide. Weight 1 out to
+ * the running width, gone a couple of units past it.
+ */
+{
+  // Paints each biome's own road material; this one is the fallback.
+  roadSurface: true,
+  material: "track",
+  weight: {
+    // Frequency 0.05 is a ~20-unit wavelength. It has to stay well clear of the terrain's own
+    // 2.5-unit vertex spacing: this layer's weight is evaluated per vertex, so noise finer than a
+    // few vertices does not fray the edge, it aliases - the first attempt used 0.25, a 4-unit
+    // wavelength, and painted a herringbone of triangle-aligned blotches all the way down every
+    // road. The other layers in this file sit at 0.03 for the same reason.
+    noises: [{ name: "roadEdge", type: "fbm", octaves: 2, frequency: 0.05, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
+    steps: [
+      { output: "roadGap", op: "input", name: "roadGap" },
+      // A little noise on the gap before the falloff, so the edge of the surface frays into the
+      // verge instead of being a drawn line - the same trick the coastline and the river banks use.
+      { output: "edgeRaw", op: "sample", noise: "roadEdge" },
+      { output: "edge", op: "scale", input: "edgeRaw", factor: 1.6 },
+      { output: "gap", op: "add", a: "roadGap", b: "edge" },
+      // Five units of fade, which is two terrain vertices. This weight is evaluated per vertex and
+      // interpolated across the triangle between, so a transition narrower than a couple of vertices
+      // cannot be blended - it can only be stepped.
+      //
+      // Not to be confused with the stepping visible where a road crosses tundra: that edge is the
+      // SNOWLINE, not this. Tundra's snow band runs from height 7 to 9.5 and the road cut drops the
+      // ground straight through it, so the snow layer switches over a couple of units of height and
+      // steps at its own vertex resolution. Widening this fade does not touch it - measured, the
+      // staircase is unchanged either way.
+      { output: "raw", op: "remap", input: "gap", inMin: 9, inMax: 4, outMin: 0, outMax: 1 },
+      { output: "surface", op: "clamp", input: "raw", min: 0, max: 1 },
+
+      // Weighted above 1 so the surface actually reads as a road. Layer weights are conserved -
+      // scaled to sum to 1, with whatever is left over going to the biome base - so a weight of 1
+      // here means an even split with anything else firing at the same point, and something always
+      // is: a graded road is a cut, which is a local basin, so every biome's curvature-driven
+      // valley layer lights up along it and washes the track out to a muddy smear.
+      //
+      // But the boost cannot be applied flat, because normalising turns it into a switch. A share
+      // of b*raw/(C + b*raw) with b = 5 and the competing weight C around 0.5 is already half the
+      // blend one tenth of the way into the fade: five units of intended transition collapse to
+      // about half a unit, and the edge of the road becomes a drawn line.
+      //
+      // Cubing before the boost is what buys the gradient back. The share a weight w earns is
+      // w/(C + w), which is steep near zero and flat near one - so to spend the fade evenly the
+      // weight has to start far below the competition and only overtake it late. Measured against
+      // C = 0.5, the share across the fade goes 0.00 / 0.07 / 0.39 / 0.68 / 0.84 / 0.91 rather than
+      // the flat boost's 0.00 / 0.67 / 0.80 / 0.86 / 0.89 / 0.91, which was a line with a smudge
+      // on it. Same 5 at the centre either way.
+      { output: "square", op: "multiply", a: "surface", b: "surface" },
+      { output: "cube", op: "multiply", a: "square", b: "surface" },
+      { output: "result", op: "scale", input: "cube", factor: 5 },
+    ],
+  },
+}

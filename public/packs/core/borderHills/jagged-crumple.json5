@@ -1,0 +1,18 @@
+// Broad rolling base with gentler, wider spikes added on top - canyon's multi-noise technique,
+// additive instead of subtractive.
+{
+  name: "Jagged Crumple",
+  height: {
+    noises: [
+      { name: "base", type: "fbm", octaves: 3, frequency: 0.006, amplitude: 20, persistence: 0.35, lacunarity: 2.0 },
+      { name: "spike", type: "ridged", octaves: 3, frequency: 0.0035, amplitude: 1, persistence: 0.4, lacunarity: 2.0 },
+    ],
+    steps: [
+      { output: "baseRaw", op: "sample", noise: "base" },
+      { output: "baseLevel", op: "offset", input: "baseRaw", amount: 8 },
+      { output: "spikeRaw", op: "sample", noise: "spike" },
+      { output: "spikeScaled", op: "scale", input: "spikeRaw", factor: 30 },
+      { output: "result", op: "add", a: "baseLevel", b: "spikeScaled" },
+    ],
+  },
+}

@@ -1,7 +1,7 @@
 import { Matrix, Quaternion, Vector3, type Mesh } from "@babylonjs/core";
 import type { CascadedShadowGenerator, Scene } from "@babylonjs/core";
 import type { TreePlacement } from "./treeScatter";
-import { TREE_KINDS, type TreeKind } from "./foliageConfig";
+import type { TreeKindDef } from "./foliageConfig";
 import { createTreeModel, type TreeModel } from "./treeModels";
 
 export interface TreeField {
@@ -51,10 +51,11 @@ interface Species {
  * Recomposing every tree on every chunk event instead cost 18.5ms at a 1200-unit draw distance -
  * a dropped frame every time a chunk came or went, which while walking is most of them.
  */
-export function createTreeField(scene: Scene, shadowGenerator: CascadedShadowGenerator): TreeField {
-  const species = new Map<TreeKind, Species>();
-  for (const kind of TREE_KINDS) {
-    const model = createTreeModel(scene, kind);
+export function createTreeField(scene: Scene, shadowGenerator: CascadedShadowGenerator, treeKinds: TreeKindDef[]): TreeField {
+  const species = new Map<string, Species>();
+  for (const def of treeKinds) {
+    const kind = def.id;
+    const model = createTreeModel(scene, def);
     // The instances cover every chunk that is loaded, which is a disc centred on the player - so a
     // master mesh is in view whenever anything is, and asking whether its bounding box intersects
     // the frustum can only ever answer yes. Computing that box meant transforming every instance on
@@ -87,7 +88,7 @@ export function createTreeField(scene: Scene, shadowGenerator: CascadedShadowGen
 
   /** Per chunk, one block per archetype - most of them empty, since a zone grows one kind of tree
    *  and only its borders grow two. */
-  const chunks = new Map<string, Map<TreeKind, Block>>();
+  const chunks = new Map<string, Map<string, Block>>();
   let count = 0;
   let dirty = false;
   // The "Trees" settings-panel toggle and "this species has nothing loaded" are two independent
@@ -101,12 +102,12 @@ export function createTreeField(scene: Scene, shadowGenerator: CascadedShadowGen
   const position = new Vector3();
   const matrix = new Matrix();
 
-  function toBlocks(trees: TreePlacement[]): Map<TreeKind, Block> {
-    const tally = new Map<TreeKind, number>();
+  function toBlocks(trees: TreePlacement[]): Map<string, Block> {
+    const tally = new Map<string, number>();
     for (const tree of trees) tally.set(tree.kind, (tally.get(tree.kind) ?? 0) + 1);
 
-    const blocks = new Map<TreeKind, Block>();
-    const filled = new Map<TreeKind, number>();
+    const blocks = new Map<string, Block>();
+    const filled = new Map<string, number>();
     for (const [kind, total] of tally) {
       blocks.set(kind, { count: total, matrices: new Float32Array(total * 16), colours: new Float32Array(total * 4) });
       filled.set(kind, 0);
@@ -149,7 +150,7 @@ export function createTreeField(scene: Scene, shadowGenerator: CascadedShadowGen
     mesh.thinInstanceSetBuffer(kind, data, stride, false);
   }
 
-  function flushSpecies(kind: TreeKind, entry: Species): void {
+  function flushSpecies(kind: string, entry: Species): void {
     let total = 0;
     for (const blocks of chunks.values()) total += (blocks.get(kind) ?? EMPTY).count;
     entry.count = total;

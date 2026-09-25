@@ -1,0 +1,11 @@
+// Open and rolling, vowel-forward, few clusters.
+{
+  onsets: ["l", "m", "n", "s", "th", "br", "c", "f", "r", "w", "v"],
+  nuclei: ["a", "e", "i", "ia", "ae", "o", "ea"],
+  codas: ["l", "n", "s", "r", "th"],
+  finals: ["ell", "aen", "iel", "ora", "wen", "as", "erin"],
+  features: ["Meadows", "Downs", "Vale", "Weald", "Green", "Fields", "Reach"],
+  qualities: ["Wide", "Sunlit", "Gentle", "Long", "Quiet", "Fair", "Singing", "Amber"],
+  codaChance: 0.35,
+  thirdSyllableChance: 0.45,
+}

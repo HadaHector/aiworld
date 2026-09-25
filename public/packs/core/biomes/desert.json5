@@ -1,0 +1,141 @@
+{
+  name: "Desert",
+  voice: "arid",
+  spawnWeight: 2,
+  lakeChance: 0.03, // oases
+  borderType: "mountain",
+  settlement: "timber",
+  height: { generator: "detailHeight", amplitude: 10.1, frequency: 0.0026, offset: 4, persistence: 0.1 },
+  // Barren, except along the water. There is no stray term and no baseline: away from a river this
+  // evaluates to zero and the zone grows nothing at all, which is the point of a desert.
+  trees: {
+    noises: [{ name: "grove", type: "fbm", octaves: 2, frequency: 0.006, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
+    steps: [
+      { output: "water", op: "input", name: "riverGap" },
+      // The same band the riverside grass uses (the desert-river-grass layer below): full on the
+      // bank, gone about forty units back from it. Descending, so the ramp is full at the water and
+      // nothing beyond its reach - and riverGap is Infinity where there is no river at all, which
+      // runs off the bottom of this and clamps to zero with no branch needed.
+      { output: "bankRamp", op: "remap", input: "water", inMin: 90, inMax: 45, outMin: 0, outMax: 1 },
+      { output: "bank", op: "clamp", input: "bankRamp", min: 0, max: 1 },
+      // Gathers the palms into clumps along the bank instead of spacing them evenly down it.
+      { output: "groveRaw", op: "sample", noise: "grove" },
+      { output: "groveRamp", op: "remap", input: "groveRaw", inMin: -0.5, inMax: 0.15, outMin: 0.15, outMax: 0.8 },
+      { output: "grove", op: "clamp", input: "groveRamp", min: 0.15, max: 0.8 },
+      { output: "palm", op: "multiply", a: "bank", b: "grove" },
+    ],
+    outputs: { palm: "palm" },
+  },
+  ground: {
+    base: "sand",
+    road: "trackSand",
+    layers: [
+      // Desert dunes: a shaded leeward face (reusing the same slopeFacing signal, just relabeled) and
+      // damp, darker sand pooling in the troughs between dunes - the latter reuses swamp's own mud
+      // material rather than a new texture, the same "share a MaterialDef across layers" trick as snow.
+      {
+        id: "desert-dune-shadow",
+        material: "duneShadow",
+        weight: {
+          noises: [],
+          steps: [
+            { output: "facing", op: "input", name: "slopeFacing" },
+            { output: "raw", op: "remap", input: "facing", inMin: 0.05, inMax: 0.3, outMin: 0, outMax: 1 },
+            { output: "result", op: "clamp", input: "raw", min: 0, max: 1 },
+          ],
+        },
+      },
+
+      // Wadi floors: the low, flat ground between dunes, where the rare runoff drops its silt and then
+      // dries and cracks. This used to reuse swamp's own mud material, which read as wet green-brown bog
+      // in the middle of a desert - desertSiltMaterial is the same idea in the right palette.
+      {
+        id: "desert-silt-valley",
+        material: "desertSilt",
+        weight: {
+          noises: [],
+          steps: [
+            { output: "curvature", op: "input", name: "reliefCurvature" },
+            { output: "raw", op: "remap", input: "curvature", inMin: 0.2, inMax: 1.0, outMin: 0, outMax: 1 },
+            { output: "result", op: "clamp", input: "raw", min: 0, max: 1 },
+          ],
+        },
+      },
+
+      // Reg/serir gravel plains. Unlike every other layer in this file, the weight is driven by an actual
+      // noise rather than only terrain-derived inputs - gravel plain versus dune field is a matter of
+      // where the wind happened to strip the sand away, not of slope or height, so a very low-frequency
+      // fbm (about one patch per 250 world units) decides it. Gated on flatness so it never creeps up a
+      // dune face.
+      {
+        id: "desert-gravel-plain",
+        material: "desertGravel",
+        weight: {
+          noises: [{ name: "patches", type: "fbm", octaves: 2, frequency: 0.004, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
+          steps: [
+            { output: "patchRaw", op: "sample", noise: "patches" },
+            { output: "patch", op: "remap", input: "patchRaw", inMin: 0.1, inMax: 0.9, outMin: 0, outMax: 1 },
+            { output: "patchClamped", op: "clamp", input: "patch", min: 0, max: 1 },
+            { output: "slope", op: "input", name: "slope" },
+            { output: "flatRaw", op: "remap", input: "slope", inMin: 0.93, inMax: 0.99, outMin: 0, outMax: 1 },
+            { output: "flat", op: "clamp", input: "flatRaw", min: 0, max: 1 },
+            { output: "result", op: "multiply", a: "patchClamped", b: "flat" },
+          ],
+        },
+      },
+
+      /**
+       * The one green thing in a desert: the strip of ground a river keeps alive.
+       *
+       * Driven by `riverGap` - true distance to the river centreline, continuous everywhere - rather
+       * than by any wetness flag, so the band is a smooth function of position with nothing to switch.
+       * Measured along a desert reach, the waterline sits at riverGap ~35-40 and the ground is fully dry
+       * by 50, so a ramp that is full at 45 and gone by 90 puts about forty units of green on dry bank
+       * and lets the `dry` gate below clip the rest off inside the channel.
+       *
+       * The edge noise matters more here than anywhere else in this file. Every other layer's boundary
+       * follows terrain, which is already irregular; this one follows a polyline, and without jitter it
+       * would read as a drawn offset curve running parallel to the water for kilometres.
+       *
+       * Boosted past 1 for the same reason as the lake shore: it has to beat the desert's own silt and
+       * gravel layers, which key on exactly the flat low ground a riverbank is made of.
+       */
+      {
+        id: "desert-river-grass",
+        material: "grass",
+        weight: {
+          noises: [{ name: "bankEdge", type: "fbm", octaves: 3, frequency: 0.012, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
+          steps: [
+            { output: "gap", op: "input", name: "riverGap" },
+            { output: "edgeRaw", op: "sample", noise: "bankEdge" },
+            { output: "edge", op: "scale", input: "edgeRaw", factor: 14 },
+            { output: "jittered", op: "add", a: "gap", b: "edge" },
+            { output: "bandRaw", op: "remap", input: "jittered", inMin: 90, inMax: 45, outMin: 0, outMax: 1 },
+            { output: "band", op: "clamp", input: "bandRaw", min: 0, max: 1 },
+            { output: "boosted", op: "scale", input: "band", factor: 2.4 },
+            // SEA_LEVEL is 0 (areaField.ts). Grass stops at the water rather than carrying on down the
+            // bed, and fading it over the last couple of units means the handoff is a shoreline, not a
+            // contour line.
+            { output: "height", op: "input", name: "height" },
+            { output: "dryRaw", op: "remap", input: "height", inMin: -1, inMax: 1.5, outMin: 0, outMax: 1 },
+            { output: "dry", op: "clamp", input: "dryRaw", min: 0, max: 1 },
+            { output: "result", op: "multiply", a: "boosted", b: "dry" },
+          ],
+        },
+      },
+    ],
+  },
+  sky: {
+    horizon: "#ecca9a",
+    zenith: "#8aa8d0",
+    cloud: "#fffaec",
+  },
+  // A harsh, near-overhead noon and a moon that barely clears the dunes - the two extremes of the
+  // per-biome elevation range - plus a hotter horizon sun and a dim, sharp-cool night to match.
+  light: {
+    sunPeak: 82,
+    moonPeak: 30,
+    sunHorizon: "#ff7837",
+    ambientDay: "#d6c6a4",
+  },
+}

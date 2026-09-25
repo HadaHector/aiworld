@@ -1,0 +1,9 @@
+// A slender birch: a pale trunk and a tall, narrow crown - the same sphereCrown builder as core's
+// broadleaf, just proportioned differently.
+{
+  trunk: { height: 20, diameterBottom: 1.8, diameterTop: 0.9, sides: 8, color: "#d9d4c8" },
+  crown: { builder: "sphereCrown", centreY: 22, radius: 8, heightRatio: 1.7 },
+  canopyDark: [0.3, 0.42, 0.16],
+  canopyLight: [0.55, 0.64, 0.26],
+  scale: [0.7, 1.15],
+}

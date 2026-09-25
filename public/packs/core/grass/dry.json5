@@ -1,0 +1,9 @@
+// Tall, thin, sparse stalks with seed heads - dry grassland, dune and silt edges.
+{
+  width: 0.95,
+  height: 0.85,
+  sway: 0.28,
+  fadeStart: 15,
+  fadeEnd: 200,
+  blades: { count: 26, minHeight: 0.55, maxHeight: 0.97, baseWidth: 4, lean: 0.18, fan: false, seedHeads: true },
+}

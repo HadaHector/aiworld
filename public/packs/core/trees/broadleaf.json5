@@ -1,0 +1,10 @@
+// Every tree stands about 18 units tall, ten times the character - the proportion that makes
+// walking between them feel like a wood rather than a park. The kinds differ in what that height is
+// made of: a pine puts it in a narrow spire, a palm in a bare trunk with everything at the top.
+{
+  trunk: { height: 24, diameterBottom: 4.9, diameterTop: 2.9, sides: 12, color: [0.32, 0.23, 0.15] },
+  // Squashed a little (heightRatio), so it reads as a crown rather than a ball on a stick.
+  crown: { builder: "sphereCrown", centreY: 33, radius: 20, heightRatio: 0.82 },
+  canopyDark: [0.15, 0.33, 0.13],
+  canopyLight: [0.38, 0.56, 0.21],
+}

@@ -1,3 +1,5 @@
+import type { ColorTuple } from "../terrain/pipeline/pipelineTypes";
+
 /**
  * Foliage comes in three levels - large (trees), medium (bushes), small (grass) - which are
  * deliberately not one system with a size parameter: a tree is an object you walk around and a
@@ -19,36 +21,17 @@ export const TREE_SPACING = 20;
 export const TREE_CANDIDATES_PER_CELL = 3;
 
 // The world's own rules, applied on top of whatever density map a biome asks for (see
-// BiomeOutputs.foliage): nothing grows in a road cut, in a lake or off a cliff, whatever the zone
-// would like. Everything but the lake test is a fade, because a hard line in a density field reads
-// as a drawn edge in the world - the same reason terrain here carves rather than switches.
+// BiomeOutputs.foliage): nothing grows in a road cut or in a lake, whatever the zone would like.
+// The road rule is a fade, because a hard line in a density field reads as a drawn edge in the
+// world - the same reason terrain here carves rather than switches. The rules a zone may set for
+// itself - shore, treeline, slope - are its TreeRules.
 export const TREE_MAX_LAKE_FACTOR = 0.02;
-
-// A shore fade rather than a waterline: trees thin out as the ground approaches the water instead
-// of marching down to it and stopping dead.
-export const TREE_MIN_HEIGHT = 1.5;
-export const TREE_SHORE_HEIGHT = 6;
 
 // Roads are graded into the terrain with a shoulder either side (ROAD_HALF_WIDTH + its shoulder),
 // so the clearance has to cover the shoulder too or trees stand on the cut. The fade past it is
 // what gives a road an open verge that closes back into the wood.
 export const TREE_ROAD_CLEARANCE = 13;
 export const TREE_ROAD_FADE = 34;
-
-// Slope as sin of the ground angle (0 flat, 1 vertical). Thinning from EASY to MAX means a
-// hillside loses its trees gradually up the steep part and a cliff has none, with no cutoff line
-// drawn across the slope.
-export const TREE_EASY_SLOPE = 0.3;
-export const TREE_MAX_SLOPE = 0.72;
-
-// The treeline. Mountain peaks reach ~120 units, so this bares the top third of the big ones and
-// leaves the shoulders wooded.
-export const TREE_LINE_START = 70;
-export const TREE_LINE_END = 95;
-
-// Per-tree variety. Uniform scale only - a placeholder that leans or squashes just looks broken.
-export const TREE_SCALE_MIN = 0.75;
-export const TREE_SCALE_MAX = 1.35;
 
 // Buries the trunk base slightly. The ground a tree is placed on is the rendered triangle it
 // stands on, so this is not correcting an error - it is insurance against one, since a trunk
@@ -58,12 +41,70 @@ export const TREE_SINK = 0.4;
 export const FOLIAGE_SALT = 801;
 
 /**
- * Which shape of tree a biome grows. The shapes and their dimensions live in treeModels.ts; this
- * is here so the biome registry can name one without depending on anything that draws.
+ * Where a zone's trees thin out, each a [start, end] range the density fades across - a fade
+ * rather than a line, so no cutoff is drawn across the landscape. Blended across a zone border by
+ * the zones' weights, like everything else about them.
+ */
+export interface TreeRules {
+  /** Ground height: trees grow from the first value up, fully by the second - a shore fade, so they
+   *  thin out towards the water instead of marching down to it and stopping dead. */
+  shore: [number, number];
+  /** Ground height: trees start thinning at the first value and are gone by the second. */
+  line: [number, number];
+  /** Sine of the ground angle (0 flat, 1 vertical): a hillside loses its trees gradually up the
+   *  steep part and a cliff has none. */
+  slope: [number, number];
+}
+
+/** A tree's trunk: a tapered cylinder standing on the origin. */
+export interface TreeTrunk {
+  height: number;
+  diameterBottom: number;
+  diameterTop: number;
+  sides: number;
+  color: ColorTuple;
+}
+
+/**
+ * A tree's crown, as one of the builders in treeModels.ts and its shape. The builder is code; which
+ * one a tree kind uses and how it is proportioned is data.
+ */
+export type TreeCrown =
+  /** One squashed, faceted ball - a broadleaf. */
+  | { builder: "sphereCrown"; centreY: number; radius: number; heightRatio: number }
+  /** Overlapping cones of decreasing width - a conifer. */
+  | { builder: "tieredCones"; sides: number; tiers: { diameter: number; height: number; baseY: number }[] }
+  /** Flattened fronds swept out and down from the top of the trunk - a palm. */
+  | {
+      builder: "frondCrown";
+      count: number;
+      length: number;
+      width: number;
+      thickness: number;
+      /** How far the root of a frond sits from the trunk's axis, before the droop is applied. */
+      reach: number;
+      /** Radians the frond tips fall below horizontal. */
+      droop: number;
+      y: number;
+    };
+
+/** The crown builders a tree kind can name - see TreeCrown. */
+export const TREE_CROWN_BUILDERS = ["sphereCrown", "tieredCones", "frondCrown"] as const;
+
+/**
+ * A kind of tree a biome can grow, named by its foliage graph's outputs (see BiomeOutputs.foliage).
  *
  * A tree picks its kind from the zone it stands in, weighted by how much of the trees around it
  * that zone is responsible for - so a border between a pine zone and a broadleaf one comes out as
  * a mixed fringe rather than a line where one species stops.
  */
-export const TREE_KINDS = ["broadleaf", "pine", "palm"] as const;
-export type TreeKind = (typeof TREE_KINDS)[number];
+export interface TreeKindDef {
+  id: string;
+  trunk: TreeTrunk;
+  crown: TreeCrown;
+  /** The two ends of the palette a tree's tint mixes its canopy between. */
+  canopyDark: ColorTuple;
+  canopyLight: ColorTuple;
+  /** Each tree is scaled uniformly by a random factor in this range. */
+  scale: [number, number];
+}

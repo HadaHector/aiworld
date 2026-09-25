@@ -1,0 +1,62 @@
+/**
+ * Clamps the noise distribution's tails before a low offset, squashing it into a mostly-flat
+ * wetland - a different shape (flattened, not just short) than plains' full-range rolling hills.
+ */
+{
+  name: "Swamp",
+  voice: "murky",
+  spawnWeight: 1.5,
+  lakeChance: 0.15,
+  borderType: "mountain",
+  settlement: "timber",
+  height: {
+    noises: [{ name: "detail", type: "fbm", octaves: 3, frequency: 0.01, amplitude: 5.2, persistence: 0.35, lacunarity: 2.0 }],
+    steps: [
+      { output: "raw", op: "sample", noise: "detail" },
+      { output: "result", op: "offset", input: "raw", amount: -3.5 },
+    ],
+  },
+  trees: { generator: "standDensity", tree: "broadleaf", frequency: 0.005, openAt: -0.3, fullAt: 0.25, peak: 0.6 },
+  ground: {
+    base: "mud",
+    road: "track",
+    layers: [
+      // Swamp is nearly flat (clamped detail noise), so its raised hummocks are subtle - reads as a
+      // negative reliefCurvature (a local high point) rather than the positive "valley" sign every
+      // other biome's layers look for. Reuses the plains grass material: dry ground poking through mud.
+      {
+        id: "swamp-grass-tuft-ridge",
+        material: "grass",
+        weight: {
+          noises: [],
+          steps: [
+            { output: "curvature", op: "input", name: "reliefCurvature" },
+            { output: "ridge", op: "scale", input: "curvature", factor: -1 },
+            { output: "raw", op: "remap", input: "ridge", inMin: 0.15, inMax: 0.6, outMin: 0, outMax: 1 },
+            { output: "result", op: "clamp", input: "raw", min: 0, max: 1 },
+          ],
+        },
+      },
+    ],
+  },
+  sky: {
+    horizon: "#b0b498",
+    zenith: "#627264",
+    cloud: "#c8ccb4",
+    // A close, low haze instead of the usual 30% - a swamp is the one zone that should never read
+    // as open country, whatever the draw-distance slider is set to.
+    fogStart: 0.08,
+  },
+  // Canopy-filtered even at noon (a dimmer sunIntensity than anywhere else) and a murky,
+  // low-strength ambient that never gets properly bright even at midday - night then falls out of
+  // the ordinary derived rule already dimmer and murkier than anywhere else, rather than needing its
+  // own separate night numbers to say so twice.
+  light: {
+    sunPeak: 45,
+    moonPeak: 24,
+    ambientDay: "#96a08c",
+    ambientDayIntensity: 0.42,
+    sunHorizon: "#c8966e",
+    sunIntensity: 0.7,
+  },
+}

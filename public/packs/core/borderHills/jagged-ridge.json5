@@ -1,0 +1,14 @@
+// Sharp crest lines - the same ridged primitive canyon's carve uses, reused additively instead of
+// subtractively. Wavelength widened well past BOUNDARY_HILL_WIDTH (20m -> 167m) and persistence
+// dropped (0.5 -> 0.4) so this reads as one flowing ridge crest, not a field of competing spikes -
+// the exact same peak-spacing lesson learned tuning the mountains/hills/canyon biomes earlier.
+{
+  name: "Jagged Ridge",
+  height: {
+    noises: [{ name: "ridge", type: "ridged", octaves: 4, frequency: 0.008, amplitude: 1, persistence: 0.15, lacunarity: 2.0 }],
+    steps: [
+      { output: "raw", op: "sample", noise: "ridge" },
+      { output: "result", op: "scale", input: "raw", factor: 35 },
+    ],
+  },
+}

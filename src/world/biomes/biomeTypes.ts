@@ -1,6 +1,7 @@
-import type { Color3 } from "@babylonjs/core";
-import type { PipelineDef } from "../terrain/pipeline/pipelineTypes";
-import type { VoiceId } from "../naming/nameGenerator";
+import type { ColorTuple, PipelineDef } from "../terrain/pipeline/pipelineTypes";
+import type { MaterialLayer } from "../materials/materialTypes";
+import type { TreeRules } from "../foliage/foliageConfig";
+import type { SettlementStyle } from "../settlements/settlementConfig";
 
 /** Reserved for future differentiated border generation; only "smooth" is generated today. */
 export type BorderType = "smooth" | "mountain" | "river" | "cliff" | "wall";
@@ -11,9 +12,9 @@ export type BorderType = "smooth" | "mountain" | "river" | "cliff" | "wall";
  * would be a visible seam rather than the ground simply fading into it.
  */
 export interface BiomeAtmosphere {
-  horizon: Color3;
-  zenith: Color3;
-  cloud: Color3;
+  horizon: ColorTuple;
+  zenith: ColorTuple;
+  cloud: ColorTuple;
   /** Fraction of the draw distance at which fog begins - the counterpart to world.ts's
    *  FOG_END_FRACTION, which stays fixed globally (fog always finishes just past the load radius,
    *  whatever zone that happens to be). Pulling this in per biome is what lets a zone read as
@@ -41,24 +42,24 @@ export interface BiomeDayNight {
   moonPeakElevation: number;
   /** The ambient sky-fill's colour and strength at full day and full night - see
    *  sunLighting.ts's updateDayNight for how these cross-fade across dawn and dusk. */
-  ambientDay: Color3;
+  ambientDay: ColorTuple;
   ambientDayIntensity: number;
-  ambientNight: Color3;
+  ambientNight: ColorTuple;
   ambientNightIntensity: number;
   /** The sun's own colour low on the horizon (dawn/dusk) versus high overhead (noon) - the one
    *  place light colour genuinely varies across the day rather than just fading in and out. */
-  sunHorizonColor: Color3;
-  sunZenithColor: Color3;
+  sunHorizonColor: ColorTuple;
+  sunZenithColor: ColorTuple;
   sunIntensity: number;
-  moonColor: Color3;
+  moonColor: ColorTuple;
   moonIntensity: number;
 }
 
 export interface BiomeOutputs {
   height: PipelineDef;
   /**
-   * How thickly this zone grows each kind of tree, as one graph with a named output per TreeKind
-   * (foliage/treeModels.ts) - so a zone is not one species at one density, it is a density *map*
+   * How thickly this zone grows each kind of tree, as one graph with a named output per tree kind
+   * id (a pack's trees/ folder) - so a zone is not one species at one density, it is a density *map*
    * per species, and two species can share ground with the mix shifting across it.
    *
    * A kind with no output does not grow here. Each output reads as a 0-1 share of the scatter
@@ -82,7 +83,7 @@ export interface BiomeDefinition {
   name: string;
   /** Which phonetic palette this biome's zones are named from (naming/nameGenerator.ts). A property
    *  of the biome rather than a lookup table elsewhere, so adding a biome cannot forget to set it. */
-  voiceId: VoiceId;
+  voiceId: string;
   outputs: BiomeOutputs;
   /** A per-biome declared preference. "mountain" generates boundary hills along a qualifying edge
    *  (see cells/areaField.ts); "river"/"cliff"/"wall" remain reserved, unbranched. */
@@ -90,14 +91,29 @@ export interface BiomeDefinition {
   spawnWeight: number;
   /** Probability (0-1) any given cell inside an area of this biome becomes a lake cell. Unset/0 = never. */
   lakeChance?: number;
-  /** MaterialDef id (materials/materialDefinitions.ts's MATERIAL_REGISTRY) this biome's ground
-   *  texture falls back to wherever no overlay layer (rock/sand/snow) outweighs it. */
+  /** MaterialDef id this biome's ground texture falls back to wherever no overlay layer
+   *  (rock/sand/snow) outweighs it. */
   baseMaterialId: string;
-  /** The surface a road through this zone is made of, as a MATERIAL_REGISTRY key. Roads are graded
+  /** The surface a road through this zone is made of, as a MaterialDef id. Roads are graded
    *  into the terrain and painted by one layer that reaches everywhere, but what that layer paints
    *  is the zone's own choice - a track through a desert is not a track through a forest. Biomes
    *  may share one, and sharing is what keeps the material roster small at a border between them. */
   roadMaterialId: string;
+  /** Layers checked only where this biome has a say, on top of the universal ones. This is what
+   *  keeps per-vertex cost flat as more biomes grow their own layers: a point only ever evaluates
+   *  the universal list plus its own biomes' lists, never every biome's layers put together. */
+  materialLayers: MaterialLayer[];
+  /** Where trees thin out here. Biomes that do not set their own share one object, the defaults'. */
+  treeRules: TreeRules;
+  /** What settlements here look like, or null for a biome nobody settles. */
+  settlementStyle: SettlementStyle | null;
   atmosphere: BiomeAtmosphere;
   dayNight: BiomeDayNight;
+}
+
+/** The shape of the hills raised along a border between two zones - see cells/areaField.ts. */
+export interface BoundaryHillStyle {
+  id: string;
+  name: string;
+  heightPipeline: PipelineDef;
 }

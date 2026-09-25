@@ -1,6 +1,12 @@
+import type { ColorTuple } from "../terrain/pipeline/pipelineTypes";
+
 /**
- * How settlements are laid out: sizes, gates, streets, house plots and how the ground is flattened
- * under them. Lengths are world units (metres).
+ * How settlements are laid out: gates, streets, house plots and how the ground is flattened under
+ * them. Lengths are world units (metres).
+ *
+ * What a settlement looks like - how big each tier grows, its houses and their colours - is its
+ * biome's SettlementStyle, loaded from a pack's settlements/ folder. What is here are the rules
+ * every settlement follows whatever its style.
  */
 
 export type SettlementTier = "hamlet" | "village" | "town";
@@ -17,11 +23,50 @@ export interface SettlementTierDef {
   squareRadius: number;
 }
 
-export const SETTLEMENT_TIERS: Record<SettlementTier, SettlementTierDef> = {
-  hamlet: { radius: 60, sideStreetChance: 0.35, sideStreetLength: [22, 40], plotFill: 0.75, squareRadius: 8 },
-  village: { radius: 85, sideStreetChance: 0.65, sideStreetLength: [28, 55], plotFill: 0.85, squareRadius: 11 },
-  town: { radius: 115, sideStreetChance: 0.85, sideStreetLength: [32, 70], plotFill: 0.9, squareRadius: 15 },
+/** The houses a style builds - see settlementLayout.ts. */
+export interface HouseStyle {
+  variants: HouseVariant[];
+  /** Roof pitch range, radians. */
+  roofPitch: [number, number];
+  /** How far the roof overhangs the walls. */
+  roofOverhang: number;
+  /** Front wall this far back from the street's level edge. At least far enough that the whole
+   *  footprint is past where a plot's levelling fades out next to a street (terrainSampler.ts). */
+  setback: [number, number];
+  /** Gap between neighbouring houses along a street. */
+  gap: [number, number];
+}
+
+/** The texture a style's walls and roofs are drawn with, by one of the builders in wallTexture.ts. */
+export type WallTexture = {
+  /** Horizontal boards, each its own tone, with grain, seams and the odd butt joint. */
+  builder: "weatherboard";
+  /** Boards per 2 m texture repeat. */
+  boards: number;
+  /** The wood's colour before a house's own tint multiplies it. */
+  color: ColorTuple;
 };
+
+export const WALL_TEXTURE_BUILDERS = ["weatherboard"] as const;
+
+/** How a style's buildings are coloured. */
+export interface BuildingLook {
+  wallTexture: WallTexture;
+  /** A house's walls take one of these, multiplying the texture. */
+  wallTints: ColorTuple[];
+  /** ...and its roof one of these. */
+  roofTints: ColorTuple[];
+  door: ColorTuple;
+  window: ColorTuple;
+}
+
+/** What settlements in a biome look like. Several biomes may share one. */
+export interface SettlementStyle {
+  id: string;
+  tiers: Record<SettlementTier, SettlementTierDef>;
+  houses: HouseStyle;
+  look: BuildingLook;
+}
 
 /** Site score thresholds (settlementSites.ts's 0..1 score) for the bigger tiers. The best ground
  *  gets the biggest places. */
@@ -122,20 +167,6 @@ export interface HouseVariant {
   weight: number;
 }
 
-export const HOUSE_VARIANTS: HouseVariant[] = [
-  { width: [10, 13], depth: [10, 12], wallHeight: [5.2, 6], weight: 3 }, // cottage
-  { width: [14, 18], depth: [11, 14], wallHeight: [5.6, 6.8], weight: 2 }, // house
-  { width: [20, 26], depth: [12, 15], wallHeight: [6, 7.2], weight: 1 }, // longhouse / barn
-];
-
-/** Roof pitch range (radians) and how far the roof overhangs the walls. */
-export const ROOF_PITCH: [number, number] = [(30 * Math.PI) / 180, (42 * Math.PI) / 180];
-export const ROOF_OVERHANG = 0.45;
-/** Front wall this far back from the street's level edge. At least far enough that the whole
- *  footprint is past where a plot's levelling fades out next to a street (terrainSampler.ts). */
-export const HOUSE_SETBACK: [number, number] = [3.4, 6];
-/** Gap between neighbouring houses along a street. */
-export const HOUSE_GAP: [number, number] = [1.5, 5];
 /** A house's floor is its street's surface height in front of it plus this step up - so a row of
  *  houses climbs with its street instead of each sitting at its own plot's average height, a
  *  little above or sunk below the street depending on the slope behind it. */

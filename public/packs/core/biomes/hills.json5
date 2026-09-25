@@ -1,0 +1,133 @@
+{
+  name: "Hills",
+  voice: "verdant",
+  spawnWeight: 2,
+  lakeChance: 0.03,
+  borderType: "mountain",
+  settlement: "timber",
+  // Target relief ~10m typical/high with well-separated bumps (same peak-spacing fix as mountains -
+  // wider wavelength, lower persistence so higher octaves stay texture, not competing bumps),
+  // measured via FORCE_BIOME_ID (devConfig.ts).
+  height: { generator: "detailHeight", amplitude: 60, frequency: 0.0021, offset: 50, octaves: 5, persistence: 0.35 },
+  trees: {
+    generator: "twoSpecies",
+    lower: "broadleaf",
+    upper: "pine",
+    noises: [{ name: "stand", type: "fbm", octaves: 3, frequency: 0.0034, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
+    cover: [
+      { output: "standRaw", op: "sample", noise: "stand" },
+      { output: "coverRamp", op: "remap", input: "standRaw", inMin: -0.45, inMax: 0.2, outMin: 0, outMax: 0.7 },
+      { output: "cover", op: "clamp", input: "coverRamp", min: 0, max: 0.7 },
+    ],
+    // Split by altitude rather than by noise: measured across hills zones the ground runs p25 33,
+    // p50 58, p75 82, so this leaves the valley floors broadleaf, the tops coniferous, and a
+    // genuinely mixed belt through the middle where most of the zone is.
+    share: [
+      { output: "ground", op: "input", name: "height" },
+      { output: "shareRamp", op: "remap", input: "ground", inMin: 36, inMax: 74, outMin: 0, outMax: 1 },
+      { output: "share", op: "clamp", input: "shareRamp", min: 0, max: 1 },
+    ],
+  },
+  ground: {
+    base: "grass",
+    road: "track",
+    layers: [
+      // Hills reuses plains' own faded/dry/weeds materials - same idea, just rethresholded for hills'
+      // much bigger detail amplitude (~60 vs plains' ~12.75).
+      {
+        id: "hills-north-fade",
+        material: "grassPale",
+        weight: {
+          noises: [],
+          steps: [
+            { output: "facing", op: "input", name: "slopeFacing" },
+            { output: "raw", op: "remap", input: "facing", inMin: 0.08, inMax: 0.4, outMin: 0, outMax: 1 },
+            { output: "result", op: "clamp", input: "raw", min: 0, max: 1 },
+          ],
+        },
+      },
+
+      {
+        id: "hills-south-dry",
+        material: "grassDry",
+        weight: {
+          noises: [],
+          steps: [
+            { output: "facing", op: "input", name: "slopeFacing" },
+            { output: "facingSouth", op: "scale", input: "facing", factor: -1 },
+            { output: "raw", op: "remap", input: "facingSouth", inMin: 0.08, inMax: 0.4, outMin: 0, outMax: 1 },
+            { output: "result", op: "clamp", input: "raw", min: 0, max: 1 },
+          ],
+        },
+      },
+
+      {
+        id: "hills-valley-weeds",
+        material: "weeds",
+        weight: {
+          noises: [],
+          steps: [
+            { output: "curvature", op: "input", name: "reliefCurvature" },
+            { output: "raw", op: "remap", input: "curvature", inMin: 1.5, inMax: 6, outMin: 0, outMax: 1 },
+            { output: "result", op: "clamp", input: "raw", min: 0, max: 1 },
+          ],
+        },
+      },
+
+      // Hills dip low enough in places to drop below sea level, forming small lakes (see
+      // terrainSampler.ts's lakeFactor lerp toward LAKE_TARGET_HEIGHT) - the universal shoreLayer would
+      // otherwise ring every one of those in the same sand it uses for ocean coastlines, which reads
+      // wrong for a hillside pond. Both layers below deliberately out-weigh shoreLayer's own lake
+      // component (whose max is 1.0) at every point it's active, one on each side of the waterline:
+      // grassAtWaterline mirrors shoreLayer's exact lakeFactor ramp scaled up 1.5x (so it wins by a
+      // growing margin, never a flat epsilon that could lose ground on a steep part of the ramp), then
+      // fades out once truly underwater; gravelUnderwater ramps up over the same (complementary) handoff
+      // band as height drops below sea level. Both ceilings are 2.2, not just "> 1.0": since the two
+      // fade gates are complementary (sum to 1), the worst case is exactly at their midpoint where each
+      // only gets half its own ceiling - 2.2*0.5=1.1 still clears shoreLayer's max of 1.0 there, so
+      // there's no dead zone in the middle of the handoff where sand could still sneak through.
+      {
+        id: "hills-lake-shore-grass",
+        material: "grass",
+        weight: {
+          noises: [],
+          steps: [
+            { output: "lakeFactor", op: "input", name: "lakeFactor" },
+            { output: "lakeRaw", op: "remap", input: "lakeFactor", inMin: 0, inMax: 0.5, outMin: 0, outMax: 1 },
+            { output: "lakeW", op: "clamp", input: "lakeRaw", min: 0, max: 1 },
+            { output: "boosted", op: "scale", input: "lakeW", factor: 2.2 },
+            { output: "height", op: "input", name: "height" },
+            // SEA_LEVEL is 0 (areaField.ts) - fades this layer out over the last couple of units above
+            // the waterline so it hands off to gravel cleanly instead of persisting underwater.
+            { output: "aboveWaterRaw", op: "remap", input: "height", inMin: -2, inMax: 0.5, outMin: 0, outMax: 1 },
+            { output: "aboveWater", op: "clamp", input: "aboveWaterRaw", min: 0, max: 1 },
+            { output: "result", op: "multiply", a: "boosted", b: "aboveWater" },
+          ],
+        },
+      },
+
+      {
+        id: "hills-lake-gravel",
+        material: "gravel",
+        weight: {
+          noises: [],
+          steps: [
+            { output: "height", op: "input", name: "height" },
+            { output: "underwaterRaw", op: "remap", input: "height", inMin: 0.5, inMax: -2, outMin: 0, outMax: 1 },
+            { output: "underwater", op: "clamp", input: "underwaterRaw", min: 0, max: 1 },
+            { output: "result", op: "scale", input: "underwater", factor: 2.2 },
+          ],
+        },
+      },
+    ],
+  },
+  sky: {
+    horizon: "#baceca",
+    zenith: "#487cba",
+    cloud: "#f2f4f0",
+  },
+  light: {
+    sunPeak: 68,
+    moonPeak: 46,
+  },
+}

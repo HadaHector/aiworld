@@ -1,0 +1,49 @@
+// Mud: the usual mottle, a web of dry-cracked-mud fractures (Worley "edge" - the textbook natural
+// use for cellular noise, an irregular polygonal crack network, not ridged noise's directional
+// creases), and darker, notably glossier wet patches (billow, broad, with a much lower roughness
+// than the surrounding dry mud).
+{
+  name: "Mud",
+  texture: {
+    bumpStrength: 0.7,
+    pipeline: {
+      noises: [
+        { name: "mottle", type: "fbm", octaves: 3, tileCycles: 13, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+        { name: "cracks", type: "worley", tileCycles: 4, amplitude: 1, mode: "edge" },
+        { name: "damp", type: "billow", octaves: 2, tileCycles: 7.7, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+      ],
+      steps: [
+        { output: "mottle", op: "sample", noise: "mottle" },
+        { output: "mottleMask", op: "mask", input: "mottle", at: 1.75, off: -1.75 },
+        { output: "crackEdge", op: "sample", noise: "cracks" },
+        { output: "crackMask", op: "mask", input: "crackEdge", at: 0, off: 0.16 },
+        { output: "dampRaw", op: "sample", noise: "damp" },
+        { output: "wetMask", op: "mask", input: "dampRaw", at: 1.3, off: 0.2 },
+
+        { output: "mudDark", op: "color", value: [0.22, 0.19, 0.13] },
+        { output: "mudLight", op: "color", value: [0.33, 0.34, 0.2] },
+        { output: "mud", op: "mix", a: "mudDark", b: "mudLight", t: "mottleMask" },
+        { output: "crackColor", op: "color", value: [0.14, 0.11, 0.07] },
+        { output: "cracked", op: "mix", a: "mud", b: "crackColor", t: "crackMask" },
+        { output: "wetColor", op: "color", value: [0.15, 0.13, 0.09] },
+        { output: "diffuse", op: "mix", a: "cracked", b: "wetColor", t: "wetMask" },
+
+        // Wet patches are notably glossier than the dry mud around them.
+        { output: "roughDry", op: "constant", value: 0.55 },
+        { output: "roughWet", op: "constant", value: 0.22 },
+        { output: "roughness", op: "mix", a: "roughDry", b: "roughWet", t: "wetMask" },
+
+        // Dried mud curls up into plates with the cracks as grooves between them - so the crack
+        // mask is subtracted here, the same correctness fix described on materials/rock.json5. The bed
+        // offset keeps the result inside the 0..1 height convention once the cracks cut into it.
+        { output: "bed", op: "constant", value: 0.6 },
+        { output: "plateRelief", op: "scale", input: "mottleMask", factor: 0.4 },
+        { output: "plates", op: "add", a: "bed", b: "plateRelief" },
+        { output: "crackDepth", op: "scale", input: "crackMask", factor: 0.6 },
+        { output: "height", op: "subtract", a: "plates", b: "crackDepth" },
+      ],
+      outputs: { diffuse: "diffuse", roughness: "roughness", height: "height" },
+    },
+  },
+  grass: [{ kind: "dry", density: 0.30, color: [0.42, 0.44, 0.24] }],
+}

@@ -1,0 +1,12 @@
+{
+  material: "rock",
+  weight: {
+    noises: [],
+    steps: [
+      // Steeper than this (lower normalY) reads as bare rock, regardless of biome.
+      { output: "slope", op: "input", name: "slope" },
+      { output: "raw", op: "remap", input: "slope", inMin: 0.85, inMax: 0.55, outMin: 0, outMax: 1 },
+      { output: "result", op: "clamp", input: "raw", min: 0, max: 1 },
+    ],
+  },
+}

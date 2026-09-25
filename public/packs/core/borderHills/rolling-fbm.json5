@@ -1,0 +1,11 @@
+// Soft rolling bumps, wider wavelength than the ridged style.
+{
+  name: "Rolling Fbm",
+  height: {
+    noises: [{ name: "roll", type: "fbm", octaves: 4, frequency: 0.008, amplitude: 30, persistence: 0.4, lacunarity: 2.0 }],
+    steps: [
+      { output: "raw", op: "sample", noise: "roll" },
+      { output: "result", op: "offset", input: "raw", amount: 10 },
+    ],
+  },
+}

@@ -1,0 +1,23 @@
+// Low, bushy heather clumps covered in tiny flowers - a tuft fanned out from one root, with many
+// small heads rather than a few big ones.
+{
+  width: 0.8,
+  height: 0.45,
+  sway: 0.08,
+  fadeStart: 30,
+  fadeEnd: 220,
+  blades: {
+    count: 34,
+    minHeight: 0.45,
+    maxHeight: 0.9,
+    baseWidth: 5,
+    lean: 0.3,
+    fan: true,
+    seedHeads: false,
+    flowerHeads: {
+      count: 20,
+      radius: 7,
+      colors: ["#b05aa8", "#c878b8", "#8e4a9a", "#e6d8e8"],
+    },
+  },
+}

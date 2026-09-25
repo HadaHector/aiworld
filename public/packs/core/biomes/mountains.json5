@@ -1,0 +1,117 @@
+{
+  name: "Mountains",
+  voice: "stony",
+  spawnWeight: 1,
+  lakeChance: 0.01, // rare tarns/crater lakes
+  borderType: "mountain",
+  settlement: "timber", // generates boundary hills along any edge shared with a differently-bordered biome
+  // Target relief ~20-30m typical/high AND ~125m between major peaks (measured/eyeballed via
+  // FORCE_BIOME_ID, see devConfig.ts - the first pass had the right height but peaks packed far too
+  // close together against the character's scale). Base wavelength widened 61m -> 125m, and
+  // persistence dropped 0.5 -> 0.42 so the higher octaves only add surface roughness instead of
+  // competing peaks at their own shorter wavelength - that competing-peaks effect, not the
+  // amplitude, was what made it read as crumpled rather than grand.
+  height: { generator: "detailHeight", amplitude: 60, frequency: 0.0015, offset: 60, octaves: 6, persistence: 0.42 },
+  trees: { generator: "standDensity", tree: "pine", frequency: 0.0035, openAt: -0.5, fullAt: 0.1, peak: 0.5 },
+  ground: {
+    base: "rock",
+    road: "trackStone",
+    layers: [
+      {
+        id: "snow-mountains",
+        material: "snow",
+        weight: {
+          noises: [{ name: "snowline", type: "fbm", octaves: 2, frequency: 0.03, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
+          steps: [
+            { output: "height", op: "input", name: "height" },
+            { output: "curvature", op: "input", name: "reliefCurvature" },
+            { output: "valleyBias", op: "scale", input: "curvature", factor: 2 },
+            { output: "biasedHeight", op: "add", a: "height", b: "valleyBias" },
+            { output: "jitterRaw", op: "sample", noise: "snowline" },
+            { output: "jitter", op: "scale", input: "jitterRaw", factor: 4 },
+            { output: "effectiveHeight", op: "add", a: "biasedHeight", b: "jitter" },
+            { output: "raw", op: "remap", input: "effectiveHeight", inMin: 75, inMax: 95, outMin: 0, outMax: 1 },
+            { output: "result", op: "clamp", input: "raw", min: 0, max: 1 },
+          ],
+        },
+      },
+
+      // Ravines/gullies cutting into a mountainside collect loose rubble - distinct from the sheer-face
+      // rock the universal rockLayer already paints on any steep slope in any biome.
+      {
+        id: "mountains-scree-valley",
+        material: "scree",
+        weight: {
+          noises: [],
+          steps: [
+            { output: "curvature", op: "input", name: "reliefCurvature" },
+            { output: "raw", op: "remap", input: "curvature", inMin: 2, inMax: 8, outMin: 0, outMax: 1 },
+            { output: "result", op: "clamp", input: "raw", min: 0, max: 1 },
+          ],
+        },
+      },
+
+      // The floor of a mountain valley, as opposed to its sides: scree above is curvature-only, so it
+      // paints the whole basin including the sloping walls, while this also demands flatness. The two
+      // therefore separate the way the real thing does - loose rubble on the valley sides, finer washed
+      // gravel settled on the flat bottom - and blend where the floor meets the walls.
+      //
+      // Thresholds come from the mountains biome's own measured distribution rather than round numbers:
+      // curvature there runs p75 2.0 / p90 3.6 / p95 4.7, and normalY p50 0.78 / p75 0.91.
+      {
+        id: "mountains-valley-gravel",
+        material: "gravel",
+        weight: {
+          noises: [],
+          steps: [
+            { output: "curvature", op: "input", name: "reliefCurvature" },
+            { output: "basinRaw", op: "remap", input: "curvature", inMin: 1.5, inMax: 4.5, outMin: 0, outMax: 1 },
+            { output: "basin", op: "clamp", input: "basinRaw", min: 0, max: 1 },
+            { output: "slope", op: "input", name: "slope" },
+            { output: "flatRaw", op: "remap", input: "slope", inMin: 0.78, inMax: 0.92, outMin: 0, outMax: 1 },
+            { output: "flat", op: "clamp", input: "flatRaw", min: 0, max: 1 },
+            { output: "result", op: "multiply", a: "basin", b: "flat" },
+          ],
+        },
+      },
+
+      // Alpine meadow: flat ground low enough to be below the treeline. Mountain height runs p5 63 /
+      // p50 108, and the snow layer starts biting around an effective 75, so grass has to live in the
+      // bottom ~15% of the range to read as being below the snow rather than fighting it - hence full
+      // grass under 55, gone by 85. A low-frequency noise breaks the elevation band up so its edge is a
+      // ragged patchwork rather than a clean contour line, the same trick snowMountainsLayer uses on the
+      // snowline.
+      {
+        id: "mountains-meadow-grass",
+        material: "grass",
+        weight: {
+          noises: [{ name: "patches", type: "fbm", octaves: 2, frequency: 0.012, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
+          steps: [
+            { output: "height", op: "input", name: "height" },
+            { output: "lowRaw", op: "remap", input: "height", inMin: 85, inMax: 55, outMin: 0, outMax: 1 },
+            { output: "low", op: "clamp", input: "lowRaw", min: 0, max: 1 },
+            { output: "slope", op: "input", name: "slope" },
+            { output: "flatRaw", op: "remap", input: "slope", inMin: 0.86, inMax: 0.95, outMin: 0, outMax: 1 },
+            { output: "flat", op: "clamp", input: "flatRaw", min: 0, max: 1 },
+            { output: "lowFlat", op: "multiply", a: "low", b: "flat" },
+            { output: "patchRaw", op: "sample", noise: "patches" },
+            { output: "patchNorm", op: "remap", input: "patchRaw", inMin: -0.8, inMax: 0.8, outMin: 0.35, outMax: 1 },
+            { output: "patch", op: "clamp", input: "patchNorm", min: 0, max: 1 },
+            { output: "result", op: "multiply", a: "lowFlat", b: "patch" },
+          ],
+        },
+      },
+    ],
+  },
+  sky: {
+    horizon: "#cad8e2",
+    zenith: "#2e5c9e",
+    cloud: "#fcfdff",
+  },
+  // Thin, crisp air: sun and moon reach nearly the same height, and both read bright and clean.
+  light: {
+    sunPeak: 55,
+    moonPeak: 55,
+    sunZenith: "#fffffa",
+  },
+}

@@ -4,7 +4,7 @@ import type { BiomeDefinition } from "../biomes/biomeTypes";
 import { deriveSeed, mulberry32 } from "../rng";
 import { smoothstep } from "../mathUtils";
 import { CELL_SPACING } from "../cells/config";
-import { SETTLEMENT_TIERS, TOWN_MIN_SCORE, VILLAGE_MIN_SCORE, type SettlementTier } from "./settlementConfig";
+import { TOWN_MIN_SCORE, VILLAGE_MIN_SCORE, type SettlementStyle, type SettlementTier } from "./settlementConfig";
 
 /**
  * Where a settlement would stand. Nothing renders one yet - this is the set of named places a road
@@ -19,6 +19,8 @@ export interface SettlementSite {
   height: number;
   areaId: number;
   biome: BiomeDefinition;
+  /** Its biome's settlement style - how big each tier grows, and what it builds. */
+  style: SettlementStyle;
   /** 0..1, how good this spot is by the rules below. Also the order sites were claimed in. */
   score: number;
   /** How big a place grows here - the best ground gets the biggest. */
@@ -115,6 +117,8 @@ export interface SettlementInput {
 function evaluate(x: number, z: number, sampleTerrain: TerrainSampler): Candidate | null {
   const here = sampleTerrain(x, z);
   if (!here.isLand) return null;
+  // A biome with no settlement style is one nobody settles.
+  if (!here.primaryBiome.settlementStyle) return null;
   if (here.height < MIN_SITE_HEIGHT) return null;
   if (here.lakeFactor > MAX_LAKE_FACTOR) return null;
   if (here.areaBorderGap < MIN_BORDER_GAP) return null;
@@ -235,9 +239,10 @@ export function generateSettlementSites({ seed, cellSites, sampleTerrain, nameFo
       height: candidate.height,
       areaId: candidate.areaId,
       biome: candidate.biome,
+      style: candidate.biome.settlementStyle!,
       score: candidate.score,
       tier: tierFor(candidate.score),
-      radius: SETTLEMENT_TIERS[tierFor(candidate.score)].radius,
+      radius: candidate.biome.settlementStyle!.tiers[tierFor(candidate.score)].radius,
     };
     sites.push(site);
     const key = bucketKey(gx, gz);

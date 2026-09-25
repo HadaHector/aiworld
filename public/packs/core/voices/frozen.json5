@@ -1,0 +1,11 @@
+// Cold and consonant-clustered, with thin front vowels.
+{
+  onsets: ["v", "sk", "thr", "n", "g", "br", "kr", "st", "h", "f", "sv"],
+  nuclei: ["i", "o", "e", "y", "ei", "u"],
+  codas: ["sk", "rn", "ld", "st", "g", "ff", "n"],
+  finals: ["vik", "orn", "eld", "isk", "ur", "and", "yr"],
+  features: ["Waste", "Wastes", "Reach", "Barrens", "Drift", "Hollow", "Shelf"],
+  qualities: ["Frozen", "Pale", "Bitter", "White", "Still", "Hollow", "Glass", "Starving"],
+  codaChance: 0.7,
+  thirdSyllableChance: 0.25,
+}

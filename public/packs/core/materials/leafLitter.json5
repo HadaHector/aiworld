@@ -1,0 +1,42 @@
+// A real physical composition rather than a two-tone tint: grass at ground level, with brown leaf
+// clusters lying on top of it wherever a low-frequency blobby noise clears a threshold. The narrow
+// mask span (0.15..0.45 of the blob noise) is what gives the clusters a defined, blob-like edge
+// instead of a soft gradient, and they genuinely sit above the grass in the height output, so the
+// bump reads them as raised litter.
+{
+  name: "Leaf Litter",
+  texture: {
+    bumpStrength: 0.5,
+    pipeline: {
+      noises: [
+        { name: "blobs", type: "fbm", octaves: 2, tileCycles: 5.1, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+        { name: "mottle", type: "fbm", octaves: 3, tileCycles: 13, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+      ],
+      steps: [
+        { output: "blobRaw", op: "sample", noise: "blobs" },
+        { output: "leafMask", op: "mask", input: "blobRaw", at: 0.45, off: 0.15 },
+        { output: "mottle", op: "sample", noise: "mottle" },
+        { output: "mottleMask", op: "mask", input: "mottle", at: 1.75, off: -1.75 },
+
+        // Both the grass and the leaves get their own tonal variation from the shared mottle, so
+        // neither reads as a flat sheet of color.
+        { output: "grassDark", op: "color", value: [0.22, 0.33, 0.16] },
+        { output: "grassLight", op: "color", value: [0.29, 0.42, 0.22] },
+        { output: "grass", op: "mix", a: "grassDark", b: "grassLight", t: "mottleMask" },
+        { output: "leafDark", op: "color", value: [0.28, 0.19, 0.09] },
+        { output: "leafLight", op: "color", value: [0.42, 0.29, 0.14] },
+        { output: "leaves", op: "mix", a: "leafDark", b: "leafLight", t: "mottleMask" },
+        { output: "diffuse", op: "mix", a: "grass", b: "leaves", t: "leafMask" },
+
+        { output: "roughGrass", op: "constant", value: 0.75 },
+        { output: "roughLeaf", op: "constant", value: 0.8 },
+        { output: "roughness", op: "mix", a: "roughGrass", b: "roughLeaf", t: "leafMask" },
+
+        { output: "groundLevel", op: "scale", input: "mottleMask", factor: 0.15 },
+        { output: "litter", op: "scale", input: "leafMask", factor: 0.85 },
+        { output: "height", op: "add", a: "groundLevel", b: "litter" },
+      ],
+      outputs: { diffuse: "diffuse", roughness: "roughness", height: "height" },
+    },
+  },
+}
