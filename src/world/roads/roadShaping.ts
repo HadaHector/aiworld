@@ -227,7 +227,9 @@ export function snapToNetwork(points: CellPoint[], index: SnapIndex, step: numbe
     }
   }
   dense.push(points[points.length - 1]);
-  return dense.map((point) => index.snap(point) ?? point);
+  // The two ends stay put: a road ends at a settlement's gate, and a gate's position (and the height
+  // its roads and main street are joined at) is fixed.
+  return dense.map((point, i) => (i === 0 || i === dense.length - 1 ? point : (index.snap(point) ?? point)));
 }
 
 /** A lateral displacement for a point, from a noise field. See `wobble`. */

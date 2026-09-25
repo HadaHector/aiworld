@@ -119,6 +119,9 @@ export interface PathRequest {
   roadNodes: Set<number>;
   /** Overrides ROAD_MAX_DETOUR_FACTOR, for the rescue pass. */
   detourFactor?: number;
+  /** Ground the route may not enter (other than at its own two ends) - settlement interiors, so a
+   *  road ends at a gate instead of cutting across the houses. */
+  avoid?: { x: number; z: number; radius: number }[];
 }
 
 export interface PathResult {
@@ -303,7 +306,7 @@ export function createRoadPathfinder(sampleTerrain: TerrainSampler): RoadPathfin
     return chordGroundIsClear(from, to);
   }
 
-  function findPath({ from, to, zones, roadNodes, detourFactor }: PathRequest): PathResult {
+  function findPath({ from, to, zones, roadNodes, detourFactor, avoid = [] }: PathRequest): PathResult {
     const startKey = nodeKey(Math.round(from.x / ROAD_GRID), Math.round(from.z / ROAD_GRID));
     const goalKey = nodeKey(Math.round(to.x / ROAD_GRID), Math.round(to.z / ROAD_GRID));
     if (startKey === goalKey) return { nodes: [startKey], expansions: 0, capped: false };
@@ -355,6 +358,7 @@ export function createRoadPathfinder(sampleTerrain: TerrainSampler): RoadPathfin
 
         const toGround = groundAt(nextKey);
         if (toGround.blocked) continue;
+        if (nextKey !== goalKey && avoid.some((c) => (next.x - c.x) ** 2 + (next.z - c.z) ** 2 < c.radius * c.radius)) continue;
 
         const distance = dx !== 0 && dz !== 0 ? ROAD_GRID * Math.SQRT2 : ROAD_GRID;
         // Both ends, not the destination alone - see ROAD_REUSE_DISCOUNT.

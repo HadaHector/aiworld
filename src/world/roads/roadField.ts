@@ -1,8 +1,21 @@
 import type { CellPoint } from "../cells/cellGrid";
-import type { RoadLink } from "./roadNetwork";
+
+/** Anything the ground is graded to and painted as road: countryside roads and settlement streets. */
+export interface RoadLine {
+  points: CellPoint[];
+  heights: number[];
+  /** How wide this line is next to a countryside road (1): its level ground, painted surface and
+   *  verge all scale with it. Streets are narrower. */
+  widthScale?: number;
+  /** False for a line that joins another at its ends (a road at a gate, a street at a junction),
+   *  whose grading must not fade out there. */
+  taperEnds?: boolean;
+}
 
 export interface RoadQuery {
-  /** True distance to the nearest road centreline, or Infinity past the search radius. */
+  /** Distance to the nearest road centreline in countryside-road units: the true distance divided
+   *  by that line's widthScale, so everything keyed on it - grading, the painted surface, grass and
+   *  tree clearance - narrows with the line. Infinity past the search radius. */
   distance: number;
   /** The road surface height there - the smoothed profile, not the ground under it. */
   height: number;
@@ -12,6 +25,7 @@ export interface RoadQuery {
 }
 
 const MISS: RoadQuery = { distance: Infinity, height: 0, taper: 0 };
+
 
 interface Segment {
   x0: number;
@@ -25,6 +39,9 @@ interface Segment {
   a0: number;
   a1: number;
   total: number;
+  /** 1 / widthScale: multiplies true distance into countryside-road units. */
+  inverseWidth: number;
+  taperEnds: boolean;
 }
 
 /**
@@ -59,7 +76,7 @@ export interface RoadField {
  * no gate to flip. The addition is that this carries the road's own surface height, because a road
  * is not a depth to subtract from the ground - it is a level the ground is brought to.
  */
-export function createRoadField(links: RoadLink[], searchRadius: number, endTaper: number): RoadField {
+export function createRoadField(links: RoadLine[], searchRadius: number, endTaper: number): RoadField {
   const buckets = new Map<number, Segment[]>();
   let segmentCount = 0;
 
@@ -95,6 +112,8 @@ export function createRoadField(links: RoadLink[], searchRadius: number, endTape
         a0: travelled,
         a1: travelled + lengths[i],
         total,
+        inverseWidth: 1 / (link.widthScale ?? 1),
+        taperEnds: link.taperEnds ?? true,
       };
       travelled += lengths[i];
       if (lengthSq <= 0) continue;
@@ -130,7 +149,9 @@ export function createRoadField(links: RoadLink[], searchRadius: number, endTape
       const u = Math.min(1, Math.max(0, (px * segment.dx + pz * segment.dz) / segment.lengthSq));
       const ox = px - u * segment.dx;
       const oz = pz - u * segment.dz;
-      const distSq = ox * ox + oz * oz;
+      // Nearest in scaled units, so a wide road beside a narrow street still owns the ground its
+      // own width covers.
+      const distSq = (ox * ox + oz * oz) * segment.inverseWidth * segment.inverseWidth;
       if (distSq < bestDistSq) {
         bestDistSq = distSq;
         best = segment;
@@ -141,7 +162,7 @@ export function createRoadField(links: RoadLink[], searchRadius: number, endTape
 
     const arc = best.a0 + (best.a1 - best.a0) * bestU;
     const fromEnds = Math.min(arc, best.total - arc);
-    const t = Math.min(1, Math.max(0, fromEnds / endTaper));
+    const t = best.taperEnds ? Math.min(1, Math.max(0, fromEnds / endTaper)) : 1;
     return {
       distance: Math.sqrt(bestDistSq),
       height: best.h0 + (best.h1 - best.h0) * bestU,

@@ -4,6 +4,7 @@ import type { BiomeDefinition } from "../biomes/biomeTypes";
 import { deriveSeed, mulberry32 } from "../rng";
 import { smoothstep } from "../mathUtils";
 import { CELL_SPACING } from "../cells/config";
+import { SETTLEMENT_TIERS, TOWN_MIN_SCORE, VILLAGE_MIN_SCORE, type SettlementTier } from "./settlementConfig";
 
 /**
  * Where a settlement would stand. Nothing renders one yet - this is the set of named places a road
@@ -20,6 +21,10 @@ export interface SettlementSite {
   biome: BiomeDefinition;
   /** 0..1, how good this spot is by the rules below. Also the order sites were claimed in. */
   score: number;
+  /** How big a place grows here - the best ground gets the biggest. */
+  tier: SettlementTier;
+  /** Gates sit on a circle this far out; streets and houses stay inside it. */
+  radius: number;
 }
 
 // Candidates are drawn inside each land cell rather than over a world-wide grid, so the search
@@ -52,6 +57,22 @@ const COMFORTABLE_BORDER_GAP = 500;
 // a preference rather than a requirement because not every zone has a river through it, and a zone
 // with no settlement at all is worse than one whose settlement carries its water uphill.
 const WATER_ACCESS_REACH = 500;
+
+// The core probe above only says the centre is level. A settlement spreads out to its radius
+// (settlementConfig.ts's tiers), and what decides how many houses it can hold is how much of THAT
+// ground is usable - dry, clear of rivers and lakes, and not far above or below the centre. Rings of
+// probes out to the biggest settlement's reach measure it; a site where too little of it is usable
+// is rejected, since it could only ever grow a couple of houses.
+const AREA_RINGS: [radius: number, probes: number][] = [
+  [30, 8],
+  [55, 12],
+  [80, 16],
+];
+/** A probe is usable ground if it is within this grade of the centre's height - a street can reach
+ *  it and a house plot there needs no more than ordinary levelling. */
+const AREA_MAX_GRADE = 0.14;
+const AREA_RIVER_CLEARANCE = 12;
+const MIN_USABLE_FRACTION = 0.45;
 
 const SCORE_FLATNESS = 0.55;
 const SCORE_WATER = 0.3;
@@ -111,7 +132,28 @@ function evaluate(x: number, z: number, sampleTerrain: TerrainSampler): Candidat
   }
   const relief = highest - lowest;
 
-  const flatness = 1 - relief / MAX_RELIEF;
+  // Usable ground across the whole footprint. Probes are counted as they come, so a site that
+  // already cannot reach MIN_USABLE_FRACTION stops paying for samples.
+  const totalProbes = AREA_RINGS.reduce((sum, [, probes]) => sum + probes, 0);
+  const allowedMisses = Math.floor(totalProbes * (1 - MIN_USABLE_FRACTION));
+  let misses = 0;
+  for (const [radius, probes] of AREA_RINGS) {
+    for (let probe = 0; probe < probes; probe++) {
+      const angle = (probe / probes) * Math.PI * 2 + radius;
+      const at = sampleTerrain(x + Math.cos(angle) * radius, z + Math.sin(angle) * radius);
+      const usable =
+        at.isLand &&
+        at.height >= MIN_SITE_HEIGHT &&
+        at.lakeFactor <= MAX_LAKE_FACTOR &&
+        at.riverGap > AREA_RIVER_CLEARANCE &&
+        Math.abs(at.height - here.height) / radius <= AREA_MAX_GRADE;
+      if (!usable && ++misses > allowedMisses) return null;
+    }
+  }
+  const usableFraction = 1 - misses / totalProbes;
+
+  // Mostly how much usable ground there is; a little for how level the centre (the square) is.
+  const flatness = 0.25 * (1 - relief / MAX_RELIEF) + 0.75 * usableFraction;
   // riverGap is Infinity where no river is in range, which smoothstep clamps to 1 - so "no water
   // anywhere near" scores exactly zero here rather than needing a branch of its own.
   const water = 1 - smoothstep(0, WATER_ACCESS_REACH, here.riverGap);
@@ -125,6 +167,12 @@ function evaluate(x: number, z: number, sampleTerrain: TerrainSampler): Candidat
     biome: here.primaryBiome,
     score: flatness * SCORE_FLATNESS + water * SCORE_WATER + inland * SCORE_INLAND,
   };
+}
+
+function tierFor(score: number): SettlementTier {
+  if (score >= TOWN_MIN_SCORE) return "town";
+  if (score >= VILLAGE_MIN_SCORE) return "village";
+  return "hamlet";
 }
 
 /**
@@ -188,6 +236,8 @@ export function generateSettlementSites({ seed, cellSites, sampleTerrain, nameFo
       areaId: candidate.areaId,
       biome: candidate.biome,
       score: candidate.score,
+      tier: tierFor(candidate.score),
+      radius: SETTLEMENT_TIERS[tierFor(candidate.score)].radius,
     };
     sites.push(site);
     const key = bucketKey(gx, gz);

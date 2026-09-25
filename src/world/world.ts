@@ -7,6 +7,8 @@ import { createMaterialLibrary, type MaterialLibrary } from "./materials/materia
 import { createTreeScatter } from "./foliage/treeScatter";
 import { createTreeField, type TreeField } from "./foliage/treeField";
 import { createGrassField, type GrassField } from "./foliage/grassField";
+import { createSettlementRenderer } from "./settlements/settlementRenderer";
+import type { SettlementLayout } from "./settlements/settlementLayout";
 import { createSunLighting, DEFAULT_DAY_NIGHT_CYCLE_MINUTES } from "./lighting/sunLighting";
 import { createSkyDome } from "./sky/skyDome";
 import type { ContinentPlan } from "./cells/continentLayout";
@@ -34,6 +36,8 @@ export interface World {
   areaNames: Map<number, string>;
   settlements: SettlementSite[];
   roads: RoadNetwork;
+  /** Streets, squares and houses per settlement - see settlements/settlementLayout.ts. */
+  settlementLayouts: SettlementLayout[];
   materialLibrary: MaterialLibrary;
   trees: TreeField;
   grass: GrassField;
@@ -120,7 +124,7 @@ export async function createWorld(scene: Scene, onProgress?: (progress: WorldLoa
   let buildPool = createChunkBuildPool(WORLD_SEED);
 
   onProgress?.({ phase: "Shaping continents", completed: 0, total: 0 });
-  const { sampleTerrain, worldExtent, continents, areaBounds, areaNames, settlements, roads } = createTerrainSampler(WORLD_SEED);
+  const { sampleTerrain, worldExtent, continents, areaBounds, areaNames, settlements, roads, settlementLayouts } = createTerrainSampler(WORLD_SEED);
 
   const materialLibrary = await createMaterialLibrary(scene, WORLD_SEED, sunLighting, (done, total) => {
     onProgress?.({ phase: "Baking material textures", completed: done, total });
@@ -128,6 +132,14 @@ export async function createWorld(scene: Scene, onProgress?: (progress: WorldLoa
 
   const trees = createTreeField(scene, sunLighting.shadowGenerator);
   const grass = createGrassField(scene, WORLD_SEED, materialLibrary.litShading);
+  const buildings = createSettlementRenderer(
+    scene,
+    settlementLayouts,
+    WORLD_SEED,
+    materialLibrary.litShading,
+    sunLighting.shadowGenerator,
+    DEFAULT_DRAW_DISTANCE,
+  );
   const sky = createSkyDome(scene);
 
   if (buildPool) {
@@ -173,6 +185,7 @@ export async function createWorld(scene: Scene, onProgress?: (progress: WorldLoa
   const setDrawDistance = (loadRadius: number) => {
     drawDistance = loadRadius;
     chunkManager.setRadii(loadRadius, loadRadius + UNLOAD_HYSTERESIS);
+    buildings.setDrawDistance(loadRadius);
     scene.fogEnd = loadRadius * FOG_END_FRACTION;
   };
   // Sets the initial fog-end directly rather than through setDrawDistance, which would otherwise
@@ -200,6 +213,7 @@ export async function createWorld(scene: Scene, onProgress?: (progress: WorldLoa
     areaNames,
     settlements,
     roads,
+    settlementLayouts,
     materialLibrary,
     trees,
     grass,

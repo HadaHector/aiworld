@@ -7,7 +7,11 @@
 // builds MORE, because a wider step both hops narrow obstructions and measures grade over a longer
 // run, so fewer steps trip the limit - which is also why it cannot go much coarser than this
 // without the grade term quietly ceasing to mean anything.
-export const ROAD_GRID = 35;
+//
+// Raised from 35 to 52.5 once roads took their full width into settlements: at 35 a serpentine's
+// legs could sit closer than a road's level ground is wide (16 units plus shoulders), so a
+// switchback cut into its own previous leg. 1.5x the spacing keeps the legs apart.
+export const ROAD_GRID = 52.5;
 
 // Grade is the term that decides whether a road goes over a hill or around it. Below EASY it is
 // nearly free; the square above it is what makes a steep climb lose to a long detour. MAX is a

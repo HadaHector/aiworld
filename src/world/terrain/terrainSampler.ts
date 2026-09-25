@@ -5,6 +5,9 @@ import { createBedrockSampler } from "../bedrock";
 import { generateSettlementSites, type SettlementSite } from "../settlements/settlementSites";
 import { generateRoadNetwork, type RoadNetwork } from "../roads/roadNetwork";
 import { createRoadField, type RoadField } from "../roads/roadField";
+import { generateSettlementLayouts, type SettlementLayout } from "../settlements/settlementLayout";
+import { createPadField, type PadField } from "../settlements/padField";
+import { PAD_BLEND_MAX, PAD_BLEND_MIN, PAD_PAINT_OFFSET, PAD_SIDE_SLOPE } from "../settlements/settlementConfig";
 import {
   ROAD_HALF_WIDTH,
   ROAD_SIDE_SLOPE,
@@ -58,6 +61,8 @@ export interface TerrainWorld {
   areaNames: Map<number, string>;
   settlements: SettlementSite[];
   roads: RoadNetwork;
+  /** Streets, squares and houses, one per settlement, in settlement id order. */
+  settlementLayouts: SettlementLayout[];
 }
 
 const OCEAN_FLOOR_DEPTH = -14;
@@ -101,6 +106,9 @@ export function createTerrainSampler(seed: number): TerrainWorld {
   // the network is generated below this is null and sampleTerrain simply reports ungraded ground,
   // which is exactly what the router has to see.
   let roadField: RoadField | null = null;
+  // Bound last of all, for the same reason: settlements are laid out on the graded terrain, then
+  // the ground is levelled under their houses.
+  let padField: PadField | null = null;
 
   function sampleTerrain(worldX: number, worldZ: number): TerrainSample {
     const area = sampleArea(worldX, worldZ);
@@ -156,7 +164,26 @@ export function createTerrainSampler(seed: number): TerrainWorld {
     const oceanNoise = oceanNoise2D(worldX * OCEAN_FLOOR_NOISE_FREQUENCY, worldZ * OCEAN_FLOOR_NOISE_FREQUENCY) * OCEAN_FLOOR_NOISE_SCALE;
     const oceanFloorHeight = SEA_LEVEL + OCEAN_FLOOR_DEPTH + oceanNoise;
     const landBlend = smoothstep(-1, 1, area.landmass);
-    const height = lerp(oceanFloorHeight, gradedHeight, landBlend);
+    let height = lerp(oceanFloorHeight, gradedHeight, landBlend);
+
+    // House plots and squares: brought to their own level, returning to the ground's over a margin
+    // as wide as PAD_SIDE_SLOPE needs (like a road shoulder), and painted as trodden earth - the
+    // road surface - by reporting a road gap just past the pad's edge. After the ocean blend, which
+    // otherwise pulls a plot near the coast a little way down toward the seabed: a plot is only ever
+    // placed on dry land, so there is no seabed for it to fight.
+    // The levelling never reaches onto a road's or street's own level ground (roadGap is in
+    // road-width units, so ROAD_HALF_WIDTH is that edge for every width): a house stands close enough
+    // to its street for its margin to overlap it, and the street would otherwise dip or bulge toward
+    // every house it passes.
+    if (padField) {
+      const pad = padField.query(worldX, worldZ);
+      if (pad) {
+        const margin = Math.min(PAD_BLEND_MAX, Math.max(PAD_BLEND_MIN, Math.abs(height - pad.height) / PAD_SIDE_SLOPE));
+        const clearOfRoad = smoothstep(ROAD_HALF_WIDTH, ROAD_HALF_WIDTH + 3, roadGap);
+        if (pad.gap < margin) height = lerp(height, pad.height, (1 - smoothstep(0, margin, pad.gap)) * clearOfRoad);
+        roadGap = Math.min(roadGap, pad.gap + PAD_PAINT_OFFSET);
+      }
+    }
 
     return {
       height,
@@ -189,5 +216,15 @@ export function createTerrainSampler(seed: number): TerrainWorld {
   const roads = generateRoadNetwork(seed, settlements, sampleTerrain);
   roadField = createRoadField(roads.links, ROAD_QUERY_RADIUS, ROAD_GRADE_END_TAPER);
 
-  return { sampleTerrain, worldExtent, continents, areaBounds, areaNames, settlements, roads };
+  // Settlements are laid out on the terrain as the roads left it, then their streets join the road
+  // field (graded and painted like roads, narrower) and their plots are levelled.
+  const settlementLayouts = generateSettlementLayouts(seed, settlements, roads.gates, roads.links, sampleTerrain);
+  roadField = createRoadField(
+    [...roads.links, ...settlementLayouts.flatMap((layout) => layout.streets)],
+    ROAD_QUERY_RADIUS,
+    ROAD_GRADE_END_TAPER,
+  );
+  padField = createPadField(settlementLayouts);
+
+  return { sampleTerrain, worldExtent, continents, areaBounds, areaNames, settlements, roads, settlementLayouts };
 }

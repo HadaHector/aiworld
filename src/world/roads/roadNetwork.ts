@@ -2,6 +2,8 @@ import { Delaunay } from "d3-delaunay";
 import type { CellPoint } from "../cells/cellGrid";
 import type { TerrainSampler } from "../terrain/terrainSampler";
 import type { SettlementSite } from "../settlements/settlementSites";
+import { chooseGate, type SettlementGate } from "../settlements/gates";
+import { GATE_PASS_SNAP, GATE_ROAD_EXCLUSION_MARGIN, STREET_JOIN_BLEND } from "../settlements/settlementConfig";
 import { simplify, removeLoops } from "../polyline";
 import { straighten, roundCorners, snapToNetwork, createSnapIndex, wobble } from "./roadShaping";
 import { createBaseNoise2D } from "../terrain/noise";
@@ -50,10 +52,15 @@ export interface RoadLink {
   heights: number[];
   /** Length along the shaped line, not the straight-line distance between the settlements. */
   length: number;
+  /** A road runs gate to gate and carries straight on into the settlement's main street there, so
+   *  its grading does not fade out at the ends the way a road that simply stops does. */
+  taperEnds: false;
 }
 
 export interface RoadNetwork {
   links: RoadLink[];
+  /** Per settlement id, the gates its roads arrive at - where its main streets start. */
+  gates: SettlementGate[][];
   /** Reported rather than logged: these are the numbers that say whether the cost function is
    *  behaving, and they are worth having at hand when it is being tuned. */
   stats: {
@@ -73,6 +80,8 @@ export interface RoadNetwork {
     unreachable: number;
     /** Ran out of expansion budget before finding a route that exists. */
     capped: number;
+    /** Dropped before routing: one end's settlement had no ground fit for a gate facing that way. */
+    noGate: number;
     /** Routes found but rejected as too indirect to be a road - see ROAD_MAX_PATH_RATIO. */
     tooIndirect: number;
     expansions: number;
@@ -262,9 +271,10 @@ export function generateRoadNetwork(
   if (settlements.length < 2) {
     return {
       links: [],
+      gates: settlements.map(() => []),
       stats: {
         candidates: 0, attempted: 0, built: 0, access: 0, rescued: 0, unreached: 0,
-        withoutHomeAccess: 0, unreachable: 0, capped: 0, tooIndirect: 0, expansions: 0, samples: 0,
+        withoutHomeAccess: 0, unreachable: 0, capped: 0, noGate: 0, tooIndirect: 0, expansions: 0, samples: 0,
         sharedNodes: 0,
       },
     };
@@ -300,20 +310,74 @@ export function generateRoadNetwork(
   });
   let unreachable = 0;
   let capped = 0;
+  let noGate = 0;
   let tooIndirect = 0;
   let expansions = 0;
 
   const built = createUnionFind(settlements.length);
+  const gates: SettlementGate[][] = settlements.map(() => []);
+
+  /** A settlement's interior, which roads keep out of so they end at its gates. */
+  const interior = (site: SettlementSite) => ({ x: site.x, z: site.z, radius: Math.max(0, site.radius - GATE_ROAD_EXCLUSION_MARGIN) });
+
+  /** Whether a straight stretch keeps out of both settlements' interiors. */
+  function clearOfInteriors(a: CellPoint, b: CellPoint, circles: { x: number; z: number; radius: number }[]): boolean {
+    for (const c of circles) {
+      const dx = b.x - a.x;
+      const dz = b.z - a.z;
+      const lengthSq = dx * dx + dz * dz;
+      const u = lengthSq > 0 ? Math.min(1, Math.max(0, ((c.x - a.x) * dx + (c.z - a.z) * dz) / lengthSq)) : 0;
+      if ((a.x + u * dx - c.x) ** 2 + (a.z + u * dz - c.z) ** 2 < c.radius * c.radius) return false;
+    }
+    return true;
+  }
+
+  /** Brings a road's surface to a gate's level over its first (or last) stretch, so two roads
+   *  meeting at one gate - and the main street leaving it - all join at the same height. The first
+   *  road to use a gate sets that level. */
+  function joinAtGate(heights: number[], points: CellPoint[], gate: SettlementGate, atStart: boolean): void {
+    const n = heights.length;
+    const endIndex = atStart ? 0 : n - 1;
+    if (gate.roadHeight === null) {
+      gate.roadHeight = heights[endIndex];
+      return;
+    }
+    let travelled = 0;
+    for (let k = 0; k < n; k++) {
+      const i = atStart ? k : n - 1 - k;
+      if (k > 0) {
+        const prev = atStart ? i - 1 : i + 1;
+        travelled += Math.hypot(points[i].x - points[prev].x, points[i].z - points[prev].z);
+      }
+      if (travelled >= STREET_JOIN_BLEND * 2) break;
+      const t = travelled / (STREET_JOIN_BLEND * 2);
+      const keep = t * t * (3 - 2 * t);
+      heights[i] = gate.roadHeight + (heights[i] - gate.roadHeight) * keep;
+    }
+  }
 
   function build(candidate: Candidate, kind: RoadKind = "link"): boolean {
-    const from = settlements[candidate.from];
-    const to = settlements[candidate.to];
+    const fromSite = settlements[candidate.from];
+    const toSite = settlements[candidate.to];
+    // Each end is a gate on that settlement's edge, chosen by the ground there - not the centre.
+    let fromGate = chooseGate(fromSite, toSite.x, toSite.z, gates[candidate.from], sampleTerrain);
+    let toGate = chooseGate(toSite, fromSite.x, fromSite.z, gates[candidate.to], sampleTerrain);
+    if (!fromGate || !toGate) {
+      noGate++;
+      return false;
+    }
+    // Routed between the gates' approach points; the straight run in to each gate is added after.
+    let from = { x: fromGate.x, z: fromGate.z };
+    let to = { x: toGate.x, z: toGate.z };
+    const approach = (gate: SettlementGate): CellPoint => ({ x: gate.approachX, z: gate.approachZ });
+    const interiors = [interior(fromSite), interior(toSite)];
     const result = pathfinder.findPath({
-      from,
-      to,
-      zones: new Set([from.areaId, to.areaId]),
+      from: approach(fromGate),
+      to: approach(toGate),
+      zones: new Set([fromSite.areaId, toSite.areaId]),
       roadNodes,
       detourFactor: kind === "link" ? undefined : ROAD_RESCUE_DETOUR_FACTOR,
+      avoid: interiors,
     });
     expansions += result.expansions;
 
@@ -323,20 +387,71 @@ export function generateRoadNetwork(
       return false;
     }
 
-    // The grid path snapped both ends to the lattice; the settlements are where they are, so the
-    // real endpoints replace the snapped ones before anything is smoothed.
-    const raw = result.nodes.map(nodePoint);
-    raw[0] = { x: from.x, z: from.z };
-    raw[raw.length - 1] = { x: to.x, z: to.z };
+    // A route that reaches another gate of either settlement on the way (typically by following a
+    // road already built to it) is cut short there: it has arrived, and joins that gate's roads
+    // instead of running on along the rim to the gate it was aimed at.
+    let nodes = result.nodes;
+    const otherGateNear = (siteGates: SettlementGate[], chosen: SettlementGate, point: CellPoint) =>
+      siteGates.find(
+        (g) =>
+          g !== chosen &&
+          (Math.hypot(g.x - point.x, g.z - point.z) < GATE_PASS_SNAP ||
+            Math.hypot(g.approachX - point.x, g.approachZ - point.z) < GATE_PASS_SNAP),
+      );
+    for (let i = 0; i < nodes.length - 1; i++) {
+      const gate = otherGateNear(gates[candidate.to], toGate, nodePoint(nodes[i]));
+      if (gate && i >= 1) {
+        nodes = nodes.slice(0, i + 1);
+        toGate = gate;
+        to = { x: gate.x, z: gate.z };
+        break;
+      }
+    }
+    for (let i = nodes.length - 1; i > 0; i--) {
+      const gate = otherGateNear(gates[candidate.from], fromGate, nodePoint(nodes[i]));
+      if (gate && i <= nodes.length - 2) {
+        nodes = nodes.slice(i);
+        fromGate = gate;
+        from = { x: gate.x, z: gate.z };
+        break;
+      }
+    }
 
-    const zones = new Set([from.areaId, to.areaId]);
+    // Likewise a route whose end would snap onto an existing road that serves another of the
+    // settlement's gates: it is arriving along that road, so it ends at that road's gate.
+    const snappedOntoGate = (siteGates: SettlementGate[], chosen: SettlementGate, point: CellPoint) => {
+      const snapped = snapIndex.snap(point);
+      return snapped ? otherGateNear(siteGates, chosen, snapped) : undefined;
+    };
+    const arriving = snappedOntoGate(gates[candidate.to], toGate, to);
+    if (arriving) {
+      toGate = arriving;
+      to = { x: arriving.x, z: arriving.z };
+    }
+    const leaving = snappedOntoGate(gates[candidate.from], fromGate, from);
+    if (leaving) {
+      fromGate = leaving;
+      from = { x: leaving.x, z: leaving.z };
+    }
+
+    // The grid path snapped both ends to the lattice; the approach points are where they are, so
+    // they replace the snapped ends before anything is smoothed.
+    const raw = nodes.map(nodePoint);
+    raw[0] = approach(fromGate);
+    raw[raw.length - 1] = approach(toGate);
+
+    const zones = new Set([fromSite.areaId, toSite.areaId]);
     // Straightening may not wander into a zone the route it replaces did not already visit -
     // otherwise a shortcut could cut a corner through the zone next door, undoing the containment
     // the off-zone penalty bought.
-    for (const key of result.nodes) zones.add(pathfinder.zoneOfNode(key));
-    const chordIsClear = (a: CellPoint, b: CellPoint): boolean => pathfinder.chordIsClear(a, b, zones);
+    for (const key of nodes) zones.add(pathfinder.zoneOfNode(key));
+    const chordIsClear = (a: CellPoint, b: CellPoint): boolean =>
+      clearOfInteriors(a, b, interiors) && pathfinder.chordIsClear(a, b, zones);
 
-    const straightened = straighten(raw, chordIsClear, pathfinder.riverLengthAlong);
+    // Straightened between the approach points only - a shortcut must not skip the straight run in
+    // to a gate - then the gates go on the ends, and rounding turns the corner at each approach
+    // point into a curve that ends in a straight run head-on into the gate.
+    const straightened = [from, ...straighten(raw, chordIsClear, pathfinder.riverLengthAlong), to];
     // removeLoops after rounding: a hairpin tight enough that its arc crosses the line is rare but
     // real - measured at 6 across the network - and it is the same fix rivers already use.
     const snapped = snapToNetwork(roundCorners(straightened, chordIsClear), snapIndex, ROAD_SNAP_SAMPLE);
@@ -356,7 +471,7 @@ export function generateRoadNetwork(
 
     // Only now that the link is accepted: a rejected route must leave no trace, or it would mark
     // ground as carrying a road that was never built and pull later links toward it.
-    for (const key of result.nodes) {
+    for (const key of nodes) {
       roadNodes.add(key);
       nodeUses.set(key, (nodeUses.get(key) ?? 0) + 1);
     }
@@ -378,14 +493,21 @@ export function generateRoadNetwork(
         ROAD_WOBBLE_SIMPLIFY_TOLERANCE,
       ),
     );
+    // Only now that the road exists are its gates real.
+    if (!gates[candidate.from].includes(fromGate)) gates[candidate.from].push(fromGate);
+    if (!gates[candidate.to].includes(toGate)) gates[candidate.to].push(toGate);
+    const heights = computeRoadProfile(points, sampleTerrain);
+    joinAtGate(heights, points, fromGate, true);
+    joinAtGate(heights, points, toGate, false);
     links.push({
       id: links.length,
       kind,
       from: candidate.from,
       to: candidate.to,
       points,
-      heights: computeRoadProfile(points, sampleTerrain),
+      heights,
       length,
+      taperEnds: false,
     });
     built.union(candidate.from, candidate.to);
     homeAccess[candidate.from] ||= settlements[candidate.from].areaId === settlements[candidate.to].areaId;
@@ -451,6 +573,7 @@ export function generateRoadNetwork(
 
   return {
     links,
+    gates,
     stats: {
       candidates: all.length,
       attempted: chosen.length,
@@ -461,6 +584,7 @@ export function generateRoadNetwork(
       withoutHomeAccess,
       unreachable,
       capped,
+      noGate,
       tooIndirect,
       expansions,
       samples: pathfinder.sampleCount(),
