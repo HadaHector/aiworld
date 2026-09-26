@@ -1,5 +1,6 @@
 import type { FloatArray } from "@babylonjs/core";
 import type { TerrainSample } from "../terrain/terrainSampler";
+import type { TreeCover } from "../foliage/treeScatter";
 
 // How far out (in full-detail grid steps) reliefCurvature looks for its "surrounding ground"
 // average - about 10 world units at the full-detail spacing set by world.ts's CHUNK_SIZE and
@@ -58,9 +59,18 @@ export function buildVertexContext(
   gridSize: number,
   vertexIndex: number,
   curvatureRadiusSteps = RELIEF_CURVATURE_RADIUS_STEPS,
+  treeCover?: { cover: TreeCover; worldX: number; worldZ: number },
 ): Record<string, number> {
   const sample = samples[vertexIndex];
+  const height = positions[vertexIndex * 3 + 1];
+  const up = normals[vertexIndex * 3 + 1];
   return {
+    // How wooded the ground is here, 0-1 - the tree scatter's own density field (see TreeCover),
+    // so a forest floor can lie exactly where the wood stands and give way to meadow in its
+    // clearings. 0 where the caller has no scatter to ask (the debug map).
+    treeCover: treeCover
+      ? treeCover.cover(treeCover.worldX, treeCover.worldZ, { height, surfaceHeight: height, slope: Math.sqrt(Math.max(0, 1 - up * up)), sample })
+      : 0,
     height: positions[vertexIndex * 3 + 1],
     slope: normals[vertexIndex * 3 + 1],
     // Sign is an arbitrary but fixed convention (positive = the slope's normal tilts toward -Z,

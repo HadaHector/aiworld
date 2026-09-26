@@ -1,0 +1,101 @@
+// Rock in a wood: the same stone as rock.json5, with moss grown over the tops of its lumps and in
+// patches across it - the forest's own steep ground (see forest.json5), which outweighs the
+// universal bare rock there.
+{
+  name: "Mossy Rock",
+  texture: {
+    bumpStrength: 3.0,
+    pipeline: {
+      noises: [
+        { name: "mottle", type: "fbm", octaves: 3, tileCycles: 13, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+        { name: "grain", type: "fbm", octaves: 2, tileCycles: 46, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+        { name: "lumps", type: "billow", octaves: 2, tileCycles: 4, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+        { name: "knobs", type: "billow", octaves: 2, tileCycles: 11, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+        { name: "mossPatch", type: "fbm", octaves: 4, tileCycles: 7, amplitude: 1, persistence: 0.55, lacunarity: 2.0 },
+        { name: "mossGrain", type: "fbm", octaves: 2, tileCycles: 120, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+      ],
+      steps: [
+        { output: "lump", op: "sample", noise: "lumps" },
+        { output: "lumpMask", op: "mask", input: "lump", at: 0.45, off: -1.4 },
+        { output: "knob", op: "sample", noise: "knobs" },
+        { output: "knobMask", op: "mask", input: "knob", at: 0.45, off: -1.4 },
+        { output: "grain", op: "sample", noise: "grain" },
+        { output: "grainMask", op: "mask", input: "grain", at: 1.5, off: -1.5 },
+        { output: "mottle", op: "sample", noise: "mottle" },
+        { output: "mottleMask", op: "mask", input: "mottle", at: 1.75, off: -1.75 },
+
+        // --- the rock's form, built first so everything below can be derived from it ---
+        { output: "lumpRelief", op: "scale", input: "lumpMask", factor: 0.75 },
+        { output: "knobRelief", op: "scale", input: "knobMask", factor: 0.33 },
+        { output: "lumpy", op: "add", a: "lumpRelief", b: "knobRelief" },
+        { output: "grainRelief", op: "scale", input: "grainMask", factor: 0.14 },
+        { output: "rockForm", op: "add", a: "lumpy", b: "grainRelief" },
+
+        // Sediment is defined purely as "where the rock is low" - 1 in the deepest hollows, gone by
+        // the time the surface has risen to 0.42.
+        { output: "sedimentMask", op: "mask", input: "rockForm", at: 0.18, off: 0.32 },
+
+        // --- diffuse ---
+        // Stone color comes from the mottle, NOT from the form. Keying color directly on the lump
+        // shape made the texture read as soft cloud or marble: albedo that tracks height exactly is
+        // not what stone looks like. Real rock is fairly uniform in albedo with blotchy variation
+        // that has nothing to do with its bumps, and the form is read from lighting - which is the
+        // normal map's job here.
+        { output: "stoneDark", op: "color", value: [0.3, 0.29, 0.28] },
+        { output: "stoneLight", op: "color", value: [0.45, 0.44, 0.42] },
+        { output: "stoneBase", op: "mix", a: "stoneDark", b: "stoneLight", t: "mottleMask" },
+
+        // A gentle stand-in for ambient occlusion: only the deepest parts of the form darken, and
+        // gradually, rather than the whole surface being shaded by height.
+        { output: "hollowMask", op: "mask", input: "rockForm", at: 0.05, off: 0.55 },
+        { output: "occlusionColor", op: "color", value: [0.2, 0.19, 0.18] },
+        { output: "occlusionBlend", op: "scale", input: "hollowMask", factor: 0.5 },
+        { output: "stone", op: "mix", a: "stoneBase", b: "occlusionColor", t: "occlusionBlend" },
+
+        { output: "sedimentDark", op: "color", value: [0.36, 0.33, 0.27] },
+        { output: "sedimentLight", op: "color", value: [0.46, 0.43, 0.36] },
+        { output: "sediment", op: "mix", a: "sedimentDark", b: "sedimentLight", t: "mottleMask" },
+        { output: "bareRock", op: "mix", a: "stone", b: "sediment", t: "sedimentMask" },
+
+        // Moss settles on the tops of the lumps first, and spreads in patches: the rock's own form
+        // plus a patch noise decides where, a fine grain frays the edge.
+        { output: "mossPatchRaw", op: "sample", noise: "mossPatch" },
+        { output: "mossPatchScaled", op: "scale", input: "mossPatchRaw", factor: 0.35 },
+        { output: "mossGrainRaw", op: "sample", noise: "mossGrain" },
+        { output: "mossFray", op: "scale", input: "mossGrainRaw", factor: 0.08 },
+        { output: "mossSeat", op: "add", a: "rockForm", b: "mossPatchScaled" },
+        { output: "mossFrayed", op: "add", a: "mossSeat", b: "mossFray" },
+        { output: "mossMask", op: "mask", input: "mossFrayed", at: 0.72, off: 0.55 },
+        {
+          output: "mossTone",
+          op: "colorRamp",
+          input: "mottleMask",
+          stops: [
+            { at: 0.0, color: [0.17, 0.25, 0.1] },
+            { at: 0.5, color: [0.24, 0.34, 0.13] },
+            { at: 1.0, color: [0.34, 0.42, 0.17] },
+          ],
+        },
+        { output: "mossShade", op: "remap", input: "mossGrainRaw", inMin: -1, inMax: 1, outMin: 0.85, outMax: 1.12 },
+        { output: "mossLit", op: "multiply", a: "mossTone", b: "mossShade" },
+        { output: "diffuse", op: "mix", a: "bareRock", b: "mossLit", t: "mossMask" },
+
+        // Loose grit is powdery and more matte than the bare stone it sits on.
+        { output: "roughStone", op: "constant", value: 0.82 },
+        { output: "roughSediment", op: "constant", value: 0.94 },
+        { output: "roughRock", op: "mix", a: "roughStone", b: "roughSediment", t: "sedimentMask" },
+        { output: "roughMoss", op: "constant", value: 0.9 },
+        { output: "roughness", op: "mix", a: "roughRock", b: "roughMoss", t: "mossMask" },
+
+        // Sediment settles level, so it fills its hollows slightly rather than draping over them.
+        { output: "sedimentFill", op: "scale", input: "sedimentMask", factor: 0.1 },
+        { output: "rockHeight", op: "add", a: "rockForm", b: "sedimentFill" },
+        // A cushion of moss stands a little proud of the stone under it.
+        { output: "mossCushion", op: "scale", input: "mossMask", factor: 0.12 },
+        { output: "heightRaw", op: "add", a: "rockHeight", b: "mossCushion" },
+        { output: "height", op: "clamp", input: "heightRaw", min: 0, max: 1 },
+      ],
+      outputs: { diffuse: "diffuse", roughness: "roughness", height: "height" },
+    },
+  },
+}

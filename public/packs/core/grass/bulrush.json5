@@ -1,0 +1,31 @@
+// Bulrush: a clump of long, upright leaves and stems at the water's edge, some of the stems carrying
+// the brown cattail - a long rounded head a hand below the tip. Stands in the shallows (`wades`),
+// thick where it grows - the reed bed material it grows on comes in patches - and tall enough to
+// read from a long way off.
+{
+  width: 1.7,
+  height: 2.3,
+  sway: 0.12,
+  fadeStart: 90,
+  fadeEnd: 380,
+  wades: 1.0,
+  blades: {
+    count: 34,
+    minHeight: 0.5,
+    maxHeight: 0.98,
+    baseWidth: 5,
+    lean: 0.08,
+    fan: false,
+    seedHeads: false,
+    flowerHeads: {
+      shape: "spike",
+      count: 9,
+      radius: 3.6,
+      colors: [
+        [0.36, 0.22, 0.12],
+        [0.42, 0.27, 0.14],
+        [0.3, 0.19, 0.11],
+      ],
+    },
+  },
+}

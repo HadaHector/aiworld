@@ -2,9 +2,10 @@ import { VertexData } from "@babylonjs/core";
 import type { TerrainSample, TerrainSampler } from "./terrainSampler";
 import { RELIEF_CURVATURE_RADIUS_STEPS, buildVertexContext } from "../materials/materialContext";
 import { MATERIALS_PER_TRIANGLE, type MaterialBlender } from "../materials/materialBlend";
-import type { TreeGround, TreePlacement, TreeScatter } from "../foliage/treeScatter";
+import type { TreeCover, TreeGround, TreePlacement, TreeScatter } from "../foliage/treeScatter";
 import { scatterGrass, type ChunkGrass } from "../foliage/grassScatter";
 import type { GrassKindDef } from "../foliage/grassConfig";
+import { BUSH_MAX_DETAIL_RATIO } from "../foliage/foliageConfig";
 
 /** Where a chunk is and at what level of detail - everything a build needs besides the world
  *  itself, and plain data, so it can be posted to a worker. */
@@ -29,6 +30,9 @@ export interface ChunkBuildContext {
    *  the material textures have been baked. */
   groundColors: [number, number, number][] | null;
   scatterTrees: TreeScatter;
+  scatterBushes: TreeScatter;
+  /** How wooded the ground is, for material rules (see materialContext.ts). */
+  treeCover: TreeCover;
   grassKinds: GrassKindDef[];
 }
 
@@ -57,6 +61,9 @@ export interface ChunkGeometry {
    *  vertex - so placing a tree costs a lookup instead of another few terrain samples, and it
    *  stands on exactly the triangle that gets drawn rather than on a second opinion about it. */
   trees: TreePlacement[];
+  /** The bushes, placed the same way - but only on chunks near enough to see them (see
+   *  BUSH_MAX_DETAIL_RATIO). */
+  bushes: TreePlacement[];
   /** Only full-detail chunks carry grass: each kind is only drawn within its own fadeEnd of the
    *  camera (see grassConfig.ts), inside the full-detail range. */
   grass: ChunkGrass | null;
@@ -121,7 +128,7 @@ function toSlots(weights: Map<number, number>, ownerList: MaterialList, allowed:
  */
 export function buildChunkGeometry(request: ChunkBuildRequest, context: ChunkBuildContext): ChunkGeometry {
   const { size, subdivisions, detailSubdivisions, originX, originZ } = request;
-  const { sampleTerrain, materialBlender, scatterTrees, seed, groundColors, grassKinds } = context;
+  const { sampleTerrain, materialBlender, scatterTrees, scatterBushes, treeCover, seed, groundColors, grassKinds } = context;
 
   const gridSize = subdivisions + 1;
   const detailRatio = detailSubdivisions / subdivisions;
@@ -175,13 +182,14 @@ export function buildChunkGeometry(request: ChunkBuildRequest, context: ChunkBui
   for (let row = -1; row <= gridSize; row++) {
     for (let col = -1; col <= gridSize; col++) {
       const index = padded(row, col);
-      const context = buildVertexContext(paddedPositions, paddedNormals, paddedSamples, paddedSize, index, curvatureSteps);
-      blends[(row + 1) * ringSize + (col + 1)] = materialBlender.buildMaterialBlend(
-        originX + paddedPositions[index * 3],
-        originZ + paddedPositions[index * 3 + 2],
-        context,
-        paddedSamples[index].areaWeights,
-      );
+      const worldX = originX + paddedPositions[index * 3];
+      const worldZ = originZ + paddedPositions[index * 3 + 2];
+      const context = buildVertexContext(paddedPositions, paddedNormals, paddedSamples, paddedSize, index, curvatureSteps, {
+        cover: treeCover,
+        worldX,
+        worldZ,
+      });
+      blends[(row + 1) * ringSize + (col + 1)] = materialBlender.buildMaterialBlend(worldX, worldZ, context, paddedSamples[index].areaWeights);
     }
   }
 
@@ -495,6 +503,11 @@ export function buildChunkGeometry(request: ChunkBuildRequest, context: ChunkBui
     probeGround,
   );
 
+  const bushes =
+    detailRatio <= BUSH_MAX_DETAIL_RATIO
+      ? scatterBushes(originX - size / 2, originZ - size / 2, originX + size / 2, originZ + size / 2, probeGround)
+      : [];
+
   const grass =
     detailRatio === 1
       ? scatterGrass(
@@ -524,6 +537,7 @@ export function buildChunkGeometry(request: ChunkBuildRequest, context: ChunkBui
     shadowNormals: new Float32Array(shadowNormals),
     shadowIndices: new Uint32Array(shadowIndices),
     trees,
+    bushes,
     grass,
   };
 }

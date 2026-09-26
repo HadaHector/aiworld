@@ -2,11 +2,12 @@ import type { ColorTuple } from "../terrain/pipeline/pipelineTypes";
 import type { TextureDef } from "../materials/textureGen";
 
 /**
- * Foliage comes in three levels - large (trees), medium (bushes), small (grass) - which are
- * deliberately not one system with a size parameter: a tree is an object you walk around and a
- * blade of grass is a texture-scale detail you never collide with, so they will want different
- * scattering, different streaming and different rendering. Only the large level exists today; the
- * constants below are all its.
+ * Foliage comes in three levels - large (trees), medium (bushes), small (grass). Grass is a system
+ * of its own: a texture-scale detail scattered from the ground's materials, never an object. Trees
+ * and bushes are both objects standing on the ground, so they share the scatter (see
+ * treeScatter.ts) and the renderer (treeField.ts) - but each level has its own lattice, spacing and
+ * density maps, so a bush never takes a tree's place and a wood can be as dense below as above.
+ * The constants below are the trees'; the bushes' follow them.
  */
 
 // The hard-core radius of the scatter: no two trunks in the world are closer than this, whatever
@@ -40,6 +41,28 @@ export const TREE_ROAD_FADE = 34;
 export const TREE_SINK = 0.4;
 
 export const FOLIAGE_SALT = 801;
+
+// Bushes: a tighter lattice of their own, under and between the trees. They stay off the trunks and
+// gather in the trees' shade, and are only placed near enough to see - out to the second level of
+// detail (400 units), past which a two-metre bush is a few pixels in the haze.
+export const BUSH_SPACING = 6;
+export const BUSH_CANDIDATES_PER_CELL = 3;
+export const BUSH_SALT = 802;
+/** How far a bush keeps from a trunk - clear of the flared base, not of the roots - per unit of the
+ *  tree's scale, so an old giant's base is kept clear in proportion. */
+export const BUSH_TRUNK_CLEARANCE = 4;
+/** A tree's shade, per unit of its scale: full out to the inner radius, gone by the outer - about
+ *  where a broadleaf's crown ends. Bushes grow at their full density in shade, at BUSH_OPEN_SHARE
+ *  of it in the open. */
+export const BUSH_SHADE_INNER = 7;
+export const BUSH_SHADE_OUTER = 15;
+export const BUSH_OPEN_SHARE = 0.3;
+/** Bushes line a road's verge, so they come closer to it than trees do. */
+export const BUSH_ROAD_CLEARANCE = 11;
+export const BUSH_ROAD_FADE = 18;
+export const BUSH_SINK = 0.15;
+/** Chunks coarser than this many times full detail carry no bushes. */
+export const BUSH_MAX_DETAIL_RATIO = 2;
 
 /**
  * Where a zone's trees thin out, each a [start, end] range the density fades across - a fade
@@ -189,6 +212,46 @@ export interface FoliageTexture {
 
 export const FOLIAGE_BUILDERS = ["broadleaf"] as const;
 
+/**
+ * A bush: no wood at all, only cards. A few large ones crossed through its middle each show a whole
+ * bush from the side - stems rising from the ground and forking, leaves over their upper part - and
+ * smaller leaf clumps sit over its top so it has volume from any direction, including above. The
+ * branches are in the texture (see treeTextures.ts's bakeBushFoliage), which is where anything this
+ * thin belongs at this scale. Lengths are metres.
+ */
+export interface BushShape {
+  model: "bush";
+  variants: number;
+  width: [number, number];
+  height: [number, number];
+  /** Whole-bush cards crossed through the middle. */
+  cards: number;
+  /** Leaf clumps over the top, and a clump card's width. */
+  clumps: number;
+  clumpSize: [number, number];
+  foliage: BushTexture;
+}
+
+/** A generated bush atlas: two side views of a whole bush and two leaf clumps, see treeTextures.ts. */
+export interface BushTexture {
+  builder: "leafyBush";
+  /** Leaves range between these, lighter towards the top and the rim. */
+  dark: ColorTuple;
+  light: ColorTuple;
+  /** The stems' colour, shaded round across their width. */
+  stem: ColorTuple;
+  /** Main stems rising from the ground in one side view. */
+  stems: [number, number];
+  /** Leaves per side view (a clump gets 60% as many), and a leaf's size as a fraction of it. */
+  leaves: number;
+  leafLength: number;
+  leafWidth: number;
+  /** The bottom fraction of the bush left bare, where only the stems show. */
+  bare: number;
+}
+
+export const BUSH_FOLIAGE_BUILDERS = ["leafyBush"] as const;
+
 /** The original placeholder trees: a trunk cylinder and a crown from one primitive builder. */
 export interface PrimitiveTree {
   model: "primitive";
@@ -197,7 +260,8 @@ export interface PrimitiveTree {
 }
 
 /**
- * A kind of tree a biome can grow, named by its foliage graph's outputs (see BiomeOutputs.foliage).
+ * A kind of tree - or bush - a biome can grow, named by its foliage graph's outputs (see
+ * BiomeOutputs.foliage and BiomeOutputs.bushes).
  *
  * A tree picks its kind from the zone it stands in, weighted by how much of the trees around it
  * that zone is responsible for - so a border between a pine zone and a broadleaf one comes out as
@@ -205,10 +269,26 @@ export interface PrimitiveTree {
  */
 export interface TreeKindDef {
   id: string;
-  shape: PrimitiveTree | BranchingTree;
+  shape: PrimitiveTree | BranchingTree | BushShape;
   /** Each tree's foliage colour is multiplied by a random mix of these two: the canopy colour of a
    *  primitive tree (whose canopy is white), and a shade of its texture for a branching one. */
   tint: [ColorTuple, ColorTuple];
   /** Each tree is scaled uniformly by a random factor in this range. */
   scale: [number, number];
+  /** Whether this kind grows old - some of its trees then stand WorldContent.oldTrees.size times
+   *  their usual size. A kind that does not still gets the room an old tree would have taken. */
+  growsOld: boolean;
+}
+
+/**
+ * A few trees are old: several times the size of the rest, and given room in proportion - two trees
+ * stand at least TREE_SPACING times the average of their sizes apart, so an old tree clears the
+ * young ones out from under its crown. Whether a tree is old is decided with its position, before
+ * anything is known about the ground or its species; see treeScatter.ts.
+ */
+export interface OldTrees {
+  /** The share of the lattice's darts that are old. Each clears a wide circle, so a little goes far. */
+  share: number;
+  /** An old tree's size, as a multiple of its kind's own scale. */
+  size: [number, number];
 }

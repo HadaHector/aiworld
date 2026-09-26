@@ -1,6 +1,6 @@
 import { createTerrainSampler } from "./terrainSampler";
 import { createMaterialBlender } from "../materials/materialBlend";
-import { createTreeScatter } from "../foliage/treeScatter";
+import { createBushScatter, createTreeCover, createTreeScatter } from "../foliage/treeScatter";
 import { buildChunkGeometry, type ChunkBuildContext, type ChunkBuildRequest, type ChunkGeometry } from "./chunkGeometry";
 import type { WorldContent } from "../content/worldContent";
 
@@ -33,10 +33,13 @@ self.onmessage = (event: MessageEvent<ChunkWorkerMessage>): void => {
   const message = event.data;
   if (message.type === "init") {
     const { seed, content } = message;
+    const { sampleTerrain } = createTerrainSampler(seed, content);
     context = {
-      sampleTerrain: createTerrainSampler(seed, content).sampleTerrain,
+      sampleTerrain,
       materialBlender: createMaterialBlender(seed, content),
       scatterTrees: createTreeScatter(seed, content),
+      scatterBushes: createBushScatter(seed, content, sampleTerrain),
+      treeCover: createTreeCover(seed, content),
       grassKinds: content.grassKinds,
       seed,
       groundColors: null,

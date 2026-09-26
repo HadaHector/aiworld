@@ -101,6 +101,39 @@
           ],
         },
       },
+
+      // Stones along the water: a river washes its bed and its near bank down to the cobbles (the
+      // waterline is ~22 units from the centreline at a source, ~62 at a mouth), a lake or a pond its
+      // shore, showing through the water too, before the universal shore sand takes over further out.
+      {
+        id: "mountains-stream-stones",
+        material: "pebbles",
+        weight: {
+          noises: [{ name: "reach", type: "fbm", octaves: 2, frequency: 0.02, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
+          steps: [
+            { output: "gap", op: "input", name: "riverGap" },
+            // A ragged reach - wider here, narrower there - rather than a ruled strip.
+            { output: "reachRaw", op: "sample", noise: "reach" },
+            { output: "reachShift", op: "scale", input: "reachRaw", factor: 9 },
+            { output: "reach", op: "add", a: "gap", b: "reachShift" },
+            { output: "band", op: "mask", input: "reach", at: 42, off: 62 },
+            // A lake's shore and bed get the same stones, from where the shore starts down.
+            { output: "lakeFactor", op: "input", name: "lakeFactor" },
+            { output: "lake", op: "mask", input: "lakeFactor", at: 0.25, off: 0.02 },
+            // And so does any hollow inland where the ground just dips to the waterline and fills - no
+            // river, no lake cell, only low ground. Inland only: the coast keeps its sand.
+            { output: "height", op: "input", name: "height" },
+            { output: "low", op: "mask", input: "height", at: 0.6, off: 2.6 },
+            { output: "landmass", op: "input", name: "landmass" },
+            { output: "inland", op: "mask", input: "landmass", at: 0.95, off: 0.7 },
+            { output: "pond", op: "multiply", a: "low", b: "inland" },
+            { output: "lakeOrPond", op: "max", a: "lake", b: "pond" },
+            { output: "water", op: "max", a: "band", b: "lakeOrPond" },
+            // Past 1, to outweigh the universal shore sand on the same bank.
+            { output: "result", op: "scale", input: "water", factor: 1.5 },
+          ],
+        },
+      },
     ],
   },
   sky: {

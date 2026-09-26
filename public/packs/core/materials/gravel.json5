@@ -1,6 +1,59 @@
-// Lake-bed gravel for hills - see the hills-lake-gravel layer in biomes/hills.json5. Cooler and smaller-grained-reading
-// than rock/scree, since it's meant as a rounded lakebed material, not a boulder/rubble one.
+// Broken stone, packed tight: angular chips, each a low pyramid over its worley cell (the "edge"
+// distance peaks at a cell's point and falls to nothing at its border, so every cell becomes a
+// faceted stone) and each its own grey, with dark gaps between and grit in them.
 {
   name: "Gravel",
-  texture: { generator: "twoTone", base: [0.5, 0.5, 0.47], variation: [0.6, 0.6, 0.56], roughness: 0.85, bumpStrength: 2.45 },
+  texture: {
+    bumpStrength: 2.6,
+    pipeline: {
+      noises: [
+        { name: "chips", type: "worley", tileCycles: 120, amplitude: 1, mode: "edge" },
+        { name: "grit", type: "fbm", octaves: 2, tileCycles: 150, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+        { name: "broad", type: "fbm", octaves: 2, tileCycles: 4, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+        { name: "warpX", type: "fbm", octaves: 2, tileCycles: 30, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+        { name: "warpY", type: "fbm", octaves: 2, tileCycles: 30, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+      ],
+      steps: [
+        { output: "wx", op: "sample", noise: "warpX" },
+        { output: "wy", op: "sample", noise: "warpY" },
+        { output: "shiftX", op: "scale", input: "wx", factor: 2.5 },
+        { output: "shiftY", op: "scale", input: "wy", factor: 2.5 },
+        { output: "chipEdge", op: "sample", noise: "chips", offset: ["shiftX", "shiftY"] },
+        { output: "chipId", op: "sample", noise: "chips", mode: "cell", offset: ["shiftX", "shiftY"] },
+        { output: "chip", op: "mask", input: "chipEdge", at: 0.32, off: 0.02 },
+        { output: "gap", op: "mask", input: "chipEdge", at: 0.0, off: 0.05 },
+        { output: "gritRaw", op: "sample", noise: "grit" },
+        { output: "gritMask", op: "mask", input: "gritRaw", at: 1.2, off: -1.2 },
+        { output: "broadRaw", op: "sample", noise: "broad" },
+        { output: "broadMask", op: "mask", input: "broadRaw", at: 1.2, off: -1.2 },
+
+        {
+          output: "chipTone",
+          op: "colorRamp",
+          input: "chipId",
+          stops: [
+            { at: 0.0, color: [0.4, 0.4, 0.38] },
+            { at: 0.3, color: [0.56, 0.55, 0.52] },
+            { at: 0.5, color: [0.46, 0.43, 0.39] },
+            { at: 0.75, color: [0.62, 0.61, 0.58] },
+            { at: 1.0, color: [0.44, 0.45, 0.47] },
+          ],
+        },
+        // The faces towards the light read lighter: chips shade with their own height.
+        { output: "chipShade", op: "remap", input: "chip", inMin: 0, inMax: 1, outMin: 0.75, outMax: 1.08 },
+        { output: "broadShade", op: "remap", input: "broadMask", inMin: 0, inMax: 1, outMin: 0.88, outMax: 1.08 },
+        { output: "shade", op: "multiply", a: "chipShade", b: "broadShade" },
+        { output: "litChip", op: "multiply", a: "chipTone", b: "shade" },
+        { output: "gapColor", op: "color", value: [0.2, 0.19, 0.17] },
+        { output: "diffuse", op: "mix", a: "litChip", b: "gapColor", t: "gap" },
+
+        { output: "roughness", op: "constant", value: 0.86 },
+
+        { output: "chipRelief", op: "scale", input: "chip", factor: 0.75 },
+        { output: "gritRelief", op: "scale", input: "gritMask", factor: 0.12 },
+        { output: "height", op: "add", a: "chipRelief", b: "gritRelief" },
+      ],
+      outputs: { diffuse: "diffuse", roughness: "roughness", height: "height" },
+    },
+  },
 }

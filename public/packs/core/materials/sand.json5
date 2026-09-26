@@ -1,13 +1,20 @@
+// Wind-blown sand. The ripples are a saw wave - a long gentle windward slope, then the steep drop of
+// the lee side - bent by a slow noise so the crests wander, fork-like, rather than ruling straight
+// lines; they fade out in patches where the sand lies smooth. Tone runs through a ramp from
+// shadowed ochre to a bleached crest, with a faint iron cast in the hollows.
 {
   name: "Desert Sand",
   texture: {
-    bumpStrength: 1.6,
+    bumpStrength: 1.8,
     pipeline: {
       noises: [
         { name: "broad", type: "fbm", octaves: 2, tileCycles: 3, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
         { name: "mottle", type: "fbm", octaves: 3, tileCycles: 13, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
-        { name: "grain", type: "fbm", octaves: 2, tileCycles: 46, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
-        { name: "ripples", type: "billow", octaves: 2, tileCycles: 20, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+        { name: "grain", type: "fbm", octaves: 2, tileCycles: 90, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+        { name: "ripples", type: "wave", tileCycles: [3, 46], amplitude: 1, shape: "saw" },
+        { name: "bend", type: "fbm", octaves: 3, tileCycles: 2, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+        { name: "wobble", type: "fbm", octaves: 2, tileCycles: 9, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+        { name: "calm", type: "fbm", octaves: 2, tileCycles: 5, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
       ],
       steps: [
         { output: "broad", op: "sample", noise: "broad" },
@@ -16,17 +23,27 @@
         { output: "mottleMask", op: "mask", input: "mottle", at: 1.75, off: -1.75 },
         { output: "grain", op: "sample", noise: "grain" },
         { output: "grainMask", op: "mask", input: "grain", at: 1.5, off: -1.5 },
-        { output: "ripple", op: "sample", noise: "ripples" },
-        { output: "rippleMask", op: "mask", input: "ripple", at: 1.2, off: -0.6 },
 
-        // One combined tone, dominated by the big drifts, then run through a ramp. A ramp rather
-        // than a two-color mix because sand doesn't read as a blend between two tones - it runs
-        // shadowed red-ochre, through mid sand, to a near-white bleached crest.
+        // The ripples, bent: a slow bend moves whole crests, a faster wobble kinks them.
+        { output: "bendRaw", op: "sample", noise: "bend" },
+        { output: "bendPx", op: "scale", input: "bendRaw", factor: 60 },
+        { output: "wobbleRaw", op: "sample", noise: "wobble" },
+        { output: "wobblePx", op: "scale", input: "wobbleRaw", factor: 9 },
+        { output: "shiftY", op: "add", a: "bendPx", b: "wobblePx" },
+        { output: "still", op: "constant", value: 0 },
+        { output: "rippleRaw", op: "sample", noise: "ripples", offset: ["still", "shiftY"] },
+        { output: "ripple", op: "mask", input: "rippleRaw", at: 1, off: -1 },
+        { output: "calmRaw", op: "sample", noise: "calm" },
+        { output: "rippled", op: "mask", input: "calmRaw", at: 0.5, off: -0.6 },
+        { output: "rippleShown", op: "multiply", a: "ripple", b: "rippled" },
+
         { output: "toneBroad", op: "scale", input: "broadMask", factor: 0.5 },
-        { output: "toneMottle", op: "scale", input: "mottleMask", factor: 0.3 },
+        { output: "toneMottle", op: "scale", input: "mottleMask", factor: 0.25 },
         { output: "tonePart", op: "add", a: "toneBroad", b: "toneMottle" },
-        { output: "toneRipple", op: "scale", input: "rippleMask", factor: 0.2 },
-        { output: "tone", op: "add", a: "tonePart", b: "toneRipple" },
+        { output: "toneRipple", op: "scale", input: "rippleShown", factor: 0.22 },
+        { output: "toneRippled", op: "add", a: "tonePart", b: "toneRipple" },
+        { output: "toneGrain", op: "scale", input: "grainMask", factor: 0.08 },
+        { output: "tone", op: "add", a: "toneRippled", b: "toneGrain" },
         {
           output: "sandTone",
           op: "colorRamp",
@@ -39,21 +56,19 @@
             { at: 1.0, color: [0.97, 0.92, 0.76] },
           ],
         },
-        // A faint iron-stained cast in the darker hollows, so the ramp doesn't read as pure greyscale-to-tan.
         { output: "ironColor", op: "color", value: [0.62, 0.38, 0.22] },
         { output: "ironAmount", op: "invert", input: "tone" },
         { output: "ironBlend", op: "scale", input: "ironAmount", factor: 0.22 },
         { output: "diffuse", op: "mix", a: "sandTone", b: "ironColor", t: "ironBlend" },
 
-        // Loose crest sand is a touch less matte than the packed, damper trough sand.
         { output: "roughTrough", op: "constant", value: 0.72 },
         { output: "roughCrest", op: "constant", value: 0.58 },
         { output: "roughness", op: "mix", a: "roughTrough", b: "roughCrest", t: "tone" },
 
-        { output: "dunes", op: "scale", input: "broadMask", factor: 0.5 },
-        { output: "rippleRelief", op: "scale", input: "rippleMask", factor: 0.32 },
+        { output: "dunes", op: "scale", input: "broadMask", factor: 0.35 },
+        { output: "rippleRelief", op: "scale", input: "rippleShown", factor: 0.5 },
         { output: "dunedRipples", op: "add", a: "dunes", b: "rippleRelief" },
-        { output: "grainRelief", op: "scale", input: "grainMask", factor: 0.18 },
+        { output: "grainRelief", op: "scale", input: "grainMask", factor: 0.1 },
         { output: "height", op: "add", a: "dunedRipples", b: "grainRelief" },
       ],
       outputs: { diffuse: "diffuse", roughness: "roughness", height: "height" },

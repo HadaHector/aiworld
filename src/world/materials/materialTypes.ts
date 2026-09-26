@@ -28,6 +28,14 @@ export interface MaterialDef {
    * own weight instead: at 2, grass is gone wherever the road is half the blend or more.
    */
   clearsGrass: number;
+  /** The close-up pass (see materialLibrary.ts): the texture again, `scale` times smaller, deepening
+   *  its light and dark and its bumps by `strength` (0 turns it off). */
+  detail: MaterialDetail;
+}
+
+export interface MaterialDetail {
+  scale: number;
+  strength: number;
 }
 
 /**

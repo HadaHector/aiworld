@@ -23,6 +23,10 @@ export interface TreeField {
   dispose: () => void;
 }
 
+function meshesOf(model: TreeModel): Mesh[] {
+  return model.trunk ? [model.trunk, model.canopy] : [model.canopy];
+}
+
 /** Instances are allocated in powers of two from here, so a walk across the world does not
  *  reallocate on every chunk - only on the rare crossing of a power of two. */
 const MIN_CAPACITY = 512;
@@ -99,21 +103,20 @@ export async function createTreeField(
     // master mesh is in view whenever anything is, and asking whether its bounding box intersects
     // the frustum can only ever answer yes. Computing that box meant transforming every instance on
     // every chunk event (3.8ms at 6236 trees) to learn nothing.
-    model.trunk.alwaysSelectAsActiveMesh = true;
-    model.canopy.alwaysSelectAsActiveMesh = true;
+    const meshes = meshesOf(model);
+    for (const mesh of meshes) mesh.alwaysSelectAsActiveMesh = true;
     // Cast once, for the life of the app - unlike terrain, an archetype's master meshes never come
     // or go, only how many instances they hold. Receive too: a primitive tree's StandardMaterial
     // is shadowed by the scene light; a branching tree's shaders do it through the shared lighting.
-    shadowGenerator.addShadowCaster(model.trunk);
-    shadowGenerator.addShadowCaster(model.canopy);
-    model.trunk.receiveShadows = true;
-    model.canopy.receiveShadows = true;
+    for (const mesh of meshes) {
+      shadowGenerator.addShadowCaster(mesh);
+      mesh.receiveShadows = true;
+    }
     // Starts disabled - see flushSpecies's own setEnabled call for why. A species with nothing
     // loaded yet would otherwise render its bare master mesh once, at its own default transform:
     // the world origin, full size, untinted, because the per-instance colour buffer was never
     // bound either. A phantom tree at (0,0,0) for any species the player hadn't walked near yet.
-    model.trunk.setEnabled(false);
-    model.canopy.setEnabled(false);
+    for (const mesh of meshes) mesh.setEnabled(false);
     species.set(kind, {
       model,
       capacity: 0,
@@ -213,7 +216,7 @@ export async function createTreeField(
     // Babylon's own definition, whatever buffers it was handed earlier, and falls back to
     // rendering its master mesh plainly - the phantom this now avoids outright by disabling the
     // mesh instead of trying to make an empty instance buffer do that job.
-    trunk.setEnabled(globallyVisible && total > 0);
+    trunk?.setEnabled(globallyVisible && total > 0);
     canopy.setEnabled(globallyVisible && total > 0);
     if (total === 0 && !entry.published) return;
 
@@ -234,18 +237,18 @@ export async function createTreeField(
       // has to be the one that lands last.
       setInstanceBuffer(canopy, "color", entry.colours, 4);
       setInstanceBuffer(canopy, "matrix", entry.matrices, 16);
-      setInstanceBuffer(trunk, "matrix", entry.matrices, 16);
+      if (trunk) setInstanceBuffer(trunk, "matrix", entry.matrices, 16);
       entry.published = true;
     } else {
       canopy.thinInstanceBufferUpdated("color");
       canopy.thinInstanceBufferUpdated("matrix");
-      trunk.thinInstanceBufferUpdated("matrix");
+      trunk?.thinInstanceBufferUpdated("matrix");
     }
 
     // Held capacity means the buffers are longer than the number of trees in them, so the count
     // has to be stated rather than inferred from their length.
     canopy.thinInstanceCount = total;
-    trunk.thinInstanceCount = total;
+    if (trunk) trunk.thinInstanceCount = total;
   }
 
   function flush(): void {
@@ -277,8 +280,7 @@ export async function createTreeField(
       // Never enables a species with nothing loaded - see flushSpecies's own setEnabled call for
       // why that mesh has to stay disabled regardless of this toggle.
       for (const entry of species.values()) {
-        entry.model.trunk.setEnabled(visible && entry.count > 0);
-        entry.model.canopy.setEnabled(visible && entry.count > 0);
+        for (const mesh of meshesOf(entry.model)) mesh.setEnabled(visible && entry.count > 0);
       }
     },
     get treeCount() {
@@ -287,10 +289,10 @@ export async function createTreeField(
     dispose() {
       chunks.clear();
       for (const { model } of species.values()) {
-        shadowGenerator.removeShadowCaster(model.trunk);
-        shadowGenerator.removeShadowCaster(model.canopy);
-        model.trunk.dispose();
-        model.canopy.dispose();
+        for (const mesh of meshesOf(model)) {
+          shadowGenerator.removeShadowCaster(mesh);
+          mesh.dispose();
+        }
       }
       species.clear();
     },

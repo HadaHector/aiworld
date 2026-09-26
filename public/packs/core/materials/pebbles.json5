@@ -1,0 +1,99 @@
+// River and lake-shore stones: rounded cobbles and the pebbles between them, every stone its own
+// shade - grey, blue-grey, brown, the odd pale quartz - packed in silt that is darker where it is
+// still wet. Each stone is a dome around one worley point, its size and colour picked by that
+// point's own random value (the `cell` mode), and its outline wobbled by a warp so none is a circle.
+{
+  name: "Pebbles",
+  detail: { strength: 0.35 },
+  texture: {
+    bumpStrength: 2.6,
+    pipeline: {
+      noises: [
+        { name: "cobbles", type: "worley", tileCycles: 64, amplitude: 1, mode: "f1" },
+        { name: "pebbles", type: "worley", tileCycles: 150, amplitude: 1, mode: "f1" },
+        { name: "warpX", type: "fbm", octaves: 2, tileCycles: 24, amplitude: 1, persistence: 0.5, lacunarity: 2 },
+        { name: "warpY", type: "fbm", octaves: 2, tileCycles: 24, amplitude: 1, persistence: 0.5, lacunarity: 2 },
+        { name: "speckle", type: "fbm", octaves: 2, tileCycles: 90, amplitude: 1, persistence: 0.5, lacunarity: 2 },
+        { name: "wet", type: "fbm", octaves: 2, tileCycles: 4, amplitude: 1, persistence: 0.5, lacunarity: 2 },
+      ],
+      steps: [
+        { output: "wx", op: "sample", noise: "warpX" },
+        { output: "wy", op: "sample", noise: "warpY" },
+        { output: "shiftX", op: "scale", input: "wx", factor: 3 },
+        { output: "shiftY", op: "scale", input: "wy", factor: 3 },
+
+        // A cobble: its point's distance, pushed out by its own value so the stones come in sizes.
+        { output: "cobbleDist", op: "sample", noise: "cobbles", offset: ["shiftX", "shiftY"] },
+        { output: "cobbleId", op: "sample", noise: "cobbles", mode: "cell", offset: ["shiftX", "shiftY"] },
+        { output: "cobbleShrink", op: "scale", input: "cobbleId", factor: 0.22 },
+        { output: "cobbleReach", op: "add", a: "cobbleDist", b: "cobbleShrink" },
+        { output: "cobbleEdge", op: "mask", input: "cobbleReach", at: 0.08, off: 0.5 },
+        { output: "cobble", op: "power", input: "cobbleEdge", exponent: 0.5 },
+
+        { output: "pebbleDist", op: "sample", noise: "pebbles", offset: ["shiftX", "shiftY"] },
+        { output: "pebbleId", op: "sample", noise: "pebbles", mode: "cell", offset: ["shiftX", "shiftY"] },
+        { output: "pebbleShrink", op: "scale", input: "pebbleId", factor: 0.2 },
+        { output: "pebbleReach", op: "add", a: "pebbleDist", b: "pebbleShrink" },
+        { output: "pebbleEdge", op: "mask", input: "pebbleReach", at: 0.06, off: 0.46 },
+        { output: "pebbleDome", op: "power", input: "pebbleEdge", exponent: 0.5 },
+        // Pebbles lie lower, in the gaps the cobbles leave.
+        { output: "pebble", op: "scale", input: "pebbleDome", factor: 0.55 },
+        { output: "stone", op: "max", a: "cobble", b: "pebble" },
+
+        {
+          output: "cobbleTone",
+          op: "colorRamp",
+          input: "cobbleId",
+          stops: [
+            { at: 0.0, color: [0.36, 0.36, 0.35] },
+            { at: 0.2, color: [0.52, 0.5, 0.46] },
+            { at: 0.4, color: [0.42, 0.37, 0.31] },
+            { at: 0.55, color: [0.6, 0.55, 0.47] },
+            { at: 0.7, color: [0.33, 0.35, 0.39] },
+            { at: 0.88, color: [0.66, 0.64, 0.6] },
+            { at: 1.0, color: [0.47, 0.37, 0.28] },
+          ],
+        },
+        {
+          output: "pebbleTone",
+          op: "colorRamp",
+          input: "pebbleId",
+          stops: [
+            { at: 0.0, color: [0.46, 0.43, 0.38] },
+            { at: 0.3, color: [0.3, 0.3, 0.3] },
+            { at: 0.6, color: [0.56, 0.5, 0.42] },
+            { at: 1.0, color: [0.38, 0.39, 0.42] },
+          ],
+        },
+        // Whichever of the two stands higher here is the one seen.
+        { output: "cobbleAbove", op: "subtract", a: "cobble", b: "pebble" },
+        { output: "cobbleShows", op: "mask", input: "cobbleAbove", at: 0.02, off: -0.02 },
+        { output: "stoneTone", op: "mix", a: "pebbleTone", b: "cobbleTone", t: "cobbleShows" },
+        // Rounded: each stone darkens towards its rim, and is flecked.
+        { output: "rimShade", op: "remap", input: "stone", inMin: 0, inMax: 1, outMin: 0.7, outMax: 1.15 },
+        { output: "speckleRaw", op: "sample", noise: "speckle" },
+        { output: "fleck", op: "remap", input: "speckleRaw", inMin: -1, inMax: 1, outMin: 0.85, outMax: 1.12 },
+        { output: "stoneShade", op: "multiply", a: "rimShade", b: "fleck" },
+        { output: "shadedStone", op: "multiply", a: "stoneTone", b: "stoneShade" },
+
+        { output: "silt", op: "color", value: [0.38, 0.34, 0.27] },
+        { output: "stoneCover", op: "mask", input: "stone", at: 0.12, off: 0.02 },
+        { output: "dry", op: "mix", a: "silt", b: "shadedStone", t: "stoneCover" },
+        { output: "wetRaw", op: "sample", noise: "wet" },
+        { output: "wetMask", op: "mask", input: "wetRaw", at: 0.5, off: -0.2 },
+        { output: "wetShade", op: "remap", input: "wetMask", inMin: 0, inMax: 1, outMin: 1, outMax: 0.8 },
+        { output: "diffuse", op: "multiply", a: "dry", b: "wetShade" },
+
+        { output: "roughDry", op: "constant", value: 0.78 },
+        { output: "roughWet", op: "constant", value: 0.3 },
+        { output: "roughness", op: "mix", a: "roughDry", b: "roughWet", t: "wetMask" },
+
+        { output: "stoneRelief", op: "scale", input: "stone", factor: 0.9 },
+        { output: "siltRelief", op: "scale", input: "fleck", factor: 0.08 },
+        { output: "height", op: "add", a: "stoneRelief", b: "siltRelief" },
+      ],
+      outputs: { diffuse: "diffuse", roughness: "roughness", height: "height" },
+    },
+  },
+  grass: [{ kind: "tuft", density: 0.25, color: [0.36, 0.44, 0.22] }],
+}

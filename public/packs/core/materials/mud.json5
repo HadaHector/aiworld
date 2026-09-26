@@ -45,5 +45,4 @@
       outputs: { diffuse: "diffuse", roughness: "roughness", height: "height" },
     },
   },
-  grass: [{ kind: "dry", density: 0.30, color: [0.42, 0.44, 0.24] }],
 }

@@ -15,12 +15,12 @@ import {
   type BaseTexture,
   type Scene,
 } from "@babylonjs/core";
-import type { BranchingTree, PrimitiveTree, TreeCrown, TreeKindDef, TreeTrunk } from "./foliageConfig";
+import type { BranchingTree, BushShape, PrimitiveTree, TreeCrown, TreeKindDef, TreeTrunk } from "./foliageConfig";
 import type { ColorTuple } from "../terrain/pipeline/pipelineTypes";
 import { LIT_SHADING_SAMPLERS, LIT_SHADING_UNIFORMS, type LitShading } from "../materials/litShading";
 import { deriveSeed } from "../rng";
-import { generateTree, type TreeDetail, type TreeGeometry } from "./treeGenerator";
-import { FOLIAGE_TEXTURE_SIZE, bakeFoliage } from "./treeTextures";
+import { generateBush, generateTree, type TreeDetail, type TreeGeometry } from "./treeGenerator";
+import { FOLIAGE_TEXTURE_SIZE, bakeBushFoliage, bakeFoliage } from "./treeTextures";
 import { TEXTURE_RESOLUTION } from "../materials/textureGen";
 import { BARK_FRAGMENT_SHADER, BARK_VERTEX_SHADER, LEAF_FRAGMENT_SHADER, LEAF_VERTEX_SHADER } from "./treeShaders";
 
@@ -30,7 +30,8 @@ import { BARK_FRAGMENT_SHADER, BARK_VERTEX_SHADER, LEAF_FRAGMENT_SHADER, LEAF_VE
  * spin about Y - and both meshes are driven by the same matrix. See treeField.ts.
  */
 export interface TreeModel {
-  trunk: Mesh;
+  /** None for a bush, which is all leaves. */
+  trunk?: Mesh;
   canopy: Mesh;
   /** A cheaper model of the same tree for distant chunks, if the kind has one. */
   far?: TreeModel;
@@ -190,6 +191,40 @@ export interface BakedBark {
   normal: Uint8Array;
 }
 
+/**
+ * The material every leaf card of one kind is drawn with: its atlas, cut out, lit as a crown and
+ * swaying in the wind - more the higher a card is up to `swayHeight`, so a plant's base stays put.
+ */
+function createLeafMaterial(scene: Scene, id: string, atlasPixels: Uint8Array, swayHeight: number, litShading: LitShading): LeafMaterial {
+  const atlas = RawTexture.CreateRGBATexture(atlasPixels, FOLIAGE_TEXTURE_SIZE, FOLIAGE_TEXTURE_SIZE, scene, true, false, Texture.TRILINEAR_SAMPLINGMODE);
+  atlas.wrapU = Texture.CLAMP_ADDRESSMODE;
+  atlas.wrapV = Texture.CLAMP_ADDRESSMODE;
+  atlas.hasAlpha = true;
+
+  Effect.ShadersStore["treeLeafVertexShader"] = LEAF_VERTEX_SHADER;
+  Effect.ShadersStore["treeLeafFragmentShader"] = LEAF_FRAGMENT_SHADER;
+  const leaves = new LeafMaterial(`tree_${id}_leaves`, scene, "treeLeaf", {
+    attributes: ["position", "normal", "uv"],
+    uniforms: ["world", "view", "viewProjection", "time", "windDirection", "treeHeight", ...LIT_SHADING_UNIFORMS],
+    samplers: ["leafAtlas", ...LIT_SHADING_SAMPLERS],
+    needAlphaTesting: true,
+  });
+  leaves.alphaTexture = atlas;
+  leaves.setTexture("leafAtlas", atlas);
+  leaves.setVector2("windDirection", WIND_DIRECTION);
+  leaves.setFloat("treeHeight", swayHeight);
+  leaves.backFaceCulling = false;
+  litShading.register(leaves);
+  const start = performance.now();
+  scene.onBeforeRenderObservable.add(() => leaves.setFloat("time", (performance.now() - start) / 1000));
+  return leaves;
+}
+
+/** A seed of a kind's own, from its id, so each kind's variants and atlas are its own. */
+function kindSeed(seed: number, id: string): number {
+  return deriveSeed(seed, [...id].reduce((h, c) => (Math.imul(h, 31) + c.charCodeAt(0)) | 0, 7));
+}
+
 function createBranchingMaterials(
   scene: Scene,
   id: string,
@@ -204,15 +239,8 @@ function createBranchingMaterials(
     texture.wrapU = Texture.WRAP_ADDRESSMODE;
     texture.wrapV = Texture.WRAP_ADDRESSMODE;
   }
-  const atlas = RawTexture.CreateRGBATexture(bakeFoliage(deriveSeed(seed, 0x1eaf), shape.foliage), FOLIAGE_TEXTURE_SIZE, FOLIAGE_TEXTURE_SIZE, scene, true, false, Texture.TRILINEAR_SAMPLINGMODE);
-  atlas.wrapU = Texture.CLAMP_ADDRESSMODE;
-  atlas.wrapV = Texture.CLAMP_ADDRESSMODE;
-  atlas.hasAlpha = true;
-
   Effect.ShadersStore["treeBarkVertexShader"] = BARK_VERTEX_SHADER;
   Effect.ShadersStore["treeBarkFragmentShader"] = BARK_FRAGMENT_SHADER;
-  Effect.ShadersStore["treeLeafVertexShader"] = LEAF_VERTEX_SHADER;
-  Effect.ShadersStore["treeLeafFragmentShader"] = LEAF_FRAGMENT_SHADER;
 
   const bark = new ShaderMaterial(`tree_${id}_bark`, scene, "treeBark", {
     attributes: ["position", "normal", "uv", "axis"],
@@ -226,21 +254,7 @@ function createBranchingMaterials(
   bark.backFaceCulling = false;
   litShading.register(bark);
 
-  const leaves = new LeafMaterial(`tree_${id}_leaves`, scene, "treeLeaf", {
-    attributes: ["position", "normal", "uv"],
-    uniforms: ["world", "view", "viewProjection", "time", "windDirection", "treeHeight", ...LIT_SHADING_UNIFORMS],
-    samplers: ["leafAtlas", ...LIT_SHADING_SAMPLERS],
-    needAlphaTesting: true,
-  });
-  leaves.alphaTexture = atlas;
-  leaves.setTexture("leafAtlas", atlas);
-  leaves.setVector2("windDirection", WIND_DIRECTION);
-  leaves.setFloat("treeHeight", shape.trunk.height * 1.8);
-  leaves.backFaceCulling = false;
-  litShading.register(leaves);
-  const start = performance.now();
-  scene.onBeforeRenderObservable.add(() => leaves.setFloat("time", (performance.now() - start) / 1000));
-
+  const leaves = createLeafMaterial(scene, id, bakeFoliage(deriveSeed(seed, 0x1eaf), shape.foliage), shape.trunk.height * 1.8, litShading);
   return { bark, leaves };
 }
 
@@ -252,8 +266,8 @@ function createBranchingModels(
   bakedBark: BakedBark,
   litShading: LitShading,
 ): TreeModel[] {
-  const kindSeed = deriveSeed(seed, [...def.id].reduce((h, c) => (Math.imul(h, 31) + c.charCodeAt(0)) | 0, 7));
-  const materials = createBranchingMaterials(scene, def.id, shape, kindSeed, bakedBark, litShading);
+  const ownSeed = kindSeed(seed, def.id);
+  const materials = createBranchingMaterials(scene, def.id, shape, ownSeed, bakedBark, litShading);
   const tintDark = color3(def.tint[0]);
   const tintLight = color3(def.tint[1]);
 
@@ -285,18 +299,45 @@ function createBranchingModels(
 
   const models: TreeModel[] = [];
   for (let variant = 0; variant < shape.variants; variant++) {
-    const variantSeed = deriveSeed(kindSeed, variant + 1);
+    const variantSeed = deriveSeed(ownSeed, variant + 1);
     const detailed = (detail: TreeDetail): TreeModel => build(generateTree(shape, variantSeed, detail), `tree_${def.id}_${variant}_${detail}`);
     models.push({ ...detailed("near"), far: detailed("far") });
   }
   return models;
 }
 
+/** One leaf-only model per variant, all sharing the kind's atlas and material. */
+function createBushModels(scene: Scene, def: TreeKindDef, shape: BushShape, seed: number, litShading: LitShading): TreeModel[] {
+  const ownSeed = kindSeed(seed, def.id);
+  // Swaying to a fraction of what a tree's crown does: a bush is stiff, and low.
+  const leaves = createLeafMaterial(scene, def.id, bakeBushFoliage(deriveSeed(ownSeed, 0x1eaf), shape.foliage), shape.height[1] * 2.2, litShading);
+  const tintDark = color3(def.tint[0]);
+  const tintLight = color3(def.tint[1]);
+
+  const models: TreeModel[] = [];
+  for (let variant = 0; variant < shape.variants; variant++) {
+    const geometry = generateBush(shape, deriveSeed(ownSeed, variant + 1));
+    const canopy = new Mesh(`bush_${def.id}_${variant}`, scene);
+    const data = new VertexData();
+    data.positions = geometry.leaves.positions;
+    data.normals = geometry.leaves.normals;
+    data.uvs = geometry.leaves.uvs;
+    data.indices = geometry.leaves.indices;
+    data.applyToMesh(canopy);
+    canopy.material = leaves;
+    const reach = shape.width[1] * 0.7;
+    canopy.setBoundingInfo(new BoundingInfo(new Vector3(-reach, -1, -reach), new Vector3(reach, geometry.height + 1, reach)));
+    models.push({ canopy, tintDark, tintLight });
+  }
+  return models;
+}
+
 /**
  * Every model a tree kind is drawn with: one for a primitive tree, one per variant for a branching
- * one, each a different tree generated from the same description.
+ * one or a bush, each a different plant generated from the same description.
  */
 export function createTreeModels(scene: Scene, def: TreeKindDef, seed: number, bakedBark: BakedBark | undefined, litShading: LitShading): TreeModel[] {
+  if (def.shape.model === "bush") return createBushModels(scene, def, def.shape, seed, litShading);
   if (def.shape.model === "branching") {
     if (!bakedBark) throw new Error(`Tree kind "${def.id}" has no baked bark`);
     return createBranchingModels(scene, def, def.shape, seed, bakedBark, litShading);

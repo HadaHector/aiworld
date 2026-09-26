@@ -1,0 +1,134 @@
+// The ground under a wood: dark humus under a litter of fallen leaves - two sizes, lying in two
+// directions, each leaf its own shade from rust to tan - with twigs across them and cushions of
+// moss here and there. Laid wherever the trees stand thick enough (see the biomes' `treeCover`
+// rules), so a wood's floor follows the wood and its clearings stay meadow.
+{
+  name: "Forest Floor",
+  texture: {
+    bumpStrength: 1.6,
+    pipeline: {
+      noises: [
+        { name: "humus", type: "fbm", octaves: 3, tileCycles: 20, amplitude: 1, persistence: 0.5, lacunarity: 2 },
+        { name: "drifts", type: "fbm", octaves: 2, tileCycles: 4, amplitude: 1, persistence: 0.5, lacunarity: 2 },
+        { name: "bigLeaves", type: "worley", tileCycles: 110, stretch: [1, 1.7], amplitude: 1, mode: "f1" },
+        { name: "smallLeaves", type: "worley", tileCycles: 180, stretch: [1.7, 1], amplitude: 1, mode: "f1" },
+        { name: "warpX", type: "fbm", octaves: 2, tileCycles: 30, amplitude: 1, persistence: 0.5, lacunarity: 2 },
+        { name: "warpY", type: "fbm", octaves: 2, tileCycles: 30, amplitude: 1, persistence: 0.5, lacunarity: 2 },
+        { name: "twigsAlong", type: "ridged", octaves: 1, tileCycles: 10, stretch: [1, 7], amplitude: 1, persistence: 0.5, lacunarity: 2 },
+        { name: "twigsAcross", type: "ridged", octaves: 1, tileCycles: 10, stretch: [7, 1], amplitude: 1, persistence: 0.5, lacunarity: 2 },
+        { name: "twigBreaks", type: "fbm", octaves: 2, tileCycles: 28, amplitude: 1, persistence: 0.5, lacunarity: 2 },
+        { name: "moss", type: "fbm", octaves: 4, tileCycles: 9, amplitude: 1, persistence: 0.55, lacunarity: 2 },
+        { name: "mossGrain", type: "fbm", octaves: 2, tileCycles: 120, amplitude: 1, persistence: 0.5, lacunarity: 2 },
+      ],
+      steps: [
+        { output: "wx", op: "sample", noise: "warpX" },
+        { output: "wy", op: "sample", noise: "warpY" },
+        { output: "shiftX", op: "scale", input: "wx", factor: 4 },
+        { output: "shiftY", op: "scale", input: "wy", factor: 4 },
+
+        // --- humus ---
+        { output: "humusRaw", op: "sample", noise: "humus" },
+        { output: "humusMask", op: "mask", input: "humusRaw", at: 1.4, off: -1.4 },
+        { output: "humusDark", op: "color", value: [0.11, 0.08, 0.05] },
+        { output: "humusLight", op: "color", value: [0.22, 0.16, 0.1] },
+        { output: "humus", op: "mix", a: "humusDark", b: "humusLight", t: "humusMask" },
+
+        // --- leaves: domes around worley points, sized and coloured by each point's own value ---
+        { output: "bigDist", op: "sample", noise: "bigLeaves", offset: ["shiftX", "shiftY"] },
+        { output: "bigId", op: "sample", noise: "bigLeaves", mode: "cell", offset: ["shiftX", "shiftY"] },
+        { output: "bigShrink", op: "scale", input: "bigId", factor: 0.2 },
+        { output: "bigReach", op: "add", a: "bigDist", b: "bigShrink" },
+        { output: "bigEdge", op: "mask", input: "bigReach", at: 0.12, off: 0.44 },
+        { output: "bigLeaf", op: "power", input: "bigEdge", exponent: 0.6 },
+        { output: "smallDist", op: "sample", noise: "smallLeaves", offset: ["shiftX", "shiftY"] },
+        { output: "smallId", op: "sample", noise: "smallLeaves", mode: "cell", offset: ["shiftX", "shiftY"] },
+        { output: "smallShrink", op: "scale", input: "smallId", factor: 0.2 },
+        { output: "smallReach", op: "add", a: "smallDist", b: "smallShrink" },
+        { output: "smallEdge", op: "mask", input: "smallReach", at: 0.1, off: 0.42 },
+        { output: "smallLeaf", op: "power", input: "smallEdge", exponent: 0.6 },
+        {
+          output: "bigTone",
+          op: "colorRamp",
+          input: "bigId",
+          stops: [
+            { at: 0.0, color: [0.23, 0.16, 0.1] },
+            { at: 0.25, color: [0.32, 0.25, 0.15] },
+            { at: 0.5, color: [0.21, 0.17, 0.11] },
+            { at: 0.75, color: [0.36, 0.31, 0.19] },
+            { at: 1.0, color: [0.28, 0.2, 0.12] },
+          ],
+        },
+        {
+          output: "smallTone",
+          op: "colorRamp",
+          input: "smallId",
+          stops: [
+            { at: 0.0, color: [0.18, 0.14, 0.09] },
+            { at: 0.5, color: [0.28, 0.23, 0.14] },
+            { at: 1.0, color: [0.23, 0.18, 0.11] },
+          ],
+        },
+        // The litter drifts: thick in places, thin enough elsewhere for the humus to show.
+        { output: "driftRaw", op: "sample", noise: "drifts" },
+        { output: "litter", op: "mask", input: "driftRaw", at: 0.0, off: -0.9 },
+        { output: "smallCover", op: "multiply", a: "smallLeaf", b: "litter" },
+        { output: "bigCover", op: "multiply", a: "bigLeaf", b: "litter" },
+        { output: "smallShown", op: "mask", input: "smallCover", at: 0.18, off: 0.04 },
+        { output: "bigShown", op: "mask", input: "bigCover", at: 0.18, off: 0.04 },
+        { output: "smallShade", op: "remap", input: "smallLeaf", inMin: 0, inMax: 1, outMin: 0.7, outMax: 1.05 },
+        { output: "smallLit", op: "multiply", a: "smallTone", b: "smallShade" },
+        { output: "bigShade", op: "remap", input: "bigLeaf", inMin: 0, inMax: 1, outMin: 0.7, outMax: 1.05 },
+        { output: "bigLit", op: "multiply", a: "bigTone", b: "bigShade" },
+        { output: "underLeaves", op: "mix", a: "humus", b: "smallLit", t: "smallShown" },
+        { output: "leaves", op: "mix", a: "underLeaves", b: "bigLit", t: "bigShown" },
+
+        // --- twigs: the crest lines of stretched ridged noise, broken into lengths ---
+        { output: "alongCrest", op: "sample", noise: "twigsAlong", offset: ["shiftX", "shiftY"] },
+        { output: "acrossCrest", op: "sample", noise: "twigsAcross", offset: ["shiftX", "shiftY"] },
+        { output: "crest", op: "max", a: "alongCrest", b: "acrossCrest" },
+        { output: "twigLine", op: "mask", input: "crest", at: 0.985, off: 0.95 },
+        { output: "breaksRaw", op: "sample", noise: "twigBreaks" },
+        { output: "twigSpan", op: "mask", input: "breaksRaw", at: 0.35, off: 0.1 },
+        { output: "twig", op: "multiply", a: "twigLine", b: "twigSpan" },
+        { output: "twigColor", op: "color", value: [0.2, 0.15, 0.1] },
+        { output: "twigged", op: "mix", a: "leaves", b: "twigColor", t: "twig" },
+
+        // --- moss cushions over all of it ---
+        { output: "mossRaw", op: "sample", noise: "moss" },
+        { output: "mossGrainRaw", op: "sample", noise: "mossGrain" },
+        { output: "mossFuzz", op: "scale", input: "mossGrainRaw", factor: 0.25 },
+        { output: "mossEdged", op: "add", a: "mossRaw", b: "mossFuzz" },
+        { output: "mossMask", op: "mask", input: "mossEdged", at: 0.62, off: 0.46 },
+        {
+          output: "mossTone",
+          op: "colorRamp",
+          input: "humusMask",
+          stops: [
+            { at: 0.0, color: [0.16, 0.22, 0.09] },
+            { at: 1.0, color: [0.27, 0.34, 0.14] },
+          ],
+        },
+        { output: "diffuse", op: "mix", a: "twigged", b: "mossTone", t: "mossMask" },
+
+        { output: "roughness", op: "constant", value: 0.86 },
+
+        { output: "humusRelief", op: "scale", input: "humusMask", factor: 0.2 },
+        { output: "smallRelief", op: "scale", input: "smallCover", factor: 0.3 },
+        { output: "bigRelief", op: "scale", input: "bigCover", factor: 0.45 },
+        { output: "leafRelief", op: "max", a: "smallRelief", b: "bigRelief" },
+        { output: "litterHeight", op: "add", a: "humusRelief", b: "leafRelief" },
+        { output: "twigRelief", op: "scale", input: "twig", factor: 0.3 },
+        { output: "withTwigs", op: "add", a: "litterHeight", b: "twigRelief" },
+        { output: "mossRelief", op: "scale", input: "mossMask", factor: 0.35 },
+        { output: "heightRaw", op: "add", a: "withTwigs", b: "mossRelief" },
+        { output: "height", op: "clamp", input: "heightRaw", min: 0, max: 1 },
+      ],
+      outputs: { diffuse: "diffuse", roughness: "roughness", height: "height" },
+    },
+  },
+  // Shade-tolerant tufts, thinly: a wood floor is mostly bare of grass, and has no meadow flowers.
+  grass: [
+    { kind: "tuft", density: 0.35, color: [0.3, 0.4, 0.16] },
+    { kind: "meadow", density: 0.3, color: [0.3, 0.42, 0.18] },
+  ],
+}

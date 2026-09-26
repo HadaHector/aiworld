@@ -72,7 +72,28 @@ function drawBlades(pixels: Uint8Array, layer: number, def: GrassKindDef, seed: 
       }
     }
 
-    if (flowerHeads && b < flowerHeads.count) {
+    if (flowerHeads && flowerHeads.shape === "spike" && b < flowerHeads.count) {
+      // A cattail: a long, rounded head in petal colour a little below the tip, so the bare stem
+      // carries on above it; lit on one side, flecked, darker at its ends.
+      const half = flowerHeads.radius * (0.8 + rng() * 0.4);
+      const top = height * 0.9;
+      const bottom = top - half * 7;
+      for (let y = Math.floor(bottom - half); y <= Math.ceil(top + half); y++) {
+        const along = (y - bottom) / (top - bottom);
+        const t = Math.min(1, Math.max(0, y / height));
+        const cx = baseX + tipShift * Math.pow(t, 1.6);
+        // Rounded ends: the half-width eases in over the first and last bit of the head.
+        const end = along < 0 ? 1 + along * ((top - bottom) / half) : along > 1 ? 1 - (along - 1) * ((top - bottom) / half) : 1;
+        const w = half * Math.sqrt(Math.max(0, Math.min(1, end)) * (2 - Math.min(1, end)));
+        if (w <= 0) continue;
+        for (let px = Math.floor(cx - w - 1); px <= Math.ceil(cx + w + 1); px++) {
+          const across = (px + 0.5 - cx) / Math.max(0.5, w);
+          const cover = Math.min(1, Math.max(0, w + 0.5 - Math.abs(px + 0.5 - cx)));
+          const lum = (0.62 + 0.3 * (0.5 - across * 0.5)) * (0.9 + rng() * 0.15) * (0.8 + 0.2 * Math.min(1, end));
+          plot(px, y, cover, lum, 1);
+        }
+      }
+    } else if (flowerHeads && b < flowerHeads.count) {
       // Five petals round a darker centre, all in petal colour; the head sits just below the stem's
       // tip so the stem does not poke out through it.
       const radius = flowerHeads.radius * (0.75 + rng() * 0.5);

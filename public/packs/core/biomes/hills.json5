@@ -119,6 +119,116 @@
           ],
         },
       },
+
+      // Under the trees, the ground is the wood's own: leaf litter, humus and twigs rather than
+      // meadow. treeCover is the tree scatter's own density here, so the floor follows the stands
+      // and their clearings stay grass.
+      {
+        id: "hills-forest-floor",
+        material: "forestFloor",
+        weight: {
+          noises: [],
+          steps: [
+            { output: "cover", op: "input", name: "treeCover" },
+            { output: "result", op: "mask", input: "cover", at: 0.9, off: 0.62 },
+          ],
+        },
+      },
+
+      // The wood's edge: leaves over grass, in the band of cover between meadow and forest floor,
+      // rising as the meadow's share falls and falling as the floor's rises.
+      {
+        id: "hills-leafy-grass",
+        material: "leafyGrass",
+        weight: {
+          noises: [],
+          steps: [
+            { output: "cover", op: "input", name: "treeCover" },
+            { output: "rising", op: "mask", input: "cover", at: 0.52, off: 0.18 },
+            { output: "falling", op: "mask", input: "cover", at: 0.68, off: 0.94 },
+            { output: "result", op: "multiply", a: "rising", b: "falling" },
+          ],
+        },
+      },
+
+      // Stones along the water: a river washes its bed and its near bank down to the cobbles (the
+      // waterline is ~22 units from the centreline at a source, ~62 at a mouth), a lake or a pond its
+      // shore, showing through the water too, before the universal shore sand takes over further out.
+      {
+        id: "hills-stream-stones",
+        material: "pebbles",
+        weight: {
+          noises: [{ name: "reach", type: "fbm", octaves: 2, frequency: 0.02, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
+          steps: [
+            { output: "gap", op: "input", name: "riverGap" },
+            // A ragged reach - wider here, narrower there - rather than a ruled strip.
+            { output: "reachRaw", op: "sample", noise: "reach" },
+            { output: "reachShift", op: "scale", input: "reachRaw", factor: 9 },
+            { output: "reach", op: "add", a: "gap", b: "reachShift" },
+            { output: "band", op: "mask", input: "reach", at: 42, off: 60 },
+            // A lake's shore and bed get the same stones, from where the shore starts down.
+            { output: "lakeFactor", op: "input", name: "lakeFactor" },
+            { output: "lake", op: "mask", input: "lakeFactor", at: 0.25, off: 0.02 },
+            // And so does any hollow inland where the ground just dips to the waterline and fills - no
+            // river, no lake cell, only low ground. Inland only: the coast keeps its sand.
+            { output: "height", op: "input", name: "height" },
+            { output: "low", op: "mask", input: "height", at: 0.6, off: 2.6 },
+            { output: "landmass", op: "input", name: "landmass" },
+            { output: "inland", op: "mask", input: "landmass", at: 0.95, off: 0.7 },
+            { output: "pond", op: "multiply", a: "low", b: "inland" },
+            { output: "lakeOrPond", op: "max", a: "lake", b: "pond" },
+            { output: "water", op: "max", a: "band", b: "lakeOrPond" },
+            // Past 1, to outweigh the universal shore sand on the same bank.
+            { output: "result", op: "scale", input: "water", factor: 1.5 },
+          ],
+        },
+      },
+
+      // Drifts of wildflowers: patches of open, gentle ground on the sunny side of a hill.
+      {
+        id: "hills-wildflowers",
+        material: "wildflowers",
+        weight: {
+          noises: [{ name: "drift", type: "fbm", octaves: 3, frequency: 0.006, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
+          steps: [
+            { output: "driftRaw", op: "sample", noise: "drift" },
+            { output: "drift", op: "mask", input: "driftRaw", at: 0.4, off: 0.05 },
+            { output: "slope", op: "input", name: "slope" },
+            { output: "gentle", op: "mask", input: "slope", at: 0.96, off: 0.86 },
+            { output: "cover", op: "input", name: "treeCover" },
+            { output: "open", op: "mask", input: "cover", at: 0.1, off: 0.4 },
+            { output: "openDrift", op: "multiply", a: "drift", b: "open" },
+            { output: "facing", op: "input", name: "slopeFacing" },
+            { output: "south", op: "mask", input: "facing", at: -0.15, off: 0.05 },
+            { output: "gentleHere", op: "multiply", a: "gentle", b: "south" },
+            { output: "result", op: "multiply", a: "openDrift", b: "gentleHere" },
+          ],
+        },
+      },
+
+      // Reed beds: patches of bulrush in the shallows and at the waterline of any inland water -
+      // pond, lake or river alike, since the band is only the ground's height about the water.
+      // Weighted to take the waterside stones' place where a patch falls.
+      {
+        id: "hills-reedbed",
+        material: "reedbed",
+        weight: {
+          noises: [{ name: "patch", type: "fbm", octaves: 3, frequency: 0.03, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
+          steps: [
+            { output: "height", op: "input", name: "height" },
+            { output: "wadeable", op: "mask", input: "height", at: -0.2, off: -1.1 },
+            { output: "nearWater", op: "mask", input: "height", at: 0.5, off: 1.5 },
+            { output: "band", op: "multiply", a: "wadeable", b: "nearWater" },
+            { output: "landmass", op: "input", name: "landmass" },
+            { output: "inland", op: "mask", input: "landmass", at: 0.95, off: 0.7 },
+            { output: "patchRaw", op: "sample", noise: "patch" },
+            { output: "patch", op: "mask", input: "patchRaw", at: 0.35, off: 0.05 },
+            { output: "inlandBand", op: "multiply", a: "band", b: "inland" },
+            { output: "patchBand", op: "multiply", a: "inlandBand", b: "patch" },
+            { output: "result", op: "scale", input: "patchBand", factor: 4 },
+          ],
+        },
+      },
     ],
   },
   sky: {

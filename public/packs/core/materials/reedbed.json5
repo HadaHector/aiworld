@@ -1,0 +1,63 @@
+// A reed bed: soft, wet silt at the water's edge, dark and glossy, strewn with the straw of last
+// year's reeds lying every which way. It grows the bulrush, and is laid in patches along the
+// shallows of ponds, lakes and rivers (see the biomes' reedbed layers).
+{
+  name: "Reed Bed",
+  detail: { strength: 0.4 },
+  texture: {
+    bumpStrength: 1.2,
+    pipeline: {
+      noises: [
+        { name: "silt", type: "fbm", octaves: 3, tileCycles: 14, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+        { name: "wet", type: "fbm", octaves: 2, tileCycles: 5, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+        { name: "strawAlong", type: "ridged", octaves: 1, tileCycles: 22, stretch: [1, 9], amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+        { name: "strawAcross", type: "ridged", octaves: 1, tileCycles: 22, stretch: [9, 1], amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+        { name: "warpX", type: "fbm", octaves: 2, tileCycles: 18, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+        { name: "warpY", type: "fbm", octaves: 2, tileCycles: 18, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+        { name: "breaks", type: "fbm", octaves: 2, tileCycles: 40, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+      ],
+      steps: [
+        { output: "siltRaw", op: "sample", noise: "silt" },
+        { output: "siltMask", op: "mask", input: "siltRaw", at: 1.5, off: -1.5 },
+        { output: "wetRaw", op: "sample", noise: "wet" },
+        { output: "wetMask", op: "mask", input: "wetRaw", at: 0.6, off: -0.4 },
+        { output: "wx", op: "sample", noise: "warpX" },
+        { output: "wy", op: "sample", noise: "warpY" },
+        { output: "shiftX", op: "scale", input: "wx", factor: 12 },
+        { output: "shiftY", op: "scale", input: "wy", factor: 12 },
+        { output: "alongCrest", op: "sample", noise: "strawAlong", offset: ["shiftX", "shiftY"] },
+        { output: "acrossCrest", op: "sample", noise: "strawAcross", offset: ["shiftX", "shiftY"] },
+        { output: "crest", op: "max", a: "alongCrest", b: "acrossCrest" },
+        { output: "strawLine", op: "mask", input: "crest", at: 0.975, off: 0.9 },
+        { output: "breaksRaw", op: "sample", noise: "breaks" },
+        { output: "strawSpan", op: "mask", input: "breaksRaw", at: 0.2, off: -0.2 },
+        { output: "straw", op: "multiply", a: "strawLine", b: "strawSpan" },
+
+        { output: "siltDark", op: "color", value: [0.13, 0.12, 0.08] },
+        { output: "siltLight", op: "color", value: [0.25, 0.23, 0.15] },
+        { output: "silt", op: "mix", a: "siltDark", b: "siltLight", t: "siltMask" },
+        { output: "wetShade", op: "remap", input: "wetMask", inMin: 0, inMax: 1, outMin: 1, outMax: 0.72 },
+        { output: "wetSilt", op: "multiply", a: "silt", b: "wetShade" },
+        { output: "strawColor", op: "color", value: [0.52, 0.45, 0.28] },
+        { output: "strawShade", op: "remap", input: "siltMask", inMin: 0, inMax: 1, outMin: 0.75, outMax: 1.05 },
+        { output: "strawLit", op: "multiply", a: "strawColor", b: "strawShade" },
+        { output: "diffuse", op: "mix", a: "wetSilt", b: "strawLit", t: "straw" },
+
+        { output: "roughDry", op: "constant", value: 0.7 },
+        { output: "roughWet", op: "constant", value: 0.25 },
+        { output: "roughMud", op: "mix", a: "roughDry", b: "roughWet", t: "wetMask" },
+        { output: "roughStraw", op: "constant", value: 0.8 },
+        { output: "roughness", op: "mix", a: "roughMud", b: "roughStraw", t: "straw" },
+
+        { output: "siltRelief", op: "scale", input: "siltMask", factor: 0.3 },
+        { output: "strawRelief", op: "scale", input: "straw", factor: 0.35 },
+        { output: "height", op: "add", a: "siltRelief", b: "strawRelief" },
+      ],
+      outputs: { diffuse: "diffuse", roughness: "roughness", height: "height" },
+    },
+  },
+  grass: [
+    { kind: "bulrush", density: 3.0, color: [0.36, 0.46, 0.2] },
+    { kind: "tall", density: 0.25, color: [0.44, 0.56, 0.26] },
+  ],
+}

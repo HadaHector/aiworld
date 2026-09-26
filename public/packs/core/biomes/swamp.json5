@@ -37,6 +37,30 @@
           ],
         },
       },
+
+      // Reed beds: patches of bulrush in the shallows and at the waterline of any inland water -
+      // pond, lake or river alike, since the band is only the ground's height about the water.
+      // Weighted to take the waterside stones' place where a patch falls.
+      {
+        id: "swamp-reedbed",
+        material: "reedbed",
+        weight: {
+          noises: [{ name: "patch", type: "fbm", octaves: 3, frequency: 0.03, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
+          steps: [
+            { output: "height", op: "input", name: "height" },
+            { output: "wadeable", op: "mask", input: "height", at: -0.2, off: -1.1 },
+            { output: "nearWater", op: "mask", input: "height", at: 0.5, off: 1.5 },
+            { output: "band", op: "multiply", a: "wadeable", b: "nearWater" },
+            { output: "landmass", op: "input", name: "landmass" },
+            { output: "inland", op: "mask", input: "landmass", at: 0.95, off: 0.7 },
+            { output: "patchRaw", op: "sample", noise: "patch" },
+            { output: "patch", op: "mask", input: "patchRaw", at: 0.0, off: -0.4 },
+            { output: "inlandBand", op: "multiply", a: "band", b: "inland" },
+            { output: "patchBand", op: "multiply", a: "inlandBand", b: "patch" },
+            { output: "result", op: "scale", input: "patchBand", factor: 4 },
+          ],
+        },
+      },
     ],
   },
   sky: {

@@ -265,7 +265,8 @@ export function scatterGrass(
       if (kind < 0) continue;
 
       const y = surfaceHeight(row, col, u, v);
-      if (y < SEA_LEVEL + GRASS_WATER_CLEARANCE) continue;
+      const wades = grassKinds[kind].wades;
+      if (y < SEA_LEVEL + (wades === undefined ? GRASS_WATER_CLEARANCE : -wades)) continue;
 
       const channel = (c: number): number =>
         (color[(v00 * kindCount + kind) * 3 + c] * w00 +

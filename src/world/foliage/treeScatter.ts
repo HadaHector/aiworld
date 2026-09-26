@@ -4,6 +4,7 @@ import { compileOutputs, type CompiledOutputs } from "../terrain/pipeline/pipeli
 import type { BiomeDefinition } from "../biomes/biomeTypes";
 import type { WorldContent } from "../content/worldContent";
 import type { TerrainSample } from "../terrain/terrainSampler";
+import type { PipelineDef } from "../terrain/pipeline/pipelineTypes";
 import {
   TREE_SPACING,
   TREE_CANDIDATES_PER_CELL,
@@ -12,9 +13,21 @@ import {
   TREE_ROAD_FADE,
   TREE_SINK,
   FOLIAGE_SALT,
+  BUSH_SPACING,
+  BUSH_CANDIDATES_PER_CELL,
+  BUSH_SALT,
+  BUSH_TRUNK_CLEARANCE,
+  BUSH_SHADE_INNER,
+  BUSH_SHADE_OUTER,
+  BUSH_OPEN_SHARE,
+  BUSH_ROAD_CLEARANCE,
+  BUSH_ROAD_FADE,
+  BUSH_SINK,
+  type OldTrees,
   type TreeKindDef,
   type TreeRules,
 } from "./foliageConfig";
+import type { TerrainSampler } from "../terrain/terrainSampler";
 
 /** What the scatter needs to know about the ground under a candidate. */
 export interface TreeGround {
@@ -45,6 +58,14 @@ export interface TreePlacement {
   tint: number;
 }
 
+/**
+ * How wooded the ground is at a point, 0-1: the share of the tree lattice that would grow there -
+ * every zone's tree graphs and rules, exactly as the scatter applies them, but before any dart is
+ * thrown. A smooth field rather than the trees themselves, so the ground under a wood can follow
+ * the wood (see materials/materialContext.ts's treeCover) without a seam at every trunk.
+ */
+export type TreeCover = (worldX: number, worldZ: number, ground: TreeGround) => number;
+
 export type TreeScatter = (
   minX: number,
   minZ: number,
@@ -52,6 +73,37 @@ export type TreeScatter = (
   maxZ: number,
   probe: TreeGroundProbe,
 ) => TreePlacement[];
+
+/**
+ * Everything that differs between trees and bushes. The scatter itself is the same.
+ */
+interface ScatterLevel {
+  /** Names this level in errors and in its graphs' noise seeds. */
+  name: string;
+  kinds: TreeKindDef[];
+  /** Which of a biome's graphs says how much of each kind grows. */
+  graphOf: (biome: BiomeDefinition) => PipelineDef | undefined;
+  /** Namespaces a biome's graph, so its noises are seeded apart from every other graph's. */
+  namespace: (biome: BiomeDefinition) => string;
+  spacing: number;
+  candidatesPerCell: number;
+  salt: number;
+  roadClearance: number;
+  roadFade: number;
+  sink: number;
+  /** Old trees, for a level that has them (see OldTrees). */
+  old?: OldTrees;
+  /**
+   * The trees an understory grows among: it keeps clear of their trunks and is thicker in their
+   * shade. `ground` stands in for the chunk's own probe beyond the ground the chunk can see, so a
+   * tree just across a chunk border still casts its shade.
+   */
+  understory?: { trees: ScatterWhere; ground: TreeGroundProbe; youngReach: number; oldReach: number };
+}
+
+/** A scatter over only the darts `keep` accepts - an understory looks further out for old trees
+ *  than for young ones, since their shade reaches further. */
+type ScatterWhere = (minX: number, minZ: number, maxX: number, maxZ: number, probe: TreeGroundProbe, keep: (size: number) => boolean) => TreePlacement[];
 
 /**
  * One dart. Everything random about a tree is drawn here, at generation time, so that rejecting a
@@ -71,6 +123,8 @@ interface Candidate {
   scaleRoll: number;
   rotation: number;
   tint: number;
+  /** 1 for a young tree, an old one's size multiple otherwise. It is also the room it takes. */
+  size: number;
 }
 
 /**
@@ -83,6 +137,71 @@ interface Candidate {
 interface BiomeFoliage {
   graph: CompiledOutputs;
   offsetOf: Int32Array;
+}
+
+type TreeContent = Pick<WorldContent, "biomes" | "treeKinds" | "oldTrees">;
+
+/** The trees: the zones' `trees` graphs, on the wide lattice. */
+export function createTreeScatter(seed: number, content: TreeContent): TreeScatter {
+  return createScatter(seed, content.biomes, treeLevel(content)).scatter;
+}
+
+export function createTreeCover(seed: number, content: TreeContent): TreeCover {
+  return createScatter(seed, content.biomes, treeLevel(content)).cover;
+}
+
+function treeLevel(content: Pick<WorldContent, "treeKinds" | "oldTrees">): ScatterLevel {
+  return {
+    old: content.oldTrees,
+    name: "tree",
+    kinds: content.treeKinds,
+    graphOf: (biome) => biome.outputs.foliage,
+    namespace: (biome) => `${biome.id}:foliage`,
+    spacing: TREE_SPACING,
+    candidatesPerCell: TREE_CANDIDATES_PER_CELL,
+    salt: FOLIAGE_SALT,
+    roadClearance: TREE_ROAD_CLEARANCE,
+    roadFade: TREE_ROAD_FADE,
+    sink: TREE_SINK,
+  };
+}
+
+/**
+ * The ground under a point from the terrain sampler alone - for a tree beyond what a chunk's own
+ * probe covers. The chunk's probe decides on the same full-detail surface, only interpolated, so
+ * the two agree on all but the odd tree whose density roll lands right on its threshold.
+ */
+function samplerGround(sampleTerrain: TerrainSampler): TreeGroundProbe {
+  return (x, z) => {
+    const sample = sampleTerrain(x, z);
+    const riseX = sampleTerrain(x + 1, z).height - sample.height;
+    const riseZ = sampleTerrain(x, z + 1).height - sample.height;
+    const gradient = Math.hypot(riseX, riseZ);
+    return { height: sample.height, surfaceHeight: sample.height, slope: gradient / Math.sqrt(1 + gradient * gradient), sample };
+  };
+}
+
+/**
+ * The bushes: the zones' `bushes` graphs, on a lattice of their own, among the trees - clear of
+ * their trunks and thickest in their shade (see ScatterLevel.understory).
+ */
+export function createBushScatter(seed: number, content: TreeContent & Pick<WorldContent, "bushKinds">, sampleTerrain: TerrainSampler): TreeScatter {
+  const trees = createScatter(seed, content.biomes, treeLevel(content));
+  const young = Math.max(1, ...content.treeKinds.map((kind) => kind.scale[1]));
+  const largest = Math.max(young, ...content.treeKinds.map((kind) => kind.scale[1] * (kind.growsOld ? content.oldTrees.size[1] : 1)));
+  return createScatter(seed, content.biomes, {
+    name: "bush",
+    kinds: content.bushKinds,
+    graphOf: (biome) => biome.outputs.bushes,
+    namespace: (biome) => `${biome.id}:bushes`,
+    spacing: BUSH_SPACING,
+    candidatesPerCell: BUSH_CANDIDATES_PER_CELL,
+    salt: BUSH_SALT,
+    roadClearance: BUSH_ROAD_CLEARANCE,
+    roadFade: BUSH_ROAD_FADE,
+    sink: BUSH_SINK,
+    understory: { trees: trees.scatterWhere, ground: samplerGround(sampleTerrain), youngReach: BUSH_SHADE_OUTER * young, oldReach: BUSH_SHADE_OUTER * largest },
+  }).scatter;
 }
 
 /**
@@ -104,20 +223,26 @@ interface BiomeFoliage {
  * What survives the spacing rule is then thinned by the density map each biome declares (see
  * BiomeOutputs.foliage), which is also what decides which species a surviving dart becomes.
  */
-export function createTreeScatter(seed: number, content: Pick<WorldContent, "biomes" | "treeKinds">): TreeScatter {
-  const kindIds = content.treeKinds.map((kind) => kind.id);
+function createScatter(seed: number, biomes: BiomeDefinition[], level: ScatterLevel): { scatter: TreeScatter; scatterWhere: ScatterWhere; cover: TreeCover } {
+  const kinds = level.kinds;
+  const kindIds = kinds.map((kind) => kind.id);
+  const spacing = level.spacing;
+  const old = level.old && level.old.share > 0 ? level.old : null;
+  // How many lattice cells out two darts can still be in each other's way: two of the largest old
+  // trees stand spacing x their size apart.
+  const reachCells = Math.ceil(old ? old.size[1] : 1);
 
   function compileFoliage(biome: BiomeDefinition): BiomeFoliage | null {
-    const def = biome.outputs.foliage;
+    const def = level.graphOf(biome);
     if (!def) return null;
 
     for (const name of Object.keys(def.outputs ?? {})) {
       if (!kindIds.includes(name)) {
-        throw new Error(`Biome "${biome.id}" declares a foliage output "${name}", which is not a tree kind`);
+        throw new Error(`Biome "${biome.id}" declares a ${level.name} output "${name}", which is not a ${level.name} kind`);
       }
     }
 
-    const graph = compileOutputs(def, seed, `${biome.id}:foliage`);
+    const graph = compileOutputs(def, seed, level.namespace(biome));
     const offsetOf = new Int32Array(kindIds.length).fill(-1);
     let grows = false;
     for (let k = 0; k < kindIds.length; k++) {
@@ -133,7 +258,7 @@ export function createTreeScatter(seed: number, content: Pick<WorldContent, "bio
   }
 
   const foliageOf = new Map<string, BiomeFoliage | null>();
-  for (const biome of content.biomes) foliageOf.set(biome.id, compileFoliage(biome));
+  for (const biome of biomes) foliageOf.set(biome.id, compileFoliage(biome));
 
   // Reused across candidates rather than rebuilt per call: this is the hottest thing in a chunk
   // build after the terrain samples themselves.
@@ -151,12 +276,12 @@ export function createTreeScatter(seed: number, content: Pick<WorldContent, "bio
     // Mixed before deriveSeed rather than added, so neighbouring cells - which differ by 1 in one
     // coordinate - get unrelated streams instead of adjacent ones.
     const mixed = (Math.imul(gx, 0x27d4eb2d) ^ Math.imul(gz, 0x165667b1)) >>> 0;
-    const rng = mulberry32(deriveSeed(seed, FOLIAGE_SALT ^ mixed));
+    const rng = mulberry32(deriveSeed(seed, level.salt ^ mixed));
     const candidates: Candidate[] = [];
-    for (let index = 0; index < TREE_CANDIDATES_PER_CELL; index++) {
+    for (let index = 0; index < level.candidatesPerCell; index++) {
       candidates.push({
-        x: (gx + rng()) * TREE_SPACING,
-        z: (gz + rng()) * TREE_SPACING,
+        x: (gx + rng()) * spacing,
+        z: (gz + rng()) * spacing,
         priority: rng(),
         gx,
         gz,
@@ -166,7 +291,17 @@ export function createTreeScatter(seed: number, content: Pick<WorldContent, "bio
         scaleRoll: rng(),
         rotation: rng() * Math.PI * 2,
         tint: rng(),
+        size: 1,
       });
+    }
+    // Whether each is old is drawn after everything else, so adding old trees left every young
+    // one's position, species and look exactly as it was.
+    if (old) {
+      for (const candidate of candidates) {
+        const ageRoll = rng();
+        const sizeRoll = rng();
+        if (ageRoll < old.share) candidate.size = old.size[0] + sizeRoll * (old.size[1] - old.size[0]);
+      }
     }
     return candidates;
   }
@@ -175,6 +310,8 @@ export function createTreeScatter(seed: number, content: Pick<WorldContent, "bio
    *  candidates that merely tie would each see no one above them and both be kept - breaking the
    *  one guarantee this whole scheme exists to make. */
   function outranks(a: Candidate, b: Candidate): boolean {
+    // An old tree outranks every young one: it was there first.
+    if ((a.size > 1) !== (b.size > 1)) return a.size > 1;
     if (a.priority !== b.priority) return a.priority > b.priority;
     if (a.gx !== b.gx) return a.gx > b.gx;
     if (a.gz !== b.gz) return a.gz > b.gz;
@@ -223,13 +360,13 @@ export function createTreeScatter(seed: number, content: Pick<WorldContent, "bio
     let remaining = roll * total;
     for (let k = 0; k < perKind.length; k++) {
       remaining -= perKind[k];
-      if (remaining <= 0) return content.treeKinds[k];
+      if (remaining <= 0) return kinds[k];
     }
     // Only reachable on a rounding edge, where the last species with any share is the answer.
     for (let k = perKind.length - 1; k >= 0; k--) {
-      if (perKind[k] > 0) return content.treeKinds[k];
+      if (perKind[k] > 0) return kinds[k];
     }
-    return content.treeKinds[0];
+    return kinds[0];
   }
 
   function rulesFade(rules: TreeRules, ground: TreeGround): number {
@@ -271,17 +408,19 @@ export function createTreeScatter(seed: number, content: Pick<WorldContent, "bio
     if (first === null) return 0;
     let fade = mixed ? blended / weightSum : firstFade;
     // roadGap is Infinity where no road is in range, which smoothstep clamps to 1.
-    fade *= smoothstep(TREE_ROAD_CLEARANCE, TREE_ROAD_FADE, sample.roadGap);
+    fade *= smoothstep(level.roadClearance, level.roadFade, sample.roadGap);
     return fade;
   }
 
-  return function scatterTrees(minX, minZ, maxX, maxZ, probe): TreePlacement[] {
-    // One ring of cells beyond the region, because a dart just outside it can still outrank - and
-    // therefore delete - one just inside.
-    const gxMin = Math.floor(minX / TREE_SPACING) - 1;
-    const gxMax = Math.floor(maxX / TREE_SPACING) + 1;
-    const gzMin = Math.floor(minZ / TREE_SPACING) - 1;
-    const gzMax = Math.floor(maxZ / TREE_SPACING) + 1;
+  /** Every dart in the region that nothing too close to it outranks - too close being `spacing`
+   *  times the average of the two darts' sizes. */
+  function survivors(minX: number, minZ: number, maxX: number, maxZ: number, keep: (size: number) => boolean): Candidate[] {
+    // A ring of cells beyond the region as wide as a dart's reach, because a dart just outside it
+    // can still outrank - and therefore delete - one just inside.
+    const gxMin = Math.floor(minX / spacing) - reachCells;
+    const gxMax = Math.floor(maxX / spacing) + reachCells;
+    const gzMin = Math.floor(minZ / spacing) - reachCells;
+    const gzMax = Math.floor(maxZ / spacing) + reachCells;
     const width = gxMax - gxMin + 1;
     const depth = gzMax - gzMin + 1;
 
@@ -292,54 +431,115 @@ export function createTreeScatter(seed: number, content: Pick<WorldContent, "bio
       }
     }
 
-    const spacingSq = TREE_SPACING * TREE_SPACING;
-    const trees: TreePlacement[] = [];
+    const kept: Candidate[] = [];
 
-    for (let ix = 1; ix < width - 1; ix++) {
-      for (let iz = 1; iz < depth - 1; iz++) {
+    for (let ix = reachCells; ix < width - reachCells; ix++) {
+      for (let iz = reachCells; iz < depth - reachCells; iz++) {
         for (const candidate of cells[ix * depth + iz]) {
           // Ownership is by position, so every dart belongs to exactly one region and a shared
           // border neither duplicates nor drops one.
           if (candidate.x < minX || candidate.x >= maxX) continue;
           if (candidate.z < minZ || candidate.z >= maxZ) continue;
+          if (!keep(candidate.size)) continue;
 
           let beaten = false;
-          for (let dx = -1; dx <= 1 && !beaten; dx++) {
-            for (let dz = -1; dz <= 1 && !beaten; dz++) {
+          for (let dx = -reachCells; dx <= reachCells && !beaten; dx++) {
+            for (let dz = -reachCells; dz <= reachCells && !beaten; dz++) {
               for (const other of cells[(ix + dx) * depth + (iz + dz)]) {
                 if (other === candidate) continue;
                 if (!outranks(other, candidate)) continue;
                 const ox = other.x - candidate.x;
                 const oz = other.z - candidate.z;
-                if (ox * ox + oz * oz < spacingSq) {
+                const apart = (spacing * (other.size + candidate.size)) / 2;
+                if (ox * ox + oz * oz < apart * apart) {
                   beaten = true;
                   break;
                 }
               }
             }
           }
-          if (beaten) continue;
-
-          const ground = probe(candidate.x, candidate.z);
-          if (!ground) continue;
-          const wanted = speciesDensities(ground, candidate.x, candidate.z);
-          if (wanted <= 0) continue;
-          if (candidate.densityRoll >= wanted * survivalFade(ground)) continue;
-
-          const kind = kindFor(wanted, candidate.kindRoll);
-          trees.push({
-            x: candidate.x,
-            y: ground.surfaceHeight - TREE_SINK,
-            z: candidate.z,
-            kind: kind.id,
-            scale: kind.scale[0] + candidate.scaleRoll * (kind.scale[1] - kind.scale[0]),
-            rotation: candidate.rotation,
-            tint: candidate.tint,
-          });
+          if (!beaten) kept.push(candidate);
         }
       }
     }
+    return kept;
+  }
 
+  const understory = level.understory;
+
+  /**
+   * How an understory plant fares among the trees: 0 on a trunk, otherwise BUSH_OPEN_SHARE in the
+   * open rising to 1 in a tree's shade - each tree's clearance and shade sized by its scale.
+   */
+  function amongTrees(trees: TreePlacement[], x: number, z: number): number {
+    let shade = 0;
+    for (const tree of trees) {
+      const distance = Math.hypot(tree.x - x, tree.z - z);
+      if (distance < BUSH_TRUNK_CLEARANCE * tree.scale) return 0;
+      shade = Math.max(shade, 1 - smoothstep(BUSH_SHADE_INNER * tree.scale, BUSH_SHADE_OUTER * tree.scale, distance));
+    }
+    return BUSH_OPEN_SHARE + (1 - BUSH_OPEN_SHARE) * shade;
+  }
+
+  function scatterWhere(minX: number, minZ: number, maxX: number, maxZ: number, probe: TreeGroundProbe, keep: (size: number) => boolean): TreePlacement[] {
+    const trees: TreePlacement[] = [];
+    // The trees around, for an understory - found only once something here wants to grow at all,
+    // since most chunks grow no bushes and finding the trees means sampling ground past the chunk.
+    let among: TreePlacement[] | null = null;
+
+    for (const candidate of survivors(minX, minZ, maxX, maxZ, keep)) {
+      const ground = probe(candidate.x, candidate.z);
+      if (!ground) continue;
+      let wanted = speciesDensities(ground, candidate.x, candidate.z);
+      if (wanted <= 0) continue;
+      const kind = kindFor(wanted, candidate.kindRoll);
+      if (understory) {
+        among ??= treesAround(understory, minX, minZ, maxX, maxZ, probe);
+        wanted *= amongTrees(among, candidate.x, candidate.z);
+      }
+      if (candidate.densityRoll >= wanted * survivalFade(ground)) continue;
+
+      const size = kind.growsOld ? candidate.size : 1;
+      trees.push({
+        x: candidate.x,
+        y: ground.surfaceHeight - level.sink * size,
+        z: candidate.z,
+        kind: kind.id,
+        scale: (kind.scale[0] + candidate.scaleRoll * (kind.scale[1] - kind.scale[0])) * size,
+        rotation: candidate.rotation,
+        tint: candidate.tint,
+      });
+    }
     return trees;
+  }
+
+  /** The trees whose shade can reach into a region: young ones from close by, old ones from further. */
+  function treesAround(
+    understory: NonNullable<ScatterLevel["understory"]>,
+    minX: number,
+    minZ: number,
+    maxX: number,
+    maxZ: number,
+    probe: TreeGroundProbe,
+  ): TreePlacement[] {
+    const ground = (x: number, z: number): TreeGround | null => probe(x, z) ?? understory.ground(x, z);
+    const y = understory.youngReach;
+    const o = understory.oldReach;
+    return [
+      ...understory.trees(minX - y, minZ - y, maxX + y, maxZ + y, ground, (size) => size === 1),
+      ...(o > y ? understory.trees(minX - o, minZ - o, maxX + o, maxZ + o, ground, (size) => size > 1) : []),
+    ];
+  }
+
+  const everyTree = (): boolean => true;
+  const scatter: TreeScatter = (minX, minZ, maxX, maxZ, probe) => scatterWhere(minX, minZ, maxX, maxZ, probe, everyTree);
+
+  return {
+    scatter,
+    scatterWhere,
+    cover: (x, z, ground) => {
+      const wanted = speciesDensities(ground, x, z);
+      return wanted <= 0 ? 0 : Math.min(1, wanted * survivalFade(ground));
+    },
   };
 }

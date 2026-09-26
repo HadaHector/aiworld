@@ -1,48 +1,97 @@
 /** Reg / serir - the wind-swept gravel plain that covers far more of the Sahara than dunes do:
- *  a lag of dark, desert-varnished pebbles sitting on ochre sand. */
+ *  a lag of desert-varnished stones sitting on ochre sand. Each stone is a dome around a worley
+ *  point, its size and its shade - near-black varnish, rust, grey, the odd pale one - picked by
+ *  that point's own value, and the stones thin out in patches where the sand shows through. */
 {
   name: "Desert Gravel",
   texture: {
-    bumpStrength: 2.2,
+    bumpStrength: 2.4,
     pipeline: {
       noises: [
         { name: "mottle", type: "fbm", octaves: 3, tileCycles: 13, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
         { name: "broad", type: "fbm", octaves: 2, tileCycles: 3, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
-        { name: "pebbles", type: "worley", tileCycles: 38, amplitude: 1, mode: "f1" },
+        { name: "grain", type: "fbm", octaves: 2, tileCycles: 90, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+        { name: "stones", type: "worley", tileCycles: 70, amplitude: 1, mode: "f1" },
+        { name: "grit", type: "worley", tileCycles: 190, amplitude: 1, mode: "f1" },
+        { name: "patches", type: "fbm", octaves: 3, tileCycles: 6, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+        { name: "warpX", type: "fbm", octaves: 2, tileCycles: 26, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+        { name: "warpY", type: "fbm", octaves: 2, tileCycles: 26, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
       ],
       steps: [
         { output: "mottle", op: "sample", noise: "mottle" },
         { output: "mottleMask", op: "mask", input: "mottle", at: 1.75, off: -1.75 },
         { output: "broad", op: "sample", noise: "broad" },
         { output: "broadMask", op: "mask", input: "broad", at: 1.5, off: -1.5 },
-        // f1 is ~0 at each scattered point, so this is 1 on a pebble and 0 in the sand between.
-        { output: "pebbleDist", op: "sample", noise: "pebbles" },
-        { output: "pebbleMask", op: "mask", input: "pebbleDist", at: 0, off: 0.55 },
+        { output: "grain", op: "sample", noise: "grain" },
+        { output: "grainMask", op: "mask", input: "grain", at: 1.5, off: -1.5 },
+        { output: "wx", op: "sample", noise: "warpX" },
+        { output: "wy", op: "sample", noise: "warpY" },
+        { output: "shiftX", op: "scale", input: "wx", factor: 3 },
+        { output: "shiftY", op: "scale", input: "wy", factor: 3 },
 
-        { output: "bedDark", op: "color", value: [0.55, 0.42, 0.26] },
-        { output: "bedLight", op: "color", value: [0.70, 0.57, 0.37] },
+        { output: "stoneDist", op: "sample", noise: "stones", offset: ["shiftX", "shiftY"] },
+        { output: "stoneId", op: "sample", noise: "stones", mode: "cell", offset: ["shiftX", "shiftY"] },
+        { output: "stoneShrink", op: "scale", input: "stoneId", factor: 0.3 },
+        { output: "stoneReach", op: "add", a: "stoneDist", b: "stoneShrink" },
+        { output: "stoneEdge", op: "mask", input: "stoneReach", at: 0.1, off: 0.44 },
+        { output: "stoneDome", op: "power", input: "stoneEdge", exponent: 0.5 },
+        { output: "gritDist", op: "sample", noise: "grit", offset: ["shiftX", "shiftY"] },
+        { output: "gritId", op: "sample", noise: "grit", mode: "cell" },
+        { output: "gritShrink", op: "scale", input: "gritId", factor: 0.3 },
+        { output: "gritReach", op: "add", a: "gritDist", b: "gritShrink" },
+        { output: "gritEdge", op: "mask", input: "gritReach", at: 0.08, off: 0.36 },
+        { output: "gritDome", op: "scale", input: "gritEdge", factor: 0.45 },
+        // Stones gather in patches, with bare sand between.
+        { output: "patchRaw", op: "sample", noise: "patches" },
+        { output: "strewn", op: "mask", input: "patchRaw", at: 0.25, off: -0.45 },
+        { output: "stoneHere", op: "multiply", a: "stoneDome", b: "strewn" },
+        { output: "gritHere", op: "multiply", a: "gritDome", b: "strewn" },
+        { output: "stone", op: "max", a: "stoneHere", b: "gritHere" },
+
+        { output: "bedDark", op: "color", value: [0.58, 0.44, 0.27] },
+        { output: "bedLight", op: "color", value: [0.74, 0.6, 0.39] },
         { output: "bed", op: "mix", a: "bedDark", b: "bedLight", t: "broadMask" },
-        // Desert varnish darkens exposed stone over centuries - the pebbles are much darker than
-        // the sand they sit on, and vary among themselves via the shared mottle.
         {
-          output: "pebbleColor",
+          output: "stoneTone",
           op: "colorRamp",
-          input: "mottleMask",
+          input: "stoneId",
           stops: [
-            { at: 0.0, color: [0.24, 0.19, 0.15] },
-            { at: 0.5, color: [0.35, 0.28, 0.21] },
-            { at: 1.0, color: [0.47, 0.38, 0.29] },
+            { at: 0.0, color: [0.16, 0.12, 0.1] },
+            { at: 0.25, color: [0.4, 0.22, 0.13] },
+            { at: 0.45, color: [0.3, 0.24, 0.19] },
+            { at: 0.65, color: [0.44, 0.4, 0.36] },
+            { at: 0.85, color: [0.22, 0.16, 0.12] },
+            { at: 1.0, color: [0.62, 0.52, 0.4] },
           ],
         },
-        { output: "diffuse", op: "mix", a: "bed", b: "pebbleColor", t: "pebbleMask" },
+        {
+          output: "gritTone",
+          op: "colorRamp",
+          input: "gritId",
+          stops: [
+            { at: 0.0, color: [0.3, 0.22, 0.16] },
+            { at: 0.5, color: [0.46, 0.34, 0.24] },
+            { at: 1.0, color: [0.24, 0.19, 0.15] },
+          ],
+        },
+        { output: "stoneAbove", op: "subtract", a: "stoneHere", b: "gritHere" },
+        { output: "stoneShows", op: "mask", input: "stoneAbove", at: 0.02, off: -0.02 },
+        { output: "pieceTone", op: "mix", a: "gritTone", b: "stoneTone", t: "stoneShows" },
+        { output: "rimShade", op: "remap", input: "stone", inMin: 0, inMax: 1, outMin: 0.6, outMax: 1.08 },
+        { output: "shadedPiece", op: "multiply", a: "pieceTone", b: "rimShade" },
+        { output: "cover", op: "mask", input: "stone", at: 0.1, off: 0.02 },
+        { output: "diffuse", op: "mix", a: "bed", b: "shadedPiece", t: "cover" },
 
         { output: "roughSand", op: "constant", value: 0.8 },
-        { output: "roughPebble", op: "constant", value: 0.62 },
-        { output: "roughness", op: "mix", a: "roughSand", b: "roughPebble", t: "pebbleMask" },
+        // Desert varnish is faintly glossy.
+        { output: "roughStone", op: "constant", value: 0.5 },
+        { output: "roughness", op: "mix", a: "roughSand", b: "roughStone", t: "cover" },
 
-        { output: "bedRelief", op: "scale", input: "mottleMask", factor: 0.2 },
-        { output: "pebbleRelief", op: "scale", input: "pebbleMask", factor: 0.8 },
-        { output: "height", op: "add", a: "bedRelief", b: "pebbleRelief" },
+        { output: "bedRelief", op: "scale", input: "mottleMask", factor: 0.12 },
+        { output: "grainRelief", op: "scale", input: "grainMask", factor: 0.06 },
+        { output: "bedHeight", op: "add", a: "bedRelief", b: "grainRelief" },
+        { output: "stoneRelief", op: "scale", input: "stone", factor: 0.8 },
+        { output: "height", op: "add", a: "bedHeight", b: "stoneRelief" },
       ],
       outputs: { diffuse: "diffuse", roughness: "roughness", height: "height" },
     },

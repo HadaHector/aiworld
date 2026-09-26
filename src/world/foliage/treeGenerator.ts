@@ -1,6 +1,6 @@
 import { mulberry32 } from "../rng";
 import { lerp, smoothstep } from "../mathUtils";
-import type { BranchingTree } from "./foliageConfig";
+import type { BranchingTree, BushShape } from "./foliageConfig";
 
 /**
  * One generated tree, in tree space (the base of the trunk at the origin, up +Y), as two meshes'
@@ -115,8 +115,9 @@ class LeafBuilder {
   uvs: number[] = [];
   indices: number[] = [];
 
-  /** One card: a square `size` across in the plane of `u` and `v`, showing atlas cell `cell`. */
-  card(centre: V3, u: V3, v: V3, size: number, cell: number, crownCentre: V3, crownRadius: number): void {
+  /** One card: a square `size` across in the plane of `u` and `v`, showing atlas cell `cell` - the
+   *  right way up along `v` with `upright`, where a cell's picture has a bottom (a bush's twigs). */
+  card(centre: V3, u: V3, v: V3, size: number, cell: number, crownCentre: V3, crownRadius: number, upright = false): void {
     const base = this.positions.length / 3;
     const half = size / 2;
     const cellU = (cell % 2) * 0.5;
@@ -136,9 +137,43 @@ class LeafBuilder {
       const out = sub(p, crownCentre);
       const n = normalize([out[0], out[1] * 1.3 + crownRadius * 0.15, out[2]]);
       this.normals.push(n[0], n[1], n[2]);
-      this.uvs.push(cellU + (a > 0 ? 0.5 - inset : inset), cellV + (b > 0 ? 0.5 - inset : inset));
+      // An atlas row runs down the picture, so the card's top (+v) is the cell's first row.
+      const up = upright ? -b : b;
+      this.uvs.push(cellU + (a > 0 ? 0.5 - inset : inset), cellV + (up > 0 ? 0.5 - inset : inset));
     }
     this.indices.push(base, base + 1, base + 2, base, base + 2, base + 3);
+  }
+
+  /**
+   * An upright card `width` by `height` standing on `foot`, spanning `u` horizontally and showing
+   * atlas cell `cell` the right way up (mirrored left to right with `mirror`). A 3x3 grid rather
+   * than a quad, because its normals are the crown's (see `card`) and a card through the middle of
+   * a bush has them pointing opposite ways at its two edges - with only corners to interpolate
+   * between, its middle would be lit as a flat diagonal crease.
+   */
+  panel(foot: V3, u: V3, width: number, height: number, cell: number, mirror: boolean, crownCentre: V3, crownRadius: number): void {
+    const base = this.positions.length / 3;
+    const cellU = (cell % 2) * 0.5;
+    const cellV = Math.floor(cell / 2) * 0.5;
+    const inset = 0.004;
+    const span = 0.5 - inset * 2;
+    for (let row = 0; row <= 2; row++) {
+      for (let col = 0; col <= 2; col++) {
+        const p = add(foot, add(scale(u, (col / 2 - 0.5) * width), [0, (row / 2) * height, 0]));
+        this.positions.push(p[0], p[1], p[2]);
+        const out = sub(p, crownCentre);
+        const n = normalize([out[0], out[1] * 1.3 + crownRadius * 0.15, out[2]]);
+        this.normals.push(n[0], n[1], n[2]);
+        const across = mirror ? 1 - col / 2 : col / 2;
+        this.uvs.push(cellU + inset + across * span, cellV + 0.5 - inset - (row / 2) * span);
+      }
+    }
+    for (let row = 0; row < 2; row++) {
+      for (let col = 0; col < 2; col++) {
+        const a = base + row * 3 + col;
+        this.indices.push(a, a + 1, a + 4, a, a + 4, a + 3);
+      }
+    }
   }
 }
 
@@ -328,5 +363,72 @@ export function generateTree(spec: BranchingTree, seed: number, detail: TreeDeta
       indices: new Uint32Array(leafBuilder.indices),
     },
     height: foliageTop,
+  };
+}
+
+/** One generated bush, in bush space (its base at the origin, up +Y): cards only. */
+export interface BushGeometry {
+  leaves: TreeGeometry["leaves"];
+  height: number;
+}
+
+/**
+ * Generates one bush from a BushShape: `cards` whole-bush cards crossed through its middle at even
+ * turns, each showing one of the atlas's two side views, and `clumps` pairs of crossed clump cards
+ * spread over its upper half, each pointing out from the middle with its twigs towards it.
+ * Deterministic from `seed`.
+ */
+export function generateBush(spec: BushShape, seed: number): BushGeometry {
+  const rng = mulberry32(seed);
+  const between = ([lo, hi]: [number, number]): number => lo + rng() * (hi - lo);
+  const builder = new LeafBuilder();
+  const width = between(spec.width);
+  const height = between(spec.height);
+  const radius = width / 2;
+  const crownCentre: V3 = [0, height * 0.5, 0];
+  let top = height;
+
+  const start = rng() * Math.PI;
+  for (let c = 0; c < spec.cards; c++) {
+    const angle = start + (c * Math.PI) / spec.cards + (rng() - 0.5) * 0.3;
+    const u: V3 = [Math.cos(angle), 0, Math.sin(angle)];
+    // Only a hair off the middle: every card's stems have to meet at the same root, or the base of
+    // the bush splays into several.
+    const off = (rng() - 0.5) * 0.03 * width;
+    const foot: V3 = [-u[2] * off, -0.1, u[0] * off];
+    const cardHeight = height * (0.9 + rng() * 0.2);
+    builder.panel(foot, u, width * (0.9 + rng() * 0.2), cardHeight, Math.floor(rng() * 2), rng() < 0.5, crownCentre, radius);
+    top = Math.max(top, cardHeight);
+  }
+
+  for (let k = 0; k < spec.clumps; k++) {
+    const heading = start + k * 2.39996 + (rng() - 0.5) * 0.5;
+    const elevation = (20 + rng() * 60) * DEG;
+    const point: V3 = [
+      Math.cos(elevation) * Math.cos(heading) * radius * 0.7,
+      height * 0.55 + Math.sin(elevation) * height * 0.32,
+      Math.cos(elevation) * Math.sin(heading) * radius * 0.7,
+    ];
+    const outward = normalize(sub(point, [0, height * 0.3, 0]));
+    const axis = normalize(add(outward, [(rng() - 0.5) * 0.5, (rng() - 0.5) * 0.5, (rng() - 0.5) * 0.5]));
+    const size = between(spec.clumpSize);
+    const centre = add(point, scale(axis, size * 0.2));
+    const first = rotate(perpendicular(axis), axis, rng() * Math.PI);
+    const cell = 2 + Math.floor(rng() * 2);
+    for (let c = 0; c < 2; c++) {
+      const normal = rotate(first, axis, (c * Math.PI) / 2);
+      builder.card(centre, cross(axis, normal), axis, size, cell, crownCentre, radius, true);
+      top = Math.max(top, centre[1] + size * 0.6);
+    }
+  }
+
+  return {
+    leaves: {
+      positions: new Float32Array(builder.positions),
+      normals: new Float32Array(builder.normals),
+      uvs: new Float32Array(builder.uvs),
+      indices: new Uint32Array(builder.indices),
+    },
+    height: top,
   };
 }

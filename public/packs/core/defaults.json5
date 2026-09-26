@@ -39,4 +39,14 @@
   // Each tree is scaled by a random factor in this range, for a tree kind with no scale of its
   // own. Uniform only - a placeholder that leans or squashes just looks broken.
   treeScale: [0.75, 1.35],
+
+  // Old trees: this share of the tree lattice's darts is old, standing `size` times as big as the
+  // rest (for a kind with `growsOld: true`) and clearing the young trees out from under its crown.
+  // Each takes a wide circle, so a small share is already a few in every wood.
+  oldTrees: { share: 0.012, size: [2, 3] },
+
+  // The ground's close-up pass: each material's texture sampled again `scale` times smaller (a
+  // material's 1 m features become 14 cm ones), deepening its light and dark and its bumps by
+  // `strength`. A material can set its own `detail` (either value), or `strength: 0` to go without.
+  materialDetail: { scale: 7.3, strength: 0.55 },
 }

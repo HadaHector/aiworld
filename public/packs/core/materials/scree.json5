@@ -1,4 +1,73 @@
+// Scree: rock fallen from the crags above - big angular blocks (each a faceted worley cell, see
+// gravel.json5) with smaller chips packed in their gaps, in the browns and greys of the rock they
+// broke from.
 {
   name: "Scree",
-  texture: { generator: "twoTone", base: [0.42, 0.38, 0.32], variation: [0.52, 0.47, 0.4], roughness: 0.88, bumpStrength: 3.5 },
+  texture: {
+    bumpStrength: 3.2,
+    pipeline: {
+      noises: [
+        { name: "blocks", type: "worley", tileCycles: 42, amplitude: 1, mode: "edge" },
+        { name: "chips", type: "worley", tileCycles: 140, amplitude: 1, mode: "edge" },
+        { name: "warpX", type: "fbm", octaves: 2, tileCycles: 16, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+        { name: "warpY", type: "fbm", octaves: 2, tileCycles: 16, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+        { name: "grain", type: "fbm", octaves: 2, tileCycles: 90, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+      ],
+      steps: [
+        { output: "wx", op: "sample", noise: "warpX" },
+        { output: "wy", op: "sample", noise: "warpY" },
+        { output: "shiftX", op: "scale", input: "wx", factor: 5 },
+        { output: "shiftY", op: "scale", input: "wy", factor: 5 },
+        { output: "blockEdge", op: "sample", noise: "blocks", offset: ["shiftX", "shiftY"] },
+        { output: "blockId", op: "sample", noise: "blocks", mode: "cell", offset: ["shiftX", "shiftY"] },
+        // Not every cell holds a block - the rest are filled with chips.
+        { output: "blockPick", op: "mask", input: "blockId", at: 0.42, off: 0.5 },
+        { output: "blockShape", op: "mask", input: "blockEdge", at: 0.3, off: 0.03 },
+        { output: "block", op: "multiply", a: "blockShape", b: "blockPick" },
+        { output: "chipEdge", op: "sample", noise: "chips", offset: ["shiftX", "shiftY"] },
+        { output: "chipId", op: "sample", noise: "chips", mode: "cell", offset: ["shiftX", "shiftY"] },
+        { output: "chipShape", op: "mask", input: "chipEdge", at: 0.3, off: 0.02 },
+        { output: "chip", op: "scale", input: "chipShape", factor: 0.45 },
+        { output: "piece", op: "max", a: "block", b: "chip" },
+        { output: "grainRaw", op: "sample", noise: "grain" },
+        { output: "grainMask", op: "mask", input: "grainRaw", at: 1.2, off: -1.2 },
+
+        {
+          output: "blockTone",
+          op: "colorRamp",
+          input: "blockId",
+          stops: [
+            { at: 0.0, color: [0.4, 0.37, 0.32] },
+            { at: 0.15, color: [0.52, 0.48, 0.41] },
+            { at: 0.3, color: [0.36, 0.35, 0.34] },
+            { at: 0.42, color: [0.47, 0.42, 0.35] },
+          ],
+        },
+        {
+          output: "chipTone",
+          op: "colorRamp",
+          input: "chipId",
+          stops: [
+            { at: 0.0, color: [0.36, 0.33, 0.28] },
+            { at: 0.5, color: [0.48, 0.44, 0.38] },
+            { at: 1.0, color: [0.4, 0.39, 0.37] },
+          ],
+        },
+        { output: "blockAbove", op: "subtract", a: "block", b: "chip" },
+        { output: "blockShows", op: "mask", input: "blockAbove", at: 0.02, off: -0.02 },
+        { output: "tone", op: "mix", a: "chipTone", b: "blockTone", t: "blockShows" },
+        { output: "faceShade", op: "remap", input: "piece", inMin: 0, inMax: 1, outMin: 0.62, outMax: 1.1 },
+        { output: "grainShade", op: "remap", input: "grainMask", inMin: 0, inMax: 1, outMin: 0.9, outMax: 1.08 },
+        { output: "shade", op: "multiply", a: "faceShade", b: "grainShade" },
+        { output: "diffuse", op: "multiply", a: "tone", b: "shade" },
+
+        { output: "roughness", op: "constant", value: 0.88 },
+
+        { output: "pieceRelief", op: "scale", input: "piece", factor: 0.85 },
+        { output: "grainRelief", op: "scale", input: "grainMask", factor: 0.1 },
+        { output: "height", op: "add", a: "pieceRelief", b: "grainRelief" },
+      ],
+      outputs: { diffuse: "diffuse", roughness: "roughness", height: "height" },
+    },
+  },
 }

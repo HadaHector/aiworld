@@ -1,7 +1,7 @@
 import type { BiomeDefinition, BoundaryHillStyle } from "../biomes/biomeTypes";
 import type { MaterialDef, MaterialLayer } from "../materials/materialTypes";
 import type { GrassKindDef } from "../foliage/grassConfig";
-import type { TreeKindDef } from "../foliage/foliageConfig";
+import type { OldTrees, TreeKindDef } from "../foliage/foliageConfig";
 import type { Voice } from "../naming/nameGenerator";
 import type { SettlementStyle } from "../settlements/settlementConfig";
 
@@ -32,6 +32,9 @@ export interface WorldContent {
   roadLayer: MaterialLayer;
   grassKinds: GrassKindDef[];
   treeKinds: TreeKindDef[];
+  /** Bushes are drawn by the same renderer as trees, so their ids share one namespace with them. */
+  bushKinds: TreeKindDef[];
+  oldTrees: OldTrees;
   voices: Record<string, Voice>;
   boundaryHillStyles: BoundaryHillStyle[];
   settlementStyles: SettlementStyle[];

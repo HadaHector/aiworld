@@ -26,6 +26,22 @@ import { bakeMaterialTextures } from "./textureBakePool";
 // this is the dial to turn if the pattern still reads as a grid.
 const TEXTURE_WORLD_TILE_SIZE = 50;
 
+// The close-up pass samples each material again a material's own `detail.scale` times smaller, and
+// turned by this much so its repeat does not line up with the main one's; the broad pass samples it
+// this many times larger, heavily blurred, so the main texture's 50 m repeat is shaded by a pattern
+// that repeats every few hundred metres instead. Neither costs memory: both are the same texture.
+const DETAIL_ROTATION = 0.61;
+const BROAD_SCALE = 0.137;
+const BROAD_ROTATION = -0.93;
+const BROAD_STRENGTH = 0.35;
+
+// Height-based blending between a triangle's materials (see the shader's heightShare): how much a
+// material's own surface height (0-1, baked into its normal map's alpha) adds to its weight, and
+// how far below the strongest a material may be and still show at all. The depth is the softness:
+// smaller makes sharper edges where two materials meet.
+const HEIGHT_BLEND = 0.6;
+const HEIGHT_BLEND_DEPTH = 0.18;
+
 export { MATERIALS_PER_TRIANGLE } from "./materialBlend";
 
 export interface MaterialLibrary {
@@ -126,7 +142,11 @@ void main() {
 // The vec4 components the fragment shader actually samples - one per blended material.
 const materialSlots = ["x", "y", "z", "w"].slice(0, MATERIALS_PER_TRIANGLE);
 
-const FRAGMENT_SHADER = `#version 300 es
+/**
+ * The fragment shader, sized to the material count - the per-material uniform arrays are indexed by
+ * a triangle's material index.
+ */
+const fragmentShader = (materialCount: number): string => `#version 300 es
 precision highp float;
 precision highp sampler2DArray;
 ${LIT_SHADING_GLSL}
@@ -144,16 +164,74 @@ uniform float waterLevel;
 uniform float specularMinShininess;
 uniform float specularMaxShininess;
 uniform float specularIntensity;
+// Per material: the close-up pass's scale and strength, and the texture's average colour.
+uniform vec2 materialDetail[${materialCount}];
+uniform vec3 materialMean[${materialCount}];
 
 out vec4 outColor;
+
+const mat2 DETAIL_TURN = mat2(${Math.cos(DETAIL_ROTATION).toFixed(5)}, ${Math.sin(DETAIL_ROTATION).toFixed(5)}, ${(-Math.sin(DETAIL_ROTATION)).toFixed(5)}, ${Math.cos(DETAIL_ROTATION).toFixed(5)});
+const mat2 BROAD_TURN = mat2(${Math.cos(BROAD_ROTATION).toFixed(5)}, ${Math.sin(BROAD_ROTATION).toFixed(5)}, ${(-Math.sin(BROAD_ROTATION)).toFixed(5)}, ${Math.cos(BROAD_ROTATION).toFixed(5)});
+
+float luma(vec3 c) {
+  return dot(c, vec3(0.299, 0.587, 0.114));
+}
+
+/**
+ * One material at this pixel. Its texture three times over: as authored; again at the material's
+ * detail scale, whose light and dark (relative to the material's average) deepen the authored
+ * colour and whose bumps add to the authored ones - so a 1 m feature of the texture turns up again
+ * as 14 cm grain; and once more hugely enlarged and blurred, for slow patches of lighter and darker
+ * ground that do not repeat with the 50 m tile. Far off, the close-up sample reaches its smallest
+ * mip, which is the average colour, and so fades out by itself.
+ */
+void sampleMaterial(float layer, out vec4 color, out vec3 tilt, out float height) {
+  int index = int(layer + 0.5);
+  vec2 detail = materialDetail[index];
+  float mean = max(luma(materialMean[index]), 0.03);
+
+  vec4 base = texture(materialAtlas, vec3(vUV, layer));
+  vec4 baseNormal = texture(normalAtlas, vec3(vUV, layer));
+
+  vec2 fineUV = DETAIL_TURN * vUV * detail.x;
+  vec3 fine = texture(materialAtlas, vec3(fineUV, layer)).rgb;
+  vec3 fineNormal = texture(normalAtlas, vec3(fineUV, layer)).rgb * 2.0 - 1.0;
+  float fineShade = mix(1.0, clamp(luma(fine) / mean, 0.35, 1.9), detail.y);
+
+  vec3 broad = texture(materialAtlas, vec3(BROAD_TURN * vUV * ${BROAD_SCALE.toFixed(4)}, layer), 4.0).rgb;
+  float broadShade = mix(1.0, clamp(luma(broad) / mean, 0.5, 1.6), ${BROAD_STRENGTH.toFixed(3)});
+
+  color = vec4(base.rgb * fineShade * broadShade, base.a);
+  // The close-up normal is in its own turned texture space; turned back, its tilt adds to the
+  // authored one's.
+  vec3 authored = baseNormal.rgb * 2.0 - 1.0;
+  tilt = vec3(authored.xy + (transpose(DETAIL_TURN) * fineNormal.xy) * detail.y, authored.z);
+  height = baseNormal.a;
+}
+
+/**
+ * How much of the pixel a material gets: its weight, raised by how high its own surface stands
+ * here, and only materials within HEIGHT_BLEND_DEPTH of the highest take part. So where two meet,
+ * the one standing proud wins its high points first - pebbles come through the sand before the
+ * sand gives way, leaves lie on the grass rather than fading into it, snow fills the rock's
+ * hollows first - instead of the two cross-fading into a smear. A material's height counts for
+ * less as its weight falls to nothing, so one that is not really here never shows through.
+ */
+float heightShare(float weight, float height) {
+  return weight + height * ${HEIGHT_BLEND.toFixed(3)} * min(1.0, weight * 6.0);
+}
 
 void main() {
   vec3 n = normalize(vNormal);
 
-  vec4 albedo = ${materialSlots.map((c) => `texture(materialAtlas, vec3(vUV, vMatIndices.${c})) * vMatWeights.${c}`).join("\n    + ")};
-
-  vec3 tangentNormal = ${materialSlots.map((c) => `(texture(normalAtlas, vec3(vUV, vMatIndices.${c})).rgb * 2.0 - 1.0) * vMatWeights.${c}`).join("\n    + ")};
-  tangentNormal = normalize(tangentNormal);
+  ${materialSlots.map((c, i) => `vec4 color${i}; vec3 tilt${i}; float height${i};
+  sampleMaterial(vMatIndices.${c}, color${i}, tilt${i}, height${i});
+  float share${i} = heightShare(vMatWeights.${c}, height${i});`).join("\n  ")}
+  float lowest = max(${materialSlots.map((_, i) => `share${i}`).reduce((a, b) => `max(${a}, ${b})`)}, 0.0) - ${HEIGHT_BLEND_DEPTH.toFixed(3)};
+  ${materialSlots.map((_, i) => `float blend${i} = max(share${i} - lowest, 0.0);`).join("\n  ")}
+  float total = ${materialSlots.map((_, i) => `blend${i}`).join(" + ")};
+  vec4 albedo = (${materialSlots.map((_, i) => `color${i} * blend${i}`).join(" + ")}) / total;
+  vec3 tangentNormal = normalize(${materialSlots.map((_, i) => `tilt${i} * blend${i}`).join(" + ")});
 
   // Screen-space-derivative TBN (no authored per-vertex tangents needed) - standard technique for
   // bump-mapping a surface, like terrain, that never got its own tangent vertex attribute.
@@ -251,7 +329,7 @@ export async function createMaterialLibrary(
   normalAtlas.wrapV = Texture.WRAP_ADDRESSMODE;
 
   Effect.ShadersStore["terrainBlendVertexShader"] = VERTEX_SHADER;
-  Effect.ShadersStore["terrainBlendFragmentShader"] = FRAGMENT_SHADER;
+  Effect.ShadersStore["terrainBlendFragmentShader"] = fragmentShader(materialDefs.length);
 
   const terrainMaterial = new ShaderMaterial("terrainBlend", scene, "terrainBlend", {
     attributes: ["position", "normal", "matIndices", "matWeights"],
@@ -264,6 +342,8 @@ export async function createMaterialLibrary(
       "specularMinShininess",
       "specularMaxShininess",
       "specularIntensity",
+      "materialDetail",
+      "materialMean",
       ...LIT_SHADING_UNIFORMS,
     ],
     samplers: ["materialAtlas", "normalAtlas", ...LIT_SHADING_SAMPLERS],
@@ -276,6 +356,8 @@ export async function createMaterialLibrary(
   terrainMaterial.setFloat("specularMinShininess", SPECULAR_MIN_SHININESS);
   terrainMaterial.setFloat("specularMaxShininess", SPECULAR_MAX_SHININESS);
   terrainMaterial.setFloat("specularIntensity", SPECULAR_INTENSITY);
+  terrainMaterial.setArray2("materialDetail", materialDefs.flatMap((def) => [def.detail.scale, def.detail.strength]));
+  terrainMaterial.setArray3("materialMean", averageColors.flat());
   terrainMaterial.backFaceCulling = true;
 
   const litShading = createLitShading(scene, sunLighting);

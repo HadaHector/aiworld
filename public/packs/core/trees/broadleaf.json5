@@ -5,6 +5,8 @@
 {
   model: "branching",
   variants: 4,
+  // Some grow old - two or three times this size (see defaults.json5's oldTrees).
+  growsOld: true,
   trunk: {
     height: 19,
     radius: 2.1,

@@ -75,6 +75,9 @@ export interface BiomeOutputs {
    * palms at its water.
    */
   foliage?: PipelineDef;
+  /** The same for bushes, one output per bush kind - scattered on a lattice of their own, under and
+   *  between the trees (see foliage/treeScatter.ts's createBushScatter). */
+  bushes?: PipelineDef;
   // Future, unimplemented: wetness?: PipelineDef; material?: PipelineDef;
 }
 

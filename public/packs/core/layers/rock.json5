@@ -3,9 +3,11 @@
   weight: {
     noises: [],
     steps: [
-      // Steeper than this (lower normalY) reads as bare rock, regardless of biome.
+      // Steeper than this (lower normalY) reads as bare rock, regardless of biome. It starts early -
+      // at about 21 degrees - and only takes over fully at about 52, so a slope turns stony by
+      // degrees, the rock's bumps coming through the grass first (the terrain blends by height).
       { output: "slope", op: "input", name: "slope" },
-      { output: "raw", op: "remap", input: "slope", inMin: 0.85, inMax: 0.55, outMin: 0, outMax: 1 },
+      { output: "raw", op: "remap", input: "slope", inMin: 0.93, inMax: 0.62, outMin: 0, outMax: 1 },
       { output: "result", op: "clamp", input: "raw", min: 0, max: 1 },
     ],
   },

@@ -1,6 +1,72 @@
+// Tundra: frost-patterned ground - the freeze and thaw sorts it into polygons a few metres across,
+// with damp, mossy troughs along their edges - and on the polygons, stony grey-green ground
+// crusted with lichen: pale grey-green flecks, and here and there a spot of orange.
 {
   name: "Tundra Ground",
-  texture: { generator: "twoTone", base: [0.52, 0.56, 0.52], variation: [0.68, 0.71, 0.68], roughness: 0.8, bumpStrength: 1.75 },
+  texture: {
+    bumpStrength: 1.9,
+    pipeline: {
+      noises: [
+        { name: "mottle", type: "fbm", octaves: 3, tileCycles: 13, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+        { name: "polygons", type: "worley", tileCycles: 9, amplitude: 1, mode: "edge" },
+        { name: "warpX", type: "fbm", octaves: 3, tileCycles: 6, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+        { name: "warpY", type: "fbm", octaves: 3, tileCycles: 6, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+        { name: "lichen", type: "worley", tileCycles: 130, amplitude: 1, mode: "f1" },
+        { name: "grit", type: "fbm", octaves: 2, tileCycles: 120, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+      ],
+      steps: [
+        { output: "mottle", op: "sample", noise: "mottle" },
+        { output: "mottleMask", op: "mask", input: "mottle", at: 1.75, off: -1.75 },
+        { output: "wx", op: "sample", noise: "warpX" },
+        { output: "wy", op: "sample", noise: "warpY" },
+        { output: "shiftX", op: "scale", input: "wx", factor: 14 },
+        { output: "shiftY", op: "scale", input: "wy", factor: 14 },
+        { output: "polygonEdge", op: "sample", noise: "polygons", offset: ["shiftX", "shiftY"] },
+        { output: "trough", op: "mask", input: "polygonEdge", at: 0.0, off: 0.09 },
+        { output: "crown", op: "mask", input: "polygonEdge", at: 0.35, off: 0.05 },
+
+        { output: "lichenDist", op: "sample", noise: "lichen" },
+        { output: "lichenId", op: "sample", noise: "lichen", mode: "cell" },
+        { output: "lichenSpot", op: "mask", input: "lichenDist", at: 0.15, off: 0.4 },
+        { output: "paleness", op: "mask", input: "lichenId", at: 0.8, off: 0.72 },
+        { output: "orangeness", op: "mask", input: "lichenId", at: 0.97, off: 0.95 },
+        { output: "paleLichen", op: "multiply", a: "lichenSpot", b: "paleness" },
+        { output: "orangeLichen", op: "multiply", a: "lichenSpot", b: "orangeness" },
+        { output: "gritRaw", op: "sample", noise: "grit" },
+        { output: "gritMask", op: "mask", input: "gritRaw", at: 1.2, off: -1.2 },
+
+        {
+          output: "ground",
+          op: "colorRamp",
+          input: "mottleMask",
+          stops: [
+            { at: 0.0, color: [0.4, 0.42, 0.38] },
+            { at: 0.5, color: [0.52, 0.54, 0.48] },
+            { at: 1.0, color: [0.6, 0.6, 0.53] },
+          ],
+        },
+        { output: "gritShade", op: "remap", input: "gritMask", inMin: 0, inMax: 1, outMin: 0.88, outMax: 1.1 },
+        { output: "gritty", op: "multiply", a: "ground", b: "gritShade" },
+        { output: "paleColor", op: "color", value: [0.72, 0.76, 0.66] },
+        { output: "lichened", op: "mix", a: "gritty", b: "paleColor", t: "paleLichen" },
+        { output: "orangeColor", op: "color", value: [0.74, 0.46, 0.18] },
+        { output: "spotted", op: "mix", a: "lichened", b: "orangeColor", t: "orangeLichen" },
+        { output: "troughColor", op: "color", value: [0.24, 0.28, 0.17] },
+        { output: "diffuse", op: "mix", a: "spotted", b: "troughColor", t: "trough" },
+
+        { output: "roughDry", op: "constant", value: 0.84 },
+        { output: "roughDamp", op: "constant", value: 0.6 },
+        { output: "roughness", op: "mix", a: "roughDry", b: "roughDamp", t: "trough" },
+
+        { output: "crownRelief", op: "scale", input: "crown", factor: 0.5 },
+        { output: "gritRelief", op: "scale", input: "gritMask", factor: 0.15 },
+        { output: "groundHeight", op: "add", a: "crownRelief", b: "gritRelief" },
+        { output: "lichenRelief", op: "scale", input: "lichenSpot", factor: 0.1 },
+        { output: "height", op: "add", a: "groundHeight", b: "lichenRelief" },
+      ],
+      outputs: { diffuse: "diffuse", roughness: "roughness", height: "height" },
+    },
+  },
   grass: [
     { kind: "tuft", density: 1.0, color: [0.55, 0.6, 0.5] },
     { kind: "flowers", density: 0.3, color: [0.5, 0.58, 0.44] },

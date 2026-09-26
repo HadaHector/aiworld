@@ -1,11 +1,14 @@
 import JSON5 from "json5";
 import type { BiomeDayNight, BiomeDefinition, BorderType, BoundaryHillStyle } from "../biomes/biomeTypes";
-import type { MaterialDef, MaterialLayer } from "../materials/materialTypes";
+import type { MaterialDef, MaterialDetail, MaterialLayer } from "../materials/materialTypes";
 import type { GrassKindDef } from "../foliage/grassConfig";
 import {
+  BUSH_FOLIAGE_BUILDERS,
   FOLIAGE_BUILDERS,
   TREE_CROWN_BUILDERS,
   type BranchingTree,
+  type BushShape,
+  type OldTrees,
   type PrimitiveTree,
   type TreeCrown,
   type TreeKindDef,
@@ -35,7 +38,7 @@ export interface PackSource {
 
 /** The folders a pack's content lives in, one kind of definition each. A definition's id is its
  *  file name, and a pack with a higher priority replaces a lower one's definition of the same id. */
-const CONTENT_FOLDERS = ["biomes", "materials", "layers", "grass", "trees", "voices", "borderHills", "settlements"] as const;
+const CONTENT_FOLDERS = ["biomes", "materials", "layers", "grass", "trees", "bushes", "voices", "borderHills", "settlements"] as const;
 type ContentFolder = (typeof CONTENT_FOLDERS)[number];
 
 /** Instances are tagged with kind * 16 + scale (foliage/grassScatter.ts), which leaves room for 16. */
@@ -167,10 +170,11 @@ export function resolveContent(packs: PackSource[]): WorldContent {
       });
   }
 
-  const materials = readAll("materials", (e, o, r) => readMaterial(e.id, o, r));
+  const materials = readAll("materials", (e, o, r) => readMaterial(e.id, o, r, defaults));
   const layers = readAll("layers", (e, o, r) => ({ file: e.file, ...readUniversalLayer(e.id, o, r) }));
   const grassKinds = readAll("grass", (e, o, r) => readGrassKind(e.id, o, r));
   const treeKinds = readAll("trees", (e, o, r) => readTreeKind(e.id, o, r, defaults));
+  const bushKinds = readAll("bushes", (e, o, r) => readBushKind(e.id, o, r, defaults));
   const voiceList = readAll("voices", (e, o, r) => ({ id: e.id, voice: readVoice(o, r) }));
   const boundaryHillStyles = readAll("borderHills", (e, o, r) => readBoundaryHillStyle(e.id, o, r));
   const settlementStyles = readAll("settlements", (e, o, r) => readSettlementStyle(e.id, o, r));
@@ -182,6 +186,12 @@ export function resolveContent(packs: PackSource[]): WorldContent {
   const materialIds = new Set(materials.map((m) => m.id));
   const grassKindIds = new Set(grassKinds.map((k) => k.id));
   const treeKindIds = new Set(treeKinds.map((k) => k.id));
+  const bushKindIds = new Set(bushKinds.map((k) => k.id));
+  for (const id of bushKindIds) {
+    if (treeKindIds.has(id)) {
+      issues.push({ file: entries.get("bushes")!.get(id)!.file, path: "", message: `a tree kind is already called "${id}" - bushes and trees share one set of names` });
+    }
+  }
   const voices: Record<string, Voice> = {};
   for (const { id, voice } of voiceList) voices[id] = voice;
 
@@ -207,6 +217,9 @@ export function resolveContent(packs: PackSource[]): WorldContent {
     }
     for (const output of Object.keys(biome.outputs.foliage?.outputs ?? {})) {
       if (!treeKindIds.has(output)) issues.push({ file, path: "trees.outputs", message: `"${output}" is not a tree kind (known: ${[...treeKindIds].join(", ")})` });
+    }
+    for (const output of Object.keys(biome.outputs.bushes?.outputs ?? {})) {
+      if (!bushKindIds.has(output)) issues.push({ file, path: "bushes.outputs", message: `"${output}" is not a bush kind (known: ${[...bushKindIds].join(", ")})` });
     }
   }
   const defaultsFile = defaultsFileOf.defaultMaterial ?? "defaults.json5";
@@ -240,6 +253,8 @@ export function resolveContent(packs: PackSource[]): WorldContent {
     roadLayer: roadLayers[0].layer,
     grassKinds,
     treeKinds,
+    bushKinds,
+    oldTrees: defaults.oldTrees,
     voices,
     boundaryHillStyles,
     settlementStyles,
@@ -279,10 +294,14 @@ interface Defaults {
    *  survivalFade, which skips blending when every zone in range shares one. */
   treeRules: TreeRules;
   treeScale: [number, number];
+  materialDetail: MaterialDetail;
+  oldTrees: OldTrees;
 }
 
 function readDefaults(obj: RawObject, reader: Reader): Defaults {
-  reader.onlyKeys(obj, "", ["defaultMaterial", "sky", "light", "treeRules", "treeScale"]);
+  reader.onlyKeys(obj, "", ["defaultMaterial", "sky", "light", "treeRules", "treeScale", "materialDetail", "oldTrees"]);
+  const oldTrees = reader.object(obj.oldTrees, "oldTrees");
+  reader.onlyKeys(oldTrees, "oldTrees", ["share", "size"]);
   const treeRules = reader.object(obj.treeRules ?? {}, "treeRules");
   reader.onlyKeys(treeRules, "treeRules", ["shore", "line", "slope"]);
   const sky = reader.object(obj.sky ?? {}, "sky");
@@ -305,6 +324,19 @@ function readDefaults(obj: RawObject, reader: Reader): Defaults {
       slope: reader.range(treeRules, "slope", "treeRules"),
     },
     treeScale: reader.range(obj, "treeScale", "", { allowEqual: true }),
+    materialDetail: readMaterialDetail(reader.object(obj.materialDetail, "materialDetail"), reader, "materialDetail"),
+    oldTrees: {
+      share: reader.number(oldTrees, "share", "oldTrees", { min: 0, max: 1 }),
+      size: reader.range(oldTrees, "size", "oldTrees", { allowEqual: true }),
+    },
+  };
+}
+
+function readMaterialDetail(obj: RawObject, reader: Reader, path: string, fallback?: MaterialDetail): MaterialDetail {
+  reader.onlyKeys(obj, path, ["scale", "strength"]);
+  return {
+    scale: fallback && obj.scale === undefined ? fallback.scale : reader.number(obj, "scale", path, { min: 1, max: 64 }),
+    strength: fallback && obj.strength === undefined ? fallback.strength : reader.number(obj, "strength", path, { min: 0, max: 2 }),
   };
 }
 
@@ -317,8 +349,8 @@ function readUniversalLayer(id: string, obj: RawObject, reader: Reader): { layer
   return { layer: readLayer(obj, reader, "", id), roadSurface: reader.boolean(obj, "roadSurface", "", false) };
 }
 
-function readMaterial(id: string, obj: RawObject, reader: Reader): MaterialDef {
-  reader.onlyKeys(obj, "", ["name", "texture", "grass", "clearsGrass"]);
+function readMaterial(id: string, obj: RawObject, reader: Reader, defaults: Defaults): MaterialDef {
+  reader.onlyKeys(obj, "", ["name", "texture", "grass", "clearsGrass", "detail"]);
   return {
     id,
     name: reader.string(obj, "name", ""),
@@ -330,6 +362,7 @@ function readMaterial(id: string, obj: RawObject, reader: Reader): MaterialDef {
       return { kind: reader.string(spec, "kind", path), density: reader.number(spec, "density", path, { min: 0 }), color: reader.color(spec, "color", path) };
     }),
     clearsGrass: reader.optionalNumber(obj, "clearsGrass", "", 0, { min: 0 }),
+    detail: obj.detail === undefined ? defaults.materialDetail : readMaterialDetail(reader.object(obj.detail, "detail"), reader, "detail", defaults.materialDetail),
   };
 }
 
@@ -346,7 +379,7 @@ function readTexture(raw: unknown, reader: Reader, path: string): TextureDef {
 }
 
 function readGrassKind(id: string, obj: RawObject, reader: Reader): GrassKindDef {
-  reader.onlyKeys(obj, "", ["width", "height", "sway", "fadeStart", "fadeEnd", "cluster", "blades"]);
+  reader.onlyKeys(obj, "", ["width", "height", "sway", "fadeStart", "fadeEnd", "cluster", "wades", "blades"]);
   const blades = reader.object(obj.blades, "blades");
   reader.onlyKeys(blades, "blades", ["count", "minHeight", "maxHeight", "baseWidth", "lean", "fan", "seedHeads", "flowerHeads"]);
   const def: GrassKindDef = {
@@ -367,6 +400,7 @@ function readGrassKind(id: string, obj: RawObject, reader: Reader): GrassKindDef
     },
   };
   if (def.fadeEnd < def.fadeStart) reader.fail("fadeEnd", "must not be closer than fadeStart");
+  if (obj.wades !== undefined) def.wades = reader.number(obj, "wades", "", { min: 0 });
   if (obj.cluster !== undefined) {
     const cluster = reader.object(obj.cluster, "cluster");
     reader.onlyKeys(cluster, "cluster", ["scale", "coverage"]);
@@ -374,28 +408,67 @@ function readGrassKind(id: string, obj: RawObject, reader: Reader): GrassKindDef
   }
   if (blades.flowerHeads !== undefined) {
     const heads = reader.object(blades.flowerHeads, "blades.flowerHeads");
-    reader.onlyKeys(heads, "blades.flowerHeads", ["count", "radius", "colors"]);
+    reader.onlyKeys(heads, "blades.flowerHeads", ["count", "radius", "colors", "shape"]);
     const colors = reader.array(heads, "colors", "blades.flowerHeads").map((c, i) => reader.colorValue(c, `blades.flowerHeads.colors[${i}]`));
     if (colors.length === 0) reader.fail("blades.flowerHeads.colors", "a flowering kind needs at least one petal colour");
     def.blades.flowerHeads = {
       count: reader.number(heads, "count", "blades.flowerHeads", { min: 0, integer: true }),
       radius: reader.number(heads, "radius", "blades.flowerHeads", { min: 0 }),
       colors,
+      shape: heads.shape === undefined ? "flower" : reader.oneOf(heads, "shape", "blades.flowerHeads", ["flower", "spike"] as const),
     };
   }
   return def;
 }
 
+const KIND_COMMON_KEYS = ["model", "tint", "scale", "growsOld"];
+
 function readTreeKind(id: string, obj: RawObject, reader: Reader, defaults: Defaults): TreeKindDef {
   const model = obj.model === undefined ? "primitive" : reader.oneOf(obj, "model", "", ["primitive", "branching"] as const);
-  const common = ["model", "tint", "scale"];
+  const shape = model === "branching" ? readBranchingTree(obj, reader, KIND_COMMON_KEYS) : readPrimitiveTree(obj, reader, KIND_COMMON_KEYS);
+  return { id, shape, ...readKindLook(obj, reader, defaults), growsOld: reader.boolean(obj, "growsOld", "", false) };
+}
+
+function readBushKind(id: string, obj: RawObject, reader: Reader, defaults: Defaults): TreeKindDef {
+  if (obj.model !== undefined) reader.oneOf(obj, "model", "", ["bush"] as const);
+  return { id, shape: readBush(obj, reader), ...readKindLook(obj, reader, defaults), growsOld: false };
+}
+
+/** What every tree and bush kind has besides its shape: its tint pair and its scale range. */
+function readKindLook(obj: RawObject, reader: Reader, defaults: Defaults): Pick<TreeKindDef, "tint" | "scale"> {
   const tint = reader.array(obj, "tint", "").map((c, i) => reader.colorValue(c, `tint[${i}]`));
   if (tint.length !== 2) reader.fail("tint", "expected two colours: [darkest, lightest]");
   return {
-    id,
-    shape: model === "branching" ? readBranchingTree(obj, reader, common) : readPrimitiveTree(obj, reader, common),
     tint: [tint[0] ?? [1, 1, 1], tint[1] ?? [1, 1, 1]],
     scale: obj.scale === undefined ? defaults.treeScale : reader.range(obj, "scale", "", { allowEqual: true }),
+  };
+}
+
+function readBush(obj: RawObject, reader: Reader): BushShape {
+  reader.onlyKeys(obj, "", [...KIND_COMMON_KEYS.filter((key) => key !== "growsOld"), "variants", "width", "height", "cards", "clumps", "clumpSize", "foliage"]);
+  const foliage = reader.object(obj.foliage, "foliage");
+  reader.onlyKeys(foliage, "foliage", ["builder", "dark", "light", "stem", "stems", "leaves", "leafLength", "leafWidth", "bare"]);
+  const stems = reader.range(foliage, "stems", "foliage", { allowEqual: true });
+  if (stems[0] < 1 || !Number.isInteger(stems[0]) || !Number.isInteger(stems[1])) reader.fail("foliage.stems", "expected whole numbers of stems, at least 1");
+  return {
+    model: "bush",
+    variants: reader.number(obj, "variants", "", { min: 1, max: 16, integer: true }),
+    width: reader.range(obj, "width", "", { allowEqual: true }),
+    height: reader.range(obj, "height", "", { allowEqual: true }),
+    cards: reader.number(obj, "cards", "", { min: 1, max: 8, integer: true }),
+    clumps: reader.number(obj, "clumps", "", { min: 0, max: 32, integer: true }),
+    clumpSize: reader.range(obj, "clumpSize", "", { allowEqual: true }),
+    foliage: {
+      builder: reader.oneOf(foliage, "builder", "foliage", BUSH_FOLIAGE_BUILDERS),
+      dark: reader.color(foliage, "dark", "foliage"),
+      light: reader.color(foliage, "light", "foliage"),
+      stem: reader.color(foliage, "stem", "foliage"),
+      stems,
+      leaves: reader.number(foliage, "leaves", "foliage", { min: 1, integer: true }),
+      leafLength: reader.number(foliage, "leafLength", "foliage", { min: 0.01, max: 1 }),
+      leafWidth: reader.number(foliage, "leafWidth", "foliage", { min: 0.01, max: 1 }),
+      bare: reader.number(foliage, "bare", "foliage", { min: 0, max: 0.9 }),
+    },
   };
 }
 
@@ -568,6 +641,7 @@ function readBiome(id: string, obj: RawObject, reader: Reader, defaults: Default
     "borderType",
     "height",
     "trees",
+    "bushes",
     "treeRules",
     "settlement",
     "ground",
@@ -616,6 +690,7 @@ function readBiome(id: string, obj: RawObject, reader: Reader, defaults: Default
     outputs: {
       height: readPipeline(obj.height, reader, "height"),
       foliage: obj.trees === undefined ? undefined : readPipeline(obj.trees, reader, "trees"),
+      bushes: obj.bushes === undefined ? undefined : readPipeline(obj.bushes, reader, "bushes"),
     },
     borderType: obj.borderType === undefined ? "mountain" : reader.oneOf(obj, "borderType", "", BORDER_TYPES),
     spawnWeight: reader.number(obj, "spawnWeight", "", { min: 0 }),

@@ -1,28 +1,40 @@
-// Snow: the usual mottle, a gentle broad tonal shift (fbm, very low frequency, a cool blue-white
-// shadow color - soft, large drifts of shading rather than a repeating pattern), and rare bright
-// sparkle glints (billow, only the extreme upper tail so glints stay tiny and sparse). No ridged
-// wind-ridge layer any more - it read as patchy and artificial rather than smooth, windswept snow.
+// Snow: wind-scoured into soft ridges (a sine wave, bent by a slow noise so the ridges wander),
+// shadowed faintly blue in its broad hollows, with ice crystals glinting here and there - single
+// worley points, picked by their own value, smoother than the snow around them.
 {
   name: "Snow",
+  detail: { strength: 0.35 },
   texture: {
-    bumpStrength: 1.0,
+    bumpStrength: 1.2,
     pipeline: {
       noises: [
         { name: "mottle", type: "fbm", octaves: 3, tileCycles: 13, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
         { name: "broad", type: "fbm", octaves: 2, tileCycles: 3, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
-        { name: "sparkle", type: "billow", octaves: 2, tileCycles: 56, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+        { name: "sastrugi", type: "wave", tileCycles: [5, 20], amplitude: 1, shape: "sine" },
+        { name: "bend", type: "fbm", octaves: 3, tileCycles: 3, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+        { name: "glints", type: "worley", tileCycles: 260, amplitude: 1, mode: "f1" },
       ],
       steps: [
         { output: "mottle", op: "sample", noise: "mottle" },
         { output: "mottleMask", op: "mask", input: "mottle", at: 1.75, off: -1.75 },
         { output: "broad", op: "sample", noise: "broad" },
         { output: "broadMask", op: "mask", input: "broad", at: 1.5, off: -1.5 },
-        // Only the extreme upper tail, so glints stay tiny and sparse rather than a bright haze.
-        { output: "sparkleRaw", op: "sample", noise: "sparkle" },
-        { output: "glintMask", op: "mask", input: "sparkleRaw", at: 1.5, off: 1.1 },
 
-        // A colorRamp instead of a two-color mix: snow reads better as a short cool-to-warm-white
-        // gradient than as a straight blend between two endpoints.
+        { output: "bendRaw", op: "sample", noise: "bend" },
+        { output: "bendPx", op: "scale", input: "bendRaw", factor: 50 },
+        { output: "still", op: "constant", value: 0 },
+        { output: "ridgeRaw", op: "sample", noise: "sastrugi", offset: ["still", "bendPx"] },
+        { output: "ridge", op: "mask", input: "ridgeRaw", at: 1, off: -1 },
+        // Ridges only where the wind has had its way - in patches.
+        { output: "scoured", op: "mask", input: "mottle", at: 0.9, off: -0.4 },
+        { output: "ridgeShown", op: "multiply", a: "ridge", b: "scoured" },
+
+        { output: "glintDist", op: "sample", noise: "glints" },
+        { output: "glintId", op: "sample", noise: "glints", mode: "cell" },
+        { output: "glintSpot", op: "mask", input: "glintDist", at: 0.05, off: 0.2 },
+        { output: "glintPick", op: "mask", input: "glintId", at: 0.9, off: 0.86 },
+        { output: "glintMask", op: "multiply", a: "glintSpot", b: "glintPick" },
+
         {
           output: "snowTone",
           op: "colorRamp",
@@ -33,23 +45,25 @@
             { at: 1.0, color: [0.99, 0.99, 1.0] },
           ],
         },
-        { output: "shadowColor", op: "color", value: [0.83, 0.87, 0.94] },
-        { output: "shadowBlend", op: "scale", input: "broadMask", factor: 0.75 },
+        { output: "shadowColor", op: "color", value: [0.8, 0.85, 0.94] },
+        { output: "shadowBlend", op: "scale", input: "broadMask", factor: 0.7 },
         { output: "drifted", op: "mix", a: "snowTone", b: "shadowColor", t: "shadowBlend" },
+        // The lee of each ridge a touch bluer.
+        { output: "leeBlend", op: "invert", input: "ridgeShown" },
+        { output: "leeAmount", op: "scale", input: "leeBlend", factor: 0.25 },
+        { output: "ridged", op: "mix", a: "drifted", b: "shadowColor", t: "leeAmount" },
         { output: "glintColor", op: "color", value: [1.0, 1.0, 1.0] },
-        { output: "diffuse", op: "mix", a: "drifted", b: "glintColor", t: "glintMask" },
+        { output: "diffuse", op: "mix", a: "ridged", b: "glintColor", t: "glintMask" },
 
-        { output: "roughSnow", op: "constant", value: 0.35 },
-        { output: "roughGlint", op: "constant", value: 0.12 },
+        { output: "roughSnow", op: "constant", value: 0.4 },
+        { output: "roughGlint", op: "constant", value: 0.05 },
         { output: "roughness", op: "mix", a: "roughSnow", b: "roughGlint", t: "glintMask" },
 
-        // Broad drifts set the large-scale relief, but at frequency 0.012 they barely change from
-        // pixel to pixel, so on their own they bake a completely flat normal map - the fine mottle
-        // is what actually gives snow any surface at all. Glints are optical, not geometric, so
-        // they contribute no height.
-        { output: "drifts", op: "scale", input: "broadMask", factor: 0.65 },
-        { output: "fineSnow", op: "scale", input: "mottleMask", factor: 0.35 },
-        { output: "height", op: "add", a: "drifts", b: "fineSnow" },
+        { output: "drifts", op: "scale", input: "broadMask", factor: 0.45 },
+        { output: "ridgeRelief", op: "scale", input: "ridgeShown", factor: 0.35 },
+        { output: "driftRidges", op: "add", a: "drifts", b: "ridgeRelief" },
+        { output: "fineSnow", op: "scale", input: "mottleMask", factor: 0.2 },
+        { output: "height", op: "add", a: "driftRidges", b: "fineSnow" },
       ],
       outputs: { diffuse: "diffuse", roughness: "roughness", height: "height" },
     },

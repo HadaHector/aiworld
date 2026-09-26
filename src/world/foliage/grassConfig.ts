@@ -28,6 +28,9 @@ export interface GrassKindDef {
    *  `coverage` is roughly the fraction of ground inside a patch. A material's density for this
    *  kind is then the density inside a patch. */
   cluster?: { scale: number; coverage: number };
+  /** How deep a water this kind stands in, in metres - reeds grow out of the shallows. Without it a
+   *  kind stops GRASS_WATER_CLEARANCE above the water line, like every other grass. */
+  wades?: number;
   /** Blade texture (see grassTextures.ts). */
   blades: {
     count: number;
@@ -45,8 +48,9 @@ export interface GrassKindDef {
     seedHeads: boolean;
     /** Flower heads on the tips of this many blades, `radius` texture pixels across. Each tuft's
      *  petals take one of `colors`, picked at random per tuft, rather than the tuft's own (stem)
-     *  colour. */
-    flowerHeads?: { count: number; radius: number; colors: ColorTuple[] };
+     *  colour. `shape` "flower" (the default) is five petals round a centre; "spike" is a bulrush's
+     *  cattail - a long, rounded head a little below the tip, the bare stem carrying on above it. */
+    flowerHeads?: { count: number; radius: number; colors: ColorTuple[]; shape: "flower" | "spike" };
   };
 }
 
