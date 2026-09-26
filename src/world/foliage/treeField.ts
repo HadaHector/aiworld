@@ -239,16 +239,24 @@ export async function createTreeField(
       setInstanceBuffer(canopy, "matrix", entry.matrices, 16);
       if (trunk) setInstanceBuffer(trunk, "matrix", entry.matrices, 16);
       entry.published = true;
+      setInstanceCount(entry, total);
     } else {
+      // The count before the upload: updating the matrix buffer sends only as many matrices as the
+      // mesh's count says it holds. Stated after, a species that gained trees - a chunk's trees
+      // moving between the near and far models - drew its new ones from matrices the GPU had never
+      // been sent, and they vanished until the next chunk event happened to upload them.
+      setInstanceCount(entry, total);
       canopy.thinInstanceBufferUpdated("color");
       canopy.thinInstanceBufferUpdated("matrix");
       trunk?.thinInstanceBufferUpdated("matrix");
     }
+  }
 
-    // Held capacity means the buffers are longer than the number of trees in them, so the count
-    // has to be stated rather than inferred from their length.
-    canopy.thinInstanceCount = total;
-    if (trunk) trunk.thinInstanceCount = total;
+  /** Held capacity means the buffers are longer than the number of trees in them, so the count
+   *  has to be stated rather than inferred from their length. */
+  function setInstanceCount(entry: Species, total: number): void {
+    entry.model.canopy.thinInstanceCount = total;
+    if (entry.model.trunk) entry.model.trunk.thinInstanceCount = total;
   }
 
   function flush(): void {
