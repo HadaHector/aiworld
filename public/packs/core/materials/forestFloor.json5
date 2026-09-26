@@ -110,7 +110,7 @@
         },
         { output: "diffuse", op: "mix", a: "twigged", b: "mossTone", t: "mossMask" },
 
-        { output: "roughness", op: "constant", value: 0.86 },
+        { output: "roughness", op: "constant", value: 0.7 },
 
         { output: "humusRelief", op: "scale", input: "humusMask", factor: 0.2 },
         { output: "smallRelief", op: "scale", input: "smallCover", factor: 0.3 },

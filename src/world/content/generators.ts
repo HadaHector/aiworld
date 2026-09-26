@@ -238,7 +238,13 @@ const grassland: Generator = (params, reader, path) => {
             ]
           : [{ output: "diffuse", op: "scale", input: "ground", factor: 1 }]),
 
-        { output: "roughness", op: "constant", value: reader.number(params, "roughness", path) },
+        // Blades are waxy and catch the light, bare soil is matte: `roughness` is the grass's own,
+        // the strokes a little glossier and the soil a good deal duller.
+        { output: "grassRough", op: "constant", value: reader.number(params, "roughness", path) },
+        { output: "bladeGloss", op: "scale", input: "strokes", factor: -0.2 },
+        { output: "bladeRough", op: "add", a: "grassRough", b: "bladeGloss" },
+        { output: "soilRough", op: "constant", value: 0.92 },
+        { output: "roughness", op: "mix", a: "bladeRough", b: "soilRough", t: "soilShown" },
 
         { output: "clumpRelief", op: "scale", input: "clump", factor: 0.4 },
         { output: "strokeRelief", op: "scale", input: "strokes", factor: 0.08 },

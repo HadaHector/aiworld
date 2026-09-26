@@ -61,7 +61,7 @@
         { output: "shade", op: "multiply", a: "faceShade", b: "grainShade" },
         { output: "diffuse", op: "multiply", a: "tone", b: "shade" },
 
-        { output: "roughness", op: "constant", value: 0.88 },
+        { output: "roughness", op: "constant", value: 0.65 },
 
         { output: "pieceRelief", op: "scale", input: "piece", factor: 0.85 },
         { output: "grainRelief", op: "scale", input: "grainMask", factor: 0.1 },

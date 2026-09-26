@@ -61,8 +61,8 @@
         { output: "ironBlend", op: "scale", input: "ironAmount", factor: 0.22 },
         { output: "diffuse", op: "mix", a: "sandTone", b: "ironColor", t: "ironBlend" },
 
-        { output: "roughTrough", op: "constant", value: 0.72 },
-        { output: "roughCrest", op: "constant", value: 0.58 },
+        { output: "roughTrough", op: "constant", value: 0.65 },
+        { output: "roughCrest", op: "constant", value: 0.4 },
         { output: "roughness", op: "mix", a: "roughTrough", b: "roughCrest", t: "tone" },
 
         { output: "dunes", op: "scale", input: "broadMask", factor: 0.35 },

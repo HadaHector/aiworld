@@ -1,5 +1,6 @@
 // Snow: wind-scoured into soft ridges (a sine wave, bent by a slow noise so the ridges wander),
-// shadowed faintly blue in its broad hollows, with ice crystals glinting here and there - single
+// a cool blue-white rather than pure white - so the sun on it shines without blinding - shadowed
+// bluer in its broad hollows, with ice crystals glinting here and there - single
 // worley points, picked by their own value, smoother than the snow around them.
 {
   name: "Snow",
@@ -40,23 +41,23 @@
           op: "colorRamp",
           input: "mottleMask",
           stops: [
-            { at: 0.0, color: [0.88, 0.9, 0.95] },
-            { at: 0.55, color: [0.94, 0.95, 0.97] },
-            { at: 1.0, color: [0.99, 0.99, 1.0] },
+            { at: 0.0, color: [0.72, 0.78, 0.88] },
+            { at: 0.55, color: [0.78, 0.83, 0.91] },
+            { at: 1.0, color: [0.84, 0.88, 0.94] },
           ],
         },
-        { output: "shadowColor", op: "color", value: [0.8, 0.85, 0.94] },
+        { output: "shadowColor", op: "color", value: [0.63, 0.71, 0.85] },
         { output: "shadowBlend", op: "scale", input: "broadMask", factor: 0.7 },
         { output: "drifted", op: "mix", a: "snowTone", b: "shadowColor", t: "shadowBlend" },
         // The lee of each ridge a touch bluer.
         { output: "leeBlend", op: "invert", input: "ridgeShown" },
         { output: "leeAmount", op: "scale", input: "leeBlend", factor: 0.25 },
         { output: "ridged", op: "mix", a: "drifted", b: "shadowColor", t: "leeAmount" },
-        { output: "glintColor", op: "color", value: [1.0, 1.0, 1.0] },
+        { output: "glintColor", op: "color", value: [0.95, 0.97, 1.0] },
         { output: "diffuse", op: "mix", a: "ridged", b: "glintColor", t: "glintMask" },
 
-        { output: "roughSnow", op: "constant", value: 0.4 },
-        { output: "roughGlint", op: "constant", value: 0.05 },
+        { output: "roughSnow", op: "constant", value: 0.5 },
+        { output: "roughGlint", op: "constant", value: 0.12 },
         { output: "roughness", op: "mix", a: "roughSnow", b: "roughGlint", t: "glintMask" },
 
         { output: "drifts", op: "scale", input: "broadMask", factor: 0.45 },

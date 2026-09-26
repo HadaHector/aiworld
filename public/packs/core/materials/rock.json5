@@ -53,7 +53,7 @@
         { output: "diffuse", op: "mix", a: "stone", b: "sediment", t: "sedimentMask" },
 
         // Loose grit is powdery and more matte than the bare stone it sits on.
-        { output: "roughStone", op: "constant", value: 0.82 },
+        { output: "roughStone", op: "constant", value: 0.56 },
         { output: "roughSediment", op: "constant", value: 0.94 },
         { output: "roughness", op: "mix", a: "roughStone", b: "roughSediment", t: "sedimentMask" },
 

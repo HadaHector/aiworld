@@ -81,10 +81,10 @@
         { output: "diffuse", op: "mix", a: "bareRock", b: "mossLit", t: "mossMask" },
 
         // Loose grit is powdery and more matte than the bare stone it sits on.
-        { output: "roughStone", op: "constant", value: 0.82 },
+        { output: "roughStone", op: "constant", value: 0.56 },
         { output: "roughSediment", op: "constant", value: 0.94 },
         { output: "roughRock", op: "mix", a: "roughStone", b: "roughSediment", t: "sedimentMask" },
-        { output: "roughMoss", op: "constant", value: 0.9 },
+        { output: "roughMoss", op: "constant", value: 0.8 },
         { output: "roughness", op: "mix", a: "roughRock", b: "roughMoss", t: "mossMask" },
 
         // Sediment settles level, so it fills its hollows slightly rather than draping over them.

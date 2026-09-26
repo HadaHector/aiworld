@@ -44,7 +44,7 @@
         { output: "diffuse", op: "mix", a: "wetSilt", b: "strawLit", t: "straw" },
 
         { output: "roughDry", op: "constant", value: 0.7 },
-        { output: "roughWet", op: "constant", value: 0.25 },
+        { output: "roughWet", op: "constant", value: 0.08 },
         { output: "roughMud", op: "mix", a: "roughDry", b: "roughWet", t: "wetMask" },
         { output: "roughStraw", op: "constant", value: 0.8 },
         { output: "roughness", op: "mix", a: "roughMud", b: "roughStraw", t: "straw" },

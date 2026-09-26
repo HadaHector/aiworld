@@ -30,7 +30,7 @@
 
         // Wet patches are notably glossier than the dry mud around them.
         { output: "roughDry", op: "constant", value: 0.55 },
-        { output: "roughWet", op: "constant", value: 0.22 },
+        { output: "roughWet", op: "constant", value: 0.1 },
         { output: "roughness", op: "mix", a: "roughDry", b: "roughWet", t: "wetMask" },
 
         // Dried mud curls up into plates with the cracks as grooves between them - so the crack

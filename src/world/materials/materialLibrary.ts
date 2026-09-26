@@ -91,12 +91,18 @@ export interface MaterialTexturePreview {
   normalPixels: Uint8Array;
 }
 
-// Blinn-Phong shininess range the blended roughness (0=smooth..1=matte) maps into - not a real
-// BRDF, just enough to make rock/snow read a hair shinier than matte grass. Kept low-key
-// deliberately (SPECULAR_INTENSITY) so terrain doesn't read as wet plastic.
-const SPECULAR_MIN_SHININESS = 4.0;
-const SPECULAR_MAX_SHININESS = 48.0;
-const SPECULAR_INTENSITY = 0.25;
+// The shininess a material's roughness (0 smooth - 1 matte) maps into, geometrically - so the
+// glossy end, a wet stone, is a tight bright glint and the matte end a broad faint sheen - and the
+// strength of the lot. The highlight is energy-normalised Blinn-Phong with a Schlick Fresnel term
+// (see the fragment shader), so how bright a highlight is follows from how tight it is, and
+// looking towards the sun across a glossy surface brings up a sheen. Roughness is a material's
+// own business (its texture's `roughness` output): rock faces, wet stone, sand and grass blades
+// are glossy, soil and grit matte.
+const SPECULAR_MIN_SHININESS = 6.0;
+const SPECULAR_MAX_SHININESS = 400.0;
+const SPECULAR_INTENSITY = 1.3;
+// How much a fully glossy surface's reflectance rises above a plain dielectric's 4%.
+const SPECULAR_GLOSS_REFLECTANCE = 0.35;
 
 const VERTEX_SHADER = `#version 300 es
 precision highp float;
@@ -252,11 +258,21 @@ void main() {
   float diffuse = ndl * lightIntensity;
 
   float roughness = albedo.a;
+  float gloss = 1.0 - roughness;
   vec3 viewDir = normalize(cameraPosition - vWorldPosition);
   vec3 halfVec = normalize(viewDir + lightDir);
   float ndh = max(dot(worldNormal, halfVec), 0.0);
-  float shininess = mix(specularMaxShininess, specularMinShininess, roughness);
-  float specular = pow(ndh, shininess) * (1.0 - roughness) * specularIntensity;
+  float shininess = exp2(mix(log2(specularMaxShininess), log2(specularMinShininess), roughness));
+  // Normalised, so a tighter highlight is a brighter one rather than the same light in less area.
+  float normalisation = (shininess + 8.0) / 25.13;
+  // Schlick Fresnel, rising towards grazing - scaled by gloss, because a matte surface's own
+  // roughness shadows the grazing light a glossy one reflects. The base reflectance is not a plain
+  // dielectric's 4% but rises with gloss, to about a third on a wet stone: artistic, a sheen of
+  // wax on a leaf or of water on a pebble, since at 4% nothing at this scale would ever glint.
+  float reflectance = 0.04 + ${SPECULAR_GLOSS_REFLECTANCE.toFixed(3)} * gloss * gloss;
+  float fresnel = reflectance + (1.0 - reflectance) * pow(1.0 - max(dot(viewDir, halfVec), 0.0), 5.0) * gloss * gloss;
+  float facing = max(dot(worldNormal, lightDir), 0.0);
+  float specular = normalisation * pow(ndh, shininess) * fresnel * facing * specularIntensity;
 
   // Shadow darkens the light itself, not the surface it lands on - a shadowed patch of sand is
   // still sand, just lit by the sky rather than the sun, which is what SHADOW_DARKNESS's floor is

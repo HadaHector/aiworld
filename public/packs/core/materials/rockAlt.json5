@@ -2,5 +2,5 @@
 // one flat texture - see layers/rock-alt.json5.
 {
   name: "Weathered Rock",
-  texture: { generator: "twoTone", base: [0.4, 0.31, 0.26], variation: [0.52, 0.42, 0.34], roughness: 0.9, bumpStrength: 4.2 },
+  texture: { generator: "twoTone", base: [0.4, 0.31, 0.26], variation: [0.52, 0.42, 0.34], roughness: 0.61, bumpStrength: 4.2 },
 }

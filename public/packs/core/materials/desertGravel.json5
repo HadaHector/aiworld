@@ -84,7 +84,7 @@
 
         { output: "roughSand", op: "constant", value: 0.8 },
         // Desert varnish is faintly glossy.
-        { output: "roughStone", op: "constant", value: 0.5 },
+        { output: "roughStone", op: "constant", value: 0.66 },
         { output: "roughness", op: "mix", a: "roughSand", b: "roughStone", t: "cover" },
 
         { output: "bedRelief", op: "scale", input: "mottleMask", factor: 0.12 },

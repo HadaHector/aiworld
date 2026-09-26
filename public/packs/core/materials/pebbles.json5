@@ -4,7 +4,8 @@
 // point's own random value (the `cell` mode), and its outline wobbled by a warp so none is a circle.
 {
   name: "Pebbles",
-  detail: { strength: 0.35 },
+  // A gentle close-up pass: its micro-bumps on a glossy stone read as a spray of glints.
+  detail: { strength: 0.2 },
   texture: {
     bumpStrength: 2.6,
     pipeline: {
@@ -84,8 +85,8 @@
         { output: "wetShade", op: "remap", input: "wetMask", inMin: 0, inMax: 1, outMin: 1, outMax: 0.8 },
         { output: "diffuse", op: "multiply", a: "dry", b: "wetShade" },
 
-        { output: "roughDry", op: "constant", value: 0.78 },
-        { output: "roughWet", op: "constant", value: 0.3 },
+        { output: "roughDry", op: "constant", value: 0.76 },
+        { output: "roughWet", op: "constant", value: 0.52 },
         { output: "roughness", op: "mix", a: "roughDry", b: "roughWet", t: "wetMask" },
 
         { output: "stoneRelief", op: "scale", input: "stone", factor: 0.9 },

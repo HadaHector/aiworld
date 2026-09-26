@@ -47,7 +47,7 @@
         { output: "gapColor", op: "color", value: [0.2, 0.19, 0.17] },
         { output: "diffuse", op: "mix", a: "litChip", b: "gapColor", t: "gap" },
 
-        { output: "roughness", op: "constant", value: 0.86 },
+        { output: "roughness", op: "constant", value: 0.62 },
 
         { output: "chipRelief", op: "scale", input: "chip", factor: 0.75 },
         { output: "gritRelief", op: "scale", input: "gritMask", factor: 0.12 },

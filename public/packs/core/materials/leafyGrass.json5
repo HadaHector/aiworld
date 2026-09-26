@@ -13,7 +13,7 @@
     soilAmount: 0.4,
     leaves: 0.6,
     leafColors: [[0.26, 0.2, 0.12], [0.4, 0.33, 0.2]],
-    roughness: 0.8,
+    roughness: 0.65,
     bumpStrength: 1.1,
   },
   grass: [
