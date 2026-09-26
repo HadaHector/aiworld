@@ -63,7 +63,7 @@ export interface World {
   getTimeOfDay: () => number;
 }
 
-const WORLD_SEED = 1337;
+const WORLD_SEED = 1338;
 
 const CHUNK_SIZE = 64;
 // Grid spacing doubles as distance doubles, which keeps a triangle about the same size on screen.
