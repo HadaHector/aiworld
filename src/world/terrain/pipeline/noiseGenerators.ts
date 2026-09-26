@@ -56,10 +56,12 @@ export function billowNoise2D(sample: OctaveSampler, params: OctaveNoiseParams):
  *  infinite-domain Noise2D-like function. Returns the OFFSET rather than an absolute position so
  *  the caller can look a point up under wrapped cell coordinates while still placing it at its
  *  unwrapped location - the whole trick behind tiling Worley (see worleyNoise2D). */
-function cellOffset(seed: number, cellX: number, cellY: number): { x: number; y: number } {
+/** A cell's jittered point, and a random value of its own (drawn after the point, so adding it
+ *  moved no point). */
+function cellOffset(seed: number, cellX: number, cellY: number): { x: number; y: number; id: number } {
   const cellSeed = deriveSeed(deriveSeed(seed, (cellX * 0x1f1f1f1f) >>> 0), (cellY * 0x2c2c2c2c) >>> 0);
   const rng = mulberry32(cellSeed);
-  return { x: rng(), y: rng() };
+  return { x: rng(), y: rng(), id: rng() };
 }
 
 function wrapCell(value: number, cellsPerTile: number): number {
@@ -89,7 +91,7 @@ export function worleyNoise2D(
   tilePeriod?: number,
   stretchX = 1,
   stretchY = 1,
-): (worldX: number, worldZ: number) => { f1: number; f2: number } {
+): (worldX: number, worldZ: number) => { f1: number; f2: number; id: number } {
   // Stretching is a different cell count per axis - taller cells for a vertical stretch - and each
   // axis rounds to a whole number of cells across the tile on its own.
   const frequencyX = frequency / stretchX;
@@ -107,6 +109,7 @@ export function worleyNoise2D(
 
     let f1 = Infinity;
     let f2 = Infinity;
+    let id = 0;
     for (let dy = -1; dy <= 1; dy++) {
       for (let dx = -1; dx <= 1; dx++) {
         const neighborX = cellX + dx;
@@ -118,11 +121,12 @@ export function worleyNoise2D(
         if (dist < f1) {
           f2 = f1;
           f1 = dist;
+          id = offset.id;
         } else if (dist < f2) {
           f2 = dist;
         }
       }
     }
-    return { f1, f2 };
+    return { f1, f2, id };
   };
 }

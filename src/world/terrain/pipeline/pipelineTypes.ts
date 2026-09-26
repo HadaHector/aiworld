@@ -31,18 +31,43 @@ export interface BillowNoiseSpec extends BaseNoiseSpec {
  * a natural, irregular crack/fracture network with no directional bias, unlike ridged noise's
  * creases (which follow the underlying gradient field and end up looking like directional waves,
  * not the polygonal fracture patterns real cracked ground/rock actually shows).
+ * "cell" is a random 0-1 value of the nearest point's own - constant across each cell. Sampled
+ * from the same noise as the "f1" or "edge" it goes with (see the `sample` step's `mode`), it gives
+ * every stone, plate or cobble those outline a shade or size of its own.
  */
 export interface WorleyNoiseSpec {
   name: string;
   type: "worley";
   frequency: number;
   amplitude: number;
-  mode: "f1" | "edge";
+  mode: WorleyMode;
   /** As BaseNoiseSpec.stretch. */
   stretch?: [number, number];
 }
 
-export type NoiseSpec = FbmNoiseSpec | RidgedNoiseSpec | BillowNoiseSpec | WorleyNoiseSpec;
+/**
+ * Parallel bands: a periodic wave running along `frequency` (cycles per unit along x and along y),
+ * so the crests are straight lines at right angles to it - `[0, f]` gives horizontal stripes, `[f, f]`
+ * diagonal ones. -1..1 times `amplitude`, with a phase picked by the seed. On its own it is a ruler;
+ * sampled with an `offset` warp it becomes wood grain, sand ripples or marble veins.
+ *
+ * `shape` is the profile across one band: "sine" is smooth, "triangle" has sharp crests and troughs
+ * with straight flanks, "saw" climbs slowly and drops at once (a ripple's gentle windward and steep
+ * lee side).
+ */
+export interface WaveNoiseSpec {
+  name: string;
+  type: "wave";
+  frequency: [number, number];
+  amplitude: number;
+  shape: WaveShape;
+}
+
+export type WaveShape = "sine" | "triangle" | "saw";
+
+export type WorleyMode = "f1" | "edge" | "cell";
+
+export type NoiseSpec = FbmNoiseSpec | RidgedNoiseSpec | BillowNoiseSpec | WorleyNoiseSpec | WaveNoiseSpec;
 
 /**
  * What a step carries. Inferred per step when the pipeline compiles (never declared by hand), so a
@@ -74,9 +99,11 @@ export type PipelineStep =
    * Samples a noise at this point - or, with `offset`, at this point moved by the values of two
    * earlier scalar steps (in the pipeline's own input units: world units, or texture pixels). That
    * is domain warping: offsetting by another noise bends the first one's features, so straight
-   * Worley cracks become wandering fissures and round blobs become swirls.
+   * Worley cracks become wandering fissures and round blobs become swirls. `mode` reads a worley
+   * noise another way than its own - the same points - so one noise can outline stones ("f1") and
+   * shade each of them ("cell").
    */
-  | { output: string; op: "sample"; noise: string; offset?: [string, string] }
+  | { output: string; op: "sample"; noise: string; offset?: [string, string]; mode?: WorleyMode }
   | { output: string; op: "constant"; value: number }
   | { output: string; op: "input"; name: string } // reads a named value from an external context bag, 0 if absent
   // --- color sources ---
@@ -93,6 +120,9 @@ export type PipelineStep =
   | { output: string; op: "power"; input: string; exponent: number }
   | { output: string; op: "abs"; input: string }
   | { output: string; op: "invert"; input: string }
+  /** sin(2π · input · cycles): turns any signal into repeating bands, -1..1. On a noise, the bands
+   *  follow its contours (agate, marble, strata); `cycles` is bands per unit of input. */
+  | { output: string; op: "sin"; input: string; cycles: number }
   | { output: string; op: "clamp"; input: string; min: number; max: number }
   | { output: string; op: "remap"; input: string; inMin: number; inMax: number; outMin: number; outMax: number }
   /** Color -> scalar (Rec. 709 luma), so a color can drive a scalar signal such as height. */

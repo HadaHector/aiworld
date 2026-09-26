@@ -4,7 +4,9 @@ import type { ColorRampStop, NoiseSpec, PipelineDef, PipelineStep } from "../ter
 import { joinPath, type RawObject, type Reader } from "./contentReader";
 import { FAILED_GENERATOR } from "./generators";
 
-const NOISE_TYPES = ["fbm", "ridged", "billow", "worley"] as const;
+const NOISE_TYPES = ["fbm", "ridged", "billow", "worley", "wave"] as const;
+const WAVE_SHAPES = ["sine", "triangle", "saw"] as const;
+const WORLEY_MODES = ["f1", "edge", "cell"] as const;
 
 /** The fields each op takes besides `output` and `op`: "ref" names an earlier step, "noise" a noise,
  *  "number"/"text"/"color" a literal. */
@@ -19,6 +21,7 @@ const OP_FIELDS: Record<string, Record<string, "ref" | "noise" | "number" | "tex
   power: { input: "ref", exponent: "number" },
   abs: { input: "ref" },
   invert: { input: "ref" },
+  sin: { input: "ref", cycles: "number" },
   clamp: { input: "ref", min: "number", max: "number" },
   remap: { input: "ref", inMin: "number", inMax: "number", outMin: "number", outMax: "number" },
   luminance: { input: "ref" },
@@ -51,6 +54,7 @@ function readNoise(raw: unknown, reader: Reader, path: string, options: Pipeline
   const obj = reader.object(raw, path);
   const type = reader.oneOf(obj, "type", path, NOISE_TYPES);
   const name = reader.string(obj, "name", path);
+  if (type === "wave") return readWave(obj, name, reader, path, options);
   const scaleKeys = options.texture ? ["frequency", "tileCycles"] : ["frequency"];
   let frequency = 0;
   if (options.texture && reader.has(obj, "tileCycles")) {
@@ -69,7 +73,7 @@ function readNoise(raw: unknown, reader: Reader, path: string, options: Pipeline
 
   if (type === "worley") {
     reader.onlyKeys(obj, path, ["name", "type", "amplitude", "mode", "stretch", ...scaleKeys]);
-    return { name, type, frequency, amplitude, mode: reader.oneOf(obj, "mode", path, ["f1", "edge"] as const), ...(stretch ? { stretch } : {}) };
+    return { name, type, frequency, amplitude, mode: reader.oneOf(obj, "mode", path, WORLEY_MODES), ...(stretch ? { stretch } : {}) };
   }
   reader.onlyKeys(obj, path, ["name", "type", "amplitude", "octaves", "persistence", "lacunarity", "stretch", ...scaleKeys]);
   return {
@@ -82,6 +86,26 @@ function readNoise(raw: unknown, reader: Reader, path: string, options: Pipeline
     persistence: reader.number(obj, "persistence", path),
     lacunarity: reader.number(obj, "lacunarity", path),
   };
+}
+
+/** A wave's scale is a pair - cycles along x and along y - and in a texture those cycles must be
+ *  whole, or the bands would not meet themselves at the tile's edge. */
+function readWave(obj: RawObject, name: string, reader: Reader, path: string, options: PipelineReadOptions): NoiseSpec {
+  const scaleKey = options.texture ? "tileCycles" : "frequency";
+  reader.onlyKeys(obj, path, ["name", "type", "amplitude", "shape", scaleKey]);
+  const value = obj[scaleKey];
+  let frequency: [number, number] = [0, 0];
+  if (!Array.isArray(value) || value.length !== 2 || !value.every((v) => typeof v === "number" && Number.isFinite(v))) {
+    reader.fail(joinPath(path, scaleKey), options.texture ? "expected [x, y], whole cycles per tile along each axis" : "expected [x, y], cycles per unit along each axis");
+  } else if (options.texture && !value.every((v) => Number.isInteger(v))) {
+    reader.fail(joinPath(path, scaleKey), "a texture's wave needs whole cycles per tile, or it will not tile");
+  } else if (value[0] === 0 && value[1] === 0) {
+    reader.fail(joinPath(path, scaleKey), "at least one of the two must be non-zero");
+  } else {
+    frequency = options.texture ? [value[0] / TEXTURE_RESOLUTION, value[1] / TEXTURE_RESOLUTION] : [value[0], value[1]];
+  }
+  const shape = reader.has(obj, "shape") ? reader.oneOf(obj, "shape", path, WAVE_SHAPES) : "sine";
+  return { name, type: "wave", frequency, amplitude: reader.number(obj, "amplitude", path), shape };
 }
 
 function readStops(raw: RawObject, reader: Reader, path: string): ColorRampStop[] {
@@ -124,9 +148,10 @@ export function readPipeline(raw: unknown, reader: Reader, path: string, options
     const output = reader.string(step, "output", at);
     const op = reader.oneOf(step, "op", at, Object.keys(OP_FIELDS));
     const fields = OP_FIELDS[op];
-    reader.onlyKeys(step, at, ["output", "op", ...Object.keys(fields), ...(op === "sample" ? ["offset"] : [])]);
+    reader.onlyKeys(step, at, ["output", "op", ...Object.keys(fields), ...(op === "sample" ? ["offset", "mode"] : [])]);
 
     const read: RawObject = { output, op };
+    if (op === "sample" && step.mode !== undefined) read.mode = reader.oneOf(step, "mode", at, WORLEY_MODES);
     if (op === "sample" && step.offset !== undefined) {
       const offset = step.offset;
       if (!Array.isArray(offset) || offset.length !== 2 || !offset.every((name) => typeof name === "string")) {

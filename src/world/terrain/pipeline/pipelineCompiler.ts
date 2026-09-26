@@ -1,7 +1,7 @@
 import { deriveSeed } from "../../rng";
 import { createTilingOctaveSampler, createWorldOctaveSampler, fbm, type Noise2D, type FbmParams } from "../noise";
 import { ridgedNoise2D, billowNoise2D, worleyNoise2D, type OctaveNoiseParams } from "./noiseGenerators";
-import type { NoiseSpec, PipelineDef, PipelineStep, ValueType } from "./pipelineTypes";
+import type { NoiseSpec, PipelineDef, PipelineStep, ValueType, WaveShape, WorleyMode } from "./pipelineTypes";
 
 /** A compiled single-result pipeline samples world-space noise like a Noise2D, but can also pull in
  *  named external values (e.g. "height", "slope", a biome flag) via an optional context bag - used
@@ -39,16 +39,35 @@ function deriveNoiseSeed(rootSeed: number, namespace: string, noiseName: string)
   return deriveSeed(deriveSeed(rootSeed, hashString(namespace)), hashString(noiseName));
 }
 
+/** One period of each wave shape, over 0..1, returning -1..1. */
+const WAVE_PROFILES: Record<WaveShape, (t: number) => number> = {
+  sine: (t) => Math.sin(t * 2 * Math.PI),
+  triangle: (t) => 1 - 4 * Math.abs(t - 0.5),
+  saw: (t) => 2 * t - 1,
+};
+
 function compileNoiseSpec(spec: NoiseSpec, rootSeed: number, namespace: string, tilePeriod: number | undefined): Noise2D {
   const seed = deriveNoiseSeed(rootSeed, namespace, spec.name);
+
+  if (spec.type === "wave") {
+    const [frequencyX, frequencyY] = spec.frequency;
+    const amplitude = spec.amplitude;
+    // The seed only picks where along its period the wave starts.
+    const phase = (seed >>> 0) / 0x100000000;
+    const profile = WAVE_PROFILES[spec.shape];
+    return (worldX: number, worldZ: number): number => {
+      const t = worldX * frequencyX + worldZ * frequencyY + phase;
+      return profile(t - Math.floor(t)) * amplitude;
+    };
+  }
 
   if (spec.type === "worley") {
     const sample = worleyNoise2D(seed, spec.frequency, tilePeriod, spec.stretch?.[0], spec.stretch?.[1]);
     const amplitude = spec.amplitude;
     const mode = spec.mode;
     return (worldX: number, worldZ: number): number => {
-      const { f1, f2 } = sample(worldX, worldZ);
-      return (mode === "f1" ? f1 : f2 - f1) * amplitude;
+      const { f1, f2, id } = sample(worldX, worldZ);
+      return (mode === "f1" ? f1 : mode === "edge" ? f2 - f1 : id) * amplitude;
     };
   }
 
@@ -133,6 +152,7 @@ function resultTypeOf(step: PipelineStep, resolve: (name: string) => SlotRef): V
     case "power":
     case "abs":
     case "invert":
+    case "sin":
     case "clamp":
     case "remap":
       return resolve(step.input).type;
@@ -153,7 +173,7 @@ function resultTypeOf(step: PipelineStep, resolve: (name: string) => SlotRef): V
 function compileStep(
   step: PipelineStep,
   resolve: (name: string) => SlotRef,
-  noiseSamplers: Map<string, Noise2D>,
+  noiseFor: (name: string, mode?: WorleyMode) => Noise2D | undefined,
   out: SlotRef,
   namespace: string,
 ): StepFn {
@@ -161,9 +181,13 @@ function compileStep(
 
   switch (step.op) {
     case "sample": {
-      const noise2D = noiseSamplers.get(step.noise);
+      const noise2D = noiseFor(step.noise, step.mode);
       if (!noise2D) {
-        throw new Error(`Pipeline "${namespace}" references unknown step/noise "${step.noise}"`);
+        throw new Error(
+          step.mode
+            ? `Pipeline "${namespace}" reads "${step.noise}" as ${step.mode}, which only a worley noise can be`
+            : `Pipeline "${namespace}" references unknown step/noise "${step.noise}"`,
+        );
       }
       if (!step.offset) {
         return (x, y, slots): void => {
@@ -270,6 +294,10 @@ function compileStep(
       return unaryFn(resolve(step.input), out, Math.abs);
     case "invert":
       return unaryFn(resolve(step.input), out, (value) => 1 - value);
+    case "sin": {
+      const angular = step.cycles * 2 * Math.PI;
+      return unaryFn(resolve(step.input), out, (value) => Math.sin(value * angular));
+    }
     case "clamp": {
       const { min, max } = step;
       return unaryFn(resolve(step.input), out, (value) => Math.min(max, Math.max(min, value)));
@@ -337,6 +365,13 @@ function compileGraph(def: PipelineDef, rootSeed: number, namespace: string, til
   for (const noiseSpec of def.noises) {
     noiseSamplers.set(noiseSpec.name, compileNoiseSpec(noiseSpec, rootSeed, namespace, tilePeriod));
   }
+  const noiseSpecs = new Map(def.noises.map((spec) => [spec.name, spec]));
+  const noiseFor = (name: string, mode?: WorleyMode): Noise2D | undefined => {
+    const spec = noiseSpecs.get(name);
+    if (!spec || !mode) return noiseSamplers.get(name);
+    if (spec.type !== "worley") return undefined;
+    return mode === spec.mode ? noiseSamplers.get(name) : compileNoiseSpec({ ...spec, mode }, rootSeed, namespace, tilePeriod);
+  };
 
   if (def.steps.length === 0) {
     throw new Error(`Pipeline "${namespace}" has no steps`);
@@ -359,7 +394,7 @@ function compileGraph(def: PipelineDef, rootSeed: number, namespace: string, til
   for (const step of def.steps) {
     const out: SlotRef = { offset: width, type: resultTypeOf(step, resolve) };
     width += out.type === "color" ? 3 : 1;
-    stepFns.push(compileStep(step, resolve, noiseSamplers, out, namespace));
+    stepFns.push(compileStep(step, resolve, noiseFor, out, namespace));
     slotOf.set(step.output, out);
     lastSlot = out;
   }
