@@ -219,7 +219,26 @@ branches and on top. Its sections:
 
 Trees in distant chunks are drawn with fewer sides and no twigs - the same tree, and the same leaves.
 
-`model: "primitive"` (the default; see `core/trees/pine.json5`) is a `trunk` cylinder and a `crown`
+`model: "conifer"` (see `core/trees/pine.json5`) is generated too, differently: a tall tapering
+trunk and a crown of stacked open cones - no base to a cone - each a ring of branches from the
+trunk out to a drooping rim, every branch a square card showing one of four generated fir-branch
+sprays drawn along its diagonal, mirrored at random, its sides arching down. Its sections:
+
+- `trunk`: `height`, `radius`/`topRadius`, `lean`, `bend` (how far the foot sweeps out before the
+  trunk straightens up, metres), `wobble` (a slow sway), `flare`/`flareHeight`, `sides`, `rings`
+- `roots`: as a branching tree's, shallower
+- `tiers`: `count`, `from` (the lowest rim, as a fraction of the trunk's height), `radius` and
+  `height` as `[lowest, topmost]`, `droop` (how far each branch bends over - its height falls as
+  along^(1 + droop), so 0 is straight and 0.6 leaves the middle a third of the way down), `panels` (branches round a cone, each a
+  square card along its diagonal), `breadth` (a branch's width for its length, 1 = the spray's own
+  proportions), `arch` (how far its sides fold down from the stem), `tilt` (how far a tier tips),
+  `variety` (how much each branch differs: its length by up to this fraction either way, its bend
+  by twice that, its drop and width by less)
+- `bark`: as a branching tree's
+- `foliage`: the `firSpray` atlas - `dark`/`light` needles (old growth to fresh tips), `twig`
+  colour, `twigs` down each side, `needleLength`/`needleWidth`/`needleGap` as fractions of a spray
+
+`model: "primitive"` (the default; see `core/trees/palm.json5`) is a `trunk` cylinder and a `crown`
 built by one of `sphereCrown`, `tieredCones` or `frondCrown`.
 
 Both take `tint: [dark, light]` - each tree's foliage is multiplied by a random mix of the two - and

@@ -4,10 +4,12 @@ import type { MaterialDef, MaterialDetail, MaterialLayer } from "../materials/ma
 import type { GrassKindDef } from "../foliage/grassConfig";
 import {
   BUSH_FOLIAGE_BUILDERS,
+  CONIFER_FOLIAGE_BUILDERS,
   FOLIAGE_BUILDERS,
   TREE_CROWN_BUILDERS,
   type BranchingTree,
   type BushShape,
+  type ConiferTree,
   type OldTrees,
   type PrimitiveTree,
   type TreeCrown,
@@ -424,8 +426,13 @@ function readGrassKind(id: string, obj: RawObject, reader: Reader): GrassKindDef
 const KIND_COMMON_KEYS = ["model", "tint", "scale", "growsOld"];
 
 function readTreeKind(id: string, obj: RawObject, reader: Reader, defaults: Defaults): TreeKindDef {
-  const model = obj.model === undefined ? "primitive" : reader.oneOf(obj, "model", "", ["primitive", "branching"] as const);
-  const shape = model === "branching" ? readBranchingTree(obj, reader, KIND_COMMON_KEYS) : readPrimitiveTree(obj, reader, KIND_COMMON_KEYS);
+  const model = obj.model === undefined ? "primitive" : reader.oneOf(obj, "model", "", ["primitive", "branching", "conifer"] as const);
+  const shape =
+    model === "branching"
+      ? readBranchingTree(obj, reader, KIND_COMMON_KEYS)
+      : model === "conifer"
+        ? readConiferTree(obj, reader, KIND_COMMON_KEYS)
+        : readPrimitiveTree(obj, reader, KIND_COMMON_KEYS);
   return { id, shape, ...readKindLook(obj, reader, defaults), growsOld: reader.boolean(obj, "growsOld", "", false) };
 }
 
@@ -522,6 +529,83 @@ function readPrimitiveTree(obj: RawObject, reader: Reader, common: string[]): Pr
       color: reader.color(trunk, "color", "trunk"),
     },
     crown: readCrown,
+  };
+}
+
+function readConiferTree(obj: RawObject, reader: Reader, common: string[]): ConiferTree {
+  reader.onlyKeys(obj, "", [...common, "variants", "trunk", "roots", "tiers", "bark", "foliage"]);
+  const section = (key: string, keys: string[]): RawObject => {
+    const value = reader.object(obj[key], key);
+    reader.onlyKeys(value, key, keys);
+    return value;
+  };
+  const trunk = section("trunk", ["height", "radius", "topRadius", "lean", "bend", "wobble", "flare", "flareHeight", "sides", "rings"]);
+  const roots = section("roots", ["count", "length", "radius", "drop", "sides", "rings"]);
+  const tiers = section("tiers", ["count", "from", "radius", "height", "droop", "panels", "breadth", "arch", "tilt", "variety"]);
+  const bark = section("bark", ["tile", "texture"]);
+  const foliage = section("foliage", ["builder", "dark", "light", "twig", "twigs", "needleLength", "needleWidth", "needleGap"]);
+  const sides = (o: RawObject, path: string): number => reader.number(o, "sides", path, { min: 3, max: 16, integer: true });
+  const rings = (o: RawObject, path: string): number => reader.number(o, "rings", path, { min: 1, max: 16, integer: true });
+  const count = reader.range(tiers, "count", "tiers", { allowEqual: true });
+  if (count[0] < 1 || !Number.isInteger(count[0]) || !Number.isInteger(count[1])) reader.fail("tiers.count", "expected whole numbers of tiers, at least 1");
+  // Both [lowest, topmost]: a crown narrows upwards, but either is allowed to be the larger.
+  const pair = (o: RawObject, key: string, path: string): [number, number] => {
+    const value = o[key];
+    if (!Array.isArray(value) || value.length !== 2 || !value.every((v) => typeof v === "number" && v > 0)) {
+      reader.fail(`${path}.${key}`, "expected [lowest tier, topmost tier], both above 0");
+      return [1, 1];
+    }
+    return [value[0], value[1]];
+  };
+  return {
+    model: "conifer",
+    variants: reader.number(obj, "variants", "", { min: 1, max: 16, integer: true }),
+    trunk: {
+      height: reader.number(trunk, "height", "trunk", { min: 1 }),
+      radius: reader.number(trunk, "radius", "trunk", { min: 0.05 }),
+      topRadius: reader.number(trunk, "topRadius", "trunk", { min: 0.01 }),
+      lean: reader.number(trunk, "lean", "trunk"),
+      bend: reader.number(trunk, "bend", "trunk", { min: 0 }),
+      wobble: reader.number(trunk, "wobble", "trunk", { min: 0 }),
+      flare: reader.number(trunk, "flare", "trunk", { min: 1 }),
+      flareHeight: reader.number(trunk, "flareHeight", "trunk", { min: 0.01 }),
+      sides: sides(trunk, "trunk"),
+      rings: rings(trunk, "trunk"),
+    },
+    roots: {
+      count: reader.number(roots, "count", "roots", { min: 0, integer: true }),
+      length: reader.range(roots, "length", "roots", { allowEqual: true }),
+      radius: reader.number(roots, "radius", "roots", { min: 0 }),
+      drop: reader.number(roots, "drop", "roots", { min: 0 }),
+      sides: sides(roots, "roots"),
+      rings: rings(roots, "roots"),
+    },
+    tiers: {
+      count,
+      from: reader.number(tiers, "from", "tiers", { min: 0, max: 1 }),
+      radius: pair(tiers, "radius", "tiers"),
+      height: pair(tiers, "height", "tiers"),
+      droop: reader.number(tiers, "droop", "tiers", { min: 0 }),
+      panels: reader.number(tiers, "panels", "tiers", { min: 3, max: 24, integer: true }),
+      breadth: reader.number(tiers, "breadth", "tiers", { min: 0.2, max: 1.6 }),
+      arch: reader.number(tiers, "arch", "tiers", { min: 0, max: 1.5 }),
+      tilt: reader.number(tiers, "tilt", "tiers", { min: 0 }),
+      variety: reader.number(tiers, "variety", "tiers", { min: 0, max: 0.8 }),
+    },
+    bark: {
+      tile: reader.number(bark, "tile", "bark", { min: 0.1 }),
+      texture: readTexture(bark.texture, reader, "bark.texture"),
+    },
+    foliage: {
+      builder: reader.oneOf(foliage, "builder", "foliage", CONIFER_FOLIAGE_BUILDERS),
+      dark: reader.color(foliage, "dark", "foliage"),
+      light: reader.color(foliage, "light", "foliage"),
+      twig: reader.color(foliage, "twig", "foliage"),
+      twigs: reader.number(foliage, "twigs", "foliage", { min: 1, max: 40, integer: true }),
+      needleLength: reader.number(foliage, "needleLength", "foliage", { min: 0.005, max: 0.5 }),
+      needleWidth: reader.number(foliage, "needleWidth", "foliage", { min: 0.002, max: 0.2 }),
+      needleGap: reader.number(foliage, "needleGap", "foliage", { min: 0.002, max: 0.2 }),
+    },
   };
 }
 

@@ -213,6 +213,77 @@ export interface FoliageTexture {
 export const FOLIAGE_BUILDERS = ["broadleaf"] as const;
 
 /**
+ * A conifer, from a small generator of its own (see treeGenerator.ts's generateConifer): a tall,
+ * tapering trunk with a natural bend - a sweep out at the foot and back up, a lean, a slow sway -
+ * standing on a few short roots, and the crown as a stack of open cones, lowest widest. There is no
+ * base to a cone: each is a ring of overlapping panels running from the trunk down and out to a
+ * drooping rim, every panel showing one of a few generated fir-branch sprays (see treeTextures.ts's
+ * bakeConiferFoliage), mirrored and turned at random so no two cones match. Lengths are metres.
+ */
+export interface ConiferTree {
+  model: "conifer";
+  variants: number;
+  trunk: {
+    height: number;
+    radius: number;
+    topRadius: number;
+    /** How far the top leans off vertical, as a fraction of the height. */
+    lean: number;
+    /** How far the trunk sweeps out near its foot before growing straight up, in metres. */
+    bend: number;
+    /** A slow side-to-side sway up the trunk, in metres. */
+    wobble: number;
+    flare: number;
+    flareHeight: number;
+    sides: number;
+    rings: number;
+  };
+  roots: { count: number; length: [number, number]; radius: number; drop: number; sides: number; rings: number };
+  tiers: {
+    count: [number, number];
+    /** The lowest tier's rim sits at this fraction of the trunk's height - below it, bare trunk. */
+    from: number;
+    /** A tier's rim radius and its height (apex to rim), for the lowest tier and the topmost. */
+    radius: [number, number];
+    height: [number, number];
+    /** How far a branch bends over: its stem's height falls as along^(1 + droop) from the trunk to
+     *  the rim - 0 is a straight slope, 0.6 leaves the middle a third of the way down. */
+    droop: number;
+    /** Branches round one tier - each a square card along its diagonal - and how wide a branch is
+     *  for its length (1 keeps the spray's own proportions). */
+    panels: number;
+    breadth: number;
+    /** How far a branch's sides fold down from its stem, as a fraction of its half-width. */
+    arch: number;
+    /** How far a tier tips off level, as a fraction of its radius. */
+    tilt: number;
+    /** How much each branch differs from the next: its length by up to this fraction either way,
+     *  its bend by twice that, its drop by 0.7x and its width by half of it. */
+    variety: number;
+  };
+  bark: BarkTexture;
+  foliage: ConiferTexture;
+}
+
+/** A generated fir-branch atlas: four variants of a spray, see treeTextures.ts. */
+export interface ConiferTexture {
+  builder: "firSpray";
+  /** Needles range between these - old growth dark, the fresh tips light. */
+  dark: ColorTuple;
+  light: ColorTuple;
+  /** The twigs' colour. */
+  twig: ColorTuple;
+  /** Side twigs down each side of the spray. */
+  twigs: number;
+  /** A needle's length and width as a fraction of the spray, and the gap between needle pairs. */
+  needleLength: number;
+  needleWidth: number;
+  needleGap: number;
+}
+
+export const CONIFER_FOLIAGE_BUILDERS = ["firSpray"] as const;
+
+/**
  * A bush: no wood at all, only cards. A few large ones crossed through its middle each show a whole
  * bush from the side - stems rising from the ground and forking, leaves over their upper part - and
  * smaller leaf clumps sit over its top so it has volume from any direction, including above. The
@@ -269,7 +340,7 @@ export interface PrimitiveTree {
  */
 export interface TreeKindDef {
   id: string;
-  shape: PrimitiveTree | BranchingTree | BushShape;
+  shape: PrimitiveTree | BranchingTree | ConiferTree | BushShape;
   /** Each tree's foliage colour is multiplied by a random mix of these two: the canopy colour of a
    *  primitive tree (whose canopy is white), and a shade of its texture for a branching one. */
   tint: [ColorTuple, ColorTuple];

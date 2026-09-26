@@ -15,12 +15,12 @@ import {
   type BaseTexture,
   type Scene,
 } from "@babylonjs/core";
-import type { BranchingTree, BushShape, PrimitiveTree, TreeCrown, TreeKindDef, TreeTrunk } from "./foliageConfig";
+import type { BushShape, PrimitiveTree, TreeCrown, TreeKindDef, TreeTrunk } from "./foliageConfig";
 import type { ColorTuple } from "../terrain/pipeline/pipelineTypes";
 import { LIT_SHADING_SAMPLERS, LIT_SHADING_UNIFORMS, type LitShading } from "../materials/litShading";
 import { deriveSeed } from "../rng";
-import { generateBush, generateTree, type TreeDetail, type TreeGeometry } from "./treeGenerator";
-import { FOLIAGE_TEXTURE_SIZE, bakeBushFoliage, bakeFoliage } from "./treeTextures";
+import { generateBush, generateConifer, generateTree, type TreeDetail, type TreeGeometry } from "./treeGenerator";
+import { FOLIAGE_TEXTURE_SIZE, bakeBushFoliage, bakeConiferFoliage, bakeFoliage } from "./treeTextures";
 import { TEXTURE_RESOLUTION } from "../materials/textureGen";
 import { BARK_FRAGMENT_SHADER, BARK_VERTEX_SHADER, LEAF_FRAGMENT_SHADER, LEAF_VERTEX_SHADER } from "./treeShaders";
 
@@ -225,12 +225,13 @@ function kindSeed(seed: number, id: string): number {
   return deriveSeed(seed, [...id].reduce((h, c) => (Math.imul(h, 31) + c.charCodeAt(0)) | 0, 7));
 }
 
-function createBranchingMaterials(
+/** A generated tree's two materials: its baked bark, and its leaves from `atlasPixels`. */
+function createWoodAndLeafMaterials(
   scene: Scene,
   id: string,
-  shape: BranchingTree,
-  seed: number,
   bakedBark: BakedBark,
+  atlasPixels: Uint8Array,
+  swayHeight: number,
   litShading: LitShading,
 ): { bark: ShaderMaterial; leaves: LeafMaterial } {
   const barkColor = RawTexture.CreateRGBATexture(bakedBark.color, TEXTURE_RESOLUTION, TEXTURE_RESOLUTION, scene, true, false, Texture.TRILINEAR_SAMPLINGMODE);
@@ -254,20 +255,39 @@ function createBranchingMaterials(
   bark.backFaceCulling = false;
   litShading.register(bark);
 
-  const leaves = createLeafMaterial(scene, id, bakeFoliage(deriveSeed(seed, 0x1eaf), shape.foliage), shape.trunk.height * 1.8, litShading);
+  const leaves = createLeafMaterial(scene, id, atlasPixels, swayHeight, litShading);
   return { bark, leaves };
 }
 
-function createBranchingModels(
-  scene: Scene,
-  def: TreeKindDef,
-  shape: BranchingTree,
-  seed: number,
-  bakedBark: BakedBark,
-  litShading: LitShading,
-): TreeModel[] {
+/** How a generated kind makes one of its trees, and the atlas its leaves are cut from. */
+interface GeneratedKind {
+  variants: number;
+  atlas: (seed: number) => Uint8Array;
+  swayHeight: number;
+  generate: (seed: number, detail: TreeDetail) => TreeGeometry;
+}
+
+function generatedKind(shape: Extract<TreeKindDef["shape"], { model: "branching" | "conifer" }>): GeneratedKind {
+  if (shape.model === "conifer") {
+    return {
+      variants: shape.variants,
+      atlas: (seed) => bakeConiferFoliage(seed, shape.foliage),
+      // A conifer's tiers are stiff: they sway less for their height than a broadleaf's crown.
+      swayHeight: shape.trunk.height * 2.4,
+      generate: (seed, detail) => generateConifer(shape, seed, detail),
+    };
+  }
+  return {
+    variants: shape.variants,
+    atlas: (seed) => bakeFoliage(seed, shape.foliage),
+    swayHeight: shape.trunk.height * 1.8,
+    generate: (seed, detail) => generateTree(shape, seed, detail),
+  };
+}
+
+function createGeneratedModels(scene: Scene, def: TreeKindDef, kind: GeneratedKind, seed: number, bakedBark: BakedBark, litShading: LitShading): TreeModel[] {
   const ownSeed = kindSeed(seed, def.id);
-  const materials = createBranchingMaterials(scene, def.id, shape, ownSeed, bakedBark, litShading);
+  const materials = createWoodAndLeafMaterials(scene, def.id, bakedBark, kind.atlas(deriveSeed(ownSeed, 0x1eaf)), kind.swayHeight, litShading);
   const tintDark = color3(def.tint[0]);
   const tintLight = color3(def.tint[1]);
 
@@ -298,9 +318,9 @@ function createBranchingModels(
   };
 
   const models: TreeModel[] = [];
-  for (let variant = 0; variant < shape.variants; variant++) {
+  for (let variant = 0; variant < kind.variants; variant++) {
     const variantSeed = deriveSeed(ownSeed, variant + 1);
-    const detailed = (detail: TreeDetail): TreeModel => build(generateTree(shape, variantSeed, detail), `tree_${def.id}_${variant}_${detail}`);
+    const detailed = (detail: TreeDetail): TreeModel => build(kind.generate(variantSeed, detail), `tree_${def.id}_${variant}_${detail}`);
     models.push({ ...detailed("near"), far: detailed("far") });
   }
   return models;
@@ -338,9 +358,9 @@ function createBushModels(scene: Scene, def: TreeKindDef, shape: BushShape, seed
  */
 export function createTreeModels(scene: Scene, def: TreeKindDef, seed: number, bakedBark: BakedBark | undefined, litShading: LitShading): TreeModel[] {
   if (def.shape.model === "bush") return createBushModels(scene, def, def.shape, seed, litShading);
-  if (def.shape.model === "branching") {
+  if (def.shape.model === "branching" || def.shape.model === "conifer") {
     if (!bakedBark) throw new Error(`Tree kind "${def.id}" has no baked bark`);
-    return createBranchingModels(scene, def, def.shape, seed, bakedBark, litShading);
+    return createGeneratedModels(scene, def, generatedKind(def.shape), seed, bakedBark, litShading);
   }
   return [createPrimitiveModel(scene, def, def.shape)];
 }

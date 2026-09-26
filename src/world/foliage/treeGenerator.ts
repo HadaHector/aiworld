@@ -1,6 +1,6 @@
 import { mulberry32 } from "../rng";
 import { lerp, smoothstep } from "../mathUtils";
-import type { BranchingTree, BushShape } from "./foliageConfig";
+import type { BranchingTree, BushShape, ConiferTree } from "./foliageConfig";
 
 /**
  * One generated tree, in tree space (the base of the trunk at the origin, up +Y), as two meshes'
@@ -171,6 +171,75 @@ class LeafBuilder {
     for (let row = 0; row < 2; row++) {
       for (let col = 0; col < 2; col++) {
         const a = base + row * 3 + col;
+        this.indices.push(a, a + 1, a + 4, a, a + 4, a + 3);
+      }
+    }
+  }
+
+  /**
+   * One panel of a conifer's cone - one branch: a square card whose diagonal runs from the trunk
+   * at `apex` out to the rim, `reach` out and `drop` down, facing `heading`, as wide across its
+   * other diagonal as `breadth` x its length. `droop` bends its stem over: near level at the trunk,
+   * falling ever faster to the tip, its height going as along^(1 + droop). `arch` folds its sides down from the stem, so the branch curves over rather
+   * than lying flat. `tilt` lifts the outer end, the way a whole tier can tip off level.
+   *
+   * It shows the whole of atlas cell `cell`, whose spray is drawn along the cell's diagonal (see
+   * treeTextures.ts's bakeConiferFoliage): the cell's top-left corner at the trunk, its bottom-right
+   * at the tip, the other two corners out at the sides - mirrored across the stem with `mirror`.
+   * The card is a 3x3 grid over the cell, each small square split along the stem's direction, so
+   * the stem runs along triangle edges (the fold of the arch) and every triangle maps its piece of
+   * the cell exactly.
+   *
+   * Normals are the cone's own - outward and up, by the cone's slope - tipped outwards on each side
+   * by the arch and bent towards the crown's centre, so each tier is lit as a cone, each branch as
+   * a curved spray, and the whole tree still shades as one mass.
+   */
+  conePanel(
+    apex: V3,
+    heading: number,
+    reach: number,
+    drop: number,
+    droop: number,
+    breadth: number,
+    arch: number,
+    tilt: number,
+    cell: number,
+    mirror: boolean,
+    crownCentre: V3,
+  ): void {
+    const base = this.positions.length / 3;
+    const cellU = (cell % 2) * 0.5;
+    const cellV = Math.floor(cell / 2) * 0.5;
+    const inset = 0.004;
+    const out: V3 = [Math.cos(heading), 0, Math.sin(heading)];
+    const sideways: V3 = [-Math.sin(heading), 0, Math.cos(heading)];
+    const halfWidth = (reach * breadth) / 2;
+    for (let iv = 0; iv <= 2; iv++) {
+      for (let iu = 0; iu <= 2; iu++) {
+        const u = iu / 2;
+        const v = iv / 2;
+        // Along the stem (the cell's diagonal, 0 at the trunk corner, 1 at the tip corner) and across
+        // it (+1 at the top-right corner, -1 at the bottom-left).
+        const along = (u + v) / 2;
+        const across = (mirror ? v - u : u - v);
+        const r = 0.15 + reach * along;
+        // The stem bends over: level where it leaves the trunk, falling ever faster towards the tip,
+        // which ends `drop` below the trunk end - its height falls as along^(1 + droop).
+        const bent = -drop * Math.pow(along, 1 + droop);
+        const y = bent + tilt * r - arch * halfWidth * across * across;
+        const p = add(apex, add([out[0] * r, y, out[2] * r], scale(sideways, across * halfWidth)));
+        this.positions.push(p[0], p[1], p[2]);
+        const cone = normalize(add(scale(out, drop), [0, reach, 0]));
+        const archTip = scale(sideways, across * arch * 0.8);
+        const n = normalize(add(add(cone, archTip), scale(normalize(sub(p, crownCentre)), 0.6)));
+        this.normals.push(n[0], n[1], n[2]);
+        this.uvs.push(cellU + inset + u * (0.5 - 2 * inset), cellV + inset + v * (0.5 - 2 * inset));
+      }
+    }
+    // Each small square split along the stem's direction (top-left to bottom-right in the cell).
+    for (let iv = 0; iv < 2; iv++) {
+      for (let iu = 0; iu < 2; iu++) {
+        const a = base + iv * 3 + iu;
         this.indices.push(a, a + 1, a + 4, a, a + 4, a + 3);
       }
     }
@@ -430,5 +499,125 @@ export function generateBush(spec: BushShape, seed: number): BushGeometry {
       indices: new Uint32Array(builder.indices),
     },
     height: top,
+  };
+}
+
+/**
+ * Generates one conifer from a ConiferTree description. Deterministic from `seed`. Each tier draws
+ * from a stream of its own, so the far model - fewer panels round each cone - keeps every tier
+ * exactly where the near one has it.
+ */
+export function generateConifer(spec: ConiferTree, seed: number, detail: TreeDetail = "near"): TreeGeometry {
+  const rng = mulberry32(seed);
+  const between = ([lo, hi]: [number, number]): number => lo + rng() * (hi - lo);
+  const intBetween = ([lo, hi]: [number, number]): number => Math.floor(lo + rng() * (hi - lo + 1));
+  const { trunk, roots, tiers, bark } = spec;
+  const wood = new WoodBuilder();
+  const leafBuilder = new LeafBuilder();
+  const far = detail === "far";
+  const limb = (points: V3[], radii: number[], sides: number): void => {
+    if (far) wood.tube(thinned(points), thinned(radii), Math.max(3, Math.round(sides * 0.6)), bark.tile);
+    else wood.tube(points, radii, sides, bark.tile);
+  };
+
+  // --- trunk ---
+  // A sweep out at the foot that straightens up (the curve a slope or a neighbour leaves in a
+  // young tree), a lean that grows with height, and a slow sway - all zero at the base.
+  const sweepAngle = rng() * Math.PI * 2;
+  const leanAngle = rng() * Math.PI * 2;
+  const phase = rng() * Math.PI * 2;
+  const buried = 0.5;
+  const pointAt = (y: number): V3 => {
+    const rise = Math.max(0, y) / trunk.height;
+    const sweep = trunk.bend * (1 - Math.pow(1 - Math.min(1, rise), 3));
+    const lean = trunk.lean * trunk.height * rise * rise;
+    const sway = trunk.wobble * rise * Math.sin(rise * 5.5 + phase);
+    return [
+      Math.cos(sweepAngle) * sweep + Math.cos(leanAngle) * lean + Math.cos(phase) * sway,
+      y,
+      Math.sin(sweepAngle) * sweep + Math.sin(leanAngle) * lean + Math.sin(phase) * sway,
+    ];
+  };
+  const radiusAt = (y: number): number => {
+    const rise = Math.max(0, y) / trunk.height;
+    const flare = 1 + (trunk.flare - 1) * (1 - smoothstep(0, trunk.flareHeight, y));
+    return lerp(trunk.radius, trunk.topRadius, Math.pow(rise, 0.9)) * flare;
+  };
+  const trunkYs: number[] = [];
+  for (let i = 0; i <= trunk.rings; i++) trunkYs.push(-buried + (trunk.height + buried) * Math.pow(i / trunk.rings, 1.25));
+  limb(trunkYs.map(pointAt), trunkYs.map(radiusAt), trunk.sides);
+
+  // --- roots ---
+  // Conifer roots are shallow: they leave the trunk low and run out under the surface.
+  const rootStart = trunk.flareHeight * 0.2;
+  for (let r = 0; r < roots.count; r++) {
+    const heading = ((r + rng() * 0.6) / roots.count) * Math.PI * 2;
+    const length = between(roots.length);
+    const points: V3[] = [];
+    const radii: number[] = [];
+    for (let i = 0; i <= roots.rings; i++) {
+      const s = i / roots.rings;
+      const reach = trunk.radius * 0.3 + length * s;
+      points.push([Math.cos(heading) * reach, rootStart * Math.pow(1 - s, 2) - roots.drop * s * s, Math.sin(heading) * reach]);
+      radii.push(trunk.radius * roots.radius * (1 - 0.8 * s));
+    }
+    limb(points, radii, roots.sides);
+  }
+
+  // --- tiers ---
+  const tierCount = intBetween(tiers.count);
+  const lowestApex = tiers.from * trunk.height + tiers.height[0];
+  // The topmost tier's apex stands a little above the trunk's end: the leader.
+  const topApex = trunk.height + tiers.height[1] * 0.3;
+  const crownCentre = pointAt((lowestApex + topApex) / 2);
+  const tierSeed = Math.floor(rng() * 0x7fffffff);
+  let top = topApex;
+  for (let i = 0; i < tierCount; i++) {
+    const tierRng = mulberry32((tierSeed + Math.imul(i + 1, 0x9e3779b1)) >>> 0);
+    const s = tierCount === 1 ? 1 : i / (tierCount - 1);
+    const spacing = tierCount === 1 ? 0 : (topApex - lowestApex) / (tierCount - 1);
+    const apexY = lerp(lowestApex, topApex, s) + (tierRng() - 0.5) * 0.35 * spacing;
+    const drop = lerp(tiers.height[0], tiers.height[1], s) * (0.9 + tierRng() * 0.2);
+    const radius = lerp(tiers.radius[0], tiers.radius[1], s) * (0.88 + tierRng() * 0.24);
+    // Above the trunk's end, the apex carries on straight up from it.
+    const apex = apexY <= trunk.height ? pointAt(apexY) : add(pointAt(trunk.height), [0, apexY - trunk.height, 0]);
+    const tiltHeading = tierRng() * Math.PI * 2;
+    const tiltAmount = tiers.tilt * tierRng();
+    const turn = tierRng() * Math.PI * 2;
+    const panels = far ? Math.max(4, Math.round(tiers.panels * 0.6)) : tiers.panels;
+    // The far model's fewer branches are broader, so a tier covers the same ground.
+    const breadth = tiers.breadth * (tiers.panels / panels);
+    for (let j = 0; j < panels; j++) {
+      const heading = turn + (j * Math.PI * 2) / panels + (tierRng() - 0.5) * 0.3 * ((Math.PI * 2) / panels);
+      // Every branch its own: longer or shorter, bending over more or less, its tip lower or
+      // higher, broader or narrower - by `variety`, so a tier's rim is ragged and no two alike.
+      const vary = (amount: number): number => 1 + (tierRng() * 2 - 1) * tiers.variety * amount;
+      const reach = radius * vary(1);
+      const droop = tiers.droop * Math.max(0, vary(2));
+      const branchDrop = drop * vary(0.7);
+      const branchBreadth = breadth * vary(0.5);
+      const tilt = tiltAmount * Math.cos(heading - tiltHeading);
+      const cell = Math.floor(tierRng() * 4);
+      const mirror = tierRng() < 0.5;
+      leafBuilder.conePanel(apex, heading, reach, branchDrop, droop, Math.min(1.6, branchBreadth), tiers.arch, tilt, cell, mirror, crownCentre);
+    }
+    top = Math.max(top, apex[1]);
+  }
+
+  return {
+    wood: {
+      positions: new Float32Array(wood.positions),
+      normals: new Float32Array(wood.normals),
+      uvs: new Float32Array(wood.uvs),
+      axes: new Float32Array(wood.axes),
+      indices: new Uint32Array(wood.indices),
+    },
+    leaves: {
+      positions: new Float32Array(leafBuilder.positions),
+      normals: new Float32Array(leafBuilder.normals),
+      uvs: new Float32Array(leafBuilder.uvs),
+      indices: new Uint32Array(leafBuilder.indices),
+    },
+    height: top + 1,
   };
 }

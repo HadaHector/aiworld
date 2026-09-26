@@ -72,12 +72,12 @@ export async function createTreeField(
 ): Promise<TreeField> {
   // Every branching kind's bark is a texture graph, baked on the same worker pool as the ground
   // materials, all at once.
-  const barkKinds = treeKinds.filter((def) => def.shape.model === "branching");
+  const barkKinds = treeKinds.filter((def) => def.shape.model === "branching" || def.shape.model === "conifer");
   const layer = TEXTURE_RESOLUTION * TEXTURE_RESOLUTION * 4;
   const barkColors = new Uint8Array(layer * barkKinds.length);
   const barkNormals = new Uint8Array(layer * barkKinds.length);
   await bakeMaterialTextures(
-    barkKinds.map((def) => ({ id: `bark-${def.id}`, texture: (def.shape as Extract<TreeKindDef["shape"], { model: "branching" }>).bark.texture })),
+    barkKinds.map((def) => ({ id: `bark-${def.id}`, texture: (def.shape as Extract<TreeKindDef["shape"], { model: "branching" | "conifer" }>).bark.texture })),
     seed,
     barkColors,
     barkNormals,

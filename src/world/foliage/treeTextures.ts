@@ -1,5 +1,5 @@
 import { mulberry32 } from "../rng";
-import type { BushTexture, FoliageTexture } from "./foliageConfig";
+import type { BushTexture, ConiferTexture, FoliageTexture } from "./foliageConfig";
 
 /** Four clump variants in a 2x2 atlas. */
 export const FOLIAGE_TEXTURE_SIZE = 1024;
@@ -42,10 +42,18 @@ class Painter {
    * rather than photographic.
    */
   leaf(baseX: number, baseY: number, dirX: number, dirY: number, length: number, width: number, base: number[], brightness: number, clip: Clip): void {
-    const reach = length + 2;
-    for (let py = Math.floor(baseY - reach); py <= Math.ceil(baseY + reach); py++) {
+    // Only the box the leaf can reach - base to tip, widened by its width - is visited; thin
+    // needles cover a sliver of the square round their base.
+    const tipX = baseX + dirX * length;
+    const tipY = baseY + dirY * length;
+    const pad = width / 2 + 2;
+    const yFrom = Math.max(Math.floor(baseY - length - 2), Math.floor(Math.min(baseY, tipY) - pad));
+    const yTo = Math.min(Math.ceil(baseY + length + 2), Math.ceil(Math.max(baseY, tipY) + pad));
+    const xFrom = Math.max(Math.floor(baseX - length - 2), Math.floor(Math.min(baseX, tipX) - pad));
+    const xTo = Math.min(Math.ceil(baseX + length + 2), Math.ceil(Math.max(baseX, tipX) + pad));
+    for (let py = yFrom; py <= yTo; py++) {
       if (py < clip.y0 || py >= clip.y1) continue;
-      for (let px = Math.floor(baseX - reach); px <= Math.ceil(baseX + reach); px++) {
+      for (let px = xFrom; px <= xTo; px++) {
         if (px < clip.x0 || px >= clip.x1) continue;
         const rx = px + 0.5 - baseX;
         const ry = py + 0.5 - baseY;
@@ -326,6 +334,144 @@ export function bakeBushFoliage(seed: number, def: BushTexture): Uint8Array {
     paintLeaves(true);
     for (const s of segments) painter.stem(s.x0, s.y0, s.x1, s.y1, s.r0, s.r1, def.stem, clip);
     paintLeaves(false);
+  }
+  return painter.finish();
+}
+
+/** How far in from its cell's corners a fir spray's stem starts and ends, as a fraction of the cell. */
+const FIR_SPRAY_MARGIN = 0.05;
+/** How much of the diamond round a fir spray's stem it may fill - its widest, halfway along. */
+const FIR_SPRAY_FILL = 0.8;
+
+/**
+ * A conifer atlas: four variants of a fir-branch spray, each drawn along its cell's diagonal - the
+ * stem from near the top-left corner to near the bottom-right, the way a cone panel runs from the
+ * trunk to the rim (see treeGenerator.ts's conePanel) - with side twigs off both sides angled
+ * forward, towards the tip, every twig clothed in needle pairs angled the same way: dark old growth
+ * near the stem, light fresh growth at the tips. Along the diagonal the spray has the most room a
+ * square offers, the diamond between its corners, and it stays inside it - twigs longest halfway,
+ * shorter towards both ends, and short enough that their needles never reach the cell's edge, so
+ * no panel ever shows a spray cut off. Half the needles are painted before the twigs and darker, as
+ * the far side of the spray, so the twigs show among them.
+ */
+export function bakeConiferFoliage(seed: number, def: ConiferTexture): Uint8Array {
+  const size = FOLIAGE_TEXTURE_SIZE;
+  const cell = size / 2;
+  const painter = new Painter(size);
+
+  for (let variant = 0; variant < 4; variant++) {
+    const rng = mulberry32(seed + variant * 7919);
+    const clip = cellClip(cell, variant);
+    const needleLength = def.needleLength * cell;
+    const needleWidth = def.needleWidth * cell;
+    const gap = Math.max(1.5, def.needleGap * cell);
+
+    // The stem's line, in pixels: from `start` along `axis` for `length`, with `across` at right
+    // angles to it (towards the top-right corner).
+    const start: [number, number] = [clip.x0 + cell * FIR_SPRAY_MARGIN, clip.y0 + cell * FIR_SPRAY_MARGIN];
+    const length = Math.SQRT2 * cell * (1 - 2 * FIR_SPRAY_MARGIN);
+    const axis: [number, number] = [Math.SQRT1_2, Math.SQRT1_2];
+    const across: [number, number] = [Math.SQRT1_2, -Math.SQRT1_2];
+    const at = (along: number, side: number): [number, number] => [
+      start[0] + axis[0] * along * length + across[0] * side,
+      start[1] + axis[1] * along * length + across[1] * side,
+    ];
+    // How far from the stem a twig's tip may reach, `along` the way down it: the diamond, less the
+    // reach of the needles at a twig's tip (they point on past it) so they stay inside too.
+    const room = (along: number): number => Math.max(0, Math.min(along, 1 - along) * length * FIR_SPRAY_FILL - needleLength * 1.6);
+
+    const twigs: { points: [number, number][]; radius: number }[] = [];
+    const bow = (rng() - 0.5) * cell * 0.05;
+    // The stem stops a needle's length short of the corner: the needles at its end point on past it.
+    const stemEnd = 1 - (needleLength * 1.3) / length;
+    const stem: [number, number][] = [];
+    for (let i = 0; i <= 12; i++) {
+      const t = (i / 12) * stemEnd;
+      stem.push(at(t, bow * Math.sin(Math.PI * t)));
+    }
+    twigs.push({ points: stem, radius: cell * 0.009 });
+    for (const side of [-1, 1]) {
+      for (let k = 0; k < def.twigs; k++) {
+        const t = 0.05 + (0.85 * (k + 0.3 + rng() * 0.4)) / def.twigs;
+        // Angled forward, towards the stem's tip, and long enough for the tip to reach the room
+        // there is where it ends - found by a few steps of refining where that is.
+        const angle = (38 + rng() * 22) * (Math.PI / 180);
+        let reach = room(t);
+        for (let i = 0; i < 4; i++) reach = room(Math.min(1, t + (reach * Math.cos(angle)) / length)) / Math.sin(angle);
+        reach *= 0.7 + rng() * 0.3;
+        const curl = (rng() - 0.3) * 0.25;
+        const origin = at(t, bow * Math.sin(Math.PI * t));
+        const points: [number, number][] = [];
+        for (let i = 0; i <= 6; i++) {
+          const u = i / 6;
+          const a = angle + curl * u;
+          const forward = Math.cos(a) * reach * u;
+          const out = side * Math.sin(a) * reach * u;
+          points.push([origin[0] + axis[0] * forward + across[0] * out, origin[1] + axis[1] * forward + across[1] * out]);
+        }
+        twigs.push({ points, radius: cell * 0.005 });
+      }
+    }
+
+    interface Needle {
+      x: number;
+      y: number;
+      dirX: number;
+      dirY: number;
+      age: number;
+      back: boolean;
+      scale: number;
+    }
+    const needles: Needle[] = [];
+    for (const twig of twigs) {
+      const { points } = twig;
+      let travelled = 0;
+      const lengths = points.slice(1).map((p, i) => Math.hypot(p[0] - points[i][0], p[1] - points[i][1]));
+      const total = lengths.reduce((a, b) => a + b, 0);
+      for (let i = 0; i < lengths.length; i++) {
+        const [x0, y0] = points[i];
+        const [x1, y1] = points[i + 1];
+        const dx = (x1 - x0) / lengths[i];
+        const dy = (y1 - y0) / lengths[i];
+        for (let d = 0; d < lengths[i]; d += gap) {
+          const along = (travelled + d) / total;
+          const x = x0 + dx * d;
+          const y = y0 + dy * d;
+          for (const side of [-1, 1]) {
+            // Angled forward, towards the twig's tip, and splayed a little at random.
+            const a = side * (0.75 + (rng() - 0.5) * 0.5);
+            const nx = dx * Math.cos(a) - dy * Math.sin(a);
+            const ny = dx * Math.sin(a) + dy * Math.cos(a);
+            needles.push({ x, y, dirX: nx, dirY: ny, age: along, back: rng() < 0.45, scale: 0.75 + rng() * 0.45 });
+          }
+        }
+        travelled += lengths[i];
+      }
+    }
+
+    const paintNeedles = (back: boolean): void => {
+      for (const needle of needles) {
+        if (needle.back !== back) continue;
+        // Fresh growth at a twig's end is lighter; the far side of the spray is in shade.
+        const fresh = Math.pow(needle.age, 2.2);
+        const mix = Math.min(1, fresh * 0.85 + rng() * 0.25);
+        const base = [0, 1, 2].map((c) => def.dark[c] + (def.light[c] - def.dark[c]) * mix);
+        const brightness = (0.75 + 0.35 * rng()) * (back ? 0.7 : 1);
+        const length = needleLength * needle.scale;
+        painter.leaf(needle.x, needle.y, needle.dirX, needle.dirY, length, needleWidth, base, brightness, clip);
+      }
+    };
+
+    paintNeedles(true);
+    for (const twig of twigs) {
+      const count = twig.points.length - 1;
+      for (let i = 0; i < count; i++) {
+        const [x0, y0] = twig.points[i];
+        const [x1, y1] = twig.points[i + 1];
+        painter.stem(x0, y0, x1, y1, twig.radius * (1 - 0.6 * (i / count)), twig.radius * (1 - 0.6 * ((i + 1) / count)), def.twig, clip);
+      }
+    }
+    paintNeedles(false);
   }
   return painter.finish();
 }
