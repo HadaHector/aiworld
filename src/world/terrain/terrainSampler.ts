@@ -69,13 +69,6 @@ const OCEAN_FLOOR_DEPTH = -14;
 const OCEAN_FLOOR_NOISE_FREQUENCY = 0.03;
 const OCEAN_FLOOR_NOISE_SCALE = 1.5;
 
-// Hard floor on solid-land height: bedrock + biome detail noise are two independent fbm signals,
-// and raising bedrock's offset only makes a below-sea-level dip rare, not impossible - in the tail
-// of the distribution both signals can still occasionally dip low at the same point. A puddle every
-// 10-20m across every biome (including deserts) looked wrong regardless of how rare "rare" was, so
-// this is a genuine floor, not a tuning knob: land height can never read below this, guaranteed.
-const MIN_LAND_HEIGHT = -1;
-
 // Absolute target lake-surface height, applied via lerp (not a relative carve like rivers/boundary
 // hills) so a lake reads as a clean, flat, undisturbed body of water at its core and fringe
 // regardless of what the surrounding terrain is doing - real lakes are level, unlike hills.
@@ -128,16 +121,18 @@ export function createTerrainSampler(seed: number, content: WorldContent): Terra
       evaluateBoundaryHill(area.boundaryHillStyle, area.areaBorderGap, worldX, worldZ) * riverHillFade;
 
     const bedrockHeight = bedrock(worldX, worldZ);
-    const landHeightFloored = Math.max(bedrockHeight + blendedDetail + boundaryHill, MIN_LAND_HEIGHT);
+    // Unclamped: where bedrock and the biome's detail dip below the sea together, the hollow fills
+    // and is a pond - as deep as the ground goes, with its shore and shallows painted by the
+    // biomes' waterside layers. (It used to be floored at -1, which left every pond a flat plate.)
+    const landHeightUncarved = bedrockHeight + blendedDetail + boundaryHill;
 
-    // Both water carves apply AFTER the floor above (that clamp is unconditional - anything summed
-    // inside it just gets clamped back up), and both are now absolute rather than relative: the
+    // Both water carves are absolute rather than relative: the
     // river clips the terrain down to a valley profile and the lake lerps it to a level surface, so
     // neither carries the surrounding terrain's own shape into the water. River before lake means a
     // river's valley gets smoothly swallowed as it approaches the lake it feeds - reading correctly
     // as the river disappearing into the lake, not a competing dip on top of it.
     const landHeightRivered = carveRiver(
-      area.isRiverEdge, area.riverTaper, area.riverGap, worldX, worldZ, landHeightFloored,
+      area.isRiverEdge, area.riverTaper, area.riverGap, worldX, worldZ, landHeightUncarved,
     );
     const landHeight = lerp(landHeightRivered, LAKE_TARGET_HEIGHT, area.lakeFactor);
 
