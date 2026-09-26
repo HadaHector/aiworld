@@ -56,30 +56,46 @@
 
       // Under the trees, the ground is the wood's own: leaf litter, humus and twigs rather than
       // meadow. treeCover is the tree scatter's own density here, so the floor follows the stands
-      // and their clearings stay grass.
+      // and their clearings stay grass - frayed by a slow noise where the wood thins, so its edge wanders in and
+      // out in tongues and islands instead of tracing the cover's contour. The leafy grass reads
+      // the same noise (it is `shared`), so the two meet along one edge.
       {
         id: "plains-forest-floor",
         material: "forestFloor",
         weight: {
-          noises: [],
+          noises: [{ name: "fray", shared: "woodEdge", type: "fbm", octaves: 3, frequency: 0.03, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
           steps: [
             { output: "cover", op: "input", name: "treeCover" },
-            { output: "result", op: "mask", input: "cover", at: 0.9, off: 0.62 },
+            // Frayed only where the wood is thinning: nothing deep in the wood or out in the meadow.
+            { output: "open", op: "invert", input: "cover" },
+            { output: "thinning", op: "multiply", a: "cover", b: "open" },
+            { output: "frayRaw", op: "sample", noise: "fray" },
+            { output: "frayHere", op: "multiply", a: "frayRaw", b: "thinning" },
+            { output: "frayShift", op: "scale", input: "frayHere", factor: 1.4 },
+            { output: "frayed", op: "add", a: "cover", b: "frayShift" },
+            { output: "result", op: "mask", input: "frayed", at: 0.96, off: 0.57 },
           ],
         },
       },
 
-      // The wood's edge: leaves over grass, in the band of cover between meadow and forest floor,
-      // rising as the meadow's share falls and falling as the floor's rises.
+      // The wood's edge: leaves over grass, a wide band of it between meadow and forest floor,
+      // rising as the meadow's share falls and giving way exactly as the floor's rises.
       {
         id: "plains-leafy-grass",
         material: "leafyGrass",
         weight: {
-          noises: [],
+          noises: [{ name: "fray", shared: "woodEdge", type: "fbm", octaves: 3, frequency: 0.03, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
           steps: [
             { output: "cover", op: "input", name: "treeCover" },
-            { output: "rising", op: "mask", input: "cover", at: 0.52, off: 0.18 },
-            { output: "falling", op: "mask", input: "cover", at: 0.68, off: 0.94 },
+            // Frayed only where the wood is thinning: nothing deep in the wood or out in the meadow.
+            { output: "open", op: "invert", input: "cover" },
+            { output: "thinning", op: "multiply", a: "cover", b: "open" },
+            { output: "frayRaw", op: "sample", noise: "fray" },
+            { output: "frayHere", op: "multiply", a: "frayRaw", b: "thinning" },
+            { output: "frayShift", op: "scale", input: "frayHere", factor: 1.4 },
+            { output: "frayed", op: "add", a: "cover", b: "frayShift" },
+            { output: "rising", op: "mask", input: "frayed", at: 0.32, off: 0.05 },
+            { output: "falling", op: "mask", input: "frayed", at: 0.57, off: 0.96 },
             { output: "result", op: "multiply", a: "rising", b: "falling" },
           ],
         },

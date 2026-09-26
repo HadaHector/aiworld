@@ -54,7 +54,8 @@ function readNoise(raw: unknown, reader: Reader, path: string, options: Pipeline
   const obj = reader.object(raw, path);
   const type = reader.oneOf(obj, "type", path, NOISE_TYPES);
   const name = reader.string(obj, "name", path);
-  if (type === "wave") return readWave(obj, name, reader, path, options);
+  const shared = reader.has(obj, "shared") ? { shared: reader.string(obj, "shared", path) } : {};
+  if (type === "wave") return { ...readWave(obj, name, reader, path, options), ...shared };
   const scaleKeys = options.texture ? ["frequency", "tileCycles"] : ["frequency"];
   let frequency = 0;
   if (options.texture && reader.has(obj, "tileCycles")) {
@@ -72,13 +73,14 @@ function readNoise(raw: unknown, reader: Reader, path: string, options: Pipeline
   }
 
   if (type === "worley") {
-    reader.onlyKeys(obj, path, ["name", "type", "amplitude", "mode", "stretch", ...scaleKeys]);
-    return { name, type, frequency, amplitude, mode: reader.oneOf(obj, "mode", path, WORLEY_MODES), ...(stretch ? { stretch } : {}) };
+    reader.onlyKeys(obj, path, ["name", "shared", "type", "amplitude", "mode", "stretch", ...scaleKeys]);
+    return { name, ...shared, type, frequency, amplitude, mode: reader.oneOf(obj, "mode", path, WORLEY_MODES), ...(stretch ? { stretch } : {}) };
   }
-  reader.onlyKeys(obj, path, ["name", "type", "amplitude", "octaves", "persistence", "lacunarity", "stretch", ...scaleKeys]);
+  reader.onlyKeys(obj, path, ["name", "shared", "type", "amplitude", "octaves", "persistence", "lacunarity", "stretch", ...scaleKeys]);
   return {
     ...(stretch ? { stretch } : {}),
     name,
+    ...shared,
     type,
     frequency,
     amplitude,
@@ -92,7 +94,7 @@ function readNoise(raw: unknown, reader: Reader, path: string, options: Pipeline
  *  whole, or the bands would not meet themselves at the tile's edge. */
 function readWave(obj: RawObject, name: string, reader: Reader, path: string, options: PipelineReadOptions): NoiseSpec {
   const scaleKey = options.texture ? "tileCycles" : "frequency";
-  reader.onlyKeys(obj, path, ["name", "type", "amplitude", "shape", scaleKey]);
+  reader.onlyKeys(obj, path, ["name", "shared", "type", "amplitude", "shape", scaleKey]);
   const value = obj[scaleKey];
   let frequency: [number, number] = [0, 0];
   if (!Array.isArray(value) || value.length !== 2 || !value.every((v) => typeof v === "number" && Number.isFinite(v))) {

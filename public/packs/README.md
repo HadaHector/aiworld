@@ -69,6 +69,10 @@ In a texture, give `tileCycles` (cycles per texture tile) instead of `frequency`
 `stretch: [x, y]` to elongate its features - `[1, 5]` makes them five times taller than wide (bark
 fissures, grain, streaks); a stretched texture still tiles.
 
+Each graph's noises are its own, seeded by the graph and the noise's name. Give a noise
+`shared: "someName"` and it is the same noise in every graph that shares that name - two material
+rules can fray along one edge (see the biomes' forest floor and leafy grass).
+
 `wave` is parallel bands rather than noise: `{ name: "ripple", type: "wave", frequency: [0, 0.05],
 amplitude: 1, shape: "saw" }`. `frequency` is cycles per unit along x and along y, so `[0, f]` gives
 horizontal stripes and `[f, f]` diagonal ones; in a texture it is `tileCycles: [x, y]`, which must be

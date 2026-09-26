@@ -39,8 +39,8 @@ const BROAD_STRENGTH = 0.35;
 // material's own surface height (0-1, baked into its normal map's alpha) adds to its weight, and
 // how far below the strongest a material may be and still show at all. The depth is the softness:
 // smaller makes sharper edges where two materials meet.
-const HEIGHT_BLEND = 0.6;
-const HEIGHT_BLEND_DEPTH = 0.18;
+const HEIGHT_BLEND = 0.8;
+const HEIGHT_BLEND_DEPTH = 0.4;
 
 export { MATERIALS_PER_TRIANGLE } from "./materialBlend";
 

@@ -1,5 +1,8 @@
 interface BaseNoiseSpec {
   name: string;
+  /** Noises with the same `shared` name are one noise, whichever graph samples them - so two
+   *  material rules can fray along the same edge. Without it every graph's noises are its own. */
+  shared?: string;
   frequency: number;
   amplitude: number;
   octaves: number;
@@ -37,6 +40,8 @@ export interface BillowNoiseSpec extends BaseNoiseSpec {
  */
 export interface WorleyNoiseSpec {
   name: string;
+  /** As BaseNoiseSpec.shared. */
+  shared?: string;
   type: "worley";
   frequency: number;
   amplitude: number;
@@ -57,6 +62,8 @@ export interface WorleyNoiseSpec {
  */
 export interface WaveNoiseSpec {
   name: string;
+  /** As BaseNoiseSpec.shared. */
+  shared?: string;
   type: "wave";
   frequency: [number, number];
   amplitude: number;

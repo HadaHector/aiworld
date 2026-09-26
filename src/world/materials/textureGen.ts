@@ -14,16 +14,17 @@ const DEFAULT_ROUGHNESS = 0.8;
  *  - `diffuse` (required, color) - the albedo.
  *  - `roughness` (optional, scalar) - 0 = smooth/shiny, 1 = fully matte. Defaults to
  *    DEFAULT_ROUGHNESS. Not physically-calibrated; a relative dial tuned by eye.
- *  - `height` (optional, scalar) - the surface's own elevation, **by convention spanning 0..1**,
- *    used to derive the bump/normal map and stashed in the normal texture's alpha for a future
- *    world-scale blend. Nothing depends on it for visibility, so a recessed feature is authored
+ *  - `height` (optional, scalar) - the surface's own elevation, used to derive the bump/normal
+ *    map and stored in the normal texture's alpha for the terrain's height blend - re-centred there
+ *    so the material's typical surface (its median height) sits at 0.5, cracks below, bumps above
+ *    (see storedHeightShift). Nothing depends on it for visibility, so a recessed feature is authored
  *    simply by making its height low - e.g. a crack can be dark *and* a groove. That was impossible
  *    under the earlier paint-layer design, where a feature could only show where it was the tallest
  *    layer, which silently baked every dark crack as a raised ridge.
  *
- *    Only the stored alpha is clamped to 0..1; the bump reads the raw values, so straying outside
- *    the range costs nothing visually today - but it throws away the signal the future world-scale
- *    blend will want, which is why the convention is worth holding to.
+ *    Only the stored alpha is clamped to 0..1; the bump reads the raw values. Since the stored
+ *    height is re-centred, not rescaled, what matters for the blend is the spread: cracks reaching
+ *    about 0.5 below the typical surface and bumps 0.5 above use the whole range.
  */
 export interface TextureDef {
   pipeline: PipelineDef;
@@ -50,9 +51,9 @@ const BUMP_REFERENCE_RESOLUTION = 256;
  *
  * `colorBuffer` gets the `diffuse` output plus `roughness` baked into the otherwise-unused alpha
  * channel. `normalBuffer` gets a tangent-space normal map derived from the gradient of the `height`
- * output, scaled by `texture.bumpStrength`, plus that height itself in its own alpha channel - not
- * consumed by anything yet, but there for a future height-based blend between materials at world
- * scale.
+ * output, scaled by `texture.bumpStrength`, plus that height itself in its own alpha channel, its
+ * median moved to 0.5, for the terrain's height blend between materials (materialLibrary.ts's
+ * heightShare).
  *
  * The gradient reads each pixel's right/down neighbour, wrapping with `& (RESOLUTION-1)` at the
  * edge. That wrap is exact rather than approximate because the pipeline's noise is compiled
@@ -98,6 +99,7 @@ export function writeProceduralTexturePixels(colorBuffer: Uint8Array, normalBuff
     }
   }
 
+  const shift = storedHeightShift(heights);
   const wrap = TEXTURE_RESOLUTION - 1;
   const bumpGain = texture.bumpStrength * (TEXTURE_RESOLUTION / BUMP_REFERENCE_RESOLUTION);
   for (let y = 0; y < TEXTURE_RESOLUTION; y++) {
@@ -114,7 +116,33 @@ export function writeProceduralTexturePixels(colorBuffer: Uint8Array, normalBuff
       normalBuffer[pixelIndex] = (nx * invLen * 0.5 + 0.5) * 255;
       normalBuffer[pixelIndex + 1] = (ny * invLen * 0.5 + 0.5) * 255;
       normalBuffer[pixelIndex + 2] = (nz * invLen * 0.5 + 0.5) * 255;
-      normalBuffer[pixelIndex + 3] = clamp01(centerHeight) * 255;
+      normalBuffer[pixelIndex + 3] = clamp01(centerHeight + shift) * 255;
     }
   }
+}
+
+/**
+ * How far to move a material's heights so its median - the typical surface, neither crack nor
+ * bump - lands on 0.5. Every material then meets every other on the same baseline in the height
+ * blend, so a material authored low or high does not win or lose everywhere, only where its own
+ * cracks and bumps are. Moved, never stretched: a flat material stays flat.
+ */
+function storedHeightShift(heights: Float64Array): number {
+  let min = Infinity;
+  let max = -Infinity;
+  for (const h of heights) {
+    if (h < min) min = h;
+    if (h > max) max = h;
+  }
+  if (max - min < 1e-9) return 0.5 - min;
+  // The median from a fine histogram - to well within one stored step, and far cheaper than a sort.
+  const bins = new Uint32Array(4096);
+  const perBin = bins.length / (max - min);
+  for (const h of heights) bins[Math.min(bins.length - 1, Math.floor((h - min) * perBin))]++;
+  let seen = 0;
+  for (let i = 0; i < bins.length; i++) {
+    seen += bins[i];
+    if (seen * 2 >= heights.length) return 0.5 - (min + (i + 0.5) / perBin);
+  }
+  return 0.5 - max;
 }

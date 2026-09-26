@@ -128,6 +128,14 @@ const twoTone: Generator = (params, reader, path) => {
 };
 
 /**
+ * How much taller than it was first authored the grassland's relief is: about 0.1 from soil to clump
+ * top, which the bump never minded (it reads the slope, not the height) but which left the height
+ * blend almost nothing to go on. Scaled up to span most of 0-1 - soil the cracks, clumps and leaves
+ * the bumps - with the bump strength scaled down to match, so the bump is exactly as it was.
+ */
+const GRASSLAND_RELIEF = 4;
+
+/**
  * A grassy ground texture - what shows between the grass tufts, so it carries the same structure
  * they do rather than a flat green: a mottle between `dark` and `light`, clumps with shadowed
  * rims, fine curling blade strokes, and bare `soil` showing through in ragged patches, more and
@@ -161,7 +169,7 @@ const grassland: Generator = (params, reader, path) => {
     lacunarity: 2.0,
   });
   return {
-    bumpStrength: reader.number(params, "bumpStrength", path),
+    bumpStrength: reader.number(params, "bumpStrength", path) / GRASSLAND_RELIEF,
     pipeline: {
       noises: [
         noise("mottle", "fbm", 3, 13),
@@ -256,9 +264,10 @@ const grassland: Generator = (params, reader, path) => {
         ...(leaves > 0
           ? [
               { output: "leafRelief", op: "scale", input: "leaf", factor: 0.5 },
-              { output: "height", op: "max", a: "groundHeight", b: "leafRelief" },
+              { output: "relief", op: "max", a: "groundHeight", b: "leafRelief" },
             ]
-          : [{ output: "height", op: "scale", input: "groundHeight", factor: 1 }]),
+          : [{ output: "relief", op: "scale", input: "groundHeight", factor: 1 }]),
+        { output: "height", op: "scale", input: "relief", factor: GRASSLAND_RELIEF },
       ],
       outputs: { diffuse: "diffuse", roughness: "roughness", height: "height" },
     },

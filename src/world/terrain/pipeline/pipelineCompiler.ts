@@ -47,7 +47,7 @@ const WAVE_PROFILES: Record<WaveShape, (t: number) => number> = {
 };
 
 function compileNoiseSpec(spec: NoiseSpec, rootSeed: number, namespace: string, tilePeriod: number | undefined): Noise2D {
-  const seed = deriveNoiseSeed(rootSeed, namespace, spec.name);
+  const seed = spec.shared !== undefined ? deriveNoiseSeed(rootSeed, "shared", spec.shared) : deriveNoiseSeed(rootSeed, namespace, spec.name);
 
   if (spec.type === "wave") {
     const [frequencyX, frequencyY] = spec.frequency;
