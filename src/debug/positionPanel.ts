@@ -34,13 +34,42 @@ function formatSnapshot(snapshot: ViewSnapshot, zoneName: string, biomeName: str
 }
 
 /**
- * Shows where the player is and which way the camera is pointing, with a button that copies both.
+ * Reads a view back out of text the Copy button produced - either line of it, the summary
+ * (`x=12.5 z=-3 ... alpha=1.2 ...`) or the call (`x: 12.5, z: -3, alpha: 1.2 ...`) - or failing
+ * those, any two numbers, taken as x and z. The camera angles are kept only where the text gives
+ * them. Null when there is no x and z to be found.
+ */
+export function parseView(text: string): (Partial<ViewSnapshot> & { x: number; z: number }) | null {
+  const number = String.raw`(-?\d+(?:\.\d+)?)`;
+  const field = (name: string): number | undefined => {
+    const match = new RegExp(String.raw`\b${name}\s*[=:]\s*${number}`).exec(text);
+    return match ? Number(match[1]) : undefined;
+  };
+  let x = field("x");
+  let z = field("z");
+  if (x === undefined || z === undefined) {
+    const numbers = text.match(/-?\d+(?:\.\d+)?/g);
+    if (!numbers || numbers.length < 2) return null;
+    x = Number(numbers[0]);
+    z = Number(numbers[1]);
+  }
+  const view: Partial<ViewSnapshot> & { x: number; z: number } = { x, z };
+  for (const key of ["alpha", "beta", "radius"] as const) {
+    const value = field(key);
+    if (value !== undefined) view[key] = value;
+  }
+  return view;
+}
+
+/**
+ * Shows where the player is and which way the camera is pointing, with a button that copies both
+ * and one that goes to a position pasted back in.
  *
  * Angles are shown in degrees because that is what a person reads, but copied in radians because
  * that is what Babylon's ArcRotateCamera takes - rounding to degrees for display and keeping full
  * precision for the copy avoids a reported view landing slightly off the one that was reported.
  */
-export function createPositionPanel(): PositionPanel {
+export function createPositionPanel(onGo: (view: Partial<ViewSnapshot> & { x: number; z: number }) => void): PositionPanel {
   const container = document.createElement("div");
   container.style.cssText = `
     position: fixed; top: 88px; left: 16px; z-index: 900;
@@ -61,8 +90,15 @@ export function createPositionPanel(): PositionPanel {
     color: #eee; font-family: inherit; font-size: 10px; padding: 3px 8px; cursor: pointer;
   `;
 
+  const goButton = document.createElement("button");
+  goButton.type = "button";
+  goButton.textContent = "Go";
+  goButton.title = "Paste a copied position and go there";
+  goButton.style.cssText = copyButton.style.cssText;
+
   container.appendChild(readout);
   container.appendChild(copyButton);
+  container.appendChild(goButton);
   document.body.appendChild(container);
 
   let current: { snapshot: ViewSnapshot; zoneName: string; biomeName: string; y: number } | null = null;
@@ -96,6 +132,42 @@ export function createPositionPanel(): PositionPanel {
     field.select();
     flash("Ctrl+C");
   }
+
+  /** A field to paste a copied position into: Enter goes there, Escape or clicking away closes it. */
+  function showGoField(): void {
+    const existing = container.querySelector<HTMLInputElement>("input.go");
+    if (existing) {
+      existing.focus();
+      return;
+    }
+    const field = document.createElement("input");
+    field.type = "text";
+    field.className = "go";
+    field.placeholder = "paste a copied position, Enter";
+    field.style.cssText = `
+      width: 260px; background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.35);
+      border-radius: 3px; color: #eee; font-family: inherit; font-size: 10px; padding: 2px 4px;
+    `;
+    field.addEventListener("keydown", (event) => {
+      // The page's own keys (M for the map, WASD) must not fire while typing here.
+      event.stopPropagation();
+      if (event.key === "Escape") field.remove();
+      if (event.key !== "Enter") return;
+      const view = parseView(field.value);
+      if (!view) {
+        field.style.borderColor = "#e66";
+        return;
+      }
+      field.remove();
+      onGo(view);
+    });
+    field.addEventListener("keyup", (event) => event.stopPropagation());
+    field.addEventListener("blur", () => field.remove());
+    container.appendChild(field);
+    field.focus();
+  }
+
+  goButton.addEventListener("click", showGoField);
 
   copyButton.addEventListener("click", () => {
     if (!current) return;

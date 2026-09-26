@@ -7,6 +7,7 @@ import { createSettingsPanel } from "./debug/settingsPanel";
 import { createZoneLabel } from "./debug/zoneLabel";
 import { createTextureBrowser } from "./debug/textureBrowser";
 import { createPositionPanel, type ViewSnapshot } from "./debug/positionPanel";
+import { createLastView } from "./debug/lastView";
 import { createStatsPanel } from "./debug/statsPanel";
 import { createLoadingScreen } from "./ui/loadingScreen";
 import { loadContent } from "./world/content/loadContent";
@@ -88,7 +89,6 @@ createSettingsPanel({
 
 const zoneLabel = createZoneLabel();
 const textureBrowser = createTextureBrowser(world.materialLibrary);
-const positionPanel = createPositionPanel();
 createStatsPanel(scene, engine);
 
 /**
@@ -103,6 +103,13 @@ function gotoView({ x, z, alpha, beta, radius }: Partial<ViewSnapshot> & { x: nu
   if (beta !== undefined) camera.beta = beta;
   if (radius !== undefined) camera.radius = radius;
 }
+
+const positionPanel = createPositionPanel(gotoView);
+
+// Back where the page was last left, so a reload after a change shows the same spot.
+const lastView = createLastView();
+const resumeView = lastView.restore();
+if (resumeView) gotoView(resumeView);
 
 (window as unknown as { __aiworld: unknown }).__aiworld = {
   goto: gotoView,
@@ -146,6 +153,7 @@ scene.onBeforeRenderObservable.add(() => {
   const zoneName = world.areaNames.get(here.primaryAreaId) ?? "Uncharted";
   zoneLabel.update(zoneName, here.primaryBiome.name);
   positionPanel.update(character.mesh.position, camera, zoneName, here.primaryBiome.name);
+  lastView.remember(character.mesh.position, camera);
   // Day-night first: it owns the clock, and updateAtmosphere reads that clock's current value
   // (world.ts's updateAtmosphere calls sunLighting.getTimeHours() itself) - calling it after this
   // is what makes that read this frame's time rather than last frame's.
