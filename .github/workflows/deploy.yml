@@ -1,0 +1,48 @@
+# Builds the game and the workbench and publishes them on GitHub Pages, on every push to master
+# (and by hand from the Actions tab). The repository's Settings -> Pages -> Source has to be set to
+# "GitHub Actions" once.
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deploy at a time; a newer push supersedes one still waiting.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx tsc
+      # Relative paths, so the site works under https://<user>.github.io/<repository>/ whatever
+      # the repository is called - the packs are fetched from the page's own folder
+      # (content/loadContent.ts reads import.meta.env.BASE_URL).
+      - run: npx vite build --base=./
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
