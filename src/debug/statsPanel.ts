@@ -1,4 +1,5 @@
 import type { Engine, Scene } from "@babylonjs/core";
+import { createTextureCacheLabel } from "./textureCacheLabel";
 
 const REFRESH_MS = 250;
 
@@ -16,6 +17,8 @@ function formatCount(count: number): string {
  * every pass in the frame, so it is split into the main view and everything rendered before the
  * main draw phase starts - in practice the shadow map's cascades, which redraw terrain and trees
  * once per cascade.
+ *
+ * Under it, how much the texture cache keeps on disk (textureCacheLabel.ts).
  */
 export function createStatsPanel(scene: Scene, engine: Engine): void {
   const container = document.createElement("div");
@@ -24,8 +27,11 @@ export function createStatsPanel(scene: Scene, engine: Engine): void {
     background: rgba(0,0,0,0.6); border: 1px solid rgba(255,255,255,0.3); border-radius: 4px;
     padding: 6px 10px; font-family: sans-serif; font-size: 11px; color: #eee;
     white-space: nowrap; font-variant-numeric: tabular-nums;
+    display: flex; flex-direction: column; align-items: flex-start; gap: 4px;
   `;
-  container.textContent = "-";
+  const readout = document.createElement("span");
+  readout.textContent = "-";
+  container.append(readout, createTextureCacheLabel());
   document.body.appendChild(container);
 
   let beforeMain = 0;
@@ -44,7 +50,7 @@ export function createStatsPanel(scene: Scene, engine: Engine): void {
     const now = performance.now();
     if (now - lastRefresh < REFRESH_MS) return;
     lastRefresh = now;
-    container.textContent =
+    readout.textContent =
       `${engine.getFps().toFixed(0)} fps · ${formatCount(totalDrawn)} verts drawn ` +
       `(view ${formatCount(mainDrawn)}, shadows ${formatCount(totalDrawn - mainDrawn)})`;
   });

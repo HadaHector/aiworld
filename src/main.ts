@@ -40,7 +40,7 @@ const engine = createEngine(canvas);
 const scene = createScene(engine);
 
 // World creation is async because material textures are baked across a worker pool (see
-// textureBakePool.ts), which is the bulk of startup time.
+// textureBakePool.ts), which is the bulk of startup time unless the texture cache already has them.
 const world = await createWorld(scene, content, ({ phase, completed, total }) => {
   loadingScreen.update(phase, completed, total);
 });

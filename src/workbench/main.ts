@@ -13,6 +13,7 @@ import { GRASS_TEXTURE_SIZE, bakeGrassTextures } from "../world/foliage/grassTex
 import { WORLD_SEED } from "../world/world";
 import { createStage, type CameraView, type GroundShape, type Stage } from "./stage";
 import { createTextureView, type TextureImage } from "./textureView";
+import { createTextureCacheLabel } from "../debug/textureCacheLabel";
 
 // ---------------------------------------------------------------------------------------------
 // Assets: every file of every pack, by "pack/folder/id".
@@ -141,6 +142,9 @@ const issuesBox = element<HTMLElement>("issues");
 const seedInput = element<HTMLInputElement>("seed");
 const randomSeed = element<HTMLButtonElement>("randomSeed");
 const previewButton = element<HTMLButtonElement>("previewButton");
+const cacheLabel = createTextureCacheLabel();
+cacheLabel.classList.add("hint");
+previewButton.before(cacheLabel);
 const viewTabs = element<HTMLElement>("viewTabs");
 const viewOptions = element<HTMLElement>("viewOptions");
 const stageCanvas = element<HTMLCanvasElement>("stageCanvas");
