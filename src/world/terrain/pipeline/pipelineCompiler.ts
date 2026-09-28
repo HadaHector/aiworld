@@ -88,7 +88,7 @@ function compileNoiseSpec(spec: NoiseSpec, rootSeed: number, namespace: string, 
       return (worldX: number, worldZ: number): number => fbm(octaveSampler, worldX, worldZ, fbmParams);
     }
     case "ridged":
-      return ridgedNoise2D(octaveSampler, octaveParams);
+      return ridgedNoise2D(octaveSampler, octaveParams, spec.crest ?? 0);
     case "billow":
       return billowNoise2D(octaveSampler, octaveParams);
   }

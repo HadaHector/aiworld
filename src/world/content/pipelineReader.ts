@@ -76,9 +76,10 @@ function readNoise(raw: unknown, reader: Reader, path: string, options: Pipeline
     reader.onlyKeys(obj, path, ["name", "shared", "type", "amplitude", "mode", "stretch", ...scaleKeys]);
     return { name, ...shared, type, frequency, amplitude, mode: reader.oneOf(obj, "mode", path, WORLEY_MODES), ...(stretch ? { stretch } : {}) };
   }
-  reader.onlyKeys(obj, path, ["name", "shared", "type", "amplitude", "octaves", "persistence", "lacunarity", "stretch", ...scaleKeys]);
+  reader.onlyKeys(obj, path, ["name", "shared", "type", "amplitude", "octaves", "persistence", "lacunarity", "stretch", ...(type === "ridged" ? ["crest"] : []), ...scaleKeys]);
   return {
     ...(stretch ? { stretch } : {}),
+    ...(type === "ridged" && obj.crest !== undefined ? { crest: reader.number(obj, "crest", path, { min: 0, max: 1 }) } : {}),
     name,
     ...shared,
     type,

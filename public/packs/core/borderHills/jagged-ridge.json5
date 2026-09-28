@@ -2,10 +2,12 @@
 // subtractively. Wavelength widened well past BOUNDARY_HILL_WIDTH (20m -> 167m) and persistence
 // dropped (0.5 -> 0.4) so this reads as one flowing ridge crest, not a field of competing spikes -
 // the exact same peak-spacing lesson learned tuning the mountains/hills/canyon biomes earlier.
+// The crests are rounded well over (crest: 0.5) - a knife edge came out as a jagged line on the terrain,
+// worst on the coarse far-away mesh - at their full height, only no longer a crease.
 {
   name: "Jagged Ridge",
   height: {
-    noises: [{ name: "ridge", type: "ridged", octaves: 4, frequency: 0.008, amplitude: 1, persistence: 0.15, lacunarity: 2.0 }],
+    noises: [{ name: "ridge", type: "ridged", octaves: 4, frequency: 0.008, amplitude: 1, persistence: 0.15, lacunarity: 2.0, crest: 0.5 }],
     steps: [
       { output: "raw", op: "sample", noise: "ridge" },
       { output: "result", op: "scale", input: "raw", factor: 35 },

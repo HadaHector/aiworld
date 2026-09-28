@@ -1,11 +1,12 @@
 // Broad rolling base with gentler, wider spikes added on top - canyon's multi-noise technique,
-// additive instead of subtractive.
+// additive instead of subtractive. The spikes' crests are rounded over (crest: 0.35), so they
+// do not come out as jagged lines on the terrain mesh.
 {
   name: "Jagged Crumple",
   height: {
     noises: [
       { name: "base", type: "fbm", octaves: 3, frequency: 0.006, amplitude: 20, persistence: 0.35, lacunarity: 2.0 },
-      { name: "spike", type: "ridged", octaves: 3, frequency: 0.0035, amplitude: 1, persistence: 0.4, lacunarity: 2.0 },
+      { name: "spike", type: "ridged", octaves: 3, frequency: 0.0035, amplitude: 1, persistence: 0.4, lacunarity: 2.0, crest: 0.35 },
     ],
     steps: [
       { output: "baseRaw", op: "sample", noise: "base" },

@@ -19,6 +19,8 @@ export interface FbmNoiseSpec extends BaseNoiseSpec {
 
 export interface RidgedNoiseSpec extends BaseNoiseSpec {
   type: "ridged";
+  /** How rounded each crest is, 0 (a knife edge, the default) and up - see ridgedNoise2D. */
+  crest?: number;
 }
 
 export interface BillowNoiseSpec extends BaseNoiseSpec {

@@ -13,15 +13,26 @@ export interface OctaveNoiseParams {
  * Ridged multifractal: each octave folds the signal via (1-|n|)^2 before summing, so the fold
  * (and resulting crest lines) happens at every scale, not just once on the final sum. This is
  * what a post-hoc `abs`/`power` step on a plain fbm sum cannot reproduce - the canyon primitive.
+ *
+ * |n| has a kink at 0, so every crest is a crease - a knife edge that a terrain mesh can only
+ * draw as a jagged line. `crest` rounds it over: |n| becomes sqrt(n^2 + crest^2) - crest, the
+ * scaled to still reach 1 where |n| does: nearly the same away from the crest and smooth across it,
+ * with the crest itself exactly as high as before.
+ * 0 is the plain fold.
  */
-export function ridgedNoise2D(sample: OctaveSampler, params: OctaveNoiseParams): Noise2D {
+export function ridgedNoise2D(sample: OctaveSampler, params: OctaveNoiseParams, crest = 0): Noise2D {
+  const crestSquared = crest * crest;
+  // Scaled back up to reach 1 where |n| does, so only the crest is rounded - not the whole ridge
+  // lifted by the few hundredths the smoothing takes off everywhere.
+  const crestScale = crest > 0 ? 1 / (Math.sqrt(1 + crestSquared) - crest) : 1;
   return (worldX: number, worldZ: number): number => {
     let amplitude = params.baseAmplitude;
     let frequency = params.baseFrequency;
     let height = 0;
 
     for (let i = 0; i < params.octaves; i++) {
-      const n = 1 - Math.abs(sample(worldX, worldZ, frequency));
+      const raw = sample(worldX, worldZ, frequency);
+      const n = 1 - (crest > 0 ? (Math.sqrt(raw * raw + crestSquared) - crest) * crestScale : Math.abs(raw));
       height += n * n * amplitude;
       amplitude *= params.persistence;
       frequency *= params.lacunarity;

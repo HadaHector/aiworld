@@ -71,6 +71,7 @@ Without `outputs`, the result is the last step. A graph with several results nam
 `persistence`, `lacunarity`) and `worley` (`frequency`, `amplitude`, `mode`: `"f1"` the distance to the nearest point - round
 stones, cells; `"edge"` the distance to a cell border - cracks; `"cell"` a random 0-1 value of the
 nearest point's own, the same across its cell).
+A `ridged` noise's crests are knife edges; `crest` (0-1: 0.2 softens them, 0.5 rounds them well over, even on the coarse far-away ground) rounds them at the same height.
 In a texture, give `tileCycles` (cycles per texture tile) instead of `frequency`. Any noise can take
 `stretch: [x, y]` to elongate its features - `[1, 5]` makes them five times taller than wide (bark
 fissures, grain, streaks); a stretched texture still tiles.
