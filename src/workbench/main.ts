@@ -199,6 +199,8 @@ function readUrl(): string | null {
     const value = params.get(key);
     if (value !== null) options[key] = value;
   }
+  urlCamera = parseCamera(params.get("cam"));
+  if (urlCamera) cameraParam = params.get("cam") ?? "";
   return params.get("asset");
 }
 
@@ -210,7 +212,33 @@ function writeUrl(): void {
   for (const [key, value] of Object.entries(options)) {
     if (value !== DEFAULT_OPTIONS[key]) params.set(key, value);
   }
+  if (cameraParam) params.set("cam", cameraParam);
   history.replaceState(null, "", `${location.pathname}?${params.toString()}`);
+}
+
+// The 3D camera, in the URL as `cam=alpha,beta,radius,targetX,targetY,targetZ`: a reload - or a
+// link - comes back to the same angle, not just the same asset. It belongs to one asset's one view,
+// so switching either drops it and the new view frames itself.
+
+/** A camera from the URL, waiting for the first 3D preview to use it. */
+let urlCamera: CameraView | undefined;
+/** The camera as the URL holds it - kept up to date as the camera moves. */
+let cameraParam = "";
+
+function parseCamera(text: string | null): CameraView | undefined {
+  const values = (text ?? "").split(",").map(Number);
+  if (values.length !== 6 || !values.every(Number.isFinite)) return undefined;
+  const [alpha, beta, radius, x, y, z] = values;
+  return { alpha, beta, radius, target: [x, y, z] };
+}
+
+function formatCamera(view: CameraView): string {
+  return [view.alpha, view.beta, view.radius, ...view.target].map((v, i) => v.toFixed(i < 2 ? 3 : 2)).join(",");
+}
+
+function forgetCamera(): void {
+  urlCamera = undefined;
+  cameraParam = "";
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -303,7 +331,10 @@ function fileTextOf(asset: Asset): string {
 
 function selectAsset(asset: Asset, preview: boolean): void {
   // A different asset starts on its first view; the first one selected keeps the URL's.
-  if (current && current !== asset) viewId = "";
+  if (current && current !== asset) {
+    viewId = "";
+    forgetCamera();
+  }
   current = asset;
   diskText = fileTextOf(asset);
   editor.value = loadDraft(asset.key, diskText) ?? diskText;
@@ -465,6 +496,7 @@ function renderPreviewBar(): void {
     button.addEventListener("click", () => {
       if (viewId === candidate.id && candidate === view) return;
       viewId = candidate.id;
+      forgetCamera();
       writeUrl();
       renderPreviewBar();
       void runPreview();
@@ -636,6 +668,12 @@ function showMode(mode: "3d" | "2d" | "none"): void {
     mode === "3d" ? "Drag: orbit · Right-drag: pan · Wheel: zoom" : mode === "2d" ? "Wheel: zoom · Drag: pan · Double-click: fit" : "";
   if (mode !== "2d") textureView.clear();
   if (mode !== "3d") dropStage();
+  // A 2D view has no camera. (Not on "none": that is also how the page starts, before the camera
+  // the URL came with has been used.)
+  if (mode === "2d" && cameraParam) {
+    forgetCamera();
+    writeUrl();
+  }
 }
 
 function dropStage(): void {
@@ -712,7 +750,7 @@ async function preview3d(token: number, asset: Asset, view: ViewDef, content: Wo
   }
 
   const subject = `${asset.key}|${view.id}`;
-  const keepView: CameraView | undefined = stage && stageSubject === subject ? stage.getView() : undefined;
+  const keepView: CameraView | undefined = stage && stageSubject === subject ? stage.getView() : urlCamera;
   showMode("3d");
   setStatus("Building");
   const built = await createStage(engine, stageCanvas, {
@@ -737,6 +775,20 @@ async function preview3d(token: number, asset: Asset, view: ViewDef, content: Wo
   stage?.dispose();
   stage = built;
   stageSubject = subject;
+  urlCamera = undefined;
+  // The URL follows the camera - written once it settles, not on every frame of a drag.
+  let cameraTimer: number | undefined;
+  const recordCamera = (): void => {
+    cameraParam = formatCamera(built.getView());
+    writeUrl();
+  };
+  built.camera.onViewMatrixChangedObservable.add(() => {
+    window.clearTimeout(cameraTimer);
+    cameraTimer = window.setTimeout(() => {
+      if (stage === built) recordCamera();
+    }, 250);
+  });
+  recordCamera();
   setStatus("");
 }
 
