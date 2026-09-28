@@ -1,0 +1,9 @@
+// Long, soft meadow grass, knee-high and leaning - between meadow and tall.
+{
+  width: 1.05,
+  height: 0.8,
+  sway: 0.26,
+  fadeStart: 30,
+  fadeEnd: 260,
+  blades: { count: 38, minHeight: 0.5, maxHeight: 0.97, baseWidth: 5, lean: 0.22, fan: false, seedHeads: false },
+}

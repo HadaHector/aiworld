@@ -33,10 +33,10 @@ self.onmessage = (event: MessageEvent<ChunkWorkerMessage>): void => {
   const message = event.data;
   if (message.type === "init") {
     const { seed, content } = message;
-    const { sampleTerrain } = createTerrainSampler(seed, content);
+    const { sampleTerrain, areaBiomes } = createTerrainSampler(seed, content);
     context = {
       sampleTerrain,
-      materialBlender: createMaterialBlender(seed, content),
+      materialBlender: createMaterialBlender(seed, content, areaBiomes),
       scatterTrees: createTreeScatter(seed, content),
       scatterBushes: createBushScatter(seed, content, sampleTerrain),
       treeCover: createTreeCover(seed, content),

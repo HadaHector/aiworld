@@ -38,6 +38,9 @@ export interface TreeModel {
   /** The two ends of the palette a tree's tint mixes its canopy between. */
   tintDark: Color3;
   tintLight: Color3;
+  /** Whether its materials read the tree tint table (treeShaders.ts) - generated trees and bushes
+   *  do; a primitive tree's plain canopy is recoloured through its instance colour instead. */
+  shaderTint: boolean;
 }
 
 /**
@@ -165,6 +168,7 @@ function createPrimitiveModel(scene: Scene, def: TreeKindDef, shape: PrimitiveTr
     canopy: buildCrown(scene, def.id, shape.crown),
     tintDark: color3(def.tint[0]),
     tintLight: color3(def.tint[1]),
+    shaderTint: false,
   };
 }
 
@@ -206,7 +210,7 @@ function createLeafMaterial(scene: Scene, id: string, atlasPixels: Uint8Array, s
   const leaves = new LeafMaterial(`tree_${id}_leaves`, scene, "treeLeaf", {
     attributes: ["position", "normal", "uv"],
     uniforms: ["world", "view", "viewProjection", "time", "windDirection", "treeHeight", ...LIT_SHADING_UNIFORMS],
-    samplers: ["leafAtlas", ...LIT_SHADING_SAMPLERS],
+    samplers: ["leafAtlas", "treeTints", ...LIT_SHADING_SAMPLERS],
     needAlphaTesting: true,
   });
   leaves.alphaTexture = atlas;
@@ -246,7 +250,7 @@ function createWoodAndLeafMaterials(
   const bark = new ShaderMaterial(`tree_${id}_bark`, scene, "treeBark", {
     attributes: ["position", "normal", "uv", "axis"],
     uniforms: ["world", "view", "viewProjection", ...LIT_SHADING_UNIFORMS],
-    samplers: ["barkColor", "barkNormal", ...LIT_SHADING_SAMPLERS],
+    samplers: ["barkColor", "barkNormal", "treeTints", ...LIT_SHADING_SAMPLERS],
   });
   bark.setTexture("barkColor", barkColor);
   bark.setTexture("barkNormal", barkNormal);
@@ -329,7 +333,7 @@ function createGeneratedModels(scene: Scene, def: TreeKindDef, kind: GeneratedKi
     const reach = geometry.height * 0.6;
     canopy.setBoundingInfo(new BoundingInfo(new Vector3(-reach, -2, -reach), new Vector3(reach, geometry.height + 2, reach)));
 
-    return { trunk, canopy, tintDark, tintLight };
+    return { trunk, canopy, tintDark, tintLight, shaderTint: true };
   };
 
   const models: TreeModel[] = [];
@@ -362,7 +366,7 @@ function createBushModels(scene: Scene, def: TreeKindDef, shape: BushShape, seed
     canopy.material = leaves;
     const reach = shape.width[1] * 0.7;
     canopy.setBoundingInfo(new BoundingInfo(new Vector3(-reach, -1, -reach), new Vector3(reach, geometry.height + 1, reach)));
-    models.push({ canopy, tintDark, tintLight });
+    models.push({ canopy, tintDark, tintLight, shaderTint: true });
   }
   return models;
 }

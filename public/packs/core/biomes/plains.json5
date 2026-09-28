@@ -5,11 +5,34 @@
   lakeChance: 0.05,
   borderType: "mountain",
   settlement: "timber",
-  height: { generator: "detailHeight", amplitude: 12.75, frequency: 0.002, offset: 7.5 },
-  trees: { generator: "standDensity", tree: "broadleaf", frequency: 0.0012, openAt: 0.12, fullAt: 0.62, peak: 0.55 },
+  height: { generator: "detailHeight", amplitude: { range: [9, 17] }, frequency: { range: [0.0016, 0.0026] }, offset: 7.5 },
+  trees: { generator: "standDensity", tree: "broadleaf", frequency: 0.0012, openAt: { range: [0, 0.3] }, fullAt: 0.62, peak: { range: [0.35, 0.7] } },
+  // Each area its own trees, and every tree its own shade of them (spread). Pines first: a tree
+  // takes the first rule for its kind, and conifers stray less far from green than the rest.
+  treeTints: [
+    {
+      kinds: ["pine"],
+      leaves: { hue: { range: [-40, 80] }, saturation: { range: [0.6, 1.5] }, value: { range: [0.85, 1.15] }, spread: { hue: 10, saturation: 0.15, value: 0.1 } },
+      bark: { hue: { range: [-20, 20] }, saturation: { range: [0.6, 1.4] }, value: { range: [0.75, 1.2] }, spread: { value: 0.12 } },
+    },
+    {
+      // Red and orange through gold to blue - an autumn wood in a dozen shades, or a strange one.
+      leaves: { hue: { range: [-100, 120] }, saturation: { range: [0.5, 1.8] }, value: { range: [0.85, 1.15] }, spread: { hue: 25, saturation: 0.25, value: 0.15 } },
+      bark: { hue: { range: [-20, 20] }, saturation: { range: [0.6, 1.4] }, value: { range: [0.75, 1.2] }, spread: { value: 0.12 } },
+    },
+  ],
   ground: {
-    base: "grass",
+    // Which meadow an area is: grass's own texture under each, a different sward on it.
+    base: { oneOf: ["grass", "meadowShort", "meadowLong", "meadowPoppy", "meadowButtercup", "meadowTussock"] },
     road: "track",
+    // Each area's ground a little different: a warmer or cooler, paler or deeper version of it.
+    adjust: { hue: { range: [-8, 8] }, saturation: { range: [0.85, 1.15] }, value: { range: [0.92, 1.08] } },
+    // Its grassland - meadow, weeds, leafy and dry grass, and the grass on them - anywhere from an
+    // orange, sunburnt steppe to a cold blue-green, and from washed-out to vivid. Roads, rock and
+    // the forest floor keep their own colours.
+    tints: [
+      { family: "grassland", hue: { range: [-65, 80] }, saturation: { range: [0.35, 1.9] }, value: { range: [0.9, 1.1] } },
+    ],
     layers: [
       // Plains-only ground variety. slopeFacing and reliefCurvature are both small, gentle signals on
       // plains' own rolling hills (amplitude ~12.75), so these thresholds sit close to 0 rather than

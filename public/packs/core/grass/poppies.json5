@@ -1,0 +1,27 @@
+// Poppies: big red and orange heads on tall stems, in drifts.
+{
+  width: 1.1,
+  height: 1.05,
+  sway: 0.24,
+  fadeStart: 70,
+  fadeEnd: 320,
+  cluster: { scale: 12, coverage: 0.3 },
+  blades: {
+    count: 9,
+    minHeight: 0.55,
+    maxHeight: 0.95,
+    baseWidth: 2.5,
+    lean: 0.14,
+    fan: false,
+    seedHeads: false,
+    flowerHeads: {
+      count: 5,
+      radius: 19,
+      colors: [
+        [0.86, 0.12, 0.08], // scarlet
+        [0.93, 0.36, 0.08], // orange
+        [0.78, 0.08, 0.12], // crimson
+      ],
+    },
+  },
+}

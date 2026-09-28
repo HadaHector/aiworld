@@ -1,3 +1,4 @@
+import { treeTintRules } from "./foliage/treeTints";
 import type { Camera, Scene } from "@babylonjs/core";
 import { createChunkManager, type ChunkLodLevel } from "./terrain/chunkManager";
 import { createChunkBuildPool } from "./terrain/chunkBuildPool";
@@ -130,14 +131,22 @@ export async function createWorld(
   let buildPool = createChunkBuildPool(WORLD_SEED, content);
 
   onProgress?.({ phase: "Shaping continents", completed: 0, total: 0 });
-  const { sampleTerrain, worldExtent, continents, areaBounds, areaNames, settlements, roads, settlementLayouts } = createTerrainSampler(WORLD_SEED, content);
+  const { sampleTerrain, worldExtent, continents, areaBounds, areaNames, settlements, roads, settlementLayouts, areaBiomes } = createTerrainSampler(WORLD_SEED, content);
 
-  const materialLibrary = await createMaterialLibrary(scene, WORLD_SEED, content, sunLighting, (done, total) => {
+  const materialLibrary = await createMaterialLibrary(scene, WORLD_SEED, content, areaBiomes, sunLighting, (done, total) => {
     onProgress?.({ phase: "Baking material textures", completed: done, total });
   });
 
   // Bushes are drawn by the same field as the trees - leaf cards on thin instances either way.
-  const trees = await createTreeField(scene, sunLighting.shadowGenerator, [...content.treeKinds, ...content.bushKinds], WORLD_SEED, materialLibrary.litShading);
+  const trees = await createTreeField(
+    scene,
+    sunLighting.shadowGenerator,
+    [...content.treeKinds, ...content.bushKinds],
+    WORLD_SEED,
+    materialLibrary.litShading,
+    undefined,
+    areaBiomes.map((biome, areaId) => treeTintRules(WORLD_SEED, areaId, biome)),
+  );
   const grass = createGrassField(scene, WORLD_SEED, materialLibrary.litShading, content.grassKinds);
   const buildings = createSettlementRenderer(
     scene,

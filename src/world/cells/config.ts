@@ -88,3 +88,8 @@ export const LAKE_EDGE_NOISE_SALT = 614;
 export const RIVER_SOURCE_SALT = 615;
 export const RIVER_LENGTH_SALT = 616;
 export const RIVER_WALK_SALT = 617;
+// After riverConfig.ts's 618-619: each area's roll of its biome (content/biomeRolls.ts), salted
+// again by the area's id.
+export const AREA_ROLL_SALT = 620;
+// Each area's shades of its trees (foliage/treeTints.ts), salted again by the area and rule.
+export const TREE_SHADE_SALT = 621;

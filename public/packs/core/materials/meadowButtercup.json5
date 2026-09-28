@@ -1,0 +1,12 @@
+// Low meadow gone yellow with buttercups.
+{
+  name: "Buttercup Meadow",
+  family: "grassland",
+  detail: { strength: 0.3 },
+  textureFrom: "grass",
+  grass: [
+    { kind: "meadow", density: 2.2, color: [0.5, 0.68, 0.3] },
+    { kind: "lawn", density: 1.2, color: [0.46, 0.66, 0.28] },
+    { kind: "buttercups", density: 1.4, color: [0.44, 0.62, 0.26] },
+  ],
+}

@@ -1,0 +1,28 @@
+// Cool-coloured flowers: blue, violet and a few white, in loose patches.
+{
+  width: 1.0,
+  height: 0.8,
+  sway: 0.2,
+  fadeStart: 60,
+  fadeEnd: 280,
+  cluster: { scale: 8, coverage: 0.4 },
+  blades: {
+    count: 12,
+    minHeight: 0.5,
+    maxHeight: 0.9,
+    baseWidth: 2.5,
+    lean: 0.16,
+    fan: false,
+    seedHeads: false,
+    flowerHeads: {
+      count: 8,
+      radius: 12,
+      colors: [
+        [0.28, 0.36, 0.9], // blue
+        [0.45, 0.3, 0.85], // violet
+        [0.36, 0.58, 0.95], // sky
+        [0.92, 0.94, 0.98], // white
+      ],
+    },
+  },
+}

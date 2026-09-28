@@ -1,0 +1,9 @@
+// Short, fine, close-cropped grass - a grazed or trodden meadow.
+{
+  width: 0.8,
+  height: 0.24,
+  sway: 0.08,
+  fadeStart: 12,
+  fadeEnd: 160,
+  blades: { count: 70, minHeight: 0.5, maxHeight: 0.95, baseWidth: 5, lean: 0.1, fan: false, seedHeads: false },
+}

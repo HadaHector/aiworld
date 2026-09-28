@@ -32,6 +32,7 @@ import {
 } from "./config";
 import { BOUNDARY_HILL_WIDTH, BOUNDARY_HILL_EDGE_NOISE_AMPLITUDE, BOUNDARY_HILL_STYLE_SALT } from "../terrain/boundaryHills/boundaryHillsConfig";
 import { RIVER_QUERY_RADIUS } from "../terrain/rivers/riverConfig";
+import { rollAreaBiome } from "../content/resolveContent";
 
 export const SEA_LEVEL = 0;
 const WORLD_CENTER_X = 0;
@@ -101,6 +102,9 @@ export interface AreaWorld {
   /** The world name generator, so later systems name their own content out of the same pool and
    *  cannot collide with a zone name. */
   nameGenerator: NameGenerator;
+  /** Each area's own roll of its biome, by area id - the objects every AreaWeight and primaryBiome
+   *  carries, so anything built per biome can be built per area from this list up front. */
+  areaBiomes: BiomeDefinition[];
 }
 
 /**
@@ -225,7 +229,11 @@ export function createAreaSampler(seed: number, content: WorldContent): AreaWorl
     const localAreaId = partitionIntoAreas(continent.seed, adjacency, continentCells, continent.areaCount);
     localAreaId.forEach((id, cellIndex) => cellToAreaId.set(cellIndex, id + areaIdOffset));
 
-    const continentBiomes = assignAreaBiomes(continent.seed, continent.areaCount, content.biomes);
+    // Each area its own roll of its biome - its own ranges, options and noise seeds (see
+    // content/biomeRolls.ts) - so everything that asks an area for its biome gets the area's.
+    const continentBiomes = assignAreaBiomes(continent.seed, continent.areaCount, content.biomes).map((biome, i) =>
+      rollAreaBiome(seed, areaIdOffset + i, biome, content),
+    );
     areaBiomes.push(...continentBiomes);
     areaIdOffset += continent.areaCount;
 
@@ -485,5 +493,6 @@ export function createAreaSampler(seed: number, content: WorldContent): AreaWorl
     areaNames,
     landCellSites,
     nameGenerator,
+    areaBiomes,
   };
 }

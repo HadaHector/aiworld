@@ -3,7 +3,7 @@ import type { TreeKindDef } from "../world/foliage/foliageConfig";
 import type { BakedBark } from "../world/foliage/treeModels";
 import { bakeLeafAtlas } from "../world/foliage/treeModels";
 import { bakeBarks } from "../world/foliage/treeField";
-import { bakeTerrainTextures, type TerrainMaterial } from "../world/materials/materialLibrary";
+import { bakeTerrainTextures, type TerrainTextures } from "../world/materials/materialLibrary";
 
 /**
  * Every bake the workbench has made, keyed by exactly what it was baked from - the definition's
@@ -39,9 +39,7 @@ class Memo<T> {
   }
 }
 
-type GroundBake = Pick<TerrainMaterial, "averageColors" | "colorBuffer" | "normalBuffer">;
-
-const grounds = new Memo<Promise<GroundBake>>();
+const grounds = new Memo<Promise<TerrainTextures>>();
 const barks = new Memo<Promise<BakedBark | undefined>>();
 const atlases = new Memo<Uint8Array | null>();
 
@@ -53,11 +51,12 @@ function remembered<T>(memo: Memo<Promise<T>>, key: string, make: () => Promise<
 }
 
 function groundKey(def: MaterialDef, seed: number): string {
-  return `${seed}|${def.id}|${JSON.stringify(def.texture)}`;
+  // The texture's own id: a material borrowing another's texture shares its bake.
+  return `${seed}|${def.textureId}|${JSON.stringify(def.texture)}`;
 }
 
-/** A material's texture, baked as the terrain shader takes it (one layer). */
-export function bakedGround(def: MaterialDef, seed: number): Promise<GroundBake> {
+/** A material's texture, baked as the terrain shader takes it (one layer), not yet recoloured. */
+export function bakedGround(def: MaterialDef, seed: number): Promise<TerrainTextures> {
   return remembered(grounds, groundKey(def, seed), () => bakeTerrainTextures(seed, [def]));
 }
 

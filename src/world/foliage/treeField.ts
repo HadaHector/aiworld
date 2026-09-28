@@ -1,4 +1,4 @@
-import { Matrix, Quaternion, Vector3, type Mesh } from "@babylonjs/core";
+import { Constants, Matrix, Quaternion, RawTexture, ShaderMaterial, Vector3, type Mesh } from "@babylonjs/core";
 import type { CascadedShadowGenerator, Scene } from "@babylonjs/core";
 import type { TreePlacement } from "./treeScatter";
 import type { TreeKindDef } from "./foliageConfig";
@@ -6,6 +6,11 @@ import { createTreeModels, type BakedBark, type TreeModel } from "./treeModels";
 import { bakeMaterialTextures } from "../materials/textureBakePool";
 import { TEXTURE_RESOLUTION } from "../materials/textureGen";
 import type { LitShading } from "../materials/litShading";
+import { applyColorMatrix, type ColorMatrix } from "../materials/colorAdjust";
+import { TREE_TINT_WIDTH } from "./treeShaders";
+import type { TreeShade, TreeTintRule } from "./treeTints";
+
+const IDENTITY: ColorMatrix = [1, 0, 0, 0, 1, 0, 0, 0, 1];
 
 function speciesKey(kind: string, variant: number, far: boolean): string {
   return `${kind}#${variant}${far ? "~far" : ""}`;
@@ -95,6 +100,9 @@ export async function createTreeField(
   /** Barks and leaf atlases already baked for these kinds and this seed, by kind id - the
    *  workbench keeps its bakes. Anything missing is baked here. */
   prebaked?: { barks?: Map<string, BakedBark>; atlases?: Map<string, Uint8Array> },
+  /** Each area's tree colour rules, by area id (TreePlacement.area - see treeTints.ts); a tree no
+   *  rule is for keeps its kind's own colours. */
+  areaTints: readonly (readonly TreeTintRule[])[] = [],
 ): Promise<TreeField> {
   const missingBark = treeKinds.filter((def) => !prebaked?.barks?.has(def.id));
   const bakedBark = new Map([...(prebaked?.barks ?? []), ...(await bakeBarks(missingBark, seed))]);
@@ -111,6 +119,37 @@ export async function createTreeField(
       ...(model.far ? [{ key: speciesKey(def.id, variant, true), model: model.far }] : []),
     ]);
   });
+  // Row 0 changes nothing; then every area's every rule's shades, one row each. A tree names its row
+  // in its instance colour's alpha.
+  const tintRows: TreeShade[] = [{ leaves: IDENTITY, bark: IDENTITY }];
+  const areaRules = areaTints.map((rules) =>
+    rules.map((rule) => {
+      const first = tintRows.length;
+      tintRows.push(...rule.shades);
+      return { kinds: rule.kinds, first, count: rule.shades.length };
+    }),
+  );
+  const tintTable = new Float32Array(tintRows.length * TREE_TINT_WIDTH * 4);
+  tintRows.forEach(({ leaves, bark }, row) => {
+    [leaves, bark].forEach((m, part) => {
+      for (let column = 0; column < 3; column++) tintTable.set([m[column], m[3 + column], m[6 + column], 0], (row * TREE_TINT_WIDTH + part * 3 + column) * 4);
+    });
+  });
+  const tintTexture = new RawTexture(tintTable, TREE_TINT_WIDTH, tintRows.length, Constants.TEXTUREFORMAT_RGBA, scene, false, false, Constants.TEXTURE_NEAREST_SAMPLINGMODE, Constants.TEXTURETYPE_FLOAT);
+  for (const { model } of models) {
+    if (!model.shaderTint) continue;
+    for (const mesh of meshesOf(model)) {
+      if (mesh.material instanceof ShaderMaterial) mesh.material.setTexture("treeTints", tintTexture);
+    }
+  }
+  /** The first of its area's rules for its kind, and the shade its roll picks there. */
+  const tintRowOf = (tree: TreePlacement): number => {
+    const rules = tree.area !== undefined ? areaRules[tree.area] : undefined;
+    const rule = rules?.find((r) => r.kinds === null || r.kinds.includes(tree.kind));
+    if (!rule) return 0;
+    return rule.first + Math.min(rule.count - 1, Math.floor((tree.shade ?? 0) * rule.count));
+  };
+
   for (const { key: kind, model } of models) {
     // The instances cover every chunk that is loaded, which is a disc centred on the player - so a
     // master mesh is in view whenever anything is, and asking whether its bounding box intersects
@@ -190,11 +229,18 @@ export async function createTreeField(
       Matrix.ComposeToRef(scaling, rotation, position, matrix);
       matrix.copyToArray(block.matrices, at * 16);
 
-      const { tintDark, tintLight } = species.get(key)!.model;
-      block.colours[at * 4] = tintDark.r + (tintLight.r - tintDark.r) * tree.tint;
-      block.colours[at * 4 + 1] = tintDark.g + (tintLight.g - tintDark.g) * tree.tint;
-      block.colours[at * 4 + 2] = tintDark.b + (tintLight.b - tintDark.b) * tree.tint;
-      block.colours[at * 4 + 3] = 1;
+      const { tintDark, tintLight, shaderTint } = species.get(key)!.model;
+      let colour: [number, number, number] = [
+        tintDark.r + (tintLight.r - tintDark.r) * tree.tint,
+        tintDark.g + (tintLight.g - tintDark.g) * tree.tint,
+        tintDark.b + (tintLight.b - tintDark.b) * tree.tint,
+      ];
+      const row = tintRowOf(tree);
+      // A primitive canopy is its instance colour and nothing else, so its area's matrix is applied
+      // here; every other kind's shaders apply it to the finished colour, from the row in alpha.
+      if (!shaderTint && row > 0) colour = applyColorMatrix(tintRows[row].leaves, colour);
+      block.colours.set(colour, at * 4);
+      block.colours[at * 4 + 3] = shaderTint ? row : 1;
     });
     return blocks;
   }
@@ -250,6 +296,8 @@ export async function createTreeField(
       // has to be the one that lands last.
       setInstanceBuffer(canopy, "color", entry.colours, 4);
       setInstanceBuffer(canopy, "matrix", entry.matrices, 16);
+      // A generated trunk reads its area's row from the same colours; a primitive one is not tinted.
+      if (trunk && entry.model.shaderTint) setInstanceBuffer(trunk, "color", entry.colours, 4);
       if (trunk) setInstanceBuffer(trunk, "matrix", entry.matrices, 16);
       entry.published = true;
       setInstanceCount(entry, total);
@@ -261,6 +309,7 @@ export async function createTreeField(
       setInstanceCount(entry, total);
       canopy.thinInstanceBufferUpdated("color");
       canopy.thinInstanceBufferUpdated("matrix");
+      if (trunk && entry.model.shaderTint) trunk.thinInstanceBufferUpdated("color");
       trunk?.thinInstanceBufferUpdated("matrix");
     }
   }
@@ -326,6 +375,7 @@ export async function createTreeField(
     },
     dispose() {
       chunks.clear();
+      tintTexture.dispose();
       for (const { model } of species.values()) {
         for (const mesh of meshesOf(model)) {
           shadowGenerator.removeShadowCaster(mesh);

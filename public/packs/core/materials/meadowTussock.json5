@@ -1,0 +1,12 @@
+// Rough, tussocky ground: clumps and long stems, few flowers.
+{
+  name: "Tussock Meadow",
+  family: "grassland",
+  detail: { strength: 0.3 },
+  textureFrom: "grass",
+  grass: [
+    { kind: "tuft", density: 2.2, color: [0.44, 0.6, 0.27] },
+    { kind: "longGrass", density: 1.0, color: [0.5, 0.66, 0.3] },
+    { kind: "tall", density: 0.6, color: [0.52, 0.72, 0.34] },
+  ],
+}

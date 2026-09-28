@@ -38,10 +38,26 @@
       { output: "result", op: "add", a: "carvedClamped", b: "plateauRaw" },
     ],
   },
-  trees: { generator: "standDensity", tree: "palm", frequency: 0.004, openAt: 0.25, fullAt: 0.7, peak: 0.3 },
+  trees: { generator: "standDensity", tree: "palm", frequency: 0.004, openAt: 0.25, fullAt: 0.7, peak: { range: [0.15, 0.4] } },
+  // Each area its own trees, and every tree its own shade of them (spread). Pines first: a tree
+  // takes the first rule for its kind, and conifers stray less far from green than the rest.
+  treeTints: [
+    {
+      kinds: ["pine"],
+      leaves: { hue: { range: [-40, 80] }, saturation: { range: [0.6, 1.5] }, value: { range: [0.85, 1.15] }, spread: { hue: 10, saturation: 0.15, value: 0.1 } },
+      bark: { hue: { range: [-20, 20] }, saturation: { range: [0.6, 1.4] }, value: { range: [0.75, 1.2] }, spread: { value: 0.12 } },
+    },
+    {
+      // Red and orange through gold to blue - an autumn wood in a dozen shades, or a strange one.
+      leaves: { hue: { range: [-100, 120] }, saturation: { range: [0.5, 1.8] }, value: { range: [0.85, 1.15] }, spread: { hue: 25, saturation: 0.25, value: 0.15 } },
+      bark: { hue: { range: [-20, 20] }, saturation: { range: [0.6, 1.4] }, value: { range: [0.75, 1.2] }, spread: { value: 0.12 } },
+    },
+  ],
   ground: {
     base: "rock",
     road: "trackSand",
+    // Each area's ground a little different: a warmer or cooler, paler or deeper version of it.
+    adjust: { hue: { range: [-6, 6] }, saturation: { range: [0.88, 1.12] }, value: { range: [0.94, 1.06] } },
     layers: [
       // Canyon floors accumulate wind/water-blown silt - reuses the sand material rather than a new
       // texture (the same sharing trick as snow and the desert valley layer above).

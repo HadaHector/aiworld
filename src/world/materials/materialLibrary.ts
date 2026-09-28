@@ -1,11 +1,13 @@
-import { Color3, Effect, RawTexture2DArray, ShaderMaterial, StandardMaterial, Texture, type Material, type Scene } from "@babylonjs/core";
+import { Color3, Constants, Effect, RawTexture, RawTexture2DArray, ShaderMaterial, StandardMaterial, Texture, type Material, type Scene } from "@babylonjs/core";
 import type { AreaWeight } from "../cells/areaField";
 import type { SunLighting } from "../lighting/sunLighting";
 import { LIT_SHADING_GLSL, LIT_SHADING_SAMPLERS, LIT_SHADING_UNIFORMS, createLitShading, type LitShading } from "./litShading";
 import { MATERIALS_PER_TRIANGLE, createMaterialBlender, type MaterialBlender } from "./materialBlend";
 import type { WorldContent } from "../content/worldContent";
+import type { BiomeDefinition } from "../biomes/biomeTypes";
 import type { MaterialDef } from "./materialTypes";
-import { TEXTURE_RESOLUTION } from "./textureGen";
+import { TEXTURE_RESOLUTION, type TextureDef } from "./textureGen";
+import { applyColorMatrix, materialMatrix } from "./colorAdjust";
 import { WATER_ALPHA, WATER_DEEP_COLOR, WATER_SHALLOW_COLOR, WATER_TINT_FULL_DEPTH } from "../terrain/ocean";
 import { bakeMaterialTextures } from "./textureBakePool";
 
@@ -54,7 +56,7 @@ export interface MaterialLibrary {
   buildMaterialBlend: (worldX: number, worldZ: number, context: Record<string, number>, areaWeights: AreaWeight[]) => Map<number, number>;
   /** Legacy single-winner resolution (highest-weight layer overall, thresholded) - kept only for
    *  the debug map, which renders one flat color per sample point and has no use for a blend. */
-  resolveMaterialIndex: (worldX: number, worldZ: number, context: Record<string, number>, biomeId: string) => number;
+  resolveMaterialIndex: (worldX: number, worldZ: number, context: Record<string, number>, biome: BiomeDefinition) => number;
   /** A representative swatch (the midpoint of its procedural texture's two colors) for a resolved
    *  material index - used by the debug map, which draws to a 2D canvas and has no Babylon
    *  Material/Texture of its own to sample from. */
@@ -63,7 +65,7 @@ export interface MaterialLibrary {
   averageColors: [number, number, number][];
   /** A biome's own base material's swatch, with no overlay layers evaluated - what the debug
    *  map's coarse World view shows, since resolving overlays isn't worth it at that zoom level. */
-  getBiomeBaseColor: (biomeId: string) => Color3;
+  getBiomeBaseColor: (biome: BiomeDefinition) => Color3;
   /** Every deduplicated material's baked color+roughness and normal-map pixels (RGBA,
    *  TEXTURE_RESOLUTION² each), for the texture browser dev tool - views into the same buffers
    *  uploaded to the GPU, not a fresh render. */
@@ -150,10 +152,12 @@ void main() {
 const materialSlots = ["x", "y", "z", "w"].slice(0, MATERIALS_PER_TRIANGLE);
 
 /**
- * The fragment shader, sized to the material count - the per-material uniform arrays are indexed by
- * a triangle's material index.
+ * Texels per material in the material table (see materialTable): its texture layer and detail, its
+ * texture's average colour, and the three columns of its colour matrix.
  */
-const fragmentShader = (materialCount: number): string => `#version 300 es
+const TABLE_WIDTH = 5;
+
+const FRAGMENT_SHADER = `#version 300 es
 precision highp float;
 precision highp sampler2DArray;
 ${LIT_SHADING_GLSL}
@@ -171,9 +175,10 @@ uniform float waterLevel;
 uniform float specularMinShininess;
 uniform float specularMaxShininess;
 uniform float specularIntensity;
-// Per material: the close-up pass's scale and strength, and the texture's average colour.
-uniform vec2 materialDetail[${materialCount}];
-uniform vec3 materialMean[${materialCount}];
+// One row per material, ${TABLE_WIDTH} texels: (texture layer, detail scale, detail strength, -), the
+// texture's own average colour, then the colour matrix's three columns. A texture rather than
+// uniform arrays so the number of materials is not capped by how many uniforms a GPU has.
+uniform highp sampler2D materialTable;
 
 out vec4 outColor;
 
@@ -191,11 +196,21 @@ float luma(vec3 c) {
  * as 14 cm grain; and once more hugely enlarged and blurred, for slow patches of lighter and darker
  * ground that do not repeat with the 50 m tile. Far off, the close-up sample reaches its smallest
  * mip, which is the average colour, and so fades out by itself.
+ *
+ * Then recoloured by the material's colour matrix (colorAdjust.ts) - the last step, so the detail
+ * passes compare the texture with its own average as baked, whatever the material makes of it.
  */
-void sampleMaterial(float layer, out vec4 color, out vec3 tilt, out float height) {
-  int index = int(layer + 0.5);
-  vec2 detail = materialDetail[index];
-  float mean = max(luma(materialMean[index]), 0.03);
+void sampleMaterial(float material, out vec4 color, out vec3 tilt, out float height) {
+  int index = int(material + 0.5);
+  vec4 entry = texelFetch(materialTable, ivec2(0, index), 0);
+  float layer = entry.x;
+  vec2 detail = entry.yz;
+  float mean = max(luma(texelFetch(materialTable, ivec2(1, index), 0).rgb), 0.03);
+  mat3 adjust = mat3(
+    texelFetch(materialTable, ivec2(2, index), 0).rgb,
+    texelFetch(materialTable, ivec2(3, index), 0).rgb,
+    texelFetch(materialTable, ivec2(4, index), 0).rgb
+  );
 
   vec4 base = texture(materialAtlas, vec3(vUV, layer));
   vec4 baseNormal = texture(normalAtlas, vec3(vUV, layer));
@@ -208,7 +223,7 @@ void sampleMaterial(float layer, out vec4 color, out vec3 tilt, out float height
   vec3 broad = texture(materialAtlas, vec3(BROAD_TURN * vUV * ${BROAD_SCALE.toFixed(4)}, layer), 4.0).rgb;
   float broadShade = mix(1.0, clamp(luma(broad) / mean, 0.5, 1.6), ${BROAD_STRENGTH.toFixed(3)});
 
-  color = vec4(base.rgb * fineShade * broadShade, base.a);
+  color = vec4(max(adjust * (base.rgb * fineShade * broadShade), 0.0), base.a);
   // The close-up normal is in its own turned texture space; turned back, its tilt adds to the
   // authored one's.
   vec3 authored = baseNormal.rgb * 2.0 - 1.0;
@@ -304,48 +319,72 @@ void main() {
 }
 `;
 
+/** Baked terrain textures: colour+roughness and normal+height pixels, TEXTURE_RESOLUTION² RGBA a
+ *  layer, and each layer's own average colour - one layer per distinct texture (terrainTextureLayers). */
+export interface TerrainTextures {
+  colorBuffer: Uint8Array;
+  normalBuffer: Uint8Array;
+  layerAverages: [number, number, number][];
+}
+
 /** A terrain shader for a list of materials, their textures baked and packed - what the world's
  *  material library is built on, and what the workbench draws a single material with. */
 export interface TerrainMaterial {
   terrainMaterial: ShaderMaterial;
   litShading: LitShading;
-  /** Every material's average baked colour, by index. */
+  /** Every material's average colour as drawn - its texture's average through its colour
+   *  adjustment - by material index. */
   averageColors: [number, number, number][];
-  /** Every material's baked colour+roughness and normal+height pixels, TEXTURE_RESOLUTION² RGBA a
-   *  layer, in material order. */
-  colorBuffer: Uint8Array;
-  normalBuffer: Uint8Array;
+  textures: TerrainTextures;
+  /** Every material's layer in `textures`, by material index. */
+  layerOf: number[];
 }
 
-/** `materialDefs`' textures, one layer each, as createTerrainMaterial uploads them. */
+/**
+ * The textures `materialDefs` draw, one per distinct textureId in first-use order, and which of
+ * them each material draws - materials that borrow a texture (textureFrom) share its layer, so a
+ * texture is baked, cached and uploaded once however many materials recolour it.
+ */
+export function terrainTextureLayers(materialDefs: MaterialDef[]): { layerOf: number[]; layers: { id: string; texture: TextureDef }[] } {
+  const layerById = new Map<string, number>();
+  const layers: { id: string; texture: TextureDef }[] = [];
+  const layerOf = materialDefs.map((def) => {
+    let layer = layerById.get(def.textureId);
+    if (layer === undefined) {
+      layer = layers.length;
+      layerById.set(def.textureId, layer);
+      layers.push({ id: def.textureId, texture: def.texture });
+    }
+    return layer;
+  });
+  return { layerOf, layers };
+}
+
+/** The textures `materialDefs` draw (terrainTextureLayers), as createTerrainMaterial uploads them. */
 export async function bakeTerrainTextures(
   seed: number,
   materialDefs: MaterialDef[],
   onProgress?: (done: number, total: number) => void,
-): Promise<Pick<TerrainMaterial, "averageColors" | "colorBuffer" | "normalBuffer">> {
-  const colorBuffer = new Uint8Array(TEXTURE_RESOLUTION * TEXTURE_RESOLUTION * 4 * materialDefs.length);
-  const normalBuffer = new Uint8Array(TEXTURE_RESOLUTION * TEXTURE_RESOLUTION * 4 * materialDefs.length);
+): Promise<TerrainTextures> {
+  const { layers } = terrainTextureLayers(materialDefs);
+  const colorBuffer = new Uint8Array(TEXTURE_RESOLUTION * TEXTURE_RESOLUTION * 4 * layers.length);
+  const normalBuffer = new Uint8Array(TEXTURE_RESOLUTION * TEXTURE_RESOLUTION * 4 * layers.length);
 
   // Baked across a worker pool - this is by far the most expensive part of starting a world, and
-  // materials are fully independent of one another, so it parallelises exactly (see
+  // textures are fully independent of one another, so it parallelises exactly (see
   // textureBakePool.ts). The averaged swatch colors come back with each result: they are averaged
   // from the actual baked pixels rather than re-derived from a texture's declared colors, since how
   // much of the bake each part of a pipeline covers is not knowable from the definition alone.
-  const { averageColors } = await bakeMaterialTextures(
-    materialDefs.map((def) => ({ id: def.id, texture: def.texture })),
-    seed,
-    colorBuffer,
-    normalBuffer,
-    onProgress,
-  );
-  return { colorBuffer, normalBuffer, averageColors };
+  const { averageColors } = await bakeMaterialTextures(layers, seed, colorBuffer, normalBuffer, onProgress);
+  return { colorBuffer, normalBuffer, layerAverages: averageColors };
 }
 
 /**
  * Bakes `materialDefs`' procedural textures (packed as layers of one array texture each for colour
  * and normals, so the terrain shader can blend any of them through a single sampler) and builds
  * the terrain shader over them, lit by `sunLighting`. A mesh drawn with it names its materials by
- * index into `materialDefs` (its matIndices/matWeights attributes - see terrainMesh.ts).
+ * index into `materialDefs` (its matIndices/matWeights attributes - see terrainMesh.ts); the
+ * material table maps each index to its layer, detail and colour adjustment.
  *
  * `prebaked` skips the bake with textures already baked from exactly these definitions and seed -
  * the workbench keeps its bakes, so previewing again does not bake an unchanged material again.
@@ -356,20 +395,44 @@ export async function createTerrainMaterial(
   materialDefs: MaterialDef[],
   sunLighting: SunLighting,
   onProgress?: (done: number, total: number) => void,
-  prebaked?: Pick<TerrainMaterial, "averageColors" | "colorBuffer" | "normalBuffer">,
+  prebaked?: TerrainTextures,
 ): Promise<TerrainMaterial> {
-  const { colorBuffer, normalBuffer, averageColors } = prebaked ?? (await bakeTerrainTextures(seed, materialDefs, onProgress));
+  const { layerOf, layers } = terrainTextureLayers(materialDefs);
+  const textures = prebaked ?? (await bakeTerrainTextures(seed, materialDefs, onProgress));
 
-  const materialAtlas = RawTexture2DArray.CreateRGBATexture(colorBuffer, TEXTURE_RESOLUTION, TEXTURE_RESOLUTION, materialDefs.length, scene, true, false);
+  const materialAtlas = RawTexture2DArray.CreateRGBATexture(textures.colorBuffer, TEXTURE_RESOLUTION, TEXTURE_RESOLUTION, layers.length, scene, true, false);
   materialAtlas.wrapU = Texture.WRAP_ADDRESSMODE;
   materialAtlas.wrapV = Texture.WRAP_ADDRESSMODE;
 
-  const normalAtlas = RawTexture2DArray.CreateRGBATexture(normalBuffer, TEXTURE_RESOLUTION, TEXTURE_RESOLUTION, materialDefs.length, scene, true, false);
+  const normalAtlas = RawTexture2DArray.CreateRGBATexture(textures.normalBuffer, TEXTURE_RESOLUTION, TEXTURE_RESOLUTION, layers.length, scene, true, false);
   normalAtlas.wrapU = Texture.WRAP_ADDRESSMODE;
   normalAtlas.wrapV = Texture.WRAP_ADDRESSMODE;
 
+  const matrices = materialDefs.map(materialMatrix);
+  const averageColors = materialDefs.map((_, i) => applyColorMatrix(matrices[i], textures.layerAverages[layerOf[i]]));
+
+  const table = new Float32Array(materialDefs.length * TABLE_WIDTH * 4);
+  materialDefs.forEach((def, i) => {
+    const row = i * TABLE_WIDTH * 4;
+    table.set([layerOf[i], def.detail.scale, def.detail.strength, 0], row);
+    table.set([...textures.layerAverages[layerOf[i]], 0], row + 4);
+    const m = matrices[i];
+    for (let column = 0; column < 3; column++) table.set([m[column], m[3 + column], m[6 + column], 0], row + 8 + column * 4);
+  });
+  const materialTable = new RawTexture(
+    table,
+    TABLE_WIDTH,
+    materialDefs.length,
+    Constants.TEXTUREFORMAT_RGBA,
+    scene,
+    false,
+    false,
+    Constants.TEXTURE_NEAREST_SAMPLINGMODE,
+    Constants.TEXTURETYPE_FLOAT,
+  );
+
   Effect.ShadersStore["terrainBlendVertexShader"] = VERTEX_SHADER;
-  Effect.ShadersStore["terrainBlendFragmentShader"] = fragmentShader(materialDefs.length);
+  Effect.ShadersStore["terrainBlendFragmentShader"] = FRAGMENT_SHADER;
 
   const terrainMaterial = new ShaderMaterial("terrainBlend", scene, "terrainBlend", {
     attributes: ["position", "normal", "matIndices", "matWeights"],
@@ -382,28 +445,25 @@ export async function createTerrainMaterial(
       "specularMinShininess",
       "specularMaxShininess",
       "specularIntensity",
-      "materialDetail",
-      "materialMean",
       ...LIT_SHADING_UNIFORMS,
     ],
-    samplers: ["materialAtlas", "normalAtlas", ...LIT_SHADING_SAMPLERS],
+    samplers: ["materialAtlas", "normalAtlas", "materialTable", ...LIT_SHADING_SAMPLERS],
   });
   terrainMaterial.setTexture("materialAtlas", materialAtlas);
   terrainMaterial.setTexture("normalAtlas", normalAtlas);
+  terrainMaterial.setTexture("materialTable", materialTable);
   terrainMaterial.setFloat("tileScale", 1 / TEXTURE_WORLD_TILE_SIZE);
   // Overwritten every frame by ocean.ts once the water exists; until then, nothing is underwater.
   terrainMaterial.setFloat("waterLevel", -1e6);
   terrainMaterial.setFloat("specularMinShininess", SPECULAR_MIN_SHININESS);
   terrainMaterial.setFloat("specularMaxShininess", SPECULAR_MAX_SHININESS);
   terrainMaterial.setFloat("specularIntensity", SPECULAR_INTENSITY);
-  terrainMaterial.setArray2("materialDetail", materialDefs.flatMap((def) => [def.detail.scale, def.detail.strength]));
-  terrainMaterial.setArray3("materialMean", averageColors.flat());
   terrainMaterial.backFaceCulling = true;
 
   const litShading = createLitShading(scene, sunLighting);
   litShading.register(terrainMaterial);
 
-  return { terrainMaterial, litShading, averageColors, colorBuffer, normalBuffer };
+  return { terrainMaterial, litShading, averageColors, textures, layerOf };
 }
 
 /** Builds every ground material's procedural texture once per world (see createTerrainMaterial),
@@ -415,28 +475,31 @@ export async function createMaterialLibrary(
   scene: Scene,
   seed: number,
   content: WorldContent,
+  /** The world's areas' own rolls of their biomes (TerrainWorld.areaBiomes) - each gets its ground. */
+  areaBiomes: readonly BiomeDefinition[],
   sunLighting: SunLighting,
   onProgress?: (done: number, total: number) => void,
 ): Promise<MaterialLibrary> {
-  const blender = createMaterialBlender(seed, content);
+  const blender = createMaterialBlender(seed, content, areaBiomes);
   const { materialDefs, defaultIndex, buildMaterialBlend, resolveMaterialIndex } = blender;
-  const { terrainMaterial, litShading, averageColors, colorBuffer, normalBuffer } = await createTerrainMaterial(scene, seed, materialDefs, sunLighting, onProgress);
+  const { terrainMaterial, litShading, averageColors, textures, layerOf } = await createTerrainMaterial(scene, seed, materialDefs, sunLighting, onProgress);
   const materialColors: Color3[] = averageColors.map(([r, g, b]) => new Color3(r, g, b));
 
   function getMaterialColor(materialIndex: number): Color3 {
     return materialColors[materialIndex] ?? materialColors[defaultIndex];
   }
 
-  function getBiomeBaseColor(biomeId: string): Color3 {
-    return getMaterialColor(blender.biomeBaseIndex(biomeId));
+  function getBiomeBaseColor(biome: BiomeDefinition): Color3 {
+    return getMaterialColor(blender.biomeBaseIndex(biome));
   }
 
   const layerSize = TEXTURE_RESOLUTION * TEXTURE_RESOLUTION * 4;
+  // The texture as baked - a material that borrows another's shows that one, unadjusted.
   const texturePreviews: MaterialTexturePreview[] = materialDefs.map((def, i) => ({
     id: def.id,
-    name: def.name,
-    colorPixels: colorBuffer.subarray(i * layerSize, (i + 1) * layerSize),
-    normalPixels: normalBuffer.subarray(i * layerSize, (i + 1) * layerSize),
+    name: def.textureId === def.id ? def.name : `${def.name} (${def.textureId}'s texture)`,
+    colorPixels: textures.colorBuffer.subarray(layerOf[i] * layerSize, (layerOf[i] + 1) * layerSize),
+    normalPixels: textures.normalBuffer.subarray(layerOf[i] * layerSize, (layerOf[i] + 1) * layerSize),
   }));
 
   function listMaterialTextures(): MaterialTexturePreview[] {

@@ -1,6 +1,7 @@
 // Plains and hills variety (their north-facing layers) - never a biome's base.
 {
   name: "Faded Grass",
+  family: "grassland",
   detail: { strength: 0.3 },
   texture: { generator: "grassland", dark: [0.46, 0.52, 0.38], light: [0.6, 0.65, 0.5], soil: [0.44, 0.39, 0.3], soilAmount: 0.35, roughness: 0.6, bumpStrength: 1.0 },
   grass: [

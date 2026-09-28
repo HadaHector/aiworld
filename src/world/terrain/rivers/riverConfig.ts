@@ -118,7 +118,7 @@ export const RIVER_MEANDER_END_TAPER = 300;
 export const RIVER_SMOOTHING_PASSES = 2;
 export const RIVER_SIMPLIFY_TOLERANCE = 1.5;
 
-// Continues cells/config.ts's salt sequence (601-610, 613-617) and boundaryHillsConfig.ts's 611-612 -
+// Continues cells/config.ts's salt sequence (601-610, 613-617, 620-621) and boundaryHillsConfig.ts's 611-612 -
 // must not collide with any of those, or the "independent" noise fields become identical.
 export const RIVER_EDGE_NOISE_SALT = 618;
 export const RIVER_MEANDER_SALT = 619;

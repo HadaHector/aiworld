@@ -2,6 +2,7 @@ import type { ColorTuple, PipelineDef } from "../terrain/pipeline/pipelineTypes"
 import type { MaterialLayer } from "../materials/materialTypes";
 import type { TreeRules } from "../foliage/foliageConfig";
 import type { SettlementStyle } from "../settlements/settlementConfig";
+import type { ColorAdjust } from "../materials/colorAdjust";
 
 /** Reserved for future differentiated border generation; only "smooth" is generated today. */
 export type BorderType = "smooth" | "mountain" | "river" | "cliff" | "wall";
@@ -81,8 +82,29 @@ export interface BiomeOutputs {
   // Future, unimplemented: wetness?: PipelineDef; material?: PipelineDef;
 }
 
+/** One part of a tree's recolouring: the area's adjustment, and how far each tree may stray from it. */
+export interface TreeTintPart {
+  adjust: ColorAdjust;
+  /** Per tree, up to: this many degrees of hue either way, and this fraction of saturation and
+   *  value either way - so a wood is many shades of its colour, not one. 0s for none. */
+  spread: { hue: number; saturation: number; value: number };
+}
+
+/** A `treeTints` rule: which kinds it recolours (null for every kind), leaves and bark. */
+export interface TreeTintRuleDef {
+  kinds: string[] | null;
+  leaves: TreeTintPart;
+  bark: TreeTintPart;
+}
+
 export interface BiomeDefinition {
   id: string;
+  /**
+   * What this biome's noises are seeded by: its id, or for an area's own roll of it (see
+   * content/biomeRolls.ts) its id and the area's - so every area of a biome grows its own hills,
+   * woods and ground patterns, not the one pattern seen from somewhere else.
+   */
+  seedKey: string;
   name: string;
   /** Which phonetic palette this biome's zones are named from (naming/nameGenerator.ts). A property
    *  of the biome rather than a lookup table elsewhere, so adding a biome cannot forget to set it. */
@@ -106,6 +128,15 @@ export interface BiomeDefinition {
    *  keeps per-vertex cost flat as more biomes grow their own layers: a point only ever evaluates
    *  the universal list plus its own biomes' lists, never every biome's layers put together. */
   materialLayers: MaterialLayer[];
+  /** A recolouring of all of this zone's ground, after each material's own (`ground.adjust`) - the
+   *  knob that makes one area's meadow greener or its sand redder than the next area's. */
+  groundAdjust: ColorAdjust;
+  /** Recolourings of one family of this zone's ground materials each (`ground.tints`), after
+   *  groundAdjust - so an area's meadows can turn blue or orange while its roads and rock do not. */
+  groundTints: { family: string; adjust: ColorAdjust }[];
+  /** How this zone recolours its trees and bushes (`treeTints`), rule by rule - a tree takes the
+   *  first rule naming its kind, or naming none. */
+  treeTints: TreeTintRuleDef[];
   /** Where trees thin out here. Biomes that do not set their own share one object, the defaults'. */
   treeRules: TreeRules;
   /** What settlements here look like, or null for a biome nobody settles. */

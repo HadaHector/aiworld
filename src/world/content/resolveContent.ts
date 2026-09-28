@@ -1,5 +1,5 @@
 import JSON5 from "json5";
-import type { BiomeDayNight, BiomeDefinition, BorderType, BoundaryHillStyle } from "../biomes/biomeTypes";
+import type { BiomeDayNight, BiomeDefinition, BorderType, BoundaryHillStyle, TreeTintPart, TreeTintRuleDef } from "../biomes/biomeTypes";
 import type { MaterialDef, MaterialDetail, MaterialLayer } from "../materials/materialTypes";
 import type { GrassKindDef } from "../foliage/grassConfig";
 import {
@@ -29,8 +29,12 @@ import { coolNightTone, deriveNightIntensity } from "../lighting/dayNightMath";
 import { ContentError, isObject, joinPath, Reader, type ContentIssue, type RawObject } from "./contentReader";
 import { expandGenerators, FAILED_GENERATOR } from "./generators";
 import { readPipeline } from "./pipelineReader";
+import { checkPlans, checkRoller, describeCheckPlan, MIDDLE_ROLLER, randomRoller, rollValue, type Roller } from "./biomeRolls";
+import { deriveSeed, mulberry32 } from "../rng";
+import { AREA_ROLL_SALT } from "../cells/config";
 import type { WorldContent } from "./worldContent";
 import type { TextureDef } from "../materials/textureGen";
+import { NO_ADJUST, type ColorAdjust } from "../materials/colorAdjust";
 
 /** One pack as found on disk: its folder name and every .json5 file in it, by path inside it. */
 export interface PackSource {
@@ -172,7 +176,8 @@ export function resolveContent(packs: PackSource[]): WorldContent {
       });
   }
 
-  const materials = readAll("materials", (e, o, r) => readMaterial(e.id, o, r, defaults));
+  const materialReads = readAll("materials", (e, o, r) => ({ file: e.file, ...readMaterial(e.id, o, r, defaults) }));
+  const materials = materialReads.map((read) => read.def);
   const layers = readAll("layers", (e, o, r) => ({ file: e.file, ...readUniversalLayer(e.id, o, r) }));
   const grassKinds = readAll("grass", (e, o, r) => readGrassKind(e.id, o, r));
   const treeKinds = readAll("trees", (e, o, r) => readTreeKind(e.id, o, r, defaults));
@@ -181,7 +186,18 @@ export function resolveContent(packs: PackSource[]): WorldContent {
   const boundaryHillStyles = readAll("borderHills", (e, o, r) => readBoundaryHillStyle(e.id, o, r));
   const settlementStyles = readAll("settlements", (e, o, r) => readSettlementStyle(e.id, o, r));
   const styleById = new Map(settlementStyles.map((style) => [style.id, style]));
-  const biomeReads = readAll("biomes", (e, o, r) => ({ file: e.file, biome: readBiome(e.id, o, r, defaults, styleById) }));
+  // A biome is read as its middle roll here (see biomeRolls.ts) - what its name, spawn weight and the
+  // workbench go by - and rolled again for every area of the world it is given to (rollAreaBiome).
+  const biomeReads = [...entries.get("biomes")!.values()]
+    .sort((a, b) => compareIds(a.id, b.id))
+    .map((entry) => {
+      const reader = new Reader(issues, entry.file);
+      const source = reader.object(entry.data, "");
+      for (const key of UNROLLED_BIOME_KEYS) {
+        if (isObject(source[key])) reader.fail(key, "cannot be rolled - it is what picks the biome for an area, before the area rolls it");
+      }
+      return { file: entry.file, source, biome: readRolledBiome(entry.id, source, MIDDLE_ROLLER, reader, defaults, styleById, entry.id) };
+    });
   const biomes = biomeReads.map((b) => b.biome);
 
   // --- references between definitions ---
@@ -201,6 +217,23 @@ export function resolveContent(packs: PackSource[]): WorldContent {
     if (id && !materialIds.has(id)) issues.push({ file, path, message: `no material "${id}" (known: ${[...materialIds].join(", ")})` });
   };
 
+  // One level only: a borrowed texture is always some material's own, so every material drawing it
+  // shares one bake, seeded and cached under that material's id.
+  const materialById = new Map(materials.map((m) => [m.id, m]));
+  const borrows = new Set(materialReads.filter((read) => read.textureFrom !== undefined).map((read) => read.def.id));
+  for (const { file, def, textureFrom } of materialReads) {
+    if (textureFrom === undefined) continue;
+    const source = materialById.get(textureFrom);
+    if (!source) {
+      issues.push({ file, path: "textureFrom", message: `no material "${textureFrom}" (known: ${[...materialIds].join(", ")})` });
+    } else if (borrows.has(textureFrom)) {
+      issues.push({ file, path: "textureFrom", message: `"${textureFrom}" borrows its texture itself - name the material that has it` });
+    } else {
+      def.textureId = source.id;
+      def.texture = source.texture;
+    }
+  }
+
   for (const material of materials) {
     material.grass.forEach((spec, i) => {
       if (!grassKindIds.has(spec.kind)) {
@@ -210,18 +243,57 @@ export function resolveContent(packs: PackSource[]): WorldContent {
   }
   const roadLayers = layers.filter((l) => l.roadSurface);
   for (const layer of layers) checkMaterial(layer.file, "material", layer.layer.materialId);
-  for (const { file, biome } of biomeReads) {
-    checkMaterial(file, "ground.base", biome.baseMaterialId);
-    checkMaterial(file, "ground.road", biome.roadMaterialId);
-    biome.materialLayers.forEach((layer, i) => checkMaterial(file, `ground.layers[${i}].material`, layer.materialId));
+  const families = new Set(materials.flatMap((m) => (m.family ? [m.family] : [])));
+  const checkBiome = (file: string, biome: BiomeDefinition, report: (issue: ContentIssue) => void): void => {
+    const material = (path: string, id: string): void => {
+      if (id && !materialIds.has(id)) report({ file, path, message: `no material "${id}" (known: ${[...materialIds].join(", ")})` });
+    };
+    material("ground.base", biome.baseMaterialId);
+    material("ground.road", biome.roadMaterialId);
+    biome.materialLayers.forEach((layer, i) => material(`ground.layers[${i}].material`, layer.materialId));
+    biome.treeTints.forEach((rule, i) => {
+      for (const kind of rule.kinds ?? []) {
+        if (!treeKindIds.has(kind) && !bushKindIds.has(kind)) {
+          report({ file, path: `treeTints[${i}].kinds`, message: `no tree or bush kind "${kind}" (known: ${[...treeKindIds, ...bushKindIds].join(", ")})` });
+        }
+      }
+    });
+    biome.groundTints.forEach((tint, i) => {
+      if (tint.family && !families.has(tint.family)) {
+        report({ file, path: `ground.tints[${i}].family`, message: `no material is of family "${tint.family}" (known: ${[...families].join(", ") || "none"})` });
+      }
+    });
     if (biome.voiceId && !voices[biome.voiceId]) {
-      issues.push({ file, path: "voice", message: `no voice "${biome.voiceId}" (known: ${Object.keys(voices).join(", ")})` });
+      report({ file, path: "voice", message: `no voice "${biome.voiceId}" (known: ${Object.keys(voices).join(", ")})` });
     }
     for (const output of Object.keys(biome.outputs.foliage?.outputs ?? {})) {
-      if (!treeKindIds.has(output)) issues.push({ file, path: "trees.outputs", message: `"${output}" is not a tree kind (known: ${[...treeKindIds].join(", ")})` });
+      if (!treeKindIds.has(output)) report({ file, path: "trees.outputs", message: `"${output}" is not a tree kind (known: ${[...treeKindIds].join(", ")})` });
     }
     for (const output of Object.keys(biome.outputs.bushes?.outputs ?? {})) {
-      if (!bushKindIds.has(output)) issues.push({ file, path: "bushes.outputs", message: `"${output}" is not a bush kind (known: ${[...bushKindIds].join(", ")})` });
+      if (!bushKindIds.has(output)) report({ file, path: "bushes.outputs", message: `"${output}" is not a bush kind (known: ${[...bushKindIds].join(", ")})` });
+    }
+  };
+  for (const { file, source, biome } of biomeReads) {
+    // What reading the middle roll already reported for this file counts as reported too.
+    const reported = new Set(issues.filter((issue) => issue.file === file).map((issue) => `${issue.path}\n${issue.message}`));
+    const report = (issue: ContentIssue): void => {
+      reported.add(`${issue.path}\n${issue.message}`);
+      issues.push(issue);
+    };
+    checkBiome(file, biome, report);
+    // Then its extreme rolls, so a range that breaks the biome at one end, or an option naming
+    // something that does not exist, is found now rather than in whichever area rolls it. Only
+    // what the middle roll did not already report.
+    if (!hasRolls(source)) continue;
+    for (let plan = 0; plan < checkPlans(source); plan++) {
+      const planIssues: ContentIssue[] = [];
+      const rolled = readRolledBiome(biome.id, source, checkRoller(plan), new Reader(planIssues, file), defaults, styleById, biome.id);
+      checkBiome(file, rolled, (issue) => planIssues.push(issue));
+      for (const issue of planIssues) {
+        if (reported.has(`${issue.path}\n${issue.message}`)) continue;
+        report(issue);
+        issue.message += ` (${describeCheckPlan(plan)})`;
+      }
     }
   }
   const defaultsFile = defaultsFileOf.defaultMaterial ?? "defaults.json5";
@@ -249,6 +321,8 @@ export function resolveContent(packs: PackSource[]): WorldContent {
 
   return {
     biomes,
+    biomeSources: Object.fromEntries(biomeReads.map(({ file, source, biome }) => [biome.id, { file, data: source, rolls: hasRolls(source) }])),
+    biomeDefaults: defaults,
     materials,
     defaultMaterialId: defaults.defaultMaterialId,
     universalLayers: layers.filter((l) => !l.roadSurface).map((l) => l.layer),
@@ -288,7 +362,9 @@ function appendLists(target: unknown, append: RawObject, reader: Reader, path: s
   return result;
 }
 
-interface Defaults {
+/** The packs' merged defaults.json5 - kept with the content, since an area's roll of a biome is read
+ *  against them (rollAreaBiome). */
+export interface Defaults {
   defaultMaterialId: string;
   fogStart: number;
   light: { ambientDay: ColorTuple; ambientDayIntensity: number; sunHorizon: ColorTuple; sunZenith: ColorTuple; sunIntensity: number };
@@ -351,12 +427,23 @@ function readUniversalLayer(id: string, obj: RawObject, reader: Reader): { layer
   return { layer: readLayer(obj, reader, "", id), roadSurface: reader.boolean(obj, "roadSurface", "", false) };
 }
 
-function readMaterial(id: string, obj: RawObject, reader: Reader, defaults: Defaults): MaterialDef {
-  reader.onlyKeys(obj, "", ["name", "texture", "grass", "clearsGrass", "detail"]);
-  return {
+/**
+ * A material and, if it borrows another's texture (`textureFrom`), whose - resolved once every
+ * material is read, since the one it names may be in any file of any pack. Until then its `texture`
+ * is an empty stand-in.
+ */
+function readMaterial(id: string, obj: RawObject, reader: Reader, defaults: Defaults): { def: MaterialDef; textureFrom?: string } {
+  reader.onlyKeys(obj, "", ["name", "family", "texture", "textureFrom", "adjust", "grass", "clearsGrass", "detail"]);
+  const textureFrom = reader.optionalString(obj, "textureFrom", "");
+  if (textureFrom !== undefined && reader.has(obj, "texture")) reader.fail("textureFrom", "a material has its own texture or borrows one with textureFrom, not both");
+  if (textureFrom === undefined && !reader.has(obj, "texture")) reader.fail("texture", "expected a texture, or textureFrom naming the material whose texture this one draws");
+  const def: MaterialDef = {
     id,
     name: reader.string(obj, "name", ""),
-    texture: readTexture(obj.texture, reader, "texture"),
+    textureId: id,
+    texture: textureFrom === undefined ? readTexture(obj.texture, reader, "texture") : { bumpStrength: 0, pipeline: { noises: [], steps: [] } },
+    adjust: obj.adjust === undefined ? NO_ADJUST : readColorAdjust(reader.object(obj.adjust, "adjust"), reader, "adjust"),
+    family: reader.optionalString(obj, "family", ""),
     grass: reader.optionalArray(obj, "grass", "").map((raw, i) => {
       const path = `grass[${i}]`;
       const spec = reader.object(raw, path);
@@ -365,6 +452,49 @@ function readMaterial(id: string, obj: RawObject, reader: Reader, defaults: Defa
     }),
     clearsGrass: reader.optionalNumber(obj, "clearsGrass", "", 0, { min: 0 }),
     detail: obj.detail === undefined ? defaults.materialDetail : readMaterialDetail(reader.object(obj.detail, "detail"), reader, "detail", defaults.materialDetail),
+  };
+  return { def, textureFrom };
+}
+
+/**
+ * A biome's `treeTints`: a list of rules `{ kinds?, leaves?, bark? }`, each part a colour
+ * adjustment plus an optional `spread` - or a single rule on its own, for every kind.
+ */
+function readTreeTints(obj: RawObject, reader: Reader): TreeTintRuleDef[] {
+  if (obj.treeTints === undefined) return [];
+  const rules = Array.isArray(obj.treeTints) ? obj.treeTints : [obj.treeTints];
+  return rules.map((raw, i) => {
+    const path = Array.isArray(obj.treeTints) ? `treeTints[${i}]` : "treeTints";
+    const rule = reader.object(raw, path);
+    reader.onlyKeys(rule, path, ["kinds", "leaves", "bark"]);
+    const part = (key: "leaves" | "bark"): TreeTintPart => {
+      const at = joinPath(path, key);
+      if (rule[key] === undefined) return { adjust: NO_ADJUST, spread: { hue: 0, saturation: 0, value: 0 } };
+      const { spread, ...adjust } = reader.object(rule[key], at);
+      let spreadRead = { hue: 0, saturation: 0, value: 0 };
+      if (spread !== undefined) {
+        const s = reader.object(spread, joinPath(at, "spread"));
+        reader.onlyKeys(s, joinPath(at, "spread"), ["hue", "saturation", "value"]);
+        spreadRead = {
+          hue: reader.optionalNumber(s, "hue", joinPath(at, "spread"), 0, { min: 0, max: 180 }),
+          saturation: reader.optionalNumber(s, "saturation", joinPath(at, "spread"), 0, { min: 0, max: 1 }),
+          value: reader.optionalNumber(s, "value", joinPath(at, "spread"), 0, { min: 0, max: 1 }),
+        };
+      }
+      return { adjust: readColorAdjust(adjust, reader, at), spread: spreadRead };
+    };
+    return { kinds: rule.kinds === undefined ? null : reader.stringList(rule, "kinds", path), leaves: part("leaves"), bark: part("bark") };
+  });
+}
+
+/** See colorAdjust.ts. Every key optional; left out, it changes nothing. */
+function readColorAdjust(obj: RawObject, reader: Reader, path: string): ColorAdjust {
+  reader.onlyKeys(obj, path, ["hue", "saturation", "value", "tint"]);
+  return {
+    hue: reader.optionalNumber(obj, "hue", path, NO_ADJUST.hue, { min: -180, max: 180 }),
+    saturation: reader.optionalNumber(obj, "saturation", path, NO_ADJUST.saturation, { min: 0, max: 4 }),
+    value: reader.optionalNumber(obj, "value", path, NO_ADJUST.value, { min: 0, max: 4 }),
+    tint: reader.optionalColor(obj, "tint", path) ?? NO_ADJUST.tint,
   };
 }
 
@@ -716,7 +846,52 @@ function readBoundaryHillStyle(id: string, obj: RawObject, reader: Reader): Boun
   return { id, name: reader.string(obj, "name", ""), heightPipeline: readPipeline(obj.height, reader, "height") };
 }
 
-function readBiome(id: string, obj: RawObject, reader: Reader, defaults: Defaults, styles: Map<string, SettlementStyle>): BiomeDefinition {
+/** Biome fields read before an area has a roll - what picks the biome, and what it is called. */
+const UNROLLED_BIOME_KEYS = ["name", "spawnWeight"] as const;
+
+/** Whether a biome file rolls anything (biomeRolls.ts) - one that does not needs no rolling per area. */
+function hasRolls(value: unknown): boolean {
+  if (Array.isArray(value)) return value.some(hasRolls);
+  if (!isObject(value)) return false;
+  return "range" in value || "between" in value || "oneOf" in value || "chance" in value || Object.values(value).some(hasRolls);
+}
+
+/** A biome file rolled by `roller`, then read as any biome is. */
+function readRolledBiome(
+  id: string,
+  source: RawObject,
+  roller: Roller,
+  reader: Reader,
+  defaults: Defaults,
+  styles: Map<string, SettlementStyle>,
+  seedKey: string,
+): BiomeDefinition {
+  const rolled = rollValue(source, roller, reader);
+  const expanded = expandGenerators(rolled, reader);
+  return { ...readBiome(id, reader.object(expanded, ""), reader, defaults, styles), seedKey };
+}
+
+/**
+ * `biome` as area `areaId` of the world made from `seed` has it: its file rolled with the area's
+ * own dice, and its noises seeded by the area - always, even for a biome that rolls nothing, so two
+ * areas of one biome never share a pattern. Deterministic, so the main thread and every chunk
+ * worker agree on every area without being told.
+ */
+export function rollAreaBiome(seed: number, areaId: number, biome: BiomeDefinition, content: WorldContent): BiomeDefinition {
+  const seedKey = `${biome.id}@${areaId}`;
+  const source = content.biomeSources[biome.id];
+  if (!source?.rolls) return { ...biome, seedKey };
+  const issues: ContentIssue[] = [];
+  const styles = new Map(content.settlementStyles.map((style) => [style.id, style]));
+  const random = randomRoller(mulberry32(deriveSeed(deriveSeed(seed, AREA_ROLL_SALT), areaId)));
+  const rolled = readRolledBiome(biome.id, source.data, random, new Reader(issues, source.file), content.biomeDefaults, styles, seedKey);
+  // Every extreme was read when the packs loaded (checkRoller), so this is not expected - but an
+  // area must never be half-read.
+  if (issues.length > 0) throw new ContentError(issues);
+  return rolled;
+}
+
+function readBiome(id: string, obj: RawObject, reader: Reader, defaults: Defaults, styles: Map<string, SettlementStyle>): Omit<BiomeDefinition, "seedKey"> {
   reader.onlyKeys(obj, "", [
     "name",
     "voice",
@@ -727,6 +902,7 @@ function readBiome(id: string, obj: RawObject, reader: Reader, defaults: Default
     "trees",
     "bushes",
     "treeRules",
+    "treeTints",
     "settlement",
     "ground",
     "sky",
@@ -741,7 +917,7 @@ function readBiome(id: string, obj: RawObject, reader: Reader, defaults: Default
   }
 
   const ground = reader.object(obj.ground, "ground");
-  reader.onlyKeys(ground, "ground", ["base", "road", "layers"]);
+  reader.onlyKeys(ground, "ground", ["base", "road", "layers", "adjust", "tints"]);
   const materialLayers = reader.optionalArray(ground, "layers", "ground").map((raw, i) => {
     const path = `ground.layers[${i}]`;
     const layer = reader.object(raw, path);
@@ -782,7 +958,15 @@ function readBiome(id: string, obj: RawObject, reader: Reader, defaults: Default
     baseMaterialId: reader.string(ground, "base", "ground"),
     roadMaterialId: reader.string(ground, "road", "ground"),
     materialLayers,
+    groundAdjust: ground.adjust === undefined ? NO_ADJUST : readColorAdjust(reader.object(ground.adjust, "ground.adjust"), reader, "ground.adjust"),
+    groundTints: reader.optionalArray(ground, "tints", "ground").map((raw, i) => {
+      const path = `ground.tints[${i}]`;
+      const { family, ...adjust } = reader.object(raw, path);
+      if (typeof family !== "string" || family === "") reader.fail(joinPath(path, "family"), "expected the family of materials this tint recolours");
+      return { family: String(family ?? ""), adjust: readColorAdjust(adjust, reader, path) };
+    }),
     treeRules: readTreeRules(obj, reader, defaults.treeRules),
+    treeTints: readTreeTints(obj, reader),
     settlementStyle,
     atmosphere: {
       horizon: reader.color(sky, "horizon", "sky"),

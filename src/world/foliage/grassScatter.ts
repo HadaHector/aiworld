@@ -1,4 +1,5 @@
 import type { MaterialDef } from "../materials/materialTypes";
+import { applyColorMatrix, chainMatrix } from "../materials/colorAdjust";
 import { SEA_LEVEL } from "../cells/areaField";
 import { GRASS_CELL_SIZE, GRASS_SALT, GRASS_WATER_CLEARANCE, type GrassKindDef } from "./grassConfig";
 
@@ -46,21 +47,20 @@ interface GrassTable {
 const tablesByDefs = new WeakMap<MaterialDef[], GrassTable>();
 
 /** Every material index's grass specs, looked up once per material list rather than by id per
- *  tuft. */
+ *  tuft. An area's variant of a material grows its grass recoloured as its ground is (areaAdjusts),
+ *  so a meadow turned blue grows blue grass - its flowers keep their own colours. */
 function grassTableFor(materialDefs: MaterialDef[], grassKinds: GrassKindDef[]): GrassTable {
   let table = tablesByDefs.get(materialDefs);
   if (!table) {
     const kindIndex = new Map(grassKinds.map((kind, index) => [kind.id, index]));
     table = {
-      grows: materialDefs.map((def) =>
-        def.grass.map((spec) => ({
-          kind: kindIndex.get(spec.kind)!,
-          density: spec.density,
-          r: spec.color[0],
-          g: spec.color[1],
-          b: spec.color[2],
-        })),
-      ),
+      grows: materialDefs.map((def) => {
+        const matrix = def.areaAdjusts ? chainMatrix(def.areaAdjusts) : null;
+        return def.grass.map((spec) => {
+          const [r, g, b] = matrix ? applyColorMatrix(matrix, spec.color) : spec.color;
+          return { kind: kindIndex.get(spec.kind)!, density: spec.density, r, g, b };
+        });
+      }),
       clears: materialDefs.map((def) => def.clearsGrass),
     };
     tablesByDefs.set(materialDefs, table);

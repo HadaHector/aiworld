@@ -4,6 +4,7 @@ import type { GrassKindDef } from "../foliage/grassConfig";
 import type { OldTrees, TreeKindDef } from "../foliage/foliageConfig";
 import type { Voice } from "../naming/nameGenerator";
 import type { SettlementStyle } from "../settlements/settlementConfig";
+import type { Defaults } from "./resolveContent";
 
 /**
  * Everything a world is generated from that is content rather than code: its biomes, ground
@@ -16,7 +17,13 @@ import type { SettlementStyle } from "../settlements/settlementConfig";
  * one WorldContent agrees with everything else built from it.
  */
 export interface WorldContent {
+  /** Every biome as its middle roll (see content/biomeRolls.ts) - what picks a biome for an area,
+   *  and what a biome is when shown alone. The world's areas each have their own roll of theirs
+   *  (content/resolveContent.ts's rollAreaBiome). */
   biomes: BiomeDefinition[];
+  /** Each biome's file as written, by id, for rolling per area; `rolls` says whether it rolls anything. */
+  biomeSources: Record<string, { file: string; data: Record<string, unknown>; rolls: boolean }>;
+  biomeDefaults: Defaults;
   /** Every material any pack defines. Only the ones something uses get a texture - see
    *  materials/materialBlend.ts. */
   materials: MaterialDef[];

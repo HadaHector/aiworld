@@ -7,6 +7,7 @@ import type { MaterialDef, GrassSpec } from "../world/materials/materialTypes";
 import type { TreeKindDef } from "../world/foliage/foliageConfig";
 import type { BiomeDefinition } from "../world/biomes/biomeTypes";
 import { TEXTURE_RESOLUTION } from "../world/materials/textureGen";
+import { applyColorMatrix, materialMatrix, type ColorMatrix } from "../world/materials/colorAdjust";
 import { bakedAtlas, bakedBark, bakedGround } from "./bakeCache";
 import { FOLIAGE_TEXTURE_SIZE } from "../world/foliage/treeTextures";
 import { GRASS_TEXTURE_SIZE, bakeGrassTextures } from "../world/foliage/grassTextures";
@@ -805,16 +806,19 @@ async function preview2d(token: number, asset: Asset, view: ViewDef, content: Wo
   if (view.id === "texture" || view.id === "bark") {
     let color: Uint8Array;
     let normal: Uint8Array;
+    let matrix: ColorMatrix | undefined;
     if (view.id === "texture") {
-      const baked = await bakedGround(content.materials.find((m) => m.id === asset.id)!, seed);
+      const material = content.materials.find((m) => m.id === asset.id)!;
+      const baked = await bakedGround(material, seed);
       color = baked.colorBuffer;
       normal = baked.normalBuffer;
+      matrix = materialMatrix(material);
     } else {
       const bark = (await bakedBark(kindOf(content, asset)!, seed))!;
       color = bark.color;
       normal = bark.normal;
     }
-    image = surfaceImage(color, normal, TEXTURE_RESOLUTION, options.channel, Number(options.tiles) || 1);
+    image = surfaceImage(color, normal, TEXTURE_RESOLUTION, options.channel, Number(options.tiles) || 1, matrix);
   } else if (view.id === "leaves") {
     const atlas = bakedAtlas(kindOf(content, asset)!, seed)!;
     image = atlasImage(atlas, FOLIAGE_TEXTURE_SIZE, options.channel);
@@ -834,12 +838,22 @@ async function preview2d(token: number, asset: Asset, view: ViewDef, content: Wo
   setStatus("");
 }
 
-/** A baked surface (colour with roughness in alpha, normal with height in alpha) as one channel. */
-function surfaceImage(color: Uint8Array, normal: Uint8Array, size: number, channel: string, tiles: number): TextureImage {
+/** A baked surface (colour with roughness in alpha, normal with height in alpha) as one channel -
+ *  its colour through `matrix`, the material's colour adjustment, as the terrain shader draws it. */
+function surfaceImage(color: Uint8Array, normal: Uint8Array, size: number, channel: string, tiles: number, matrix?: ColorMatrix): TextureImage {
   const pixels = new Uint8Array(size * size * 4);
+  const drawn = (o: number): [number, number, number] => {
+    const rgb: [number, number, number] = [color[o] / 255, color[o + 1] / 255, color[o + 2] / 255];
+    return matrix ? applyColorMatrix(matrix, rgb) : rgb;
+  };
   for (let i = 0; i < size * size; i++) {
     const o = i * 4;
-    if (channel === "roughness" || channel === "height") {
+    if (channel === "color" && matrix) {
+      const [r, g, b] = drawn(o);
+      pixels[o] = Math.min(255, r * 255);
+      pixels[o + 1] = Math.min(255, g * 255);
+      pixels[o + 2] = Math.min(255, b * 255);
+    } else if (channel === "roughness" || channel === "height") {
       const value = channel === "roughness" ? color[o + 3] : normal[o + 3];
       pixels[o] = pixels[o + 1] = pixels[o + 2] = value;
     } else {
@@ -859,7 +873,8 @@ function surfaceImage(color: Uint8Array, normal: Uint8Array, size: number, chann
     tiles,
     describe: (x, y) => {
       const o = at(x, y);
-      return `rgb ${unit(color[o])} ${unit(color[o + 1])} ${unit(color[o + 2])}  roughness ${unit(color[o + 3])}  height ${unit(normal[o + 3])}`;
+      const [r, g, b] = drawn(o);
+      return `rgb ${r.toFixed(2)} ${g.toFixed(2)} ${b.toFixed(2)}  roughness ${unit(color[o + 3])}  height ${unit(normal[o + 3])}`;
     },
   };
 }

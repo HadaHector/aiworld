@@ -4,6 +4,7 @@
 // the leaves thicken over the grass rather than the ground switching from one to the other.
 {
   name: "Leafy Grass",
+  family: "grassland",
   detail: { strength: 0.35 },
   texture: {
     generator: "grassland",

@@ -144,6 +144,13 @@ out in full.
   height: { ... },            // graph: the ground's height
   trees: { ... },             // graph (optional): one output per tree kind, each a 0-1 density
   bushes: { ... },            // graph (optional): the same per bush kind, on a denser lattice of its own
+  treeTints: [                // optional: recolour this biome's trees and bushes, rule by rule
+    { kinds: ["pine"], leaves: { hue: 20 } },   // a tree takes the first rule for its kind...
+    {                                           // ...or the first naming no kinds
+      leaves: { hue: -40, saturation: 1.2, spread: { hue: 25, saturation: 0.2, value: 0.1 } },
+      bark: { value: 0.8 },
+    },
+  ],
   treeRules: {                // optional, each range falls back to defaults.json5
     shore: [1.5, 6],          // ground height where trees fade in above the water
     line: [70, 95],           // ground height where they fade out: the treeline
@@ -152,6 +159,10 @@ out in full.
   ground: {
     base: "grass",            // material wherever no layer outweighs it
     road: "track",            // what roads through this biome are made of
+    adjust: { hue, saturation, value, tint },   // optional: recolours all of this biome's ground (see Materials)
+    tints: [                  // optional: recolour one family of materials only, after adjust
+      { family: "grassland", hue: -30, saturation: 1.2 },   // the meadows turn; roads and rock do not
+    ],
     layers: [                 // material rules for this biome only, on top of layers/
       { id: "plains-dry", material: "grassDry", weight: { ... } },  // id is optional; it seeds the graph's noise
     ],
@@ -168,6 +179,44 @@ out in full.
 Layer weights are shares: they are summed with the universal layers and scaled to fit, and the
 base material fills whatever is left. A weight above 1 wins more of a point than the others.
 
+A `treeTints` part (`leaves`, `bark`) is a colour adjustment like a material's `adjust` (see
+Materials), applied to the finished colour - it can turn a green crown red or blue. Its `spread`
+lets each tree stray from it: up to `hue` degrees either way, and `saturation` and `value` as a
+fraction either way, so a wood is many shades of its colour rather than one. Each area draws its
+trees in 8 shades of each rule.
+
+### Rolls: every area its own
+
+Each area of the world rolls its biome afresh, so no two forests are quite the same forest. Every
+area's noises are seeded by the area itself - its hills, stands and ground patterns are its own
+without asking - and a biome can leave any value to the dice:
+
+```json5
+height: { generator: "detailHeight", amplitude: { range: [32, 50] }, frequency: 0.0014, offset: 27 },
+bushes: { chance: 0.8, generator: "standDensity", kind: "hazel", ... },   // 1 in 5 forests has no hazel
+ground: {
+  base: { oneOf: ["grass", "grassDry"] },
+  adjust: { hue: { range: [-8, 8] }, saturation: { range: [0.85, 1.15] } },
+},
+sky: { horizon: { between: ["#a4baac", "#b4c0a0"] }, ... },
+settlement: { oneOf: ["timber", null] },                // null: this area is not settled
+```
+
+- `{ range: [min, max] }` - a number between the two; `integer: true` for a whole one.
+- `{ between: [colour, colour] }` - a colour on the way from one to the other.
+- `{ oneOf: [...] }` - one of the options, each as likely; `null` leaves the field out.
+- `chance: p` on any object - kept with probability p, otherwise taken out of its list or its field.
+
+They work anywhere in a biome file, generator parameters and weight graphs included, and nest (an
+option can hold ranges). Only `name` and `spawnWeight` cannot roll: they pick the biome for an area
+before the area rolls it. When the packs load, each biome is also read at its extremes - every
+range at both ends, every option, every chance kept and dropped - so a roll that would break it is
+reported then, not in some far-off area. On its own (the workbench, the biome list) a biome is its
+middle roll: ranges at their middle, the first option, everything with a chance kept.
+
+A biome's `ground.adjust` gives each area its own variant of every material it draws - one more
+entry in the material table, never another texture.
+
 ## Materials
 
 ```json5
@@ -181,8 +230,31 @@ base material fills whatever is left. A weight above 1 wins more of a point than
 ```
 
 `diffuse` is required; `roughness` (0 shiny - 1 matte) and `height` (0-1, drives the bump map) are
-optional. A texture is one 50 m tile, baked at load - every material costs about 11 MB of GPU
-memory, and only materials something uses are baked.
+optional. A texture is one 50 m tile, baked at load - every texture costs about 11 MB of GPU
+memory, and only textures something uses are baked.
+
+A material can instead draw another material's texture, recoloured - a paler meadow, a redder sand -
+for no bake and no memory of its own:
+
+```json5
+{
+  name: "Faded Grass",
+  textureFrom: "grass",                 // the material whose texture this one draws (one with its own)
+  adjust: { hue: -10, saturation: 0.5, value: 1.4, tint: [1, 0.96, 0.9] },
+  grass: [ ... ],                       // its own grass, detail and clearsGrass as usual
+}
+```
+
+`adjust` works on any material, with its own texture or a borrowed one, and every key is optional:
+`hue` turns the colours around the grey axis (degrees, -180 to 180), `saturation` scales how far
+they stand from grey (0 grey, 1 unchanged), `value` scales brightness, and `tint` multiplies each
+channel. Applied in that order, in the terrain shader; the workbench's texture view shows the
+result. Only colour changes - the relief, roughness and height blend are the texture's own.
+
+`family: "grassland"` puts a material in a family, for a biome's `ground.tints`: a tint recolours
+every material of its family in an area at once - the meadow, the weeds and the dry grass shift
+together - and leaves everything else alone. The grass a recoloured material grows is recoloured
+with it (its flowers keep their own colours).
 
 On the ground each texture is drawn three times over: as baked; again `detail.scale` times smaller,
 its light and dark and its bumps deepening the baked ones by `detail.strength` (so a 1 m feature

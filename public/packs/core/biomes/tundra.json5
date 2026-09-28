@@ -5,11 +5,27 @@
   lakeChance: 0.05,
   borderType: "mountain",
   settlement: "timber",
-  height: { generator: "detailHeight", amplitude: 2.1, frequency: 0.0162, offset: 1 },
-  trees: { generator: "standDensity", tree: "pine", frequency: 0.0028, openAt: 0.2, fullAt: 0.65, peak: 0.35 },
+  height: { generator: "detailHeight", amplitude: { range: [1.6, 2.8] }, frequency: 0.0162, offset: 1 },
+  trees: { generator: "standDensity", tree: "pine", frequency: 0.0028, openAt: 0.2, fullAt: 0.65, peak: { range: [0.2, 0.45] } },
+  // Each area its own trees, and every tree its own shade of them (spread). Pines first: a tree
+  // takes the first rule for its kind, and conifers stray less far from green than the rest.
+  treeTints: [
+    {
+      kinds: ["pine"],
+      leaves: { hue: { range: [-40, 80] }, saturation: { range: [0.6, 1.5] }, value: { range: [0.85, 1.15] }, spread: { hue: 10, saturation: 0.15, value: 0.1 } },
+      bark: { hue: { range: [-20, 20] }, saturation: { range: [0.6, 1.4] }, value: { range: [0.75, 1.2] }, spread: { value: 0.12 } },
+    },
+    {
+      // Red and orange through gold to blue - an autumn wood in a dozen shades, or a strange one.
+      leaves: { hue: { range: [-100, 120] }, saturation: { range: [0.5, 1.8] }, value: { range: [0.85, 1.15] }, spread: { hue: 25, saturation: 0.25, value: 0.15 } },
+      bark: { hue: { range: [-20, 20] }, saturation: { range: [0.6, 1.4] }, value: { range: [0.75, 1.2] }, spread: { value: 0.12 } },
+    },
+  ],
   ground: {
     base: "tundraGround",
     road: "trackStone",
+    // Each area's ground a little different: a warmer or cooler, paler or deeper version of it.
+    adjust: { hue: { range: [-5, 5] }, saturation: { range: [0.88, 1.12] }, value: { range: [0.94, 1.06] } },
     layers: [
       // Snow only makes sense on specific biomes, and each biome's own height range is wildly different
       // (tundra ~3.5-10.5, mountains ~20-100 - see biomeDefinitions.ts) so one global height threshold

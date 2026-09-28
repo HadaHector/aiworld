@@ -2,6 +2,7 @@ import { deriveSeed, mulberry32 } from "../rng";
 import { smoothstep } from "../mathUtils";
 import { compileOutputs, type CompiledOutputs } from "../terrain/pipeline/pipelineCompiler";
 import type { BiomeDefinition } from "../biomes/biomeTypes";
+import type { AreaWeight } from "../cells/areaField";
 import type { WorldContent } from "../content/worldContent";
 import type { TerrainSample } from "../terrain/terrainSampler";
 import type { PipelineDef } from "../terrain/pipeline/pipelineTypes";
@@ -56,6 +57,11 @@ export interface TreePlacement {
   rotation: number;
   /** 0-1, mixes the canopy colour so a stand of trees is not one flat green. */
   tint: number;
+  /** The area it grows in (by weighted roll among those with a say, near a border), for its area's
+   *  tree colours - see treeField.ts. */
+  area?: number;
+  /** 0-1, which of its area's shades of its colour it is drawn in (see treeTints.ts). */
+  shade?: number;
   /** Which of its kind's models it is drawn with. Left out, as the scatter does, it is hashed from
    *  where the tree stands (see treeField.ts); the workbench names one to show it. */
   variant?: number;
@@ -128,6 +134,9 @@ interface Candidate {
   tint: number;
   /** 1 for a young tree, an old one's size multiple otherwise. It is also the room it takes. */
   size: number;
+  /** 0-1, which area's colours it takes where several have a say (see TreePlacement.area). */
+  areaRoll: number;
+  shadeRoll: number;
 }
 
 /**
@@ -142,15 +151,15 @@ interface BiomeFoliage {
   offsetOf: Int32Array;
 }
 
-type TreeContent = Pick<WorldContent, "biomes" | "treeKinds" | "oldTrees">;
+type TreeContent = Pick<WorldContent, "treeKinds" | "oldTrees">;
 
 /** The trees: the zones' `trees` graphs, on the wide lattice. */
 export function createTreeScatter(seed: number, content: TreeContent): TreeScatter {
-  return createScatter(seed, content.biomes, treeLevel(content)).scatter;
+  return createScatter(seed, treeLevel(content)).scatter;
 }
 
 export function createTreeCover(seed: number, content: TreeContent): TreeCover {
-  return createScatter(seed, content.biomes, treeLevel(content)).cover;
+  return createScatter(seed, treeLevel(content)).cover;
 }
 
 function treeLevel(content: Pick<WorldContent, "treeKinds" | "oldTrees">): ScatterLevel {
@@ -159,7 +168,7 @@ function treeLevel(content: Pick<WorldContent, "treeKinds" | "oldTrees">): Scatt
     name: "tree",
     kinds: content.treeKinds,
     graphOf: (biome) => biome.outputs.foliage,
-    namespace: (biome) => `${biome.id}:foliage`,
+    namespace: (biome) => `${biome.seedKey}:foliage`,
     spacing: TREE_SPACING,
     candidatesPerCell: TREE_CANDIDATES_PER_CELL,
     salt: FOLIAGE_SALT,
@@ -189,14 +198,14 @@ function samplerGround(sampleTerrain: TerrainSampler): TreeGroundProbe {
  * their trunks and thickest in their shade (see ScatterLevel.understory).
  */
 export function createBushScatter(seed: number, content: TreeContent & Pick<WorldContent, "bushKinds">, sampleTerrain: TerrainSampler): TreeScatter {
-  const trees = createScatter(seed, content.biomes, treeLevel(content));
+  const trees = createScatter(seed, treeLevel(content));
   const young = Math.max(1, ...content.treeKinds.map((kind) => kind.scale[1]));
   const largest = Math.max(young, ...content.treeKinds.map((kind) => kind.scale[1] * (kind.growsOld ? content.oldTrees.size[1] : 1)));
-  return createScatter(seed, content.biomes, {
+  return createScatter(seed, {
     name: "bush",
     kinds: content.bushKinds,
     graphOf: (biome) => biome.outputs.bushes,
-    namespace: (biome) => `${biome.id}:bushes`,
+    namespace: (biome) => `${biome.seedKey}:bushes`,
     spacing: BUSH_SPACING,
     candidatesPerCell: BUSH_CANDIDATES_PER_CELL,
     salt: BUSH_SALT,
@@ -226,7 +235,7 @@ export function createBushScatter(seed: number, content: TreeContent & Pick<Worl
  * What survives the spacing rule is then thinned by the density map each biome declares (see
  * BiomeOutputs.foliage), which is also what decides which species a surviving dart becomes.
  */
-function createScatter(seed: number, biomes: BiomeDefinition[], level: ScatterLevel): { scatter: TreeScatter; scatterWhere: ScatterWhere; cover: TreeCover } {
+function createScatter(seed: number, level: ScatterLevel): { scatter: TreeScatter; scatterWhere: ScatterWhere; cover: TreeCover } {
   const kinds = level.kinds;
   const kindIds = kinds.map((kind) => kind.id);
   const spacing = level.spacing;
@@ -260,8 +269,17 @@ function createScatter(seed: number, biomes: BiomeDefinition[], level: ScatterLe
     return grows ? { graph, offsetOf } : null;
   }
 
-  const foliageOf = new Map<string, BiomeFoliage | null>();
-  for (const biome of biomes) foliageOf.set(biome.id, compileFoliage(biome));
+  // Compiled the first time an area of the biome is asked about: each area has its own roll of its
+  // biome (content/biomeRolls.ts), with its own numbers and its own noise seeds.
+  const compiledFoliage = new Map<BiomeDefinition, BiomeFoliage | null>();
+  function foliageOf(biome: BiomeDefinition): BiomeFoliage | null {
+    let foliage = compiledFoliage.get(biome);
+    if (foliage === undefined) {
+      foliage = compileFoliage(biome);
+      compiledFoliage.set(biome, foliage);
+    }
+    return foliage;
+  }
 
   // Reused across candidates rather than rebuilt per call: this is the hottest thing in a chunk
   // build after the terrain samples themselves.
@@ -295,6 +313,8 @@ function createScatter(seed: number, biomes: BiomeDefinition[], level: ScatterLe
         rotation: rng() * Math.PI * 2,
         tint: rng(),
         size: 1,
+        areaRoll: 0,
+        shadeRoll: 0,
       });
     }
     // Whether each is old is drawn after everything else, so adding old trees left every young
@@ -305,6 +325,11 @@ function createScatter(seed: number, biomes: BiomeDefinition[], level: ScatterLe
         const sizeRoll = rng();
         if (ageRoll < old.share) candidate.size = old.size[0] + sizeRoll * (old.size[1] - old.size[0]);
       }
+    }
+    // Last of all, for the same reason.
+    for (const candidate of candidates) {
+      candidate.areaRoll = rng();
+      candidate.shadeRoll = rng();
     }
     return candidates;
   }
@@ -342,7 +367,7 @@ function createScatter(seed: number, biomes: BiomeDefinition[], level: ScatterLe
 
     let total = 0;
     for (const { biome, weight } of sample.areaWeights) {
-      const foliage = foliageOf.get(biome.id);
+      const foliage = foliageOf(biome);
       if (!foliage) continue;
       foliage.graph.run(x, z, context);
       for (let k = 0; k < perKind.length; k++) {
@@ -511,6 +536,8 @@ function createScatter(seed: number, biomes: BiomeDefinition[], level: ScatterLe
         scale: (kind.scale[0] + candidate.scaleRoll * (kind.scale[1] - kind.scale[0])) * size,
         rotation: candidate.rotation,
         tint: candidate.tint,
+        area: areaFor(ground.sample.areaWeights, candidate.areaRoll),
+        shade: candidate.shadeRoll,
       });
     }
     return trees;
@@ -545,4 +572,15 @@ function createScatter(seed: number, biomes: BiomeDefinition[], level: ScatterLe
       return wanted <= 0 ? 0 : Math.min(1, wanted * survivalFade(ground));
     },
   };
+}
+
+/** The area a tree takes its colours from: one of those with a say where it stands, as likely as
+ *  its weight - so across a border the two areas' trees mix rather than meeting at a line. */
+function areaFor(areaWeights: readonly AreaWeight[], roll: number): number | undefined {
+  let left = roll;
+  for (const { areaId, weight } of areaWeights) {
+    left -= weight;
+    if (left < 0) return areaId;
+  }
+  return areaWeights.at(-1)?.areaId;
 }

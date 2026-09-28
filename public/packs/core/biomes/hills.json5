@@ -8,7 +8,7 @@
   // Target relief ~10m typical/high with well-separated bumps (same peak-spacing fix as mountains -
   // wider wavelength, lower persistence so higher octaves stay texture, not competing bumps),
   // measured via FORCE_BIOME_ID (devConfig.ts).
-  height: { generator: "detailHeight", amplitude: 60, frequency: 0.0021, offset: 50, octaves: 5, persistence: 0.35 },
+  height: { generator: "detailHeight", amplitude: { range: [48, 72] }, frequency: 0.0021, offset: 50, octaves: 5, persistence: 0.35 },
   trees: {
     generator: "twoSpecies",
     lower: "broadleaf",
@@ -16,7 +16,7 @@
     noises: [{ name: "stand", type: "fbm", octaves: 3, frequency: 0.0034, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
     cover: [
       { output: "standRaw", op: "sample", noise: "stand" },
-      { output: "coverRamp", op: "remap", input: "standRaw", inMin: -0.45, inMax: 0.2, outMin: 0, outMax: 0.7 },
+      { output: "coverRamp", op: "remap", input: "standRaw", inMin: { range: [-0.6, -0.3] }, inMax: 0.2, outMin: 0, outMax: 0.7 },
       { output: "cover", op: "clamp", input: "coverRamp", min: 0, max: 0.7 },
     ],
     // Split by altitude rather than by noise: measured across hills zones the ground runs p25 33,
@@ -28,9 +28,32 @@
       { output: "share", op: "clamp", input: "shareRamp", min: 0, max: 1 },
     ],
   },
+  // Each area its own trees, and every tree its own shade of them (spread). Pines first: a tree
+  // takes the first rule for its kind, and conifers stray less far from green than the rest.
+  treeTints: [
+    {
+      kinds: ["pine"],
+      leaves: { hue: { range: [-40, 80] }, saturation: { range: [0.6, 1.5] }, value: { range: [0.85, 1.15] }, spread: { hue: 10, saturation: 0.15, value: 0.1 } },
+      bark: { hue: { range: [-20, 20] }, saturation: { range: [0.6, 1.4] }, value: { range: [0.75, 1.2] }, spread: { value: 0.12 } },
+    },
+    {
+      // Red and orange through gold to blue - an autumn wood in a dozen shades, or a strange one.
+      leaves: { hue: { range: [-100, 120] }, saturation: { range: [0.5, 1.8] }, value: { range: [0.85, 1.15] }, spread: { hue: 25, saturation: 0.25, value: 0.15 } },
+      bark: { hue: { range: [-20, 20] }, saturation: { range: [0.6, 1.4] }, value: { range: [0.75, 1.2] }, spread: { value: 0.12 } },
+    },
+  ],
   ground: {
-    base: "grass",
+    // Which meadow an area is: grass's own texture under each, a different sward on it.
+    base: { oneOf: ["grass", "meadowShort", "meadowLong", "meadowPoppy", "meadowButtercup", "meadowTussock"] },
     road: "track",
+    // Each area's ground a little different: a warmer or cooler, paler or deeper version of it.
+    adjust: { hue: { range: [-8, 8] }, saturation: { range: [0.85, 1.15] }, value: { range: [0.92, 1.08] } },
+    // Its grassland - meadow, weeds, leafy and dry grass, and the grass on them - anywhere from an
+    // orange, sunburnt steppe to a cold blue-green, and from washed-out to vivid. Roads, rock and
+    // the forest floor keep their own colours.
+    tints: [
+      { family: "grassland", hue: { range: [-65, 80] }, saturation: { range: [0.35, 1.9] }, value: { range: [0.9, 1.1] } },
+    ],
     layers: [
       // Hills reuses plains' own faded/dry/weeds materials - same idea, just rethresholded for hills'
       // much bigger detail amplitude (~60 vs plains' ~12.75).

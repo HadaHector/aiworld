@@ -5,7 +5,7 @@
   lakeChance: 0.04,
   borderType: "mountain",
   settlement: "timber",
-  height: { generator: "detailHeight", amplitude: 40.45, frequency: 0.0014, offset: 27 },
+  height: { generator: "detailHeight", amplitude: { range: [32, 50] }, frequency: 0.0014, offset: 27 },
   trees: {
     generator: "twoSpecies",
     lower: "broadleaf",
@@ -18,23 +18,46 @@
     // default is wood and the exception is open ground.
     cover: [
       { output: "standRaw", op: "sample", noise: "stand" },
-      { output: "coverRamp", op: "remap", input: "standRaw", inMin: -0.9, inMax: -0.35, outMin: 0, outMax: 1 },
+      { output: "coverRamp", op: "remap", input: "standRaw", inMin: { range: [-1.1, -0.75] }, inMax: -0.35, outMin: 0, outMax: 1 },
       { output: "cover", op: "clamp", input: "coverRamp", min: 0, max: 1 },
     ],
     // A slower noise than the cover one, so a conifer stand spans several clearings instead of
     // changing species every time the wood thins.
     share: [
       { output: "speciesRaw", op: "sample", noise: "species" },
-      { output: "shareRamp", op: "remap", input: "speciesRaw", inMin: 0.12, inMax: 0.5, outMin: 0, outMax: 1 },
+      { output: "shareRamp", op: "remap", input: "speciesRaw", inMin: { range: [-0.1, 0.3] }, inMax: { range: [0.4, 0.7] }, outMin: 0, outMax: 1 },
       { output: "share", op: "clamp", input: "shareRamp", min: 0, max: 1 },
     ],
   },
   // Thickets and thinner stretches rather than an even carpet - a faster noise than the trees', so
   // the understory changes within one stand.
-  bushes: { generator: "standDensity", kind: "hazel", frequency: 0.012, openAt: -0.9, fullAt: 0.1, peak: 1 },
+  bushes: { chance: 0.8, generator: "standDensity", kind: "hazel", frequency: 0.012, openAt: -0.9, fullAt: 0.1, peak: 1 },
+  // Each area its own trees, and every tree its own shade of them (spread). Pines first: a tree
+  // takes the first rule for its kind, and conifers stray less far from green than the rest.
+  treeTints: [
+    {
+      kinds: ["pine"],
+      leaves: { hue: { range: [-40, 80] }, saturation: { range: [0.6, 1.5] }, value: { range: [0.85, 1.15] }, spread: { hue: 10, saturation: 0.15, value: 0.1 } },
+      bark: { hue: { range: [-20, 20] }, saturation: { range: [0.6, 1.4] }, value: { range: [0.75, 1.2] }, spread: { value: 0.12 } },
+    },
+    {
+      // Red and orange through gold to blue - an autumn wood in a dozen shades, or a strange one.
+      leaves: { hue: { range: [-100, 120] }, saturation: { range: [0.5, 1.8] }, value: { range: [0.85, 1.15] }, spread: { hue: 25, saturation: 0.25, value: 0.15 } },
+      bark: { hue: { range: [-20, 20] }, saturation: { range: [0.6, 1.4] }, value: { range: [0.75, 1.2] }, spread: { value: 0.12 } },
+    },
+  ],
   ground: {
-    base: "grass",
+    // Which meadow an area is: grass's own texture under each, a different sward on it.
+    base: { oneOf: ["grass", "meadowShort", "meadowLong", "meadowPoppy", "meadowButtercup", "meadowTussock"] },
     road: "track",
+    // Each area's ground a little different: a warmer or cooler, paler or deeper version of it.
+    adjust: { hue: { range: [-8, 8] }, saturation: { range: [0.85, 1.15] }, value: { range: [0.92, 1.08] } },
+    // Its grassland - meadow, weeds, leafy and dry grass, and the grass on them - anywhere from an
+    // orange, sunburnt steppe to a cold blue-green, and from washed-out to vivid. Roads, rock and
+    // the forest floor keep their own colours.
+    tints: [
+      { family: "grassland", hue: { range: [-65, 80] }, saturation: { range: [0.35, 1.9] }, value: { range: [0.9, 1.1] } },
+    ],
     layers: [
       // Forest's detail amplitude (~40.45) is bigger than plains' (~12.75), so its curvature
       // threshold is widened roughly proportionally.

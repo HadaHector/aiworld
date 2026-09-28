@@ -5,7 +5,7 @@
   lakeChance: 0.03, // oases
   borderType: "mountain",
   settlement: "timber",
-  height: { generator: "detailHeight", amplitude: 10.1, frequency: 0.0026, offset: 4, persistence: 0.1 },
+  height: { generator: "detailHeight", amplitude: { range: [7, 13] }, frequency: 0.0026, offset: 4, persistence: 0.1 },
   // Barren, except along the water. There is no stray term and no baseline: away from a river this
   // evaluates to zero and the zone grows nothing at all, which is the point of a desert.
   trees: {
@@ -26,9 +26,25 @@
     ],
     outputs: { palm: "palm" },
   },
+  // Each area its own trees, and every tree its own shade of them (spread). Pines first: a tree
+  // takes the first rule for its kind, and conifers stray less far from green than the rest.
+  treeTints: [
+    {
+      kinds: ["pine"],
+      leaves: { hue: { range: [-40, 80] }, saturation: { range: [0.6, 1.5] }, value: { range: [0.85, 1.15] }, spread: { hue: 10, saturation: 0.15, value: 0.1 } },
+      bark: { hue: { range: [-20, 20] }, saturation: { range: [0.6, 1.4] }, value: { range: [0.75, 1.2] }, spread: { value: 0.12 } },
+    },
+    {
+      // Red and orange through gold to blue - an autumn wood in a dozen shades, or a strange one.
+      leaves: { hue: { range: [-100, 120] }, saturation: { range: [0.5, 1.8] }, value: { range: [0.85, 1.15] }, spread: { hue: 25, saturation: 0.25, value: 0.15 } },
+      bark: { hue: { range: [-20, 20] }, saturation: { range: [0.6, 1.4] }, value: { range: [0.75, 1.2] }, spread: { value: 0.12 } },
+    },
+  ],
   ground: {
     base: "sand",
     road: "trackSand",
+    // Each area's ground a little different: a warmer or cooler, paler or deeper version of it.
+    adjust: { hue: { range: [-6, 6] }, saturation: { range: [0.88, 1.12] }, value: { range: [0.94, 1.06] } },
     layers: [
       // Desert dunes: a shaded leeward face (reusing the same slopeFacing signal, just relabeled) and
       // damp, darker sand pooling in the troughs between dunes - the latter reuses swamp's own mud

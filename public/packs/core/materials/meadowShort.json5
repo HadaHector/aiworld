@@ -1,0 +1,12 @@
+// Short, cropped meadow with daisies - grass's own texture, a different sward on it.
+{
+  name: "Short Meadow",
+  family: "grassland",
+  detail: { strength: 0.3 },
+  textureFrom: "grass",
+  grass: [
+    { kind: "lawn", density: 3.5, color: [0.45, 0.66, 0.28] },
+    { kind: "daisies", density: 0.8, color: [0.4, 0.6, 0.26] },
+    { kind: "tuft", density: 0.3, color: [0.42, 0.58, 0.26] },
+  ],
+}

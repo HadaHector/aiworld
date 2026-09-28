@@ -63,6 +63,8 @@ export interface TerrainWorld {
   roads: RoadNetwork;
   /** Streets, squares and houses, one per settlement, in settlement id order. */
   settlementLayouts: SettlementLayout[];
+  /** Each area's own roll of its biome, by area id (see cells/areaField.ts). */
+  areaBiomes: BiomeDefinition[];
 }
 
 const OCEAN_FLOOR_DEPTH = -14;
@@ -76,21 +78,27 @@ const LAKE_TARGET_HEIGHT = SEA_LEVEL - 10;
 
 const OCEAN_SALT = 402;
 
-function compileHeightPipelines(seed: number, biomes: BiomeDefinition[]): Map<string, CompiledPipeline> {
-  const compiled = new Map<string, CompiledPipeline>();
-  for (const biome of biomes) {
-    compiled.set(biome.id, compilePipeline(biome.outputs.height, seed, biome.id));
-  }
-  return compiled;
+/** Each biome's height graph, compiled the first time an area of it is sampled - one per area, since
+ *  each area rolls its own (see content/biomeRolls.ts) and seeds its own noise. */
+function heightPipelineCache(seed: number): (biome: BiomeDefinition) => CompiledPipeline {
+  const compiled = new Map<BiomeDefinition, CompiledPipeline>();
+  return (biome) => {
+    let pipeline = compiled.get(biome);
+    if (!pipeline) {
+      pipeline = compilePipeline(biome.outputs.height, seed, biome.seedKey);
+      compiled.set(biome, pipeline);
+    }
+    return pipeline;
+  };
 }
 
 /** Composes continent shape + biome zoning + height noise into one queryable per-position sample. */
 export function createTerrainSampler(seed: number, content: WorldContent): TerrainWorld {
-  const { sampleArea, worldExtent, continents, areaBounds, areaNames, landCellSites, nameGenerator } =
+  const { sampleArea, worldExtent, continents, areaBounds, areaNames, landCellSites, nameGenerator, areaBiomes } =
     createAreaSampler(seed, content);
   const bedrock = createBedrockSampler(seed);
   const oceanNoise2D = createBaseNoise2D(deriveSeed(seed, OCEAN_SALT));
-  const heightPipelines = compileHeightPipelines(seed, content.biomes);
+  const heightPipelineOf = heightPipelineCache(seed);
   const evaluateBoundaryHill = createBoundaryHillEvaluator(seed, content.boundaryHillStyles);
   const carveRiver = createRiverEvaluator(seed);
 
@@ -112,7 +120,7 @@ export function createTerrainSampler(seed: number, content: WorldContent): Terra
     // all real biome borders with no height blend at all - a hard switch between two biomes' noise.
     let blendedDetail = 0;
     for (const { biome, weight } of area.areaWeights) {
-      blendedDetail += heightPipelines.get(biome.id)!(worldX, worldZ) * weight;
+      blendedDetail += heightPipelineOf(biome)(worldX, worldZ) * weight;
     }
     // Faded out near a river rather than switched off by one - see RIVER_HILL_SUPPRESSION_INNER.
     // riverGap is Infinity where there is no river within reach, which smoothstep clamps to 1.
@@ -221,5 +229,5 @@ export function createTerrainSampler(seed: number, content: WorldContent): Terra
   );
   padField = createPadField(settlementLayouts);
 
-  return { sampleTerrain, worldExtent, continents, areaBounds, areaNames, settlements, roads, settlementLayouts };
+  return { sampleTerrain, worldExtent, continents, areaBounds, areaNames, settlements, roads, settlementLayouts, areaBiomes };
 }

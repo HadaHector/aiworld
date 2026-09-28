@@ -338,10 +338,10 @@ export function createDebugMap(
             roadGap: sample.roadGap,
             reliefCurvature,
           };
-          const materialIndex = materialLibrary.resolveMaterialIndex(worldX, worldZ, context, sample.primaryBiome.id);
+          const materialIndex = materialLibrary.resolveMaterialIndex(worldX, worldZ, context, sample.primaryBiome);
           color = materialLibrary.getMaterialColor(materialIndex);
         } else {
-          color = materialLibrary.getBiomeBaseColor(sample.primaryBiome.id);
+          color = materialLibrary.getBiomeBaseColor(sample.primaryBiome);
         }
 
         let factor = 1;

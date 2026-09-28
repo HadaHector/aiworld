@@ -17,6 +17,28 @@ uniform mat4 view;
 uniform mat4 viewProjection;
 `;
 
+/** Texels per row of the tree tint table: the leaves' colour matrix, then the bark's, a column each. */
+export const TREE_TINT_WIDTH = 6;
+
+/**
+ * Each area's recolouring of its trees (a biome's `treeTints`), one row per area - row 0 changes
+ * nothing - which a tree's instance names in its colour's alpha (see treeField.ts). A matrix, not a
+ * multiplied colour, because the leaves' green is in their atlas: only turning the final colour can
+ * make them orange or blue.
+ */
+const TREE_TINT_GLSL = `
+uniform highp sampler2D treeTints;
+
+mat3 treeTint(float row, int first) {
+  int r = int(row + 0.5);
+  return mat3(
+    texelFetch(treeTints, ivec2(first, r), 0).rgb,
+    texelFetch(treeTints, ivec2(first + 1, r), 0).rgb,
+    texelFetch(treeTints, ivec2(first + 2, r), 0).rgb
+  );
+}
+`;
+
 export const BARK_VERTEX_SHADER = `#version 300 es
 precision highp float;
 
@@ -24,6 +46,7 @@ in vec3 position;
 in vec3 normal;
 in vec2 uv;
 in vec3 axis;
+in vec4 instanceColor;
 ${INSTANCED_WORLD}
 
 out vec3 vWorldPosition;
@@ -32,6 +55,7 @@ out vec3 vAxis;
 out vec2 vUV;
 out float vViewDepth;
 out float vHeight;
+flat out float vTintRow;
 
 void main() {
   mat4 finalWorld = world * mat4(world0, world1, world2, world3);
@@ -42,6 +66,7 @@ void main() {
   vAxis = normalize(turn * axis);
   vUV = uv;
   vHeight = position.y;
+  vTintRow = instanceColor.a;
   vWorldPosition = worldPosition.xyz;
   vViewDepth = (view * worldPosition).z;
   gl_Position = viewProjection * worldPosition;
@@ -58,6 +83,8 @@ in vec3 vAxis;
 in vec2 vUV;
 in float vViewDepth;
 in float vHeight;
+flat in float vTintRow;
+${TREE_TINT_GLSL}
 
 uniform sampler2D barkColor;
 uniform sampler2D barkNormal;
@@ -65,7 +92,7 @@ uniform sampler2D barkNormal;
 out vec4 outColor;
 
 void main() {
-  vec3 albedo = texture(barkColor, vUV).rgb;
+  vec3 albedo = max(treeTint(vTintRow, 3) * texture(barkColor, vUV).rgb, 0.0);
   // The normal map's x runs around the limb and y along it.
   vec3 tangentNormal = texture(barkNormal, vUV).xyz * 2.0 - 1.0;
   vec3 surface = normalize(vNormal);
@@ -101,6 +128,7 @@ out vec3 vNormal;
 out vec2 vUV;
 out vec3 vTint;
 out float vViewDepth;
+flat out float vTintRow;
 
 void main() {
   mat4 finalWorld = world * mat4(world0, world1, world2, world3);
@@ -118,6 +146,7 @@ void main() {
   vNormal = normalize(mat3(finalWorld) * normal);
   vUV = uv;
   vTint = instanceColor.rgb;
+  vTintRow = instanceColor.a;
   vWorldPosition = worldPosition.xyz;
   vViewDepth = (view * worldPosition).z;
   gl_Position = viewProjection * worldPosition;
@@ -133,6 +162,8 @@ in vec3 vNormal;
 in vec2 vUV;
 in vec3 vTint;
 in float vViewDepth;
+flat in float vTintRow;
+${TREE_TINT_GLSL}
 
 uniform sampler2D leafAtlas;
 
@@ -146,7 +177,7 @@ void main() {
   float lod = max(0.0, 0.5 * log2(max(dot(dFdx(texel), dFdx(texel)), dot(dFdy(texel), dFdy(texel)))));
   if (leaf.a * (1.0 + 0.3 * lod) < 0.5) discard;
 
-  vec3 albedo = leaf.rgb * vTint;
+  vec3 albedo = max(treeTint(vTintRow, 0) * (leaf.rgb * vTint), 0.0);
   vec3 n = normalize(vNormal);
   vec3 lightDir = normalize(lightDirection);
   // Wrapped lighting on the crown's own normal: the sunny side bright, the far side falling off

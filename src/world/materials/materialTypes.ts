@@ -1,5 +1,6 @@
 import type { ColorTuple, PipelineDef } from "../terrain/pipeline/pipelineTypes";
 import type { TextureDef } from "./textureGen";
+import type { ColorAdjust } from "./colorAdjust";
 
 /** One kind of grass a material grows - see foliage/grassScatter.ts. */
 export interface GrassSpec {
@@ -11,11 +12,27 @@ export interface GrassSpec {
   color: ColorTuple;
 }
 
-/** A ground surface: its baked texture, and what grows on it. */
+/** A ground surface: its baked texture, how that is recoloured, and what grows on it. */
 export interface MaterialDef {
   id: string;
   name: string;
+  /**
+   * Whose bake this material draws: its own id, or - for a material authored with `textureFrom` -
+   * the material it borrows from. The bake is seeded by and cached under this id, and the texture
+   * atlas holds one layer per distinct textureId, however many materials draw it.
+   */
+  textureId: string;
+  /** The texture baked under `textureId` - this material's own, or the one it borrows. */
   texture: TextureDef;
+  /** How the shader recolours the texture for this material (NO_ADJUST for none). */
+  adjust: ColorAdjust;
+  /** Set only on an area's variant of the material (see materialBlend.ts): the area's own
+   *  recolourings of it - its ground's, then its tints' for this material's family - applied in
+   *  order after `adjust`. The grass it grows is recoloured by them too. */
+  areaAdjusts?: ColorAdjust[];
+  /** Which family of materials this is (e.g. "grassland"), for a biome's `ground.tints`, which
+   *  recolour a whole family at once and leave the rest of the ground alone. */
+  family?: string;
   /** What grows on this material. A point's grass is every material's specs scaled by that
    *  material's weight there, so blends between materials thin one kind out as the next thickens. */
   grass: GrassSpec[];

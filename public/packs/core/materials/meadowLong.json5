@@ -1,0 +1,13 @@
+// Long, uncut meadow grass with bluebells through it.
+{
+  name: "Long Meadow",
+  family: "grassland",
+  detail: { strength: 0.3 },
+  textureFrom: "grass",
+  grass: [
+    { kind: "longGrass", density: 2.4, color: [0.5, 0.68, 0.3] },
+    { kind: "meadow", density: 1.2, color: [0.46, 0.64, 0.28] },
+    { kind: "tall", density: 0.4, color: [0.52, 0.74, 0.34] },
+    { kind: "bluebells", density: 0.5, color: [0.4, 0.58, 0.26] },
+  ],
+}

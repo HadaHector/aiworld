@@ -16,10 +16,26 @@
       { output: "result", op: "offset", input: "raw", amount: -3.5 },
     ],
   },
-  trees: { generator: "standDensity", tree: "broadleaf", frequency: 0.005, openAt: -0.3, fullAt: 0.25, peak: 0.6 },
+  trees: { generator: "standDensity", tree: "broadleaf", frequency: 0.005, openAt: -0.3, fullAt: 0.25, peak: { range: [0.4, 0.75] } },
+  // Each area its own trees, and every tree its own shade of them (spread). Pines first: a tree
+  // takes the first rule for its kind, and conifers stray less far from green than the rest.
+  treeTints: [
+    {
+      kinds: ["pine"],
+      leaves: { hue: { range: [-40, 80] }, saturation: { range: [0.6, 1.5] }, value: { range: [0.85, 1.15] }, spread: { hue: 10, saturation: 0.15, value: 0.1 } },
+      bark: { hue: { range: [-20, 20] }, saturation: { range: [0.6, 1.4] }, value: { range: [0.75, 1.2] }, spread: { value: 0.12 } },
+    },
+    {
+      // Red and orange through gold to blue - an autumn wood in a dozen shades, or a strange one.
+      leaves: { hue: { range: [-100, 120] }, saturation: { range: [0.5, 1.8] }, value: { range: [0.85, 1.15] }, spread: { hue: 25, saturation: 0.25, value: 0.15 } },
+      bark: { hue: { range: [-20, 20] }, saturation: { range: [0.6, 1.4] }, value: { range: [0.75, 1.2] }, spread: { value: 0.12 } },
+    },
+  ],
   ground: {
     base: "mud",
     road: "track",
+    // Each area's ground a little different: a warmer or cooler, paler or deeper version of it.
+    adjust: { hue: { range: [-8, 8] }, saturation: { range: [0.85, 1.15] }, value: { range: [0.92, 1.08] } },
     layers: [
       // Swamp is nearly flat (clamped detail noise), so its raised hummocks are subtle - reads as a
       // negative reliefCurvature (a local high point) rather than the positive "valley" sign every
@@ -69,7 +85,7 @@
     cloud: "#c8ccb4",
     // A close, low haze instead of the usual 30% - a swamp is the one zone that should never read
     // as open country, whatever the draw-distance slider is set to.
-    fogStart: 0.08,
+    fogStart: { range: [0.05, 0.12] },
   },
   // Canopy-filtered even at noon (a dimmer sunIntensity than anywhere else) and a murky,
   // low-strength ambient that never gets properly bright even at midday - night then falls out of
