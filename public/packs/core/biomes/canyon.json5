@@ -39,9 +39,13 @@
     ],
   },
   trees: { generator: "standDensity", tree: "palm", frequency: 0.004, openAt: 0.25, fullAt: 0.7, peak: { range: [0.15, 0.4] } },
+  // Rockfall: boulders tumbled from the canyon walls and heaped at their feet, in warm desert stone.
+  rocks: { generator: "rockDensity", kind: "boulder", frequency: 0.005, openAt: -0.2, fullAt: 0.5, peak: { range: [0.025, 0.075] }, footOfSlope: { range: [0.7, 1] }, riverShore: { range: [0.75, 1.5] }, lakeShore: { range: [0.75, 1.5] } },
   // Each area its own trees, and every tree its own shade of them (spread). Pines first: a tree
   // takes the first rule for its kind, and conifers stray less far from green than the rest.
   treeTints: [
+    // Each area's stone a shade of its own, and every boulder a little different.
+    { kinds: ["boulder"], stone: { hue: { range: [-10, 15] }, saturation: { range: [1, 1.8] }, value: { range: [0.95, 1.2] }, tint: [1.2, 1, 0.78], spread: { hue: 6, saturation: 0.2, value: 0.12 } } },
     {
       kinds: ["pine"],
       leaves: { hue: { range: [-40, 80] }, saturation: { range: [0.6, 1.5] }, value: { range: [0.85, 1.15] }, spread: { hue: 10, saturation: 0.15, value: 0.1 } },

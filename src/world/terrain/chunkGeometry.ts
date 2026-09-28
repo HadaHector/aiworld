@@ -5,7 +5,7 @@ import { MATERIALS_PER_TRIANGLE, type MaterialBlender } from "../materials/mater
 import type { TreeCover, TreeGround, TreePlacement, TreeScatter } from "../foliage/treeScatter";
 import { scatterGrass, type ChunkGrass } from "../foliage/grassScatter";
 import type { GrassKindDef } from "../foliage/grassConfig";
-import { BUSH_MAX_DETAIL_RATIO } from "../foliage/foliageConfig";
+import { BUSH_MAX_DETAIL_RATIO, ROCK_MAX_DETAIL_RATIO } from "../foliage/foliageConfig";
 
 /** Where a chunk is and at what level of detail - everything a build needs besides the world
  *  itself, and plain data, so it can be posted to a worker. */
@@ -31,6 +31,7 @@ export interface ChunkBuildContext {
   groundColors: [number, number, number][] | null;
   scatterTrees: TreeScatter;
   scatterBushes: TreeScatter;
+  scatterRocks: TreeScatter;
   /** How wooded the ground is, for material rules (see materialContext.ts). */
   treeCover: TreeCover;
   grassKinds: GrassKindDef[];
@@ -64,6 +65,8 @@ export interface ChunkGeometry {
   /** The bushes, placed the same way - but only on chunks near enough to see them (see
    *  BUSH_MAX_DETAIL_RATIO). */
   bushes: TreePlacement[];
+  /** The boulders, placed the same way, out to ROCK_MAX_DETAIL_RATIO. */
+  rocks: TreePlacement[];
   /** Only full-detail chunks carry grass: each kind is only drawn within its own fadeEnd of the
    *  camera (see grassConfig.ts), inside the full-detail range. */
   grass: ChunkGrass | null;
@@ -128,7 +131,7 @@ function toSlots(weights: Map<number, number>, ownerList: MaterialList, allowed:
  */
 export function buildChunkGeometry(request: ChunkBuildRequest, context: ChunkBuildContext): ChunkGeometry {
   const { size, subdivisions, detailSubdivisions, originX, originZ } = request;
-  const { sampleTerrain, materialBlender, scatterTrees, scatterBushes, treeCover, seed, groundColors, grassKinds } = context;
+  const { sampleTerrain, materialBlender, scatterTrees, scatterBushes, scatterRocks, treeCover, seed, groundColors, grassKinds } = context;
 
   const gridSize = subdivisions + 1;
   const detailRatio = detailSubdivisions / subdivisions;
@@ -508,6 +511,11 @@ export function buildChunkGeometry(request: ChunkBuildRequest, context: ChunkBui
       ? scatterBushes(originX - size / 2, originZ - size / 2, originX + size / 2, originZ + size / 2, probeGround)
       : [];
 
+  const rocks =
+    detailRatio <= ROCK_MAX_DETAIL_RATIO
+      ? scatterRocks(originX - size / 2, originZ - size / 2, originX + size / 2, originZ + size / 2, probeGround)
+      : [];
+
   const grass =
     detailRatio === 1
       ? scatterGrass(
@@ -538,6 +546,7 @@ export function buildChunkGeometry(request: ChunkBuildRequest, context: ChunkBui
     shadowIndices: new Uint32Array(shadowIndices),
     trees,
     bushes,
+    rocks,
     grass,
   };
 }

@@ -32,9 +32,13 @@
   // Thickets and thinner stretches rather than an even carpet - a faster noise than the trees', so
   // the understory changes within one stand.
   bushes: { chance: 0.8, generator: "standDensity", kind: "hazel", frequency: 0.012, openAt: -0.9, fullAt: 0.1, peak: 1 },
+  // Moss-grown boulders among the trees, gathered where the ground drops and by the water.
+  rocks: { generator: "rockDensity", kind: "mossyBoulder", frequency: 0.006, openAt: 0, fullAt: 0.7, peak: { range: [0.012, 0.045] }, footOfSlope: { range: [0.3, 0.6] }, riverShore: { range: [0.75, 1.5] }, lakeShore: { range: [0.75, 1.5] } },
   // Each area its own trees, and every tree its own shade of them (spread). Pines first: a tree
   // takes the first rule for its kind, and conifers stray less far from green than the rest.
   treeTints: [
+    // Each area's stone a shade of its own, and every boulder a little different.
+    { kinds: ["mossyBoulder"], stone: { hue: { range: [-12, 12] }, saturation: { range: [0.6, 1.4] }, value: { range: [0.85, 1.15] }, spread: { hue: 6, saturation: 0.25, value: 0.15 } } },
     {
       kinds: ["pine"],
       leaves: { hue: { range: [-40, 80] }, saturation: { range: [0.6, 1.5] }, value: { range: [0.85, 1.15] }, spread: { hue: 10, saturation: 0.15, value: 0.1 } },

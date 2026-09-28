@@ -79,6 +79,10 @@ export interface BiomeOutputs {
   /** The same for bushes, one output per bush kind - scattered on a lattice of their own, under and
    *  between the trees (see foliage/treeScatter.ts's createBushScatter). */
   bushes?: PipelineDef;
+  /** The same for boulders, one output per rock kind (a pack's rocks/ folder) - on the trees' own
+   *  lattice, so a boulder takes a tree's room, and a big one clears a wide circle. Rocks keep out
+   *  of water and roads, but not the zone's shore, treeline or slope rules: those are for trees. */
+  rocks?: PipelineDef;
   // Future, unimplemented: wetness?: PipelineDef; material?: PipelineDef;
 }
 
@@ -90,11 +94,13 @@ export interface TreeTintPart {
   spread: { hue: number; saturation: number; value: number };
 }
 
-/** A `treeTints` rule: which kinds it recolours (null for every kind), leaves and bark. */
+/** A `treeTints` rule: which kinds it recolours (null for every kind), leaves and bark - and a
+ *  boulder's stone. */
 export interface TreeTintRuleDef {
   kinds: string[] | null;
   leaves: TreeTintPart;
   bark: TreeTintPart;
+  stone: TreeTintPart;
 }
 
 export interface BiomeDefinition {

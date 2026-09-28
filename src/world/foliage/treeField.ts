@@ -1,7 +1,7 @@
 import { Constants, Matrix, Quaternion, RawTexture, ShaderMaterial, Vector3, type Mesh } from "@babylonjs/core";
 import type { CascadedShadowGenerator, Scene } from "@babylonjs/core";
 import type { TreePlacement } from "./treeScatter";
-import type { TreeKindDef } from "./foliageConfig";
+import { surfaceTexture, type TreeKindDef } from "./foliageConfig";
 import { createTreeModels, type BakedBark, type TreeModel } from "./treeModels";
 import { bakeMaterialTextures } from "../materials/textureBakePool";
 import { TEXTURE_RESOLUTION } from "../materials/textureGen";
@@ -72,16 +72,21 @@ interface Species {
  * a dropped frame every time a chunk came or went, which while walking is most of them.
  */
 /**
- * Every generated kind's bark, by kind id - each a texture graph, baked on the same worker pool as
- * the ground materials, all at once. TEXTURE_RESOLUTION² RGBA each.
+ * Every generated kind's bark and every boulder's stone, by kind id - each a texture graph, baked on
+ * the same worker pool as the ground materials, all at once. TEXTURE_RESOLUTION² RGBA each. A stone
+ * drawn from a material is baked under the material's id, so it is that material's own texture.
  */
 export async function bakeBarks(treeKinds: TreeKindDef[], seed: number): Promise<Map<string, BakedBark>> {
-  const barkKinds = treeKinds.filter((def) => def.shape.model === "branching" || def.shape.model === "conifer");
+  const barkKinds = treeKinds.filter((def) => surfaceTexture(def) !== null);
   const layer = TEXTURE_RESOLUTION * TEXTURE_RESOLUTION * 4;
   const barkColors = new Uint8Array(layer * barkKinds.length);
   const barkNormals = new Uint8Array(layer * barkKinds.length);
   await bakeMaterialTextures(
-    barkKinds.map((def) => ({ id: `bark-${def.id}`, texture: (def.shape as Extract<TreeKindDef["shape"], { model: "branching" | "conifer" }>).bark.texture })),
+    barkKinds.map((def) => {
+      const surface = surfaceTexture(def)!;
+      const material = "material" in surface ? surface.material : undefined;
+      return { id: material ?? `${def.shape.model === "boulder" ? "stone" : "bark"}-${def.id}`, texture: surface.texture };
+    }),
     seed,
     barkColors,
     barkNormals,
@@ -121,7 +126,7 @@ export async function createTreeField(
   });
   // Row 0 changes nothing; then every area's every rule's shades, one row each. A tree names its row
   // in its instance colour's alpha.
-  const tintRows: TreeShade[] = [{ leaves: IDENTITY, bark: IDENTITY }];
+  const tintRows: TreeShade[] = [{ leaves: IDENTITY, bark: IDENTITY, stone: IDENTITY }];
   const areaRules = areaTints.map((rules) =>
     rules.map((rule) => {
       const first = tintRows.length;
@@ -130,8 +135,8 @@ export async function createTreeField(
     }),
   );
   const tintTable = new Float32Array(tintRows.length * TREE_TINT_WIDTH * 4);
-  tintRows.forEach(({ leaves, bark }, row) => {
-    [leaves, bark].forEach((m, part) => {
+  tintRows.forEach(({ leaves, bark, stone }, row) => {
+    [leaves, bark, stone].forEach((m, part) => {
       for (let column = 0; column < 3; column++) tintTable.set([m[column], m[3 + column], m[6 + column], 0], (row * TREE_TINT_WIDTH + part * 3 + column) * 4);
     });
   });
@@ -194,6 +199,8 @@ export async function createTreeField(
   const rotation = new Quaternion();
   const position = new Vector3();
   const matrix = new Matrix();
+  const groundNormal = new Vector3();
+  const tipped = new Quaternion();
 
   /** Which of its kind's models a tree is drawn with: hashed from where it stands, so it is the same
    *  tree every time its chunk is built. */
@@ -225,6 +232,12 @@ export async function createTreeField(
 
       scaling.set(tree.scale, tree.scale, tree.scale);
       Quaternion.RotationYawPitchRollToRef(tree.rotation, 0, 0, rotation);
+      if (tree.lean) {
+        // Spun about its own up first, then tipped so that up is the ground's normal.
+        groundNormal.set(-tree.lean[0], 1, -tree.lean[1]).normalize();
+        Quaternion.FromUnitVectorsToRef(Vector3.UpReadOnly, groundNormal, tipped);
+        tipped.multiplyToRef(rotation, rotation);
+      }
       position.set(tree.x, tree.y, tree.z);
       Matrix.ComposeToRef(scaling, rotation, position, matrix);
       matrix.copyToArray(block.matrices, at * 16);

@@ -26,9 +26,13 @@
     ],
     outputs: { palm: "palm" },
   },
+  // A few boulders of warm desert stone standing out of the sand, more under the slopes and by the water.
+  rocks: { generator: "rockDensity", kind: "boulder", frequency: 0.003, openAt: 0.2, fullAt: 0.8, peak: { range: [0.005, 0.03] }, footOfSlope: { range: [0.3, 0.6] }, riverShore: { range: [0.5, 1] }, lakeShore: { range: [0.5, 1] } },
   // Each area its own trees, and every tree its own shade of them (spread). Pines first: a tree
   // takes the first rule for its kind, and conifers stray less far from green than the rest.
   treeTints: [
+    // Each area's stone a shade of its own, and every boulder a little different.
+    { kinds: ["boulder"], stone: { hue: { range: [-10, 15] }, saturation: { range: [1, 1.8] }, value: { range: [0.95, 1.2] }, tint: [1.2, 1, 0.78], spread: { hue: 6, saturation: 0.2, value: 0.12 } } },
     {
       kinds: ["pine"],
       leaves: { hue: { range: [-40, 80] }, saturation: { range: [0.6, 1.5] }, value: { range: [0.85, 1.15] }, spread: { hue: 10, saturation: 0.15, value: 0.1 } },

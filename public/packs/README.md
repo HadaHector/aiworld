@@ -24,7 +24,8 @@ packs/<pack>/
   layers/<id>.json5       a material rule applied in every biome (rock on steep slopes, the road)
   grass/<id>.json5        a kind of grass tuft
   trees/<id>.json5        a kind of tree
-  bushes/<id>.json5       a kind of bush (trees and bushes share one set of ids)
+  bushes/<id>.json5       a kind of bush (trees, bushes and rocks share one set of ids)
+  rocks/<id>.json5        a kind of boulder
   voices/<id>.json5       the sounds a zone's names are built from
   borderHills/<id>.json5  the shape of the hills raised along a zone border
   settlements/<id>.json5  a settlement style: how big places grow, their houses and colours
@@ -124,6 +125,7 @@ Anywhere a value is expected, `{ generator: "<name>", ...params }` produces it i
 |---|---|---|
 | `detailHeight` | a height graph: one fbm noise plus an offset | `amplitude`, `frequency`, `offset`, `octaves?` (4), `persistence?` (0.4) |
 | `standDensity` | a tree or bush density for one species | `kind` (or `tree`), `frequency` (stand size), `openAt`, `fullAt` (noise values for none / full), `peak` |
+| `rockDensity` | a boulder density: a thin scatter as `standDensity`, plus more where stone collects, in clusters | the same, and optional `footOfSlope` (flattish ground with 16 m of ground rising above it within 30 m), `riverShore` and `lakeShore` (the waterline, ground -0.1 to 0.3, half in the water) - each its density at its fullest |
 | `twoSpecies` | a tree density split between two species | `lower`, `upper`, `noises`, `cover` (steps ending in `cover`), `share` (steps ending in `share`) |
 | `twoTone` | a material texture: one mottle between two colours | `base`, `variation`, `roughness`, `bumpStrength` |
 | `grassland` | a grassy ground texture: clumps, curling blade strokes, ragged bare patches | `dark`, `light`, `soil`, `soilAmount` (0-1), `roughness`, `bumpStrength`, and optionally fallen `leaves` (0-1) in `leafColors: [dark, light]` |
@@ -144,7 +146,9 @@ out in full.
   height: { ... },            // graph: the ground's height
   trees: { ... },             // graph (optional): one output per tree kind, each a 0-1 density
   bushes: { ... },            // graph (optional): the same per bush kind, on a denser lattice of its own
-  treeTints: [                // optional: recolour this biome's trees and bushes, rule by rule
+  rocks: { ... },             // graph (optional): the same per rock kind, on the trees' own lattice
+  treeTints: [                // optional: recolour this biome's trees, bushes and boulders, rule by rule
+    { kinds: ["boulder"], stone: { hue: 10, spread: { value: 0.15 } } },
     { kinds: ["pine"], leaves: { hue: 20 } },   // a tree takes the first rule for its kind...
     {                                           // ...or the first naming no kinds
       leaves: { hue: -40, saturation: 1.2, spread: { hue: 25, saturation: 0.2, value: 0.1 } },
@@ -179,7 +183,7 @@ out in full.
 Layer weights are shares: they are summed with the universal layers and scaled to fit, and the
 base material fills whatever is left. A weight above 1 wins more of a point than the others.
 
-A `treeTints` part (`leaves`, `bark`) is a colour adjustment like a material's `adjust` (see
+A `treeTints` part (`leaves`, `bark`, or a boulder's `stone`) is a colour adjustment like a material's `adjust` (see
 Materials), applied to the finished colour - it can turn a green crown red or blue. Its `spread`
 lets each tree stray from it: up to `hue` degrees either way, and `saturation` and `value` as a
 fraction either way, so a wood is many shades of its colour rather than one. Each area draws its
@@ -340,6 +344,25 @@ its top for volume. `width` and `height` are ranges in metres, and `variants`, `
 work as for trees. `foliage` is the generated `leafyBush` atlas: `dark`/`light` leaves, `stem`
 colour, `stems` (a range) rising from the ground, `leaves` per side view, `leafLength`/`leafWidth`,
 and `bare`, the bottom fraction where only the stems show.
+
+Boulders (`rocks/<id>.json5`, see `core/rocks/boulder.json5`) are generated lumps of stone: a
+sphere of `radius` metres swollen and dented by `lumps` (a fraction of the radius), squashed to
+`squash` of its width and stretched to `stretch` times it (ranges, each variant somewhere in them),
+with `facets` (a range) flat faces sheared off it up to `facetDepth` deep, tipped up to `tilt`
+degrees and sunk `sink` of its height into the ground. `stone` is its texture, laid on from three
+sides: `{ tile, material }` borrows a material's texture and colour (the very bake the ground uses),
+`{ tile, texture }` is a graph of its own, and either can take an `adjust`. `variants`, `tint`,
+`scale` and `growsOld` work as for trees - an old boulder is the size of a house.
+
+A biome places boulders with its `rocks` graph, one output per rock kind (usually a `rockDensity`),
+on a 9 m lattice of their own - dense enough to pile up - keeping clear of tree trunks, with bushes
+keeping clear of them. Besides the usual inputs a rock graph can read `uphill`: how far the ground
+within 30 m rises above the point, high at the foot of a slope. Boulders keep out of road cuts and
+deep water (below -1.2; the water is at 0), but not the `treeRules` - they lie above the treeline,
+on the shore and on steep ground as readily as anywhere, each tipped to lie along the slope under it
+(up to about 40 degrees). They are not a wood, so they leave the ground under them as it is, and
+are placed out to about 800 m. A `treeTints` rule's `stone` recolours them: without a rule naming them, they take the
+first rule naming no kinds, whose `stone` is usually unset and leaves them as they are.
 
 Bushes scatter on a 6 m lattice of their own, so they never take a tree's place. They keep clear of
 the trees' trunks and gather in their shade: a bush density is met in full under a crown and only in

@@ -1,0 +1,26 @@
+// A boulder: a lump of split, weathered stone sitting in the ground, on the trees' lattice - where a
+// biome's `rocks` graph asks for it, it takes a tree's place. Big against the character on purpose:
+// most stand head height or more, and the old ones (growsOld) are the size of a house.
+{
+  model: "boulder",
+  variants: 6,
+  growsOld: true,
+  // Half its width in metres, before the scale below.
+  radius: 2.2,
+  // Height as a fraction of width, length as a multiple of it - each variant somewhere in each.
+  squash: [0.5, 0.85],
+  stretch: [1.0, 1.5],
+  // How far the surface swells in and out, as a fraction of the radius.
+  lumps: 0.28,
+  // Flat faces sheared off it, and how deep they cut at most.
+  facets: [3, 7],
+  facetDepth: 0.4,
+  // Degrees off upright, and the share of its height in the ground.
+  tilt: 14,
+  sink: 0.22,
+  // The ground's own rock, so a boulder is the same stone as the crag it fell from.
+  stone: { tile: 6, material: "rock" },
+  // Each boulder's stone is multiplied by a random mix of these - a few shades lighter or darker.
+  tint: [[0.8, 0.8, 0.8], [1.12, 1.1, 1.06]],
+  scale: [0.55, 1.5],
+}

@@ -7,6 +7,7 @@ import {
   CONIFER_FOLIAGE_BUILDERS,
   FOLIAGE_BUILDERS,
   TREE_CROWN_BUILDERS,
+  type BoulderShape,
   type BranchingTree,
   type BushShape,
   type ConiferTree,
@@ -34,7 +35,7 @@ import { deriveSeed, mulberry32 } from "../rng";
 import { AREA_ROLL_SALT } from "../cells/config";
 import type { WorldContent } from "./worldContent";
 import type { TextureDef } from "../materials/textureGen";
-import { NO_ADJUST, type ColorAdjust } from "../materials/colorAdjust";
+import { adjustMatrix, chainMatrix, NO_ADJUST, type ColorAdjust } from "../materials/colorAdjust";
 
 /** One pack as found on disk: its folder name and every .json5 file in it, by path inside it. */
 export interface PackSource {
@@ -44,7 +45,7 @@ export interface PackSource {
 
 /** The folders a pack's content lives in, one kind of definition each. A definition's id is its
  *  file name, and a pack with a higher priority replaces a lower one's definition of the same id. */
-const CONTENT_FOLDERS = ["biomes", "materials", "layers", "grass", "trees", "bushes", "voices", "borderHills", "settlements"] as const;
+const CONTENT_FOLDERS = ["biomes", "materials", "layers", "grass", "trees", "bushes", "rocks", "voices", "borderHills", "settlements"] as const;
 type ContentFolder = (typeof CONTENT_FOLDERS)[number];
 
 /** Instances are tagged with kind * 16 + scale (foliage/grassScatter.ts), which leaves room for 16. */
@@ -182,6 +183,8 @@ export function resolveContent(packs: PackSource[]): WorldContent {
   const grassKinds = readAll("grass", (e, o, r) => readGrassKind(e.id, o, r));
   const treeKinds = readAll("trees", (e, o, r) => readTreeKind(e.id, o, r, defaults));
   const bushKinds = readAll("bushes", (e, o, r) => readBushKind(e.id, o, r, defaults));
+  const rockReads = readAll("rocks", (e, o, r) => ({ file: e.file, ...readRockKind(e.id, o, r, defaults) }));
+  const rockKinds = rockReads.map((read) => read.def);
   const voiceList = readAll("voices", (e, o, r) => ({ id: e.id, voice: readVoice(o, r) }));
   const boundaryHillStyles = readAll("borderHills", (e, o, r) => readBoundaryHillStyle(e.id, o, r));
   const settlementStyles = readAll("settlements", (e, o, r) => readSettlementStyle(e.id, o, r));
@@ -205,11 +208,18 @@ export function resolveContent(packs: PackSource[]): WorldContent {
   const grassKindIds = new Set(grassKinds.map((k) => k.id));
   const treeKindIds = new Set(treeKinds.map((k) => k.id));
   const bushKindIds = new Set(bushKinds.map((k) => k.id));
+  const rockKindIds = new Set(rockKinds.map((k) => k.id));
   for (const id of bushKindIds) {
     if (treeKindIds.has(id)) {
-      issues.push({ file: entries.get("bushes")!.get(id)!.file, path: "", message: `a tree kind is already called "${id}" - bushes and trees share one set of names` });
+      issues.push({ file: entries.get("bushes")!.get(id)!.file, path: "", message: `a tree kind is already called "${id}" - trees, bushes and rocks share one set of names` });
     }
   }
+  for (const id of rockKindIds) {
+    if (treeKindIds.has(id) || bushKindIds.has(id)) {
+      issues.push({ file: entries.get("rocks")!.get(id)!.file, path: "", message: `a tree or bush kind is already called "${id}" - trees, bushes and rocks share one set of names` });
+    }
+  }
+  const plantKindIds = [...treeKindIds, ...bushKindIds, ...rockKindIds];
   const voices: Record<string, Voice> = {};
   for (const { id, voice } of voiceList) voices[id] = voice;
 
@@ -234,6 +244,21 @@ export function resolveContent(packs: PackSource[]): WorldContent {
     }
   }
 
+  // A stone drawn from a material: its texture (the borrowed one, if the material borrows), baked
+  // under the texture's own id so it is the very bake the ground uses, and its recolouring before
+  // the kind's own.
+  for (const { file, def, stoneMaterial, stoneAdjust } of rockReads) {
+    if (stoneMaterial === undefined || def.shape.model !== "boulder") continue;
+    const source = materialById.get(stoneMaterial);
+    if (!source) {
+      issues.push({ file, path: "stone.material", message: `no material "${stoneMaterial}" (known: ${[...materialIds].join(", ")})` });
+      continue;
+    }
+    def.shape.stone.texture = source.texture;
+    def.shape.stone.material = source.textureId;
+    def.shape.stone.adjust = chainMatrix([source.adjust, stoneAdjust]);
+  }
+
   for (const material of materials) {
     material.grass.forEach((spec, i) => {
       if (!grassKindIds.has(spec.kind)) {
@@ -253,8 +278,8 @@ export function resolveContent(packs: PackSource[]): WorldContent {
     biome.materialLayers.forEach((layer, i) => material(`ground.layers[${i}].material`, layer.materialId));
     biome.treeTints.forEach((rule, i) => {
       for (const kind of rule.kinds ?? []) {
-        if (!treeKindIds.has(kind) && !bushKindIds.has(kind)) {
-          report({ file, path: `treeTints[${i}].kinds`, message: `no tree or bush kind "${kind}" (known: ${[...treeKindIds, ...bushKindIds].join(", ")})` });
+        if (!plantKindIds.includes(kind)) {
+          report({ file, path: `treeTints[${i}].kinds`, message: `no tree, bush or rock kind "${kind}" (known: ${plantKindIds.join(", ")})` });
         }
       }
     });
@@ -271,6 +296,9 @@ export function resolveContent(packs: PackSource[]): WorldContent {
     }
     for (const output of Object.keys(biome.outputs.bushes?.outputs ?? {})) {
       if (!bushKindIds.has(output)) report({ file, path: "bushes.outputs", message: `"${output}" is not a bush kind (known: ${[...bushKindIds].join(", ")})` });
+    }
+    for (const output of Object.keys(biome.outputs.rocks?.outputs ?? {})) {
+      if (!rockKindIds.has(output)) report({ file, path: "rocks.outputs", message: `"${output}" is not a rock kind (known: ${[...rockKindIds].join(", ") || "none"})` });
     }
   };
   for (const { file, source, biome } of biomeReads) {
@@ -330,6 +358,7 @@ export function resolveContent(packs: PackSource[]): WorldContent {
     grassKinds,
     treeKinds,
     bushKinds,
+    rockKinds,
     oldTrees: defaults.oldTrees,
     voices,
     boundaryHillStyles,
@@ -457,7 +486,7 @@ function readMaterial(id: string, obj: RawObject, reader: Reader, defaults: Defa
 }
 
 /**
- * A biome's `treeTints`: a list of rules `{ kinds?, leaves?, bark? }`, each part a colour
+ * A biome's `treeTints`: a list of rules `{ kinds?, leaves?, bark?, stone? }`, each part a colour
  * adjustment plus an optional `spread` - or a single rule on its own, for every kind.
  */
 function readTreeTints(obj: RawObject, reader: Reader): TreeTintRuleDef[] {
@@ -466,8 +495,8 @@ function readTreeTints(obj: RawObject, reader: Reader): TreeTintRuleDef[] {
   return rules.map((raw, i) => {
     const path = Array.isArray(obj.treeTints) ? `treeTints[${i}]` : "treeTints";
     const rule = reader.object(raw, path);
-    reader.onlyKeys(rule, path, ["kinds", "leaves", "bark"]);
-    const part = (key: "leaves" | "bark"): TreeTintPart => {
+    reader.onlyKeys(rule, path, ["kinds", "leaves", "bark", "stone"]);
+    const part = (key: "leaves" | "bark" | "stone"): TreeTintPart => {
       const at = joinPath(path, key);
       if (rule[key] === undefined) return { adjust: NO_ADJUST, spread: { hue: 0, saturation: 0, value: 0 } };
       const { spread, ...adjust } = reader.object(rule[key], at);
@@ -483,7 +512,7 @@ function readTreeTints(obj: RawObject, reader: Reader): TreeTintRuleDef[] {
       }
       return { adjust: readColorAdjust(adjust, reader, at), spread: spreadRead };
     };
-    return { kinds: rule.kinds === undefined ? null : reader.stringList(rule, "kinds", path), leaves: part("leaves"), bark: part("bark") };
+    return { kinds: rule.kinds === undefined ? null : reader.stringList(rule, "kinds", path), leaves: part("leaves"), bark: part("bark"), stone: part("stone") };
   });
 }
 
@@ -564,6 +593,41 @@ function readTreeKind(id: string, obj: RawObject, reader: Reader, defaults: Defa
         ? readConiferTree(obj, reader, KIND_COMMON_KEYS)
         : readPrimitiveTree(obj, reader, KIND_COMMON_KEYS);
   return { id, shape, ...readKindLook(obj, reader, defaults), growsOld: reader.boolean(obj, "growsOld", "", false) };
+}
+
+/**
+ * A rock kind: a boulder, with the look every kind has (tint pair, scale, growsOld). Its stone is a
+ * texture graph of its own, or a material's - filled in once the materials are read.
+ */
+function readRockKind(id: string, obj: RawObject, reader: Reader, defaults: Defaults): { def: TreeKindDef; stoneMaterial?: string; stoneAdjust: ColorAdjust } {
+  if (obj.model !== undefined) reader.oneOf(obj, "model", "", ["boulder"] as const);
+  reader.onlyKeys(obj, "", [...KIND_COMMON_KEYS, "variants", "radius", "squash", "stretch", "lumps", "facets", "facetDepth", "tilt", "sink", "stone"]);
+  const stone = reader.object(obj.stone, "stone");
+  reader.onlyKeys(stone, "stone", ["tile", "texture", "material", "adjust"]);
+  const stoneMaterial = reader.optionalString(stone, "material", "stone") || undefined;
+  if ((stoneMaterial === undefined) === (stone.texture === undefined)) reader.fail("stone", "expected either a texture or the material whose texture it is");
+  const stoneAdjust = stone.adjust === undefined ? NO_ADJUST : readColorAdjust(reader.object(stone.adjust, "stone.adjust"), reader, "stone.adjust");
+  const facets = reader.range(obj, "facets", "", { allowEqual: true });
+  if (facets[0] < 0 || !Number.isInteger(facets[0]) || !Number.isInteger(facets[1])) reader.fail("facets", "expected whole numbers of faces, at least 0");
+  const shape: BoulderShape = {
+    model: "boulder",
+    variants: reader.number(obj, "variants", "", { min: 1, max: 16, integer: true }),
+    radius: reader.number(obj, "radius", "", { min: 0.05 }),
+    squash: reader.range(obj, "squash", "", { allowEqual: true }),
+    stretch: reader.range(obj, "stretch", "", { allowEqual: true }),
+    lumps: reader.number(obj, "lumps", "", { min: 0, max: 1 }),
+    facets,
+    facetDepth: reader.number(obj, "facetDepth", "", { min: 0, max: 0.9 }),
+    tilt: reader.number(obj, "tilt", "", { min: 0, max: 90 }),
+    sink: reader.number(obj, "sink", "", { min: 0, max: 0.9 }),
+    stone: {
+      tile: reader.number(stone, "tile", "stone", { min: 0.1 }),
+      // A material's texture is filled in once the materials are known.
+      texture: stoneMaterial === undefined ? readTexture(stone.texture, reader, "stone.texture") : { bumpStrength: 0, pipeline: { noises: [], steps: [] } },
+      adjust: adjustMatrix(stoneAdjust),
+    },
+  };
+  return { def: { id, shape, ...readKindLook(obj, reader, defaults), growsOld: reader.boolean(obj, "growsOld", "", false) }, stoneMaterial, stoneAdjust };
 }
 
 function readBushKind(id: string, obj: RawObject, reader: Reader, defaults: Defaults): TreeKindDef {
@@ -901,6 +965,7 @@ function readBiome(id: string, obj: RawObject, reader: Reader, defaults: Default
     "height",
     "trees",
     "bushes",
+    "rocks",
     "treeRules",
     "treeTints",
     "settlement",
@@ -951,6 +1016,7 @@ function readBiome(id: string, obj: RawObject, reader: Reader, defaults: Default
       height: readPipeline(obj.height, reader, "height"),
       foliage: obj.trees === undefined ? undefined : readPipeline(obj.trees, reader, "trees"),
       bushes: obj.bushes === undefined ? undefined : readPipeline(obj.bushes, reader, "bushes"),
+      rocks: obj.rocks === undefined ? undefined : readPipeline(obj.rocks, reader, "rocks"),
     },
     borderType: obj.borderType === undefined ? "mountain" : reader.oneOf(obj, "borderType", "", BORDER_TYPES),
     spawnWeight: reader.number(obj, "spawnWeight", "", { min: 0 }),

@@ -176,7 +176,8 @@ export function createChunkManager(options: ChunkManagerOptions): ChunkManager {
       shadowGenerator.removeShadowCaster(previous.meshes.shadowMesh);
     }
     loaded.set(key, { meshes, level });
-    trees.setChunk(key, geometry.bushes.length > 0 ? geometry.trees.concat(geometry.bushes) : geometry.trees, level);
+    const extra = geometry.bushes.length + geometry.rocks.length;
+    trees.setChunk(key, extra > 0 ? geometry.trees.concat(geometry.bushes, geometry.rocks) : geometry.trees, level);
     grass.setChunk(key, geometry.grass, center.x, center.z, chunkSize);
     shadowGenerator.addShadowCaster(meshes.shadowMesh);
   }

@@ -1,5 +1,5 @@
 import type { MaterialDef } from "../world/materials/materialTypes";
-import type { TreeKindDef } from "../world/foliage/foliageConfig";
+import { surfaceTexture, type TreeKindDef } from "../world/foliage/foliageConfig";
 import type { BakedBark } from "../world/foliage/treeModels";
 import { bakeLeafAtlas } from "../world/foliage/treeModels";
 import { bakeBarks } from "../world/foliage/treeField";
@@ -65,9 +65,9 @@ export function isGroundBaked(def: MaterialDef, seed: number): boolean {
   return grounds.has(groundKey(def, seed));
 }
 
-/** A generated tree's bark, or undefined for a kind without one. */
+/** A generated tree's bark or a boulder's stone, or undefined for a kind without either. */
 export function bakedBark(def: TreeKindDef, seed: number): Promise<BakedBark | undefined> {
-  const bark = "bark" in def.shape ? def.shape.bark : null;
+  const bark = surfaceTexture(def);
   if (!bark) return Promise.resolve(undefined);
   return remembered(barks, `${seed}|${def.id}|${JSON.stringify(bark)}`, async () => (await bakeBarks([def], seed)).get(def.id));
 }

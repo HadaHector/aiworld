@@ -7,9 +7,13 @@
   settlement: "timber",
   height: { generator: "detailHeight", amplitude: { range: [9, 17] }, frequency: { range: [0.0016, 0.0026] }, offset: 7.5 },
   trees: { generator: "standDensity", tree: "broadleaf", frequency: 0.0012, openAt: { range: [0, 0.3] }, fullAt: 0.62, peak: { range: [0.35, 0.7] } },
+  // The odd lone boulder in a field, and a few on the banks of the water.
+  rocks: { generator: "rockDensity", kind: "boulder", frequency: 0.003, openAt: 0.3, fullAt: 0.8, peak: { range: [0, 0.02] }, footOfSlope: { range: [0.1, 0.4] }, riverShore: { range: [0.5, 1.25] }, lakeShore: { range: [0.5, 1.25] } },
   // Each area its own trees, and every tree its own shade of them (spread). Pines first: a tree
   // takes the first rule for its kind, and conifers stray less far from green than the rest.
   treeTints: [
+    // Each area's stone a shade of its own, and every boulder a little different.
+    { kinds: ["boulder"], stone: { hue: { range: [-12, 12] }, saturation: { range: [0.6, 1.4] }, value: { range: [0.85, 1.15] }, spread: { hue: 6, saturation: 0.25, value: 0.15 } } },
     {
       kinds: ["pine"],
       leaves: { hue: { range: [-40, 80] }, saturation: { range: [0.6, 1.5] }, value: { range: [0.85, 1.15] }, spread: { hue: 10, saturation: 0.15, value: 0.1 } },

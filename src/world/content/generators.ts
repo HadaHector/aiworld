@@ -76,6 +76,71 @@ const standDensity: Generator = (params, reader, path) => {
 };
 
 /**
+ * A zone's boulders: a thin scatter everywhere, as standDensity, and far more where stone collects -
+ * at the foot of a slope or a crag (flattish ground with ground rising well above it within 30 m,
+ * the `uphill` input), and at the waterline of rivers and lakes, half in the water. The extra comes
+ * in clusters, a slow noise gathering it into tumbles and runs of stones rather than an even band.
+ * Each extra is its density at its fullest (above 1 fills the lattice even where thinned); 0 or
+ * left out, none.
+ *
+ * `{ generator: "rockDensity", kind, frequency, openAt, fullAt, peak, footOfSlope?, riverShore?, lakeShore? }`
+ */
+const rockDensity: Generator = (params, reader, path) => {
+  reader.onlyKeys(params, path, ["generator", "kind", "frequency", "openAt", "fullAt", "peak", "footOfSlope", "riverShore", "lakeShore"]);
+  const kind = reader.string(params, "kind", path);
+  const peak = reader.number(params, "peak", path);
+  const extra = (key: string): number => reader.optionalNumber(params, key, path, 0, { min: 0 });
+  return {
+    noises: [
+      { name: "stand", type: "fbm", octaves: 3, frequency: reader.number(params, "frequency", path), amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+      { name: "clusters", type: "fbm", octaves: 2, frequency: 0.02, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+    ],
+    steps: [
+      { output: "raw", op: "sample", noise: "stand" },
+      { output: "ramp", op: "remap", input: "raw", inMin: reader.number(params, "openAt", path), inMax: reader.number(params, "fullAt", path), outMin: 0, outMax: peak },
+      { output: "scattered", op: "clamp", input: "ramp", min: 0, max: peak },
+
+      // The foot of a slope: 16 m of ground rising above within reach, on ground gentle enough to
+      // stop a falling stone.
+      { output: "uphill", op: "input", name: "uphill" },
+      { output: "risesAbove", op: "mask", input: "uphill", at: 16, off: 8 },
+      { output: "slope", op: "input", name: "slope" },
+      { output: "gentle", op: "mask", input: "slope", at: 0.2, off: 0.45 },
+      { output: "foot", op: "multiply", a: "risesAbove", b: "gentle" },
+      { output: "footDensity", op: "scale", input: "foot", factor: extra("footOfSlope") },
+
+      // The waterline of a river or a lake: ground from just under the water to just over it (the
+      // water is at 0), so a stone there stands half in it - fullest from -0.1 to 0.3, gone by -0.3
+      // and 0.55. Near a river is out to past the waterline of the widest; near a lake, any of it.
+      { output: "height", op: "input", name: "height" },
+      { output: "notDeep", op: "mask", input: "height", at: -0.1, off: -0.3 },
+      { output: "notHigh", op: "mask", input: "height", at: 0.3, off: 0.55 },
+      { output: "waterline", op: "multiply", a: "notDeep", b: "notHigh" },
+      { output: "riverGap", op: "input", name: "riverGap" },
+      { output: "nearRiver", op: "mask", input: "riverGap", at: 80, off: 110 },
+      { output: "bank", op: "multiply", a: "nearRiver", b: "waterline" },
+      { output: "bankDensity", op: "scale", input: "bank", factor: extra("riverShore") },
+      { output: "lakeFactor", op: "input", name: "lakeFactor" },
+      { output: "nearLake", op: "mask", input: "lakeFactor", at: 0.03, off: 0.001 },
+      { output: "shore", op: "multiply", a: "nearLake", b: "waterline" },
+      { output: "shoreDensity", op: "scale", input: "shore", factor: extra("lakeShore") },
+      { output: "waterside", op: "max", a: "bankDensity", b: "shoreDensity" },
+
+      // Fallen stone in clusters - tumbles and runs of it, not an even band; the waterline's stones
+      // only thinned here and there, so a shore stays lined.
+      { output: "clusterRaw", op: "sample", noise: "clusters" },
+      { output: "cluster", op: "mask", input: "clusterRaw", at: 0.5, off: -0.6 },
+      { output: "clusteredFoot", op: "multiply", a: "footDensity", b: "cluster" },
+      { output: "shoreBreaks", op: "mask", input: "clusterRaw", at: 0.2, off: -1.2 },
+      { output: "brokenShore", op: "multiply", a: "waterside", b: "shoreBreaks" },
+      { output: "gathered", op: "max", a: "clusteredFoot", b: "brokenShore" },
+      { output: "density", op: "add", a: "scattered", b: "gathered" },
+    ],
+    outputs: { [kind]: "density" },
+  };
+};
+
+/**
  * Splits one "how wooded is it here" cover signal between two species by a 0-1 share, so the two
  * always partition the same ground rather than stacking two independent densities on it. What
  * drives the share is up to the pack: a slow noise gives interleaved stands, the `height` input a
@@ -274,7 +339,7 @@ const grassland: Generator = (params, reader, path) => {
   };
 };
 
-export const GENERATORS: Record<string, Generator> = { detailHeight, standDensity, twoSpecies, twoTone, grassland };
+export const GENERATORS: Record<string, Generator> = { detailHeight, standDensity, rockDensity, twoSpecies, twoTone, grassland };
 
 /** Stands in for a generator call that could not be made. Its problem is already reported, so
  *  whatever reads this value skips it quietly rather than piling "missing field" errors on top. */

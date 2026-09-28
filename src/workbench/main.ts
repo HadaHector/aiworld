@@ -31,10 +31,10 @@ interface Asset {
 }
 
 /** The folders with a preview, and what each asset kind can be looked at as. */
-type PreviewFolder = "materials" | "trees" | "bushes" | "grass";
-const PREVIEW_FOLDERS: PreviewFolder[] = ["materials", "trees", "bushes", "grass"];
+type PreviewFolder = "materials" | "trees" | "bushes" | "rocks" | "grass";
+const PREVIEW_FOLDERS: PreviewFolder[] = ["materials", "trees", "bushes", "rocks", "grass"];
 /** Everything else is listed after these, its JSON still checked by Preview. */
-const FOLDER_ORDER = ["materials", "trees", "bushes", "grass", "biomes", "layers", "borderHills", "settlements", "voices", "patches", ""];
+const FOLDER_ORDER = ["materials", "trees", "bushes", "rocks", "grass", "biomes", "layers", "borderHills", "settlements", "voices", "patches", ""];
 
 interface ViewDef {
   id: string;
@@ -434,15 +434,17 @@ function viewsFor(asset: Asset | null, content: WorldContent | null): ViewDef[] 
         { id: "blades", label: "Blade texture", mode: "2d" },
       ];
     case "trees":
-    case "bushes": {
+    case "bushes":
+    case "rocks": {
       const def = content ? kindOf(content, asset) : undefined;
       const model = def?.shape.model;
       const views: ViewDef[] = [
         { id: "model", label: "Model", mode: "3d" },
         { id: "placed", label: "On the ground", mode: "3d" },
       ];
-      if (model !== "primitive") views.push({ id: "leaves", label: "Leaf atlas", mode: "2d" });
+      if (model !== "primitive" && model !== "boulder") views.push({ id: "leaves", label: "Leaf atlas", mode: "2d" });
       if (model === "branching" || model === "conifer") views.push({ id: "bark", label: "Bark", mode: "2d" });
+      if (model === "boulder") views.push({ id: "bark", label: "Stone", mode: "2d" });
       return views;
     }
   }
@@ -526,7 +528,7 @@ function renderPreviewBar(): void {
       viewOptions.append(select("On", "ground", groundChoices(content, current), rebuild));
     }
     if (view.id !== "model") viewOptions.append(checkbox("Grass", "grass", rebuild));
-    if ((current.folder === "trees" || current.folder === "bushes") && content) {
+    if ((current.folder === "trees" || current.folder === "bushes" || current.folder === "rocks") && content) {
       const def = kindOf(content, current);
       const variants = def ? variantCount(def) : 1;
       const variantMenu = select("Variant", "variant", [...Array.from({ length: variants }, (_, i): [string, string] => [String(i), String(i + 1)]), ["all", "All"]], rebuild);
@@ -548,7 +550,7 @@ function renderPreviewBar(): void {
       };
       variantMenu.append(step(-1), step(1));
       viewOptions.append(variantMenu);
-      if (current.folder === "trees" && def?.shape.model !== "primitive" && def?.shape.model !== "bush") {
+      if ((current.folder === "trees" || current.folder === "rocks") && def?.shape.model !== "primitive" && def?.shape.model !== "bush") {
         viewOptions.append(select("Detail", "lod", [
           ["near", "Near"],
           ["far", "Far"],
@@ -617,6 +619,8 @@ function autoSkyBiome(content: WorldContent, asset: Asset): BiomeDefinition {
         return asset.id in (biome.outputs.foliage?.outputs ?? {});
       case "bushes":
         return asset.id in (biome.outputs.bushes?.outputs ?? {});
+      case "rocks":
+        return asset.id in (biome.outputs.rocks?.outputs ?? {});
       case "grass":
         return content.materials.some((material) => material.grass.some((spec) => spec.kind === asset.id) && usesMaterial(biome, material.id));
       default:
@@ -633,7 +637,8 @@ function autoSkyBiome(content: WorldContent, asset: Asset): BiomeDefinition {
 }
 
 function kindOf(content: WorldContent, asset: Asset): TreeKindDef | undefined {
-  return (asset.folder === "bushes" ? content.bushKinds : content.treeKinds).find((kind) => kind.id === asset.id);
+  const kinds = asset.folder === "bushes" ? content.bushKinds : asset.folder === "rocks" ? content.rockKinds : content.treeKinds;
+  return kinds.find((kind) => kind.id === asset.id);
 }
 
 function variantCount(def: TreeKindDef): number {
@@ -814,9 +819,11 @@ async function preview2d(token: number, asset: Asset, view: ViewDef, content: Wo
       normal = baked.normalBuffer;
       matrix = materialMatrix(material);
     } else {
-      const bark = (await bakedBark(kindOf(content, asset)!, seed))!;
+      const def = kindOf(content, asset)!;
+      const bark = (await bakedBark(def, seed))!;
       color = bark.color;
       normal = bark.normal;
+      if (def.shape.model === "boulder") matrix = def.shape.stone.adjust;
     }
     image = surfaceImage(color, normal, TEXTURE_RESOLUTION, options.channel, Number(options.tiles) || 1, matrix);
   } else if (view.id === "leaves") {

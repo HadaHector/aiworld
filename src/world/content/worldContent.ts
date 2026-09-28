@@ -41,6 +41,9 @@ export interface WorldContent {
   treeKinds: TreeKindDef[];
   /** Bushes are drawn by the same renderer as trees, so their ids share one namespace with them. */
   bushKinds: TreeKindDef[];
+  /** Boulders - placed on the trees' lattice and drawn by the same renderer, so their ids share the
+   *  trees' and bushes' namespace too. */
+  rockKinds: TreeKindDef[];
   oldTrees: OldTrees;
   voices: Record<string, Voice>;
   boundaryHillStyles: BoundaryHillStyle[];

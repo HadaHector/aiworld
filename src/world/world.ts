@@ -5,7 +5,7 @@ import { createChunkBuildPool } from "./terrain/chunkBuildPool";
 import { createTerrainSampler, type TerrainSampler } from "./terrain/terrainSampler";
 import { createOceanPlane } from "./terrain/ocean";
 import { createMaterialLibrary, type MaterialLibrary } from "./materials/materialLibrary";
-import { createBushScatter, createTreeCover, createTreeScatter } from "./foliage/treeScatter";
+import { createBushScatter, createRockScatter, createTreeCover, createTreeScatter } from "./foliage/treeScatter";
 import { createTreeField, type TreeField } from "./foliage/treeField";
 import { createGrassField, type GrassField } from "./foliage/grassField";
 import { createSettlementRenderer } from "./settlements/settlementRenderer";
@@ -137,11 +137,11 @@ export async function createWorld(
     onProgress?.({ phase: "Baking material textures", completed: done, total });
   });
 
-  // Bushes are drawn by the same field as the trees - leaf cards on thin instances either way.
+  // Bushes and boulders are drawn by the same field as the trees - thin instances all.
   const trees = await createTreeField(
     scene,
     sunLighting.shadowGenerator,
-    [...content.treeKinds, ...content.bushKinds],
+    [...content.treeKinds, ...content.rockKinds, ...content.bushKinds],
     WORLD_SEED,
     materialLibrary.litShading,
     undefined,
@@ -181,6 +181,7 @@ export async function createWorld(
       materialBlender: materialLibrary.blender,
       scatterTrees: createTreeScatter(WORLD_SEED, content),
       scatterBushes: createBushScatter(WORLD_SEED, content, sampleTerrain),
+      scatterRocks: createRockScatter(WORLD_SEED, content, sampleTerrain),
       treeCover: createTreeCover(WORLD_SEED, content),
       grassKinds: content.grassKinds,
       seed: WORLD_SEED,

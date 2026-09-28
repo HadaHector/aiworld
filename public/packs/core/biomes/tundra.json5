@@ -7,9 +7,13 @@
   settlement: "timber",
   height: { generator: "detailHeight", amplitude: { range: [1.6, 2.8] }, frequency: 0.0162, offset: 1 },
   trees: { generator: "standDensity", tree: "pine", frequency: 0.0028, openAt: 0.2, fullAt: 0.65, peak: { range: [0.2, 0.45] } },
+  // Boulders the ice left behind, strewn across the open ground and gathered on the shores.
+  rocks: { generator: "rockDensity", kind: "boulder", frequency: 0.004, openAt: -0.3, fullAt: 0.4, peak: { range: [0.025, 0.075] }, footOfSlope: { range: [0.4, 0.8] }, riverShore: { range: [1, 2] }, lakeShore: { range: [1.25, 2.25] } },
   // Each area its own trees, and every tree its own shade of them (spread). Pines first: a tree
   // takes the first rule for its kind, and conifers stray less far from green than the rest.
   treeTints: [
+    // Each area's stone a shade of its own, and every boulder a little different.
+    { kinds: ["boulder"], stone: { hue: { range: [-12, 12] }, saturation: { range: [0.6, 1.4] }, value: { range: [0.85, 1.15] }, spread: { hue: 6, saturation: 0.25, value: 0.15 } } },
     {
       kinds: ["pine"],
       leaves: { hue: { range: [-40, 80] }, saturation: { range: [0.6, 1.5] }, value: { range: [0.85, 1.15] }, spread: { hue: 10, saturation: 0.15, value: 0.1 } },

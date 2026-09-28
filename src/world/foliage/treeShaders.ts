@@ -3,7 +3,7 @@ import { FOLIAGE_TEXTURE_SIZE } from "./treeTextures";
 
 /**
  * Shaders for branching trees (see treeGenerator.ts): the wood, bark-textured with a normal map,
- * and the leaf cards, cut out of the foliage atlas. Both are drawn as thin instances - one matrix
+ * and the leaf cards, cut out of the foliage atlas - and for boulders (boulderGenerator.ts). Both are drawn as thin instances - one matrix
  * per tree - and lit, shadowed and fogged through the shared LIT_SHADING_GLSL, like the ground.
  */
 
@@ -17,8 +17,9 @@ uniform mat4 view;
 uniform mat4 viewProjection;
 `;
 
-/** Texels per row of the tree tint table: the leaves' colour matrix, then the bark's, a column each. */
-export const TREE_TINT_WIDTH = 6;
+/** Texels per row of the tree tint table: the leaves' colour matrix, then the bark's, then a
+ *  boulder's stone's, a column each. */
+export const TREE_TINT_WIDTH = 9;
 
 /**
  * Each area's recolouring of its trees (a biome's `treeTints`), one row per area - row 0 changes
@@ -191,6 +192,98 @@ void main() {
   float occlusion = mix(0.6, 1.0, n.y * 0.5 + 0.5);
   float shadow = computeShadow(vWorldPosition, n, vViewDepth);
   vec3 lit = albedo * ((diffuse + through) * lightColor * shadow + ambientColor * ambientIntensity * occlusion);
+  outColor = vec4(applyFog(lit, length(vWorldPosition - cameraPosition)), 1.0);
+}
+`;
+
+export const ROCK_VERTEX_SHADER = `#version 300 es
+precision highp float;
+
+in vec3 position;
+in vec3 normal;
+in vec4 instanceColor;
+${INSTANCED_WORLD}
+
+out vec3 vWorldPosition;
+out vec3 vLocal;
+out vec3 vLocalNormal;
+out mat3 vTurn;
+out vec3 vTint;
+out float vViewDepth;
+out float vHeight;
+flat out float vTintRow;
+
+void main() {
+  mat4 finalWorld = world * mat4(world0, world1, world2, world3);
+  vec4 worldPosition = finalWorld * vec4(position, 1.0);
+  // Uniformly scaled: the stone's texture is laid on in its own space, so it stays put on the stone
+  // however it is turned, at the same size on a small stone as a giant.
+  float size = length(finalWorld[0].xyz);
+  vLocal = position * size;
+  vLocalNormal = normal;
+  vTurn = mat3(finalWorld) / size;
+  vHeight = position.y * size;
+  vTint = instanceColor.rgb;
+  vTintRow = instanceColor.a;
+  vWorldPosition = worldPosition.xyz;
+  vViewDepth = (view * worldPosition).z;
+  gl_Position = viewProjection * worldPosition;
+}
+`;
+
+/**
+ * A boulder has no seams to lay a texture along, so its stone is projected on from three sides and
+ * blended by which way the surface faces (triplanar), each side's normal map folded onto the surface
+ * normal (the "whiteout" blend), all in the stone's own space.
+ */
+export const ROCK_FRAGMENT_SHADER = `#version 300 es
+precision highp float;
+${LIT_SHADING_GLSL}
+
+in vec3 vWorldPosition;
+in vec3 vLocal;
+in vec3 vLocalNormal;
+in mat3 vTurn;
+in vec3 vTint;
+in float vViewDepth;
+in float vHeight;
+flat in float vTintRow;
+${TREE_TINT_GLSL}
+
+uniform sampler2D stoneColor;
+uniform sampler2D stoneNormal;
+uniform float stoneTile;
+
+out vec4 outColor;
+
+void main() {
+  vec3 surface = normalize(vLocalNormal);
+  vec3 weights = pow(abs(surface), vec3(4.0));
+  weights /= weights.x + weights.y + weights.z;
+  vec2 uvX = vLocal.zy / stoneTile;
+  vec2 uvY = vLocal.xz / stoneTile;
+  vec2 uvZ = vLocal.xy / stoneTile;
+
+  vec3 stone = texture(stoneColor, uvX).rgb * weights.x + texture(stoneColor, uvY).rgb * weights.y + texture(stoneColor, uvZ).rgb * weights.z;
+  vec3 nX = texture(stoneNormal, uvX).xyz * 2.0 - 1.0;
+  vec3 nY = texture(stoneNormal, uvY).xyz * 2.0 - 1.0;
+  vec3 nZ = texture(stoneNormal, uvZ).xyz * 2.0 - 1.0;
+  nX = vec3(nX.xy + surface.zy, abs(nX.z) * surface.x);
+  nY = vec3(nY.xy + surface.xz, abs(nY.z) * surface.y);
+  nZ = vec3(nZ.xy + surface.xy, abs(nZ.z) * surface.z);
+  vec3 local = normalize(nX.zyx * weights.x + nY.xzy * weights.y + nZ.xyz * weights.z);
+  vec3 n = normalize(vTurn * local);
+  vec3 geometric = normalize(vTurn * surface);
+
+  vec3 albedo = max(treeTint(vTintRow, 6) * (stone * vTint), 0.0);
+  // A little darker where it meets the ground - a cheap stand-in for occlusion.
+  float occlusion = mix(0.75, 1.0, smoothstep(-0.3, 1.0, vHeight));
+  vec3 lightDir = normalize(lightDirection);
+  // Lit the way the ground is (materialLibrary.ts's half-Lambert), so a boulder is the same stone
+  // in the same light as the rock it lies on.
+  float diffuse = (dot(n, lightDir) * 0.5 + 0.5) * lightIntensity;
+  float shadow = computeShadow(vWorldPosition, geometric, vViewDepth);
+  vec3 lit = albedo * (diffuse * lightColor * shadow + ambientColor * ambientIntensity) * occlusion;
   outColor = vec4(applyFog(lit, length(vWorldPosition - cameraPosition)), 1.0);
 }
 `;

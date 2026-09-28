@@ -1,5 +1,6 @@
 import type { ColorTuple } from "../terrain/pipeline/pipelineTypes";
 import type { TextureDef } from "../materials/textureGen";
+import type { ColorMatrix } from "../materials/colorAdjust";
 
 /**
  * Foliage comes in three levels - large (trees), medium (bushes), small (grass). Grass is a system
@@ -63,6 +64,29 @@ export const BUSH_ROAD_FADE = 18;
 export const BUSH_SINK = 0.15;
 /** Chunks coarser than this many times full detail carry no bushes. */
 export const BUSH_MAX_DETAIL_RATIO = 2;
+
+// Boulders: a lattice of their own, finer than the trees' so they can pile up - under a crag,
+// along a shore - but wide enough that two ordinary ones never overlap. They keep clear of the
+// trunks, and are placed out to the fourth level of detail (about 800 units); past that even a big
+// one is a speck.
+export const ROCK_SPACING = 9;
+export const ROCK_CANDIDATES_PER_CELL = 3;
+export const ROCK_SALT = 803;
+/** The share of rock darts that are giants, OldTrees.size times as big - a few in every rocky area. */
+export const ROCK_GIANT_SHARE = 0.008;
+/** How far a boulder keeps from a trunk, per unit of the tree's scale, beyond its own reach. */
+export const ROCK_TRUNK_CLEARANCE = 1.5;
+export const ROCK_ROAD_CLEARANCE = 11;
+export const ROCK_ROAD_FADE = 16;
+export const ROCK_SINK = 0.1;
+/** The deepest ground a boulder stands on: shallow water at a shore - stones half out of the water
+ *  are what a shore is made of - but not a lake's or a river's middle. The water is at 0. */
+export const ROCK_MIN_HEIGHT = -1.2;
+export const ROCK_MAX_DETAIL_RATIO = 4;
+/** How far round a point `uphill` looks for higher ground (see treeScatter.ts). */
+export const UPHILL_RADII = [14, 30];
+/** The steepest a boulder leans to lie along the ground: tan of about 40 degrees. */
+export const ROCK_MAX_LEAN = 0.84;
 
 /**
  * Where a zone's trees thin out, each a [start, end] range the density fades across - a fade
@@ -323,6 +347,59 @@ export interface BushTexture {
 
 export const BUSH_FOLIAGE_BUILDERS = ["leafyBush"] as const;
 
+/**
+ * A boulder: a lump of stone standing on the ground, scattered on the trees' lattice (a pack's
+ * rocks/ folder, placed by a biome's `rocks` graph - see treeScatter.ts). Generated (see
+ * boulderGenerator.ts) as a sphere pushed in and out by a slow noise, squashed and stretched, with a
+ * few flat faces sheared off it - the way weathered, split stone looks - then tipped a little and
+ * sunk into the ground. Lengths are metres.
+ */
+export interface BoulderShape {
+  model: "boulder";
+  variants: number;
+  /** Half its width, before its kind's scale. */
+  radius: number;
+  /** Its height as a fraction of its width, and its length as a multiple of it - each variant
+   *  somewhere in each range. */
+  squash: [number, number];
+  stretch: [number, number];
+  /** How far the surface swells in and out, as a fraction of the radius. */
+  lumps: number;
+  /** How many flat faces are sheared off it, and how deep they cut at most, as a fraction of the
+   *  radius. */
+  facets: [number, number];
+  facetDepth: number;
+  /** Degrees it may lean off upright. */
+  tilt: number;
+  /** The share of its height below the ground. */
+  sink: number;
+  stone: StoneTexture;
+}
+
+/** A boulder's stone: a texture graph like a ground material's, or a material's own texture, with
+ *  that material's recolouring and the kind's own after it. Mapped from three sides (triplanar). */
+export interface StoneTexture {
+  /** Metres of stone one texture repeat covers. */
+  tile: number;
+  texture: TextureDef;
+  /** The material it is drawn from, if it is one's: its texture is baked once, under its id. */
+  material?: string;
+  adjust: ColorMatrix;
+}
+
+/** The texture a kind bakes for its wood or its stone, or null for one that bakes none. */
+export function surfaceTexture(def: TreeKindDef): BarkTexture | StoneTexture | null {
+  switch (def.shape.model) {
+    case "branching":
+    case "conifer":
+      return def.shape.bark;
+    case "boulder":
+      return def.shape.stone;
+    default:
+      return null;
+  }
+}
+
 /** The original placeholder trees: a trunk cylinder and a crown from one primitive builder. */
 export interface PrimitiveTree {
   model: "primitive";
@@ -331,7 +408,7 @@ export interface PrimitiveTree {
 }
 
 /**
- * A kind of tree - or bush - a biome can grow, named by its foliage graph's outputs (see
+ * A kind of tree - or bush, or boulder - a biome can grow, named by its foliage graph's outputs (see
  * BiomeOutputs.foliage and BiomeOutputs.bushes).
  *
  * A tree picks its kind from the zone it stands in, weighted by how much of the trees around it
@@ -340,7 +417,7 @@ export interface PrimitiveTree {
  */
 export interface TreeKindDef {
   id: string;
-  shape: PrimitiveTree | BranchingTree | ConiferTree | BushShape;
+  shape: PrimitiveTree | BranchingTree | ConiferTree | BushShape | BoulderShape;
   /** Each tree's foliage colour is multiplied by a random mix of these two: the canopy colour of a
    *  primitive tree (whose canopy is white), and a shade of its texture for a branching one. */
   tint: [ColorTuple, ColorTuple];

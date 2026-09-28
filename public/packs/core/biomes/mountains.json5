@@ -11,11 +11,45 @@
   // persistence dropped 0.5 -> 0.42 so the higher octaves only add surface roughness instead of
   // competing peaks at their own shorter wavelength - that competing-peaks effect, not the
   // amplitude, was what made it read as crumpled rather than grand.
-  height: { generator: "detailHeight", amplitude: { range: [50, 70] }, frequency: 0.0015, offset: 60, octaves: 6, persistence: 0.42 },
+  //
+  // On top of that, the same idea as the hills' basins: a slow noise (a basin about 2 km across)
+  // opens broad alpine valleys between the ranges, floored well above the water, and the ranges
+  // themselves stand higher - everything above their base level stretched by 1.7, which lifts the
+  // highest peaks about 40%, while the valleys between them stay as deep as they were.
+  height: {
+    noises: [
+      { name: "range", type: "fbm", octaves: 6, frequency: 0.0015, amplitude: { range: [50, 70] }, persistence: 0.42, lacunarity: 2.0 },
+      { name: "basin", type: "fbm", octaves: 3, frequency: 0.00045, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+      { name: "floor", type: "fbm", octaves: 3, frequency: 0.0025, amplitude: 6, persistence: 0.45, lacunarity: 2.0 },
+    ],
+    steps: [
+      { output: "rangeRaw", op: "sample", noise: "range" },
+      { output: "zero", op: "constant", value: 0 },
+      { output: "above", op: "max", a: "rangeRaw", b: "zero" },
+      { output: "lift", op: "scale", input: "above", factor: 0.7 },
+      { output: "stretched", op: "add", a: "rangeRaw", b: "lift" },
+      { output: "peak", op: "offset", input: "stretched", amount: 60 },
+      // The valley floor: 30 m and some swell - with bedrock under it, never water.
+      { output: "floorRaw", op: "sample", noise: "floor" },
+      { output: "floor", op: "offset", input: "floorRaw", amount: 30 },
+      // Less of an area is valley than in the hills: mountains are mostly mountain.
+      { output: "basinRaw", op: "sample", noise: "basin" },
+      { output: "rangeness", op: "remap", input: "basinRaw", inMin: { range: [-0.75, -0.5] }, inMax: { range: [-0.2, 0] }, outMin: 0, outMax: 1 },
+      { output: "rangeShare", op: "clamp", input: "rangeness", min: 0, max: 1 },
+      // floor + share x (peak - floor): the floor in a valley, the range at full height elsewhere.
+      { output: "rise", op: "subtract", a: "peak", b: "floor" },
+      { output: "shareOfRise", op: "multiply", a: "rise", b: "rangeShare" },
+      { output: "result", op: "add", a: "floor", b: "shareOfRise" },
+    ],
+  },
   trees: { generator: "standDensity", tree: "pine", frequency: 0.0035, openAt: -0.5, fullAt: 0.1, peak: { range: [0.3, 0.6] } },
+  // Boulders scattered all over - above the treeline too - and piled at the foot of every crag and along the water.
+  rocks: { generator: "rockDensity", kind: "boulder", frequency: 0.004, openAt: -0.4, fullAt: 0.3, peak: { range: [0.04, 0.1] }, footOfSlope: { range: [0.6, 1] }, riverShore: { range: [1, 2] }, lakeShore: { range: [1, 2] } },
   // Each area its own trees, and every tree its own shade of them (spread). Pines first: a tree
   // takes the first rule for its kind, and conifers stray less far from green than the rest.
   treeTints: [
+    // Each area's stone a shade of its own, and every boulder a little different.
+    { kinds: ["boulder"], stone: { hue: { range: [-12, 12] }, saturation: { range: [0.6, 1.4] }, value: { range: [0.85, 1.15] }, spread: { hue: 6, saturation: 0.25, value: 0.15 } } },
     {
       kinds: ["pine"],
       leaves: { hue: { range: [-40, 80] }, saturation: { range: [0.6, 1.5] }, value: { range: [0.85, 1.15] }, spread: { hue: 10, saturation: 0.15, value: 0.1 } },

@@ -5,10 +5,33 @@
   lakeChance: 0.03,
   borderType: "mountain",
   settlement: "timber",
-  // Target relief ~10m typical/high with well-separated bumps (same peak-spacing fix as mountains -
-  // wider wavelength, lower persistence so higher octaves stay texture, not competing bumps),
-  // measured via FORCE_BIOME_ID (devConfig.ts).
-  height: { generator: "detailHeight", amplitude: { range: [48, 72] }, frequency: 0.0021, offset: 50, octaves: 5, persistence: 0.35 },
+  // Hill country broken up by basins. The hills themselves - well-separated bumps, wide wavelength,
+  // low persistence so the higher octaves stay texture - are what they always were; a slow noise
+  // (a basin about 1.8 km across) decides where they stand. Where it is low the ground eases down to
+  // a gently rolling floor well above the water, where it is high the hills stand at full height,
+  // and between the two they are scaled down towards the floor into foothills. How much of an area
+  // is basin is the area's own roll.
+  height: {
+    noises: [
+      { name: "hills", type: "fbm", octaves: 5, frequency: 0.0021, amplitude: { range: [48, 72] }, persistence: 0.35, lacunarity: 2.0 },
+      { name: "basin", type: "fbm", octaves: 3, frequency: 0.00055, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+      { name: "floor", type: "fbm", octaves: 3, frequency: 0.003, amplitude: 4, persistence: 0.45, lacunarity: 2.0 },
+    ],
+    steps: [
+      { output: "hillsRaw", op: "sample", noise: "hills" },
+      { output: "hill", op: "offset", input: "hillsRaw", amount: 50 },
+      // The basin floor: 18 m and a few metres of gentle swell - with bedrock under it, never water.
+      { output: "floorRaw", op: "sample", noise: "floor" },
+      { output: "floor", op: "offset", input: "floorRaw", amount: 18 },
+      { output: "basinRaw", op: "sample", noise: "basin" },
+      { output: "hilliness", op: "remap", input: "basinRaw", inMin: { range: [-0.35, -0.1] }, inMax: { range: [0.2, 0.4] }, outMin: 0, outMax: 1 },
+      { output: "hillShare", op: "clamp", input: "hilliness", min: 0, max: 1 },
+      // floor + share x (hill - floor): the floor in a basin, the hills in hill country.
+      { output: "rise", op: "subtract", a: "hill", b: "floor" },
+      { output: "shareOfRise", op: "multiply", a: "rise", b: "hillShare" },
+      { output: "result", op: "add", a: "floor", b: "shareOfRise" },
+    ],
+  },
   trees: {
     generator: "twoSpecies",
     lower: "broadleaf",
@@ -28,9 +51,13 @@
       { output: "share", op: "clamp", input: "shareRamp", min: 0, max: 1 },
     ],
   },
+  // A few boulders about, more where a hillside comes down to level ground, and along the water.
+  rocks: { generator: "rockDensity", kind: "boulder", frequency: 0.005, openAt: 0, fullAt: 0.7, peak: { range: [0.012, 0.06] }, footOfSlope: { range: [0.3, 0.7] }, riverShore: { range: [0.75, 1.75] }, lakeShore: { range: [0.75, 1.75] } },
   // Each area its own trees, and every tree its own shade of them (spread). Pines first: a tree
   // takes the first rule for its kind, and conifers stray less far from green than the rest.
   treeTints: [
+    // Each area's stone a shade of its own, and every boulder a little different.
+    { kinds: ["boulder"], stone: { hue: { range: [-12, 12] }, saturation: { range: [0.6, 1.4] }, value: { range: [0.85, 1.15] }, spread: { hue: 6, saturation: 0.25, value: 0.15 } } },
     {
       kinds: ["pine"],
       leaves: { hue: { range: [-40, 80] }, saturation: { range: [0.6, 1.5] }, value: { range: [0.85, 1.15] }, spread: { hue: 10, saturation: 0.15, value: 0.1 } },

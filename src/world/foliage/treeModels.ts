@@ -15,14 +15,16 @@ import {
   type BaseTexture,
   type Scene,
 } from "@babylonjs/core";
-import type { BushShape, PrimitiveTree, TreeCrown, TreeKindDef, TreeTrunk } from "./foliageConfig";
+import type { BoulderShape, BushShape, PrimitiveTree, TreeCrown, TreeKindDef, TreeTrunk } from "./foliageConfig";
 import type { ColorTuple } from "../terrain/pipeline/pipelineTypes";
 import { LIT_SHADING_SAMPLERS, LIT_SHADING_UNIFORMS, type LitShading } from "../materials/litShading";
 import { deriveSeed } from "../rng";
 import { generateBush, generateConifer, generateTree, type TreeDetail, type TreeGeometry } from "./treeGenerator";
 import { FOLIAGE_TEXTURE_SIZE, bakeBushFoliage, bakeConiferFoliage, bakeFoliage } from "./treeTextures";
 import { TEXTURE_RESOLUTION } from "../materials/textureGen";
-import { BARK_FRAGMENT_SHADER, BARK_VERTEX_SHADER, LEAF_FRAGMENT_SHADER, LEAF_VERTEX_SHADER } from "./treeShaders";
+import { BARK_FRAGMENT_SHADER, BARK_VERTEX_SHADER, LEAF_FRAGMENT_SHADER, LEAF_VERTEX_SHADER, ROCK_FRAGMENT_SHADER, ROCK_VERTEX_SHADER } from "./treeShaders";
+import { generateBoulder } from "./boulderGenerator";
+import type { ColorMatrix } from "../materials/colorAdjust";
 
 /**
  * One archetype's geometry, built in tree space: the base of the trunk sits at the origin and the
@@ -30,8 +32,9 @@ import { BARK_FRAGMENT_SHADER, BARK_VERTEX_SHADER, LEAF_FRAGMENT_SHADER, LEAF_VE
  * spin about Y - and both meshes are driven by the same matrix. See treeField.ts.
  */
 export interface TreeModel {
-  /** None for a bush, which is all leaves. */
+  /** None for a bush, which is all leaves, or a boulder, which is all stone. */
   trunk?: Mesh;
+  /** The leaves - or a boulder's stone. */
   canopy: Mesh;
   /** A cheaper model of the same tree for distant chunks, if the kind has one. */
   far?: TreeModel;
@@ -188,8 +191,8 @@ class LeafMaterial extends ShaderMaterial {
   }
 }
 
-/** A tree kind's bark, baked from its texture graph like a ground material (see textureGen.ts):
- *  colour with roughness in alpha, and a normal map with height in alpha. */
+/** A tree kind's bark - or a boulder's stone - baked from its texture graph like a ground material
+ *  (see textureGen.ts): colour with roughness in alpha, and a normal map with height in alpha. */
 export interface BakedBark {
   color: Uint8Array;
   normal: Uint8Array;
@@ -371,15 +374,77 @@ function createBushModels(scene: Scene, def: TreeKindDef, shape: BushShape, seed
   return models;
 }
 
+/** A baked colour texture through a colour matrix, alpha (roughness) left as it is. */
+function recoloured(pixels: Uint8Array, m: ColorMatrix): Uint8Array {
+  if (m.every((v, i) => v === (i % 4 === 0 ? 1 : 0))) return pixels;
+  const out = new Uint8Array(pixels);
+  const clamped = new Uint8ClampedArray(out.buffer);
+  for (let i = 0; i < out.length; i += 4) {
+    const r = pixels[i];
+    const g = pixels[i + 1];
+    const b = pixels[i + 2];
+    clamped[i] = m[0] * r + m[1] * g + m[2] * b;
+    clamped[i + 1] = m[3] * r + m[4] * g + m[5] * b;
+    clamped[i + 2] = m[6] * r + m[7] * g + m[8] * b;
+  }
+  return out;
+}
+
+/** One model per variant - a near one and a far one each - all drawn with the kind's stone. */
+function createBoulderModels(scene: Scene, def: TreeKindDef, shape: BoulderShape, seed: number, stone: BakedBark, litShading: LitShading): TreeModel[] {
+  const stoneColor = RawTexture.CreateRGBATexture(recoloured(stone.color, shape.stone.adjust), TEXTURE_RESOLUTION, TEXTURE_RESOLUTION, scene, true, false, Texture.TRILINEAR_SAMPLINGMODE);
+  const stoneNormal = RawTexture.CreateRGBATexture(stone.normal, TEXTURE_RESOLUTION, TEXTURE_RESOLUTION, scene, true, false, Texture.TRILINEAR_SAMPLINGMODE);
+  for (const texture of [stoneColor, stoneNormal]) {
+    texture.wrapU = Texture.WRAP_ADDRESSMODE;
+    texture.wrapV = Texture.WRAP_ADDRESSMODE;
+  }
+  Effect.ShadersStore["treeRockVertexShader"] = ROCK_VERTEX_SHADER;
+  Effect.ShadersStore["treeRockFragmentShader"] = ROCK_FRAGMENT_SHADER;
+  const material = new ShaderMaterial(`rock_${def.id}`, scene, "treeRock", {
+    attributes: ["position", "normal"],
+    uniforms: ["world", "view", "viewProjection", "stoneTile", ...LIT_SHADING_UNIFORMS],
+    samplers: ["stoneColor", "stoneNormal", "treeTints", ...LIT_SHADING_SAMPLERS],
+  });
+  material.setTexture("stoneColor", stoneColor);
+  material.setTexture("stoneNormal", stoneNormal);
+  material.setFloat("stoneTile", shape.stone.tile);
+  litShading.register(material);
+
+  const ownSeed = kindSeed(seed, def.id);
+  const tintDark = color3(def.tint[0]);
+  const tintLight = color3(def.tint[1]);
+  const models: TreeModel[] = [];
+  for (let variant = 0; variant < shape.variants; variant++) {
+    const variantSeed = deriveSeed(ownSeed, variant + 1);
+    const detailed = (detail: TreeDetail): TreeModel => {
+      const geometry = generateBoulder(shape, variantSeed, detail);
+      const canopy = new Mesh(`rock_${def.id}_${variant}_${detail}`, scene);
+      const data = new VertexData();
+      data.positions = geometry.positions;
+      data.normals = geometry.normals;
+      data.indices = geometry.indices;
+      data.applyToMesh(canopy);
+      canopy.material = material;
+      return { canopy, tintDark, tintLight, shaderTint: true };
+    };
+    models.push({ ...detailed("near"), far: detailed("far") });
+  }
+  return models;
+}
+
 /**
  * Every model a tree kind is drawn with: one for a primitive tree, one per variant for a branching
- * one or a bush, each a different plant generated from the same description.
+ * one, a bush or a boulder, each a different plant generated from the same description.
  *
  * `atlas` is the kind's leaf atlas if it has already been baked (see bakeLeafAtlas) - the
  * workbench keeps its bakes - and is baked here otherwise.
  */
 export function createTreeModels(scene: Scene, def: TreeKindDef, seed: number, bakedBark: BakedBark | undefined, litShading: LitShading, atlas?: Uint8Array): TreeModel[] {
   if (def.shape.model === "bush") return createBushModels(scene, def, def.shape, seed, litShading, atlas);
+  if (def.shape.model === "boulder") {
+    if (!bakedBark) throw new Error(`Boulder kind "${def.id}" has no baked stone`);
+    return createBoulderModels(scene, def, def.shape, seed, bakedBark, litShading);
+  }
   if (def.shape.model === "branching" || def.shape.model === "conifer") {
     if (!bakedBark) throw new Error(`Tree kind "${def.id}" has no baked bark`);
     return createGeneratedModels(scene, def, generatedKind(def.shape), seed, bakedBark, litShading, atlas);
