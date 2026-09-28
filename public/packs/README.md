@@ -8,6 +8,11 @@ reloads the page by itself.
 
 Files are [JSON5](https://json5.org): JSON plus comments, trailing commas and unquoted keys.
 
+To look at one asset on its own, open the **workbench** (`/workbench.html` on the dev server): pick
+a material, tree, bush or grass, edit its JSON and preview it - on a patch of ground under the
+game's own sun and sky, or as its baked textures. Edits there are not saved; copy them into the
+file to keep them. Every other file's JSON is still checked when previewed.
+
 ## Layout
 
 ```

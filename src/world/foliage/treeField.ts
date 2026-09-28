@@ -19,6 +19,9 @@ export interface TreeField {
   /** Republishes the instance buffers if anything changed since the last call. Cheap when nothing did. */
   flush: () => void;
   setVisible: (visible: boolean) => void;
+  /** How far a kind's widest model reaches from its trunk, and how tall its tallest stands, at
+   *  scale 1 - for laying specimens out side by side (the workbench). */
+  sizeOf: (kind: string) => { radius: number; height: number };
   readonly treeCount: number;
   dispose: () => void;
 }
@@ -63,15 +66,11 @@ interface Species {
  * Recomposing every tree on every chunk event instead cost 18.5ms at a 1200-unit draw distance -
  * a dropped frame every time a chunk came or went, which while walking is most of them.
  */
-export async function createTreeField(
-  scene: Scene,
-  shadowGenerator: CascadedShadowGenerator,
-  treeKinds: TreeKindDef[],
-  seed: number,
-  litShading: LitShading,
-): Promise<TreeField> {
-  // Every branching kind's bark is a texture graph, baked on the same worker pool as the ground
-  // materials, all at once.
+/**
+ * Every generated kind's bark, by kind id - each a texture graph, baked on the same worker pool as
+ * the ground materials, all at once. TEXTURE_RESOLUTION² RGBA each.
+ */
+export async function bakeBarks(treeKinds: TreeKindDef[], seed: number): Promise<Map<string, BakedBark>> {
   const barkKinds = treeKinds.filter((def) => def.shape.model === "branching" || def.shape.model === "conifer");
   const layer = TEXTURE_RESOLUTION * TEXTURE_RESOLUTION * 4;
   const barkColors = new Uint8Array(layer * barkKinds.length);
@@ -82,16 +81,30 @@ export async function createTreeField(
     barkColors,
     barkNormals,
   );
-  const bakedBark = new Map<string, BakedBark>(
+  return new Map<string, BakedBark>(
     barkKinds.map((def, i) => [def.id, { color: barkColors.subarray(i * layer, (i + 1) * layer), normal: barkNormals.subarray(i * layer, (i + 1) * layer) }]),
   );
+}
+
+export async function createTreeField(
+  scene: Scene,
+  shadowGenerator: CascadedShadowGenerator,
+  treeKinds: TreeKindDef[],
+  seed: number,
+  litShading: LitShading,
+  /** Barks and leaf atlases already baked for these kinds and this seed, by kind id - the
+   *  workbench keeps its bakes. Anything missing is baked here. */
+  prebaked?: { barks?: Map<string, BakedBark>; atlases?: Map<string, Uint8Array> },
+): Promise<TreeField> {
+  const missingBark = treeKinds.filter((def) => !prebaked?.barks?.has(def.id));
+  const bakedBark = new Map([...(prebaked?.barks ?? []), ...(await bakeBarks(missingBark, seed))]);
 
   // One "species" per model: a primitive kind has one, a branching kind one per variant, and each is
   // its own pair of master meshes with its own instances.
   const species = new Map<string, Species>();
   const variantCount = new Map<string, number>();
   const models = treeKinds.flatMap((def) => {
-    const kindModels = createTreeModels(scene, def, seed, bakedBark.get(def.id), litShading);
+    const kindModels = createTreeModels(scene, def, seed, bakedBark.get(def.id), litShading, prebaked?.atlases?.get(def.id));
     variantCount.set(def.id, kindModels.length);
     return kindModels.flatMap((model, variant) => [
       { key: speciesKey(def.id, variant, false), model },
@@ -148,7 +161,7 @@ export async function createTreeField(
   function keyOf(tree: TreePlacement, far: boolean): string {
     const variants = variantCount.get(tree.kind) ?? 1;
     const hash = (Math.imul(Math.floor(tree.x * 8), 0x27d4eb2d) ^ Math.imul(Math.floor(tree.z * 8), 0x165667b1)) >>> 0;
-    const variant = variants === 1 ? 0 : (hash >>> 7) % variants;
+    const variant = tree.variant !== undefined ? tree.variant % variants : variants === 1 ? 0 : (hash >>> 7) % variants;
     const key = speciesKey(tree.kind, variant, far);
     return species.has(key) ? key : speciesKey(tree.kind, variant, false);
   }
@@ -290,6 +303,23 @@ export async function createTreeField(
       for (const entry of species.values()) {
         for (const mesh of meshesOf(entry.model)) mesh.setEnabled(visible && entry.count > 0);
       }
+    },
+    sizeOf(kind) {
+      let radius = 0;
+      let height = 0;
+      for (const [key, entry] of species) {
+        if (!key.startsWith(`${kind}#`)) continue;
+        // From the vertices, not the bounding box: a canopy's box is left generous on purpose, for
+        // the wind to sway it about in (see treeModels.ts).
+        for (const mesh of meshesOf(entry.model)) {
+          const positions = mesh.getVerticesData("position") ?? [];
+          for (let i = 0; i < positions.length; i += 3) {
+            radius = Math.max(radius, Math.hypot(positions[i], positions[i + 2]));
+            height = Math.max(height, positions[i + 1]);
+          }
+        }
+      }
+      return { radius, height };
     },
     get treeCount() {
       return count;

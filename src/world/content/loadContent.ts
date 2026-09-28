@@ -12,6 +12,15 @@ interface PackIndex {
  * reloading is all it takes. Throws a ContentError listing every problem found.
  */
 export async function loadContent(baseUrl: string = import.meta.env.BASE_URL): Promise<WorldContent> {
+  return resolveContent(await fetchPackSources(baseUrl));
+}
+
+/**
+ * Every content pack's files as text, unresolved - what loadContent resolves, and what the
+ * workbench keeps so it can resolve them again with one file's text swapped for an edit. Throws a
+ * ContentError if the pack list or any file cannot be fetched.
+ */
+export async function fetchPackSources(baseUrl: string = import.meta.env.BASE_URL): Promise<PackSource[]> {
   const root = `${baseUrl}packs/`;
   // no-cache: a pack edited while the page was closed must not come back stale from the cache.
   const fetchText = async (url: string): Promise<string> => {
@@ -47,5 +56,5 @@ export async function loadContent(baseUrl: string = import.meta.env.BASE_URL): P
   );
   if (issues.length > 0) throw new ContentError(issues);
   if (packs.length === 0) throw new ContentError([{ file: "public/packs", path: "", message: "no content packs found" }]);
-  return resolveContent(packs);
+  return packs;
 }

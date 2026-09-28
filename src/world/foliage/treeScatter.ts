@@ -56,6 +56,9 @@ export interface TreePlacement {
   rotation: number;
   /** 0-1, mixes the canopy colour so a stand of trees is not one flat green. */
   tint: number;
+  /** Which of its kind's models it is drawn with. Left out, as the scatter does, it is hashed from
+   *  where the tree stands (see treeField.ts); the workbench names one to show it. */
+  variant?: number;
 }
 
 /**

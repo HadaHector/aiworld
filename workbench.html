@@ -1,0 +1,380 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>aiworld workbench</title>
+    <style>
+      :root {
+        --bg: #161b21;
+        --panel: #1d242c;
+        --panel-2: #242c36;
+        --line: #333e4b;
+        --text: #dfe6ee;
+        --muted: #8d9aa8;
+        --accent: #6fa8c7;
+        --accent-strong: #a9d3e4;
+        --error: #f3c2b8;
+        --error-bg: #3a2320;
+        --edited: #e7c16b;
+        font: 13px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
+        color-scheme: dark;
+      }
+
+      html, body {
+        margin: 0;
+        height: 100%;
+        background: var(--bg);
+        color: var(--text);
+        overflow: hidden;
+      }
+
+      #app {
+        display: grid;
+        grid-template-columns: minmax(340px, 38%) 1fr;
+        height: 100%;
+      }
+
+      /* ---- left: the data ---- */
+      #data {
+        display: grid;
+        grid-template-rows: auto minmax(120px, 32%) auto 1fr auto auto;
+        min-width: 0;
+        min-height: 0;
+        background: var(--panel);
+        border-right: 1px solid var(--line);
+      }
+
+      #dataHeader {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 12px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      #dataHeader h1 {
+        margin: 0;
+        font-size: 13px;
+        font-weight: 600;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        opacity: 0.85;
+        white-space: nowrap;
+      }
+
+      #dataHeader a {
+        margin-left: auto;
+        color: var(--muted);
+        font-size: 12px;
+        text-decoration: none;
+      }
+
+      #dataHeader a:hover { color: var(--text); }
+
+      #assetFilter {
+        flex: 1;
+        min-width: 0;
+      }
+
+      #assetList {
+        overflow: auto;
+        padding: 4px 0 8px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .assetGroup {
+        display: block;
+        width: 100%;
+        padding: 6px 12px;
+        border: 0;
+        border-radius: 0;
+        background: none;
+        color: var(--muted);
+        font-size: 11px;
+        letter-spacing: 0.08em;
+        text-align: left;
+        text-transform: uppercase;
+      }
+
+      .assetGroup:hover { color: var(--text); background: var(--panel-2); }
+      .assetGroup .currentNote { color: var(--accent-strong); }
+
+      .assetGroup small {
+        text-transform: none;
+        letter-spacing: 0;
+        opacity: 0.7;
+      }
+
+      .asset {
+        display: flex;
+        align-items: baseline;
+        gap: 6px;
+        width: 100%;
+        padding: 3px 12px 3px 22px;
+        border: 0;
+        background: none;
+        color: var(--text);
+        font: inherit;
+        text-align: left;
+        cursor: pointer;
+      }
+
+      .asset:hover { background: var(--panel-2); }
+      .asset.selected { background: #2c4a5c; }
+      .asset.noPreview { color: var(--muted); }
+      .asset .pack { margin-left: auto; color: var(--muted); font-size: 11px; }
+      .asset .dot { color: var(--edited); }
+
+      #fileBar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 12px;
+        border-bottom: 1px solid var(--line);
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      #fileName {
+        font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+        color: var(--text);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      #editedBadge {
+        display: none;
+        color: var(--edited);
+      }
+
+      #editedBadge.shown { display: inline; }
+
+      #fileBar button { margin-left: auto; }
+
+      #editor {
+        display: block;
+        box-sizing: border-box;
+        width: 100%;
+        height: 100%;
+        min-height: 0;
+        margin: 0;
+        padding: 10px 12px;
+        border: 0;
+        resize: none;
+        outline: none;
+        background: var(--bg);
+        color: var(--text);
+        font: 12px/1.5 ui-monospace, "Cascadia Mono", Consolas, monospace;
+        tab-size: 2;
+        white-space: pre;
+      }
+
+      #issues {
+        display: none;
+        max-height: 30vh;
+        overflow: auto;
+        margin: 0;
+        padding: 8px 12px;
+        border-top: 1px solid #5a3430;
+        background: var(--error-bg);
+        color: var(--error);
+        font: 12px/1.5 ui-monospace, "Cascadia Mono", Consolas, monospace;
+        white-space: pre-wrap;
+      }
+
+      #issues.shown { display: block; }
+
+      #controls {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 12px;
+        border-top: 1px solid var(--line);
+      }
+
+      #controls label {
+        color: var(--muted);
+      }
+
+      #seed { width: 110px; }
+
+      #previewButton {
+        margin-left: auto;
+        padding: 6px 16px;
+        background: var(--accent);
+        border-color: var(--accent);
+        color: #0f1a21;
+        font-weight: 600;
+      }
+
+      #previewButton:hover { background: var(--accent-strong); }
+
+      #controls .hint {
+        color: var(--muted);
+        font-size: 11px;
+      }
+
+      /* ---- right: the preview ---- */
+      #preview {
+        display: grid;
+        grid-template-rows: auto 1fr;
+        min-width: 0;
+        min-height: 0;
+      }
+
+      #previewBar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 6px 14px;
+        padding: 8px 12px;
+        background: var(--panel);
+        border-bottom: 1px solid var(--line);
+      }
+
+      #viewTabs {
+        display: flex;
+        gap: 2px;
+      }
+
+      #viewTabs button {
+        border-radius: 0;
+      }
+
+      #viewTabs button:first-child { border-radius: 4px 0 0 4px; }
+      #viewTabs button:last-child { border-radius: 0 4px 4px 0; }
+      #viewTabs button.active { background: #2c4a5c; border-color: var(--accent); }
+
+      #viewOptions {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 6px 14px;
+      }
+
+      #viewOptions label {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        color: var(--muted);
+        white-space: nowrap;
+      }
+
+      #stageArea {
+        position: relative;
+        min-height: 0;
+        overflow: hidden;
+        background: #0e1216;
+      }
+
+      #stageArea canvas {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        display: block;
+        outline: none;
+      }
+
+      #textureCanvas {
+        cursor: grab;
+        background:
+          repeating-conic-gradient(#20262d 0% 25%, #181d23 0% 50%) 50% / 24px 24px;
+      }
+
+      #textureCanvas.dragging { cursor: grabbing; }
+
+      #stageStatus {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%, -50%);
+        max-width: 80%;
+        padding: 10px 16px;
+        border-radius: 6px;
+        background: rgba(0, 0, 0, 0.55);
+        color: var(--text);
+        text-align: center;
+        pointer-events: none;
+      }
+
+      #stageStatus:empty { display: none; }
+
+      #stageHelp {
+        position: absolute;
+        right: 10px;
+        bottom: 8px;
+        color: rgba(255, 255, 255, 0.55);
+        font-size: 11px;
+        pointer-events: none;
+        text-shadow: 0 1px 2px #000;
+      }
+
+      #pixelReadout {
+        position: absolute;
+        left: 10px;
+        bottom: 8px;
+        color: rgba(255, 255, 255, 0.75);
+        font: 11px ui-monospace, "Cascadia Mono", Consolas, monospace;
+        pointer-events: none;
+        text-shadow: 0 1px 2px #000;
+      }
+
+      button, select, input {
+        padding: 4px 8px;
+        border: 1px solid var(--line);
+        border-radius: 4px;
+        background: var(--panel-2);
+        color: var(--text);
+        font: inherit;
+      }
+
+      button { cursor: pointer; }
+      button:hover { border-color: var(--accent); }
+      input:focus, select:focus, textarea:focus { outline: 1px solid var(--accent); }
+    </style>
+  </head>
+  <body>
+    <div id="app">
+      <section id="data">
+        <div id="dataHeader">
+          <h1>Workbench</h1>
+          <input id="assetFilter" type="search" placeholder="Filter assets" />
+          <a href="/" title="Back to the world">World ↗</a>
+        </div>
+        <nav id="assetList" aria-label="Pack assets"></nav>
+        <div id="fileBar">
+          <span id="fileName">-</span>
+          <span id="editedBadge" title="The text differs from the file on disk. Not saved: copy it into the file to keep it.">● edited</span>
+          <button id="revertButton" type="button" title="Back to the file on disk">Revert</button>
+        </div>
+        <textarea id="editor" spellcheck="false" autocomplete="off"></textarea>
+        <pre id="issues"></pre>
+        <div id="controls">
+          <label for="seed">Seed</label>
+          <input id="seed" type="number" step="1" />
+          <button id="randomSeed" type="button" title="A random seed, then preview">🎲</button>
+          <span class="hint">Ctrl+Enter</span>
+          <button id="previewButton" type="button">Preview</button>
+        </div>
+      </section>
+      <section id="preview">
+        <div id="previewBar">
+          <div id="viewTabs"></div>
+          <div id="viewOptions"></div>
+        </div>
+        <div id="stageArea">
+          <canvas id="stageCanvas"></canvas>
+          <canvas id="textureCanvas"></canvas>
+          <div id="pixelReadout"></div>
+          <div id="stageHelp"></div>
+          <div id="stageStatus"></div>
+        </div>
+      </section>
+    </div>
+    <script type="module" src="/src/workbench/main.ts"></script>
+  </body>
+</html>

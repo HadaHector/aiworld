@@ -4,6 +4,7 @@ import type { SunLighting } from "../lighting/sunLighting";
 import { LIT_SHADING_GLSL, LIT_SHADING_SAMPLERS, LIT_SHADING_UNIFORMS, createLitShading, type LitShading } from "./litShading";
 import { MATERIALS_PER_TRIANGLE, createMaterialBlender, type MaterialBlender } from "./materialBlend";
 import type { WorldContent } from "../content/worldContent";
+import type { MaterialDef } from "./materialTypes";
 import { TEXTURE_RESOLUTION } from "./textureGen";
 import { WATER_ALPHA, WATER_DEEP_COLOR, WATER_SHALLOW_COLOR, WATER_TINT_FULL_DEPTH } from "../terrain/ocean";
 import { bakeMaterialTextures } from "./textureBakePool";
@@ -303,22 +304,25 @@ void main() {
 }
 `;
 
-/** Builds every ground material's procedural texture once per world (packed as layers of one
- *  combined array texture, so the terrain shader can blend any of them via a single sampler), and
- *  compiles every material layer's weight pipeline once (reusing the exact same pipeline engine
- *  height pipelines use - see pipeline/pipelineCompiler.ts). Several layers - or a layer and a
- *  biome's own base - may resolve to the same MaterialDef (e.g. the two snow layers), so materials
- *  are deduplicated by id before building texture layers. */
-export async function createMaterialLibrary(
-  scene: Scene,
-  seed: number,
-  content: WorldContent,
-  sunLighting: SunLighting,
-  onProgress?: (done: number, total: number) => void,
-): Promise<MaterialLibrary> {
-  const blender = createMaterialBlender(seed, content);
-  const { materialDefs, defaultIndex, buildMaterialBlend, resolveMaterialIndex } = blender;
+/** A terrain shader for a list of materials, their textures baked and packed - what the world's
+ *  material library is built on, and what the workbench draws a single material with. */
+export interface TerrainMaterial {
+  terrainMaterial: ShaderMaterial;
+  litShading: LitShading;
+  /** Every material's average baked colour, by index. */
+  averageColors: [number, number, number][];
+  /** Every material's baked colour+roughness and normal+height pixels, TEXTURE_RESOLUTION² RGBA a
+   *  layer, in material order. */
+  colorBuffer: Uint8Array;
+  normalBuffer: Uint8Array;
+}
 
+/** `materialDefs`' textures, one layer each, as createTerrainMaterial uploads them. */
+export async function bakeTerrainTextures(
+  seed: number,
+  materialDefs: MaterialDef[],
+  onProgress?: (done: number, total: number) => void,
+): Promise<Pick<TerrainMaterial, "averageColors" | "colorBuffer" | "normalBuffer">> {
   const colorBuffer = new Uint8Array(TEXTURE_RESOLUTION * TEXTURE_RESOLUTION * 4 * materialDefs.length);
   const normalBuffer = new Uint8Array(TEXTURE_RESOLUTION * TEXTURE_RESOLUTION * 4 * materialDefs.length);
 
@@ -334,7 +338,27 @@ export async function createMaterialLibrary(
     normalBuffer,
     onProgress,
   );
-  const materialColors: Color3[] = averageColors.map(([r, g, b]) => new Color3(r, g, b));
+  return { colorBuffer, normalBuffer, averageColors };
+}
+
+/**
+ * Bakes `materialDefs`' procedural textures (packed as layers of one array texture each for colour
+ * and normals, so the terrain shader can blend any of them through a single sampler) and builds
+ * the terrain shader over them, lit by `sunLighting`. A mesh drawn with it names its materials by
+ * index into `materialDefs` (its matIndices/matWeights attributes - see terrainMesh.ts).
+ *
+ * `prebaked` skips the bake with textures already baked from exactly these definitions and seed -
+ * the workbench keeps its bakes, so previewing again does not bake an unchanged material again.
+ */
+export async function createTerrainMaterial(
+  scene: Scene,
+  seed: number,
+  materialDefs: MaterialDef[],
+  sunLighting: SunLighting,
+  onProgress?: (done: number, total: number) => void,
+  prebaked?: Pick<TerrainMaterial, "averageColors" | "colorBuffer" | "normalBuffer">,
+): Promise<TerrainMaterial> {
+  const { colorBuffer, normalBuffer, averageColors } = prebaked ?? (await bakeTerrainTextures(seed, materialDefs, onProgress));
 
   const materialAtlas = RawTexture2DArray.CreateRGBATexture(colorBuffer, TEXTURE_RESOLUTION, TEXTURE_RESOLUTION, materialDefs.length, scene, true, false);
   materialAtlas.wrapU = Texture.WRAP_ADDRESSMODE;
@@ -378,6 +402,26 @@ export async function createMaterialLibrary(
 
   const litShading = createLitShading(scene, sunLighting);
   litShading.register(terrainMaterial);
+
+  return { terrainMaterial, litShading, averageColors, colorBuffer, normalBuffer };
+}
+
+/** Builds every ground material's procedural texture once per world (see createTerrainMaterial),
+ *  and compiles every material layer's weight pipeline once (reusing the exact same pipeline engine
+ *  height pipelines use - see pipeline/pipelineCompiler.ts). Several layers - or a layer and a
+ *  biome's own base - may resolve to the same MaterialDef (e.g. the two snow layers), so materials
+ *  are deduplicated by id before building texture layers. */
+export async function createMaterialLibrary(
+  scene: Scene,
+  seed: number,
+  content: WorldContent,
+  sunLighting: SunLighting,
+  onProgress?: (done: number, total: number) => void,
+): Promise<MaterialLibrary> {
+  const blender = createMaterialBlender(seed, content);
+  const { materialDefs, defaultIndex, buildMaterialBlend, resolveMaterialIndex } = blender;
+  const { terrainMaterial, litShading, averageColors, colorBuffer, normalBuffer } = await createTerrainMaterial(scene, seed, materialDefs, sunLighting, onProgress);
+  const materialColors: Color3[] = averageColors.map(([r, g, b]) => new Color3(r, g, b));
 
   function getMaterialColor(materialIndex: number): Color3 {
     return materialColors[materialIndex] ?? materialColors[defaultIndex];

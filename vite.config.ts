@@ -36,6 +36,15 @@ function packIndex(): Plugin {
 
 export default defineConfig({
   plugins: [packIndex()],
+  // Two pages: the game, and the workbench (workbench.html) for looking at one pack asset at a time.
+  build: {
+    rollupOptions: {
+      input: {
+        main: fileURLToPath(new URL("./index.html", import.meta.url)),
+        workbench: fileURLToPath(new URL("./workbench.html", import.meta.url)),
+      },
+    },
+  },
   server: {
     port: 5173,
     strictPort: true,
