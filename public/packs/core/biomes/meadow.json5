@@ -250,10 +250,14 @@
       },
     ],
   },
+  // A clear summer sky, a soft haze low down - fresh green-blue in one area, a warmer summer haze or
+  // a paler, bright one in the next - and a long view across the grass.
   sky: {
-    horizon: "#c4d6d2",
-    zenith: "#588cca",
+    horizon: { oneOf: ["#c4d8d2", "#d4dccc", "#cfdce0"] },
+    zenith: { oneOf: ["#588cca", "#4f86c8", "#6496cc"] },
     cloud: "#f6f8f4",
+    fogStart: { range: [0.35, 0.5] },
+    fogEnd: 0.95,
   },
   light: {
     sunPeak: 65,

@@ -125,10 +125,14 @@
       },
     ],
   },
+  // A cold, pale sky - icy blue, blue-grey or white - and in some areas a freezing mist lying over
+  // the steppe, the snow fields fading into it.
   sky: {
-    horizon: "#dee4e8",
+    horizon: { oneOf: ["#d4e0ec", "#cdd8e4", "#e2e8ec"] },
     zenith: "#8eaccd",
     cloud: "#ffffff",
+    fogStart: { range: [0.05, 0.3] },
+    fogEnd: { range: [0.55, 0.95] },
   },
   // A low, grazing noon sun and a big, bright midnight moon.
   light: {

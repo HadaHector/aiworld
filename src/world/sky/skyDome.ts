@@ -172,13 +172,12 @@ function blendChannel(out: Color3, night: Color3, day: Color3, dayness: number, 
 }
 
 export interface SkyDome {
-  /** Recomputes the blended sky/fog colour and fog-start distance from whichever areas are in
+  /** Recomputes the blended sky/fog colour and fog distances from whichever areas are in
    *  range of one point (the player's own, in practice) and the current time of day, and pushes
    *  them to the dome shader and the scene's fog - see BiomeAtmosphere.horizon for why colour is
    *  never set from two different sources, and BiomeAtmosphere.fogStartFraction for why this needs
-   *  the current draw distance to turn into an actual distance. fogEnd is not this function's
-   *  business - it stays a fixed fraction of the draw distance regardless of zone or time (see
-   *  world.ts). timeHours drives the same day/night/twilight cross-fade sunLighting.ts's own
+   *  the current draw distance to turn into an actual distance - and fog-end likewise, from
+   *  BiomeAtmosphere.fogEndFraction. timeHours drives the same day/night/twilight cross-fade sunLighting.ts's own
    *  lighting uses (see lighting/dayNightMath.ts) - the two are never computed independently, so
    *  the sky can never read as day while the ground reads as night. sunDirection (the same
    *  SunLighting.direction the terrain and shadows use) is what lets the sunrise/sunset glow sit on
@@ -267,6 +266,7 @@ export function createSkyDome(scene: Scene): SkyDome {
     dayCloud.set(0, 0, 0);
     twilightTint.set(0, 0, 0);
     let fogStartFraction = 0;
+    let fogEndFraction = 0;
     for (const { biome, weight } of areaWeights) {
       const a = biome.atmosphere;
       dayHorizon.r += a.horizon[0] * weight;
@@ -279,6 +279,7 @@ export function createSkyDome(scene: Scene): SkyDome {
       dayCloud.g += a.cloud[1] * weight;
       dayCloud.b += a.cloud[2] * weight;
       fogStartFraction += a.fogStartFraction * weight;
+      fogEndFraction += a.fogEndFraction * weight;
       const sunHorizon = biome.dayNight.sunHorizonColor;
       twilightTint.r += sunHorizon[0] * weight;
       twilightTint.g += sunHorizon[1] * weight;
@@ -304,10 +305,11 @@ export function createSkyDome(scene: Scene): SkyDome {
     // A separately-tinted value, not skyHorizon - see this function's own opening comment for why
     // scene fog can't share the sky dome's now-directional horizon colour.
     scene.fogColor.copyFrom(fogColor);
-    // Never past fogEnd, which world.ts sets independently off the same draw distance - a fraction
-    // above 0.95 is only reachable by hand-editing a biome, but a fogStart past fogEnd would still
-    // read as "no fog at all" rather than the dense one a low fraction is meant to buy.
-    scene.fogStart = Math.min(drawDistance * fogStartFraction, scene.fogEnd);
+    // Both ends off the draw distance, so fog always finishes inside what is loaded. The start never
+    // past the end: a fogStart past fogEnd would read as "no fog at all" rather than the dense one
+    // a low fraction is meant to buy.
+    scene.fogEnd = drawDistance * fogEndFraction;
+    scene.fogStart = Math.min(drawDistance * fogStartFraction, scene.fogEnd * 0.98);
   }
 
   function dispose(): void {

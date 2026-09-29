@@ -16,11 +16,12 @@ export interface BiomeAtmosphere {
   horizon: ColorTuple;
   zenith: ColorTuple;
   cloud: ColorTuple;
-  /** Fraction of the draw distance at which fog begins - the counterpart to world.ts's
-   *  FOG_END_FRACTION, which stays fixed globally (fog always finishes just past the load radius,
-   *  whatever zone that happens to be). Pulling this in per biome is what lets a zone read as
-   *  hemmed-in and close (the swamp, low) without changing what "far" means everywhere else. */
+  /** Fractions of the draw distance at which fog begins and where it is complete. Pulling them in
+   *  per zone is what lets a zone read as hemmed-in and close (a misty wood, the swamp) and another
+   *  as open and far-seeing (the steppe) without changing what "far" means anywhere else. Past the
+   *  end the ground is all fog - the horizon colour, so it meets the sky without a seam. */
   fogStartFraction: number;
+  fogEndFraction: number;
 }
 
 /**

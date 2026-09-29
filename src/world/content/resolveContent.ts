@@ -404,6 +404,7 @@ function appendLists(target: unknown, append: RawObject, reader: Reader, path: s
 export interface Defaults {
   defaultMaterialId: string;
   fogStart: number;
+  fogEnd: number;
   light: { ambientDay: ColorTuple; ambientDayIntensity: number; sunHorizon: ColorTuple; sunZenith: ColorTuple; sunIntensity: number };
   /** One object shared by every biome that sets no rules of its own - see treeScatter's
    *  survivalFade, which skips blending when every zone in range shares one. */
@@ -420,12 +421,13 @@ function readDefaults(obj: RawObject, reader: Reader): Defaults {
   const treeRules = reader.object(obj.treeRules ?? {}, "treeRules");
   reader.onlyKeys(treeRules, "treeRules", ["shore", "line", "slope"]);
   const sky = reader.object(obj.sky ?? {}, "sky");
-  reader.onlyKeys(sky, "sky", ["fogStart"]);
+  reader.onlyKeys(sky, "sky", ["fogStart", "fogEnd"]);
   const light = reader.object(obj.light ?? {}, "light");
   reader.onlyKeys(light, "light", ["ambientDay", "ambientDayIntensity", "sunHorizon", "sunZenith", "sunIntensity"]);
   return {
     defaultMaterialId: reader.string(obj, "defaultMaterial", ""),
     fogStart: reader.number(sky, "fogStart", "sky", { min: 0, max: 1 }),
+    fogEnd: reader.number(sky, "fogEnd", "sky", { min: 0.05, max: 1 }),
     light: {
       ambientDay: reader.color(light, "ambientDay", "light"),
       ambientDayIntensity: reader.number(light, "ambientDayIntensity", "light", { min: 0 }),
@@ -1046,7 +1048,7 @@ function readBiome(id: string, obj: RawObject, reader: Reader, defaults: Default
   });
 
   const sky = reader.object(obj.sky, "sky");
-  reader.onlyKeys(sky, "sky", ["horizon", "zenith", "cloud", "fogStart"]);
+  reader.onlyKeys(sky, "sky", ["horizon", "zenith", "cloud", "fogStart", "fogEnd"]);
 
   const light = reader.object(obj.light, "light");
   reader.onlyKeys(light, "light", [
@@ -1103,6 +1105,7 @@ function readBiome(id: string, obj: RawObject, reader: Reader, defaults: Default
       zenith: reader.color(sky, "zenith", "sky"),
       cloud: reader.color(sky, "cloud", "sky"),
       fogStartFraction: reader.optionalNumber(sky, "fogStart", "sky", defaults.fogStart, { min: 0, max: 1 }),
+      fogEndFraction: reader.optionalNumber(sky, "fogEnd", "sky", defaults.fogEnd, { min: 0.05, max: 1 }),
     },
     dayNight: readDayNight(light, reader, defaults),
   };

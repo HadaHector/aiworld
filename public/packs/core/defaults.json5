@@ -5,9 +5,11 @@
   defaultMaterial: "grass",
 
   sky: {
-    // Fraction of the draw distance at which fog begins. Only a biome with something to say (the
-    // swamp) overrides it; fog always ends just short of the draw distance, whatever the zone.
+    // Fractions of the draw distance at which fog begins and where it is complete - just short of
+    // the draw distance, so it is complete before the loaded ground runs out. A biome says its own
+    // where it wants to feel close (a misty wood) or open.
     fogStart: 0.3,
+    fogEnd: 0.95,
   },
 
   // A plain, unsaturated day palette, so a biome only has to state colour where it actually wants to

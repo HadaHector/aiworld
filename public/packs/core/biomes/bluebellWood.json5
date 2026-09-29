@@ -257,10 +257,14 @@
       },
     ],
   },
+  // A spring morning's mist in the wood: blue-lilac, as though the bluebells hazed the air - or a
+  // green-grey one - close enough in some areas that the far trunks fade to shadows.
   sky: {
-    horizon: "#a4baac",
-    zenith: "#467084",
-    cloud: "#d6ded0",
+    horizon: { oneOf: ["#aab8cc", "#b2b6cc", "#a6bcb8"] },
+    zenith: "#4e7494",
+    cloud: "#dde2e6",
+    fogStart: { range: [0.03, 0.2] },
+    fogEnd: { range: [0.45, 0.85] },
   },
   light: {
     sunPeak: 58,

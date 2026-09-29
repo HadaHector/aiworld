@@ -279,9 +279,13 @@
   },
   // A hazy, golden autumn sky and a low, warm sun.
   sky: {
-    horizon: "#d6c6a6",
+    // A golden autumn haze - honey, amber, or a grey-gold overcast one.
+    horizon: { oneOf: ["#d8c49e", "#d6b890", "#cdc4b2"] },
     zenith: "#6a8cae",
     cloud: "#f2e6d4",
+    // Low sun through a smoky haze: the wood's far side goes gold.
+    fogStart: { range: [0.05, 0.25] },
+    fogEnd: { range: [0.5, 0.9] },
   },
   light: {
     sunPeak: 42,

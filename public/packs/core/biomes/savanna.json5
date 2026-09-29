@@ -197,9 +197,13 @@
   },
   // A hot, hazy sky: a warm, dusty horizon under a deep blue.
   sky: {
-    horizon: "#e0d2b2",
+    // Heat and dust: straw-gold, a deeper orange dust haze, or a pale bleached one.
+    horizon: { oneOf: ["#e2d2ae", "#e4c9a0", "#ddd6c2"] },
     zenith: "#5f93cf",
     cloud: "#fbf5e8",
+    // Haze from not far off, thickening slowly, so the far acacias go to silhouettes in the dust.
+    fogStart: { range: [0.15, 0.3] },
+    fogEnd: { range: [0.85, 0.95] },
   },
   light: {
     sunPeak: 72,
