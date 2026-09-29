@@ -126,7 +126,7 @@ export async function createTreeField(
   });
   // Row 0 changes nothing; then every area's every rule's shades, one row each. A tree names its row
   // in its instance colour's alpha.
-  const tintRows: TreeShade[] = [{ leaves: IDENTITY, bark: IDENTITY, stone: IDENTITY }];
+  const tintRows: TreeShade[] = [{ leaves: IDENTITY, bark: IDENTITY, stone: IDENTITY, snow: 0 }];
   const areaRules = areaTints.map((rules) =>
     rules.map((rule) => {
       const first = tintRows.length;
@@ -135,10 +135,12 @@ export async function createTreeField(
     }),
   );
   const tintTable = new Float32Array(tintRows.length * TREE_TINT_WIDTH * 4);
-  tintRows.forEach(({ leaves, bark, stone }, row) => {
+  tintRows.forEach(({ leaves, bark, stone, snow }, row) => {
     [leaves, bark, stone].forEach((m, part) => {
       for (let column = 0; column < 3; column++) tintTable.set([m[column], m[3 + column], m[6 + column], 0], (row * TREE_TINT_WIDTH + part * 3 + column) * 4);
     });
+    // The snow rides in the row's first texel's otherwise unused alpha (see treeShaders.ts's treeSnow).
+    tintTable[row * TREE_TINT_WIDTH * 4 + 3] = snow;
   });
   const tintTexture = new RawTexture(tintTable, TREE_TINT_WIDTH, tintRows.length, Constants.TEXTUREFORMAT_RGBA, scene, false, false, Constants.TEXTURE_NEAREST_SAMPLINGMODE, Constants.TEXTURETYPE_FLOAT);
   for (const { model } of models) {

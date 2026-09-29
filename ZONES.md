@@ -73,6 +73,11 @@ Existing: **broadleaf**, **pine**, **palm**.
   `savannaShort`, `grass/savanna`), red earth
   patches (`redEarth`, new) and a red-earth road (`trackRedEarth`), silt pans in the hollows;
   termite mounds (a boulder with `taper`).
+- **Frost steppe: done** - `biomes/frostSteppe.json5` (tundra retired to `legacy/`). Silver feather
+  grass (`grass/featherGrass`) and tussocks (`steppeGrass`, `steppeTussock`), gravel on the rises,
+  frost in the hollows, boulders, birch groves only along the area's edges. Snow patches from the
+  new `snowCover` generator - the first piece of snow cover: an amount per area, drifting into
+  hollows and onto north faces, with an optional snow line; snow now clears grass.
 
 | Variant | Ground | Plants | Trees | Extras |
 |---|---|---|---|---|

@@ -493,8 +493,9 @@ function readMaterial(id: string, obj: RawObject, reader: Reader, defaults: Defa
 }
 
 /**
- * A biome's `treeTints`: a list of rules `{ kinds?, leaves?, bark?, stone? }`, each part a colour
- * adjustment plus an optional `spread` - or a single rule on its own, for every kind.
+ * A biome's `treeTints`: a list of rules `{ kinds?, leaves?, bark?, stone?, snow? }`, each part a
+ * colour adjustment plus an optional `spread`, and `snow` how much snow lies on them (0-1) - or a
+ * single rule on its own, for every kind.
  */
 function readTreeTints(obj: RawObject, reader: Reader): TreeTintRuleDef[] {
   if (obj.treeTints === undefined) return [];
@@ -502,7 +503,7 @@ function readTreeTints(obj: RawObject, reader: Reader): TreeTintRuleDef[] {
   return rules.map((raw, i) => {
     const path = Array.isArray(obj.treeTints) ? `treeTints[${i}]` : "treeTints";
     const rule = reader.object(raw, path);
-    reader.onlyKeys(rule, path, ["kinds", "leaves", "bark", "stone"]);
+    reader.onlyKeys(rule, path, ["kinds", "leaves", "bark", "stone", "snow"]);
     const part = (key: "leaves" | "bark" | "stone"): TreeTintPart => {
       const at = joinPath(path, key);
       if (rule[key] === undefined) return { adjust: NO_ADJUST, spread: { hue: 0, saturation: 0, value: 0 } };
@@ -519,7 +520,7 @@ function readTreeTints(obj: RawObject, reader: Reader): TreeTintRuleDef[] {
       }
       return { adjust: readColorAdjust(adjust, reader, at), spread: spreadRead };
     };
-    return { kinds: rule.kinds === undefined ? null : reader.stringList(rule, "kinds", path), leaves: part("leaves"), bark: part("bark"), stone: part("stone") };
+    return { kinds: rule.kinds === undefined ? null : reader.stringList(rule, "kinds", path), leaves: part("leaves"), bark: part("bark"), stone: part("stone"), snow: reader.optionalNumber(rule, "snow", path, 0, { min: 0, max: 1 }) };
   });
 }
 
@@ -629,7 +630,7 @@ function readRockKind(id: string, obj: RawObject, reader: Reader, defaults: Defa
     facets,
     facetDepth: reader.number(obj, "facetDepth", "", { min: 0, max: 0.9 }),
     tilt: reader.number(obj, "tilt", "", { min: 0, max: 90 }),
-    sink: reader.number(obj, "sink", "", { min: 0, max: 0.9 }),
+    sink: typeof obj.sink === "number" ? [reader.number(obj, "sink", "", { min: 0, max: 0.9 }), obj.sink] : reader.range(obj, "sink", "", { allowEqual: true }),
     stone: {
       tile: reader.number(stone, "tile", "stone", { min: 0.1 }),
       // A material's texture is filled in once the materials are known.

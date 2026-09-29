@@ -6,11 +6,12 @@ import { deriveSeed, mulberry32 } from "../rng";
  *  that a wood does not read as a handful of colours, few enough that the table stays tiny. */
 export const TREE_SHADES = 8;
 
-/** One shade: the leaves', the bark's and a boulder's stone's colour matrices. */
+/** One shade: the leaves', the bark's and a boulder's stone's colour matrices, and the rule's snow. */
 export interface TreeShade {
   leaves: ColorMatrix;
   bark: ColorMatrix;
   stone: ColorMatrix;
+  snow: number;
 }
 
 /** An area's rule, ready to draw: which kinds it is for (null for all) and its shades. */
@@ -39,7 +40,7 @@ export function treeTintRules(seed: number, areaId: number, biome: BiomeDefiniti
   return biome.treeTints.map((rule, index) => {
     const spreads = [rule.leaves.spread, rule.bark.spread, rule.stone.spread].some((s) => s.hue > 0 || s.saturation > 0 || s.value > 0);
     if (!spreads) {
-      return { kinds: rule.kinds, shades: [{ leaves: adjustMatrix(rule.leaves.adjust), bark: adjustMatrix(rule.bark.adjust), stone: adjustMatrix(rule.stone.adjust) }] };
+      return { kinds: rule.kinds, shades: [{ leaves: adjustMatrix(rule.leaves.adjust), bark: adjustMatrix(rule.bark.adjust), stone: adjustMatrix(rule.stone.adjust), snow: rule.snow }] };
     }
     const random = mulberry32(deriveSeed(deriveSeed(seed, TREE_SHADE_SALT), areaId * 64 + index));
     const signed = (): number => random() * 2 - 1;
@@ -54,7 +55,7 @@ export function treeTintRules(seed: number, areaId: number, biome: BiomeDefiniti
     });
     // Stone drawn after the rest, so adding it left every tree's shade as it was - and freely in all
     // three: a scatter of boulders is not sorted by colour.
-    const shades: TreeShade[] = woods.map((wood) => ({ ...wood, stone: adjustMatrix(strayed(rule.stone, signed(), signed(), signed())) }));
+    const shades: TreeShade[] = woods.map((wood) => ({ ...wood, stone: adjustMatrix(strayed(rule.stone, signed(), signed(), signed())), snow: rule.snow }));
     return { kinds: rule.kinds, shades };
   });
 }

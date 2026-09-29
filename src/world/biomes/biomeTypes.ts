@@ -101,6 +101,9 @@ export interface TreeTintRuleDef {
   leaves: TreeTintPart;
   bark: TreeTintPart;
   stone: TreeTintPart;
+  /** How much snow lies on them, 0-1: on a boulder's top, and further down its sides the more there
+   *  is. 0 for none. */
+  snow: number;
 }
 
 export interface BiomeDefinition {

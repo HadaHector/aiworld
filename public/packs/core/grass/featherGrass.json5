@@ -1,0 +1,10 @@
+// Feather grass: the steppe's grass - thin, wiry, silver-grey stems, long awns bending over in the
+// wind, so a whole steppe ripples silver when it blows.
+{
+  width: 0.9,
+  height: 0.95,
+  sway: 0.38,
+  fadeStart: 50,
+  fadeEnd: 300,
+  blades: { count: 26, minHeight: 0.5, maxHeight: 0.98, baseWidth: 2.5, lean: 0.32, fan: true, seedHeads: false },
+}

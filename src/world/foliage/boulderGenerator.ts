@@ -141,7 +141,9 @@ export function generateBoulder(shape: BoulderShape, seed: number, detail: TreeD
     bottom = Math.min(bottom, positions[i]);
     top = Math.max(top, positions[i]);
   }
-  const lift = -bottom - shape.sink * (top - bottom);
+  // Drawn last, so a kind with a single sink has every other draw - and so every stone - as before.
+  const sink = shape.sink[0] === shape.sink[1] ? shape.sink[0] : between(shape.sink);
+  const lift = -bottom - sink * (top - bottom);
   for (let i = 1; i < positions.length; i += 3) positions[i] += lift;
 
   // Smooth normals, each corner's the area-weighted sum of its faces': the sheared faces come out

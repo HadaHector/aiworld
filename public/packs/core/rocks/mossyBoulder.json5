@@ -10,7 +10,7 @@
   facets: [2, 5],
   facetDepth: 0.3,
   tilt: 10,
-  sink: 0.28,
+  sink: [0.25, 0.55],
   stone: { tile: 6, material: "mossyRock" },
   tint: [[0.8, 0.82, 0.8], [1.1, 1.1, 1.04]],
   scale: [0.5, 1.3],

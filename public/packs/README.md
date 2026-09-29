@@ -131,6 +131,7 @@ Anywhere a value is expected, `{ generator: "<name>", ...params }` produces it i
 | `twoSpecies` | a tree density split between two species | `lower`, `upper`, `noises`, `cover` (steps ending in `cover`), `share` (steps ending in `share`) |
 | `twoTone` | a material texture: one mottle between two colours | `base`, `variation`, `roughness`, `bumpStrength` |
 | `grassland` | a grassy ground texture: clumps, curling blade strokes, ragged bare patches | `dark`, `light`, `soil`, `soilAmount` (0-1), `roughness`, `bumpStrength`, and optionally fallen `leaves` (0-1) in `leafColors: [dark, light]` |
+| `snowCover` | a ground layer of snow: ragged patches over a share of the ground, lying longest in hollows and on north faces, plus an optional snow line | `id`, `amount` (0-1 of the ground), and optionally `frequency` (patch size, 0.008), `material` ("snow"), `drifts` (pull into hollows, 0.6), `north` (pull onto north faces, 1.5), `line: [start, full]` (heights), `strength` (2), `chance` |
 
 Generators are code (`src/world/content/generators.ts`); anything they make can also be written
 out in full.
@@ -193,6 +194,9 @@ Materials), applied to the finished colour - it can turn a green crown red or bl
 lets each tree stray from it: up to `hue` degrees either way, and `saturation` and `value` as a
 fraction either way, so a wood is many shades of its colour rather than one. Each area draws its
 trees in 8 shades of each rule.
+
+A rule's `snow` (0-1) lays snow on what it covers: on a boulder's top, and further down its sides the
+more there is - e.g. `{ kinds: ["boulder"], snow: { range: [0.2, 0.6] } }`.
 
 ### Rolls: every area its own
 
@@ -369,7 +373,8 @@ sphere of `radius` metres swollen and dented by `lumps` (a fraction of the radiu
 its top by `taper` (0-1, optional: near 1 a spire - see `core/rocks/termiteMound.json5`), squashed to
 `squash` of its width and stretched to `stretch` times it (ranges, each variant somewhere in them),
 with `facets` (a range) flat faces sheared off it up to `facetDepth` deep, tipped up to `tilt`
-degrees and sunk `sink` of its height into the ground. `stone` is its texture, laid on from three
+degrees and sunk `sink` of its height into the ground (a range - each variant somewhere in it - so
+some sit on the ground and some are half buried). `stone` is its texture, laid on from three
 sides: `{ tile, material }` borrows a material's texture and colour (the very bake the ground uses),
 `{ tile, texture }` is a graph of its own, and either can take an `adjust`. `variants`, `tint`,
 `scale` and `growsOld` work as for trees - an old boulder is the size of a house.

@@ -38,6 +38,11 @@ mat3 treeTint(float row, int first) {
     texelFetch(treeTints, ivec2(first + 2, r), 0).rgb
   );
 }
+
+// How much snow lies on this row's plants and stones, 0-1 (a treeTints rule's \`snow\`).
+float treeSnow(float row) {
+  return texelFetch(treeTints, ivec2(0, int(row + 0.5)), 0).a;
+}
 `;
 
 export const BARK_VERTEX_SHADER = `#version 300 es
@@ -276,6 +281,19 @@ void main() {
   vec3 geometric = normalize(vTurn * surface);
 
   vec3 albedo = max(treeTint(vTintRow, 6) * (stone * vTint), 0.0);
+  // Snow on its top: on whatever faces up enough, reaching further down the sides the more snow
+  // there is - the bumped normal, so its edge follows the stone's own cracks and knobs rather
+  // than a smooth contour, lying in the hollows first.
+  float snow = treeSnow(vTintRow);
+  if (snow > 0.0) {
+    float stoneHeight = texture(stoneNormal, uvX).a * weights.x + texture(stoneNormal, uvY).a * weights.y + texture(stoneNormal, uvZ).a * weights.z;
+    float upness = mix(geometric.y, n.y, 0.5) - (stoneHeight - 0.5) * 0.25;
+    float lying = 1.0 - snow * 1.1;
+    float cover = smoothstep(lying, lying + 0.12, upness);
+    // Not a flat white: the stone's own relief shows through as soft drifts and crust.
+    vec3 snowColor = vec3(0.86, 0.9, 0.96) * (0.9 + stoneHeight * 0.18);
+    albedo = mix(albedo, snowColor, cover);
+  }
   // A little darker where it meets the ground - a cheap stand-in for occlusion.
   float occlusion = mix(0.75, 1.0, smoothstep(-0.3, 1.0, vHeight));
   vec3 lightDir = normalize(lightDirection);

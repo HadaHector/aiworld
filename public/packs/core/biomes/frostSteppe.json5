@@ -1,0 +1,140 @@
+/**
+ * Frost steppe - the open grassland family's cold variant (see ZONES.md), in place of the tundra:
+ * wide, rolling, treeless land under silver feather grass and grey-green tussocks, stony ground
+ * showing on the wind-scoured rises, frost in the hollows and snow lying in patches - a little in
+ * one area, most of the ground in the next. Boulders the ice left behind; birches only at its
+ * edges, where it meets kinder land.
+ */
+{
+  name: "Frost Steppe",
+  voice: "frozen",
+  spawnWeight: 1.5,
+  lakeChance: 0.06,
+  borderType: "mountain",
+  settlement: "timber",
+  // Broad, low swells: open country you can see across.
+  height: { generator: "detailHeight", amplitude: { range: [4, 9] }, frequency: { range: [0.0012, 0.002] }, offset: 4, persistence: 0.35 },
+  // No trees out on the steppe - only a fringe of birch along the area's edges, broken into groves.
+  trees: {
+    noises: [{ name: "grove", type: "fbm", octaves: 2, frequency: 0.008, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
+    steps: [
+      { output: "gap", op: "input", name: "areaBorderGap" },
+      { output: "edge", op: "mask", input: "gap", at: { range: [40, 90] }, off: { range: [160, 260] } },
+      { output: "groveRaw", op: "sample", noise: "grove" },
+      { output: "grove", op: "mask", input: "groveRaw", at: 0.4, off: -0.1 },
+      { output: "edgeGroves", op: "multiply", a: "edge", b: "grove" },
+      { output: "birch", op: "scale", input: "edgeGroves", factor: { range: [0.15, 0.45] } },
+    ],
+    outputs: { birch: "birch" },
+  },
+  // Boulders the ice left behind, strewn across the open ground and gathered on the shores.
+  rocks: { generator: "rockDensity", kind: "boulder", frequency: 0.004, openAt: -0.4, fullAt: 0.5, peak: { range: [0.015, 0.06] }, footOfSlope: { range: [0.3, 0.7] }, riverShore: { range: [1, 2] }, lakeShore: { range: [1, 2] } },
+  treeTints: [
+    // A cold grey stone, each area its own shade, snow lying on its top - a cap in one area, most of
+    // the stone in the next.
+    { kinds: ["boulder"], snow: { range: [0.2, 0.6] }, stone: { hue: { range: [-15, 10] }, saturation: { range: [0.5, 1.1] }, value: { range: [0.85, 1.1] }, spread: { hue: 6, saturation: 0.2, value: 0.14 } } },
+    {
+      // The birches already turning: fresh yellow-green to gold.
+      leaves: { hue: { range: [-45, 5] }, saturation: { range: [0.8, 1.3] }, value: { range: [0.95, 1.12] }, spread: { hue: 12, saturation: 0.15, value: 0.1 } },
+      bark: { hue: { range: [-8, 8] }, saturation: { range: [0.7, 1.1] }, value: { range: [0.9, 1.1] }, spread: { value: 0.08 } },
+    },
+  ],
+  ground: {
+    // Feather grass or tussocks.
+    base: { oneOf: ["steppeGrass", "steppeGrass", "steppeTussock"] },
+    road: "trackStone",
+    adjust: { hue: { range: [-5, 5] }, saturation: { range: [0.88, 1.1] }, value: { range: [0.94, 1.06] } },
+    // Silver-green to a cold blue-green; never lush, never warm.
+    tints: [
+      { family: "grassland", hue: { range: [0, 30] }, saturation: { range: [0.65, 1.0] }, value: { range: [0.94, 1.06] } },
+    ],
+    // A few hardy flowers in some areas.
+    grass: [
+      { family: "grassland", kind: "yarrow", density: 0.25, color: [0.56, 0.6, 0.44], chance: 0.2 },
+      { family: "grassland", kind: "bluebells", density: 0.3, color: [0.54, 0.6, 0.44], chance: 0.15 },
+    ],
+    layers: [
+      // Snow lying in patches: a dusting in one area, most of the ground in the next.
+      { generator: "snowCover", id: "steppe-snow", amount: { range: [0.05, 0.6] }, frequency: 0.006, drifts: 0.5, north: 1.5, shared: "steppeSnow" },
+      // Hoar frost ringing the snow - the same patches, reaching further - white-blue rime on the
+      // grass round every field of snow, and over the shaded ground between.
+      { generator: "snowCover", id: "steppe-rime", material: "frostGrass", amount: { range: [0.4, 0.85] }, frequency: 0.006, drifts: 0.5, north: 1.5, strength: 1.5, shared: "steppeSnow" },
+
+      // Bare gravel on the rises, where the wind strips the grass.
+      {
+        id: "steppe-scoured-rises",
+        material: "gravel",
+        weight: {
+          noises: [{ name: "fray", type: "fbm", octaves: 3, frequency: 0.02, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
+          steps: [
+            { output: "curvature", op: "input", name: "reliefCurvature" },
+            { output: "ridge", op: "scale", input: "curvature", factor: -1 },
+            { output: "frayRaw", op: "sample", noise: "fray" },
+            { output: "fray", op: "scale", input: "frayRaw", factor: 0.25 },
+            { output: "rough", op: "add", a: "ridge", b: "fray" },
+            { output: "rise", op: "mask", input: "rough", at: 0.6, off: 0.2 },
+            // Only on the steppe's own gentle swells: a border ridge's crest is all "rise", and gravel
+            // over the whole of it reads as a cobbled hill.
+            { output: "slope", op: "input", name: "slope" },
+            { output: "gentle", op: "mask", input: "slope", at: 0.97, off: 0.9 },
+            { output: "result", op: "multiply", a: "rise", b: "gentle" },
+          ],
+        },
+      },
+
+      // Frost in the hollows, where the cold air pools.
+      {
+        id: "steppe-frost-hollows",
+        material: "frostPatch",
+        weight: {
+          noises: [{ name: "fray", type: "fbm", octaves: 3, frequency: 0.02, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
+          steps: [
+            { output: "curvature", op: "input", name: "reliefCurvature" },
+            { output: "frayRaw", op: "sample", noise: "fray" },
+            { output: "fray", op: "scale", input: "frayRaw", factor: 0.25 },
+            { output: "rough", op: "add", a: "curvature", b: "fray" },
+            { output: "result", op: "mask", input: "rough", at: 0.9, off: 0.45 },
+          ],
+        },
+      },
+
+      // Stones along the water: a river's bed and near bank, a lake's shore, a pond.
+      {
+        id: "steppe-stream-stones",
+        material: "pebbles",
+        weight: {
+          noises: [{ name: "reach", type: "fbm", octaves: 2, frequency: 0.02, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
+          steps: [
+            { output: "gap", op: "input", name: "riverGap" },
+            { output: "reachRaw", op: "sample", noise: "reach" },
+            { output: "reachShift", op: "scale", input: "reachRaw", factor: 9 },
+            { output: "reach", op: "add", a: "gap", b: "reachShift" },
+            { output: "band", op: "mask", input: "reach", at: 40, off: 58 },
+            { output: "lakeFactor", op: "input", name: "lakeFactor" },
+            { output: "lake", op: "mask", input: "lakeFactor", at: 0.25, off: 0.02 },
+            { output: "height", op: "input", name: "height" },
+            { output: "low", op: "mask", input: "height", at: 0.6, off: 2.6 },
+            { output: "landmass", op: "input", name: "landmass" },
+            { output: "inland", op: "mask", input: "landmass", at: 0.95, off: 0.7 },
+            { output: "pond", op: "multiply", a: "low", b: "inland" },
+            { output: "lakeOrPond", op: "max", a: "lake", b: "pond" },
+            { output: "water", op: "max", a: "band", b: "lakeOrPond" },
+            { output: "result", op: "scale", input: "water", factor: 1.5 },
+          ],
+        },
+      },
+    ],
+  },
+  sky: {
+    horizon: "#dee4e8",
+    zenith: "#8eaccd",
+    cloud: "#ffffff",
+  },
+  // A low, grazing noon sun and a big, bright midnight moon.
+  light: {
+    sunPeak: 32,
+    moonPeak: 62,
+    ambientDay: "#d2dce6",
+    sunZenith: "#ebf0f5",
+  },
+}

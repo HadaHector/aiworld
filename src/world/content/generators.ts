@@ -339,7 +339,66 @@ const grassland: Generator = (params, reader, path) => {
   };
 };
 
-export const GENERATORS: Record<string, Generator> = { detailHeight, standDensity, rockDensity, twoSpecies, twoTone, grassland };
+/**
+ * A zone's snow cover, as one of its ground layers: patches of snow over `amount` of the ground
+ * (0 none, 1 all but the barest ridges), gathered by a slow noise into drifts and fields rather than
+ * sprinkled evenly, and lying longest where snow does - in the hollows (`drifts`, how strongly
+ * reliefCurvature pulls it in) and on the north-facing slopes (`north`, how strongly slopeFacing
+ * does) - and scoured off the ridges. With `line: [start, full]`, everything above a snow line is
+ * covered too, starting at the first height and complete by the second. Weighted past 1
+ * (`strength`) so a patch's middle is all snow rather than a share of the ground under it.
+ *
+ * With `shared`, the patch noise is shared with every other layer naming the same: a second layer of
+ * frost (`material`) with a larger `amount` then rings the snow patches instead of lying elsewhere.
+ *
+ * `{ generator: "snowCover", id, amount, frequency?, material?, drifts?, north?, line?, strength?, chance?, shared? }`
+ */
+const snowCover: Generator = (params, reader, path) => {
+  reader.onlyKeys(params, path, ["generator", "id", "amount", "frequency", "material", "drifts", "north", "line", "strength", "chance", "shared"]);
+  const amount = reader.number(params, "amount", path, { min: 0, max: 1 });
+  // An fbm of 3 octaves spans about +/-1.2 in practice: `amount` slides the patch threshold across
+  // it, from above its top (no snow) to below its bottom (snow everywhere).
+  const threshold = 1.2 - 2.4 * amount;
+  const line = params.line === undefined ? null : reader.range(params, "line", path);
+  // Two layers sharing their patch noise lie in the same places - frost ringing a snow patch.
+  const sharedName = reader.optionalString(params, "shared", path);
+  const sharedAs = sharedName === undefined ? {} : { shared: sharedName };
+  const steps: unknown[] = [
+    { output: "patchRaw", op: "sample", noise: "patch" },
+    { output: "curvature", op: "input", name: "reliefCurvature" },
+    { output: "drift", op: "scale", input: "curvature", factor: reader.optionalNumber(params, "drifts", path, 0.6) },
+    { output: "facing", op: "input", name: "slopeFacing" },
+    { output: "shade", op: "scale", input: "facing", factor: reader.optionalNumber(params, "north", path, 1.5) },
+    { output: "drifted", op: "add", a: "patchRaw", b: "drift" },
+    { output: "lying", op: "add", a: "drifted", b: "shade" },
+    { output: "patches", op: "mask", input: "lying", at: threshold + 0.15, off: threshold - 0.15 },
+  ];
+  if (line) {
+    steps.push(
+      { output: "height", op: "input", name: "height" },
+      // The line wanders, with the same noise: a little lower where a patch runs down to it.
+      { output: "lineShift", op: "scale", input: "patchRaw", factor: (line[1] - line[0]) * 0.8 },
+      { output: "lineHeight", op: "add", a: "height", b: "lineShift" },
+      { output: "above", op: "mask", input: "lineHeight", at: line[1], off: line[0] },
+      { output: "snow", op: "max", a: "patches", b: "above" },
+    );
+  } else {
+    steps.push({ output: "snow", op: "scale", input: "patches", factor: 1 });
+  }
+  steps.push({ output: "result", op: "scale", input: "snow", factor: reader.optionalNumber(params, "strength", path, 2, { min: 0 }) });
+  return {
+    ...(params.chance === undefined ? {} : { chance: params.chance }),
+    id: reader.string(params, "id", path),
+    material: reader.optionalString(params, "material", path) ?? "snow",
+    weight: {
+      // Five octaves, the finer ones strong: a patch's edge ragged and broken into islands, not a blob.
+      noises: [{ name: "patch", ...sharedAs, type: "fbm", octaves: 5, frequency: reader.optionalNumber(params, "frequency", path, 0.008, { min: 0 }), amplitude: 1, persistence: 0.6, lacunarity: 2.1 }],
+      steps,
+    },
+  };
+};
+
+export const GENERATORS: Record<string, Generator> = { detailHeight, standDensity, rockDensity, twoSpecies, twoTone, grassland, snowCover };
 
 /** Stands in for a generator call that could not be made. Its problem is already reported, so
  *  whatever reads this value skips it quietly rather than piling "missing field" errors on top. */

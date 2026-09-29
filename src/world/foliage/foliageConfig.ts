@@ -386,8 +386,9 @@ export interface BoulderShape {
   facetDepth: number;
   /** Degrees it may lean off upright. */
   tilt: number;
-  /** The share of its height below the ground. */
-  sink: number;
+  /** The share of its height below the ground - each variant somewhere in the range, so some sit
+   *  on the ground and some are half buried. */
+  sink: [number, number];
   stone: StoneTexture;
 }
 

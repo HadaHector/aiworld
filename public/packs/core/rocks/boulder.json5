@@ -17,7 +17,7 @@
   facetDepth: 0.4,
   // Degrees off upright, and the share of its height in the ground.
   tilt: 14,
-  sink: 0.22,
+  sink: [0.2, 0.55],
   // The ground's own rock, so a boulder is the same stone as the crag it fell from.
   stone: { tile: 6, material: "rock" },
   // Each boulder's stone is multiplied by a random mix of these - a few shades lighter or darker.

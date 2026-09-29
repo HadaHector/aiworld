@@ -69,4 +69,7 @@
       outputs: { diffuse: "diffuse", roughness: "roughness", height: "height" },
     },
   },
+  // Nothing grows through snow, and a patch of it clears the grass of the ground it lies on - gone
+  // wherever the snow is half the blend or more, thinning in across its edge.
+  clearsGrass: 2,
 }
