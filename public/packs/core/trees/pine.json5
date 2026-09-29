@@ -41,7 +41,7 @@
       bumpStrength: 3,
       pipeline: {
         noises: [
-          { name: "plates", type: "worley", tileCycles: 9, stretch: [1, 3.2], amplitude: 1, mode: "edge" },
+          { name: "plates", type: "worley", tileCycles: 9, stretch: [1, 3.2], amplitude: 1, mode: "edge", warp: 0.1, sizeJitter: 0.2 },
           { name: "scales", type: "worley", tileCycles: 22, stretch: [1, 1.6], amplitude: 1, mode: "edge" },
           { name: "bend", type: "fbm", octaves: 3, tileCycles: 4, amplitude: 1, persistence: 0.5, lacunarity: 2 },
           { name: "mottle", type: "fbm", octaves: 3, tileCycles: 9, amplitude: 1, persistence: 0.5, lacunarity: 2 },

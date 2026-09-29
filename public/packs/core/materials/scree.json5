@@ -7,8 +7,8 @@
     bumpStrength: 3.2,
     pipeline: {
       noises: [
-        { name: "blocks", type: "worley", tileCycles: 42, amplitude: 1, mode: "edge" },
-        { name: "chips", type: "worley", tileCycles: 140, amplitude: 1, mode: "edge" },
+        { name: "blocks", type: "worley", tileCycles: 42, amplitude: 1, mode: "edge", warp: 0.1, sizeJitter: 0.25 },
+        { name: "chips", type: "worley", tileCycles: 140, amplitude: 1, mode: "edge", warp: 0.1, sizeJitter: 0.2 },
         { name: "warpX", type: "fbm", octaves: 2, tileCycles: 16, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
         { name: "warpY", type: "fbm", octaves: 2, tileCycles: 16, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
         { name: "grain", type: "fbm", octaves: 2, tileCycles: 90, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },

@@ -8,7 +8,7 @@
     pipeline: {
       noises: [
         { name: "mottle", type: "fbm", octaves: 3, tileCycles: 13, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
-        { name: "polygons", type: "worley", tileCycles: 9, amplitude: 1, mode: "edge" },
+        { name: "polygons", type: "worley", tileCycles: 9, amplitude: 1, mode: "edge", warp: 0.15, sizeJitter: 0.15, round: 0.1 },
         { name: "warpX", type: "fbm", octaves: 3, tileCycles: 6, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
         { name: "warpY", type: "fbm", octaves: 3, tileCycles: 6, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
         { name: "lichen", type: "worley", tileCycles: 130, amplitude: 1, mode: "f1" },

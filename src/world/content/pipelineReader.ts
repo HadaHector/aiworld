@@ -73,8 +73,21 @@ function readNoise(raw: unknown, reader: Reader, path: string, options: Pipeline
   }
 
   if (type === "worley") {
-    reader.onlyKeys(obj, path, ["name", "shared", "type", "amplitude", "mode", "stretch", ...scaleKeys]);
-    return { name, ...shared, type, frequency, amplitude, mode: reader.oneOf(obj, "mode", path, WORLEY_MODES), ...(stretch ? { stretch } : {}) };
+    reader.onlyKeys(obj, path, ["name", "shared", "type", "amplitude", "mode", "stretch", "warp", "sizeJitter", "round", ...scaleKeys]);
+    const shaping = (key: "warp" | "sizeJitter" | "round", max: number) =>
+      reader.has(obj, key) ? { [key]: reader.number(obj, key, path, { min: 0, max }) } : {};
+    return {
+      name,
+      ...shared,
+      type,
+      frequency,
+      amplitude,
+      mode: reader.oneOf(obj, "mode", path, WORLEY_MODES),
+      ...(stretch ? { stretch } : {}),
+      ...shaping("warp", 1),
+      ...shaping("sizeJitter", 0.5),
+      ...shaping("round", 1),
+    };
   }
   reader.onlyKeys(obj, path, ["name", "shared", "type", "amplitude", "octaves", "persistence", "lacunarity", "stretch", ...(type === "ridged" ? ["crest"] : []), ...scaleKeys]);
   return {

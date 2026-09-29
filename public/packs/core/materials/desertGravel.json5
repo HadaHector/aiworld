@@ -11,7 +11,7 @@
         { name: "mottle", type: "fbm", octaves: 3, tileCycles: 13, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
         { name: "broad", type: "fbm", octaves: 2, tileCycles: 3, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
         { name: "grain", type: "fbm", octaves: 2, tileCycles: 90, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
-        { name: "stones", type: "worley", tileCycles: 70, amplitude: 1, mode: "f1" },
+        { name: "stones", type: "worley", tileCycles: 70, amplitude: 1, mode: "f1", warp: 0.15 },
         { name: "grit", type: "worley", tileCycles: 190, amplitude: 1, mode: "f1" },
         { name: "patches", type: "fbm", octaves: 3, tileCycles: 6, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
         { name: "warpX", type: "fbm", octaves: 2, tileCycles: 26, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },

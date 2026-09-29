@@ -62,7 +62,7 @@ function compileNoiseSpec(spec: NoiseSpec, rootSeed: number, namespace: string, 
   }
 
   if (spec.type === "worley") {
-    const sample = worleyNoise2D(seed, spec.frequency, tilePeriod, spec.stretch?.[0], spec.stretch?.[1]);
+    const sample = worleyNoise2D(seed, spec.frequency, tilePeriod, spec.stretch?.[0], spec.stretch?.[1], spec);
     const amplitude = spec.amplitude;
     const mode = spec.mode;
     return (worldX: number, worldZ: number): number => {

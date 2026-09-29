@@ -50,6 +50,15 @@ export interface WorleyNoiseSpec {
   mode: WorleyMode;
   /** As BaseNoiseSpec.stretch. */
   stretch?: [number, number];
+  /** How far, in cells, a noise at the cells' own scale moves each lookup - bends every side, so the
+   *  cells stop looking ruled. 0.2 is organic; much past 0.4 they fray. */
+  warp?: number;
+  /** 0-0.5: how much each point's distances are scaled by a weight of its own, so neighbouring
+   *  cells differ in size and the borders between them curve. */
+  sizeJitter?: number;
+  /** In cells: the width over which "edge" blends the borders where they meet, so a stone cut from
+   *  it has rounded corners rather than points. 0.12 rounds them; past 0.25 stones pinch and merge. */
+  round?: number;
 }
 
 /**

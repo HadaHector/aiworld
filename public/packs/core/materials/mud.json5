@@ -9,7 +9,7 @@
     pipeline: {
       noises: [
         { name: "mottle", type: "fbm", octaves: 3, tileCycles: 13, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
-        { name: "cracks", type: "worley", tileCycles: 4, amplitude: 1, mode: "edge" },
+        { name: "cracks", type: "worley", tileCycles: 4, amplitude: 1, mode: "edge", warp: 0.2, sizeJitter: 0.2 },
         { name: "damp", type: "billow", octaves: 2, tileCycles: 7.7, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
       ],
       steps: [
