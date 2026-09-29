@@ -462,7 +462,7 @@ function readUniversalLayer(id: string, obj: RawObject, reader: Reader): { layer
  * is an empty stand-in.
  */
 function readMaterial(id: string, obj: RawObject, reader: Reader, defaults: Defaults): { def: MaterialDef; textureFrom?: string } {
-  reader.onlyKeys(obj, "", ["name", "family", "texture", "textureFrom", "adjust", "grass", "clearsGrass", "detail"]);
+  reader.onlyKeys(obj, "", ["name", "family", "texture", "textureFrom", "adjust", "grass", "clearsGrass", "detail", "uvScale"]);
   const textureFrom = reader.optionalString(obj, "textureFrom", "");
   if (textureFrom !== undefined && reader.has(obj, "texture")) reader.fail("textureFrom", "a material has its own texture or borrows one with textureFrom, not both");
   if (textureFrom === undefined && !reader.has(obj, "texture")) reader.fail("texture", "expected a texture, or textureFrom naming the material whose texture this one draws");
@@ -480,6 +480,7 @@ function readMaterial(id: string, obj: RawObject, reader: Reader, defaults: Defa
       return { kind: reader.string(spec, "kind", path), density: reader.number(spec, "density", path, { min: 0 }), color: reader.color(spec, "color", path) };
     }),
     clearsGrass: reader.optionalNumber(obj, "clearsGrass", "", 0, { min: 0 }),
+    uvScale: reader.optionalNumber(obj, "uvScale", "", 1, { min: 0.125, max: 8 }),
     detail: obj.detail === undefined ? defaults.materialDetail : readMaterialDetail(reader.object(obj.detail, "detail"), reader, "detail", defaults.materialDetail),
   };
   return { def, textureFrom };

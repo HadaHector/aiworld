@@ -71,6 +71,7 @@ Without `outputs`, the result is the last step. A graph with several results nam
 `persistence`, `lacunarity`) and `worley` (`frequency`, `amplitude`, `mode`: `"f1"` the distance to the nearest point - round
 stones, cells; `"edge"` the distance to a cell border - cracks; `"cell"` a random 0-1 value of the
 nearest point's own, the same across its cell).
+A worley noise is a ruled diagram unless shaped, all in cells: `warp` (0.2) bends each side, `sizeJitter` (0-0.5) makes neighbours differ in size, `round` (0.12) rounds the corners where edges meet - see `core/materials/cobblestone.json5`.
 A `ridged` noise's crests are knife edges; `crest` (0-1: 0.2 softens them, 0.5 rounds them well over, even on the coarse far-away ground) rounds them at the same height.
 In a texture, give `tileCycles` (cycles per texture tile) instead of `frequency`. Any noise can take
 `stretch: [x, y]` to elongate its features - `[1, 5]` makes them five times taller than wide (bark
@@ -231,6 +232,8 @@ entry in the material table, never another texture.
   grass: [{ kind: "meadow", density: 2, color: [0.4, 0.5, 0.3] }],   // tufts per m2 at full weight
   clearsGrass: 0,             // > 0 removes grass under it (roads use 2)
   detail: { scale: 7.3, strength: 0.55 },   // optional, else defaults.json5's materialDetail
+  uvScale: 1,                // laid this many times smaller: 2 puts the 50 m tile on 25 m - author
+                             // everything twice the size (and bumpStrength twice) for twice the texels
 }
 ```
 

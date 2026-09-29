@@ -53,7 +53,7 @@
   ground: {
     // Which meadow an area is: grass's own texture under each, a different sward on it.
     base: { oneOf: ["grass", "meadowShort", "meadowLong", "meadowPoppy", "meadowButtercup", "meadowTussock"] },
-    road: "track",
+    road: "cobblestone",
     // Each area's ground a little different: a warmer or cooler, paler or deeper version of it.
     adjust: { hue: { range: [-8, 8] }, saturation: { range: [0.85, 1.15] }, value: { range: [0.92, 1.08] } },
     // Its grassland - meadow, weeds, leafy and dry grass, and the grass on them - anywhere from an

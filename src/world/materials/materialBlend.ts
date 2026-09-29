@@ -165,27 +165,32 @@ export function createMaterialBlender(seed: number, content: WorldContent, areaB
     }
 
     // The road's weight is the same everywhere - the layer is one pipeline over roadGap - so it is
-    // evaluated once here and only its MATERIAL varies per area below.
-    const roadWeight = Math.max(0, compiledRoadLayer(worldX, worldZ, context));
+    // evaluated once here and only its MATERIAL varies per area below. The road is laid on top:
+    // it takes its weight first and every other layer shares what is left. Sharing evenly, a road
+    // through a wood came out half forest floor, and that half's own height - leaves, fine and high -
+    // won through at every dip of the road's surface, as a sparkle that crawled when the camera moved.
+    const roadWeight = Math.min(1, Math.max(0, compiledRoadLayer(worldX, worldZ, context)));
+    const offRoad = 1 - roadWeight;
 
     for (const area of areaWeights) {
       const ground = groundFor(area.biome);
       const layers = ground.layers;
       const layerWeights: number[] = [];
-      let overlaySum = universalSum + roadWeight;
+      let overlaySum = universalSum;
       for (const layer of layers) {
         const weight = Math.max(0, layer.evaluate(worldX, worldZ, context));
         layerWeights.push(weight);
         overlaySum += weight;
       }
-      // Same weight conservation as the single-biome case, applied within this area's own blend.
-      const scale = overlaySum > 1 ? 1 / overlaySum : 1;
+      // Same weight conservation as the single-biome case, applied within this area's own blend -
+      // within what the road leaves.
+      const scale = overlaySum > 1 ? offRoad / overlaySum : offRoad;
       const share = area.weight;
       for (let i = 0; i < compiledUniversalLayers.length; i++) {
         add(ground.universal[i], universalWeights[i] * scale * share);
       }
-      add(ground.road, roadWeight * scale * share);
-      add(ground.base, Math.max(0, 1 - overlaySum * scale) * share);
+      add(ground.road, roadWeight * share);
+      add(ground.base, Math.max(0, offRoad - overlaySum * scale) * share);
       for (let i = 0; i < layers.length; i++) {
         add(layers[i].materialIndex, layerWeights[i] * scale * share);
       }

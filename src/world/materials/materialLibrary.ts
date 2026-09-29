@@ -205,6 +205,8 @@ void sampleMaterial(float material, out vec4 color, out vec3 tilt, out float hei
   vec4 entry = texelFetch(materialTable, ivec2(0, index), 0);
   float layer = entry.x;
   vec2 detail = entry.yz;
+  // Laid uvScale times smaller than the usual tile (MaterialDef.uvScale).
+  vec2 uv = vUV * entry.w;
   float mean = max(luma(texelFetch(materialTable, ivec2(1, index), 0).rgb), 0.03);
   mat3 adjust = mat3(
     texelFetch(materialTable, ivec2(2, index), 0).rgb,
@@ -212,10 +214,10 @@ void sampleMaterial(float material, out vec4 color, out vec3 tilt, out float hei
     texelFetch(materialTable, ivec2(4, index), 0).rgb
   );
 
-  vec4 base = texture(materialAtlas, vec3(vUV, layer));
-  vec4 baseNormal = texture(normalAtlas, vec3(vUV, layer));
+  vec4 base = texture(materialAtlas, vec3(uv, layer));
+  vec4 baseNormal = texture(normalAtlas, vec3(uv, layer));
 
-  vec2 fineUV = DETAIL_TURN * vUV * detail.x;
+  vec2 fineUV = DETAIL_TURN * uv * detail.x;
   vec3 fine = texture(materialAtlas, vec3(fineUV, layer)).rgb;
   vec3 fineNormal = texture(normalAtlas, vec3(fineUV, layer)).rgb * 2.0 - 1.0;
   float fineShade = mix(1.0, clamp(luma(fine) / mean, 0.35, 1.9), detail.y);
@@ -255,18 +257,15 @@ void main() {
   vec4 albedo = (${materialSlots.map((_, i) => `color${i} * blend${i}`).join(" + ")}) / total;
   vec3 tangentNormal = normalize(${materialSlots.map((_, i) => `tilt${i} * blend${i}`).join(" + ")});
 
-  // Screen-space-derivative TBN (no authored per-vertex tangents needed) - standard technique for
-  // bump-mapping a surface, like terrain, that never got its own tangent vertex attribute.
-  vec3 dp1 = dFdx(vWorldPosition);
-  vec3 dp2 = dFdy(vWorldPosition);
-  vec2 duv1 = dFdx(vUV);
-  vec2 duv2 = dFdy(vUV);
-  vec3 dp2perp = cross(dp2, n);
-  vec3 dp1perp = cross(n, dp1);
-  vec3 tangent = dp2perp * duv1.x + dp1perp * duv2.x;
-  vec3 bitangent = dp2perp * duv1.y + dp1perp * duv2.y;
-  float invMax = inversesqrt(max(dot(tangent, tangent), dot(bitangent, bitangent)));
-  mat3 tbn = mat3(tangent * invMax, bitangent * invMax, n);
+  // The texture's axes on the surface: vUV is world x and z scaled (see the vertex shader), so u runs
+  // along world x and v along world z, each laid onto the surface. Not the usual screen-space
+  // derivative frame (dFdx of the world position): tens of kilometres out a float holds a position
+  // only to millimetres, as fine as the step between two pixels up close, so that frame came out
+  // of rounding - a different tilt for every 2x2 block of pixels, a crawling dither wherever the
+  // bumps lean far over (the side of a cobble).
+  vec3 tangent = normalize(vec3(1.0, 0.0, 0.0) - n * n.x);
+  vec3 bitangent = normalize(vec3(0.0, 0.0, 1.0) - n * n.z);
+  mat3 tbn = mat3(tangent, bitangent, n);
   vec3 worldNormal = normalize(tbn * tangentNormal);
 
   vec3 lightDir = normalize(lightDirection);
@@ -293,7 +292,10 @@ void main() {
   // Shadow darkens the light itself, not the surface it lands on - a shadowed patch of sand is
   // still sand, just lit by the sky rather than the sun, which is what SHADOW_DARKNESS's floor is
   // standing in for (see computeShadow).
-  float shadow = computeShadow(vWorldPosition, worldNormal, vPositionFromCamera.z);
+  // Biased along the mesh's own normal, not the bumped one: a bump tilted far over (the side of a
+  // domed cobble) pushed the lookup sideways into the ground, into its own shadow - a dither like
+  // z-fighting that crawled as the cascades followed the camera.
+  float shadow = computeShadow(vWorldPosition, n, vPositionFromCamera.z);
   // Ambient is not shadowed - it is sky-fill, not a beam the sun caster could block, and reaches a
   // shadowed patch exactly as it reaches a lit one. Without this, night terrain (a dim moon,
   // frequently in the 0-intensity instant right at moonrise/moonset) would read as pure black,
@@ -414,7 +416,7 @@ export async function createTerrainMaterial(
   const table = new Float32Array(materialDefs.length * TABLE_WIDTH * 4);
   materialDefs.forEach((def, i) => {
     const row = i * TABLE_WIDTH * 4;
-    table.set([layerOf[i], def.detail.scale, def.detail.strength, 0], row);
+    table.set([layerOf[i], def.detail.scale, def.detail.strength, def.uvScale], row);
     table.set([...textures.layerAverages[layerOf[i]], 0], row + 4);
     const m = matrices[i];
     for (let column = 0; column < 3; column++) table.set([m[column], m[3 + column], m[6 + column], 0], row + 8 + column * 4);

@@ -1,0 +1,100 @@
+/**
+ * A cobbled road, for a wood or hill country: rounded stones about 70 cm across, set tight in dark earth with moss
+ * creeping into the joints. Each cobble is a worley cell - its edge distance cut into a stone with
+ * a rounded top and a gap round it, its own value picking its shade (grey, brown, the odd pale or
+ * mossy one) - warped, uneven in size and round-cornered, the way hand-laid stones are.
+ */
+{
+  name: "Cobblestone",
+  // No detail pass: drawn again 7.3 times smaller it would lay a web of tiny cobbles over every stone.
+  detail: { strength: 0 },
+  // Laid at twice the usual density - each 50 m tile covers 25 m, and everything in it is authored
+  // twice the size - so a 70 cm cobble gets ~30 texels rather than ~15 and stays sharp up close.
+  uvScale: 2,
+  texture: {
+    // Twice the usual, for twice the texels: the bump is the height step from one texel to the next.
+    bumpStrength: 4.4,
+    pipeline: {
+      noises: [
+        // Warped and uneven, with rounded corners: laid by hand, not cut from a diagram.
+        { name: "cobbles", type: "worley", tileCycles: 35, amplitude: 1, mode: "edge", warp: 0.2, sizeJitter: 0.2, round: 0.12 },
+        { name: "mottle", type: "fbm", octaves: 3, tileCycles: 7, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+        { name: "grain", type: "fbm", octaves: 2, tileCycles: 200, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+        // Blotches a few to a stone - weathering, lichen stain, the mineral showing through.
+        { name: "stain", type: "fbm", octaves: 3, tileCycles: 130, amplitude: 1, persistence: 0.55, lacunarity: 2.1 },
+        { name: "moss", type: "fbm", octaves: 3, tileCycles: 5, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+      ],
+      steps: [
+        { output: "edge", op: "sample", noise: "cobbles" },
+        { output: "cobbleId", op: "sample", noise: "cobbles", mode: "cell" },
+        { output: "mottle", op: "sample", noise: "mottle" },
+        { output: "mottleMask", op: "mask", input: "mottle", at: 1.75, off: -1.75 },
+        { output: "grain", op: "sample", noise: "grain" },
+        { output: "grainMask", op: "mask", input: "grain", at: 1.5, off: -1.5 },
+        { output: "mossRaw", op: "sample", noise: "moss" },
+        { output: "mossy", op: "mask", input: "mossRaw", at: 0.6, off: -0.4 },
+
+        // The stone: a dome - nothing in the joint, rising steeply off it and curving over all the way
+        // to the middle: 1 - (1 - t)^3 across the stone's edge distance. Not a quarter circle: that
+        // rises straight up, and a stone is only ~15 texels across, so its rim became a one-texel
+        // cliff - blocky normals round every stone that crawled as the camera moved. This one's rim
+        // takes about three texels. Measured to a fixed 0.6 cell, about the middle of a big stone -
+        // a small one never gets there: a lower dome.
+        { output: "stoneEdge", op: "mask", input: "edge", at: 0.6, off: 0.05 },
+        { output: "fromTop", op: "invert", input: "stoneEdge" },
+        { output: "fromTopCubed", op: "power", input: "fromTop", exponent: 3 },
+        { output: "stone", op: "invert", input: "fromTopCubed" },
+        { output: "set", op: "mask", input: "edge", at: 0.12, off: 0.05 },
+
+        {
+          output: "cobbleTone",
+          op: "colorRamp",
+          input: "cobbleId",
+          stops: [
+            { at: 0.0, color: [0.3, 0.29, 0.27] },
+            { at: 0.3, color: [0.4, 0.38, 0.34] },
+            { at: 0.55, color: [0.36, 0.31, 0.26] },
+            { at: 0.75, color: [0.46, 0.44, 0.4] },
+            // The odd mossy stone - one in twenty or so, the ramp only greening between these two.
+            { at: 0.9, color: [0.42, 0.4, 0.36] },
+            { at: 0.93, color: [0.3, 0.33, 0.24] },
+            { at: 0.96, color: [0.5, 0.48, 0.44] },
+            { at: 1.0, color: [0.55, 0.52, 0.47] },
+          ],
+        },
+        // Worn: lighter on the tops, darker down the sides, and flecked with grain.
+        { output: "wear", op: "remap", input: "stone", inMin: 0, inMax: 1, outMin: 0.62, outMax: 1.1 },
+        { output: "worn", op: "multiply", a: "cobbleTone", b: "wear" },
+        { output: "fleck", op: "remap", input: "grainMask", inMin: 0, inMax: 1, outMin: 0.9, outMax: 1.08 },
+        { output: "flecked", op: "multiply", a: "worn", b: "fleck" },
+        { output: "wideTone", op: "remap", input: "mottleMask", inMin: 0, inMax: 1, outMin: 0.88, outMax: 1.08 },
+        { output: "toned", op: "multiply", a: "flecked", b: "wideTone" },
+        // Stained: darker and cooler in some blotches, lighter and warmer in others - colour only.
+        { output: "stainRaw", op: "sample", noise: "stain" },
+        { output: "stainMask", op: "mask", input: "stainRaw", at: 0.7, off: -0.7 },
+        { output: "stainDark", op: "color", value: [0.8, 0.83, 0.88] },
+        { output: "stainLight", op: "color", value: [1.14, 1.08, 0.98] },
+        { output: "stainTone", op: "mix", a: "stainDark", b: "stainLight", t: "stainMask" },
+        { output: "cobble", op: "multiply", a: "toned", b: "stainTone" },
+
+        // The joints: dark earth, green with moss in patches.
+        { output: "earth", op: "color", value: [0.16, 0.12, 0.09] },
+        { output: "mossTone", op: "color", value: [0.2, 0.28, 0.11] },
+        { output: "joint", op: "mix", a: "earth", b: "mossTone", t: "mossy" },
+        { output: "diffuse", op: "mix", a: "joint", b: "cobble", t: "set" },
+
+        { output: "roughJoint", op: "constant", value: 0.9 },
+        // Polished a little by feet and wheels.
+        { output: "roughStone", op: "constant", value: 0.6 },
+        { output: "roughness", op: "mix", a: "roughJoint", b: "roughStone", t: "set" },
+
+        { output: "stoneHeight", op: "scale", input: "stone", factor: 0.85 },
+        { output: "grainHeight", op: "scale", input: "grainMask", factor: 0.08 },
+        { output: "height", op: "add", a: "stoneHeight", b: "grainHeight" },
+      ],
+      outputs: { diffuse: "diffuse", roughness: "roughness", height: "height" },
+    },
+  },
+  // Clears grass rather than merely growing none, like the other roads (see track.json5).
+  clearsGrass: 2,
+}

@@ -48,6 +48,10 @@ export interface MaterialDef {
   /** The close-up pass (see materialLibrary.ts): the texture again, `scale` times smaller, deepening
    *  its light and dark and its bumps by `strength` (0 turns it off). */
   detail: MaterialDetail;
+  /** How many times smaller the texture is laid on the ground than the usual 50 m tile - 2 covers
+   *  25 m with it, so the same features author at twice the size get twice the texels (a road's
+   *  cobbles, sharp up close). The far-off broad pass keeps the world's scale. */
+  uvScale: number;
 }
 
 export interface MaterialDetail {
