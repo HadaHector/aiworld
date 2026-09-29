@@ -169,6 +169,9 @@ out in full.
     tints: [                  // optional: recolour one family of materials only, after adjust
       { family: "grassland", hue: -30, saturation: 1.2 },   // the meadows turn; roads and rock do not
     ],
+    grass: [                  // optional: grass grown on one family of materials, on top of their own -
+      { family: "grassland", kind: "clover", density: 0.8, color: [0.36, 0.56, 0.24], chance: 0.35 },
+    ],                        // with a chance on each, every area its own flowers (see core/biomes/meadow.json5)
     layers: [                 // material rules for this biome only, on top of layers/
       { id: "plains-dry", material: "grassDry", weight: { ... } },  // id is optional; it seeds the graph's noise
     ],
@@ -289,7 +292,11 @@ See `core/grass/*.json5` and `core/trees/*.json5`. Grass: tuft `width`/`height` 
 `sway`, `fadeStart`/`fadeEnd` (camera distance where tufts shrink away - capped in practice by the
 first level-of-detail ring), an optional `cluster: { scale, coverage }` for patches, and `blades`
 describing the baked blade texture. A flowering kind gives `blades.flowerHeads: { count, radius,
-colors: [...] }`, and each tuft's petals take one of its colours. At most 16 grass kinds in total.
+colors: [...] }`, and each tuft's petals take one of its colours. `shape` is how a head is drawn -
+`flower` (round petals, the default), `daisy` (rays round an eye), `cup` (a tulip in profile),
+`bell` (hanging bells), `raceme` (a spire of florets, lupin), `umbel` (a flat dome of tiny florets,
+yarrow), `globe` (a ball, clover or thistle) or `spike` (a cattail); `petals` is its count of petals,
+bells, florets or rays, and `eye: [r, g, b]` colours a flower's centre. At most 32 grass kinds in total.
 
 Trees come in two models. `model: "branching"` (see `core/trees/broadleaf.json5`) is generated:
 a trunk with a flared base and roots diving into the ground, main branches carrying twigs, and leaf

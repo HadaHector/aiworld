@@ -1,0 +1,262 @@
+/**
+ * Flower meadow - the open grassland family's green, gentle variant (see ZONES.md): rolling
+ * grassland thick with flowers, and the trees standing in it rather than a wood. Which flowers an
+ * area grows is its own roll, on top of whichever sward it is; so are its trees - lone oaks, birch
+ * groves, or the two together.
+ */
+{
+  name: "Meadow",
+  voice: "verdant",
+  spawnWeight: 2,
+  lakeChance: 0.05,
+  borderType: "mountain",
+  settlement: "timber",
+  height: { generator: "detailHeight", amplitude: { range: [9, 17] }, frequency: { range: [0.0016, 0.0026] }, offset: 7.5 },
+  trees: {
+    oneOf: [
+      // Lone oaks: a thin scatter everywhere, each one standing in the open with room round it.
+      { generator: "standDensity", tree: "oak", frequency: 0.002, openAt: -0.6, fullAt: 0.5, peak: { range: [0.02, 0.05] } },
+      // Birch groves: small, light stands with meadow between them.
+      { generator: "standDensity", tree: "birch", frequency: 0.004, openAt: { range: [0.05, 0.3] }, fullAt: 0.75, peak: { range: [0.35, 0.6] } },
+      // Both: birch groves, and the odd great oak out in the grass between them.
+      {
+        generator: "twoSpecies",
+        lower: "oak",
+        upper: "birch",
+        noises: [{ name: "stand", type: "fbm", octaves: 3, frequency: 0.004, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
+        // Open ground carries a few trees; the stands, many.
+        cover: [
+          { output: "standRaw", op: "sample", noise: "stand" },
+          { output: "coverRamp", op: "remap", input: "standRaw", inMin: -0.2, inMax: 0.7, outMin: 0.03, outMax: { range: [0.35, 0.55] } },
+          { output: "cover", op: "clamp", input: "coverRamp", min: 0.03, max: 0.55 },
+        ],
+        // Oak where the stands thin, birch where they close up: the lone trees are oaks, the groves birch.
+        share: [
+          { output: "standAgain", op: "sample", noise: "stand" },
+          { output: "shareRamp", op: "remap", input: "standAgain", inMin: -0.1, inMax: 0.3, outMin: 0, outMax: 1 },
+          { output: "share", op: "clamp", input: "shareRamp", min: 0, max: 1 },
+        ],
+      },
+    ],
+  },
+  // The odd lone boulder in a field, and a few on the banks of the water.
+  rocks: { generator: "rockDensity", kind: "boulder", frequency: 0.003, openAt: 0.3, fullAt: 0.8, peak: { range: [0, 0.02] }, footOfSlope: { range: [0.1, 0.4] }, riverShore: { range: [0.5, 1.25] }, lakeShore: { range: [0.5, 1.25] } },
+  // Each area its own trees, and every tree its own shade of them (spread). Pines first: a tree
+  // takes the first rule for its kind, and conifers stray less far from green than the rest.
+  treeTints: [
+    // Each area's stone a shade of its own, and every boulder a little different.
+    { kinds: ["boulder"], stone: { hue: { range: [-12, 12] }, saturation: { range: [0.6, 1.4] }, value: { range: [0.85, 1.15] }, spread: { hue: 6, saturation: 0.25, value: 0.15 } } },
+    {
+      kinds: ["pine"],
+      leaves: { hue: { range: [-40, 80] }, saturation: { range: [0.6, 1.5] }, value: { range: [0.85, 1.15] }, spread: { hue: 10, saturation: 0.15, value: 0.1 } },
+      bark: { hue: { range: [-20, 20] }, saturation: { range: [0.6, 1.4] }, value: { range: [0.75, 1.2] }, spread: { value: 0.12 } },
+    },
+    {
+      // A summer meadow's trees: fresh green to deep green, the odd area yellower or bluer.
+      leaves: { hue: { range: [-25, 35] }, saturation: { range: [0.8, 1.35] }, value: { range: [0.9, 1.12] }, spread: { hue: 10, saturation: 0.15, value: 0.12 } },
+      bark: { hue: { range: [-10, 10] }, saturation: { range: [0.7, 1.2] }, value: { range: [0.85, 1.12] }, spread: { value: 0.1 } },
+    },
+  ],
+  ground: {
+    // Which meadow an area is: grass's own texture under each, a different sward on it.
+    base: { oneOf: ["grass", "meadowShort", "meadowLong", "meadowPoppy", "meadowButtercup", "meadowTussock", "meadowLupin", "meadowClover", "meadowRough"] },
+    road: "track",
+    // Each area's ground a little different: a warmer or cooler, paler or deeper version of it.
+    adjust: { hue: { range: [-8, 8] }, saturation: { range: [0.85, 1.15] }, value: { range: [0.92, 1.08] } },
+    // Its grassland lush and green - a touch yellower or bluer, never the plains' sunburnt orange.
+    tints: [
+      { family: "grassland", hue: { range: [-20, 25] }, saturation: { range: [0.7, 1.08] }, value: { range: [0.92, 1.05] } },
+    ],
+    // Each area's own flowers, over whichever sward it is: every kind a chance of its own, so one
+    // meadow goes with clover and daisies, the next with lupins and poppies, a third with none.
+    grass: [
+      { family: "grassland", kind: "daisies", density: 0.6, color: [0.4, 0.6, 0.26], chance: 0.4 },
+      { family: "grassland", kind: "clover", density: 0.8, color: [0.36, 0.56, 0.24], chance: 0.35 },
+      { family: "grassland", kind: "buttercups", density: 0.7, color: [0.42, 0.6, 0.26], chance: 0.3 },
+      { family: "grassland", kind: "poppies", density: 0.5, color: [0.42, 0.6, 0.26], chance: 0.25 },
+      { family: "grassland", kind: "lupins", density: 0.5, color: [0.4, 0.58, 0.26], chance: 0.2 },
+      { family: "grassland", kind: "yarrow", density: 0.5, color: [0.44, 0.6, 0.28], chance: 0.25 },
+      { family: "grassland", kind: "bluebells", density: 0.5, color: [0.4, 0.58, 0.26], chance: 0.15 },
+      { family: "grassland", kind: "thistles", density: 0.2, color: [0.4, 0.55, 0.28], chance: 0.2 },
+    ],
+    layers: [
+      // Meadow-only ground variety. slopeFacing and reliefCurvature are both small, gentle signals on
+      // the meadow's own rolling hills (amplitude ~12.75), so these thresholds sit close to 0 rather than
+      // mirroring rock/snow's much steeper ones.
+      {
+        id: "meadow-north-fade",
+        material: "grassPale",
+        weight: {
+          noises: [],
+          steps: [
+            { output: "facing", op: "input", name: "slopeFacing" },
+            { output: "raw", op: "remap", input: "facing", inMin: 0.08, inMax: 0.35, outMin: 0, outMax: 1 },
+            { output: "result", op: "clamp", input: "raw", min: 0, max: 1 },
+          ],
+        },
+      },
+
+      {
+        id: "meadow-south-dry",
+        material: "grassDry",
+        weight: {
+          noises: [],
+          steps: [
+            { output: "facing", op: "input", name: "slopeFacing" },
+            { output: "facingSouth", op: "scale", input: "facing", factor: -1 },
+            { output: "raw", op: "remap", input: "facingSouth", inMin: 0.08, inMax: 0.35, outMin: 0, outMax: 1 },
+            { output: "result", op: "clamp", input: "raw", min: 0, max: 1 },
+          ],
+        },
+      },
+
+      {
+        id: "meadow-valley-weeds",
+        material: "weeds",
+        weight: {
+          noises: [],
+          steps: [
+            { output: "curvature", op: "input", name: "reliefCurvature" },
+            { output: "raw", op: "remap", input: "curvature", inMin: 0.3, inMax: 1.5, outMin: 0, outMax: 1 },
+            { output: "result", op: "clamp", input: "raw", min: 0, max: 1 },
+          ],
+        },
+      },
+
+      // Under the trees, the ground is the wood's own: leaf litter, humus and twigs rather than
+      // meadow. treeCover is the tree scatter's own density here, so the floor follows the stands
+      // and their clearings stay grass - frayed by a slow noise where the wood thins, so its edge wanders in and
+      // out in tongues and islands instead of tracing the cover's contour. The leafy grass reads
+      // the same noise (it is `shared`), so the two meet along one edge.
+      {
+        id: "meadow-forest-floor",
+        material: "forestFloor",
+        weight: {
+          noises: [{ name: "fray", shared: "woodEdge", type: "fbm", octaves: 3, frequency: 0.03, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
+          steps: [
+            { output: "cover", op: "input", name: "treeCover" },
+            // Frayed only where the wood is thinning: nothing deep in the wood or out in the meadow.
+            { output: "open", op: "invert", input: "cover" },
+            { output: "thinning", op: "multiply", a: "cover", b: "open" },
+            { output: "frayRaw", op: "sample", noise: "fray" },
+            { output: "frayHere", op: "multiply", a: "frayRaw", b: "thinning" },
+            { output: "frayShift", op: "scale", input: "frayHere", factor: 1.4 },
+            { output: "frayed", op: "add", a: "cover", b: "frayShift" },
+            { output: "result", op: "mask", input: "frayed", at: 0.96, off: 0.57 },
+          ],
+        },
+      },
+
+      // The wood's edge: leaves over grass, a wide band of it between meadow and forest floor,
+      // rising as the meadow's share falls and giving way exactly as the floor's rises.
+      {
+        id: "meadow-leafy-grass",
+        material: "leafyGrass",
+        weight: {
+          noises: [{ name: "fray", shared: "woodEdge", type: "fbm", octaves: 3, frequency: 0.03, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
+          steps: [
+            { output: "cover", op: "input", name: "treeCover" },
+            // Frayed only where the wood is thinning: nothing deep in the wood or out in the meadow.
+            { output: "open", op: "invert", input: "cover" },
+            { output: "thinning", op: "multiply", a: "cover", b: "open" },
+            { output: "frayRaw", op: "sample", noise: "fray" },
+            { output: "frayHere", op: "multiply", a: "frayRaw", b: "thinning" },
+            { output: "frayShift", op: "scale", input: "frayHere", factor: 1.4 },
+            { output: "frayed", op: "add", a: "cover", b: "frayShift" },
+            { output: "rising", op: "mask", input: "frayed", at: 0.32, off: 0.05 },
+            { output: "falling", op: "mask", input: "frayed", at: 0.57, off: 0.96 },
+            { output: "result", op: "multiply", a: "rising", b: "falling" },
+          ],
+        },
+      },
+
+      // Stones along the water: a river washes its bed and its near bank down to the cobbles (the
+      // waterline is ~22 units from the centreline at a source, ~62 at a mouth), a lake or a pond its
+      // shore, showing through the water too, before the universal shore sand takes over further out.
+      {
+        id: "meadow-stream-stones",
+        material: "pebbles",
+        weight: {
+          noises: [{ name: "reach", type: "fbm", octaves: 2, frequency: 0.02, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
+          steps: [
+            { output: "gap", op: "input", name: "riverGap" },
+            // A ragged reach - wider here, narrower there - rather than a ruled strip.
+            { output: "reachRaw", op: "sample", noise: "reach" },
+            { output: "reachShift", op: "scale", input: "reachRaw", factor: 9 },
+            { output: "reach", op: "add", a: "gap", b: "reachShift" },
+            { output: "band", op: "mask", input: "reach", at: 40, off: 58 },
+            // A lake's shore and bed get the same stones, from where the shore starts down.
+            { output: "lakeFactor", op: "input", name: "lakeFactor" },
+            { output: "lake", op: "mask", input: "lakeFactor", at: 0.25, off: 0.02 },
+            // And so does any hollow inland where the ground just dips to the waterline and fills - no
+            // river, no lake cell, only low ground. Inland only: the coast keeps its sand.
+            { output: "height", op: "input", name: "height" },
+            { output: "low", op: "mask", input: "height", at: 0.6, off: 2.6 },
+            { output: "landmass", op: "input", name: "landmass" },
+            { output: "inland", op: "mask", input: "landmass", at: 0.95, off: 0.7 },
+            { output: "pond", op: "multiply", a: "low", b: "inland" },
+            { output: "lakeOrPond", op: "max", a: "lake", b: "pond" },
+            { output: "water", op: "max", a: "band", b: "lakeOrPond" },
+            // Past 1, to outweigh the universal shore sand on the same bank.
+            { output: "result", op: "scale", input: "water", factor: 1.5 },
+          ],
+        },
+      },
+
+      // Drifts of mixed wildflowers on open, gentle ground - in some areas only, like the rest of its
+      // flowers (ground.grass), or every meadow would carry the same drifts.
+      {
+        chance: 0.3,
+        id: "meadow-wildflowers",
+        material: "wildflowers",
+        weight: {
+          noises: [{ name: "drift", type: "fbm", octaves: 3, frequency: 0.006, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
+          steps: [
+            { output: "driftRaw", op: "sample", noise: "drift" },
+            { output: "drift", op: "mask", input: "driftRaw", at: 0.55, off: 0.2 },
+            { output: "slope", op: "input", name: "slope" },
+            { output: "gentle", op: "mask", input: "slope", at: 0.96, off: 0.86 },
+            { output: "cover", op: "input", name: "treeCover" },
+            { output: "open", op: "mask", input: "cover", at: 0.1, off: 0.4 },
+            { output: "openDrift", op: "multiply", a: "drift", b: "open" },
+            { output: "gentleHere", op: "scale", input: "gentle", factor: 1 },
+            { output: "result", op: "multiply", a: "openDrift", b: "gentleHere" },
+          ],
+        },
+      },
+
+      // Reed beds: patches of bulrush in the shallows and at the waterline of any inland water -
+      // pond, lake or river alike, since the band is only the ground's height about the water.
+      // Weighted to take the waterside stones' place where a patch falls.
+      {
+        id: "meadow-reedbed",
+        material: "reedbed",
+        weight: {
+          noises: [{ name: "patch", type: "fbm", octaves: 3, frequency: 0.03, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
+          steps: [
+            { output: "height", op: "input", name: "height" },
+            { output: "wadeable", op: "mask", input: "height", at: -0.2, off: -1.1 },
+            { output: "nearWater", op: "mask", input: "height", at: 0.5, off: 1.5 },
+            { output: "band", op: "multiply", a: "wadeable", b: "nearWater" },
+            { output: "landmass", op: "input", name: "landmass" },
+            { output: "inland", op: "mask", input: "landmass", at: 0.95, off: 0.7 },
+            { output: "patchRaw", op: "sample", noise: "patch" },
+            { output: "patch", op: "mask", input: "patchRaw", at: 0.35, off: 0.05 },
+            { output: "inlandBand", op: "multiply", a: "band", b: "inland" },
+            { output: "patchBand", op: "multiply", a: "inlandBand", b: "patch" },
+            { output: "result", op: "scale", input: "patchBand", factor: 4 },
+          ],
+        },
+      },
+    ],
+  },
+  sky: {
+    horizon: "#c4d6d2",
+    zenith: "#588cca",
+    cloud: "#f6f8f4",
+  },
+  light: {
+    sunPeak: 65,
+    moonPeak: 45,
+  },
+}

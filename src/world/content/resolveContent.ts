@@ -1,7 +1,7 @@
 import JSON5 from "json5";
 import type { BiomeDayNight, BiomeDefinition, BorderType, BoundaryHillStyle, TreeTintPart, TreeTintRuleDef } from "../biomes/biomeTypes";
 import type { MaterialDef, MaterialDetail, MaterialLayer } from "../materials/materialTypes";
-import type { GrassKindDef } from "../foliage/grassConfig";
+import { FLOWER_SHAPES, type GrassKindDef } from "../foliage/grassConfig";
 import {
   BUSH_FOLIAGE_BUILDERS,
   CONIFER_FOLIAGE_BUILDERS,
@@ -48,8 +48,10 @@ export interface PackSource {
 const CONTENT_FOLDERS = ["biomes", "materials", "layers", "grass", "trees", "bushes", "rocks", "voices", "borderHills", "settlements"] as const;
 type ContentFolder = (typeof CONTENT_FOLDERS)[number];
 
-/** Instances are tagged with kind * 16 + scale (foliage/grassScatter.ts), which leaves room for 16. */
-const MAX_GRASS_KINDS = 16;
+/** How many grass kinds the packs may define between them: each is a layer of the blade atlas and
+ *  an entry in the grass shader's per-kind uniform arrays (four vectors a kind, plus its petal
+ *  colours), which must stay inside the 256 vertex uniform vectors WebGL2 guarantees. */
+const MAX_GRASS_KINDS = 32;
 
 const BORDER_TYPES: readonly BorderType[] = ["smooth", "mountain", "river", "cliff", "wall"];
 const ID_PATTERN = /^[A-Za-z0-9_-]+$/;
@@ -287,6 +289,10 @@ export function resolveContent(packs: PackSource[]): WorldContent {
       if (tint.family && !families.has(tint.family)) {
         report({ file, path: `ground.tints[${i}].family`, message: `no material is of family "${tint.family}" (known: ${[...families].join(", ") || "none"})` });
       }
+    });
+    biome.groundGrass.forEach(({ family, spec }, i) => {
+      if (!families.has(family)) report({ file, path: `ground.grass[${i}].family`, message: `no material is of family "${family}" (known: ${[...families].join(", ") || "none"})` });
+      if (!grassKindIds.has(spec.kind)) report({ file, path: `ground.grass[${i}].kind`, message: `no grass kind "${spec.kind}" (known: ${[...grassKindIds].join(", ")})` });
     });
     if (biome.voiceId && !voices[biome.voiceId]) {
       report({ file, path: "voice", message: `no voice "${biome.voiceId}" (known: ${Object.keys(voices).join(", ")})` });
@@ -570,14 +576,16 @@ function readGrassKind(id: string, obj: RawObject, reader: Reader): GrassKindDef
   }
   if (blades.flowerHeads !== undefined) {
     const heads = reader.object(blades.flowerHeads, "blades.flowerHeads");
-    reader.onlyKeys(heads, "blades.flowerHeads", ["count", "radius", "colors", "shape"]);
+    reader.onlyKeys(heads, "blades.flowerHeads", ["count", "radius", "colors", "shape", "petals", "eye"]);
     const colors = reader.array(heads, "colors", "blades.flowerHeads").map((c, i) => reader.colorValue(c, `blades.flowerHeads.colors[${i}]`));
     if (colors.length === 0) reader.fail("blades.flowerHeads.colors", "a flowering kind needs at least one petal colour");
     def.blades.flowerHeads = {
       count: reader.number(heads, "count", "blades.flowerHeads", { min: 0, integer: true }),
       radius: reader.number(heads, "radius", "blades.flowerHeads", { min: 0 }),
       colors,
-      shape: heads.shape === undefined ? "flower" : reader.oneOf(heads, "shape", "blades.flowerHeads", ["flower", "spike"] as const),
+      shape: heads.shape === undefined ? "flower" : reader.oneOf(heads, "shape", "blades.flowerHeads", FLOWER_SHAPES),
+      ...(heads.petals !== undefined ? { petals: reader.number(heads, "petals", "blades.flowerHeads", { min: 1, max: 40, integer: true }) } : {}),
+      ...(heads.eye !== undefined ? { eye: reader.color(heads, "eye", "blades.flowerHeads") } : {}),
     };
   }
   return def;
@@ -983,7 +991,7 @@ function readBiome(id: string, obj: RawObject, reader: Reader, defaults: Default
   }
 
   const ground = reader.object(obj.ground, "ground");
-  reader.onlyKeys(ground, "ground", ["base", "road", "layers", "adjust", "tints"]);
+  reader.onlyKeys(ground, "ground", ["base", "road", "layers", "adjust", "tints", "grass"]);
   const materialLayers = reader.optionalArray(ground, "layers", "ground").map((raw, i) => {
     const path = `ground.layers[${i}]`;
     const layer = reader.object(raw, path);
@@ -1031,6 +1039,15 @@ function readBiome(id: string, obj: RawObject, reader: Reader, defaults: Default
       const { family, ...adjust } = reader.object(raw, path);
       if (typeof family !== "string" || family === "") reader.fail(joinPath(path, "family"), "expected the family of materials this tint recolours");
       return { family: String(family ?? ""), adjust: readColorAdjust(adjust, reader, path) };
+    }),
+    groundGrass: reader.optionalArray(ground, "grass", "ground").map((raw, i) => {
+      const path = `ground.grass[${i}]`;
+      const spec = reader.object(raw, path);
+      reader.onlyKeys(spec, path, ["family", "kind", "density", "color"]);
+      return {
+        family: reader.string(spec, "family", path),
+        spec: { kind: reader.string(spec, "kind", path), density: reader.number(spec, "density", path, { min: 0 }), color: reader.color(spec, "color", path) },
+      };
     }),
     treeRules: readTreeRules(obj, reader, defaults.treeRules),
     treeTints: readTreeTints(obj, reader),

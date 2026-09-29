@@ -1,7 +1,7 @@
 import type { AreaWeight } from "../cells/areaField";
 import { compilePipeline, type CompiledPipeline } from "../terrain/pipeline/pipelineCompiler";
 import type { WorldContent } from "../content/worldContent";
-import type { MaterialDef } from "./materialTypes";
+import type { GrassSpec, MaterialDef } from "./materialTypes";
 import type { BiomeDefinition } from "../biomes/biomeTypes";
 import { isNoAdjust, type ColorAdjust } from "./colorAdjust";
 
@@ -10,6 +10,12 @@ import { isNoAdjust, type ColorAdjust } from "./colorAdjust";
 function areaAdjustsFor(def: MaterialDef, biome: BiomeDefinition): ColorAdjust[] {
   const tints = biome.groundTints.filter((tint) => def.family !== undefined && tint.family === def.family).map((tint) => tint.adjust);
   return [biome.groundAdjust, ...tints].filter((adjust) => !isNoAdjust(adjust));
+}
+
+/** What an area grows on one material besides the material's own grass: its `ground.grass` entries
+ *  for the material's family. */
+function areaGrassFor(def: MaterialDef, biome: BiomeDefinition): GrassSpec[] {
+  return biome.groundGrass.filter((entry) => def.family !== undefined && entry.family === def.family).map((entry) => entry.spec);
 }
 
 // Below this, no layer's weight is trusted and the base material wins outright - used only by the
@@ -48,9 +54,14 @@ export interface MaterialBlender {
   resolveMaterialIndex: (worldX: number, worldZ: number, context: Record<string, number>, biome: BiomeDefinition) => number;
 }
 
-/** A variant's key: the material and how its area recolours it, or just the material when it does not. */
-function variantKey(id: string, adjusts: readonly ColorAdjust[]): string {
-  return [id, ...adjusts.map((adjust) => `${adjust.hue},${adjust.saturation},${adjust.value},${adjust.tint.join(",")}`)].join("|");
+/** A variant's key: the material, how its area recolours it and what extra grass the area grows on
+ *  it - or just the material when the area does neither. */
+function variantKey(id: string, adjusts: readonly ColorAdjust[], extraGrass: readonly GrassSpec[]): string {
+  return [
+    id,
+    ...adjusts.map((adjust) => `${adjust.hue},${adjust.saturation},${adjust.value},${adjust.tint.join(",")}`),
+    ...extraGrass.map((spec) => `+${spec.kind}:${spec.density}:${spec.color.join(",")}`),
+  ].join("|");
 }
 
 /**
@@ -65,18 +76,23 @@ export function createMaterialBlender(seed: number, content: WorldContent, areaB
   const definitionById = new Map(content.materials.map((def) => [def.id, def]));
 
   // Only materials something actually uses get an index, and so a place in the material table.
-  // `biome`, when given, is the area's: its ground adjustment and whichever of its tints are for
-  // this material's family make the variant.
+  // `biome`, when given, is the area's: its ground adjustment, whichever of its tints are for this
+  // material's family and whatever extra grass it grows on that family make the variant.
   function ensureMaterial(id: string, biome?: BiomeDefinition): number {
     const def = definitionById.get(id);
     if (!def) throw new Error(`Unknown material "${id}"`);
     const adjusts = biome ? areaAdjustsFor(def, biome) : [];
-    const key = variantKey(id, adjusts);
+    const extraGrass = biome ? areaGrassFor(def, biome) : [];
+    const key = variantKey(id, adjusts, extraGrass);
     let index = materialIndexByKey.get(key);
     if (index === undefined) {
       index = materialDefs.length;
       materialIndexByKey.set(key, index);
-      materialDefs.push(adjusts.length === 0 ? def : { ...def, areaAdjusts: adjusts });
+      materialDefs.push(
+        adjusts.length === 0 && extraGrass.length === 0
+          ? def
+          : { ...def, ...(adjusts.length > 0 ? { areaAdjusts: adjusts } : {}), ...(extraGrass.length > 0 ? { grass: [...def.grass, ...extraGrass] } : {}) },
+      );
     }
     return index;
   }

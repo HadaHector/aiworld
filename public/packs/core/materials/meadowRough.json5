@@ -1,0 +1,14 @@
+// Rough, ungrazed grassland: long grass and tussocks, yarrow through it and thistles standing up
+// out of it.
+{
+  name: "Rough Meadow",
+  family: "grassland",
+  detail: { strength: 0.3 },
+  textureFrom: "grass",
+  grass: [
+    { kind: "longGrass", density: 2.2, color: [0.5, 0.66, 0.3] },
+    { kind: "tuft", density: 0.6, color: [0.46, 0.6, 0.28] },
+    { kind: "yarrow", density: 1.0, color: [0.44, 0.6, 0.28] },
+    { kind: "thistles", density: 0.35, color: [0.4, 0.55, 0.28] },
+  ],
+}

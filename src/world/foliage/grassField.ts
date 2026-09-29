@@ -12,7 +12,7 @@ import {
   type Scene,
 } from "@babylonjs/core";
 import { LIT_SHADING_GLSL, LIT_SHADING_SAMPLERS, LIT_SHADING_UNIFORMS, type LitShading } from "../materials/litShading";
-import type { GrassKindDef } from "./grassConfig";
+import { GRASS_KIND_STRIDE, type GrassKindDef } from "./grassConfig";
 import type { ColorTuple } from "../terrain/pipeline/pipelineTypes";
 import { GRASS_INSTANCE_STRIDE, type ChunkGrass } from "./grassScatter";
 import { GRASS_TEXTURE_SIZE, bakeGrassTextures } from "./grassTextures";
@@ -33,7 +33,7 @@ precision highp float;
 in vec3 position;
 in vec3 normal;
 in vec2 uv;
-// Per tuft: chunk-local root (xyz) and kind * 16 + scale (w)...
+// Per tuft: chunk-local root (xyz) and kind * GRASS_KIND_STRIDE + scale (w)...
 in vec4 grassA;
 // ...then colour (rgb) and turn about the vertical (w)...
 in vec4 grassB;
@@ -53,19 +53,22 @@ uniform vec2 kindFade[${kindCount}];
 // Per kind: where its petal colours start in petalColors, and how many it has.
 uniform vec2 kindPetals[${kindCount}];
 uniform vec3 petalColors[${petalColorCount}];
+// Per kind: its flowers' eye colour.
+uniform vec3 kindEyes[${kindCount}];
 
 out vec2 vUV;
 out vec3 vFaceNormal;
 out vec3 vColor;
 flat out vec3 vPetalColor;
+flat out vec3 vEyeColor;
 flat out vec4 vGroundColor;
 out vec3 vWorldPosition;
 out vec3 vPositionFromCamera;
 flat out float vKind;
 
 void main() {
-  float kind = floor(grassA.w / 16.0);
-  float scale = grassA.w - kind * 16.0;
+  float kind = floor(grassA.w / ${GRASS_KIND_STRIDE.toFixed(1)});
+  float scale = grassA.w - kind * ${GRASS_KIND_STRIDE.toFixed(1)};
   vec3 shape = kindShape[int(kind)];
   float fadeStart = kindFade[int(kind)].x;
   float fadeEnd = kindFade[int(kind)].y;
@@ -104,6 +107,7 @@ void main() {
   // The turn angle is uniform random per tuft, so it picks the petal colour too.
   vec2 petals = kindPetals[int(kind)];
   vPetalColor = petalColors[int(petals.x + floor(fract(grassB.w * 13.37) * petals.y))];
+  vEyeColor = kindEyes[int(kind)];
   vKind = kind;
 }
 `;
@@ -118,6 +122,7 @@ in vec2 vUV;
 in vec3 vFaceNormal;
 in vec3 vColor;
 flat in vec3 vPetalColor;
+flat in vec3 vEyeColor;
 flat in vec4 vGroundColor;
 in vec3 vWorldPosition;
 in vec3 vPositionFromCamera;
@@ -136,8 +141,8 @@ void main() {
   if (blade.a * (1.0 + 0.35 * lod) < 0.45) discard;
 
   // Darker towards the root, where the blades shade one another. Petals (the texture's G mask)
-  // take the tuft's petal colour instead of its stem colour.
-  vec3 albedo = mix(vColor * mix(0.8, 1.0, vUV.y), vPetalColor, blade.g) * blade.r;
+  // take the tuft's petal colour instead of its stem colour, and flower eyes (B) the kind's eye colour.
+  vec3 albedo = mix(mix(vColor * mix(0.8, 1.0, vUV.y), vPetalColor, blade.g), vEyeColor, blade.b) * blade.r;
   vec3 up = vec3(0.0, 1.0, 0.0);
   vec3 lightDir = normalize(lightDirection);
 
@@ -254,7 +259,7 @@ export function createGrassField(
   Effect.ShadersStore["grassFragmentShader"] = FRAGMENT_SHADER;
   const material = new ShaderMaterial("grass", scene, "grass", {
     attributes: ["position", "normal", "uv", "grassA", "grassB", "grassC"],
-    uniforms: ["world", "view", "projection", "time", "windDirection", "kindShape", "kindFade", "kindPetals", "petalColors", ...LIT_SHADING_UNIFORMS],
+    uniforms: ["world", "view", "projection", "time", "windDirection", "kindShape", "kindFade", "kindPetals", "petalColors", "kindEyes", ...LIT_SHADING_UNIFORMS],
     samplers: ["bladeAtlas", ...LIT_SHADING_SAMPLERS],
   });
   material.setTexture("bladeAtlas", atlas);
@@ -268,6 +273,8 @@ export function createGrassField(
   );
   material.setArray2("kindPetals", kindPetals);
   material.setArray3("petalColors", petalColors.flat());
+  // A kind with no eye colour never draws the eye mask, so what it reads here is never seen.
+  material.setArray3("kindEyes", grassKinds.flatMap((kind) => kind.blades.flowerHeads?.eye ?? [1, 1, 1]));
   material.setVector2("windDirection", WIND_DIRECTION);
   material.backFaceCulling = false;
   litShading.register(material);

@@ -1,0 +1,31 @@
+// Thistles: stiff, tall stems each topped with a purple brush on a green, spiny base, standing
+// alone in rough grass.
+{
+  width: 1.2,
+  height: 1.2,
+  sway: 0.1,
+  fadeStart: 70,
+  fadeEnd: 320,
+  cluster: { scale: 16, coverage: 0.2 },
+  blades: {
+    count: 7,
+    minHeight: 0.6,
+    maxHeight: 0.95,
+    baseWidth: 4,
+    lean: 0.06,
+    fan: true,
+    seedHeads: false,
+    flowerHeads: {
+      shape: "globe",
+      petals: 30,
+      count: 3,
+      radius: 18,
+      // The eye is the green, spiny cup the brush sits in.
+      eye: [0.3, 0.42, 0.2],
+      colors: [
+        [0.62, 0.3, 0.72], // purple
+        [0.78, 0.36, 0.7], // magenta
+      ],
+    },
+  },
+}

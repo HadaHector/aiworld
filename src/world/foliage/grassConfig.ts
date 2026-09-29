@@ -48,11 +48,26 @@ export interface GrassKindDef {
     seedHeads: boolean;
     /** Flower heads on the tips of this many blades, `radius` texture pixels across. Each tuft's
      *  petals take one of `colors`, picked at random per tuft, rather than the tuft's own (stem)
-     *  colour. `shape` "flower" (the default) is five petals round a centre; "spike" is a bulrush's
-     *  cattail - a long, rounded head a little below the tip, the bare stem carrying on above it. */
-    flowerHeads?: { count: number; radius: number; colors: ColorTuple[]; shape: "flower" | "spike" };
+     *  colour; `eye`, if given, colours a flower's centre (a daisy's yellow, a poppy's black) -
+     *  without it the centre is a darker shade of the petals. `shape` is one of FLOWER_SHAPES, and
+     *  `petals` its count of petals, bells, florets or rays, each shape having its own default. */
+    flowerHeads?: { count: number; radius: number; colors: ColorTuple[]; shape: FlowerShape; petals?: number; eye?: ColorTuple };
   };
 }
+
+/**
+ * How a flower head is drawn (see grassTextures.ts's drawHead):
+ *  - "flower": broad round petals round a centre (5) - buttercup, wild rose, open poppy;
+ *  - "daisy": many narrow petals raying from a large eye (14) - daisy, aster, chamomile;
+ *  - "cup": a tall petal between petals leaning out, in profile (3) - tulip, closed poppy, crocus;
+ *  - "bell": bells hanging from an arching tip, mouths down (3) - bluebell, harebell;
+ *  - "raceme": florets crowded up the top of the stem (12) - lupin, foxglove, lavender;
+ *  - "umbel": a flat-topped dome of tiny florets on thin rays (9) - yarrow, cow parsley;
+ *  - "globe": a ball of tiny florets (26) - clover, allium, thistle;
+ *  - "spike": a bulrush's cattail - a long, rounded head a little below the tip.
+ */
+export const FLOWER_SHAPES = ["flower", "daisy", "cup", "bell", "raceme", "umbel", "globe", "spike"] as const;
+export type FlowerShape = (typeof FLOWER_SHAPES)[number];
 
 /** Side of the jittered grid tufts are scattered on - at most one tuft per cell, so this also caps
  *  density at 1 / GRASS_CELL_SIZE^2 per square metre. */
@@ -62,3 +77,7 @@ export const GRASS_CELL_SIZE = 0.8;
 export const GRASS_WATER_CLEARANCE = 0.3;
 
 export const GRASS_SALT = 0x67a55;
+
+/** A tuft's kind and scale share one float, kind * GRASS_KIND_STRIDE + scale - room enough, as a
+ *  tuft's scale stays under 2 (see grassScatter.ts). */
+export const GRASS_KIND_STRIDE = 4;

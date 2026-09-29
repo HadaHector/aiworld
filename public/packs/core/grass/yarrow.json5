@@ -1,0 +1,29 @@
+// Yarrow: flat-topped clusters of tiny florets on wiry stems - white, cream and the odd pale pink.
+{
+  width: 1.0,
+  height: 0.95,
+  sway: 0.18,
+  fadeStart: 60,
+  fadeEnd: 280,
+  cluster: { scale: 8, coverage: 0.4 },
+  blades: {
+    count: 11,
+    minHeight: 0.5,
+    maxHeight: 0.9,
+    baseWidth: 2,
+    lean: 0.1,
+    fan: false,
+    seedHeads: false,
+    flowerHeads: {
+      shape: "umbel",
+      petals: 9,
+      count: 5,
+      radius: 14,
+      colors: [
+        [0.96, 0.95, 0.9], // white
+        [0.95, 0.9, 0.74], // cream
+        [0.95, 0.78, 0.84], // pale pink
+      ],
+    },
+  },
+}

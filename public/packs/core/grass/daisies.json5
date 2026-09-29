@@ -14,9 +14,12 @@
     lean: 0.12,
     fan: false,
     seedHeads: false,
+    // Narrow white rays round a big yellow eye.
     flowerHeads: {
+      shape: "daisy",
       count: 7,
       radius: 11,
+      eye: [0.98, 0.78, 0.14],
       colors: [
         [0.97, 0.96, 0.93], // white
         [0.98, 0.9, 0.93], // blush

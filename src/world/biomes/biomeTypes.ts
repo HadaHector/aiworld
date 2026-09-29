@@ -1,5 +1,5 @@
 import type { ColorTuple, PipelineDef } from "../terrain/pipeline/pipelineTypes";
-import type { MaterialLayer } from "../materials/materialTypes";
+import type { GrassSpec, MaterialLayer } from "../materials/materialTypes";
 import type { TreeRules } from "../foliage/foliageConfig";
 import type { SettlementStyle } from "../settlements/settlementConfig";
 import type { ColorAdjust } from "../materials/colorAdjust";
@@ -140,6 +140,10 @@ export interface BiomeDefinition {
   /** Recolourings of one family of this zone's ground materials each (`ground.tints`), after
    *  groundAdjust - so an area's meadows can turn blue or orange while its roads and rock do not. */
   groundTints: { family: string; adjust: ColorAdjust }[];
+  /** Grass this zone grows on top of what its materials grow, on every material of one family
+   *  (`ground.grass`) - with a roll's `chance` on each, one area's meadows go with clover and the
+   *  next with daisies, whichever sward they are. */
+  groundGrass: { family: string; spec: GrassSpec }[];
   /** How this zone recolours its trees and bushes (`treeTints`), rule by rule - a tree takes the
    *  first rule naming its kind, or naming none. */
   treeTints: TreeTintRuleDef[];

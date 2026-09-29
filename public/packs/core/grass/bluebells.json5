@@ -1,4 +1,5 @@
-// Cool-coloured flowers: blue, violet and a few white, in loose patches.
+// Bluebells: stems arching over at the top, a few bells hanging from each - blue, violet and the
+// odd white - in loose patches.
 {
   width: 1.0,
   height: 0.8,
@@ -15,8 +16,10 @@
     fan: false,
     seedHeads: false,
     flowerHeads: {
+      shape: "bell",
+      petals: 3,
       count: 8,
-      radius: 12,
+      radius: 22,
       colors: [
         [0.28, 0.36, 0.9], // blue
         [0.45, 0.3, 0.85], // violet

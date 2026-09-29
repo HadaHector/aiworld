@@ -14,7 +14,11 @@
     lean: 0.14,
     fan: false,
     seedHeads: false,
+    // Four broad petals round a black eye.
     flowerHeads: {
+      shape: "flower",
+      petals: 4,
+      eye: [0.07, 0.05, 0.05],
       count: 5,
       radius: 19,
       colors: [

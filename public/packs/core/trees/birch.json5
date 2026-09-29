@@ -1,0 +1,90 @@
+// A birch: tall, slim and pale - a white trunk you can see through a whole wood of them, many thin
+// branches reaching up at a steep angle, and a small, airy, yellow-green crown that lets the light
+// through. The white is the tree: its bark is chalk white, dashed across with dark lenticels and
+// broken into black, cracked patches here and there.
+{
+  model: "branching",
+  variants: 4,
+  trunk: {
+    height: 22,
+    radius: 0.85,
+    topRadius: 0.3,
+    lean: 0.12,
+    wobble: 0.6,
+    flare: 1.35,
+    flareHeight: 2,
+    sides: 7,
+    rings: 9,
+  },
+  roots: { count: 3, length: [1.5, 2.5], radius: 0.4, drop: 0.8, sides: 4, rings: 2 },
+  branches: {
+    count: [7, 9],
+    from: 0.42,
+    length: [5, 8.5],
+    radius: 0.35,
+    // Steeply up, bending up further: a narrow crown, not a spreading one.
+    angle: [24, 46],
+    arc: 0.3,
+    sides: 5,
+    rings: 4,
+    twigs: { count: [2, 3], length: [0.35, 0.6], angle: [25, 50], sides: 3, rings: 2 },
+  },
+  // Small clusters, many of them, loosely spread - the crown is lace, not a mass.
+  leaves: { size: [7, 10], cards: 3, alongBranch: 3, top: 2, spread: 1.6 },
+  bark: {
+    tile: 4,
+    texture: {
+      bumpStrength: 1.4,
+      pipeline: {
+        noises: [
+          // Lenticels: short dark dashes running round the trunk (stretched along u, not up it).
+          { name: "dashes", type: "fbm", octaves: 2, tileCycles: 26, stretch: [7, 1], amplitude: 1, persistence: 0.5, lacunarity: 2 },
+          // The black cracked patches, and the cracks in them.
+          { name: "patches", type: "fbm", octaves: 3, tileCycles: 3, stretch: [1.5, 1], amplitude: 1, persistence: 0.55, lacunarity: 2 },
+          { name: "cracks", type: "worley", tileCycles: 16, stretch: [1.4, 1], amplitude: 1, mode: "edge", warp: 0.2, sizeJitter: 0.2 },
+          { name: "sheen", type: "fbm", octaves: 3, tileCycles: 6, amplitude: 1, persistence: 0.5, lacunarity: 2 },
+          { name: "grain", type: "fbm", octaves: 2, tileCycles: 90, stretch: [4, 1], amplitude: 1, persistence: 0.5, lacunarity: 2 },
+        ],
+        steps: [
+          { output: "dashRaw", op: "sample", noise: "dashes" },
+          { output: "dash", op: "mask", input: "dashRaw", at: 0.75, off: 0.45 },
+          { output: "patchRaw", op: "sample", noise: "patches" },
+          { output: "patch", op: "mask", input: "patchRaw", at: 0.7, off: 0.45 },
+          { output: "crackEdge", op: "sample", noise: "cracks" },
+          { output: "crack", op: "mask", input: "crackEdge", at: 0.03, off: 0.12 },
+          // Cracks only inside the dark patches.
+          { output: "patchCrack", op: "multiply", a: "crack", b: "patch" },
+          { output: "sheenRaw", op: "sample", noise: "sheen" },
+          { output: "sheen", op: "mask", input: "sheenRaw", at: 1.5, off: -1.5 },
+          { output: "grainRaw", op: "sample", noise: "grain" },
+          { output: "grain", op: "mask", input: "grainRaw", at: 1.2, off: -1.2 },
+
+          // White, faintly warm or grey by the sheen, then the dashes, then the patches.
+          { output: "white", op: "colorRamp", input: "sheen", stops: [{ at: 0, color: [0.7, 0.69, 0.65] }, { at: 1, color: [0.9, 0.89, 0.85] }] },
+          { output: "dashTone", op: "color", value: [0.16, 0.14, 0.13] },
+          { output: "dashed", op: "mix", a: "white", b: "dashTone", t: "dash" },
+          { output: "patchTone", op: "color", value: [0.1, 0.09, 0.085] },
+          { output: "patched", op: "mix", a: "dashed", b: "patchTone", t: "patch" },
+          { output: "crackTone", op: "color", value: [0.03, 0.025, 0.02] },
+          { output: "diffuse", op: "mix", a: "patched", b: "crackTone", t: "patchCrack" },
+
+          // Smooth papery bark, raised a little in the patches and sunk in their cracks.
+          { output: "patchLift", op: "scale", input: "patch", factor: 0.35 },
+          { output: "crackCut", op: "scale", input: "patchCrack", factor: 0.5 },
+          { output: "grainHeight", op: "scale", input: "grain", factor: 0.1 },
+          { output: "heightRaw", op: "subtract", a: "patchLift", b: "crackCut" },
+          { output: "heightGrain", op: "add", a: "heightRaw", b: "grainHeight" },
+          { output: "height", op: "offset", input: "heightGrain", amount: 0.4 },
+          // The white paper has a faint sheen; the patches are rough.
+          { output: "roughWhite", op: "constant", value: 0.7 },
+          { output: "roughPatch", op: "constant", value: 0.95 },
+          { output: "roughness", op: "mix", a: "roughWhite", b: "roughPatch", t: "patch" },
+        ],
+        outputs: { diffuse: "diffuse", roughness: "roughness", height: "height" },
+      },
+    },
+  },
+  // Small, light, yellow-green leaves.
+  foliage: { builder: "broadleaf", dark: [0.16, 0.3, 0.08], light: [0.56, 0.7, 0.24], leaves: 700, leafLength: 0.04, leafWidth: 0.025 },
+  tint: [[0.85, 0.92, 0.8], [1.12, 1.1, 0.95]],
+}

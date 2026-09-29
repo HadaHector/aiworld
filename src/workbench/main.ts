@@ -606,7 +606,7 @@ function groundChoices(content: WorldContent, asset: Asset): [string, string][] 
 /**
  * The biome whose sky and light an asset is seen under by default: one it grows in - a material a
  * biome's ground is made of, a tree or bush a biome grows, a grass a biome's own ground grows -
- * else the plains, else the first.
+ * else the meadow, else the first.
  */
 function autoSkyBiome(content: WorldContent, asset: Asset): BiomeDefinition {
   const usesMaterial = (biome: BiomeDefinition, id: string): boolean =>
@@ -631,7 +631,7 @@ function autoSkyBiome(content: WorldContent, asset: Asset): BiomeDefinition {
   return (
     content.biomes.find((biome) => asset.folder === "materials" && biome.baseMaterialId === asset.id) ??
     content.biomes.find(grows) ??
-    content.biomes.find((biome) => biome.id === "plains") ??
+    content.biomes.find((biome) => biome.id === "meadow") ??
     content.biomes[0]
   );
 }
@@ -835,7 +835,8 @@ async function preview2d(token: number, asset: Asset, view: ViewDef, content: Wo
     const all = bakeGrassTextures(seed, content.grassKinds);
     const kind = content.grassKinds[layer];
     const stem = content.materials.flatMap((material) => material.grass).find((spec) => spec.kind === asset.id)?.color ?? [0.36, 0.5, 0.22];
-    image = bladeImage(all.slice(layer * layerSize, (layer + 1) * layerSize), GRASS_TEXTURE_SIZE, options.channel, stem, kind.blades.flowerHeads?.colors[0] ?? [1, 1, 1]);
+    const heads = kind.blades.flowerHeads;
+    image = bladeImage(all.slice(layer * layerSize, (layer + 1) * layerSize), GRASS_TEXTURE_SIZE, options.channel, stem, heads?.colors[0] ?? [1, 1, 1], heads?.eye ?? [1, 1, 1]);
   }
 
   if (token !== previewToken) return;
@@ -892,7 +893,7 @@ function surfaceImage(color: Uint8Array, normal: Uint8Array, size: number, chann
  * material grows it in and its first petal colour. Turned upright: the root is the texture's first
  * row.
  */
-function bladeImage(source: Uint8Array, size: number, channel: string, stem: [number, number, number], petal: [number, number, number]): TextureImage {
+function bladeImage(source: Uint8Array, size: number, channel: string, stem: [number, number, number], petal: [number, number, number], eye: [number, number, number]): TextureImage {
   const pixels = new Uint8Array(size * size * 4);
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
@@ -900,9 +901,13 @@ function bladeImage(source: Uint8Array, size: number, channel: string, stem: [nu
       const d = (y * size + x) * 4;
       const shade = source[o] / 255;
       const petalMask = source[o + 1] / 255;
+      const eyeMask = source[o + 2] / 255;
       if (channel === "color") {
         const rootShade = 0.8 + 0.2 * (1 - y / (size - 1));
-        for (let c = 0; c < 3; c++) pixels[d + c] = Math.round(255 * Math.min(1, (stem[c] * rootShade * (1 - petalMask) + petal[c] * petalMask) * shade));
+        for (let c = 0; c < 3; c++) {
+          const body = stem[c] * rootShade * (1 - petalMask) + petal[c] * petalMask;
+          pixels[d + c] = Math.round(255 * Math.min(1, (body * (1 - eyeMask) + eye[c] * eyeMask) * shade));
+        }
         pixels[d + 3] = source[o + 3];
       } else {
         const value = channel === "shading" ? source[o] : channel === "petals" ? source[o + 1] : source[o + 3];

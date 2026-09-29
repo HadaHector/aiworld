@@ -1,0 +1,28 @@
+// Clover: low round heads just above a short sward - pink and white.
+{
+  width: 0.8,
+  height: 0.35,
+  sway: 0.1,
+  fadeStart: 40,
+  fadeEnd: 200,
+  cluster: { scale: 7, coverage: 0.5 },
+  blades: {
+    count: 12,
+    minHeight: 0.45,
+    maxHeight: 0.85,
+    baseWidth: 3,
+    lean: 0.14,
+    fan: false,
+    seedHeads: false,
+    flowerHeads: {
+      shape: "globe",
+      count: 6,
+      radius: 13,
+      colors: [
+        [0.88, 0.5, 0.68], // pink
+        [0.8, 0.36, 0.56], // red clover
+        [0.95, 0.94, 0.9], // white
+      ],
+    },
+  },
+}

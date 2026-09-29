@@ -1,9 +1,9 @@
 import type { MaterialDef } from "../materials/materialTypes";
 import { applyColorMatrix, chainMatrix } from "../materials/colorAdjust";
 import { SEA_LEVEL } from "../cells/areaField";
-import { GRASS_CELL_SIZE, GRASS_SALT, GRASS_WATER_CLEARANCE, type GrassKindDef } from "./grassConfig";
+import { GRASS_CELL_SIZE, GRASS_KIND_STRIDE, GRASS_SALT, GRASS_WATER_CLEARANCE, type GrassKindDef } from "./grassConfig";
 
-/** Floats per tuft in ChunkGrass.instances: x, y, z (chunk-local), kind * 16 + scale, then
+/** Floats per tuft in ChunkGrass.instances: x, y, z (chunk-local), kind * GRASS_KIND_STRIDE + scale, then
  *  r, g, b, rotation (radians), then the ground's colour at the root packed into one float (see
  *  packColor), or -1 where it is not known. Matches the instance attributes in grassField.ts. */
 export const GRASS_INSTANCE_STRIDE = 9;
@@ -283,7 +283,7 @@ export function scatterGrass(
         groundColor[v00 * 3 + c] * w00 + groundColor[v10 * 3 + c] * w10 + groundColor[v01 * 3 + c] * w01 + groundColor[v11 * 3 + c] * w11;
       const root = groundColors ? packColor(groundChannel(0), groundChannel(1), groundChannel(2)) : -1;
 
-      byKind[kind].push(x - originX, y, z - originZ, kind * 16 + scale, channel(0) * tint, channel(1) * tint, channel(2) * tint, rotation, root);
+      byKind[kind].push(x - originX, y, z - originZ, kind * GRASS_KIND_STRIDE + scale, channel(0) * tint, channel(1) * tint, channel(2) * tint, rotation, root);
       if (y < minY) minY = y;
       if (y > maxY) maxY = y;
     }

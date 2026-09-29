@@ -1,7 +1,7 @@
 // Wild flowers: a few thin stems, most of them topped with a five-petalled head, in patches.
 {
-  width: 1.25,
-  height: 1.25,
+  width: 1.0,
+  height: 0.95,
   sway: 0.22,
   fadeStart: 70,
   fadeEnd: 300,
@@ -16,8 +16,8 @@
     seedHeads: false,
     // Each tuft's petals take one of these, picked at random per tuft.
     flowerHeads: {
-      count: 7,
-      radius: 16,
+      count: 6,
+      radius: 12,
       colors: [
         [0.96, 0.95, 0.9], // white
         [0.98, 0.84, 0.22], // yellow
