@@ -92,6 +92,10 @@ Existing: **broadleaf**, **pine**, **palm**.
   broadleaf wood, oaks where it thins and in its clearings, hazel, mossy boulders; drifts of a new
   `bluebellCarpet` over the forest floor (`bluebellFloor`), from a few patches to a carpet per area. Each area rolls its relief: a flat lowland wood, rolling
   wooded hills, or hill country cut by wide valleys.
+- **Autumn wood: done** - `biomes/autumnWood.json5`. Maples (new) where the wood is thick, oaks
+  where it thins, turned crimson to gold; green ferns (a new `fern` bush builder) under them; fallen
+  leaves drifting out over golden clearings; a low, warm sun. The same three reliefs.
+- **Later:** ferns as a waterside plant too, beside the cattails.
 
 | Variant | Ground | Plants | Trees | Extras |
 |---|---|---|---|---|

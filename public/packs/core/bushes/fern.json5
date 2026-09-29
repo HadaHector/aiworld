@@ -1,0 +1,37 @@
+// A fern: a shuttlecock of fronds from one root - the middle ones upright, the outer ones arching out
+// and over - knee to waist high, in the dappled shade under a wood. Fresh green - bright against an
+// autumn wood's reds and golds. Built of real fronds, each a folded strip bending over (`fronds`),
+// rather than crossed cards, so it holds up close.
+{
+  model: "bush",
+  variants: 4,
+  // Its spread and height, for its bounds.
+  width: [2.6, 3.6],
+  height: [1.0, 1.4],
+  fronds: {
+    count: [10, 15],
+    length: [1.2, 1.8],
+    width: 0.6,
+    // Upright in the middle to well out at the rim, and curling over further towards the tip.
+    angle: [12, 70],
+    curl: 65,
+    fold: 0.1,
+    segments: 4,
+  },
+  // In beds, not one at a time: each fern placed brings a few more round it, of different sizes -
+  // the bush lattice alone keeps bushes metres apart.
+  bed: { plants: [3, 6], spread: 2.2 },
+  foliage: {
+    builder: "fern",
+    dark: [0.1, 0.24, 0.06],
+    light: [0.42, 0.62, 0.18],
+    stem: [0.24, 0.26, 0.1],
+    stems: [1, 1],
+    leaves: 15,
+    leafLength: 0.42,
+    leafWidth: 0.042,
+    bare: 0,
+  },
+  tint: [[0.85, 0.9, 0.82], [1.1, 1.06, 0.95]],
+  scale: [0.8, 2.2],
+}

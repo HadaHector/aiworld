@@ -1,6 +1,6 @@
 import { mulberry32 } from "../rng";
 import { lerp, smoothstep } from "../mathUtils";
-import type { BranchingTree, BushShape, ConiferTree } from "./foliageConfig";
+import type { BranchingTree, BushShape, ConiferTree, Fronds } from "./foliageConfig";
 
 /**
  * One generated tree, in tree space (the base of the trunk at the origin, up +Y), as two meshes'
@@ -90,8 +90,10 @@ class WoodBuilder {
       if (i > 0) {
         const a0 = base + (i - 1) * ring;
         const b0 = base + i * ring;
+        // Clockwise seen from outside - Babylon's front faces - so the bark's back faces, the
+        // inside of a limb, can be culled.
         for (let j = 0; j < sides; j++) {
-          this.indices.push(a0 + j, a0 + j + 1, b0 + j, a0 + j + 1, b0 + j + 1, b0 + j);
+          this.indices.push(a0 + j, b0 + j, a0 + j + 1, a0 + j + 1, b0 + j, b0 + j + 1);
         }
       }
     }
@@ -106,7 +108,7 @@ class WoodBuilder {
     this.uvs.push(around * 0.5, v + (radii[last] * 2) / tile);
     this.axes.push(tipDirection[0], tipDirection[1], tipDirection[2]);
     const lastRing = base + last * ring;
-    for (let j = 0; j < sides; j++) this.indices.push(lastRing + j, lastRing + j + 1, apexIndex);
+    for (let j = 0; j < sides; j++) this.indices.push(lastRing + j, apexIndex, lastRing + j + 1);
   }
 }
 
@@ -476,6 +478,7 @@ export interface BushGeometry {
  * Deterministic from `seed`.
  */
 export function generateBush(spec: BushShape, seed: number): BushGeometry {
+  if (spec.fronds) return generateFronds(spec.fronds, seed);
   const rng = mulberry32(seed);
   const between = ([lo, hi]: [number, number]): number => lo + rng() * (hi - lo);
   const builder = new LeafBuilder();
@@ -526,6 +529,74 @@ export function generateBush(spec: BushShape, seed: number): BushGeometry {
       uvs: new Float32Array(builder.uvs),
       indices: new Uint32Array(builder.indices),
     },
+    height: top,
+  };
+}
+
+/**
+ * Generates one frond plant - a fern - from its Fronds: `count` fronds round one root at even turns
+ * (jittered), each a strip of `segments` quads three vertices across. A frond sets off `angle` from
+ * vertical and curls over by `curl` more at its tip, the curl growing along it, so the outer fronds
+ * arch out and down; its midrib stands `fold` of its width above its edges, a shallow keel. It
+ * shows one of the atlas's four single fronds, base to tip, mirrored at random. Deterministic from
+ * `seed`.
+ */
+function generateFronds(spec: Fronds, seed: number): BushGeometry {
+  const rng = mulberry32(seed);
+  const between = ([lo, hi]: [number, number]): number => lo + rng() * (hi - lo);
+  const positions: number[] = [];
+  const normals: number[] = [];
+  const uvs: number[] = [];
+  const indices: number[] = [];
+  const inset = 0.004;
+  const span = 0.5 - inset * 2;
+  let top = 0.2;
+  const count = Math.floor(between([spec.count[0], spec.count[1] + 0.999]));
+  const start = rng() * Math.PI * 2;
+  for (let f = 0; f < count; f++) {
+    const azimuth = start + ((f + (rng() - 0.5) * 0.6) / count) * Math.PI * 2;
+    const out: V3 = [Math.cos(azimuth), 0, Math.sin(azimuth)];
+    const side: V3 = [-Math.sin(azimuth), 0, Math.cos(azimuth)];
+    const angle = between(spec.angle) * DEG;
+    const curl = spec.curl * DEG * (0.7 + rng() * 0.6);
+    const length = between(spec.length);
+    const cell = Math.floor(rng() * 4);
+    const mirror = rng() < 0.5;
+    const cellU = (cell % 2) * 0.5;
+    const cellV = Math.floor(cell / 2) * 0.5;
+    const base = positions.length / 3;
+    let point: V3 = [0, -0.05, 0];
+    for (let s = 0; s <= spec.segments; s++) {
+      const t = s / spec.segments;
+      const heading = angle + curl * t * t;
+      const along: V3 = add(scale(out, Math.sin(heading)), [0, Math.cos(heading), 0]);
+      // The frond's own "up": its direction turned back a right angle, towards the sky.
+      const facing: V3 = add(scale(out, -Math.cos(heading)), [0, Math.sin(heading), 0]);
+      // Narrow where it leaves the root, full width from a fifth of the way along.
+      const width = spec.width * Math.min(1, 0.35 + t * 3.25);
+      for (let a = -1; a <= 1; a++) {
+        const keel = a === 0 ? spec.fold * width : 0;
+        const p = add(add(point, scale(side, (a * width) / 2)), scale(facing, keel));
+        positions.push(p[0], p[1], p[2]);
+        // Tipped outwards either side of the keel, the way the fold turns the halves.
+        const n = normalize(add(facing, scale(side, a * spec.fold * 1.5)));
+        normals.push(n[0], n[1], n[2]);
+        const across = (a + 1) / 2;
+        uvs.push(cellU + inset + (mirror ? 1 - across : across) * span, cellV + 0.5 - inset - t * span);
+        top = Math.max(top, p[1]);
+      }
+      if (s < spec.segments) point = add(point, scale(along, length / spec.segments));
+    }
+    for (let s = 0; s < spec.segments; s++) {
+      for (let a = 0; a < 2; a++) {
+        const i0 = base + s * 3 + a;
+        const i1 = base + (s + 1) * 3 + a;
+        indices.push(i0, i0 + 1, i1 + 1, i0, i1 + 1, i1);
+      }
+    }
+  }
+  return {
+    leaves: { positions: new Float32Array(positions), normals: new Float32Array(normals), uvs: new Float32Array(uvs), indices: new Uint32Array(indices) },
     height: top,
   };
 }

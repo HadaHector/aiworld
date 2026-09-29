@@ -368,6 +368,16 @@ work as for trees. `foliage` is the generated `leafyBush` atlas: `dark`/`light` 
 colour, `stems` (a range) rising from the ground, `leaves` per side view, `leafLength`/`leafWidth`,
 and `bare`, the bottom fraction where only the stems show.
 
+A bush with `fronds` (see `core/bushes/fern.json5`) is built of fronds instead of cards: `count` of
+them round one root, each a strip of `segments` quads `length` long and `width` wide, setting off
+`angle` degrees from vertical and curling `curl` degrees further over by its tip, its midrib `fold`
+of its width above its edges. Its `foliage` is the `fern` atlas - four single fronds, `leaves`
+pairs of leaflets `leafLength`/`leafWidth` in size - and `width`/`height` are only its bounds.
+
+Any bush can grow in beds: `bed: { plants, spread }` places `plants` (a range) of it together, the
+others up to `spread` metres (times its scale) round the first, each its own size and turn and
+standing on its own ground - the bush lattice alone keeps bushes some 6 m apart.
+
 Boulders (`rocks/<id>.json5`, see `core/rocks/boulder.json5`) are generated lumps of stone: a
 sphere of `radius` metres swollen and dented by `lumps` (a fraction of the radius), narrowed towards
 its top by `taper` (0-1, optional: near 1 a spire - see `core/rocks/termiteMound.json5`), squashed to

@@ -337,12 +337,49 @@ export interface BushShape {
   /** Leaf clumps over the top, and a clump card's width. */
   clumps: number;
   clumpSize: [number, number];
+  /** Built of fronds instead of cards (a fern) - see Fronds; null for cards. */
+  fronds: Fronds | null;
+  /** Grown in beds - see BushBed; null for one plant at a time. */
+  bed: BushBed | null;
   foliage: BushTexture;
 }
 
-/** A generated bush atlas: two side views of a whole bush and two leaf clumps, see treeTextures.ts. */
+/**
+ * A plant built of fronds rather than crossed cards: each frond a strip of quads rising from the
+ * root, arching out and over - folded a little along its midrib - showing one of the atlas's four
+ * single fronds along its length. Lengths metres, angles degrees.
+ */
+export interface Fronds {
+  count: [number, number];
+  length: [number, number];
+  /** A frond's width, across its leaflets. */
+  width: number;
+  /** Angle from vertical a frond sets off at, and how much further it curls over by its tip. */
+  angle: [number, number];
+  curl: number;
+  /** How high the midrib stands above the frond's edges, as a fraction of its width. */
+  fold: number;
+  /** Quads along a frond. */
+  segments: number;
+}
+
+/**
+ * A bed: each placed bush of the kind comes with more of it round it - `plants` in all, the others
+ * up to `spread` metres from it (times its scale), each its own size, turn and ground height. The
+ * bush lattice keeps bushes metres apart; a bed is how a kind grows close together, in patches.
+ */
+export interface BushBed {
+  plants: [number, number];
+  spread: number;
+}
+
+/**
+ * A generated bush atlas: two side views of a whole bush and two leaf clumps, see treeTextures.ts.
+ * With the `fern` builder, for a plant built of `fronds`, it is four single fronds instead: `leaves`
+ * pairs of leaflets down each, `leafLength`/`leafWidth` the longest leaflet's size.
+ */
 export interface BushTexture {
-  builder: "leafyBush";
+  builder: "leafyBush" | "fern";
   /** Leaves range between these, lighter towards the top and the rim. */
   dark: ColorTuple;
   light: ColorTuple;
@@ -358,7 +395,7 @@ export interface BushTexture {
   bare: number;
 }
 
-export const BUSH_FOLIAGE_BUILDERS = ["leafyBush"] as const;
+export const BUSH_FOLIAGE_BUILDERS = ["leafyBush", "fern"] as const;
 
 /**
  * A boulder: a lump of stone standing on the ground, scattered on the trees' lattice (a pack's

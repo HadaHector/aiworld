@@ -257,9 +257,10 @@ function createWoodAndLeafMaterials(
   });
   bark.setTexture("barkColor", barkColor);
   bark.setTexture("barkNormal", barkNormal);
-  // Limbs are closed tubes, but their winding is not worth being careful about for the few
-  // back faces an open end could show.
-  bark.backFaceCulling = false;
+  // Limbs are closed tubes wound clockwise from outside (treeGenerator.ts's WoodBuilder), so their
+  // insides are culled - a camera inside a trunk sees through it, and no wood is drawn twice. A
+  // limb's open end is always buried in the trunk or the ground.
+  bark.backFaceCulling = true;
   litShading.register(bark);
 
   const leaves = atlasPixels ? createLeafMaterial(scene, id, atlasPixels, swayHeight, litShading) : null;

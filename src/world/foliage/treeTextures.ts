@@ -241,6 +241,7 @@ function growStem(
  * spray of leaves.
  */
 export function bakeBushFoliage(seed: number, def: BushTexture): Uint8Array {
+  if (def.builder === "fern") return bakeFernFoliage(seed, def);
   const size = FOLIAGE_TEXTURE_SIZE;
   const cell = size / 2;
   const painter = new Painter(size);
@@ -334,6 +335,78 @@ export function bakeBushFoliage(seed: number, def: BushTexture): Uint8Array {
     paintLeaves(true);
     for (const s of segments) painter.stem(s.x0, s.y0, s.x1, s.y1, s.r0, s.r1, def.stem, clip);
     paintLeaves(false);
+  }
+  return painter.finish();
+}
+
+/**
+ * One fern frond from (x, y): a stem setting off at `angle` (radians from straight up, positive to
+ * the right) and curling by `curl` over its `length` - so a frond thrown out sideways arches over
+ * and down - with `pairs` pairs of leaflets off it, angled forward towards the tip, longest a third
+ * of the way along and tapering to nothing at the tip. The far-side leaflets are painted first and
+ * darker, so the frond reads as a spray with a front and a back.
+ */
+function paintFrond(painter: Painter, rng: () => number, def: BushTexture, clip: Clip, cell: number, x: number, y: number, angle: number, curl: number, length: number, sweep = 0.45): void {
+  const steps = 24;
+  const points: { x: number; y: number; heading: number }[] = [];
+  let px = x;
+  let py = y;
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps;
+    const heading = angle + curl * t * t;
+    points.push({ x: px, y: py, heading });
+    px += Math.sin(heading) * (length / steps);
+    py -= Math.cos(heading) * (length / steps);
+  }
+  const leafletAt = (t: number, back: boolean): void => {
+    const f = t * steps;
+    const i = Math.min(steps - 1, Math.floor(f));
+    const k = f - i;
+    const a = points[i];
+    const b = points[i + 1];
+    const bx = a.x + (b.x - a.x) * k;
+    const by = a.y + (b.y - a.y) * k;
+    const heading = a.heading + (b.heading - a.heading) * k;
+    // Longest a third of the way up, nothing at the tip, shorter again at the base.
+    const size = Math.sin(Math.PI * Math.pow(t, 0.75)) * (0.7 + rng() * 0.3);
+    const leafLength = def.leafLength * cell * size;
+    const leafWidth = def.leafWidth * cell * size;
+    if (leafLength < 1.5) return;
+    const tone = Math.min(1, t * 0.6 + rng() * 0.4);
+    const base = [0, 1, 2].map((c) => def.dark[c] + (def.light[c] - def.dark[c]) * tone);
+    const brightness = (0.75 + 0.3 * t + rng() * 0.15) * (back ? 0.7 : 1);
+    for (const side of [-1, 1]) {
+      // Out to the side of the stem, swept forward towards its tip.
+      const out = heading + side * (Math.PI / 2 - sweep);
+      painter.leaf(bx, by, Math.sin(out), -Math.cos(out), leafLength, leafWidth, base, brightness, clip);
+    }
+  };
+  for (let p = 0; p < def.leaves; p++) leafletAt(0.08 + (0.92 * (p + 0.3)) / def.leaves, true);
+  for (let i = 0; i < steps; i++) {
+    const a = points[i];
+    const b = points[i + 1];
+    const r = cell * 0.007 * (1 - (i / steps) * 0.8);
+    painter.stem(a.x, a.y, b.x, b.y, r, r * 0.9, def.stem, clip);
+  }
+  for (let p = 0; p < def.leaves; p++) leafletAt(0.08 + (0.92 * (p + 0.75)) / def.leaves, false);
+}
+
+/**
+ * A fern atlas: four single fronds, one per cell, each rising straight from the cell's bottom to near
+ * its top - laid along a fern's frond strips (see treeGenerator.ts's generateFronds), which do the
+ * bending. `stems` is unused: the plant's fronds are its geometry.
+ */
+function bakeFernFoliage(seed: number, def: BushTexture): Uint8Array {
+  const size = FOLIAGE_TEXTURE_SIZE;
+  const cell = size / 2;
+  const painter = new Painter(size);
+  for (let variant = 0; variant < 4; variant++) {
+    const rng = mulberry32(seed + variant * 7919);
+    const clip = cellClip(cell, variant);
+    // Drawn wide, its leaflets near square to the stem: a frond strip is several times longer than
+    // it is wide, so laid on one the frond is squeezed sideways and its leaflets end up swept
+    // forward the way a fern's are.
+    paintFrond(painter, rng, def, clip, cell, clip.x0 + cell / 2, clip.y1 - 2, 0, 0, cell * 0.95, 0.12);
   }
   return painter.finish();
 }

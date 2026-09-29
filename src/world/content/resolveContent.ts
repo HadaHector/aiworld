@@ -10,7 +10,9 @@ import {
   type BoulderShape,
   type BranchingTree,
   type BushShape,
+  type BushBed,
   type ConiferTree,
+  type Fronds,
   type OldTrees,
   type PrimitiveTree,
   type TreeCrown,
@@ -656,8 +658,34 @@ function readKindLook(obj: RawObject, reader: Reader, defaults: Defaults): Pick<
   };
 }
 
+function readBushBed(obj: RawObject, reader: Reader): BushBed | null {
+  if (obj.bed === undefined) return null;
+  const bed = reader.object(obj.bed, "bed");
+  reader.onlyKeys(bed, "bed", ["plants", "spread"]);
+  const plants = reader.range(bed, "plants", "bed", { allowEqual: true });
+  if (plants[0] < 1 || !Number.isInteger(plants[0]) || !Number.isInteger(plants[1])) reader.fail("bed.plants", "expected whole numbers of plants, at least 1");
+  return { plants, spread: reader.number(bed, "spread", "bed", { min: 0 }) };
+}
+
 function readBush(obj: RawObject, reader: Reader): BushShape {
-  reader.onlyKeys(obj, "", [...KIND_COMMON_KEYS.filter((key) => key !== "growsOld"), "variants", "width", "height", "cards", "clumps", "clumpSize", "foliage"]);
+  reader.onlyKeys(obj, "", [...KIND_COMMON_KEYS.filter((key) => key !== "growsOld"), "variants", "width", "height", "cards", "clumps", "clumpSize", "fronds", "bed", "foliage"]);
+  // A frond plant has no cards or clumps - its fronds are its geometry.
+  let fronds: Fronds | null = null;
+  if (obj.fronds !== undefined) {
+    const f = reader.object(obj.fronds, "fronds");
+    reader.onlyKeys(f, "fronds", ["count", "length", "width", "angle", "curl", "fold", "segments"]);
+    const count = reader.range(f, "count", "fronds", { allowEqual: true });
+    if (count[0] < 1 || !Number.isInteger(count[0]) || !Number.isInteger(count[1])) reader.fail("fronds.count", "expected whole numbers of fronds, at least 1");
+    fronds = {
+      count,
+      length: reader.range(f, "length", "fronds", { allowEqual: true }),
+      width: reader.number(f, "width", "fronds", { min: 0.01 }),
+      angle: reader.range(f, "angle", "fronds", { allowEqual: true }),
+      curl: reader.number(f, "curl", "fronds"),
+      fold: reader.optionalNumber(f, "fold", "fronds", 0.15, { min: 0, max: 1 }),
+      segments: reader.optionalNumber(f, "segments", "fronds", 4, { min: 1, max: 12, integer: true }),
+    };
+  }
   const foliage = reader.object(obj.foliage, "foliage");
   reader.onlyKeys(foliage, "foliage", ["builder", "dark", "light", "stem", "stems", "leaves", "leafLength", "leafWidth", "bare"]);
   const stems = reader.range(foliage, "stems", "foliage", { allowEqual: true });
@@ -667,9 +695,11 @@ function readBush(obj: RawObject, reader: Reader): BushShape {
     variants: reader.number(obj, "variants", "", { min: 1, max: 16, integer: true }),
     width: reader.range(obj, "width", "", { allowEqual: true }),
     height: reader.range(obj, "height", "", { allowEqual: true }),
-    cards: reader.number(obj, "cards", "", { min: 1, max: 8, integer: true }),
-    clumps: reader.number(obj, "clumps", "", { min: 0, max: 32, integer: true }),
-    clumpSize: reader.range(obj, "clumpSize", "", { allowEqual: true }),
+    cards: fronds && obj.cards === undefined ? 0 : reader.number(obj, "cards", "", { min: 1, max: 8, integer: true }),
+    clumps: fronds && obj.clumps === undefined ? 0 : reader.number(obj, "clumps", "", { min: 0, max: 32, integer: true }),
+    clumpSize: fronds && obj.clumpSize === undefined ? [1, 1] : reader.range(obj, "clumpSize", "", { allowEqual: true }),
+    fronds,
+    bed: readBushBed(obj, reader),
     foliage: {
       builder: reader.oneOf(foliage, "builder", "foliage", BUSH_FOLIAGE_BUILDERS),
       dark: reader.color(foliage, "dark", "foliage"),

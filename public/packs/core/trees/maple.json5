@@ -1,0 +1,86 @@
+// A maple: a tall, straight trunk and a big, round, dense crown - a dome of broad leaves from well
+// down the trunk to the top, red and orange and gold in the autumn wood (the leaves are painted
+// scarlet; the biome's tints turn them anywhere from crimson to yellow). Its bark is grey, fairly
+// smooth, split by shallow furrows into long narrow plates.
+{
+  model: "branching",
+  variants: 4,
+  growsOld: true,
+  trunk: {
+    height: 17,
+    radius: 1.3,
+    topRadius: 0.6,
+    lean: 0.05,
+    wobble: 0.6,
+    flare: 1.6,
+    flareHeight: 2.4,
+    sides: 10,
+    rings: 9,
+  },
+  roots: { count: 5, length: [3, 5], radius: 0.45, drop: 1.2, sides: 5, rings: 3 },
+  branches: {
+    count: [8, 10],
+    from: 0.32,
+    length: [7, 10],
+    radius: 0.5,
+    // Up and out, bending up: a rounded dome.
+    angle: [35, 62],
+    arc: 0.45,
+    sides: 7,
+    rings: 5,
+    twigs: { count: [2, 3], length: [0.35, 0.55], angle: [30, 60], sides: 4, rings: 2 },
+  },
+  // Many big clumps, close together: a dense crown with no gaps.
+  leaves: { size: [11, 15], cards: 3, alongBranch: 3, top: 3, spread: 1.8 },
+  bark: {
+    tile: 5,
+    texture: {
+      bumpStrength: 2.2,
+      pipeline: {
+        noises: [
+          { name: "furrows", type: "ridged", octaves: 1, tileCycles: 9, stretch: [1, 5], amplitude: 1, persistence: 0.5, lacunarity: 2 },
+          { name: "plates", type: "worley", tileCycles: 12, stretch: [1, 4], amplitude: 1, mode: "edge", warp: 0.25, sizeJitter: 0.3 },
+          { name: "bend", type: "fbm", octaves: 3, tileCycles: 3, stretch: [1, 2], amplitude: 1, persistence: 0.5, lacunarity: 2 },
+          { name: "mottle", type: "fbm", octaves: 3, tileCycles: 5, amplitude: 1, persistence: 0.5, lacunarity: 2 },
+          { name: "grain", type: "fbm", octaves: 2, tileCycles: 60, stretch: [1, 6], amplitude: 1, persistence: 0.5, lacunarity: 2 },
+        ],
+        steps: [
+          { output: "bendRaw", op: "sample", noise: "bend" },
+          { output: "bendPx", op: "scale", input: "bendRaw", factor: 30 },
+          { output: "still", op: "constant", value: 0 },
+          { output: "furrowCrest", op: "sample", noise: "furrows", offset: ["bendPx", "still"] },
+          { output: "furrow", op: "mask", input: "furrowCrest", at: 0.75, off: 0.97 },
+          { output: "plateEdge", op: "sample", noise: "plates", offset: ["bendPx", "still"] },
+          { output: "plate", op: "mask", input: "plateEdge", at: 0.1, off: 0.02 },
+          { output: "body", op: "multiply", a: "furrow", b: "plate" },
+          { output: "grainRaw", op: "sample", noise: "grain" },
+          { output: "grain", op: "mask", input: "grainRaw", at: 1.2, off: -1.2 },
+          { output: "bodyHeight", op: "scale", input: "body", factor: 0.85 },
+          { output: "grainHeight", op: "scale", input: "grain", factor: 0.15 },
+          { output: "height", op: "add", a: "bodyHeight", b: "grainHeight" },
+          { output: "mottleRaw", op: "sample", noise: "mottle" },
+          { output: "mottle", op: "mask", input: "mottleRaw", at: 1.75, off: -1.75 },
+          { output: "toneBase", op: "scale", input: "height", factor: 0.6 },
+          { output: "toneMottle", op: "scale", input: "mottle", factor: 0.35 },
+          { output: "tone", op: "add", a: "toneBase", b: "toneMottle" },
+          {
+            output: "diffuse",
+            op: "colorRamp",
+            input: "tone",
+            stops: [
+              { at: 0.0, color: [0.08, 0.07, 0.06] },
+              { at: 0.3, color: [0.24, 0.22, 0.2] },
+              { at: 0.65, color: [0.42, 0.4, 0.37] },
+              { at: 1.0, color: [0.54, 0.52, 0.48] },
+            ],
+          },
+          { output: "roughness", op: "constant", value: 0.85 },
+        ],
+        outputs: { diffuse: "diffuse", roughness: "roughness", height: "height" },
+      },
+    },
+  },
+  // Scarlet to orange: the maple's own autumn colour, before any biome tint.
+  foliage: { builder: "broadleaf", dark: [0.42, 0.06, 0.03], light: [0.98, 0.42, 0.1], leaves: 520, leafLength: 0.06, leafWidth: 0.045 },
+  tint: [[0.85, 0.85, 0.85], [1.1, 1.05, 1.0]],
+}

@@ -662,6 +662,38 @@ function createScatter(seed: number, level: ScatterLevel): { scatter: TreeScatte
         shade: candidate.shadeRoll,
         lean: stone ? leanUnder(stone, candidate.x, candidate.z, stone.reachOf(kind.id, scale)) : undefined,
       });
+
+      // A bed: the rest of its plants round it, each standing on its own ground. Placed by the
+      // chunk that owns the first, so none is ever placed twice.
+      const bed = kind.shape.model === "bush" ? kind.shape.bed : null;
+      if (bed) {
+        const bedRng = mulberry32(deriveSeed(deriveSeed(level.salt, candidate.gx * 73856093 + candidate.gz * 19349663), candidate.index + 1));
+        const plants = bed.plants[0] + Math.floor(bedRng() * (bed.plants[1] - bed.plants[0] + 1));
+        for (let p = 1; p < plants; p++) {
+          const bearing = bedRng() * Math.PI * 2;
+          const distance = bed.spread * scale * Math.sqrt(0.2 + 0.8 * bedRng());
+          const size = 0.55 + bedRng() * 0.6;
+          const rotation = bedRng() * Math.PI * 2;
+          const tint = bedRng();
+          const shadeRoll = bedRng();
+          const px = candidate.x + Math.cos(bearing) * distance;
+          const pz = candidate.z + Math.sin(bearing) * distance;
+          const plantGround = probe(px, pz) ?? understory?.ground(px, pz);
+          if (!plantGround || survivalFade(plantGround) < 0.5) continue;
+          if (understory && among && amongTrees(understory, among, px, pz, 0) === 0) continue;
+          trees.push({
+            x: px,
+            y: plantGround.surfaceHeight - level.sink,
+            z: pz,
+            kind: kind.id,
+            scale: scale * size,
+            rotation,
+            tint,
+            area: areaFor(plantGround.sample.areaWeights, candidate.areaRoll),
+            shade: shadeRoll,
+          });
+        }
+      }
     }
     return trees;
   }
