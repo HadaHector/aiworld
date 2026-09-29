@@ -1,0 +1,270 @@
+/**
+ * Bluebell wood - the woodland family's green, spring variant (see ZONES.md), in place of the old
+ * forest: a deep, closed broadleaf wood on rolling hills, great oaks standing where it thins and in
+ * its clearings, hazel beneath, mossy boulders - and under the trees, drifts of bluebells hazing the
+ * floor blue, thick in one area and a few patches in the next.
+ */
+{
+  name: "Bluebell Wood",
+  voice: "shaded",
+  spawnWeight: 2,
+  lakeChance: 0.04,
+  borderType: "mountain",
+  settlement: "timber",
+  // Each area its own lie of the land: a flat lowland wood, rolling wooded hills, or hill country
+  // cut by wide valleys (the hills' basins: the hills scaled down to a gently rolling floor where a
+  // slow noise is low).
+  height: {
+    oneOf: [
+      { generator: "detailHeight", amplitude: { range: [6, 12] }, frequency: { range: [0.0015, 0.0025] }, offset: 9, persistence: 0.4 },
+      { generator: "detailHeight", amplitude: { range: [32, 50] }, frequency: 0.0014, offset: 27 },
+      {
+        noises: [
+          { name: "hills", type: "fbm", octaves: 5, frequency: 0.0021, amplitude: { range: [44, 66] }, persistence: 0.35, lacunarity: 2.0 },
+          { name: "basin", type: "fbm", octaves: 3, frequency: 0.0006, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+          { name: "floor", type: "fbm", octaves: 3, frequency: 0.003, amplitude: 4, persistence: 0.45, lacunarity: 2.0 },
+        ],
+        steps: [
+          { output: "hillsRaw", op: "sample", noise: "hills" },
+          { output: "hill", op: "offset", input: "hillsRaw", amount: 46 },
+          // The valley floor: 14 m and a few metres of gentle swell.
+          { output: "floorRaw", op: "sample", noise: "floor" },
+          { output: "floor", op: "offset", input: "floorRaw", amount: 14 },
+          { output: "basinRaw", op: "sample", noise: "basin" },
+          { output: "hilliness", op: "remap", input: "basinRaw", inMin: { range: [-0.35, -0.1] }, inMax: { range: [0.2, 0.4] }, outMin: 0, outMax: 1 },
+          { output: "hillShare", op: "clamp", input: "hilliness", min: 0, max: 1 },
+          { output: "rise", op: "subtract", a: "hill", b: "floor" },
+          { output: "shareOfRise", op: "multiply", a: "rise", b: "hillShare" },
+          { output: "result", op: "add", a: "floor", b: "shareOfRise" },
+        ],
+      },
+    ],
+  },
+  trees: {
+    generator: "twoSpecies",
+    lower: "oak",
+    upper: "broadleaf",
+    noises: [
+      { name: "stand", type: "fbm", octaves: 3, frequency: 0.0035, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+      { name: "species", type: "fbm", octaves: 2, frequency: 0.0012, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+    ],
+    // Nearly closed, with the odd clearing rather than the odd stand - this is the one zone where the
+    // default is wood and the exception is open ground.
+    cover: [
+      { output: "standRaw", op: "sample", noise: "stand" },
+      { output: "coverRamp", op: "remap", input: "standRaw", inMin: { range: [-1.1, -0.75] }, inMax: -0.35, outMin: 0, outMax: 1 },
+      { output: "cover", op: "clamp", input: "coverRamp", min: 0, max: 1 },
+    ],
+    // Broadleaf where the wood is thick, oak where it thins: the great oaks stand at the edges of
+    // clearings and out in them, with room for their crowns. The slow noise shifts the balance
+    // across the area, so some stretches are oakwood and some are all broadleaf.
+    share: [
+      { output: "standAgain", op: "sample", noise: "stand" },
+      { output: "speciesRaw", op: "sample", noise: "species" },
+      { output: "speciesLean", op: "scale", input: "speciesRaw", factor: 0.4 },
+      { output: "leaning", op: "add", a: "standAgain", b: "speciesLean" },
+      { output: "shareRamp", op: "remap", input: "leaning", inMin: { range: [-0.85, -0.6] }, inMax: -0.3, outMin: 0, outMax: 1 },
+      { output: "share", op: "clamp", input: "shareRamp", min: 0, max: 1 },
+    ],
+  },
+  // Thickets and thinner stretches rather than an even carpet - a faster noise than the trees', so
+  // the understory changes within one stand.
+  bushes: { chance: 0.8, generator: "standDensity", kind: "hazel", frequency: 0.012, openAt: -0.9, fullAt: 0.1, peak: 1 },
+  // Moss-grown boulders among the trees, gathered where the ground drops and by the water.
+  rocks: { generator: "rockDensity", kind: "mossyBoulder", frequency: 0.006, openAt: 0, fullAt: 0.7, peak: { range: [0.012, 0.045] }, footOfSlope: { range: [0.3, 0.6] }, riverShore: { range: [0.75, 1.5] }, lakeShore: { range: [0.75, 1.5] } },
+  // Each area its own trees, and every tree its own shade of them (spread). Pines first: a tree
+  // takes the first rule for its kind, and conifers stray less far from green than the rest.
+  treeTints: [
+    // Each area's stone a shade of its own, and every boulder a little different.
+    { kinds: ["mossyBoulder"], stone: { hue: { range: [-12, 12] }, saturation: { range: [0.6, 1.4] }, value: { range: [0.85, 1.15] }, spread: { hue: 6, saturation: 0.25, value: 0.15 } } },
+    {
+      // A spring wood: fresh, bright greens, the odd area yellower with new leaf or deeper and bluer.
+      leaves: { hue: { range: [-15, 25] }, saturation: { range: [0.95, 1.4] }, value: { range: [0.95, 1.15] }, spread: { hue: 10, saturation: 0.15, value: 0.12 } },
+      bark: { hue: { range: [-10, 10] }, saturation: { range: [0.7, 1.2] }, value: { range: [0.85, 1.12] }, spread: { value: 0.1 } },
+    },
+  ],
+  ground: {
+    // Which meadow an area is: grass's own texture under each, a different sward on it.
+    base: { oneOf: ["grass", "meadowShort", "meadowLong", "meadowPoppy", "meadowButtercup", "meadowTussock"] },
+    road: "cobblestone",
+    // Each area's ground a little different: a warmer or cooler, paler or deeper version of it.
+    adjust: { hue: { range: [-8, 8] }, saturation: { range: [0.85, 1.15] }, value: { range: [0.92, 1.08] } },
+    // Its clearings a lush spring green. Roads, rock and the forest floor keep their own colours.
+    tints: [
+      { family: "grassland", hue: { range: [-10, 25] }, saturation: { range: [0.9, 1.25] }, value: { range: [0.95, 1.08] } },
+    ],
+    layers: [
+      // Forest's detail amplitude (~40.45) is bigger than plains' (~12.75), so its curvature
+      // threshold is widened roughly proportionally.
+      {
+        id: "forest-leaf-litter-valley",
+        material: "leafLitter",
+        weight: {
+          noises: [],
+          steps: [
+            { output: "curvature", op: "input", name: "reliefCurvature" },
+            { output: "raw", op: "remap", input: "curvature", inMin: 0.05, inMax: 1.5, outMin: 0, outMax: 1.5 },
+            { output: "result", op: "clamp", input: "raw", min: 0, max: 1 },
+          ],
+        },
+      },
+
+      // Under the trees, the ground is the wood's own: leaf litter, humus and twigs rather than
+      // meadow. treeCover is the tree scatter's own density here, so the floor follows the stands
+      // and their clearings stay grass - frayed by a slow noise where the wood thins, so its edge wanders in and
+      // out in tongues and islands instead of tracing the cover's contour. The leafy grass reads
+      // the same noise (it is `shared`), so the two meet along one edge.
+      {
+        id: "forest-forest-floor",
+        material: "forestFloor",
+        weight: {
+          noises: [{ name: "fray", shared: "woodEdge", type: "fbm", octaves: 3, frequency: 0.03, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
+          steps: [
+            { output: "cover", op: "input", name: "treeCover" },
+            // Frayed only where the wood is thinning: nothing deep in the wood or out in the meadow.
+            { output: "open", op: "invert", input: "cover" },
+            { output: "thinning", op: "multiply", a: "cover", b: "open" },
+            { output: "frayRaw", op: "sample", noise: "fray" },
+            { output: "frayHere", op: "multiply", a: "frayRaw", b: "thinning" },
+            { output: "frayShift", op: "scale", input: "frayHere", factor: 1.4 },
+            { output: "frayed", op: "add", a: "cover", b: "frayShift" },
+            { output: "result", op: "mask", input: "frayed", at: 0.95, off: 0.55 },
+          ],
+        },
+      },
+
+      // Bluebells: drifts of them over the forest floor, deep in the wood - how much of it is the
+      // area's own roll, from a few patches to a carpet. On top of the floor (the same treeCover
+      // edge, a little further in), weighted past 1 so a drift's middle is all bluebells.
+      {
+        id: "bluebell-drifts",
+        material: "bluebellFloor",
+        weight: {
+          noises: [
+            { name: "fray", shared: "woodEdge", type: "fbm", octaves: 3, frequency: 0.03, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+            { name: "drift", type: "fbm", octaves: 3, frequency: 0.012, amplitude: 1, persistence: 0.55, lacunarity: 2.0 },
+          ],
+          steps: [
+            { output: "cover", op: "input", name: "treeCover" },
+            { output: "open", op: "invert", input: "cover" },
+            { output: "thinning", op: "multiply", a: "cover", b: "open" },
+            { output: "frayRaw", op: "sample", noise: "fray" },
+            { output: "frayHere", op: "multiply", a: "frayRaw", b: "thinning" },
+            { output: "frayShift", op: "scale", input: "frayHere", factor: 1.4 },
+            { output: "frayed", op: "add", a: "cover", b: "frayShift" },
+            { output: "inWood", op: "mask", input: "frayed", at: 0.97, off: 0.7 },
+            { output: "driftRaw", op: "sample", noise: "drift" },
+            { output: "drift", op: "mask", input: "driftRaw", at: { range: [-0.2, 0.5] }, off: { range: [-0.9, -0.3] } },
+            { output: "drifts", op: "multiply", a: "inWood", b: "drift" },
+            { output: "result", op: "scale", input: "drifts", factor: 2 },
+          ],
+        },
+      },
+
+      // The wood's edge: leaves over grass, a wide band of it between meadow and forest floor,
+      // rising as the meadow's share falls and giving way exactly as the floor's rises.
+      {
+        id: "forest-leafy-grass",
+        material: "leafyGrass",
+        weight: {
+          noises: [{ name: "fray", shared: "woodEdge", type: "fbm", octaves: 3, frequency: 0.03, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
+          steps: [
+            { output: "cover", op: "input", name: "treeCover" },
+            // Frayed only where the wood is thinning: nothing deep in the wood or out in the meadow.
+            { output: "open", op: "invert", input: "cover" },
+            { output: "thinning", op: "multiply", a: "cover", b: "open" },
+            { output: "frayRaw", op: "sample", noise: "fray" },
+            { output: "frayHere", op: "multiply", a: "frayRaw", b: "thinning" },
+            { output: "frayShift", op: "scale", input: "frayHere", factor: 1.4 },
+            { output: "frayed", op: "add", a: "cover", b: "frayShift" },
+            { output: "rising", op: "mask", input: "frayed", at: 0.3, off: 0.03 },
+            { output: "falling", op: "mask", input: "frayed", at: 0.55, off: 0.95 },
+            { output: "result", op: "multiply", a: "rising", b: "falling" },
+          ],
+        },
+      },
+
+      // The wood's steep ground is rock grown over with moss - weighted to outdo the universal bare
+      // rock, which fires on the same slopes.
+      {
+        id: "forest-mossy-rock",
+        material: "mossyRock",
+        weight: {
+          noises: [],
+          steps: [
+            { output: "slope", op: "input", name: "slope" },
+            { output: "steep", op: "mask", input: "slope", at: 0.66, off: 0.93 },
+            { output: "result", op: "scale", input: "steep", factor: 2.5 },
+          ],
+        },
+      },
+
+      // Stones along the water: a river washes its bed and its near bank down to the cobbles (the
+      // waterline is ~22 units from the centreline at a source, ~62 at a mouth), a lake or a pond its
+      // shore, showing through the water too, before the universal shore sand takes over further out.
+      {
+        id: "forest-stream-stones",
+        material: "pebbles",
+        weight: {
+          noises: [{ name: "reach", type: "fbm", octaves: 2, frequency: 0.02, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
+          steps: [
+            { output: "gap", op: "input", name: "riverGap" },
+            // A ragged reach - wider here, narrower there - rather than a ruled strip.
+            { output: "reachRaw", op: "sample", noise: "reach" },
+            { output: "reachShift", op: "scale", input: "reachRaw", factor: 9 },
+            { output: "reach", op: "add", a: "gap", b: "reachShift" },
+            { output: "band", op: "mask", input: "reach", at: 40, off: 58 },
+            // A lake's shore and bed get the same stones, from where the shore starts down.
+            { output: "lakeFactor", op: "input", name: "lakeFactor" },
+            { output: "lake", op: "mask", input: "lakeFactor", at: 0.25, off: 0.02 },
+            // And so does any hollow inland where the ground just dips to the waterline and fills - no
+            // river, no lake cell, only low ground. Inland only: the coast keeps its sand.
+            { output: "height", op: "input", name: "height" },
+            { output: "low", op: "mask", input: "height", at: 0.6, off: 2.6 },
+            { output: "landmass", op: "input", name: "landmass" },
+            { output: "inland", op: "mask", input: "landmass", at: 0.95, off: 0.7 },
+            { output: "pond", op: "multiply", a: "low", b: "inland" },
+            { output: "lakeOrPond", op: "max", a: "lake", b: "pond" },
+            { output: "water", op: "max", a: "band", b: "lakeOrPond" },
+            // Past 1, to outweigh the universal shore sand on the same bank.
+            { output: "result", op: "scale", input: "water", factor: 1.5 },
+          ],
+        },
+      },
+
+      // Reed beds: patches of bulrush in the shallows and at the waterline of any inland water -
+      // pond, lake or river alike, since the band is only the ground's height about the water.
+      // Weighted to take the waterside stones' place where a patch falls.
+      {
+        id: "forest-reedbed",
+        material: "reedbed",
+        weight: {
+          noises: [{ name: "patch", type: "fbm", octaves: 3, frequency: 0.03, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
+          steps: [
+            { output: "height", op: "input", name: "height" },
+            { output: "wadeable", op: "mask", input: "height", at: -0.2, off: -1.1 },
+            { output: "nearWater", op: "mask", input: "height", at: 0.5, off: 1.5 },
+            { output: "band", op: "multiply", a: "wadeable", b: "nearWater" },
+            { output: "landmass", op: "input", name: "landmass" },
+            { output: "inland", op: "mask", input: "landmass", at: 0.95, off: 0.7 },
+            { output: "patchRaw", op: "sample", noise: "patch" },
+            { output: "patch", op: "mask", input: "patchRaw", at: 0.35, off: 0.05 },
+            { output: "inlandBand", op: "multiply", a: "band", b: "inland" },
+            { output: "patchBand", op: "multiply", a: "inlandBand", b: "patch" },
+            { output: "result", op: "scale", input: "patchBand", factor: 4 },
+          ],
+        },
+      },
+    ],
+  },
+  sky: {
+    horizon: "#a4baac",
+    zenith: "#467084",
+    cloud: "#d6ded0",
+  },
+  light: {
+    sunPeak: 58,
+    moonPeak: 38,
+    ambientDay: "#a8c2b0",
+  },
+}

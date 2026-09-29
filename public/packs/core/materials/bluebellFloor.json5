@@ -1,0 +1,11 @@
+// A bluebell carpet: the forest floor under a spring wood, hazed blue with bluebells so thick the
+// leaf litter barely shows between them. Laid in drifts under the trees (see the bluebell wood).
+{
+  name: "Bluebell Floor",
+  detail: { strength: 0.3 },
+  textureFrom: "forestFloor",
+  grass: [
+    { kind: "bluebellCarpet", density: 4.2, color: [0.24, 0.4, 0.18] },
+    { kind: "meadow", density: 0.5, color: [0.3, 0.44, 0.2] },
+  ],
+}

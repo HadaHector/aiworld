@@ -32,6 +32,7 @@ Any family should be able to roll these per area; together they do most of the c
 | Water pools | Fraction of standing water on flat ground |
 | Mist | Per-area fog density and colour |
 | Palette | Ground, foliage and stone tints (exists) |
+| Relief | Which lie of the land an area is: `height: { oneOf: [...] }` over flat, rolling, and hills with valleys (the hills' basin graph) - see the bluebell wood; every woodland variant gets it |
 
 ## Tree roster
 
@@ -86,6 +87,11 @@ Existing: **broadleaf**, **pine**, **palm**.
 | Frost steppe | tundraGround, frostPatch | tufts, grey-green | none, birch at the edges | snow patches, boulders |
 
 ### 2. Woodland (rolling to hilly) - today: forest
+
+- **Bluebell wood: done** - `biomes/bluebellWood.json5` (forest retired to `legacy/`). A closed
+  broadleaf wood, oaks where it thins and in its clearings, hazel, mossy boulders; drifts of a new
+  `bluebellCarpet` over the forest floor (`bluebellFloor`), from a few patches to a carpet per area. Each area rolls its relief: a flat lowland wood, rolling
+  wooded hills, or hill country cut by wide valleys.
 
 | Variant | Ground | Plants | Trees | Extras |
 |---|---|---|---|---|

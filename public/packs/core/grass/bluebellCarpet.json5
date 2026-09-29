@@ -1,0 +1,32 @@
+// A bluebell carpet: the same arching stems and hanging bells as the meadow's bluebells, but nearly
+// continuous rather than in loose patches - the blue haze over a spring wood's floor - and mostly
+// blue and violet, the white only now and then. Seen from further off, so the haze carries.
+{
+  width: 1.0,
+  height: 0.75,
+  sway: 0.18,
+  fadeStart: 90,
+  fadeEnd: 360,
+  cluster: { scale: 6, coverage: 0.85 },
+  blades: {
+    count: 14,
+    minHeight: 0.55,
+    maxHeight: 0.92,
+    baseWidth: 2.5,
+    lean: 0.16,
+    fan: false,
+    seedHeads: false,
+    flowerHeads: {
+      shape: "bell",
+      petals: 3,
+      count: 11,
+      radius: 22,
+      colors: [
+        [0.28, 0.36, 0.9], // blue
+        [0.34, 0.32, 0.88], // blue-violet
+        [0.45, 0.3, 0.85], // violet
+        [0.3, 0.4, 0.92], // blue
+      ],
+    },
+  },
+}
