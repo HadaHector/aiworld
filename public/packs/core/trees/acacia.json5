@@ -1,0 +1,84 @@
+// An umbrella acacia: the tree of the savanna, and the one shape nothing else has - a short, thin
+// trunk that forks low into a few long limbs thrown up and out like the ribs of an umbrella, and on
+// their ends one flat, wide, thin layer of fine leaves, far wider than the tree is tall. Its bark is
+// dark and rough, split into small scaly plates.
+{
+  model: "branching",
+  variants: 4,
+  trunk: {
+    height: 6.5,
+    radius: 0.75,
+    topRadius: 0.5,
+    lean: 0.14,
+    wobble: 0.6,
+    flare: 1.4,
+    flareHeight: 1.2,
+    sides: 8,
+    rings: 6,
+  },
+  roots: { count: 4, length: [2, 3.5], radius: 0.45, drop: 0.7, sides: 4, rings: 3 },
+  branches: {
+    // The fork: a few limbs nearly as thick as the trunk, leaving it together near its top.
+    count: [3, 5],
+    from: 0.6,
+    length: [10, 14],
+    radius: 0.75,
+    // Up steeply, then bending out and over (arc below 0) - the umbrella's ribs.
+    angle: [30, 52],
+    arc: -0.25,
+    sides: 6,
+    rings: 6,
+    // Many long side shoots, spreading out level, to carry the canopy wide.
+    twigs: { count: [3, 4], length: [0.35, 0.6], angle: [55, 85], sides: 4, rings: 3 },
+  },
+  // Wide cards, sheared flat and pulled to one height: a layer, not a ball.
+  leaves: { size: [8, 12], cards: 3, alongBranch: 4, top: 0, spread: 2.4, squash: 0.48, level: 0.6 },
+  bark: {
+    tile: 3,
+    texture: {
+      bumpStrength: 2.6,
+      pipeline: {
+        noises: [
+          { name: "scales", type: "worley", tileCycles: 14, stretch: [1, 2.2], amplitude: 1, mode: "edge", warp: 0.3, sizeJitter: 0.3 },
+          { name: "fissures", type: "ridged", octaves: 1, tileCycles: 8, stretch: [1, 4], amplitude: 1, persistence: 0.5, lacunarity: 2 },
+          { name: "grain", type: "fbm", octaves: 3, tileCycles: 60, stretch: [1, 5], amplitude: 1, persistence: 0.5, lacunarity: 2 },
+          { name: "mottle", type: "fbm", octaves: 3, tileCycles: 5, amplitude: 1, persistence: 0.5, lacunarity: 2 },
+        ],
+        steps: [
+          { output: "scaleEdge", op: "sample", noise: "scales" },
+          { output: "scaleBody", op: "mask", input: "scaleEdge", at: 0.16, off: 0.02 },
+          { output: "fissureCrest", op: "sample", noise: "fissures" },
+          { output: "fissureRidge", op: "mask", input: "fissureCrest", at: 0.6, off: 0.97 },
+          { output: "body", op: "multiply", a: "scaleBody", b: "fissureRidge" },
+          { output: "grainRaw", op: "sample", noise: "grain" },
+          { output: "grain", op: "mask", input: "grainRaw", at: 1.2, off: -1.2 },
+          { output: "mottleRaw", op: "sample", noise: "mottle" },
+          { output: "mottle", op: "mask", input: "mottleRaw", at: 1.75, off: -1.75 },
+          { output: "bodyHeight", op: "scale", input: "body", factor: 0.85 },
+          { output: "grainHeight", op: "scale", input: "grain", factor: 0.15 },
+          { output: "height", op: "add", a: "bodyHeight", b: "grainHeight" },
+          { output: "toneBase", op: "scale", input: "height", factor: 0.8 },
+          { output: "toneMottle", op: "scale", input: "mottle", factor: 0.25 },
+          { output: "tone", op: "add", a: "toneBase", b: "toneMottle" },
+          // Near black in the cracks, a dark grey-brown on the scales.
+          {
+            output: "diffuse",
+            op: "colorRamp",
+            input: "tone",
+            stops: [
+              { at: 0.0, color: [0.04, 0.03, 0.025] },
+              { at: 0.35, color: [0.12, 0.09, 0.07] },
+              { at: 0.7, color: [0.24, 0.2, 0.16] },
+              { at: 1.0, color: [0.36, 0.31, 0.25] },
+            ],
+          },
+          { output: "roughness", op: "constant", value: 0.9 },
+        ],
+        outputs: { diffuse: "diffuse", roughness: "roughness", height: "height" },
+      },
+    },
+  },
+  // Many tiny leaflets: a fine, olive-green, slightly dusty foliage.
+  foliage: { builder: "broadleaf", dark: [0.12, 0.18, 0.06], light: [0.44, 0.5, 0.2], leaves: 900, leafLength: 0.03, leafWidth: 0.018 },
+  tint: [[0.85, 0.88, 0.78], [1.1, 1.06, 0.92]],
+}

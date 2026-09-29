@@ -1,0 +1,10 @@
+// Savanna grass: tall, thin, golden stalks with seed heads, thick enough to stand in up to the knee -
+// the sea of grass the acacias stand in. Seen from a long way off, so it fades out late.
+{
+  width: 1.0,
+  height: 1.25,
+  sway: 0.3,
+  fadeStart: 60,
+  fadeEnd: 340,
+  blades: { count: 32, minHeight: 0.5, maxHeight: 0.98, baseWidth: 3.5, lean: 0.22, fan: false, seedHeads: true },
+}

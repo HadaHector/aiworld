@@ -60,9 +60,10 @@ class WoodBuilder {
    * A tapered tube along a centreline, `sides` around, closed at its far end by a single apex vertex.
    * Its rings are oriented by parallel transport - each ring's frame is the previous one turned just
    * enough to stay square to the line - so a curving limb does not twist. The bark tiles a whole
-   * number of times around (so the seam matches) and at its true scale along.
+   * number of times around (so the seam matches) and at its true scale along. A `blunt` tube - a
+   * limb snapped off - ends in a low cap instead of a tapering point.
    */
-  tube(points: V3[], radii: number[], sides: number, tile: number): void {
+  tube(points: V3[], radii: number[], sides: number, tile: number, blunt = false): void {
     const base = this.positions.length / 3;
     const ring = sides + 1;
     // Sized on the limb's average girth: its first ring can be a flared base twice the width of
@@ -98,7 +99,7 @@ class WoodBuilder {
     // The apex: a short cone off the last ring, rather than an open end.
     const last = points.length - 1;
     const tipDirection = normalize(sub(points[last], points[last - 1]));
-    const apex = add(points[last], scale(tipDirection, radii[last] * 2));
+    const apex = add(points[last], scale(tipDirection, radii[last] * (blunt ? 0.35 : 2)));
     const apexIndex = this.positions.length / 3;
     this.positions.push(apex[0], apex[1], apex[2]);
     this.normals.push(tipDirection[0], tipDirection[1], tipDirection[2]);
@@ -273,10 +274,13 @@ export function generateTree(spec: BranchingTree, seed: number, detail: TreeDeta
   const wood = new WoodBuilder();
   const leafBuilder = new LeafBuilder();
   const far = detail === "far";
-  const limb = (points: V3[], radii: number[], sides: number): void => {
-    if (far) wood.tube(thinned(points), thinned(radii), Math.max(3, Math.round(sides * 0.6)), bark.tile);
-    else wood.tube(points, radii, sides, bark.tile);
+  const limb = (points: V3[], radii: number[], sides: number, blunt = false): void => {
+    if (far) wood.tube(thinned(points), thinned(radii), Math.max(3, Math.round(sides * 0.6)), bark.tile, blunt);
+    else wood.tube(points, radii, sides, bark.tile, blunt);
   };
+  // Whether a limb is snapped off short, and to what share of its length. No draw at all for a kind
+  // that never breaks, so its trees stay exactly as they were.
+  const snapped = (): number => (branches.broken > 0 && rng() < branches.broken ? 0.3 + rng() * 0.4 : 1);
 
   // --- trunk ---
   // A gentle lean in one direction plus two slow sways, all zero at the base so the trunk stands
@@ -300,7 +304,9 @@ export function generateTree(spec: BranchingTree, seed: number, detail: TreeDeta
     const y = -buried + (trunk.height + buried) * t;
     const rise = Math.max(0, y) / trunk.height;
     const flare = 1 + (trunk.flare - 1) * (1 - smoothstep(0, trunk.flareHeight, y));
-    return lerp(trunk.radius, trunk.topRadius, rise) * flare;
+    const swell = (rise - trunk.bulgeAt) / 0.3;
+    const bulge = 1 + trunk.bulge * Math.exp(-swell * swell);
+    return lerp(trunk.radius, trunk.topRadius, rise) * flare * bulge;
   };
   const trunkTs: number[] = [];
   for (let i = 0; i <= trunk.rings; i++) {
@@ -341,22 +347,25 @@ export function generateTree(spec: BranchingTree, seed: number, detail: TreeDeta
     const direction: V3 = [Math.sin(tilt) * Math.cos(heading), Math.cos(tilt), Math.sin(tilt) * Math.sin(heading)];
     const side = perpendicular(direction);
     const wander = (rng() - 0.5) * 0.3;
-    const length = between(branches.length);
+    const fullLength = between(branches.length);
+    const kept = snapped();
+    const length = fullLength * kept;
     const start = trunkPoint(t);
     const startRadius = trunkRadius(t) * branches.radius;
 
     const points: V3[] = [];
     const radii: number[] = [];
     for (let i = 0; i <= branches.rings; i++) {
-      const s = i / branches.rings;
+      // A snapped branch is the same branch ending short - still thick where it broke.
+      const s = (i / branches.rings) * kept;
       // Straight out along its direction, curving back up towards the tip, with a slight sideways drift.
-      const along = scale(direction, length * s);
-      const lift: V3 = [0, branches.arc * length * s * s, 0];
-      const drift = scale(side, wander * length * s * s);
+      const along = scale(direction, fullLength * s);
+      const lift: V3 = [0, branches.arc * fullLength * s * s, 0];
+      const drift = scale(side, wander * fullLength * s * s);
       points.push(add(add(add(start, along), lift), drift));
       radii.push(startRadius * (1 - 0.78 * s));
     }
-    limb(points, radii, branches.sides);
+    limb(points, radii, branches.sides, kept < 1);
     clusterPoints.push(points[points.length - 1]);
 
     const branchAt = (s: number): { point: V3; tangent: V3; radius: number } => {
@@ -376,8 +385,12 @@ export function generateTree(spec: BranchingTree, seed: number, detail: TreeDeta
       const away = rotate(perpendicular(at.tangent), at.tangent, rng() * Math.PI * 2);
       const angle = between(branches.twigs.angle) * DEG;
       // Off the branch, then nudged upward - twigs reach for the light.
-      const twigDirection = normalize(add(add(scale(at.tangent, Math.cos(angle)), scale(away, Math.sin(angle))), [0, 0.35, 0]));
-      const twigLength = length * between(branches.twigs.length);
+      const reaching = normalize(add(add(scale(at.tangent, Math.cos(angle)), scale(away, Math.sin(angle))), [0, 0.35, 0]));
+      // In a crown levelled into one layer, twigs spread out along it rather than up through it.
+      const flatness = leaves ? leaves.level : 0;
+      const twigDirection = flatness > 0 ? normalize([reaching[0], reaching[1] * (1 - flatness), reaching[2]]) : reaching;
+      const twigKept = snapped();
+      const twigLength = length * between(branches.twigs.length) * twigKept;
       const twigPoints: V3[] = [];
       const twigRadii: number[] = [];
       for (let i = 0; i <= branches.twigs.rings; i++) {
@@ -385,36 +398,51 @@ export function generateTree(spec: BranchingTree, seed: number, detail: TreeDeta
         twigPoints.push(add(at.point, add(scale(twigDirection, twigLength * s), [0, twigLength * 0.15 * s * s, 0])));
         twigRadii.push(at.radius * 0.7 * (1 - 0.75 * s));
       }
-      if (!far) wood.tube(twigPoints, twigRadii, branches.twigs.sides, bark.tile);
+      if (!far) wood.tube(twigPoints, twigRadii, branches.twigs.sides, bark.tile, twigKept < 1);
       clusterPoints.push(twigPoints[twigPoints.length - 1]);
     }
 
-    for (let a = 0; a < leaves.alongBranch; a++) clusterPoints.push(branchAt(0.55 + rng() * 0.35).point);
-  }
-  const top = trunkPoint(1);
-  for (let a = 0; a < leaves.top; a++) {
-    clusterPoints.push(add(top, [(rng() - 0.5) * leaves.spread * 2, leaves.size[0] * 0.25 + rng() * leaves.spread, (rng() - 0.5) * leaves.spread * 2]));
+    if (leaves) for (let a = 0; a < leaves.alongBranch; a++) clusterPoints.push(branchAt(0.55 + rng() * 0.35).point);
   }
 
-  // --- leaf clusters ---
-  const crownCentre = scale(clusterPoints.reduce<V3>((sum, p) => add(sum, p), [0, 0, 0]), 1 / Math.max(1, clusterPoints.length));
-  const crownRadius = Math.max(1, ...clusterPoints.map((p) => Math.hypot(...sub(p, crownCentre))));
   let foliageTop = trunk.height;
-  for (const point of clusterPoints) {
-    // Each cluster is `cards` cards crossed about one axis - out from the crown and upward - like a
-    // tuft of grass turned on its side, so it reads as a clump from any direction.
-    const outward = normalize(add(sub(point, crownCentre), [0, crownRadius * 0.4, 0]));
-    const axis = normalize(add(outward, [(rng() - 0.5) * 0.8, (rng() - 0.5) * 0.8, (rng() - 0.5) * 0.8]));
-    const first = rotate(perpendicular(axis), axis, rng() * Math.PI);
-    for (let c = 0; c < leaves.cards; c++) {
-      const normal = rotate(first, axis, (c * Math.PI) / leaves.cards);
-      const across = cross(axis, normal);
-      const size = between(leaves.size);
-      const offset: V3 = [(rng() - 0.5) * 2 * leaves.spread, (rng() - 0.5) * leaves.spread, (rng() - 0.5) * 2 * leaves.spread];
-      const centre = add(point, offset);
-      leafBuilder.card(centre, axis, across, size, Math.floor(rng() * 4), crownCentre, crownRadius);
-      foliageTop = Math.max(foliageTop, centre[1] + size * 0.7);
+  if (leaves) {
+    const top = trunkPoint(1);
+    for (let a = 0; a < leaves.top; a++) {
+      clusterPoints.push(add(top, [(rng() - 0.5) * leaves.spread * 2, leaves.size[0] * 0.25 + rng() * leaves.spread, (rng() - 0.5) * leaves.spread * 2]));
     }
+
+    // --- leaf clusters ---
+    // Pulled towards the height of the crown's highest quarter first, for a crown that is one flat
+    // layer lying on top of its limbs - not through them, with their ends poking out above it.
+    if (leaves.level > 0 && clusterPoints.length > 0) {
+      const heights = clusterPoints.map((p) => p[1]).sort((a, b) => b - a);
+      const highest = heights.slice(0, Math.max(1, Math.ceil(heights.length / 4)));
+      const layerY = highest.reduce((sum, y) => sum + y, 0) / highest.length;
+      for (const p of clusterPoints) p[1] = lerp(p[1], layerY, leaves.level);
+    }
+    const crownCentre = scale(clusterPoints.reduce<V3>((sum, p) => add(sum, p), [0, 0, 0]), 1 / Math.max(1, clusterPoints.length));
+    const crownRadius = Math.max(1, ...clusterPoints.map((p) => Math.hypot(...sub(p, crownCentre))));
+    // Squashed, every card is sheared flatter, so a crown of them is a layer rather than a ball.
+    const flat = (v: V3): V3 => [v[0], v[1] * leaves.squash, v[2]];
+    for (const point of clusterPoints) {
+      // Each cluster is `cards` cards crossed about one axis - out from the crown and upward - like a
+      // tuft of grass turned on its side, so it reads as a clump from any direction.
+      const outward = normalize(add(sub(point, crownCentre), [0, crownRadius * 0.4, 0]));
+      const axis = normalize(add(outward, [(rng() - 0.5) * 0.8, (rng() - 0.5) * 0.8, (rng() - 0.5) * 0.8]));
+      const first = rotate(perpendicular(axis), axis, rng() * Math.PI);
+      for (let c = 0; c < leaves.cards; c++) {
+        const normal = rotate(first, axis, (c * Math.PI) / leaves.cards);
+        const across = cross(axis, normal);
+        const size = between(leaves.size);
+        const offset: V3 = [(rng() - 0.5) * 2 * leaves.spread, (rng() - 0.5) * leaves.spread * leaves.squash, (rng() - 0.5) * 2 * leaves.spread];
+        const centre = add(point, offset);
+        leafBuilder.card(centre, flat(axis), flat(across), size, Math.floor(rng() * 4), crownCentre, crownRadius);
+        foliageTop = Math.max(foliageTop, centre[1] + size * 0.7 * leaves.squash);
+      }
+    }
+  } else {
+    for (let i = 1; i < wood.positions.length; i += 3) foliageTop = Math.max(foliageTop, wood.positions[i]);
   }
 
   return {

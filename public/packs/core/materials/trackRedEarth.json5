@@ -1,0 +1,67 @@
+/**
+ * A red-earth track: the savanna's road, the same iron-red soil as its bare patches (redEarth)
+ * packed hard by wheels and feet - a shade darker and browner where it is pressed down, pale red
+ * dust lying loose on top in drifts, and a scatter of small stones worked up out of it.
+ *
+ * Like the cart track, deliberately low relief and no clods or cracks: a network of either reads as
+ * a pattern running the length of every road, and the ground under a road really is flat.
+ */
+{
+  name: "Red Earth Track",
+  texture: {
+    bumpStrength: 0.9,
+    pipeline: {
+      noises: [
+        { name: "mottle", type: "fbm", octaves: 3, tileCycles: 13, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+        { name: "grain", type: "fbm", octaves: 2, tileCycles: 46, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+        { name: "broad", type: "fbm", octaves: 2, tileCycles: 3, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+        { name: "dust", type: "fbm", octaves: 3, tileCycles: 7, amplitude: 1, persistence: 0.55, lacunarity: 2.0 },
+        { name: "stones", type: "worley", tileCycles: 60, amplitude: 1, mode: "f1", warp: 0.3, sizeJitter: 0.5 },
+      ],
+      steps: [
+        { output: "mottle", op: "sample", noise: "mottle" },
+        { output: "mottleMask", op: "mask", input: "mottle", at: 1.75, off: -1.75 },
+        { output: "grain", op: "sample", noise: "grain" },
+        { output: "grainMask", op: "mask", input: "grain", at: 1.5, off: -1.5 },
+        { output: "broad", op: "sample", noise: "broad" },
+        { output: "broadMask", op: "mask", input: "broad", at: 1.5, off: -1.5 },
+
+        // Packed red-brown earth, redder where it is less worn.
+        { output: "packed", op: "color", value: [0.34, 0.2, 0.13] },
+        { output: "worn", op: "color", value: [0.5, 0.3, 0.19] },
+        { output: "earth", op: "mix", a: "packed", b: "worn", t: "mottleMask" },
+        // Loose pale dust lying on it in drifts.
+        { output: "dustRaw", op: "sample", noise: "dust" },
+        { output: "dustDrift", op: "mask", input: "dustRaw", at: 0.9, off: 0 },
+        { output: "dustColor", op: "color", value: [0.64, 0.46, 0.33] },
+        { output: "dustAmount", op: "scale", input: "dustDrift", factor: 0.45 },
+        { output: "dusted", op: "mix", a: "earth", b: "dustColor", t: "dustAmount" },
+        // Fine grit lightening it at a much finer scale than the tone.
+        { output: "grit", op: "color", value: [0.58, 0.42, 0.3] },
+        { output: "gritAmount", op: "scale", input: "grainMask", factor: 0.3 },
+        { output: "gritty", op: "mix", a: "dusted", b: "grit", t: "gritAmount" },
+        // Small dark stones: the middles of a sparse few worley cells.
+        { output: "stoneDistance", op: "sample", noise: "stones" },
+        { output: "stoneCore", op: "mask", input: "stoneDistance", at: 0.14, off: 0.24 },
+        { output: "stoneSeeds", op: "mask", input: "grain", at: 0.6, off: 0.3 },
+        { output: "stone", op: "multiply", a: "stoneCore", b: "stoneSeeds" },
+        { output: "stoneColor", op: "color", value: [0.3, 0.24, 0.2] },
+        { output: "diffuse", op: "mix", a: "gritty", b: "stoneColor", t: "stone" },
+
+        { output: "roughness", op: "constant", value: 0.85 },
+
+        // Shallow relief: broad undulation and grain, the stones just proud of it.
+        { output: "bed", op: "constant", value: 0.4 },
+        { output: "swell", op: "scale", input: "broadMask", factor: 0.3 },
+        { output: "bedSwell", op: "add", a: "bed", b: "swell" },
+        { output: "tooth", op: "scale", input: "grainMask", factor: 0.28 },
+        { output: "toothed", op: "add", a: "bedSwell", b: "tooth" },
+        { output: "stoneHeight", op: "scale", input: "stone", factor: 0.15 },
+        { output: "height", op: "add", a: "toothed", b: "stoneHeight" },
+      ],
+      outputs: { diffuse: "diffuse", roughness: "roughness", height: "height" },
+    },
+  },
+  // As the cart track: gone wherever the road is half the blend or more.
+  clearsGrass: 2,
+}

@@ -303,15 +303,23 @@ a trunk with a flared base and roots diving into the ground, main branches carry
 clumps - crossed cards cut out of a generated texture - at the branch and twig tips, along the outer
 branches and on top. Its sections:
 
-- `trunk`: `height`, `radius`/`topRadius`, `lean`, `wobble`, `flare`/`flareHeight`, `sides`, `rings`
+- `trunk`: `height`, `radius`/`topRadius`, `lean`, `wobble`, `flare`/`flareHeight`, `sides`, `rings`,
+  and optionally `bulge` - the trunk swells to 1 + `bulge` times its girth around `bulgeAt` of the
+  way up (default 0.35), a baobab's bottle
 - `roots`: `count`, `length`, `radius` (of the trunk's), `drop` (how deep the ends dive), `sides`, `rings`
 - `branches`: `count`, `from` (fraction of the trunk's height), `length`, `radius`, `angle` (degrees
-  from vertical), `arc` (how much they curve back up), `sides`, `rings`, and `twigs` likewise
-- `leaves`: `size` of a card, `cards` per clump, clumps `alongBranch` and on `top`, `spread`
+  from vertical), `arc` (how much they curve back up; below 0, over and outwards), `sides`, `rings`,
+  `twigs` likewise, and optionally `broken` - the share of branches and twigs snapped off short
+- `leaves`: `size` of a card, `cards` per clump, clumps `alongBranch` and on `top`, `spread`, and
+  optionally `squash` (a clump's height for its width: below 1, flattened) and `level` (0-1, how far
+  every clump is pulled up to the crown's top layer - with a low `squash`, an acacia's umbrella)
 - `bark`: `tile` (metres of trunk per texture repeat) and `texture`, a texture graph exactly like a
   material's - u runs around a limb, v along it
 - `foliage`: the `broadleaf` clump texture - `dark`/`light`, `leaves` per clump, `leafLength`/`leafWidth`
 - `variants`: how many different trees are generated from all this; each placed tree is one of them
+
+Leave out both `leaves` and `foliage` for a bare tree - all wood, no leaves (see
+`core/trees/deadTree.json5`).
 
 Trees in distant chunks are drawn with fewer sides and no twigs - the same tree, and the same leaves.
 
@@ -357,7 +365,8 @@ colour, `stems` (a range) rising from the ground, `leaves` per side view, `leafL
 and `bare`, the bottom fraction where only the stems show.
 
 Boulders (`rocks/<id>.json5`, see `core/rocks/boulder.json5`) are generated lumps of stone: a
-sphere of `radius` metres swollen and dented by `lumps` (a fraction of the radius), squashed to
+sphere of `radius` metres swollen and dented by `lumps` (a fraction of the radius), narrowed towards
+its top by `taper` (0-1, optional: near 1 a spire - see `core/rocks/termiteMound.json5`), squashed to
 `squash` of its width and stretched to `stretch` times it (ranges, each variant somewhere in them),
 with `facets` (a range) flat faces sheared off it up to `facetDepth` deep, tipped up to `tilt`
 degrees and sunk `sink` of its height into the ground. `stone` is its texture, laid on from three

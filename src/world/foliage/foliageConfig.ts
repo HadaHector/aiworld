@@ -162,6 +162,10 @@ export interface BranchingTree {
     /** The base swells to `flare` times the radius, easing back over the bottom `flareHeight` metres. */
     flare: number;
     flareHeight: number;
+    /** The trunk swells to 1 + `bulge` times its girth around `bulgeAt` of the way up, easing back
+     *  either side - a baobab's bottle. 0 for none. */
+    bulge: number;
+    bulgeAt: number;
     sides: number;
     rings: number;
   };
@@ -184,8 +188,11 @@ export interface BranchingTree {
     radius: number;
     /** Angle from vertical a branch sets off at. */
     angle: [number, number];
-    /** How far a branch bends back up towards its tip, as a fraction of its length. */
+    /** How far a branch bends back up towards its tip, as a fraction of its length - below 0, over
+     *  and outwards. */
     arc: number;
+    /** The share of branches and twigs snapped off short, their ends left blunt - a dead tree's. */
+    broken: number;
     sides: number;
     rings: number;
     twigs: {
@@ -209,9 +216,15 @@ export interface BranchingTree {
     top: number;
     /** How far a card may sit from its cluster's point. */
     spread: number;
-  };
+    /** Each cluster's height as a fraction of its width: below 1, flattened into a layer. */
+    squash: number;
+    /** How far (0-1) every cluster is pulled to the crown's mean height - 1 is one flat layer, an
+     *  acacia's umbrella. */
+    level: number;
+  } | null;
   bark: BarkTexture;
-  foliage: FoliageTexture;
+  /** None for a bare tree, which has no leaves. */
+  foliage: FoliageTexture | null;
 }
 
 /** A tree's bark: a texture graph like a ground material's (diffuse, roughness, height), with u
@@ -365,6 +378,8 @@ export interface BoulderShape {
   stretch: [number, number];
   /** How far the surface swells in and out, as a fraction of the radius. */
   lumps: number;
+  /** How much narrower it grows towards its top (0-1): 0 an egg, near 1 a spire - a termite mound. */
+  taper: number;
   /** How many flat faces are sheared off it, and how deep they cut at most, as a fraction of the
    *  radius. */
   facets: [number, number];

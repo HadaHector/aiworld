@@ -610,7 +610,7 @@ function readTreeKind(id: string, obj: RawObject, reader: Reader, defaults: Defa
  */
 function readRockKind(id: string, obj: RawObject, reader: Reader, defaults: Defaults): { def: TreeKindDef; stoneMaterial?: string; stoneAdjust: ColorAdjust } {
   if (obj.model !== undefined) reader.oneOf(obj, "model", "", ["boulder"] as const);
-  reader.onlyKeys(obj, "", [...KIND_COMMON_KEYS, "variants", "radius", "squash", "stretch", "lumps", "facets", "facetDepth", "tilt", "sink", "stone"]);
+  reader.onlyKeys(obj, "", [...KIND_COMMON_KEYS, "variants", "radius", "squash", "stretch", "lumps", "taper", "facets", "facetDepth", "tilt", "sink", "stone"]);
   const stone = reader.object(obj.stone, "stone");
   reader.onlyKeys(stone, "stone", ["tile", "texture", "material", "adjust"]);
   const stoneMaterial = reader.optionalString(stone, "material", "stone") || undefined;
@@ -625,6 +625,7 @@ function readRockKind(id: string, obj: RawObject, reader: Reader, defaults: Defa
     squash: reader.range(obj, "squash", "", { allowEqual: true }),
     stretch: reader.range(obj, "stretch", "", { allowEqual: true }),
     lumps: reader.number(obj, "lumps", "", { min: 0, max: 1 }),
+    taper: obj.taper === undefined ? 0 : reader.number(obj, "taper", "", { min: 0, max: 0.95 }),
     facets,
     facetDepth: reader.number(obj, "facetDepth", "", { min: 0, max: 0.9 }),
     tilt: reader.number(obj, "tilt", "", { min: 0, max: 90 }),
@@ -819,14 +820,19 @@ function readBranchingTree(obj: RawObject, reader: Reader, common: string[]): Br
     reader.onlyKeys(value, key, keys);
     return value;
   };
-  const trunk = section("trunk", ["height", "radius", "topRadius", "lean", "wobble", "flare", "flareHeight", "sides", "rings"]);
+  const trunk = section("trunk", ["height", "radius", "topRadius", "lean", "wobble", "flare", "flareHeight", "bulge", "bulgeAt", "sides", "rings"]);
   const roots = section("roots", ["count", "length", "radius", "drop", "sides", "rings"]);
-  const branches = section("branches", ["count", "from", "length", "radius", "angle", "arc", "sides", "rings", "twigs"]);
+  const branches = section("branches", ["count", "from", "length", "radius", "angle", "arc", "broken", "sides", "rings", "twigs"]);
   const twigs = reader.object(branches.twigs, "branches.twigs");
   reader.onlyKeys(twigs, "branches.twigs", ["count", "length", "angle", "sides", "rings"]);
-  const leaves = section("leaves", ["size", "cards", "alongBranch", "top", "spread"]);
+  // A bare tree - a dead one - has neither leaves nor the foliage they are cut from.
+  if ((obj.leaves === undefined) !== (obj.foliage === undefined)) reader.fail("leaves", "a tree has both leaves and foliage, or neither (a bare tree)");
+  const bare = obj.leaves === undefined;
+  const leaves = bare ? {} : section("leaves", ["size", "cards", "alongBranch", "top", "spread", "squash", "level"]);
   const bark = section("bark", ["tile", "texture"]);
-  const foliage = section("foliage", ["builder", "dark", "light", "leaves", "leafLength", "leafWidth"]);
+  const foliage = bare ? {} : section("foliage", ["builder", "dark", "light", "leaves", "leafLength", "leafWidth"]);
+  const optional = (o: RawObject, key: string, path: string, fallback: number, bounds: { min?: number; max?: number }): number =>
+    o[key] === undefined ? fallback : reader.number(o, key, path, bounds);
   const sides = (o: RawObject, path: string): number => reader.number(o, "sides", path, { min: 3, max: 16, integer: true });
   const rings = (o: RawObject, path: string): number => reader.number(o, "rings", path, { min: 1, max: 16, integer: true });
   const count = (o: RawObject, key: string, path: string): [number, number] => {
@@ -845,6 +851,8 @@ function readBranchingTree(obj: RawObject, reader: Reader, common: string[]): Br
       wobble: reader.number(trunk, "wobble", "trunk", { min: 0 }),
       flare: reader.number(trunk, "flare", "trunk", { min: 1 }),
       flareHeight: reader.number(trunk, "flareHeight", "trunk", { min: 0.01 }),
+      bulge: optional(trunk, "bulge", "trunk", 0, { min: 0, max: 3 }),
+      bulgeAt: optional(trunk, "bulgeAt", "trunk", 0.35, { min: 0, max: 1 }),
       sides: sides(trunk, "trunk"),
       rings: rings(trunk, "trunk"),
     },
@@ -863,6 +871,7 @@ function readBranchingTree(obj: RawObject, reader: Reader, common: string[]): Br
       radius: reader.number(branches, "radius", "branches", { min: 0 }),
       angle: reader.range(branches, "angle", "branches", { allowEqual: true }),
       arc: reader.number(branches, "arc", "branches"),
+      broken: optional(branches, "broken", "branches", 0, { min: 0, max: 1 }),
       sides: sides(branches, "branches"),
       rings: rings(branches, "branches"),
       twigs: {
@@ -873,25 +882,31 @@ function readBranchingTree(obj: RawObject, reader: Reader, common: string[]): Br
         rings: rings(twigs, "branches.twigs"),
       },
     },
-    leaves: {
-      size: reader.range(leaves, "size", "leaves", { allowEqual: true }),
-      cards: reader.number(leaves, "cards", "leaves", { min: 1, max: 8, integer: true }),
-      alongBranch: reader.number(leaves, "alongBranch", "leaves", { min: 0, integer: true }),
-      top: reader.number(leaves, "top", "leaves", { min: 0, integer: true }),
-      spread: reader.number(leaves, "spread", "leaves", { min: 0 }),
-    },
+    leaves: bare
+      ? null
+      : {
+          size: reader.range(leaves, "size", "leaves", { allowEqual: true }),
+          cards: reader.number(leaves, "cards", "leaves", { min: 1, max: 8, integer: true }),
+          alongBranch: reader.number(leaves, "alongBranch", "leaves", { min: 0, integer: true }),
+          top: reader.number(leaves, "top", "leaves", { min: 0, integer: true }),
+          spread: reader.number(leaves, "spread", "leaves", { min: 0 }),
+          squash: optional(leaves, "squash", "leaves", 1, { min: 0.05, max: 1 }),
+          level: optional(leaves, "level", "leaves", 0, { min: 0, max: 1 }),
+        },
     bark: {
       tile: reader.number(bark, "tile", "bark", { min: 0.1 }),
       texture: readTexture(bark.texture, reader, "bark.texture"),
     },
-    foliage: {
-      builder: reader.oneOf(foliage, "builder", "foliage", FOLIAGE_BUILDERS),
-      dark: reader.color(foliage, "dark", "foliage"),
-      light: reader.color(foliage, "light", "foliage"),
-      leaves: reader.number(foliage, "leaves", "foliage", { min: 1, integer: true }),
-      leafLength: reader.number(foliage, "leafLength", "foliage", { min: 0.01, max: 1 }),
-      leafWidth: reader.number(foliage, "leafWidth", "foliage", { min: 0.01, max: 1 }),
-    },
+    foliage: bare
+      ? null
+      : {
+          builder: reader.oneOf(foliage, "builder", "foliage", FOLIAGE_BUILDERS),
+          dark: reader.color(foliage, "dark", "foliage"),
+          light: reader.color(foliage, "light", "foliage"),
+          leaves: reader.number(foliage, "leaves", "foliage", { min: 1, integer: true }),
+          leafLength: reader.number(foliage, "leafLength", "foliage", { min: 0.01, max: 1 }),
+          leafWidth: reader.number(foliage, "leafWidth", "foliage", { min: 0.01, max: 1 }),
+        },
   };
 }
 

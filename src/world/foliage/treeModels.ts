@@ -237,10 +237,10 @@ function createWoodAndLeafMaterials(
   scene: Scene,
   id: string,
   bakedBark: BakedBark,
-  atlasPixels: Uint8Array,
+  atlasPixels: Uint8Array | null,
   swayHeight: number,
   litShading: LitShading,
-): { bark: ShaderMaterial; leaves: LeafMaterial } {
+): { bark: ShaderMaterial; leaves: LeafMaterial | null } {
   const barkColor = RawTexture.CreateRGBATexture(bakedBark.color, TEXTURE_RESOLUTION, TEXTURE_RESOLUTION, scene, true, false, Texture.TRILINEAR_SAMPLINGMODE);
   const barkNormal = RawTexture.CreateRGBATexture(bakedBark.normal, TEXTURE_RESOLUTION, TEXTURE_RESOLUTION, scene, true, false, Texture.TRILINEAR_SAMPLINGMODE);
   for (const texture of [barkColor, barkNormal]) {
@@ -262,14 +262,15 @@ function createWoodAndLeafMaterials(
   bark.backFaceCulling = false;
   litShading.register(bark);
 
-  const leaves = createLeafMaterial(scene, id, atlasPixels, swayHeight, litShading);
+  const leaves = atlasPixels ? createLeafMaterial(scene, id, atlasPixels, swayHeight, litShading) : null;
   return { bark, leaves };
 }
 
-/** How a generated kind makes one of its trees, and the atlas its leaves are cut from. */
+/** How a generated kind makes one of its trees, and the atlas its leaves are cut from - none for
+ *  a bare tree. */
 interface GeneratedKind {
   variants: number;
-  atlas: (seed: number) => Uint8Array;
+  atlas: (seed: number) => Uint8Array | null;
   swayHeight: number;
   generate: (seed: number, detail: TreeDetail) => TreeGeometry;
 }
@@ -286,7 +287,7 @@ function generatedKind(shape: Extract<TreeKindDef["shape"], { model: "branching"
   }
   return {
     variants: shape.variants,
-    atlas: (seed) => bakeFoliage(seed, shape.foliage),
+    atlas: (seed) => (shape.foliage ? bakeFoliage(seed, shape.foliage) : null),
     swayHeight: shape.trunk.height * 1.8,
     generate: (seed, detail) => generateTree(shape, seed, detail),
   };
@@ -323,6 +324,8 @@ function createGeneratedModels(scene: Scene, def: TreeKindDef, kind: GeneratedKi
     wood.applyToMesh(trunk);
     trunk.setVerticesData("axis", geometry.wood.axes, false, 3);
     trunk.material = materials.bark;
+    // A bare tree is all wood: its wood stands in the canopy's place, where every model has a mesh.
+    if (!materials.leaves) return { canopy: trunk, tintDark, tintLight, shaderTint: true };
 
     const canopy = new Mesh(`${name}_leaves`, scene);
     const leafData = new VertexData();

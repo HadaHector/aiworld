@@ -1,0 +1,10 @@
+// Elephant grass: the savanna's tall grass, twice the height of the rest - over a man's head, in big
+// stands you wade into and lose sight of the ground. Seen from far off, so it fades out late.
+{
+  width: 1.1,
+  height: 2.5,
+  sway: 0.34,
+  fadeStart: 80,
+  fadeEnd: 400,
+  blades: { count: 30, minHeight: 0.55, maxHeight: 0.98, baseWidth: 3.5, lean: 0.2, fan: false, seedHeads: true },
+}

@@ -66,6 +66,13 @@ Existing: **broadleaf**, **pine**, **palm**.
 - **Flower meadow: done** - `biomes/meadow.json5` (plains retired to `legacy/`). Oak and birch
   (lone oaks, birch groves, or both), nine swards, and each area's own flowers rolled over them
   (`ground.grass` with chances); eight flower head shapes.
+- **Golden savanna: done** - `biomes/savanna.json5`. Acacia (a flat crown: `leaves.squash` and
+  `level`), dead tree (bare: no leaves, `branches.broken`), baobab (`trunk.bulge`), each area its own
+  share of each; acacias and thorn bushes (`bushes/thornBush`) gathered in copses with open grass
+  between; big stands of head-high elephant grass (`savannaTall`); long gold grass (`savannaGrass`,
+  `savannaShort`, `grass/savanna`), red earth
+  patches (`redEarth`, new) and a red-earth road (`trackRedEarth`), silt pans in the hollows;
+  termite mounds (a boulder with `taper`).
 
 | Variant | Ground | Plants | Trees | Extras |
 |---|---|---|---|---|

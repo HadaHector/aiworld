@@ -1,52 +1,78 @@
-/** The pale, cracked silt floor of a wadi or playa - the one place in a desert where dried mud
- *  genuinely belongs. Cracks are grooves: they darken the color and cut down into the height. */
+/** The pale, crusted silt floor of a wadi, a playa or a savanna's dried-out pan - the one place in a
+ *  desert where dried mud genuinely belongs. One scale of plates, a couple of metres across, each
+ *  one curled up as it dried: from the crack between two plates a sharp wall up to a raised, salty
+ *  rim, then a long, gentle slope down into a sagging middle and up to the rim on its far side.
+ *  The rims are whitest, where the salt was pushed up; the cracks dark. Only one scale of plate,
+ *  so no close-up detail pass - that would lay a second, smaller crack network over the first. */
 {
   name: "Desert Silt",
+  detail: { strength: 0 },
+  // Twice the resolution: the texture holds half as many plates, drawn twice as often over the
+  // ground (as the cobbles do), so a crack is twice as many texels wide and no longer pixelated.
+  uvScale: 2,
   texture: {
-    bumpStrength: 1.4,
+    bumpStrength: 3.2,
     pipeline: {
       noises: [
-        { name: "mottle", type: "fbm", octaves: 3, tileCycles: 13, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
-        { name: "grain", type: "fbm", octaves: 2, tileCycles: 46, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
-        { name: "cracks", type: "worley", tileCycles: 7, amplitude: 1, mode: "edge", warp: 0.2, sizeJitter: 0.2 },
+        // The plates: irregular, uneven polygons.
+        { name: "plates", type: "worley", tileCycles: 13, amplitude: 1, mode: "edge", warp: 0.3, sizeJitter: 0.45, round: 0.03 },
+        // How high each stretch of rim is curled - no two plates alike.
+        { name: "curl", type: "fbm", octaves: 3, tileCycles: 20, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+        // Crumpled salt on the crust: fine wrinkles, heavier up on the rims.
+        { name: "crumple", type: "fbm", octaves: 3, tileCycles: 80, amplitude: 1, persistence: 0.55, lacunarity: 2.0 },
+        { name: "mottle", type: "fbm", octaves: 3, tileCycles: 5, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
       ],
       steps: [
-        { output: "mottle", op: "sample", noise: "mottle" },
-        { output: "mottleMask", op: "mask", input: "mottle", at: 1.75, off: -1.75 },
-        { output: "grain", op: "sample", noise: "grain" },
-        { output: "grainMask", op: "mask", input: "grain", at: 1.5, off: -1.5 },
-        { output: "crackEdge", op: "sample", noise: "cracks" },
-        { output: "crackMask", op: "mask", input: "crackEdge", at: 0, off: 0.1 },
+        { output: "edge", op: "sample", noise: "plates" },
+        // The crack: a narrow gap, walls rising steeply out of it.
+        { output: "wall", op: "mask", input: "edge", at: 0.03, off: 0.006 },
+        // The rim: full right at the wall, easing away over the plate's outer part.
+        { output: "rimRamp", op: "mask", input: "edge", at: 0.035, off: 0.34 },
+        { output: "rimShape", op: "power", input: "rimRamp", exponent: 2 },
+        { output: "curlRaw", op: "sample", noise: "curl" },
+        { output: "curl", op: "mask", input: "curlRaw", at: 1.0, off: -0.8 },
+        { output: "curlAmount", op: "remap", input: "curl", inMin: 0, inMax: 1, outMin: 0.25, outMax: 1 },
+        { output: "rim", op: "multiply", a: "rimShape", b: "curlAmount" },
+        // The plate: its sagging middle, lifted at the rim.
+        { output: "sag", op: "constant", value: 0.42 },
+        { output: "rimLift", op: "scale", input: "rim", factor: 0.5 },
+        { output: "plate", op: "add", a: "sag", b: "rimLift" },
+        { output: "crumpleRaw", op: "sample", noise: "crumple" },
+        { output: "crumple", op: "mask", input: "crumpleRaw", at: 1.2, off: -1.2 },
+        { output: "crumpleOn", op: "remap", input: "rim", inMin: 0, inMax: 1, outMin: 0.03, outMax: 0.1 },
+        { output: "crumpleHeight", op: "multiply", a: "crumple", b: "crumpleOn" },
+        { output: "surface", op: "add", a: "plate", b: "crumpleHeight" },
+        { output: "height", op: "multiply", a: "surface", b: "wall" },
 
+        // Colour: a warm, dusty beige in the sagging middles, salt-white up on the rims, near black
+        // down the cracks.
+        { output: "mottleRaw", op: "sample", noise: "mottle" },
+        { output: "mottle", op: "mask", input: "mottleRaw", at: 1.75, off: -1.75 },
         {
-          output: "siltTone",
+          output: "silt",
           op: "colorRamp",
-          input: "mottleMask",
+          input: "mottle",
           stops: [
-            { at: 0.0, color: [0.63, 0.55, 0.42] },
-            { at: 0.5, color: [0.76, 0.69, 0.55] },
-            { at: 1.0, color: [0.85, 0.79, 0.66] },
+            { at: 0.0, color: [0.6, 0.52, 0.4] },
+            { at: 0.5, color: [0.7, 0.63, 0.5] },
+            { at: 1.0, color: [0.78, 0.72, 0.6] },
           ],
         },
-        { output: "dustColor", op: "color", value: [0.80, 0.74, 0.60] },
-        { output: "dustBlend", op: "scale", input: "grainMask", factor: 0.25 },
-        { output: "dusted", op: "mix", a: "siltTone", b: "dustColor", t: "dustBlend" },
-        { output: "crackColor", op: "color", value: [0.30, 0.24, 0.17] },
-        { output: "diffuse", op: "mix", a: "dusted", b: "crackColor", t: "crackMask" },
+        { output: "saltColor", op: "color", value: [0.88, 0.85, 0.78] },
+        { output: "saltAmount", op: "scale", input: "rim", factor: 0.7 },
+        { output: "salted", op: "mix", a: "silt", b: "saltColor", t: "saltAmount" },
+        { output: "crackColor", op: "color", value: [0.28, 0.23, 0.17] },
+        { output: "crack", op: "invert", input: "wall" },
+        { output: "diffuse", op: "mix", a: "salted", b: "crackColor", t: "crack" },
 
-        { output: "roughSilt", op: "constant", value: 0.82 },
-        { output: "roughCrack", op: "constant", value: 0.9 },
-        { output: "roughness", op: "mix", a: "roughSilt", b: "roughCrack", t: "crackMask" },
-
-        // Curled plates standing above the crack network between them.
-        { output: "bed", op: "constant", value: 0.62 },
-        { output: "plateRelief", op: "scale", input: "mottleMask", factor: 0.38 },
-        { output: "plates", op: "add", a: "bed", b: "plateRelief" },
-        { output: "crackDepth", op: "scale", input: "crackMask", factor: 0.62 },
-        { output: "height", op: "subtract", a: "plates", b: "crackDepth" },
+        { output: "roughSilt", op: "constant", value: 0.84 },
+        { output: "roughCrack", op: "constant", value: 0.92 },
+        { output: "roughness", op: "mix", a: "roughSilt", b: "roughCrack", t: "crack" },
       ],
       outputs: { diffuse: "diffuse", roughness: "roughness", height: "height" },
     },
   },
-  grass: [{ kind: "dry", density: 0.2, color: [0.64, 0.6, 0.36] }],
+  // Bare: nothing grows on a salt crust. Clears the grass of the ground it lies over too, as a road
+  // does - gone wherever the crust is half the blend or more, thinning in across its edge.
+  clearsGrass: 2,
 }

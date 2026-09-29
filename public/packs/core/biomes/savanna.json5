@@ -1,0 +1,208 @@
+/**
+ * Golden savanna - the open grassland family's hot, dry variant (see ZONES.md): flat to gently rolling
+ * land under a sea of long golden grass, with red earth showing through. Its trees stand apart:
+ * umbrella acacias, the odd dead tree bleached silver, and now and then a great baobab on the
+ * horizon. Termite mounds stand up out of the grass. Each area rolls how many of each.
+ */
+{
+  name: "Savanna",
+  voice: "arid",
+  spawnWeight: 1.5,
+  lakeChance: 0.03,
+  borderType: "mountain",
+  settlement: "timber",
+  // Flatter and broader than the meadow: long, low swells.
+  height: { generator: "detailHeight", amplitude: { range: [6, 12] }, frequency: { range: [0.0011, 0.0019] }, offset: 6, persistence: 0.35 },
+  // Acacias gathered into copses - a few trees standing close with thorn bushes under them - with
+  // open grass between, and the odd lone tree out in it. A slower noise decides where copses are
+  // thick on the ground and where they are few. Dead trees scattered thinly everywhere and baobabs
+  // rarer still, each area its own share of them.
+  trees: {
+    noises: [
+      // Shared with the bushes' graph, so the bushes gather in the same copses. Fixed frequencies:
+      // a rolled one would roll differently in each graph.
+      { name: "copse", shared: "savannaCopse", type: "fbm", octaves: 2, frequency: 0.009, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+      { name: "region", shared: "savannaRegion", type: "fbm", octaves: 2, frequency: 0.0015, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+      { name: "drought", type: "fbm", octaves: 2, frequency: 0.002, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+    ],
+    steps: [
+      // Inside a copse: its middle full, fading over its edge.
+      { output: "copseRaw", op: "sample", noise: "copse" },
+      { output: "inCopse", op: "mask", input: "copseRaw", at: { range: [0.25, 0.4] }, off: 0.05 },
+      // How many copses a stretch of the area has: none to many.
+      { output: "regionRaw", op: "sample", noise: "region" },
+      { output: "regionRamp", op: "remap", input: "regionRaw", inMin: -0.6, inMax: 0.4, outMin: 0, outMax: 1 },
+      { output: "region", op: "clamp", input: "regionRamp", min: 0, max: 1 },
+      { output: "copseHere", op: "multiply", a: "inCopse", b: "region" },
+      { output: "copseDensity", op: "scale", input: "copseHere", factor: { range: [0.8, 1.0] } },
+      // And a lone acacia now and then out in the open.
+      { output: "lone", op: "constant", value: { range: [0.005, 0.02] } },
+      { output: "acacia", op: "add", a: "copseDensity", b: "lone" },
+      // Dead trees where the other noise says the ground is driest - and where the acacias thin.
+      { output: "droughtRaw", op: "sample", noise: "drought" },
+      { output: "droughtRamp", op: "remap", input: "droughtRaw", inMin: -0.2, inMax: 0.8, outMin: 0, outMax: { range: [0.005, 0.035] } },
+      { output: "dead", op: "clamp", input: "droughtRamp", min: 0, max: 0.035 },
+      // Baobabs: a flat, tiny chance everywhere - landmarks, not a stand.
+      { output: "baobab", op: "constant", value: { range: [0, 0.006] } },
+    ],
+    outputs: { acacia: "acacia", deadTree: "dead", baobab: "baobab" },
+  },
+  // Thorn bushes in the copses, under and between the trees (bushes thin out in the open by
+  // themselves), and a few scattered out in the grass.
+  bushes: {
+    noises: [
+      { name: "copse", shared: "savannaCopse", type: "fbm", octaves: 2, frequency: 0.009, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+      { name: "region", shared: "savannaRegion", type: "fbm", octaves: 2, frequency: 0.0015, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+    ],
+    steps: [
+      { output: "copseRaw", op: "sample", noise: "copse" },
+      // A little wider than the trees' copse, so the thorn spills out round its edge.
+      { output: "inCopse", op: "mask", input: "copseRaw", at: 0.3, off: -0.05 },
+      { output: "regionRaw", op: "sample", noise: "region" },
+      { output: "regionRamp", op: "remap", input: "regionRaw", inMin: -0.6, inMax: 0.4, outMin: 0, outMax: 1 },
+      { output: "region", op: "clamp", input: "regionRamp", min: 0, max: 1 },
+      { output: "copseHere", op: "multiply", a: "inCopse", b: "region" },
+      { output: "copseBushes", op: "scale", input: "copseHere", factor: { range: [0.5, 0.9] } },
+      { output: "scattered", op: "constant", value: { range: [0.01, 0.04] } },
+      { output: "thorn", op: "add", a: "copseBushes", b: "scattered" },
+    ],
+    outputs: { thornBush: "thorn" },
+  },
+  // Termite mounds, few and far between - on the rocks' finer lattice, so a little goes a long way.
+  rocks: { generator: "rockDensity", kind: "termiteMound", frequency: 0.004, openAt: -0.3, fullAt: 0.8, peak: { range: [0.003, 0.012] } },
+  treeTints: [
+    // Each area's earth a shade of its own, and every mound a little different.
+    { kinds: ["termiteMound"], stone: { hue: { range: [-10, 10] }, saturation: { range: [0.8, 1.25] }, value: { range: [0.85, 1.12] }, spread: { hue: 5, saturation: 0.15, value: 0.12 } } },
+    // The dead wood only ever a paler or darker grey.
+    { kinds: ["deadTree"], bark: { hue: { range: [-10, 10] }, saturation: { range: [0.7, 1.2] }, value: { range: [0.9, 1.15] }, spread: { value: 0.12 } } },
+    {
+      // Olive to a dusty yellow-green: a dry country's leaves, never a meadow's fresh green.
+      leaves: { hue: { range: [-30, 8] }, saturation: { range: [0.7, 1.1] }, value: { range: [0.9, 1.1] }, spread: { hue: 8, saturation: 0.12, value: 0.1 } },
+      bark: { hue: { range: [-10, 10] }, saturation: { range: [0.7, 1.2] }, value: { range: [0.85, 1.12] }, spread: { value: 0.1 } },
+    },
+  ],
+  ground: {
+    // Long grass, grazed grass, or the plains' plain dry grass.
+    base: { oneOf: ["savannaGrass", "savannaGrass", "savannaShort", "grassDry"] },
+    road: "trackRedEarth",
+    adjust: { hue: { range: [-6, 6] }, saturation: { range: [0.9, 1.15] }, value: { range: [0.94, 1.06] } },
+    // Straw to deep gold to a faintly green-gold after rain.
+    tints: [
+      { family: "grassland", hue: { range: [-12, 16] }, saturation: { range: [0.8, 1.25] }, value: { range: [0.95, 1.08] } },
+    ],
+    // A few flowers in some areas: thistles, and white yarrow.
+    grass: [
+      { family: "grassland", kind: "thistles", density: 0.15, color: [0.6, 0.55, 0.32], chance: 0.25 },
+      { family: "grassland", kind: "yarrow", density: 0.25, color: [0.62, 0.56, 0.32], chance: 0.15 },
+    ],
+    layers: [
+      // Elephant grass: big stands of it, hundreds of metres across, head-high over the rest.
+      {
+        id: "savanna-tall-grass",
+        material: "savannaTall",
+        weight: {
+          noises: [{ name: "stand", type: "fbm", octaves: 3, frequency: 0.0025, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
+          steps: [
+            { output: "standRaw", op: "sample", noise: "stand" },
+            { output: "stand", op: "mask", input: "standRaw", at: { range: [0.3, 0.55] }, off: 0.12 },
+            // Past 1, so a stand's middle is all tall grass rather than half the ground under it.
+            { output: "result", op: "scale", input: "stand", factor: 3 },
+          ],
+        },
+      },
+
+      // Bare red earth in ragged patches, more of it on the tops of the swells where the rain runs off.
+      {
+        id: "savanna-red-earth",
+        material: "redEarth",
+        weight: {
+          noises: [
+            { name: "patch", type: "fbm", octaves: 4, frequency: 0.012, amplitude: 1, persistence: 0.55, lacunarity: 2.0 },
+          ],
+          steps: [
+            { output: "patchRaw", op: "sample", noise: "patch" },
+            { output: "curvature", op: "input", name: "reliefCurvature" },
+            // Ridges (curvature below 0) lift the patches, hollows sink them.
+            { output: "ridge", op: "scale", input: "curvature", factor: -0.25 },
+            { output: "lifted", op: "add", a: "patchRaw", b: "ridge" },
+            { output: "result", op: "mask", input: "lifted", at: { range: [0.45, 0.8] }, off: 0.2 },
+          ],
+        },
+      },
+
+      // Pale silt pans in the hollows: where the rain stands for a week and dries out cracked.
+      {
+        id: "savanna-silt-pans",
+        material: "desertSilt",
+        weight: {
+          noises: [{ name: "pan", type: "fbm", octaves: 3, frequency: 0.006, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
+          steps: [
+            { output: "panRaw", op: "sample", noise: "pan" },
+            { output: "curvature", op: "input", name: "reliefCurvature" },
+            { output: "hollow", op: "scale", input: "curvature", factor: 0.4 },
+            { output: "sunk", op: "add", a: "panRaw", b: "hollow" },
+            { output: "result", op: "mask", input: "sunk", at: { range: [1.05, 1.3] }, off: 0.85 },
+          ],
+        },
+      },
+
+      // Stones along the water, as in the meadow: a river's bed and near bank, a lake's shore, a pond.
+      {
+        id: "savanna-stream-stones",
+        material: "pebbles",
+        weight: {
+          noises: [{ name: "reach", type: "fbm", octaves: 2, frequency: 0.02, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
+          steps: [
+            { output: "gap", op: "input", name: "riverGap" },
+            { output: "reachRaw", op: "sample", noise: "reach" },
+            { output: "reachShift", op: "scale", input: "reachRaw", factor: 9 },
+            { output: "reach", op: "add", a: "gap", b: "reachShift" },
+            { output: "band", op: "mask", input: "reach", at: 40, off: 58 },
+            { output: "lakeFactor", op: "input", name: "lakeFactor" },
+            { output: "lake", op: "mask", input: "lakeFactor", at: 0.25, off: 0.02 },
+            { output: "height", op: "input", name: "height" },
+            { output: "low", op: "mask", input: "height", at: 0.6, off: 2.6 },
+            { output: "landmass", op: "input", name: "landmass" },
+            { output: "inland", op: "mask", input: "landmass", at: 0.95, off: 0.7 },
+            { output: "pond", op: "multiply", a: "low", b: "inland" },
+            { output: "lakeOrPond", op: "max", a: "lake", b: "pond" },
+            { output: "water", op: "max", a: "band", b: "lakeOrPond" },
+            { output: "result", op: "scale", input: "water", factor: 1.5 },
+          ],
+        },
+      },
+
+      // Reeds in the shallows of a waterhole.
+      {
+        id: "savanna-reedbed",
+        material: "reedbed",
+        weight: {
+          noises: [{ name: "patch", type: "fbm", octaves: 3, frequency: 0.03, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
+          steps: [
+            { output: "height", op: "input", name: "height" },
+            { output: "wadeable", op: "mask", input: "height", at: -0.2, off: -1.1 },
+            { output: "nearWater", op: "mask", input: "height", at: 0.5, off: 1.5 },
+            { output: "band", op: "multiply", a: "wadeable", b: "nearWater" },
+            { output: "landmass", op: "input", name: "landmass" },
+            { output: "inland", op: "mask", input: "landmass", at: 0.95, off: 0.7 },
+            { output: "patchRaw", op: "sample", noise: "patch" },
+            { output: "patch", op: "mask", input: "patchRaw", at: 0.35, off: 0.05 },
+            { output: "inlandBand", op: "multiply", a: "band", b: "inland" },
+            { output: "patchBand", op: "multiply", a: "inlandBand", b: "patch" },
+            { output: "result", op: "scale", input: "patchBand", factor: 4 },
+          ],
+        },
+      },
+    ],
+  },
+  // A hot, hazy sky: a warm, dusty horizon under a deep blue.
+  sky: {
+    horizon: "#e0d2b2",
+    zenith: "#5f93cf",
+    cloud: "#fbf5e8",
+  },
+  light: {
+    sunPeak: 72,
+    moonPeak: 45,
+  },
+}

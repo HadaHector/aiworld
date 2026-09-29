@@ -1,0 +1,92 @@
+// A dead tree: long since dried out and bare - no leaves at all, the bark gone and the wood beneath
+// bleached silver-grey by the sun, split along its grain. A crooked trunk, and limbs reaching out at
+// every angle, half of them snapped off short. It stands alone on a savanna, a salt flat, a frozen
+// bog or a polar waste, and is the whole of what grows there.
+{
+  model: "branching",
+  variants: 5,
+  trunk: {
+    height: 13,
+    radius: 1.0,
+    topRadius: 0.3,
+    lean: 0.16,
+    wobble: 1.4,
+    flare: 1.6,
+    flareHeight: 1.8,
+    sides: 8,
+    rings: 10,
+  },
+  roots: { count: 5, length: [2, 4], radius: 0.45, drop: 0.9, sides: 5, rings: 3 },
+  branches: {
+    count: [5, 7],
+    from: 0.3,
+    length: [7, 12],
+    radius: 0.55,
+    // Every angle, some near level: a tree that grew towards the light it had, not a shape.
+    angle: [30, 85],
+    arc: 0.45,
+    // A third of the limbs broken off, and their twigs with them.
+    broken: 0.35,
+    sides: 6,
+    rings: 6,
+    twigs: { count: [2, 4], length: [0.3, 0.6], angle: [25, 60], sides: 4, rings: 3 },
+  },
+  // Dead wood: no bark left, only the grain - long splits running up it, a few knots, and bleached
+  // grey fading to a darker, weathered brown in the cracks.
+  bark: {
+    tile: 4,
+    texture: {
+      bumpStrength: 2.4,
+      pipeline: {
+        noises: [
+          { name: "splits", type: "ridged", octaves: 1, tileCycles: 9, stretch: [1, 9], amplitude: 1, persistence: 0.5, lacunarity: 2 },
+          { name: "fineSplits", type: "ridged", octaves: 1, tileCycles: 22, stretch: [1, 10], amplitude: 1, persistence: 0.5, lacunarity: 2 },
+          { name: "bend", type: "fbm", octaves: 3, tileCycles: 3, stretch: [1, 2], amplitude: 1, persistence: 0.5, lacunarity: 2 },
+          { name: "grain", type: "fbm", octaves: 3, tileCycles: 70, stretch: [1, 12], amplitude: 1, persistence: 0.5, lacunarity: 2 },
+          { name: "weather", type: "fbm", octaves: 3, tileCycles: 4, stretch: [1, 2], amplitude: 1, persistence: 0.55, lacunarity: 2 },
+        ],
+        steps: [
+          { output: "bendRaw", op: "sample", noise: "bend" },
+          { output: "bendPx", op: "scale", input: "bendRaw", factor: 30 },
+          { output: "still", op: "constant", value: 0 },
+          { output: "splitCrest", op: "sample", noise: "splits", offset: ["bendPx", "still"] },
+          { output: "splitRidge", op: "mask", input: "splitCrest", at: 0.85, off: 0.985 },
+          { output: "fineCrest", op: "sample", noise: "fineSplits", offset: ["bendPx", "still"] },
+          { output: "fineRidge", op: "mask", input: "fineCrest", at: 0.9, off: 0.99 },
+          { output: "fineCut", op: "invert", input: "fineRidge" },
+          { output: "fineDepth", op: "scale", input: "fineCut", factor: 0.3 },
+          { output: "body", op: "subtract", a: "splitRidge", b: "fineDepth" },
+          { output: "grainRaw", op: "sample", noise: "grain", offset: ["bendPx", "still"] },
+          { output: "grain", op: "mask", input: "grainRaw", at: 1.2, off: -1.2 },
+          { output: "bodyHeight", op: "scale", input: "body", factor: 0.8 },
+          { output: "grainHeight", op: "scale", input: "grain", factor: 0.2 },
+          { output: "heightRaw", op: "add", a: "bodyHeight", b: "grainHeight" },
+          { output: "height", op: "clamp", input: "heightRaw", min: 0, max: 1 },
+          // Silver-grey on the wood, a weathered brown-grey in patches, near black in the splits.
+          { output: "weatherRaw", op: "sample", noise: "weather" },
+          { output: "weather", op: "mask", input: "weatherRaw", at: 0.6, off: -0.2 },
+          { output: "toneBase", op: "scale", input: "height", factor: 0.85 },
+          { output: "toneGrain", op: "scale", input: "grain", factor: 0.15 },
+          { output: "tone", op: "add", a: "toneBase", b: "toneGrain" },
+          {
+            output: "silver",
+            op: "colorRamp",
+            input: "tone",
+            stops: [
+              { at: 0.0, color: [0.07, 0.06, 0.05] },
+              { at: 0.3, color: [0.3, 0.28, 0.25] },
+              { at: 0.7, color: [0.6, 0.58, 0.54] },
+              { at: 1.0, color: [0.74, 0.72, 0.68] },
+            ],
+          },
+          { output: "weatherTint", op: "color", value: [0.72, 0.62, 0.5] },
+          { output: "weathered", op: "multiply", a: "silver", b: "weatherTint" },
+          { output: "diffuse", op: "mix", a: "silver", b: "weathered", t: "weather" },
+          { output: "roughness", op: "constant", value: 0.85 },
+        ],
+        outputs: { diffuse: "diffuse", roughness: "roughness", height: "height" },
+      },
+    },
+  },
+  tint: [[0.85, 0.85, 0.85], [1.08, 1.06, 1.02]],
+}

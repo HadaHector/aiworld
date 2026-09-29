@@ -118,8 +118,11 @@ export function generateBoulder(shape: BoulderShape, seed: number, detail: TreeD
         z -= beyond * normal[2];
       }
     }
-    x *= shape.radius * stretch;
+    // Narrowing up its height: nothing at the foot, `taper` of its girth gone at the very top.
+    const narrow = 1 - shape.taper * (y + 1) * 0.5;
+    x *= shape.radius * stretch * narrow;
     y *= shape.radius * squash;
+    z *= narrow;
     z *= shape.radius;
     // Tipped about a level axis (axisX, 0, axisZ) - Rodrigues' rotation, the axis having no y.
     const along = x * axisX + z * axisZ;

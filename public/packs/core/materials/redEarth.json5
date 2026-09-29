@@ -1,0 +1,49 @@
+// Red earth: bare, iron-red soil baked hard - a savanna's bare patches and paths, and later the red
+// bush's ground (see ZONES.md). No grassland family, so a zone's grass tint leaves it red.
+{
+  name: "Red Earth",
+  texture: {
+    bumpStrength: 1.3,
+    pipeline: {
+      noises: [
+        { name: "mottle", type: "fbm", octaves: 3, tileCycles: 11, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+        { name: "grit", type: "fbm", octaves: 2, tileCycles: 70, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+        { name: "clods", type: "worley", tileCycles: 40, amplitude: 1, mode: "edge", warp: 0.5, sizeJitter: 0.5, round: 0.3 },
+      ],
+      steps: [
+        { output: "mottleRaw", op: "sample", noise: "mottle" },
+        { output: "mottle", op: "mask", input: "mottleRaw", at: 1.75, off: -1.75 },
+        { output: "gritRaw", op: "sample", noise: "grit" },
+        { output: "grit", op: "mask", input: "gritRaw", at: 1.4, off: -1.4 },
+        { output: "clodEdge", op: "sample", noise: "clods" },
+        { output: "clod", op: "mask", input: "clodEdge", at: 0.3, off: 0.02 },
+        {
+          output: "earth",
+          op: "colorRamp",
+          input: "mottle",
+          stops: [
+            { at: 0.0, color: [0.4, 0.22, 0.13] },
+            { at: 0.5, color: [0.52, 0.3, 0.18] },
+            { at: 1.0, color: [0.62, 0.4, 0.26] },
+          ],
+        },
+        // Dust on the high spots, darker between the clods.
+        { output: "dustColor", op: "color", value: [0.66, 0.5, 0.36] },
+        { output: "dustAmount", op: "scale", input: "grit", factor: 0.3 },
+        { output: "dusted", op: "mix", a: "earth", b: "dustColor", t: "dustAmount" },
+        { output: "gapColor", op: "color", value: [0.3, 0.16, 0.1] },
+        { output: "gap", op: "invert", input: "clod" },
+        { output: "gapAmount", op: "scale", input: "gap", factor: 0.18 },
+        { output: "diffuse", op: "mix", a: "dusted", b: "gapColor", t: "gapAmount" },
+        { output: "roughness", op: "constant", value: 0.88 },
+        { output: "clodHeight", op: "scale", input: "clod", factor: 0.25 },
+        { output: "mottleHeight", op: "scale", input: "mottle", factor: 0.55 },
+        { output: "gritHeight", op: "scale", input: "grit", factor: 0.15 },
+        { output: "bodyHeight", op: "add", a: "clodHeight", b: "mottleHeight" },
+        { output: "height", op: "add", a: "bodyHeight", b: "gritHeight" },
+      ],
+      outputs: { diffuse: "diffuse", roughness: "roughness", height: "height" },
+    },
+  },
+  grass: [{ kind: "dry", density: 0.15, color: [0.7, 0.58, 0.32] }],
+}

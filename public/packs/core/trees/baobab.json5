@@ -1,0 +1,97 @@
+// A baobab: a trunk like a bottle - swollen, smooth and enormous, far too wide for its height - and
+// on top of it a tangle of short, stubby limbs like roots turned to the sky, with a few small tufts of
+// leaves on them. Rare: one on a savanna's horizon is a landmark. Its bark is smooth and grey-pink,
+// wrinkled round the trunk in folds.
+{
+  model: "branching",
+  variants: 3,
+  scale: [1.0, 1.5],
+  trunk: {
+    height: 14,
+    radius: 2.6,
+    topRadius: 1.3,
+    lean: 0.02,
+    wobble: 0.35,
+    flare: 1.2,
+    flareHeight: 2.5,
+    // The bottle: widest a third of the way up, narrowing hard to the crown.
+    bulge: 0.45,
+    bulgeAt: 0.3,
+    sides: 16,
+    rings: 12,
+  },
+  roots: { count: 5, length: [2.5, 4], radius: 0.4, drop: 1.0, sides: 6, rings: 3 },
+  branches: {
+    // All of them bunched at the very top: the crown is the trunk's lid.
+    count: [9, 12],
+    from: 0.84,
+    length: [5, 9],
+    radius: 0.55,
+    angle: [55, 95],
+    arc: 0.4,
+    sides: 7,
+    rings: 5,
+    // Many short side shoots off every limb, each with its own tuft: a crown of little branches.
+    twigs: { count: [4, 6], length: [0.3, 0.55], angle: [30, 70], sides: 4, rings: 3 },
+  },
+  // Small tufts at the ends of the limbs and their shoots - many of them, but each small, so the
+  // crown stays open and the limbs show through.
+  leaves: { size: [2.3, 3.3], cards: 2, alongBranch: 1, top: 0, spread: 0.6 },
+  bark: {
+    tile: 5,
+    texture: {
+      bumpStrength: 1.6,
+      pipeline: {
+        noises: [
+          // Folds running round the trunk (stretched along u).
+          { name: "folds", type: "ridged", octaves: 1, tileCycles: 6, stretch: [5, 1], amplitude: 1, persistence: 0.5, lacunarity: 2 },
+          { name: "bend", type: "fbm", octaves: 3, tileCycles: 3, amplitude: 1, persistence: 0.5, lacunarity: 2 },
+          { name: "streaks", type: "fbm", octaves: 3, tileCycles: 12, stretch: [1, 6], amplitude: 1, persistence: 0.5, lacunarity: 2 },
+          { name: "mottle", type: "fbm", octaves: 3, tileCycles: 4, amplitude: 1, persistence: 0.55, lacunarity: 2 },
+          { name: "grain", type: "fbm", octaves: 2, tileCycles: 80, amplitude: 1, persistence: 0.5, lacunarity: 2 },
+        ],
+        steps: [
+          { output: "bendRaw", op: "sample", noise: "bend" },
+          { output: "bendPx", op: "scale", input: "bendRaw", factor: 40 },
+          { output: "still", op: "constant", value: 0 },
+          { output: "foldCrest", op: "sample", noise: "folds", offset: ["still", "bendPx"] },
+          { output: "fold", op: "mask", input: "foldCrest", at: 0.4, off: 0.95 },
+          { output: "foldSoft", op: "power", input: "fold", exponent: 0.5 },
+          { output: "grainRaw", op: "sample", noise: "grain" },
+          { output: "grain", op: "mask", input: "grainRaw", at: 1.2, off: -1.2 },
+          { output: "foldHeight", op: "scale", input: "foldSoft", factor: 0.9 },
+          { output: "grainHeight", op: "scale", input: "grain", factor: 0.1 },
+          { output: "height", op: "add", a: "foldHeight", b: "grainHeight" },
+          // Smooth grey with a pink-brown cast, darker down the rain streaks and in the folds.
+          { output: "mottleRaw", op: "sample", noise: "mottle" },
+          { output: "mottle", op: "mask", input: "mottleRaw", at: 1.5, off: -1.5 },
+          { output: "streakRaw", op: "sample", noise: "streaks" },
+          { output: "streak", op: "mask", input: "streakRaw", at: 0.7, off: 0.1 },
+          { output: "toneBase", op: "scale", input: "height", factor: 0.35 },
+          { output: "toneMottle", op: "scale", input: "mottle", factor: 0.5 },
+          { output: "toneLift", op: "constant", value: 0.2 },
+          { output: "toneSum", op: "add", a: "toneBase", b: "toneMottle" },
+          { output: "tone", op: "add", a: "toneSum", b: "toneLift" },
+          {
+            output: "skin",
+            op: "colorRamp",
+            input: "tone",
+            stops: [
+              { at: 0.0, color: [0.2, 0.17, 0.15] },
+              { at: 0.4, color: [0.42, 0.36, 0.33] },
+              { at: 0.75, color: [0.56, 0.49, 0.45] },
+              { at: 1.0, color: [0.66, 0.6, 0.55] },
+            ],
+          },
+          { output: "streakTone", op: "color", value: [0.3, 0.27, 0.25] },
+          { output: "streakAmount", op: "scale", input: "streak", factor: 0.5 },
+          { output: "diffuse", op: "mix", a: "skin", b: "streakTone", t: "streakAmount" },
+          { output: "roughness", op: "constant", value: 0.8 },
+        ],
+        outputs: { diffuse: "diffuse", roughness: "roughness", height: "height" },
+      },
+    },
+  },
+  foliage: { builder: "broadleaf", dark: [0.12, 0.2, 0.07], light: [0.4, 0.5, 0.22], leaves: 360, leafLength: 0.07, leafWidth: 0.04 },
+  tint: [[0.85, 0.9, 0.8], [1.1, 1.05, 0.95]],
+}
