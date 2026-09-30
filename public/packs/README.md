@@ -196,7 +196,7 @@ fraction either way, so a wood is many shades of its colour rather than one. Eac
 trees in 8 shades of each rule.
 
 A rule's `snow` (0-1) lays snow on what it covers: on a boulder's top, and further down its sides the
-more there is - e.g. `{ kinds: ["boulder"], snow: { range: [0.2, 0.6] } }`.
+more there is; on a tree's upper faces - a conifer's tiers, a crown's top - and along its limbs. E.g. `{ kinds: ["boulder"], snow: { range: [0.2, 0.6] } }`.
 
 ### Rolls: every area its own
 
@@ -226,6 +226,23 @@ before the area rolls it. When the packs load, each biome is also read at its ex
 range at both ends, every option, every chance kept and dropped - so a roll that would break it is
 reported then, not in some far-off area. On its own (the workbench, the biome list) a biome is its
 middle roll: ranges at their middle, the first option, everything with a chance kept.
+
+Rolls on their own are independent, so two values that ought to agree - snow on the ground and
+snow on the trees - can land far apart. A biome's `params` are rolled first, once per area, and
+anything in the file can follow one:
+
+```json5
+params: { snow: { range: [0, 1] } },
+...
+{ generator: "snowCover", id: "snow", amount: { param: "snow", to: [0.7, 1] } },
+treeTints: [{ snow: { param: "snow", to: [0.3, 0.85] }, ... }],
+```
+
+- `{ param: name, to: [a, b] }` - the param mapped from 0-1 onto a to b (two numbers or two
+  colours); without `to`, the param itself.
+
+A param is any number, rolled like anything else (a range, a oneOf); `params` itself is not part of
+the biome.
 
 A biome's `ground.adjust` gives each area its own variant of every material it draws - one more
 entry in the material table, never another texture.

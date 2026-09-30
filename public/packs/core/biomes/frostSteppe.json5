@@ -12,6 +12,9 @@
   lakeChance: 0.06,
   borderType: "mountain",
   settlement: "timber",
+  // How snowy the area is, 0-1: the snow patches, the rime round them and the snow on the boulders
+  // all follow it together.
+  params: { snow: { range: [0, 1] } },
   // Broad, low swells: open country you can see across.
   height: { generator: "detailHeight", amplitude: { range: [4, 9] }, frequency: { range: [0.0012, 0.002] }, offset: 4, persistence: 0.35 },
   // No trees out on the steppe - only a fringe of birch along the area's edges, broken into groves.
@@ -32,7 +35,7 @@
   treeTints: [
     // A cold grey stone, each area its own shade, snow lying on its top - a cap in one area, most of
     // the stone in the next.
-    { kinds: ["boulder"], snow: { range: [0.2, 0.6] }, stone: { hue: { range: [-15, 10] }, saturation: { range: [0.5, 1.1] }, value: { range: [0.85, 1.1] }, spread: { hue: 6, saturation: 0.2, value: 0.14 } } },
+    { kinds: ["boulder"], snow: { param: "snow", to: [0.2, 0.6] }, stone: { hue: { range: [-15, 10] }, saturation: { range: [0.5, 1.1] }, value: { range: [0.85, 1.1] }, spread: { hue: 6, saturation: 0.2, value: 0.14 } } },
     {
       // The birches already turning: fresh yellow-green to gold.
       leaves: { hue: { range: [-45, 5] }, saturation: { range: [0.8, 1.3] }, value: { range: [0.95, 1.12] }, spread: { hue: 12, saturation: 0.15, value: 0.1 } },
@@ -55,10 +58,10 @@
     ],
     layers: [
       // Snow lying in patches: a dusting in one area, most of the ground in the next.
-      { generator: "snowCover", id: "steppe-snow", amount: { range: [0.05, 0.6] }, frequency: 0.006, drifts: 0.5, north: 1.5, shared: "steppeSnow" },
+      { generator: "snowCover", id: "steppe-snow", amount: { param: "snow", to: [0.05, 0.6] }, frequency: 0.006, drifts: 0.5, north: 1.5, shared: "steppeSnow" },
       // Hoar frost ringing the snow - the same patches, reaching further - white-blue rime on the
       // grass round every field of snow, and over the shaded ground between.
-      { generator: "snowCover", id: "steppe-rime", material: "frostGrass", amount: { range: [0.4, 0.85] }, frequency: 0.006, drifts: 0.5, north: 1.5, strength: 1.5, shared: "steppeSnow" },
+      { generator: "snowCover", id: "steppe-rime", material: "frostGrass", amount: { param: "snow", to: [0.4, 0.85] }, frequency: 0.006, drifts: 0.5, north: 1.5, strength: 1.5, shared: "steppeSnow" },
 
       // Bare gravel on the rises, where the wind strips the grass.
       {

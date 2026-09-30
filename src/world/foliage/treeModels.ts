@@ -211,7 +211,7 @@ function createLeafMaterial(scene: Scene, id: string, atlasPixels: Uint8Array, s
   Effect.ShadersStore["treeLeafVertexShader"] = LEAF_VERTEX_SHADER;
   Effect.ShadersStore["treeLeafFragmentShader"] = LEAF_FRAGMENT_SHADER;
   const leaves = new LeafMaterial(`tree_${id}_leaves`, scene, "treeLeaf", {
-    attributes: ["position", "normal", "uv"],
+    attributes: ["position", "normal", "uv", "lie"],
     uniforms: ["world", "view", "viewProjection", "time", "windDirection", "treeHeight", ...LIT_SHADING_UNIFORMS],
     samplers: ["leafAtlas", "treeTints", ...LIT_SHADING_SAMPLERS],
     needAlphaTesting: true,
@@ -335,6 +335,7 @@ function createGeneratedModels(scene: Scene, def: TreeKindDef, kind: GeneratedKi
     leafData.uvs = geometry.leaves.uvs;
     leafData.indices = geometry.leaves.indices;
     leafData.applyToMesh(canopy);
+    canopy.setVerticesData("lie", geometry.leaves.lie, false, 1);
     canopy.material = materials.leaves;
     // The leaves sway in the vertex shader, beyond where the vertex data alone would put them.
     const reach = geometry.height * 0.6;
@@ -370,6 +371,7 @@ function createBushModels(scene: Scene, def: TreeKindDef, shape: BushShape, seed
     data.uvs = geometry.leaves.uvs;
     data.indices = geometry.leaves.indices;
     data.applyToMesh(canopy);
+    canopy.setVerticesData("lie", geometry.leaves.lie, false, 1);
     canopy.material = leaves;
     const reach = shape.width[1] * 0.7;
     canopy.setBoundingInfo(new BoundingInfo(new Vector3(-reach, -1, -reach), new Vector3(reach, geometry.height + 1, reach)));

@@ -1,0 +1,147 @@
+/**
+ * Snowy taiga - the woodland family's cold variant (see ZONES.md): a deep, dark wood of spruce,
+ * snow lying over everything - the ground white from edge to edge but for the needle-strewn floor
+ * right under the thickest trees, snow loaded on the branches, on the boulders, in the crooks of
+ * the limbs; a few dead trees standing bleached in the clearings. Each area its own lie of the land,
+ * as the other woods, and its own depth of snow on the trees.
+ */
+{
+  name: "Snowy Taiga",
+  voice: "frozen",
+  spawnWeight: 2,
+  lakeChance: 0.04,
+  borderType: "mountain",
+  settlement: "timber",
+  // How snowy the area is, 0-1: the ground, the trees and the stones all follow it together.
+  params: { snow: { range: [0, 1] } },
+  height: {
+    oneOf: [
+      { generator: "detailHeight", amplitude: { range: [6, 12] }, frequency: { range: [0.0015, 0.0025] }, offset: 9, persistence: 0.4 },
+      { generator: "detailHeight", amplitude: { range: [32, 50] }, frequency: 0.0014, offset: 27 },
+      {
+        noises: [
+          { name: "hills", type: "fbm", octaves: 5, frequency: 0.0021, amplitude: { range: [44, 66] }, persistence: 0.35, lacunarity: 2.0 },
+          { name: "basin", type: "fbm", octaves: 3, frequency: 0.0006, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+          { name: "floor", type: "fbm", octaves: 3, frequency: 0.003, amplitude: 4, persistence: 0.45, lacunarity: 2.0 },
+        ],
+        steps: [
+          { output: "hillsRaw", op: "sample", noise: "hills" },
+          { output: "hill", op: "offset", input: "hillsRaw", amount: 46 },
+          // The valley floor: 14 m and a few metres of gentle swell.
+          { output: "floorRaw", op: "sample", noise: "floor" },
+          { output: "floor", op: "offset", input: "floorRaw", amount: 14 },
+          { output: "basinRaw", op: "sample", noise: "basin" },
+          { output: "hilliness", op: "remap", input: "basinRaw", inMin: { range: [-0.35, -0.1] }, inMax: { range: [0.2, 0.4] }, outMin: 0, outMax: 1 },
+          { output: "hillShare", op: "clamp", input: "hilliness", min: 0, max: 1 },
+          { output: "rise", op: "subtract", a: "hill", b: "floor" },
+          { output: "shareOfRise", op: "multiply", a: "rise", b: "hillShare" },
+          { output: "result", op: "add", a: "floor", b: "shareOfRise" },
+        ],
+      },
+    ],
+  },
+  // Spruce, close and dark, with the odd clearing - and in the clearings, now and then, a dead tree.
+  trees: {
+    noises: [
+      { name: "stand", type: "fbm", octaves: 3, frequency: 0.0035, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+    ],
+    steps: [
+      { output: "standRaw", op: "sample", noise: "stand" },
+      { output: "coverRamp", op: "remap", input: "standRaw", inMin: { range: [-1.0, -0.65] }, inMax: -0.3, outMin: 0, outMax: 1 },
+      { output: "cover", op: "clamp", input: "coverRamp", min: 0, max: 1 },
+      { output: "spruce", op: "scale", input: "cover", factor: { range: [0.8, 1] } },
+      { output: "open", op: "invert", input: "cover" },
+      { output: "clearing", op: "mask", input: "open", at: 0.7, off: 0.3 },
+      { output: "dead", op: "scale", input: "clearing", factor: { range: [0, 0.06] } },
+    ],
+    outputs: { spruce: "spruce", deadTree: "dead" },
+  },
+  // Boulders under the snow, gathered where the ground drops and by the water.
+  rocks: { generator: "rockDensity", kind: "boulder", frequency: 0.006, openAt: 0, fullAt: 0.7, peak: { range: [0.01, 0.035] }, footOfSlope: { range: [0.3, 0.6] }, riverShore: { range: [0.75, 1.5] }, lakeShore: { range: [0.75, 1.5] } },
+  treeTints: [
+    { kinds: ["boulder"], snow: { param: "snow", to: [0.35, 0.9] }, stone: { hue: { range: [-12, 8] }, saturation: { range: [0.5, 1.0] }, value: { range: [0.85, 1.05] }, spread: { hue: 6, saturation: 0.2, value: 0.14 } } },
+    {
+      // Snow on the trees as on the ground: a dusting on the tiers in one area, every branch bowed
+      // white in the next.
+      snow: { param: "snow", to: [0.3, 0.7] },
+      // Dark green, blue-green or near black.
+      leaves: { hue: { range: [-5, 20] }, saturation: { range: [0.8, 1.15] }, value: { range: [0.8, 1.05] }, spread: { hue: 6, saturation: 0.12, value: 0.1 } },
+      bark: { hue: { range: [-8, 8] }, saturation: { range: [0.7, 1.05] }, value: { range: [0.85, 1.05] }, spread: { value: 0.08 } },
+    },
+  ],
+  ground: {
+    base: "forestFloor",
+    road: "trackStone",
+    adjust: { hue: { range: [-5, 5] }, saturation: { range: [0.85, 1.05] }, value: { range: [0.92, 1.05] } },
+    layers: [
+      // Snow over all of it, only the odd bare spot where the wind has had its way.
+      { generator: "snowCover", id: "taiga-snow", amount: { param: "snow", to: [0.7, 1] }, frequency: 0.006, drifts: 0.5, north: 1.5, strength: 2 },
+
+      // Under the thickest spruce the branches have caught the snow: the needle-strewn floor shows,
+      // in patches round the trunks.
+      {
+        id: "taiga-under-spruce",
+        material: "forestFloor",
+        weight: {
+          noises: [{ name: "fray", type: "fbm", octaves: 3, frequency: 0.04, amplitude: 1, persistence: 0.55, lacunarity: 2.0 }],
+          steps: [
+            { output: "cover", op: "input", name: "treeCover" },
+            { output: "frayRaw", op: "sample", noise: "fray" },
+            { output: "fray", op: "scale", input: "frayRaw", factor: 0.35 },
+            { output: "frayed", op: "add", a: "cover", b: "fray" },
+            { output: "under", op: "mask", input: "frayed", at: { param: "snow", to: [1.05, 1.55] }, off: { param: "snow", to: [0.95, 1.35] } },
+            { output: "result", op: "scale", input: "under", factor: 3 },
+          ],
+        },
+      },
+
+      // Stones along the water: a river washes its bed and its near bank down to the cobbles (the
+      // waterline is ~22 units from the centreline at a source, ~62 at a mouth), a lake or a pond its
+      // shore, showing through the water too, before the universal shore sand takes over further out.
+      {
+        id: "taiga-stream-stones",
+        material: "pebbles",
+        weight: {
+          noises: [{ name: "reach", type: "fbm", octaves: 2, frequency: 0.02, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
+          steps: [
+            { output: "gap", op: "input", name: "riverGap" },
+            // A ragged reach - wider here, narrower there - rather than a ruled strip.
+            { output: "reachRaw", op: "sample", noise: "reach" },
+            { output: "reachShift", op: "scale", input: "reachRaw", factor: 9 },
+            { output: "reach", op: "add", a: "gap", b: "reachShift" },
+            { output: "band", op: "mask", input: "reach", at: 40, off: 58 },
+            // A lake's shore and bed get the same stones, from where the shore starts down.
+            { output: "lakeFactor", op: "input", name: "lakeFactor" },
+            { output: "lake", op: "mask", input: "lakeFactor", at: 0.25, off: 0.02 },
+            // And so does any hollow inland where the ground just dips to the waterline and fills - no
+            // river, no lake cell, only low ground. Inland only: the coast keeps its sand.
+            { output: "height", op: "input", name: "height" },
+            { output: "low", op: "mask", input: "height", at: 0.6, off: 2.6 },
+            { output: "landmass", op: "input", name: "landmass" },
+            { output: "inland", op: "mask", input: "landmass", at: 0.95, off: 0.7 },
+            { output: "pond", op: "multiply", a: "low", b: "inland" },
+            { output: "lakeOrPond", op: "max", a: "lake", b: "pond" },
+            { output: "water", op: "max", a: "band", b: "lakeOrPond" },
+            // Past 1, to outweigh the universal shore sand on the same bank.
+            { output: "result", op: "scale", input: "water", factor: 1.5 },
+          ],
+        },
+      },
+
+    ],
+  },
+  // A grey-white winter sky, and a cold mist in among the trunks - close in some areas.
+  sky: {
+    horizon: { oneOf: ["#c8d2dc", "#d6dade", "#bcc8d4"] },
+    zenith: "#6f8aa6",
+    cloud: "#eef0f2",
+    fogStart: { range: [0.03, 0.2] },
+    fogEnd: { range: [0.45, 0.85] },
+  },
+  light: {
+    sunPeak: 26,
+    moonPeak: 58,
+    ambientDay: "#c4d0dc",
+    sunZenith: "#f0ece4",
+  },
+}

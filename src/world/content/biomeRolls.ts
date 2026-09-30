@@ -9,7 +9,14 @@ import { isObject, joinPath, type RawObject, type Reader } from "./contentReader
  *  - `{ oneOf: [a, b, ...] }` - one of the options, each as likely; `null` among them leaves the
  *    field out altogether (an area with no settlements, say);
  *  - `chance: p` on any object - it is kept with probability p and dropped otherwise, taken out of
- *    the list it is in or the field that holds it (a layer, a bush, a whole `bushes` block).
+ *    the list it is in or the field that holds it (a layer, a bush, a whole `bushes` block);
+ *  - `{ param: name, to: [a, b] }` - one of the biome's own `params`, mapped from 0-1 onto a to b
+ *    (numbers or colours); without `to`, the param itself.
+ *
+ * A biome's top-level `params` - `{ snow: { range: [0, 1] } }` - are rolled first, once for the
+ * area, and are not part of the rolled biome: they are there so that several values can follow one
+ * roll. Snow on the ground and snow on the trees read the same `snow`, so a lightly snowed area is
+ * light on both, instead of a white wood over bare ground.
  *
  * Rolling runs on the file as written, before its generators expand, so a generator's parameters
  * roll like anything else; the rolled file is then read exactly as an unrolled one would be. An
@@ -86,16 +93,41 @@ const DROPPED = Symbol("dropped");
 
 /** `value` rolled; malformed rolls are reported to `reader` and left out. */
 export function rollValue(value: unknown, roller: Roller, reader: Reader, path = ""): unknown {
-  const rolled = roll(value, roller, reader, path);
+  let params: Params = new Map();
+  let body = value;
+  if (isObject(value) && "params" in value) {
+    const { params: source, ...rest } = value;
+    params = rollParams(source, roller, reader, joinPath(path, "params"));
+    body = rest;
+  }
+  const rolled = roll(body, roller, reader, path, params);
   return rolled === DROPPED ? undefined : rolled;
 }
 
-function roll(value: unknown, roller: Roller, reader: Reader, path: string): unknown {
+/** A biome's params, rolled for the area. */
+type Params = Map<string, number>;
+
+function rollParams(source: unknown, roller: Roller, reader: Reader, path: string): Params {
+  const params: Params = new Map();
+  if (!isObject(source)) {
+    reader.fail(path, "expected { name: value, ... }");
+    return params;
+  }
+  for (const [name, spec] of Object.entries(source)) {
+    const value = roll(spec, roller, reader, joinPath(path, name), params);
+    if (typeof value === "number" && Number.isFinite(value)) params.set(name, value);
+    else if (value !== DROPPED) reader.fail(joinPath(path, name), "expected a number (or a roll of one)");
+  }
+  return params;
+}
+
+function roll(value: unknown, roller: Roller, reader: Reader, path: string, params: Params): unknown {
   if (Array.isArray(value)) {
-    return value.map((item, i) => roll(item, roller, reader, joinPath(path, i))).filter((item) => item !== DROPPED);
+    return value.map((item, i) => roll(item, roller, reader, joinPath(path, i), params)).filter((item) => item !== DROPPED);
   }
   if (!isObject(value)) return value;
 
+  if ("param" in value) return readParam(value, params, reader, path);
   if ("range" in value) return rollRange(value, roller, reader, path);
   if ("between" in value) return rollBetween(value, roller, reader, path);
   if ("oneOf" in value) {
@@ -105,7 +137,7 @@ function roll(value: unknown, roller: Roller, reader: Reader, path: string): unk
     }
     const index = roller.pick(value.oneOf.length);
     const option = value.oneOf[index];
-    return option === null ? DROPPED : roll(option, roller, reader, joinPath(joinPath(path, "oneOf"), index));
+    return option === null ? DROPPED : roll(option, roller, reader, joinPath(joinPath(path, "oneOf"), index), params);
   }
 
   let source: RawObject = value;
@@ -122,10 +154,32 @@ function roll(value: unknown, roller: Roller, reader: Reader, path: string): unk
 
   const result: RawObject = {};
   for (const [key, child] of Object.entries(source)) {
-    const rolled = roll(child, roller, reader, joinPath(path, key));
+    const rolled = roll(child, roller, reader, joinPath(path, key), params);
     if (rolled !== DROPPED) result[key] = rolled;
   }
   return result;
+}
+
+function readParam(value: RawObject, params: Params, reader: Reader, path: string): unknown {
+  const extra = Object.keys(value).filter((key) => key !== "param" && key !== "to");
+  const name = value.param;
+  const known = typeof name === "string" ? params.get(name) : undefined;
+  if (extra.length > 0 || known === undefined) {
+    reader.fail(path, `expected { param: name, to?: [a, b] } naming one of the biome's params (${[...params.keys()].join(", ") || "it has none"})`);
+    return DROPPED;
+  }
+  if (value.to === undefined) return known;
+  const to = value.to;
+  if (Array.isArray(to) && to.length === 2 && to.every((end) => typeof end === "number" && Number.isFinite(end))) {
+    return to[0] + (to[1] - to[0]) * known;
+  }
+  const colours = Array.isArray(to) && to.length === 2 ? to.map(parseColour) : null;
+  if (!colours || colours.some((colour) => colour === null)) {
+    reader.fail(joinPath(path, "to"), 'expected [a, b]: two numbers or two colours ("#rrggbb" or [r, g, b])');
+    return DROPPED;
+  }
+  const [a, b] = colours as [number, number, number][];
+  return a.map((channel, i) => channel + (b[i] - channel) * known);
 }
 
 function rollRange(value: RawObject, roller: Roller, reader: Reader, path: string): unknown {

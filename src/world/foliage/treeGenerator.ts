@@ -20,6 +20,10 @@ export interface TreeGeometry {
     /** Not the cards' own facing but out from the crown's centre, so the crown shades as one soft
      *  mass instead of a pile of flat cards. */
     normals: Float32Array;
+    /** Per vertex, how level the surface itself lies there, 0 (upright) to 1 (flat) - what holds
+     *  snow. Smooth across a card's folds, unlike its triangles' facing, and free of the crown's
+     *  shading bias, unlike `normals`. */
+    lie: Float32Array;
     uvs: Float32Array;
     indices: Uint32Array;
   };
@@ -115,6 +119,7 @@ class WoodBuilder {
 class LeafBuilder {
   positions: number[] = [];
   normals: number[] = [];
+  lie: number[] = [];
   uvs: number[] = [];
   indices: number[] = [];
 
@@ -126,6 +131,7 @@ class LeafBuilder {
     const cellU = (cell % 2) * 0.5;
     const cellV = Math.floor(cell / 2) * 0.5;
     const inset = 0.004;
+    const lie = Math.abs(normalize(cross(u, v))[1]);
     const corners: [number, number][] = [
       [-1, -1],
       [1, -1],
@@ -140,6 +146,7 @@ class LeafBuilder {
       const out = sub(p, crownCentre);
       const n = normalize([out[0], out[1] * 1.3 + crownRadius * 0.15, out[2]]);
       this.normals.push(n[0], n[1], n[2]);
+      this.lie.push(lie);
       // An atlas row runs down the picture, so the card's top (+v) is the cell's first row.
       const up = upright ? -b : b;
       this.uvs.push(cellU + (a > 0 ? 0.5 - inset : inset), cellV + (up > 0 ? 0.5 - inset : inset));
@@ -167,6 +174,8 @@ class LeafBuilder {
         const out = sub(p, crownCentre);
         const n = normalize([out[0], out[1] * 1.3 + crownRadius * 0.15, out[2]]);
         this.normals.push(n[0], n[1], n[2]);
+        // An upright card holds no snow of its own; a bush's top still whitens, by the crown's normal.
+        this.lie.push(Math.max(0, n[1]));
         const across = mirror ? 1 - col / 2 : col / 2;
         this.uvs.push(cellU + inset + across * span, cellV + 0.5 - inset - (row / 2) * span);
       }
@@ -236,6 +245,7 @@ class LeafBuilder {
         const archTip = scale(sideways, across * arch * 0.8);
         const n = normalize(add(add(cone, archTip), scale(normalize(sub(p, crownCentre)), 0.6)));
         this.normals.push(n[0], n[1], n[2]);
+        this.lie.push(Math.max(0, normalize(add(cone, archTip))[1]));
         this.uvs.push(cellU + inset + u * (0.5 - 2 * inset), cellV + inset + v * (0.5 - 2 * inset));
       }
     }
@@ -458,6 +468,7 @@ export function generateTree(spec: BranchingTree, seed: number, detail: TreeDeta
     leaves: {
       positions: new Float32Array(leafBuilder.positions),
       normals: new Float32Array(leafBuilder.normals),
+      lie: new Float32Array(leafBuilder.lie),
       uvs: new Float32Array(leafBuilder.uvs),
       indices: new Uint32Array(leafBuilder.indices),
     },
@@ -526,6 +537,7 @@ export function generateBush(spec: BushShape, seed: number): BushGeometry {
     leaves: {
       positions: new Float32Array(builder.positions),
       normals: new Float32Array(builder.normals),
+      lie: new Float32Array(builder.lie),
       uvs: new Float32Array(builder.uvs),
       indices: new Uint32Array(builder.indices),
     },
@@ -546,6 +558,7 @@ function generateFronds(spec: Fronds, seed: number): BushGeometry {
   const between = ([lo, hi]: [number, number]): number => lo + rng() * (hi - lo);
   const positions: number[] = [];
   const normals: number[] = [];
+  const lie: number[] = [];
   const uvs: number[] = [];
   const indices: number[] = [];
   const inset = 0.004;
@@ -581,6 +594,7 @@ function generateFronds(spec: Fronds, seed: number): BushGeometry {
         // Tipped outwards either side of the keel, the way the fold turns the halves.
         const n = normalize(add(facing, scale(side, a * spec.fold * 1.5)));
         normals.push(n[0], n[1], n[2]);
+        lie.push(Math.abs(n[1]));
         const across = (a + 1) / 2;
         uvs.push(cellU + inset + (mirror ? 1 - across : across) * span, cellV + 0.5 - inset - t * span);
         top = Math.max(top, p[1]);
@@ -596,7 +610,7 @@ function generateFronds(spec: Fronds, seed: number): BushGeometry {
     }
   }
   return {
-    leaves: { positions: new Float32Array(positions), normals: new Float32Array(normals), uvs: new Float32Array(uvs), indices: new Uint32Array(indices) },
+    leaves: { positions: new Float32Array(positions), normals: new Float32Array(normals), lie: new Float32Array(lie), uvs: new Float32Array(uvs), indices: new Uint32Array(indices) },
     height: top,
   };
 }
@@ -714,6 +728,7 @@ export function generateConifer(spec: ConiferTree, seed: number, detail: TreeDet
     leaves: {
       positions: new Float32Array(leafBuilder.positions),
       normals: new Float32Array(leafBuilder.normals),
+      lie: new Float32Array(leafBuilder.lie),
       uvs: new Float32Array(leafBuilder.uvs),
       indices: new Uint32Array(leafBuilder.indices),
     },

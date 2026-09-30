@@ -95,6 +95,12 @@ Existing: **broadleaf**, **pine**, **palm**.
 - **Autumn wood: done** - `biomes/autumnWood.json5`. Maples (new) where the wood is thick, oaks
   where it thins, turned crimson to gold; green ferns (a new `fern` bush builder) under them; fallen
   leaves drifting out over golden clearings; a low, warm sun. The same three reliefs.
+- **Snowy taiga: done** - `biomes/snowyTaiga.json5`. Spruce (new): a big, narrow, dark cone -
+  few large trees rather than many small ones, their crowns closing overhead; snow on the trees (a
+  tint rule's `snow` now reaches leaves and bark), each area its own weight of it; snow over nearly
+  all the ground, the needle floor showing only under the thickest wood; snowy boulders, the odd
+  dead tree in a clearing. The same three reliefs. One `snow` param per area (biome `params`, new)
+  drives the ground's snow, the trees' and the stones' together - the frost steppe uses it too.
 - **Later:** ferns as a waterside plant too, beside the cattails.
 
 | Variant | Ground | Plants | Trees | Extras |

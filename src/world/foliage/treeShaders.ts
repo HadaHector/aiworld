@@ -108,6 +108,16 @@ void main() {
 
   // Darker low down, where roots and the ground close in - a cheap stand-in for occlusion.
   float occlusion = mix(0.55, 1.0, smoothstep(-0.5, 5.0, vHeight));
+  // Snow along the tops of the limbs and in the crooks - on whatever faces up enough, the bark's
+  // own relief breaking its edge. A trunk stands too steep to hold any.
+  float snow = treeSnow(vTintRow);
+  if (snow > 0.0) {
+    float relief = dot(texture(barkColor, vUV).rgb, vec3(0.33));
+    float lying = 1.0 - snow * 0.8;
+    float cover = smoothstep(lying, lying + 0.15, n.y + (relief - 0.3) * 0.3);
+    albedo = mix(albedo, vec3(0.86, 0.9, 0.96), cover);
+    occlusion = mix(occlusion, 1.0, cover * 0.5);
+  }
   vec3 lightDir = normalize(lightDirection);
   float diffuse = clamp(dot(n, lightDir) * 0.75 + 0.25, 0.0, 1.0) * lightIntensity;
   float shadow = computeShadow(vWorldPosition, surface, vViewDepth);
@@ -122,6 +132,7 @@ precision highp float;
 in vec3 position;
 in vec3 normal;
 in vec2 uv;
+in float lie;
 in vec4 instanceColor;
 ${INSTANCED_WORLD}
 
@@ -131,6 +142,7 @@ uniform float treeHeight;
 
 out vec3 vWorldPosition;
 out vec3 vNormal;
+out float vLie;
 out vec2 vUV;
 out vec3 vTint;
 out float vViewDepth;
@@ -154,6 +166,7 @@ void main() {
   vTint = instanceColor.rgb;
   vTintRow = instanceColor.a;
   vWorldPosition = worldPosition.xyz;
+  vLie = lie;
   vViewDepth = (view * worldPosition).z;
   gl_Position = viewProjection * worldPosition;
 }
@@ -165,6 +178,7 @@ ${LIT_SHADING_GLSL}
 
 in vec3 vWorldPosition;
 in vec3 vNormal;
+in float vLie;
 in vec2 vUV;
 in vec3 vTint;
 in float vViewDepth;
@@ -185,6 +199,23 @@ void main() {
 
   vec3 albedo = max(treeTint(vTintRow, 0) * (leaf.rgb * vTint), 0.0);
   vec3 n = normalize(vNormal);
+  // Snow lying on the branches: wherever the card itself lies flat enough to hold it (its \`lie\`, not
+  // the crown's rounded normal, which turns down on the lower tiers and would leave them bare under
+  // a white top) - thicker the more snow the area has, the spray's own light and dark needles
+  // breaking it into clumps, the darkest showing through, so a branch reads as loaded with snow
+  // rather than painted white.
+  float snow = treeSnow(vTintRow);
+  if (snow > 0.0) {
+    float level = vLie;
+    float needles = dot(leaf.rgb, vec3(0.3, 0.5, 0.2));
+    float clump = smoothstep(0.04, 0.3, needles);
+    float lying = 1.0 - snow * 0.85;
+    // A light snow only catches on the brightest needles; a heavy one fills in over the dark ones
+    // too, the branch's top one solid white.
+    float cover = smoothstep(lying - 0.1, lying + 0.25, level + (clump - 0.5) * 0.6) * mix(0.1 + snow * 0.4, 1.0, clump);
+    vec3 snowColor = vec3(0.9, 0.93, 0.98) * (0.9 + clump * 0.12);
+    albedo = mix(albedo, snowColor, clamp(cover * 1.3, 0.0, 1.0));
+  }
   vec3 lightDir = normalize(lightDirection);
   // Wrapped lighting on the crown's own normal: the sunny side bright, the far side falling off
   // softly rather than to black, the crown shading as one rounded mass.
