@@ -330,7 +330,10 @@ branches and on top. Its sections:
 - `roots`: `count`, `length`, `radius` (of the trunk's), `drop` (how deep the ends dive), `sides`, `rings`,
   and optionally `buttress: { height, thickness }` - a jungle giant's plank roots instead of round
   ones: wedges on edge, thick at the foot, leaving the trunk `height` metres up and sweeping down to
-  dive into the ground at their ends (see `core/trees/kapok.json5`)
+  dive into the ground at their ends (see `core/trees/kapok.json5`) - or `stilt: [low, high]`, a
+  mangrove's props: each root leaves the trunk somewhere between those heights and dives or arches
+  down into the ground, and the trunk narrows towards the ground above them (see
+  `core/trees/mangrove.json5`)
 - `branches`: `count`, `from` (fraction of the trunk's height), `length`, `radius`, `angle` (degrees
   from vertical), `arc` (how much they curve back up; below 0, over and outwards), `sides`, `rings`,
   `twigs` likewise, and optionally `broken` - the share of branches and twigs snapped off short
@@ -348,7 +351,11 @@ Leave out both `leaves` and `foliage` for a bare tree - all wood, no leaves (see
 A `crown` puts a fern's fronds on top of the trunk - a tree fern's, and later a palm's (see
 `core/trees/treeFern.json5`): the same settings as a bush's `fronds` (below), its fronds growing out
 of the trunk's tapering tip. With a crown, `leaves` may be left out and `foliage` is a bush atlas
-(`builder: "fern"`, or one of the broad-leaf builders). A frond bends in the wind from its root.
+(`builder: "fern"`, `"palmFrond"` - leaflets all near one length, for many thin ones, see
+`core/trees/palm.json5` - or one of the broad-leaf builders). A frond bends in the wind from its root.
+
+A tree kind with `wetFeet: true` (a mangrove) stands with its feet in the water: its zone's shore
+rule does not hold it back from the waterline.
 
 Trees in distant chunks are drawn with fewer sides and no twigs - the same tree, and the same leaves.
 

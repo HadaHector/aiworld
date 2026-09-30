@@ -1,0 +1,129 @@
+/**
+ * Palm grove - the jungle family's coastal variant (see ZONES.md): gentle ground, thick with palms
+ * leaning every way over leafy grass and pale sand; at the water, mangroves standing out into the
+ * shallows on their stilt roots; the odd wild banana and elephant ear in the damper hollows. Bright,
+ * warm light and a sea haze.
+ */
+{
+  name: "Palm Grove",
+  voice: "shaded",
+  spawnWeight: 2,
+  lakeChance: 0.1,
+  borderType: "mountain",
+  settlement: "timber",
+  // Low, gentle land: long low swells, or a few rounded rises.
+  height: {
+    oneOf: [
+      { generator: "detailHeight", amplitude: { range: [6, 12] }, frequency: { range: [0.0015, 0.0025] }, offset: 7, persistence: 0.4 },
+      { generator: "detailHeight", amplitude: { range: [16, 26] }, frequency: 0.0016, offset: 14, persistence: 0.4 },
+    ],
+  },
+  // Palms right down to the beach: only the last metre or so above the water is bare.
+  treeRules: { shore: [0.4, 2] },
+  // Palms nearly everywhere, thickest in groves; mangroves along the waterline, out into the
+  // shallows; a broadleaf now and then among the palms.
+  trees: {
+    noises: [{ name: "grove", type: "fbm", octaves: 3, frequency: 0.004, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
+    steps: [
+      { output: "groveRaw", op: "sample", noise: "grove" },
+      { output: "groveRamp", op: "remap", input: "groveRaw", inMin: { range: [-1.0, -0.6] }, inMax: 0.1, outMin: 0.25, outMax: 1 },
+      { output: "grove", op: "clamp", input: "groveRamp", min: 0, max: 1 },
+      { output: "height", op: "input", name: "height" },
+      // The waterline: out into the shallows to a couple of metres over the water.
+      { output: "notDeep", op: "mask", input: "height", at: -0.4, off: -1.2 },
+      { output: "notHigh", op: "mask", input: "height", at: 1.5, off: 2.8 },
+      { output: "waterline", op: "multiply", a: "notDeep", b: "notHigh" },
+      { output: "dry", op: "invert", input: "waterline" },
+      { output: "groveDry", op: "multiply", a: "grove", b: "dry" },
+      { output: "palm", op: "scale", input: "groveDry", factor: { range: [0.55, 0.8] } },
+      { output: "broadleaf", op: "scale", input: "groveDry", factor: { range: [0, 0.08] } },
+      { output: "mangrove", op: "scale", input: "waterline", factor: { range: [1.2, 1.6] } },
+    ],
+    outputs: { palm: "palm", broadleaf: "broadleaf", mangrove: "mangrove" },
+  },
+  // A few broad leaves in the damp hollows.
+  bushes: {
+    noises: [{ name: "bed", type: "fbm", octaves: 2, frequency: 0.025, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
+    steps: [
+      { output: "bedRaw", op: "sample", noise: "bed" },
+      { output: "bed", op: "mask", input: "bedRaw", at: 0.55, off: 0.3 },
+      { output: "height", op: "input", name: "height" },
+      { output: "aboveWater", op: "mask", input: "height", at: 2, off: 1 },
+      { output: "beds", op: "multiply", a: "bed", b: "aboveWater" },
+      { output: "banana", op: "scale", input: "beds", factor: { range: [0.2, 0.5] } },
+      { output: "elephantEar", op: "scale", input: "beds", factor: { range: [0.2, 0.5] } },
+    ],
+    outputs: { banana: "banana", elephantEar: "elephantEar" },
+  },
+  treeTints: [
+    {
+      // Fresh, sunlit greens, one area yellower, the next bluer.
+      leaves: { hue: { range: [-12, 12] }, saturation: { range: [0.95, 1.25] }, value: { range: [0.95, 1.12] }, spread: { hue: 8, saturation: 0.12, value: 0.1 } },
+      bark: { hue: { range: [-6, 6] }, saturation: { range: [0.8, 1.1] }, value: { range: [0.9, 1.1] }, spread: { value: 0.08 } },
+    },
+  ],
+  ground: {
+    base: "leafyGrass",
+    road: "trackSand",
+    adjust: { hue: { range: [-6, 8] }, saturation: { range: [0.95, 1.2] }, value: { range: [0.95, 1.08] } },
+    layers: [
+      // The beach: pale sand from the water up the first few metres, ragged at its top.
+      {
+        id: "grove-beach",
+        material: "beachSand",
+        weight: {
+          noises: [{ name: "fray", type: "fbm", octaves: 3, frequency: 0.02, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
+          steps: [
+            { output: "height", op: "input", name: "height" },
+            { output: "frayRaw", op: "sample", noise: "fray" },
+            { output: "fray", op: "scale", input: "frayRaw", factor: 1.2 },
+            { output: "reach", op: "add", a: "height", b: "fray" },
+            { output: "beach", op: "mask", input: "reach", at: { range: [2.5, 4] }, off: { range: [4, 5.5] } },
+            { output: "result", op: "scale", input: "beach", factor: 2.5 },
+          ],
+        },
+      },
+      // Sandy patches inland, under the palms, where the grass thins.
+      {
+        id: "grove-sand-patches",
+        material: "beachSand",
+        weight: {
+          noises: [{ name: "patch", type: "fbm", octaves: 4, frequency: 0.012, amplitude: 1, persistence: 0.55, lacunarity: 2.0 }],
+          steps: [
+            { output: "patchRaw", op: "sample", noise: "patch" },
+            { output: "result", op: "mask", input: "patchRaw", at: { range: [0.25, 0.6] }, off: { range: [0.0, 0.15] } },
+          ],
+        },
+      },
+      // Mud round the mangroves' feet, where the water is slack.
+      {
+        id: "grove-mangrove-mud",
+        material: "mud",
+        weight: {
+          noises: [{ name: "patch", type: "fbm", octaves: 3, frequency: 0.03, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
+          steps: [
+            { output: "height", op: "input", name: "height" },
+            { output: "wet", op: "mask", input: "height", at: 0.3, off: 1.2 },
+            { output: "patchRaw", op: "sample", noise: "patch" },
+            { output: "patch", op: "mask", input: "patchRaw", at: 0.2, off: -0.2 },
+            { output: "wetPatch", op: "multiply", a: "wet", b: "patch" },
+            { output: "result", op: "scale", input: "wetPatch", factor: 3 },
+          ],
+        },
+      },
+    ],
+  },
+  // A bright sky, a light sea haze.
+  sky: {
+    horizon: { oneOf: ["#cfe0e6", "#d8e4e0", "#e2e4da"] },
+    zenith: "#4f8fc4",
+    cloud: "#ffffff",
+    fogStart: { range: [0.15, 0.35] },
+    fogEnd: { range: [0.75, 1] },
+  },
+  light: {
+    sunPeak: 75,
+    moonPeak: 50,
+    ambientDay: "#c8d6cc",
+  },
+}

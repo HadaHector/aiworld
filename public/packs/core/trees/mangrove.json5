@@ -1,0 +1,76 @@
+// A mangrove: a low, spreading tree standing in the shallows on a tangle of stilt roots - arching out
+// from the trunk a couple of metres up and plunging into the water - under a dense, dark, glossy
+// crown. It grows with its feet in the water (`wetFeet`): the shore rule that keeps other trees
+// back from the waterline does not hold it.
+{
+  model: "branching",
+  variants: 4,
+  wetFeet: true,
+  trunk: {
+    height: 16,
+    radius: 0.7,
+    topRadius: 0.32,
+    lean: 0.1,
+    wobble: 1,
+    // No flare: on stilts, the trunk narrows to the ground instead.
+    flare: 1,
+    flareHeight: 2,
+    sides: 7,
+    rings: 7,
+  },
+  // Props, leaving the trunk anywhere from knee high to over your head, down into the water.
+  roots: { count: 14, length: [5, 8], radius: 0.32, drop: 1.6, sides: 5, rings: 6, stilt: [1.6, 6.4] },
+  branches: {
+    count: [5, 7],
+    from: 0.45,
+    length: [8, 12],
+    radius: 0.6,
+    angle: [45, 78],
+    arc: 0.1,
+    sides: 5,
+    rings: 4,
+    twigs: { count: [2, 3], length: [0.3, 0.5], angle: [40, 70], sides: 3, rings: 2 },
+  },
+  // A low, dense dome.
+  leaves: { size: [9, 13], cards: 3, alongBranch: 3, top: 2, spread: 3.2, squash: 0.7, level: 0.2 },
+  // Smooth grey-brown bark, pale lenticels freckling it.
+  bark: {
+    tile: 2.4,
+    texture: {
+      bumpStrength: 1.2,
+      pipeline: {
+        noises: [
+          { name: "mottle", type: "fbm", octaves: 4, tileCycles: 5, amplitude: 1, persistence: 0.5, lacunarity: 2 },
+          { name: "lenticels", type: "worley", tileCycles: 40, stretch: [3, 1], amplitude: 1, mode: "f1" },
+        ],
+        steps: [
+          { output: "mottleRaw", op: "sample", noise: "mottle" },
+          { output: "mottle", op: "mask", input: "mottleRaw", at: 1.5, off: -1.5 },
+          { output: "dotDist", op: "sample", noise: "lenticels" },
+          { output: "dot", op: "mask", input: "dotDist", at: 0.08, off: 0.2 },
+          { output: "mottleHeight", op: "scale", input: "mottle", factor: 0.5 },
+          { output: "dotHeight", op: "scale", input: "dot", factor: 0.3 },
+          { output: "height", op: "add", a: "mottleHeight", b: "dotHeight" },
+          {
+            output: "tone",
+            op: "colorRamp",
+            input: "mottle",
+            stops: [
+              { at: 0.0, color: [0.26, 0.22, 0.18] },
+              { at: 0.5, color: [0.36, 0.32, 0.27] },
+              { at: 1.0, color: [0.44, 0.4, 0.34] },
+            ],
+          },
+          { output: "dotColor", op: "color", value: [0.58, 0.54, 0.46] },
+          { output: "diffuse", op: "mix", a: "tone", b: "dotColor", t: "dot" },
+          { output: "roughness", op: "constant", value: 0.8 },
+        ],
+        outputs: { diffuse: "diffuse", roughness: "roughness", height: "height" },
+      },
+    },
+  },
+  // Thick, glossy, dark green leaves.
+  foliage: { builder: "broadleaf", dark: [0.03, 0.12, 0.04], light: [0.24, 0.42, 0.12], leaves: 420, leafLength: 0.08, leafWidth: 0.04 },
+  tint: [[0.85, 0.92, 0.85], [1.1, 1.06, 0.98]],
+  scale: [0.8, 1.3],
+}

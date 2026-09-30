@@ -340,7 +340,9 @@ export function generateTree(spec: BranchingTree, seed: number, detail: TreeDeta
     const flare = 1 + (trunk.flare - 1) * (1 - smoothstep(0, trunk.flareHeight, y));
     const swell = (rise - trunk.bulgeAt) / 0.3;
     const bulge = 1 + trunk.bulge * Math.exp(-swell * swell);
-    return lerp(trunk.radius, trunk.topRadius, rise) * flare * bulge;
+    // On stilts, the trunk narrows towards the ground: the roots carry it.
+    const stilted = roots.stilt === null ? 1 : 0.35 + 0.65 * smoothstep(-0.3, roots.stilt[1] * 0.9, y);
+    return lerp(trunk.radius, trunk.topRadius, rise) * flare * bulge * stilted;
   };
   const trunkTs: number[] = [];
   for (let i = 0; i <= trunk.rings; i++) {
@@ -384,7 +386,35 @@ export function generateTree(spec: BranchingTree, seed: number, detail: TreeDeta
       limb(points, widths, roots.sides, false, heights);
     }
   }
-  for (let r = 0; r < (roots.buttress ? 0 : roots.count); r++) {
+  if (roots.stilt !== null && !roots.buttress) {
+    // Stilts: from the trunk down to plunge into the ground - some near level at first and then
+    // curving down, some diving steeply from the start - each from its own height, so they cross
+    // and tangle. Each sets off from the trunk's own centre at its height, wherever the trunk's
+    // lean and sway have taken it.
+    for (let r = 0; r < roots.count; r++) {
+      const heading = ((r + rng() * 0.8) / roots.count) * Math.PI * 2;
+      const out: V3 = [Math.cos(heading), 0, Math.sin(heading)];
+      const curl = (rng() - 0.5) * 0.8;
+      const length = between(roots.length);
+      const high = between(roots.stilt);
+      // 1 a straight dive, 2 out level and then down.
+      const arch = 1 + rng();
+      const from = trunkPoint((high + buried) / (trunk.height + buried));
+      const startRadius = trunk.radius * roots.radius;
+      const points: V3[] = [];
+      const radii: number[] = [];
+      for (let i = 0; i <= roots.rings; i++) {
+        const s = i / roots.rings;
+        const bent = rotate(out, [0, 1, 0], curl * s);
+        const y = high * (1 - Math.pow(s, arch)) - roots.drop * s * s;
+        const reach = length * Math.pow(s, 0.5 + 0.25 * (2 - arch));
+        points.push([from[0] + bent[0] * reach, y, from[2] + bent[2] * reach]);
+        radii.push(startRadius * (1 - 0.35 * s));
+      }
+      limb(points, radii, roots.sides);
+    }
+  }
+  for (let r = 0; r < (roots.buttress || roots.stilt !== null ? 0 : roots.count); r++) {
     const heading = ((r + rng() * 0.6) / roots.count) * Math.PI * 2;
     const out: V3 = [Math.cos(heading), 0, Math.sin(heading)];
     const curl = (rng() - 0.5) * 0.6;

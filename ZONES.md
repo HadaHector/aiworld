@@ -116,7 +116,11 @@ Existing: **broadleaf**, **pine**, **palm**.
   trunk) in the damp stretches; on a new wet, dark `jungleFloor`, giant ferns and elephant ears
   (new: fronds on a `stalk`, the `heartLeaf` atlas) in beds with open ground between, wild bananas
   (the `paddleLeaf` atlas) by the water; mud banks; a close green haze. Hills or valleys, never flat.
-- **Later:** palms rebuilt on the frond crown.
+- **Palm grove: done** - `biomes/palmGrove.json5`. Low, gentle ground thick with palms (rebuilt on
+  the frond crown, a new `palmFrond` atlas) over leafy grass and pale `beachSand` (new) - a beach
+  at the water, sandy patches inland; mangroves (new: stilt roots, `roots.stilt`; `wetFeet`, which
+  lets a kind stand in the shallows) in stands along the waterline; the odd banana and elephant ear;
+  bright light and a sea haze.
 
 | Variant | Ground | Plants | Trees | Extras |
 |---|---|---|---|---|

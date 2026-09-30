@@ -511,8 +511,8 @@ function createScatter(seed: number, level: ScatterLevel): { scatter: TreeScatte
     return kinds[0];
   }
 
-  function rulesFade(rules: TreeRules, ground: TreeGround): number {
-    let fade = smoothstep(rules.shore[0], rules.shore[1], ground.height);
+  function rulesFade(rules: TreeRules, ground: TreeGround, wetFeet: boolean): number {
+    let fade = wetFeet ? 1 : smoothstep(rules.shore[0], rules.shore[1], ground.height);
     fade *= 1 - smoothstep(rules.line[0], rules.line[1], ground.height);
     fade *= 1 - smoothstep(rules.slope[0], rules.slope[1], ground.slope);
     return fade;
@@ -523,8 +523,9 @@ function createScatter(seed: number, level: ScatterLevel): { scatter: TreeScatte
    * (shore, treeline, slope), blended by the zones' weights - for a plant, not a stone - then the
    * world's own: nothing grows in a lake or a road cut, whatever the zone would like. Every one but
    * the lake is a fade, because a hard line in a density field reads as a drawn edge in the world.
+   * A kind with `wetFeet` (a mangrove) is not held back by the shore rule.
    */
-  function survivalFade(ground: TreeGround): number {
+  function survivalFade(ground: TreeGround, wetFeet = false): number {
     const { sample } = ground;
     if (!sample.isLand) return 0;
     // roadGap is Infinity where no road is in range, which smoothstep clamps to 1.
@@ -540,7 +541,7 @@ function createScatter(seed: number, level: ScatterLevel): { scatter: TreeScatte
     let blended = 0;
     let weightSum = 0;
     for (const { biome, weight } of sample.areaWeights) {
-      const zoneFade = rulesFade(biome.treeRules, ground);
+      const zoneFade = rulesFade(biome.treeRules, ground, wetFeet);
       if (first === null) {
         first = biome.treeRules;
         firstFade = zoneFade;
@@ -640,7 +641,7 @@ function createScatter(seed: number, level: ScatterLevel): { scatter: TreeScatte
       if (wanted <= 0) continue;
       const kind = kindFor(wanted, candidate.kindRoll);
       // Cheap rules first: finding the trees around means scattering them past the chunk.
-      const fade = survivalFade(ground);
+      const fade = survivalFade(ground, kind.wetFeet === true);
       if (candidate.densityRoll >= wanted * fade) continue;
       const size = kind.growsOld ? candidate.size : 1;
       const scale = (kind.scale[0] + candidate.scaleRoll * (kind.scale[1] - kind.scale[0])) * size;

@@ -182,6 +182,10 @@ export interface BranchingTree {
      *  on edge, `height` metres up the trunk where it leaves it, curving down to the ground at its
      *  end, `thickness` metres through. `radius` is then unused. */
     buttress: { height: number; thickness: number } | null;
+    /** Stilt roots - a mangrove's: each leaves the trunk somewhere between these heights (metres),
+     *  and dives or arches down into the ground or the water like a prop. None, the usual roots
+     *  arching out from the flare. */
+    stilt: [number, number] | null;
   };
   branches: {
     count: [number, number];
@@ -401,9 +405,12 @@ export interface BushBed {
  * paddle, torn into strips from its edges (`leaves` tears), or an elephant ear's heart, with
  * `leaves` veins fanning from the stalk. `leafWidth` is the blade's half-width as a share of the
  * cell's; `leafLength`, `stems` and `bare` are unused.
+ *
+ * `palmFrond` is the fern's frond made a palm's: leaflets all near the same length, tapering only
+ * at the tip, and little varied in size or shade - for many thin ones in a row.
  */
 export interface BushTexture {
-  builder: "leafyBush" | "fern" | "paddleLeaf" | "heartLeaf";
+  builder: "leafyBush" | "fern" | "palmFrond" | "paddleLeaf" | "heartLeaf";
   /** Leaves range between these, lighter towards the top and the rim. */
   dark: ColorTuple;
   light: ColorTuple;
@@ -419,7 +426,7 @@ export interface BushTexture {
   bare: number;
 }
 
-export const BUSH_FOLIAGE_BUILDERS = ["leafyBush", "fern", "paddleLeaf", "heartLeaf"] as const;
+export const BUSH_FOLIAGE_BUILDERS = ["leafyBush", "fern", "palmFrond", "paddleLeaf", "heartLeaf"] as const;
 
 /**
  * A boulder: a lump of stone standing on the ground, scattered on the trees' lattice (a pack's
@@ -503,6 +510,10 @@ export interface TreeKindDef {
   /** Whether this kind grows old - some of its trees then stand WorldContent.oldTrees.size times
    *  their usual size. A kind that does not still gets the room an old tree would have taken. */
   growsOld: boolean;
+  /** A tree that stands with its feet in the water - a mangrove: its zone's shore rule does not
+   *  hold it back from the waterline. Only a tree kind's; nothing grows in a lake or a road cut
+   *  whatever it is. */
+  wetFeet?: boolean;
 }
 
 /**

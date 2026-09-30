@@ -602,13 +602,15 @@ const KIND_COMMON_KEYS = ["model", "tint", "scale", "growsOld"];
 
 function readTreeKind(id: string, obj: RawObject, reader: Reader, defaults: Defaults): TreeKindDef {
   const model = obj.model === undefined ? "primitive" : reader.oneOf(obj, "model", "", ["primitive", "branching", "conifer"] as const);
+  // Only a tree can stand in the water.
+  const common = [...KIND_COMMON_KEYS, "wetFeet"];
   const shape =
     model === "branching"
-      ? readBranchingTree(obj, reader, KIND_COMMON_KEYS)
+      ? readBranchingTree(obj, reader, common)
       : model === "conifer"
-        ? readConiferTree(obj, reader, KIND_COMMON_KEYS)
-        : readPrimitiveTree(obj, reader, KIND_COMMON_KEYS);
-  return { id, shape, ...readKindLook(obj, reader, defaults), growsOld: reader.boolean(obj, "growsOld", "", false) };
+        ? readConiferTree(obj, reader, common)
+        : readPrimitiveTree(obj, reader, common);
+  return { id, shape, ...readKindLook(obj, reader, defaults), growsOld: reader.boolean(obj, "growsOld", "", false), wetFeet: reader.boolean(obj, "wetFeet", "", false) };
 }
 
 /**
@@ -867,7 +869,7 @@ function readBranchingTree(obj: RawObject, reader: Reader, common: string[]): Br
     return value;
   };
   const trunk = section("trunk", ["height", "radius", "topRadius", "lean", "wobble", "flare", "flareHeight", "bulge", "bulgeAt", "sides", "rings"]);
-  const roots = section("roots", ["count", "length", "radius", "drop", "sides", "rings", "buttress"]);
+  const roots = section("roots", ["count", "length", "radius", "drop", "sides", "rings", "buttress", "stilt"]);
   const buttress = roots.buttress === undefined ? null : reader.object(roots.buttress, "roots.buttress");
   if (buttress) reader.onlyKeys(buttress, "roots.buttress", ["height", "thickness"]);
   const branches = section("branches", ["count", "from", "length", "radius", "angle", "arc", "broken", "sides", "rings", "twigs"]);
@@ -881,9 +883,9 @@ function readBranchingTree(obj: RawObject, reader: Reader, common: string[]): Br
   const crown = obj.crown === undefined ? null : readFronds(obj.crown, reader, "crown");
   const bark = section("bark", ["tile", "texture"]);
   const foliageObj = obj.foliage === undefined ? null : reader.object(obj.foliage, "foliage");
-  // A frond crown's atlas is a fern's; leaf clusters' are the broadleaf's.
+  // A frond crown's atlas is a bush's (a fern's, a palm's, a broad leaf's); leaf clusters' are the broadleaf's.
   const readTreeFoliage = (f: RawObject): FoliageTexture | BushTexture => {
-    if (f.builder === "fern") return readBushTexture(f, reader);
+    if (f.builder !== "broadleaf") return readBushTexture(f, reader);
     reader.onlyKeys(f, "foliage", ["builder", "dark", "light", "leaves", "leafLength", "leafWidth"]);
     return {
       builder: reader.oneOf(f, "builder", "foliage", FOLIAGE_BUILDERS),
@@ -929,6 +931,7 @@ function readBranchingTree(obj: RawObject, reader: Reader, common: string[]): Br
       buttress: buttress
         ? { height: reader.number(buttress, "height", "roots.buttress", { min: 0.1 }), thickness: reader.number(buttress, "thickness", "roots.buttress", { min: 0.02 }) }
         : null,
+      stilt: roots.stilt === undefined ? null : reader.range(roots, "stilt", "roots", { allowEqual: true }),
     },
     branches: {
       count: count(branches, "count", "branches"),

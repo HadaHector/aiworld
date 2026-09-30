@@ -1,20 +1,98 @@
-// A bare trunk carrying everything at the top. The fronds are flattened ellipsoids swept out and
-// down from the crown; seven is enough to close the silhouette from any angle without the crown
-// turning into a solid disc.
+// A coconut palm: a tall, slender, ringed trunk, leaning and curving as it rises, bare to the top,
+// and there a crown of long feathery fronds - the upper ones reaching out and up, the lower ones
+// arching over and hanging. The fronds are the fern's (`crown`), long and drooping, their leaflets
+// long and narrow.
 {
-  trunk: { height: 23.5, diameterBottom: 2.0, diameterTop: 0.9, sides: 8, color: [0.44, 0.36, 0.25] },
-  crown: {
-    builder: "frondCrown",
-    count: 7,
-    length: 5.6,
-    width: 1.8,
-    thickness: 0.35,
-    // How far the root of a frond sits from the trunk's axis, before the droop is applied.
-    reach: 4.9,
-    // Radians the frond tips fall below horizontal.
-    droop: 0.5,
-    y: 23.2,
+  model: "branching",
+  variants: 4,
+  trunk: {
+    height: 22,
+    radius: 0.45,
+    topRadius: 0.32,
+    // The lean and the slow curve of a palm that grew towards the light.
+    lean: 0.14,
+    wobble: 0.9,
+    flare: 1.6,
+    flareHeight: 1.4,
+    sides: 8,
+    rings: 10,
   },
-  // The canopy is white; each tree tints it with a random mix of these two.
-  tint: [[0.2, 0.38, 0.15], [0.44, 0.59, 0.24]],
+  roots: { count: 0, length: [1, 1], radius: 0.3, drop: 0.3, sides: 4, rings: 2 },
+  // No branches: the crown is all fronds.
+  branches: {
+    count: [0, 0],
+    from: 0.9,
+    length: [1, 1],
+    radius: 0.5,
+    angle: [30, 30],
+    arc: 0,
+    sides: 4,
+    rings: 2,
+    twigs: { count: [0, 0], length: [0.3, 0.3], angle: [45, 45], sides: 3, rings: 2 },
+  },
+  crown: {
+    count: [14, 20],
+    length: [8, 11],
+    width: 3,
+    // Up and out at the top of the crown, out and hanging below it, arching over to their tips.
+    angle: [35, 115],
+    curl: 55,
+    fold: 0.15,
+    segments: 7,
+  },
+  // Grey-brown, ringed with the scars of old fronds, each ring a little ridge.
+  bark: {
+    tile: 1.6,
+    texture: {
+      bumpStrength: 2,
+      pipeline: {
+        noises: [
+          { name: "rings", type: "worley", tileCycles: 6, stretch: [6, 1], amplitude: 1, mode: "edge", warp: 0.1, sizeJitter: 0.2 },
+          { name: "grain", type: "fbm", octaves: 3, tileCycles: 20, stretch: [1, 4], amplitude: 1, persistence: 0.5, lacunarity: 2 },
+          { name: "mottle", type: "fbm", octaves: 3, tileCycles: 4, amplitude: 1, persistence: 0.5, lacunarity: 2 },
+        ],
+        steps: [
+          { output: "ringEdge", op: "sample", noise: "rings" },
+          { output: "ring", op: "mask", input: "ringEdge", at: 0.12, off: 0.02 },
+          { output: "grainRaw", op: "sample", noise: "grain" },
+          { output: "grain", op: "mask", input: "grainRaw", at: 1.2, off: -1.2 },
+          { output: "mottleRaw", op: "sample", noise: "mottle" },
+          { output: "mottle", op: "mask", input: "mottleRaw", at: 1.5, off: -1.5 },
+          { output: "ringHeight", op: "scale", input: "ring", factor: 0.75 },
+          { output: "grainHeight", op: "scale", input: "grain", factor: 0.25 },
+          { output: "height", op: "add", a: "ringHeight", b: "grainHeight" },
+          {
+            output: "tone",
+            op: "colorRamp",
+            input: "mottle",
+            stops: [
+              { at: 0.0, color: [0.36, 0.31, 0.24] },
+              { at: 0.5, color: [0.48, 0.42, 0.33] },
+              { at: 1.0, color: [0.56, 0.5, 0.4] },
+            ],
+          },
+          { output: "grainShade", op: "remap", input: "grain", inMin: 0, inMax: 1, outMin: 0.88, outMax: 1.06 },
+          { output: "lit", op: "multiply", a: "tone", b: "grainShade" },
+          { output: "scar", op: "color", value: [0.2, 0.16, 0.12] },
+          { output: "diffuse", op: "mix", a: "scar", b: "lit", t: "ring" },
+          { output: "roughness", op: "constant", value: 0.85 },
+        ],
+        outputs: { diffuse: "diffuse", roughness: "roughness", height: "height" },
+      },
+    },
+  },
+  // Long, narrow leaflets, many to a frond and all near one length: a palm's feather.
+  foliage: {
+    builder: "palmFrond",
+    dark: [0.08, 0.24, 0.06],
+    light: [0.4, 0.6, 0.18],
+    stem: [0.4, 0.42, 0.2],
+    stems: [1, 1],
+    leaves: 44,
+    leafLength: 0.5,
+    leafWidth: 0.018,
+    bare: 0,
+  },
+  tint: [[0.88, 0.92, 0.85], [1.08, 1.06, 0.98]],
+  scale: [0.8, 1.2],
 }

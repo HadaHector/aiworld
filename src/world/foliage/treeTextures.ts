@@ -257,7 +257,7 @@ function growStem(
  * spray of leaves.
  */
 export function bakeBushFoliage(seed: number, def: BushTexture, fronds: Fronds | null = null): Uint8Array {
-  if (def.builder === "fern") return bakeFernFoliage(seed, def);
+  if (def.builder === "fern" || def.builder === "palmFrond") return bakeFernFoliage(seed, def);
   if (def.builder === "paddleLeaf" || def.builder === "heartLeaf") return bakeBroadLeafFoliage(seed, def, fronds);
   const size = FOLIAGE_TEXTURE_SIZE;
   const cell = size / 2;
@@ -364,6 +364,7 @@ export function bakeBushFoliage(seed: number, def: BushTexture, fronds: Fronds |
  * darker, so the frond reads as a spray with a front and a back.
  */
 function paintFrond(painter: Painter, rng: () => number, def: BushTexture, clip: Clip, cell: number, x: number, y: number, angle: number, curl: number, length: number, sweep = 0.45): void {
+  const palm = def.builder === "palmFrond";
   const steps = 24;
   const points: { x: number; y: number; heading: number }[] = [];
   let px = x;
@@ -385,13 +386,14 @@ function paintFrond(painter: Painter, rng: () => number, def: BushTexture, clip:
     const by = a.y + (b.y - a.y) * k;
     const heading = a.heading + (b.heading - a.heading) * k;
     // Longest a third of the way up, nothing at the tip, shorter again at the base.
-    const size = Math.sin(Math.PI * Math.pow(t, 0.75)) * (0.7 + rng() * 0.3);
+    // A palm's leaflets are near one length, tapering only towards the tip.
+    const size = palm ? Math.min(1, t * 8) * Math.pow(Math.max(0, 1 - t), 0.35) * (0.93 + rng() * 0.07) : Math.sin(Math.PI * Math.pow(t, 0.75)) * (0.7 + rng() * 0.3);
     const leafLength = def.leafLength * cell * size;
     const leafWidth = def.leafWidth * cell * size;
     if (leafLength < 1.5) return;
-    const tone = Math.min(1, t * 0.6 + rng() * 0.4);
+    const tone = palm ? Math.min(1, 0.35 + t * 0.35 + rng() * 0.1) : Math.min(1, t * 0.6 + rng() * 0.4);
     const base = [0, 1, 2].map((c) => def.dark[c] + (def.light[c] - def.dark[c]) * tone);
-    const brightness = (0.75 + 0.3 * t + rng() * 0.15) * (back ? 0.7 : 1);
+    const brightness = (palm ? 0.85 + 0.15 * t + rng() * 0.05 : 0.75 + 0.3 * t + rng() * 0.15) * (back ? 0.7 : 1);
     for (const side of [-1, 1]) {
       // Out to the side of the stem, swept forward towards its tip.
       const out = heading + side * (Math.PI / 2 - sweep);
