@@ -26,6 +26,7 @@
     // Up steeply, then bending out and over (arc below 0) - the umbrella's ribs.
     angle: [30, 52],
     arc: -0.25,
+    crook: 0.2,
     sides: 6,
     rings: 6,
     // Many long side shoots, spreading out level, to carry the canopy wide.

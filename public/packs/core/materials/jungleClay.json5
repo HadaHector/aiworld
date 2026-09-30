@@ -1,0 +1,10 @@
+// Jungle clay: the red earth (redEarth.json5), wet and dark - bare red-brown soil showing through
+// the litter in patches and on the banks where the slope is too steep to hold it. No grass: in the
+// shade of the forest nothing low grows on it.
+{
+  name: "Jungle Clay",
+  detail: { strength: 0.3 },
+  textureFrom: "redEarth",
+  adjust: { hue: -4, saturation: 1.1, value: 0.72, tint: [1, 0.94, 0.9] },
+  grass: [],
+}

@@ -27,6 +27,7 @@
     radius: 0.55,
     angle: [20, 80],
     arc: 0.12,
+    crook: 0.2,
     sides: 7,
     rings: 6,
     twigs: { count: [3, 4], length: [0.3, 0.5], angle: [45, 80], sides: 4, rings: 3 },

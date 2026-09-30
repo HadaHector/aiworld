@@ -25,6 +25,7 @@
     // Steeply up, bending up further: a narrow crown, not a spreading one.
     angle: [24, 46],
     arc: 0.3,
+    crook: 0.2,
     sides: 5,
     rings: 4,
     twigs: { count: [2, 3], length: [0.35, 0.6], angle: [25, 50], sides: 3, rings: 2 },

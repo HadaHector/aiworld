@@ -46,7 +46,7 @@ export const FOLIAGE_SALT = 801;
 // Bushes: a tighter lattice of their own, under and between the trees. They stay off the trunks and
 // gather in the trees' shade, and are only placed near enough to see - out to the second level of
 // detail (400 units), past which a two-metre bush is a few pixels in the haze.
-export const BUSH_SPACING = 6;
+export const BUSH_SPACING = 3;
 export const BUSH_CANDIDATES_PER_CELL = 3;
 export const BUSH_SALT = 802;
 /** How far a bush keeps from a trunk - clear of the flared base, not of the roots - per unit of the
@@ -201,6 +201,9 @@ export interface BranchingTree {
     arc: number;
     /** The share of branches and twigs snapped off short, their ends left blunt - a dead tree's. */
     broken: number;
+    /** How crooked a branch grows: at every ring it kinks off its line by up to this share of its
+     *  length, the kinks adding up along it - 0 straight, 0.05 gnarled. */
+    crook: number;
     sides: number;
     rings: number;
     twigs: {
@@ -233,6 +236,11 @@ export interface BranchingTree {
   /** A crown of fronds on top of the trunk - a tree fern's - built as a fern bush's (see Fronds),
    *  instead of or as well as leaf clusters. */
   crown: Fronds | null;
+  /** Lianas hung from the limbs: `count` woody strands `radius` thick, each hanging straight down
+   *  `length` metres (never to the ground) from a point along a branch's outer half, or - for a
+   *  `loops` share of them - slung between two such points, sagging. Wood, drawn with the bark;
+   *  left off a distant tree. */
+  vines: { count: [number, number]; length: [number, number]; radius: number; loops: number } | null;
   bark: BarkTexture;
   /** None for a bare tree, which has neither leaves nor a crown. A frond crown's atlas is a fern's
    *  (a BushTexture with the "fern" builder). */

@@ -128,6 +128,15 @@ const cornerScratch = new Vector3();
  * Meshes that opt out of frustum culling (alwaysSelectAsActiveMesh - the tree masters, whose own
  * bounds cover one tree at the origin rather than their thousands of instances) are always kept.
  */
+/**
+ * Marks a mesh as casting into the nearest cascade only: its shadow is drawn close to the camera
+ * and nowhere further out. For the bushes - thousands of them, each small, whose shadows are lost
+ * a little way off anyway, but which drawn into every cascade came to most of a frame's vertices.
+ */
+export function castNearShadowOnly(mesh: AbstractMesh): void {
+  mesh.metadata = { ...(mesh.metadata ?? {}), nearShadowOnly: true };
+}
+
 function cullCastersPerCascade(shadowGenerator: CascadedShadowGenerator): void {
   const shadowMap = shadowGenerator.getShadowMap();
   if (!shadowMap) return;
@@ -139,6 +148,7 @@ function cullCastersPerCascade(shadowGenerator: CascadedShadowGenerator): void {
     kept.length = 0;
     for (let i = 0; i < casterCount; i++) {
       const mesh = casters[i] as AbstractMesh;
+      if (cascade > 0 && mesh.metadata?.nearShadowOnly) continue;
       if (mesh.alwaysSelectAsActiveMesh) {
         kept.push(mesh);
         continue;

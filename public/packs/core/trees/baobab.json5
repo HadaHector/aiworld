@@ -29,6 +29,7 @@
     radius: 0.55,
     angle: [55, 95],
     arc: 0.4,
+    crook: 0.2,
     sides: 7,
     rings: 5,
     // Many short side shoots off every limb, each with its own tuft: a crown of little branches.

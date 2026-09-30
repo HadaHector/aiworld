@@ -7,6 +7,7 @@ import { bakeMaterialTextures } from "../materials/textureBakePool";
 import { TEXTURE_RESOLUTION } from "../materials/textureGen";
 import type { LitShading } from "../materials/litShading";
 import { applyColorMatrix, type ColorMatrix } from "../materials/colorAdjust";
+import { castNearShadowOnly } from "../lighting/sunLighting";
 import { TREE_TINT_WIDTH } from "./treeShaders";
 import type { TreeShade, TreeTintRule } from "./treeTints";
 
@@ -119,9 +120,10 @@ export async function createTreeField(
   const models = treeKinds.flatMap((def) => {
     const kindModels = createTreeModels(scene, def, seed, bakedBark.get(def.id), litShading, prebaked?.atlases?.get(def.id));
     variantCount.set(def.id, kindModels.length);
+    const bush = def.shape.model === "bush";
     return kindModels.flatMap((model, variant) => [
-      { key: speciesKey(def.id, variant, false), model },
-      ...(model.far ? [{ key: speciesKey(def.id, variant, true), model: model.far }] : []),
+      { key: speciesKey(def.id, variant, false), model, bush },
+      ...(model.far ? [{ key: speciesKey(def.id, variant, true), model: model.far, bush }] : []),
     ]);
   });
   // Row 0 changes nothing; then every area's every rule's shades, one row each. A tree names its row
@@ -157,7 +159,7 @@ export async function createTreeField(
     return rule.first + Math.min(rule.count - 1, Math.floor((tree.shade ?? 0) * rule.count));
   };
 
-  for (const { key: kind, model } of models) {
+  for (const { key: kind, model, bush } of models) {
     // The instances cover every chunk that is loaded, which is a disc centred on the player - so a
     // master mesh is in view whenever anything is, and asking whether its bounding box intersects
     // the frustum can only ever answer yes. Computing that box meant transforming every instance on
@@ -170,6 +172,8 @@ export async function createTreeField(
     for (const mesh of meshes) {
       shadowGenerator.addShadowCaster(mesh);
       mesh.receiveShadows = true;
+      // A bush's shadow only near the camera: see castNearShadowOnly.
+      if (bush) castNearShadowOnly(mesh);
     }
     // Starts disabled - see flushSpecies's own setEnabled call for why. A species with nothing
     // loaded yet would otherwise render its bare master mesh once, at its own default transform:

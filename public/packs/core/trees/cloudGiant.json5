@@ -1,0 +1,82 @@
+// A cloud-forest giant: a very tall, crooked tree of the misty mountain jungle - a trunk rising far
+// up, bent this way and that, low buttresses at its foot, great crooked limbs from its upper third
+// under a broad crown of small dark leaves; its bark green with moss, and lianas hanging from every
+// limb - straight down towards the ground, or slung in loops from one limb to the next.
+{
+  model: "branching",
+  variants: 4,
+  trunk: {
+    height: 48,
+    radius: 3,
+    topRadius: 1,
+    lean: 0.05,
+    // Crooked: a slow wander this way and that as it rises.
+    wobble: 2.2,
+    flare: 1.5,
+    flareHeight: 5,
+    sides: 10,
+    rings: 12,
+  },
+  roots: { count: 5, length: [4, 6], radius: 0.5, drop: 0.3, sides: 6, rings: 6, buttress: { height: 3.5, thickness: 1.4 } },
+  branches: {
+    count: [10, 14],
+    from: 0.62,
+    length: [14, 32],
+    radius: 0.5,
+    angle: [45, 120],
+    // Crooked limbs, kinking this way and that, bending back up at their ends.
+    arc: 0.2,
+    crook: 0.36,
+    sides: 7,
+    rings: 10,
+    twigs: { count: [3, 4], length: [0.3, 0.5], angle: [40, 80], sides: 4, rings: 3 },
+  },
+  leaves: { size: [15, 20], cards: 4, alongBranch: 4, top: 2, spread: 3.4, squash: 0.8, level: 0.1 },
+  // Lianas: many hanging, a third looped between limbs.
+  vines: { count: [18, 28], length: [10, 30], radius: 0.13, loops: 0.35 },
+  // Dark bark, thick with moss: bright green cushions over most of it, the bark showing between.
+  bark: {
+    tile: 3,
+    texture: {
+      bumpStrength: 2,
+      pipeline: {
+        noises: [
+          { name: "moss", type: "fbm", octaves: 4, tileCycles: 4, amplitude: 1, persistence: 0.55, lacunarity: 2 },
+          { name: "mossGrain", type: "fbm", octaves: 2, tileCycles: 60, amplitude: 1, persistence: 0.5, lacunarity: 2 },
+          { name: "cracks", type: "worley", tileCycles: 10, stretch: [1, 3], amplitude: 1, mode: "edge", warp: 0.2, sizeJitter: 0.2 },
+        ],
+        steps: [
+          { output: "mossRaw", op: "sample", noise: "moss" },
+          { output: "moss", op: "mask", input: "mossRaw", at: 0.25, off: -0.25 },
+          { output: "grainRaw", op: "sample", noise: "mossGrain" },
+          { output: "grain", op: "mask", input: "grainRaw", at: 1.2, off: -1.2 },
+          { output: "crackEdge", op: "sample", noise: "cracks" },
+          { output: "plate", op: "mask", input: "crackEdge", at: 0.1, off: 0.02 },
+          { output: "mossHeight", op: "scale", input: "moss", factor: 0.6 },
+          { output: "plateHeight", op: "scale", input: "plate", factor: 0.4 },
+          { output: "height", op: "add", a: "mossHeight", b: "plateHeight" },
+          { output: "barkDark", op: "color", value: [0.1, 0.08, 0.06] },
+          { output: "barkLight", op: "color", value: [0.3, 0.26, 0.2] },
+          { output: "barkTone", op: "mix", a: "barkDark", b: "barkLight", t: "plate" },
+          {
+            output: "mossTone",
+            op: "colorRamp",
+            input: "grain",
+            stops: [
+              { at: 0.0, color: [0.14, 0.24, 0.06] },
+              { at: 0.5, color: [0.26, 0.38, 0.1] },
+              { at: 1.0, color: [0.36, 0.48, 0.16] },
+            ],
+          },
+          { output: "diffuse", op: "mix", a: "barkTone", b: "mossTone", t: "moss" },
+          { output: "roughness", op: "constant", value: 0.95 },
+        ],
+        outputs: { diffuse: "diffuse", roughness: "roughness", height: "height" },
+      },
+    },
+  },
+  // Small, dark, leathery leaves.
+  foliage: { builder: "broadleaf", dark: [0.04, 0.13, 0.05], light: [0.24, 0.42, 0.14], leaves: 650, leafLength: 0.06, leafWidth: 0.03 },
+  tint: [[0.85, 0.92, 0.85], [1.1, 1.06, 0.98]],
+  scale: [0.9, 1.2],
+}

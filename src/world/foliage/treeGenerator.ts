@@ -436,6 +436,8 @@ export function generateTree(spec: BranchingTree, seed: number, detail: TreeDeta
 
   // --- branches and twigs ---
   const clusterPoints: V3[] = [];
+  // Where along the limbs a vine can hang from - no draws, so a tree without vines is unchanged.
+  const perches: V3[] = [];
   const branchCount = intBetween(branches.count);
   for (let b = 0; b < branchCount; b++) {
     const t = Math.min(0.97, branches.from + (1 - branches.from) * ((b + rng()) / branchCount));
@@ -452,6 +454,10 @@ export function generateTree(spec: BranchingTree, seed: number, detail: TreeDeta
 
     const points: V3[] = [];
     const radii: number[] = [];
+    // Crooked: a kink off the line at every ring, the kinks adding up - from a stream of the
+    // branch's own, so a kind that grows straight is the same tree it always was.
+    const crookRng = branches.crook > 0 ? mulberry32((seed ^ Math.imul(b + 1, 0x9e3779b1)) >>> 0) : null;
+    let bent: V3 = [0, 0, 0];
     for (let i = 0; i <= branches.rings; i++) {
       // A snapped branch is the same branch ending short - still thick where it broke.
       const s = (i / branches.rings) * kept;
@@ -459,7 +465,12 @@ export function generateTree(spec: BranchingTree, seed: number, detail: TreeDeta
       const along = scale(direction, fullLength * s);
       const lift: V3 = [0, branches.arc * fullLength * s * s, 0];
       const drift = scale(side, wander * fullLength * s * s);
-      points.push(add(add(add(start, along), lift), drift));
+      if (crookRng && i > 0) {
+        const kink: V3 = [crookRng() - 0.5, crookRng() - 0.5, crookRng() - 0.5];
+        const across = sub(kink, scale(direction, dot(kink, direction)));
+        bent = add(bent, scale(across, (2 * branches.crook * fullLength * kept) / branches.rings));
+      }
+      points.push(add(add(add(add(start, along), lift), drift), bent));
       radii.push(startRadius * (1 - 0.78 * s));
     }
     limb(points, radii, branches.sides, kept < 1);
@@ -499,6 +510,7 @@ export function generateTree(spec: BranchingTree, seed: number, detail: TreeDeta
       clusterPoints.push(twigPoints[twigPoints.length - 1]);
     }
 
+    if (spec.vines) for (const s of [0.35, 0.55, 0.75, 0.92]) perches.push(branchAt(s).point);
     if (leaves) for (let a = 0; a < leaves.alongBranch; a++) clusterPoints.push(branchAt(0.55 + rng() * 0.35).point);
   }
 
@@ -540,6 +552,45 @@ export function generateTree(spec: BranchingTree, seed: number, detail: TreeDeta
     }
   } else if (!spec.crown) {
     for (let i = 1; i < wood.positions.length; i += 3) foliageTop = Math.max(foliageTop, wood.positions[i]);
+  }
+
+  // --- vines ---
+  // Lianas: hanging straight down from a limb, swaying a little as they go, stopping short of the
+  // ground - or slung from one limb to another, sagging between. From a stream of their own, so
+  // the rest of the tree is the same with them or without.
+  if (spec.vines && perches.length > 0 && !far) {
+    const vineRng = mulberry32((seed ^ 0x2f1a3c5) >>> 0);
+    const pick = (): V3 => perches[Math.floor(vineRng() * perches.length)];
+    const { vines } = spec;
+    const vineCount = Math.floor(vines.count[0] + vineRng() * (vines.count[1] - vines.count[0] + 1));
+    const rings = 10;
+    for (let v = 0; v < vineCount; v++) {
+      const from = pick();
+      const points: V3[] = [];
+      if (vineRng() < vines.loops && perches.length > 1) {
+        const to = pick();
+        const span = Math.hypot(...sub(to, from));
+        if (span < 1) continue;
+        const sag = span * (0.25 + vineRng() * 0.5);
+        for (let i = 0; i <= rings; i++) {
+          const s = i / rings;
+          const p = add(scale(from, 1 - s), scale(to, s));
+          points.push([p[0], p[1] - sag * 4 * s * (1 - s), p[2]]);
+        }
+      } else {
+        const length = Math.min(from[1] - 0.8, vines.length[0] + vineRng() * (vines.length[1] - vines.length[0]));
+        if (length < 1) continue;
+        const driftX = (vineRng() - 0.5) * 0.2;
+        const driftZ = (vineRng() - 0.5) * 0.2;
+        const phase = vineRng() * Math.PI * 2;
+        for (let i = 0; i <= rings; i++) {
+          const s = i / rings;
+          const wiggle = Math.sin(s * 5 + phase) * 0.25 * s;
+          points.push([from[0] + (driftX * length + wiggle) * s, from[1] - length * s, from[2] + (driftZ * length + wiggle * 0.7) * s]);
+        }
+      }
+      wood.tube(points, points.map((_, i) => vines.radius * (1 - 0.3 * (i / rings))), 3, bark.tile);
+    }
   }
 
   // --- a frond crown ---

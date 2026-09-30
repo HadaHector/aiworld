@@ -32,6 +32,7 @@
     // Out nearly level, then bending back up at their ends.
     angle: [62, 86],
     arc: 0.5,
+    crook: 0.2,
     sides: 9,
     rings: 7,
     twigs: { count: [2, 3], length: [0.3, 0.5], angle: [35, 65], sides: 5, rings: 3 },

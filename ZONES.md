@@ -121,6 +121,10 @@ Existing: **broadleaf**, **pine**, **palm**.
   at the water, sandy patches inland; mangroves (new: stilt roots, `roots.stilt`; `wetFeet`, which
   lets a kind stand in the shallows) in stands along the waterline; the odd banana and elephant ear;
   bright light and a sea haze.
+- **Cloud forest: done** - `biomes/cloudForest.json5`. Steep, set low so pools stand in the valleys;
+  very tall, crooked cloud giants (new: `vines` - lianas hung and looped from the limbs; `crook` -
+  crooked limbs, now on every branching tree) green with moss; tree ferns; giant ferns, ferns and
+  elephant ears almost everywhere; half the floor bare red `jungleClay` (new); the thickest mist.
 
 | Variant | Ground | Plants | Trees | Extras |
 |---|---|---|---|---|

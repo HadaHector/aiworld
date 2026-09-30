@@ -862,7 +862,7 @@ function readConiferTree(obj: RawObject, reader: Reader, common: string[]): Coni
 }
 
 function readBranchingTree(obj: RawObject, reader: Reader, common: string[]): BranchingTree {
-  reader.onlyKeys(obj, "", [...common, "variants", "trunk", "roots", "branches", "leaves", "crown", "bark", "foliage"]);
+  reader.onlyKeys(obj, "", [...common, "variants", "trunk", "roots", "branches", "leaves", "crown", "vines", "bark", "foliage"]);
   const section = (key: string, keys: string[]): RawObject => {
     const value = reader.object(obj[key], key);
     reader.onlyKeys(value, key, keys);
@@ -872,7 +872,7 @@ function readBranchingTree(obj: RawObject, reader: Reader, common: string[]): Br
   const roots = section("roots", ["count", "length", "radius", "drop", "sides", "rings", "buttress", "stilt"]);
   const buttress = roots.buttress === undefined ? null : reader.object(roots.buttress, "roots.buttress");
   if (buttress) reader.onlyKeys(buttress, "roots.buttress", ["height", "thickness"]);
-  const branches = section("branches", ["count", "from", "length", "radius", "angle", "arc", "broken", "sides", "rings", "twigs"]);
+  const branches = section("branches", ["count", "from", "length", "radius", "angle", "arc", "broken", "crook", "sides", "rings", "twigs"]);
   const twigs = reader.object(branches.twigs, "branches.twigs");
   reader.onlyKeys(twigs, "branches.twigs", ["count", "length", "angle", "sides", "rings"]);
   // A bare tree - a dead one - has neither leaves (nor a frond crown) nor the foliage they are cut from.
@@ -881,6 +881,7 @@ function readBranchingTree(obj: RawObject, reader: Reader, common: string[]): Br
   const bare = obj.leaves === undefined;
   const leaves = bare ? {} : section("leaves", ["size", "cards", "alongBranch", "top", "spread", "squash", "level"]);
   const crown = obj.crown === undefined ? null : readFronds(obj.crown, reader, "crown");
+  const vinesObj = obj.vines === undefined ? null : section("vines", ["count", "length", "radius", "loops"]);
   const bark = section("bark", ["tile", "texture"]);
   const foliageObj = obj.foliage === undefined ? null : reader.object(obj.foliage, "foliage");
   // A frond crown's atlas is a bush's (a fern's, a palm's, a broad leaf's); leaf clusters' are the broadleaf's.
@@ -941,6 +942,7 @@ function readBranchingTree(obj: RawObject, reader: Reader, common: string[]): Br
       angle: reader.range(branches, "angle", "branches", { allowEqual: true }),
       arc: reader.number(branches, "arc", "branches"),
       broken: optional(branches, "broken", "branches", 0, { min: 0, max: 1 }),
+      crook: optional(branches, "crook", "branches", 0, { min: 0, max: 0.5 }),
       sides: sides(branches, "branches"),
       rings: rings(branches, "branches"),
       twigs: {
@@ -963,6 +965,14 @@ function readBranchingTree(obj: RawObject, reader: Reader, common: string[]): Br
           level: optional(leaves, "level", "leaves", 0, { min: 0, max: 1 }),
         },
     crown,
+    vines: vinesObj
+      ? {
+          count: count(vinesObj, "count", "vines"),
+          length: reader.range(vinesObj, "length", "vines", { allowEqual: true }),
+          radius: reader.number(vinesObj, "radius", "vines", { min: 0.01 }),
+          loops: reader.optionalNumber(vinesObj, "loops", "vines", 0.3, { min: 0, max: 1 }),
+        }
+      : null,
     bark: {
       tile: reader.number(bark, "tile", "bark", { min: 0.1 }),
       texture: readTexture(bark.texture, reader, "bark.texture"),

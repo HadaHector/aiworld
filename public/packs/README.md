@@ -336,7 +336,9 @@ branches and on top. Its sections:
   `core/trees/mangrove.json5`)
 - `branches`: `count`, `from` (fraction of the trunk's height), `length`, `radius`, `angle` (degrees
   from vertical), `arc` (how much they curve back up; below 0, over and outwards), `sides`, `rings`,
-  `twigs` likewise, and optionally `broken` - the share of branches and twigs snapped off short
+  `twigs` likewise, and optionally `broken` - the share of branches and twigs snapped off short - and
+  `crook` - how crooked a limb grows: it kinks off its line at every ring by up to this share of its
+  length, the kinks adding up (0 straight, 0.2 gnarled, 0.36 a cloud-forest giant's)
 - `leaves`: `size` of a card, `cards` per clump, clumps `alongBranch` and on `top`, `spread`, and
   optionally `squash` (a clump's height for its width: below 1, flattened) and `level` (0-1, how far
   every clump is pulled up to the crown's top layer - with a low `squash`, an acacia's umbrella)
@@ -344,6 +346,11 @@ branches and on top. Its sections:
   material's - u runs around a limb, v along it
 - `foliage`: the `broadleaf` clump texture - `dark`/`light`, `leaves` per clump, `leafLength`/`leafWidth`
 - `variants`: how many different trees are generated from all this; each placed tree is one of them
+
+`vines: { count, length, radius, loops }` hangs lianas from the limbs (see
+`core/trees/cloudGiant.json5`): woody strands dropping `length` metres from along a branch's outer
+half, stopping short of the ground, or - a `loops` share of them - slung between two limbs, sagging.
+They are drawn with the bark, and left off a distant tree.
 
 Leave out both `leaves` and `foliage` for a bare tree - all wood, no leaves (see
 `core/trees/deadTree.json5`).
@@ -416,7 +423,8 @@ top catches a gloss.
 
 Any bush can grow in beds: `bed: { plants, spread }` places `plants` (a range) of it together, the
 others up to `spread` metres (times its scale) round the first, each its own size and turn and
-standing on its own ground - the bush lattice alone keeps bushes some 6 m apart.
+standing on its own ground - the bush lattice alone keeps bushes some 3 m apart. A bush casts its
+shadow only near the camera.
 
 Boulders (`rocks/<id>.json5`, see `core/rocks/boulder.json5`) are generated lumps of stone: a
 sphere of `radius` metres swollen and dented by `lumps` (a fraction of the radius), narrowed towards

@@ -25,6 +25,7 @@
     // Every angle, some near level: a tree that grew towards the light it had, not a shape.
     angle: [30, 85],
     arc: 0.45,
+    crook: 0.2,
     // A third of the limbs broken off, and their twigs with them.
     broken: 0.35,
     sides: 6,

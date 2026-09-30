@@ -26,6 +26,7 @@
     // Up and out, bending up: a rounded dome.
     angle: [35, 62],
     arc: 0.45,
+    crook: 0.2,
     sides: 7,
     rings: 5,
     twigs: { count: [2, 3], length: [0.35, 0.55], angle: [30, 60], sides: 4, rings: 2 },
