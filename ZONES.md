@@ -111,6 +111,13 @@ Existing: **broadleaf**, **pine**, **palm**.
 
 ### 3. Jungle (rolling to hilly) - new
 
+- **Rainforest: done** - `biomes/rainforest.json5`. A broadleaf canopy with kapoks (new: buttress
+  roots, `roots.buttress`) towering over it; tree ferns tall and young (new: a frond `crown` on a
+  trunk) in the damp stretches; on a new wet, dark `jungleFloor`, giant ferns and elephant ears
+  (new: fronds on a `stalk`, the `heartLeaf` atlas) in beds with open ground between, wild bananas
+  (the `paddleLeaf` atlas) by the water; mud banks; a close green haze. Hills or valleys, never flat.
+- **Later:** palms rebuilt on the frond crown.
+
 | Variant | Ground | Plants | Trees | Extras |
 |---|---|---|---|---|
 | Rainforest | leafyGrass, mud | tall grass, ferns ★ | jungle giant ★, tree fern ★, palm | mist ★ |

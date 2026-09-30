@@ -133,6 +133,7 @@ in vec3 position;
 in vec3 normal;
 in vec2 uv;
 in float lie;
+in float flex;
 in vec4 instanceColor;
 ${INSTANCED_WORLD}
 
@@ -143,6 +144,8 @@ uniform float treeHeight;
 out vec3 vWorldPosition;
 out vec3 vNormal;
 out float vLie;
+// 1 on a frond, whose normal is its surface's own (not the crown's), so it has an underside.
+out float vFrond;
 out vec2 vUV;
 out vec3 vTint;
 out float vViewDepth;
@@ -153,9 +156,10 @@ void main() {
   vec4 worldPosition = finalWorld * vec4(position, 1.0);
 
   // The whole crown sways with the wind, more the higher up, each tree on its own phase; on top of
-  // that each card flutters a little on its own.
+  // that each card flutters a little on its own. A frond bends from its root instead: still where
+  // it grows, however high up that is, swaying most at its tip.
   vec3 origin = finalWorld[3].xyz;
-  float reach = clamp(position.y / treeHeight, 0.0, 1.0);
+  float reach = flex < 0.0 ? clamp(position.y / treeHeight, 0.0, 1.0) : flex;
   float sway = sin(time * 0.9 + origin.x * 0.05 + origin.z * 0.07) * 0.6 * reach * reach;
   float flutter = sin(time * 3.1 + dot(position, vec3(1.7, 2.3, 1.1))) * 0.12 * reach;
   worldPosition.xz += windDirection * (sway + flutter);
@@ -167,6 +171,7 @@ void main() {
   vTintRow = instanceColor.a;
   vWorldPosition = worldPosition.xyz;
   vLie = lie;
+  vFrond = flex < 0.0 ? 0.0 : 1.0;
   vViewDepth = (view * worldPosition).z;
   gl_Position = viewProjection * worldPosition;
 }
@@ -179,6 +184,7 @@ ${LIT_SHADING_GLSL}
 in vec3 vWorldPosition;
 in vec3 vNormal;
 in float vLie;
+in float vFrond;
 in vec2 vUV;
 in vec3 vTint;
 in float vViewDepth;
@@ -217,17 +223,26 @@ void main() {
     albedo = mix(albedo, snowColor, clamp(cover * 1.3, 0.0, 1.0));
   }
   vec3 lightDir = normalize(lightDirection);
+  vec3 toCamera = normalize(cameraPosition - vWorldPosition);
+  // A frond seen from below shows its underside, which is lit through the leaf: half the light its
+  // top gets. Its normal stays the top's for that, turned to face the camera only for the shadow.
+  float underside = vFrond > 0.5 && dot(n, toCamera) < 0.0 ? 1.0 : 0.0;
   // Wrapped lighting on the crown's own normal: the sunny side bright, the far side falling off
   // softly rather than to black, the crown shading as one rounded mass.
   float wrapped = clamp(dot(n, lightDir) * 0.5 + 0.5, 0.0, 1.0);
-  float diffuse = wrapped * wrapped * 1.15 * lightIntensity;
+  float diffuse = wrapped * wrapped * 1.15 * lightIntensity * (1.0 - underside * 0.5);
   // Looking towards the sun through the crown, the leaves glow a little.
-  vec3 toCamera = normalize(cameraPosition - vWorldPosition);
   float through = pow(max(dot(-toCamera, lightDir), 0.0), 4.0) * 0.35 * lightIntensity;
   // The underside of a crown is darker than its top.
-  float occlusion = mix(0.6, 1.0, n.y * 0.5 + 0.5);
+  float occlusion = mix(0.6, 1.0, n.y * 0.5 + 0.5) * (1.0 - underside * 0.25);
+  if (underside > 0.5) n = -n;
   float shadow = computeShadow(vWorldPosition, n, vViewDepth);
   vec3 lit = albedo * ((diffuse + through) * lightColor * shadow + ambientColor * ambientIntensity * occlusion);
+  // A broad leaf's waxy top catches the sun.
+  if (vFrond > 0.5 && underside < 0.5) {
+    float gloss = pow(max(dot(n, normalize(lightDir + toCamera)), 0.0), 40.0) * 0.35 * lightIntensity;
+    lit += lightColor * gloss * shadow;
+  }
   outColor = vec4(applyFog(lit, length(vWorldPosition - cameraPosition)), 1.0);
 }
 `;

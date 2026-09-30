@@ -178,6 +178,10 @@ export interface BranchingTree {
     drop: number;
     sides: number;
     rings: number;
+    /** Buttress roots - a jungle giant's - instead of round ones: each a tall, thin plank standing
+     *  on edge, `height` metres up the trunk where it leaves it, curving down to the ground at its
+     *  end, `thickness` metres through. `radius` is then unused. */
+    buttress: { height: number; thickness: number } | null;
   };
   branches: {
     count: [number, number];
@@ -222,9 +226,13 @@ export interface BranchingTree {
      *  acacia's umbrella. */
     level: number;
   } | null;
+  /** A crown of fronds on top of the trunk - a tree fern's - built as a fern bush's (see Fronds),
+   *  instead of or as well as leaf clusters. */
+  crown: Fronds | null;
   bark: BarkTexture;
-  /** None for a bare tree, which has no leaves. */
-  foliage: FoliageTexture | null;
+  /** None for a bare tree, which has neither leaves nor a crown. A frond crown's atlas is a fern's
+   *  (a BushTexture with the "fern" builder). */
+  foliage: FoliageTexture | BushTexture | null;
 }
 
 /** A tree's bark: a texture graph like a ground material's (diffuse, roughness, height), with u
@@ -361,7 +369,17 @@ export interface Fronds {
   fold: number;
   /** Quads along a frond. */
   segments: number;
+  /** A bare stalk before the blade - a banana's or an elephant ear's leaf on its stem - `length`
+   *  metres of it (before the frond's own `length`), `width` across. It shows the bottom
+   *  FROND_STALK_SHARE of the atlas cell, down its middle, where a broad-leaf atlas paints it. None,
+   *  a fern: leaflets from the root. */
+  stalk: { length: [number, number]; width: number } | null;
 }
+
+/** The bottom share of a broad-leaf atlas cell given to its stalk, and the stalk's half-width there
+ *  as a share of the cell's width - painted by treeTextures.ts, laid on by generateFronds. */
+export const FROND_STALK_SHARE = 0.12;
+export const FROND_STALK_HALF_WIDTH = 0.03;
 
 /**
  * A bed: each placed bush of the kind comes with more of it round it - `plants` in all, the others
@@ -378,8 +396,14 @@ export interface BushBed {
  * With the `fern` builder, for a plant built of `fronds`, it is four single fronds instead: `leaves`
  * pairs of leaflets down each, `leafLength`/`leafWidth` the longest leaflet's size.
  */
+/**
+ * `paddleLeaf` and `heartLeaf` paint one broad leaf per cell, stalk at the bottom: a banana's long
+ * paddle, torn into strips from its edges (`leaves` tears), or an elephant ear's heart, with
+ * `leaves` veins fanning from the stalk. `leafWidth` is the blade's half-width as a share of the
+ * cell's; `leafLength`, `stems` and `bare` are unused.
+ */
 export interface BushTexture {
-  builder: "leafyBush" | "fern";
+  builder: "leafyBush" | "fern" | "paddleLeaf" | "heartLeaf";
   /** Leaves range between these, lighter towards the top and the rim. */
   dark: ColorTuple;
   light: ColorTuple;
@@ -395,7 +419,7 @@ export interface BushTexture {
   bare: number;
 }
 
-export const BUSH_FOLIAGE_BUILDERS = ["leafyBush", "fern"] as const;
+export const BUSH_FOLIAGE_BUILDERS = ["leafyBush", "fern", "paddleLeaf", "heartLeaf"] as const;
 
 /**
  * A boulder: a lump of stone standing on the ground, scattered on the trees' lattice (a pack's

@@ -1,0 +1,83 @@
+// A kapok: the rainforest's emergent giant. A straight, bare, pale trunk rising far above everything
+// else, braced at its foot by great plank buttresses running out across the ground, and at its top
+// great limbs spreading out and up under a broad dome of a crown. Few of them, and far apart - the
+// floor under them stays open.
+{
+  model: "branching",
+  variants: 4,
+  trunk: {
+    height: 38,
+    radius: 2,
+    topRadius: 1,
+    lean: 0.02,
+    wobble: 0.4,
+    flare: 1.55,
+    flareHeight: 6,
+    sides: 10,
+    rings: 10,
+  },
+  // Planks on edge, from high on the trunk out across the ground.
+  roots: { count: 6, length: [7, 10], radius: 0.5, drop: 0.2, sides: 8, rings: 8, buttress: { height: 6.5, thickness: 2.1 } },
+  branches: {
+    // Great limbs from the upper trunk, rising and spreading - the lower ones out wide, the upper
+    // ones steeper - to hold up a dome.
+    count: [7, 9],
+    from: 0.7,
+    length: [15, 21],
+    radius: 0.55,
+    angle: [20, 80],
+    arc: 0.12,
+    sides: 7,
+    rings: 6,
+    twigs: { count: [3, 4], length: [0.3, 0.5], angle: [45, 80], sides: 4, rings: 3 },
+  },
+  // A broad dome: clusters all over the limbs' outer halves and on top, only a little flattened.
+  leaves: { size: [12, 16], cards: 2, alongBranch: 4, top: 2, spread: 2.2, squash: 0.65, level: 0.2 },
+  // Smooth, pale grey bark: faint horizontal creases, patches of pale lichen.
+  bark: {
+    tile: 4,
+    texture: {
+      bumpStrength: 1.2,
+      pipeline: {
+        noises: [
+          { name: "mottle", type: "fbm", octaves: 4, tileCycles: 5, amplitude: 1, persistence: 0.5, lacunarity: 2 },
+          { name: "creases", type: "fbm", octaves: 3, tileCycles: 10, stretch: [6, 1], amplitude: 1, persistence: 0.5, lacunarity: 2 },
+          { name: "lichen", type: "fbm", octaves: 3, tileCycles: 3, amplitude: 1, persistence: 0.5, lacunarity: 2 },
+        ],
+        steps: [
+          { output: "mottleRaw", op: "sample", noise: "mottle" },
+          { output: "mottle", op: "mask", input: "mottleRaw", at: 1.5, off: -1.5 },
+          { output: "creaseRaw", op: "sample", noise: "creases" },
+          { output: "crease", op: "mask", input: "creaseRaw", at: 1.2, off: -1.2 },
+          { output: "lichenRaw", op: "sample", noise: "lichen" },
+          { output: "lichen", op: "mask", input: "lichenRaw", at: 0.7, off: 0.2 },
+          { output: "creaseHeight", op: "scale", input: "crease", factor: 0.6 },
+          { output: "mottleHeight", op: "scale", input: "mottle", factor: 0.2 },
+          { output: "lichenHeight", op: "scale", input: "lichen", factor: 0.2 },
+          { output: "bump", op: "add", a: "creaseHeight", b: "mottleHeight" },
+          { output: "height", op: "add", a: "bump", b: "lichenHeight" },
+          {
+            output: "barkTone",
+            op: "colorRamp",
+            input: "mottle",
+            stops: [
+              { at: 0.0, color: [0.44, 0.43, 0.39] },
+              { at: 0.5, color: [0.56, 0.54, 0.49] },
+              { at: 1.0, color: [0.64, 0.62, 0.56] },
+            ],
+          },
+          { output: "creaseShade", op: "remap", input: "crease", inMin: 0, inMax: 1, outMin: 0.85, outMax: 1.05 },
+          { output: "shaded", op: "multiply", a: "barkTone", b: "creaseShade" },
+          { output: "lichenColor", op: "color", value: [0.7, 0.72, 0.6] },
+          { output: "diffuse", op: "mix", a: "shaded", b: "lichenColor", t: "lichen" },
+          { output: "roughness", op: "constant", value: 0.8 },
+        ],
+        outputs: { diffuse: "diffuse", roughness: "roughness", height: "height" },
+      },
+    },
+  },
+  // Mid-sized, glossy, deep green leaves.
+  foliage: { builder: "broadleaf", dark: [0.05, 0.15, 0.05], light: [0.3, 0.5, 0.16], leaves: 500, leafLength: 0.07, leafWidth: 0.035 },
+  tint: [[0.85, 0.92, 0.85], [1.1, 1.08, 1.0]],
+  scale: [0.85, 1.25],
+}

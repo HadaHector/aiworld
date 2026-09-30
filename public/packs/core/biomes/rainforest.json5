@@ -1,0 +1,240 @@
+/**
+ * Rainforest - the jungle family's first variant (see ZONES.md): a closed, high canopy of broadleaf
+ * with here and there a kapok standing far above it on its buttresses, tree ferns under it, and on
+ * the dark, wet floor giant ferns in beds, elephant ears in the gaps and wild bananas along the
+ * water - a green haze of mist over all of it. Built to be walked through: the giants are few and
+ * far apart, their floor open, the undergrowth in beds with open ground between.
+ */
+{
+  name: "Rainforest",
+  voice: "shaded",
+  spawnWeight: 2,
+  lakeChance: 0.05,
+  borderType: "mountain",
+  settlement: "timber",
+  // Each area its own lie of the land: rolling jungle hills, or hill country cut by wide valleys (the
+  // hills' basins) - never flat.
+  height: {
+    oneOf: [
+      { generator: "detailHeight", amplitude: { range: [32, 50] }, frequency: 0.0014, offset: 27 },
+      {
+        noises: [
+          { name: "hills", type: "fbm", octaves: 5, frequency: 0.0021, amplitude: { range: [44, 66] }, persistence: 0.35, lacunarity: 2.0 },
+          { name: "basin", type: "fbm", octaves: 3, frequency: 0.0006, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+          { name: "floor", type: "fbm", octaves: 3, frequency: 0.003, amplitude: 4, persistence: 0.45, lacunarity: 2.0 },
+        ],
+        steps: [
+          { output: "hillsRaw", op: "sample", noise: "hills" },
+          { output: "hill", op: "offset", input: "hillsRaw", amount: 46 },
+          // The valley floor: 14 m and a few metres of gentle swell.
+          { output: "floorRaw", op: "sample", noise: "floor" },
+          { output: "floor", op: "offset", input: "floorRaw", amount: 14 },
+          { output: "basinRaw", op: "sample", noise: "basin" },
+          { output: "hilliness", op: "remap", input: "basinRaw", inMin: { range: [-0.35, -0.1] }, inMax: { range: [0.2, 0.4] }, outMin: 0, outMax: 1 },
+          { output: "hillShare", op: "clamp", input: "hilliness", min: 0, max: 1 },
+          { output: "rise", op: "subtract", a: "hill", b: "floor" },
+          { output: "shareOfRise", op: "multiply", a: "rise", b: "hillShare" },
+          { output: "result", op: "add", a: "floor", b: "shareOfRise" },
+        ],
+      },
+    ],
+  },
+  // The canopy: broadleaf, closed but for clearings; the odd kapok towering over it; tree ferns,
+  // tall and young, under it and thickest in the damp stretches; palms out in the clearings.
+  trees: {
+    noises: [
+      { name: "stand", type: "fbm", octaves: 3, frequency: 0.0035, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+      { name: "damp", type: "fbm", octaves: 2, frequency: 0.006, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+    ],
+    steps: [
+      { output: "standRaw", op: "sample", noise: "stand" },
+      { output: "coverRamp", op: "remap", input: "standRaw", inMin: { range: [-1.4, -1.1] }, inMax: -0.55, outMin: 0, outMax: 1 },
+      { output: "cover", op: "clamp", input: "coverRamp", min: 0, max: 1 },
+      { output: "open", op: "invert", input: "cover" },
+      { output: "broadleaf", op: "scale", input: "cover", factor: { range: [0.5, 0.7] } },
+      { output: "kapok", op: "scale", input: "cover", factor: { range: [0.12, 0.2] } },
+      { output: "dampRaw", op: "sample", noise: "damp" },
+      { output: "damp", op: "mask", input: "dampRaw", at: 0.1, off: -0.5 },
+      { output: "shadedDamp", op: "multiply", a: "cover", b: "damp" },
+      { output: "treeFern", op: "scale", input: "shadedDamp", factor: { range: [0.15, 0.3] } },
+      { output: "treeFernShort", op: "scale", input: "shadedDamp", factor: { range: [0.1, 0.2] } },
+      { output: "palm", op: "scale", input: "open", factor: { range: [0.05, 0.15] } },
+    ],
+    outputs: { broadleaf: "broadleaf", kapok: "kapok", treeFern: "treeFern", treeFernShort: "treeFernShort", palm: "palm" },
+  },
+  // The undergrowth, in beds with open ground between - kept to its patches so there is always a
+  // way through: giant ferns in the shade, elephant ears in their own clumps, wild bananas thickest
+  // along the water.
+  bushes: {
+    noises: [
+      { name: "bed", type: "fbm", octaves: 2, frequency: 0.03, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+      { name: "kind", type: "fbm", octaves: 2, frequency: 0.012, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+    ],
+    steps: [
+      { output: "bedRaw", op: "sample", noise: "bed" },
+      { output: "bed", op: "mask", input: "bedRaw", at: 0.25, off: -0.05 },
+      { output: "kindRaw", op: "sample", noise: "kind" },
+      { output: "fernSide", op: "mask", input: "kindRaw", at: 0.25, off: -0.15 },
+      { output: "earSide", op: "invert", input: "fernSide" },
+      { output: "ferns", op: "multiply", a: "bed", b: "fernSide" },
+      { output: "giantFern", op: "scale", input: "ferns", factor: { range: [1.0, 1.5] } },
+      { output: "ears", op: "multiply", a: "bed", b: "earSide" },
+      { output: "elephantEar", op: "scale", input: "ears", factor: { range: [0.7, 1.1] } },
+      // Bananas by the water: along rivers, round lakes.
+      { output: "riverGap", op: "input", name: "riverGap" },
+      { output: "nearRiver", op: "mask", input: "riverGap", at: 70, off: 120 },
+      { output: "height", op: "input", name: "height" },
+      { output: "low", op: "mask", input: "height", at: 2, off: 6 },
+      { output: "waterside", op: "max", a: "nearRiver", b: "low" },
+      { output: "banana", op: "scale", input: "waterside", factor: { range: [0.25, 0.5] } },
+    ],
+    outputs: { giantFern: "giantFern", elephantEar: "elephantEar", banana: "banana" },
+  },
+  // Moss-grown boulders, gathered where the ground drops and by the water.
+  rocks: { generator: "rockDensity", kind: "mossyBoulder", frequency: 0.006, openAt: 0.2, fullAt: 0.8, peak: { range: [0.008, 0.025] }, footOfSlope: { range: [0.3, 0.6] }, riverShore: { range: [0.5, 1] }, lakeShore: { range: [0.5, 1] } },
+  treeTints: [
+    { kinds: ["mossyBoulder"], stone: { hue: { range: [-12, 12] }, saturation: { range: [0.7, 1.4] }, value: { range: [0.8, 1.0] }, spread: { hue: 6, saturation: 0.25, value: 0.15 } } },
+    {
+      // Deep, saturated greens: blue-green in one area, a fresher yellow-green in the next.
+      leaves: { hue: { range: [-10, 20] }, saturation: { range: [1.0, 1.35] }, value: { range: [0.85, 1.05] }, spread: { hue: 8, saturation: 0.12, value: 0.1 } },
+      bark: { hue: { range: [-8, 8] }, saturation: { range: [0.8, 1.1] }, value: { range: [0.85, 1.05] }, spread: { value: 0.08 } },
+    },
+  ],
+  ground: {
+    // Clearings grown over with leafy grass.
+    base: "leafyGrass",
+    road: "track",
+    adjust: { hue: { range: [-6, 10] }, saturation: { range: [0.95, 1.2] }, value: { range: [0.9, 1.02] } },
+    layers: [
+      // Under the trees, the ground is the jungle's own: wet, dark litter rather than grass. treeCover is the tree scatter's own density here, so the floor follows the stands
+      // and their clearings stay grass - frayed by a slow noise where the wood thins, so its edge wanders in and
+      // out in tongues and islands instead of tracing the cover's contour. The leafy grass reads
+      // the same noise (it is `shared`), so the two meet along one edge.
+      {
+        id: "jungle-floor",
+        material: "jungleFloor",
+        weight: {
+          noises: [{ name: "fray", shared: "jungleEdge", type: "fbm", octaves: 3, frequency: 0.03, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
+          steps: [
+            { output: "cover", op: "input", name: "treeCover" },
+            // Frayed only where the wood is thinning: nothing deep in the wood or out in the meadow.
+            { output: "open", op: "invert", input: "cover" },
+            { output: "thinning", op: "multiply", a: "cover", b: "open" },
+            { output: "frayRaw", op: "sample", noise: "fray" },
+            { output: "frayHere", op: "multiply", a: "frayRaw", b: "thinning" },
+            { output: "frayShift", op: "scale", input: "frayHere", factor: 1.4 },
+            { output: "frayed", op: "add", a: "cover", b: "frayShift" },
+            { output: "result", op: "mask", input: "frayed", at: 0.95, off: 0.55 },
+          ],
+        },
+      },
+
+      // The wood's edge: leaves over grass, a wide band of it between meadow and forest floor,
+      // rising as the meadow's share falls and giving way exactly as the floor's rises.
+      {
+        id: "jungle-edge",
+        material: "leafyGrass",
+        weight: {
+          noises: [{ name: "fray", shared: "jungleEdge", type: "fbm", octaves: 3, frequency: 0.03, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
+          steps: [
+            { output: "cover", op: "input", name: "treeCover" },
+            // Frayed only where the wood is thinning: nothing deep in the wood or out in the meadow.
+            { output: "open", op: "invert", input: "cover" },
+            { output: "thinning", op: "multiply", a: "cover", b: "open" },
+            { output: "frayRaw", op: "sample", noise: "fray" },
+            { output: "frayHere", op: "multiply", a: "frayRaw", b: "thinning" },
+            { output: "frayShift", op: "scale", input: "frayHere", factor: 1.4 },
+            { output: "frayed", op: "add", a: "cover", b: "frayShift" },
+            { output: "rising", op: "mask", input: "frayed", at: 0.3, off: 0.03 },
+            { output: "falling", op: "mask", input: "frayed", at: 0.55, off: 0.95 },
+            { output: "result", op: "multiply", a: "rising", b: "falling" },
+          ],
+        },
+      },
+
+      // The wood's steep ground is rock grown over with moss - weighted to outdo the universal bare
+      // rock, which fires on the same slopes.
+      {
+        id: "jungle-mossy-rock",
+        material: "mossyRock",
+        weight: {
+          noises: [],
+          steps: [
+            { output: "slope", op: "input", name: "slope" },
+            { output: "steep", op: "mask", input: "slope", at: 0.66, off: 0.93 },
+            { output: "result", op: "scale", input: "steep", factor: 2.5 },
+          ],
+        },
+      },
+
+      // Mud along the water: a river's bed and its near bank, a lake's shore, a pond - the jungle's
+      // rivers run brown, their banks slick.
+      {
+        id: "jungle-mud-banks",
+        material: "mud",
+        weight: {
+          noises: [{ name: "reach", type: "fbm", octaves: 2, frequency: 0.02, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
+          steps: [
+            { output: "gap", op: "input", name: "riverGap" },
+            // A ragged reach - wider here, narrower there - rather than a ruled strip.
+            { output: "reachRaw", op: "sample", noise: "reach" },
+            { output: "reachShift", op: "scale", input: "reachRaw", factor: 9 },
+            { output: "reach", op: "add", a: "gap", b: "reachShift" },
+            { output: "band", op: "mask", input: "reach", at: 40, off: 58 },
+            // A lake's shore and bed get the same stones, from where the shore starts down.
+            { output: "lakeFactor", op: "input", name: "lakeFactor" },
+            { output: "lake", op: "mask", input: "lakeFactor", at: 0.25, off: 0.02 },
+            // And so does any hollow inland where the ground just dips to the waterline and fills - no
+            // river, no lake cell, only low ground. Inland only: the coast keeps its sand.
+            { output: "height", op: "input", name: "height" },
+            { output: "low", op: "mask", input: "height", at: 0.6, off: 2.6 },
+            { output: "landmass", op: "input", name: "landmass" },
+            { output: "inland", op: "mask", input: "landmass", at: 0.95, off: 0.7 },
+            { output: "pond", op: "multiply", a: "low", b: "inland" },
+            { output: "lakeOrPond", op: "max", a: "lake", b: "pond" },
+            { output: "water", op: "max", a: "band", b: "lakeOrPond" },
+            // Past 1, to outweigh the universal shore sand on the same bank.
+            { output: "result", op: "scale", input: "water", factor: 1.5 },
+          ],
+        },
+      },
+
+      // Reed beds: patches of bulrush in the shallows and at the waterline of any inland water -
+      // pond, lake or river alike, since the band is only the ground's height about the water.
+      // Weighted to take the waterside stones' place where a patch falls.
+      {
+        id: "jungle-reedbed",
+        material: "reedbed",
+        weight: {
+          noises: [{ name: "patch", type: "fbm", octaves: 3, frequency: 0.03, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
+          steps: [
+            { output: "height", op: "input", name: "height" },
+            { output: "wadeable", op: "mask", input: "height", at: -0.2, off: -1.1 },
+            { output: "nearWater", op: "mask", input: "height", at: 0.5, off: 1.5 },
+            { output: "band", op: "multiply", a: "wadeable", b: "nearWater" },
+            { output: "landmass", op: "input", name: "landmass" },
+            { output: "inland", op: "mask", input: "landmass", at: 0.95, off: 0.7 },
+            { output: "patchRaw", op: "sample", noise: "patch" },
+            { output: "patch", op: "mask", input: "patchRaw", at: 0.35, off: 0.05 },
+            { output: "inlandBand", op: "multiply", a: "band", b: "inland" },
+            { output: "patchBand", op: "multiply", a: "inlandBand", b: "patch" },
+            { output: "result", op: "scale", input: "patchBand", factor: 4 },
+          ],
+        },
+      },
+    ],
+  },
+  // A humid haze: green-grey, close - the far trunks fading into it.
+  sky: {
+    horizon: { oneOf: ["#b6c4b0", "#a8bcaa", "#c0c8b8"] },
+    zenith: "#6f93a8",
+    cloud: "#e6eae6",
+    fogStart: { range: [0.02, 0.12] },
+    fogEnd: { range: [0.4, 0.7] },
+  },
+  light: {
+    sunPeak: 72,
+    moonPeak: 45,
+    ambientDay: "#a8c0a4",
+  },
+}

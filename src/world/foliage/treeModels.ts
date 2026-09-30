@@ -211,7 +211,7 @@ function createLeafMaterial(scene: Scene, id: string, atlasPixels: Uint8Array, s
   Effect.ShadersStore["treeLeafVertexShader"] = LEAF_VERTEX_SHADER;
   Effect.ShadersStore["treeLeafFragmentShader"] = LEAF_FRAGMENT_SHADER;
   const leaves = new LeafMaterial(`tree_${id}_leaves`, scene, "treeLeaf", {
-    attributes: ["position", "normal", "uv", "lie"],
+    attributes: ["position", "normal", "uv", "lie", "flex"],
     uniforms: ["world", "view", "viewProjection", "time", "windDirection", "treeHeight", ...LIT_SHADING_UNIFORMS],
     samplers: ["leafAtlas", "treeTints", ...LIT_SHADING_SAMPLERS],
     needAlphaTesting: true,
@@ -288,7 +288,7 @@ function generatedKind(shape: Extract<TreeKindDef["shape"], { model: "branching"
   }
   return {
     variants: shape.variants,
-    atlas: (seed) => (shape.foliage ? bakeFoliage(seed, shape.foliage) : null),
+    atlas: (seed) => (!shape.foliage ? null : shape.foliage.builder === "broadleaf" ? bakeFoliage(seed, shape.foliage) : bakeBushFoliage(seed, shape.foliage, shape.crown)),
     swayHeight: shape.trunk.height * 1.8,
     generate: (seed, detail) => generateTree(shape, seed, detail),
   };
@@ -304,7 +304,7 @@ function atlasSeed(seed: number, id: string): number {
  * null for a primitive tree, which has none.
  */
 export function bakeLeafAtlas(def: TreeKindDef, seed: number): Uint8Array | null {
-  if (def.shape.model === "bush") return bakeBushFoliage(atlasSeed(seed, def.id), def.shape.foliage);
+  if (def.shape.model === "bush") return bakeBushFoliage(atlasSeed(seed, def.id), def.shape.foliage, def.shape.fronds);
   if (def.shape.model === "branching" || def.shape.model === "conifer") return generatedKind(def.shape).atlas(atlasSeed(seed, def.id));
   return null;
 }
@@ -336,6 +336,7 @@ function createGeneratedModels(scene: Scene, def: TreeKindDef, kind: GeneratedKi
     leafData.indices = geometry.leaves.indices;
     leafData.applyToMesh(canopy);
     canopy.setVerticesData("lie", geometry.leaves.lie, false, 1);
+    canopy.setVerticesData("flex", geometry.leaves.flex, false, 1);
     canopy.material = materials.leaves;
     // The leaves sway in the vertex shader, beyond where the vertex data alone would put them.
     const reach = geometry.height * 0.6;
@@ -357,7 +358,7 @@ function createGeneratedModels(scene: Scene, def: TreeKindDef, kind: GeneratedKi
 function createBushModels(scene: Scene, def: TreeKindDef, shape: BushShape, seed: number, litShading: LitShading, atlas?: Uint8Array): TreeModel[] {
   const ownSeed = kindSeed(seed, def.id);
   // Swaying to a fraction of what a tree's crown does: a bush is stiff, and low.
-  const leaves = createLeafMaterial(scene, def.id, atlas ?? bakeBushFoliage(atlasSeed(seed, def.id), shape.foliage), shape.height[1] * 2.2, litShading);
+  const leaves = createLeafMaterial(scene, def.id, atlas ?? bakeBushFoliage(atlasSeed(seed, def.id), shape.foliage, shape.fronds), shape.height[1] * 2.2, litShading);
   const tintDark = color3(def.tint[0]);
   const tintLight = color3(def.tint[1]);
 
@@ -372,6 +373,7 @@ function createBushModels(scene: Scene, def: TreeKindDef, shape: BushShape, seed
     data.indices = geometry.leaves.indices;
     data.applyToMesh(canopy);
     canopy.setVerticesData("lie", geometry.leaves.lie, false, 1);
+    canopy.setVerticesData("flex", geometry.leaves.flex, false, 1);
     canopy.material = leaves;
     const reach = shape.width[1] * 0.7;
     canopy.setBoundingInfo(new BoundingInfo(new Vector3(-reach, -1, -reach), new Vector3(reach, geometry.height + 1, reach)));

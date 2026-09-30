@@ -327,7 +327,10 @@ branches and on top. Its sections:
 - `trunk`: `height`, `radius`/`topRadius`, `lean`, `wobble`, `flare`/`flareHeight`, `sides`, `rings`,
   and optionally `bulge` - the trunk swells to 1 + `bulge` times its girth around `bulgeAt` of the
   way up (default 0.35), a baobab's bottle
-- `roots`: `count`, `length`, `radius` (of the trunk's), `drop` (how deep the ends dive), `sides`, `rings`
+- `roots`: `count`, `length`, `radius` (of the trunk's), `drop` (how deep the ends dive), `sides`, `rings`,
+  and optionally `buttress: { height, thickness }` - a jungle giant's plank roots instead of round
+  ones: wedges on edge, thick at the foot, leaving the trunk `height` metres up and sweeping down to
+  dive into the ground at their ends (see `core/trees/kapok.json5`)
 - `branches`: `count`, `from` (fraction of the trunk's height), `length`, `radius`, `angle` (degrees
   from vertical), `arc` (how much they curve back up; below 0, over and outwards), `sides`, `rings`,
   `twigs` likewise, and optionally `broken` - the share of branches and twigs snapped off short
@@ -341,6 +344,11 @@ branches and on top. Its sections:
 
 Leave out both `leaves` and `foliage` for a bare tree - all wood, no leaves (see
 `core/trees/deadTree.json5`).
+
+A `crown` puts a fern's fronds on top of the trunk - a tree fern's, and later a palm's (see
+`core/trees/treeFern.json5`): the same settings as a bush's `fronds` (below), its fronds growing out
+of the trunk's tapering tip. With a crown, `leaves` may be left out and `foliage` is a bush atlas
+(`builder: "fern"`, or one of the broad-leaf builders). A frond bends in the wind from its root.
 
 Trees in distant chunks are drawn with fewer sides and no twigs - the same tree, and the same leaves.
 
@@ -390,6 +398,14 @@ them round one root, each a strip of `segments` quads `length` long and `width` 
 `angle` degrees from vertical and curling `curl` degrees further over by its tip, its midrib `fold`
 of its width above its edges. Its `foliage` is the `fern` atlas - four single fronds, `leaves`
 pairs of leaflets `leafLength`/`leafWidth` in size - and `width`/`height` are only its bounds.
+
+A frond can stand on a bare stalk: `stalk: { length, width }` (metres, before the frond's own
+`length`) - a banana's or an elephant ear's leaf on its stem (see `core/bushes/banana.json5`,
+`core/bushes/elephantEar.json5`). Such a leaf wants a broad-leaf atlas, one leaf per cell with its
+stalk painted in: `paddleLeaf` (a long paddle, torn in `leaves` slits from its edges) or `heartLeaf`
+(a heart, `leaves` veins fanning from the stalk), `leafWidth` the blade's half-width as a share of
+the cell. A frond's underside is shaded as seen through the leaf, half as bright as its top, and its
+top catches a gloss.
 
 Any bush can grow in beds: `bed: { plants, spread }` places `plants` (a range) of it together, the
 others up to `spread` metres (times its scale) round the first, each its own size and turn and

@@ -12,6 +12,8 @@ import {
   type BushShape,
   type BushBed,
   type ConiferTree,
+  type BushTexture,
+  type FoliageTexture,
   type Fronds,
   type OldTrees,
   type PrimitiveTree,
@@ -669,29 +671,50 @@ function readBushBed(obj: RawObject, reader: Reader): BushBed | null {
   return { plants, spread: reader.number(bed, "spread", "bed", { min: 0 }) };
 }
 
-function readBush(obj: RawObject, reader: Reader): BushShape {
-  reader.onlyKeys(obj, "", [...KIND_COMMON_KEYS.filter((key) => key !== "growsOld"), "variants", "width", "height", "cards", "clumps", "clumpSize", "fronds", "bed", "foliage"]);
-  // A frond plant has no cards or clumps - its fronds are its geometry.
-  let fronds: Fronds | null = null;
-  if (obj.fronds !== undefined) {
-    const f = reader.object(obj.fronds, "fronds");
-    reader.onlyKeys(f, "fronds", ["count", "length", "width", "angle", "curl", "fold", "segments"]);
-    const count = reader.range(f, "count", "fronds", { allowEqual: true });
-    if (count[0] < 1 || !Number.isInteger(count[0]) || !Number.isInteger(count[1])) reader.fail("fronds.count", "expected whole numbers of fronds, at least 1");
-    fronds = {
-      count,
-      length: reader.range(f, "length", "fronds", { allowEqual: true }),
-      width: reader.number(f, "width", "fronds", { min: 0.01 }),
-      angle: reader.range(f, "angle", "fronds", { allowEqual: true }),
-      curl: reader.number(f, "curl", "fronds"),
-      fold: reader.optionalNumber(f, "fold", "fronds", 0.15, { min: 0, max: 1 }),
-      segments: reader.optionalNumber(f, "segments", "fronds", 4, { min: 1, max: 12, integer: true }),
-    };
-  }
-  const foliage = reader.object(obj.foliage, "foliage");
+/** A frond plant's fronds (a fern bush's, or a tree fern's crown) - `key` names the field. */
+function readFronds(value: unknown, reader: Reader, key: string): Fronds {
+  const f = reader.object(value, key);
+  reader.onlyKeys(f, key, ["count", "length", "width", "angle", "curl", "fold", "segments", "stalk"]);
+  const stalk = f.stalk === undefined ? null : reader.object(f.stalk, `${key}.stalk`);
+  if (stalk) reader.onlyKeys(stalk, `${key}.stalk`, ["length", "width"]);
+  const count = reader.range(f, "count", key, { allowEqual: true });
+  if (count[0] < 1 || !Number.isInteger(count[0]) || !Number.isInteger(count[1])) reader.fail(`${key}.count`, "expected whole numbers of fronds, at least 1");
+  return {
+    count,
+    length: reader.range(f, "length", key, { allowEqual: true }),
+    width: reader.number(f, "width", key, { min: 0.01 }),
+    angle: reader.range(f, "angle", key, { allowEqual: true }),
+    curl: reader.number(f, "curl", key),
+    fold: reader.optionalNumber(f, "fold", key, 0.15, { min: 0, max: 1 }),
+    segments: reader.optionalNumber(f, "segments", key, 4, { min: 1, max: 12, integer: true }),
+    stalk: stalk
+      ? { length: reader.range(stalk, "length", `${key}.stalk`, { allowEqual: true }), width: reader.number(stalk, "width", `${key}.stalk`, { min: 0.005 }) }
+      : null,
+  };
+}
+
+/** A bush's foliage atlas (also a tree fern's crown's). */
+function readBushTexture(foliage: RawObject, reader: Reader): BushTexture {
   reader.onlyKeys(foliage, "foliage", ["builder", "dark", "light", "stem", "stems", "leaves", "leafLength", "leafWidth", "bare"]);
   const stems = reader.range(foliage, "stems", "foliage", { allowEqual: true });
   if (stems[0] < 1 || !Number.isInteger(stems[0]) || !Number.isInteger(stems[1])) reader.fail("foliage.stems", "expected whole numbers of stems, at least 1");
+  return {
+    builder: reader.oneOf(foliage, "builder", "foliage", BUSH_FOLIAGE_BUILDERS),
+    dark: reader.color(foliage, "dark", "foliage"),
+    light: reader.color(foliage, "light", "foliage"),
+    stem: reader.color(foliage, "stem", "foliage"),
+    stems,
+    leaves: reader.number(foliage, "leaves", "foliage", { min: 1, integer: true }),
+    leafLength: reader.number(foliage, "leafLength", "foliage", { min: 0.01, max: 1 }),
+    leafWidth: reader.number(foliage, "leafWidth", "foliage", { min: 0.01, max: 1 }),
+    bare: reader.number(foliage, "bare", "foliage", { min: 0, max: 0.9 }),
+  };
+}
+
+function readBush(obj: RawObject, reader: Reader): BushShape {
+  reader.onlyKeys(obj, "", [...KIND_COMMON_KEYS.filter((key) => key !== "growsOld"), "variants", "width", "height", "cards", "clumps", "clumpSize", "fronds", "bed", "foliage"]);
+  // A frond plant has no cards or clumps - its fronds are its geometry.
+  const fronds = obj.fronds === undefined ? null : readFronds(obj.fronds, reader, "fronds");
   return {
     model: "bush",
     variants: reader.number(obj, "variants", "", { min: 1, max: 16, integer: true }),
@@ -702,17 +725,7 @@ function readBush(obj: RawObject, reader: Reader): BushShape {
     clumpSize: fronds && obj.clumpSize === undefined ? [1, 1] : reader.range(obj, "clumpSize", "", { allowEqual: true }),
     fronds,
     bed: readBushBed(obj, reader),
-    foliage: {
-      builder: reader.oneOf(foliage, "builder", "foliage", BUSH_FOLIAGE_BUILDERS),
-      dark: reader.color(foliage, "dark", "foliage"),
-      light: reader.color(foliage, "light", "foliage"),
-      stem: reader.color(foliage, "stem", "foliage"),
-      stems,
-      leaves: reader.number(foliage, "leaves", "foliage", { min: 1, integer: true }),
-      leafLength: reader.number(foliage, "leafLength", "foliage", { min: 0.01, max: 1 }),
-      leafWidth: reader.number(foliage, "leafWidth", "foliage", { min: 0.01, max: 1 }),
-      bare: reader.number(foliage, "bare", "foliage", { min: 0, max: 0.9 }),
-    },
+    foliage: readBushTexture(reader.object(obj.foliage, "foliage"), reader),
   };
 }
 
@@ -847,23 +860,40 @@ function readConiferTree(obj: RawObject, reader: Reader, common: string[]): Coni
 }
 
 function readBranchingTree(obj: RawObject, reader: Reader, common: string[]): BranchingTree {
-  reader.onlyKeys(obj, "", [...common, "variants", "trunk", "roots", "branches", "leaves", "bark", "foliage"]);
+  reader.onlyKeys(obj, "", [...common, "variants", "trunk", "roots", "branches", "leaves", "crown", "bark", "foliage"]);
   const section = (key: string, keys: string[]): RawObject => {
     const value = reader.object(obj[key], key);
     reader.onlyKeys(value, key, keys);
     return value;
   };
   const trunk = section("trunk", ["height", "radius", "topRadius", "lean", "wobble", "flare", "flareHeight", "bulge", "bulgeAt", "sides", "rings"]);
-  const roots = section("roots", ["count", "length", "radius", "drop", "sides", "rings"]);
+  const roots = section("roots", ["count", "length", "radius", "drop", "sides", "rings", "buttress"]);
+  const buttress = roots.buttress === undefined ? null : reader.object(roots.buttress, "roots.buttress");
+  if (buttress) reader.onlyKeys(buttress, "roots.buttress", ["height", "thickness"]);
   const branches = section("branches", ["count", "from", "length", "radius", "angle", "arc", "broken", "sides", "rings", "twigs"]);
   const twigs = reader.object(branches.twigs, "branches.twigs");
   reader.onlyKeys(twigs, "branches.twigs", ["count", "length", "angle", "sides", "rings"]);
-  // A bare tree - a dead one - has neither leaves nor the foliage they are cut from.
-  if ((obj.leaves === undefined) !== (obj.foliage === undefined)) reader.fail("leaves", "a tree has both leaves and foliage, or neither (a bare tree)");
+  // A bare tree - a dead one - has neither leaves (nor a frond crown) nor the foliage they are cut from.
+  const leafy = obj.leaves !== undefined || obj.crown !== undefined;
+  if (leafy !== (obj.foliage !== undefined)) reader.fail("foliage", "a tree with leaves or a crown has foliage; a bare tree has none of them");
   const bare = obj.leaves === undefined;
   const leaves = bare ? {} : section("leaves", ["size", "cards", "alongBranch", "top", "spread", "squash", "level"]);
+  const crown = obj.crown === undefined ? null : readFronds(obj.crown, reader, "crown");
   const bark = section("bark", ["tile", "texture"]);
-  const foliage = bare ? {} : section("foliage", ["builder", "dark", "light", "leaves", "leafLength", "leafWidth"]);
+  const foliageObj = obj.foliage === undefined ? null : reader.object(obj.foliage, "foliage");
+  // A frond crown's atlas is a fern's; leaf clusters' are the broadleaf's.
+  const readTreeFoliage = (f: RawObject): FoliageTexture | BushTexture => {
+    if (f.builder === "fern") return readBushTexture(f, reader);
+    reader.onlyKeys(f, "foliage", ["builder", "dark", "light", "leaves", "leafLength", "leafWidth"]);
+    return {
+      builder: reader.oneOf(f, "builder", "foliage", FOLIAGE_BUILDERS),
+      dark: reader.color(f, "dark", "foliage"),
+      light: reader.color(f, "light", "foliage"),
+      leaves: reader.number(f, "leaves", "foliage", { min: 1, integer: true }),
+      leafLength: reader.number(f, "leafLength", "foliage", { min: 0.01, max: 1 }),
+      leafWidth: reader.number(f, "leafWidth", "foliage", { min: 0.01, max: 1 }),
+    };
+  };
   const optional = (o: RawObject, key: string, path: string, fallback: number, bounds: { min?: number; max?: number }): number =>
     o[key] === undefined ? fallback : reader.number(o, key, path, bounds);
   const sides = (o: RawObject, path: string): number => reader.number(o, "sides", path, { min: 3, max: 16, integer: true });
@@ -896,6 +926,9 @@ function readBranchingTree(obj: RawObject, reader: Reader, common: string[]): Br
       drop: reader.number(roots, "drop", "roots", { min: 0 }),
       sides: sides(roots, "roots"),
       rings: rings(roots, "roots"),
+      buttress: buttress
+        ? { height: reader.number(buttress, "height", "roots.buttress", { min: 0.1 }), thickness: reader.number(buttress, "thickness", "roots.buttress", { min: 0.02 }) }
+        : null,
     },
     branches: {
       count: count(branches, "count", "branches"),
@@ -926,20 +959,12 @@ function readBranchingTree(obj: RawObject, reader: Reader, common: string[]): Br
           squash: optional(leaves, "squash", "leaves", 1, { min: 0.05, max: 1 }),
           level: optional(leaves, "level", "leaves", 0, { min: 0, max: 1 }),
         },
+    crown,
     bark: {
       tile: reader.number(bark, "tile", "bark", { min: 0.1 }),
       texture: readTexture(bark.texture, reader, "bark.texture"),
     },
-    foliage: bare
-      ? null
-      : {
-          builder: reader.oneOf(foliage, "builder", "foliage", FOLIAGE_BUILDERS),
-          dark: reader.color(foliage, "dark", "foliage"),
-          light: reader.color(foliage, "light", "foliage"),
-          leaves: reader.number(foliage, "leaves", "foliage", { min: 1, integer: true }),
-          leafLength: reader.number(foliage, "leafLength", "foliage", { min: 0.01, max: 1 }),
-          leafWidth: reader.number(foliage, "leafWidth", "foliage", { min: 0.01, max: 1 }),
-        },
+    foliage: foliageObj ? readTreeFoliage(foliageObj) : null,
   };
 }
 

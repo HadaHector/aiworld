@@ -1,0 +1,31 @@
+// A giant fern: the fern (fern.json5) at jungle size - fronds three metres and more, arching out over
+// the path from a crown head high - in a deep, glossy green. In beds, in the shade of the big trees.
+{
+  model: "bush",
+  variants: 4,
+  width: [5, 7],
+  height: [2, 3],
+  fronds: {
+    count: [9, 13],
+    length: [2.6, 3.6],
+    width: 1.0,
+    angle: [15, 75],
+    curl: 70,
+    fold: 0.1,
+    segments: 5,
+  },
+  bed: { plants: [2, 4], spread: 4 },
+  foliage: {
+    builder: "fern",
+    dark: [0.05, 0.19, 0.05],
+    light: [0.3, 0.52, 0.14],
+    stem: [0.2, 0.22, 0.08],
+    stems: [1, 1],
+    leaves: 18,
+    leafLength: 0.4,
+    leafWidth: 0.045,
+    bare: 0,
+  },
+  tint: [[0.85, 0.92, 0.85], [1.1, 1.06, 0.98]],
+  scale: [0.8, 1.3],
+}

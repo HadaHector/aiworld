@@ -1,6 +1,6 @@
 import { mulberry32 } from "../rng";
 import { lerp, smoothstep } from "../mathUtils";
-import type { BranchingTree, BushShape, ConiferTree, Fronds } from "./foliageConfig";
+import { FROND_STALK_HALF_WIDTH, FROND_STALK_SHARE, type BranchingTree, type BushShape, type ConiferTree, type Fronds } from "./foliageConfig";
 
 /**
  * One generated tree, in tree space (the base of the trunk at the origin, up +Y), as two meshes'
@@ -24,6 +24,10 @@ export interface TreeGeometry {
      *  snow. Smooth across a card's folds, unlike its triangles' facing, and free of the crown's
      *  shading bias, unlike `normals`. */
     lie: Float32Array;
+    /** Per vertex, how far it bends in the wind, 0 (held fast) to 1: a frond's share of its length
+     *  from its root, so it bends from where it grows. Below 0, the crown sways as one, more the
+     *  higher up - cards and conifer panels. */
+    flex: Float32Array;
     uvs: Float32Array;
     indices: Uint32Array;
   };
@@ -66,26 +70,40 @@ class WoodBuilder {
    * enough to stay square to the line - so a curving limb does not twist. The bark tiles a whole
    * number of times around (so the seam matches) and at its true scale along. A `blunt` tube - a
    * limb snapped off - ends in a low cap instead of a tapering point.
+   *
+   * With `heights`, each ring is an upright wedge instead of a circle - `radii` across at its foot,
+   * narrowing to a sharp edge at its top, `heights` up and down - framed on the vertical rather than
+   * transported: a buttress root's plank, standing on edge.
    */
-  tube(points: V3[], radii: number[], sides: number, tile: number, blunt = false): void {
+  tube(points: V3[], radii: number[], sides: number, tile: number, blunt = false, heights?: number[]): void {
     const base = this.positions.length / 3;
     const ring = sides + 1;
     // Sized on the limb's average girth: its first ring can be a flared base twice the width of
     // the rest, which would squeeze the bark sideways everywhere else.
-    const meanRadius = radii.reduce((sum, r) => sum + r, 0) / radii.length;
+    const meanRadius = radii.reduce((sum, r, i) => sum + (heights ? (r + heights[i]) / 2 : r), 0) / radii.length;
     const around = Math.max(1, Math.round((2 * Math.PI * meanRadius) / tile));
     let normal: V3 = perpendicular(normalize(sub(points[1], points[0])));
     let v = 0;
 
     for (let i = 0; i < points.length; i++) {
-      const tangent = normalize(i === 0 ? sub(points[1], points[0]) : i === points.length - 1 ? sub(points[i], points[i - 1]) : sub(points[i + 1], points[i - 1]));
-      normal = normalize(sub(normal, scale(tangent, dot(normal, tangent))));
+      const along = normalize(i === 0 ? sub(points[1], points[0]) : i === points.length - 1 ? sub(points[i], points[i - 1]) : sub(points[i + 1], points[i - 1]));
+      // A wedge's slices stand upright whatever its centreline does: squared to the line, they would
+      // tip outwards where it falls steeply and throw the top edge off the trunk.
+      const tangent = heights ? normalize([along[0], 0, along[2]]) : along;
+      normal = heights ? normalize(cross(tangent, [0, 1, 0])) : normalize(sub(normal, scale(tangent, dot(normal, tangent))));
       const binormal = cross(tangent, normal);
       if (i > 0) v += Math.hypot(...sub(points[i], points[i - 1])) / tile;
+      const height = heights ? heights[i] : radii[i];
       for (let j = 0; j <= sides; j++) {
         const angle = (j / sides) * Math.PI * 2;
-        const out = add(scale(normal, Math.cos(angle)), scale(binormal, Math.sin(angle)));
-        const p = add(points[i], scale(out, radii[i]));
+        const up = scale(binormal, Math.sin(angle));
+        // A wedge: full width at the foot, a third of it at the top edge.
+        const rising = heights ? (up[1] / Math.max(1e-6, Math.hypot(...binormal)) + 1) / 2 : 0;
+        const width = radii[i] * (1 - 0.65 * rising);
+        const across = scale(normal, Math.cos(angle));
+        const p = add(points[i], add(scale(across, width), scale(up, height)));
+        // Its normal leans towards the flat sides: the ellipse's gradient, not the radial direction.
+        const out = heights ? normalize(add(scale(across, 1 / width), scale(up, 1 / height))) : add(across, up);
         this.positions.push(p[0], p[1], p[2]);
         this.normals.push(out[0], out[1], out[2]);
         this.uvs.push((j / sides) * around, v);
@@ -120,6 +138,7 @@ class LeafBuilder {
   positions: number[] = [];
   normals: number[] = [];
   lie: number[] = [];
+  flex: number[] = [];
   uvs: number[] = [];
   indices: number[] = [];
 
@@ -147,6 +166,7 @@ class LeafBuilder {
       const n = normalize([out[0], out[1] * 1.3 + crownRadius * 0.15, out[2]]);
       this.normals.push(n[0], n[1], n[2]);
       this.lie.push(lie);
+      this.flex.push(-1);
       // An atlas row runs down the picture, so the card's top (+v) is the cell's first row.
       const up = upright ? -b : b;
       this.uvs.push(cellU + (a > 0 ? 0.5 - inset : inset), cellV + (up > 0 ? 0.5 - inset : inset));
@@ -176,6 +196,7 @@ class LeafBuilder {
         this.normals.push(n[0], n[1], n[2]);
         // An upright card holds no snow of its own; a bush's top still whitens, by the crown's normal.
         this.lie.push(Math.max(0, n[1]));
+        this.flex.push(-1);
         const across = mirror ? 1 - col / 2 : col / 2;
         this.uvs.push(cellU + inset + across * span, cellV + 0.5 - inset - (row / 2) * span);
       }
@@ -246,6 +267,7 @@ class LeafBuilder {
         const n = normalize(add(add(cone, archTip), scale(normalize(sub(p, crownCentre)), 0.6)));
         this.normals.push(n[0], n[1], n[2]);
         this.lie.push(Math.max(0, normalize(add(cone, archTip))[1]));
+        this.flex.push(-1);
         this.uvs.push(cellU + inset + u * (0.5 - 2 * inset), cellV + inset + v * (0.5 - 2 * inset));
       }
     }
@@ -286,9 +308,9 @@ export function generateTree(spec: BranchingTree, seed: number, detail: TreeDeta
   const wood = new WoodBuilder();
   const leafBuilder = new LeafBuilder();
   const far = detail === "far";
-  const limb = (points: V3[], radii: number[], sides: number, blunt = false): void => {
-    if (far) wood.tube(thinned(points), thinned(radii), Math.max(3, Math.round(sides * 0.6)), bark.tile, blunt);
-    else wood.tube(points, radii, sides, bark.tile, blunt);
+  const limb = (points: V3[], radii: number[], sides: number, blunt = false, heights?: number[]): void => {
+    if (far) wood.tube(thinned(points), thinned(radii), Math.max(3, Math.round(sides * 0.6)), bark.tile, blunt, heights && thinned(heights));
+    else wood.tube(points, radii, sides, bark.tile, blunt, heights);
   };
   // Whether a limb is snapped off short, and to what share of its length. No draw at all for a kind
   // that never breaks, so its trees stay exactly as they were.
@@ -329,7 +351,40 @@ export function generateTree(spec: BranchingTree, seed: number, detail: TreeDeta
 
   // --- roots ---
   const rootStart = trunk.flareHeight * 0.55;
-  for (let r = 0; r < roots.count; r++) {
+  if (roots.buttress) {
+    // Buttresses: planks on edge, running out from the trunk, their top edge sweeping down from
+    // high on the trunk to the ground in a concave curve, their foot buried.
+    const { height, thickness } = roots.buttress;
+    for (let r = 0; r < roots.count; r++) {
+      const heading = ((r + (rng() - 0.5) * 0.5) / roots.count) * Math.PI * 2;
+      const out: V3 = [Math.cos(heading), 0, Math.sin(heading)];
+      const curl = (rng() - 0.5) * 0.5;
+      // A snaking run rather than a ruled line: a slow sideways wave along it.
+      const wave = (rng() - 0.5) * 0.5;
+      const wavePhase = rng() * Math.PI * 2;
+      const length = between(roots.length);
+      const tall = height * (0.7 + rng() * 0.3);
+      const points: V3[] = [];
+      const widths: number[] = [];
+      const heights: number[] = [];
+      for (let i = 0; i <= roots.rings; i++) {
+        // Rings bunched towards the trunk, where the top edge curves fastest.
+        const s = Math.pow(i / roots.rings, 1.7);
+        const bent = rotate(out, [0, 1, 0], curl * s + wave * Math.sin(s * Math.PI * 2 + wavePhase) * s);
+        // The top edge sweeps down from high on the trunk in a concave curve, running into the
+        // ground just short of the end, so the tip dives under rather than stopping cut off.
+        const top = tall * Math.pow(1 - s, 2.4) + 0.5 * (1 - s) - 0.35 * s;
+        const bottom = -0.8 - roots.drop * s;
+        // Starting inside the trunk, so its foot merges into the flare.
+        const reach = trunk.radius * 0.35 + length * s;
+        points.push([bent[0] * reach, (top + bottom) / 2, bent[2] * reach]);
+        heights.push(Math.max(0.05, (top - bottom) / 2));
+        widths.push((thickness / 2) * (1 - 0.65 * s));
+      }
+      limb(points, widths, roots.sides, false, heights);
+    }
+  }
+  for (let r = 0; r < (roots.buttress ? 0 : roots.count); r++) {
     const heading = ((r + rng() * 0.6) / roots.count) * Math.PI * 2;
     const out: V3 = [Math.cos(heading), 0, Math.sin(heading)];
     const curl = (rng() - 0.5) * 0.6;
@@ -453,8 +508,26 @@ export function generateTree(spec: BranchingTree, seed: number, detail: TreeDeta
         foliageTop = Math.max(foliageTop, centre[1] + size * 0.7 * leaves.squash);
       }
     }
-  } else {
+  } else if (!spec.crown) {
     for (let i = 1; i < wood.positions.length; i += 3) foliageTop = Math.max(foliageTop, wood.positions[i]);
+  }
+
+  // --- a frond crown ---
+  // A fern's fronds, their root up in the trunk's tapering tip (the tube's apex runs two top radii
+  // past its last ring), so they grow out of it rather than sit on a stump.
+  if (spec.crown) {
+    const crown = generateFronds(spec.crown, Math.floor(rng() * 0x7fffffff));
+    const top = trunkPoint(1);
+    const lift = top[1] + trunk.topRadius * 1.2;
+    const base = leafBuilder.positions.length / 3;
+    const p = crown.leaves.positions;
+    for (let i = 0; i < p.length; i += 3) leafBuilder.positions.push(p[i] + top[0], p[i + 1] + lift, p[i + 2] + top[2]);
+    leafBuilder.normals.push(...crown.leaves.normals);
+    leafBuilder.lie.push(...crown.leaves.lie);
+    leafBuilder.flex.push(...crown.leaves.flex);
+    leafBuilder.uvs.push(...crown.leaves.uvs);
+    for (const index of crown.leaves.indices) leafBuilder.indices.push(base + index);
+    foliageTop = Math.max(foliageTop, lift + crown.height);
   }
 
   return {
@@ -469,6 +542,7 @@ export function generateTree(spec: BranchingTree, seed: number, detail: TreeDeta
       positions: new Float32Array(leafBuilder.positions),
       normals: new Float32Array(leafBuilder.normals),
       lie: new Float32Array(leafBuilder.lie),
+      flex: new Float32Array(leafBuilder.flex),
       uvs: new Float32Array(leafBuilder.uvs),
       indices: new Uint32Array(leafBuilder.indices),
     },
@@ -538,6 +612,7 @@ export function generateBush(spec: BushShape, seed: number): BushGeometry {
       positions: new Float32Array(builder.positions),
       normals: new Float32Array(builder.normals),
       lie: new Float32Array(builder.lie),
+      flex: new Float32Array(builder.flex),
       uvs: new Float32Array(builder.uvs),
       indices: new Uint32Array(builder.indices),
     },
@@ -559,6 +634,7 @@ function generateFronds(spec: Fronds, seed: number): BushGeometry {
   const positions: number[] = [];
   const normals: number[] = [];
   const lie: number[] = [];
+  const flex: number[] = [];
   const uvs: number[] = [];
   const indices: number[] = [];
   const inset = 0.004;
@@ -578,39 +654,94 @@ function generateFronds(spec: Fronds, seed: number): BushGeometry {
     const cellU = (cell % 2) * 0.5;
     const cellV = Math.floor(cell / 2) * 0.5;
     const base = positions.length / 3;
+    // Drawn last, so a frond with no stalk draws exactly what it always did.
+    const stalkLength = spec.stalk ? between(spec.stalk.length) : 0;
+    const total = stalkLength + length;
+    // Each row across the strip: how far along the frond (metres) and which row of the cell it
+    // shows, and its vertices across - where (metres from the middle), which column of the cell,
+    // how high the keel lifts it, and how far its normal tips out to the side.
+    type Column = { x: number; u: number; keel: number; tilt: number };
+    const rows: { d: number; v: number; cols: Column[] }[] = [];
+    const smoothstep01 = (t: number): number => smoothstep(0, 1, Math.min(1, Math.max(0, t)));
+    if (!spec.stalk) {
+      // A fern: three across, the keel down the middle.
+      for (let s = 0; s <= spec.segments; s++) {
+        const t = s / spec.segments;
+        // Narrow where it leaves the root, full width from a fifth of the way along.
+        const width = spec.width * Math.min(1, 0.35 + t * 3.25);
+        rows.push({
+          d: length * t,
+          v: t,
+          cols: [-1, 0, 1].map((a) => ({ x: (a * width) / 2, u: 0.5 + a * 0.5, keel: a === 0 ? spec.fold * width : 0, tilt: a * spec.fold * 1.5 })),
+        });
+      }
+    } else {
+      // A leaf on a stalk: five across - the blade's edges, the stem's edges and its middle - so the
+      // stalk's round ridge runs on up the blade at its own width and height, dying away over the
+      // blade's first fifth as the blade's own fold comes in. Three across could not carry a narrow
+      // ridge onto a wide blade: its edges would jump. The stalk's rows put its outer columns on its
+      // stem's edges; the blade's first row stands where the stalk ends, so the strip widens in no
+      // length at all, where the atlas paints the stem on the blade at the stalk's own width.
+      const stem = spec.stalk.width;
+      const ridge = stem * 0.5;
+      const stemU = stem / spec.width / 2;
+      for (let s = 0; s <= 2; s++) {
+        rows.push({
+          d: (stalkLength * s) / 2,
+          v: (FROND_STALK_SHARE * s) / 2,
+          cols: [-1, -1, 0, 1, 1].map((a) => ({ x: (a * stem) / 2, u: 0.5 + a * FROND_STALK_HALF_WIDTH, keel: a === 0 ? ridge : 0, tilt: a * 0.75 })),
+        });
+      }
+      for (let s = 0; s <= spec.segments; s++) {
+        const t = s / spec.segments;
+        const foldIn = smoothstep01(t / 0.2);
+        const fold = spec.fold * spec.width * foldIn;
+        const stemRidge = ridge * (1 - foldIn);
+        rows.push({
+          d: stalkLength + length * t,
+          v: FROND_STALK_SHARE + (1 - FROND_STALK_SHARE) * t,
+          cols: [
+            { x: -spec.width / 2, u: 0, keel: 0, tilt: -spec.fold * 1.5 * foldIn },
+            { x: -stem / 2, u: 0.5 - stemU, keel: fold * (1 - stem / spec.width), tilt: -(0.75 * (1 - foldIn) + spec.fold * 1.5 * foldIn) },
+            { x: 0, u: 0.5, keel: fold + stemRidge, tilt: 0 },
+            { x: stem / 2, u: 0.5 + stemU, keel: fold * (1 - stem / spec.width), tilt: 0.75 * (1 - foldIn) + spec.fold * 1.5 * foldIn },
+            { x: spec.width / 2, u: 1, keel: 0, tilt: spec.fold * 1.5 * foldIn },
+          ],
+        });
+      }
+    }
+    const columns = rows[0].cols.length;
     let point: V3 = [0, -0.05, 0];
-    for (let s = 0; s <= spec.segments; s++) {
-      const t = s / spec.segments;
+    rows.forEach((row, r) => {
+      const t = row.d / total;
       const heading = angle + curl * t * t;
       const along: V3 = add(scale(out, Math.sin(heading)), [0, Math.cos(heading), 0]);
       // The frond's own "up": its direction turned back a right angle, towards the sky.
       const facing: V3 = add(scale(out, -Math.cos(heading)), [0, Math.sin(heading), 0]);
-      // Narrow where it leaves the root, full width from a fifth of the way along.
-      const width = spec.width * Math.min(1, 0.35 + t * 3.25);
-      for (let a = -1; a <= 1; a++) {
-        const keel = a === 0 ? spec.fold * width : 0;
-        const p = add(add(point, scale(side, (a * width) / 2)), scale(facing, keel));
+      for (const col of row.cols) {
+        const p = add(add(point, scale(side, col.x)), scale(facing, col.keel));
         positions.push(p[0], p[1], p[2]);
         // Tipped outwards either side of the keel, the way the fold turns the halves.
-        const n = normalize(add(facing, scale(side, a * spec.fold * 1.5)));
+        const n = normalize(add(facing, scale(side, col.tilt)));
         normals.push(n[0], n[1], n[2]);
         lie.push(Math.abs(n[1]));
-        const across = (a + 1) / 2;
-        uvs.push(cellU + inset + (mirror ? 1 - across : across) * span, cellV + 0.5 - inset - t * span);
+        // A long frond swings further at its tip than a short one: full at 8 m.
+        flex.push(t * Math.min(1, total / 8));
+        uvs.push(cellU + inset + (mirror ? 1 - col.u : col.u) * span, cellV + 0.5 - inset - row.v * span);
         top = Math.max(top, p[1]);
       }
-      if (s < spec.segments) point = add(point, scale(along, length / spec.segments));
-    }
-    for (let s = 0; s < spec.segments; s++) {
-      for (let a = 0; a < 2; a++) {
-        const i0 = base + s * 3 + a;
-        const i1 = base + (s + 1) * 3 + a;
+      if (r < rows.length - 1) point = add(point, scale(along, rows[r + 1].d - row.d));
+    });
+    for (let s = 0; s < rows.length - 1; s++) {
+      for (let a = 0; a < columns - 1; a++) {
+        const i0 = base + s * columns + a;
+        const i1 = base + (s + 1) * columns + a;
         indices.push(i0, i0 + 1, i1 + 1, i0, i1 + 1, i1);
       }
     }
   }
   return {
-    leaves: { positions: new Float32Array(positions), normals: new Float32Array(normals), lie: new Float32Array(lie), uvs: new Float32Array(uvs), indices: new Uint32Array(indices) },
+    leaves: { positions: new Float32Array(positions), normals: new Float32Array(normals), lie: new Float32Array(lie), flex: new Float32Array(flex), uvs: new Float32Array(uvs), indices: new Uint32Array(indices) },
     height: top,
   };
 }
@@ -729,6 +860,7 @@ export function generateConifer(spec: ConiferTree, seed: number, detail: TreeDet
       positions: new Float32Array(leafBuilder.positions),
       normals: new Float32Array(leafBuilder.normals),
       lie: new Float32Array(leafBuilder.lie),
+      flex: new Float32Array(leafBuilder.flex),
       uvs: new Float32Array(leafBuilder.uvs),
       indices: new Uint32Array(leafBuilder.indices),
     },

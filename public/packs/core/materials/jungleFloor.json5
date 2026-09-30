@@ -1,0 +1,12 @@
+// The rainforest floor: the forest floor's litter, but wet and dark - leaves rotting to black humus in
+// the damp, moss greening everything - with only a few shade-tolerant tufts in it. Laid under the
+// trees (see the rainforest's `treeCover` rule).
+{
+  name: "Jungle Floor",
+  detail: { strength: 0.3 },
+  textureFrom: "forestFloor",
+  adjust: { hue: 12, saturation: 0.95, value: 0.72, tint: [0.92, 1.0, 0.9] },
+  grass: [
+    { kind: "tuft", density: 0.35, color: [0.2, 0.34, 0.12] },
+  ],
+}

@@ -85,6 +85,7 @@ const DEFAULT_OPTIONS: Options = {
   ground: "",
   variant: "0",
   lod: "near",
+  wire: "off",
   channel: "color",
   tiles: "2",
 };
@@ -528,6 +529,11 @@ function renderPreviewBar(): void {
       viewOptions.append(select("On", "ground", groundChoices(content, current), rebuild));
     }
     if (view.id !== "model") viewOptions.append(checkbox("Grass", "grass", rebuild));
+    viewOptions.append(
+      checkbox("Wireframe", "wire", () => {
+        if (stage) stage.scene.forceWireframe = options.wire === "on";
+      }),
+    );
     if ((current.folder === "trees" || current.folder === "bushes" || current.folder === "rocks") && content) {
       const def = kindOf(content, current);
       const variants = def ? variantCount(def) : 1;
@@ -784,6 +790,7 @@ async function preview3d(token: number, asset: Asset, view: ViewDef, content: Wo
   }
   stage?.dispose();
   stage = built;
+  built.scene.forceWireframe = options.wire === "on";
   stageSubject = subject;
   urlCamera = undefined;
   // The URL follows the camera - written once it settles, not on every frame of a drag.

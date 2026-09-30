@@ -1,5 +1,5 @@
 import { mulberry32 } from "../rng";
-import type { BushTexture, ConiferTexture, FoliageTexture } from "./foliageConfig";
+import { FROND_STALK_HALF_WIDTH, FROND_STALK_SHARE, type BushTexture, type ConiferTexture, type FoliageTexture, type Fronds } from "./foliageConfig";
 
 /** Four clump variants in a 2x2 atlas. */
 export const FOLIAGE_TEXTURE_SIZE = 1024;
@@ -69,6 +69,22 @@ class Painter {
         if (edge < 1.8) shade *= 0.85;
         shade *= 0.85 + 0.15 * along; // darker where the leaf joins the stem
         this.blend(py * this.size + px, cover, base[0] * shade, base[1] * shade, base[2] * shade);
+      }
+    }
+  }
+
+  /**
+   * Fills one cell from a function of where in it a pixel is - `x` 0-1 left to right, `y` 0-1 from
+   * the bottom up - which gives its coverage and colour, or null for none.
+   */
+  fill(clip: Clip, sample: (x: number, y: number) => [number, number, number, number] | null): void {
+    const w = clip.x1 - clip.x0;
+    const h = clip.y1 - clip.y0;
+    for (let py = clip.y0; py < clip.y1; py++) {
+      for (let px = clip.x0; px < clip.x1; px++) {
+        const got = sample((px + 0.5 - clip.x0) / w, 1 - (py + 0.5 - clip.y0) / h);
+        if (!got || got[0] <= 0) continue;
+        this.blend(py * this.size + px, Math.min(1, got[0]), got[1], got[2], got[3]);
       }
     }
   }
@@ -240,8 +256,9 @@ function growStem(
  * few twigs from its bottom edge - the side of the card nearer the bush's middle - under a round
  * spray of leaves.
  */
-export function bakeBushFoliage(seed: number, def: BushTexture): Uint8Array {
+export function bakeBushFoliage(seed: number, def: BushTexture, fronds: Fronds | null = null): Uint8Array {
   if (def.builder === "fern") return bakeFernFoliage(seed, def);
+  if (def.builder === "paddleLeaf" || def.builder === "heartLeaf") return bakeBroadLeafFoliage(seed, def, fronds);
   const size = FOLIAGE_TEXTURE_SIZE;
   const cell = size / 2;
   const painter = new Painter(size);
@@ -407,6 +424,112 @@ function bakeFernFoliage(seed: number, def: BushTexture): Uint8Array {
     // it is wide, so laid on one the frond is squeezed sideways and its leaflets end up swept
     // forward the way a fern's are.
     paintFrond(painter, rng, def, clip, cell, clip.x0 + cell / 2, clip.y1 - 2, 0, 0, cell * 0.95, 0.12);
+  }
+  return painter.finish();
+}
+
+/**
+ * A broad-leaf atlas: one big leaf per cell, standing on its stalk - the stalk down the middle of the
+ * cell's bottom FROND_STALK_SHARE, the blade over the rest, tip at the top - laid along a frond strip
+ * with a `stalk` (see treeGenerator.ts's generateFronds). A banana's paddle ("paddleLeaf"): long,
+ * blunt-ended, a pale midrib, fine veins running out from it at a slant, torn from the edge towards
+ * the midrib here and there. Or an elephant ear's heart ("heartLeaf"): two rounded lobes either side
+ * of the notch where the stalk joins, a pointed tip, pale veins fanning out from the join.
+ *
+ * The stalk runs on up the blade, into its midrib, as wide as the plant's own stalk is for its blade
+ * (from its `fronds`), so the stem carries on across the join at one width.
+ */
+function bakeBroadLeafFoliage(seed: number, def: BushTexture, fronds: Fronds | null): Uint8Array {
+  const size = FOLIAGE_TEXTURE_SIZE;
+  const cell = size / 2;
+  const painter = new Painter(size);
+  const heart = def.builder === "heartLeaf";
+  const halfWidth = def.leafWidth;
+  // A pixel's size in the cell's 0-1 units, across (u runs -1 to 1, so twice) and along.
+  const pxU = 2 / cell;
+  const pxV = 1 / cell;
+  const smooth = (edge0: number, edge1: number, x: number): number => {
+    const t = Math.min(1, Math.max(0, (x - edge0) / (edge1 - edge0)));
+    return t * t * (3 - 2 * t);
+  };
+  for (let variant = 0; variant < 4; variant++) {
+    const rng = mulberry32(seed + variant * 7919);
+    const clip = cellClip(cell, variant);
+    const tears = Array.from({ length: heart ? 0 : def.leaves }, () => ({
+      at: 0.15 + rng() * 0.8,
+      side: rng() < 0.5 ? -1 : 1,
+      depth: 0.35 + rng() * 0.6,
+      slope: 0.08 + rng() * 0.12,
+      gap: 0.002 + rng() * 0.006,
+    }));
+    const toneShift = (rng() - 0.5) * 0.2;
+    // Where the stalk meets the blade, in blade units (0 at its base, 1 at its tip).
+    const join = heart ? 0.16 : 0;
+    // The stalk's half-width on the blade, in u: its width over the blade's. Below the blade, the
+    // stalk strip shows the middle of a wider painted stem, so it is all stem.
+    const onBlade = fronds?.stalk ? fronds.stalk.width / fronds.width : 0.06;
+    const stem = (u: number, v: number): [number, number, number, number] | null => {
+      const b = (v - FROND_STALK_SHARE) / (1 - FROND_STALK_SHARE);
+      // Up the blade it narrows into the midrib, a little past the join.
+      const r = v < FROND_STALK_SHARE ? FROND_STALK_HALF_WIDTH * 2 * 1.5 : onBlade * (1 - 0.6 * smooth(join, join + 0.15, b));
+      if (b > join + 0.15 || Math.abs(u) > r + pxU) return null;
+      const cover = Math.min(1, Math.max(0, (r - Math.abs(u)) / pxU + 0.5));
+      const across = Math.min(1, Math.abs(u) / r);
+      const shade = 0.6 + 0.4 * Math.sqrt(1 - across * across) - 0.1 * Math.sign(u) * across;
+      return [cover, def.stem[0] * shade, def.stem[1] * shade, def.stem[2] * shade];
+    };
+    painter.fill(clip, (x, y) => {
+      const u = (x - 0.5) * 2;
+      const b = (y - FROND_STALK_SHARE) / (1 - FROND_STALK_SHARE);
+      const au = Math.abs(u);
+      let half: number;
+      if (heart) {
+        // An ellipse widest a third of the way up, pinched to a point at the tip, rounded off at
+        // the lobes' bottoms, with the notch cut up into it between them.
+        half = halfWidth * Math.sqrt(Math.max(0, 1 - ((b - 0.36) / 0.68) ** 2));
+        if (b > 0.62) half *= Math.pow(Math.min(1, Math.max(0, (1.02 - b) / 0.4)), 0.7);
+        half *= Math.sqrt(Math.min(1, Math.max(0, (b + 0.06) / 0.12)));
+        if (b < join && au < 0.42 * (join - b) / join) half = 0;
+      } else {
+        // A long paddle: narrowing into the stalk, near parallel-sided, a blunt rounded tip.
+        half = halfWidth * Math.pow(Math.max(0, Math.sin(Math.PI * Math.min(1, Math.max(0, b)) * 0.97 + 0.03)), 0.3);
+        half *= smooth(-0.02, 0.12, b);
+        // Rounded off inside the cell, not cut by its top edge.
+        if (b > 0.78) half *= Math.sqrt(Math.max(0, 1 - ((b - 0.78) / 0.19) ** 2));
+      }
+      const edge = (half - au) / pxU;
+      let cover = b < 0 || b > 0.99 ? 0 : Math.min(1, Math.max(0, edge + 0.5));
+      // Torn: slits in from the edge, running back towards the stalk as they near the midrib.
+      for (const tear of tears) {
+        if (Math.sign(u) !== tear.side || au < half * (1 - tear.depth)) continue;
+        const line = b - (tear.at - au * tear.slope);
+        if (Math.abs(line) < tear.gap) cover *= Math.min(1, Math.max(0, (Math.abs(line) - tear.gap) / pxV + 1));
+      }
+      const blade = cover > 0;
+      const stalk = stem(u, y);
+      if (!blade) return stalk;
+      // Tone: darker at the join, fresher towards the tip and the edges; one half a shade lighter.
+      const tone = Math.min(1, Math.max(0, 0.25 + 0.45 * b + 0.25 * (au / Math.max(0.05, half)) + toneShift));
+      let shade = (u > 0 ? 1.06 : 0.92) * (0.8 + 0.2 * Math.min(1, edge / 6));
+      let vein = 0;
+      if (heart) {
+        // Veins fan from the join.
+        const angle = Math.atan2(u, b - join);
+        const spacing = Math.PI / Math.max(3, def.leaves);
+        const k = Math.abs(((angle / spacing) % 1 + 1) % 1 - 0.5) * 2;
+        vein = smooth(0.82, 0.97, k) * smooth(0, 0.08, Math.hypot(u, b - join));
+        if (au < 0.012 && b > join) vein = 1;
+      } else {
+        // A midrib, and fine veins out from it at a slant.
+        if (au < 0.022) vein = 1;
+        const k = (((b - au * 0.35) * 90) % 1 + 1) % 1;
+        shade *= 0.94 + 0.06 * smooth(0.2, 0.5, Math.abs(k - 0.5) * 2);
+      }
+      const colour = [0, 1, 2].map((c) => (def.dark[c] + (def.light[c] - def.dark[c]) * tone) * shade);
+      const veinColour = [0, 1, 2].map((c) => def.light[c] * 1.15 + 0.05);
+      const mixed = colour.map((c, i) => c + (veinColour[i] - c) * vein * 0.7);
+      return [cover, mixed[0], mixed[1], mixed[2]];
+    });
   }
   return painter.finish();
 }
