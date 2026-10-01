@@ -1,0 +1,120 @@
+/**
+ * Frozen bog - the wetland family's cold variant (see ZONES.md): a flat, open peatland in early
+ * winter, set at the waterline and pitted all over with small dark pools, most of them frozen over;
+ * between them a lumpy carpet of red and green sphagnum, straw-coloured tufts, frost at the pools'
+ * edges and snow lying in the hollows - or over nearly everything, each area its own depth of snow;
+ * thin spruces leaning every which way in loose groups on the drier rises, grey snags among them.
+ * A cold, low, white haze.
+ */
+{
+  name: "Frozen Bog",
+  voice: "frozen",
+  spawnWeight: 1.5,
+  lakeChance: 0.1,
+  borderType: "mountain",
+  settlement: "timber",
+  // How snowy the area is (0-1) - the ground and the trees follow it together - and how much of its
+  // water has frozen over.
+  params: { snow: { range: [0, 1] }, frozen: { range: [0.4, 1] } },
+  // The bog at the water: a slow swell, and on it a finer one pitting it with small pools - about
+  // a third of it under water, give or take (the terrain lifts land some 6 m on its own, hence
+  // the offset) - and over all of it, knee-high hummocks.
+  height: {
+    noises: [
+      { name: "swell", type: "fbm", octaves: 3, frequency: 0.006, amplitude: { range: [1, 1.6] }, persistence: 0.5, lacunarity: 2.0 },
+      { name: "pits", type: "fbm", octaves: 3, frequency: 0.022, amplitude: { range: [0.9, 1.3] }, persistence: 0.45, lacunarity: 2.0 },
+      { name: "hummocks", type: "fbm", octaves: 2, frequency: 0.09, amplitude: 0.35, persistence: 0.5, lacunarity: 2.0 },
+    ],
+    steps: [
+      { output: "swell", op: "sample", noise: "swell" },
+      { output: "pits", op: "sample", noise: "pits" },
+      { output: "hummocks", op: "sample", noise: "hummocks" },
+      { output: "ground", op: "add", a: "swell", b: "pits" },
+      { output: "lumpy", op: "add", a: "ground", b: "hummocks" },
+      { output: "result", op: "offset", input: "lumpy", amount: { range: [-5.2, -4.8] } },
+    ],
+  },
+  treeRules: { shore: [0.3, 1.2] },
+  // Spruces in loose groups on the drier rises, and grey snags among them.
+  trees: {
+    noises: [{ name: "group", type: "fbm", octaves: 2, frequency: 0.007, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
+    steps: [
+      { output: "height", op: "input", name: "height" },
+      { output: "rise", op: "mask", input: "height", at: 0.9, off: 0.35 },
+      { output: "groupRaw", op: "sample", noise: "group" },
+      { output: "groupRamp", op: "remap", input: "groupRaw", inMin: { range: [-0.5, -0.2] }, inMax: 0.3, outMin: 0, outMax: 1 },
+      { output: "group", op: "clamp", input: "groupRamp", min: 0, max: 1 },
+      { output: "grove", op: "multiply", a: "rise", b: "group" },
+      { output: "stuntedSpruce", op: "scale", input: "grove", factor: { range: [0.7, 1.0] } },
+      { output: "deadTree", op: "scale", input: "rise", factor: { range: [0.04, 0.1] } },
+    ],
+    outputs: { stuntedSpruce: "stuntedSpruce", deadTree: "deadTree" },
+  },
+  treeTints: [
+    {
+      snow: { param: "snow", to: [0.15, 0.6] },
+      // Dull, starved greens, going yellow.
+      leaves: { hue: { range: [-10, 10] }, saturation: { range: [0.6, 0.9] }, value: { range: [0.8, 1.0] }, spread: { hue: 8, saturation: 0.15, value: 0.12 } },
+      bark: { hue: { range: [-8, 8] }, saturation: { range: [0.6, 0.9] }, value: { range: [0.9, 1.1] }, spread: { value: 0.1 } },
+    },
+  ],
+  ground: {
+    base: "sphagnum",
+    road: "track",
+    adjust: { hue: { range: [-8, 8] }, saturation: { range: [0.85, 1.1] }, value: { range: [0.9, 1.05] } },
+    layers: [
+      // Ice over the pools: a pool frozen to its edges, or open dark water - which, by a slow noise,
+      // the area's `frozen` share of them. Past the waterline a little, the bank hiding it there,
+      // so the ice reaches the shore; weighted to outweigh the snow on the same ground.
+      {
+        id: "bog-ice",
+        material: "pondIce",
+        weight: {
+          noises: [{ name: "which", type: "fbm", octaves: 2, frequency: 0.01, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
+          steps: [
+            { output: "height", op: "input", name: "height" },
+            { output: "wet", op: "mask", input: "height", at: 0, off: 0.15 },
+            { output: "whichRaw", op: "sample", noise: "which" },
+            { output: "frozen", op: "mask", input: "whichRaw", at: { param: "frozen", to: [0.1, 0.9] }, off: { param: "frozen", to: [0.2, 1.0] } },
+            { output: "ice", op: "multiply", a: "wet", b: "frozen" },
+            { output: "result", op: "scale", input: "ice", factor: 6 },
+          ],
+        },
+      },
+      // Snow in the hollows and on the hummocks' north sides - or over nearly all of it.
+      { generator: "snowCover", id: "bog-snow", amount: { param: "snow", to: [0.1, 0.85] }, frequency: 0.008, drifts: 0.8, north: 1.5, strength: 1.5, shared: "bogSnow" },
+      // Hoar frost round the snow and at the pools' edges.
+      { generator: "snowCover", id: "bog-rime", material: "frostPatch", amount: { param: "snow", to: [0.3, 0.95] }, frequency: 0.008, drifts: 0.8, north: 1.5, strength: 1, shared: "bogSnow" },
+      // Straw-coloured tufts on the drier rises.
+      {
+        id: "bog-tufts",
+        material: "grassDry",
+        weight: {
+          noises: [{ name: "patch", type: "fbm", octaves: 3, frequency: 0.03, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
+          steps: [
+            { output: "height", op: "input", name: "height" },
+            { output: "rise", op: "mask", input: "height", at: 1.0, off: 0.4 },
+            { output: "patchRaw", op: "sample", noise: "patch" },
+            { output: "patch", op: "mask", input: "patchRaw", at: 0.45, off: 0.1 },
+            { output: "tufts", op: "multiply", a: "rise", b: "patch" },
+            { output: "result", op: "scale", input: "tufts", factor: 1.2 },
+          ],
+        },
+      },
+    ],
+  },
+  // A cold, low, white haze; pale, flat light.
+  sky: {
+    horizon: { oneOf: ["#d4dade", "#c8d0d6", "#dcdcd8"] },
+    zenith: "#8094a8",
+    cloud: "#eef0f2",
+    fogStart: { range: [0.02, 0.12] },
+    fogEnd: { range: [0.4, 0.75] },
+  },
+  light: {
+    sunPeak: 22,
+    moonPeak: 55,
+    ambientDay: "#cad4dc",
+    sunZenith: "#f0ece0",
+  },
+}

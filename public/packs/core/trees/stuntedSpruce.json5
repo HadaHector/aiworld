@@ -1,0 +1,83 @@
+// A stunted spruce: a bog's tree, starved on wet peat - thin and scrawny, short sparse limbs with
+// gaps between the tiers, the lot leaning hard one way or another as the peat gives under it (a
+// "drunken forest"), and wandering as it climbs. The spruce's bark and needles, duller.
+{
+  model: "conifer",
+  variants: 4,
+  trunk: {
+    height: 15,
+    radius: 0.42,
+    topRadius: 0.05,
+    // Leaning hard, and wandering as it climbs.
+    lean: 0.12,
+    bend: 0.5,
+    wobble: 0.45,
+    flare: 1.4,
+    flareHeight: 1.2,
+    sides: 7,
+    rings: 9,
+  },
+  roots: { count: 4, length: [1.2, 2.0], radius: 0.32, drop: 0.6, sides: 4, rings: 2 },
+  tiers: {
+    // Few, short and far apart: the trunk shows between them.
+    count: [9, 12],
+    from: 0.12,
+    radius: [2.6, 0.6],
+    height: [1.8, 1.1],
+    droop: 1.2,
+    panels: 6,
+    breadth: 0.7,
+    arch: 0.5,
+    tilt: 0.12,
+    // Ragged: every limb its own length.
+    variety: 0.55,
+  },
+  // Spruce bark: small, thin, rounded scales, grey-brown, flaking - no deep fissures.
+  bark: {
+    tile: 1.0,
+    texture: {
+      bumpStrength: 2,
+      pipeline: {
+        noises: [
+          { name: "scales", type: "worley", tileCycles: 16, stretch: [1, 1.4], amplitude: 1, mode: "edge", warp: 0.15, sizeJitter: 0.3 },
+          { name: "mottle", type: "fbm", octaves: 3, tileCycles: 9, amplitude: 1, persistence: 0.5, lacunarity: 2 },
+        ],
+        steps: [
+          { output: "scaleEdge", op: "sample", noise: "scales" },
+          { output: "scaleId", op: "sample", noise: "scales", mode: "cell" },
+          { output: "height", op: "mask", input: "scaleEdge", at: 0.12, off: 0.0 },
+          { output: "mottleRaw", op: "sample", noise: "mottle" },
+          { output: "mottle", op: "mask", input: "mottleRaw", at: 1.6, off: -1.6 },
+          {
+            output: "scaleTone",
+            op: "colorRamp",
+            input: "scaleId",
+            stops: [
+              { at: 0.0, color: [0.3, 0.24, 0.2] },
+              { at: 0.5, color: [0.38, 0.31, 0.26] },
+              { at: 1.0, color: [0.33, 0.25, 0.19] },
+            ],
+          },
+          { output: "mottleShade", op: "remap", input: "mottle", inMin: 0, inMax: 1, outMin: 0.75, outMax: 1.1 },
+          { output: "scaleLit", op: "multiply", a: "scaleTone", b: "mottleShade" },
+          { output: "gap", op: "color", value: [0.1, 0.08, 0.07] },
+          { output: "diffuse", op: "mix", a: "gap", b: "scaleLit", t: "height" },
+          { output: "roughness", op: "constant", value: 0.85 },
+        ],
+        outputs: { diffuse: "diffuse", roughness: "roughness", height: "height" },
+      },
+    },
+  },
+  foliage: {
+    builder: "firSpray",
+    dark: [0.02, 0.08, 0.06],
+    light: [0.14, 0.28, 0.18],
+    twig: [0.2, 0.15, 0.11],
+    twigs: 20,
+    needleLength: 0.05,
+    needleWidth: 0.008,
+    needleGap: 0.005,
+  },
+  tint: [[0.85, 0.92, 0.95], [1.05, 1.05, 1.02]],
+  scale: [0.6, 1.2],
+}

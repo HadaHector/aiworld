@@ -149,6 +149,13 @@ Existing: **broadleaf**, **pine**, **palm**.
   duckweed (new: a material that `floats`, drawn on a sheet at the water's surface) in mats against
   the banks with open lanes between, stranded duckweed on the banks; bulrush in patches; shed
   needles; a close green-grey haze. The water no longer rises and falls.
+- **Frozen bog: done** - `biomes/frozenBog.json5`. Flat peatland at the waterline, pitted with small
+  pools under knee-high hummocks; each area its own depth of snow and its own share of its pools
+  frozen over (new `pondIce`, a floating material: milky and clear ice, cracks, bubbles, frost),
+  the rest open dark water; red, ochre and green sphagnum (new `sphagnum`), cotton grass in drifts
+  (new `grass/cottonGrass`), straw tufts on the rises, snow in the hollows ringed with hoar frost
+  (snow no longer lies under water); stunted spruces (new `stuntedSpruce`: scrawny, ragged, leaning
+  hard) and grey snags in loose groups on the rises; a cold, low, white haze.
 
 | Variant | Ground | Plants | Trees | Extras |
 |---|---|---|---|---|

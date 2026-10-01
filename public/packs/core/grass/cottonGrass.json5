@@ -1,0 +1,31 @@
+// Cotton grass: a bog's sedge - a thin tuft of grassy leaves, and over it, on bare stems, a nodding
+// head of white cotton, a tuft of fluffy bristles. Gathered in drifts, so a stretch of bog is
+// dotted white from end to end and the next has none.
+{
+  width: 0.8,
+  height: 0.9,
+  sway: 0.22,
+  fadeStart: 60,
+  fadeEnd: 260,
+  cluster: { scale: 14, coverage: 0.45 },
+  blades: {
+    count: 14,
+    minHeight: 0.4,
+    maxHeight: 0.95,
+    baseWidth: 2,
+    lean: 0.12,
+    fan: true,
+    seedHeads: false,
+    flowerHeads: {
+      shape: "globe",
+      petals: 30,
+      count: 5,
+      radius: 10,
+      colors: [
+        [0.97, 0.97, 0.95],
+        [0.94, 0.93, 0.9],
+        [0.98, 0.96, 0.92],
+      ],
+    },
+  },
+}

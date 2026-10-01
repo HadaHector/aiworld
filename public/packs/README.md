@@ -131,7 +131,7 @@ Anywhere a value is expected, `{ generator: "<name>", ...params }` produces it i
 | `twoSpecies` | a tree density split between two species | `lower`, `upper`, `noises`, `cover` (steps ending in `cover`), `share` (steps ending in `share`) |
 | `twoTone` | a material texture: one mottle between two colours | `base`, `variation`, `roughness`, `bumpStrength` |
 | `grassland` | a grassy ground texture: clumps, curling blade strokes, ragged bare patches | `dark`, `light`, `soil`, `soilAmount` (0-1), `roughness`, `bumpStrength`, and optionally fallen `leaves` (0-1) in `leafColors: [dark, light]` |
-| `snowCover` | a ground layer of snow: ragged patches over a share of the ground, lying longest in hollows and on north faces, plus an optional snow line | `id`, `amount` (0-1 of the ground), and optionally `frequency` (patch size, 0.008), `material` ("snow"), `drifts` (pull into hollows, 0.6), `north` (pull onto north faces, 1.5), `line: [start, full]` (heights), `strength` (2), `chance` |
+| `snowCover` | a ground layer of snow: ragged patches over a share of the ground, lying longest in hollows and on north faces, plus an optional snow line; none under the water or at its very edge | `id`, `amount` (0-1 of the ground), and optionally `frequency` (patch size, 0.008), `material` ("snow"), `drifts` (pull into hollows, 0.6), `north` (pull onto north faces, 1.5), `line: [start, full]` (heights), `strength` (2), `chance` |
 
 Generators are code (`src/world/content/generators.ts`); anything they make can also be written
 out in full.
@@ -270,7 +270,11 @@ it breaks up raggedly through its own thin spots), and above the water it is not
 little past the waterline - the bank hides it there - so a mat reaches the shore, and lay something
 that looks like it on the bank (`core/materials/strandedDuckweed.json5` borrows its texture) so the
 cut edge lands on more of the same. Keep other layers off the water where it lies: weights share
-out, and one crowding it under half leaves the water bare.
+out, and one crowding it under half leaves the water bare. Ice is one too (see
+`core/materials/pondIce.json5`, and `core/biomes/frozenBog.json5` freezing a share of its pools): a
+texture whose height is near full everywhere covers a pool to its edge. Mind the shore - a triangle
+blends only three materials, so a floating layer running far up the bank, among snow, frost and the
+rest, leaves faceted edges where they crowd one another out.
 
 `diffuse` is required; `roughness` (0 shiny - 1 matte) and `height` (0-1, drives the bump map) are
 optional. A texture is one 50 m tile, baked at load - every texture costs about 11 MB of GPU

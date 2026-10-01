@@ -346,7 +346,8 @@ const grassland: Generator = (params, reader, path) => {
  * reliefCurvature pulls it in) and on the north-facing slopes (`north`, how strongly slopeFacing
  * does) - and scoured off the ridges. With `line: [start, full]`, everything above a snow line is
  * covered too, starting at the first height and complete by the second. Weighted past 1
- * (`strength`) so a patch's middle is all snow rather than a share of the ground under it.
+ * (`strength`) so a patch's middle is all snow rather than a share of the ground under it. None
+ * lies under the water.
  *
  * With `shared`, the patch noise is shared with every other layer naming the same: a second layer of
  * frost (`material`) with a larger `amount` then rings the snow patches instead of lying elsewhere.
@@ -385,7 +386,14 @@ const snowCover: Generator = (params, reader, path) => {
   } else {
     steps.push({ output: "snow", op: "scale", input: "patches", factor: 1 });
   }
-  steps.push({ output: "result", op: "scale", input: "snow", factor: reader.optionalNumber(params, "strength", path, 2, { min: 0 }) });
+  // None under the water - snow falling on a pool melts into it, or lies on its ice, not its bed -
+  // nor at its very edge, which is the water's own layers' to share (a triangle blends only three).
+  steps.push(
+    { output: "groundHeight", op: "input", name: "height" },
+    { output: "dry", op: "mask", input: "groundHeight", at: 0.25, off: 0.05 },
+    { output: "drySnow", op: "multiply", a: "snow", b: "dry" },
+    { output: "result", op: "scale", input: "drySnow", factor: reader.optionalNumber(params, "strength", path, 2, { min: 0 }) },
+  );
   return {
     ...(params.chance === undefined ? {} : { chance: params.chance }),
     id: reader.string(params, "id", path),

@@ -1,0 +1,62 @@
+// Pond ice: a frozen pool's skin, floating on the water (`floats`) - grey and milky where it froze
+// cloudy, dark where it froze clear and the black water shows through, crazed with white cracks,
+// strung with frozen bubbles, a frost bloom here and there. Glassy, but for the frosted patches. Its
+// height is near full all over, so a pool once frozen stays frozen to its edge; only where the
+// layer's weight thins out does it break up, through the clear patches first.
+{
+  name: "Pond Ice",
+  floats: true,
+  uvScale: 2,
+  detail: { strength: 0.2 },
+  texture: {
+    bumpStrength: 0.4,
+    pipeline: {
+      noises: [
+        { name: "clouding", type: "fbm", octaves: 4, tileCycles: 6, amplitude: 1, persistence: 0.55, lacunarity: 2.0 },
+        { name: "cracks", type: "worley", tileCycles: 9, amplitude: 1, mode: "edge", warp: 0.5, sizeJitter: 0.5 },
+        { name: "fineCracks", type: "worley", tileCycles: 30, amplitude: 1, mode: "edge", warp: 0.4, sizeJitter: 0.5 },
+        { name: "bubbles", type: "worley", tileCycles: 240, amplitude: 1, mode: "f1", sizeJitter: 0.5 },
+        { name: "bubbleWhere", type: "fbm", octaves: 2, tileCycles: 8, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+        { name: "frost", type: "fbm", octaves: 3, tileCycles: 12, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+      ],
+      steps: [
+        { output: "cloudRaw", op: "sample", noise: "clouding" },
+        { output: "cloudy", op: "mask", input: "cloudRaw", at: 0.35, off: -0.35 },
+        { output: "crackEdge", op: "sample", noise: "cracks" },
+        { output: "crackLine", op: "mask", input: "crackEdge", at: 0.004, off: 0.018 },
+        { output: "crack", op: "scale", input: "crackLine", factor: 0.55 },
+        { output: "fineEdge", op: "sample", noise: "fineCracks" },
+        { output: "fineRaw", op: "mask", input: "fineEdge", at: 0.003, off: 0.012 },
+        { output: "fine", op: "scale", input: "fineRaw", factor: 0.25 },
+        { output: "cracking", op: "max", a: "crack", b: "fine" },
+        { output: "bubbleDistance", op: "sample", noise: "bubbles" },
+        { output: "bubbleDot", op: "mask", input: "bubbleDistance", at: 0.12, off: 0.25 },
+        { output: "bubbleWhereRaw", op: "sample", noise: "bubbleWhere" },
+        { output: "bubbleWhere", op: "mask", input: "bubbleWhereRaw", at: 0.5, off: 0.1 },
+        { output: "bubble", op: "multiply", a: "bubbleDot", b: "bubbleWhere" },
+        { output: "frostRaw", op: "sample", noise: "frost" },
+        { output: "frost", op: "mask", input: "frostRaw", at: 0.75, off: 0.35 },
+
+        { output: "clear", op: "color", value: [0.22, 0.27, 0.31] },
+        { output: "milky", op: "color", value: [0.52, 0.58, 0.62] },
+        { output: "body", op: "mix", a: "clear", b: "milky", t: "cloudy" },
+        { output: "white", op: "color", value: [0.74, 0.79, 0.83] },
+        { output: "bubbled", op: "mix", a: "body", b: "white", t: "bubble" },
+        { output: "cracked", op: "mix", a: "bubbled", b: "white", t: "cracking" },
+        { output: "frostWhite", op: "color", value: [0.86, 0.9, 0.94] },
+        { output: "diffuse", op: "mix", a: "cracked", b: "frostWhite", t: "frost" },
+
+        // Glassy, frosted patches matte.
+        { output: "glass", op: "constant", value: 0.08 },
+        { output: "frosted", op: "constant", value: 0.7 },
+        { output: "roughness", op: "mix", a: "glass", b: "frosted", t: "frost" },
+
+        // Near full all over, the clear patches a little lower - where a thinning sheet gives first.
+        { output: "cloudHeight", op: "scale", input: "cloudy", factor: 0.25 },
+        { output: "base", op: "constant", value: 0.7 },
+        { output: "height", op: "add", a: "base", b: "cloudHeight" },
+      ],
+      outputs: { diffuse: "diffuse", roughness: "roughness", height: "height" },
+    },
+  },
+}
