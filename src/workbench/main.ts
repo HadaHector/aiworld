@@ -15,6 +15,8 @@ import { WORLD_SEED } from "../world/world";
 import { createStage, type CameraView, type GroundShape, type Stage } from "./stage";
 import { createTextureView, type TextureImage } from "./textureView";
 import { createTextureCacheLabel } from "../debug/textureCacheLabel";
+import { sampleBiomeArea, type BiomeArea } from "./biomeArea";
+import { heightView, layerView, materialsView, plantsView, type Rgb } from "./biomeViews";
 
 // ---------------------------------------------------------------------------------------------
 // Assets: every file of every pack, by "pack/folder/id".
@@ -31,8 +33,8 @@ interface Asset {
 }
 
 /** The folders with a preview, and what each asset kind can be looked at as. */
-type PreviewFolder = "materials" | "trees" | "bushes" | "rocks" | "grass";
-const PREVIEW_FOLDERS: PreviewFolder[] = ["materials", "trees", "bushes", "rocks", "grass"];
+type PreviewFolder = "materials" | "trees" | "bushes" | "rocks" | "grass" | "biomes";
+const PREVIEW_FOLDERS: PreviewFolder[] = ["materials", "trees", "bushes", "rocks", "grass", "biomes"];
 /** Everything else is listed after these, its JSON still checked by Preview. */
 const FOLDER_ORDER = ["materials", "trees", "bushes", "rocks", "grass", "biomes", "layers", "borderHills", "settlements", "voices", "patches", ""];
 
@@ -88,6 +90,15 @@ const DEFAULT_OPTIONS: Options = {
   wire: "off",
   channel: "color",
   tiles: "2",
+  // A biome's maps: which area's roll, how much of it and how finely, and per view what to show.
+  roll: "0",
+  extent: "1024",
+  res: "257",
+  colors: "natural",
+  only: "",
+  layer: "",
+  plants: "all",
+  water: "on",
 };
 
 // ---------------------------------------------------------------------------------------------
@@ -154,6 +165,7 @@ const textureCanvas = element<HTMLCanvasElement>("textureCanvas");
 const stageStatus = element<HTMLElement>("stageStatus");
 const stageHelp = element<HTMLElement>("stageHelp");
 const pixelReadout = element<HTMLElement>("pixelReadout");
+const mapLegend = element<HTMLElement>("mapLegend");
 
 const engine = new Engine(stageCanvas, true, { preserveDrawingBuffer: true, stencil: true });
 const textureView = createTextureView(textureCanvas, pixelReadout);
@@ -448,6 +460,13 @@ function viewsFor(asset: Asset | null, content: WorldContent | null): ViewDef[] 
       if (model === "boulder") views.push({ id: "bark", label: "Stone", mode: "2d" });
       return views;
     }
+    case "biomes":
+      return [
+        { id: "height", label: "Height", mode: "2d" },
+        { id: "materials", label: "Materials", mode: "2d" },
+        { id: "layers", label: "Layers", mode: "2d" },
+        { id: "plants", label: "Plants", mode: "2d" },
+      ];
   }
 }
 
@@ -563,6 +582,22 @@ function renderPreviewBar(): void {
         ], rebuild));
       }
     }
+  } else if (current.folder === "biomes") {
+    viewOptions.append(
+      select("Area", "roll", Array.from({ length: 8 }, (_, i): [string, string] => [String(i), `Roll ${i + 1}`]), rebuild),
+      select("Size", "extent", [["512", "512 m"], ["1024", "1 km"], ["2048", "2 km"]], rebuild),
+      select("Detail", "res", [["129", "Coarse"], ["257", "Medium"], ["513", "Fine"]], rebuild),
+    );
+    const biome = content?.biomes.find((b) => b.id === current?.id);
+    if (view.id === "materials") {
+      viewOptions.append(
+        select("Colours", "colors", [["natural", "As drawn"], ["categorical", "Distinct"]], rebuild),
+        select("Show", "only", [["", "All"], ...(biomeArea?.area.materials ?? []).map((m): [string, string] => [m.id, m.name])], rebuild),
+      );
+    }
+    if (view.id === "layers") viewOptions.append(select("Layer", "layer", (biome?.materialLayers ?? []).map((l): [string, string] => [l.id, `${l.id} (${l.materialId})`]), rebuild));
+    if (view.id === "plants") viewOptions.append(select("Show", "plants", [["all", "All"], ["trees", "Trees"], ["bushes", "Bushes"], ["rocks", "Rocks"]], rebuild));
+    if (view.id !== "height") viewOptions.append(checkbox("Water", "water", rebuild));
   } else {
     const atlas = view.id === "leaves" || view.id === "blades";
     viewOptions.append(
@@ -683,6 +718,7 @@ function showMode(mode: "3d" | "2d" | "none"): void {
   stageHelp.textContent =
     mode === "3d" ? "Drag: orbit · Right-drag: pan · Wheel: zoom" : mode === "2d" ? "Wheel: zoom · Drag: pan · Double-click: fit" : "";
   if (mode !== "2d") textureView.clear();
+  mapLegend.replaceChildren();
   if (mode !== "3d") dropStage();
   // A 2D view has no camera. (Not on "none": that is also how the page starts, before the camera
   // the URL came with has been used.)
@@ -809,7 +845,59 @@ async function preview3d(token: number, asset: Asset, view: ViewDef, content: Wo
   setStatus("");
 }
 
+/** The last biome area sampled, and what it was sampled from - a view or an option of a view
+ *  changing draws it again without sampling it again. */
+let biomeArea: { key: string; area: BiomeArea } | null = null;
+
+async function previewBiome(token: number, asset: Asset, view: ViewDef, content: WorldContent): Promise<void> {
+  const extent = Number(options.extent) || 1024;
+  const res = Number(options.res) || 257;
+  const roll = Number(options.roll) || 0;
+  const key = [asset.key, seed, roll, extent, res, editor.value].join("|");
+  if (biomeArea?.key !== key) {
+    setStatus("Sampling the area");
+    await nextPaint();
+    const area = sampleBiomeArea(seed, content, asset.id, roll, extent, res);
+    if (token !== previewToken) return;
+    biomeArea = { key, area };
+    // The menus listing its materials follow it.
+    renderPreviewBar();
+  }
+  const area = biomeArea.area;
+  const water = options.water === "on";
+  let map;
+  if (view.id === "height") map = heightView(area);
+  else if (view.id === "materials") {
+    let colors: Rgb[] | null = null;
+    if (options.colors === "natural") {
+      setStatus("Baking the materials");
+      await nextPaint();
+      colors = await Promise.all(
+        area.materials.map(async (def) => {
+          const baked = await bakedGround(def, seed);
+          return applyColorMatrix(materialMatrix(def), baked.layerAverages[0]) as Rgb;
+        }),
+      );
+      if (token !== previewToken) return;
+    }
+    map = materialsView(area, colors, options.only, water);
+  } else if (view.id === "layers") map = layerView(area, options.layer, water);
+  else {
+    setStatus("Scattering the plants");
+    await nextPaint();
+    map = plantsView(area, options.plants, water);
+  }
+  if (token !== previewToken) return;
+  const subject = `${asset.key}|${extent}|${res}`;
+  showMode("2d");
+  textureView.show(map.image, textureSubject === subject);
+  textureSubject = subject;
+  mapLegend.replaceChildren(map.legend);
+  setStatus("");
+}
+
 async function preview2d(token: number, asset: Asset, view: ViewDef, content: WorldContent): Promise<void> {
+  if (asset.folder === "biomes") return previewBiome(token, asset, view, content);
   const subject = `${asset.key}|${view.id}`;
   setStatus("Baking");
   await nextPaint();

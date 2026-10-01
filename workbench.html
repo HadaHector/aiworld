@@ -313,6 +313,26 @@
         text-shadow: 0 1px 2px #000;
       }
 
+      #mapLegend {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        max-width: 340px;
+        max-height: calc(100% - 50px);
+        overflow: auto;
+        padding: 8px 10px;
+        border-radius: 6px;
+        background: rgba(22, 27, 33, 0.88);
+        border: 1px solid var(--line);
+        font-size: 12px;
+      }
+      #mapLegend:empty { display: none; }
+      #mapLegend h3 { margin: 0 0 6px; font-size: 12px; color: var(--accent-strong); }
+      #mapLegend table { border-collapse: collapse; margin-bottom: 8px; width: 100%; }
+      #mapLegend td { padding: 1px 6px 1px 0; white-space: nowrap; }
+      #mapLegend td:not(:first-child) { text-align: right; color: var(--muted); }
+      #mapLegend .chip { display: inline-block; width: 10px; height: 10px; margin-right: 6px; border-radius: 2px; vertical-align: -1px; }
+
       #pixelReadout {
         position: absolute;
         left: 10px;
@@ -370,6 +390,7 @@
           <canvas id="stageCanvas"></canvas>
           <canvas id="textureCanvas"></canvas>
           <div id="pixelReadout"></div>
+          <div id="mapLegend"></div>
           <div id="stageHelp"></div>
           <div id="stageStatus"></div>
         </div>

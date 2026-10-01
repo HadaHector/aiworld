@@ -10,8 +10,12 @@ Files are [JSON5](https://json5.org): JSON plus comments, trailing commas and un
 
 To look at one asset on its own, open the **workbench** (`/workbench.html` on the dev server): pick
 a material, tree, bush or grass, edit its JSON and preview it - on a patch of ground under the
-game's own sun and sky, or as its baked textures. Edits there are not saved; copy them into the
-file to keep them. Every other file's JSON is still checked when previewed.
+game's own sun and sky, or as its baked textures. A biome is shown as maps of one area of it, alone
+on open land (no rivers, roads or neighbours) - one of several areas' rolls, a few hundred metres to
+two kilometres across: its height and water, its materials (as drawn or a colour each, or one at a
+time) with each one's share of the ground, any one of its ground layers' raw weight, and where its
+trees, bushes and stones are placed, with counts per hectare. Edits there are not saved; copy them
+into the file to keep them. Every other file's JSON is still checked when previewed.
 
 ## Layout
 
