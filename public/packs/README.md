@@ -316,7 +316,8 @@ describing the baked blade texture. A flowering kind gives `blades.flowerHeads: 
 colors: [...] }`, and each tuft's petals take one of its colours. `shape` is how a head is drawn -
 `flower` (round petals, the default), `daisy` (rays round an eye), `cup` (a tulip in profile),
 `bell` (hanging bells), `raceme` (a spire of florets, lupin), `umbel` (a flat dome of tiny florets,
-yarrow), `globe` (a ball, clover or thistle) or `spike` (a cattail); `petals` is its count of petals,
+yarrow), `globe` (a ball, clover or thistle), `spike` (a cattail) or `plume` (a reed's feathery panicle,
+nodding one way - see `core/grass/reed.json5`); `petals` is its count of petals,
 bells, florets or rays, and `eye: [r, g, b]` colours a flower's centre. At most 32 grass kinds in total.
 
 Trees come in two models. `model: "branching"` (see `core/trees/broadleaf.json5`) is generated:
@@ -350,7 +351,12 @@ branches and on top. Its sections:
 `vines: { count, length, radius, loops }` hangs lianas from the limbs (see
 `core/trees/cloudGiant.json5`): woody strands dropping `length` metres from along a branch's outer
 half, stopping short of the ground, or - a `loops` share of them - slung between two limbs, sagging.
-They are drawn with the bark, and left off a distant tree.
+They are drawn with the bark, and left off a distant tree. With `leaves: { width, tile? }` a strand is
+a willow's whip instead (see `core/trees/willow.json5`): arching up and out off its limb - square to
+it near the trunk, running on outwards towards the limb's end - then falling, a ribbon `width` metres
+wide with the leaf atlas repeated down it every `tile` metres (default `width`), twisting as it
+falls. Its atlas is `willowWhip`: a stem and `leaves` narrow leaves to each width of whip. A leafy
+tree needs neither `leaves` nor a `crown`; a distant one keeps every other whip.
 
 Leave out both `leaves` and `foliage` for a bare tree - all wood, no leaves (see
 `core/trees/deadTree.json5`).

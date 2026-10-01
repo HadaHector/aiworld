@@ -256,9 +256,10 @@ function growStem(
  * few twigs from its bottom edge - the side of the card nearer the bush's middle - under a round
  * spray of leaves.
  */
-export function bakeBushFoliage(seed: number, def: BushTexture, fronds: Fronds | null = null): Uint8Array {
+export function bakeBushFoliage(seed: number, def: BushTexture, fronds: Fronds | null = null, stretch = 1): Uint8Array {
   if (def.builder === "fern" || def.builder === "palmFrond") return bakeFernFoliage(seed, def);
   if (def.builder === "paddleLeaf" || def.builder === "heartLeaf") return bakeBroadLeafFoliage(seed, def, fronds);
+  if (def.builder === "willowWhip") return bakeWillowFoliage(seed, def, stretch);
   const size = FOLIAGE_TEXTURE_SIZE;
   const cell = size / 2;
   const painter = new Painter(size);
@@ -532,6 +533,55 @@ function bakeBroadLeafFoliage(seed: number, def: BushTexture, fronds: Fronds | n
       const mixed = colour.map((c, i) => c + (veinColour[i] - c) * vein * 0.7);
       return [cover, mixed[0], mixed[1], mixed[2]];
     });
+  }
+  return painter.finish();
+}
+
+/**
+ * A willow atlas: each cell one tile of a whip, repeated end to end down it (see treeGenerator.ts's
+ * LeafBuilder.ribbon) - a straight stem down the middle, and `leaves` narrow, pointed leaves off it,
+ * alternately left and right, spread evenly up the whole stem and angled up towards the cell's top
+ * (the whip's tip, which hangs down), each its own length and shade, the ones behind the stem
+ * darker. Seamless: a leaf running over the cell's top is painted again a cell lower, where the next
+ * tile carries it on. `leafLength`/`leafWidth` are fractions of the whip's width.
+ *
+ * A tile may be `stretch` times longer than the whip is wide: the cell then holds that many widths of
+ * whip - `stretch` times the leaves - every one squashed down by as much, to come out leaf-shaped on
+ * it. Fewer, longer tiles, fewer quads.
+ */
+function bakeWillowFoliage(seed: number, def: BushTexture, stretch: number): Uint8Array {
+  const size = FOLIAGE_TEXTURE_SIZE;
+  const cell = size / 2;
+  const painter = new Painter(size);
+  for (let variant = 0; variant < 4; variant++) {
+    const rng = mulberry32(seed + variant * 7919);
+    const clip = cellClip(cell, variant);
+    const x = clip.x0 + cell / 2;
+    const bottom = clip.y1;
+    const leafAt = (back: boolean): void => {
+      const count = Math.round(def.leaves * stretch);
+      for (let i = 0; i < count; i++) {
+        if ((i % 3 === 0) !== back) continue;
+        const side = i % 2 === 0 ? -1 : 1;
+        const angle = side * (0.6 + rng() * 0.35);
+        const onWhip = def.leafLength * cell * (0.85 + rng() * 0.3);
+        // Squashed down by the stretch: its run along the whip shortened, its reach across kept.
+        const dx = Math.sin(angle) * onWhip;
+        const dy = (Math.cos(angle) * onWhip) / stretch;
+        const leafLength = Math.hypot(dx, dy);
+        const leafWidth = def.leafWidth * cell * (0.85 + rng() * 0.3) * (0.5 + 0.5 / stretch);
+        // Spread evenly up the whole stem.
+        const y = bottom - ((i + 0.5 + (rng() - 0.5) * 0.4) / count) * cell;
+        const tone = Math.min(1, 0.3 + rng() * 0.6);
+        const base = [0, 1, 2].map((c) => def.dark[c] + (def.light[c] - def.dark[c]) * tone);
+        const brightness = (0.85 + rng() * 0.25) * (back ? 0.75 : 1);
+        // Painted again a cell lower, so what runs over the top carries on at the next tile's bottom.
+        for (const shift of [0, cell]) painter.leaf(x, y + shift, dx / leafLength, -dy / leafLength, leafLength, leafWidth, base, brightness, clip);
+      }
+    };
+    leafAt(true);
+    painter.stem(x, clip.y0, x, clip.y1, cell * 0.012, cell * 0.012, def.stem, clip);
+    leafAt(false);
   }
   return painter.finish();
 }

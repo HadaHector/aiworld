@@ -876,12 +876,15 @@ function readBranchingTree(obj: RawObject, reader: Reader, common: string[]): Br
   const twigs = reader.object(branches.twigs, "branches.twigs");
   reader.onlyKeys(twigs, "branches.twigs", ["count", "length", "angle", "sides", "rings"]);
   // A bare tree - a dead one - has neither leaves (nor a frond crown) nor the foliage they are cut from.
-  const leafy = obj.leaves !== undefined || obj.crown !== undefined;
-  if (leafy !== (obj.foliage !== undefined)) reader.fail("foliage", "a tree with leaves or a crown has foliage; a bare tree has none of them");
+  const leafyVines = isObject(obj.vines) && obj.vines.leaves !== undefined;
+  const leafy = obj.leaves !== undefined || obj.crown !== undefined || leafyVines;
+  if (leafy !== (obj.foliage !== undefined)) reader.fail("foliage", "a tree with leaves, a crown or leafy vines has foliage; a bare tree has none of them");
   const bare = obj.leaves === undefined;
   const leaves = bare ? {} : section("leaves", ["size", "cards", "alongBranch", "top", "spread", "squash", "level"]);
   const crown = obj.crown === undefined ? null : readFronds(obj.crown, reader, "crown");
-  const vinesObj = obj.vines === undefined ? null : section("vines", ["count", "length", "radius", "loops"]);
+  const vinesObj = obj.vines === undefined ? null : section("vines", ["count", "length", "radius", "loops", "leaves"]);
+  const vineLeaves = vinesObj?.leaves === undefined ? null : reader.object(vinesObj.leaves, "vines.leaves");
+  if (vineLeaves) reader.onlyKeys(vineLeaves, "vines.leaves", ["width", "tile"]);
   const bark = section("bark", ["tile", "texture"]);
   const foliageObj = obj.foliage === undefined ? null : reader.object(obj.foliage, "foliage");
   // A frond crown's atlas is a bush's (a fern's, a palm's, a broad leaf's); leaf clusters' are the broadleaf's.
@@ -971,6 +974,12 @@ function readBranchingTree(obj: RawObject, reader: Reader, common: string[]): Br
           length: reader.range(vinesObj, "length", "vines", { allowEqual: true }),
           radius: reader.number(vinesObj, "radius", "vines", { min: 0.01 }),
           loops: reader.optionalNumber(vinesObj, "loops", "vines", 0.3, { min: 0, max: 1 }),
+          leaves: vineLeaves
+            ? {
+                width: reader.number(vineLeaves, "width", "vines.leaves", { min: 0.05 }),
+                tile: reader.optionalNumber(vineLeaves, "tile", "vines.leaves", reader.number(vineLeaves, "width", "vines.leaves", { min: 0.05 }), { min: 0.05 }),
+              }
+            : null,
         }
       : null,
     bark: {

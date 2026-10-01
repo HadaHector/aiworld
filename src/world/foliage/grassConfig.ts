@@ -64,9 +64,11 @@ export interface GrassKindDef {
  *  - "raceme": florets crowded up the top of the stem (12) - lupin, foxglove, lavender;
  *  - "umbel": a flat-topped dome of tiny florets on thin rays (9) - yarrow, cow parsley;
  *  - "globe": a ball of tiny florets (26) - clover, allium, thistle;
- *  - "spike": a bulrush's cattail - a long, rounded head a little below the tip.
+ *  - "spike": a bulrush's cattail - a long, rounded head a little below the tip;
+ *  - "plume": a reed's feathery panicle - hair-thin florets fanning out and drooping from the top of
+ *    the stem, all nodding one way (40).
  */
-export const FLOWER_SHAPES = ["flower", "daisy", "cup", "bell", "raceme", "umbel", "globe", "spike"] as const;
+export const FLOWER_SHAPES = ["flower", "daisy", "cup", "bell", "raceme", "umbel", "globe", "spike", "plume"] as const;
 export type FlowerShape = (typeof FLOWER_SHAPES)[number];
 
 /** Side of the jittered grid tufts are scattered on - at most one tuft per cell, so this also caps

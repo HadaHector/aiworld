@@ -239,8 +239,10 @@ export interface BranchingTree {
   /** Lianas hung from the limbs: `count` woody strands `radius` thick, each hanging straight down
    *  `length` metres (never to the ground) from a point along a branch's outer half, or - for a
    *  `loops` share of them - slung between two such points, sagging. Wood, drawn with the bark;
-   *  left off a distant tree. */
-  vines: { count: [number, number]; length: [number, number]; radius: number; loops: number } | null;
+   *  left off a distant tree. With `leaves`, each strand is instead a ribbon
+   *  `width` metres wide, the leaf atlas tiled down them every `tile` metres (default `width`) - a
+   *  willow's weeping curtain - which a distant tree keeps, thinned to every other whip. */
+  vines: { count: [number, number]; length: [number, number]; radius: number; loops: number; leaves: { width: number; tile: number } | null } | null;
   bark: BarkTexture;
   /** None for a bare tree, which has neither leaves nor a crown. A frond crown's atlas is a fern's
    *  (a BushTexture with the "fern" builder). */
@@ -416,9 +418,13 @@ export interface BushBed {
  *
  * `palmFrond` is the fern's frond made a palm's: leaflets all near the same length, tapering only
  * at the tip, and little varied in size or shade - for many thin ones in a row.
+ *
+ * `willowWhip` paints one tile of a willow whip per cell - a stem down the middle, `leaves` narrow
+ * leaves to each width of whip (`leafLength`/`leafWidth`, fractions of its width) off it angled one
+ * way - repeated end to end down a willow's leafy vines; a tile longer than wide holds more.
  */
 export interface BushTexture {
-  builder: "leafyBush" | "fern" | "palmFrond" | "paddleLeaf" | "heartLeaf";
+  builder: "leafyBush" | "fern" | "palmFrond" | "paddleLeaf" | "heartLeaf" | "willowWhip";
   /** Leaves range between these, lighter towards the top and the rim. */
   dark: ColorTuple;
   light: ColorTuple;
@@ -434,7 +440,7 @@ export interface BushTexture {
   bare: number;
 }
 
-export const BUSH_FOLIAGE_BUILDERS = ["leafyBush", "fern", "palmFrond", "paddleLeaf", "heartLeaf"] as const;
+export const BUSH_FOLIAGE_BUILDERS = ["leafyBush", "fern", "palmFrond", "paddleLeaf", "heartLeaf", "willowWhip"] as const;
 
 /**
  * A boulder: a lump of stone standing on the ground, scattered on the trees' lattice (a pack's

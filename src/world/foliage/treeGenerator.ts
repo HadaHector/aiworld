@@ -175,6 +175,57 @@ class LeafBuilder {
   }
 
   /**
+   * A ribbon along `points`, `width` across `side`, showing atlas cell `cell` as a tile repeated end
+   * to end every `tile` metres down it - the cell's bottom towards the first point, its top towards
+   * the last (mirrored with `mirror`) - each tile its own quad, so the repeats need no wrapping. Its
+   * normals are its own face's, so it is shaded as a frond is (an underside, a gloss), and it bends
+   * in the wind from its first point. It twists `twist` radians about its own line from end to end,
+   * so it turns a face every way as it falls rather than hanging as one flat card.
+   */
+  ribbon(points: V3[], side: V3, width: number, tile: number, cell: number, mirror: boolean, twist = 0): void {
+    const cellU = (cell % 2) * 0.5;
+    const cellV = Math.floor(cell / 2) * 0.5;
+    const inset = 0.004;
+    const span = 0.5 - inset * 2;
+    const lengths = [0];
+    for (let i = 1; i < points.length; i++) lengths.push(lengths[i - 1] + Math.hypot(...sub(points[i], points[i - 1])));
+    const total = lengths[lengths.length - 1];
+    if (total < 1e-3) return;
+    // The point `d` metres along, and the way the line runs there.
+    let k = 0;
+    const at = (d: number): { p: V3; tangent: V3 } => {
+      while (k < points.length - 2 && lengths[k + 1] < d) k++;
+      while (k > 0 && lengths[k] > d) k--;
+      const segment = Math.max(1e-6, lengths[k + 1] - lengths[k]);
+      const f = Math.min(1, Math.max(0, (d - lengths[k]) / segment));
+      return { p: add(scale(points[k], 1 - f), scale(points[k + 1], f)), tangent: normalize(sub(points[k + 1], points[k])) };
+    };
+    const tiles = Math.ceil(total / tile);
+    for (let t = 0; t < tiles; t++) {
+      const d0 = t * tile;
+      const d1 = Math.min(total, d0 + tile);
+      const base = this.positions.length / 3;
+      for (const [d, row] of [[d0, 1], [d1, 1 - (d1 - d0) / tile]] as const) {
+        const { p, tangent } = at(d);
+        // Square to the line, turned by its share of the twist.
+        const flat = normalize(sub(side, scale(tangent, dot(side, tangent))));
+        const turned = rotate(flat, tangent, twist * (d / total));
+        const n = normalize(cross(turned, tangent));
+        for (const a of [-1, 1]) {
+          const q = add(p, scale(turned, (a * width) / 2));
+          this.positions.push(q[0], q[1], q[2]);
+          this.normals.push(n[0], n[1], n[2]);
+          this.lie.push(Math.abs(n[1]));
+          this.flex.push((d / total) * Math.min(1, total / 8));
+          const across = (a + 1) / 2;
+          this.uvs.push(cellU + inset + (mirror ? 1 - across : across) * span, cellV + inset + row * span);
+        }
+      }
+      this.indices.push(base, base + 1, base + 3, base, base + 3, base + 2);
+    }
+  }
+
+  /**
    * An upright card `width` by `height` standing on `foot`, spanning `u` horizontally and showing
    * atlas cell `cell` the right way up (mirrored left to right with `mirror`). A 3x3 grid rather
    * than a quad, because its normals are the crown's (see `card`) and a card through the middle of
@@ -438,6 +489,9 @@ export function generateTree(spec: BranchingTree, seed: number, detail: TreeDeta
   const clusterPoints: V3[] = [];
   // Where along the limbs a vine can hang from - no draws, so a tree without vines is unchanged.
   const perches: V3[] = [];
+  // ...and which way the limb runs there, for a leafy whip to arch off it square.
+  const perchLimbs: V3[] = [];
+  const perchAlong: number[] = [];
   const branchCount = intBetween(branches.count);
   for (let b = 0; b < branchCount; b++) {
     const t = Math.min(0.97, branches.from + (1 - branches.from) * ((b + rng()) / branchCount));
@@ -510,7 +564,13 @@ export function generateTree(spec: BranchingTree, seed: number, detail: TreeDeta
       clusterPoints.push(twigPoints[twigPoints.length - 1]);
     }
 
-    if (spec.vines) for (const s of [0.35, 0.55, 0.75, 0.92]) perches.push(branchAt(s).point);
+    // Leafy strands - a curtain - hang closer together, from more of the limb.
+    if (spec.vines) for (const s of spec.vines.leaves ? [0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1] : [0.35, 0.55, 0.75, 0.92]) {
+      const at = branchAt(s);
+      perches.push(at.point);
+      perchLimbs.push(at.tangent);
+      perchAlong.push(s);
+    }
     if (leaves) for (let a = 0; a < leaves.alongBranch; a++) clusterPoints.push(branchAt(0.55 + rng() * 0.35).point);
   }
 
@@ -557,17 +617,48 @@ export function generateTree(spec: BranchingTree, seed: number, detail: TreeDeta
   // --- vines ---
   // Lianas: hanging straight down from a limb, swaying a little as they go, stopping short of the
   // ground - or slung from one limb to another, sagging between. From a stream of their own, so
-  // the rest of the tree is the same with them or without.
-  if (spec.vines && perches.length > 0 && !far) {
+  // the rest of the tree is the same with them or without. Leafy strands - a willow's curtain - are
+  // clothed in crossed strips of the leaf atlas down their length, kept on a distant tree too.
+  if (spec.vines && perches.length > 0 && (!far || spec.vines.leaves)) {
     const vineRng = mulberry32((seed ^ 0x2f1a3c5) >>> 0);
-    const pick = (): V3 => perches[Math.floor(vineRng() * perches.length)];
+    let picked = 0;
+    const pick = (): V3 => perches[(picked = Math.floor(vineRng() * perches.length))];
     const { vines } = spec;
     const vineCount = Math.floor(vines.count[0] + vineRng() * (vines.count[1] - vines.count[0] + 1));
     const rings = 10;
     for (let v = 0; v < vineCount; v++) {
       const from = pick();
       const points: V3[] = [];
-      if (vineRng() < vines.loops && perches.length > 1) {
+      if (vines.leaves) {
+        // A leafy whip: up and out from the limb in a short arch, then falling - a fountain, so the
+        // whips cover the limbs they hang from.
+        const length = Math.min(from[1] - 0.6, vines.length[0] + vineRng() * (vines.length[1] - vines.length[0]));
+        if (length < 1) continue;
+        // Off the limb to one side, square to it - ribs off a spine, seen from above - turning to
+        // run on out away from the trunk towards the limb's end, so the end of a limb is a fan.
+        const limb = perchLimbs[picked];
+        const level = Math.hypot(limb[0], limb[2]);
+        const along: V3 = level > 0.1 ? [limb[0] / level, 0, limb[2] / level] : [1, 0, 0];
+        const square = scale(cross([0, 1, 0], along), vineRng() < 0.5 ? -1 : 1);
+        const flat = Math.hypot(from[0], from[2]);
+        const outward: V3 = flat > 0.1 ? [from[0] / flat, 0, from[2] / flat] : along;
+        const toEnd = smoothstep(0.45, 1, perchAlong[picked]);
+        const blended = add(scale(square, 1 - toEnd), scale(outward, toEnd));
+        const away = rotate(Math.hypot(...blended) > 0.05 ? normalize(blended) : outward, [0, 1, 0], (vineRng() - 0.5) * 0.5);
+        const rise = 0.6 + vineRng() * 1.2;
+        const reach = 1.5 + vineRng() * 2.5;
+        const archShare = 0.25;
+        for (let i = 0; i <= rings; i++) {
+          const s = i / rings;
+          if (s <= archShare) {
+            const u = s / archShare;
+            points.push(add(add(from, scale(away, reach * Math.sin((u * Math.PI) / 2))), [0, rise * Math.sin(u * Math.PI), 0]));
+          } else {
+            const u = (s - archShare) / (1 - archShare);
+            points.push(add(add(from, scale(away, reach * (1 + 0.12 * u))), [0, -length * u, 0]));
+          }
+        }
+      } else if (vineRng() < vines.loops && perches.length > 1) {
         const to = pick();
         const span = Math.hypot(...sub(to, from));
         if (span < 1) continue;
@@ -589,7 +680,26 @@ export function generateTree(spec: BranchingTree, seed: number, detail: TreeDeta
           points.push([from[0] + (driftX * length + wiggle) * s, from[1] - length * s, from[2] + (driftZ * length + wiggle * 0.7) * s]);
         }
       }
-      wood.tube(points, points.map((_, i) => vines.radius * (1 - 0.3 * (i / rings))), 3, bark.tile);
+      // A leafy whip carries its own stem in its leaves; only a bare liana is wood.
+      if (!far && !vines.leaves) wood.tube(points, points.map((_, i) => vines.radius * (1 - 0.3 * (i / rings))), 3, bark.tile);
+      if (vines.leaves) {
+        // One ribbon of the whip atlas along it, lying across the way it leans out - its face to the
+        // outside of the tree, where it is seen from.
+        const out = normalize([points[rings][0] - from[0], 0, points[rings][2] - from[2]]);
+        const sideways = cross([0, 1, 0], out);
+        const cell = Math.floor(vineRng() * 4);
+        const mirror = vineRng() < 0.5;
+        // A distant tree: every other whip, wider to keep the curtain as full, its leaves tiled half
+        // as often - a quarter of the quads. Every whip still draws its numbers, so the ones kept
+        // hang exactly where the near tree's do.
+        if (far && v % 2 === 1) continue;
+        const width = vines.leaves.width * (far ? 1.4 : 1);
+        const tile = vines.leaves.tile * (far ? 2 : 1);
+        // Twisting a good part of half a turn as it falls, one way or the other - never hanging flat.
+        const turn = vineRng();
+        const twist = (turn < 0.5 ? -1 : 1) * (0.6 + 0.4 * ((turn * 2) % 1)) * Math.PI;
+        leafBuilder.ribbon(points, sideways, width, tile, cell, mirror, twist);
+      }
     }
   }
 

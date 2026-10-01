@@ -288,7 +288,7 @@ function generatedKind(shape: Extract<TreeKindDef["shape"], { model: "branching"
   }
   return {
     variants: shape.variants,
-    atlas: (seed) => (!shape.foliage ? null : shape.foliage.builder === "broadleaf" ? bakeFoliage(seed, shape.foliage) : bakeBushFoliage(seed, shape.foliage, shape.crown)),
+    atlas: (seed) => (!shape.foliage ? null : shape.foliage.builder === "broadleaf" ? bakeFoliage(seed, shape.foliage) : bakeBushFoliage(seed, shape.foliage, shape.crown, shape.vines?.leaves ? shape.vines.leaves.tile / shape.vines.leaves.width : 1)),
     swayHeight: shape.trunk.height * 1.8,
     generate: (seed, detail) => generateTree(shape, seed, detail),
   };

@@ -1,0 +1,30 @@
+// Common reed: the marsh's own grass, taller than a man - thin upright stems and leaves in dense
+// stands, each stem crowned with a feathery purple-brown plume nodding one way (the "plume" head).
+// Stands in the shallows too (`wades`), and is seen from far across the flat water, so it fades late.
+{
+  width: 1.3,
+  height: 3.2,
+  sway: 0.3,
+  fadeStart: 100,
+  fadeEnd: 420,
+  wades: 0.8,
+  blades: {
+    count: 30,
+    minHeight: 0.6,
+    maxHeight: 0.9,
+    baseWidth: 3,
+    lean: 0.12,
+    fan: false,
+    seedHeads: false,
+    flowerHeads: {
+      shape: "plume",
+      count: 12,
+      radius: 18,
+      colors: [
+        [0.42, 0.3, 0.32],
+        [0.5, 0.38, 0.34],
+        [0.36, 0.26, 0.28],
+      ],
+    },
+  },
+}

@@ -78,5 +78,7 @@ export function bakedAtlas(def: TreeKindDef, seed: number): Uint8Array | null {
   if (!foliage) return null;
   // A broad-leaf atlas paints the stalk as wide as the plant's fronds have it, so they key it too.
   const fronds = "fronds" in def.shape ? def.shape.fronds : "crown" in def.shape ? def.shape.crown : null;
-  return atlases.get(`${seed}|${def.id}|${JSON.stringify(foliage)}|${JSON.stringify(fronds)}`, () => bakeLeafAtlas(def, seed));
+  // ...and a willow's whips by how long a tile is for their width.
+  const vines = "vines" in def.shape ? def.shape.vines : null;
+  return atlases.get(`${seed}|${def.id}|${JSON.stringify(foliage)}|${JSON.stringify(fronds)}|${JSON.stringify(vines)}`, () => bakeLeafAtlas(def, seed));
 }

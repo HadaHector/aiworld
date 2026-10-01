@@ -1,0 +1,84 @@
+// A weeping willow: a short, thick, leaning trunk, a few great limbs arching up and out, and from them
+// a curtain of long thin whips hanging nearly to the ground or the water, clothed in narrow
+// silver-green leaves - leafy vines (`vines.leaves`), arching up off the limbs before they fall, so
+// the curtain is the whole crown. Deeply furrowed
+// grey-brown bark. The marsh's, the bayou's and the gorge's tree, by the water.
+{
+  model: "branching",
+  variants: 4,
+  trunk: {
+    height: 9,
+    radius: 1.0,
+    topRadius: 0.5,
+    lean: 0.15,
+    wobble: 0.8,
+    flare: 1.4,
+    flareHeight: 1.5,
+    sides: 9,
+    rings: 7,
+  },
+  roots: { count: 5, length: [1.6, 2.6], radius: 0.4, drop: 0.6, sides: 4, rings: 3 },
+  branches: {
+    count: [6, 9],
+    from: 0.55,
+    length: [7, 11],
+    radius: 0.6,
+    angle: [40, 80],
+    // Arching up a little, so the whips hang from high.
+    arc: 0.2,
+    crook: 0.2,
+    sides: 6,
+    rings: 6,
+    twigs: { count: [2, 3], length: [0.3, 0.5], angle: [40, 70], sides: 3, rings: 2 },
+  },
+  // The weeping curtain: many thin whips arching up off the limbs and falling, leaved their whole
+  // length - a fountain of them, which is the whole crown.
+  vines: { count: [140, 180], length: [6, 11], radius: 0.03, loops: 0, leaves: { width: 1.5, tile: 3 } },
+  bark: {
+    tile: 1.6,
+    texture: {
+      bumpStrength: 2.4,
+      pipeline: {
+        noises: [
+          { name: "ridges", type: "ridged", octaves: 2, tileCycles: 7, stretch: [1, 5], amplitude: 1, persistence: 0.5, lacunarity: 2 },
+          { name: "mottle", type: "fbm", octaves: 3, tileCycles: 5, amplitude: 1, persistence: 0.5, lacunarity: 2 },
+        ],
+        steps: [
+          { output: "ridgeRaw", op: "sample", noise: "ridges" },
+          { output: "height", op: "mask", input: "ridgeRaw", at: 0.85, off: 0.35 },
+          { output: "mottleRaw", op: "sample", noise: "mottle" },
+          { output: "mottle", op: "mask", input: "mottleRaw", at: 1.5, off: -1.5 },
+          {
+            output: "tone",
+            op: "colorRamp",
+            input: "mottle",
+            stops: [
+              { at: 0.0, color: [0.24, 0.21, 0.17] },
+              { at: 0.5, color: [0.34, 0.31, 0.26] },
+              { at: 1.0, color: [0.42, 0.39, 0.33] },
+            ],
+          },
+          { output: "furrow", op: "color", value: [0.08, 0.07, 0.06] },
+          { output: "diffuse", op: "mix", a: "furrow", b: "tone", t: "height" },
+          { output: "roughness", op: "constant", value: 0.9 },
+        ],
+        outputs: { diffuse: "diffuse", roughness: "roughness", height: "height" },
+      },
+    },
+  },
+  // Narrow, pointed, silver-green leaves down each whip, angled towards its tip (`willowWhip`).
+  foliage: {
+    builder: "willowWhip",
+    dark: [0.2, 0.3, 0.12],
+    light: [0.56, 0.68, 0.36],
+    stem: [0.42, 0.4, 0.22],
+    stems: [1, 1],
+    // Per width of whip; their size as a share of its width. A tile is two widths long.
+    leaves: 7,
+    leafLength: 0.42,
+    leafWidth: 0.14,
+    bare: 0,
+  },
+  tint: [[0.88, 0.92, 0.85], [1.08, 1.06, 0.98]],
+  scale: [0.9, 1.3],
+}

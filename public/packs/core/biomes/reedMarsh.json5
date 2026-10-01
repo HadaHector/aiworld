@@ -1,0 +1,105 @@
+/**
+ * Reed marsh - the wetland family's open variant (see ZONES.md), in place of the old swamp: flat
+ * land set right at the waterline, so every hollow is a pool or a channel between low islands;
+ * common reed taller than a man standing thick in the shallows and round every pool, its plumes
+ * nodding; coarse marsh grass on the islands; a willow here and there; a warm haze lying low.
+ */
+{
+  name: "Reed Marsh",
+  voice: "murky",
+  spawnWeight: 1.5,
+  lakeChance: 0.15,
+  borderType: "mountain",
+  settlement: "timber",
+  // Flat, and at the water: a slow swell and a finer one, centred about half a metre above the water
+  // (the terrain lifts land some 6 m on its own, hence the offset) - so the low half of it, give or
+  // take, stands under water in pools and channels.
+  height: {
+    noises: [
+      { name: "swell", type: "fbm", octaves: 3, frequency: 0.009, amplitude: { range: [1.2, 1.8] }, persistence: 0.5, lacunarity: 2.0 },
+      { name: "ripple", type: "fbm", octaves: 2, frequency: 0.03, amplitude: 0.8, persistence: 0.5, lacunarity: 2.0 },
+    ],
+    steps: [
+      { output: "swell", op: "sample", noise: "swell" },
+      { output: "ripple", op: "sample", noise: "ripple" },
+      { output: "raw", op: "add", a: "swell", b: "ripple" },
+      { output: "result", op: "offset", input: "raw", amount: { range: [-6, -5.4] } },
+    ],
+  },
+  // Willows may stand on any island a little above the water.
+  treeRules: { shore: [0.2, 1] },
+  // A willow here and there, in loose groups on the islands.
+  trees: {
+    noises: [{ name: "group", type: "fbm", octaves: 2, frequency: 0.006, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
+    steps: [
+      { output: "groupRaw", op: "sample", noise: "group" },
+      { output: "group", op: "mask", input: "groupRaw", at: 0.35, off: -0.05 },
+      { output: "willow", op: "scale", input: "group", factor: { range: [0.2, 0.35] } },
+    ],
+    outputs: { willow: "willow" },
+  },
+  treeTints: [
+    {
+      leaves: { hue: { range: [-10, 10] }, saturation: { range: [0.85, 1.15] }, value: { range: [0.95, 1.1] }, spread: { hue: 6, saturation: 0.1, value: 0.1 } },
+      bark: { hue: { range: [-6, 6] }, saturation: { range: [0.8, 1.1] }, value: { range: [0.9, 1.1] }, spread: { value: 0.08 } },
+    },
+  ],
+  ground: {
+    base: "marshGrass",
+    road: "track",
+    adjust: { hue: { range: [-6, 6] }, saturation: { range: [0.9, 1.1] }, value: { range: [0.94, 1.06] } },
+    // Each area its own season of sedge: green in one, half gone to straw in the next.
+    tints: [{ family: "grassland", hue: { range: [-25, 5] }, saturation: { range: [0.8, 1.05] }, value: { range: [0.95, 1.05] } }],
+    layers: [
+      // Reeds: thick in the shallows and on the wet ground round every pool, thinning up onto the
+      // islands in ragged tongues.
+      {
+        id: "marsh-reeds",
+        material: "reedStand",
+        weight: {
+          noises: [{ name: "fray", type: "fbm", octaves: 3, frequency: 0.03, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
+          steps: [
+            { output: "height", op: "input", name: "height" },
+            { output: "frayRaw", op: "sample", noise: "fray" },
+            { output: "fray", op: "scale", input: "frayRaw", factor: 0.6 },
+            { output: "reach", op: "add", a: "height", b: "fray" },
+            { output: "wet", op: "mask", input: "reach", at: { range: [1.1, 1.6] }, off: { range: [1.7, 2.3] } },
+            { output: "notDeep", op: "mask", input: "height", at: -0.6, off: -1.2 },
+            { output: "stand", op: "multiply", a: "wet", b: "notDeep" },
+            { output: "result", op: "scale", input: "stand", factor: 2 },
+          ],
+        },
+      },
+      // Bare mud at the waterline, here and there, where the reeds give out.
+      {
+        id: "marsh-mud",
+        material: "mud",
+        weight: {
+          noises: [{ name: "patch", type: "fbm", octaves: 3, frequency: 0.025, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
+          steps: [
+            { output: "height", op: "input", name: "height" },
+            { output: "edge", op: "mask", input: "height", at: 0.15, off: 0.5 },
+            { output: "patchRaw", op: "sample", noise: "patch" },
+            { output: "patch", op: "mask", input: "patchRaw", at: 0.45, off: 0.2 },
+            { output: "edgePatch", op: "multiply", a: "edge", b: "patch" },
+            { output: "result", op: "scale", input: "edgePatch", factor: 3 },
+          ],
+        },
+      },
+    ],
+  },
+  // A warm, pale haze lying over the water.
+  sky: {
+    horizon: { oneOf: ["#dcd8c4", "#d4d8cc", "#e0d6c0"] },
+    zenith: "#7896b0",
+    cloud: "#f0ece4",
+    fogStart: { range: [0.06, 0.18] },
+    fogEnd: { range: [0.6, 0.85] },
+  },
+  light: {
+    sunPeak: 48,
+    moonPeak: 45,
+    ambientDay: "#d0ccb8",
+    sunZenith: "#f6e8cc",
+  },
+}

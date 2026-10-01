@@ -1,0 +1,12 @@
+// A reed stand: the reed bed's wet silt (reedbed.json5) grown thick with common reed - taller than a
+// man, its plumes nodding over the water - with a few bulrushes at the edges. The reed marsh's
+// shallows and the wet ground round them.
+{
+  name: "Reed Stand",
+  detail: { strength: 0.4 },
+  textureFrom: "reedbed",
+  grass: [
+    { kind: "reed", density: 3.2, color: [0.42, 0.48, 0.22] },
+    { kind: "bulrush", density: 0.4, color: [0.36, 0.46, 0.2] },
+  ],
+}

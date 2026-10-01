@@ -1,0 +1,14 @@
+// Marsh grass: the low islands between a marsh's pools - a coarse, wet sward of sedge and long grass,
+// green going to straw-brown, never a lawn. The grass texture, browned.
+{
+  name: "Marsh Grass",
+  detail: { strength: 0.35 },
+  textureFrom: "grass",
+  adjust: { hue: -10, saturation: 0.8, value: 0.88, tint: [1, 0.97, 0.9] },
+  family: "grassland",
+  grass: [
+    { kind: "longGrass", density: 2.0, color: [0.46, 0.5, 0.26] },
+    { kind: "tall", density: 0.6, color: [0.5, 0.5, 0.28] },
+    { kind: "tuft", density: 0.5, color: [0.42, 0.46, 0.24] },
+  ],
+}

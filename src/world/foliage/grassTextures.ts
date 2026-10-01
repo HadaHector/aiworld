@@ -180,6 +180,31 @@ function drawBlades(pixels: Uint8Array, layer: number, def: GrassKindDef, seed: 
       case "spike":
         // Drawn by the caller (it follows the stem rather than sitting at its tip).
         break;
+      case "plume": {
+        // A reed's panicle: hair-thin florets fanning out from the top quarter of the stem, drooping
+        // as they go and all nodding the same way, each ending in a fluffy tuft.
+        const n = petalCount ?? 40;
+        const nod = rng() < 0.5 ? -1 : 1;
+        for (let k = 0; k < n; k++) {
+          const u = rng();
+          const y0 = height * (0.74 + 0.25 * u);
+          const x0 = stemX(y0);
+          const length = radius * (0.7 + rng() * 0.6) * (1 - 0.45 * u);
+          // Out to the nodding side mostly, a few the other way; up at first, drooping at the end.
+          const out = (rng() < 0.8 ? nod : -nod) * (0.35 + rng() * 0.65);
+          const steps = Math.max(2, Math.ceil(length));
+          let x = x0;
+          let y = y0;
+          for (let s = 1; s <= steps; s++) {
+            const t = s / steps;
+            x += (out * length) / steps;
+            y += (length / steps) * (0.55 - 1.3 * t);
+            plot(Math.round(x), Math.round(y), 0.9, 0.75 + 0.25 * t, 1);
+          }
+          disc(x, y, radius * (0.03 + rng() * 0.025), 0.85 + rng() * 0.15, 1);
+        }
+        break;
+      }
     }
   };
 
