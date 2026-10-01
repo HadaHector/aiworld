@@ -11,32 +11,64 @@
   lakeChance: 0.15,
   borderType: "mountain",
   settlement: "timber",
-  // Flat, and at the water: a slow swell and a finer one, centred about half a metre above the water
-  // (the terrain lifts land some 6 m on its own, hence the offset) - so the low half of it, give or
-  // take, stands under water in pools and channels.
+  // The marsh at the water - flat, a slow swell and a finer one centred about half a metre above the
+  // water (the terrain lifts land some 6 m on its own, hence the offset), so the low half of it,
+  // give or take, stands under water in pools and channels - and out of it, where a slow noise says
+  // so, low dry islands: gentle hills a few metres high (the hills' basins turned round - the marsh
+  // the floor, the islands rising from it), with room on them for whatever stands there later.
   height: {
     noises: [
       { name: "swell", type: "fbm", octaves: 3, frequency: 0.009, amplitude: { range: [1.2, 1.8] }, persistence: 0.5, lacunarity: 2.0 },
       { name: "ripple", type: "fbm", octaves: 2, frequency: 0.03, amplitude: 0.8, persistence: 0.5, lacunarity: 2.0 },
+      { name: "island", type: "fbm", octaves: 4, frequency: 0.004, amplitude: { range: [3.5, 6] }, persistence: 0.4, lacunarity: 2.0 },
+      { name: "where", type: "fbm", octaves: 3, frequency: 0.0016, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
     ],
     steps: [
+      // The marsh floor.
       { output: "swell", op: "sample", noise: "swell" },
       { output: "ripple", op: "sample", noise: "ripple" },
-      { output: "raw", op: "add", a: "swell", b: "ripple" },
-      { output: "result", op: "offset", input: "raw", amount: { range: [-6, -5.4] } },
+      { output: "floorRaw", op: "add", a: "swell", b: "ripple" },
+      { output: "floor", op: "offset", input: "floorRaw", amount: { range: [-6, -5.4] } },
+      // The islands: hills some 4-8 m over the water at their middle.
+      { output: "islandRaw", op: "sample", noise: "island" },
+      { output: "island", op: "offset", input: "islandRaw", amount: 1 },
+      // Where they rise: a slow noise, a share of each area islands, the rest open marsh.
+      { output: "whereRaw", op: "sample", noise: "where" },
+      { output: "islandRamp", op: "remap", input: "whereRaw", inMin: { range: [0.1, 0.25] }, inMax: { range: [0.45, 0.6] }, outMin: 0, outMax: 1 },
+      { output: "islandShare", op: "clamp", input: "islandRamp", min: 0, max: 1 },
+      // Only ever up out of the marsh, never a hole in it.
+      { output: "riseRaw", op: "subtract", a: "island", b: "floor" },
+      { output: "zero", op: "constant", value: 0 },
+      { output: "rise", op: "max", a: "riseRaw", b: "zero" },
+      { output: "shareOfRise", op: "multiply", a: "rise", b: "islandShare" },
+      { output: "result", op: "add", a: "floor", b: "shareOfRise" },
     ],
   },
   // Willows may stand on any island a little above the water.
   treeRules: { shore: [0.2, 1] },
   // A willow here and there, in loose groups on the islands.
+  // Willows in loose groups on the lower ground and the islands' shores; on the islands' tops, groves
+  // of one kind of dry-land tree - pine, oak or birch, each area its own.
   trees: {
-    noises: [{ name: "group", type: "fbm", octaves: 2, frequency: 0.006, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
+    noises: [
+      { name: "group", type: "fbm", octaves: 2, frequency: 0.006, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+      { name: "grove", type: "fbm", octaves: 2, frequency: 0.008, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+    ],
     steps: [
       { output: "groupRaw", op: "sample", noise: "group" },
       { output: "group", op: "mask", input: "groupRaw", at: 0.35, off: -0.05 },
-      { output: "willow", op: "scale", input: "group", factor: { range: [0.2, 0.35] } },
+      { output: "height", op: "input", name: "height" },
+      // The islands' tops: from some two and a half metres over the water.
+      { output: "top", op: "mask", input: "height", at: 3.3, off: 2.5 },
+      { output: "low", op: "invert", input: "top" },
+      { output: "lowGroup", op: "multiply", a: "group", b: "low" },
+      { output: "willow", op: "scale", input: "lowGroup", factor: { range: [0.2, 0.35] } },
+      { output: "groveRaw", op: "sample", noise: "grove" },
+      { output: "grove", op: "mask", input: "groveRaw", at: 0.5, off: 0.15 },
+      { output: "topGrove", op: "multiply", a: "top", b: "grove" },
+      { output: "dry", op: "scale", input: "topGrove", factor: { range: [0.12, 0.25] } },
     ],
-    outputs: { willow: "willow" },
+    outputs: { oneOf: [{ willow: "willow", pine: "dry" }, { willow: "willow", oak: "dry" }, { willow: "willow", birch: "dry" }] },
   },
   treeTints: [
     {
@@ -70,6 +102,41 @@
           ],
         },
       },
+      // The islands' tops: a drier sward of their own - each area's own kind - frayed at its edge.
+      {
+        id: "marsh-island-tops",
+        material: { oneOf: ["meadowShort", "grassDry", "meadowRough"] },
+        weight: {
+          noises: [{ name: "fray", type: "fbm", octaves: 3, frequency: 0.025, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
+          steps: [
+            { output: "height", op: "input", name: "height" },
+            { output: "frayRaw", op: "sample", noise: "fray" },
+            { output: "fray", op: "scale", input: "frayRaw", factor: 0.9 },
+            { output: "reach", op: "add", a: "height", b: "fray" },
+            { output: "top", op: "mask", input: "reach", at: { range: [3, 4] }, off: { range: [2, 2.5] } },
+            { output: "result", op: "scale", input: "top", factor: 1.5 },
+          ],
+        },
+      },
+      // Mud on the islands' lower flanks, in patches, between the reeds and the dry tops.
+      {
+        id: "marsh-muddy-flanks",
+        material: "mud",
+        weight: {
+          noises: [{ name: "patch", type: "fbm", octaves: 3, frequency: 0.03, amplitude: 1, persistence: 0.55, lacunarity: 2.0 }],
+          steps: [
+            { output: "height", op: "input", name: "height" },
+            { output: "above", op: "mask", input: "height", at: 1.6, off: 1.1 },
+            { output: "below", op: "mask", input: "height", at: 2.6, off: 3.4 },
+            { output: "flank", op: "multiply", a: "above", b: "below" },
+            { output: "patchRaw", op: "sample", noise: "patch" },
+            { output: "patch", op: "mask", input: "patchRaw", at: 0.25, off: -0.15 },
+            { output: "flankPatch", op: "multiply", a: "flank", b: "patch" },
+            { output: "result", op: "scale", input: "flankPatch", factor: 2 },
+          ],
+        },
+      },
+
       // Bare mud at the waterline, here and there, where the reeds give out.
       {
         id: "marsh-mud",

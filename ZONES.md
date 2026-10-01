@@ -134,10 +134,12 @@ Existing: **broadleaf**, **pine**, **palm**.
 
 ### 4. Wetland (flat) - today: swamp
 
-- **Reed marsh: in progress** - `biomes/reedMarsh.json5` (swamp retired to `legacy/`). Flat land at
-  the water, half of it pools and channels; common reed (new `grass/reed`, a `plume` head) in stands
-  (`reedStand`) round every pool, `marshGrass` on the islands; willows (new: leafy `vines` - twisting
-  ribbons of the new `willowWhip` atlas - arching off the limbs and falling); a warm haze.
+- **Reed marsh: done** - `biomes/reedMarsh.json5` (swamp retired to `legacy/`). A marsh at the water,
+  half of it pools and channels, and out of it low dry islands (the hills' basins turned round);
+  common reed (new `grass/reed`, a `plume` head) in stands (`reedStand`) round every pool,
+  `marshGrass` on the islands, a drier sward on their tops and mud on their flanks; willows (new:
+  leafy `vines` - twisting ribbons of the new `willowWhip` atlas - arching off the limbs and falling)
+  on the low ground, groves of pine, oak or birch on the island tops; a warm haze.
 
 | Variant | Ground | Plants | Trees | Extras |
 |---|---|---|---|---|
