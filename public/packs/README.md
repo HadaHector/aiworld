@@ -258,8 +258,19 @@ entry in the material table, never another texture.
   detail: { scale: 7.3, strength: 0.55 },   // optional, else defaults.json5's materialDetail
   uvScale: 1,                // laid this many times smaller: 2 puts the 50 m tile on 25 m - author
                              // everything twice the size (and bumpStrength twice) for twice the texels
+  floats: false,             // true: floats on the water (duckweed) - see below
 }
 ```
+
+A material with `floats: true` (see `core/materials/duckweed.json5`) floats on the water rather than
+lying on the ground. A biome lays it with an ordinary layer, but under the water it is left out of the
+bed's blend and drawn instead on a sheet at the water's surface: its weight is how much of the water
+it covers (a mat shows where that, raised or lowered by the texture's own `height`, is over half, so
+it breaks up raggedly through its own thin spots), and above the water it is nothing. Run its layer a
+little past the waterline - the bank hides it there - so a mat reaches the shore, and lay something
+that looks like it on the bank (`core/materials/strandedDuckweed.json5` borrows its texture) so the
+cut edge lands on more of the same. Keep other layers off the water where it lies: weights share
+out, and one crowding it under half leaves the water bare.
 
 `diffuse` is required; `roughness` (0 shiny - 1 matte) and `height` (0-1, drives the bump map) are
 optional. A texture is one 50 m tile, baked at load - every texture costs about 11 MB of GPU
@@ -346,6 +357,9 @@ branches and on top. Its sections:
 - `bark`: `tile` (metres of trunk per texture repeat) and `texture`, a texture graph exactly like a
   material's - u runs around a limb, v along it
 - `foliage`: the `broadleaf` clump texture - `dark`/`light`, `leaves` per clump, `leafLength`/`leafWidth`
+  - or `featherSpray` (see `core/trees/baldCypress.json5`), the same keys painting `leaves` feathery
+  sprays per clump instead: a thin twig `leafLength` of the clump long, lined both sides with short flat
+  needles `leafWidth` of it long, shortening to its tip. Either may add `moss` (below)
 - `variants`: how many different trees are generated from all this; each placed tree is one of them
 
 `vines: { count, length, radius, loops }` hangs lianas from the limbs (see
@@ -356,7 +370,16 @@ a willow's whip instead (see `core/trees/willow.json5`): arching up and out off 
 it near the trunk, running on outwards towards the limb's end - then falling, a ribbon `width` metres
 wide with the leaf atlas repeated down it every `tile` metres (default `width`), twisting as it
 falls. Its atlas is `willowWhip`: a stem and `leaves` narrow leaves to each width of whip. A leafy
-tree needs neither `leaves` nor a `crown`; a distant one keeps every other whip.
+tree needs neither `leaves` nor a `crown`; a distant one keeps every other whip. `arch` scales how
+far a whip arches up and out before it falls (default 1; 0.1 all but hangs straight down) and
+`taper` narrows it along its length (default 0; 1 to a point), the atlas cropped towards its middle
+rather than squeezed.
+
+A tree with leaf clumps can hang moss from its limbs that way too (see `core/trees/baldCypress.json5`):
+leafy vines with little `arch`, and `moss` on its clump `foliage` - `{ dark, light, threads, curls?,
+sway? }`, fine wavy threads down a strand, `curls` short curls off each per tile, each wandering up to
+`sway` of the strand's width. The clumps then keep to half the atlas and the moss takes the other
+half. `moss: { oneOf: [a, b] }` paints two kinds, and every tree picks one for all its strands.
 
 Leave out both `leaves` and `foliage` for a bare tree - all wood, no leaves (see
 `core/trees/deadTree.json5`).

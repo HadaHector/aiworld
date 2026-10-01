@@ -1,0 +1,45 @@
+// A cypress knee: a knobbly stump of root standing up out of the bayou's water and mud round the bald
+// cypresses, waist-high, narrowing to a rounded top - a stone for the scatter's sake, on the rocks'
+// lattice (as a termite mound is), so a biome scatters them with its `rocks` graph, and shallow
+// water is no bar. Bark like the cypress's: red-brown, stringy, wet and dark at its foot.
+{
+  model: "boulder",
+  variants: 6,
+  radius: 0.5,
+  // Two to three and a half times as tall as wide: a cone with a blunt top.
+  squash: [2.0, 3.5],
+  stretch: [1.0, 1.3],
+  lumps: 0.25,
+  taper: 0.7,
+  facets: [0, 1],
+  facetDepth: 0.1,
+  tilt: 9,
+  sink: 0.15,
+  stone: {
+    tile: 1.5,
+    texture: {
+      bumpStrength: 2,
+      pipeline: {
+        noises: [
+          { name: "fibres", type: "ridged", octaves: 3, tileCycles: 6, stretch: [1, 6], amplitude: 1, persistence: 0.5, lacunarity: 2 },
+          { name: "weather", type: "fbm", octaves: 3, tileCycles: 3, amplitude: 1, persistence: 0.55, lacunarity: 2 },
+        ],
+        steps: [
+          { output: "fibreRaw", op: "sample", noise: "fibres" },
+          { output: "height", op: "mask", input: "fibreRaw", at: 0.7, off: 0.25 },
+          { output: "weatherRaw", op: "sample", noise: "weather" },
+          { output: "weather", op: "mask", input: "weatherRaw", at: 0.6, off: -0.6 },
+          { output: "red", op: "color", value: [0.32, 0.2, 0.13] },
+          { output: "grey", op: "color", value: [0.4, 0.37, 0.32] },
+          { output: "tone", op: "mix", a: "red", b: "grey", t: "weather" },
+          { output: "furrow", op: "color", value: [0.09, 0.06, 0.04] },
+          { output: "diffuse", op: "mix", a: "furrow", b: "tone", t: "height" },
+          { output: "roughness", op: "constant", value: 0.85 },
+        ],
+        outputs: { diffuse: "diffuse", roughness: "roughness", height: "height" },
+      },
+    },
+  },
+  tint: [[0.85, 0.85, 0.82], [1.1, 1.06, 1.0]],
+  scale: [0.6, 1.5],
+}

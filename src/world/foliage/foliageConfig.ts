@@ -241,8 +241,11 @@ export interface BranchingTree {
    *  `loops` share of them - slung between two such points, sagging. Wood, drawn with the bark;
    *  left off a distant tree. With `leaves`, each strand is instead a ribbon
    *  `width` metres wide, the leaf atlas tiled down them every `tile` metres (default `width`) - a
-   *  willow's weeping curtain - which a distant tree keeps, thinned to every other whip. */
-  vines: { count: [number, number]; length: [number, number]; radius: number; loops: number; leaves: { width: number; tile: number } | null } | null;
+   *  willow's weeping curtain - which a distant tree keeps, thinned to every other whip. Each
+   *  arches up and out off its limb before it falls; `arch` scales that (default 1, 0 hangs
+   *  straight down - moss) - and narrows by `taper` of its width to its end (default 0, 1 to a
+   *  point). */
+  vines: { count: [number, number]; length: [number, number]; radius: number; loops: number; leaves: { width: number; tile: number; arch: number; taper: number } | null } | null;
   bark: BarkTexture;
   /** None for a bare tree, which has neither leaves nor a crown. A frond crown's atlas is a fern's
    *  (a BushTexture with the "fern" builder). */
@@ -257,19 +260,42 @@ export interface BarkTexture {
   texture: TextureDef;
 }
 
-/** A generated leaf-cluster atlas - four variants of one clump, see treeTextures.ts. */
+/**
+ * A generated leaf-cluster atlas - four variants of one clump, see treeTextures.ts.
+ *
+ * `broadleaf` paints a clump of `leaves` leaves, `leafLength` by `leafWidth` (fractions of the clump).
+ * `featherSpray` paints a clump of `leaves` feathery sprays instead - a bald cypress's - each a thin
+ * twig `leafLength` of the clump long, lined both sides with short flat needles `leafWidth` of it
+ * long, shortening to its tip.
+ *
+ * With `moss`, the atlas's bottom two cells are hanging moss instead - a bald cypress's - tiled end
+ * to end down the tree's leafy vines, while the leaf clusters keep to the top two. `{ oneOf: [a, b] }`
+ * paints one kind of moss in each cell and every tree picks one of them for all its strands; a
+ * single kind fills both.
+ */
 export interface FoliageTexture {
-  builder: "broadleaf";
+  builder: "broadleaf" | "featherSpray";
   /** Leaves range between these, the outer ones lighter where they catch the light. */
   dark: ColorTuple;
   light: ColorTuple;
-  /** Leaves per clump, and a leaf's size as a fraction of the clump. */
   leaves: number;
   leafLength: number;
   leafWidth: number;
+  moss: MossTexture[] | null;
 }
 
-export const FOLIAGE_BUILDERS = ["broadleaf"] as const;
+/** One kind of hanging moss: `threads` fine, wavy threads down a strand, between `dark` and `light`,
+ *  `curls` short curls off each per tile (a wiry Spanish moss has many, a smooth beard few), each
+ *  wandering up to `sway` of the strand's width from side to side. */
+export interface MossTexture {
+  dark: ColorTuple;
+  light: ColorTuple;
+  threads: number;
+  curls: number;
+  sway: number;
+}
+
+export const FOLIAGE_BUILDERS = ["broadleaf", "featherSpray"] as const;
 
 /**
  * A conifer, from a small generator of its own (see treeGenerator.ts's generateConifer): a tall,

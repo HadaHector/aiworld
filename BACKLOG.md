@@ -138,6 +138,22 @@ Note the transferable-`ArrayBuffer` constraint that applies to the texture pool 
 
 ## Known artifacts
 
+### The cells of one zone can be cut off from each other by cliffs
+
+Seen in the map's zone view: one highlighted zone of several cells, each cell its own plateau with
+a band of cliff along the edges between them, so a cell (the one in the bottom right, say) cannot be
+walked to from the rest of its own zone. A zone should be one piece of land: every one of its cells
+reachable on foot from every other, without leaving it.
+
+Likely cause: each cell's height is rolled and blended on its own, and where two cells of the zone
+land at different heights the band between them squeezes the whole difference into a wall. Nothing
+checks that a zone stays connected.
+
+Possible fixes: roll the height-shaping values once per zone rather than per cell (the `params`
+mechanism is close to this already), or narrow how far apart cells of one zone may land, or cut
+walkable ramps through the edges between them. Worth a probe that walks every edge inside each zone
+and reports the zones whose cells are not all connected.
+
 ### A road cut steps other layers that key on height or curvature
 
 Where a road crosses tundra its edge is a hard staircase, and it is not the road's edge: it is the

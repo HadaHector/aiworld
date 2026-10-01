@@ -1,5 +1,5 @@
 import { mulberry32 } from "../rng";
-import { FROND_STALK_HALF_WIDTH, FROND_STALK_SHARE, type BushTexture, type ConiferTexture, type FoliageTexture, type Fronds } from "./foliageConfig";
+import { FROND_STALK_HALF_WIDTH, FROND_STALK_SHARE, type BushTexture, type ConiferTexture, type FoliageTexture, type Fronds, type MossTexture } from "./foliageConfig";
 
 /** Four clump variants in a 2x2 atlas. */
 export const FOLIAGE_TEXTURE_SIZE = 1024;
@@ -159,8 +159,15 @@ export function bakeFoliage(seed: number, def: FoliageTexture): Uint8Array {
   const size = FOLIAGE_TEXTURE_SIZE;
   const cell = size / 2;
   const painter = new Painter(size);
+  // With moss, the clumps keep to the top two cells and the moss takes the bottom two.
+  const clumps = def.moss ? 2 : 4;
+  if (def.moss) for (let variant = 2; variant < 4; variant++) paintMoss(painter, mulberry32(seed + variant * 7919), def.moss[(variant - 2) % def.moss.length], cell, cellClip(cell, variant));
+  if (def.builder === "featherSpray") {
+    for (let variant = 0; variant < clumps; variant++) paintFeatherClump(painter, mulberry32(seed + variant * 7919), def, cell, cellClip(cell, variant));
+    return painter.finish();
+  }
 
-  for (let variant = 0; variant < 4; variant++) {
+  for (let variant = 0; variant < clumps; variant++) {
     const rng = mulberry32(seed + variant * 7919);
     const clip = cellClip(cell, variant);
     const radius = cell * 0.44;
@@ -190,6 +197,111 @@ export function bakeFoliage(seed: number, def: FoliageTexture): Uint8Array {
     }
   }
   return painter.finish();
+}
+
+/**
+ * A feathery clump, into the cell `clip`: a rounded clump of sprays, a bald cypress's - each a thin twig
+ * running out from near the middle, bowed a little, lined both sides with short, flat needles set
+ * nearly square to it, longest at its base and shortening to its tip, so it reads as a feather.
+ * The inner sprays are painted first and darker, shaded by the outer ones; the fresh ends lighter.
+ */
+function paintFeatherClump(painter: Painter, rng: () => number, def: FoliageTexture, cell: number, clip: Clip): void {
+  const radius = cell * 0.46;
+  const cx = clip.x0 + cell / 2;
+  const cy = clip.y0 + cell / 2;
+  const sprays = Array.from({ length: def.leaves }, () => {
+    const r = radius * Math.pow(rng(), 0.8) * 0.7;
+    const angle = rng() * Math.PI * 2;
+    return { r, angle, turn: (rng() - 0.5) * 0.9, bow: (rng() - 0.5) * 0.5, scale: 0.7 + rng() * 0.4, shade: rng() };
+  }).sort((a, b) => a.r - b.r);
+
+  for (const spray of sprays) {
+    const inner = 1 - spray.r / (radius * 0.7);
+    // Long enough to reach the rim from where it starts, and no further.
+    const length = Math.min(def.leafLength * cell * spray.scale, radius - spray.r - def.leafWidth * cell * 0.6);
+    if (length <= def.leafLength * cell * 0.3) continue;
+    const steps = 10;
+    const points: [number, number][] = [];
+    for (let i = 0; i <= steps; i++) {
+      const t = i / steps;
+      const a = spray.angle + spray.turn * 0.5 + spray.bow * t;
+      const prev = points[i - 1] ?? [cx + Math.cos(spray.angle) * spray.r, cy + Math.sin(spray.angle) * spray.r];
+      points.push(i === 0 ? prev : [prev[0] + Math.cos(a) * (length / steps), prev[1] + Math.sin(a) * (length / steps)]);
+    }
+    const darken = 0.6 + 0.4 * (1 - inner);
+    const twig = def.dark.map((c) => c * 0.7);
+    for (let i = 0; i < steps; i++) {
+      const [x0, y0] = points[i];
+      const [x1, y1] = points[i + 1];
+      painter.stem(x0, y0, x1, y1, cell * 0.004 * (1 - 0.5 * (i / steps)), cell * 0.004 * (1 - 0.5 * ((i + 1) / steps)), twig, clip);
+    }
+    const needle = def.leafWidth * cell;
+    const gap = Math.max(1.5, needle * 0.32);
+    for (let i = 0; i < steps; i++) {
+      const [x0, y0] = points[i];
+      const [x1, y1] = points[i + 1];
+      const segment = Math.hypot(x1 - x0, y1 - y0);
+      const dx = (x1 - x0) / segment;
+      const dy = (y1 - y0) / segment;
+      for (let d = 0; d < segment; d += gap) {
+        const t = (i + d / segment) / steps;
+        if (t < 0.08) continue;
+        // Longest near the base, tapering to the tip.
+        const reach = needle * (1 - 0.65 * t) * (0.85 + rng() * 0.3);
+        const fresh = Math.min(1, t * 0.7 + spray.shade * 0.45 + rng() * 0.15);
+        const base = [0, 1, 2].map((c) => def.dark[c] + (def.light[c] - def.dark[c]) * fresh);
+        const brightness = darken * (0.8 + rng() * 0.3);
+        for (const side of [-1, 1]) {
+          // Nearly square to the twig, angled a little forward.
+          const a = side * (1.2 + (rng() - 0.5) * 0.3);
+          const nx = dx * Math.cos(a) - dy * Math.sin(a);
+          const ny = dx * Math.sin(a) + dy * Math.cos(a);
+          painter.leaf(x0 + dx * d, y0 + dy * d, nx, ny, reach, Math.max(1.2, reach * 0.16), base, brightness, clip);
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Hanging moss, into the cell `clip` - one tile of a strand, repeated end to end down a leafy vine:
+ * `threads` fine threads running down it, each wandering from side to side in whole waves so it
+ * meets itself at the tile's top and bottom, the middle of the strand fuller than its edges, with
+ * short curls off them. Grey-green, the ones behind darker; airy, the background showing through.
+ */
+function paintMoss(painter: Painter, rng: () => number, moss: MossTexture, cell: number, clip: Clip): void {
+  const steps = 48;
+  for (let t = 0; t < moss.threads; t++) {
+    // Bunched towards the middle of the strand.
+    const centre = clip.x0 + cell * (0.5 + (rng() + rng() + rng() - 1.5) * 0.34);
+    const waves = 1 + Math.floor(rng() * 3);
+    const sway = cell * moss.sway * (0.3 + rng() * 0.7);
+    const phase = rng() * Math.PI * 2;
+    const ripple = cell * rng() * 0.015;
+    const back = rng() < 0.4;
+    const tone = rng();
+    const colour = [0, 1, 2].map((c) => (moss.dark[c] + (moss.light[c] - moss.dark[c]) * tone) * (back ? 0.7 : 1));
+    const x = (y: number): number => {
+      const u = (y - clip.y0) / cell;
+      return centre + Math.sin(u * Math.PI * 2 * waves + phase) * sway + Math.sin(u * Math.PI * 2 * (waves + 4) + phase * 2) * ripple;
+    };
+    const radius = cell * (0.0025 + rng() * 0.002);
+    for (let i = 0; i < steps; i++) {
+      const y0 = clip.y0 + (i / steps) * cell;
+      const y1 = clip.y0 + ((i + 1) / steps) * cell;
+      painter.stem(x(y0), y0, x(y1), y1, radius, radius, colour, clip);
+    }
+    // Short curls off the thread, painted again a cell over so they carry on into the next tile.
+    const curls = Math.round(moss.curls * (0.5 + rng()));
+    for (let k = 0; k < curls; k++) {
+      const y = clip.y0 + rng() * cell;
+      const side = rng() < 0.5 ? -1 : 1;
+      const a = side * (0.5 + rng() * 0.6);
+      const length = cell * (0.03 + rng() * 0.05);
+      const base = colour.map((c) => c * (0.9 + rng() * 0.25));
+      for (const shift of [0, cell, -cell]) painter.leaf(x(y), y + shift, Math.sin(a), Math.cos(a), length, Math.max(1.2, cell * 0.006), base, 1, clip);
+    }
+  }
 }
 
 /** Where a bush's leaves may hang from: a point on one of its stems. */

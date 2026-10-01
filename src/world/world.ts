@@ -205,7 +205,7 @@ export async function createWorld(
   chunkManager.loadInitial(0, 0);
 
   // Only needs to reach past the farthest fog - it follows the camera (see ocean.ts).
-  createOceanPlane(scene, sunLighting, sky, materialLibrary.terrainMaterial, { size: MAX_DRAW_DISTANCE * 2.5 });
+  createOceanPlane(scene, sunLighting, sky, [materialLibrary.terrainMaterial, materialLibrary.floatingMaterial], { size: MAX_DRAW_DISTANCE * 2.5 });
 
   // Tracked so updateAtmosphere can turn a biome's fogStartFraction into an actual distance without
   // main.ts having to know or pass the draw distance itself every frame.

@@ -52,6 +52,11 @@ export interface MaterialDef {
    *  25 m with it, so the same features author at twice the size get twice the texels (a road's
    *  cobbles, sharp up close). The far-off broad pass keeps the world's scale. */
   uvScale: number;
+  /** Floats on the water rather than lying on the ground - duckweed, a scum of algae. Under water it
+   *  is left out of the bed's blend and drawn instead on a sheet at the water's surface (see
+   *  terrainMesh.ts), its weight how much of the surface it covers, its own height (the texture's)
+   *  raggedness at the edges of a mat. Above the water it is nothing at all. */
+  floats: boolean;
 }
 
 export interface MaterialDetail {

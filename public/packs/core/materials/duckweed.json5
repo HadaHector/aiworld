@@ -1,0 +1,53 @@
+// Duckweed: a mat of tiny round leaves floating on still water, bright yellow-green, packed edge to
+// edge with dark slivers of water between, here and there a darker scum of algae. It floats
+// (`floats`): laid by a biome's layer like any ground, but under the water it is drawn on the
+// surface instead - its weight how much of the water it covers, its height (thick in drifts, thin
+// between) where a mat breaks up first at its edge. Above the water it is nothing.
+{
+  name: "Duckweed",
+  floats: true,
+  // Laid twice as fine as the usual tile, for twice the texels on every leaf - the features below
+  // authored at twice their size to come out as before.
+  uvScale: 2,
+  detail: { strength: 0.3 },
+  texture: {
+    bumpStrength: 0.6,
+    pipeline: {
+      noises: [
+        { name: "fronds", type: "worley", tileCycles: 130, amplitude: 1, mode: "edge", warp: 0.3, sizeJitter: 0.4, round: 0.3 },
+        { name: "drifts", type: "fbm", octaves: 4, tileCycles: 5, amplitude: 1, persistence: 0.55, lacunarity: 2.0 },
+        { name: "algae", type: "fbm", octaves: 3, tileCycles: 4, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+        { name: "tone", type: "fbm", octaves: 2, tileCycles: 20, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+      ],
+      steps: [
+        { output: "frondEdge", op: "sample", noise: "fronds" },
+        { output: "frond", op: "mask", input: "frondEdge", at: 0.12, off: 0.03 },
+        { output: "driftRaw", op: "sample", noise: "drifts" },
+        { output: "drift", op: "mask", input: "driftRaw", at: 0.9, off: -0.9 },
+        { output: "algaeRaw", op: "sample", noise: "algae" },
+        { output: "algae", op: "mask", input: "algaeRaw", at: 0.7, off: 0.1 },
+        { output: "toneRaw", op: "sample", noise: "tone" },
+        { output: "tone", op: "mask", input: "toneRaw", at: 1.2, off: -1.2 },
+
+        { output: "leafDark", op: "color", value: [0.17, 0.25, 0.06] },
+        { output: "leafLight", op: "color", value: [0.3, 0.4, 0.1] },
+        { output: "leaf", op: "mix", a: "leafDark", b: "leafLight", t: "tone" },
+        { output: "scum", op: "color", value: [0.13, 0.16, 0.07] },
+        { output: "leafScum", op: "mix", a: "leaf", b: "scum", t: "algae" },
+        { output: "gap", op: "color", value: [0.06, 0.09, 0.04] },
+        { output: "diffuse", op: "mix", a: "gap", b: "leafScum", t: "frond" },
+
+        // Wet: a sheen on the leaves, glossier still on the water between.
+        { output: "roughLeaf", op: "constant", value: 0.5 },
+        { output: "roughGap", op: "constant", value: 0.15 },
+        { output: "roughness", op: "mix", a: "roughGap", b: "roughLeaf", t: "frond" },
+
+        // Thick in the drifts, thin between: where a mat breaks up first.
+        { output: "driftHeight", op: "scale", input: "drift", factor: 0.8 },
+        { output: "frondHeight", op: "scale", input: "frond", factor: 0.2 },
+        { output: "height", op: "add", a: "driftHeight", b: "frondHeight" },
+      ],
+      outputs: { diffuse: "diffuse", roughness: "roughness", height: "height" },
+    },
+  },
+}

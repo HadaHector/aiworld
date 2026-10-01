@@ -1,0 +1,219 @@
+/**
+ * Cypress bayou - the wetland family's wooded variant (see ZONES.md): still, shallow water over most
+ * of the land, and standing in it the bald cypresses, swollen at their feet, knees poking up out of
+ * the water round them, grey moss hanging from their limbs; low mud banks and hummocks between,
+ * with a willow or a dead tree on them and bulrush at their edges. Dim, damp, green-grey light.
+ */
+{
+  name: "Cypress Bayou",
+  voice: "murky",
+  spawnWeight: 1.5,
+  lakeChance: 0.1,
+  borderType: "mountain",
+  settlement: "timber",
+  // The bayou floor just under the water - a slow swell and a finer one, mostly a hand to a metre
+  // deep (the terrain lifts land some 6 m on its own, hence the offset) - and out of it, where a
+  // slow noise says so, low hummocks and banks a metre or three over the water.
+  height: {
+    noises: [
+      { name: "swell", type: "fbm", octaves: 3, frequency: 0.008, amplitude: { range: [0.6, 0.9] }, persistence: 0.5, lacunarity: 2.0 },
+      { name: "ripple", type: "fbm", octaves: 2, frequency: 0.035, amplitude: 0.5, persistence: 0.5, lacunarity: 2.0 },
+      { name: "hummock", type: "fbm", octaves: 3, frequency: 0.007, amplitude: { range: [2, 3.5] }, persistence: 0.45, lacunarity: 2.0 },
+      { name: "where", type: "fbm", octaves: 3, frequency: 0.002, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+    ],
+    steps: [
+      { output: "swell", op: "sample", noise: "swell" },
+      { output: "ripple", op: "sample", noise: "ripple" },
+      { output: "floorRaw", op: "add", a: "swell", b: "ripple" },
+      { output: "floor", op: "offset", input: "floorRaw", amount: { range: [-6.5, -6.1] } },
+      { output: "hummockRaw", op: "sample", noise: "hummock" },
+      { output: "hummock", op: "offset", input: "hummockRaw", amount: -4.5 },
+      { output: "whereRaw", op: "sample", noise: "where" },
+      { output: "hummockRamp", op: "remap", input: "whereRaw", inMin: { range: [-0.1, 0.1] }, inMax: { range: [0.4, 0.55] }, outMin: 0, outMax: 1 },
+      { output: "hummockShare", op: "clamp", input: "hummockRamp", min: 0, max: 1 },
+      // Only ever up out of the water, never a hole in it.
+      { output: "riseRaw", op: "subtract", a: "hummock", b: "floor" },
+      { output: "zero", op: "constant", value: 0 },
+      { output: "rise", op: "max", a: "riseRaw", b: "zero" },
+      { output: "shareOfRise", op: "multiply", a: "rise", b: "hummockShare" },
+      { output: "result", op: "add", a: "floor", b: "shareOfRise" },
+    ],
+  },
+  // Willows and dead trees on the banks from a little over the water; the cypresses wade.
+  treeRules: { shore: [0.2, 1] },
+  // Cypresses in stands through the water and over the low banks; a willow at the banks' edges now
+  // and then, and the odd dead tree.
+  trees: {
+    noises: [
+      { name: "stand", type: "fbm", octaves: 2, frequency: 0.005, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+      { name: "group", type: "fbm", octaves: 2, frequency: 0.009, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+    ],
+    steps: [
+      { output: "height", op: "input", name: "height" },
+      { output: "standRaw", op: "sample", noise: "stand" },
+      { output: "standRamp", op: "remap", input: "standRaw", inMin: { range: [-0.7, -0.4] }, inMax: 0.2, outMin: 0.2, outMax: 1 },
+      { output: "stand", op: "clamp", input: "standRamp", min: 0, max: 1 },
+      // In the water out to a metre deep, and up the low banks.
+      { output: "notDeep", op: "mask", input: "height", at: -0.7, off: -1.2 },
+      { output: "low", op: "mask", input: "height", at: 2, off: 3.5 },
+      { output: "wading", op: "multiply", a: "notDeep", b: "low" },
+      { output: "standWading", op: "multiply", a: "stand", b: "wading" },
+      { output: "baldCypress", op: "scale", input: "standWading", factor: { range: [0.6, 0.9] } },
+      { output: "groupRaw", op: "sample", noise: "group" },
+      { output: "group", op: "mask", input: "groupRaw", at: 0.4, off: 0 },
+      { output: "willow", op: "scale", input: "group", factor: { range: [0.1, 0.2] } },
+      { output: "deadTree", op: "constant", value: { range: [0.02, 0.06] } },
+    ],
+    outputs: { baldCypress: "baldCypress", willow: "willow", deadTree: "deadTree" },
+  },
+  // Cypress knees: knobbly stumps poking out of the shallows and the mud at the waterline, gathered
+  // in clusters - round the cypresses, as far as anyone can tell.
+  rocks: {
+    noises: [{ name: "cluster", type: "fbm", octaves: 2, frequency: 0.03, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
+    steps: [
+      { output: "height", op: "input", name: "height" },
+      { output: "notDeep", op: "mask", input: "height", at: -0.6, off: -1.1 },
+      { output: "notHigh", op: "mask", input: "height", at: 0.6, off: 1.2 },
+      { output: "shallows", op: "multiply", a: "notDeep", b: "notHigh" },
+      { output: "clusterRaw", op: "sample", noise: "cluster" },
+      { output: "cluster", op: "mask", input: "clusterRaw", at: 0.4, off: -0.1 },
+      { output: "knees", op: "multiply", a: "shallows", b: "cluster" },
+      { output: "cypressKnee", op: "scale", input: "knees", factor: { range: [0.4, 0.7] } },
+    ],
+    outputs: { cypressKnee: "cypressKnee" },
+  },
+  // Ferns on the hummocks, in the shade.
+  bushes: {
+    noises: [{ name: "bed", type: "fbm", octaves: 2, frequency: 0.03, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
+    steps: [
+      { output: "bedRaw", op: "sample", noise: "bed" },
+      { output: "bed", op: "mask", input: "bedRaw", at: 0.5, off: 0.2 },
+      { output: "height", op: "input", name: "height" },
+      { output: "dry", op: "mask", input: "height", at: 1.4, off: 0.8 },
+      { output: "beds", op: "multiply", a: "bed", b: "dry" },
+      { output: "fern", op: "scale", input: "beds", factor: { range: [0.2, 0.4] } },
+    ],
+    outputs: { fern: "fern" },
+  },
+  treeTints: [
+    { kinds: ["cypressKnee"], stone: { hue: { range: [-6, 6] }, saturation: { range: [0.85, 1.1] }, value: { range: [0.85, 1.05] }, spread: { value: 0.1 } } },
+    {
+      // Dull, damp greens: the cypresses' feathers yellower in one area, bluer in the next.
+      leaves: { hue: { range: [-10, 10] }, saturation: { range: [0.8, 1.05] }, value: { range: [0.85, 1.0] }, spread: { hue: 6, saturation: 0.1, value: 0.1 } },
+      bark: { hue: { range: [-6, 6] }, saturation: { range: [0.8, 1.1] }, value: { range: [0.85, 1.05] }, spread: { value: 0.08 } },
+    },
+  ],
+  ground: {
+    base: "mud",
+    road: "track",
+    adjust: { hue: { range: [-6, 6] }, saturation: { range: [0.85, 1.05] }, value: { range: [0.9, 1.02] } },
+    layers: [
+      // Duckweed on the water: broad mats over most of it, thickest against the banks, open lanes
+      // of dark water winding between.
+      {
+        id: "bayou-duckweed",
+        material: "duckweed",
+        weight: {
+          noises: [{ name: "mat", type: "fbm", octaves: 3, frequency: 0.006, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
+          steps: [
+            { output: "height", op: "input", name: "height" },
+            // On past the waterline a little - the bank hides it there - so a mat meets the mud.
+            { output: "wet", op: "mask", input: "height", at: 0.1, off: 0.3 },
+            // Against the banks: the last half metre of depth.
+            { output: "bank", op: "mask", input: "height", at: -0.2, off: -0.6 },
+            { output: "matRaw", op: "sample", noise: "mat" },
+            { output: "matRamp", op: "remap", input: "matRaw", inMin: { range: [-0.1, 0.15] }, inMax: 0.45, outMin: 0, outMax: 1 },
+            { output: "mat", op: "clamp", input: "matRamp", min: 0, max: 1 },
+            { output: "matOrBank", op: "max", a: "mat", b: "bank" },
+            { output: "cover", op: "multiply", a: "wet", b: "matOrBank" },
+            { output: "result", op: "scale", input: "cover", factor: { range: [1.5, 2.5] } },
+          ],
+        },
+      },
+      // Stranded duckweed on the banks at the waterline, a ragged band up from the water, so the
+      // mats on the water meet more of the same rather than a cut edge against bare mud.
+      {
+        id: "bayou-stranded",
+        material: "strandedDuckweed",
+        weight: {
+          noises: [{ name: "fray", type: "fbm", octaves: 3, frequency: 0.04, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
+          steps: [
+            { output: "height", op: "input", name: "height" },
+            { output: "frayRaw", op: "sample", noise: "fray" },
+            { output: "fray", op: "scale", input: "frayRaw", factor: 0.25 },
+            { output: "reach", op: "add", a: "height", b: "fray" },
+            { output: "below", op: "mask", input: "reach", at: 0.3, off: 0.6 },
+            // Out of the water only: under it, it would crowd the floating mats' own weight out.
+            { output: "above", op: "mask", input: "height", at: 0, off: -0.1 },
+            { output: "band", op: "multiply", a: "below", b: "above" },
+            { output: "result", op: "scale", input: "band", factor: 2 },
+          ],
+        },
+      },
+      // Bulrush in patches at the banks' edges and in the shallows by them.
+      {
+        id: "bayou-bulrush",
+        material: "reedbed",
+        weight: {
+          noises: [{ name: "patch", type: "fbm", octaves: 3, frequency: 0.03, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
+          steps: [
+            { output: "height", op: "input", name: "height" },
+            { output: "notDeep", op: "mask", input: "height", at: -0.3, off: -0.7 },
+            { output: "notHigh", op: "mask", input: "height", at: 0.5, off: 1.0 },
+            { output: "edge", op: "multiply", a: "notDeep", b: "notHigh" },
+            { output: "patchRaw", op: "sample", noise: "patch" },
+            { output: "patch", op: "mask", input: "patchRaw", at: 0.6, off: 0.3 },
+            { output: "edgePatch", op: "multiply", a: "edge", b: "patch" },
+            { output: "result", op: "scale", input: "edgePatch", factor: 2 },
+          ],
+        },
+      },
+      // The hummocks' tops: coarse marsh grass, frayed at its edge into the mud.
+      {
+        id: "bayou-hummocks",
+        material: "marshGrass",
+        weight: {
+          noises: [{ name: "fray", type: "fbm", octaves: 3, frequency: 0.03, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
+          steps: [
+            { output: "height", op: "input", name: "height" },
+            { output: "frayRaw", op: "sample", noise: "fray" },
+            { output: "fray", op: "scale", input: "frayRaw", factor: 0.8 },
+            { output: "reach", op: "add", a: "height", b: "fray" },
+            { output: "top", op: "mask", input: "reach", at: { range: [1.6, 2.2] }, off: { range: [1, 1.3] } },
+            { output: "result", op: "scale", input: "top", factor: 1.5 },
+          ],
+        },
+      },
+      // Shed cypress needles, rust-brown, drifted on the banks under the trees.
+      {
+        id: "bayou-litter",
+        material: "leafLitter",
+        weight: {
+          noises: [{ name: "drift", type: "fbm", octaves: 3, frequency: 0.02, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
+          steps: [
+            { output: "height", op: "input", name: "height" },
+            { output: "above", op: "mask", input: "height", at: 0.9, off: 0.4 },
+            { output: "driftRaw", op: "sample", noise: "drift" },
+            { output: "drift", op: "mask", input: "driftRaw", at: 0.35, off: 0 },
+            { output: "litter", op: "multiply", a: "above", b: "drift" },
+            { output: "result", op: "scale", input: "litter", factor: 1.5 },
+          ],
+        },
+      },
+    ],
+  },
+  // A damp green-grey haze, close in.
+  sky: {
+    horizon: { oneOf: ["#b4bca4", "#aab4a0", "#bcbca4"] },
+    zenith: "#6c8494",
+    cloud: "#d8dcd0",
+    fogStart: { range: [0.02, 0.08] },
+    fogEnd: { range: [0.4, 0.6] },
+  },
+  light: {
+    sunPeak: 44,
+    moonPeak: 45,
+    ambientDay: "#b4bca4",
+    sunZenith: "#ece8cc",
+  },
+}

@@ -1,0 +1,88 @@
+// A bald cypress: the bayou's tree, standing in the water. A tall, straight, tapering trunk swelling
+// out at its foot into a broad, fluted base - short buttresses all round it - and up top long
+// limbs held out level, crooked, under an open, flat-topped crown of feathery sprays in layers.
+// Fibrous bark in long vertical strips, red-brown weathering grey. Grey Spanish moss hanging from
+// the limbs.
+{
+  model: "branching",
+  // Stands in the water (`wetFeet`): the zone's shore rule does not keep it back from the waterline.
+  wetFeet: true,
+  variants: 4,
+  trunk: {
+    height: 34,
+    radius: 1.3,
+    topRadius: 0.35,
+    lean: 0.03,
+    wobble: 0.5,
+    // The swollen foot - a cypress's bottle base.
+    flare: 2.3,
+    flareHeight: 6,
+    sides: 10,
+    rings: 10,
+  },
+  // Many short buttresses, fluting the swollen base.
+  roots: { count: 9, length: [2.2, 3.4], radius: 0.4, drop: 0.4, sides: 6, rings: 5, buttress: { height: 3.5, thickness: 0.9 } },
+  branches: {
+    // Long limbs from the upper half, held out level, the upper ones a little steeper.
+    count: [11, 15],
+    from: 0.5,
+    length: [8, 14],
+    radius: 0.45,
+    angle: [65, 100],
+    arc: 0.08,
+    crook: 0.25,
+    sides: 6,
+    rings: 7,
+    twigs: { count: [3, 4], length: [0.3, 0.5], angle: [50, 85], sides: 3, rings: 3 },
+  },
+  // Open layers of feathery sprays along the limbs, flattened, a crown flat on top.
+  leaves: { size: [10, 15], cards: 2, alongBranch: 6, top: 1, spread: 1.0, squash: 0.45, level: 0 },
+  // Spanish moss: long grey beards hanging straight down from the limbs (leafy vines, barely
+  // arching), narrowing to a point, showing the moss half of the leaf atlas.
+  vines: { count: [80, 110], length: [8, 16], radius: 0.03, loops: 0, leaves: { width: 1.8, tile: 3.2, arch: 0.1, taper: 1 } },
+  // Fibrous bark: long, shallow, stringy ridges running up the trunk, red-brown, greying.
+  bark: {
+    tile: 2.5,
+    texture: {
+      bumpStrength: 2.2,
+      pipeline: {
+        noises: [
+          { name: "fibres", type: "ridged", octaves: 3, tileCycles: 9, stretch: [1, 8], amplitude: 1, persistence: 0.5, lacunarity: 2 },
+          { name: "weather", type: "fbm", octaves: 3, tileCycles: 4, amplitude: 1, persistence: 0.55, lacunarity: 2 },
+        ],
+        steps: [
+          { output: "fibreRaw", op: "sample", noise: "fibres" },
+          { output: "height", op: "mask", input: "fibreRaw", at: 0.7, off: 0.25 },
+          { output: "weatherRaw", op: "sample", noise: "weather" },
+          { output: "weather", op: "mask", input: "weatherRaw", at: 0.6, off: -0.6 },
+          { output: "red", op: "color", value: [0.36, 0.22, 0.15] },
+          { output: "grey", op: "color", value: [0.42, 0.39, 0.35] },
+          { output: "tone", op: "mix", a: "red", b: "grey", t: "weather" },
+          { output: "furrow", op: "color", value: [0.1, 0.07, 0.05] },
+          { output: "diffuse", op: "mix", a: "furrow", b: "tone", t: "height" },
+          { output: "roughness", op: "constant", value: 0.9 },
+        ],
+        outputs: { diffuse: "diffuse", roughness: "roughness", height: "height" },
+      },
+    },
+  },
+  // Feathery sprays of short, flat, soft needles, a fresh yellowish green.
+  foliage: {
+    builder: "featherSpray",
+    dark: [0.1, 0.2, 0.06],
+    light: [0.48, 0.6, 0.22],
+    leaves: 40,
+    leafLength: 0.24,
+    leafWidth: 0.05,
+    // The moss, each tree its own kind: silver-grey Spanish moss, wiry and curly, or a smoother,
+    // straighter beard, a dull olive green.
+    moss: {
+      oneOf: [
+        { dark: [0.42, 0.44, 0.38], light: [0.78, 0.8, 0.72], threads: 44, curls: 12, sway: 0.08 },
+        { dark: [0.26, 0.3, 0.16], light: [0.56, 0.6, 0.34], threads: 56, curls: 3, sway: 0.03 },
+      ],
+    },
+  },
+  tint: [[0.88, 0.92, 0.85], [1.08, 1.06, 0.96]],
+  scale: [0.85, 1.2],
+}

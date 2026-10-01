@@ -51,6 +51,10 @@ export interface MaterialLibrary {
   /** The single shader material every terrain chunk uses - blends MATERIALS_PER_TRIANGLE materials
    *  per triangle (see terrainMesh.ts), so no MultiMaterial/SubMesh split is needed any more. */
   terrainMaterial: ShaderMaterial;
+  /** What a chunk's floating sheet is drawn with (see terrainMesh.ts), and which material indices
+   *  float - a chunk needs a sheet only where one of them has a say under the water. */
+  floatingMaterial: ShaderMaterial;
+  floatingMaterials: ReadonlySet<number>;
   /** Every material's weight at one point, keyed by material index and summing to 1. Every area
    *  with a say there contributes its own base and layers, scaled by that area's share. */
   buildMaterialBlend: (worldX: number, worldZ: number, context: Record<string, number>, areaWeights: AreaWeight[]) => Map<number, number>;
@@ -107,7 +111,14 @@ const SPECULAR_INTENSITY = 1.3;
 // How much a fully glossy surface's reflectance rises above a plain dielectric's 4%.
 const SPECULAR_GLOSS_REFLECTANCE = 0.35;
 
-const VERTEX_SHADER = `#version 300 es
+/** How far above the water plane a floating sheet lies (see vertexShader) - enough that the plane,
+ *  drawn after it, never covers it. */
+const FLOAT_LIFT = 0.03;
+
+/** The terrain's vertex shader - or, `floating`, a floating sheet's: the same chunk raised flat to
+ *  the water's surface, with how deep the water is over the ground beneath. */
+function vertexShader(floating: boolean): string {
+  return `#version 300 es
 precision highp float;
 
 in vec3 position;
@@ -119,8 +130,10 @@ uniform mat4 world;
 uniform mat4 view;
 uniform mat4 projection;
 uniform float tileScale;
+uniform float waterLevel;
 
 out vec2 vUV;
+out float vDepth;
 out vec3 vNormal;
 out vec3 vWorldPosition;
 // The fragment's position in camera space. Its .z is what picks a shadow cascade (the same
@@ -136,8 +149,10 @@ out vec4 vMatWeights;
 
 void main() {
   vec4 worldPosition = world * vec4(position, 1.0);
+  vDepth = waterLevel - worldPosition.y;
+  ${floating ? `worldPosition.y = waterLevel + ${FLOAT_LIFT.toFixed(3)};` : ""}
   gl_Position = projection * view * worldPosition;
-  vNormal = normalize((world * vec4(normal, 0.0)).xyz);
+  vNormal = ${floating ? "vec3(0.0, 1.0, 0.0)" : "normalize((world * vec4(normal, 0.0)).xyz)"};
   vWorldPosition = worldPosition.xyz;
   vPositionFromCamera = (view * worldPosition).xyz;
   // Texture coordinates come straight from world-space position, not the mesh's own 0..1 UV - see
@@ -147,6 +162,7 @@ void main() {
   vMatWeights = matWeights;
 }
 `;
+}
 
 // The vec4 components the fragment shader actually samples - one per blended material.
 const materialSlots = ["x", "y", "z", "w"].slice(0, MATERIALS_PER_TRIANGLE);
@@ -166,6 +182,7 @@ in vec2 vUV;
 in vec3 vNormal;
 in vec3 vWorldPosition;
 in vec3 vPositionFromCamera;
+in float vDepth;
 flat in vec4 vMatIndices;
 in vec4 vMatWeights;
 
@@ -175,8 +192,8 @@ uniform float waterLevel;
 uniform float specularMinShininess;
 uniform float specularMaxShininess;
 uniform float specularIntensity;
-// One row per material, ${TABLE_WIDTH} texels: (texture layer, detail scale, detail strength, -), the
-// texture's own average colour, then the colour matrix's three columns. A texture rather than
+// One row per material, ${TABLE_WIDTH} texels: (texture layer, detail scale, detail strength, uv
+// scale), the texture's own average colour and whether it floats, then the colour matrix's three columns. A texture rather than
 // uniform arrays so the number of materials is not capped by how many uniforms a GPU has.
 uniform highp sampler2D materialTable;
 
@@ -200,14 +217,16 @@ float luma(vec3 c) {
  * Then recoloured by the material's colour matrix (colorAdjust.ts) - the last step, so the detail
  * passes compare the texture with its own average as baked, whatever the material makes of it.
  */
-void sampleMaterial(float material, out vec4 color, out vec3 tilt, out float height) {
+void sampleMaterial(float material, out vec4 color, out vec3 tilt, out float height, out float floats) {
   int index = int(material + 0.5);
   vec4 entry = texelFetch(materialTable, ivec2(0, index), 0);
   float layer = entry.x;
   vec2 detail = entry.yz;
   // Laid uvScale times smaller than the usual tile (MaterialDef.uvScale).
   vec2 uv = vUV * entry.w;
-  float mean = max(luma(texelFetch(materialTable, ivec2(1, index), 0).rgb), 0.03);
+  vec4 average = texelFetch(materialTable, ivec2(1, index), 0);
+  float mean = max(luma(average.rgb), 0.03);
+  floats = average.w;
   mat3 adjust = mat3(
     texelFetch(materialTable, ivec2(2, index), 0).rgb,
     texelFetch(materialTable, ivec2(3, index), 0).rgb,
@@ -248,12 +267,14 @@ float heightShare(float weight, float height) {
 void main() {
   vec3 n = normalize(vNormal);
 
-  ${materialSlots.map((c, i) => `vec4 color${i}; vec3 tilt${i}; float height${i};
-  sampleMaterial(vMatIndices.${c}, color${i}, tilt${i}, height${i});
-  float share${i} = heightShare(vMatWeights.${c}, height${i});`).join("\n  ")}
+  // A floating material is not part of the bed: it is drawn on the water's surface instead.
+  ${materialSlots.map((c, i) => `vec4 color${i}; vec3 tilt${i}; float height${i}; float floats${i};
+  sampleMaterial(vMatIndices.${c}, color${i}, tilt${i}, height${i}, floats${i});
+  float share${i} = heightShare(vMatWeights.${c} * (1.0 - floats${i}), height${i});`).join("\n  ")}
   float lowest = max(${materialSlots.map((_, i) => `share${i}`).reduce((a, b) => `max(${a}, ${b})`)}, 0.0) - ${HEIGHT_BLEND_DEPTH.toFixed(3)};
   ${materialSlots.map((_, i) => `float blend${i} = max(share${i} - lowest, 0.0);`).join("\n  ")}
-  float total = ${materialSlots.map((_, i) => `blend${i}`).join(" + ")};
+  // Never nothing - a floating mat with no bed under it in the blend still divides by something.
+  float total = max(${materialSlots.map((_, i) => `blend${i}`).join(" + ")}, 1e-4);
   vec4 albedo = (${materialSlots.map((_, i) => `color${i} * blend${i}`).join(" + ")}) / total;
   vec3 tangentNormal = normalize(${materialSlots.map((_, i) => `tilt${i} * blend${i}`).join(" + ")});
 
@@ -321,6 +342,45 @@ void main() {
 }
 `;
 
+/** How ragged a floating mat's edge is: its texture's own height pushes its cover up or down by up
+ *  to half this, so a mat thins out through its own gaps rather than fading. */
+const FLOAT_RAGGEDNESS = 0.9;
+
+/**
+ * A floating sheet's fragment shader: the terrain's, down to its main - only the floating materials
+ * of the blend drawn, their weight how much of the surface they cover, cut out (not blended, so the
+ * sheet sorts and shadows as an opaque surface) where the cover, raised or lowered by the texture's
+ * own height, falls short of half. Lit flat, facing up, a matte surface with a little sheen; nothing
+ * where the ground stands above the water.
+ */
+const FLOATING_FRAGMENT_SHADER =
+  FRAGMENT_SHADER.slice(0, FRAGMENT_SHADER.indexOf("void main() {")) +
+  `void main() {
+  if (vDepth <= 0.0) discard;
+  ${materialSlots.map((c, i) => `vec4 color${i}; vec3 tilt${i}; float height${i}; float floats${i};
+  sampleMaterial(vMatIndices.${c}, color${i}, tilt${i}, height${i}, floats${i});
+  float cover${i} = vMatWeights.${c} * floats${i};`).join("\n  ")}
+  float cover = ${materialSlots.map((_, i) => `cover${i}`).join(" + ")};
+  if (cover < 0.001) discard;
+  float height = (${materialSlots.map((_, i) => `height${i} * cover${i}`).join(" + ")}) / cover;
+  if (cover + (height - 0.5) * ${FLOAT_RAGGEDNESS.toFixed(3)} < 0.5) discard;
+  vec4 albedo = (${materialSlots.map((_, i) => `color${i} * cover${i}`).join(" + ")}) / cover;
+  vec3 tangentNormal = normalize(${materialSlots.map((_, i) => `tilt${i} * cover${i}`).join(" + ")});
+  vec3 n = vec3(0.0, 1.0, 0.0);
+  // The texture's u runs along world x and v along world z, its z up.
+  vec3 worldNormal = normalize(vec3(tangentNormal.x, tangentNormal.z, tangentNormal.y));
+
+  vec3 lightDir = normalize(lightDirection);
+  float diffuse = (dot(worldNormal, lightDir) * 0.5 + 0.5) * lightIntensity;
+  vec3 viewDir = normalize(cameraPosition - vWorldPosition);
+  float gloss = 1.0 - albedo.a;
+  float specular = pow(max(dot(worldNormal, normalize(viewDir + lightDir)), 0.0), 60.0) * gloss * 0.6 * max(lightDir.y, 0.0);
+  float shadow = computeShadow(vWorldPosition, n, vPositionFromCamera.z);
+  vec3 lit = albedo.rgb * diffuse * lightColor * shadow + vec3(specular) * lightColor * lightIntensity * shadow + albedo.rgb * ambientColor * ambientIntensity;
+  outColor = vec4(applyFog(lit, length(vPositionFromCamera)), 1.0);
+}
+`;
+
 /** Baked terrain textures: colour+roughness and normal+height pixels, TEXTURE_RESOLUTION² RGBA a
  *  layer, and each layer's own average colour - one layer per distinct texture (terrainTextureLayers). */
 export interface TerrainTextures {
@@ -333,6 +393,8 @@ export interface TerrainTextures {
  *  material library is built on, and what the workbench draws a single material with. */
 export interface TerrainMaterial {
   terrainMaterial: ShaderMaterial;
+  /** The same materials drawn as a floating sheet - only those that float (MaterialDef.floats). */
+  floatingMaterial: ShaderMaterial;
   litShading: LitShading;
   /** Every material's average colour as drawn - its texture's average through its colour
    *  adjustment - by material index. */
@@ -417,7 +479,7 @@ export async function createTerrainMaterial(
   materialDefs.forEach((def, i) => {
     const row = i * TABLE_WIDTH * 4;
     table.set([layerOf[i], def.detail.scale, def.detail.strength, def.uvScale], row);
-    table.set([...textures.layerAverages[layerOf[i]], 0], row + 4);
+    table.set([...textures.layerAverages[layerOf[i]], def.floats ? 1 : 0], row + 4);
     const m = matrices[i];
     for (let column = 0; column < 3; column++) table.set([m[column], m[3 + column], m[6 + column], 0], row + 8 + column * 4);
   });
@@ -433,39 +495,45 @@ export async function createTerrainMaterial(
     Constants.TEXTURETYPE_FLOAT,
   );
 
-  Effect.ShadersStore["terrainBlendVertexShader"] = VERTEX_SHADER;
+  Effect.ShadersStore["terrainBlendVertexShader"] = vertexShader(false);
   Effect.ShadersStore["terrainBlendFragmentShader"] = FRAGMENT_SHADER;
-
-  const terrainMaterial = new ShaderMaterial("terrainBlend", scene, "terrainBlend", {
-    attributes: ["position", "normal", "matIndices", "matWeights"],
-    uniforms: [
-      "world",
-      "view",
-      "projection",
-      "tileScale",
-      "waterLevel",
-      "specularMinShininess",
-      "specularMaxShininess",
-      "specularIntensity",
-      ...LIT_SHADING_UNIFORMS,
-    ],
-    samplers: ["materialAtlas", "normalAtlas", "materialTable", ...LIT_SHADING_SAMPLERS],
-  });
-  terrainMaterial.setTexture("materialAtlas", materialAtlas);
-  terrainMaterial.setTexture("normalAtlas", normalAtlas);
-  terrainMaterial.setTexture("materialTable", materialTable);
-  terrainMaterial.setFloat("tileScale", 1 / TEXTURE_WORLD_TILE_SIZE);
-  // Overwritten every frame by ocean.ts once the water exists; until then, nothing is underwater.
-  terrainMaterial.setFloat("waterLevel", -1e6);
-  terrainMaterial.setFloat("specularMinShininess", SPECULAR_MIN_SHININESS);
-  terrainMaterial.setFloat("specularMaxShininess", SPECULAR_MAX_SHININESS);
-  terrainMaterial.setFloat("specularIntensity", SPECULAR_INTENSITY);
-  terrainMaterial.backFaceCulling = true;
+  Effect.ShadersStore["terrainFloatingVertexShader"] = vertexShader(true);
+  Effect.ShadersStore["terrainFloatingFragmentShader"] = FLOATING_FRAGMENT_SHADER;
 
   const litShading = createLitShading(scene, sunLighting);
-  litShading.register(terrainMaterial);
+  const make = (name: string): ShaderMaterial => {
+    const material = new ShaderMaterial(name, scene, name, {
+      attributes: ["position", "normal", "matIndices", "matWeights"],
+      uniforms: [
+        "world",
+        "view",
+        "projection",
+        "tileScale",
+        "waterLevel",
+        "specularMinShininess",
+        "specularMaxShininess",
+        "specularIntensity",
+        ...LIT_SHADING_UNIFORMS,
+      ],
+      samplers: ["materialAtlas", "normalAtlas", "materialTable", ...LIT_SHADING_SAMPLERS],
+    });
+    material.setTexture("materialAtlas", materialAtlas);
+    material.setTexture("normalAtlas", normalAtlas);
+    material.setTexture("materialTable", materialTable);
+    material.setFloat("tileScale", 1 / TEXTURE_WORLD_TILE_SIZE);
+    // Set by ocean.ts once the water exists; until then, nothing is underwater.
+    material.setFloat("waterLevel", -1e6);
+    material.setFloat("specularMinShininess", SPECULAR_MIN_SHININESS);
+    material.setFloat("specularMaxShininess", SPECULAR_MAX_SHININESS);
+    material.setFloat("specularIntensity", SPECULAR_INTENSITY);
+    material.backFaceCulling = true;
+    litShading.register(material);
+    return material;
+  };
+  const terrainMaterial = make("terrainBlend");
+  const floatingMaterial = make("terrainFloating");
 
-  return { terrainMaterial, litShading, averageColors, textures, layerOf };
+  return { terrainMaterial, floatingMaterial, litShading, averageColors, textures, layerOf };
 }
 
 /** Builds every ground material's procedural texture once per world (see createTerrainMaterial),
@@ -484,7 +552,7 @@ export async function createMaterialLibrary(
 ): Promise<MaterialLibrary> {
   const blender = createMaterialBlender(seed, content, areaBiomes);
   const { materialDefs, defaultIndex, buildMaterialBlend, resolveMaterialIndex } = blender;
-  const { terrainMaterial, litShading, averageColors, textures, layerOf } = await createTerrainMaterial(scene, seed, materialDefs, sunLighting, onProgress);
+  const { terrainMaterial, floatingMaterial, litShading, averageColors, textures, layerOf } = await createTerrainMaterial(scene, seed, materialDefs, sunLighting, onProgress);
   const materialColors: Color3[] = averageColors.map(([r, g, b]) => new Color3(r, g, b));
 
   function getMaterialColor(materialIndex: number): Color3 {
@@ -516,10 +584,15 @@ export async function createMaterialLibrary(
 
   function setWireframe(enabled: boolean): void {
     terrainMaterial.wireframe = enabled;
+    floatingMaterial.wireframe = enabled;
   }
+
+  const floatingMaterials = new Set(materialDefs.flatMap((def, i) => (def.floats ? [i] : [])));
 
   return {
     terrainMaterial,
+    floatingMaterial,
+    floatingMaterials,
     litShading,
     blender,
     buildMaterialBlend,

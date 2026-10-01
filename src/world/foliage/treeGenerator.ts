@@ -180,9 +180,11 @@ class LeafBuilder {
    * the last (mirrored with `mirror`) - each tile its own quad, so the repeats need no wrapping. Its
    * normals are its own face's, so it is shaded as a frond is (an underside, a gloss), and it bends
    * in the wind from its first point. It twists `twist` radians about its own line from end to end,
-   * so it turns a face every way as it falls rather than hanging as one flat card.
+   * so it turns a face every way as it falls rather than hanging as one flat card. With `taper` it
+   * narrows along its length to 1 - `taper` of its width at the end, the tile cropped in towards its
+   * middle rather than squeezed, so what is painted keeps its size and the edges just run out.
    */
-  ribbon(points: V3[], side: V3, width: number, tile: number, cell: number, mirror: boolean, twist = 0): void {
+  ribbon(points: V3[], side: V3, width: number, tile: number, cell: number, mirror: boolean, twist = 0, taper = 0): void {
     const cellU = (cell % 2) * 0.5;
     const cellV = Math.floor(cell / 2) * 0.5;
     const inset = 0.004;
@@ -211,13 +213,14 @@ class LeafBuilder {
         const flat = normalize(sub(side, scale(tangent, dot(side, tangent))));
         const turned = rotate(flat, tangent, twist * (d / total));
         const n = normalize(cross(turned, tangent));
+        const kept = 1 - taper * (d / total);
         for (const a of [-1, 1]) {
-          const q = add(p, scale(turned, (a * width) / 2));
+          const q = add(p, scale(turned, (a * width * kept) / 2));
           this.positions.push(q[0], q[1], q[2]);
           this.normals.push(n[0], n[1], n[2]);
           this.lie.push(Math.abs(n[1]));
           this.flex.push((d / total) * Math.min(1, total / 8));
-          const across = (a + 1) / 2;
+          const across = 0.5 + (a * kept) / 2;
           this.uvs.push(cellU + inset + (mirror ? 1 - across : across) * span, cellV + inset + row * span);
         }
       }
@@ -575,6 +578,10 @@ export function generateTree(spec: BranchingTree, seed: number, detail: TreeDeta
   }
 
   let foliageTop = trunk.height;
+  // With moss in the atlas, the clusters keep to its top two cells and the leafy vines - the moss -
+  // to its bottom two.
+  const mossKinds = spec.foliage && "moss" in spec.foliage && spec.foliage.moss ? spec.foliage.moss.length : 0;
+  const mossy = mossKinds > 0;
   if (leaves) {
     const top = trunkPoint(1);
     for (let a = 0; a < leaves.top; a++) {
@@ -606,7 +613,7 @@ export function generateTree(spec: BranchingTree, seed: number, detail: TreeDeta
         const size = between(leaves.size);
         const offset: V3 = [(rng() - 0.5) * 2 * leaves.spread, (rng() - 0.5) * leaves.spread * leaves.squash, (rng() - 0.5) * 2 * leaves.spread];
         const centre = add(point, offset);
-        leafBuilder.card(centre, flat(axis), flat(across), size, Math.floor(rng() * 4), crownCentre, crownRadius);
+        leafBuilder.card(centre, flat(axis), flat(across), size, Math.floor(rng() * (mossy ? 2 : 4)), crownCentre, crownRadius);
         foliageTop = Math.max(foliageTop, centre[1] + size * 0.7 * leaves.squash);
       }
     }
@@ -621,6 +628,8 @@ export function generateTree(spec: BranchingTree, seed: number, detail: TreeDeta
   // clothed in crossed strips of the leaf atlas down their length, kept on a distant tree too.
   if (spec.vines && perches.length > 0 && (!far || spec.vines.leaves)) {
     const vineRng = mulberry32((seed ^ 0x2f1a3c5) >>> 0);
+    // Which of the atlas's two moss cells this tree's strands all show - its kind of moss.
+    const mossCell = 2 + (mossKinds === 2 ? Math.floor(vineRng() * 2) : 0);
     let picked = 0;
     const pick = (): V3 => perches[(picked = Math.floor(vineRng() * perches.length))];
     const { vines } = spec;
@@ -645,8 +654,8 @@ export function generateTree(spec: BranchingTree, seed: number, detail: TreeDeta
         const toEnd = smoothstep(0.45, 1, perchAlong[picked]);
         const blended = add(scale(square, 1 - toEnd), scale(outward, toEnd));
         const away = rotate(Math.hypot(...blended) > 0.05 ? normalize(blended) : outward, [0, 1, 0], (vineRng() - 0.5) * 0.5);
-        const rise = 0.6 + vineRng() * 1.2;
-        const reach = 1.5 + vineRng() * 2.5;
+        const rise = (0.6 + vineRng() * 1.2) * vines.leaves.arch;
+        const reach = (1.5 + vineRng() * 2.5) * vines.leaves.arch;
         const archShare = 0.25;
         for (let i = 0; i <= rings; i++) {
           const s = i / rings;
@@ -685,9 +694,11 @@ export function generateTree(spec: BranchingTree, seed: number, detail: TreeDeta
       if (vines.leaves) {
         // One ribbon of the whip atlas along it, lying across the way it leans out - its face to the
         // outside of the tree, where it is seen from.
-        const out = normalize([points[rings][0] - from[0], 0, points[rings][2] - from[2]]);
+        const lean: V3 = [points[rings][0] - from[0], 0, points[rings][2] - from[2]];
+        // Hanging straight down (no arch), it faces out from the trunk instead.
+        const out = Math.hypot(...lean) > 0.05 ? normalize(lean) : Math.hypot(from[0], from[2]) > 0.05 ? normalize([from[0], 0, from[2]]) : ([1, 0, 0] as V3);
         const sideways = cross([0, 1, 0], out);
-        const cell = Math.floor(vineRng() * 4);
+        const cell = mossy ? (mossKinds === 2 ? mossCell : 2 + Math.floor(vineRng() * 2)) : Math.floor(vineRng() * 4);
         const mirror = vineRng() < 0.5;
         // A distant tree: every other whip, wider to keep the curtain as full, its leaves tiled half
         // as often - a quarter of the quads. Every whip still draws its numbers, so the ones kept
@@ -698,7 +709,7 @@ export function generateTree(spec: BranchingTree, seed: number, detail: TreeDeta
         // Twisting a good part of half a turn as it falls, one way or the other - never hanging flat.
         const turn = vineRng();
         const twist = (turn < 0.5 ? -1 : 1) * (0.6 + 0.4 * ((turn * 2) % 1)) * Math.PI;
-        leafBuilder.ribbon(points, sideways, width, tile, cell, mirror, twist);
+        leafBuilder.ribbon(points, sideways, width, tile, cell, mirror, twist, vines.leaves.taper);
       }
     }
   }

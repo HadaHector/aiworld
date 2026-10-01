@@ -15,7 +15,7 @@ import {
   type BaseTexture,
   type Scene,
 } from "@babylonjs/core";
-import type { BoulderShape, BushShape, PrimitiveTree, TreeCrown, TreeKindDef, TreeTrunk } from "./foliageConfig";
+import type { BoulderShape, BushShape, BushTexture, FoliageTexture, PrimitiveTree, TreeCrown, TreeKindDef, TreeTrunk } from "./foliageConfig";
 import type { ColorTuple } from "../terrain/pipeline/pipelineTypes";
 import { LIT_SHADING_SAMPLERS, LIT_SHADING_UNIFORMS, type LitShading } from "../materials/litShading";
 import { deriveSeed } from "../rng";
@@ -288,10 +288,15 @@ function generatedKind(shape: Extract<TreeKindDef["shape"], { model: "branching"
   }
   return {
     variants: shape.variants,
-    atlas: (seed) => (!shape.foliage ? null : shape.foliage.builder === "broadleaf" ? bakeFoliage(seed, shape.foliage) : bakeBushFoliage(seed, shape.foliage, shape.crown, shape.vines?.leaves ? shape.vines.leaves.tile / shape.vines.leaves.width : 1)),
+    atlas: (seed) => (!shape.foliage ? null : isClumpFoliage(shape.foliage) ? bakeFoliage(seed, shape.foliage) : bakeBushFoliage(seed, shape.foliage, shape.crown, shape.vines?.leaves ? shape.vines.leaves.tile / shape.vines.leaves.width : 1)),
     swayHeight: shape.trunk.height * 1.8,
     generate: (seed, detail) => generateTree(shape, seed, detail),
   };
+}
+
+/** Whether a tree's foliage is leaf clusters (a FoliageTexture) rather than a bush's atlas. */
+function isClumpFoliage(foliage: FoliageTexture | BushTexture): foliage is FoliageTexture {
+  return foliage.builder === "broadleaf" || foliage.builder === "featherSpray";
 }
 
 /** The seed a kind's leaf atlas is baked from. */

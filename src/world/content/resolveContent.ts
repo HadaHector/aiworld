@@ -474,7 +474,7 @@ function readUniversalLayer(id: string, obj: RawObject, reader: Reader): { layer
  * is an empty stand-in.
  */
 function readMaterial(id: string, obj: RawObject, reader: Reader, defaults: Defaults): { def: MaterialDef; textureFrom?: string } {
-  reader.onlyKeys(obj, "", ["name", "family", "texture", "textureFrom", "adjust", "grass", "clearsGrass", "detail", "uvScale"]);
+  reader.onlyKeys(obj, "", ["name", "family", "texture", "textureFrom", "adjust", "grass", "clearsGrass", "detail", "uvScale", "floats"]);
   const textureFrom = reader.optionalString(obj, "textureFrom", "");
   if (textureFrom !== undefined && reader.has(obj, "texture")) reader.fail("textureFrom", "a material has its own texture or borrows one with textureFrom, not both");
   if (textureFrom === undefined && !reader.has(obj, "texture")) reader.fail("texture", "expected a texture, or textureFrom naming the material whose texture this one draws");
@@ -493,6 +493,7 @@ function readMaterial(id: string, obj: RawObject, reader: Reader, defaults: Defa
     }),
     clearsGrass: reader.optionalNumber(obj, "clearsGrass", "", 0, { min: 0 }),
     uvScale: reader.optionalNumber(obj, "uvScale", "", 1, { min: 0.125, max: 8 }),
+    floats: reader.boolean(obj, "floats", "", false),
     detail: obj.detail === undefined ? defaults.materialDetail : readMaterialDetail(reader.object(obj.detail, "detail"), reader, "detail", defaults.materialDetail),
   };
   return { def, textureFrom };
@@ -884,13 +885,31 @@ function readBranchingTree(obj: RawObject, reader: Reader, common: string[]): Br
   const crown = obj.crown === undefined ? null : readFronds(obj.crown, reader, "crown");
   const vinesObj = obj.vines === undefined ? null : section("vines", ["count", "length", "radius", "loops", "leaves"]);
   const vineLeaves = vinesObj?.leaves === undefined ? null : reader.object(vinesObj.leaves, "vines.leaves");
-  if (vineLeaves) reader.onlyKeys(vineLeaves, "vines.leaves", ["width", "tile"]);
+  if (vineLeaves) reader.onlyKeys(vineLeaves, "vines.leaves", ["width", "tile", "arch", "taper"]);
   const bark = section("bark", ["tile", "texture"]);
   const foliageObj = obj.foliage === undefined ? null : reader.object(obj.foliage, "foliage");
   // A frond crown's atlas is a bush's (a fern's, a palm's, a broad leaf's); leaf clusters' are the broadleaf's.
   const readTreeFoliage = (f: RawObject): FoliageTexture | BushTexture => {
-    if (f.builder !== "broadleaf") return readBushTexture(f, reader);
-    reader.onlyKeys(f, "foliage", ["builder", "dark", "light", "leaves", "leafLength", "leafWidth"]);
+    if (f.builder !== "broadleaf" && f.builder !== "featherSpray") return readBushTexture(f, reader);
+    reader.onlyKeys(f, "foliage", ["builder", "dark", "light", "leaves", "leafLength", "leafWidth", "moss"]);
+    // One kind of moss, or `{ oneOf: [a, b] }` - two, each tree picking one.
+    const mossObj = f.moss === undefined ? null : reader.object(f.moss, "foliage.moss");
+    const mossKinds = !mossObj ? [] : "oneOf" in mossObj ? reader.array(mossObj, "oneOf", "foliage.moss").map((m, i) => ({ m, path: `foliage.moss.oneOf.${i}` })) : [{ m: mossObj as unknown, path: "foliage.moss" }];
+    if (mossObj && "oneOf" in mossObj) {
+      reader.onlyKeys(mossObj, "foliage.moss", ["oneOf"]);
+      if (mossKinds.length < 1 || mossKinds.length > 2) reader.fail("foliage.moss.oneOf", "one or two kinds of moss - the atlas has two cells for it");
+    }
+    const moss = mossKinds.map(({ m, path }) => {
+      const o = reader.object(m, path);
+      reader.onlyKeys(o, path, ["dark", "light", "threads", "curls", "sway"]);
+      return {
+        dark: reader.color(o, "dark", path),
+        light: reader.color(o, "light", path),
+        threads: reader.number(o, "threads", path, { min: 1, integer: true }),
+        curls: reader.optionalNumber(o, "curls", path, 10, { min: 0 }),
+        sway: reader.optionalNumber(o, "sway", path, 0.07, { min: 0, max: 0.5 }),
+      };
+    });
     return {
       builder: reader.oneOf(f, "builder", "foliage", FOLIAGE_BUILDERS),
       dark: reader.color(f, "dark", "foliage"),
@@ -898,6 +917,7 @@ function readBranchingTree(obj: RawObject, reader: Reader, common: string[]): Br
       leaves: reader.number(f, "leaves", "foliage", { min: 1, integer: true }),
       leafLength: reader.number(f, "leafLength", "foliage", { min: 0.01, max: 1 }),
       leafWidth: reader.number(f, "leafWidth", "foliage", { min: 0.01, max: 1 }),
+      moss: moss.length > 0 ? moss : null,
     };
   };
   const optional = (o: RawObject, key: string, path: string, fallback: number, bounds: { min?: number; max?: number }): number =>
@@ -978,6 +998,8 @@ function readBranchingTree(obj: RawObject, reader: Reader, common: string[]): Br
             ? {
                 width: reader.number(vineLeaves, "width", "vines.leaves", { min: 0.05 }),
                 tile: reader.optionalNumber(vineLeaves, "tile", "vines.leaves", reader.number(vineLeaves, "width", "vines.leaves", { min: 0.05 }), { min: 0.05 }),
+                arch: reader.optionalNumber(vineLeaves, "arch", "vines.leaves", 1, { min: 0 }),
+                taper: reader.optionalNumber(vineLeaves, "taper", "vines.leaves", 0, { min: 0, max: 1 }),
               }
             : null,
         }

@@ -1,0 +1,11 @@
+// Stranded duckweed: the bank at the waterline, where the mats on the water wash up and are left on
+// the mud - the duckweed's own texture, duller, browner and darker, so a floating mat's cut edge
+// lands on ground that looks like more of it rather than on bare mud. It does not float.
+{
+  name: "Stranded Duckweed",
+  detail: { strength: 0.3 },
+  textureFrom: "duckweed",
+  // As fine as the duckweed's own, so the two match where they meet.
+  uvScale: 2,
+  adjust: { hue: -12, saturation: 0.55, value: 0.8, tint: [1, 0.96, 0.88] },
+}

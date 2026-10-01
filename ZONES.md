@@ -140,6 +140,15 @@ Existing: **broadleaf**, **pine**, **palm**.
   `marshGrass` on the islands, a drier sward on their tops and mud on their flanks; willows (new:
   leafy `vines` - twisting ribbons of the new `willowWhip` atlas - arching off the limbs and falling)
   on the low ground, groves of pine, oak or birch on the island tops; a warm haze.
+- **Cypress bayou: done** - `biomes/cypressBayou.json5`. Shallow still water over half the land, low
+  mud banks and hummocks between; bald cypresses (new: a swollen, fluted foot, level crooked limbs,
+  a crown of the new `featherSpray` clumps) wading in it, hung with moss - leafy vines barely
+  arching and tapering to a point (`arch`, `taper`), the clump atlas's other half moss, each tree
+  grey Spanish moss or an olive beard (`moss: { oneOf }`); knees (`rocks/cypressKnee`) in the
+  shallows; willows and dead trees on the banks, ferns on the hummocks. The water's murk is
+  duckweed (new: a material that `floats`, drawn on a sheet at the water's surface) in mats against
+  the banks with open lanes between, stranded duckweed on the banks; bulrush in patches; shed
+  needles; a close green-grey haze. The water no longer rises and falls.
 
 | Variant | Ground | Plants | Trees | Extras |
 |---|---|---|---|---|

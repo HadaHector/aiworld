@@ -25,11 +25,6 @@ export const WATER_SHALLOW_COLOR: [number, number, number] = [0.09, 0.34, 0.42];
 // Keeps each triangle a few dozen units across at the default size.
 const OCEAN_SUBDIVISIONS = 128;
 
-// The whole surface rises and falls together - 30 cm peak to trough - so the waterline creeps up
-// and down the shore without needing any per-vertex wave geometry.
-const TIDE_AMPLITUDE = 0.15;
-const TIDE_PERIOD_SECONDS = 8;
-
 // World units per noise cell for each wave octave (broad swell, mid chop, fine ripple) - the actual
 // "how big do the waves look" knob, against the character's own scale rather than the world's:
 // character.ts stands a couple of units tall, so a ripple has to read in single digits of world
@@ -184,7 +179,7 @@ void main(void) {
  * lightDirection/lightColor/lightIntensity/ambientColor/ambientIntensity from SunLighting exactly
  * like the terrain shader does, so the water dims and cools at night right along with the ground.
  */
-export function createOceanPlane(scene: Scene, sunLighting: SunLighting, sky: SkyDome, terrainMaterial: ShaderMaterial, options: OceanOptions): Mesh {
+export function createOceanPlane(scene: Scene, sunLighting: SunLighting, sky: SkyDome, waterMaterials: ShaderMaterial[], options: OceanOptions): Mesh {
   // Camera-following and subdivided rather than one world-sized quad: two triangles tens of
   // thousands of units across lose enough float precision in depth interpolation that the
   // waterline jitters against the shore whenever the camera moves. The waves are computed from
@@ -227,13 +222,13 @@ export function createOceanPlane(scene: Scene, sunLighting: SunLighting, sky: Sk
   material.alpha = 0.999;
   ocean.material = material;
 
+  // A still surface - no tide - so the shore and anything floating on the water (materialLibrary.ts's
+  // floating sheet) stay where they are: the terrain shaders are told its height once.
+  for (const waterMaterial of waterMaterials) waterMaterial.setFloat("waterLevel", ocean.position.y);
+
   let time = 0;
-  let tideSeconds = 0;
   scene.onBeforeRenderObservable.add(() => {
     time += scene.getEngine().getDeltaTime() / 2000;
-    tideSeconds += scene.getEngine().getDeltaTime() / 1000;
-    ocean.position.y = SEA_LEVEL - OCEAN_SURFACE_OFFSET + TIDE_AMPLITUDE * Math.sin((tideSeconds * 2 * Math.PI) / TIDE_PERIOD_SECONDS);
-    terrainMaterial.setFloat("waterLevel", ocean.position.y);
     if (scene.activeCamera) {
       ocean.position.x = scene.activeCamera.position.x;
       ocean.position.z = scene.activeCamera.position.z;
