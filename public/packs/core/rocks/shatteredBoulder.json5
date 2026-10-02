@@ -1,0 +1,20 @@
+// A frost-shattered boulder: a block of grey rock the frost has been splitting for ten thousand years -
+// all sharp edges and flat broken faces, hardly a curve left on it, sitting cracked open where it
+// lies. The polar desert's, and anywhere cold and bare enough.
+{
+  model: "boulder",
+  variants: 6,
+  growsOld: true,
+  radius: 2.0,
+  squash: [0.5, 0.9],
+  stretch: [1.0, 1.5],
+  // Hardly rounded: the shape is all in its broken faces.
+  lumps: 0.08,
+  facets: [7, 11],
+  facetDepth: 0.55,
+  tilt: 18,
+  sink: [0.15, 0.4],
+  stone: { tile: 6, material: "rock" },
+  tint: [[0.78, 0.8, 0.82], [1.06, 1.06, 1.08]],
+  scale: [0.5, 1.4],
+}

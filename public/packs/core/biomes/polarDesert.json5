@@ -1,0 +1,91 @@
+/**
+ * Polar desert - the barrens' cold variant (see ZONES.md): flat to gently rolling grey gravel under
+ * a low grey sky, too cold and too dry for anything to grow. The frost has sorted the flats into
+ * polygons ringed with stones; scree lies on the rises; snow in the hollows and on the north sides -
+ * none at all in one area, a dusting in the next, most of the ground white in another. Boulders split by the frost lie everywhere, and
+ * now and then the bleached stump of a dead tree from some kinder age.
+ */
+{
+  name: "Polar Desert",
+  voice: "frozen",
+  spawnWeight: 1,
+  lakeChance: 0.04,
+  borderType: "mountain",
+  settlement: "timber",
+  // How snowy the area is, and how much of its flats the frost has sorted into polygons.
+  params: { snow: { range: [0, 1] }, sorted: { range: [0, 1] } },
+  // Flat to gently rolling: long, low swells.
+  height: { generator: "detailHeight", amplitude: { range: [3, 10] }, frequency: { range: [0.0012, 0.002] }, offset: 4, persistence: 0.4 },
+  treeRules: { shore: [0.5, 2] },
+  // A dead tree, very rarely.
+  trees: {
+    steps: [{ output: "deadTree", op: "constant", value: { range: [0.0, 0.004] } }],
+    outputs: { deadTree: "deadTree" },
+  },
+  // Frost-split boulders everywhere, thickest on the rises and at the foot of the slopes.
+  rocks: { generator: "rockDensity", kind: "shatteredBoulder", frequency: 0.005, openAt: -0.5, fullAt: 0.4, peak: { range: [0.03, 0.08] }, footOfSlope: { range: [0.5, 0.9] }, riverShore: { range: [1, 2] }, lakeShore: { range: [1, 2] } },
+  treeTints: [
+    // Cold grey stone with snow on its top, more in a snowier area.
+    { kinds: ["shatteredBoulder"], snow: { param: "snow", to: [0.0, 0.8] }, stone: { hue: { range: [-10, 10] }, saturation: { range: [0.3, 0.7] }, value: { range: [0.85, 1.05] }, spread: { saturation: 0.1, value: 0.12 } } },
+    { kinds: ["deadTree"], snow: { param: "snow", to: [0.0, 0.6] }, bark: { hue: { range: [-10, 10] }, saturation: { range: [0.4, 0.8] }, value: { range: [0.9, 1.1] }, spread: { value: 0.1 } } },
+  ],
+  ground: {
+    base: "gravel",
+    road: "trackStone",
+    adjust: { hue: { range: [-5, 5] }, saturation: { range: [0.4, 0.7] }, value: { range: [0.92, 1.05] } },
+    layers: [
+      // Snow in the hollows and on the north sides: none, a dusting, or most of the ground.
+      { generator: "snowCover", id: "polar-snow", amount: { param: "snow", to: [0.0, 0.8] }, frequency: 0.007, drifts: 0.7, north: 1.8, shared: "polarSnow" },
+      // Frost polygons on the flats, wide fields of them in one area, scattered in another.
+      {
+        id: "polar-polygons",
+        material: "frostPolygons",
+        weight: {
+          noises: [{ name: "field", type: "fbm", octaves: 3, frequency: 0.005, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
+          steps: [
+            { output: "slope", op: "input", name: "slope" },
+            { output: "flat", op: "mask", input: "slope", at: 0.985, off: 0.95 },
+            { output: "fieldRaw", op: "sample", noise: "field" },
+            { output: "field", op: "mask", input: "fieldRaw", at: { param: "sorted", to: [0.5, -0.1] }, off: { param: "sorted", to: [0.25, -0.35] } },
+            { output: "sortedFlat", op: "multiply", a: "flat", b: "field" },
+            { output: "result", op: "scale", input: "sortedFlat", factor: 2 },
+          ],
+        },
+      },
+      // Scree on the rises and the slopes: the frost's rubble.
+      {
+        id: "polar-scree",
+        material: "scree",
+        weight: {
+          noises: [{ name: "fray", type: "fbm", octaves: 3, frequency: 0.02, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
+          steps: [
+            { output: "curvature", op: "input", name: "reliefCurvature" },
+            { output: "ridge", op: "scale", input: "curvature", factor: -1 },
+            { output: "frayRaw", op: "sample", noise: "fray" },
+            { output: "fray", op: "scale", input: "frayRaw", factor: 0.4 },
+            { output: "rough", op: "add", a: "ridge", b: "fray" },
+            { output: "rise", op: "mask", input: "rough", at: 0.5, off: 0.1 },
+            { output: "slope", op: "input", name: "slope" },
+            { output: "sloped", op: "mask", input: "slope", at: 0.9, off: 0.97 },
+            { output: "rubble", op: "max", a: "rise", b: "sloped" },
+            { output: "result", op: "scale", input: "rubble", factor: 1.2 },
+          ],
+        },
+      },
+    ],
+  },
+  // A low, grey, cold sky; the distance soon goes grey.
+  sky: {
+    horizon: { oneOf: ["#c4c8cc", "#bcc2c8", "#c8c8c4"] },
+    zenith: "#7c8ea4",
+    cloud: "#e4e6ea",
+    fogStart: { range: [0.2, 0.35] },
+    fogEnd: { range: [0.85, 0.95] },
+  },
+  light: {
+    sunPeak: 28,
+    moonPeak: 40,
+    ambientDay: "#b4bcc8",
+    sunZenith: "#f2f4f8",
+  },
+}

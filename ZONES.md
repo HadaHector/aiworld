@@ -191,6 +191,16 @@ Existing: **broadleaf**, **pine**, **palm**.
 
 ### 6. Barrens (flat to rolling) - today: desert
 
+- **Salt flat: done** - `biomes/saltFlat.json5`. A basin's floor: low stony hills filled up to one
+  dead-level floor (height graphs can now read the `bedrock`, so the floor is level in the world),
+  new `saltCrust` on it - plates with raised rims - mud pans in it and a dried-mud rim round its
+  edge, desert gravel on the hills; a lone dead tree now and then; glaring light. Mirage haze left
+  for later.
+- **Polar desert: done** - `biomes/polarDesert.json5`. Flat to gently rolling grey gravel; new
+  `frostPolygons` (patterned ground: silt polygons ringed with frost-sorted stones) in fields on the
+  flats, scree on the rises, a thin snow; new `shatteredBoulder` (all broken faces) everywhere, snow
+  on their tops; a dead tree very rarely; a low grey sky.
+
 | Variant | Ground | Plants | Trees | Extras |
 |---|---|---|---|---|
 | Sand sea | sand, duneShadow | none | palm oasis at water | big dunes |

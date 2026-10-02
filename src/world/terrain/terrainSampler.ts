@@ -100,6 +100,9 @@ const RELIEF_STEEPNESS_STEP = 1.5;
  * bedrock, each area's own height weighted by its say, and then - where an area has one - its rock
  * relief (BiomeOutputs.relief), read against that height and how steep it is. Shared with the
  * workbench's maps, so a zone previews as it is built.
+ *
+ * A zone's height graph can read the bedrock under it (input `bedrock`), for a level that is level
+ * in the world rather than over the bedrock's swells - a salt flat's floor, filled up to one height.
  */
 export function createZoneHeight(seed: number): (worldX: number, worldZ: number, areaWeights: readonly AreaWeight[]) => number {
   const bedrock = createBedrockSampler(seed);
@@ -114,9 +117,11 @@ export function createZoneHeight(seed: number): (worldX: number, worldZ: number,
     return pipeline;
   };
   const shaped = (x: number, z: number, areaWeights: readonly AreaWeight[]): number => {
+    const base = bedrock(x, z);
+    const context = { bedrock: base };
     let detail = 0;
-    for (const { biome, weight } of areaWeights) detail += heightPipelineOf(biome)(x, z) * weight;
-    return bedrock(x, z) + detail;
+    for (const { biome, weight } of areaWeights) detail += heightPipelineOf(biome)(x, z, context) * weight;
+    return base + detail;
   };
   return (worldX, worldZ, areaWeights) => {
     const height = shaped(worldX, worldZ, areaWeights);

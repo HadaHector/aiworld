@@ -213,6 +213,11 @@ and subtract the height to get what the steps add, add a ridged rock-formation n
 multiply the lot by a mask on `steepness`. It costs two more evaluations of the height per point, in
 a biome that has one.
 
+The biome's `height` graph itself can read `bedrock`: the world's bedrock under it, which the
+height is added to. Subtract it from a level and the result is that level in the world, not over
+the bedrock's swells of several metres - `smoothMax` the hills against it for a dead-level floor
+(see `core/biomes/saltFlat.json5`).
+
 ### Rolls: every area its own
 
 Each area of the world rolls its biome afresh, so no two forests are quite the same forest. Every

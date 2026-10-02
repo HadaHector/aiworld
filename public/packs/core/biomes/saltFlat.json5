@@ -1,0 +1,105 @@
+/**
+ * Salt flat - the barrens' white variant (see ZONES.md): the floor of a basin, a dead-level sheet of
+ * white salt crust dried into plates, grey-brown mud pans in it and a rim of dried mud round its
+ * edge, low stony desert hills standing up out of it and closing it in. Nothing grows; now and then a lone dead tree stands out on it, bleached, miles from
+ * anything. A glaring light, a pale sky, the far edge lost in a white haze.
+ */
+{
+  name: "Salt Flat",
+  voice: "arid",
+  spawnWeight: 1,
+  lakeChance: 0.0,
+  borderType: "mountain",
+  settlement: "timber",
+  // The floor's level, how much of the area it floods (the rest low hills round it), and how much
+  // mud shows through the salt.
+  params: { level: { range: [0, 1] }, flood: { range: [0, 1] }, mud: { range: [0, 1] } },
+  // A basin's floor: low, rolling hills, and everything below one level filled up to it - dead level
+  // in the world, not over the bedrock's swells (`bedrock`: the floor less the bedrock under it). A
+  // short fillet (`smoothMax`) where the hills rise out of it.
+  height: {
+    noises: [{ name: "hills", type: "fbm", octaves: 4, frequency: { range: [0.002, 0.003] }, amplitude: { range: [8, 16] }, persistence: 0.45, lacunarity: 2.0 }],
+    steps: [
+      { output: "hillsRaw", op: "sample", noise: "hills" },
+      { output: "hills", op: "offset", input: "hillsRaw", amount: { param: "flood", to: [5, -1] } },
+      { output: "bedrock", op: "input", name: "bedrock" },
+      { output: "level", op: "constant", value: { param: "level", to: [10, 12] } },
+      { output: "floor", op: "subtract", a: "level", b: "bedrock" },
+      { output: "result", op: "smoothMax", a: "hills", b: "floor", k: 1.5 },
+    ],
+  },
+  // A lone dead tree now and then, far apart.
+  trees: {
+    steps: [{ output: "deadTree", op: "constant", value: { range: [0.003, 0.008] } }],
+    outputs: { deadTree: "deadTree" },
+  },
+  treeTints: [
+    { kinds: ["deadTree"], bark: { hue: { range: [-10, 10] }, saturation: { range: [0.5, 0.9] }, value: { range: [1.0, 1.2] }, spread: { value: 0.1 } } },
+  ],
+  ground: {
+    // The hills' ground: dry, stony desert; the salt only on the floor.
+    base: "desertGravel",
+    road: "trackSand",
+    adjust: { hue: { range: [-6, 6] }, saturation: { range: [0.45, 0.75] }, value: { range: [0.95, 1.02] } },
+    layers: [
+      // The salt: the floor, and nothing above it - gone within a hand's breadth of rising ground.
+      {
+        id: "salt-flat-salt",
+        material: "saltCrust",
+        weight: {
+          steps: [
+            { output: "height", op: "input", name: "height" },
+            { output: "floor", op: "mask", input: "height", at: { param: "level", to: [10.05, 12.05] }, off: { param: "level", to: [10.35, 12.35] } },
+            { output: "result", op: "scale", input: "floor", factor: 4 },
+          ],
+        },
+      },
+      // A rim of dried mud round the floor's edge, where the water reaches only in a wet year.
+      {
+        id: "salt-flat-shore",
+        material: "desertSilt",
+        weight: {
+          steps: [
+            { output: "height", op: "input", name: "height" },
+            { output: "above", op: "mask", input: "height", at: { param: "level", to: [10.4, 12.4] }, off: { param: "level", to: [10.1, 12.1] } },
+            { output: "below", op: "mask", input: "height", at: { param: "level", to: [11.2, 13.2] }, off: { param: "level", to: [12.2, 14.2] } },
+            { output: "band", op: "multiply", a: "above", b: "below" },
+            { output: "result", op: "scale", input: "band", factor: 3 },
+          ],
+        },
+      },
+      // Mud showing through in the low places: a little in one area, wide brown pans in the next.
+      {
+        id: "salt-flat-mud",
+        material: "desertSilt",
+        weight: {
+          noises: [{ name: "pan", type: "fbm", octaves: 4, frequency: 0.006, amplitude: 1, persistence: 0.55, lacunarity: 2.0 }],
+          steps: [
+            { output: "panRaw", op: "sample", noise: "pan" },
+            { output: "pan", op: "mask", input: "panRaw", at: { param: "mud", to: [0.75, 0.35] }, off: { param: "mud", to: [0.5, 0.05] } },
+            // On the floor only.
+            { output: "height", op: "input", name: "height" },
+            { output: "floor", op: "mask", input: "height", at: { param: "level", to: [10.05, 12.05] }, off: { param: "level", to: [10.35, 12.35] } },
+            { output: "floorPan", op: "multiply", a: "pan", b: "floor" },
+            // Past the salt's own weight, so a pan's middle is mud.
+            { output: "result", op: "scale", input: "floorPan", factor: 6 },
+          ],
+        },
+      },
+    ],
+  },
+  // Glare: a pale, washed-out sky and a white haze swallowing the distance.
+  sky: {
+    horizon: { oneOf: ["#eceae4", "#e8e8e6", "#eee8dc"] },
+    zenith: "#6e9ccc",
+    cloud: "#ffffff",
+    fogStart: { range: [0.2, 0.35] },
+    fogEnd: { range: [0.85, 0.95] },
+  },
+  light: {
+    sunPeak: 70,
+    moonPeak: 45,
+    ambientDay: "#d8dce0",
+    sunZenith: "#fffaf0",
+  },
+}
