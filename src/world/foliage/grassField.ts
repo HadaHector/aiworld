@@ -163,10 +163,10 @@ void main() {
   vec3 lit = albedo * diffuse * lightColor * shadow + albedo * ambientColor * ambientIntensity;
 
   // The bottom of the blades fades into the ground they grow from, lit the way the terrain lights
-  // it (half-Lambert, upward normal), so a tuft does not end in a hard line against bare earth or
+  // it (plain Lambert, upward normal), so a tuft does not end in a hard line against bare earth or
   // sand. Skipped where the ground colour is not known (alpha 0).
   if (vGroundColor.a > 0.0) {
-    vec3 groundLit = vGroundColor.rgb * ((dot(up, lightDir) * 0.5 + 0.5) * lightIntensity * lightColor * shadow + ambientColor * ambientIntensity);
+    vec3 groundLit = vGroundColor.rgb * (max(dot(up, lightDir), 0.0) * lightIntensity * lightColor * shadow + ambientColor * ambientIntensity);
     lit = mix(groundLit, lit, smoothstep(0.0, ${GRASS_ROOT_BLEND.toFixed(3)}, vUV.y));
   }
 

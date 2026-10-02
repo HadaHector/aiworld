@@ -93,6 +93,14 @@ whole numbers so the bands meet at the tile's edge. `shape` is `"sine"` (the def
 side). It runs -1..1 times `amplitude`. Straight, it is a ruler; sampled with an `offset` warp it
 becomes wood grain, sand ripples or marble.
 
+A `"triangle"` can lean and round its corners: `rise` is the share of each band spent climbing (0.5
+by default, symmetric; 0.8 climbs slowly and drops steeply), and `crest` and `trough` round off its
+top and bottom over that share of a band (0, sharp, by default; at most the shorter flank). Out in
+the world, `frequency` can instead be one number with a `direction` in degrees (from +x towards +z)
+for the bands to run across - both can be rolled, so each area lies its own way. A dune field is
+one of these (see `core/biomes/sandSea.json5`): `rise: 0.8` and a height about a tenth of the
+spacing give a dune's ~8-degree windward slope and ~30-degree slip face.
+
 **Steps** (`input`, `a`, `b` and a `mix`'s `t` name earlier steps):
 
 | op | fields | |

@@ -70,6 +70,11 @@ export interface WorleyNoiseSpec {
  * `shape` is the profile across one band: "sine" is smooth, "triangle" has sharp crests and troughs
  * with straight flanks, "saw" climbs slowly and drops at once (a ripple's gentle windward and steep
  * lee side).
+ *
+ * A triangle can lean: `rise` is the share of each band spent climbing (0.5, the default, is
+ * symmetric; 0.8 climbs slowly and falls steeply - a dune's long windward slope and short slip face).
+ * `crest` and `trough` round its top and bottom corners off, over that share of a band (0, the
+ * default, leaves them sharp) - a dune's brink a little blunted, its trough a smooth hollow.
  */
 export interface WaveNoiseSpec {
   name: string;
@@ -79,6 +84,9 @@ export interface WaveNoiseSpec {
   frequency: [number, number];
   amplitude: number;
   shape: WaveShape;
+  rise: number;
+  crest: number;
+  trough: number;
 }
 
 export type WaveShape = "sine" | "triangle" | "saw";

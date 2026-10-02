@@ -1,0 +1,185 @@
+/**
+ * Sand sea - the barrens' sandy variant (see ZONES.md), in place of the desert: an erg, dune behind
+ * dune to the horizon. Each dune a long, gentle windward slope (about 9 degrees) up to a brink and a
+ * shorter, steeper lee side (about 20) - height a tenth or so of the spacing, as
+ * measured on real transverse dunes - their crests wandering, forking and merging, all lying across
+ * the area's own wind. They ride on the backs of draa, giant dunes a kilometre and more apart; where
+ * the sand runs thin they flatten out into sand plains. Palms only by the water.
+ */
+{
+  name: "Sand Sea",
+  voice: "arid",
+  spawnWeight: 2,
+  lakeChance: 0.03, // oases
+  borderType: "mountain",
+  settlement: "timber",
+  // The wind's direction (0-1 of a turn), the dunes' size, and how much sand there is - thin, the
+  // dunes break up into crescents with flat ground between; plenty, one ridge after another - and
+  // how high up the dunes the darker sand reaches.
+  params: { wind: { range: [0, 1] }, size: { range: [0, 1] }, supply: { range: [0, 1] }, shade: { range: [0, 1] } },
+  height: {
+    noises: [
+      // The dunes: a leaning triangle wave across the wind - long climb, short drop, blunted brink,
+      // a smooth trough. Height ~0.11 of the spacing: ~9 degrees up the windward side, ~20 down the lee.
+      { name: "dunes", type: "wave", frequency: { param: "size", to: [0.0071, 0.0042] }, direction: { param: "wind", to: [0, 360] }, amplitude: 1, shape: "triangle", rise: 0.7, crest: 0.06, trough: 0.18 },
+      // The draa they ride on: the same wind, a little turned, a kilometre and more apart, rounder.
+      { name: "draa", type: "wave", frequency: { range: [0.0006, 0.0009] }, direction: { param: "wind", to: [15, 375] }, amplitude: 1, shape: "triangle", rise: 0.65, crest: 0.2, trough: 0.3 },
+      // Bending the crests: a slow sway, and a quicker one that splits and joins them.
+      { name: "swayX", type: "fbm", octaves: 2, frequency: 0.0015, amplitude: 70, persistence: 0.5, lacunarity: 2.0 },
+      { name: "swayZ", type: "fbm", octaves: 2, frequency: 0.0015, amplitude: 70, persistence: 0.5, lacunarity: 2.0 },
+      { name: "forkX", type: "fbm", octaves: 2, frequency: 0.005, amplitude: 10, persistence: 0.5, lacunarity: 2.0 },
+      { name: "forkZ", type: "fbm", octaves: 2, frequency: 0.005, amplitude: 10, persistence: 0.5, lacunarity: 2.0 },
+      // Where the sand runs thick and where thin.
+      { name: "sand", type: "fbm", octaves: 3, frequency: 0.0015, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+    ],
+    steps: [
+      { output: "swayX", op: "sample", noise: "swayX" },
+      { output: "swayZ", op: "sample", noise: "swayZ" },
+      { output: "forkX", op: "sample", noise: "forkX" },
+      { output: "forkZ", op: "sample", noise: "forkZ" },
+      { output: "bendX", op: "add", a: "swayX", b: "forkX" },
+      { output: "bendZ", op: "add", a: "swayZ", b: "forkZ" },
+      // The dunes, 0 in the troughs to 1 on the brinks.
+      { output: "duneRaw", op: "sample", noise: "dunes", offset: ["bendX", "bendZ"] },
+      { output: "dune", op: "remap", input: "duneRaw", inMin: -1, inMax: 1, outMin: 0, outMax: 1 },
+      // As high as the sand allows: full where it is thick, down to nothing where it runs out.
+      { output: "sandRaw", op: "sample", noise: "sand" },
+      { output: "sand", op: "mask", input: "sandRaw", at: { param: "supply", to: [0.15, -0.45] }, off: { param: "supply", to: [-0.45, -1.1] } },
+      { output: "duneSand", op: "multiply", a: "dune", b: "sand" },
+      { output: "duneHeight", op: "scale", input: "duneSand", factor: { param: "size", to: [15, 26] } },
+      // The draa under them.
+      { output: "draaRaw", op: "sample", noise: "draa", offset: ["swayX", "swayZ"] },
+      { output: "draa", op: "remap", input: "draaRaw", inMin: -1, inMax: 1, outMin: 0, outMax: { range: [10, 30] } },
+      { output: "both", op: "add", a: "duneHeight", b: "draa" },
+      { output: "result", op: "offset", input: "both", amount: 4 },
+    ],
+  },
+  treeRules: { shore: [0.5, 2] },
+  // Palms only by water: round an oasis, and through the green belt along a river.
+  trees: {
+    noises: [{ name: "grove", type: "fbm", octaves: 2, frequency: 0.006, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
+    steps: [
+      { output: "water", op: "input", name: "riverGap" },
+      { output: "bankRamp", op: "remap", input: "water", inMin: 300, inMax: 110, outMin: 0, outMax: 1 },
+      { output: "bank", op: "clamp", input: "bankRamp", min: 0, max: 1 },
+      { output: "lakeFactor", op: "input", name: "lakeFactor" },
+      { output: "lake", op: "mask", input: "lakeFactor", at: 0.3, off: 0.05 },
+      { output: "water2", op: "max", a: "bank", b: "lake" },
+      { output: "groveRaw", op: "sample", noise: "grove" },
+      { output: "groveRamp", op: "remap", input: "groveRaw", inMin: -0.5, inMax: 0.15, outMin: 0.15, outMax: 0.8 },
+      { output: "grove", op: "clamp", input: "groveRamp", min: 0.15, max: 0.8 },
+      // On the low ground with the green, not up the dunes.
+      { output: "height", op: "input", name: "height" },
+      { output: "lowGround", op: "mask", input: "height", at: 9, off: 22 },
+      { output: "lowWater", op: "multiply", a: "water2", b: "lowGround" },
+      { output: "palm", op: "multiply", a: "lowWater", b: "grove" },
+    ],
+    outputs: { palm: "palm" },
+  },
+  ground: {
+    base: "duneSand",
+    road: "trackSand",
+    adjust: { hue: { range: [-8, 6] }, saturation: { range: [0.88, 1.15] }, value: { range: [0.94, 1.06] } },
+    layers: [
+      // How shaded the sand is: darker and duller low down, paling up the dunes to their crests -
+      // following the height, so it runs along every dune. Spread over tens of metres: the terrain's
+      // height blend squeezes a gradient between two materials into a much shorter edge.
+      // Both sands are laid over the world's bare rock where the lee sides are steep (which would
+      // otherwise take any slope this steep: a dune is sand all the way down), each in its share.
+      {
+        id: "sand-sea-low-sand",
+        material: "duneSandShade",
+        weight: {
+          noises: [{ name: "edge", shared: "sandSeaGreenEdge", type: "fbm", octaves: 3, frequency: 0.004, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
+          steps: [
+            { output: "height", op: "input", name: "height" },
+            { output: "shade", op: "mask", input: "height", at: { param: "shade", to: [8, 14] }, off: { param: "shade", to: [42, 56] } },
+            { output: "slope", op: "input", name: "slope" },
+            { output: "steep", op: "mask", input: "slope", at: 0.88, off: 0.95 },
+            { output: "steepBoost", op: "scale", input: "steep", factor: 4 },
+            { output: "boost", op: "offset", input: "steepBoost", amount: 1.2 },
+            { output: "shadeBoost", op: "multiply", a: "shade", b: "boost" },
+            // Out of the way of the river's green: a triangle blends only three grounds, and a fourth
+            // would cut its edge into the triangles.
+            { output: "gap", op: "input", name: "riverGap" },
+            { output: "edgeRaw", op: "sample", noise: "edge" },
+            { output: "edge", op: "scale", input: "edgeRaw", factor: 70 },
+            { output: "jittered", op: "add", a: "gap", b: "edge" },
+            { output: "band", op: "mask", input: "jittered", at: 150, off: 340 },
+            { output: "lakeFactor", op: "input", name: "lakeFactor" },
+            { output: "lake", op: "mask", input: "lakeFactor", at: 0.35, off: 0.1 },
+            { output: "water", op: "max", a: "band", b: "lake" },
+            // Low and gentle ground only: the green fills the flats along the water and stops at the
+            // foot of the dunes rather than running up their faces.
+            { output: "lowGround", op: "mask", input: "height", at: 9, off: 22 },
+            { output: "gentle", op: "mask", input: "slope", at: 0.985, off: 0.93 },
+            { output: "lowGentle", op: "multiply", a: "lowGround", b: "gentle" },
+            { output: "dry", op: "mask", input: "height", at: 1.5, off: -1 },
+            { output: "lowDry", op: "multiply", a: "lowGentle", b: "dry" },
+            { output: "green", op: "multiply", a: "water", b: "lowDry" },
+            { output: "notGreen", op: "invert", input: "green" },
+            { output: "result", op: "multiply", a: "shadeBoost", b: "notGreen" },
+          ],
+        },
+      },
+      {
+        id: "sand-sea-slip-faces",
+        material: "duneSand",
+        weight: {
+          steps: [
+            { output: "height", op: "input", name: "height" },
+            { output: "shade", op: "mask", input: "height", at: { param: "shade", to: [8, 14] }, off: { param: "shade", to: [42, 56] } },
+            { output: "bright", op: "invert", input: "shade" },
+            { output: "slope", op: "input", name: "slope" },
+            { output: "steep", op: "mask", input: "slope", at: 0.88, off: 0.95 },
+            { output: "steepBright", op: "multiply", a: "steep", b: "bright" },
+            { output: "result", op: "scale", input: "steepBright", factor: 4 },
+          ],
+        },
+      },
+      // Green by the water: an oasis's grass, and a broad belt of it along a river - a few hundred
+      // metres either side, its edge wandering.
+      {
+        id: "sand-sea-oasis",
+        material: "grass",
+        weight: {
+          noises: [{ name: "edge", shared: "sandSeaGreenEdge", type: "fbm", octaves: 3, frequency: 0.004, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
+          steps: [
+            { output: "gap", op: "input", name: "riverGap" },
+            { output: "edgeRaw", op: "sample", noise: "edge" },
+            { output: "edge", op: "scale", input: "edgeRaw", factor: 70 },
+            { output: "jittered", op: "add", a: "gap", b: "edge" },
+            { output: "band", op: "mask", input: "jittered", at: 150, off: 340 },
+            { output: "lakeFactor", op: "input", name: "lakeFactor" },
+            { output: "lake", op: "mask", input: "lakeFactor", at: 0.35, off: 0.1 },
+            { output: "water", op: "max", a: "band", b: "lake" },
+            // Low and gentle ground only: the green fills the flats along the water and stops at the
+            // foot of the dunes rather than running up their faces.
+            { output: "height", op: "input", name: "height" },
+            { output: "lowGround", op: "mask", input: "height", at: 9, off: 22 },
+            { output: "slope", op: "input", name: "slope" },
+            { output: "gentle", op: "mask", input: "slope", at: 0.985, off: 0.93 },
+            { output: "lowGentle", op: "multiply", a: "lowGround", b: "gentle" },
+            { output: "dry", op: "mask", input: "height", at: 1.5, off: -1 },
+            { output: "lowDry", op: "multiply", a: "lowGentle", b: "dry" },
+            { output: "green", op: "multiply", a: "water", b: "lowDry" },
+            { output: "result", op: "scale", input: "green", factor: 2.4 },
+          ],
+        },
+      },
+    ],
+  },
+  sky: {
+    horizon: { oneOf: ["#ecca9a", "#e8d0a8", "#f0c890"] },
+    zenith: "#7aa2d2",
+    cloud: "#fffaec",
+    fogStart: { range: [0.3, 0.5] },
+    fogEnd: { range: [0.9, 1.0] },
+  },
+  light: {
+    sunPeak: 80,
+    moonPeak: 30,
+    sunHorizon: "#ff7837",
+    ambientDay: "#d6c6a4",
+  },
+}

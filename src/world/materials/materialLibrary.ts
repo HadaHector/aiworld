@@ -290,7 +290,9 @@ void main() {
   vec3 worldNormal = normalize(tbn * tangentNormal);
 
   vec3 lightDir = normalize(lightDirection);
-  float ndl = dot(worldNormal, lightDir) * 0.5 + 0.5;
+  // Plain Lambert: a face turned from the sun gets none of it, and the ambient below fills it - not
+  // a wrapped half-Lambert, which halved every difference in light between two slopes.
+  float ndl = max(dot(worldNormal, lightDir), 0.0);
   float diffuse = ndl * lightIntensity;
 
   float roughness = albedo.a;
@@ -371,7 +373,7 @@ const FLOATING_FRAGMENT_SHADER =
   vec3 worldNormal = normalize(vec3(tangentNormal.x, tangentNormal.z, tangentNormal.y));
 
   vec3 lightDir = normalize(lightDirection);
-  float diffuse = (dot(worldNormal, lightDir) * 0.5 + 0.5) * lightIntensity;
+  float diffuse = max(dot(worldNormal, lightDir), 0.0) * lightIntensity;
   vec3 viewDir = normalize(cameraPosition - vWorldPosition);
   float gloss = 1.0 - albedo.a;
   float specular = pow(max(dot(worldNormal, normalize(viewDir + lightDir)), 0.0), 60.0) * gloss * 0.6 * max(lightDir.y, 0.0);

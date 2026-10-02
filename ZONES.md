@@ -200,6 +200,12 @@ Existing: **broadleaf**, **pine**, **palm**.
   `frostPolygons` (patterned ground: silt polygons ringed with frost-sorted stones) in fields on the
   flats, scree on the rises, a thin snow; new `shatteredBoulder` (all broken faces) everywhere, snow
   on their tops; a dead tree very rarely; a low grey sky.
+- **Sand sea: done** - `biomes/sandSea.json5`. Dunes from the `wave` noise, which gains a leaning
+  triangle (`rise`), rounded corners (`crest`, `trough`) and a rolled `direction`: long windward
+  slopes, shorter lee sides, crests swaying and forking, riding on draa; each area its own wind,
+  dune size and sand supply. One bare sand (new `duneSand`), a touch darker low down (new
+  `duneSandShade`, by height); a broad green belt with palms along rivers, on the low ground only.
+  The terrain is now lit with plain Lambert (no half-Lambert wrap), which the dunes needed to show.
 
 | Variant | Ground | Plants | Trees | Extras |
 |---|---|---|---|---|

@@ -108,13 +108,19 @@ function readNoise(raw: unknown, reader: Reader, path: string, options: Pipeline
 }
 
 /** A wave's scale is a pair - cycles along x and along y - and in a texture those cycles must be
- *  whole, or the bands would not meet themselves at the tile's edge. */
+ *  whole, or the bands would not meet themselves at the tile's edge. Out in the world it can instead
+ *  be one frequency and a `direction` (degrees from +x towards +z) for the bands to run across, so
+ *  an area can roll which way they lie. */
 function readWave(obj: RawObject, name: string, reader: Reader, path: string, options: PipelineReadOptions): NoiseSpec {
   const scaleKey = options.texture ? "tileCycles" : "frequency";
-  reader.onlyKeys(obj, path, ["name", "shared", "type", "amplitude", "shape", scaleKey]);
+  reader.onlyKeys(obj, path, ["name", "shared", "type", "amplitude", "shape", "rise", "crest", "trough", scaleKey, ...(options.texture ? [] : ["direction"])]);
   const value = obj[scaleKey];
   let frequency: [number, number] = [0, 0];
-  if (!Array.isArray(value) || value.length !== 2 || !value.every((v) => typeof v === "number" && Number.isFinite(v))) {
+  if (!options.texture && reader.has(obj, "direction")) {
+    const cycles = reader.number(obj, scaleKey, path, { min: 1e-6 });
+    const angle = (reader.number(obj, "direction", path) * Math.PI) / 180;
+    frequency = [cycles * Math.cos(angle), cycles * Math.sin(angle)];
+  } else if (!Array.isArray(value) || value.length !== 2 || !value.every((v) => typeof v === "number" && Number.isFinite(v))) {
     reader.fail(joinPath(path, scaleKey), options.texture ? "expected [x, y], whole cycles per tile along each axis" : "expected [x, y], cycles per unit along each axis");
   } else if (options.texture && !value.every((v) => Number.isInteger(v))) {
     reader.fail(joinPath(path, scaleKey), "a texture's wave needs whole cycles per tile, or it will not tile");
@@ -124,7 +130,14 @@ function readWave(obj: RawObject, name: string, reader: Reader, path: string, op
     frequency = options.texture ? [value[0] / TEXTURE_RESOLUTION, value[1] / TEXTURE_RESOLUTION] : [value[0], value[1]];
   }
   const shape = reader.has(obj, "shape") ? reader.oneOf(obj, "shape", path, WAVE_SHAPES) : "sine";
-  return { name, type: "wave", frequency, amplitude: reader.number(obj, "amplitude", path), shape };
+  const leaning = ["rise", "crest", "trough"].filter((key) => reader.has(obj, key));
+  if (shape !== "triangle" && leaning.length > 0) reader.fail(joinPath(path, leaning[0]), "only a triangle wave leans or rounds its corners");
+  const rise = reader.has(obj, "rise") ? reader.number(obj, "rise", path, { min: 0.05, max: 0.95 }) : 0.5;
+  // Each rounding at most the shorter flank, so the crest's fillet and the trough's never meet.
+  const corner = Math.min(rise, 1 - rise);
+  const crest = reader.has(obj, "crest") ? reader.number(obj, "crest", path, { min: 0, max: corner }) : 0;
+  const trough = reader.has(obj, "trough") ? reader.number(obj, "trough", path, { min: 0, max: corner }) : 0;
+  return { name, type: "wave", frequency, amplitude: reader.number(obj, "amplitude", path), shape, rise, crest, trough };
 }
 
 function readStops(raw: RawObject, reader: Reader, path: string): ColorRampStop[] {

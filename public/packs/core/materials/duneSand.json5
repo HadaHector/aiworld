@@ -1,0 +1,6 @@
+// Dune sand: the open erg's sand - the plain sand's texture, but bare: no tufts of dry grass, which
+// grow only where there is water to be had.
+{
+  name: "Dune Sand",
+  textureFrom: "sand",
+}

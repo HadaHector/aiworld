@@ -57,8 +57,8 @@ void main() {
   vec3 n = normalize(vNormal) * (gl_FrontFacing ? 1.0 : -1.0);
   vec3 albedo = texture(woodTexture, vUV).rgb * vColor;
   vec3 lightDir = normalize(lightDirection);
-  // Firmer than the terrain's half-Lambert, so a building's sunny and shaded walls read as a solid.
-  float diffuse = clamp(dot(n, lightDir) * 0.6 + 0.4, 0.0, 1.0) * lightIntensity;
+  // Plain Lambert, as the terrain: a building's sunny and shaded walls read as a solid.
+  float diffuse = max(dot(n, lightDir), 0.0) * lightIntensity;
   float shadow = computeShadow(vWorldPosition, n, vPositionFromCamera.z);
   vec3 lit = albedo * diffuse * lightColor * shadow + albedo * ambientColor * ambientIntensity;
   outColor = vec4(applyFog(lit, length(vPositionFromCamera)), 1.0);

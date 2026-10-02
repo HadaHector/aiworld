@@ -343,9 +343,9 @@ void main() {
   // A little darker where it meets the ground - a cheap stand-in for occlusion.
   float occlusion = mix(0.75, 1.0, smoothstep(-0.3, 1.0, vHeight));
   vec3 lightDir = normalize(lightDirection);
-  // Lit the way the ground is (materialLibrary.ts's half-Lambert), so a boulder is the same stone
+  // Lit the way the ground is (materialLibrary.ts's plain Lambert), so a boulder is the same stone
   // in the same light as the rock it lies on.
-  float diffuse = (dot(n, lightDir) * 0.5 + 0.5) * lightIntensity;
+  float diffuse = max(dot(n, lightDir), 0.0) * lightIntensity;
   float shadow = computeShadow(vWorldPosition, geometric, vViewDepth);
   vec3 lit = albedo * (diffuse * lightColor * shadow + ambientColor * ambientIntensity) * occlusion;
   outColor = vec4(applyFog(lit, length(vWorldPosition - cameraPosition)), 1.0);

@@ -1,0 +1,7 @@
+// Dune sand, shaded: the same bare sand a touch darker and duller - the coarser, damper sand down in
+// the troughs between dunes, blended in by height so the dunes' crests stand out pale against it.
+{
+  name: "Dune Sand (Shade)",
+  textureFrom: "sand",
+  adjust: { hue: 0, saturation: 0.91, value: 0.93 },
+}

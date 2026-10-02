@@ -40,11 +40,38 @@ function deriveNoiseSeed(rootSeed: number, namespace: string, noiseName: string)
 }
 
 /** One period of each wave shape, over 0..1, returning -1..1. */
-const WAVE_PROFILES: Record<WaveShape, (t: number) => number> = {
+const WAVE_PROFILES: Record<Exclude<WaveShape, "triangle">, (t: number) => number> = {
   sine: (t) => Math.sin(t * 2 * Math.PI),
-  triangle: (t) => 1 - 4 * Math.abs(t - 0.5),
   saw: (t) => 2 * t - 1,
 };
+
+/**
+ * One period of a triangle wave over 0..1, -1..1: climbing for the first `rise` of it to its crest,
+ * falling for the rest - and with its crest and trough each rounded off over a share of the period
+ * (a polynomial smooth min of the two flanks, sized so the fillet spans that share). The trough sits
+ * at 0 (and 1), the crest at `rise`; at 0.5 and no rounding it is the plain symmetric triangle.
+ */
+function triangleProfile(rise: number, crest: number, trough: number): (t: number) => number {
+  const up = 2 / rise;
+  const down = 2 / (1 - rise);
+  // In value units: the two flanks part by (up + down) per unit of t, so k spans `share` of a period.
+  const crestK = (crest * (up + down)) / 2;
+  const troughK = (trough * (up + down)) / 2;
+  const smoothMin = (a: number, b: number, k: number): number => {
+    if (k <= 0) return Math.min(a, b);
+    const h = Math.max(k - Math.abs(a - b), 0) / k;
+    return Math.min(a, b) - (h * h * k) / 4;
+  };
+  return (t) => {
+    const climbing = -1 + up * t;
+    const falling = 1 - down * (t - rise);
+    const sharp = Math.min(climbing, falling);
+    if (sharp >= 0) return smoothMin(climbing, falling, crestK);
+    // About the trough: measured from it, the flank falling into it from the left, the one rising out.
+    const s = t < rise ? t : t - 1;
+    return -smoothMin(1 + down * s, 1 - up * s, troughK);
+  };
+}
 
 function compileNoiseSpec(spec: NoiseSpec, rootSeed: number, namespace: string, tilePeriod: number | undefined): Noise2D {
   const seed = spec.shared !== undefined ? deriveNoiseSeed(rootSeed, "shared", spec.shared) : deriveNoiseSeed(rootSeed, namespace, spec.name);
@@ -54,7 +81,7 @@ function compileNoiseSpec(spec: NoiseSpec, rootSeed: number, namespace: string, 
     const amplitude = spec.amplitude;
     // The seed only picks where along its period the wave starts.
     const phase = (seed >>> 0) / 0x100000000;
-    const profile = WAVE_PROFILES[spec.shape];
+    const profile = spec.shape === "triangle" ? triangleProfile(spec.rise, spec.crest, spec.trough) : WAVE_PROFILES[spec.shape];
     return (worldX: number, worldZ: number): number => {
       const t = worldX * frequencyX + worldZ * frequencyY + phase;
       return profile(t - Math.floor(t)) * amplitude;
