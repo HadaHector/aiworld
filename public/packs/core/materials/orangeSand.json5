@@ -1,0 +1,7 @@
+// Orange sand: a rocky desert's floor - the red sandstone round it worn down to sand, a warm orange,
+// bare but for what the bushes hold.
+{
+  name: "Orange Sand",
+  textureFrom: "sand",
+  adjust: { hue: -14, saturation: 1.25, value: 0.92 },
+}

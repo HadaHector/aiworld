@@ -1,0 +1,25 @@
+// A desert bush: the low, round, pale shrub of a rocky desert's sandy floor - bursage and brittlebush
+// - a dense dome of fine grey twigs and tiny silver-white leaves, almost white in the sun, dotted over
+// the sand a few paces apart.
+{
+  model: "bush",
+  variants: 4,
+  width: [1.4, 2.2],
+  height: [0.9, 1.4],
+  cards: 3,
+  clumps: 5,
+  clumpSize: [0.8, 1.2],
+  foliage: {
+    builder: "leafyBush",
+    dark: [0.6, 0.6, 0.56],
+    light: [0.94, 0.94, 0.9],
+    stem: [0.42, 0.38, 0.33],
+    stems: [6, 9],
+    leaves: 650,
+    leafLength: 0.03,
+    leafWidth: 0.016,
+    bare: 0.3,
+  },
+  tint: [[0.9, 0.9, 0.9], [1.06, 1.06, 1.04]],
+  scale: [0.75, 1.25],
+}

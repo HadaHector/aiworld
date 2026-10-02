@@ -206,11 +206,19 @@ Existing: **broadleaf**, **pine**, **palm**.
   dune size and sand supply. One bare sand (new `duneSand`), a touch darker low down (new
   `duneSandShade`, by height); a broad green belt with palms along rivers, on the low ground only.
   The terrain is now lit with plain Lambert (no half-Lambert wrap), which the dunes needed to show.
+- **Rocky desert: done, a detour** - not in the plan: the old `biomes/desert.json5`, upgraded in
+  place rather than retired (its feel was worth keeping), after a photo of Nevada's Valley of Fire.
+  A flat floor of new `orangeSand` with masses of red sandstone rising steeply out of it - broad
+  domes and cliffs, ledges and knobs (`relief`, built up only, faded out at the floor) - new
+  `redGravel` round their feet and in patches, red boulders heaped there; new `desertBush` (pale,
+  silver) over the floor, the odd cactus. Rivers without a lawn: new `bankSand` with green clumps,
+  palms, short tree ferns, a little oleander and thorn.
 
 | Variant | Ground | Plants | Trees | Extras |
 |---|---|---|---|---|
 | Sand sea | sand, duneShadow | none | palm oasis at water | big dunes |
 | Salt flat | salt crust ★ | none | a lone dead tree ★ | mirage haze ★ (optional) |
+| Rocky desert (detour) | orange sand, red sandstone | pale desert bushes | the odd cactus | red rock masses, boulder rubble |
 | Polar desert | desertGravel and scree, grey | none | the odd dead tree ★ | thin snow, frost-shattered boulders |
 
 ### 7. Broken land (hilly, rugged) - today: canyon

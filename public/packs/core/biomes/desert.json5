@@ -1,160 +1,204 @@
+/**
+ * Rocky desert - a detour from the barrens' plan (see ZONES.md): the old desert upgraded in place,
+ * after Nevada's Valley of Fire. A flat floor of orange sand, and out of it masses of red sandstone
+ * rising steeply - domes, fins and knobbly ridges, broken into ledges and rounded knobs - with rubble
+ * of red boulders heaped at their feet. Pale silver bushes dotted over the sand a few paces apart,
+ * the odd cactus among them, nothing on the rock. By the water, palms and short tree ferns, oleander and thorn, and
+ * clumps of green grass on the sand banks - never a lawn.
+ */
 {
-  name: "Desert",
+  name: "Rocky Desert",
   voice: "arid",
   spawnWeight: 2,
   lakeChance: 0.03, // oases
   borderType: "mountain",
   settlement: "timber",
-  height: { generator: "detailHeight", amplitude: { range: [7, 13] }, frequency: 0.0026, offset: 4, persistence: 0.1 },
-  // Barren, except along the water. There is no stray term and no baseline: away from a river this
-  // evaluates to zero and the zone grows nothing at all, which is the point of a desert.
+  // How much of the area the rock takes, and how tall it stands.
+  params: { rock: { range: [0, 1] }, tall: { range: [0, 1] } },
+  // The floor: nearly flat sand, a gentle swell. The rock: where a noise passes a threshold, the
+  // ground stands straight up from the floor - a short, steep rise over its edge - its top lumpy
+  // with domes and knobs, not a table.
+  height: {
+    noises: [
+      { name: "massif", type: "fbm", octaves: 3, frequency: { range: [0.0022, 0.0032] }, amplitude: 1, persistence: 0.45, lacunarity: 2.0 },
+      { name: "domes", type: "fbm", octaves: 2, frequency: 0.009, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+      { name: "floorSwell", type: "fbm", octaves: 3, frequency: 0.002, amplitude: 2, persistence: 0.5, lacunarity: 2.0 },
+    ],
+    steps: [
+      { output: "floorRaw", op: "sample", noise: "floorSwell" },
+      { output: "floor", op: "offset", input: "floorRaw", amount: 4 },
+      // Where the rock stands: past the threshold, rising to its full height over a short edge.
+      { output: "massifRaw", op: "sample", noise: "massif" },
+      { output: "rock", op: "mask", input: "massifRaw", at: { param: "rock", to: [0.38, 0.12] }, off: { param: "rock", to: [0.26, 0.0] } },
+      { output: "rockSoft", op: "power", input: "rock", exponent: 0.7 },
+      // Its top: broad domes and saddles, half to full height.
+      { output: "domesRaw", op: "sample", noise: "domes" },
+      { output: "domesRamp", op: "remap", input: "domesRaw", inMin: -0.7, inMax: 0.7, outMin: 0.5, outMax: 1 },
+      { output: "domes", op: "clamp", input: "domesRamp", min: 0.5, max: 1 },
+      { output: "rockShape", op: "multiply", a: "rockSoft", b: "domes" },
+      { output: "rockHeight", op: "scale", input: "rockShape", factor: { param: "tall", to: [18, 40] } },
+      { output: "result", op: "add", a: "floor", b: "rockHeight" },
+    ],
+  },
+  // The rock's faces stepped into its beds, and rounded knobs swelling off them, as the red bush's.
+  relief: {
+    noises: [
+      { name: "knobs", type: "billow", octaves: 1, frequency: 0.03, amplitude: 1, persistence: 0.45, lacunarity: 2.0 },
+    ],
+    steps: [
+      { output: "height", op: "input", name: "height" },
+      { output: "steepness", op: "input", name: "steepness" },
+      { output: "steep", op: "mask", input: "steepness", at: 0.35, off: 0.12 },
+      { output: "stepped", op: "terrace", input: "height", step: { range: [3, 5] }, riser: 0.4 },
+      { output: "ledgeStep", op: "subtract", a: "stepped", b: "height" },
+      // Only ever built up, never cut down: a step below the ground at a slope's foot would dig a
+      // trench into the floor where the rock meets it.
+      { output: "zero", op: "constant", value: 0 },
+      { output: "ledges", op: "max", a: "ledgeStep", b: "zero" },
+      { output: "knobRaw", op: "sample", noise: "knobs" },
+      { output: "knob", op: "scale", input: "knobRaw", factor: { range: [0.8, 1.6] } },
+      { output: "rockFace", op: "add", a: "ledges", b: "knob" },
+      // Faded out over the last few metres above the floor, so a cliff's foot meets the sand clean.
+      { output: "aboveFloor", op: "mask", input: "height", at: 10, off: 7 },
+      { output: "where", op: "multiply", a: "steep", b: "aboveFloor" },
+      { output: "result", op: "multiply", a: "rockFace", b: "where" },
+    ],
+  },
+  treeRules: { shore: [0.5, 2] },
+  // The odd cactus on the floor; palms by water.
   trees: {
     noises: [{ name: "grove", type: "fbm", octaves: 2, frequency: 0.006, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
     steps: [
+      { output: "slope", op: "input", name: "slope" },
+      { output: "flat", op: "mask", input: "slope", at: 0.12, off: 0.3 },
+      { output: "height", op: "input", name: "height" },
+      { output: "floorLevel", op: "mask", input: "height", at: 9, off: 14 },
+      { output: "sand", op: "multiply", a: "flat", b: "floorLevel" },
+      { output: "cactus", op: "scale", input: "sand", factor: { range: [0.03, 0.1] } },
       { output: "water", op: "input", name: "riverGap" },
-      // The same band the riverside grass uses (the desert-river-grass layer below): full on the
-      // bank, gone about forty units back from it. Descending, so the ramp is full at the water and
-      // nothing beyond its reach - and riverGap is Infinity where there is no river at all, which
-      // runs off the bottom of this and clamps to zero with no branch needed.
-      { output: "bankRamp", op: "remap", input: "water", inMin: 90, inMax: 45, outMin: 0, outMax: 1 },
+      { output: "bankRamp", op: "remap", input: "water", inMin: 130, inMax: 45, outMin: 0, outMax: 1 },
       { output: "bank", op: "clamp", input: "bankRamp", min: 0, max: 1 },
-      // Gathers the palms into clumps along the bank instead of spacing them evenly down it.
       { output: "groveRaw", op: "sample", noise: "grove" },
       { output: "groveRamp", op: "remap", input: "groveRaw", inMin: -0.5, inMax: 0.15, outMin: 0.15, outMax: 0.8 },
       { output: "grove", op: "clamp", input: "groveRamp", min: 0.15, max: 0.8 },
-      { output: "palm", op: "multiply", a: "bank", b: "grove" },
+      { output: "palmBank", op: "multiply", a: "bank", b: "grove" },
+      { output: "palm", op: "scale", input: "palmBank", factor: 1.5 },
+      // Short tree ferns among the palms, close to the water - a desert's little fan palms.
+      { output: "nearRamp", op: "remap", input: "water", inMin: 90, inMax: 40, outMin: 0, outMax: 1 },
+      { output: "near", op: "clamp", input: "nearRamp", min: 0, max: 1 },
+      { output: "treeFernShort", op: "scale", input: "near", factor: 0.5 },
     ],
-    outputs: { palm: "palm" },
+    outputs: { cactus: "cactus", palm: "palm", treeFernShort: "treeFernShort" },
   },
-  // A few boulders of warm desert stone standing out of the sand, more under the slopes and by the water.
-  rocks: { generator: "rockDensity", kind: "boulder", frequency: 0.003, openAt: 0.2, fullAt: 0.8, peak: { range: [0.005, 0.03] }, footOfSlope: { range: [0.3, 0.6] }, riverShore: { range: [0.5, 1] }, lakeShore: { range: [0.5, 1] } },
-  // Each area its own trees, and every tree its own shade of them (spread). Pines first: a tree
-  // takes the first rule for its kind, and conifers stray less far from green than the rest.
+  // Pale bushes all over the sand floor, a few paces apart; none on the rock.
+  bushes: {
+    noises: [{ name: "patch", type: "fbm", octaves: 2, frequency: 0.02, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
+    steps: [
+      { output: "slope", op: "input", name: "slope" },
+      { output: "flat", op: "mask", input: "slope", at: 0.15, off: 0.35 },
+      { output: "height", op: "input", name: "height" },
+      { output: "floorLevel", op: "mask", input: "height", at: 9, off: 14 },
+      { output: "sand", op: "multiply", a: "flat", b: "floorLevel" },
+      { output: "patchRaw", op: "sample", noise: "patch" },
+      { output: "patch", op: "remap", input: "patchRaw", inMin: -0.6, inMax: 0.4, outMin: 0.35, outMax: 1 },
+      { output: "spread", op: "clamp", input: "patch", min: 0.35, max: 1 },
+      { output: "bushes", op: "multiply", a: "sand", b: "spread" },
+      // Past 1: bushes grow at a share of their density away from trees' shade.
+      { output: "desertBush", op: "scale", input: "bushes", factor: { range: [1.2, 1.8] } },
+      // Green shrubs along the water instead: oleander and thorn on the banks.
+      { output: "gap", op: "input", name: "riverGap" },
+      { output: "bank", op: "mask", input: "gap", at: 45, off: 120 },
+      { output: "dry", op: "mask", input: "height", at: 1.0, off: -0.5 },
+      { output: "dryBank", op: "multiply", a: "bank", b: "dry" },
+      { output: "bankPatch", op: "multiply", a: "dryBank", b: "spread" },
+      { output: "oleander", op: "scale", input: "bankPatch", factor: 0.25 },
+      { output: "thornBush", op: "scale", input: "bankPatch", factor: 0.45 },
+    ],
+    outputs: { desertBush: "desertBush", oleander: "oleander", thornBush: "thornBush" },
+  },
+  // Rubble: red boulders heaped thick at the foot of the rock, a few out on the floor.
+  rocks: { generator: "rockDensity", kind: "redBoulder", frequency: 0.006, openAt: -0.4, fullAt: 0.4, peak: { range: [0.02, 0.05] }, footOfSlope: { range: [1.5, 2.5] }, riverShore: { range: [0.5, 1] }, lakeShore: { range: [0.5, 1] } },
   treeTints: [
-    // Each area's stone a shade of its own, and every boulder a little different.
-    { kinds: ["boulder"], stone: { hue: { range: [-10, 15] }, saturation: { range: [1, 1.8] }, value: { range: [0.95, 1.2] }, tint: [1.2, 1, 0.78], spread: { hue: 6, saturation: 0.2, value: 0.12 } } },
+    { kinds: ["redBoulder"], stone: { hue: { range: [-6, 8] }, saturation: { range: [0.9, 1.2] }, value: { range: [0.92, 1.1] }, spread: { hue: 4, saturation: 0.1, value: 0.1 } } },
+    { kinds: ["cactus"], bark: { hue: { range: [-10, 10] }, saturation: { range: [0.85, 1.1] }, value: { range: [0.95, 1.08] }, spread: { hue: 5, value: 0.08 } } },
     {
-      kinds: ["pine"],
-      leaves: { hue: { range: [-40, 80] }, saturation: { range: [0.6, 1.5] }, value: { range: [0.85, 1.15] }, spread: { hue: 10, saturation: 0.15, value: 0.1 } },
-      bark: { hue: { range: [-20, 20] }, saturation: { range: [0.6, 1.4] }, value: { range: [0.75, 1.2] }, spread: { value: 0.12 } },
-    },
-    {
-      // Red and orange through gold to blue - an autumn wood in a dozen shades, or a strange one.
-      leaves: { hue: { range: [-100, 120] }, saturation: { range: [0.5, 1.8] }, value: { range: [0.85, 1.15] }, spread: { hue: 25, saturation: 0.25, value: 0.15 } },
-      bark: { hue: { range: [-20, 20] }, saturation: { range: [0.6, 1.4] }, value: { range: [0.75, 1.2] }, spread: { value: 0.12 } },
+      leaves: { hue: { range: [-8, 8] }, saturation: { range: [0.7, 1.0] }, value: { range: [0.95, 1.06] }, spread: { hue: 5, saturation: 0.1, value: 0.08 } },
+      bark: { hue: { range: [-8, 8] }, saturation: { range: [0.8, 1.1] }, value: { range: [0.9, 1.08] }, spread: { value: 0.08 } },
     },
   ],
   ground: {
-    base: "sand",
+    base: "orangeSand",
     road: "trackSand",
-    // Each area's ground a little different: a warmer or cooler, paler or deeper version of it.
-    adjust: { hue: { range: [-6, 6] }, saturation: { range: [0.88, 1.12] }, value: { range: [0.94, 1.06] } },
+    adjust: { hue: { range: [-6, 6] }, saturation: { range: [0.9, 1.1] }, value: { range: [0.95, 1.05] } },
     layers: [
-      // Desert dunes: a shaded leeward face (reusing the same slopeFacing signal, just relabeled) and
-      // damp, darker sand pooling in the troughs between dunes - the latter reuses swamp's own mud
-      // material rather than a new texture, the same "share a MaterialDef across layers" trick as snow.
+      // The rock: everything standing up off the floor, and any slope steep enough - all of it
+      // sandstone, over the world's grey rock.
       {
-        id: "desert-dune-shadow",
-        material: "duneShadow",
+        id: "desert-sandstone",
+        material: "redSandstone",
         weight: {
-          noises: [],
           steps: [
-            { output: "facing", op: "input", name: "slopeFacing" },
-            { output: "raw", op: "remap", input: "facing", inMin: 0.05, inMax: 0.3, outMin: 0, outMax: 1 },
-            { output: "result", op: "clamp", input: "raw", min: 0, max: 1 },
-          ],
-        },
-      },
-
-      // Wadi floors: the low, flat ground between dunes, where the rare runoff drops its silt and then
-      // dries and cracks. This used to reuse swamp's own mud material, which read as wet green-brown bog
-      // in the middle of a desert - desertSiltMaterial is the same idea in the right palette.
-      {
-        id: "desert-silt-valley",
-        material: "desertSilt",
-        weight: {
-          noises: [],
-          steps: [
-            { output: "curvature", op: "input", name: "reliefCurvature" },
-            { output: "raw", op: "remap", input: "curvature", inMin: 0.2, inMax: 1.0, outMin: 0, outMax: 1 },
-            { output: "result", op: "clamp", input: "raw", min: 0, max: 1 },
-          ],
-        },
-      },
-
-      // Reg/serir gravel plains. Unlike every other layer in this file, the weight is driven by an actual
-      // noise rather than only terrain-derived inputs - gravel plain versus dune field is a matter of
-      // where the wind happened to strip the sand away, not of slope or height, so a very low-frequency
-      // fbm (about one patch per 250 world units) decides it. Gated on flatness so it never creeps up a
-      // dune face.
-      {
-        id: "desert-gravel-plain",
-        material: "desertGravel",
-        weight: {
-          noises: [{ name: "patches", type: "fbm", octaves: 2, frequency: 0.004, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
-          steps: [
-            { output: "patchRaw", op: "sample", noise: "patches" },
-            { output: "patch", op: "remap", input: "patchRaw", inMin: 0.1, inMax: 0.9, outMin: 0, outMax: 1 },
-            { output: "patchClamped", op: "clamp", input: "patch", min: 0, max: 1 },
             { output: "slope", op: "input", name: "slope" },
-            { output: "flatRaw", op: "remap", input: "slope", inMin: 0.93, inMax: 0.99, outMin: 0, outMax: 1 },
-            { output: "flat", op: "clamp", input: "flatRaw", min: 0, max: 1 },
-            { output: "result", op: "multiply", a: "patchClamped", b: "flat" },
+            { output: "steep", op: "mask", input: "slope", at: 0.8, off: 0.93 },
+            { output: "height", op: "input", name: "height" },
+            { output: "raised", op: "mask", input: "height", at: 13, off: 9 },
+            { output: "rock", op: "max", a: "steep", b: "raised" },
+            { output: "result", op: "scale", input: "rock", factor: 4 },
           ],
         },
       },
-
-      /**
-       * The one green thing in a desert: the strip of ground a river keeps alive.
-       *
-       * Driven by `riverGap` - true distance to the river centreline, continuous everywhere - rather
-       * than by any wetness flag, so the band is a smooth function of position with nothing to switch.
-       * Measured along a desert reach, the waterline sits at riverGap ~35-40 and the ground is fully dry
-       * by 50, so a ramp that is full at 45 and gone by 90 puts about forty units of green on dry bank
-       * and lets the `dry` gate below clip the rest off inside the channel.
-       *
-       * The edge noise matters more here than anywhere else in this file. Every other layer's boundary
-       * follows terrain, which is already irregular; this one follows a polyline, and without jitter it
-       * would read as a drawn offset curve running parallel to the water for kilometres.
-       *
-       * Boosted past 1 for the same reason as the lake shore: it has to beat the desert's own silt and
-       * gravel layers, which key on exactly the flat low ground a riverbank is made of.
-       */
+      // Red gravel: the rock's debris round its feet, and in patches out over the sand.
       {
-        id: "desert-river-grass",
-        material: "grass",
+        id: "desert-red-gravel",
+        material: "redGravel",
         weight: {
-          noises: [{ name: "bankEdge", type: "fbm", octaves: 3, frequency: 0.012, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
+          noises: [{ name: "patch", type: "fbm", octaves: 3, frequency: 0.008, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
+          steps: [
+            { output: "height", op: "input", name: "height" },
+            { output: "foot", op: "mask", input: "height", at: 9, off: 6.5 },
+            { output: "below", op: "mask", input: "height", at: 11, off: 14 },
+            { output: "footBand", op: "multiply", a: "foot", b: "below" },
+            { output: "patchRaw", op: "sample", noise: "patch" },
+            { output: "patch", op: "mask", input: "patchRaw", at: 0.4, off: 0.05 },
+            { output: "floorPatch", op: "multiply", a: "patch", b: "below" },
+            { output: "gravel", op: "max", a: "footBand", b: "floorPatch" },
+            { output: "result", op: "scale", input: "gravel", factor: 1.3 },
+          ],
+        },
+      },
+      // The banks: no lawn, but the same sand with green clumps of grass growing out of it, in
+      // patches, thinning away from the water.
+      {
+        id: "desert-river-banks",
+        material: "bankSand",
+        weight: {
+          noises: [{ name: "clumps", type: "fbm", octaves: 3, frequency: 0.03, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
           steps: [
             { output: "gap", op: "input", name: "riverGap" },
-            { output: "edgeRaw", op: "sample", noise: "bankEdge" },
-            { output: "edge", op: "scale", input: "edgeRaw", factor: 14 },
-            { output: "jittered", op: "add", a: "gap", b: "edge" },
-            { output: "bandRaw", op: "remap", input: "jittered", inMin: 90, inMax: 45, outMin: 0, outMax: 1 },
-            { output: "band", op: "clamp", input: "bandRaw", min: 0, max: 1 },
-            { output: "boosted", op: "scale", input: "band", factor: 2.4 },
-            // SEA_LEVEL is 0 (areaField.ts). Grass stops at the water rather than carrying on down the
-            // bed, and fading it over the last couple of units means the handoff is a shoreline, not a
-            // contour line.
+            { output: "bank", op: "mask", input: "gap", at: 50, off: 110 },
+            { output: "clumpsRaw", op: "sample", noise: "clumps" },
+            { output: "clumps", op: "mask", input: "clumpsRaw", at: 0.2, off: -0.3 },
+            { output: "bankClumps", op: "multiply", a: "bank", b: "clumps" },
             { output: "height", op: "input", name: "height" },
-            { output: "dryRaw", op: "remap", input: "height", inMin: -1, inMax: 1.5, outMin: 0, outMax: 1 },
-            { output: "dry", op: "clamp", input: "dryRaw", min: 0, max: 1 },
-            { output: "result", op: "multiply", a: "boosted", b: "dry" },
+            { output: "dry", op: "mask", input: "height", at: 1.0, off: -0.5 },
+            { output: "dryBank", op: "multiply", a: "bankClumps", b: "dry" },
+            { output: "result", op: "scale", input: "dryBank", factor: 2 },
           ],
         },
       },
     ],
   },
+  // Clear and hot in one area, a soft grey overcast in the next.
   sky: {
-    horizon: "#ecca9a",
-    zenith: "#8aa8d0",
-    cloud: "#fffaec",
+    horizon: { oneOf: ["#ecd2b0", "#d8d4d0", "#e4cca8"] },
+    zenith: { oneOf: ["#6c98cc", "#9aa4b0", "#7aa2d2"] },
+    cloud: "#fbf6ee",
+    fogStart: { range: [0.3, 0.5] },
+    fogEnd: { range: [0.9, 1.0] },
   },
-  // A harsh, near-overhead noon and a moon that barely clears the dunes - the two extremes of the
-  // per-biome elevation range - plus a hotter horizon sun and a dim, sharp-cool night to match.
   light: {
-    sunPeak: 82,
-    moonPeak: 30,
+    sunPeak: 70,
+    moonPeak: 35,
     sunHorizon: "#ff7837",
     ambientDay: "#d6c6a4",
   },

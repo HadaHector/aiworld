@@ -1,0 +1,7 @@
+// Red gravel: the gravel's stones, but broken off red sandstone - a rocky desert's stony ground at the
+// foot of its rock and in patches over its sand floor.
+{
+  name: "Red Gravel",
+  textureFrom: "gravel",
+  adjust: { hue: 0, saturation: 1, value: 1.05, tint: [1.45, 0.92, 0.7] },
+}

@@ -1,0 +1,12 @@
+// Bank sand: a desert river's banks - the same orange sand as the desert floor round it, but with
+// water near enough for green clumps of grass to grow out of it here and there.
+{
+  name: "Bank Sand",
+  textureFrom: "sand",
+  adjust: { hue: -14, saturation: 1.15, value: 0.9 },
+  grass: [
+    { kind: "longGrass", density: 0.5, color: [0.36, 0.48, 0.2] },
+    { kind: "tall", density: 0.35, color: [0.42, 0.5, 0.22] },
+    { kind: "tuft", density: 0.5, color: [0.34, 0.44, 0.18] },
+  ],
+}
