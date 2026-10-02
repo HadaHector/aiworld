@@ -189,16 +189,22 @@ export interface BranchingTree {
   };
   branches: {
     count: [number, number];
-    /** Branches leave the trunk between this fraction of its height and the top. */
+    /** Branches leave the trunk between these fractions of its height (`to` 1, the top, by default). */
     from: number;
+    to: number;
     length: [number, number];
-    /** Radius where a branch leaves the trunk, as a fraction of the trunk's radius there. */
+    /** Radius where a branch leaves the trunk, as a fraction of the trunk's radius there, and the
+     *  share of it lost by the tip (0.78 by default; a cactus's arms hardly narrow). */
     radius: number;
+    taper: number;
     /** Angle from vertical a branch sets off at. */
     angle: [number, number];
     /** How far a branch bends back up towards its tip, as a fraction of its length - below 0, over
      *  and outwards. */
     arc: number;
+    /** How late along it the branch makes that bend: its lift goes as along^`bend` (2 by default) -
+     *  higher, it runs out straight and turns at an elbow, a cactus's arm. */
+    bend: number;
     /** The share of branches and twigs snapped off short, their ends left blunt - a dead tree's. */
     broken: number;
     /** How crooked a branch grows: at every ring it kinks off its line by up to this share of its
@@ -246,10 +252,19 @@ export interface BranchingTree {
    *  straight down - moss) - and narrows by `taper` of its width to its end (default 0, 1 to a
    *  point). */
   vines: { count: [number, number]; length: [number, number]; radius: number; loops: number; leaves: { width: number; tile: number; arch: number; taper: number } | null } | null;
+  /** A cactus: its trunk and branches pleated into `count` ribs, `depth` of their radius deep, and
+   *  their ends rounded into domes - the bark texture is then the skin. None for a tree. */
+  ribs: Ribs | null;
   bark: BarkTexture;
   /** None for a bare tree, which has neither leaves nor a crown. A frond crown's atlas is a fern's
    *  (a BushTexture with the "fern" builder). */
   foliage: FoliageTexture | BushTexture | null;
+}
+
+/** A cactus's ribs, see BranchingTree.ribs. */
+export interface Ribs {
+  count: number;
+  depth: number;
 }
 
 /** A tree's bark: a texture graph like a ground material's (diffuse, roughness, height), with u

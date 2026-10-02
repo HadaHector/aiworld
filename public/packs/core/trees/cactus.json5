@@ -1,0 +1,81 @@
+// A cactus: a saguaro - one tall, thick green column, pleated from foot to rounded top into deep
+// ribs, and from partway up a few arms thrown out level and turning up hard to stand beside it,
+// nearly as thick as the trunk and rounded off the same. Young ones have no arms yet. Its skin is
+// a waxy grey-green, paler down the ribs' crests where the spines grow in rows of small tufts.
+{
+  model: "branching",
+  variants: 6,
+  trunk: {
+    height: 12,
+    radius: 0.75,
+    topRadius: 0.62,
+    lean: 0.03,
+    wobble: 0.15,
+    flare: 1.05,
+    flareHeight: 0.6,
+    sides: 12,
+    rings: 10,
+  },
+  roots: { count: 0, length: [1, 1], radius: 0.3, drop: 0.2, sides: 3, rings: 1 },
+  branches: {
+    // None to four, from the middle of the trunk.
+    count: [0, 4],
+    from: 0.3,
+    to: 0.65,
+    // Out level (or a little down), then turning up: the elbow, and the arm standing tall.
+    length: [1.8, 2.6],
+    radius: 0.72,
+    taper: 0.12,
+    angle: [84, 100],
+    arc: 2.2,
+    bend: 4,
+    sides: 12,
+    rings: 10,
+    twigs: { count: [0, 0], length: [0.1, 0.1], angle: [30, 30], sides: 3, rings: 1 },
+  },
+  ribs: { count: 14, depth: 0.12 },
+  // The skin: grey-green, streaked along the ribs, with rows of pale spine tufts.
+  bark: {
+    tile: 0.9,
+    texture: {
+      bumpStrength: 1.6,
+      pipeline: {
+        noises: [
+          { name: "streaks", type: "fbm", octaves: 3, tileCycles: 6, stretch: [1, 8], amplitude: 1, persistence: 0.5, lacunarity: 2 },
+          { name: "mottle", type: "fbm", octaves: 3, tileCycles: 3, amplitude: 1, persistence: 0.5, lacunarity: 2 },
+          { name: "areoles", type: "worley", tileCycles: 16, amplitude: 1, mode: "f1", sizeJitter: 0.3, warp: 0.1 },
+        ],
+        steps: [
+          { output: "streakRaw", op: "sample", noise: "streaks" },
+          { output: "streak", op: "mask", input: "streakRaw", at: 1.2, off: -1.2 },
+          { output: "mottleRaw", op: "sample", noise: "mottle" },
+          { output: "mottle", op: "mask", input: "mottleRaw", at: 1.2, off: -1.2 },
+          { output: "tone", op: "lerp", a: "streak", b: "mottle", t: 0.4 },
+          {
+            output: "skin",
+            op: "colorRamp",
+            input: "tone",
+            stops: [
+              { at: 0.0, color: [0.24, 0.32, 0.19] },
+              { at: 0.5, color: [0.34, 0.42, 0.27] },
+              { at: 1.0, color: [0.45, 0.51, 0.36] },
+            ],
+          },
+          // Spine tufts: small pale spots.
+          { output: "areoleDist", op: "sample", noise: "areoles" },
+          { output: "areole", op: "mask", input: "areoleDist", at: 0.08, off: 0.2 },
+          { output: "spineColor", op: "color", value: [0.78, 0.74, 0.6] },
+          { output: "spineAmount", op: "scale", input: "areole", factor: 0.75 },
+          { output: "diffuse", op: "mix", a: "skin", b: "spineColor", t: "spineAmount" },
+          { output: "roughness", op: "constant", value: 0.6 },
+          { output: "streakHeight", op: "scale", input: "streak", factor: 0.6 },
+          { output: "areoleHeight", op: "scale", input: "areole", factor: 0.4 },
+          { output: "height", op: "add", a: "streakHeight", b: "areoleHeight" },
+        ],
+        outputs: { diffuse: "diffuse", roughness: "roughness", height: "height" },
+      },
+    },
+  },
+  tint: [[0.88, 0.9, 0.86], [1.06, 1.06, 1.0]],
+  scale: [0.55, 1.35],
+}

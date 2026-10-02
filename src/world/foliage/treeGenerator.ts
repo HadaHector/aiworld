@@ -1,6 +1,6 @@
 import { mulberry32 } from "../rng";
 import { lerp, smoothstep } from "../mathUtils";
-import { FROND_STALK_HALF_WIDTH, FROND_STALK_SHARE, type BranchingTree, type BushShape, type ConiferTree, type Fronds } from "./foliageConfig";
+import { FROND_STALK_HALF_WIDTH, FROND_STALK_SHARE, type BranchingTree, type BushShape, type ConiferTree, type Fronds, type Ribs } from "./foliageConfig";
 
 /**
  * One generated tree, in tree space (the base of the trunk at the origin, up +Y), as two meshes'
@@ -74,10 +74,22 @@ class WoodBuilder {
    * With `heights`, each ring is an upright wedge instead of a circle - `radii` across at its foot,
    * narrowing to a sharp edge at its top, `heights` up and down - framed on the vertical rather than
    * transported: a buttress root's plank, standing on edge.
+   *
+   * With `ribs`, the tube is a cactus's column instead: its section pleated into `ribs.count` rounded
+   * ribs with sharp grooves between, `ribs.depth` of the radius deep (four sides to a rib, whatever
+   * `sides` says), and its end a rounded dome of `domeRings` rings, the ribs running over it.
    */
-  tube(points: V3[], radii: number[], sides: number, tile: number, blunt = false, heights?: number[]): void {
+  tube(points: V3[], radii: number[], sides: number, tile: number, blunt = false, heights?: number[], ribs: Ribs | null = null, domeRings = 3): void {
+    if (ribs) sides = ribs.count * 4;
     const base = this.positions.length / 3;
     const ring = sides + 1;
+    // The pleat at an angle round the section: 1 on a rib's crest, 1 - depth in a groove - and how
+    // fast it changes there, for the normal, which leans off the radius on a rib's flanks.
+    const pleat = (angle: number): [number, number] => {
+      if (!ribs) return [1, 0];
+      const wave = Math.sin((ribs.count * angle) / 2);
+      return [1 - ribs.depth * (1 - Math.abs(wave)), ribs.depth * Math.sign(wave) * Math.cos((ribs.count * angle) / 2) * (ribs.count / 2)];
+    };
     // Sized on the limb's average girth: its first ring can be a flared base twice the width of
     // the rest, which would squeeze the bark sideways everywhere else.
     const meanRadius = radii.reduce((sum, r, i) => sum + (heights ? (r + heights[i]) / 2 : r), 0) / radii.length;
@@ -99,11 +111,14 @@ class WoodBuilder {
         const up = scale(binormal, Math.sin(angle));
         // A wedge: full width at the foot, a third of it at the top edge.
         const rising = heights ? (up[1] / Math.max(1e-6, Math.hypot(...binormal)) + 1) / 2 : 0;
-        const width = radii[i] * (1 - 0.65 * rising);
+        const [fold, foldSlope] = pleat(angle);
+        const width = radii[i] * (1 - 0.65 * rising) * fold;
         const across = scale(normal, Math.cos(angle));
-        const p = add(points[i], add(scale(across, width), scale(up, height)));
+        const p = add(points[i], add(scale(across, width), scale(up, heights ? height : height * fold)));
         // Its normal leans towards the flat sides: the ellipse's gradient, not the radial direction.
-        const out = heights ? normalize(add(scale(across, 1 / width), scale(up, 1 / height))) : add(across, up);
+        // On a rib's flanks it leans off the radius, round the section: r(a) out, less r'(a) along.
+        const flank = scale(add(scale(normal, Math.sin(angle)), scale(binormal, -Math.cos(angle))), foldSlope);
+        const out = heights ? normalize(add(scale(across, 1 / width), scale(up, 1 / height))) : add(scale(add(across, up), fold), flank);
         this.positions.push(p[0], p[1], p[2]);
         this.normals.push(out[0], out[1], out[2]);
         this.uvs.push((j / sides) * around, v);
@@ -123,13 +138,38 @@ class WoodBuilder {
     // The apex: a short cone off the last ring, rather than an open end.
     const last = points.length - 1;
     const tipDirection = normalize(sub(points[last], points[last - 1]));
-    const apex = add(points[last], scale(tipDirection, radii[last] * (blunt ? 0.35 : 2)));
+    let lastRing = base + last * ring;
+    if (ribs && !blunt) {
+      // A dome instead: rings closing in over a quarter circle, the ribs running on over them.
+      const binormal = cross(tipDirection, normal);
+      for (let k = 1; k <= domeRings; k++) {
+        const theta = (k / (domeRings + 1)) * (Math.PI / 2);
+        const centre = add(points[last], scale(tipDirection, radii[last] * Math.sin(theta)));
+        const radius = radii[last] * Math.cos(theta);
+        v += (radii[last] * (Math.PI / 2)) / (domeRings + 1) / tile;
+        for (let j = 0; j <= sides; j++) {
+          const angle = (j / sides) * Math.PI * 2;
+          const [fold, foldSlope] = pleat(angle);
+          const radial = add(scale(normal, Math.cos(angle)), scale(binormal, Math.sin(angle)));
+          const p = add(centre, scale(radial, radius * fold));
+          const flank = scale(add(scale(normal, Math.sin(angle)), scale(binormal, -Math.cos(angle))), foldSlope * Math.cos(theta));
+          const out = add(add(scale(radial, fold * Math.cos(theta)), flank), scale(tipDirection, Math.sin(theta)));
+          this.positions.push(p[0], p[1], p[2]);
+          this.normals.push(out[0], out[1], out[2]);
+          this.uvs.push((j / sides) * around, v);
+          this.axes.push(tipDirection[0], tipDirection[1], tipDirection[2]);
+        }
+        const nextRing = this.positions.length / 3 - ring;
+        for (let j = 0; j < sides; j++) this.indices.push(lastRing + j, nextRing + j, lastRing + j + 1, lastRing + j + 1, nextRing + j, nextRing + j + 1);
+        lastRing = nextRing;
+      }
+    }
+    const apex = add(points[last], scale(tipDirection, radii[last] * (blunt ? 0.35 : ribs ? 1 : 2)));
     const apexIndex = this.positions.length / 3;
     this.positions.push(apex[0], apex[1], apex[2]);
     this.normals.push(tipDirection[0], tipDirection[1], tipDirection[2]);
     this.uvs.push(around * 0.5, v + (radii[last] * 2) / tile);
     this.axes.push(tipDirection[0], tipDirection[1], tipDirection[2]);
-    const lastRing = base + last * ring;
     for (let j = 0; j < sides; j++) this.indices.push(lastRing + j, apexIndex, lastRing + j + 1);
   }
 }
@@ -351,6 +391,32 @@ function thinned<T>(items: T[]): T[] {
 }
 
 /**
+ * Where along a branch (0-1 of its length) to put each of its `rings` + 1 rings so they lie evenly
+ * along its curve: out `outward` and up `upward` per unit along (its direction), lifted by
+ * `arc` * along^`bend` - measured on a fine walk of the curve, sideways drift aside.
+ */
+function evenAlongCurve(outward: number, upward: number, arc: number, bend: number, rings: number): number[] {
+  const steps = 64;
+  const lengths = [0];
+  for (let k = 1; k <= steps; k++) {
+    const s0 = (k - 1) / steps;
+    const s1 = k / steps;
+    const rise = upward * (s1 - s0) + arc * (Math.pow(s1, bend) - Math.pow(s0, bend));
+    lengths.push(lengths[k - 1] + Math.hypot(outward * (s1 - s0), rise));
+  }
+  const total = lengths[steps];
+  const result: number[] = [];
+  let k = 1;
+  for (let i = 0; i <= rings; i++) {
+    const want = (i / rings) * total;
+    while (k < steps && lengths[k] < want) k++;
+    const span = lengths[k] - lengths[k - 1];
+    result.push(Math.min(1, (k - 1 + (span > 0 ? (want - lengths[k - 1]) / span : 0)) / steps));
+  }
+  return result;
+}
+
+/**
  * Generates one tree from a BranchingTree description. Deterministic from `seed`, which is what
  * makes each of a kind's variants a different but repeatable tree.
  */
@@ -362,9 +428,13 @@ export function generateTree(spec: BranchingTree, seed: number, detail: TreeDeta
   const wood = new WoodBuilder();
   const leafBuilder = new LeafBuilder();
   const far = detail === "far";
-  const limb = (points: V3[], radii: number[], sides: number, blunt = false, heights?: number[]): void => {
-    if (far) wood.tube(thinned(points), thinned(radii), Math.max(3, Math.round(sides * 0.6)), bark.tile, blunt, heights && thinned(heights));
-    else wood.tube(points, radii, sides, bark.tile, blunt, heights);
+  // A cactus's ribs on its trunk and arms - half as many, half as deep, on a distant one.
+  const ribs = spec.ribs && far ? { count: Math.max(3, Math.round(spec.ribs.count / 2)), depth: spec.ribs.depth / 2 } : spec.ribs;
+  const limb = (points: V3[], radii: number[], sides: number, blunt = false, heights?: number[], ribbed = false): void => {
+    const pleats = ribbed ? ribs : null;
+    // A ribbed limb's dome gets a single ring far off.
+    if (far) wood.tube(thinned(points), thinned(radii), Math.max(3, Math.round(sides * 0.6)), bark.tile, blunt, heights && thinned(heights), pleats, 1);
+    else wood.tube(points, radii, sides, bark.tile, blunt, heights, pleats);
   };
   // Whether a limb is snapped off short, and to what share of its length. No draw at all for a kind
   // that never breaks, so its trees stay exactly as they were.
@@ -403,7 +473,7 @@ export function generateTree(spec: BranchingTree, seed: number, detail: TreeDeta
     // Rings bunched towards the base, where the flare needs them.
     trunkTs.push(Math.pow(i / trunk.rings, 1.4));
   }
-  limb(trunkTs.map(trunkPoint), trunkTs.map(trunkRadius), trunk.sides);
+  limb(trunkTs.map(trunkPoint), trunkTs.map(trunkRadius), trunk.sides, false, undefined, true);
 
   // --- roots ---
   const rootStart = trunk.flareHeight * 0.55;
@@ -497,7 +567,7 @@ export function generateTree(spec: BranchingTree, seed: number, detail: TreeDeta
   const perchAlong: number[] = [];
   const branchCount = intBetween(branches.count);
   for (let b = 0; b < branchCount; b++) {
-    const t = Math.min(0.97, branches.from + (1 - branches.from) * ((b + rng()) / branchCount));
+    const t = Math.min(0.97, branches.from + (branches.to - branches.from) * ((b + rng()) / branchCount));
     const heading = b * 2.39996 + (rng() - 0.5) * 0.6; // the golden angle, so no two line up
     const tilt = between(branches.angle) * DEG;
     const direction: V3 = [Math.sin(tilt) * Math.cos(heading), Math.cos(tilt), Math.sin(tilt) * Math.sin(heading)];
@@ -515,12 +585,15 @@ export function generateTree(spec: BranchingTree, seed: number, detail: TreeDeta
     // branch's own, so a kind that grows straight is the same tree it always was.
     const crookRng = branches.crook > 0 ? mulberry32((seed ^ Math.imul(b + 1, 0x9e3779b1)) >>> 0) : null;
     let bent: V3 = [0, 0, 0];
+    // A cactus's arm turns hard at its elbow: its rings spaced evenly along the curve rather than
+    // along its reach, so the turn gets as many as the straight runs either side of it.
+    const ringAt = spec.ribs ? evenAlongCurve(Math.sin(tilt), Math.cos(tilt), branches.arc, branches.bend, branches.rings) : null;
     for (let i = 0; i <= branches.rings; i++) {
       // A snapped branch is the same branch ending short - still thick where it broke.
-      const s = (i / branches.rings) * kept;
+      const s = (ringAt ? ringAt[i] : i / branches.rings) * kept;
       // Straight out along its direction, curving back up towards the tip, with a slight sideways drift.
       const along = scale(direction, fullLength * s);
-      const lift: V3 = [0, branches.arc * fullLength * s * s, 0];
+      const lift: V3 = [0, branches.arc * fullLength * Math.pow(s, branches.bend), 0];
       const drift = scale(side, wander * fullLength * s * s);
       if (crookRng && i > 0) {
         const kink: V3 = [crookRng() - 0.5, crookRng() - 0.5, crookRng() - 0.5];
@@ -528,9 +601,9 @@ export function generateTree(spec: BranchingTree, seed: number, detail: TreeDeta
         bent = add(bent, scale(across, (2 * branches.crook * fullLength * kept) / branches.rings));
       }
       points.push(add(add(add(add(start, along), lift), drift), bent));
-      radii.push(startRadius * (1 - 0.78 * s));
+      radii.push(startRadius * (1 - branches.taper * s));
     }
-    limb(points, radii, branches.sides, kept < 1);
+    limb(points, radii, branches.sides, kept < 1, undefined, true);
     clusterPoints.push(points[points.length - 1]);
 
     const branchAt = (s: number): { point: V3; tangent: V3; radius: number } => {

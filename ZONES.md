@@ -172,6 +172,12 @@ Existing: **broadleaf**, **pine**, **palm**.
   hillsides with paths through, olives (new `olive`) and new `oleander` (pink or white, the new
   bush `flowers`) on the valley floors, Italian cypresses (new `italianCypress`, its tiers swept up
   below and drooping above) of every age; bright, warm light.
+- **Red bush: done** - `biomes/redBush.json5`. Red earth plains (`smoothMax` again) with low hills
+  and buttes rising out of them, their steep sides broken into sandstone ledges and rounded knobs
+  (`relief`, a billowed noise) in new `redSandstone`; patches of short gold grass; saguaros (new
+  `cactus`: a tree with new `ribs` - pleated limbs with domed ends - and arms that run out level
+  and turn up at an elbow, new `branches.bend`/`to`/`taper`) in loose stands, the odd acacia on the
+  plains, sparse hazel and thorn; new `redBoulder` at the foot of the rocks; hot, hard light.
 
 | Variant | Ground | Plants | Trees | Extras |
 |---|---|---|---|---|

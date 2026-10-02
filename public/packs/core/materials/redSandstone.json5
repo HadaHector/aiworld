@@ -1,0 +1,60 @@
+// Red sandstone: the red bush's rock, on its outcrops' ledges and knobs and its boulders - soft,
+// rounded rock, a warm salmon-orange paler than the earth round it, rust in its low places, cracked
+// and faintly bedded.
+//
+// Built as the limestone is: its height half broad swells (a coarse fbm) and half cracks (an fbm
+// folded about its middle), with a little of a faint bedding - the same, stretched long across. The
+// colour follows the height and the bump shapes the rest.
+{
+  name: "Red Sandstone",
+  texture: {
+    bumpStrength: 4,
+    pipeline: {
+      noises: [
+        { name: "cracks", type: "fbm", octaves: 4, tileCycles: 5, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+        { name: "swell", type: "fbm", octaves: 3, tileCycles: 3, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+        { name: "beds", type: "fbm", octaves: 3, tileCycles: 4, stretch: [4, 1], amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+        { name: "mottle", type: "fbm", octaves: 3, tileCycles: 9, amplitude: 1, persistence: 0.55, lacunarity: 2.0 },
+      ],
+      steps: [
+        // The cracks: the fbm as 0-1, doubled less one (-1..1, 0 at its middle), folded, shaped.
+        { output: "crackRaw", op: "sample", noise: "cracks" },
+        { output: "crackUnit", op: "mask", input: "crackRaw", at: 1, off: -1 },
+        { output: "crackDoubled", op: "scale", input: "crackUnit", factor: 2 },
+        { output: "crackCentred", op: "offset", input: "crackDoubled", amount: -1 },
+        { output: "crackFolded", op: "abs", input: "crackCentred" },
+        { output: "crack", op: "power", input: "crackFolded", exponent: 0.9 },
+        // The bedding, folded the same.
+        { output: "bedRaw", op: "sample", noise: "beds" },
+        { output: "bedFolded", op: "abs", input: "bedRaw" },
+        { output: "bed", op: "mask", input: "bedFolded", at: 0.5, off: 0 },
+        // The broad swells, 0-1.
+        { output: "swellRaw", op: "sample", noise: "swell" },
+        { output: "swell", op: "mask", input: "swellRaw", at: 0.9, off: -0.9 },
+        { output: "crackPart", op: "scale", input: "crack", factor: 0.4 },
+        { output: "bedPart", op: "scale", input: "bed", factor: 0.15 },
+        { output: "swellPart", op: "scale", input: "swell", factor: 0.45 },
+        { output: "body", op: "add", a: "crackPart", b: "swellPart" },
+        { output: "height", op: "add", a: "body", b: "bedPart" },
+
+        // The colour from the height: rust in the lowest places, salmon over most, pale on the tops.
+        {
+          output: "byHeight",
+          op: "colorRamp",
+          input: "height",
+          stops: [
+            { at: 0.0, color: [0.38, 0.2, 0.13] },
+            { at: 0.2, color: [0.56, 0.33, 0.22] },
+            { at: 0.55, color: [0.7, 0.47, 0.33] },
+            { at: 1.0, color: [0.84, 0.66, 0.5] },
+          ],
+        },
+        { output: "mottleRaw", op: "sample", noise: "mottle" },
+        { output: "mottleShade", op: "remap", input: "mottleRaw", inMin: -1, inMax: 1, outMin: 0.9, outMax: 1.06 },
+        { output: "diffuse", op: "multiply", a: "byHeight", b: "mottleShade" },
+        { output: "roughness", op: "constant", value: 0.92 },
+      ],
+      outputs: { diffuse: "diffuse", roughness: "roughness", height: "height" },
+    },
+  },
+}

@@ -1,0 +1,164 @@
+/**
+ * Red bush - the scrubland family's hot, dry variant (see ZONES.md): wide, gently rolling red earth
+ * under a hard blue sky, flat red plains between low hills whose steeper sides break out into ledges
+ * and rounded knobs of red sandstone. Tufts of dry grass over the earth, here and there a patch of
+ * pale grass, a few scattered bushes; the tall saguaro cacti standing up out of it all in loose
+ * stands, the odd acacia, and red boulders tumbled at the foot of the rocks.
+ */
+{
+  name: "Red Bush",
+  voice: "arid",
+  spawnWeight: 1.5,
+  lakeChance: 0.01,
+  borderType: "mountain",
+  settlement: "timber",
+  // Where the area's plains lie (0-1 of their range) - the height and the plants both read it.
+  params: { floor: { range: [0, 1] } },
+  // Low hills filled up from below to a broad, nearly flat plain (`smoothMax`, as the maquis): more
+  // plain than hill, the hills rising out of it.
+  height: {
+    noises: [
+      { name: "hills", type: "fbm", octaves: 4, frequency: { range: [0.0016, 0.0024] }, amplitude: { range: [26, 40] }, persistence: 0.42, lacunarity: 2.0 },
+      { name: "plainSwell", type: "fbm", octaves: 3, frequency: 0.003, amplitude: 1.5, persistence: 0.5, lacunarity: 2.0 },
+    ],
+    steps: [
+      { output: "hillsRaw", op: "sample", noise: "hills" },
+      { output: "hills", op: "offset", input: "hillsRaw", amount: 10 },
+      { output: "plainRaw", op: "sample", noise: "plainSwell" },
+      { output: "plain", op: "offset", input: "plainRaw", amount: { param: "floor", to: [6, 12] } },
+      { output: "result", op: "smoothMax", a: "hills", b: "plain", k: 6 },
+    ],
+  },
+  // The sandstone breaking out where the ground is steep: the slope stepped into its beds - ledges a
+  // metre or two high - and rounded knobs (a billowed noise) swelling up off them.
+  relief: {
+    noises: [
+      { name: "knobs", type: "billow", octaves: 2, frequency: 0.03, amplitude: 1, persistence: 0.45, lacunarity: 2.0 },
+      { name: "outcrops", type: "fbm", octaves: 2, frequency: 0.007, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+    ],
+    steps: [
+      { output: "height", op: "input", name: "height" },
+      { output: "steepness", op: "input", name: "steepness" },
+      { output: "steep", op: "mask", input: "steepness", at: 0.26, off: 0.1 },
+      { output: "outcropRaw", op: "sample", noise: "outcrops" },
+      { output: "outcrop", op: "mask", input: "outcropRaw", at: { range: [0.05, 0.25] }, off: { range: [-0.45, -0.25] } },
+      { output: "where", op: "multiply", a: "steep", b: "outcrop" },
+      { output: "stepped", op: "terrace", input: "height", step: { range: [1.4, 2.4] }, riser: 0.35 },
+      { output: "ledges", op: "subtract", a: "stepped", b: "height" },
+      { output: "knobRaw", op: "sample", noise: "knobs" },
+      { output: "knob", op: "scale", input: "knobRaw", factor: { range: [1.5, 3] } },
+      { output: "rock", op: "add", a: "ledges", b: "knob" },
+      { output: "result", op: "multiply", a: "rock", b: "where" },
+    ],
+  },
+  treeRules: { shore: [0.5, 2] },
+  // Saguaros in loose stands over the gentler ground, thinning to the odd one between; the odd
+  // acacia, more of them on the plains.
+  trees: {
+    noises: [
+      { name: "stand", type: "fbm", octaves: 2, frequency: 0.008, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+      { name: "acacias", type: "fbm", octaves: 2, frequency: 0.012, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+    ],
+    steps: [
+      { output: "slope", op: "input", name: "slope" },
+      { output: "gentle", op: "mask", input: "slope", at: 0.2, off: 0.42 },
+      { output: "standRaw", op: "sample", noise: "stand" },
+      { output: "standRamp", op: "remap", input: "standRaw", inMin: -0.5, inMax: 0.5, outMin: 0.12, outMax: 1 },
+      { output: "stand", op: "clamp", input: "standRamp", min: 0.12, max: 1 },
+      { output: "cactusGround", op: "multiply", a: "gentle", b: "stand" },
+      { output: "cactus", op: "scale", input: "cactusGround", factor: { range: [0.6, 1.0] } },
+      // The plains (the area's floor, give or take).
+      { output: "height", op: "input", name: "height" },
+      { output: "plain", op: "mask", input: "height", at: { param: "floor", to: [14, 20] }, off: { param: "floor", to: [18, 24] } },
+      { output: "acaciaRaw", op: "sample", noise: "acacias" },
+      { output: "acaciaClump", op: "mask", input: "acaciaRaw", at: 0.5, off: 0.2 },
+      { output: "acaciaPlain", op: "multiply", a: "acaciaClump", b: "plain" },
+      { output: "acaciaGentle", op: "multiply", a: "acaciaPlain", b: "gentle" },
+      { output: "acacia", op: "scale", input: "acaciaGentle", factor: { range: [0.2, 0.4] } },
+    ],
+    outputs: { cactus: "cactus", acacia: "acacia" },
+  },
+  // Sparse scrub: hazel and thorn in small clumps over the earth, a little more in the hollows.
+  bushes: {
+    noises: [{ name: "clump", type: "fbm", octaves: 3, frequency: 0.025, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
+    steps: [
+      { output: "clumpRaw", op: "sample", noise: "clump" },
+      { output: "clump", op: "mask", input: "clumpRaw", at: 0.45, off: 0.05 },
+      { output: "slope", op: "input", name: "slope" },
+      { output: "notRock", op: "mask", input: "slope", at: 0.3, off: 0.5 },
+      { output: "scrub", op: "multiply", a: "clump", b: "notRock" },
+      { output: "curvature", op: "input", name: "reliefCurvature" },
+      { output: "hollow", op: "remap", input: "curvature", inMin: -0.5, inMax: 1, outMin: 0.6, outMax: 1.6 },
+      { output: "hollowScrub", op: "multiply", a: "scrub", b: "hollow" },
+      { output: "hazel", op: "scale", input: "hollowScrub", factor: { range: [0.12, 0.25] } },
+      { output: "thornBush", op: "scale", input: "hollowScrub", factor: { range: [0.1, 0.2] } },
+    ],
+    outputs: { hazel: "hazel", thornBush: "thornBush" },
+  },
+  // Red boulders at the foot of the rocks and scattered over the hills.
+  rocks: { generator: "rockDensity", kind: "redBoulder", frequency: 0.005, openAt: -0.1, fullAt: 0.6, peak: { range: [0.02, 0.05] }, footOfSlope: { range: [0.6, 1] }, riverShore: { range: [0.5, 1] }, lakeShore: { range: [0.5, 1] } },
+  treeTints: [
+    // The rock a shade of its own in each area: rust, brick or salmon.
+    { kinds: ["redBoulder"], stone: { hue: { range: [-8, 8] }, saturation: { range: [0.85, 1.15] }, value: { range: [0.9, 1.1] }, spread: { hue: 4, saturation: 0.1, value: 0.1 } } },
+    // Cacti only ever a bluer or a yellower grey-green.
+    { kinds: ["cactus"], bark: { hue: { range: [-10, 10] }, saturation: { range: [0.85, 1.1] }, value: { range: [0.95, 1.08] }, spread: { hue: 5, value: 0.08 } } },
+    {
+      // Dusty olive leaves, never fresh green.
+      leaves: { hue: { range: [-15, 2] }, saturation: { range: [0.75, 1.0] }, value: { range: [0.9, 1.05] }, spread: { hue: 6, saturation: 0.1, value: 0.08 } },
+      bark: { hue: { range: [-8, 8] }, saturation: { range: [0.8, 1.1] }, value: { range: [0.9, 1.08] }, spread: { value: 0.08 } },
+    },
+  ],
+  ground: {
+    base: "redEarth",
+    road: "trackRedEarth",
+    adjust: { hue: { range: [-5, 5] }, saturation: { range: [0.82, 1.0] }, value: { range: [0.94, 1.06] } },
+    tints: [{ family: "grassland", hue: { range: [-10, 10] }, saturation: { range: [0.75, 1.0] }, value: { range: [0.95, 1.08] } }],
+    layers: [
+      // Sandstone where the ground is steep or stands up as a knob - the relief's ledges and drops.
+      {
+        id: "red-bush-sandstone",
+        material: "redSandstone",
+        weight: {
+          steps: [
+            { output: "slope", op: "input", name: "slope" },
+            { output: "steep", op: "mask", input: "slope", at: 0.8, off: 0.93 },
+            { output: "curvature", op: "input", name: "reliefCurvature" },
+            { output: "ridge", op: "mask", input: "curvature", at: -1.2, off: -0.5 },
+            { output: "rock", op: "max", a: "steep", b: "ridge" },
+            { output: "result", op: "scale", input: "rock", factor: 3 },
+          ],
+        },
+      },
+      // Dry grass in patches over the earth, more of it in the hollows where the rain lies longest.
+      {
+        id: "red-bush-dry-grass",
+        material: "savannaShort",
+        weight: {
+          noises: [{ name: "patch", type: "fbm", octaves: 3, frequency: 0.01, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
+          steps: [
+            { output: "patchRaw", op: "sample", noise: "patch" },
+            { output: "curvature", op: "input", name: "reliefCurvature" },
+            { output: "hollow", op: "scale", input: "curvature", factor: 0.3 },
+            { output: "sunk", op: "add", a: "patchRaw", b: "hollow" },
+            { output: "patch", op: "mask", input: "sunk", at: { range: [0.35, 0.6] }, off: 0.05 },
+            { output: "result", op: "scale", input: "patch", factor: 0.9 },
+          ],
+        },
+      },
+    ],
+  },
+  // Hot and hard: a deep blue overhead, a dusty, rust-tinged horizon, little haze.
+  sky: {
+    horizon: { oneOf: ["#e6cfb0", "#e2c4a2", "#e8d6bc"] },
+    zenith: "#3f7fc8",
+    cloud: "#fbf3e6",
+    fogStart: { range: [0.3, 0.5] },
+    fogEnd: { range: [0.9, 1.0] },
+  },
+  light: {
+    sunPeak: 70,
+    moonPeak: 45,
+    ambientDay: "#dccdb8",
+    sunZenith: "#fff0d4",
+  },
+}

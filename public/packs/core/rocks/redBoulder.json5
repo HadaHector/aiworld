@@ -1,0 +1,19 @@
+// A red boulder: a weathered lump of the red bush's sandstone - rounder than a granite boulder, worn
+// smooth by wind and sand, with only a few flat faces where it split along its beds. Lying about on
+// the red earth alone or in tumbled heaps, the biggest the size of a shed.
+{
+  model: "boulder",
+  variants: 6,
+  growsOld: true,
+  radius: 2.4,
+  squash: [0.45, 0.8],
+  stretch: [1.0, 1.6],
+  lumps: 0.22,
+  facets: [1, 4],
+  facetDepth: 0.3,
+  tilt: 12,
+  sink: [0.2, 0.5],
+  stone: { tile: 6, material: "redSandstone" },
+  tint: [[0.82, 0.8, 0.78], [1.12, 1.08, 1.04]],
+  scale: [0.5, 1.4],
+}

@@ -369,12 +369,18 @@ branches and on top. Its sections:
   from vertical), `arc` (how much they curve back up; below 0, over and outwards), `sides`, `rings`,
   `twigs` likewise, and optionally `broken` - the share of branches and twigs snapped off short - and
   `crook` - how crooked a limb grows: it kinks off its line at every ring by up to this share of its
-  length, the kinks adding up (0 straight, 0.2 gnarled, 0.36 a cloud-forest giant's)
+  length, the kinks adding up (0 straight, 0.2 gnarled, 0.36 a cloud-forest giant's). Also optional:
+  `to` (default 1) - the branches leave the trunk between `from` and `to` of its height; `taper`
+  (default 0.78) - the share of its girth a branch loses by its tip; and `bend` (default 2) - its rise
+  goes as along^`bend`, so a high one runs out straight and turns up at an elbow, a cactus's arm
 - `leaves`: `size` of a card, `cards` per clump, clumps `alongBranch` and on `top`, `spread`, and
   optionally `squash` (a clump's height for its width: below 1, flattened) and `level` (0-1, how far
   every clump is pulled up to the crown's top layer - with a low `squash`, an acacia's umbrella)
 - `bark`: `tile` (metres of trunk per texture repeat) and `texture`, a texture graph exactly like a
   material's - u runs around a limb, v along it
+- `ribs: { count, depth }` (optional) makes it a cactus (see `core/trees/cactus.json5`): the trunk and
+  branches pleated into `count` rounded ribs with sharp grooves between, `depth` of their radius deep,
+  and their ends rounded off into domes rather than tapering to points - the bark is then its skin
 - `foliage`: the `broadleaf` clump texture - `dark`/`light`, `leaves` per clump, `leafLength`/`leafWidth`
   - or `featherSpray` (see `core/trees/baldCypress.json5`), the same keys painting `leaves` feathery
   sprays per clump instead: a thin twig `leafLength` of the clump long, lined both sides with short flat
