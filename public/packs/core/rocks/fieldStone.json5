@@ -1,0 +1,18 @@
+// A field stone: a knee-high to waist-high lump of grey rock, half sunk in the ground, scattered over
+// open hills - the sage hills' and others' - one here, a few together there. A boulder's smaller
+// cousin, plain enough to be anywhere.
+{
+  model: "boulder",
+  variants: 6,
+  radius: 0.9,
+  squash: [0.45, 0.75],
+  stretch: [1.0, 1.6],
+  lumps: 0.25,
+  facets: [3, 6],
+  facetDepth: 0.4,
+  tilt: 16,
+  sink: [0.25, 0.5],
+  stone: { tile: 4, material: "rock" },
+  tint: [[0.8, 0.8, 0.78], [1.12, 1.1, 1.06]],
+  scale: [0.5, 1.3],
+}

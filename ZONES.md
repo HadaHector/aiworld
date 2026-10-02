@@ -178,6 +178,10 @@ Existing: **broadleaf**, **pine**, **palm**.
   `cactus`: a tree with new `ribs` - pleated limbs with domed ends - and arms that run out level
   and turn up at an elbow, new `branches.bend`/`to`/`taper`) in loose stands, the odd acacia on the
   plains, sparse hazel and thorn; new `redBoulder` at the foot of the rocks; hot, hard light.
+- **Sage hills: done** - `biomes/sageHills.json5`. Broad, rounded hills close together; silver
+  new `sagebrush` everywhere a step or two apart, pale grass with tufts, gravel on the rises and
+  dusty patches; twisted, wind-leaning new `juniper` (shaggy bark, scaly blue-green sprays) few
+  over the hills and in open woods up the high ground and ridges; new `fieldStone` lying about.
 
 | Variant | Ground | Plants | Trees | Extras |
 |---|---|---|---|---|

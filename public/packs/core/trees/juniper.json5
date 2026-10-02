@@ -1,0 +1,75 @@
+// A juniper: the sage hills' tree, and the windswept fell's and the desert range's - low and old, a
+// short trunk twisting as it rises and splitting near the ground into a few crooked limbs that lean
+// with the wind, under a dense, ragged crown of scaly blue-green sprays, broader than it is tall.
+// Its bark is shaggy: long, loose, stringy strips, red-brown weathering to silver.
+{
+  model: "branching",
+  variants: 5,
+  trunk: {
+    height: 6,
+    radius: 0.8,
+    topRadius: 0.4,
+    // Wind-shaped: leaning hard, and wandering.
+    lean: 0.3,
+    wobble: 0.9,
+    flare: 1.6,
+    flareHeight: 1.0,
+    sides: 8,
+    rings: 6,
+  },
+  roots: { count: 4, length: [1.2, 2.2], radius: 0.4, drop: 0.5, sides: 4, rings: 3 },
+  branches: {
+    // Splitting low into a few crooked limbs, out more than up.
+    count: [5, 8],
+    from: 0.25,
+    length: [6, 9],
+    radius: 0.65,
+    angle: [35, 80],
+    arc: 0.12,
+    crook: 0.3,
+    // An old tree: a few limbs dead and snapped.
+    broken: 0.12,
+    sides: 6,
+    rings: 6,
+    twigs: { count: [2, 4], length: [0.3, 0.5], angle: [35, 70], sides: 4, rings: 3 },
+  },
+  // Dense and ragged: many clumps along the limbs, a little flattened.
+  leaves: { size: [3.2, 4.6], cards: 2, alongBranch: 3, top: 1, spread: 0.9, squash: 0.65, level: 0 },
+  // Shaggy bark: long loose strips, red-brown going silver-grey.
+  bark: {
+    tile: 1.6,
+    texture: {
+      bumpStrength: 2.6,
+      pipeline: {
+        noises: [
+          { name: "strips", type: "ridged", octaves: 3, tileCycles: 7, stretch: [1, 9], amplitude: 1, persistence: 0.5, lacunarity: 2 },
+          { name: "weather", type: "fbm", octaves: 3, tileCycles: 4, amplitude: 1, persistence: 0.55, lacunarity: 2 },
+        ],
+        steps: [
+          { output: "stripRaw", op: "sample", noise: "strips" },
+          { output: "height", op: "mask", input: "stripRaw", at: 0.75, off: 0.2 },
+          { output: "weatherRaw", op: "sample", noise: "weather" },
+          { output: "weather", op: "mask", input: "weatherRaw", at: 0.4, off: -0.6 },
+          { output: "red", op: "color", value: [0.4, 0.25, 0.17] },
+          { output: "silver", op: "color", value: [0.55, 0.52, 0.47] },
+          { output: "tone", op: "mix", a: "red", b: "silver", t: "weather" },
+          { output: "furrow", op: "color", value: [0.12, 0.08, 0.06] },
+          { output: "diffuse", op: "mix", a: "furrow", b: "tone", t: "height" },
+          { output: "roughness", op: "constant", value: 0.9 },
+        ],
+        outputs: { diffuse: "diffuse", roughness: "roughness", height: "height" },
+      },
+    },
+  },
+  // Scaly sprays, a dusty blue-green.
+  foliage: {
+    builder: "featherSpray",
+    dark: [0.14, 0.2, 0.19],
+    light: [0.52, 0.62, 0.58],
+    leaves: 60,
+    leafLength: 0.18,
+    leafWidth: 0.03,
+  },
+  tint: [[0.88, 0.9, 0.9], [1.06, 1.06, 1.04]],
+  scale: [1.05, 2.0],
+}

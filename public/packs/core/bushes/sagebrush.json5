@@ -1,0 +1,25 @@
+// Sagebrush: the sage hills' cover - a low, rounded, grey shrub, a few gnarled stems twisting up from
+// one root under a soft cloud of small, silver-grey leaves, open enough to see the stems through.
+// It grows everywhere, a step or two apart, so the hills read silver from afar.
+{
+  model: "bush",
+  variants: 4,
+  width: [2.0, 3.0],
+  height: [1.3, 1.9],
+  cards: 3,
+  clumps: 6,
+  clumpSize: [1.0, 1.5],
+  foliage: {
+    builder: "leafyBush",
+    dark: [0.34, 0.37, 0.33],
+    light: [0.76, 0.79, 0.72],
+    stem: [0.3, 0.26, 0.21],
+    stems: [5, 8],
+    leaves: 700,
+    leafLength: 0.04,
+    leafWidth: 0.018,
+    bare: 0.3,
+  },
+  tint: [[0.88, 0.9, 0.88], [1.08, 1.06, 1.02]],
+  scale: [0.75, 1.25],
+}
