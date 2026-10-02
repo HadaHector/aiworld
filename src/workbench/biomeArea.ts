@@ -1,8 +1,7 @@
 import type { WorldContent } from "../world/content/worldContent";
 import type { BiomeDefinition } from "../world/biomes/biomeTypes";
-import type { TerrainSample, TerrainSampler } from "../world/terrain/terrainSampler";
+import { createZoneHeight, type TerrainSample, type TerrainSampler } from "../world/terrain/terrainSampler";
 import { rollAreaBiome } from "../world/content/resolveContent";
-import { createBedrockSampler } from "../world/bedrock";
 import { compilePipeline } from "../world/terrain/pipeline/pipelineCompiler";
 import { createMaterialBlender } from "../world/materials/materialBlend";
 import { createBushScatter, createRockScatter, createTreeCover, createTreeScatter, type TreeGround, type TreePlacement } from "../world/foliage/treeScatter";
@@ -59,12 +58,10 @@ export function sampleBiomeArea(seed: number, content: WorldContent, biomeId: st
   const minX = centreX - extent / 2;
   const maxZ = centreZ + extent / 2;
 
-  const bedrock = createBedrockSampler(seed);
-  const detail = compilePipeline(biome.outputs.height, seed, biome.seedKey);
-  const heightAt = (x: number, z: number): number => bedrock(x, z) + detail(x, z);
-
   // The area alone: one area's say everywhere, nothing else near.
   const areaWeights = [{ areaId: AREA_ID, biome, weight: 1 }];
+  const zoneHeight = createZoneHeight(seed);
+  const heightAt = (x: number, z: number): number => zoneHeight(x, z, areaWeights);
   const sampleAt = (x: number, z: number): TerrainSample => ({
     height: heightAt(x, z),
     primaryAreaId: AREA_ID,

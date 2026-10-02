@@ -108,7 +108,9 @@ becomes wood grain, sand ripples or marble.
 | `clamp` | `input`, `min`, `max` | |
 | `remap` | `input`, `inMin`, `inMax`, `outMin`, `outMax` | linear, not clamped |
 | `mask` | `input`, `at`, `off` | 1 at `at`, 0 at `off`, clamped - `at` may be either side |
+| `terrace` | `input`, `step`, `riser` | steps `step` apart, each a level tread then a rise over its last `riser` share (0-1, eased): on a height, ledges and short drops |
 | `add`, `subtract`, `multiply`, `max`, `min` | `a`, `b` | |
+| `smoothMax`, `smoothMin` | `a`, `b`, `k` | `max`/`min` with the corner rounded over `k`: on a height, `smoothMax` with a level is a flat valley floor the slopes ease onto, `smoothMin` a plateau |
 | `lerp` | `a`, `b`, `t` (a number) | |
 | `mix` | `a`, `b`, `t` (a step) | |
 
@@ -151,6 +153,7 @@ out in full.
   borderType: "mountain",     // "mountain" raises border hills (optional, "mountain")
   settlement: "timber",       // a settlements/ style (optional: without one, nobody settles here)
   height: { ... },            // graph: the ground's height
+  relief: { ... },            // graph (optional): rock relief added on top - see below
   trees: { ... },             // graph (optional): one output per tree kind, each a 0-1 density
   bushes: { ... },            // graph (optional): the same per bush kind, on a denser lattice of its own
   rocks: { ... },             // graph (optional): the same per rock kind, on the trees' own lattice
@@ -201,6 +204,14 @@ trees in 8 shades of each rule.
 
 A rule's `snow` (0-1) lays snow on what it covers: on a boulder's top, and further down its sides the
 more there is; on a tree's upper faces - a conifer's tiers, a crown's top - and along its limbs. E.g. `{ kinds: ["boulder"], snow: { range: [0.2, 0.6] } }`.
+
+A `relief` (see `core/biomes/maquis.json5`) is rock added to the height, as real ground - the
+character stands on it and the trees grow on it. It is a graph with two inputs: `height`, the ground
+as the biome's `height` and the world's bedrock made it, and `steepness`, the sine of that ground's
+slope, so the rock can come only where the ground is already steep: `terrace` the height into ledges
+and subtract the height to get what the steps add, add a ridged rock-formation noise for crags, and
+multiply the lot by a mask on `steepness`. It costs two more evaluations of the height per point, in
+a biome that has one.
 
 ### Rolls: every area its own
 
@@ -412,7 +423,8 @@ sprays drawn along its diagonal, mirrored at random, its sides arching down. Its
   trunk straightens up, metres), `wobble` (a slow sway), `flare`/`flareHeight`, `sides`, `rings`
 - `roots`: as a branching tree's, shallower
 - `tiers`: `count`, `from` (the lowest rim, as a fraction of the trunk's height), `radius` and
-  `height` as `[lowest, topmost]`, `droop` (how far each branch bends over - its height falls as
+  `height` as `[lowest, topmost]` (graded between; a height below 0 sweeps a tier's branches up
+  from the trunk rather than letting them fall - an Italian cypress's), `droop` (how far each branch bends over - its height falls as
   along^(1 + droop), so 0 is straight and 0.6 leaves the middle a third of the way down), `panels` (branches round a cone, each a
   square card along its diagonal), `breadth` (a branch's width for its length, 1 = the spray's own
   proportions), `arch` (how far its sides fold down from the stem), `tilt` (how far a tier tips),
@@ -442,7 +454,10 @@ forking, leaves over their upper part - and `clumps` smaller crossed cards of `c
 its top for volume. `width` and `height` are ranges in metres, and `variants`, `tint` and `scale`
 work as for trees. `foliage` is the generated `leafyBush` atlas: `dark`/`light` leaves, `stem`
 colour, `stems` (a range) rising from the ground, `leaves` per side view, `leafLength`/`leafWidth`,
-and `bare`, the bottom fraction where only the stems show.
+and `bare`, the bottom fraction where only the stems show. `flowers: { colors, clusters, size }`
+puts it in flower (see `core/bushes/oleander.json5`): `clusters` bunches of five-petalled flowers
+`size` across over its outer, upper leaves; with two colours, every bush flowers in one of them,
+alternate variants the other.
 
 A bush with `fronds` (see `core/bushes/fern.json5`) is built of fronds instead of cards: `count` of
 them round one root, each a strip of `segments` quads `length` long and `width` wide, setting off

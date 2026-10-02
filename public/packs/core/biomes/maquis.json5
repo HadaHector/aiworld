@@ -1,0 +1,173 @@
+/**
+ * Maquis - the scrubland family's Mediterranean variant (see ZONES.md): rolling to hilly limestone
+ * country, its steep sides broken into ledges and crags of pale rock, red earth and dry grass
+ * between; thick, dark, evergreen scrub over most of it, with clearings and paths through; tall
+ * dark cypresses standing alone or in short rows, old grey olives in the gentler hollows. Bright,
+ * warm, clear light.
+ */
+{
+  name: "Maquis",
+  voice: "arid",
+  spawnWeight: 2,
+  lakeChance: 0.02,
+  borderType: "mountain",
+  settlement: "timber",
+  // Where the area's valley floors lie (0-1 of their range) - the height and the trees both read it.
+  params: { floor: { range: [0, 1] } },
+  // Rolling to hilly, broken by flat valley floors: the hills fill up from below to a gently swelling
+  // floor - its level the area's own - meeting it in a smooth fillet (`smoothMax`), so wide flat
+  // plains open between the hills rather than every valley a V.
+  height: {
+    noises: [
+      { name: "hills", type: "fbm", octaves: 4, frequency: { range: [0.0022, 0.003] }, amplitude: { range: [26, 44] }, persistence: 0.43, lacunarity: 2.0 },
+      { name: "floorSwell", type: "fbm", octaves: 3, frequency: 0.004, amplitude: 1.2, persistence: 0.5, lacunarity: 2.0 },
+    ],
+    steps: [
+      { output: "hillsRaw", op: "sample", noise: "hills" },
+      { output: "hills", op: "offset", input: "hillsRaw", amount: 20 },
+      { output: "floorRaw", op: "sample", noise: "floorSwell" },
+      { output: "floor", op: "offset", input: "floorRaw", amount: { param: "floor", to: [5, 13] } },
+      { output: "result", op: "smoothMax", a: "hills", b: "floor", k: 8 },
+    ],
+  },
+  // The rock breaking through where the ground is steep: the slope stepped into ledges a couple of
+  // metres high, and crags - a ridged rock-formation noise - standing up off them, in outcrops
+  // rather than on every slope.
+  relief: {
+    noises: [
+      { name: "crags", type: "ridged", octaves: 3, frequency: 0.035, amplitude: 1, persistence: 0.5, lacunarity: 2.1 },
+      { name: "outcrops", type: "fbm", octaves: 2, frequency: 0.006, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+    ],
+    steps: [
+      { output: "height", op: "input", name: "height" },
+      { output: "steepness", op: "input", name: "steepness" },
+      { output: "steep", op: "mask", input: "steepness", at: 0.4, off: 0.15 },
+      { output: "outcropRaw", op: "sample", noise: "outcrops" },
+      { output: "outcrop", op: "mask", input: "outcropRaw", at: { range: [0.1, 0.3] }, off: { range: [-0.4, -0.2] } },
+      { output: "where", op: "multiply", a: "steep", b: "outcrop" },
+      // Ledges: the height stepped, less the height - what the steps add or take away.
+      { output: "stepped", op: "terrace", input: "height", step: { range: [2, 3.5] }, riser: 0.3 },
+      { output: "ledges", op: "subtract", a: "stepped", b: "height" },
+      // Crags standing up off them.
+      { output: "cragRaw", op: "sample", noise: "crags" },
+      { output: "crag", op: "scale", input: "cragRaw", factor: { range: [1.5, 2.5] } },
+      { output: "rock", op: "add", a: "ledges", b: "crag" },
+      { output: "result", op: "multiply", a: "rock", b: "where" },
+    ],
+  },
+  treeRules: { shore: [0.5, 2] },
+  // Old olives in loose groves on the gentler ground; cypresses standing alone, or a few together,
+  // anywhere but the rock.
+  trees: {
+    noises: [
+      { name: "grove", type: "fbm", octaves: 2, frequency: 0.006, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+      { name: "spires", type: "fbm", octaves: 2, frequency: 0.01, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+    ],
+    steps: [
+      { output: "slope", op: "input", name: "slope" },
+      { output: "gentle", op: "mask", input: "slope", at: 0.15, off: 0.35 },
+      { output: "groveRaw", op: "sample", noise: "grove" },
+      { output: "grove", op: "mask", input: "groveRaw", at: 0.35, off: -0.05 },
+      { output: "oliveGround", op: "multiply", a: "gentle", b: "grove" },
+      // The valley floors (the area's floor and the bedrock under it, give or take): olives thick.
+      { output: "height", op: "input", name: "height" },
+      { output: "valley", op: "mask", input: "height", at: { param: "floor", to: [14, 22] }, off: { param: "floor", to: [18, 26] } },
+      { output: "valleyFloor", op: "multiply", a: "valley", b: "gentle" },
+      { output: "oliveBoost", op: "add", a: "oliveGround", b: "valleyFloor" },
+      { output: "olive", op: "scale", input: "oliveBoost", factor: { range: [0.35, 0.55] } },
+      { output: "spiresRaw", op: "sample", noise: "spires" },
+      { output: "spires", op: "mask", input: "spiresRaw", at: 0.45, off: 0.15 },
+      { output: "spiresValley", op: "add", a: "spires", b: "valleyFloor" },
+      { output: "italianCypress", op: "scale", input: "spiresValley", factor: { range: [0.06, 0.12] } },
+    ],
+    outputs: { olive: "olive", italianCypress: "italianCypress" },
+  },
+  // The scrub: thickets over much of the ground, with clearings and paths between, off the rock.
+  bushes: {
+    noises: [
+      { name: "thicket", type: "fbm", octaves: 3, frequency: 0.02, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+      { name: "paths", type: "fbm", octaves: 2, frequency: 0.05, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+    ],
+    steps: [
+      { output: "thicketRaw", op: "sample", noise: "thicket" },
+      { output: "thicket", op: "mask", input: "thicketRaw", at: { range: [0.05, 0.25] }, off: { range: [-0.35, -0.15] } },
+      // Winding gaps through even the thickest of it.
+      { output: "pathsRaw", op: "sample", noise: "paths" },
+      { output: "pathRaw", op: "abs", input: "pathsRaw" },
+      { output: "notPath", op: "mask", input: "pathRaw", at: 0.18, off: 0.08 },
+      { output: "open", op: "multiply", a: "thicket", b: "notPath" },
+      { output: "slope", op: "input", name: "slope" },
+      { output: "notRock", op: "mask", input: "slope", at: 0.3, off: 0.5 },
+      { output: "offRock", op: "multiply", a: "open", b: "notRock" },
+      // The valley floors kept open - olive groves over dry grass - the scrub on the hillsides.
+      { output: "height", op: "input", name: "height" },
+      { output: "hillside", op: "mask", input: "height", at: { param: "floor", to: [18, 26] }, off: { param: "floor", to: [14, 22] } },
+      { output: "floorScrub", op: "remap", input: "hillside", inMin: 0, inMax: 1, outMin: 0.2, outMax: 1 },
+      { output: "scrub", op: "multiply", a: "offRock", b: "floorScrub" },
+      // Past 1: bushes grow at only a share of their density away from trees' shade, and the scrub
+      // is the cover here, not an understory.
+      { output: "maquisScrub", op: "scale", input: "scrub", factor: { range: [2.5, 3.5] } },
+      // Oleanders in clumps on the valley floors, flowering pink and white.
+      { output: "valley", op: "invert", input: "hillside" },
+      { output: "valleyThicket", op: "multiply", a: "valley", b: "thicket" },
+      { output: "oleander", op: "scale", input: "valleyThicket", factor: { range: [0.3, 0.6] } },
+    ],
+    outputs: { maquisScrub: "maquisScrub", oleander: "oleander" },
+  },
+  treeTints: [
+    {
+      leaves: { hue: { range: [-8, 8] }, saturation: { range: [0.85, 1.1] }, value: { range: [0.92, 1.05] }, spread: { hue: 5, saturation: 0.1, value: 0.08 } },
+      bark: { hue: { range: [-6, 6] }, saturation: { range: [0.8, 1.05] }, value: { range: [0.92, 1.08] }, spread: { value: 0.08 } },
+    },
+  ],
+  ground: {
+    base: "grassDry",
+    road: "trackStone",
+    // Lavender in patches on the dry grass, in most areas.
+    grass: [{ family: "grassland", kind: "lavender", density: 0.8, color: [0.42, 0.48, 0.38], chance: 0.75 }],
+    layers: [
+      // Limestone where the ground is steep or stands up as a crag - the relief's ledges and drops.
+      {
+        id: "maquis-limestone",
+        material: "limestone",
+        weight: {
+          steps: [
+            { output: "slope", op: "input", name: "slope" },
+            { output: "steep", op: "mask", input: "slope", at: 0.62, off: 0.8 },
+            { output: "curvature", op: "input", name: "reliefCurvature" },
+            { output: "ridge", op: "mask", input: "curvature", at: -1.2, off: -0.5 },
+            { output: "rock", op: "max", a: "steep", b: "ridge" },
+            { output: "result", op: "scale", input: "rock", factor: 3 },
+          ],
+        },
+      },
+      // Red earth in patches over the rest.
+      {
+        id: "maquis-red-earth",
+        material: "terraRossa",
+        weight: {
+          noises: [{ name: "patch", type: "fbm", octaves: 3, frequency: 0.012, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
+          steps: [
+            { output: "patchRaw", op: "sample", noise: "patch" },
+            { output: "patch", op: "mask", input: "patchRaw", at: 0.55, off: 0.2 },
+            { output: "result", op: "scale", input: "patch", factor: 0.8 },
+          ],
+        },
+      },
+    ],
+  },
+  // Bright and warm, a clear blue sky, a light dry haze far off.
+  sky: {
+    horizon: { oneOf: ["#e4ddc8", "#dcd8c8", "#e8e0c4"] },
+    zenith: "#4f86c4",
+    cloud: "#f8f6f0",
+    fogStart: { range: [0.35, 0.55] },
+    fogEnd: { range: [0.9, 1.0] },
+  },
+  light: {
+    sunPeak: 62,
+    moonPeak: 45,
+    ambientDay: "#d8d4c4",
+    sunZenith: "#fff2d8",
+  },
+}

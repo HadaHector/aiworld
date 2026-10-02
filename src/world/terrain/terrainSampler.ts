@@ -92,13 +92,55 @@ function heightPipelineCache(seed: number): (biome: BiomeDefinition) => Compiled
   };
 }
 
+/** How far either way the ground is looked at to tell how steep it is, for a zone's relief. */
+const RELIEF_STEEPNESS_STEP = 1.5;
+
+/**
+ * The ground's height from the zones alone, before rivers, lakes, borders and roads: the world's
+ * bedrock, each area's own height weighted by its say, and then - where an area has one - its rock
+ * relief (BiomeOutputs.relief), read against that height and how steep it is. Shared with the
+ * workbench's maps, so a zone previews as it is built.
+ */
+export function createZoneHeight(seed: number): (worldX: number, worldZ: number, areaWeights: readonly AreaWeight[]) => number {
+  const bedrock = createBedrockSampler(seed);
+  const heightPipelineOf = heightPipelineCache(seed);
+  const reliefOf = new Map<BiomeDefinition, CompiledPipeline>();
+  const relief = (biome: BiomeDefinition): CompiledPipeline => {
+    let pipeline = reliefOf.get(biome);
+    if (!pipeline) {
+      pipeline = compilePipeline(biome.outputs.relief!, seed, `${biome.seedKey}:relief`);
+      reliefOf.set(biome, pipeline);
+    }
+    return pipeline;
+  };
+  const shaped = (x: number, z: number, areaWeights: readonly AreaWeight[]): number => {
+    let detail = 0;
+    for (const { biome, weight } of areaWeights) detail += heightPipelineOf(biome)(x, z) * weight;
+    return bedrock(x, z) + detail;
+  };
+  return (worldX, worldZ, areaWeights) => {
+    const height = shaped(worldX, worldZ, areaWeights);
+    if (!areaWeights.some(({ biome }) => biome.outputs.relief)) return height;
+    // How steep the shaped ground is - the same areas' say a step away either way, near enough.
+    const e = RELIEF_STEEPNESS_STEP;
+    const gx = (shaped(worldX + e, worldZ, areaWeights) - height) / e;
+    const gz = (shaped(worldX, worldZ + e, areaWeights) - height) / e;
+    const g = Math.hypot(gx, gz);
+    const context = { height, steepness: g / Math.sqrt(1 + g * g) };
+    let added = 0;
+    for (const { biome, weight } of areaWeights) {
+      if (biome.outputs.relief) added += relief(biome)(worldX, worldZ, context) * weight;
+    }
+    return height + added;
+  };
+}
+
 /** Composes continent shape + biome zoning + height noise into one queryable per-position sample. */
 export function createTerrainSampler(seed: number, content: WorldContent): TerrainWorld {
   const { sampleArea, worldExtent, continents, areaBounds, areaNames, landCellSites, nameGenerator, areaBiomes } =
     createAreaSampler(seed, content);
-  const bedrock = createBedrockSampler(seed);
   const oceanNoise2D = createBaseNoise2D(deriveSeed(seed, OCEAN_SALT));
-  const heightPipelineOf = heightPipelineCache(seed);
+  const zoneHeight = createZoneHeight(seed);
   const evaluateBoundaryHill = createBoundaryHillEvaluator(seed, content.boundaryHillStyles);
   const carveRiver = createRiverEvaluator(seed);
 
@@ -118,21 +160,18 @@ export function createTerrainSampler(seed: number, content: WorldContent): Terra
     // so height and texture always agree about where a border is. This replaced a two-way lerp on
     // biomeBlend, which was driven by a cell identity that flipped abruptly and so left ~half of
     // all real biome borders with no height blend at all - a hard switch between two biomes' noise.
-    let blendedDetail = 0;
-    for (const { biome, weight } of area.areaWeights) {
-      blendedDetail += heightPipelineOf(biome)(worldX, worldZ) * weight;
-    }
+    // (See createZoneHeight: the bedrock and the zones' own heights and relief.)
+    const zoneHeightHere = zoneHeight(worldX, worldZ, area.areaWeights);
     // Faded out near a river rather than switched off by one - see RIVER_HILL_SUPPRESSION_INNER.
     // riverGap is Infinity where there is no river within reach, which smoothstep clamps to 1.
     const riverHillFade = smoothstep(RIVER_HILL_SUPPRESSION_INNER, RIVER_HILL_SUPPRESSION_OUTER, area.riverGap);
     const boundaryHill =
       evaluateBoundaryHill(area.boundaryHillStyle, area.areaBorderGap, worldX, worldZ) * riverHillFade;
 
-    const bedrockHeight = bedrock(worldX, worldZ);
     // Unclamped: where bedrock and the biome's detail dip below the sea together, the hollow fills
     // and is a pond - as deep as the ground goes, with its shore and shallows painted by the
     // biomes' waterside layers. (It used to be floored at -1, which left every pond a flat plate.)
-    const landHeightUncarved = bedrockHeight + blendedDetail + boundaryHill;
+    const landHeightUncarved = zoneHeightHere + boundaryHill;
 
     // Both water carves are absolute rather than relative: the
     // river clips the terrain down to a valley profile and the lake lerps it to a level surface, so

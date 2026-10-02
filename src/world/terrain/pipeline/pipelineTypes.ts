@@ -142,6 +142,10 @@ export type PipelineStep =
    *  follow its contours (agate, marble, strata); `cycles` is bands per unit of input. */
   | { output: string; op: "sin"; input: string; cycles: number }
   | { output: string; op: "clamp"; input: string; min: number; max: number }
+  /** Steps: the input snapped to a staircase `step` apart, each step a level tread and then a rise
+   *  over its last `riser` share (0-1, eased) - so a slope made of it is ledges and short drops, the
+   *  smaller `riser` the sheerer the drops. On a height, rock benches and terraces. */
+  | { output: string; op: "terrace"; input: string; step: number; riser: number }
   | { output: string; op: "remap"; input: string; inMin: number; inMax: number; outMin: number; outMax: number }
   /** Color -> scalar (Rec. 709 luma), so a color can drive a scalar signal such as height. */
   | { output: string; op: "luminance"; input: string }
@@ -151,6 +155,11 @@ export type PipelineStep =
   | { output: string; op: "multiply"; a: string; b: string }
   | { output: string; op: "max"; a: string; b: string }
   | { output: string; op: "min"; a: string; b: string }
+  /** `max`/`min` with the corner rounded over a width of `k`: the two meet in a smooth fillet
+   *  rather than a crease. On a height, `smoothMax` with a level is a flat floor the hillsides ease
+   *  down onto - a valley plain - and `smoothMin` a plateau they ease up to. */
+  | { output: string; op: "smoothMax"; a: string; b: string; k: number }
+  | { output: string; op: "smoothMin"; a: string; b: string; k: number }
   | { output: string; op: "lerp"; a: string; b: string; t: number }
   /** Like `lerp`, but blends by a *computed* factor (another step, clamped 0..1) instead of a fixed
    *  number - the everyday way one noise decides how much of two signals to show. */

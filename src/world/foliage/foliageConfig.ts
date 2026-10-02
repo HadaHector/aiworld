@@ -328,7 +328,9 @@ export interface ConiferTree {
     count: [number, number];
     /** The lowest tier's rim sits at this fraction of the trunk's height - below it, bare trunk. */
     from: number;
-    /** A tier's rim radius and its height (apex to rim), for the lowest tier and the topmost. */
+    /** A tier's rim radius and its height (apex to rim), for the lowest tier and the topmost - the
+     *  tiers between graded from one to the other. A height below 0 has the rim above the apex:
+     *  branches swept up from the trunk instead of falling from it. */
     radius: [number, number];
     height: [number, number];
     /** How far a branch bends over: its stem's height falls as along^(1 + droop) from the trunk to
@@ -464,6 +466,12 @@ export interface BushTexture {
   leafWidth: number;
   /** The bottom fraction of the bush left bare, where only the stems show. */
   bare: number;
+  /** A leafy bush in flower - an oleander's: `clusters` bunches over its outer, upper leaves (a clump
+   *  gets 60% as many), each of five-petalled flowers `size` across (a fraction of the bush), with a
+   *  paler eye. With one colour every bush flowers in it; with two, every bush in one of them - the
+   *  atlas's cells paint one colour each (0 and 2 the first, 1 and 3 the second) and a bush keeps to
+   *  one pair, alternate variants the other. None, a bush of leaves alone. */
+  flowers: { colors: ColorTuple[]; clusters: number; size: number } | null;
 }
 
 export const BUSH_FOLIAGE_BUILDERS = ["leafyBush", "fern", "palmFrond", "paddleLeaf", "heartLeaf", "willowWhip"] as const;

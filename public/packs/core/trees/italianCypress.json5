@@ -1,0 +1,87 @@
+// An Italian cypress: the maquis's landmark - a tall, narrow, dark column, its short branches swept
+// up against the trunk from the ground to a blunt point, so it stands like a dark flame over the
+// scrub, alone or in a short row. Dense, dark green scale-leaved sprays; thin grey-brown bark,
+// stringy, barely seen.
+{
+  model: "conifer",
+  variants: 4,
+  trunk: {
+    height: 26,
+    radius: 0.55,
+    topRadius: 0.06,
+    lean: 0.005,
+    bend: 0.1,
+    wobble: 0.1,
+    flare: 1.4,
+    flareHeight: 1.2,
+    sides: 7,
+    rings: 9,
+  },
+  roots: { count: 4, length: [1.2, 2.0], radius: 0.32, drop: 0.6, sides: 4, rings: 2 },
+  tiers: {
+    // Many short tiers, close over one another from the foot: a column, not a cone - barely
+    // narrower at the bottom than in the middle, closing in only near the top.
+    count: [34, 40],
+    from: 0.03,
+    radius: [2.5, 1.3],
+    // The lowest tiers swept up against the trunk, the topmost falling - graded between, so the
+    // column is tight at its foot and softens to its tip.
+    height: [-3.6, 0.9],
+    // Swept up, not hanging.
+    droop: 0,
+    panels: 10,
+    breadth: 1.4,
+    arch: 0.7,
+    tilt: 0.02,
+    variety: 0.15,
+  },
+  // Spruce bark: small, thin, rounded scales, grey-brown, flaking - no deep fissures.
+  bark: {
+    tile: 1.0,
+    texture: {
+      bumpStrength: 2,
+      pipeline: {
+        noises: [
+          { name: "scales", type: "worley", tileCycles: 16, stretch: [1, 1.4], amplitude: 1, mode: "edge", warp: 0.15, sizeJitter: 0.3 },
+          { name: "mottle", type: "fbm", octaves: 3, tileCycles: 9, amplitude: 1, persistence: 0.5, lacunarity: 2 },
+        ],
+        steps: [
+          { output: "scaleEdge", op: "sample", noise: "scales" },
+          { output: "scaleId", op: "sample", noise: "scales", mode: "cell" },
+          { output: "height", op: "mask", input: "scaleEdge", at: 0.12, off: 0.0 },
+          { output: "mottleRaw", op: "sample", noise: "mottle" },
+          { output: "mottle", op: "mask", input: "mottleRaw", at: 1.6, off: -1.6 },
+          {
+            output: "scaleTone",
+            op: "colorRamp",
+            input: "scaleId",
+            stops: [
+              { at: 0.0, color: [0.3, 0.24, 0.2] },
+              { at: 0.5, color: [0.38, 0.31, 0.26] },
+              { at: 1.0, color: [0.33, 0.25, 0.19] },
+            ],
+          },
+          { output: "mottleShade", op: "remap", input: "mottle", inMin: 0, inMax: 1, outMin: 0.75, outMax: 1.1 },
+          { output: "scaleLit", op: "multiply", a: "scaleTone", b: "mottleShade" },
+          { output: "gap", op: "color", value: [0.1, 0.08, 0.07] },
+          { output: "diffuse", op: "mix", a: "gap", b: "scaleLit", t: "height" },
+          { output: "roughness", op: "constant", value: 0.85 },
+        ],
+        outputs: { diffuse: "diffuse", roughness: "roughness", height: "height" },
+      },
+    },
+  },
+  foliage: {
+    builder: "firSpray",
+    dark: [0.07, 0.15, 0.07],
+    light: [0.24, 0.36, 0.17],
+    twig: [0.2, 0.15, 0.11],
+    twigs: 20,
+    needleLength: 0.035,
+    needleWidth: 0.012,
+    needleGap: 0.003,
+  },
+  tint: [[0.85, 0.92, 0.95], [1.05, 1.05, 1.02]],
+  // Young and old together: from half grown to nearly half again as tall.
+  scale: [0.5, 1.45],
+}

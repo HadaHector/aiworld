@@ -60,6 +60,15 @@ export interface BiomeDayNight {
 export interface BiomeOutputs {
   height: PipelineDef;
   /**
+   * Rock relief, added on top of the height - real ground, so the character stands on it and the
+   * trees grow on it. Read as a graph with two inputs: `height`, the ground as shaped so far (the
+   * world's bedrock and the zone's height, before rivers, lakes and roads), and `steepness`, the sine
+   * of its slope there - so a zone can raise crags from a rock-formation noise, or `terrace` the
+   * height into ledges, only where the ground is already steep. Costs two more evaluations of the
+   * height per sample, in a zone that has one.
+   */
+  relief?: PipelineDef;
+  /**
    * How thickly this zone grows each kind of tree, as one graph with a named output per tree kind
    * id (a pack's trees/ folder) - so a zone is not one species at one density, it is a density *map*
    * per species, and two species can share ground with the mix shifting across it.

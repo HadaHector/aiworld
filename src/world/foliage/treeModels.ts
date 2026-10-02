@@ -369,7 +369,7 @@ function createBushModels(scene: Scene, def: TreeKindDef, shape: BushShape, seed
 
   const models: TreeModel[] = [];
   for (let variant = 0; variant < shape.variants; variant++) {
-    const geometry = generateBush(shape, deriveSeed(ownSeed, variant + 1));
+    const geometry = generateBush(shape, deriveSeed(ownSeed, variant + 1), variant);
     const canopy = new Mesh(`bush_${def.id}_${variant}`, scene);
     const data = new VertexData();
     data.positions = geometry.leaves.positions;

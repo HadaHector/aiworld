@@ -155,12 +155,15 @@ function resultTypeOf(step: PipelineStep, resolve: (name: string) => SlotRef): V
     case "sin":
     case "clamp":
     case "remap":
+    case "terrace":
       return resolve(step.input).type;
     case "add":
     case "subtract":
     case "multiply":
     case "max":
     case "min":
+    case "smoothMax":
+    case "smoothMin":
     case "lerp":
     case "mix":
       return combineType(resolve(step.a), resolve(step.b));
@@ -302,6 +305,16 @@ function compileStep(
       const { min, max } = step;
       return unaryFn(resolve(step.input), out, (value) => Math.min(max, Math.max(min, value)));
     }
+    case "terrace": {
+      const size = step.step;
+      const riser = Math.min(1, Math.max(1e-3, step.riser));
+      return unaryFn(resolve(step.input), out, (value) => {
+        const u = value / size;
+        const level = Math.floor(u);
+        const t = Math.min(1, Math.max(0, (u - level - (1 - riser)) / riser));
+        return (level + t * t * (3 - 2 * t)) * size;
+      });
+    }
     case "remap": {
       const { inMin, inMax, outMin, outMax } = step;
       return unaryFn(resolve(step.input), out, (value) => {
@@ -319,6 +332,18 @@ function compileStep(
       return binaryFn(resolve(step.a), resolve(step.b), out, Math.max);
     case "min":
       return binaryFn(resolve(step.a), resolve(step.b), out, Math.min);
+    case "smoothMax":
+    case "smoothMin": {
+      // The polynomial smooth minimum; the maximum is its mirror.
+      const k = Math.max(1e-6, step.k);
+      const sign = step.op === "smoothMax" ? -1 : 1;
+      return binaryFn(resolve(step.a), resolve(step.b), out, (a, b) => {
+        const x = a * sign;
+        const y = b * sign;
+        const h = Math.min(1, Math.max(0, 0.5 + (0.5 * (y - x)) / k));
+        return (y + (x - y) * h - k * h * (1 - h)) * sign;
+      });
+    }
     case "lerp": {
       const t = step.t;
       return binaryFn(resolve(step.a), resolve(step.b), out, (a, b) => a + (b - a) * t);

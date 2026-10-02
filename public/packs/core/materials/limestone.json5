@@ -1,0 +1,55 @@
+// Limestone: the maquis's bare rock, on its ledges' drops and crags - pale grey going to cream on its
+// raised faces, cracked, earth lying in its low places.
+//
+// Its height is half broad swells (a coarse fbm) and half cracks: an fbm folded about its middle -
+// brought to 0-1, doubled less one and taken absolute, it is 0 along every line where the noise
+// crossed its middle - raised to a power a little under 1, so each crack is a groove with soft sides.
+// The colour follows the height (earthy at the bottom, stone, then pale faces) and the bump shapes
+// the rest; nothing draws the cracks on their own. A faint mottle keeps a big face from being flat.
+{
+  name: "Limestone",
+  texture: {
+    bumpStrength: 5,
+    pipeline: {
+      noises: [
+        { name: "cracks", type: "fbm", octaves: 5, tileCycles: 6, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+        { name: "swell", type: "fbm", octaves: 3, tileCycles: 3, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+        { name: "mottle", type: "fbm", octaves: 3, tileCycles: 9, amplitude: 1, persistence: 0.55, lacunarity: 2.0 },
+      ],
+      steps: [
+        // The cracks: the fbm as 0-1, doubled less one (-1..1, 0 at its middle), folded, shaped.
+        { output: "crackRaw", op: "sample", noise: "cracks" },
+        { output: "crackUnit", op: "mask", input: "crackRaw", at: 1, off: -1 },
+        { output: "crackDoubled", op: "scale", input: "crackUnit", factor: 2 },
+        { output: "crackCentred", op: "offset", input: "crackDoubled", amount: -1 },
+        { output: "crackFolded", op: "abs", input: "crackCentred" },
+        { output: "crack", op: "power", input: "crackFolded", exponent: 0.8 },
+        // The broad swells, 0-1.
+        { output: "swellRaw", op: "sample", noise: "swell" },
+        { output: "swell", op: "mask", input: "swellRaw", at: 0.9, off: -0.9 },
+        // Half and half: still 0-1.
+        { output: "crackHalf", op: "scale", input: "crack", factor: 0.5 },
+        { output: "swellHalf", op: "scale", input: "swell", factor: 0.5 },
+        { output: "height", op: "add", a: "crackHalf", b: "swellHalf" },
+
+        // The colour from the height: earth in the lowest places, then stone, pale on the tops.
+        {
+          output: "byHeight",
+          op: "colorRamp",
+          input: "height",
+          stops: [
+            { at: 0.0, color: [0.36, 0.29, 0.23] },
+            { at: 0.18, color: [0.5, 0.47, 0.42] },
+            { at: 0.5, color: [0.64, 0.63, 0.59] },
+            { at: 1.0, color: [0.78, 0.76, 0.69] },
+          ],
+        },
+        { output: "mottleRaw", op: "sample", noise: "mottle" },
+        { output: "mottleShade", op: "remap", input: "mottleRaw", inMin: -1, inMax: 1, outMin: 0.92, outMax: 1.06 },
+        { output: "diffuse", op: "multiply", a: "byHeight", b: "mottleShade" },
+        { output: "roughness", op: "remap", input: "height", inMin: 0, inMax: 1, outMin: 0.92, outMax: 0.62 },
+      ],
+      outputs: { diffuse: "diffuse", roughness: "roughness", height: "height" },
+    },
+  },
+}

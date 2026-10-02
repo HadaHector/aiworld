@@ -764,8 +764,11 @@ export interface BushGeometry {
  * spread over its upper half, each pointing out from the middle with its twigs towards it.
  * Deterministic from `seed`.
  */
-export function generateBush(spec: BushShape, seed: number): BushGeometry {
+export function generateBush(spec: BushShape, seed: number, variant = 0): BushGeometry {
   if (spec.fronds) return generateFronds(spec.fronds, seed);
+  // A bush flowering in two colours keeps to one pair of cells - one side view, one clump - so it is
+  // all one colour (see BushTexture.flowers).
+  const pair = (spec.foliage.flowers?.colors.length ?? 0) >= 2 ? variant % 2 : -1;
   const rng = mulberry32(seed);
   const between = ([lo, hi]: [number, number]): number => lo + rng() * (hi - lo);
   const builder = new LeafBuilder();
@@ -784,7 +787,8 @@ export function generateBush(spec: BushShape, seed: number): BushGeometry {
     const off = (rng() - 0.5) * 0.03 * width;
     const foot: V3 = [-u[2] * off, -0.1, u[0] * off];
     const cardHeight = height * (0.9 + rng() * 0.2);
-    builder.panel(foot, u, width * (0.9 + rng() * 0.2), cardHeight, Math.floor(rng() * 2), rng() < 0.5, crownCentre, radius);
+    const sideCell = Math.floor(rng() * 2);
+    builder.panel(foot, u, width * (0.9 + rng() * 0.2), cardHeight, pair >= 0 ? pair : sideCell, rng() < 0.5, crownCentre, radius);
     top = Math.max(top, cardHeight);
   }
 
@@ -801,7 +805,8 @@ export function generateBush(spec: BushShape, seed: number): BushGeometry {
     const size = between(spec.clumpSize);
     const centre = add(point, scale(axis, size * 0.2));
     const first = rotate(perpendicular(axis), axis, rng() * Math.PI);
-    const cell = 2 + Math.floor(rng() * 2);
+    const clumpCell = 2 + Math.floor(rng() * 2);
+    const cell = pair >= 0 ? 2 + pair : clumpCell;
     for (let c = 0; c < 2; c++) {
       const normal = rotate(first, axis, (c * Math.PI) / 2);
       builder.card(centre, cross(axis, normal), axis, size, cell, crownCentre, radius, true);

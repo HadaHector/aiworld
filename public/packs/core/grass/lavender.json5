@@ -1,0 +1,30 @@
+// Lavender: a low, rounded clump of grey-green stems, each topped with a slender spike of tiny
+// purple flowers - the scent of the maquis. In patches (its own `cluster`), never a carpet.
+{
+  width: 0.9,
+  height: 0.75,
+  sway: 0.15,
+  fadeStart: 60,
+  fadeEnd: 260,
+  cluster: { scale: 7, coverage: 0.3 },
+  blades: {
+    count: 22,
+    minHeight: 0.55,
+    maxHeight: 0.95,
+    baseWidth: 2,
+    lean: 0.1,
+    fan: true,
+    seedHeads: false,
+    flowerHeads: {
+      shape: "raceme",
+      petals: 10,
+      count: 14,
+      radius: 9,
+      colors: [
+        [0.48, 0.38, 0.72],
+        [0.56, 0.44, 0.78],
+        [0.42, 0.34, 0.66],
+      ],
+    },
+  },
+}

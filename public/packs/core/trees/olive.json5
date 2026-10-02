@@ -1,0 +1,73 @@
+// An olive: an old tree of the maquis's gentler ground - a short, thick, gnarled trunk, twisting and
+// leaning as it rises, splitting low into a few crooked limbs under a rounded, open crown of narrow
+// leaves, grey-green above and silvery below, so the whole tree reads grey from afar. Pale grey bark,
+// deeply furrowed and twisted round the trunk.
+{
+  model: "branching",
+  variants: 4,
+  trunk: {
+    height: 7,
+    radius: 1.1,
+    topRadius: 0.55,
+    lean: 0.14,
+    // Gnarled: wandering hard as it rises.
+    wobble: 1.3,
+    flare: 1.6,
+    flareHeight: 1.6,
+    sides: 10,
+    rings: 8,
+  },
+  roots: { count: 5, length: [1.4, 2.4], radius: 0.45, drop: 0.5, sides: 5, rings: 3 },
+  branches: {
+    // A few crooked limbs from low on the trunk, out and up.
+    count: [6, 9],
+    from: 0.45,
+    length: [6, 9],
+    radius: 0.6,
+    angle: [30, 70],
+    arc: 0.15,
+    crook: 0.35,
+    sides: 7,
+    rings: 7,
+    twigs: { count: [3, 4], length: [0.3, 0.5], angle: [40, 75], sides: 4, rings: 3 },
+  },
+  // A rounded, open crown: clumps along the limbs' outer halves and over the top.
+  leaves: { size: [6, 9], cards: 2, alongBranch: 3, top: 2, spread: 1.8, squash: 0.75, level: 0 },
+  // Pale grey bark in long, twisted furrows.
+  bark: {
+    tile: 1.6,
+    texture: {
+      bumpStrength: 2.6,
+      pipeline: {
+        noises: [
+          { name: "furrows", type: "ridged", octaves: 2, tileCycles: 6, stretch: [1, 4], amplitude: 1, persistence: 0.5, lacunarity: 2 },
+          { name: "mottle", type: "fbm", octaves: 3, tileCycles: 5, amplitude: 1, persistence: 0.5, lacunarity: 2 },
+        ],
+        steps: [
+          { output: "furrowRaw", op: "sample", noise: "furrows" },
+          { output: "height", op: "mask", input: "furrowRaw", at: 0.85, off: 0.3 },
+          { output: "mottleRaw", op: "sample", noise: "mottle" },
+          { output: "mottle", op: "mask", input: "mottleRaw", at: 1.4, off: -1.4 },
+          {
+            output: "tone",
+            op: "colorRamp",
+            input: "mottle",
+            stops: [
+              { at: 0.0, color: [0.36, 0.35, 0.32] },
+              { at: 0.5, color: [0.48, 0.47, 0.43] },
+              { at: 1.0, color: [0.58, 0.57, 0.52] },
+            ],
+          },
+          { output: "furrow", op: "color", value: [0.14, 0.13, 0.12] },
+          { output: "diffuse", op: "mix", a: "furrow", b: "tone", t: "height" },
+          { output: "roughness", op: "constant", value: 0.88 },
+        ],
+        outputs: { diffuse: "diffuse", roughness: "roughness", height: "height" },
+      },
+    },
+  },
+  // Narrow leaves, grey-green and silvery.
+  foliage: { builder: "broadleaf", dark: [0.32, 0.37, 0.28], light: [0.7, 0.74, 0.64], leaves: 620, leafLength: 0.065, leafWidth: 0.016 },
+  tint: [[0.88, 0.9, 0.86], [1.06, 1.06, 1.02]],
+  scale: [0.85, 1.25],
+}

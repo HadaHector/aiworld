@@ -165,6 +165,14 @@ Existing: **broadleaf**, **pine**, **palm**.
 
 ### 5. Scrubland (rolling to hilly) - new
 
+- **Maquis: done** - `biomes/maquis.json5`. Limestone hills (new `relief`: steep ground stepped
+  into ledges - the new `terrace` - with crags off a ridged noise, real ground) broken by flat
+  valley floors (new `smoothMax`, a rolled floor level); new `limestone` on the faces, new
+  `terraRossa` patches, dry grass with new `grass/lavender`; thick new `maquisScrub` on the
+  hillsides with paths through, olives (new `olive`) and new `oleander` (pink or white, the new
+  bush `flowers`) on the valley floors, Italian cypresses (new `italianCypress`, its tiers swept up
+  below and drooping above) of every age; bright, warm light.
+
 | Variant | Ground | Plants | Trees | Extras |
 |---|---|---|---|---|
 | Maquis | limestone ★, gravel | hazel, dense, dark green | Italian cypress ★, olive ★ | white rock outcrops |

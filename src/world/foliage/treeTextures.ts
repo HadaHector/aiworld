@@ -465,8 +465,57 @@ export function bakeBushFoliage(seed: number, def: BushTexture, fronds: Fronds |
     paintLeaves(true);
     for (const s of segments) painter.stem(s.x0, s.y0, s.x1, s.y1, s.r0, s.r1, def.stem, clip);
     paintLeaves(false);
+    if (def.flowers) {
+      // Two colours: each pair of cells (a side view and a clump) its own - see BushTexture.flowers.
+      const colour = def.flowers.colors.length >= 2 ? [def.flowers.colors[variant % 2]] : def.flowers.colors;
+      paintFlowerClusters(painter, rng, { ...def.flowers, colors: colour }, view ? def.flowers.clusters : Math.round(def.flowers.clusters * 0.6), leaves, massRx, cell, clip);
+    }
   }
   return painter.finish();
+}
+
+/**
+ * Bunches of flowers over a leafy bush - each at one of its outer, upper leaves (the bush's flowers
+ * are at the shoot tips, where the light is), a handful of five-petalled flowers crowded together in
+ * one colour, each its own shade and turn, a paler eye in the middle.
+ */
+function paintFlowerClusters(
+  painter: Painter,
+  rng: () => number,
+  flowers: NonNullable<BushTexture["flowers"]>,
+  clusters: number,
+  leaves: { x: number; y: number; rim: number }[],
+  spread: number,
+  cell: number,
+  clip: Clip,
+): void {
+  // The outer half of the leaves, the higher ones likelier.
+  const tips = leaves.filter((leaf) => leaf.rim > 0.55);
+  if (tips.length === 0) return;
+  const flowerSize = flowers.size * cell;
+  for (let c = 0; c < clusters; c++) {
+    let at = tips[Math.floor(rng() * tips.length)];
+    const other = tips[Math.floor(rng() * tips.length)];
+    if (other.y < at.y) at = other;
+    const colour = flowers.colors[Math.floor(rng() * flowers.colors.length)];
+    const count = 4 + Math.floor(rng() * 5);
+    for (let f = 0; f < count; f++) {
+      const angle = rng() * Math.PI * 2;
+      const distance = Math.sqrt(rng()) * flowerSize * 1.6;
+      const fx = at.x + Math.cos(angle) * distance;
+      const fy = at.y + Math.sin(angle) * distance * 0.8;
+      if (Math.abs(fx - at.x) > spread) continue;
+      const size = flowerSize * (0.75 + rng() * 0.4);
+      const shade = 0.85 + rng() * 0.25;
+      const turn = rng() * Math.PI * 2;
+      for (let p = 0; p < 5; p++) {
+        const a = turn + (p * Math.PI * 2) / 5;
+        painter.leaf(fx, fy, Math.cos(a), Math.sin(a), size * 0.55, size * 0.42, colour, shade, clip);
+      }
+      const eye = colour.map((v) => Math.min(1, v * 0.6 + 0.4));
+      painter.leaf(fx - size * 0.06, fy, 1, 0, size * 0.14, size * 0.14, eye, 1, clip);
+    }
+  }
 }
 
 /**

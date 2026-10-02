@@ -1,0 +1,7 @@
+// Terra rossa: the maquis's red earth - the red clay that limestone weathers into, duller, browner and
+// darker than the savanna's red earth, whose texture it borrows.
+{
+  name: "Terra Rossa",
+  textureFrom: "redEarth",
+  adjust: { hue: -4, saturation: 0.6, value: 0.82 },
+}

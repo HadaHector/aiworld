@@ -698,7 +698,9 @@ function readFronds(value: unknown, reader: Reader, key: string): Fronds {
 
 /** A bush's foliage atlas (also a tree fern's crown's). */
 function readBushTexture(foliage: RawObject, reader: Reader): BushTexture {
-  reader.onlyKeys(foliage, "foliage", ["builder", "dark", "light", "stem", "stems", "leaves", "leafLength", "leafWidth", "bare"]);
+  reader.onlyKeys(foliage, "foliage", ["builder", "dark", "light", "stem", "stems", "leaves", "leafLength", "leafWidth", "bare", "flowers"]);
+  const flowers = foliage.flowers === undefined ? null : reader.object(foliage.flowers, "foliage.flowers");
+  if (flowers) reader.onlyKeys(flowers, "foliage.flowers", ["colors", "clusters", "size"]);
   const stems = reader.range(foliage, "stems", "foliage", { allowEqual: true });
   if (stems[0] < 1 || !Number.isInteger(stems[0]) || !Number.isInteger(stems[1])) reader.fail("foliage.stems", "expected whole numbers of stems, at least 1");
   return {
@@ -711,6 +713,13 @@ function readBushTexture(foliage: RawObject, reader: Reader): BushTexture {
     leafLength: reader.number(foliage, "leafLength", "foliage", { min: 0.01, max: 1 }),
     leafWidth: reader.number(foliage, "leafWidth", "foliage", { min: 0.01, max: 1 }),
     bare: reader.number(foliage, "bare", "foliage", { min: 0, max: 0.9 }),
+    flowers: flowers
+      ? {
+          colors: reader.array(flowers, "colors", "foliage.flowers").map((c, i) => reader.colorValue(c, `foliage.flowers.colors[${i}]`)),
+          clusters: reader.number(flowers, "clusters", "foliage.flowers", { min: 1, integer: true }),
+          size: reader.number(flowers, "size", "foliage.flowers", { min: 0.005, max: 0.2 }),
+        }
+      : null,
   };
 }
 
@@ -802,6 +811,15 @@ function readConiferTree(obj: RawObject, reader: Reader, common: string[]): Coni
   const count = reader.range(tiers, "count", "tiers", { allowEqual: true });
   if (count[0] < 1 || !Number.isInteger(count[0]) || !Number.isInteger(count[1])) reader.fail("tiers.count", "expected whole numbers of tiers, at least 1");
   // Both [lowest, topmost]: a crown narrows upwards, but either is allowed to be the larger.
+  // A tier's height may be below 0 - its branches swept up from the trunk rather than falling.
+  const tierHeights = (o: RawObject): [number, number] => {
+    const value = o.height;
+    if (!Array.isArray(value) || value.length !== 2 || !value.every((v) => typeof v === "number")) {
+      reader.fail("tiers.height", "expected [lowest tier, topmost tier]");
+      return [1, 1];
+    }
+    return [value[0], value[1]];
+  };
   const pair = (o: RawObject, key: string, path: string): [number, number] => {
     const value = o[key];
     if (!Array.isArray(value) || value.length !== 2 || !value.every((v) => typeof v === "number" && v > 0)) {
@@ -837,7 +855,7 @@ function readConiferTree(obj: RawObject, reader: Reader, common: string[]): Coni
       count,
       from: reader.number(tiers, "from", "tiers", { min: 0, max: 1 }),
       radius: pair(tiers, "radius", "tiers"),
-      height: pair(tiers, "height", "tiers"),
+      height: tierHeights(tiers),
       droop: reader.number(tiers, "droop", "tiers", { min: 0 }),
       panels: reader.number(tiers, "panels", "tiers", { min: 3, max: 24, integer: true }),
       breadth: reader.number(tiers, "breadth", "tiers", { min: 0.2, max: 1.6 }),
@@ -1089,6 +1107,7 @@ function readBiome(id: string, obj: RawObject, reader: Reader, defaults: Default
     "lakeChance",
     "borderType",
     "height",
+    "relief",
     "trees",
     "bushes",
     "rocks",
@@ -1140,6 +1159,7 @@ function readBiome(id: string, obj: RawObject, reader: Reader, defaults: Default
     voiceId: reader.string(obj, "voice", ""),
     outputs: {
       height: readPipeline(obj.height, reader, "height"),
+      relief: obj.relief === undefined ? undefined : readPipeline(obj.relief, reader, "relief"),
       foliage: obj.trees === undefined ? undefined : readPipeline(obj.trees, reader, "trees"),
       bushes: obj.bushes === undefined ? undefined : readPipeline(obj.bushes, reader, "bushes"),
       rocks: obj.rocks === undefined ? undefined : readPipeline(obj.rocks, reader, "rocks"),

@@ -23,6 +23,7 @@ const OP_FIELDS: Record<string, Record<string, "ref" | "noise" | "number" | "tex
   invert: { input: "ref" },
   sin: { input: "ref", cycles: "number" },
   clamp: { input: "ref", min: "number", max: "number" },
+  terrace: { input: "ref", step: "number", riser: "number" },
   remap: { input: "ref", inMin: "number", inMax: "number", outMin: "number", outMax: "number" },
   luminance: { input: "ref" },
   add: { a: "ref", b: "ref" },
@@ -30,6 +31,8 @@ const OP_FIELDS: Record<string, Record<string, "ref" | "noise" | "number" | "tex
   multiply: { a: "ref", b: "ref" },
   max: { a: "ref", b: "ref" },
   min: { a: "ref", b: "ref" },
+  smoothMax: { a: "ref", b: "ref", k: "number" },
+  smoothMin: { a: "ref", b: "ref", k: "number" },
   lerp: { a: "ref", b: "ref", t: "number" },
   mix: { a: "ref", b: "ref", t: "ref" },
   /**

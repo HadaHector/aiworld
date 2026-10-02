@@ -1,0 +1,28 @@
+// Oleander (Nerium): a big, rounded evergreen shrub of the maquis's dry stream beds and valley floors -
+// many upright stems, long, narrow, leathery leaves, dark grey-green, and at the shoot tips bunches
+// of five-petalled flowers, each bush pink or white.
+{
+  model: "bush",
+  variants: 4,
+  width: [3.6, 5],
+  height: [2.8, 3.8],
+  cards: 3,
+  clumps: 7,
+  clumpSize: [1.5, 2.1],
+  foliage: {
+    builder: "leafyBush",
+    dark: [0.08, 0.16, 0.08],
+    light: [0.36, 0.46, 0.26],
+    stem: [0.4, 0.36, 0.28],
+    stems: [8, 11],
+    // Long and narrow.
+    leaves: 780,
+    leafLength: 0.12,
+    leafWidth: 0.022,
+    bare: 0.15,
+    // Pink or white, a bush each.
+    flowers: { colors: [[0.92, 0.48, 0.66], [0.96, 0.94, 0.9]], clusters: 40, size: 0.04 },
+  },
+  tint: [[0.88, 0.92, 0.86], [1.06, 1.04, 0.98]],
+  scale: [0.8, 1.2],
+}
