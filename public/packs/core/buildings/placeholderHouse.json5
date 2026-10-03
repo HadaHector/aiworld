@@ -1,0 +1,18 @@
+// A stand-in house: plain boxes, for trying out where buildings go and how big they are before
+// the real generators exist. Each variant rolls its own sizes and colours.
+{
+  name: "Placeholder House",
+  // Which generator builds it, and its settings under its own name.
+  type: "boxes",
+  boxes: {
+    // Metres: along the front, back from it, and up to the top.
+    width: [8, 14],
+    depth: [7, 11],
+    height: [4.5, 7],
+    // Up to two smaller boxes against its sides or back, each a share of the main box's size.
+    annexes: [0, 2],
+    annexSize: [0.35, 0.6],
+    walls: [[0.78, 0.72, 0.62], [0.7, 0.66, 0.6], [0.62, 0.52, 0.42]],
+    tops: [[0.55, 0.3, 0.24], [0.42, 0.4, 0.38]],
+  },
+}

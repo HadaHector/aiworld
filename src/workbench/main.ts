@@ -17,6 +17,7 @@ import { createTextureView, type TextureImage } from "./textureView";
 import { createTextureCacheLabel } from "../debug/textureCacheLabel";
 import { sampleBiomeArea, type BiomeArea } from "./biomeArea";
 import { heightView, layerView, materialsView, plantsView, type Rgb } from "./biomeViews";
+import { generateBuilding } from "../world/buildings/buildingGenerator";
 
 // ---------------------------------------------------------------------------------------------
 // Assets: every file of every pack, by "pack/folder/id".
@@ -33,10 +34,13 @@ interface Asset {
 }
 
 /** The folders with a preview, and what each asset kind can be looked at as. */
-type PreviewFolder = "materials" | "trees" | "bushes" | "rocks" | "grass" | "biomes";
-const PREVIEW_FOLDERS: PreviewFolder[] = ["materials", "trees", "bushes", "rocks", "grass", "biomes"];
+type PreviewFolder = "materials" | "trees" | "bushes" | "rocks" | "grass" | "biomes" | "buildings";
+const PREVIEW_FOLDERS: PreviewFolder[] = ["materials", "trees", "bushes", "rocks", "grass", "biomes", "buildings"];
+/** How many variants of a building the Variant menu steps through - a building has no fixed count,
+ *  every seed is one. */
+const BUILDING_VARIANTS = 8;
 /** Everything else is listed after these, its JSON still checked by Preview. */
-const FOLDER_ORDER = ["materials", "trees", "bushes", "rocks", "grass", "biomes", "layers", "borderHills", "settlements", "voices", "patches", ""];
+const FOLDER_ORDER = ["materials", "trees", "bushes", "rocks", "grass", "biomes", "buildings", "features", "layers", "borderHills", "settlements", "voices", "patches", ""];
 
 interface ViewDef {
   id: string;
@@ -99,6 +103,7 @@ const DEFAULT_OPTIONS: Options = {
   layer: "",
   plants: "all",
   water: "on",
+  marks: "on",
 };
 
 // ---------------------------------------------------------------------------------------------
@@ -460,6 +465,11 @@ function viewsFor(asset: Asset | null, content: WorldContent | null): ViewDef[] 
       if (model === "boulder") views.push({ id: "bark", label: "Stone", mode: "2d" });
       return views;
     }
+    case "buildings":
+      return [
+        { id: "placed", label: "On the ground", mode: "3d" },
+        { id: "model", label: "Model", mode: "3d" },
+      ];
     case "biomes":
       return [
         { id: "height", label: "Height", mode: "2d" },
@@ -553,9 +563,10 @@ function renderPreviewBar(): void {
         if (stage) stage.scene.forceWireframe = options.wire === "on";
       }),
     );
-    if ((current.folder === "trees" || current.folder === "bushes" || current.folder === "rocks") && content) {
-      const def = kindOf(content, current);
-      const variants = def ? variantCount(def) : 1;
+    if (current.folder === "buildings") viewOptions.append(checkbox("Footprint", "marks", rebuild));
+    if ((current.folder === "trees" || current.folder === "bushes" || current.folder === "rocks" || current.folder === "buildings") && content) {
+      const def = current.folder === "buildings" ? undefined : kindOf(content, current);
+      const variants = current.folder === "buildings" ? BUILDING_VARIANTS : def ? variantCount(def) : 1;
       const variantMenu = select("Variant", "variant", [...Array.from({ length: variants }, (_, i): [string, string] => [String(i), String(i + 1)]), ["all", "All"]], rebuild);
       // Stepping through one model at a time keeps the camera where it is, so each variant is seen
       // from the same side as the last.
@@ -781,6 +792,7 @@ async function preview3d(token: number, asset: Asset, view: ViewDef, content: Wo
   let ground: MaterialDef;
   let grass: GrassSpec[] = [];
   let trees: Parameters<typeof createStage>[2]["trees"];
+  let buildings: Parameters<typeof createStage>[2]["buildings"];
 
   if (asset.folder === "materials") {
     ground = content.materials.find((material) => material.id === asset.id)!;
@@ -792,6 +804,12 @@ async function preview3d(token: number, asset: Asset, view: ViewDef, content: Wo
     grass = [{ kind: asset.id, density: spec?.density ?? 1.2, color: spec?.color ?? [0.36, 0.5, 0.22] }];
     // Everything else the ground grows too, if asked for - the kind among its neighbours.
     if (grassOn) grass.push(...ground.grass.filter((entry) => entry.kind !== asset.id));
+  } else if (asset.folder === "buildings") {
+    ground = groundMaterial(content, asset);
+    if (grassOn) grass = ground.grass;
+    const def = content.buildings.find((building) => building.id === asset.id)!;
+    const chosen = options.variant === "all" ? Array.from({ length: BUILDING_VARIANTS }, (_, i) => i) : [Math.min(BUILDING_VARIANTS - 1, Number(options.variant) || 0)];
+    buildings = chosen.map((variant) => generateBuilding(def, seed, variant));
   } else {
     ground = groundMaterial(content, asset);
     if (grassOn) grass = ground.grass;
@@ -813,6 +831,8 @@ async function preview3d(token: number, asset: Asset, view: ViewDef, content: Wo
     shape: options.shape as GroundShape,
     bare: view.id === "model",
     trees,
+    buildings,
+    footprints: options.marks === "on",
     timeHours: timeHours(),
     lightBiome,
     view: keepView,

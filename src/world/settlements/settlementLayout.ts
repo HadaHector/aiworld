@@ -7,6 +7,12 @@ import { chaikin } from "../polyline";
 import { deriveSeed, mulberry32 } from "../rng";
 import type { SettlementSite } from "./settlementSites";
 import { chooseGate, type SettlementGate } from "./gates";
+import type { BuildingDef } from "../buildings/buildingTypes";
+import { generateBuilding } from "../buildings/buildingGenerator";
+
+/** A house's variant of its building is drawn from this many - enough that no two in a town share
+ *  one by more than chance. */
+const BUILDING_VARIANT_SPACE = 1 << 20;
 import {
   HOUSE_FLOOR_ABOVE_STREET,
   HOUSE_MAX_CUT_FILL,
@@ -35,7 +41,8 @@ export interface Street extends RoadLine {
   taperEnds: false;
 }
 
-/** A house plot with the house on it. Its footprint is width (along the street) x depth. */
+/** A house plot with the house on it: one variant of a building (buildings/), its footprint width
+ *  (along the street) x depth. */
 export interface House {
   x: number;
   z: number;
@@ -46,10 +53,8 @@ export interface House {
   frontZ: number;
   width: number;
   depth: number;
-  wallHeight: number;
-  roofPitch: number;
-  /** 0..1, a per-house colour variation. */
-  tint: number;
+  building: BuildingDef;
+  variant: number;
 }
 
 export interface SettlementSquare {
@@ -571,7 +576,7 @@ function layoutSettlement(
     const across = Math.abs(-dx * uz + dz * ux) - hd;
     return Math.hypot(Math.max(0, along), Math.max(0, across));
   };
-  const totalWeight = houseStyle.variants.reduce((sum, v) => sum + v.weight, 0);
+  const totalWeight = houseStyle.buildings.reduce((sum, entry) => sum + entry.weight, 0);
 
   for (const street of streets) {
     const arcs = arcLengths(street.points);
@@ -580,10 +585,13 @@ function layoutSettlement(
     for (const side of [1, -1]) {
       let s = street.kind === "main" ? 4 : 6;
       while (s < total - 3) {
+        // A building, and its own variant of it: the model says how much ground it takes.
         let pick = rng() * totalWeight;
-        const variant = houseStyle.variants.find((v) => (pick -= v.weight) < 0) ?? houseStyle.variants[0];
-        const width = between(variant.width);
-        const depth = between(variant.depth);
+        const { building } = houseStyle.buildings.find((entry) => (pick -= entry.weight) < 0) ?? houseStyle.buildings[0];
+        const variant = Math.floor(rng() * BUILDING_VARIANT_SPACE);
+        const model = generateBuilding(building, seed, variant);
+        const width = model.halfWidth * 2;
+        const depth = model.halfDepth * 2;
         if (rng() >= tier.plotFill) {
           s += width * 0.8;
           continue;
@@ -625,9 +633,8 @@ function layoutSettlement(
             frontZ: -nz,
             width,
             depth,
-            wallHeight: between(variant.wallHeight),
-            roofPitch: between(houseStyle.roofPitch),
-            tint: rng(),
+            building,
+            variant,
           });
           return true;
         })();

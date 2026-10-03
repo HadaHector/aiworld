@@ -16,6 +16,8 @@ import { createGrassField } from "../world/foliage/grassField";
 import { scatterGrass } from "../world/foliage/grassScatter";
 import { createTreeField } from "../world/foliage/treeField";
 import { NO_WEATHER } from "../world/weather/weatherTypes";
+import type { BuildingModel } from "../world/buildings/buildingTypes";
+import { createBuildingMaterial, createBuildingMesh } from "../world/buildings/buildingMesh";
 
 /** The ground's shape under a preview. */
 export type GroundShape = "flat" | "hills" | "steep";
@@ -42,6 +44,10 @@ export interface StageOptions {
   /** Trees to stand in a row across the middle of the ground, each at its own scale; a variant
    *  left out is hashed from where it stands, as in the world. */
   trees?: { kinds: TreeKindDef[]; specimens: { kind: string; variant?: number; scale: number }[]; far: boolean };
+  /** Buildings to stand in a row across the middle of the ground, fronts toward the camera. */
+  buildings?: BuildingModel[];
+  /** Mark each building's footprint and door on the ground. */
+  footprints?: boolean;
   timeHours: number;
   /** Whose sky and light: a biome's day-night settings. */
   lightBiome: BiomeDefinition;
@@ -201,6 +207,11 @@ export async function createStage(engine: Engine, canvas: HTMLCanvasElement, opt
       framing = placed.framing;
     }
 
+    if (options.buildings && options.buildings.length > 0) {
+      options.onProgress?.("Raising buildings");
+      framing = layOutBuildings(scene, options.buildings, height, litShading, sunLighting.shadowGenerator, options.footprints === true);
+    }
+
     // Far enough back for the whole row and the tallest top to fit the view, whichever way the
     // canvas is shaped. Babylon's fov is the vertical one.
     const fov = 0.8;
@@ -209,10 +220,11 @@ export async function createStage(engine: Engine, canvas: HTMLCanvasElement, opt
     const fitHeight = framing.height / 2 / Math.tan(fov / 2);
     const view = options.view ?? {
       // The row runs along x: looked at nearly face on, so none of it hides behind the rest.
-      alpha: options.trees ? -Math.PI / 2 + 0.15 : -Math.PI / 2 + 0.5,
-      beta: options.trees ? 1.45 : 1.15,
-      radius: options.trees ? Math.max(4, fitWidth, fitHeight) * 1.15 : 22,
-      target: [0, height(0, 0) + (options.trees ? framing.height * 0.45 : 0.5), 0] as [number, number, number],
+      // Buildings face +z, so they are looked at from the front and a little to the side.
+      alpha: options.buildings ? Math.PI / 2 - 0.5 : options.trees ? -Math.PI / 2 + 0.15 : -Math.PI / 2 + 0.5,
+      beta: options.buildings ? 1.2 : options.trees ? 1.45 : 1.15,
+      radius: options.trees || options.buildings ? Math.max(4, fitWidth, fitHeight) * 1.15 : 22,
+      target: [0, height(0, 0) + (options.trees || options.buildings ? framing.height * 0.45 : 0.5), 0] as [number, number, number],
     };
     const camera = new ArcRotateCamera("workbenchCamera", view.alpha, view.beta, view.radius, new Vector3(...view.target), scene);
     camera.lowerRadiusLimit = 1.5;
@@ -271,6 +283,49 @@ export async function createStage(engine: Engine, canvas: HTMLCanvasElement, opt
     scene.dispose();
     throw error;
   }
+}
+
+/** Stands buildings in a row along x, fronts to +z, each on the ground under its own footprint's
+ *  middle, and says how wide and tall the row is. With `marks`, outlines each footprint on the
+ *  ground and puts a post at its door. */
+function layOutBuildings(
+  scene: Scene,
+  models: BuildingModel[],
+  height: (x: number, z: number) => number,
+  litShading: LitShading,
+  shadowGenerator: { addShadowCaster: (mesh: Mesh, includeDescendants?: boolean) => void },
+  marks: boolean,
+): { width: number; height: number } {
+  const material = createBuildingMaterial(scene, litShading);
+  const gap = 4;
+  const width = models.reduce((sum, model) => sum + model.halfWidth * 2, 0) + gap * Math.max(0, models.length - 1);
+  let x = -width / 2;
+  models.forEach((model, i) => {
+    x += model.halfWidth;
+    const mesh = createBuildingMesh(scene, `building_${i}`, model, material);
+    const y = height(x, 0);
+    mesh.position.set(x, y, 0);
+    shadowGenerator.addShadowCaster(mesh, false);
+    if (marks) {
+      const w = model.halfWidth;
+      const d = model.halfDepth;
+      const lift = 0.08;
+      const outline = MeshBuilder.CreateLines(
+        `footprint_${i}`,
+        { points: [[-w, -d], [w, -d], [w, d], [-w, d], [-w, -d]].map(([px, pz]) => new Vector3(x + px, height(x + px, pz) + lift, pz)) },
+        scene,
+      );
+      outline.color.set(1, 0.85, 0.2);
+      outline.isPickable = false;
+      const post = MeshBuilder.CreateCylinder(`door_${i}`, { height: 3, diameter: 0.25 }, scene);
+      post.position.set(x + model.door.x, height(x + model.door.x, model.door.z) + 1.5, model.door.z + 0.5);
+      post.material = material;
+      post.setVerticesData("color", new Array((post.getTotalVertices()) * 4).fill(0).map((_, k) => [1, 0.85, 0.2, 1][k % 4]));
+      post.isPickable = false;
+    }
+    x += model.halfWidth + gap;
+  });
+  return { width, height: Math.max(1, ...models.map((model) => model.height)) };
 }
 
 /** Stands specimens in a row along x, centred on the origin, each far enough from the next that

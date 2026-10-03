@@ -22,13 +22,7 @@ import {
   type TreeRules,
 } from "../foliage/foliageConfig";
 import type { Voice } from "../naming/nameGenerator";
-import {
-  WALL_TEXTURE_BUILDERS,
-  type HouseVariant,
-  type SettlementStyle,
-  type SettlementTier,
-  type SettlementTierDef,
-} from "../settlements/settlementConfig";
+import type { SettlementStyle, SettlementTier, SettlementTierDef } from "../settlements/settlementConfig";
 import type { ColorTuple } from "../terrain/pipeline/pipelineTypes";
 import { coolNightTone, deriveNightIntensity } from "../lighting/dayNightMath";
 import { ContentError, isObject, joinPath, Reader, type ContentIssue, type RawObject } from "./contentReader";
@@ -42,6 +36,7 @@ import type { TextureDef } from "../materials/textureGen";
 import { adjustMatrix, chainMatrix, NO_ADJUST, type ColorAdjust } from "../materials/colorAdjust";
 import type { WeatherChance, WeatherDef } from "../weather/weatherTypes";
 import { FEATURE_TYPES, NO_FEATURE, type FeatureChance, type FeatureKindDef } from "../features/featureTypes";
+import { BUILDING_GENERATORS, type BuildingDef, type Rgb } from "../buildings/buildingTypes";
 
 /** One pack as found on disk: its folder name and every .json5 file in it, by path inside it. */
 export interface PackSource {
@@ -51,7 +46,7 @@ export interface PackSource {
 
 /** The folders a pack's content lives in, one kind of definition each. A definition's id is its
  *  file name, and a pack with a higher priority replaces a lower one's definition of the same id. */
-const CONTENT_FOLDERS = ["biomes", "materials", "layers", "grass", "trees", "bushes", "rocks", "voices", "borderHills", "settlements", "weathers", "features"] as const;
+const CONTENT_FOLDERS = ["biomes", "materials", "layers", "grass", "trees", "bushes", "rocks", "voices", "borderHills", "settlements", "weathers", "features", "buildings"] as const;
 type ContentFolder = (typeof CONTENT_FOLDERS)[number];
 
 /** How many grass kinds the packs may define between them: each is a layer of the blade atlas and
@@ -197,7 +192,9 @@ export function resolveContent(packs: PackSource[]): WorldContent {
   const weathers = readAll("weathers", (e, o, r) => readWeather(e.id, o, r));
   const weatherIds = new Set(weathers.map((w) => w.id));
   const boundaryHillStyles = readAll("borderHills", (e, o, r) => readBoundaryHillStyle(e.id, o, r));
-  const settlementStyles = readAll("settlements", (e, o, r) => readSettlementStyle(e.id, o, r));
+  const buildings = readAll("buildings", (e, o, r) => readBuilding(e.id, o, r));
+  const buildingById = new Map(buildings.map((building) => [building.id, building]));
+  const settlementStyles = readAll("settlements", (e, o, r) => readSettlementStyle(e.id, o, r, buildingById));
   const featureReads = readAll("features", (e, o, r) => ({ file: e.file, kind: readFeatureKind(e.id, o, r) }));
   const featureKinds = featureReads.map((read) => read.kind);
   const featureIds = new Set([NO_FEATURE, ...featureKinds.map((kind) => kind.id)]);
@@ -393,6 +390,7 @@ export function resolveContent(packs: PackSource[]): WorldContent {
     settlementStyles,
     weathers,
     featureKinds,
+    buildings,
   };
 }
 
@@ -486,6 +484,33 @@ function readFeatureChances(obj: RawObject, reader: Reader): FeatureChance[] {
     reader.onlyKeys(chance, path, ["feature", "odds"]);
     return { featureId: reader.string(chance, "feature", path), odds: reader.number(chance, "odds", path, { min: 0 }) };
   });
+}
+
+/** A buildings/ file - see BuildingDef. Its generator is named by `type` (`generator` already means
+ *  a content generator - see generators.ts), and its own block is under the generator's name. */
+function readBuilding(id: string, obj: RawObject, reader: Reader): BuildingDef {
+  const generator = reader.oneOf(obj, "type", "", BUILDING_GENERATORS);
+  reader.onlyKeys(obj, "", ["name", "type", generator]);
+  const block = reader.object(obj[generator], generator);
+  const colors = (key: string): Rgb[] => {
+    const list = reader.array(block, key, generator).map((raw, i) => reader.colorValue(raw, `${generator}.${key}[${i}]`));
+    if (list.length === 0) reader.fail(`${generator}.${key}`, "needs at least one colour");
+    return list.length > 0 ? list : [[0.5, 0.5, 0.5]];
+  };
+  let boxes: BuildingDef["boxes"] = null;
+  if (generator === "boxes") {
+    reader.onlyKeys(block, generator, ["width", "depth", "height", "annexes", "annexSize", "walls", "tops"]);
+    boxes = {
+      width: reader.range(block, "width", generator, { allowEqual: true }),
+      depth: reader.range(block, "depth", generator, { allowEqual: true }),
+      height: reader.range(block, "height", generator, { allowEqual: true }),
+      annexes: reader.range(block, "annexes", generator, { allowEqual: true }),
+      annexSize: reader.range(block, "annexSize", generator, { allowEqual: true }),
+      walls: colors("walls"),
+      tops: colors("tops"),
+    };
+  }
+  return { id, name: reader.string(obj, "name", ""), generator, boxes };
 }
 
 /** A features/ file - see FeatureKindDef. */
@@ -1323,8 +1348,8 @@ function readBiome(id: string, obj: RawObject, reader: Reader, defaults: Default
 
 const TIERS: readonly SettlementTier[] = ["hamlet", "village", "town"];
 
-function readSettlementStyle(id: string, obj: RawObject, reader: Reader): SettlementStyle {
-  reader.onlyKeys(obj, "", ["tiers", "houses", "look"]);
+function readSettlementStyle(id: string, obj: RawObject, reader: Reader, buildings: Map<string, BuildingDef>): SettlementStyle {
+  reader.onlyKeys(obj, "", ["tiers", "houses"]);
 
   const tiersRaw = reader.object(obj.tiers, "tiers");
   reader.onlyKeys(tiersRaw, "tiers", TIERS);
@@ -1343,52 +1368,28 @@ function readSettlementStyle(id: string, obj: RawObject, reader: Reader): Settle
   }
 
   const houses = reader.object(obj.houses, "houses");
-  reader.onlyKeys(houses, "houses", ["variants", "roofPitch", "roofOverhang", "setback", "gap"]);
-  const variants: HouseVariant[] = reader.array(houses, "variants", "houses").map((raw, i) => {
-    const path = `houses.variants[${i}]`;
-    const v = reader.object(raw, path);
-    reader.onlyKeys(v, path, ["width", "depth", "wallHeight", "weight"]);
-    return {
-      width: reader.range(v, "width", path, { allowEqual: true }),
-      depth: reader.range(v, "depth", path, { allowEqual: true }),
-      wallHeight: reader.range(v, "wallHeight", path, { allowEqual: true }),
-      weight: reader.number(v, "weight", path, { min: 0 }),
-    };
+  reader.onlyKeys(houses, "houses", ["buildings", "setback", "gap"]);
+  const buildingList = reader.array(houses, "buildings", "houses").flatMap((raw, i) => {
+    const path = `houses.buildings[${i}]`;
+    const entry = reader.object(raw, path);
+    reader.onlyKeys(entry, path, ["building", "weight"]);
+    const buildingId = reader.string(entry, "building", path);
+    const building = buildings.get(buildingId);
+    if (!building) {
+      reader.fail(joinPath(path, "building"), `no building "${buildingId}" (known: ${[...buildings.keys()].join(", ") || "none"})`);
+      return [];
+    }
+    return [{ building, weight: reader.number(entry, "weight", path, { min: 0 }) }];
   });
-  if (variants.length === 0) reader.fail("houses.variants", "needs at least one house variant");
-  const pitch = reader.range(houses, "roofPitch", "houses", { allowEqual: true });
-
-  const look = reader.object(obj.look, "look");
-  reader.onlyKeys(look, "look", ["wallTexture", "wallTints", "roofTints", "door", "window"]);
-  const texture = reader.object(look.wallTexture, "look.wallTexture");
-  reader.onlyKeys(texture, "look.wallTexture", ["builder", "boards", "color"]);
-  const colors = (key: string): [number, number, number][] => {
-    const list = reader.array(look, key, "look").map((c, i) => reader.colorValue(c, `look.${key}[${i}]`));
-    if (list.length === 0) reader.fail(`look.${key}`, "needs at least one colour");
-    return list;
-  };
+  if (buildingList.length === 0) reader.fail("houses.buildings", "needs at least one building");
 
   return {
     id,
     tiers,
     houses: {
-      variants,
-      // Written in degrees, the way anyone thinks about a roof.
-      roofPitch: [(pitch[0] * Math.PI) / 180, (pitch[1] * Math.PI) / 180],
-      roofOverhang: reader.number(houses, "roofOverhang", "houses", { min: 0 }),
+      buildings: buildingList,
       setback: reader.range(houses, "setback", "houses", { allowEqual: true }),
       gap: reader.range(houses, "gap", "houses", { allowEqual: true }),
-    },
-    look: {
-      wallTexture: {
-        builder: reader.oneOf(texture, "builder", "look.wallTexture", WALL_TEXTURE_BUILDERS),
-        boards: reader.number(texture, "boards", "look.wallTexture", { min: 1, integer: true }),
-        color: reader.color(texture, "color", "look.wallTexture"),
-      },
-      wallTints: colors("wallTints"),
-      roofTints: colors("roofTints"),
-      door: reader.color(look, "door", "look"),
-      window: reader.color(look, "window", "look"),
     },
   };
 }

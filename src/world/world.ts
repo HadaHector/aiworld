@@ -163,7 +163,6 @@ export async function createWorld(
   const buildings = createSettlementRenderer(
     scene,
     settlementLayouts,
-    content.settlementStyles,
     WORLD_SEED,
     materialLibrary.litShading,
     sunLighting.shadowGenerator,

@@ -35,6 +35,7 @@ packs/<pack>/
   settlements/<id>.json5  a settlement style: how big places grow, their houses and colours
   weathers/<id>.json5     a kind of weather: its clouds, light, wind, rain and snow
   features/<id>.json5     a kind of cell feature - a quarry - and how it changes the ground
+  buildings/<id>.json5    a building, built by one of the building generators
   patches/<any>.json5     additions to another pack's lists
 ```
 
@@ -528,10 +529,11 @@ too, though they come closer to roads. They are only placed within about 400 m o
 ## Settlement styles
 
 See `core/settlements/timber.json5`. A style gives each tier (`hamlet`, `village`, `town`) its
-radius, street pattern and how full its plots are; its houses' size variants, roof pitch (degrees),
-overhang, setback and gaps; and its `look` - the wall texture (built by a code builder, today only
-`weatherboard`) and the tints walls, roofs, doors and windows are coloured with. Which tier a place
-becomes, and the rules for gates, streets and levelling plots, are the same for every style.
+radius, street pattern and how full its plots are; and its houses - the buildings (see Buildings
+below) its plots are built with, each with a weight, how far back from the street they stand and
+the gaps between them. Each house is its own variant of its building, and takes the ground its
+model says it needs. Which tier a place becomes, and the rules for gates, streets and levelling
+plots, are the same for every style.
 
 ## Cell features
 
@@ -552,6 +554,19 @@ any ground it cut or filled). `road` gives it a track to the nearest road - `wid
 `ground` paints it: a material laid over everything else, with a weight graph that can read
 `featureGap` (distance past the feature's edge, 0 inside it) and `featureDepth` (how far the ground
 was cut or built up there), besides the usual inputs. A biome's own layers can read those too.
+
+## Buildings
+
+A building is an asset of its own, as a tree is: one file, and any number of variants from a seed.
+Features place them. How one is built is up to its generator, named by `type` - a house, a tent and
+a round tower have little in common - and the generator's settings sit in a block under its name.
+Today there is one: `boxes`, the placeholder, a main box with a door patch and smaller boxes against
+its sides and back (see `core/buildings/placeholderHouse.json5`). Every generator gives the same
+result: geometry with its floor at height 0, the footprint centred, the front facing +z, and the
+door on the front edge.
+
+In the workbench a building stands on a patch of ground, one variant or a row of eight, with its
+footprint and door marked.
 
 ## Example
 

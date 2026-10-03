@@ -1,10 +1,10 @@
-import type { ColorTuple } from "../terrain/pipeline/pipelineTypes";
+import type { BuildingDef } from "../buildings/buildingTypes";
 
 /**
  * How settlements are laid out: gates, streets, house plots and how the ground is flattened under
  * them. Lengths are world units (metres).
  *
- * What a settlement looks like - how big each tier grows, its houses and their colours - is its
+ * What a settlement looks like - how big each tier grows, and which buildings it builds - is its
  * biome's SettlementStyle, loaded from a pack's settlements/ folder. What is here are the rules
  * every settlement follows whatever its style.
  */
@@ -25,11 +25,9 @@ export interface SettlementTierDef {
 
 /** The houses a style builds - see settlementLayout.ts. */
 export interface HouseStyle {
-  variants: HouseVariant[];
-  /** Roof pitch range, radians. */
-  roofPitch: [number, number];
-  /** How far the roof overhangs the walls. */
-  roofOverhang: number;
+  /** The buildings (a pack's buildings/ folder) its plots are built with, each picked as often as
+   *  its weight over the sum of them all - and each house its own variant of it. */
+  buildings: { building: BuildingDef; weight: number }[];
   /** Front wall this far back from the street's level edge. At least far enough that the whole
    *  footprint is past where a plot's levelling fades out next to a street (terrainSampler.ts). */
   setback: [number, number];
@@ -37,35 +35,11 @@ export interface HouseStyle {
   gap: [number, number];
 }
 
-/** The texture a style's walls and roofs are drawn with, by one of the builders in wallTexture.ts. */
-export type WallTexture = {
-  /** Horizontal boards, each its own tone, with grain, seams and the odd butt joint. */
-  builder: "weatherboard";
-  /** Boards per 2 m texture repeat. */
-  boards: number;
-  /** The wood's colour before a house's own tint multiplies it. */
-  color: ColorTuple;
-};
-
-export const WALL_TEXTURE_BUILDERS = ["weatherboard"] as const;
-
-/** How a style's buildings are coloured. */
-export interface BuildingLook {
-  wallTexture: WallTexture;
-  /** A house's walls take one of these, multiplying the texture. */
-  wallTints: ColorTuple[];
-  /** ...and its roof one of these. */
-  roofTints: ColorTuple[];
-  door: ColorTuple;
-  window: ColorTuple;
-}
-
 /** What settlements in a biome look like. Several biomes may share one. */
 export interface SettlementStyle {
   id: string;
   tiers: Record<SettlementTier, SettlementTierDef>;
   houses: HouseStyle;
-  look: BuildingLook;
 }
 
 /** Site score thresholds (settlementSites.ts's 0..1 score) for the bigger tiers. The best ground

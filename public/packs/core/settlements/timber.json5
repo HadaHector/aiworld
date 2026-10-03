@@ -1,5 +1,5 @@
-// Timber-framed weatherboard houses under pitched roofs - the one settlement style so far, used by
-// every core biome.
+// The one settlement style so far, used by every core biome - built for now with the placeholder
+// house, until real house generators exist.
 {
   // How big a place grows, by tier. The best ground gets the biggest places (the score thresholds
   // are in code - see settlementConfig.ts).
@@ -13,38 +13,13 @@
   },
 
   houses: {
-    // width is along the street, depth back from it; weight is how often each is picked.
-    variants: [
-      { width: [10, 13], depth: [10, 12], wallHeight: [5.2, 6], weight: 3 }, // cottage
-      { width: [14, 18], depth: [11, 14], wallHeight: [5.6, 6.8], weight: 2 }, // house
-      { width: [20, 26], depth: [12, 15], wallHeight: [6, 7.2], weight: 1 }, // longhouse / barn
-    ],
-    roofPitch: [30, 42], // degrees
-    // How far the roof overhangs the walls.
-    roofOverhang: 0.45,
+    // The buildings its plots are built with (see buildings/), each as often as its weight over the
+    // sum of them all; every house is its own variant of one.
+    buildings: [{ building: "placeholderHouse", weight: 1 }],
     // Front wall this far back from the street's level edge. At least far enough that the whole
     // footprint is past where a plot's levelling fades out next to a street.
     setback: [3.4, 6],
     // Gap between neighbouring houses along a street.
     gap: [1.5, 5],
-  },
-
-  look: {
-    // Kept close to neutral warm wood - a building's own colour comes from the tints below
-    // multiplying it.
-    wallTexture: { builder: "weatherboard", boards: 8, color: [0.66, 0.5, 0.34] },
-    wallTints: [
-      [1.1, 1.05, 1.0], // bare
-      [0.95, 0.95, 0.92], // weathered
-      [0.78, 0.68, 0.58], // dark stain
-      [1.25, 1.2, 1.1], // limewashed
-    ],
-    roofTints: [
-      [0.72, 0.46, 0.36],
-      [0.55, 0.5, 0.46],
-      [0.62, 0.55, 0.42],
-    ],
-    door: [0.38, 0.26, 0.18],
-    window: [0.12, 0.13, 0.15],
   },
 }
