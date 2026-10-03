@@ -1,0 +1,314 @@
+/**
+ * Green alps - the mountains' green variant (see ZONES.md): high ranges over green valleys. Meadow
+ * on the valley floors and the gentler slopes, flowers in it; dark spruce climbing the mountainsides
+ * in thick stands up to a tree line, thinning out above it into high pasture; then bare rock and
+ * scree, and snow over everything above a high line, lying further down in the gullies and on the
+ * north faces. A deep blue sky, bright thin air.
+ *
+ * Each area is one of three kinds of range (`oneOf`): high ranges with valleys opening between them;
+ * sharp, ridged peaks; or wide green valleys under lower mountains. Its tree line and snow line are
+ * its own rolls.
+ */
+{
+  name: "Green Alps",
+  voice: "stony",
+  spawnWeight: 1,
+  lakeChance: 0.02,
+  borderType: "mountain",
+  settlement: "timber",
+  // How far up the spruce climb, and how far down the snow comes.
+  params: { treeline: { range: [0, 1] }, snowline: { range: [0, 1] } },
+  height: {
+    oneOf: [
+      // High ranges, valleys opening between them (as the old mountains): above its base level the
+      // range is stretched, so the peaks stand tall while the valleys stay as deep.
+      {
+        noises: [
+          { name: "range", type: "fbm", octaves: 6, frequency: { range: [0.0012, 0.0015] }, amplitude: { range: [62, 80] }, persistence: 0.42, lacunarity: 2.0 },
+          { name: "valley", type: "fbm", octaves: 3, frequency: 0.00045, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+          { name: "floor", type: "fbm", octaves: 3, frequency: 0.0025, amplitude: 5, persistence: 0.45, lacunarity: 2.0 },
+        ],
+        steps: [
+          { output: "rangeRaw", op: "sample", noise: "range" },
+          { output: "zero", op: "constant", value: 0 },
+          { output: "above", op: "max", a: "rangeRaw", b: "zero" },
+          { output: "lift", op: "scale", input: "above", factor: 0.9 },
+          { output: "stretched", op: "add", a: "rangeRaw", b: "lift" },
+          { output: "peak", op: "offset", input: "stretched", amount: 75 },
+          { output: "floorRaw", op: "sample", noise: "floor" },
+          { output: "floor", op: "offset", input: "floorRaw", amount: { range: [22, 32] } },
+          { output: "valleyRaw", op: "sample", noise: "valley" },
+          { output: "rangeness", op: "remap", input: "valleyRaw", inMin: { range: [-0.7, -0.45] }, inMax: { range: [-0.15, 0.05] }, outMin: 0, outMax: 1 },
+          { output: "rangeShare", op: "clamp", input: "rangeness", min: 0, max: 1 },
+          { output: "shareSquared", op: "multiply", a: "rangeShare", b: "rangeShare" },
+          { output: "twiceShare", op: "scale", input: "rangeShare", factor: -2 },
+          { output: "easing", op: "offset", input: "twiceShare", amount: 3 },
+          { output: "eased", op: "multiply", a: "shareSquared", b: "easing" },
+          { output: "rise", op: "subtract", a: "peak", b: "floor" },
+          { output: "shareOfRise", op: "multiply", a: "rise", b: "eased" },
+          { output: "result", op: "add", a: "floor", b: "shareOfRise" },
+        ],
+      },
+      // Sharp peaks: a ridged noise's crests for the arêtes, a slow swell under them, valleys between.
+      {
+        noises: [
+          { name: "ridges", type: "ridged", octaves: 4, frequency: { range: [0.0009, 0.0012] }, amplitude: { range: [110, 145] }, persistence: 0.48, lacunarity: 2.1 },
+          { name: "swell", type: "fbm", octaves: 3, frequency: 0.0006, amplitude: { range: [15, 25] }, persistence: 0.45, lacunarity: 2.0 },
+        ],
+        steps: [
+          { output: "ridgesRaw", op: "sample", noise: "ridges" },
+          { output: "swellRaw", op: "sample", noise: "swell" },
+          { output: "ground", op: "add", a: "ridgesRaw", b: "swellRaw" },
+          // The ridged noise hardly ever dips low: let it down, and floor the valleys between the
+          // ridges (`smoothMax`) with a rounded foot.
+          { output: "lowered", op: "offset", input: "ground", amount: { range: [-55, -40] } },
+          { output: "floor", op: "constant", value: { range: [20, 28] } },
+          { output: "result", op: "smoothMax", a: "lowered", b: "floor", k: 14 },
+        ],
+      },
+      // Wide green valleys under lower mountains: more of the area valley floor, the ranges lower.
+      {
+        noises: [
+          { name: "range", type: "fbm", octaves: 6, frequency: { range: [0.0013, 0.0017] }, amplitude: { range: [50, 62] }, persistence: 0.42, lacunarity: 2.0 },
+          { name: "valley", type: "fbm", octaves: 3, frequency: 0.0005, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+          { name: "floor", type: "fbm", octaves: 3, frequency: 0.0025, amplitude: 4, persistence: 0.45, lacunarity: 2.0 },
+        ],
+        steps: [
+          { output: "rangeRaw", op: "sample", noise: "range" },
+          { output: "zero", op: "constant", value: 0 },
+          { output: "above", op: "max", a: "rangeRaw", b: "zero" },
+          { output: "lift", op: "scale", input: "above", factor: 0.7 },
+          { output: "stretched", op: "add", a: "rangeRaw", b: "lift" },
+          { output: "peak", op: "offset", input: "stretched", amount: 62 },
+          { output: "floorRaw", op: "sample", noise: "floor" },
+          { output: "floor", op: "offset", input: "floorRaw", amount: { range: [16, 24] } },
+          { output: "valleyRaw", op: "sample", noise: "valley" },
+          { output: "rangeness", op: "remap", input: "valleyRaw", inMin: { range: [-0.25, -0.05] }, inMax: { range: [0.25, 0.45] }, outMin: 0, outMax: 1 },
+          { output: "rangeShare", op: "clamp", input: "rangeness", min: 0, max: 1 },
+          { output: "shareSquared", op: "multiply", a: "rangeShare", b: "rangeShare" },
+          { output: "twiceShare", op: "scale", input: "rangeShare", factor: -2 },
+          { output: "easing", op: "offset", input: "twiceShare", amount: 3 },
+          { output: "eased", op: "multiply", a: "shareSquared", b: "easing" },
+          { output: "rise", op: "subtract", a: "peak", b: "floor" },
+          { output: "shareOfRise", op: "multiply", a: "rise", b: "eased" },
+          { output: "result", op: "add", a: "floor", b: "shareOfRise" },
+        ],
+      },
+    ],
+  },
+  treeRules: { shore: [0.5, 2] },
+  // Spruce in thick stands up the mountainsides to the area's tree line, thinning over it; the odd
+  // open glade, and the valley meadows left open in places. None on the steepest ground.
+  trees: {
+    noises: [{ name: "stand", shared: "alpsStand", type: "fbm", octaves: 3, frequency: 0.0035, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
+    steps: [
+      { output: "standRaw", op: "sample", noise: "stand" },
+      { output: "standRamp", op: "remap", input: "standRaw", inMin: -0.4, inMax: 0.1, outMin: 0, outMax: 1 },
+      { output: "stand", op: "clamp", input: "standRamp", min: 0, max: 1 },
+      { output: "height", op: "input", name: "height" },
+      { output: "below", op: "mask", input: "height", at: { param: "treeline", to: [62, 100] }, off: { param: "treeline", to: [82, 125] } },
+      { output: "slope", op: "input", name: "slope" },
+      { output: "footing", op: "mask", input: "slope", at: 0.45, off: 0.65 },
+      { output: "where", op: "multiply", a: "below", b: "footing" },
+      { output: "coverHere", op: "multiply", a: "stand", b: "where" },
+      { output: "spruce", op: "scale", input: "coverHere", factor: 0.95 },
+    ],
+    outputs: { spruce: "spruce" },
+  },
+  // Under the spruce: ferns in beds, and here and there a hazel - in the stands only (the same stand
+  // noise as the trees), and only below the tree line.
+  bushes: {
+    noises: [
+      { name: "stand", shared: "alpsStand", type: "fbm", octaves: 3, frequency: 0.0035, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+      { name: "bed", type: "fbm", octaves: 2, frequency: 0.03, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+    ],
+    steps: [
+      { output: "standRaw", op: "sample", noise: "stand" },
+      { output: "inStand", op: "mask", input: "standRaw", at: 0.0, off: -0.35 },
+      { output: "height", op: "input", name: "height" },
+      { output: "below", op: "mask", input: "height", at: { param: "treeline", to: [62, 100] }, off: { param: "treeline", to: [82, 125] } },
+      { output: "wood", op: "multiply", a: "inStand", b: "below" },
+      { output: "bedRaw", op: "sample", noise: "bed" },
+      { output: "bed", op: "mask", input: "bedRaw", at: 0.4, off: -0.1 },
+      { output: "ferns", op: "multiply", a: "wood", b: "bed" },
+      { output: "fern", op: "scale", input: "ferns", factor: 1.2 },
+      { output: "hazel", op: "scale", input: "wood", factor: 0.08 },
+    ],
+    outputs: { fern: "fern", hazel: "hazel" },
+  },
+  // Boulders scattered all over, piled at the foot of the crags and along the water.
+  rocks: { generator: "rockDensity", kind: "boulder", frequency: 0.004, openAt: -0.4, fullAt: 0.3, peak: { range: [0.03, 0.07] }, footOfSlope: { range: [0.6, 1] }, riverShore: { range: [1, 2] }, lakeShore: { range: [1, 2] } },
+  treeTints: [
+    { kinds: ["boulder"], stone: { hue: { range: [-10, 10] }, saturation: { range: [0.5, 0.9] }, value: { range: [0.95, 1.1] }, spread: { saturation: 0.15, value: 0.12 } } },
+    {
+      kinds: ["spruce"],
+      leaves: { hue: { range: [-12, 12] }, saturation: { range: [0.8, 1.15] }, value: { range: [0.9, 1.08] }, spread: { hue: 6, saturation: 0.1, value: 0.08 } },
+      bark: { hue: { range: [-10, 10] }, saturation: { range: [0.8, 1.2] }, value: { range: [0.9, 1.1] }, spread: { value: 0.1 } },
+    },
+  ],
+  ground: {
+    base: "meadowShort",
+    road: "trackStone",
+    adjust: { hue: { range: [-6, 6] }, saturation: { range: [0.9, 1.1] }, value: { range: [0.96, 1.06] } },
+    tints: [{ family: "grassland", hue: { range: [-12, 14] }, saturation: { range: [0.7, 0.95] }, value: { range: [0.96, 1.06] } }],
+    layers: [
+      // Bare rock: the steep ground anywhere, and everything above the high pasture, whatever its
+      // slope - fading in over a wide band so the pasture breaks up into rock by degrees.
+      {
+        id: "alps-rock",
+        material: "rock",
+        weight: {
+          noises: [{ name: "break", type: "fbm", octaves: 3, frequency: 0.01, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
+          steps: [
+            { output: "height", op: "input", name: "height" },
+            { output: "breakRaw", op: "sample", noise: "break" },
+            { output: "breakShift", op: "scale", input: "breakRaw", factor: 14 },
+            { output: "broken", op: "add", a: "height", b: "breakShift" },
+            { output: "high", op: "mask", input: "broken", at: { param: "treeline", to: [120, 160] }, off: { param: "treeline", to: [90, 125] } },
+            { output: "slope", op: "input", name: "slope" },
+            { output: "steep", op: "mask", input: "slope", at: 0.72, off: 0.86 },
+            { output: "rocky", op: "max", a: "high", b: "steep" },
+            { output: "result", op: "scale", input: "rocky", factor: 2.5 },
+          ],
+        },
+      },
+      // Scree down the gullies and spilling below the crags.
+      {
+        id: "alps-scree",
+        material: "scree",
+        weight: {
+          noises: [{ name: "spill", type: "fbm", octaves: 3, frequency: 0.012, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
+          steps: [
+            { output: "curvature", op: "input", name: "reliefCurvature" },
+            { output: "spillRaw", op: "sample", noise: "spill" },
+            { output: "spillShift", op: "scale", input: "spillRaw", factor: 1.5 },
+            { output: "spilled", op: "add", a: "curvature", b: "spillShift" },
+            { output: "gully", op: "mask", input: "spilled", at: 4, off: 1.5 },
+            { output: "height", op: "input", name: "height" },
+            { output: "upper", op: "mask", input: "height", at: { param: "treeline", to: [80, 115] }, off: { param: "treeline", to: [55, 85] } },
+            { output: "upperGully", op: "multiply", a: "gully", b: "upper" },
+            { output: "result", op: "scale", input: "upperGully", factor: 3 },
+          ],
+        },
+      },
+      // Snow over everything above the area's snow line, lying further down in patches in the
+      // gullies and on the north faces.
+      // The height above the line counts for more the higher it goes, so a little above it the snow
+      // lies only in the hollows and on the north faces, well above it everywhere.
+      {
+        id: "alps-snow",
+        material: "snow",
+        weight: {
+          noises: [{ name: "patch", type: "fbm", octaves: 5, frequency: 0.008, amplitude: 1, persistence: 0.6, lacunarity: 2.1 }],
+          steps: [
+            { output: "patchRaw", op: "sample", noise: "patch" },
+            { output: "curvature", op: "input", name: "reliefCurvature" },
+            { output: "drift", op: "scale", input: "curvature", factor: 0.5 },
+            { output: "facing", op: "input", name: "slopeFacing" },
+            { output: "shade", op: "scale", input: "facing", factor: 1.2 },
+            { output: "height", op: "input", name: "height" },
+            { output: "overLine", op: "offset", input: "height", amount: { param: "snowline", to: [-75, -125] } },
+            { output: "altitude", op: "scale", input: "overLine", factor: 0.05 },
+            { output: "drifted", op: "add", a: "patchRaw", b: "drift" },
+            { output: "shaded", op: "add", a: "drifted", b: "shade" },
+            { output: "lying", op: "add", a: "shaded", b: "altitude" },
+            { output: "patches", op: "mask", input: "lying", at: 1.05, off: 0.55 },
+            { output: "result", op: "scale", input: "patches", factor: 3 },
+          ],
+        },
+      },
+      // High pasture over the tree line: a paler, thinner sward on the way up to the rock.
+      {
+        id: "alps-high-pasture",
+        material: "grassPale",
+        weight: {
+          noises: [{ name: "fray", type: "fbm", octaves: 3, frequency: 0.008, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
+          steps: [
+            { output: "height", op: "input", name: "height" },
+            { output: "frayRaw", op: "sample", noise: "fray" },
+            { output: "frayShift", op: "scale", input: "frayRaw", factor: 14 },
+            { output: "frayed", op: "add", a: "height", b: "frayShift" },
+            { output: "result", op: "mask", input: "frayed", at: { param: "treeline", to: [95, 130] }, off: { param: "treeline", to: [60, 95] } },
+          ],
+        },
+      },
+      // Drifts of alpine flowers in the open meadows, more on the sunny side.
+      {
+        id: "alps-flowers",
+        material: "alpineFlowers",
+        weight: {
+          noises: [{ name: "drift", type: "fbm", octaves: 3, frequency: 0.006, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
+          steps: [
+            { output: "driftRaw", op: "sample", noise: "drift" },
+            { output: "facing", op: "input", name: "slopeFacing" },
+            { output: "sunny", op: "scale", input: "facing", factor: -0.4 },
+            { output: "drifting", op: "add", a: "driftRaw", b: "sunny" },
+            { output: "drift", op: "mask", input: "drifting", at: 0.5, off: -0.25 },
+            { output: "slope", op: "input", name: "slope" },
+            { output: "gentle", op: "mask", input: "slope", at: 0.95, off: 0.84 },
+            { output: "cover", op: "input", name: "treeCover" },
+            { output: "open", op: "mask", input: "cover", at: 0.1, off: 0.45 },
+            { output: "openDrift", op: "multiply", a: "drift", b: "open" },
+            { output: "result", op: "multiply", a: "openDrift", b: "gentle" },
+          ],
+        },
+      },
+      // Under the spruce, the needle-strewn floor, frayed where the stand thins.
+      {
+        id: "alps-forest-floor",
+        material: "forestFloor",
+        weight: {
+          noises: [{ name: "fray", type: "fbm", octaves: 3, frequency: 0.03, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
+          steps: [
+            { output: "cover", op: "input", name: "treeCover" },
+            { output: "open", op: "invert", input: "cover" },
+            { output: "thinning", op: "multiply", a: "cover", b: "open" },
+            { output: "frayRaw", op: "sample", noise: "fray" },
+            { output: "frayHere", op: "multiply", a: "frayRaw", b: "thinning" },
+            { output: "frayShift", op: "scale", input: "frayHere", factor: 1.4 },
+            { output: "frayed", op: "add", a: "cover", b: "frayShift" },
+            { output: "result", op: "mask", input: "frayed", at: 1.0, off: 0.2 },
+          ],
+        },
+      },
+      // Stones along the streams and round the tarns, outweighing the shore sand.
+      {
+        id: "alps-stream-stones",
+        material: "pebbles",
+        weight: {
+          noises: [{ name: "reach", type: "fbm", octaves: 2, frequency: 0.02, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
+          steps: [
+            { output: "gap", op: "input", name: "riverGap" },
+            { output: "reachRaw", op: "sample", noise: "reach" },
+            { output: "reachShift", op: "scale", input: "reachRaw", factor: 9 },
+            { output: "reach", op: "add", a: "gap", b: "reachShift" },
+            { output: "band", op: "mask", input: "reach", at: 40, off: 62 },
+            { output: "lakeFactor", op: "input", name: "lakeFactor" },
+            { output: "lake", op: "mask", input: "lakeFactor", at: 0.25, off: 0.02 },
+            { output: "height", op: "input", name: "height" },
+            { output: "low", op: "mask", input: "height", at: 0.6, off: 2.6 },
+            { output: "landmass", op: "input", name: "landmass" },
+            { output: "inland", op: "mask", input: "landmass", at: 0.95, off: 0.7 },
+            { output: "pond", op: "multiply", a: "low", b: "inland" },
+            { output: "lakeOrPond", op: "max", a: "lake", b: "pond" },
+            { output: "water", op: "max", a: "band", b: "lakeOrPond" },
+            { output: "result", op: "scale", input: "water", factor: 1.5 },
+          ],
+        },
+      },
+    ],
+  },
+  // Thin, crisp air: a deep blue sky, the sun and moon bright and clean.
+  sky: {
+    horizon: { oneOf: ["#cad8e2", "#c2d4e4", "#d0dce6"] },
+    zenith: { oneOf: ["#2e5c9e", "#3464a8", "#285698"] },
+    cloud: "#fcfdff",
+    fogStart: { range: [0.45, 0.65] },
+    fogEnd: { range: [0.92, 1.0] },
+  },
+  light: {
+    sunPeak: 58,
+    moonPeak: 52,
+    sunZenith: "#fffffa",
+  },
+}

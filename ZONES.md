@@ -265,6 +265,13 @@ Existing: **broadleaf**, **pine**, **palm**.
 
 ### 9. Mountains - today: mountains
 
+- **Green alps: done** - `biomes/greenAlps.json5`. Each area one of three (`oneOf`): high ranges
+  with valleys opening between them, sharp ridged peaks floored (`smoothMax`) into valleys, or wide
+  green valleys under lower mountains. Meadow and alpine flowers below; spruce in stands to a rolled
+  tree line, ferns and hazel under them (the stand noise `shared` with the bushes); pale high
+  pasture over it, then rock by height and on steep ground, scree down the upper gullies; snow
+  growing with height over a rolled snow line, first in the hollows and on the north faces.
+
 | Variant | Ground | Plants | Trees | Extras |
 |---|---|---|---|---|
 | Green alps | rock, meadowShort low | meadow low down | spruce ★ to a tree line | snow above a high line |
