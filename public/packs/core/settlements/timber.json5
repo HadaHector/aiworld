@@ -1,5 +1,5 @@
-// The one settlement style so far, used by every core biome - built for now with the placeholder
-// house, until real house generators exist.
+// The one settlement style so far, used by every core biome: one-storey cottages, each its own
+// variant (see buildings/cottage.json5).
 {
   // How big a place grows, by tier. The best ground gets the biggest places (the score thresholds
   // are in code - see settlementConfig.ts).
@@ -15,7 +15,7 @@
   houses: {
     // The buildings its plots are built with (see buildings/), each as often as its weight over the
     // sum of them all; every house is its own variant of one.
-    buildings: [{ building: "placeholderHouse", weight: 1 }],
+    buildings: [{ building: "cottage", weight: 1 }],
     // Front wall this far back from the street's level edge. At least far enough that the whole
     // footprint is past where a plot's levelling fades out next to a street.
     setback: [3.4, 6],

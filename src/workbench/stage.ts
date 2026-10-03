@@ -317,6 +317,17 @@ function layOutBuildings(
       );
       outline.color.set(1, 0.85, 0.2);
       outline.isPickable = false;
+      // The plan's tiles, where the generator has a plan.
+      if (model.tiles && model.tiles.length > 0) {
+        const lines = model.tiles.map((t) =>
+          [[t.x0, t.z0], [t.x1, t.z0], [t.x1, t.z1], [t.x0, t.z1], [t.x0, t.z0]].map(([px, pz]) => new Vector3(x + px, height(x + px, pz) + lift * 2, pz)),
+        );
+        const plan = MeshBuilder.CreateLineSystem(`plan_${i}`, { lines }, scene);
+        plan.color.set(0.3, 0.9, 1);
+        plan.isPickable = false;
+        // Drawn over everything, so the plan shows through the house standing on it.
+        plan.renderingGroupId = 1;
+      }
       const post = MeshBuilder.CreateCylinder(`door_${i}`, { height: 3, diameter: 0.25 }, scene);
       post.position.set(x + model.door.x, height(x + model.door.x, model.door.z) + 1.5, model.door.z + 0.5);
       post.material = material;

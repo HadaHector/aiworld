@@ -6,7 +6,7 @@
  * little in common - so a building names one (its `type`), and gives it its own block of settings
  * under the generator's name. Every generator produces the same thing: a BuildingModel.
  */
-export const BUILDING_GENERATORS = ["boxes"] as const;
+export const BUILDING_GENERATORS = ["boxes", "house"] as const;
 export type BuildingGenerator = (typeof BUILDING_GENERATORS)[number];
 
 export type Rgb = [number, number, number];
@@ -26,11 +26,54 @@ export interface BoxesSpec {
   tops: Rgb[];
 }
 
+export const ROOF_TYPES = ["gable", "hip"] as const;
+export type RoofType = (typeof ROOF_TYPES)[number];
+
+/**
+ * A traditional house, one storey for now: its plan is tiles - a main block, and maybe a wing at
+ * the back and one at a side - and from the plan come its plinth, walls, corner posts, door and
+ * windows and a roof over each block. Lengths are metres; tile counts are whole tiles; each range is
+ * rolled per variant.
+ */
+export interface HouseSpec {
+  /** A tile's side: one bay of wall, one window's worth. */
+  tile: [number, number];
+  /** The main block, in tiles: along the front, and back from it. */
+  width: [number, number];
+  depth: [number, number];
+  /** How likely a wing at the back, and one at a side, and how many tiles each reaches out. */
+  backWing: number;
+  sideWing: number;
+  wingLength: [number, number];
+  /** Floor to eaves (a storey), how high the plinth lifts the floor, and how far it stands out from
+   *  the walls. */
+  wallHeight: [number, number];
+  plinth: [number, number];
+  plinthOutset: number;
+  /** The corner posts' width, either way. */
+  post: [number, number];
+  /** Picked per variant. Every block of a house has the same pitch and eave height, so where two
+   *  roofs meet their slopes cut each other along clean valleys. */
+  roofs: RoofType[];
+  /** Degrees. */
+  pitch: [number, number];
+  /** How far the roof reaches past the walls, every way, and how thick it is. */
+  overhang: number;
+  roofThickness: number;
+  /** The door, and how wide its frame is. */
+  door: { width: number; height: number; frame: number };
+  /** Each bay of wall gets a window with this chance. Closed: a frame and a pane on the wall, on a
+   *  sill `sill` above the floor that reaches `sillReach` past the frame either side and out. */
+  window: { width: number; height: number; sill: number; frame: number; sillReach: number; chance: number };
+  colors: { walls: Rgb[]; trim: Rgb[]; roof: Rgb[]; plinth: Rgb[]; door: Rgb[]; glass: Rgb[] };
+}
+
 export interface BuildingDef {
   id: string;
   name: string;
   generator: BuildingGenerator;
   boxes: BoxesSpec | null;
+  house: HouseSpec | null;
 }
 
 /**
@@ -48,4 +91,6 @@ export interface BuildingModel {
   /** Where its door is, on the footprint's edge - what a street or track leads to. */
   door: { x: number; z: number };
   height: number;
+  /** The plan's tiles, for a generator that has one - drawn over the ground in the workbench. */
+  tiles?: { x0: number; z0: number; x1: number; z1: number }[];
 }

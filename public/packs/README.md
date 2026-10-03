@@ -560,13 +560,23 @@ was cut or built up there), besides the usual inputs. A biome's own layers can r
 A building is an asset of its own, as a tree is: one file, and any number of variants from a seed.
 Features place them. How one is built is up to its generator, named by `type` - a house, a tent and
 a round tower have little in common - and the generator's settings sit in a block under its name.
-Today there is one: `boxes`, the placeholder, a main box with a door patch and smaller boxes against
-its sides and back (see `core/buildings/placeholderHouse.json5`). Every generator gives the same
+There are two:
+
+- `boxes`, the placeholder: a main box with a door patch and smaller boxes against its sides and
+  back (see `core/buildings/placeholderHouse.json5`).
+- `house`, a traditional one-storey house (see `core/buildings/cottage.json5`). Its plan is tiles -
+  each one bay of wall - in a main block and maybe a wing out of the back (a T or an L) and one out
+  of a side. From the plan come a plinth, corner posts, walls, a door in a middle bay of the front
+  and windows in other bays (closed: a frame and a pane standing on the wall), and a gable or hipped
+  roof over each block. All of a house's roofs share one pitch and eave height, so where two meet
+  they cut each other along clean valleys.
+
+Every generator gives the same
 result: geometry with its floor at height 0, the footprint centred, the front facing +z, and the
 door on the front edge.
 
 In the workbench a building stands on a patch of ground, one variant or a row of eight, with its
-footprint and door marked.
+footprint, its door and - for a generator with a plan - its tiles marked.
 
 ## Example
 

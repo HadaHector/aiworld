@@ -36,7 +36,7 @@ import type { TextureDef } from "../materials/textureGen";
 import { adjustMatrix, chainMatrix, NO_ADJUST, type ColorAdjust } from "../materials/colorAdjust";
 import type { WeatherChance, WeatherDef } from "../weather/weatherTypes";
 import { FEATURE_TYPES, NO_FEATURE, type FeatureChance, type FeatureKindDef } from "../features/featureTypes";
-import { BUILDING_GENERATORS, type BuildingDef, type Rgb } from "../buildings/buildingTypes";
+import { BUILDING_GENERATORS, ROOF_TYPES, type BuildingDef, type RoofType, type Rgb } from "../buildings/buildingTypes";
 
 /** One pack as found on disk: its folder name and every .json5 file in it, by path inside it. */
 export interface PackSource {
@@ -492,11 +492,12 @@ function readBuilding(id: string, obj: RawObject, reader: Reader): BuildingDef {
   const generator = reader.oneOf(obj, "type", "", BUILDING_GENERATORS);
   reader.onlyKeys(obj, "", ["name", "type", generator]);
   const block = reader.object(obj[generator], generator);
-  const colors = (key: string): Rgb[] => {
-    const list = reader.array(block, key, generator).map((raw, i) => reader.colorValue(raw, `${generator}.${key}[${i}]`));
-    if (list.length === 0) reader.fail(`${generator}.${key}`, "needs at least one colour");
+  const colorsIn = (obj: RawObject, path: string, key: string): Rgb[] => {
+    const list = reader.array(obj, key, path).map((raw, i) => reader.colorValue(raw, `${path}.${key}[${i}]`));
+    if (list.length === 0) reader.fail(`${path}.${key}`, "needs at least one colour");
     return list.length > 0 ? list : [[0.5, 0.5, 0.5]];
   };
+  const colors = (key: string): Rgb[] => colorsIn(block, generator, key);
   let boxes: BuildingDef["boxes"] = null;
   if (generator === "boxes") {
     reader.onlyKeys(block, generator, ["width", "depth", "height", "annexes", "annexSize", "walls", "tops"]);
@@ -510,7 +511,66 @@ function readBuilding(id: string, obj: RawObject, reader: Reader): BuildingDef {
       tops: colors("tops"),
     };
   }
-  return { id, name: reader.string(obj, "name", ""), generator, boxes };
+  let house: BuildingDef["house"] = null;
+  if (generator === "house") {
+    const path = "house";
+    reader.onlyKeys(block, path, ["tile", "width", "depth", "backWing", "sideWing", "wingLength", "wallHeight", "plinth", "plinthOutset", "post", "roofs", "pitch", "overhang", "roofThickness", "door", "window", "colors"]);
+    const door = reader.object(block.door, "house.door");
+    reader.onlyKeys(door, "house.door", ["width", "height", "frame"]);
+    const win = reader.object(block.window, "house.window");
+    reader.onlyKeys(win, "house.window", ["width", "height", "sill", "frame", "sillReach", "chance"]);
+    const palette = reader.object(block.colors, "house.colors");
+    reader.onlyKeys(palette, "house.colors", ["walls", "trim", "roof", "plinth", "door", "glass"]);
+    const roofs = reader.stringList(block, "roofs", path).filter((roof): roof is RoofType => {
+      if ((ROOF_TYPES as readonly string[]).includes(roof)) return true;
+      reader.fail("house.roofs", `"${roof}" is not a roof (known: ${ROOF_TYPES.join(", ")})`);
+      return false;
+    });
+    if (roofs.length === 0) reader.fail("house.roofs", "needs at least one roof");
+    const tiles = (key: string): [number, number] => {
+      const range = reader.range(block, key, path, { allowEqual: true });
+      if (range[0] < 1) reader.fail(`house.${key}`, "is in whole tiles, at least 1");
+      return range;
+    };
+    house = {
+      tile: reader.range(block, "tile", path, { allowEqual: true }),
+      width: tiles("width"),
+      depth: tiles("depth"),
+      backWing: reader.number(block, "backWing", path, { min: 0, max: 1 }),
+      sideWing: reader.number(block, "sideWing", path, { min: 0, max: 1 }),
+      wingLength: tiles("wingLength"),
+      wallHeight: reader.range(block, "wallHeight", path, { allowEqual: true }),
+      plinth: reader.range(block, "plinth", path, { allowEqual: true }),
+      plinthOutset: reader.number(block, "plinthOutset", path, { min: 0 }),
+      post: reader.range(block, "post", path, { allowEqual: true }),
+      roofs: roofs.length > 0 ? roofs : ["gable"],
+      pitch: reader.range(block, "pitch", path, { allowEqual: true }),
+      overhang: reader.number(block, "overhang", path, { min: 0 }),
+      roofThickness: reader.number(block, "roofThickness", path, { min: 0.01 }),
+      door: {
+        width: reader.number(door, "width", "house.door", { min: 0.3 }),
+        height: reader.number(door, "height", "house.door", { min: 0.5 }),
+        frame: reader.number(door, "frame", "house.door", { min: 0.02 }),
+      },
+      window: {
+        width: reader.number(win, "width", "house.window", { min: 0.2 }),
+        height: reader.number(win, "height", "house.window", { min: 0.2 }),
+        sill: reader.number(win, "sill", "house.window", { min: 0 }),
+        frame: reader.number(win, "frame", "house.window", { min: 0.02 }),
+        sillReach: reader.number(win, "sillReach", "house.window", { min: 0 }),
+        chance: reader.number(win, "chance", "house.window", { min: 0, max: 1 }),
+      },
+      colors: {
+        walls: colorsIn(palette, "house.colors", "walls"),
+        trim: colorsIn(palette, "house.colors", "trim"),
+        roof: colorsIn(palette, "house.colors", "roof"),
+        plinth: colorsIn(palette, "house.colors", "plinth"),
+        door: colorsIn(palette, "house.colors", "door"),
+        glass: colorsIn(palette, "house.colors", "glass"),
+      },
+    };
+  }
+  return { id, name: reader.string(obj, "name", ""), generator, boxes, house };
 }
 
 /** A features/ file - see FeatureKindDef. */
