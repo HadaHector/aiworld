@@ -18,6 +18,7 @@ import { createTextureCacheLabel } from "../debug/textureCacheLabel";
 import { sampleBiomeArea, type BiomeArea } from "./biomeArea";
 import { heightView, layerView, materialsView, plantsView, type Rgb } from "./biomeViews";
 import { generateBuilding } from "../world/buildings/buildingGenerator";
+import { bakeBuildingTextures } from "../world/buildings/buildingMesh";
 
 // ---------------------------------------------------------------------------------------------
 // Assets: every file of every pack, by "pack/folder/id".
@@ -34,13 +35,13 @@ interface Asset {
 }
 
 /** The folders with a preview, and what each asset kind can be looked at as. */
-type PreviewFolder = "materials" | "trees" | "bushes" | "rocks" | "grass" | "biomes" | "buildings";
-const PREVIEW_FOLDERS: PreviewFolder[] = ["materials", "trees", "bushes", "rocks", "grass", "biomes", "buildings"];
+type PreviewFolder = "materials" | "trees" | "bushes" | "rocks" | "grass" | "biomes" | "buildings" | "buildingMaterials";
+const PREVIEW_FOLDERS: PreviewFolder[] = ["materials", "trees", "bushes", "rocks", "grass", "biomes", "buildings", "buildingMaterials"];
 /** How many variants of a building the Variant menu steps through - a building has no fixed count,
  *  every seed is one. */
 const BUILDING_VARIANTS = 8;
 /** Everything else is listed after these, its JSON still checked by Preview. */
-const FOLDER_ORDER = ["materials", "trees", "bushes", "rocks", "grass", "biomes", "buildings", "features", "layers", "borderHills", "settlements", "voices", "patches", ""];
+const FOLDER_ORDER = ["materials", "trees", "bushes", "rocks", "grass", "biomes", "buildings", "buildingMaterials", "features", "layers", "borderHills", "settlements", "voices", "patches", ""];
 
 interface ViewDef {
   id: string;
@@ -470,6 +471,8 @@ function viewsFor(asset: Asset | null, content: WorldContent | null): ViewDef[] 
         { id: "placed", label: "On the ground", mode: "3d" },
         { id: "model", label: "Model", mode: "3d" },
       ];
+    case "buildingMaterials":
+      return [{ id: "texture", label: "Texture", mode: "2d" }];
     case "biomes":
       return [
         { id: "height", label: "Height", mode: "2d" },
@@ -927,7 +930,12 @@ async function preview2d(token: number, asset: Asset, view: ViewDef, content: Wo
     let color: Uint8Array;
     let normal: Uint8Array;
     let matrix: ColorMatrix | undefined;
-    if (view.id === "texture") {
+    if (view.id === "texture" && asset.folder === "buildingMaterials") {
+      const def = content.buildingMaterials.find((m) => m.id === asset.id)!;
+      const baked = await bakeBuildingTextures(seed, [def]);
+      color = baked.colorBuffer;
+      normal = baked.normalBuffer;
+    } else if (view.id === "texture") {
       const material = content.materials.find((m) => m.id === asset.id)!;
       const baked = await bakedGround(material, seed);
       color = baked.colorBuffer;

@@ -1,7 +1,7 @@
 import { deriveSeed } from "../../rng";
 import { createTilingOctaveSampler, createWorldOctaveSampler, fbm, type Noise2D, type FbmParams } from "../noise";
 import { ridgedNoise2D, billowNoise2D, worleyNoise2D, type OctaveNoiseParams } from "./noiseGenerators";
-import type { NoiseSpec, PipelineDef, PipelineStep, ValueType, WaveShape, WorleyMode } from "./pipelineTypes";
+import type { BricksNoiseSpec, CellMode, NoiseSpec, PipelineDef, PipelineStep, ValueType, WaveShape } from "./pipelineTypes";
 
 /** A compiled single-result pipeline samples world-space noise like a Noise2D, but can also pull in
  *  named external values (e.g. "height", "slope", a biome flag) via an optional context bag - used
@@ -73,8 +73,45 @@ function triangleProfile(rise: number, crest: number, trough: number): (t: numbe
   };
 }
 
+/** A `bricks` noise. Over a tiling texture the courses and the cells along them wrap with it, so a
+ *  brick cut by the tile's edge is the same brick, with the same random value, on the other side. */
+function bricksNoise(spec: BricksNoiseSpec, seed: number, tilePeriod: number | undefined): Noise2D {
+  const { columns, rows, stagger, amplitude, mode } = spec;
+  const rowsPerTile = tilePeriod === undefined ? 0 : Math.round(rows * tilePeriod);
+  const columnsPerTile = tilePeriod === undefined ? 0 : Math.round(columns * tilePeriod);
+  const wrap = (value: number, count: number): number => (count > 0 ? ((value % count) + count) % count : value);
+  return (x: number, y: number): number => {
+    const course = y * rows;
+    const row = Math.floor(course);
+    const v = course - row;
+    const along = x * columns + row * stagger;
+    const column = Math.floor(along);
+    const u = along - column;
+    switch (mode) {
+      case "u":
+        return u * amplitude;
+      case "v":
+        return v * amplitude;
+      case "edge": {
+        // In rows: across a course its own height, along it the cell's length over the row height.
+        const acrossJoint = Math.min(v, 1 - v);
+        const alongJoint = (Math.min(u, 1 - u) * rows) / columns;
+        return Math.min(acrossJoint, alongJoint) * amplitude;
+      }
+      case "cell": {
+        let h = Math.imul(wrap(row, rowsPerTile) | 0, 0x27d4eb2d) ^ Math.imul(wrap(column, columnsPerTile) | 0, 0x165667b1) ^ seed;
+        h = Math.imul(h ^ (h >>> 15), 0x2c1b3c6d);
+        h = Math.imul(h ^ (h >>> 12), 0x297a2d39);
+        return (((h ^ (h >>> 15)) >>> 0) / 0x100000000) * amplitude;
+      }
+    }
+  };
+}
+
 function compileNoiseSpec(spec: NoiseSpec, rootSeed: number, namespace: string, tilePeriod: number | undefined): Noise2D {
   const seed = spec.shared !== undefined ? deriveNoiseSeed(rootSeed, "shared", spec.shared) : deriveNoiseSeed(rootSeed, namespace, spec.name);
+
+  if (spec.type === "bricks") return bricksNoise(spec, seed, tilePeriod);
 
   if (spec.type === "wave") {
     const [frequencyX, frequencyY] = spec.frequency;
@@ -203,7 +240,7 @@ function resultTypeOf(step: PipelineStep, resolve: (name: string) => SlotRef): V
 function compileStep(
   step: PipelineStep,
   resolve: (name: string) => SlotRef,
-  noiseFor: (name: string, mode?: WorleyMode) => Noise2D | undefined,
+  noiseFor: (name: string, mode?: CellMode) => Noise2D | undefined,
   out: SlotRef,
   namespace: string,
 ): StepFn {
@@ -215,7 +252,7 @@ function compileStep(
       if (!noise2D) {
         throw new Error(
           step.mode
-            ? `Pipeline "${namespace}" reads "${step.noise}" as ${step.mode}, which only a worley noise can be`
+            ? `Pipeline "${namespace}" reads "${step.noise}" as ${step.mode}, which it cannot be read as`
             : `Pipeline "${namespace}" references unknown step/noise "${step.noise}"`,
         );
       }
@@ -418,11 +455,13 @@ function compileGraph(def: PipelineDef, rootSeed: number, namespace: string, til
     noiseSamplers.set(noiseSpec.name, compileNoiseSpec(noiseSpec, rootSeed, namespace, tilePeriod));
   }
   const noiseSpecs = new Map(def.noises.map((spec) => [spec.name, spec]));
-  const noiseFor = (name: string, mode?: WorleyMode): Noise2D | undefined => {
+  const noiseFor = (name: string, mode?: CellMode): Noise2D | undefined => {
     const spec = noiseSpecs.get(name);
     if (!spec || !mode) return noiseSamplers.get(name);
-    if (spec.type !== "worley") return undefined;
-    return mode === spec.mode ? noiseSamplers.get(name) : compileNoiseSpec({ ...spec, mode }, rootSeed, namespace, tilePeriod);
+    if ((spec.type === "worley" || spec.type === "bricks") && mode === spec.mode) return noiseSamplers.get(name);
+    if (spec.type === "worley" && (mode === "f1" || mode === "edge" || mode === "cell")) return compileNoiseSpec({ ...spec, mode }, rootSeed, namespace, tilePeriod);
+    if (spec.type === "bricks" && mode !== "f1") return compileNoiseSpec({ ...spec, mode }, rootSeed, namespace, tilePeriod);
+    return undefined;
   };
 
   if (def.steps.length === 0) {

@@ -1,4 +1,4 @@
-import type { BuildingModel, HouseSpec, Rgb, RoofType } from "./buildingTypes";
+import type { BuildingModel, HouseSpec, Paint, RoofType } from "./buildingTypes";
 import { FOUNDATION_DEPTH, ModelBuilder, pick, roll, rollInt, type Vec3 } from "./buildingGeometry";
 
 /**
@@ -42,6 +42,16 @@ interface RoofEnd {
 }
 
 const UP: Vec3 = [0, 1, 0];
+
+/**
+ * How far a door's and a window's parts stand out from the wall's face (metres), each layer well clear
+ * of the one behind it - a few centimetres reads as a flat decal and flickers into the layer behind
+ * at a distance, where the depth buffer is coarse. The frame stands proudest, the glazing bars in
+ * front of the pane, the pane well in front of the wall. Every part starts a little inside the wall,
+ * so none of them has a face lying in the wall's own plane.
+ */
+const OUT = { pane: 0.06, bars: 0.1, door: 0.08, frame: 0.15, lintel: 0.18 };
+const SET_IN = -0.03;
 const DOWN: Vec3 = [0, -1, 0];
 
 /** The plan: the main block and any wings, each wing with how its roof meets the main block's. */
@@ -181,7 +191,7 @@ function roofBlock(
   eaves: number,
   slope: number,
   overhang: number,
-  wall: Rgb,
+  wall: Paint,
 ): BlockRoof {
   const half = (c1 - c0) / 2;
   const middle = (c0 + c1) / 2;
@@ -272,13 +282,15 @@ function alongOpenEdge(face: RoofFace, p: Point, q: Point): boolean {
 }
 
 /** A slope drawn as a slab `thickness` thick: its underside on its plane, its top lifted straight up
- *  by as much as makes it that thick across the slope, and its open edges closed. */
-function drawSlab(b: ModelBuilder, face: RoofFace, slope: number, thickness: number, color: Rgb): void {
+ *  by as much as makes it that thick across the slope, and its open edges closed. Its top is the
+ *  roof's covering; its underside and edges are timber. */
+function drawSlab(b: ModelBuilder, face: RoofFace, slope: number, thickness: number, top: Paint, timber: Paint): void {
   const lift = thickness * Math.sqrt(1 + slope * slope);
   const under = face.polygon.map((p): Vec3 => [p[0], heightOn(face.plane, p), p[1]]);
-  const top = under.map(([x, y, z]): Vec3 => [x, y + lift, z]);
-  b.faceToward(top, UP, color);
-  b.faceToward(under, DOWN, color);
+  const over = under.map(([x, y, z]): Vec3 => [x, y + lift, z]);
+  // The covering on top; the boards under it run up the slope, and along its edges.
+  b.faceToward(over, UP, top);
+  b.faceToward(under, DOWN, timber);
   const cx = under.reduce((sum, v) => sum + v[0], 0) / under.length;
   const cz = under.reduce((sum, v) => sum + v[2], 0) / under.length;
   face.polygon.forEach((p, i) => {
@@ -286,7 +298,7 @@ function drawSlab(b: ModelBuilder, face: RoofFace, slope: number, thickness: num
     const q = face.polygon[j];
     if (!alongOpenEdge(face, p, q)) return;
     const away: Vec3 = [(p[0] + q[0]) / 2 - cx, 0, (p[1] + q[1]) / 2 - cz];
-    b.faceToward([under[i], under[j], top[j], top[i]], away, color);
+    b.faceToward([under[i], under[j], over[j], over[i]], away, timber, [q[0] - p[0], 0, q[1] - p[1]]);
   });
 }
 
@@ -304,13 +316,14 @@ export function buildHouse(spec: HouseSpec, rng: () => number): BuildingModel {
   const eaves = plinth + wallHeight;
   const roofType = pick(spec.roofs, rng);
   const slope = Math.tan((roll(spec.pitch, rng) * Math.PI) / 180);
-  const colors = {
-    wall: pick(spec.colors.walls, rng),
-    trim: pick(spec.colors.trim, rng),
-    roof: pick(spec.colors.roof, rng),
-    plinth: pick(spec.colors.plinth, rng),
-    door: pick(spec.colors.door, rng),
-    glass: pick(spec.colors.glass, rng),
+  const paint = (part: keyof HouseSpec["parts"]): Paint => ({ material: spec.parts[part].material, tint: pick(spec.parts[part].tints, rng) });
+  const paints = {
+    walls: paint("walls"),
+    timber: paint("timber"),
+    roof: paint("roof"),
+    plinth: paint("plinth"),
+    door: paint("door"),
+    glass: paint("glass"),
   };
 
   // Tiles to metres, with the plan's bounding box centred on the origin.
@@ -340,7 +353,7 @@ export function buildHouse(spec: HouseSpec, rng: () => number): BuildingModel {
       alongX ? [X(along), y, lineAt + sign * out] : [lineAt + sign * out, y, Z(along)];
     /** A box against the face: `along` metres either side of a point (tiles), standing out
      *  between `out0` and `out1` metres. */
-    const box = (centre: number, halfAlong: number, y0: number, y1: number, out0: number, out1: number, color: Rgb): void => {
+    const box = (centre: number, halfAlong: number, y0: number, y1: number, out0: number, out1: number, color: Paint): void => {
       const [ax, , az] = at(centre, out0, 0);
       const [bx, , bz] = at(centre, out1, 0);
       if (alongX) {
@@ -365,15 +378,15 @@ export function buildHouse(spec: HouseSpec, rng: () => number): BuildingModel {
     const grow = (kind: "outer" | "inner"): number => (kind === "outer" ? outset : -outset) / tile;
     const p0 = run.from - grow(startCorner);
     const p1 = run.to + grow(endCorner);
-    b.face([at(p0, outset, -FOUNDATION_DEPTH), at(p1, outset, -FOUNDATION_DEPTH), at(p1, outset, plinth), at(p0, outset, plinth)], normal, colors.plinth);
-    b.faceToward([at(p0, outset, plinth), at(p1, outset, plinth), at(run.to, 0, plinth), at(run.from, 0, plinth)], UP, colors.plinth);
-    b.face([at(run.from, 0, plinth), at(run.to, 0, plinth), at(run.to, 0, eaves), at(run.from, 0, eaves)], normal, colors.wall);
+    b.face([at(p0, outset, -FOUNDATION_DEPTH), at(p1, outset, -FOUNDATION_DEPTH), at(p1, outset, plinth), at(p0, outset, plinth)], normal, paints.plinth);
+    b.faceToward([at(p0, outset, plinth), at(p1, outset, plinth), at(run.to, 0, plinth), at(run.from, 0, plinth)], UP, paints.plinth);
+    b.face([at(run.from, 0, plinth), at(run.to, 0, plinth), at(run.to, 0, eaves), at(run.from, 0, eaves)], normal, paints.walls);
     for (const along of [run.from, run.to]) corners.add(alongX ? `${along},${run.line}` : `${run.line},${along}`);
   }
   for (const key of corners) {
     const [i, j] = key.split(",").map(Number);
     const h = post / 2;
-    b.box(X(i) - h, plinth, Z(j) - h, X(i) + h, eaves, Z(j) + h, colors.trim);
+    b.box(X(i) - h, plinth, Z(j) - h, X(i) + h, eaves, Z(j) + h, paints.timber);
   }
 
   // The door: in a middle bay of the main block's front.
@@ -386,11 +399,11 @@ export function buildHouse(spec: HouseSpec, rng: () => number): BuildingModel {
     const centre = doorBay + 0.5;
     const half = Math.min(door.width, tile * 0.8) / 2;
     const f = door.frame;
-    box(centre, half, plinth, doorTop, 0, 0.05, colors.door);
+    box(centre, half, plinth, doorTop, SET_IN, OUT.door, paints.door);
     // Jambs at the door's two edges, and a lintel over it reaching past them.
-    box(centre - (half + f / 2) / tile, f / 2, plinth, doorTop + f, 0, 0.1, colors.trim);
-    box(centre + (half + f / 2) / tile, f / 2, plinth, doorTop + f, 0, 0.1, colors.trim);
-    box(centre, half + f * 1.25, doorTop, doorTop + f, 0, 0.12, colors.trim);
+    box(centre - (half + f / 2) / tile, f / 2, plinth, doorTop + f, SET_IN, OUT.frame, paints.timber);
+    box(centre + (half + f / 2) / tile, f / 2, plinth, doorTop + f, SET_IN, OUT.frame, paints.timber);
+    box(centre, half + f * 1.25, doorTop, doorTop + f, SET_IN, OUT.lintel, paints.timber);
   }
 
   // Windows: any bay of any wall but the door's, with the window's own chance.
@@ -405,14 +418,14 @@ export function buildHouse(spec: HouseSpec, rng: () => number): BuildingModel {
       const centre = bay + 0.5;
       const half = Math.min(win.width, tile * 0.7) / 2;
       const f = win.frame;
-      box(centre, half, sill, head, 0, 0.03, colors.glass);
+      box(centre, half, sill, head, SET_IN, OUT.pane, paints.glass);
       // Frame, a cross of glazing bars, and a sill below, wider and standing further out.
-      box(centre - (half + f / 2) / tile, f / 2, sill, head + f, 0, 0.08, colors.trim);
-      box(centre + (half + f / 2) / tile, f / 2, sill, head + f, 0, 0.08, colors.trim);
-      box(centre, half + f, head, head + f, 0, 0.08, colors.trim);
-      box(centre, f / 4, sill, head, 0, 0.06, colors.trim);
-      box(centre, half, (sill + head) / 2 - f / 4, (sill + head) / 2 + f / 4, 0, 0.06, colors.trim);
-      box(centre, half + f + win.sillReach, sill - f, sill, 0, f + win.sillReach, colors.trim);
+      box(centre - (half + f / 2) / tile, f / 2, sill, head + f, SET_IN, OUT.frame, paints.timber);
+      box(centre + (half + f / 2) / tile, f / 2, sill, head + f, SET_IN, OUT.frame, paints.timber);
+      box(centre, half + f, head, head + f, SET_IN, OUT.frame, paints.timber);
+      box(centre, f / 4, sill, head, SET_IN, OUT.bars, paints.timber);
+      box(centre, half, (sill + head) / 2 - f / 4, (sill + head) / 2 + f / 4, SET_IN, OUT.bars, paints.timber);
+      box(centre, half + f + win.sillReach, sill - f, sill, SET_IN, OUT.frame + win.sillReach, paints.timber);
     }
   }
 
@@ -431,14 +444,14 @@ export function buildHouse(spec: HouseSpec, rng: () => number): BuildingModel {
     const gable = wingHere || (left ? backFlushLeft : backFlushRight);
     return { kind: gable ? "gable" : roofType, overhang, extend: 0 };
   };
-  const roofs: BlockRoof[] = [roofBlock(b, X(main.i0), X(main.i1), Z(main.j0), Z(main.j1), true, mainEnd(true), mainEnd(false), eaves, slope, overhang, colors.wall)];
+  const roofs: BlockRoof[] = [roofBlock(b, X(main.i0), X(main.i1), Z(main.j0), Z(main.j1), true, mainEnd(true), mainEnd(false), eaves, slope, overhang, paints.walls)];
   if (back) {
     const halfSpan = ((back.i1 - back.i0) * tile) / 2;
-    roofs.push(roofBlock(b, Z(back.j0), Z(back.j1), X(back.i0), X(back.i1), false, free(), { kind: "attached", overhang: 0, extend: halfSpan }, eaves, slope, overhang, colors.wall));
+    roofs.push(roofBlock(b, Z(back.j0), Z(back.j1), X(back.i0), X(back.i1), false, free(), { kind: "attached", overhang: 0, extend: halfSpan }, eaves, slope, overhang, paints.walls));
   }
   if (side) {
     const attached: RoofEnd = { kind: "attached", overhang: 0, extend: 0 };
-    roofs.push(roofBlock(b, X(side.i0), X(side.i1), Z(side.j0), Z(side.j1), true, side.left ? free() : attached, side.left ? attached : free(), eaves, slope, overhang, colors.wall));
+    roofs.push(roofBlock(b, X(side.i0), X(side.i1), Z(side.j0), Z(side.j1), true, side.left ? free() : attached, side.left ? attached : free(), eaves, slope, overhang, paints.walls));
   }
   roofs.forEach((roof, k) => {
     let faces = roof.faces;
@@ -446,7 +459,7 @@ export function buildHouse(spec: HouseSpec, rng: () => number): BuildingModel {
       // A wing yields to the main block (the first roof) where their slopes share a plane.
       if (m !== k) faces = faces.flatMap((face) => cutUnder(face, other, m < k));
     });
-    for (const face of faces) drawSlab(b, face, slope, spec.roofThickness, colors.roof);
+    for (const face of faces) drawSlab(b, face, slope, spec.roofThickness, paints.roof, paints.timber);
   });
 
   const tiles: NonNullable<BuildingModel["tiles"]> = [];

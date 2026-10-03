@@ -9,6 +9,7 @@ import { createBushScatter, createRockScatter, createTreeCover, createTreeScatte
 import { createTreeField, type TreeField } from "./foliage/treeField";
 import { createGrassField, type GrassField } from "./foliage/grassField";
 import { createSettlementRenderer } from "./settlements/settlementRenderer";
+import { bakeBuildingTextures, createBuildingMaterial } from "./buildings/buildingMesh";
 import type { SettlementLayout } from "./settlements/settlementLayout";
 import { createSunLighting, DEFAULT_DAY_NIGHT_CYCLE_MINUTES } from "./lighting/sunLighting";
 import { createSkyDome } from "./sky/skyDome";
@@ -160,11 +161,13 @@ export async function createWorld(
     areaBiomes.map((biome, areaId) => treeTintRules(WORLD_SEED, areaId, biome)),
   );
   const grass = createGrassField(scene, WORLD_SEED, materialLibrary.litShading, content.grassKinds);
+  onProgress?.({ phase: "Baking building materials", completed: 0, total: 0 });
+  const buildingMaterial = createBuildingMaterial(scene, materialLibrary.litShading, await bakeBuildingTextures(WORLD_SEED, content.buildingMaterials));
   const buildings = createSettlementRenderer(
     scene,
     settlementLayouts,
     WORLD_SEED,
-    materialLibrary.litShading,
+    buildingMaterial,
     sunLighting.shadowGenerator,
     DEFAULT_DRAW_DISTANCE,
   );

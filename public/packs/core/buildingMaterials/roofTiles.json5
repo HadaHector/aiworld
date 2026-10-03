@@ -1,0 +1,61 @@
+// Fired clay roof tiles: rounded terracotta tiles in overlapping courses, each its own shade from red
+// to brown, each course's lower edge standing proud of the one below and casting a dark line.
+{
+  name: "Roof Tiles",
+  // 8 tiles across and 10 courses up the slope a repeat: 75 x 60 cm each.
+  size: 6,
+  shine: 0.15,
+  texture: {
+    bumpStrength: 3,
+    pipeline: {
+      noises: [
+        { name: "tiles", type: "bricks", tileCycles: [8, 10], stagger: 0.5, amplitude: 1, mode: "edge" },
+        { name: "weather", type: "fbm", octaves: 3, tileCycles: 6, amplitude: 1, persistence: 0.55, lacunarity: 2 },
+        { name: "clay", type: "fbm", octaves: 2, tileCycles: 120, amplitude: 1, persistence: 0.5, lacunarity: 2 },
+      ],
+      steps: [
+        { output: "joint", op: "sample", noise: "tiles" },
+        { output: "tileId", op: "sample", noise: "tiles", mode: "cell" },
+        { output: "across", op: "sample", noise: "tiles", mode: "u" },
+        { output: "up", op: "sample", noise: "tiles", mode: "v" },
+        { output: "weatherRaw", op: "sample", noise: "weather" },
+        { output: "clayRaw", op: "sample", noise: "clay" },
+
+        // Each tile is a half-round across its width, and thickest at its lower edge, where it lies
+        // over the course below; thinnest under the course above.
+        { output: "barrel", op: "sin", input: "across", cycles: 0.5 },
+        { output: "thickness", op: "invert", input: "up" },
+        { output: "barrelHeight", op: "scale", input: "barrel", factor: 0.6 },
+        { output: "courseHeight", op: "scale", input: "thickness", factor: 0.5 },
+        { output: "tileHeight", op: "add", a: "barrelHeight", b: "courseHeight" },
+        { output: "gap", op: "mask", input: "joint", at: 0.0, off: 0.025 },
+        { output: "gapDepth", op: "scale", input: "gap", factor: -0.4 },
+        { output: "clayBump", op: "scale", input: "clayRaw", factor: 0.05 },
+        { output: "shaped", op: "add", a: "tileHeight", b: "gapDepth" },
+        { output: "height", op: "add", a: "shaped", b: "clayBump" },
+
+        {
+          output: "tileTone",
+          op: "colorRamp",
+          input: "tileId",
+          stops: [
+            { at: 0.0, color: [0.62, 0.3, 0.2] },
+            { at: 0.35, color: [0.7, 0.36, 0.23] },
+            { at: 0.6, color: [0.55, 0.28, 0.19] },
+            { at: 0.85, color: [0.66, 0.4, 0.28] },
+            { at: 1.0, color: [0.48, 0.25, 0.18] },
+          ],
+        },
+        // Weathered unevenly over the roof, a little darker towards the covered top of each tile.
+        { output: "weatherShade", op: "remap", input: "weatherRaw", inMin: -1, inMax: 1, outMin: 0.75, outMax: 1.05 },
+        { output: "upShade", op: "remap", input: "up", inMin: 0, inMax: 1, outMin: 1.05, outMax: 0.8 },
+        { output: "shade", op: "multiply", a: "weatherShade", b: "upShade" },
+        { output: "tile", op: "multiply", a: "tileTone", b: "shade" },
+        { output: "gapColor", op: "color", value: [0.12, 0.08, 0.07] },
+        { output: "diffuse", op: "mix", a: "tile", b: "gapColor", t: "gap" },
+        { output: "roughness", op: "constant", value: 0.7 },
+      ],
+      outputs: { diffuse: "diffuse", roughness: "roughness", height: "height" },
+    },
+  },
+}

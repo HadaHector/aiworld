@@ -1,4 +1,4 @@
-import { ArcRotateCamera, Color4, Mesh, MeshBuilder, Scene, Vector3, VertexData, type Engine } from "@babylonjs/core";
+import { ArcRotateCamera, Color3, Color4, Mesh, MeshBuilder, Scene, StandardMaterial, Vector3, VertexData, type Engine } from "@babylonjs/core";
 import type { AreaWeight } from "../world/cells/areaField";
 import type { BiomeDefinition } from "../world/biomes/biomeTypes";
 import type { WorldContent } from "../world/content/worldContent";
@@ -17,7 +17,7 @@ import { scatterGrass } from "../world/foliage/grassScatter";
 import { createTreeField } from "../world/foliage/treeField";
 import { NO_WEATHER } from "../world/weather/weatherTypes";
 import type { BuildingModel } from "../world/buildings/buildingTypes";
-import { createBuildingMaterial, createBuildingMesh } from "../world/buildings/buildingMesh";
+import { appendModel, bakeBuildingTextures, createBuildingMaterial, createBuildingMesh, emptyGeometry, type BuildingMaterial } from "../world/buildings/buildingMesh";
 
 /** The ground's shape under a preview. */
 export type GroundShape = "flat" | "hills" | "steep";
@@ -208,8 +208,10 @@ export async function createStage(engine: Engine, canvas: HTMLCanvasElement, opt
     }
 
     if (options.buildings && options.buildings.length > 0) {
+      options.onProgress?.("Baking building materials");
+      const buildingMaterial = createBuildingMaterial(scene, litShading, await bakeBuildingTextures(seed, content.buildingMaterials));
       options.onProgress?.("Raising buildings");
-      framing = layOutBuildings(scene, options.buildings, height, litShading, sunLighting.shadowGenerator, options.footprints === true);
+      framing = layOutBuildings(scene, options.buildings, height, buildingMaterial, sunLighting.shadowGenerator, options.footprints === true);
     }
 
     // Far enough back for the whole row and the tallest top to fit the view, whichever way the
@@ -292,17 +294,21 @@ function layOutBuildings(
   scene: Scene,
   models: BuildingModel[],
   height: (x: number, z: number) => number,
-  litShading: LitShading,
+  material: BuildingMaterial,
   shadowGenerator: { addShadowCaster: (mesh: Mesh, includeDescendants?: boolean) => void },
   marks: boolean,
 ): { width: number; height: number } {
-  const material = createBuildingMaterial(scene, litShading);
+  const markMaterial = new StandardMaterial("doorMark", scene);
+  markMaterial.emissiveColor = new Color3(1, 0.85, 0.2);
+  markMaterial.disableLighting = true;
   const gap = 4;
   const width = models.reduce((sum, model) => sum + model.halfWidth * 2, 0) + gap * Math.max(0, models.length - 1);
   let x = -width / 2;
   models.forEach((model, i) => {
     x += model.halfWidth;
-    const mesh = createBuildingMesh(scene, `building_${i}`, model, material);
+    const geometry = emptyGeometry();
+    appendModel(geometry, model, material.layerOf, (px, py, pz) => [px, py, pz]);
+    const mesh = createBuildingMesh(scene, `building_${i}`, geometry, material);
     const y = height(x, 0);
     mesh.position.set(x, y, 0);
     shadowGenerator.addShadowCaster(mesh, false);
@@ -330,8 +336,7 @@ function layOutBuildings(
       }
       const post = MeshBuilder.CreateCylinder(`door_${i}`, { height: 3, diameter: 0.25 }, scene);
       post.position.set(x + model.door.x, height(x + model.door.x, model.door.z) + 1.5, model.door.z + 0.5);
-      post.material = material;
-      post.setVerticesData("color", new Array((post.getTotalVertices()) * 4).fill(0).map((_, k) => [1, 0.85, 0.2, 1][k % 4]));
+      post.material = markMaterial;
       post.isPickable = false;
     }
     x += model.halfWidth + gap;

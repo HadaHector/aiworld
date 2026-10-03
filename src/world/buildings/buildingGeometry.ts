@@ -1,15 +1,39 @@
-import type { BuildingModel, Rgb } from "./buildingTypes";
+import type { BuildingModel, Paint, Rgb } from "./buildingTypes";
 
 /** How far below its floor a building reaches, so it never stands on air at the edge of its plot. */
 export const FOUNDATION_DEPTH = 1.2;
 
 export type Vec3 = [number, number, number];
 
-/** Geometry being built up by a generator, and its extent so far. */
+const UP: Vec3 = [0, 1, 0];
+
+const dot = (a: Vec3, b: Vec3): number => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+const cross = (a: Vec3, b: Vec3): Vec3 => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+const normalize = (a: Vec3): Vec3 => {
+  const length = Math.hypot(a[0], a[1], a[2]) || 1;
+  return [a[0] / length, a[1] / length, a[2] / length];
+};
+/** `a` with its part along unit `n` taken out: what of it lies in the plane `n` is normal to. */
+const inPlane = (a: Vec3, n: Vec3): Vec3 => {
+  const d = dot(a, n);
+  return [a[0] - n[0] * d, a[1] - n[1] * d, a[2] - n[2] * d];
+};
+
+/**
+ * Geometry being built up by a generator, and its extent so far.
+ *
+ * Every face is textured in metres. Its v runs "up" it: up a wall, up a roof's slope (so roof tiles
+ * lie in rows along the eaves) - or along `grain` where a face is given one, which is how a beam's
+ * wood runs along the beam, whichever way it lies. A level face with no grain runs v along z.
+ */
 export class ModelBuilder {
   positions: number[] = [];
   normals: number[] = [];
+  tangents: number[] = [];
+  uvs: number[] = [];
   colors: number[] = [];
+  materialSlots: number[] = [];
+  materials: string[] = [];
   indices: number[] = [];
   minX = Infinity;
   maxX = -Infinity;
@@ -17,52 +41,76 @@ export class ModelBuilder {
   maxZ = -Infinity;
   maxY = 0;
 
-  private vertex([x, y, z]: Vec3, normal: Vec3, color: Rgb): void {
-    this.positions.push(x, y, z);
-    this.normals.push(...normal);
-    this.colors.push(color[0], color[1], color[2], 1);
-    this.minX = Math.min(this.minX, x);
-    this.maxX = Math.max(this.maxX, x);
-    this.minZ = Math.min(this.minZ, z);
-    this.maxZ = Math.max(this.maxZ, z);
-    this.maxY = Math.max(this.maxY, y);
+  private slotOf(material: string | null): number {
+    if (material === null) return -1;
+    let slot = this.materials.indexOf(material);
+    if (slot < 0) {
+      slot = this.materials.length;
+      this.materials.push(material);
+    }
+    return slot;
   }
 
-  /** A flat polygon (a triangle or a quad, corners in order) with the given normal. */
-  face(corners: Vec3[], normal: Vec3, color: Rgb): void {
+  /** A flat polygon (corners in order, convex) with the given normal. */
+  face(corners: Vec3[], normal: Vec3, paint: Paint, grain?: Vec3): void {
+    let v = grain ? inPlane(grain, normal) : inPlane(UP, normal);
+    if (Math.hypot(...v) < 1e-3) v = inPlane(grain ? UP : [0, 0, 1], normal);
+    if (Math.hypot(...v) < 1e-3) v = inPlane([0, 0, 1], normal);
+    v = normalize(v);
+    const u = normalize(cross(v, normal));
+    const slot = this.slotOf(paint.material);
     const base = this.positions.length / 3;
-    for (const corner of corners) this.vertex(corner, normal, color);
+    for (const corner of corners) {
+      const [x, y, z] = corner;
+      this.positions.push(x, y, z);
+      this.normals.push(...normal);
+      this.tangents.push(...u);
+      this.uvs.push(dot(corner, u), dot(corner, v));
+      this.colors.push(paint.tint[0], paint.tint[1], paint.tint[2], 1);
+      this.materialSlots.push(slot);
+      this.minX = Math.min(this.minX, x);
+      this.maxX = Math.max(this.maxX, x);
+      this.minZ = Math.min(this.minZ, z);
+      this.maxZ = Math.max(this.maxZ, z);
+      this.maxY = Math.max(this.maxY, y);
+    }
     for (let i = 1; i < corners.length - 1; i++) this.indices.push(base, base + i, base + i + 1);
   }
 
   /** A flat polygon whose normal is worked out from its corners, turned to face `towards`'s side
    *  (up, for a roof). */
-  faceToward(corners: Vec3[], towards: Vec3, color: Rgb): void {
+  faceToward(corners: Vec3[], towards: Vec3, paint: Paint, grain?: Vec3): void {
     const [a, b, c] = corners;
-    const u = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
-    const v = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
-    let n: Vec3 = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
-    const length = Math.hypot(...n) || 1;
-    n = [n[0] / length, n[1] / length, n[2] / length];
-    if (n[0] * towards[0] + n[1] * towards[1] + n[2] * towards[2] < 0) n = [-n[0], -n[1], -n[2]];
-    this.face(corners, n, color);
+    let n = normalize(cross([b[0] - a[0], b[1] - a[1], b[2] - a[2]], [c[0] - a[0], c[1] - a[1], c[2] - a[2]]));
+    if (dot(n, towards) < 0) n = [-n[0], -n[1], -n[2]];
+    this.face(corners, n, paint, grain);
   }
 
-  /** An axis-aligned box from (x0, y0, z0) to (x1, y1, z1): its four sides and its top. No bottom -
-   *  it stands on something. `top` defaults to the sides' colour. */
-  box(x0: number, y0: number, z0: number, x1: number, y1: number, z1: number, wall: Rgb, top: Rgb = wall): void {
-    this.face([[x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1]], [0, 0, 1], wall);
-    this.face([[x1, y0, z0], [x0, y0, z0], [x0, y1, z0], [x1, y1, z0]], [0, 0, -1], wall);
-    this.face([[x1, y0, z1], [x1, y0, z0], [x1, y1, z0], [x1, y1, z1]], [1, 0, 0], wall);
-    this.face([[x0, y0, z0], [x0, y0, z1], [x0, y1, z1], [x0, y1, z0]], [-1, 0, 0], wall);
-    this.face([[x0, y1, z1], [x1, y1, z1], [x1, y1, z0], [x0, y1, z0]], [0, 1, 0], top);
+  /**
+   * An axis-aligned box from (x0, y0, z0) to (x1, y1, z1): its four sides and its top. No bottom -
+   * it stands on something. Its texture runs along its longest side: a post's grain up it, a sill's
+   * or a lintel's along it. `top` defaults to the sides' paint.
+   */
+  box(x0: number, y0: number, z0: number, x1: number, y1: number, z1: number, paint: Paint, top: Paint = paint): void {
+    const sizes = [x1 - x0, y1 - y0, z1 - z0];
+    const longest = sizes.indexOf(Math.max(...sizes));
+    const grain: Vec3 = longest === 0 ? [1, 0, 0] : longest === 1 ? [0, 1, 0] : [0, 0, 1];
+    this.face([[x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1]], [0, 0, 1], paint, grain);
+    this.face([[x1, y0, z0], [x0, y0, z0], [x0, y1, z0], [x1, y1, z0]], [0, 0, -1], paint, grain);
+    this.face([[x1, y0, z1], [x1, y0, z0], [x1, y1, z0], [x1, y1, z1]], [1, 0, 0], paint, grain);
+    this.face([[x0, y0, z0], [x0, y0, z1], [x0, y1, z1], [x0, y1, z0]], [-1, 0, 0], paint, grain);
+    this.face([[x0, y1, z1], [x1, y1, z1], [x1, y1, z0], [x0, y1, z0]], [0, 1, 0], top, grain);
   }
 
   finish(door: { x: number; z: number }, tiles?: BuildingModel["tiles"]): BuildingModel {
     return {
       positions: this.positions,
       normals: this.normals,
+      tangents: this.tangents,
+      uvs: this.uvs,
       colors: this.colors,
+      materialSlots: this.materialSlots,
+      materials: this.materials,
       indices: this.indices,
       halfWidth: Math.max(Math.abs(this.minX), Math.abs(this.maxX)),
       halfDepth: Math.max(Math.abs(this.minZ), Math.abs(this.maxZ)),
@@ -71,6 +119,11 @@ export class ModelBuilder {
       tiles,
     };
   }
+}
+
+/** A plain colour, no material. */
+export function plain(color: Rgb): Paint {
+  return { material: null, tint: color };
 }
 
 export function roll(range: [number, number], rng: () => number): number {

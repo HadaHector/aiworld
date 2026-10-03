@@ -93,7 +93,32 @@ export type WaveShape = "sine" | "triangle" | "saw";
 
 export type WorleyMode = "f1" | "edge" | "cell";
 
-export type NoiseSpec = FbmNoiseSpec | RidgedNoiseSpec | BillowNoiseSpec | WorleyNoiseSpec | WaveNoiseSpec;
+/** How a `bricks` noise is read: "edge" is the distance to the nearest joint, in rows (0 on a joint,
+ *  up to 0.5 mid-brick); "cell" a random 0-1 value of the brick's own; "u" and "v" where in its
+ *  brick a point is, 0-1 along and up it. */
+export type BrickMode = "edge" | "cell" | "u" | "v";
+
+/** What a `sample` step can read a cell noise as. */
+export type CellMode = WorleyMode | BrickMode;
+
+/**
+ * A regular course of cells - bricks, ashlar, boards, roof tiles: `rows` courses and `columns`
+ * cells along each (cycles per unit; in a texture, whole numbers per tile), each course slid along
+ * by `stagger` of a cell more than the one below it (0.5: running bond). Read by `mode`.
+ */
+export interface BricksNoiseSpec {
+  name: string;
+  /** As BaseNoiseSpec.shared. */
+  shared?: string;
+  type: "bricks";
+  columns: number;
+  rows: number;
+  stagger: number;
+  amplitude: number;
+  mode: BrickMode;
+}
+
+export type NoiseSpec = FbmNoiseSpec | RidgedNoiseSpec | BillowNoiseSpec | WorleyNoiseSpec | WaveNoiseSpec | BricksNoiseSpec;
 
 /**
  * What a step carries. Inferred per step when the pipeline compiles (never declared by hand), so a
@@ -129,7 +154,7 @@ export type PipelineStep =
    * noise another way than its own - the same points - so one noise can outline stones ("f1") and
    * shade each of them ("cell").
    */
-  | { output: string; op: "sample"; noise: string; offset?: [string, string]; mode?: WorleyMode }
+  | { output: string; op: "sample"; noise: string; offset?: [string, string]; mode?: CellMode }
   | { output: string; op: "constant"; value: number }
   | { output: string; op: "input"; name: string } // reads a named value from an external context bag, 0 if absent
   // --- color sources ---

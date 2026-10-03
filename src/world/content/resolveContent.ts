@@ -36,7 +36,7 @@ import type { TextureDef } from "../materials/textureGen";
 import { adjustMatrix, chainMatrix, NO_ADJUST, type ColorAdjust } from "../materials/colorAdjust";
 import type { WeatherChance, WeatherDef } from "../weather/weatherTypes";
 import { FEATURE_TYPES, NO_FEATURE, type FeatureChance, type FeatureKindDef } from "../features/featureTypes";
-import { BUILDING_GENERATORS, ROOF_TYPES, type BuildingDef, type RoofType, type Rgb } from "../buildings/buildingTypes";
+import { BUILDING_GENERATORS, HOUSE_PARTS, ROOF_TYPES, type BuildingDef, type BuildingMaterialDef, type HouseSpec, type RoofType, type Rgb } from "../buildings/buildingTypes";
 
 /** One pack as found on disk: its folder name and every .json5 file in it, by path inside it. */
 export interface PackSource {
@@ -46,7 +46,7 @@ export interface PackSource {
 
 /** The folders a pack's content lives in, one kind of definition each. A definition's id is its
  *  file name, and a pack with a higher priority replaces a lower one's definition of the same id. */
-const CONTENT_FOLDERS = ["biomes", "materials", "layers", "grass", "trees", "bushes", "rocks", "voices", "borderHills", "settlements", "weathers", "features", "buildings"] as const;
+const CONTENT_FOLDERS = ["biomes", "materials", "layers", "grass", "trees", "bushes", "rocks", "voices", "borderHills", "settlements", "weathers", "features", "buildings", "buildingMaterials"] as const;
 type ContentFolder = (typeof CONTENT_FOLDERS)[number];
 
 /** How many grass kinds the packs may define between them: each is a layer of the blade atlas and
@@ -192,7 +192,18 @@ export function resolveContent(packs: PackSource[]): WorldContent {
   const weathers = readAll("weathers", (e, o, r) => readWeather(e.id, o, r));
   const weatherIds = new Set(weathers.map((w) => w.id));
   const boundaryHillStyles = readAll("borderHills", (e, o, r) => readBoundaryHillStyle(e.id, o, r));
-  const buildings = readAll("buildings", (e, o, r) => readBuilding(e.id, o, r));
+  const buildingMaterials = readAll("buildingMaterials", (e, o, r) => readBuildingMaterial(e.id, o, r));
+  const buildingMaterialIds = new Set(buildingMaterials.map((m) => m.id));
+  const buildingReads = readAll("buildings", (e, o, r) => ({ file: e.file, def: readBuilding(e.id, o, r) }));
+  const buildings = buildingReads.map((read) => read.def);
+  for (const { file, def } of buildingReads) {
+    for (const part of HOUSE_PARTS) {
+      const id = def.house?.parts[part].material;
+      if (id !== undefined && !buildingMaterialIds.has(id)) {
+        issues.push({ file, path: `house.parts.${part}.material`, message: `no building material "${id}" (known: ${[...buildingMaterialIds].join(", ") || "none"})` });
+      }
+    }
+  }
   const buildingById = new Map(buildings.map((building) => [building.id, building]));
   const settlementStyles = readAll("settlements", (e, o, r) => readSettlementStyle(e.id, o, r, buildingById));
   const featureReads = readAll("features", (e, o, r) => ({ file: e.file, kind: readFeatureKind(e.id, o, r) }));
@@ -391,6 +402,7 @@ export function resolveContent(packs: PackSource[]): WorldContent {
     weathers,
     featureKinds,
     buildings,
+    buildingMaterials,
   };
 }
 
@@ -486,6 +498,23 @@ function readFeatureChances(obj: RawObject, reader: Reader): FeatureChance[] {
   });
 }
 
+/** A buildingMaterials/ file - see BuildingMaterialDef. */
+function readBuildingMaterial(id: string, obj: RawObject, reader: Reader): BuildingMaterialDef {
+  reader.onlyKeys(obj, "", ["name", "texture", "size", "shine"]);
+  const size = obj.size;
+  let repeat: [number, number] = [1, 1];
+  if (typeof size === "number" && size > 0) repeat = [size, size];
+  else if (Array.isArray(size) && size.length === 2 && size.every((v) => typeof v === "number" && v > 0)) repeat = [size[0], size[1]];
+  else reader.fail("size", "expected metres per repeat: a number, or [across, up]");
+  return {
+    id,
+    name: reader.string(obj, "name", ""),
+    texture: readTexture(obj.texture, reader, "texture"),
+    size: repeat,
+    shine: reader.optionalNumber(obj, "shine", "", 0, { min: 0, max: 1 }),
+  };
+}
+
 /** A buildings/ file - see BuildingDef. Its generator is named by `type` (`generator` already means
  *  a content generator - see generators.ts), and its own block is under the generator's name. */
 function readBuilding(id: string, obj: RawObject, reader: Reader): BuildingDef {
@@ -514,13 +543,20 @@ function readBuilding(id: string, obj: RawObject, reader: Reader): BuildingDef {
   let house: BuildingDef["house"] = null;
   if (generator === "house") {
     const path = "house";
-    reader.onlyKeys(block, path, ["tile", "width", "depth", "backWing", "sideWing", "wingLength", "wallHeight", "plinth", "plinthOutset", "post", "roofs", "pitch", "overhang", "roofThickness", "door", "window", "colors"]);
+    reader.onlyKeys(block, path, ["tile", "width", "depth", "backWing", "sideWing", "wingLength", "wallHeight", "plinth", "plinthOutset", "post", "roofs", "pitch", "overhang", "roofThickness", "door", "window", "parts"]);
     const door = reader.object(block.door, "house.door");
     reader.onlyKeys(door, "house.door", ["width", "height", "frame"]);
     const win = reader.object(block.window, "house.window");
     reader.onlyKeys(win, "house.window", ["width", "height", "sill", "frame", "sillReach", "chance"]);
-    const palette = reader.object(block.colors, "house.colors");
-    reader.onlyKeys(palette, "house.colors", ["walls", "trim", "roof", "plinth", "door", "glass"]);
+    const partsRaw = reader.object(block.parts, "house.parts");
+    reader.onlyKeys(partsRaw, "house.parts", HOUSE_PARTS);
+    const parts = {} as HouseSpec["parts"];
+    for (const part of HOUSE_PARTS) {
+      const at = `house.parts.${part}`;
+      const entry = reader.object(partsRaw[part], at);
+      reader.onlyKeys(entry, at, ["material", "tints"]);
+      parts[part] = { material: reader.string(entry, "material", at), tints: colorsIn(entry, at, "tints") };
+    }
     const roofs = reader.stringList(block, "roofs", path).filter((roof): roof is RoofType => {
       if ((ROOF_TYPES as readonly string[]).includes(roof)) return true;
       reader.fail("house.roofs", `"${roof}" is not a roof (known: ${ROOF_TYPES.join(", ")})`);
@@ -560,14 +596,7 @@ function readBuilding(id: string, obj: RawObject, reader: Reader): BuildingDef {
         sillReach: reader.number(win, "sillReach", "house.window", { min: 0 }),
         chance: reader.number(win, "chance", "house.window", { min: 0, max: 1 }),
       },
-      colors: {
-        walls: colorsIn(palette, "house.colors", "walls"),
-        trim: colorsIn(palette, "house.colors", "trim"),
-        roof: colorsIn(palette, "house.colors", "roof"),
-        plinth: colorsIn(palette, "house.colors", "plinth"),
-        door: colorsIn(palette, "house.colors", "door"),
-        glass: colorsIn(palette, "house.colors", "glass"),
-      },
+      parts,
     };
   }
   return { id, name: reader.string(obj, "name", ""), generator, boxes, house };

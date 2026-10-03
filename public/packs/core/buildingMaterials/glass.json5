@@ -1,0 +1,22 @@
+// Window glass: old panes, dark against the room behind and faintly uneven - smooth and shining, it
+// mirrors the sky at a glancing angle and throws back a sharp glint of the sun.
+{
+  name: "Glass",
+  size: 1,
+  shine: 1,
+  texture: {
+    bumpStrength: 0.25,
+    pipeline: {
+      noises: [{ name: "ripple", type: "fbm", octaves: 2, tileCycles: 6, amplitude: 1, persistence: 0.5, lacunarity: 2 }],
+      steps: [
+        { output: "rippleRaw", op: "sample", noise: "ripple" },
+        { output: "shade", op: "remap", input: "rippleRaw", inMin: -1, inMax: 1, outMin: 0.85, outMax: 1.1 },
+        { output: "base", op: "color", value: [0.1, 0.13, 0.16] },
+        { output: "diffuse", op: "multiply", a: "base", b: "shade" },
+        { output: "roughness", op: "constant", value: 0.04 },
+        { output: "height", op: "scale", input: "rippleRaw", factor: 0.3 },
+      ],
+      outputs: { diffuse: "diffuse", roughness: "roughness", height: "height" },
+    },
+  },
+}

@@ -1,6 +1,6 @@
 import { deriveSeed, mulberry32 } from "../rng";
 import type { BoxesSpec, BuildingDef, BuildingModel, Rgb } from "./buildingTypes";
-import { FOUNDATION_DEPTH, ModelBuilder, pick, roll } from "./buildingGeometry";
+import { FOUNDATION_DEPTH, ModelBuilder, pick, plain, roll } from "./buildingGeometry";
 import { buildHouse } from "./houseGenerator";
 
 /** The placeholder: a main box, a door-sized dark patch in the middle of its front, and smaller
@@ -10,13 +10,13 @@ function buildBoxes(spec: BoxesSpec, rng: () => number): BuildingModel {
   const hw = roll(spec.width, rng) / 2;
   const hd = roll(spec.depth, rng) / 2;
   const height = roll(spec.height, rng);
-  b.box(-hw, -FOUNDATION_DEPTH, -hd, hw, height, hd, pick(spec.walls, rng), pick(spec.tops, rng));
+  b.box(-hw, -FOUNDATION_DEPTH, -hd, hw, height, hd, plain(pick(spec.walls, rng)), plain(pick(spec.tops, rng)));
 
   // The door: just proud of the front, so it is never lost in the wall.
   const door: Rgb = [0.18, 0.13, 0.1];
   const doorHalf = Math.min(0.55, hw * 0.3);
   const doorTop = Math.min(2.2, height - 0.3);
-  b.face([[-doorHalf, 0, hd + 0.03], [doorHalf, 0, hd + 0.03], [doorHalf, doorTop, hd + 0.03], [-doorHalf, doorTop, hd + 0.03]], [0, 0, 1], door);
+  b.face([[-doorHalf, 0, hd + 0.03], [doorHalf, 0, hd + 0.03], [doorHalf, doorTop, hd + 0.03], [-doorHalf, doorTop, hd + 0.03]], [0, 0, 1], plain(door));
 
   // Annexes on the left, right and back - never the front, which the door and the street have.
   const count = Math.round(roll(spec.annexes, rng));
@@ -29,8 +29,8 @@ function buildBoxes(spec: BoxesSpec, rng: () => number): BuildingModel {
   for (const side of sides) {
     const share = roll(spec.annexSize, rng);
     const annexHeight = height * roll([0.45, 0.8], rng);
-    const wall = pick(spec.walls, rng);
-    const top = pick(spec.tops, rng);
+    const wall = plain(pick(spec.walls, rng));
+    const top = plain(pick(spec.tops, rng));
     if (side === 2) {
       // Back: as wide as a share of the main box, sliding along it.
       const w = hw * share;

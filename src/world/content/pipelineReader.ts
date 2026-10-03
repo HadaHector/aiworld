@@ -4,9 +4,11 @@ import type { ColorRampStop, NoiseSpec, PipelineDef, PipelineStep } from "../ter
 import { joinPath, type RawObject, type Reader } from "./contentReader";
 import { FAILED_GENERATOR } from "./generators";
 
-const NOISE_TYPES = ["fbm", "ridged", "billow", "worley", "wave"] as const;
+const NOISE_TYPES = ["fbm", "ridged", "billow", "worley", "wave", "bricks"] as const;
 const WAVE_SHAPES = ["sine", "triangle", "saw"] as const;
 const WORLEY_MODES = ["f1", "edge", "cell"] as const;
+const BRICK_MODES = ["edge", "cell", "u", "v"] as const;
+const CELL_MODES = ["f1", "edge", "cell", "u", "v"] as const;
 
 /** The fields each op takes besides `output` and `op`: "ref" names an earlier step, "noise" a noise,
  *  "number"/"text"/"color" a literal. */
@@ -59,6 +61,7 @@ function readNoise(raw: unknown, reader: Reader, path: string, options: Pipeline
   const name = reader.string(obj, "name", path);
   const shared = reader.has(obj, "shared") ? { shared: reader.string(obj, "shared", path) } : {};
   if (type === "wave") return { ...readWave(obj, name, reader, path, options), ...shared };
+  if (type === "bricks") return { ...readBricks(obj, name, reader, path, options), ...shared };
   const scaleKeys = options.texture ? ["frequency", "tileCycles"] : ["frequency"];
   let frequency = 0;
   if (options.texture && reader.has(obj, "tileCycles")) {
@@ -104,6 +107,34 @@ function readNoise(raw: unknown, reader: Reader, path: string, options: Pipeline
     octaves: reader.number(obj, "octaves", path, { min: 1, max: 12, integer: true }),
     persistence: reader.number(obj, "persistence", path),
     lacunarity: reader.number(obj, "lacunarity", path),
+  };
+}
+
+/** Bricks are counted rather than sized: `tileCycles: [columns, rows]`, whole numbers per texture
+ *  tile, and a `stagger` that brings the courses back into line by the tile's edge. Textures only. */
+function readBricks(obj: RawObject, name: string, reader: Reader, path: string, options: PipelineReadOptions): NoiseSpec {
+  reader.onlyKeys(obj, path, ["name", "shared", "type", "amplitude", "tileCycles", "stagger", "mode"]);
+  if (!options.texture) reader.fail(joinPath(path, "type"), "a bricks noise is for textures only");
+  const value = obj.tileCycles;
+  let columns = 1;
+  let rows = 1;
+  if (!Array.isArray(value) || value.length !== 2 || !value.every((v) => typeof v === "number" && Number.isInteger(v) && v > 0)) {
+    reader.fail(joinPath(path, "tileCycles"), "expected [columns, rows], whole numbers per tile");
+  } else {
+    [columns, rows] = value as number[];
+  }
+  const stagger = reader.has(obj, "stagger") ? reader.number(obj, "stagger", path, { min: 0, max: 1 }) : 0.5;
+  if (Math.abs(rows * stagger - Math.round(rows * stagger)) > 1e-9) {
+    reader.fail(joinPath(path, "stagger"), `${rows} rows slid by ${stagger} each do not line up again at the tile's edge`);
+  }
+  return {
+    name,
+    type: "bricks",
+    columns: columns / TEXTURE_RESOLUTION,
+    rows: rows / TEXTURE_RESOLUTION,
+    stagger,
+    amplitude: reader.number(obj, "amplitude", path),
+    mode: reader.has(obj, "mode") ? reader.oneOf(obj, "mode", path, BRICK_MODES) : "edge",
   };
 }
 
@@ -183,7 +214,7 @@ export function readPipeline(raw: unknown, reader: Reader, path: string, options
     reader.onlyKeys(step, at, ["output", "op", ...Object.keys(fields), ...(op === "sample" ? ["offset", "mode"] : [])]);
 
     const read: RawObject = { output, op };
-    if (op === "sample" && step.mode !== undefined) read.mode = reader.oneOf(step, "mode", at, WORLEY_MODES);
+    if (op === "sample" && step.mode !== undefined) read.mode = reader.oneOf(step, "mode", at, CELL_MODES);
     if (op === "sample" && step.offset !== undefined) {
       const offset = step.offset;
       if (!Array.isArray(offset) || offset.length !== 2 || !offset.every((name) => typeof name === "string")) {

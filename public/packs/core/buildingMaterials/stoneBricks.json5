@@ -1,0 +1,62 @@
+// Dressed stone in courses, for a plinth: grey and warm-grey blocks, each its own shade, chipped
+// and grainy, their edges rounded off into pale lime mortar.
+{
+  name: "Stone Bricks",
+  // Metres one repeat covers: 5 stones across and 8 courses up, so each is 1.2 m x 75 cm.
+  size: 6,
+  shine: 0.05,
+  texture: {
+    bumpStrength: 2.2,
+    pipeline: {
+      noises: [
+        { name: "stones", type: "bricks", tileCycles: [5, 8], stagger: 0.5, amplitude: 1, mode: "edge" },
+        { name: "grain", type: "fbm", octaves: 3, tileCycles: 60, amplitude: 1, persistence: 0.55, lacunarity: 2 },
+        { name: "mottle", type: "fbm", octaves: 2, tileCycles: 8, amplitude: 1, persistence: 0.5, lacunarity: 2 },
+        { name: "chips", type: "worley", tileCycles: 40, amplitude: 1, mode: "f1" },
+      ],
+      steps: [
+        { output: "joint", op: "sample", noise: "stones" },
+        { output: "stoneId", op: "sample", noise: "stones", mode: "cell" },
+        { output: "grainRaw", op: "sample", noise: "grain" },
+        { output: "mottleRaw", op: "sample", noise: "mottle" },
+        { output: "chipRaw", op: "sample", noise: "chips" },
+
+        // The mortar: a joint of its own width, frayed by the grain so no edge is ruled.
+        { output: "fray", op: "scale", input: "grainRaw", factor: 0.02 },
+        { output: "jointFrayed", op: "add", a: "joint", b: "fray" },
+        { output: "mortar", op: "mask", input: "jointFrayed", at: 0.02, off: 0.06 },
+
+        // Each stone its own grey, mottled and grainy.
+        {
+          output: "stoneTone",
+          op: "colorRamp",
+          input: "stoneId",
+          stops: [
+            { at: 0.0, color: [0.46, 0.45, 0.43] },
+            { at: 0.3, color: [0.55, 0.53, 0.49] },
+            { at: 0.55, color: [0.5, 0.47, 0.42] },
+            { at: 0.8, color: [0.6, 0.58, 0.55] },
+            { at: 1.0, color: [0.42, 0.42, 0.42] },
+          ],
+        },
+        { output: "shadeRaw", op: "add", a: "mottleRaw", b: "grainRaw" },
+        { output: "shade", op: "remap", input: "shadeRaw", inMin: -1, inMax: 1, outMin: 0.82, outMax: 1.12 },
+        { output: "stone", op: "multiply", a: "stoneTone", b: "shade" },
+        { output: "mortarColor", op: "color", value: [0.66, 0.63, 0.57] },
+        { output: "diffuse", op: "mix", a: "stone", b: "mortarColor", t: "mortar" },
+        { output: "roughness", op: "constant", value: 0.88 },
+
+        // Height: each face rounded off towards its joints, pitted with chips, the mortar sunk.
+        { output: "bevelRaw", op: "remap", input: "joint", inMin: 0.02, inMax: 0.16, outMin: 0, outMax: 1 },
+        { output: "bevel", op: "clamp", input: "bevelRaw", min: 0, max: 1 },
+        { output: "bevelRound", op: "power", input: "bevel", exponent: 0.5 },
+        { output: "chipDent", op: "mask", input: "chipRaw", at: 0.0, off: 0.12 },
+        { output: "chipDepth", op: "scale", input: "chipDent", factor: -0.15 },
+        { output: "grainBump", op: "scale", input: "grainRaw", factor: 0.06 },
+        { output: "faceHeight", op: "add", a: "bevelRound", b: "chipDepth" },
+        { output: "height", op: "add", a: "faceHeight", b: "grainBump" },
+      ],
+      outputs: { diffuse: "diffuse", roughness: "roughness", height: "height" },
+    },
+  },
+}

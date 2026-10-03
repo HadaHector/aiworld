@@ -1,0 +1,32 @@
+// Lime plaster: an off-white render, softly uneven - patchy in tone over metres, sandy close up -
+// that a building tints to its own colour of wash.
+{
+  name: "Plaster",
+  size: 4,
+  shine: 0,
+  texture: {
+    bumpStrength: 0.8,
+    pipeline: {
+      noises: [
+        { name: "patches", type: "fbm", octaves: 3, tileCycles: 3, amplitude: 1, persistence: 0.55, lacunarity: 2 },
+        { name: "trowel", type: "fbm", octaves: 2, tileCycles: 14, amplitude: 1, persistence: 0.5, lacunarity: 2, stretch: [2.5, 1] },
+        { name: "sand", type: "fbm", octaves: 2, tileCycles: 300, amplitude: 1, persistence: 0.5, lacunarity: 2 },
+      ],
+      steps: [
+        { output: "patchRaw", op: "sample", noise: "patches" },
+        { output: "trowelRaw", op: "sample", noise: "trowel" },
+        { output: "sandRaw", op: "sample", noise: "sand" },
+        { output: "patchShade", op: "remap", input: "patchRaw", inMin: -1, inMax: 1, outMin: 0.88, outMax: 1.06 },
+        { output: "sandShade", op: "remap", input: "sandRaw", inMin: -1, inMax: 1, outMin: 0.95, outMax: 1.03 },
+        { output: "shade", op: "multiply", a: "patchShade", b: "sandShade" },
+        { output: "base", op: "color", value: [0.9, 0.88, 0.84] },
+        { output: "diffuse", op: "multiply", a: "base", b: "shade" },
+        { output: "roughness", op: "constant", value: 0.95 },
+        { output: "trowelBump", op: "scale", input: "trowelRaw", factor: 0.35 },
+        { output: "sandBump", op: "scale", input: "sandRaw", factor: 0.12 },
+        { output: "height", op: "add", a: "trowelBump", b: "sandBump" },
+      ],
+      outputs: { diffuse: "diffuse", roughness: "roughness", height: "height" },
+    },
+  },
+}

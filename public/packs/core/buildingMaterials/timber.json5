@@ -1,0 +1,51 @@
+// Sawn timber, for posts, frames and the boards under a roof: mid-brown wood with its grain running
+// along the beam (up the texture), darker streaks and the odd knot. A building tints it darker or
+// paler.
+{
+  name: "Timber",
+  // Across the grain and along it: the grain repeats every 6 m along a beam.
+  size: [1.6, 6],
+  shine: 0.1,
+  texture: {
+    bumpStrength: 1.2,
+    pipeline: {
+      noises: [
+        { name: "grain", type: "fbm", octaves: 3, tileCycles: 10, amplitude: 1, persistence: 0.5, lacunarity: 2.2, stretch: [1, 14] },
+        { name: "streaks", type: "fbm", octaves: 2, tileCycles: 4, amplitude: 1, persistence: 0.5, lacunarity: 2, stretch: [1, 10] },
+        { name: "fibre", type: "fbm", octaves: 2, tileCycles: 90, amplitude: 1, persistence: 0.5, lacunarity: 2, stretch: [1, 20] },
+        { name: "knots", type: "worley", tileCycles: 3, amplitude: 1, mode: "f1", stretch: [1, 1.6] },
+      ],
+      steps: [
+        { output: "grainRaw", op: "sample", noise: "grain" },
+        { output: "streakRaw", op: "sample", noise: "streaks" },
+        { output: "fibreRaw", op: "sample", noise: "fibre" },
+        { output: "knotRaw", op: "sample", noise: "knots" },
+        // Growth rings seen edge-on: bands along the grain, bent by it.
+        { output: "rings", op: "sin", input: "grainRaw", cycles: 3 },
+        { output: "ringsSoft", op: "remap", input: "rings", inMin: -1, inMax: 1, outMin: 0, outMax: 1 },
+        { output: "knot", op: "mask", input: "knotRaw", at: 0.02, off: 0.09 },
+        { output: "toneRaw", op: "add", a: "ringsSoft", b: "streakRaw" },
+        {
+          output: "tone",
+          op: "colorRamp",
+          input: "toneRaw",
+          stops: [
+            { at: -0.6, color: [0.36, 0.24, 0.15] },
+            { at: 0.2, color: [0.5, 0.35, 0.22] },
+            { at: 0.8, color: [0.58, 0.42, 0.27] },
+            { at: 1.6, color: [0.44, 0.3, 0.19] },
+          ],
+        },
+        { output: "fibreShade", op: "remap", input: "fibreRaw", inMin: -1, inMax: 1, outMin: 0.9, outMax: 1.08 },
+        { output: "wood", op: "multiply", a: "tone", b: "fibreShade" },
+        { output: "knotColor", op: "color", value: [0.22, 0.14, 0.09] },
+        { output: "diffuse", op: "mix", a: "wood", b: "knotColor", t: "knot" },
+        { output: "roughness", op: "constant", value: 0.75 },
+        { output: "ringBump", op: "scale", input: "ringsSoft", factor: 0.25 },
+        { output: "fibreBump", op: "scale", input: "fibreRaw", factor: 0.15 },
+        { output: "height", op: "add", a: "ringBump", b: "fibreBump" },
+      ],
+      outputs: { diffuse: "diffuse", roughness: "roughness", height: "height" },
+    },
+  },
+}

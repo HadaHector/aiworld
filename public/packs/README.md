@@ -36,6 +36,7 @@ packs/<pack>/
   weathers/<id>.json5     a kind of weather: its clouds, light, wind, rain and snow
   features/<id>.json5     a kind of cell feature - a quarry - and how it changes the ground
   buildings/<id>.json5    a building, built by one of the building generators
+  buildingMaterials/<id>.json5  what buildings are made of: plaster, timber, stone, glass, tiles
   patches/<any>.json5     additions to another pack's lists
 ```
 
@@ -87,6 +88,14 @@ fissures, grain, streaks); a stretched texture still tiles.
 Each graph's noises are its own, seeded by the graph and the noise's name. Give a noise
 `shared: "someName"` and it is the same noise in every graph that shares that name - two material
 rules can fray along one edge (see the biomes' forest floor and leafy grass).
+
+`bricks` is courses of cells - bricks, ashlar, boards, roof tiles - for textures only:
+`{ name: "stones", type: "bricks", tileCycles: [5, 8], stagger: 0.5, amplitude: 1, mode: "edge" }`
+is 5 cells across and 8 courses up a tile, each course slid half a cell along from the one below
+(`stagger` times the number of courses must be whole, so the tile meets itself). Its `mode` - or a
+`sample` step's - reads it as `"edge"`, the distance to the nearest joint in courses (0 on a joint,
+0.5 mid-cell), `"cell"`, a random 0-1 value of each cell's own, or `"u"` and `"v"`, where in its cell
+a point is, 0-1 along and up it. See `core/buildingMaterials/roofTiles.json5`.
 
 `wave` is parallel bands rather than noise: `{ name: "ripple", type: "wave", frequency: [0, 0.05],
 amplitude: 1, shape: "saw" }`. `frequency` is cycles per unit along x and along y, so `[0, f]` gives
@@ -574,6 +583,18 @@ There are two:
 Every generator gives the same
 result: geometry with its floor at height 0, the footprint centred, the front facing +z, and the
 door on the front edge.
+
+A house says what each part is made of - `parts: { walls, timber, roof, plinth, door, glass }`, each
+`{ material, tints }` - naming a building material and the tints, one picked per house, its colour
+is multiplied by (1 is the material as it is). Timber is the posts, the frames, and the boards under
+the roof and along its edges.
+
+A building material (`buildingMaterials/`) is a texture graph like a ground material's, with `size` -
+the metres one repeat covers, a number or `[across, up]` - and `shine`, 0 (matte) to 1 (glass: a
+sharp glint of the sun, and the sky mirrored at a glancing angle). Every face of a building is
+textured in metres, its texture's up running up the face - up a wall, up a roof's slope, so roof
+tiles lie in rows along the eaves - and along a beam, so a post's grain runs up it and a lintel's
+along it.
 
 In the workbench a building stands on a patch of ground, one variant or a row of eight, with its
 footprint, its door and - for a generator with a plan - its tiles marked.
