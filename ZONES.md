@@ -244,6 +244,12 @@ Existing: **broadleaf**, **pine**, **palm**.
   half grass) - a `heath` family, its hue rolled per area - tawny moor grass, new `peat` round and
   under the pools; granite tors on the high ground (new `granite`, `graniteBoulder`); rolled moor
   flowers; very rarely a little birch copse with hazel.
+- **Alpine meadow: done** - `biomes/alpineMeadow.json5`. Each area one of three (`oneOf`): broad
+  high-pasture swells, a valley between high shoulders (the slopes eased off the floor), or a
+  capped high shelf with knolls. Short meadow, new `alpineFlowers` (with new `grass/gentians`) in
+  wide drifts on the open, sunny ground, faded grass on the wind-scoured crests, stones in the
+  tighter folds and along the streams; spruce in stands below the area's rolled tree line; old
+  snow in the high hollows and on the north sides above its rolled snow line; one rolled extra flower.
 
 | Variant | Ground | Plants | Trees | Extras |
 |---|---|---|---|---|

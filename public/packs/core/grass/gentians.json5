@@ -1,0 +1,32 @@
+// Alpine flowers: low cushions on short stems, open cups turned to the sky - gentian blue for the
+// most part, with the odd white star, alpine pink and pale yellow among them.
+{
+  width: 0.8,
+  height: 0.35,
+  sway: 0.1,
+  fadeStart: 40,
+  fadeEnd: 220,
+  cluster: { scale: 7, coverage: 0.45 },
+  blades: {
+    count: 10,
+    minHeight: 0.55,
+    maxHeight: 0.95,
+    baseWidth: 2.5,
+    lean: 0.1,
+    fan: false,
+    seedHeads: false,
+    flowerHeads: {
+      shape: "cup",
+      count: 8,
+      radius: 14,
+      colors: [
+        [0.16, 0.26, 0.9], // gentian
+        [0.2, 0.34, 0.95], // gentian
+        [0.3, 0.22, 0.86], // deep violet-blue
+        [0.96, 0.96, 0.92], // white
+        [0.92, 0.45, 0.66], // alpine pink
+        [0.98, 0.9, 0.45], // pale yellow
+      ],
+    },
+  },
+}

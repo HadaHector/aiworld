@@ -1,0 +1,266 @@
+/**
+ * Alpine meadow - the highlands' green, high variant (see ZONES.md): high pasture of short, cropped
+ * grass, gentians and the other low alpine flowers in wide drifts over it; dark spruce in stands on
+ * the lower slopes and along the meadow's edges, thinning out to a tree line; bare rock where the
+ * ground turns steep, and patches of old snow lying on in the high hollows and on the north sides.
+ * A deep, clear blue sky.
+ *
+ * Each area is one of three kinds of high country (`oneOf`): long, broad pasture swells; a valley
+ * between high shoulders; or a high shelf, flat-topped, with knolls on it. Its snow line and tree
+ * line are its own rolls.
+ */
+{
+  name: "Alpine Meadow",
+  voice: "verdant",
+  spawnWeight: 1.5,
+  lakeChance: 0.04,
+  borderType: "mountain",
+  settlement: "timber",
+  // Where the old snow starts to lie (low: patches over much of the high ground, high: only on the
+  // tops, or none), and how far up the spruce climb.
+  params: { snowline: { range: [0, 1] }, treeline: { range: [0, 1] } },
+  height: {
+    oneOf: [
+      // High pasture: long, broad swells, one after the other.
+      {
+        noises: [{ name: "swells", type: "fbm", octaves: 4, frequency: { range: [0.0013, 0.0019] }, amplitude: { range: [24, 34] }, persistence: 0.4, lacunarity: 2.0 }],
+        steps: [
+          { output: "swellsRaw", op: "sample", noise: "swells" },
+          { output: "result", op: "offset", input: "swellsRaw", amount: { range: [34, 40] } },
+        ],
+      },
+      // A valley between high shoulders: a gently rolling floor, the slopes rising off it to big
+      // rounded tops - how much of an area is valley its own roll.
+      {
+        noises: [
+          { name: "hills", type: "fbm", octaves: 5, frequency: { range: [0.0017, 0.0022] }, amplitude: { range: [52, 70] }, persistence: 0.36, lacunarity: 2.0 },
+          { name: "valley", type: "fbm", octaves: 3, frequency: 0.0005, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+          { name: "floor", type: "fbm", octaves: 3, frequency: 0.0028, amplitude: 3, persistence: 0.45, lacunarity: 2.0 },
+        ],
+        steps: [
+          { output: "hillsRaw", op: "sample", noise: "hills" },
+          { output: "hill", op: "offset", input: "hillsRaw", amount: 62 },
+          { output: "floorRaw", op: "sample", noise: "floor" },
+          { output: "floor", op: "offset", input: "floorRaw", amount: { range: [12, 18] } },
+          { output: "valleyRaw", op: "sample", noise: "valley" },
+          { output: "hilliness", op: "remap", input: "valleyRaw", inMin: { range: [-0.4, -0.15] }, inMax: { range: [0.2, 0.45] }, outMin: 0, outMax: 1 },
+          { output: "hillShare", op: "clamp", input: "hilliness", min: 0, max: 1 },
+          // Eased, so the slopes come off the floor in a long curve, as a glaciated valley's do.
+          { output: "shareSquared", op: "multiply", a: "hillShare", b: "hillShare" },
+          { output: "twiceShare", op: "scale", input: "hillShare", factor: -2 },
+          { output: "easing", op: "offset", input: "twiceShare", amount: 3 },
+          { output: "eased", op: "multiply", a: "shareSquared", b: "easing" },
+          { output: "rise", op: "subtract", a: "hill", b: "floor" },
+          { output: "shareOfRise", op: "multiply", a: "rise", b: "eased" },
+          { output: "result", op: "add", a: "floor", b: "shareOfRise" },
+        ],
+      },
+      // A high shelf: the ground capped (`smoothMin`) into wide, flat pasture, knolls standing on it
+      // and the valleys cut down between.
+      {
+        noises: [
+          { name: "hills", type: "fbm", octaves: 4, frequency: { range: [0.0016, 0.0022] }, amplitude: { range: [32, 42] }, persistence: 0.42, lacunarity: 2.0 },
+          { name: "knolls", type: "fbm", octaves: 3, frequency: { range: [0.006, 0.009] }, amplitude: { range: [4, 8] }, persistence: 0.45, lacunarity: 2.0 },
+        ],
+        steps: [
+          { output: "hillsRaw", op: "sample", noise: "hills" },
+          { output: "raised", op: "offset", input: "hillsRaw", amount: 40 },
+          { output: "cap", op: "constant", value: { range: [48, 58] } },
+          { output: "capped", op: "smoothMin", a: "raised", b: "cap", k: 10 },
+          // Knolls up on the shelf only, not down in the valleys.
+          { output: "knollsRaw", op: "sample", noise: "knolls" },
+          { output: "zero", op: "constant", value: 0 },
+          { output: "knollsUp", op: "max", a: "knollsRaw", b: "zero" },
+          { output: "onShelf", op: "mask", input: "capped", at: 46, off: 30 },
+          { output: "knolls", op: "multiply", a: "knollsUp", b: "onShelf" },
+          { output: "result", op: "add", a: "capped", b: "knolls" },
+        ],
+      },
+    ],
+  },
+  treeRules: { shore: [0.5, 2] },
+  // Spruce in stands on the lower ground and along the meadows' edges, thinning out up to the area's
+  // tree line, with a few lone trees strayed out into the pasture; none on the steepest ground.
+  trees: {
+    noises: [{ name: "stand", type: "fbm", octaves: 3, frequency: 0.004, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
+    steps: [
+      { output: "standRaw", op: "sample", noise: "stand" },
+      { output: "standRamp", op: "remap", input: "standRaw", inMin: { range: [-0.4, -0.15] }, inMax: 0.3, outMin: 0, outMax: 1 },
+      { output: "stand", op: "clamp", input: "standRamp", min: 0, max: 1 },
+      { output: "lone", op: "constant", value: 0.025 },
+      { output: "cover", op: "max", a: "stand", b: "lone" },
+      { output: "height", op: "input", name: "height" },
+      { output: "below", op: "mask", input: "height", at: { param: "treeline", to: [22, 46] }, off: { param: "treeline", to: [38, 66] } },
+      { output: "slope", op: "input", name: "slope" },
+      { output: "footing", op: "mask", input: "slope", at: 0.35, off: 0.55 },
+      { output: "where", op: "multiply", a: "below", b: "footing" },
+      { output: "coverHere", op: "multiply", a: "cover", b: "where" },
+      { output: "spruce", op: "scale", input: "coverHere", factor: 0.9 },
+    ],
+    outputs: { spruce: "spruce" },
+  },
+  // Boulders about the pasture, gathered at the foot of the slopes and along the streams.
+  rocks: { generator: "rockDensity", kind: "boulder", frequency: 0.005, openAt: 0, fullAt: 0.7, peak: { range: [0.015, 0.04] }, footOfSlope: { range: [0.5, 0.9] }, riverShore: { range: [0.75, 1.5] }, lakeShore: { range: [0.75, 1.5] } },
+  treeTints: [
+    { kinds: ["boulder"], stone: { hue: { range: [-10, 10] }, saturation: { range: [0.5, 0.9] }, value: { range: [0.95, 1.1] }, spread: { saturation: 0.15, value: 0.12 } } },
+    {
+      kinds: ["spruce"],
+      leaves: { hue: { range: [-12, 12] }, saturation: { range: [0.8, 1.15] }, value: { range: [0.9, 1.08] }, spread: { hue: 6, saturation: 0.1, value: 0.08 } },
+      bark: { hue: { range: [-10, 10] }, saturation: { range: [0.8, 1.2] }, value: { range: [0.9, 1.1] }, spread: { value: 0.1 } },
+    },
+  ],
+  ground: {
+    base: "meadowShort",
+    road: "track",
+    adjust: { hue: { range: [-6, 6] }, saturation: { range: [0.95, 1.15] }, value: { range: [0.96, 1.06] } },
+    // The pasture's green: fresh and vivid, a little yellower or bluer in each area.
+    tints: [{ family: "grassland", hue: { range: [-12, 14] }, saturation: { range: [0.7, 0.95] }, value: { range: [0.96, 1.06] } }],
+    // An area's own flower among the rest: one kind, now and then none.
+    grass: [
+      {
+        oneOf: [
+          null,
+          { family: "grassland", kind: "lupins", density: 0.25, color: [0.42, 0.62, 0.26] },
+          { family: "grassland", kind: "bluebells", density: 0.3, color: [0.42, 0.62, 0.26] },
+          { family: "grassland", kind: "yarrow", density: 0.3, color: [0.44, 0.62, 0.28] },
+          { family: "grassland", kind: "buttercups", density: 0.35, color: [0.44, 0.62, 0.26] },
+        ],
+      },
+    ],
+    layers: [
+      // Old snow lying on up high: in patches, more the higher the ground goes above the area's snow
+      // line, gathered in the hollows and on the north sides, scoured off the ridges.
+      {
+        id: "alpine-snow",
+        material: "snow",
+        weight: {
+          noises: [{ name: "patch", type: "fbm", octaves: 5, frequency: 0.009, amplitude: 1, persistence: 0.6, lacunarity: 2.1 }],
+          steps: [
+            { output: "patchRaw", op: "sample", noise: "patch" },
+            { output: "curvature", op: "input", name: "reliefCurvature" },
+            { output: "drift", op: "scale", input: "curvature", factor: 1.0 },
+            { output: "facing", op: "input", name: "slopeFacing" },
+            { output: "shade", op: "scale", input: "facing", factor: 1.8 },
+            { output: "height", op: "input", name: "height" },
+            { output: "upHigh", op: "offset", input: "height", amount: { param: "snowline", to: [-48, -95] } },
+            { output: "altitude", op: "scale", input: "upHigh", factor: 0.035 },
+            { output: "drifted", op: "add", a: "patchRaw", b: "drift" },
+            { output: "shaded", op: "add", a: "drifted", b: "shade" },
+            { output: "lying", op: "add", a: "shaded", b: "altitude" },
+            { output: "patches", op: "mask", input: "lying", at: 1.05, off: 0.55 },
+            { output: "result", op: "scale", input: "patches", factor: 2 },
+          ],
+        },
+      },
+      // A paler, thinner sward over the crests and rounded tops, where the wind scours them -
+      // frayed by a slow noise, so it comes and goes along a ridge.
+      {
+        id: "alpine-crest-pale",
+        material: "grassPale",
+        weight: {
+          noises: [{ name: "fray", type: "fbm", octaves: 3, frequency: 0.007, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
+          steps: [
+            { output: "curvature", op: "input", name: "reliefCurvature" },
+            { output: "crestRaw", op: "scale", input: "curvature", factor: -0.5 },
+            { output: "frayRaw", op: "sample", noise: "fray" },
+            { output: "frayed", op: "add", a: "crestRaw", b: "frayRaw" },
+            { output: "result", op: "mask", input: "frayed", at: 0.9, off: 0.15 },
+          ],
+        },
+      },
+      // Drifts of alpine flowers over the open, gentle pasture, more on the sunny side.
+      {
+        id: "alpine-flowers",
+        material: "alpineFlowers",
+        weight: {
+          noises: [{ name: "drift", type: "fbm", octaves: 3, frequency: 0.006, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
+          steps: [
+            { output: "driftRaw", op: "sample", noise: "drift" },
+            { output: "facing", op: "input", name: "slopeFacing" },
+            { output: "sunny", op: "scale", input: "facing", factor: -0.4 },
+            { output: "drifting", op: "add", a: "driftRaw", b: "sunny" },
+            { output: "drift", op: "mask", input: "drifting", at: 0.45, off: -0.3 },
+            { output: "slope", op: "input", name: "slope" },
+            { output: "gentle", op: "mask", input: "slope", at: 0.95, off: 0.84 },
+            { output: "cover", op: "input", name: "treeCover" },
+            { output: "open", op: "mask", input: "cover", at: 0.1, off: 0.45 },
+            { output: "openDrift", op: "multiply", a: "drift", b: "open" },
+            { output: "result", op: "multiply", a: "openDrift", b: "gentle" },
+          ],
+        },
+      },
+      // Under the spruce, the needle-strewn floor, frayed where the stand thins (as in the hills).
+      {
+        id: "alpine-forest-floor",
+        material: "forestFloor",
+        weight: {
+          noises: [{ name: "fray", shared: "alpineWoodEdge", type: "fbm", octaves: 3, frequency: 0.03, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
+          steps: [
+            { output: "cover", op: "input", name: "treeCover" },
+            { output: "open", op: "invert", input: "cover" },
+            { output: "thinning", op: "multiply", a: "cover", b: "open" },
+            { output: "frayRaw", op: "sample", noise: "fray" },
+            { output: "frayHere", op: "multiply", a: "frayRaw", b: "thinning" },
+            { output: "frayShift", op: "scale", input: "frayHere", factor: 1.4 },
+            { output: "frayed", op: "add", a: "cover", b: "frayShift" },
+            { output: "result", op: "mask", input: "frayed", at: 0.96, off: 0.5 },
+          ],
+        },
+      },
+      // Stones washed down into the bottoms of the tighter valleys and folds - the tighter the fold,
+      // the more of them - frayed by a noise, so they come and go along its length.
+      {
+        id: "alpine-valley-stones",
+        material: "pebbles",
+        weight: {
+          noises: [{ name: "fray", type: "fbm", octaves: 3, frequency: 0.012, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
+          steps: [
+            { output: "curvature", op: "input", name: "reliefCurvature" },
+            { output: "frayRaw", op: "sample", noise: "fray" },
+            { output: "frayShift", op: "scale", input: "frayRaw", factor: 1.2 },
+            { output: "frayed", op: "add", a: "curvature", b: "frayShift" },
+            { output: "fold", op: "mask", input: "frayed", at: 2.6, off: 1.0 },
+            { output: "result", op: "scale", input: "fold", factor: 1.3 },
+          ],
+        },
+      },
+      // Stones along the streams and round the tarns, outweighing the shore sand.
+      {
+        id: "alpine-stream-stones",
+        material: "pebbles",
+        weight: {
+          noises: [{ name: "reach", type: "fbm", octaves: 2, frequency: 0.02, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
+          steps: [
+            { output: "gap", op: "input", name: "riverGap" },
+            { output: "reachRaw", op: "sample", noise: "reach" },
+            { output: "reachShift", op: "scale", input: "reachRaw", factor: 9 },
+            { output: "reach", op: "add", a: "gap", b: "reachShift" },
+            { output: "band", op: "mask", input: "reach", at: 40, off: 62 },
+            { output: "lakeFactor", op: "input", name: "lakeFactor" },
+            { output: "lake", op: "mask", input: "lakeFactor", at: 0.25, off: 0.02 },
+            { output: "height", op: "input", name: "height" },
+            { output: "low", op: "mask", input: "height", at: 0.6, off: 2.6 },
+            { output: "landmass", op: "input", name: "landmass" },
+            { output: "inland", op: "mask", input: "landmass", at: 0.95, off: 0.7 },
+            { output: "pond", op: "multiply", a: "low", b: "inland" },
+            { output: "lakeOrPond", op: "max", a: "lake", b: "pond" },
+            { output: "water", op: "max", a: "band", b: "lakeOrPond" },
+            { output: "result", op: "scale", input: "water", factor: 1.5 },
+          ],
+        },
+      },
+    ],
+  },
+  // Thin, clear mountain air: a deep blue sky, bright sun.
+  sky: {
+    horizon: { oneOf: ["#c4d6e6", "#bcd2e8", "#cddbe6"] },
+    zenith: { oneOf: ["#3a6cb4", "#3264b0", "#4474bc"] },
+    cloud: "#f6f8fa",
+    fogStart: { range: [0.4, 0.6] },
+    fogEnd: { range: [0.92, 1.0] },
+  },
+  light: {
+    sunPeak: 64,
+    moonPeak: 46,
+  },
+}
