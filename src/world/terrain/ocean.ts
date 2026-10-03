@@ -2,6 +2,7 @@ import { Effect, MeshBuilder, ShaderMaterial, type Mesh, type Scene } from "@bab
 import { SEA_LEVEL } from "../cells/areaField";
 import type { SunLighting } from "../lighting/sunLighting";
 import type { SkyDome } from "../sky/skyDome";
+import { LIT_SHADING_GLSL, LIT_SHADING_SAMPLERS, LIT_SHADING_UNIFORMS, createLitShading } from "../materials/litShading";
 
 export interface OceanOptions {
   size: number;
@@ -38,19 +39,22 @@ const WAVE_DRIFT: Array<[number, number]> = [
   [4.1, -3.2],
 ];
 const WAVE_STRENGTH = [1.0, 0.5, 0.22];
+// The angular radius (radians) a reflected ray counts as hitting the sun or moon within - the sky's
+// own disc size and a little more.
+const DISC_REFLECT_RADIUS = 0.035;
 // The rain's ripples on top, world units per noise cell and strength at full rain: fine enough to
 // read as drops pitting the surface, not as more waves.
 const RAIN_RIPPLE_SIZES = [0.35, 0.14];
 const RAIN_RIPPLE_STRENGTH = [0.9, 0.6];
 
-const VERTEX_SHADER = `
+const VERTEX_SHADER = `#version 300 es
 precision highp float;
-attribute vec3 position;
+in vec3 position;
 uniform mat4 world;
 uniform mat4 view;
 uniform mat4 projection;
-varying vec3 vWorldPosition;
-varying vec3 vPositionFromCamera;
+out vec3 vWorldPosition;
+out vec3 vPositionFromCamera;
 void main(void) {
   vec4 worldPosition = world * vec4(position, 1.0);
   vWorldPosition = worldPosition.xyz;
@@ -61,27 +65,21 @@ void main(void) {
 }
 `;
 
-const FRAGMENT_SHADER = `
+// The shared lit-shading block (litShading.ts) brings the light, the fog and the cascaded shadow
+// map - the last so the sun's glint and its mirrored disc go dark where the water lies in a shadow:
+// a sun already behind a hill throws no light on the water below it.
+const FRAGMENT_SHADER = `#version 300 es
 precision highp float;
-varying vec3 vWorldPosition;
-varying vec3 vPositionFromCamera;
+${LIT_SHADING_GLSL}
+in vec3 vWorldPosition;
+in vec3 vPositionFromCamera;
+out vec4 outColor;
 
-uniform vec3 cameraPosition;
-uniform vec3 lightDirection;
-uniform vec3 lightColor;
-uniform float lightIntensity;
-uniform vec3 ambientColor;
-uniform float ambientIntensity;
 uniform vec3 skyHorizon;
 uniform vec3 skyZenith;
+uniform vec3 discColor;
 uniform float time;
 uniform float rain;
-
-uniform int fogMode;
-uniform vec3 fogColor;
-uniform float fogStart;
-uniform float fogEnd;
-uniform float fogDensity;
 
 float hash(vec2 p) {
   return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
@@ -164,23 +162,28 @@ void main(void) {
   float reflectAlpha = ${WATER_ALPHA.toFixed(3)} * clamp(fresnel * 0.85 + 0.1, 0.0, 1.0);
 
   vec3 glint = lightColor * specular;
+  // The sun's (or the moon's) own disc, mirrored: wherever a wave turns the reflected ray onto it,
+  // the water shows the disc's colour - scattered by the waves into the long, broken path of light
+  // that runs out to a low sun. Drawn a little larger than the disc itself, since each wave facet
+  // is a tiny mirror tilted a little differently.
+  float toDisc = dot(reflectDir, normalize(lightDirection));
+  float mirrored = smoothstep(${Math.cos(DISC_REFLECT_RADIUS * 1.6).toFixed(7)}, ${Math.cos(DISC_REFLECT_RADIUS).toFixed(7)}, toDisc);
+  // In the disc's own colour - its hue at full strength rather than pushed past white, so a low
+  // sun's path burns orange, not blank.
+  float discBright = max(max(discColor.r, discColor.g), max(discColor.b, 0.0001));
+  glint += discColor / discBright * min(discBright, 1.0) * mirrored;
+
+  // Only where the sun (or moon) reaches the water: none of it in a shadow. The shadow block's
+  // darkness is mapped back to 0 (shadowed) .. 1 (lit).
+  float sunLit = (computeShadow(vWorldPosition, vec3(0.0, 1.0, 0.0), vPositionFromCamera.z) - SHADOW_DARKNESS) / (1.0 - SHADOW_DARKNESS);
+  glint *= clamp(sunLit, 0.0, 1.0);
+
   vec3 color = reflectedSky + glint;
   // A glint is light the surface throws at the camera, not something seen through it - it raises
   // the pixel's opacity rather than being scaled down by a thin reflection.
   float alpha = clamp(reflectAlpha + max(glint.r, max(glint.g, glint.b)), 0.0, 1.0);
 
-  float fogDistance = length(vPositionFromCamera);
-  float fogFactor = 1.0;
-  if (fogMode == 3) {
-    fogFactor = clamp((fogEnd - fogDistance) / max(fogEnd - fogStart, 0.0001), 0.0, 1.0);
-  } else if (fogMode == 1) {
-    fogFactor = clamp(1.0 / exp(fogDistance * fogDensity), 0.0, 1.0);
-  } else if (fogMode == 2) {
-    fogFactor = clamp(1.0 / exp(fogDistance * fogDistance * fogDensity * fogDensity), 0.0, 1.0);
-  }
-  vec3 finalColor = mix(fogColor, color, fogFactor);
-
-  gl_FragColor = vec4(finalColor, alpha);
+  outColor = vec4(applyFog(color, length(vPositionFromCamera)), alpha);
 }
 `;
 
@@ -207,26 +210,8 @@ export function createOceanPlane(scene: Scene, sunLighting: SunLighting, sky: Sk
 
   const material = new ShaderMaterial("oceanMaterial", scene, "ocean", {
     attributes: ["position"],
-    uniforms: [
-      "world",
-      "view",
-      "projection",
-      "cameraPosition",
-      "lightDirection",
-      "lightColor",
-      "lightIntensity",
-      "ambientColor",
-      "ambientIntensity",
-      "skyHorizon",
-      "skyZenith",
-      "time",
-      "rain",
-      "fogMode",
-      "fogColor",
-      "fogStart",
-      "fogEnd",
-      "fogDensity",
-    ],
+    uniforms: ["world", "view", "projection", "skyHorizon", "skyZenith", "discColor", "time", "rain", ...LIT_SHADING_UNIFORMS],
+    samplers: LIT_SHADING_SAMPLERS,
   });
   material.backFaceCulling = true;
   // Forces Babylon's engine-level alpha-blend mode on (Material.needAlphaBlending checks alpha < 1
@@ -236,6 +221,7 @@ export function createOceanPlane(scene: Scene, sunLighting: SunLighting, sky: Sk
   material.alpha = 0.999;
   material.setFloat("rain", 0);
   ocean.material = material;
+  createLitShading(scene, sunLighting).register(material);
 
   // A still surface - no tide - so the shore and anything floating on the water (materialLibrary.ts's
   // floating sheet) stay where they are: the terrain shaders are told its height once.
@@ -249,21 +235,9 @@ export function createOceanPlane(scene: Scene, sunLighting: SunLighting, sky: Sk
       ocean.position.z = scene.activeCamera.position.z;
     }
     material.setFloat("time", time);
-    if (scene.activeCamera) {
-      material.setVector3("cameraPosition", scene.activeCamera.position);
-    }
-    material.setVector3("lightDirection", sunLighting.direction);
-    material.setColor3("lightColor", sunLighting.color);
-    material.setFloat("lightIntensity", sunLighting.intensity);
-    material.setColor3("ambientColor", sunLighting.ambientColor);
-    material.setFloat("ambientIntensity", sunLighting.ambientIntensity);
     material.setColor3("skyHorizon", sky.horizon);
     material.setColor3("skyZenith", sky.zenith);
-    material.setInt("fogMode", scene.fogMode);
-    material.setColor3("fogColor", scene.fogColor);
-    material.setFloat("fogStart", scene.fogStart);
-    material.setFloat("fogEnd", scene.fogEnd);
-    material.setFloat("fogDensity", scene.fogDensity);
+    material.setColor3("discColor", sky.discColor);
   });
 
   return { mesh: ocean, setRain: (amount: number) => material.setFloat("rain", amount) };

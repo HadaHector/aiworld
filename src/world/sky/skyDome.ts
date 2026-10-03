@@ -1,6 +1,6 @@
 import { Color3, Effect, Mesh, MeshBuilder, ShaderMaterial, Vector2, Vector3, type Scene } from "@babylonjs/core";
 import type { AreaWeight } from "../cells/areaField";
-import { lerp } from "../mathUtils";
+import { lerp, smoothstep } from "../mathUtils";
 import { computeDayNightFactors, deriveNightSkyColor } from "../lighting/dayNightMath";
 import { FAIR_CLOUD_COVER, type WeatherBlend } from "../weather/weatherTypes";
 
@@ -18,6 +18,11 @@ const TWILIGHT_CLOUD_STRENGTH = 0.6;
 // not simply "not sunset-coloured". Weaker than the sun-side wash - it is a secondary effect, not a
 // second sunset.
 const TWILIGHT_HORIZON_ANTI_STRENGTH = 0.5;
+
+// The sun's and the moon's size in the sky, as angular radii (radians) - a few times their true size,
+// as games draw them, so they read as discs and not as specks.
+const SUN_RADIUS = 0.022;
+const MOON_RADIUS = 0.03;
 
 // Far past MAX_DRAW_DISTANCE (2000) and the shadow/fog reach - the dome is infiniteDistance, so its
 // own radius only has to clear the camera's far clip plane, never the world itself.
@@ -62,6 +67,8 @@ uniform float cloudCover;
 uniform vec3 twilightTint;
 uniform float twilightFactor;
 uniform vec3 sunDirection;
+uniform float isDay;
+uniform float discVisibility;
 
 float hash(vec2 p) {
   return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
@@ -146,6 +153,30 @@ void main(void) {
   // which is already what "not sunset-facing" should look like.
   vec3 litCloud = mix(cloudColor, twilightTint, sunSide * ${TWILIGHT_CLOUD_STRENGTH.toFixed(3)});
 
+  // The sun or the moon - whichever is up: sunDirection points at it, by day or by night. Drawn
+  // into the sky before the clouds go over it, and faded behind a grey sky (discVisibility).
+  float facing = dot(dir, normalize(sunDirection));
+  if (isDay > 0.5) {
+    float disc = smoothstep(${Math.cos(SUN_RADIUS * 1.15).toFixed(7)}, ${Math.cos(SUN_RADIUS).toFixed(7)}, facing);
+    float glow = pow(max(facing, 0.0), 900.0) * 0.5 + pow(max(facing, 0.0), 60.0) * 0.18;
+    // White-gold high up, the sunset's own colour near the horizon.
+    vec3 sunColor = mix(vec3(1.0, 0.97, 0.86), twilightTint, twilightFactor * 0.8) * 1.6;
+    sky = mix(sky, sunColor, clamp(disc + glow, 0.0, 1.0) * discVisibility);
+  } else {
+    float disc = smoothstep(${Math.cos(MOON_RADIUS * 1.08).toFixed(7)}, ${Math.cos(MOON_RADIUS).toFixed(7)}, facing);
+    // Its dark seas: a noise over the disc, in the disc's own flat coordinates (across and up it as
+    // seen) so they keep their shape wherever it stands in the sky.
+    vec3 body = normalize(sunDirection);
+    vec3 across = normalize(cross(vec3(0.0, 1.0, 0.0), body));
+    vec3 upward = cross(body, across);
+    vec3 offset = dir - body;
+    vec2 onDisc = vec2(dot(offset, across), dot(offset, upward)) / ${MOON_RADIUS.toFixed(3)};
+    float seas = cloudFbm(onDisc * 1.6 + vec2(11.3, 4.7));
+    vec3 moonColor = vec3(0.95, 0.97, 1.0) * 1.2 * mix(0.75, 1.0, smoothstep(0.3, 0.7, seas));
+    float halo = pow(max(facing, 0.0), 2000.0) * 0.25;
+    sky = mix(sky, moonColor, clamp(disc + halo, 0.0, 1.0) * discVisibility);
+  }
+
   vec3 color = mix(sky, litCloud, cloudMask);
   gl_FragColor = vec4(color, 1.0);
 }
@@ -202,6 +233,9 @@ export interface SkyDome {
    *  SunLighting.direction - read them fresh each frame rather than caching the object contents. */
   horizon: Color3;
   zenith: Color3;
+  /** The sun's or the moon's disc as the sky draws it this frame - its colour, already faded by the
+   *  weather - for the water to reflect (see terrain/ocean.ts). The direction is the light's. */
+  discColor: Color3;
   dispose: () => void;
 }
 
@@ -230,7 +264,7 @@ export function createSkyDome(scene: Scene): SkyDome {
 
   const material = new ShaderMaterial("skyDomeMaterial", scene, "skyDome", {
     attributes: ["position"],
-    uniforms: ["worldViewProjection", "skyZenith", "skyHorizon", "cloudColor", "cloudOffset", "cloudCover", "twilightTint", "twilightFactor", "sunDirection"],
+    uniforms: ["worldViewProjection", "skyZenith", "skyHorizon", "cloudColor", "cloudOffset", "cloudCover", "twilightTint", "twilightFactor", "sunDirection", "isDay", "discVisibility"],
   });
   material.backFaceCulling = false;
   material.disableDepthWrite = true;
@@ -274,6 +308,7 @@ export function createSkyDome(scene: Scene): SkyDome {
   const zenith = new Color3();
   const cloudBase = new Color3();
   const fogColor = new Color3();
+  const discColor = new Color3();
 
   function update(areaWeights: AreaWeight[], drawDistance: number, timeHours: number, sunDirection: Vector3, weather: WeatherBlend): void {
     dayHorizon.set(0, 0, 0);
@@ -313,7 +348,19 @@ export function createSkyDome(scene: Scene): SkyDome {
     windStrength = weather.wind;
     material.setFloat("cloudCover", weather.cloudCover);
 
-    const { dayness, twilightFactor } = computeDayNightFactors(timeHours);
+    const { dayness, twilightFactor, isDay } = computeDayNightFactors(timeHours);
+    material.setFloat("isDay", isDay ? 1 : 0);
+    // Gone behind a grey sky: a little through thin cloud, not at all through an overcast one.
+    const discVisibility = 1 - smoothstep(0.2, 0.75, weather.skyGrey);
+    material.setFloat("discVisibility", discVisibility);
+    // The same colours the shader gives the discs: the sun white-gold, warming towards the sunset's
+    // own colour low down; the moon a cool white, dimmer.
+    if (isDay) {
+      const warm = twilightFactor * 0.8;
+      discColor.set(lerp(1.0, twilightTint.r, warm), lerp(0.97, twilightTint.g, warm), lerp(0.86, twilightTint.b, warm)).scaleInPlace(1.6 * discVisibility);
+    } else {
+      discColor.set(0.95, 0.97, 1.0).scaleInPlace(0.7 * discVisibility);
+    }
     const nightHorizon = deriveNightSkyColor(dayHorizon);
     const nightZenith = deriveNightSkyColor(dayZenith);
     const nightCloud = deriveNightSkyColor(dayCloud);
@@ -344,5 +391,5 @@ export function createSkyDome(scene: Scene): SkyDome {
     material.dispose();
   }
 
-  return { update, horizon: fogColor, zenith, dispose };
+  return { update, horizon: fogColor, zenith, discColor, dispose };
 }
