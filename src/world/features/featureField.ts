@@ -37,7 +37,9 @@ function bucketKey(gx: number, gz: number): number {
 export function createFeatureField(features: FeatureSite[]): FeatureField {
   const buckets = new Map<number, FeatureSite[]>();
   for (const feature of features) {
+    // A settlement's ground is its streets and plots - see settlements/padField.ts.
     const { quarry } = feature;
+    if (!quarry) continue;
     const extent = Math.hypot(quarry.halfLength, quarry.halfWidth) + QUARRY_REACH;
     const gxMin = Math.floor((feature.x - extent) / BUCKET_SIZE);
     const gxMax = Math.floor((feature.x + extent) / BUCKET_SIZE);
@@ -60,9 +62,10 @@ export function createFeatureField(features: FeatureSite[]): FeatureField {
     let nearest: FeatureSite | null = null;
     let nearestGap = Infinity;
     for (const feature of bucket) {
-      const gap = quarryGap(feature.quarry, x, z);
+      const quarry = feature.quarry!;
+      const gap = quarryGap(quarry, x, z);
       if (gap >= QUARRY_REACH) continue;
-      height = quarryHeight(feature.quarry, gap, height);
+      height = quarryHeight(quarry, gap, height);
       if (gap < nearestGap) {
         nearestGap = gap;
         nearest = feature;

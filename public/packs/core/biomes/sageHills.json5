@@ -11,8 +11,12 @@
   lakeChance: 0.03,
   borderType: "mountain",
   settlement: "timber",
-  // A quarry in one cell of every three, where there is a hillside to cut it into.
-  features: [{ feature: "quarry", odds: 1 }, { feature: "none", odds: 2 }],
+  // Hill country: a settlement in some cells, a quarry in others, where there is a hillside to cut it into.
+  features: [
+    { feature: "settlement", odds: 0.8 },
+    { feature: "quarry", odds: 0.7 },
+    { feature: "none", odds: 0.7 },
+  ],
   // Each area its own country: how rugged its hills are, how far its valleys are filled to flat sage
   // plains, and how big the long swell under it all - read together by the height and the junipers.
   params: { rugged: { range: [0, 1] }, basin: { range: [0, 1] }, swell: { range: [0, 1] } },

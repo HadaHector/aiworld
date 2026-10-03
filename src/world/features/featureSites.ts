@@ -15,13 +15,19 @@ export interface FeatureSite {
   x: number;
   z: number;
   areaId: number;
-  /** Roads keep out of this circle (other than the feature's own track). */
+  /** Roads keep out of this circle (other than the feature's own track). 0 for a settlement, whose
+   *  roads come in at its gates instead. */
   footprint: number;
   /** Where its track starts, the point a little way out it is routed from, and the level it starts
-   *  at. Null for a feature with no road. */
+   *  at. Null for a feature with no track of its own (a settlement is on the road network itself). */
   entrance: { x: number; z: number; approachX: number; approachZ: number; height: number } | null;
-  quarry: QuarryShape;
+  /** The type's own data: one of these is set. */
+  quarry: QuarryShape | null;
+  settlement: SettlementSite | null;
 }
+
+/** No feature rolled. */
+export const NO_ROLL = -1;
 
 // Candidates are scattered over most of the cell, not all of it: a feature at the very edge would
 // sit next to whatever the cell beside it rolled.
@@ -34,69 +40,75 @@ const MIN_FEATURE_SPACING = 500;
 const FEATURE_ROLL_SALT = 901;
 const FEATURE_PLACE_SALT = 902;
 
-export interface FeatureInput {
-  seed: number;
-  cellSites: CellPoint[];
-  sampleTerrain: TerrainSampler;
-  kinds: FeatureKindDef[];
-  settlements: SettlementSite[];
-}
-
 function roll(range: [number, number], rng: () => number): number {
   return range[0] + (range[1] - range[0]) * rng();
 }
 
 /**
- * Rolls each cell's major feature and finds it a place.
- *
- * A cell a settlement stands in has that for its feature and rolls nothing. Every other cell rolls
- * one kind from its biome's `features` list, then looks for ground that suits it - a quarry wants a
- * hillside - among a scatter of points over the cell, and takes the best. A cell where nothing suits
- * is simply empty: the roll is what the cell would like, the ground is what it gets.
- *
- * Each cell has its own random stream, so what one cell rolls never shifts another's.
+ * What each land cell would like to hold: one kind (its index in `kinds`) drawn from its biome's
+ * `features` list, or NO_ROLL. Each cell has its own random stream, so what one cell rolls never
+ * shifts another's.
  */
-export function generateFeatureSites({ seed, cellSites, sampleTerrain, kinds, settlements }: FeatureInput): FeatureSite[] {
+export function rollCellFeatures(seed: number, cellSites: CellPoint[], sampleTerrain: TerrainSampler, kinds: FeatureKindDef[]): number[] {
   const kindIndex = new Map(kinds.map((kind, i) => [kind.id, i]));
-
-  // The cells settlements stand in.
-  const settled = new Set<number>();
-  for (const settlement of settlements) {
-    let nearest = -1;
-    let nearestSq = Infinity;
-    cellSites.forEach((site, i) => {
-      const distSq = (site.x - settlement.x) ** 2 + (site.z - settlement.z) ** 2;
-      if (distSq < nearestSq) {
-        nearestSq = distSq;
-        nearest = i;
-      }
-    });
-    if (nearest >= 0) settled.add(nearest);
-  }
-
-  const features: FeatureSite[] = [];
-  const clearOfOthers = (x: number, z: number): boolean =>
-    settlements.every((s) => Math.hypot(s.x - x, s.z - z) > s.radius + SETTLEMENT_CLEARANCE) &&
-    features.every((f) => Math.hypot(f.x - x, f.z - z) > MIN_FEATURE_SPACING);
-
-  for (let cell = 0; cell < cellSites.length; cell++) {
-    if (settled.has(cell)) continue;
-    const site = cellSites[cell];
-    const biome = sampleTerrain(site.x, site.z).primaryBiome;
-    const chances = biome.features;
+  return cellSites.map((site, cell) => {
+    const chances = sampleTerrain(site.x, site.z).primaryBiome.features;
     const total = chances.reduce((sum, chance) => sum + chance.odds, 0);
-    if (total <= 0) continue;
-
+    if (total <= 0) return NO_ROLL;
     let pick = mulberry32(deriveSeed(seed, FEATURE_ROLL_SALT + cell))() * total;
     const chosen = chances.find((chance) => (pick -= chance.odds) < 0) ?? chances[chances.length - 1];
-    if (chosen.featureId === NO_FEATURE) continue;
-    const index = kindIndex.get(chosen.featureId);
-    if (index === undefined) continue;
+    if (chosen.featureId === NO_FEATURE) return NO_ROLL;
+    return kindIndex.get(chosen.featureId) ?? NO_ROLL;
+  });
+}
+
+export interface FeatureInput {
+  seed: number;
+  cellSites: CellPoint[];
+  sampleTerrain: TerrainSampler;
+  kinds: FeatureKindDef[];
+  /** rollCellFeatures's answer. */
+  rolls: number[];
+  /** Already placed (settlements/settlementSites.ts), in the cells that rolled one. */
+  settlements: SettlementSite[];
+}
+
+/**
+ * Every cell's feature, placed.
+ *
+ * Settlements come first, as their sites were placed by their own rules in the cells that rolled
+ * one. Every other cell looks for ground that suits its roll - a quarry wants a hillside - among a
+ * scatter of points over the cell, and takes the best. A cell where nothing suits is simply empty:
+ * the roll is what the cell would like, the ground is what it gets.
+ */
+export function placeFeatures({ seed, cellSites, sampleTerrain, kinds, rolls, settlements }: FeatureInput): FeatureSite[] {
+  const features: FeatureSite[] = settlements.map((settlement) => ({
+    id: 0,
+    kindIndex: rolls[settlement.cellId],
+    kind: kinds[rolls[settlement.cellId]],
+    x: settlement.x,
+    z: settlement.z,
+    areaId: settlement.areaId,
+    footprint: 0,
+    entrance: null,
+    quarry: null,
+    settlement,
+  }));
+
+  const clearOfOthers = (x: number, z: number): boolean =>
+    settlements.every((s) => Math.hypot(s.x - x, s.z - z) > s.radius + SETTLEMENT_CLEARANCE) &&
+    features.every((f) => f.settlement !== null || Math.hypot(f.x - x, f.z - z) > MIN_FEATURE_SPACING);
+
+  for (let cell = 0; cell < cellSites.length; cell++) {
+    const index = rolls[cell];
+    if (index === NO_ROLL) continue;
     const kind = kinds[index];
+    const spec = kind.quarry;
+    if (kind.type !== "quarry" || !spec) continue;
+    const site = cellSites[cell];
 
     const rng = mulberry32(deriveSeed(seed, FEATURE_PLACE_SALT + cell));
     // One size per cell, rolled before the search, so where it lands does not change how big it is.
-    const spec = kind.quarry;
     const size = {
       halfLength: roll(spec.floorLength, rng) / 2,
       halfWidth: roll(spec.floorWidth, rng) / 2,
@@ -117,7 +129,7 @@ export function generateFeatureSites({ seed, cellSites, sampleTerrain, kinds, se
 
     const shape = best.shape;
     features.push({
-      id: features.length,
+      id: 0,
       kindIndex: index,
       kind,
       x: shape.x,
@@ -126,7 +138,9 @@ export function generateFeatureSites({ seed, cellSites, sampleTerrain, kinds, se
       footprint: quarryFootprint(shape),
       entrance: kind.road ? { ...quarryEntrance(shape), height: shape.level } : null,
       quarry: shape,
+      settlement: null,
     });
   }
+  features.forEach((feature, id) => (feature.id = id));
   return features;
 }

@@ -68,7 +68,11 @@
   ],
 
   // What the cells of a biome that names none roll for their one major feature (see features/): each
-  // as likely as its odds over the sum of them all, and "none" leaves a cell empty. A cell a
-  // settlement stands in rolls nothing.
-  features: [{ feature: "none", odds: 1 }],
+  // as likely as its odds over the sum of them all, and "none" leaves a cell empty. A feature is
+  // placed only where its ground suits it - a settlement on level, dry, inland ground - so a cell
+  // that rolls one can still end up empty.
+  features: [
+    { feature: "settlement", odds: 0.8 },
+    { feature: "none", odds: 1 },
+  ],
 }

@@ -535,14 +535,17 @@ becomes, and the rules for gates, streets and levelling plots, are the same for 
 
 ## Cell features
 
-Every land cell has room for one major feature. A cell a settlement stands in has that; every other
-cell rolls one from its biome's `features` list - `[{ feature: "quarry", odds: 1 }, { feature:
-"none", odds: 2 }]`, each as likely as its odds over the sum of them all, `"none"` leaving the cell
-empty on purpose (the defaults' list is just `"none"`). Then it looks over the cell for ground that
-suits the kind, and a cell with none stays empty whatever it rolled.
+Every land cell has room for one major feature, rolled from its biome's `features` list -
+`[{ feature: "settlement", odds: 0.8 }, { feature: "quarry", odds: 0.7 }, { feature: "none", odds:
+0.7 }]`, each as likely as its odds over the sum of them all, `"none"` leaving the cell empty on
+purpose. Then it looks over the cell for ground that suits the kind, and a cell with none stays
+empty whatever it rolled.
 
-A kind's `type` picks the code that places it and shapes its ground - today only `quarry`; see
-`core/features/quarry.json5`. Its own block (`quarry: {...}`) sizes it, each range rolled per
+A kind's `type` picks the code that places it and shapes its ground. `settlement`
+(`core/features/settlement.json5`) takes nothing else: settlements choose level, dry, inland ground
+and are laid out in the biome's own `settlement` style, so a biome that rolls one must name a style.
+Everything else keeps clear of them, and they are what the road network connects. For a `quarry`
+see `core/features/quarry.json5`. Its own block (`quarry: {...}`) sizes it, each range rolled per
 feature. `clearing` is how far past its edge trees, bushes and stones are cleared (they also go from
 any ground it cut or filled). `road` gives it a track to the nearest road - `width` against a road's
 1, `maxLength` the furthest it looks for one - and the roads themselves keep off its ground.

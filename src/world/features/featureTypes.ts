@@ -1,9 +1,9 @@
 import type { MaterialLayer } from "../materials/materialTypes";
 
 /**
- * What stands in a cell besides the land itself: one major feature per cell at most - a quarry, and
- * in time a farm, a mine, a camp. Settlements are the first of them, and are placed by their own
- * rules (settlements/settlementSites.ts); a cell holding one rolls nothing else.
+ * What stands in a cell besides the land itself: one major feature per cell at most - a settlement,
+ * a quarry, and in time a farm, a mine, a camp. Settlements keep their own placement and layout
+ * rules (settlements/), but which cells have one is rolled here, like any other feature.
  *
  * A feature kind is content (a pack's features/ folder); its `type` picks the code that places it
  * and shapes the ground under it. A biome lists which kinds its cells roll, with odds - "none"
@@ -11,7 +11,7 @@ import type { MaterialLayer } from "../materials/materialTypes";
  */
 export const NO_FEATURE = "none";
 
-export const FEATURE_TYPES = ["quarry"] as const;
+export const FEATURE_TYPES = ["quarry", "settlement"] as const;
 export type FeatureType = (typeof FEATURE_TYPES)[number];
 
 /** `features: [{ feature, odds }]` in a biome: which kinds its cells roll, and how likely each is -
@@ -43,8 +43,11 @@ export interface QuarrySpec {
 export interface FeatureKindDef {
   id: string;
   name: string;
+  /** "settlement" is placed and laid out by settlements/ - in the biome's own `settlement` style,
+   *  with its streets, plots and gates - and uses none of the fields below. */
   type: FeatureType;
-  quarry: QuarrySpec;
+  /** A quarry's own block; null for any other type. */
+  quarry: QuarrySpec | null;
   /** Trees, bushes and stones are cleared off the ground the feature changes, and up to the first
    *  distance past its edge, returning by the second. */
   clearing: [number, number];

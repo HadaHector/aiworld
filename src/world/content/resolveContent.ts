@@ -201,6 +201,7 @@ export function resolveContent(packs: PackSource[]): WorldContent {
   const featureReads = readAll("features", (e, o, r) => ({ file: e.file, kind: readFeatureKind(e.id, o, r) }));
   const featureKinds = featureReads.map((read) => read.kind);
   const featureIds = new Set([NO_FEATURE, ...featureKinds.map((kind) => kind.id)]);
+  const settlementFeatureIds = new Set(featureKinds.filter((kind) => kind.type === "settlement").map((kind) => kind.id));
   const styleById = new Map(settlementStyles.map((style) => [style.id, style]));
   // A biome is read as its middle roll here (see biomeRolls.ts) - what its name, spawn weight and the
   // workbench go by - and rolled again for every area of the world it is given to (rollAreaBiome).
@@ -308,6 +309,9 @@ export function resolveContent(packs: PackSource[]): WorldContent {
     });
     biome.features.forEach((chance, i) => {
       if (!featureIds.has(chance.featureId)) report({ file, path: `features[${i}].feature`, message: `no feature "${chance.featureId}" (known: ${[...featureIds].join(", ")})` });
+      if (settlementFeatureIds.has(chance.featureId) && chance.odds > 0 && !biome.settlementStyle) {
+        report({ file, path: `features[${i}].feature`, message: `"${chance.featureId}" is a settlement, but this biome has no settlement style (\`settlement\`) to build it in` });
+      }
     });
     biome.weather.forEach((chance, i) => {
       if (!weatherIds.has(chance.weatherId)) report({ file, path: `weather[${i}].weather`, message: `no weather "${chance.weatherId}" (known: ${[...weatherIds].join(", ") || "none"})` });
@@ -488,6 +492,11 @@ function readFeatureChances(obj: RawObject, reader: Reader): FeatureChance[] {
 function readFeatureKind(id: string, obj: RawObject, reader: Reader): FeatureKindDef {
   reader.onlyKeys(obj, "", ["name", "type", "quarry", "clearing", "road", "ground"]);
   const type = reader.oneOf(obj, "type", "", FEATURE_TYPES);
+  // A settlement is laid out by its own code, in its biome's settlement style: it takes nothing else.
+  if (type === "settlement") {
+    reader.onlyKeys(obj, "", ["name", "type"]);
+    return { id, name: reader.string(obj, "name", ""), type, quarry: null, clearing: [0, 0], road: null, ground: null };
+  }
   const quarry = reader.object(obj.quarry, "quarry");
   reader.onlyKeys(quarry, "quarry", ["floorLength", "floorWidth", "benchHeight", "benchSteepness", "benchWidth", "spoilSlope", "grade", "idealGrade"]);
   const road = obj.road === undefined ? null : reader.object(obj.road, "road");

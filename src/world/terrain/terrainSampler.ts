@@ -8,7 +8,7 @@ import { createRoadField, type RoadField } from "../roads/roadField";
 import { generateSettlementLayouts, type SettlementLayout } from "../settlements/settlementLayout";
 import { createPadField, type PadField } from "../settlements/padField";
 import { PAD_BLEND_MAX, PAD_BLEND_MIN, PAD_PAINT_OFFSET, PAD_SIDE_SLOPE } from "../settlements/settlementConfig";
-import { generateFeatureSites, type FeatureSite } from "../features/featureSites";
+import { NO_ROLL, placeFeatures, rollCellFeatures, type FeatureSite } from "../features/featureSites";
 import { createFeatureField, type FeatureField } from "../features/featureField";
 import {
   ROAD_HALF_WIDTH,
@@ -269,17 +269,24 @@ export function createTerrainSampler(seed: number, content: WorldContent): Terra
     };
   }
 
-  // After sampleTerrain exists, because choosing a site is entirely a question about the finished
-  // terrain - how level it is, how far above the water, how near a river.
+  // Each land cell rolls its one major feature from its biome's list. After sampleTerrain exists,
+  // because placing one is entirely a question about the finished terrain - how level it is, how
+  // far above the water, how near a river.
+  const kinds = content.featureKinds;
+  const rolls = rollCellFeatures(seed, landCellSites, sampleTerrain, kinds);
+  // The settlements first, in the cells that rolled one: they choose their ground by their own rules,
+  // and everything else keeps clear of them.
+  const settledCells = rolls.flatMap((roll, cell) => (roll !== NO_ROLL && kinds[roll].type === "settlement" ? [cell] : []));
   const settlements = generateSettlementSites({
     seed,
-    cellSites: landCellSites,
+    cellSites: settledCells.map((cell) => landCellSites[cell]),
+    cellIds: settledCells,
     sampleTerrain,
     nameFor: (biome, id) => nameGenerator.settlementNameFor(biome.voiceId, id),
   });
 
-  // Then every other cell's feature, kept clear of the settlements, and its ground edits bound.
-  const features = generateFeatureSites({ seed, cellSites: landCellSites, sampleTerrain, kinds: content.featureKinds, settlements });
+  // Then every other cell's feature, and their ground edits bound.
+  const features = placeFeatures({ seed, cellSites: landCellSites, sampleTerrain, kinds, rolls, settlements });
   featureField = createFeatureField(features);
 
   // Roads need the settlements to connect and the finished terrain to route over, so they come

@@ -1,0 +1,7 @@
+// A settlement: a hamlet, village or town, by how good its ground is. Placed, laid out and built by
+// the settlement code, in the cell's biome's own style (its `settlement` key) - this file only
+// makes it a kind a biome's cells can roll.
+{
+  name: "Settlement",
+  type: "settlement",
+}

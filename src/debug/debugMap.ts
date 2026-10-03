@@ -487,6 +487,8 @@ export function createDebugMap(
 
     // Features as small grey squares, under the settlements' dots, named by kind when close.
     for (const feature of features) {
+      // Settlements have their own dots.
+      if (feature.settlement) continue;
       const { x, y } = worldToPixel(feature.x, feature.z);
       if (x < 0 || y < 0 || x > SAMPLE_RESOLUTION || y > SAMPLE_RESOLUTION) continue;
       const left = `${(x / SAMPLE_RESOLUTION) * 100}%`;

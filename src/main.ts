@@ -139,11 +139,16 @@ function gotoLoaded(view: Partial<ViewSnapshot> & { x: number; z: number }, iter
 (window as unknown as { __aiworld: unknown }).__aiworld = {
   goto: gotoView,
   gotoLoaded,
-  /** Goes to feature `id` (world.features), looking into it from in front - its floor, its face. */
+  /** Goes to feature `id` (world.features): a settlement's square, or in front of a quarry looking
+   *  into it - its floor, its face. */
   gotoFeature(id: number): void {
     const feature = world.features[id];
     if (!feature) return;
     const q = feature.quarry;
+    if (!q) {
+      gotoLoaded({ x: feature.x, z: feature.z, beta: 1.1, radius: 60 });
+      return;
+    }
     const x = q.x + q.ax * (q.halfLength + 25);
     const z = q.z + q.az * (q.halfLength + 25);
     // The camera's alpha is measured from +x; it sits behind the character, so it looks along -dir.

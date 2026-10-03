@@ -357,7 +357,7 @@ export function generateRoadNetwork(
 
   /** The ground features stand on, which no road crosses (but for a feature's own track) - only
    *  those a route between `a` and `b` could reach at all, since every search step tests each one. */
-  const footprints = features.map((f) => ({ x: f.x, z: f.z, radius: f.footprint, id: f.id }));
+  const footprints = features.filter((f) => f.footprint > 0).map((f) => ({ x: f.x, z: f.z, radius: f.footprint, id: f.id }));
   function footprintsNear(a: CellPoint, b: CellPoint, detourFactor: number, except = -1): { x: number; z: number; radius: number }[] {
     const midX = (a.x + b.x) / 2;
     const midZ = (a.z + b.z) / 2;

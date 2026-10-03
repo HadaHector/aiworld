@@ -27,6 +27,8 @@ export interface SettlementSite {
   tier: SettlementTier;
   /** Gates sit on a circle this far out; streets and houses stay inside it. */
   radius: number;
+  /** The land cell (its index among all of them) whose roll put it here. */
+  cellId: number;
 }
 
 // Candidates are drawn inside each land cell rather than over a world-wide grid, so the search
@@ -80,10 +82,11 @@ const SCORE_FLATNESS = 0.55;
 const SCORE_WATER = 0.3;
 const SCORE_INLAND = 0.15;
 
-// Greedy claiming radius. Above CELL_SPACING deliberately: one settlement per cell would come out
-// as a grid however well each individual spot scored, and the point of scoring is that the good
-// ground decides the spacing, not the cell diagram.
-const MIN_SETTLEMENT_SPACING = 1400;
+// Greedy claiming radius. Which cells are settled at all is their own roll (features/featureSites.ts),
+// so the settled cells are already a scatter rather than a grid; this only keeps two settled cells
+// side by side from putting their towns on either side of the border between them. It is above the
+// candidate disc's diameter (CANDIDATE_RADIUS * 2), so no cell can ever hold two.
+const MIN_SETTLEMENT_SPACING = 900;
 
 const SETTLEMENT_SALT = 702;
 // Settlement ids share the name generator uniqueness pool with zone ids, and sit well clear of them
@@ -97,12 +100,16 @@ interface Candidate {
   areaId: number;
   biome: BiomeDefinition;
   score: number;
+  cellId?: number;
 }
 
 export interface SettlementInput {
   seed: number;
-  /** One site per land cell that is not a lake - the centres candidates are scattered around. */
+  /** The centres of the cells that rolled a settlement - candidates are scattered around them. */
   cellSites: CellPoint[];
+  /** Each of those cells' index among all land cells, which seeds its candidates - so a cell's
+   *  candidates do not depend on which other cells rolled a settlement. */
+  cellIds: number[];
   sampleTerrain: TerrainSampler;
   nameFor: (biome: BiomeDefinition, id: number) => string;
 }
@@ -182,16 +189,17 @@ function tierFor(score: number): SettlementTier {
 /**
  * Picks the places settlements will stand.
  *
- * Two phases. Every land cell scatters candidates and scores them independently, then the whole
+ * Two phases. Every cell that rolled a settlement scatters candidates and scores them independently,
+ * then the whole
  * world's survivors are claimed greedily best-first, each one blocking anything within
  * MIN_SETTLEMENT_SPACING. Claiming globally rather than per cell is what stops two towns ending up
  * on opposite sides of one cell border, which a per-cell pass cannot see.
  */
-export function generateSettlementSites({ seed, cellSites, sampleTerrain, nameFor }: SettlementInput): SettlementSite[] {
+export function generateSettlementSites({ seed, cellSites, cellIds, sampleTerrain, nameFor }: SettlementInput): SettlementSite[] {
   const candidates: Candidate[] = [];
 
   for (let cell = 0; cell < cellSites.length; cell++) {
-    const rng = mulberry32(deriveSeed(seed, SETTLEMENT_SALT + cell));
+    const rng = mulberry32(deriveSeed(seed, SETTLEMENT_SALT + cellIds[cell]));
     const site = cellSites[cell];
     for (let attempt = 0; attempt < CANDIDATES_PER_CELL; attempt++) {
       // The square root spreads points evenly over the disc; a raw roll would pile them at the
@@ -199,7 +207,7 @@ export function generateSettlementSites({ seed, cellSites, sampleTerrain, nameFo
       const radius = Math.sqrt(rng()) * CANDIDATE_RADIUS;
       const angle = rng() * Math.PI * 2;
       const scored = evaluate(site.x + Math.cos(angle) * radius, site.z + Math.sin(angle) * radius, sampleTerrain);
-      if (scored) candidates.push(scored);
+      if (scored) candidates.push({ ...scored, cellId: cellIds[cell] });
     }
   }
 
@@ -243,6 +251,7 @@ export function generateSettlementSites({ seed, cellSites, sampleTerrain, nameFo
       score: candidate.score,
       tier: tierFor(candidate.score),
       radius: candidate.biome.settlementStyle!.tiers[tierFor(candidate.score)].radius,
+      cellId: candidate.cellId!,
     };
     sites.push(site);
     const key = bucketKey(gx, gz);
