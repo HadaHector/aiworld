@@ -16,6 +16,8 @@
   lakeChance: 0.05,
   borderType: "mountain",
   settlement: "timber",
+  // A quarry in one cell of every three, where there is a hillside to cut it into.
+  features: [{ feature: "quarry", odds: 1 }, { feature: "none", odds: 2 }],
   // How much of the steep ground stands up as crags, how much snow lies.
   params: { crags: { range: [0, 1] }, snow: { range: [0, 1] } },
   height: {

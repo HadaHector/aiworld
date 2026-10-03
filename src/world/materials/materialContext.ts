@@ -81,6 +81,9 @@ export function buildVertexContext(
     lakeFactor: sample.lakeFactor,
     riverGap: sample.riverGap,
     roadGap: sample.roadGap,
+    featureKind: sample.featureKind,
+    featureGap: sample.featureGap,
+    featureDepth: sample.featureDepth,
     reliefCurvature: computeReliefCurvature(positions, gridSize, vertexIndex, curvatureRadiusSteps),
   };
 }

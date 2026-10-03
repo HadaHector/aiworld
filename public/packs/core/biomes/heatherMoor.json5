@@ -17,6 +17,8 @@
   lakeChance: 0.05,
   borderType: "mountain",
   settlement: "timber",
+  // A quarry in one cell of every three, where there is a hillside to cut it into.
+  features: [{ feature: "quarry", odds: 1 }, { feature: "none", odds: 2 }],
   // How many bog pools (how far down the hills sit), and how much of the hills carry a tor.
   params: { pools: { range: [0, 1] }, tors: { range: [0, 1] } },
   // Heights are set in the world, the bedrock taken off at the end: so the hollows that reach below

@@ -107,6 +107,17 @@ export function createMaterialBlender(seed: number, content: WorldContent, areaB
   for (const biome of content.biomes) {
     for (const layer of biome.materialLayers) ensureMaterial(layer.materialId);
   }
+  // A feature's ground (a quarry's floor) is the same everywhere - the feature's, not the zone's.
+  const featureGrounds = content.featureKinds.map((kind) =>
+    kind.ground ? { materialIndex: ensureMaterial(kind.ground.materialId), evaluate: compilePipeline(kind.ground.weight, seed, `material-${kind.ground.id}`) } : null,
+  );
+  /** The weight of the ground of the feature at this point, if there is one - laid over everything. */
+  const featureWeight = (worldX: number, worldZ: number, context: Record<string, number>): { index: number; weight: number } | null => {
+    const kind = context.featureKind ?? -1;
+    const ground = kind >= 0 ? featureGrounds[kind] : null;
+    if (!ground) return null;
+    return { index: ground.materialIndex, weight: Math.min(1, Math.max(0, ground.evaluate(worldX, worldZ, context))) };
+  };
 
   interface CompiledLayer {
     materialIndex: number;
@@ -185,8 +196,12 @@ export function createMaterialBlender(seed: number, content: WorldContent, areaB
     // it takes its weight first and every other layer shares what is left. Sharing evenly, a road
     // through a wood came out half forest floor, and that half's own height - leaves, fine and high -
     // won through at every dip of the road's surface, as a sparkle that crawled when the camera moved.
-    const roadWeight = Math.min(1, Math.max(0, compiledRoadLayer(worldX, worldZ, context)));
-    const offRoad = 1 - roadWeight;
+    // A feature's own ground goes over even that: its track runs into it and stops.
+    const feature = featureWeight(worldX, worldZ, context);
+    const onFeature = feature ? feature.weight : 0;
+    if (feature) add(feature.index, onFeature);
+    const roadWeight = Math.min(1, Math.max(0, compiledRoadLayer(worldX, worldZ, context))) * (1 - onFeature);
+    const offRoad = 1 - onFeature - roadWeight;
 
     for (const area of areaWeights) {
       const ground = groundFor(area.biome);
@@ -231,6 +246,11 @@ export function createMaterialBlender(seed: number, content: WorldContent, areaB
     if (roadWeight > bestWeight) {
       bestWeight = roadWeight;
       bestIndex = ground.road;
+    }
+    const feature = featureWeight(worldX, worldZ, context);
+    if (feature && feature.weight > bestWeight) {
+      bestWeight = feature.weight;
+      bestIndex = feature.index;
     }
     for (const layer of ground.layers) {
       const weight = layer.evaluate(worldX, worldZ, context);

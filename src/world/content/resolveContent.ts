@@ -41,6 +41,7 @@ import type { WorldContent } from "./worldContent";
 import type { TextureDef } from "../materials/textureGen";
 import { adjustMatrix, chainMatrix, NO_ADJUST, type ColorAdjust } from "../materials/colorAdjust";
 import type { WeatherChance, WeatherDef } from "../weather/weatherTypes";
+import { FEATURE_TYPES, NO_FEATURE, type FeatureChance, type FeatureKindDef } from "../features/featureTypes";
 
 /** One pack as found on disk: its folder name and every .json5 file in it, by path inside it. */
 export interface PackSource {
@@ -50,7 +51,7 @@ export interface PackSource {
 
 /** The folders a pack's content lives in, one kind of definition each. A definition's id is its
  *  file name, and a pack with a higher priority replaces a lower one's definition of the same id. */
-const CONTENT_FOLDERS = ["biomes", "materials", "layers", "grass", "trees", "bushes", "rocks", "voices", "borderHills", "settlements", "weathers"] as const;
+const CONTENT_FOLDERS = ["biomes", "materials", "layers", "grass", "trees", "bushes", "rocks", "voices", "borderHills", "settlements", "weathers", "features"] as const;
 type ContentFolder = (typeof CONTENT_FOLDERS)[number];
 
 /** How many grass kinds the packs may define between them: each is a layer of the blade atlas and
@@ -197,6 +198,9 @@ export function resolveContent(packs: PackSource[]): WorldContent {
   const weatherIds = new Set(weathers.map((w) => w.id));
   const boundaryHillStyles = readAll("borderHills", (e, o, r) => readBoundaryHillStyle(e.id, o, r));
   const settlementStyles = readAll("settlements", (e, o, r) => readSettlementStyle(e.id, o, r));
+  const featureReads = readAll("features", (e, o, r) => ({ file: e.file, kind: readFeatureKind(e.id, o, r) }));
+  const featureKinds = featureReads.map((read) => read.kind);
+  const featureIds = new Set([NO_FEATURE, ...featureKinds.map((kind) => kind.id)]);
   const styleById = new Map(settlementStyles.map((style) => [style.id, style]));
   // A biome is read as its middle roll here (see biomeRolls.ts) - what its name, spawn weight and the
   // workbench go by - and rolled again for every area of the world it is given to (rollAreaBiome).
@@ -277,6 +281,7 @@ export function resolveContent(packs: PackSource[]): WorldContent {
   }
   const roadLayers = layers.filter((l) => l.roadSurface);
   for (const layer of layers) checkMaterial(layer.file, "material", layer.layer.materialId);
+  for (const { file, kind } of featureReads) if (kind.ground) checkMaterial(file, "ground.material", kind.ground.materialId);
   const families = new Set(materials.flatMap((m) => (m.family ? [m.family] : [])));
   const checkBiome = (file: string, biome: BiomeDefinition, report: (issue: ContentIssue) => void): void => {
     const material = (path: string, id: string): void => {
@@ -300,6 +305,9 @@ export function resolveContent(packs: PackSource[]): WorldContent {
     biome.groundGrass.forEach(({ family, spec }, i) => {
       if (!families.has(family)) report({ file, path: `ground.grass[${i}].family`, message: `no material is of family "${family}" (known: ${[...families].join(", ") || "none"})` });
       if (!grassKindIds.has(spec.kind)) report({ file, path: `ground.grass[${i}].kind`, message: `no grass kind "${spec.kind}" (known: ${[...grassKindIds].join(", ")})` });
+    });
+    biome.features.forEach((chance, i) => {
+      if (!featureIds.has(chance.featureId)) report({ file, path: `features[${i}].feature`, message: `no feature "${chance.featureId}" (known: ${[...featureIds].join(", ")})` });
     });
     biome.weather.forEach((chance, i) => {
       if (!weatherIds.has(chance.weatherId)) report({ file, path: `weather[${i}].weather`, message: `no weather "${chance.weatherId}" (known: ${[...weatherIds].join(", ") || "none"})` });
@@ -380,6 +388,7 @@ export function resolveContent(packs: PackSource[]): WorldContent {
     boundaryHillStyles,
     settlementStyles,
     weathers,
+    featureKinds,
   };
 }
 
@@ -423,10 +432,12 @@ export interface Defaults {
   oldTrees: OldTrees;
   /** The weathers of a biome that names none. */
   weather: WeatherChance[];
+  /** What the cells of a biome that names none roll for their feature. */
+  features: FeatureChance[];
 }
 
 function readDefaults(obj: RawObject, reader: Reader): Defaults {
-  reader.onlyKeys(obj, "", ["defaultMaterial", "sky", "light", "treeRules", "treeScale", "materialDetail", "oldTrees", "weather"]);
+  reader.onlyKeys(obj, "", ["defaultMaterial", "sky", "light", "treeRules", "treeScale", "materialDetail", "oldTrees", "weather", "features"]);
   const oldTrees = reader.object(obj.oldTrees, "oldTrees");
   reader.onlyKeys(oldTrees, "oldTrees", ["share", "size"]);
   const treeRules = reader.object(obj.treeRules ?? {}, "treeRules");
@@ -458,6 +469,48 @@ function readDefaults(obj: RawObject, reader: Reader): Defaults {
       size: reader.range(oldTrees, "size", "oldTrees", { allowEqual: true }),
     },
     weather: readWeatherChances(obj, reader),
+    features: readFeatureChances(obj, reader),
+  };
+}
+
+/** `features: [{ feature: id, odds }]` - what a biome's cells roll for their one major feature, each
+ *  as likely as its odds over the sum of them all; `feature: "none"` leaves a cell empty. */
+function readFeatureChances(obj: RawObject, reader: Reader): FeatureChance[] {
+  return reader.optionalArray(obj, "features", "").map((raw, i) => {
+    const path = `features[${i}]`;
+    const chance = reader.object(raw, path);
+    reader.onlyKeys(chance, path, ["feature", "odds"]);
+    return { featureId: reader.string(chance, "feature", path), odds: reader.number(chance, "odds", path, { min: 0 }) };
+  });
+}
+
+/** A features/ file - see FeatureKindDef. */
+function readFeatureKind(id: string, obj: RawObject, reader: Reader): FeatureKindDef {
+  reader.onlyKeys(obj, "", ["name", "type", "quarry", "clearing", "road", "ground"]);
+  const type = reader.oneOf(obj, "type", "", FEATURE_TYPES);
+  const quarry = reader.object(obj.quarry, "quarry");
+  reader.onlyKeys(quarry, "quarry", ["floorLength", "floorWidth", "benchHeight", "benchSteepness", "benchWidth", "spoilSlope", "grade", "idealGrade"]);
+  const road = obj.road === undefined ? null : reader.object(obj.road, "road");
+  if (road) reader.onlyKeys(road, "road", ["width", "maxLength"]);
+  const ground = obj.ground === undefined ? null : reader.object(obj.ground, "ground");
+  if (ground) reader.onlyKeys(ground, "ground", ["material", "weight"]);
+  return {
+    id,
+    name: reader.string(obj, "name", ""),
+    type,
+    quarry: {
+      floorLength: reader.range(quarry, "floorLength", "quarry", { allowEqual: true }),
+      floorWidth: reader.range(quarry, "floorWidth", "quarry", { allowEqual: true }),
+      benchHeight: reader.range(quarry, "benchHeight", "quarry", { allowEqual: true }),
+      benchSteepness: reader.number(quarry, "benchSteepness", "quarry", { min: 0.5 }),
+      benchWidth: reader.range(quarry, "benchWidth", "quarry", { allowEqual: true }),
+      spoilSlope: reader.number(quarry, "spoilSlope", "quarry", { min: 0.2 }),
+      grade: reader.range(quarry, "grade", "quarry"),
+      idealGrade: reader.number(quarry, "idealGrade", "quarry", { min: 0.01 }),
+    },
+    clearing: reader.range(obj, "clearing", "", { allowEqual: true }),
+    road: road ? { width: reader.number(road, "width", "road", { min: 0.1, max: 1 }), maxLength: reader.number(road, "maxLength", "road", { min: 0 }) } : null,
+    ground: ground ? readLayer(ground, reader, "ground", `feature-${id}`) : null,
   };
 }
 
@@ -1173,6 +1226,7 @@ function readBiome(id: string, obj: RawObject, reader: Reader, defaults: Default
     "sky",
     "light",
     "weather",
+    "features",
   ]);
 
   let settlementStyle: SettlementStyle | null = null;
@@ -1254,6 +1308,7 @@ function readBiome(id: string, obj: RawObject, reader: Reader, defaults: Default
     },
     dayNight: readDayNight(light, reader, defaults),
     weather: obj.weather === undefined ? defaults.weather : readWeatherChances(obj, reader),
+    features: obj.features === undefined ? defaults.features : readFeatureChances(obj, reader),
   };
 }
 

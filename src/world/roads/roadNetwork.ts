@@ -2,6 +2,8 @@ import { Delaunay } from "d3-delaunay";
 import type { CellPoint } from "../cells/cellGrid";
 import type { TerrainSampler } from "../terrain/terrainSampler";
 import type { SettlementSite } from "../settlements/settlementSites";
+import type { FeatureSite } from "../features/featureSites";
+import { createRoadField } from "./roadField";
 import { chooseGate, type SettlementGate } from "../settlements/gates";
 import { GATE_PASS_SNAP, GATE_ROAD_EXCLUSION_MARGIN, STREET_JOIN_BLEND } from "../settlements/settlementConfig";
 import { simplify, removeLoops } from "../polyline";
@@ -14,6 +16,8 @@ import {
   ROAD_MAX_LINK_LENGTH,
   ROAD_MAX_PATH_RATIO,
   ROAD_RESCUE_DETOUR_FACTOR,
+  ROAD_MAX_DETOUR_FACTOR,
+  ROAD_GRID,
   ROAD_ACCESS_ATTEMPTS,
   ROAD_SNAP_DISTANCE,
   ROAD_SNAP_SAMPLE,
@@ -34,18 +38,25 @@ import {
   ROAD_PROFILE_MAX_GRADE,
   ROAD_PROFILE_MAX_CUT,
   ROAD_PROFILE_MAX_FILL,
+  ROAD_QUERY_RADIUS,
+  ROAD_GRADE_END_TAPER,
 } from "./roadConfig";
 
 /** Why a road exists. Every link is routed the same way; this is which pass asked for it, and it
- *  is what a later stage would use to draw a local access track narrower than a trunk road. */
-export type RoadKind = "link" | "access" | "rescue";
+ *  is what a later stage would use to draw a local access track narrower than a trunk road. A
+ *  "spur" is a feature's own track (a quarry's), from the feature to the nearest road. */
+export type RoadKind = "link" | "access" | "rescue" | "spur";
 
 /** One road, as the line it runs along. */
 export interface RoadLink {
   id: number;
   kind: RoadKind;
-  from: number; // settlement id
+  from: number; // settlement id, -1 for a spur
   to: number;
+  /** A spur's feature id (FeatureSite.id). */
+  featureId?: number;
+  /** Narrower than a road (1) - a spur's track. See RoadLine. */
+  widthScale?: number;
   points: CellPoint[];
   /** The road surface height at each point: the ground under it, smoothed along the road and held
    *  to a walkable gradient. This is the level the terrain is brought to, not the level it has. */
@@ -84,6 +95,9 @@ export interface RoadNetwork {
     noGate: number;
     /** Routes found but rejected as too indirect to be a road - see ROAD_MAX_PATH_RATIO. */
     tooIndirect: number;
+    /** Features given a track to the road, and those that wanted one and got none. */
+    spurs: number;
+    spursFailed: number;
     expansions: number;
     samples: number;
     /** Grid nodes reached by more than one link - the shared trunks, and so a direct measure of
@@ -246,6 +260,26 @@ function computeRoadProfile(points: CellPoint[], sampleTerrain: TerrainSampler):
   return heights;
 }
 
+/** How far a track's surface is eased to the level it meets at either end. */
+const SPUR_JOIN_BLEND = 20;
+
+/** Eases a profile's first (or last) `reach` of length onto `level`, fully at the end itself. */
+function blendEnd(heights: number[], points: CellPoint[], level: number, atStart: boolean, reach: number): void {
+  const n = heights.length;
+  let travelled = 0;
+  for (let k = 0; k < n; k++) {
+    const i = atStart ? k : n - 1 - k;
+    if (k > 0) {
+      const prev = atStart ? i - 1 : i + 1;
+      travelled += Math.hypot(points[i].x - points[prev].x, points[i].z - points[prev].z);
+    }
+    if (travelled >= reach) break;
+    const t = travelled / reach;
+    const keep = t * t * (3 - 2 * t);
+    heights[i] = level + (heights[i] - level) * keep;
+  }
+}
+
 function polylineLength(points: CellPoint[]): number {
   let total = 0;
   for (let i = 0; i < points.length - 1; i++) {
@@ -267,6 +301,7 @@ export function generateRoadNetwork(
   seed: number,
   settlements: SettlementSite[],
   sampleTerrain: TerrainSampler,
+  features: FeatureSite[] = [],
 ): RoadNetwork {
   if (settlements.length < 2) {
     return {
@@ -274,8 +309,8 @@ export function generateRoadNetwork(
       gates: settlements.map(() => []),
       stats: {
         candidates: 0, attempted: 0, built: 0, access: 0, rescued: 0, unreached: 0,
-        withoutHomeAccess: 0, unreachable: 0, capped: 0, noGate: 0, tooIndirect: 0, expansions: 0, samples: 0,
-        sharedNodes: 0,
+        withoutHomeAccess: 0, unreachable: 0, capped: 0, noGate: 0, tooIndirect: 0, spurs: 0, spursFailed: 0,
+        expansions: 0, samples: 0, sharedNodes: 0,
       },
     };
   }
@@ -319,6 +354,16 @@ export function generateRoadNetwork(
 
   /** A settlement's interior, which roads keep out of so they end at its gates. */
   const interior = (site: SettlementSite) => ({ x: site.x, z: site.z, radius: Math.max(0, site.radius - GATE_ROAD_EXCLUSION_MARGIN) });
+
+  /** The ground features stand on, which no road crosses (but for a feature's own track) - only
+   *  those a route between `a` and `b` could reach at all, since every search step tests each one. */
+  const footprints = features.map((f) => ({ x: f.x, z: f.z, radius: f.footprint, id: f.id }));
+  function footprintsNear(a: CellPoint, b: CellPoint, detourFactor: number, except = -1): { x: number; z: number; radius: number }[] {
+    const midX = (a.x + b.x) / 2;
+    const midZ = (a.z + b.z) / 2;
+    const reach = (Math.hypot(b.x - a.x, b.z - a.z) * detourFactor) / 2 + ROAD_GRID;
+    return footprints.filter((c) => c.id !== except && Math.hypot(c.x - midX, c.z - midZ) < reach + c.radius);
+  }
 
   /** Whether a straight stretch keeps out of both settlements' interiors. */
   function clearOfInteriors(a: CellPoint, b: CellPoint, circles: { x: number; z: number; radius: number }[]): boolean {
@@ -370,7 +415,11 @@ export function generateRoadNetwork(
     let from = { x: fromGate.x, z: fromGate.z };
     let to = { x: toGate.x, z: toGate.z };
     const approach = (gate: SettlementGate): CellPoint => ({ x: gate.approachX, z: gate.approachZ });
-    const interiors = [interior(fromSite), interior(toSite)];
+    const interiors = [
+      interior(fromSite),
+      interior(toSite),
+      ...footprintsNear(fromSite, toSite, kind === "link" ? ROAD_MAX_DETOUR_FACTOR : ROAD_RESCUE_DETOUR_FACTOR),
+    ];
     const result = pathfinder.findPath({
       from: approach(fromGate),
       to: approach(toGate),
@@ -568,6 +617,115 @@ export function generateRoadNetwork(
     if (!homeAccess[id] && (zoneMembers.get(settlements[id].areaId) ?? []).length > 1) withoutHomeAccess++;
   }
 
+  // Last, each feature that wants one gets a track: from its entrance to the nearest road already
+  // built, routed like any road, so it merges onto one where that is cheaper and later tracks can
+  // join earlier ones. Its end is pulled onto the road it reaches and brought to that road's level.
+  const builtField = createRoadField(links, ROAD_QUERY_RADIUS, ROAD_GRADE_END_TAPER);
+  const spurLinks: RoadLink[] = [];
+  /** The road's surface height at a point on it - the network's, or a track built since. */
+  function roadHeightAt(point: CellPoint): number | null {
+    let best = builtField.query(point.x, point.z);
+    let height: number | null = Number.isFinite(best.distance) ? best.height : null;
+    let bestDistance = best.distance;
+    for (const spur of spurLinks) {
+      const field = createRoadField([spur], ROAD_QUERY_RADIUS, ROAD_GRADE_END_TAPER);
+      best = field.query(point.x, point.z);
+      if (best.distance < bestDistance) {
+        bestDistance = best.distance;
+        height = best.height;
+      }
+    }
+    return height;
+  }
+  const allInteriors = settlements.map(interior);
+  let spurs = 0;
+  let spursFailed = 0;
+  for (const feature of features) {
+    const road = feature.kind.road;
+    const entrance = feature.entrance;
+    if (!road || !entrance) continue;
+    const approach = { x: entrance.approachX, z: entrance.approachZ };
+    let target = -1;
+    let targetDistance = Infinity;
+    for (const key of roadNodes) {
+      const point = nodePoint(key);
+      const distance = Math.hypot(point.x - approach.x, point.z - approach.z);
+      if (distance < targetDistance) {
+        targetDistance = distance;
+        target = key;
+      }
+    }
+    if (target < 0 || targetDistance > road.maxLength) {
+      spursFailed++;
+      continue;
+    }
+    const targetPoint = nodePoint(target);
+    const avoid = [
+      ...allInteriors.filter((c) => Math.hypot(c.x - approach.x, c.z - approach.z) < targetDistance * ROAD_MAX_DETOUR_FACTOR + c.radius),
+      ...footprintsNear(approach, targetPoint, ROAD_MAX_DETOUR_FACTOR, feature.id),
+    ];
+    const zones = new Set([feature.areaId, pathfinder.zoneOfNode(target)]);
+    const result = pathfinder.findPath({ from: approach, to: targetPoint, zones, roadNodes, avoid });
+    expansions += result.expansions;
+    if (!result.nodes) {
+      spursFailed++;
+      continue;
+    }
+    const nodes = result.nodes;
+    const raw = nodes.map(nodePoint);
+    raw[0] = approach;
+    // Onto the road itself, not the lattice node beside it.
+    raw[raw.length - 1] = snapIndex.snap(targetPoint) ?? targetPoint;
+    for (const key of nodes) zones.add(pathfinder.zoneOfNode(key));
+    const chordIsClear = (a: CellPoint, b: CellPoint): boolean => clearOfInteriors(a, b, avoid) && pathfinder.chordIsClear(a, b, zones);
+    const start = { x: entrance.x, z: entrance.z };
+    const shaped = snapToNetwork(roundCorners([start, ...straighten(raw, chordIsClear, pathfinder.riverLengthAlong)], chordIsClear), snapIndex, ROAD_SNAP_SAMPLE);
+    const base = removeLoops(simplify(shaped, ROAD_SIMPLIFY_TOLERANCE));
+    if (base.length < 2) {
+      spursFailed++;
+      continue;
+    }
+    for (const key of nodes) {
+      roadNodes.add(key);
+      nodeUses.set(key, (nodeUses.get(key) ?? 0) + 1);
+    }
+    snapIndex.add(base);
+    const points = removeLoops(
+      simplify(
+        wobble(
+          base,
+          displacement,
+          ROAD_WOBBLE_SAMPLE_STEP,
+          ROAD_WOBBLE_STRAIGHT_WINDOW,
+          ROAD_WOBBLE_TURN_FADE_START,
+          ROAD_WOBBLE_TURN_FADE_END,
+          ROAD_WOBBLE_END_TAPER,
+        ),
+        ROAD_WOBBLE_SIMPLIFY_TOLERANCE,
+      ),
+    );
+    const heights = computeRoadProfile(points, sampleTerrain);
+    // Level with the feature's floor where it starts, and with the road where it ends.
+    blendEnd(heights, points, entrance.height, true, SPUR_JOIN_BLEND);
+    const joinHeight = roadHeightAt(points[points.length - 1]);
+    if (joinHeight !== null) blendEnd(heights, points, joinHeight, false, SPUR_JOIN_BLEND * 2);
+    const spur: RoadLink = {
+      id: links.length + spurLinks.length,
+      kind: "spur",
+      from: -1,
+      to: -1,
+      featureId: feature.id,
+      widthScale: road.width,
+      points,
+      heights,
+      length: polylineLength(base),
+      taperEnds: false,
+    };
+    spurLinks.push(spur);
+    spurs++;
+  }
+  links.push(...spurLinks);
+
   let sharedNodes = 0;
   for (const uses of nodeUses.values()) if (uses > 1) sharedNodes++;
 
@@ -586,6 +744,8 @@ export function generateRoadNetwork(
       capped,
       noGate,
       tooIndirect,
+      spurs,
+      spursFailed,
       expansions,
       samples: pathfinder.sampleCount(),
       sharedNodes,

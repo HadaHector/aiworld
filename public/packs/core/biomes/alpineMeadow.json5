@@ -16,6 +16,8 @@
   lakeChance: 0.04,
   borderType: "mountain",
   settlement: "timber",
+  // A quarry in one cell of every three, where there is a hillside to cut it into.
+  features: [{ feature: "quarry", odds: 1 }, { feature: "none", odds: 2 }],
   // Where the old snow starts to lie (low: patches over much of the high ground, high: only on the
   // tops, or none), and how far up the spruce climb.
   params: { snowline: { range: [0, 1] }, treeline: { range: [0, 1] } },

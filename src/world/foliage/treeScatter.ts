@@ -528,8 +528,9 @@ function createScatter(seed: number, level: ScatterLevel): { scatter: TreeScatte
   function survivalFade(ground: TreeGround, wetFeet = false): number {
     const { sample } = ground;
     if (!sample.isLand) return 0;
-    // roadGap is Infinity where no road is in range, which smoothstep clamps to 1.
-    const road = smoothstep(level.roadClearance, level.roadFade, sample.roadGap);
+    // roadGap is Infinity where no road is in range, which smoothstep clamps to 1. A feature (a
+    // quarry) clears the ground it took the same way.
+    const road = smoothstep(level.roadClearance, level.roadFade, sample.roadGap) * (1 - sample.featureClear);
     if (stone) return ground.height < ROCK_MIN_HEIGHT ? 0 : road;
     if (sample.lakeFactor > TREE_MAX_LAKE_FACTOR) return 0;
 

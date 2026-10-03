@@ -76,6 +76,10 @@ export function sampleBiomeArea(seed: number, content: WorldContent, biomeId: st
     areaBorderGap: Infinity,
     riverGap: Infinity,
     roadGap: Infinity,
+    featureKind: -1,
+    featureGap: Infinity,
+    featureDepth: 0,
+    featureClear: 0,
   });
   const sampleTerrain: TerrainSampler = sampleAt;
 

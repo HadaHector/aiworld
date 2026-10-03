@@ -66,4 +66,9 @@
     { weather: "rain", odds: 2 },
     { weather: "storm", odds: 0.5 },
   ],
+
+  // What the cells of a biome that names none roll for their one major feature (see features/): each
+  // as likely as its odds over the sum of them all, and "none" leaves a cell empty. A cell a
+  // settlement stands in rolls nothing.
+  features: [{ feature: "none", odds: 1 }],
 }

@@ -5,6 +5,7 @@ import { SEA_LEVEL, type AreaBounds } from "../world/cells/areaField";
 import { GROWTH_RADIUS_SAFETY_FACTOR } from "../world/cells/config";
 import type { MaterialLibrary } from "../world/materials/materialLibrary";
 import type { SettlementSite } from "../world/settlements/settlementSites";
+import type { FeatureSite } from "../world/features/featureSites";
 import type { RoadNetwork } from "../world/roads/roadNetwork";
 
 const SAMPLE_RESOLUTION = 400; // internal sample grid, kept modest since this is a debug tool
@@ -29,6 +30,7 @@ const ZONE_OUTSIDE_DIM = 0.4;
 // magnified two or three times, and 9px text came out unreadably blurry. Text and a dot cost
 // nothing to position in CSS and render at the screen's own resolution.
 const SETTLEMENT_DOT_PX = 7;
+const FEATURE_SQUARE_PX = 6;
 // Names are only legible where the map is zoomed in far enough for the dots to be spread out; in
 // World view the whole continent is a few dozen pixels across and every label would overlap.
 const SETTLEMENT_LABEL_MIN_HALF_SIZE = 12000;
@@ -93,6 +95,7 @@ export function createDebugMap(
   areaBounds: Map<number, AreaBounds>,
   areaNames: Map<number, string>,
   settlements: SettlementSite[],
+  features: FeatureSite[],
   roads: RoadNetwork,
   onTeleport: (worldX: number, worldZ: number) => void,
 ): DebugMap {
@@ -336,6 +339,9 @@ export function createDebugMap(
             lakeFactor: sample.lakeFactor,
             riverGap: sample.riverGap,
             roadGap: sample.roadGap,
+            featureKind: sample.featureKind,
+            featureGap: sample.featureGap,
+            featureDepth: sample.featureDepth,
             reliefCurvature,
           };
           const materialIndex = materialLibrary.resolveMaterialIndex(worldX, worldZ, context, sample.primaryBiome);
@@ -478,6 +484,33 @@ export function createDebugMap(
 
     const viewport = activeViewport();
     const labelled = viewport.halfSize <= SETTLEMENT_LABEL_MIN_HALF_SIZE;
+
+    // Features as small grey squares, under the settlements' dots, named by kind when close.
+    for (const feature of features) {
+      const { x, y } = worldToPixel(feature.x, feature.z);
+      if (x < 0 || y < 0 || x > SAMPLE_RESOLUTION || y > SAMPLE_RESOLUTION) continue;
+      const left = `${(x / SAMPLE_RESOLUTION) * 100}%`;
+      const top = `${(y / SAMPLE_RESOLUTION) * 100}%`;
+      const square = document.createElement("div");
+      square.title = `${feature.kind.name} #${feature.id}`;
+      square.style.cssText = `
+        position: absolute; left: ${left}; top: ${top};
+        width: ${FEATURE_SQUARE_PX}px; height: ${FEATURE_SQUARE_PX}px; margin: ${-FEATURE_SQUARE_PX / 2}px 0 0 ${-FEATURE_SQUARE_PX / 2}px;
+        background: rgb(200, 200, 205); border: 1px solid rgba(0,0,0,0.75); box-sizing: border-box;
+      `;
+      markerLayer.appendChild(square);
+      if (!labelled) continue;
+      const name = document.createElement("div");
+      name.textContent = feature.kind.name;
+      name.style.cssText = `
+        position: absolute; left: ${left}; top: ${top};
+        transform: translate(-50%, 0); margin-top: ${FEATURE_SQUARE_PX}px;
+        font-family: sans-serif; font-size: 10px; line-height: 1; white-space: nowrap;
+        color: rgb(225, 225, 230);
+        text-shadow: 0 0 3px #000, 0 0 3px #000, 1px 1px 2px #000;
+      `;
+      markerLayer.appendChild(name);
+    }
 
     for (const site of settlements) {
       const { x, y } = worldToPixel(site.x, site.z);

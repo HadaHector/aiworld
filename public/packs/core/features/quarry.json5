@@ -1,0 +1,55 @@
+// A stone quarry: a level floor cut back into a hillside, its back and sides a stepped rock face -
+// bench over bench - and its spoil tipped out in front as a bank falling back to the ground. It
+// takes its trees and bushes, gets a gravel floor and a track out to the nearest road.
+//
+// Where it goes is decided by the ground: somewhere in its cell with a hillside of the right grade,
+// sloping one way across the floor and still rising behind it, so there is a face to cut. A cell
+// with no such ground has no quarry, whatever it rolled.
+{
+  name: "Quarry",
+  type: "quarry",
+  quarry: {
+    // Metres, each rolled per quarry: how far the floor reaches into the hill, and its width.
+    floorLength: [26, 44],
+    floorWidth: [24, 40],
+    // The face's benches: each this tall, its face this steep (rise over run - 3 is about 72
+    // degrees), with a ledge this wide before the next. The terrain's vertices are about 2.7 m
+    // apart up close, so a ledge much narrower than two of them would not show.
+    benchHeight: [5, 8],
+    benchSteepness: 3,
+    benchWidth: [5, 8],
+    // The spoil bank in front, falling back to the ground - about the angle loose stone rests at.
+    spoilSlope: 0.75,
+    // The hillside's grade (rise over run): from a gentle brae to a steep one, best at the third.
+    grade: [0.15, 0.6],
+    idealGrade: 0.35,
+  },
+  // Trees and bushes cleared off everything cut or tipped, and up to 6 m past the floor's edge,
+  // growing back by 14.
+  clearing: [6, 14],
+  road: { width: 0.5, maxLength: 1500 },
+  ground: {
+    material: "quarryFloor",
+    weight: {
+      noises: [{ name: "floorEdge", type: "fbm", octaves: 2, frequency: 0.06, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
+      steps: [
+        // The floor and a fringe past it, frayed by a little noise...
+        { output: "gapRaw", op: "input", name: "featureGap" },
+        { output: "edgeRaw", op: "sample", noise: "floorEdge" },
+        { output: "edge", op: "scale", input: "edgeRaw", factor: 2 },
+        { output: "gap", op: "add", a: "gapRaw", b: "edge" },
+        { output: "floor", op: "remap", input: "gap", inMin: 6, inMax: 1, outMin: 0, outMax: 1 },
+        // ...and every ledge and spoil slope - any ground cut or tipped by more than a little.
+        { output: "depth", op: "input", name: "featureDepth" },
+        { output: "worked", op: "remap", input: "depth", inMin: 0.4, inMax: 1.6, outMin: 0, outMax: 1 },
+        { output: "anyRaw", op: "max", a: "floor", b: "worked" },
+        { output: "any", op: "clamp", input: "anyRaw", min: 0, max: 1 },
+        // Not the faces themselves: those are the rock layer's, as steep ground is everywhere.
+        { output: "slope", op: "input", name: "slope" },
+        { output: "level", op: "remap", input: "slope", inMin: 0.72, inMax: 0.88, outMin: 0, outMax: 1 },
+        { output: "levelClamped", op: "clamp", input: "level", min: 0, max: 1 },
+        { output: "result", op: "multiply", a: "any", b: "levelClamped" },
+      ],
+    },
+  },
+}

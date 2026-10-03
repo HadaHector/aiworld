@@ -4,6 +4,7 @@ import type { TreeRules } from "../foliage/foliageConfig";
 import type { SettlementStyle } from "../settlements/settlementConfig";
 import type { ColorAdjust } from "../materials/colorAdjust";
 import type { WeatherChance } from "../weather/weatherTypes";
+import type { FeatureChance } from "../features/featureTypes";
 
 /** Reserved for future differentiated border generation; only "smooth" is generated today. */
 export type BorderType = "smooth" | "mountain" | "river" | "cliff" | "wall";
@@ -170,6 +171,9 @@ export interface BiomeDefinition {
   /** The weathers this zone can have and how likely each is (see weather/weatherSystem.ts) - the
    *  packs' defaults.json5 list for a biome that names none. Empty: always as written. */
   weather: WeatherChance[];
+  /** What this zone's cells roll for their one major feature (a quarry...) and how likely each is -
+   *  see features/featureSites.ts. */
+  features: FeatureChance[];
 }
 
 /** The shape of the hills raised along a border between two zones - see cells/areaField.ts. */

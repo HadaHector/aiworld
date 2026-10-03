@@ -6,6 +6,7 @@ import type { Voice } from "../naming/nameGenerator";
 import type { SettlementStyle } from "../settlements/settlementConfig";
 import type { Defaults } from "./resolveContent";
 import type { WeatherDef } from "../weather/weatherTypes";
+import type { FeatureKindDef } from "../features/featureTypes";
 
 /**
  * Everything a world is generated from that is content rather than code: its biomes, ground
@@ -51,4 +52,6 @@ export interface WorldContent {
   settlementStyles: SettlementStyle[];
   /** Every kind of weather (a pack's weathers/ folder) - what a biome's `weather` list names. */
   weathers: WeatherDef[];
+  /** Every kind of cell feature (a pack's features/ folder) - what a biome's `features` list names. */
+  featureKinds: FeatureKindDef[];
 }

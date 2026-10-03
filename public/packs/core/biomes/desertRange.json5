@@ -14,6 +14,8 @@
   lakeChance: 0.01,
   borderType: "mountain",
   settlement: "timber",
+  // A quarry in one cell of every three, where there is a hillside to cut it into.
+  features: [{ feature: "quarry", odds: 1 }, { feature: "none", odds: 2 }],
   // How far up the junipers climb.
   params: { scrub: { range: [0, 1] } },
   height: {

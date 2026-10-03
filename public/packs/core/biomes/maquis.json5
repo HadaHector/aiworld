@@ -12,6 +12,8 @@
   lakeChance: 0.02,
   borderType: "mountain",
   settlement: "timber",
+  // A quarry in one cell of every three, where there is a hillside to cut it into.
+  features: [{ feature: "quarry", odds: 1 }, { feature: "none", odds: 2 }],
   // Where the area's valley floors lie (0-1 of their range) - the height and the trees both read it.
   params: { floor: { range: [0, 1] } },
   // Rolling to hilly, broken by flat valley floors: the hills fill up from below to a gently swelling

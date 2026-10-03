@@ -8,6 +8,8 @@ import { createRoadField, type RoadField } from "../roads/roadField";
 import { generateSettlementLayouts, type SettlementLayout } from "../settlements/settlementLayout";
 import { createPadField, type PadField } from "../settlements/padField";
 import { PAD_BLEND_MAX, PAD_BLEND_MIN, PAD_PAINT_OFFSET, PAD_SIDE_SLOPE } from "../settlements/settlementConfig";
+import { generateFeatureSites, type FeatureSite } from "../features/featureSites";
+import { createFeatureField, type FeatureField } from "../features/featureField";
 import {
   ROAD_HALF_WIDTH,
   ROAD_SIDE_SLOPE,
@@ -49,6 +51,13 @@ export interface TerrainSample {
   /** True distance to the nearest road centreline, Infinity past the road field's search radius.
    *  The material pipeline paints the road surface from this - there is no road mesh. */
   roadGap: number;
+  /** The nearest feature in reach (a quarry): its kind's index into WorldContent.featureKinds, or
+   *  -1; the distance past its edge (0 inside, Infinity with none); how far it cut or filled the
+   *  ground here; and how far plants are cleared, 0-1. See features/featureField.ts. */
+  featureKind: number;
+  featureGap: number;
+  featureDepth: number;
+  featureClear: number;
 }
 
 export type TerrainSampler = (worldX: number, worldZ: number) => TerrainSample;
@@ -60,6 +69,8 @@ export interface TerrainWorld {
   areaBounds: Map<number, AreaBounds>;
   areaNames: Map<number, string>;
   settlements: SettlementSite[];
+  /** Each cell's major feature, other than a settlement - see features/featureSites.ts. */
+  features: FeatureSite[];
   roads: RoadNetwork;
   /** Streets, squares and houses, one per settlement, in settlement id order. */
   settlementLayouts: SettlementLayout[];
@@ -157,6 +168,9 @@ export function createTerrainSampler(seed: number, content: WorldContent): Terra
   // Bound last of all, for the same reason: settlements are laid out on the graded terrain, then
   // the ground is levelled under their houses.
   let padField: PadField | null = null;
+  // Bound once the features are placed and before the roads are routed: a feature takes its ground
+  // first, and the roads (its own track among them) are laid over what it left.
+  let featureField: FeatureField | null = null;
 
   function sampleTerrain(worldX: number, worldZ: number): TerrainSample {
     const area = sampleArea(worldX, worldZ);
@@ -186,7 +200,9 @@ export function createTerrainSampler(seed: number, content: WorldContent): Terra
     const landHeightRivered = carveRiver(
       area.isRiverEdge, area.riverTaper, area.riverGap, worldX, worldZ, landHeightUncarved,
     );
-    const landHeight = lerp(landHeightRivered, LAKE_TARGET_HEIGHT, area.lakeFactor);
+    const landHeightNatural = lerp(landHeightRivered, LAKE_TARGET_HEIGHT, area.lakeFactor);
+    const feature = featureField?.apply(worldX, worldZ, landHeightNatural);
+    const landHeight = feature ? feature.height : landHeightNatural;
 
     // Roads are graded into the terrain rather than laid on top of it, so this is the last thing
     // to touch the land height: a road cuts through a boundary hill and fills a dip, and it should
@@ -246,6 +262,10 @@ export function createTerrainSampler(seed: number, content: WorldContent): Terra
       isRiverEdge: area.isRiverEdge,
       riverGap: area.riverGap,
       roadGap,
+      featureKind: feature ? feature.kind : -1,
+      featureGap: feature ? feature.gap : Infinity,
+      featureDepth: feature ? feature.depth : 0,
+      featureClear: feature ? feature.clear : 0,
     };
   }
 
@@ -258,9 +278,13 @@ export function createTerrainSampler(seed: number, content: WorldContent): Terra
     nameFor: (biome, id) => nameGenerator.settlementNameFor(biome.voiceId, id),
   });
 
+  // Then every other cell's feature, kept clear of the settlements, and its ground edits bound.
+  const features = generateFeatureSites({ seed, cellSites: landCellSites, sampleTerrain, kinds: content.featureKinds, settlements });
+  featureField = createFeatureField(features);
+
   // Roads need the settlements to connect and the finished terrain to route over, so they come
-  // last of all.
-  const roads = generateRoadNetwork(seed, settlements, sampleTerrain);
+  // last of all - keeping off the features' ground, and running a track out to each that wants one.
+  const roads = generateRoadNetwork(seed, settlements, sampleTerrain, features);
   roadField = createRoadField(roads.links, ROAD_QUERY_RADIUS, ROAD_GRADE_END_TAPER);
 
   // Settlements are laid out on the terrain as the roads left it, then their streets join the road
@@ -273,5 +297,5 @@ export function createTerrainSampler(seed: number, content: WorldContent): Terra
   );
   padField = createPadField(settlementLayouts);
 
-  return { sampleTerrain, worldExtent, continents, areaBounds, areaNames, settlements, roads, settlementLayouts, areaBiomes };
+  return { sampleTerrain, worldExtent, continents, areaBounds, areaNames, settlements, features, roads, settlementLayouts, areaBiomes };
 }

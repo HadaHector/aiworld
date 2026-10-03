@@ -33,6 +33,8 @@ packs/<pack>/
   voices/<id>.json5       the sounds a zone's names are built from
   borderHills/<id>.json5  the shape of the hills raised along a zone border
   settlements/<id>.json5  a settlement style: how big places grow, their houses and colours
+  weathers/<id>.json5     a kind of weather: its clouds, light, wind, rain and snow
+  features/<id>.json5     a kind of cell feature - a quarry - and how it changes the ground
   patches/<any>.json5     additions to another pack's lists
 ```
 
@@ -530,6 +532,23 @@ radius, street pattern and how full its plots are; its houses' size variants, ro
 overhang, setback and gaps; and its `look` - the wall texture (built by a code builder, today only
 `weatherboard`) and the tints walls, roofs, doors and windows are coloured with. Which tier a place
 becomes, and the rules for gates, streets and levelling plots, are the same for every style.
+
+## Cell features
+
+Every land cell has room for one major feature. A cell a settlement stands in has that; every other
+cell rolls one from its biome's `features` list - `[{ feature: "quarry", odds: 1 }, { feature:
+"none", odds: 2 }]`, each as likely as its odds over the sum of them all, `"none"` leaving the cell
+empty on purpose (the defaults' list is just `"none"`). Then it looks over the cell for ground that
+suits the kind, and a cell with none stays empty whatever it rolled.
+
+A kind's `type` picks the code that places it and shapes its ground - today only `quarry`; see
+`core/features/quarry.json5`. Its own block (`quarry: {...}`) sizes it, each range rolled per
+feature. `clearing` is how far past its edge trees, bushes and stones are cleared (they also go from
+any ground it cut or filled). `road` gives it a track to the nearest road - `width` against a road's
+1, `maxLength` the furthest it looks for one - and the roads themselves keep off its ground.
+`ground` paints it: a material laid over everything else, with a weight graph that can read
+`featureGap` (distance past the feature's edge, 0 inside it) and `featureDepth` (how far the ground
+was cut or built up there), besides the usual inputs. A biome's own layers can read those too.
 
 ## Example
 

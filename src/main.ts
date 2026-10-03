@@ -50,7 +50,7 @@ const camera = createThirdPersonCamera(scene, canvas, character.mesh);
 // Camera near/far and the shadow generator's own frustum both need the real camera, which does
 // not exist until here - see World.attachCamera.
 world.attachCamera(camera);
-const debugMap = createDebugMap(world.sampleTerrain, world.worldExtent, world.continents, world.materialLibrary, world.areaBounds, world.areaNames, world.settlements, world.roads, (worldX, worldZ) => {
+const debugMap = createDebugMap(world.sampleTerrain, world.worldExtent, world.continents, world.materialLibrary, world.areaBounds, world.areaNames, world.settlements, world.features, world.roads, (worldX, worldZ) => {
   character.teleport(worldX, worldZ);
 });
 
@@ -120,22 +120,34 @@ const lastView = createLastView();
 const resumeView = lastView.restore();
 if (resumeView) gotoView(resumeView);
 
+/**
+ * `goto`, then force every chunk around the new position to build right away instead of
+ * streaming in over many frames - what a console session testing a spot always wants and `goto`
+ * alone never gave it, so every session was hand-writing the same `for` loop calling
+ * `updateChunks` a few thousand times afterward. `updateChunks` is already a no-op once its
+ * queue is empty (see chunkManager.ts's `takeNearestQueued`), so an iteration count generous
+ * enough for the worst case (a couple thousand chunks at the top of the draw-distance slider)
+ * costs nothing extra once the ordinary case (a few hundred) has already drained.
+ */
+function gotoLoaded(view: Partial<ViewSnapshot> & { x: number; z: number }, iterations = 6000): void {
+  gotoView(view);
+  for (let i = 0; i < iterations; i++) {
+    world.updateChunks(view.x, view.z, true);
+  }
+}
+
 (window as unknown as { __aiworld: unknown }).__aiworld = {
   goto: gotoView,
-  /**
-   * `goto`, then force every chunk around the new position to build right away instead of
-   * streaming in over many frames - what a console session testing a spot always wants and `goto`
-   * alone never gave it, so every session was hand-writing the same `for` loop calling
-   * `updateChunks` a few thousand times afterward. `updateChunks` is already a no-op once its
-   * queue is empty (see chunkManager.ts's `takeNearestQueued`), so an iteration count generous
-   * enough for the worst case (a couple thousand chunks at the top of the draw-distance slider)
-   * costs nothing extra once the ordinary case (a few hundred) has already drained.
-   */
-  gotoLoaded(view: Partial<ViewSnapshot> & { x: number; z: number }, iterations = 6000): void {
-    gotoView(view);
-    for (let i = 0; i < iterations; i++) {
-      world.updateChunks(view.x, view.z, true);
-    }
+  gotoLoaded,
+  /** Goes to feature `id` (world.features), looking into it from in front - its floor, its face. */
+  gotoFeature(id: number): void {
+    const feature = world.features[id];
+    if (!feature) return;
+    const q = feature.quarry;
+    const x = q.x + q.ax * (q.halfLength + 25);
+    const z = q.z + q.az * (q.halfLength + 25);
+    // The camera's alpha is measured from +x; it sits behind the character, so it looks along -dir.
+    gotoLoaded({ x, z, alpha: Math.atan2(q.az, q.ax), beta: 1.25, radius: 30 });
   },
   world,
   character,

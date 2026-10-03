@@ -19,6 +19,7 @@ import { createPrecipitation } from "./weather/precipitation";
 import type { ContinentPlan } from "./cells/continentLayout";
 import type { AreaBounds, AreaWeight } from "./cells/areaField";
 import type { SettlementSite } from "./settlements/settlementSites";
+import type { FeatureSite } from "./features/featureSites";
 import type { RoadNetwork } from "./roads/roadNetwork";
 import type { WorldContent } from "./content/worldContent";
 
@@ -41,6 +42,8 @@ export interface World {
   areaBounds: Map<number, AreaBounds>;
   areaNames: Map<number, string>;
   settlements: SettlementSite[];
+  /** Each cell's major feature other than a settlement (a quarry) - see features/featureSites.ts. */
+  features: FeatureSite[];
   roads: RoadNetwork;
   /** Streets, squares and houses per settlement - see settlements/settlementLayout.ts. */
   settlementLayouts: SettlementLayout[];
@@ -140,7 +143,7 @@ export async function createWorld(
   let buildPool = createChunkBuildPool(WORLD_SEED, content);
 
   onProgress?.({ phase: "Shaping continents", completed: 0, total: 0 });
-  const { sampleTerrain, worldExtent, continents, areaBounds, areaNames, settlements, roads, settlementLayouts, areaBiomes } = createTerrainSampler(WORLD_SEED, content);
+  const { sampleTerrain, worldExtent, continents, areaBounds, areaNames, settlements, features, roads, settlementLayouts, areaBiomes } = createTerrainSampler(WORLD_SEED, content);
 
   const materialLibrary = await createMaterialLibrary(scene, WORLD_SEED, content, areaBiomes, sunLighting, (done, total) => {
     onProgress?.({ phase: "Baking material textures", completed: done, total });
@@ -270,6 +273,7 @@ export async function createWorld(
     areaBounds,
     areaNames,
     settlements,
+    features,
     roads,
     settlementLayouts,
     materialLibrary,

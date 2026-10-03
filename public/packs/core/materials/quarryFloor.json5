@@ -1,0 +1,8 @@
+// A quarry's floor and ledges: the gravel's broken stone, paler and dustier - fresh-cut and
+// crushed rather than weathered.
+{
+  name: "Quarry Floor",
+  textureFrom: "gravel",
+  adjust: { hue: 0, saturation: 0.8, value: 1.3, tint: [1.04, 1.0, 0.95] },
+  clearsGrass: 2,
+}
