@@ -248,6 +248,47 @@ than geometry.
 
 ## Rendering
 
+### Float32 positions lose millimetres far from the origin
+
+The world is one coordinate system holding every continent. Seed 1338: four continents, centred at
+the origin and at 34 km, 34 km and 34 km out (radius ~14 km each), the farthest land cell 44 km from
+the origin. The GPU computes positions in float32, which past 32 km can only step in 2^-8 m (~4 mm),
+16-32 km in ~2 mm, under 16 km in ~1 mm or finer. Everything rendered there snaps to that grid, and
+`view * world * position` subtracts the camera's equally large coordinates, so the snap differs from
+frame to frame:
+
+- geometry trembles by a few mm as the camera moves;
+- two surfaces a centimetre or two apart can flicker through each other even up close - it looks
+  like z-fighting but is position precision, and it depends on the distance from the ORIGIN, not
+  from the camera (depth precision depends only on the latter, and is unchanged out there);
+- anything textured by world position swims - the ground's close-up detail repeats every ~7 m.
+
+Not depth precision, which is its own matter: 24-bit depth with the near plane at 1 m separates
+~5 mm at 300 m and ~4 cm at 800 m. Building parts are kept ≥4 cm apart for that (houseGenerator's
+`OUT`). Reversed-Z would not help on WebGL2 - the canvas depth buffer is fixed-point and Babylon v9
+does not use `EXT_clip_control`, so depth stays in -1..1; it pays off only on WebGPU (0..1 depth,
+float32 buffer). The cheap depth measures, if needed: a far LOD for buildings without their thin
+parts, the near plane out to ~2 m, logarithmic depth as a last resort (costs early-z, worst for grass).
+
+Possible fixes for the position precision, not exclusive:
+
+- **Floating origin.** Babylon v9 has it built in: the engine option `useLargeWorldRendering`
+  (64-bit matrices on the CPU, the camera moved to the origin before upload). It only shifts
+  Babylon's own matrices, though; our custom shaders read absolute world coordinates that would have
+  to be shifted alike or given the offset - `cameraPosition` (litShading), the shadow cascades'
+  `lightMatrix`, the terrain's world-xz texturing and detail, grass wind, the trees' instance
+  matrices, rain/snow/splashes, the water's ripple noise, the sky dome. Contained but every shader
+  has to be checked; probably half a day with testing.
+- **Continents as dimensions.** Each continent in a coordinate system of its own, centred on its own
+  origin, with travel between them a transition rather than a walk across 6 km of ocean - nobody
+  walks it today anyway. That alone brings everything within ~15-18 km of an origin (~1-2 mm), and
+  each world loaded is a quarter of the size. It touches world generation more than rendering:
+  continent layout, roads and rivers already stop at the coast, but the debug map's world view, the
+  ocean, and anything keyed on absolute position would follow.
+
+A quick way to confirm before fixing: the same house at spawn and at 40 km, flickering at one and
+not the other.
+
 ### Textures stretch vertically on near-vertical cliffs
 
 Material UVs use a planar XZ projection, so a near-vertical face samples a thin sliver of texture
