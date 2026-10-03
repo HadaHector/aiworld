@@ -791,7 +791,7 @@ export function generateTree(spec: BranchingTree, seed: number, detail: TreeDeta
   // A fern's fronds, their root up in the trunk's tapering tip (the tube's apex runs two top radii
   // past its last ring), so they grow out of it rather than sit on a stump.
   if (spec.crown) {
-    const crown = generateFronds(spec.crown, Math.floor(rng() * 0x7fffffff));
+    const crown = generateFronds(spec.crown, Math.floor(rng() * 0x7fffffff), detail);
     const top = trunkPoint(1);
     const lift = top[1] + trunk.topRadius * 1.2;
     const base = leafBuilder.positions.length / 3;
@@ -835,10 +835,10 @@ export interface BushGeometry {
  * Generates one bush from a BushShape: `cards` whole-bush cards crossed through its middle at even
  * turns, each showing one of the atlas's two side views, and `clumps` pairs of crossed clump cards
  * spread over its upper half, each pointing out from the middle with its twigs towards it.
- * Deterministic from `seed`.
+ * Deterministic from `seed`. Only a frond plant has a cheaper far model; a card bush is cheap already.
  */
-export function generateBush(spec: BushShape, seed: number, variant = 0): BushGeometry {
-  if (spec.fronds) return generateFronds(spec.fronds, seed);
+export function generateBush(spec: BushShape, seed: number, variant = 0, detail: TreeDetail = "near"): BushGeometry {
+  if (spec.fronds) return generateFronds(spec.fronds, seed, detail);
   // A bush flowering in two colours keeps to one pair of cells - one side view, one clump - so it is
   // all one colour (see BushTexture.flowers).
   const pair = (spec.foliage.flowers?.colors.length ?? 0) >= 2 ? variant % 2 : -1;
@@ -907,8 +907,11 @@ export function generateBush(spec: BushShape, seed: number, variant = 0): BushGe
  * arch out and down; its midrib stands `fold` of its width above its edges, a shallow keel. It
  * shows one of the atlas's four single fronds, base to tip, mirrored at random. Deterministic from
  * `seed`.
+ *
+ * The far model is the same plant, every frond where the near one has it, but each a single flat
+ * strip - its two edges, no keel or stalk ridge between them - in three quarters of the segments.
  */
-function generateFronds(spec: Fronds, seed: number): BushGeometry {
+function generateFronds(spec: Fronds, seed: number, detail: TreeDetail = "near"): BushGeometry {
   const rng = mulberry32(seed);
   const between = ([lo, hi]: [number, number]): number => lo + rng() * (hi - lo);
   const positions: number[] = [];
@@ -922,6 +925,8 @@ function generateFronds(spec: Fronds, seed: number): BushGeometry {
   let top = 0.2;
   const count = Math.floor(between([spec.count[0], spec.count[1] + 0.999]));
   const start = rng() * Math.PI * 2;
+  const far = detail === "far";
+  const segments = far ? Math.max(2, Math.round(spec.segments * 0.75)) : spec.segments;
   for (let f = 0; f < count; f++) {
     const azimuth = start + ((f + (rng() - 0.5) * 0.6) / count) * Math.PI * 2;
     const out: V3 = [Math.cos(azimuth), 0, Math.sin(azimuth)];
@@ -945,8 +950,8 @@ function generateFronds(spec: Fronds, seed: number): BushGeometry {
     const smoothstep01 = (t: number): number => smoothstep(0, 1, Math.min(1, Math.max(0, t)));
     if (!spec.stalk) {
       // A fern: three across, the keel down the middle.
-      for (let s = 0; s <= spec.segments; s++) {
-        const t = s / spec.segments;
+      for (let s = 0; s <= segments; s++) {
+        const t = s / segments;
         // Narrow where it leaves the root, full width from a fifth of the way along.
         const width = spec.width * Math.min(1, 0.35 + t * 3.25);
         rows.push({
@@ -972,8 +977,8 @@ function generateFronds(spec: Fronds, seed: number): BushGeometry {
           cols: [-1, -1, 0, 1, 1].map((a) => ({ x: (a * stem) / 2, u: 0.5 + a * FROND_STALK_HALF_WIDTH, keel: a === 0 ? ridge : 0, tilt: a * 0.75 })),
         });
       }
-      for (let s = 0; s <= spec.segments; s++) {
-        const t = s / spec.segments;
+      for (let s = 0; s <= segments; s++) {
+        const t = s / segments;
         const foldIn = smoothstep01(t / 0.2);
         const fold = spec.fold * spec.width * foldIn;
         const stemRidge = ridge * (1 - foldIn);
@@ -990,6 +995,8 @@ function generateFronds(spec: Fronds, seed: number): BushGeometry {
         });
       }
     }
+    // Far off, a flat strip: only each row's two edges, lying flat.
+    if (far) for (const row of rows) row.cols = [row.cols[0], row.cols[row.cols.length - 1]].map((col) => ({ ...col, keel: 0, tilt: 0 }));
     const columns = rows[0].cols.length;
     let point: V3 = [0, -0.05, 0];
     rows.forEach((row, r) => {

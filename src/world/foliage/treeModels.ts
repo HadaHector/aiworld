@@ -367,10 +367,9 @@ function createBushModels(scene: Scene, def: TreeKindDef, shape: BushShape, seed
   const tintDark = color3(def.tint[0]);
   const tintLight = color3(def.tint[1]);
 
-  const models: TreeModel[] = [];
-  for (let variant = 0; variant < shape.variants; variant++) {
-    const geometry = generateBush(shape, deriveSeed(ownSeed, variant + 1), variant);
-    const canopy = new Mesh(`bush_${def.id}_${variant}`, scene);
+  const build = (variant: number, detail: TreeDetail): TreeModel => {
+    const geometry = generateBush(shape, deriveSeed(ownSeed, variant + 1), variant, detail);
+    const canopy = new Mesh(`bush_${def.id}_${variant}${detail === "far" ? "_far" : ""}`, scene);
     const data = new VertexData();
     data.positions = geometry.leaves.positions;
     data.normals = geometry.leaves.normals;
@@ -382,7 +381,13 @@ function createBushModels(scene: Scene, def: TreeKindDef, shape: BushShape, seed
     canopy.material = leaves;
     const reach = shape.width[1] * 0.7;
     canopy.setBoundingInfo(new BoundingInfo(new Vector3(-reach, -1, -reach), new Vector3(reach, geometry.height + 1, reach)));
-    models.push({ canopy, tintDark, tintLight, shaderTint: true });
+    return { canopy, tintDark, tintLight, shaderTint: true };
+  };
+
+  const models: TreeModel[] = [];
+  for (let variant = 0; variant < shape.variants; variant++) {
+    // A frond plant - a fern - is costly up close; beyond the nearest band it is drawn cheaper.
+    models.push(shape.fronds ? { ...build(variant, "near"), far: build(variant, "far") } : build(variant, "near"));
   }
   return models;
 }
