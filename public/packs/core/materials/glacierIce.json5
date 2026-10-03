@@ -1,0 +1,61 @@
+// Glacier ice: old, compressed ice, a hard blue-white - mottled with faint bands
+// (the layers it was laid down in), grey here and there with rock dust, and
+// split by crevasses: narrow cracks, deep blue inside. Dimpled by melt, a little glassy.
+{
+  name: "Glacier Ice",
+  detail: { strength: 0.25 },
+  texture: {
+    bumpStrength: 1.6,
+    pipeline: {
+      noises: [
+        { name: "bands", type: "fbm", octaves: 3, tileCycles: 4, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+        { name: "crevasses", type: "worley", tileCycles: 6, amplitude: 1, mode: "edge", warp: 0.25, sizeJitter: 0.4 },
+        { name: "crevasseWhere", type: "fbm", octaves: 2, tileCycles: 3, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+        { name: "dust", type: "fbm", octaves: 3, tileCycles: 5, amplitude: 1, persistence: 0.55, lacunarity: 2.0 },
+        { name: "melt", type: "fbm", octaves: 3, tileCycles: 40, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+      ],
+      steps: [
+        // Melt-dimpled surface, broad swells under it.
+        { output: "meltRaw", op: "sample", noise: "melt" },
+        { output: "dimple", op: "mask", input: "meltRaw", at: 1, off: -1 },
+        { output: "bandRaw", op: "sample", noise: "bands" },
+        { output: "band", op: "mask", input: "bandRaw", at: 0.9, off: -0.9 },
+        // Crevasses: worley edges, only in the cracked stretches.
+        { output: "crevasseEdge", op: "sample", noise: "crevasses" },
+        { output: "crevasseLine", op: "mask", input: "crevasseEdge", at: 0.02, off: 0.07 },
+        { output: "crevasseWhereRaw", op: "sample", noise: "crevasseWhere" },
+        { output: "crevasseWhere", op: "mask", input: "crevasseWhereRaw", at: 0.45, off: 0.0 },
+        { output: "crevasse", op: "multiply", a: "crevasseLine", b: "crevasseWhere" },
+        { output: "dimplePart", op: "scale", input: "dimple", factor: 0.15 },
+        { output: "bandPart", op: "scale", input: "band", factor: 0.5 },
+        { output: "surface", op: "add", a: "dimplePart", b: "bandPart" },
+        { output: "base", op: "offset", input: "surface", amount: 0.3 },
+        { output: "crevasseDepth", op: "scale", input: "crevasse", factor: -0.45 },
+        { output: "height", op: "add", a: "base", b: "crevasseDepth" },
+
+        {
+          output: "byHeight",
+          op: "colorRamp",
+          input: "height",
+          stops: [
+            { at: 0.0, color: [0.16, 0.34, 0.56] },
+            { at: 0.3, color: [0.44, 0.62, 0.78] },
+            { at: 0.6, color: [0.66, 0.78, 0.88] },
+            { at: 1.0, color: [0.8, 0.87, 0.93] },
+          ],
+        },
+        // Rock dust in grey streaks along the flow.
+        { output: "dustRaw", op: "sample", noise: "dust" },
+        { output: "dustMask", op: "mask", input: "dustRaw", at: 0.75, off: 0.3 },
+        { output: "dustAmount", op: "scale", input: "dustMask", factor: 0.45 },
+        { output: "dustColor", op: "color", value: [0.5, 0.52, 0.54] },
+        { output: "diffuse", op: "mix", a: "byHeight", b: "dustColor", t: "dustAmount" },
+
+        { output: "roughIce", op: "constant", value: 0.25 },
+        { output: "roughDust", op: "constant", value: 0.6 },
+        { output: "roughness", op: "mix", a: "roughIce", b: "roughDust", t: "dustMask" },
+      ],
+      outputs: { diffuse: "diffuse", roughness: "roughness", height: "height" },
+    },
+  },
+}

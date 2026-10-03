@@ -1,0 +1,189 @@
+/**
+ * Ice peaks - the mountains' frozen variant (see ZONES.md): sharp peaks of dark rock standing out of
+ * snow that lies all the way down to the valley floors, and glaciers filling the valleys between
+ * them - smooth, gently sloping tongues of blue-white ice, crevassed, their edges running up into
+ * the snow. Rock only where it is too steep for the snow to hold, and on the wind-scoured ridges;
+ * scree at the foot of the faces; frost-split boulders half buried. No plants at all. A pale, cold
+ * sky, the light hard and bright.
+ *
+ * Each area is one of two kinds of range (`oneOf`) - sharp ridged peaks, or a big massif - and how
+ * high its ice fills (`ice`) is its own roll: glaciers down the valleys only, or an icefield with the
+ * peaks standing out of it. The glaciers are real ground: the valleys filled (`smoothMax`) up to a
+ * slow, tilted ice surface.
+ */
+{
+  name: "Ice Peaks",
+  voice: "frozen",
+  spawnWeight: 1,
+  lakeChance: 0.01,
+  borderType: "mountain",
+  settlement: "timber",
+  // How high the ice fills the valleys.
+  params: { ice: { range: [0, 1] } },
+  height: {
+    oneOf: [
+      // Sharp peaks: a ridged noise's crests, valleys floored between them, then iced.
+      {
+        noises: [
+          { name: "ridges", type: "ridged", octaves: 4, frequency: { range: [0.0008, 0.001] }, amplitude: { range: [100, 130] }, persistence: 0.48, lacunarity: 2.1 },
+          { name: "swell", type: "fbm", octaves: 3, frequency: 0.0006, amplitude: { range: [15, 25] }, persistence: 0.45, lacunarity: 2.0 },
+          { name: "iceFlow", type: "fbm", octaves: 2, frequency: 0.0007, amplitude: { range: [14, 22] }, persistence: 0.5, lacunarity: 2.0 },
+        ],
+        steps: [
+          { output: "ridgesRaw", op: "sample", noise: "ridges" },
+          { output: "swellRaw", op: "sample", noise: "swell" },
+          { output: "ground", op: "add", a: "ridgesRaw", b: "swellRaw" },
+          { output: "lowered", op: "offset", input: "ground", amount: { range: [-55, -40] } },
+          { output: "floor", op: "constant", value: { range: [18, 26] } },
+          { output: "rock", op: "smoothMax", a: "lowered", b: "floor", k: 14 },
+          // The ice surface: a slow, tilted plane, as high as the area's roll lets it.
+          { output: "iceFlowRaw", op: "sample", noise: "iceFlow" },
+          { output: "iceLevel", op: "offset", input: "iceFlowRaw", amount: { param: "ice", to: [34, 80] } },
+          { output: "result", op: "smoothMax", a: "rock", b: "iceLevel", k: 10 },
+        ],
+      },
+      // A big massif: broad high ground, the peaks stretched up off it, the valleys iced.
+      {
+        noises: [
+          { name: "range", type: "fbm", octaves: 6, frequency: { range: [0.0011, 0.0014] }, amplitude: { range: [70, 88] }, persistence: 0.44, lacunarity: 2.0 },
+          { name: "iceFlow", type: "fbm", octaves: 2, frequency: 0.0007, amplitude: { range: [14, 22] }, persistence: 0.5, lacunarity: 2.0 },
+        ],
+        steps: [
+          { output: "rangeRaw", op: "sample", noise: "range" },
+          { output: "zero", op: "constant", value: 0 },
+          { output: "above", op: "max", a: "rangeRaw", b: "zero" },
+          { output: "lift", op: "scale", input: "above", factor: 1.0 },
+          { output: "stretched", op: "add", a: "rangeRaw", b: "lift" },
+          { output: "peak", op: "offset", input: "stretched", amount: 70 },
+          { output: "floor", op: "constant", value: { range: [18, 26] } },
+          { output: "rock", op: "smoothMax", a: "peak", b: "floor", k: 14 },
+          { output: "iceFlowRaw", op: "sample", noise: "iceFlow" },
+          { output: "iceLevel", op: "offset", input: "iceFlowRaw", amount: { param: "ice", to: [40, 90] } },
+          { output: "result", op: "smoothMax", a: "rock", b: "iceLevel", k: 10 },
+        ],
+      },
+    ],
+  },
+  treeRules: { shore: [0.5, 2] },
+  // Frost-split boulders, half buried in the snow, thickest at the foot of the faces.
+  rocks: { generator: "rockDensity", kind: "shatteredBoulder", frequency: 0.005, openAt: -0.3, fullAt: 0.4, peak: { range: [0.02, 0.05] }, footOfSlope: { range: [0.7, 1.2] }, riverShore: { range: [1, 2] }, lakeShore: { range: [1, 2] } },
+  treeTints: [
+    { kinds: ["shatteredBoulder"], snow: { range: [0.5, 0.8] }, stone: { hue: { range: [-10, 10] }, saturation: { range: [0.3, 0.6] }, value: { range: [0.8, 1.0] }, spread: { saturation: 0.1, value: 0.12 } } },
+  ],
+  ground: {
+    base: "snow",
+    road: "trackStone",
+    adjust: { hue: { range: [-4, 4] }, saturation: { range: [0.9, 1.1] }, value: { range: [0.97, 1.03] } },
+    layers: [
+      // Snow holding on the slopes, outweighing the steep ground's rock (which starts at ~21 degrees
+      // everywhere) until it is too steep for it.
+      {
+        id: "ice-snow-holds",
+        material: "snow",
+        weight: {
+          steps: [
+            { output: "slope", op: "input", name: "slope" },
+            { output: "holds", op: "mask", input: "slope", at: 0.62, off: 0.48 },
+            { output: "result", op: "scale", input: "holds", factor: 2 },
+          ],
+        },
+      },
+      // Rock where it is too steep for the snow to hold, and on the wind-scoured crests.
+      {
+        id: "ice-rock",
+        material: "rock",
+        weight: {
+          noises: [{ name: "scour", type: "fbm", octaves: 3, frequency: 0.01, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
+          steps: [
+            { output: "slope", op: "input", name: "slope" },
+            { output: "steep", op: "mask", input: "slope", at: 0.45, off: 0.62 },
+            { output: "curvature", op: "input", name: "reliefCurvature" },
+            { output: "scourRaw", op: "sample", noise: "scour" },
+            { output: "scourShift", op: "scale", input: "scourRaw", factor: 1.5 },
+            { output: "crestRaw", op: "subtract", a: "scourShift", b: "curvature" },
+            { output: "crest", op: "mask", input: "crestRaw", at: 6, off: 3.5 },
+            { output: "bare", op: "max", a: "steep", b: "crest" },
+            { output: "result", op: "scale", input: "bare", factor: 3 },
+          ],
+        },
+      },
+      // Scree at the foot of the faces, where the slope eases into the hollows.
+      {
+        id: "ice-scree",
+        material: "scree",
+        weight: {
+          noises: [{ name: "spill", type: "fbm", octaves: 3, frequency: 0.012, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
+          steps: [
+            { output: "curvature", op: "input", name: "reliefCurvature" },
+            { output: "spillRaw", op: "sample", noise: "spill" },
+            { output: "spillShift", op: "scale", input: "spillRaw", factor: 1.5 },
+            { output: "spilled", op: "add", a: "curvature", b: "spillShift" },
+            { output: "foot", op: "mask", input: "spilled", at: 4, off: 2 },
+            { output: "slope", op: "input", name: "slope" },
+            { output: "sloping", op: "mask", input: "slope", at: 0.85, off: 0.96 },
+            { output: "footSlope", op: "multiply", a: "foot", b: "sloping" },
+            { output: "result", op: "scale", input: "footSlope", factor: 1.5 },
+          ],
+        },
+      },
+      // Glacier ice: the filled valleys - the flat, smooth ground - bare in long stretches, snow
+      // lying over it in others (the firn up its higher reaches).
+      {
+        id: "ice-glacier",
+        material: "glacierIce",
+        weight: {
+          noises: [{ name: "firn", type: "fbm", octaves: 3, frequency: 0.004, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
+          steps: [
+            { output: "slope", op: "input", name: "slope" },
+            { output: "flat", op: "mask", input: "slope", at: 0.985, off: 0.95 },
+            { output: "height", op: "input", name: "height" },
+            { output: "aboveWater", op: "mask", input: "height", at: 6, off: 2 },
+            { output: "firnRaw", op: "sample", noise: "firn" },
+            { output: "bare", op: "mask", input: "firnRaw", at: 0.2, off: -0.45 },
+            { output: "flatIce", op: "multiply", a: "flat", b: "aboveWater" },
+            { output: "glacier", op: "multiply", a: "flatIce", b: "bare" },
+            { output: "result", op: "scale", input: "glacier", factor: 5 },
+          ],
+        },
+      },
+      // Stones along the streams and round the tarns, outweighing the shore sand.
+      {
+        id: "ice-stream-stones",
+        material: "pebbles",
+        weight: {
+          noises: [{ name: "reach", type: "fbm", octaves: 2, frequency: 0.02, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
+          steps: [
+            { output: "gap", op: "input", name: "riverGap" },
+            { output: "reachRaw", op: "sample", noise: "reach" },
+            { output: "reachShift", op: "scale", input: "reachRaw", factor: 9 },
+            { output: "reach", op: "add", a: "gap", b: "reachShift" },
+            { output: "band", op: "mask", input: "reach", at: 40, off: 62 },
+            { output: "lakeFactor", op: "input", name: "lakeFactor" },
+            { output: "lake", op: "mask", input: "lakeFactor", at: 0.25, off: 0.02 },
+            { output: "height", op: "input", name: "height" },
+            { output: "low", op: "mask", input: "height", at: 0.6, off: 2.6 },
+            { output: "landmass", op: "input", name: "landmass" },
+            { output: "inland", op: "mask", input: "landmass", at: 0.95, off: 0.7 },
+            { output: "pond", op: "multiply", a: "low", b: "inland" },
+            { output: "lakeOrPond", op: "max", a: "lake", b: "pond" },
+            { output: "water", op: "max", a: "band", b: "lakeOrPond" },
+            { output: "result", op: "scale", input: "water", factor: 1.5 },
+          ],
+        },
+      },
+    ],
+  },
+  // A pale, cold sky; hard, bright light off the snow.
+  sky: {
+    horizon: { oneOf: ["#d8e2ea", "#d0dce8", "#e0e6ec"] },
+    zenith: { oneOf: ["#4a78b4", "#5480b8", "#4070ac"] },
+    cloud: "#f8fafc",
+    fogStart: { range: [0.4, 0.6] },
+    fogEnd: { range: [0.9, 1.0] },
+  },
+  light: {
+    sunPeak: 40,
+    moonPeak: 50,
+    ambientDay: "#b8c8dc",
+  },
+}

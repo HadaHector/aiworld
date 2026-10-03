@@ -271,6 +271,12 @@ Existing: **broadleaf**, **pine**, **palm**.
   tree line, ferns and hazel under them (the stand noise `shared` with the bushes); pale high
   pasture over it, then rock by height and on steep ground, scree down the upper gullies; snow
   growing with height over a rolled snow line, first in the hollows and on the north faces.
+- **Ice peaks: done** - `biomes/icePeaks.json5`. Sharp ridged peaks or a big massif (`oneOf`);
+  glaciers as real ground - the valleys filled (`smoothMax`) up to a slow, tilted ice surface, how
+  high its `ice` roll - in new `glacierIce` (blue-white, patchy crevasses, rock dust), firn snow
+  over it in places. Snow everywhere else, holding on the slopes until they are too steep for it;
+  rock on the steepest faces and scoured crests, scree at their feet; frost-split boulders under
+  snow. No plants.
 
 | Variant | Ground | Plants | Trees | Extras |
 |---|---|---|---|---|
