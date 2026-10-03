@@ -237,7 +237,7 @@ Existing: **broadleaf**, **pine**, **palm**.
 
 ### 8. Highlands (rolling to hilly, open) - today: hills
 
-- **Heather moor: done** - `biomes/heatherMoor.json5`. Each area one of three moors (a `oneOf` of
+- **Heather moor: done** - `biomes/heatherMoor.json5` (hills retired to `legacy/` with the fell). Each area one of three moors (a `oneOf` of
   whole height graphs): low and rolling, a high plateau with flat tops, bigger rounded hills; bog
   pools in the lowest hollows, filled flat just under the water (heights set in the world, the
   `bedrock` taken off). New `heather` (with new `grass/heather`) and `heatherGrass` (half heather,
@@ -255,7 +255,7 @@ Existing: **broadleaf**, **pine**, **palm**.
   crags (relief ledges and knobs, built up only) on the steep ground, as many as its `crags` roll.
   New `fellGrass` (wind-bitten, hardly a flower), grey tussock patches, scree on the steep sides,
   bare rock on the sheer faces, a thin rolled snow; low junipers in loose groups, a few stunted
-  spruce in the sheltered folds; boulders everywhere; a grey sky. Family 8 done (`hills` remains).
+  spruce in the sheltered folds; boulders everywhere; a grey sky. Family 8 done.
 
 | Variant | Ground | Plants | Trees | Extras |
 |---|---|---|---|---|
@@ -265,7 +265,7 @@ Existing: **broadleaf**, **pine**, **palm**.
 
 ### 9. Mountains - today: mountains
 
-- **Green alps: done** - `biomes/greenAlps.json5`. Each area one of three (`oneOf`): high ranges
+- **Green alps: done** - `biomes/greenAlps.json5` (mountains retired to `legacy/` with the desert range). Each area one of three (`oneOf`): high ranges
   with valleys opening between them, sharp ridged peaks floored (`smoothMax`) into valleys, or wide
   green valleys under lower mountains. Meadow and alpine flowers below; spruce in stands to a rolled
   tree line, ferns and hazel under them (the stand noise `shared` with the bushes); pale high
@@ -282,7 +282,7 @@ Existing: **broadleaf**, **pine**, **palm**.
   stay walkable, broken ground on the slopes only), or an old worn range (`oneOf`). Pale desert
   gravel on the aprons, red gravel washed down them, new `desertScree` in banks and `desertRock`
   (red-brown tinted rock) on the faces; junipers low down to a rolled height, desert bushes, red
-  boulders; no snow. Family 9 done (`mountains` remains).
+  boulders; no snow. Family 9 done.
 
 | Variant | Ground | Plants | Trees | Extras |
 |---|---|---|---|---|
