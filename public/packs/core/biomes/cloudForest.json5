@@ -211,6 +211,16 @@
       },
     ],
   },
+  // Mist above all: the cloud sits on these slopes, and it rains often.
+  weather: [
+    { weather: "fair", odds: 1 },
+    { weather: "cloudy", odds: 2 },
+    { weather: "overcast", odds: 2 },
+    { weather: "mist", odds: 5 },
+    { weather: "drizzle", odds: 3 },
+    { weather: "rain", odds: 3 },
+    { weather: "storm", odds: 0.5 },
+  ],
   // Inside the cloud: a thick white-grey mist, closing in to tens of metres - the far trees only
   // shapes, then nothing.
   sky: {

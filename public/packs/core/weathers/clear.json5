@@ -1,0 +1,10 @@
+// Clear: hardly a cloud, the air sharp and far-seeing, the sun at full strength, barely a breeze.
+{
+  name: "Clear",
+  clouds: { cover: 0.18 },
+  fog: 1.2,
+  sun: 1.05,
+  ambient: 0.95,
+  wind: 0.6,
+  lasts: [180, 480],
+}

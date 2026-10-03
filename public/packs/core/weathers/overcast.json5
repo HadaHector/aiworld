@@ -1,0 +1,12 @@
+// Overcast: one unbroken grey deck, the sky without a trace of blue, no sun and so hardly a shadow -
+// the land lit flat and evenly from the whole sky, the distance closing in.
+{
+  name: "Overcast",
+  clouds: { cover: 1, darkness: 0.4 },
+  skyGrey: 0.75,
+  fog: 0.7,
+  sun: 0.3,
+  ambient: 1.2,
+  wind: 1.2,
+  lasts: [150, 360],
+}

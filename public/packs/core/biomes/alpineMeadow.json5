@@ -251,6 +251,19 @@
       },
     ],
   },
+  // High ground: the usual weather, and a fall of snow now and then even in summer.
+  weather: [
+    { weather: "clear", odds: 3 },
+    { weather: "fair", odds: 4 },
+    { weather: "cloudy", odds: 3 },
+    { weather: "overcast", odds: 2 },
+    { weather: "mist", odds: 1.5 },
+    { weather: "gale", odds: 1 },
+    { weather: "drizzle", odds: 2 },
+    { weather: "rain", odds: 2 },
+    { weather: "storm", odds: 0.5 },
+    { weather: "snow", odds: 0.7 },
+  ],
   // Thin, clear mountain air: a deep blue sky, bright sun.
   sky: {
     horizon: { oneOf: ["#c4d6e6", "#bcd2e8", "#cddbe6"] },

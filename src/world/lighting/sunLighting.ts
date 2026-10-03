@@ -93,6 +93,10 @@ export interface SunLighting {
    *  areaWeights (which, mid-drag, may not come until the player next moves). */
   setTimeHours: (hours: number) => void;
   getTimeHours: () => number;
+  /** The weather's hand on the light: the direct light (sun or moon) and the ambient sky-fill each
+   *  scaled - an overcast day loses its sun, and with it its shadows, and is lit from the whole sky
+   *  instead. Applied from the next updateDayNight on. */
+  setWeather: (sun: number, ambient: number) => void;
 }
 
 /**
@@ -271,6 +275,8 @@ export function createSunLighting(scene: Scene): SunLighting {
   // arbitrary point mid-transition.
   let timeHours = 12;
   let lastAreaWeights: AreaWeight[] = [];
+  let weatherSun = 1;
+  let weatherAmbient = 1;
 
   // Scratch accumulators for applyTimeOfDay's blend - module-lifetime, not per-call, since this
   // runs every frame and a fresh Color3 per field per frame is pure garbage-collector pressure for
@@ -359,7 +365,7 @@ export function createSunLighting(scene: Scene): SunLighting {
     }
     // Zero at the instant either body sits exactly on the horizon - not a separate fade the code
     // has to arrange, just what elevationFactor already is at that instant.
-    intensity = elevationFactor * (isDay ? sunIntensityBlend : moonIntensityBlend);
+    intensity = elevationFactor * (isDay ? sunIntensityBlend : moonIntensityBlend) * weatherSun;
 
     // Ambient doesn't switch bodies the way direct light does - it cross-fades smoothly through
     // both twilights using the same raw signal, so the sky stays lit (dimly) through the moment
@@ -367,7 +373,7 @@ export function createSunLighting(scene: Scene): SunLighting {
     ambientColor.r = lerp(blendAmbientNight.r, blendAmbientDay.r, dayness);
     ambientColor.g = lerp(blendAmbientNight.g, blendAmbientDay.g, dayness);
     ambientColor.b = lerp(blendAmbientNight.b, blendAmbientDay.b, dayness);
-    ambientIntensity = lerp(ambientNightIntensity, ambientDayIntensity, dayness);
+    ambientIntensity = lerp(ambientNightIntensity, ambientDayIntensity, dayness) * weatherAmbient;
 
     ambient.diffuse.copyFrom(ambientColor);
     ambient.intensity = ambientIntensity;
@@ -398,6 +404,11 @@ export function createSunLighting(scene: Scene): SunLighting {
     return timeHours;
   }
 
+  function setWeather(sun: number, ambient: number): void {
+    weatherSun = sun;
+    weatherAmbient = ambient;
+  }
+
   return {
     direction,
     get intensity() {
@@ -416,5 +427,6 @@ export function createSunLighting(scene: Scene): SunLighting {
     updateDayNight,
     setTimeHours,
     getTimeHours,
+    setWeather,
   };
 }

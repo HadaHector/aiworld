@@ -113,6 +113,16 @@
       },
     ],
   },
+  // Wet: rain and mist far more often than anywhere else.
+  weather: [
+    { weather: "fair", odds: 2 },
+    { weather: "cloudy", odds: 2 },
+    { weather: "overcast", odds: 2 },
+    { weather: "mist", odds: 2 },
+    { weather: "drizzle", odds: 4 },
+    { weather: "rain", odds: 4 },
+    { weather: "storm", odds: 1 },
+  ],
   // A bright sky, a light sea haze.
   sky: {
     horizon: { oneOf: ["#cfe0e6", "#d8e4e0", "#e2e4da"] },

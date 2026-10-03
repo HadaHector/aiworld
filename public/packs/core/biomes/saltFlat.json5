@@ -88,6 +88,16 @@
       },
     ],
   },
+  // Dry: mostly clear and bright, a windy day now and then, rain only rarely.
+  weather: [
+    { weather: "clear", odds: 5 },
+    { weather: "fair", odds: 3 },
+    { weather: "cloudy", odds: 1 },
+    { weather: "gale", odds: 1.5 },
+    { weather: "drizzle", odds: 0.3 },
+    { weather: "rain", odds: 0.3 },
+    { weather: "storm", odds: 0.2 },
+  ],
   // Glare: a pale, washed-out sky and a white haze swallowing the distance.
   sky: {
     horizon: { oneOf: ["#eceae4", "#e8e8e6", "#eee8dc"] },

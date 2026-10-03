@@ -40,6 +40,7 @@ import { AREA_ROLL_SALT } from "../cells/config";
 import type { WorldContent } from "./worldContent";
 import type { TextureDef } from "../materials/textureGen";
 import { adjustMatrix, chainMatrix, NO_ADJUST, type ColorAdjust } from "../materials/colorAdjust";
+import type { WeatherChance, WeatherDef } from "../weather/weatherTypes";
 
 /** One pack as found on disk: its folder name and every .json5 file in it, by path inside it. */
 export interface PackSource {
@@ -49,7 +50,7 @@ export interface PackSource {
 
 /** The folders a pack's content lives in, one kind of definition each. A definition's id is its
  *  file name, and a pack with a higher priority replaces a lower one's definition of the same id. */
-const CONTENT_FOLDERS = ["biomes", "materials", "layers", "grass", "trees", "bushes", "rocks", "voices", "borderHills", "settlements"] as const;
+const CONTENT_FOLDERS = ["biomes", "materials", "layers", "grass", "trees", "bushes", "rocks", "voices", "borderHills", "settlements", "weathers"] as const;
 type ContentFolder = (typeof CONTENT_FOLDERS)[number];
 
 /** How many grass kinds the packs may define between them: each is a layer of the blade atlas and
@@ -192,6 +193,8 @@ export function resolveContent(packs: PackSource[]): WorldContent {
   const rockReads = readAll("rocks", (e, o, r) => ({ file: e.file, ...readRockKind(e.id, o, r, defaults) }));
   const rockKinds = rockReads.map((read) => read.def);
   const voiceList = readAll("voices", (e, o, r) => ({ id: e.id, voice: readVoice(o, r) }));
+  const weathers = readAll("weathers", (e, o, r) => readWeather(e.id, o, r));
+  const weatherIds = new Set(weathers.map((w) => w.id));
   const boundaryHillStyles = readAll("borderHills", (e, o, r) => readBoundaryHillStyle(e.id, o, r));
   const settlementStyles = readAll("settlements", (e, o, r) => readSettlementStyle(e.id, o, r));
   const styleById = new Map(settlementStyles.map((style) => [style.id, style]));
@@ -298,6 +301,9 @@ export function resolveContent(packs: PackSource[]): WorldContent {
       if (!families.has(family)) report({ file, path: `ground.grass[${i}].family`, message: `no material is of family "${family}" (known: ${[...families].join(", ") || "none"})` });
       if (!grassKindIds.has(spec.kind)) report({ file, path: `ground.grass[${i}].kind`, message: `no grass kind "${spec.kind}" (known: ${[...grassKindIds].join(", ")})` });
     });
+    biome.weather.forEach((chance, i) => {
+      if (!weatherIds.has(chance.weatherId)) report({ file, path: `weather[${i}].weather`, message: `no weather "${chance.weatherId}" (known: ${[...weatherIds].join(", ") || "none"})` });
+    });
     if (biome.voiceId && !voices[biome.voiceId]) {
       report({ file, path: "voice", message: `no voice "${biome.voiceId}" (known: ${Object.keys(voices).join(", ")})` });
     }
@@ -373,6 +379,7 @@ export function resolveContent(packs: PackSource[]): WorldContent {
     voices,
     boundaryHillStyles,
     settlementStyles,
+    weathers,
   };
 }
 
@@ -414,10 +421,12 @@ export interface Defaults {
   treeScale: [number, number];
   materialDetail: MaterialDetail;
   oldTrees: OldTrees;
+  /** The weathers of a biome that names none. */
+  weather: WeatherChance[];
 }
 
 function readDefaults(obj: RawObject, reader: Reader): Defaults {
-  reader.onlyKeys(obj, "", ["defaultMaterial", "sky", "light", "treeRules", "treeScale", "materialDetail", "oldTrees"]);
+  reader.onlyKeys(obj, "", ["defaultMaterial", "sky", "light", "treeRules", "treeScale", "materialDetail", "oldTrees", "weather"]);
   const oldTrees = reader.object(obj.oldTrees, "oldTrees");
   reader.onlyKeys(oldTrees, "oldTrees", ["share", "size"]);
   const treeRules = reader.object(obj.treeRules ?? {}, "treeRules");
@@ -448,6 +457,42 @@ function readDefaults(obj: RawObject, reader: Reader): Defaults {
       share: reader.number(oldTrees, "share", "oldTrees", { min: 0, max: 1 }),
       size: reader.range(oldTrees, "size", "oldTrees", { allowEqual: true }),
     },
+    weather: readWeatherChances(obj, reader),
+  };
+}
+
+/** `weather: [{ weather: id, odds }]` - which weathers, and how likely each is drawn next: its odds
+ *  over the sum of them all, so they need not add up to anything. (Not `chance`: in a biome file
+ *  that is a roll - see biomeRolls.ts.) */
+function readWeatherChances(obj: RawObject, reader: Reader): WeatherChance[] {
+  return reader.optionalArray(obj, "weather", "").map((raw, i) => {
+    const path = `weather[${i}]`;
+    const chance = reader.object(raw, path);
+    reader.onlyKeys(chance, path, ["weather", "odds"]);
+    return { weatherId: reader.string(chance, "weather", path), odds: reader.number(chance, "odds", path, { min: 0 }) };
+  });
+}
+
+/** A weathers/ file - see WeatherDef. */
+function readWeather(id: string, obj: RawObject, reader: Reader): WeatherDef {
+  reader.onlyKeys(obj, "", ["name", "clouds", "skyGrey", "fog", "sun", "ambient", "wind", "precipitation", "lasts"]);
+  const clouds = reader.object(obj.clouds ?? {}, "clouds");
+  reader.onlyKeys(clouds, "clouds", ["cover", "darkness"]);
+  const precipitation = reader.object(obj.precipitation ?? {}, "precipitation");
+  reader.onlyKeys(precipitation, "precipitation", ["rain", "snow"]);
+  return {
+    id,
+    name: reader.string(obj, "name", ""),
+    cloudCover: reader.number(clouds, "cover", "clouds", { min: 0, max: 1 }),
+    cloudDarkness: reader.optionalNumber(clouds, "darkness", "clouds", 0, { min: 0, max: 1 }),
+    skyGrey: reader.optionalNumber(obj, "skyGrey", "", 0, { min: 0, max: 1 }),
+    fog: reader.optionalNumber(obj, "fog", "", 1, { min: 0.02, max: 2 }),
+    sun: reader.optionalNumber(obj, "sun", "", 1, { min: 0, max: 2 }),
+    ambient: reader.optionalNumber(obj, "ambient", "", 1, { min: 0, max: 3 }),
+    wind: reader.optionalNumber(obj, "wind", "", 1, { min: 0, max: 5 }),
+    rain: reader.optionalNumber(precipitation, "rain", "precipitation", 0, { min: 0, max: 1 }),
+    snow: reader.optionalNumber(precipitation, "snow", "precipitation", 0, { min: 0, max: 1 }),
+    lasts: reader.range(obj, "lasts", "", { allowEqual: true }),
   };
 }
 
@@ -1127,6 +1172,7 @@ function readBiome(id: string, obj: RawObject, reader: Reader, defaults: Default
     "ground",
     "sky",
     "light",
+    "weather",
   ]);
 
   let settlementStyle: SettlementStyle | null = null;
@@ -1207,6 +1253,7 @@ function readBiome(id: string, obj: RawObject, reader: Reader, defaults: Default
       fogEndFraction: reader.optionalNumber(sky, "fogEnd", "sky", defaults.fogEnd, { min: 0.05, max: 1 }),
     },
     dayNight: readDayNight(light, reader, defaults),
+    weather: obj.weather === undefined ? defaults.weather : readWeatherChances(obj, reader),
   };
 }
 

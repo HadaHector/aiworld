@@ -9,7 +9,6 @@ import {
   ShaderMaterial,
   StandardMaterial,
   Texture,
-  Vector2,
   Vector3,
   VertexData,
   type BaseTexture,
@@ -19,6 +18,7 @@ import type { BoulderShape, BushShape, BushTexture, FoliageTexture, PrimitiveTre
 import type { ColorTuple } from "../terrain/pipeline/pipelineTypes";
 import { LIT_SHADING_SAMPLERS, LIT_SHADING_UNIFORMS, type LitShading } from "../materials/litShading";
 import { deriveSeed } from "../rng";
+import { WIND } from "./wind";
 import { generateBush, generateConifer, generateTree, type TreeDetail, type TreeGeometry } from "./treeGenerator";
 import { FOLIAGE_TEXTURE_SIZE, bakeBushFoliage, bakeConiferFoliage, bakeFoliage } from "./treeTextures";
 import { TEXTURE_RESOLUTION } from "../materials/textureGen";
@@ -175,8 +175,6 @@ function createPrimitiveModel(scene: Scene, def: TreeKindDef, shape: PrimitiveTr
   };
 }
 
-/** Wind blows this way (x, z) - the same way it blows through the grass. */
-const WIND_DIRECTION = new Vector2(0.8, 0.6).normalize();
 
 /**
  * Leaf cards are cut out of their texture, and the shadow map has to cut them out the same way or
@@ -218,7 +216,7 @@ function createLeafMaterial(scene: Scene, id: string, atlasPixels: Uint8Array, s
   });
   leaves.alphaTexture = atlas;
   leaves.setTexture("leafAtlas", atlas);
-  leaves.setVector2("windDirection", WIND_DIRECTION);
+  leaves.setVector2("windDirection", WIND);
   leaves.setFloat("treeHeight", swayHeight);
   leaves.backFaceCulling = false;
   litShading.register(leaves);

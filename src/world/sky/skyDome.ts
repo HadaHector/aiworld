@@ -2,6 +2,7 @@ import { Color3, Effect, Mesh, MeshBuilder, ShaderMaterial, Vector2, Vector3, ty
 import type { AreaWeight } from "../cells/areaField";
 import { lerp } from "../mathUtils";
 import { computeDayNightFactors, deriveNightSkyColor } from "../lighting/dayNightMath";
+import { FAIR_CLOUD_COVER, type WeatherBlend } from "../weather/weatherTypes";
 
 // How strongly the sunrise/sunset glow (each in-range biome's own sunHorizonColor - the same warm
 // colour the sun itself wears low in the sky, see BiomeDayNight) washes into the sky at full
@@ -27,9 +28,8 @@ const SKY_RADIUS = 4000;
 const CLOUD_HEIGHT = 900;
 // World units per noise cell - bigger clouds, not more of them.
 const CLOUD_FREQUENCY = 0.00065;
-// Fraction of the sky a cloud layer covers at CLOUD_COVERAGE = 0.5. Higher opens up more clear sky.
-const CLOUD_COVERAGE = 0.58;
 // How wide the coverage threshold's own transition is - a soft cloud edge instead of a stencil cutout.
+// (How much of the sky is cloud is the weather's - see WeatherBlend.cloudCover.)
 const CLOUD_SOFTNESS = 0.22;
 const CLOUD_OPACITY = 0.85;
 // World units/second the noise field drifts, so a cloud layer reads as blowing rather than painted on.
@@ -58,6 +58,7 @@ uniform vec3 skyZenith;
 uniform vec3 skyHorizon;
 uniform vec3 cloudColor;
 uniform vec2 cloudOffset;
+uniform float cloudCover;
 uniform vec3 twilightTint;
 uniform float twilightFactor;
 uniform vec3 sunDirection;
@@ -130,14 +131,15 @@ void main(void) {
   float upness = max(dir.y, 0.02);
   vec2 cloudPlane = dir.xz * (${CLOUD_HEIGHT.toFixed(1)} / upness) * ${CLOUD_FREQUENCY};
   float coverage = cloudFbm(cloudPlane + cloudOffset);
-  float cloudMask = smoothstep(
-    ${(1 - CLOUD_COVERAGE - CLOUD_SOFTNESS * 0.5).toFixed(4)},
-    ${(1 - CLOUD_COVERAGE + CLOUD_SOFTNESS * 0.5).toFixed(4)},
-    coverage
-  );
+  // The threshold slides with the cover: at 0 nothing clears it, at 1 everything does - and the
+  // softness widens towards full cover, so a closing deck is one soft grey rather than hard blobs.
+  float threshold = 1.0 - cloudCover;
+  float softness = ${CLOUD_SOFTNESS.toFixed(3)} * (1.0 + cloudCover);
+  float cloudMask = smoothstep(threshold - softness * 0.5, threshold + softness * 0.5, coverage);
   // The projection above stretches every cloud toward a smear as dir.y approaches zero - faded out
-  // rather than let that smear reach the horizon.
-  cloudMask *= smoothstep(0.02, 0.22, dir.y) * ${CLOUD_OPACITY.toFixed(3)};
+  // rather than let that smear reach the horizon. A full deck is opaque: no blue through it.
+  float opacity = mix(${CLOUD_OPACITY.toFixed(3)}, 1.0, smoothstep(0.75, 1.0, cloudCover));
+  cloudMask *= smoothstep(0.02, 0.22, dir.y) * opacity;
 
   // Clouds facing the sun catch its glow the same way the horizon under them does; the far side of
   // the sky gets no equivalent treatment here - an unlit cloud simply reads as its own base colour,
@@ -148,6 +150,16 @@ void main(void) {
   gl_FragColor = vec4(color, 1.0);
 }
 `;
+
+/** How dark the heaviest rain cloud gets. */
+const RAIN_CLOUD_GREY = 0.36;
+
+/** Moves a colour `amount` of the way to a grey of `grey`, in place. */
+function greyTowards(out: Color3, grey: number, amount: number): void {
+  out.r = lerp(out.r, grey, amount);
+  out.g = lerp(out.g, grey, amount);
+  out.b = lerp(out.b, grey, amount);
+}
 
 /** Plain night->day cross-fade, no tint - what horizon and cloud need now that their sunrise/sunset
  *  tint has moved into the fragment shader (see its own sunFacing comment for why: that tint has to
@@ -182,7 +194,7 @@ export interface SkyDome {
    *  the sky can never read as day while the ground reads as night. sunDirection (the same
    *  SunLighting.direction the terrain and shadows use) is what lets the sunrise/sunset glow sit on
    *  the correct side of the sky instead of as a uniform ring around the horizon. */
-  update: (areaWeights: AreaWeight[], drawDistance: number, timeHours: number, sunDirection: Vector3) => void;
+  update: (areaWeights: AreaWeight[], drawDistance: number, timeHours: number, sunDirection: Vector3, weather: WeatherBlend) => void;
   /** This frame's blended horizon/zenith colour - the same values sent to scene fog and the sky
    *  shader's own zenith uniform, exposed for anything else that wants to read "what colour is the
    *  sky right now" without recomputing the same blend (the ocean's fake sky reflection - see
@@ -218,7 +230,7 @@ export function createSkyDome(scene: Scene): SkyDome {
 
   const material = new ShaderMaterial("skyDomeMaterial", scene, "skyDome", {
     attributes: ["position"],
-    uniforms: ["worldViewProjection", "skyZenith", "skyHorizon", "cloudColor", "cloudOffset", "twilightTint", "twilightFactor", "sunDirection"],
+    uniforms: ["worldViewProjection", "skyZenith", "skyHorizon", "cloudColor", "cloudOffset", "cloudCover", "twilightTint", "twilightFactor", "sunDirection"],
   });
   material.backFaceCulling = false;
   material.disableDepthWrite = true;
@@ -226,6 +238,7 @@ export function createSkyDome(scene: Scene): SkyDome {
   material.setColor3("skyHorizon", new Color3(0.7, 0.8, 0.85));
   material.setColor3("cloudColor", new Color3(1, 1, 1));
   material.setVector2("cloudOffset", Vector2.Zero());
+  material.setFloat("cloudCover", FAIR_CLOUD_COVER);
   material.setColor3("twilightTint", new Color3(1, 0.6, 0.35));
   material.setFloat("twilightFactor", 0);
   material.setVector3("sunDirection", new Vector3(0, 1, 0));
@@ -233,10 +246,12 @@ export function createSkyDome(scene: Scene): SkyDome {
 
   let windX = 0;
   let windZ = 0;
+  // The weather's wind, as of the last update - a gale drives the clouds as it does the grass.
+  let windStrength = 1;
   scene.onBeforeRenderObservable.add(() => {
     const dt = scene.getEngine().getDeltaTime() / 1000;
-    windX += CLOUD_WIND.x * CLOUD_FREQUENCY * dt;
-    windZ += CLOUD_WIND.z * CLOUD_FREQUENCY * dt;
+    windX += CLOUD_WIND.x * CLOUD_FREQUENCY * dt * windStrength;
+    windZ += CLOUD_WIND.z * CLOUD_FREQUENCY * dt * windStrength;
     material.setVector2("cloudOffset", new Vector2(windX, windZ));
   });
 
@@ -260,7 +275,7 @@ export function createSkyDome(scene: Scene): SkyDome {
   const cloudBase = new Color3();
   const fogColor = new Color3();
 
-  function update(areaWeights: AreaWeight[], drawDistance: number, timeHours: number, sunDirection: Vector3): void {
+  function update(areaWeights: AreaWeight[], drawDistance: number, timeHours: number, sunDirection: Vector3, weather: WeatherBlend): void {
     dayHorizon.set(0, 0, 0);
     dayZenith.set(0, 0, 0);
     dayCloud.set(0, 0, 0);
@@ -285,6 +300,18 @@ export function createSkyDome(scene: Scene): SkyDome {
       twilightTint.g += sunHorizon[1] * weight;
       twilightTint.b += sunHorizon[2] * weight;
     }
+
+    // The weather on the day colours, before night is derived from them - so an overcast night is
+    // the overcast day's, dimmed: the sky washed out towards a grey as light as its horizon, darker
+    // as the clouds are; the clouds themselves darkened towards rain-cloud grey; the fog pulled in.
+    const grey = (0.299 * dayHorizon.r + 0.587 * dayHorizon.g + 0.114 * dayHorizon.b) * (1 - 0.3 * weather.cloudDarkness);
+    greyTowards(dayHorizon, grey, weather.skyGrey);
+    greyTowards(dayZenith, grey * 0.95, weather.skyGrey);
+    greyTowards(dayCloud, lerp(grey, RAIN_CLOUD_GREY, weather.cloudDarkness), Math.max(weather.cloudDarkness, weather.skyGrey * 0.5));
+    fogStartFraction *= weather.fog;
+    fogEndFraction = Math.min(1, fogEndFraction * weather.fog);
+    windStrength = weather.wind;
+    material.setFloat("cloudCover", weather.cloudCover);
 
     const { dayness, twilightFactor } = computeDayNightFactors(timeHours);
     const nightHorizon = deriveNightSkyColor(dayHorizon);

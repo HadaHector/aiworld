@@ -206,6 +206,18 @@
       },
     ],
   },
+  // A moor's weather: grey, misty, wet and windy far more often than fair.
+  weather: [
+    { weather: "clear", odds: 1 },
+    { weather: "fair", odds: 1.5 },
+    { weather: "cloudy", odds: 3 },
+    { weather: "overcast", odds: 3 },
+    { weather: "mist", odds: 3 },
+    { weather: "gale", odds: 2 },
+    { weather: "drizzle", odds: 3 },
+    { weather: "rain", odds: 3 },
+    { weather: "storm", odds: 0.5 },
+  ],
   // A grey sky, low cloud, a cold wind.
   sky: {
     horizon: { oneOf: ["#c4c8cc", "#b8c0c6", "#ccc8c2"] },

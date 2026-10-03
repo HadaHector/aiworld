@@ -1,0 +1,12 @@
+// Blizzard: driving snow on a gale, the world white and a few dozen metres wide.
+{
+  name: "Blizzard",
+  clouds: { cover: 1, darkness: 0.45 },
+  skyGrey: 0.95,
+  fog: 0.2,
+  sun: 0.2,
+  ambient: 1.1,
+  wind: 3.5,
+  precipitation: { snow: 1 },
+  lasts: [90, 200],
+}

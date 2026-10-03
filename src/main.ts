@@ -85,6 +85,15 @@ createSettingsPanel({
       onChange: (hours) => world.setTimeOfDay(hours),
     },
   ],
+  selects: [
+    {
+      // Each zone's own weather, or one held everywhere to look at - blending in over a few seconds.
+      label: "Weather",
+      options: [{ value: "", label: "Natural" }, ...world.weather.weathers.map((w) => ({ value: w.id, label: w.name }))],
+      initial: "",
+      onChange: (id) => world.weather.force(id === "" ? null : id),
+    },
+  ],
 });
 
 const zoneLabel = createZoneLabel();
@@ -151,12 +160,13 @@ scene.onBeforeRenderObservable.add(() => {
   debugMap.updateMarker(character.mesh.position.x, character.mesh.position.z, camera.alpha);
   const here = world.sampleTerrain(character.mesh.position.x, character.mesh.position.z);
   const zoneName = world.areaNames.get(here.primaryAreaId) ?? "Uncharted";
-  zoneLabel.update(zoneName, here.primaryBiome.name);
+  zoneLabel.update(zoneName, here.primaryBiome.name, world.weather.describe(here.primaryAreaId));
   positionPanel.update(character.mesh.position, camera, zoneName, here.primaryBiome.name);
   lastView.remember(character.mesh.position, camera);
   // Day-night first: it owns the clock, and updateAtmosphere reads that clock's current value
   // (world.ts's updateAtmosphere calls sunLighting.getTimeHours() itself) - calling it after this
   // is what makes that read this frame's time rather than last frame's.
+  world.updateWeather(deltaSeconds, here.areaWeights, character.mesh.position.x, character.mesh.position.z);
   world.updateDayNight(deltaSeconds, here.areaWeights);
   world.updateAtmosphere(here.areaWeights);
 });

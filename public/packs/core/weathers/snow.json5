@@ -1,0 +1,12 @@
+// Snow: a pale, even grey sky, flakes drifting down thick and slow, the air still and hushed.
+{
+  name: "Snow",
+  clouds: { cover: 1, darkness: 0.3 },
+  skyGrey: 0.85,
+  fog: 0.5,
+  sun: 0.3,
+  ambient: 1.15,
+  wind: 0.7,
+  precipitation: { snow: 0.7 },
+  lasts: [120, 360],
+}

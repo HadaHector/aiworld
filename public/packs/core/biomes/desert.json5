@@ -188,6 +188,16 @@
       },
     ],
   },
+  // Dry: mostly clear and bright, a windy day now and then, rain only rarely.
+  weather: [
+    { weather: "clear", odds: 5 },
+    { weather: "fair", odds: 3 },
+    { weather: "cloudy", odds: 1 },
+    { weather: "gale", odds: 1.5 },
+    { weather: "drizzle", odds: 0.3 },
+    { weather: "rain", odds: 0.3 },
+    { weather: "storm", odds: 0.2 },
+  ],
   // Clear and hot in one area, a soft grey overcast in the next.
   sky: {
     horizon: { oneOf: ["#ecd2b0", "#d8d4d0", "#e4cca8"] },

@@ -38,6 +38,10 @@ const WAVE_DRIFT: Array<[number, number]> = [
   [4.1, -3.2],
 ];
 const WAVE_STRENGTH = [1.0, 0.5, 0.22];
+// The rain's ripples on top, world units per noise cell and strength at full rain: fine enough to
+// read as drops pitting the surface, not as more waves.
+const RAIN_RIPPLE_SIZES = [0.35, 0.14];
+const RAIN_RIPPLE_STRENGTH = [0.9, 0.6];
 
 const VERTEX_SHADER = `
 precision highp float;
@@ -71,6 +75,7 @@ uniform float ambientIntensity;
 uniform vec3 skyHorizon;
 uniform vec3 skyZenith;
 uniform float time;
+uniform float rain;
 
 uniform int fogMode;
 uniform vec3 fogColor;
@@ -120,6 +125,11 @@ void main(void) {
   grad += waveGradient(p, ${(1 / WAVE_CELL_SIZES[0]).toFixed(5)}, vec2(time * ${WAVE_DRIFT[0][0].toFixed(2)}, time * ${WAVE_DRIFT[0][1].toFixed(2)}), ${WAVE_STRENGTH[0].toFixed(3)});
   grad += waveGradient(p, ${(1 / WAVE_CELL_SIZES[1]).toFixed(5)}, vec2(time * ${WAVE_DRIFT[1][0].toFixed(2)}, time * ${WAVE_DRIFT[1][1].toFixed(2)}), ${WAVE_STRENGTH[1].toFixed(3)});
   grad += waveGradient(p, ${(1 / WAVE_CELL_SIZES[2]).toFixed(5)}, vec2(time * ${WAVE_DRIFT[2][0].toFixed(2)}, time * ${WAVE_DRIFT[2][1].toFixed(2)}), ${WAVE_STRENGTH[2].toFixed(3)});
+  // Rain on the water: two fine, quick layers of ripple crossing each other, so the surface churns in
+  // place rather than drifting - as many as the rain is heavy.
+  float rainTime = time * 7.0;
+  grad += waveGradient(p, ${(1 / RAIN_RIPPLE_SIZES[0]).toFixed(4)}, vec2(rainTime, -rainTime * 0.7), ${RAIN_RIPPLE_STRENGTH[0].toFixed(3)} * rain);
+  grad += waveGradient(p + 17.3, ${(1 / RAIN_RIPPLE_SIZES[1]).toFixed(4)}, vec2(-rainTime * 1.3, rainTime), ${RAIN_RIPPLE_STRENGTH[1].toFixed(3)} * rain);
   vec3 n = normalize(vec3(-grad.x, 1.0, -grad.y));
 
   vec3 viewDir = normalize(cameraPosition - vWorldPosition);
@@ -131,7 +141,8 @@ void main(void) {
   // specular term.
   vec3 halfVec = normalize(viewDir + lightDir);
   float ndh = max(dot(n, halfVec), 0.0);
-  float specular = pow(ndh, 200.0) * lightIntensity * 1.5;
+  // A pitted surface throws no clean glint.
+  float specular = pow(ndh, 200.0) * lightIntensity * 1.5 * (1.0 - 0.75 * rain);
 
   // Fresnel: water reflects almost nothing looking straight down into it and almost everything at
   // a grazing angle - the actual reason any open water reads as a mirror near the horizon and a
@@ -145,6 +156,8 @@ void main(void) {
   vec3 reflectDir = reflect(-viewDir, n);
   float skyT = smoothstep(0.0, 0.6, clamp(reflectDir.y, 0.0, 1.0));
   vec3 reflectedSky = mix(skyHorizon, skyZenith, skyT);
+  // In the rain the sky's picture breaks up: what the water gives back is a dull, even grey of it.
+  reflectedSky = mix(reflectedSky, (skyHorizon + skyZenith) * 0.45, rain * 0.7);
 
   // Only the reflection and glint are drawn here; the water's body colour is the terrain shader's
   // job (see WATER_ALPHA), so this pass's own opacity is just how much reflection there is.
@@ -179,7 +192,7 @@ void main(void) {
  * lightDirection/lightColor/lightIntensity/ambientColor/ambientIntensity from SunLighting exactly
  * like the terrain shader does, so the water dims and cools at night right along with the ground.
  */
-export function createOceanPlane(scene: Scene, sunLighting: SunLighting, sky: SkyDome, waterMaterials: ShaderMaterial[], options: OceanOptions): Mesh {
+export function createOceanPlane(scene: Scene, sunLighting: SunLighting, sky: SkyDome, waterMaterials: ShaderMaterial[], options: OceanOptions): OceanPlane {
   // Camera-following and subdivided rather than one world-sized quad: two triangles tens of
   // thousands of units across lose enough float precision in depth interpolation that the
   // waterline jitters against the shore whenever the camera moves. The waves are computed from
@@ -207,6 +220,7 @@ export function createOceanPlane(scene: Scene, sunLighting: SunLighting, sky: Sk
       "skyHorizon",
       "skyZenith",
       "time",
+      "rain",
       "fogMode",
       "fogColor",
       "fogStart",
@@ -220,6 +234,7 @@ export function createOceanPlane(scene: Scene, sunLighting: SunLighting, sky: Sk
   // WATER_ALPHA output above, not this number, but it still has to be under 1 to turn blending on
   // at all.
   material.alpha = 0.999;
+  material.setFloat("rain", 0);
   ocean.material = material;
 
   // A still surface - no tide - so the shore and anything floating on the water (materialLibrary.ts's
@@ -251,5 +266,11 @@ export function createOceanPlane(scene: Scene, sunLighting: SunLighting, sky: Sk
     material.setFloat("fogDensity", scene.fogDensity);
   });
 
-  return ocean;
+  return { mesh: ocean, setRain: (amount: number) => material.setFloat("rain", amount) };
+}
+
+export interface OceanPlane {
+  mesh: Mesh;
+  /** How hard it is raining on the water, 0-1 - see the fragment shader's rain ripples. */
+  setRain: (amount: number) => void;
 }

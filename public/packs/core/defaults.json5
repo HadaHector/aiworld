@@ -51,4 +51,19 @@
   // material's 1 m features become 14 cm ones), deepening its light and dark and its bumps by
   // `strength`. A material can set its own `detail` (either value), or `strength: 0` to go without.
   materialDetail: { scale: 7.3, strength: 0.55 },
+
+  // The weathers of a biome that names none of its own (see weathers/). Which comes next is drawn at
+  // random, each as likely as its odds over the sum of them all; a zone holds it for a spell, then
+  // draws again - its own, out of step with every other zone.
+  weather: [
+    { weather: "clear", odds: 2 },
+    { weather: "fair", odds: 4 },
+    { weather: "cloudy", odds: 3 },
+    { weather: "overcast", odds: 2 },
+    { weather: "mist", odds: 1 },
+    { weather: "gale", odds: 1 },
+    { weather: "drizzle", odds: 2 },
+    { weather: "rain", odds: 2 },
+    { weather: "storm", odds: 0.5 },
+  ],
 }

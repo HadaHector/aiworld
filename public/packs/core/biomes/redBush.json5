@@ -147,6 +147,16 @@
       },
     ],
   },
+  // Dry: mostly clear and bright, a windy day now and then, rain only rarely.
+  weather: [
+    { weather: "clear", odds: 5 },
+    { weather: "fair", odds: 3 },
+    { weather: "cloudy", odds: 1 },
+    { weather: "gale", odds: 1.5 },
+    { weather: "drizzle", odds: 0.3 },
+    { weather: "rain", odds: 0.3 },
+    { weather: "storm", odds: 0.2 },
+  ],
   // Hot and hard: a deep blue overhead, a dusty, rust-tinged horizon, little haze.
   sky: {
     horizon: { oneOf: ["#e6cfb0", "#e2c4a2", "#e8d6bc"] },

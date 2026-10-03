@@ -1,0 +1,12 @@
+// Storm: black cloud, a downpour driven sideways by the wind, the trees thrashing, the day gone dim.
+{
+  name: "Storm",
+  clouds: { cover: 1, darkness: 0.9 },
+  skyGrey: 0.9,
+  fog: 0.45,
+  sun: 0.1,
+  ambient: 0.8,
+  wind: 3,
+  precipitation: { rain: 1 },
+  lasts: [90, 200],
+}

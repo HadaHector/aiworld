@@ -74,6 +74,17 @@
       },
     ],
   },
+  // Snow rather than rain: often grey, snowing now and then, sometimes a blizzard.
+  weather: [
+    { weather: "clear", odds: 2 },
+    { weather: "fair", odds: 2 },
+    { weather: "cloudy", odds: 2 },
+    { weather: "overcast", odds: 2 },
+    { weather: "mist", odds: 1 },
+    { weather: "gale", odds: 1 },
+    { weather: "snow", odds: 3 },
+    { weather: "blizzard", odds: 1 },
+  ],
   // A low, grey, cold sky; the distance soon goes grey.
   sky: {
     horizon: { oneOf: ["#c4c8cc", "#bcc2c8", "#c8c8c4"] },

@@ -1,0 +1,6 @@
+// Fair: the zone as written - white clouds drifting over a blue sky, a steady breeze.
+{
+  name: "Fair",
+  clouds: { cover: 0.58 },
+  lasts: [180, 480],
+}

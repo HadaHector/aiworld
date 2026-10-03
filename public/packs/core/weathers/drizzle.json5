@@ -1,0 +1,13 @@
+// Light rain: a soft, thin rain out of a grey but not dark sky, the distance a little hazed, hardly
+// any wind.
+{
+  name: "Light Rain",
+  clouds: { cover: 0.92, darkness: 0.3 },
+  skyGrey: 0.6,
+  fog: 0.8,
+  sun: 0.45,
+  ambient: 1.1,
+  wind: 0.8,
+  precipitation: { rain: 0.25 },
+  lasts: [120, 360],
+}

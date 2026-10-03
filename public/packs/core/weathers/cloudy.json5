@@ -1,0 +1,11 @@
+// Cloudy: most of the sky clouded, a little greyer, the sun coming and going and weaker for it.
+{
+  name: "Cloudy",
+  clouds: { cover: 0.8, darkness: 0.15 },
+  skyGrey: 0.25,
+  fog: 0.9,
+  sun: 0.75,
+  ambient: 1.05,
+  wind: 1.3,
+  lasts: [150, 400],
+}

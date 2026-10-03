@@ -1,5 +1,5 @@
 export interface ZoneLabel {
-  update: (zoneName: string, biomeName: string) => void;
+  update: (zoneName: string, biomeName: string, weather?: string | null) => void;
 }
 
 /** A small, always-visible dev-tool label showing which zone the player currently stands in, by its
@@ -18,8 +18,8 @@ export function createZoneLabel(): ZoneLabel {
 
   let lastText: string | null = null;
 
-  const update = (zoneName: string, biomeName: string): void => {
-    const text = `Zone: ${zoneName} (${biomeName})`;
+  const update = (zoneName: string, biomeName: string, weather?: string | null): void => {
+    const text = `Zone: ${zoneName} (${biomeName})${weather ? ` · ${weather}` : ""}`;
     if (text === lastText) return;
     lastText = text;
     container.textContent = text;

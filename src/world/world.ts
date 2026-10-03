@@ -1,5 +1,5 @@
 import { treeTintRules } from "./foliage/treeTints";
-import type { Camera, Scene } from "@babylonjs/core";
+import { Color3, type Camera, type Scene } from "@babylonjs/core";
 import { createChunkManager, type ChunkLodLevel } from "./terrain/chunkManager";
 import { createChunkBuildPool } from "./terrain/chunkBuildPool";
 import { createTerrainSampler, type TerrainSampler } from "./terrain/terrainSampler";
@@ -12,6 +12,10 @@ import { createSettlementRenderer } from "./settlements/settlementRenderer";
 import type { SettlementLayout } from "./settlements/settlementLayout";
 import { createSunLighting, DEFAULT_DAY_NIGHT_CYCLE_MINUTES } from "./lighting/sunLighting";
 import { createSkyDome } from "./sky/skyDome";
+import { createWeatherSystem, type WeatherSystem } from "./weather/weatherSystem";
+import { NO_WEATHER, type WeatherBlend } from "./weather/weatherTypes";
+import { setWindStrength } from "./foliage/wind";
+import { createPrecipitation } from "./weather/precipitation";
 import type { ContinentPlan } from "./cells/continentLayout";
 import type { AreaBounds, AreaWeight } from "./cells/areaField";
 import type { SettlementSite } from "./settlements/settlementSites";
@@ -58,6 +62,11 @@ export interface World {
    *  lighting/sunLighting.ts's updateDayNight. Meant to be called every frame alongside
    *  updateAtmosphere, with the same areaWeights and the frame's own delta time. */
   updateDayNight: (deltaSeconds: number, areaWeights: AreaWeight[]) => void;
+  /** Advances every in-range zone's weather and hands the blend to the light and the wind - see
+   *  weather/weatherSystem.ts. Every frame, before updateDayNight and updateAtmosphere, which use it. */
+  updateWeather: (deltaSeconds: number, areaWeights: AreaWeight[], playerX?: number, playerZ?: number) => void;
+  /** The zones' weather: what one area's is now (for the HUD), and picking one by hand to look at. */
+  weather: WeatherSystem;
   /** Jumps the clock to a given hour (0-24, wrapping) - what the settings-panel time-of-day slider
    *  drives, so previewing the far side of a slow cycle doesn't mean actually waiting for it. */
   setTimeOfDay: (hours: number) => void;
@@ -205,7 +214,7 @@ export async function createWorld(
   chunkManager.loadInitial(0, 0);
 
   // Only needs to reach past the farthest fog - it follows the camera (see ocean.ts).
-  createOceanPlane(scene, sunLighting, sky, [materialLibrary.terrainMaterial, materialLibrary.floatingMaterial], { size: MAX_DRAW_DISTANCE * 2.5 });
+  const ocean = createOceanPlane(scene, sunLighting, sky, [materialLibrary.terrainMaterial, materialLibrary.floatingMaterial], { size: MAX_DRAW_DISTANCE * 2.5 });
 
   // Tracked so updateAtmosphere can turn a biome's fogStartFraction into an actual distance without
   // main.ts having to know or pass the draw distance itself every frame.
@@ -231,7 +240,25 @@ export async function createWorld(
   // Reads sunLighting's own clock rather than taking timeHours as a parameter, so main.ts doesn't
   // have to thread it through - callers just need to call updateDayNight first each frame (main.ts
   // does) so this reads the frame's current time rather than the previous frame's.
-  const updateAtmosphere = (areaWeights: AreaWeight[]) => sky.update(areaWeights, drawDistance, sunLighting.getTimeHours(), sunLighting.direction);
+  const weather = createWeatherSystem(WORLD_SEED, content.weathers);
+  let weatherNow: WeatherBlend = NO_WEATHER;
+  const precipitation = createPrecipitation(scene, heightAt);
+  // The light the rain and snow are seen by: the sky's fill and some of the sun's - so they are
+  // bright by day, grey under a dark sky and dim at night.
+  const fallLight = new Color3();
+  const updateWeather = (deltaSeconds: number, areaWeights: AreaWeight[], playerX = 0, playerZ = 0) => {
+    precipitation.setCentre(playerX, playerZ);
+    weatherNow = weather.update(deltaSeconds, areaWeights);
+    sunLighting.setWeather(weatherNow.sun, weatherNow.ambient);
+    setWindStrength(weatherNow.wind);
+    sunLighting.ambientColor.scaleToRef(sunLighting.ambientIntensity * 1.3, fallLight);
+    fallLight.r = Math.min(1.1, fallLight.r + sunLighting.color.r * sunLighting.intensity * 0.5);
+    fallLight.g = Math.min(1.1, fallLight.g + sunLighting.color.g * sunLighting.intensity * 0.5);
+    fallLight.b = Math.min(1.1, fallLight.b + sunLighting.color.b * sunLighting.intensity * 0.5);
+    precipitation.update(weatherNow.rain, weatherNow.snow, fallLight);
+    ocean.setRain(weatherNow.rain);
+  };
+  const updateAtmosphere = (areaWeights: AreaWeight[]) => sky.update(areaWeights, drawDistance, sunLighting.getTimeHours(), sunLighting.direction, weatherNow);
 
   return {
     heightAt,
@@ -253,6 +280,8 @@ export async function createWorld(
     setWireframe: materialLibrary.setWireframe,
     updateAtmosphere,
     updateDayNight: sunLighting.updateDayNight,
+    updateWeather,
+    weather,
     setTimeOfDay: sunLighting.setTimeHours,
     getTimeOfDay: sunLighting.getTimeHours,
   };

@@ -15,6 +15,7 @@ import { bakedAtlas, bakedBark, bakedGround, isGroundBaked } from "./bakeCache";
 import { createGrassField } from "../world/foliage/grassField";
 import { scatterGrass } from "../world/foliage/grassScatter";
 import { createTreeField } from "../world/foliage/treeField";
+import { NO_WEATHER } from "../world/weather/weatherTypes";
 
 /** The ground's shape under a preview. */
 export type GroundShape = "flat" | "hills" | "steep";
@@ -164,7 +165,7 @@ export async function createStage(engine: Engine, canvas: HTMLCanvasElement, opt
       scene.fogMode = Scene.FOGMODE_NONE;
     } else {
       const sky = createSkyDome(scene);
-      scene.onBeforeRenderObservable.add(() => sky.update(areaWeights, DRAW_DISTANCE, sunLighting.getTimeHours(), sunLighting.direction));
+      scene.onBeforeRenderObservable.add(() => sky.update(areaWeights, DRAW_DISTANCE, sunLighting.getTimeHours(), sunLighting.direction, NO_WEATHER));
     }
 
     // With no ground to draw, only the light-and-shadow feed the trees are lit through - no ground

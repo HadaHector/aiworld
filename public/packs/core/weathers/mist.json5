@@ -1,0 +1,12 @@
+// Mist: low cloud down on the land, the world closed in to a few hundred metres of soft grey, the
+// sun a pale glow through it, the air still.
+{
+  name: "Mist",
+  clouds: { cover: 0.95, darkness: 0.1 },
+  skyGrey: 0.85,
+  fog: 0.3,
+  sun: 0.45,
+  ambient: 1.15,
+  wind: 0.35,
+  lasts: [120, 300],
+}

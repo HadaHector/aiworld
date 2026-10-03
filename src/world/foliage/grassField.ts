@@ -6,7 +6,6 @@ import {
   RawTexture2DArray,
   ShaderMaterial,
   Texture,
-  Vector2,
   Vector3,
   VertexData,
   type Scene,
@@ -16,9 +15,8 @@ import { GRASS_KIND_STRIDE, type GrassKindDef } from "./grassConfig";
 import type { ColorTuple } from "../terrain/pipeline/pipelineTypes";
 import { GRASS_INSTANCE_STRIDE, type ChunkGrass } from "./grassScatter";
 import { GRASS_TEXTURE_SIZE, bakeGrassTextures } from "./grassTextures";
+import { WIND } from "./wind";
 
-/** Wind blows this way (x, z), normalised. Weather will want to drive it. */
-const WIND_DIRECTION = new Vector2(0.8, 0.6).normalize();
 
 /** How far up a blade (as a fraction of its height) it fades from the ground's colour to its own. */
 const GRASS_ROOT_BLEND = 0.3;
@@ -275,7 +273,7 @@ export function createGrassField(
   material.setArray3("petalColors", petalColors.flat());
   // A kind with no eye colour never draws the eye mask, so what it reads here is never seen.
   material.setArray3("kindEyes", grassKinds.flatMap((kind) => kind.blades.flowerHeads?.eye ?? [1, 1, 1]));
-  material.setVector2("windDirection", WIND_DIRECTION);
+  material.setVector2("windDirection", WIND);
   material.backFaceCulling = false;
   litShading.register(material);
 

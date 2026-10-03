@@ -5,6 +5,7 @@ import type { OldTrees, TreeKindDef } from "../foliage/foliageConfig";
 import type { Voice } from "../naming/nameGenerator";
 import type { SettlementStyle } from "../settlements/settlementConfig";
 import type { Defaults } from "./resolveContent";
+import type { WeatherDef } from "../weather/weatherTypes";
 
 /**
  * Everything a world is generated from that is content rather than code: its biomes, ground
@@ -48,4 +49,6 @@ export interface WorldContent {
   voices: Record<string, Voice>;
   boundaryHillStyles: BoundaryHillStyle[];
   settlementStyles: SettlementStyle[];
+  /** Every kind of weather (a pack's weathers/ folder) - what a biome's `weather` list names. */
+  weathers: WeatherDef[];
 }

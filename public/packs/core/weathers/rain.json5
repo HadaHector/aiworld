@@ -1,0 +1,12 @@
+// Rain: a grey sky, low and close, steady rain slanting down, the distance lost in it.
+{
+  name: "Rain",
+  clouds: { cover: 1, darkness: 0.6 },
+  skyGrey: 0.85,
+  fog: 0.55,
+  sun: 0.2,
+  ambient: 1.05,
+  wind: 1.5,
+  precipitation: { rain: 0.65 },
+  lasts: [120, 300],
+}

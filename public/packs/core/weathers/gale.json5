@@ -1,0 +1,12 @@
+// Gale: torn clouds racing over, the grass flattened and the trees thrashing, sun and shadow
+// chasing each other across the land.
+{
+  name: "Gale",
+  clouds: { cover: 0.7, darkness: 0.3 },
+  skyGrey: 0.3,
+  fog: 0.85,
+  sun: 0.8,
+  ambient: 1.05,
+  wind: 3,
+  lasts: [90, 240],
+}
