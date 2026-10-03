@@ -1,0 +1,18 @@
+// A granite boulder: a rounded block of moorland granite, weathered smooth on its top and split
+// square along its joints below - the clitter strewn round the foot of a tor and over the moor.
+{
+  model: "boulder",
+  variants: 6,
+  growsOld: true,
+  radius: 2.0,
+  squash: [0.5, 0.85],
+  stretch: [1.0, 1.5],
+  lumps: 0.18,
+  facets: [3, 6],
+  facetDepth: 0.35,
+  tilt: 12,
+  sink: [0.25, 0.5],
+  stone: { tile: 6, material: "granite" },
+  tint: [[0.84, 0.84, 0.84], [1.08, 1.07, 1.05]],
+  scale: [0.5, 1.4],
+}

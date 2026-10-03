@@ -1,0 +1,245 @@
+/**
+ * Heather moor - the highlands' open, bleak variant (see ZONES.md): rolling upland under a carpet of
+ * heather, brown-purple, flowering pink-purple, with tawny moor grass in patches and peat showing in
+ * the hollows; dark bog pools lying in the low ground. Granite tors crown some of the hilltops -
+ * stacked, rounded blocks - with clitter strewn about them and boulders over the moor. Hardly a
+ * tree: only, very rarely, a little copse of birch in a sheltered fold, a few bushes round it.
+ * A wide, grey-blue sky, wind and cloud.
+ *
+ * Each area is one of three kinds of moor (`oneOf`): low and rolling, a high plateau with broad flat
+ * tops, or bigger rounded hills. In each, the deepest hollows hold pools, filled flat to just under
+ * the water.
+ */
+{
+  name: "Heather Moor",
+  voice: "frozen",
+  spawnWeight: 1.5,
+  lakeChance: 0.05,
+  borderType: "mountain",
+  settlement: "timber",
+  // How many bog pools (how far down the hills sit), and how much of the hills carry a tor.
+  params: { pools: { range: [0, 1] }, tors: { range: [0, 1] } },
+  // Heights are set in the world, the bedrock taken off at the end: so the hollows that reach below
+  // the water are the area's own lowest ground, whatever the bedrock under it, and `pools` - how
+  // far down the hills sit - decides how many of them there are.
+  height: {
+    oneOf: [
+      // Low and rolling: long, gentle swells.
+      {
+        noises: [{ name: "hills", type: "fbm", octaves: 4, frequency: { range: [0.0016, 0.0024] }, amplitude: { range: [9, 14] }, persistence: 0.42, lacunarity: 2.0 }],
+        steps: [
+          { output: "hillsRaw", op: "sample", noise: "hills" },
+          { output: "shaped", op: "scale", input: "hillsRaw", factor: 1 },
+          { output: "ground", op: "offset", input: "shaped", amount: { param: "pools", to: [14, 10] } },
+          // The hollows that dip under the water fill to just below it: flat, shallow bog pools.
+          { output: "pool", op: "constant", value: -0.7 },
+          { output: "flooded", op: "smoothMax", a: "ground", b: "pool", k: 1.5 },
+          { output: "bedrock", op: "input", name: "bedrock" },
+          { output: "result", op: "subtract", a: "flooded", b: "bedrock" },
+        ],
+      },
+      // A high plateau: hills capped (`smoothMin`) into broad, flat moorland tops, valleys between.
+      {
+        noises: [{ name: "hills", type: "fbm", octaves: 4, frequency: { range: [0.0018, 0.0026] }, amplitude: { range: [24, 32] }, persistence: 0.42, lacunarity: 2.0 }],
+        steps: [
+          { output: "hillsRaw", op: "sample", noise: "hills" },
+          { output: "raised", op: "offset", input: "hillsRaw", amount: 14 },
+          { output: "cap", op: "constant", value: { range: [22, 30] } },
+          { output: "capped", op: "smoothMin", a: "raised", b: "cap", k: 8 },
+          { output: "shaped", op: "offset", input: "capped", amount: -14 },
+          { output: "ground", op: "offset", input: "shaped", amount: { param: "pools", to: [21, 15] } },
+          // The hollows that dip under the water fill to just below it: flat, shallow bog pools.
+          { output: "pool", op: "constant", value: -0.7 },
+          { output: "flooded", op: "smoothMax", a: "ground", b: "pool", k: 1.5 },
+          { output: "bedrock", op: "input", name: "bedrock" },
+          { output: "result", op: "subtract", a: "flooded", b: "bedrock" },
+        ],
+      },
+      // Bigger rounded hills, close together.
+      {
+        noises: [{ name: "hills", type: "fbm", octaves: 4, frequency: { range: [0.0022, 0.0028] }, amplitude: { range: [16, 23] }, persistence: 0.4, lacunarity: 2.0 }],
+        steps: [
+          { output: "hillsRaw", op: "sample", noise: "hills" },
+          { output: "shaped", op: "scale", input: "hillsRaw", factor: 1 },
+          { output: "ground", op: "offset", input: "shaped", amount: { param: "pools", to: [20, 14] } },
+          // The hollows that dip under the water fill to just below it: flat, shallow bog pools.
+          { output: "pool", op: "constant", value: -0.7 },
+          { output: "flooded", op: "smoothMax", a: "ground", b: "pool", k: 1.5 },
+          { output: "bedrock", op: "input", name: "bedrock" },
+          { output: "result", op: "subtract", a: "flooded", b: "bedrock" },
+        ],
+      },
+    ],
+  },
+  // Tors: granite stepped into stacked blocks (`terrace`) on the hilltops and ridges, a few knobs off
+  // them - gentler than the maquis's limestone, and only where an area's outcrop noise says so.
+  relief: {
+    noises: [
+      { name: "outcrops", type: "fbm", octaves: 2, frequency: 0.008, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+      { name: "knobs", type: "billow", octaves: 1, frequency: 0.05, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+    ],
+    steps: [
+      { output: "height", op: "input", name: "height" },
+      { output: "high", op: "mask", input: "height", at: 24, off: 14 },
+      { output: "outcropRaw", op: "sample", noise: "outcrops" },
+      { output: "outcrop", op: "mask", input: "outcropRaw", at: { param: "tors", to: [0.55, 0.3] }, off: { param: "tors", to: [0.4, 0.15] } },
+      { output: "where", op: "multiply", a: "high", b: "outcrop" },
+      { output: "stepped", op: "terrace", input: "height", step: { range: [1.5, 2.5] }, riser: 0.25 },
+      { output: "ledgeStep", op: "subtract", a: "stepped", b: "height" },
+      { output: "zero", op: "constant", value: 0 },
+      { output: "ledges", op: "max", a: "ledgeStep", b: "zero" },
+      { output: "knobRaw", op: "sample", noise: "knobs" },
+      { output: "knob", op: "scale", input: "knobRaw", factor: { range: [1.5, 3] } },
+      { output: "tor", op: "add", a: "ledges", b: "knob" },
+      { output: "result", op: "multiply", a: "tor", b: "where" },
+    ],
+  },
+  treeRules: { shore: [0.5, 2] },
+  // Very rarely, a little copse of birch - five trees or so - in a sheltered fold of the moor, a few
+  // bushes round it. A fine noise's highest peaks, and only where a slow one allows.
+  trees: {
+    noises: [
+      { name: "copse", shared: "moorCopse", type: "fbm", octaves: 2, frequency: 0.014, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+      { name: "region", shared: "moorCopseRegion", type: "fbm", octaves: 2, frequency: 0.0015, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+    ],
+    steps: [
+      { output: "copseRaw", op: "sample", noise: "copse" },
+      { output: "copse", op: "mask", input: "copseRaw", at: 0.72, off: 0.6 },
+      { output: "regionRaw", op: "sample", noise: "region" },
+      { output: "region", op: "mask", input: "regionRaw", at: 0.6, off: 0.38 },
+      { output: "here", op: "multiply", a: "copse", b: "region" },
+      { output: "slope", op: "input", name: "slope" },
+      { output: "gentle", op: "mask", input: "slope", at: 0.2, off: 0.4 },
+      { output: "sheltered", op: "multiply", a: "here", b: "gentle" },
+      { output: "birch", op: "scale", input: "sheltered", factor: 0.9 },
+    ],
+    outputs: { birch: "birch" },
+  },
+  bushes: {
+    noises: [
+      { name: "copse", shared: "moorCopse", type: "fbm", octaves: 2, frequency: 0.014, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+      { name: "region", shared: "moorCopseRegion", type: "fbm", octaves: 2, frequency: 0.0015, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+    ],
+    steps: [
+      // A little wider than the trees, so the bushes ring the copse.
+      { output: "copseRaw", op: "sample", noise: "copse" },
+      { output: "copse", op: "mask", input: "copseRaw", at: 0.7, off: 0.58 },
+      { output: "regionRaw", op: "sample", noise: "region" },
+      { output: "region", op: "mask", input: "regionRaw", at: 0.6, off: 0.38 },
+      { output: "here", op: "multiply", a: "copse", b: "region" },
+      { output: "hazel", op: "scale", input: "here", factor: 0.12 },
+    ],
+    outputs: { hazel: "hazel" },
+  },
+  // Boulders over the whole moor, more about the tors and at the foot of the slopes.
+  rocks: { generator: "rockDensity", kind: "graniteBoulder", frequency: 0.005, openAt: -0.2, fullAt: 0.6, peak: { range: [0.02, 0.05] }, footOfSlope: { range: [0.6, 1.0] }, riverShore: { range: [0.5, 1] }, lakeShore: { range: [0.5, 1] } },
+  treeTints: [
+    { kinds: ["graniteBoulder"], stone: { hue: { range: [-8, 8] }, saturation: { range: [0.7, 1.1] }, value: { range: [0.92, 1.08] }, spread: { saturation: 0.1, value: 0.1 } } },
+  ],
+  ground: {
+    base: "heather",
+    road: "track",
+    adjust: { hue: { range: [-6, 6] }, saturation: { range: [0.85, 1.1] }, value: { range: [0.94, 1.06] } },
+    tints: [
+      { family: "grassland", hue: { range: [-10, 10] }, saturation: { range: [0.55, 0.8] }, value: { range: [0.95, 1.05] } },
+      // The heather a shade of its own in each area - redder or bluer purple - its ground, the mixed
+      // ground and the plants on them alike. Not far: the flowers keep their own colour.
+      { family: "heath", hue: { range: [-25, 25] }, saturation: { range: [0.85, 1.2] }, value: { range: [0.92, 1.06] } },
+    ],
+    // Other moor flowers among the heather, an area's own: one kind, sometimes a second -
+    // cotton grass's white tufts, tormentil yellow, harebells, white yarrow.
+    grass: [
+      {
+        oneOf: [
+          { family: "heath", kind: "cottonGrass", density: 0.5, color: [0.5, 0.48, 0.32] },
+          { family: "heath", kind: "buttercups", density: 0.4, color: [0.4, 0.42, 0.26] },
+          { family: "heath", kind: "bluebells", density: 0.4, color: [0.38, 0.42, 0.28] },
+          { family: "heath", kind: "yarrow", density: 0.35, color: [0.46, 0.46, 0.3] },
+        ],
+      },
+      {
+        oneOf: [
+          null,
+          { family: "heath", kind: "cottonGrass", density: 0.3, color: [0.5, 0.48, 0.32] },
+          { family: "heath", kind: "buttercups", density: 0.25, color: [0.4, 0.42, 0.26] },
+          { family: "heath", kind: "bluebells", density: 0.25, color: [0.38, 0.42, 0.28] },
+        ],
+      },
+    ],
+    layers: [
+      // Granite where the ground is steep: the tors' faces and stacked blocks.
+      {
+        id: "moor-granite",
+        material: "granite",
+        weight: {
+          steps: [
+            { output: "slope", op: "input", name: "slope" },
+            { output: "steep", op: "mask", input: "slope", at: 0.78, off: 0.9 },
+            { output: "result", op: "scale", input: "steep", factor: 3 },
+          ],
+        },
+      },
+      // Tawny moor grass in patches: the heather gives way to it here and there.
+      {
+        id: "moor-grass",
+        material: "grassDry",
+        weight: {
+          noises: [{ name: "patch", shared: "moorGrass", type: "fbm", octaves: 3, frequency: 0.008, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
+          steps: [
+            { output: "patchRaw", op: "sample", noise: "patch" },
+            { output: "result", op: "mask", input: "patchRaw", at: 0.88, off: 0.12 },
+          ],
+        },
+      },
+      // Heather and grass growing through each other: half of what is heather, the moor grass's
+      // share left as it is.
+      {
+        id: "moor-heather-grass",
+        material: "heatherGrass",
+        weight: {
+          noises: [
+            { name: "mix", type: "fbm", octaves: 3, frequency: 0.01, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+            { name: "patch", shared: "moorGrass", type: "fbm", octaves: 3, frequency: 0.008, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+          ],
+          steps: [
+            { output: "mixRaw", op: "sample", noise: "mix" },
+            { output: "mix", op: "mask", input: "mixRaw", at: 0.3, off: -0.3 },
+            // Out of the moor grass's way, so its share stays as it was.
+            { output: "patchRaw", op: "sample", noise: "patch" },
+            { output: "grass", op: "mask", input: "patchRaw", at: 0.88, off: 0.12 },
+            { output: "notGrass", op: "invert", input: "grass" },
+            { output: "result", op: "multiply", a: "mix", b: "notGrass" },
+          ],
+        },
+      },
+      // Peat round the pools and in the wet hollows.
+      {
+        id: "moor-peat",
+        material: "peat",
+        weight: {
+          steps: [
+            { output: "height", op: "input", name: "height" },
+            { output: "wet", op: "mask", input: "height", at: 0.3, off: 1.6 },
+            { output: "curvature", op: "input", name: "reliefCurvature" },
+            { output: "hollow", op: "mask", input: "curvature", at: 1.5, off: 0.6 },
+            { output: "peat", op: "max", a: "wet", b: "hollow" },
+            { output: "result", op: "scale", input: "peat", factor: 1.5 },
+          ],
+        },
+      },
+    ],
+  },
+  // A wide, grey-blue sky, often heavy with cloud.
+  sky: {
+    horizon: { oneOf: ["#c8ccd0", "#bcc4cc", "#cfcac4"] },
+    zenith: { oneOf: ["#6a86a8", "#7c8ca0", "#5a7aa0"] },
+    cloud: "#eef0f2",
+    fogStart: { range: [0.25, 0.45] },
+    fogEnd: { range: [0.85, 0.95] },
+  },
+  light: {
+    sunPeak: 45,
+    moonPeak: 40,
+    ambientDay: "#b8c0cc",
+  },
+}

@@ -194,8 +194,8 @@ Existing: **broadleaf**, **pine**, **palm**.
 - **Salt flat: done** - `biomes/saltFlat.json5`. A basin's floor: low stony hills filled up to one
   dead-level floor (height graphs can now read the `bedrock`, so the floor is level in the world),
   new `saltCrust` on it - plates with raised rims - mud pans in it and a dried-mud rim round its
-  edge, desert gravel on the hills; a lone dead tree now and then; glaring light. Mirage haze left
-  for later.
+  edge, desert gravel on the hills; a lone dead tree now and then; glaring light. Mirage haze put
+  off: screen effects like it wait until the zones are done.
 - **Polar desert: done** - `biomes/polarDesert.json5`. Flat to gently rolling grey gravel; new
   `frostPolygons` (patterned ground: silt polygons ringed with frost-sorted stones) in fields on the
   flats, scree on the rises, a thin snow; new `shatteredBoulder` (all broken faces) everywhere, snow
@@ -223,6 +223,12 @@ Existing: **broadleaf**, **pine**, **palm**.
 
 ### 7. Broken land (hilly, rugged) - today: canyon
 
+- **Skipped for now.** All three need a branching valley network - valleys that join, drain
+  somewhere and grow downstream, not a noise maze - which is a real engine piece (a drainage tree
+  per area, carved by distance, tied to the rivers where one runs through). Too much to get right
+  now; worth coming back to. The old `canyon` was retired to `legacy/` and is not to be a base for
+  any of it.
+
 | Variant | Ground | Plants | Trees | Extras |
 |---|---|---|---|---|
 | Red canyon | striped rock, red and ochre | dry tufts on the floors | cactus ★ | tall walls |
@@ -230,6 +236,14 @@ Existing: **broadleaf**, **pine**, **palm**.
 | Green gorge | rock, mossyRock | meadow on the floors | broadleaf, willow ★ in the bottoms | river at the bottom |
 
 ### 8. Highlands (rolling to hilly, open) - today: hills
+
+- **Heather moor: done** - `biomes/heatherMoor.json5`. Each area one of three moors (a `oneOf` of
+  whole height graphs): low and rolling, a high plateau with flat tops, bigger rounded hills; bog
+  pools in the lowest hollows, filled flat just under the water (heights set in the world, the
+  `bedrock` taken off). New `heather` (with new `grass/heather`) and `heatherGrass` (half heather,
+  half grass) - a `heath` family, its hue rolled per area - tawny moor grass, new `peat` round and
+  under the pools; granite tors on the high ground (new `granite`, `graniteBoulder`); rolled moor
+  flowers; very rarely a little birch copse with hazel.
 
 | Variant | Ground | Plants | Trees | Extras |
 |---|---|---|---|---|

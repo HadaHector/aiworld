@@ -1,0 +1,75 @@
+// Granite: a moor's tor rock - coarse grey stone flecked with pink feldspar, white quartz and black
+// mica, weathered to rounded blocks along its joints, lichen-grey on its tops.
+//
+// Built as the limestone is (its height half broad swells, half cracks - an fbm folded about its
+// middle), with the crystals scattered over it as a fine worley's cells, each its own shade. The
+// colour follows the height (dark in the joints, grey, paler on the tops), the crystals fleck it.
+{
+  name: "Granite",
+  texture: {
+    bumpStrength: 3.5,
+    pipeline: {
+      noises: [
+        { name: "cracks", type: "fbm", octaves: 4, tileCycles: 4, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+        { name: "swell", type: "fbm", octaves: 3, tileCycles: 3, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+        { name: "crystals", type: "worley", tileCycles: 260, amplitude: 1, mode: "cell", sizeJitter: 0.4, warp: 0.2 },
+        { name: "lichen", type: "fbm", octaves: 3, tileCycles: 7, amplitude: 1, persistence: 0.55, lacunarity: 2.0 },
+      ],
+      steps: [
+        { output: "crackRaw", op: "sample", noise: "cracks" },
+        { output: "crackUnit", op: "mask", input: "crackRaw", at: 1, off: -1 },
+        { output: "crackDoubled", op: "scale", input: "crackUnit", factor: 2 },
+        { output: "crackCentred", op: "offset", input: "crackDoubled", amount: -1 },
+        { output: "crackFolded", op: "abs", input: "crackCentred" },
+        { output: "crack", op: "power", input: "crackFolded", exponent: 0.6 },
+        { output: "swellRaw", op: "sample", noise: "swell" },
+        { output: "swell", op: "mask", input: "swellRaw", at: 0.9, off: -0.9 },
+        { output: "crackPart", op: "scale", input: "crack", factor: 0.45 },
+        { output: "swellPart", op: "scale", input: "swell", factor: 0.45 },
+        { output: "body", op: "add", a: "crackPart", b: "swellPart" },
+        // The crystals: each cell a shade - most grey, some pink, a few black or white.
+        { output: "crystal", op: "sample", noise: "crystals" },
+        { output: "crystalBump", op: "scale", input: "crystal", factor: 0.04 },
+        { output: "height", op: "add", a: "body", b: "crystalBump" },
+
+        {
+          output: "byHeight",
+          op: "colorRamp",
+          input: "height",
+          stops: [
+            { at: 0.0, color: [0.2, 0.19, 0.18] },
+            { at: 0.2, color: [0.38, 0.37, 0.36] },
+            { at: 0.55, color: [0.5, 0.49, 0.47] },
+            { at: 1.0, color: [0.62, 0.61, 0.58] },
+          ],
+        },
+        {
+          output: "fleck",
+          op: "colorRamp",
+          input: "crystal",
+          stops: [
+            { at: 0.0, color: [0.82, 0.82, 0.82] },
+            { at: 0.15, color: [0.82, 0.82, 0.82] },
+            { at: 0.16, color: [1.0, 1.0, 1.0] },
+            { at: 0.6, color: [1.0, 1.0, 1.0] },
+            { at: 0.61, color: [1.1, 1.0, 0.96] },
+            { at: 0.85, color: [1.1, 1.0, 0.96] },
+            { at: 0.86, color: [1.1, 1.1, 1.08] },
+            { at: 1.0, color: [1.1, 1.1, 1.08] },
+          ],
+        },
+        { output: "flecked", op: "multiply", a: "byHeight", b: "fleck" },
+        // Grey-green lichen in patches on the higher faces.
+        { output: "lichenRaw", op: "sample", noise: "lichen" },
+        { output: "lichenPatch", op: "mask", input: "lichenRaw", at: 0.6, off: 0.2 },
+        { output: "high", op: "mask", input: "height", at: 0.6, off: 0.35 },
+        { output: "lichenAmount", op: "multiply", a: "lichenPatch", b: "high" },
+        { output: "lichenTone", op: "scale", input: "lichenAmount", factor: 0.5 },
+        { output: "lichenColor", op: "color", value: [0.6, 0.64, 0.52] },
+        { output: "diffuse", op: "mix", a: "flecked", b: "lichenColor", t: "lichenTone" },
+        { output: "roughness", op: "constant", value: 0.85 },
+      ],
+      outputs: { diffuse: "diffuse", roughness: "roughness", height: "height" },
+    },
+  },
+}

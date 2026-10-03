@@ -1,0 +1,30 @@
+// Heather: ling - a low, springy, woody clump of fine stems, dense with tiny scale leaves and, in
+// late summer, spikes of small pinkish-purple bells all along their tops. It covers a moor as a
+// knee- to thigh-high carpet, clump against clump.
+{
+  width: 0.95,
+  height: 0.85,
+  sway: 0.08,
+  fadeStart: 40,
+  fadeEnd: 220,
+  blades: {
+    count: 34,
+    minHeight: 0.5,
+    maxHeight: 0.95,
+    baseWidth: 2,
+    lean: 0.3,
+    fan: true,
+    seedHeads: false,
+    flowerHeads: {
+      shape: "raceme",
+      petals: 8,
+      count: 20,
+      radius: 7,
+      colors: [
+        [0.62, 0.36, 0.58],
+        [0.7, 0.42, 0.64],
+        [0.54, 0.3, 0.5],
+      ],
+    },
+  },
+}

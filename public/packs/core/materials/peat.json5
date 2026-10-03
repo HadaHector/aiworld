@@ -1,0 +1,45 @@
+// Peat: a moor's wet ground - dark, soft, waterlogged peat round the bog pools and under them, black-
+// brown with a reddish cast, glossy where it is wettest, flecked with the fibres of old moss and
+// heather. Never dry enough to crack.
+{
+  name: "Peat",
+  texture: {
+    bumpStrength: 1.2,
+    pipeline: {
+      noises: [
+        { name: "mottle", type: "fbm", octaves: 3, tileCycles: 9, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+        { name: "wet", type: "fbm", octaves: 2, tileCycles: 5, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+        { name: "fibres", type: "fbm", octaves: 2, tileCycles: 80, stretch: [1, 4], amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+      ],
+      steps: [
+        { output: "mottleRaw", op: "sample", noise: "mottle" },
+        { output: "mottle", op: "mask", input: "mottleRaw", at: 1.2, off: -1.2 },
+        { output: "fibreRaw", op: "sample", noise: "fibres" },
+        { output: "fibre", op: "mask", input: "fibreRaw", at: 1.1, off: -1.1 },
+        { output: "wetRaw", op: "sample", noise: "wet" },
+        { output: "wet", op: "mask", input: "wetRaw", at: 0.5, off: -0.2 },
+        // Soft swells, a fine fibrous grain - no cracks.
+        { output: "swellPart", op: "scale", input: "mottle", factor: 0.75 },
+        { output: "fibrePart", op: "scale", input: "fibre", factor: 0.25 },
+        { output: "height", op: "add", a: "swellPart", b: "fibrePart" },
+        {
+          output: "byHeight",
+          op: "colorRamp",
+          input: "height",
+          stops: [
+            { at: 0.0, color: [0.08, 0.06, 0.05] },
+            { at: 0.5, color: [0.16, 0.11, 0.08] },
+            { at: 1.0, color: [0.26, 0.19, 0.13] },
+          ],
+        },
+        { output: "wetColor", op: "color", value: [0.07, 0.05, 0.04] },
+        { output: "wetAmount", op: "scale", input: "wet", factor: 0.6 },
+        { output: "diffuse", op: "mix", a: "byHeight", b: "wetColor", t: "wetAmount" },
+        { output: "roughDry", op: "constant", value: 0.8 },
+        { output: "roughWet", op: "constant", value: 0.25 },
+        { output: "roughness", op: "mix", a: "roughDry", b: "roughWet", t: "wet" },
+      ],
+      outputs: { diffuse: "diffuse", roughness: "roughness", height: "height" },
+    },
+  },
+}
