@@ -1,0 +1,222 @@
+/**
+ * Windswept fell - the highlands' bare, bleak variant (see ZONES.md): high, open hill ground under
+ * a pale, wind-flattened grass, grey tussocks in patches; scree spilling down the steep sides below
+ * crags of bare rock; boulders everywhere. Hardly a tree - low, wind-bent junipers hugging the ground
+ * and a few stunted spruce in the sheltered folds. A thin, ragged snow lying in the hollows and on
+ * the north sides. A grey sky, low cloud.
+ *
+ * Each area is one of three kinds of fell (`oneOf`): big rounded fells, steep-sided with broad tops;
+ * sharp ridges with hollows between; or a high stony plateau, its edges falling away. How craggy it
+ * is and how much snow lies are its own rolls.
+ */
+{
+  name: "Windswept Fell",
+  voice: "frozen",
+  spawnWeight: 1.5,
+  lakeChance: 0.05,
+  borderType: "mountain",
+  settlement: "timber",
+  // How much of the steep ground stands up as crags, how much snow lies.
+  params: { crags: { range: [0, 1] }, snow: { range: [0, 1] } },
+  height: {
+    oneOf: [
+      // Big rounded fells: broad domed tops, the sides steepening down to the valleys.
+      {
+        noises: [{ name: "fells", type: "fbm", octaves: 4, frequency: { range: [0.0014, 0.0019] }, amplitude: { range: [40, 55] }, persistence: 0.33, lacunarity: 2.0 }],
+        steps: [
+          { output: "fellsRaw", op: "sample", noise: "fells" },
+          { output: "result", op: "offset", input: "fellsRaw", amount: { range: [40, 48] } },
+        ],
+      },
+      // Sharp ridges with hollows between: a ridged noise for the crests, a slow fbm under it.
+      {
+        noises: [
+          { name: "ridges", type: "ridged", octaves: 3, frequency: { range: [0.0012, 0.0016] }, amplitude: { range: [38, 52] }, persistence: 0.45, lacunarity: 2.1 },
+          { name: "swell", type: "fbm", octaves: 3, frequency: 0.0009, amplitude: { range: [10, 18] }, persistence: 0.45, lacunarity: 2.0 },
+        ],
+        steps: [
+          { output: "ridgesRaw", op: "sample", noise: "ridges" },
+          { output: "swellRaw", op: "sample", noise: "swell" },
+          { output: "ground", op: "add", a: "ridgesRaw", b: "swellRaw" },
+          { output: "result", op: "offset", input: "ground", amount: { range: [14, 22] } },
+        ],
+      },
+      // A high stony plateau: the ground capped (`smoothMin`) into a wide, rough top, its edges
+      // falling steeply away into the valleys.
+      {
+        noises: [
+          { name: "hills", type: "fbm", octaves: 4, frequency: { range: [0.0016, 0.0022] }, amplitude: { range: [40, 52] }, persistence: 0.4, lacunarity: 2.0 },
+          { name: "rough", type: "fbm", octaves: 3, frequency: 0.01, amplitude: { range: [2, 4] }, persistence: 0.5, lacunarity: 2.0 },
+        ],
+        steps: [
+          { output: "hillsRaw", op: "sample", noise: "hills" },
+          { output: "raised", op: "offset", input: "hillsRaw", amount: 48 },
+          { output: "cap", op: "constant", value: { range: [54, 64] } },
+          { output: "capped", op: "smoothMin", a: "raised", b: "cap", k: 5 },
+          { output: "roughRaw", op: "sample", noise: "rough" },
+          { output: "onTop", op: "mask", input: "capped", at: 50, off: 36 },
+          { output: "roughTop", op: "multiply", a: "roughRaw", b: "onTop" },
+          { output: "result", op: "add", a: "capped", b: "roughTop" },
+        ],
+      },
+    ],
+  },
+  // Crags: the steep ground stepped into ledges, knobs of rock standing up off them - as many as the
+  // area's `crags` roll says, none at all in some.
+  relief: {
+    noises: [
+      { name: "crags", type: "ridged", octaves: 3, frequency: 0.03, amplitude: 1, persistence: 0.5, lacunarity: 2.1 },
+      { name: "outcrops", type: "fbm", octaves: 2, frequency: 0.006, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+    ],
+    steps: [
+      { output: "height", op: "input", name: "height" },
+      { output: "steepness", op: "input", name: "steepness" },
+      { output: "steep", op: "mask", input: "steepness", at: 0.4, off: 0.18 },
+      { output: "outcropRaw", op: "sample", noise: "outcrops" },
+      { output: "outcrop", op: "mask", input: "outcropRaw", at: { param: "crags", to: [0.7, 0.1] }, off: { param: "crags", to: [0.45, -0.25] } },
+      { output: "where", op: "multiply", a: "steep", b: "outcrop" },
+      { output: "stepped", op: "terrace", input: "height", step: { range: [2.5, 4] }, riser: 0.3 },
+      { output: "ledgeStep", op: "subtract", a: "stepped", b: "height" },
+      { output: "zero", op: "constant", value: 0 },
+      { output: "ledges", op: "max", a: "ledgeStep", b: "zero" },
+      { output: "cragRaw", op: "sample", noise: "crags" },
+      { output: "crag", op: "scale", input: "cragRaw", factor: { range: [1.5, 3] } },
+      { output: "rock", op: "add", a: "ledges", b: "crag" },
+      // Faded out near the valley floors, so the crags never dig at their feet.
+      { output: "aboveFloor", op: "mask", input: "height", at: 14, off: 6 },
+      { output: "craggy", op: "multiply", a: "rock", b: "where" },
+      { output: "result", op: "multiply", a: "craggy", b: "aboveFloor" },
+    ],
+  },
+  treeRules: { shore: [0.5, 2] },
+  // Junipers low and scattered over the fell, in loose groups; a few stunted spruce down in the
+  // sheltered folds and the lower ground. Nothing on the steepest ground.
+  trees: {
+    noises: [
+      { name: "groups", type: "fbm", octaves: 2, frequency: 0.006, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+      { name: "shelter", type: "fbm", octaves: 2, frequency: 0.004, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+    ],
+    steps: [
+      { output: "slope", op: "input", name: "slope" },
+      { output: "footing", op: "mask", input: "slope", at: 0.3, off: 0.5 },
+      { output: "groupsRaw", op: "sample", noise: "groups" },
+      { output: "groups", op: "mask", input: "groupsRaw", at: 0.6, off: 0.0 },
+      { output: "groupsOrFew", op: "scale", input: "groups", factor: 0.35 },
+      { output: "few", op: "constant", value: 0.02 },
+      { output: "junipers", op: "add", a: "groupsOrFew", b: "few" },
+      { output: "juniper", op: "multiply", a: "junipers", b: "footing" },
+      // Spruce: down in the folds and on the lower ground, where the wind can't get at them.
+      { output: "curvature", op: "input", name: "reliefCurvature" },
+      { output: "fold", op: "mask", input: "curvature", at: 1.2, off: 0.2 },
+      { output: "height", op: "input", name: "height" },
+      { output: "low", op: "mask", input: "height", at: 18, off: 34 },
+      { output: "sheltered", op: "max", a: "fold", b: "low" },
+      { output: "shelterRaw", op: "sample", noise: "shelter" },
+      { output: "shelterPatch", op: "mask", input: "shelterRaw", at: 0.5, off: 0.0 },
+      { output: "spruceWhere", op: "multiply", a: "sheltered", b: "shelterPatch" },
+      { output: "spruceHere", op: "multiply", a: "spruceWhere", b: "footing" },
+      { output: "stuntedSpruce", op: "scale", input: "spruceHere", factor: 0.3 },
+    ],
+    outputs: { juniper: "juniper", stuntedSpruce: "stuntedSpruce" },
+  },
+  // Boulders everywhere, thick at the foot of the slopes under the crags.
+  rocks: { generator: "rockDensity", kind: "boulder", frequency: 0.005, openAt: -0.6, fullAt: 0.3, peak: { range: [0.05, 0.1] }, footOfSlope: { range: [0.7, 1.2] }, riverShore: { range: [1, 2] }, lakeShore: { range: [1, 2] } },
+  treeTints: [
+    // Grey stone, a little snow on its top in a snowier area.
+    { kinds: ["boulder"], snow: { param: "snow", to: [0.0, 0.35] }, stone: { hue: { range: [-10, 10] }, saturation: { range: [0.4, 0.8] }, value: { range: [0.9, 1.08] }, spread: { saturation: 0.12, value: 0.12 } } },
+    {
+      kinds: ["juniper", "stuntedSpruce"],
+      leaves: { hue: { range: [-10, 10] }, saturation: { range: [0.7, 1.0] }, value: { range: [0.9, 1.05] }, spread: { hue: 6, saturation: 0.1, value: 0.08 } },
+      bark: { hue: { range: [-10, 10] }, saturation: { range: [0.7, 1.1] }, value: { range: [0.9, 1.1] }, spread: { value: 0.1 } },
+    },
+  ],
+  ground: {
+    base: "fellGrass",
+    road: "trackStone",
+    adjust: { hue: { range: [-6, 6] }, saturation: { range: [0.85, 1.05] }, value: { range: [0.95, 1.05] } },
+    // The fell grass: from a grey-green to a tawny straw, never lush.
+    tints: [{ family: "grassland", hue: { range: [-18, 6] }, saturation: { range: [0.6, 0.9] }, value: { range: [0.95, 1.05] } }],
+    layers: [
+      // Bare rock on the steepest ground: the crags' faces.
+      {
+        id: "fell-crag",
+        material: "rock",
+        weight: {
+          steps: [
+            { output: "slope", op: "input", name: "slope" },
+            { output: "sheer", op: "mask", input: "slope", at: 0.62, off: 0.74 },
+            { output: "result", op: "scale", input: "sheer", factor: 4 },
+          ],
+        },
+      },
+      // Scree over the steep sides and spilling down below them, frayed by a noise.
+      {
+        id: "fell-scree",
+        material: "scree",
+        weight: {
+          noises: [{ name: "spill", type: "fbm", octaves: 3, frequency: 0.012, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
+          steps: [
+            { output: "slope", op: "input", name: "slope" },
+            { output: "spillRaw", op: "sample", noise: "spill" },
+            { output: "spillShift", op: "scale", input: "spillRaw", factor: -0.08 },
+            { output: "spilled", op: "add", a: "slope", b: "spillShift" },
+            { output: "steep", op: "mask", input: "spilled", at: 0.74, off: 0.9 },
+            { output: "result", op: "scale", input: "steep", factor: 3 },
+          ],
+        },
+      },
+      // Grey tussocks in wide patches through the pale grass.
+      {
+        id: "fell-tussock",
+        material: "steppeTussock",
+        weight: {
+          noises: [{ name: "patch", type: "fbm", octaves: 3, frequency: 0.007, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
+          steps: [
+            { output: "patchRaw", op: "sample", noise: "patch" },
+            { output: "result", op: "mask", input: "patchRaw", at: 0.6, off: -0.15 },
+          ],
+        },
+      },
+      // A thin, ragged snow in the hollows and on the north sides.
+      { generator: "snowCover", id: "fell-snow", amount: { param: "snow", to: [0.0, 0.25] }, frequency: 0.009, drifts: 0.6, north: 0.9 },
+      // Stones along the streams and round the tarns, outweighing the shore sand.
+      {
+        id: "fell-stream-stones",
+        material: "pebbles",
+        weight: {
+          noises: [{ name: "reach", type: "fbm", octaves: 2, frequency: 0.02, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
+          steps: [
+            { output: "gap", op: "input", name: "riverGap" },
+            { output: "reachRaw", op: "sample", noise: "reach" },
+            { output: "reachShift", op: "scale", input: "reachRaw", factor: 9 },
+            { output: "reach", op: "add", a: "gap", b: "reachShift" },
+            { output: "band", op: "mask", input: "reach", at: 40, off: 62 },
+            { output: "lakeFactor", op: "input", name: "lakeFactor" },
+            { output: "lake", op: "mask", input: "lakeFactor", at: 0.25, off: 0.02 },
+            { output: "height", op: "input", name: "height" },
+            { output: "low", op: "mask", input: "height", at: 0.6, off: 2.6 },
+            { output: "landmass", op: "input", name: "landmass" },
+            { output: "inland", op: "mask", input: "landmass", at: 0.95, off: 0.7 },
+            { output: "pond", op: "multiply", a: "low", b: "inland" },
+            { output: "lakeOrPond", op: "max", a: "lake", b: "pond" },
+            { output: "water", op: "max", a: "band", b: "lakeOrPond" },
+            { output: "result", op: "scale", input: "water", factor: 1.5 },
+          ],
+        },
+      },
+    ],
+  },
+  // A grey sky, low cloud, a cold wind.
+  sky: {
+    horizon: { oneOf: ["#c4c8cc", "#b8c0c6", "#ccc8c2"] },
+    zenith: { oneOf: ["#7088a0", "#687c94", "#7a8a9c"] },
+    cloud: "#e8eaec",
+    fogStart: { range: [0.2, 0.4] },
+    fogEnd: { range: [0.8, 0.92] },
+  },
+  light: {
+    sunPeak: 42,
+    moonPeak: 38,
+    ambientDay: "#b4bcc8",
+  },
+}

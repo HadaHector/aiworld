@@ -1,0 +1,13 @@
+// Fell grass: the faded grass's ground, but wind-bitten - short tufts and dry, bleached stalks,
+// a little feather grass tossing in the wind, hardly a flower. The windswept fell's base.
+{
+  name: "Fell Grass",
+  family: "grassland",
+  detail: { strength: 0.3 },
+  textureFrom: "grassPale",
+  grass: [
+    { kind: "tuft", density: 2.4, color: [0.62, 0.66, 0.5] },
+    { kind: "dry", density: 0.9, color: [0.66, 0.64, 0.5] },
+    { kind: "featherGrass", density: 0.4, color: [0.7, 0.74, 0.68] },
+  ],
+}

@@ -250,6 +250,12 @@ Existing: **broadleaf**, **pine**, **palm**.
   wide drifts on the open, sunny ground, faded grass on the wind-scoured crests, stones in the
   tighter folds and along the streams; spruce in stands below the area's rolled tree line; old
   snow in the high hollows and on the north sides above its rolled snow line; one rolled extra flower.
+- **Windswept fell: done** - `biomes/windsweptFell.json5`. Each area one of three (`oneOf`): big
+  rounded fells, sharp ridges (a ridged noise) with hollows between, or a capped stony plateau;
+  crags (relief ledges and knobs, built up only) on the steep ground, as many as its `crags` roll.
+  New `fellGrass` (wind-bitten, hardly a flower), grey tussock patches, scree on the steep sides,
+  bare rock on the sheer faces, a thin rolled snow; low junipers in loose groups, a few stunted
+  spruce in the sheltered folds; boulders everywhere; a grey sky. Family 8 done (`hills` remains).
 
 | Variant | Ground | Plants | Trees | Extras |
 |---|---|---|---|---|
