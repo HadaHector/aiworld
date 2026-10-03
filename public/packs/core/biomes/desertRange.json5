@@ -1,0 +1,219 @@
+/**
+ * Desert range - the mountains' dry variant (see ZONES.md): bare red-brown mountains rising straight
+ * out of the desert, their feet spread in long, pale aprons of gravel washed down from them (the
+ * bajadas), scree banked against the faces. Junipers dotted over the lower slopes and the aprons,
+ * a few low bushes; nothing higher up but rock. No snow. A hot, hazy sky.
+ *
+ * Each area is one of three kinds of range (`oneOf`): mountains rising over a wide basin, its apron
+ * a long concave curve; sharp, craggy ridges; or an old, worn range, rounded and low.
+ */
+{
+  name: "Desert Range",
+  voice: "arid",
+  spawnWeight: 1,
+  lakeChance: 0.01,
+  borderType: "mountain",
+  settlement: "timber",
+  // How far up the junipers climb.
+  params: { scrub: { range: [0, 1] } },
+  height: {
+    oneOf: [
+      // Mountains over a wide basin: share squared rather than eased, so the ground comes off the
+      // basin floor in a long concave apron and steepens into the range.
+      {
+        noises: [
+          { name: "range", type: "fbm", octaves: 6, frequency: { range: [0.0012, 0.0016] }, amplitude: { range: [60, 78] }, persistence: 0.44, lacunarity: 2.0 },
+          { name: "basin", type: "fbm", octaves: 3, frequency: 0.0005, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+          { name: "floor", type: "fbm", octaves: 3, frequency: 0.002, amplitude: 3, persistence: 0.45, lacunarity: 2.0 },
+        ],
+        steps: [
+          { output: "rangeRaw", op: "sample", noise: "range" },
+          { output: "zero", op: "constant", value: 0 },
+          { output: "above", op: "max", a: "rangeRaw", b: "zero" },
+          { output: "lift", op: "scale", input: "above", factor: 0.8 },
+          { output: "stretched", op: "add", a: "rangeRaw", b: "lift" },
+          { output: "peak", op: "offset", input: "stretched", amount: 70 },
+          { output: "floorRaw", op: "sample", noise: "floor" },
+          { output: "floor", op: "offset", input: "floorRaw", amount: { range: [10, 16] } },
+          { output: "basinRaw", op: "sample", noise: "basin" },
+          { output: "rangeness", op: "remap", input: "basinRaw", inMin: { range: [-0.5, -0.3] }, inMax: { range: [0.1, 0.3] }, outMin: 0, outMax: 1 },
+          { output: "rangeShare", op: "clamp", input: "rangeness", min: 0, max: 1 },
+          { output: "apron", op: "multiply", a: "rangeShare", b: "rangeShare" },
+          { output: "rise", op: "subtract", a: "peak", b: "floor" },
+          { output: "shareOfRise", op: "multiply", a: "rise", b: "apron" },
+          { output: "result", op: "add", a: "floor", b: "shareOfRise" },
+        ],
+      },
+      // Sharp, craggy ridges: a ridged noise's crests, let down onto the desert floor with a wide,
+      // rounded foot (`smoothMax`) - the apron. Three octaves, raised to a power: the big ridges
+      // stand, the small ones between them sink towards the apron, so the valleys stay walkable.
+      {
+        noises: [
+          { name: "ridges", type: "ridged", octaves: 3, frequency: { range: [0.0008, 0.0011] }, amplitude: 1, persistence: 0.45, lacunarity: 2.1, crest: 0.06 },
+          { name: "swell", type: "fbm", octaves: 3, frequency: 0.0006, amplitude: { range: [10, 18] }, persistence: 0.45, lacunarity: 2.0 },
+          { name: "rough", type: "fbm", octaves: 2, frequency: { range: [0.02, 0.04] }, amplitude: { range: [3, 5] }, persistence: 0.45, lacunarity: 2.0 },
+        ],
+        steps: [
+          { output: "ridgesRaw", op: "sample", noise: "ridges" },
+          { output: "sharpened", op: "power", input: "ridgesRaw", exponent: 1.5 },
+          { output: "ridges", op: "scale", input: "sharpened", factor: { range: [75, 95] } },
+          { output: "swellRaw", op: "sample", noise: "swell" },
+          { output: "ground", op: "add", a: "ridges", b: "swellRaw" },
+          { output: "lowered", op: "offset", input: "ground", amount: { range: [-24, -14] } },
+          // Broken ground on the slopes - knobs and hollows 25-50 m across, a few metres high -
+          // fading out towards the floor so the valleys stay smooth.
+          { output: "roughRaw", op: "sample", noise: "rough" },
+          { output: "upSlope", op: "mask", input: "lowered", at: 45, off: 12 },
+          { output: "roughness", op: "multiply", a: "roughRaw", b: "upSlope" },
+          { output: "rough", op: "add", a: "lowered", b: "roughness" },
+          { output: "floor", op: "constant", value: { range: [10, 16] } },
+          { output: "result", op: "smoothMax", a: "rough", b: "floor", k: 20 },
+        ],
+      },
+      // An old, worn range: rounded and low, weathered down, its foot buried in its own gravel.
+      {
+        noises: [{ name: "range", type: "fbm", octaves: 5, frequency: { range: [0.0013, 0.0017] }, amplitude: { range: [62, 78] }, persistence: 0.34, lacunarity: 2.0 }],
+        steps: [
+          { output: "rangeRaw", op: "sample", noise: "range" },
+          { output: "raised", op: "offset", input: "rangeRaw", amount: 38 },
+          { output: "floor", op: "constant", value: { range: [10, 16] } },
+          { output: "result", op: "smoothMax", a: "raised", b: "floor", k: 24 },
+        ],
+      },
+    ],
+  },
+  treeRules: { shore: [0.5, 2] },
+  // Junipers dotted over the aprons and the lower slopes, in loose groups, thinning out up the
+  // range; none on the steep rock.
+  trees: {
+    noises: [{ name: "groups", type: "fbm", octaves: 2, frequency: 0.006, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
+    steps: [
+      { output: "groupsRaw", op: "sample", noise: "groups" },
+      { output: "groups", op: "mask", input: "groupsRaw", at: 0.5, off: -0.2 },
+      { output: "grouped", op: "scale", input: "groups", factor: 0.5 },
+      { output: "few", op: "constant", value: 0.04 },
+      { output: "junipers", op: "add", a: "grouped", b: "few" },
+      { output: "height", op: "input", name: "height" },
+      { output: "low", op: "mask", input: "height", at: { param: "scrub", to: [26, 55] }, off: { param: "scrub", to: [45, 80] } },
+      { output: "slope", op: "input", name: "slope" },
+      { output: "footing", op: "mask", input: "slope", at: 0.3, off: 0.5 },
+      { output: "where", op: "multiply", a: "low", b: "footing" },
+      { output: "juniper", op: "multiply", a: "junipers", b: "where" },
+    ],
+    outputs: { juniper: "juniper" },
+  },
+  // Low desert bushes scattered over the aprons, a good few paces apart.
+  bushes: {
+    noises: [{ name: "patch", type: "fbm", octaves: 2, frequency: 0.02, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
+    steps: [
+      { output: "slope", op: "input", name: "slope" },
+      { output: "gentle", op: "mask", input: "slope", at: 0.15, off: 0.35 },
+      { output: "patchRaw", op: "sample", noise: "patch" },
+      { output: "patch", op: "mask", input: "patchRaw", at: 0.3, off: -0.5 },
+      { output: "here", op: "multiply", a: "gentle", b: "patch" },
+      { output: "desertBush", op: "scale", input: "here", factor: 0.25 },
+    ],
+    outputs: { desertBush: "desertBush" },
+  },
+  // Red boulders fallen from the faces, heaped at the foot of the slopes.
+  rocks: { generator: "rockDensity", kind: "redBoulder", frequency: 0.005, openAt: -0.4, fullAt: 0.4, peak: { range: [0.02, 0.05] }, footOfSlope: { range: [1.0, 1.8] }, riverShore: { range: [0.5, 1] }, lakeShore: { range: [0.5, 1] } },
+  treeTints: [
+    { kinds: ["redBoulder"], stone: { hue: { range: [-8, 6] }, saturation: { range: [0.7, 1.0] }, value: { range: [0.85, 1.0] }, spread: { hue: 4, saturation: 0.1, value: 0.1 } } },
+    {
+      kinds: ["juniper"],
+      leaves: { hue: { range: [-10, 10] }, saturation: { range: [0.7, 1.0] }, value: { range: [0.9, 1.05] }, spread: { hue: 6, saturation: 0.1, value: 0.08 } },
+      bark: { hue: { range: [-10, 10] }, saturation: { range: [0.8, 1.1] }, value: { range: [0.9, 1.1] }, spread: { value: 0.1 } },
+    },
+  ],
+  ground: {
+    base: "desertGravel",
+    road: "trackStone",
+    adjust: { hue: { range: [-6, 6] }, saturation: { range: [0.85, 1.15] }, value: { range: [0.94, 1.06] } },
+    layers: [
+      // Red-brown rock on the steep ground: the range's faces, outweighing the default grey.
+      {
+        id: "range-rock",
+        material: "desertRock",
+        weight: {
+          steps: [
+            { output: "slope", op: "input", name: "slope" },
+            { output: "steep", op: "mask", input: "slope", at: 0.72, off: 0.88 },
+            { output: "result", op: "scale", input: "steep", factor: 4 },
+          ],
+        },
+      },
+      // Scree banked against the faces, on the middling slopes between the rock and the apron.
+      {
+        id: "range-scree",
+        material: "desertScree",
+        weight: {
+          noises: [
+            { name: "spill", type: "fbm", octaves: 3, frequency: 0.012, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+            { name: "bank", type: "fbm", octaves: 3, frequency: 0.006, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+          ],
+          steps: [
+            { output: "slope", op: "input", name: "slope" },
+            { output: "spillRaw", op: "sample", noise: "spill" },
+            { output: "spillShift", op: "scale", input: "spillRaw", factor: -0.05 },
+            { output: "spilled", op: "add", a: "slope", b: "spillShift" },
+            { output: "sloping", op: "mask", input: "spilled", at: 0.84, off: 0.97 },
+            // In banks and fans, not over every slope: the gravel and the rock show between.
+            { output: "bankRaw", op: "sample", noise: "bank" },
+            { output: "bank", op: "mask", input: "bankRaw", at: 0.35, off: -0.35 },
+            { output: "banked", op: "multiply", a: "sloping", b: "bank" },
+            { output: "result", op: "scale", input: "banked", factor: 2 },
+          ],
+        },
+      },
+      // Red gravel washed down the aprons in wide tongues.
+      {
+        id: "range-red-gravel",
+        material: "redGravel",
+        weight: {
+          noises: [{ name: "wash", type: "fbm", octaves: 3, frequency: 0.005, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
+          steps: [
+            { output: "washRaw", op: "sample", noise: "wash" },
+            { output: "result", op: "mask", input: "washRaw", at: 0.55, off: -0.15 },
+          ],
+        },
+      },
+      // Stones along the washes and round the rare waterholes, outweighing the shore sand.
+      {
+        id: "range-stream-stones",
+        material: "pebbles",
+        weight: {
+          noises: [{ name: "reach", type: "fbm", octaves: 2, frequency: 0.02, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
+          steps: [
+            { output: "gap", op: "input", name: "riverGap" },
+            { output: "reachRaw", op: "sample", noise: "reach" },
+            { output: "reachShift", op: "scale", input: "reachRaw", factor: 9 },
+            { output: "reach", op: "add", a: "gap", b: "reachShift" },
+            { output: "band", op: "mask", input: "reach", at: 40, off: 62 },
+            { output: "lakeFactor", op: "input", name: "lakeFactor" },
+            { output: "lake", op: "mask", input: "lakeFactor", at: 0.25, off: 0.02 },
+            { output: "height", op: "input", name: "height" },
+            { output: "low", op: "mask", input: "height", at: 0.6, off: 2.6 },
+            { output: "landmass", op: "input", name: "landmass" },
+            { output: "inland", op: "mask", input: "landmass", at: 0.95, off: 0.7 },
+            { output: "pond", op: "multiply", a: "low", b: "inland" },
+            { output: "lakeOrPond", op: "max", a: "lake", b: "pond" },
+            { output: "water", op: "max", a: "band", b: "lakeOrPond" },
+            { output: "result", op: "scale", input: "water", factor: 1.5 },
+          ],
+        },
+      },
+    ],
+  },
+  // A hot, hazy sky, bleached pale at the horizon.
+  sky: {
+    horizon: { oneOf: ["#e6d8c4", "#e0d4c2", "#ead9c0"] },
+    zenith: { oneOf: ["#5a86bc", "#6490c0", "#4e7cb4"] },
+    cloud: "#fbf8f2",
+    fogStart: { range: [0.35, 0.55] },
+    fogEnd: { range: [0.9, 1.0] },
+  },
+  light: {
+    sunPeak: 70,
+    moonPeak: 50,
+  },
+}

@@ -277,6 +277,12 @@ Existing: **broadleaf**, **pine**, **palm**.
   over it in places. Snow everywhere else, holding on the slopes until they are too steep for it;
   rock on the steepest faces and scoured crests, scree at their feet; frost-split boulders under
   snow. No plants.
+- **Desert range: done** - `biomes/desertRange.json5`. Mountains over a basin (share squared: a
+  long concave apron), craggy ridges (a 3-octave ridged noise raised to a power, so the valleys
+  stay walkable, broken ground on the slopes only), or an old worn range (`oneOf`). Pale desert
+  gravel on the aprons, red gravel washed down them, new `desertScree` in banks and `desertRock`
+  (red-brown tinted rock) on the faces; junipers low down to a rolled height, desert bushes, red
+  boulders; no snow. Family 9 done (`mountains` remains).
 
 | Variant | Ground | Plants | Trees | Extras |
 |---|---|---|---|---|

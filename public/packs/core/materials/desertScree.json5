@@ -1,0 +1,6 @@
+// Desert scree: the scree's broken blocks, fallen off a red-brown desert range - warmer and redder.
+{
+  name: "Desert Scree",
+  textureFrom: "scree",
+  adjust: { hue: 0, saturation: 1, value: 1.05, tint: [1.18, 0.96, 0.84] },
+}
