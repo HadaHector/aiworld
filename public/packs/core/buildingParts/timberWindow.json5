@@ -1,0 +1,18 @@
+// A window in a timber frame: a pane split four by a cross of glazing bars, and a sill under it.
+{
+  name: "Timber Window",
+  type: "framed",
+  framed: {
+    span: 1,
+    // The pane, and how high above the floor it starts.
+    width: 1.0,
+    height: 1.6,
+    sill: 1.1,
+    frame: 0.18,
+    // Glazing bars: how many up the pane, and how many across.
+    bars: [1, 1],
+    // The sill reaches this far past the frame either way, and stands that much further out.
+    sillReach: 0.05,
+    parts: { frame: "timber", panel: "glass" },
+  },
+}

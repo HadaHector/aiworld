@@ -36,7 +36,23 @@ import type { TextureDef } from "../materials/textureGen";
 import { adjustMatrix, chainMatrix, NO_ADJUST, type ColorAdjust } from "../materials/colorAdjust";
 import type { WeatherChance, WeatherDef } from "../weather/weatherTypes";
 import { FEATURE_TYPES, NO_FEATURE, type FeatureChance, type FeatureKindDef } from "../features/featureTypes";
-import { BUILDING_GENERATORS, HOUSE_PARTS, ROOF_TYPES, type BuildingDef, type BuildingMaterialDef, type HouseSpec, type RoofType, type Rgb } from "../buildings/buildingTypes";
+import {
+  BUILDING_GENERATORS,
+  BUILDING_PART_GENERATORS,
+  HOUSE_PARTS,
+  ROOF_TYPES,
+  WALL_SIDES,
+  type BuildingDef,
+  type BuildingMaterialDef,
+  type BuildingPartDef,
+  type HousePart,
+  type HouseSpec,
+  type PartChoice,
+  type RoofType,
+  type WallExtra,
+  type WallSide,
+  type Rgb,
+} from "../buildings/buildingTypes";
 
 /** One pack as found on disk: its folder name and every .json5 file in it, by path inside it. */
 export interface PackSource {
@@ -46,7 +62,7 @@ export interface PackSource {
 
 /** The folders a pack's content lives in, one kind of definition each. A definition's id is its
  *  file name, and a pack with a higher priority replaces a lower one's definition of the same id. */
-const CONTENT_FOLDERS = ["biomes", "materials", "layers", "grass", "trees", "bushes", "rocks", "voices", "borderHills", "settlements", "weathers", "features", "buildings", "buildingMaterials"] as const;
+const CONTENT_FOLDERS = ["biomes", "materials", "layers", "grass", "trees", "bushes", "rocks", "voices", "borderHills", "settlements", "weathers", "features", "buildings", "buildingParts", "buildingMaterials"] as const;
 type ContentFolder = (typeof CONTENT_FOLDERS)[number];
 
 /** How many grass kinds the packs may define between them: each is a layer of the blade atlas and
@@ -194,7 +210,9 @@ export function resolveContent(packs: PackSource[]): WorldContent {
   const boundaryHillStyles = readAll("borderHills", (e, o, r) => readBoundaryHillStyle(e.id, o, r));
   const buildingMaterials = readAll("buildingMaterials", (e, o, r) => readBuildingMaterial(e.id, o, r));
   const buildingMaterialIds = new Set(buildingMaterials.map((m) => m.id));
-  const buildingReads = readAll("buildings", (e, o, r) => ({ file: e.file, def: readBuilding(e.id, o, r) }));
+  const buildingParts = readAll("buildingParts", (e, o, r) => readBuildingPart(e.id, o, r));
+  const partById = new Map(buildingParts.map((part) => [part.id, part]));
+  const buildingReads = readAll("buildings", (e, o, r) => ({ file: e.file, def: readBuilding(e.id, o, r, partById) }));
   const buildings = buildingReads.map((read) => read.def);
   for (const { file, def } of buildingReads) {
     for (const part of HOUSE_PARTS) {
@@ -402,6 +420,7 @@ export function resolveContent(packs: PackSource[]): WorldContent {
     weathers,
     featureKinds,
     buildings,
+    buildingParts,
     buildingMaterials,
   };
 }
@@ -517,7 +536,7 @@ function readBuildingMaterial(id: string, obj: RawObject, reader: Reader): Build
 
 /** A buildings/ file - see BuildingDef. Its generator is named by `type` (`generator` already means
  *  a content generator - see generators.ts), and its own block is under the generator's name. */
-function readBuilding(id: string, obj: RawObject, reader: Reader): BuildingDef {
+function readBuilding(id: string, obj: RawObject, reader: Reader, partById: Map<string, BuildingPartDef>): BuildingDef {
   const generator = reader.oneOf(obj, "type", "", BUILDING_GENERATORS);
   reader.onlyKeys(obj, "", ["name", "type", generator]);
   const block = reader.object(obj[generator], generator);
@@ -543,11 +562,41 @@ function readBuilding(id: string, obj: RawObject, reader: Reader): BuildingDef {
   let house: BuildingDef["house"] = null;
   if (generator === "house") {
     const path = "house";
-    reader.onlyKeys(block, path, ["tile", "width", "depth", "backWing", "sideWing", "wingLength", "wingWidth", "wallHeight", "plinth", "plinthOutset", "post", "roofs", "pitch", "overhang", "roofThickness", "door", "window", "parts"]);
-    const door = reader.object(block.door, "house.door");
-    reader.onlyKeys(door, "house.door", ["width", "height", "frame"]);
-    const win = reader.object(block.window, "house.window");
-    reader.onlyKeys(win, "house.window", ["width", "height", "sill", "frame", "sillReach", "chance"]);
+    reader.onlyKeys(block, path, ["tile", "width", "depth", "backWing", "sideWing", "wingLength", "wingWidth", "wallHeight", "plinth", "plinthOutset", "post", "roofs", "pitch", "overhang", "roofThickness", "doors", "wallExtras", "parts"]);
+    // A list of building parts, each with a weight.
+    const partNamed = (entry: RawObject, at: string): BuildingPartDef | undefined => {
+      const partId = reader.string(entry, "part", at);
+      const part = partById.get(partId);
+      if (!part) reader.fail(joinPath(at, "part"), `no building part "${partId}" (known: ${[...partById.keys()].join(", ") || "none"})`);
+      return part;
+    };
+    const choices = (key: string): PartChoice[] => {
+      const list = reader.array(block, key, path).flatMap((raw, i) => {
+        const at = `house.${key}[${i}]`;
+        const entry = reader.object(raw, at);
+        reader.onlyKeys(entry, at, ["part", "weight"]);
+        const part = partNamed(entry, at);
+        return part ? [{ part, weight: reader.number(entry, "weight", at, { min: 0 }) }] : [];
+      });
+      if (list.length === 0) reader.fail(`house.${key}`, "needs at least one building part");
+      return list;
+    };
+    const wallExtras = (block.wallExtras === undefined ? [] : reader.array(block, "wallExtras", path)).flatMap((raw, i): WallExtra[] => {
+      const at = `house.wallExtras[${i}]`;
+      const entry = reader.object(raw, at);
+      reader.onlyKeys(entry, at, ["part", "priority", "chance", "maxCount", "walls"]);
+      const part = partNamed(entry, at);
+      const walls = entry.walls === undefined ? [...WALL_SIDES] : reader.stringList(entry, "walls", at).filter((wall): wall is WallSide => {
+        if ((WALL_SIDES as readonly string[]).includes(wall)) return true;
+        reader.fail(joinPath(at, "walls"), `"${wall}" is not a wall (known: ${WALL_SIDES.join(", ")})`);
+        return false;
+      });
+      const maxCount = entry.maxCount === undefined ? null : reader.number(entry, "maxCount", at, { min: 0 });
+      if (maxCount !== null && !Number.isInteger(maxCount)) reader.fail(joinPath(at, "maxCount"), "is a whole number");
+      return part
+        ? [{ part, priority: reader.optionalNumber(entry, "priority", at, 0), chance: reader.number(entry, "chance", at, { min: 0, max: 1 }), maxCount, walls }]
+        : [];
+    });
     const partsRaw = reader.object(block.parts, "house.parts");
     reader.onlyKeys(partsRaw, "house.parts", HOUSE_PARTS);
     const parts = {} as HouseSpec["parts"];
@@ -584,23 +633,81 @@ function readBuilding(id: string, obj: RawObject, reader: Reader): BuildingDef {
       pitch: reader.range(block, "pitch", path, { allowEqual: true }),
       overhang: reader.number(block, "overhang", path, { min: 0 }),
       roofThickness: reader.number(block, "roofThickness", path, { min: 0.01 }),
-      door: {
-        width: reader.number(door, "width", "house.door", { min: 0.3 }),
-        height: reader.number(door, "height", "house.door", { min: 0.5 }),
-        frame: reader.number(door, "frame", "house.door", { min: 0.02 }),
-      },
-      window: {
-        width: reader.number(win, "width", "house.window", { min: 0.2 }),
-        height: reader.number(win, "height", "house.window", { min: 0.2 }),
-        sill: reader.number(win, "sill", "house.window", { min: 0 }),
-        frame: reader.number(win, "frame", "house.window", { min: 0.02 }),
-        sillReach: reader.number(win, "sillReach", "house.window", { min: 0 }),
-        chance: reader.number(win, "chance", "house.window", { min: 0, max: 1 }),
-      },
+      doors: choices("doors"),
+      wallExtras,
       parts,
     };
   }
   return { id, name: reader.string(obj, "name", ""), generator, boxes, house };
+}
+
+/** A buildingParts/ file - see BuildingPartDef. Named by `type` like a building, its settings under
+ *  the generator's name. */
+function readBuildingPart(id: string, obj: RawObject, reader: Reader): BuildingPartDef {
+  const generator = reader.oneOf(obj, "type", "", BUILDING_PART_GENERATORS);
+  reader.onlyKeys(obj, "", ["name", "type", generator]);
+  const path = generator;
+  const block = reader.object(obj[generator], path);
+  const role = (key: string, at: string, from: RawObject): HousePart => reader.oneOf(from, key, at, HOUSE_PARTS);
+  let framed: BuildingPartDef["framed"] = null;
+  if (generator === "framed") {
+    reader.onlyKeys(block, path, ["span", "width", "height", "sill", "frame", "headReach", "bars", "sillReach", "parts"]);
+    const span = reader.number(block, "span", path, { min: 1 });
+    if (!Number.isInteger(span)) reader.fail(`${path}.span`, "is in whole bays");
+    const bars = block.bars === undefined ? [0, 0] : block.bars;
+    let barCounts: [number, number] = [0, 0];
+    if (Array.isArray(bars) && bars.length === 2 && bars.every((n) => typeof n === "number" && Number.isInteger(n) && n >= 0)) barCounts = [bars[0], bars[1]];
+    else reader.fail(`${path}.bars`, "expected [up, across]: how many bars each way, whole numbers");
+    const parts = reader.object(block.parts, `${path}.parts`);
+    reader.onlyKeys(parts, `${path}.parts`, ["frame", "panel"]);
+    framed = {
+      span: Math.max(1, Math.round(span)),
+      width: reader.number(block, "width", path, { min: 0.3 }),
+      height: reader.number(block, "height", path, { min: 0.4 }),
+      sill: reader.number(block, "sill", path, { min: 0 }),
+      frame: reader.number(block, "frame", path, { min: 0.02 }),
+      headReach: reader.optionalNumber(block, "headReach", path, 0, { min: 0 }),
+      bars: barCounts,
+      sillReach: block.sillReach === undefined ? null : reader.number(block, "sillReach", path, { min: 0 }),
+      parts: { frame: role("frame", `${path}.parts`, parts), panel: role("panel", `${path}.parts`, parts) },
+    };
+  }
+  let chimney: BuildingPartDef["chimney"] = null;
+  if (generator === "chimney") {
+    reader.onlyKeys(block, path, ["span", "width", "depth", "shoulder", "stackWidth", "stackDepth", "rise", "foundation", "cap", "pots", "parts"]);
+    const span = reader.number(block, "span", path, { min: 1 });
+    if (!Number.isInteger(span)) reader.fail(`${path}.span`, "is in whole bays");
+    const sub = (key: string, keys: string[]): RawObject => {
+      const at = `${path}.${key}`;
+      const o = reader.object(block[key], at);
+      reader.onlyKeys(o, at, keys);
+      return o;
+    };
+    const foundation = sub("foundation", ["reach", "height"]);
+    const cap = sub("cap", ["height", "reach"]);
+    const pots = sub("pots", ["count", "width", "height"]);
+    const parts = sub("parts", ["body", "cap", "pots"]);
+    const potCount = reader.number(pots, "count", `${path}.pots`, { min: 0 });
+    if (!Number.isInteger(potCount)) reader.fail(`${path}.pots.count`, "is a whole number");
+    chimney = {
+      span: Math.max(1, Math.round(span)),
+      width: reader.number(block, "width", path, { min: 0.4 }),
+      depth: reader.number(block, "depth", path, { min: 0.2 }),
+      shoulder: reader.number(block, "shoulder", path, { min: 0 }),
+      stackWidth: reader.number(block, "stackWidth", path, { min: 0.3 }),
+      stackDepth: reader.number(block, "stackDepth", path, { min: 0.2 }),
+      rise: reader.range(block, "rise", path, { allowEqual: true }),
+      foundation: { reach: reader.number(foundation, "reach", `${path}.foundation`, { min: 0 }), height: reader.number(foundation, "height", `${path}.foundation`, { min: 0 }) },
+      cap: { height: reader.number(cap, "height", `${path}.cap`, { min: 0.02 }), reach: reader.number(cap, "reach", `${path}.cap`, { min: 0 }) },
+      pots: {
+        count: Math.max(0, Math.round(potCount)),
+        width: reader.number(pots, "width", `${path}.pots`, { min: 0.05 }),
+        height: reader.number(pots, "height", `${path}.pots`, { min: 0.05 }),
+      },
+      parts: { body: role("body", `${path}.parts`, parts), cap: role("cap", `${path}.parts`, parts), pots: role("pots", `${path}.parts`, parts) },
+    };
+  }
+  return { id, name: reader.string(obj, "name", ""), generator, framed, chimney };
 }
 
 /** A features/ file - see FeatureKindDef. */

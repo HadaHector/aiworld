@@ -7,7 +7,7 @@ import type { SettlementStyle } from "../settlements/settlementConfig";
 import type { Defaults } from "./resolveContent";
 import type { WeatherDef } from "../weather/weatherTypes";
 import type { FeatureKindDef } from "../features/featureTypes";
-import type { BuildingDef, BuildingMaterialDef } from "../buildings/buildingTypes";
+import type { BuildingDef, BuildingMaterialDef, BuildingPartDef } from "../buildings/buildingTypes";
 
 /**
  * Everything a world is generated from that is content rather than code: its biomes, ground
@@ -57,6 +57,8 @@ export interface WorldContent {
   featureKinds: FeatureKindDef[];
   /** Every building (a pack's buildings/ folder) - what features place. */
   buildings: BuildingDef[];
+  /** The pieces buildings are built with - doors, windows (a pack's buildingParts/ folder). */
+  buildingParts: BuildingPartDef[];
   /** What buildings are made of (a pack's buildingMaterials/ folder). */
   buildingMaterials: BuildingMaterialDef[];
 }

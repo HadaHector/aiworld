@@ -36,6 +36,7 @@ packs/<pack>/
   weathers/<id>.json5     a kind of weather: its clouds, light, wind, rain and snow
   features/<id>.json5     a kind of cell feature - a quarry - and how it changes the ground
   buildings/<id>.json5    a building, built by one of the building generators
+  buildingParts/<id>.json5  a piece buildings are built with: a door, a window, a chimney
   buildingMaterials/<id>.json5  what buildings are made of: plaster, timber, stone, glass, tiles
   patches/<any>.json5     additions to another pack's lists
 ```
@@ -576,9 +577,15 @@ There are two:
 - `house`, a traditional one-storey house (see `core/buildings/cottage.json5`). Its plan is tiles -
   each one bay of wall - in a main block and maybe a wing out of the back (a T or an L) and one out
   of a side. From the plan come a plinth, corner posts, walls, a door in a middle bay of the front
-  and windows in other bays (closed: a frame and a pane standing on the wall), and a gable or hipped
-  roof over each block. All of a house's roofs share one pitch and eave height, so where two meet
-  they cut each other along clean valleys.
+  and windows in other bays, and a gable or hipped roof over each block. All of a house's roofs share
+  one pitch and eave height, so where two meet they cut each other along clean valleys. Its door and
+  windows are building parts (below). `doors` is a list of `{ part, weight }`, one picked per house.
+  Everything else on the walls is `wallExtras`, a list of `{ part, priority, chance, maxCount, walls }`
+  placed highest `priority` first (in list order where level): each tries every free spot - as many
+  bays as the part spans - on the `walls` it may go on (`front`, `back`, `side`; all if left out), in
+  a random order, taking each with its `chance`, up to `maxCount` (no limit if left out). The bays a
+  part takes are not free to the extras after it, and a part may turn a spot down (a chimney by an
+  inner corner, where another wing stands beside it).
 
 Every generator gives the same
 result: geometry with its floor at height 0, the footprint centred, the front facing +z, and the
@@ -596,8 +603,30 @@ textured in metres, its texture's up running up the face - up a wall, up a roof'
 tiles lie in rows along the eaves - and along a beam, so a post's grain runs up it and a lintel's
 along it.
 
+A building part (`buildingParts/`) is a piece a building generator leaves to a generator of its
+own, so one house can wear timber frames or stone arches: the house works out where it goes and how
+much room it has, the part builds itself there. Like a building it names its generator by `type`,
+its settings under the generator's name. It takes no materials of its own - each of its pieces is
+painted as one of the building's `parts`, so a house's windows, posts and door share one timber.
+There are two so far:
+
+- `framed`, an opening in a timber frame, closed - a panel (glass, or a door's boards) standing on
+  the wall, never a hole: `width`, `height` and `sill` (its foot above the floor, 0 for a door) of the
+  panel; `frame`, the jambs' and head's width, and `headReach`, how far the head reaches past them;
+  `bars: [up, across]`, glazing bars or a double door's stile; `sillReach` for a sill under it (none
+  if left out); and `parts: { frame, panel }`, which of the building's parts each is painted as. It
+  spans `span` bays of wall - a barn door two (see `core/buildingParts/barnDoor.json5`) - and
+  shrinks to keep clear of corner posts and the eaves.
+- `chimney`, built against the outside of a wall on a foundation of its own (see
+  `core/buildingParts/stoneChimney.json5`): a breast `width` along the wall and `depth` out from it
+  up to its `shoulder` (above the floor), sloping in to a stack `stackWidth` by `stackDepth` that
+  rises through the eaves to `rise` above the ridge (a range, rolled per chimney). Its `foundation`
+  reaches past the breast and stands a little above the floor, out past the house's plinth; a `cap`
+  band tops the stack, with `pots` on it. `parts: { body, cap, pots }` paints them.
+
 In the workbench a building stands on a patch of ground, one variant or a row of eight, with its
-footprint, its door and - for a generator with a plan - its tiles marked.
+footprint, its door and - for a generator with a plan - its tiles marked. A building part stands on
+a stretch of wall, painted and sized like the first house that uses it.
 
 ## Example
 

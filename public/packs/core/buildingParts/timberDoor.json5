@@ -1,0 +1,19 @@
+// A plain door in a timber frame: boards, a jamb either side and a lintel over it that reaches a
+// little past them.
+{
+  name: "Timber Door",
+  type: "framed",
+  framed: {
+    // How many bays of wall it takes up.
+    span: 1,
+    // The door itself, standing on the floor.
+    width: 1.4,
+    height: 3,
+    sill: 0,
+    // The jambs and the lintel: this wide, the lintel reaching this far past the jambs.
+    frame: 0.25,
+    headReach: 0.06,
+    // What its pieces are painted as - the house's parts.
+    parts: { frame: "timber", panel: "door" },
+  },
+}

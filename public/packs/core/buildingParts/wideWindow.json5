@@ -1,0 +1,16 @@
+// A wide window across two bays: one long pane in a timber frame, split by three bars up it and one
+// across, on a long sill.
+{
+  name: "Wide Window",
+  type: "framed",
+  framed: {
+    span: 2,
+    width: 3.2,
+    height: 1.6,
+    sill: 1.1,
+    frame: 0.18,
+    bars: [3, 1],
+    sillReach: 0.05,
+    parts: { frame: "timber", panel: "glass" },
+  },
+}

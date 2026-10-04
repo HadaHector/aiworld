@@ -87,11 +87,10 @@ export interface HouseSpec {
   /** How far the roof reaches past the walls, every way, and how thick it is. */
   overhang: number;
   roofThickness: number;
-  /** The door, and how wide its frame is. */
-  door: { width: number; height: number; frame: number };
-  /** Each bay of wall gets a window with this chance. Closed: a frame and a pane on the wall, on a
-   *  sill `sill` above the floor that reaches `sillReach` past the frame either side and out. */
-  window: { width: number; height: number; sill: number; frame: number; sillReach: number; chance: number };
+  /** The door, one of these (building parts) picked per house, in a middle bay of the front. */
+  doors: PartChoice[];
+  /** Everything else on the walls - windows, chimneys - placed in the bays the door leaves free. */
+  wallExtras: WallExtra[];
   /** What each part is made of, and the tints - one picked per house - its colour is multiplied by.
    *  Timber is the posts, the frames, and the roof's underside and edges. */
   parts: Record<HousePart, { material: string; tints: Rgb[] }>;
@@ -99,6 +98,100 @@ export interface HouseSpec {
 
 export const HOUSE_PARTS = ["walls", "timber", "roof", "plinth", "door", "glass"] as const;
 export type HousePart = (typeof HOUSE_PARTS)[number];
+
+/** Which walls of a house: the front (where the door is), the back, and the sides. */
+export const WALL_SIDES = ["front", "back", "side"] as const;
+export type WallSide = (typeof WALL_SIDES)[number];
+
+/**
+ * A building part a house puts on its walls. Extras are placed highest `priority` first (in the
+ * order listed where two are level): each tries every free spot of the walls it may go on, in a
+ * random order, and takes one with its `chance` - up to `maxCount` of them (null: no limit). A part
+ * may still turn a spot down (a chimney by an inner corner), and the bays it takes are not free to
+ * the extras after it.
+ */
+export interface WallExtra {
+  part: BuildingPartDef;
+  priority: number;
+  chance: number;
+  maxCount: number | null;
+  walls: WallSide[];
+}
+
+/** A building part a building can use, and how likely it is against the others it could. */
+export interface PartChoice {
+  part: BuildingPartDef;
+  weight: number;
+}
+
+/**
+ * A building part (a pack's buildingParts/ folder): one piece of a building - a door, a window -
+ * built by a generator of its own into a slot the building gives it, so one house generator can wear
+ * timber frames or stone arches. Like a building, it names its generator (`type`) and has its
+ * settings under the generator's name.
+ *
+ * A part takes no materials of its own: each of its pieces is painted as one of the building's
+ * parts (its `parts`: timber, glass, ...), so a house's windows, posts and door share one timber.
+ */
+export const BUILDING_PART_GENERATORS = ["framed", "chimney"] as const;
+export type BuildingPartGenerator = (typeof BUILDING_PART_GENERATORS)[number];
+
+/**
+ * An opening in a timber frame, closed: a panel (glass, or a door's boards) standing on the wall,
+ * jambs either side of it, a head over it, maybe glazing bars across it and a sill under it. Lengths
+ * are metres. It spans `span` bays of wall - a big door two or three - and keeps clear of the corner
+ * posts, shrinking where the bays leave it too little room.
+ */
+export interface FramedSpec {
+  span: number;
+  /** The panel, and how high its foot is above the floor (0: a door). */
+  width: number;
+  height: number;
+  sill: number;
+  /** The jambs' and the head's width, and how far the head reaches past the jambs either way. */
+  frame: number;
+  headReach: number;
+  /** Glazing bars (or a double door's middle stile): how many up the panel, and how many across. */
+  bars: [number, number];
+  /** A sill under the panel, reaching this far past the jambs either way and out - or none. */
+  sillReach: number | null;
+  /** Which of the building's parts the frame and the panel are painted as. */
+  parts: { frame: HousePart; panel: HousePart };
+}
+
+/**
+ * A chimney against the outside of a wall, on a foundation of its own: a broad breast up to its
+ * shoulders, sloping in to a narrower stack that rises past the ridge, capped by a band with pots on
+ * it. Lengths are metres; widths are along the wall, depths out from it.
+ */
+export interface ChimneySpec {
+  span: number;
+  /** The breast. */
+  width: number;
+  depth: number;
+  /** How high above the floor its shoulders are, where it narrows to the stack. */
+  shoulder: number;
+  stackWidth: number;
+  stackDepth: number;
+  /** How far the stack's top stands above the ridge - rolled per chimney. */
+  rise: [number, number];
+  /** Its foundation: how far it reaches past the breast every way, and how high above the floor. */
+  foundation: { reach: number; height: number };
+  /** The band capping the stack: how tall, and how far it stands out from the stack every way. */
+  cap: { height: number; reach: number };
+  /** Chimney pots on the cap: how many, how wide and how tall. */
+  pots: { count: number; width: number; height: number };
+  /** Which of the building's parts the body, the cap and the pots are painted as. */
+  parts: { body: HousePart; cap: HousePart; pots: HousePart };
+}
+
+export interface BuildingPartDef {
+  id: string;
+  name: string;
+  generator: BuildingPartGenerator;
+  framed: FramedSpec | null;
+  chimney: ChimneySpec | null;
+}
 
 export interface BuildingDef {
   id: string;

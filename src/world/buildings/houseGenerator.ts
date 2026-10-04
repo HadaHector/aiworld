@@ -1,5 +1,6 @@
-import type { BuildingModel, HouseSpec, Paint, RoofType } from "./buildingTypes";
+import type { BuildingModel, HouseSpec, Paint, RoofType, WallSide } from "./buildingTypes";
 import { FOUNDATION_DEPTH, ModelBuilder, pick, roll, rollInt, type Vec3 } from "./buildingGeometry";
+import { buildWallPart, partSpan, pickPart, type PartPaints, type WallSlot } from "./buildingParts";
 
 /**
  * A traditional one-storey house, built in the order a house is: its plan (tiles), the plinth, the
@@ -10,7 +11,9 @@ import { FOUNDATION_DEPTH, ModelBuilder, pick, roll, rollInt, type Vec3 } from "
  * same pitch and from the same eave height, so where two meet their slopes cut each other along
  * clean valleys without anything having to work out where those are.
  *
- * Doors and windows are closed: a frame and a panel standing proud of the wall, never a hole.
+ * The door and the wall's extras - windows, chimneys - are building parts (see buildingParts.ts): the
+ * house picks them and the bays they take, and each builds itself there - a door or a window closed,
+ * standing on the wall, never a hole.
  */
 
 /** A block of the plan, in tiles: i along x, j along z (the front is the main block's +z side). */
@@ -42,16 +45,6 @@ interface RoofEnd {
 }
 
 const UP: Vec3 = [0, 1, 0];
-
-/**
- * How far a door's and a window's parts stand out from the wall's face (metres), each layer well clear
- * of the one behind it - a few centimetres reads as a flat decal and flickers into the layer behind
- * at a distance, where the depth buffer is coarse. The frame stands proudest, the glazing bars in
- * front of the pane, the pane well in front of the wall. Every part starts a little inside the wall,
- * so none of them has a face lying in the wall's own plane.
- */
-const OUT = { pane: 0.06, bars: 0.1, door: 0.08, frame: 0.15, lintel: 0.18 };
-const SET_IN = -0.03;
 const DOWN: Vec3 = [0, -1, 0];
 
 /** The plan: the main block and any wings, each wing with how its roof meets the main block's. */
@@ -321,7 +314,7 @@ export function buildHouse(spec: HouseSpec, rng: () => number): BuildingModel {
   const roofType = pick(spec.roofs, rng);
   const slope = Math.tan((roll(spec.pitch, rng) * Math.PI) / 180);
   const paint = (part: keyof HouseSpec["parts"]): Paint => ({ material: spec.parts[part].material, tint: pick(spec.parts[part].tints, rng) });
-  const paints = {
+  const paints: PartPaints = {
     walls: paint("walls"),
     timber: paint("timber"),
     roof: paint("roof"),
@@ -355,20 +348,49 @@ export function buildHouse(spec: HouseSpec, rng: () => number): BuildingModel {
     const normal: Vec3 = alongX ? [0, 0, sign] : [sign, 0, 0];
     const at = (along: number, out: number, y: number): Vec3 =>
       alongX ? [X(along), y, lineAt + sign * out] : [lineAt + sign * out, y, Z(along)];
-    /** A box against the face: `along` metres either side of a point (tiles), standing out
-     *  between `out0` and `out1` metres. */
-    const box = (centre: number, halfAlong: number, y0: number, y1: number, out0: number, out1: number, color: Paint): void => {
-      const [ax, , az] = at(centre, out0, 0);
-      const [bx, , bz] = at(centre, out1, 0);
-      if (alongX) {
-        const x = X(centre);
-        b.box(x - halfAlong, y0, Math.min(az, bz), x + halfAlong, y1, Math.max(az, bz), color);
-      } else {
-        const z = Z(centre);
-        b.box(Math.min(ax, bx), y0, z - halfAlong, Math.max(ax, bx), y1, z + halfAlong, color);
-      }
+    return { alongX, normal, at };
+  };
+
+  // The top of the highest roof: the main block's ridge, its slab on it.
+  const ridge = eaves + ((main.j1 - main.j0) * tile * slope) / 2 + spec.roofThickness * Math.sqrt(1 + slope * slope);
+
+  const wallOf = (run: WallRun): WallSide => (run.dir === "pz" ? "front" : run.dir === "nz" ? "back" : "side");
+  /** Whether a run starts and ends at an inner corner. */
+  const innerEnds = (run: WallRun): [boolean, boolean] => {
+    const alongX = run.dir === "pz" || run.dir === "nz";
+    const kind = (along: number) => (alongX ? cornerKind(along, run.line) : cornerKind(run.line, along));
+    return [kind(run.from) === "inner", kind(run.to) === "inner"];
+  };
+
+  /** The slot for a part `span` bays wide, its middle `centre` tiles along a run. Clear of the
+   *  eaves, and of the corner post where it reaches the run's end. */
+  const slotAt = (run: WallRun, centre: number, span: number): WallSlot => {
+    const { alongX, at } = frame(run);
+    const sign = run.dir === "px" || run.dir === "pz" ? 1 : -1;
+    const atStart = centre - span / 2 <= run.from;
+    const atEnd = atStart || centre + span / 2 >= run.to;
+    const [startInner, endInner] = innerEnds(run);
+    const point = ([a, y, out]: Vec3): Vec3 => {
+      const [x, , z] = at(centre, out, y);
+      return alongX ? [x + a, y, z] : [x, y, z + a];
     };
-    return { alongX, normal, at, box };
+    return {
+      floor: plinth,
+      top: eaves - 0.25,
+      ridge,
+      plinthOutset: outset,
+      halfRoom: (span * tile) / 2 - 0.05 - (atEnd ? post / 2 : 0),
+      wall: wallOf(run),
+      innerCorner: (atStart && startInner) || (centre + span / 2 >= run.to && endInner),
+      box: (a0, a1, y0, y1, out0, out1, paint) => {
+        const [ax, , az] = at(centre, out0, 0);
+        const [bx, , bz] = at(centre, out1, 0);
+        if (alongX) b.box(ax + a0, y0, Math.min(az, bz), ax + a1, y1, Math.max(az, bz), paint);
+        else b.box(Math.min(ax, bx), y0, az + a0, Math.max(ax, bx), y1, az + a1, paint);
+      },
+      face: (corners, [ta, ty, tout], paint) =>
+        b.faceToward(corners.map(point), alongX ? [ta, ty, sign * tout] : [sign * tout, ty, ta], paint),
+    };
   };
 
   // 2. The plinth: standing out from the walls, from below ground to the floor, with a ledge on top.
@@ -393,43 +415,42 @@ export function buildHouse(spec: HouseSpec, rng: () => number): BuildingModel {
     b.box(X(i) - h, plinth, Z(j) - h, X(i) + h, eaves, Z(j) + h, paints.timber);
   }
 
-  // The door: in a middle bay of the main block's front.
-  const doorBay = W >= 3 ? rollInt([1, W - 2], rng) : rollInt([0, W - 1], rng);
-  const frontRun = runs.find((run) => run.dir === "pz" && run.line === main.j1 && run.from <= doorBay && run.to > doorBay)!;
-  const door = spec.door;
-  const doorTop = plinth + Math.min(door.height, wallHeight - 0.3 - door.frame);
-  {
-    const { box } = frame(frontRun);
-    const centre = doorBay + 0.5;
-    const half = Math.min(door.width, tile * 0.8) / 2;
-    const f = door.frame;
-    box(centre, half, plinth, doorTop, SET_IN, OUT.door, paints.door);
-    // Jambs at the door's two edges, and a lintel over it reaching past them.
-    box(centre - (half + f / 2) / tile, f / 2, plinth, doorTop + f, SET_IN, OUT.frame, paints.timber);
-    box(centre + (half + f / 2) / tile, f / 2, plinth, doorTop + f, SET_IN, OUT.frame, paints.timber);
-    box(centre, half + f * 1.25, doorTop, doorTop + f, SET_IN, OUT.lintel, paints.timber);
-  }
+  // The door: one of the house's doors that fits the front, in a middle bay of it (bays, for a
+  // big door) where there are bays to spare either side.
+  const doorPart = pickPart(spec.doors.filter((choice) => partSpan(choice.part) <= W), rng);
+  const doorSpan = doorPart ? partSpan(doorPart) : 1;
+  const doorBay = W >= doorSpan + 2 ? rollInt([1, W - 1 - doorSpan], rng) : rollInt([0, W - doorSpan], rng);
+  const doorCentre = doorBay + doorSpan / 2;
+  const frontRun = runs.find((run) => run.dir === "pz" && run.line === main.j1 && run.from <= doorBay && run.to >= doorBay + doorSpan)!;
+  if (doorPart) buildWallPart(doorPart, slotAt(frontRun, doorCentre, doorSpan), paints, rng);
+  /** The bays each run has given to a part so far, as [from, to). */
+  const taken = new Map<WallRun, [number, number][]>([[frontRun, [[doorBay, doorBay + doorSpan]]]]);
+  const take = (run: WallRun, from: number, to: number): void => {
+    taken.set(run, [...(taken.get(run) ?? []), [from, to]]);
+  };
 
-  // Windows: any bay of any wall but the door's, with the window's own chance.
-  const win = spec.window;
-  const sill = plinth + win.sill;
-  const head = Math.min(sill + win.height, eaves - 0.25 - win.frame);
-  for (const run of runs) {
-    const { box } = frame(run);
-    for (let bay = run.from; bay < run.to; bay++) {
-      if (run === frontRun && bay === doorBay) continue;
-      if (rng() >= win.chance || head - sill < 0.4) continue;
-      const centre = bay + 0.5;
-      const half = Math.min(win.width, tile * 0.7) / 2;
-      const f = win.frame;
-      box(centre, half, sill, head, SET_IN, OUT.pane, paints.glass);
-      // Frame, a cross of glazing bars, and a sill below, wider and standing further out.
-      box(centre - (half + f / 2) / tile, f / 2, sill, head + f, SET_IN, OUT.frame, paints.timber);
-      box(centre + (half + f / 2) / tile, f / 2, sill, head + f, SET_IN, OUT.frame, paints.timber);
-      box(centre, half + f, head, head + f, SET_IN, OUT.frame, paints.timber);
-      box(centre, f / 4, sill, head, SET_IN, OUT.bars, paints.timber);
-      box(centre, half, (sill + head) / 2 - f / 4, (sill + head) / 2 + f / 4, SET_IN, OUT.bars, paints.timber);
-      box(centre, half + f + win.sillReach, sill - f, sill, SET_IN, OUT.frame + win.sillReach, paints.timber);
+  // The wall's extras, highest priority first: each tries every free spot of the walls it may go
+  // on, in a random order, taking each with its chance, until it has as many as it may.
+  const extras = spec.wallExtras.map((extra, order) => ({ extra, order })).sort((a, b) => b.extra.priority - a.extra.priority || a.order - b.order);
+  const isFree = (run: WallRun, from: number, to: number): boolean => (taken.get(run) ?? []).every(([a, z]) => to <= a || from >= z);
+  for (const { extra } of extras) {
+    const span = partSpan(extra.part);
+    const spots: { run: WallRun; bay: number }[] = [];
+    for (const run of runs) {
+      if (!extra.walls.includes(wallOf(run))) continue;
+      for (let bay = run.from; bay + span <= run.to; bay++) spots.push({ run, bay });
+    }
+    for (let i = spots.length - 1; i > 0; i--) {
+      const j = Math.floor(rng() * (i + 1));
+      [spots[i], spots[j]] = [spots[j], spots[i]];
+    }
+    let count = 0;
+    for (const { run, bay } of spots) {
+      if (extra.maxCount !== null && count >= extra.maxCount) break;
+      if (!isFree(run, bay, bay + span) || rng() >= extra.chance) continue;
+      if (!buildWallPart(extra.part, slotAt(run, bay + span / 2, span), paints, rng)) continue;
+      take(run, bay, bay + span);
+      count++;
     }
   }
 
@@ -472,5 +493,5 @@ export function buildHouse(spec: HouseSpec, rng: () => number): BuildingModel {
       for (let j = block.j0; j < block.j1; j++) tiles.push({ x0: X(i), z0: Z(j), x1: X(i + 1), z1: Z(j + 1) });
     }
   }
-  return b.finish({ x: X(doorBay + 0.5), z: Z(main.j1) }, tiles);
+  return b.finish({ x: X(doorCentre), z: Z(main.j1) }, tiles);
 }

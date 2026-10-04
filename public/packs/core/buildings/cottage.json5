@@ -28,10 +28,17 @@
     // The roof reaches this far past the walls every way, and is this thick.
     overhang: 0.8,
     roofThickness: 0.4,
-    // Doors and windows: their openings, and how wide their frames are. A window's sill reaches
-    // `sillReach` past its frame either way and stands that much further out from the wall.
-    door: { width: 1.4, height: 3, frame: 0.25 },
-    window: { width: 1.0, height: 1.6, sill: 1.1, frame: 0.18, sillReach: 0.05, chance: 0.2 },
+    // Doors, windows and chimneys are building parts (see buildingParts/). One door per house, picked
+    // by weight, in the front.
+    doors: [{ part: "timberDoor", weight: 3 }, { part: "barnDoor", weight: 1 }],
+    // Everything else on the walls, highest priority first: each tries every free spot (as many bays
+    // as it spans) on the walls it may go on - front, back, side; all if not given - in a random
+    // order, and takes it with its chance, up to maxCount of them.
+    wallExtras: [
+      { part: "stoneChimney", priority: 2, chance: 0.1, maxCount: 1, walls: ["side", "back"] },
+      { part: "wideWindow", priority: 1, chance: 0.05 },
+      { part: "timberWindow", priority: 1, chance: 0.2 },
+    ],
     // What each part is made of (see buildingMaterials/), and the tints - one picked per house - its
     // colour is multiplied by: 1 is the material as it is. Timber is the posts, the frames, and the
     // boards under the roof and along its edges.

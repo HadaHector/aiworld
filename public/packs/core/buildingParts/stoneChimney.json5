@@ -1,0 +1,27 @@
+// A stone chimney built against the outside of a gable or back wall, on a foundation of its own: a
+// broad breast (the hearth behind it) up to its shoulders, sloping in to a narrower stack that
+// rises through the eaves and well clear of the ridge, capped by a band with clay pots on it.
+{
+  name: "Stone Chimney",
+  type: "chimney",
+  chimney: {
+    // How many bays of wall it takes up.
+    span: 1,
+    // The breast: along the wall, and out from it.
+    width: 1.7,
+    depth: 0.9,
+    // How high above the floor it narrows to the stack.
+    shoulder: 2.6,
+    stackWidth: 0.95,
+    stackDepth: 0.75,
+    // How far the top of the stack stands above the ridge.
+    rise: [1.2, 2.2],
+    // Its foundation reaches this far past the breast every way, and stands this high above the floor.
+    foundation: { reach: 0.15, height: 0.3 },
+    // The band capping the stack, and the pots on it.
+    cap: { height: 0.25, reach: 0.08 },
+    pots: { count: 2, width: 0.26, height: 0.5 },
+    // What its pieces are painted as - the house's parts.
+    parts: { body: "plinth", cap: "plinth", pots: "roof" },
+  },
+}
