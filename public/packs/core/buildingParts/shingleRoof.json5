@@ -1,0 +1,26 @@
+// A pitched roof of wooden shingles: steep, light and thin, with a smaller overhang than a clay
+// roof's, a peaked ridge of two boards, bargeboards up its gables - and sagging like an old roof.
+{
+  name: "Shingle Roof",
+  type: "pitched",
+  pitched: {
+    // The shape at its free ends, one picked per house - and its pitch, in degrees: steep, to
+    // shed the rain off the wood.
+    shapes: ["gable", "hip"],
+    pitch: [44, 54],
+    // It reaches this far past the walls every way, and is this thick.
+    overhang: 0.6,
+    thickness: 0.3,
+    // The shingles on its boards: how thick (of the whole), and how far they reach past the boards
+    // at the eaves - and at the verges, where there is no bargeboard.
+    covering: { thickness: 0.07, overhang: 0.08 },
+    // Boards up the gables' edges, on edge: how far they stand above the shingles, and how thick.
+    bargeboard: { height: 0.16, thickness: 0.06 },
+    // How far its ridges sink in the middle, and its rafters bow (metres, rolled per house).
+    sag: { ridge: [0.08, 0.3], slope: [0.03, 0.1] },
+    step: 1.5,
+    // The ridge: two boards meeting along the top, covering the shingles' ends.
+    ridgeTiles: { width: 0.36, height: 0.1, profile: "peaked" },
+    parts: { covering: "roof", underside: "timber", ridge: "timber", gable: "walls" },
+  },
+}

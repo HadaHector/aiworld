@@ -1,0 +1,62 @@
+// Split wooden shingles: narrow boards in staggered courses, each its own weathered shade from
+// silver-grey to brown, their grain running down the slope, dark slits between them, and each thick
+// at its lower edge where it lies over the course below.
+{
+  name: "Wood Shingles",
+  // 8 shingles across and 16 courses up the slope a repeat: 75 x 37 cm showing each - twice life
+  // size, so they read from afar.
+  size: 6,
+  shine: 0.03,
+  texture: {
+    bumpStrength: 2.5,
+    pipeline: {
+      noises: [
+        { name: "shingles", type: "bricks", tileCycles: [8, 16], stagger: 0.5, amplitude: 1, mode: "edge" },
+        { name: "grain", type: "fbm", octaves: 3, tileCycles: 24, amplitude: 1, persistence: 0.55, lacunarity: 2.2, stretch: [1, 10] },
+        { name: "weather", type: "fbm", octaves: 3, tileCycles: 5, amplitude: 1, persistence: 0.55, lacunarity: 2 },
+      ],
+      steps: [
+        { output: "joint", op: "sample", noise: "shingles" },
+        { output: "shingleId", op: "sample", noise: "shingles", mode: "cell" },
+        { output: "up", op: "sample", noise: "shingles", mode: "v" },
+        { output: "grainRaw", op: "sample", noise: "grain" },
+        { output: "weatherRaw", op: "sample", noise: "weather" },
+
+        // Each shingle thickest at its lower edge, thin under the course above, with its grain in
+        // ridges down it; the slits between them sunk.
+        { output: "thickness", op: "invert", input: "up" },
+        { output: "courseHeight", op: "scale", input: "thickness", factor: 0.5 },
+        { output: "grainBump", op: "scale", input: "grainRaw", factor: 0.15 },
+        { output: "slit", op: "mask", input: "joint", at: 0.0, off: 0.03 },
+        { output: "slitDepth", op: "scale", input: "slit", factor: -0.4 },
+        { output: "shaped", op: "add", a: "courseHeight", b: "grainBump" },
+        { output: "height", op: "add", a: "shaped", b: "slitDepth" },
+
+        // Each its own shade of weathered wood.
+        {
+          output: "tone",
+          op: "colorRamp",
+          input: "shingleId",
+          stops: [
+            { at: 0.0, color: [0.44, 0.38, 0.31] },
+            { at: 0.25, color: [0.52, 0.47, 0.4] },
+            { at: 0.5, color: [0.4, 0.33, 0.26] },
+            { at: 0.75, color: [0.57, 0.53, 0.47] },
+            { at: 1.0, color: [0.36, 0.3, 0.24] },
+          ],
+        },
+        { output: "grainShade", op: "remap", input: "grainRaw", inMin: -1, inMax: 1, outMin: 0.82, outMax: 1.1 },
+        { output: "weatherShade", op: "remap", input: "weatherRaw", inMin: -1, inMax: 1, outMin: 0.8, outMax: 1.06 },
+        // Darker in the shadow of the course above.
+        { output: "upShade", op: "remap", input: "up", inMin: 0, inMax: 1, outMin: 1.05, outMax: 0.72 },
+        { output: "shadeA", op: "multiply", a: "grainShade", b: "weatherShade" },
+        { output: "shade", op: "multiply", a: "shadeA", b: "upShade" },
+        { output: "wood", op: "multiply", a: "tone", b: "shade" },
+        { output: "slitColor", op: "color", value: [0.1, 0.08, 0.06] },
+        { output: "diffuse", op: "mix", a: "wood", b: "slitColor", t: "slit" },
+        { output: "roughness", op: "constant", value: 0.9 },
+      ],
+      outputs: { diffuse: "diffuse", roughness: "roughness", height: "height" },
+    },
+  },
+}

@@ -2,8 +2,9 @@
 // and grainy, their edges rounded off into pale lime mortar.
 {
   name: "Stone Bricks",
-  // Metres one repeat covers: 5 stones across and 8 courses up, so each is 1.2 m x 75 cm.
-  size: 6,
+  // Metres one repeat covers: 5 stones across and 8 courses up, so each is 2.4 m x 1.5 m - twice
+  // life size, so they read from afar.
+  size: 12,
   shine: 0.05,
   texture: {
     bumpStrength: 2.2,

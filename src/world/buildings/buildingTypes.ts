@@ -51,6 +51,11 @@ export interface BoxesSpec {
 }
 
 export const ROOF_TYPES = ["gable", "hip"] as const;
+
+/** A ridge cap's cross-section: a rounded back (clay ridge tiles), or two boards meeting along the
+ *  top (a shingle or a board roof's). */
+export const RIDGE_PROFILES = ["round", "peaked"] as const;
+export type RidgeProfile = (typeof RIDGE_PROFILES)[number];
 export type RoofType = (typeof ROOF_TYPES)[number];
 
 /**
@@ -242,7 +247,7 @@ export interface PitchedRoofSpec {
   step: number;
   /** A ridge cap along the ridges and hips - a row of ridge tiles, as one rounded length: how wide,
    *  and how high above the slabs - or none. */
-  ridgeTiles: { width: number; height: number } | null;
+  ridgeTiles: { width: number; height: number; profile: RidgeProfile } | null;
   /** Which of the building's parts the covering, the underside and edges, the ridge tiles and the
    *  gables' wall are painted as. */
   parts: { covering: HousePart; underside: HousePart; ridge: HousePart; gable: HousePart };

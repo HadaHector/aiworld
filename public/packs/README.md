@@ -645,8 +645,10 @@ house, and how its ends meet the others. There are five so far:
   thick reaching `overhang` past the walls every way: boards, and a `covering` on them -
   `covering.thickness` of the whole - that reaches `covering.overhang` past them at the eaves. Up a
   gable's verges a `bargeboard` stands `height` above the covering, `thickness` thick (none if null:
-  the covering reaches past the boards there too), and `ridgeTiles` - one rounded cap `width`
-  across and `height` high - along the ridges and hips (none if null). It sags like an old roof: `sag.ridge` is how far its ridges sink in the middle, `sag.slope`
+  the covering reaches past the boards there too), and `ridgeTiles` - one cap `width`
+  across and `height` high, its `profile` `round` (clay ridge tiles, the default) or `peaked` (two
+  boards meeting along the top, see `core/buildingParts/shingleRoof.json5`) - along the ridges and
+  hips (none if null). It sags like an old roof: `sag.ridge` is how far its ridges sink in the middle, `sag.slope`
   how far its rafters bow (ranges, rolled per house) - nothing at the eaves and at the house's
   outermost ends, so a ridge dips and a hip bows inward; its slabs bend in cells `step` across.
   `parts: { covering, underside, ridge, gable }` paints the covering, the underside and edges, the

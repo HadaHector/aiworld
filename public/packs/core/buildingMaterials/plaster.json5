@@ -2,7 +2,8 @@
 // that a building tints to its own colour of wash.
 {
   name: "Plaster",
-  size: 4,
+  // Metres one repeat covers - its blotches twice life size, so they read from afar.
+  size: 8,
   shine: 0,
   texture: {
     bumpStrength: 0.8,

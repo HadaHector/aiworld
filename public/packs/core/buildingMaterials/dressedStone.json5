@@ -3,8 +3,8 @@
 // piece of it is a stone).
 {
   name: "Dressed Stone",
-  // Metres one repeat covers.
-  size: 3,
+  // Metres one repeat covers - its grain and pits twice life size, so they read from afar.
+  size: 6,
   shine: 0.08,
   texture: {
     bumpStrength: 1.2,

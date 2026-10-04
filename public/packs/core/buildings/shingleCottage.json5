@@ -1,0 +1,52 @@
+// A one-storey cottage under wooden shingles: plastered walls on a stone plinth in a heavy timber
+// frame, under a steep gable or hipped roof - sometimes with a wing out of the back or a side.
+{
+  name: "Shingled Cottage",
+  type: "house",
+  house: {
+    // A tile is one bay of wall: the plan is made of them, and each can hold a window.
+    tile: [2.6, 3.0],
+    // The main block in tiles: along the front, and back from it.
+    width: [3, 5],
+    depth: [2, 3],
+    // How likely a wing out of the back (a T or an L), and one out of a side, how far each reaches,
+    // and how wide it is, in tiles. A wing stays narrower than the main block, whatever the range;
+    // a block too small for the least width gets no wing (a 2-deep cottage, no side wing).
+    backWing: 0.5,
+    sideWing: 0.35,
+    wingLength: [1, 2],
+    wingWidth: [2, 3],
+    // Floor to eaves - a storey - how high the plinth lifts the floor off the ground, and how far it
+    // stands out from the walls.
+    wallHeight: [4.2, 4.8],
+    plinth: [0.35, 0.6],
+    plinthOutset: 0.7,
+    // The posts and beams the walls are framed with (a building part).
+    framing: "timberFrame",
+    // The roof over every block (a building part).
+    roof: "shingleRoof",
+    // Doors, windows and chimneys are building parts (see buildingParts/). One door per house, picked
+    // by weight, in the front.
+    doors: [{ part: "timberDoor", weight: 3 }, { part: "barnDoor", weight: 1 }],
+    // Everything else on the walls, highest priority first: each tries every free spot (as many bays
+    // as it spans) on the walls it may go on - front, back, side; all if not given - in a random
+    // order, and takes it with its chance, up to maxCount of them.
+    wallExtras: [
+      { part: "stoneChimney", priority: 2, chance: 0.16, maxCount: 1, walls: ["side", "back"] },
+      { part: "wideWindow", priority: 1, chance: 0.05 },
+      { part: "timberWindow", priority: 1, chance: 0.2 },
+    ],
+    // What each part is made of (see buildingMaterials/), and the tints - one picked per house - its
+    // colour is multiplied by: 1 is the material as it is. Timber is the posts, the frames, and the
+    // boards under the roof and along its edges.
+    parts: {
+      walls: { material: "plaster", tints: [[1, 1, 1], [1.02, 0.95, 0.82], [0.95, 0.88, 0.76], [0.9, 0.93, 0.95]] },
+      timber: { material: "timber", tints: [[0.6, 0.55, 0.5], [0.8, 0.75, 0.7], [0.5, 0.45, 0.42]] },
+      stone: { material: "dressedStone", tints: [[1, 1, 1], [0.92, 0.9, 0.86]] },
+      roof: { material: "woodShingles", tints: [[1, 1, 1], [0.9, 0.92, 0.95], [1.06, 1.0, 0.92]] },
+      plinth: { material: "stoneBricks", tints: [[1, 1, 1], [0.9, 0.88, 0.85]] },
+      door: { material: "timber", tints: [[0.7, 0.62, 0.55], [0.5, 0.6, 0.6]] },
+      glass: { material: "glass", tints: [[1, 1, 1]] },
+    },
+  },
+}

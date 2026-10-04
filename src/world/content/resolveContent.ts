@@ -40,6 +40,7 @@ import {
   BUILDING_GENERATORS,
   BUILDING_PART_GENERATORS,
   HOUSE_PARTS,
+  RIDGE_PROFILES,
   ROOF_TYPES,
   WALL_SIDES,
   type BuildingDef,
@@ -710,10 +711,11 @@ function readBuildingPart(id: string, obj: RawObject, reader: Reader): BuildingP
     if (block.ridgeTiles !== undefined && block.ridgeTiles !== null) {
       const at = `${path}.ridgeTiles`;
       const tiles = reader.object(block.ridgeTiles, at);
-      reader.onlyKeys(tiles, at, ["width", "height"]);
+      reader.onlyKeys(tiles, at, ["width", "height", "profile"]);
       ridgeTiles = {
         width: reader.number(tiles, "width", at, { min: 0.05 }),
         height: reader.number(tiles, "height", at, { min: 0.02 }),
+        profile: tiles.profile === undefined ? "round" : reader.oneOf(tiles, "profile", at, RIDGE_PROFILES),
       };
     }
     const parts = reader.object(block.parts, `${path}.parts`);

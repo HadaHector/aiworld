@@ -2,8 +2,9 @@
 // to brown, each course's lower edge standing proud of the one below and casting a dark line.
 {
   name: "Roof Tiles",
-  // 8 tiles across and 10 courses up the slope a repeat: 75 x 60 cm each.
-  size: 6,
+  // 8 tiles across and 10 courses up the slope a repeat: 1.5 m x 1.2 m each - twice life size,
+  // so they read from afar.
+  size: 12,
   shine: 0.15,
   texture: {
     bumpStrength: 3,

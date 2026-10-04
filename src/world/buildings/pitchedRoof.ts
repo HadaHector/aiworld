@@ -493,12 +493,14 @@ function drawRidgeCap(
   const span = Math.hypot(line.to[0] - line.from[0], line.to[1] - line.from[1], line.to[2] - line.from[2]) * (t1 - t0);
   const lengths = Math.max(1, Math.ceil(span / step));
   const r = cap.width / 2;
-  const SEGMENTS = 4;
+  // A round cap is an arc; a peaked one two boards, meeting along the top.
+  const peaked = cap.profile === "peaked";
+  const SEGMENTS = peaked ? 2 : 4;
   // Its edges come down onto the slopes either side - as far below the line as they fall in its
   // half width - and a little into them, so no gap shows under it.
   const sink = r * line.fall + 0.03;
   // The arc across the cap at `t`, and its normals.
-  const arc =(t: number): { ring: Vec3[]; normals: Vec3[] } => {
+  const arc = (t: number): { ring: Vec3[]; normals: Vec3[] } => {
     const base = point(t);
     const drop = sag(base[0], base[2], base[1]);
     const ring: Vec3[] = [];
@@ -516,18 +518,28 @@ function drawRidgeCap(
     }
     return { ring, normals };
   };
-  // One frame for the whole cap's texture, so it runs on unbroken along it.
-  let previous = arc(t0);
+  // A peaked cap's boards are flat: each shaded by its own face's normal, out from the line.
+  const first = arc(t0);
+  const flat = Array.from({ length: SEGMENTS }, (_, s): Vec3 => {
+    const e: Vec3 = [first.ring[s + 1][0] - first.ring[s][0], first.ring[s + 1][1] - first.ring[s][1], first.ring[s + 1][2] - first.ring[s][2]];
+    const n = normalize(cross(e, dir));
+    const mid = (Math.PI * (s + 0.5)) / SEGMENTS;
+    const out: Vec3 = [side[0] * Math.cos(mid) + up[0] * Math.sin(mid), side[1] * Math.cos(mid) + up[1] * Math.sin(mid), side[2] * Math.cos(mid) + up[2] * Math.sin(mid)];
+    return n[0] * out[0] + n[1] * out[1] + n[2] * out[2] < 0 ? [-n[0], -n[1], -n[2]] : n;
+  });
+  // One frame per strip of the cap's texture, so it runs on unbroken along it.
+  let previous = first;
   for (let k = 1; k <= lengths; k++) {
     const next = arc(t0 + ((t1 - t0) * k) / lengths);
     for (let s = 0; s < SEGMENTS; s++) {
-      const frame = previous.normals[s];
-      b.surface([previous.ring[s], previous.ring[s + 1], next.ring[s + 1], next.ring[s]], [previous.normals[s], previous.normals[s + 1], next.normals[s + 1], next.normals[s]], frame, paint, dir);
+      const quad = [previous.ring[s], previous.ring[s + 1], next.ring[s + 1], next.ring[s]];
+      if (peaked) b.surface(quad, [flat[s], flat[s], flat[s], flat[s]], flat[s], paint, dir);
+      else b.surface(quad, [previous.normals[s], previous.normals[s + 1], next.normals[s + 1], next.normals[s]], previous.normals[s], paint, dir);
     }
     previous = next;
   }
   // Its two ends, closed.
-  b.faceToward(arc(t0).ring, [-dir[0], -dir[1], -dir[2]], paint);
+  b.faceToward(first.ring, [-dir[0], -dir[1], -dir[2]], paint);
   b.faceToward(previous.ring, dir, paint);
 }
 

@@ -3,8 +3,9 @@
 // paler.
 {
   name: "Timber",
-  // Across the grain and along it: the grain repeats every 6 m along a beam.
-  size: [1.6, 6],
+  // Across the grain and along it: the grain repeats every 12 m along a beam - its rings and knots
+  // twice life size, so they read from afar.
+  size: [3.2, 12],
   shine: 0.1,
   texture: {
     bumpStrength: 1.2,
