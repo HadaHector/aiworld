@@ -62,17 +62,21 @@ function planHouse(spec: HouseSpec, rng: () => number) {
   let back: Block | null = null;
   let side: (Block & { left: boolean }) | null = null;
 
+  // A wing's width, from the spec's range, held under the most its block allows. Where the block
+  // allows less than the range's least, there is no wing at all rather than a sliver of one.
+  const [widthMin, widthMax] = spec.wingWidth;
+  const wingWidth = (most: number): number => rollInt([widthMin, Math.min(widthMax, most)], rng);
   // A wing out of the back: narrower than the main block's front, and no wider than it is deep, so
   // its ridge never stands above the main ridge.
   const backWidthMax = Math.min(W - 1, D);
-  if (backWidthMax >= 1 && rng() < spec.backWing) {
-    const w = rollInt([1, backWidthMax], rng);
+  if (backWidthMax >= widthMin && rng() < spec.backWing) {
+    const w = wingWidth(backWidthMax);
     const offset = pick([0, Math.floor((W - w) / 2), W - w], rng);
     back = { i0: offset, i1: offset + w, j0: -rollInt(spec.wingLength, rng), j1: 0 };
   }
   // A wing out of one side: shallower than the main block, so its ridge is lower.
-  if (D >= 2 && rng() < spec.sideWing) {
-    const d = rollInt([1, D - 1], rng);
+  if (D - 1 >= widthMin && rng() < spec.sideWing) {
+    const d = wingWidth(D - 1);
     const left = rng() < 0.5;
     let offset = pick([0, Math.floor((D - d) / 2), D - d], rng);
     // Flush with the back where a back wing is flush with the same end, the two would touch at

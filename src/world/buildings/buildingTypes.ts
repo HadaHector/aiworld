@@ -65,10 +65,13 @@ export interface HouseSpec {
   /** The main block, in tiles: along the front, and back from it. */
   width: [number, number];
   depth: [number, number];
-  /** How likely a wing at the back, and one at a side, and how many tiles each reaches out. */
+  /** How likely a wing at the back, and one at a side, how many tiles each reaches out, and how many
+   *  wide it is - always narrower than the main block, so the most a block allows caps the width,
+   *  and a block that cannot take the least width gets no wing. */
   backWing: number;
   sideWing: number;
   wingLength: [number, number];
+  wingWidth: [number, number];
   /** Floor to eaves (a storey), how high the plinth lifts the floor, and how far it stands out from
    *  the walls. */
   wallHeight: [number, number];

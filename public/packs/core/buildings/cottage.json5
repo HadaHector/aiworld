@@ -9,11 +9,13 @@
     // The main block in tiles: along the front, and back from it.
     width: [3, 5],
     depth: [2, 3],
-    // How likely a wing out of the back (a T or an L), and one out of a side, and how far each
-    // reaches, in tiles.
+    // How likely a wing out of the back (a T or an L), and one out of a side, how far each reaches,
+    // and how wide it is, in tiles. A wing stays narrower than the main block, whatever the range;
+    // a block too small for the least width gets no wing (a 2-deep cottage, no side wing).
     backWing: 0.5,
     sideWing: 0.35,
     wingLength: [1, 2],
+    wingWidth: [2, 3],
     // Floor to eaves - a storey - how high the plinth lifts the floor off the ground, and how far it
     // stands out from the walls.
     wallHeight: [4.2, 4.8],

@@ -543,7 +543,7 @@ function readBuilding(id: string, obj: RawObject, reader: Reader): BuildingDef {
   let house: BuildingDef["house"] = null;
   if (generator === "house") {
     const path = "house";
-    reader.onlyKeys(block, path, ["tile", "width", "depth", "backWing", "sideWing", "wingLength", "wallHeight", "plinth", "plinthOutset", "post", "roofs", "pitch", "overhang", "roofThickness", "door", "window", "parts"]);
+    reader.onlyKeys(block, path, ["tile", "width", "depth", "backWing", "sideWing", "wingLength", "wingWidth", "wallHeight", "plinth", "plinthOutset", "post", "roofs", "pitch", "overhang", "roofThickness", "door", "window", "parts"]);
     const door = reader.object(block.door, "house.door");
     reader.onlyKeys(door, "house.door", ["width", "height", "frame"]);
     const win = reader.object(block.window, "house.window");
@@ -575,6 +575,7 @@ function readBuilding(id: string, obj: RawObject, reader: Reader): BuildingDef {
       backWing: reader.number(block, "backWing", path, { min: 0, max: 1 }),
       sideWing: reader.number(block, "sideWing", path, { min: 0, max: 1 }),
       wingLength: tiles("wingLength"),
+      wingWidth: tiles("wingWidth"),
       wallHeight: reader.range(block, "wallHeight", path, { allowEqual: true }),
       plinth: reader.range(block, "plinth", path, { allowEqual: true }),
       plinthOutset: reader.number(block, "plinthOutset", path, { min: 0 }),
