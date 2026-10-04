@@ -77,8 +77,8 @@ export interface HouseSpec {
   wallHeight: [number, number];
   plinth: [number, number];
   plinthOutset: number;
-  /** The corner posts' width, either way. */
-  post: [number, number];
+  /** The posts and beams the walls are framed with (a framing building part) - none if null. */
+  framing: BuildingPartDef | null;
   /** Picked per variant. Every block of a house has the same pitch and eave height, so where two
    *  roofs meet their slopes cut each other along clean valleys. */
   roofs: RoofType[];
@@ -96,7 +96,7 @@ export interface HouseSpec {
   parts: Record<HousePart, { material: string; tints: Rgb[] }>;
 }
 
-export const HOUSE_PARTS = ["walls", "timber", "roof", "plinth", "door", "glass"] as const;
+export const HOUSE_PARTS = ["walls", "timber", "stone", "roof", "plinth", "door", "glass"] as const;
 export type HousePart = (typeof HOUSE_PARTS)[number];
 
 /** Which walls of a house: the front (where the door is), the back, and the sides. */
@@ -133,7 +133,7 @@ export interface PartChoice {
  * A part takes no materials of its own: each of its pieces is painted as one of the building's
  * parts (its `parts`: timber, glass, ...), so a house's windows, posts and door share one timber.
  */
-export const BUILDING_PART_GENERATORS = ["framed", "chimney"] as const;
+export const BUILDING_PART_GENERATORS = ["framed", "chimney", "timberFrame", "stoneFrame"] as const;
 export type BuildingPartGenerator = (typeof BUILDING_PART_GENERATORS)[number];
 
 /**
@@ -185,12 +185,49 @@ export interface ChimneySpec {
   parts: { body: HousePart; cap: HousePart; pots: HousePart };
 }
 
+/**
+ * A house's walls framed in timber: a square post on every corner, a beam along the foot of each wall
+ * and one along its top, a post between them wherever the wall or the roof over it changes, and a king
+ * post up each gable to its ridge. Lengths are metres; out is how far each stands out from the wall.
+ */
+export interface TimberFrameSpec {
+  /** The corner posts' width, either way - rolled per house. */
+  corner: [number, number];
+  /** The posts between the corners, and up the gables. */
+  post: { width: number; out: number };
+  /** The beam along the foot of the wall, and the one along its top. */
+  sill: { height: number; out: number };
+  plate: { height: number; out: number };
+  /** Which of the building's parts it is painted as. */
+  parts: { timber: HousePart };
+}
+
+/**
+ * A house's walls framed in dressed stone: quoins up every outer corner - stones in courses, long
+ * along one wall and short along the other, turn and turn about - a cornice along the top of every
+ * wall, maybe a string course along its foot, and a pilaster wherever the wall or the roof over it
+ * changes. Lengths are metres; out is how far each stands out from the wall.
+ */
+export interface StoneFrameSpec {
+  /** About how tall each course of quoins is (fitted to the wall), how far its long and its short
+   *  stone reach along the walls from the corner, and how far they stand out. */
+  quoins: { course: number; long: number; short: number; out: number };
+  pilaster: { width: number; out: number };
+  cornice: { height: number; out: number };
+  /** A string course along the foot of the wall - none if null. */
+  band: { height: number; out: number } | null;
+  /** Which of the building's parts it is painted as. */
+  parts: { stone: HousePart };
+}
+
 export interface BuildingPartDef {
   id: string;
   name: string;
   generator: BuildingPartGenerator;
   framed: FramedSpec | null;
   chimney: ChimneySpec | null;
+  timberFrame: TimberFrameSpec | null;
+  stoneFrame: StoneFrameSpec | null;
 }
 
 export interface BuildingDef {

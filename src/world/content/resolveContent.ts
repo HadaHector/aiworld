@@ -562,12 +562,12 @@ function readBuilding(id: string, obj: RawObject, reader: Reader, partById: Map<
   let house: BuildingDef["house"] = null;
   if (generator === "house") {
     const path = "house";
-    reader.onlyKeys(block, path, ["tile", "width", "depth", "backWing", "sideWing", "wingLength", "wingWidth", "wallHeight", "plinth", "plinthOutset", "post", "roofs", "pitch", "overhang", "roofThickness", "doors", "wallExtras", "parts"]);
+    reader.onlyKeys(block, path, ["tile", "width", "depth", "backWing", "sideWing", "wingLength", "wingWidth", "wallHeight", "plinth", "plinthOutset", "framing", "roofs", "pitch", "overhang", "roofThickness", "doors", "wallExtras", "parts"]);
     // A list of building parts, each with a weight.
-    const partNamed = (entry: RawObject, at: string): BuildingPartDef | undefined => {
-      const partId = reader.string(entry, "part", at);
+    const partNamed = (entry: RawObject, at: string, key = "part"): BuildingPartDef | undefined => {
+      const partId = reader.string(entry, key, at);
       const part = partById.get(partId);
-      if (!part) reader.fail(joinPath(at, "part"), `no building part "${partId}" (known: ${[...partById.keys()].join(", ") || "none"})`);
+      if (!part) reader.fail(joinPath(at, key), `no building part "${partId}" (known: ${[...partById.keys()].join(", ") || "none"})`);
       return part;
     };
     const choices = (key: string): PartChoice[] => {
@@ -628,7 +628,7 @@ function readBuilding(id: string, obj: RawObject, reader: Reader, partById: Map<
       wallHeight: reader.range(block, "wallHeight", path, { allowEqual: true }),
       plinth: reader.range(block, "plinth", path, { allowEqual: true }),
       plinthOutset: reader.number(block, "plinthOutset", path, { min: 0 }),
-      post: reader.range(block, "post", path, { allowEqual: true }),
+      framing: block.framing === undefined ? null : (partNamed(block, path, "framing") ?? null),
       roofs: roofs.length > 0 ? roofs : ["gable"],
       pitch: reader.range(block, "pitch", path, { allowEqual: true }),
       overhang: reader.number(block, "overhang", path, { min: 0 }),
@@ -672,6 +672,51 @@ function readBuildingPart(id: string, obj: RawObject, reader: Reader): BuildingP
       parts: { frame: role("frame", `${path}.parts`, parts), panel: role("panel", `${path}.parts`, parts) },
     };
   }
+  let timberFrame: BuildingPartDef["timberFrame"] = null;
+  if (generator === "timberFrame") {
+    reader.onlyKeys(block, path, ["corner", "post", "sill", "plate", "parts"]);
+    const sizes = (key: string, keys: [string, string]): RawObject => {
+      const at = `${path}.${key}`;
+      const o = reader.object(block[key], at);
+      reader.onlyKeys(o, at, keys);
+      return o;
+    };
+    const post = sizes("post", ["width", "out"]);
+    const sill = sizes("sill", ["height", "out"]);
+    const plate = sizes("plate", ["height", "out"]);
+    const parts = reader.object(block.parts, `${path}.parts`);
+    reader.onlyKeys(parts, `${path}.parts`, ["timber"]);
+    const size = (o: RawObject, key: string, at: string): number => reader.number(o, key, `${path}.${at}`, { min: 0.02 });
+    timberFrame = {
+      corner: reader.range(block, "corner", path, { allowEqual: true }),
+      post: { width: size(post, "width", "post"), out: size(post, "out", "post") },
+      sill: { height: size(sill, "height", "sill"), out: size(sill, "out", "sill") },
+      plate: { height: size(plate, "height", "plate"), out: size(plate, "out", "plate") },
+      parts: { timber: role("timber", `${path}.parts`, parts) },
+    };
+  }
+  let stoneFrame: BuildingPartDef["stoneFrame"] = null;
+  if (generator === "stoneFrame") {
+    reader.onlyKeys(block, path, ["quoins", "pilaster", "cornice", "band", "parts"]);
+    const sub = (key: string, keys: string[]): RawObject => {
+      const o = reader.object(block[key], `${path}.${key}`);
+      reader.onlyKeys(o, `${path}.${key}`, keys);
+      return o;
+    };
+    const size = (o: RawObject, key: string, at: string): number => reader.number(o, key, `${path}.${at}`, { min: 0.02 });
+    const quoins = sub("quoins", ["course", "long", "short", "out"]);
+    const pilaster = sub("pilaster", ["width", "out"]);
+    const cornice = sub("cornice", ["height", "out"]);
+    const band = block.band === undefined || block.band === null ? null : sub("band", ["height", "out"]);
+    const parts = sub("parts", ["stone"]);
+    stoneFrame = {
+      quoins: { course: size(quoins, "course", "quoins"), long: size(quoins, "long", "quoins"), short: size(quoins, "short", "quoins"), out: size(quoins, "out", "quoins") },
+      pilaster: { width: size(pilaster, "width", "pilaster"), out: size(pilaster, "out", "pilaster") },
+      cornice: { height: size(cornice, "height", "cornice"), out: size(cornice, "out", "cornice") },
+      band: band ? { height: size(band, "height", "band"), out: size(band, "out", "band") } : null,
+      parts: { stone: role("stone", `${path}.parts`, parts) },
+    };
+  }
   let chimney: BuildingPartDef["chimney"] = null;
   if (generator === "chimney") {
     reader.onlyKeys(block, path, ["span", "width", "depth", "shoulder", "stackWidth", "stackDepth", "rise", "foundation", "cap", "pots", "parts"]);
@@ -707,7 +752,7 @@ function readBuildingPart(id: string, obj: RawObject, reader: Reader): BuildingP
       parts: { body: role("body", `${path}.parts`, parts), cap: role("cap", `${path}.parts`, parts), pots: role("pots", `${path}.parts`, parts) },
     };
   }
-  return { id, name: reader.string(obj, "name", ""), generator, framed, chimney };
+  return { id, name: reader.string(obj, "name", ""), generator, framed, chimney, timberFrame, stoneFrame };
 }
 
 /** A features/ file - see FeatureKindDef. */

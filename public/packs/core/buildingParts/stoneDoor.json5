@@ -1,0 +1,15 @@
+// A door in a dressed stone surround: boards between broad stone jambs, under a lintel reaching well
+// past them.
+{
+  name: "Stone Door",
+  type: "framed",
+  framed: {
+    span: 1,
+    width: 1.4,
+    height: 2.9,
+    sill: 0,
+    frame: 0.35,
+    headReach: 0.15,
+    parts: { frame: "stone", panel: "door" },
+  },
+}

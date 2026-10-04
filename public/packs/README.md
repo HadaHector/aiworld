@@ -576,8 +576,9 @@ There are two:
   back (see `core/buildings/placeholderHouse.json5`).
 - `house`, a traditional one-storey house (see `core/buildings/cottage.json5`). Its plan is tiles -
   each one bay of wall - in a main block and maybe a wing out of the back (a T or an L) and one out
-  of a side. From the plan come a plinth, corner posts, walls, a door in a middle bay of the front
-  and windows in other bays, and a gable or hipped roof over each block. All of a house's roofs share
+  of a side. From the plan come a plinth, walls, a door in a middle bay of the front and windows in
+  other bays, the walls' framing (`framing`, a framing part - none if left out), and a gable or
+  hipped roof over each block. All of a house's roofs share
   one pitch and eave height, so where two meet they cut each other along clean valleys. Its door and
   windows are building parts (below). `doors` is a list of `{ part, weight }`, one picked per house.
   Everything else on the walls is `wallExtras`, a list of `{ part, priority, chance, maxCount, walls }`
@@ -585,16 +586,17 @@ There are two:
   bays as the part spans - on the `walls` it may go on (`front`, `back`, `side`; all if left out), in
   a random order, taking each with its `chance`, up to `maxCount` (no limit if left out). The bays a
   part takes are not free to the extras after it, and a part may turn a spot down (a chimney by an
-  inner corner, where another wing stands beside it).
+  inner corner, where another wing stands beside it). Everything on the walls keeps clear of the
+  framing's posts and its top beam.
 
 Every generator gives the same
 result: geometry with its floor at height 0, the footprint centred, the front facing +z, and the
 door on the front edge.
 
-A house says what each part is made of - `parts: { walls, timber, roof, plinth, door, glass }`, each
-`{ material, tints }` - naming a building material and the tints, one picked per house, its colour
-is multiplied by (1 is the material as it is). Timber is the posts, the frames, and the boards under
-the roof and along its edges.
+A house says what each part is made of - `parts: { walls, timber, stone, roof, plinth, door, glass }`,
+each `{ material, tints }` - naming a building material and the tints, one picked per house, its
+colour is multiplied by (1 is the material as it is). Timber is the posts, the frames, and the boards
+under the roof and along its edges; stone is dressed stone trim - quoins, cornices, stone surrounds.
 
 A building material (`buildingMaterials/`) is a texture graph like a ground material's, with `size` -
 the metres one repeat covers, a number or `[across, up]` - and `shine`, 0 (matte) to 1 (glass: a
@@ -608,7 +610,9 @@ own, so one house can wear timber frames or stone arches: the house works out wh
 much room it has, the part builds itself there. Like a building it names its generator by `type`,
 its settings under the generator's name. It takes no materials of its own - each of its pieces is
 painted as one of the building's `parts`, so a house's windows, posts and door share one timber.
-There are two so far:
+Most fill a slot on a wall; a framing part is handed every wall of the house at once - each wall's
+length, where along it the wall or the roof over it changes, any gable over it, and where along its
+foot a door or a chimney stands - and every corner, outer or inner. There are four so far:
 
 - `framed`, an opening in a timber frame, closed - a panel (glass, or a door's boards) standing on
   the wall, never a hole: `width`, `height` and `sill` (its foot above the floor, 0 for a door) of the
@@ -623,10 +627,22 @@ There are two so far:
   rises through the eaves to `rise` above the ridge (a range, rolled per chimney). Its `foundation`
   reaches past the breast and stands a little above the floor, out past the house's plinth; a `cap`
   band tops the stack, with `pots` on it. `parts: { body, cap, pots }` paints them.
+- `timberFrame`, a framing (see `core/buildingParts/timberFrame.json5`): a square post `corner` wide
+  (a range, rolled per house) on every corner, a `sill` beam along the foot of every wall - broken
+  where a door or a chimney stands - and a `plate` beam along its top, a `post` between them
+  wherever the wall or the roof over it changes, and a king post up each gable to its ridge.
+  `parts: { timber }` paints it.
+- `stoneFrame`, a framing in dressed stone (see `core/buildingParts/stoneFrame.json5`, and
+  `core/buildings/stoneCottage.json5` for a house wearing it): `quoins` up every outer corner -
+  courses about `course` tall, a `long` and a `short` stone along the two walls, turn and turn about,
+  standing `out` - a `cornice` along the top of every wall, a `band` (string course) along its foot
+  (none if null), and a `pilaster` wherever the wall or the roof over it changes. `parts: { stone }`
+  paints it.
 
 In the workbench a building stands on a patch of ground, one variant or a row of eight, with its
 footprint, its door and - for a generator with a plan - its tiles marked. A building part stands on
-a stretch of wall, painted and sized like the first house that uses it.
+a stretch of wall, painted, sized and framed like the first house that uses it - a framing part on
+that whole house.
 
 ## Example
 

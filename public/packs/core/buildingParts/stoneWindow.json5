@@ -1,0 +1,17 @@
+// A window in a dressed stone surround: a stone mullion and transom split the pane in four, over a
+// deep stone sill.
+{
+  name: "Stone Window",
+  type: "framed",
+  framed: {
+    span: 1,
+    width: 1.1,
+    height: 1.7,
+    sill: 1.1,
+    frame: 0.25,
+    headReach: 0.08,
+    bars: [1, 1],
+    sillReach: 0.08,
+    parts: { frame: "stone", panel: "glass" },
+  },
+}

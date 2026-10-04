@@ -1,0 +1,19 @@
+// A timber frame for a house's walls: a heavy square post on every corner, a beam along the foot of
+// every wall (broken where a door stands) and one along its top under the eaves, a post between
+// them wherever the wall or the roof over it changes, and a king post up each gable to its ridge.
+{
+  name: "Timber Frame",
+  type: "timberFrame",
+  timberFrame: {
+    // The corner posts' width either way, rolled per house.
+    corner: [0.6, 0.9],
+    // The posts between the corners and up the gables: how wide, and how far they stand out from
+    // the wall.
+    post: { width: 0.4, out: 0.16 },
+    // The beam along the foot of the wall, and the one along its top.
+    sill: { height: 0.3, out: 0.14 },
+    plate: { height: 0.35, out: 0.18 },
+    // What it is painted as - the house's parts.
+    parts: { timber: "timber" },
+  },
+}

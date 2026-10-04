@@ -1,10 +1,11 @@
 import type { BuildingModel, HouseSpec, Paint, RoofType, WallSide } from "./buildingTypes";
 import { FOUNDATION_DEPTH, ModelBuilder, pick, roll, rollInt, type Vec3 } from "./buildingGeometry";
-import { buildWallPart, partSpan, pickPart, type PartPaints, type WallSlot } from "./buildingParts";
+import { buildFraming, buildWallPart, partSpan, pickPart, planFraming, type FramingCorner, type FramingWall, type PartExtent, type PartPaints, type WallSlot } from "./buildingParts";
 
 /**
  * A traditional one-storey house, built in the order a house is: its plan (tiles), the plinth, the
- * corner posts, the walls with their door and windows, and a roof over each block of the plan.
+ * walls with their door, windows and the like, the framing over them, and a roof over each block of
+ * the plan.
  *
  * The plan is a main block with its front to +z, and maybe a wing out of the back (a T or an L)
  * and one out of a side. Each block is a rectangle and gets a roof of its own - every one at the
@@ -309,7 +310,6 @@ export function buildHouse(spec: HouseSpec, rng: () => number): BuildingModel {
   const wallHeight = roll(spec.wallHeight, rng);
   const plinth = roll(spec.plinth, rng);
   const outset = spec.plinthOutset;
-  const post = roll(spec.post, rng);
   const eaves = plinth + wallHeight;
   const roofType = pick(spec.roofs, rng);
   const slope = Math.tan((roll(spec.pitch, rng) * Math.PI) / 180);
@@ -317,6 +317,7 @@ export function buildHouse(spec: HouseSpec, rng: () => number): BuildingModel {
   const paints: PartPaints = {
     walls: paint("walls"),
     timber: paint("timber"),
+    stone: paint("stone"),
     roof: paint("roof"),
     plinth: paint("plinth"),
     door: paint("door"),
@@ -354,6 +355,54 @@ export function buildHouse(spec: HouseSpec, rng: () => number): BuildingModel {
   // The top of the highest roof: the main block's ridge, its slab on it.
   const ridge = eaves + ((main.j1 - main.j0) * tile * slope) / 2 + spec.roofThickness * Math.sqrt(1 + slope * slope);
 
+  // How each block's roof ends. The main block's ridge runs along the front, a wing's away from it.
+  // A main end with a wing at it is a gable, overhanging the wing's roof like any other.
+  const overhang = spec.overhang;
+  const free = (): RoofEnd => ({ kind: roofType, overhang, extend: 0 });
+  const backFlushLeft = back !== null && back.i0 === 0;
+  const backFlushRight = back !== null && back.i1 === W;
+  const mainEnd = (left: boolean): RoofEnd => {
+    const wingHere = side !== null && side.left === left;
+    const gable = wingHere || (left ? backFlushLeft : backFlushRight);
+    return { kind: gable ? "gable" : roofType, overhang, extend: 0 };
+  };
+
+  // The gables: each block end with one, as the wall it stands on (its direction and line), and its
+  // apex - along that wall, in tiles, and how high.
+  const gables: { dir: Direction; line: number; at: number; ridge: number }[] = [];
+  const apex = (span: number): number => eaves + (span * tile * slope) / 2;
+  if (mainEnd(true).kind === "gable") gables.push({ dir: "nx", line: main.i0, at: (main.j0 + main.j1) / 2, ridge: apex(main.j1 - main.j0) });
+  if (mainEnd(false).kind === "gable") gables.push({ dir: "px", line: main.i1, at: (main.j0 + main.j1) / 2, ridge: apex(main.j1 - main.j0) });
+  if (back && roofType === "gable") gables.push({ dir: "nz", line: back.j0, at: (back.i0 + back.i1) / 2, ridge: apex(back.i1 - back.i0) });
+  if (side && roofType === "gable") {
+    gables.push({ dir: side.left ? "nx" : "px", line: side.left ? side.i0 : side.i1, at: (side.j0 + side.j1) / 2, ridge: apex(side.j1 - side.j0) });
+  }
+
+  // Where a post goes along each run between its corners: wherever the block behind the wall - and
+  // so the roof over it - changes.
+  const blockAt = (i: number, j: number): number => blocks.findIndex((k) => i >= k.i0 && i < k.i1 && j >= k.j0 && j < k.j1);
+  const behind = (run: WallRun, along: number): number => {
+    switch (run.dir) {
+      case "pz":
+        return blockAt(along, run.line - 1);
+      case "nz":
+        return blockAt(along, run.line);
+      case "px":
+        return blockAt(run.line - 1, along);
+      case "nx":
+        return blockAt(run.line, along);
+    }
+  };
+  const breaks = (run: WallRun): number[] => {
+    const out: number[] = [];
+    for (let along = run.from + 1; along < run.to; along++) if (behind(run, along - 1) !== behind(run, along)) out.push(along);
+    return out;
+  };
+
+  // The framing, settled before anything goes on the walls, so all of it keeps clear of its posts
+  // and its top beam.
+  const framing = planFraming(spec.framing, rng);
+
   const wallOf = (run: WallRun): WallSide => (run.dir === "pz" ? "front" : run.dir === "nz" ? "back" : "side");
   /** Whether a run starts and ends at an inner corner. */
   const innerEnds = (run: WallRun): [boolean, boolean] => {
@@ -363,12 +412,14 @@ export function buildHouse(spec: HouseSpec, rng: () => number): BuildingModel {
   };
 
   /** The slot for a part `span` bays wide, its middle `centre` tiles along a run. Clear of the
-   *  eaves, and of the corner post where it reaches the run's end. */
+   *  eaves and the framing's top beam, and of a post where it reaches one - at the run's end, or
+   *  where the roof changes. */
   const slotAt = (run: WallRun, centre: number, span: number): WallSlot => {
     const { alongX, at } = frame(run);
     const sign = run.dir === "px" || run.dir === "pz" ? 1 : -1;
     const atStart = centre - span / 2 <= run.from;
     const atEnd = atStart || centre + span / 2 >= run.to;
+    const atPost = breaks(run).some((along) => Math.abs(along - (centre - span / 2)) < 1e-6 || Math.abs(along - (centre + span / 2)) < 1e-6);
     const [startInner, endInner] = innerEnds(run);
     const point = ([a, y, out]: Vec3): Vec3 => {
       const [x, , z] = at(centre, out, y);
@@ -376,10 +427,10 @@ export function buildHouse(spec: HouseSpec, rng: () => number): BuildingModel {
     };
     return {
       floor: plinth,
-      top: eaves - 0.25,
+      top: eaves - framing.top - 0.25,
       ridge,
       plinthOutset: outset,
-      halfRoom: (span * tile) / 2 - 0.05 - (atEnd ? post / 2 : 0),
+      halfRoom: (span * tile) / 2 - 0.05 - Math.max(atEnd ? framing.cornerReach : 0, atPost ? framing.postHalf : 0),
       wall: wallOf(run),
       innerCorner: (atStart && startInner) || (centre + span / 2 >= run.to && endInner),
       box: (a0, a1, y0, y1, out0, out1, paint) => {
@@ -394,7 +445,7 @@ export function buildHouse(spec: HouseSpec, rng: () => number): BuildingModel {
   };
 
   // 2. The plinth: standing out from the walls, from below ground to the floor, with a ledge on top.
-  // 3. The corner posts - heavy, square, a beam's width either way of the corner. 4. The walls.
+  // 3. The walls.
   const corners = new Set<string>();
   for (const run of runs) {
     const { alongX, normal, at } = frame(run);
@@ -409,11 +460,6 @@ export function buildHouse(spec: HouseSpec, rng: () => number): BuildingModel {
     b.face([at(run.from, 0, plinth), at(run.to, 0, plinth), at(run.to, 0, eaves), at(run.from, 0, eaves)], normal, paints.walls);
     for (const along of [run.from, run.to]) corners.add(alongX ? `${along},${run.line}` : `${run.line},${along}`);
   }
-  for (const key of corners) {
-    const [i, j] = key.split(",").map(Number);
-    const h = post / 2;
-    b.box(X(i) - h, plinth, Z(j) - h, X(i) + h, eaves, Z(j) + h, paints.timber);
-  }
 
   // The door: one of the house's doors that fits the front, in a middle bay of it (bays, for a
   // big door) where there are bays to spare either side.
@@ -422,12 +468,19 @@ export function buildHouse(spec: HouseSpec, rng: () => number): BuildingModel {
   const doorBay = W >= doorSpan + 2 ? rollInt([1, W - 1 - doorSpan], rng) : rollInt([0, W - doorSpan], rng);
   const doorCentre = doorBay + doorSpan / 2;
   const frontRun = runs.find((run) => run.dir === "pz" && run.line === main.j1 && run.from <= doorBay && run.to >= doorBay + doorSpan)!;
-  if (doorPart) buildWallPart(doorPart, slotAt(frontRun, doorCentre, doorSpan), paints, rng);
-  /** The bays each run has given to a part so far, as [from, to). */
+  /** The bays each run has given to a part so far, as [from, to), and the stretches of its foot
+   *  (metres from its start) the parts there stand in. */
   const taken = new Map<WallRun, [number, number][]>([[frontRun, [[doorBay, doorBay + doorSpan]]]]);
   const take = (run: WallRun, from: number, to: number): void => {
     taken.set(run, [...(taken.get(run) ?? []), [from, to]]);
   };
+  const footGaps = new Map<WallRun, [number, number][]>();
+  const place = (run: WallRun, centre: number, extent: PartExtent | null): void => {
+    if (!extent || extent.foot > plinth + 0.5) return;
+    const at = (centre - run.from) * tile;
+    footGaps.set(run, [...(footGaps.get(run) ?? []), [at - extent.half, at + extent.half]]);
+  };
+  if (doorPart) place(frontRun, doorCentre, buildWallPart(doorPart, slotAt(frontRun, doorCentre, doorSpan), paints, rng));
 
   // The wall's extras, highest priority first: each tries every free spot of the walls it may go
   // on, in a random order, taking each with its chance, until it has as many as it may.
@@ -448,27 +501,67 @@ export function buildHouse(spec: HouseSpec, rng: () => number): BuildingModel {
     for (const { run, bay } of spots) {
       if (extra.maxCount !== null && count >= extra.maxCount) break;
       if (!isFree(run, bay, bay + span) || rng() >= extra.chance) continue;
-      if (!buildWallPart(extra.part, slotAt(run, bay + span / 2, span), paints, rng)) continue;
+      const extent = buildWallPart(extra.part, slotAt(run, bay + span / 2, span), paints, rng);
+      if (!extent) continue;
+      place(run, bay + span / 2, extent);
       take(run, bay, bay + span);
       count++;
     }
   }
 
-  // 5-7. The roofs. The main block's ridge runs along the front; a wing's runs away from it, and
-  // where it joins runs on into the main roof as far as its ridge could reach (its half span, at
-  // one pitch). Then every block's slopes are cut where they pass under another block's roof - so
-  // they end exactly along the valleys - and only then drawn. A main end with a wing at it is a
-  // gable, overhanging the wing's roof like any other - where a side wing is flush with its front or
-  // back and the two share a plane, the wing's gives way under it.
-  const overhang = spec.overhang;
-  const free = (): RoofEnd => ({ kind: roofType, overhang, extend: 0 });
-  const backFlushLeft = back !== null && back.i0 === 0;
-  const backFlushRight = back !== null && back.i1 === W;
-  const mainEnd = (left: boolean): RoofEnd => {
-    const wingHere = side !== null && side.left === left;
-    const gable = wingHere || (left ? backFlushLeft : backFlushRight);
-    return { kind: gable ? "gable" : roofType, overhang, extend: 0 };
-  };
+  // 4. The framing over the walls: every run, its posts and its gable, and every corner.
+  const framingWalls = runs.map((run): FramingWall => {
+    const { alongX, at } = frame(run);
+    const gable = gables.find((g) => g.dir === run.dir && g.line === run.line && g.at > run.from && g.at < run.to);
+    return {
+      length: (run.to - run.from) * tile,
+      posts: breaks(run).map((along) => (along - run.from) * tile),
+      gable: gable ? { at: (gable.at - run.from) * tile, ridge: gable.ridge } : null,
+      gaps: footGaps.get(run) ?? [],
+      box: (a0, a1, y0, y1, out0, out1, paint) => {
+        const [ax, , az] = at(run.from, out0, 0);
+        const [bx, , bz] = at(run.from, out1, 0);
+        if (alongX) b.box(ax + a0, y0, Math.min(az, bz), ax + a1, y1, Math.max(az, bz), paint);
+        else b.box(Math.min(ax, bx), y0, az + a0, Math.max(ax, bx), y1, az + a1, paint);
+      },
+    };
+  });
+  buildFraming(
+    spec.framing,
+    framing,
+    {
+      floor: plinth,
+      eaves,
+      walls: framingWalls,
+      corners: [...corners].map((key): FramingCorner => {
+        const [i, j] = key.split(",").map(Number);
+        // u and v run along x and z, toward the house at an outer corner (the one tile of the four
+        // around it that is inside), away from the outside at an inner one (the one that is not).
+        const kind = cornerKind(i, j);
+        const quadrant = [[i - 1, j - 1], [i, j - 1], [i - 1, j], [i, j]].find(([ti, tj]) => inside(ti, tj) === (kind === "outer"))!;
+        const flip = kind === "outer" ? 1 : -1;
+        const su = (quadrant[0] === i ? 1 : -1) * flip;
+        const sv = (quadrant[1] === j ? 1 : -1) * flip;
+        return {
+          kind,
+          box: (u0, u1, v0, v1, y0, y1, paint) => {
+            const xa = X(i) + su * u0;
+            const xb = X(i) + su * u1;
+            const za = Z(j) + sv * v0;
+            const zb = Z(j) + sv * v1;
+            b.box(Math.min(xa, xb), y0, Math.min(za, zb), Math.max(xa, xb), y1, Math.max(za, zb), paint);
+          },
+        };
+      }),
+    },
+    paints,
+  );
+
+  // 5-7. The roofs. A wing's, where it joins, runs on into the main roof as far as its ridge could
+  // reach (its half span, at one pitch). Then every block's slopes are cut where they pass under
+  // another block's roof - so they end exactly along the valleys - and only then drawn. Where a side
+  // wing is flush with the main block's front or back and the two share a plane, the wing's gives
+  // way under the main one.
   const roofs: BlockRoof[] = [roofBlock(b, X(main.i0), X(main.i1), Z(main.j0), Z(main.j1), true, mainEnd(true), mainEnd(false), eaves, slope, overhang, paints.walls)];
   if (back) {
     const halfSpan = ((back.i1 - back.i0) * tile) / 2;

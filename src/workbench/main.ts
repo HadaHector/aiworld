@@ -818,9 +818,12 @@ async function preview3d(token: number, asset: Asset, view: ViewDef, content: Wo
   } else if (asset.folder === "buildingParts") {
     ground = groundMaterial(content, asset);
     if (grassOn) grass = ground.grass;
-    // On a stretch of wall, looking like the first house that uses it.
+    // On a stretch of wall, looking like the first house that uses it - or, for a framing part, on
+    // that whole house, where it has gables and wings to frame.
     const part = content.buildingParts.find((p) => p.id === asset.id)!;
-    buildings = [buildPartSample(part, houseUsing(part, content.buildings)?.house ?? null)];
+    const house = houseUsing(part, content.buildings);
+    const isFraming = part.generator === "timberFrame" || part.generator === "stoneFrame";
+    buildings = [isFraming && house ? generateBuilding(house, seed, 0) : buildPartSample(part, house?.house ?? null)];
   } else {
     ground = groundMaterial(content, asset);
     if (grassOn) grass = ground.grass;

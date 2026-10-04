@@ -1,0 +1,20 @@
+// A stone frame for a house's walls: quoins up every outer corner - dressed stones in courses, long
+// along one wall and short along the other, turn and turn about - a cornice along the top of every
+// wall under the eaves, a string course along its foot, and a pilaster wherever the wall or the roof
+// over it changes.
+{
+  name: "Stone Frame",
+  type: "stoneFrame",
+  stoneFrame: {
+    // About how tall a course of quoins is (fitted to the wall), how far its long and its short
+    // stone reach along the walls from the corner, and how far they stand out.
+    quoins: { course: 0.5, long: 0.95, short: 0.55, out: 0.12 },
+    // The pilasters between the corners.
+    pilaster: { width: 0.6, out: 0.08 },
+    // The cornice along the top of the wall, and the string course along its foot (null: none).
+    cornice: { height: 0.35, out: 0.16 },
+    band: { height: 0.25, out: 0.06 },
+    // What it is painted as - the house's parts.
+    parts: { stone: "stone" },
+  },
+}

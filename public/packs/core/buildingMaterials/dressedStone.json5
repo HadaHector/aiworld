@@ -1,0 +1,44 @@
+// Dressed stone, for quoins, cornices and door and window surrounds: smooth pale limestone, each
+// block cut clean - only a faint grain, a soft mottle and the odd pit, no joints of its own (each
+// piece of it is a stone).
+{
+  name: "Dressed Stone",
+  // Metres one repeat covers.
+  size: 3,
+  shine: 0.08,
+  texture: {
+    bumpStrength: 1.2,
+    pipeline: {
+      noises: [
+        { name: "grain", type: "fbm", octaves: 3, tileCycles: 70, amplitude: 1, persistence: 0.55, lacunarity: 2 },
+        { name: "mottle", type: "fbm", octaves: 3, tileCycles: 5, amplitude: 1, persistence: 0.5, lacunarity: 2 },
+        { name: "pits", type: "worley", tileCycles: 30, amplitude: 1, mode: "f1" },
+      ],
+      steps: [
+        { output: "grainRaw", op: "sample", noise: "grain" },
+        { output: "mottleRaw", op: "sample", noise: "mottle" },
+        { output: "pitRaw", op: "sample", noise: "pits" },
+        {
+          output: "tone",
+          op: "colorRamp",
+          input: "mottleRaw",
+          stops: [
+            { at: -1, color: [0.66, 0.63, 0.56] },
+            { at: 0, color: [0.74, 0.71, 0.64] },
+            { at: 1, color: [0.8, 0.77, 0.7] },
+          ],
+        },
+        { output: "grainShade", op: "remap", input: "grainRaw", inMin: -1, inMax: 1, outMin: 0.92, outMax: 1.06 },
+        { output: "stone", op: "multiply", a: "tone", b: "grainShade" },
+        { output: "pit", op: "mask", input: "pitRaw", at: 0.0, off: 0.08 },
+        { output: "pitColor", op: "color", value: [0.5, 0.48, 0.43] },
+        { output: "diffuse", op: "mix", a: "stone", b: "pitColor", t: "pit" },
+        { output: "roughness", op: "constant", value: 0.85 },
+        { output: "pitDepth", op: "scale", input: "pit", factor: -0.2 },
+        { output: "grainBump", op: "scale", input: "grainRaw", factor: 0.05 },
+        { output: "height", op: "add", a: "pitDepth", b: "grainBump" },
+      ],
+      outputs: { diffuse: "diffuse", roughness: "roughness", height: "height" },
+    },
+  },
+}
