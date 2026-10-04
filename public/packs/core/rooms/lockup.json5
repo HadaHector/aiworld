@@ -1,0 +1,10 @@
+// A lockup under the town hall: rough flags, dank rubble walls, the joists of the floor over it.
+{
+  name: "Lockup",
+  floor: { material: "stoneBricks", tints: [[0.6, 0.6, 0.58]] },
+  walls: { material: "rubbleStone", tints: [[0.72, 0.72, 0.7]] },
+  ceiling: { material: "planks", tints: [[0.55, 0.5, 0.45]] },
+  beams: { material: "timber", tints: [[0.3, 0.26, 0.24]] },
+  timber: { material: "timber", tints: [[0.32, 0.28, 0.25]] },
+  stair: "solid",
+}

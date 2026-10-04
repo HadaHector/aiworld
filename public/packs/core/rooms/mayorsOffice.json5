@@ -1,0 +1,10 @@
+// The mayor's office: warm boards, walls washed a deep blue, a beamed ceiling.
+{
+  name: "Mayor's Office",
+  floor: { material: "floorboards", tints: [[0.85, 0.74, 0.64]] },
+  walls: { material: "plaster", tints: [[0.72, 0.8, 0.98], [0.78, 0.74, 0.95]] },
+  ceiling: { material: "plaster", tints: [[0.96, 0.94, 0.9]] },
+  beams: { material: "timber", tints: [[0.36, 0.28, 0.24]] },
+  timber: { material: "timber", tints: [[0.36, 0.28, 0.24]] },
+  stair: "open",
+}

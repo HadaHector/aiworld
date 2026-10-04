@@ -1,0 +1,11 @@
+// A town hall's stair hall upstairs: flagstones, pale limewash, and the stair on up where there is a
+// storey over it.
+{
+  name: "Stair Hall",
+  floor: { material: "stoneBricks", tints: [[1.0, 0.98, 0.95]] },
+  walls: { material: "plaster", tints: [[1.02, 1.0, 0.94]] },
+  ceiling: { material: "plaster", tints: [[0.98, 0.96, 0.9]] },
+  beams: { material: "timber", tints: [[0.42, 0.36, 0.32]] },
+  timber: { material: "timber", tints: [[0.45, 0.36, 0.3]] },
+  stair: "solid",
+}

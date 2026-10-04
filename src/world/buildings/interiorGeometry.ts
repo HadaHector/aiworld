@@ -57,6 +57,8 @@ const DOUBLE_DOOR = 2;
 const RAIL_HEIGHT = 1.2;
 const RAIL = 0.1;
 const POST_GAP = 1.3;
+/** How far a stair stands off the wall beside it. */
+const STAIR_CLEAR = 0.02;
 /** A stair's steps rise about this much each. */
 const RISER = 0.4;
 
@@ -240,10 +242,15 @@ export function buildInterior(input: InteriorInput): void {
     const runX = !alongX(stair.dir);
     // Along the run: from the back of its first tile to the front of its last.
     const start = runX ? (s > 0 ? X(t0[0]) : X(t0[0] + 1)) : s > 0 ? Z(t0[1]) : Z(t0[1] + 1);
-    const end = start + s * stair.tiles.length * tile;
+    // To the front of its last tile - or, where a wall stands across its top (the room it rises
+    // into lies over a wall of this one), just short of the wall's face.
+    const [ai, aj] = stair.arrival;
+    const walled = layout.cells.get(cellKey(ai, aj, stair.level)) !== stair.room;
+    const end = start + s * (stair.tiles.length * tile - (walled ? WALL + STAIR_CLEAR : 0));
     // Across it: from the wall it stands against, as wide as fits.
     const width = Math.min(1.9, tile - 2 * WALL);
-    const wallLine = lineOf(t0[0], t0[1], stair.wallSide) - signOf(stair.wallSide) * WALL;
+    // Just clear of the wall it stands against, so its side and the wall's face are never one plane.
+    const wallLine = lineOf(t0[0], t0[1], stair.wallSide) - signOf(stair.wallSide) * (WALL + STAIR_CLEAR);
     const across: [number, number] = [wallLine, wallLine - signOf(stair.wallSide) * width];
     const steps = Math.max(4, Math.round(rise / RISER));
     const box = (a0: number, a1: number, y0: number, y1: number, paint: Paint): void => {

@@ -1,0 +1,9 @@
+// A clerks' office: boards underfoot, walls washed a pale green, a plain ceiling.
+{
+  name: "Clerks' Office",
+  floor: { material: "floorboards", tints: [[0.95, 0.9, 0.85]] },
+  walls: { material: "plaster", tints: [[0.88, 0.96, 0.86], [0.9, 0.94, 0.9]] },
+  ceiling: { material: "plaster", tints: [[0.98, 0.98, 0.94]] },
+  timber: { material: "timber", tints: [[0.5, 0.42, 0.36]] },
+  stair: "open",
+}

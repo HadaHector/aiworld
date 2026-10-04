@@ -6,17 +6,18 @@
   type: "house",
   house: {
     tile: [2.8, 3.2],
-    width: [4, 5],
-    depth: [3, 3],
+    // Big - but how big varies from town to town.
+    width: [5, 7],
+    depth: [3, 4],
     // How the plan is laid out round the main block (see the README's "House plans").
     plan: {
       type: "house",
       house: {
-        backWing: 0.4,
-        sideWing: 0,
-        wingLength: [1, 2],
+        backWing: 0.6,
+        sideWing: 0.3,
+        wingLength: [2, 3],
         wingWidth: [2, 3],
-        wingStoreys: [1, 2],
+        wingStoreys: [2, 2],
         lowTops: [{ part: "stoneTerrace", weight: 1 }],
         arcade: { chance: 1, support: "stonePillar" },
       },
@@ -37,17 +38,27 @@
       { part: "stoneChimney", priority: 2, chance: 0.4, maxCount: 2, walls: ["side", "back"], storeys: ["ground"] },
       { part: "stoneWindow", priority: 1, chance: 0.65 },
     ],
-    // Inside: an entry hall behind the front door with a stair up to the hall over it, and a cellar
-    // under it; the rest stays shut.
+    // Inside: an entry hall behind the front door with the stair, a guard room and clerks' offices
+    // beside it; upstairs a stair hall over it - and on a third storey another - with the council
+    // chamber off it (two storeys tall where it can be), the mayor's office and an archive; and in
+    // the cellar a lockup and a strongroom. Doors out at the back too.
     interior: {
       type: "rooms",
       rooms: {
-        exits: [1, 1],
-        fakeDoors: 0.6,
+        exits: [1, 2],
+        fakeDoors: 0.5,
         rooms: [
-          { room: "entryHall", priority: 10, tiles: [6, 9], at: "entrance", stair: true },
-          { room: "hall", priority: 8, level: "upper", tiles: [6, 15], over: "entryHall" },
-          { room: "cellar", priority: 4, chance: 0.6, level: "cellar", tiles: [3, 8], under: "entryHall" },
+          { room: "entryHall", priority: 10, tiles: [6, 9], minSide: 2, at: "entrance", stair: true },
+          { room: "stairHall", priority: 9, level: "upper", tiles: [4, 6], minSide: 2, over: "entryHall", stair: true },
+          { room: "councilChamber", priority: 8, level: "upper", levels: [1, 2], tiles: [8, 14], minSide: 3, next: "stairHall" },
+          { room: "mayorsOffice", priority: 7, level: "upper", tiles: [4, 6], minSide: 2, maxSide: 3 },
+          { room: "guardRoom", priority: 6, tiles: [4, 6], minSide: 2, maxSide: 3, next: "entryHall" },
+          { room: "clerksOffice", priority: 5, count: [1, 2], tiles: [4, 6], minSide: 2, maxSide: 3 },
+          { room: "archive", priority: 4, chance: 0.8, level: "upper", tiles: [4, 8], minSide: 2, maxSide: 4 },
+          { room: "stairHall", priority: 3, level: "upper", tiles: [4, 6], minSide: 2, over: "stairHall", stair: true },
+          { room: "clerksOffice", priority: 2, count: [1, 3], level: "upper", tiles: [4, 6], minSide: 2, maxSide: 3 },
+          { room: "lockup", priority: 1, chance: 0.7, level: "cellar", tiles: [4, 8], minSide: 2, under: "entryHall" },
+          { room: "strongroom", priority: 1, chance: 0.6, level: "cellar", tiles: [2, 4], next: "lockup" },
         ],
       },
     },

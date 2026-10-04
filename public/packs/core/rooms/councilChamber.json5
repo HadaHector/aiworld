@@ -1,0 +1,11 @@
+// The council chamber: dark polished boards, walls panelled in dark wood, and a ceiling of heavy
+// dark beams.
+{
+  name: "Council Chamber",
+  floor: { material: "floorboards", tints: [[0.72, 0.6, 0.5]] },
+  walls: { material: "planks", tints: [[0.62, 0.5, 0.42]] },
+  ceiling: { material: "plaster", tints: [[0.94, 0.88, 0.76]] },
+  beams: { material: "timber", tints: [[0.3, 0.24, 0.2]] },
+  timber: { material: "timber", tints: [[0.32, 0.25, 0.2]] },
+  stair: "solid",
+}

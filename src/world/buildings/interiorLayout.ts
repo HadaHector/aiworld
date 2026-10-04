@@ -127,31 +127,14 @@ export function planInterior(program: RoomsInterior, shell: InteriorShell, rng: 
 
   for (const request of requests) {
     if (rng() >= request.chance) continue;
-    const height = rollInt(request.levels, rng);
+    const rolled = rollInt(request.levels, rng);
     const target = rollInt(request.tiles, rng);
-    const bases = baseLevels(request, height, levelIndices);
+    // As tall as rolled - or, where that cannot stand anywhere (a two-storey room in a one-storey
+    // wing), the tallest that can.
     let best: { rect: Block; base: number; score: number } | null = null;
-    for (const base of bases) {
-      if (!Array.from({ length: height }, (_, n) => hasLevel(base + n)).every(Boolean)) continue;
-      for (let i0 = bounds.i0; i0 < bounds.i1; i0++) {
-        for (let i1 = i0 + 1; i1 <= bounds.i1; i1++) {
-          for (let j0 = bounds.j0; j0 < bounds.j1; j0++) {
-            for (let j1 = j0 + 1; j1 <= bounds.j1; j1++) {
-              const rect = { i0, i1, j0, j1 };
-              const size = area(rect);
-              if (size < request.tiles[0] || size > request.tiles[1]) continue;
-              if (i1 - i0 < request.minSide || j1 - j0 < request.minSide) continue;
-              if (request.maxSide !== null && (i1 - i0 > request.maxSide || j1 - j0 > request.maxSide)) continue;
-              if (!fits(rect, base, height)) continue;
-              const score = scoreOf(request, rect, base, height, size, target);
-              if (score === null) continue;
-              const jittered = score + rng() * 0.01;
-              if (!best || jittered > best.score) best = { rect, base, score: jittered };
-            }
-          }
-        }
-      }
-    }
+    let height = rolled;
+    for (; height >= request.levels[0] && !best; height--) best = bestPlace(request, height, target);
+    height++;
     if (!best) continue;
     const room: Room = {
       id: rooms.length,
@@ -172,6 +155,33 @@ export function planInterior(program: RoomsInterior, shell: InteriorShell, rng: 
     };
     stake(room);
     rooms.push(room);
+  }
+
+  /** Where a request's room `height` levels tall fits best - or null where it fits nowhere. */
+  function bestPlace(request: RoomRequest, height: number, target: number): { rect: Block; base: number; score: number } | null {
+    let best: { rect: Block; base: number; score: number } | null = null;
+    for (const base of baseLevels(request, height, levelIndices)) {
+      if (!Array.from({ length: height }, (_, n) => hasLevel(base + n)).every(Boolean)) continue;
+      for (let i0 = bounds.i0; i0 < bounds.i1; i0++) {
+        for (let i1 = i0 + 1; i1 <= bounds.i1; i1++) {
+          for (let j0 = bounds.j0; j0 < bounds.j1; j0++) {
+            for (let j1 = j0 + 1; j1 <= bounds.j1; j1++) {
+              const rect = { i0, i1, j0, j1 };
+              const size = area(rect);
+              if (size < request.tiles[0] || size > request.tiles[1]) continue;
+              if (i1 - i0 < request.minSide || j1 - j0 < request.minSide) continue;
+              if (request.maxSide !== null && (i1 - i0 > request.maxSide || j1 - j0 > request.maxSide)) continue;
+              if (!fits(rect, base, height)) continue;
+              const score = scoreOf(request, rect, base, height, size, target);
+              if (score === null) continue;
+              const jittered = score + rng() * 0.01;
+              if (!best || jittered > best.score) best = { rect, base, score: jittered };
+            }
+          }
+        }
+      }
+    }
+    return best;
   }
 
   /** Whether a rect, `height` levels from `base`, is inside the house and free on every level. */
