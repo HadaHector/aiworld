@@ -77,13 +77,35 @@ export interface HouseSpec {
   sideWing: number;
   wingLength: [number, number];
   wingWidth: [number, number];
-  /** Floor to eaves (a storey), how high the plinth lifts the floor, and how far it stands out from
-   *  the walls. */
+  /** How many storeys stand above ground - the ground floor and those over it - and how many cellars
+   *  are dug under it. */
+  storeys: [number, number];
+  cellars: [number, number];
+  /** Floor to ceiling: the ground storey's, the storeys' over it (null: as the ground storey's), and
+   *  a cellar's. How high the plinth lifts the ground floor, and how far it stands out from the
+   *  walls. */
   wallHeight: [number, number];
+  upperHeight: [number, number] | null;
+  cellarHeight: [number, number];
   plinth: [number, number];
   plinthOutset: number;
   /** The posts and beams the walls are framed with (a framing building part) - none if null. */
   framing: BuildingPartDef | null;
+  /** Each storey over the ground one standing this much further out than the one under it, on these
+   *  walls - the roof growing to match - or none. */
+  jetty: { out: number; walls: WallSide[] } | null;
+  /** How many storeys a wing stands - no more than the main block's - or null: as many. A lower wing
+   *  is topped with one of `lowTops`: a roof (stopping against the taller block's wall) or a terrace.
+   *  None given: the house's own roof. */
+  wingStoreys: [number, number] | null;
+  lowTops: PartChoice[];
+  /** With `chance`, the top storey stands back a tile from the front, the strip before it a terrace
+   *  (one of `terraces`). Only on a house of two storeys or more, two tiles deep or more. */
+  setback: { chance: number; terraces: PartChoice[] } | null;
+  /** With `chance`, the ground storey's front row of tiles is left open - an arcade - the storeys over
+   *  it standing on `support`s along its front, with a ceiling over it. Only on a house of two storeys
+   *  or more, two tiles deep or more. */
+  arcade: { chance: number; support: BuildingPartDef } | null;
   /** The roof over every block (a roof building part). */
   roof: BuildingPartDef;
   /** The door, one of these (building parts) picked per house, in a middle bay of the front. */
@@ -102,12 +124,23 @@ export type HousePart = (typeof HOUSE_PARTS)[number];
 export const WALL_SIDES = ["front", "back", "side"] as const;
 export type WallSide = (typeof WALL_SIDES)[number];
 
+/** Which storeys of a house: those dug under it, the ground one, and those over it. */
+export const STOREY_KINDS = ["cellar", "ground", "upper"] as const;
+export type StoreyKind = (typeof STOREY_KINDS)[number];
+
+/** One level of a house, as built: what kind it is, and its floor and ceiling heights. */
+export interface Level {
+  kind: StoreyKind;
+  floor: number;
+  top: number;
+}
+
 /**
  * A building part a house puts on its walls. Extras are placed highest `priority` first (in the
- * order listed where two are level): each tries every free spot of the walls it may go on, in a
- * random order, and takes one with its `chance` - up to `maxCount` of them (null: no limit). A part
- * may still turn a spot down (a chimney by an inner corner), and the bays it takes are not free to
- * the extras after it.
+ * order listed where two are level): each tries every free spot of the walls and storeys it may go
+ * on, in a random order, and takes one with its `chance` - up to `maxCount` of them (null: no
+ * limit). A part may still turn a spot down (a chimney by an inner corner), and the bays it takes -
+ * on every storey it rises through - are not free to the extras after it.
  */
 export interface WallExtra {
   part: BuildingPartDef;
@@ -115,6 +148,7 @@ export interface WallExtra {
   chance: number;
   maxCount: number | null;
   walls: WallSide[];
+  storeys: StoreyKind[];
 }
 
 /** A building part a building can use, and how likely it is against the others it could. */
@@ -132,7 +166,7 @@ export interface PartChoice {
  * A part takes no materials of its own: each of its pieces is painted as one of the building's
  * parts (its `parts`: timber, glass, ...), so a house's windows, posts and door share one timber.
  */
-export const BUILDING_PART_GENERATORS = ["framed", "chimney", "timberFrame", "stoneFrame", "pitched"] as const;
+export const BUILDING_PART_GENERATORS = ["framed", "chimney", "timberFrame", "stoneFrame", "pitched", "terrace", "support"] as const;
 export type BuildingPartGenerator = (typeof BUILDING_PART_GENERATORS)[number];
 
 /**
@@ -253,6 +287,36 @@ export interface PitchedRoofSpec {
   parts: { covering: HousePart; underside: HousePart; ridge: HousePart; gable: HousePart };
 }
 
+/**
+ * A terrace on top of a storey that the storeys over it do not cover: a floor, its edge closed by a
+ * band, and along its open sides - those not against a wall rising over it - a parapet: a low wall,
+ * or a railing of posts and a rail. Lengths are metres.
+ */
+export interface TerraceSpec {
+  /** The floor's band round its edge: how deep, and how far it stands out from the walls under it. */
+  edge: { height: number; out: number };
+  /** The parapet: how high and thick - and a wall, or a railing (posts `post` apart, a rail on top). */
+  parapet: { height: number; thickness: number; style: ParapetStyle; post: number };
+  /** Which of the building's parts the floor, its edge and the parapet are painted as. */
+  parts: { floor: HousePart; edge: HousePart; parapet: HousePart };
+}
+
+export const PARAPET_STYLES = ["wall", "railing"] as const;
+export type ParapetStyle = (typeof PARAPET_STYLES)[number];
+
+/**
+ * A support standing under a storey that overhangs open ground - an arcade's posts or pillars: a
+ * square shaft `width` wide, with maybe a wider base at its foot and a capital at its head. Lengths
+ * are metres.
+ */
+export interface SupportSpec {
+  width: number;
+  base: { height: number; reach: number } | null;
+  capital: { height: number; reach: number } | null;
+  /** Which of the building's parts the shaft, and its base and capital, are painted as. */
+  parts: { shaft: HousePart; ends: HousePart };
+}
+
 export interface BuildingPartDef {
   id: string;
   name: string;
@@ -262,6 +326,8 @@ export interface BuildingPartDef {
   timberFrame: TimberFrameSpec | null;
   stoneFrame: StoneFrameSpec | null;
   pitched: PitchedRoofSpec | null;
+  terrace: TerraceSpec | null;
+  support: SupportSpec | null;
 }
 
 export interface BuildingDef {
@@ -297,4 +363,6 @@ export interface BuildingModel {
   height: number;
   /** The plan's tiles, for a generator that has one - drawn over the ground in the workbench. */
   tiles?: { x0: number; z0: number; x1: number; z1: number }[];
+  /** Its levels, cellars first, for a generator that has them - what an interior will be laid in. */
+  levels?: Level[];
 }

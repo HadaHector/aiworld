@@ -1,0 +1,11 @@
+// A dressed stone pillar for an arcade: a square shaft on a plinth block, under a moulded capital.
+{
+  name: "Stone Pillar",
+  type: "support",
+  support: {
+    width: 0.7,
+    base: { height: 0.5, reach: 0.12 },
+    capital: { height: 0.35, reach: 0.15 },
+    parts: { shaft: "stone", ends: "stone" },
+  },
+}

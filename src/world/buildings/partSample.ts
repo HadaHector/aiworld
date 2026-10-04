@@ -57,6 +57,7 @@ export function buildPartSample(part: BuildingPartDef, house: HouseSpec | null):
     const extent = buildWallPart(
       part,
       {
+        storey: "ground",
         floor: plinth,
         top: eaves - framing.top - 0.25,
         ridgeLine: () => eaves + 2.5,
@@ -82,6 +83,9 @@ export function buildPartSample(part: BuildingPartDef, house: HouseSpec | null):
       far: false,
       walls: [
         {
+          floor: plinth,
+          top: eaves,
+          topStorey: true,
           length: half * 2,
           posts: [],
           gable: null,
@@ -92,6 +96,9 @@ export function buildPartSample(part: BuildingPartDef, house: HouseSpec | null):
       // The wall's two ends as outer corners: u along it inward, v back into the wall.
       corners: [-half, half].map((x) => ({
         kind: "outer" as const,
+        floor: plinth,
+        top: eaves,
+        topStorey: true,
         box: (u0: number, u1: number, v0: number, v1: number, y0: number, y1: number, paint: Paint) => {
           const s = x < 0 ? 1 : -1;
           b.box(Math.min(x + s * u0, x + s * u1), y0, Math.min(-v0, -v1), Math.max(x + s * u0, x + s * u1), y1, Math.max(-v0, -v1), paint);

@@ -1,4 +1,17 @@
-import type { BuildingPartDef, ChimneySpec, FramedSpec, HousePart, Paint, PartChoice, StoneFrameSpec, TimberFrameSpec, WallSide } from "./buildingTypes";
+import type {
+  BuildingPartDef,
+  ChimneySpec,
+  FramedSpec,
+  HousePart,
+  Paint,
+  PartChoice,
+  StoneFrameSpec,
+  StoreyKind,
+  SupportSpec,
+  TerraceSpec,
+  TimberFrameSpec,
+  WallSide,
+} from "./buildingTypes";
 import { FOUNDATION_DEPTH, roll, type Vec3 } from "./buildingGeometry";
 import { buildPitchedRoof, planPitchedRoof, type RoofInput, type RoofPlan } from "./pitchedRoof";
 
@@ -22,7 +35,9 @@ export interface WallSlot {
   box(a0: number, a1: number, y0: number, y1: number, out0: number, out1: number, paint: Paint): void;
   /** A flat polygon, its corners as [along, up, out], facing toward `towards` (the same way). */
   face(corners: Vec3[], towards: Vec3, paint: Paint): void;
-  /** The floor's height, and the most an opening may reach up to (under the eaves). */
+  /** Which storey it is on, the floor's height there, and the most an opening may reach up to (under
+   *  the storey's top beam). A cellar's slot is in the plinth, its floor below the ground. */
+  storey: StoreyKind;
   floor: number;
   top: number;
   /** How high a line falling at `angle` degrees from the house's nearest ridge (its top) reaches over
@@ -42,10 +57,12 @@ export interface WallSlot {
 }
 
 /** How much of a wall a part took: how far either side of its middle it reaches, and how low its
- *  foot is - a part down at the floor stands where the wall's foot beam would run. */
+ *  foot is and how high its top - a part down at a floor stands where the wall's foot beam would run,
+ *  and one rising through the storey above (a chimney) takes its bays there too. */
 export interface PartExtent {
   half: number;
   foot: number;
+  top: number;
 }
 
 /** How many bays a wall part takes up. */
@@ -58,6 +75,8 @@ export function partSpan(part: BuildingPartDef): number {
     case "timberFrame":
     case "stoneFrame":
     case "pitched":
+    case "terrace":
+    case "support":
       return 1;
   }
 }
@@ -83,6 +102,8 @@ export function buildWallPart(part: BuildingPartDef, slot: WallSlot, paints: Par
     case "timberFrame":
     case "stoneFrame":
     case "pitched":
+    case "terrace":
+    case "support":
       return null;
   }
 }
@@ -98,7 +119,7 @@ function buildFramed(spec: FramedSpec, slot: WallSlot, paints: PartPaints): Part
   const frame = paints[spec.parts.frame];
 
   box(-half, half, bottom, top, SET_IN, OUT.panel, paints[spec.parts.panel]);
-  const extent = { half: half + f + reach, foot: spec.sillReach !== null ? bottom - f : bottom };
+  const extent = { half: half + f + reach, foot: spec.sillReach !== null ? bottom - f : bottom, top: top + f };
   // From afar an opening is its panel: the frame, bars and sill are too fine to see.
   if (slot.far) return extent;
   // Jambs at its two edges, and a head over them, reaching past them.
@@ -169,7 +190,7 @@ function buildChimney(spec: ChimneySpec, slot: WallSlot, paints: PartPaints, rng
   const capHalf = stackHalf + spec.cap.reach;
   const capOut = stackOut + spec.cap.reach;
   box(-capHalf, capHalf, capBottom, top, back, capOut, cap);
-  const extent = { half: breastHalf + foundationReach, foot: -FOUNDATION_DEPTH };
+  const extent = { half: breastHalf + foundationReach, foot: -FOUNDATION_DEPTH, top: top + spec.pots.height };
   // From afar, no underside to the cap, and no pots.
   if (slot.far) return extent;
   face([[-capHalf, capBottom, back], [capHalf, capBottom, back], [capHalf, capBottom, capOut], [-capHalf, capBottom, capOut]], [0, -1, 0], cap);
@@ -192,6 +213,11 @@ function buildChimney(spec: ChimneySpec, slot: WallSlot, paints: PartPaints, rng
  * from the front. Points along it are metres from its start.
  */
 export interface FramingWall {
+  /** The storey it is a wall of: its floor and top, and whether it is the top storey (under the
+   *  eaves - a gable over it, if any). */
+  floor: number;
+  top: number;
+  topStorey: boolean;
   length: number;
   /** Where along it a post belongs between the corners: where the wall or the roof over it changes. */
   posts: number[];
@@ -212,11 +238,16 @@ export interface FramingWall {
  */
 export interface FramingCorner {
   kind: "outer" | "inner";
+  /** The storey it is a corner of, as a wall's. */
+  floor: number;
+  top: number;
+  topStorey: boolean;
   /** Lays a box at the corner: `u0` to `u1`, `v0` to `v1`, `y0` to `y1` up. No bottom. */
   box(u0: number, u1: number, v0: number, v1: number, y0: number, y1: number, paint: Paint): void;
 }
 
-/** The house's shape as its framing is handed it: every wall, and every corner where two meet. */
+/** The house's shape as its framing is handed it: every wall and every corner where two meet, each
+ *  storey's of them - from the ground floor up to the eaves. */
 export interface FramingInput {
   floor: number;
   eaves: number;
@@ -278,63 +309,66 @@ function footBand(wall: FramingWall, from: number, to: number, y0: number, y1: n
 const inGap = (wall: FramingWall, at: number): boolean => wall.gaps.some(([g0, g1]) => at > g0 && at < g1);
 
 /**
- * A timber frame: a heavy square post on every corner, a beam along the foot of every wall (broken
- * where a door stands) and one along its top under the eaves, a post between them wherever the wall
- * or the roof over it changes, and a king post up the middle of every gable to its ridge.
+ * A timber frame, storey by storey: a heavy square post on every corner, a beam along the foot of
+ * every wall (broken where a door stands) and one along its top, a post between them wherever the
+ * wall or the roof over it changes, and a king post up the middle of every gable to its ridge.
  */
 function buildTimberFrame(spec: TimberFrameSpec, plan: FramingPlan, input: FramingInput, paints: PartPaints): void {
   const timber = paints[spec.parts.timber];
-  const { floor, eaves } = input;
-  const sillTop = floor + spec.sill.height;
-  const plateBottom = eaves - spec.plate.height;
   const half = plan.cornerReach;
   const { postHalf } = plan;
-  for (const corner of input.corners) corner.box(-half, half, -half, half, floor, eaves, timber);
+  for (const corner of input.corners) corner.box(-half, half, -half, half, corner.floor, corner.top, timber);
   for (const wall of input.walls) {
+    const sillTop = wall.floor + spec.sill.height;
+    const plateBottom = wall.top - spec.plate.height;
     const end = wall.length - half;
-    // The top beam, under the eaves.
-    wall.box(half, end, plateBottom, eaves, SET_IN, spec.plate.out, timber);
+    // The top beam, under the storey above or the eaves.
+    wall.box(half, end, plateBottom, wall.top, SET_IN, spec.plate.out, timber);
     // From afar, the corner posts, the top beams and the king posts are the frame.
     if (!input.far) {
-      footBand(wall, half, end, floor, sillTop, spec.sill.out, timber);
+      footBand(wall, half, end, wall.floor, sillTop, spec.sill.out, timber);
       // Posts between the beams; one standing in a gap stands on the floor.
-      for (const at of wall.posts) wall.box(at - postHalf, at + postHalf, inGap(wall, at) ? floor : sillTop, plateBottom, SET_IN, spec.post.out, timber);
+      for (const at of wall.posts) wall.box(at - postHalf, at + postHalf, inGap(wall, at) ? wall.floor : sillTop, plateBottom, SET_IN, spec.post.out, timber);
     }
     // The king post, from the top beam to the ridge.
-    if (wall.gable) wall.box(wall.gable.at - postHalf, wall.gable.at + postHalf, eaves, wall.gable.ridge, SET_IN, spec.post.out, timber);
+    if (wall.gable) wall.box(wall.gable.at - postHalf, wall.gable.at + postHalf, wall.top, wall.gable.ridge, SET_IN, spec.post.out, timber);
   }
 }
 
 /**
- * A stone frame: quoins up every outer corner - dressed stones in courses, long along one wall and
- * short along the other, turn and turn about - a cornice along the top of every wall under the
- * eaves, maybe a string course along its foot, and a pilaster wherever the wall or the roof over it
- * changes. Its stones stand a little proud of the wall, and start a little inside it.
+ * A stone frame, storey by storey: quoins up every outer corner - dressed stones in courses, long
+ * along one wall and short along the other, turn and turn about - a string course along the foot of
+ * every storey (its band), a cornice along the top of the top one under the eaves, and a pilaster
+ * wherever the wall or the roof over it changes. Its stones stand a little proud of the wall, and
+ * start a little inside it.
  */
 function buildStoneFrame(spec: StoneFrameSpec, _plan: FramingPlan, input: FramingInput, paints: PartPaints): void {
   const stone = paints[spec.parts.stone];
   const shaded: Paint = { material: stone.material, tint: [stone.tint[0] * 0.9, stone.tint[1] * 0.9, stone.tint[2] * 0.9] };
-  const { floor, eaves } = input;
-  const foot = spec.band ? floor + spec.band.height : floor;
-  const corniceBottom = eaves - spec.cornice.height;
   const inWall = 0.05;
   const { course, long, short, out } = spec.quoins;
-  const courses = Math.max(1, Math.round((corniceBottom - foot) / course));
-  const h = (corniceBottom - foot) / courses;
   const c = spec.cornice.out;
   const b = spec.band?.out ?? 0;
   const band = input.far ? null : spec.band;
+  /** Where a storey's stones start and stop: above its band, and under the cornice on the top one. */
+  const span = (storey: { floor: number; top: number; topStorey: boolean }): [number, number] => [
+    band ? storey.floor + band.height : storey.floor,
+    storey.topStorey ? storey.top - spec.cornice.height : storey.top,
+  ];
   for (const corner of input.corners) {
     if (corner.kind !== "outer") continue;
+    const [foot, quoinTop] = span(corner);
     // The cornice, and the band, turning the corner: the walls' own run between their corners.
-    corner.box(-c, 0, -c, 0, corniceBottom, eaves, stone);
-    if (band) corner.box(-b, 0, -b, 0, floor, foot, stone);
+    if (corner.topStorey) corner.box(-c, 0, -c, 0, quoinTop, corner.top, stone);
+    if (band) corner.box(-b, 0, -b, 0, corner.floor, foot, stone);
     // From afar the quoins are a plain stone strip up the corner, as wide as their short stones.
     if (input.far) {
-      corner.box(-out, short, -out, inWall, foot, corniceBottom, stone);
-      corner.box(-out, inWall, inWall, short, foot, corniceBottom, stone);
+      corner.box(-out, short, -out, inWall, foot, quoinTop, stone);
+      corner.box(-out, inWall, inWall, short, foot, quoinTop, stone);
       continue;
     }
+    const courses = Math.max(1, Math.round((quoinTop - foot) / course));
+    const h = (quoinTop - foot) / courses;
     for (let k = 0; k < courses; k++) {
       const y0 = foot + k * h;
       const y1 = y0 + h;
@@ -352,16 +386,133 @@ function buildStoneFrame(spec: StoneFrameSpec, _plan: FramingPlan, input: Framin
     }
   }
   for (const wall of input.walls) {
-    wall.box(0, wall.length, corniceBottom, eaves, SET_IN, c, stone);
-    if (band) footBand(wall, 0, wall.length, floor, foot, b, stone);
+    const [foot, top] = span(wall);
+    if (wall.topStorey) wall.box(0, wall.length, top, wall.top, SET_IN, c, stone);
+    if (band) footBand(wall, 0, wall.length, wall.floor, foot, b, stone);
     const half = spec.pilaster.width / 2;
-    for (const at of wall.posts) wall.box(at - half, at + half, inGap(wall, at) ? floor : foot, corniceBottom, SET_IN, spec.pilaster.out, stone);
+    for (const at of wall.posts) wall.box(at - half, at + half, inGap(wall, at) ? wall.floor : foot, top, SET_IN, spec.pilaster.out, stone);
   }
 }
 
-/** Whether a part is one a whole house is handed - its framing, its roof - not a wall slot. */
+/** Whether a part is one a whole house places by itself - its framing, its roof, a terrace, a
+ *  support - not into a wall slot. */
 export function isWholeHousePart(part: BuildingPartDef): boolean {
-  return part.generator === "timberFrame" || part.generator === "stoneFrame" || part.generator === "pitched";
+  return ["timberFrame", "stoneFrame", "pitched", "terrace", "support"].includes(part.generator);
+}
+
+/** Whether a part tops a storey as a roof does, rather than as a terrace. */
+export function isRoof(part: BuildingPartDef): boolean {
+  return part.generator === "pitched";
+}
+
+/** A box in the house's own space, from (x0, y0, z0) to (x1, y1, z1). No bottom. */
+type WorldBox = (x0: number, y0: number, z0: number, x1: number, y1: number, z1: number, paint: Paint) => void;
+
+/**
+ * A terrace as the house hands it: the rectangle it covers (metres, out to the faces of the walls
+ * under it), how high it is - the top of the storey under it - and which of its sides are open,
+ * rather than against a wall rising over it.
+ */
+export interface TerraceInput {
+  rect: { x0: number; x1: number; z0: number; z1: number };
+  y: number;
+  open: { nx: boolean; px: boolean; nz: boolean; pz: boolean };
+  far: boolean;
+  box: WorldBox;
+  floor(corners: Vec3[], paint: Paint): void;
+}
+
+/** Builds a terrace (a terrace part's). */
+export function buildTerrace(part: BuildingPartDef, input: TerraceInput, paints: PartPaints): void {
+  if (part.generator !== "terrace") return;
+  const spec: TerraceSpec = part.terrace!;
+  const { rect, y, open, box } = input;
+  const { x0, x1, z0, z1 } = rect;
+  const floorPaint = paints[spec.parts.floor];
+  const edgePaint = paints[spec.parts.edge];
+  const parapetPaint = paints[spec.parts.parapet];
+  const lip = 0.03;
+  const o = spec.edge.out;
+  input.floor([[x0, y, z0], [x1, y, z0], [x1, y, z1], [x0, y, z1]], floorPaint);
+
+  // The band round its open sides, and the parapet on it - each side's running out over the corner
+  // where the side beside it is open, and stopping at the wall where it is not; the x sides stopping
+  // short of the z sides, so no two meet face to face.
+  const xs0 = open.nx ? x0 - o : x0;
+  const xs1 = open.px ? x1 + o : x1;
+  const zs0 = open.nz ? z0 - o : z0;
+  const zs1 = open.pz ? z1 + o : z1;
+  const inset = 0.05;
+  if (open.pz) box(xs0, y - spec.edge.height, z1 - inset, xs1, y + lip, z1 + o, edgePaint);
+  if (open.nz) box(xs0, y - spec.edge.height, z0 - o, xs1, y + lip, z0 + inset, edgePaint);
+  const zIn0 = open.nz ? z0 + inset : z0;
+  const zIn1 = open.pz ? z1 - inset : z1;
+  if (open.nx) box(x0 - o, y - spec.edge.height, zIn0, x0 + inset, y + lip, zIn1, edgePaint);
+  if (open.px) box(x1 - inset, y - spec.edge.height, zIn0, x1 + o, y + lip, zIn1, edgePaint);
+
+  const t = spec.parapet.thickness;
+  const base = y + lip;
+  const top = base + spec.parapet.height;
+  // The parapet's lines: along each open side, at the band's outer edge.
+  const lines: { along: "x" | "z"; at: number; inward: number; from: number; to: number }[] = [];
+  if (open.pz) lines.push({ along: "x", at: zs1, inward: -1, from: xs0, to: xs1 });
+  if (open.nz) lines.push({ along: "x", at: zs0, inward: 1, from: xs0, to: xs1 });
+  if (open.nx) lines.push({ along: "z", at: xs0, inward: 1, from: open.nz ? zs0 + t : zs0, to: open.pz ? zs1 - t : zs1 });
+  if (open.px) lines.push({ along: "z", at: xs1, inward: -1, from: open.nz ? zs0 + t : zs0, to: open.pz ? zs1 - t : zs1 });
+  const run = (line: (typeof lines)[number], a0: number, a1: number, y0: number, y1: number, depth = t): void => {
+    const c0 = line.inward > 0 ? line.at : line.at - depth;
+    const c1 = line.inward > 0 ? line.at + depth : line.at;
+    if (line.along === "x") box(a0, y0, c0, a1, y1, c1, parapetPaint);
+    else box(c0, y0, a0, c1, y1, a1, parapetPaint);
+  };
+  for (const line of lines) {
+    if (spec.parapet.style === "wall") {
+      run(line, line.from, line.to, base, top);
+      continue;
+    }
+    // A railing: a rail along the top, and - near - posts along it and a rail along the foot.
+    const rail = t * 0.8;
+    run(line, line.from, line.to, top - rail, top);
+    if (input.far) continue;
+    run(line, line.from, line.to, base, base + rail);
+    const length = line.to - line.from;
+    const count = Math.max(1, Math.round(length / spec.parapet.post));
+    for (let k = 0; k <= count; k++) {
+      const a = line.from + (length * k) / count;
+      const a0 = Math.max(line.from, a - t / 2);
+      const a1 = Math.min(line.to, a + t / 2);
+      run(line, a0, a1, base + rail, top - rail, t * 0.9);
+    }
+  }
+}
+
+/** A support as the house hands it: where it stands (its middle), from its floor up to the beam
+ *  it carries. */
+export interface SupportInput {
+  x: number;
+  z: number;
+  floor: number;
+  top: number;
+  far: boolean;
+  box: WorldBox;
+}
+
+/** Builds a support (a support part's): a square shaft, maybe on a wider base and under a capital. */
+export function buildSupport(part: BuildingPartDef, input: SupportInput, paints: PartPaints): void {
+  if (part.generator !== "support") return;
+  const spec: SupportSpec = part.support!;
+  const { x, z, floor, top, box } = input;
+  const shaft = paints[spec.parts.shaft];
+  const ends = paints[spec.parts.ends];
+  const square = (half: number, y0: number, y1: number, paint: Paint): void => box(x - half, y0, z - half, x + half, y1, z + half, paint);
+  const half = spec.width / 2;
+  const base = !input.far && spec.base ? spec.base : null;
+  const capital = !input.far && spec.capital ? spec.capital : null;
+  const shaftFoot = base ? floor + base.height : floor;
+  const shaftHead = capital ? top - capital.height : top;
+  if (base) square(half + base.reach, floor, shaftFoot, ends);
+  square(half, shaftFoot, shaftHead, shaft);
+  if (capital) square(half + capital.reach, shaftHead, top, ends);
 }
 
 /** Settles a roof before the walls are built (see RoofPlan). */

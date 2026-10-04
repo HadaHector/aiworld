@@ -574,16 +574,35 @@ There are two:
 
 - `boxes`, the placeholder: a main box with a door patch and smaller boxes against its sides and
   back (see `core/buildings/placeholderHouse.json5`).
-- `house`, a traditional one-storey house (see `core/buildings/cottage.json5`). Its plan is tiles -
+- `house`, a traditional house (see `core/buildings/cottage.json5`, and `townHouse.json5` for one
+  of several storeys). Its plan is tiles -
   each one bay of wall - in a main block and maybe a wing out of the back (a T or an L) and one out
   of a side. From the plan come a plinth, walls, a door in a middle bay of the front and windows in
   other bays, the walls' framing (`framing`, a framing part - none if left out), and a roof over
-  every block (`roof`, a roof part). Its door and windows are building parts (below). `doors` is a list of `{ part, weight }`, one picked per house.
-  Everything else on the walls is `wallExtras`, a list of `{ part, priority, chance, maxCount, walls }`
+  every block (`roof`, a roof part). It stands `storeys` storeys tall (a range, ground floor
+  included; 1 if left out) - the ground one `wallHeight` floor to ceiling, those over it
+  `upperHeight` (as the ground one if left out) - over `cellars` cellars (0 if left out) dug
+  `cellarHeight` deep each under the ground floor: nothing of a cellar shows yet but its deeper
+  foundation, though wall extras can be put in one (in the plinth), and the building's levels are
+  kept for interiors. A `jetty: { out, walls }` stands each storey over the ground one `out` further
+  out than the one under it on those `walls` (`front`, `back`, `side`), the roof growing to match.
+  Its storeys need not all have the same footprint. A wing may stand lower (`wingStoreys`, a range,
+  no taller than the house; as tall if left out), topped with one of `lowTops` - a roof, stopping
+  against the taller block's wall, or a terrace (the house's own roof if left out). With
+  `setback: { chance, terraces }` the top storey stands back a tile from the front, a terrace before
+  it; with `arcade: { chance, support }` the ground storey's front row is left open, the storeys over
+  it standing on supports along its edge (both need two storeys or more - three for both - and a
+  main block two tiles deep). Wherever a storey covers more than the one under it - an arcade, a
+  jetty - its underside is closed with a ceiling, and an open ground storey is paved.
+  Its door and windows are building parts (below). `doors` is a list of `{ part, weight }`, one picked per house.
+  Everything else on the walls is `wallExtras`, a list of `{ part, priority, chance, maxCount, walls,
+  storeys }`
   placed highest `priority` first (in list order where level): each tries every free spot - as many
-  bays as the part spans - on the `walls` it may go on (`front`, `back`, `side`; all if left out), in
+  bays as the part spans - on the `walls` it may go on (`front`, `back`, `side`; all if left out) and
+  the `storeys` (`cellar`, `ground`, `upper`; ground and upper if left out), in
   a random order, taking each with its `chance`, up to `maxCount` (no limit if left out). The bays a
-  part takes are not free to the extras after it, and a part may turn a spot down (a chimney by an
+  part takes - on every storey it rises through, as a chimney does - are not free to the extras after
+  it, and a part may turn a spot down (a chimney by an
   inner corner, where another wing stands beside it). Everything on the walls keeps clear of the
   framing's posts and its top beam.
 
@@ -611,7 +630,8 @@ painted as one of the building's `parts`, so a house's windows, posts and door s
 Most fill a slot on a wall; a framing part is handed every wall of the house at once - each wall's
 length, where along it the wall or the roof over it changes, any gable over it, and where along its
 foot a door or a chimney stands - and every corner, outer or inner; a roof part every block of the
-house, and how its ends meet the others. There are five so far:
+house, and how its ends meet the others; a terrace the top of a mass the storeys over it leave bare,
+and which of its sides are open; a support where it stands. There are seven so far:
 
 - `framed`, an opening in a timber frame, closed - a panel (glass, or a door's boards) standing on
   the wall, never a hole: `width`, `height` and `sill` (its foot above the floor, 0 for a door) of the
@@ -653,6 +673,14 @@ house, and how its ends meet the others. There are five so far:
   outermost ends, so a ridge dips and a hip bows inward; its slabs bend in cells `step` across.
   `parts: { covering, underside, ridge, gable }` paints the covering, the underside and edges, the
   ridge tiles and the gables' wall.
+- `terrace`, a floor on top of a storey (see `core/buildingParts/timberBalcony.json5` and
+  `stoneTerrace.json5`): an `edge` band round it, `height` deep standing `out` from the walls under it,
+  and along its open sides a `parapet` `height` high and `thickness` thick - a solid `wall`, or a
+  `railing` of posts `post` apart between a top and a foot rail. `parts: { floor, edge, parapet }`.
+- `support`, a post or pillar under a storey that overhangs open ground (see
+  `core/buildingParts/timberPost.json5` and `stonePillar.json5`): a square shaft `width` wide, on a
+  wider `base` and under a `capital` (each `{ height, reach }`, none if left out).
+  `parts: { shaft, ends }`.
 
 In the workbench a building stands on a patch of ground, one variant or a row of eight, with its
 footprint, its door and - for a generator with a plan - its tiles marked. A building part stands on

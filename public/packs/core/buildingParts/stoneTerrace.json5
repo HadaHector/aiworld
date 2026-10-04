@@ -1,0 +1,12 @@
+// A stone terrace: a paved floor on top of a storey, its edge a stone band, behind a low solid
+// parapet wall.
+{
+  name: "Stone Terrace",
+  type: "terrace",
+  terrace: {
+    edge: { height: 0.3, out: 0.12 },
+    // A wall, as high and as thick as this.
+    parapet: { height: 1.0, thickness: 0.3, style: "wall" },
+    parts: { floor: "plinth", edge: "stone", parapet: "stone" },
+  },
+}

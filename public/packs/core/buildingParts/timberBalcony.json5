@@ -1,0 +1,14 @@
+// A timber terrace: a boarded floor on top of a storey, its edge a deep beam, behind a railing of
+// posts between a top rail and a foot rail.
+{
+  name: "Timber Balcony",
+  type: "terrace",
+  terrace: {
+    // The beam round the floor's edge: how deep, and how far it stands out from the walls under it.
+    edge: { height: 0.35, out: 0.12 },
+    // The railing: how high, how thick its rails and posts are, and how far apart its posts stand.
+    parapet: { height: 1.1, thickness: 0.12, style: "railing", post: 1.0 },
+    // What its pieces are painted as - the house's parts.
+    parts: { floor: "timber", edge: "timber", parapet: "timber" },
+  },
+}

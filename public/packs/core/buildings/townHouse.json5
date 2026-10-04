@@ -1,0 +1,61 @@
+// A timber-framed town house: narrow to the street and two or three storeys tall, each upper storey
+// jettied out over the one below it at the front, under a steep shingle roof. Sometimes its ground
+// floor is an arcade on posts, its top storey stands back behind a balcony, a lower wing reaches out
+// of the back, and a cellar is dug under it.
+{
+  name: "Town House",
+  type: "house",
+  house: {
+    // A tile is one bay of wall: the plan is made of them, and each can hold a window.
+    tile: [2.6, 3.0],
+    // The main block in tiles: along the front (narrow to the street), and back from it.
+    width: [2, 3],
+    depth: [2, 3],
+    // A wing out of the back now and then; never one out of a side - its neighbours stand there.
+    backWing: 0.45,
+    sideWing: 0,
+    wingLength: [1, 2],
+    wingWidth: [1, 2],
+    // How many storeys stand above ground, and how many cellars are dug under it.
+    storeys: [2, 3],
+    cellars: [0, 1],
+    // Floor to ceiling: the ground storey, the storeys over it, and a cellar. How high the plinth
+    // lifts the ground floor, and how far it stands out from the walls.
+    wallHeight: [4.2, 4.6],
+    upperHeight: [3.8, 4.2],
+    cellarHeight: [2.6, 3.0],
+    plinth: [0.35, 0.55],
+    plinthOutset: 0.5,
+    // Each storey over the ground one stands this much further out over the street than the one
+    // under it.
+    jetty: { out: 0.6, walls: ["front"] },
+    // A wing stands one storey or two - no taller than the house - and a lower one is topped with one
+    // of these: a roof stopping against the house's wall, or a balcony.
+    wingStoreys: [1, 2],
+    lowTops: [{ part: "shingleRoof", weight: 2 }, { part: "timberBalcony", weight: 1 }],
+    // Sometimes the top storey stands back a tile from the front, behind a balcony...
+    setback: { chance: 0.3, terraces: [{ part: "timberBalcony", weight: 1 }] },
+    // ...and sometimes the ground storey's front row is an open arcade, the storeys over it on posts.
+    arcade: { chance: 0.35, support: "timberPost" },
+    framing: "timberFrame",
+    roof: "shingleRoof",
+    doors: [{ part: "timberDoor", weight: 1 }],
+    // Highest priority first: a chimney up a side or the back from the ground (rising through the
+    // storeys over it, whose bays it takes), then windows on every storey.
+    wallExtras: [
+      { part: "stoneChimney", priority: 2, chance: 0.2, maxCount: 1, walls: ["side", "back"], storeys: ["ground"] },
+      { part: "wideWindow", priority: 1, chance: 0.12, storeys: ["upper"] },
+      { part: "timberWindow", priority: 1, chance: 0.35 },
+    ],
+    // What each part is made of (see buildingMaterials/), and the tints - one picked per house.
+    parts: {
+      walls: { material: "plaster", tints: [[1, 1, 1], [1.02, 0.95, 0.82], [0.95, 0.88, 0.76], [0.92, 0.95, 0.9]] },
+      timber: { material: "timber", tints: [[0.5, 0.45, 0.42], [0.65, 0.58, 0.52], [0.42, 0.38, 0.36]] },
+      stone: { material: "dressedStone", tints: [[1, 1, 1]] },
+      roof: { material: "woodShingles", tints: [[1, 1, 1], [0.9, 0.92, 0.95], [1.06, 1.0, 0.92]] },
+      plinth: { material: "stoneBricks", tints: [[1, 1, 1], [0.9, 0.88, 0.85]] },
+      door: { material: "timber", tints: [[0.7, 0.62, 0.55], [0.5, 0.6, 0.6]] },
+      glass: { material: "glass", tints: [[1, 1, 1]] },
+    },
+  },
+}

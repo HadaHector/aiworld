@@ -1,0 +1,16 @@
+// A timber post for an arcade: a square post on a stone pad, under a wide bolster that spreads the
+// beam it carries.
+{
+  name: "Timber Post",
+  type: "support",
+  support: {
+    // The post's width, either way.
+    width: 0.55,
+    // A stone pad at its foot, and the bolster at its head: how tall, and how far each reaches past
+    // the post every way. Leave one out for none.
+    base: { height: 0.35, reach: 0.12 },
+    capital: { height: 0.3, reach: 0.25 },
+    // What its pieces are painted as - the house's parts.
+    parts: { shaft: "timber", ends: "timber" },
+  },
+}
