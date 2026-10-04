@@ -12,7 +12,7 @@
   spawnWeight: 2,
   lakeChance: 0.03, // oases
   borderType: "mountain",
-  settlement: "timber",
+  settlement: ["stoneVillage", "marketTown"],
   // How much of the area the rock takes, and how tall it stands.
   params: { rock: { range: [0, 1] }, tall: { range: [0, 1] } },
   // The floor: nearly flat sand, a gentle swell. The rock: where a noise passes a threshold, the

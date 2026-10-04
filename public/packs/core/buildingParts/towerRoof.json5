@@ -1,0 +1,18 @@
+// A tower's roof: clay tiles pitched steep on all four sides to a point - hipped on a square tower,
+// a pyramid - reaching a little past the walls, held nearly straight.
+{
+  name: "Tower Roof",
+  type: "pitched",
+  pitched: {
+    shapes: ["hip"],
+    pitch: [58, 66],
+    overhang: 0.5,
+    thickness: 0.35,
+    covering: { thickness: 0.12, overhang: 0.12 },
+    bargeboard: null,
+    sag: { ridge: [0, 0.05], slope: [0.02, 0.05] },
+    step: 1.5,
+    ridgeTiles: { width: 0.4, height: 0.16 },
+    parts: { covering: "roof", underside: "timber", ridge: "roof", gable: "walls" },
+  },
+}

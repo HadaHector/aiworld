@@ -10,7 +10,7 @@
   spawnWeight: 1.5,
   lakeChance: 0.03,
   borderType: "mountain",
-  settlement: "timber",
+  settlement: ["farmVillage", "marketTown"],
   // Flatter and broader than the meadow: long, low swells.
   height: { generator: "detailHeight", amplitude: { range: [6, 12] }, frequency: { range: [0.0011, 0.0019] }, offset: 6, persistence: 0.35 },
   // Acacias gathered into copses - a few trees standing close with thorn bushes under them - with

@@ -17,7 +17,7 @@
   spawnWeight: 1,
   lakeChance: 0.01,
   borderType: "mountain",
-  settlement: "timber",
+  settlement: ["stoneVillage", "farmVillage"],
   // How high the ice fills the valleys.
   params: { ice: { range: [0, 1] } },
   height: {

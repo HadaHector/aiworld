@@ -70,15 +70,11 @@ export interface HouseSpec {
   /** The main block, in tiles: along the front, and back from it. */
   width: [number, number];
   depth: [number, number];
-  /** How likely a wing at the back, and one at a side, how many tiles each reaches out, and how many
-   *  wide it is - always narrower than the main block, so the most a block allows caps the width,
-   *  and a block that cannot take the least width gets no wing. */
-  backWing: number;
-  sideWing: number;
-  wingLength: [number, number];
-  wingWidth: [number, number];
-  /** How many storeys stand above ground - the ground floor and those over it - and how many cellars
-   *  are dug under it. */
+  /** How the plan is laid out round the main block - its masses, and what tops each: a generator
+   *  (`type`), its settings under its own name. */
+  plan: HousePlanSpec;
+  /** How many storeys the main block stands above ground - the ground floor and those over it - and
+   *  how many cellars are dug under the house. */
   storeys: [number, number];
   cellars: [number, number];
   /** Floor to ceiling: the ground storey's, the storeys' over it (null: as the ground storey's), and
@@ -94,6 +90,33 @@ export interface HouseSpec {
   /** Each storey over the ground one standing this much further out than the one under it, on these
    *  walls - the roof growing to match - or none. */
   jetty: { out: number; walls: WallSide[] } | null;
+  /** The roof over the main block, and every block that stands as tall (a roof building part). */
+  roof: BuildingPartDef;
+  /** The door, one of these (building parts) picked per house, in a middle bay of the front. */
+  doors: PartChoice[];
+  /** Everything else on the walls - windows, chimneys - placed in the bays the door leaves free. */
+  wallExtras: WallExtra[];
+  /** What each part is made of, and the tints - one picked per house - its colour is multiplied by.
+   *  Timber is the posts, the frames, and the roof's underside and edges. */
+  parts: Record<HousePart, { material: string; tints: Rgb[] }>;
+}
+
+export const HOUSE_PLAN_GENERATORS = ["house", "tower"] as const;
+export type HousePlanGenerator = (typeof HOUSE_PLAN_GENERATORS)[number];
+
+/** A house's plan generator, and its settings - see housePlans.ts. */
+export type HousePlanSpec = { type: "house"; house: HousePlanSettings } | { type: "tower"; tower: TowerPlanSettings };
+
+/** The `house` plan: a main block, maybe with a wing out of the back (a T or an L) and one out of a
+ *  side, a front arcade and a top storey stood back. */
+export interface HousePlanSettings {
+  /** How likely a wing at the back, and one at a side, how many tiles each reaches out, and how many
+   *  wide it is - always narrower than the main block, so the most a block allows caps the width,
+   *  and a block that cannot take the least width gets no wing. */
+  backWing: number;
+  sideWing: number;
+  wingLength: [number, number];
+  wingWidth: [number, number];
   /** How many storeys a wing stands - no more than the main block's - or null: as many. A lower wing
    *  is topped with one of `lowTops`: a roof (stopping against the taller block's wall) or a terrace.
    *  None given: the house's own roof. */
@@ -106,15 +129,20 @@ export interface HouseSpec {
    *  it standing on `support`s along its front, with a ceiling over it. Only on a house of two storeys
    *  or more, two tiles deep or more. */
   arcade: { chance: number; support: BuildingPartDef } | null;
-  /** The roof over every block (a roof building part). */
+}
+
+/** The `tower` plan: the main block - a chapel's nave, a hall - with a square tower against one end,
+ *  standing storeys taller under a roof of its own; the main block's roof stops against it. */
+export interface TowerPlanSettings {
+  /** The tower's side, in tiles - held to the main block's width, and centred on it. */
+  width: [number, number];
+  /** Which end of the main block it stands against, one picked per house: the front (the door in the
+   *  tower's foot) or the back. */
+  ends: ("front" | "back")[];
+  /** How many storeys it stands over the main block's. */
+  storeys: [number, number];
+  /** Its roof (a roof building part) - a hipped one on a square tower is a pyramid. */
   roof: BuildingPartDef;
-  /** The door, one of these (building parts) picked per house, in a middle bay of the front. */
-  doors: PartChoice[];
-  /** Everything else on the walls - windows, chimneys - placed in the bays the door leaves free. */
-  wallExtras: WallExtra[];
-  /** What each part is made of, and the tints - one picked per house - its colour is multiplied by.
-   *  Timber is the posts, the frames, and the roof's underside and edges. */
-  parts: Record<HousePart, { material: string; tints: Rgb[] }>;
 }
 
 export const HOUSE_PARTS = ["walls", "timber", "stone", "roof", "plinth", "door", "glass"] as const;

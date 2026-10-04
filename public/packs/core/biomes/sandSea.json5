@@ -12,7 +12,7 @@
   spawnWeight: 2,
   lakeChance: 0.03, // oases
   borderType: "mountain",
-  settlement: "timber",
+  settlement: ["stoneVillage", "marketTown"],
   // The wind's direction (0-1 of a turn), the dunes' size, and how much sand there is - thin, the
   // dunes break up into crescents with flat ground between; plenty, one ridge after another - and
   // how high up the dunes the darker sand reaches.

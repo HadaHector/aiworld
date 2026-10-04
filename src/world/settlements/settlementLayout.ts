@@ -13,6 +13,8 @@ import { generateBuilding } from "../buildings/buildingGenerator";
 /** A house's variant of its building is drawn from this many - enough that no two in a town share
  *  one by more than chance. */
 const BUILDING_VARIANT_SPACE = 1 << 20;
+/** How many spots along a street a picked building is tried at before another is picked. */
+const PENDING_TRIES = 4;
 import {
   HOUSE_FLOOR_ABOVE_STREET,
   HOUSE_MAX_CUT_FILL,
@@ -32,6 +34,8 @@ import {
   STREET_PROFILE_MAX_GRADE,
   STREET_PROFILE_SMOOTH_REACH,
   STREET_STRAIGHT_MAX_GRADE,
+  type StreetKind,
+  type StyleBuilding,
 } from "./settlementConfig";
 
 /** A settlement street: a road line (graded and painted like any road, narrower) plus what it is. */
@@ -461,7 +465,7 @@ function layoutSettlement(
 ): SettlementLayout {
   const rng = mulberry32(deriveSeed(seed, SETTLEMENT_LAYOUT_SALT + site.id));
   const between = ([lo, hi]: [number, number]): number => lo + rng() * (hi - lo);
-  const tier = site.style.tiers[site.tier];
+  const tier = site.style.tiers[site.tier]!;
   const houseStyle = site.style.houses;
   const ground = createGround(sampleTerrain);
 
@@ -576,7 +580,29 @@ function layoutSettlement(
     const across = Math.abs(-dx * uz + dz * ux) - hd;
     return Math.hypot(Math.max(0, along), Math.max(0, across));
   };
-  const totalWeight = houseStyle.buildings.reduce((sum, entry) => sum + entry.weight, 0);
+  // How many of each of the style's buildings stand so far - for their min and max.
+  const built = new Map<StyleBuilding, number>();
+  /** Which of the style's buildings may stand on a plot this far out (a fraction of the radius)
+   *  along a street of this kind: those still short of their min if any are, else all of them. */
+  const choicesFor = (kind: StreetKind, ring: number): StyleBuilding[] => {
+    const fits = houseStyle.buildings.filter(
+      (entry) =>
+        (entry.tiers === null || entry.tiers.includes(site.tier)) &&
+        (entry.streets === null || entry.streets.includes(kind)) &&
+        ring >= entry.ring[0] &&
+        ring <= entry.ring[1] &&
+        (entry.max === null || (built.get(entry) ?? 0) < entry.max),
+    );
+    const wanted = fits.filter((entry) => (built.get(entry) ?? 0) < entry.min);
+    return wanted.length > 0 ? wanted : fits.filter((entry) => entry.weight > 0);
+  };
+  /** One of them, by weight - evenly where none has any (a building wanted only for its min). */
+  const pickFrom = (choices: StyleBuilding[]): StyleBuilding => {
+    const total = choices.reduce((sum, entry) => sum + entry.weight, 0);
+    if (total <= 0) return choices[Math.floor(rng() * choices.length)];
+    let pick = rng() * total;
+    return choices.find((entry) => (pick -= entry.weight) < 0) ?? choices[choices.length - 1];
+  };
 
   for (const street of streets) {
     const arcs = arcLengths(street.points);
@@ -584,18 +610,33 @@ function layoutSettlement(
     const streetHalf = ROAD_HALF_WIDTH * street.widthScale;
     for (const side of [1, -1]) {
       let s = street.kind === "main" ? 4 : 6;
+      // A building that did not fit is tried a few steps further on before another is picked - so
+      // one wanted near the square is not given up on at the first awkward plot.
+      let pending: { entry: StyleBuilding; variant: number; width: number; depth: number; tries: number } | null = null;
       while (s < total - 3) {
-        // A building, and its own variant of it: the model says how much ground it takes.
-        let pick = rng() * totalWeight;
-        const { building } = houseStyle.buildings.find((entry) => (pick -= entry.weight) < 0) ?? houseStyle.buildings[0];
-        const variant = Math.floor(rng() * BUILDING_VARIANT_SPACE);
-        const model = generateBuilding(building, seed, variant);
-        const width = model.halfWidth * 2;
-        const depth = model.halfDepth * 2;
-        if (rng() >= tier.plotFill) {
-          s += width * 0.8;
-          continue;
+        // A building that may stand here, and its own variant of it: the model says how much ground
+        // it takes.
+        const spot = pointAt(street, arcs, s);
+        const ring = Math.hypot(spot.x - site.x, spot.z - site.z) / site.radius;
+        if (pending && !choicesFor(street.kind, ring).includes(pending.entry)) pending = null;
+        if (!pending) {
+          const choices = choicesFor(street.kind, ring);
+          if (choices.length === 0) {
+            s += 2.5;
+            continue;
+          }
+          const entry = pickFrom(choices);
+          const variant = Math.floor(rng() * BUILDING_VARIANT_SPACE);
+          const model = generateBuilding(entry.building, seed, variant);
+          pending = { entry, variant, width: model.halfWidth * 2, depth: model.halfDepth * 2, tries: 0 };
+          if (rng() >= tier.plotFill) {
+            s += pending.width * 0.8;
+            pending = null;
+            continue;
+          }
         }
+        const { entry, variant, width, depth } = pending;
+        const building = entry.building;
         const at = pointAt(street, arcs, Math.min(total, s + width / 2));
         // Normal pointing away from the street on this side; the house faces back along it.
         const nx = -at.tz * side;
@@ -636,9 +677,11 @@ function layoutSettlement(
             building,
             variant,
           });
+          built.set(entry, (built.get(entry) ?? 0) + 1);
           return true;
         })();
         s += placed ? width + between(houseStyle.gap) : 2.5;
+        if (placed || ++pending.tries >= PENDING_TRIES) pending = null;
       }
     }
   }

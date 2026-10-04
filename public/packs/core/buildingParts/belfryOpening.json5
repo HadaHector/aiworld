@@ -1,0 +1,17 @@
+// A belfry's opening, high in a tower: tall and narrow in a dressed stone surround, closed by timber
+// louvres - slats across it - to let the bells' sound out and keep the rain off them.
+{
+  name: "Belfry Opening",
+  type: "framed",
+  framed: {
+    span: 1,
+    width: 1.1,
+    height: 2.4,
+    sill: 1.0,
+    frame: 0.26,
+    headReach: 0.1,
+    bars: [0, 5],
+    sillReach: 0.1,
+    parts: { frame: "stone", panel: "timber" },
+  },
+}

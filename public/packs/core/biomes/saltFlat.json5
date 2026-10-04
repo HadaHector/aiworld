@@ -10,7 +10,7 @@
   spawnWeight: 1,
   lakeChance: 0.0,
   borderType: "mountain",
-  settlement: "timber",
+  settlement: ["stoneVillage", "marketTown"],
   // The floor's level, how much of the area it floods (the rest low hills round it), and how much
   // mud shows through the salt.
   params: { level: { range: [0, 1] }, flood: { range: [0, 1] }, mud: { range: [0, 1] } },

@@ -10,7 +10,7 @@
   spawnWeight: 1.5,
   lakeChance: 0.15,
   borderType: "mountain",
-  settlement: "timber",
+  settlement: ["farmVillage", "marketTown"],
   // The marsh at the water - flat, a slow swell and a finer one centred about half a metre above the
   // water (the terrain lifts land some 6 m on its own, hence the offset), so the low half of it,
   // give or take, stands under water in pools and channels - and out of it, where a slow noise says

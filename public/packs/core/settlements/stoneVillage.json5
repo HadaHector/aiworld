@@ -1,0 +1,28 @@
+// A stone village of the hills and the dry country: limewashed stone cottages, rubble-walled barns
+// and granaries, a smithy - and in a village or a town a chapel with its bell tower and an inn by the
+// square, and in a town a town hall. Any size.
+{
+  tiers: {
+    hamlet: { radius: 60, sideStreetChance: 0.3, sideStreetLength: [22, 40], plotFill: 0.75, squareRadius: 8 },
+    village: { radius: 85, sideStreetChance: 0.6, sideStreetLength: [28, 55], plotFill: 0.85, squareRadius: 11 },
+    town: { radius: 110, sideStreetChance: 0.8, sideStreetLength: [32, 70], plotFill: 0.9, squareRadius: 14 },
+  },
+
+  houses: {
+    buildings: [
+      // Homes.
+      { building: "stoneCottage", weight: 4 },
+      // Its farms and stores.
+      { building: "stoneBarn", weight: 2.5, ring: [0.4, 1] },
+      { building: "granary", weight: 1.2, ring: [0.25, 1] },
+      { building: "workshop", weight: 0.6 },
+      { building: "smithy", weight: 0.4, min: 1, max: 2, ring: [0.2, 1] },
+      // By the square.
+      { building: "chapel", weight: 0, min: 1, max: 1, tiers: ["village", "town"], ring: [0, 0.5] },
+      { building: "inn", weight: 0, min: 1, max: 1, tiers: ["village", "town"], streets: ["main"], ring: [0, 0.5] },
+      { building: "townHall", weight: 0, min: 1, max: 1, tiers: ["town"], streets: ["main"], ring: [0, 0.4] },
+    ],
+    setback: [3.4, 6],
+    gap: [1.5, 5],
+  },
+}

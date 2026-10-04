@@ -1,0 +1,32 @@
+// A market town: tall, jettied town houses packed shoulder to shoulder, shop houses opening onto its
+// main streets as arcades, inns and workshops between them, a chapel - and in a town a town hall on
+// the square. Out at the edge it thins into cottages and the odd farm. Villages and towns only.
+{
+  tiers: {
+    village: { radius: 90, sideStreetChance: 0.75, sideStreetLength: [28, 55], plotFill: 0.92, squareRadius: 13 },
+    town: { radius: 120, sideStreetChance: 0.9, sideStreetLength: [32, 70], plotFill: 0.95, squareRadius: 16 },
+  },
+
+  houses: {
+    buildings: [
+      // Homes: town houses in the middle, cottages out at the edge.
+      { building: "townHouse", weight: 3, ring: [0, 0.8] },
+      { building: "cottage", weight: 2, ring: [0.6, 1] },
+      // Trade: shops along the main streets, workshops anywhere, granaries up the side streets.
+      { building: "shopHouse", weight: 3, streets: ["main"], ring: [0, 0.75] },
+      { building: "workshop", weight: 1.5 },
+      { building: "granary", weight: 0.8, streets: ["side"], ring: [0.3, 1] },
+      { building: "inn", weight: 0.3, min: 1, max: 2, streets: ["main"], ring: [0, 0.65] },
+      { building: "smithy", weight: 0.3, min: 1, max: 2, ring: [0.3, 1] },
+      // The odd farm at the edge.
+      { building: "farmhouse", weight: 0.6, ring: [0.7, 1] },
+      { building: "barn", weight: 0.6, ring: [0.75, 1] },
+      // By the square: a chapel - and in a town, the town hall.
+      { building: "chapel", weight: 0, min: 1, max: 1, ring: [0, 0.5] },
+      { building: "townHall", weight: 0, min: 1, max: 1, tiers: ["town"], streets: ["main"], ring: [0, 0.4] },
+    ],
+    // Close to the street and close together.
+    setback: [3.4, 4.5],
+    gap: [0.8, 2.5],
+  },
+}

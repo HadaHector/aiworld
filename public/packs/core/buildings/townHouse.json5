@@ -11,11 +11,25 @@
     // The main block in tiles: along the front (narrow to the street), and back from it.
     width: [2, 3],
     depth: [2, 3],
-    // A wing out of the back now and then; never one out of a side - its neighbours stand there.
-    backWing: 0.45,
-    sideWing: 0,
-    wingLength: [1, 2],
-    wingWidth: [1, 2],
+    // How the plan is laid out round the main block (see the README's "House plans").
+    plan: {
+      type: "house",
+      house: {
+        // A wing out of the back now and then; never one out of a side - its neighbours stand there.
+        backWing: 0.45,
+        sideWing: 0,
+        wingLength: [1, 2],
+        wingWidth: [1, 2],
+        // A wing stands one storey or two - no taller than the house - and a lower one is topped with one
+        // of these: a roof stopping against the house's wall, or a balcony.
+        wingStoreys: [1, 2],
+        lowTops: [{ part: "shingleRoof", weight: 2 }, { part: "timberBalcony", weight: 1 }],
+        // Sometimes the top storey stands back a tile from the front, behind a balcony...
+        setback: { chance: 0.3, terraces: [{ part: "timberBalcony", weight: 1 }] },
+        // ...and sometimes the ground storey's front row is an open arcade, the storeys over it on posts.
+        arcade: { chance: 0.35, support: "timberPost" },
+      },
+    },
     // How many storeys stand above ground, and how many cellars are dug under it.
     storeys: [2, 3],
     cellars: [0, 1],
@@ -29,20 +43,14 @@
     // Each storey over the ground one stands this much further out over the street than the one
     // under it.
     jetty: { out: 0.6, walls: ["front"] },
-    // A wing stands one storey or two - no taller than the house - and a lower one is topped with one
-    // of these: a roof stopping against the house's wall, or a balcony.
-    wingStoreys: [1, 2],
-    lowTops: [{ part: "shingleRoof", weight: 2 }, { part: "timberBalcony", weight: 1 }],
-    // Sometimes the top storey stands back a tile from the front, behind a balcony...
-    setback: { chance: 0.3, terraces: [{ part: "timberBalcony", weight: 1 }] },
-    // ...and sometimes the ground storey's front row is an open arcade, the storeys over it on posts.
-    arcade: { chance: 0.35, support: "timberPost" },
     framing: "timberFrame",
     roof: "shingleRoof",
     doors: [{ part: "timberDoor", weight: 1 }],
     // Highest priority first: a chimney up a side or the back from the ground (rising through the
     // storeys over it, whose bays it takes), then windows on every storey.
     wallExtras: [
+      // A door onto a balcony or a terrace - doors over the ground storey only go where one opens onto one.
+      { part: "timberDoor", priority: 3, chance: 0.9, maxCount: 2, storeys: ["upper"] },
       { part: "stoneChimney", priority: 2, chance: 0.2, maxCount: 1, walls: ["side", "back"], storeys: ["ground"] },
       { part: "wideWindow", priority: 1, chance: 0.12, storeys: ["upper"] },
       { part: "timberWindow", priority: 1, chance: 0.35 },

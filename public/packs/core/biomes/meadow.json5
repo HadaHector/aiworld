@@ -10,7 +10,7 @@
   spawnWeight: 2,
   lakeChance: 0.05,
   borderType: "mountain",
-  settlement: "timber",
+  settlement: ["farmVillage", "marketTown"],
   height: { generator: "detailHeight", amplitude: { range: [9, 17] }, frequency: { range: [0.0016, 0.0026] }, offset: 7.5 },
   trees: {
     oneOf: [

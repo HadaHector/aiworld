@@ -15,7 +15,7 @@
   spawnWeight: 1,
   lakeChance: 0.02,
   borderType: "mountain",
-  settlement: "timber",
+  settlement: ["stoneVillage", "farmVillage"],
   // Hill country: a settlement in some cells, a quarry in others, where there is a hillside to cut it into.
   features: [
     { feature: "settlement", odds: 0.8 },

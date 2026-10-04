@@ -1,0 +1,17 @@
+// A tall, narrow chapel window high in the wall, in a dressed stone surround, its leaded panes split
+// by three transoms.
+{
+  name: "Lancet Window",
+  type: "framed",
+  framed: {
+    span: 1,
+    width: 1.0,
+    height: 3.2,
+    sill: 2.0,
+    frame: 0.24,
+    headReach: 0.1,
+    bars: [0, 3],
+    sillReach: 0.1,
+    parts: { frame: "stone", panel: "glass" },
+  },
+}

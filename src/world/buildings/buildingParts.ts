@@ -400,6 +400,11 @@ export function isWholeHousePart(part: BuildingPartDef): boolean {
   return ["timberFrame", "stoneFrame", "pitched", "terrace", "support"].includes(part.generator);
 }
 
+/** Whether a part is a door - a framed part standing on the floor - rather than a window. */
+export function isDoor(part: BuildingPartDef): boolean {
+  return part.generator === "framed" && part.framed!.sill <= 0.01;
+}
+
 /** Whether a part tops a storey as a roof does, rather than as a terrace. */
 export function isRoof(part: BuildingPartDef): boolean {
   return part.generator === "pitched";

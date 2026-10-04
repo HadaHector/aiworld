@@ -1,0 +1,56 @@
+// A merchant's shop house: a town house whose ground floor opens to the street as an arcade on
+// posts, the shop behind it, two or three storeys over it jettied out, under a shingle roof -
+// brightly washed, to be seen from down the street.
+{
+  name: "Shop House",
+  type: "house",
+  house: {
+    tile: [2.6, 3.0],
+    // Three deep, so the arcade is a third of the ground floor, not half of it.
+    width: [2, 3],
+    depth: [3, 3],
+    // How the plan is laid out round the main block (see the README's "House plans").
+    plan: {
+      type: "house",
+      house: {
+        backWing: 0.3,
+        sideWing: 0,
+        wingLength: [1, 2],
+        wingWidth: [2, 2],
+        wingStoreys: [1, 2],
+        lowTops: [{ part: "shingleRoof", weight: 1 }, { part: "timberBalcony", weight: 1 }],
+        setback: { chance: 0.2, terraces: [{ part: "timberBalcony", weight: 1 }] },
+        arcade: { chance: 1, support: "timberPost" },
+      },
+    },
+    storeys: [2, 3],
+    cellars: [0, 1],
+    wallHeight: [4.2, 4.6],
+    upperHeight: [3.8, 4.2],
+    cellarHeight: [2.6, 3.0],
+    plinth: [0.3, 0.45],
+    plinthOutset: 0.5,
+    jetty: { out: 0.5, walls: ["front"] },
+    framing: "timberFrame",
+    roof: "shingleRoof",
+    doors: [{ part: "timberDoor", weight: 1 }],
+    wallExtras: [
+      // A door onto a balcony or a terrace - doors over the ground storey only go where one opens onto one.
+      { part: "timberDoor", priority: 3, chance: 0.9, maxCount: 2, storeys: ["upper"] },
+      { part: "stoneChimney", priority: 2, chance: 0.2, maxCount: 1, walls: ["side", "back"], storeys: ["ground"] },
+      // The shop window, under the arcade.
+      { part: "wideWindow", priority: 1, chance: 0.6, walls: ["front"], storeys: ["ground"] },
+      { part: "wideWindow", priority: 1, chance: 0.15, storeys: ["upper"] },
+      { part: "timberWindow", priority: 1, chance: 0.4 },
+    ],
+    parts: {
+      walls: { material: "plaster", tints: [[1.05, 0.88, 0.7], [0.85, 0.92, 0.98], [0.98, 0.82, 0.8], [0.9, 0.98, 0.86], [1.05, 1.0, 0.82]] },
+      timber: { material: "timber", tints: [[0.42, 0.36, 0.34], [0.55, 0.5, 0.46]] },
+      stone: { material: "dressedStone", tints: [[1, 1, 1]] },
+      roof: { material: "woodShingles", tints: [[1, 1, 1], [0.9, 0.92, 0.95]] },
+      plinth: { material: "stoneBricks", tints: [[1, 1, 1], [0.9, 0.88, 0.85]] },
+      door: { material: "timber", tints: [[0.55, 0.38, 0.3], [0.38, 0.45, 0.5]] },
+      glass: { material: "glass", tints: [[1, 1, 1]] },
+    },
+  },
+}

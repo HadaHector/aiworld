@@ -164,8 +164,9 @@ export interface BiomeDefinition {
   treeTints: TreeTintRuleDef[];
   /** Where trees thin out here. Biomes that do not set their own share one object, the defaults'. */
   treeRules: TreeRules;
-  /** What settlements here look like, or null for a biome nobody settles. */
-  settlementStyle: SettlementStyle | null;
+  /** What settlements here may look like - each place one of them, one that builds its tier - or
+   *  none, for a biome nobody settles. */
+  settlementStyles: SettlementStyle[];
   atmosphere: BiomeAtmosphere;
   dayNight: BiomeDayNight;
   /** The weathers this zone can have and how likely each is (see weather/weatherSystem.ts) - the

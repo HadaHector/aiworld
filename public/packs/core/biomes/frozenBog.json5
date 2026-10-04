@@ -12,7 +12,7 @@
   spawnWeight: 1.5,
   lakeChance: 0.1,
   borderType: "mountain",
-  settlement: "timber",
+  settlement: ["stoneVillage", "farmVillage"],
   // How snowy the area is (0-1) - the ground and the trees follow it together - and how much of its
   // water has frozen over.
   params: { snow: { range: [0, 1] }, frozen: { range: [0.4, 1] } },

@@ -1,0 +1,43 @@
+// A barn: a big, tall shed of upright planks on a timber frame, big double doors front and back to
+// drive a cart through, hardly a window, and a steep shingle roof over it all - sometimes a lean-to
+// out of a side.
+{
+  name: "Barn",
+  type: "house",
+  house: {
+    // Wide bays: a barn's frame is bigger than a house's.
+    tile: [3.0, 3.4],
+    width: [3, 4],
+    depth: [2, 3],
+    // How the plan is laid out round the main block (see the README's "House plans").
+    plan: {
+      type: "house",
+      house: {
+        backWing: 0,
+        sideWing: 0.35,
+        wingLength: [1, 2],
+        wingWidth: [2, 2],
+      },
+    },
+    wallHeight: [5.0, 6.0],
+    plinth: [0.15, 0.3],
+    plinthOutset: 0.3,
+    framing: "timberFrame",
+    roof: "barnRoof",
+    doors: [{ part: "barnDoor", weight: 1 }],
+    wallExtras: [
+      // A second pair of doors in the back, straight through.
+      { part: "barnDoor", priority: 2, chance: 0.6, maxCount: 1, walls: ["back"] },
+      { part: "timberWindow", priority: 1, chance: 0.06 },
+    ],
+    parts: {
+      walls: { material: "planks", tints: [[1, 1, 1], [0.85, 0.8, 0.78], [0.75, 0.62, 0.55], [0.62, 0.42, 0.36]] },
+      timber: { material: "timber", tints: [[0.55, 0.5, 0.46], [0.42, 0.38, 0.36]] },
+      stone: { material: "dressedStone", tints: [[1, 1, 1]] },
+      roof: { material: "woodShingles", tints: [[0.9, 0.9, 0.92], [0.8, 0.82, 0.85], [1, 0.96, 0.9]] },
+      plinth: { material: "stoneBricks", tints: [[0.9, 0.88, 0.85]] },
+      door: { material: "timber", tints: [[0.6, 0.56, 0.52], [0.7, 0.45, 0.38]] },
+      glass: { material: "glass", tints: [[1, 1, 1]] },
+    },
+  },
+}

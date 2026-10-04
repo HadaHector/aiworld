@@ -23,11 +23,32 @@ export interface SettlementTierDef {
   squareRadius: number;
 }
 
+/**
+ * One of the buildings a style builds, and where: picked for a plot as often as its weight over the
+ * sum of all those that may stand there - only in the tiers it names (all, if null), on the streets
+ * it names (any, if null), and with the plot's distance from the centre, as a fraction of the
+ * settlement's radius, within `ring`. The first `min` of it are built wherever they may stand before
+ * anything else is, and no more than `max` (null: no limit).
+ */
+export interface StyleBuilding {
+  building: BuildingDef;
+  weight: number;
+  tiers: SettlementTier[] | null;
+  streets: StreetKind[] | null;
+  ring: [number, number];
+  min: number;
+  max: number | null;
+}
+
+export type StreetKind = "main" | "side";
+export const STREET_KINDS: readonly StreetKind[] = ["main", "side"];
+export const SETTLEMENT_TIERS: readonly SettlementTier[] = ["hamlet", "village", "town"];
+
 /** The houses a style builds - see settlementLayout.ts. */
 export interface HouseStyle {
-  /** The buildings (a pack's buildings/ folder) its plots are built with, each picked as often as
-   *  its weight over the sum of them all - and each house its own variant of it. */
-  buildings: { building: BuildingDef; weight: number }[];
+  /** The buildings (a pack's buildings/ folder) its plots are built with - each house its own
+   *  variant of one. */
+  buildings: StyleBuilding[];
   /** Front wall this far back from the street's level edge. At least far enough that the whole
    *  footprint is past where a plot's levelling fades out next to a street (terrainSampler.ts). */
   setback: [number, number];
@@ -35,10 +56,11 @@ export interface HouseStyle {
   gap: [number, number];
 }
 
-/** What settlements in a biome look like. Several biomes may share one. */
+/** What settlements in a biome look like. Several biomes may share one. A style builds only the
+ *  tiers it gives - a market town is never a hamlet. */
 export interface SettlementStyle {
   id: string;
-  tiers: Record<SettlementTier, SettlementTierDef>;
+  tiers: Partial<Record<SettlementTier, SettlementTierDef>>;
   houses: HouseStyle;
 }
 

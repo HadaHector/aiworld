@@ -1,28 +1,18 @@
 import type { BuildingModel, HouseSpec, Level, Paint, StoreyKind, WallSide } from "./buildingTypes";
 import { FOUNDATION_DEPTH, ModelBuilder, pick, roll, rollInt, type Vec3 } from "./buildingGeometry";
-import { buildFraming, buildRoof, buildSupport, buildTerrace, buildWallPart, isRoof, partSpan, pickPart, planFraming, planRoof, type FramingCorner, type FramingWall, type PartExtent, type PartPaints, type WallSlot } from "./buildingParts";
+import { buildFraming, buildRoof, buildSupport, buildTerrace, buildWallPart, isDoor, partSpan, pickPart, planFraming, planRoof, type FramingCorner, type FramingWall, type PartExtent, type PartPaints, type WallSlot } from "./buildingParts";
 import type { RoofBlockInput, RoofEnd } from "./pitchedRoof";
+import { inRect, planHouse, type Block, type PlanEnd } from "./housePlans";
 
 /**
- * A traditional house, built in the order a house is: its plan (tiles), the plinth, the walls storey
- * by storey with their door, windows and the like, the framing over them, and the roofs and
- * terraces over its masses.
- *
- * The plan is a main block with its front to +z, and maybe a wing out of the back (a T or an L)
- * and one out of a side. Each block is a rectangle; the roof is handed all of them.
+ * A traditional house, built in the order a house is: its plan (tiles, laid out by one of the plan
+ * generators in housePlans.ts), the plinth, the walls storey by storey with their door, windows and
+ * the like, the framing over them, and the roofs and terraces over its masses.
  *
  * The roof, the framing, the door and the wall's extras - windows, chimneys - are building parts
  * (see buildingParts.ts): the house picks them and where they go, and each builds itself there - a
  * door or a window closed, standing on the wall, never a hole.
  */
-
-/** A block of the plan, in tiles: i along x, j along z (the front is the main block's +z side). */
-interface Block {
-  i0: number;
-  i1: number;
-  j0: number;
-  j1: number;
-}
 
 type Direction = "px" | "nx" | "pz" | "nz";
 
@@ -45,40 +35,6 @@ interface Storey {
   floor: number;
   top: number;
   jetty: number;
-}
-
-/** The plan: the main block and any wings, each wing with how its roof meets the main block's. */
-function planHouse(spec: HouseSpec, rng: () => number) {
-  const W = rollInt(spec.width, rng);
-  const D = rollInt(spec.depth, rng);
-  const main: Block = { i0: 0, i1: W, j0: 0, j1: D };
-  let back: Block | null = null;
-  let side: (Block & { left: boolean }) | null = null;
-
-  // A wing's width, from the spec's range, held under the most its block allows. Where the block
-  // allows less than the range's least, there is no wing at all rather than a sliver of one.
-  const [widthMin, widthMax] = spec.wingWidth;
-  const wingWidth = (most: number): number => rollInt([widthMin, Math.min(widthMax, most)], rng);
-  // A wing out of the back: narrower than the main block's front, and no wider than it is deep, so
-  // its ridge never stands above the main ridge.
-  const backWidthMax = Math.min(W - 1, D);
-  if (backWidthMax >= widthMin && rng() < spec.backWing) {
-    const w = wingWidth(backWidthMax);
-    const offset = pick([0, Math.floor((W - w) / 2), W - w], rng);
-    back = { i0: offset, i1: offset + w, j0: -rollInt(spec.wingLength, rng), j1: 0 };
-  }
-  // A wing out of one side: shallower than the main block, so its ridge is lower.
-  if (D - 1 >= widthMin && rng() < spec.sideWing) {
-    const d = wingWidth(D - 1);
-    const left = rng() < 0.5;
-    let offset = pick([0, Math.floor((D - d) / 2), D - d], rng);
-    // Flush with the back where a back wing is flush with the same end, the two would touch at
-    // just a corner: then it goes flush with the front instead.
-    if (offset === 0 && back && (left ? back.i0 === 0 : back.i1 === W)) offset = D - d;
-    const length = rollInt(spec.wingLength, rng);
-    side = left ? { i0: -length, i1: 0, j0: offset, j1: offset + d, left } : { i0: W, i1: W + length, j0: offset, j1: offset + d, left };
-  }
-  return { W, D, main, back, side };
 }
 
 /** Every outer wall of a set of tiles, as straight runs. */
@@ -114,15 +70,6 @@ function wallRuns(inside: (i: number, j: number) => boolean, blocks: Block[]): W
   return runs;
 }
 
-/** A mass of the house: a block of tiles standing from storey `from` up to (not including) `to`. */
-interface Mass {
-  rect: Block;
-  from: number;
-  to: number;
-}
-
-const inRect = (r: Block, i: number, j: number): boolean => i >= r.i0 && i < r.i1 && j >= r.j0 && j < r.j1;
-
 /**
  * Builds a house - `far`, to be seen from afar: its parts leave out their small pieces, though every
  * roll is taken as near, so near and far are the same house.
@@ -136,16 +83,10 @@ const inRect = (r: Block, i: number, j: number): boolean => i >= r.i0 && i < r.i
 export function buildHouse(spec: HouseSpec, rng: () => number, far = false): BuildingModel {
   const b = new ModelBuilder();
   const tile = roll(spec.tile, rng);
-  const { W, main, back, side } = planHouse(spec, rng);
-  const blocks = [main, ...(back ? [back] : []), ...(side ? [side] : [])];
-  // The plan: every tile the house stands on, open or not.
-  const inside = (i: number, j: number): boolean => blocks.some((k) => inRect(k, i, j));
 
   const wallHeight = roll(spec.wallHeight, rng);
   const plinth = roll(spec.plinth, rng);
   const outset = spec.plinthOutset;
-  const roofPlan = planRoof(spec.roof, rng);
-  const { shape: roofType } = roofPlan;
   const paint = (part: keyof HouseSpec["parts"]): Paint => ({ material: spec.parts[part].material, tint: pick(spec.parts[part].tints, rng) });
   const paints: PartPaints = {
     walls: paint("walls"),
@@ -159,7 +100,10 @@ export function buildHouse(spec: HouseSpec, rng: () => number, far = false): Bui
 
   // The levels, cellars first: the cellars dug down from the ground floor, then the ground storey on
   // the plinth and the storeys over it, each jettied further out than the one below.
-  const storeys = rollInt(spec.storeys, rng);
+  const plan = planHouse(spec, rollInt(spec.storeys, rng), rng);
+  const { blocks, masses, storeys, entrance } = plan;
+  // The plan: every tile the house stands on, open or not.
+  const inside = (i: number, j: number): boolean => blocks.some((k) => inRect(k, i, j));
   const cellars = rollInt(spec.cellars, rng);
   const upperHeight = spec.upperHeight ? roll(spec.upperHeight, rng) : wallHeight;
   const cellarHeight = roll(spec.cellarHeight, rng);
@@ -179,25 +123,6 @@ export function buildHouse(spec: HouseSpec, rng: () => number, far = false): Bui
   // The plinth's foot: below the deepest cellar's floor, or the foundation's depth.
   const footing = Math.min(-FOUNDATION_DEPTH, levels[0].floor - 0.3);
 
-  // The masses. A wing may stand lower than the main block; the main block's front row of tiles may
-  // be open on the ground storey (an arcade) and stand back on the top one (a setback).
-  const wingStoreys = (): number => (spec.wingStoreys ? Math.min(storeys, rollInt(spec.wingStoreys, rng)) : storeys);
-  const backStoreys = back ? wingStoreys() : 0;
-  const sideStoreys = side ? wingStoreys() : 0;
-  const deep = main.j1 - main.j0 >= 2;
-  const arcade = spec.arcade !== null && storeys >= 2 && deep && rng() < spec.arcade.chance;
-  const setback = spec.setback !== null && storeys >= (arcade ? 3 : 2) && deep && rng() < spec.setback.chance;
-  const frontRow: Block = { i0: main.i0, i1: main.i1, j0: main.j1 - 1, j1: main.j1 };
-  const rest: Block = { ...main, j1: main.j1 - 1 };
-  const masses: Mass[] = [];
-  if (arcade || setback) {
-    masses.push({ rect: rest, from: 0, to: storeys });
-    masses.push({ rect: frontRow, from: arcade ? 1 : 0, to: setback ? storeys - 1 : storeys });
-  } else {
-    masses.push({ rect: main, from: 0, to: storeys });
-  }
-  if (back) masses.push({ rect: back, from: 0, to: backStoreys });
-  if (side) masses.push({ rect: side, from: 0, to: sideStoreys });
   const occupied = (i: number, j: number, k: number): boolean => masses.some((m) => m.from <= k && k < m.to && inRect(m.rect, i, j));
 
   // Tiles to metres, with the plan's bounding box centred on the origin.
@@ -279,73 +204,44 @@ export function buildHouse(spec: HouseSpec, rng: () => number, far = false): Bui
     return { x0: X(r.i0) - grow("nx"), x1: X(r.i1) + grow("px"), z0: Z(r.j0) - grow("nz"), z1: Z(r.j1) + grow("pz") };
   };
 
-  // What tops each mass: those reaching the top storey share the house's roof; a lower wing has a
-  // roof or a terrace of its own; a setback strip, a terrace.
-  const topStorey = above[above.length - 1];
-  const joined = (storeysOf: number): boolean => storeysOf === storeys;
-  const overhang = roofPlan.overhang;
-  const free = (): RoofEnd => ({ kind: roofType, overhang, extend: 0 });
-  const backFlushLeft = back !== null && joined(backStoreys) && back.i0 === 0;
-  const backFlushRight = back !== null && joined(backStoreys) && back.i1 === W;
-  const mainEnd = (left: boolean): RoofEnd => {
-    const wingHere = side !== null && joined(sideStoreys) && side.left === left;
-    const gable = wingHere || (left ? backFlushLeft : backFlushRight);
-    return { kind: gable ? "gable" : roofType, overhang, extend: 0 };
-  };
-
+  // The roofs, each over its blocks on top of its storey - its ends free (the roof's own shape),
+  // gabled, or stopping at the block they meet (at the tiles' own line there, not out at a jettied
+  // wall's face) - and the terraces.
   /** A roof over some blocks, from the top of a storey, and the gables on its walls. */
   interface RoofGroup {
     part: (typeof spec)["roof"];
-    plan: typeof roofPlan;
+    plan: ReturnType<typeof planRoof>;
     level: Storey;
     blocks: RoofBlockInput[];
     /** Each block's tiles, for the walls its gables stand on. */
     rects: Block[];
     gables: { dir: Direction; line: number; at: number; ridge: number }[];
   }
-  const roofGroups: RoofGroup[] = [];
-  const terraces: { part: (typeof spec)["roof"]; mass: Mass }[] = [];
-  {
-    const top = rectOf(setback ? rest : main, topStorey);
-    const group: RoofGroup = { part: spec.roof, plan: roofPlan, level: topStorey, blocks: [], rects: [], gables: [] };
-    group.blocks.push({ a0: top.x0, a1: top.x1, c0: top.z0, c1: top.z1, alongX: true, start: mainEnd(true), end: mainEnd(false) });
-    group.rects.push(setback ? rest : main);
-    if (back && joined(backStoreys)) {
-      const r = rectOf(back, topStorey);
-      group.blocks.push({ a0: r.z0, a1: Z(back.j1), c0: r.x0, c1: r.x1, alongX: false, start: free(), end: { kind: "attached", overhang: 0, extend: (r.x1 - r.x0) / 2 } });
-      group.rects.push(back);
-    }
-    if (side && joined(sideStoreys)) {
-      const r = rectOf(side, topStorey);
-      const attached: RoofEnd = { kind: "attached", overhang: 0, extend: 0 };
-      group.blocks.push({ a0: side.left ? r.x0 : X(side.i0), a1: side.left ? X(side.i1) : r.x1, c0: r.z0, c1: r.z1, alongX: true, start: side.left ? free() : attached, end: side.left ? attached : free() });
-      group.rects.push(side);
-    }
-    roofGroups.push(group);
-    if (setback) terraces.push({ part: pickPart(spec.setback!.terraces, rng)!, mass: masses[1] });
-  }
-  // A lower wing: its own roof, stopping at the taller block's wall, or a terrace.
-  for (const [wing, storeysOf, isBack] of [[back, backStoreys, true], [side, sideStoreys, false]] as const) {
-    if (!wing || joined(storeysOf)) continue;
-    const mass = masses.find((m) => m.rect === wing)!;
-    const part = pickPart(spec.lowTops, rng) ?? spec.roof;
-    if (!isRoof(part)) {
-      terraces.push({ part, mass });
-      continue;
-    }
-    const level = above[storeysOf - 1];
-    const plan = planRoof(part, rng);
-    const wingFree: RoofEnd = { kind: plan.shape, overhang: plan.overhang, extend: 0 };
-    const attached: RoofEnd = { kind: "attached", overhang: 0, extend: 0 };
-    const r = rectOf(wing, level);
-    const group: RoofGroup = { part, plan, level, blocks: [], rects: [wing], gables: [] };
-    if (isBack) group.blocks.push({ a0: r.z0, a1: Z(wing.j1), c0: r.x0, c1: r.x1, alongX: false, start: wingFree, end: attached });
-    else {
-      const left = (wing as typeof side)!.left;
-      group.blocks.push({ a0: left ? r.x0 : X(wing.i0), a1: left ? X(wing.i1) : r.x1, c0: r.z0, c1: r.z1, alongX: true, start: left ? wingFree : attached, end: left ? attached : wingFree });
-    }
-    roofGroups.push(group);
-  }
+  const roofGroups: RoofGroup[] = plan.roofs.map((roof) => {
+    const roofPlan = planRoof(roof.part, rng);
+    const level = above[roof.level];
+    const endOf = (end: PlanEnd, span: number): RoofEnd =>
+      end.kind === "attached"
+        ? { kind: "attached", overhang: 0, extend: end.into ? span / 2 : 0 }
+        : { kind: end.kind === "gable" ? "gable" : roofPlan.shape, overhang: roofPlan.overhang, extend: 0 };
+    const inputs = roof.blocks.map(({ rect, alongX, start, end }): RoofBlockInput => {
+      const r = rectOf(rect, level);
+      const [a0, a1, c0, c1] = alongX ? [r.x0, r.x1, r.z0, r.z1] : [r.z0, r.z1, r.x0, r.x1];
+      const [line0, line1] = alongX ? [X(rect.i0), X(rect.i1)] : [Z(rect.j0), Z(rect.j1)];
+      return {
+        a0: start.kind === "attached" ? line0 : a0,
+        a1: end.kind === "attached" ? line1 : a1,
+        c0,
+        c1,
+        alongX,
+        start: endOf(start, c1 - c0),
+        end: endOf(end, c1 - c0),
+      };
+    });
+    return { part: roof.part, plan: roofPlan, level, blocks: inputs, rects: roof.blocks.map((k) => k.rect), gables: [] };
+  });
+  const topStorey = above[above.length - 1];
+  const { terraces } = plan;
   // Each roof's gables: a block end with one, as the wall it stands on, and its apex - where along
   // that wall (metres) and how high.
   for (const group of roofGroups) {
@@ -524,10 +420,11 @@ export function buildHouse(spec: HouseSpec, rng: () => number, far = false): Bui
 
   // Supports: along the first storey's walls wherever the ground under them is open - an arcade's
   // front - at every bay's edge and its corners, each standing on the plinth and carrying the beam.
-  if (arcade && above.length > 1) {
+  if (plan.support && above.length > 1) {
     const level = above[1];
     const outline = outlineAt(level);
-    const half = (spec.arcade!.support.support?.width ?? 0.4) / 2;
+    const support = plan.support;
+    const half = (support.support?.width ?? 0.4) / 2;
     const placed = new Set<string>();
     for (const run of outline.runs) {
       const wall = wallAt(run, level);
@@ -555,7 +452,7 @@ export function buildHouse(spec: HouseSpec, rng: () => number, far = false): Bui
         const key = `${x.toFixed(2)},${z.toFixed(2)}`;
         if (placed.has(key)) continue;
         placed.add(key);
-        buildSupport(spec.arcade!.support, { x, z, floor: plinth, top: level.floor, far, box: (x0, y0, z0, x1, y1, z1, p) => b.box(x0, y0, z0, x1, y1, z1, p) }, paints);
+        buildSupport(support, { x, z, floor: plinth, top: level.floor, far, box: (x0, y0, z0, x1, y1, z1, p) => b.box(x0, y0, z0, x1, y1, z1, p) }, paints);
       }
     }
   }
@@ -584,21 +481,62 @@ export function buildHouse(spec: HouseSpec, rng: () => number, far = false): Bui
   };
   const isFree = (run: WallRun, level: Storey, from: number, to: number): boolean => (taken.get(keyOf(run, level)) ?? []).every(([a, z]) => to <= a || from >= z);
 
-  // The door: one of the house's doors that fits the front, in a middle bay of it (bays, for a
-  // big door) where there are bays to spare either side - on the ground storey's front wall, at the
-  // back of an arcade where there is one.
+  // The door - every house has one. One of the house's doors that fits the entrance's front, in a
+  // middle bay of it (bays, for a big door) where there are bays to spare either side - on the ground
+  // storey's front wall, at the back of an arcade where there is one. Where it does not fit there - a
+  // narrow tower's front, its corners crowding it - it is tried in the front's other bays, then the
+  // other fronts, the sides and the back, nearest their middles first; at each, the picked door
+  // before the others, the narrowest of them first.
+  const W = entrance.i1 - entrance.i0;
   const doorPart = pickPart(spec.doors.filter((choice) => partSpan(choice.part) <= W), rng);
   const doorSpan = doorPart ? partSpan(doorPart) : 1;
-  const doorBay = W >= doorSpan + 2 ? rollInt([1, W - 1 - doorSpan], rng) : rollInt([0, W - doorSpan], rng);
-  const doorCentre = doorBay + doorSpan / 2;
-  const frontRun = outlineAt(ground)
-    .runs.filter((run) => run.dir === "pz" && run.from <= doorBay && run.to >= doorBay + doorSpan && run.line <= main.j1 && run.line > main.j0)
+  const doorBay = entrance.i0 + (W >= doorSpan + 2 ? rollInt([1, W - 1 - doorSpan], rng) : rollInt([0, W - doorSpan], rng));
+  const groundRuns = outlineAt(ground).runs;
+  const frontRun = groundRuns
+    .filter((run) => run.dir === "pz" && run.from <= doorBay && run.to >= doorBay + doorSpan && run.line <= entrance.j1 && run.line > entrance.j0)
     .sort((p, q) => q.line - p.line)[0];
-  if (frontRun) add(taken, keyOf(frontRun, ground), [doorBay, doorBay + doorSpan]);
-  if (doorPart && frontRun) {
-    const extent = buildWallPart(doorPart, slotAt(frontRun, doorCentre, doorSpan, ground), paints, rng);
-    if (extent) place(frontRun, ground, doorCentre, doorSpan, extent);
+  const doorParts = [...(doorPart ? [doorPart] : []), ...spec.doors.map((choice) => choice.part).filter((part) => part !== doorPart).sort((p, q) => partSpan(p) - partSpan(q))];
+  /** Where along a run a part `span` wide could stand: `first` (where it is one of its bays), then
+   *  the run's very middle - between two bays, where the run has no middle bay, so on a short wall it
+   *  keeps clear of both corners - then its bays, nearest the middle first. */
+  const baysOf = (run: WallRun, span: number, first: number | null): number[] => {
+    const bays: number[] = [];
+    for (let bay = run.from; bay + span <= run.to; bay++) bays.push(bay);
+    const middle = (run.from + run.to - span) / 2;
+    bays.sort((p, q) => Math.abs(p - middle) - Math.abs(q - middle) || p - q);
+    const order = run.to - run.from >= span ? [middle, ...bays.filter((bay) => bay !== middle)] : bays;
+    return first !== null && bays.includes(first) ? [first, ...order.filter((bay) => bay !== first)] : order;
+  };
+  const sideRank = (run: WallRun): number => (run === frontRun ? 0 : run.dir === "pz" ? 1 : run.dir === "nz" ? 3 : 2);
+  const doorWalls = [...groundRuns].sort((p, q) => sideRank(p) - sideRank(q) || q.line - p.line || p.from - q.from);
+  let door: { x: number; z: number } | null = null;
+  for (const run of doorWalls) {
+    for (const part of doorParts) {
+      const span = partSpan(part);
+      for (const bay of baysOf(run, span, run === frontRun && part === doorPart ? doorBay : null)) {
+        if (!isFree(run, ground, bay, bay + span)) continue;
+        const extent = buildWallPart(part, slotAt(run, bay + span / 2, span, ground), paints, rng);
+        if (!extent) continue;
+        place(run, ground, bay + span / 2, span, extent);
+        const [x, , z] = wallAt(run, ground).at(bay + span / 2, 0, 0);
+        door = { x, z };
+        break;
+      }
+      if (door) break;
+    }
+    if (door) break;
   }
+
+  /** Whether every bay from `bay` to `bay + span` along a run opens onto a terrace: the tile outside
+   *  it is the top of a terrace's mass, at this level's floor. */
+  const ontoTerrace = (run: WallRun, level: Storey, bay: number, span: number): boolean => {
+    for (let along = bay; along < bay + span; along++) {
+      const [i, j] =
+        run.dir === "pz" ? [along, run.line] : run.dir === "nz" ? [along, run.line - 1] : run.dir === "px" ? [run.line, along] : [run.line - 1, along];
+      if (!terraces.some(({ mass }) => mass.to === level.index && inRect(mass.rect, i, j))) return false;
+    }
+    return true;
+  };
 
   // The wall's extras, highest priority first: each tries every free spot of the walls and storeys
   // it may go on, in a random order, taking each with its chance, until it has as many as it may.
@@ -610,7 +548,11 @@ export function buildHouse(spec: HouseSpec, rng: () => number, far = false): Bui
       if (!extra.storeys.includes(level.kind)) continue;
       for (const run of outlineAt(level).runs) {
         if (!extra.walls.includes(wallOf(run))) continue;
-        for (let bay = run.from; bay + span <= run.to; bay++) spots.push({ run, level, bay });
+        for (let bay = run.from; bay + span <= run.to; bay++) {
+          // A door over the ground storey only where it opens onto a terrace.
+          if (level.kind === "upper" && isDoor(extra.part) && !ontoTerrace(run, level, bay, span)) continue;
+          spots.push({ run, level, bay });
+        }
       }
     }
     for (let i = spots.length - 1; i > 0; i--) {
@@ -744,7 +686,7 @@ export function buildHouse(spec: HouseSpec, rng: () => number, far = false): Bui
       for (let j = block.j0; j < block.j1; j++) tiles.push({ x0: X(i), z0: Z(j), x1: X(i + 1), z1: Z(j + 1) });
     }
   }
-  const model = b.finish({ x: X(doorCentre), z: Z(main.j1) }, tiles);
+  const model = b.finish(door ?? { x: X(doorBay + doorSpan / 2), z: Z(entrance.j1) }, tiles);
   model.levels = levels.map(({ kind, floor, top }): Level => ({ kind, floor, top }));
   return model;
 }

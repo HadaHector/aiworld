@@ -1,0 +1,17 @@
+// A chapel's roof: clay tiles pitched steep between two gables, its ridge held nearly straight.
+{
+  name: "Chapel Roof",
+  type: "pitched",
+  pitched: {
+    shapes: ["gable"],
+    pitch: [48, 55],
+    overhang: 0.6,
+    thickness: 0.4,
+    covering: { thickness: 0.12, overhang: 0.14 },
+    bargeboard: null,
+    sag: { ridge: [0.03, 0.12], slope: [0.02, 0.05] },
+    step: 1.5,
+    ridgeTiles: { width: 0.42, height: 0.16 },
+    parts: { covering: "roof", underside: "timber", ridge: "roof", gable: "walls" },
+  },
+}

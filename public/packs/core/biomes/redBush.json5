@@ -11,7 +11,7 @@
   spawnWeight: 1.5,
   lakeChance: 0.01,
   borderType: "mountain",
-  settlement: "timber",
+  settlement: ["farmVillage", "marketTown"],
   // Where the area's plains lie (0-1 of their range) - the height and the plants both read it.
   params: { floor: { range: [0, 1] } },
   // Low hills filled up from below to a broad, nearly flat plain (`smoothMax`, as the maquis): more

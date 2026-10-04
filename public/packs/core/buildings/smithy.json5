@@ -1,0 +1,42 @@
+// A smithy: a low, rubble-walled forge with a wide door to lead a horse in, a forge chimney up a
+// side or the back - sometimes two - and few windows, under a clay roof; now and then a lean-to out
+// of a side.
+{
+  name: "Smithy",
+  type: "house",
+  house: {
+    tile: [2.6, 3.0],
+    width: [2, 3],
+    depth: [2, 3],
+    // How the plan is laid out round the main block (see the README's "House plans").
+    plan: {
+      type: "house",
+      house: {
+        backWing: 0,
+        sideWing: 0.4,
+        wingLength: [1, 1],
+        wingWidth: [2, 2],
+      },
+    },
+    wallHeight: [3.8, 4.4],
+    plinth: [0.15, 0.3],
+    plinthOutset: 0.4,
+    framing: "stoneFrame",
+    roof: "clayRoof",
+    doors: [{ part: "barnDoor", weight: 1 }],
+    wallExtras: [
+      { part: "stoneChimney", priority: 3, chance: 1, maxCount: 1, walls: ["side", "back"] },
+      { part: "stoneChimney", priority: 2, chance: 0.3, maxCount: 1, walls: ["side", "back"] },
+      { part: "stoneWindow", priority: 1, chance: 0.12 },
+    ],
+    parts: {
+      walls: { material: "rubbleStone", tints: [[1, 1, 1], [0.86, 0.84, 0.82], [0.95, 0.9, 0.84]] },
+      timber: { material: "timber", tints: [[0.45, 0.4, 0.38], [0.38, 0.34, 0.32]] },
+      stone: { material: "dressedStone", tints: [[0.9, 0.88, 0.86], [0.8, 0.78, 0.76]] },
+      roof: { material: "roofTiles", tints: [[0.82, 0.78, 0.76], [0.92, 0.86, 0.8]] },
+      plinth: { material: "stoneBricks", tints: [[0.85, 0.83, 0.8]] },
+      door: { material: "timber", tints: [[0.45, 0.4, 0.38], [0.4, 0.45, 0.42]] },
+      glass: { material: "glass", tints: [[1, 1, 1]] },
+    },
+  },
+}

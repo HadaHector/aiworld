@@ -10,7 +10,7 @@
   spawnWeight: 1.5,
   lakeChance: 0.1,
   borderType: "mountain",
-  settlement: "timber",
+  settlement: ["farmVillage", "marketTown"],
   // The bayou floor just under the water - a slow swell and a finer one, mostly a hand to a metre
   // deep (the terrain lifts land some 6 m on its own, hence the offset) - and out of it, where a
   // slow noise says so, low hummocks and banks a metre or three over the water.

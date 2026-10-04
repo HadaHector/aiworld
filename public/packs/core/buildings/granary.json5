@@ -1,0 +1,39 @@
+// A granary or storehouse: a square block of rubble stone two storeys tall, a cart door below,
+// hardly a window, sometimes a cellar, under a clay roof.
+{
+  name: "Granary",
+  type: "house",
+  house: {
+    tile: [2.6, 3.0],
+    width: [2, 3],
+    depth: [2, 3],
+    // How the plan is laid out round the main block (see the README's "House plans").
+    plan: {
+      type: "house",
+      // No wings.
+      house: {},
+    },
+    storeys: [2, 2],
+    cellars: [0, 1],
+    wallHeight: [3.6, 4.0],
+    upperHeight: [3.2, 3.6],
+    cellarHeight: [2.4, 2.8],
+    plinth: [0.5, 0.8],
+    plinthOutset: 0.4,
+    framing: "stoneFrame",
+    roof: "clayRoof",
+    doors: [{ part: "barnDoor", weight: 1 }],
+    wallExtras: [
+      { part: "stoneWindow", priority: 1, chance: 0.08 },
+    ],
+    parts: {
+      walls: { material: "rubbleStone", tints: [[1, 1, 1], [1.05, 1.0, 0.92], [0.9, 0.9, 0.9]] },
+      timber: { material: "timber", tints: [[0.55, 0.5, 0.46]] },
+      stone: { material: "dressedStone", tints: [[1, 1, 1], [0.92, 0.9, 0.86]] },
+      roof: { material: "roofTiles", tints: [[1, 1, 1], [0.88, 0.84, 0.8]] },
+      plinth: { material: "stoneBricks", tints: [[0.9, 0.88, 0.85]] },
+      door: { material: "timber", tints: [[0.6, 0.56, 0.52], [0.5, 0.42, 0.36]] },
+      glass: { material: "glass", tints: [[1, 1, 1]] },
+    },
+  },
+}

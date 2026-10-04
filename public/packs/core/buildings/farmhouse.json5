@@ -1,0 +1,47 @@
+// A farmhouse: a long two-storey timber-framed house, a one-storey wing - a dairy, a scullery - out
+// of the back or a side under a roof of its own, a big hearth's chimney, and sometimes a cellar.
+{
+  name: "Farmhouse",
+  type: "house",
+  house: {
+    tile: [2.6, 3.0],
+    width: [4, 5],
+    depth: [2, 3],
+    // How the plan is laid out round the main block (see the README's "House plans").
+    plan: {
+      type: "house",
+      house: {
+        backWing: 0.5,
+        sideWing: 0.5,
+        wingLength: [1, 2],
+        wingWidth: [2, 2],
+        // Its wings a storey, roofed up against the house.
+        wingStoreys: [1, 1],
+        lowTops: [{ part: "clayRoof", weight: 1 }],
+      },
+    },
+    storeys: [2, 2],
+    cellars: [0, 1],
+    wallHeight: [4.0, 4.4],
+    upperHeight: [3.6, 4.0],
+    cellarHeight: [2.4, 2.8],
+    plinth: [0.35, 0.55],
+    plinthOutset: 0.6,
+    framing: "timberFrame",
+    roof: "clayRoof",
+    doors: [{ part: "timberDoor", weight: 3 }, { part: "barnDoor", weight: 1 }],
+    wallExtras: [
+      { part: "stoneChimney", priority: 2, chance: 0.6, maxCount: 1, walls: ["side", "back"], storeys: ["ground"] },
+      { part: "timberWindow", priority: 1, chance: 0.3 },
+    ],
+    parts: {
+      walls: { material: "plaster", tints: [[1.04, 0.94, 0.76], [1.02, 0.9, 0.7], [0.98, 0.96, 0.9]] },
+      timber: { material: "timber", tints: [[0.55, 0.5, 0.46], [0.45, 0.4, 0.38]] },
+      stone: { material: "dressedStone", tints: [[1, 1, 1]] },
+      roof: { material: "roofTiles", tints: [[1, 1, 1], [0.88, 0.84, 0.8], [1.04, 0.94, 0.84]] },
+      plinth: { material: "stoneBricks", tints: [[1, 1, 1], [0.9, 0.88, 0.85]] },
+      door: { material: "timber", tints: [[0.6, 0.55, 0.5], [0.5, 0.6, 0.55]] },
+      glass: { material: "glass", tints: [[1, 1, 1]] },
+    },
+  },
+}

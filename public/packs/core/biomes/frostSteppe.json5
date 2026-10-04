@@ -11,7 +11,7 @@
   spawnWeight: 1.5,
   lakeChance: 0.06,
   borderType: "mountain",
-  settlement: "timber",
+  settlement: ["stoneVillage", "farmVillage"],
   // How snowy the area is, 0-1: the snow patches, the rime round them and the snow on the boulders
   // all follow it together.
   params: { snow: { range: [0, 1] } },

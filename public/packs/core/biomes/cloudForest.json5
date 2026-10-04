@@ -10,7 +10,7 @@
   spawnWeight: 2,
   lakeChance: 0.03,
   borderType: "mountain",
-  settlement: "timber",
+  settlement: ["farmVillage", "marketTown"],
   // Each area its own lie of the land, all of it steep: high rolling hills, or mountainsides cut by
   // deep valleys (the hills' basins) - set low, so the valley floors lie at the water and pools stand
   // in their hollows.

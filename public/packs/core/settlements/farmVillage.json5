@@ -1,0 +1,45 @@
+// A farming village: a loose straggle of timber-framed cottages and farms, the farmhouses, barns and
+// granaries out towards its edge where the fields begin, a smithy on the way in - and in a village
+// an inn and a chapel by the square. Hamlets and villages only: a farming place never grows into a
+// town.
+{
+  // How big a place grows, by tier. The best ground gets the biggest places (the score thresholds
+  // are in code - see settlementConfig.ts).
+  tiers: {
+    //   radius: gates sit on a circle this far from the centre; streets and houses stay inside it
+    //   sideStreetChance: chance a side street is tried at each branching point along a main street
+    //   plotFill: chance a plot along a street is built on, rather than left as a gap
+    hamlet: { radius: 65, sideStreetChance: 0.35, sideStreetLength: [22, 40], plotFill: 0.7, squareRadius: 8 },
+    village: { radius: 90, sideStreetChance: 0.65, sideStreetLength: [28, 55], plotFill: 0.8, squareRadius: 11 },
+  },
+
+  houses: {
+    // The buildings its plots are built with (see buildings/), each picked as often as its weight
+    // over the sum of all those that may stand on a plot - and every house its own variant of one.
+    // Where each may stand:
+    //   ring: [from, to] - how far out from the centre the plot is, as a fraction of the radius
+    //   streets: ["main"] or ["side"] - only along those (any, if not given)
+    //   tiers: only in those (any, if not given)
+    //   min: this many are built first, wherever they may stand; max: no more than this many
+    buildings: [
+      // Homes.
+      { building: "cottage", weight: 2.5 },
+      { building: "shingleCottage", weight: 1.5 },
+      // The farms, out where the fields are.
+      { building: "farmhouse", weight: 2, ring: [0.35, 1] },
+      { building: "barn", weight: 2, ring: [0.5, 1] },
+      { building: "granary", weight: 0.6, ring: [0.3, 1] },
+      { building: "workshop", weight: 0.8 },
+      // A smithy on a main street, on the way in.
+      { building: "smithy", weight: 0, min: 1, max: 1, streets: ["main"], ring: [0.25, 0.9] },
+      // In a village, an inn and a chapel by the square.
+      { building: "inn", weight: 0, min: 1, max: 1, tiers: ["village"], streets: ["main"], ring: [0, 0.5] },
+      { building: "chapel", weight: 0, min: 1, max: 1, tiers: ["village"], ring: [0, 0.55] },
+    ],
+    // Front wall this far back from the street's level edge. At least far enough that the whole
+    // footprint is past where a plot's levelling fades out next to a street.
+    setback: [3.4, 6.5],
+    // Gap between neighbouring houses along a street.
+    gap: [2, 6],
+  },
+}

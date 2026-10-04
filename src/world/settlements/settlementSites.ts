@@ -89,6 +89,8 @@ const SCORE_INLAND = 0.15;
 const MIN_SETTLEMENT_SPACING = 900;
 
 const SETTLEMENT_SALT = 702;
+/** Seeds which of its biome's styles a place is built in, by the place's id. */
+const STYLE_SALT = 7_020_000;
 // Settlement ids share the name generator uniqueness pool with zone ids, and sit well clear of them
 // so the two can never derive the same name stream.
 const SETTLEMENT_ID_BASE = 100000;
@@ -125,7 +127,7 @@ function evaluate(x: number, z: number, sampleTerrain: TerrainSampler): Candidat
   const here = sampleTerrain(x, z);
   if (!here.isLand) return null;
   // A biome with no settlement style is one nobody settles.
-  if (!here.primaryBiome.settlementStyle) return null;
+  if (here.primaryBiome.settlementStyles.length === 0) return null;
   if (here.height < MIN_SITE_HEIGHT) return null;
   if (here.lakeFactor > MAX_LAKE_FACTOR) return null;
   if (here.areaBorderGap < MIN_BORDER_GAP) return null;
@@ -178,6 +180,23 @@ function evaluate(x: number, z: number, sampleTerrain: TerrainSampler): Candidat
     biome: here.primaryBiome,
     score: flatness * SCORE_FLATNESS + water * SCORE_WATER + inland * SCORE_INLAND,
   };
+}
+
+/**
+ * Which of its biome's styles a place is built in: one of those that build the tier its ground
+ * earned, each as likely. Where none does, the nearest tier one of them builds - a smaller one
+ * before a bigger.
+ */
+function styleFor(styles: SettlementStyle[], earned: SettlementTier, seed: number): { style: SettlementStyle; tier: SettlementTier } {
+  const rng = mulberry32(seed);
+  const order: SettlementTier[] = ["hamlet", "village", "town"];
+  const at = order.indexOf(earned);
+  const byNearness = [...order].sort((a, b) => Math.abs(order.indexOf(a) - at) - Math.abs(order.indexOf(b) - at) || order.indexOf(a) - order.indexOf(b));
+  for (const tier of byNearness) {
+    const building = styles.filter((style) => style.tiers[tier]);
+    if (building.length > 0) return { style: building[Math.floor(rng() * building.length)], tier };
+  }
+  throw new Error("a settlement style builds no tier");
 }
 
 function tierFor(score: number): SettlementTier {
@@ -239,6 +258,7 @@ export function generateSettlementSites({ seed, cellSites, cellIds, sampleTerrai
     }
     if (blocked) continue;
 
+    const { style, tier } = styleFor(candidate.biome.settlementStyles, tierFor(candidate.score), deriveSeed(seed, STYLE_SALT + sites.length));
     const site: SettlementSite = {
       id: sites.length,
       name: nameFor(candidate.biome, SETTLEMENT_ID_BASE + sites.length),
@@ -247,10 +267,10 @@ export function generateSettlementSites({ seed, cellSites, cellIds, sampleTerrai
       height: candidate.height,
       areaId: candidate.areaId,
       biome: candidate.biome,
-      style: candidate.biome.settlementStyle!,
+      style,
       score: candidate.score,
-      tier: tierFor(candidate.score),
-      radius: candidate.biome.settlementStyle!.tiers[tierFor(candidate.score)].radius,
+      tier,
+      radius: style.tiers[tier]!.radius,
       cellId: candidate.cellId!,
     };
     sites.push(site);

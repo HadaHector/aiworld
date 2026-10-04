@@ -1,0 +1,40 @@
+// A stone barn: thick rubble walls with dressed quoins, big double doors front and back, a few small
+// windows, under a steep tiled roof - the barn of a stone country.
+{
+  name: "Stone Barn",
+  type: "house",
+  house: {
+    tile: [3.0, 3.4],
+    width: [3, 4],
+    depth: [2, 3],
+    // How the plan is laid out round the main block (see the README's "House plans").
+    plan: {
+      type: "house",
+      house: {
+        backWing: 0,
+        sideWing: 0.3,
+        wingLength: [1, 2],
+        wingWidth: [2, 2],
+      },
+    },
+    wallHeight: [4.8, 5.6],
+    plinth: [0.15, 0.3],
+    plinthOutset: 0.3,
+    framing: "stoneFrame",
+    roof: "barnRoof",
+    doors: [{ part: "barnDoor", weight: 1 }],
+    wallExtras: [
+      { part: "barnDoor", priority: 2, chance: 0.5, maxCount: 1, walls: ["back"] },
+      { part: "stoneWindow", priority: 1, chance: 0.08 },
+    ],
+    parts: {
+      walls: { material: "rubbleStone", tints: [[1, 1, 1], [0.92, 0.9, 0.88], [1.04, 0.98, 0.9]] },
+      timber: { material: "timber", tints: [[0.55, 0.5, 0.46], [0.42, 0.38, 0.36]] },
+      stone: { material: "dressedStone", tints: [[1, 1, 1], [0.92, 0.9, 0.86]] },
+      roof: { material: "roofTiles", tints: [[0.85, 0.82, 0.8], [1, 1, 1]] },
+      plinth: { material: "stoneBricks", tints: [[0.9, 0.88, 0.85]] },
+      door: { material: "timber", tints: [[0.6, 0.56, 0.52], [0.5, 0.6, 0.55]] },
+      glass: { material: "glass", tints: [[1, 1, 1]] },
+    },
+  },
+}

@@ -1,0 +1,43 @@
+// A chapel: a tall, narrow nave of rubble stone, its ridge running back from the street, tall lancet
+// windows down its sides, under a steep clay roof - and a square stone tower against its front or
+// its back end, standing storeys over the nave, louvred openings for its bells near the top and a
+// tiled pyramid roof over it.
+{
+  name: "Chapel",
+  type: "house",
+  house: {
+    tile: [2.8, 3.2],
+    // The nave: two or three bays across, four or five long.
+    width: [2, 3],
+    depth: [4, 5],
+    // The tower plan: the nave, and the tower at one end of it - as wide as the nave or a bay
+    // (centred on it), two or three storeys taller. With the tower at the front, the door is in its
+    // foot; at the back, in the nave's gable.
+    plan: {
+      type: "tower",
+      tower: { width: [1, 2], ends: ["front", "back"], storeys: [2, 3], roof: "towerRoof" },
+    },
+    // The nave is one storey, tall; the tower's storeys over it are shorter.
+    wallHeight: [6.6, 7.6],
+    upperHeight: [3.6, 4.2],
+    plinth: [0.45, 0.7],
+    plinthOutset: 0.5,
+    framing: "stoneFrame",
+    roof: "chapelRoof",
+    doors: [{ part: "stoneDoor", weight: 1 }],
+    wallExtras: [
+      // Up the tower - the only walls over the ground storey.
+      { part: "belfryOpening", priority: 2, chance: 0.6, storeys: ["upper"] },
+      { part: "lancetWindow", priority: 1, chance: 0.8, walls: ["side"], storeys: ["ground"] },
+    ],
+    parts: {
+      walls: { material: "rubbleStone", tints: [[1.04, 1.02, 0.98], [0.95, 0.93, 0.9], [1.05, 0.98, 0.88]] },
+      timber: { material: "timber", tints: [[0.5, 0.45, 0.42]] },
+      stone: { material: "dressedStone", tints: [[1.05, 1.04, 1.0], [0.95, 0.92, 0.88]] },
+      roof: { material: "roofTiles", tints: [[0.86, 0.82, 0.8], [1, 0.95, 0.9]] },
+      plinth: { material: "stoneBricks", tints: [[1, 1, 1]] },
+      door: { material: "timber", tints: [[0.45, 0.32, 0.26], [0.38, 0.3, 0.26]] },
+      glass: { material: "glass", tints: [[0.8, 0.9, 1.0]] },
+    },
+  },
+}

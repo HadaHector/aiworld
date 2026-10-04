@@ -11,7 +11,7 @@
   spawnWeight: 1,
   lakeChance: 0.04,
   borderType: "mountain",
-  settlement: "timber",
+  settlement: ["stoneVillage", "farmVillage"],
   // How snowy the area is, and how much of its flats the frost has sorted into polygons.
   params: { snow: { range: [0, 1] }, sorted: { range: [0, 1] } },
   // Flat to gently rolling: long, low swells.

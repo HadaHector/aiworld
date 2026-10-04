@@ -11,7 +11,7 @@
   spawnWeight: 2,
   lakeChance: 0.05,
   borderType: "mountain",
-  settlement: "timber",
+  settlement: ["farmVillage", "marketTown"],
   // Each area its own lie of the land: rolling jungle hills, or hill country cut by wide valleys (the
   // hills' basins) - never flat.
   height: {

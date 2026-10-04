@@ -172,7 +172,7 @@ out in full.
   spawnWeight: 2,             // relative chance an area rolls this biome
   lakeChance: 0.05,           // chance a cell becomes a lake (optional, 0)
   borderType: "mountain",     // "mountain" raises border hills (optional, "mountain")
-  settlement: "timber",       // a settlements/ style (optional: without one, nobody settles here)
+  settlement: ["farmVillage", "marketTown"], // settlements/ styles, or one (optional: none, nobody settles here)
   height: { ... },            // graph: the ground's height
   relief: { ... },            // graph (optional): rock relief added on top - see below
   trees: { ... },             // graph (optional): one output per tree kind, each a 0-1 density
@@ -253,7 +253,7 @@ ground: {
   adjust: { hue: { range: [-8, 8] }, saturation: { range: [0.85, 1.15] } },
 },
 sky: { horizon: { between: ["#a4baac", "#b4c0a0"] }, ... },
-settlement: { oneOf: ["timber", null] },                // null: this area is not settled
+settlement: { oneOf: ["farmVillage", null] },                // null: this area is not settled
 ```
 
 - `{ range: [min, max] }` - a number between the two; `integer: true` for a whole one.
@@ -538,12 +538,29 @@ too, though they come closer to roads. They are only placed within about 400 m o
 
 ## Settlement styles
 
-See `core/settlements/timber.json5`. A style gives each tier (`hamlet`, `village`, `town`) its
-radius, street pattern and how full its plots are; and its houses - the buildings (see Buildings
-below) its plots are built with, each with a weight, how far back from the street they stand and
-the gaps between them. Each house is its own variant of its building, and takes the ground its
-model says it needs. Which tier a place becomes, and the rules for gates, streets and levelling
-plots, are the same for every style.
+See `core/settlements/farmVillage.json5`, `marketTown.json5` and `stoneVillage.json5`. A style
+gives the tiers it builds (`hamlet`, `village`, `town` - any of them; a market town is never a
+hamlet) their radius, street pattern and how full their plots are; and its houses - the buildings
+(see Buildings below) its plots are built with, how far back from the street they stand and the
+gaps between them. A biome names one style or a list of them: each place takes one of those that
+build the tier its ground earned, each as likely - or, where none does, the nearest tier one builds.
+
+Each of its buildings is picked for a plot as often as its weight over the sum of all those that
+may stand there:
+
+```json5
+{ building: "barn", weight: 2, ring: [0.5, 1] },          // only out past half the radius
+{ building: "shopHouse", weight: 3, streets: ["main"] },  // only along main streets
+{ building: "inn", weight: 0, min: 1, max: 1, tiers: ["village"], ring: [0, 0.5] },
+```
+
+`ring` is how far out from the centre the plot is, as a fraction of the radius; `streets` limits it
+to `main` or `side` streets and `tiers` to those tiers (all, if not given). The first `min` of a
+building are built before anything else, at the first plots where they may stand - so a village
+always has its inn by the square - and no more than `max` are. A building that does not fit a plot
+is tried a few steps further along before another is picked. Each house is its own variant of its
+building, and takes the ground its model says it needs. Which tier a place becomes, and the rules
+for gates, streets and levelling plots, are the same for every style.
 
 ## Cell features
 
@@ -574,26 +591,22 @@ There are two:
 
 - `boxes`, the placeholder: a main box with a door patch and smaller boxes against its sides and
   back (see `core/buildings/placeholderHouse.json5`).
-- `house`, a traditional house (see `core/buildings/cottage.json5`, and `townHouse.json5` for one
-  of several storeys). Its plan is tiles -
-  each one bay of wall - in a main block and maybe a wing out of the back (a T or an L) and one out
-  of a side. From the plan come a plinth, walls, a door in a middle bay of the front and windows in
-  other bays, the walls' framing (`framing`, a framing part - none if left out), and a roof over
-  every block (`roof`, a roof part). It stands `storeys` storeys tall (a range, ground floor
+- `house`, a traditional house (see `core/buildings/cottage.json5`, `townHouse.json5` for one of
+  several storeys, and `chapel.json5` for a tower). Its plan is tiles - each one bay of wall - in a
+  main block (`width` along the front, `depth` back from it) and whatever its plan generator lays
+  out round it (see House plans below). From the plan come a plinth, walls, a door in a middle bay of
+  the front and windows in other bays, the walls' framing (`framing`, a framing part - none if left
+  out), and the roofs (`roof`, a roof part, over the main block and all that stand as tall). The main
+  block stands `storeys` storeys tall (a range, ground floor
   included; 1 if left out) - the ground one `wallHeight` floor to ceiling, those over it
   `upperHeight` (as the ground one if left out) - over `cellars` cellars (0 if left out) dug
   `cellarHeight` deep each under the ground floor: nothing of a cellar shows yet but its deeper
   foundation, though wall extras can be put in one (in the plinth), and the building's levels are
   kept for interiors. A `jetty: { out, walls }` stands each storey over the ground one `out` further
   out than the one under it on those `walls` (`front`, `back`, `side`), the roof growing to match.
-  Its storeys need not all have the same footprint. A wing may stand lower (`wingStoreys`, a range,
-  no taller than the house; as tall if left out), topped with one of `lowTops` - a roof, stopping
-  against the taller block's wall, or a terrace (the house's own roof if left out). With
-  `setback: { chance, terraces }` the top storey stands back a tile from the front, a terrace before
-  it; with `arcade: { chance, support }` the ground storey's front row is left open, the storeys over
-  it standing on supports along its edge (both need two storeys or more - three for both - and a
-  main block two tiles deep). Wherever a storey covers more than the one under it - an arcade, a
-  jetty - its underside is closed with a ceiling, and an open ground storey is paved.
+  Its storeys need not all have the same footprint (see House plans). Wherever a storey covers more
+  than the one under it - an arcade, a jetty - its underside is closed with a ceiling, and an open
+  ground storey is paved.
   Its door and windows are building parts (below). `doors` is a list of `{ part, weight }`, one picked per house.
   Everything else on the walls is `wallExtras`, a list of `{ part, priority, chance, maxCount, walls,
   storeys }`
@@ -603,8 +616,44 @@ There are two:
   a random order, taking each with its `chance`, up to `maxCount` (no limit if left out). The bays a
   part takes - on every storey it rises through, as a chimney does - are not free to the extras after
   it, and a part may turn a spot down (a chimney by an
-  inner corner, where another wing stands beside it). Everything on the walls keeps clear of the
-  framing's posts and its top beam.
+  inner corner, where another wing stands beside it). A door (a `framed` part with `sill: 0`) over the
+  ground storey only goes where it opens onto a terrace - a balcony's door. Everything on the walls
+  keeps clear of the framing's posts and its top beam.
+
+### House plans
+
+A house's `plan` lays out its tiles round the main block: which blocks it stands on, how many
+storeys each stands through (its masses), and what tops each - a roof, and how its ends meet its
+neighbours', or a terrace. Like a building it names its generator by `type`, its settings under the
+generator's name; the house builds whatever it is handed - walls, framing, parts, roofs and terraces
+all follow from the masses. There are two:
+
+- `house` - the main block, maybe a wing out of the back (a T or an L, `backWing` its chance) and
+  one out of a side (`sideWing`), each `wingLength` tiles long and `wingWidth` wide (always narrower
+  than the main block; a block too small for the least width gets no wing). A wing may stand lower
+  (`wingStoreys`, a range, no taller than the house; as tall if left out), topped with one of
+  `lowTops` - a roof, stopping against the taller block's wall, or a terrace (the house's own roof
+  if left out). With `setback: { chance, terraces }` the top storey stands back a tile from the
+  front, a terrace before it; with `arcade: { chance, support }` the ground storey's front row is
+  left open, the storeys over it standing on supports along its edge (both need two storeys or more
+  - three for both - and a main block two tiles deep). Everything may be left out: `house: {}` is
+  the main block alone.
+
+  ```json5
+  plan: { type: "house", house: { backWing: 0.5, sideWing: 0.35, wingLength: [1, 2], wingWidth: [2, 3] } },
+  ```
+
+- `tower` - the main block, its ridge running back from the front (a chapel's nave, a hall), and a
+  square tower `width` tiles a side (held to the main block's width, centred on it) against one of
+  its `ends` (`front`, `back`; one picked per house), standing `storeys` more storeys than the main
+  block under its own `roof` - a hipped roof on a square tower is a pyramid. The main block's roof
+  stops against the tower where the tower is as wide as it, and is gabled behind it where it is
+  narrower. With the tower at the front the door is in its foot. Only the tower has storeys over
+  the main block's, so extras for `upper` storeys go up the tower (a belfry's openings).
+
+  ```json5
+  plan: { type: "tower", tower: { width: [1, 2], ends: ["front", "back"], storeys: [2, 3], roof: "towerRoof" } },
+  ```
 
 Every generator gives the same
 result: geometry with its floor at height 0, the footprint centred, the front facing +z, and the

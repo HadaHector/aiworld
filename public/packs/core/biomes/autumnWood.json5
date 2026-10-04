@@ -10,7 +10,7 @@
   spawnWeight: 2,
   lakeChance: 0.04,
   borderType: "mountain",
-  settlement: "timber",
+  settlement: ["farmVillage", "marketTown"],
   // Each area its own lie of the land: a flat lowland wood, rolling wooded hills, or hill country
   // cut by wide valleys (the hills' basins: the hills scaled down to a gently rolling floor where a
   // slow noise is low).

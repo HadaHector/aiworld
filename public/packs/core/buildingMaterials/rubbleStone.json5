@@ -1,0 +1,54 @@
+// Rubble walling: rough fieldstones of every size and shade, flattish and laid roughly level, packed
+// in pale lime mortar - a smithy's, a barn's or a chapel's walls.
+{
+  name: "Rubble Stone",
+  // Metres one repeat covers: about ten stones across, each near a metre wide - twice life size, so
+  // they read from afar.
+  size: 9,
+  shine: 0.04,
+  texture: {
+    bumpStrength: 2.4,
+    pipeline: {
+      noises: [
+        // Stones wider than tall, as they would be laid.
+        { name: "stones", type: "worley", tileCycles: 9, amplitude: 1, mode: "edge", stretch: [1.7, 1] },
+        { name: "grain", type: "fbm", octaves: 3, tileCycles: 50, amplitude: 1, persistence: 0.55, lacunarity: 2 },
+        { name: "mottle", type: "fbm", octaves: 2, tileCycles: 6, amplitude: 1, persistence: 0.5, lacunarity: 2 },
+      ],
+      steps: [
+        { output: "joint", op: "sample", noise: "stones" },
+        { output: "stoneId", op: "sample", noise: "stones", mode: "cell" },
+        { output: "grainRaw", op: "sample", noise: "grain" },
+        { output: "mottleRaw", op: "sample", noise: "mottle" },
+        { output: "fray", op: "scale", input: "grainRaw", factor: 0.025 },
+        { output: "jointFrayed", op: "add", a: "joint", b: "fray" },
+        { output: "mortar", op: "mask", input: "jointFrayed", at: 0.03, off: 0.08 },
+        {
+          output: "stoneTone",
+          op: "colorRamp",
+          input: "stoneId",
+          stops: [
+            { at: 0.0, color: [0.44, 0.42, 0.39] },
+            { at: 0.25, color: [0.56, 0.52, 0.45] },
+            { at: 0.5, color: [0.4, 0.39, 0.38] },
+            { at: 0.75, color: [0.6, 0.57, 0.52] },
+            { at: 1.0, color: [0.5, 0.45, 0.38] },
+          ],
+        },
+        { output: "shadeRaw", op: "add", a: "mottleRaw", b: "grainRaw" },
+        { output: "shade", op: "remap", input: "shadeRaw", inMin: -1, inMax: 1, outMin: 0.8, outMax: 1.12 },
+        { output: "stone", op: "multiply", a: "stoneTone", b: "shade" },
+        { output: "mortarColor", op: "color", value: [0.68, 0.65, 0.58] },
+        { output: "diffuse", op: "mix", a: "stone", b: "mortarColor", t: "mortar" },
+        { output: "roughness", op: "constant", value: 0.92 },
+        // Height: each stone domed towards its middle, the mortar sunk deep.
+        { output: "domeRaw", op: "remap", input: "joint", inMin: 0.03, inMax: 0.3, outMin: 0, outMax: 1 },
+        { output: "dome", op: "clamp", input: "domeRaw", min: 0, max: 1 },
+        { output: "domeRound", op: "power", input: "dome", exponent: 0.6 },
+        { output: "grainBump", op: "scale", input: "grainRaw", factor: 0.1 },
+        { output: "height", op: "add", a: "domeRound", b: "grainBump" },
+      ],
+      outputs: { diffuse: "diffuse", roughness: "roughness", height: "height" },
+    },
+  },
+}

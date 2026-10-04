@@ -22,7 +22,7 @@ import {
   type TreeRules,
 } from "../foliage/foliageConfig";
 import type { Voice } from "../naming/nameGenerator";
-import type { SettlementStyle, SettlementTier, SettlementTierDef } from "../settlements/settlementConfig";
+import { STREET_KINDS, type SettlementStyle, type SettlementTier, type SettlementTierDef } from "../settlements/settlementConfig";
 import type { ColorTuple } from "../terrain/pipeline/pipelineTypes";
 import { coolNightTone, deriveNightIntensity } from "../lighting/dayNightMath";
 import { ContentError, isObject, joinPath, Reader, type ContentIssue, type RawObject } from "./contentReader";
@@ -40,6 +40,7 @@ import {
   BUILDING_GENERATORS,
   BUILDING_PART_GENERATORS,
   HOUSE_PARTS,
+  HOUSE_PLAN_GENERATORS,
   PARAPET_STYLES,
   RIDGE_PROFILES,
   ROOF_TYPES,
@@ -49,6 +50,7 @@ import {
   type BuildingMaterialDef,
   type BuildingPartDef,
   type HousePart,
+  type HousePlanSettings,
   type HouseSpec,
   type PartChoice,
   type PitchedRoofSpec,
@@ -340,7 +342,7 @@ export function resolveContent(packs: PackSource[]): WorldContent {
     });
     biome.features.forEach((chance, i) => {
       if (!featureIds.has(chance.featureId)) report({ file, path: `features[${i}].feature`, message: `no feature "${chance.featureId}" (known: ${[...featureIds].join(", ")})` });
-      if (settlementFeatureIds.has(chance.featureId) && chance.odds > 0 && !biome.settlementStyle) {
+      if (settlementFeatureIds.has(chance.featureId) && chance.odds > 0 && biome.settlementStyles.length === 0) {
         report({ file, path: `features[${i}].feature`, message: `"${chance.featureId}" is a settlement, but this biome has no settlement style (\`settlement\`) to build it in` });
       }
     });
@@ -567,7 +569,7 @@ function readBuilding(id: string, obj: RawObject, reader: Reader, partById: Map<
   let house: BuildingDef["house"] = null;
   if (generator === "house") {
     const path = "house";
-    reader.onlyKeys(block, path, ["tile", "width", "depth", "backWing", "sideWing", "wingLength", "wingWidth", "storeys", "cellars", "wallHeight", "upperHeight", "cellarHeight", "plinth", "plinthOutset", "framing", "jetty", "wingStoreys", "lowTops", "setback", "arcade", "roof", "doors", "wallExtras", "parts"]);
+    reader.onlyKeys(block, path, ["tile", "width", "depth", "plan", "storeys", "cellars", "wallHeight", "upperHeight", "cellarHeight", "plinth", "plinthOutset", "framing", "jetty", "roof", "doors", "wallExtras", "parts"]);
     // A list of building parts, each with a weight.
     const partNamed = (entry: RawObject, at: string, key = "part"): BuildingPartDef | undefined => {
       const partId = reader.string(entry, key, at);
@@ -588,26 +590,77 @@ function readBuilding(id: string, obj: RawObject, reader: Reader, partById: Map<
     };
     /** A part that tops a storey - a roof or a terrace. */
     const isTop = (part: BuildingPartDef): boolean => part.generator === "pitched" || part.generator === "terrace";
-    const lowTops = block.lowTops === undefined ? [] : choices("lowTops");
-    for (const choice of lowTops) if (!isTop(choice.part)) reader.fail("house.lowTops", `building part "${choice.part.id}" is not a roof or a terrace`);
-    let setback: HouseSpec["setback"] = null;
-    if (block.setback !== undefined && block.setback !== null) {
-      const at = "house.setback";
-      const raw = reader.object(block.setback, at);
-      reader.onlyKeys(raw, at, ["chance", "terraces"]);
-      const terraces = choices("terraces", raw, at);
-      for (const choice of terraces) if (choice.part.generator !== "terrace") reader.fail(`${at}.terraces`, `building part "${choice.part.id}" is not a terrace`);
-      setback = { chance: reader.number(raw, "chance", at, { min: 0, max: 1 }), terraces };
-    }
-    let arcade: HouseSpec["arcade"] = null;
-    if (block.arcade !== undefined && block.arcade !== null) {
-      const at = "house.arcade";
-      const raw = reader.object(block.arcade, at);
-      reader.onlyKeys(raw, at, ["chance", "support"]);
-      const support = partNamed(raw, at, "support");
-      if (support && support.generator !== "support") reader.fail(`${at}.support`, `building part "${support.id}" is not a support`);
-      if (support) arcade = { chance: reader.number(raw, "chance", at, { min: 0, max: 1 }), support };
-    }
+    /** A whole number of tiles, at least 1. */
+    const tilesIn = (from: RawObject, key: string, at: string): [number, number] => {
+      const range = reader.range(from, key, at, { allowEqual: true });
+      if (range[0] < 1 || !range.every(Number.isInteger)) reader.fail(`${at}.${key}`, "is in whole tiles, at least 1");
+      return range;
+    };
+    /** A count's range - of storeys - or `otherwise` where it is not given. */
+    const countIn = (from: RawObject, key: string, at: string, least: number, otherwise: [number, number]): [number, number] => {
+      if (from[key] === undefined) return otherwise;
+      const range = reader.range(from, key, at, { allowEqual: true });
+      if (range[0] < least || !range.every(Number.isInteger)) reader.fail(`${at}.${key}`, `is a whole number, at least ${least}`);
+      return range;
+    };
+    // The plan: a generator, named by `type`, its settings under its own name.
+    const readPlan = (): HouseSpec["plan"] => {
+      const at = "house.plan";
+      const raw = reader.object(block.plan, at);
+      const type = reader.oneOf(raw, "type", at, HOUSE_PLAN_GENERATORS);
+      reader.onlyKeys(raw, at, ["type", type]);
+      const where = `${at}.${type}`;
+      const settings = reader.object(raw[type], where);
+      if (type === "tower") {
+        reader.onlyKeys(settings, where, ["width", "ends", "storeys", "roof"]);
+        const ends = reader.stringList(settings, "ends", where).filter((end): end is "front" | "back" => {
+          if (end === "front" || end === "back") return true;
+          reader.fail(`${where}.ends`, `"${end}" is not an end (known: front, back)`);
+          return false;
+        });
+        if (ends.length === 0) reader.fail(`${where}.ends`, "needs at least one end");
+        const roof = partNamed(settings, where, "roof");
+        if (roof && roof.generator !== "pitched") reader.fail(`${where}.roof`, `building part "${roof.id}" is not a roof`);
+        return {
+          type,
+          tower: { width: tilesIn(settings, "width", where), ends, storeys: countIn(settings, "storeys", where, 1, [1, 1]), roof: roof as BuildingPartDef },
+        };
+      }
+      reader.onlyKeys(settings, where, ["backWing", "sideWing", "wingLength", "wingWidth", "wingStoreys", "lowTops", "setback", "arcade"]);
+      const lowTops = settings.lowTops === undefined ? [] : choices("lowTops", settings, where);
+      for (const choice of lowTops) if (!isTop(choice.part)) reader.fail(`${where}.lowTops`, `building part "${choice.part.id}" is not a roof or a terrace`);
+      let setback: HousePlanSettings["setback"] = null;
+      if (settings.setback !== undefined && settings.setback !== null) {
+        const sat = `${where}.setback`;
+        const sraw = reader.object(settings.setback, sat);
+        reader.onlyKeys(sraw, sat, ["chance", "terraces"]);
+        const terraces = choices("terraces", sraw, sat);
+        for (const choice of terraces) if (choice.part.generator !== "terrace") reader.fail(`${sat}.terraces`, `building part "${choice.part.id}" is not a terrace`);
+        setback = { chance: reader.number(sraw, "chance", sat, { min: 0, max: 1 }), terraces };
+      }
+      let arcade: HousePlanSettings["arcade"] = null;
+      if (settings.arcade !== undefined && settings.arcade !== null) {
+        const aat = `${where}.arcade`;
+        const araw = reader.object(settings.arcade, aat);
+        reader.onlyKeys(araw, aat, ["chance", "support"]);
+        const support = partNamed(araw, aat, "support");
+        if (support && support.generator !== "support") reader.fail(`${aat}.support`, `building part "${support.id}" is not a support`);
+        if (support) arcade = { chance: reader.number(araw, "chance", aat, { min: 0, max: 1 }), support };
+      }
+      return {
+        type,
+        house: {
+          backWing: reader.optionalNumber(settings, "backWing", where, 0, { min: 0, max: 1 }),
+          sideWing: reader.optionalNumber(settings, "sideWing", where, 0, { min: 0, max: 1 }),
+          wingLength: settings.wingLength === undefined ? [1, 1] : tilesIn(settings, "wingLength", where),
+          wingWidth: settings.wingWidth === undefined ? [1, 1] : tilesIn(settings, "wingWidth", where),
+          wingStoreys: settings.wingStoreys === undefined ? null : countIn(settings, "wingStoreys", where, 1, [1, 1]),
+          lowTops,
+          setback,
+          arcade,
+        },
+      };
+    };
     const wallExtras = (block.wallExtras === undefined ? [] : reader.array(block, "wallExtras", path)).flatMap((raw, i): WallExtra[] => {
       const at = `house.wallExtras[${i}]`;
       const entry = reader.object(raw, at);
@@ -670,10 +723,7 @@ function readBuilding(id: string, obj: RawObject, reader: Reader, partById: Map<
       tile: reader.range(block, "tile", path, { allowEqual: true }),
       width: tiles("width"),
       depth: tiles("depth"),
-      backWing: reader.number(block, "backWing", path, { min: 0, max: 1 }),
-      sideWing: reader.number(block, "sideWing", path, { min: 0, max: 1 }),
-      wingLength: tiles("wingLength"),
-      wingWidth: tiles("wingWidth"),
+      plan: readPlan(),
       storeys: count("storeys", 1, [1, 1]),
       cellars: count("cellars", 0, [0, 0]),
       wallHeight: reader.range(block, "wallHeight", path, { allowEqual: true }),
@@ -683,10 +733,6 @@ function readBuilding(id: string, obj: RawObject, reader: Reader, partById: Map<
       plinthOutset: reader.number(block, "plinthOutset", path, { min: 0 }),
       framing: block.framing === undefined ? null : (partNamed(block, path, "framing") ?? null),
       jetty: readJetty(),
-      wingStoreys: block.wingStoreys === undefined ? null : count("wingStoreys", 1, [1, 1]),
-      lowTops,
-      setback,
-      arcade,
       // A house without a roof part has already failed above; its content is never used.
       roof: roof as BuildingPartDef,
       doors: choices("doors"),
@@ -1649,11 +1695,15 @@ function readBiome(id: string, obj: RawObject, reader: Reader, defaults: Default
     "features",
   ]);
 
-  let settlementStyle: SettlementStyle | null = null;
-  const styleId = reader.optionalString(obj, "settlement", "");
-  if (styleId) {
-    settlementStyle = styles.get(styleId) ?? null;
-    if (!settlementStyle) reader.fail("settlement", `no settlement style "${styleId}" (known: ${[...styles.keys()].join(", ")})`);
+  // One style, or a list of them - each place built in one that builds its tier.
+  const settlementStyles: SettlementStyle[] = [];
+  if (obj.settlement !== undefined && obj.settlement !== null) {
+    const ids = Array.isArray(obj.settlement) ? reader.stringList(obj, "settlement", "") : [reader.string(obj, "settlement", "")];
+    for (const styleId of ids) {
+      const style = styles.get(styleId);
+      if (style) settlementStyles.push(style);
+      else reader.fail("settlement", `no settlement style "${styleId}" (known: ${[...styles.keys()].join(", ")})`);
+    }
   }
 
   const ground = reader.object(obj.ground, "ground");
@@ -1718,7 +1768,7 @@ function readBiome(id: string, obj: RawObject, reader: Reader, defaults: Default
     }),
     treeRules: readTreeRules(obj, reader, defaults.treeRules),
     treeTints: readTreeTints(obj, reader),
-    settlementStyle,
+    settlementStyles,
     atmosphere: {
       horizon: reader.color(sky, "horizon", "sky"),
       zenith: reader.color(sky, "zenith", "sky"),
@@ -1739,8 +1789,10 @@ function readSettlementStyle(id: string, obj: RawObject, reader: Reader, buildin
 
   const tiersRaw = reader.object(obj.tiers, "tiers");
   reader.onlyKeys(tiersRaw, "tiers", TIERS);
-  const tiers = {} as Record<SettlementTier, SettlementTierDef>;
+  // Only the tiers it gives: a style may build no hamlets, or no towns.
+  const tiers: Partial<Record<SettlementTier, SettlementTierDef>> = {};
   for (const tier of TIERS) {
+    if (tiersRaw[tier] === undefined) continue;
     const path = `tiers.${tier}`;
     const t = reader.object(tiersRaw[tier], path);
     reader.onlyKeys(t, path, ["radius", "sideStreetChance", "sideStreetLength", "plotFill", "squareRadius"]);
@@ -1752,20 +1804,33 @@ function readSettlementStyle(id: string, obj: RawObject, reader: Reader, buildin
       squareRadius: reader.number(t, "squareRadius", path, { min: 0 }),
     };
   }
+  if (Object.keys(tiers).length === 0) reader.fail("tiers", "needs at least one tier");
 
   const houses = reader.object(obj.houses, "houses");
   reader.onlyKeys(houses, "houses", ["buildings", "setback", "gap"]);
   const buildingList = reader.array(houses, "buildings", "houses").flatMap((raw, i) => {
     const path = `houses.buildings[${i}]`;
     const entry = reader.object(raw, path);
-    reader.onlyKeys(entry, path, ["building", "weight"]);
+    reader.onlyKeys(entry, path, ["building", "weight", "tiers", "streets", "ring", "min", "max"]);
     const buildingId = reader.string(entry, "building", path);
     const building = buildings.get(buildingId);
     if (!building) {
       reader.fail(joinPath(path, "building"), `no building "${buildingId}" (known: ${[...buildings.keys()].join(", ") || "none"})`);
       return [];
     }
-    return [{ building, weight: reader.number(entry, "weight", path, { min: 0 }) }];
+    const names = <T extends string>(key: string, known: readonly T[]): T[] | null => {
+      if (entry[key] === undefined) return null;
+      return reader.stringList(entry, key, path).filter((name): name is T => {
+        if ((known as readonly string[]).includes(name)) return true;
+        reader.fail(joinPath(path, key), `"${name}" is not one of ${known.join(", ")}`);
+        return false;
+      });
+    };
+    const ring: [number, number] = entry.ring === undefined ? [0, 1] : reader.range(entry, "ring", path, { allowEqual: true });
+    const min = reader.optionalNumber(entry, "min", path, 0, { min: 0, integer: true });
+    const max = entry.max === undefined || entry.max === null ? null : reader.number(entry, "max", path, { min: 0, integer: true });
+    if (max !== null && max < min) reader.fail(joinPath(path, "max"), "is less than min");
+    return [{ building, weight: reader.number(entry, "weight", path, { min: 0 }), tiers: names("tiers", TIERS), streets: names("streets", STREET_KINDS), ring, min, max }];
   });
   if (buildingList.length === 0) reader.fail("houses.buildings", "needs at least one building");
 

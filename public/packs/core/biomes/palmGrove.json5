@@ -10,7 +10,7 @@
   spawnWeight: 2,
   lakeChance: 0.1,
   borderType: "mountain",
-  settlement: "timber",
+  settlement: ["farmVillage", "marketTown"],
   // Low, gentle land: long low swells, or a few rounded rises.
   height: {
     oneOf: [
