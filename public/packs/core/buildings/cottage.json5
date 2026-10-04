@@ -23,11 +23,8 @@
     plinthOutset: 0.7,
     // The posts and beams the walls are framed with (a building part).
     framing: "timberFrame",
-    roofs: ["gable", "hip"],
-    pitch: [34, 45],
-    // The roof reaches this far past the walls every way, and is this thick.
-    overhang: 0.8,
-    roofThickness: 0.4,
+    // The roof over every block (a building part).
+    roof: "clayRoof",
     // Doors, windows and chimneys are building parts (see buildingParts/). One door per house, picked
     // by weight, in the front.
     doors: [{ part: "timberDoor", weight: 3 }, { part: "barnDoor", weight: 1 }],

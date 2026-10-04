@@ -19,6 +19,7 @@ import { sampleBiomeArea, type BiomeArea } from "./biomeArea";
 import { heightView, layerView, materialsView, plantsView, type Rgb } from "./biomeViews";
 import { generateBuilding } from "../world/buildings/buildingGenerator";
 import { buildPartSample, houseUsing } from "../world/buildings/partSample";
+import { isWholeHousePart } from "../world/buildings/buildingParts";
 import { bakeBuildingTextures } from "../world/buildings/buildingMesh";
 
 // ---------------------------------------------------------------------------------------------
@@ -818,12 +819,12 @@ async function preview3d(token: number, asset: Asset, view: ViewDef, content: Wo
   } else if (asset.folder === "buildingParts") {
     ground = groundMaterial(content, asset);
     if (grassOn) grass = ground.grass;
-    // On a stretch of wall, looking like the first house that uses it - or, for a framing part, on
-    // that whole house, where it has gables and wings to frame.
+    // On a stretch of wall, looking like the first house that uses it - or, for a part a whole house
+    // is handed (a framing, a roof), on that whole house: every variant the menu asks for.
     const part = content.buildingParts.find((p) => p.id === asset.id)!;
     const house = houseUsing(part, content.buildings);
-    const isFraming = part.generator === "timberFrame" || part.generator === "stoneFrame";
-    buildings = [isFraming && house ? generateBuilding(house, seed, 0) : buildPartSample(part, house?.house ?? null)];
+    const variants = options.variant === "all" ? Array.from({ length: BUILDING_VARIANTS }, (_, i) => i) : [Math.min(BUILDING_VARIANTS - 1, Number(options.variant) || 0)];
+    buildings = isWholeHousePart(part) && house ? variants.map((variant) => generateBuilding(house, seed, variant)) : [buildPartSample(part, house?.house ?? null)];
   } else {
     ground = groundMaterial(content, asset);
     if (grassOn) grass = ground.grass;

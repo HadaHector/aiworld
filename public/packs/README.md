@@ -577,10 +577,8 @@ There are two:
 - `house`, a traditional one-storey house (see `core/buildings/cottage.json5`). Its plan is tiles -
   each one bay of wall - in a main block and maybe a wing out of the back (a T or an L) and one out
   of a side. From the plan come a plinth, walls, a door in a middle bay of the front and windows in
-  other bays, the walls' framing (`framing`, a framing part - none if left out), and a gable or
-  hipped roof over each block. All of a house's roofs share
-  one pitch and eave height, so where two meet they cut each other along clean valleys. Its door and
-  windows are building parts (below). `doors` is a list of `{ part, weight }`, one picked per house.
+  other bays, the walls' framing (`framing`, a framing part - none if left out), and a roof over
+  every block (`roof`, a roof part). Its door and windows are building parts (below). `doors` is a list of `{ part, weight }`, one picked per house.
   Everything else on the walls is `wallExtras`, a list of `{ part, priority, chance, maxCount, walls }`
   placed highest `priority` first (in list order where level): each tries every free spot - as many
   bays as the part spans - on the `walls` it may go on (`front`, `back`, `side`; all if left out), in
@@ -612,7 +610,8 @@ its settings under the generator's name. It takes no materials of its own - each
 painted as one of the building's `parts`, so a house's windows, posts and door share one timber.
 Most fill a slot on a wall; a framing part is handed every wall of the house at once - each wall's
 length, where along it the wall or the roof over it changes, any gable over it, and where along its
-foot a door or a chimney stands - and every corner, outer or inner. There are four so far:
+foot a door or a chimney stands - and every corner, outer or inner; a roof part every block of the
+house, and how its ends meet the others. There are five so far:
 
 - `framed`, an opening in a timber frame, closed - a panel (glass, or a door's boards) standing on
   the wall, never a hole: `width`, `height` and `sill` (its foot above the floor, 0 for a door) of the
@@ -638,6 +637,18 @@ foot a door or a chimney stands - and every corner, outer or inner. There are fo
   standing `out` - a `cornice` along the top of every wall, a `band` (string course) along its foot
   (none if null), and a `pilaster` wherever the wall or the roof over it changes. `parts: { stone }`
   paints it.
+- `pitched`, a roof (see `core/buildingParts/clayRoof.json5`): one of its `shapes` (`gable`, `hip`)
+  at the free ends, picked per house, at a `pitch` (degrees) - every block at one pitch and eave
+  height, so where two roofs meet their slopes cut each other along clean valleys. Slabs `thickness`
+  thick reaching `overhang` past the walls every way: boards, and a `covering` on them -
+  `covering.thickness` of the whole - that reaches `covering.overhang` past them at the eaves. Up a
+  gable's verges a `bargeboard` stands `height` above the covering, `thickness` thick (none if null:
+  the covering reaches past the boards there too), and `ridgeTiles` - one rounded cap `width`
+  across and `height` high - along the ridges and hips (none if null). It sags like an old roof: `sag.ridge` is how far its ridges sink in the middle, `sag.slope`
+  how far its rafters bow (ranges, rolled per house) - nothing at the eaves and at the house's
+  outermost ends, so a ridge dips and a hip bows inward; its slabs bend in cells `step` across.
+  `parts: { covering, underside, ridge, gable }` paints the covering, the underside and edges, the
+  ridge tiles and the gables' wall.
 
 In the workbench a building stands on a patch of ground, one variant or a row of eight, with its
 footprint, its door and - for a generator with a plan - its tiles marked. A building part stands on

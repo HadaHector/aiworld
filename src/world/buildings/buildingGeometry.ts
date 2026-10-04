@@ -53,17 +53,27 @@ export class ModelBuilder {
 
   /** A flat polygon (corners in order, convex) with the given normal. */
   face(corners: Vec3[], normal: Vec3, paint: Paint, grain?: Vec3): void {
-    let v = grain ? inPlane(grain, normal) : inPlane(UP, normal);
-    if (Math.hypot(...v) < 1e-3) v = inPlane(grain ? UP : [0, 0, 1], normal);
-    if (Math.hypot(...v) < 1e-3) v = inPlane([0, 0, 1], normal);
+    this.surface(corners, corners.map(() => normal), normal, paint, grain);
+  }
+
+  /**
+   * A polygon that may be a little bent - a cell of a sagging roof - shaded by a normal per corner,
+   * but textured in the frame of `frame` (the normal of the flat surface it is bent from), so the
+   * cells of one surface share one frame and its texture runs across them unbroken.
+   */
+  surface(corners: Vec3[], normals: Vec3[], frame: Vec3, paint: Paint, grain?: Vec3): void {
+    let v = grain ? inPlane(grain, frame) : inPlane(UP, frame);
+    if (Math.hypot(...v) < 1e-3) v = inPlane(grain ? UP : [0, 0, 1], frame);
+    if (Math.hypot(...v) < 1e-3) v = inPlane([0, 0, 1], frame);
     v = normalize(v);
-    const u = normalize(cross(v, normal));
+    const u = normalize(cross(v, frame));
     const slot = this.slotOf(paint.material);
     const base = this.positions.length / 3;
-    for (const corner of corners) {
+    for (let i = 0; i < corners.length; i++) {
+      const corner = corners[i];
       const [x, y, z] = corner;
       this.positions.push(x, y, z);
-      this.normals.push(...normal);
+      this.normals.push(...normals[i]);
       this.tangents.push(...u);
       this.uvs.push(dot(corner, u), dot(corner, v));
       this.colors.push(paint.tint[0], paint.tint[1], paint.tint[2], 1);

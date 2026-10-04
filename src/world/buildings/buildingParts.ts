@@ -1,5 +1,6 @@
 import type { BuildingPartDef, ChimneySpec, FramedSpec, HousePart, Paint, PartChoice, StoneFrameSpec, TimberFrameSpec, WallSide } from "./buildingTypes";
 import { FOUNDATION_DEPTH, roll, type Vec3 } from "./buildingGeometry";
+import { buildPitchedRoof, planPitchedRoof, type RoofInput, type RoofPlan } from "./pitchedRoof";
 
 /**
  * Building parts: the pieces a building generator leaves to a generator of their own (see
@@ -51,6 +52,7 @@ export function partSpan(part: BuildingPartDef): number {
       return part.chimney!.span;
     case "timberFrame":
     case "stoneFrame":
+    case "pitched":
       return 1;
   }
 }
@@ -75,6 +77,7 @@ export function buildWallPart(part: BuildingPartDef, slot: WallSlot, paints: Par
       return buildChimney(part.chimney!, slot, paints, rng);
     case "timberFrame":
     case "stoneFrame":
+    case "pitched":
       return null;
   }
 }
@@ -327,6 +330,30 @@ function buildStoneFrame(spec: StoneFrameSpec, _plan: FramingPlan, input: Framin
     if (spec.band) footBand(wall, 0, wall.length, floor, foot, b, stone);
     const half = spec.pilaster.width / 2;
     for (const at of wall.posts) wall.box(at - half, at + half, inGap(wall, at) ? floor : foot, corniceBottom, SET_IN, spec.pilaster.out, stone);
+  }
+}
+
+/** Whether a part is one a whole house is handed - its framing, its roof - not a wall slot. */
+export function isWholeHousePart(part: BuildingPartDef): boolean {
+  return part.generator === "timberFrame" || part.generator === "stoneFrame" || part.generator === "pitched";
+}
+
+/** Settles a roof before the walls are built (see RoofPlan). */
+export function planRoof(part: BuildingPartDef, rng: () => number): RoofPlan {
+  switch (part.generator) {
+    case "pitched":
+      return planPitchedRoof(part.pitched!, rng);
+    default:
+      throw new Error(`building part "${part.id}" is not a roof`);
+  }
+}
+
+/** Roofs a house's blocks. */
+export function buildRoof(part: BuildingPartDef, plan: RoofPlan, input: RoofInput, paints: PartPaints): void {
+  switch (part.generator) {
+    case "pitched":
+      buildPitchedRoof(part.pitched!, plan, input, paints);
+      break;
   }
 }
 

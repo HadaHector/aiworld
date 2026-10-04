@@ -48,6 +48,7 @@ import {
   type HousePart,
   type HouseSpec,
   type PartChoice,
+  type PitchedRoofSpec,
   type RoofType,
   type WallExtra,
   type WallSide,
@@ -562,7 +563,7 @@ function readBuilding(id: string, obj: RawObject, reader: Reader, partById: Map<
   let house: BuildingDef["house"] = null;
   if (generator === "house") {
     const path = "house";
-    reader.onlyKeys(block, path, ["tile", "width", "depth", "backWing", "sideWing", "wingLength", "wingWidth", "wallHeight", "plinth", "plinthOutset", "framing", "roofs", "pitch", "overhang", "roofThickness", "doors", "wallExtras", "parts"]);
+    reader.onlyKeys(block, path, ["tile", "width", "depth", "backWing", "sideWing", "wingLength", "wingWidth", "wallHeight", "plinth", "plinthOutset", "framing", "roof", "doors", "wallExtras", "parts"]);
     // A list of building parts, each with a weight.
     const partNamed = (entry: RawObject, at: string, key = "part"): BuildingPartDef | undefined => {
       const partId = reader.string(entry, key, at);
@@ -606,12 +607,9 @@ function readBuilding(id: string, obj: RawObject, reader: Reader, partById: Map<
       reader.onlyKeys(entry, at, ["material", "tints"]);
       parts[part] = { material: reader.string(entry, "material", at), tints: colorsIn(entry, at, "tints") };
     }
-    const roofs = reader.stringList(block, "roofs", path).filter((roof): roof is RoofType => {
-      if ((ROOF_TYPES as readonly string[]).includes(roof)) return true;
-      reader.fail("house.roofs", `"${roof}" is not a roof (known: ${ROOF_TYPES.join(", ")})`);
-      return false;
-    });
-    if (roofs.length === 0) reader.fail("house.roofs", "needs at least one roof");
+    // Every house has a roof - a roof part (one a whole house is handed, as roofs are).
+    const roof = partNamed(block, path, "roof");
+    if (roof && roof.generator !== "pitched") reader.fail("house.roof", `building part "${roof.id}" is not a roof`);
     const tiles = (key: string): [number, number] => {
       const range = reader.range(block, key, path, { allowEqual: true });
       if (range[0] < 1) reader.fail(`house.${key}`, "is in whole tiles, at least 1");
@@ -629,10 +627,8 @@ function readBuilding(id: string, obj: RawObject, reader: Reader, partById: Map<
       plinth: reader.range(block, "plinth", path, { allowEqual: true }),
       plinthOutset: reader.number(block, "plinthOutset", path, { min: 0 }),
       framing: block.framing === undefined ? null : (partNamed(block, path, "framing") ?? null),
-      roofs: roofs.length > 0 ? roofs : ["gable"],
-      pitch: reader.range(block, "pitch", path, { allowEqual: true }),
-      overhang: reader.number(block, "overhang", path, { min: 0 }),
-      roofThickness: reader.number(block, "roofThickness", path, { min: 0.01 }),
+      // A house without a roof part has already failed above; its content is never used.
+      roof: roof as BuildingPartDef,
       doors: choices("doors"),
       wallExtras,
       parts,
@@ -695,6 +691,53 @@ function readBuildingPart(id: string, obj: RawObject, reader: Reader): BuildingP
       parts: { timber: role("timber", `${path}.parts`, parts) },
     };
   }
+  let pitched: BuildingPartDef["pitched"] = null;
+  if (generator === "pitched") {
+    reader.onlyKeys(block, path, ["shapes", "pitch", "overhang", "thickness", "covering", "bargeboard", "sag", "step", "ridgeTiles", "parts"]);
+    const shapes = reader.stringList(block, "shapes", path).filter((shape): shape is RoofType => {
+      if ((ROOF_TYPES as readonly string[]).includes(shape)) return true;
+      reader.fail(`${path}.shapes`, `"${shape}" is not a roof shape (known: ${ROOF_TYPES.join(", ")})`);
+      return false;
+    });
+    if (shapes.length === 0) reader.fail(`${path}.shapes`, "needs at least one shape");
+    const covering = reader.object(block.covering, `${path}.covering`);
+    reader.onlyKeys(covering, `${path}.covering`, ["thickness", "overhang"]);
+    const bargeboard = block.bargeboard === undefined || block.bargeboard === null ? null : reader.object(block.bargeboard, `${path}.bargeboard`);
+    if (bargeboard) reader.onlyKeys(bargeboard, `${path}.bargeboard`, ["height", "thickness"]);
+    const sag = reader.object(block.sag, `${path}.sag`);
+    reader.onlyKeys(sag, `${path}.sag`, ["ridge", "slope"]);
+    let ridgeTiles: PitchedRoofSpec["ridgeTiles"] = null;
+    if (block.ridgeTiles !== undefined && block.ridgeTiles !== null) {
+      const at = `${path}.ridgeTiles`;
+      const tiles = reader.object(block.ridgeTiles, at);
+      reader.onlyKeys(tiles, at, ["width", "height"]);
+      ridgeTiles = {
+        width: reader.number(tiles, "width", at, { min: 0.05 }),
+        height: reader.number(tiles, "height", at, { min: 0.02 }),
+      };
+    }
+    const parts = reader.object(block.parts, `${path}.parts`);
+    reader.onlyKeys(parts, `${path}.parts`, ["covering", "underside", "ridge", "gable"]);
+    pitched = {
+      shapes: shapes.length > 0 ? shapes : ["gable"],
+      pitch: reader.range(block, "pitch", path, { allowEqual: true }),
+      overhang: reader.number(block, "overhang", path, { min: 0 }),
+      thickness: reader.number(block, "thickness", path, { min: 0.01 }),
+      sag: { ridge: reader.range(sag, "ridge", `${path}.sag`, { allowEqual: true }), slope: reader.range(sag, "slope", `${path}.sag`, { allowEqual: true }) },
+      covering: { thickness: reader.number(covering, "thickness", `${path}.covering`, { min: 0.01 }), overhang: reader.number(covering, "overhang", `${path}.covering`, { min: 0 }) },
+      bargeboard: bargeboard
+        ? { height: reader.number(bargeboard, "height", `${path}.bargeboard`, { min: 0 }), thickness: reader.number(bargeboard, "thickness", `${path}.bargeboard`, { min: 0.01 }) }
+        : null,
+      step: reader.number(block, "step", path, { min: 0.25 }),
+      ridgeTiles,
+      parts: {
+        covering: role("covering", `${path}.parts`, parts),
+        underside: role("underside", `${path}.parts`, parts),
+        ridge: role("ridge", `${path}.parts`, parts),
+        gable: role("gable", `${path}.parts`, parts),
+      },
+    };
+  }
   let stoneFrame: BuildingPartDef["stoneFrame"] = null;
   if (generator === "stoneFrame") {
     reader.onlyKeys(block, path, ["quoins", "pilaster", "cornice", "band", "parts"]);
@@ -752,7 +795,7 @@ function readBuildingPart(id: string, obj: RawObject, reader: Reader): BuildingP
       parts: { body: role("body", `${path}.parts`, parts), cap: role("cap", `${path}.parts`, parts), pots: role("pots", `${path}.parts`, parts) },
     };
   }
-  return { id, name: reader.string(obj, "name", ""), generator, framed, chimney, timberFrame, stoneFrame };
+  return { id, name: reader.string(obj, "name", ""), generator, framed, chimney, timberFrame, stoneFrame, pitched };
 }
 
 /** A features/ file - see FeatureKindDef. */

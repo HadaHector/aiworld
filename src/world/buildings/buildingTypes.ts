@@ -79,14 +79,8 @@ export interface HouseSpec {
   plinthOutset: number;
   /** The posts and beams the walls are framed with (a framing building part) - none if null. */
   framing: BuildingPartDef | null;
-  /** Picked per variant. Every block of a house has the same pitch and eave height, so where two
-   *  roofs meet their slopes cut each other along clean valleys. */
-  roofs: RoofType[];
-  /** Degrees. */
-  pitch: [number, number];
-  /** How far the roof reaches past the walls, every way, and how thick it is. */
-  overhang: number;
-  roofThickness: number;
+  /** The roof over every block (a roof building part). */
+  roof: BuildingPartDef;
   /** The door, one of these (building parts) picked per house, in a middle bay of the front. */
   doors: PartChoice[];
   /** Everything else on the walls - windows, chimneys - placed in the bays the door leaves free. */
@@ -133,7 +127,7 @@ export interface PartChoice {
  * A part takes no materials of its own: each of its pieces is painted as one of the building's
  * parts (its `parts`: timber, glass, ...), so a house's windows, posts and door share one timber.
  */
-export const BUILDING_PART_GENERATORS = ["framed", "chimney", "timberFrame", "stoneFrame"] as const;
+export const BUILDING_PART_GENERATORS = ["framed", "chimney", "timberFrame", "stoneFrame", "pitched"] as const;
 export type BuildingPartGenerator = (typeof BUILDING_PART_GENERATORS)[number];
 
 /**
@@ -220,6 +214,37 @@ export interface StoneFrameSpec {
   parts: { stone: HousePart };
 }
 
+/**
+ * A pitched roof over every block of a house: gables or hips at its free ends (one shape picked per
+ * house), every block at one pitch and eave height, so where two roofs meet their slopes cut each
+ * other along clean valleys. Thick slabs, with ridge tiles along the ridges and hips, sagging like an
+ * old roof. Lengths are metres; ranges are rolled per house.
+ */
+export interface PitchedRoofSpec {
+  shapes: RoofType[];
+  /** Degrees. */
+  pitch: [number, number];
+  /** How far it reaches past the walls, every way, and how thick it is. */
+  overhang: number;
+  thickness: number;
+  /** How far its ridges sink in the middle, and its rafters bow between eaves and ridge. */
+  sag: { ridge: [number, number]; slope: [number, number] };
+  /** The covering on its boards: how thick (of the whole), and how far it reaches past them at the
+   *  eaves - and at the verges, where there is no bargeboard. */
+  covering: { thickness: number; overhang: number };
+  /** Boards up the gables' verges, on edge: how far they stand above the covering, and how thick -
+   *  or none. */
+  bargeboard: { height: number; thickness: number } | null;
+  /** The size of the cells its slabs are split into to bend. */
+  step: number;
+  /** A ridge cap along the ridges and hips - a row of ridge tiles, as one rounded length: how wide,
+   *  and how high above the slabs - or none. */
+  ridgeTiles: { width: number; height: number } | null;
+  /** Which of the building's parts the covering, the underside and edges, the ridge tiles and the
+   *  gables' wall are painted as. */
+  parts: { covering: HousePart; underside: HousePart; ridge: HousePart; gable: HousePart };
+}
+
 export interface BuildingPartDef {
   id: string;
   name: string;
@@ -228,6 +253,7 @@ export interface BuildingPartDef {
   chimney: ChimneySpec | null;
   timberFrame: TimberFrameSpec | null;
   stoneFrame: StoneFrameSpec | null;
+  pitched: PitchedRoofSpec | null;
 }
 
 export interface BuildingDef {

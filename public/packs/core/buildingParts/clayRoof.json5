@@ -1,0 +1,31 @@
+// A pitched roof of clay tiles: gabled or hipped, thick, reaching well past the walls, with a rounded
+// ridge cap along its ridges and hips - and sagging like an old roof, its ridges dipping in the
+// middle and its hips bowing in.
+{
+  name: "Clay Roof",
+  type: "pitched",
+  pitched: {
+    // The shape at its free ends, one picked per house - and its pitch, in degrees.
+    shapes: ["gable", "hip"],
+    pitch: [34, 45],
+    // It reaches this far past the walls every way, and is this thick.
+    overhang: 0.8,
+    thickness: 0.4,
+    // The tiles on its boards: how thick (of the whole), and how far they reach past the boards at
+    // the eaves - and at the verges, where there is no bargeboard.
+    covering: { thickness: 0.12, overhang: 0.14 },
+    // Boards up the gables' edges, on edge: how far they stand above the tiles, and how thick
+    // (null: none - the tiles reach past the verges instead).
+    bargeboard: { height: 0.18, thickness: 0.08 },
+    // How far its ridges sink in the middle, and its rafters bow between the eaves and the ridge
+    // (metres, rolled per house). 0 for a roof as straight as the day it was built.
+    sag: { ridge: [0.1, 0.35], slope: [0.03, 0.12] },
+    // The cells its slabs are split into to bend: smaller bends smoother, for more triangles.
+    step: 1.5,
+    // The ridge tiles along the ridges and hips, laid as one rounded cap: how wide, and how high
+    // above the slab.
+    ridgeTiles: { width: 0.42, height: 0.16 },
+    // What its pieces are painted as - the house's parts.
+    parts: { covering: "roof", underside: "timber", ridge: "roof", gable: "walls" },
+  },
+}

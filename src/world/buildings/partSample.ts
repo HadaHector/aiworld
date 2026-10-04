@@ -18,7 +18,9 @@ const FALLBACK: PartPaints = {
 /** The first house that uses a part - whose look a sample of it borrows. */
 export function houseUsing(part: BuildingPartDef, buildings: BuildingDef[]): BuildingDef | undefined {
   return buildings.find(
-    (def) => def.house && (def.house.framing?.id === part.id || [...def.house.doors, ...def.house.wallExtras].some((use) => use.part.id === part.id)),
+    (def) =>
+      def.house &&
+      (def.house.framing?.id === part.id || def.house.roof.id === part.id || [...def.house.doors, ...def.house.wallExtras].some((use) => use.part.id === part.id)),
   );
 }
 
