@@ -389,6 +389,13 @@ function drawSlab(b: ModelBuilder, face: RoofFace, slope: number, sag: Sag, look
     return away[0] * ((p[0] + q[0]) / 2 - cx) + away[2] * ((p[1] + q[1]) / 2 - cz) < 0 ? [-away[0], -away[1], -away[2]] : away;
   };
 
+  // The way an edge runs - up the slope, along a verge - for the grain of the boards along it.
+  const along = (p: Point, q: Point): Vec3 => {
+    const a = at(p, 0);
+    const b = at(q, 0);
+    return [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+  };
+
   // Which edges are open, and which of those are verges - sloping, where an eave is level.
   const n = face.polygon.length;
   const edges = face.polygon.map((p, i) => {
@@ -409,7 +416,7 @@ function drawSlab(b: ModelBuilder, face: RoofFace, slope: number, sag: Sag, look
   for (const { p, q, open, barge } of edges) {
     if (!open || barge) continue;
     const away = awayFrom(p, q);
-    const grain: Vec3 = [q[0] - p[0], 0, q[1] - p[1]];
+    const grain = along(p, q);
     for (const [s, t] of lengths(p, q)) b.surface([at(s, 0), at(t, 0), at(t, boards), at(s, boards)], [away, away, away, away], away, look.underside, grain);
   }
 
@@ -421,7 +428,7 @@ function drawSlab(b: ModelBuilder, face: RoofFace, slope: number, sag: Sag, look
     if (reach[i] === 0) return;
     const q = cover[(i + 1) % n];
     const away = awayFrom(p, q);
-    const grain: Vec3 = [q[0] - p[0], 0, q[1] - p[1]];
+    const grain = along(p, q);
     for (const [s, t] of lengths(p, q)) b.surface([at(s, boards), at(t, boards), at(t, lift), at(s, lift)], [away, away, away, away], away, look.top, grain);
   });
 
@@ -432,7 +439,7 @@ function drawSlab(b: ModelBuilder, face: RoofFace, slope: number, sag: Sag, look
     if (!here) continue;
     const away = awayFrom(p, q);
     const inward: Vec3 = [-away[0], -away[1], -away[2]];
-    const grain: Vec3 = [q[0] - p[0], 0, q[1] - p[1]];
+    const grain = along(p, q);
     const outer = (point: Point): Point => [point[0] + away[0] * barge.thickness, point[1] + away[2] * barge.thickness];
     const low = (point: Point, from: Point): Vec3 => {
       const v = at(from, 0);
@@ -534,9 +541,11 @@ export interface RoofInput {
 export function buildPitchedRoof(spec: PitchedRoofSpec, plan: RoofPlan, input: RoofInput, paints: PartPaints): void {
   const { b, eaves, blocks } = input;
   const { slope, overhang, thickness } = plan;
-  // How far past the boards the covering's edge is - the ridge tiles run out to it: at the eaves,
-  // and at a gable's verge (to the bargeboard's face, where there is one).
-  const reach = { eave: spec.covering.overhang, verge: spec.bargeboard ? spec.bargeboard.thickness : spec.covering.overhang };
+  // How far past the boards the ridge tiles run: out to the covering's edge at the eaves; at a
+  // gable's verge, into the middle of the bargeboard, which stands taller and hides their end - or,
+  // with none, to a little short of the covering's edge. Never flush with a face, where the two
+  // would flicker.
+  const reach = { eave: spec.covering.overhang, verge: spec.bargeboard ? spec.bargeboard.thickness / 2 : Math.max(0, spec.covering.overhang - 0.04) };
   const roofs = blocks.map((block) => roofBlock(b, block, eaves, slope, overhang, reach, paints[spec.parts.gable]));
 
   // The sag: over the whole roof's outline, nothing at its edges and most in its middle, and up the

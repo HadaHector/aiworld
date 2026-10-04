@@ -762,7 +762,7 @@ function readBuildingPart(id: string, obj: RawObject, reader: Reader): BuildingP
   }
   let chimney: BuildingPartDef["chimney"] = null;
   if (generator === "chimney") {
-    reader.onlyKeys(block, path, ["span", "width", "depth", "shoulder", "stackWidth", "stackDepth", "rise", "foundation", "cap", "pots", "parts"]);
+    reader.onlyKeys(block, path, ["span", "width", "depth", "shoulder", "stackWidth", "stackDepth", "angle", "rise", "foundation", "cap", "pots", "parts"]);
     const span = reader.number(block, "span", path, { min: 1 });
     if (!Number.isInteger(span)) reader.fail(`${path}.span`, "is in whole bays");
     const sub = (key: string, keys: string[]): RawObject => {
@@ -784,6 +784,7 @@ function readBuildingPart(id: string, obj: RawObject, reader: Reader): BuildingP
       shoulder: reader.number(block, "shoulder", path, { min: 0 }),
       stackWidth: reader.number(block, "stackWidth", path, { min: 0.3 }),
       stackDepth: reader.number(block, "stackDepth", path, { min: 0.2 }),
+      angle: reader.number(block, "angle", path, { min: 0, max: 80 }),
       rise: reader.range(block, "rise", path, { allowEqual: true }),
       foundation: { reach: reader.number(foundation, "reach", `${path}.foundation`, { min: 0 }), height: reader.number(foundation, "height", `${path}.foundation`, { min: 0 }) },
       cap: { height: reader.number(cap, "height", `${path}.cap`, { min: 0.02 }), reach: reader.number(cap, "reach", `${path}.cap`, { min: 0 }) },

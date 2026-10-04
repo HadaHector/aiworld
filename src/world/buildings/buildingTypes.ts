@@ -168,6 +168,9 @@ export interface ChimneySpec {
   stackWidth: number;
   stackDepth: number;
   /** How far the stack's top stands above the ridge - rolled per chimney. */
+  /** How far its top stands above a line falling from the nearest ridge at `angle` degrees below
+   *  level - the old rule for a chimney to draw: over the ridge right by it, lower further off. */
+  angle: number;
   rise: [number, number];
   /** Its foundation: how far it reaches past the breast every way, and how high above the floor. */
   foundation: { reach: number; height: number };

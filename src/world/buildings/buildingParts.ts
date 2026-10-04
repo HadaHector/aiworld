@@ -25,8 +25,10 @@ export interface WallSlot {
   /** The floor's height, and the most an opening may reach up to (under the eaves). */
   floor: number;
   top: number;
-  /** The top of the house's highest roof, and how far its plinth stands out from the wall. */
-  ridge: number;
+  /** How high a line falling at `angle` degrees from the house's nearest ridge (its top) reaches over
+   *  a point [along, out] - how high a chimney there must reach to draw well. And how far the house's
+   *  plinth stands out from the wall. */
+  ridgeLine(a: number, out: number, angle: number): number;
   plinthOutset: number;
   /** How far either side of the middle it may reach before it meets a corner post or the next bay. */
   halfRoom: number;
@@ -119,7 +121,8 @@ function buildFramed(spec: FramedSpec, slot: WallSlot, paints: PartPaints): Part
 /**
  * A chimney built against the outside of a wall, from a foundation of its own: a broad breast (the
  * fireplace behind it) up to its shoulders, sloping in to a narrower stack that rises through the
- * eaves to stand `rise` above the ridge, capped by a projecting band with pots on it. Not by an
+ * eaves and stands `rise` above the line falling at `angle` from the nearest ridge - right by the
+ * ridge, over the ridge; out at the eaves, lower - capped by a projecting band with pots on it. Not by an
  * inner corner, where it would stand in the other wing's way.
  */
 function buildChimney(spec: ChimneySpec, slot: WallSlot, paints: PartPaints, rng: () => number): PartExtent | null {
@@ -152,8 +155,9 @@ function buildChimney(spec: ChimneySpec, slot: WallSlot, paints: PartPaints, rng
     face([[side * breastHalf, shoulder, back], [side * breastHalf, shoulder, breastOut], [side * stackHalf, slopeTop, stackOut], [side * stackHalf, slopeTop, back]], [side, 1, 0], body);
   }
 
-  // The stack, up past the ridge, and the band capping it, with a closed underside.
-  const top = Math.max(slopeTop + 1, slot.ridge + roll(spec.rise, rng));
+  // The stack, up past the line from the ridge over its middle, and the band capping it, with a
+  // closed underside.
+  const top = Math.max(slopeTop + 1, slot.ridgeLine(0, (back + stackOut) / 2, spec.angle) + roll(spec.rise, rng));
   const capBottom = top - spec.cap.height;
   box(-stackHalf, stackHalf, slopeTop, capBottom, back, stackOut, body);
   const capHalf = stackHalf + spec.cap.reach;

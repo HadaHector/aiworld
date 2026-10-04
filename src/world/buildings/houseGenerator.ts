@@ -155,9 +155,6 @@ export function buildHouse(spec: HouseSpec, rng: () => number): BuildingModel {
     return { alongX, normal, at };
   };
 
-  // The top of the highest roof: the main block's ridge, its slab and ridge tiles on it.
-  const ridge = eaves + ((main.j1 - main.j0) * tile * slope) / 2 + roofPlan.thickness * Math.sqrt(1 + slope * slope) + roofPlan.ridgeHeight;
-
   // How each block's roof ends. The main block's ridge runs along the front, a wing's away from it.
   // A main end with a wing at it is a gable, overhanging the wing's roof like any other.
   const overhang = roofPlan.overhang;
@@ -180,6 +177,44 @@ export function buildHouse(spec: HouseSpec, rng: () => number): BuildingModel {
   if (side && roofType === "gable") {
     gables.push({ dir: side.left ? "nx" : "px", line: side.left ? side.i0 : side.i1, at: (side.j0 + side.j1) / 2, ridge: apex(side.j1 - side.j0) });
   }
+
+  // The roof's blocks, the main one first. The main block's ridge runs along the front, a wing's
+  // away from it; a wing's roof, where it joins, runs on into the main roof as far as its ridge could
+  // reach (its half span, at one pitch).
+  const roofBlocks: RoofBlockInput[] = [{ a0: X(main.i0), a1: X(main.i1), c0: Z(main.j0), c1: Z(main.j1), alongX: true, start: mainEnd(true), end: mainEnd(false) }];
+  if (back) {
+    const halfSpan = ((back.i1 - back.i0) * tile) / 2;
+    roofBlocks.push({ a0: Z(back.j0), a1: Z(back.j1), c0: X(back.i0), c1: X(back.i1), alongX: false, start: free(), end: { kind: "attached", overhang: 0, extend: halfSpan } });
+  }
+  if (side) {
+    const attached: RoofEnd = { kind: "attached", overhang: 0, extend: 0 };
+    roofBlocks.push({ a0: X(side.i0), a1: X(side.i1), c0: Z(side.j0), c1: Z(side.j1), alongX: true, start: side.left ? free() : attached, end: side.left ? attached : free() });
+  }
+
+  // Every ridge, as a segment in plan and the height of its top (slab and ridge cap on it) - a hip
+  // end stops it half a span short, a gable runs it out over the verge.
+  const onTop = roofPlan.thickness * Math.sqrt(1 + slope * slope) + roofPlan.ridgeHeight;
+  const ridges = roofBlocks.map((k) => {
+    const half = (k.c1 - k.c0) / 2;
+    const reach = (end: RoofEnd): number => (end.kind === "hip" ? -half : end.kind === "attached" ? end.extend : end.overhang);
+    let s0 = k.a0 - reach(k.start);
+    let s1 = k.a1 + reach(k.end);
+    if (s0 > s1) s0 = s1 = (s0 + s1) / 2;
+    const c = (k.c0 + k.c1) / 2;
+    const [x0, z0, x1, z1] = k.alongX ? [s0, c, s1, c] : [c, s0, c, s1];
+    return { x0, z0, x1, z1, height: eaves + half * slope + onTop };
+  });
+  /** How high a line falling at `angle` (degrees) from the nearest ridge reaches over a point. */
+  const ridgeLine = (x: number, z: number, angle: number): number =>
+    Math.max(
+      ...ridges.map((r) => {
+        const dx = r.x1 - r.x0;
+        const dz = r.z1 - r.z0;
+        const t = dx === 0 && dz === 0 ? 0 : Math.min(1, Math.max(0, ((x - r.x0) * dx + (z - r.z0) * dz) / (dx * dx + dz * dz)));
+        const distance = Math.hypot(x - (r.x0 + dx * t), z - (r.z0 + dz * t));
+        return r.height - distance * Math.tan((angle * Math.PI) / 180);
+      }),
+    );
 
   // Where a post goes along each run between its corners: wherever the block behind the wall - and
   // so the roof over it - changes.
@@ -231,7 +266,10 @@ export function buildHouse(spec: HouseSpec, rng: () => number): BuildingModel {
     return {
       floor: plinth,
       top: eaves - framing.top - 0.25,
-      ridge,
+      ridgeLine: (a, out, angle) => {
+        const [x, , z] = point([a, 0, out]);
+        return ridgeLine(x, z, angle);
+      },
       plinthOutset: outset,
       halfRoom: (span * tile) / 2 - 0.05 - Math.max(atEnd ? framing.cornerReach : 0, atPost ? framing.postHalf : 0),
       wall: wallOf(run),
@@ -360,18 +398,7 @@ export function buildHouse(spec: HouseSpec, rng: () => number): BuildingModel {
     paints,
   );
 
-  // 5-7. The roof, over every block - the main one first. The main block's ridge runs along the
-  // front, a wing's away from it; a wing's roof, where it joins, runs on into the main roof as far
-  // as its ridge could reach (its half span, at one pitch).
-  const roofBlocks: RoofBlockInput[] = [{ a0: X(main.i0), a1: X(main.i1), c0: Z(main.j0), c1: Z(main.j1), alongX: true, start: mainEnd(true), end: mainEnd(false) }];
-  if (back) {
-    const halfSpan = ((back.i1 - back.i0) * tile) / 2;
-    roofBlocks.push({ a0: Z(back.j0), a1: Z(back.j1), c0: X(back.i0), c1: X(back.i1), alongX: false, start: free(), end: { kind: "attached", overhang: 0, extend: halfSpan } });
-  }
-  if (side) {
-    const attached: RoofEnd = { kind: "attached", overhang: 0, extend: 0 };
-    roofBlocks.push({ a0: X(side.i0), a1: X(side.i1), c0: Z(side.j0), c1: Z(side.j1), alongX: true, start: side.left ? free() : attached, end: side.left ? attached : free() });
-  }
+  // 5-7. The roof, over every block (laid out above).
   buildRoof(spec.roof, roofPlan, { b, eaves, blocks: roofBlocks }, paints);
 
   const tiles: NonNullable<BuildingModel["tiles"]> = [];

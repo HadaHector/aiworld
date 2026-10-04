@@ -623,7 +623,9 @@ house, and how its ends meet the others. There are five so far:
 - `chimney`, built against the outside of a wall on a foundation of its own (see
   `core/buildingParts/stoneChimney.json5`): a breast `width` along the wall and `depth` out from it
   up to its `shoulder` (above the floor), sloping in to a stack `stackWidth` by `stackDepth` that
-  rises through the eaves to `rise` above the ridge (a range, rolled per chimney). Its `foundation`
+  rises through the eaves to `rise` (a range, rolled per chimney) above a line falling from the nearest
+  ridge at `angle` degrees below level - the old rule for a chimney to draw: over the ridge right
+  by it, lower out at the eaves. Its `foundation`
   reaches past the breast and stands a little above the floor, out past the house's plinth; a `cap`
   band tops the stack, with `pots` on it. `parts: { body, cap, pots }` paints them.
 - `timberFrame`, a framing (see `core/buildingParts/timberFrame.json5`): a square post `corner` wide

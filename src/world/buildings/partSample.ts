@@ -59,7 +59,7 @@ export function buildPartSample(part: BuildingPartDef, house: HouseSpec | null):
       {
         floor: plinth,
         top: eaves - framing.top - 0.25,
-        ridge: eaves + 2.5,
+        ridgeLine: () => eaves + 2.5,
         plinthOutset: outset,
         halfRoom: (span * tile) / 2 - 0.05,
         wall: "side",

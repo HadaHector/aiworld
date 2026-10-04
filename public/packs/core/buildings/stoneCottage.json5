@@ -33,7 +33,7 @@
     // as it spans) on the walls it may go on - front, back, side; all if not given - in a random
     // order, and takes it with its chance, up to maxCount of them.
     wallExtras: [
-      { part: "stoneChimney", priority: 2, chance: 0.1, maxCount: 1, walls: ["side", "back"] },
+      { part: "stoneChimney", priority: 2, chance: 0.16, maxCount: 1, walls: ["side", "back"] },
       { part: "stoneWindow", priority: 1, chance: 0.25 },
     ],
     // What each part is made of (see buildingMaterials/), and the tints - one picked per house - its
