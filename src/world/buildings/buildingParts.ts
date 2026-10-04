@@ -36,6 +36,9 @@ export interface WallSlot {
    *  stands right beside it. */
   wall: WallSide;
   innerCorner: boolean;
+  /** Built to be seen from afar: a part leaves out its small pieces, keeping what shows its shape
+   *  and colour - taking no fewer rolls, so it comes out the same. */
+  far: boolean;
 }
 
 /** How much of a wall a part took: how far either side of its middle it reaches, and how low its
@@ -95,6 +98,9 @@ function buildFramed(spec: FramedSpec, slot: WallSlot, paints: PartPaints): Part
   const frame = paints[spec.parts.frame];
 
   box(-half, half, bottom, top, SET_IN, OUT.panel, paints[spec.parts.panel]);
+  const extent = { half: half + f + reach, foot: spec.sillReach !== null ? bottom - f : bottom };
+  // From afar an opening is its panel: the frame, bars and sill are too fine to see.
+  if (slot.far) return extent;
   // Jambs at its two edges, and a head over them, reaching past them.
   box(-half - f, -half, bottom, top + f, SET_IN, OUT.frame, frame);
   box(half, half + f, bottom, top + f, SET_IN, OUT.frame, frame);
@@ -115,7 +121,7 @@ function buildFramed(spec: FramedSpec, slot: WallSlot, paints: PartPaints): Part
     const sillHalf = half + f + spec.sillReach;
     box(-sillHalf, sillHalf, bottom - f, bottom, SET_IN, OUT.frame + spec.sillReach, frame);
   }
-  return { half: half + f + reach, foot: spec.sillReach !== null ? bottom - f : bottom };
+  return extent;
 }
 
 /**
@@ -163,6 +169,9 @@ function buildChimney(spec: ChimneySpec, slot: WallSlot, paints: PartPaints, rng
   const capHalf = stackHalf + spec.cap.reach;
   const capOut = stackOut + spec.cap.reach;
   box(-capHalf, capHalf, capBottom, top, back, capOut, cap);
+  const extent = { half: breastHalf + foundationReach, foot: -FOUNDATION_DEPTH };
+  // From afar, no underside to the cap, and no pots.
+  if (slot.far) return extent;
   face([[-capHalf, capBottom, back], [capHalf, capBottom, back], [capHalf, capBottom, capOut], [-capHalf, capBottom, capOut]], [0, -1, 0], cap);
 
   // Pots in a row along the top.
@@ -175,7 +184,7 @@ function buildChimney(spec: ChimneySpec, slot: WallSlot, paints: PartPaints, rng
       box(a - r, a + r, top, top + pots.height, middle - r, middle + r, paints[spec.parts.pots]);
     }
   }
-  return { half: breastHalf + foundationReach, foot: -FOUNDATION_DEPTH };
+  return extent;
 }
 
 /**
@@ -211,6 +220,9 @@ export interface FramingCorner {
 export interface FramingInput {
   floor: number;
   eaves: number;
+  /** Built to be seen from afar: a framing keeps its big lines - its corners, its top - and leaves
+   *  out the fine ones. */
+  far: boolean;
   walls: FramingWall[];
   corners: FramingCorner[];
 }
@@ -280,11 +292,14 @@ function buildTimberFrame(spec: TimberFrameSpec, plan: FramingPlan, input: Frami
   for (const corner of input.corners) corner.box(-half, half, -half, half, floor, eaves, timber);
   for (const wall of input.walls) {
     const end = wall.length - half;
-    footBand(wall, half, end, floor, sillTop, spec.sill.out, timber);
     // The top beam, under the eaves.
     wall.box(half, end, plateBottom, eaves, SET_IN, spec.plate.out, timber);
-    // Posts between the beams; one standing in a gap stands on the floor.
-    for (const at of wall.posts) wall.box(at - postHalf, at + postHalf, inGap(wall, at) ? floor : sillTop, plateBottom, SET_IN, spec.post.out, timber);
+    // From afar, the corner posts, the top beams and the king posts are the frame.
+    if (!input.far) {
+      footBand(wall, half, end, floor, sillTop, spec.sill.out, timber);
+      // Posts between the beams; one standing in a gap stands on the floor.
+      for (const at of wall.posts) wall.box(at - postHalf, at + postHalf, inGap(wall, at) ? floor : sillTop, plateBottom, SET_IN, spec.post.out, timber);
+    }
     // The king post, from the top beam to the ridge.
     if (wall.gable) wall.box(wall.gable.at - postHalf, wall.gable.at + postHalf, eaves, wall.gable.ridge, SET_IN, spec.post.out, timber);
   }
@@ -308,11 +323,18 @@ function buildStoneFrame(spec: StoneFrameSpec, _plan: FramingPlan, input: Framin
   const h = (corniceBottom - foot) / courses;
   const c = spec.cornice.out;
   const b = spec.band?.out ?? 0;
+  const band = input.far ? null : spec.band;
   for (const corner of input.corners) {
     if (corner.kind !== "outer") continue;
     // The cornice, and the band, turning the corner: the walls' own run between their corners.
     corner.box(-c, 0, -c, 0, corniceBottom, eaves, stone);
-    if (spec.band) corner.box(-b, 0, -b, 0, floor, foot, stone);
+    if (band) corner.box(-b, 0, -b, 0, floor, foot, stone);
+    // From afar the quoins are a plain stone strip up the corner, as wide as their short stones.
+    if (input.far) {
+      corner.box(-out, short, -out, inWall, foot, corniceBottom, stone);
+      corner.box(-out, inWall, inWall, short, foot, corniceBottom, stone);
+      continue;
+    }
     for (let k = 0; k < courses; k++) {
       const y0 = foot + k * h;
       const y1 = y0 + h;
@@ -331,7 +353,7 @@ function buildStoneFrame(spec: StoneFrameSpec, _plan: FramingPlan, input: Framin
   }
   for (const wall of input.walls) {
     wall.box(0, wall.length, corniceBottom, eaves, SET_IN, c, stone);
-    if (spec.band) footBand(wall, 0, wall.length, floor, foot, b, stone);
+    if (band) footBand(wall, 0, wall.length, floor, foot, b, stone);
     const half = spec.pilaster.width / 2;
     for (const at of wall.posts) wall.box(at - half, at + half, inGap(wall, at) ? floor : foot, corniceBottom, SET_IN, spec.pilaster.out, stone);
   }

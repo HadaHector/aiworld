@@ -592,7 +592,8 @@ function renderPreviewBar(): void {
       };
       variantMenu.append(step(-1), step(1));
       viewOptions.append(variantMenu);
-      if ((current.folder === "trees" || current.folder === "rocks") && def?.shape.model !== "primitive" && def?.shape.model !== "bush") {
+      const hasFar = current.folder === "buildings" || ((current.folder === "trees" || current.folder === "rocks") && def?.shape.model !== "primitive" && def?.shape.model !== "bush");
+      if (hasFar) {
         viewOptions.append(select("Detail", "lod", [
           ["near", "Near"],
           ["far", "Far"],
@@ -815,7 +816,7 @@ async function preview3d(token: number, asset: Asset, view: ViewDef, content: Wo
     if (grassOn) grass = ground.grass;
     const def = content.buildings.find((building) => building.id === asset.id)!;
     const chosen = options.variant === "all" ? Array.from({ length: BUILDING_VARIANTS }, (_, i) => i) : [Math.min(BUILDING_VARIANTS - 1, Number(options.variant) || 0)];
-    buildings = chosen.map((variant) => generateBuilding(def, seed, variant));
+    buildings = chosen.map((variant) => generateBuilding(def, seed, variant, options.lod === "far"));
   } else if (asset.folder === "buildingParts") {
     ground = groundMaterial(content, asset);
     if (grassOn) grass = ground.grass;
@@ -824,7 +825,7 @@ async function preview3d(token: number, asset: Asset, view: ViewDef, content: Wo
     const part = content.buildingParts.find((p) => p.id === asset.id)!;
     const house = houseUsing(part, content.buildings);
     const variants = options.variant === "all" ? Array.from({ length: BUILDING_VARIANTS }, (_, i) => i) : [Math.min(BUILDING_VARIANTS - 1, Number(options.variant) || 0)];
-    buildings = isWholeHousePart(part) && house ? variants.map((variant) => generateBuilding(house, seed, variant)) : [buildPartSample(part, house?.house ?? null)];
+    buildings = isWholeHousePart(part) && house ? variants.map((variant) => generateBuilding(house, seed, variant, options.lod === "far")) : [buildPartSample(part, house?.house ?? null)];
   } else {
     ground = groundMaterial(content, asset);
     if (grassOn) grass = ground.grass;

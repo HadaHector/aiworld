@@ -52,9 +52,10 @@ function buildBoxes(spec: BoxesSpec, rng: () => number): BuildingModel {
 
 /**
  * Builds one variant of a building. The same building, seed and variant always give the same
- * model, wherever it is asked for - the workbench and the world agree.
+ * model, wherever it is asked for - the workbench and the world agree. `far` builds it to be seen
+ * from afar: the same building, with its small details left out.
  */
-export function generateBuilding(def: BuildingDef, seed: number, variant: number): BuildingModel {
+export function generateBuilding(def: BuildingDef, seed: number, variant: number, far = false): BuildingModel {
   let hash = 0;
   for (let i = 0; i < def.id.length; i++) hash = (Math.imul(hash, 31) + def.id.charCodeAt(i)) | 0;
   const rng = mulberry32(deriveSeed(deriveSeed(seed, hash), variant));
@@ -62,6 +63,6 @@ export function generateBuilding(def: BuildingDef, seed: number, variant: number
     case "boxes":
       return buildBoxes(def.boxes!, rng);
     case "house":
-      return buildHouse(def.house!, rng);
+      return buildHouse(def.house!, rng, far);
   }
 }

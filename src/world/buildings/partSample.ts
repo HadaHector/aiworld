@@ -64,6 +64,7 @@ export function buildPartSample(part: BuildingPartDef, house: HouseSpec | null):
         halfRoom: (span * tile) / 2 - 0.05,
         wall: "side",
         innerCorner: false,
+        far: false,
         box: (a0, a1, y0, y1, out0, out1, paint) => b.box(a0, y0, out0, a1, y1, out1, paint),
         face: (corners, towards, paint) => b.faceToward(corners, towards, paint),
       },
@@ -78,6 +79,7 @@ export function buildPartSample(part: BuildingPartDef, house: HouseSpec | null):
     {
       floor: plinth,
       eaves,
+      far: false,
       walls: [
         {
           length: half * 2,

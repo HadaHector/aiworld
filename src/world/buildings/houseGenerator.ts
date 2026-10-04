@@ -103,7 +103,11 @@ function wallRuns(inside: (i: number, j: number) => boolean, blocks: Block[]): W
   return runs;
 }
 
-export function buildHouse(spec: HouseSpec, rng: () => number): BuildingModel {
+/**
+ * Builds a house - `far`, to be seen from afar: its parts leave out their small pieces, though every
+ * roll is taken as near, so near and far are the same house.
+ */
+export function buildHouse(spec: HouseSpec, rng: () => number, far = false): BuildingModel {
   const b = new ModelBuilder();
   const tile = roll(spec.tile, rng);
   const { W, main, back, side } = planHouse(spec, rng);
@@ -273,6 +277,7 @@ export function buildHouse(spec: HouseSpec, rng: () => number): BuildingModel {
       plinthOutset: outset,
       halfRoom: (span * tile) / 2 - 0.05 - Math.max(atEnd ? framing.cornerReach : 0, atPost ? framing.postHalf : 0),
       wall: wallOf(run),
+      far,
       innerCorner: (atStart && startInner) || (centre + span / 2 >= run.to && endInner),
       box: (a0, a1, y0, y1, out0, out1, paint) => {
         const [ax, , az] = at(centre, out0, 0);
@@ -373,6 +378,7 @@ export function buildHouse(spec: HouseSpec, rng: () => number): BuildingModel {
     {
       floor: plinth,
       eaves,
+      far,
       walls: framingWalls,
       corners: [...corners].map((key): FramingCorner => {
         const [i, j] = key.split(",").map(Number);
@@ -399,7 +405,7 @@ export function buildHouse(spec: HouseSpec, rng: () => number): BuildingModel {
   );
 
   // 5-7. The roof, over every block (laid out above).
-  buildRoof(spec.roof, roofPlan, { b, eaves, blocks: roofBlocks }, paints);
+  buildRoof(spec.roof, roofPlan, { b, eaves, blocks: roofBlocks, far }, paints);
 
   const tiles: NonNullable<BuildingModel["tiles"]> = [];
   for (const block of blocks) {

@@ -548,7 +548,14 @@ export interface RoofInput {
   b: ModelBuilder;
   eaves: number;
   blocks: RoofBlockInput[];
+  /** Built to be seen from afar: bent in coarser cells (see FAR_STEP), its ridge cap in two boards. */
+  far: boolean;
 }
+
+/** From afar a roof bends in cells this much coarser than near (and no smaller than FAR_STEP_MIN):
+ *  its sag still shows in its outline, in a handful of cells to a slope. */
+const FAR_STEP_SCALE = 3;
+const FAR_STEP_MIN = 4;
 
 export function buildPitchedRoof(spec: PitchedRoofSpec, plan: RoofPlan, input: RoofInput, paints: PartPaints): void {
   const { b, eaves, blocks } = input;
@@ -576,6 +583,8 @@ export function buildPitchedRoof(spec: PitchedRoofSpec, plan: RoofPlan, input: R
   };
 
   const lift = thickness * Math.sqrt(1 + slope * slope);
+  const step = input.far ? Math.max(spec.step * FAR_STEP_SCALE, FAR_STEP_MIN) : spec.step;
+  const ridgeTiles = spec.ridgeTiles && input.far ? { ...spec.ridgeTiles, profile: "peaked" as const } : spec.ridgeTiles;
   roofs.forEach((roof, k) => {
     let faces = roof.faces;
     roofs.forEach((other, m) => {
@@ -587,19 +596,19 @@ export function buildPitchedRoof(spec: PitchedRoofSpec, plan: RoofPlan, input: R
         thickness,
         covering: spec.covering,
         bargeboard: spec.bargeboard,
-        step: spec.step,
+        step,
         top: paints[spec.parts.covering],
         underside: paints[spec.parts.underside],
       });
     }
-    if (!spec.ridgeTiles) return;
+    if (!ridgeTiles) return;
     for (const line of roof.lines) {
       const length = Math.hypot(line.to[0] - line.from[0], line.to[2] - line.from[2]);
       let spans: [number, number][] = [[-line.extend[0] / length, 1 + line.extend[1] / length]];
       roofs.forEach((other, m) => {
         if (m !== k) spans = visibleSpans(line, other, m < k, spans);
       });
-      for (const [t0, t1] of spans) drawRidgeCap(b, line, t0, t1, lift, spec.ridgeTiles, spec.step, sag, paints[spec.parts.ridge]);
+      for (const [t0, t1] of spans) drawRidgeCap(b, line, t0, t1, lift, ridgeTiles, step, sag, paints[spec.parts.ridge]);
     }
   });
 }
