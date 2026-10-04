@@ -54,6 +54,9 @@ export interface WallSlot {
   /** Built to be seen from afar: a part leaves out its small pieces, keeping what shows its shape
    *  and colour - taking no fewer rolls, so it comes out the same. */
   far: boolean;
+  /** A door standing open - into a room of the house's interior: its frame round a hole, no leaf
+   *  in it (the wall is cut there). */
+  open?: boolean;
 }
 
 /** How much of a wall a part took: how far either side of its middle it reaches, and how low its
@@ -63,6 +66,8 @@ export interface PartExtent {
   half: number;
   foot: number;
   top: number;
+  /** An opening's own size, inside its frame: half its width, its foot and its head. */
+  opening?: { half: number; bottom: number; top: number };
 }
 
 /** How many bays a wall part takes up. */
@@ -118,8 +123,8 @@ function buildFramed(spec: FramedSpec, slot: WallSlot, paints: PartPaints): Part
   if (half < 0.2 || top - bottom < 0.4) return null;
   const frame = paints[spec.parts.frame];
 
-  box(-half, half, bottom, top, SET_IN, OUT.panel, paints[spec.parts.panel]);
-  const extent = { half: half + f + reach, foot: spec.sillReach !== null ? bottom - f : bottom, top: top + f };
+  if (!slot.open) box(-half, half, bottom, top, SET_IN, OUT.panel, paints[spec.parts.panel]);
+  const extent = { half: half + f + reach, foot: spec.sillReach !== null ? bottom - f : bottom, top: top + f, opening: { half, bottom, top } };
   // From afar an opening is its panel: the frame, bars and sill are too fine to see.
   if (slot.far) return extent;
   // Jambs at its two edges, and a head over them, reaching past them.
@@ -127,8 +132,8 @@ function buildFramed(spec: FramedSpec, slot: WallSlot, paints: PartPaints): Part
   box(half, half + f, bottom, top + f, SET_IN, OUT.frame, frame);
   const headHalf = half + f + spec.headReach;
   box(-headHalf, headHalf, top, top + f, SET_IN, spec.headReach > 0 ? OUT.head : OUT.frame, frame);
-  // Glazing bars, evenly spaced up and across the panel.
-  const [up, across] = spec.bars;
+  // Glazing bars, evenly spaced up and across the panel - none across an open door.
+  const [up, across] = slot.open ? [0, 0] : spec.bars;
   for (let k = 1; k <= up; k++) {
     const a = -half + (2 * half * k) / (up + 1);
     box(a - f / 4, a + f / 4, bottom, top, SET_IN, OUT.bars, frame);

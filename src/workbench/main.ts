@@ -18,6 +18,8 @@ import { createTextureCacheLabel } from "../debug/textureCacheLabel";
 import { sampleBiomeArea, type BiomeArea } from "./biomeArea";
 import { heightView, layerView, materialsView, plantsView, type Rgb } from "./biomeViews";
 import { generateBuilding } from "../world/buildings/buildingGenerator";
+import { cutModel } from "./cutModel";
+import type { BuildingModel } from "../world/buildings/buildingTypes";
 import { buildPartSample, houseUsing } from "../world/buildings/partSample";
 import { isWholeHousePart } from "../world/buildings/buildingParts";
 import { bakeBuildingTextures } from "../world/buildings/buildingMesh";
@@ -107,7 +109,21 @@ const DEFAULT_OPTIONS: Options = {
   plants: "all",
   water: "on",
   marks: "on",
+  cut: "none",
 };
+
+/** A building cut open as the Cut menu says: over a level's floor - its plan - or through its middle. */
+function cutOpen(model: BuildingModel): BuildingModel {
+  const cut = options.cut;
+  if (cut === "none") return model;
+  if (cut === "front") return cutModel(model, { axis: "z", at: 0.01 });
+  if (cut === "side") return cutModel(model, { axis: "x", at: 0.01 });
+  const levels = model.levels ?? [];
+  const ground = levels.findIndex((level) => level.kind !== "cellar");
+  const level = levels[ground + Number(cut)];
+  if (!level) return model;
+  return cutModel(model, { axis: "y", at: level.floor + Math.min(2.4, (level.top - level.floor) * 0.6) });
+}
 
 // ---------------------------------------------------------------------------------------------
 // Drafts: an edit survives a reload, but only while the file it was made against is unchanged.
@@ -569,7 +585,21 @@ function renderPreviewBar(): void {
         if (stage) stage.scene.forceWireframe = options.wire === "on";
       }),
     );
-    if (current.folder === "buildings") viewOptions.append(checkbox("Footprint", "marks", rebuild));
+    if (current.folder === "buildings") {
+      viewOptions.append(checkbox("Footprint", "marks", rebuild));
+      // Cut open, to see its interior: a plan of a level (cut a little over its floor), or a section
+      // through the middle from the front or the side.
+      viewOptions.append(select("Cut", "cut", [
+        ["none", "None"],
+        ["-1", "Cellar"],
+        ["0", "Ground"],
+        ["1", "Storey 2"],
+        ["2", "Storey 3"],
+        ["3", "Storey 4"],
+        ["front", "Section"],
+        ["side", "Side section"],
+      ], rebuild));
+    }
     if ((current.folder === "trees" || current.folder === "bushes" || current.folder === "rocks" || current.folder === "buildings") && content) {
       const def = current.folder === "buildings" ? undefined : kindOf(content, current);
       const variants = current.folder === "buildings" ? BUILDING_VARIANTS : def ? variantCount(def) : 1;
@@ -816,7 +846,7 @@ async function preview3d(token: number, asset: Asset, view: ViewDef, content: Wo
     if (grassOn) grass = ground.grass;
     const def = content.buildings.find((building) => building.id === asset.id)!;
     const chosen = options.variant === "all" ? Array.from({ length: BUILDING_VARIANTS }, (_, i) => i) : [Math.min(BUILDING_VARIANTS - 1, Number(options.variant) || 0)];
-    buildings = chosen.map((variant) => generateBuilding(def, seed, variant, options.lod === "far"));
+    buildings = chosen.map((variant) => cutOpen(generateBuilding(def, seed, variant, options.lod === "far")));
   } else if (asset.folder === "buildingParts") {
     ground = groundMaterial(content, asset);
     if (grassOn) grass = ground.grass;

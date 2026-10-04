@@ -30,6 +30,18 @@
       { part: "belfryOpening", priority: 2, chance: 0.6, storeys: ["upper"] },
       { part: "lancetWindow", priority: 1, chance: 0.8, walls: ["side"], storeys: ["ground"] },
     ],
+    // Inside: the nave, and the tower's foot through a door from it - where either holds the front
+    // door, the way in - and now and then a second door out.
+    interior: {
+      type: "rooms",
+      rooms: {
+        exits: [1, 2],
+        rooms: [
+          { room: "nave", priority: 10, tiles: [8, 15], near: "entrance" },
+          { room: "towerBase", priority: 8, tiles: [1, 4], next: "nave", near: "entrance" },
+        ],
+      },
+    },
     parts: {
       walls: { material: "rubbleStone", tints: [[1.04, 1.02, 0.98], [0.95, 0.93, 0.9], [1.05, 0.98, 0.88]] },
       timber: { material: "timber", tints: [[0.5, 0.45, 0.42]] },

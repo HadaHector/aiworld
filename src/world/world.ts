@@ -33,6 +33,11 @@ export interface WorldLoadProgress {
 
 export interface World {
   heightAt: (worldX: number, worldZ: number) => number;
+  /** What one stands on at a point with one's feet at `feet`: a floor inside a building where there
+   *  is one under them - see settlements/settlementRenderer.ts - otherwise the ground. */
+  groundAt: (worldX: number, worldZ: number, feet: number) => number;
+  /** Whether one is inside a building's rooms there. */
+  indoors: (worldX: number, worldZ: number, feet: number) => boolean;
   sampleTerrain: TerrainSampler;
   /** `immediate` builds whatever is queued on this thread now instead of handing it to the chunk
    *  build workers - see ChunkManager.update. */
@@ -170,6 +175,7 @@ export async function createWorld(
     buildingMaterial,
     sunLighting.shadowGenerator,
     DEFAULT_DRAW_DISTANCE,
+    materialLibrary.setTerrainCuts,
   );
   const sky = createSkyDome(scene);
 
@@ -226,6 +232,7 @@ export async function createWorld(
   let drawDistance = DEFAULT_DRAW_DISTANCE;
 
   const heightAt = (worldX: number, worldZ: number) => sampleTerrain(worldX, worldZ).height;
+  const groundAt = (worldX: number, worldZ: number, feet: number) => buildings.floorAt(worldX, worldZ, feet) ?? heightAt(worldX, worldZ);
   const updateChunks = (playerX: number, playerZ: number, immediate?: boolean) => chunkManager.update(playerX, playerZ, immediate);
   const setDrawDistance = (loadRadius: number) => {
     drawDistance = loadRadius;
@@ -267,6 +274,8 @@ export async function createWorld(
 
   return {
     heightAt,
+    groundAt,
+    indoors: (worldX: number, worldZ: number, feet: number) => buildings.floorAt(worldX, worldZ, feet) !== null,
     sampleTerrain,
     updateChunks,
     setDrawDistance,

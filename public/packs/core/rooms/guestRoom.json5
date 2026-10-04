@@ -1,0 +1,9 @@
+// A guest room: plain boards, whitewashed walls and ceiling.
+{
+  name: "Guest Room",
+  floor: { material: "floorboards", tints: [[1.1, 1.05, 1.0], [1, 1, 1]] },
+  walls: { material: "plaster", tints: [[1.0, 0.98, 0.94], [0.94, 0.92, 0.86], [0.92, 0.94, 0.96]] },
+  ceiling: { material: "plaster", tints: [[1.0, 0.98, 0.94]] },
+  timber: { material: "timber", tints: [[0.55, 0.48, 0.42]] },
+  stair: "open",
+}

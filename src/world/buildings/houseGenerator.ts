@@ -3,6 +3,8 @@ import { FOUNDATION_DEPTH, ModelBuilder, pick, roll, rollInt, type Vec3 } from "
 import { buildFraming, buildRoof, buildSupport, buildTerrace, buildWallPart, isDoor, partSpan, pickPart, planFraming, planRoof, type FramingCorner, type FramingWall, type PartExtent, type PartPaints, type WallSlot } from "./buildingParts";
 import type { RoofBlockInput, RoofEnd } from "./pitchedRoof";
 import { inRect, planHouse, type Block, type PlanEnd } from "./housePlans";
+import { cellKey, planInterior, type FaceDir, type InteriorLayout } from "./interiorLayout";
+import { buildInterior, WALL, type Opening } from "./interiorGeometry";
 
 /**
  * A traditional house, built in the order a house is: its plan (tiles, laid out by one of the plan
@@ -316,7 +318,7 @@ export function buildHouse(spec: HouseSpec, rng: () => number, far = false): Bui
   /** The slot for a part `span` bays wide, its middle `centre` tiles along a run, on a level. Clear of
    *  the storey's top beam (or, in a cellar, of the ground floor), and of a post where it reaches one
    *  - at the run's end, or where the roof changes. */
-  const slotAt = (run: WallRun, centre: number, span: number, level: Storey): WallSlot => {
+  const slotAt = (run: WallRun, centre: number, span: number, level: Storey, open = false): WallSlot => {
     const wall = wallAt(run, level);
     const outline = outlineAt(level);
     const { alongX, sign, at } = wall;
@@ -341,6 +343,7 @@ export function buildHouse(spec: HouseSpec, rng: () => number, far = false): Bui
       halfRoom: (span * tile) / 2 - 0.05 - Math.max(atEnd ? framing.cornerReach : 0, atPost ? framing.postHalf : 0),
       wall: wallOf(run),
       far,
+      open,
       innerCorner: (atStart && startInner) || (centre + span / 2 >= run.to && endInner),
       box: (a0, a1, y0, y1, out0, out1, paint) => {
         const [ax, , az] = at(centre, out0, 0);
@@ -379,13 +382,6 @@ export function buildHouse(spec: HouseSpec, rng: () => number, far = false): Bui
     }
   }
 
-  // 3. The walls, storey by storey.
-  for (const level of above) {
-    for (const run of outlineAt(level).runs) {
-      const wall = wallAt(run, level);
-      b.face([wall.at(wall.from, 0, level.floor), wall.at(wall.to, 0, level.floor), wall.at(wall.to, 0, level.top), wall.at(wall.from, 0, level.top)], wall.normal, paints.walls);
-    }
-  }
 
   // Ceilings: wherever a storey covers ground the one under it does not - an arcade, the overhang of a
   // jetty - its underside is closed, at its floor. Found on a grid of every edge of either storey.
@@ -495,6 +491,61 @@ export function buildHouse(spec: HouseSpec, rng: () => number, far = false): Bui
   const frontRun = groundRuns
     .filter((run) => run.dir === "pz" && run.from <= doorBay && run.to >= doorBay + doorSpan && run.line <= entrance.j1 && run.line > entrance.j0)
     .sort((p, q) => q.line - p.line)[0];
+  // The interior, where the house has one: its rooms laid out in the house before anything goes on
+  // its walls, so a door that leads into a room is built open - a hole through the wall.
+  const interior: InteriorLayout | null = spec.interior
+    ? planInterior(
+        spec.interior.rooms,
+        {
+          levels: levels.map(({ kind, index, floor, top }) => ({ kind, index, floor, top })),
+          inside: (i, j, k) => (k < 0 ? inside(i, j) : occupied(i, j, k)),
+          bounds: { i0: iMin, i1: iMax, j0: jMin, j1: jMax },
+          tile,
+          entrance: frontRun ? { i: doorBay, j: frontRun.line - 1 } : null,
+        },
+        rng,
+        (surface) => ({ material: surface.material, tint: pick(surface.tints, rng) }),
+      )
+    : null;
+  /** The tile inside a run's wall at a bay. */
+  const tileInside = (run: WallRun, bay: number): [number, number] =>
+    run.dir === "pz" ? [bay, run.line - 1] : run.dir === "nz" ? [bay, run.line] : run.dir === "px" ? [run.line - 1, bay] : [run.line, bay];
+  /** The room every tile behind a stretch of wall opens into, on a level - standing on its floor - or
+   *  null. */
+  const roomBehind = (run: WallRun, bay: number, span: number, level: Storey): number | null => {
+    if (!interior) return null;
+    let found: number | null = null;
+    for (let along = bay; along < bay + span; along++) {
+      const [i, j] = tileInside(run, along);
+      const id = interior.cells.get(cellKey(i, j, level.index));
+      const room = interior.rooms.find((r) => r.id === id);
+      const blocked = interior.stairs.some((stair) => stair.level === level.index && stair.tiles.some(([a, c]) => a === i && c === j)) || interior.holes.has(cellKey(i, j, level.index));
+      if (!room || room.base !== level.index || blocked || (found !== null && found !== room.id)) return null;
+      found = room.id;
+    }
+    return found;
+  };
+  // The openings the interior shows from inside: the doors out (open), and the windows (shut).
+  const exits: Opening[] = [];
+  const windows: Opening[] = [];
+  /** Exterior wall holes for open doors, by wall and level: along the wall in tiles, and up. */
+  const holes = new Map<string, { a0: number; a1: number; y0: number; y1: number }[]>();
+  const openingOf = (run: WallRun, level: Storey, bay: number, span: number, extent: PartExtent): Opening | null => {
+    if (!extent.opening) return null;
+    const centre = bay + span / 2;
+    const [x, , z] = wallAt(run, level).at(centre, 0, 0);
+    const [i, j] = tileInside(run, Math.min(bay + span - 1, Math.floor(centre)));
+    return { i, j, k: level.index, dir: run.dir as FaceDir, along: run.dir === "pz" || run.dir === "nz" ? x : z, half: extent.opening.half, bottom: extent.opening.bottom, top: extent.opening.top };
+  };
+  const openDoor = (run: WallRun, level: Storey, bay: number, span: number, extent: PartExtent): void => {
+    const opening = openingOf(run, level, bay, span, extent);
+    if (!opening) return;
+    exits.push(opening);
+    const centre = bay + span / 2;
+    const list = holes.get(keyOf(run, level)) ?? [];
+    list.push({ a0: centre - opening.half / tile, a1: centre + opening.half / tile, y0: opening.bottom, y1: opening.top });
+    holes.set(keyOf(run, level), list);
+  };
   const doorParts = [...(doorPart ? [doorPart] : []), ...spec.doors.map((choice) => choice.part).filter((part) => part !== doorPart).sort((p, q) => partSpan(p) - partSpan(q))];
   /** Where along a run a part `span` wide could stand: `first` (where it is one of its bays), then
    *  the run's very middle - between two bays, where the run has no middle bay, so on a short wall it
@@ -510,14 +561,18 @@ export function buildHouse(spec: HouseSpec, rng: () => number, far = false): Bui
   const sideRank = (run: WallRun): number => (run === frontRun ? 0 : run.dir === "pz" ? 1 : run.dir === "nz" ? 3 : 2);
   const doorWalls = [...groundRuns].sort((p, q) => sideRank(p) - sideRank(q) || q.line - p.line || p.from - q.from);
   let door: { x: number; z: number } | null = null;
+  let frontOpen = false;
   for (const run of doorWalls) {
     for (const part of doorParts) {
       const span = partSpan(part);
       for (const bay of baysOf(run, span, run === frontRun && part === doorPart ? doorBay : null)) {
         if (!isFree(run, ground, bay, bay + span)) continue;
-        const extent = buildWallPart(part, slotAt(run, bay + span / 2, span, ground), paints, rng);
+        const open = roomBehind(run, bay, span, ground) !== null;
+        const extent = buildWallPart(part, slotAt(run, bay + span / 2, span, ground, open), paints, rng);
         if (!extent) continue;
         place(run, ground, bay + span / 2, span, extent);
+        if (open) openDoor(run, ground, bay, span, extent);
+        frontOpen = open;
         const [x, , z] = wallAt(run, ground).at(bay + span / 2, 0, 0);
         door = { x, z };
         break;
@@ -526,6 +581,17 @@ export function buildHouse(spec: HouseSpec, rng: () => number, far = false): Bui
     }
     if (door) break;
   }
+
+  /** A slot turned about to the wall's inner face - where the interior's rooms' walls stand (see
+   *  interiorGeometry.ts's WALL) - its "out" running into the room. Along the wall it is the same. */
+  const insideSlot = (slot: WallSlot, run: WallRun, level: Storey): WallSlot => {
+    const inner = -(wallAt(run, level).off + WALL);
+    return {
+      ...slot,
+      box: (a0, a1, y0, y1, out0, out1, paint) => slot.box(a0, a1, y0, y1, inner - out1, inner - out0, paint),
+      face: (corners, [ta, ty, tout], paint) => slot.face(corners.map(([a, y, out]) => [a, y, inner - out]), [ta, ty, -tout], paint),
+    };
+  };
 
   /** Whether every bay from `bay` to `bay + span` along a run opens onto a terrace: the tile outside
    *  it is the top of a terrace's mass, at this level's floor. */
@@ -537,6 +603,39 @@ export function buildHouse(spec: HouseSpec, rng: () => number, far = false): Bui
     }
     return true;
   };
+
+  // More ways out of a house with an interior: open doors in the ground walls of its rooms - the
+  // back first, then the sides, then the front - into other rooms than the front door's where
+  // there are any.
+  if (interior && spec.interior) {
+    // At least one, where the front door does not open into a room.
+    let wanted = Math.max(frontOpen ? 0 : 1, rollInt(spec.interior.rooms.exits, rng) - 1);
+    const rank = (run: WallRun): number => (run.dir === "nz" ? 0 : run.dir === "pz" ? 2 : 1);
+    const spots: { run: WallRun; bay: number; room: number }[] = [];
+    const span = doorPart ? partSpan(doorPart) : 1;
+    for (const run of groundRuns) {
+      for (let bay = run.from; bay + span <= run.to; bay++) {
+        const room = roomBehind(run, bay, span, ground);
+        if (room !== null) spots.push({ run, bay, room });
+      }
+    }
+    for (let i = spots.length - 1; i > 0; i--) {
+      const j = Math.floor(rng() * (i + 1));
+      [spots[i], spots[j]] = [spots[j], spots[i]];
+    }
+    spots.sort((p, q) => rank(p.run) - rank(q.run) || Number(p.room === interior.entranceRoom) - Number(q.room === interior.entranceRoom));
+    const used = new Set<number>();
+    for (const { run, bay, room } of spots) {
+      if (wanted <= 0 || !doorPart) break;
+      if (used.has(room) || !isFree(run, ground, bay, bay + span)) continue;
+      const extent = buildWallPart(doorPart, slotAt(run, bay + span / 2, span, ground, true), paints, rng);
+      if (!extent) continue;
+      place(run, ground, bay + span / 2, span, extent);
+      openDoor(run, ground, bay, span, extent);
+      used.add(room);
+      wanted--;
+    }
+  }
 
   // The wall's extras, highest priority first: each tries every free spot of the walls and storeys
   // it may go on, in a random order, taking each with its chance, until it has as many as it may.
@@ -567,6 +666,35 @@ export function buildHouse(spec: HouseSpec, rng: () => number, far = false): Bui
       if (!extent) continue;
       place(run, level, bay + span / 2, span, extent);
       count++;
+      if (!isDoor(extra.part)) {
+        const opening = openingOf(run, level, bay, span, extent);
+        if (opening) windows.push(opening);
+        // Seen from a room inside, the window is itself again, turned about: built a second time on
+        // the wall's inner face, facing in - unless the room has its shutters shut over it.
+        if (opening && interior && !far) {
+          const room = interior.rooms.find((r) => r.id === interior.cells.get(cellKey(opening.i, opening.j, opening.k)));
+          if (room && room.type.windows === "glass") buildWallPart(extra.part, insideSlot(slotAt(run, bay + span / 2, span, level), run, level), paints, rng);
+        }
+      }
+    }
+  }
+
+  // 3. The walls, storey by storey - cut round the doors that stand open.
+  for (const level of above) {
+    for (const run of outlineAt(level).runs) {
+      const wall = wallAt(run, level);
+      const piece = (a0: number, a1: number, y0: number, y1: number): void => {
+        if (a1 - a0 < 1e-4 || y1 - y0 < 1e-4) return;
+        b.face([wall.at(a0, 0, y0), wall.at(a1, 0, y0), wall.at(a1, 0, y1), wall.at(a0, 0, y1)], wall.normal, paints.walls);
+      };
+      let from = wall.from;
+      for (const hole of [...(holes.get(keyOf(run, level)) ?? [])].sort((p, q) => p.a0 - q.a0)) {
+        piece(from, hole.a0, level.floor, level.top);
+        piece(hole.a0, hole.a1, level.floor, hole.y0);
+        piece(hole.a0, hole.a1, hole.y1, level.top);
+        from = hole.a1;
+      }
+      piece(from, wall.to, level.floor, level.top);
     }
   }
 
@@ -680,6 +808,11 @@ export function buildHouse(spec: HouseSpec, rng: () => number, far = false): Bui
     );
   }
 
+  // 8. Inside: the rooms' walls, floors and ceilings, their doors, stairs and galleries - near only.
+  if (interior && !far) {
+    buildInterior({ b, layout: interior, levels: levels.map(({ kind, index, floor, top }) => ({ kind, index, floor, top })), X, Z, tile, inside: (i, j, k) => (k < 0 ? inside(i, j) : occupied(i, j, k)), exits, windows });
+  }
+
   const tiles: NonNullable<BuildingModel["tiles"]> = [];
   for (const block of blocks) {
     for (let i = block.i0; i < block.i1; i++) {
@@ -688,5 +821,6 @@ export function buildHouse(spec: HouseSpec, rng: () => number, far = false): Bui
   }
   const model = b.finish(door ?? { x: X(doorBay + doorSpan / 2), z: Z(entrance.j1) }, tiles);
   model.levels = levels.map(({ kind, floor, top }): Level => ({ kind, floor, top }));
+  if (interior) model.interior = { layout: interior, levels: levels.map(({ kind, index, floor, top }) => ({ kind, index, floor, top })), X0: X(0), Z0: Z(0), tile };
   return model;
 }

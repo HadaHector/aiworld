@@ -1,0 +1,11 @@
+// A cellar: a flagged floor, rubble walls, and the boards and joists of the floor over it for a
+// ceiling.
+{
+  name: "Cellar",
+  floor: { material: "stoneBricks", tints: [[0.7, 0.68, 0.66]] },
+  walls: { material: "rubbleStone", tints: [[0.8, 0.78, 0.76]] },
+  ceiling: { material: "planks", tints: [[0.7, 0.64, 0.58]] },
+  beams: { material: "timber", tints: [[0.4, 0.34, 0.3]] },
+  timber: { material: "timber", tints: [[0.42, 0.36, 0.32]] },
+  stair: "solid",
+}

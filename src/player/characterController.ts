@@ -8,6 +8,9 @@ import {
   type Scene,
 } from "@babylonjs/core";
 import type { HeightSampler } from "../world/terrain/noise";
+
+/** What one stands on at a point, with one's feet at `feet` - a building's floor, or the ground. */
+export type GroundSampler = (worldX: number, worldZ: number, feet: number) => number;
 import { createInput } from "./input";
 
 const SPEED = 60; // world units per second (10x boosted for dev/exploration convenience)
@@ -21,8 +24,9 @@ export interface Character {
   dispose: () => void;
 }
 
-/** Placeholder capsule "body" that walks on the terrain surface using the same height sampler that built it. */
-export function createCharacter(scene: Scene, heightAt: HeightSampler): Character {
+/** Placeholder capsule "body" that walks on the terrain surface using the same height sampler that
+ *  built it - and on the floors and stairs of a building it walks into (`groundAt`). */
+export function createCharacter(scene: Scene, heightAt: HeightSampler, groundAt: GroundSampler = (x, z) => heightAt(x, z)): Character {
   const mesh = MeshBuilder.CreateCapsule("player", { height: CAPSULE_HEIGHT, radius: CAPSULE_RADIUS }, scene);
   const material = new StandardMaterial("playerMaterial", scene);
   material.diffuseColor = new Color3(0.2, 0.5, 0.9);
@@ -55,7 +59,8 @@ export function createCharacter(scene: Scene, heightAt: HeightSampler): Characte
       mesh.rotation.y = Math.atan2(move.x, move.z);
     }
 
-    mesh.position.y = heightAt(mesh.position.x, mesh.position.z) + CAPSULE_HEIGHT / 2;
+    const feet = mesh.position.y - CAPSULE_HEIGHT / 2;
+    mesh.position.y = groundAt(mesh.position.x, mesh.position.z, feet) + CAPSULE_HEIGHT / 2;
   }
 
   function teleport(worldX: number, worldZ: number): void {

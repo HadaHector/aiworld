@@ -1,3 +1,4 @@
+import type { InteriorLayout, ShellLevel } from "./interiorLayout";
 import type { TextureDef } from "../materials/textureGen";
 
 /**
@@ -99,6 +100,86 @@ export interface HouseSpec {
   /** What each part is made of, and the tints - one picked per house - its colour is multiplied by.
    *  Timber is the posts, the frames, and the roof's underside and edges. */
   parts: Record<HousePart, { material: string; tints: Rgb[] }>;
+  /** What is inside it - a generator and its settings - or null: a house nobody goes into, its doors
+   *  shut and nothing behind its walls. */
+  interior: InteriorSpec | null;
+}
+
+export const INTERIOR_GENERATORS = ["rooms"] as const;
+
+/** A house's interior generator, and its settings - see INTERIORS.md and interiorLayout.ts. */
+export type InteriorSpec = { type: "rooms"; rooms: RoomsInterior };
+
+/** The `rooms` interior: a list of rooms, each with what it needs, laid out in priority order. */
+export interface RoomsInterior {
+  /** How many doors lead out - the front one, and more on the walls of rooms on the ground. */
+  exits: [number, number];
+  /** The chance a room gets a fake door into the unbuilt space beside it. */
+  fakeDoors: number;
+  /** Once all are placed, how far past its largest `tiles` a room may grow into the space left over
+   *  - a multiplier; a room's own `grow` overrides it. */
+  grow: number;
+  rooms: RoomRequest[];
+}
+
+export const ROOM_LEVELS = ["cellar", "ground", "upper"] as const;
+export type RoomLevel = (typeof ROOM_LEVELS)[number];
+
+/**
+ * A room a house asks for. Placed highest `priority` first, `count` of them, each with `chance`; one
+ * that does not fit is left out. `levels` tall, starting on a `level` of that kind, `tiles` in floor
+ * area, each side at least `minSide` tiles. `at: "entrance"`: behind the front door; `near: "entrance"`: there if it can be. `next`, `under`, `over`: beside, below or above a
+ * room of that type placed before it. `stair`: a stair up from it is put in it before any other
+ * room. `windows`: it needs an outer wall.
+ */
+export interface RoomRequest {
+  room: RoomTypeDef;
+  priority: number;
+  chance: number;
+  count: [number, number];
+  levels: [number, number];
+  level: RoomLevel;
+  tiles: [number, number];
+  /** The fewest tiles either of its sides may be - 2: never a corridor a tile wide - and the most
+   *  (null: no limit), growing included. */
+  minSide: number;
+  maxSide: number | null;
+  /** Its own growth multiplier (see RoomsInterior.grow), or null: the interior's. */
+  grow: number | null;
+  at: "entrance" | null;
+  near: "entrance" | null;
+  next: string | null;
+  under: string | null;
+  over: string | null;
+  stair: boolean;
+  windows: boolean;
+}
+
+/** What a room's surfaces are made of: a building material, and tints - one picked per room. */
+export interface RoomSurface {
+  material: string;
+  tints: Rgb[];
+}
+
+export const STAIR_STYLES = ["solid", "open"] as const;
+export const WINDOW_INSIDES = ["glass", "shutters"] as const;
+
+/**
+ * A kind of room (a pack's rooms/ folder): its style - the same through the whole room. Its floor,
+ * walls and ceiling, beams under the ceiling (or none), and the timber of its doors, stairs, railings
+ * and shutters; its stair solid steps or open treads; its windows seen from inside as they are
+ * outside (`glass`) or with their shutters shut (`shutters`).
+ */
+export interface RoomTypeDef {
+  id: string;
+  name: string;
+  floor: RoomSurface;
+  walls: RoomSurface;
+  ceiling: RoomSurface;
+  beams: RoomSurface | null;
+  timber: RoomSurface;
+  stair: (typeof STAIR_STYLES)[number];
+  windows: (typeof WINDOW_INSIDES)[number];
 }
 
 export const HOUSE_PLAN_GENERATORS = ["house", "tower"] as const;
@@ -393,4 +474,7 @@ export interface BuildingModel {
   tiles?: { x0: number; z0: number; x1: number; z1: number }[];
   /** Its levels, cellars first, for a generator that has them - what an interior will be laid in. */
   levels?: Level[];
+  /** Its interior's layout, where it has one: its rooms, stairs and doors, and where its tile (0, 0)
+   *  starts (x, z), so a cell can be found from a point. */
+  interior?: { layout: InteriorLayout; levels: ShellLevel[]; X0: number; Z0: number; tile: number };
 }

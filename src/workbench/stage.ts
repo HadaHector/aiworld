@@ -8,7 +8,8 @@ import type { TreePlacement } from "../world/foliage/treeScatter";
 import type { TreeField } from "../world/foliage/treeField";
 import { createSunLighting } from "../world/lighting/sunLighting";
 import { createSkyDome } from "../world/sky/skyDome";
-import { createTerrainMaterial, type TerrainMaterial } from "../world/materials/materialLibrary";
+import { applyTerrainCuts, createTerrainMaterial, type TerrainCut, type TerrainMaterial } from "../world/materials/materialLibrary";
+import { WALL } from "../world/buildings/interiorGeometry";
 import { createLitShading, type LitShading } from "../world/materials/litShading";
 import type { BakedBark } from "../world/foliage/treeModels";
 import { bakedAtlas, bakedBark, bakedGround, isGroundBaked } from "./bakeCache";
@@ -188,7 +189,7 @@ export async function createStage(engine: Engine, canvas: HTMLCanvasElement, opt
 
     // The trees first, since the camera frames them: the field is what knows how big they are.
     let field: TreeField | null = null;
-    let framing = { width: 0, height: 1 };
+    let framing: { width: number; height: number; placed?: number[] } = { width: 0, height: 1 };
     if (options.trees) {
       options.onProgress?.("Growing trees");
       const kinds = options.trees.kinds;
@@ -248,6 +249,8 @@ export async function createStage(engine: Engine, canvas: HTMLCanvasElement, opt
     } else if (terrain) {
       const patch = buildGroundPatch(scene, height);
       patch.material = terrain.terrainMaterial;
+      // The ground taken out over the buildings' cellars, as in the world.
+      applyTerrainCuts([terrain.terrainMaterial], cellarCuts(options.buildings ?? [], framing.placed ?? []));
     }
 
     if (options.grass.length > 0 && terrain) {
@@ -297,7 +300,8 @@ function layOutBuildings(
   material: BuildingMaterial,
   shadowGenerator: { addShadowCaster: (mesh: Mesh, includeDescendants?: boolean) => void },
   marks: boolean,
-): { width: number; height: number } {
+): { width: number; height: number; placed: number[] } {
+  const placed: number[] = [];
   const markMaterial = new StandardMaterial("doorMark", scene);
   markMaterial.emissiveColor = new Color3(1, 0.85, 0.2);
   markMaterial.disableLighting = true;
@@ -306,6 +310,7 @@ function layOutBuildings(
   let x = -width / 2;
   models.forEach((model, i) => {
     x += model.halfWidth;
+    placed.push(x);
     const geometry = emptyGeometry();
     appendModel(geometry, model, material.layerOf, (px, py, pz) => [px, py, pz]);
     const mesh = createBuildingMesh(scene, `building_${i}`, geometry, material);
@@ -341,7 +346,25 @@ function layOutBuildings(
     }
     x += model.halfWidth + gap;
   });
-  return { width, height: Math.max(1, ...models.map((model) => model.height)) };
+  return { width, height: Math.max(1, ...models.map((model) => model.height)), placed };
+}
+
+/** The ground over each building's cellars, the buildings standing at `placed` along x. */
+function cellarCuts(models: BuildingModel[], placed: number[]): TerrainCut[] {
+  return models.flatMap((model, n) => {
+    const interior = model.interior;
+    if (!interior) return [];
+    const { X0, Z0, tile } = interior;
+    return interior.layout.rooms
+      .filter((room) => room.base < 0)
+      .map((room): TerrainCut => {
+        const x0 = X0 + room.rect.i0 * tile + WALL;
+        const x1 = X0 + room.rect.i1 * tile - WALL;
+        const z0 = Z0 + room.rect.j0 * tile + WALL;
+        const z1 = Z0 + room.rect.j1 * tile - WALL;
+        return { x: placed[n] + (x0 + x1) / 2, z: (z0 + z1) / 2, ux: 1, uz: 0, halfWidth: (x1 - x0) / 2, halfDepth: (z1 - z0) / 2 };
+      });
+  });
 }
 
 /** Stands specimens in a row along x, centred on the origin, each far enough from the next that

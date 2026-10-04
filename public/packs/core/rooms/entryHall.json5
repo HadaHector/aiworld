@@ -1,0 +1,10 @@
+// A hall's entrance: flagstones, limewash, and a solid stair up to the hall over it.
+{
+  name: "Entry Hall",
+  floor: { material: "stoneBricks", tints: [[0.95, 0.93, 0.9]] },
+  walls: { material: "plaster", tints: [[1.02, 1.0, 0.95]] },
+  ceiling: { material: "plaster", tints: [[0.98, 0.96, 0.9]] },
+  beams: { material: "timber", tints: [[0.42, 0.36, 0.32]] },
+  timber: { material: "timber", tints: [[0.45, 0.36, 0.3]] },
+  stair: "solid",
+}

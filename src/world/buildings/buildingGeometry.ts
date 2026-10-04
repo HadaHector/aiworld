@@ -97,11 +97,12 @@ export class ModelBuilder {
   }
 
   /**
-   * An axis-aligned box from (x0, y0, z0) to (x1, y1, z1): its four sides and its top. No bottom -
-   * it stands on something. Its texture runs along its longest side: a post's grain up it, a sill's
-   * or a lintel's along it. `top` defaults to the sides' paint.
+   * An axis-aligned box from (x0, y0, z0) to (x1, y1, z1): its four sides and, by `ends`, its top -
+   * no bottom, it stands on something - its bottom and no top (it hangs under something), or both
+   * (it floats). Its texture runs along its longest side: a post's grain up it, a sill's or a
+   * lintel's along it. `top` defaults to the sides' paint.
    */
-  box(x0: number, y0: number, z0: number, x1: number, y1: number, z1: number, paint: Paint, top: Paint = paint): void {
+  box(x0: number, y0: number, z0: number, x1: number, y1: number, z1: number, paint: Paint, top: Paint = paint, ends: "top" | "bottom" | "both" = "top"): void {
     const sizes = [x1 - x0, y1 - y0, z1 - z0];
     const longest = sizes.indexOf(Math.max(...sizes));
     const grain: Vec3 = longest === 0 ? [1, 0, 0] : longest === 1 ? [0, 1, 0] : [0, 0, 1];
@@ -109,7 +110,8 @@ export class ModelBuilder {
     this.face([[x1, y0, z0], [x0, y0, z0], [x0, y1, z0], [x1, y1, z0]], [0, 0, -1], paint, grain);
     this.face([[x1, y0, z1], [x1, y0, z0], [x1, y1, z0], [x1, y1, z1]], [1, 0, 0], paint, grain);
     this.face([[x0, y0, z0], [x0, y0, z1], [x0, y1, z1], [x0, y1, z0]], [-1, 0, 0], paint, grain);
-    this.face([[x0, y1, z1], [x1, y1, z1], [x1, y1, z0], [x0, y1, z0]], [0, 1, 0], top, grain);
+    if (ends !== "bottom") this.face([[x0, y1, z1], [x1, y1, z1], [x1, y1, z0], [x0, y1, z0]], [0, 1, 0], top, grain);
+    if (ends !== "top") this.face([[x0, y0, z0], [x1, y0, z0], [x1, y0, z1], [x0, y0, z1]], [0, -1, 0], paint, grain);
   }
 
   finish(door: { x: number; z: number }, tiles?: BuildingModel["tiles"]): BuildingModel {

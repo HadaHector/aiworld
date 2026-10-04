@@ -23,3 +23,31 @@ export function createThirdPersonCamera(scene: Scene, canvas: HTMLCanvasElement,
 
   return camera;
 }
+
+/** How close the camera comes in behind the player indoors - inside the room, not out past its
+ *  walls - and the least it may zoom to there. */
+const INDOOR_RADIUS = 4;
+const INDOOR_LOWER_LIMIT = 1.5;
+
+/**
+ * Brings the camera in close while the player is inside a building's rooms, and lets it back out to
+ * where it was on the way out. No collision yet: this only keeps it from sitting outside the walls.
+ */
+export function createIndoorCamera(camera: ArcRotateCamera, indoors: () => boolean): { update: () => void } {
+  const outdoorLimit = camera.lowerRadiusLimit ?? 6;
+  let outdoorRadius: number | null = null;
+  return {
+    update() {
+      const inside = indoors();
+      if (inside && outdoorRadius === null) {
+        outdoorRadius = camera.radius;
+        camera.lowerRadiusLimit = INDOOR_LOWER_LIMIT;
+        camera.radius = Math.min(camera.radius, INDOOR_RADIUS);
+      } else if (!inside && outdoorRadius !== null) {
+        camera.lowerRadiusLimit = outdoorLimit;
+        camera.radius = Math.max(outdoorRadius, outdoorLimit);
+        outdoorRadius = null;
+      }
+    },
+  };
+}

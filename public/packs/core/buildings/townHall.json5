@@ -37,6 +37,20 @@
       { part: "stoneChimney", priority: 2, chance: 0.4, maxCount: 2, walls: ["side", "back"], storeys: ["ground"] },
       { part: "stoneWindow", priority: 1, chance: 0.65 },
     ],
+    // Inside: an entry hall behind the front door with a stair up to the hall over it, and a cellar
+    // under it; the rest stays shut.
+    interior: {
+      type: "rooms",
+      rooms: {
+        exits: [1, 1],
+        fakeDoors: 0.6,
+        rooms: [
+          { room: "entryHall", priority: 10, tiles: [6, 9], at: "entrance", stair: true },
+          { room: "hall", priority: 8, level: "upper", tiles: [6, 15], over: "entryHall" },
+          { room: "cellar", priority: 4, chance: 0.6, level: "cellar", tiles: [3, 8], under: "entryHall" },
+        ],
+      },
+    },
     parts: {
       walls: { material: "plaster", tints: [[1.02, 1.0, 0.95], [1.04, 0.96, 0.84], [0.96, 0.96, 0.98]] },
       timber: { material: "timber", tints: [[0.45, 0.4, 0.38]] },

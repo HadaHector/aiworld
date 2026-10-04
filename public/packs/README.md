@@ -38,6 +38,7 @@ packs/<pack>/
   buildings/<id>.json5    a building, built by one of the building generators
   buildingParts/<id>.json5  a piece buildings are built with: a door, a window, a chimney
   buildingMaterials/<id>.json5  what buildings are made of: plaster, timber, stone, glass, tiles
+  rooms/<id>.json5        a kind of room inside a building, and its style: floor, walls, ceiling
   patches/<any>.json5     additions to another pack's lists
 ```
 
@@ -654,6 +655,69 @@ all follow from the masses. There are two:
   ```json5
   plan: { type: "tower", tower: { width: [1, 2], ends: ["front", "back"], storeys: [2, 3], roof: "towerRoof" } },
   ```
+
+### Interiors
+
+Most houses cannot be gone into: their doors are shut and nothing is behind their walls. A house
+with an `interior` can - see `core/buildings/inn.json5`, and INTERIORS.md at the repo root for the
+plan. Like its plan, it names a generator by `type`, its settings under the generator's name. There
+is one so far, `rooms`: a list of rooms, each with what it needs, laid out inside the house in
+priority order, joined up from the front door - and nothing more, whatever space is left over
+sealed off behind plain walls (and, with `fakeDoors` - a chance per room - the odd door that leads
+nowhere).
+
+```json5
+interior: {
+  type: "rooms",
+  rooms: {
+    exits: [1, 2],         // doors out: the front one, and maybe more on the ground walls of rooms
+    fakeDoors: 0.4,
+    rooms: [
+      { room: "taproom", priority: 10, levels: [2, 2], tiles: [8, 12], at: "entrance", stair: true },
+      { room: "kitchen", priority: 8, tiles: [3, 4], next: "taproom" },
+      { room: "guestRoom", priority: 6, count: [2, 4], level: "upper", tiles: [2, 4] },
+      { room: "cellar", priority: 4, chance: 0.8, level: "cellar", tiles: [3, 8], under: "taproom" },
+    ],
+  },
+},
+```
+
+A room is a box of tiles one or more storeys tall (`levels`, 1 if left out), open through all of
+them, starting on a `level` of its kind (`cellar`, `ground` - the default - or `upper`), `tiles` in
+floor area, each side at least `minSide` tiles (1) and at most `maxSide` (no limit); `count` of them (1), each with `chance` (1). Placed highest `priority` first, each where
+its needs hold, nearest the floor area rolled from `tiles`, as square as it can be, its sides along
+the house's own walls where they can be, low, and beside or over a room already placed; one that
+does not fit is left out. Its needs: `at: "entrance"` behind the front door (`near: "entrance"`
+there if it can be); `next`, `under`, `over` a room type placed before it - beside it, below it,
+over it; `windows` an outer wall. `stair`: the stairs up go in it - only a room that asks for them holds a stair, but for a cellar,
+which holds its own way up.
+Once all are placed, the rooms grow into the space left over - a row of tiles at a time, each in
+turn, the one furthest under its most first - until none can: each up to its largest `tiles` times
+`grow`, the interior's (1.5 if left out) or the room's own, its sides within `maxSide` - and
+never drawn out longer than three times its width.
+
+Rooms are joined up from the room behind the front door: by a door where two rooms' floors meet; by
+a stair against a wall of a tall room up to a gallery round its upper storey, a door off the gallery
+into a room beside it - an inn's guest rooms round its taproom; or by a stair through a floor, into
+a room over it or up out of a cellar under it, the floor round it railed. A stair is two tiles long,
+one where it rises less than a tile (a cellar's). A room that cannot be reached is left out. Doors
+between rooms are always open - a shut door is a fake one, with nothing behind it. The front door
+opens into the room behind it, and `exits` adds more doors out of ground-floor rooms - the back
+first - each a real hole through the wall; a house whose front door finds no room behind it gets
+one anyway. Doors over the ground storey are only ever ones onto terraces.
+
+A room type (`rooms/`) is its style, the same through the room: what its `floor`, `walls`,
+`ceiling` and `timber` (doors, frames, stairs, railings, shutters) are made of, each
+`{ material, tints }` naming a building material; `beams` under the ceiling (none if left out);
+its `stair` `solid` steps or `open` treads; its `windows` from inside - `glass`, the default: the
+window part built again on the wall's inner face, the outside window turned about - or `shutters`
+shut over them. Windows never let light or sight through.
+
+Interiors are built only near (not in a building's far detail level). In the world the ground is
+taken out over a cellar near the camera, so it can be seen into and walked in; the player walks on
+the floors, stairs and galleries of a house they go into, and the camera closes in while they are
+indoors. In the workbench, `Cut` cuts a building open over a level's floor - its plan - or through
+its middle.
 
 Every generator gives the same
 result: geometry with its floor at height 0, the footprint centred, the front facing +z, and the

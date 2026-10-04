@@ -1,7 +1,7 @@
 import { createEngine, createScene } from "./core/engine";
 import { createWorld, DEFAULT_DRAW_DISTANCE, MIN_DRAW_DISTANCE, MAX_DRAW_DISTANCE } from "./world/world";
 import { createCharacter } from "./player/characterController";
-import { createThirdPersonCamera } from "./player/thirdPersonCamera";
+import { createIndoorCamera, createThirdPersonCamera } from "./player/thirdPersonCamera";
 import { createDebugMap } from "./debug/debugMap";
 import { createSettingsPanel } from "./debug/settingsPanel";
 import { createZoneLabel } from "./debug/zoneLabel";
@@ -45,8 +45,9 @@ const world = await createWorld(scene, content, ({ phase, completed, total }) =>
   loadingScreen.update(phase, completed, total);
 });
 
-const character = createCharacter(scene, world.heightAt);
+const character = createCharacter(scene, world.heightAt, world.groundAt);
 const camera = createThirdPersonCamera(scene, canvas, character.mesh);
+const indoorCamera = createIndoorCamera(camera, () => world.indoors(character.mesh.position.x, character.mesh.position.z, character.mesh.position.y - 0.9));
 // Camera near/far and the shadow generator's own frustum both need the real camera, which does
 // not exist until here - see World.attachCamera.
 world.attachCamera(camera);
@@ -173,6 +174,7 @@ window.addEventListener("keydown", (e) => {
 scene.onBeforeRenderObservable.add(() => {
   const deltaSeconds = engine.getDeltaTime() / 1000;
   character.update(deltaSeconds, camera);
+  indoorCamera.update();
   world.updateChunks(character.mesh.position.x, character.mesh.position.z);
   debugMap.updateMarker(character.mesh.position.x, character.mesh.position.z, camera.alpha);
   const here = world.sampleTerrain(character.mesh.position.x, character.mesh.position.z);

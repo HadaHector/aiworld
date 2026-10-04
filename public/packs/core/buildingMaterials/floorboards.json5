@@ -1,0 +1,54 @@
+// Floorboards: long boards laid side by side, each its own warm brown, worn smooth and paler where
+// they are walked on, with fine dark joints and the grain running along them. A room tints them.
+{
+  name: "Floorboards",
+  // Metres one repeat covers: 10 boards across, so each is 0.4 m wide - twice life size - and the
+  // boards' ends and grain repeat every 8 m along them.
+  size: [4, 8],
+  shine: 0.08,
+  texture: {
+    bumpStrength: 0.9,
+    pipeline: {
+      noises: [
+        { name: "boards", type: "bricks", tileCycles: [10, 2], stagger: 0.5, amplitude: 1, mode: "edge" },
+        { name: "grain", type: "fbm", octaves: 3, tileCycles: 8, amplitude: 1, persistence: 0.5, lacunarity: 2.2, stretch: [1, 14] },
+        { name: "fibre", type: "fbm", octaves: 2, tileCycles: 80, amplitude: 1, persistence: 0.5, lacunarity: 2, stretch: [1, 18] },
+        { name: "wear", type: "fbm", octaves: 2, tileCycles: 2, amplitude: 1, persistence: 0.5, lacunarity: 2 },
+      ],
+      steps: [
+        { output: "joint", op: "sample", noise: "boards" },
+        { output: "boardId", op: "sample", noise: "boards", mode: "cell" },
+        { output: "grainRaw", op: "sample", noise: "grain" },
+        { output: "fibreRaw", op: "sample", noise: "fibre" },
+        { output: "wearRaw", op: "sample", noise: "wear" },
+        { output: "gap", op: "mask", input: "joint", at: 0.008, off: 0.025 },
+        {
+          output: "boardTone",
+          op: "colorRamp",
+          input: "boardId",
+          stops: [
+            { at: 0.0, color: [0.56, 0.4, 0.26] },
+            { at: 0.3, color: [0.64, 0.47, 0.31] },
+            { at: 0.6, color: [0.52, 0.37, 0.24] },
+            { at: 1.0, color: [0.6, 0.44, 0.29] },
+          ],
+        },
+        { output: "rings", op: "sin", input: "grainRaw", cycles: 3 },
+        { output: "ringShade", op: "remap", input: "rings", inMin: -1, inMax: 1, outMin: 0.9, outMax: 1.06 },
+        { output: "fibreShade", op: "remap", input: "fibreRaw", inMin: -1, inMax: 1, outMin: 0.94, outMax: 1.05 },
+        { output: "wearShade", op: "remap", input: "wearRaw", inMin: -1, inMax: 1, outMin: 0.9, outMax: 1.1 },
+        { output: "shadeA", op: "multiply", a: "ringShade", b: "fibreShade" },
+        { output: "shade", op: "multiply", a: "shadeA", b: "wearShade" },
+        { output: "wood", op: "multiply", a: "boardTone", b: "shade" },
+        { output: "gapColor", op: "color", value: [0.2, 0.14, 0.1] },
+        { output: "diffuse", op: "mix", a: "wood", b: "gapColor", t: "gap" },
+        { output: "roughness", op: "constant", value: 0.7 },
+        { output: "edgeRaw", op: "remap", input: "joint", inMin: 0.008, inMax: 0.06, outMin: 0, outMax: 1 },
+        { output: "edge", op: "clamp", input: "edgeRaw", min: 0, max: 1 },
+        { output: "fibreBump", op: "scale", input: "fibreRaw", factor: 0.08 },
+        { output: "height", op: "add", a: "edge", b: "fibreBump" },
+      ],
+      outputs: { diffuse: "diffuse", roughness: "roughness", height: "height" },
+    },
+  },
+}

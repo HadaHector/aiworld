@@ -1,0 +1,11 @@
+// A chapel's nave: a flagstone floor, limewashed walls, a boarded ceiling on heavy beams, and dim
+// leaded windows.
+{
+  name: "Nave",
+  floor: { material: "stoneBricks", tints: [[0.95, 0.93, 0.9]] },
+  walls: { material: "plaster", tints: [[1.04, 1.02, 0.98], [1.0, 0.97, 0.9]] },
+  ceiling: { material: "planks", tints: [[0.7, 0.6, 0.5]] },
+  beams: { material: "timber", tints: [[0.4, 0.33, 0.28]] },
+  timber: { material: "timber", tints: [[0.42, 0.34, 0.28]] },
+  stair: "solid",
+}

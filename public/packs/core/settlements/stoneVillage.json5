@@ -19,7 +19,7 @@
       { building: "smithy", weight: 0.4, min: 1, max: 2, ring: [0.2, 1] },
       // By the square.
       { building: "chapel", weight: 0, min: 1, max: 1, tiers: ["village", "town"], ring: [0, 0.5] },
-      { building: "inn", weight: 0, min: 1, max: 1, tiers: ["village", "town"], streets: ["main"], ring: [0, 0.5] },
+      { building: "inn", weight: 0, min: 1, max: 1, tiers: ["village", "town"], streets: ["main"], ring: [0, 0.65] },
       { building: "townHall", weight: 0, min: 1, max: 1, tiers: ["town"], streets: ["main"], ring: [0, 0.4] },
     ],
     setback: [3.4, 6],

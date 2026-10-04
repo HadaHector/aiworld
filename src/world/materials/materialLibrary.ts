@@ -84,6 +84,9 @@ export interface MaterialLibrary {
   shadowCasterMaterial: Material;
   /** Draws the terrain as wireframe - a debug view for judging mesh density and level of detail. */
   setWireframe: (enabled: boolean) => void;
+  /** The holes taken out of the ground - over cellars near the camera - the first MAX_TERRAIN_CUTS
+   *  of them. */
+  setTerrainCuts: (cuts: TerrainCut[]) => void;
   /** The shared light/shadow/fog feed - other world shaders (grass) register with it to be lit
    *  exactly like the terrain. */
   litShading: LitShading;
@@ -173,6 +176,36 @@ const materialSlots = ["x", "y", "z", "w"].slice(0, MATERIALS_PER_TRIANGLE);
  */
 const TABLE_WIDTH = 5;
 
+/** How many holes the ground can have taken out of it at once (see setTerrainCuts). */
+export const MAX_TERRAIN_CUTS = 8;
+
+/** A rectangle taken out of the ground: its middle, the unit direction its width runs, and half
+ *  its width and depth. */
+export interface TerrainCut {
+  x: number;
+  z: number;
+  ux: number;
+  uz: number;
+  halfWidth: number;
+  halfDepth: number;
+}
+
+/** Takes holes out of the ground drawn with these materials - the first MAX_TERRAIN_CUTS of them. */
+export function applyTerrainCuts(materials: ShaderMaterial[], cuts: TerrainCut[]): void {
+  const a = new Array<number>(MAX_TERRAIN_CUTS * 4).fill(0);
+  const b = new Array<number>(MAX_TERRAIN_CUTS * 4).fill(0);
+  const used = cuts.slice(0, MAX_TERRAIN_CUTS);
+  used.forEach((cut, i) => {
+    a.splice(i * 4, 4, cut.x, cut.z, cut.ux, cut.uz);
+    b.splice(i * 4, 4, cut.halfWidth, cut.halfDepth, 0, 0);
+  });
+  for (const material of materials) {
+    material.setArray4("cutA", a);
+    material.setArray4("cutB", b);
+    material.setInt("cutCount", used.length);
+  }
+}
+
 const FRAGMENT_SHADER = `#version 300 es
 precision highp float;
 precision highp sampler2DArray;
@@ -189,6 +222,12 @@ in vec4 vMatWeights;
 uniform sampler2DArray materialAtlas;
 uniform sampler2DArray normalAtlas;
 uniform float waterLevel;
+// Holes in the ground over buildings' cellars, so they can be seen into and walked in: each a
+// rectangle - its middle (x, z) and the direction its width runs (x, z) in cutA, half its width and
+// depth in cutB - taken out of the ground.
+uniform vec4 cutA[${MAX_TERRAIN_CUTS}];
+uniform vec4 cutB[${MAX_TERRAIN_CUTS}];
+uniform int cutCount;
 uniform float specularMinShininess;
 uniform float specularMaxShininess;
 uniform float specularIntensity;
@@ -265,6 +304,12 @@ float heightShare(float weight, float height) {
 }
 
 void main() {
+  for (int i = 0; i < ${MAX_TERRAIN_CUTS}; i++) {
+    if (i >= cutCount) break;
+    vec2 d = vWorldPosition.xz - cutA[i].xy;
+    vec2 u = cutA[i].zw;
+    if (abs(dot(d, u)) < cutB[i].x && abs(d.x * -u.y + d.y * u.x) < cutB[i].y) discard;
+  }
   vec3 n = normalize(vNormal);
 
   // A floating material is not part of the bed: it is drawn on the water's surface instead.
@@ -512,6 +557,9 @@ export async function createTerrainMaterial(
         "projection",
         "tileScale",
         "waterLevel",
+        "cutA",
+        "cutB",
+        "cutCount",
         "specularMinShininess",
         "specularMaxShininess",
         "specularIntensity",
@@ -528,6 +576,9 @@ export async function createTerrainMaterial(
     material.setFloat("specularMinShininess", SPECULAR_MIN_SHININESS);
     material.setFloat("specularMaxShininess", SPECULAR_MAX_SHININESS);
     material.setFloat("specularIntensity", SPECULAR_INTENSITY);
+    material.setInt("cutCount", 0);
+    material.setArray4("cutA", new Array(MAX_TERRAIN_CUTS * 4).fill(0));
+    material.setArray4("cutB", new Array(MAX_TERRAIN_CUTS * 4).fill(0));
     material.backFaceCulling = true;
     litShading.register(material);
     return material;
@@ -584,6 +635,10 @@ export async function createMaterialLibrary(
 
   const shadowCasterMaterial = new StandardMaterial("terrainShadowCaster", scene);
 
+  function setTerrainCuts(cuts: TerrainCut[]): void {
+    applyTerrainCuts([terrainMaterial, floatingMaterial], cuts);
+  }
+
   function setWireframe(enabled: boolean): void {
     terrainMaterial.wireframe = enabled;
     floatingMaterial.wireframe = enabled;
@@ -606,5 +661,6 @@ export async function createMaterialLibrary(
     setShadowsEnabled,
     shadowCasterMaterial,
     setWireframe,
+    setTerrainCuts,
   };
 }

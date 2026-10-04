@@ -41,6 +41,10 @@ import {
   BUILDING_PART_GENERATORS,
   HOUSE_PARTS,
   HOUSE_PLAN_GENERATORS,
+  INTERIOR_GENERATORS,
+  ROOM_LEVELS,
+  STAIR_STYLES,
+  WINDOW_INSIDES,
   PARAPET_STYLES,
   RIDGE_PROFILES,
   ROOF_TYPES,
@@ -51,6 +55,9 @@ import {
   type BuildingPartDef,
   type HousePart,
   type HousePlanSettings,
+  type RoomRequest,
+  type RoomSurface,
+  type RoomTypeDef,
   type HouseSpec,
   type PartChoice,
   type PitchedRoofSpec,
@@ -69,7 +76,7 @@ export interface PackSource {
 
 /** The folders a pack's content lives in, one kind of definition each. A definition's id is its
  *  file name, and a pack with a higher priority replaces a lower one's definition of the same id. */
-const CONTENT_FOLDERS = ["biomes", "materials", "layers", "grass", "trees", "bushes", "rocks", "voices", "borderHills", "settlements", "weathers", "features", "buildings", "buildingParts", "buildingMaterials"] as const;
+const CONTENT_FOLDERS = ["biomes", "materials", "layers", "grass", "trees", "bushes", "rocks", "voices", "borderHills", "settlements", "weathers", "features", "buildings", "buildingParts", "buildingMaterials", "rooms"] as const;
 type ContentFolder = (typeof CONTENT_FOLDERS)[number];
 
 /** How many grass kinds the packs may define between them: each is a layer of the blade atlas and
@@ -219,7 +226,17 @@ export function resolveContent(packs: PackSource[]): WorldContent {
   const buildingMaterialIds = new Set(buildingMaterials.map((m) => m.id));
   const buildingParts = readAll("buildingParts", (e, o, r) => readBuildingPart(e.id, o, r));
   const partById = new Map(buildingParts.map((part) => [part.id, part]));
-  const buildingReads = readAll("buildings", (e, o, r) => ({ file: e.file, def: readBuilding(e.id, o, r, partById) }));
+  const roomReads = readAll("rooms", (e, o, r) => ({ file: e.file, def: readRoomType(e.id, o, r) }));
+  const roomTypes = roomReads.map((read) => read.def);
+  for (const { file, def } of roomReads) {
+    for (const [key, surface] of [["floor", def.floor], ["walls", def.walls], ["ceiling", def.ceiling], ["beams", def.beams], ["timber", def.timber]] as const) {
+      if (surface && !buildingMaterialIds.has(surface.material)) {
+        issues.push({ file, path: `${key}.material`, message: `no building material "${surface.material}" (known: ${[...buildingMaterialIds].join(", ") || "none"})` });
+      }
+    }
+  }
+  const roomById = new Map(roomTypes.map((room) => [room.id, room]));
+  const buildingReads = readAll("buildings", (e, o, r) => ({ file: e.file, def: readBuilding(e.id, o, r, partById, roomById) }));
   const buildings = buildingReads.map((read) => read.def);
   for (const { file, def } of buildingReads) {
     for (const part of HOUSE_PARTS) {
@@ -429,6 +446,7 @@ export function resolveContent(packs: PackSource[]): WorldContent {
     buildings,
     buildingParts,
     buildingMaterials,
+    roomTypes,
   };
 }
 
@@ -543,7 +561,30 @@ function readBuildingMaterial(id: string, obj: RawObject, reader: Reader): Build
 
 /** A buildings/ file - see BuildingDef. Its generator is named by `type` (`generator` already means
  *  a content generator - see generators.ts), and its own block is under the generator's name. */
-function readBuilding(id: string, obj: RawObject, reader: Reader, partById: Map<string, BuildingPartDef>): BuildingDef {
+/** A rooms/ file - see RoomTypeDef. */
+function readRoomType(id: string, obj: RawObject, reader: Reader): RoomTypeDef {
+  reader.onlyKeys(obj, "", ["name", "floor", "walls", "ceiling", "beams", "timber", "stair", "windows"]);
+  const surface = (key: string): RoomSurface => {
+    const raw = reader.object(obj[key], key);
+    reader.onlyKeys(raw, key, ["material", "tints"]);
+    const tints = reader.array(raw, "tints", key).map((value, i) => reader.colorValue(value, `${key}.tints[${i}]`));
+    if (tints.length === 0) reader.fail(`${key}.tints`, "needs at least one colour");
+    return { material: reader.string(raw, "material", key), tints: tints.length > 0 ? tints : [[1, 1, 1]] };
+  };
+  return {
+    id,
+    name: reader.string(obj, "name", ""),
+    floor: surface("floor"),
+    walls: surface("walls"),
+    ceiling: surface("ceiling"),
+    beams: obj.beams === undefined || obj.beams === null ? null : surface("beams"),
+    timber: surface("timber"),
+    stair: obj.stair === undefined ? "solid" : reader.oneOf(obj, "stair", "", STAIR_STYLES),
+    windows: obj.windows === undefined ? "glass" : reader.oneOf(obj, "windows", "", WINDOW_INSIDES),
+  };
+}
+
+function readBuilding(id: string, obj: RawObject, reader: Reader, partById: Map<string, BuildingPartDef>, roomById: Map<string, RoomTypeDef>): BuildingDef {
   const generator = reader.oneOf(obj, "type", "", BUILDING_GENERATORS);
   reader.onlyKeys(obj, "", ["name", "type", generator]);
   const block = reader.object(obj[generator], generator);
@@ -569,7 +610,7 @@ function readBuilding(id: string, obj: RawObject, reader: Reader, partById: Map<
   let house: BuildingDef["house"] = null;
   if (generator === "house") {
     const path = "house";
-    reader.onlyKeys(block, path, ["tile", "width", "depth", "plan", "storeys", "cellars", "wallHeight", "upperHeight", "cellarHeight", "plinth", "plinthOutset", "framing", "jetty", "roof", "doors", "wallExtras", "parts"]);
+    reader.onlyKeys(block, path, ["tile", "width", "depth", "plan", "storeys", "cellars", "wallHeight", "upperHeight", "cellarHeight", "plinth", "plinthOutset", "framing", "jetty", "roof", "doors", "wallExtras", "parts", "interior"]);
     // A list of building parts, each with a weight.
     const partNamed = (entry: RawObject, at: string, key = "part"): BuildingPartDef | undefined => {
       const partId = reader.string(entry, key, at);
@@ -719,6 +760,70 @@ function readBuilding(id: string, obj: RawObject, reader: Reader, partById: Map<
       if (range[0] < least || !range.every(Number.isInteger)) reader.fail(`house.${key}`, `is a whole number, at least ${least}`);
       return range;
     };
+    // The interior: a generator, named by `type`, its settings under its own name - or none.
+    const readInterior = (): HouseSpec["interior"] => {
+      if (block.interior === undefined || block.interior === null) return null;
+      const at = "house.interior";
+      const raw = reader.object(block.interior, at);
+      const type = reader.oneOf(raw, "type", at, INTERIOR_GENERATORS);
+      reader.onlyKeys(raw, at, ["type", type]);
+      const where = `${at}.${type}`;
+      const settings = reader.object(raw[type], where);
+      reader.onlyKeys(settings, where, ["exits", "fakeDoors", "grow", "rooms"]);
+      const requests = reader.array(settings, "rooms", where).flatMap((value, i): RoomRequest[] => {
+        const rat = `${where}.rooms[${i}]`;
+        const entry = reader.object(value, rat);
+        reader.onlyKeys(entry, rat, ["room", "priority", "chance", "count", "levels", "level", "tiles", "minSide", "maxSide", "grow", "at", "near", "next", "under", "over", "stair", "windows"]);
+        const roomId = reader.string(entry, "room", rat);
+        const room = roomById.get(roomId);
+        if (!room) {
+          reader.fail(`${rat}.room`, `no room type "${roomId}" (known: ${[...roomById.keys()].join(", ") || "none"})`);
+          return [];
+        }
+        const name = (key: string): string | null => {
+          if (entry[key] === undefined || entry[key] === null) return null;
+          const other = reader.string(entry, key, rat);
+          if (!roomById.has(other)) reader.fail(`${rat}.${key}`, `no room type "${other}"`);
+          return other;
+        };
+        const entrance = (key: string): "entrance" | null => {
+          if (entry[key] === undefined || entry[key] === null) return null;
+          if (entry[key] !== "entrance") reader.fail(`${rat}.${key}`, `expected "entrance"`);
+          return "entrance";
+        };
+        return [
+          {
+            room,
+            priority: reader.optionalNumber(entry, "priority", rat, 0),
+            chance: reader.optionalNumber(entry, "chance", rat, 1, { min: 0, max: 1 }),
+            count: countIn(entry, "count", rat, 1, [1, 1]),
+            levels: countIn(entry, "levels", rat, 1, [1, 1]),
+            level: entry.level === undefined ? "ground" : reader.oneOf(entry, "level", rat, ROOM_LEVELS),
+            tiles: tilesIn(entry, "tiles", rat),
+            minSide: reader.optionalNumber(entry, "minSide", rat, 1, { min: 1, integer: true }),
+            maxSide: entry.maxSide === undefined ? null : reader.number(entry, "maxSide", rat, { min: 1, integer: true }),
+            grow: entry.grow === undefined ? null : reader.number(entry, "grow", rat, { min: 1 }),
+            at: entrance("at"),
+            near: entrance("near"),
+            next: name("next"),
+            under: name("under"),
+            over: name("over"),
+            stair: entry.stair === true,
+            windows: entry.windows === true,
+          },
+        ];
+      });
+      if (requests.length === 0) reader.fail(`${where}.rooms`, "needs at least one room");
+      return {
+        type,
+        rooms: {
+          exits: countIn(settings, "exits", where, 1, [1, 1]),
+          fakeDoors: reader.optionalNumber(settings, "fakeDoors", where, 0, { min: 0, max: 1 }),
+          grow: reader.optionalNumber(settings, "grow", where, 1.5, { min: 1 }),
+          rooms: requests,
+        },
+      };
+    };
     house = {
       tile: reader.range(block, "tile", path, { allowEqual: true }),
       width: tiles("width"),
@@ -738,6 +843,7 @@ function readBuilding(id: string, obj: RawObject, reader: Reader, partById: Map<
       doors: choices("doors"),
       wallExtras,
       parts,
+      interior: readInterior(),
     };
   }
   return { id, name: reader.string(obj, "name", ""), generator, boxes, house };

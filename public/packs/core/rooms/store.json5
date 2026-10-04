@@ -1,0 +1,10 @@
+// A store room: boards on the floor, the walls and the ceiling.
+{
+  name: "Store Room",
+  floor: { material: "floorboards", tints: [[0.95, 0.92, 0.9]] },
+  walls: { material: "planks", tints: [[0.85, 0.78, 0.7]] },
+  ceiling: { material: "planks", tints: [[0.75, 0.68, 0.6]] },
+  beams: { material: "timber", tints: [[0.42, 0.36, 0.32]] },
+  timber: { material: "timber", tints: [[0.45, 0.38, 0.34]] },
+  stair: "open",
+}
