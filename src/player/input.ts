@@ -5,11 +5,17 @@ const BACK_KEYS = new Set(["s", "arrowdown"]);
 const LEFT_KEYS = new Set(["a", "arrowleft"]);
 const RIGHT_KEYS = new Set(["d", "arrowright"]);
 
-/** Tracks WASD/arrow key state and exposes a normalized movement axis (x = strafe, y = forward). */
+/** Tracks WASD/arrow key state and exposes a normalized movement axis (x = strafe, y = forward) -
+ *  and Space, as a jump to take once per press. */
 export function createInput() {
   const pressed = new Set<string>();
+  let jump = false;
 
-  const onKeyDown = (e: KeyboardEvent) => pressed.add(e.key.toLowerCase());
+  const onKeyDown = (e: KeyboardEvent) => {
+    const key = e.key.toLowerCase();
+    if (key === " " && !pressed.has(key)) jump = true;
+    pressed.add(key);
+  };
   const onKeyUp = (e: KeyboardEvent) => pressed.delete(e.key.toLowerCase());
 
   window.addEventListener("keydown", onKeyDown);
@@ -28,10 +34,17 @@ export function createInput() {
     return axis.lengthSquared() > 1 ? axis.normalize() : axis;
   }
 
+  /** Whether Space was pressed since this was last asked. */
+  function takeJump(): boolean {
+    const taken = jump;
+    jump = false;
+    return taken;
+  }
+
   function dispose() {
     window.removeEventListener("keydown", onKeyDown);
     window.removeEventListener("keyup", onKeyUp);
   }
 
-  return { getMoveAxis, dispose };
+  return { getMoveAxis, takeJump, dispose };
 }

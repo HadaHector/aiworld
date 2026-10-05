@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>aiworld collision sandbox</title>
+    <style>
+      :root {
+        --bg: #161b21;
+        --panel: #1d242c;
+        --line: #333e4b;
+        --text: #dfe6ee;
+        --muted: #8d9aa8;
+        --accent: #6fa8c7;
+        font: 13px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
+        color-scheme: dark;
+      }
+      html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); overflow: hidden; }
+      #app { display: grid; grid-template-columns: 1fr 280px; height: 100%; }
+      #renderCanvas { width: 100%; height: 100%; display: block; outline: none; touch-action: none; }
+      #view { position: relative; min-width: 0; }
+      #crosshair {
+        position: absolute; left: 50%; top: 50%; width: 14px; height: 14px; margin: -7px 0 0 -7px; pointer-events: none;
+        background: linear-gradient(var(--text), var(--text)) center / 2px 100% no-repeat, linear-gradient(var(--text), var(--text)) center / 100% 2px no-repeat;
+        opacity: 0.7;
+      }
+      #hud {
+        position: absolute; left: 10px; top: 10px; padding: 6px 9px; border-radius: 4px; pointer-events: none;
+        background: rgba(15, 19, 24, 0.75); font: 12px/1.5 ui-monospace, Consolas, monospace; white-space: pre;
+      }
+      #panel { background: var(--panel); border-left: 1px solid var(--line); overflow-y: auto; overflow-x: hidden; padding: 10px 12px; }
+      h2 { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 16px 0 6px; }
+      h2:first-child { margin-top: 0; }
+      select, button { font: inherit; color: var(--text); background: #242c36; border: 1px solid var(--line); border-radius: 4px; padding: 4px 8px; }
+      button:hover { border-color: var(--accent); }
+      select { width: 100%; }
+      .row { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 6px; }
+      .row button { flex: 1 1 auto; }
+      label.slider { display: grid; grid-template-columns: 82px 1fr 44px; align-items: center; gap: 6px; margin-bottom: 4px; }
+      label.slider input { width: 100%; min-width: 0; margin: 0; }
+      label.slider output { text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
+      label.check { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+      .hint { color: var(--muted); font-size: 12px; margin: 6px 0 0; }
+      .legend span { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin: 0 4px 0 8px; vertical-align: -1px; }
+      .legend span:first-child { margin-left: 0; }
+    </style>
+  </head>
+  <body>
+    <div id="app">
+      <div id="view">
+        <canvas id="renderCanvas"></canvas>
+        <div id="crosshair"></div>
+        <div id="hud"></div>
+      </div>
+      <div id="panel">
+        <h2>Scene</h2>
+        <select id="preset"></select>
+        <div class="row" style="margin-top: 6px"><button id="respawn">Back to start</button></div>
+
+        <h2>Spawn ahead</h2>
+        <div class="row">
+          <button data-spawn="sphere">Sphere</button>
+          <button data-spawn="capsule">Capsule</button>
+          <button data-spawn="box">Box</button>
+          <button data-spawn="convex">Hull</button>
+        </div>
+        <label class="slider">Size <input id="spawnSize" type="range" min="0.2" max="4" step="0.1" value="1" /><output></output></label>
+        <label class="check"><input id="spawnTilt" type="checkbox" checked /> Random rotation</label>
+        <label class="check"><input id="spawnSightOnly" type="checkbox" /> Blocks sight only (walk through)</label>
+        <div class="row"><button id="clear">Clear spawned</button></div>
+        <p class="hint">Shift-click a spawned shape to delete it.</p>
+
+        <h2>Character</h2>
+        <label class="slider">Radius <input id="radius" type="range" min="0.15" max="1.5" step="0.05" /><output></output></label>
+        <label class="slider">Height <input id="height" type="range" min="0.6" max="5" step="0.1" /><output></output></label>
+        <label class="slider">Step <input id="stepHeight" type="range" min="0" max="1.5" step="0.05" /><output></output></label>
+        <label class="slider">Max slope <input id="maxSlope" type="range" min="10" max="80" step="1" /><output></output></label>
+        <label class="slider">Jump <input id="jumpSpeed" type="range" min="0" max="20" step="0.2" /><output></output></label>
+        <label class="slider">Speed <input id="speed" type="range" min="1" max="30" step="0.5" /><output></output></label>
+
+        <h2>Rays</h2>
+        <p class="hint" style="margin-top: 0">Click to cast a ray from the camera: its hit and normal are drawn.</p>
+        <label class="check"><input id="sight" type="checkbox" /> Line of sight to the last hit</label>
+
+        <h2>Drawing</h2>
+        <label class="check"><input id="showContacts" type="checkbox" checked /> Contacts and the path</label>
+        <p class="hint legend"><span style="background: #5fd068"></span>ground<span style="background: #f0a040"></span>wall<span style="background: #f05050"></span>ceiling</p>
+        <p class="hint">WASD to walk, Space to jump, drag to look, wheel to zoom.</p>
+      </div>
+    </div>
+    <script type="module" src="/src/collisionSandbox/main.ts"></script>
+  </body>
+</html>
