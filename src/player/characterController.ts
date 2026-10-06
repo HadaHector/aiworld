@@ -1,5 +1,5 @@
 import { Color3, MeshBuilder, StandardMaterial, Vector3, type ArcRotateCamera, type Mesh, type Scene } from "@babylonjs/core";
-import { createCharacterMotor, type CharacterMotor } from "../world/collision/index";
+import { collisionStats, createCharacterMotor, type CharacterMotor } from "../world/collision/index";
 import type { WorldCollision } from "../world/worldCollision";
 import type { HeightSampler } from "../world/terrain/noise";
 import { createInput } from "./input";
@@ -59,7 +59,9 @@ export function createCharacter(scene: Scene, collision: WorldCollision, heightA
       // No collision here yet: stand on the terrain itself until it comes.
       motor.teleport({ x: feet.x + move.x * deltaSeconds, y: heightAt(feet.x, feet.z), z: feet.z + move.z * deltaSeconds });
     } else {
+      const started = performance.now();
       motor.update(Math.min(deltaSeconds, 0.1), { move: { x: move.x, y: 0, z: move.z }, jump });
+      collisionStats.motorMs += performance.now() - started;
       // Through the ground somehow - a chunk swapped under it mid-step: back on top of it.
       const ground = heightAt(motor.state.feet.x, motor.state.feet.z);
       if (motor.state.feet.y < ground - 1) motor.teleport({ x: motor.state.feet.x, y: ground, z: motor.state.feet.z });

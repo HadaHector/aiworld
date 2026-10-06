@@ -1,4 +1,4 @@
-import { createCollisionWorld, type CollisionWorld, type ShapeDesc } from "./collision/index";
+import { collisionStats, createCollisionWorld, type CollisionWorld, type ShapeDesc } from "./collision/index";
 import type { ChunkGeometry } from "./terrain/chunkGeometry";
 import type { TreeField } from "./foliage/treeField";
 
@@ -14,25 +14,34 @@ export interface WorldCollision {
   clearChunk: (key: string) => void;
   /** Whether the ground under a point is in the collision world yet - its chunk built near enough. */
   hasGroundAt: (x: number, z: number) => boolean;
+  /** How many chunks have their collision in, and how many shapes they hold in all - for profiling. */
+  readonly chunkCount: number;
+  readonly shapeCount: number;
 }
 
 export function createWorldCollision(trees: TreeField, chunkSize: number): WorldCollision {
   const world = createCollisionWorld();
   const batches = new Map<string, number>();
+  const shapeCount = new Map<string, number>();
 
   function clearChunk(key: string): void {
     const batch = batches.get(key);
     if (batch === undefined) return;
     world.removeBatch(batch);
     batches.delete(key);
+    shapeCount.delete(key);
   }
 
   function setChunk(key: string, geometry: ChunkGeometry, centerX: number, centerZ: number, level: number, subdivisions: number): void {
     clearChunk(key);
     if (level !== 0) return;
+    const started = performance.now();
     const shapes: ShapeDesc[] = [ground(geometry, centerX, centerZ, subdivisions)];
     shapes.push(...trees.colliders(geometry.trees));
     batches.set(key, world.addBatch(shapes));
+    shapeCount.set(key, shapes.length);
+    collisionStats.chunksBuilt++;
+    collisionStats.chunkMs += performance.now() - started;
   }
 
   /**
@@ -66,5 +75,18 @@ export function createWorldCollision(trees: TreeField, chunkSize: number): World
     return batches.has(`${Math.floor(x / chunkSize)},${Math.floor(z / chunkSize)}`);
   }
 
-  return { world, setChunk, clearChunk, hasGroundAt };
+  return {
+    world,
+    setChunk,
+    clearChunk,
+    hasGroundAt,
+    get chunkCount() {
+      return batches.size;
+    },
+    get shapeCount() {
+      let total = 0;
+      for (const n of shapeCount.values()) total += n;
+      return total;
+    },
+  };
 }

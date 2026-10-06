@@ -1,6 +1,7 @@
 import { buildAabbTree, type AabbTree } from "./aabbTree";
 import { forEachFieldTriangle, queryBounds, separate, separateTriangle, type QueryShape, type Separation } from "./narrowphase";
 import { rayShape } from "./raycast";
+import { collisionStats } from "./stats";
 import { createShape, DEFAULT_LAYERS, heightfieldHeight, type Shape, type ShapeDesc } from "./shapes";
 import { aabbOverlaps, aabbUnion, add, dot, emptyAabb, inverseDirection, length, madd, rayAabb, scale, type Aabb, type Vec3 } from "./vec";
 
@@ -101,6 +102,7 @@ export function createCollisionWorld(): CollisionWorld {
   const loose = new Map<number, Shape>();
 
   function addBatch(descs: readonly ShapeDesc[]): number {
+    const started = performance.now();
     const made = descs.map((desc) => createShape(desc, nextShape++));
     for (const s of made) shapes.set(s.id, s);
     const treeShapes = made.filter((s) => s.kind !== "heightfield");
@@ -109,6 +111,8 @@ export function createCollisionWorld(): CollisionWorld {
     for (const s of made) bounds = aabbUnion(bounds, s.bounds);
     const id = nextBatch++;
     batches.set(id, { shapes: made, tree: buildAabbTree(treeShapes.map((s) => s.bounds)), treeShapes, fields, bounds });
+    collisionStats.batchesAdded++;
+    collisionStats.batchMs += performance.now() - started;
     return id;
   }
 
@@ -160,6 +164,7 @@ export function createCollisionWorld(): CollisionWorld {
   }
 
   function raycast(origin: Vec3, direction: Vec3, maxDistance: number, mask = DEFAULT_LAYERS): RayHit | null {
+    collisionStats.rays++;
     const l = length(direction);
     if (l === 0) return null;
     const dir = scale(direction, 1 / l);
@@ -174,6 +179,7 @@ export function createCollisionWorld(): CollisionWorld {
   }
 
   function raycastAny(origin: Vec3, direction: Vec3, maxDistance: number, mask = DEFAULT_LAYERS): boolean {
+    collisionStats.rays++;
     const l = length(direction);
     if (l === 0) return false;
     const dir = scale(direction, 1 / l);
@@ -206,13 +212,20 @@ export function createCollisionWorld(): CollisionWorld {
           const h = heightfieldHeight(s, p.x, p.z);
           return h !== null && p.y < h;
         };
-        forEachFieldTriangle(s, box, (tri) => visit(s, separateTriangle(query, tri, under)));
+        forEachFieldTriangle(s, box, (tri) => {
+          collisionStats.pairs++;
+          visit(s, separateTriangle(query, tri, under));
+        });
       }
-      else visit(s, separate(query, s));
+      else {
+        collisionStats.pairs++;
+        visit(s, separate(query, s));
+      }
     });
   }
 
   function overlap(query: QueryShape, mask = DEFAULT_LAYERS): Contact[] {
+    collisionStats.overlaps++;
     const contacts: Contact[] = [];
     forEachSeparation(query, 0, mask, (shape, sep) => {
       if (sep.distance < 0) contacts.push({ shape, normal: sep.normal, depth: -sep.distance, point: sep.point });
@@ -221,6 +234,7 @@ export function createCollisionWorld(): CollisionWorld {
   }
 
   function nearest(query: QueryShape, maxDistance: number, mask = DEFAULT_LAYERS): Nearest | null {
+    collisionStats.nearests++;
     let best: Nearest | null = null;
     forEachSeparation(query, maxDistance, mask, (shape, sep) => {
       if (sep.distance <= maxDistance && (!best || sep.distance < best.distance)) best = { ...sep, shape };
@@ -233,6 +247,7 @@ export function createCollisionWorld(): CollisionWorld {
    * until within tolerance - never past a contact, since a convex gap shrinks no faster than that.
    */
   function sweep(query: QueryShape, delta: Vec3, mask = DEFAULT_LAYERS): SweepHit | null {
+    collisionStats.sweeps++;
     const total = length(delta);
     const startBox = queryBounds(query, SWEEP_TOLERANCE);
     const endBox = queryBounds(translateQuery(query, delta), SWEEP_TOLERANCE);
@@ -241,8 +256,10 @@ export function createCollisionWorld(): CollisionWorld {
     let best: SweepHit | null = null;
 
     const advance = (shape: Shape, separation: (q: QueryShape) => Separation): void => {
+      collisionStats.pairs++;
       let t = 0;
       for (let i = 0; i < MAX_ADVANCES; i++) {
+        collisionStats.advances++;
         const sep = separation(t === 0 ? query : translateQuery(query, scale(dir, t)));
         const closing = -dot(sep.normal, dir);
         // Touching at the start but moving along it or away: it never gets in the way.

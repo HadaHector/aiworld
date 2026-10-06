@@ -10,6 +10,7 @@ import { createTextureBrowser } from "./debug/textureBrowser";
 import { createPositionPanel, type ViewSnapshot } from "./debug/positionPanel";
 import { createLastView } from "./debug/lastView";
 import { createStatsPanel } from "./debug/statsPanel";
+import { createCollisionPanel } from "./debug/collisionPanel";
 import { createLoadingScreen } from "./ui/loadingScreen";
 import { loadContent } from "./world/content/loadContent";
 import { ContentError, formatIssue } from "./world/content/contentReader";
@@ -118,7 +119,8 @@ createSettingsPanel({
 
 const zoneLabel = createZoneLabel();
 const textureBrowser = createTextureBrowser(world.materialLibrary);
-createStatsPanel(scene, engine);
+const statsPanel = createStatsPanel(scene, engine);
+const collisionPanel = createCollisionPanel(scene, world.collision, statsPanel);
 
 /**
  * A deliberate, permanent debug surface. `goto` restores a view captured by the position panel's
@@ -178,6 +180,8 @@ function gotoLoaded(view: Partial<ViewSnapshot> & { x: number; z: number }, iter
   character,
   camera,
   spectator,
+  /** The collision profiler's last half second (see debug/collisionPanel.ts). */
+  collisionProfile: () => collisionPanel.last,
   scene,
   engine,
 };
@@ -196,7 +200,9 @@ scene.onBeforeRenderObservable.add(() => {
   // The world streams, and its weather and light follow, wherever is being looked from: the player,
   // or the spectator camera while it flies.
   if (!spectator.active) {
+    const started = performance.now();
     character.update(deltaSeconds, camera);
+    collisionPanel.addPlayerMs(performance.now() - started);
     indoorCamera.update();
   }
   const focus = spectator.active ? spectator.camera.position : character.mesh.position;

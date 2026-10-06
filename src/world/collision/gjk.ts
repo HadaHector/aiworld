@@ -1,3 +1,4 @@
+import { collisionStats } from "./stats";
 import { add, dot, lengthSq, scale, sub, vec3, type Vec3 } from "./vec";
 
 /**
@@ -39,6 +40,7 @@ const MAX_ITERATIONS = 64;
  * slower than the usual case analysis, and simpler to trust.
  */
 export function gjkDistance(worldA: PointSet, worldB: PointSet): GjkResult {
+  collisionStats.gjkCalls++;
   // Worked near the origin, so far-off coordinates lose no precision.
   const base = worldA[0];
   const setA = worldA.map((p) => sub(p, base));
@@ -54,6 +56,7 @@ export function gjkDistance(worldA: PointSet, worldB: PointSet): GjkResult {
   const tiny = scaleOf * 1e-14;
 
   for (let i = 0; i < MAX_ITERATIONS; i++) {
+    collisionStats.gjkIterations++;
     const v = closest.v;
     const vv = lengthSq(v);
     if (vv <= tiny) break;
