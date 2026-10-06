@@ -47,6 +47,7 @@ const world = await createWorld(scene, content, ({ phase, completed, total }) =>
   loadingScreen.update(phase, completed, total);
 });
 
+loadingScreen.update("Placing the player", 0, 0);
 const character = createCharacter(scene, world.collision, world.heightAt);
 const camera = createThirdPersonCamera(scene, canvas, character.mesh);
 const indoorCamera = createIndoorCamera(camera, () => world.indoors(character.mesh.position.x, character.mesh.position.z, character.mesh.position.y - 0.9));
@@ -225,6 +226,12 @@ scene.onBeforeRenderObservable.add(() => {
 // canvas. Deliberately not hooked to onAfterRenderObservable/the render loop: those are driven by
 // requestAnimationFrame, which the browser pauses in a background tab - loading the page in one
 // would otherwise leave the loading screen up indefinitely.
+loadingScreen.update("Compiling shaders and drawing the first frame", 0, 0);
+// A paint for that line first - or a moment's wait, in a background tab, which never paints.
+await new Promise<void>((resolve) => {
+  requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+  setTimeout(resolve, 60);
+});
 scene.render();
 loadingScreen.hide();
 

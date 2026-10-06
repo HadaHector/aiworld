@@ -151,7 +151,13 @@ export async function createWorld(
   // chunkBuild.worker.ts), which overlaps with this thread building its own below.
   let buildPool = createChunkBuildPool(WORLD_SEED, content);
 
-  onProgress?.({ phase: "Shaping continents", completed: 0, total: 0 });
+  /** Says what comes next, and lets it be painted before the (synchronous) work starts. */
+  const phase = async (text: string): Promise<void> => {
+    onProgress?.({ phase: text, completed: 0, total: 0 });
+    await nextPaint();
+  };
+
+  await phase("Shaping the world: continents, zones, rivers, roads and settlements");
   const { sampleTerrain, worldExtent, continents, areaBounds, areaNames, settlements, features, roads, settlementLayouts, areaBiomes } = createTerrainSampler(WORLD_SEED, content);
 
   const materialLibrary = await createMaterialLibrary(scene, WORLD_SEED, content, areaBiomes, sunLighting, (done, total) => {
@@ -159,6 +165,7 @@ export async function createWorld(
   });
 
   // Bushes and boulders are drawn by the same field as the trees - thin instances all.
+  await phase(`Growing ${content.treeKinds.length} kinds of tree, ${content.bushKinds.length} of bush and ${content.rockKinds.length} of boulder`);
   const trees = await createTreeField(
     scene,
     sunLighting.shadowGenerator,
@@ -168,9 +175,11 @@ export async function createWorld(
     undefined,
     areaBiomes.map((biome, areaId) => treeTintRules(WORLD_SEED, areaId, biome)),
   );
+  await phase(`Sowing ${content.grassKinds.length} kinds of grass`);
   const grass = createGrassField(scene, WORLD_SEED, materialLibrary.litShading, content.grassKinds);
-  onProgress?.({ phase: "Baking building materials", completed: 0, total: 0 });
+  await phase(`Baking ${content.buildingMaterials.length} building materials`);
   const buildingMaterial = createBuildingMaterial(scene, materialLibrary.litShading, await bakeBuildingTextures(WORLD_SEED, content.buildingMaterials));
+  await phase(`Planning the buildings of ${settlementLayouts.length} settlements`);
   const buildings = createSettlementRenderer(
     scene,
     settlementLayouts,
@@ -180,6 +189,7 @@ export async function createWorld(
     DEFAULT_DRAW_DISTANCE,
     materialLibrary.setTerrainCuts,
   );
+  await phase("Raising the sky");
   const sky = createSkyDome(scene);
 
   // Sent now that the textures are baked; queued behind each worker's own world building if it is
@@ -187,7 +197,7 @@ export async function createWorld(
   buildPool?.setGroundColors(materialLibrary.averageColors);
 
   if (buildPool) {
-    onProgress?.({ phase: "Starting terrain workers", completed: 0, total: 0 });
+    await phase("Waiting for the terrain workers to build their own copy of the world");
     try {
       await buildPool.ready;
     } catch (error) {
@@ -225,9 +235,9 @@ export async function createWorld(
   // loadInitial blocks for a few hundred ms, so give the browser a frame to actually paint the
   // "building terrain" message before it starts - otherwise the loading screen sits on the
   // previous phase for the whole thing.
-  onProgress?.({ phase: "Building terrain", completed: 0, total: 0 });
-  await nextPaint();
+  await phase("Building the terrain around the start: ground, trees, grass and collision");
   chunkManager.loadInitial(0, 0);
+  await phase("Flooding the ocean");
 
   // Only needs to reach past the farthest fog - it follows the camera (see ocean.ts).
   const ocean = createOceanPlane(scene, sunLighting, sky, [materialLibrary.terrainMaterial, materialLibrary.floatingMaterial], { size: MAX_DRAW_DISTANCE * 2.5 });
