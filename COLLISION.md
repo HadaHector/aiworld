@@ -113,5 +113,14 @@ Done:
 4. The character motor.
 5. The sandbox.
 
+Colliders so far:
+
+- **Trees**: a generated tree's trunk and roots - never its branches or leaves - come out of the
+  generator as a few convex pieces (`TreeGeometry.colliders`): each limb cut into nearly straight
+  runs, each run the hull of its rings, a buttress root's the hull of its wedges, and anything wholly
+  under the ground left out. `TreeField.colliders` puts a chunk's trees' pieces in the world. The
+  workbench draws them over a tree (Colliders), and the sandbox's "Trees from the packs" plants one
+  of each kind to walk into.
+
 Later, each its own step: colliders for terrain and buildings; the game's character on the motor;
 the camera kept out of walls by a ray; navigation.

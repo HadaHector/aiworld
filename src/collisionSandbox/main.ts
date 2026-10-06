@@ -31,6 +31,9 @@ import {
   type Vec3,
 } from "../world/collision/index";
 import { PRESETS, type Preset } from "./presets";
+import { loadContent } from "../world/content/loadContent";
+import type { WorldContent } from "../world/content/worldContent";
+import { generateConifer, generateTree } from "../world/foliage/treeGenerator";
 
 const element = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
 const canvas = element<HTMLCanvasElement>("renderCanvas");
@@ -98,6 +101,7 @@ const solidMaterial = material("solid", new Color3(0.72, 0.7, 0.64));
 const spawnedMaterial = material("spawned", new Color3(0.55, 0.68, 0.85));
 const sightMaterial = material("sightOnly", new Color3(0.45, 0.8, 0.5), 0.45);
 const groundMaterial = material("ground", new Color3(0.42, 0.5, 0.36));
+const colliderMaterial = material("collider", new Color3(1, 0.55, 0.15), 0.3);
 
 function meshFor(shape: Shape): Mesh {
   const name = `shape${shape.id}`;
@@ -144,9 +148,9 @@ function meshFor(shape: Shape): Mesh {
     }
   }
   mesh.material =
-    shape.kind === "heightfield" ? groundMaterial : !(shape.layers & Layers.solid) ? sightMaterial : spawned.has(shape.id) ? spawnedMaterial : solidMaterial;
+    shape.kind === "heightfield" ? groundMaterial : shape.group === TREE_GROUP ? colliderMaterial : !(shape.layers & Layers.solid) ? sightMaterial : spawned.has(shape.id) ? spawnedMaterial : solidMaterial;
   // Outlines on the flat-sided ones; round ones would only show their tessellation.
-  if (shape.kind === "box" || shape.kind === "convex") {
+  if (shape.kind === "box" || (shape.kind === "convex" && shape.group !== TREE_GROUP)) {
     mesh.enableEdgesRendering(0.95);
     mesh.edgesWidth = 2;
     mesh.edgesColor = new Color4(0.1, 0.12, 0.15, 0.8);
@@ -193,8 +197,77 @@ function loadPreset(next: Preset): void {
   preset = next;
   presetBatch = world.addBatch(next.shapes);
   addShapes(world.batchShapes(presetBatch).map((shape) => shape.id));
+  clearGrove();
+  if (next.grove) void plantGrove();
   teleport(next.spawn);
   writeUrl();
+}
+
+// ---------------------------------------------------------------------------------------------
+// The grove: every generated tree kind in the content packs, its wood drawn plain and its trunk
+// and roots solid - the pieces drawn see-through over it.
+
+const TREE_GROUP = 1;
+const woodMaterial = material("wood", new Color3(0.45, 0.33, 0.22));
+let groveBatch = -1;
+let groveMeshes: Mesh[] = [];
+let groveToken = 0;
+let contentPromise: Promise<WorldContent> | null = null;
+
+function clearGrove(): void {
+  groveToken++;
+  for (const mesh of groveMeshes) mesh.dispose();
+  groveMeshes = [];
+  if (groveBatch >= 0) {
+    for (const shape of world.batchShapes(groveBatch)) dropMesh(shape.id);
+    world.removeBatch(groveBatch);
+    groveBatch = -1;
+  }
+}
+
+async function plantGrove(): Promise<void> {
+  const token = groveToken;
+  contentPromise ??= loadContent();
+  const content = await contentPromise;
+  if (token !== groveToken) return;
+  const descs: ShapeDesc[] = [];
+  // In rows across x, each tree given room for its roots.
+  const ROW = 110;
+  let x = -ROW / 2;
+  let z = 6;
+  let rowDepth = 0;
+  for (const def of content.treeKinds) {
+    const shape = def.shape;
+    if (shape.model !== "branching" && shape.model !== "conifer") continue;
+    const geometry = shape.model === "conifer" ? generateConifer(shape, 1337) : generateTree(shape, 1337);
+    const size = (def.scale[0] + def.scale[1]) / 2;
+    let reach = 1;
+    for (const hull of geometry.colliders) for (let i = 0; i < hull.length; i += 3) reach = Math.max(reach, Math.hypot(hull[i], hull[i + 2]));
+    reach *= size;
+    if (x + reach * 2 > ROW / 2) { x = -ROW / 2; z += rowDepth + 4; rowDepth = 0; }
+    const at = vec3(x + reach, 0, z + reach);
+    x += reach * 2 + 4;
+    rowDepth = Math.max(rowDepth, reach * 2);
+
+    const mesh = new Mesh(`grove_${def.id}`, scene);
+    const data = new VertexData();
+    data.positions = geometry.wood.positions;
+    data.normals = geometry.wood.normals;
+    data.indices = geometry.wood.indices;
+    data.applyToMesh(mesh);
+    mesh.material = woodMaterial;
+    mesh.scaling.setAll(size);
+    mesh.position.set(at.x, at.y, at.z);
+    mesh.isPickable = false;
+    groveMeshes.push(mesh);
+    for (const hull of geometry.colliders) {
+      const points: Vec3[] = [];
+      for (let i = 0; i < hull.length; i += 3) points.push(vec3(at.x + hull[i] * size, at.y + hull[i + 1] * size, at.z + hull[i + 2] * size));
+      descs.push({ kind: "convex", points, group: TREE_GROUP });
+    }
+  }
+  groveBatch = world.addBatch(descs);
+  addShapes(world.batchShapes(groveBatch).map((s) => s.id));
 }
 
 function teleport(feet: Vec3): void {

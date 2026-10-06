@@ -9,21 +9,23 @@ export interface Preset {
   spawn: Vec3;
   /** Which way it starts facing - and walks, in the probe. */
   heading: Vec3;
+  /** Plant a row of every generated tree kind from the content packs, trunk and roots solid. */
+  grove?: boolean;
 }
 
 const GROUND_SIZE = 64;
 
-/** Flat or rolling ground around the origin. */
-export function ground(rolling = 0, cell = 2): ShapeDesc {
-  const count = GROUND_SIZE / cell + 1;
+/** Flat or rolling ground around the origin, `size` metres square. */
+export function ground(rolling = 0, cell = 2, size = GROUND_SIZE): ShapeDesc {
+  const count = size / cell + 1;
   const heights: number[] = [];
   for (let row = 0; row < count; row++) {
     for (let col = 0; col < count; col++) {
-      const x = col * cell - GROUND_SIZE / 2, z = row * cell - GROUND_SIZE / 2;
+      const x = col * cell - size / 2, z = row * cell - size / 2;
       heights.push(rolling * (Math.sin(x * 0.21) * Math.cos(z * 0.17) + 0.5 * Math.sin(x * 0.53 + z * 0.41)));
     }
   }
-  return { kind: "heightfield", originX: -GROUND_SIZE / 2, originZ: -GROUND_SIZE / 2, cell, columns: count, rows: count, heights };
+  return { kind: "heightfield", originX: -size / 2, originZ: -size / 2, cell, columns: count, rows: count, heights };
 }
 
 /** A box standing on the ground at (x, z), `w` across x, `h` high, `d` along z, turned by `yaw`. */
@@ -112,6 +114,14 @@ export const PRESETS: Preset[] = [
     ],
     spawn: vec3(0, 0, 0),
     heading: east,
+  },
+  {
+    id: "trees",
+    label: "Trees from the packs",
+    shapes: [ground(0, 4, 240)],
+    spawn: vec3(0, 0, -12),
+    heading: vec3(0, 0, 1),
+    grove: true,
   },
   {
     id: "hills",

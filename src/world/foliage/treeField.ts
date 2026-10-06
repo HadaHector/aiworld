@@ -10,6 +10,7 @@ import { applyColorMatrix, type ColorMatrix } from "../materials/colorAdjust";
 import { castNearShadowOnly } from "../lighting/sunLighting";
 import { TREE_TINT_WIDTH } from "./treeShaders";
 import type { TreeShade, TreeTintRule } from "./treeTints";
+import type { Vec3 } from "../collision/vec";
 
 const IDENTITY: ColorMatrix = [1, 0, 0, 0, 1, 0, 0, 0, 1];
 
@@ -28,6 +29,9 @@ export interface TreeField {
   /** How far a kind's widest model reaches from its trunk, and how tall its tallest stands, at
    *  scale 1 - for laying specimens out side by side (the workbench). */
   sizeOf: (kind: string) => { radius: number; height: number };
+  /** What these trees put in the way, in world space: each tree's convex pieces, a list of corners
+   *  each (see TreeModel.colliders). */
+  colliders: (trees: readonly TreePlacement[]) => Vec3[][];
   readonly treeCount: number;
   dispose: () => void;
 }
@@ -218,6 +222,20 @@ export async function createTreeField(
     return species.has(key) ? key : speciesKey(tree.kind, variant, false);
   }
 
+  /** A tree's transform: scaled, spun about Y, tipped onto the slope if it leans, and moved into place. */
+  function composeTree(tree: TreePlacement, into: Matrix): void {
+    scaling.set(tree.scale, tree.scale, tree.scale);
+    Quaternion.RotationYawPitchRollToRef(tree.rotation, 0, 0, rotation);
+    if (tree.lean) {
+      // Spun about its own up first, then tipped so that up is the ground's normal.
+      groundNormal.set(-tree.lean[0], 1, -tree.lean[1]).normalize();
+      Quaternion.FromUnitVectorsToRef(Vector3.UpReadOnly, groundNormal, tipped);
+      tipped.multiplyToRef(rotation, rotation);
+    }
+    position.set(tree.x, tree.y, tree.z);
+    Matrix.ComposeToRef(scaling, rotation, position, into);
+  }
+
   function toBlocks(trees: TreePlacement[], far: boolean): Map<string, Block> {
     const keys = trees.map((tree) => keyOf(tree, far));
     const tally = new Map<string, number>();
@@ -236,16 +254,7 @@ export async function createTreeField(
       const at = filled.get(key)!;
       filled.set(key, at + 1);
 
-      scaling.set(tree.scale, tree.scale, tree.scale);
-      Quaternion.RotationYawPitchRollToRef(tree.rotation, 0, 0, rotation);
-      if (tree.lean) {
-        // Spun about its own up first, then tipped so that up is the ground's normal.
-        groundNormal.set(-tree.lean[0], 1, -tree.lean[1]).normalize();
-        Quaternion.FromUnitVectorsToRef(Vector3.UpReadOnly, groundNormal, tipped);
-        tipped.multiplyToRef(rotation, rotation);
-      }
-      position.set(tree.x, tree.y, tree.z);
-      Matrix.ComposeToRef(scaling, rotation, position, matrix);
+      composeTree(tree, matrix);
       matrix.copyToArray(block.matrices, at * 16);
 
       const { tintDark, tintLight, shaderTint } = species.get(key)!.model;
@@ -388,6 +397,26 @@ export async function createTreeField(
         }
       }
       return { radius, height };
+    },
+    colliders(trees) {
+      const pieces: Vec3[][] = [];
+      const corner = new Vector3();
+      const moved = new Vector3();
+      for (const tree of trees) {
+        const hulls = species.get(keyOf(tree, false))?.model.colliders;
+        if (!hulls || hulls.length === 0) continue;
+        composeTree(tree, matrix);
+        for (const hull of hulls) {
+          const piece: Vec3[] = [];
+          for (let i = 0; i < hull.length; i += 3) {
+            corner.set(hull[i], hull[i + 1], hull[i + 2]);
+            Vector3.TransformCoordinatesToRef(corner, matrix, moved);
+            piece.push({ x: moved.x, y: moved.y, z: moved.z });
+          }
+          pieces.push(piece);
+        }
+      }
+      return pieces;
     },
     get treeCount() {
       return count;

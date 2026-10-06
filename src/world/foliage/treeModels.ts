@@ -38,6 +38,9 @@ export interface TreeModel {
   canopy: Mesh;
   /** A cheaper model of the same tree for distant chunks, if the kind has one. */
   far?: TreeModel;
+  /** What stands in the way, in tree space: convex pieces, each its corners' x, y, z in turn (see
+   *  TreeGeometry.colliders). None for a kind that has no collision yet. */
+  colliders?: Float32Array[];
   /** The two ends of the palette a tree's tint mixes its canopy between. */
   tintDark: Color3;
   tintLight: Color3;
@@ -351,8 +354,9 @@ function createGeneratedModels(scene: Scene, def: TreeKindDef, kind: GeneratedKi
   const models: TreeModel[] = [];
   for (let variant = 0; variant < kind.variants; variant++) {
     const variantSeed = deriveSeed(ownSeed, variant + 1);
-    const detailed = (detail: TreeDetail): TreeModel => build(kind.generate(variantSeed, detail), `tree_${def.id}_${variant}_${detail}`);
-    models.push({ ...detailed("near"), far: detailed("far") });
+    const near = kind.generate(variantSeed, "near");
+    const far = kind.generate(variantSeed, "far");
+    models.push({ ...build(near, `tree_${def.id}_${variant}_near`), far: build(far, `tree_${def.id}_${variant}_far`), colliders: near.colliders });
   }
   return models;
 }

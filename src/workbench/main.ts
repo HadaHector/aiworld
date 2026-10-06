@@ -110,6 +110,7 @@ const DEFAULT_OPTIONS: Options = {
   water: "on",
   marks: "on",
   cut: "none",
+  colliders: "off",
 };
 
 /** A building cut open as the Cut menu says: over a level's floor - its plan - or through its middle. */
@@ -623,6 +624,8 @@ function renderPreviewBar(): void {
       variantMenu.append(step(-1), step(1));
       viewOptions.append(variantMenu);
       const hasFar = current.folder === "buildings" || ((current.folder === "trees" || current.folder === "rocks") && def?.shape.model !== "primitive" && def?.shape.model !== "bush");
+      // What a tree puts in the way: its trunk's and roots' collision pieces, drawn over it.
+      if (current.folder === "trees" && (def?.shape.model === "branching" || def?.shape.model === "conifer")) viewOptions.append(checkbox("Colliders", "colliders", rebuild));
       if (hasFar) {
         viewOptions.append(select("Detail", "lod", [
           ["near", "Near"],
@@ -862,7 +865,7 @@ async function preview3d(token: number, asset: Asset, view: ViewDef, content: Wo
     const def = kindOf(content, asset)!;
     const variants = variantCount(def);
     const chosen = options.variant === "all" ? Array.from({ length: variants }, (_, i) => i) : [Math.min(variants - 1, Number(options.variant) || 0)];
-    trees = { kinds: [def], specimens: chosen.map((variant) => ({ kind: def.id, variant, scale: 1 })), far: options.lod === "far" };
+    trees = { kinds: [def], specimens: chosen.map((variant) => ({ kind: def.id, variant, scale: 1 })), far: options.lod === "far", colliders: options.colliders === "on" };
   }
 
   const subject = `${asset.key}|${view.id}`;

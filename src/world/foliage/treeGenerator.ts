@@ -33,6 +33,9 @@ export interface TreeGeometry {
   };
   /** Top of the foliage, for bounding boxes. */
   height: number;
+  /** What stands in the way: the trunk and the roots, as a few convex pieces, each its corners'
+   *  x, y, z in turn (tree space) - for collision shapes. Branches and leaves are left out. */
+  colliders: Float32Array[];
 }
 
 type V3 = [number, number, number];
@@ -56,6 +59,78 @@ const rotate = (v: V3, axis: V3, angle: number): V3 => {
 };
 
 const DEG = Math.PI / 180;
+
+/** Corners around each ring of a collider piece. */
+const COLLIDER_SIDES = 8;
+/** The longest a collider piece runs. */
+const COLLIDER_MAX_LENGTH = 4;
+/** How far a limb's centreline may stray from a piece's straight run before the piece ends, as a
+ *  share of the limb's radius there (and never less than COLLIDER_MIN_STRAY metres). */
+const COLLIDER_STRAY = 0.35;
+const COLLIDER_MIN_STRAY = 0.05;
+
+/**
+ * Collision shapes for the limbs that stand in the way - trunks and roots: each limb cut into
+ * nearly straight runs, and each run the hull of its rings. A piece wholly under the ground is
+ * left out.
+ */
+class ColliderBuilder {
+  hulls: Float32Array[] = [];
+
+  /** A limb as WoodBuilder.tube takes it: round rings of `radii`, or with `heights` upright wedges. */
+  limb(points: V3[], radii: number[], heights?: number[]): void {
+    let start = 0;
+    while (start < points.length - 1) {
+      let end = start + 1;
+      while (end + 1 < points.length && this.straight(points, radii, start, end + 1)) end++;
+      this.piece(points, radii, heights, start, end);
+      start = end;
+    }
+  }
+
+  /** Whether the rings from `a` to `b` lie near enough the straight line between their ends. */
+  private straight(points: V3[], radii: number[], a: number, b: number): boolean {
+    const run = sub(points[b], points[a]);
+    const length = Math.hypot(run[0], run[1], run[2]);
+    if (length > COLLIDER_MAX_LENGTH) return false;
+    for (let i = a + 1; i < b; i++) {
+      const off = sub(points[i], points[a]);
+      const along = length > 0 ? Math.min(length, Math.max(0, dot(off, run) / length)) : 0;
+      const stray = Math.hypot(...sub(off, scale(run, length > 0 ? along / length : 0)));
+      if (stray > Math.max(COLLIDER_MIN_STRAY, radii[i] * COLLIDER_STRAY)) return false;
+    }
+    return true;
+  }
+
+  private piece(points: V3[], radii: number[], heights: number[] | undefined, a: number, b: number): void {
+    const corners: number[] = [];
+    let above = false;
+    for (let i = a; i <= b; i++) {
+      const p = points[i];
+      const tangent = normalize(sub(points[Math.min(i + 1, b)], points[Math.max(i - 1, a)]));
+      if (heights) {
+        // An upright wedge: a sharp top edge, and its foot `radii` across either side.
+        const side = normalize(cross(tangent, [0, 1, 0]));
+        const h = heights[i];
+        corners.push(p[0], p[1] + h, p[2]);
+        corners.push(p[0] + side[0] * radii[i], p[1] - h, p[2] + side[2] * radii[i]);
+        corners.push(p[0] - side[0] * radii[i], p[1] - h, p[2] - side[2] * radii[i]);
+        if (p[1] + h > 0) above = true;
+      } else {
+        const u = perpendicular(tangent);
+        const v = cross(tangent, u);
+        for (let k = 0; k < COLLIDER_SIDES; k++) {
+          const angle = (k / COLLIDER_SIDES) * Math.PI * 2;
+          const c = Math.cos(angle) * radii[i];
+          const s = Math.sin(angle) * radii[i];
+          corners.push(p[0] + u[0] * c + v[0] * s, p[1] + u[1] * c + v[1] * s, p[2] + u[2] * c + v[2] * s);
+        }
+        if (p[1] + radii[i] > 0) above = true;
+      }
+    }
+    if (above) this.hulls.push(new Float32Array(corners));
+  }
+}
 
 class WoodBuilder {
   positions: number[] = [];
@@ -426,6 +501,7 @@ export function generateTree(spec: BranchingTree, seed: number, detail: TreeDeta
   const intBetween = ([lo, hi]: [number, number]): number => Math.floor(lo + rng() * (hi - lo + 1));
   const { trunk, roots, branches, leaves, bark } = spec;
   const wood = new WoodBuilder();
+  const colliders = new ColliderBuilder();
   const leafBuilder = new LeafBuilder();
   const far = detail === "far";
   // A cactus's ribs on its trunk and arms - half as many, half as deep, on a distant one.
@@ -474,6 +550,7 @@ export function generateTree(spec: BranchingTree, seed: number, detail: TreeDeta
     trunkTs.push(Math.pow(i / trunk.rings, 1.4));
   }
   limb(trunkTs.map(trunkPoint), trunkTs.map(trunkRadius), trunk.sides, false, undefined, true);
+  colliders.limb(trunkTs.map(trunkPoint), trunkTs.map(trunkRadius));
 
   // --- roots ---
   const rootStart = trunk.flareHeight * 0.55;
@@ -508,6 +585,7 @@ export function generateTree(spec: BranchingTree, seed: number, detail: TreeDeta
         widths.push((thickness / 2) * (1 - 0.65 * s));
       }
       limb(points, widths, roots.sides, false, heights);
+      colliders.limb(points, widths, heights);
     }
   }
   if (roots.stilt !== null && !roots.buttress) {
@@ -536,6 +614,7 @@ export function generateTree(spec: BranchingTree, seed: number, detail: TreeDeta
         radii.push(startRadius * (1 - 0.35 * s));
       }
       limb(points, radii, roots.sides);
+      colliders.limb(points, radii);
     }
   }
   for (let r = 0; r < (roots.buttress || roots.stilt !== null ? 0 : roots.count); r++) {
@@ -556,6 +635,7 @@ export function generateTree(spec: BranchingTree, seed: number, detail: TreeDeta
       radii.push(startRadius * (1 - 0.8 * s));
     }
     limb(points, radii, roots.sides);
+    colliders.limb(points, radii);
   }
 
   // --- branches and twigs ---
@@ -822,6 +902,7 @@ export function generateTree(spec: BranchingTree, seed: number, detail: TreeDeta
       indices: new Uint32Array(leafBuilder.indices),
     },
     height: foliageTop,
+    colliders: colliders.hulls,
   };
 }
 
@@ -1044,6 +1125,7 @@ export function generateConifer(spec: ConiferTree, seed: number, detail: TreeDet
   const intBetween = ([lo, hi]: [number, number]): number => Math.floor(lo + rng() * (hi - lo + 1));
   const { trunk, roots, tiers, bark } = spec;
   const wood = new WoodBuilder();
+  const colliders = new ColliderBuilder();
   const leafBuilder = new LeafBuilder();
   const far = detail === "far";
   const limb = (points: V3[], radii: number[], sides: number): void => {
@@ -1077,6 +1159,7 @@ export function generateConifer(spec: ConiferTree, seed: number, detail: TreeDet
   const trunkYs: number[] = [];
   for (let i = 0; i <= trunk.rings; i++) trunkYs.push(-buried + (trunk.height + buried) * Math.pow(i / trunk.rings, 1.25));
   limb(trunkYs.map(pointAt), trunkYs.map(radiusAt), trunk.sides);
+  colliders.limb(trunkYs.map(pointAt), trunkYs.map(radiusAt));
 
   // --- roots ---
   // Conifer roots are shallow: they leave the trunk low and run out under the surface.
@@ -1093,6 +1176,7 @@ export function generateConifer(spec: ConiferTree, seed: number, detail: TreeDet
       radii.push(trunk.radius * roots.radius * (1 - 0.8 * s));
     }
     limb(points, radii, roots.sides);
+    colliders.limb(points, radii);
   }
 
   // --- tiers ---
@@ -1152,5 +1236,6 @@ export function generateConifer(spec: ConiferTree, seed: number, detail: TreeDet
       indices: new Uint32Array(leafBuilder.indices),
     },
     height: top + 1,
+    colliders: colliders.hulls,
   };
 }

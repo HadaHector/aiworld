@@ -16,9 +16,60 @@ import { bakedAtlas, bakedBark, bakedGround, isGroundBaked } from "./bakeCache";
 import { createGrassField } from "../world/foliage/grassField";
 import { scatterGrass } from "../world/foliage/grassScatter";
 import { createTreeField } from "../world/foliage/treeField";
+import { convexHull } from "../world/collision/hull";
+import type { Vec3 } from "../world/collision/vec";
 import { NO_WEATHER } from "../world/weather/weatherTypes";
 import type { BuildingModel } from "../world/buildings/buildingTypes";
 import { appendModel, bakeBuildingTextures, createBuildingMaterial, createBuildingMesh, emptyGeometry, type BuildingMaterial } from "../world/buildings/buildingMesh";
+
+/**
+ * Collision pieces drawn over what they stand for: each a see-through orange hull with its edges -
+ * and the leaves taken away, which would only hide the trunk they are being compared with.
+ */
+function drawColliders(scene: Scene, pieces: Vec3[][]): void {
+  for (const mesh of scene.meshes) if (mesh.name.endsWith("_leaves")) mesh.setEnabled(false);
+  const fill = new StandardMaterial("colliderFill", scene);
+  fill.diffuseColor = new Color3(1, 0.55, 0.15);
+  fill.emissiveColor = new Color3(0.35, 0.18, 0.04);
+  fill.alpha = 0.35;
+  fill.backFaceCulling = false;
+  const positions: number[] = [];
+  const indices: number[] = [];
+  const lines: Vector3[][] = [];
+  for (const piece of pieces) {
+    const hull = convexHull(piece);
+    const base = positions.length / 3;
+    for (const p of hull.points) positions.push(p.x, p.y, p.z);
+    const t = hull.triangles;
+    const seen = new Set<string>();
+    for (let i = 0; i < t.length; i += 3) {
+      // Babylon winds the other way round.
+      indices.push(base + t[i], base + t[i + 2], base + t[i + 1]);
+      for (const [a, b] of [[t[i], t[i + 1]], [t[i + 1], t[i + 2]], [t[i + 2], t[i]]]) {
+        const key = a < b ? `${a},${b}` : `${b},${a}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        const pa = hull.points[a], pb = hull.points[b];
+        lines.push([new Vector3(pa.x, pa.y, pa.z), new Vector3(pb.x, pb.y, pb.z)]);
+      }
+    }
+  }
+  if (positions.length === 0) return;
+  const mesh = new Mesh("colliders", scene);
+  const data = new VertexData();
+  data.positions = positions;
+  data.indices = indices;
+  const normals: number[] = [];
+  VertexData.ComputeNormals(positions, indices, normals);
+  data.normals = normals;
+  data.applyToMesh(mesh);
+  mesh.material = fill;
+  mesh.isPickable = false;
+  const edges = MeshBuilder.CreateLineSystem("colliderEdges", { lines }, scene);
+  edges.color = new Color3(1, 0.6, 0.2);
+  edges.alpha = 0.8;
+  edges.isPickable = false;
+}
 
 /** The ground's shape under a preview. */
 export type GroundShape = "flat" | "hills" | "steep";
@@ -44,7 +95,7 @@ export interface StageOptions {
   bare?: boolean;
   /** Trees to stand in a row across the middle of the ground, each at its own scale; a variant
    *  left out is hashed from where it stands, as in the world. */
-  trees?: { kinds: TreeKindDef[]; specimens: { kind: string; variant?: number; scale: number }[]; far: boolean };
+  trees?: { kinds: TreeKindDef[]; specimens: { kind: string; variant?: number; scale: number }[]; far: boolean; colliders?: boolean };
   /** Buildings to stand in a row across the middle of the ground, fronts toward the camera. */
   buildings?: BuildingModel[];
   /** Mark each building's footprint and door on the ground. */
@@ -205,6 +256,7 @@ export async function createStage(engine: Engine, canvas: HTMLCanvasElement, opt
       const placed = layOutSpecimens(options.trees.specimens, field, height);
       field.setChunk("stage", placed.trees, options.trees.far ? 1 : 0);
       field.flush();
+      if (options.trees.colliders) drawColliders(scene, field.colliders(placed.trees));
       framing = placed.framing;
     }
 
