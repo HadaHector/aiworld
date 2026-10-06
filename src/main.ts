@@ -62,8 +62,21 @@ function setSpectating(on: boolean): void {
   else spectator.leave(camera);
   world.attachCamera(on ? spectator.camera : camera);
 }
+/**
+ * Moves the player - and, while flying, the spectator camera with it, as high over the new ground
+ * as it was over the old.
+ */
+function teleport(x: number, z: number): void {
+  if (spectator.active) {
+    const from = spectator.camera.position;
+    const above = from.y - world.heightAt(from.x, from.z);
+    spectator.moveTo(x, world.heightAt(x, z) + Math.max(2, above), z);
+  }
+  character.teleport(x, z);
+}
+
 const debugMap = createDebugMap(world.sampleTerrain, world.worldExtent, world.continents, world.materialLibrary, world.areaBounds, world.areaNames, world.settlements, world.features, world.roads, (worldX, worldZ) => {
-  character.teleport(worldX, worldZ);
+  teleport(worldX, worldZ);
 });
 
 // "14:06" rather than a raw "14.1" - the slider steps in hundredths of an hour (step 0.1 below is
@@ -130,7 +143,7 @@ const collisionPanel = createCollisionPanel(scene, world.collision, statsPanel);
  * without the app having to be re-instrumented to investigate anything.
  */
 function gotoView({ x, z, alpha, beta, radius }: Partial<ViewSnapshot> & { x: number; z: number }): void {
-  character.teleport(x, z);
+  teleport(x, z);
   if (alpha !== undefined) camera.alpha = alpha;
   if (beta !== undefined) camera.beta = beta;
   if (radius !== undefined) camera.radius = radius;
