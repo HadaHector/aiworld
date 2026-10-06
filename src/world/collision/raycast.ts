@@ -150,16 +150,21 @@ function rayTriangle(p0: Vec3, p1: Vec3, p2: Vec3, origin: Vec3, dir: Vec3, maxT
   return { t, normal: normalize(n) };
 }
 
-/** A heightfield cell's two triangles, upward facing, in the world. */
+/** A heightfield cell's triangles - two, or four about its middle - upward facing, in the world. */
 export function heightfieldTriangles(field: Heightfield, col: number, row: number): [Vec3, Vec3, Vec3][] {
   const corner = (c: number, r: number): Vec3 =>
     vec3(field.originX + (col + c) * field.cell, field.heights[(row + r) * field.columns + col + c], field.originZ + (row + r) * field.cell);
   const p00 = corner(0, 0), p10 = corner(1, 0), p11 = corner(1, 1), p01 = corner(0, 1);
+  if (field.split === "centre") {
+    const mid = vec3(p00.x + field.cell / 2, (p00.y + p10.y + p11.y + p01.y) / 4, p00.z + field.cell / 2);
+    // Each quarter wound to face up, as the diagonal split's two are.
+    return [[p00, mid, p10], [p10, mid, p11], [p11, mid, p01], [p01, mid, p00]];
+  }
   // Wound so each faces up (+y), split along (0,0)-(1,1) as heightfieldHeight is.
   return [[p00, p11, p10], [p00, p01, p11]];
 }
 
-/** Walks the cells under the ray in order, and tests each cell's two triangles. */
+/** Walks the cells under the ray in order, and tests each cell's triangles. */
 function rayHeightfield(field: Heightfield, origin: Vec3, dir: Vec3, maxT: number): RayContact | null {
   // Starting under the ground: no hit.
   const under = heightfieldHeight(field, origin.x, origin.z);

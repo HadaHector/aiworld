@@ -1,6 +1,7 @@
 import { treeTintRules } from "./foliage/treeTints";
 import { Color3, type Camera, type Scene } from "@babylonjs/core";
 import { createChunkManager, type ChunkLodLevel } from "./terrain/chunkManager";
+import { createWorldCollision, type WorldCollision } from "./worldCollision";
 import { createChunkBuildPool } from "./terrain/chunkBuildPool";
 import { createTerrainSampler, type TerrainSampler } from "./terrain/terrainSampler";
 import { createOceanPlane } from "./terrain/ocean";
@@ -58,6 +59,8 @@ export interface World {
   grass: GrassField;
   /** Camera near/far and the shadow generator's own frustum both depend on the real camera, which
    *  main.ts creates after the world exists - call this once it does. */
+  /** What the player collides with: the ground and trees around it (see worldCollision.ts). */
+  collision: WorldCollision;
   attachCamera: (camera: Camera) => void;
   setShadowsEnabled: (enabled: boolean) => void;
   /** Draws the terrain as wireframe, to see mesh density and where each level of detail starts. */
@@ -194,6 +197,7 @@ export async function createWorld(
     }
   }
 
+  const collision = createWorldCollision(trees, CHUNK_SIZE);
   const chunkManager = createChunkManager({
     scene,
     buildContext: {
@@ -211,6 +215,7 @@ export async function createWorld(
     materialLibrary,
     trees,
     grass,
+    collision,
     shadowGenerator: sunLighting.shadowGenerator,
     chunkSize: CHUNK_SIZE,
     lodLevels: CHUNK_LOD_LEVELS,
@@ -290,6 +295,7 @@ export async function createWorld(
     materialLibrary,
     trees,
     grass,
+    collision,
     attachCamera: sunLighting.attachCamera,
     setShadowsEnabled,
     setWireframe: materialLibrary.setWireframe,

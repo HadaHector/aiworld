@@ -5,6 +5,7 @@ import type { ChunkBuildPool } from "./chunkBuildPool";
 import type { MaterialLibrary } from "../materials/materialLibrary";
 import type { TreeField } from "../foliage/treeField";
 import type { GrassField } from "../foliage/grassField";
+import type { WorldCollision } from "../worldCollision";
 
 /** One level of detail: chunks whose centre is within `maxDistance` of the player (and beyond the
  *  previous level's) are built with `subdivisions` squares per side. */
@@ -39,6 +40,8 @@ export interface ChunkManagerOptions {
   trees: TreeField;
   /** Like trees, grass comes and goes with its chunk - only full-detail chunks carry any. */
   grass: GrassField;
+  /** And so does what the player collides with - the ground and the trees, full-detail chunks only. */
+  collision?: WorldCollision;
   /** A chunk registers itself as a shadow caster the moment it is built and unregisters on unload,
    *  so hills self-shadow their own valleys the same way anything else does. What it registers is
    *  its shadow-only stand-in (see TerrainChunkMeshes.shadowMesh), not the mesh that is drawn. */
@@ -93,7 +96,7 @@ function chunkKey(cx: number, cz: number): string {
  * so it is checked against where the player is at that point, not where they were when it was sent.
  */
 export function createChunkManager(options: ChunkManagerOptions): ChunkManager {
-  const { scene, buildContext, materialLibrary, trees, grass, shadowGenerator, chunkSize, lodLevels } = options;
+  const { scene, buildContext, materialLibrary, trees, grass, collision, shadowGenerator, chunkSize, lodLevels } = options;
   const detailSubdivisions = lodLevels[0].subdivisions;
   let buildPool = options.buildPool;
 
@@ -179,6 +182,7 @@ export function createChunkManager(options: ChunkManagerOptions): ChunkManager {
     const extra = geometry.bushes.length + geometry.rocks.length;
     trees.setChunk(key, extra > 0 ? geometry.trees.concat(geometry.bushes, geometry.rocks) : geometry.trees, level);
     grass.setChunk(key, geometry.grass, center.x, center.z, chunkSize);
+    collision?.setChunk(key, geometry, center.x, center.z, level, lodLevels[level].subdivisions);
     shadowGenerator.addShadowCaster(meshes.shadowMesh);
   }
 
@@ -219,6 +223,7 @@ export function createChunkManager(options: ChunkManagerOptions): ChunkManager {
         loaded.delete(key);
         trees.clearChunk(key);
         grass.clearChunk(key);
+        collision?.clearChunk(key);
         shadowGenerator.removeShadowCaster(meshes.shadowMesh);
       }
     }

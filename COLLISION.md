@@ -122,5 +122,13 @@ Colliders so far:
   workbench draws them over a tree (Colliders), and the sandbox's "Trees from the packs" plants one
   of each kind to walk into.
 
-Later, each its own step: colliders for terrain and buildings; the game's character on the motor;
-the camera kept out of walls by a ray; navigation.
+- **Ground**: each full-detail chunk's plain height grid, as a heightfield split four ways about each
+  square's middle - as the ground is drawn - with its trees' pieces, in a batch that comes and goes
+  with the chunk (worldCollision.ts).
+
+The game's player walks on the motor through these: WASD, Shift to run, Space to jump. Where its
+chunk's collision is not built yet it stands on the terrain's own height. The settings panel's
+"Spectator" swaps it for a free-flying camera with no body.
+
+Later, each its own step: colliders for buildings (until then the player walks through walls and
+cannot climb into upper floors); the camera kept out of walls by a ray; navigation.

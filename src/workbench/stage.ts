@@ -17,7 +17,7 @@ import { createGrassField } from "../world/foliage/grassField";
 import { scatterGrass } from "../world/foliage/grassScatter";
 import { createTreeField } from "../world/foliage/treeField";
 import { convexHull } from "../world/collision/hull";
-import type { Vec3 } from "../world/collision/vec";
+import type { ConvexDesc } from "../world/collision/shapes";
 import { NO_WEATHER } from "../world/weather/weatherTypes";
 import type { BuildingModel } from "../world/buildings/buildingTypes";
 import { appendModel, bakeBuildingTextures, createBuildingMaterial, createBuildingMesh, emptyGeometry, type BuildingMaterial } from "../world/buildings/buildingMesh";
@@ -26,7 +26,7 @@ import { appendModel, bakeBuildingTextures, createBuildingMaterial, createBuildi
  * Collision pieces drawn over what they stand for: each a see-through orange hull with its edges -
  * and the leaves taken away, which would only hide the trunk they are being compared with.
  */
-function drawColliders(scene: Scene, pieces: Vec3[][]): void {
+function drawColliders(scene: Scene, pieces: ConvexDesc[]): void {
   for (const mesh of scene.meshes) if (mesh.name.endsWith("_leaves")) mesh.setEnabled(false);
   const fill = new StandardMaterial("colliderFill", scene);
   fill.diffuseColor = new Color3(1, 0.55, 0.15);
@@ -37,7 +37,7 @@ function drawColliders(scene: Scene, pieces: Vec3[][]): void {
   const indices: number[] = [];
   const lines: Vector3[][] = [];
   for (const piece of pieces) {
-    const hull = convexHull(piece);
+    const hull = piece.triangles ? { points: piece.points, triangles: Array.from(piece.triangles) } : convexHull(piece.points);
     const base = positions.length / 3;
     for (const p of hull.points) positions.push(p.x, p.y, p.z);
     const t = hull.triangles;

@@ -11,6 +11,7 @@ import { castNearShadowOnly } from "../lighting/sunLighting";
 import { TREE_TINT_WIDTH } from "./treeShaders";
 import type { TreeShade, TreeTintRule } from "./treeTints";
 import type { Vec3 } from "../collision/vec";
+import type { ConvexDesc } from "../collision/shapes";
 
 const IDENTITY: ColorMatrix = [1, 0, 0, 0, 1, 0, 0, 0, 1];
 
@@ -29,9 +30,9 @@ export interface TreeField {
   /** How far a kind's widest model reaches from its trunk, and how tall its tallest stands, at
    *  scale 1 - for laying specimens out side by side (the workbench). */
   sizeOf: (kind: string) => { radius: number; height: number };
-  /** What these trees put in the way, in world space: each tree's convex pieces, a list of corners
-   *  each (see TreeModel.colliders). */
-  colliders: (trees: readonly TreePlacement[]) => Vec3[][];
+  /** What these trees put in the way, in world space: each tree's convex pieces, ready for a
+   *  collision world (see TreeModel.colliders). */
+  colliders: (trees: readonly TreePlacement[]) => ConvexDesc[];
   readonly treeCount: number;
   dispose: () => void;
 }
@@ -399,7 +400,7 @@ export async function createTreeField(
       return { radius, height };
     },
     colliders(trees) {
-      const pieces: Vec3[][] = [];
+      const pieces: ConvexDesc[] = [];
       const corner = new Vector3();
       const moved = new Vector3();
       for (const tree of trees) {
@@ -407,13 +408,14 @@ export async function createTreeField(
         if (!hulls || hulls.length === 0) continue;
         composeTree(tree, matrix);
         for (const hull of hulls) {
-          const piece: Vec3[] = [];
-          for (let i = 0; i < hull.length; i += 3) {
-            corner.set(hull[i], hull[i + 1], hull[i + 2]);
+          const points: Vec3[] = [];
+          for (let i = 0; i < hull.corners.length; i += 3) {
+            corner.set(hull.corners[i], hull.corners[i + 1], hull.corners[i + 2]);
             Vector3.TransformCoordinatesToRef(corner, matrix, moved);
-            piece.push({ x: moved.x, y: moved.y, z: moved.z });
+            points.push({ x: moved.x, y: moved.y, z: moved.z });
           }
-          pieces.push(piece);
+          // Moved, turned and scaled evenly, a hull is still one, with the same faces.
+          pieces.push({ kind: "convex", points, triangles: hull.triangles });
         }
       }
       return pieces;

@@ -1,4 +1,4 @@
-import { convexHull, type Plane } from "./hull";
+import { convexHull, hullOfTriangles, type Plane } from "./hull";
 import { aabbOfPoints, add, dot, IDENTITY, length, madd, rotate, sub, vec3, type Aabb, type Quat, type Vec3 } from "./vec";
 
 /**
@@ -60,13 +60,20 @@ export interface ConvexDesc extends DescBase {
   kind: "convex";
   /** Any points; the shape is their hull. They must have volume. */
   points: Vec3[];
+  /**
+   * When the points are already a hull - every one a corner - its faces as triangles, wound
+   * counter-clockwise seen from outside: the hull is not worked out again. A hull moved, turned or
+   * scaled evenly is still one, with the same triangles, which is what makes this worth having.
+   */
+  triangles?: ArrayLike<number>;
 }
 
 /**
  * Ground as a grid of heights: `heights[row * columns + col]` stands at
  * (originX + col * cell, originZ + row * cell). Each cell is two triangles, split along the
- * diagonal from its (col, row) corner to its (col + 1, row + 1) corner. A cell can be left out (a
- * hole) - say under a cellar.
+ * diagonal from its (col, row) corner to its (col + 1, row + 1) corner - or, `split: "centre"`,
+ * four, meeting at its middle at the average of its corners' heights (as the game's terrain is
+ * drawn). A cell can be left out (a hole) - say under a cellar.
  */
 export interface HeightfieldDesc extends DescBase {
   kind: "heightfield";
@@ -78,7 +85,10 @@ export interface HeightfieldDesc extends DescBase {
   heights: Float32Array | number[];
   /** One per cell ((columns - 1) * (rows - 1)), 1 where the cell is a hole. */
   holes?: Uint8Array;
+  split?: HeightfieldSplit;
 }
+
+export type HeightfieldSplit = "diagonal" | "centre";
 
 export type ShapeDesc = SphereDesc | CapsuleDesc | BoxDesc | ConvexDesc | HeightfieldDesc;
 
@@ -130,6 +140,7 @@ export interface Heightfield extends ShapeBase {
   rows: number;
   heights: Float32Array;
   holes: Uint8Array | null;
+  split: HeightfieldSplit;
 }
 
 export type Shape = Sphere | Capsule | Box | Convex | Heightfield;
@@ -149,7 +160,7 @@ export function createShape(desc: ShapeDesc, id: number): Shape {
       return box;
     }
     case "convex": {
-      const hull = convexHull(desc.points);
+      const hull = desc.triangles ? hullOfTriangles(desc.points, desc.triangles) : convexHull(desc.points);
       return { ...base, kind: "convex", points: hull.points, triangles: hull.triangles, planes: hull.planes, bounds: aabbOfPoints(hull.points) };
     }
     case "heightfield": {
@@ -167,6 +178,7 @@ export function createShape(desc: ShapeDesc, id: number): Shape {
         rows: desc.rows,
         heights,
         holes: desc.holes ?? null,
+        split: desc.split ?? "diagonal",
         bounds: {
           // All the way down: everything under the ground is in it.
           min: vec3(desc.originX, -Infinity, desc.originZ),
@@ -220,8 +232,25 @@ export function heightfieldHeight(field: Heightfield, x: number, z: number): num
   if (field.holes && field.holes[row * (field.columns - 1) + col]) return null;
   const u = fx - col, v = fz - row;
   const h = (c: number, r: number): number => field.heights[(row + r) * field.columns + col + c];
+  if (field.split === "centre") {
+    // Four triangles about the middle: whichever quarter the point is in, between two corners and it.
+    const mid = (h(0, 0) + h(1, 0) + h(0, 1) + h(1, 1)) / 4;
+    const below = v < u, belowOther = v < 1 - u;
+    const [c0, c1] = below && belowOther ? [[0, 0], [1, 0]] : !below && !belowOther ? [[1, 1], [0, 1]] : below ? [[1, 0], [1, 1]] : [[0, 1], [0, 0]];
+    return planeHeight([c0[0], c0[1], h(c0[0], c0[1])], [c1[0], c1[1], h(c1[0], c1[1])], [0.5, 0.5, mid], u, v);
+  }
   // Split along (0,0)-(1,1): below it (u > v) the triangle (0,0),(1,0),(1,1); above, (0,0),(1,1),(0,1).
   return u > v ? h(0, 0) + u * (h(1, 0) - h(0, 0)) + v * (h(1, 1) - h(1, 0)) : h(0, 0) + v * (h(0, 1) - h(0, 0)) + u * (h(1, 1) - h(0, 1));
+}
+
+/** The height at (u, v) of the plane through three (u, v, height) points. */
+function planeHeight(a: number[], b: number[], c: number[], u: number, v: number): number {
+  const e1 = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+  const e2 = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
+  const nx = e1[1] * e2[2] - e1[2] * e2[1];
+  const ny = e1[2] * e2[0] - e1[0] * e2[2];
+  const nh = e1[0] * e2[1] - e1[1] * e2[0];
+  return a[2] - (nx * (u - a[0]) + ny * (v - a[1])) / nh;
 }
 
 /** Whether a point is inside a shape - under the ground, for a heightfield. */

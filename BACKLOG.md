@@ -5,6 +5,16 @@ does not mean re-deriving why it matters. Newest first within each section.
 
 ## Performance
 
+### The collision world has not been profiled
+
+The player now walks on the collision motor (COLLISION.md) through every full-detail chunk's
+ground and tree pieces - a batch per chunk, added as the chunk is built. None of it has been timed
+in the game: what a chunk's batch costs to add (its box tree and each tree's hull planes), what
+the motor's update costs per frame in a dense wood (the sandbox measured 0.05-0.3 ms on its own
+small scenes), and how both scale with tree density and draw distance. The sweeps go through GJK
+for every pair and conservative advancement, with no exact shortcuts for sphere and capsule
+pairs yet - the first place to look if a profile points at them.
+
 ### Every loaded chunk is a shadow caster, however far past the shadow's own reach
 
 `chunkManager` registers every chunk it builds as a shadow caster, with no distance cutoff of its
@@ -301,6 +311,14 @@ One 1024 texture per material, tiled. Most visible in the desert, where large fl
 sand texture with nothing to break up the repeat.
 
 ## Pipeline
+
+### No image filters for texture generation
+
+The texture pipeline makes its images from noise and its operations on values, but has no filters
+that work on a neighbourhood of an image - a Kuwahara filter above all, which flattens a texture
+into painterly patches with crisp edges between them, and the like (blurs, edge-aware smoothing,
+posterising). An idea to explore, not yet a plan: where such a filter would sit in a graph, and
+what it costs at bake time.
 
 ### Domain warping and coordinate inputs are not expressible
 

@@ -2,6 +2,7 @@ import { createEngine, createScene } from "./core/engine";
 import { createWorld, DEFAULT_DRAW_DISTANCE, MIN_DRAW_DISTANCE, MAX_DRAW_DISTANCE } from "./world/world";
 import { createCharacter } from "./player/characterController";
 import { createIndoorCamera, createThirdPersonCamera } from "./player/thirdPersonCamera";
+import { createSpectatorCamera } from "./player/spectatorCamera";
 import { createDebugMap } from "./debug/debugMap";
 import { createSettingsPanel } from "./debug/settingsPanel";
 import { createZoneLabel } from "./debug/zoneLabel";
@@ -45,12 +46,20 @@ const world = await createWorld(scene, content, ({ phase, completed, total }) =>
   loadingScreen.update(phase, completed, total);
 });
 
-const character = createCharacter(scene, world.heightAt, world.groundAt);
+const character = createCharacter(scene, world.collision, world.heightAt);
 const camera = createThirdPersonCamera(scene, canvas, character.mesh);
 const indoorCamera = createIndoorCamera(camera, () => world.indoors(character.mesh.position.x, character.mesh.position.z, character.mesh.position.y - 0.9));
 // Camera near/far and the shadow generator's own frustum both need the real camera, which does
 // not exist until here - see World.attachCamera.
 world.attachCamera(camera);
+// A camera to fly about in, with no body - the settings panel's "Spectator" switches to it and back.
+const spectator = createSpectatorCamera(scene, canvas);
+function setSpectating(on: boolean): void {
+  if (on === spectator.active) return;
+  if (on) spectator.enter(camera);
+  else spectator.leave(camera);
+  world.attachCamera(on ? spectator.camera : camera);
+}
 const debugMap = createDebugMap(world.sampleTerrain, world.worldExtent, world.continents, world.materialLibrary, world.areaBounds, world.areaNames, world.settlements, world.features, world.roads, (worldX, worldZ) => {
   character.teleport(worldX, worldZ);
 });
@@ -74,6 +83,16 @@ createSettingsPanel({
     { label: "Grass", initial: true, onChange: (on) => world.grass.setVisible(on) },
     { label: "Shadows", initial: true, onChange: (on) => world.setShadowsEnabled(on) },
     { label: "Wireframe", initial: false, onChange: (on) => world.setWireframe(on) },
+    {
+      label: "Spectator",
+      initial: false,
+      onChange: (on) => {
+        setSpectating(on);
+        // Off the checkbox, or Space - up, while flying - would tick it again.
+        (document.activeElement as HTMLElement | null)?.blur();
+        canvas.focus();
+      },
+    },
   ],
   sliders: [
     {
@@ -158,6 +177,7 @@ function gotoLoaded(view: Partial<ViewSnapshot> & { x: number; z: number }, iter
   world,
   character,
   camera,
+  spectator,
   scene,
   engine,
 };
@@ -173,11 +193,16 @@ window.addEventListener("keydown", (e) => {
 
 scene.onBeforeRenderObservable.add(() => {
   const deltaSeconds = engine.getDeltaTime() / 1000;
-  character.update(deltaSeconds, camera);
-  indoorCamera.update();
-  world.updateChunks(character.mesh.position.x, character.mesh.position.z);
-  debugMap.updateMarker(character.mesh.position.x, character.mesh.position.z, camera.alpha);
-  const here = world.sampleTerrain(character.mesh.position.x, character.mesh.position.z);
+  // The world streams, and its weather and light follow, wherever is being looked from: the player,
+  // or the spectator camera while it flies.
+  if (!spectator.active) {
+    character.update(deltaSeconds, camera);
+    indoorCamera.update();
+  }
+  const focus = spectator.active ? spectator.camera.position : character.mesh.position;
+  world.updateChunks(focus.x, focus.z);
+  debugMap.updateMarker(focus.x, focus.z, camera.alpha);
+  const here = world.sampleTerrain(focus.x, focus.z);
   const zoneName = world.areaNames.get(here.primaryAreaId) ?? "Uncharted";
   zoneLabel.update(zoneName, here.primaryBiome.name, world.weather.describe(here.primaryAreaId));
   positionPanel.update(character.mesh.position, camera, zoneName, here.primaryBiome.name);
@@ -185,7 +210,7 @@ scene.onBeforeRenderObservable.add(() => {
   // Day-night first: it owns the clock, and updateAtmosphere reads that clock's current value
   // (world.ts's updateAtmosphere calls sunLighting.getTimeHours() itself) - calling it after this
   // is what makes that read this frame's time rather than last frame's.
-  world.updateWeather(deltaSeconds, here.areaWeights, character.mesh.position.x, character.mesh.position.z);
+  world.updateWeather(deltaSeconds, here.areaWeights, focus.x, focus.z);
   world.updateDayNight(deltaSeconds, here.areaWeights);
   world.updateAtmosphere(here.areaWeights);
 });

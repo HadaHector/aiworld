@@ -6,6 +6,7 @@ import {
   createCharacterMotor,
 } from "../../src/world/collision/index.ts";
 import { PRESETS } from "../../src/collisionSandbox/presets.ts";
+import { heightfieldTriangles } from "../../src/world/collision/raycast.ts";
 
 const rng = mulberry32(7);
 const rand = (lo, hi) => lo + rng() * (hi - lo);
@@ -44,7 +45,7 @@ function randomField() {
   const columns = 12, rows = 10;
   const heights = Array.from({ length: columns * rows }, () => rand(-3, 0));
   const holes = new Uint8Array((columns - 1) * (rows - 1)).map(() => (rng() < 0.1 ? 1 : 0));
-  return { kind: "heightfield", originX: -6, originZ: -5, cell: 1, columns, rows, heights, holes };
+  return { kind: "heightfield", originX: -6, originZ: -5, cell: 1, columns, rows, heights, holes, split: rng() < 0.5 ? "diagonal" : "centre" };
 }
 
 // --- Each shape's ray test, against marching along the ray and asking "inside yet?" ---------
@@ -220,8 +221,7 @@ const moved = (q, d) => (q.kind === "sphere" ? { ...q, center: madd(q.center, d,
   const groundGap = (p) => {
     let best = Infinity;
     for (let row = 0; row < field.rows - 1; row++) for (let col = 0; col < field.columns - 1; col++) {
-      const corner = (c, r) => vec3(field.originX + (col + c) * field.cell, shape.heights[(row + r) * field.columns + col + c], field.originZ + (row + r) * field.cell);
-      for (const [a, b, c] of [[corner(0, 0), corner(1, 1), corner(1, 0)], [corner(0, 0), corner(0, 1), corner(1, 1)]]) best = Math.min(best, len3(sub3(p, closestOnTriangle(p, a, b, c))));
+      for (const [a, b, c] of heightfieldTriangles(shape, col, row)) best = Math.min(best, len3(sub3(p, closestOnTriangle(p, a, b, c))));
     }
     const h = heightfieldHeight(shape, p.x, p.z);
     return h !== null && p.y < h ? -best : best;

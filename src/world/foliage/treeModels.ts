@@ -25,12 +25,20 @@ import { TEXTURE_RESOLUTION } from "../materials/textureGen";
 import { BARK_FRAGMENT_SHADER, BARK_VERTEX_SHADER, LEAF_FRAGMENT_SHADER, LEAF_VERTEX_SHADER, ROCK_FRAGMENT_SHADER, ROCK_VERTEX_SHADER } from "./treeShaders";
 import { generateBoulder } from "./boulderGenerator";
 import type { ColorMatrix } from "../materials/colorAdjust";
+import { convexHull } from "../collision/hull";
 
 /**
  * One archetype's geometry, built in tree space: the base of the trunk sits at the origin and the
  * crown is already lifted into place, so a whole tree is one transform - position, uniform scale, a
  * spin about Y - and both meshes are driven by the same matrix. See treeField.ts.
  */
+/** One convex piece of a tree: its hull's corners (x, y, z in turn) and triangles, counter-clockwise
+ *  seen from outside. */
+export interface TreeCollider {
+  corners: Float32Array;
+  triangles: Uint16Array;
+}
+
 export interface TreeModel {
   /** None for a bush, which is all leaves, or a boulder, which is all stone. */
   trunk?: Mesh;
@@ -38,9 +46,10 @@ export interface TreeModel {
   canopy: Mesh;
   /** A cheaper model of the same tree for distant chunks, if the kind has one. */
   far?: TreeModel;
-  /** What stands in the way, in tree space: convex pieces, each its corners' x, y, z in turn (see
-   *  TreeGeometry.colliders). None for a kind that has no collision yet. */
-  colliders?: Float32Array[];
+  /** What stands in the way, in tree space: convex pieces (see TreeGeometry.colliders), their hulls
+   *  worked out once here so a tree placed in the world only has to move their corners. None for a
+   *  kind that has no collision yet. */
+  colliders?: TreeCollider[];
   /** The two ends of the palette a tree's tint mixes its canopy between. */
   tintDark: Color3;
   tintLight: Color3;
@@ -356,9 +365,16 @@ function createGeneratedModels(scene: Scene, def: TreeKindDef, kind: GeneratedKi
     const variantSeed = deriveSeed(ownSeed, variant + 1);
     const near = kind.generate(variantSeed, "near");
     const far = kind.generate(variantSeed, "far");
-    models.push({ ...build(near, `tree_${def.id}_${variant}_near`), far: build(far, `tree_${def.id}_${variant}_far`), colliders: near.colliders });
+    models.push({ ...build(near, `tree_${def.id}_${variant}_near`), far: build(far, `tree_${def.id}_${variant}_far`), colliders: near.colliders.map(hullPiece) });
   }
   return models;
+}
+
+function hullPiece(corners: Float32Array): TreeCollider {
+  const points = [];
+  for (let i = 0; i < corners.length; i += 3) points.push({ x: corners[i], y: corners[i + 1], z: corners[i + 2] });
+  const hull = convexHull(points);
+  return { corners: new Float32Array(hull.points.flatMap((p) => [p.x, p.y, p.z])), triangles: Uint16Array.from(hull.triangles) };
 }
 
 /** One leaf-only model per variant, all sharing the kind's atlas and material. */

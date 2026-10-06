@@ -15,6 +15,23 @@ export interface Hull {
   planes: Plane[];
 }
 
+/** A hull already worked out, from its corners and its triangles: just its planes found again. */
+export function hullOfTriangles(points: readonly Vec3[], triangles: ArrayLike<number>): Hull {
+  let extent = 0;
+  for (const p of points) extent = Math.max(extent, Math.abs(p.x), Math.abs(p.y), Math.abs(p.z));
+  const planeEps = Math.max(extent, 1) * 1e-6;
+  const planes: Plane[] = [];
+  for (let i = 0; i < triangles.length; i += 3) {
+    const a = points[triangles[i]], b = points[triangles[i + 1]], c = points[triangles[i + 2]];
+    const n = cross(sub(b, a), sub(c, a));
+    if (length(n) === 0) continue;
+    const normal = normalize(n);
+    const d = dot(normal, a);
+    if (!planes.some((q) => dot(q.normal, normal) > 1 - 1e-9 && Math.abs(q.d - d) < planeEps)) planes.push({ normal, d });
+  }
+  return { points: points.map((p) => ({ ...p })), triangles: Array.from(triangles), planes };
+}
+
 interface Face {
   a: number;
   b: number;
