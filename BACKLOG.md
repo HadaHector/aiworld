@@ -5,6 +5,17 @@ does not mean re-deriving why it matters. Newest first within each section.
 
 ## Performance
 
+### Every house's models are built at startup
+
+All settlements' houses are generated near and far while the world loads: 1870 houses on one
+continent, about 10 s outside the browser (scripts/probe/startup.local.mjs). Inside a house the
+roof is about 40% of it, then its wall parts, framing and interior plan about 1.5 s each over all
+of them. Fine for now - settlements were meant to hold far fewer buildings than they do. Later, the
+finished models could be cached (on a server, or like the texture cache): they are little data
+next to the textures, and the same seed always gives the same houses. Building each settlement's
+houses only when it first comes into view is the other way out, but it has to bring the ground's
+cellar holes (worldCollision.ts) along with it.
+
 ### The collision world has not been profiled
 
 The player now walks on the collision motor (COLLISION.md) through every full-detail chunk's

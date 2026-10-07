@@ -8,7 +8,7 @@ import { deriveSeed, mulberry32 } from "../rng";
 import type { SettlementSite } from "./settlementSites";
 import { chooseGate, type SettlementGate } from "./gates";
 import type { BuildingDef } from "../buildings/buildingTypes";
-import { generateBuilding } from "../buildings/buildingGenerator";
+import { measureBuilding } from "../buildings/buildingGenerator";
 
 /** A house's variant of its building is drawn from this many - enough that no two in a town share
  *  one by more than chance. */
@@ -627,7 +627,7 @@ function layoutSettlement(
           }
           const entry = pickFrom(choices);
           const variant = Math.floor(rng() * BUILDING_VARIANT_SPACE);
-          const model = generateBuilding(entry.building, seed, variant);
+          const model = measureBuilding(entry.building, seed, variant);
           pending = { entry, variant, width: model.halfWidth * 2, depth: model.halfDepth * 2, tries: 0 };
           if (rng() >= tier.plotFill) {
             s += pending.width * 0.8;

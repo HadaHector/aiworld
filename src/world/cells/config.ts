@@ -7,7 +7,7 @@ export const CELL_BOUNDS_MARGIN = CELL_SPACING * 2;
 
 // Content-first sizing: the user sets how many continents and how large they are; world size is
 // derived from this (see cells/continentLayout.ts), not the other way around.
-export const CONTINENT_COUNT_RANGE: [number, number] = [3, 5];
+export const CONTINENT_COUNT_RANGE: [number, number] = [1, 1];
 export const AREAS_PER_CONTINENT_RANGE: [number, number] = [20, 30];
 export const CELLS_PER_AREA = 10;
 

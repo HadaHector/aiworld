@@ -65,6 +65,20 @@ function buildBoxes(spec: BoxesSpec, rng: () => number): BuildingModel {
  * from afar: the same building, with its small details left out.
  */
 export function generateBuilding(def: BuildingDef, seed: number, variant: number, far = false): BuildingModel {
+  return generate(def, seed, variant, far, false);
+}
+
+/**
+ * How far a building reaches either side of its middle, along x and z - its model's halfWidth and
+ * halfDepth - worked out the way the model is, every roll the same, but with no geometry kept: what
+ * a settlement needs to fit it to a plot, at a fraction of the cost of building it.
+ */
+export function measureBuilding(def: BuildingDef, seed: number, variant: number): { halfWidth: number; halfDepth: number } {
+  const { halfWidth, halfDepth } = generate(def, seed, variant, false, true);
+  return { halfWidth, halfDepth };
+}
+
+function generate(def: BuildingDef, seed: number, variant: number, far: boolean, measure: boolean): BuildingModel {
   let hash = 0;
   for (let i = 0; i < def.id.length; i++) hash = (Math.imul(hash, 31) + def.id.charCodeAt(i)) | 0;
   const rng = mulberry32(deriveSeed(deriveSeed(seed, hash), variant));
@@ -72,6 +86,6 @@ export function generateBuilding(def: BuildingDef, seed: number, variant: number
     case "boxes":
       return buildBoxes(def.boxes!, rng);
     case "house":
-      return buildHouse(def.house!, rng, far);
+      return buildHouse(def.house!, rng, far, measure);
   }
 }

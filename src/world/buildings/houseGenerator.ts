@@ -83,10 +83,10 @@ function wallRuns(inside: (i: number, j: number) => boolean, blocks: Block[]): W
  * the ones over it do not cover is a roof or a terrace; what a storey covers that the one under it
  * does not - an arcade, a jetty - has a ceiling, and an arcade supports along its open side.
  */
-export function buildHouse(spec: HouseSpec, rng: () => number, far = false): BuildingModel {
-  const b = new ModelBuilder();
+export function buildHouse(spec: HouseSpec, rng: () => number, far = false, measure = false): BuildingModel {
+  const b = new ModelBuilder(measure);
   // What it puts in the way - for the near model only, which is the one walked into.
-  const colliders = far ? null : new ColliderBuilder();
+  const colliders = far || measure ? null : new ColliderBuilder();
   const tile = roll(spec.tile, rng);
 
   const wallHeight = roll(spec.wallHeight, rng);

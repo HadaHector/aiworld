@@ -362,6 +362,11 @@ function drawSlab(b: ModelBuilder, face: RoofFace, slope: number, sag: Sag, look
   };
   /** A polygon split into cells, each drawn by `draw`. */
   const cells = (polygon: Point[], draw: (cell: Point[]) => void): void => {
+    // Measured only: the cells fill the polygon, so it reaches as far whole.
+    if (b.measure) {
+      draw(polygon);
+      return;
+    }
     const step = look.step;
     const xs = polygon.map((p) => p[0]);
     const zs = polygon.map((p) => p[1]);

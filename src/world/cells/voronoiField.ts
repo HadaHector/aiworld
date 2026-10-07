@@ -45,23 +45,63 @@ const MAX_RING = 12;
 
 /** Generic nearest/second-nearest seed-point lookup, bucketed into a grid for fast queries. */
 export function createVoronoiField(points: VoronoiPoint[], cellSize: number): VoronoiField {
-  const buckets = new Map<string, number[]>();
-
-  function bucketKey(gx: number, gz: number): string {
-    return `${gx},${gz}`;
-  }
-
+  // The buckets: a dense grid over the points' extent, each bucket a run of `order` (point indices,
+  // in the order they were given) from `start` for `count` - integers all the way, since a query
+  // visits dozens of buckets and building a string key for each was most of its cost.
+  let minGx = Infinity, maxGx = -Infinity, minGz = Infinity, maxGz = -Infinity;
+  const gxOf = new Int32Array(points.length);
+  const gzOf = new Int32Array(points.length);
   points.forEach((point, index) => {
     const gx = Math.floor(point.x / cellSize);
     const gz = Math.floor(point.z / cellSize);
-    const key = bucketKey(gx, gz);
-    const bucket = buckets.get(key);
-    if (bucket) {
-      bucket.push(index);
-    } else {
-      buckets.set(key, [index]);
-    }
+    gxOf[index] = gx;
+    gzOf[index] = gz;
+    minGx = Math.min(minGx, gx); maxGx = Math.max(maxGx, gx);
+    minGz = Math.min(minGz, gz); maxGz = Math.max(maxGz, gz);
   });
+  if (points.length === 0) minGx = maxGx = minGz = maxGz = 0;
+  const columns = maxGx - minGx + 1;
+  const rows = maxGz - minGz + 1;
+  const count = new Int32Array(columns * rows);
+  for (let i = 0; i < points.length; i++) count[(gzOf[i] - minGz) * columns + (gxOf[i] - minGx)]++;
+  const start = new Int32Array(columns * rows);
+  for (let b = 1; b < start.length; b++) start[b] = start[b - 1] + count[b - 1];
+  const order = new Int32Array(points.length);
+  const filled = new Int32Array(columns * rows);
+  for (let i = 0; i < points.length; i++) {
+    const b = (gzOf[i] - minGz) * columns + (gxOf[i] - minGx);
+    order[start[b] + filled[b]++] = i;
+  }
+  const px = Float64Array.from(points, (p) => p.x);
+  const pz = Float64Array.from(points, (p) => p.z);
+
+  /** The bucket at grid (gx, gz), or -1 off the grid or where it is empty. */
+  function bucketAt(gx: number, gz: number): number {
+    if (gx < minGx || gx > maxGx || gz < minGz || gz > maxGz) return -1;
+    const b = (gz - minGz) * columns + (gx - minGx);
+    return count[b] > 0 ? b : -1;
+  }
+
+  /**
+   * Every bucket on the edge of the square ring `ring` round (cx, cz), in the order a sweep of the
+   * whole square would meet them - x, then z, rising - but without visiting its inside.
+   */
+  function forEachRingBucket(cx: number, cz: number, ring: number, visit: (bucket: number) => void): void {
+    for (let gx = cx - ring; gx <= cx + ring; gx++) {
+      const edgeColumn = gx === cx - ring || gx === cx + ring;
+      if (edgeColumn || ring === 0) {
+        for (let gz = cz - ring; gz <= cz + ring; gz++) {
+          const b = bucketAt(gx, gz);
+          if (b >= 0) visit(b);
+        }
+      } else {
+        const low = bucketAt(gx, cz - ring);
+        if (low >= 0) visit(low);
+        const high = bucketAt(gx, cz + ring);
+        if (high >= 0) visit(high);
+      }
+    }
+  }
 
   function query(x: number, z: number): VoronoiQuery {
     let nearestIndex = -1;
@@ -73,18 +113,16 @@ export function createVoronoiField(points: VoronoiPoint[], cellSize: number): Vo
     const centerGz = Math.floor(z / cellSize);
 
     for (let ring = 0; ring <= MAX_RING; ring++) {
+      // The ring's edge, as forEachRingBucket walks it - written out here, the hottest loop there is.
       for (let gx = centerGx - ring; gx <= centerGx + ring; gx++) {
-        for (let gz = centerGz - ring; gz <= centerGz + ring; gz++) {
-          const onRingEdge = Math.max(Math.abs(gx - centerGx), Math.abs(gz - centerGz)) === ring;
-          if (!onRingEdge) continue;
-
-          const bucket = buckets.get(bucketKey(gx, gz));
-          if (!bucket) continue;
-
-          for (const index of bucket) {
-            const point = points[index];
-            const dx = point.x - x;
-            const dz = point.z - z;
+        const edgeColumn = ring === 0 || gx === centerGx - ring || gx === centerGx + ring;
+        for (let gz = centerGz - ring; gz <= centerGz + ring; gz += edgeColumn ? 1 : 2 * ring) {
+          if (gx < minGx || gx > maxGx || gz < minGz || gz > maxGz) continue;
+          const b = (gz - minGz) * columns + (gx - minGx);
+          for (let k = start[b], end = start[b] + count[b]; k < end; k++) {
+            const index = order[k];
+            const dx = px[index] - x;
+            const dz = pz[index] - z;
             const distSq = dx * dx + dz * dz;
 
             if (distSq < nearestDistance) {
@@ -131,27 +169,19 @@ export function createVoronoiField(points: VoronoiPoint[], cellSize: number): Vo
       const ringBound = Math.max(0, ring - 1) * cellSize;
       if (ringBound * ringBound >= Math.min(bestDistSq, maxDistanceSq)) break;
 
-      for (let gx = centerGx - ring; gx <= centerGx + ring; gx++) {
-        for (let gz = centerGz - ring; gz <= centerGz + ring; gz++) {
-          const onRingEdge = Math.max(Math.abs(gx - centerGx), Math.abs(gz - centerGz)) === ring;
-          if (!onRingEdge) continue;
-
-          const bucket = buckets.get(bucketKey(gx, gz));
-          if (!bucket) continue;
-
-          for (const index of bucket) {
-            if (!accept(index)) continue;
-            const point = points[index];
-            const dx = point.x - x;
-            const dz = point.z - z;
-            const distSq = dx * dx + dz * dz;
-            if (distSq < bestDistSq) {
-              bestDistSq = distSq;
-              bestIndex = index;
-            }
+      forEachRingBucket(centerGx, centerGz, ring, (b) => {
+        for (let k = start[b], end = start[b] + count[b]; k < end; k++) {
+          const index = order[k];
+          if (!accept(index)) continue;
+          const dx = px[index] - x;
+          const dz = pz[index] - z;
+          const distSq = dx * dx + dz * dz;
+          if (distSq < bestDistSq) {
+            bestDistSq = distSq;
+            bestIndex = index;
           }
         }
-      }
+      });
     }
 
     if (bestDistSq > maxDistanceSq) return { index: -1, distance: Infinity };
@@ -171,29 +201,21 @@ export function createVoronoiField(points: VoronoiPoint[], cellSize: number): Vo
       const ringBound = Math.max(0, ring - 1) * cellSize;
       if (ringBound * ringBound >= maxDistanceSq) break;
 
-      for (let gx = centerGx - ring; gx <= centerGx + ring; gx++) {
-        for (let gz = centerGz - ring; gz <= centerGz + ring; gz++) {
-          const onRingEdge = Math.max(Math.abs(gx - centerGx), Math.abs(gz - centerGz)) === ring;
-          if (!onRingEdge) continue;
+      forEachRingBucket(centerGx, centerGz, ring, (b) => {
+        for (let k = start[b], end = start[b] + count[b]; k < end; k++) {
+          const index = order[k];
+          const dx = px[index] - x;
+          const dz = pz[index] - z;
+          const distSq = dx * dx + dz * dz;
+          if (distSq > maxDistanceSq) continue;
 
-          const bucket = buckets.get(bucketKey(gx, gz));
-          if (!bucket) continue;
-
-          for (const index of bucket) {
-            const point = points[index];
-            const dx = point.x - x;
-            const dz = point.z - z;
-            const distSq = dx * dx + dz * dz;
-            if (distSq > maxDistanceSq) continue;
-
-            const group = groupOf(index);
-            const best = nearestSqByGroup.get(group);
-            if (best === undefined || distSq < best) {
-              nearestSqByGroup.set(group, distSq);
-            }
+          const group = groupOf(index);
+          const best = nearestSqByGroup.get(group);
+          if (best === undefined || distSq < best) {
+            nearestSqByGroup.set(group, distSq);
           }
         }
-      }
+      });
     }
 
     const result = new Map<number, number>();

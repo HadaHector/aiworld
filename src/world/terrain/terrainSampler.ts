@@ -1,3 +1,4 @@
+import { sampleCounter, timed } from "../loadTimings";
 import { deriveSeed } from "../rng";
 import { smoothstep, lerp } from "../mathUtils";
 import { createAreaSampler, SEA_LEVEL, type AreaWeight, type AreaBounds } from "../cells/areaField";
@@ -173,6 +174,7 @@ export function createTerrainSampler(seed: number, content: WorldContent): Terra
   let featureField: FeatureField | null = null;
 
   function sampleTerrain(worldX: number, worldZ: number): TerrainSample {
+    sampleCounter.count++;
     const area = sampleArea(worldX, worldZ);
 
     // Weighted sum over every area with a say here, using the same weights the materials blend by,
@@ -273,30 +275,32 @@ export function createTerrainSampler(seed: number, content: WorldContent): Terra
   // because placing one is entirely a question about the finished terrain - how level it is, how
   // far above the water, how near a river.
   const kinds = content.featureKinds;
-  const rolls = rollCellFeatures(seed, landCellSites, sampleTerrain, kinds);
+  const rolls = timed("Rolling each cell's feature", () => rollCellFeatures(seed, landCellSites, sampleTerrain, kinds));
   // The settlements first, in the cells that rolled one: they choose their ground by their own rules,
   // and everything else keeps clear of them.
   const settledCells = rolls.flatMap((roll, cell) => (roll !== NO_ROLL && kinds[roll].type === "settlement" ? [cell] : []));
-  const settlements = generateSettlementSites({
-    seed,
-    cellSites: settledCells.map((cell) => landCellSites[cell]),
-    cellIds: settledCells,
-    sampleTerrain,
-    nameFor: (biome, id) => nameGenerator.settlementNameFor(biome.voiceId, id),
-  });
+  const settlements = timed("Siting settlements", () =>
+    generateSettlementSites({
+      seed,
+      cellSites: settledCells.map((cell) => landCellSites[cell]),
+      cellIds: settledCells,
+      sampleTerrain,
+      nameFor: (biome, id) => nameGenerator.settlementNameFor(biome.voiceId, id),
+    }),
+  );
 
   // Then every other cell's feature, and their ground edits bound.
-  const features = placeFeatures({ seed, cellSites: landCellSites, sampleTerrain, kinds, rolls, settlements });
+  const features = timed("Placing features", () => placeFeatures({ seed, cellSites: landCellSites, sampleTerrain, kinds, rolls, settlements }));
   featureField = createFeatureField(features);
 
   // Roads need the settlements to connect and the finished terrain to route over, so they come
   // last of all - keeping off the features' ground, and running a track out to each that wants one.
-  const roads = generateRoadNetwork(seed, settlements, sampleTerrain, features);
+  const roads = timed("Routing roads", () => generateRoadNetwork(seed, settlements, sampleTerrain, features));
   roadField = createRoadField(roads.links, ROAD_QUERY_RADIUS, ROAD_GRADE_END_TAPER);
 
   // Settlements are laid out on the terrain as the roads left it, then their streets join the road
   // field (graded and painted like roads, narrower) and their plots are levelled.
-  const settlementLayouts = generateSettlementLayouts(seed, settlements, roads.gates, roads.links, sampleTerrain);
+  const settlementLayouts = timed("Laying out settlements", () => generateSettlementLayouts(seed, settlements, roads.gates, roads.links, sampleTerrain));
   roadField = createRoadField(
     [...roads.links, ...settlementLayouts.flatMap((layout) => layout.streets)],
     ROAD_QUERY_RADIUS,

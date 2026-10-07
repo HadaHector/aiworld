@@ -41,6 +41,15 @@ export class ModelBuilder {
   maxZ = -Infinity;
   maxY = 0;
 
+  /** `measure`: only how far it reaches is kept - no geometry - for a house measured for its plot
+   *  before it is built. */
+  /** Only measuring: how far it reaches is kept, no geometry (see the constructor). */
+  readonly measure: boolean;
+
+  constructor(measure = false) {
+    this.measure = measure;
+  }
+
   private slotOf(material: string | null): number {
     if (material === null) return -1;
     let slot = this.materials.indexOf(material);
@@ -62,6 +71,16 @@ export class ModelBuilder {
    * cells of one surface share one frame and its texture runs across them unbroken.
    */
   surface(corners: Vec3[], normals: Vec3[], frame: Vec3, paint: Paint, grain?: Vec3): void {
+    if (this.measure) {
+      for (const [x, y, z] of corners) {
+        this.minX = Math.min(this.minX, x);
+        this.maxX = Math.max(this.maxX, x);
+        this.minZ = Math.min(this.minZ, z);
+        this.maxZ = Math.max(this.maxZ, z);
+        this.maxY = Math.max(this.maxY, y);
+      }
+      return;
+    }
     let v = grain ? inPlane(grain, frame) : inPlane(UP, frame);
     if (Math.hypot(...v) < 1e-3) v = inPlane(grain ? UP : [0, 0, 1], frame);
     if (Math.hypot(...v) < 1e-3) v = inPlane([0, 0, 1], frame);

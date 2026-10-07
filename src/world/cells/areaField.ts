@@ -1,3 +1,4 @@
+import { timed } from "../loadTimings";
 import { createVoronoiField, type VoronoiField } from "./voronoiField";
 import { computeCellBounds, generateCellDiagram, type CellPoint } from "./cellGrid";
 import { createRiverField } from "./riverField";
@@ -210,7 +211,8 @@ function resolveBoundaryHillStyle(
 export function createAreaSampler(seed: number, content: WorldContent): AreaWorld {
   const layout = planWorld(seed);
   const bounds = computeCellBounds(WORLD_CENTER_X, WORLD_CENTER_Z, layout.worldExtent, CELL_BOUNDS_MARGIN);
-  const { points, adjacency, seamBetween } = generateCellDiagram(seed, bounds, CELL_SPACING);
+  const { points, adjacency, seamBetween } = timed("Laying out the cells", () => generateCellDiagram(seed, bounds, CELL_SPACING));
+  const continentsStarted = performance.now();
 
   const landCells = new Set<number>();
   const cellToAreaId = new Map<number, number>();
@@ -311,7 +313,8 @@ export function createAreaSampler(seed: number, content: WorldContent): AreaWorl
     }
   }
 
-  const riverField = createRiverField(riverPolylines, RIVER_QUERY_RADIUS);
+  console.info(`[shaping] Growing continents, zones, lakes and rivers: ${((performance.now() - continentsStarted) / 1000).toFixed(2)} s`);
+  const riverField = timed("Indexing rivers", () => createRiverField(riverPolylines, RIVER_QUERY_RADIUS));
 
   // landField is built from a filtered point array, so its query indices need remapping back to
   // the original cell indices that cellToAreaId is keyed by.
