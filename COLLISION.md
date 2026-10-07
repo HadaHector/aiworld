@@ -143,4 +143,8 @@ The game's player walks on the motor through these: WASD, Shift to run, Space to
 chunk's collision is not built yet it stands on the terrain's own height. The settings panel's
 "Spectator" swaps it for a free-flying camera with no body.
 
-Later, each its own step: the camera kept out of walls by a ray; navigation.
+The third-person camera is kept out of walls: a sphere swept from the player's head to where the
+camera wants to be, the camera stopping where it first touches, and easing back out once clear
+(player/thirdPersonCamera.ts).
+
+Later, its own step: navigation.

@@ -1,7 +1,7 @@
 import { createEngine, createScene } from "./core/engine";
 import { createWorld, DEFAULT_DRAW_DISTANCE, MIN_DRAW_DISTANCE, MAX_DRAW_DISTANCE } from "./world/world";
 import { createCharacter } from "./player/characterController";
-import { createIndoorCamera, createThirdPersonCamera } from "./player/thirdPersonCamera";
+import { createCameraCollision, createThirdPersonCamera } from "./player/thirdPersonCamera";
 import { createSpectatorCamera } from "./player/spectatorCamera";
 import { createDebugMap } from "./debug/debugMap";
 import { createSettingsPanel } from "./debug/settingsPanel";
@@ -50,7 +50,7 @@ const world = await createWorld(scene, content, ({ phase, completed, total }) =>
 loadingScreen.update("Placing the player", 0, 0);
 const character = createCharacter(scene, world.collision, world.heightAt, world.groundAt);
 const camera = createThirdPersonCamera(scene, canvas, character.mesh);
-const indoorCamera = createIndoorCamera(camera, () => world.indoors(character.mesh.position.x, character.mesh.position.z, character.mesh.position.y - 0.9));
+const cameraCollision = createCameraCollision(camera, world.collision.world);
 // Camera near/far and the shadow generator's own frustum both need the real camera, which does
 // not exist until here - see World.attachCamera.
 world.attachCamera(camera);
@@ -248,7 +248,7 @@ scene.onBeforeRenderObservable.add(() => {
     const started = performance.now();
     character.update(deltaSeconds, camera);
     collisionPanel.addPlayerMs(performance.now() - started);
-    indoorCamera.update();
+    cameraCollision.update(deltaSeconds);
   }
   const focus = spectator.active ? spectator.camera.position : character.mesh.position;
   world.updateChunks(focus.x, focus.z);

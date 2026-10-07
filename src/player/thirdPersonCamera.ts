@@ -1,4 +1,5 @@
 import { ArcRotateCamera, type Mesh, type Scene } from "@babylonjs/core";
+import type { CollisionWorld } from "../world/collision/index";
 
 /** Mouse-orbit third-person camera that follows a target mesh's position. */
 export function createThirdPersonCamera(scene: Scene, canvas: HTMLCanvasElement, target: Mesh): ArcRotateCamera {
@@ -24,30 +25,53 @@ export function createThirdPersonCamera(scene: Scene, canvas: HTMLCanvasElement,
   return camera;
 }
 
-/** How close the camera comes in behind the player indoors - inside the room, not out past its
- *  walls - and the least it may zoom to there. */
-const INDOOR_RADIUS = 4;
-const INDOOR_LOWER_LIMIT = 1.5;
+/** The camera's own size, as the collision sees it - kept clear of walls by this much, near the
+ *  camera's near plane (1 m, see lighting/sunLighting.ts), so a wall it stops at is not cut open. */
+const CAMERA_RADIUS = 0.8;
+/** The sweep sets off this far over the camera's target (the middle of the player's capsule) - from
+ *  the head, clear of the floor, which a sphere this size would start inside. */
+const HEAD = 0.7;
+/** The nearest the player may zoom in, and the nearest a wall may push the camera. */
+const MIN_ZOOM = 6;
+const MIN_PUSHED = 0.8;
+/** How quickly the camera eases back out once a wall stops pushing it in (per second). */
+const EASE_OUT = 6;
 
 /**
- * Brings the camera in close while the player is inside a building's rooms, and lets it back out to
- * where it was on the way out. No collision yet: this only keeps it from sitting outside the walls.
+ * Keeps the camera out of walls: each frame a small sphere is swept from the player out to where
+ * the camera wants to be, and the camera stops where it first touches something - a wall, a roof, a
+ * tree - easing back out once the way is clear. The zoom the player chose (the wheel) is kept and
+ * returned to; only what is in the way brings the camera nearer.
  */
-export function createIndoorCamera(camera: ArcRotateCamera, indoors: () => boolean): { update: () => void } {
-  const outdoorLimit = camera.lowerRadiusLimit ?? 6;
-  let outdoorRadius: number | null = null;
+export function createCameraCollision(camera: ArcRotateCamera, world: CollisionWorld): { update: (deltaSeconds: number) => void } {
+  // The camera's own limit would stop a wall pushing it in: the zoom's floor is kept here instead.
+  camera.lowerRadiusLimit = MIN_PUSHED;
+  let wanted = Math.max(camera.radius, MIN_ZOOM);
+  let set = camera.radius;
   return {
-    update() {
-      const inside = indoors();
-      if (inside && outdoorRadius === null) {
-        outdoorRadius = camera.radius;
-        camera.lowerRadiusLimit = INDOOR_LOWER_LIMIT;
-        camera.radius = Math.min(camera.radius, INDOOR_RADIUS);
-      } else if (!inside && outdoorRadius !== null) {
-        camera.lowerRadiusLimit = outdoorLimit;
-        camera.radius = Math.max(outdoorRadius, outdoorLimit);
-        outdoorRadius = null;
+    update(deltaSeconds) {
+      // A change not made here is the player's zoom.
+      if (Math.abs(camera.radius - set) > 1e-6) wanted = Math.max(camera.radius, MIN_ZOOM);
+      const target = camera.target;
+      const sinBeta = Math.sin(camera.beta);
+      const out = { x: Math.cos(camera.alpha) * sinBeta, y: Math.cos(camera.beta), z: Math.sin(camera.alpha) * sinBeta };
+      // From the head to where the camera wants to be.
+      const head = { x: target.x, y: target.y + HEAD, z: target.z };
+      const to = { x: target.x + out.x * wanted - head.x, y: target.y + out.y * wanted - head.y, z: target.z + out.z * wanted - head.z };
+      const hit = world.sweep({ kind: "sphere", center: head, radius: CAMERA_RADIUS }, to);
+      let reach = wanted;
+      if (hit && !hit.startedInside) {
+        // Where it stopped, as a distance from the target along the camera's own line.
+        const f = hit.fraction;
+        const at = { x: head.x + to.x * f - target.x, y: head.y + to.y * f - target.y, z: head.z + to.z * f - target.z };
+        reach = Math.max(MIN_PUSHED, Math.hypot(at.x, at.y, at.z));
+      } else if (hit) {
+        reach = MIN_PUSHED;
       }
+      // In at once, out gently.
+      const radius = reach < camera.radius ? reach : Math.min(reach, camera.radius + (reach - camera.radius) * Math.min(1, EASE_OUT * deltaSeconds));
+      camera.radius = radius;
+      set = radius;
     },
   };
 }

@@ -37,8 +37,6 @@ export interface World {
   /** What one stands on at a point with one's feet at `feet`: a floor inside a building where there
    *  is one under them - see settlements/settlementRenderer.ts - otherwise the ground. */
   groundAt: (worldX: number, worldZ: number, feet: number) => number;
-  /** Whether one is inside a building's rooms there. */
-  indoors: (worldX: number, worldZ: number, feet: number) => boolean;
   sampleTerrain: TerrainSampler;
   /** `immediate` builds whatever is queued on this thread now instead of handing it to the chunk
    *  build workers - see ChunkManager.update. */
@@ -293,7 +291,6 @@ export async function createWorld(
   return {
     heightAt,
     groundAt,
-    indoors: (worldX: number, worldZ: number, feet: number) => buildings.floorAt(worldX, worldZ, feet) !== null,
     sampleTerrain,
     updateChunks,
     setDrawDistance,
