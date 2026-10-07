@@ -62,7 +62,7 @@ export const PRESETS: Preset[] = [
   {
     id: "ledge",
     label: "A ledge too high",
-    shapes: [ground(), block(4, 0, 4, 0.7, 4)],
+    shapes: [ground(), block(4, 0, 4, 1, 4)],
     spawn: vec3(0, 0, 0),
     heading: east,
   },

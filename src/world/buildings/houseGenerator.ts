@@ -5,6 +5,7 @@ import type { RoofBlockInput, RoofEnd } from "./pitchedRoof";
 import { inRect, planHouse, type Block, type PlanEnd } from "./housePlans";
 import { cellKey, planInterior, type FaceDir, type InteriorLayout } from "./interiorLayout";
 import { buildInterior, WALL, type Opening } from "./interiorGeometry";
+import { ColliderBuilder, wallBoxes } from "./buildingColliders";
 
 /**
  * A traditional house, built in the order a house is: its plan (tiles, laid out by one of the plan
@@ -84,6 +85,8 @@ function wallRuns(inside: (i: number, j: number) => boolean, blocks: Block[]): W
  */
 export function buildHouse(spec: HouseSpec, rng: () => number, far = false): BuildingModel {
   const b = new ModelBuilder();
+  // What it puts in the way - for the near model only, which is the one walked into.
+  const colliders = far ? null : new ColliderBuilder();
   const tile = roll(spec.tile, rng);
 
   const wallHeight = roll(spec.wallHeight, rng);
@@ -448,7 +451,11 @@ export function buildHouse(spec: HouseSpec, rng: () => number, far = false): Bui
         const key = `${x.toFixed(2)},${z.toFixed(2)}`;
         if (placed.has(key)) continue;
         placed.add(key);
-        buildSupport(support, { x, z, floor: plinth, top: level.floor, far, box: (x0, y0, z0, x1, y1, z1, p) => b.box(x0, y0, z0, x1, y1, z1, p) }, paints);
+        const box = (x0: number, y0: number, z0: number, x1: number, y1: number, z1: number, p: Paint): void => {
+          b.box(x0, y0, z0, x1, y1, z1, p);
+          colliders?.box(x0, y0, z0, x1, y1, z1);
+        };
+        buildSupport(support, { x, z, floor: plinth, top: level.floor, far, box }, paints);
       }
     }
   }
@@ -686,6 +693,13 @@ export function buildHouse(spec: HouseSpec, rng: () => number, far = false): Bui
       const piece = (a0: number, a1: number, y0: number, y1: number): void => {
         if (a1 - a0 < 1e-4 || y1 - y0 < 1e-4) return;
         b.face([wall.at(a0, 0, y0), wall.at(a1, 0, y0), wall.at(a1, 0, y1), wall.at(a0, 0, y1)], wall.normal, paints.walls);
+        // As collision - in a house with rooms, whose walls are hollow - from its face in to where the
+        // rooms' own walls stand.
+        if (colliders && interior) {
+          const [x0, , z0] = wall.at(a0, 0, y0);
+          const [x1, , z1] = wall.at(a1, -WALL - wall.off, y1);
+          colliders.box(x0, y0, z0, x1, y1, z1);
+        }
       };
       let from = wall.from;
       for (const hole of [...(holes.get(keyOf(run, level)) ?? [])].sort((p, q) => p.a0 - q.a0)) {
@@ -801,7 +815,10 @@ export function buildHouse(spec: HouseSpec, rng: () => number, far = false): Bui
           pz: openAlong(range(r.i0, r.i1).map((i): [number, number] => [i, r.j1])),
         },
         far,
-        box: (x0, y0, z0, x1, y1, z1, p) => b.box(x0, y0, z0, x1, y1, z1, p),
+        box: (x0, y0, z0, x1, y1, z1, p) => {
+          b.box(x0, y0, z0, x1, y1, z1, p);
+          colliders?.box(x0, y0, z0, x1, y1, z1);
+        },
         floor: (corners, p) => b.faceToward(corners, UP, p),
       },
       paints,
@@ -810,7 +827,7 @@ export function buildHouse(spec: HouseSpec, rng: () => number, far = false): Bui
 
   // 8. Inside: the rooms' walls, floors and ceilings, their doors, stairs and galleries - near only.
   if (interior && !far) {
-    buildInterior({ b, layout: interior, levels: levels.map(({ kind, index, floor, top }) => ({ kind, index, floor, top })), X, Z, tile, inside: (i, j, k) => (k < 0 ? inside(i, j) : occupied(i, j, k)), exits, windows });
+    buildInterior({ b, colliders: colliders ?? undefined, layout: interior, levels: levels.map(({ kind, index, floor, top }) => ({ kind, index, floor, top })), X, Z, tile, inside: (i, j, k) => (k < 0 ? inside(i, j) : occupied(i, j, k)), exits, windows });
   }
 
   const tiles: NonNullable<BuildingModel["tiles"]> = [];
@@ -822,5 +839,92 @@ export function buildHouse(spec: HouseSpec, rng: () => number, far = false): Bui
   const model = b.finish(door ?? { x: X(doorBay + doorSpan / 2), z: Z(entrance.j1) }, tiles);
   model.levels = levels.map(({ kind, floor, top }): Level => ({ kind, floor, top }));
   if (interior) model.interior = { layout: interior, levels: levels.map(({ kind, index, floor, top }) => ({ kind, index, floor, top })), X0: X(0), Z0: Z(0), tile };
+  if (colliders) {
+    buildShellColliders(colliders);
+    model.colliders = colliders.finish();
+  }
   return model;
+
+  /**
+   * The rest of what the house puts in the way, besides its outer walls, supports, terraces and
+   * interior (each added as it is built): the plinth, the masses - solid, in a house with no rooms,
+   * or only where no room is, in one with them - the roofs, and a ramp up to each door that opens.
+   */
+  function buildShellColliders(c: ColliderBuilder): void {
+    // The plinth: under every tile, up to the ground floor - or, where there are rooms in cellars,
+    // to the deepest cellar's floor, the cellars' own cells added as the masses are - and out to
+    // its face all round.
+    const plinthTop = interior && cellars > 0 ? levels[0].floor : plinth;
+    for (const block of blocks) c.box(X(block.i0), footing, Z(block.j0), X(block.i1), plinthTop, Z(block.j1));
+    for (const run of planOutline.runs) {
+      const alongX = run.dir === "pz" || run.dir === "nz";
+      const sign = run.dir === "px" || run.dir === "pz" ? 1 : -1;
+      const lineAt = alongX ? Z(run.line) : X(run.line);
+      const a0 = (alongX ? X : Z)(run.from) - outset;
+      const a1 = (alongX ? X : Z)(run.to) + outset;
+      wallBoxes(c, alongX, lineAt, lineAt + sign * outset, a0, a1, footing, plinth, []);
+    }
+
+    if (!interior) {
+      // No rooms: each mass solid, storey by storey, out to its jettied walls.
+      for (const level of above) {
+        for (const m of masses) {
+          if (m.from > level.index || level.index >= m.to) continue;
+          const r = rectOf(m.rect, level);
+          c.box(r.x0, level.floor, r.z0, r.x1, level.top, r.z1);
+        }
+      }
+    } else {
+      // Rooms: solid wherever a level of the house has no room - unbuilt space, sealed off.
+      for (const level of levels) {
+        const k = level.index;
+        for (let i = iMin; i < iMax; i++) {
+          for (let j = jMin; j < jMax; j++) {
+            const there = k < 0 ? inside(i, j) : occupied(i, j, k);
+            if (!there || interior.cells.has(cellKey(i, j, k))) continue;
+            c.box(X(i), level.floor, Z(j), X(i + 1), level.top, Z(j + 1));
+          }
+        }
+      }
+      // A ramp up the plinth to each door out, so it is walked in rather than climbed.
+      for (const exit of exits) {
+        if (exit.k !== 0) continue;
+        const alongX = exit.dir === "pz" || exit.dir === "nz";
+        const sign = exit.dir === "px" || exit.dir === "pz" ? 1 : -1;
+        const line = exit.dir === "pz" ? Z(exit.j + 1) : exit.dir === "nz" ? Z(exit.j) : exit.dir === "px" ? X(exit.i + 1) : X(exit.i);
+        const face = line + sign * outset;
+        const foot = face + sign * Math.max(0.8, plinth * 2.2);
+        const a0 = exit.along - exit.half - 0.3;
+        const a1 = exit.along + exit.half + 0.3;
+        const at = (a: number, y: number, across: number): Vec3 => (alongX ? [a, y, across] : [across, y, a]);
+        c.hull([
+          at(a0, plinth, line), at(a1, plinth, line), at(a0, plinth, face), at(a1, plinth, face),
+          at(a0, -0.4, line), at(a1, -0.4, line), at(a0, 0, foot), at(a1, 0, foot),
+        ]);
+      }
+    }
+
+    // The roofs: each block's as one solid piece, from its eaves' overhang up to its ridge.
+    for (const group of roofGroups) {
+      const { slope: s, overhang, thickness } = group.plan;
+      const eaves = group.level.top;
+      for (const k of group.blocks) {
+        const half = (k.c1 - k.c0) / 2;
+        const reach = (end: RoofEnd): number => (end.kind === "hip" ? -half : end.kind === "attached" ? end.extend : end.overhang);
+        let s0 = k.a0 - reach(k.start);
+        let s1 = k.a1 + reach(k.end);
+        if (s0 > s1) s0 = s1 = (s0 + s1) / 2;
+        const e0 = k.start.kind === "attached" ? k.a0 : k.a0 - k.start.overhang;
+        const e1 = k.end.kind === "attached" ? k.a1 : k.a1 + k.end.overhang;
+        const eaveY = eaves - overhang * s;
+        const ridgeY = eaves + half * s + thickness * Math.sqrt(1 + s * s);
+        const cm = (k.c0 + k.c1) / 2;
+        const at = (a: number, y: number, across: number): Vec3 => (k.alongX ? [a, y, across] : [across, y, a]);
+        c.hull([
+          at(e0, eaveY, k.c0 - overhang), at(e1, eaveY, k.c0 - overhang), at(e0, eaveY, k.c1 + overhang), at(e1, eaveY, k.c1 + overhang),
+          at(s0, ridgeY, cm), at(s1, ridgeY, cm),
+        ]);
+      }
+    }
+  }
 }

@@ -588,6 +588,8 @@ function renderPreviewBar(): void {
     );
     if (current.folder === "buildings") {
       viewOptions.append(checkbox("Footprint", "marks", rebuild));
+      // What the building puts in the way, drawn in its place.
+      viewOptions.append(checkbox("Colliders", "colliders", rebuild));
       // Cut open, to see its interior: a plan of a level (cut a little over its floor), or a section
       // through the middle from the front or the side.
       viewOptions.append(select("Cut", "cut", [
@@ -881,6 +883,7 @@ async function preview3d(token: number, asset: Asset, view: ViewDef, content: Wo
     bare: view.id === "model",
     trees,
     buildings,
+    buildingColliders: options.colliders === "on" && asset.folder === "buildings",
     footprints: options.marks === "on" && asset.folder === "buildings",
     timeHours: timeHours(),
     lightBiome,

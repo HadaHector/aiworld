@@ -1,16 +1,23 @@
 import { deriveSeed, mulberry32 } from "../rng";
 import type { BoxesSpec, BuildingDef, BuildingModel, Rgb } from "./buildingTypes";
 import { FOUNDATION_DEPTH, ModelBuilder, pick, plain, roll } from "./buildingGeometry";
+import { ColliderBuilder } from "./buildingColliders";
 import { buildHouse } from "./houseGenerator";
 
 /** The placeholder: a main box, a door-sized dark patch in the middle of its front, and smaller
  *  boxes against its sides and back. */
 function buildBoxes(spec: BoxesSpec, rng: () => number): BuildingModel {
   const b = new ModelBuilder();
+  // Every box solid, as it is drawn.
+  const colliders = new ColliderBuilder();
+  const box: ModelBuilder["box"] = (x0, y0, z0, x1, y1, z1, paint, top) => {
+    b.box(x0, y0, z0, x1, y1, z1, paint, top);
+    colliders.box(x0, y0, z0, x1, y1, z1);
+  };
   const hw = roll(spec.width, rng) / 2;
   const hd = roll(spec.depth, rng) / 2;
   const height = roll(spec.height, rng);
-  b.box(-hw, -FOUNDATION_DEPTH, -hd, hw, height, hd, plain(pick(spec.walls, rng)), plain(pick(spec.tops, rng)));
+  box(-hw, -FOUNDATION_DEPTH, -hd, hw, height, hd, plain(pick(spec.walls, rng)), plain(pick(spec.tops, rng)));
 
   // The door: just proud of the front, so it is never lost in the wall.
   const door: Rgb = [0.18, 0.13, 0.1];
@@ -36,7 +43,7 @@ function buildBoxes(spec: BoxesSpec, rng: () => number): BuildingModel {
       const w = hw * share;
       const d = hd * share;
       const at = (rng() * 2 - 1) * (hw - w);
-      b.box(at - w, -FOUNDATION_DEPTH, -hd - d * 2, at + w, annexHeight, -hd, wall, top);
+      box(at - w, -FOUNDATION_DEPTH, -hd - d * 2, at + w, annexHeight, -hd, wall, top);
     } else {
       const sign = side === 0 ? -1 : 1;
       const w = hw * share;
@@ -44,10 +51,12 @@ function buildBoxes(spec: BoxesSpec, rng: () => number): BuildingModel {
       const at = (rng() * 2 - 1) * (hd - d);
       const inner = sign * hw;
       const outer = sign * (hw + w * 2);
-      b.box(Math.min(inner, outer), -FOUNDATION_DEPTH, at - d, Math.max(inner, outer), annexHeight, at + d, wall, top);
+      box(Math.min(inner, outer), -FOUNDATION_DEPTH, at - d, Math.max(inner, outer), annexHeight, at + d, wall, top);
     }
   }
-  return b.finish({ x: 0, z: hd });
+  const model = b.finish({ x: 0, z: hd });
+  model.colliders = colliders.finish();
+  return model;
 }
 
 /**

@@ -124,11 +124,23 @@ Colliders so far:
 
 - **Ground**: each full-detail chunk's plain height grid, as a heightfield split four ways about each
   square's middle - as the ground is drawn - with its trees' pieces, in a batch that comes and goes
-  with the chunk (worldCollision.ts).
+  with the chunk (worldCollision.ts). Where a cellar's cut crosses a square, the square is a hole
+  and the rest of it is put back as slabs, so a cellar can be walked down into.
+
+- **Buildings**: coarse boxes and a few convex pieces, made by the generator with the near model
+  (buildingColliders.ts). A house with no rooms is solid, storey by storey, out to its jetties; one
+  with rooms has hollow walls - cut round the doors that open - floors, slabs under open sky, solid
+  unbuilt space, railings, a smooth slope for each stair, and a ramp up the plinth to each door out.
+  Every roof block is one solid piece, plinths are boxes, supports and terraces their own boxes.
+  Small things - frames, beams, shut doors and windows - are the wall or nothing. A settlement's
+  buildings come into the world within 120 m of its edge and go past 180 m. The workbench draws a
+  building's (Colliders) in place of the building.
+
+The motor's step (0.75 m) and steepest ground (52 degrees) are set for these: a plinth is stepped
+onto, and the steepest stair (50 degrees) walked up.
 
 The game's player walks on the motor through these: WASD, Shift to run, Space to jump. Where its
 chunk's collision is not built yet it stands on the terrain's own height. The settings panel's
 "Spectator" swaps it for a free-flying camera with no body.
 
-Later, each its own step: colliders for buildings (until then the player walks through walls and
-cannot climb into upper floors); the camera kept out of walls by a ray; navigation.
+Later, each its own step: the camera kept out of walls by a ray; navigation.

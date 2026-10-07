@@ -23,7 +23,13 @@ export interface Character {
  * ground under it is not in the collision world yet (its chunk not built near enough), it waits on
  * the terrain's own height instead of falling.
  */
-export function createCharacter(scene: Scene, collision: WorldCollision, heightAt: HeightSampler): Character {
+export function createCharacter(
+  scene: Scene,
+  collision: WorldCollision,
+  heightAt: HeightSampler,
+  /** What is stood on at a point with the feet at a height: a building's floor, or the ground. */
+  groundAt: (x: number, z: number, feet: number) => number = (x, z) => heightAt(x, z),
+): Character {
   const motor = createCharacterMotor(collision.world, {}, { x: 0, y: heightAt(0, 0), z: 0 });
   const { height, radius } = motor.settings;
   const mesh = MeshBuilder.CreateCapsule("player", { height, radius }, scene);
@@ -62,9 +68,11 @@ export function createCharacter(scene: Scene, collision: WorldCollision, heightA
       const started = performance.now();
       motor.update(Math.min(deltaSeconds, 0.1), { move: { x: move.x, y: 0, z: move.z }, jump });
       collisionStats.motorMs += performance.now() - started;
-      // Through the ground somehow - a chunk swapped under it mid-step: back on top of it.
-      const ground = heightAt(motor.state.feet.x, motor.state.feet.z);
-      if (motor.state.feet.y < ground - 1) motor.teleport({ x: motor.state.feet.x, y: ground, z: motor.state.feet.z });
+      // Through the ground somehow - a chunk swapped under it mid-step: back on top of it. A cellar's
+      // floor counts as the ground there.
+      const at = motor.state.feet;
+      const ground = groundAt(at.x, at.z, at.y + 0.5);
+      if (at.y < ground - 1) motor.teleport({ x: at.x, y: ground, z: at.z });
     }
     if (move.lengthSquared() > 0) mesh.rotation.y = Math.atan2(move.x, move.z);
     place();

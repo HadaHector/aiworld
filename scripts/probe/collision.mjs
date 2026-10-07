@@ -333,7 +333,7 @@ const moved = (q, d) => (q.kind === "sphere" ? { ...q, center: madd(q.center, d,
   w = walk("ledge", 3);
   report("ledge", w.maxY < 0.05 && w.end.x + r <= 2 + 1e-3, `held at x ${(w.end.x + r).toFixed(3)}, max y ${w.maxY.toFixed(3)}`);
   w = walk("ledge", 0.8, { jumpAt: [0.15] });
-  report("ledge+jump", Math.abs(w.end.y - 0.7) < 0.05, `jumped onto y ${w.end.y.toFixed(3)}`);
+  report("ledge+jump", Math.abs(w.end.y - 1) < 0.05, `jumped onto y ${w.end.y.toFixed(3)}`);
 
   w = walk("steep", 4);
   report("steep", w.maxY < 0.6, `climbed no higher than ${w.maxY.toFixed(3)}`);

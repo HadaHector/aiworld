@@ -207,7 +207,7 @@ export async function createWorld(
     }
   }
 
-  const collision = createWorldCollision(trees, CHUNK_SIZE);
+  const collision = createWorldCollision(trees, CHUNK_SIZE, buildings.cellarCuts);
   const chunkManager = createChunkManager({
     scene,
     buildContext: {
@@ -248,7 +248,10 @@ export async function createWorld(
 
   const heightAt = (worldX: number, worldZ: number) => sampleTerrain(worldX, worldZ).height;
   const groundAt = (worldX: number, worldZ: number, feet: number) => buildings.floorAt(worldX, worldZ, feet) ?? heightAt(worldX, worldZ);
-  const updateChunks = (playerX: number, playerZ: number, immediate?: boolean) => chunkManager.update(playerX, playerZ, immediate);
+  const updateChunks = (playerX: number, playerZ: number, immediate?: boolean) => {
+    chunkManager.update(playerX, playerZ, immediate);
+    buildings.updateCollision(playerX, playerZ, collision.setExtra, collision.clearExtra);
+  };
   const setDrawDistance = (loadRadius: number) => {
     drawDistance = loadRadius;
     chunkManager.setRadii(loadRadius, loadRadius + UNLOAD_HYSTERESIS);

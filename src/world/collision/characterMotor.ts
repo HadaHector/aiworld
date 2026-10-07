@@ -27,8 +27,10 @@ export interface MotorSettings {
 export const DEFAULT_MOTOR: MotorSettings = {
   radius: 0.4,
   height: 1.8,
-  stepHeight: 0.45,
-  maxSlope: 46,
+  // As far as a house's plinth stands - the step the old floor logic allowed, at the world's scale.
+  stepHeight: 0.75,
+  // Steep enough for the steepest stair (50 degrees), whose slope stands in for its steps.
+  maxSlope: 52,
   skin: 0.02,
   gravity: 24,
   jumpSpeed: 7.6,

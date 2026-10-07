@@ -26,12 +26,12 @@ import { appendModel, bakeBuildingTextures, createBuildingMaterial, createBuildi
  * Collision pieces drawn over what they stand for: each a see-through orange hull with its edges -
  * and the leaves taken away, which would only hide the trunk they are being compared with.
  */
-function drawColliders(scene: Scene, pieces: ConvexDesc[]): void {
+function drawColliders(scene: Scene, pieces: ConvexDesc[], alpha = 0.35): void {
   for (const mesh of scene.meshes) if (mesh.name.endsWith("_leaves")) mesh.setEnabled(false);
   const fill = new StandardMaterial("colliderFill", scene);
   fill.diffuseColor = new Color3(1, 0.55, 0.15);
   fill.emissiveColor = new Color3(0.35, 0.18, 0.04);
-  fill.alpha = 0.35;
+  fill.alpha = alpha;
   fill.backFaceCulling = false;
   const positions: number[] = [];
   const indices: number[] = [];
@@ -71,6 +71,23 @@ function drawColliders(scene: Scene, pieces: ConvexDesc[]): void {
   edges.isPickable = false;
 }
 
+/** A building's collision shapes, as convex pieces, stood at (x, y, 0). */
+function buildingPieces(model: BuildingModel, x: number, y: number): ConvexDesc[] {
+  const pieces: ConvexDesc[] = [];
+  const at = (px: number, py: number, pz: number) => ({ x: x + px, y: y + py, z: pz });
+  const boxes = model.colliders?.boxes ?? new Float32Array(0);
+  for (let i = 0; i < boxes.length; i += 6) {
+    const [x0, y0, z0, x1, y1, z1] = boxes.subarray(i, i + 6);
+    pieces.push({ kind: "convex", points: [at(x0, y0, z0), at(x1, y0, z0), at(x0, y1, z0), at(x1, y1, z0), at(x0, y0, z1), at(x1, y0, z1), at(x0, y1, z1), at(x1, y1, z1)] });
+  }
+  for (const hull of model.colliders?.hulls ?? []) {
+    const points = [];
+    for (let i = 0; i < hull.length; i += 3) points.push(at(hull[i], hull[i + 1], hull[i + 2]));
+    pieces.push({ kind: "convex", points });
+  }
+  return pieces;
+}
+
 /** The ground's shape under a preview. */
 export type GroundShape = "flat" | "hills" | "steep";
 
@@ -98,6 +115,8 @@ export interface StageOptions {
   trees?: { kinds: TreeKindDef[]; specimens: { kind: string; variant?: number; scale: number }[]; far: boolean; colliders?: boolean };
   /** Buildings to stand in a row across the middle of the ground, fronts toward the camera. */
   buildings?: BuildingModel[];
+  /** Draw the buildings' collision shapes in place of the buildings themselves. */
+  buildingColliders?: boolean;
   /** Mark each building's footprint and door on the ground. */
   footprints?: boolean;
   timeHours: number;
@@ -265,6 +284,12 @@ export async function createStage(engine: Engine, canvas: HTMLCanvasElement, opt
       const buildingMaterial = createBuildingMaterial(scene, litShading, await bakeBuildingTextures(seed, content.buildingMaterials));
       options.onProgress?.("Raising buildings");
       framing = layOutBuildings(scene, options.buildings, height, buildingMaterial, sunLighting.shadowGenerator, options.footprints === true);
+      if (options.buildingColliders) {
+        // In the buildings' place: what they put in the way would hide behind their own walls.
+        for (const mesh of scene.meshes) if (mesh.name.startsWith("building_")) mesh.setEnabled(false);
+        const placed = framing.placed ?? [];
+        drawColliders(scene, options.buildings.flatMap((model, i) => buildingPieces(model, placed[i], height(placed[i], 0))), 0.55);
+      }
     }
 
     // Far enough back for the whole row and the tallest top to fit the view, whichever way the

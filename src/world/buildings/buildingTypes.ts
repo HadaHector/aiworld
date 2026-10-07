@@ -1,3 +1,4 @@
+import type { BuildingCollision } from "./buildingColliders";
 import type { InteriorLayout, ShellLevel } from "./interiorLayout";
 import type { TextureDef } from "../materials/textureGen";
 
@@ -477,4 +478,6 @@ export interface BuildingModel {
   /** Its interior's layout, where it has one: its rooms, stairs and doors, and where its tile (0, 0)
    *  starts (x, z), so a cell can be found from a point. */
   interior?: { layout: InteriorLayout; levels: ShellLevel[]; X0: number; Z0: number; tile: number };
+  /** What it puts in the way (see buildingColliders.ts) - built with the near model only. */
+  colliders?: BuildingCollision;
 }

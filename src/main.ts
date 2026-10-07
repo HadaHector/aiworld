@@ -48,7 +48,7 @@ const world = await createWorld(scene, content, ({ phase, completed, total }) =>
 });
 
 loadingScreen.update("Placing the player", 0, 0);
-const character = createCharacter(scene, world.collision, world.heightAt);
+const character = createCharacter(scene, world.collision, world.heightAt, world.groundAt);
 const camera = createThirdPersonCamera(scene, canvas, character.mesh);
 const indoorCamera = createIndoorCamera(camera, () => world.indoors(character.mesh.position.x, character.mesh.position.z, character.mesh.position.y - 0.9));
 // Camera near/far and the shadow generator's own frustum both need the real camera, which does

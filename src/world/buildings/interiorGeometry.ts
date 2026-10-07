@@ -1,5 +1,6 @@
 import type { Paint } from "./buildingTypes";
 import type { ModelBuilder, Vec3 } from "./buildingGeometry";
+import { wallBoxes, type ColliderBuilder } from "./buildingColliders";
 import { cellKey, FACE_DIRS, opposite, STEP, type FaceDir, type InteriorLayout, type Room, type ShellLevel } from "./interiorLayout";
 
 /**
@@ -25,6 +26,8 @@ export interface Opening {
 
 export interface InteriorInput {
   b: ModelBuilder;
+  /** Where its walls, floors, stairs and railings go as collision shapes, if anywhere. */
+  colliders?: ColliderBuilder;
   layout: InteriorLayout;
   levels: ShellLevel[];
   X: (i: number) => number;
@@ -66,7 +69,7 @@ const UP: Vec3 = [0, 1, 0];
 const DOWN: Vec3 = [0, -1, 0];
 
 export function buildInterior(input: InteriorInput): void {
-  const { b, layout, X, Z, tile } = input;
+  const { b, layout, X, Z, tile, colliders } = input;
   const levelOf = (k: number): ShellLevel => input.levels.find((level) => level.index === k)!;
   const roomOf = (id: number): Room => layout.rooms.find((room) => room.id === id)!;
   const alongX = (dir: FaceDir): boolean => dir === "pz" || dir === "nz";
@@ -137,6 +140,9 @@ export function buildInterior(input: InteriorInput): void {
               holes.push({ a0: exit.along - exit.half, a1: exit.along + exit.half, y0: exit.bottom, y1: exit.top });
             }
             const normal = inward(dir);
+            // As collision: the wall's half from its face back to the tile line - the room on the
+            // other side, or the house's outer wall, stands the rest.
+            if (colliders) wallBoxes(colliders, alongX(dir), c, lineOf(i, j, dir), a0, a1, level.floor, level.top, holes);
             let from = a0;
             for (const hole of holes.sort((p, q) => p.a0 - q.a0)) {
               upright(dir, c, from, hole.a0, level.floor, level.top, normal, room.paints.walls);
@@ -157,6 +163,8 @@ export function buildInterior(input: InteriorInput): void {
         if (layout.holes.has(cellKey(i, j, room.base))) continue;
         const [x0, x1, z0, z1] = clampCell(i, j, inset);
         b.faceToward([[x0, floorY, z0], [x1, floorY, z0], [x1, floorY, z1], [x0, floorY, z1]], UP, room.paints.floor);
+        // As collision, out to the tile lines, under the walls.
+        colliders?.box(X(i), floorY - SLAB, Z(j), X(i + 1), floorY, Z(j + 1));
       }
     }
     // The ceiling, but where a stair rises through it to the room over it - and its beams.
@@ -166,6 +174,9 @@ export function buildInterior(input: InteriorInput): void {
         if (layout.holes.has(cellKey(i, j, top + 1))) continue;
         const [x0, x1, z0, z1] = clampCell(i, j, inset);
         b.faceToward([[x0, ceilingY, z0], [x1, ceilingY, z0], [x1, ceilingY, z1], [x0, ceilingY, z1]], DOWN, room.paints.ceiling);
+        // Nothing of the house over it - the roof's own piece, or the open air over a terrace's
+        // floor - so a slab of its own.
+        if (!input.inside(i, j, top + 1)) colliders?.box(X(i), ceilingY, Z(j), X(i + 1), ceilingY + SLAB, Z(j + 1));
       }
     }
     if (room.paints.beams) {
@@ -187,6 +198,7 @@ export function buildInterior(input: InteriorInput): void {
           const [x0, x1, z0, z1] = clampCell(i, j, inset);
           b.faceToward([[x0, y, z0], [x1, y, z0], [x1, y, z1], [x0, y, z1]], UP, room.paints.floor);
           b.faceToward([[x0, y - SLAB, z0], [x1, y - SLAB, z0], [x1, y - SLAB, z1], [x0, y - SLAB, z1]], DOWN, room.paints.timber);
+          colliders?.box(x0, y - SLAB, z0, x1, y, z1);
           for (const dir of FACE_DIRS) {
             const [di, dj] = STEP[dir];
             const ni = i + di;
@@ -253,6 +265,12 @@ export function buildInterior(input: InteriorInput): void {
     const wallLine = lineOf(t0[0], t0[1], stair.wallSide) - signOf(stair.wallSide) * (WALL + STAIR_CLEAR);
     const across: [number, number] = [wallLine, wallLine - signOf(stair.wallSide) * width];
     const steps = Math.max(4, Math.round(rise / RISER));
+    // As collision, a smooth slope - its steps' noses - rather than the steps themselves.
+    if (colliders) {
+      const at = (a: number, y: number, c: number): Vec3 => (runX ? [a, y, c] : [c, y, a]);
+      const [c0, c1] = across;
+      colliders.hull([at(start, floor, c0), at(start, floor, c1), at(end, floor, c0), at(end, floor, c1), at(end, floor + rise, c0), at(end, floor + rise, c1)]);
+    }
     const box = (a0: number, a1: number, y0: number, y1: number, paint: Paint): void => {
       const [al, ah] = a0 < a1 ? [a0, a1] : [a1, a0];
       const [cl, ch] = across[0] < across[1] ? across : [across[1], across[0]];
@@ -363,6 +381,11 @@ export function buildInterior(input: InteriorInput): void {
       faceBox(dir, line - RAIL / 2, line + RAIL / 2, a - RAIL / 2, a + RAIL / 2, y, y + RAIL_HEIGHT - RAIL, paint);
     }
     faceBox(dir, line - RAIL / 2, line + RAIL / 2, a0, a1, y + RAIL_HEIGHT - RAIL, y + RAIL_HEIGHT, paint);
+    // As collision, one solid rail from the floor up.
+    if (colliders) {
+      if (alongX(dir)) colliders.box(a0, y, line - RAIL / 2, a1, y + RAIL_HEIGHT, line + RAIL / 2);
+      else colliders.box(line - RAIL / 2, y, a0, line + RAIL / 2, y + RAIL_HEIGHT, a1);
+    }
   }
   /** A cell's square, held inside its room's walls. */
   function clampCell(i: number, j: number, inset: { x0: number; x1: number; z0: number; z1: number }): [number, number, number, number] {

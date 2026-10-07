@@ -5,6 +5,8 @@ import { appendModel, createBuildingMesh, emptyGeometry, type BuildingMaterial }
 import { interiorFloorAt, type BuiltInterior } from "../buildings/interiorFloors";
 import { WALL } from "../buildings/interiorGeometry";
 import type { TerrainCut } from "../materials/materialLibrary";
+import type { BuildingCollision } from "../buildings/buildingColliders";
+import { quatFromEuler, vec3, type ShapeDesc, type Vec3 } from "../collision/index";
 
 /**
  * Where a house's model goes: turned to face its street and stood on its plot. The model's front
@@ -29,6 +31,49 @@ export interface SettlementRenderer {
   /** What one stands on inside a building at a world point - see interiorFloorAt - or null outside
    *  every building's rooms. */
   floorAt: (x: number, z: number, feet: number) => number | null;
+  /**
+   * Keeps the buildings of the settlements near a point in a collision world and takes those
+   * further off out of it - `add` and `remove` are the world's (see worldCollision.ts).
+   */
+  updateCollision: (x: number, z: number, add: (key: string, shapes: ShapeDesc[]) => void, remove: (key: string) => void) => void;
+  /** The ground taken out over every cellar with rooms - for the ground's collision. */
+  readonly cellarCuts: readonly TerrainCut[];
+}
+
+/** A settlement's buildings come into the collision world within this far of its edge, and go
+ *  again past COLLISION_OUT. */
+const COLLISION_IN = 120;
+const COLLISION_OUT = 180;
+
+/** One house's collision, in its own space, and where it stands. */
+interface PlacedCollision {
+  house: House;
+  colliders: BuildingCollision;
+}
+
+/** A house's collision shapes in the world: turned to face its street and stood on its plot. */
+function placedShapes({ house, colliders }: PlacedCollision, group: number): ShapeDesc[] {
+  // Its +z turns to (frontX, frontZ), its +x to (frontZ, -frontX): a turn about y by this.
+  const rotation = quatFromEuler(Math.atan2(house.frontX, house.frontZ));
+  const place = (x: number, y: number, z: number): Vec3 =>
+    vec3(house.x + house.frontZ * x + house.frontX * z, house.y + y, house.z - house.frontX * x + house.frontZ * z);
+  const shapes: ShapeDesc[] = [];
+  const b = colliders.boxes;
+  for (let i = 0; i < b.length; i += 6) {
+    shapes.push({
+      kind: "box",
+      center: place((b[i] + b[i + 3]) / 2, (b[i + 1] + b[i + 4]) / 2, (b[i + 2] + b[i + 5]) / 2),
+      half: vec3((b[i + 3] - b[i]) / 2, (b[i + 4] - b[i + 1]) / 2, (b[i + 5] - b[i + 2]) / 2),
+      rotation,
+      group,
+    });
+  }
+  for (const hull of colliders.hulls) {
+    const points: Vec3[] = [];
+    for (let i = 0; i < hull.length; i += 3) points.push(place(hull[i], hull[i + 1], hull[i + 2]));
+    shapes.push({ kind: "convex", points, group });
+  }
+  return shapes;
 }
 
 /** How far a step up the floor under the feet may be and still be stepped onto. */
@@ -67,14 +112,19 @@ export function createSettlementRenderer(
 ): SettlementRenderer {
   const meshes: { near: Mesh; far: Mesh; x: number; z: number; radius: number }[] = [];
   const enterable: Enterable[] = [];
+  /** Each settlement's houses' collision, from their near models. */
+  const collisions: { key: string; x: number; z: number; radius: number; houses: PlacedCollision[] }[] = [];
+  const inCollision = new Set<string>();
   for (const layout of layouts) {
     if (layout.houses.length === 0) continue;
+    const houses: PlacedCollision[] = [];
     const build = (far: boolean): Mesh => {
       const geometry = emptyGeometry();
       for (const house of layout.houses) {
         const model = generateBuilding(house.building, seed, house.variant, far);
         appendModel(geometry, model, material.layerOf, placeHouse(house, layout.x, layout.z));
         if (!far && model.interior) enterable.push(enterableOf(house, model.interior, Math.hypot(model.halfWidth, model.halfDepth)));
+        if (!far && model.colliders) houses.push({ house, colliders: model.colliders });
       }
       const mesh = createBuildingMesh(scene, `settlement_${layout.siteId}${far ? "_far" : ""}`, geometry, material);
       mesh.position.set(layout.x, 0, layout.z);
@@ -83,6 +133,7 @@ export function createSettlementRenderer(
       return mesh;
     };
     meshes.push({ near: build(false), far: build(true), x: layout.x, z: layout.z, radius: layout.radius });
+    collisions.push({ key: `settlement:${layout.siteId}`, x: layout.x, z: layout.z, radius: layout.radius, houses });
   }
 
   let drawDistance = initialDrawDistance;
@@ -115,6 +166,19 @@ export function createSettlementRenderer(
     setDrawDistance(distance) {
       drawDistance = distance;
     },
+    updateCollision(x, z, add, remove) {
+      for (const entry of collisions) {
+        const distance = Math.hypot(entry.x - x, entry.z - z) - entry.radius;
+        if (!inCollision.has(entry.key) && distance <= COLLISION_IN) {
+          inCollision.add(entry.key);
+          add(entry.key, entry.houses.flatMap((house, n) => placedShapes(house, n)));
+        } else if (inCollision.has(entry.key) && distance > COLLISION_OUT) {
+          inCollision.delete(entry.key);
+          remove(entry.key);
+        }
+      }
+    },
+    cellarCuts: enterable.flatMap((entry) => entry.cuts),
     floorAt(x, z, feet) {
       let best: number | null = null;
       for (const { house, interior, reach } of enterable) {
