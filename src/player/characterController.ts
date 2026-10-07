@@ -14,6 +14,8 @@ export interface Character {
   motor: CharacterMotor;
   update: (deltaSeconds: number, camera: ArcRotateCamera) => void;
   teleport: (worldX: number, worldZ: number) => void;
+  /** Puts its feet at a point - on a roof, a floor, anywhere - pushed out of whatever is there. */
+  teleportTo: (feet: { x: number; y: number; z: number }) => void;
   dispose: () => void;
 }
 
@@ -83,10 +85,15 @@ export function createCharacter(
     place();
   }
 
+  function teleportTo(feet: { x: number; y: number; z: number }): void {
+    motor.teleport({ x: feet.x, y: feet.y, z: feet.z });
+    place();
+  }
+
   function dispose(): void {
     input.dispose();
   }
 
   place();
-  return { mesh, motor, update, teleport, dispose };
+  return { mesh, motor, update, teleport, teleportTo, dispose };
 }

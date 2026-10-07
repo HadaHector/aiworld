@@ -151,6 +151,37 @@ function gotoView({ x, z, alpha, beta, radius }: Partial<ViewSnapshot> & { x: nu
 
 const positionPanel = createPositionPanel(gotoView);
 
+// Right-click (a click, not a drag) to put the player where the pointer is: on what it hits in the
+// collision world - a roof, a floor, a tree - or, past where that reaches, on the ground drawn.
+{
+  let down: { x: number; y: number } | null = null;
+  canvas.addEventListener("contextmenu", (e) => e.preventDefault());
+  canvas.addEventListener("pointerdown", (e) => {
+    if (e.button === 2) down = { x: e.clientX, y: e.clientY };
+  });
+  canvas.addEventListener("pointerup", (e) => {
+    if (e.button !== 2 || !down) return;
+    const moved = Math.hypot(e.clientX - down.x, e.clientY - down.y);
+    down = null;
+    if (moved > 4) return;
+    const rect = canvas.getBoundingClientRect();
+    const ray = scene.createPickingRay(e.clientX - rect.left, e.clientY - rect.top, null, scene.activeCamera);
+    const origin = { x: ray.origin.x, y: ray.origin.y, z: ray.origin.z };
+    const direction = { x: ray.direction.x, y: ray.direction.y, z: ray.direction.z };
+    const hit = world.collision.world.raycast(origin, direction, 3000);
+    if (hit) {
+      // Stood on what it hit - or, on a wall, just in front of it.
+      const radius = character.motor.settings.radius;
+      const lift = hit.normal.y > 0.5 ? 0.05 : 0;
+      const off = hit.normal.y > 0.5 ? 0 : radius * 1.2;
+      character.teleportTo({ x: hit.point.x + hit.normal.x * off, y: hit.point.y + lift, z: hit.point.z + hit.normal.z * off });
+      return;
+    }
+    const pick = scene.pickWithRay(ray, (mesh) => mesh.name.startsWith("terrainChunk_"));
+    if (pick?.hit && pick.pickedPoint) character.teleport(pick.pickedPoint.x, pick.pickedPoint.z);
+  });
+}
+
 // Back where the page was last left, so a reload after a change shows the same spot.
 const lastView = createLastView();
 const resumeView = lastView.restore();
