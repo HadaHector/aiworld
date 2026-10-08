@@ -11,6 +11,12 @@
   lakeChance: 0.04,
   borderType: "mountain",
   settlement: ["farmVillage", "marketTown"],
+  // Woodland: a settlement in some cells, a logging camp deep in the trees in others.
+  features: [
+    { feature: "settlement", odds: 0.8 },
+    { feature: "loggingCamp", odds: 0.6 },
+    { feature: "none", odds: 0.8 },
+  ],
   // Each area its own lie of the land: a flat lowland wood, rolling wooded hills, or hill country
   // cut by wide valleys (the hills' basins: the hills scaled down to a gently rolling floor where a
   // slow noise is low).

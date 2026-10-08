@@ -1,6 +1,7 @@
 import { smoothstep } from "../mathUtils";
 import type { FeatureSite } from "./featureSites";
 import { QUARRY_REACH, quarryGap, quarryHeight } from "./quarry";
+import { compoundGap } from "./compound";
 
 /** What the features do to the ground at one point. */
 export interface FeatureGround {
@@ -29,6 +30,11 @@ function bucketKey(gx: number, gz: number): number {
   return (gx + 32768) * 65536 + (gz + 32768);
 }
 
+/** How far past its edge a feature still has a say: a quarry's cut, or a compound's clearing. */
+function reachOf(feature: FeatureSite): number {
+  return feature.quarry ? QUARRY_REACH : feature.kind.clearing[1];
+}
+
 /**
  * The ground edits of every feature, bucketed so that a point far from any - nearly all of them -
  * costs one map lookup. The terrain sampler applies it before the roads are graded in, so a road
@@ -37,10 +43,11 @@ function bucketKey(gx: number, gz: number): number {
 export function createFeatureField(features: FeatureSite[]): FeatureField {
   const buckets = new Map<number, FeatureSite[]>();
   for (const feature of features) {
-    // A settlement's ground is its streets and plots - see settlements/padField.ts.
-    const { quarry } = feature;
-    if (!quarry) continue;
-    const extent = Math.hypot(quarry.halfLength, quarry.halfWidth) + QUARRY_REACH;
+    // A settlement's ground is its streets and plots - see settlements/padField.ts. A compound's yard
+    // and buildings are levelled the same way, after the roads; here it only clears its ground.
+    const { quarry, compound } = feature;
+    if (!quarry && !compound) continue;
+    const extent = (quarry ? Math.hypot(quarry.halfLength, quarry.halfWidth) : compound!.yardRadius) + reachOf(feature);
     const gxMin = Math.floor((feature.x - extent) / BUCKET_SIZE);
     const gxMax = Math.floor((feature.x + extent) / BUCKET_SIZE);
     const gzMin = Math.floor((feature.z - extent) / BUCKET_SIZE);
@@ -62,10 +69,10 @@ export function createFeatureField(features: FeatureSite[]): FeatureField {
     let nearest: FeatureSite | null = null;
     let nearestGap = Infinity;
     for (const feature of bucket) {
-      const quarry = feature.quarry!;
-      const gap = quarryGap(quarry, x, z);
-      if (gap >= QUARRY_REACH) continue;
-      height = quarryHeight(quarry, gap, height);
+      const quarry = feature.quarry;
+      const gap = quarry ? quarryGap(quarry, x, z) : compoundGap(feature.compound!, x, z);
+      if (gap >= reachOf(feature)) continue;
+      if (quarry) height = quarryHeight(quarry, gap, height);
       if (gap < nearestGap) {
         nearestGap = gap;
         nearest = feature;

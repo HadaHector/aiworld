@@ -588,12 +588,23 @@ Props get the same model and colliders views as buildings.
    - Measured on seed 1338 against the old network: road laid 276 to 226 km, road on top of road
      31 to 0.2 km, road running beside road 1.56 to 0.02 km, routes through other settlements 7 to
      0, unreached settlements unchanged.
-2. **Compound siting and layout.**
-   - Siting before the roads; gates from the network.
-   - Entrances, trails and lanes.
-   - The `ring` arrangement.
-   - Pads in the late stage, with a plain box for each building.
-   - Probe the placement and the layout.
+2. **Compound siting and layout: done** (features/compound.ts, features/loggingCamp.json5).
+   - Siting before the roads rolls the yard, the buildings (measured) and the trails, so the circle
+     the roads keep out of is sure to hold them: a rim too short for the buildings and the
+     entrances grows the yard, then drops the least of the optional buildings.
+   - A compound is a place with gates on its rim; its own roads keep out of all of its circle.
+     One that ends up with no road at all (its ground boxed in by slopes) is dropped, its cell
+     left empty; the fallback track gives rim-gated places a gate facing the nearest road.
+   - Layout after the roads: the yard levelled at the ground's mean, a lane in from each gate,
+     the buildings round the rim (required first, then largest, least cut and fill), then each
+     trail out through what is left - as far from the gates as it can be, clear of roads by
+     25 m, stopping short of one.
+   - The yard and buildings join settlements' pads; lanes and trails join the road field.
+   - Odds in the three woods; stand-in buildings (shingleCottage, workshop) until step 6, not drawn
+     until step 3.
+   - Probe (compounds.local.mjs): yards level, buildings on their pads and clear of each other,
+     the lanes, trails and roads, every compound reached by a road - seeds 1338, 77, 4242, 9001
+     (38 camps), no faults.
 3. **The renderer split.** Compounds draw real buildings with collision.
 4. **Props:** the asset folder, the generators, anchors, collision.
 5. **Stumps.**

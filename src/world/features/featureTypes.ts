@@ -1,9 +1,10 @@
 import type { MaterialLayer } from "../materials/materialTypes";
 import type { SettlementTier } from "../settlements/settlementConfig";
+import type { BuildingDef } from "../buildings/buildingTypes";
 
 /**
  * What stands in a cell besides the land itself: one major feature per cell at most - a settlement,
- * a quarry, and in time a farm, a mine, a camp. Settlements keep their own placement and layout
+ * a quarry, a compound (a camp, a farmstead), and in time a mine. Settlements keep their own placement and layout
  * rules (settlements/), but which cells have one is rolled here, like any other feature.
  *
  * A feature kind is content (a pack's features/ folder); its `type` picks the code that places it
@@ -12,7 +13,7 @@ import type { SettlementTier } from "../settlements/settlementConfig";
  */
 export const NO_FEATURE = "none";
 
-export const FEATURE_TYPES = ["quarry", "settlement"] as const;
+export const FEATURE_TYPES = ["quarry", "settlement", "compound"] as const;
 export type FeatureType = (typeof FEATURE_TYPES)[number];
 
 /** `features: [{ feature, odds }]` in a biome: which kinds its cells roll, and how likely each is -
@@ -39,6 +40,55 @@ export interface QuarrySpec {
    *  run). Between them, the nearer the third, the better. */
   grade: [number, number];
   idealGrade: number;
+}
+
+/** How a compound's buildings stand round its yard - see FEATURES.md. Each is built with the first
+ *  compound that needs it: `ring`, round the yard's rim facing in, its entrances kept free. */
+export const COMPOUND_ARRANGEMENTS = ["ring"] as const;
+export type CompoundArrangement = (typeof COMPOUND_ARRANGEMENTS)[number];
+
+/** Where a compound's trail leads: `clearing` - out into the ground round it, the way furthest from
+ *  its roads. */
+export const TRAIL_DESTINATIONS = ["clearing"] as const;
+export type TrailDestination = (typeof TRAIL_DESTINATIONS)[number];
+
+/** A way out of a compound that is not a road: a narrow path on the ground as it lies, ending where
+ *  it gets to. `length` is rolled; it is made with `chance`. */
+export interface CompoundTrailSpec {
+  to: TrailDestination;
+  length: [number, number];
+  chance: number;
+}
+
+/** Which way a compound building's door is turned: to the yard's middle. */
+export const COMPOUND_DOORS = ["yard"] as const;
+export type CompoundDoor = (typeof COMPOUND_DOORS)[number];
+
+/** A building a compound puts up: `count` of it (rolled), each with `chance`. A `required` one must
+ *  fit, or the compound is not placed there. */
+export interface CompoundBuildingSpec {
+  building: BuildingDef;
+  count: [number, number];
+  chance: number;
+  required: boolean;
+  doorTo: CompoundDoor;
+}
+
+/**
+ * A compound: a yard with buildings standing round it, its entrances where its roads arrive (its
+ * `road` block decides how many) and its trails lead off. No streets - one open space everything
+ * faces. Each range is rolled per compound.
+ */
+export interface CompoundSpec {
+  /** The ground it wants: the grade across it within the range (rise over run); tree cover round
+   *  it at least the first, the more the better up to the second (0-1, as the trees scatter by);
+   *  and a river within `nearWater` counts in its favour (null: no matter). */
+  site: { grade: [number, number]; cover: [number, number]; nearWater: number | null };
+  /** The yard: a level round of trodden ground, this radius. */
+  yard: { radius: [number, number] };
+  arrangement: CompoundArrangement;
+  trails: CompoundTrailSpec[];
+  buildings: CompoundBuildingSpec[];
 }
 
 /**
@@ -69,6 +119,8 @@ export interface FeatureKindDef {
   type: FeatureType;
   /** A quarry's own block; null for any other type. */
   quarry: QuarrySpec | null;
+  /** A compound's own block; null for any other type. */
+  compound: CompoundSpec | null;
   /** Trees, bushes and stones are cleared off the ground the feature changes, and up to the first
    *  distance past its edge, returning by the second. */
   clearing: [number, number];

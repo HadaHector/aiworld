@@ -35,7 +35,20 @@ import type { WorldContent } from "./worldContent";
 import type { TextureDef } from "../materials/textureGen";
 import { adjustMatrix, chainMatrix, NO_ADJUST, type ColorAdjust } from "../materials/colorAdjust";
 import type { WeatherChance, WeatherDef } from "../weather/weatherTypes";
-import { FEATURE_TYPES, NO_FEATURE, type FeatureChance, type FeatureKindDef, type PlaceRoadSpec } from "../features/featureTypes";
+import {
+  COMPOUND_ARRANGEMENTS,
+  COMPOUND_DOORS,
+  FEATURE_TYPES,
+  NO_FEATURE,
+  TRAIL_DESTINATIONS,
+  type CompoundBuildingSpec,
+  type CompoundSpec,
+  type CompoundTrailSpec,
+  type FeatureChance,
+  type FeatureKindDef,
+  type PlaceRoadSpec,
+  type QuarrySpec,
+} from "../features/featureTypes";
 import {
   BUILDING_GENERATORS,
   BUILDING_PART_GENERATORS,
@@ -248,7 +261,7 @@ export function resolveContent(packs: PackSource[]): WorldContent {
   }
   const buildingById = new Map(buildings.map((building) => [building.id, building]));
   const settlementStyles = readAll("settlements", (e, o, r) => readSettlementStyle(e.id, o, r, buildingById));
-  const featureReads = readAll("features", (e, o, r) => ({ file: e.file, kind: readFeatureKind(e.id, o, r) }));
+  const featureReads = readAll("features", (e, o, r) => ({ file: e.file, kind: readFeatureKind(e.id, o, r, buildingById) }));
   const featureKinds = featureReads.map((read) => read.kind);
   const featureIds = new Set([NO_FEATURE, ...featureKinds.map((kind) => kind.id)]);
   const settlementFeatureIds = new Set(featureKinds.filter((kind) => kind.type === "settlement").map((kind) => kind.id));
@@ -1060,35 +1073,93 @@ function readBuildingPart(id: string, obj: RawObject, reader: Reader): BuildingP
 }
 
 /** A features/ file - see FeatureKindDef. */
-function readFeatureKind(id: string, obj: RawObject, reader: Reader): FeatureKindDef {
-  reader.onlyKeys(obj, "", ["name", "type", "quarry", "clearing", "road", "ground"]);
+function readFeatureKind(id: string, obj: RawObject, reader: Reader, buildings: Map<string, BuildingDef>): FeatureKindDef {
+  reader.onlyKeys(obj, "", ["name", "type", "quarry", "compound", "clearing", "road", "ground"]);
   const type = reader.oneOf(obj, "type", "", FEATURE_TYPES);
   // A settlement is laid out by its own code, in its biome's settlement style: it takes nothing else.
   if (type === "settlement") {
     reader.onlyKeys(obj, "", ["name", "type", "road"]);
-    return { id, name: reader.string(obj, "name", ""), type, quarry: null, clearing: [0, 0], road: readPlaceRoad(obj, reader, true), ground: null };
+    return { id, name: reader.string(obj, "name", ""), type, quarry: null, compound: null, clearing: [0, 0], road: readPlaceRoad(obj, reader, true), ground: null };
   }
-  const quarry = reader.object(obj.quarry, "quarry");
-  reader.onlyKeys(quarry, "quarry", ["floorLength", "floorWidth", "benchHeight", "benchSteepness", "benchWidth", "spoilSlope", "grade", "idealGrade"]);
+  // Each type takes its own block and not another's.
+  reader.onlyKeys(obj, "", ["name", "type", type, "clearing", "road", "ground"]);
   const ground = obj.ground === undefined ? null : reader.object(obj.ground, "ground");
   if (ground) reader.onlyKeys(ground, "ground", ["material", "weight"]);
   return {
     id,
     name: reader.string(obj, "name", ""),
     type,
-    quarry: {
-      floorLength: reader.range(quarry, "floorLength", "quarry", { allowEqual: true }),
-      floorWidth: reader.range(quarry, "floorWidth", "quarry", { allowEqual: true }),
-      benchHeight: reader.range(quarry, "benchHeight", "quarry", { allowEqual: true }),
-      benchSteepness: reader.number(quarry, "benchSteepness", "quarry", { min: 0.5 }),
-      benchWidth: reader.range(quarry, "benchWidth", "quarry", { allowEqual: true }),
-      spoilSlope: reader.number(quarry, "spoilSlope", "quarry", { min: 0.2 }),
-      grade: reader.range(quarry, "grade", "quarry"),
-      idealGrade: reader.number(quarry, "idealGrade", "quarry", { min: 0.01 }),
-    },
+    quarry: type === "quarry" ? readQuarry(reader.object(obj.quarry, "quarry"), reader) : null,
+    compound: type === "compound" ? readCompound(reader.object(obj.compound, "compound"), reader, buildings) : null,
     clearing: reader.range(obj, "clearing", "", { allowEqual: true }),
     road: readPlaceRoad(obj, reader, false),
     ground: ground ? readLayer(ground, reader, "ground", `feature-${id}`) : null,
+  };
+}
+
+function readQuarry(quarry: RawObject, reader: Reader): QuarrySpec {
+  reader.onlyKeys(quarry, "quarry", ["floorLength", "floorWidth", "benchHeight", "benchSteepness", "benchWidth", "spoilSlope", "grade", "idealGrade"]);
+  return {
+    floorLength: reader.range(quarry, "floorLength", "quarry", { allowEqual: true }),
+    floorWidth: reader.range(quarry, "floorWidth", "quarry", { allowEqual: true }),
+    benchHeight: reader.range(quarry, "benchHeight", "quarry", { allowEqual: true }),
+    benchSteepness: reader.number(quarry, "benchSteepness", "quarry", { min: 0.5 }),
+    benchWidth: reader.range(quarry, "benchWidth", "quarry", { allowEqual: true }),
+    spoilSlope: reader.number(quarry, "spoilSlope", "quarry", { min: 0.2 }),
+    grade: reader.range(quarry, "grade", "quarry"),
+    idealGrade: reader.number(quarry, "idealGrade", "quarry", { min: 0.01 }),
+  };
+}
+
+/** A compound's block - see CompoundSpec. */
+function readCompound(compound: RawObject, reader: Reader, buildings: Map<string, BuildingDef>): CompoundSpec {
+  reader.onlyKeys(compound, "compound", ["site", "yard", "arrangement", "trails", "buildings"]);
+  const site = reader.object(compound.site, "compound.site");
+  reader.onlyKeys(site, "compound.site", ["grade", "cover", "nearWater"]);
+  const yard = reader.object(compound.yard, "compound.yard");
+  reader.onlyKeys(yard, "compound.yard", ["radius"]);
+  const cover = reader.range(site, "cover", "compound.site", { allowEqual: true });
+  if (cover[0] < 0 || cover[1] > 1) reader.fail("compound.site.cover", `expected a range within 0-1, got [${cover[0]}, ${cover[1]}]`);
+  const trails = reader.optionalArray(compound, "trails", "compound").map((raw, i): CompoundTrailSpec => {
+    const path = `compound.trails[${i}]`;
+    const trail = reader.object(raw, path);
+    reader.onlyKeys(trail, path, ["to", "length", "chance"]);
+    return {
+      to: reader.oneOf(trail, "to", path, TRAIL_DESTINATIONS),
+      length: reader.range(trail, "length", path, { allowEqual: true }),
+      chance: reader.optionalNumber(trail, "chance", path, 1, { min: 0, max: 1 }),
+    };
+  });
+  const buildingList = reader.array(compound, "buildings", "compound").flatMap((raw, i): CompoundBuildingSpec[] => {
+    const path = `compound.buildings[${i}]`;
+    const entry = reader.object(raw, path);
+    reader.onlyKeys(entry, path, ["building", "count", "chance", "required", "doorTo"]);
+    const buildingId = reader.string(entry, "building", path);
+    const building = buildings.get(buildingId);
+    if (!building) {
+      reader.fail(joinPath(path, "building"), `no building "${buildingId}" (known: ${[...buildings.keys()].join(", ") || "none"})`);
+      return [];
+    }
+    const count = reader.range(entry, "count", path, { allowEqual: true });
+    if (count[0] < 0 || !Number.isInteger(count[0]) || !Number.isInteger(count[1])) reader.fail(joinPath(path, "count"), `expected whole numbers, got [${count[0]}, ${count[1]}]`);
+    return [{
+      building,
+      count,
+      chance: reader.optionalNumber(entry, "chance", path, 1, { min: 0, max: 1 }),
+      required: reader.boolean(entry, "required", path, false),
+      doorTo: entry.doorTo === undefined ? "yard" : reader.oneOf(entry, "doorTo", path, COMPOUND_DOORS),
+    }];
+  });
+  return {
+    site: {
+      grade: reader.range(site, "grade", "compound.site", { allowEqual: true }),
+      cover,
+      nearWater: site.nearWater === undefined ? null : reader.number(site, "nearWater", "compound.site", { min: 0 }),
+    },
+    yard: { radius: reader.range(yard, "radius", "compound.yard", { allowEqual: true }) },
+    arrangement: reader.oneOf(compound, "arrangement", "compound", COMPOUND_ARRANGEMENTS),
+    trails,
+    buildings: buildingList,
   };
 }
 

@@ -73,8 +73,34 @@ export function collectPlaces(settlements: SettlementSite[], features: FeatureSi
   });
   for (const feature of features) {
     const road = feature.kind.road;
+    if (feature.settlement || !road) continue;
+    const importance = typeof road.importance === "number" ? road.importance : road.importance.village;
+    // A compound's gates are found on its circle, facing each road, as a settlement's are.
+    const compound = feature.compound;
+    if (compound) {
+      places.push({
+        id: places.length,
+        kindId: feature.kind.id,
+        name: `${feature.kind.name} #${feature.id}`,
+        x: compound.x,
+        z: compound.z,
+        height: compound.height,
+        radius: compound.radius,
+        areaId: feature.areaId,
+        // All of it: its roads are routed to points outside it, and its buildings reach near its edge.
+        avoidRadius: compound.radius,
+        importance,
+        links: road.links,
+        wants: road.wants,
+        maxLength: road.maxLength,
+        fixedGates: null,
+        settlement: null,
+        feature,
+      });
+      continue;
+    }
     const entrance = feature.entrance;
-    if (feature.settlement || !road || !entrance) continue;
+    if (!entrance) continue;
     const angle = Math.atan2(entrance.approachZ - entrance.z, entrance.approachX - entrance.x);
     places.push({
       id: places.length,
@@ -86,7 +112,7 @@ export function collectPlaces(settlements: SettlementSite[], features: FeatureSi
       radius: Math.hypot(entrance.x - feature.x, entrance.z - feature.z),
       areaId: feature.areaId,
       avoidRadius: feature.footprint,
-      importance: typeof road.importance === "number" ? road.importance : road.importance.village,
+      importance,
       links: road.links,
       wants: road.wants,
       maxLength: road.maxLength,

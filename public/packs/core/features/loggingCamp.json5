@@ -1,0 +1,36 @@
+// A logging camp: a trodden yard in a thick wood, its buildings round it facing in, a road in from
+// the nearest village and a skid trail out the other way into the felling. The first compound (see
+// FEATURES.md) - a yard with buildings round it, no streets.
+//
+// Where it goes is decided by the ground: gentle, and deep in a wood. A cell with no such ground
+// has no camp, whatever it rolled.
+{
+  name: "Logging camp",
+  type: "compound",
+  compound: {
+    // Gentle ground (rise over run across the whole camp), trees all round it - the share of the
+    // ground they cover, at least the first, the more the better up to the second - and a river
+    // within 300 m in its favour.
+    site: { grade: [0, 0.12], cover: [0.5, 0.9], nearWater: 300 },
+    // A round of trodden ground, its radius in metres, rolled per camp.
+    yard: { radius: [12, 18] },
+    // Round the yard's rim, fronts to the yard, the entrances kept free.
+    arrangement: "ring",
+    // The skid trail the logs are dragged in along: out through the widest stretch of rim the
+    // roads leave, so the felling lies away from the way in.
+    trails: [{ to: "clearing", length: [40, 90], chance: 0.85 }],
+    // Its buildings, each `count` of them (rolled), each with `chance`; a required one must fit.
+    // Stand-ins until the camp's own (a bunkhouse, a saw shed, a tool shed) are built.
+    buildings: [
+      { building: "shingleCottage", count: [1, 2], required: true },
+      { building: "workshop", count: [1, 1], required: true },
+      { building: "workshop", count: [0, 1], chance: 0.5 },
+    ],
+  },
+  // Trees and bushes cleared up to 25 m past the yard's edge - over its buildings - and growing back
+  // by 55.
+  clearing: [25, 55],
+  // Its place in the road network (see settlement.json5): about a hamlet's worth, one road at the
+  // least and two at most, to a settlement by preference.
+  road: { importance: 1, links: [1, 2], wants: ["settlement"], maxLength: 2500 },
+}

@@ -1,8 +1,9 @@
-import type { SettlementLayout } from "./settlementLayout";
+import type { House, SettlementLayout } from "./settlementLayout";
+import type { CompoundLayout } from "../features/compound";
 import { PAD_BLEND_MAX, PAD_PAINT_OFFSET } from "./settlementConfig";
 
-/** Ground that has to be level: a house footprint (a rectangle) or a square (a circle). */
-interface Pad {
+/** Ground that has to be level: a house footprint (a rectangle) or a square or a yard (a circle). */
+export interface Pad {
   x: number;
   z: number;
   y: number;
@@ -45,17 +46,37 @@ function gapTo(pad: Pad, x: number, z: number): number {
   return Math.hypot(Math.max(0, along), Math.max(0, across));
 }
 
+/** A house's footprint as a pad: its width along its street, square to its front. */
+function housePad(house: House): Pad {
+  return { x: house.x, z: house.z, y: house.y, ux: -house.frontZ, uz: house.frontX, hw: house.width / 2, hd: house.depth / 2, radius: 0 };
+}
+
+/** Every settlement's square and house plots. */
+export function settlementPads(layouts: SettlementLayout[]): Pad[] {
+  return layouts.flatMap((layout) => {
+    const { square } = layout;
+    return [{ x: square.x, z: square.z, y: square.y, ux: 1, uz: 0, hw: 0, hd: 0, radius: square.radius }, ...layout.houses.map(housePad)];
+  });
+}
+
+/** Every compound's yard and the ground under its buildings. */
+export function compoundPads(layouts: CompoundLayout[]): Pad[] {
+  return layouts.flatMap(({ yard, buildings }) => [{ x: yard.x, z: yard.z, y: yard.y, ux: 1, uz: 0, hw: 0, hd: 0, radius: yard.radius }, ...buildings.map(housePad)]);
+}
+
 /**
- * The level patches of ground settlements stand on - each house's footprint and each square - so the
- * terrain sampler can bring the ground to them (the same way it grades roads) and paint them with
- * the road surface. Bucketed like the road field, so a query away from any settlement is one miss.
+ * The level patches of ground places stand on - each house's footprint, each square and each
+ * compound's yard - so the terrain sampler can bring the ground to them (the same way it grades
+ * roads) and paint them with the road surface. Bucketed like the road field, so a query away from
+ * any of them is one miss.
  */
-export function createPadField(layouts: SettlementLayout[]): PadField {
+export function createPadField(pads: Pad[]): PadField {
   const buckets = new Map<number, Pad[]>();
   let padCount = 0;
 
-  function add(pad: Pad, extent: number): void {
+  function add(pad: Pad): void {
     padCount++;
+    const extent = pad.radius > 0 ? pad.radius : Math.hypot(pad.hw, pad.hd);
     const gxMin = Math.floor((pad.x - extent - REACH) / BUCKET_SIZE);
     const gxMax = Math.floor((pad.x + extent + REACH) / BUCKET_SIZE);
     const gzMin = Math.floor((pad.z - extent - REACH) / BUCKET_SIZE);
@@ -70,19 +91,7 @@ export function createPadField(layouts: SettlementLayout[]): PadField {
     }
   }
 
-  for (const layout of layouts) {
-    const { square } = layout;
-    add({ x: square.x, z: square.z, y: square.y, ux: 1, uz: 0, hw: 0, hd: 0, radius: square.radius }, square.radius);
-    for (const house of layout.houses) {
-      // Width axis runs along the street: perpendicular to the front.
-      const ux = -house.frontZ;
-      const uz = house.frontX;
-      add(
-        { x: house.x, z: house.z, y: house.y, ux, uz, hw: house.width / 2, hd: house.depth / 2, radius: 0 },
-        Math.hypot(house.width, house.depth) / 2,
-      );
-    }
-  }
+  for (const pad of pads) add(pad);
 
   function query(x: number, z: number): PadQuery | null {
     const bucket = buckets.get(bucketKey(Math.floor(x / BUCKET_SIZE), Math.floor(z / BUCKET_SIZE)));

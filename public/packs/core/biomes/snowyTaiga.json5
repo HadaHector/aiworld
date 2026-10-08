@@ -12,6 +12,12 @@
   lakeChance: 0.04,
   borderType: "mountain",
   settlement: ["stoneVillage", "farmVillage"],
+  // Woodland: a settlement in some cells, a logging camp deep in the trees in others.
+  features: [
+    { feature: "settlement", odds: 0.8 },
+    { feature: "loggingCamp", odds: 0.6 },
+    { feature: "none", odds: 0.8 },
+  ],
   // How snowy the area is, 0-1: the ground, the trees and the stones all follow it together.
   params: { snow: { range: [0, 1] } },
   height: {

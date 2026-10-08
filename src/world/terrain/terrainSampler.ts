@@ -7,7 +7,9 @@ import { generateSettlementSites, type SettlementSite } from "../settlements/set
 import { generateRoadNetwork, type RoadNetwork } from "../roads/roadNetwork";
 import { createRoadField, type RoadField } from "../roads/roadField";
 import { generateSettlementLayouts, type SettlementLayout } from "../settlements/settlementLayout";
-import { createPadField, type PadField } from "../settlements/padField";
+import { compoundPads, createPadField, settlementPads, type PadField } from "../settlements/padField";
+import { layoutCompounds, type CompoundLayout } from "../features/compound";
+import { createTreeCover } from "../foliage/treeScatter";
 import { PAD_BLEND_MAX, PAD_BLEND_MIN, PAD_PAINT_OFFSET, PAD_SIDE_SLOPE } from "../settlements/settlementConfig";
 import { NO_ROLL, placeFeatures, rollCellFeatures, type FeatureSite } from "../features/featureSites";
 import { createFeatureField, type FeatureField } from "../features/featureField";
@@ -75,6 +77,8 @@ export interface TerrainWorld {
   roads: RoadNetwork;
   /** Streets, squares and houses, one per settlement, in settlement id order. */
   settlementLayouts: SettlementLayout[];
+  /** Each compound's yard, entrances and buildings - see features/compound.ts. */
+  compoundLayouts: CompoundLayout[];
   /** Each area's own roll of its biome, by area id (see cells/areaField.ts). */
   areaBiomes: BiomeDefinition[];
 }
@@ -290,7 +294,8 @@ export function createTerrainSampler(seed: number, content: WorldContent): Terra
   );
 
   // Then every other cell's feature, and their ground edits bound.
-  const features = timed("Placing features", () => placeFeatures({ seed, cellSites: landCellSites, sampleTerrain, kinds, rolls, settlements }));
+  const treeCover = createTreeCover(seed, content);
+  let features = timed("Placing features", () => placeFeatures({ seed, cellSites: landCellSites, sampleTerrain, kinds, rolls, settlements, treeCover }));
   featureField = createFeatureField(features);
 
   // Roads need the settlements to connect and the finished terrain to route over, so they come
@@ -302,12 +307,28 @@ export function createTerrainSampler(seed: number, content: WorldContent): Terra
   // Settlements are laid out on the terrain as the roads left it, then their streets join the road
   // field (graded and painted like roads, narrower) and their plots are levelled.
   const settlementLayouts = timed("Laying out settlements", () => generateSettlementLayouts(seed, settlements, roads.gates, roads.stretches, sampleTerrain));
+  // Compounds the same way: laid out round the gates their roads arrived at, their lanes and trails
+  // joining the road field and their yards and buildings levelled.
+  // A compound no road could reach - its ground boxed in by slopes no road can climb - is not one:
+  // its cell is left empty, its clearing with it.
+  const roadless = new Set(
+    roads.places.filter((place) => place.feature?.compound && !roads.links.some((link) => link.from === place.id || link.to === place.id)).map((place) => place.feature!),
+  );
+  if (roadless.size > 0) {
+    const kept = features.filter((feature) => !roadless.has(feature));
+    const newId = new Map(kept.map((feature, id) => [feature.id, id]));
+    for (const link of roads.links) if (link.featureId !== undefined) link.featureId = newId.get(link.featureId);
+    kept.forEach((feature, id) => (feature.id = id));
+    features = kept;
+    featureField = createFeatureField(features);
+  }
+  const compoundLayouts = timed("Laying out compounds", () => layoutCompounds(features, roads, sampleTerrain));
   roadField = createRoadField(
-    [...roads.stretches, ...settlementLayouts.flatMap((layout) => layout.streets)],
+    [...roads.stretches, ...settlementLayouts.flatMap((layout) => layout.streets), ...compoundLayouts.flatMap((layout) => [...layout.lanes, ...layout.trails])],
     ROAD_QUERY_RADIUS,
     ROAD_GRADE_END_TAPER,
   );
-  padField = createPadField(settlementLayouts);
+  padField = createPadField([...settlementPads(settlementLayouts), ...compoundPads(compoundLayouts)]);
 
-  return { sampleTerrain, worldExtent, continents, areaBounds, areaNames, settlements, features, roads, settlementLayouts, areaBiomes };
+  return { sampleTerrain, worldExtent, continents, areaBounds, areaNames, settlements, features, roads, settlementLayouts, compoundLayouts, areaBiomes };
 }

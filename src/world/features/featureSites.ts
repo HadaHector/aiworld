@@ -5,6 +5,8 @@ import { CELL_SPACING } from "../cells/config";
 import { deriveSeed, mulberry32 } from "../rng";
 import { NO_FEATURE, type FeatureKindDef } from "./featureTypes";
 import { evaluateQuarry, quarryEntrance, quarryFootprint, type QuarryShape } from "./quarry";
+import { evaluateCompound, planCompound, type CompoundSite } from "./compound";
+import type { TreeCover } from "../foliage/treeScatter";
 
 /** One feature as it stands in the world. */
 export interface FeatureSite {
@@ -24,6 +26,8 @@ export interface FeatureSite {
   /** The type's own data: one of these is set. */
   quarry: QuarryShape | null;
   settlement: SettlementSite | null;
+  /** A compound as sited - laid out once the roads are built (see compound.ts). */
+  compound: CompoundSite | null;
 }
 
 /** No feature rolled. */
@@ -71,6 +75,8 @@ export interface FeatureInput {
   rolls: number[];
   /** Already placed (settlements/settlementSites.ts), in the cells that rolled one. */
   settlements: SettlementSite[];
+  /** How thick the woods are - what a compound that wants to stand in them reads. */
+  treeCover: TreeCover;
 }
 
 /**
@@ -81,7 +87,7 @@ export interface FeatureInput {
  * scatter of points over the cell, and takes the best. A cell where nothing suits is simply empty:
  * the roll is what the cell would like, the ground is what it gets.
  */
-export function placeFeatures({ seed, cellSites, sampleTerrain, kinds, rolls, settlements }: FeatureInput): FeatureSite[] {
+export function placeFeatures({ seed, cellSites, sampleTerrain, kinds, rolls, settlements, treeCover }: FeatureInput): FeatureSite[] {
   const features: FeatureSite[] = settlements.map((settlement) => ({
     id: 0,
     kindIndex: rolls[settlement.cellId],
@@ -93,6 +99,7 @@ export function placeFeatures({ seed, cellSites, sampleTerrain, kinds, rolls, se
     entrance: null,
     quarry: null,
     settlement,
+    compound: null,
   }));
 
   const clearOfOthers = (x: number, z: number): boolean =>
@@ -103,11 +110,42 @@ export function placeFeatures({ seed, cellSites, sampleTerrain, kinds, rolls, se
     const index = rolls[cell];
     if (index === NO_ROLL) continue;
     const kind = kinds[index];
+    const site = cellSites[cell];
+    const rng = mulberry32(deriveSeed(seed, FEATURE_PLACE_SALT + cell));
+
+    if (kind.type === "compound" && kind.compound) {
+      // Everything that decides its size first, so where it lands does not change how big it is.
+      const plan = planCompound(kind, seed, rng);
+      let best: { x: number; z: number; height: number; areaId: number; score: number } | null = null;
+      for (let attempt = 0; attempt < CANDIDATES_PER_CELL; attempt++) {
+        const radius = Math.sqrt(rng()) * CANDIDATE_RADIUS;
+        const angle = rng() * Math.PI * 2;
+        const x = site.x + Math.cos(angle) * radius;
+        const z = site.z + Math.sin(angle) * radius;
+        if (!clearOfOthers(x, z)) continue;
+        const scored = evaluateCompound(x, z, kind.compound, plan.radius, sampleTerrain, treeCover);
+        if (scored && (!best || scored.score > best.score)) best = { x, z, ...scored };
+      }
+      if (!best) continue;
+      features.push({
+        id: 0,
+        kindIndex: index,
+        kind,
+        x: best.x,
+        z: best.z,
+        areaId: best.areaId,
+        footprint: plan.radius,
+        entrance: null,
+        quarry: null,
+        settlement: null,
+        compound: { ...plan, x: best.x, z: best.z, height: best.height },
+      });
+      continue;
+    }
+
     const spec = kind.quarry;
     if (kind.type !== "quarry" || !spec) continue;
-    const site = cellSites[cell];
 
-    const rng = mulberry32(deriveSeed(seed, FEATURE_PLACE_SALT + cell));
     // One size per cell, rolled before the search, so where it lands does not change how big it is.
     const size = {
       halfLength: roll(spec.floorLength, rng) / 2,
@@ -139,6 +177,7 @@ export function placeFeatures({ seed, cellSites, sampleTerrain, kinds, rolls, se
       entrance: kind.road ? { ...quarryEntrance(shape), height: shape.level } : null,
       quarry: shape,
       settlement: null,
+      compound: null,
     });
   }
   features.forEach((feature, id) => (feature.id = id));

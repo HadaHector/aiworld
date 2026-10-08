@@ -787,10 +787,10 @@ export function generateRoadNetwork(
     let from = { x: fromGate.x, z: fromGate.z };
     let to = { x: toGate.x, z: toGate.z };
     const approach = (gate: SettlementGate): CellPoint => ({ x: gate.approachX, z: gate.approachZ });
-    // A settlement's interior is kept out of right up to its gates; a feature's footprint is its own
-    // ground, which its road comes into.
+    // A place with gates on its rim (a settlement, a compound) keeps its roads out of its middle
+    // right up to them; a feature with a way in of its own (a quarry's open front) is entered.
     const interiors = [
-      ...[fromSite, toSite].filter((place) => place.settlement).map(interior),
+      ...[fromSite, toSite].filter((place) => !place.fixedGates).map(interior),
       // One it goes around is kept clear by a road's width past its rim, not merely out of its middle.
       ...around.map((place) => ({ x: place.x, z: place.z, radius: place.radius + ROAD_HALF_WIDTH * 2 })),
       ...footprintsNear(fromSite, toSite, kind === "link" ? ROAD_MAX_DETOUR_FACTOR : ROAD_RESCUE_DETOUR_FACTOR, [fromSite.feature?.id, toSite.feature?.id]),
@@ -1013,8 +1013,22 @@ export function generateRoadNetwork(
   let spursFailed = 0;
   for (const place of places) {
     const feature = place.feature;
-    const entrance = place.fixedGates?.[0];
-    if (!feature || !entrance || builtLinks[place.id] > 0) continue;
+    if (!feature || builtLinks[place.id] > 0) continue;
+    // Its own way in - or, for one whose gates are found on its rim (a compound), the gate facing
+    // the nearest road.
+    let entrance = place.fixedGates?.[0] ?? null;
+    if (!entrance) {
+      let nearest: CellPoint | null = null;
+      for (const key of roadNodes) {
+        const point = nodePoint(key);
+        if (!nearest || Math.hypot(point.x - place.x, point.z - place.z) < Math.hypot(nearest.x - place.x, nearest.z - place.z)) nearest = point;
+      }
+      entrance = nearest ? gateFor(place, nearest.x, nearest.z) : null;
+    }
+    if (!entrance) {
+      spursFailed++;
+      continue;
+    }
     const approach = { x: entrance.approachX, z: entrance.approachZ };
     let target = -1;
     let targetDistance = Infinity;
@@ -1034,9 +1048,12 @@ export function generateRoadNetwork(
     const avoid = [
       ...allInteriors.filter((c) => Math.hypot(c.x - approach.x, c.z - approach.z) < targetDistance * ROAD_MAX_DETOUR_FACTOR + c.radius),
       ...footprintsNear(approach, targetPoint, ROAD_MAX_DETOUR_FACTOR, [feature.id]),
+      // Out of its own middle, if its gates are on its rim.
+      ...(place.fixedGates ? [] : [interior(place)]),
     ];
     const zones = new Set([feature.areaId, pathfinder.zoneOfNode(target)]);
-    const result = pathfinder.findPath({ from: approach, to: targetPoint, zones, roadNodes, avoid });
+    // As a rescue is: it is this place's only road, and an indirect one beats none.
+    const result = pathfinder.findPath({ from: approach, to: targetPoint, zones, roadNodes, avoid, detourFactor: ROAD_RESCUE_DETOUR_FACTOR });
     expansions += result.expansions;
     if (!result.nodes) {
       spursFailed++;
