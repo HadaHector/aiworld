@@ -66,6 +66,19 @@ export class ModelBuilder {
     this.surface(corners, corners.map(() => normal), normal, paint, grain, origin);
   }
 
+  /** A flat polygon whose texture is laid by hand: `uvs`, one per corner, in its material's own
+   *  units (a material one unit across: 0-1 over the texture once) - a door leaf, its texture drawn
+   *  to fit it whatever its size. */
+  mapped(corners: Vec3[], normal: Vec3, paint: Paint, uvs: [number, number][]): void {
+    const start = this.positions.length / 3;
+    this.face(corners, normal, paint);
+    if (this.measure) return;
+    for (let i = 0; i < corners.length; i++) {
+      this.uvs[(start + i) * 2] = uvs[i][0];
+      this.uvs[(start + i) * 2 + 1] = uvs[i][1];
+    }
+  }
+
   /**
    * A polygon that may be a little bent - a cell of a sagging roof - shaded by a normal per corner,
    * but textured in the frame of `frame` (the normal of the flat surface it is bent from), so the

@@ -68,7 +68,7 @@
       stone: { material: "dressedStone", tints: [[1.04, 1.02, 0.98], [0.95, 0.92, 0.88]] },
       roof: { material: "roofTiles", tints: [[1, 1, 1], [0.86, 0.82, 0.8]] },
       plinth: { material: "stoneBricks", tints: [[1, 1, 1]] },
-      door: { material: "timber", tints: [[0.45, 0.32, 0.26]] },
+      door: { material: "doorBoards", tints: [[0.45, 0.32, 0.26]] },
       glass: { material: "glass", tints: [[1, 1, 1]] },
     },
   },

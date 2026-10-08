@@ -1,7 +1,7 @@
 import type { BuildingDef, BuildingModel, BuildingPartDef, HouseSpec, Paint } from "./buildingTypes";
 import { HOUSE_PARTS } from "./buildingTypes";
 import { FOUNDATION_DEPTH, ModelBuilder, plain } from "./buildingGeometry";
-import { buildBeam, buildFraming, buildWallPart, partSpan, planFraming, type PartPaints } from "./buildingParts";
+import { buildBeam, buildFraming, buildWallPart, LEAF_UV, partSpan, planFraming, type PartPaints } from "./buildingParts";
 import { mulberry32 } from "../rng";
 
 /** Plain colours for a part with no house to borrow paints from. */
@@ -70,6 +70,11 @@ export function buildPartSample(part: BuildingPartDef, house: HouseSpec | null):
         far: false,
         box: (a0, a1, y0, y1, out0, out1, paint) => b.box(a0, y0, out0, a1, y1, out1, paint),
         face: (corners, towards, paint) => b.faceToward(corners, towards, paint),
+        leaf: (a0, a1, y0, y1, out, paint, flip) => {
+          const [u0, u1] = flip ? [LEAF_UV[0], 0] : [0, LEAF_UV[0]];
+          const v1 = LEAF_UV[1];
+          b.mapped([[a0, y0, out], [a1, y0, out], [a1, y1, out], [a0, y1, out]], [0, 0, 1], paint, [[u0, 0], [u1, 0], [u1, v1], [u0, v1]]);
+        },
       },
       paints,
       rng,

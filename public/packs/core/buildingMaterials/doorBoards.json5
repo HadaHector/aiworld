@@ -1,0 +1,100 @@
+// A board door's leaf, the whole of it: six upright boards with dark grooves between them, two
+// ledges across them near the top and the bottom - the boards' grooves stopping at them - and an
+// iron ring of a handle on one side, halfway up.
+// Drawn for a leaf twice as tall as it is wide: a door part lays it once over each leaf (`size`
+// [1, 2] - see buildingParts.ts' LEAF_UV), so the texture is stretched twice as tall as it is drawn,
+// and what must come out round - the ring - is drawn half as tall.
+{
+  name: "Door Boards",
+  size: [1, 2],
+  shine: 0.06,
+  texture: {
+    bumpStrength: 1,
+    pipeline: {
+      noises: [
+        // Where on the leaf a point is: 0-1 across it, and up it.
+        { name: "across", type: "bricks", tileCycles: [1, 1], stagger: 0, amplitude: 1, mode: "u" },
+        { name: "up", type: "bricks", tileCycles: [1, 1], stagger: 0, amplitude: 1, mode: "v" },
+        // Each board's own shade.
+        { name: "boards", type: "bricks", tileCycles: [6, 1], stagger: 0, amplitude: 1, mode: "cell" },
+        // The grain up the boards - drawn half as stretched, since the texture is stretched twice.
+        { name: "grain", type: "fbm", octaves: 3, tileCycles: 6, amplitude: 1, persistence: 0.5, lacunarity: 2.2, stretch: [1, 7] },
+        { name: "weather", type: "fbm", octaves: 2, tileCycles: 3, amplitude: 1, persistence: 0.5, lacunarity: 2 },
+      ],
+      steps: [
+        { output: "u", op: "sample", noise: "across" },
+        { output: "v", op: "sample", noise: "up" },
+        { output: "boardId", op: "sample", noise: "boards" },
+        { output: "grainRaw", op: "sample", noise: "grain" },
+        { output: "weatherRaw", op: "sample", noise: "weather" },
+
+        // The grooves between the six boards: |sin| is 0 at each joint.
+        { output: "wave", op: "sin", input: "u", cycles: 3 },
+        { output: "waveAbs", op: "abs", input: "wave" },
+        { output: "grooveAll", op: "mask", input: "waveAbs", at: 0.025, off: 0.07 },
+
+        // The two ledges, bands across the leaf near its foot and its head, and a dark line along
+        // each one's edges.
+        { output: "lowAt", op: "offset", input: "v", amount: -0.16 },
+        { output: "lowDist", op: "abs", input: "lowAt" },
+        { output: "highAt", op: "offset", input: "v", amount: -0.84 },
+        { output: "highDist", op: "abs", input: "highAt" },
+        { output: "ledgeDist", op: "min", a: "lowDist", b: "highDist" },
+        { output: "ledge", op: "mask", input: "ledgeDist", at: 0.036, off: 0.04 },
+        { output: "ledgeEdgeAt", op: "offset", input: "ledgeDist", amount: -0.038 },
+        { output: "ledgeEdgeDist", op: "abs", input: "ledgeEdgeAt" },
+        { output: "ledgeEdge", op: "mask", input: "ledgeEdgeDist", at: 0.003, off: 0.008 },
+        // The grooves stop at the ledges.
+        { output: "openBoard", op: "invert", input: "ledge" },
+        { output: "groove", op: "multiply", a: "grooveAll", b: "openBoard" },
+
+        // The ring: round on the leaf, so its height is counted twice over.
+        { output: "ringU", op: "offset", input: "u", amount: -0.16 },
+        { output: "ringV", op: "offset", input: "v", amount: -0.5 },
+        { output: "ringV2", op: "scale", input: "ringV", factor: 2 },
+        { output: "ringUU", op: "multiply", a: "ringU", b: "ringU" },
+        { output: "ringVV", op: "multiply", a: "ringV2", b: "ringV2" },
+        { output: "ringD2", op: "add", a: "ringUU", b: "ringVV" },
+        { output: "ringD", op: "power", input: "ringD2", exponent: 0.5 },
+        { output: "ringAt", op: "offset", input: "ringD", amount: -0.055 },
+        { output: "ringDist", op: "abs", input: "ringAt" },
+        { output: "iron", op: "mask", input: "ringDist", at: 0.011, off: 0.018 },
+
+        // The wood: each board its own shade, the ledges a shade paler, grain and weather over both.
+        {
+          output: "boardTone",
+          op: "colorRamp",
+          input: "boardId",
+          stops: [
+            { at: 0.0, color: [0.5, 0.38, 0.27] },
+            { at: 0.35, color: [0.57, 0.43, 0.3] },
+            { at: 0.7, color: [0.47, 0.36, 0.26] },
+            { at: 1.0, color: [0.54, 0.41, 0.29] },
+          ],
+        },
+        { output: "ledgeTone", op: "color", value: [0.6, 0.46, 0.33] },
+        { output: "tone", op: "mix", a: "boardTone", b: "ledgeTone", t: "ledge" },
+        { output: "grainShade", op: "remap", input: "grainRaw", inMin: -1, inMax: 1, outMin: 0.86, outMax: 1.1 },
+        { output: "weatherShade", op: "remap", input: "weatherRaw", inMin: -1, inMax: 1, outMin: 0.9, outMax: 1.06 },
+        { output: "shade", op: "multiply", a: "grainShade", b: "weatherShade" },
+        { output: "wood", op: "multiply", a: "tone", b: "shade" },
+        { output: "lineColor", op: "color", value: [0.16, 0.12, 0.09] },
+        { output: "lines", op: "max", a: "groove", b: "ledgeEdge" },
+        { output: "lined", op: "mix", a: "wood", b: "lineColor", t: "lines" },
+        { output: "ironColor", op: "color", value: [0.11, 0.1, 0.1] },
+        { output: "diffuse", op: "mix", a: "lined", b: "ironColor", t: "iron" },
+        { output: "roughness", op: "constant", value: 0.8 },
+
+        // Height: the ledges stand proud of the boards, the grooves sunk into them, the iron on top.
+        { output: "ledgeH", op: "scale", input: "ledge", factor: 0.6 },
+        { output: "grooveH", op: "scale", input: "groove", factor: -0.5 },
+        { output: "ironH", op: "scale", input: "iron", factor: 0.9 },
+        { output: "grainH", op: "scale", input: "grainRaw", factor: 0.05 },
+        { output: "h1", op: "add", a: "ledgeH", b: "grooveH" },
+        { output: "h2", op: "max", a: "h1", b: "ironH" },
+        { output: "height", op: "add", a: "h2", b: "grainH" },
+      ],
+      outputs: { diffuse: "diffuse", roughness: "roughness", height: "height" },
+    },
+  },
+}

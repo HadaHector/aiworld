@@ -349,3 +349,13 @@ plain wall where its hearth should be. The chimney part could build its inside t
 fireplace on the room's wall behind it - an opening as wide as the breast, a hearthstone, a lintel
 or mantel - sized and placed from the same breast, so they line up. It would also be the place
 the interior lighting the furniture step plans can start from.
+
+### Building textures can only be baked square
+
+Every building material is one layer of a single texture array, all layers TEXTURE_RESOLUTION
+square (buildingMesh.ts). A texture meant for a shape that is not square - a door leaf, twice as
+tall as it is wide - is baked square and stretched by its `size` ([1, 2] for doorBoards), so it is
+drawn squashed (its ring of a handle drawn half as tall, its grain half as stretched) and gets half
+the texels up it that it gets across. Baking non-square textures needs either layers of their own
+size (a second array, or a texture per shape) or packing two square cells of one layer as one tall
+texture with its own uv range.

@@ -1,7 +1,7 @@
 import type { BuildingModel, HouseSpec, Level, Paint, StoreyKind, WallSide } from "./buildingTypes";
 import { FOUNDATION_DEPTH, ModelBuilder, pick, roll, rollInt, type Vec3 } from "./buildingGeometry";
 import { buildPorch, planPorch } from "./porch";
-import { buildBeam, buildFraming, buildRoof, buildSupport, buildTerrace, buildWallPart, isDoor, partSpan, pickPart, planFraming, planRoof, type FramingCorner, type FramingWall, type PartExtent, type PartPaints, type WallSlot } from "./buildingParts";
+import { buildBeam, buildFraming, buildRoof, buildSupport, buildTerrace, buildWallPart, isDoor, LEAF_UV, partSpan, pickPart, planFraming, planRoof, type FramingCorner, type FramingWall, type PartExtent, type PartPaints, type WallSlot } from "./buildingParts";
 import type { RoofBlockInput, RoofEnd } from "./pitchedRoof";
 import { inRect, planHouse, type Block, type PlanEnd } from "./housePlans";
 import { cellKey, inStall, planInterior, type FaceDir, type InteriorLayout } from "./interiorLayout";
@@ -393,6 +393,11 @@ export function buildHouse(spec: HouseSpec, rng: () => number, far = false, meas
       },
       face: (corners, [ta, ty, tout], paint) =>
         b.faceToward(corners.map(point), alongX ? [ta, ty, sign * tout] : [sign * tout, ty, ta], paint),
+      leaf: (a0, a1, y0, y1, out, paint, flip) => {
+        const [u0, u1] = flip ? [LEAF_UV[0], 0] : [0, LEAF_UV[0]];
+        const v1 = LEAF_UV[1];
+        b.mapped([point([a0, y0, out]), point([a1, y0, out]), point([a1, y1, out]), point([a0, y1, out])], alongX ? [0, 0, sign] : [sign, 0, 0], paint, [[u0, 0], [u1, 0], [u1, v1], [u0, v1]]);
+      },
     };
   };
 

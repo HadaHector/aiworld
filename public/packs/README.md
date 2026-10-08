@@ -760,7 +760,10 @@ and which of its sides are open; a support where it stands. There are seven so f
   `bars: [up, across]`, glazing bars or a double door's stile; `sillReach` for a sill under it (none
   if left out); and `parts: { frame, panel }`, which of the building's parts each is painted as. It
   spans `span` bays of wall - a barn door two (see `core/buildingParts/barnDoor.json5`) - and
-  shrinks to keep clear of corner posts and the eaves.
+  shrinks to keep clear of corner posts and the eaves. A panel painted as the `door` part is a
+  door's leaf - two leaves where it is over 2.2 m wide, their handles meeting in the middle - and its
+  material is laid once over each leaf, whatever its size: a door material is drawn for a leaf twice
+  as tall as it is wide, `size: [1, 2]` (see `core/buildingMaterials/doorBoards.json5`).
 - `chimney`, built against the outside of a wall on a foundation of its own (see
   `core/buildingParts/stoneChimney.json5`): a breast `width` along the wall and `depth` out from it
   up to its `shoulder` (above the floor), sloping in to a stack `stackWidth` by `stackDepth` that

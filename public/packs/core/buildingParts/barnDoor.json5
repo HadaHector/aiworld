@@ -1,5 +1,5 @@
 // A big double door in a heavy timber frame, two bays wide - a barn's or a workshop's, its two
-// leaves split by a stile and braced across the middle.
+// boarded leaves, ledged across, split by a stile.
 {
   name: "Barn Door",
   type: "framed",
@@ -10,8 +10,8 @@
     sill: 0,
     frame: 0.32,
     headReach: 0.12,
-    // A stile up the middle, and a brace across.
-    bars: [1, 1],
+    // A stile up the middle, between its two leaves - the leaves' own ledges brace them.
+    bars: [1, 0],
     parts: { frame: "timber", panel: "door" },
   },
 }

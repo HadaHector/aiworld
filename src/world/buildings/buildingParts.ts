@@ -38,6 +38,9 @@ export interface WallSlot {
   box(a0: number, a1: number, y0: number, y1: number, out0: number, out1: number, paint: Paint): void;
   /** A flat polygon, its corners as [along, up, out], facing toward `towards` (the same way). */
   face(corners: Vec3[], towards: Vec3, paint: Paint): void;
+  /** A door's leaf: an upright rectangle `out` from the wall's face, facing out, its texture laid
+   *  once over it (see LEAF_UV) - along it from `a0`, or from `a1` with `flip`, and up it. */
+  leaf(a0: number, a1: number, y0: number, y1: number, out: number, paint: Paint, flip: boolean): void;
   /** Which storey it is on, the floor's height there, and the most an opening may reach up to (under
    *  the storey's top beam). A cellar's slot is in the plinth, its floor below the ground. */
   storey: StoreyKind;
@@ -101,6 +104,11 @@ export function partSpan(part: BuildingPartDef): number {
  */
 const OUT = { panel: 0.07, bars: 0.1, frame: 0.15, head: 0.18 };
 const SET_IN = -0.03;
+/** A door wider than this is two leaves. */
+const DOUBLE_LEAF = 2.2;
+/** A door leaf's texture coordinates, corner to corner: a door's material is one by two units
+ *  (`size: [1, 2]`), laid once over each leaf - a texture drawn for a leaf twice as tall as wide. */
+export const LEAF_UV: [number, number] = [1, 2];
 
 /** Fills a wall slot with a part, and says how much of the wall it took - null where the slot leaves
  *  it too little room to be built (or it is no part for a wall slot). */
@@ -132,7 +140,19 @@ function buildFramed(spec: FramedSpec, slot: WallSlot, paints: PartPaints): Part
   if (half < 0.2 || top - bottom < 0.4) return null;
   const frame = paints[spec.parts.frame];
 
-  if (!slot.open) box(-half, half, bottom, top, SET_IN, OUT.panel, paints[spec.parts.panel]);
+  if (!slot.open) {
+    const panel = paints[spec.parts.panel];
+    if (spec.parts.panel === "door") {
+      // A door's leaves, each its texture laid once over it - two, handles meeting in the middle,
+      // where the door is wide - and the panel's edges round them.
+      const leaves = 2 * half > DOUBLE_LEAF ? 2 : 1;
+      const w = (2 * half) / leaves;
+      for (let n = 0; n < leaves; n++) slot.leaf(-half + n * w, -half + (n + 1) * w, bottom, top, OUT.panel, panel, leaves === 2 && n === 0);
+      slot.face([[-half, bottom, SET_IN], [-half, bottom, OUT.panel], [-half, top, OUT.panel], [-half, top, SET_IN]], [-1, 0, 0], panel);
+      slot.face([[half, bottom, SET_IN], [half, top, SET_IN], [half, top, OUT.panel], [half, bottom, OUT.panel]], [1, 0, 0], panel);
+      slot.face([[-half, top, SET_IN], [-half, top, OUT.panel], [half, top, OUT.panel], [half, top, SET_IN]], [0, 1, 0], panel);
+    } else box(-half, half, bottom, top, SET_IN, OUT.panel, panel);
+  }
   const extent = { half: half + f + reach, foot: spec.sillReach !== null ? bottom - f : bottom, top: top + f, opening: { half, bottom, top } };
   // From afar an opening is its panel: the frame, bars and sill are too fine to see.
   if (slot.far) return extent;
