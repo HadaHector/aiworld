@@ -1,0 +1,14 @@
+// A logging camp's kitchen: a stone-flagged floor by the hearth, log walls darkened with smoke, open
+// up to the sooty boards of the roof, round log ties across it.
+{
+  name: "Camp Kitchen",
+  floor: { material: "stoneBricks", tints: [[0.82, 0.8, 0.76], [0.76, 0.74, 0.7]] },
+  walls: { material: "logWall", tints: [[0.72, 0.68, 0.64], [0.68, 0.64, 0.6]] },
+  ceiling: { material: "planks", tints: [[0.48, 0.44, 0.4]] },
+  beams: { material: "roundLog", tints: [[0.6, 0.56, 0.52]] },
+  timber: { material: "timber", tints: [[0.42, 0.36, 0.32]] },
+  stair: "solid",
+  underRoof: true,
+  // The chimney stands against its wall - its hearth.
+  hearth: true,
+}

@@ -714,7 +714,8 @@ its `stair` `solid` steps or `open` treads; its `windows` from inside - `glass`,
 window part built again on the wall's inner face, the outside window turned about - or `shutters`
 shut over them. Windows never let light or sight through. `underRoof: true` opens it up to the
 roof where nothing of the house is over it - a loft, a lean-to's room: its ceiling the roof's
-underside, its walls going up to it, its `beams` tying across at the top of its walls.
+underside, its walls going up to it, its `beams` tying across at the top of its walls. `hearth: true`: it wants the chimney - a house's
+chimneys try the walls behind such a room before any others.
 
 Interiors are built only near (not in a building's far detail level). In the world the ground is
 taken out over a cellar near the camera, so it can be seen into and walked in; the player walks on

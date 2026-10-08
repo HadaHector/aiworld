@@ -56,9 +56,6 @@ const SLAB = 0.3;
 const DOOR_HALF = 0.7;
 const DOOR_HEIGHT = 2.9;
 const FRAME = 0.12;
-const LEAF = 0.08;
-/** A door out wider than this has two leaves. */
-const DOUBLE_DOOR = 2;
 /** Railings: how high, how thick their posts and rail, and how far apart their posts. */
 const RAIL_HEIGHT = 1.2;
 const RAIL = 0.1;
@@ -119,8 +116,9 @@ export function buildInterior(input: InteriorInput): void {
     const roofOver = input.roofOver;
     const underRoof = (i: number, j: number): boolean =>
       room.type.underRoof && !!roofOver && !input.inside(i, j, top + 1) && roofOver(top, (X(i) + X(i + 1)) / 2, (Z(j) + Z(j + 1)) / 2) !== null;
-    /** Its ceiling there: just under the roof - or, past the roof's edge, the top of its walls. */
-    const roofCeiling = (x: number, z: number): number => (roofOver?.(top, x, z) ?? levelOf(top).top) - CEILING_DROP;
+    /** Its ceiling there: just under the roof - never under the top of its walls, nor, past the
+     *  roof's edge, over it. */
+    const roofCeiling = (x: number, z: number): number => Math.max(levelOf(top).top, roofOver?.(top, x, z) ?? levelOf(top).top) - CEILING_DROP;
 
     // The walls: every face of the room's cells onto anything that is not the room, level by level,
     // cut round the doors through it.
@@ -377,10 +375,10 @@ export function buildInterior(input: InteriorInput): void {
     }
     frame(dir, line - s * (WALL + 0.04), line + s * (WALL + 0.04), mid, DOOR_HALF, y0, y1, paint);
     threshold(dir, line - s * WALL, line + s * WALL, mid, DOOR_HALF, y0, paint);
-    leafOpen(dir, line - s * WALL, -s, mid - DOOR_HALF, 2 * DOOR_HALF, y0, y1, paint);
   }
 
-  // The doors out, from inside: a frame through the wall, and the leaf swung back against it.
+  // The doors out, from inside: a frame through the wall. No door stands open with its leaf in the
+  // way - nothing opens or shuts - so an open doorway is just its frame.
   for (const exit of input.exits) {
     const id = layout.cells.get(cellKey(exit.i, exit.j, exit.k));
     if (id === undefined) continue;
@@ -389,11 +387,6 @@ export function buildInterior(input: InteriorInput): void {
     const s = signOf(exit.dir);
     frame(exit.dir, line - s * (WALL + 0.04), line, exit.along, exit.half, exit.bottom, exit.top, room.paints.timber);
     threshold(exit.dir, line - s * WALL, line, exit.along, exit.half, exit.bottom, room.paints.timber);
-    // A wide door's two leaves, one swung back from each jamb; a narrow one's one.
-    if (2 * exit.half > DOUBLE_DOOR) {
-      leafOpen(exit.dir, line - s * WALL, -s, exit.along - exit.half, exit.half, exit.bottom, exit.top, room.paints.timber);
-      leafOpen(exit.dir, line - s * WALL, -s, exit.along + exit.half, exit.half, exit.bottom, exit.top, room.paints.timber, true);
-    } else leafOpen(exit.dir, line - s * WALL, -s, exit.along - exit.half, 2 * exit.half, exit.bottom, exit.top, room.paints.timber);
   }
 
   // The windows from inside: where a room keeps its shutters shut over them, the shutters in a
@@ -426,13 +419,6 @@ export function buildInterior(input: InteriorInput): void {
     const [al, ah] = [mid - half, mid + half];
     if (alongX(dir)) b.box(al, y - 0.1, cl, ah, y + THRESHOLD, ch, paint);
     else b.box(cl, y - 0.1, al, ch, y + THRESHOLD, ah, paint);
-  }
-  /** A door's leaf swung open: hinged at `hinge` along the wall - at the low jamb, its leaf just
-   *  past it, or with `high` the high one - standing out from the wall's face `face` toward `toward`
-   *  (+1 or -1 across). */
-  function leafOpen(dir: FaceDir, face: number, toward: number, hinge: number, width: number, y0: number, y1: number, paint: Paint, high = false): void {
-    const [a0, a1] = high ? [hinge + 0.02, hinge + LEAF + 0.02] : [hinge - LEAF - 0.02, hinge - 0.02];
-    faceBox(dir, face + toward * 0.02, face + toward * (0.02 + width), a0, a1, y0, y1, paint);
   }
   /** A railing along a line across a face's plane: posts and a rail on top. */
   function railing(dir: FaceDir, line: number, a0: number, a1: number, y: number, paint: Paint): void {

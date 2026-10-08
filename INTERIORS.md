@@ -16,7 +16,7 @@ and interior lighting come after it, as a step of their own.
   spans.
 - **Static openings.** Windows are opaque, inside and out. Doors are open or fake; none of them
   move. A shut door is always a fake one, with nothing behind it - a door into a room stands open,
-  a real hole through the wall.
+  a real hole through the wall, its frame and no leaf (a leaf swung back only gets in the way).
 - **The outside decides the shell.** The interior is laid inside the masses, storeys and roof the
   house plan built, and fits the openings already on the walls: every outer window and door lands on
   a room's wall or on sealed space.

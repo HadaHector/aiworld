@@ -173,7 +173,8 @@ export const WINDOW_INSIDES = ["glass", "shutters"] as const;
  * and shutters; its stair solid steps or open treads; its windows seen from inside as they are
  * outside (`glass`) or with their shutters shut (`shutters`). `underRoof`: where nothing of the house
  * is over it, it is open up to the roof - its ceiling the roof's underside, its walls going up to it,
- * its beams tying across at the top of its walls - a loft, or a lean-to's room.
+ * its beams tying across at the top of its walls - a loft, or a lean-to's room. `hearth`: it wants
+ * the chimney - a house's chimneys try the walls behind such a room before any others.
  */
 export interface RoomTypeDef {
   id: string;
@@ -186,6 +187,7 @@ export interface RoomTypeDef {
   stair: (typeof STAIR_STYLES)[number];
   windows: (typeof WINDOW_INSIDES)[number];
   underRoof: boolean;
+  hearth: boolean;
 }
 
 export const HOUSE_PLAN_GENERATORS = ["house", "tower", "cabin"] as const;

@@ -751,7 +751,8 @@ export function buildHouse(spec: HouseSpec, rng: () => number, far = false, meas
   }
 
   // The wall's extras, highest priority first: each tries every free spot of the walls and storeys
-  // it may go on, in a random order, taking each with its chance, until it has as many as it may.
+  // it may go on, in a random order, taking each with its chance, until it has as many as it may - a
+  // chimney the walls behind a room with a hearth first.
   const extras = spec.wallExtras.map((extra, order) => ({ extra, order })).sort((p, q) => q.extra.priority - p.extra.priority || p.order - q.order);
   for (const { extra } of extras) {
     const span = partSpan(extra.part);
@@ -770,6 +771,13 @@ export function buildHouse(spec: HouseSpec, rng: () => number, far = false, meas
     for (let i = spots.length - 1; i > 0; i--) {
       const j = Math.floor(rng() * (i + 1));
       [spots[i], spots[j]] = [spots[j], spots[i]];
+    }
+    if (extra.part.chimney && interior) {
+      const hearth = (spot: { run: WallRun; level: Storey; bay: number }): boolean => {
+        const id = roomBehind(spot.run, spot.bay, span, spot.level);
+        return id !== null && interior.rooms.some((room) => room.id === id && room.type.hearth);
+      };
+      spots.sort((p, q) => Number(hearth(q)) - Number(hearth(p)));
     }
     let count = 0;
     for (const { run, level, bay } of spots) {
@@ -995,8 +1003,10 @@ export function buildHouse(spec: HouseSpec, rng: () => number, far = false, meas
     buildInterior({ b, colliders: colliders ?? undefined, layout: interior, levels: levels.map(({ kind, index, floor, top }) => ({ kind, index, floor, top })), X, Z, tile, inside: (i, j, k) => (k < 0 ? inside(i, j) : enclosed(i, j, k)), exits, windows, roofOver: (k, x, z) => {
       for (const group of roofGroups) {
         if (group.level.index !== k) continue;
+        // Under the roof's straight plane by as far as its ridge and rafters sag, so it never dips
+        // through the ceiling.
         const h = roofUnderside(group, x, z);
-        if (h !== null) return h;
+        if (h !== null) return h - group.plan.ridgeSag - group.plan.slopeSag;
       }
       return null;
     } });

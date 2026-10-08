@@ -582,7 +582,11 @@ stalls).
    through its ceiling to the bunk loft over it, open up to the roof (room types can now ask for
    that, `underRoof`), and a store in a lean-to - or at the cabin's end - with the second door out.
    A room can be held inside one block of the plan (`oneBlock`), so it never reaches from the cabin
-   into a lean-to. Not yet: a hearth against the chimney.
+   into a lean-to. The cookhouse: a one-storey cabin (4-5 x 3) open up to its roof, a mess hall
+   behind the front door and a kitchen beside it, a big stone chimney on the kitchen's end (a room
+   type's `hearth` draws the chimney to its wall), a porch most of the time, and half the time a
+   back door into the kitchen. Open doorways are frames only - no leaves swung back in the way.
+   Not yet: the hearth itself, inside.
 
 Each is checked in the workbench before the next.
 

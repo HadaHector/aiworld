@@ -1,0 +1,24 @@
+// A big stone chimney for a cookhouse: the stone chimney's make, but broader and deeper - a cooking
+// hearth behind it, wide enough for a pot crane - with a heavier stack and three pots.
+{
+  name: "Big Chimney",
+  type: "chimney",
+  chimney: {
+    // Two bays of wall, standing out in the middle of a gable.
+    span: 2,
+    // The breast: along the wall, and out from it.
+    width: 3.2,
+    depth: 1.5,
+    // How high above the floor it narrows to the stack.
+    shoulder: 3.4,
+    stackWidth: 1.7,
+    stackDepth: 1.2,
+    // Up to a line falling from the nearest ridge at `angle` degrees below level, and `rise` over it.
+    angle: 30,
+    rise: [0.5, 1.0],
+    foundation: { reach: 0.25, height: 0.4 },
+    cap: { height: 0.35, reach: 0.12 },
+    pots: { count: 3, width: 0.32, height: 0.55 },
+    parts: { body: "plinth", cap: "plinth", pots: "roof" },
+  },
+}

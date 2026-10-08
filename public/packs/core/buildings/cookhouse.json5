@@ -1,0 +1,56 @@
+// A logging camp's cookhouse: a one-storey log cabin open up to its shingle roof, a big stone
+// chimney on one end, small windows, and most of the time a porch along its front - the men eat
+// at long tables in its hall, the cook works in the kitchen beside it.
+{
+  name: "Cookhouse",
+  type: "house",
+  house: {
+    tile: [2.8, 3.0],
+    // Four or five bays along the front, three deep.
+    width: [4, 5],
+    depth: [3, 3],
+    plan: {
+      type: "cabin",
+      cabin: {
+        porches: [{ walls: ["front"], chance: 0.7, part: "timberPorch" }],
+      },
+    },
+    storeys: [1, 1],
+    // In whole courses of the log wall (0.6 m), from the model's foot.
+    wallHeight: [4.2, 4.2],
+    plinth: [0.6, 0.6],
+    plinthOutset: 0.4,
+    framing: "logCorners",
+    roof: "shingleRoof",
+    doors: [{ part: "timberDoor", weight: 1 }],
+    wallExtras: [
+      { part: "bigChimney", priority: 2, chance: 1, maxCount: 1, walls: ["side"], storeys: ["ground"] },
+      { part: "timberWindow", priority: 1, chance: 0.35, storeys: ["ground"] },
+    ],
+    // Inside: the mess hall behind the front door, and the kitchen beside it - with, as often as not,
+    // a door of its own out the back.
+    interior: {
+      type: "rooms",
+      rooms: {
+        exits: [1, 2],
+        fakeDoors: 0,
+        grow: 1,
+        rooms: [
+          { room: "messHall", priority: 10, tiles: [6, 6], grow: 1.5, minSide: 2, at: "entrance", oneBlock: true },
+          { room: "campKitchen", priority: 8, tiles: [4, 6], minSide: 2, maxSide: 3, next: "messHall", oneBlock: true },
+        ],
+      },
+    },
+    parts: {
+      walls: { material: "logWall", tints: [[1, 1, 1], [0.92, 0.9, 0.88], [1.05, 1, 0.94]] },
+      timber: { material: "roundLog", tints: [[1, 1, 1], [0.92, 0.9, 0.88]] },
+      stone: { material: "rubbleStone", tints: [[1, 1, 1]] },
+      roof: { material: "woodShingles", tints: [[0.85, 0.85, 0.85], [0.75, 0.76, 0.78]] },
+      plinth: { material: "rubbleStone", tints: [[1, 1, 1], [0.9, 0.88, 0.85]] },
+      door: { material: "planks", tints: [[0.8, 0.75, 0.7]] },
+      glass: { material: "glass", tints: [[1, 1, 1]] },
+      endGrain: { material: "endGrain", tints: [[1, 1, 1]] },
+      boards: { material: "deckBoards", tints: [[1, 1, 1], [0.9, 0.88, 0.86]] },
+    },
+  },
+}

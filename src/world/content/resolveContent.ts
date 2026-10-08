@@ -590,7 +590,7 @@ function readBuildingMaterial(id: string, obj: RawObject, reader: Reader): Build
  *  a content generator - see generators.ts), and its own block is under the generator's name. */
 /** A rooms/ file - see RoomTypeDef. */
 function readRoomType(id: string, obj: RawObject, reader: Reader): RoomTypeDef {
-  reader.onlyKeys(obj, "", ["name", "floor", "walls", "ceiling", "beams", "timber", "stair", "windows", "underRoof"]);
+  reader.onlyKeys(obj, "", ["name", "floor", "walls", "ceiling", "beams", "timber", "stair", "windows", "underRoof", "hearth"]);
   const surface = (key: string): RoomSurface => {
     const raw = reader.object(obj[key], key);
     reader.onlyKeys(raw, key, ["material", "tints"]);
@@ -609,6 +609,7 @@ function readRoomType(id: string, obj: RawObject, reader: Reader): RoomTypeDef {
     stair: obj.stair === undefined ? "solid" : reader.oneOf(obj, "stair", "", STAIR_STYLES),
     windows: obj.windows === undefined ? "glass" : reader.oneOf(obj, "windows", "", WINDOW_INSIDES),
     underRoof: obj.underRoof === true,
+    hearth: obj.hearth === true,
   };
 }
 
