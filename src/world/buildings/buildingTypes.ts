@@ -132,7 +132,8 @@ export type RoomLevel = (typeof ROOM_LEVELS)[number];
  * area, each side at least `minSide` tiles. `at: "entrance"`: behind the front door; `near: "entrance"`: there if it can be. `next`, `under`, `over`: beside, below or above a
  * room of that type placed before it. `stair`: a stair up from it is put in it before any other
  * room. `windows`: it needs an outer wall. `oneBlock`: it stays inside one block of the plan - the
- * main block, a wing, a lean-to - never reaching across into another, growing included.
+ * main block, a wing, a lean-to - never reaching across into another, growing included. `through`: it runs through its block from
+ * its front wall to its back - a bay of a stable, a shed's end.
  */
 export interface RoomRequest {
   room: RoomTypeDef;
@@ -156,6 +157,7 @@ export interface RoomRequest {
   stair: boolean;
   windows: boolean;
   oneBlock: boolean;
+  through: boolean;
 }
 
 /** What a room's surfaces are made of: a building material, and tints - one picked per room. */
@@ -174,7 +176,9 @@ export const WINDOW_INSIDES = ["glass", "shutters"] as const;
  * outside (`glass`) or with their shutters shut (`shutters`). `underRoof`: where nothing of the house
  * is over it, it is open up to the roof - its ceiling the roof's underside, its walls going up to it,
  * its beams tying across at the top of its walls - a loft, or a lean-to's room. `hearth`: it wants
- * the chimney - a house's chimneys try the walls behind such a room before any others.
+ * the chimney - a house's chimneys try the walls behind such a room before any others. `stalls`: a
+ * row of stalls along its back wall (the side away from the house's front), a bay each - see
+ * StallsSpec.
  */
 export interface RoomTypeDef {
   id: string;
@@ -188,6 +192,18 @@ export interface RoomTypeDef {
   windows: (typeof WINDOW_INSIDES)[number];
   underRoof: boolean;
   hearth: boolean;
+  stalls: StallsSpec | null;
+}
+
+/**
+ * A room's stalls: along its back wall, `depth` tiles deep - the rest of the room, in front of them,
+ * its aisle - one to a bay, split by board partitions `height` metres high, a post at each one's
+ * open end, and a manger along the wall in each. No door opens into them; a room no deeper than
+ * its stalls has none.
+ */
+export interface StallsSpec {
+  depth: number;
+  height: number;
 }
 
 export const HOUSE_PLAN_GENERATORS = ["house", "tower", "cabin"] as const;

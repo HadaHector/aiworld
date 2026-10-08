@@ -60,6 +60,12 @@ const FRAME = 0.12;
 const RAIL_HEIGHT = 1.2;
 const RAIL = 0.1;
 const POST_GAP = 1.3;
+/** A stall's partition boards and the post at its open end, how thick; a manger, how far out from
+ *  the wall and how high. */
+const STALL_BOARD = 0.14;
+const STALL_POST = 0.32;
+const MANGER_DEPTH = 1.0;
+const MANGER_HEIGHT = 1.3;
 /** How far a stair stands off the wall beside it. */
 const STAIR_CLEAR = 0.02;
 /** A stair's steps rise about this much each. */
@@ -248,6 +254,39 @@ export function buildInterior(input: InteriorInput): void {
           }
         }
       });
+    }
+
+    // Stalls along its back wall, a bay each: board partitions between them, a post at each one's
+    // open end, and a manger - a trough - along the wall in each.
+    const stalls = room.type.stalls;
+    if (stalls && rect.j1 - rect.j0 > stalls.depth) {
+      const paint = room.paints.timber;
+      const y0 = floorY;
+      const y1 = floorY + stalls.height;
+      const back = inset.z0;
+      const front = Z(rect.j0 + stalls.depth);
+      const solid = (x0: number, ya: number, z0: number, x1: number, yb: number, z1: number): void => {
+        b.box(x0, ya, z0, x1, yb, z1, paint);
+        colliders?.box(x0, ya, z0, x1, yb, z1);
+      };
+      for (let i = rect.i0 + 1; i < rect.i1; i++) {
+        const x = X(i);
+        solid(x - STALL_BOARD / 2, y0, back, x + STALL_BOARD / 2, y1, front - STALL_POST);
+        solid(x - STALL_POST / 2, y0, front - STALL_POST, x + STALL_POST / 2, y1 + 0.3, front);
+      }
+      for (let i = rect.i0; i < rect.i1; i++) {
+        const x0 = (i === rect.i0 ? inset.x0 : X(i) + STALL_BOARD / 2) + 0.1;
+        const x1 = (i === rect.i1 - 1 ? inset.x1 : X(i + 1) - STALL_BOARD / 2) - 0.1;
+        // A trough: a base, and a lip along its front and at its ends standing up round its hollow.
+        const rim = y0 + MANGER_HEIGHT;
+        const hollow = rim - 0.35;
+        const out = back + MANGER_DEPTH;
+        b.box(x0, y0, back, x1, hollow, out, paint);
+        b.box(x0, hollow, out - 0.1, x1, rim, out, paint);
+        b.box(x0, hollow, back, x0 + 0.1, rim, out - 0.1, paint);
+        b.box(x1 - 0.1, hollow, back, x1, rim, out - 0.1, paint);
+        colliders?.box(x0, y0, back, x1, rim, out);
+      }
     }
 
     // Galleries over a tall room's floor: a slab, its open edges railed - but where its stair arrives.

@@ -337,3 +337,15 @@ The material pipeline has no way to feed a computed value back in as a *coordina
 warping - the standard trick for turning smooth noise into something organic - cannot be written.
 Coordinate inputs (world x/z) are similarly unavailable, so nothing can vary by position except
 through the noise operations' own internal sampling.
+
+## Buildings
+
+### A fireplace inside that matches the chimney outside
+
+A window is one part built twice - on the wall's face, and turned about on its inner face for a
+room that sees it (houseGenerator.ts, `insideSlot`) - so the two always match. A chimney is built
+outside only: a room behind it (a cookhouse's kitchen, drawn there by its type's `hearth`) has a
+plain wall where its hearth should be. The chimney part could build its inside the same way: the
+fireplace on the room's wall behind it - an opening as wide as the breast, a hearthstone, a lintel
+or mantel - sized and placed from the same breast, so they line up. It would also be the place
+the interior lighting the furniture step plans can start from.

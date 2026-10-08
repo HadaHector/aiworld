@@ -690,7 +690,8 @@ the house's own walls where they can be, low, and beside or over a room already 
 does not fit is left out. Its needs: `at: "entrance"` behind the front door (`near: "entrance"`
 there if it can be); `next`, `under`, `over` a room type placed before it - beside it, below it,
 over it; `windows` an outer wall; `oneBlock: true` to stay inside one block of the plan - the main
-block, a wing, a lean-to - growing included. `stair`: the stairs up go in it - only a room that asks for them holds a stair, but for a cellar,
+block, a wing, a lean-to - growing included; `through: true` to run through its block from the
+front wall to the back (a bay of a stable). `stair`: the stairs up go in it - only a room that asks for them holds a stair, but for a cellar,
 which holds its own way up.
 Once all are placed, the rooms grow into the space left over - a row of tiles at a time, each in
 turn, the one furthest under its most first - until none can: each up to its largest `tiles` times
@@ -715,7 +716,10 @@ window part built again on the wall's inner face, the outside window turned abou
 shut over them. Windows never let light or sight through. `underRoof: true` opens it up to the
 roof where nothing of the house is over it - a loft, a lean-to's room: its ceiling the roof's
 underside, its walls going up to it, its `beams` tying across at the top of its walls. `hearth: true`: it wants the chimney - a house's
-chimneys try the walls behind such a room before any others.
+chimneys try the walls behind such a room before any others. `stalls: { depth, height }`: a row of
+stalls along its back wall, `depth` tiles deep (the rest of the room their aisle), one to a bay,
+split by board partitions `height` high with a post at each one's open end, a trough of a manger in
+each; no door opens into them.
 
 Interiors are built only near (not in a building's far detail level). In the world the ground is
 taken out over a cellar near the camera, so it can be seen into and walked in; the player walks on

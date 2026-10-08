@@ -4,7 +4,7 @@ import { buildPorch, planPorch } from "./porch";
 import { buildBeam, buildFraming, buildRoof, buildSupport, buildTerrace, buildWallPart, isDoor, partSpan, pickPart, planFraming, planRoof, type FramingCorner, type FramingWall, type PartExtent, type PartPaints, type WallSlot } from "./buildingParts";
 import type { RoofBlockInput, RoofEnd } from "./pitchedRoof";
 import { inRect, planHouse, type Block, type PlanEnd } from "./housePlans";
-import { cellKey, planInterior, type FaceDir, type InteriorLayout } from "./interiorLayout";
+import { cellKey, inStall, planInterior, type FaceDir, type InteriorLayout } from "./interiorLayout";
 import { buildInterior, WALL, type Opening } from "./interiorGeometry";
 import { ColliderBuilder, wallBoxes } from "./buildingColliders";
 
@@ -729,7 +729,11 @@ export function buildHouse(spec: HouseSpec, rng: () => number, far = false, meas
     for (const run of groundRuns) {
       for (let bay = run.from; bay + span <= run.to; bay++) {
         const room = roomBehind(run, bay, span, ground);
-        if (room !== null) spots.push({ run, bay, room });
+        if (room === null) continue;
+        // Never into a stall.
+        const r = interior.rooms.find((x) => x.id === room)!;
+        if (Array.from({ length: span }, (_, n) => tileInside(run, bay + n)).some(([i, j]) => inStall(r, i, j, ground.index))) continue;
+        spots.push({ run, bay, room });
       }
     }
     for (let i = spots.length - 1; i > 0; i--) {

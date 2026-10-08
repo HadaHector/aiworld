@@ -77,6 +77,7 @@ import {
   type RoomRequest,
   type RoomSurface,
   type RoomTypeDef,
+  type StallsSpec,
   type HouseSpec,
   type PartChoice,
   type PitchedRoofSpec,
@@ -590,7 +591,15 @@ function readBuildingMaterial(id: string, obj: RawObject, reader: Reader): Build
  *  a content generator - see generators.ts), and its own block is under the generator's name. */
 /** A rooms/ file - see RoomTypeDef. */
 function readRoomType(id: string, obj: RawObject, reader: Reader): RoomTypeDef {
-  reader.onlyKeys(obj, "", ["name", "floor", "walls", "ceiling", "beams", "timber", "stair", "windows", "underRoof", "hearth"]);
+  const readStalls = (): StallsSpec => {
+    const raw = reader.object(obj.stalls, "stalls");
+    reader.onlyKeys(raw, "stalls", ["depth", "height"]);
+    return {
+      depth: reader.number(raw, "depth", "stalls", { min: 1, integer: true }),
+      height: reader.number(raw, "height", "stalls", { min: 0.5 }),
+    };
+  };
+  reader.onlyKeys(obj, "", ["name", "floor", "walls", "ceiling", "beams", "timber", "stair", "windows", "underRoof", "hearth", "stalls"]);
   const surface = (key: string): RoomSurface => {
     const raw = reader.object(obj[key], key);
     reader.onlyKeys(raw, key, ["material", "tints"]);
@@ -610,6 +619,7 @@ function readRoomType(id: string, obj: RawObject, reader: Reader): RoomTypeDef {
     windows: obj.windows === undefined ? "glass" : reader.oneOf(obj, "windows", "", WINDOW_INSIDES),
     underRoof: obj.underRoof === true,
     hearth: obj.hearth === true,
+    stalls: obj.stalls === undefined || obj.stalls === null ? null : readStalls(),
   };
 }
 
@@ -863,7 +873,7 @@ function readBuilding(id: string, obj: RawObject, reader: Reader, partById: Map<
       const requests = reader.array(settings, "rooms", where).flatMap((value, i): RoomRequest[] => {
         const rat = `${where}.rooms[${i}]`;
         const entry = reader.object(value, rat);
-        reader.onlyKeys(entry, rat, ["room", "priority", "chance", "count", "levels", "level", "tiles", "minSide", "maxSide", "grow", "at", "near", "next", "under", "over", "stair", "windows", "oneBlock"]);
+        reader.onlyKeys(entry, rat, ["room", "priority", "chance", "count", "levels", "level", "tiles", "minSide", "maxSide", "grow", "at", "near", "next", "under", "over", "stair", "windows", "oneBlock", "through"]);
         const roomId = reader.string(entry, "room", rat);
         const room = roomById.get(roomId);
         if (!room) {
@@ -901,6 +911,7 @@ function readBuilding(id: string, obj: RawObject, reader: Reader, partById: Map<
             stair: entry.stair === true,
             windows: entry.windows === true,
             oneBlock: entry.oneBlock === true,
+            through: entry.through === true,
           },
         ];
       });

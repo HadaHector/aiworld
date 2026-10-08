@@ -586,7 +586,10 @@ stalls).
    behind the front door and a kitchen beside it, a big stone chimney on the kitchen's end (a room
    type's `hearth` draws the chimney to its wall), a porch most of the time, and half the time a
    back door into the kitchen. Open doorways are frames only - no leaves swung back in the way.
-   Not yet: the hearth itself, inside.
+   Not yet: the hearth itself, inside (BACKLOG.md). The ox stable: a one-storey cabin 4-7 bays
+   long, a barn door, a feed store a bay wide at one end and a stall to each other bay - three to
+   six oxen - along its back wall: partitions, posts and a manger each, the aisle in front (a room
+   type's `stalls`; a request's `through` keeps a room running front to back).
 
 Each is checked in the workbench before the next.
 

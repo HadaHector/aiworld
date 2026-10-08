@@ -1,0 +1,14 @@
+// A stable's stall room: a stone floor, bare log walls, open up to the roof - and along its back
+// wall a stall to each bay, board partitions between them and a manger in each, an aisle in front.
+{
+  name: "Ox Stalls",
+  floor: { material: "stoneBricks", tints: [[0.7, 0.68, 0.64], [0.66, 0.64, 0.6]] },
+  walls: { material: "logWall", tints: [[0.86, 0.82, 0.78], [0.8, 0.76, 0.72]] },
+  ceiling: { material: "planks", tints: [[0.6, 0.55, 0.5]] },
+  beams: { material: "roundLog", tints: [[0.76, 0.72, 0.68]] },
+  timber: { material: "timber", tints: [[0.5, 0.42, 0.36], [0.45, 0.38, 0.34]] },
+  stair: "solid",
+  underRoof: true,
+  // Two tiles deep - an ox at twice life size, and its manger - the partitions as high as its back.
+  stalls: { depth: 2, height: 2.6 },
+}

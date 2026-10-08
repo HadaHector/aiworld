@@ -101,6 +101,14 @@ export interface InteriorLayout {
 
 export const cellKey = (i: number, j: number, k: number): string => `${i},${j},${k}`;
 
+/** Whether a cell of a room is in one of its stalls (RoomTypeDef.stalls): on its floor, within the
+ *  stalls' depth of its back wall - where no door may open. */
+export function inStall(room: Room, i: number, j: number, k: number): boolean {
+  const stalls = room.type.stalls;
+  if (!stalls || k !== room.base || room.rect.j1 - room.rect.j0 <= stalls.depth) return false;
+  return i >= room.rect.i0 && i < room.rect.i1 && j >= room.rect.j0 && j < room.rect.j0 + stalls.depth;
+}
+
 /** Growing into the space left over never draws a room out longer than this many times its width. */
 const GROW_ASPECT = 3;
 
@@ -176,7 +184,7 @@ export function planInterior(program: RoomsInterior, shell: InteriorShell, rng: 
               if (size < request.tiles[0] || size > request.tiles[1]) continue;
               if (i1 - i0 < request.minSide || j1 - j0 < request.minSide) continue;
               if (request.maxSide !== null && (i1 - i0 > request.maxSide || j1 - j0 > request.maxSide)) continue;
-              if (!fits(rect, base, height) || (request.oneBlock && !inOneBlock(rect))) continue;
+              if (!fits(rect, base, height) || (request.oneBlock && !inOneBlock(rect)) || (request.through && !throughBlock(rect))) continue;
               const score = scoreOf(request, rect, base, height, size, target);
               if (score === null) continue;
               const jittered = score + rng() * 0.01;
@@ -201,6 +209,10 @@ export function planInterior(program: RoomsInterior, shell: InteriorShell, rng: 
   /** Whether a rect lies wholly inside one of the plan's blocks. */
   function inOneBlock(rect: Block): boolean {
     return shell.blocks.some((block) => rect.i0 >= block.i0 && rect.i1 <= block.i1 && rect.j0 >= block.j0 && rect.j1 <= block.j1);
+  }
+  /** Whether a rect runs through one of the plan's blocks from its front to its back. */
+  function throughBlock(rect: Block): boolean {
+    return shell.blocks.some((block) => rect.i0 >= block.i0 && rect.i1 <= block.i1 && rect.j0 === block.j0 && rect.j1 === block.j1);
   }
   function stake(room: Room): void {
     for (let k = room.base; k < room.base + room.height; k++) {
@@ -396,7 +408,7 @@ export function planInterior(program: RoomsInterior, shell: InteriorShell, rng: 
     const faces: InnerDoor[] = [];
     for (let i = room.rect.i0; i < room.rect.i1; i++) {
       for (let j = room.rect.j0; j < room.rect.j1; j++) {
-        if (!floored(room, i, j, room.base)) continue;
+        if (!floored(room, i, j, room.base) || inStall(room, i, j, room.base)) continue;
         for (const dir of FACE_DIRS) {
           const [di, dj] = STEP[dir];
           if (shell.inside(i + di, j + dj, room.base) && !cells.has(cellKey(i + di, j + dj, room.base)) && !doorOn(i, j, room.base, dir)) {
@@ -429,8 +441,14 @@ export function planInterior(program: RoomsInterior, shell: InteriorShell, rng: 
         }
       }
     }
-    if (doors.length > 0) {
-      addDoor(pick(doors, rng));
+    // Never into a stall.
+    const clear = doors.filter((door) => {
+      const [di, dj] = STEP[door.dir];
+      const other = roomAt(door.i + di, door.j + dj, door.k)!;
+      return !inStall(room, door.i, door.j, door.k) && !inStall(other, door.i + di, door.j + dj, door.k);
+    });
+    if (clear.length > 0) {
+      addDoor(pick(clear, rng));
       return true;
     }
     // A gallery: this room's floor beside the level over a reached tall room's floor.
