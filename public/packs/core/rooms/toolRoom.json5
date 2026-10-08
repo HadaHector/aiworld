@@ -1,0 +1,12 @@
+// A saw shed's tool room: log walls and boards underfoot, open up to the roof - where the saws are
+// filed and hung, and the axes and peaveys kept.
+{
+  name: "Tool Room",
+  floor: { material: "floorboards", tints: [[0.74, 0.7, 0.66]] },
+  walls: { material: "logWall", tints: [[0.86, 0.82, 0.78], [0.82, 0.78, 0.74]] },
+  ceiling: { material: "planks", tints: [[0.62, 0.56, 0.5]] },
+  beams: { material: "roundLog", tints: [[0.76, 0.72, 0.68]] },
+  timber: { material: "timber", tints: [[0.45, 0.38, 0.34]] },
+  stair: "open",
+  underRoof: true,
+}

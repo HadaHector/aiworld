@@ -628,7 +628,8 @@ export function buildHouse(spec: HouseSpec, rng: () => number, far = false, meas
   const roomBehind = (run: WallRun, bay: number, span: number, level: Storey): number | null => {
     if (!interior) return null;
     let found: number | null = null;
-    for (let along = bay; along < bay + span; along++) {
+    // Every tile it spans - a part between two bays (a short wall's middle) spans part of each.
+    for (let along = Math.floor(bay); along < Math.ceil(bay + span - 1e-6); along++) {
       const [i, j] = tileInside(run, along);
       const id = interior.cells.get(cellKey(i, j, level.index));
       const room = interior.rooms.find((r) => r.id === id);
@@ -647,7 +648,7 @@ export function buildHouse(spec: HouseSpec, rng: () => number, far = false, meas
     if (!extent.opening) return null;
     const centre = bay + span / 2;
     const [x, , z] = wallAt(run, level).at(centre, 0, 0);
-    const [i, j] = tileInside(run, Math.min(bay + span - 1, Math.floor(centre)));
+    const [i, j] = tileInside(run, Math.floor(Math.min(bay + span - 1, centre)));
     return { i, j, k: level.index, dir: run.dir as FaceDir, along: run.dir === "pz" || run.dir === "nz" ? x : z, half: extent.opening.half, bottom: extent.opening.bottom, top: extent.opening.top };
   };
   const openDoor = (run: WallRun, level: Storey, bay: number, span: number, extent: PartExtent): void => {
@@ -671,7 +672,17 @@ export function buildHouse(spec: HouseSpec, rng: () => number, far = false, meas
     const order = run.to - run.from >= span ? [middle, ...bays.filter((bay) => bay !== middle)] : bays;
     return first !== null && bays.includes(first) ? [first, ...order.filter((bay) => bay !== first)] : order;
   };
-  const sideRank = (run: WallRun): number => (run === frontRun ? 0 : run.dir === "pz" ? 1 : run.dir === "nz" ? 3 : 2);
+  /** Whether a ground wall faces onto an open part of the house - a shed's floor, under its roof. */
+  const ontoOpen = (run: WallRun): boolean => {
+    const [di, dj] = run.dir === "pz" ? [0, 0] : run.dir === "nz" ? [0, -1] : run.dir === "px" ? [0, 0] : [-1, 0];
+    for (let t = run.from; t < run.to; t++) {
+      const [i, j] = run.dir === "pz" || run.dir === "nz" ? [t + di, run.line + dj] : [run.line + di, t + dj];
+      if (occupied(i, j, ground.index) && !enclosed(i, j, ground.index)) return true;
+    }
+    return false;
+  };
+  // A wall onto an open part of the house first - a shed's tool room is gone into from the shed.
+  const sideRank = (run: WallRun): number => (ontoOpen(run) ? -1 : run === frontRun ? 0 : run.dir === "pz" ? 1 : run.dir === "nz" ? 3 : 2);
   const doorWalls = [...groundRuns].sort((p, q) => sideRank(p) - sideRank(q) || q.line - p.line || p.from - q.from);
   let door: { x: number; z: number } | null = null;
   let frontOpen = false;
@@ -687,7 +698,8 @@ export function buildHouse(spec: HouseSpec, rng: () => number, far = false, meas
         if (open) openDoor(run, ground, bay, span, extent);
         frontOpen = open;
         const [x, , z] = wallAt(run, ground).at(bay + span / 2, 0, 0);
-        door = { x, z };
+        // Inside the house's open part, what leads to it comes to the open part's front instead.
+        door = ontoOpen(run) ? { x, z: Z(entrance.j1) } : { x, z };
         break;
       }
       if (door) break;
@@ -717,22 +729,24 @@ export function buildHouse(spec: HouseSpec, rng: () => number, far = false, meas
     return true;
   };
 
-  // More ways out of a house with an interior: open doors in the ground walls of its rooms - the
-  // back first, then the sides, then the front - into other rooms than the front door's where
-  // there are any.
+  // More ways out of a house with an interior: open doors in the ground walls of its rooms - onto an
+  // open part of the house first (a shed's floor, from its tool room), then the back, the sides and
+  // the front - into other rooms than the front door's where there are any.
   if (interior && spec.interior) {
     // At least one, where the front door does not open into a room.
     let wanted = Math.max(frontOpen ? 0 : 1, rollInt(spec.interior.rooms.exits, rng) - 1);
-    const rank = (run: WallRun): number => (run.dir === "nz" ? 0 : run.dir === "pz" ? 2 : 1);
+    const rank = (run: WallRun): number => (ontoOpen(run) ? -1 : run.dir === "nz" ? 0 : run.dir === "pz" ? 2 : 1);
     const spots: { run: WallRun; bay: number; room: number }[] = [];
     const span = doorPart ? partSpan(doorPart) : 1;
     for (const run of groundRuns) {
       for (let bay = run.from; bay + span <= run.to; bay++) {
         const room = roomBehind(run, bay, span, ground);
         if (room === null) continue;
-        // Never into a stall.
+        // Never into a stall, nor through a tile another door out already opens into.
         const r = interior.rooms.find((x) => x.id === room)!;
-        if (Array.from({ length: span }, (_, n) => tileInside(run, bay + n)).some(([i, j]) => inStall(r, i, j, ground.index))) continue;
+        const behind = Array.from({ length: span }, (_, n) => tileInside(run, bay + n));
+        if (behind.some(([i, j]) => inStall(r, i, j, ground.index))) continue;
+        if (behind.some(([i, j]) => exits.some((exit) => exit.k === ground.index && exit.i === i && exit.j === j))) continue;
         spots.push({ run, bay, room });
       }
     }
@@ -1024,7 +1038,7 @@ export function buildHouse(spec: HouseSpec, rng: () => number, far = false, meas
   }
   const model = b.finish(door ?? { x: X(doorBay + doorSpan / 2), z: Z(entrance.j1) }, tiles);
   model.levels = levels.map(({ kind, floor, top }): Level => ({ kind, floor, top }));
-  if (interior) model.interior = { layout: interior, levels: levels.map(({ kind, index, floor, top }) => ({ kind, index, floor, top })), X0: X(0), Z0: Z(0), tile, exits: exits.map(({ i, j, k, dir }) => ({ i, j, k, dir })) };
+  if (interior) model.interior = { layout: interior, levels: levels.map(({ kind, index, floor, top }) => ({ kind, index, floor, top })), X0: X(0), Z0: Z(0), tile, exits: exits.map(({ i, j, k, dir, along }) => ({ i, j, k, dir, along })) };
   if (colliders) {
     buildShellColliders(colliders);
     model.colliders = colliders.finish();

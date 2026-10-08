@@ -614,8 +614,9 @@ export interface BuildingModel {
   /** Its levels, cellars first, for a generator that has them - what an interior will be laid in. */
   levels?: Level[];
   /** Its interior's layout, where it has one: its rooms, stairs and doors, and where its tile (0, 0)
-   *  starts (x, z), so a cell can be found from a point. */
-  interior?: { layout: InteriorLayout; levels: ShellLevel[]; X0: number; Z0: number; tile: number; exits: { i: number; j: number; k: number; dir: "px" | "nx" | "pz" | "nz" }[] };
+   *  starts (x, z), so a cell can be found from a point - and its doors out: the tile inside each,
+   *  which way it faces, and where along the wall (x or z) its middle is. */
+  interior?: { layout: InteriorLayout; levels: ShellLevel[]; X0: number; Z0: number; tile: number; exits: { i: number; j: number; k: number; dir: "px" | "nx" | "pz" | "nz"; along: number }[] };
   /** What it puts in the way (see buildingColliders.ts) - built with the near model only. */
   colliders?: BuildingCollision;
 }

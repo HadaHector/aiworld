@@ -589,7 +589,9 @@ stalls).
    Not yet: the hearth itself, inside (BACKLOG.md). The ox stable: a one-storey cabin 4-7 bays
    long, a barn door, a feed store a bay wide at one end and a stall to each other bay - three to
    six oxen - along its back wall: partitions, posts and a manger each, the aisle in front (a room
-   type's `stalls`; a request's `through` keeps a room running front to back).
+   type's `stalls`; a request's `through` keeps a room running front to back). The saw shed's tool
+   room: the whole walled end, its one door opening onto the shed's floor (a door goes first in a
+   wall onto an open part of the house).
 
 Each is checked in the workbench before the next.
 

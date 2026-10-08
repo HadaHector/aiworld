@@ -1,6 +1,6 @@
 // A logging camp's saw shed: a long shingle roof on heavy posts, open on its front, its back and its
 // far end, where the logs are sawn - and at one end a bay or two walled in with logs, its tool room,
-// with a plank door.
+// its plank door opening onto the shed's floor.
 {
   name: "Saw Shed",
   type: "house",
@@ -26,6 +26,15 @@
     roof: "shedRoof",
     doors: [{ part: "timberDoor", weight: 1 }],
     wallExtras: [],
+    // Inside: the walled end is the tool room, the whole of it - its one door onto the shed's floor.
+    interior: {
+      type: "rooms",
+      rooms: {
+        exits: [1, 1],
+        fakeDoors: 0,
+        rooms: [{ room: "toolRoom", priority: 10, tiles: [4, 8], at: "entrance", through: true }],
+      },
+    },
     parts: {
       walls: { material: "logWall", tints: [[1, 1, 1], [0.92, 0.9, 0.88], [1.05, 1, 0.94]] },
       timber: { material: "roundLog", tints: [[1, 1, 1], [0.92, 0.9, 0.88]] },
