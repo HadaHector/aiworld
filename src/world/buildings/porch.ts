@@ -45,9 +45,13 @@ export function planPorch(spec: PorchSpec, rng: () => number): PorchPlan {
 const STEP_FROM = 0.35;
 /** The deck's skirt reaches this far into the ground, so it never stands on air on a slope. */
 const SKIRT = 0.3;
+/** The deck's top stands this far over the floor's line, so it is never drawn in one plane with the
+ *  plinth's top it covers - under a door's threshold, which stands higher. */
+const DECK_LIFT = 0.03;
 
 export function buildPorch(spec: PorchSpec, plan: PorchPlan, input: PorchInput, paints: PartPaints): void {
-  const { b, colliders, a0, a1, at, along, outward, ground, floor, top } = input;
+  const { b, colliders, a0, a1, at, along, outward, ground, top } = input;
+  const floor = input.floor + DECK_LIFT;
   const deck = paints[spec.parts.deck];
   const post = paints[spec.parts.post];
   const covering = paints[spec.parts.covering];

@@ -689,7 +689,8 @@ its needs hold, nearest the floor area rolled from `tiles`, as square as it can 
 the house's own walls where they can be, low, and beside or over a room already placed; one that
 does not fit is left out. Its needs: `at: "entrance"` behind the front door (`near: "entrance"`
 there if it can be); `next`, `under`, `over` a room type placed before it - beside it, below it,
-over it; `windows` an outer wall. `stair`: the stairs up go in it - only a room that asks for them holds a stair, but for a cellar,
+over it; `windows` an outer wall; `oneBlock: true` to stay inside one block of the plan - the main
+block, a wing, a lean-to - growing included. `stair`: the stairs up go in it - only a room that asks for them holds a stair, but for a cellar,
 which holds its own way up.
 Once all are placed, the rooms grow into the space left over - a row of tiles at a time, each in
 turn, the one furthest under its most first - until none can: each up to its largest `tiles` times
@@ -711,7 +712,9 @@ A room type (`rooms/`) is its style, the same through the room: what its `floor`
 `{ material, tints }` naming a building material; `beams` under the ceiling (none if left out);
 its `stair` `solid` steps or `open` treads; its `windows` from inside - `glass`, the default: the
 window part built again on the wall's inner face, the outside window turned about - or `shutters`
-shut over them. Windows never let light or sight through.
+shut over them. Windows never let light or sight through. `underRoof: true` opens it up to the
+roof where nothing of the house is over it - a loft, a lean-to's room: its ceiling the roof's
+underside, its walls going up to it, its `beams` tying across at the top of its walls.
 
 Interiors are built only near (not in a building's far detail level). In the world the ground is
 taken out over a cellar near the camera, so it can be seen into and walked in; the player walks on

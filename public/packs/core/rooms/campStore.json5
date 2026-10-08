@@ -1,0 +1,12 @@
+// A logging camp's store, in a lean-to or the end of a cabin: log walls and boards underfoot - open
+// up to the roof, in a lean-to - where the tools, the flour and the salt pork are kept.
+{
+  name: "Camp Store",
+  floor: { material: "floorboards", tints: [[0.78, 0.74, 0.7]] },
+  walls: { material: "logWall", tints: [[0.86, 0.82, 0.78]] },
+  ceiling: { material: "planks", tints: [[0.66, 0.6, 0.54]] },
+  beams: { material: "roundLog", tints: [[0.76, 0.72, 0.68]] },
+  timber: { material: "timber", tints: [[0.45, 0.38, 0.34]] },
+  stair: "open",
+  underRoof: true,
+}

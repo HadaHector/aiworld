@@ -131,7 +131,8 @@ export type RoomLevel = (typeof ROOM_LEVELS)[number];
  * that does not fit is left out. `levels` tall, starting on a `level` of that kind, `tiles` in floor
  * area, each side at least `minSide` tiles. `at: "entrance"`: behind the front door; `near: "entrance"`: there if it can be. `next`, `under`, `over`: beside, below or above a
  * room of that type placed before it. `stair`: a stair up from it is put in it before any other
- * room. `windows`: it needs an outer wall.
+ * room. `windows`: it needs an outer wall. `oneBlock`: it stays inside one block of the plan - the
+ * main block, a wing, a lean-to - never reaching across into another, growing included.
  */
 export interface RoomRequest {
   room: RoomTypeDef;
@@ -154,6 +155,7 @@ export interface RoomRequest {
   over: string | null;
   stair: boolean;
   windows: boolean;
+  oneBlock: boolean;
 }
 
 /** What a room's surfaces are made of: a building material, and tints - one picked per room. */
@@ -169,7 +171,9 @@ export const WINDOW_INSIDES = ["glass", "shutters"] as const;
  * A kind of room (a pack's rooms/ folder): its style - the same through the whole room. Its floor,
  * walls and ceiling, beams under the ceiling (or none), and the timber of its doors, stairs, railings
  * and shutters; its stair solid steps or open treads; its windows seen from inside as they are
- * outside (`glass`) or with their shutters shut (`shutters`).
+ * outside (`glass`) or with their shutters shut (`shutters`). `underRoof`: where nothing of the house
+ * is over it, it is open up to the roof - its ceiling the roof's underside, its walls going up to it,
+ * its beams tying across at the top of its walls - a loft, or a lean-to's room.
  */
 export interface RoomTypeDef {
   id: string;
@@ -181,6 +185,7 @@ export interface RoomTypeDef {
   timber: RoomSurface;
   stair: (typeof STAIR_STYLES)[number];
   windows: (typeof WINDOW_INSIDES)[number];
+  underRoof: boolean;
 }
 
 export const HOUSE_PLAN_GENERATORS = ["house", "tower", "cabin"] as const;
@@ -592,7 +597,7 @@ export interface BuildingModel {
   levels?: Level[];
   /** Its interior's layout, where it has one: its rooms, stairs and doors, and where its tile (0, 0)
    *  starts (x, z), so a cell can be found from a point. */
-  interior?: { layout: InteriorLayout; levels: ShellLevel[]; X0: number; Z0: number; tile: number };
+  interior?: { layout: InteriorLayout; levels: ShellLevel[]; X0: number; Z0: number; tile: number; exits: { i: number; j: number; k: number; dir: "px" | "nx" | "pz" | "nz" }[] };
   /** What it puts in the way (see buildingColliders.ts) - built with the near model only. */
   colliders?: BuildingCollision;
 }

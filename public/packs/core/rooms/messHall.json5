@@ -1,0 +1,11 @@
+// A logging camp's mess hall: a long room of bare log walls, worn boards underfoot, a plank ceiling
+// on round log beams - the loft's floor - and an open stair up to the loft.
+{
+  name: "Mess Hall",
+  floor: { material: "floorboards", tints: [[0.9, 0.86, 0.8], [0.82, 0.78, 0.74]] },
+  walls: { material: "logWall", tints: [[0.92, 0.88, 0.84], [0.86, 0.82, 0.78]] },
+  ceiling: { material: "planks", tints: [[0.7, 0.64, 0.58]] },
+  beams: { material: "roundLog", tints: [[0.8, 0.76, 0.72]] },
+  timber: { material: "timber", tints: [[0.5, 0.42, 0.36], [0.45, 0.38, 0.34]] },
+  stair: "open",
+}

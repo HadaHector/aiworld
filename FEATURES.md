@@ -531,7 +531,7 @@ taiga's settlements can use later too.
 
 | Building | Size (tiles) | What it is | Inside |
 |---|---|---|---|
-| Bunkhouse | 7-9 x 3 | long log hall, porch along the front, a lean-to along the back | bunk room, mess room with a hearth, foreman's room, store in the lean-to; 2 exits |
+| Bunkhouse | 7-9 x 3 | long log hall, porch along the front, a lean-to along the back | three rooms at most: a mess hall, the bunk loft over it, a store in the lean-to; 2 exits |
 | Cookhouse | 4-5 x 3 | log, a big stone chimney, porch | kitchen and mess hall; 1-2 exits |
 | Saw shed | 4-6 x 3 | roof on heavy posts, open on two or three sides, one end closed | the open floor; the closed end a tool room |
 | Ox stable | 3-6 x 3 | log or plank, wide double doors; its length rolled in stalls, a bay each, so it holds two oxen or six | stalls, feed store |
@@ -576,8 +576,13 @@ stalls).
    `postEvery` bays, a boarded floor; a walled mass's wall inside its roof goes up to it. Not yet:
    a shed open on only some sides.
 5. The interiors - the bunkhouse's first, to try the generator on a loft and a lean-to - then the
-   cookhouse, the stable and the rest, swapped into the logging camp. Done so far: the bunkhouse,
-   the saw shed (5-8 x 4 bays, a 30 degree roof) and the tool shed, without interiors.
+   cookhouse, the stable and the rest, swapped into the logging camp. Done so far: the saw shed
+   (5-8 x 4 bays, a 30 degree roof) and the tool shed, without interiors; and the bunkhouse's
+   interior: a mess hall filling the cabin's ground storey behind the front door, with a stair up
+   through its ceiling to the bunk loft over it, open up to the roof (room types can now ask for
+   that, `underRoof`), and a store in a lean-to - or at the cabin's end - with the second door out.
+   A room can be held inside one block of the plan (`oneBlock`), so it never reaches from the cabin
+   into a lean-to. Not yet: a hearth against the chimney.
 
 Each is checked in the workbench before the next.
 

@@ -36,6 +36,9 @@ export interface InteriorInput {
   inside: (i: number, j: number, k: number) => boolean;
   exits: Opening[];
   windows: Opening[];
+  /** The underside of a roof over the top of level k at a point in plan, or null where there is
+   *  none - what a room open under the roof (RoomTypeDef.underRoof) has for its ceiling. */
+  roofOver?: (k: number, x: number, z: number) => number | null;
 }
 
 /** How far a room's walls stand in from the tile lines - an inner wall twice this thick. */
@@ -111,6 +114,13 @@ export function buildInterior(input: InteriorInput): void {
     const inset = insetOf(room);
     const { rect } = room;
     const top = room.base + room.height - 1;
+    /** Whether a cell of its top level is open up to the roof: its type asks for it, nothing of the
+     *  house is over it, and a roof is. */
+    const roofOver = input.roofOver;
+    const underRoof = (i: number, j: number): boolean =>
+      room.type.underRoof && !!roofOver && !input.inside(i, j, top + 1) && roofOver(top, (X(i) + X(i + 1)) / 2, (Z(j) + Z(j + 1)) / 2) !== null;
+    /** Its ceiling there: just under the roof - or, past the roof's edge, the top of its walls. */
+    const roofCeiling = (x: number, z: number): number => (roofOver?.(top, x, z) ?? levelOf(top).top) - CEILING_DROP;
 
     // The walls: every face of the room's cells onto anything that is not the room, level by level,
     // cut round the doors through it.
@@ -151,6 +161,21 @@ export function buildInterior(input: InteriorInput): void {
               from = hole.a1;
             }
             upright(dir, c, from, a1, level.floor, level.top, normal, room.paints.walls);
+            // Open up to the roof: the wall goes on up to it - along the roof's line, peaked where a
+            // ridge passes over (a ridge lies on a tile's line or its middle).
+            if (k === top && underRoof(i, j)) {
+              const mid = (s0 + s1) / 2;
+              const along = [a0, ...(mid > a0 && mid < a1 ? [mid] : []), a1];
+              const at = (a: number, y: number): Vec3 => (alongX(dir) ? [a, y, c] : [c, y, a]);
+              const heights = along.map((a) => (alongX(dir) ? roofCeiling(a, c) : roofCeiling(c, a)));
+              if (heights.some((h) => h > level.top + 1e-3)) {
+                const corners = [at(a0, level.top), at(a1, level.top), ...along.map((a, n) => at(a, Math.max(level.top, heights[n]))).reverse()];
+                b.face(corners, normal, room.paints.walls);
+                // As collision, back to the tile line, as the wall under it is.
+                const line = lineOf(i, j, dir);
+                if (colliders) colliders.hull([...corners, ...corners.map(([x, y, z]): Vec3 => (alongX(dir) ? [x, y, line] : [line, y, z]))]);
+              }
+            }
           }
         }
       }
@@ -173,6 +198,21 @@ export function buildInterior(input: InteriorInput): void {
       for (let j = rect.j0; j < rect.j1; j++) {
         if (layout.holes.has(cellKey(i, j, top + 1))) continue;
         const [x0, x1, z0, z1] = clampCell(i, j, inset);
+        // Open up to the roof: the roof's underside, in quarters - a ridge over it lies on the
+        // cell's edge or its middle - its slab the roof's own (houseGenerator.ts).
+        if (underRoof(i, j)) {
+          const xs = [x0, Math.min(x1, Math.max(x0, (X(i) + X(i + 1)) / 2)), x1];
+          const zs = [z0, Math.min(z1, Math.max(z0, (Z(j) + Z(j + 1)) / 2)), z1];
+          for (let p = 0; p < 2; p++) {
+            for (let q = 0; q < 2; q++) {
+              const [xa, xb, za, zb] = [xs[p], xs[p + 1], zs[q], zs[q + 1]];
+              if (xb - xa < 1e-4 || zb - za < 1e-4) continue;
+              const corners: Vec3[] = [[xa, roofCeiling(xa, za), za], [xb, roofCeiling(xb, za), za], [xb, roofCeiling(xb, zb), zb], [xa, roofCeiling(xa, zb), zb]];
+              b.faceToward(corners, DOWN, room.paints.ceiling);
+            }
+          }
+          continue;
+        }
         b.faceToward([[x0, ceilingY, z0], [x1, ceilingY, z0], [x1, ceilingY, z1], [x0, ceilingY, z1]], DOWN, room.paints.ceiling);
         // Nothing of the house over it - the roof's own piece, or the open air over a terrace's
         // floor - so a slab of its own.
@@ -182,11 +222,34 @@ export function buildInterior(input: InteriorInput): void {
     if (room.paints.beams) {
       const across = rect.i1 - rect.i0 <= rect.j1 - rect.j0;
       const lines = across ? range(rect.j0 + 1, rect.j1).map(Z) : range(rect.i0 + 1, rect.i1).map(X);
-      for (const line of lines) {
-        // Hung under the ceiling: sides and a bottom, no top against it.
-        if (across) b.box(inset.x0, ceilingY - 0.3, line - 0.14, inset.x1, ceilingY, line + 0.14, room.paints.beams, room.paints.beams, "bottom");
-        else b.box(line - 0.14, ceilingY - 0.3, inset.z0, line + 0.14, ceilingY, inset.z1, room.paints.beams, room.paints.beams, "bottom");
-      }
+      const beams = room.paints.beams;
+      const lineTiles = across ? range(rect.j0 + 1, rect.j1) : range(rect.i0 + 1, rect.i1);
+      lineTiles.forEach((t, n) => {
+        const line = lines[n];
+        // Along the beam, tile by tile - but not across a stairwell: where the floor over it is open
+        // on both sides of the beam, the beam stops at its edge.
+        const runs: [number, number][] = [];
+        const [c0, c1] = across ? [rect.i0, rect.i1] : [rect.j0, rect.j1];
+        for (let c = c0; c < c1; c++) {
+          const [p, q] = across ? [cellKey(c, t - 1, top + 1), cellKey(c, t, top + 1)] : [cellKey(t - 1, c, top + 1), cellKey(t, c, top + 1)];
+          if (layout.holes.has(p) && layout.holes.has(q)) continue;
+          const last = runs[runs.length - 1];
+          if (last && last[1] === c) last[1] = c + 1;
+          else runs.push([c, c + 1]);
+        }
+        for (const [s, e] of runs) {
+          // Hung under the ceiling: sides and a bottom, no top against it.
+          if (across) {
+            const x0 = s === rect.i0 ? inset.x0 : X(s);
+            const x1 = e === rect.i1 ? inset.x1 : X(e);
+            b.box(x0, ceilingY - 0.3, line - 0.14, x1, ceilingY, line + 0.14, beams, beams, "bottom");
+          } else {
+            const z0 = s === rect.j0 ? inset.z0 : Z(s);
+            const z1 = e === rect.j1 ? inset.z1 : Z(e);
+            b.box(line - 0.14, ceilingY - 0.3, z0, line + 0.14, ceilingY, z1, beams, beams, "bottom");
+          }
+        }
+      });
     }
 
     // Galleries over a tall room's floor: a slab, its open edges railed - but where its stair arrives.

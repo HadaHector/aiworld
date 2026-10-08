@@ -104,7 +104,9 @@ floor, ceiling, walls, doors, window insides and stair, and their materials.
 ## Status
 
 All five phases are in (see the README's "Interiors" for the content side): the inn, the chapel
-and the town hall have interiors. Not yet: the attic as a level, hearths against chimneys, per-cell
+and the town hall have interiors, and the logging camp's bunkhouse - its loft open up to the roof
+(a room type's `underRoof`: where nothing of the house is over it, its ceiling is the roof's
+underside and its walls go up to it). Not yet: the attic as a level of its own, hearths against chimneys, per-cell
 style overrides, and a camera that keeps out of the walls (it only closes in indoors).
 
 ## Phases

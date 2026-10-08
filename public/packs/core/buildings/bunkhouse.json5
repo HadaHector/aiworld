@@ -38,6 +38,22 @@
       { part: "timberWindow", priority: 1, chance: 0.3, storeys: ["ground"] },
       { part: "timberWindow", priority: 1, chance: 0.15, walls: ["side"], storeys: ["upper"] },
     ],
+    // Inside: three rooms at most. The mess hall, most of the cabin's ground storey, behind the
+    // front door, with the stair up; the loft over it, where the men sleep; and a store in a lean-to
+    // beside it - or, with no lean-to, at an end of the cabin. A second door out, round the back.
+    interior: {
+      type: "rooms",
+      rooms: {
+        exits: [2, 2],
+        fakeDoors: 0.3,
+        grow: 1,
+        rooms: [
+          { room: "messHall", priority: 10, tiles: [12, 27], minSide: 3, at: "entrance", stair: true, oneBlock: true },
+          { room: "bunkLoft", priority: 8, level: "upper", tiles: [12, 27], minSide: 3, over: "messHall", oneBlock: true },
+          { room: "campStore", priority: 6, tiles: [4, 6], minSide: 2, maxSide: 3, next: "messHall", oneBlock: true },
+        ],
+      },
+    },
     parts: {
       walls: { material: "logWall", tints: [[1, 1, 1], [0.92, 0.9, 0.88], [1.05, 1, 0.94]] },
       timber: { material: "roundLog", tints: [[1, 1, 1], [0.92, 0.9, 0.88]] },

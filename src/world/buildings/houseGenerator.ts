@@ -263,6 +263,17 @@ export function buildHouse(spec: HouseSpec, rng: () => number, far = false, meas
     return { part: roof.part, plan: roofPlan, level, blocks: inputs, rects: roof.blocks.map((k) => k.rect), gables: [] };
   });
   const topStorey = above[above.length - 1];
+  /** A roof's underside over a point in plan, or null where none of its blocks is over it. */
+  const roofUnderside = (group: RoofGroup, x: number, z: number): number | null => {
+    const { slope: s } = group.plan;
+    for (const k of group.blocks) {
+      const [a, c] = k.alongX ? [x, z] : [z, x];
+      if (a < k.a0 - 1e-6 || a > k.a1 + 1e-6 || c < k.c0 - 1e-6 || c > k.c1 + 1e-6) continue;
+      if (group.plan.mono) return group.level.top + (k.lean === "c0" ? k.c1 - c : c - k.c0) * s;
+      return group.level.top + ((k.c1 - k.c0) / 2 - Math.abs(c - (k.c0 + k.c1) / 2)) * s;
+    }
+    return null;
+  };
   const { terraces } = plan;
   // Each roof's gables: a block end with one, as the wall it stands on, and its apex - where along
   // that wall (metres) and how high.
@@ -598,8 +609,10 @@ export function buildHouse(spec: HouseSpec, rng: () => number, far = false, meas
         spec.interior.rooms,
         {
           levels: levels.map(({ kind, index, floor, top }) => ({ kind, index, floor, top })),
-          inside: (i, j, k) => (k < 0 ? inside(i, j) : occupied(i, j, k)),
+          // Rooms go under walls only - never on an open mass's floor.
+          inside: (i, j, k) => (k < 0 ? inside(i, j) : enclosed(i, j, k)),
           bounds: { i0: iMin, i1: iMax, j0: jMin, j1: jMax },
+          blocks,
           tile,
           entrance: frontRun ? { i: doorBay, j: frontRun.line - 1 } : null,
         },
@@ -810,17 +823,7 @@ export function buildHouse(spec: HouseSpec, rng: () => number, far = false, meas
   // gable's shape, along it a band up to where the roof is over it.
   for (const group of roofGroups) {
     const level = group.level;
-    const { slope: s } = group.plan;
-    /** The roof's underside over a point in plan, or null where none of its blocks is over it. */
-    const roofOver = (x: number, z: number): number | null => {
-      for (const k of group.blocks) {
-        const [a, c] = k.alongX ? [x, z] : [z, x];
-        if (a < k.a0 - 1e-6 || a > k.a1 + 1e-6 || c < k.c0 - 1e-6 || c > k.c1 + 1e-6) continue;
-        if (group.plan.mono) return level.top + (k.lean === "c0" ? k.c1 - c : c - k.c0) * s;
-        return level.top + ((k.c1 - k.c0) / 2 - Math.abs(c - (k.c0 + k.c1) / 2)) * s;
-      }
-      return null;
-    };
+    const roofOver = (x: number, z: number): number | null => roofUnderside(group, x, z);
     for (const run of outlineAt(level).runs) {
       const outside = (t: number): [number, number] => (run.dir === "pz" ? [t, run.line] : run.dir === "nz" ? [t, run.line - 1] : run.dir === "px" ? [run.line, t] : [run.line - 1, t]);
       let inside = false;
@@ -989,7 +992,14 @@ export function buildHouse(spec: HouseSpec, rng: () => number, far = false, meas
 
   // 8. Inside: the rooms' walls, floors and ceilings, their doors, stairs and galleries - near only.
   if (interior && !far) {
-    buildInterior({ b, colliders: colliders ?? undefined, layout: interior, levels: levels.map(({ kind, index, floor, top }) => ({ kind, index, floor, top })), X, Z, tile, inside: (i, j, k) => (k < 0 ? inside(i, j) : enclosed(i, j, k)), exits, windows });
+    buildInterior({ b, colliders: colliders ?? undefined, layout: interior, levels: levels.map(({ kind, index, floor, top }) => ({ kind, index, floor, top })), X, Z, tile, inside: (i, j, k) => (k < 0 ? inside(i, j) : enclosed(i, j, k)), exits, windows, roofOver: (k, x, z) => {
+      for (const group of roofGroups) {
+        if (group.level.index !== k) continue;
+        const h = roofUnderside(group, x, z);
+        if (h !== null) return h;
+      }
+      return null;
+    } });
   }
 
   const tiles: NonNullable<BuildingModel["tiles"]> = [];
@@ -1000,7 +1010,7 @@ export function buildHouse(spec: HouseSpec, rng: () => number, far = false, meas
   }
   const model = b.finish(door ?? { x: X(doorBay + doorSpan / 2), z: Z(entrance.j1) }, tiles);
   model.levels = levels.map(({ kind, floor, top }): Level => ({ kind, floor, top }));
-  if (interior) model.interior = { layout: interior, levels: levels.map(({ kind, index, floor, top }) => ({ kind, index, floor, top })), X0: X(0), Z0: Z(0), tile };
+  if (interior) model.interior = { layout: interior, levels: levels.map(({ kind, index, floor, top }) => ({ kind, index, floor, top })), X0: X(0), Z0: Z(0), tile, exits: exits.map(({ i, j, k, dir }) => ({ i, j, k, dir })) };
   if (colliders) {
     buildShellColliders(colliders);
     model.colliders = colliders.finish();
@@ -1066,10 +1076,12 @@ export function buildHouse(spec: HouseSpec, rng: () => number, far = false, meas
       }
     }
 
-    // The roofs: each block's as one solid piece, from its eaves' overhang up to its ridge.
+    // The roofs: each block's as one solid piece, from its eaves' overhang up to its ridge - but over
+    // a room open up to it (a loft), a slab along each of its slopes, the room under them.
     for (const group of roofGroups) {
       const { slope: s, overhang, thickness } = group.plan;
       const eaves = group.level.top;
+      const openUnder = interior?.rooms.some((room) => room.type.underRoof && room.base + room.height - 1 === group.level.index) ?? false;
       for (const k of group.blocks) {
         const half = (k.c1 - k.c0) / 2;
         const eaveY = eaves - overhang * s;
@@ -1096,6 +1108,16 @@ export function buildHouse(spec: HouseSpec, rng: () => number, far = false, meas
         const ridgeY = eaves + half * s + thickness * Math.sqrt(1 + s * s);
         const cm = (k.c0 + k.c1) / 2;
         const at = (a: number, y: number, across: number): Vec3 => (k.alongX ? [a, y, across] : [across, y, a]);
+        if (openUnder) {
+          const T = thickness * Math.sqrt(1 + s * s);
+          const ridgeUnder = eaves + half * s;
+          const slab = (points: Vec3[]): void => c.hull([...points, ...points.map(([x, y, z]): Vec3 => [x, y + T, z])]);
+          for (const edge of [k.c0 - overhang, k.c1 + overhang]) slab([at(e0, eaveY, edge), at(e1, eaveY, edge), at(s0, ridgeUnder, cm), at(s1, ridgeUnder, cm)]);
+          // A hip's end slope.
+          if (k.start.kind === "hip") slab([at(e0, eaveY, k.c0 - overhang), at(e0, eaveY, k.c1 + overhang), at(s0, ridgeUnder, cm)]);
+          if (k.end.kind === "hip") slab([at(e1, eaveY, k.c0 - overhang), at(e1, eaveY, k.c1 + overhang), at(s1, ridgeUnder, cm)]);
+          continue;
+        }
         c.hull([
           at(e0, eaveY, k.c0 - overhang), at(e1, eaveY, k.c0 - overhang), at(e0, eaveY, k.c1 + overhang), at(e1, eaveY, k.c1 + overhang),
           at(s0, ridgeY, cm), at(s1, ridgeY, cm),

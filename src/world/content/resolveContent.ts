@@ -590,7 +590,7 @@ function readBuildingMaterial(id: string, obj: RawObject, reader: Reader): Build
  *  a content generator - see generators.ts), and its own block is under the generator's name. */
 /** A rooms/ file - see RoomTypeDef. */
 function readRoomType(id: string, obj: RawObject, reader: Reader): RoomTypeDef {
-  reader.onlyKeys(obj, "", ["name", "floor", "walls", "ceiling", "beams", "timber", "stair", "windows"]);
+  reader.onlyKeys(obj, "", ["name", "floor", "walls", "ceiling", "beams", "timber", "stair", "windows", "underRoof"]);
   const surface = (key: string): RoomSurface => {
     const raw = reader.object(obj[key], key);
     reader.onlyKeys(raw, key, ["material", "tints"]);
@@ -608,6 +608,7 @@ function readRoomType(id: string, obj: RawObject, reader: Reader): RoomTypeDef {
     timber: surface("timber"),
     stair: obj.stair === undefined ? "solid" : reader.oneOf(obj, "stair", "", STAIR_STYLES),
     windows: obj.windows === undefined ? "glass" : reader.oneOf(obj, "windows", "", WINDOW_INSIDES),
+    underRoof: obj.underRoof === true,
   };
 }
 
@@ -861,7 +862,7 @@ function readBuilding(id: string, obj: RawObject, reader: Reader, partById: Map<
       const requests = reader.array(settings, "rooms", where).flatMap((value, i): RoomRequest[] => {
         const rat = `${where}.rooms[${i}]`;
         const entry = reader.object(value, rat);
-        reader.onlyKeys(entry, rat, ["room", "priority", "chance", "count", "levels", "level", "tiles", "minSide", "maxSide", "grow", "at", "near", "next", "under", "over", "stair", "windows"]);
+        reader.onlyKeys(entry, rat, ["room", "priority", "chance", "count", "levels", "level", "tiles", "minSide", "maxSide", "grow", "at", "near", "next", "under", "over", "stair", "windows", "oneBlock"]);
         const roomId = reader.string(entry, "room", rat);
         const room = roomById.get(roomId);
         if (!room) {
@@ -898,6 +899,7 @@ function readBuilding(id: string, obj: RawObject, reader: Reader, partById: Map<
             over: name("over"),
             stair: entry.stair === true,
             windows: entry.windows === true,
+            oneBlock: entry.oneBlock === true,
           },
         ];
       });

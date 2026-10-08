@@ -27,6 +27,8 @@ export interface InteriorShell {
   inside: (i: number, j: number, k: number) => boolean;
   /** Every tile the house stands on, for the search. */
   bounds: Block;
+  /** The plan's blocks - the main block, its wings and lean-tos - for a room kept inside one. */
+  blocks: Block[];
   /** A tile's side, in metres - a stair's run is whole tiles. */
   tile: number;
   /** The tile behind the front door, on the ground level - or none. */
@@ -50,6 +52,8 @@ export interface Room {
    *  the longest either side may grow (Infinity: no limit). */
   maxTiles: number;
   maxSide: number;
+  /** Whether it stays inside one block of the plan (see RoomRequest.oneBlock). */
+  oneBlock: boolean;
   paints: { floor: Paint; walls: Paint; ceiling: Paint; beams: Paint | null; timber: Paint };
 }
 
@@ -145,6 +149,7 @@ export function planInterior(program: RoomsInterior, shell: InteriorShell, rng: 
       height,
       maxTiles: Math.floor(request.tiles[1] * (request.grow ?? program.grow)),
       maxSide: request.maxSide ?? Infinity,
+      oneBlock: request.oneBlock,
       paints: {
         floor: paintOf(request.room.floor),
         walls: paintOf(request.room.walls),
@@ -171,7 +176,7 @@ export function planInterior(program: RoomsInterior, shell: InteriorShell, rng: 
               if (size < request.tiles[0] || size > request.tiles[1]) continue;
               if (i1 - i0 < request.minSide || j1 - j0 < request.minSide) continue;
               if (request.maxSide !== null && (i1 - i0 > request.maxSide || j1 - j0 > request.maxSide)) continue;
-              if (!fits(rect, base, height)) continue;
+              if (!fits(rect, base, height) || (request.oneBlock && !inOneBlock(rect))) continue;
               const score = scoreOf(request, rect, base, height, size, target);
               if (score === null) continue;
               const jittered = score + rng() * 0.01;
@@ -192,6 +197,10 @@ export function planInterior(program: RoomsInterior, shell: InteriorShell, rng: 
       }
     }
     return true;
+  }
+  /** Whether a rect lies wholly inside one of the plan's blocks. */
+  function inOneBlock(rect: Block): boolean {
+    return shell.blocks.some((block) => rect.i0 >= block.i0 && rect.i1 <= block.i1 && rect.j0 >= block.j0 && rect.j1 <= block.j1);
   }
   function stake(room: Room): void {
     for (let k = room.base; k < room.base + room.height; k++) {
@@ -282,7 +291,12 @@ export function planInterior(program: RoomsInterior, shell: InteriorShell, rng: 
         const w = rect.i1 - rect.i0;
         const d = rect.j1 - rect.j0;
         const was = Math.max(room.rect.i1 - room.rect.i0, room.rect.j1 - room.rect.j0) / Math.min(room.rect.i1 - room.rect.i0, room.rect.j1 - room.rect.j0);
-        return area(rect) <= room.maxTiles && Math.max(w, d) <= room.maxSide && Math.max(w, d) / Math.min(w, d) <= Math.max(GROW_ASPECT, was);
+        return (
+          area(rect) <= room.maxTiles &&
+          Math.max(w, d) <= room.maxSide &&
+          Math.max(w, d) / Math.min(w, d) <= Math.max(GROW_ASPECT, was) &&
+          (!room.oneBlock || inOneBlock(rect))
+        );
       });
       for (let n = options.length - 1; n > 0; n--) {
         const m = Math.floor(rng() * (n + 1));
@@ -481,6 +495,9 @@ export function planInterior(program: RoomsInterior, shell: InteriorShell, rng: 
           const foot: [number, number] = [i - di, j - dj];
           if (!floored(host, ...foot, k) || stairFeet.has(cellKey(...foot, k))) continue;
           if (!run.every(([a, b]) => floored(host, a, b, k) && !stairFeet.has(cellKey(a, b, k)))) continue;
+          // Never on the tile behind the front door, which would shut it.
+          const entrance = shell.entrance;
+          if (k === 0 && entrance && run.some(([a, b]) => a === entrance.i && b === entrance.j)) continue;
           // Over the stair: open - the host's own level over it, or the room it rises into.
           const overOk = run.every(([a, b]) =>
             to === host ? roomAt(a, b, k + 1) === to && !layout.gallery.has(cellKey(a, b, k + 1)) : floored(to, a, b, k + 1),
