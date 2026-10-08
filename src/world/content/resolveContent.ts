@@ -22,7 +22,7 @@ import {
   type TreeRules,
 } from "../foliage/foliageConfig";
 import type { Voice } from "../naming/nameGenerator";
-import { STREET_KINDS, type SettlementStyle, type SettlementTier, type SettlementTierDef } from "../settlements/settlementConfig";
+import { SETTLEMENT_TIERS, STREET_KINDS, type SettlementStyle, type SettlementTier, type SettlementTierDef } from "../settlements/settlementConfig";
 import type { ColorTuple } from "../terrain/pipeline/pipelineTypes";
 import { coolNightTone, deriveNightIntensity } from "../lighting/dayNightMath";
 import { ContentError, isObject, joinPath, Reader, type ContentIssue, type RawObject } from "./contentReader";
@@ -35,7 +35,7 @@ import type { WorldContent } from "./worldContent";
 import type { TextureDef } from "../materials/textureGen";
 import { adjustMatrix, chainMatrix, NO_ADJUST, type ColorAdjust } from "../materials/colorAdjust";
 import type { WeatherChance, WeatherDef } from "../weather/weatherTypes";
-import { FEATURE_TYPES, NO_FEATURE, type FeatureChance, type FeatureKindDef } from "../features/featureTypes";
+import { FEATURE_TYPES, NO_FEATURE, type FeatureChance, type FeatureKindDef, type PlaceRoadSpec } from "../features/featureTypes";
 import {
   BUILDING_GENERATORS,
   BUILDING_PART_GENERATORS,
@@ -252,6 +252,14 @@ export function resolveContent(packs: PackSource[]): WorldContent {
   const featureKinds = featureReads.map((read) => read.kind);
   const featureIds = new Set([NO_FEATURE, ...featureKinds.map((kind) => kind.id)]);
   const settlementFeatureIds = new Set(featureKinds.filter((kind) => kind.type === "settlement").map((kind) => kind.id));
+  // The road network is planned over settlements and features alike, so a settlement has to say how
+  // much it matters to it; and what a road wants to lead to must be a kind of place.
+  for (const { file, kind } of featureReads) {
+    if (kind.type === "settlement" && !kind.road) issues.push({ file, path: "road", message: "a settlement needs a road block: its importance per tier and how many roads it takes" });
+    kind.road?.wants.forEach((want, i) => {
+      if (want === NO_FEATURE || !featureIds.has(want)) issues.push({ file, path: `road.wants[${i}]`, message: `no feature "${want}" (known: ${featureKinds.map((k) => k.id).join(", ")})` });
+    });
+  }
   const styleById = new Map(settlementStyles.map((style) => [style.id, style]));
   // A biome is read as its middle roll here (see biomeRolls.ts) - what its name, spawn weight and the
   // workbench go by - and rolled again for every area of the world it is given to (rollAreaBiome).
@@ -1057,13 +1065,11 @@ function readFeatureKind(id: string, obj: RawObject, reader: Reader): FeatureKin
   const type = reader.oneOf(obj, "type", "", FEATURE_TYPES);
   // A settlement is laid out by its own code, in its biome's settlement style: it takes nothing else.
   if (type === "settlement") {
-    reader.onlyKeys(obj, "", ["name", "type"]);
-    return { id, name: reader.string(obj, "name", ""), type, quarry: null, clearing: [0, 0], road: null, ground: null };
+    reader.onlyKeys(obj, "", ["name", "type", "road"]);
+    return { id, name: reader.string(obj, "name", ""), type, quarry: null, clearing: [0, 0], road: readPlaceRoad(obj, reader, true), ground: null };
   }
   const quarry = reader.object(obj.quarry, "quarry");
   reader.onlyKeys(quarry, "quarry", ["floorLength", "floorWidth", "benchHeight", "benchSteepness", "benchWidth", "spoilSlope", "grade", "idealGrade"]);
-  const road = obj.road === undefined ? null : reader.object(obj.road, "road");
-  if (road) reader.onlyKeys(road, "road", ["width", "maxLength"]);
   const ground = obj.ground === undefined ? null : reader.object(obj.ground, "ground");
   if (ground) reader.onlyKeys(ground, "ground", ["material", "weight"]);
   return {
@@ -1081,8 +1087,32 @@ function readFeatureKind(id: string, obj: RawObject, reader: Reader): FeatureKin
       idealGrade: reader.number(quarry, "idealGrade", "quarry", { min: 0.01 }),
     },
     clearing: reader.range(obj, "clearing", "", { allowEqual: true }),
-    road: road ? { width: reader.number(road, "width", "road", { min: 0.1, max: 1 }), maxLength: reader.number(road, "maxLength", "road", { min: 0 }) } : null,
+    road: readPlaceRoad(obj, reader, false),
     ground: ground ? readLayer(ground, reader, "ground", `feature-${id}`) : null,
+  };
+}
+
+/** A feature's `road` block - see PlaceRoadSpec. A settlement's importance is given per tier. */
+function readPlaceRoad(obj: RawObject, reader: Reader, perTier: boolean): PlaceRoadSpec | null {
+  if (obj.road === undefined) return null;
+  const road = reader.object(obj.road, "road");
+  reader.onlyKeys(road, "road", ["importance", "links", "wants", "maxLength"]);
+  let importance: PlaceRoadSpec["importance"];
+  if (perTier) {
+    const tiers = reader.object(road.importance, "road.importance");
+    reader.onlyKeys(tiers, "road.importance", SETTLEMENT_TIERS);
+    importance = { hamlet: 0, village: 0, town: 0 };
+    for (const tier of SETTLEMENT_TIERS) importance[tier] = reader.number(tiers, tier, "road.importance", { min: 0.01 });
+  } else {
+    importance = reader.number(road, "importance", "road", { min: 0.01 });
+  }
+  const links = reader.range(road, "links", "road", { allowEqual: true });
+  if (links[0] < 1 || !Number.isInteger(links[0]) || !Number.isInteger(links[1])) reader.fail("road.links", `expected whole numbers, at least 1, got [${links[0]}, ${links[1]}]`);
+  return {
+    importance,
+    links,
+    wants: road.wants === undefined ? [] : reader.stringList(road, "wants", "road"),
+    maxLength: reader.number(road, "maxLength", "road", { min: 0 }),
   };
 }
 

@@ -1,6 +1,6 @@
 // A stone quarry: a level floor cut back into a hillside, its back and sides a stepped rock face -
 // bench over bench - and its spoil tipped out in front as a bank falling back to the ground. It
-// takes its trees and bushes, gets a gravel floor and a track out to the nearest road.
+// takes its trees and bushes, gets a gravel floor and a track to a settlement near it.
 //
 // Where it goes is decided by the ground: somewhere in its cell with a hillside of the right grade,
 // sloping one way across the floor and still rising behind it, so there is a face to cut. A cell
@@ -27,7 +27,9 @@
   // Trees and bushes cleared off everything cut or tipped, and up to 6 m past the floor's edge,
   // growing back by 14.
   clearing: [6, 14],
-  road: { width: 0.5, maxLength: 1500 },
+  // Its place in the road network (see settlement.json5): a dead end of little account - one track,
+  // in at its open front, to the nearest place that matters, a settlement by preference.
+  road: { importance: 0.5, links: [1, 1], wants: ["settlement"], maxLength: 1500 },
   ground: {
     material: "quarryFloor",
     weight: {

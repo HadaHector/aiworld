@@ -1,7 +1,16 @@
 // A settlement: a hamlet, village or town, by how good its ground is. Placed, laid out and built by
 // the settlement code, in the cell's biome's own style (its `settlement` key) - this file only
-// makes it a kind a biome's cells can roll.
+// makes it a kind a biome's cells can roll, and says what it is to the roads.
 {
   name: "Settlement",
   type: "settlement",
+  // Its place in the road network, which settlements and features share (see roads/places.ts): how
+  // much it matters, per tier - the road between two places is as grand as the lesser of them, so
+  // two towns are joined by a highway and a quarry by a track - and how many roads it takes: at
+  // least one, and as many as its neighbours bring.
+  road: {
+    importance: { hamlet: 1, village: 2, town: 4 },
+    links: [1, 12],
+    maxLength: 5000,
+  },
 }

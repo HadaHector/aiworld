@@ -1,7 +1,6 @@
 import type { CellPoint } from "../cells/cellGrid";
 import type { TerrainSample, TerrainSampler } from "../terrain/terrainSampler";
 import type { RoadLine } from "../roads/roadField";
-import type { RoadLink } from "../roads/roadNetwork";
 import { ROAD_HALF_WIDTH, ROAD_MAX_LAKE_FACTOR, ROAD_MIN_HEIGHT } from "../roads/roadConfig";
 import { chaikin } from "../polyline";
 import { deriveSeed, mulberry32 } from "../rng";
@@ -460,7 +459,7 @@ function layoutSettlement(
   seed: number,
   site: SettlementSite,
   siteGates: SettlementGate[],
-  nearbyRoads: RoadLink[],
+  nearbyRoads: RoadLine[],
   sampleTerrain: TerrainSampler,
 ): SettlementLayout {
   const rng = mulberry32(deriveSeed(seed, SETTLEMENT_LAYOUT_SALT + site.id));
@@ -694,7 +693,7 @@ export function generateSettlementLayouts(
   seed: number,
   sites: SettlementSite[],
   gates: SettlementGate[][],
-  roads: RoadLink[],
+  roads: RoadLine[],
   sampleTerrain: TerrainSampler,
 ): SettlementLayout[] {
   return sites.map((site) => {

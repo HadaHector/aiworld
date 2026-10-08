@@ -1,4 +1,5 @@
 import type { MaterialLayer } from "../materials/materialTypes";
+import type { SettlementTier } from "../settlements/settlementConfig";
 
 /**
  * What stands in a cell besides the land itself: one major feature per cell at most - a settlement,
@@ -40,20 +41,39 @@ export interface QuarrySpec {
   idealGrade: number;
 }
 
+/**
+ * A feature's place in the road network, which is planned over settlements and features alike
+ * (roads/places.ts): how much a road to it matters, how many roads it takes, which kinds of place
+ * it would rather be joined to, and how far it will reach for one.
+ */
+export interface PlaceRoadSpec {
+  /** How much it matters to the roads: a village is 2. Important places are joined first and most
+   *  directly, the less important hang off them, and the road between two places is as grand as
+   *  the lesser of them (roadConfig's ROAD_CLASSES). A settlement gives one per tier. */
+  importance: number | Record<SettlementTier, number>;
+  /** The fewest roads it is given, and the most it takes: [1, 1] is a dead end, two or more at the
+   *  least puts it on a road running through. */
+  links: [number, number];
+  /** Kinds of place (feature ids - "settlement" for any settlement) a road from it would rather
+   *  lead to: a mine to a smelter, a camp to a sawmill. */
+  wants: string[];
+  /** The longest straight line it will be joined across. */
+  maxLength: number;
+}
+
 export interface FeatureKindDef {
   id: string;
   name: string;
   /** "settlement" is placed and laid out by settlements/ - in the biome's own `settlement` style,
-   *  with its streets, plots and gates - and uses none of the fields below. */
+   *  with its streets, plots and gates - and uses none of the fields below but `road`. */
   type: FeatureType;
   /** A quarry's own block; null for any other type. */
   quarry: QuarrySpec | null;
   /** Trees, bushes and stones are cleared off the ground the feature changes, and up to the first
    *  distance past its edge, returning by the second. */
   clearing: [number, number];
-  /** A track to the nearest road: its width next to a road's (1), and the furthest it will run.
-   *  Null for a feature nobody drives to. */
-  road: { width: number; maxLength: number } | null;
+  /** Its place in the road network (see PlaceRoadSpec), or null for a feature nobody drives to. */
+  road: PlaceRoadSpec | null;
   /** What the feature's ground is painted with: a material, laid over everything else, and its
    *  weight - a graph that can read `featureGap` (distance past the feature's edge, 0 inside it),
    *  `featureDepth` (how far the ground was cut or filled there) and the usual inputs. */

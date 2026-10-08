@@ -6,6 +6,7 @@ import { GROWTH_RADIUS_SAFETY_FACTOR } from "../world/cells/config";
 import type { MaterialLibrary } from "../world/materials/materialLibrary";
 import type { SettlementSite } from "../world/settlements/settlementSites";
 import type { FeatureSite } from "../world/features/featureSites";
+import type { RoadClassId } from "../world/roads/roadConfig";
 import type { RoadNetwork } from "../world/roads/roadNetwork";
 
 const SAMPLE_RESOLUTION = 400; // internal sample grid, kept modest since this is a debug tool
@@ -39,9 +40,14 @@ const SETTLEMENT_LABEL_MIN_HALF_SIZE = 12000;
 // canvas for the same reason the labels are DOM: the canvas is a small image stretched to fill the
 // screen, and a one-pixel line drawn into it comes out two or three pixels wide and soft.
 const ROAD_CASING_COLOR = "rgba(0, 0, 0, 0.55)";
-const ROAD_COLOR = "rgb(228, 196, 140)";
-const ROAD_WIDTH_PX = 1.4;
-const ROAD_CASING_WIDTH_PX = 3;
+/** Each class of road (roadConfig's ROAD_CLASSES) drawn as heavy as it is grand: its colour, its
+ *  width and its casing's, in screen pixels. Drawn least first, so a highway lies over the tracks
+ *  that join it. */
+const ROAD_STYLES: [RoadClassId, string, number, number][] = [
+  ["track", "rgb(205, 190, 160)", 0.9, 2],
+  ["road", "rgb(228, 196, 140)", 1.4, 3],
+  ["highway", "rgb(245, 214, 120)", 2.4, 4.4],
+];
 
 // Emboss/relief shading: each land pixel is compared against its upper-left neighbor (one pixel
 // away, so the offset self-scales with zoom - a big offset in World view, a fine one in Continent
@@ -417,9 +423,9 @@ export function createDebugMap(
   const drawRoads = (): SVGSVGElement | null => {
     if (!showRoads) return null;
     const viewport = activeViewport();
-    let d = "";
+    const paths = new Map<RoadClassId, string>(ROAD_STYLES.map(([id]) => [id, ""]));
 
-    for (const link of roads.links) {
+    for (const link of roads.stretches) {
       // Cheap reject on the link's own extent, so a zoomed-in view does not walk the whole world's
       // points to draw the handful that are visible.
       let minX = Infinity;
@@ -441,22 +447,27 @@ export function createDebugMap(
         continue;
       }
 
+      let d = paths.get(link.roadClass) ?? "";
       link.points.forEach((point, index) => {
         const { x, y } = worldToPixel(point.x, point.z);
         d += `${index === 0 ? "M" : "L"}${x.toFixed(1)} ${y.toFixed(1)}`;
       });
+      paths.set(link.roadClass, d);
     }
-    if (d === "") return null;
+    if ([...paths.values()].every((d) => d === "")) return null;
 
     const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
     svg.setAttribute("viewBox", `0 0 ${SAMPLE_RESOLUTION} ${SAMPLE_RESOLUTION}`);
     svg.setAttribute("preserveAspectRatio", "none");
     svg.style.cssText = "position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible;";
 
-    for (const [color, width] of [
-      [ROAD_CASING_COLOR, ROAD_CASING_WIDTH_PX],
-      [ROAD_COLOR, ROAD_WIDTH_PX],
-    ] as [string, number][]) {
+    // Every casing under every fill, so a junction reads as one road rather than two cased lines.
+    const strokes: [string, string, number][] = [
+      ...ROAD_STYLES.map(([id, , , casing]): [string, string, number] => [paths.get(id)!, ROAD_CASING_COLOR, casing]),
+      ...ROAD_STYLES.map(([id, color, width]): [string, string, number] => [paths.get(id)!, color, width]),
+    ];
+    for (const [d, color, width] of strokes) {
+      if (d === "") continue;
       const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
       path.setAttribute("d", d);
       path.setAttribute("fill", "none");

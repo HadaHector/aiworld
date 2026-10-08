@@ -15,6 +15,10 @@ import {
   GATE_SEARCH_STEP,
 } from "./settlementConfig";
 
+/** What a gate is found on - a settlement, or any place the roads join (roads/places.ts): its
+ *  centre and the ground's height there, and the circle its gates stand on. */
+export type GateSite = Pick<SettlementSite, "x" | "z" | "height" | "radius">;
+
 /** Where a countryside road meets a settlement's own streets. */
 export interface SettlementGate {
   x: number;
@@ -78,7 +82,7 @@ const STRICT: GateLimits = {
   approachMaxGrade: GATE_APPROACH_MAX_GRADE,
 };
 
-function evaluateGate(site: SettlementSite, angle: number, offset: number, sampleTerrain: TerrainSampler, limits: GateLimits): GateCandidate | null {
+function evaluateGate(site: GateSite, angle: number, offset: number, sampleTerrain: TerrainSampler, limits: GateLimits): GateCandidate | null {
   const cos = Math.cos(angle);
   const sin = Math.sin(angle);
   const x = site.x + cos * site.radius;
@@ -139,7 +143,7 @@ function evaluateGate(site: SettlementSite, angle: number, offset: number, sampl
  * must not be left behind. The caller commits it once the road is built.
  */
 export function chooseGate(
-  site: SettlementSite,
+  site: GateSite,
   towardX: number,
   towardZ: number,
   existing: SettlementGate[],

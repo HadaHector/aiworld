@@ -8,6 +8,7 @@ import {
   ROAD_MIN_HEIGHT,
   ROAD_MAX_LAKE_FACTOR,
   ROAD_REUSE_DISCOUNT,
+  ROAD_ALONGSIDE_PENALTY,
   ROAD_RIVER_CORRIDOR,
   ROAD_RIVER_CROSSING_WEIGHT,
   ROAD_OFF_ZONE_PENALTY,
@@ -103,6 +104,15 @@ class Frontier {
     [this.keys[a], this.keys[b]] = [this.keys[b], this.keys[a]];
     [this.costs[a], this.costs[b]] = [this.costs[b], this.costs[a]];
   }
+}
+
+/** Whether a lattice node is off the road but next to it - one of its eight neighbours carries road. */
+function besideRoad(key: number, roadNodes: Set<number>): boolean {
+  if (roadNodes.has(key)) return false;
+  const gx = keyToGx(key);
+  const gz = keyToGz(key);
+  for (const [dx, dz] of NEIGHBOUR_OFFSETS) if (roadNodes.has(nodeKey(gx + dx, gz + dz))) return true;
+  return false;
 }
 
 const NEIGHBOUR_OFFSETS: [number, number][] = [
@@ -363,7 +373,8 @@ export function createRoadPathfinder(sampleTerrain: TerrainSampler): RoadPathfin
         const distance = dx !== 0 && dz !== 0 ? ROAD_GRID * Math.SQRT2 : ROAD_GRID;
         // Both ends, not the destination alone - see ROAD_REUSE_DISCOUNT.
         const onRoad = roadNodes.has(current) && roadNodes.has(nextKey);
-        const step = stepCost(fromGround, toGround, distance, zones, onRoad ? ROAD_REUSE_DISCOUNT : 1);
+        const alongside = !onRoad && besideRoad(current, roadNodes) && besideRoad(nextKey, roadNodes);
+        const step = stepCost(fromGround, toGround, distance, zones, onRoad ? ROAD_REUSE_DISCOUNT : alongside ? ROAD_ALONGSIDE_PENALTY : 1);
         if (!Number.isFinite(step)) continue;
 
         const candidate = costSoFar + step;

@@ -68,6 +68,17 @@ export const ROAD_REUSE_DISCOUNT = 0.15;
 // too, so roads exactly overlaid fell from 41.6% to 39.2% of nearby road length and parallel
 // stretches rose. Cheap ground next to a road is an invitation to use the ground, not the road.
 
+// Travelling right beside a road - a step off it whose two ends both have road next to them - costs
+// this much more than open ground. Two roads a grid step apart are never what anyone would build:
+// the search either takes the road (cheap) or keeps clear of it. Without it, a route could run 75 m
+// beside a road for half a kilometre: the search's estimate assumes full price to the goal, so going
+// straight on beside the road never looks worse, and the sideways step onto it is never tried
+// before the goal is reached.
+//
+// The opposite of the ring discount tried and rejected above, which made running beside a road
+// cheap.
+export const ROAD_ALONGSIDE_PENALTY = 2.5;
+
 // Search bounds. The ellipse is the real limiter - it confines the search to a corridor around the
 // straight line - and the expansion cap is a backstop that currently never fires.
 //
@@ -106,6 +117,43 @@ export const ROAD_HEURISTIC_WEIGHT = 1;
 // forest of those guarantees everything reachable is connected, and the shortest of the leftovers
 // are added back so the network has loops and alternate routes instead of being a pure tree.
 export const ROAD_EXTRA_LINK_FRACTION = 0.25;
+
+// --- Places ---
+//
+// The network is planned over places - settlements, and features whose kind wants roads (see
+// places.ts) - each with an importance (a village is 2) and a range of how many roads it takes.
+
+// How grand a stretch of road is: by its traffic, the summed weight of the routes that run along it
+// - each route weighing as much as the lesser of the two places it joins - the first class whose
+// minimum that reaches. So a road between two villages is a road, a quarry's a track, and where the
+// routes between towns and villages run together the road they share is a highway. The width is
+// next to a plain road's (1): its level ground, its painted surface and its verge all scale with it
+// (see RoadLine.widthScale).
+export type RoadClassId = "highway" | "road" | "track";
+export interface RoadClass {
+  id: RoadClassId;
+  minTraffic: number;
+  width: number;
+}
+export const ROAD_CLASSES: readonly RoadClass[] = [
+  { id: "highway", minTraffic: 6, width: 1.25 },
+  { id: "road", minTraffic: 1, width: 1 },
+  { id: "track", minTraffic: 0, width: 0.5 },
+];
+
+// A link's length over its two places' importance (the root of their product) is what the plan
+// sorts by: important places are joined first and most directly, and the less important hang off
+// them. A road to something either end wants counts as this much shorter.
+export const ROAD_WANT_DISCOUNT = 0.6;
+// A place with room for more roads is also offered its few nearest places, beside its natural
+// (Delaunay) neighbours: a quarry's neighbours are often only other features, or none in reach.
+export const ROAD_NEAREST_CANDIDATES = 4;
+// Two places with a settlement this near the straight line between them (past its own radius) are
+// not joined directly: the road would run through it, so they are joined by way of it.
+export const ROAD_ON_THE_WAY = 100;
+// A route that still runs through a settlement once routed is built as two, by way of it - and each
+// of those may again, this many times over.
+export const ROAD_THROUGH_MAX_DEPTH = 3;
 
 // A route this much longer than the straight line between its two settlements is not a road anyone
 // would build - and, more to the point, it is not a road at all: a path that indirect is almost

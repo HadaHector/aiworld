@@ -294,15 +294,16 @@ export function createTerrainSampler(seed: number, content: WorldContent): Terra
   featureField = createFeatureField(features);
 
   // Roads need the settlements to connect and the finished terrain to route over, so they come
-  // last of all - keeping off the features' ground, and running a track out to each that wants one.
+  // last of all - joining the settlements and the features that want roads, and keeping off the
+  // rest of the features' ground.
   const roads = timed("Routing roads", () => generateRoadNetwork(seed, settlements, sampleTerrain, features));
-  roadField = createRoadField(roads.links, ROAD_QUERY_RADIUS, ROAD_GRADE_END_TAPER);
+  roadField = createRoadField(roads.stretches, ROAD_QUERY_RADIUS, ROAD_GRADE_END_TAPER);
 
   // Settlements are laid out on the terrain as the roads left it, then their streets join the road
   // field (graded and painted like roads, narrower) and their plots are levelled.
-  const settlementLayouts = timed("Laying out settlements", () => generateSettlementLayouts(seed, settlements, roads.gates, roads.links, sampleTerrain));
+  const settlementLayouts = timed("Laying out settlements", () => generateSettlementLayouts(seed, settlements, roads.gates, roads.stretches, sampleTerrain));
   roadField = createRoadField(
-    [...roads.links, ...settlementLayouts.flatMap((layout) => layout.streets)],
+    [...roads.stretches, ...settlementLayouts.flatMap((layout) => layout.streets)],
     ROAD_QUERY_RADIUS,
     ROAD_GRADE_END_TAPER,
   );
