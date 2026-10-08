@@ -1,0 +1,24 @@
+// Log walls' corners: at every outer corner each course of logs runs on past it as a square hewn
+// beam, one wall's and the other's turn and turn about, course over course - the notched corner of
+// a log house. The walls themselves are flat, in the log wall material, and a beam is the wall's own
+// course carried on: one course tall on its lines, its face in the wall's plane and painted as the
+// wall, so the wall's logs run into it unbroken.
+{
+  name: "Log Corners",
+  type: "logs",
+  logs: {
+    // One course: a log's height - the log wall material's 4.8 m over its 8 rows.
+    course: 0.6,
+    // How far a beam stands out past the corner, rolled per house, and how thick it is back from
+    // the wall's face.
+    reach: [0.4, 0.6],
+    depth: 0.5,
+    // How far off the middle of a beam's cut end the heart of its tree may be, each beam its own: the
+    // end grain material's trunk is 1.4 m in radius, so a 0.6 m end within 0.9 m of the heart shows only
+    // rings, never the bark.
+    endOffset: 0.9,
+    // What it is painted as - the house's parts: its face and back as the walls, its top and
+    // underside as its timber, its cut end as its end grain.
+    parts: { face: "walls", grain: "timber", end: "endGrain" },
+  },
+}

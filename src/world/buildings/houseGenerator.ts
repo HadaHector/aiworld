@@ -1,6 +1,7 @@
 import type { BuildingModel, HouseSpec, Level, Paint, StoreyKind, WallSide } from "./buildingTypes";
 import { FOUNDATION_DEPTH, ModelBuilder, pick, roll, rollInt, type Vec3 } from "./buildingGeometry";
-import { buildFraming, buildRoof, buildSupport, buildTerrace, buildWallPart, isDoor, partSpan, pickPart, planFraming, planRoof, type FramingCorner, type FramingWall, type PartExtent, type PartPaints, type WallSlot } from "./buildingParts";
+import { buildPorch, planPorch } from "./porch";
+import { buildBeam, buildFraming, buildRoof, buildSupport, buildTerrace, buildWallPart, isDoor, partSpan, pickPart, planFraming, planRoof, type FramingCorner, type FramingWall, type PartExtent, type PartPaints, type WallSlot } from "./buildingParts";
 import type { RoofBlockInput, RoofEnd } from "./pitchedRoof";
 import { inRect, planHouse, type Block, type PlanEnd } from "./housePlans";
 import { cellKey, planInterior, type FaceDir, type InteriorLayout } from "./interiorLayout";
@@ -83,6 +84,9 @@ function wallRuns(inside: (i: number, j: number) => boolean, blocks: Block[]): W
  * the ones over it do not cover is a roof or a terrace; what a storey covers that the one under it
  * does not - an arcade, a jetty - has a ceiling, and an arcade supports along its open side.
  */
+/** How far under the top of the wall a lean-to leans on its roof meets it. */
+const LEAN_TO_CLEARANCE = 0.3;
+
 export function buildHouse(spec: HouseSpec, rng: () => number, far = false, measure = false): BuildingModel {
   const b = new ModelBuilder(measure);
   // What it puts in the way - for the near model only, which is the one walked into.
@@ -94,6 +98,8 @@ export function buildHouse(spec: HouseSpec, rng: () => number, far = false, meas
   const outset = spec.plinthOutset;
   const paint = (part: keyof HouseSpec["parts"]): Paint => ({ material: spec.parts[part].material, tint: pick(spec.parts[part].tints, rng) });
   const paints: PartPaints = {
+    endGrain: paint("endGrain"),
+    boards: paint("boards"),
     walls: paint("walls"),
     timber: paint("timber"),
     stone: paint("stone"),
@@ -129,6 +135,9 @@ export function buildHouse(spec: HouseSpec, rng: () => number, far = false, meas
   const footing = Math.min(-FOUNDATION_DEPTH, levels[0].floor - 0.3);
 
   const occupied = (i: number, j: number, k: number): boolean => masses.some((m) => m.from <= k && k < m.to && inRect(m.rect, i, j));
+  /** Under walls - not an open mass's tiles, which stand on posts open to the air: what the walls,
+   *  the rooms and the solid shell are found from. */
+  const enclosed = (i: number, j: number, k: number): boolean => masses.some((m) => !m.open && m.from <= k && k < m.to && inRect(m.rect, i, j));
 
   // Tiles to metres, with the plan's bounding box centred on the origin.
   const iMin = Math.min(...blocks.map((k) => k.i0));
@@ -160,7 +169,7 @@ export function buildHouse(spec: HouseSpec, rng: () => number, far = false, meas
   const outlines = new Map<number, Outline>();
   for (const level of above) {
     const k = level.index;
-    outlines.set(k, outlineOf((i, j) => occupied(i, j, k), masses.filter((m) => m.from <= k && k < m.to).map((m) => m.rect)));
+    outlines.set(k, outlineOf((i, j) => enclosed(i, j, k), masses.filter((m) => !m.open && m.from <= k && k < m.to).map((m) => m.rect)));
   }
   const outlineAt = (level: Storey): Outline => (level.kind === "cellar" ? planOutline : outlines.get(level.index)!);
 
@@ -229,7 +238,7 @@ export function buildHouse(spec: HouseSpec, rng: () => number, far = false, meas
       end.kind === "attached"
         ? { kind: "attached", overhang: 0, extend: end.into ? span / 2 : 0 }
         : { kind: end.kind === "gable" ? "gable" : roofPlan.shape, overhang: roofPlan.overhang, extend: 0 };
-    const inputs = roof.blocks.map(({ rect, alongX, start, end }): RoofBlockInput => {
+    const inputs = roof.blocks.map(({ rect, alongX, start, end, lean }): RoofBlockInput => {
       const r = rectOf(rect, level);
       const [a0, a1, c0, c1] = alongX ? [r.x0, r.x1, r.z0, r.z1] : [r.z0, r.z1, r.x0, r.x1];
       const [line0, line1] = alongX ? [X(rect.i0), X(rect.i1)] : [Z(rect.j0), Z(rect.j1)];
@@ -241,8 +250,16 @@ export function buildHouse(spec: HouseSpec, rng: () => number, far = false, meas
         alongX,
         start: endOf(start, c1 - c0),
         end: endOf(end, c1 - c0),
+        lean,
       };
     });
+    // A lean-to's slope held low enough that it meets the wall it leans on - the storey over its own
+    // - a little under that wall's top, under the eaves or the floor of the storey over that.
+    const over = above[roof.level + 1];
+    if (roofPlan.mono && over) {
+      const span = Math.max(...inputs.map((k) => k.c1 - k.c0));
+      roofPlan.slope = Math.min(roofPlan.slope, (over.top - level.top - LEAN_TO_CLEARANCE) / span);
+    }
     return { part: roof.part, plan: roofPlan, level, blocks: inputs, rects: roof.blocks.map((k) => k.rect), gables: [] };
   });
   const topStorey = above[above.length - 1];
@@ -250,6 +267,8 @@ export function buildHouse(spec: HouseSpec, rng: () => number, far = false, meas
   // Each roof's gables: a block end with one, as the wall it stands on, and its apex - where along
   // that wall (metres) and how high.
   for (const group of roofGroups) {
+    // A lean-to fills the walls under its own ends.
+    if (group.plan.mono) continue;
     const eaves = group.level.top;
     const gableOf = (k: RoofBlockInput, dir: Direction, line: number): void => {
       group.gables.push({ dir, line, at: (k.c0 + k.c1) / 2, ridge: eaves + ((k.c1 - k.c0) / 2) * group.plan.slope });
@@ -272,6 +291,13 @@ export function buildHouse(spec: HouseSpec, rng: () => number, far = false, meas
     const onTop = group.plan.thickness * Math.sqrt(1 + s * s) + group.plan.ridgeHeight;
     return group.blocks.map((k) => {
       const half = (k.c1 - k.c0) / 2;
+      // A lean-to's top is its high edge.
+      if (group.plan.mono) {
+        const c = k.lean === "c0" ? k.c0 : k.c1;
+        const [s0, s1] = [k.a0 - (k.start.kind === "attached" ? 0 : k.start.overhang), k.a1 + (k.end.kind === "attached" ? 0 : k.end.overhang)];
+        const [x0, z0, x1, z1] = k.alongX ? [s0, c, s1, c] : [c, s0, c, s1];
+        return { x0, z0, x1, z1, height: group.level.top + 2 * half * s + onTop };
+      }
       const reach = (end: RoofEnd): number => (end.kind === "hip" ? -half : end.kind === "attached" ? end.extend : end.overhang);
       let s0 = k.a0 - reach(k.start);
       let s1 = k.a1 + reach(k.end);
@@ -379,8 +405,10 @@ export function buildHouse(spec: HouseSpec, rng: () => number, far = false, meas
   for (const block of blocks) {
     for (let i = block.i0; i < block.i1; i++) {
       for (let j = block.j0; j < block.j1; j++) {
-        if (occupied(i, j, 0)) continue;
-        b.faceToward([[X(i), plinth, Z(j)], [X(i + 1), plinth, Z(j)], [X(i + 1), plinth, Z(j + 1)], [X(i), plinth, Z(j + 1)]], UP, paints.plinth);
+        if (enclosed(i, j, 0)) continue;
+        // Under an open mass - a shed's floor - boarded; elsewhere (an arcade's) the plinth's stone.
+        const boarded = masses.some((m) => m.open && m.from === 0 && inRect(m.rect, i, j));
+        b.faceToward([[X(i), plinth, Z(j)], [X(i + 1), plinth, Z(j)], [X(i + 1), plinth, Z(j + 1)], [X(i), plinth, Z(j + 1)]], UP, boarded ? paints.boards : paints.plinth);
       }
     }
   }
@@ -456,6 +484,71 @@ export function buildHouse(spec: HouseSpec, rng: () => number, far = false, meas
           colliders?.box(x0, y0, z0, x1, y1, z1);
         };
         buildSupport(support, { x, z, floor: plinth, top: level.floor, far, box }, paints);
+      }
+    }
+  }
+
+  // Open masses: no walls, but posts along their outer edges - not where they meet a walled mass,
+  // whose wall stands there - carrying a beam along the edge under the storey's top, the roof or the
+  // floor over it.
+  if (plan.openPost) {
+    const post = plan.openPost;
+    const half = (post.support?.width ?? 0.4) / 2;
+    const placed = new Set<string>();
+    const box = (x0: number, y0: number, z0: number, x1: number, y1: number, z1: number, p: Paint): void => {
+      b.box(Math.min(x0, x1), y0, Math.min(z0, z1), Math.max(x0, x1), y1, Math.max(z0, z1), p);
+      colliders?.box(x0, y0, z0, x1, y1, z1);
+    };
+    for (const level of above) {
+      const k = level.index;
+      const beamFoot = level.top - half * 2;
+      for (const m of masses) {
+        if (!m.open || m.from > k || k >= m.to) continue;
+        const r = m.rect;
+        // Each edge: its line, which way it runs, and the tile outside it at a step along.
+        const edges: { alongX: boolean; line: number; at: number; inset: number; from: number; to: number; outside: (t: number) => [number, number] }[] = [
+          { alongX: true, line: r.j1, at: Z(r.j1), inset: -half, from: r.i0, to: r.i1, outside: (t) => [t, r.j1] },
+          { alongX: true, line: r.j0, at: Z(r.j0), inset: half, from: r.i0, to: r.i1, outside: (t) => [t, r.j0 - 1] },
+          { alongX: false, line: r.i1, at: X(r.i1), inset: -half, from: r.j0, to: r.j1, outside: (t) => [r.i1, t] },
+          { alongX: false, line: r.i0, at: X(r.i0), inset: half, from: r.j0, to: r.j1, outside: (t) => [r.i0 - 1, t] },
+        ];
+        for (const edge of edges) {
+          const toMetres = edge.alongX ? X : Z;
+          const [lo, hi] = [toMetres(edge.from) + half, toMetres(edge.to) - half];
+          const point = (a: number, across: number): [number, number] => (edge.alongX ? [a, across] : [across, a]);
+          // Its open stretches: where no mass stands past it.
+          let t = edge.from;
+          while (t < edge.to) {
+            if (occupied(...edge.outside(t), k)) {
+              t++;
+              continue;
+            }
+            const s0 = t;
+            while (t < edge.to && !occupied(...edge.outside(t), k)) t++;
+            const [a0, a1] = [Math.max(lo, toMetres(s0)), Math.min(hi, toMetres(t))];
+            // Posts spread evenly between the stretch's ends, about every `openPostEvery` bays - but
+            // none at an end against a walled mass's corner, whose wall stands there.
+            const gaps = Math.max(1, Math.round((t - s0) / plan.openPostEvery));
+            for (let n = 0; n <= gaps; n++) {
+              const at = s0 + ((t - s0) * n) / gaps;
+              if (n === 0 || n === gaps) {
+                // The grid point it stands on, and the four tiles round it.
+                const [gi, gj] = edge.alongX ? [at, edge.line] : [edge.line, at];
+                if ([[gi - 1, gj - 1], [gi, gj - 1], [gi - 1, gj], [gi, gj]].some(([i, j]) => enclosed(i, j, k))) continue;
+              }
+              const a = Math.min(hi, Math.max(lo, toMetres(at)));
+              const [x, z] = point(a, edge.at + edge.inset);
+              const key = `${x.toFixed(2)},${z.toFixed(2)},${k}`;
+              if (placed.has(key)) continue;
+              placed.add(key);
+              buildSupport(post, { x, z, floor: k === 0 ? plinth : level.floor, top: beamFoot, far, box }, paints);
+            }
+            // The beam along it, on the posts.
+            const [bx0, bz0] = point(a0 - half, edge.at);
+            const [bx1, bz1] = point(a1 + half, edge.at + edge.inset * 2);
+            box(bx0, beamFoot, bz0, bx1, level.top, bz1, paints.timber);
+          }
+        }
       }
     }
   }
@@ -712,6 +805,49 @@ export function buildHouse(spec: HouseSpec, rng: () => number, far = false, meas
     }
   }
 
+  // A walled mass's wall that stands inside its roof - against an open mass under the same roof, a
+  // shed's tool room - goes on up to the roof's underside, as a gable does: square to the ridge a
+  // gable's shape, along it a band up to where the roof is over it.
+  for (const group of roofGroups) {
+    const level = group.level;
+    const { slope: s } = group.plan;
+    /** The roof's underside over a point in plan, or null where none of its blocks is over it. */
+    const roofOver = (x: number, z: number): number | null => {
+      for (const k of group.blocks) {
+        const [a, c] = k.alongX ? [x, z] : [z, x];
+        if (a < k.a0 - 1e-6 || a > k.a1 + 1e-6 || c < k.c0 - 1e-6 || c > k.c1 + 1e-6) continue;
+        if (group.plan.mono) return level.top + (k.lean === "c0" ? k.c1 - c : c - k.c0) * s;
+        return level.top + ((k.c1 - k.c0) / 2 - Math.abs(c - (k.c0 + k.c1) / 2)) * s;
+      }
+      return null;
+    };
+    for (const run of outlineAt(level).runs) {
+      const outside = (t: number): [number, number] => (run.dir === "pz" ? [t, run.line] : run.dir === "nz" ? [t, run.line - 1] : run.dir === "px" ? [run.line, t] : [run.line - 1, t]);
+      let inside = false;
+      for (let t = run.from; t < run.to && !inside; t++) inside = occupied(...outside(t), level.index);
+      if (!inside) continue;
+      const wall = wallAt(run, level);
+      // Along it: its ends, and where it passes under a ridge.
+      const stops = [wall.from, wall.to];
+      for (const k of group.blocks) {
+        const cm = (k.c0 + k.c1) / 2;
+        const across = wall.alongX !== k.alongX;
+        if (!across || group.plan.mono) continue;
+        const along = ((wall.alongX ? cm - X(0) : cm - Z(0)) / tile);
+        if (along > wall.from && along < wall.to) stops.push(along);
+      }
+      stops.sort((p, q) => p - q);
+      const top = stops.map((along) => {
+        const [x, , z] = wall.at(along, 0, 0);
+        const h = roofOver(x, z);
+        return h === null ? null : wall.at(along, 0, h);
+      });
+      if (top.some((p) => p === null)) continue;
+      const points: Vec3[] = [wall.at(stops[0], 0, level.top), wall.at(stops[stops.length - 1], 0, level.top), ...(top as Vec3[]).reverse()];
+      b.faceToward(points, wall.normal, paints.walls);
+    }
+  }
+
   // 4. The framing over the walls: every storey's walls, their posts and - under a roof's gable - its
   // gable, and every corner on every storey.
   const gableOn = (run: WallRun, level: Storey) => {
@@ -787,6 +923,8 @@ export function buildHouse(spec: HouseSpec, rng: () => number, far = false, meas
           const zb = cz + sv * v1;
           b.box(Math.min(xa, xb), y0, Math.min(za, zb), Math.max(xa, xb), y1, Math.max(za, zb), paint);
         },
+        beam: (along, reach, depth, y0, y1, face, grain, end, heart) =>
+          buildBeam(b, (u, v, y) => [cx + su * u, y, cz + sv * v], [su, sv], along, reach, depth, y0, y1, face, grain, end, heart),
       });
     }
   }
@@ -794,6 +932,30 @@ export function buildHouse(spec: HouseSpec, rng: () => number, far = false, meas
 
   // 5-7. The roofs, each over its blocks from the top of its storey.
   for (const group of roofGroups) buildRoof(group.part, group.plan, { b, eaves: group.level.top, blocks: group.blocks, far }, paints);
+
+  // The porches: along a wall of the entrance block, on the ground storey, a post at every bay.
+  for (const porch of plan.porches) {
+    const m = plan.entrance;
+    const alongX = porch.wall === "front" || porch.wall === "back";
+    const sign = porch.wall === "front" || porch.wall === "right" ? 1 : -1;
+    const face = porch.wall === "front" ? Z(m.j1) : porch.wall === "back" ? Z(m.j0) : porch.wall === "right" ? X(m.i1) : X(m.i0);
+    const toMetres = alongX ? X : Z;
+    const posts: number[] = [];
+    for (let t = porch.from; t <= porch.to; t++) posts.push(toMetres(t));
+    buildPorch(porch.part.porch!, planPorch(porch.part.porch!, rng), {
+      b,
+      colliders,
+      a0: toMetres(porch.from),
+      a1: toMetres(porch.to),
+      at: (a, out, y) => (alongX ? [a, y, face + sign * out] : [face + sign * out, y, a]),
+      along: alongX ? [1, 0, 0] : [0, 0, 1],
+      outward: alongX ? [0, 0, sign] : [sign, 0, 0],
+      ground: 0,
+      floor: ground.floor,
+      top: ground.top,
+      posts,
+    }, paints);
+  }
 
   // And the terraces: on top of a mass the storeys over it do not cover, its sides open but where a
   // wall rises over them.
@@ -827,7 +989,7 @@ export function buildHouse(spec: HouseSpec, rng: () => number, far = false, meas
 
   // 8. Inside: the rooms' walls, floors and ceilings, their doors, stairs and galleries - near only.
   if (interior && !far) {
-    buildInterior({ b, colliders: colliders ?? undefined, layout: interior, levels: levels.map(({ kind, index, floor, top }) => ({ kind, index, floor, top })), X, Z, tile, inside: (i, j, k) => (k < 0 ? inside(i, j) : occupied(i, j, k)), exits, windows });
+    buildInterior({ b, colliders: colliders ?? undefined, layout: interior, levels: levels.map(({ kind, index, floor, top }) => ({ kind, index, floor, top })), X, Z, tile, inside: (i, j, k) => (k < 0 ? inside(i, j) : enclosed(i, j, k)), exits, windows });
   }
 
   const tiles: NonNullable<BuildingModel["tiles"]> = [];
@@ -869,7 +1031,7 @@ export function buildHouse(spec: HouseSpec, rng: () => number, far = false, meas
       // No rooms: each mass solid, storey by storey, out to its jettied walls.
       for (const level of above) {
         for (const m of masses) {
-          if (m.from > level.index || level.index >= m.to) continue;
+          if (m.open || m.from > level.index || level.index >= m.to) continue;
           const r = rectOf(m.rect, level);
           c.box(r.x0, level.floor, r.z0, r.x1, level.top, r.z1);
         }
@@ -880,7 +1042,7 @@ export function buildHouse(spec: HouseSpec, rng: () => number, far = false, meas
         const k = level.index;
         for (let i = iMin; i < iMax; i++) {
           for (let j = jMin; j < jMax; j++) {
-            const there = k < 0 ? inside(i, j) : occupied(i, j, k);
+            const there = k < 0 ? inside(i, j) : enclosed(i, j, k);
             if (!there || interior.cells.has(cellKey(i, j, k))) continue;
             c.box(X(i), level.floor, Z(j), X(i + 1), level.top, Z(j + 1));
           }
@@ -910,13 +1072,27 @@ export function buildHouse(spec: HouseSpec, rng: () => number, far = false, meas
       const eaves = group.level.top;
       for (const k of group.blocks) {
         const half = (k.c1 - k.c0) / 2;
+        const eaveY = eaves - overhang * s;
+        // A lean-to: from its low eaves up to its high edge against the wall.
+        if (group.plan.mono) {
+          const highAtEnd = k.lean !== "c0";
+          const [low, high] = highAtEnd ? [k.c0 - overhang, k.c1] : [k.c1 + overhang, k.c0];
+          const e0 = k.a0 - (k.start.kind === "attached" ? 0 : k.start.overhang);
+          const e1 = k.a1 + (k.end.kind === "attached" ? 0 : k.end.overhang);
+          const highY = eaves + 2 * half * s;
+          const at = (a: number, y: number, across: number): Vec3 => (k.alongX ? [a, y, across] : [across, y, a]);
+          c.hull([
+            at(e0, eaveY, low), at(e1, eaveY, low), at(e0, highY, high), at(e1, highY, high),
+            at(e0, eaveY + thickness, low), at(e1, eaveY + thickness, low), at(e0, highY + thickness * Math.sqrt(1 + s * s), high), at(e1, highY + thickness * Math.sqrt(1 + s * s), high),
+          ]);
+          continue;
+        }
         const reach = (end: RoofEnd): number => (end.kind === "hip" ? -half : end.kind === "attached" ? end.extend : end.overhang);
         let s0 = k.a0 - reach(k.start);
         let s1 = k.a1 + reach(k.end);
         if (s0 > s1) s0 = s1 = (s0 + s1) / 2;
         const e0 = k.start.kind === "attached" ? k.a0 : k.a0 - k.start.overhang;
         const e1 = k.end.kind === "attached" ? k.a1 : k.a1 + k.end.overhang;
-        const eaveY = eaves - overhang * s;
         const ridgeY = eaves + half * s + thickness * Math.sqrt(1 + s * s);
         const cm = (k.c0 + k.c1) / 2;
         const at = (a: number, y: number, across: number): Vec3 => (k.alongX ? [a, y, across] : [across, y, a]);

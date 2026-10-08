@@ -1,4 +1,4 @@
-import type { BuildingPartDef, HousePlanSettings, HouseSpec, TowerPlanSettings } from "./buildingTypes";
+import type { BuildingPartDef, CabinPlanSettings, HousePlanSettings, HouseSpec, TowerPlanSettings } from "./buildingTypes";
 import { pick, rollInt } from "./buildingGeometry";
 import { isRoof, pickPart } from "./buildingParts";
 
@@ -19,11 +19,13 @@ export interface Block {
   j1: number;
 }
 
-/** A block of tiles standing from storey `from` up to (not including) storey `to`. */
+/** A block of tiles standing from storey `from` up to (not including) storey `to`. An `open` one has
+ *  no walls: its storeys stand on posts, under its roof, open to the air. */
 export interface Mass {
   rect: Block;
   from: number;
   to: number;
+  open?: boolean;
 }
 
 /** A roof block's end: free (the roof's own shape there), a gable whatever its shape, or attached to
@@ -37,6 +39,8 @@ export interface PlanRoofBlock {
   alongX: boolean;
   start: PlanEnd;
   end: PlanEnd;
+  /** Under a lean-to roof: its high side across it - c0 (the low tile line) or c1. */
+  lean?: "c0" | "c1";
 }
 
 /** A roof over some blocks, on top of storey `level`. */
@@ -44,6 +48,14 @@ export interface PlanRoof {
   part: BuildingPartDef;
   level: number;
   blocks: PlanRoofBlock[];
+}
+
+/** A porch along one of the entrance block's walls, ground storey, from tile `from` to `to` along it. */
+export interface PlanPorch {
+  part: BuildingPartDef;
+  wall: "front" | "back" | "left" | "right";
+  from: number;
+  to: number;
 }
 
 export interface HousePlan {
@@ -59,6 +71,12 @@ export interface HousePlan {
   terraces: { part: BuildingPartDef; mass: Mass }[];
   /** What stands under a storey over open ground - an arcade's posts - or none. */
   support: BuildingPartDef | null;
+  /** Porches along the entrance block's walls. */
+  porches: PlanPorch[];
+  /** What an open mass's storeys stand on - posts along its outer edges, about every `openPostEvery`
+   *  bays - or none. */
+  openPost: BuildingPartDef | null;
+  openPostEvery: number;
 }
 
 export const inRect = (r: Block, i: number, j: number): boolean => i >= r.i0 && i < r.i1 && j >= r.j0 && j < r.j1;
@@ -70,6 +88,8 @@ export function planHouse(spec: HouseSpec, storeys: number, rng: () => number): 
       return housePlan(spec, spec.plan.house, storeys, rng);
     case "tower":
       return towerPlan(spec, spec.plan.tower, storeys, rng);
+    case "cabin":
+      return cabinPlan(spec, spec.plan.cabin, storeys, rng);
   }
 }
 
@@ -167,7 +187,7 @@ function housePlan(spec: HouseSpec, settings: HousePlanSettings, storeys: number
       blocks: [isBack ? { rect: wing, alongX: false, start: free, end: attached } : { rect: wing, alongX: true, start: left ? free : attached, end: left ? attached : free }],
     });
   }
-  return { blocks, masses, storeys, entrance: main, roofs, terraces, support: arcade ? settings.arcade!.support : null };
+  return { blocks, masses, storeys, entrance: main, roofs, terraces, support: arcade ? settings.arcade!.support : null, porches: [], openPost: null, openPostEvery: 1 };
 }
 
 /**
@@ -205,5 +225,86 @@ function towerPlan(spec: HouseSpec, settings: TowerPlanSettings, storeys: number
     ],
     terraces: [],
     support: null,
+    porches: [],
+    openPost: null, openPostEvery: 1,
   };
+}
+
+/**
+ * The `cabin` plan: a long main block, gabled at both ends - a log cabin's way, whatever shapes its
+ * roof part allows, and a lean-to against an end leans on the gable's wall - porches along it, and
+ * lean-tos one storey tall against its back or its ends - each a whole wall long or part of it - each under a lean-to roof rising to the main block's
+ * wall above it. A cabin of one storey has no wall above its lean-tos to lean them on, so none.
+ */
+function cabinPlan(spec: HouseSpec, settings: CabinPlanSettings, storeys: number, rng: () => number): HousePlan {
+  const W = rollInt(spec.width, rng);
+  const D = rollInt(spec.depth, rng);
+  const main: Block = { i0: 0, i1: W, j0: 0, j1: D };
+  const blocks: Block[] = [main];
+  const gable: PlanEnd = { kind: "gable" };
+  const mainRoof: PlanRoof = { part: spec.roof, level: storeys - 1, blocks: [{ rect: main, alongX: true, start: gable, end: gable }] };
+  // An open shed: the main block on posts, but for a few bays at one end shut in - its way in, its
+  // door - and no lean-tos or porches.
+  if (settings.open) {
+    const closed = Math.max(1, Math.min(W - 1, rollInt(settings.open.closedBays, rng)));
+    const atLeft = rng() < 0.5;
+    const shut: Block = atLeft ? { i0: 0, i1: closed, j0: 0, j1: D } : { i0: W - closed, i1: W, j0: 0, j1: D };
+    const open: Block = atLeft ? { i0: closed, i1: W, j0: 0, j1: D } : { i0: 0, i1: W - closed, j0: 0, j1: D };
+    return {
+      blocks,
+      masses: [{ rect: shut, from: 0, to: storeys }, { rect: open, from: 0, to: storeys, open: true }],
+      storeys,
+      entrance: shut,
+      roofs: [mainRoof],
+      terraces: [],
+      support: null,
+      porches: [],
+      openPost: settings.open.post,
+      openPostEvery: settings.open.postEvery,
+    };
+  }
+  const masses: Mass[] = [{ rect: main, from: 0, to: storeys }];
+  const roofs: PlanRoof[] = [];
+  const free: PlanEnd = { kind: "free" };
+  const taken = new Set<"front" | "back" | "left" | "right">();
+  for (const leanTo of settings.leanTos) {
+    if (storeys < 2 || rng() >= leanTo.chance) continue;
+    const places = leanTo.walls.flatMap((wall) => (wall === "back" ? ["back" as const] : ["left" as const, "right" as const])).filter((place) => !taken.has(place));
+    if (places.length === 0) continue;
+    const place = pick(places, rng);
+    taken.add(place);
+    const depth = rollInt(leanTo.depth, rng);
+    const wallLength = place === "back" ? W : D;
+    const length = leanTo.length ? Math.min(wallLength, rollInt(leanTo.length, rng)) : wallLength;
+    const offset = Math.floor(rng() * (wallLength - length + 1));
+    // Against the back its high side is toward the front (c1, along z); against an end, toward the
+    // main block (along x).
+    const rect: Block =
+      place === "back"
+        ? { i0: offset, i1: offset + length, j0: -depth, j1: 0 }
+        : place === "left"
+          ? { i0: -depth, i1: 0, j0: offset, j1: offset + length }
+          : { i0: W, i1: W + depth, j0: offset, j1: offset + length };
+    blocks.push(rect);
+    masses.push({ rect, from: 0, to: 1 });
+    roofs.push({
+      part: leanTo.roof,
+      level: 0,
+      blocks: [{ rect, alongX: place === "back", start: free, end: free, lean: place === "right" ? "c0" : "c1" }],
+    });
+  }
+  // Porches, along walls no lean-to took.
+  const porches: PlanPorch[] = [];
+  for (const porch of settings.porches) {
+    if (rng() >= porch.chance) continue;
+    const places = porch.walls.flatMap((wall) => (wall === "side" ? ["left" as const, "right" as const] : [wall])).filter((place) => !taken.has(place));
+    if (places.length === 0) continue;
+    const wall = pick(places, rng);
+    taken.add(wall);
+    const wallLength = wall === "front" || wall === "back" ? W : D;
+    const length = porch.length ? Math.min(wallLength, rollInt(porch.length, rng)) : wallLength;
+    const from = Math.floor(rng() * (wallLength - length + 1));
+    porches.push({ part: porch.part, wall, from, to: from + length });
+  }
+  return { blocks, masses, storeys, entrance: main, roofs: [mainRoof, ...roofs], terraces: [], support: null, porches, openPost: null, openPostEvery: 1 };
 }

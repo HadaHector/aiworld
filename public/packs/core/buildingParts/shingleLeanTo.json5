@@ -1,0 +1,15 @@
+// A lean-to's shingle roof: one shallow slope from its outer wall up to the taller wall it leans
+// against, the walls under its ends filled - for a log cabin's lean-tos.
+{
+  name: "Shingle Lean-to",
+  type: "leanTo",
+  leanTo: {
+    // Degrees, rolled per house - and held lower where the wall it leans on is too short for it.
+    pitch: [16, 24],
+    // How far it reaches past its outer wall and its free ends, and how thick it is.
+    overhang: 0.6,
+    thickness: 0.25,
+    // What it is painted as - the house's parts.
+    parts: { covering: "roof", underside: "timber", gable: "walls" },
+  },
+}

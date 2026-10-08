@@ -1,0 +1,81 @@
+// A wall of logs laid in courses: round, weathered grey-brown logs, each its own shade, their grain
+// running along them, the gaps between them packed with pale clay chinking. The log framing's
+// corners (buildingParts/logCorners) stand on the same course lines, so its `course` must be this
+// material's height over its rows: 4.8 m over 8 rows, 0.6 m - twice a real log, so it reads from afar.
+{
+  name: "Log Wall",
+  // Along the logs and up the wall: a log's grain repeats every 8 m along it, and 8 courses stand
+  // in 4.8 m - every 0.6 m up from the model's floor, where the corners' logs are laid.
+  size: [8, 4.8],
+  shine: 0.04,
+  texture: {
+    bumpStrength: 2.4,
+    pipeline: {
+      noises: [
+        // One course per row and one cell along it: no joints but the courses'.
+        { name: "courses", type: "bricks", tileCycles: [1, 8], stagger: 0, amplitude: 1, mode: "v" },
+        { name: "courseId", type: "bricks", tileCycles: [1, 8], stagger: 0, amplitude: 1, mode: "cell" },
+        { name: "grain", type: "fbm", octaves: 3, tileCycles: 8, amplitude: 1, persistence: 0.5, lacunarity: 2.2, stretch: [14, 1] },
+        { name: "checks", type: "fbm", octaves: 2, tileCycles: 24, amplitude: 1, persistence: 0.5, lacunarity: 2, stretch: [10, 1] },
+        { name: "weather", type: "fbm", octaves: 2, tileCycles: 3, amplitude: 1, persistence: 0.5, lacunarity: 2 },
+        { name: "clay", type: "fbm", octaves: 3, tileCycles: 40, amplitude: 1, persistence: 0.5, lacunarity: 2 },
+      ],
+      steps: [
+        // Across a course, from its foot (0) to its top (1): the log's round, 1 at its middle and 0
+        // where it meets the next - sqrt(1 - t^2), t from -1 to 1.
+        { output: "across", op: "sample", noise: "courses" },
+        { output: "acrossScaled", op: "scale", input: "across", factor: 2 },
+        { output: "t", op: "offset", input: "acrossScaled", amount: -1 },
+        { output: "tSquared", op: "power", input: "t", exponent: 2 },
+        { output: "roundSquared", op: "invert", input: "tSquared" },
+        { output: "roundClamped", op: "clamp", input: "roundSquared", min: 0, max: 1 },
+        { output: "round", op: "power", input: "roundClamped", exponent: 0.5 },
+        // The chinking: where the round has fallen away, between two logs.
+        { output: "chink", op: "mask", input: "round", at: 0.25, off: 0.45 },
+        { output: "logId", op: "sample", noise: "courseId" },
+        { output: "grainRaw", op: "sample", noise: "grain" },
+        { output: "checkRaw", op: "sample", noise: "checks" },
+        { output: "weatherRaw", op: "sample", noise: "weather" },
+        { output: "clayRaw", op: "sample", noise: "clay" },
+        {
+          output: "logTone",
+          op: "colorRamp",
+          input: "logId",
+          stops: [
+            { at: 0.0, color: [0.42, 0.36, 0.3] },
+            { at: 0.35, color: [0.5, 0.43, 0.35] },
+            { at: 0.65, color: [0.46, 0.41, 0.36] },
+            { at: 1.0, color: [0.38, 0.32, 0.26] },
+          ],
+        },
+        { output: "grainShade", op: "remap", input: "grainRaw", inMin: -1, inMax: 1, outMin: 0.84, outMax: 1.12 },
+        { output: "weatherShade", op: "remap", input: "weatherRaw", inMin: -1, inMax: 1, outMin: 0.86, outMax: 1.08 },
+        // Darker towards a log's top and foot, where it turns away.
+        { output: "turnShade", op: "remap", input: "round", inMin: 0, inMax: 1, outMin: 0.5, outMax: 1.05 },
+        { output: "checkLine", op: "mask", input: "checkRaw", at: 0.55, off: 0.45 },
+        { output: "checkShade", op: "remap", input: "checkLine", inMin: 0, inMax: 1, outMin: 1, outMax: 0.7 },
+        { output: "shadeA", op: "multiply", a: "grainShade", b: "weatherShade" },
+        { output: "shadeB", op: "multiply", a: "shadeA", b: "turnShade" },
+        { output: "shade", op: "multiply", a: "shadeB", b: "checkShade" },
+        { output: "wood", op: "multiply", a: "logTone", b: "shade" },
+        {
+          output: "clayColor",
+          op: "colorRamp",
+          input: "clayRaw",
+          stops: [
+            { at: -1, color: [0.62, 0.58, 0.5] },
+            { at: 1, color: [0.76, 0.72, 0.63] },
+          ],
+        },
+        { output: "diffuse", op: "mix", a: "wood", b: "clayColor", t: "chink" },
+        { output: "roughness", op: "constant", value: 0.88 },
+        // Height: the logs' round, the chinking sunk between them, the grain and its checks cut in.
+        { output: "grainBump", op: "scale", input: "grainRaw", factor: 0.05 },
+        { output: "checkBump", op: "scale", input: "checkLine", factor: -0.08 },
+        { output: "heightA", op: "add", a: "round", b: "grainBump" },
+        { output: "height", op: "add", a: "heightA", b: "checkBump" },
+      ],
+      outputs: { diffuse: "diffuse", roughness: "roughness", height: "height" },
+    },
+  },
+}

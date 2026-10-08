@@ -1,0 +1,44 @@
+// A round log's side: the same weathered grey-brown wood as the log wall's logs, its grain and
+// checks running along it - for the logs that stand out at a log building's corners, and its other
+// timbers, so they are the wall's own wood.
+{
+  name: "Round Log",
+  // Across the grain and along it.
+  size: [2.4, 8],
+  shine: 0.04,
+  texture: {
+    bumpStrength: 1.6,
+    pipeline: {
+      noises: [
+        { name: "grain", type: "fbm", octaves: 3, tileCycles: 8, amplitude: 1, persistence: 0.5, lacunarity: 2.2, stretch: [1, 14] },
+        { name: "checks", type: "fbm", octaves: 2, tileCycles: 24, amplitude: 1, persistence: 0.5, lacunarity: 2, stretch: [1, 10] },
+        { name: "weather", type: "fbm", octaves: 2, tileCycles: 3, amplitude: 1, persistence: 0.5, lacunarity: 2 },
+      ],
+      steps: [
+        { output: "grainRaw", op: "sample", noise: "grain" },
+        { output: "checkRaw", op: "sample", noise: "checks" },
+        { output: "weatherRaw", op: "sample", noise: "weather" },
+        {
+          output: "tone",
+          op: "colorRamp",
+          input: "weatherRaw",
+          stops: [
+            { at: -1, color: [0.4, 0.34, 0.28] },
+            { at: 0, color: [0.47, 0.41, 0.34] },
+            { at: 1, color: [0.42, 0.37, 0.32] },
+          ],
+        },
+        { output: "grainShade", op: "remap", input: "grainRaw", inMin: -1, inMax: 1, outMin: 0.84, outMax: 1.12 },
+        { output: "checkLine", op: "mask", input: "checkRaw", at: 0.55, off: 0.45 },
+        { output: "checkShade", op: "remap", input: "checkLine", inMin: 0, inMax: 1, outMin: 1, outMax: 0.7 },
+        { output: "shade", op: "multiply", a: "grainShade", b: "checkShade" },
+        { output: "diffuse", op: "multiply", a: "tone", b: "shade" },
+        { output: "roughness", op: "constant", value: 0.88 },
+        { output: "grainBump", op: "scale", input: "grainRaw", factor: 0.1 },
+        { output: "checkBump", op: "scale", input: "checkLine", factor: -0.2 },
+        { output: "height", op: "add", a: "grainBump", b: "checkBump" },
+      ],
+      outputs: { diffuse: "diffuse", roughness: "roughness", height: "height" },
+    },
+  },
+}

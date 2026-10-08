@@ -1,7 +1,7 @@
 import type { BuildingDef, BuildingModel, BuildingPartDef, HouseSpec, Paint } from "./buildingTypes";
 import { HOUSE_PARTS } from "./buildingTypes";
 import { FOUNDATION_DEPTH, ModelBuilder, plain } from "./buildingGeometry";
-import { buildFraming, buildWallPart, partSpan, planFraming, type PartPaints } from "./buildingParts";
+import { buildBeam, buildFraming, buildWallPart, partSpan, planFraming, type PartPaints } from "./buildingParts";
 import { mulberry32 } from "../rng";
 
 /** Plain colours for a part with no house to borrow paints from. */
@@ -13,6 +13,8 @@ const FALLBACK: PartPaints = {
   plinth: plain([0.55, 0.53, 0.5]),
   door: plain([0.3, 0.22, 0.15]),
   glass: plain([0.25, 0.32, 0.38]),
+  endGrain: plain([0.72, 0.6, 0.45]),
+  boards: plain([0.5, 0.4, 0.3]),
 };
 
 /** The first house that uses a part - whose look a sample of it borrows. */
@@ -41,7 +43,7 @@ export function buildPartSample(part: BuildingPartDef, house: HouseSpec | null):
   const paints: PartPaints = house
     ? (Object.fromEntries(HOUSE_PARTS.map((name): [string, Paint] => [name, { material: house.parts[name].material, tint: house.parts[name].tints[0] }])) as PartPaints)
     : FALLBACK;
-  const isFraming = part.generator === "timberFrame" || part.generator === "stoneFrame";
+  const isFraming = part.generator === "timberFrame" || part.generator === "stoneFrame" || part.generator === "logs";
   const framingPart = isFraming ? part : (house?.framing ?? null);
   const framing = planFraming(framingPart, rng);
 
@@ -99,6 +101,10 @@ export function buildPartSample(part: BuildingPartDef, house: HouseSpec | null):
         floor: plinth,
         top: eaves,
         topStorey: true,
+        beam: (along: "u" | "v", reach: number, depth: number, y0: number, y1: number, face: Paint, grain: Paint, end: Paint, heart: [number, number]) => {
+          const s = x < 0 ? 1 : -1;
+          buildBeam(b, (u, v, y) => [x + s * u, y, -v], [s, -1], along, reach, depth, y0, y1, face, grain, end, heart);
+        },
         box: (u0: number, u1: number, v0: number, v1: number, y0: number, y1: number, paint: Paint) => {
           const s = x < 0 ? 1 : -1;
           b.box(Math.min(x + s * u0, x + s * u1), y0, Math.min(-v0, -v1), Math.max(x + s * u0, x + s * u1), y1, Math.max(-v0, -v1), paint);

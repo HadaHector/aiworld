@@ -32,6 +32,8 @@ export interface RoofBlockInput {
   alongX: boolean;
   start: RoofEnd;
   end: RoofEnd;
+  /** A lean-to's high side - the one against the wall it leans on - across it: c0 or c1. */
+  lean?: "c0" | "c1";
 }
 
 /** What a roof settles before the walls are built: its shape at free ends, and its pitch, overhang
@@ -46,6 +48,8 @@ export interface RoofPlan {
   slopeSag: number;
   /** How far its ridge tiles stand above the slab. */
   ridgeHeight: number;
+  /** One slope, not two: a lean-to (leanToRoof.ts), high on its blocks' `lean` side. */
+  mono?: boolean;
 }
 
 export function planPitchedRoof(spec: PitchedRoofSpec, rng: () => number): RoofPlan {

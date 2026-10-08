@@ -524,24 +524,62 @@ scatter should keep each tree it would have grown there, but as a **stump**.
 
 So the clearing reads as worked timber, not a plain lawn, and the stumps fall where real trees stood.
 
-### 5. Buildings in a woodland style
+### 5. The camp's buildings
 
-A log style that settlements in the taiga can use later too. Three building files:
+Log buildings, big enough inside (at the 2x scale) for a few people to a room. A log style the
+taiga's settlements can use later too.
 
-- `bunkhouse`: one long room, small windows, a chimney;
-- `sawShed`: a roof on posts, open on two or three sides;
-- `toolShed`: small, with a door.
+| Building | Size (tiles) | What it is | Inside |
+|---|---|---|---|
+| Bunkhouse | 7-9 x 3 | long log hall, porch along the front, a lean-to along the back | bunk room, mess room with a hearth, foreman's room, store in the lean-to; 2 exits |
+| Cookhouse | 4-5 x 3 | log, a big stone chimney, porch | kitchen and mess hall; 1-2 exits |
+| Saw shed | 4-6 x 3 | roof on heavy posts, open on two or three sides, one end closed | the open floor; the closed end a tool room |
+| Ox stable | 3-6 x 3 | log or plank, wide double doors; its length rolled in stalls, a bay each, so it holds two oxen or six | stalls, feed store |
+| Tool shed | 2 x 2 | a small log store | shut |
 
-Two additions to the house generator:
+A camp rolls a bunkhouse and a saw shed (required), and a cookhouse, a stable or a tool shed by
+chance.
 
-- **Log walls:** a `logWall` framing part, round logs coursed horizontally with their ends
-  standing past the corners. This is what makes a log building read as one, so it is built, not
-  faked with a texture.
-- **Open sides:** a wall side can be left open, the roof carried on posts. The supports from the
-  arcade work already exist for this.
+**A new plan generator, `cabin`:**
 
-The autumn and bluebell woods' camps use the existing timber and plank walls instead. The building
-list takes an optional `biomes` filter per entry, so one camp file serves all three woods.
+- a long main block, with **lean-tos**: lower, single-sloped, along all or part of the back or a
+  side (the `house` plan's wings are narrower blocks with gables of their own);
+- **open sides**: a storey's walls left out on chosen sides, the roof carried on posts at every
+  bay - the saw shed, and later a market hall, a cart shed;
+- a **porch** on a chosen wall.
+
+**New building parts:**
+
+- **`logs` framing**: crossed, saddle-notched log ends standing out at every corner, a heavy sill
+  log. The faces stay flat, in a new log wall material (horizontal logs and chinking, the courses
+  in its bump), so only the corners are real logs and the triangle count stays low.
+- **`leanTo` roof**: one slope against a taller wall - lean-tos and porches.
+- **`porch`**: a lean-to roof on posts along a wall, a plank deck, a step or two; walkable under.
+- **Braced door**: the framed door with a Z-brace of boards on its panel.
+
+**New content:** materials (log wall, cut log end - rings, for log stacks and stumps later too -
+rough boards) and room types with log insides (bunk room, mess room, foreman's room, tool room,
+stalls).
+
+**Order:**
+
+1. The log wall material and the `logs` framing: **done.** The corners are square hewn beams, one
+   course tall on the walls' course lines, their faces in the wall's plane and paint so the wall
+   runs on into them; cut ends in end grain (a 2.8 m trunk's rings, each end off its heart by up
+   to `endOffset`). Heights are counted in whole 0.6 m courses.
+2. The `cabin` plan, lean-tos and the `leanTo` roof: **done.** A cabin's main block is two storeys
+   (the hall and a low loft), always gabled; a lean-to is a one-storey wing against it, its pitch
+   held under the wall it leans on.
+3. The porch: **done.** A deck (deck boards), a step, posts and a beam, a lean-to roof open at its
+   ends; walkable. A wall takes a porch or a lean-to.
+4. Open sides: **done.** An `open` mass has no walls, posts along its outer edges about every
+   `postEvery` bays, a boarded floor; a walled mass's wall inside its roof goes up to it. Not yet:
+   a shed open on only some sides.
+5. The interiors - the bunkhouse's first, to try the generator on a loft and a lean-to - then the
+   cookhouse, the stable and the rest, swapped into the logging camp. Done so far: the bunkhouse,
+   the saw shed (5-8 x 4 bays, a 30 degree roof) and the tool shed, without interiors.
+
+Each is checked in the workbench before the next.
 
 ### 6. Workbench
 
@@ -605,10 +643,11 @@ Props get the same model and colliders views as buildings.
    - Probe (compounds.local.mjs): yards level, buildings on their pads and clear of each other,
      the lanes, trails and roads, every compound reached by a road - seeds 1338, 77, 4242, 9001
      (38 camps), no faults.
-3. **The renderer split.** Compounds draw real buildings with collision.
-4. **Props:** the asset folder, the generators, anchors, collision.
-5. **Stumps.**
-6. **Log walls and open sides,** and the three camp buildings.
+3. **The camp's buildings** (section 5): log walls, the `cabin` plan, lean-tos, porches, open
+   sides, and the five buildings - brought forward, so the renderer split draws them.
+4. **The renderer split.** Compounds draw real buildings with collision.
+5. **Props:** the asset folder, the generators, anchors, collision.
+6. **Stumps.**
 7. **Workbench preview.**
 8. **Finishing:** materials and the yard's paint, biome odds, a walk through each wood, timings.
 

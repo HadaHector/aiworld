@@ -1,0 +1,25 @@
+// A timber porch along a wall: a plank deck at the floor's level and a step down from it, a squared
+// post at every bay along its front with a beam along their tops, and a shingle lean-to roof from
+// the wall out over them, open at its ends.
+{
+  name: "Timber Porch",
+  type: "porch",
+  porch: {
+    // How far it reaches out from the wall, and its roof's pitch (degrees) - each rolled per house.
+    depth: [2.8, 3.6],
+    pitch: [12, 18],
+    // Its roof meets the wall this far under the storey's top (the loft's floor, or the eaves), and
+    // keeps at least `headroom` clear over the deck at its front - shallower if it must.
+    drop: 0.2,
+    headroom: 3.0,
+    // How far its roof reaches past the posts and its ends, and how thick it is.
+    overhang: 0.5,
+    thickness: 0.22,
+    // Its posts' width either way, the beam along their tops, and the step down from its deck.
+    post: 0.35,
+    beam: 0.35,
+    step: 0.7,
+    // What it is painted as - the house's parts.
+    parts: { deck: "boards", post: "timber", covering: "roof", underside: "timber" },
+  },
+}

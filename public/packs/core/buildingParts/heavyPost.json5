@@ -1,0 +1,16 @@
+// A heavy squared post for an open shed: a thick timber on a flat timber pad, under a short bolster
+// that spreads the beam it carries.
+{
+  name: "Heavy Post",
+  type: "support",
+  support: {
+    // The post's width, either way.
+    width: 0.6,
+    // A pad at its foot, and the bolster at its head: how tall, and how far each reaches past
+    // the post every way.
+    base: { height: 0.25, reach: 0.15 },
+    capital: { height: 0.35, reach: 0.2 },
+    // What its pieces are painted as - the house's parts.
+    parts: { shaft: "timber", ends: "timber" },
+  },
+}

@@ -3,6 +3,7 @@ import type {
   ChimneySpec,
   FramedSpec,
   HousePart,
+  LogsSpec,
   Paint,
   PartChoice,
   StoneFrameSpec,
@@ -12,8 +13,10 @@ import type {
   TimberFrameSpec,
   WallSide,
 } from "./buildingTypes";
-import { FOUNDATION_DEPTH, roll, type Vec3 } from "./buildingGeometry";
+import { FOUNDATION_DEPTH, roll, type ModelBuilder, type Vec3 } from "./buildingGeometry";
+import { mulberry32 } from "../rng";
 import { buildPitchedRoof, planPitchedRoof, type RoofInput, type RoofPlan } from "./pitchedRoof";
+import { buildLeanToRoof, planLeanToRoof } from "./leanToRoof";
 
 /**
  * Building parts: the pieces a building generator leaves to a generator of their own (see
@@ -79,7 +82,10 @@ export function partSpan(part: BuildingPartDef): number {
       return part.chimney!.span;
     case "timberFrame":
     case "stoneFrame":
+    case "logs":
     case "pitched":
+    case "leanTo":
+    case "porch":
     case "terrace":
     case "support":
       return 1;
@@ -106,7 +112,10 @@ export function buildWallPart(part: BuildingPartDef, slot: WallSlot, paints: Par
       return buildChimney(part.chimney!, slot, paints, rng);
     case "timberFrame":
     case "stoneFrame":
+    case "logs":
     case "pitched":
+    case "leanTo":
+    case "porch":
     case "terrace":
     case "support":
       return null;
@@ -249,6 +258,14 @@ export interface FramingCorner {
   topStorey: boolean;
   /** Lays a box at the corner: `u0` to `u1`, `v0` to `v1`, `y0` to `y1` up. No bottom. */
   box(u0: number, u1: number, v0: number, v1: number, y0: number, y1: number, paint: Paint): void;
+  /**
+   * Lays a beam running on past the corner along its wall (`along`: the wall along u, or along v),
+   * `reach` out past it, `depth` back from the wall's face, from `y0` to `y1`: its face and back in
+   * the wall's plane and painted `face` - textured as the wall is, so the wall runs on into it - its
+   * top and underside `grain`, its cut end `end` - its rings round `heart`, how far off the end's
+   * middle the tree's heart was (back from the wall, and up).
+   */
+  beam(along: "u" | "v", reach: number, depth: number, y0: number, y1: number, face: Paint, grain: Paint, end: Paint, heart: [number, number]): void;
 }
 
 /** The house's shape as its framing is handed it: every wall and every corner where two meet, each
@@ -272,6 +289,10 @@ export interface FramingPlan {
   cornerReach: number;
   postHalf: number;
   top: number;
+  /** How far a log framing's ends stand out past the corners, rolled per house - and a seed for
+   *  what else differs from one of its pieces to the next. */
+  logReach?: number;
+  seed?: number;
 }
 
 export function planFraming(part: BuildingPartDef | null, rng: () => number): FramingPlan {
@@ -283,6 +304,11 @@ export function planFraming(part: BuildingPartDef | null, rng: () => number): Fr
     case "stoneFrame": {
       const spec = part.stoneFrame!;
       return { cornerReach: spec.quoins.long, postHalf: spec.pilaster.width / 2, top: spec.cornice.height };
+    }
+    case "logs": {
+      // Its logs stand out past the corners; along the walls nothing of it but their half-round ends.
+      const spec = part.logs!;
+      return { cornerReach: spec.course / 2, postHalf: 0, top: 0, logReach: roll(spec.reach, rng), seed: Math.floor(rng() * 0x7fffffff) };
     }
     default:
       return { cornerReach: 0, postHalf: 0, top: 0 };
@@ -297,6 +323,9 @@ export function buildFraming(part: BuildingPartDef | null, plan: FramingPlan, in
       break;
     case "stoneFrame":
       buildStoneFrame(part.stoneFrame!, plan, input, paints);
+      break;
+    case "logs":
+      buildLogs(part.logs!, plan, input, paints);
       break;
   }
 }
@@ -337,6 +366,68 @@ function buildTimberFrame(spec: TimberFrameSpec, plan: FramingPlan, input: Frami
     }
     // The king post, from the top beam to the ridge.
     if (wall.gable) wall.box(wall.gable.at - postHalf, wall.gable.at + postHalf, wall.top, wall.gable.ridge, SET_IN, spec.post.out, timber);
+  }
+}
+
+/**
+ * A log corner's beam, in a corner's own frame: u and v run along its two walls toward the house,
+ * `point` takes (u, v, y) to the model and `signs` are u's and v's directions there along x and z.
+ * Along u: from the corner (u 0) out to -reach, from the wall's face (v 0) back to `depth`.
+ */
+export function buildBeam(
+  b: ModelBuilder,
+  point: (u: number, v: number, y: number) => Vec3,
+  signs: [number, number],
+  along: "u" | "v",
+  reach: number,
+  depth: number,
+  y0: number,
+  y1: number,
+  face: Paint,
+  grain: Paint,
+  end: Paint,
+  heart: [number, number],
+): void {
+  // In the beam's own terms: a (along it, 0 at the corner, out to -reach) and c (back from the
+  // wall's face, 0 to depth).
+  const at = (a: number, c: number, y: number): Vec3 => (along === "u" ? point(a, c, y) : point(c, a, y));
+  const dir = (da: number, dc: number): Vec3 => {
+    const [du, dv] = along === "u" ? [da, dc] : [dc, da];
+    return [signs[0] * du, 0, signs[1] * dv];
+  };
+  const [aOut, cBack] = [-reach, depth];
+  // Its face and its back, in planes square to the wall's - the face in the wall's own: the wall's
+  // paint, its texture laid as the wall's is (from the world's origin), so the courses run on.
+  b.face([at(0, 0, y0), at(aOut, 0, y0), at(aOut, 0, y1), at(0, 0, y1)], dir(0, -1), face);
+  b.face([at(0, cBack, y0), at(aOut, cBack, y0), at(aOut, cBack, y1), at(0, cBack, y1)], dir(0, 1), face);
+  // Top and underside, the grain along it.
+  b.face([at(0, 0, y1), at(aOut, 0, y1), at(aOut, cBack, y1), at(0, cBack, y1)], [0, 1, 0], grain, dir(1, 0));
+  b.face([at(0, 0, y0), at(aOut, 0, y0), at(aOut, cBack, y0), at(0, cBack, y0)], [0, -1, 0], grain, dir(1, 0));
+  // Its cut end, the rings round the heart of the tree it was cut from.
+  b.face([at(aOut, 0, y0), at(aOut, cBack, y0), at(aOut, cBack, y1), at(aOut, 0, y1)], dir(-1, 0), end, undefined, at(aOut, cBack / 2 + heart[0], (y0 + y1) / 2 + heart[1]));
+}
+
+/**
+ * Log corners: at every outer corner, course by course, the course running on past it as a square
+ * beam - one wall's on one course, the other's on the next, as a log house's corner is notched - on
+ * the course lines of the walls' log material (every `course` up from 0), from the storey's floor
+ * to its top. Only the part past the corner is built: the wall itself is the rest of it.
+ */
+function buildLogs(spec: LogsSpec, plan: FramingPlan, input: FramingInput, paints: PartPaints): void {
+  const reach = plan.logReach ?? spec.reach[0];
+  const face = paints[spec.parts.face];
+  const grain = paints[spec.parts.grain];
+  const end = paints[spec.parts.end];
+  const rng = mulberry32(plan.seed ?? 0);
+  for (const corner of input.corners) {
+    if (corner.kind !== "outer") continue;
+    for (let k = Math.ceil(corner.floor / spec.course - 1e-6); (k + 1) * spec.course <= corner.top + 1e-6; k++) {
+      // Where the tree's heart was, off the end's middle: anywhere within endOffset of it.
+      const angle = rng() * Math.PI * 2;
+      const off = Math.sqrt(rng()) * spec.endOffset;
+      const heart: [number, number] = [Math.cos(angle) * off, Math.sin(angle) * off];
+      corner.beam(k % 2 === 0 ? "u" : "v", reach, spec.depth, k * spec.course, (k + 1) * spec.course, face, grain, end, heart);
+    }
   }
 }
 
@@ -402,7 +493,7 @@ function buildStoneFrame(spec: StoneFrameSpec, _plan: FramingPlan, input: Framin
 /** Whether a part is one a whole house places by itself - its framing, its roof, a terrace, a
  *  support - not into a wall slot. */
 export function isWholeHousePart(part: BuildingPartDef): boolean {
-  return ["timberFrame", "stoneFrame", "pitched", "terrace", "support"].includes(part.generator);
+  return ["timberFrame", "stoneFrame", "logs", "pitched", "leanTo", "porch", "terrace", "support"].includes(part.generator);
 }
 
 /** Whether a part is a door - a framed part standing on the floor - rather than a window. */
@@ -412,7 +503,7 @@ export function isDoor(part: BuildingPartDef): boolean {
 
 /** Whether a part tops a storey as a roof does, rather than as a terrace. */
 export function isRoof(part: BuildingPartDef): boolean {
-  return part.generator === "pitched";
+  return part.generator === "pitched" || part.generator === "leanTo";
 }
 
 /** A box in the house's own space, from (x0, y0, z0) to (x1, y1, z1). No bottom. */
@@ -530,6 +621,8 @@ export function planRoof(part: BuildingPartDef, rng: () => number): RoofPlan {
   switch (part.generator) {
     case "pitched":
       return planPitchedRoof(part.pitched!, rng);
+    case "leanTo":
+      return planLeanToRoof(part.leanTo!, rng);
     default:
       throw new Error(`building part "${part.id}" is not a roof`);
   }
@@ -540,6 +633,9 @@ export function buildRoof(part: BuildingPartDef, plan: RoofPlan, input: RoofInpu
   switch (part.generator) {
     case "pitched":
       buildPitchedRoof(part.pitched!, plan, input, paints);
+      break;
+    case "leanTo":
+      buildLeanToRoof(part.leanTo!, plan, input, paints);
       break;
   }
 }

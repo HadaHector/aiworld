@@ -1,0 +1,54 @@
+// Deck boards: narrow sawn boards laid side by side, their butt joints staggered, each its own
+// weathered shade, the grain along them, with hairline gaps between - a porch's deck, a floor.
+// The boards run along the texture's u: a surface laid with them turns its v across them.
+{
+  name: "Deck Boards",
+  // Along the boards and across them: twelve boards in 3 m, each 0.25 m wide - twice life size -
+  // and 4 m long, every other row's joints halfway along.
+  size: [8, 3],
+  shine: 0.05,
+  texture: {
+    bumpStrength: 0.8,
+    pipeline: {
+      noises: [
+        { name: "boards", type: "bricks", tileCycles: [2, 12], stagger: 0.5, amplitude: 1, mode: "edge" },
+        { name: "boardId", type: "bricks", tileCycles: [2, 12], stagger: 0.5, amplitude: 1, mode: "cell" },
+        { name: "grain", type: "fbm", octaves: 3, tileCycles: 8, amplitude: 1, persistence: 0.5, lacunarity: 2.2, stretch: [16, 1] },
+        { name: "weather", type: "fbm", octaves: 2, tileCycles: 3, amplitude: 1, persistence: 0.5, lacunarity: 2 },
+      ],
+      steps: [
+        { output: "joint", op: "sample", noise: "boards" },
+        { output: "id", op: "sample", noise: "boardId" },
+        { output: "grainRaw", op: "sample", noise: "grain" },
+        { output: "weatherRaw", op: "sample", noise: "weather" },
+        // A hairline between boards: only the last few hundredths of a board's width.
+        { output: "gap", op: "mask", input: "joint", at: 0.004, off: 0.02 },
+        {
+          output: "boardTone",
+          op: "colorRamp",
+          input: "id",
+          stops: [
+            { at: 0.0, color: [0.5, 0.43, 0.35] },
+            { at: 0.4, color: [0.58, 0.5, 0.41] },
+            { at: 0.7, color: [0.54, 0.48, 0.42] },
+            { at: 1.0, color: [0.46, 0.4, 0.33] },
+          ],
+        },
+        { output: "grainShade", op: "remap", input: "grainRaw", inMin: -1, inMax: 1, outMin: 0.88, outMax: 1.1 },
+        { output: "weatherShade", op: "remap", input: "weatherRaw", inMin: -1, inMax: 1, outMin: 0.9, outMax: 1.06 },
+        { output: "shade", op: "multiply", a: "grainShade", b: "weatherShade" },
+        { output: "wood", op: "multiply", a: "boardTone", b: "shade" },
+        { output: "gapColor", op: "color", value: [0.2, 0.17, 0.14] },
+        { output: "diffuse", op: "mix", a: "wood", b: "gapColor", t: "gap" },
+        { output: "roughness", op: "constant", value: 0.85 },
+        // Flat boards, their edges just eased, the grain faintly raised.
+        { output: "edgeRaw", op: "remap", input: "joint", inMin: 0.004, inMax: 0.04, outMin: 0, outMax: 1 },
+        { output: "edge", op: "clamp", input: "edgeRaw", min: 0, max: 1 },
+        { output: "grainBump", op: "scale", input: "grainRaw", factor: 0.06 },
+        { output: "heightA", op: "scale", input: "edge", factor: 0.5 },
+        { output: "height", op: "add", a: "heightA", b: "grainBump" },
+      ],
+      outputs: { diffuse: "diffuse", roughness: "roughness", height: "height" },
+    },
+  },
+}

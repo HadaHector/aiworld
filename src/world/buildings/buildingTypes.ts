@@ -183,11 +183,57 @@ export interface RoomTypeDef {
   windows: (typeof WINDOW_INSIDES)[number];
 }
 
-export const HOUSE_PLAN_GENERATORS = ["house", "tower"] as const;
+export const HOUSE_PLAN_GENERATORS = ["house", "tower", "cabin"] as const;
 export type HousePlanGenerator = (typeof HOUSE_PLAN_GENERATORS)[number];
 
 /** A house's plan generator, and its settings - see housePlans.ts. */
-export type HousePlanSpec = { type: "house"; house: HousePlanSettings } | { type: "tower"; tower: TowerPlanSettings };
+export type HousePlanSpec =
+  | { type: "house"; house: HousePlanSettings }
+  | { type: "tower"; tower: TowerPlanSettings }
+  | { type: "cabin"; cabin: CabinPlanSettings };
+
+/** The walls of a cabin's main block a lean-to may stand against. */
+export const LEAN_TO_WALLS = ["back", "side"] as const;
+
+/**
+ * A lean-to a cabin may have: a wing one storey tall against one of `walls` of its main block (a
+ * side: either end), made with `chance`, reaching `depth` tiles out from it, along the whole wall
+ * (`length` null) or `length` tiles of it, under a lean-to roof (`roof`, a leanTo part) rising to
+ * the main block's wall. Each wall takes one at most.
+ */
+export interface LeanToSpec {
+  walls: (typeof LEAN_TO_WALLS)[number][];
+  chance: number;
+  depth: [number, number];
+  length: [number, number] | null;
+  roof: BuildingPartDef;
+}
+
+/** The walls of a cabin's main block a porch may stand along. */
+export const PORCH_WALLS = ["front", "back", "side"] as const;
+
+/** A porch a cabin may have: along one of `walls` of its main block's ground storey (a side: either
+ *  end), made with `chance`, along the whole wall (`length` null) or `length` tiles of it - a porch
+ *  part (`part`). A wall takes a porch or a lean-to, not both. */
+export interface PorchPlanSpec {
+  walls: (typeof PORCH_WALLS)[number][];
+  chance: number;
+  length: [number, number] | null;
+  part: BuildingPartDef;
+}
+
+/** The `cabin` plan: a long main block, its storeys over the ground one a loft under its roof, and
+ *  lean-tos one storey tall against it - only on a cabin of two storeys or more, the wall a lean-to
+ *  leans on being the main block's above its own - and porches along it. */
+export interface CabinPlanSettings {
+  leanTos: LeanToSpec[];
+  porches: PorchPlanSpec[];
+  /** An open shed instead (null: walled): the main block's storeys standing on posts (`post`, a
+   *  support part) along its outer edges, spread evenly about every `postEvery` bays, open on every
+   *  side, but for `closedBays` bays at one end, walled in - the shed's way in and its door - with no
+   *  lean-tos or porches. */
+  open: { closedBays: [number, number]; post: BuildingPartDef; postEvery: number } | null;
+}
 
 /** The `house` plan: a main block, maybe with a wing out of the back (a T or an L) and one out of a
  *  side, a front arcade and a top storey stood back. */
@@ -227,7 +273,10 @@ export interface TowerPlanSettings {
   roof: BuildingPartDef;
 }
 
-export const HOUSE_PARTS = ["walls", "timber", "stone", "roof", "plinth", "door", "glass"] as const;
+/** The parts a house is painted in. `endGrain` (a beam's cut end) and `boards` (a porch's deck) may
+ *  be left out of a house's `parts`, and are then its timber. */
+export const HOUSE_PARTS = ["walls", "timber", "stone", "roof", "plinth", "door", "glass", "endGrain", "boards"] as const;
+export const OPTIONAL_HOUSE_PARTS: readonly HousePart[] = ["endGrain", "boards"];
 export type HousePart = (typeof HOUSE_PARTS)[number];
 
 /** Which walls of a house: the front (where the door is), the back, and the sides. */
@@ -276,7 +325,7 @@ export interface PartChoice {
  * A part takes no materials of its own: each of its pieces is painted as one of the building's
  * parts (its `parts`: timber, glass, ...), so a house's windows, posts and door share one timber.
  */
-export const BUILDING_PART_GENERATORS = ["framed", "chimney", "timberFrame", "stoneFrame", "pitched", "terrace", "support"] as const;
+export const BUILDING_PART_GENERATORS = ["framed", "chimney", "timberFrame", "stoneFrame", "logs", "pitched", "leanTo", "porch", "terrace", "support"] as const;
 export type BuildingPartGenerator = (typeof BUILDING_PART_GENERATORS)[number];
 
 /**
@@ -367,6 +416,30 @@ export interface StoneFrameSpec {
 }
 
 /**
+ * A house's walls built of hewn logs: at every outer corner each course of logs runs on past it as
+ * a square beam, one wall's and the other's turn and turn about - the corner of a log house. The
+ * walls' faces are flat, in a log wall material whose courses this must match (`course`): a beam is
+ * one course tall, on the course's own lines, and its face is the wall's own paint in the wall's
+ * plane, so the wall's logs run on into it unbroken. Lengths are metres.
+ */
+export interface LogsSpec {
+  /** One course: a log's height - the height of a course of the walls' material. Courses lie on
+   *  the model's own height, every `course` from 0, as the material's rows do. */
+  course: number;
+  /** How far a beam stands out past the corner - rolled per house - and how thick it is, back from
+   *  the wall's face. */
+  reach: [number, number];
+  depth: number;
+  /** How far off the middle of a beam's cut end the heart of the tree it was cut from may be - each
+   *  its own, so no two ends show the same rings. Kept within the trunk the end grain material draws,
+   *  so an end never reaches the bark. */
+  endOffset: number;
+  /** Which of the building's parts its faces (the walls', to run on from them), its top and
+   *  underside (the grain along it), and its cut end are painted as. */
+  parts: { face: HousePart; grain: HousePart; end: HousePart };
+}
+
+/**
  * A pitched roof over every block of a house: gables or hips at its free ends (one shape picked per
  * house), every block at one pitch and eave height, so where two roofs meet their slopes cut each
  * other along clean valleys. Thick slabs, with ridge tiles along the ridges and hips, sagging like an
@@ -395,6 +468,45 @@ export interface PitchedRoofSpec {
   /** Which of the building's parts the covering, the underside and edges, the ridge tiles and the
    *  gables' wall are painted as. */
   parts: { covering: HousePart; underside: HousePart; ridge: HousePart; gable: HousePart };
+}
+
+/**
+ * A lean-to roof: one slope over a lower block, from its outer wall up to the taller wall it leans
+ * against - a slab, its covering on top and boards under it - and at its free ends a wall filling
+ * the space under the slope. Lengths are metres; its pitch (degrees) is rolled per house, and held
+ * low enough that it meets the wall it leans on below that wall's top.
+ */
+export interface LeanToRoofSpec {
+  pitch: [number, number];
+  /** How far it reaches past its outer wall and its free ends, and how thick its slab is. */
+  overhang: number;
+  thickness: number;
+  /** Which of the building's parts its covering, its underside and edges, and the walls under its
+   *  ends are painted as. */
+  parts: { covering: HousePart; underside: HousePart; gable: HousePart };
+}
+
+/**
+ * A porch along a wall: a plank deck at the floor's level and a step down from it, a post at every bay
+ * along its front with a beam along their tops, and a lean-to roof from the wall - `drop` under the
+ * storey's top - out over the posts, open at its ends. Lengths are metres; its depth and its pitch
+ * (degrees) are rolled per house, the pitch held shallow enough to leave `headroom` under its front.
+ */
+export interface PorchSpec {
+  depth: [number, number];
+  pitch: [number, number];
+  drop: number;
+  headroom: number;
+  /** How far its roof reaches past the posts and the ends, and how thick it is. */
+  overhang: number;
+  thickness: number;
+  /** Its posts' width either way, the beam along their tops' height, and its step's depth. */
+  post: number;
+  beam: number;
+  step: number;
+  /** Which of the building's parts its deck and step, its posts and beam, its roof's covering, and
+   *  its roof's underside and edges are painted as. */
+  parts: { deck: HousePart; post: HousePart; covering: HousePart; underside: HousePart };
 }
 
 /**
@@ -435,7 +547,10 @@ export interface BuildingPartDef {
   chimney: ChimneySpec | null;
   timberFrame: TimberFrameSpec | null;
   stoneFrame: StoneFrameSpec | null;
+  logs: LogsSpec | null;
   pitched: PitchedRoofSpec | null;
+  leanTo: LeanToRoofSpec | null;
+  porch: PorchSpec | null;
   terrace: TerraceSpec | null;
   support: SupportSpec | null;
 }

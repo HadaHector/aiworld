@@ -53,7 +53,13 @@ import {
   BUILDING_GENERATORS,
   BUILDING_PART_GENERATORS,
   HOUSE_PARTS,
+  OPTIONAL_HOUSE_PARTS,
   HOUSE_PLAN_GENERATORS,
+  LEAN_TO_WALLS,
+  PORCH_WALLS,
+  type LeanToSpec,
+  type PorchPlanSpec,
+  type CabinPlanSettings,
   INTERIOR_GENERATORS,
   ROOM_LEVELS,
   STAIR_STYLES,
@@ -688,6 +694,62 @@ function readBuilding(id: string, obj: RawObject, reader: Reader, partById: Map<
           tower: { width: tilesIn(settings, "width", where), ends, storeys: countIn(settings, "storeys", where, 1, [1, 1]), roof: roof as BuildingPartDef },
         };
       }
+      if (type === "cabin") {
+        reader.onlyKeys(settings, where, ["leanTos", "porches", "open"]);
+        let open: CabinPlanSettings["open"] = null;
+        if (settings.open !== undefined && settings.open !== null) {
+          const oat = `${where}.open`;
+          const oraw = reader.object(settings.open, oat);
+          reader.onlyKeys(oraw, oat, ["closedBays", "post", "postEvery"]);
+          const post = partNamed(oraw, oat, "post");
+          if (post && post.generator !== "support") reader.fail(`${oat}.post`, `building part "${post.id}" is not a support`);
+          const closedBays = countIn(oraw, "closedBays", oat, 1, [1, 1]);
+          const postEvery = reader.optionalNumber(oraw, "postEvery", oat, 1, { min: 1, integer: true });
+          if (post) open = { closedBays, post, postEvery };
+        }
+        const porches = reader.optionalArray(settings, "porches", where).flatMap((rawPorch, i): PorchPlanSpec[] => {
+          const pat = `${where}.porches[${i}]`;
+          const entry = reader.object(rawPorch, pat);
+          reader.onlyKeys(entry, pat, ["walls", "chance", "length", "part"]);
+          const walls = reader.stringList(entry, "walls", pat).filter((wall): wall is PorchPlanSpec["walls"][number] => {
+            if ((PORCH_WALLS as readonly string[]).includes(wall)) return true;
+            reader.fail(`${pat}.walls`, `"${wall}" is not a wall a porch stands along (known: ${PORCH_WALLS.join(", ")})`);
+            return false;
+          });
+          if (walls.length === 0) reader.fail(`${pat}.walls`, "needs at least one wall");
+          const part = partNamed(entry, pat, "part");
+          if (part && part.generator !== "porch") reader.fail(`${pat}.part`, `building part "${part.id}" is not a porch`);
+          if (!part) return [];
+          return [{
+            walls,
+            chance: reader.optionalNumber(entry, "chance", pat, 1, { min: 0, max: 1 }),
+            length: entry.length === undefined || entry.length === null ? null : tilesIn(entry, "length", pat),
+            part,
+          }];
+        });
+        const leanTos = reader.optionalArray(settings, "leanTos", where).flatMap((rawLeanTo, i): LeanToSpec[] => {
+          const lat = `${where}.leanTos[${i}]`;
+          const entry = reader.object(rawLeanTo, lat);
+          reader.onlyKeys(entry, lat, ["walls", "chance", "depth", "length", "roof"]);
+          const walls = reader.stringList(entry, "walls", lat).filter((wall): wall is LeanToSpec["walls"][number] => {
+            if ((LEAN_TO_WALLS as readonly string[]).includes(wall)) return true;
+            reader.fail(`${lat}.walls`, `"${wall}" is not a wall a lean-to stands against (known: ${LEAN_TO_WALLS.join(", ")})`);
+            return false;
+          });
+          if (walls.length === 0) reader.fail(`${lat}.walls`, "needs at least one wall");
+          const roof = partNamed(entry, lat, "roof");
+          if (roof && roof.generator !== "leanTo") reader.fail(`${lat}.roof`, `building part "${roof.id}" is not a lean-to roof`);
+          if (!roof) return [];
+          return [{
+            walls,
+            chance: reader.optionalNumber(entry, "chance", lat, 1, { min: 0, max: 1 }),
+            depth: tilesIn(entry, "depth", lat),
+            length: entry.length === undefined || entry.length === null ? null : tilesIn(entry, "length", lat),
+            roof,
+          }];
+        });
+        return { type, cabin: { leanTos, porches, open } };
+      }
       reader.onlyKeys(settings, where, ["backWing", "sideWing", "wingLength", "wingWidth", "wingStoreys", "lowTops", "setback", "arcade"]);
       const lowTops = settings.lowTops === undefined ? [] : choices("lowTops", settings, where);
       for (const choice of lowTops) if (!isTop(choice.part)) reader.fail(`${where}.lowTops`, `building part "${choice.part.id}" is not a roof or a terrace`);
@@ -749,6 +811,11 @@ function readBuilding(id: string, obj: RawObject, reader: Reader, partById: Map<
     const parts = {} as HouseSpec["parts"];
     for (const part of HOUSE_PARTS) {
       const at = `house.parts.${part}`;
+      // A part a house may leave out is its timber.
+      if (OPTIONAL_HOUSE_PARTS.includes(part) && partsRaw[part] === undefined) {
+        parts[part] = parts.timber;
+        continue;
+      }
       const entry = reader.object(partsRaw[part], at);
       reader.onlyKeys(entry, at, ["material", "tints"]);
       parts[part] = { material: reader.string(entry, "material", at), tints: colorsIn(entry, at, "tints") };
@@ -1033,6 +1100,54 @@ function readBuildingPart(id: string, obj: RawObject, reader: Reader): BuildingP
       parts: { stone: role("stone", `${path}.parts`, parts) },
     };
   }
+  let porch: BuildingPartDef["porch"] = null;
+  if (generator === "porch") {
+    reader.onlyKeys(block, path, ["depth", "pitch", "drop", "headroom", "overhang", "thickness", "post", "beam", "step", "parts"]);
+    const parts = reader.object(block.parts, `${path}.parts`);
+    reader.onlyKeys(parts, `${path}.parts`, ["deck", "post", "covering", "underside"]);
+    porch = {
+      depth: reader.range(block, "depth", path, { allowEqual: true }),
+      pitch: reader.range(block, "pitch", path, { allowEqual: true }),
+      drop: reader.number(block, "drop", path, { min: 0 }),
+      headroom: reader.number(block, "headroom", path, { min: 1 }),
+      overhang: reader.number(block, "overhang", path, { min: 0 }),
+      thickness: reader.number(block, "thickness", path, { min: 0.02 }),
+      post: reader.number(block, "post", path, { min: 0.05 }),
+      beam: reader.number(block, "beam", path, { min: 0.05 }),
+      step: reader.number(block, "step", path, { min: 0.1 }),
+      parts: {
+        deck: role("deck", `${path}.parts`, parts),
+        post: role("post", `${path}.parts`, parts),
+        covering: role("covering", `${path}.parts`, parts),
+        underside: role("underside", `${path}.parts`, parts),
+      },
+    };
+  }
+  let leanTo: BuildingPartDef["leanTo"] = null;
+  if (generator === "leanTo") {
+    reader.onlyKeys(block, path, ["pitch", "overhang", "thickness", "parts"]);
+    const parts = reader.object(block.parts, `${path}.parts`);
+    reader.onlyKeys(parts, `${path}.parts`, ["covering", "underside", "gable"]);
+    leanTo = {
+      pitch: reader.range(block, "pitch", path, { allowEqual: true }),
+      overhang: reader.number(block, "overhang", path, { min: 0 }),
+      thickness: reader.number(block, "thickness", path, { min: 0.02 }),
+      parts: { covering: role("covering", `${path}.parts`, parts), underside: role("underside", `${path}.parts`, parts), gable: role("gable", `${path}.parts`, parts) },
+    };
+  }
+  let logs: BuildingPartDef["logs"] = null;
+  if (generator === "logs") {
+    reader.onlyKeys(block, path, ["course", "reach", "depth", "endOffset", "parts"]);
+    const parts = reader.object(block.parts, `${path}.parts`);
+    reader.onlyKeys(parts, `${path}.parts`, ["face", "grain", "end"]);
+    logs = {
+      course: reader.number(block, "course", path, { min: 0.1 }),
+      reach: reader.range(block, "reach", path, { allowEqual: true }),
+      depth: reader.number(block, "depth", path, { min: 0.05 }),
+      endOffset: reader.number(block, "endOffset", path, { min: 0 }),
+      parts: { face: role("face", `${path}.parts`, parts), grain: role("grain", `${path}.parts`, parts), end: role("end", `${path}.parts`, parts) },
+    };
+  }
   let chimney: BuildingPartDef["chimney"] = null;
   if (generator === "chimney") {
     reader.onlyKeys(block, path, ["span", "width", "depth", "shoulder", "stackWidth", "stackDepth", "angle", "rise", "foundation", "cap", "pots", "parts"]);
@@ -1069,7 +1184,7 @@ function readBuildingPart(id: string, obj: RawObject, reader: Reader): BuildingP
       parts: { body: role("body", `${path}.parts`, parts), cap: role("cap", `${path}.parts`, parts), pots: role("pots", `${path}.parts`, parts) },
     };
   }
-  return { id, name: reader.string(obj, "name", ""), generator, framed, chimney, timberFrame, stoneFrame, pitched, terrace, support };
+  return { id, name: reader.string(obj, "name", ""), generator, framed, chimney, timberFrame, stoneFrame, logs, pitched, leanTo, porch, terrace, support };
 }
 
 /** A features/ file - see FeatureKindDef. */

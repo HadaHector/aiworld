@@ -60,9 +60,10 @@ export class ModelBuilder {
     return slot;
   }
 
-  /** A flat polygon (corners in order, convex) with the given normal. */
-  face(corners: Vec3[], normal: Vec3, paint: Paint, grain?: Vec3): void {
-    this.surface(corners, corners.map(() => normal), normal, paint, grain);
+  /** A flat polygon (corners in order, convex) with the given normal. Its texture is laid from
+   *  `origin` (the world's origin, if none) - a beam's cut end centred on the beam. */
+  face(corners: Vec3[], normal: Vec3, paint: Paint, grain?: Vec3, origin?: Vec3): void {
+    this.surface(corners, corners.map(() => normal), normal, paint, grain, origin);
   }
 
   /**
@@ -70,7 +71,7 @@ export class ModelBuilder {
    * but textured in the frame of `frame` (the normal of the flat surface it is bent from), so the
    * cells of one surface share one frame and its texture runs across them unbroken.
    */
-  surface(corners: Vec3[], normals: Vec3[], frame: Vec3, paint: Paint, grain?: Vec3): void {
+  surface(corners: Vec3[], normals: Vec3[], frame: Vec3, paint: Paint, grain?: Vec3, origin?: Vec3): void {
     if (this.measure) {
       for (const [x, y, z] of corners) {
         this.minX = Math.min(this.minX, x);
@@ -94,7 +95,8 @@ export class ModelBuilder {
       this.positions.push(x, y, z);
       this.normals.push(...normals[i]);
       this.tangents.push(...u);
-      this.uvs.push(dot(corner, u), dot(corner, v));
+      const from: Vec3 = origin ? [x - origin[0], y - origin[1], z - origin[2]] : corner;
+      this.uvs.push(dot(from, u), dot(from, v));
       this.colors.push(paint.tint[0], paint.tint[1], paint.tint[2], 1);
       this.materialSlots.push(slot);
       this.minX = Math.min(this.minX, x);

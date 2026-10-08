@@ -1,0 +1,74 @@
+// A sawn trunk's end: its growth rings round its heart, thin and dark against the pale wood between
+// them - the heartwood warm in the middle, the sapwood paler further out - and a rim of bark at the
+// trunk's edge. The heart is the texture's corner, which a cut end lays at its middle (or near it), and
+// the trunk is 2.8 m across: a beam or a log cut from inside it shows only rings, and a whole trunk's
+// end up to that size its bark too.
+{
+  name: "End Grain",
+  // The trunk's radius, from its heart at the corner, is 0.44 of this: 1.4 m.
+  size: [3.2, 3.2],
+  shine: 0.05,
+  texture: {
+    bumpStrength: 0.6,
+    pipeline: {
+      noises: [
+        // Where in the tile a point is, 0-1 each way.
+        { name: "across", type: "bricks", tileCycles: [1, 1], stagger: 0, amplitude: 1, mode: "u" },
+        { name: "up", type: "bricks", tileCycles: [1, 1], stagger: 0, amplitude: 1, mode: "v" },
+        // The rings a little off round, as a tree grows.
+        { name: "wobble", type: "fbm", octaves: 2, tileCycles: 5, amplitude: 1, persistence: 0.5, lacunarity: 2 },
+        // Each ring its own width: some years grew more than others.
+        { name: "years", type: "fbm", octaves: 1, tileCycles: 3, amplitude: 1, persistence: 0.5, lacunarity: 2 },
+        { name: "fibre", type: "fbm", octaves: 2, tileCycles: 80, amplitude: 1, persistence: 0.5, lacunarity: 2 },
+      ],
+      steps: [
+        // Distance from the tile's corner, wrapping round: from the trunk's heart.
+        { output: "u", op: "sample", noise: "across" },
+        { output: "uBack", op: "invert", input: "u" },
+        { output: "du", op: "min", a: "u", b: "uBack" },
+        { output: "v", op: "sample", noise: "up" },
+        { output: "vBack", op: "invert", input: "v" },
+        { output: "dv", op: "min", a: "v", b: "vBack" },
+        { output: "du2", op: "power", input: "du", exponent: 2 },
+        { output: "dv2", op: "power", input: "dv", exponent: 2 },
+        { output: "r2", op: "add", a: "du2", b: "dv2" },
+        { output: "rTrue", op: "power", input: "r2", exponent: 0.5 },
+        { output: "wobbleRaw", op: "sample", noise: "wobble" },
+        { output: "wobbleSmall", op: "scale", input: "wobbleRaw", factor: 0.004 },
+        { output: "r", op: "add", a: "rTrue", b: "wobbleSmall" },
+        // The rings: about 6 cm apart, a little more or less, each a thin dark line (the late wood).
+        { output: "yearsRaw", op: "sample", noise: "years" },
+        { output: "yearShift", op: "scale", input: "yearsRaw", factor: 0.01 },
+        { output: "rYears", op: "add", a: "r", b: "yearShift" },
+        { output: "ringWave", op: "sin", input: "rYears", cycles: 52 },
+        { output: "ring", op: "mask", input: "ringWave", at: 0.96, off: 0.7 },
+        // Heart to bark: a small dark pith, warm heartwood, pale sapwood, a dark line under the bark,
+        // and the bark itself past 0.44.
+        {
+          output: "tone",
+          op: "colorRamp",
+          input: "r",
+          stops: [
+            { at: 0.0, color: [0.5, 0.36, 0.24] },
+            { at: 0.012, color: [0.7, 0.53, 0.35] },
+            { at: 0.24, color: [0.74, 0.58, 0.39] },
+            { at: 0.3, color: [0.84, 0.72, 0.53] },
+            { at: 0.425, color: [0.82, 0.7, 0.51] },
+            { at: 0.435, color: [0.5, 0.4, 0.3] },
+            { at: 0.445, color: [0.3, 0.25, 0.2] },
+            { at: 0.71, color: [0.27, 0.22, 0.18] },
+          ],
+        },
+        { output: "ringShade", op: "remap", input: "ring", inMin: 0, inMax: 1, outMin: 1, outMax: 0.78 },
+        { output: "fibreRaw", op: "sample", noise: "fibre" },
+        { output: "fibreShade", op: "remap", input: "fibreRaw", inMin: -1, inMax: 1, outMin: 0.97, outMax: 1.03 },
+        { output: "shade", op: "multiply", a: "ringShade", b: "fibreShade" },
+        { output: "diffuse", op: "multiply", a: "tone", b: "shade" },
+        { output: "roughness", op: "constant", value: 0.82 },
+        // Sawn flat: the rings barely stand out.
+        { output: "height", op: "scale", input: "ring", factor: 0.05 },
+      ],
+      outputs: { diffuse: "diffuse", roughness: "roughness", height: "height" },
+    },
+  },
+}
