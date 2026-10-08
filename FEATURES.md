@@ -592,6 +592,14 @@ stalls).
    type's `stalls`; a request's `through` keeps a room running front to back). The saw shed's tool
    room: the whole walled end, its one door opening onto the shed's floor (a door goes first in a
    wall onto an open part of the house).
+   **Done:** all of them, and swapped into the logging camp - a bunkhouse and a saw shed always, a
+   cookhouse, an ox stable and a tool shed by chance, round a yard of 18-24 m. The buildings being
+   two or three times the stand-ins' size, the camp's circle grew (to 55-65 m), and its site was
+   loosened to keep as many camps: a grade up to 0.2, and unevenness counted against its radius
+   (10% of it) rather than a fixed 3 m. Its buildings stand 5 m back from the yard, and its
+   circle reaches 14 m past their furthest corners, so a road arriving at a gate never grades
+   their ground. The yard's level ground reaches out under the buildings' fronts - a wide one's
+   corners too - so each is come up to on the level, with no dip before its door.
 
 Each is checked in the workbench before the next.
 

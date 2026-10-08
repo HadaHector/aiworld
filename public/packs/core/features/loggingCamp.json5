@@ -8,23 +8,28 @@
   name: "Logging camp",
   type: "compound",
   compound: {
-    // Gentle ground (rise over run across the whole camp), trees all round it - the share of the
+    // Gentle enough ground (rise over run across the whole camp - the yard and the buildings' pads
+    // are levelled into it), trees all round it - the share of the
     // ground they cover, at least the first, the more the better up to the second - and a river
     // within 300 m in its favour.
-    site: { grade: [0, 0.12], cover: [0.5, 0.9], nearWater: 300 },
-    // A round of trodden ground, its radius in metres, rolled per camp.
-    yard: { radius: [12, 18] },
+    site: { grade: [0, 0.2], cover: [0.5, 0.9], nearWater: 300 },
+    // A round of trodden ground, its radius in metres, rolled per camp - wide enough for a long
+    // bunkhouse and a saw shed to stand round it.
+    yard: { radius: [18, 24] },
     // Round the yard's rim, fronts to the yard, the entrances kept free.
     arrangement: "ring",
     // The skid trail the logs are dragged in along: out through the widest stretch of rim the
     // roads leave, so the felling lies away from the way in.
     trails: [{ to: "clearing", length: [40, 90], chance: 0.85 }],
     // Its buildings, each `count` of them (rolled), each with `chance`; a required one must fit.
-    // Stand-ins until the camp's own (a bunkhouse, a saw shed, a tool shed) are built.
+    // A bunkhouse for the men and a saw shed always; a cookhouse, an ox stable and a tool shed by
+    // chance.
     buildings: [
-      { building: "shingleCottage", count: [1, 2], required: true },
-      { building: "workshop", count: [1, 1], required: true },
-      { building: "workshop", count: [0, 1], chance: 0.5 },
+      { building: "bunkhouse", count: [1, 1], required: true },
+      { building: "sawShed", count: [1, 1], required: true },
+      { building: "cookhouse", count: [1, 1], chance: 0.6 },
+      { building: "stable", count: [1, 1], chance: 0.5 },
+      { building: "toolShed", count: [1, 1], chance: 0.6 },
     ],
   },
   // Trees and bushes cleared up to 25 m past the yard's edge - over its buildings - and growing back

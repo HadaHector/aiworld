@@ -61,8 +61,9 @@ export interface CompoundLayout {
   kindId: string;
   x: number;
   z: number;
-  /** The yard: a level round at `y`. */
-  yard: { x: number; z: number; y: number; radius: number };
+  /** The yard: a round of `radius` at `y` - and the ground levelled with it out to `level`, under
+   *  the buildings' fronts, corners and all, so each is come up to on the level. */
+  yard: { x: number; z: number; y: number; radius: number; level: number };
   entrances: CompoundEntrance[];
   /** In from each gate to the yard's rim - narrow road lines, graded from the road's level to the
    *  yard's. */
@@ -77,13 +78,16 @@ export interface CompoundLayout {
 
 /** A building variant is drawn from this many, as a settlement's houses are. */
 const BUILDING_VARIANT_SPACE = 1 << 20;
-/** Between the yard's rim and the buildings' fronts. */
-const SETBACK = 2;
+/** Between the yard's rim and the buildings' fronts: trodden ground before their doors. */
+const SETBACK = 5;
+/** The yard's level ground reaches this far past the buildings' fronts - their furthest corners - under them. */
+const LEVEL_UNDER_FRONTS = 1;
 /** Kept between two buildings along the rim. */
 const BUILDING_GAP = 3;
-/** Past the buildings' backs, inside the compound's circle - where its gates stand: a road's level
- *  ground (ROAD_HALF_WIDTH) and a little, so one running along the circle keeps clear of them. */
-const RING_MARGIN = 10;
+/** Past the buildings' furthest corners, inside the compound's circle - where its gates stand: a
+ *  road's level ground (ROAD_HALF_WIDTH) and the few metres past it where a building's pad still
+ *  gives way to it, so a road arriving along the circle at a gate never grades a building's ground. */
+const RING_MARGIN = 14;
 /** A lane is this wide next to a road (1), and kept this far clear either side of its middle. */
 const LANE_WIDTH = 0.6;
 const LANE_CLEARANCE = 8;
@@ -160,10 +164,11 @@ export function planCompound(
     if (optional < 0) break;
     buildings.splice(optional, 1);
   }
-  const deepest = Math.max(0, ...buildings.map((b) => b.depth));
+  // Out to the furthest of the buildings' back corners - a wide one's reach past its back's middle.
+  const furthest = Math.max(yardRadius + SETBACK, ...buildings.map((b) => Math.hypot(yardRadius + SETBACK + b.depth, b.width / 2)));
   return {
     yardRadius,
-    radius: yardRadius + SETBACK + deepest + RING_MARGIN,
+    radius: furthest + RING_MARGIN,
     buildings,
     trails,
     seed: Math.floor(rng() * 0x7fffffff),
@@ -176,8 +181,9 @@ const MIN_HEIGHT = 3;
 const MAX_LAKE_FACTOR = 0.02;
 const RIVER_CLEARANCE = 15;
 const BORDER_CLEARANCE = 30;
-/** How far the ground under it may stand off a plane through it - a ridge or a dip across it. */
-const MAX_UNEVENNESS = 3;
+/** How far the ground under it may stand off a plane through it - a ridge or a dip across it - as a
+ *  share of its radius: a big camp's circle may be as uneven as a small one's, in proportion. */
+const MAX_UNEVENNESS = 0.1;
 /** Tree cover is judged out to this times its radius: the wood it stands in, not the clearing. */
 const COVER_REACH = 1.8;
 
@@ -212,7 +218,8 @@ export function evaluateCompound(
   const grade = Math.hypot(gx, gz);
   if (grade < spec.site.grade[0] || grade > spec.site.grade[1]) return null;
   const unevenness = Math.max(...ring.map((p) => Math.abs(p.h - (here.height + gx * p.dx + gz * p.dz))));
-  if (unevenness > MAX_UNEVENNESS) return null;
+  const maxUnevenness = MAX_UNEVENNESS * radius;
+  if (unevenness > maxUnevenness) return null;
 
   // The wood round it.
   const slope = grade / Math.sqrt(1 + grade * grade);
@@ -226,7 +233,7 @@ export function evaluateCompound(
   }
   if (cover < spec.site.cover[0]) return null;
 
-  const level = 1 - unevenness / MAX_UNEVENNESS;
+  const level = 1 - unevenness / maxUnevenness;
   const wooded = spec.site.cover[1] > spec.site.cover[0] ? Math.min(1, (cover - spec.site.cover[0]) / (spec.site.cover[1] - spec.site.cover[0])) : 1;
   const nearWater = spec.site.nearWater;
   const score =
@@ -372,6 +379,10 @@ export function layoutCompound(
     });
   }
 
+  // The yard's level ground: out under the buildings' fronts - a wide one's corners stand further
+  // out than its middle, its front straight and the yard round.
+  const level = Math.max(rim, ...buildings.map((b) => Math.hypot(rim, b.width / 2))) + LEVEL_UNDER_FRONTS;
+
   // Then the trails, through the rim the gates and the buildings leave.
   const trails: RoadLine[] = [];
   const reach = site.radius + Math.max(0, ...site.trails.map((t) => t.length)) + TRAIL_ROAD_CLEARANCE;
@@ -411,7 +422,7 @@ export function layoutCompound(
     trails.push({ points, heights, widthScale: TRAIL_WIDTH, taperEnds: false });
   }
 
-  return { featureId, kindId: kind.id, x, z, yard: { x, z, y, radius: yardRadius }, entrances, lanes, trails, buildings, dropped, droppedRequired };
+  return { featureId, kindId: kind.id, x, z, yard: { x, z, y, radius: yardRadius, level }, entrances, lanes, trails, buildings, dropped, droppedRequired };
 }
 
 /** Every compound laid out, round the gates its roads arrived at (RoadNetwork.gates, by place). */

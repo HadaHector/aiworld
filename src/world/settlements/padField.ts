@@ -61,7 +61,7 @@ export function settlementPads(layouts: SettlementLayout[]): Pad[] {
 
 /** Every compound's yard and the ground under its buildings. */
 export function compoundPads(layouts: CompoundLayout[]): Pad[] {
-  return layouts.flatMap(({ yard, buildings }) => [{ x: yard.x, z: yard.z, y: yard.y, ux: 1, uz: 0, hw: 0, hd: 0, radius: yard.radius }, ...buildings.map(housePad)]);
+  return layouts.flatMap(({ yard, buildings }) => [{ x: yard.x, z: yard.z, y: yard.y, ux: 1, uz: 0, hw: 0, hd: 0, radius: yard.level }, ...buildings.map(housePad)]);
 }
 
 /**
