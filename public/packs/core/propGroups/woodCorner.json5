@@ -1,0 +1,8 @@
+// A wood corner: a chopping block, and a crate by it for the kindling.
+{
+  name: "Wood Corner",
+  members: [
+    { prop: "choppingBlock", at: [0, 0], turn: [0, 360] },
+    { prop: "crate", at: [-2.2, -0.6], turn: [-15, 15], chance: 0.7 },
+  ],
+}

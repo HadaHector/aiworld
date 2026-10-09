@@ -40,3 +40,27 @@ export interface PropDef {
   /** Whether it is in the way - a stack, a barrel; not a scatter of chips. */
   collide: boolean;
 }
+
+/**
+ * One member of a prop group: a prop, where it stands in the group (x, z metres, the group's front
+ * toward +z) - or `on` an earlier member, standing on its top - turned by `turn` (degrees, rolled),
+ * made with `chance` (a member on one left out is left out too).
+ */
+export interface GroupMember {
+  prop: PropDef;
+  at: [number, number];
+  on: number | null;
+  turn: [number, number];
+  chance: number;
+}
+
+/**
+ * A group of props (a pack's propGroups/ folder) set down together - a pile of crates and barrels,
+ * a sawbuck by a log stack: its members as a list, each placed relative to the group. Each member
+ * is its own prop, built and drawn on its own; the group only says where they stand.
+ */
+export interface PropGroupDef {
+  id: string;
+  name: string;
+  members: GroupMember[];
+}

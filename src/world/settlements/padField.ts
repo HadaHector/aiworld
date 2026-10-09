@@ -13,6 +13,9 @@ export interface Pad {
   hw: number;
   hd: number;
   radius: number;
+  /** Levelled even beside a road or a lane, which otherwise keeps its own grade there - a prop's
+   *  small pad, where a trail bending round it does no harm. */
+  firm?: boolean;
 }
 
 export interface PadQuery {
@@ -20,6 +23,8 @@ export interface PadQuery {
   gap: number;
   /** The level that pad's ground is brought to. */
   height: number;
+  /** Whether it is levelled beside roads too (Pad.firm). */
+  firm: boolean;
 }
 
 export interface PadField {
@@ -57,6 +62,17 @@ export function settlementPads(layouts: SettlementLayout[]): Pad[] {
     const { square } = layout;
     return [{ x: square.x, z: square.z, y: square.y, ux: 1, uz: 0, hw: 0, hd: 0, radius: square.radius }, ...layout.houses.map(housePad)];
   });
+}
+
+/** The level ground under each of a compound's props standing on the ground - at the height
+ *  settleProps gave it, a little wider than it. Listed before the yards (see createPadField: the
+ *  first of two pads a point is inside wins), so the yard's edge under a prop is the prop's. */
+export function propPads(layouts: CompoundLayout[]): Pad[] {
+  return layouts.flatMap((layout) =>
+    layout.props
+      .filter((prop) => !prop.on)
+      .map((prop) => ({ x: prop.x, z: prop.z, y: prop.y, ux: -prop.frontZ, uz: prop.frontX, hw: prop.halfWidth + 0.3, hd: prop.halfDepth + 0.3, radius: 0, firm: true })),
+  );
 }
 
 /** Every compound's yard and the ground under its buildings. */
@@ -105,7 +121,7 @@ export function createPadField(pads: Pad[]): PadField {
         best = pad;
       }
     }
-    return best ? { gap: bestGap, height: best.y } : null;
+    return best ? { gap: bestGap, height: best.y, firm: best.firm === true } : null;
   }
 
   return { query, padCount };

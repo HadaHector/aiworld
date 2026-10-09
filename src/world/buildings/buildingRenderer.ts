@@ -1,6 +1,5 @@
 import type { Mesh, CascadedShadowGenerator, Scene } from "@babylonjs/core";
-import type { House } from "../settlements/settlementLayout";
-import { generateBuilding } from "./buildingGenerator";
+import type { BuildingModel } from "./buildingTypes";
 import { appendModel, createBuildingMesh, emptyGeometry, type BuildingMaterial } from "./buildingMesh";
 import { interiorFloorAt, type BuiltInterior } from "./interiorFloors";
 import { WALL } from "./interiorGeometry";
@@ -8,13 +7,25 @@ import type { TerrainCut } from "../materials/materialLibrary";
 import type { BuildingCollision } from "./buildingColliders";
 import { quatFromEuler, vec3, type ShapeDesc, type Vec3 } from "../collision/index";
 
-/** A group of houses that come into the collision world together - a settlement's, a compound's -
- *  under `key`, round (x, z). */
+/** Something set down with a model of its own - a house, a prop: where it stands, which way its
+ *  front (+z of its model) faces, and its model, near or far. */
+export interface Placed {
+  x: number;
+  y: number;
+  z: number;
+  frontX: number;
+  frontZ: number;
+  model(far: boolean): BuildingModel;
+}
+type House = Placed;
+
+/** Things set down that come into the collision world together - a settlement's houses, a
+ *  compound's buildings and props - under `key`, round (x, z). */
 export interface BuildingGroup {
   key: string;
   x: number;
   z: number;
-  houses: House[];
+  houses: Placed[];
 }
 
 /**
@@ -104,7 +115,7 @@ interface Enterable {
 const FAR_DETAIL_DISTANCE = 220;
 
 /**
- * Draws the buildings of every settlement and compound, each its own mesh, shown while it is within
+ * Draws the buildings of every settlement and compound - and a compound's props - each its own mesh, shown while it is within
  * the draw distance - in full near, and with its small details left out from FAR_DETAIL_DISTANCE on.
  * Each house is its building's own model (see buildings/), the same the workbench shows. Houses cast
  * shadows (they are few and large - nothing like grass) and are lit through the shared lighting,
@@ -113,7 +124,6 @@ const FAR_DETAIL_DISTANCE = 220;
 export function createBuildingRenderer(
   scene: Scene,
   groups: BuildingGroup[],
-  seed: number,
   material: BuildingMaterial,
   shadowGenerator: CascadedShadowGenerator,
   initialDrawDistance: number,
@@ -130,7 +140,7 @@ export function createBuildingRenderer(
     let radius = 0;
     group.houses.forEach((house, n) => {
       const build = (far: boolean): { mesh: Mesh; reach: number } => {
-        const model = generateBuilding(house.building, seed, house.variant, far);
+        const model = house.model(far);
         const geometry = emptyGeometry();
         appendModel(geometry, model, material.layerOf, placeHouse(house, house.x, house.z));
         const reach = Math.hypot(model.halfWidth, model.halfDepth);

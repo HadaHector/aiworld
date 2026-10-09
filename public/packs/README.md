@@ -40,6 +40,7 @@ packs/<pack>/
   buildingMaterials/<id>.json5  what buildings are made of: plaster, timber, stone, glass, tiles
   rooms/<id>.json5        a kind of room inside a building, and its style: floor, walls, ceiling
   props/<id>.json5        a thing set about a place: a log stack, a chopping block, a barrel
+  propGroups/<id>.json5   props set down together: a pile of crates and barrels
   patches/<any>.json5     additions to another pack's lists
 ```
 
@@ -836,6 +837,23 @@ far model of its own (coarser, its small pieces left out) and its own collision.
 end grain (`endGrain`) centred on each log's own heart; logs wrap `bark` round them along their
 length; boards run up a barrel as staves. In the workbench, `props/` shows each prop's variants,
 near and far, and what it puts in the way.
+
+A **group** (`propGroups/`) is props set down together - a store pile, a saw spot: `members`, each
+a `prop` standing `at: [x, z]` metres in the group (its front toward +z) or `on` an earlier member
+(by its place in the list, 0 the first) - on that one's top, `at` then an offset from its middle -
+turned by `turn` (degrees, a number or a range rolled), made with `chance` (and a member on one
+left out is left out too). Each member is its own prop; a group's members on the ground stand
+level with each other, on ground levelled for them.
+
+A compound sets props and groups down by `props` in its block: each `{ prop | group, count, chance,
+at }`, `at` its anchor - `yard` (anywhere in the yard, turned freely, off the ways across it from
+its entrances to its middle), `yardEdge` (round the yard's rim, in the gaps between the buildings),
+`byBuilding` (beside a building - of `building`, if it has one - or behind it, facing as it does)
+or `trail` (beside its trails, out past the buildings, lying along them). Each goes where it fits,
+clear of the buildings and the ground before their doors, the lanes, the roads and the props down
+already - as far from those as it can be, so they spread - and one that fits nowhere is left out.
+What it takes up is its footprint: the rectangle its members fill, turned as it is set down.
+The ground under each is levelled to it.
 
 A new generator is code (`src/world/props/generators/`): a table of its settings, its parts, and
 how it builds from the shared shapes (`propShapes.ts`: boxes, beams, round logs, turned shapes, in

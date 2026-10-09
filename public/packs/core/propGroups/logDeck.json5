@@ -1,0 +1,11 @@
+// A deck of logs in the yard, waiting to be hauled or sawn: two or three stacks side by side, now
+// and then a log lying loose before them.
+{
+  name: "Log Deck",
+  members: [
+    { prop: "logStack", at: [0, 0], turn: [-4, 4] },
+    { prop: "logStack", at: [0.3, 2.6], turn: [-6, 6] },
+    { prop: "logStack", at: [-0.2, -2.6], turn: [-6, 6], chance: 0.6 },
+    { prop: "felledLog", at: [0.8, 5.4], turn: [-10, 10], chance: 0.4 },
+  ],
+}

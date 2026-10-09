@@ -12,6 +12,8 @@ import { deriveSeed, mulberry32 } from "../rng";
 import type { CompoundDoor, CompoundSpec, FeatureKindDef, TrailDestination } from "./featureTypes";
 import type { FeatureSite } from "./featureSites";
 import type { RoadNetwork } from "../roads/roadNetwork";
+import { ROAD_HALF_WIDTH } from "../roads/roadConfig";
+import { arrangeGroup, arrangeProp, setDown, type Arranged, type PlacedProp } from "../props/propGroups";
 
 /**
  * A compound (see FEATURES.md): a yard with buildings round it, entrances where its roads arrive and
@@ -74,6 +76,11 @@ export interface CompoundLayout {
   /** Buildings rolled that found no room - a required one among them is a fault in the siting. */
   dropped: number;
   droppedRequired: number;
+  /** Its props, set down by their anchors - their heights filled in once the ground is final (see
+   *  settleProps). */
+  props: PlacedProp[];
+  /** Props (or groups) rolled that found no room, by id. */
+  droppedProps: string[];
 }
 
 /** A building variant is drawn from this many, as a settlement's houses are. */
@@ -295,6 +302,7 @@ export function layoutCompound(
   gates: SettlementGate[],
   roadLines: RoadLine[],
   sampleTerrain: TerrainSampler,
+  worldSeed: number,
 ): CompoundLayout {
   const rng = mulberry32(deriveSeed(site.seed, COMPOUND_LAYOUT_SALT));
   const { x, z, yardRadius } = site;
@@ -422,16 +430,269 @@ export function layoutCompound(
     trails.push({ points, heights, widthScale: TRAIL_WIDTH, taperEnds: false });
   }
 
-  return { featureId, kindId: kind.id, x, z, yard: { x, z, y, radius: yardRadius, level }, entrances, lanes, trails, buildings, dropped, droppedRequired };
+  const { props, droppedProps } = placeProps(kind.compound!, site, worldSeed, rng, buildings, lanes, trails, nearbyRoads, sampleTerrain, { x, z, yardRadius, rim });
+  return { featureId, kindId: kind.id, x, z, yard: { x, z, y, radius: yardRadius, level }, entrances, lanes, trails, buildings, dropped, droppedRequired, props, droppedProps };
+}
+
+/** A prop keeps this far from anything else - a building, another prop. */
+const PROP_GAP = 0.6;
+/** And clear of the ground before a building's front, this deep - its door's approach. */
+const DOOR_APRON = 4;
+/** And this far from a lane's middle or a trail's (beyond its own reach); a trail's props lie this
+ *  far off it. */
+const PROP_LANE_CLEARANCE = 3;
+const PROP_TRAIL_OFFSET = 2;
+/** Where round the yard's rim a prop is tried: this many steps round. */
+const PROP_RIM_STEPS = 72;
+/** The ways across the yard - from each lane's end and each trail's start to its middle - are kept
+ *  this clear either side, so every way in leads on across it. */
+const YARD_PATH_CLEARANCE = 2.5;
+/** In the yard, a prop is tried on rings this far apart, and this far apart round each. */
+const YARD_STEP = 2.5;
+
+/**
+ * Sets a compound's props down by their anchors, in their list's order: each where it fits - clear
+ * of the buildings (and the ground before their doors), the lanes, the trails, the roads and the
+ * props already down - and, among those, as far from the props already down as it can be, so they
+ * spread out. One that fits nowhere is left out.
+ */
+function placeProps(
+  spec: CompoundSpec,
+  site: CompoundSite,
+  worldSeed: number,
+  rng: () => number,
+  buildings: House[],
+  lanes: RoadLine[],
+  trails: RoadLine[],
+  roads: RoadLine[],
+  sampleTerrain: TerrainSampler,
+  at: { x: number; z: number; yardRadius: number; rim: number },
+): { props: PlacedProp[]; droppedProps: string[] } {
+  const props: PlacedProp[] = [];
+  /** The footprints of what is down already. */
+  const down: Box[] = [];
+  const droppedProps: string[] = [];
+  // The buildings, and the ground before each one's door.
+  const houseBoxes = buildings.map((house): Box => ({ x: house.x, z: house.z, ax: house.frontZ, az: -house.frontX, hw: house.width / 2, hd: house.depth / 2 }));
+  const aprons = buildings.map((house): Box => {
+    const ahead = house.depth / 2 + DOOR_APRON / 2;
+    return { x: house.x + house.frontX * ahead, z: house.z + house.frontZ * ahead, ax: house.frontZ, az: -house.frontX, hw: house.width / 2, hd: DOOR_APRON / 2 };
+  });
+  // The ways across the yard: from where each lane and trail meets it to its middle.
+  const paths: CellPoint[][] = [...lanes.map((line) => line.points[line.points.length - 1]), ...trails.map((line) => line.points[0])].map((end) => [end, { x: at.x, z: at.z }]);
+  const fits = (box: Box, limit: number | null, onTrail: RoadLine | null): boolean => {
+    if (limit !== null && corners(box).some((p) => Math.hypot(p.x - at.x, p.z - at.z) > limit)) return false;
+    if (paths.some((path) => lineToBox(path, box) < YARD_PATH_CLEARANCE)) return false;
+    if (houseBoxes.some((house) => boxGap(house, box) < PROP_GAP) || aprons.some((apron) => boxGap(apron, box) < 0)) return false;
+    if (lanes.some((line) => lineToBox(line.points, box) < PROP_LANE_CLEARANCE)) return false;
+    if (trails.some((line) => line !== onTrail && lineToBox(line.points, box) < PROP_LANE_CLEARANCE)) return false;
+    if (onTrail && lineToBox(onTrail.points, box) < PROP_TRAIL_OFFSET - 0.01) return false;
+    if (roads.some((line) => distanceToLine(line.points, box.x, box.z) < Math.hypot(box.hw, box.hd) + ROAD_HALF_WIDTH + 1)) return false;
+    if (down.some((other) => boxGap(other, box) < PROP_GAP)) return false;
+    return corners(box).every((p) => {
+      const ground = sampleTerrain(p.x, p.z);
+      return ground.isLand && ground.lakeFactor < 0.02;
+    });
+  };
+  const spread = (box: Box): number => Math.min(Infinity, ...down.map((other) => boxGap(other, box)));
+
+  for (const entry of spec.props) {
+    const count = entry.count[0] + Math.floor(rng() * (entry.count[1] - entry.count[0] + 1));
+    for (let k = 0; k < count; k++) {
+      if (rng() >= entry.chance) continue;
+      const arranged: Arranged = entry.placed.kind === "prop" ? arrangeProp(entry.placed.prop, worldSeed, rng) : arrangeGroup(entry.placed.group, worldSeed, rng);
+      if (arranged.members.length === 0) continue;
+      const r = arranged.reach;
+      /** Candidates: where, which way it faces, the trail it lies by, and how far from the middle it
+       *  may reach (null: no matter). */
+      const candidates: { x: number; z: number; fx: number; fz: number; trail: RoadLine | null; limit: number | null }[] = [];
+      /** Where its footprint lies, set down as a candidate says. */
+      const boxAt = (c: (typeof candidates)[number]): Box => {
+        const length = Math.hypot(c.fx, c.fz) || 1;
+        const fx = c.fx / length;
+        const fz = c.fz / length;
+        const { cx, cz, hw, hd } = arranged.box;
+        return { x: c.x + fz * cx + fx * cz, z: c.z - fx * cx + fz * cz, ax: fz, az: -fx, hw, hd };
+      };
+      if (entry.at === "yard") {
+        // Anywhere in the yard, on rings out from its middle, turned freely.
+        for (let ring = 0; ring * YARD_STEP <= at.yardRadius - Math.min(arranged.box.hw, arranged.box.hd); ring++) {
+          const radius = ring * YARD_STEP;
+          const steps = Math.max(1, Math.floor((2 * Math.PI * radius) / YARD_STEP));
+          const start = rng() * Math.PI * 2;
+          for (let s = 0; s < steps; s++) {
+            const angle = start + (s / steps) * Math.PI * 2;
+            const turn = rng() * Math.PI * 2;
+            candidates.push({ x: at.x + Math.cos(angle) * radius, z: at.z + Math.sin(angle) * radius, fx: Math.sin(turn), fz: Math.cos(turn), trail: null, limit: at.yardRadius });
+          }
+        }
+      } else if (entry.at === "yardEdge") {
+        // Round the rim: just inside the yard's edge, or back between the buildings, facing in.
+        const start = rng() * Math.PI * 2;
+        for (let s = 0; s < PROP_RIM_STEPS; s++) {
+          const angle = start + (s / PROP_RIM_STEPS) * Math.PI * 2;
+          for (const radius of [at.rim + r + 0.5, at.rim + r + 3, at.yardRadius - r - 0.5]) {
+            if (radius <= r) continue;
+            const turn = (rng() - 0.5) * 0.6;
+            candidates.push({ x: at.x + Math.cos(angle) * radius, z: at.z + Math.sin(angle) * radius, fx: -Math.cos(angle + turn), fz: -Math.sin(angle + turn), trail: null, limit: site.radius });
+          }
+        }
+      } else if (entry.at === "byBuilding") {
+        // Along a building's sides, from just behind its front back - then along its back - facing
+        // as it does.
+        // By its building where it has one - otherwise by any.
+        const named = buildings.filter((house) => house.building === entry.building);
+        const houses = entry.building && named.length > 0 ? named : buildings;
+        for (const house of shuffled(houses, rng)) {
+          const hw = house.width / 2;
+          const hd = house.depth / 2;
+          const at = (u: number, w: number) => ({ x: house.x + house.frontZ * u + house.frontX * w, z: house.z - house.frontX * u + house.frontZ * w, fx: house.frontX, fz: house.frontZ, trail: null, limit: site.radius });
+          for (let w = hd - r - PROP_GAP; w >= -hd + r; w -= 1.5) {
+            for (const side of rng() < 0.5 ? [-1, 1] : [1, -1]) candidates.push(at(side * (hw + r + PROP_GAP + 0.05), w));
+          }
+          for (let u = -hw + r; u <= hw - r; u += 1.5) candidates.push(at(u, -(hd + r + PROP_GAP + 0.05)));
+        }
+      } else {
+        // Beside a trail, out past the buildings, lying along it.
+        for (const trail of trails) {
+          let travelled = 0;
+          for (let i = 0; i + 1 < trail.points.length; i++) {
+            const a = trail.points[i];
+            const b = trail.points[i + 1];
+            const length = Math.hypot(b.x - a.x, b.z - a.z);
+            const dx = (b.x - a.x) / length;
+            const dz = (b.z - a.z) / length;
+            for (let t = 0; t < length; t += 3) {
+              const along = travelled + t;
+              // Out past the buildings' furthest corners.
+              if (along + at.yardRadius < site.radius - RING_MARGIN + 2) continue;
+              const px = a.x + dx * t;
+              const pz = a.z + dz * t;
+              for (const side of rng() < 0.5 ? [-1, 1] : [1, -1]) {
+                const off = r + PROP_TRAIL_OFFSET;
+                const turn = (rng() - 0.5) * 0.5;
+                // Its +x (the long way of a log) along the trail.
+                candidates.push({ x: px - dz * side * off, z: pz + dx * side * off, fx: -Math.sin(Math.atan2(dz, dx) + turn), fz: Math.cos(Math.atan2(dz, dx) + turn), trail, limit: null });
+              }
+            }
+            travelled += length;
+          }
+        }
+      }
+      let best: (typeof candidates)[number] | null = null;
+      let bestBox: Box | null = null;
+      let bestSpread = -Infinity;
+      for (const c of candidates) {
+        const box = boxAt(c);
+        if (!fits(box, c.limit, c.trail)) continue;
+        const score = spread(box) + rng() * 2;
+        if (score > bestSpread) {
+          bestSpread = score;
+          best = c;
+          bestBox = box;
+          // Along a building or a trail, the first that fits - near the front, near the yard.
+          if (entry.at === "byBuilding" || entry.at === "trail") break;
+        }
+      }
+      if (!best) {
+        droppedProps.push(entry.placed.kind === "prop" ? entry.placed.prop.id : entry.placed.group.id);
+        continue;
+      }
+      const length = Math.hypot(best.fx, best.fz) || 1;
+      props.push(...setDown(arranged, best.x, best.z, best.fx / length, best.fz / length, down.length));
+      down.push(bestBox!);
+    }
+  }
+  return { props, droppedProps };
+}
+
+/** A footprint: a rectangle round (x, z), its half-extents along its unit axis (ax, az) and across
+ *  it. */
+interface Box {
+  x: number;
+  z: number;
+  ax: number;
+  az: number;
+  hw: number;
+  hd: number;
+}
+
+function corners(box: Box): CellPoint[] {
+  return [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([a, b]) => ({ x: box.x + box.ax * box.hw * a - box.az * box.hd * b, z: box.z + box.az * box.hw * a + box.ax * box.hd * b }));
+}
+
+/** How far apart two footprints are along the axis that parts them most - negative where they
+ *  overlap (a lower bound of the distance between them). */
+function boxGap(p: Box, q: Box): number {
+  let gap = -Infinity;
+  for (const box of [p, q]) {
+    for (const [ux, uz] of [[box.ax, box.az], [-box.az, box.ax]]) {
+      const project = (b: Box): [number, number] => {
+        const values = corners(b).map((c) => c.x * ux + c.z * uz);
+        return [Math.min(...values), Math.max(...values)];
+      };
+      const [p0, p1] = project(p);
+      const [q0, q1] = project(q);
+      gap = Math.max(gap, q0 - p1, p0 - q1);
+    }
+  }
+  return gap;
+}
+
+/** How far a line comes to a footprint - 0 where it crosses it. */
+function lineToBox(points: CellPoint[], box: Box): number {
+  let best = Infinity;
+  for (let i = 0; i + 1 < points.length; i++) {
+    const a = points[i];
+    const b = points[i + 1];
+    const steps = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.z - a.z) / 0.5));
+    for (let s = 0; s <= steps; s++) {
+      const px = a.x + ((b.x - a.x) * s) / steps - box.x;
+      const pz = a.z + ((b.z - a.z) * s) / steps - box.z;
+      const u = Math.abs(px * box.ax + pz * box.az) - box.hw;
+      const w = Math.abs(-px * box.az + pz * box.ax) - box.hd;
+      best = Math.min(best, Math.hypot(Math.max(0, u), Math.max(0, w)));
+    }
+  }
+  return best;
+}
+
+function shuffled<T>(list: T[], rng: () => number): T[] {
+  const out = [...list];
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
+}
+
+/**
+ * Each prop's height, once the yard and the buildings' pads are levelled: a group's members on the
+ * ground all at the mean of the ground under them (a pad of its own levels it there - see
+ * propPads), and one on another on that one's top. In list order - one is always after what it
+ * stands on.
+ */
+export function settleProps(layouts: CompoundLayout[], sampleTerrain: TerrainSampler): void {
+  for (const layout of layouts) {
+    const levels = new Map<number, number[]>();
+    for (const prop of layout.props) {
+      if (prop.on) continue;
+      const list = levels.get(prop.group) ?? [];
+      list.push(sampleTerrain(prop.x, prop.z).height);
+      levels.set(prop.group, list);
+    }
+    const mean = (list: number[]): number => list.reduce((a, b) => a + b, 0) / list.length;
+    for (const prop of layout.props) prop.y = prop.on ? prop.on.y + prop.lift : mean(levels.get(prop.group)!);
+  }
 }
 
 /** Every compound laid out, round the gates its roads arrived at (RoadNetwork.gates, by place). */
-export function layoutCompounds(features: FeatureSite[], roads: Pick<RoadNetwork, "places" | "gates" | "stretches">, sampleTerrain: TerrainSampler): CompoundLayout[] {
+export function layoutCompounds(features: FeatureSite[], roads: Pick<RoadNetwork, "places" | "gates" | "stretches">, sampleTerrain: TerrainSampler, worldSeed: number): CompoundLayout[] {
   const placeOf = new Map(roads.places.flatMap((place) => (place.feature ? [[place.feature, place.id] as const] : [])));
   return features.flatMap((feature) => {
     if (!feature.compound) return [];
     const placeId = placeOf.get(feature);
     const gates = placeId === undefined ? [] : roads.gates[placeId];
-    return [layoutCompound(feature.id, feature.kind, feature.compound, gates, roads.stretches, sampleTerrain)];
+    return [layoutCompound(feature.id, feature.kind, feature.compound, gates, roads.stretches, sampleTerrain, worldSeed)];
   });
 }

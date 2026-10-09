@@ -10,6 +10,9 @@ import { createBushScatter, createRockScatter, createTreeCover, createTreeScatte
 import { createTreeField, type TreeField } from "./foliage/treeField";
 import { createGrassField, type GrassField } from "./foliage/grassField";
 import { createBuildingRenderer } from "./buildings/buildingRenderer";
+import { generateBuilding } from "./buildings/buildingGenerator";
+import { generateProp } from "./props/propGenerator";
+import type { House } from "./settlements/settlementLayout";
 import { bakeBuildingTextures, createBuildingMaterial } from "./buildings/buildingMesh";
 import type { SettlementLayout } from "./settlements/settlementLayout";
 import { createSunLighting, DEFAULT_DAY_NIGHT_CYCLE_MINUTES } from "./lighting/sunLighting";
@@ -178,13 +181,18 @@ export async function createWorld(
   await phase(`Baking ${content.buildingMaterials.length} building materials`);
   const buildingMaterial = createBuildingMaterial(scene, materialLibrary.litShading, await bakeBuildingTextures(WORLD_SEED, content.buildingMaterials));
   await phase(`Planning the buildings of ${settlementLayouts.length} settlements and ${compoundLayouts.length} compounds`);
+  const houseModel = (house: House) => ({ ...house, model: (far: boolean) => generateBuilding(house.building, WORLD_SEED, house.variant, far) });
   const buildings = createBuildingRenderer(
     scene,
     [
-      ...settlementLayouts.map((layout) => ({ key: `settlement:${layout.siteId}`, x: layout.x, z: layout.z, houses: layout.houses })),
-      ...compoundLayouts.map((layout) => ({ key: `compound:${layout.featureId}`, x: layout.x, z: layout.z, houses: layout.buildings })),
+      ...settlementLayouts.map((layout) => ({ key: `settlement:${layout.siteId}`, x: layout.x, z: layout.z, houses: layout.houses.map(houseModel) })),
+      ...compoundLayouts.map((layout) => ({
+        key: `compound:${layout.featureId}`,
+        x: layout.x,
+        z: layout.z,
+        houses: [...layout.buildings.map(houseModel), ...layout.props.map((prop) => ({ ...prop, model: (far: boolean) => generateProp(prop.prop, WORLD_SEED, prop.variant, far) }))],
+      })),
     ],
-    WORLD_SEED,
     buildingMaterial,
     sunLighting.shadowGenerator,
     DEFAULT_DRAW_DISTANCE,

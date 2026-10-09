@@ -518,8 +518,17 @@ bulge), each laid in a local frame and putting its own hull in the way. A genera
 settings (ranges, counts, chances, numbers, with defaults) and its parts, and the content reader
 reads any generator's file from that, so a new prop is one file of code and nothing else. Materials:
 `bark` new, `endGrain` serving as `cutWood`, `deckBoards` as sawn boards. Not yet: the saw pit
-(needs a ground cut), the brush pile (needs the trees' leaf atlas), and placing props in a compound
-by anchor.
+(needs a ground cut) and the brush pile (needs the trees' leaf atlas).
+
+**Groups and anchors, done:** a group (`propGroups/`) is a list of members - a prop at a place in
+the group, or `on` an earlier member's top, turned, with a chance - each built and drawn as its own
+prop. A compound's `props` set props and groups down by anchor (`yard`, `yardEdge`, `byBuilding`,
+`trail`), each by its footprint - the rectangle its members fill - clear of everything, off the ways
+across the yard from its entrances to its middle, and spread apart; a group's members stand level with each other, and the ground
+under each prop is levelled to it by a firm pad of its own (one a lane or trail beside it does not
+undo). The logging camp has log decks, logs dragged in and its saw spot in its yard, log stacks round it, a wood corner by its
+cookhouse, store piles by its buildings and felled logs along its skid trail; the compounds probe
+checks them all (seeds 1338, 77, 4242, 9001: no faults).
 
 ### 4. Stumps where trees were cut
 
@@ -679,8 +688,8 @@ Props get the same model and colliders views as buildings.
    sides, and the five buildings - brought forward, so the renderer split draws them. **Done.**
 4. **The renderer split.** Compounds draw real buildings with collision. **Done:** one renderer for
    settlements and compounds, each building its own mesh.
-5. **Props:** the asset folder, the generators, anchors, collision. **The folder, six generators
-   and collision done;** anchors next.
+5. **Props:** the asset folder, the generators, anchors, collision. **Done** but for the saw pit
+   and the brush pile.
 6. **Stumps.**
 7. **Workbench preview.**
 8. **Finishing:** materials and the yard's paint, biome odds, a walk through each wood, timings.

@@ -39,12 +39,23 @@ export interface PropGenerator {
 /** A prop's model: built from its seed and variant, the same every time - `far`: coarser, its
  *  small pieces left out, and no colliders. */
 export function generateProp(def: PropDef, seed: number, variant: number, far = false): BuildingModel {
+  return generate(def, seed, variant, far, false);
+}
+
+/** How far a prop reaches either side of its middle and how tall it is - worked out as its model is,
+ *  every roll the same, with no geometry kept: what a layout needs to set it down. */
+export function measureProp(def: PropDef, seed: number, variant: number): { halfWidth: number; halfDepth: number; height: number } {
+  const { halfWidth, halfDepth, height } = generate(def, seed, variant, false, true);
+  return { halfWidth, halfDepth, height };
+}
+
+function generate(def: PropDef, seed: number, variant: number, far: boolean, measure: boolean): BuildingModel {
   const generator = PROP_GENERATORS[def.generator];
   let hash = 0;
   for (let i = 0; i < def.id.length; i++) hash = (Math.imul(hash, 31) + def.id.charCodeAt(i)) | 0;
   const rng = mulberry32(deriveSeed(deriveSeed(seed, hash), variant));
-  const b = new ModelBuilder();
-  const colliders = def.collide && !far ? new ColliderBuilder() : null;
+  const b = new ModelBuilder(measure);
+  const colliders = def.collide && !far && !measure ? new ColliderBuilder() : null;
   const paints = new Map<string, Paint>();
   const s: PropSettings = def.settings;
   const ctx: PropContext = {

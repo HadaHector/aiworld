@@ -1,6 +1,7 @@
 import type { MaterialLayer } from "../materials/materialTypes";
 import type { SettlementTier } from "../settlements/settlementConfig";
 import type { BuildingDef } from "../buildings/buildingTypes";
+import type { PropDef, PropGroupDef } from "../props/propTypes";
 
 /**
  * What stands in a cell besides the land itself: one major feature per cell at most - a settlement,
@@ -75,6 +76,27 @@ export interface CompoundBuildingSpec {
 }
 
 /**
+ * Where a compound sets a prop (or a group of them) down:
+ * - `yard`: anywhere in the yard, turned freely - off the ways across it from its entrances to its
+ *   middle;
+ * - `yardEdge`: round the yard's rim, in the gaps the buildings leave, facing the yard;
+ * - `byBuilding`: beside a building (of `building`, if given), along its side near its front;
+ * - `trail`: beside its trails, out past the buildings, lying along them.
+ */
+export const PROP_ANCHORS = ["yard", "yardEdge", "byBuilding", "trail"] as const;
+export type PropAnchor = (typeof PROP_ANCHORS)[number];
+
+/** A prop, or a group of them, a compound sets down: `count` of it (rolled), each with `chance`,
+ *  at its anchor - where it fits, clear of the buildings, the lanes, the roads and each other. */
+export interface CompoundPropSpec {
+  placed: { kind: "prop"; prop: PropDef } | { kind: "group"; group: PropGroupDef };
+  count: [number, number];
+  chance: number;
+  at: PropAnchor;
+  building: BuildingDef | null;
+}
+
+/**
  * A compound: a yard with buildings standing round it, its entrances where its roads arrive (its
  * `road` block decides how many) and its trails lead off. No streets - one open space everything
  * faces. Each range is rolled per compound.
@@ -89,6 +111,7 @@ export interface CompoundSpec {
   arrangement: CompoundArrangement;
   trails: CompoundTrailSpec[];
   buildings: CompoundBuildingSpec[];
+  props: CompoundPropSpec[];
 }
 
 /**

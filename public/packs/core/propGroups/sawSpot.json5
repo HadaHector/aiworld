@@ -1,0 +1,10 @@
+// Where logs are sawn to length: a sawbuck, a stack of logs beside it to feed it, and now and then
+// a barrel of water for the saw.
+{
+  name: "Saw Spot",
+  members: [
+    { prop: "sawbuck", at: [0, 0], turn: [-10, 10] },
+    { prop: "logStack", at: [0, -2.8], turn: [-5, 5] },
+    { prop: "barrel", at: [2.4, 0.6], chance: 0.4 },
+  ],
+}

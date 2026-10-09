@@ -31,6 +31,19 @@
       { building: "stable", count: [1, 1], chance: 0.5 },
       { building: "toolShed", count: [1, 1], chance: 0.6 },
     ],
+    // Its props, set down where they fit, each kind in turn: in the yard, decks of logs waiting to
+    // be hauled, logs dragged in and lying about, and the saw spot; log stacks round its edge; a
+    // wood corner by the cookhouse (or any building), store piles by the buildings; and felled logs
+    // along the skid trail.
+    props: [
+      { group: "logDeck", count: [1, 2], at: "yard" },
+      { group: "sawSpot", count: [1, 1], at: "yard" },
+      { prop: "felledLog", count: [1, 3], at: "yard" },
+      { prop: "logStack", count: [1, 3], at: "yardEdge" },
+      { group: "woodCorner", count: [1, 1], at: "byBuilding", building: "cookhouse", chance: 0.9 },
+      { group: "storePile", count: [1, 2], at: "byBuilding" },
+      { prop: "felledLog", count: [1, 4], at: "trail" },
+    ],
   },
   // Trees and bushes cleared up to 25 m past the yard's edge - over its buildings - and growing back
   // by 55.

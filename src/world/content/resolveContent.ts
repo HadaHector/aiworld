@@ -32,13 +32,15 @@ import { checkPlans, checkRoller, describeCheckPlan, MIDDLE_ROLLER, randomRoller
 import { deriveSeed, mulberry32 } from "../rng";
 import { AREA_ROLL_SALT } from "../cells/config";
 import type { WorldContent } from "./worldContent";
-import type { PropDef, PropPaint, PropSettings } from "../props/propTypes";
+import type { GroupMember, PropDef, PropGroupDef, PropPaint, PropSettings } from "../props/propTypes";
 import { PROP_GENERATORS } from "../props/generators/index";
 import type { TextureDef } from "../materials/textureGen";
 import { adjustMatrix, chainMatrix, NO_ADJUST, type ColorAdjust } from "../materials/colorAdjust";
 import type { WeatherChance, WeatherDef } from "../weather/weatherTypes";
 import {
   COMPOUND_ARRANGEMENTS,
+  PROP_ANCHORS,
+  type CompoundPropSpec,
   COMPOUND_DOORS,
   FEATURE_TYPES,
   NO_FEATURE,
@@ -98,7 +100,7 @@ export interface PackSource {
 
 /** The folders a pack's content lives in, one kind of definition each. A definition's id is its
  *  file name, and a pack with a higher priority replaces a lower one's definition of the same id. */
-const CONTENT_FOLDERS = ["biomes", "materials", "layers", "grass", "trees", "bushes", "rocks", "voices", "borderHills", "settlements", "weathers", "features", "buildings", "buildingParts", "buildingMaterials", "rooms", "props"] as const;
+const CONTENT_FOLDERS = ["biomes", "materials", "layers", "grass", "trees", "bushes", "rocks", "voices", "borderHills", "settlements", "weathers", "features", "buildings", "buildingParts", "buildingMaterials", "rooms", "props", "propGroups"] as const;
 type ContentFolder = (typeof CONTENT_FOLDERS)[number];
 
 /** How many grass kinds the packs may define between them: each is a layer of the blade atlas and
@@ -260,6 +262,9 @@ export function resolveContent(packs: PackSource[]): WorldContent {
   const roomById = new Map(roomTypes.map((room) => [room.id, room]));
   const propReads = readAll("props", (e, o, r) => ({ file: e.file, def: readProp(e.id, o, r) }));
   const props = propReads.map((read) => read.def);
+  const propById = new Map(props.map((prop) => [prop.id, prop]));
+  const propGroups = readAll("propGroups", (e, o, r) => readPropGroup(e.id, o, r, propById));
+  const groupById = new Map(propGroups.map((group) => [group.id, group]));
   for (const { file, def } of propReads) {
     for (const [part, paint] of Object.entries(def.parts)) {
       if (paint.material !== null && !buildingMaterialIds.has(paint.material)) {
@@ -279,7 +284,7 @@ export function resolveContent(packs: PackSource[]): WorldContent {
   }
   const buildingById = new Map(buildings.map((building) => [building.id, building]));
   const settlementStyles = readAll("settlements", (e, o, r) => readSettlementStyle(e.id, o, r, buildingById));
-  const featureReads = readAll("features", (e, o, r) => ({ file: e.file, kind: readFeatureKind(e.id, o, r, buildingById) }));
+  const featureReads = readAll("features", (e, o, r) => ({ file: e.file, kind: readFeatureKind(e.id, o, r, buildingById, propById, groupById) }));
   const featureKinds = featureReads.map((read) => read.kind);
   const featureIds = new Set([NO_FEATURE, ...featureKinds.map((kind) => kind.id)]);
   const settlementFeatureIds = new Set(featureKinds.filter((kind) => kind.type === "settlement").map((kind) => kind.id));
@@ -487,6 +492,7 @@ export function resolveContent(packs: PackSource[]): WorldContent {
     buildingMaterials,
     roomTypes,
     props,
+    propGroups,
   };
 }
 
@@ -1271,7 +1277,7 @@ function readBuildingPart(id: string, obj: RawObject, reader: Reader): BuildingP
 }
 
 /** A features/ file - see FeatureKindDef. */
-function readFeatureKind(id: string, obj: RawObject, reader: Reader, buildings: Map<string, BuildingDef>): FeatureKindDef {
+function readFeatureKind(id: string, obj: RawObject, reader: Reader, buildings: Map<string, BuildingDef>, props: Map<string, PropDef>, groups: Map<string, PropGroupDef>): FeatureKindDef {
   reader.onlyKeys(obj, "", ["name", "type", "quarry", "compound", "clearing", "road", "ground"]);
   const type = reader.oneOf(obj, "type", "", FEATURE_TYPES);
   // A settlement is laid out by its own code, in its biome's settlement style: it takes nothing else.
@@ -1288,7 +1294,7 @@ function readFeatureKind(id: string, obj: RawObject, reader: Reader, buildings: 
     name: reader.string(obj, "name", ""),
     type,
     quarry: type === "quarry" ? readQuarry(reader.object(obj.quarry, "quarry"), reader) : null,
-    compound: type === "compound" ? readCompound(reader.object(obj.compound, "compound"), reader, buildings) : null,
+    compound: type === "compound" ? readCompound(reader.object(obj.compound, "compound"), reader, buildings, props, groups) : null,
     clearing: reader.range(obj, "clearing", "", { allowEqual: true }),
     road: readPlaceRoad(obj, reader, false),
     ground: ground ? readLayer(ground, reader, "ground", `feature-${id}`) : null,
@@ -1310,8 +1316,8 @@ function readQuarry(quarry: RawObject, reader: Reader): QuarrySpec {
 }
 
 /** A compound's block - see CompoundSpec. */
-function readCompound(compound: RawObject, reader: Reader, buildings: Map<string, BuildingDef>): CompoundSpec {
-  reader.onlyKeys(compound, "compound", ["site", "yard", "arrangement", "trails", "buildings"]);
+function readCompound(compound: RawObject, reader: Reader, buildings: Map<string, BuildingDef>, props: Map<string, PropDef>, groups: Map<string, PropGroupDef>): CompoundSpec {
+  reader.onlyKeys(compound, "compound", ["site", "yard", "arrangement", "trails", "buildings", "props"]);
   const site = reader.object(compound.site, "compound.site");
   reader.onlyKeys(site, "compound.site", ["grade", "cover", "nearWater"]);
   const yard = reader.object(compound.yard, "compound.yard");
@@ -1358,7 +1364,65 @@ function readCompound(compound: RawObject, reader: Reader, buildings: Map<string
     arrangement: reader.oneOf(compound, "arrangement", "compound", COMPOUND_ARRANGEMENTS),
     trails,
     buildings: buildingList,
+    props: reader.optionalArray(compound, "props", "compound").flatMap((raw, i): CompoundPropSpec[] => {
+      const path = `compound.props[${i}]`;
+      const entry = reader.object(raw, path);
+      reader.onlyKeys(entry, path, ["prop", "group", "count", "chance", "at", "building"]);
+      let placed: CompoundPropSpec["placed"] | null = null;
+      if ((entry.prop === undefined) === (entry.group === undefined)) reader.fail(path, "names a `prop` or a `group`, one of them");
+      else if (entry.prop !== undefined) {
+        const prop = props.get(reader.string(entry, "prop", path));
+        if (prop) placed = { kind: "prop", prop };
+        else reader.fail(`${path}.prop`, `no prop "${String(entry.prop)}" (known: ${[...props.keys()].join(", ") || "none"})`);
+      } else {
+        const group = groups.get(reader.string(entry, "group", path));
+        if (group) placed = { kind: "group", group };
+        else reader.fail(`${path}.group`, `no prop group "${String(entry.group)}" (known: ${[...groups.keys()].join(", ") || "none"})`);
+      }
+      const count = reader.range(entry, "count", path, { allowEqual: true });
+      if (count[0] < 0 || !Number.isInteger(count[0]) || !Number.isInteger(count[1])) reader.fail(`${path}.count`, `expected whole numbers, got [${count[0]}, ${count[1]}]`);
+      let building: BuildingDef | null = null;
+      if (entry.building !== undefined) {
+        building = buildings.get(reader.string(entry, "building", path)) ?? null;
+        if (!building) reader.fail(`${path}.building`, `no building "${String(entry.building)}"`);
+      }
+      if (!placed) return [];
+      return [{ placed, count, chance: reader.optionalNumber(entry, "chance", path, 1, { min: 0, max: 1 }), at: reader.oneOf(entry, "at", path, PROP_ANCHORS), building }];
+    }),
   };
+}
+
+/** A propGroups/ file - see PropGroupDef: its members, each a prop at a place in the group or on an
+ *  earlier member, turned, with a chance. */
+function readPropGroup(id: string, obj: RawObject, reader: Reader, props: Map<string, PropDef>): PropGroupDef {
+  reader.onlyKeys(obj, "", ["name", "members"]);
+  const members = reader.array(obj, "members", "").flatMap((raw, i): GroupMember[] => {
+    const path = `members[${i}]`;
+    const entry = reader.object(raw, path);
+    reader.onlyKeys(entry, path, ["prop", "at", "on", "turn", "chance"]);
+    const prop = props.get(reader.string(entry, "prop", path));
+    if (!prop) {
+      reader.fail(`${path}.prop`, `no prop "${String(entry.prop)}" (known: ${[...props.keys()].join(", ") || "none"})`);
+      return [];
+    }
+    let at: [number, number] = [0, 0];
+    if (entry.at !== undefined) {
+      const value = entry.at;
+      if (Array.isArray(value) && value.length === 2 && value.every((v) => typeof v === "number")) at = [value[0], value[1]];
+      else reader.fail(`${path}.at`, "expected [x, z] metres in the group");
+    }
+    let on: number | null = null;
+    if (entry.on !== undefined) {
+      on = reader.number(entry, "on", path, { min: 0, integer: true });
+      if (on >= i) reader.fail(`${path}.on`, "names an earlier member, by its place in the list (0 the first)");
+    }
+    let turn: [number, number] = [0, 0];
+    if (typeof entry.turn === "number") turn = [entry.turn, entry.turn];
+    else if (entry.turn !== undefined) turn = reader.range(entry, "turn", path, { allowEqual: true });
+    return [{ prop, at, on, turn, chance: reader.optionalNumber(entry, "chance", path, 1, { min: 0, max: 1 }) }];
+  });
+  if (members.length === 0) reader.fail("members", "needs at least one member");
+  return { id, name: reader.string(obj, "name", ""), members };
 }
 
 /** A feature's `road` block - see PlaceRoadSpec. A settlement's importance is given per tier. */
