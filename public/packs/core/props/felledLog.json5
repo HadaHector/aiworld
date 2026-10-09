@@ -2,6 +2,8 @@
 {
   name: "Felled Log",
   type: "felledLog",
+  // Lying on the ground as it is, along the slope - not on ground levelled for it.
+  ground: "slope",
   felledLog: {
     length: [6, 11],
     radius: [0.32, 0.5],

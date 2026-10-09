@@ -15,7 +15,26 @@ export interface Placed {
   z: number;
   frontX: number;
   frontZ: number;
+  /** Which way its up points, where it is tilted - lying on a slope - rather than standing upright. */
+  up?: [number, number, number];
   model(far: boolean): BuildingModel;
+}
+
+/**
+ * Its model's axes in the world: its front (+z) turned to (frontX, frontZ) and its +x to the right
+ * of that - and, where it has an `up`, tipped over so its +y runs along it, its front staying as
+ * near its front as the tilt lets it.
+ */
+export function placedAxes(item: { frontX: number; frontZ: number; up?: [number, number, number] }): { x: Vec3; y: Vec3; z: Vec3 } {
+  const up = item.up ?? [0, 1, 0];
+  const f: [number, number, number] = [item.frontX, 0, item.frontZ];
+  const d = f[0] * up[0] + f[1] * up[1] + f[2] * up[2];
+  let z: [number, number, number] = [f[0] - up[0] * d, f[1] - up[1] * d, f[2] - up[2] * d];
+  const zl = Math.hypot(...z) || 1;
+  z = [z[0] / zl, z[1] / zl, z[2] / zl];
+  // x = up × z.
+  const x: [number, number, number] = [up[1] * z[2] - up[2] * z[1], up[2] * z[0] - up[0] * z[2], up[0] * z[1] - up[1] * z[0]];
+  return { x: vec3(...x), y: vec3(...up), z: vec3(...z) };
 }
 type House = Placed;
 
@@ -35,15 +54,14 @@ export interface BuildingGroup {
  * direction is only turned.
  */
 function placeHouse(house: House, ox: number, oz: number) {
-  const fx = house.frontX;
-  const fz = house.frontZ;
-  // A rotation (not a mirror): +x goes to (fz, -fx) when +z goes to (fx, fz).
-  const rx = fz;
-  const rz = -fx;
+  // A rotation (not a mirror): +x goes to (fz, -fx) when +z goes to (fx, fz) - tipped to its up.
+  const a = placedAxes(house);
   const cx = house.x - ox;
   const cz = house.z - oz;
-  return (x: number, y: number, z: number, direction: boolean): [number, number, number] =>
-    direction ? [rx * x + fx * z, y, rz * x + fz * z] : [cx + rx * x + fx * z, house.y + y, cz + rz * x + fz * z];
+  return (x: number, y: number, z: number, direction: boolean): [number, number, number] => {
+    const p: [number, number, number] = [a.x.x * x + a.y.x * y + a.z.x * z, a.x.y * x + a.y.y * y + a.z.y * z, a.x.z * x + a.y.z * y + a.z.z * z];
+    return direction ? p : [cx + p[0], house.y + p[1], cz + p[2]];
+  };
 }
 
 export interface BuildingRenderer {
@@ -75,11 +93,19 @@ interface PlacedCollision {
 function placedShapes({ house, colliders }: PlacedCollision, group: number): ShapeDesc[] {
   // Its +z turns to (frontX, frontZ), its +x to (frontZ, -frontX): a turn about y by this.
   const rotation = quatFromEuler(Math.atan2(house.frontX, house.frontZ));
+  const a = placedAxes(house);
   const place = (x: number, y: number, z: number): Vec3 =>
-    vec3(house.x + house.frontZ * x + house.frontX * z, house.y + y, house.z - house.frontX * x + house.frontZ * z);
+    vec3(house.x + a.x.x * x + a.y.x * y + a.z.x * z, house.y + a.x.y * x + a.y.y * y + a.z.y * z, house.z + a.x.z * x + a.y.z * y + a.z.z * z);
   const shapes: ShapeDesc[] = [];
   const b = colliders.boxes;
   for (let i = 0; i < b.length; i += 6) {
+    // Tilted, a box is no longer turned about y alone: its corners' hull instead.
+    if (house.up && house.up[1] < 0.9999) {
+      const points: Vec3[] = [];
+      for (const x of [b[i], b[i + 3]]) for (const y of [b[i + 1], b[i + 4]]) for (const z of [b[i + 2], b[i + 5]]) points.push(place(x, y, z));
+      shapes.push({ kind: "convex", points, group });
+      continue;
+    }
     shapes.push({
       kind: "box",
       center: place((b[i] + b[i + 3]) / 2, (b[i + 1] + b[i + 4]) / 2, (b[i + 2] + b[i + 5]) / 2),

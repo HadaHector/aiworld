@@ -819,7 +819,9 @@ A prop (`props/`) is a thing set about a place - a log stack, a chopping block, 
 a barrel. Like a building, it names its generator by `type` and gives its settings under that
 name; `parts` says what each piece the generator paints is made of - `{ material, tints }`, a
 building material (or none, for a plain colour - iron) and tints, one picked per prop; and
-`collide: false` keeps a small one out of the way (they are in it by default). Each setting is a
+`collide: false` keeps a small one out of the way (they are in it by default); `ground` says how it
+meets the ground - `level` (the default), on ground levelled for it, or `slope`, lying on the ground
+as it is, tilted to it (a felled log). Each setting is a
 range rolled per prop (`[lo, hi]`), a count (whole numbers), a chance, or a number, as the
 generator declares it; any left out takes the generator's default.
 

@@ -643,7 +643,8 @@ in to its clearing. Variants reroll it; Detail, Colliders and the Ground shape w
 (src/workbench/featurePreview.ts), and `Pads` outlines its pads. A settlement or a quarry has no
 preview yet. Since: a compound's `pads` set how wide its banks are; overlapping pads blend smoothly
 (each pulls the ground by its nearness, not the nearest alone - that made a crack where wide banks
-met).
+met); and a prop with `ground: "slope"` (the felled log) lies on the ground tilted to it, with no
+pad.
 
 ### 7. Probe, map, biomes and timing
 

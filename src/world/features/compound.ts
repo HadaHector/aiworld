@@ -671,20 +671,38 @@ function shuffled<T>(list: T[], rng: () => number): T[] {
 /**
  * Each prop's height, once the yard and the buildings' pads are levelled: a group's members on the
  * ground all at the mean of the ground under them (a pad of its own levels it there - see
- * propPads), and one on another on that one's top. In list order - one is always after what it
- * stands on.
+ * propPads), and one on another on that one's top. One that lies on the slope (PropDef.ground)
+ * sits on the ground under its middle instead, tilted to the ground's rise across its footprint
+ * either way. In list order - one is always after what it stands on.
  */
 export function settleProps(layouts: CompoundLayout[], sampleTerrain: TerrainSampler): void {
   for (const layout of layouts) {
+    for (const prop of layout.props) {
+      if (prop.on || prop.prop.ground !== "slope") continue;
+      // The ground's rise across it (along its width, its +x) and along it (front to back).
+      const ax = prop.frontZ;
+      const az = -prop.frontX;
+      const h = (u: number, w: number): number => sampleTerrain(prop.x + ax * u + prop.frontX * w, prop.z + az * u + prop.frontZ * w).height;
+      const across = (h(prop.halfWidth, 0) - h(-prop.halfWidth, 0)) / Math.max(0.1, 2 * prop.halfWidth);
+      const along = (h(0, prop.halfDepth) - h(0, -prop.halfDepth)) / Math.max(0.1, 2 * prop.halfDepth);
+      const gx = ax * across + prop.frontX * along;
+      const gz = az * across + prop.frontZ * along;
+      const length = Math.hypot(gx, 1, gz);
+      prop.up = [-gx / length, 1 / length, -gz / length];
+      prop.y = h(0, 0);
+    }
     const levels = new Map<number, number[]>();
     for (const prop of layout.props) {
-      if (prop.on) continue;
+      if (prop.on || prop.prop.ground === "slope") continue;
       const list = levels.get(prop.group) ?? [];
       list.push(sampleTerrain(prop.x, prop.z).height);
       levels.set(prop.group, list);
     }
     const mean = (list: number[]): number => list.reduce((a, b) => a + b, 0) / list.length;
-    for (const prop of layout.props) prop.y = prop.on ? prop.on.y + prop.lift : mean(levels.get(prop.group)!);
+    for (const prop of layout.props) {
+      if (prop.on) prop.y = prop.on.y + prop.lift;
+      else if (prop.prop.ground !== "slope") prop.y = mean(levels.get(prop.group)!);
+    }
   }
 }
 

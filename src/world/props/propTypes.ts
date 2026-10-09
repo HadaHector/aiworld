@@ -39,6 +39,9 @@ export interface PropDef {
   parts: Record<string, PropPaint>;
   /** Whether it is in the way - a stack, a barrel; not a scatter of chips. */
   collide: boolean;
+  /** How it meets the ground: `level` - the ground under it levelled to it (a stack, a crate) - or
+   *  `slope` - lying on the ground as it is, tilted to it (a felled log). */
+  ground: "level" | "slope";
 }
 
 /**

@@ -29,6 +29,9 @@ export interface PlacedProp {
   halfDepth: number;
   /** Which set-down it was part of - a group's members stand level with each other. */
   group: number;
+  /** Which way its up points: straight up, or - for one lying on the slope - the ground's normal
+   *  under it. Filled in with its height. */
+  up: [number, number, number];
 }
 
 /** A group's (or a lone prop's) members, rolled, in the group's own space - its front toward +z -
@@ -67,7 +70,7 @@ export function arrangeProp(prop: PropDef, seed: number, rng: () => number): Arr
   const variant = Math.floor(rng() * PROP_VARIANT_SPACE);
   const size = measureProp(prop, seed, variant);
   const reach = Math.hypot(size.halfWidth, size.halfDepth);
-  return { members: [{ prop, variant, x: 0, z: 0, y: 0, frontX: 0, frontZ: 1, on: null, lift: 0, reach, halfWidth: size.halfWidth, halfDepth: size.halfDepth, group: 0 }], reach, box: { cx: 0, cz: 0, hw: size.halfWidth, hd: size.halfDepth } };
+  return { members: [{ prop, variant, x: 0, z: 0, y: 0, frontX: 0, frontZ: 1, on: null, lift: 0, reach, halfWidth: size.halfWidth, halfDepth: size.halfDepth, group: 0, up: [0, 1, 0] }], reach, box: { cx: 0, cz: 0, hw: size.halfWidth, hd: size.halfDepth } };
 }
 
 /**
@@ -90,7 +93,7 @@ export function arrangeGroup(group: PropGroupDef, seed: number, rng: () => numbe
     const z = base ? base.z + member.at[1] : member.at[1];
     const own = Math.hypot(size.halfWidth, size.halfDepth);
     const baseHeight = base ? measureProp(base.prop, seed, base.variant).height : 0;
-    placed.push({ prop: member.prop, variant, x, z, y: 0, frontX: Math.sin(turn), frontZ: Math.cos(turn), on: base, lift: baseHeight, reach: own, halfWidth: size.halfWidth, halfDepth: size.halfDepth, group: 0 });
+    placed.push({ prop: member.prop, variant, x, z, y: 0, frontX: Math.sin(turn), frontZ: Math.cos(turn), on: base, lift: baseHeight, reach: own, halfWidth: size.halfWidth, halfDepth: size.halfDepth, group: 0, up: [0, 1, 0] });
     reach = Math.max(reach, Math.hypot(x, z) + own);
   }
   const members = placed.filter((p): p is PlacedProp => p !== null);

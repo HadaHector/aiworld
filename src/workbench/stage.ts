@@ -21,6 +21,7 @@ import type { ConvexDesc } from "../world/collision/shapes";
 import { NO_WEATHER } from "../world/weather/weatherTypes";
 import type { BuildingModel } from "../world/buildings/buildingTypes";
 import { DEFAULT_PAD_BLEND, type Pad } from "../world/settlements/padField";
+import { placedAxes } from "../world/buildings/buildingRenderer";
 import { appendModel, bakeBuildingTextures, createBuildingMaterial, createBuildingMesh, emptyGeometry, type BuildingMaterial } from "../world/buildings/buildingMesh";
 
 /**
@@ -74,9 +75,9 @@ function drawColliders(scene: Scene, pieces: ConvexDesc[], alpha = 0.35): void {
 
 /** A placed model's collision shapes, as convex pieces: turned to face (frontX, frontZ) and stood at
  *  (x, y, z), as the world turns a house. */
-function placedPieces(model: BuildingModel, at: { x: number; y: number; z: number; frontX: number; frontZ: number }): ConvexDesc[] {
-  const { frontX: fx, frontZ: fz } = at;
-  const place = (px: number, py: number, pz: number) => ({ x: at.x + fz * px + fx * pz, y: at.y + py, z: at.z - fx * px + fz * pz });
+function placedPieces(model: BuildingModel, at: { x: number; y: number; z: number; frontX: number; frontZ: number; up?: [number, number, number] }): ConvexDesc[] {
+  const a = placedAxes(at);
+  const place = (px: number, py: number, pz: number) => ({ x: at.x + a.x.x * px + a.y.x * py + a.z.x * pz, y: at.y + a.x.y * px + a.y.y * py + a.z.y * pz, z: at.z + a.x.z * px + a.y.z * py + a.z.z * pz });
   const pieces: ConvexDesc[] = [];
   const boxes = model.colliders?.boxes ?? new Float32Array(0);
   for (let i = 0; i < boxes.length; i += 6) {
@@ -245,7 +246,7 @@ export interface StageOptions {
   site?: {
     size: number;
     heightAt: (x: number, z: number) => number;
-    placed: { x: number; y: number; z: number; frontX: number; frontZ: number; model: BuildingModel }[];
+    placed: { x: number; y: number; z: number; frontX: number; frontZ: number; up?: [number, number, number]; model: BuildingModel }[];
     lines: { points: { x: number; z: number }[]; width: number; kind: "road" | "lane" | "trail" }[];
     /** Trodden rounds: a yard, out to its level ground's edge. */
     yards: { x: number; z: number; radius: number }[];
@@ -442,10 +443,11 @@ export async function createStage(engine: Engine, canvas: HTMLCanvasElement, opt
       const buildingMaterial = createBuildingMaterial(scene, litShading, await bakeBuildingTextures(seed, content.buildingMaterials));
       options.onProgress?.("Raising the buildings and setting the props down");
       site.placed.forEach((item, i) => {
-        // Its front (+z) turned to (frontX, frontZ), its +x to (frontZ, -frontX) - as in the world.
-        const { frontX: fx, frontZ: fz } = item;
+        // Its front (+z) turned to (frontX, frontZ), its +x to (frontZ, -frontX), tipped to its up -
+        // as in the world.
+        const a = placedAxes(item);
         const geometry = emptyGeometry();
-        appendModel(geometry, item.model, buildingMaterial.layerOf, (px, py, pz, direction) => (direction ? [fz * px + fx * pz, py, -fx * px + fz * pz] : [fz * px + fx * pz, py, -fx * px + fz * pz]));
+        appendModel(geometry, item.model, buildingMaterial.layerOf, (px, py, pz) => [a.x.x * px + a.y.x * py + a.z.x * pz, a.x.y * px + a.y.y * py + a.z.y * pz, a.x.z * px + a.y.z * py + a.z.z * pz]);
         const mesh = createBuildingMesh(scene, `building_${i}`, geometry, buildingMaterial);
         mesh.position.set(item.x, item.y, item.z);
         sunLighting.shadowGenerator.addShadowCaster(mesh, false);

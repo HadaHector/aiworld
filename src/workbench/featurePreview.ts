@@ -25,7 +25,7 @@ export interface FeaturePreview {
   size: number;
   heightAt: (x: number, z: number) => number;
   /** Its buildings and props: where each stands, which way it faces, and its model. */
-  placed: { x: number; y: number; z: number; frontX: number; frontZ: number; model: BuildingModel }[];
+  placed: { x: number; y: number; z: number; frontX: number; frontZ: number; up?: [number, number, number]; model: BuildingModel }[];
   /** Its roads, lanes and trails, to draw on the ground: their points and how wide. */
   lines: { points: { x: number; z: number }[]; width: number; kind: "road" | "lane" | "trail" }[];
   /** Its pads - the level ground under its yard, buildings and props - for drawing. */
@@ -100,7 +100,7 @@ export function buildFeaturePreview(
 
   const placed: FeaturePreview["placed"] = [
     ...layout.buildings.map((house) => ({ x: house.x, y: house.y, z: house.z, frontX: house.frontX, frontZ: house.frontZ, model: generateBuilding(house.building, seed, house.variant, far) })),
-    ...layout.props.map((prop) => ({ x: prop.x, y: prop.y, z: prop.z, frontX: prop.frontX, frontZ: prop.frontZ, model: generateProp(prop.prop, seed, prop.variant, far) })),
+    ...layout.props.map((prop) => ({ x: prop.x, y: prop.y, z: prop.z, frontX: prop.frontX, frontZ: prop.frontZ, up: prop.up, model: generateProp(prop.prop, seed, prop.variant, far) })),
   ];
   const lines: FeaturePreview["lines"] = [
     ...roads.map((line) => ({ points: line.points, width: ROAD_HALF * 2, kind: "road" as const })),

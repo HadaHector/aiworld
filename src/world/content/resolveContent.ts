@@ -615,7 +615,7 @@ function readBuildingMaterial(id: string, obj: RawObject, reader: Reader): Build
 function readProp(id: string, obj: RawObject, reader: Reader): PropDef {
   const names = Object.keys(PROP_GENERATORS);
   const type = reader.oneOf(obj, "type", "", names);
-  reader.onlyKeys(obj, "", ["name", "type", type, "parts", "collide"]);
+  reader.onlyKeys(obj, "", ["name", "type", type, "parts", "collide", "ground"]);
   const generator = PROP_GENERATORS[type];
   const settings: PropSettings = {};
   if (generator) {
@@ -661,7 +661,7 @@ function readProp(id: string, obj: RawObject, reader: Reader): PropDef {
     if (tints.length === 0) reader.fail(`${at}.tints`, "needs at least one colour");
     parts[part] = { material: raw.material === undefined || raw.material === null ? null : reader.string(raw, "material", at), tints: tints.length > 0 ? tints : [[1, 1, 1]] };
   }
-  return { id, name: reader.string(obj, "name", ""), generator: type, settings, parts, collide: obj.collide === undefined ? true : obj.collide === true };
+  return { id, name: reader.string(obj, "name", ""), generator: type, settings, parts, collide: obj.collide === undefined ? true : obj.collide === true, ground: obj.ground === undefined ? "level" : reader.oneOf(obj, "ground", "", ["level", "slope"] as const) };
 }
 
 /** A rooms/ file - see RoomTypeDef. */
