@@ -80,6 +80,7 @@ export function sampleBiomeArea(seed: number, content: WorldContent, biomeId: st
     featureGap: Infinity,
     featureDepth: 0,
     featureClear: 0,
+    featureStumps: 0,
   });
   const sampleTerrain: TerrainSampler = sampleAt;
 

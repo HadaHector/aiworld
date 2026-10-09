@@ -46,6 +46,8 @@ export interface TreeModel {
   canopy: Mesh;
   /** A cheaper model of the same tree for distant chunks, if the kind has one. */
   far?: TreeModel;
+  /** The same tree felled: its stump, if the kind has one (see STUMP_HEIGHT). */
+  stump?: TreeModel;
   /** What stands in the way, in tree space: convex pieces (see TreeGeometry.colliders), their hulls
    *  worked out once here so a tree placed in the world only has to move their corners. None for a
    *  kind that has no collision yet. */
@@ -283,7 +285,8 @@ interface GeneratedKind {
   variants: number;
   atlas: (seed: number) => Uint8Array | null;
   swayHeight: number;
-  generate: (seed: number, detail: TreeDetail) => TreeGeometry;
+  /** With `cut`, its stump, sawn off that high (see generateTree). */
+  generate: (seed: number, detail: TreeDetail, cut?: number) => TreeGeometry;
 }
 
 function generatedKind(shape: Extract<TreeKindDef["shape"], { model: "branching" | "conifer" }>): GeneratedKind {
@@ -293,14 +296,14 @@ function generatedKind(shape: Extract<TreeKindDef["shape"], { model: "branching"
       atlas: (seed) => bakeConiferFoliage(seed, shape.foliage),
       // A conifer's tiers are stiff: they sway less for their height than a broadleaf's crown.
       swayHeight: shape.trunk.height * 2.4,
-      generate: (seed, detail) => generateConifer(shape, seed, detail),
+      generate: (seed, detail, cut) => generateConifer(shape, seed, detail, cut ?? null),
     };
   }
   return {
     variants: shape.variants,
     atlas: (seed) => (!shape.foliage ? null : isClumpFoliage(shape.foliage) ? bakeFoliage(seed, shape.foliage) : bakeBushFoliage(seed, shape.foliage, shape.crown, shape.vines?.leaves ? shape.vines.leaves.tile / shape.vines.leaves.width : 1)),
     swayHeight: shape.trunk.height * 1.8,
-    generate: (seed, detail) => generateTree(shape, seed, detail),
+    generate: (seed, detail, cut) => generateTree(shape, seed, detail, cut ?? null),
   };
 }
 
@@ -330,7 +333,7 @@ function createGeneratedModels(scene: Scene, def: TreeKindDef, kind: GeneratedKi
   const tintDark = color3(def.tint[0]);
   const tintLight = color3(def.tint[1]);
 
-  const build = (geometry: TreeGeometry, name: string): TreeModel => {
+  const build = (geometry: TreeGeometry, name: string, woodOnly = false): TreeModel => {
     const trunk = new Mesh(`${name}_wood`, scene);
     const wood = new VertexData();
     wood.positions = geometry.wood.positions;
@@ -340,8 +343,9 @@ function createGeneratedModels(scene: Scene, def: TreeKindDef, kind: GeneratedKi
     wood.applyToMesh(trunk);
     trunk.setVerticesData("axis", geometry.wood.axes, false, 3);
     trunk.material = materials.bark;
-    // A bare tree is all wood: its wood stands in the canopy's place, where every model has a mesh.
-    if (!materials.leaves) return { canopy: trunk, tintDark, tintLight, shaderTint: true };
+    // A bare tree - or a stump - is all wood: its wood stands in the canopy's place, where every
+    // model has a mesh.
+    if (!materials.leaves || woodOnly) return { canopy: trunk, tintDark, tintLight, shaderTint: true };
 
     const canopy = new Mesh(`${name}_leaves`, scene);
     const leafData = new VertexData();
@@ -360,15 +364,22 @@ function createGeneratedModels(scene: Scene, def: TreeKindDef, kind: GeneratedKi
     return { trunk, canopy, tintDark, tintLight, shaderTint: true };
   };
 
+  // Sawn off STUMP_HEIGHT up, at the kind's middling size.
+  const cut = Math.max(0.15, STUMP_HEIGHT / ((def.scale[0] + def.scale[1]) / 2));
   const models: TreeModel[] = [];
   for (let variant = 0; variant < kind.variants; variant++) {
     const variantSeed = deriveSeed(ownSeed, variant + 1);
     const near = kind.generate(variantSeed, "near");
     const far = kind.generate(variantSeed, "far");
-    models.push({ ...build(near, `tree_${def.id}_${variant}_near`), far: build(far, `tree_${def.id}_${variant}_far`), colliders: near.colliders.map(hullPiece) });
+    const stumpGeometry = kind.generate(variantSeed, "near", cut);
+    const stump = { ...build(stumpGeometry, `tree_${def.id}_${variant}_stump`, true), colliders: stumpGeometry.colliders.map(hullPiece) };
+    models.push({ ...build(near, `tree_${def.id}_${variant}_near`), far: build(far, `tree_${def.id}_${variant}_far`), stump, colliders: near.colliders.map(hullPiece) });
   }
   return models;
 }
+
+/** How high a tree is sawn off, in metres - about the knee, at the world's twice life size. */
+const STUMP_HEIGHT = 0.9;
 
 function hullPiece(corners: Float32Array): TreeCollider {
   const points = [];

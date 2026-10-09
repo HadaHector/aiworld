@@ -15,8 +15,8 @@ import type { ConvexDesc } from "../collision/shapes";
 
 const IDENTITY: ColorMatrix = [1, 0, 0, 0, 1, 0, 0, 0, 1];
 
-function speciesKey(kind: string, variant: number, far: boolean): string {
-  return `${kind}#${variant}${far ? "~far" : ""}`;
+function speciesKey(kind: string, variant: number, far: boolean, stump = false): string {
+  return `${kind}#${variant}${stump ? "~stump" : far ? "~far" : ""}`;
 }
 
 export interface TreeField {
@@ -129,6 +129,7 @@ export async function createTreeField(
     return kindModels.flatMap((model, variant) => [
       { key: speciesKey(def.id, variant, false), model, bush },
       ...(model.far ? [{ key: speciesKey(def.id, variant, true), model: model.far, bush }] : []),
+      ...(model.stump ? [{ key: speciesKey(def.id, variant, false, true), model: model.stump, bush }] : []),
     ]);
   });
   // Row 0 changes nothing; then every area's every rule's shades, one row each. A tree names its row
@@ -219,6 +220,8 @@ export async function createTreeField(
     const variants = variantCount.get(tree.kind) ?? 1;
     const hash = (Math.imul(Math.floor(tree.x * 8), 0x27d4eb2d) ^ Math.imul(Math.floor(tree.z * 8), 0x165667b1)) >>> 0;
     const variant = tree.variant !== undefined ? tree.variant % variants : variants === 1 ? 0 : (hash >>> 7) % variants;
+    // A stump is one model near and far: it is small. A kind with no stump stands whole.
+    if (tree.stump && species.has(speciesKey(tree.kind, variant, false, true))) return speciesKey(tree.kind, variant, false, true);
     const key = speciesKey(tree.kind, variant, far);
     return species.has(key) ? key : speciesKey(tree.kind, variant, false);
   }

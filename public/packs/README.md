@@ -579,7 +579,9 @@ and are laid out in the biome's own `settlement` style, so a biome that rolls on
 Everything else keeps clear of them, and they are what the road network connects. For a `quarry`
 see `core/features/quarry.json5`. Its own block (`quarry: {...}`) sizes it, each range rolled per
 feature. `clearing` is how far past its edge trees, bushes and stones are cleared (they also go from
-any ground it cut or filled). `road` gives it a track to the nearest road - `width` against a road's
+any ground it cut or filled). `stumps` (0-1, none by default) is the share of the trees it clears
+left standing as their stumps - each its kind's own, sawn off about knee high - past a compound's
+own circle; an old tree there is spared, left standing whole. `road` gives it a track to the nearest road - `width` against a road's
 1, `maxLength` the furthest it looks for one - and the roads themselves keep off its ground.
 `ground` paints it: a material laid over everything else, with a weight graph that can read
 `featureGap` (distance past the feature's edge, 0 inside it) and `featureDepth` (how far the ground

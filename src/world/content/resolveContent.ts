@@ -1278,15 +1278,15 @@ function readBuildingPart(id: string, obj: RawObject, reader: Reader): BuildingP
 
 /** A features/ file - see FeatureKindDef. */
 function readFeatureKind(id: string, obj: RawObject, reader: Reader, buildings: Map<string, BuildingDef>, props: Map<string, PropDef>, groups: Map<string, PropGroupDef>): FeatureKindDef {
-  reader.onlyKeys(obj, "", ["name", "type", "quarry", "compound", "clearing", "road", "ground"]);
+  reader.onlyKeys(obj, "", ["name", "type", "quarry", "compound", "clearing", "stumps", "road", "ground"]);
   const type = reader.oneOf(obj, "type", "", FEATURE_TYPES);
   // A settlement is laid out by its own code, in its biome's settlement style: it takes nothing else.
   if (type === "settlement") {
     reader.onlyKeys(obj, "", ["name", "type", "road"]);
-    return { id, name: reader.string(obj, "name", ""), type, quarry: null, compound: null, clearing: [0, 0], road: readPlaceRoad(obj, reader, true), ground: null };
+    return { id, name: reader.string(obj, "name", ""), type, quarry: null, compound: null, clearing: [0, 0], stumps: 0, road: readPlaceRoad(obj, reader, true), ground: null };
   }
   // Each type takes its own block and not another's.
-  reader.onlyKeys(obj, "", ["name", "type", type, "clearing", "road", "ground"]);
+  reader.onlyKeys(obj, "", ["name", "type", type, "clearing", "stumps", "road", "ground"]);
   const ground = obj.ground === undefined ? null : reader.object(obj.ground, "ground");
   if (ground) reader.onlyKeys(ground, "ground", ["material", "weight"]);
   return {
@@ -1296,6 +1296,7 @@ function readFeatureKind(id: string, obj: RawObject, reader: Reader, buildings: 
     quarry: type === "quarry" ? readQuarry(reader.object(obj.quarry, "quarry"), reader) : null,
     compound: type === "compound" ? readCompound(reader.object(obj.compound, "compound"), reader, buildings, props, groups) : null,
     clearing: reader.range(obj, "clearing", "", { allowEqual: true }),
+    stumps: reader.optionalNumber(obj, "stumps", "", 0, { min: 0, max: 1 }),
     road: readPlaceRoad(obj, reader, false),
     ground: ground ? readLayer(ground, reader, "ground", `feature-${id}`) : null,
   };

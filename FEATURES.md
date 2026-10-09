@@ -543,6 +543,16 @@ scatter should keep each tree it would have grown there, but as a **stump**.
 
 So the clearing reads as worked timber, not a plain lawn, and the stumps fall where real trees stood.
 
+**Done:** a feature's `stumps` (the camp's 0.85) is the share of the trees its clearing takes past a
+compound's own circle that stand as stumps; the old giants there are spared, standing whole. Every
+generated kind has a stump per variant (foliage/treeModels.ts): its trunk and root star sawn off
+0.9 m up at its middling size, the star squeezed under the cut so the top is round, capped with a
+face the bark shader draws as end grain (pith, heartwood, sapwood, rings, a bark rim); its
+colliders the foot's own pieces, cut there. Before, every tree's roots were limbs stuck into the
+trunk; now its foot spreads into them as a star (treeGenerator.ts's RootStar). The camp's clearing
+widened to [50, 80] to reach past its circle, which had grown to some 40 m past the yard. Probe
+(stumps.local.mjs): no stump inside a circle, no old tree felled.
+
 ### 5. The camp's buildings
 
 Log buildings, big enough inside (at the 2x scale) for a few people to a room. A log style the
@@ -702,7 +712,7 @@ pad.
    settlements and compounds, each building its own mesh.
 5. **Props:** the asset folder, the generators, anchors, collision. **Done** but for the saw pit
    and the brush pile.
-6. **Stumps.**
+6. **Stumps.** **Done.**
 7. **Workbench preview.** **Done** for compounds.
 8. **Finishing:** materials and the yard's paint, biome odds, a walk through each wood, timings.
 

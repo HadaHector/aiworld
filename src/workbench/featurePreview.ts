@@ -5,7 +5,7 @@ import type { BiomeDefinition } from "../world/biomes/biomeTypes";
 import type { TerrainSample, TerrainSampler } from "../world/terrain/terrainSampler";
 import type { RoadLine } from "../world/roads/roadField";
 import type { SettlementGate } from "../world/settlements/gates";
-import type { TreePlacement } from "../world/foliage/treeScatter";
+import { FELL_MAX_RADIUS, type TreePlacement } from "../world/foliage/treeScatter";
 import { layoutCompound, planCompound, settleProps, type CompoundLayout } from "../world/features/compound";
 import { compoundPads, createPadField, propPads, type Pad, type PadField } from "../world/settlements/padField";
 import { generateBuilding } from "../world/buildings/buildingGenerator";
@@ -134,9 +134,19 @@ export function buildFeaturePreview(
         const x = gx + (rng() - 0.5) * TREE_SPACING * 0.8;
         const z = gz + (rng() - 0.5) * TREE_SPACING * 0.8;
         if (Math.abs(x) > half - 2 || Math.abs(z) > half - 2) continue;
-        if (rng() > smoothstep(clear, full, Math.hypot(x, z))) continue;
+        const cleared = rng() > smoothstep(clear, full, Math.hypot(x, z));
+        // One the clearing took, past the compound's own circle, may be left as its stump - or, too
+        // thick to fell, standing (as the world's scatter has it).
+        const felling = cleared && Math.hypot(x, z) > site.radius && rng() < kind.stumps;
+        if (cleared && !felling) continue;
         if (lines.some((line) => distanceToLine(line.points, x, z) < line.width / 2 + 3)) continue;
-        const tree = { kind: kinds[Math.floor(rng() * kinds.length)], scale: 0.85 + rng() * 0.3, x, y: heightAt(x, z), z, rotation: rng() * Math.PI * 2, tint: rng() };
+        const id = kinds[Math.floor(rng() * kinds.length)];
+        const treeKind = content.treeKinds.find((t) => t.id === id)!;
+        const scale = treeKind.scale[0] + rng() * (treeKind.scale[1] - treeKind.scale[0]);
+        const shape = treeKind.shape;
+        const girth = shape.model === "branching" || shape.model === "conifer" ? shape.trunk.radius * scale : 0;
+        const stump = felling && girth <= FELL_MAX_RADIUS;
+        const tree = { kind: treeKind.id, scale, x, y: heightAt(x, z), z, rotation: rng() * Math.PI * 2, tint: rng(), stump };
         (Math.hypot(x, z) < full + NEAR_WOOD ? trees : farTrees).push(tree);
       }
     }

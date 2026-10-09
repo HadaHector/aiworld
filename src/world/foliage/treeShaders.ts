@@ -61,6 +61,9 @@ out vec3 vAxis;
 out vec2 vUV;
 out float vViewDepth;
 out float vHeight;
+// A stump's sawn top: how far out from its heart to the bark (0-1) and the trunk's radius there -
+// x below 0 on bark. Marked by an axis longer than a limb's unit one (treeGenerator.ts's cap).
+out vec2 vCut;
 flat out float vTintRow;
 
 void main() {
@@ -69,7 +72,9 @@ void main() {
   // Trees are only ever scaled uniformly, so the upper 3x3 turns normals correctly.
   mat3 turn = mat3(finalWorld);
   vNormal = normalize(turn * normal);
-  vAxis = normalize(turn * axis);
+  bool cut = length(axis) > 1.5;
+  vCut = cut ? vec2(axis.x, axis.y - 2.0) : vec2(-1.0);
+  vAxis = normalize(turn * (cut ? vec3(0.0, 0.0, 1.0) : axis));
   vUV = uv;
   vHeight = position.y;
   vTintRow = instanceColor.a;
@@ -89,6 +94,7 @@ in vec3 vAxis;
 in vec2 vUV;
 in float vViewDepth;
 in float vHeight;
+in vec2 vCut;
 flat in float vTintRow;
 ${TREE_TINT_GLSL}
 
@@ -97,10 +103,32 @@ uniform sampler2D barkNormal;
 
 out vec4 outColor;
 
+/** Growth rings per unit of a stump's radius, in tree space - the trees are drawn about twice life
+ *  size, so a ring every few centimetres. */
+const float RINGS_PER_UNIT = 30.0;
+
+/**
+ * A sawn trunk's end, as the end grain the camp's logs are cut to (buildingMaterials/endGrain.json5):
+ * a dark pith, warm heartwood, paler sapwood, thin dark rings - following the trunk's own outline,
+ * a root's swell and all - fading where they are too fine to see, and the bark round the edge.
+ */
+vec3 endGrain(vec2 cut) {
+  float out_ = cut.x;
+  float years = out_ * cut.y * RINGS_PER_UNIT;
+  float blur = fwidth(years);
+  float apart = min(fract(years), 1.0 - fract(years));
+  float ring = (1.0 - smoothstep(0.08, 0.16 + blur, apart)) * (1.0 - smoothstep(0.35, 0.9, blur));
+  vec3 wood = mix(vec3(0.74, 0.58, 0.39), vec3(0.84, 0.72, 0.53), smoothstep(0.45, 0.6, out_));
+  wood = mix(vec3(0.5, 0.36, 0.24), wood, smoothstep(0.0, 0.05, out_));
+  wood *= 1.0 - 0.22 * ring;
+  return mix(wood, vec3(0.3, 0.25, 0.2), smoothstep(0.9, 0.94, out_));
+}
+
 void main() {
-  vec3 albedo = max(treeTint(vTintRow, 3) * texture(barkColor, vUV).rgb, 0.0);
-  // The normal map's x runs around the limb and y along it.
-  vec3 tangentNormal = texture(barkNormal, vUV).xyz * 2.0 - 1.0;
+  bool sawn = vCut.x >= 0.0;
+  vec3 albedo = sawn ? endGrain(vCut) : max(treeTint(vTintRow, 3) * texture(barkColor, vUV).rgb, 0.0);
+  // The normal map's x runs around the limb and y along it - none on a sawn face, which is flat.
+  vec3 tangentNormal = sawn ? vec3(0.0, 0.0, 1.0) : texture(barkNormal, vUV).xyz * 2.0 - 1.0;
   vec3 surface = normalize(vNormal);
   vec3 along = normalize(vAxis - surface * dot(vAxis, surface));
   vec3 around = cross(along, surface);

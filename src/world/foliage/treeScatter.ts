@@ -78,6 +78,8 @@ export interface TreePlacement {
   /** For a boulder: how the ground under it rises per metre along x and along z, across its
    *  footprint - it lies along the slope rather than level on it (see treeField.ts). */
   lean?: [number, number];
+  /** Felled: drawn as its kind's stump (see treeModels.ts) - where a feature cleared the wood. */
+  stump?: boolean;
   /** Which of its kind's models it is drawn with. Left out, as the scatter does, it is hashed from
    *  where the tree stands (see treeField.ts); the workbench names one to show it. */
   variant?: number;
@@ -525,12 +527,12 @@ function createScatter(seed: number, level: ScatterLevel): { scatter: TreeScatte
    * the lake is a fade, because a hard line in a density field reads as a drawn edge in the world.
    * A kind with `wetFeet` (a mangrove) is not held back by the shore rule.
    */
-  function survivalFade(ground: TreeGround, wetFeet = false): number {
+  function survivalFade(ground: TreeGround, wetFeet = false, uncleared = false): number {
     const { sample } = ground;
     if (!sample.isLand) return 0;
     // roadGap is Infinity where no road is in range, which smoothstep clamps to 1. A feature (a
-    // quarry) clears the ground it took the same way.
-    const road = smoothstep(level.roadClearance, level.roadFade, sample.roadGap) * (1 - sample.featureClear);
+    // quarry) clears the ground it took the same way - unless asked what would grow without it.
+    const road = smoothstep(level.roadClearance, level.roadFade, sample.roadGap) * (uncleared ? 1 : 1 - sample.featureClear);
     if (stone) return ground.height < ROCK_MIN_HEIGHT ? 0 : road;
     if (sample.lakeFactor > TREE_MAX_LAKE_FACTOR) return 0;
 
@@ -642,9 +644,34 @@ function createScatter(seed: number, level: ScatterLevel): { scatter: TreeScatte
       if (wanted <= 0) continue;
       const kind = kindFor(wanted, candidate.kindRoll);
       // Cheap rules first: finding the trees around means scattering them past the chunk.
-      const fade = survivalFade(ground, kind.wetFeet === true);
-      if (candidate.densityRoll >= wanted * fade) continue;
+      // The giants are spared - an old one, or one too thick to saw: where a feature's clearing leaves
+      // stumps, past a compound's own circle, the loggers left them standing.
       const size = kind.growsOld ? candidate.size : 1;
+      const girth = kind.shape.model === "branching" || kind.shape.model === "conifer" ? kind.shape.trunk.radius * (kind.scale[0] + candidate.scaleRoll * (kind.scale[1] - kind.scale[0])) * size : 0;
+      const spared = ground.sample.featureStumps > 0 && (size > 1 || girth > FELL_MAX_RADIUS);
+      const fade = survivalFade(ground, kind.wetFeet === true, spared);
+      if (candidate.densityRoll >= wanted * fade) {
+        // One a feature's clearing took - that would have grown but for it - may be left as its
+        // stump: a tree's kind only (a bush or a stone just goes), a share of them by its roll.
+        const stumps = ground.sample.featureStumps;
+        if (stumps > 0 && !stone && (kind.shape.model === "branching" || kind.shape.model === "conifer") && stumpRoll(candidate) < stumps) {
+          if (candidate.densityRoll < wanted * survivalFade(ground, kind.wetFeet === true, true)) {
+            trees.push({
+              x: candidate.x,
+              y: ground.surfaceHeight - level.sink * size,
+              z: candidate.z,
+              kind: kind.id,
+              scale: (kind.scale[0] + candidate.scaleRoll * (kind.scale[1] - kind.scale[0])) * size,
+              rotation: candidate.rotation,
+              tint: candidate.tint,
+              area: areaFor(ground.sample.areaWeights, candidate.areaRoll),
+              shade: candidate.shadeRoll,
+              stump: true,
+            });
+          }
+        }
+        continue;
+      }
       const scale = (kind.scale[0] + candidate.scaleRoll * (kind.scale[1] - kind.scale[0])) * size;
       if (understory) {
         among ??= treesAround(understory, minX, minZ, maxX, maxZ, probe);
@@ -734,6 +761,15 @@ function createScatter(seed: number, level: ScatterLevel): { scatter: TreeScatte
       return wanted <= 0 ? 0 : Math.min(1, wanted * survivalFade(ground));
     },
   };
+}
+
+/** The thickest trunk (radius, metres, as placed) loggers fell - a thicker one is left standing. */
+export const FELL_MAX_RADIUS = 1.6;
+
+/** A dart's roll for being left a stump: from its spin, which nothing else reads that way. */
+function stumpRoll(candidate: { rotation: number }): number {
+  const spun = (candidate.rotation / (Math.PI * 2)) * 7.31;
+  return spun - Math.floor(spun);
 }
 
 /** What an understory keeps clear of around a region. */

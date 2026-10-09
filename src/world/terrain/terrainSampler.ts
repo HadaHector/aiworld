@@ -61,6 +61,8 @@ export interface TerrainSample {
   featureGap: number;
   featureDepth: number;
   featureClear: number;
+  /** The share of the trees cleared here left as stumps, 0-1 (see FeatureGround.stumps). */
+  featureStumps: number;
 }
 
 export type TerrainSampler = (worldX: number, worldZ: number) => TerrainSample;
@@ -272,6 +274,7 @@ export function createTerrainSampler(seed: number, content: WorldContent): Terra
       featureGap: feature ? feature.gap : Infinity,
       featureDepth: feature ? feature.depth : 0,
       featureClear: feature ? feature.clear : 0,
+      featureStumps: feature ? feature.stumps : 0,
     };
   }
 

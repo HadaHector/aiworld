@@ -150,6 +150,9 @@ export interface FeatureKindDef {
   /** Trees, bushes and stones are cleared off the ground the feature changes, and up to the first
    *  distance past its edge, returning by the second. */
   clearing: [number, number];
+  /** The share (0-1) of the trees its clearing takes - past its own circle, round a compound - left
+   *  standing as stumps: worked timber rather than a lawn. 0 for none. */
+  stumps: number;
   /** Its place in the road network (see PlaceRoadSpec), or null for a feature nobody drives to. */
   road: PlaceRoadSpec | null;
   /** What the feature's ground is painted with: a material, laid over everything else, and its
