@@ -1,18 +1,27 @@
 import type { Mesh, CascadedShadowGenerator, Scene } from "@babylonjs/core";
-import type { House, SettlementLayout } from "./settlementLayout";
-import { generateBuilding } from "../buildings/buildingGenerator";
-import { appendModel, createBuildingMesh, emptyGeometry, type BuildingMaterial } from "../buildings/buildingMesh";
-import { interiorFloorAt, type BuiltInterior } from "../buildings/interiorFloors";
-import { WALL } from "../buildings/interiorGeometry";
+import type { House } from "../settlements/settlementLayout";
+import { generateBuilding } from "./buildingGenerator";
+import { appendModel, createBuildingMesh, emptyGeometry, type BuildingMaterial } from "./buildingMesh";
+import { interiorFloorAt, type BuiltInterior } from "./interiorFloors";
+import { WALL } from "./interiorGeometry";
 import type { TerrainCut } from "../materials/materialLibrary";
-import type { BuildingCollision } from "../buildings/buildingColliders";
+import type { BuildingCollision } from "./buildingColliders";
 import { quatFromEuler, vec3, type ShapeDesc, type Vec3 } from "../collision/index";
+
+/** A group of houses that come into the collision world together - a settlement's, a compound's -
+ *  under `key`, round (x, z). */
+export interface BuildingGroup {
+  key: string;
+  x: number;
+  z: number;
+  houses: House[];
+}
 
 /**
  * Where a house's model goes: turned to face its street and stood on its plot. The model's front
  * (+z) turns to the house's front and its +x to the right of that, seen from the street. Positions
- * are relative to the settlement's origin (ox, oz), so each settlement's mesh keeps its numbers
- * small; a direction is only turned.
+ * are relative to (ox, oz) - the house's own spot, where its mesh stands - so they stay small; a
+ * direction is only turned.
  */
 function placeHouse(house: House, ox: number, oz: number) {
   const fx = house.frontX;
@@ -26,22 +35,22 @@ function placeHouse(house: House, ox: number, oz: number) {
     direction ? [rx * x + fx * z, y, rz * x + fz * z] : [cx + rx * x + fx * z, house.y + y, cz + rz * x + fz * z];
 }
 
-export interface SettlementRenderer {
+export interface BuildingRenderer {
   setDrawDistance: (distance: number) => void;
   /** What one stands on inside a building at a world point - see interiorFloorAt - or null outside
    *  every building's rooms. */
   floorAt: (x: number, z: number, feet: number) => number | null;
   /**
-   * Keeps the buildings of the settlements near a point in a collision world and takes those
-   * further off out of it - `add` and `remove` are the world's (see worldCollision.ts).
+   * Keeps the buildings of the groups near a point in a collision world and takes those further off
+   * out of it - `add` and `remove` are the world's (see worldCollision.ts).
    */
   updateCollision: (x: number, z: number, add: (key: string, shapes: ShapeDesc[]) => void, remove: (key: string) => void) => void;
   /** The ground taken out over every cellar with rooms - for the ground's collision. */
   readonly cellarCuts: readonly TerrainCut[];
 }
 
-/** A settlement's buildings come into the collision world within this far of its edge, and go
- *  again past COLLISION_OUT. */
+/** A group's buildings come into the collision world within this far of its edge, and go again
+ *  past COLLISION_OUT. */
 const COLLISION_IN = 120;
 const COLLISION_OUT = 180;
 
@@ -90,50 +99,56 @@ interface Enterable {
   cuts: TerrainCut[];
 }
 
-/** Past this far from a settlement's edge (metres) its houses are drawn with their small details
- *  left out (see generateBuilding's `far`). */
+/** Past this far from a house (metres, from its own edge) it is drawn with its small details left
+ *  out (see generateBuilding's `far`). */
 const FAR_DETAIL_DISTANCE = 220;
 
 /**
- * Draws every settlement's buildings: one mesh per settlement with all its houses merged, shown
- * while the settlement is within the draw distance - in full near, and with their small details
- * left out from FAR_DETAIL_DISTANCE on. Each house is its building's own model (see buildings/),
- * the same the workbench shows. Houses cast shadows (they are few and large - nothing like grass)
- * and are lit through the shared lighting, like the ground they stand on.
+ * Draws the buildings of every settlement and compound, each its own mesh, shown while it is within
+ * the draw distance - in full near, and with its small details left out from FAR_DETAIL_DISTANCE on.
+ * Each house is its building's own model (see buildings/), the same the workbench shows. Houses cast
+ * shadows (they are few and large - nothing like grass) and are lit through the shared lighting,
+ * like the ground they stand on.
  */
-export function createSettlementRenderer(
+export function createBuildingRenderer(
   scene: Scene,
-  layouts: SettlementLayout[],
+  groups: BuildingGroup[],
   seed: number,
   material: BuildingMaterial,
   shadowGenerator: CascadedShadowGenerator,
   initialDrawDistance: number,
   setTerrainCuts: (cuts: TerrainCut[]) => void,
-): SettlementRenderer {
-  const meshes: { near: Mesh; far: Mesh; x: number; z: number; radius: number }[] = [];
+): BuildingRenderer {
+  const meshes: { near: Mesh; far: Mesh; x: number; z: number; reach: number }[] = [];
   const enterable: Enterable[] = [];
-  /** Each settlement's houses' collision, from their near models. */
+  /** Each group's houses' collision, from their near models. */
   const collisions: { key: string; x: number; z: number; radius: number; houses: PlacedCollision[] }[] = [];
   const inCollision = new Set<string>();
-  for (const layout of layouts) {
-    if (layout.houses.length === 0) continue;
+  for (const group of groups) {
+    if (group.houses.length === 0) continue;
     const houses: PlacedCollision[] = [];
-    const build = (far: boolean): Mesh => {
-      const geometry = emptyGeometry();
-      for (const house of layout.houses) {
+    let radius = 0;
+    group.houses.forEach((house, n) => {
+      const build = (far: boolean): { mesh: Mesh; reach: number } => {
         const model = generateBuilding(house.building, seed, house.variant, far);
-        appendModel(geometry, model, material.layerOf, placeHouse(house, layout.x, layout.z));
-        if (!far && model.interior) enterable.push(enterableOf(house, model.interior, Math.hypot(model.halfWidth, model.halfDepth)));
+        const geometry = emptyGeometry();
+        appendModel(geometry, model, material.layerOf, placeHouse(house, house.x, house.z));
+        const reach = Math.hypot(model.halfWidth, model.halfDepth);
+        if (!far && model.interior) enterable.push(enterableOf(house, model.interior, reach));
         if (!far && model.colliders) houses.push({ house, colliders: model.colliders });
-      }
-      const mesh = createBuildingMesh(scene, `settlement_${layout.siteId}${far ? "_far" : ""}`, geometry, material);
-      mesh.position.set(layout.x, 0, layout.z);
-      shadowGenerator.addShadowCaster(mesh, false);
-      mesh.setEnabled(false);
-      return mesh;
-    };
-    meshes.push({ near: build(false), far: build(true), x: layout.x, z: layout.z, radius: layout.radius });
-    collisions.push({ key: `settlement:${layout.siteId}`, x: layout.x, z: layout.z, radius: layout.radius, houses });
+        const mesh = createBuildingMesh(scene, `${group.key}:${n}${far ? ":far" : ""}`, geometry, material);
+        mesh.position.set(house.x, 0, house.z);
+        mesh.freezeWorldMatrix();
+        shadowGenerator.addShadowCaster(mesh, false);
+        mesh.setEnabled(false);
+        return { mesh, reach };
+      };
+      const near = build(false);
+      const far = build(true);
+      meshes.push({ near: near.mesh, far: far.mesh, x: house.x, z: house.z, reach: near.reach });
+      radius = Math.max(radius, Math.hypot(house.x - group.x, house.z - group.z) + near.reach);
+    });
+    collisions.push({ key: group.key, x: group.x, z: group.z, radius, houses });
   }
 
   let drawDistance = initialDrawDistance;
@@ -154,7 +169,7 @@ export function createSettlementRenderer(
       setTerrainCuts(cuts);
     }
     for (const entry of meshes) {
-      const distance = Math.hypot(entry.x - x, entry.z - z) - entry.radius;
+      const distance = Math.hypot(entry.x - x, entry.z - z) - entry.reach;
       const shown = distance <= drawDistance;
       const near = distance <= FAR_DETAIL_DISTANCE;
       entry.near.setEnabled(shown && near);

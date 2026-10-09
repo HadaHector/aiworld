@@ -9,7 +9,7 @@ import { createMaterialLibrary, type MaterialLibrary } from "./materials/materia
 import { createBushScatter, createRockScatter, createTreeCover, createTreeScatter } from "./foliage/treeScatter";
 import { createTreeField, type TreeField } from "./foliage/treeField";
 import { createGrassField, type GrassField } from "./foliage/grassField";
-import { createSettlementRenderer } from "./settlements/settlementRenderer";
+import { createBuildingRenderer } from "./buildings/buildingRenderer";
 import { bakeBuildingTextures, createBuildingMaterial } from "./buildings/buildingMesh";
 import type { SettlementLayout } from "./settlements/settlementLayout";
 import { createSunLighting, DEFAULT_DAY_NIGHT_CYCLE_MINUTES } from "./lighting/sunLighting";
@@ -35,7 +35,7 @@ export interface WorldLoadProgress {
 export interface World {
   heightAt: (worldX: number, worldZ: number) => number;
   /** What one stands on at a point with one's feet at `feet`: a floor inside a building where there
-   *  is one under them - see settlements/settlementRenderer.ts - otherwise the ground. */
+   *  is one under them - see buildings/buildingRenderer.ts - otherwise the ground. */
   groundAt: (worldX: number, worldZ: number, feet: number) => number;
   sampleTerrain: TerrainSampler;
   /** `immediate` builds whatever is queued on this thread now instead of handing it to the chunk
@@ -156,7 +156,7 @@ export async function createWorld(
   };
 
   await phase("Shaping the world: continents, zones, rivers, roads and settlements");
-  const { sampleTerrain, worldExtent, continents, areaBounds, areaNames, settlements, features, roads, settlementLayouts, areaBiomes } = createTerrainSampler(WORLD_SEED, content);
+  const { sampleTerrain, worldExtent, continents, areaBounds, areaNames, settlements, features, roads, settlementLayouts, compoundLayouts, areaBiomes } = createTerrainSampler(WORLD_SEED, content);
 
   const materialLibrary = await createMaterialLibrary(scene, WORLD_SEED, content, areaBiomes, sunLighting, (done, total) => {
     onProgress?.({ phase: "Baking material textures", completed: done, total });
@@ -177,10 +177,13 @@ export async function createWorld(
   const grass = createGrassField(scene, WORLD_SEED, materialLibrary.litShading, content.grassKinds);
   await phase(`Baking ${content.buildingMaterials.length} building materials`);
   const buildingMaterial = createBuildingMaterial(scene, materialLibrary.litShading, await bakeBuildingTextures(WORLD_SEED, content.buildingMaterials));
-  await phase(`Planning the buildings of ${settlementLayouts.length} settlements`);
-  const buildings = createSettlementRenderer(
+  await phase(`Planning the buildings of ${settlementLayouts.length} settlements and ${compoundLayouts.length} compounds`);
+  const buildings = createBuildingRenderer(
     scene,
-    settlementLayouts,
+    [
+      ...settlementLayouts.map((layout) => ({ key: `settlement:${layout.siteId}`, x: layout.x, z: layout.z, houses: layout.houses })),
+      ...compoundLayouts.map((layout) => ({ key: `compound:${layout.featureId}`, x: layout.x, z: layout.z, houses: layout.buildings })),
+    ],
     WORLD_SEED,
     buildingMaterial,
     sunLighting.shadowGenerator,

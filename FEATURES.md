@@ -477,12 +477,11 @@ The feature field still reports, from the site:
 
 #### Drawing and collision
 
-`settlementRenderer.ts` gets split:
-
-- a general **placed-buildings renderer** for any list of `{ building or prop, x, y, z, front }`,
-  owning the near and far meshes per group, shadows, collision in and out by distance,
-  `floorAt` and cellar cuts;
-- settlements and compounds both feed it.
+**Done:** `settlementRenderer.ts` became `buildings/buildingRenderer.ts`, a general renderer for
+groups of placed buildings - a settlement's houses, a compound's buildings - owning shadows,
+collision in and out by distance (per group), `floorAt` and cellar cuts. Each building is its own
+mesh, near and far, shown and given its far detail by its own distance; nothing is merged. Props
+will feed it too.
 
 No second copy of that code.
 
@@ -666,8 +665,9 @@ Props get the same model and colliders views as buildings.
      the lanes, trails and roads, every compound reached by a road - seeds 1338, 77, 4242, 9001
      (38 camps), no faults.
 3. **The camp's buildings** (section 5): log walls, the `cabin` plan, lean-tos, porches, open
-   sides, and the five buildings - brought forward, so the renderer split draws them.
-4. **The renderer split.** Compounds draw real buildings with collision.
+   sides, and the five buildings - brought forward, so the renderer split draws them. **Done.**
+4. **The renderer split.** Compounds draw real buildings with collision. **Done:** one renderer for
+   settlements and compounds, each building its own mesh.
 5. **Props:** the asset folder, the generators, anchors, collision.
 6. **Stumps.**
 7. **Workbench preview.**

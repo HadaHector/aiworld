@@ -28,7 +28,7 @@ export interface WorldCollision {
 const PATCH_DEPTH = 1;
 
 /**
- * `cellarCuts` are where the ground is taken out over cellars (see settlementRenderer.ts): the
+ * `cellarCuts` are where the ground is taken out over cellars (see buildings/buildingRenderer.ts): the
  * ground's collision is cut there too, so a cellar can be walked down into.
  */
 export function createWorldCollision(trees: TreeField, chunkSize: number, cellarCuts: readonly TerrainCut[] = []): WorldCollision {
