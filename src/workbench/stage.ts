@@ -71,6 +71,91 @@ function drawColliders(scene: Scene, pieces: ConvexDesc[], alpha = 0.35): void {
   edges.isPickable = false;
 }
 
+/** A placed model's collision shapes, as convex pieces: turned to face (frontX, frontZ) and stood at
+ *  (x, y, z), as the world turns a house. */
+function placedPieces(model: BuildingModel, at: { x: number; y: number; z: number; frontX: number; frontZ: number }): ConvexDesc[] {
+  const { frontX: fx, frontZ: fz } = at;
+  const place = (px: number, py: number, pz: number) => ({ x: at.x + fz * px + fx * pz, y: at.y + py, z: at.z - fx * px + fz * pz });
+  const pieces: ConvexDesc[] = [];
+  const boxes = model.colliders?.boxes ?? new Float32Array(0);
+  for (let i = 0; i < boxes.length; i += 6) {
+    const [x0, y0, z0, x1, y1, z1] = boxes.subarray(i, i + 6);
+    pieces.push({ kind: "convex", points: [place(x0, y0, z0), place(x1, y0, z0), place(x0, y1, z0), place(x1, y1, z0), place(x0, y0, z1), place(x1, y0, z1), place(x0, y1, z1), place(x1, y1, z1)] });
+  }
+  for (const hull of model.colliders?.hulls ?? []) {
+    const points = [];
+    for (let i = 0; i < hull.length; i += 3) points.push(place(hull[i], hull[i + 1], hull[i + 2]));
+    pieces.push({ kind: "convex", points });
+  }
+  return pieces;
+}
+
+/** Roads, lanes and trails as strips laid on the ground - each its own shade of trodden earth. */
+function drawLines(
+  scene: Scene,
+  lines: { points: { x: number; z: number }[]; width: number; kind: "road" | "lane" | "trail" }[],
+  yards: { x: number; z: number; radius: number }[],
+  height: (x: number, z: number) => number,
+): void {
+  const colors = { road: new Color3(0.42, 0.36, 0.28), lane: new Color3(0.5, 0.43, 0.33), trail: new Color3(0.36, 0.3, 0.22), yard: new Color3(0.46, 0.4, 0.31) };
+  /** Laid on the ground: a hair over it, and drawn as if nearer than it, so it never sinks into it. */
+  const onGround = (name: string, color: Color3): StandardMaterial => {
+    const material = new StandardMaterial(name, scene);
+    material.diffuseColor = color;
+    material.specularColor = new Color3(0, 0, 0);
+    material.zOffset = -4;
+    return material;
+  };
+  yards.forEach((yard, n) => {
+    // Rings out from its middle, each following the ground.
+    const rings: Vector3[][] = [];
+    const segments = 64;
+    for (let r = 0; r <= yard.radius + 1e-6; r += Math.min(1.5, yard.radius)) {
+      rings.push(Array.from({ length: segments + 1 }, (_, k) => {
+        const a = (k / segments) * Math.PI * 2;
+        const x = yard.x + Math.cos(a) * r;
+        const z = yard.z + Math.sin(a) * r;
+        return new Vector3(x, height(x, z) + 0.05, z);
+      }));
+    }
+    const disc = MeshBuilder.CreateRibbon(`yard_${n}`, { pathArray: rings, sideOrientation: Mesh.DOUBLESIDE }, scene);
+    disc.material = onGround(`yard_${n}`, colors.yard);
+    disc.isPickable = false;
+  });
+  lines.forEach((line, n) => {
+    const left: Vector3[] = [];
+    const right: Vector3[] = [];
+    for (let i = 0; i + 1 < line.points.length; i++) {
+      const a = line.points[i];
+      const b = line.points[i + 1];
+      const length = Math.hypot(b.x - a.x, b.z - a.z);
+      const steps = Math.max(1, Math.ceil(length));
+      const sx = (-(b.z - a.z) / length) * (line.width / 2);
+      const sz = ((b.x - a.x) / length) * (line.width / 2);
+      for (let s = i === 0 ? 0 : 1; s <= steps; s++) {
+        const x = a.x + ((b.x - a.x) * s) / steps;
+        const z = a.z + ((b.z - a.z) * s) / steps;
+        left.push(new Vector3(x + sx, height(x + sx, z + sz) + 0.06, z + sz));
+        right.push(new Vector3(x - sx, height(x - sx, z - sz) + 0.06, z - sz));
+      }
+    }
+    if (left.length < 2) return;
+    // Across it too, a metre apart, so it follows the ground across a wide road as well as along it.
+    const across = Math.max(1, Math.ceil(line.width));
+    const paths = Array.from({ length: across + 1 }, (_, k) =>
+      left.map((l, i) => {
+        const r = right[i];
+        const x = l.x + ((r.x - l.x) * k) / across;
+        const z = l.z + ((r.z - l.z) * k) / across;
+        return new Vector3(x, height(x, z) + 0.06, z);
+      }),
+    );
+    const ribbon = MeshBuilder.CreateRibbon(`line_${n}`, { pathArray: paths, sideOrientation: Mesh.DOUBLESIDE }, scene);
+    ribbon.material = onGround(`line_${n}`, colors[line.kind]);
+    ribbon.isPickable = false;
+  });
+}
+
 /** A building's collision shapes, as convex pieces, stood at (x, y, 0). */
 function buildingPieces(model: BuildingModel, x: number, y: number): ConvexDesc[] {
   const pieces: ConvexDesc[] = [];
@@ -119,6 +204,21 @@ export interface StageOptions {
   buildingColliders?: boolean;
   /** Mark each building's footprint and door on the ground. */
   footprints?: boolean;
+  /** A whole place instead - a feature laid out (see featurePreview.ts): its own ground, levelled,
+   *  its buildings and props standing where it put them, turned as it turned them, its roads and
+   *  trails drawn on the ground, and the trees round it. */
+  site?: {
+    size: number;
+    heightAt: (x: number, z: number) => number;
+    placed: { x: number; y: number; z: number; frontX: number; frontZ: number; model: BuildingModel }[];
+    lines: { points: { x: number; z: number }[]; width: number; kind: "road" | "lane" | "trail" }[];
+    /** Trodden rounds: a yard, out to its level ground's edge. */
+    yards: { x: number; z: number; radius: number }[];
+    trees: TreePlacement[];
+    /** Trees drawn as the world draws distant ones. */
+    farTrees: TreePlacement[];
+    far: boolean;
+  };
   timeHours: number;
   /** Whose sky and light: a biome's day-night settings. */
   lightBiome: BiomeDefinition;
@@ -144,7 +244,7 @@ const DRAW_DISTANCE = 2000;
 
 /** The ground's height at (x, z). Deterministic sines rather than noise: the same shape every
  *  time, whatever the seed, so two previews of an edit compare like for like. */
-function heightFunction(shape: GroundShape): (x: number, z: number) => number {
+export function heightFunction(shape: GroundShape): (x: number, z: number) => number {
   if (shape === "flat") return () => 0;
   const amplitude = shape === "hills" ? 1 : 5;
   return (x, z) =>
@@ -177,10 +277,12 @@ function buildGrid(scene: Scene, half: number): void {
 }
 
 /** A square of ground, one material everywhere, with its normals from the height function. */
-function buildGroundPatch(scene: Scene, height: (x: number, z: number) => number): Mesh {
-  const grid = PATCH_SUBDIVISIONS + 1;
-  const step = PATCH_SIZE / PATCH_SUBDIVISIONS;
-  const half = PATCH_SIZE / 2;
+function buildGroundPatch(scene: Scene, height: (x: number, z: number) => number, size = PATCH_SIZE): Mesh {
+  // A metre a square, whatever the patch's size.
+  const subdivisions = Math.round((size / PATCH_SIZE) * PATCH_SUBDIVISIONS);
+  const grid = subdivisions + 1;
+  const step = size / subdivisions;
+  const half = size / 2;
   const positions = new Float32Array(grid * grid * 3);
   const normals = new Float32Array(grid * grid * 3);
   const matIndices = new Float32Array(grid * grid * 4);
@@ -230,7 +332,9 @@ export async function createStage(engine: Engine, canvas: HTMLCanvasElement, opt
   scene.fogEnd = DRAW_DISTANCE;
 
   try {
-    const height = heightFunction(options.bare ? "flat" : shape);
+    const site = options.site;
+    const height = site ? site.heightAt : heightFunction(options.bare ? "flat" : shape);
+    const patchSize = site ? site.size : PATCH_SIZE;
     const sunLighting = createSunLighting(scene);
     const areaWeights: AreaWeight[] = [{ areaId: 0, biome: lightBiome, weight: 1 }];
     // updateDayNight with no time passing is what first applies a biome's day-night settings;
@@ -279,6 +383,44 @@ export async function createStage(engine: Engine, canvas: HTMLCanvasElement, opt
       framing = placed.framing;
     }
 
+    if (site) {
+      if (site.trees.length + site.farTrees.length > 0) {
+        options.onProgress?.("Growing the wood");
+        const used = new Set([...site.trees, ...site.farTrees].map((tree) => tree.kind));
+        const kinds = content.treeKinds.filter((kind) => used.has(kind.id));
+        const barks = new Map<string, BakedBark>();
+        const atlases = new Map<string, Uint8Array>();
+        for (const kind of kinds) {
+          const bark = await bakedBark(kind, seed);
+          if (bark) barks.set(kind.id, bark);
+          const atlas = bakedAtlas(kind, seed);
+          if (atlas) atlases.set(kind.id, atlas);
+        }
+        field = await createTreeField(scene, sunLighting.shadowGenerator, kinds, seed, litShading, { barks, atlases });
+        field.setChunk("site", site.trees, site.far ? 1 : 0);
+        field.setChunk("siteFar", site.farTrees, 1);
+        field.flush();
+      }
+      options.onProgress?.("Baking building materials");
+      const buildingMaterial = createBuildingMaterial(scene, litShading, await bakeBuildingTextures(seed, content.buildingMaterials));
+      options.onProgress?.("Raising the buildings and setting the props down");
+      site.placed.forEach((item, i) => {
+        // Its front (+z) turned to (frontX, frontZ), its +x to (frontZ, -frontX) - as in the world.
+        const { frontX: fx, frontZ: fz } = item;
+        const geometry = emptyGeometry();
+        appendModel(geometry, item.model, buildingMaterial.layerOf, (px, py, pz, direction) => (direction ? [fz * px + fx * pz, py, -fx * px + fz * pz] : [fz * px + fx * pz, py, -fx * px + fz * pz]));
+        const mesh = createBuildingMesh(scene, `building_${i}`, geometry, buildingMaterial);
+        mesh.position.set(item.x, item.y, item.z);
+        sunLighting.shadowGenerator.addShadowCaster(mesh, false);
+      });
+      if (options.buildingColliders) {
+        for (const mesh of scene.meshes) if (mesh.name.startsWith("building_")) mesh.setEnabled(false);
+        drawColliders(scene, site.placed.flatMap((item) => placedPieces(item.model, item)), 0.55);
+      }
+      drawLines(scene, site.lines, site.yards, height);
+      framing = { width: site.size * 0.75, height: 10 };
+    }
+
     if (options.buildings && options.buildings.length > 0) {
       options.onProgress?.("Baking building materials");
       const buildingMaterial = createBuildingMaterial(scene, litShading, await bakeBuildingTextures(seed, content.buildingMaterials));
@@ -301,10 +443,10 @@ export async function createStage(engine: Engine, canvas: HTMLCanvasElement, opt
     const view = options.view ?? {
       // The row runs along x: looked at nearly face on, so none of it hides behind the rest.
       // Buildings face +z, so they are looked at from the front and a little to the side.
-      alpha: options.buildings ? Math.PI / 2 - 0.5 : options.trees ? -Math.PI / 2 + 0.15 : -Math.PI / 2 + 0.5,
-      beta: options.buildings ? 1.2 : options.trees ? 1.45 : 1.15,
-      radius: options.trees || options.buildings ? Math.max(4, fitWidth, fitHeight) * 1.15 : 22,
-      target: [0, height(0, 0) + (options.trees || options.buildings ? framing.height * 0.45 : 0.5), 0] as [number, number, number],
+      alpha: site ? Math.PI / 2 - 0.6 : options.buildings ? Math.PI / 2 - 0.5 : options.trees ? -Math.PI / 2 + 0.15 : -Math.PI / 2 + 0.5,
+      beta: site ? 0.85 : options.buildings ? 1.2 : options.trees ? 1.45 : 1.15,
+      radius: site ? site.size * 0.5 : options.trees || options.buildings ? Math.max(4, fitWidth, fitHeight) * 1.15 : 22,
+      target: [0, height(0, 0) + (site ? 0 : options.trees || options.buildings ? framing.height * 0.45 : 0.5), 0] as [number, number, number],
     };
     const camera = new ArcRotateCamera("workbenchCamera", view.alpha, view.beta, view.radius, new Vector3(...view.target), scene);
     camera.lowerRadiusLimit = 1.5;
@@ -324,7 +466,7 @@ export async function createStage(engine: Engine, canvas: HTMLCanvasElement, opt
       camera.upperBetaLimit = Math.PI - 0.05;
       buildGrid(scene, Math.max(10, Math.ceil((framing.width / 2 + 4) / 5) * 5));
     } else if (terrain) {
-      const patch = buildGroundPatch(scene, height);
+      const patch = buildGroundPatch(scene, height, patchSize);
       patch.material = terrain.terrainMaterial;
       // The ground taken out over the buildings' cellars, as in the world.
       applyTerrainCuts([terrain.terrainMaterial], cellarCuts(options.buildings ?? [], framing.placed ?? []));
@@ -333,12 +475,13 @@ export async function createStage(engine: Engine, canvas: HTMLCanvasElement, opt
     if (options.grass.length > 0 && terrain) {
       options.onProgress?.("Growing grass");
       const grass = createGrassField(scene, seed, litShading, content.grassKinds);
-      const step = PATCH_SIZE / PATCH_SUBDIVISIONS;
-      const half = PATCH_SIZE / 2;
+      const subdivisions = Math.round((patchSize / PATCH_SIZE) * PATCH_SUBDIVISIONS);
+      const step = patchSize / subdivisions;
+      const half = patchSize / 2;
       const scattered = scatterGrass(
         {
-          size: PATCH_SIZE,
-          subdivisions: PATCH_SUBDIVISIONS,
+          size: patchSize,
+          subdivisions,
           originX: 0,
           originZ: 0,
           blendAt: () => new Map([[0, 1]]),
@@ -350,7 +493,7 @@ export async function createStage(engine: Engine, canvas: HTMLCanvasElement, opt
         seed,
         terrain.averageColors,
       );
-      grass.setChunk("patch", scattered, 0, 0, PATCH_SIZE);
+      grass.setChunk("patch", scattered, 0, 0, patchSize);
     }
 
     await scene.whenReadyAsync();

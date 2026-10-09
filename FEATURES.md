@@ -634,6 +634,14 @@ picked (the biomes' "On the ground" path), with:
 
 Props get the same model and colliders views as buildings.
 
+**Done:** a compound's file previews it on the ground of the biome it is found in (its sky, its
+base material, its trees): sited in the middle of a patch, one or two roads coming in from the
+patch's edge to gates at rolled angles - standing in for the road network - and laid out by the
+world's own code, its yard and pads levelled into the patch, its buildings and props where the
+layout put them, its roads, lanes, trail and trodden yard drawn on the ground, and the wood thinning
+in to its clearing. Variants reroll it; Detail, Colliders and the Ground shape work as for buildings
+(src/workbench/featurePreview.ts). A settlement or a quarry has no preview yet.
+
 ### 7. Probe, map, biomes and timing
 
 - **`scripts/probe/features.mjs`**, run across many seeds. It checks:
@@ -691,7 +699,7 @@ Props get the same model and colliders views as buildings.
 5. **Props:** the asset folder, the generators, anchors, collision. **Done** but for the saw pit
    and the brush pile.
 6. **Stumps.**
-7. **Workbench preview.**
+7. **Workbench preview.** **Done** for compounds.
 8. **Finishing:** materials and the yard's paint, biome odds, a walk through each wood, timings.
 
 Each step is checked and shown before the next one.

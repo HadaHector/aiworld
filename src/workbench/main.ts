@@ -12,13 +12,14 @@ import { bakedAtlas, bakedBark, bakedGround } from "./bakeCache";
 import { FOLIAGE_TEXTURE_SIZE } from "../world/foliage/treeTextures";
 import { GRASS_TEXTURE_SIZE, bakeGrassTextures } from "../world/foliage/grassTextures";
 import { WORLD_SEED } from "../world/world";
-import { createStage, type CameraView, type GroundShape, type Stage } from "./stage";
+import { createStage, heightFunction, type CameraView, type GroundShape, type Stage } from "./stage";
 import { createTextureView, type TextureImage } from "./textureView";
 import { createTextureCacheLabel } from "../debug/textureCacheLabel";
 import { sampleBiomeArea, type BiomeArea } from "./biomeArea";
 import { heightView, layerView, materialsView, plantsView, type Rgb } from "./biomeViews";
 import { generateBuilding } from "../world/buildings/buildingGenerator";
 import { generateProp } from "../world/props/propGenerator";
+import { buildFeaturePreview } from "./featurePreview";
 import { cutModel } from "./cutModel";
 import type { BuildingModel } from "../world/buildings/buildingTypes";
 import { buildPartSample, houseUsing } from "../world/buildings/partSample";
@@ -40,8 +41,8 @@ interface Asset {
 }
 
 /** The folders with a preview, and what each asset kind can be looked at as. */
-type PreviewFolder = "materials" | "trees" | "bushes" | "rocks" | "grass" | "biomes" | "buildings" | "buildingParts" | "buildingMaterials" | "props";
-const PREVIEW_FOLDERS: PreviewFolder[] = ["materials", "trees", "bushes", "rocks", "grass", "biomes", "buildings", "buildingParts", "buildingMaterials", "props"];
+type PreviewFolder = "materials" | "trees" | "bushes" | "rocks" | "grass" | "biomes" | "buildings" | "buildingParts" | "buildingMaterials" | "props" | "features";
+const PREVIEW_FOLDERS: PreviewFolder[] = ["materials", "trees", "bushes", "rocks", "grass", "biomes", "buildings", "buildingParts", "buildingMaterials", "props", "features"];
 /** How many variants of a building the Variant menu steps through - a building has no fixed count,
  *  every seed is one. */
 const BUILDING_VARIANTS = 8;
@@ -495,6 +496,8 @@ function viewsFor(asset: Asset | null, content: WorldContent | null): ViewDef[] 
       ];
     case "buildingMaterials":
       return [{ id: "texture", label: "Texture", mode: "2d" }];
+    case "features":
+      return [{ id: "placed", label: "On the ground", mode: "3d" }];
     case "biomes":
       return [
         { id: "height", label: "Height", mode: "2d" },
@@ -588,7 +591,7 @@ function renderPreviewBar(): void {
         if (stage) stage.scene.forceWireframe = options.wire === "on";
       }),
     );
-    if (current.folder === "props") viewOptions.append(checkbox("Colliders", "colliders", rebuild));
+    if (current.folder === "props" || current.folder === "features") viewOptions.append(checkbox("Colliders", "colliders", rebuild));
     if (current.folder === "buildings") {
       viewOptions.append(checkbox("Footprint", "marks", rebuild));
       // What the building puts in the way, drawn in its place.
@@ -606,8 +609,8 @@ function renderPreviewBar(): void {
         ["side", "Side section"],
       ], rebuild));
     }
-    if ((current.folder === "trees" || current.folder === "bushes" || current.folder === "rocks" || current.folder === "buildings" || current.folder === "props") && content) {
-      const generated = current.folder === "buildings" || current.folder === "props";
+    if ((current.folder === "trees" || current.folder === "bushes" || current.folder === "rocks" || current.folder === "buildings" || current.folder === "props" || current.folder === "features") && content) {
+      const generated = current.folder === "buildings" || current.folder === "props" || current.folder === "features";
       const def = generated ? undefined : kindOf(content, current);
       const variants = generated ? BUILDING_VARIANTS : def ? variantCount(def) : 1;
       const variantMenu = select("Variant", "variant", [...Array.from({ length: variants }, (_, i): [string, string] => [String(i), String(i + 1)]), ["all", "All"]], rebuild);
@@ -693,6 +696,12 @@ function timeHours(): number {
 /** The materials a tree or grass can be stood on: for grass, the ones that grow it come first. */
 function groundChoices(content: WorldContent, asset: Asset): [string, string][] {
   const all = content.materials.map((material): [string, string] => [material.id, material.name]);
+  // A feature on the ground of the biome it is found in.
+  const home = asset.folder === "features" ? content.biomes.find((biome) => biome.features.some((chance) => chance.featureId === asset.id)) : undefined;
+  if (home) {
+    const base = content.materials.find((m) => m.id === home.baseMaterialId);
+    if (base) return [[base.id, `${base.name} (its biome's)`], ...all.filter(([id]) => id !== base.id)];
+  }
   if (asset.folder !== "grass") {
     const preferred = content.materials.find((m) => m.id === content.defaultMaterialId);
     return preferred ? [[preferred.id, preferred.name], ...all.filter(([id]) => id !== preferred.id)] : all;
@@ -719,6 +728,8 @@ function autoSkyBiome(content: WorldContent, asset: Asset): BiomeDefinition {
         return asset.id in (biome.outputs.bushes?.outputs ?? {});
       case "rocks":
         return asset.id in (biome.outputs.rocks?.outputs ?? {});
+      case "features":
+        return biome.features.some((chance) => chance.featureId === asset.id);
       case "grass":
         return content.materials.some((material) => material.grass.some((spec) => spec.kind === asset.id) && usesMaterial(biome, material.id));
       default:
@@ -839,6 +850,7 @@ async function preview3d(token: number, asset: Asset, view: ViewDef, content: Wo
   let grass: GrassSpec[] = [];
   let trees: Parameters<typeof createStage>[2]["trees"];
   let buildings: Parameters<typeof createStage>[2]["buildings"];
+  let site: Parameters<typeof createStage>[2]["site"];
 
   if (asset.folder === "materials") {
     ground = content.materials.find((material) => material.id === asset.id)!;
@@ -856,6 +868,21 @@ async function preview3d(token: number, asset: Asset, view: ViewDef, content: Wo
     const def = content.buildings.find((building) => building.id === asset.id)!;
     const chosen = options.variant === "all" ? Array.from({ length: BUILDING_VARIANTS }, (_, i) => i) : [Math.min(BUILDING_VARIANTS - 1, Number(options.variant) || 0)];
     buildings = chosen.map((variant) => cutOpen(generateBuilding(def, seed, variant, options.lod === "far")));
+  } else if (asset.folder === "features") {
+    ground = groundMaterial(content, asset);
+    if (grassOn) grass = ground.grass;
+    const kind = content.featureKinds.find((k) => k.id === asset.id)!;
+    const variant = options.variant === "all" ? 0 : Math.min(BUILDING_VARIANTS - 1, Number(options.variant) || 0);
+    const far = options.lod === "far";
+    setStatus("Laying it out");
+    await nextPaint();
+    const built = buildFeaturePreview(kind, content, seed, variant, far, heightFunction(options.shape as GroundShape));
+    if (!built) {
+      showMode("none");
+      setStatus(`No preview for a ${kind.type} yet - only compounds. The JSON checks out.`);
+      return;
+    }
+    site = { size: built.size, heightAt: built.heightAt, placed: built.placed, lines: built.lines, yards: built.yards, trees: built.trees, farTrees: built.farTrees, far };
   } else if (asset.folder === "props") {
     ground = groundMaterial(content, asset);
     if (grassOn) grass = ground.grass;
@@ -893,7 +920,8 @@ async function preview3d(token: number, asset: Asset, view: ViewDef, content: Wo
     bare: view.id === "model",
     trees,
     buildings,
-    buildingColliders: options.colliders === "on" && (asset.folder === "buildings" || asset.folder === "props"),
+    buildingColliders: options.colliders === "on" && (asset.folder === "buildings" || asset.folder === "props" || asset.folder === "features"),
+    site,
     footprints: options.marks === "on" && asset.folder === "buildings",
     timeHours: timeHours(),
     lightBiome,

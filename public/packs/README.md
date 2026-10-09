@@ -836,7 +836,9 @@ A prop's model is a building's kind of model, so it is drawn with the buildings'
 far model of its own (coarser, its small pieces left out) and its own collision. Its log ends show
 end grain (`endGrain`) centred on each log's own heart; logs wrap `bark` round them along their
 length; boards run up a barrel as staves. In the workbench, `props/` shows each prop's variants,
-near and far, and what it puts in the way.
+near and far, and what it puts in the way. A compound's `features/` file shows the whole place: sited on a
+patch of its biome's ground, roads brought in to its gates, laid out, levelled, its buildings and
+props standing, its wood round it - each variant a new roll.
 
 A **group** (`propGroups/`) is props set down together - a store pile, a saw spot: `members`, each
 a `prop` standing `at: [x, z]` metres in the group (its front toward +z) or `on` an earlier member
