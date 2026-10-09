@@ -1,4 +1,5 @@
-import type { Spill } from "../props/propTypes";
+import type { FurnishResult } from "./furnish";
+import type { PropDef, PropGroupDef, Spill } from "../props/propTypes";
 import type { BuildingCollision } from "./buildingColliders";
 import type { InteriorLayout, ShellLevel } from "./interiorLayout";
 import type { TextureDef } from "../materials/textureGen";
@@ -197,6 +198,28 @@ export interface RoomTypeDef {
   underRoof: boolean;
   hearth: boolean;
   stalls: StallsSpec | null;
+  /** What it is furnished with, placed highest priority first (see FURNITURE.md and furnish.ts). */
+  furnish: FurnishEntry[];
+}
+
+/** Where in a room a piece of furniture asks to stand (see FURNITURE.md's placer):
+ *  `wall` - its back against a wall; `corner` - into a corner; `centre` - in the open, away from the
+ *  walls; `hearth` - against the chimney's wall, in front of it; `window` - under a window; `door` -
+ *  by a door, not in its way; `any` - wherever it fits. */
+export const FURNISH_SPOTS = ["wall", "corner", "centre", "hearth", "window", "door", "any"] as const;
+export type FurnishSpot = (typeof FURNISH_SPOTS)[number];
+
+/** One line of a room type's `furnish`: a prop or a group, `count` of them (rolled) - or, with `per`,
+ *  `count` for each `per` tiles of the room's floor (rounded), so a big room gets more - each made
+ *  with `chance`, placed in `priority` order (higher first) where `at` asks. */
+export interface FurnishEntry {
+  prop: PropDef | null;
+  group: PropGroupDef | null;
+  count: [number, number];
+  per: number | null;
+  chance: number;
+  priority: number;
+  at: FurnishSpot;
 }
 
 /**
@@ -622,7 +645,7 @@ export interface BuildingModel {
   /** Its interior's layout, where it has one: its rooms, stairs and doors, and where its tile (0, 0)
    *  starts (x, z), so a cell can be found from a point - and its doors out: the tile inside each,
    *  which way it faces, and where along the wall (x or z) its middle is. */
-  interior?: { layout: InteriorLayout; levels: ShellLevel[]; X0: number; Z0: number; tile: number; exits: { i: number; j: number; k: number; dir: "px" | "nx" | "pz" | "nz"; along: number }[] };
+  interior?: { layout: InteriorLayout; levels: ShellLevel[]; X0: number; Z0: number; tile: number; exits: { i: number; j: number; k: number; dir: "px" | "nx" | "pz" | "nz"; along: number }[]; furnished?: FurnishResult };
   /** What it puts in the way (see buildingColliders.ts) - built with the near model only. */
   colliders?: BuildingCollision;
 }

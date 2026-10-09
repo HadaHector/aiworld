@@ -342,13 +342,20 @@ through the noise operations' own internal sampling.
 
 ### A fireplace inside that matches the chimney outside
 
-A window is one part built twice - on the wall's face, and turned about on its inner face for a
-room that sees it (houseGenerator.ts, `insideSlot`) - so the two always match. A chimney is built
-outside only: a room behind it (a cookhouse's kitchen, drawn there by its type's `hearth`) has a
-plain wall where its hearth should be. The chimney part could build its inside the same way: the
-fireplace on the room's wall behind it - an opening as wide as the breast, a hearthstone, a lintel
-or mantel - sized and placed from the same breast, so they line up. It would also be the place
-the interior lighting the furniture step plans can start from.
+The furniture placer stands a room's `fireplace` (a prop) on the chimney's wall, centred on where
+the house recorded the chimney (furnish.ts, `at: "hearth"`), but the two are sized apart: the
+fireplace rolls its own width, not the breast's. The chimney part could pass its breast's width
+(and stone) on to the fireplace it stands behind, so they match as a window's two faces do
+(houseGenerator.ts, `insideSlot`). And a house with one chimney and two hearth rooms (the
+cookhouse's kitchen and mess hall) leaves one of them without a fireplace: a second chimney, or
+a stove in its place, would do. It is also where interior lighting can start from.
+
+### A chapel laid out as a chapel
+
+The placer sets a room's pieces where each scores best on its own (furnish.ts), which suits a
+taproom or a store but not a nave: its altar should stand against the wall facing the entrance,
+and its benches in rows facing the altar, an aisle down the middle. A room type could ask for a
+layout of its own - rows facing a focus piece - that later halls and courts reuse.
 
 ### Building textures can only be baked square
 

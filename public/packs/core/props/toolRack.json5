@@ -2,6 +2,8 @@
 {
   name: "Tool rack",
   type: "rack",
+  // On a wall, its tools hanging to the floor.
+  mount: { kind: "wall", height: 0 },
   parts: {
     board: { material: "timber", tints: [[1, 1, 1], [0.86, 0.8, 0.72]] },
     handle: { material: "timber", tints: [[1, 1, 1], [0.85, 0.8, 0.74], [0.7, 0.64, 0.58]] },

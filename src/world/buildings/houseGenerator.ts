@@ -7,6 +7,9 @@ import { inRect, planHouse, type Block, type PlanEnd } from "./housePlans";
 import { cellKey, inStall, planInterior, type FaceDir, type InteriorLayout } from "./interiorLayout";
 import { buildInterior, WALL, type Opening } from "./interiorGeometry";
 import { ColliderBuilder, wallBoxes } from "./buildingColliders";
+import { furnishInterior, type Chimney, type FurnishResult } from "./furnish";
+import { generateProp } from "../props/propGenerator";
+import { mulberry32 } from "../rng";
 
 /**
  * A traditional house, built in the order a house is: its plan (tiles, laid out by one of the plan
@@ -656,6 +659,14 @@ export function buildHouse(spec: HouseSpec, rng: () => number, far = false, meas
     const [i, j] = tileInside(run, Math.floor(Math.min(bay + span - 1, centre)));
     return { i, j, k: level.index, dir: run.dir as FaceDir, along: run.dir === "pz" || run.dir === "nz" ? x : z, half: extent.opening.half, bottom: extent.opening.bottom, top: extent.opening.top };
   };
+  // Where each chimney stands, as the room behind it sees it - for its fireplace (see furnish.ts).
+  const chimneys: Chimney[] = [];
+  const chimneyAt = (run: WallRun, level: Storey, bay: number, span: number): Chimney => {
+    const centre = bay + span / 2;
+    const [x, , z] = wallAt(run, level).at(centre, 0, 0);
+    const [i, j] = tileInside(run, Math.floor(Math.min(bay + span - 1, centre)));
+    return { i, j, k: level.index, dir: run.dir as FaceDir, along: run.dir === "pz" || run.dir === "nz" ? x : z, half: (span * tile) / 2 };
+  };
   const openDoor = (run: WallRun, level: Storey, bay: number, span: number, extent: PartExtent): void => {
     const opening = openingOf(run, level, bay, span, extent);
     if (!opening) return;
@@ -810,6 +821,7 @@ export function buildHouse(spec: HouseSpec, rng: () => number, far = false, meas
       if (!extent) continue;
       place(run, level, bay + span / 2, span, extent);
       count++;
+      if (extra.part.chimney) chimneys.push(chimneyAt(run, level, bay, span));
       if (!isDoor(extra.part)) {
         const opening = openingOf(run, level, bay, span, extent);
         if (opening) windows.push(opening);
@@ -1022,8 +1034,9 @@ export function buildHouse(spec: HouseSpec, rng: () => number, far = false, meas
   }
 
   // 8. Inside: the rooms' walls, floors and ceilings, their doors, stairs and galleries - near only.
+  let furnished: FurnishResult | undefined;
   if (interior && !far) {
-    buildInterior({ b, colliders: colliders ?? undefined, layout: interior, levels: levels.map(({ kind, index, floor, top }) => ({ kind, index, floor, top })), X, Z, tile, inside: (i, j, k) => (k < 0 ? inside(i, j) : enclosed(i, j, k)), exits, windows, roofOver: (k, x, z) => {
+    const roofOver = (k: number, x: number, z: number): number | null => {
       for (const group of roofGroups) {
         if (group.level.index !== k) continue;
         // Under the roof's straight plane by as far as its ridge and rafters sag, so it never dips
@@ -1032,7 +1045,19 @@ export function buildHouse(spec: HouseSpec, rng: () => number, far = false, meas
         if (h !== null) return h - group.plan.ridgeSag - group.plan.slopeSag;
       }
       return null;
-    } });
+    };
+    buildInterior({ b, colliders: colliders ?? undefined, layout: interior, levels: levels.map(({ kind, index, floor, top }) => ({ kind, index, floor, top })), X, Z, tile, inside: (i, j, k) => (k < 0 ? inside(i, j) : enclosed(i, j, k)), exits, windows, roofOver });
+    // And their furniture (see furnish.ts), each piece laid into the house's own model - from a
+    // seed of the layout's own, so the house's rolls are untouched.
+    if (!measure) {
+      const furnishSeed = layoutSeed(interior, tile);
+      furnished = furnishInterior({ layout: interior, levels: levels.map(({ kind, index, floor, top }) => ({ kind, index, floor, top })), X, Z, tile, exits, windows, chimneys, roofOver, seed: furnishSeed, rng: mulberry32(furnishSeed) });
+      for (const piece of furnished.pieces) {
+        const model = generateProp(piece.prop, furnishSeed, piece.variant);
+        b.append(model, piece.x, piece.y, piece.z, piece.frontX, piece.frontZ);
+        if (colliders && model.colliders) colliders.append(model.colliders, piece.x, piece.y, piece.z, piece.frontX, piece.frontZ);
+      }
+    }
   }
 
   const tiles: NonNullable<BuildingModel["tiles"]> = [];
@@ -1043,7 +1068,7 @@ export function buildHouse(spec: HouseSpec, rng: () => number, far = false, meas
   }
   const model = b.finish(door ?? { x: X(doorBay + doorSpan / 2), z: Z(entrance.j1) }, tiles);
   model.levels = levels.map(({ kind, floor, top }): Level => ({ kind, floor, top }));
-  if (interior) model.interior = { layout: interior, levels: levels.map(({ kind, index, floor, top }) => ({ kind, index, floor, top })), X0: X(0), Z0: Z(0), tile, exits: exits.map(({ i, j, k, dir, along }) => ({ i, j, k, dir, along })) };
+  if (interior) model.interior = { layout: interior, levels: levels.map(({ kind, index, floor, top }) => ({ kind, index, floor, top })), X0: X(0), Z0: Z(0), tile, exits: exits.map(({ i, j, k, dir, along }) => ({ i, j, k, dir, along })), furnished };
   if (colliders) {
     buildShellColliders(colliders);
     model.colliders = colliders.finish();
@@ -1158,4 +1183,14 @@ export function buildHouse(spec: HouseSpec, rng: () => number, far = false, meas
       }
     }
   }
+}
+
+/** A seed of an interior's own, from its layout - its tile and its rooms' places - so the same
+ *  house is furnished the same way however it is built, near or measured. */
+function layoutSeed(layout: InteriorLayout, tile: number): number {
+  let hash = Math.round(tile * 1000) | 0;
+  for (const room of layout.rooms) {
+    for (const value of [room.id, room.rect.i0, room.rect.j0, room.rect.i1, room.rect.j1, room.base, room.height]) hash = (Math.imul(hash, 31) + value) | 0;
+  }
+  return hash >>> 0;
 }

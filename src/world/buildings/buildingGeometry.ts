@@ -175,6 +175,36 @@ export class ModelBuilder {
     if (ends !== "top") this.face([[x0, y0, z0], [x1, y0, z0], [x1, y0, z1], [x0, y0, z1]], [0, -1, 0], paint, grain);
   }
 
+  /**
+   * Another model laid into this one: stood at (x, y, z), its front (+z) turned toward (frontX,
+   * frontZ) - its +x to (frontZ, -frontX), as a house is turned - its materials joined to this one's.
+   * How a piece of furniture becomes part of the house it stands in.
+   */
+  append(model: BuildingModel, x: number, y: number, z: number, frontX: number, frontZ: number): void {
+    const place = (px: number, py: number, pz: number): Vec3 => [x + frontZ * px + frontX * pz, y + py, z - frontX * px + frontZ * pz];
+    const turn = (dx: number, dy: number, dz: number): Vec3 => [frontZ * dx + frontX * dz, dy, -frontX * dx + frontZ * dz];
+    const base = this.positions.length / 3;
+    const count = model.positions.length / 3;
+    for (let v = 0; v < count; v++) {
+      const [px, py, pz] = place(model.positions[v * 3], model.positions[v * 3 + 1], model.positions[v * 3 + 2]);
+      this.minX = Math.min(this.minX, px);
+      this.maxX = Math.max(this.maxX, px);
+      this.minZ = Math.min(this.minZ, pz);
+      this.maxZ = Math.max(this.maxZ, pz);
+      this.maxY = Math.max(this.maxY, py);
+      if (this.measure) continue;
+      this.positions.push(px, py, pz);
+      this.normals.push(...turn(model.normals[v * 3], model.normals[v * 3 + 1], model.normals[v * 3 + 2]));
+      this.tangents.push(...turn(model.tangents[v * 3], model.tangents[v * 3 + 1], model.tangents[v * 3 + 2]));
+      this.uvs.push(model.uvs[v * 2], model.uvs[v * 2 + 1]);
+      this.colors.push(model.colors[v * 4], model.colors[v * 4 + 1], model.colors[v * 4 + 2], model.colors[v * 4 + 3]);
+      const slot = model.materialSlots[v];
+      this.materialSlots.push(slot < 0 ? -1 : this.slotOf(model.materials[slot]));
+    }
+    if (this.measure) return;
+    for (const index of model.indices) this.indices.push(base + index);
+  }
+
   finish(door: { x: number; z: number }, tiles?: BuildingModel["tiles"]): BuildingModel {
     return {
       positions: this.positions,

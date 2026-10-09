@@ -43,13 +43,15 @@ export function generateProp(def: PropDef, seed: number, variant: number, far = 
 }
 
 /** How far a prop reaches either side of its middle and how tall it is - worked out as its model is,
- *  every roll the same, with no geometry kept: what a layout needs to set it down. */
-export function measureProp(def: PropDef, seed: number, variant: number): { halfWidth: number; halfDepth: number; height: number } {
-  const { halfWidth, halfDepth, height } = generate(def, seed, variant, false, true);
-  return { halfWidth, halfDepth, height };
+ *  every roll the same, with no geometry kept: what a layout needs to set it down. And how far it
+ *  reaches each way on its own - `bounds`, [minX, maxX, minZ, maxZ] - for one that reaches further
+ *  forward than back (a fireplace's hearth stone), to stand its real back against a wall. */
+export function measureProp(def: PropDef, seed: number, variant: number): { halfWidth: number; halfDepth: number; height: number; bounds: [number, number, number, number] } {
+  const { halfWidth, halfDepth, height, bounds } = generate(def, seed, variant, false, true);
+  return { halfWidth, halfDepth, height, bounds: bounds! };
 }
 
-function generate(def: PropDef, seed: number, variant: number, far: boolean, measure: boolean): BuildingModel {
+function generate(def: PropDef, seed: number, variant: number, far: boolean, measure: boolean): BuildingModel & { bounds?: [number, number, number, number] } {
   const generator = PROP_GENERATORS[def.generator];
   let hash = 0;
   for (let i = 0; i < def.id.length; i++) hash = (Math.imul(hash, 31) + def.id.charCodeAt(i)) | 0;
@@ -80,5 +82,5 @@ function generate(def: PropDef, seed: number, variant: number, far: boolean, mea
   generator.build(ctx);
   const model = b.finish({ x: 0, z: Math.max(Math.abs(b.minZ), Math.abs(b.maxZ)) });
   if (colliders) model.colliders = colliders.finish();
-  return model;
+  return measure ? { ...model, bounds: [b.minX, b.maxX, b.minZ, b.maxZ] } : model;
 }

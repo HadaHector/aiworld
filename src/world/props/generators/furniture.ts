@@ -405,7 +405,11 @@ export const fireplace: PropGenerator = {
     // Out in front, stopping short of the wall behind (where the cheeks' backs are).
     slab(ctx, [0, 0.08, d * 0.4 + 0.015], [w + 0.25, 0.08, d * 1.4 - 0.015], ctx.paint("hearth"), { bottom: false, collide: true, bevel: 0.04 });
     if (ctx.far) return;
-    slab(ctx, [0, openTop + lintel + 0.08, d + 0.2], [w + 0.3, 0.08, 0.32], ctx.paint("mantel"), { bevel: 0.03 });
+    // The mantel on the lintel, its back set into the breast (whose face is at d - 0.3), its front
+    // out over the hearth.
+    const mantelBack = d - 0.36;
+    const mantelFront = d + 0.52;
+    slab(ctx, [0, openTop + lintel + 0.08 + PROUD, (mantelBack + mantelFront) / 2], [w + 0.3, 0.08, (mantelFront - mantelBack) / 2], ctx.paint("mantel"), { bevel: 0.03 });
     if (!ctx.chance("fire")) return;
     // Two or three logs on the hearth, crossed, and flames up from them.
     const logs = 2 + Math.floor(rng() * 2);
@@ -454,8 +458,8 @@ export const stove: PropGenerator = {
 export const lantern: PropGenerator = {
   doc: "An iron lantern with lit panes, standing or hung.",
   params: {
-    height: { kind: "range", default: [0.8, 1.0], min: 0.2, doc: "its body's height" },
-    width: { kind: "range", default: [0.45, 0.55], min: 0.1, doc: "across its body" },
+    height: { kind: "range", default: [0.5, 0.6], min: 0.2, doc: "its body's height" },
+    width: { kind: "range", default: [0.3, 0.35], min: 0.1, doc: "across its body" },
     chain: { kind: "range", default: [0, 0], min: 0, doc: "how long a chain it hangs from (0: it stands)" },
   },
   parts: ["iron", "pane"],

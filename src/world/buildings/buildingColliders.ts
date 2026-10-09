@@ -31,6 +31,28 @@ export class ColliderBuilder {
     this.hulls.push(new Float32Array(points.flat()));
   }
 
+  /** Another model's collision shapes, stood and turned as BuildingModel's `append` stands it: a
+   *  box turned by a quarter turn stays a box, any other turn makes it its corners' hull. */
+  append(collision: BuildingCollision, x: number, y: number, z: number, frontX: number, frontZ: number): void {
+    const place = (px: number, py: number, pz: number): Vec3 => [x + frontZ * px + frontX * pz, y + py, z - frontX * px + frontZ * pz];
+    const square = Math.abs(frontX * frontZ) < 1e-6;
+    const b = collision.boxes;
+    for (let i = 0; i < b.length; i += 6) {
+      const corners: Vec3[] = [];
+      for (const px of [b[i], b[i + 3]]) for (const py of [b[i + 1], b[i + 4]]) for (const pz of [b[i + 2], b[i + 5]]) corners.push(place(px, py, pz));
+      if (square) {
+        const lo = [0, 1, 2].map((k) => Math.min(...corners.map((c) => c[k])));
+        const hi = [0, 1, 2].map((k) => Math.max(...corners.map((c) => c[k])));
+        this.box(lo[0], lo[1], lo[2], hi[0], hi[1], hi[2]);
+      } else this.hull(corners);
+    }
+    for (const hull of collision.hulls) {
+      const points: Vec3[] = [];
+      for (let i = 0; i < hull.length; i += 3) points.push(place(hull[i], hull[i + 1], hull[i + 2]));
+      this.hull(points);
+    }
+  }
+
   finish(): BuildingCollision {
     return { boxes: new Float32Array(this.boxes), hulls: this.hulls };
   }

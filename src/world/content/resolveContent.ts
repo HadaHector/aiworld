@@ -32,7 +32,7 @@ import { checkPlans, checkRoller, describeCheckPlan, MIDDLE_ROLLER, randomRoller
 import { deriveSeed, mulberry32 } from "../rng";
 import { AREA_ROLL_SALT } from "../cells/config";
 import type { WorldContent } from "./worldContent";
-import type { GroupMember, PropDef, PropGroupDef, PropPaint, PropSettings, Spill } from "../props/propTypes";
+import type { GroupMember, Mount, PropDef, PropGroupDef, PropPaint, PropSettings, Spill } from "../props/propTypes";
 import { PROP_GENERATORS } from "../props/generators/index";
 import type { TextureDef } from "../materials/textureGen";
 import { adjustMatrix, chainMatrix, NO_ADJUST, type ColorAdjust } from "../materials/colorAdjust";
@@ -68,6 +68,8 @@ import {
   ROOM_LEVELS,
   STAIR_STYLES,
   WINDOW_INSIDES,
+  FURNISH_SPOTS,
+  type FurnishEntry,
   PARAPET_STYLES,
   RIDGE_PROFILES,
   ROOF_TYPES,
@@ -250,7 +252,13 @@ export function resolveContent(packs: PackSource[]): WorldContent {
   const buildingMaterialIds = new Set(buildingMaterials.map((m) => m.id));
   const buildingParts = readAll("buildingParts", (e, o, r) => readBuildingPart(e.id, o, r));
   const partById = new Map(buildingParts.map((part) => [part.id, part]));
-  const roomReads = readAll("rooms", (e, o, r) => ({ file: e.file, def: readRoomType(e.id, o, r) }));
+  // Props before rooms: a room type is furnished with them.
+  const propReads = readAll("props", (e, o, r) => ({ file: e.file, def: readProp(e.id, o, r) }));
+  const props = propReads.map((read) => read.def);
+  const propById = new Map(props.map((prop) => [prop.id, prop]));
+  const propGroups = readAll("propGroups", (e, o, r) => readPropGroup(e.id, o, r, propById));
+  const groupById = new Map(propGroups.map((group) => [group.id, group]));
+  const roomReads = readAll("rooms", (e, o, r) => ({ file: e.file, def: readRoomType(e.id, o, r, propById, groupById) }));
   const roomTypes = roomReads.map((read) => read.def);
   for (const { file, def } of roomReads) {
     for (const [key, surface] of [["floor", def.floor], ["walls", def.walls], ["ceiling", def.ceiling], ["beams", def.beams], ["timber", def.timber]] as const) {
@@ -260,11 +268,6 @@ export function resolveContent(packs: PackSource[]): WorldContent {
     }
   }
   const roomById = new Map(roomTypes.map((room) => [room.id, room]));
-  const propReads = readAll("props", (e, o, r) => ({ file: e.file, def: readProp(e.id, o, r) }));
-  const props = propReads.map((read) => read.def);
-  const propById = new Map(props.map((prop) => [prop.id, prop]));
-  const propGroups = readAll("propGroups", (e, o, r) => readPropGroup(e.id, o, r, propById));
-  const groupById = new Map(propGroups.map((group) => [group.id, group]));
   for (const { file, def } of propReads) {
     for (const [part, paint] of Object.entries(def.parts)) {
       if (paint.material !== null && !buildingMaterialIds.has(paint.material)) {
@@ -614,6 +617,16 @@ function readBuildingMaterial(id: string, obj: RawObject, reader: Reader): Build
  * name, each read as the generator's own `params` declare it - so any generator's file is read here
  * - and `parts`, what each part the generator paints is made of.
  */
+/** A prop's `mount: { kind, height }` - how a room sets it down; on the floor if none. */
+function readMount(obj: RawObject, reader: Reader): Mount {
+  if (obj.mount === undefined) return { kind: "floor", height: [0, 0] };
+  const mount = reader.object(obj.mount, "mount");
+  reader.onlyKeys(mount, "mount", ["kind", "height"]);
+  const kind = reader.oneOf(mount, "kind", "mount", ["floor", "wall", "ceiling"] as const);
+  const height: [number, number] = mount.height === undefined ? [0, 0] : typeof mount.height === "number" ? [mount.height, mount.height] : reader.range(mount, "height", "mount", { allowEqual: true });
+  return { kind, height };
+}
+
 /** A prop's or building's `spill: { material, reach }` - the ground round it painted - or none. */
 function readSpill(obj: RawObject, reader: Reader): Spill | null {
   if (obj.spill === undefined) return null;
@@ -625,7 +638,7 @@ function readSpill(obj: RawObject, reader: Reader): Spill | null {
 function readProp(id: string, obj: RawObject, reader: Reader): PropDef {
   const names = Object.keys(PROP_GENERATORS);
   const type = reader.oneOf(obj, "type", "", names);
-  reader.onlyKeys(obj, "", ["name", "type", type, "parts", "collide", "ground", "spill"]);
+  reader.onlyKeys(obj, "", ["name", "type", type, "parts", "collide", "ground", "spill", "mount"]);
   const generator = PROP_GENERATORS[type];
   const settings: PropSettings = {};
   if (generator) {
@@ -671,11 +684,11 @@ function readProp(id: string, obj: RawObject, reader: Reader): PropDef {
     if (tints.length === 0) reader.fail(`${at}.tints`, "needs at least one colour");
     parts[part] = { material: raw.material === undefined || raw.material === null ? null : reader.string(raw, "material", at), tints: tints.length > 0 ? tints : [[1, 1, 1]] };
   }
-  return { id, name: reader.string(obj, "name", ""), generator: type, settings, parts, collide: obj.collide === undefined ? true : obj.collide === true, ground: obj.ground === undefined ? "level" : reader.oneOf(obj, "ground", "", ["level", "slope"] as const), spill: readSpill(obj, reader) };
+  return { id, name: reader.string(obj, "name", ""), generator: type, settings, parts, collide: obj.collide === undefined ? true : obj.collide === true, ground: obj.ground === undefined ? "level" : reader.oneOf(obj, "ground", "", ["level", "slope"] as const), spill: readSpill(obj, reader), mount: readMount(obj, reader) };
 }
 
 /** A rooms/ file - see RoomTypeDef. */
-function readRoomType(id: string, obj: RawObject, reader: Reader): RoomTypeDef {
+function readRoomType(id: string, obj: RawObject, reader: Reader, props: Map<string, PropDef>, groups: Map<string, PropGroupDef>): RoomTypeDef {
   const readStalls = (): StallsSpec => {
     const raw = reader.object(obj.stalls, "stalls");
     reader.onlyKeys(raw, "stalls", ["depth", "height"]);
@@ -684,7 +697,7 @@ function readRoomType(id: string, obj: RawObject, reader: Reader): RoomTypeDef {
       height: reader.number(raw, "height", "stalls", { min: 0.5 }),
     };
   };
-  reader.onlyKeys(obj, "", ["name", "floor", "walls", "ceiling", "beams", "timber", "stair", "windows", "underRoof", "hearth", "stalls"]);
+  reader.onlyKeys(obj, "", ["name", "floor", "walls", "ceiling", "beams", "timber", "stair", "windows", "underRoof", "hearth", "stalls", "furnish"]);
   const surface = (key: string): RoomSurface => {
     const raw = reader.object(obj[key], key);
     reader.onlyKeys(raw, key, ["material", "tints"]);
@@ -705,6 +718,35 @@ function readRoomType(id: string, obj: RawObject, reader: Reader): RoomTypeDef {
     underRoof: obj.underRoof === true,
     hearth: obj.hearth === true,
     stalls: obj.stalls === undefined || obj.stalls === null ? null : readStalls(),
+    furnish: obj.furnish === undefined ? [] : reader.array(obj, "furnish", "").flatMap((raw, i): FurnishEntry[] => {
+      const path = `furnish[${i}]`;
+      const entry = reader.object(raw, path);
+      reader.onlyKeys(entry, path, ["prop", "group", "count", "per", "chance", "priority", "at"]);
+      const isGroup = entry.group !== undefined;
+      if (isGroup === (entry.prop !== undefined)) {
+        reader.fail(path, "give either a prop or a group");
+        return [];
+      }
+      const name = reader.string(entry, isGroup ? "group" : "prop", path);
+      const prop = isGroup ? null : (props.get(name) ?? null);
+      const group = isGroup ? (groups.get(name) ?? null) : null;
+      if (!prop && !group) {
+        const known = isGroup ? [...groups.keys()] : [...props.keys()];
+        reader.fail(`${path}.${isGroup ? "group" : "prop"}`, `no ${isGroup ? "prop group" : "prop"} "${name}" (known: ${known.join(", ") || "none"})`);
+        return [];
+      }
+      return [
+        {
+          prop,
+          group,
+          count: entry.count === undefined ? [1, 1] : typeof entry.count === "number" ? [entry.count, entry.count] : reader.range(entry, "count", path, { allowEqual: true }),
+          per: entry.per === undefined ? null : reader.number(entry, "per", path, { min: 1 }),
+          chance: reader.optionalNumber(entry, "chance", path, 1, { min: 0, max: 1 }),
+          priority: reader.optionalNumber(entry, "priority", path, 0),
+          at: entry.at === undefined ? "any" : reader.oneOf(entry, "at", path, FURNISH_SPOTS),
+        },
+      ];
+    }),
   };
 }
 

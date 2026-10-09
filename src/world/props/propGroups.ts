@@ -65,12 +65,15 @@ function boxOf(members: PlacedProp[]): Arranged["box"] {
   return { cx: (x0 + x1) / 2, cz: (z0 + z1) / 2, hw: (x1 - x0) / 2, hd: (z1 - z0) / 2 };
 }
 
-/** One prop set down on its own, as a group of one. */
-export function arrangeProp(prop: PropDef, seed: number, rng: () => number): Arranged {
+/** One prop set down on its own, as a group of one. Its box is symmetric about its middle - or,
+ *  `exact`, just what it reaches each way: a fireplace's box reaching further forward than back. */
+export function arrangeProp(prop: PropDef, seed: number, rng: () => number, exact = false): Arranged {
   const variant = Math.floor(rng() * PROP_VARIANT_SPACE);
   const size = measureProp(prop, seed, variant);
   const reach = Math.hypot(size.halfWidth, size.halfDepth);
-  return { members: [{ prop, variant, x: 0, z: 0, y: 0, frontX: 0, frontZ: 1, on: null, lift: 0, reach, halfWidth: size.halfWidth, halfDepth: size.halfDepth, group: 0, up: [0, 1, 0] }], reach, box: { cx: 0, cz: 0, hw: size.halfWidth, hd: size.halfDepth } };
+  const [x0, x1, z0, z1] = size.bounds;
+  const box = exact ? { cx: (x0 + x1) / 2, cz: (z0 + z1) / 2, hw: (x1 - x0) / 2, hd: (z1 - z0) / 2 } : { cx: 0, cz: 0, hw: size.halfWidth, hd: size.halfDepth };
+  return { members: [{ prop, variant, x: 0, z: 0, y: 0, frontX: 0, frontZ: 1, on: null, lift: 0, reach, halfWidth: size.halfWidth, halfDepth: size.halfDepth, group: 0, up: [0, 1, 0] }], reach, box };
 }
 
 /**

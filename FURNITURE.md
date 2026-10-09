@@ -141,7 +141,23 @@ table, chair, armchair, stool, bench, bed, wardrobe, chest, sack, bar, fireplace
 hangingLantern, altar, sconce, banner, toolRack), with the crate and barrel there already; the
 building materials `cloth`, `iron` and `flame` - a building material's `glow` (0-1) draws it with its
 own light, the same in sun and shadow, for flames and lit panes. Each previews in the workbench's
-props folder. Not yet: mounting, the placer, and anything in a room.
+props folder.
+
+Phase 2 is in, and with it most of phase 3: a prop's `mount` (`floor`, `wall` at a rolled height,
+`ceiling`), a room type's `furnish` list (a prop or a group, `count`, `chance`, `priority`, `at`), and
+the placer (`src/world/buildings/furnish.ts`) - slots a quarter tile across, doors' fronts and stair
+feet and landings kept as the way through (checked by a flood fill after each piece), stairs, holes
+and stalls no floor, windows letting only what stands below their sill before them; floor pieces
+backed onto a wall for `wall`, `corner`, `hearth` (the chimney's wall - the house now records where
+each chimney went), `window` and `door`, or anywhere in any of the four turns for `centre` and `any`,
+the best-scoring place that keeps the way clear taken; wall pieces on a stretch of wall clear of
+doors, windows, stairs and anything standing before it; hung pieces over open floor nearest the
+room's middle. Its pieces are built into the house's own model and colliders (ModelBuilder and
+ColliderBuilder `append`), near only, from a seed of the layout's own. Groups `diningTable` and
+`messTable`; the taproom, kitchen, guest room, cellar, store, mess hall, bunk loft, camp kitchen,
+camp store, tool room and nave are furnished; the taproom and the mess hall became hearth rooms.
+Probe: `scripts/probe/furnish.local.mjs` (no overlaps, nothing out of its room, on a stair or before
+a door). Not yet: the workbench's Furnished plan view, outdoor wall pieces, the town hall's rooms.
 
 ## Phases
 

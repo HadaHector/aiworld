@@ -1,0 +1,10 @@
+// A camp's mess table: a long table with a bench down each side, a lantern on it now and then.
+{
+  name: "Mess Table",
+  members: [
+    { prop: "table", at: [0, 0] },
+    { prop: "bench", at: [0, -1.45], turn: [-2, 2] },
+    { prop: "bench", at: [0, 1.45], turn: [-2, 2] },
+    { prop: "lantern", at: [0.4, 0.1], on: 0, chance: 0.5 },
+  ],
+}

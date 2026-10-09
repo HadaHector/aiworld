@@ -1,0 +1,13 @@
+// A table and its chairs: one each side, each turned to face it, and now and then one at each end.
+{
+  name: "Dining Table",
+  members: [
+    { prop: "table", at: [0, 0] },
+    { prop: "chair", at: [-0.7, -1.35], turn: [-6, 6] },
+    { prop: "chair", at: [0.7, -1.35], turn: [-6, 6], chance: 0.8 },
+    { prop: "chair", at: [-0.7, 1.35], turn: [174, 186], chance: 0.8 },
+    { prop: "chair", at: [0.7, 1.35], turn: [174, 186] },
+    { prop: "chair", at: [-2.2, 0], turn: [84, 96], chance: 0.4 },
+    { prop: "chair", at: [2.2, 0], turn: [-96, -84], chance: 0.4 },
+  ],
+}

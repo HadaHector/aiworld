@@ -6,4 +6,13 @@
   ceiling: { material: "plaster", tints: [[1.0, 0.98, 0.94]] },
   timber: { material: "timber", tints: [[0.55, 0.48, 0.42]] },
   stair: "open",
+  // What it is furnished with, highest priority first (see FURNITURE.md) - a `per` count so many
+  // for each that many tiles of floor.
+  furnish: [
+    { prop: "bed", at: "wall", priority: 10 },
+    { prop: "chest", at: "wall", priority: 6 },
+    { prop: "wardrobe", chance: 0.5, at: "wall", priority: 5 },
+    { prop: "chair", chance: 0.7, at: "window", priority: 4 },
+    { prop: "sconce", count: [0.8, 1.2], per: 6, priority: 2 },
+  ],
 }

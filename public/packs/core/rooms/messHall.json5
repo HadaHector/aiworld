@@ -10,4 +10,15 @@
   timber: { material: "timber", tints: [[0.5, 0.42, 0.36], [0.45, 0.38, 0.34]] },
   stair: "open",
   underRoof: true,
+  // A fireplace against its chimney.
+  hearth: true,
+  // What it is furnished with, highest priority first (see FURNITURE.md) - a `per` count so many
+  // for each that many tiles of floor.
+  furnish: [
+    { prop: "fireplace", at: "hearth", priority: 9 },
+    { group: "messTable", count: [0.8, 1.1], per: 12, at: "centre", priority: 7 },
+    { prop: "barrel", count: [0.5, 1], per: 10, at: "corner", priority: 4 },
+    { prop: "bench", chance: 0.5, at: "wall", priority: 3 },
+    { prop: "sconce", count: [1, 1.4], per: 10, priority: 2 },
+  ],
 }

@@ -8,4 +8,12 @@
   beams: { material: "timber", tints: [[0.4, 0.33, 0.28]] },
   timber: { material: "timber", tints: [[0.42, 0.34, 0.28]] },
   stair: "solid",
+  // What it is furnished with, highest priority first (see FURNITURE.md) - a `per` count so many
+  // for each that many tiles of floor.
+  furnish: [
+    { prop: "altar", at: "wall", priority: 10 },
+    { prop: "bench", count: [0.8, 1], per: 5, at: "centre", priority: 6 },
+    { prop: "banner", count: [0.5, 1], per: 10, priority: 3 },
+    { prop: "sconce", count: [1, 1.4], per: 10, priority: 2 },
+  ],
 }

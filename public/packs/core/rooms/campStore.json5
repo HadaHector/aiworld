@@ -9,4 +9,11 @@
   timber: { material: "timber", tints: [[0.45, 0.38, 0.34]] },
   stair: "open",
   underRoof: true,
+  // What it is furnished with, highest priority first (see FURNITURE.md) - a `per` count so many
+  // for each that many tiles of floor.
+  furnish: [
+    { prop: "crate", count: [1, 1.5], per: 6, at: "wall", priority: 6 },
+    { prop: "sack", count: [1, 1.5], per: 6, at: "corner", priority: 5 },
+    { prop: "barrel", count: [0.5, 1], per: 6, at: "any", priority: 4 },
+  ],
 }

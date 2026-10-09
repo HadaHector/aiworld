@@ -11,4 +11,14 @@
   underRoof: true,
   // The chimney stands against its wall - its hearth.
   hearth: true,
+  // What it is furnished with, highest priority first (see FURNITURE.md) - a `per` count so many
+  // for each that many tiles of floor.
+  furnish: [
+    { prop: "fireplace", at: "hearth", priority: 9 },
+    { prop: "stove", chance: 0.5, at: "wall", priority: 8 },
+    { prop: "table", at: "centre", priority: 7 },
+    { prop: "barrel", count: [0.6, 1], per: 6, at: "corner", priority: 5 },
+    { prop: "sack", count: [0.6, 1.2], per: 6, at: "corner", priority: 4 },
+    { prop: "crate", chance: 0.6, at: "wall", priority: 3 },
+  ],
 }

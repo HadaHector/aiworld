@@ -44,6 +44,17 @@ export interface PropDef {
   ground: "level" | "slope";
   /** The ground round it painted with a material of its own, or none (see Spill). */
   spill: Spill | null;
+  /** How it is set down in a room (see FURNITURE.md). */
+  mount: Mount;
+}
+
+/**
+ * How a prop is set down in a room: on the `floor` (the default), on a `wall` - its back flat on it,
+ * `height` metres up from the floor (rolled) - or hung from the `ceiling`, its top against it.
+ */
+export interface Mount {
+  kind: "floor" | "wall" | "ceiling";
+  height: [number, number];
 }
 
 /**
