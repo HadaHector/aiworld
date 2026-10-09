@@ -4,11 +4,13 @@ import type { ColorRampStop, NoiseSpec, PipelineDef, PipelineStep } from "../ter
 import { joinPath, type RawObject, type Reader } from "./contentReader";
 import { FAILED_GENERATOR } from "./generators";
 
-const NOISE_TYPES = ["fbm", "ridged", "billow", "worley", "wave", "bricks"] as const;
+const NOISE_TYPES = ["fbm", "ridged", "billow", "worley", "wave", "bricks", "scatter"] as const;
 const WAVE_SHAPES = ["sine", "triangle", "saw"] as const;
 const WORLEY_MODES = ["f1", "edge", "cell"] as const;
 const BRICK_MODES = ["edge", "cell", "u", "v"] as const;
-const CELL_MODES = ["f1", "edge", "cell", "u", "v"] as const;
+const CELL_MODES = ["f1", "edge", "cell", "u", "v", "height", "coverage"] as const;
+const SCATTER_MODES = ["height", "cell", "coverage"] as const;
+const SCATTER_SHAPES = ["ellipse", "splinter", "chip"] as const;
 
 /** The fields each op takes besides `output` and `op`: "ref" names an earlier step, "noise" a noise,
  *  "number"/"text"/"color" a literal. */
@@ -76,6 +78,34 @@ function readNoise(raw: unknown, reader: Reader, path: string, options: Pipeline
     const value = obj.stretch;
     if (Array.isArray(value) && value.length === 2 && value.every((v) => typeof v === "number" && v > 0)) stretch = [value[0], value[1]];
     else reader.fail(joinPath(path, "stretch"), "expected [x, y], both above 0");
+  }
+
+  if (type === "scatter") {
+    reader.onlyKeys(obj, path, ["name", "shared", "type", "amplitude", "mode", "shape", "count", "density", "size", "aspect", "rotation", "height", ...scaleKeys]);
+    // A pair, low to high - or one number for both.
+    const pair = (key: string, fallback: [number, number], min: number): [number, number] => {
+      const value = obj[key];
+      if (value === undefined) return fallback;
+      if (typeof value === "number" && value >= min) return [value, value];
+      if (Array.isArray(value) && value.length === 2 && value.every((v) => typeof v === "number" && v >= min) && value[0] <= value[1]) return [value[0], value[1]];
+      reader.fail(joinPath(path, key), `expected a number or [low, high], at least ${min}`);
+      return fallback;
+    };
+    return {
+      name,
+      ...shared,
+      type,
+      frequency,
+      amplitude,
+      mode: reader.has(obj, "mode") ? reader.oneOf(obj, "mode", path, SCATTER_MODES) : "height",
+      shape: reader.oneOf(obj, "shape", path, SCATTER_SHAPES),
+      count: reader.has(obj, "count") ? reader.number(obj, "count", path, { min: 1, max: 8, integer: true }) : 1,
+      density: reader.has(obj, "density") ? reader.number(obj, "density", path, { min: 0, max: 1 }) : 1,
+      size: pair("size", [1, 1], 0.01),
+      aspect: pair("aspect", [1, 1], 0.01),
+      rotation: obj.rotation === undefined ? [0, 360] : pair("rotation", [0, 360], -360),
+      height: pair("height", [1, 1], 0),
+    };
   }
 
   if (type === "worley") {

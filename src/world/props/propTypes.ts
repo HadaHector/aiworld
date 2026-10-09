@@ -42,6 +42,19 @@ export interface PropDef {
   /** How it meets the ground: `level` - the ground under it levelled to it (a stack, a crate) - or
    *  `slope` - lying on the ground as it is, tilted to it (a felled log). */
   ground: "level" | "slope";
+  /** The ground round it painted with a material of its own, or none (see Spill). */
+  spill: Spill | null;
+}
+
+/**
+ * The ground round a prop or building painted with a material of its own - sawdust round a sawbuck,
+ * chips round a chopping block: over everything else there, fading out `reach` metres past its
+ * footprint, its edge frayed (see features/spill.ts).
+ */
+export interface Spill {
+  /** A ground material (a pack's materials/ folder). */
+  material: string;
+  reach: number;
 }
 
 /**

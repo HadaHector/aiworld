@@ -1,3 +1,4 @@
+import type { Spill } from "../props/propTypes";
 import type { BuildingCollision } from "./buildingColliders";
 import type { InteriorLayout, ShellLevel } from "./interiorLayout";
 import type { TextureDef } from "../materials/textureGen";
@@ -584,6 +585,8 @@ export interface BuildingDef {
   generator: BuildingGenerator;
   boxes: BoxesSpec | null;
   house: HouseSpec | null;
+  /** The ground round it painted with a material of its own, or none (see props' Spill). */
+  spill: Spill | null;
 }
 
 /**

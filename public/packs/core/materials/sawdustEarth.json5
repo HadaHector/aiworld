@@ -1,0 +1,126 @@
+/**
+ * The ground where wood is worked - round a saw spot, a chopping block, a log deck: earth trodden
+ * hard, drifts of pale sawdust over it, and chips and splinters strewn about, flown off the axes
+ * and saws - fresh pale ones, weathered grey ones, bits of dark bark.
+ *
+ * The chips and splinters are `scatter` noises - shapes laid on the ground, each turned, sized and
+ * stretched its own way - rather than worley cells, which fill the plane in round blobs and read as
+ * pebbles. Each chip shades the earth beside it (its coverage sampled a few pixels over), so it lies
+ * on the ground rather than being painted into it. Sawdust grains are far finer than a pixel at
+ * this size (a tile is 25 m - see uvScale), so the dust is a fine grain in its drifts, not shapes.
+ */
+{
+  name: "Sawdust Earth",
+  // Laid twice as small as the usual 50 m tile: finer chips, with twice the texels each way.
+  uvScale: 2,
+  texture: {
+    bumpStrength: 1.4,
+    pipeline: {
+      noises: [
+        { name: "mottle", type: "fbm", octaves: 3, tileCycles: 13, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+        { name: "grain", type: "fbm", octaves: 2, tileCycles: 46, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+        { name: "dust", type: "fbm", octaves: 3, tileCycles: 7, amplitude: 1, persistence: 0.55, lacunarity: 2.0 },
+        { name: "dustGrain", type: "fbm", octaves: 2, tileCycles: 380, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+        // Chips: some 10-22 cm long, flat flakes, two to a cell of 28 cm, some two in five kept.
+        { name: "chips", type: "scatter", tileCycles: 90, amplitude: 1, shape: "chip", count: 2, density: 0.4, size: [0.35, 0.8], aspect: [0.25, 0.55], height: [0.5, 1] },
+        // Splinters: thin needles 10-27 cm long.
+        { name: "splinters", type: "scatter", tileCycles: 120, amplitude: 1, shape: "splinter", count: 2, density: 0.35, size: [0.5, 1.3], aspect: [0.1, 0.18], height: [0.6, 1] },
+      ],
+      steps: [
+        { output: "mottle", op: "sample", noise: "mottle" },
+        { output: "mottleMask", op: "mask", input: "mottle", at: 1.75, off: -1.75 },
+        { output: "grain", op: "sample", noise: "grain" },
+        { output: "grainMask", op: "mask", input: "grain", at: 1.5, off: -1.5 },
+
+        // The earth: two tones, darker where it is packed hardest, a little grit.
+        { output: "packed", op: "color", value: [0.25, 0.19, 0.13] },
+        { output: "dusty", op: "color", value: [0.38, 0.31, 0.22] },
+        { output: "earthTone", op: "mix", a: "packed", b: "dusty", t: "mottleMask" },
+        { output: "grit", op: "color", value: [0.46, 0.4, 0.3] },
+        { output: "gritAmount", op: "scale", input: "grainMask", factor: 0.25 },
+        { output: "earth", op: "mix", a: "earthTone", b: "grit", t: "gritAmount" },
+
+        // Sawdust in drifts: pale, finely grained, thinning out at their edges.
+        { output: "dustRaw", op: "sample", noise: "dust" },
+        { output: "drift", op: "mask", input: "dustRaw", at: 0.6, off: -0.2 },
+        { output: "dustGrainRaw", op: "sample", noise: "dustGrain" },
+        { output: "dustGrain", op: "mask", input: "dustGrainRaw", at: 0.7, off: -0.7 },
+        { output: "dustLight", op: "color", value: [0.78, 0.66, 0.47] },
+        { output: "dustDark", op: "color", value: [0.6, 0.48, 0.32] },
+        { output: "sawdust", op: "mix", a: "dustDark", b: "dustLight", t: "dustGrain" },
+        // Patchy even inside a drift: thicker where its grain is.
+        { output: "grainCover", op: "remap", input: "dustGrain", inMin: 0, inMax: 1, outMin: 0.55, outMax: 1 },
+        { output: "dustCover", op: "multiply", a: "drift", b: "grainCover" },
+        { output: "dusted", op: "mix", a: "earth", b: "sawdust", t: "dustCover" },
+
+        // Each chip's and splinter's shadow on the ground: its coverage a few pixels down-light.
+        { output: "shadowShift", op: "constant", value: 2.5 },
+        { output: "chipShadowRaw", op: "sample", noise: "chips", mode: "coverage", offset: ["shadowShift", "shadowShift"] },
+        { output: "splinterShadowRaw", op: "sample", noise: "splinters", mode: "coverage", offset: ["shadowShift", "shadowShift"] },
+        { output: "shadowRaw", op: "max", a: "chipShadowRaw", b: "splinterShadowRaw" },
+        { output: "shadowDepth", op: "remap", input: "shadowRaw", inMin: 0, inMax: 1, outMin: 1, outMax: 0.6 },
+        { output: "shaded", op: "multiply", a: "dusted", b: "shadowDepth" },
+
+        // The chips, each its own wood by its own value.
+        { output: "chip", op: "sample", noise: "chips" },
+        { output: "chipId", op: "sample", noise: "chips", mode: "cell" },
+        { output: "chipCover", op: "sample", noise: "chips", mode: "coverage" },
+        {
+          output: "chipTone",
+          op: "colorRamp",
+          input: "chipId",
+          stops: [
+            { at: 0.0, color: [0.82, 0.7, 0.5] },
+            { at: 0.35, color: [0.74, 0.61, 0.42] },
+            { at: 0.55, color: [0.66, 0.6, 0.5] },
+            { at: 0.72, color: [0.52, 0.49, 0.44] },
+            { at: 0.82, color: [0.3, 0.22, 0.15] },
+            { at: 1.0, color: [0.36, 0.27, 0.18] },
+          ],
+        },
+        // A chip's bevel a little darker than its face.
+        { output: "chipFace", op: "remap", input: "chip", inMin: 0, inMax: 1, outMin: 0.75, outMax: 1.05 },
+        { output: "chipLit", op: "multiply", a: "chipTone", b: "chipFace" },
+        { output: "chipped", op: "mix", a: "shaded", b: "chipLit", t: "chipCover" },
+
+        // Splinters: mostly fresh, lit along their ridge.
+        { output: "splinter", op: "sample", noise: "splinters" },
+        { output: "splinterId", op: "sample", noise: "splinters", mode: "cell" },
+        { output: "splinterCover", op: "sample", noise: "splinters", mode: "coverage" },
+        {
+          output: "splinterTone",
+          op: "colorRamp",
+          input: "splinterId",
+          stops: [
+            { at: 0.0, color: [0.86, 0.75, 0.55] },
+            { at: 0.7, color: [0.76, 0.64, 0.45] },
+            { at: 1.0, color: [0.58, 0.54, 0.47] },
+          ],
+        },
+        { output: "splinterRidge", op: "remap", input: "splinter", inMin: 0, inMax: 1, outMin: 0.7, outMax: 1.1 },
+        { output: "splinterLit", op: "multiply", a: "splinterTone", b: "splinterRidge" },
+        // A splinter lies over a chip where it is the taller.
+        { output: "splinterOver", op: "subtract", a: "splinter", b: "chip" },
+        { output: "splinterShows", op: "mask", input: "splinterOver", at: 0.02, off: -0.02 },
+        { output: "splinterSeen", op: "multiply", a: "splinterCover", b: "splinterShows" },
+        { output: "diffuse", op: "mix", a: "chipped", b: "splinterLit", t: "splinterSeen" },
+
+        { output: "roughness", op: "constant", value: 0.85 },
+
+        // Relief: the earth's grain, the dust a touch raised, the chips and splinters standing on it.
+        { output: "bed", op: "constant", value: 0.3 },
+        { output: "tooth", op: "scale", input: "grainMask", factor: 0.1 },
+        { output: "ground", op: "add", a: "bed", b: "tooth" },
+        { output: "dustLift", op: "scale", input: "dustCover", factor: 0.05 },
+        { output: "dustGround", op: "add", a: "ground", b: "dustLift" },
+        { output: "chipLift", op: "scale", input: "chip", factor: 0.3 },
+        { output: "splinterLift", op: "scale", input: "splinter", factor: 0.3 },
+        { output: "pieces", op: "max", a: "chipLift", b: "splinterLift" },
+        { output: "height", op: "add", a: "dustGround", b: "pieces" },
+      ],
+      outputs: { diffuse: "diffuse", roughness: "roughness", height: "height" },
+    },
+  },
+  // Trodden: no grass on it.
+  clearsGrass: 2,
+}

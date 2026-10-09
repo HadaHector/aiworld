@@ -224,3 +224,147 @@ export function worleyNoise2D(
   };
 }
 
+
+/** The shapes a `scatter` noise lays down (see ScatterNoiseSpec). */
+export type ScatterShape = "ellipse" | "splinter" | "chip";
+
+/** A `scatter` noise's instances, all in cells (see ScatterNoiseSpec). */
+export interface ScatterLayout {
+  shape: ScatterShape;
+  count: number;
+  density: number;
+  size: [number, number];
+  aspect: [number, number];
+  /** Degrees. */
+  rotation: [number, number];
+  height: [number, number];
+}
+
+/** One instance's numbers, per slot of the table: centre x, y (in cells), the cosine and sine of
+ *  its turn, its half length and half width (cells), its height, its own value - and 0 where it is
+ *  left out. */
+const INSTANCE_STRIDE = 8;
+/** A tiling scatter keeps a table of every instance on its tile up to this many floats. */
+const MAX_TABLE_FLOATS = 4_000_000;
+
+/** How high a shape stands at (u, v) in its own frame - u along it, v across, each over its half
+ *  length and width - 0 outside it. */
+function shapeProfile(shape: ScatterShape, u: number, v: number, halfWidth: number, halfLength: number): number {
+  const au = Math.abs(u);
+  const av = Math.abs(v);
+  if (au >= 1 || av >= 1) return 0;
+  switch (shape) {
+    case "ellipse": {
+      const r = u * u + v * v;
+      return r < 1 ? Math.sqrt(1 - r) : 0;
+    }
+    case "splinter": {
+      // A needle: narrowing to a point at each end, ridged along its middle.
+      const width = 1 - au * au;
+      if (av >= width) return 0;
+      return (1 - av / width) * Math.sqrt(1 - au * au * au * au);
+    }
+    case "chip": {
+      // A flat flake, its edges bevelled over a third of its half width all round.
+      const bevel = 0.35 * halfWidth;
+      const edge = Math.min((1 - au) * halfLength, (1 - av) * halfWidth);
+      return Math.min(1, edge / bevel);
+    }
+  }
+}
+
+/**
+ * Shapes scattered over a grid - Substance Designer's tile sampler: `count` per cell, each kept by
+ * `density`, set down at a random point of its cell, turned, sized and stretched by its own rolls,
+ * and stood up to its own height. Where two overlap, the taller there shows (max blending). Returns
+ * the height there (0 on bare ground), the value of the instance showing (0-1, its own random; 0
+ * where none), and how far the point is covered (1 inside any, 0 outside).
+ */
+export function scatterNoise2D(seed: number, frequency: number, tilePeriod: number | undefined, layout: ScatterLayout): (worldX: number, worldZ: number) => { height: number; id: number; coverage: number } {
+  const cellsX = tilePeriod === undefined ? 0 : Math.max(1, Math.round(tilePeriod * frequency));
+  const cellsY = cellsX;
+  const effective = tilePeriod === undefined ? frequency : cellsX / tilePeriod;
+  const { shape, count, density, size, aspect, rotation, height } = layout;
+  const reach = size[1] / 2;
+  const DEG = Math.PI / 180;
+
+  const rollInstance = (cellX: number, cellY: number, k: number, into: Float32Array, at: number): void => {
+    const rng = mulberry32(deriveSeed(deriveSeed(deriveSeed(seed, (cellX * 0x1f1f1f1f) >>> 0), (cellY * 0x2c2c2c2c) >>> 0), k + 1));
+    const x = rng();
+    const y = rng();
+    const kept = rng() < density;
+    const angle = (rotation[0] + rng() * (rotation[1] - rotation[0])) * DEG;
+    const length = size[0] + rng() * (size[1] - size[0]);
+    const width = length * (aspect[0] + rng() * (aspect[1] - aspect[0]));
+    into[at] = x;
+    into[at + 1] = y;
+    into[at + 2] = Math.cos(angle);
+    into[at + 3] = Math.sin(angle);
+    into[at + 4] = length / 2;
+    into[at + 5] = Math.max(1e-4, width / 2);
+    into[at + 6] = height[0] + rng() * (height[1] - height[0]);
+    into[at + 7] = kept ? rng() : -1;
+  };
+
+  // On a tile, every instance once, in a table; out in the world, each as it is needed.
+  const tableFloats = cellsX * cellsY * count * INSTANCE_STRIDE;
+  let table: Float32Array | null = null;
+  if (cellsX > 0 && tableFloats <= MAX_TABLE_FLOATS) {
+    table = new Float32Array(tableFloats);
+    for (let cy = 0; cy < cellsY; cy++) for (let cx = 0; cx < cellsX; cx++) for (let k = 0; k < count; k++) rollInstance(cx, cy, k, table, ((cy * cellsX + cx) * count + k) * INSTANCE_STRIDE);
+  }
+  const scratch = new Float32Array(INSTANCE_STRIDE);
+  const result = { height: 0, id: 0, coverage: 0 };
+
+  return (worldX: number, worldZ: number) => {
+    const x = worldX * effective;
+    const y = worldZ * effective;
+    let best = 0;
+    let bestId = 0;
+    let covered = 0;
+    const x0 = Math.floor(x - reach - 1);
+    const x1 = Math.floor(x + reach);
+    const y0 = Math.floor(y - reach - 1);
+    const y1 = Math.floor(y + reach);
+    for (let cy = y0; cy <= y1; cy++) {
+      for (let cx = x0; cx <= x1; cx++) {
+        const wx = wrapCell(cx, cellsX);
+        const wy = wrapCell(cy, cellsY);
+        for (let k = 0; k < count; k++) {
+          let data: Float32Array;
+          let at: number;
+          if (table) {
+            data = table;
+            at = ((wy * cellsX + wx) * count + k) * INSTANCE_STRIDE;
+          } else {
+            rollInstance(wx, wy, k, scratch, 0);
+            data = scratch;
+            at = 0;
+          }
+          if (data[at + 7] < 0) continue;
+          const dx = x - (cx + data[at]);
+          const dy = y - (cy + data[at + 1]);
+          const halfLength = data[at + 4];
+          if (Math.abs(dx) > halfLength + 1e-9 && Math.abs(dy) > halfLength + 1e-9) continue;
+          const cos = data[at + 2];
+          const sin = data[at + 3];
+          const halfWidth = data[at + 5];
+          const u = (dx * cos + dy * sin) / halfLength;
+          const v = (-dx * sin + dy * cos) / halfWidth;
+          const profile = shapeProfile(shape, u, v, halfWidth, halfLength);
+          if (profile <= 0) continue;
+          covered = 1;
+          const h = profile * data[at + 6];
+          if (h > best) {
+            best = h;
+            bestId = data[at + 7];
+          }
+        }
+      }
+    }
+    result.height = best;
+    result.id = bestId;
+    result.coverage = covered;
+    return result;
+  };
+}

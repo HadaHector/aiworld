@@ -84,6 +84,8 @@ export function buildVertexContext(
     featureKind: sample.featureKind,
     featureGap: sample.featureGap,
     featureDepth: sample.featureDepth,
+    spill: sample.spill,
+    spillMaterial: sample.spillMaterial,
     reliefCurvature: computeReliefCurvature(positions, gridSize, vertexIndex, curvatureRadiusSteps),
   };
 }

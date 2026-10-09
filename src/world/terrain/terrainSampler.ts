@@ -9,6 +9,7 @@ import { createRoadField, type RoadField } from "../roads/roadField";
 import { generateSettlementLayouts, type SettlementLayout } from "../settlements/settlementLayout";
 import { compoundPads, createPadField, propPads, settlementPads, type PadField } from "../settlements/padField";
 import { layoutCompounds, settleProps, type CompoundLayout } from "../features/compound";
+import { createSpillField, spillMaterials, type SpillField } from "../features/spill";
 import { createTreeCover } from "../foliage/treeScatter";
 import { PAD_PAINT_OFFSET } from "../settlements/settlementConfig";
 import { NO_ROLL, placeFeatures, rollCellFeatures, type FeatureSite } from "../features/featureSites";
@@ -63,6 +64,10 @@ export interface TerrainSample {
   featureClear: number;
   /** The share of the trees cleared here left as stumps, 0-1 (see FeatureGround.stumps). */
   featureStumps: number;
+  /** How far (0-1) a prop's or building's spill paints the ground here, and which of
+   *  spillMaterials it is (-1 for none) - see features/spill.ts. */
+  spill: number;
+  spillMaterial: number;
 }
 
 export type TerrainSampler = (worldX: number, worldZ: number) => TerrainSample;
@@ -178,6 +183,14 @@ export function createTerrainSampler(seed: number, content: WorldContent): Terra
   // Bound once the features are placed and before the roads are routed: a feature takes its ground
   // first, and the roads (its own track among them) are laid over what it left.
   let featureField: FeatureField | null = null;
+  // Bound with the pads: the ground the compounds' props and buildings spill over.
+  let spillField: SpillField | null = null;
+
+  const NO_SPILL = { spill: 0, spillMaterial: -1 };
+  function spillAt(x: number, z: number): { spill: number; spillMaterial: number } {
+    const spill = spillField?.at(x, z);
+    return spill ? { spill: spill.weight, spillMaterial: spill.material } : NO_SPILL;
+  }
 
   function sampleTerrain(worldX: number, worldZ: number): TerrainSample {
     sampleCounter.count++;
@@ -275,6 +288,7 @@ export function createTerrainSampler(seed: number, content: WorldContent): Terra
       featureDepth: feature ? feature.depth : 0,
       featureClear: feature ? feature.clear : 0,
       featureStumps: feature ? feature.stumps : 0,
+      ...spillAt(worldX, worldZ),
     };
   }
 
@@ -336,6 +350,7 @@ export function createTerrainSampler(seed: number, content: WorldContent): Terra
   // each is levelled to it.
   settleProps(compoundLayouts, sampleTerrain);
   padField = createPadField([...propPads(compoundLayouts), ...settlementPads(settlementLayouts), ...compoundPads(compoundLayouts)]);
+  spillField = createSpillField(compoundLayouts, spillMaterials(content));
 
   return { sampleTerrain, worldExtent, continents, areaBounds, areaNames, settlements, features, roads, settlementLayouts, compoundLayouts, areaBiomes };
 }

@@ -51,7 +51,7 @@ brainstorm, not yet a plan: a pool to pick from, weighed so the cheap, striking 
 | Alpine summer pasture (shieling): huts, a cheese hut, a stone byre | M | a high shelf | alpine meadow, green alps | 1 | 3 | 2 |
 | Ranch / cattle corrals and a water trough | M | open flat | savanna, red bush, sage hills | 1, 3 | 3 | 2 |
 | Apiary: skeps or hives on a bench | S | a flowery slope | meadow, heather moor, maquis | 3 | 2 | 1 |
-| Logging camp: stumps, log piles, a saw pit, bunkhouse | M | dense wood | snowy taiga, autumn wood, bluebell wood | 1, 3, clearing as stumps | 4 | 2 |
+| Logging camp: stumps, log piles, bunkhouse | M | dense wood | snowy taiga, autumn wood, bluebell wood | 1, 3, clearing as stumps | 4 | 2 |
 | Charcoal burners: smoking earth mounds, wood stacks | S-M | in the wood | bluebell wood, autumn wood | 3, 4 (mounds), 9 (smoke) | 4 | 2 |
 | Quarry (exists) | M | a hillside | maquis, heather moor, windswept fell | - | 3 | done |
 | Mine: an adit in the hill, spoil heaps, a winch house, ore carts | M | a hillside | (Mountains), windswept fell, desert range | 4 (adit: the quarry cut plus a hole) | 4 | 3 |
@@ -264,7 +264,7 @@ next one was started:
 A camp working a stand of timber. Its parts:
 
 - a bunkhouse and a saw shed round a trodden yard;
-- logs stacked by length, a saw pit with a log on its trestles, a chopping block;
+- logs stacked by length, a chopping block;
 - a cut-over clearing of stumps all round, a few felled trunks still lying in it;
 - its roads (one to the village, maybe one on to a sawmill), and a skid trail out into the felling.
 
@@ -408,10 +408,8 @@ farmstead, a stockade).
     ],
     props: [
       { prop: "logStack", count: [3, 6], at: "yardEdge" },
-      { prop: "sawPit", count: [1, 1], at: "yard" },
       { prop: "choppingBlock", count: [1, 2], at: "byBuilding", side: "door" },
       { prop: "felledLog", count: [4, 10], at: "trail" },      // along the skid trail
-      { prop: "brushPile", count: [3, 8], at: "clearing" },
     ],
     boundary: null,
     clearing: { radius: [55, 90], stumps: true },  // the cut-over ground: trees become stumps
@@ -500,9 +498,7 @@ The generators the camp needs, each low-poly and rolled per variant:
 |---|---|---|
 | Log stack | `logStack` | Logs in a pyramid or a crib, between two stakes; ends showing a pale cut face with rings |
 | Felled log | `log` | One trunk lying, its branches lopped, a root plate or a sawn end |
-| Saw pit | `sawPit` | A trestle frame over a cut in the ground, a log on it, a long saw. Needs its own small ground cut (see Ground: a pit stamp) |
 | Chopping block | `block` | A round of trunk, an axe in it, split wood heaped by it |
-| Brush pile | `brush` | Lopped branches heaped; leaf-card branches from the tree generator's own atlas, so it matches the wood |
 | Sawhorse, barrel, crate, cart | `boxes`-like | The general small stuff, reused by every later compound |
 
 Materials needed:
@@ -517,8 +513,8 @@ bark wrapped round them, end grain on their cut ends, a slant cut), turned shape
 bulge), each laid in a local frame and putting its own hull in the way. A generator declares its
 settings (ranges, counts, chances, numbers, with defaults) and its parts, and the content reader
 reads any generator's file from that, so a new prop is one file of code and nothing else. Materials:
-`bark` new, `endGrain` serving as `cutWood`, `deckBoards` as sawn boards. Not yet: the saw pit
-(needs a ground cut) and the brush pile (needs the trees' leaf atlas).
+`bark` new, `endGrain` serving as `cutWood`, `deckBoards` as sawn boards. The saw pit and the
+brush pile were dropped.
 
 **Groups and anchors, done:** a group (`propGroups/`) is a list of members - a prop at a place in
 the group, or `on` an earlier member's top, turned, with a chance - each built and drawn as its own
@@ -710,11 +706,17 @@ pad.
    sides, and the five buildings - brought forward, so the renderer split draws them. **Done.**
 4. **The renderer split.** Compounds draw real buildings with collision. **Done:** one renderer for
    settlements and compounds, each building its own mesh.
-5. **Props:** the asset folder, the generators, anchors, collision. **Done** but for the saw pit
-   and the brush pile.
+5. **Props:** the asset folder, the generators, anchors, collision. **Done** (the saw pit and the
+   brush pile dropped).
 6. **Stumps.** **Done.**
 7. **Workbench preview.** **Done** for compounds.
 8. **Finishing:** materials and the yard's paint, biome odds, a walk through each wood, timings.
+   **Yard done:** the camp's `ground` paints trodden earth (`track`) over its yard and out to its
+   buildings' fronts, fraying out by 10 m past the yard; where wood is worked - round a sawbuck, a
+   chopping block, the saw shed - their `spill` lays `sawdustEarth` over it (drifts of sawdust,
+   chips and splinters, made with the texture graph's new `scatter` noise, which lays oriented
+   shapes on the ground rather than worley's plane-filling blobs). A compound's pads no longer
+   paint the road surface (Pad.unpainted), which had cobbled its yard with its biome's road.
 
 Each step is checked and shown before the next one.
 

@@ -99,7 +99,7 @@ export type WorleyMode = "f1" | "edge" | "cell";
 export type BrickMode = "edge" | "cell" | "u" | "v";
 
 /** What a `sample` step can read a cell noise as. */
-export type CellMode = WorleyMode | BrickMode;
+export type CellMode = WorleyMode | BrickMode | ScatterMode;
 
 /**
  * A regular course of cells - bricks, ashlar, boards, roof tiles: `rows` courses and `columns`
@@ -118,7 +118,39 @@ export interface BricksNoiseSpec {
   mode: BrickMode;
 }
 
-export type NoiseSpec = FbmNoiseSpec | RidgedNoiseSpec | BillowNoiseSpec | WorleyNoiseSpec | WaveNoiseSpec | BricksNoiseSpec;
+/**
+ * Shapes scattered over a grid of cells - Substance Designer's tile sampler: `count` in each cell
+ * (cell size = 1/frequency), each kept by `density`, at a random point of its cell, turned between
+ * `rotation` degrees, `size` cells long, `aspect` of that wide and standing `height` tall - each roll
+ * its own. Where they overlap the taller there shows. `shape`: an "ellipse" (a dome), a "splinter"
+ * (a needle, pointed at both ends and ridged along its middle) or a "chip" (a flat flake with
+ * bevelled edges). Read as "height" (0 on bare ground), "cell" (the showing instance's own random
+ * value, 0-1 - for its colour; 0 on bare ground) or "coverage" (1 inside any, 0 outside).
+ *
+ * Unlike a worley cell, which fills the plane, these lie on bare ground and can be long and thin
+ * and turned any way: wood chips, splinters, straw, leaves, pine needles, gravel.
+ */
+export interface ScatterNoiseSpec {
+  name: string;
+  /** As BaseNoiseSpec.shared. */
+  shared?: string;
+  type: "scatter";
+  frequency: number;
+  amplitude: number;
+  mode: ScatterMode;
+  shape: ScatterShape;
+  count: number;
+  density: number;
+  size: [number, number];
+  aspect: [number, number];
+  rotation: [number, number];
+  height: [number, number];
+}
+
+export type ScatterShape = "ellipse" | "splinter" | "chip";
+export type ScatterMode = "height" | "cell" | "coverage";
+
+export type NoiseSpec = FbmNoiseSpec | RidgedNoiseSpec | BillowNoiseSpec | WorleyNoiseSpec | WaveNoiseSpec | BricksNoiseSpec | ScatterNoiseSpec;
 
 /**
  * What a step carries. Inferred per step when the pipeline compiles (never declared by hand), so a

@@ -4,6 +4,8 @@
 {
   name: "Saw Shed",
   type: "house",
+  // Sawdust and chips out round it, from the logs sawn under its roof.
+  spill: { material: "sawdustEarth", reach: 4 },
   house: {
     tile: [2.8, 3.0],
     // Five to eight bays along, four deep: room for a log on trestles and the men round it.

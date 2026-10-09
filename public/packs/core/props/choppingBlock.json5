@@ -2,6 +2,8 @@
 {
   name: "Chopping Block",
   type: "choppingBlock",
+  // Chips round it, from the wood split on it.
+  spill: { material: "sawdustEarth", reach: 2.5 },
   choppingBlock: {
     radius: [0.4, 0.55],
     height: [0.7, 0.95],

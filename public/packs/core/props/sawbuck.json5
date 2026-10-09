@@ -2,6 +2,8 @@
 {
   name: "Sawbuck",
   type: "sawbuck",
+  // Sawdust and chips round it, from the logs sawn on it.
+  spill: { material: "sawdustEarth", reach: 3 },
   sawbuck: {
     length: [2.2, 3.0],
     height: [1.6, 1.9],

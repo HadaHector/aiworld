@@ -1,6 +1,6 @@
 import { deriveSeed } from "../../rng";
 import { createTilingOctaveSampler, createWorldOctaveSampler, fbm, type Noise2D, type FbmParams } from "../noise";
-import { ridgedNoise2D, billowNoise2D, worleyNoise2D, type OctaveNoiseParams } from "./noiseGenerators";
+import { ridgedNoise2D, billowNoise2D, scatterNoise2D, worleyNoise2D, type OctaveNoiseParams } from "./noiseGenerators";
 import type { BricksNoiseSpec, CellMode, NoiseSpec, PipelineDef, PipelineStep, ValueType, WaveShape } from "./pipelineTypes";
 
 /** A compiled single-result pipeline samples world-space noise like a Noise2D, but can also pull in
@@ -122,6 +122,16 @@ function compileNoiseSpec(spec: NoiseSpec, rootSeed: number, namespace: string, 
     return (worldX: number, worldZ: number): number => {
       const t = worldX * frequencyX + worldZ * frequencyY + phase;
       return profile(t - Math.floor(t)) * amplitude;
+    };
+  }
+
+  if (spec.type === "scatter") {
+    const sample = scatterNoise2D(seed, spec.frequency, tilePeriod, spec);
+    const amplitude = spec.amplitude;
+    const mode = spec.mode;
+    return (worldX: number, worldZ: number): number => {
+      const { height, id, coverage } = sample(worldX, worldZ);
+      return (mode === "height" ? height : mode === "cell" ? id : coverage) * amplitude;
     };
   }
 
@@ -458,9 +468,10 @@ function compileGraph(def: PipelineDef, rootSeed: number, namespace: string, til
   const noiseFor = (name: string, mode?: CellMode): Noise2D | undefined => {
     const spec = noiseSpecs.get(name);
     if (!spec || !mode) return noiseSamplers.get(name);
-    if ((spec.type === "worley" || spec.type === "bricks") && mode === spec.mode) return noiseSamplers.get(name);
+    if ((spec.type === "worley" || spec.type === "bricks" || spec.type === "scatter") && mode === spec.mode) return noiseSamplers.get(name);
+    if (spec.type === "scatter" && (mode === "height" || mode === "cell" || mode === "coverage")) return compileNoiseSpec({ ...spec, mode }, rootSeed, namespace, tilePeriod);
     if (spec.type === "worley" && (mode === "f1" || mode === "edge" || mode === "cell")) return compileNoiseSpec({ ...spec, mode }, rootSeed, namespace, tilePeriod);
-    if (spec.type === "bricks" && mode !== "f1") return compileNoiseSpec({ ...spec, mode }, rootSeed, namespace, tilePeriod);
+    if (spec.type === "bricks" && (mode === "edge" || mode === "cell" || mode === "u" || mode === "v")) return compileNoiseSpec({ ...spec, mode }, rootSeed, namespace, tilePeriod);
     return undefined;
   };
 

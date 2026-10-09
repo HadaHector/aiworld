@@ -1,4 +1,5 @@
 import type { AreaWeight } from "../cells/areaField";
+import { spillMaterials } from "../features/spill";
 import { compilePipeline, type CompiledPipeline } from "../terrain/pipeline/pipelineCompiler";
 import type { WorldContent } from "../content/worldContent";
 import type { GrassSpec, MaterialDef } from "./materialTypes";
@@ -111,6 +112,13 @@ export function createMaterialBlender(seed: number, content: WorldContent, areaB
   const featureGrounds = content.featureKinds.map((kind) =>
     kind.ground ? { materialIndex: ensureMaterial(kind.ground.materialId), evaluate: compilePipeline(kind.ground.weight, seed, `material-${kind.ground.id}`) } : null,
   );
+  // A prop's or building's spill (sawdust round a sawbuck) - laid over even a feature's ground.
+  const spillIndices = spillMaterials(content).map((id) => ensureMaterial(id));
+  const spillWeight = (context: Record<string, number>): { index: number; weight: number } | null => {
+    const material = context.spillMaterial ?? -1;
+    const weight = context.spill ?? 0;
+    return material >= 0 && weight > 0 ? { index: spillIndices[material], weight: Math.min(1, weight) } : null;
+  };
   /** The weight of the ground of the feature at this point, if there is one - laid over everything. */
   const featureWeight = (worldX: number, worldZ: number, context: Record<string, number>): { index: number; weight: number } | null => {
     const kind = context.featureKind ?? -1;
@@ -197,11 +205,15 @@ export function createMaterialBlender(seed: number, content: WorldContent, areaB
     // through a wood came out half forest floor, and that half's own height - leaves, fine and high -
     // won through at every dip of the road's surface, as a sparkle that crawled when the camera moved.
     // A feature's own ground goes over even that: its track runs into it and stops.
+    // And a prop's spill over that.
+    const spill = spillWeight(context);
+    const onSpill = spill ? spill.weight : 0;
+    if (spill) add(spill.index, onSpill);
     const feature = featureWeight(worldX, worldZ, context);
-    const onFeature = feature ? feature.weight : 0;
+    const onFeature = feature ? feature.weight * (1 - onSpill) : 0;
     if (feature) add(feature.index, onFeature);
-    const roadWeight = Math.min(1, Math.max(0, compiledRoadLayer(worldX, worldZ, context))) * (1 - onFeature);
-    const offRoad = 1 - onFeature - roadWeight;
+    const roadWeight = Math.min(1, Math.max(0, compiledRoadLayer(worldX, worldZ, context))) * (1 - onSpill - onFeature);
+    const offRoad = 1 - onSpill - onFeature - roadWeight;
 
     for (const area of areaWeights) {
       const ground = groundFor(area.biome);
@@ -251,6 +263,11 @@ export function createMaterialBlender(seed: number, content: WorldContent, areaB
     if (feature && feature.weight > bestWeight) {
       bestWeight = feature.weight;
       bestIndex = feature.index;
+    }
+    const spill = spillWeight(context);
+    if (spill && spill.weight > bestWeight) {
+      bestWeight = spill.weight;
+      bestIndex = spill.index;
     }
     for (const layer of ground.layers) {
       const weight = layer.evaluate(worldX, worldZ, context);

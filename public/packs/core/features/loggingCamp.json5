@@ -54,6 +54,24 @@
   clearing: [50, 80],
   // Most of the trees it cleared - past its buildings - left as stumps: the timber it has worked.
   stumps: 0.85,
+  // Its yard's ground: earth trodden hard - across the yard and out to its buildings' fronts (5 m
+  // past its edge), fraying out by 10. Its lanes run into it and stop; past it they are the biome's
+  // own road. Where wood is worked - round its sawbucks, chopping blocks and saw shed - sawdust and
+  // chips lie over it (their `spill`).
+  ground: {
+    material: "track",
+    weight: {
+      noises: [{ name: "yardEdge", type: "fbm", octaves: 2, frequency: 0.08, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
+      steps: [
+        { output: "gapRaw", op: "input", name: "featureGap" },
+        { output: "edgeRaw", op: "sample", noise: "yardEdge" },
+        { output: "edge", op: "scale", input: "edgeRaw", factor: 2 },
+        { output: "gap", op: "add", a: "gapRaw", b: "edge" },
+        { output: "raw", op: "remap", input: "gap", inMin: 10, inMax: 5, outMin: 0, outMax: 1 },
+        { output: "result", op: "clamp", input: "raw", min: 0, max: 1 },
+      ],
+    },
+  },
   // Its place in the road network (see settlement.json5): about a hamlet's worth, one road at the
   // least and two at most, to a settlement by preference.
   road: { importance: 1, links: [1, 2], wants: ["settlement"], maxLength: 2500 },

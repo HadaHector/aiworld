@@ -101,6 +101,19 @@ is 5 cells across and 8 courses up a tile, each course slid half a cell along fr
 0.5 mid-cell), `"cell"`, a random 0-1 value of each cell's own, or `"u"` and `"v"`, where in its cell
 a point is, 0-1 along and up it. See `core/buildingMaterials/roofTiles.json5`.
 
+`scatter` lays shapes down on bare ground - Substance Designer's tile sampler - for chips, splinters,
+straw, leaves, needles, gravel: `{ name: "chips", type: "scatter", tileCycles: 90, amplitude: 1,
+shape: "chip", count: 2, density: 0.4, size: [0.35, 0.8], aspect: [0.25, 0.55], height: [0.5, 1] }`
+is a grid of cells (`tileCycles` per tile), `count` shapes to a cell each kept by `density`, each at a
+random point of its cell, turned between `rotation` degrees ([0, 360] by default), `size` cells long
+and `aspect` of that wide, standing `height` tall - every one rolled on its own (a range, or one number
+for all). `shape` is `"ellipse"` (a dome), `"splinter"` (a needle, pointed at both ends, ridged along
+its middle) or `"chip"` (a flat flake, its edges bevelled). Where they overlap the taller shows. Its
+`mode` - or a `sample` step's - reads it as `"height"` (0 on bare ground), `"cell"` (the showing
+shape's own random 0-1 value, for its colour) or `"coverage"` (1 on any shape, 0 off them); sampled
+a few pixels over, the coverage is the shapes' shadow on the ground. See
+`core/materials/sawdustEarth.json5`.
+
 `wave` is parallel bands rather than noise: `{ name: "ripple", type: "wave", frequency: [0, 0.05],
 amplitude: 1, shape: "saw" }`. `frequency` is cycles per unit along x and along y, so `[0, f]` gives
 horizontal stripes and `[f, f]` diagonal ones; in a texture it is `tileCycles: [x, y]`, which must be
@@ -823,7 +836,9 @@ name; `parts` says what each piece the generator paints is made of - `{ material
 building material (or none, for a plain colour - iron) and tints, one picked per prop; and
 `collide: false` keeps a small one out of the way (they are in it by default); `ground` says how it
 meets the ground - `level` (the default), on ground levelled for it, or `slope`, lying on the ground
-as it is, tilted to it (a felled log). Each setting is a
+as it is, tilted to it (a felled log); `spill: { material, reach }` paints the ground round it with
+a ground material, over everything else there, fading out `reach` metres past its footprint - sawdust
+round a sawbuck (a building takes a `spill` too: a saw shed's). Each setting is a
 range rolled per prop (`[lo, hi]`), a count (whole numbers), a chance, or a number, as the
 generator declares it; any left out takes the generator's default.
 

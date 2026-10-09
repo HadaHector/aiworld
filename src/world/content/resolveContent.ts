@@ -32,7 +32,7 @@ import { checkPlans, checkRoller, describeCheckPlan, MIDDLE_ROLLER, randomRoller
 import { deriveSeed, mulberry32 } from "../rng";
 import { AREA_ROLL_SALT } from "../cells/config";
 import type { WorldContent } from "./worldContent";
-import type { GroupMember, PropDef, PropGroupDef, PropPaint, PropSettings } from "../props/propTypes";
+import type { GroupMember, PropDef, PropGroupDef, PropPaint, PropSettings, Spill } from "../props/propTypes";
 import { PROP_GENERATORS } from "../props/generators/index";
 import type { TextureDef } from "../materials/textureGen";
 import { adjustMatrix, chainMatrix, NO_ADJUST, type ColorAdjust } from "../materials/colorAdjust";
@@ -377,6 +377,7 @@ export function resolveContent(packs: PackSource[]): WorldContent {
   const roadLayers = layers.filter((l) => l.roadSurface);
   for (const layer of layers) checkMaterial(layer.file, "material", layer.layer.materialId);
   for (const { file, kind } of featureReads) if (kind.ground) checkMaterial(file, "ground.material", kind.ground.materialId);
+  for (const { file, def } of [...propReads, ...buildingReads]) if (def.spill) checkMaterial(file, "spill.material", def.spill.material);
   const families = new Set(materials.flatMap((m) => (m.family ? [m.family] : [])));
   const checkBiome = (file: string, biome: BiomeDefinition, report: (issue: ContentIssue) => void): void => {
     const material = (path: string, id: string): void => {
@@ -612,10 +613,18 @@ function readBuildingMaterial(id: string, obj: RawObject, reader: Reader): Build
  * name, each read as the generator's own `params` declare it - so any generator's file is read here
  * - and `parts`, what each part the generator paints is made of.
  */
+/** A prop's or building's `spill: { material, reach }` - the ground round it painted - or none. */
+function readSpill(obj: RawObject, reader: Reader): Spill | null {
+  if (obj.spill === undefined) return null;
+  const spill = reader.object(obj.spill, "spill");
+  reader.onlyKeys(spill, "spill", ["material", "reach"]);
+  return { material: reader.string(spill, "material", "spill"), reach: reader.number(spill, "reach", "spill", { min: 0.1 }) };
+}
+
 function readProp(id: string, obj: RawObject, reader: Reader): PropDef {
   const names = Object.keys(PROP_GENERATORS);
   const type = reader.oneOf(obj, "type", "", names);
-  reader.onlyKeys(obj, "", ["name", "type", type, "parts", "collide", "ground"]);
+  reader.onlyKeys(obj, "", ["name", "type", type, "parts", "collide", "ground", "spill"]);
   const generator = PROP_GENERATORS[type];
   const settings: PropSettings = {};
   if (generator) {
@@ -661,7 +670,7 @@ function readProp(id: string, obj: RawObject, reader: Reader): PropDef {
     if (tints.length === 0) reader.fail(`${at}.tints`, "needs at least one colour");
     parts[part] = { material: raw.material === undefined || raw.material === null ? null : reader.string(raw, "material", at), tints: tints.length > 0 ? tints : [[1, 1, 1]] };
   }
-  return { id, name: reader.string(obj, "name", ""), generator: type, settings, parts, collide: obj.collide === undefined ? true : obj.collide === true, ground: obj.ground === undefined ? "level" : reader.oneOf(obj, "ground", "", ["level", "slope"] as const) };
+  return { id, name: reader.string(obj, "name", ""), generator: type, settings, parts, collide: obj.collide === undefined ? true : obj.collide === true, ground: obj.ground === undefined ? "level" : reader.oneOf(obj, "ground", "", ["level", "slope"] as const), spill: readSpill(obj, reader) };
 }
 
 /** A rooms/ file - see RoomTypeDef. */
@@ -700,7 +709,7 @@ function readRoomType(id: string, obj: RawObject, reader: Reader): RoomTypeDef {
 
 function readBuilding(id: string, obj: RawObject, reader: Reader, partById: Map<string, BuildingPartDef>, roomById: Map<string, RoomTypeDef>): BuildingDef {
   const generator = reader.oneOf(obj, "type", "", BUILDING_GENERATORS);
-  reader.onlyKeys(obj, "", ["name", "type", generator]);
+  reader.onlyKeys(obj, "", ["name", "type", generator, "spill"]);
   const block = reader.object(obj[generator], generator);
   const colorsIn = (obj: RawObject, path: string, key: string): Rgb[] => {
     const list = reader.array(obj, key, path).map((raw, i) => reader.colorValue(raw, `${path}.${key}[${i}]`));
@@ -1023,7 +1032,7 @@ function readBuilding(id: string, obj: RawObject, reader: Reader, partById: Map<
       interior: readInterior(),
     };
   }
-  return { id, name: reader.string(obj, "name", ""), generator, boxes, house };
+  return { id, name: reader.string(obj, "name", ""), generator, boxes, house, spill: readSpill(obj, reader) };
 }
 
 /** A buildingParts/ file - see BuildingPartDef. Named by `type` like a building, its settings under

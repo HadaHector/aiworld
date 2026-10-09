@@ -18,6 +18,9 @@ export interface Pad {
   firm?: boolean;
   /** How it blends back to the ground round it (see PadBlend) - the settlements' own if left out. */
   blend?: PadBlend;
+  /** Not painted as a road: levelled only - a compound's, whose own ground layer paints it (see
+   *  FeatureKindDef.ground). */
+  unpainted?: boolean;
 }
 
 /**
@@ -57,8 +60,8 @@ export interface PadField {
    * its own level as far as its blend reaches (and `roadClear`, 0-1, lets a pad that is not firm
    * reach: none of it onto a road's own level ground), the pads it is nearest pulling hardest, so
    * where two pads' blends overlap the ground runs smoothly from one level to the other rather than
-   * stepping where one stops being the nearest. And how far it is from the nearest pad's edge, for
-   * its paint. Null where no pad is near. The result is reused - read it before the next call.
+   * stepping where one stops being the nearest. And how far it is from the nearest painted pad's
+   * edge, for its paint (Infinity with none - see Pad.unpainted). Null where no pad is near. The result is reused - read it before the next call.
    */
   level(x: number, z: number, height: number, roadClear: number): { height: number; gap: number } | null;
   padCount: number;
@@ -109,13 +112,16 @@ export function propPads(layouts: CompoundLayout[]): Pad[] {
   return layouts.flatMap((layout) =>
     layout.props
       .filter((prop) => !prop.on && prop.prop.ground !== "slope")
-      .map((prop) => ({ x: prop.x, z: prop.z, y: prop.y, ux: -prop.frontZ, uz: prop.frontX, hw: prop.halfWidth + 0.3, hd: prop.halfDepth + 0.3, radius: 0, firm: true, blend: layout.padBlend })),
+      .map((prop) => ({ x: prop.x, z: prop.z, y: prop.y, ux: -prop.frontZ, uz: prop.frontX, hw: prop.halfWidth + 0.3, hd: prop.halfDepth + 0.3, radius: 0, firm: true, blend: layout.padBlend, unpainted: true })),
   );
 }
 
 /** Every compound's yard and the ground under its buildings. */
 export function compoundPads(layouts: CompoundLayout[]): Pad[] {
-  return layouts.flatMap(({ yard, buildings, padBlend }) => [{ x: yard.x, z: yard.z, y: yard.y, ux: 1, uz: 0, hw: 0, hd: 0, radius: yard.level, blend: padBlend }, ...buildings.map((house) => ({ ...housePad(house), blend: padBlend }))]);
+  return layouts.flatMap(({ yard, buildings, padBlend }) => [
+    { x: yard.x, z: yard.z, y: yard.y, ux: 1, uz: 0, hw: 0, hd: 0, radius: yard.level, blend: padBlend, unpainted: true },
+    ...buildings.map((house) => ({ ...housePad(house), blend: padBlend, unpainted: true })),
+  ]);
 }
 
 /**
@@ -167,6 +173,7 @@ export function createPadField(pads: Pad[]): PadField {
   function level(x: number, z: number, height: number, roadClear: number): { height: number; gap: number } | null {
     const bucket = buckets.get(bucketKey(Math.floor(x / BUCKET_SIZE), Math.floor(z / BUCKET_SIZE)));
     if (!bucket) return null;
+    let near = false;
     let nearest = Infinity;
     let weights = 0;
     let weighted = 0;
@@ -174,7 +181,8 @@ export function createPadField(pads: Pad[]): PadField {
     for (const pad of bucket) {
       const gap = gapTo(pad, x, z);
       if (gap >= reachOf(pad)) continue;
-      nearest = Math.min(nearest, gap);
+      near = true;
+      if (!pad.unpainted) nearest = Math.min(nearest, gap);
       const margin = padMargin(pad.blend ?? DEFAULT_PAD_BLEND, height - pad.y);
       if (gap >= margin) continue;
       const pull = (1 - smoothstep(0, margin, gap)) * (pad.firm ? 1 : roadClear);
@@ -186,7 +194,7 @@ export function createPadField(pads: Pad[]): PadField {
       weighted += weight * pad.y;
       strength = Math.max(strength, pull);
     }
-    if (nearest === Infinity) return null;
+    if (!near) return null;
     levelled.gap = nearest;
     levelled.height = weights > 0 ? height + (weighted / weights - height) * strength : height;
     return levelled;
