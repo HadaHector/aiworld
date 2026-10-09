@@ -20,6 +20,7 @@ import { convexHull } from "../world/collision/hull";
 import type { ConvexDesc } from "../world/collision/shapes";
 import { NO_WEATHER } from "../world/weather/weatherTypes";
 import type { BuildingModel } from "../world/buildings/buildingTypes";
+import { DEFAULT_PAD_BLEND, type Pad } from "../world/settlements/padField";
 import { appendModel, bakeBuildingTextures, createBuildingMaterial, createBuildingMesh, emptyGeometry, type BuildingMaterial } from "../world/buildings/buildingMesh";
 
 /**
@@ -88,6 +89,40 @@ function placedPieces(model: BuildingModel, at: { x: number; y: number; z: numbe
     pieces.push({ kind: "convex", points });
   }
   return pieces;
+}
+
+/**
+ * Pads outlined: each one's edge at its own level - yellow, or cyan for a firm one (a prop's) - and,
+ * fainter, how far its blend back to the ground can reach at the most, on the ground. Drawn over
+ * everything, so an outline under a building shows through it.
+ */
+function drawPads(scene: Scene, pads: Pad[], height: (x: number, z: number) => number): void {
+  const outline = (pad: Pad, grow: number, onGround: boolean): Vector3[] => {
+    const at = (x: number, z: number): Vector3 => new Vector3(x, (onGround ? height(x, z) : pad.y) + 0.12, z);
+    if (pad.radius > 0) {
+      return Array.from({ length: 65 }, (_, k) => {
+        const a = (k / 64) * Math.PI * 2;
+        return at(pad.x + Math.cos(a) * (pad.radius + grow), pad.z + Math.sin(a) * (pad.radius + grow));
+      });
+    }
+    const hw = pad.hw + grow;
+    const hd = pad.hd + grow;
+    return [[-1, -1], [1, -1], [1, 1], [-1, 1], [-1, -1]].map(([a, b]) => at(pad.x + pad.ux * hw * a - pad.uz * hd * b, pad.z + pad.uz * hw * a + pad.ux * hd * b));
+  };
+  const edges = MeshBuilder.CreateLineSystem(
+    "padEdges",
+    { lines: pads.map((pad) => outline(pad, 0, false)), colors: pads.map((pad) => outline(pad, 0, false).map(() => (pad.firm ? new Color4(0.3, 0.95, 1, 1) : new Color4(1, 0.85, 0.2, 1)))) },
+    scene,
+  );
+  const reach = MeshBuilder.CreateLineSystem(
+    "padReach",
+    { lines: pads.map((pad) => outline(pad, (pad.blend ?? DEFAULT_PAD_BLEND).max, true)), colors: pads.map((pad) => outline(pad, (pad.blend ?? DEFAULT_PAD_BLEND).max, true).map(() => (pad.firm ? new Color4(0.3, 0.95, 1, 0.22) : new Color4(1, 0.85, 0.2, 0.22)))), useVertexAlpha: true },
+    scene,
+  );
+  for (const mesh of [edges, reach]) {
+    mesh.isPickable = false;
+    mesh.renderingGroupId = 1;
+  }
 }
 
 /** Roads, lanes and trails as strips laid on the ground - each its own shade of trodden earth. */
@@ -217,6 +252,8 @@ export interface StageOptions {
     trees: TreePlacement[];
     /** Trees drawn as the world draws distant ones. */
     farTrees: TreePlacement[];
+    /** Its pads, outlined at their levels - or none. */
+    pads?: Pad[];
     far: boolean;
   };
   timeHours: number;
@@ -418,6 +455,7 @@ export async function createStage(engine: Engine, canvas: HTMLCanvasElement, opt
         drawColliders(scene, site.placed.flatMap((item) => placedPieces(item.model, item)), 0.55);
       }
       drawLines(scene, site.lines, site.yards, height);
+      if (site.pads) drawPads(scene, site.pads, height);
       framing = { width: site.size * 0.75, height: 10 };
     }
 

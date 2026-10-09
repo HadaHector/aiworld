@@ -7,7 +7,7 @@ import type { RoadLine } from "../world/roads/roadField";
 import type { SettlementGate } from "../world/settlements/gates";
 import type { TreePlacement } from "../world/foliage/treeScatter";
 import { layoutCompound, planCompound, settleProps, type CompoundLayout } from "../world/features/compound";
-import { compoundPads, createPadField, padMargin, propPads, type PadField } from "../world/settlements/padField";
+import { compoundPads, createPadField, propPads, type Pad, type PadField } from "../world/settlements/padField";
 import { generateBuilding } from "../world/buildings/buildingGenerator";
 import { generateProp } from "../world/props/propGenerator";
 import { deriveSeed, mulberry32 } from "../world/rng";
@@ -28,6 +28,8 @@ export interface FeaturePreview {
   placed: { x: number; y: number; z: number; frontX: number; frontZ: number; model: BuildingModel }[];
   /** Its roads, lanes and trails, to draw on the ground: their points and how wide. */
   lines: { points: { x: number; z: number }[]; width: number; kind: "road" | "lane" | "trail" }[];
+  /** Its pads - the level ground under its yard, buildings and props - for drawing. */
+  pads: Pad[];
   /** Its yard, trodden out to its level ground's edge. */
   yards: { x: number; z: number; radius: number }[];
   /** The wood round it: near the clearing in full, further out as the world draws distant trees. */
@@ -67,13 +69,8 @@ export function buildFeaturePreview(
   // height - levelled by `pads` once there are some.
   let pads: PadField | null = null;
   const heightAt = (x: number, z: number): number => {
-    let height = baseHeight(x, z);
-    const pad = pads?.query(x, z);
-    if (pad) {
-      const margin = padMargin(pad.blend, height - pad.height);
-      if (pad.gap < margin) height = height + (pad.height - height) * (1 - smoothstep(0, margin, pad.gap));
-    }
-    return height;
+    const height = baseHeight(x, z);
+    return pads?.level(x, z, height, 1)?.height ?? height;
   };
   const sample = (x: number, z: number): TerrainSample => ({ height: heightAt(x, z), isLand: true, lakeFactor: 0 }) as unknown as TerrainSample;
   const sampleTerrain: TerrainSampler = sample;
@@ -98,7 +95,8 @@ export function buildFeaturePreview(
   // Levelled as the world levels it: the yard and the buildings' pads, then each prop's on them.
   pads = createPadField(compoundPads([layout]));
   settleProps([layout], sampleTerrain);
-  pads = createPadField([...propPads([layout]), ...compoundPads([layout])]);
+  const padList = [...propPads([layout]), ...compoundPads([layout])];
+  pads = createPadField(padList);
 
   const placed: FeaturePreview["placed"] = [
     ...layout.buildings.map((house) => ({ x: house.x, y: house.y, z: house.z, frontX: house.frontX, frontZ: house.frontZ, model: generateBuilding(house.building, seed, house.variant, far) })),
@@ -143,5 +141,5 @@ export function buildFeaturePreview(
       }
     }
   }
-  return { size, heightAt, placed, lines, yards: [{ x: layout.yard.x, z: layout.yard.z, radius: layout.yard.level }], trees, farTrees, biome, layout };
+  return { size, heightAt, placed, lines, pads: padList, yards: [{ x: layout.yard.x, z: layout.yard.z, radius: layout.yard.level }], trees, farTrees, biome, layout };
 }

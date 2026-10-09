@@ -850,7 +850,9 @@ level with each other, on ground levelled for them.
 A compound's `pads: { slope, blend: [min, max] }` says how the level ground under its yard, its
 buildings and its props blends back to the ground round it: its banks no steeper than `slope` (rise
 over run - lower, a wider, gentler bank), at least `min` and at most `max` metres wide (the
-settlements' own, 0.6 and [1.5, 10], if left out).
+settlements' own, 0.6 and [1.5, 10], if left out). Where two pads' banks overlap, the ground runs
+smoothly from one level to the other. In the workbench, a feature's `Pads` outlines each pad at its
+level - yellow, cyan for a prop's - and, faintly, how far its bank can reach.
 
 A compound sets props and groups down by `props` in its block: each `{ prop | group, count, chance,
 at }`, `at` its anchor - `yard` (anywhere in the yard, turned freely, off the ways across it from

@@ -113,6 +113,7 @@ const DEFAULT_OPTIONS: Options = {
   marks: "on",
   cut: "none",
   colliders: "off",
+  pads: "off",
 };
 
 /** A building cut open as the Cut menu says: over a level's floor - its plan - or through its middle. */
@@ -592,6 +593,8 @@ function renderPreviewBar(): void {
       }),
     );
     if (current.folder === "props" || current.folder === "features") viewOptions.append(checkbox("Colliders", "colliders", rebuild));
+    // The level ground under a place's yard, buildings and props, outlined.
+    if (current.folder === "features") viewOptions.append(checkbox("Pads", "pads", rebuild));
     if (current.folder === "buildings") {
       viewOptions.append(checkbox("Footprint", "marks", rebuild));
       // What the building puts in the way, drawn in its place.
@@ -882,7 +885,7 @@ async function preview3d(token: number, asset: Asset, view: ViewDef, content: Wo
       setStatus(`No preview for a ${kind.type} yet - only compounds. The JSON checks out.`);
       return;
     }
-    site = { size: built.size, heightAt: built.heightAt, placed: built.placed, lines: built.lines, yards: built.yards, trees: built.trees, farTrees: built.farTrees, far };
+    site = { size: built.size, heightAt: built.heightAt, placed: built.placed, lines: built.lines, yards: built.yards, trees: built.trees, farTrees: built.farTrees, far, pads: options.pads === "on" ? built.pads : undefined };
   } else if (asset.folder === "props") {
     ground = groundMaterial(content, asset);
     if (grassOn) grass = ground.grass;

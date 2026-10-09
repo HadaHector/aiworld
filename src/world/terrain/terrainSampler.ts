@@ -7,7 +7,7 @@ import { generateSettlementSites, type SettlementSite } from "../settlements/set
 import { generateRoadNetwork, type RoadNetwork } from "../roads/roadNetwork";
 import { createRoadField, type RoadField } from "../roads/roadField";
 import { generateSettlementLayouts, type SettlementLayout } from "../settlements/settlementLayout";
-import { compoundPads, createPadField, padMargin, propPads, settlementPads, type PadField } from "../settlements/padField";
+import { compoundPads, createPadField, propPads, settlementPads, type PadField } from "../settlements/padField";
 import { layoutCompounds, settleProps, type CompoundLayout } from "../features/compound";
 import { createTreeCover } from "../foliage/treeScatter";
 import { PAD_PAINT_OFFSET } from "../settlements/settlementConfig";
@@ -244,13 +244,13 @@ export function createTerrainSampler(seed: number, content: WorldContent): Terra
     // road-width units, so ROAD_HALF_WIDTH is that edge for every width): a house stands close enough
     // to its street for its margin to overlap it, and the street would otherwise dip or bulge toward
     // every house it passes.
+    // Where two pads' blends overlap, the ground runs smoothly between their levels (see
+    // PadField.level).
     if (padField) {
-      const pad = padField.query(worldX, worldZ);
-      if (pad) {
-        const margin = padMargin(pad.blend, height - pad.height);
-        const clearOfRoad = pad.firm ? 1 : smoothstep(ROAD_HALF_WIDTH, ROAD_HALF_WIDTH + 3, roadGap);
-        if (pad.gap < margin) height = lerp(height, pad.height, (1 - smoothstep(0, margin, pad.gap)) * clearOfRoad);
-        roadGap = Math.min(roadGap, pad.gap + PAD_PAINT_OFFSET);
+      const levelled = padField.level(worldX, worldZ, height, smoothstep(ROAD_HALF_WIDTH, ROAD_HALF_WIDTH + 3, roadGap));
+      if (levelled) {
+        height = levelled.height;
+        roadGap = Math.min(roadGap, levelled.gap + PAD_PAINT_OFFSET);
       }
     }
 

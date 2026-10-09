@@ -52,10 +52,26 @@ export interface PadQuery {
 export interface PadField {
   /** The nearest pad within reach, or null. */
   query(x: number, z: number): PadQuery | null;
+  /**
+   * The ground at (x, z), `height` as it lies, brought to the pads near it - each pulling it toward
+   * its own level as far as its blend reaches (and `roadClear`, 0-1, lets a pad that is not firm
+   * reach: none of it onto a road's own level ground), the pads it is nearest pulling hardest, so
+   * where two pads' blends overlap the ground runs smoothly from one level to the other rather than
+   * stepping where one stops being the nearest. And how far it is from the nearest pad's edge, for
+   * its paint. Null where no pad is near. The result is reused - read it before the next call.
+   */
+  level(x: number, z: number, height: number, roadClear: number): { height: number; gap: number } | null;
   padCount: number;
 }
 
 const BUCKET_SIZE = 32;
+/** How much more a firm pad (a prop's) weighs where it overlaps others - its level holds on a yard. */
+const FIRM_WEIGHT = 100;
+
+function smoothstep(edge0: number, edge1: number, x: number): number {
+  const t = Math.min(1, Math.max(0, (x - edge0) / (edge1 - edge0)));
+  return t * t * (3 - 2 * t);
+}
 /** How far from a pad anything still cares: the widest its ground's blend back to its own level
  *  gets, or the road paint's fade, whichever reaches further. */
 const reachOf = (pad: Pad): number => Math.max((pad.blend ?? DEFAULT_PAD_BLEND).max, 9 - PAD_PAINT_OFFSET + 4);
@@ -147,5 +163,34 @@ export function createPadField(pads: Pad[]): PadField {
     return best ? { gap: bestGap, height: best.y, firm: best.firm === true, blend: best.blend ?? DEFAULT_PAD_BLEND } : null;
   }
 
-  return { query, padCount };
+  const levelled = { height: 0, gap: 0 };
+  function level(x: number, z: number, height: number, roadClear: number): { height: number; gap: number } | null {
+    const bucket = buckets.get(bucketKey(Math.floor(x / BUCKET_SIZE), Math.floor(z / BUCKET_SIZE)));
+    if (!bucket) return null;
+    let nearest = Infinity;
+    let weights = 0;
+    let weighted = 0;
+    let strength = 0;
+    for (const pad of bucket) {
+      const gap = gapTo(pad, x, z);
+      if (gap >= reachOf(pad)) continue;
+      nearest = Math.min(nearest, gap);
+      const margin = padMargin(pad.blend ?? DEFAULT_PAD_BLEND, height - pad.y);
+      if (gap >= margin) continue;
+      const pull = (1 - smoothstep(0, margin, gap)) * (pad.firm ? 1 : roadClear);
+      if (pull <= 0) continue;
+      // Nearer pads weigh more, without bound at their own edge - so on a pad its own level holds -
+      // and a firm one (a prop's, on a yard) more again.
+      const weight = (pull * (pad.firm ? FIRM_WEIGHT : 1)) / (gap * gap + 0.0001);
+      weights += weight;
+      weighted += weight * pad.y;
+      strength = Math.max(strength, pull);
+    }
+    if (nearest === Infinity) return null;
+    levelled.gap = nearest;
+    levelled.height = weights > 0 ? height + (weighted / weights - height) * strength : height;
+    return levelled;
+  }
+
+  return { query, level, padCount };
 }
