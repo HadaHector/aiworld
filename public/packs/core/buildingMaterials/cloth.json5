@@ -1,0 +1,49 @@
+// Woven cloth - blankets, cushions, banners, an altar's cover: coarse threads over and under each
+// other, thicker slubs along them, a few darker threads. Near white, so a piece's tint is its colour
+// (a red blanket, a green banner). Its weave twice life size, as everything is.
+{
+  name: "Cloth",
+  size: 2,
+  texture: {
+    bumpStrength: 1.4,
+    pipeline: {
+      noises: [
+        // The warp and the weft: 48 threads to a 2 m repeat.
+        { name: "warp", type: "wave", tileCycles: [48, 0], amplitude: 1, shape: "sine" },
+        { name: "weft", type: "wave", tileCycles: [0, 48], amplitude: 1, shape: "sine" },
+        // Over and under: a checker of the threads' crossings.
+        { name: "overX", type: "wave", tileCycles: [24, 0], amplitude: 1, shape: "triangle" },
+        { name: "overY", type: "wave", tileCycles: [0, 24], amplitude: 1, shape: "triangle" },
+        { name: "slubs", type: "fbm", octaves: 2, tileCycles: 12, amplitude: 1, persistence: 0.5, lacunarity: 2, stretch: [1, 6] },
+        { name: "mottle", type: "fbm", octaves: 3, tileCycles: 3, amplitude: 1, persistence: 0.5, lacunarity: 2 },
+      ],
+      steps: [
+        { output: "warpRaw", op: "sample", noise: "warp" },
+        { output: "weftRaw", op: "sample", noise: "weft" },
+        { output: "warpRidge", op: "abs", input: "warpRaw" },
+        { output: "weftRidge", op: "abs", input: "weftRaw" },
+        { output: "ox", op: "sample", noise: "overX" },
+        { output: "oy", op: "sample", noise: "overY" },
+        // Where the warp is on top and where the weft is, in turn.
+        { output: "checker", op: "multiply", a: "ox", b: "oy" },
+        { output: "warpOver", op: "mask", input: "checker", at: 0.1, off: -0.1 },
+        { output: "threads", op: "mix", a: "weftRidge", b: "warpRidge", t: "warpOver" },
+        { output: "slubRaw", op: "sample", noise: "slubs" },
+        { output: "slub", op: "mask", input: "slubRaw", at: 0.9, off: 0.3 },
+        { output: "mottleRaw", op: "sample", noise: "mottle" },
+        { output: "shadeThreads", op: "remap", input: "threads", inMin: 0, inMax: 1, outMin: 0.72, outMax: 1 },
+        { output: "shadeMottle", op: "remap", input: "mottleRaw", inMin: -1, inMax: 1, outMin: 0.9, outMax: 1.04 },
+        { output: "shade", op: "multiply", a: "shadeThreads", b: "shadeMottle" },
+        { output: "base", op: "color", value: [0.86, 0.84, 0.8] },
+        { output: "woven", op: "multiply", a: "base", b: "shade" },
+        { output: "slubColor", op: "color", value: [0.94, 0.92, 0.88] },
+        { output: "diffuse", op: "mix", a: "woven", b: "slubColor", t: "slub" },
+        { output: "roughness", op: "constant", value: 0.95 },
+        { output: "threadHeight", op: "scale", input: "threads", factor: 0.6 },
+        { output: "slubHeight", op: "scale", input: "slub", factor: 0.3 },
+        { output: "height", op: "add", a: "threadHeight", b: "slubHeight" },
+      ],
+      outputs: { diffuse: "diffuse", roughness: "roughness", height: "height" },
+    },
+  },
+}

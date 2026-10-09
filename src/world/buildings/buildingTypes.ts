@@ -29,6 +29,9 @@ export interface BuildingMaterialDef {
   /** 0-1: how glossy and reflective it is, from matte plaster (0) to glass (1). Its texture's own
    *  roughness still varies it across the surface. */
   shine: number;
+  /** 0-1: how far it gives its own light rather than taking the sun's - a flame, a lamp's pane (1:
+   *  its colour as it is, lit or in shadow, day or night). */
+  glow: number;
 }
 
 /** How one face of a building is drawn: a building material (by id - null for plain colour), and a

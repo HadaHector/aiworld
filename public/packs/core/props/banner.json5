@@ -1,0 +1,10 @@
+// A banner: a cloth hanging from a pole against the wall, fringed at its foot.
+{
+  name: "Banner",
+  type: "banner",
+  parts: {
+    cloth: { material: "cloth", tints: [[0.85, 0.2, 0.16], [0.24, 0.36, 0.7], [0.3, 0.55, 0.26], [0.9, 0.72, 0.24]] },
+    fringe: { material: "cloth", tints: [[0.8, 0.66, 0.3]] },
+    pole: { material: "timber", tints: [[0.62, 0.52, 0.44], [0.55, 0.46, 0.4]] },
+  },
+}

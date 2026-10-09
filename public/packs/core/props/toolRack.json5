@@ -1,0 +1,10 @@
+// A tool rack: a board on the wall, pegs out of it, an axe, a saw, a rake or a shovel hung on them.
+{
+  name: "Tool rack",
+  type: "rack",
+  parts: {
+    board: { material: "timber", tints: [[1, 1, 1], [0.86, 0.8, 0.72]] },
+    handle: { material: "timber", tints: [[1, 1, 1], [0.85, 0.8, 0.74], [0.7, 0.64, 0.58]] },
+    iron: { material: "iron", tints: [[1, 1, 1]] },
+  },
+}

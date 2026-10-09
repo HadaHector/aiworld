@@ -1,0 +1,9 @@
+// A lantern: an iron frame round lit panes, a cap and a ring - standing on a table or the floor.
+{
+  name: "Lantern",
+  type: "lantern",
+  parts: {
+    iron: { material: "iron", tints: [[1, 1, 1]] },
+    pane: { material: "flame", tints: [[0.95, 0.7, 0.4]] },
+  },
+}

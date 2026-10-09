@@ -1,0 +1,10 @@
+// A bar: a counter of planks, posts down its front, a thick top overhanging it.
+{
+  name: "Bar",
+  type: "counter",
+  parts: {
+    front: { material: "planks", tints: [[0.8, 0.72, 0.62]] },
+    top: { material: "timber", tints: [[0.62, 0.52, 0.44], [0.55, 0.46, 0.4]] },
+    posts: { material: "timber", tints: [[1, 1, 1], [0.85, 0.8, 0.74], [0.7, 0.64, 0.58]] },
+  },
+}

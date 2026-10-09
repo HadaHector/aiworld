@@ -1,0 +1,37 @@
+// Wrought iron - straps, hinges, a stove, a lantern's frame: near black, hammered into shallow dents,
+// worn to a dull sheen at its edges and rusting in patches.
+{
+  name: "Iron",
+  size: 1.5,
+  shine: 0.35,
+  texture: {
+    bumpStrength: 1.6,
+    pipeline: {
+      noises: [
+        { name: "dents", type: "worley", tileCycles: 22, amplitude: 1, mode: "f1", sizeJitter: 0.3 },
+        { name: "rust", type: "fbm", octaves: 4, tileCycles: 5, amplitude: 1, persistence: 0.55, lacunarity: 2 },
+        { name: "grit", type: "fbm", octaves: 2, tileCycles: 70, amplitude: 1, persistence: 0.5, lacunarity: 2 },
+      ],
+      steps: [
+        { output: "dentRaw", op: "sample", noise: "dents" },
+        { output: "dent", op: "mask", input: "dentRaw", at: 0.0, off: 0.5 },
+        { output: "rustRaw", op: "sample", noise: "rust" },
+        { output: "rust", op: "mask", input: "rustRaw", at: 0.7, off: 0.25 },
+        { output: "gritRaw", op: "sample", noise: "grit" },
+        { output: "gritShade", op: "remap", input: "gritRaw", inMin: -1, inMax: 1, outMin: 0.85, outMax: 1.1 },
+        { output: "metal", op: "color", value: [0.16, 0.16, 0.17] },
+        { output: "dentShade", op: "remap", input: "dent", inMin: 0, inMax: 1, outMin: 1.15, outMax: 0.85 },
+        { output: "hammered", op: "multiply", a: "metal", b: "dentShade" },
+        { output: "rustColor", op: "color", value: [0.36, 0.2, 0.11] },
+        { output: "rusted", op: "mix", a: "hammered", b: "rustColor", t: "rust" },
+        { output: "diffuse", op: "multiply", a: "rusted", b: "gritShade" },
+        // Rough where it rusts, smoother where it is bare.
+        { output: "roughness", op: "remap", input: "rust", inMin: 0, inMax: 1, outMin: 0.45, outMax: 0.95 },
+        { output: "dentHeight", op: "scale", input: "dent", factor: -0.5 },
+        { output: "rustHeight", op: "scale", input: "rust", factor: 0.15 },
+        { output: "height", op: "add", a: "dentHeight", b: "rustHeight" },
+      ],
+      outputs: { diffuse: "diffuse", roughness: "roughness", height: "height" },
+    },
+  },
+}

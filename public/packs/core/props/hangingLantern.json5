@@ -1,0 +1,12 @@
+// A lantern hung on a chain from a beam or the ceiling.
+{
+  name: "Hanging lantern",
+  type: "lantern",
+  lantern: {
+    chain: [1.0, 1.6],
+  },
+  parts: {
+    iron: { material: "iron", tints: [[1, 1, 1]] },
+    pane: { material: "flame", tints: [[0.95, 0.7, 0.4]] },
+  },
+}

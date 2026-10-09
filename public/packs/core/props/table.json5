@@ -1,0 +1,9 @@
+// A table: a thick slab of a top on posts and an apron - or, now and then, on trestles.
+{
+  name: "Table",
+  type: "table",
+  parts: {
+    top: { material: "planks", tints: [[1, 1, 1], [0.86, 0.8, 0.72]] },
+    legs: { material: "timber", tints: [[1, 1, 1], [0.85, 0.8, 0.74], [0.7, 0.64, 0.58]] },
+  },
+}

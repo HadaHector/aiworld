@@ -1,0 +1,9 @@
+// A chair: a thick seat on posts, the back legs running up into rails.
+{
+  name: "Chair",
+  type: "chair",
+  parts: {
+    wood: { material: "timber", tints: [[1, 1, 1], [0.85, 0.8, 0.74], [0.7, 0.64, 0.58]] },
+    seat: { material: "planks", tints: [[1, 1, 1], [0.86, 0.8, 0.72]] },
+  },
+}

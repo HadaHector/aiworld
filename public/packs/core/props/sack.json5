@@ -1,0 +1,9 @@
+// A sack of grain or flour: full, slumped, tied at its neck.
+{
+  name: "Sack",
+  type: "sack",
+  parts: {
+    cloth: { material: "cloth", tints: [[0.72, 0.6, 0.42], [0.66, 0.56, 0.4]] },
+    tie: { tints: [[0.45, 0.36, 0.24]] },
+  },
+}

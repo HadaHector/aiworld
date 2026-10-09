@@ -1,0 +1,8 @@
+// A bench: a long thick seat on slab ends or posts - indoors at a table, or by a door.
+{
+  name: "Bench",
+  type: "bench",
+  parts: {
+    wood: { material: "timber", tints: [[1, 1, 1], [0.85, 0.8, 0.74], [0.7, 0.64, 0.58]] },
+  },
+}

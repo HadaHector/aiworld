@@ -1,0 +1,9 @@
+// A stove: an iron box on stubby feet, a fire door glowing, a pipe up from it.
+{
+  name: "Stove",
+  type: "stove",
+  parts: {
+    iron: { material: "iron", tints: [[1, 1, 1]] },
+    flame: { material: "flame", tints: [[1, 1, 1]] },
+  },
+}

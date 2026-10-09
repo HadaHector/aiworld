@@ -60,6 +60,8 @@ uniform sampler2DArray normalArray;
 // Per material: metres to a repeat (across, up), and how much it shines.
 uniform vec2 sizes[${MAX_BUILDING_MATERIALS}];
 uniform float shines[${MAX_BUILDING_MATERIALS}];
+// Per material: how far it gives its own light (a flame) rather than taking the scene's.
+uniform float glows[${MAX_BUILDING_MATERIALS}];
 
 out vec4 outColor;
 
@@ -72,6 +74,7 @@ void main() {
   vec3 albedo = vColor;
   float roughness = 0.85;
   float shine = 0.0;
+  float glow = 0.0;
   vec3 surfaceNormal = n;
   if (vLayer >= 0) {
     vec3 at = vec3(vUV / sizes[vLayer], float(vLayer));
@@ -79,6 +82,7 @@ void main() {
     albedo *= texel.rgb;
     roughness = texel.a;
     shine = shines[vLayer];
+    glow = glows[vLayer];
     // The texture's own bumps: its u along the face's tangent, its v along normal x tangent.
     vec3 bump = texture(normalArray, at).xyz * 2.0 - 1.0;
     vec3 t = normalize(vTangent - n * dot(vTangent, n));
@@ -101,6 +105,7 @@ void main() {
   vec3 lit = albedo * (diffuse * lightColor * shadow + ambientColor * ambientIntensity)
     + vec3(specular) * lightColor * lightIntensity * shadow
     + sky * fresnel * shine;
+  lit = mix(lit, albedo, glow);
   outColor = vec4(applyFog(lit, length(vPositionFromCamera)), 1.0);
 }
 `;
@@ -155,20 +160,23 @@ export function createBuildingMaterial(scene: Scene, litShading: LitShading, tex
 
   const material = new ShaderMaterial("texturedBuilding", scene, "texturedBuilding", {
     attributes: ["position", "normal", "btangent", "uv", "layer", "color"],
-    uniforms: ["world", "view", "projection", "sizes", "shines", ...LIT_SHADING_UNIFORMS],
+    uniforms: ["world", "view", "projection", "sizes", "shines", "glows", ...LIT_SHADING_UNIFORMS],
     samplers: ["colorArray", "normalArray", ...LIT_SHADING_SAMPLERS],
   });
   material.setTexture("colorArray", colorArray);
   material.setTexture("normalArray", normalArray);
   const sizes = new Array<number>(MAX_BUILDING_MATERIALS * 2).fill(1);
   const shines = new Array<number>(MAX_BUILDING_MATERIALS).fill(0);
+  const glows = new Array<number>(MAX_BUILDING_MATERIALS).fill(0);
   materials.forEach((def, i) => {
     sizes[i * 2] = def.size[0];
     sizes[i * 2 + 1] = def.size[1];
     shines[i] = def.shine;
+    glows[i] = def.glow;
   });
   material.setArray2("sizes", sizes);
   material.setFloats("shines", shines);
+  material.setFloats("glows", glows);
   material.backFaceCulling = false;
   litShading.register(material);
   return { material, layerOf: new Map(materials.map((def, i) => [def.id, i])) };

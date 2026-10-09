@@ -1,0 +1,15 @@
+// A fireplace: a stone hearth, cheeks, a lintel and a breast up to its top, a timber mantel, and a
+// fire burning.
+{
+  name: "Fireplace",
+  type: "fireplace",
+  parts: {
+    stone: { material: "dressedStone", tints: [[1, 1, 1], [0.9, 0.88, 0.85]] },
+    hearth: { material: "rubbleStone", tints: [[0.8, 0.78, 0.75]] },
+    soot: { material: "rubbleStone", tints: [[0.18, 0.16, 0.15]] },
+    mantel: { material: "timber", tints: [[0.62, 0.52, 0.44], [0.55, 0.46, 0.4]] },
+    logs: { material: "bark", tints: [[0.7, 0.6, 0.55]] },
+    end: { material: "endGrain", tints: [[0.5, 0.35, 0.25]] },
+    flame: { material: "flame", tints: [[1, 1, 1]] },
+  },
+}

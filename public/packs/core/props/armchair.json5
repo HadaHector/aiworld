@@ -1,0 +1,9 @@
+// An armchair: a deep seat, broad arms, a high back, cushioned.
+{
+  name: "Armchair",
+  type: "armchair",
+  parts: {
+    wood: { material: "timber", tints: [[0.62, 0.52, 0.44], [0.55, 0.46, 0.4]] },
+    cushion: { material: "cloth", tints: [[0.55, 0.16, 0.12], [0.2, 0.32, 0.2], [0.5, 0.42, 0.25]] },
+  },
+}

@@ -137,12 +137,48 @@ export class Shaper {
    * A box centred on the frame's origin, `half` its half-extents along the frame's axes. Its grain
    * runs along its longest side. `top` paints its top (default: the same); `bottom: false` leaves
    * its underside out, where it stands on something.
+   *
+   * `taper: [low, high]` narrows it along `taperAxis` (y by default): its face at that axis's low
+   * end scaled across by `low`, its high end's by `high` - a leg slimming to its foot, a post to its
+   * head. The same eight corners, so no more polygons, but it reads as shaped rather than sawn
+   * square. Its sides then lean, and are lit as they lean.
+   *
+   * `bevel` (metres) cuts every edge off at 45 degrees with a face of its own, and every corner with
+   * a small triangle - 26 faces rather than 6: worn timber, dressed stone, a cushion's roll. It goes
+   * with `taper` too.
    */
-  box(f: Frame, half: Vec3, paint: Paint, options: ShapeOptions & { top?: Paint; bottom?: boolean } = {}): void {
+  box(f: Frame, half: Vec3, paint: Paint, options: ShapeOptions & { top?: Paint; bottom?: boolean; taper?: [number, number]; taperAxis?: "y" | "z"; bevel?: number } = {}): void {
     const [hx, hy, hz] = half;
     const longest = hx >= hy && hx >= hz ? f.x : hy >= hz ? f.y : f.z;
-    const corner = (sx: number, sy: number, sz: number): Vec3 => at(f, [sx * hx, sy * hy, sz * hz]);
-    const quad = (n: Vec3, corners: Vec3[], p: Paint): void => this.b.face(corners, n, p, longest);
+    const [low, high] = options.taper ?? [1, 1];
+    const alongZ = options.taperAxis === "z";
+    // A point in the box's own half-extent space, tapered by which end of the taper's axis it is at.
+    const point = (x: number, y: number, z: number): Vec3 => {
+      const scale = (alongZ ? z : y) < 0 ? low : high;
+      return alongZ ? at(f, [x * scale, y * scale, z]) : at(f, [x * scale, y, z * scale]);
+    };
+    const corner = (sx: number, sy: number, sz: number): Vec3 => point(sx * hx, sy * hy, sz * hz);
+    const bevel = Math.min(options.bevel ?? 0, Math.min(hx, hy, hz) * 0.45);
+    if (bevel > 0) {
+      this.bevelled(f, half, bevel, point, longest, paint, options);
+      if (options.collide) {
+        const points: Vec3[] = [];
+        for (const sx of [-1, 1]) for (const sy of [-1, 1]) for (const sz of [-1, 1]) points.push(corner(sx, sy, sz));
+        this.solid(points);
+      }
+      return;
+    }
+    const tapered = low !== 1 || high !== 1;
+    // A face's normal: square to the axis it faces - or, where the box tapers, from its own corners,
+    // turned the way the axis faces.
+    const quad = (n: Vec3, corners: Vec3[], p: Paint): void => {
+      let normal = n;
+      if (tapered) {
+        const own = normalize(cross(sub(corners[1], corners[0]), sub(corners[3], corners[0])));
+        normal = dot(own, n) < 0 ? scale(own, -1) : own;
+      }
+      this.b.face(corners, normal, p, longest);
+    };
     quad(f.z, [corner(-1, -1, 1), corner(1, -1, 1), corner(1, 1, 1), corner(-1, 1, 1)], paint);
     quad(scale(f.z, -1), [corner(1, -1, -1), corner(-1, -1, -1), corner(-1, 1, -1), corner(1, 1, -1)], paint);
     quad(f.x, [corner(1, -1, 1), corner(1, -1, -1), corner(1, 1, -1), corner(1, 1, 1)], paint);
@@ -156,12 +192,77 @@ export class Shaper {
     }
   }
 
+  /**
+   * A box's faces with its edges and corners cut off (see box's `bevel`): each face shrunk in by
+   * `bevel`, a strip across each edge between the two faces it parts, a triangle at each corner.
+   * Every face's normal from its own corners, so it shades as it leans.
+   */
+  private bevelled(f: Frame, half: Vec3, bevel: number, point: (x: number, y: number, z: number) => Vec3, grain: Vec3, paint: Paint, options: { top?: Paint; bottom?: boolean }): void {
+    const axes: Vec3[] = [f.x, f.y, f.z];
+    // Corner (sx, sy, sz)'s point on the face square to `axis`: full out along that axis, cut back
+    // by the bevel along the other two.
+    const vertex = (axis: number, signs: [number, number, number]): Vec3 =>
+      point(...([0, 1, 2].map((k) => signs[k] * (k === axis ? half[k] : half[k] - bevel)) as [number, number, number]));
+    const polygon = (corners: Vec3[], out: Vec3, p: Paint): void => {
+      const own = normalize(cross(sub(corners[1], corners[0]), sub(corners[2], corners[0])));
+      this.b.face(corners, dot(own, out) < 0 ? scale(own, -1) : own, p, grain);
+    };
+    const outward = (signs: [number, number, number]): Vec3 => normalize(add(add(scale(axes[0], signs[0]), scale(axes[1], signs[1])), scale(axes[2], signs[2])));
+    const ring: [number, number][] = [[-1, -1], [1, -1], [1, 1], [-1, 1]];
+    // The faces.
+    for (let axis = 0; axis < 3; axis++) {
+      for (const sign of [-1, 1]) {
+        if (axis === 1 && sign < 0 && options.bottom === false) continue;
+        const [u, v] = [0, 1, 2].filter((k) => k !== axis);
+        const corners = ring.map(([a, b]) => {
+          const signs: [number, number, number] = [0, 0, 0];
+          signs[axis] = sign;
+          signs[u] = a;
+          signs[v] = b;
+          return vertex(axis, signs);
+        });
+        const out: [number, number, number] = [0, 0, 0];
+        out[axis] = sign;
+        polygon(corners, outward(out), axis === 1 && sign > 0 ? (options.top ?? paint) : paint);
+      }
+    }
+    // The edges: along each axis, one between each pair of faces it parts.
+    for (let axis = 0; axis < 3; axis++) {
+      const [p, q] = [0, 1, 2].filter((k) => k !== axis);
+      for (const sp of [-1, 1]) {
+        for (const sq of [-1, 1]) {
+          const at = (along: number, face: number): Vec3 => {
+            const signs: [number, number, number] = [0, 0, 0];
+            signs[axis] = along;
+            signs[p] = sp;
+            signs[q] = sq;
+            return vertex(face, signs);
+          };
+          const out: [number, number, number] = [0, 0, 0];
+          out[p] = sp;
+          out[q] = sq;
+          polygon([at(-1, p), at(1, p), at(1, q), at(-1, q)], outward(out), paint);
+        }
+      }
+    }
+    // The corners.
+    for (const sx of [-1, 1]) {
+      for (const sy of [-1, 1]) {
+        for (const sz of [-1, 1]) {
+          const signs: [number, number, number] = [sx, sy, sz];
+          polygon([vertex(0, signs), vertex(1, signs), vertex(2, signs)], outward(signs), paint);
+        }
+      }
+    }
+  }
+
   /** A squared timber from `from` to `to` (in f), `width` across and `height` deep, its depth as
-   *  near `up` as it can be - a leg, a rail, a handle. */
-  beam(f: Frame, from: Vec3, to: Vec3, width: number, height: number, paint: Paint, options: ShapeOptions & { up?: Vec3 } = {}): void {
+   *  near `up` as it can be - a leg, a rail, a handle. `taper: [atFrom, atTo]` narrows it toward
+   *  either end, `bevel` cuts its edges off (see box). */
+  beam(f: Frame, from: Vec3, to: Vec3, width: number, height: number, paint: Paint, options: ShapeOptions & { up?: Vec3; taper?: [number, number]; bevel?: number } = {}): void {
     const frame = between(f, from, to, options.up);
     const half = distance(from, to) / 2;
-    this.box(moved(frame, [0, 0, half]), [width / 2, height / 2, half], paint, options);
+    this.box(moved(frame, [0, 0, half]), [width / 2, height / 2, half], paint, { ...options, taperAxis: "z" });
   }
 
   /**

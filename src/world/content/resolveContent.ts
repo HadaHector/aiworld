@@ -591,7 +591,7 @@ function readFeatureChances(obj: RawObject, reader: Reader): FeatureChance[] {
 
 /** A buildingMaterials/ file - see BuildingMaterialDef. */
 function readBuildingMaterial(id: string, obj: RawObject, reader: Reader): BuildingMaterialDef {
-  reader.onlyKeys(obj, "", ["name", "texture", "size", "shine"]);
+  reader.onlyKeys(obj, "", ["name", "texture", "size", "shine", "glow"]);
   const size = obj.size;
   let repeat: [number, number] = [1, 1];
   if (typeof size === "number" && size > 0) repeat = [size, size];
@@ -603,6 +603,7 @@ function readBuildingMaterial(id: string, obj: RawObject, reader: Reader): Build
     texture: readTexture(obj.texture, reader, "texture"),
     size: repeat,
     shine: reader.optionalNumber(obj, "shine", "", 0, { min: 0, max: 1 }),
+    glow: reader.optionalNumber(obj, "glow", "", 0, { min: 0, max: 1 }),
   };
 }
 

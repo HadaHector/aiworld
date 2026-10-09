@@ -29,7 +29,7 @@ export const choppingBlock: PropGenerator = {
       const reach = 1.5 + rng() * 0.3;
       const tip: Vec3 = [head[0] + Math.cos(yaw) * Math.cos(rise) * reach, head[1] + Math.sin(rise) * reach, head[2] + Math.sin(yaw) * Math.cos(rise) * reach];
       const handle = between(ORIGIN, head, tip);
-      shape.beam(ORIGIN, head, tip, 0.09, 0.12, ctx.paint("handle"));
+      shape.beam(ORIGIN, head, tip, 0.09, 0.12, ctx.paint("handle"), { taper: [1.1, 0.8] });
       // The blade: down into the wood, square to the handle's flat.
       const blade = turned(moved(handle, [0, 0, 0.02]), "x", rise);
       shape.box(moved(blade, [0, -0.06, 0.06]), [0.04, 0.24, 0.18], ctx.paint("iron"));
@@ -75,7 +75,7 @@ export const sawbuck: PropGenerator = {
     for (const x of ends) {
       for (const side of [-1, 1]) {
         const lean = side * 0.06;
-        shape.beam(ORIGIN, [x + lean, 0, side * spread], [x - lean, height, -side * spread * 0.7], leg, leg, ctx.paint("wood"), { collide: true });
+        shape.beam(ORIGIN, [x + lean, 0, side * spread], [x - lean, height, -side * spread * 0.7], leg, leg, ctx.paint("wood"), { collide: true, taper: [1, 0.8] });
       }
     }
     // The rail joining the crossings, and a brace across each trestle's feet.

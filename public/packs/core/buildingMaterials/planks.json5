@@ -1,5 +1,5 @@
-// Weatherboarding: wide upright planks, each its own weathered brown-grey, split by dark gaps, their
-// grain running up the wall - a barn's or a shed's walls.
+// Weatherboarding: wide upright planks, each its own weathered brown-grey, split by narrow dark gaps,
+// their grain running up the wall - a barn's or a shed's walls, a ceiling's boards, a table's top.
 {
   name: "Planks",
   // Metres one repeat covers: 8 planks across, so each is 0.75 m wide - twice life size, so they
@@ -16,12 +16,17 @@
         { name: "weather", type: "fbm", octaves: 2, tileCycles: 3, amplitude: 1, persistence: 0.5, lacunarity: 2 },
       ],
       steps: [
-        { output: "joint", op: "sample", noise: "planks" },
+        // How far across its plank a point is, from the plank's middle (0) to its edge (0.5) - across
+        // the planks only: a plank runs on unbroken where the texture repeats along it.
+        { output: "across", op: "sample", noise: "planks", mode: "u" },
+        { output: "acrossCentred", op: "offset", input: "across", amount: -0.5 },
+        { output: "fromMiddle", op: "abs", input: "acrossCentred" },
         { output: "plankId", op: "sample", noise: "planks", mode: "cell" },
         { output: "grainRaw", op: "sample", noise: "grain" },
         { output: "fibreRaw", op: "sample", noise: "fibre" },
         { output: "weatherRaw", op: "sample", noise: "weather" },
-        { output: "gap", op: "mask", input: "joint", at: 0.015, off: 0.04 },
+        // A narrow dark gap between the planks: some 3 cm of a 75 cm plank, fading out by 6.
+        { output: "gap", op: "mask", input: "fromMiddle", at: 0.48, off: 0.44 },
         {
           output: "plankTone",
           op: "colorRamp",
@@ -43,7 +48,7 @@
         { output: "diffuse", op: "mix", a: "wood", b: "gapColor", t: "gap" },
         { output: "roughness", op: "constant", value: 0.85 },
         // Height: each plank rounded off at its edges, the gaps sunk, the grain raised.
-        { output: "edgeRaw", op: "remap", input: "joint", inMin: 0.015, inMax: 0.1, outMin: 0, outMax: 1 },
+        { output: "edgeRaw", op: "remap", input: "fromMiddle", inMin: 0.48, inMax: 0.38, outMin: 0, outMax: 1 },
         { output: "edge", op: "clamp", input: "edgeRaw", min: 0, max: 1 },
         { output: "fibreBump", op: "scale", input: "fibreRaw", factor: 0.12 },
         { output: "height", op: "add", a: "edge", b: "fibreBump" },

@@ -1,0 +1,9 @@
+// A stool: a thick seat, round or square, on splayed legs.
+{
+  name: "Stool",
+  type: "stool",
+  parts: {
+    seat: { material: "planks", tints: [[1, 1, 1], [0.86, 0.8, 0.72]] },
+    legs: { material: "timber", tints: [[1, 1, 1], [0.85, 0.8, 0.74], [0.7, 0.64, 0.58]] },
+  },
+}
