@@ -7,8 +7,7 @@ import type { RoadLine } from "../world/roads/roadField";
 import type { SettlementGate } from "../world/settlements/gates";
 import type { TreePlacement } from "../world/foliage/treeScatter";
 import { layoutCompound, planCompound, settleProps, type CompoundLayout } from "../world/features/compound";
-import { compoundPads, createPadField, propPads, type PadField } from "../world/settlements/padField";
-import { PAD_BLEND_MAX, PAD_BLEND_MIN, PAD_SIDE_SLOPE } from "../world/settlements/settlementConfig";
+import { compoundPads, createPadField, padMargin, propPads, type PadField } from "../world/settlements/padField";
 import { generateBuilding } from "../world/buildings/buildingGenerator";
 import { generateProp } from "../world/props/propGenerator";
 import { deriveSeed, mulberry32 } from "../world/rng";
@@ -71,7 +70,7 @@ export function buildFeaturePreview(
     let height = baseHeight(x, z);
     const pad = pads?.query(x, z);
     if (pad) {
-      const margin = Math.min(PAD_BLEND_MAX, Math.max(PAD_BLEND_MIN, Math.abs(height - pad.height) / PAD_SIDE_SLOPE));
+      const margin = padMargin(pad.blend, height - pad.height);
       if (pad.gap < margin) height = height + (pad.height - height) * (1 - smoothstep(0, margin, pad.gap));
     }
     return height;

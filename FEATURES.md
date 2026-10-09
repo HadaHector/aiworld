@@ -640,7 +640,8 @@ patch's edge to gates at rolled angles - standing in for the road network - and 
 world's own code, its yard and pads levelled into the patch, its buildings and props where the
 layout put them, its roads, lanes, trail and trodden yard drawn on the ground, and the wood thinning
 in to its clearing. Variants reroll it; Detail, Colliders and the Ground shape work as for buildings
-(src/workbench/featurePreview.ts). A settlement or a quarry has no preview yet.
+(src/workbench/featurePreview.ts). A settlement or a quarry has no preview yet. Since: a compound's
+`pads` set how wide its banks are.
 
 ### 7. Probe, map, biomes and timing
 

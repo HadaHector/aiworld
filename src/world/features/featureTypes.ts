@@ -108,6 +108,9 @@ export interface CompoundSpec {
   site: { grade: [number, number]; cover: [number, number]; nearWater: number | null };
   /** The yard: a level round of trodden ground, this radius. */
   yard: { radius: [number, number] };
+  /** How the level ground under its yard, buildings and props blends back to the ground round it -
+   *  see PadBlend: `slope` the steepest its banks stand, `blend` how narrow and wide they may get. */
+  pads: { slope: number; blend: [number, number] };
   arrangement: CompoundArrangement;
   trails: CompoundTrailSpec[];
   buildings: CompoundBuildingSpec[];

@@ -22,7 +22,7 @@ import {
   type TreeRules,
 } from "../foliage/foliageConfig";
 import type { Voice } from "../naming/nameGenerator";
-import { SETTLEMENT_TIERS, STREET_KINDS, type SettlementStyle, type SettlementTier, type SettlementTierDef } from "../settlements/settlementConfig";
+import { PAD_BLEND_MAX, PAD_BLEND_MIN, PAD_SIDE_SLOPE, SETTLEMENT_TIERS, STREET_KINDS, type SettlementStyle, type SettlementTier, type SettlementTierDef } from "../settlements/settlementConfig";
 import type { ColorTuple } from "../terrain/pipeline/pipelineTypes";
 import { coolNightTone, deriveNightIntensity } from "../lighting/dayNightMath";
 import { ContentError, isObject, joinPath, Reader, type ContentIssue, type RawObject } from "./contentReader";
@@ -1317,7 +1317,15 @@ function readQuarry(quarry: RawObject, reader: Reader): QuarrySpec {
 
 /** A compound's block - see CompoundSpec. */
 function readCompound(compound: RawObject, reader: Reader, buildings: Map<string, BuildingDef>, props: Map<string, PropDef>, groups: Map<string, PropGroupDef>): CompoundSpec {
-  reader.onlyKeys(compound, "compound", ["site", "yard", "arrangement", "trails", "buildings", "props"]);
+  reader.onlyKeys(compound, "compound", ["site", "yard", "pads", "arrangement", "trails", "buildings", "props"]);
+  // How its level ground blends back - the settlements' own unless it says.
+  const padsRaw = compound.pads === undefined ? {} : reader.object(compound.pads, "compound.pads");
+  reader.onlyKeys(padsRaw, "compound.pads", ["slope", "blend"]);
+  const pads = {
+    slope: reader.optionalNumber(padsRaw, "slope", "compound.pads", PAD_SIDE_SLOPE, { min: 0.05 }),
+    blend: padsRaw.blend === undefined ? ([PAD_BLEND_MIN, PAD_BLEND_MAX] as [number, number]) : reader.range(padsRaw, "blend", "compound.pads", { allowEqual: true }),
+  };
+  if (pads.blend[0] < 0) reader.fail("compound.pads.blend", "is at least 0");
   const site = reader.object(compound.site, "compound.site");
   reader.onlyKeys(site, "compound.site", ["grade", "cover", "nearWater"]);
   const yard = reader.object(compound.yard, "compound.yard");
@@ -1361,6 +1369,7 @@ function readCompound(compound: RawObject, reader: Reader, buildings: Map<string
       nearWater: site.nearWater === undefined ? null : reader.number(site, "nearWater", "compound.site", { min: 0 }),
     },
     yard: { radius: reader.range(yard, "radius", "compound.yard", { allowEqual: true }) },
+    pads,
     arrangement: reader.oneOf(compound, "arrangement", "compound", COMPOUND_ARRANGEMENTS),
     trails,
     buildings: buildingList,

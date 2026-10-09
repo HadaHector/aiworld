@@ -81,6 +81,8 @@ export interface CompoundLayout {
   props: PlacedProp[];
   /** Props (or groups) rolled that found no room, by id. */
   droppedProps: string[];
+  /** How its level ground blends back to the ground round it (its kind's `pads`). */
+  padBlend: { slope: number; min: number; max: number };
 }
 
 /** A building variant is drawn from this many, as a settlement's houses are. */
@@ -431,7 +433,7 @@ export function layoutCompound(
   }
 
   const { props, droppedProps } = placeProps(kind.compound!, site, worldSeed, rng, buildings, lanes, trails, nearbyRoads, sampleTerrain, { x, z, yardRadius, rim });
-  return { featureId, kindId: kind.id, x, z, yard: { x, z, y, radius: yardRadius, level }, entrances, lanes, trails, buildings, dropped, droppedRequired, props, droppedProps };
+  return { featureId, kindId: kind.id, x, z, yard: { x, z, y, radius: yardRadius, level }, entrances, lanes, trails, buildings, dropped, droppedRequired, props, droppedProps, padBlend: { slope: kind.compound!.pads.slope, min: kind.compound!.pads.blend[0], max: kind.compound!.pads.blend[1] } };
 }
 
 /** A prop keeps this far from anything else - a building, another prop. */

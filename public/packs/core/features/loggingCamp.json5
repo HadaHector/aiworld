@@ -16,6 +16,10 @@
     // A round of trodden ground, its radius in metres, rolled per camp - wide enough for a long
     // bunkhouse and a saw shed to stand round it.
     yard: { radius: [18, 24] },
+    // How the level ground - the yard, and the pads under the buildings and props - blends back to
+    // the ground round it: its banks no steeper than `slope` (rise over run; lower, a wider,
+    // gentler bank), and between `blend` metres wide at the least and the most.
+    pads: { slope: 0.6, blend: [1.5, 10] },
     // Round the yard's rim, fronts to the yard, the entrances kept free.
     arrangement: "ring",
     // The skid trail the logs are dragged in along: out through the widest stretch of rim the
