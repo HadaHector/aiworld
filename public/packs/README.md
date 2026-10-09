@@ -39,6 +39,7 @@ packs/<pack>/
   buildingParts/<id>.json5  a piece buildings are built with: a door, a window, a chimney
   buildingMaterials/<id>.json5  what buildings are made of: plaster, timber, stone, glass, tiles
   rooms/<id>.json5        a kind of room inside a building, and its style: floor, walls, ceiling
+  props/<id>.json5        a thing set about a place: a log stack, a chopping block, a barrel
   patches/<any>.json5     additions to another pack's lists
 ```
 
@@ -810,6 +811,35 @@ In the workbench a building stands on a patch of ground, one variant or a row of
 footprint, its door and - for a generator with a plan - its tiles marked. A building part stands on
 a stretch of wall, painted, sized and framed like the first house that uses it - a framing part on
 that whole house.
+
+## Props
+
+A prop (`props/`) is a thing set about a place - a log stack, a chopping block, a sawbuck, a crate,
+a barrel. Like a building, it names its generator by `type` and gives its settings under that
+name; `parts` says what each piece the generator paints is made of - `{ material, tints }`, a
+building material (or none, for a plain colour - iron) and tints, one picked per prop; and
+`collide: false` keeps a small one out of the way (they are in it by default). Each setting is a
+range rolled per prop (`[lo, hi]`), a count (whole numbers), a chance, or a number, as the
+generator declares it; any left out takes the generator's default.
+
+| `type` | What | Settings | Parts |
+|---|---|---|---|
+| `logStack` | logs in a pyramid, between stakes | `length`, `radius`, `bottom` (logs in its bottom row), `rows`, `stakes` (chance) | `bark`, `end` |
+| `felledLog` | one trunk lying, lopped, stubs of its branches | `length`, `radius` (at the butt), `taper` (the top's share of it), `stubs` | `bark`, `end` |
+| `choppingBlock` | a round on end, an axe in it, split billets round it | `radius`, `height`, `billets`, `axe` (chance) | `bark`, `end`, `wood`, `handle`, `iron` |
+| `sawbuck` | two crossed-leg trestles and a rail | `length`, `height`, `spread` | `wood` |
+| `crate` | boards, battens down its corners and round its top and foot | `width`, `depth`, `height` | `boards`, `battens` |
+| `barrel` | staves bulging at the middle, iron hoops, a boarded head | `height`, `radius`, `bulge` | `staves`, `hoops`, `head` |
+
+A prop's model is a building's kind of model, so it is drawn with the buildings' materials, has a
+far model of its own (coarser, its small pieces left out) and its own collision. Its log ends show
+end grain (`endGrain`) centred on each log's own heart; logs wrap `bark` round them along their
+length; boards run up a barrel as staves. In the workbench, `props/` shows each prop's variants,
+near and far, and what it puts in the way.
+
+A new generator is code (`src/world/props/generators/`): a table of its settings, its parts, and
+how it builds from the shared shapes (`propShapes.ts`: boxes, beams, round logs, turned shapes, in
+local frames) - nothing else needs to know about it.
 
 ## Example
 

@@ -510,6 +510,17 @@ Materials needed:
 - **Building materials:** `cutWood` (the rings) and `sawnPlanks`.
 - **Ground material:** `sawdustEarth` (trodden earth with chips and sawdust).
 
+**Done so far:** the folder, its reader and its workbench preview, and six generators - `logStack`,
+`felledLog`, `choppingBlock`, `sawbuck`, `crate`, `barrel` - built from one set of shared shapes
+(`src/world/props/propShapes.ts`): boxes, beams between two points, round logs (smooth, tapering,
+bark wrapped round them, end grain on their cut ends, a slant cut), turned shapes (a barrel's
+bulge), each laid in a local frame and putting its own hull in the way. A generator declares its
+settings (ranges, counts, chances, numbers, with defaults) and its parts, and the content reader
+reads any generator's file from that, so a new prop is one file of code and nothing else. Materials:
+`bark` new, `endGrain` serving as `cutWood`, `deckBoards` as sawn boards. Not yet: the saw pit
+(needs a ground cut), the brush pile (needs the trees' leaf atlas), and placing props in a compound
+by anchor.
+
 ### 4. Stumps where trees were cut
 
 Today a feature's `featureClear` just removes trees. Inside a compound's `clearing.stumps`, the
@@ -668,7 +679,8 @@ Props get the same model and colliders views as buildings.
    sides, and the five buildings - brought forward, so the renderer split draws them. **Done.**
 4. **The renderer split.** Compounds draw real buildings with collision. **Done:** one renderer for
    settlements and compounds, each building its own mesh.
-5. **Props:** the asset folder, the generators, anchors, collision.
+5. **Props:** the asset folder, the generators, anchors, collision. **The folder, six generators
+   and collision done;** anchors next.
 6. **Stumps.**
 7. **Workbench preview.**
 8. **Finishing:** materials and the yard's paint, biome odds, a walk through each wood, timings.

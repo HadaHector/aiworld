@@ -1,0 +1,15 @@
+// A felled trunk, lopped of its branches but for their stubs, lying where it was dragged.
+{
+  name: "Felled Log",
+  type: "felledLog",
+  felledLog: {
+    length: [6, 11],
+    radius: [0.32, 0.5],
+    taper: [0.55, 0.75],
+    stubs: [2, 6],
+  },
+  parts: {
+    bark: { material: "bark", tints: [[1, 1, 1], [0.9, 0.86, 0.82]] },
+    end: { material: "endGrain", tints: [[1, 1, 1]] },
+  },
+}

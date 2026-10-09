@@ -18,6 +18,7 @@ import { createTextureCacheLabel } from "../debug/textureCacheLabel";
 import { sampleBiomeArea, type BiomeArea } from "./biomeArea";
 import { heightView, layerView, materialsView, plantsView, type Rgb } from "./biomeViews";
 import { generateBuilding } from "../world/buildings/buildingGenerator";
+import { generateProp } from "../world/props/propGenerator";
 import { cutModel } from "./cutModel";
 import type { BuildingModel } from "../world/buildings/buildingTypes";
 import { buildPartSample, houseUsing } from "../world/buildings/partSample";
@@ -39,13 +40,13 @@ interface Asset {
 }
 
 /** The folders with a preview, and what each asset kind can be looked at as. */
-type PreviewFolder = "materials" | "trees" | "bushes" | "rocks" | "grass" | "biomes" | "buildings" | "buildingParts" | "buildingMaterials";
-const PREVIEW_FOLDERS: PreviewFolder[] = ["materials", "trees", "bushes", "rocks", "grass", "biomes", "buildings", "buildingParts", "buildingMaterials"];
+type PreviewFolder = "materials" | "trees" | "bushes" | "rocks" | "grass" | "biomes" | "buildings" | "buildingParts" | "buildingMaterials" | "props";
+const PREVIEW_FOLDERS: PreviewFolder[] = ["materials", "trees", "bushes", "rocks", "grass", "biomes", "buildings", "buildingParts", "buildingMaterials", "props"];
 /** How many variants of a building the Variant menu steps through - a building has no fixed count,
  *  every seed is one. */
 const BUILDING_VARIANTS = 8;
 /** Everything else is listed after these, its JSON still checked by Preview. */
-const FOLDER_ORDER = ["materials", "trees", "bushes", "rocks", "grass", "biomes", "buildings", "buildingParts", "buildingMaterials", "features", "layers", "borderHills", "settlements", "voices", "patches", ""];
+const FOLDER_ORDER = ["materials", "trees", "bushes", "rocks", "grass", "biomes", "buildings", "buildingParts", "buildingMaterials", "props", "features", "layers", "borderHills", "settlements", "voices", "patches", ""];
 
 interface ViewDef {
   id: string;
@@ -487,6 +488,7 @@ function viewsFor(asset: Asset | null, content: WorldContent | null): ViewDef[] 
     }
     case "buildings":
     case "buildingParts":
+    case "props":
       return [
         { id: "placed", label: "On the ground", mode: "3d" },
         { id: "model", label: "Model", mode: "3d" },
@@ -586,6 +588,7 @@ function renderPreviewBar(): void {
         if (stage) stage.scene.forceWireframe = options.wire === "on";
       }),
     );
+    if (current.folder === "props") viewOptions.append(checkbox("Colliders", "colliders", rebuild));
     if (current.folder === "buildings") {
       viewOptions.append(checkbox("Footprint", "marks", rebuild));
       // What the building puts in the way, drawn in its place.
@@ -603,9 +606,10 @@ function renderPreviewBar(): void {
         ["side", "Side section"],
       ], rebuild));
     }
-    if ((current.folder === "trees" || current.folder === "bushes" || current.folder === "rocks" || current.folder === "buildings") && content) {
-      const def = current.folder === "buildings" ? undefined : kindOf(content, current);
-      const variants = current.folder === "buildings" ? BUILDING_VARIANTS : def ? variantCount(def) : 1;
+    if ((current.folder === "trees" || current.folder === "bushes" || current.folder === "rocks" || current.folder === "buildings" || current.folder === "props") && content) {
+      const generated = current.folder === "buildings" || current.folder === "props";
+      const def = generated ? undefined : kindOf(content, current);
+      const variants = generated ? BUILDING_VARIANTS : def ? variantCount(def) : 1;
       const variantMenu = select("Variant", "variant", [...Array.from({ length: variants }, (_, i): [string, string] => [String(i), String(i + 1)]), ["all", "All"]], rebuild);
       // Stepping through one model at a time keeps the camera where it is, so each variant is seen
       // from the same side as the last.
@@ -625,7 +629,7 @@ function renderPreviewBar(): void {
       };
       variantMenu.append(step(-1), step(1));
       viewOptions.append(variantMenu);
-      const hasFar = current.folder === "buildings" || ((current.folder === "trees" || current.folder === "rocks") && def?.shape.model !== "primitive" && def?.shape.model !== "bush");
+      const hasFar = generated || ((current.folder === "trees" || current.folder === "rocks") && def?.shape.model !== "primitive" && def?.shape.model !== "bush");
       // What a tree puts in the way: its trunk's and roots' collision pieces, drawn over it.
       if (current.folder === "trees" && (def?.shape.model === "branching" || def?.shape.model === "conifer")) viewOptions.append(checkbox("Colliders", "colliders", rebuild));
       if (hasFar) {
@@ -852,6 +856,12 @@ async function preview3d(token: number, asset: Asset, view: ViewDef, content: Wo
     const def = content.buildings.find((building) => building.id === asset.id)!;
     const chosen = options.variant === "all" ? Array.from({ length: BUILDING_VARIANTS }, (_, i) => i) : [Math.min(BUILDING_VARIANTS - 1, Number(options.variant) || 0)];
     buildings = chosen.map((variant) => cutOpen(generateBuilding(def, seed, variant, options.lod === "far")));
+  } else if (asset.folder === "props") {
+    ground = groundMaterial(content, asset);
+    if (grassOn) grass = ground.grass;
+    const def = content.props.find((prop) => prop.id === asset.id)!;
+    const chosen = options.variant === "all" ? Array.from({ length: BUILDING_VARIANTS }, (_, i) => i) : [Math.min(BUILDING_VARIANTS - 1, Number(options.variant) || 0)];
+    buildings = chosen.map((variant) => generateProp(def, seed, variant, options.lod === "far"));
   } else if (asset.folder === "buildingParts") {
     ground = groundMaterial(content, asset);
     if (grassOn) grass = ground.grass;
@@ -883,7 +893,7 @@ async function preview3d(token: number, asset: Asset, view: ViewDef, content: Wo
     bare: view.id === "model",
     trees,
     buildings,
-    buildingColliders: options.colliders === "on" && asset.folder === "buildings",
+    buildingColliders: options.colliders === "on" && (asset.folder === "buildings" || asset.folder === "props"),
     footprints: options.marks === "on" && asset.folder === "buildings",
     timeHours: timeHours(),
     lightBiome,

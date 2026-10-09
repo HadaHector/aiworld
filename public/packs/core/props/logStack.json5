@@ -1,0 +1,17 @@
+// A stack of sawn logs in a pyramid, three to five in its bottom row, between stakes - a logging
+// camp's yard has them waiting to be sawn or hauled.
+{
+  name: "Log Stack",
+  type: "logStack",
+  logStack: {
+    length: [3.6, 5.2],
+    radius: [0.24, 0.36],
+    bottom: [3, 5],
+    rows: [2, 4],
+    stakes: 0.7,
+  },
+  parts: {
+    bark: { material: "bark", tints: [[1, 1, 1], [0.92, 0.88, 0.84]] },
+    end: { material: "endGrain", tints: [[1, 1, 1], [0.95, 0.9, 0.86]] },
+  },
+}

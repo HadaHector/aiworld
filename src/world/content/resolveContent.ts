@@ -32,6 +32,8 @@ import { checkPlans, checkRoller, describeCheckPlan, MIDDLE_ROLLER, randomRoller
 import { deriveSeed, mulberry32 } from "../rng";
 import { AREA_ROLL_SALT } from "../cells/config";
 import type { WorldContent } from "./worldContent";
+import type { PropDef, PropPaint, PropSettings } from "../props/propTypes";
+import { PROP_GENERATORS } from "../props/generators/index";
 import type { TextureDef } from "../materials/textureGen";
 import { adjustMatrix, chainMatrix, NO_ADJUST, type ColorAdjust } from "../materials/colorAdjust";
 import type { WeatherChance, WeatherDef } from "../weather/weatherTypes";
@@ -96,7 +98,7 @@ export interface PackSource {
 
 /** The folders a pack's content lives in, one kind of definition each. A definition's id is its
  *  file name, and a pack with a higher priority replaces a lower one's definition of the same id. */
-const CONTENT_FOLDERS = ["biomes", "materials", "layers", "grass", "trees", "bushes", "rocks", "voices", "borderHills", "settlements", "weathers", "features", "buildings", "buildingParts", "buildingMaterials", "rooms"] as const;
+const CONTENT_FOLDERS = ["biomes", "materials", "layers", "grass", "trees", "bushes", "rocks", "voices", "borderHills", "settlements", "weathers", "features", "buildings", "buildingParts", "buildingMaterials", "rooms", "props"] as const;
 type ContentFolder = (typeof CONTENT_FOLDERS)[number];
 
 /** How many grass kinds the packs may define between them: each is a layer of the blade atlas and
@@ -256,6 +258,15 @@ export function resolveContent(packs: PackSource[]): WorldContent {
     }
   }
   const roomById = new Map(roomTypes.map((room) => [room.id, room]));
+  const propReads = readAll("props", (e, o, r) => ({ file: e.file, def: readProp(e.id, o, r) }));
+  const props = propReads.map((read) => read.def);
+  for (const { file, def } of propReads) {
+    for (const [part, paint] of Object.entries(def.parts)) {
+      if (paint.material !== null && !buildingMaterialIds.has(paint.material)) {
+        issues.push({ file, path: `parts.${part}.material`, message: `no building material "${paint.material}" (known: ${[...buildingMaterialIds].join(", ") || "none"})` });
+      }
+    }
+  }
   const buildingReads = readAll("buildings", (e, o, r) => ({ file: e.file, def: readBuilding(e.id, o, r, partById, roomById) }));
   const buildings = buildingReads.map((read) => read.def);
   for (const { file, def } of buildingReads) {
@@ -475,6 +486,7 @@ export function resolveContent(packs: PackSource[]): WorldContent {
     buildingParts,
     buildingMaterials,
     roomTypes,
+    props,
   };
 }
 
@@ -589,6 +601,63 @@ function readBuildingMaterial(id: string, obj: RawObject, reader: Reader): Build
 
 /** A buildings/ file - see BuildingDef. Its generator is named by `type` (`generator` already means
  *  a content generator - see generators.ts), and its own block is under the generator's name. */
+/**
+ * A props/ file - see PropDef. Named by `type` (its generator), its settings under the generator's
+ * name, each read as the generator's own `params` declare it - so any generator's file is read here
+ * - and `parts`, what each part the generator paints is made of.
+ */
+function readProp(id: string, obj: RawObject, reader: Reader): PropDef {
+  const names = Object.keys(PROP_GENERATORS);
+  const type = reader.oneOf(obj, "type", "", names);
+  reader.onlyKeys(obj, "", ["name", "type", type, "parts", "collide"]);
+  const generator = PROP_GENERATORS[type];
+  const settings: PropSettings = {};
+  if (generator) {
+    const raw = obj[type] === undefined ? {} : reader.object(obj[type], type);
+    reader.onlyKeys(raw, type, Object.keys(generator.params));
+    for (const [key, param] of Object.entries(generator.params)) {
+      const at = type;
+      if (raw[key] === undefined) {
+        if (param.default === null) reader.fail(`${at}.${key}`, `is needed (${param.doc})`);
+        else settings[key] = param.default;
+        continue;
+      }
+      switch (param.kind) {
+        case "range":
+        case "count": {
+          const range = reader.range(raw, key, at, { allowEqual: true });
+          if (param.min !== undefined && range[0] < param.min) reader.fail(`${at}.${key}`, `is at least ${param.min}`);
+          if (param.kind === "count" && !range.every(Number.isInteger)) reader.fail(`${at}.${key}`, "is a whole number");
+          settings[key] = range;
+          break;
+        }
+        case "chance":
+          settings[key] = reader.number(raw, key, at, { min: 0, max: 1 });
+          break;
+        case "number":
+          settings[key] = reader.number(raw, key, at, { min: param.min, max: param.max });
+          break;
+      }
+    }
+  }
+  const partsRaw = reader.object(obj.parts, "parts");
+  const parts: Record<string, PropPaint> = {};
+  reader.onlyKeys(partsRaw, "parts", generator ? generator.parts : []);
+  for (const part of generator?.parts ?? []) {
+    const at = `parts.${part}`;
+    if (partsRaw[part] === undefined) {
+      reader.fail(at, "is needed: what it is painted");
+      continue;
+    }
+    const raw = reader.object(partsRaw[part], at);
+    reader.onlyKeys(raw, at, ["material", "tints"]);
+    const tints = reader.array(raw, "tints", at).map((value, i) => reader.colorValue(value, `${at}.tints[${i}]`));
+    if (tints.length === 0) reader.fail(`${at}.tints`, "needs at least one colour");
+    parts[part] = { material: raw.material === undefined || raw.material === null ? null : reader.string(raw, "material", at), tints: tints.length > 0 ? tints : [[1, 1, 1]] };
+  }
+  return { id, name: reader.string(obj, "name", ""), generator: type, settings, parts, collide: obj.collide === undefined ? true : obj.collide === true };
+}
+
 /** A rooms/ file - see RoomTypeDef. */
 function readRoomType(id: string, obj: RawObject, reader: Reader): RoomTypeDef {
   const readStalls = (): StallsSpec => {

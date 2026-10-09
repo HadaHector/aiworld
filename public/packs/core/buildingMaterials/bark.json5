@@ -1,0 +1,47 @@
+// Bark: a felled log's or a stake's rough grey-brown bark, furrowed along the trunk into ridges
+// that part and join, the furrows dark, the ridges catching the light.
+// Its v runs along the trunk (a prop's logs wrap it round them, their v along their length).
+{
+  name: "Bark",
+  // Round it and along it.
+  size: [0.8, 1.6],
+  shine: 0.02,
+  texture: {
+    bumpStrength: 2.2,
+    pipeline: {
+      noises: [
+        // The furrows: a ridged noise's creases, drawn far out along the trunk - long, branching,
+        // parting and joining as bark's furrows do.
+        { name: "furrows", type: "ridged", octaves: 2, tileCycles: 8, amplitude: 1, persistence: 0.45, lacunarity: 2.2, stretch: [1, 7] },
+        { name: "grain", type: "fbm", octaves: 3, tileCycles: 12, amplitude: 1, persistence: 0.5, lacunarity: 2.2, stretch: [1, 8] },
+        { name: "tone", type: "fbm", octaves: 2, tileCycles: 3, amplitude: 1, persistence: 0.5, lacunarity: 2 },
+      ],
+      steps: [
+        { output: "crest", op: "sample", noise: "furrows" },
+        { output: "grainRaw", op: "sample", noise: "grain" },
+        { output: "toneRaw", op: "sample", noise: "tone" },
+        // The creases, turned into furrows: dark and sunk where the ridged noise peaks.
+        { output: "furrow", op: "mask", input: "crest", at: 1.26, off: 1.08 },
+        { output: "ridgeRound", op: "invert", input: "crest" },
+        {
+          output: "ridgeTone",
+          op: "colorRamp",
+          input: "toneRaw",
+          stops: [
+            { at: -1, color: [0.34, 0.29, 0.24] },
+            { at: 0, color: [0.42, 0.36, 0.3] },
+            { at: 1, color: [0.38, 0.35, 0.31] },
+          ],
+        },
+        { output: "grainShade", op: "remap", input: "grainRaw", inMin: -1, inMax: 1, outMin: 0.86, outMax: 1.12 },
+        { output: "ridge", op: "multiply", a: "ridgeTone", b: "grainShade" },
+        { output: "furrowColor", op: "color", value: [0.11, 0.09, 0.07] },
+        { output: "diffuse", op: "mix", a: "ridge", b: "furrowColor", t: "furrow" },
+        { output: "roughness", op: "constant", value: 0.95 },
+        { output: "grainBump", op: "scale", input: "grainRaw", factor: 0.08 },
+        { output: "height", op: "add", a: "ridgeRound", b: "grainBump" },
+      ],
+      outputs: { diffuse: "diffuse", roughness: "roughness", height: "height" },
+    },
+  },
+}

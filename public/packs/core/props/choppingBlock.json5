@@ -1,0 +1,20 @@
+// A chopping block: a round of trunk on end, an axe bitten into it, split wood lying round it.
+{
+  name: "Chopping Block",
+  type: "choppingBlock",
+  choppingBlock: {
+    radius: [0.4, 0.55],
+    height: [0.7, 0.95],
+    billets: [3, 7],
+    axe: 0.8,
+  },
+  parts: {
+    bark: { material: "bark", tints: [[1, 1, 1]] },
+    end: { material: "endGrain", tints: [[0.9, 0.86, 0.8]] },
+    // The billets' split faces.
+    wood: { material: "roundLog", tints: [[1.25, 1.15, 1.0]] },
+    handle: { material: "timber", tints: [[0.7, 0.58, 0.45]] },
+    // The axe's head: no material, a plain dark iron.
+    iron: { tints: [[0.18, 0.18, 0.19]] },
+  },
+}

@@ -8,6 +8,7 @@ import type { Defaults } from "./resolveContent";
 import type { WeatherDef } from "../weather/weatherTypes";
 import type { FeatureKindDef } from "../features/featureTypes";
 import type { BuildingDef, BuildingMaterialDef, BuildingPartDef, RoomTypeDef } from "../buildings/buildingTypes";
+import type { PropDef } from "../props/propTypes";
 
 /**
  * Everything a world is generated from that is content rather than code: its biomes, ground
@@ -63,4 +64,6 @@ export interface WorldContent {
   buildingMaterials: BuildingMaterialDef[];
   /** Kinds of room, and their styles (a pack's rooms/ folder). */
   roomTypes: RoomTypeDef[];
+  /** Things set about places - log stacks, barrels (a pack's props/ folder). */
+  props: PropDef[];
 }

@@ -80,6 +80,33 @@ export class ModelBuilder {
   }
 
   /**
+   * A polygon laid entirely by hand: a normal, a tangent (the way its texture's u runs) and texture
+   * coordinates (metres, as everywhere else) per corner - a strip of a round log, shaded smooth
+   * round it and its bark wrapped round it without a seam.
+   */
+  raw(corners: Vec3[], normals: Vec3[], tangents: Vec3[], uvs: [number, number][], paint: Paint): void {
+    for (const [x, y, z] of corners) {
+      this.minX = Math.min(this.minX, x);
+      this.maxX = Math.max(this.maxX, x);
+      this.minZ = Math.min(this.minZ, z);
+      this.maxZ = Math.max(this.maxZ, z);
+      this.maxY = Math.max(this.maxY, y);
+    }
+    if (this.measure) return;
+    const slot = this.slotOf(paint.material);
+    const base = this.positions.length / 3;
+    for (let i = 0; i < corners.length; i++) {
+      this.positions.push(...corners[i]);
+      this.normals.push(...normals[i]);
+      this.tangents.push(...tangents[i]);
+      this.uvs.push(uvs[i][0], uvs[i][1]);
+      this.colors.push(paint.tint[0], paint.tint[1], paint.tint[2], 1);
+      this.materialSlots.push(slot);
+    }
+    for (let i = 1; i < corners.length - 1; i++) this.indices.push(base, base + i, base + i + 1);
+  }
+
+  /**
    * A polygon that may be a little bent - a cell of a sagging roof - shaded by a normal per corner,
    * but textured in the frame of `frame` (the normal of the flat surface it is bent from), so the
    * cells of one surface share one frame and its texture runs across them unbroken.

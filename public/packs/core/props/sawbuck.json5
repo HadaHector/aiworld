@@ -1,0 +1,13 @@
+// A sawbuck: two crossed-leg trestles and a rail, a log laid in their crotches to be sawn to length.
+{
+  name: "Sawbuck",
+  type: "sawbuck",
+  sawbuck: {
+    length: [2.2, 3.0],
+    height: [1.6, 1.9],
+    spread: [0.7, 0.9],
+  },
+  parts: {
+    wood: { material: "roundLog", tints: [[1, 1, 1], [0.9, 0.86, 0.82]] },
+  },
+}
