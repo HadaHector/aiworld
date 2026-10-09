@@ -153,8 +153,12 @@ class WoodBuilder {
    * With `ribs`, the tube is a cactus's column instead: its section pleated into `ribs.count` rounded
    * ribs with sharp grooves between, `ribs.depth` of the radius deep (four sides to a rib, whatever
    * `sides` says), and its end a rounded dome of `domeRings` rings, the ribs running over it.
+   *
+   * With `star`, each ring's corners are pushed out and down by it - a trunk's foot spread into its
+   * roots (see RootStar). Its rings are then framed on the world's +x, so corner `j` points the
+   * same way whatever the limb, and its normals are taken from the shape it makes.
    */
-  tube(points: V3[], radii: number[], sides: number, tile: number, blunt = false, heights?: number[], ribs: Ribs | null = null, domeRings = 3): void {
+  tube(points: V3[], radii: number[], sides: number, tile: number, blunt = false, heights?: number[], ribs: Ribs | null = null, domeRings = 3, star: RootStar | null = null): void {
     if (ribs) sides = ribs.count * 4;
     const base = this.positions.length / 3;
     const ring = sides + 1;
@@ -169,14 +173,17 @@ class WoodBuilder {
     // the rest, which would squeeze the bark sideways everywhere else.
     const meanRadius = radii.reduce((sum, r, i) => sum + (heights ? (r + heights[i]) / 2 : r), 0) / radii.length;
     const around = Math.max(1, Math.round((2 * Math.PI * meanRadius) / tile));
-    let normal: V3 = perpendicular(normalize(sub(points[1], points[0])));
+    const first = normalize(sub(points[1], points[0]));
+    let normal: V3 = star ? normalize(sub([1, 0, 0], scale(first, first[0]))) : perpendicular(first);
     let v = 0;
 
     for (let i = 0; i < points.length; i++) {
       const along = normalize(i === 0 ? sub(points[1], points[0]) : i === points.length - 1 ? sub(points[i], points[i - 1]) : sub(points[i + 1], points[i - 1]));
       // A wedge's slices stand upright whatever its centreline does: squared to the line, they would
       // tip outwards where it falls steeply and throw the top edge off the trunk.
-      const tangent = heights ? normalize([along[0], 0, along[2]]) : along;
+      // A root star's rings lie level, whatever way the trunk above them sways: its points spread
+      // over the ground rather than tipping into it on one side.
+      const tangent: V3 = heights ? normalize([along[0], 0, along[2]]) : star && points[i][1] <= star.top + 1e-6 ? [0, 1, 0] : along;
       normal = heights ? normalize(cross(tangent, [0, 1, 0])) : normalize(sub(normal, scale(tangent, dot(normal, tangent))));
       const binormal = cross(tangent, normal);
       if (i > 0) v += Math.hypot(...sub(points[i], points[i - 1])) / tile;
@@ -189,7 +196,11 @@ class WoodBuilder {
         const [fold, foldSlope] = pleat(angle);
         const width = radii[i] * (1 - 0.65 * rising) * fold;
         const across = scale(normal, Math.cos(angle));
-        const p = add(points[i], add(scale(across, width), scale(up, heights ? height : height * fold)));
+        let p = add(points[i], add(scale(across, width), scale(up, heights ? height : height * fold)));
+        if (star) {
+          const [outward, down] = star.shape(points[i][1], j % sides, sides);
+          p = add(p, add(scale(add(across, up), outward), [0, -down, 0]));
+        }
         // Its normal leans towards the flat sides: the ellipse's gradient, not the radial direction.
         // On a rib's flanks it leans off the radius, round the section: r(a) out, less r'(a) along.
         const flank = scale(add(scale(normal, Math.sin(angle)), scale(binormal, -Math.cos(angle))), foldSlope);
@@ -206,6 +217,28 @@ class WoodBuilder {
         // inside of a limb, can be culled.
         for (let j = 0; j < sides; j++) {
           this.indices.push(a0 + j, b0 + j, a0 + j + 1, a0 + j + 1, b0 + j, b0 + j + 1);
+        }
+      }
+    }
+
+    // A star's corners stand out at angles a round section's normals know nothing of: each corner's
+    // from its neighbours round its ring and along the limb instead.
+    if (star) {
+      const at = (i: number, j: number): V3 => {
+        const k = (base + i * ring + j) * 3;
+        return [this.positions[k], this.positions[k + 1], this.positions[k + 2]];
+      };
+      const n = points.length;
+      for (let i = 0; i < n; i++) {
+        for (let j = 0; j <= sides; j++) {
+          const around = sub(at(i, j === sides ? 1 : j + 1), at(i, j === 0 ? sides - 1 : j - 1));
+          const along = sub(at(Math.min(n - 1, i + 1), j), at(Math.max(0, i - 1), j));
+          let out = normalize(cross(along, around));
+          if (dot(out, sub(at(i, j), points[i])) < 0) out = scale(out, -1);
+          const k = (base + i * ring + j) * 3;
+          this.normals[k] = out[0];
+          this.normals[k + 1] = out[1];
+          this.normals[k + 2] = out[2];
         }
       }
     }
@@ -458,6 +491,151 @@ class LeafBuilder {
  */
 export type TreeDetail = "near" | "far";
 
+/**
+ * A trunk's foot spread into its roots: each root a point of a star its rings deform into on the
+ * way down - round above `top`, the points growing out (and the lowest ring's diving) towards the
+ * ground and under it - the same corners in every ring, so it is one piece with the trunk rather
+ * than limbs stuck into it. Each root's point is one corner of the trunk's rings, its neighbours
+ * drawn out with it by `spread` corners' worth.
+ */
+interface RootStar {
+  /** Each root: which way it points (0-1 round the trunk), how far its point reaches out past the
+   *  trunk by the lowest ring, and how far that dives. */
+  roots: { heading: number; length: number; drop: number }[];
+  top: number;
+  bottom: number;
+  spread: number;
+  /** How far ring corner `j` (of `sides`) at height `y` stands out and drops. */
+  shape(y: number, j: number, sides: number): [number, number];
+  /** Where a root's corner is pushed out to at height y: its share of `length` and of `drop`. */
+  reach(y: number): number;
+  /** The height at which its points are out `share` (0-1) of their length - reach's inverse. */
+  heightAt(share: number): number;
+}
+
+/**
+ * A star for a trunk's foot (see RootStar): `count` roots, each reaching `length` out by `bottom`
+ * (the trunk's buried end), its drop below that `drop`, pointing out from `top` down. Draws `draws`
+ * numbers per root from `rng`, so a tree's other rolls come out as they did with roots as limbs.
+ */
+function rootStar(roots: { count: number; length: [number, number]; radius: number; drop: number }, sides: number, top: number, bottom: number, rng: () => number, draws: number): RootStar {
+  const list: RootStar["roots"] = [];
+  for (let r = 0; r < roots.count; r++) {
+    const heading = (r + rng() * 0.6) / roots.count;
+    const length = roots.length[0] + rng() * (roots.length[1] - roots.length[0]);
+    // A third draw (a limb root's curl): how far it dives, from half to all of `drop`.
+    const drop = roots.drop * (draws > 2 ? 0.5 + rng() * 0.5 : 1);
+    list.push({ heading, length, drop });
+  }
+  // A thick root draws its neighbours out with it; never less than its own corner alone.
+  const spread = Math.max(1, (roots.radius * sides) / Math.max(1, roots.count));
+  // Half its length out at the ground, as a limb root diving halfway out showed: the rest under it.
+  const curve = Math.log(STAR_AT_GROUND) / Math.log(top / (top - bottom));
+  const reach = (y: number): number => {
+    const t = Math.min(1, Math.max(0, (top - y) / (top - bottom)));
+    return Math.pow(t, curve);
+  };
+  return {
+    roots: list,
+    top,
+    bottom,
+    spread,
+    reach,
+    heightAt: (share) => top - Math.pow(share, 1 / curve) * (top - bottom),
+    shape(y, j, sides) {
+      const share = reach(y);
+      if (share <= 0) return [0, 0];
+      // The root pulling this corner furthest has it.
+      let best = 0;
+      let down = 0;
+      for (const root of list) {
+        const corner = Math.round(root.heading * sides) % sides;
+        const off = Math.abs(j - corner);
+        const pull = Math.pow(Math.max(0, 1 - Math.min(off, sides - off) / spread), 2);
+        if (pull * root.length > best) {
+          best = pull * root.length;
+          down = pull * root.drop * share * share;
+        }
+      }
+      return [best * share, down];
+    },
+  };
+}
+
+/** The rings a root star is drawn with, from its buried end up to where it is round again. */
+function starRingYs(star: RootStar): number[] {
+  // Spaced by how far out the points are rather than by height: bunched where the foot bends, so
+  // it swells out of the trunk in a curve instead of a cone. One of them at the ground.
+  return [1, STAR_AT_GROUND, 0.25, 0.1, 0.025, 0].map((share) => star.heightAt(share));
+}
+
+/** The share of a root star's points' length that shows above the ground. */
+const STAR_AT_GROUND = 0.5;
+
+/** Past a root star's top, the trunk's own rings carry on from this times it. */
+const STAR_CLEAR = 1.15;
+
+/**
+ * Collision pieces for a root star's foot, from its drawn corners - every corner of every one of
+ * its rings (`ys`, as drawn) in some piece. Concave, so in convex pieces: between each two rings,
+ * fans out from the trunk's centre, each taking corners round the ring for as long as it stays
+ * convex on both, the next starting where it stops - the hull of a fan's corners on its two rings.
+ * It holds the trunk inside the star too. A piece wholly under the ground is left out.
+ */
+function rootPieces(star: RootStar, sides: number, ys: number[], pointAt: (y: number) => V3, radiusAt: (y: number) => number): Float32Array[] {
+  // Corner j of ring y as the tube draws it: its rings level, corner j out (cos, 0, -sin) of its
+  // angle (see WoodBuilder.tube), pushed by the star.
+  const corner = (y: number, j: number): V3 => {
+    const angle = (j / sides) * Math.PI * 2;
+    const [outward, down] = star.shape(y, j % sides, sides);
+    const r = radiusAt(y) + outward;
+    const c = pointAt(y);
+    return [c[0] + Math.cos(angle) * r, c[1] - down, c[2] - Math.sin(angle) * r];
+  };
+  // Whether the fan from the centre through corners a..b of ring y turns one way all round (seen
+  // from above), so is convex.
+  const convex = (y: number, a: number, b: number): boolean => {
+    const ring = [pointAt(y), ...Array.from({ length: b - a + 1 }, (_, k) => corner(y, a + k))];
+    // Every turn round it the same way.
+    let sign = 0;
+    for (let i = 0; i < ring.length; i++) {
+      const p = ring[i];
+      const q = ring[(i + 1) % ring.length];
+      const r = ring[(i + 2) % ring.length];
+      const turn = (q[0] - p[0]) * (r[2] - q[2]) - (q[2] - p[2]) * (r[0] - q[0]);
+      if (Math.abs(turn) < 1e-6) continue;
+      if (sign === 0) sign = Math.sign(turn);
+      else if (Math.sign(turn) !== sign) return false;
+    }
+    return true;
+  };
+  // Starting from a dip - the corner least pushed out - so no fan need wrap past where it began.
+  let first = 0;
+  for (let j = 1; j < sides; j++) if (star.shape(0, j, sides)[0] < star.shape(0, first, sides)[0]) first = j;
+  const pieces: Float32Array[] = [];
+  for (let k = 0; k + 1 < ys.length; k++) {
+    const pair = [ys[k], ys[k + 1]];
+    let a = first;
+    while (a < first + sides) {
+      let b = a + 1;
+      while (b < first + sides && pair.every((y) => convex(y, a, b + 1))) b++;
+      const points: number[] = [];
+      let above = false;
+      for (const y of pair) {
+        points.push(...pointAt(y));
+        for (let j = a; j <= b; j++) {
+          const c = corner(y, j);
+          points.push(...c);
+          if (c[1] > 0) above = true;
+        }
+      }
+      if (above || pointAt(pair[1])[1] > 0) pieces.push(new Float32Array(points));
+      a = b;
+    }
+  }
+  return pieces;
+}
+
 /** Every other point of a limb's line, always keeping its last. */
 function thinned<T>(items: T[]): T[] {
   const kept = items.filter((_, i) => i % 2 === 0);
@@ -506,11 +684,13 @@ export function generateTree(spec: BranchingTree, seed: number, detail: TreeDeta
   const far = detail === "far";
   // A cactus's ribs on its trunk and arms - half as many, half as deep, on a distant one.
   const ribs = spec.ribs && far ? { count: Math.max(3, Math.round(spec.ribs.count / 2)), depth: spec.ribs.depth / 2 } : spec.ribs;
-  const limb = (points: V3[], radii: number[], sides: number, blunt = false, heights?: number[], ribbed = false): void => {
+  const limb = (points: V3[], radii: number[], sides: number, blunt = false, heights?: number[], ribbed = false, star: RootStar | null = null, starRings = 0): void => {
     const pleats = ribbed ? ribs : null;
-    // A ribbed limb's dome gets a single ring far off.
-    if (far) wood.tube(thinned(points), thinned(radii), Math.max(3, Math.round(sides * 0.6)), bark.tile, blunt, heights && thinned(heights), pleats, 1);
-    else wood.tube(points, radii, sides, bark.tile, blunt, heights, pleats);
+    // A ribbed limb's dome gets a single ring far off. A root star keeps its corners - each root is
+    // one - and its rings.
+    if (far && star) wood.tube([...points.slice(0, starRings), ...thinned(points.slice(starRings))], [...radii.slice(0, starRings), ...thinned(radii.slice(starRings))], sides, bark.tile, blunt, undefined, pleats, 1, star);
+    else if (far) wood.tube(thinned(points), thinned(radii), Math.max(3, Math.round(sides * 0.6)), bark.tile, blunt, heights && thinned(heights), pleats, 1);
+    else wood.tube(points, radii, sides, bark.tile, blunt, heights, pleats, 3, star);
   };
   // Whether a limb is snapped off short, and to what share of its length. No draw at all for a kind
   // that never breaks, so its trees stay exactly as they were.
@@ -544,16 +724,26 @@ export function generateTree(spec: BranchingTree, seed: number, detail: TreeDeta
     const stilted = roots.stilt === null ? 1 : 0.35 + 0.65 * smoothstep(-0.3, roots.stilt[1] * 0.9, y);
     return lerp(trunk.radius, trunk.topRadius, rise) * flare * bulge * stilted;
   };
-  const trunkTs: number[] = [];
+  let trunkTs: number[] = [];
   for (let i = 0; i <= trunk.rings; i++) {
     // Rings bunched towards the base, where the flare needs them.
     trunkTs.push(Math.pow(i / trunk.rings, 1.4));
   }
-  limb(trunkTs.map(trunkPoint), trunkTs.map(trunkRadius), trunk.sides, false, undefined, true);
-  colliders.limb(trunkTs.map(trunkPoint), trunkTs.map(trunkRadius));
+  // Plain roots are the trunk's own foot spread into a star (see RootStar): rings of its own there,
+  // and a corner for each root at the least.
+  const starred = !roots.buttress && roots.stilt === null && roots.count > 0;
+  const trunkSides = starred ? Math.max(trunk.sides, roots.count * 2) : trunk.sides;
+  const toT = (y: number): number => (y + buried) / (trunk.height + buried);
+  const star = starred ? rootStar(roots, trunkSides, trunk.flareHeight, -buried, rng, 3) : null;
+  const starYs = star ? starRingYs(star) : [];
+  if (star) trunkTs = [...starYs.map(toT), ...trunkTs.filter((t) => t > toT(star.top * STAR_CLEAR))];
+  limb(trunkTs.map(trunkPoint), trunkTs.map(trunkRadius), trunkSides, false, undefined, true, star, starYs.length);
+  // Above a root star, round pieces; in it, its own (which hold the trunk there too).
+  const roundTs = star ? trunkTs.slice(starYs.length - 1) : trunkTs;
+  colliders.limb(roundTs.map(trunkPoint), roundTs.map(trunkRadius));
+  if (star) colliders.hulls.push(...rootPieces(star, trunkSides, starYs, (y) => trunkPoint(toT(y)), (y) => trunkRadius(toT(y))));
 
   // --- roots ---
-  const rootStart = trunk.flareHeight * 0.55;
   if (roots.buttress) {
     // Buttresses: planks on edge, running out from the trunk, their top edge sweeping down from
     // high on the trunk to the ground in a concave curve, their foot buried.
@@ -616,26 +806,6 @@ export function generateTree(spec: BranchingTree, seed: number, detail: TreeDeta
       limb(points, radii, roots.sides);
       colliders.limb(points, radii);
     }
-  }
-  for (let r = 0; r < (roots.buttress || roots.stilt !== null ? 0 : roots.count); r++) {
-    const heading = ((r + rng() * 0.6) / roots.count) * Math.PI * 2;
-    const out: V3 = [Math.cos(heading), 0, Math.sin(heading)];
-    const curl = (rng() - 0.5) * 0.6;
-    const length = between(roots.length);
-    const startRadius = trunk.radius * roots.radius;
-    const points: V3[] = [];
-    const radii: number[] = [];
-    for (let i = 0; i <= roots.rings; i++) {
-      const s = i / roots.rings;
-      const bent = rotate(out, [0, 1, 0], curl * s);
-      // Out along the ground, then down into it: the arch of a buttress root.
-      const y = rootStart * Math.pow(1 - s, 2) - roots.drop * s * s;
-      const reach = trunk.radius * 0.3 + length * s;
-      points.push([bent[0] * reach, y, bent[2] * reach]);
-      radii.push(startRadius * (1 - 0.8 * s));
-    }
-    limb(points, radii, roots.sides);
-    colliders.limb(points, radii);
   }
 
   // --- branches and twigs ---
@@ -1121,16 +1291,17 @@ function generateFronds(spec: Fronds, seed: number, detail: TreeDetail = "near")
  */
 export function generateConifer(spec: ConiferTree, seed: number, detail: TreeDetail = "near"): TreeGeometry {
   const rng = mulberry32(seed);
-  const between = ([lo, hi]: [number, number]): number => lo + rng() * (hi - lo);
   const intBetween = ([lo, hi]: [number, number]): number => Math.floor(lo + rng() * (hi - lo + 1));
   const { trunk, roots, tiers, bark } = spec;
   const wood = new WoodBuilder();
   const colliders = new ColliderBuilder();
   const leafBuilder = new LeafBuilder();
   const far = detail === "far";
-  const limb = (points: V3[], radii: number[], sides: number): void => {
-    if (far) wood.tube(thinned(points), thinned(radii), Math.max(3, Math.round(sides * 0.6)), bark.tile);
-    else wood.tube(points, radii, sides, bark.tile);
+  const limb = (points: V3[], radii: number[], sides: number, star: RootStar | null = null, starRings = 0): void => {
+    // A root star keeps its corners - each root is one - and its rings (see generateTree).
+    if (far && star) wood.tube([...points.slice(0, starRings), ...thinned(points.slice(starRings))], [...radii.slice(0, starRings), ...thinned(radii.slice(starRings))], sides, bark.tile, false, undefined, null, 1, star);
+    else if (far) wood.tube(thinned(points), thinned(radii), Math.max(3, Math.round(sides * 0.6)), bark.tile);
+    else wood.tube(points, radii, sides, bark.tile, false, undefined, null, 3, star);
   };
 
   // --- trunk ---
@@ -1156,28 +1327,19 @@ export function generateConifer(spec: ConiferTree, seed: number, detail: TreeDet
     const flare = 1 + (trunk.flare - 1) * (1 - smoothstep(0, trunk.flareHeight, y));
     return lerp(trunk.radius, trunk.topRadius, Math.pow(rise, 0.9)) * flare;
   };
-  const trunkYs: number[] = [];
+  let trunkYs: number[] = [];
   for (let i = 0; i <= trunk.rings; i++) trunkYs.push(-buried + (trunk.height + buried) * Math.pow(i / trunk.rings, 1.25));
-  limb(trunkYs.map(pointAt), trunkYs.map(radiusAt), trunk.sides);
-  colliders.limb(trunkYs.map(pointAt), trunkYs.map(radiusAt));
-
   // --- roots ---
-  // Conifer roots are shallow: they leave the trunk low and run out under the surface.
-  const rootStart = trunk.flareHeight * 0.2;
-  for (let r = 0; r < roots.count; r++) {
-    const heading = ((r + rng() * 0.6) / roots.count) * Math.PI * 2;
-    const length = between(roots.length);
-    const points: V3[] = [];
-    const radii: number[] = [];
-    for (let i = 0; i <= roots.rings; i++) {
-      const s = i / roots.rings;
-      const reach = trunk.radius * 0.3 + length * s;
-      points.push([Math.cos(heading) * reach, rootStart * Math.pow(1 - s, 2) - roots.drop * s * s, Math.sin(heading) * reach]);
-      radii.push(trunk.radius * roots.radius * (1 - 0.8 * s));
-    }
-    limb(points, radii, roots.sides);
-    colliders.limb(points, radii);
-  }
+  // The trunk's own foot spread into a star (see RootStar), a corner for each root at the least.
+  const trunkSides = roots.count > 0 ? Math.max(trunk.sides, roots.count * 2) : trunk.sides;
+  const star = roots.count > 0 ? rootStar(roots, trunkSides, trunk.flareHeight, -buried, rng, 2) : null;
+  const starYs = star ? starRingYs(star) : [];
+  if (star) trunkYs = [...starYs, ...trunkYs.filter((y) => y > star.top * STAR_CLEAR)];
+  limb(trunkYs.map(pointAt), trunkYs.map(radiusAt), trunkSides, star, starYs.length);
+  // Above a root star, round pieces; in it, its own (which hold the trunk there too).
+  const roundYs = star ? trunkYs.slice(starYs.length - 1) : trunkYs;
+  colliders.limb(roundYs.map(pointAt), roundYs.map(radiusAt));
+  if (star) colliders.hulls.push(...rootPieces(star, trunkSides, starYs, pointAt, radiusAt));
 
   // --- tiers ---
   const tierCount = intBetween(tiers.count);

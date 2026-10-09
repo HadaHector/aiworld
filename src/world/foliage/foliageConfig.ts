@@ -169,6 +169,10 @@ export interface BranchingTree {
     sides: number;
     rings: number;
   };
+  /** The usual roots are the trunk's own foot spread into a star, a point for each root (see
+   *  treeGenerator.ts's RootStar): `length` how far a point reaches out past the trunk, `radius`
+   *  how broad it is (a fraction of the trunk's radius), `drop` how far its end dives. Buttress and
+   *  stilt roots are limbs of their own, `sides` round and `rings` along. */
   roots: {
     count: number;
     length: [number, number];
@@ -338,6 +342,7 @@ export interface ConiferTree {
     sides: number;
     rings: number;
   };
+  /** The trunk's foot spread into a star, as a branching tree's (`sides` and `rings` unused). */
   roots: { count: number; length: [number, number]; radius: number; drop: number; sides: number; rings: number };
   tiers: {
     count: [number, number];
