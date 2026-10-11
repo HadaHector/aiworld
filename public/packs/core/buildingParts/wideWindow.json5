@@ -3,6 +3,8 @@
 {
   name: "Wide Window",
   type: "framed",
+  // The daylight it lets into a room behind it with its glass in (see LIGHTS.md).
+  light: { intensity: 4, radius: 9 },
   framed: {
     span: 2,
     width: 3.2,

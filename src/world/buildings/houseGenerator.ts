@@ -1,4 +1,4 @@
-import type { BuildingModel, HouseSpec, Level, Paint, StoreyKind, WallSide } from "./buildingTypes";
+import type { BuildingModel, HouseSpec, Level, Paint, StoreyKind, WallSide, ModelLight, WindowLight } from "./buildingTypes";
 import { FOUNDATION_DEPTH, ModelBuilder, pick, roll, rollInt, type Vec3 } from "./buildingGeometry";
 import { buildPorch, planPorch } from "./porch";
 import { buildBeam, buildFraming, buildRoof, buildSupport, buildTerrace, buildWallPart, isDoor, LEAF_UV, partSpan, pickPart, planFraming, planRoof, type FramingCorner, type FramingWall, type PartExtent, type PartPaints, type WallSlot } from "./buildingParts";
@@ -659,6 +659,20 @@ export function buildHouse(spec: HouseSpec, rng: () => number, far = false, meas
     const [i, j] = tileInside(run, Math.floor(Math.min(bay + span - 1, centre)));
     return { i, j, k: level.index, dir: run.dir as FaceDir, along: run.dir === "pz" || run.dir === "nz" ? x : z, half: extent.opening.half, bottom: extent.opening.bottom, top: extent.opening.top };
   };
+  /** The daylight a window lets in: a light just inside it, as big as it is, shining into the room
+   *  (see ModelLight's `sky`). Far enough in that its source does not reach back through the glass. */
+  const windowLight = (opening: Opening, light: WindowLight): ModelLight => {
+    const spread = Math.min(opening.half, 0.4);
+    const inward = spread + 0.15;
+    const y = (opening.bottom + opening.top) / 2;
+    const { i, j, dir, along } = opening;
+    const [position, facing]: [ModelLight["position"], ModelLight["facing"]] =
+      dir === "px" ? [[X(i + 1) - WALL - inward, y, along], [-1, 0, 0]]
+      : dir === "nx" ? [[X(i) + WALL + inward, y, along], [1, 0, 0]]
+      : dir === "pz" ? [[along, y, Z(j + 1) - WALL - inward], [0, 0, -1]]
+      : [[along, y, Z(j) + WALL + inward], [0, 0, 1]];
+    return { position, color: [1, 1, 1], intensity: light.intensity, radius: light.radius, size: spread * 2, sky: true, facing };
+  };
   // Where each chimney stands, as the room behind it sees it - for its fireplace (see furnish.ts).
   const chimneys: Chimney[] = [];
   const chimneyAt = (run: WallRun, level: Storey, bay: number, span: number): Chimney => {
@@ -829,7 +843,12 @@ export function buildHouse(spec: HouseSpec, rng: () => number, far = false, meas
         // the wall's inner face, facing in - unless the room has its shutters shut over it.
         if (opening && interior && !far) {
           const room = interior.rooms.find((r) => r.id === interior.cells.get(cellKey(opening.i, opening.j, opening.k)));
-          if (room && room.type.windows === "glass") buildWallPart(extra.part, insideSlot(slotAt(run, bay + span / 2, span, level), run, level), paints, rng);
+          if (room && room.type.windows === "glass") {
+            // Its glass as it is seen from inside: the day through it.
+            const inside = spec.parts.glass.inside;
+            buildWallPart(extra.part, insideSlot(slotAt(run, bay + span / 2, span, level), run, level), inside ? { ...paints, glass: { material: inside, tint: [1, 1, 1] } } : paints, rng);
+            if (extra.part.light && !b.measure) b.lights.push(windowLight(opening, extra.part.light));
+          }
         }
       }
     }

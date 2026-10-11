@@ -2,6 +2,8 @@
 {
   name: "Hanging lantern",
   type: "lantern",
+  // The light it gives (see LIGHTS.md). A flame behind glass: steady.
+  light: { color: [1.0, 0.74, 0.45], intensity: 1.0, radius: 7, size: 0.25 },
   // Hung from the ceiling or a beam by its chain.
   mount: { kind: "ceiling" },
   lantern: {

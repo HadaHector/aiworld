@@ -2,6 +2,8 @@
 {
   name: "Timber Window",
   type: "framed",
+  // The daylight it lets into a room behind it with its glass in (see LIGHTS.md).
+  light: { intensity: 3, radius: 8 },
   framed: {
     span: 1,
     // The pane, and how high above the floor it starts.

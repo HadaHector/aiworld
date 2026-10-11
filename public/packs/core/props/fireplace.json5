@@ -3,6 +3,8 @@
 {
   name: "Fireplace",
   type: "fireplace",
+  // The light it gives (see LIGHTS.md). A fire: warm, wide, its bed the width of the logs.
+  light: { color: [1.0, 0.58, 0.28], intensity: 1.6, radius: 10, size: 0.8 },
   parts: {
     stone: { material: "dressedStone", tints: [[1, 1, 1], [0.9, 0.88, 0.85]] },
     hearth: { material: "rubbleStone", tints: [[0.8, 0.78, 0.75]] },

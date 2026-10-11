@@ -110,7 +110,7 @@ const DEFAULT_OPTIONS: Options = {
   layer: "",
   plants: "all",
   water: "on",
-  marks: "on",
+  marks: "off",
   cut: "none",
   colliders: "off",
   pads: "off",

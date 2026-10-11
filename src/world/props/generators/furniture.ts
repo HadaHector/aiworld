@@ -30,6 +30,7 @@ function candle(ctx: PropContext, base: Vec3, radius: number, height: number): v
   const { shape } = ctx;
   shape.cylinder(between(ORIGIN, base, [base[0], base[1] + height, base[2]], [0, 0, 1]), height, radius, ctx.paint("wax"), { ends: ctx.paint("wax"), caps: "end", sides: 6 });
   flame(ctx, [base[0], base[1] + height + 0.02, base[2]], radius * 1.3, radius * 4);
+  ctx.light([base[0], base[1] + height + 0.02 + radius * 1.6, base[2]]);
 }
 
 /** A tongue of flame standing at `base`: two crossed, tapering slivers - the second turned an eighth
@@ -423,6 +424,9 @@ export const fireplace: PropGenerator = {
       ctx.shape.cylinder(between(ORIGIN, from, to), len, r, ctx.paint("logs"), { ends: ctx.paint("end"), sides: 6 });
     }
     for (let n = 0; n < 3; n++) flame(ctx, [(n - 1) * opening * 0.35, 0.35, -d * 0.2], 0.22, 0.7 + rng() * 0.4);
+    // Its light from over the fire, a little forward so the opening's cheeks do not hide it - and
+    // high enough to reach out across the floor, not graze it.
+    ctx.light([0, Math.min(1.1, openTop - 0.4), d * 0.3]);
   },
 };
 
@@ -451,6 +455,8 @@ export const stove: PropGenerator = {
     // The fire door, the fire glowing in a slot of it.
     slab(ctx, [0, feet + (h - feet) * 0.45, d + 0.04], [w * 0.55, (h - feet) * 0.28, 0.04], iron);
     slab(ctx, [0, feet + (h - feet) * 0.4, d + 0.08 + PROUD], [w * 0.4, 0.06, 0.02], ctx.paint("flame"));
+    // Its light just before the fire's slot: it shines out of the door only.
+    ctx.light([0, feet + (h - feet) * 0.4, d + 0.25]);
   },
 };
 
@@ -472,6 +478,7 @@ export const lantern: PropGenerator = {
     slab(ctx, [0, base / 2, 0], [w + 0.04, base / 2, w + 0.04], iron, { collide: true });
     // The panes: one glowing block inside the posts.
     slab(ctx, [0, base + (h - base) * 0.45, 0], [w - 0.02, (h - base) * 0.42, w - 0.02], ctx.paint("pane"));
+    ctx.light([0, base + (h - base) * 0.45, 0]);
     for (const sx of [-1, 1]) for (const sz of [-1, 1]) post(ctx, sx * w, sz * w, base, h, 0.06, iron, false, [1, 1]);
     // A cap like a little roof, and the ring over it.
     ctx.shape.lathe(turned(moved(ORIGIN, [0, h - 0.02, 0]), "y", Math.PI / 4), [[(w + 0.08) * Math.SQRT2, 0], [0.06, h * 0.3]], iron, { sides: 4, bottom: iron });

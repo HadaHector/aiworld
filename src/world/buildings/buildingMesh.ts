@@ -1,8 +1,9 @@
-import { Effect, Mesh, RawTexture2DArray, ShaderMaterial, Texture, VertexData, type Scene } from "@babylonjs/core";
+import { Constants, Effect, Mesh, RawTexture, RawTexture2DArray, ShaderMaterial, Texture, VertexData, type Scene } from "@babylonjs/core";
 import { LIT_SHADING_GLSL, LIT_SHADING_SAMPLERS, LIT_SHADING_UNIFORMS, type LitShading } from "../materials/litShading";
 import { TEXTURE_RESOLUTION } from "../materials/textureGen";
 import { bakeMaterialTextures } from "../materials/textureBakePool";
 import type { BuildingMaterialDef, BuildingModel } from "./buildingTypes";
+import { bakeLightmap, type Lightmap } from "../lighting/lightBake";
 
 /** How many building materials one shader can draw - the size of its per-material uniform arrays. */
 export const MAX_BUILDING_MATERIALS = 32;
@@ -16,6 +17,7 @@ in vec3 btangent;
 in vec2 uv;
 in float layer;
 in vec4 color;
+in vec2 lightUv;
 
 uniform mat4 world;
 uniform mat4 view;
@@ -28,6 +30,7 @@ flat out int vLayer;
 out vec3 vColor;
 out vec3 vWorldPosition;
 out vec3 vPositionFromCamera;
+out vec2 vLightUv;
 
 void main() {
   vec4 worldPosition = world * vec4(position, 1.0);
@@ -39,6 +42,7 @@ void main() {
   vColor = color.rgb;
   vWorldPosition = worldPosition.xyz;
   vPositionFromCamera = (view * worldPosition).xyz;
+  vLightUv = lightUv;
 }
 `;
 
@@ -54,6 +58,7 @@ flat in int vLayer;
 in vec3 vColor;
 in vec3 vWorldPosition;
 in vec3 vPositionFromCamera;
+in vec2 vLightUv;
 
 uniform sampler2DArray colorArray;
 uniform sampler2DArray normalArray;
@@ -62,6 +67,12 @@ uniform vec2 sizes[${MAX_BUILDING_MATERIALS}];
 uniform float shines[${MAX_BUILDING_MATERIALS}];
 // Per material: how far it gives its own light (a flame) rather than taking the scene's.
 uniform float glows[${MAX_BUILDING_MATERIALS}];
+// Per material: how far it is drawn with the daylight through it (a pane seen from inside).
+uniform float daylights[${MAX_BUILDING_MATERIALS}];
+// The house's own lights, baked (see LIGHTS.md): their light in their colours, and the strength of
+// the daylight its windows let in - lit by the sky as it is now. Off for a mesh with none.
+uniform sampler2D lightmap;
+uniform float lightmapOn;
 
 out vec4 outColor;
 
@@ -75,6 +86,7 @@ void main() {
   float roughness = 0.85;
   float shine = 0.0;
   float glow = 0.0;
+  float through = 0.0;
   vec3 surfaceNormal = n;
   if (vLayer >= 0) {
     vec3 at = vec3(vUV / sizes[vLayer], float(vLayer));
@@ -83,6 +95,7 @@ void main() {
     roughness = texel.a;
     shine = shines[vLayer];
     glow = glows[vLayer];
+    through = daylights[vLayer];
     // The texture's own bumps: its u along the face's tangent, its v along normal x tangent.
     vec3 bump = texture(normalArray, at).xyz * 2.0 - 1.0;
     vec3 t = normalize(vTangent - n * dot(vTangent, n));
@@ -102,10 +115,19 @@ void main() {
   vec3 sky = ambientColor * ambientIntensity * 1.6 + lightColor * lightIntensity * 0.15;
 
   float shadow = computeShadow(vWorldPosition, n, vPositionFromCamera.z);
-  vec3 lit = albedo * (diffuse * lightColor * shadow + ambientColor * ambientIntensity)
+  // The daylight through a window: the sky's fill, and some of the sun's or moon's strength (not
+  // its direction - it has come in through the glass and spread).
+  vec3 daylight = ambientColor * ambientIntensity + lightColor * lightIntensity * 0.5;
+  vec3 own = vec3(0.0);
+  if (lightmapOn > 0.5) {
+    vec4 baked = texture(lightmap, vLightUv);
+    own = baked.rgb + baked.a * daylight;
+  }
+  vec3 lit = albedo * (diffuse * lightColor * shadow + ambientColor * ambientIntensity + own)
     + vec3(specular) * lightColor * lightIntensity * shadow
     + sky * fresnel * shine;
   lit = mix(lit, albedo, glow);
+  lit = mix(lit, albedo * daylight, through);
   outColor = vec4(applyFog(lit, length(vPositionFromCamera)), 1.0);
 }
 `;
@@ -137,6 +159,14 @@ export async function bakeBuildingTextures(seed: number, materials: BuildingMate
 export interface BuildingMaterial {
   material: ShaderMaterial;
   layerOf: Map<string, number>;
+  /** Whether a building material casts shadow from a house's own lights - a flame or a lit pane
+   *  does not: the light comes from inside it. */
+  casts: (material: string | null) => boolean;
+}
+
+/** A model's own lights baked into a lightmap (see lighting/lightBake.ts), or none if it has none. */
+export function bakeModelLight(model: BuildingModel, material: BuildingMaterial): Lightmap | undefined {
+  return model.lights?.length ? bakeLightmap(model, model.lights, material.casts) : undefined;
 }
 
 /**
@@ -159,27 +189,41 @@ export function createBuildingMaterial(scene: Scene, litShading: LitShading, tex
   }
 
   const material = new ShaderMaterial("texturedBuilding", scene, "texturedBuilding", {
-    attributes: ["position", "normal", "btangent", "uv", "layer", "color"],
-    uniforms: ["world", "view", "projection", "sizes", "shines", "glows", ...LIT_SHADING_UNIFORMS],
-    samplers: ["colorArray", "normalArray", ...LIT_SHADING_SAMPLERS],
+    attributes: ["position", "normal", "btangent", "uv", "layer", "color", "lightUv"],
+    uniforms: ["world", "view", "projection", "sizes", "shines", "glows", "daylights", "lightmapOn", ...LIT_SHADING_UNIFORMS],
+    samplers: ["colorArray", "normalArray", "lightmap", ...LIT_SHADING_SAMPLERS],
   });
   material.setTexture("colorArray", colorArray);
   material.setTexture("normalArray", normalArray);
   const sizes = new Array<number>(MAX_BUILDING_MATERIALS * 2).fill(1);
   const shines = new Array<number>(MAX_BUILDING_MATERIALS).fill(0);
   const glows = new Array<number>(MAX_BUILDING_MATERIALS).fill(0);
+  const daylights = new Array<number>(MAX_BUILDING_MATERIALS).fill(0);
   materials.forEach((def, i) => {
     sizes[i * 2] = def.size[0];
     sizes[i * 2 + 1] = def.size[1];
     shines[i] = def.shine;
     glows[i] = def.glow;
+    daylights[i] = def.daylight;
   });
   material.setArray2("sizes", sizes);
   material.setFloats("shines", shines);
   material.setFloats("glows", glows);
+  material.setFloats("daylights", daylights);
   material.backFaceCulling = false;
   litShading.register(material);
-  return { material, layerOf: new Map(materials.map((def, i) => [def.id, i])) };
+  // Each mesh its own lightmap, bound as it is drawn - one shader for lit and unlit houses alike.
+  const none = RawTexture.CreateRGBATexture(new Uint8Array(4), 1, 1, scene, false);
+  material.setTexture("lightmap", none);
+  material.onBindObservable.add((mesh) => {
+    const effect = material.getEffect();
+    if (!effect) return;
+    const own = (mesh.metadata as { lightmap?: MeshLightmap } | null)?.lightmap;
+    effect.setFloat("lightmapOn", own ? 1 : 0);
+    effect.setTexture("lightmap", own?.texture ?? none);
+  });
+  const glowing = new Set(materials.filter((def) => def.glow > 0).map((def) => def.id));
+  return { material, layerOf: new Map(materials.map((def, i) => [def.id, i])), casts: (id) => id === null || !glowing.has(id) };
 }
 
 /** Geometry in the form the building shader draws: what BuildingModel holds, with each vertex's
@@ -191,11 +235,29 @@ export interface BuildingGeometry {
   uvs: number[];
   colors: number[];
   layers: number[];
+  /** Where on its lightmap each vertex is (see lighting/lightBake.ts) - 0 where it has none. */
+  lightUvs: number[];
   indices: number[];
 }
 
 export function emptyGeometry(): BuildingGeometry {
-  return { positions: [], normals: [], tangents: [], uvs: [], colors: [], layers: [], indices: [] };
+  return { positions: [], normals: [], tangents: [], uvs: [], colors: [], layers: [], lightUvs: [], indices: [] };
+}
+
+/** A mesh's baked light: its lightmap as a texture. */
+interface MeshLightmap {
+  texture: RawTexture;
+}
+
+/** A float as a half float's bits. */
+function toHalf(value: number): number {
+  const f = new Float32Array([value]);
+  const bits = new Uint32Array(f.buffer)[0];
+  const sign = (bits >> 16) & 0x8000;
+  const exponent = ((bits >> 23) & 0xff) - 127 + 15;
+  if (exponent <= 0) return sign;
+  if (exponent >= 31) return sign | 0x7bff;
+  return sign | (exponent << 10) | ((bits >> 13) & 0x3ff);
 }
 
 /**
@@ -207,6 +269,7 @@ export function appendModel(
   model: BuildingModel,
   layerOf: Map<string, number>,
   place: (x: number, y: number, z: number, direction: boolean) => [number, number, number],
+  lightUvs?: Float32Array,
 ): void {
   const base = into.positions.length / 3;
   const layerOfSlot = model.materials.map((id) => layerOf.get(id) ?? -1);
@@ -221,11 +284,14 @@ export function appendModel(
   for (const value of model.uvs) into.uvs.push(value);
   for (const value of model.colors) into.colors.push(value);
   for (const slot of model.materialSlots) into.layers.push(slot < 0 ? -1 : layerOfSlot[slot]);
+  if (lightUvs) for (const value of lightUvs) into.lightUvs.push(value);
+  else for (let i = 0; i < p.length / 3; i++) into.lightUvs.push(0, 0);
   for (const index of model.indices) into.indices.push(base + index);
 }
 
-/** A mesh of building geometry, drawn with `material`. */
-export function createBuildingMesh(scene: Scene, name: string, geometry: BuildingGeometry, material: BuildingMaterial): Mesh {
+/** A mesh of building geometry, drawn with `material` - lit by its own baked lights, where it has a
+ *  `lightmap` (its geometry laid with that lightmap's `uvs`). */
+export function createBuildingMesh(scene: Scene, name: string, geometry: BuildingGeometry, material: BuildingMaterial, lightmap?: Lightmap): Mesh {
   const mesh = new Mesh(name, scene);
   const data = new VertexData();
   data.positions = geometry.positions;
@@ -236,6 +302,17 @@ export function createBuildingMesh(scene: Scene, name: string, geometry: Buildin
   data.applyToMesh(mesh);
   mesh.setVerticesData("btangent", geometry.tangents, false, 3);
   mesh.setVerticesData("layer", geometry.layers, false, 1);
+  mesh.setVerticesData("lightUv", geometry.lightUvs, false, 2);
+  if (lightmap) {
+    const half = new Uint16Array(lightmap.texels.length);
+    for (let i = 0; i < half.length; i++) half[i] = toHalf(lightmap.texels[i]);
+    const texture = RawTexture.CreateRGBATexture(half, lightmap.width, lightmap.height, scene, false, false, Texture.BILINEAR_SAMPLINGMODE, Constants.TEXTURETYPE_HALF_FLOAT);
+    texture.wrapU = Texture.CLAMP_ADDRESSMODE;
+    texture.wrapV = Texture.CLAMP_ADDRESSMODE;
+    const own: MeshLightmap = { texture };
+    mesh.metadata = { ...(mesh.metadata ?? {}), lightmap: own };
+    mesh.onDisposeObservable.add(() => texture.dispose());
+  }
   mesh.material = material.material;
   mesh.isPickable = false;
   return mesh;

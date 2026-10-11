@@ -2,6 +2,8 @@
 {
   name: "Lantern",
   type: "lantern",
+  // The light it gives (see LIGHTS.md). A flame behind glass: steady.
+  light: { color: [1.0, 0.74, 0.45], intensity: 1.0, radius: 7, size: 0.25 },
   parts: {
     iron: { material: "iron", tints: [[1, 1, 1]] },
     pane: { material: "flame", tints: [[0.95, 0.7, 0.4]] },

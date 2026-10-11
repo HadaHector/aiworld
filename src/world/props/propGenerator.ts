@@ -1,4 +1,4 @@
-import { ModelBuilder, roll, rollInt, pick } from "../buildings/buildingGeometry";
+import { ModelBuilder, roll, rollInt, pick, type Vec3 } from "../buildings/buildingGeometry";
 import { ColliderBuilder } from "../buildings/buildingColliders";
 import type { BuildingModel, Paint } from "../buildings/buildingTypes";
 import { deriveSeed, mulberry32 } from "../rng";
@@ -23,6 +23,9 @@ export interface PropContext {
   number(name: string): number;
   /** A setting's raw [lo, hi], for a generator that rolls it more than once (a size per log). */
   bounds(name: string): [number, number];
+  /** The prop's light (its `light`), burning at `at` - nothing if it gives none, or in the far
+   *  model. */
+  light(at: Vec3): void;
 }
 
 /**
@@ -78,6 +81,9 @@ function generate(def: PropDef, seed: number, variant: number, far: boolean, mea
     chance: (name) => rng() < (s[name] as number),
     number: (name) => s[name] as number,
     bounds: (name) => s[name] as [number, number],
+    light(at) {
+      if (def.light && !far && !measure) b.lights.push({ position: at, ...def.light, sky: false, facing: null });
+    },
   };
   generator.build(ctx);
   const model = b.finish({ x: 0, z: Math.max(Math.abs(b.minZ), Math.abs(b.maxZ)) });

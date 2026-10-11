@@ -3,6 +3,8 @@
 {
   name: "Altar",
   type: "altar",
+  // The light it gives (see LIGHTS.md). Each candle.
+  light: { color: [1.0, 0.76, 0.48], intensity: 0.5, radius: 5, size: 0.1 },
   parts: {
     stone: { material: "dressedStone", tints: [[1, 1, 1], [0.9, 0.88, 0.85]] },
     cloth: { material: "cloth", tints: [[0.92, 0.9, 0.84], [0.5, 0.14, 0.14]] },

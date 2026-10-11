@@ -1,4 +1,4 @@
-import { ArcRotateCamera, Color3, Color4, Mesh, MeshBuilder, Scene, StandardMaterial, Vector3, VertexData, type Engine } from "@babylonjs/core";
+import { ArcRotateCamera, Color3, Color4, Material, Mesh, MeshBuilder, Scene, StandardMaterial, Vector3, VertexData, type Engine } from "@babylonjs/core";
 import type { AreaWeight } from "../world/cells/areaField";
 import type { BiomeDefinition } from "../world/biomes/biomeTypes";
 import type { WorldContent } from "../world/content/worldContent";
@@ -22,7 +22,7 @@ import { NO_WEATHER } from "../world/weather/weatherTypes";
 import type { BuildingModel } from "../world/buildings/buildingTypes";
 import { DEFAULT_PAD_BLEND, type Pad } from "../world/settlements/padField";
 import { placedAxes } from "../world/buildings/buildingRenderer";
-import { appendModel, bakeBuildingTextures, createBuildingMaterial, createBuildingMesh, emptyGeometry, type BuildingMaterial } from "../world/buildings/buildingMesh";
+import { appendModel, bakeBuildingTextures, bakeModelLight, createBuildingMaterial, createBuildingMesh, emptyGeometry, type BuildingMaterial } from "../world/buildings/buildingMesh";
 
 /**
  * Collision pieces drawn over what they stand for: each a see-through orange hull with its edges -
@@ -440,15 +440,16 @@ export async function createStage(engine: Engine, canvas: HTMLCanvasElement, opt
         field.flush();
       }
       options.onProgress?.("Baking building materials");
-      const buildingMaterial = createBuildingMaterial(scene, litShading, await bakeBuildingTextures(seed, content.buildingMaterials));
+      const buildingMaterial = oneSided(createBuildingMaterial(scene, litShading, await bakeBuildingTextures(seed, content.buildingMaterials)));
       options.onProgress?.("Raising the buildings and setting the props down");
       site.placed.forEach((item, i) => {
         // Its front (+z) turned to (frontX, frontZ), its +x to (frontZ, -frontX), tipped to its up -
         // as in the world.
         const a = placedAxes(item);
         const geometry = emptyGeometry();
-        appendModel(geometry, item.model, buildingMaterial.layerOf, (px, py, pz) => [a.x.x * px + a.y.x * py + a.z.x * pz, a.x.y * px + a.y.y * py + a.z.y * pz, a.x.z * px + a.y.z * py + a.z.z * pz]);
-        const mesh = createBuildingMesh(scene, `building_${i}`, geometry, buildingMaterial);
+        const lightmap = bakeModelLight(item.model, buildingMaterial);
+        appendModel(geometry, item.model, buildingMaterial.layerOf, (px, py, pz) => [a.x.x * px + a.y.x * py + a.z.x * pz, a.x.y * px + a.y.y * py + a.z.y * pz, a.x.z * px + a.y.z * py + a.z.z * pz], lightmap?.uvs);
+        const mesh = createBuildingMesh(scene, `building_${i}`, geometry, buildingMaterial, lightmap);
         mesh.position.set(item.x, item.y, item.z);
         sunLighting.shadowGenerator.addShadowCaster(mesh, false);
       });
@@ -463,7 +464,7 @@ export async function createStage(engine: Engine, canvas: HTMLCanvasElement, opt
 
     if (options.buildings && options.buildings.length > 0) {
       options.onProgress?.("Baking building materials");
-      const buildingMaterial = createBuildingMaterial(scene, litShading, await bakeBuildingTextures(seed, content.buildingMaterials));
+      const buildingMaterial = oneSided(createBuildingMaterial(scene, litShading, await bakeBuildingTextures(seed, content.buildingMaterials)));
       options.onProgress?.("Raising buildings");
       framing = layOutBuildings(scene, options.buildings, height, buildingMaterial, sunLighting.shadowGenerator, options.footprints === true);
       if (options.buildingColliders) {
@@ -553,6 +554,16 @@ export async function createStage(engine: Engine, canvas: HTMLCanvasElement, opt
 /** Stands buildings in a row along x, fronts to +z, each on the ground under its own footprint's
  *  middle, and says how wide and tall the row is. With `marks`, outlines each footprint on the
  *  ground and puts a post at its door. */
+/** Buildings drawn one side only, their back faces culled - every face is wound by its normal (see
+ *  ModelBuilder.fan); in the workbench first, to look for what goes missing. Counter-clockwise seen
+ *  from the front in the model's own (right-handed) sense, which Babylon's left-handed view sees as
+ *  clockwise. */
+function oneSided(material: BuildingMaterial): BuildingMaterial {
+  material.material.backFaceCulling = true;
+  material.material.sideOrientation = Material.ClockWiseSideOrientation;
+  return material;
+}
+
 function layOutBuildings(
   scene: Scene,
   models: BuildingModel[],
@@ -572,8 +583,9 @@ function layOutBuildings(
     x += model.halfWidth;
     placed.push(x);
     const geometry = emptyGeometry();
-    appendModel(geometry, model, material.layerOf, (px, py, pz) => [px, py, pz]);
-    const mesh = createBuildingMesh(scene, `building_${i}`, geometry, material);
+    const lightmap = bakeModelLight(model, material);
+    appendModel(geometry, model, material.layerOf, (px, py, pz) => [px, py, pz], lightmap?.uvs);
+    const mesh = createBuildingMesh(scene, `building_${i}`, geometry, material, lightmap);
     const y = height(x, 0);
     mesh.position.set(x, y, 0);
     shadowGenerator.addShadowCaster(mesh, false);

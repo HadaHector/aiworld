@@ -145,6 +145,8 @@ export function furnishInterior(input: FurnishInput): FurnishResult {
     const sx = (x1 - x0) / nx;
     const sz = (z1 - z0) / nz;
     const state: SlotState[] = new Array(nx * nz).fill("free");
+    /** The slots pieces hung from the ceiling hang over, to keep the next apart from them. */
+    const hungOver: [number, number][] = [];
     /** The most a piece standing on a slot may reach up (before a window: its sill). */
     const maxHeight: number[] = new Array(nx * nz).fill(Infinity);
     /** How tall what stands on a slot is - what a wall piece over it must clear. */
@@ -477,12 +479,13 @@ export function furnishInterior(input: FurnishInput): FurnishResult {
     }
 
     /** A hung piece: from the ceiling over open floor - not over a stair or a hole - nearest the
-     *  middle of the room, its top just under the ceiling. */
+     *  middle of the room, its top just under the ceiling; a tile or more from any hung before it. */
     function placeHung(arranged: Arranged, tall: number): boolean {
       let best: { a: number; b: number; score: number } | null = null;
       for (let b = 0; b < nz; b++) {
         for (let a = 0; a < nx; a++) {
           if (state[b * nx + a] === "blocked") continue;
+          if (hungOver.some(([ha, hb]) => Math.hypot(a - ha, b - hb) < SLOTS)) continue;
           const score = -Math.hypot(a + 0.5 - nx / 2, b + 0.5 - nz / 2) + rng() * 1.5;
           if (!best || score > best.score) best = { a, b, score };
         }
@@ -494,6 +497,7 @@ export function furnishInterior(input: FurnishInput): FurnishResult {
       const roof = room.type.underRoof ? input.roofOver?.(room.base + room.height - 1, x, z) : null;
       const over = roof ?? ceiling;
       setDown(arranged, x, z, Math.max(floor + MIN_HANG, over - tall - CEILING_GAP), Math.floor(rng() * 4));
+      hungOver.push([best.a, best.b]);
       return true;
     }
   }

@@ -33,6 +33,12 @@ export interface BuildingMaterialDef {
   /** 0-1: how far it gives its own light rather than taking the sun's - a flame, a lamp's pane (1:
    *  its colour as it is, lit or in shadow, day or night). */
   glow: number;
+  /** 0-1: how far it is drawn with the daylight coming through it rather than lit - a window's pane
+   *  seen from inside: bright by day, dimming at dusk, dark by night (see LIGHTS.md). */
+  daylight: number;
+  /** The material it is seen as from inside a room, where it is not itself - glass, seen from
+   *  inside as the day through it - or none. */
+  inside: string | null;
 }
 
 /** How one face of a building is drawn: a building material (by id - null for plain colour), and a
@@ -105,7 +111,7 @@ export interface HouseSpec {
   wallExtras: WallExtra[];
   /** What each part is made of, and the tints - one picked per house - its colour is multiplied by.
    *  Timber is the posts, the frames, and the roof's underside and edges. */
-  parts: Record<HousePart, { material: string; tints: Rgb[] }>;
+  parts: Record<HousePart, { material: string; tints: Rgb[]; inside?: string | null }>;
   /** What is inside it - a generator and its settings - or null: a house nobody goes into, its doors
    *  shut and nothing behind its walls. */
   interior: InteriorSpec | null;
@@ -603,6 +609,8 @@ export interface BuildingPartDef {
   porch: PorchSpec | null;
   terrace: TerraceSpec | null;
   support: SupportSpec | null;
+  /** For a window: the daylight it lets into a room behind it with its glass in, or none. */
+  light: WindowLight | null;
 }
 
 export interface BuildingDef {
@@ -648,4 +656,28 @@ export interface BuildingModel {
   interior?: { layout: InteriorLayout; levels: ShellLevel[]; X0: number; Z0: number; tile: number; exits: { i: number; j: number; k: number; dir: "px" | "nx" | "pz" | "nz"; along: number }[]; furnished?: FurnishResult };
   /** What it puts in the way (see buildingColliders.ts) - built with the near model only. */
   colliders?: BuildingCollision;
+  /** The lights it gives (see LIGHTS.md) - built with the near model only. */
+  lights?: ModelLight[];
+}
+
+/**
+ * A light in a model, in the model's own space: a prop's (see PropLight) - or a window's, `sky`: the
+ * daylight it lets in, its strength baked and its colour the sky's as it is drawn, so it dims at
+ * dusk and is gone by night. `facing`: it shines that way only, most straight ahead (a window, into
+ * its room); else every way.
+ */
+export interface ModelLight {
+  position: [number, number, number];
+  color: Rgb;
+  intensity: number;
+  radius: number;
+  size: number;
+  sky: boolean;
+  facing: [number, number, number] | null;
+}
+
+/** The daylight a window lets into its room (see ModelLight's `sky`). */
+export interface WindowLight {
+  intensity: number;
+  radius: number;
 }

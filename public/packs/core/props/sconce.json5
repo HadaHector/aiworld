@@ -2,6 +2,8 @@
 {
   name: "Sconce",
   type: "sconce",
+  // The light it gives (see LIGHTS.md). A candle.
+  light: { color: [1.0, 0.76, 0.48], intensity: 0.6, radius: 6, size: 0.1 },
   // On a wall, its candle above head height.
   mount: { kind: "wall", height: [2.6, 3.0] },
   parts: {

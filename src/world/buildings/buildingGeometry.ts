@@ -1,4 +1,4 @@
-import type { BuildingModel, Paint, Rgb } from "./buildingTypes";
+import type { BuildingModel, ModelLight, Paint, Rgb } from "./buildingTypes";
 
 /** How far below its floor a building reaches, so it never stands on air at the edge of its plot. */
 export const FOUNDATION_DEPTH = 1.2;
@@ -35,6 +35,7 @@ export class ModelBuilder {
   materialSlots: number[] = [];
   materials: string[] = [];
   indices: number[] = [];
+  lights: ModelLight[] = [];
   minX = Infinity;
   maxX = -Infinity;
   minZ = Infinity;
@@ -103,7 +104,28 @@ export class ModelBuilder {
       this.colors.push(paint.tint[0], paint.tint[1], paint.tint[2], 1);
       this.materialSlots.push(slot);
     }
-    for (let i = 1; i < corners.length - 1; i++) this.indices.push(base, base + i, base + i + 1);
+    this.fan(base, corners, normals);
+  }
+
+  /**
+   * A polygon's triangles, a fan from its first corner - wound counter-clockwise seen from the side
+   * its normals face, whichever way round its corners were given, so every face is wound the same
+   * way - so the faces could be drawn one-sided. (A polygon a little concave - a log wall's gable
+   * piece - still leaves one backward sliver of its fan.)
+   */
+  private fan(base: number, corners: Vec3[], normals: Vec3[]): void {
+    // Its corners' own turn (Newell's sum), against the way its normals say it faces.
+    let turn = 0;
+    const facing: Vec3 = [0, 0, 0];
+    for (const n of normals) for (let k = 0; k < 3; k++) facing[k] += n[k];
+    for (let i = 0; i < corners.length; i++) {
+      const a = corners[i], b = corners[(i + 1) % corners.length];
+      turn += (a[1] - b[1]) * (a[2] + b[2]) * facing[0] + (a[2] - b[2]) * (a[0] + b[0]) * facing[1] + (a[0] - b[0]) * (a[1] + b[1]) * facing[2];
+    }
+    for (let i = 1; i < corners.length - 1; i++) {
+      if (turn >= 0) this.indices.push(base, base + i, base + i + 1);
+      else this.indices.push(base, base + i + 1, base + i);
+    }
   }
 
   /**
@@ -145,7 +167,7 @@ export class ModelBuilder {
       this.maxZ = Math.max(this.maxZ, z);
       this.maxY = Math.max(this.maxY, y);
     }
-    for (let i = 1; i < corners.length - 1; i++) this.indices.push(base, base + i, base + i + 1);
+    this.fan(base, corners, normals);
   }
 
   /** A flat polygon whose normal is worked out from its corners, turned to face `towards`'s side
@@ -203,6 +225,7 @@ export class ModelBuilder {
     }
     if (this.measure) return;
     for (const index of model.indices) this.indices.push(base + index);
+    for (const light of model.lights ?? []) this.lights.push({ ...light, position: place(...light.position) });
   }
 
   finish(door: { x: number; z: number }, tiles?: BuildingModel["tiles"]): BuildingModel {
@@ -220,6 +243,7 @@ export class ModelBuilder {
       door,
       height: this.maxY,
       tiles,
+      ...(this.lights.length ? { lights: this.lights } : {}),
     };
   }
 }

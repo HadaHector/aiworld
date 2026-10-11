@@ -46,6 +46,21 @@ export interface PropDef {
   spill: Spill | null;
   /** How it is set down in a room (see FURNITURE.md). */
   mount: Mount;
+  /** The light it gives, or none (see LIGHTS.md) - where, its generator says. */
+  light: PropLight | null;
+}
+
+/**
+ * The light a prop gives - a fire, a lantern, a candle: its colour, its strength, how far it reaches
+ * (metres, where it falls to nothing), and how big its source is (metres across - a candle's flame,
+ * a fire's bed: what softens its shadows). Where it burns, the prop's generator says
+ * (PropContext.light), as it builds the flame.
+ */
+export interface PropLight {
+  color: Rgb;
+  intensity: number;
+  radius: number;
+  size: number;
 }
 
 /**

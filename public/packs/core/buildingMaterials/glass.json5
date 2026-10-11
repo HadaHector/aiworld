@@ -4,6 +4,8 @@
   name: "Glass",
   size: 1,
   shine: 1,
+  // Seen from inside a room: the day through it.
+  inside: "dayPane",
   texture: {
     bumpStrength: 0.25,
     pipeline: {

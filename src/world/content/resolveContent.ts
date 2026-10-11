@@ -32,7 +32,7 @@ import { checkPlans, checkRoller, describeCheckPlan, MIDDLE_ROLLER, randomRoller
 import { deriveSeed, mulberry32 } from "../rng";
 import { AREA_ROLL_SALT } from "../cells/config";
 import type { WorldContent } from "./worldContent";
-import type { GroupMember, Mount, PropDef, PropGroupDef, PropPaint, PropSettings, Spill } from "../props/propTypes";
+import type { GroupMember, Mount, PropDef, PropLight, PropGroupDef, PropPaint, PropSettings, Spill } from "../props/propTypes";
 import { PROP_GENERATORS } from "../props/generators/index";
 import type { TextureDef } from "../materials/textureGen";
 import { adjustMatrix, chainMatrix, NO_ADJUST, type ColorAdjust } from "../materials/colorAdjust";
@@ -92,6 +92,7 @@ import {
   type WallExtra,
   type WallSide,
   type Rgb,
+  type WindowLight,
 } from "../buildings/buildingTypes";
 
 /** One pack as found on disk: its folder name and every .json5 file in it, by path inside it. */
@@ -250,6 +251,10 @@ export function resolveContent(packs: PackSource[]): WorldContent {
   const boundaryHillStyles = readAll("borderHills", (e, o, r) => readBoundaryHillStyle(e.id, o, r));
   const buildingMaterials = readAll("buildingMaterials", (e, o, r) => readBuildingMaterial(e.id, o, r));
   const buildingMaterialIds = new Set(buildingMaterials.map((m) => m.id));
+  const insideOf = new Map(buildingMaterials.map((m) => [m.id, m.inside]));
+  for (const m of buildingMaterials) {
+    if (m.inside !== null && !buildingMaterialIds.has(m.inside)) issues.push({ file: `buildingMaterials/${m.id}`, path: "inside", message: `no building material "${m.inside}" (known: ${[...buildingMaterialIds].join(", ")})` });
+  }
   const buildingParts = readAll("buildingParts", (e, o, r) => readBuildingPart(e.id, o, r));
   const partById = new Map(buildingParts.map((part) => [part.id, part]));
   // Props before rooms: a room type is furnished with them.
@@ -283,6 +288,8 @@ export function resolveContent(packs: PackSource[]): WorldContent {
       if (id !== undefined && !buildingMaterialIds.has(id)) {
         issues.push({ file, path: `house.parts.${part}.material`, message: `no building material "${id}" (known: ${[...buildingMaterialIds].join(", ") || "none"})` });
       }
+      // What it is seen as from inside, its material's say.
+      if (def.house && id !== undefined) def.house.parts[part].inside = insideOf.get(id) ?? null;
     }
   }
   const buildingById = new Map(buildings.map((building) => [building.id, building]));
@@ -594,7 +601,7 @@ function readFeatureChances(obj: RawObject, reader: Reader): FeatureChance[] {
 
 /** A buildingMaterials/ file - see BuildingMaterialDef. */
 function readBuildingMaterial(id: string, obj: RawObject, reader: Reader): BuildingMaterialDef {
-  reader.onlyKeys(obj, "", ["name", "texture", "size", "shine", "glow"]);
+  reader.onlyKeys(obj, "", ["name", "texture", "size", "shine", "glow", "daylight", "inside"]);
   const size = obj.size;
   let repeat: [number, number] = [1, 1];
   if (typeof size === "number" && size > 0) repeat = [size, size];
@@ -607,6 +614,8 @@ function readBuildingMaterial(id: string, obj: RawObject, reader: Reader): Build
     size: repeat,
     shine: reader.optionalNumber(obj, "shine", "", 0, { min: 0, max: 1 }),
     glow: reader.optionalNumber(obj, "glow", "", 0, { min: 0, max: 1 }),
+    daylight: reader.optionalNumber(obj, "daylight", "", 0, { min: 0, max: 1 }),
+    inside: obj.inside === undefined || obj.inside === null ? null : reader.string(obj, "inside", ""),
   };
 }
 
@@ -617,6 +626,27 @@ function readBuildingMaterial(id: string, obj: RawObject, reader: Reader): Build
  * name, each read as the generator's own `params` declare it - so any generator's file is read here
  * - and `parts`, what each part the generator paints is made of.
  */
+/** A prop's `light: { color, intensity, radius, size }` - the light it gives - or none. */
+function readLight(obj: RawObject, reader: Reader): PropLight | null {
+  if (obj.light === undefined) return null;
+  const light = reader.object(obj.light, "light");
+  reader.onlyKeys(light, "light", ["color", "intensity", "radius", "size"]);
+  return {
+    color: reader.color(light, "color", "light"),
+    intensity: reader.number(light, "intensity", "light", { min: 0 }),
+    radius: reader.number(light, "radius", "light", { min: 0.5 }),
+    size: reader.optionalNumber(light, "size", "light", 0.1, { min: 0 }),
+  };
+}
+
+/** A window part's `light: { intensity, radius }` - the daylight it lets in - or none. */
+function readWindowLight(obj: RawObject, reader: Reader): WindowLight | null {
+  if (obj.light === undefined) return null;
+  const light = reader.object(obj.light, "light");
+  reader.onlyKeys(light, "light", ["intensity", "radius"]);
+  return { intensity: reader.number(light, "intensity", "light", { min: 0 }), radius: reader.number(light, "radius", "light", { min: 0.5 }) };
+}
+
 /** A prop's `mount: { kind, height }` - how a room sets it down; on the floor if none. */
 function readMount(obj: RawObject, reader: Reader): Mount {
   if (obj.mount === undefined) return { kind: "floor", height: [0, 0] };
@@ -638,7 +668,7 @@ function readSpill(obj: RawObject, reader: Reader): Spill | null {
 function readProp(id: string, obj: RawObject, reader: Reader): PropDef {
   const names = Object.keys(PROP_GENERATORS);
   const type = reader.oneOf(obj, "type", "", names);
-  reader.onlyKeys(obj, "", ["name", "type", type, "parts", "collide", "ground", "spill", "mount"]);
+  reader.onlyKeys(obj, "", ["name", "type", type, "parts", "collide", "ground", "spill", "mount", "light"]);
   const generator = PROP_GENERATORS[type];
   const settings: PropSettings = {};
   if (generator) {
@@ -684,7 +714,7 @@ function readProp(id: string, obj: RawObject, reader: Reader): PropDef {
     if (tints.length === 0) reader.fail(`${at}.tints`, "needs at least one colour");
     parts[part] = { material: raw.material === undefined || raw.material === null ? null : reader.string(raw, "material", at), tints: tints.length > 0 ? tints : [[1, 1, 1]] };
   }
-  return { id, name: reader.string(obj, "name", ""), generator: type, settings, parts, collide: obj.collide === undefined ? true : obj.collide === true, ground: obj.ground === undefined ? "level" : reader.oneOf(obj, "ground", "", ["level", "slope"] as const), spill: readSpill(obj, reader), mount: readMount(obj, reader) };
+  return { id, name: reader.string(obj, "name", ""), generator: type, settings, parts, collide: obj.collide === undefined ? true : obj.collide === true, ground: obj.ground === undefined ? "level" : reader.oneOf(obj, "ground", "", ["level", "slope"] as const), spill: readSpill(obj, reader), mount: readMount(obj, reader), light: readLight(obj, reader) };
 }
 
 /** A rooms/ file - see RoomTypeDef. */
@@ -1082,7 +1112,7 @@ function readBuilding(id: string, obj: RawObject, reader: Reader, partById: Map<
  *  the generator's name. */
 function readBuildingPart(id: string, obj: RawObject, reader: Reader): BuildingPartDef {
   const generator = reader.oneOf(obj, "type", "", BUILDING_PART_GENERATORS);
-  reader.onlyKeys(obj, "", ["name", "type", generator]);
+  reader.onlyKeys(obj, "", ["name", "type", generator, "light"]);
   const path = generator;
   const block = reader.object(obj[generator], path);
   const role = (key: string, at: string, from: RawObject): HousePart => reader.oneOf(from, key, at, HOUSE_PARTS);
@@ -1325,7 +1355,7 @@ function readBuildingPart(id: string, obj: RawObject, reader: Reader): BuildingP
       parts: { body: role("body", `${path}.parts`, parts), cap: role("cap", `${path}.parts`, parts), pots: role("pots", `${path}.parts`, parts) },
     };
   }
-  return { id, name: reader.string(obj, "name", ""), generator, framed, chimney, timberFrame, stoneFrame, logs, pitched, leanTo, porch, terrace, support };
+  return { id, name: reader.string(obj, "name", ""), generator, framed, chimney, timberFrame, stoneFrame, logs, pitched, leanTo, porch, terrace, support, light: readWindowLight(obj, reader) };
 }
 
 /** A features/ file - see FeatureKindDef. */
