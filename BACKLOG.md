@@ -340,6 +340,17 @@ through the noise operations' own internal sampling.
 
 ## Buildings
 
+### Rain and snow fall inside buildings
+
+The precipitation (weather/precipitation.ts) is a box of particles that wraps round the camera, and
+its splashes land on `heightAt`, the ground's height: nothing knows about roofs. Inside a house it
+rains through the ceiling, and splashes on the floor beneath it or on the ground of a cellar's hole.
+The particles need a cover to stop at: a coarse roof height per spot round the camera (a small
+height texture of the houses' roofs and upper floors, redrawn as the camera moves) that the vertex
+shader drops a particle under, and that the splashes land on instead of the ground. Or, cheaper,
+fade the whole fall out while the camera is inside an enterable house, though rain would then
+vanish from the view out of its windows and door too.
+
 ### A fireplace inside that matches the chimney outside
 
 The furniture placer stands a room's `fireplace` (a prop) on the chimney's wall, centred on where
