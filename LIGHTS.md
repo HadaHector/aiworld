@@ -159,8 +159,12 @@ Phase 1 is in, and the drawing half of phase 2, in the workbench only:
 - In the game: each house's lights are baked the first time its near model is shown, in a pool of
   two workers (`lighting/lightBake.worker.ts`, `lightBakePool.ts`) - the nearest waiting house
   first - from its near mesh's own vertex data and its lights placed as the mesh is; the lightmap
-  and each vertex's place on it laid onto the mesh when it comes back (`applyLightmap`). Kept for the
-  session; not cached between visits yet.
+  and each vertex's place on it laid onto the mesh when it comes back (`applyLightmap`).
+- Cached between visits (`lighting/lightCache.ts`, IndexedDB `aiworld-lightmaps`, least recently
+  used past 256 MB): keyed by a hash of exactly what is baked - the mesh, which materials cast
+  shadow, the lights - and of the bake's code (`virtual:light-bake-code-hash`), so a changed house,
+  content or bake bakes again. Looked up and kept by the worker; the texture cache's Clear clears it
+  too.
 
 Open: indoors the sky's ambient light is as strong as outdoors, everywhere - so a window's light
-hardly shows by day. Not yet: the bakes cached between visits; the player lit; the workbench's own Lights view.
+hardly shows by day. Not yet: the player lit; the workbench's own Lights view.

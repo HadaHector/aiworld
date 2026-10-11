@@ -1,4 +1,5 @@
 import { clearTextureCache, onTextureCacheChange, textureCacheUsage } from "../world/materials/textureCache";
+import { clearLightCache } from "../world/lighting/lightCache";
 
 function formatBytes(bytes: number): string {
   const mb = bytes / 1024 ** 2;
@@ -20,10 +21,11 @@ export function createTextureCacheLabel(): HTMLElement {
   const clear = document.createElement("button");
   clear.type = "button";
   clear.textContent = "Clear";
-  clear.title = "Forget every kept texture; the next start bakes them all again";
+  clear.title = "Forget every kept texture and house lightmap; the next start bakes them all again";
   clear.style.cssText = "font: inherit; padding: 0 6px; cursor: pointer;";
   clear.addEventListener("click", () => {
     void clearTextureCache();
+    void clearLightCache();
   });
 
   root.append(text, clear);

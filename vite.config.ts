@@ -51,25 +51,39 @@ function textureCodeFiles(): string[] {
   ].map((file) => resolve(root, file));
 }
 
+/** Everything a house's baked lightmap depends on besides its mesh and lights. */
+function lightBakeCodeFiles(): string[] {
+  const root = fileURLToPath(new URL(".", import.meta.url));
+  return ["src/world/lighting/lightBake.ts", "src/world/lighting/lightBake.worker.ts", "src/world/lighting/lightCache.ts"].map((file) => resolve(root, file));
+}
+
 /**
  * `virtual:texture-code-hash` - a hash of the code that bakes textures, so the texture cache
  * (src/world/materials/textureCache.ts) bakes again after that code changes. Worked out here rather
  * than in the page so the bundle carries a hash, not the sources; in dev every file is watched,
- * so an edit to one reloads the page with the new hash.
+ * so an edit to one reloads the page with the new hash. And `virtual:light-bake-code-hash`, the
+ * same for houses' lightmaps (src/world/lighting/lightCache.ts).
  */
 function textureCodeHash(): Plugin {
-  const id = "virtual:texture-code-hash";
+  return codeHash("virtual:texture-code-hash", textureCodeFiles);
+}
+
+function lightBakeCodeHash(): Plugin {
+  return codeHash("virtual:light-bake-code-hash", lightBakeCodeFiles);
+}
+
+function codeHash(id: string, files: () => string[]): Plugin {
   const resolvedId = `\0${id}`;
   const root = fileURLToPath(new URL(".", import.meta.url));
   return {
-    name: "aiworld-texture-code-hash",
+    name: `aiworld-${id.slice("virtual:".length)}`,
     resolveId(source) {
       return source === id ? resolvedId : undefined;
     },
     load(loadId) {
       if (loadId !== resolvedId) return undefined;
       const hash = createHash("sha256");
-      for (const file of textureCodeFiles()) {
+      for (const file of files()) {
         this.addWatchFile(file);
         hash.update(relative(root, file).replaceAll("\\", "/"));
         // Line endings normalised, so a checkout's autocrlf does not count as a change.
@@ -81,7 +95,12 @@ function textureCodeHash(): Plugin {
 }
 
 export default defineConfig({
-  plugins: [packIndex(), textureCodeHash()],
+  plugins: [packIndex(), textureCodeHash(), lightBakeCodeHash()],
+  // Workers are bundled on their own, with their own plugins: the light bake's keeps its cache.
+  worker: {
+    format: "es",
+    plugins: () => [lightBakeCodeHash()],
+  },
   // Three pages: the game, the workbench (workbench.html) for looking at one pack asset at a time,
   // and the collision sandbox (collision.html).
   build: {
