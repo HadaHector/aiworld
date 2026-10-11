@@ -1,4 +1,4 @@
-import { ArcRotateCamera, Color3, Color4, Material, Mesh, MeshBuilder, Scene, StandardMaterial, Vector3, VertexData, type Engine } from "@babylonjs/core";
+import { ArcRotateCamera, Color3, Color4, Mesh, MeshBuilder, Scene, StandardMaterial, Vector3, VertexData, type Engine } from "@babylonjs/core";
 import type { AreaWeight } from "../world/cells/areaField";
 import type { BiomeDefinition } from "../world/biomes/biomeTypes";
 import type { WorldContent } from "../world/content/worldContent";
@@ -440,7 +440,7 @@ export async function createStage(engine: Engine, canvas: HTMLCanvasElement, opt
         field.flush();
       }
       options.onProgress?.("Baking building materials");
-      const buildingMaterial = oneSided(createBuildingMaterial(scene, litShading, await bakeBuildingTextures(seed, content.buildingMaterials)));
+      const buildingMaterial = createBuildingMaterial(scene, litShading, await bakeBuildingTextures(seed, content.buildingMaterials));
       options.onProgress?.("Raising the buildings and setting the props down");
       site.placed.forEach((item, i) => {
         // Its front (+z) turned to (frontX, frontZ), its +x to (frontZ, -frontX), tipped to its up -
@@ -464,7 +464,7 @@ export async function createStage(engine: Engine, canvas: HTMLCanvasElement, opt
 
     if (options.buildings && options.buildings.length > 0) {
       options.onProgress?.("Baking building materials");
-      const buildingMaterial = oneSided(createBuildingMaterial(scene, litShading, await bakeBuildingTextures(seed, content.buildingMaterials)));
+      const buildingMaterial = createBuildingMaterial(scene, litShading, await bakeBuildingTextures(seed, content.buildingMaterials));
       options.onProgress?.("Raising buildings");
       framing = layOutBuildings(scene, options.buildings, height, buildingMaterial, sunLighting.shadowGenerator, options.footprints === true);
       if (options.buildingColliders) {
@@ -554,16 +554,6 @@ export async function createStage(engine: Engine, canvas: HTMLCanvasElement, opt
 /** Stands buildings in a row along x, fronts to +z, each on the ground under its own footprint's
  *  middle, and says how wide and tall the row is. With `marks`, outlines each footprint on the
  *  ground and puts a post at its door. */
-/** Buildings drawn one side only, their back faces culled - every face is wound by its normal (see
- *  ModelBuilder.fan); in the workbench first, to look for what goes missing. Counter-clockwise seen
- *  from the front in the model's own (right-handed) sense, which Babylon's left-handed view sees as
- *  clockwise. */
-function oneSided(material: BuildingMaterial): BuildingMaterial {
-  material.material.backFaceCulling = true;
-  material.material.sideOrientation = Material.ClockWiseSideOrientation;
-  return material;
-}
-
 function layOutBuildings(
   scene: Scene,
   models: BuildingModel[],

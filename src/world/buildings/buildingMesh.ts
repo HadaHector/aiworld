@@ -1,4 +1,4 @@
-import { Constants, Effect, Mesh, RawTexture, RawTexture2DArray, ShaderMaterial, Texture, VertexData, type Scene } from "@babylonjs/core";
+import { Constants, Effect, Material, Mesh, RawTexture, RawTexture2DArray, ShaderMaterial, Texture, VertexData, type Scene } from "@babylonjs/core";
 import { LIT_SHADING_GLSL, LIT_SHADING_SAMPLERS, LIT_SHADING_UNIFORMS, type LitShading } from "../materials/litShading";
 import { TEXTURE_RESOLUTION } from "../materials/textureGen";
 import { bakeMaterialTextures } from "../materials/textureBakePool";
@@ -210,7 +210,11 @@ export function createBuildingMaterial(scene: Scene, litShading: LitShading, tex
   material.setFloats("shines", shines);
   material.setFloats("glows", glows);
   material.setFloats("daylights", daylights);
-  material.backFaceCulling = false;
+  // One side only, the back faces culled: every face is wound counter-clockwise seen from the side it
+  // faces (see ModelBuilder.fan) - in the model's own right-handed sense, which Babylon's left-handed
+  // view sees as clockwise.
+  material.backFaceCulling = true;
+  material.sideOrientation = Material.ClockWiseSideOrientation;
   litShading.register(material);
   // Each mesh its own lightmap, bound as it is drawn - one shader for lit and unlit houses alike.
   const none = RawTexture.CreateRGBATexture(new Uint8Array(4), 1, 1, scene, false);
