@@ -156,6 +156,11 @@ Phase 1 is in, and the drawing half of phase 2, in the workbench only:
   and bake time, and the atlas as a picture. At variant 3, with its windows, the inn bakes in about
   2.7 s (32 lights, 16 000 occluding triangles, 3 M rays) to 512 x 204 texels; the others under 2 s.
 
+- In the game: each house's lights are baked the first time its near model is shown, in a pool of
+  two workers (`lighting/lightBake.worker.ts`, `lightBakePool.ts`) - the nearest waiting house
+  first - from its near mesh's own vertex data and its lights placed as the mesh is; the lightmap
+  and each vertex's place on it laid onto the mesh when it comes back (`applyLightmap`). Kept for the
+  session; not cached between visits yet.
+
 Open: indoors the sky's ambient light is as strong as outdoors, everywhere - so a window's light
-hardly shows by day. Not yet: the bake in a worker and cached, and the world's houses lit (they draw
-unlit, as before); the player lit; the workbench's own Lights view.
+hardly shows by day. Not yet: the bakes cached between visits; the player lit; the workbench's own Lights view.

@@ -1,6 +1,8 @@
 import type { Mesh, CascadedShadowGenerator, Scene } from "@babylonjs/core";
 import type { BuildingModel } from "./buildingTypes";
-import { appendModel, createBuildingMesh, emptyGeometry, type BuildingMaterial } from "./buildingMesh";
+import { appendModel, applyLightmap, createBuildingMesh, emptyGeometry, type BuildingMaterial } from "./buildingMesh";
+import { createLightBakePool } from "../lighting/lightBakePool";
+import type { ModelLight } from "./buildingTypes";
 import { interiorFloorAt, type BuiltInterior } from "./interiorFloors";
 import { WALL } from "./interiorGeometry";
 import type { TerrainCut } from "../materials/materialLibrary";
@@ -155,7 +157,10 @@ export function createBuildingRenderer(
   initialDrawDistance: number,
   setTerrainCuts: (cuts: TerrainCut[]) => void,
 ): BuildingRenderer {
-  const meshes: { near: Mesh; far: Mesh; x: number; z: number; reach: number }[] = [];
+  /** Each house's meshes - and its lights, placed as its near mesh is, until they are baked (see
+   *  LIGHTS.md): asked for the first time its near model is shown. */
+  const meshes: { near: Mesh; far: Mesh; x: number; z: number; reach: number; lights: ModelLight[] | null }[] = [];
+  const lightBakes = createLightBakePool();
   const enterable: Enterable[] = [];
   /** Each group's houses' collision, from their near models. */
   const collisions: { key: string; x: number; z: number; radius: number; houses: PlacedCollision[] }[] = [];
@@ -165,10 +170,15 @@ export function createBuildingRenderer(
     const houses: PlacedCollision[] = [];
     let radius = 0;
     group.houses.forEach((house, n) => {
+      let lights: ModelLight[] | null = null;
       const build = (far: boolean): { mesh: Mesh; reach: number } => {
         const model = house.model(far);
         const geometry = emptyGeometry();
-        appendModel(geometry, model, material.layerOf, placeHouse(house, house.x, house.z));
+        const place = placeHouse(house, house.x, house.z);
+        appendModel(geometry, model, material.layerOf, place);
+        if (!far && model.lights?.length) {
+          lights = model.lights.map((light) => ({ ...light, position: place(...light.position, false), facing: light.facing && place(...light.facing, true) }));
+        }
         const reach = Math.hypot(model.halfWidth, model.halfDepth);
         if (!far && model.interior) enterable.push(enterableOf(house, model.interior, reach));
         if (!far && model.colliders) houses.push({ house, colliders: model.colliders });
@@ -181,7 +191,7 @@ export function createBuildingRenderer(
       };
       const near = build(false);
       const far = build(true);
-      meshes.push({ near: near.mesh, far: far.mesh, x: house.x, z: house.z, reach: near.reach });
+      meshes.push({ near: near.mesh, far: far.mesh, x: house.x, z: house.z, reach: near.reach, lights });
       radius = Math.max(radius, Math.hypot(house.x - group.x, house.z - group.z) + near.reach);
     });
     collisions.push({ key: group.key, x: group.x, z: group.z, radius, houses });
@@ -210,8 +220,36 @@ export function createBuildingRenderer(
       const near = distance <= FAR_DETAIL_DISTANCE;
       entry.near.setEnabled(shown && near);
       entry.far.setEnabled(shown && !near);
+      if (shown && near && entry.lights) bakeLights(entry);
     }
   });
+
+  /** A house's lights baked in a worker from its near mesh's own vertices, and laid onto it when
+   *  they come back - the nearest house first. */
+  function bakeLights(entry: (typeof meshes)[number]): void {
+    const lights = entry.lights!;
+    entry.lights = null;
+    const mesh = entry.near;
+    const data = (kind: string): Float32Array => Float32Array.from(mesh.getVerticesData(kind) ?? []);
+    const request = {
+      positions: data("position"),
+      normals: data("normal"),
+      indices: Uint32Array.from(mesh.getIndices() ?? []),
+      layers: data("layer"),
+      casts: material.castsByLayer,
+      lights,
+    };
+    const priority = (): number => {
+      const camera = scene.activeCamera;
+      return camera ? Math.hypot(entry.x - camera.position.x, entry.z - camera.position.z) : 0;
+    };
+    lightBakes
+      .bake(request, priority)
+      .then((baked) => {
+        if (!mesh.isDisposed()) applyLightmap(scene, mesh, baked);
+      })
+      .catch((error: unknown) => console.warn("A house's lights failed to bake:", error));
+  }
 
   return {
     setDrawDistance(distance) {

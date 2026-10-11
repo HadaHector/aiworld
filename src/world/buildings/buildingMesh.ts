@@ -3,7 +3,7 @@ import { LIT_SHADING_GLSL, LIT_SHADING_SAMPLERS, LIT_SHADING_UNIFORMS, type LitS
 import { TEXTURE_RESOLUTION } from "../materials/textureGen";
 import { bakeMaterialTextures } from "../materials/textureBakePool";
 import type { BuildingMaterialDef, BuildingModel } from "./buildingTypes";
-import { bakeLightmap, type Lightmap } from "../lighting/lightBake";
+import { bakeLightmap, halfTexels, type Lightmap } from "../lighting/lightBake";
 
 /** How many building materials one shader can draw - the size of its per-material uniform arrays. */
 export const MAX_BUILDING_MATERIALS = 32;
@@ -160,8 +160,9 @@ export interface BuildingMaterial {
   material: ShaderMaterial;
   layerOf: Map<string, number>;
   /** Whether a building material casts shadow from a house's own lights - a flame or a lit pane
-   *  does not: the light comes from inside it. */
+   *  does not: the light comes from inside it. And the same by layer. */
   casts: (material: string | null) => boolean;
+  castsByLayer: boolean[];
 }
 
 /** A model's own lights baked into a lightmap (see lighting/lightBake.ts), or none if it has none. */
@@ -227,7 +228,7 @@ export function createBuildingMaterial(scene: Scene, litShading: LitShading, tex
     effect.setTexture("lightmap", own?.texture ?? none);
   });
   const glowing = new Set(materials.filter((def) => def.glow > 0).map((def) => def.id));
-  return { material, layerOf: new Map(materials.map((def, i) => [def.id, i])), casts: (id) => id === null || !glowing.has(id) };
+  return { material, layerOf: new Map(materials.map((def, i) => [def.id, i])), casts: (id) => id === null || !glowing.has(id), castsByLayer: materials.map((def) => !glowing.has(def.id)) };
 }
 
 /** Geometry in the form the building shader draws: what BuildingModel holds, with each vertex's
@@ -253,15 +254,21 @@ interface MeshLightmap {
   texture: RawTexture;
 }
 
-/** A float as a half float's bits. */
-function toHalf(value: number): number {
-  const f = new Float32Array([value]);
-  const bits = new Uint32Array(f.buffer)[0];
-  const sign = (bits >> 16) & 0x8000;
-  const exponent = ((bits >> 23) & 0xff) - 127 + 15;
-  if (exponent <= 0) return sign;
-  if (exponent >= 31) return sign | 0x7bff;
-  return sign | (exponent << 10) | ((bits >> 13) & 0x3ff);
+/**
+ * A baked lightmap laid onto a mesh: its texels as the mesh's lightmap, and - given `uvs`, where a
+ * bake came back after the mesh was made - each vertex's place on it. The mesh must be one model's
+ * (its vertices the model's, in order).
+ */
+export function applyLightmap(scene: Scene, mesh: Mesh, baked: { width: number; height: number; half: Uint16Array; uvs?: Float32Array }): void {
+  if (baked.uvs) mesh.setVerticesData("lightUv", baked.uvs, false, 2);
+  const texture = RawTexture.CreateRGBATexture(baked.half, baked.width, baked.height, scene, false, false, Texture.BILINEAR_SAMPLINGMODE, Constants.TEXTURETYPE_HALF_FLOAT);
+  texture.wrapU = Texture.CLAMP_ADDRESSMODE;
+  texture.wrapV = Texture.CLAMP_ADDRESSMODE;
+  const previous = (mesh.metadata as { lightmap?: MeshLightmap } | null)?.lightmap;
+  previous?.texture.dispose();
+  const own: MeshLightmap = { texture };
+  mesh.metadata = { ...(mesh.metadata ?? {}), lightmap: own };
+  if (!previous) mesh.onDisposeObservable.add(() => (mesh.metadata as { lightmap?: MeshLightmap } | null)?.lightmap?.texture.dispose());
 }
 
 /**
@@ -307,16 +314,7 @@ export function createBuildingMesh(scene: Scene, name: string, geometry: Buildin
   mesh.setVerticesData("btangent", geometry.tangents, false, 3);
   mesh.setVerticesData("layer", geometry.layers, false, 1);
   mesh.setVerticesData("lightUv", geometry.lightUvs, false, 2);
-  if (lightmap) {
-    const half = new Uint16Array(lightmap.texels.length);
-    for (let i = 0; i < half.length; i++) half[i] = toHalf(lightmap.texels[i]);
-    const texture = RawTexture.CreateRGBATexture(half, lightmap.width, lightmap.height, scene, false, false, Texture.BILINEAR_SAMPLINGMODE, Constants.TEXTURETYPE_HALF_FLOAT);
-    texture.wrapU = Texture.CLAMP_ADDRESSMODE;
-    texture.wrapV = Texture.CLAMP_ADDRESSMODE;
-    const own: MeshLightmap = { texture };
-    mesh.metadata = { ...(mesh.metadata ?? {}), lightmap: own };
-    mesh.onDisposeObservable.add(() => texture.dispose());
-  }
+  if (lightmap) applyLightmap(scene, mesh, { width: lightmap.width, height: lightmap.height, half: halfTexels(lightmap.texels) });
   mesh.material = material.material;
   mesh.isPickable = false;
   return mesh;

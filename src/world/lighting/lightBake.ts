@@ -1,4 +1,14 @@
-import type { BuildingModel, ModelLight } from "../buildings/buildingTypes";
+import type { ModelLight } from "../buildings/buildingTypes";
+
+/** What the bake needs of a model: its geometry, and what each vertex is made of (a slot into
+ *  `materials`, -1 plain) - a BuildingModel is one, and so is a mesh's own vertex data. */
+export interface BakeModel {
+  positions: ArrayLike<number>;
+  normals: ArrayLike<number>;
+  indices: ArrayLike<number>;
+  materialSlots: ArrayLike<number>;
+  materials: string[];
+}
 
 /**
  * A house's own lights baked into a lightmap, shadows and all (see LIGHTS.md): every face that a
@@ -31,6 +41,21 @@ export function falloff(light: { intensity: number; radius: number }, distance: 
   return (light.intensity * reach * reach) / (1 + far * far);
 }
 
+/** A lightmap's texels as half floats, as the GPU takes them. */
+export function halfTexels(texels: Float32Array): Uint16Array {
+  const half = new Uint16Array(texels.length);
+  const f = new Float32Array(1);
+  const bits = new Uint32Array(f.buffer);
+  for (let i = 0; i < texels.length; i++) {
+    f[0] = texels[i];
+    const b = bits[0];
+    const sign = (b >> 16) & 0x8000;
+    const exponent = ((b >> 23) & 0xff) - 127 + 15;
+    half[i] = exponent <= 0 ? sign : exponent >= 31 ? sign | 0x7bff : sign | (exponent << 10) | ((b >> 13) & 0x3ff);
+  }
+  return half;
+}
+
 export interface Lightmap {
   width: number;
   height: number;
@@ -48,7 +73,7 @@ export interface Lightmap {
  * Bakes a model's lights - `lights` in the model's own space - into a lightmap. `occludes`: whether
  * a material casts shadow (a flame or a lit pane does not: its light comes from inside it).
  */
-export function bakeLightmap(model: BuildingModel, lights: ModelLight[], occludes: (material: string | null) => boolean): Lightmap {
+export function bakeLightmap(model: BakeModel, lights: ModelLight[], occludes: (material: string | null) => boolean): Lightmap {
   const P = model.positions;
   const vertexCount = P.length / 3;
   const uvs = new Float32Array(vertexCount * 2);
@@ -233,7 +258,7 @@ interface Face {
   h: number;
 }
 
-function faceOf(P: number[], N: number[], first: number, count: number): Face {
+function faceOf(P: ArrayLike<number>, N: ArrayLike<number>, first: number, count: number): Face {
   const corner = (c: number): number[] => [P[(first + c) * 3], P[(first + c) * 3 + 1], P[(first + c) * 3 + 2]];
   const corners = Array.from({ length: count }, (_, c) => corner(c));
   // Its normal by Newell's sum - right for a polygon a little bent too - and its area.
@@ -333,7 +358,7 @@ interface Tree {
 /** The triangles that cast shadow, in a tree of boxes - each split where the two halves' boxes
  *  cost a ray least to pass (their surface areas times what is in them, over a dozen trial cuts
  *  along each axis) - for rays to be tested against only those whose boxes they pass through. */
-function buildTree(model: BuildingModel, occludes: (material: string | null) => boolean): Tree {
+function buildTree(model: BakeModel, occludes: (material: string | null) => boolean): Tree {
   const P = model.positions;
   const I = model.indices;
   const tris: number[] = [];
