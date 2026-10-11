@@ -393,6 +393,7 @@ export function resolveContent(packs: PackSource[]): WorldContent {
   const roadLayers = layers.filter((l) => l.roadSurface);
   for (const layer of layers) checkMaterial(layer.file, "material", layer.layer.materialId);
   for (const { file, kind } of featureReads) if (kind.ground) checkMaterial(file, "ground.material", kind.ground.materialId);
+  for (const { file, kind } of featureReads) if (kind.compound?.pads.spill) checkMaterial(file, "compound.pads.spill.material", kind.compound.pads.spill.material);
   for (const { file, def } of [...propReads, ...buildingReads]) if (def.spill) checkMaterial(file, "spill.material", def.spill.material);
   const families = new Set(materials.flatMap((m) => (m.family ? [m.family] : [])));
   const checkBiome = (file: string, biome: BiomeDefinition, report: (issue: ContentIssue) => void): void => {
@@ -1444,10 +1445,11 @@ function readCompound(compound: RawObject, reader: Reader, buildings: Map<string
   reader.onlyKeys(compound, "compound", ["site", "yard", "pads", "arrangement", "trails", "buildings", "props"]);
   // How its level ground blends back - the settlements' own unless it says.
   const padsRaw = compound.pads === undefined ? {} : reader.object(compound.pads, "compound.pads");
-  reader.onlyKeys(padsRaw, "compound.pads", ["slope", "blend"]);
+  reader.onlyKeys(padsRaw, "compound.pads", ["slope", "blend", "spill"]);
   const pads = {
     slope: reader.optionalNumber(padsRaw, "slope", "compound.pads", PAD_SIDE_SLOPE, { min: 0.05 }),
     blend: padsRaw.blend === undefined ? ([PAD_BLEND_MIN, PAD_BLEND_MAX] as [number, number]) : reader.range(padsRaw, "blend", "compound.pads", { allowEqual: true }),
+    spill: readSpill(padsRaw, reader),
   };
   if (pads.blend[0] < 0) reader.fail("compound.pads.blend", "is at least 0");
   const site = reader.object(compound.site, "compound.site");

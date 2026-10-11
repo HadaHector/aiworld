@@ -2,12 +2,14 @@ import { smoothstep } from "../mathUtils";
 import type { BuildingDef } from "../buildings/buildingTypes";
 import type { PropDef, Spill } from "../props/propTypes";
 import type { CompoundLayout } from "./compound";
+import type { FeatureKindDef } from "./featureTypes";
 
 /**
  * The ground a placed prop or building spills over (PropDef.spill, BuildingDef.spill) - sawdust
  * round a sawbuck, chips round a chopping block - painted with its material over everything else
  * there, the feature's own ground and the road included, fading out `reach` metres past its
- * footprint.
+ * footprint. And a compound's pads' own (its kind's pads.spill) under and round each of its
+ * buildings and props - trodden earth - under any of their own.
  */
 export interface SpillField {
   /** How far (0-1) a spill covers the ground here and which of `spillMaterials` it is - the
@@ -17,9 +19,11 @@ export interface SpillField {
 
 /** Every material a prop or building spills, in a fixed order - props first, then buildings - so
  *  the terrain and the material blend number them alike. */
-export function spillMaterials(content: { props: readonly PropDef[]; buildings: readonly BuildingDef[] }): string[] {
+export function spillMaterials(content: { props: readonly PropDef[]; buildings: readonly BuildingDef[]; featureKinds: readonly FeatureKindDef[] }): string[] {
   const ids: string[] = [];
-  for (const def of [...content.props, ...content.buildings]) if (def.spill && !ids.includes(def.spill.material)) ids.push(def.spill.material);
+  const spills = [...content.props, ...content.buildings].map((def) => def.spill);
+  for (const kind of content.featureKinds) spills.push(kind.compound?.pads.spill ?? null);
+  for (const spill of spills) if (spill && !ids.includes(spill.material)) ids.push(spill.material);
   return ids;
 }
 
@@ -72,6 +76,11 @@ export function createSpillField(layouts: readonly CompoundLayout[], materials: 
   for (const layout of layouts) {
     for (const prop of layout.props) add(prop.prop.spill, prop.x, prop.z, prop.frontX, prop.frontZ, prop.halfWidth, prop.halfDepth);
     for (const house of layout.buildings) add(house.building.spill, house.x, house.z, house.frontX, house.frontZ, house.width / 2, house.depth / 2);
+  }
+  // The pads' own after - so where both reach in full, a prop's own (sawdust) is what shows.
+  for (const layout of layouts) {
+    for (const prop of layout.props) if (!prop.on) add(layout.padSpill, prop.x, prop.z, prop.frontX, prop.frontZ, prop.halfWidth, prop.halfDepth);
+    for (const house of layout.buildings) add(layout.padSpill, house.x, house.z, house.frontX, house.frontZ, house.width / 2, house.depth / 2);
   }
 
   const buckets = new Map<number, Patch[]>();

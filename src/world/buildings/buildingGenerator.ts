@@ -73,9 +73,9 @@ export function generateBuilding(def: BuildingDef, seed: number, variant: number
  * halfDepth - worked out the way the model is, every roll the same, but with no geometry kept: what
  * a settlement needs to fit it to a plot, at a fraction of the cost of building it.
  */
-export function measureBuilding(def: BuildingDef, seed: number, variant: number): { halfWidth: number; halfDepth: number } {
-  const { halfWidth, halfDepth } = generate(def, seed, variant, false, true);
-  return { halfWidth, halfDepth };
+export function measureBuilding(def: BuildingDef, seed: number, variant: number): { halfWidth: number; halfDepth: number; door: { x: number; z: number } } {
+  const { halfWidth, halfDepth, door } = generate(def, seed, variant, false, true);
+  return { halfWidth, halfDepth, door };
 }
 
 function generate(def: BuildingDef, seed: number, variant: number, far: boolean, measure: boolean): BuildingModel {

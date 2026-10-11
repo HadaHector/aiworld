@@ -64,6 +64,9 @@ export interface TerrainSample {
   featureClear: number;
   /** The share of the trees cleared here left as stumps, 0-1 (see FeatureGround.stumps). */
   featureStumps: number;
+  /** Distance past the nearest levelled pad's edge - a house's, a compound's building's or prop's -
+   *  0 on it, Infinity with none near: nothing grows on one (see PadField.level). */
+  padGap: number;
   /** How long ago a tree cut here was felled, 0-1 (see FeatureGround.stumpAge). */
   featureStumpAge: number;
   /** How far (0-1) a prop's or building's spill paints the ground here, and which of
@@ -263,11 +266,13 @@ export function createTerrainSampler(seed: number, content: WorldContent): Terra
     // every house it passes.
     // Where two pads' blends overlap, the ground runs smoothly between their levels (see
     // PadField.level).
+    let padGap = Infinity;
     if (padField) {
       const levelled = padField.level(worldX, worldZ, height, smoothstep(ROAD_HALF_WIDTH, ROAD_HALF_WIDTH + 3, roadGap));
       if (levelled) {
         height = levelled.height;
         roadGap = Math.min(roadGap, levelled.gap + PAD_PAINT_OFFSET);
+        padGap = levelled.edge;
       }
     }
 
@@ -291,6 +296,7 @@ export function createTerrainSampler(seed: number, content: WorldContent): Terra
       featureClear: feature ? feature.clear : 0,
       featureStumps: feature ? feature.stumps : 0,
       featureStumpAge: feature ? feature.stumpAge : 0,
+      padGap,
       ...spillAt(worldX, worldZ),
     };
   }

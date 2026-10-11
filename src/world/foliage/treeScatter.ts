@@ -534,7 +534,8 @@ function createScatter(seed: number, level: ScatterLevel): { scatter: TreeScatte
     if (!sample.isLand) return 0;
     // roadGap is Infinity where no road is in range, which smoothstep clamps to 1. A feature (a
     // quarry) clears the ground it took the same way - unless asked what would grow without it.
-    const road = smoothstep(level.roadClearance, level.roadFade, sample.roadGap) * (uncleared ? 1 : 1 - sample.featureClear);
+    // Nor on a levelled pad - under a house, a compound's building or prop - fading in past its edge.
+    const road = smoothstep(level.roadClearance, level.roadFade, sample.roadGap) * (uncleared ? 1 : 1 - sample.featureClear) * smoothstep(PAD_TREE_CLEARANCE, PAD_TREE_FADE, sample.padGap);
     if (stone) return ground.height < ROCK_MIN_HEIGHT ? 0 : road;
     if (sample.lakeFactor > TREE_MAX_LAKE_FACTOR) return 0;
 
@@ -774,6 +775,10 @@ function createScatter(seed: number, level: ScatterLevel): { scatter: TreeScatte
 export const FELL_MAX_RADIUS = 1.6;
 
 /** A dart's roll for being left a stump: from its spin, which nothing else reads that way. */
+/** Trees keep this far past a pad's edge (metres), and grow as thick as they would by this far. */
+const PAD_TREE_CLEARANCE = 2.5;
+const PAD_TREE_FADE = 7;
+
 /** How far the oldest stump has sunk into the ground, metres. */
 export const STUMP_SINK = 0.3;
 

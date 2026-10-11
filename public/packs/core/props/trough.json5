@@ -3,6 +3,8 @@
 {
   name: "Trough",
   type: "trough",
+  // The ground round it trodden to earth where the beasts stand to drink.
+  spill: { material: "track", reach: 2.5 },
   trough: {
     length: [1.8, 2.4],
     width: [0.7, 0.85],

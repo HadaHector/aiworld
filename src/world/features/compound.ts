@@ -14,6 +14,7 @@ import type { FeatureSite } from "./featureSites";
 import type { RoadNetwork } from "../roads/roadNetwork";
 import { ROAD_HALF_WIDTH } from "../roads/roadConfig";
 import { arrangeGroup, arrangeProp, setDown, type Arranged, type PlacedProp } from "../props/propGroups";
+import type { Spill } from "../props/propTypes";
 
 /**
  * A compound (see FEATURES.md): a yard with buildings round it, entrances where its roads arrive and
@@ -33,6 +34,8 @@ export interface CompoundBuilding {
   depth: number;
   required: boolean;
   doorTo: CompoundDoor;
+  /** Where its door is on its footprint's edge, in its own frame: x along its front, z out of it. */
+  door: { x: number; z: number };
 }
 
 /** A compound as sited, before the roads. */
@@ -86,6 +89,9 @@ export interface CompoundLayout {
   droppedProps: string[];
   /** How its level ground blends back to the ground round it (its kind's `pads`). */
   padBlend: { slope: number; min: number; max: number };
+  /** The ground under and round each of its buildings and props painted (its kind's pads.spill), or
+   *  none. */
+  padSpill: Spill | null;
 }
 
 /** A building variant is drawn from this many, as a settlement's houses are. */
@@ -150,8 +156,8 @@ export function planCompound(
     for (let k = 0; k < count; k++) {
       if (rng() >= entry.chance) continue;
       const variant = Math.floor(rng() * BUILDING_VARIANT_SPACE);
-      const { halfWidth, halfDepth } = measureBuilding(entry.building, worldSeed, variant);
-      buildings.push({ building: entry.building, variant, width: halfWidth * 2, depth: halfDepth * 2, required: entry.required, doorTo: entry.doorTo });
+      const { halfWidth, halfDepth, door } = measureBuilding(entry.building, worldSeed, variant);
+      buildings.push({ building: entry.building, variant, width: halfWidth * 2, depth: halfDepth * 2, required: entry.required, doorTo: entry.doorTo, door });
     }
   }
   // Required first, then largest: the order they are placed in, so a required one never finds the
@@ -310,6 +316,7 @@ export function layoutCompound(
   sampleTerrain: TerrainSampler,
   worldSeed: number,
 ): CompoundLayout {
+  if (site.roadAngles.length > 0) return layoutRoadside(featureId, kind, site, roadLines, sampleTerrain, worldSeed);
   const rng = mulberry32(deriveSeed(site.seed, COMPOUND_LAYOUT_SALT));
   const { x, z, yardRadius } = site;
   const rim = yardRadius + SETBACK;
@@ -334,11 +341,6 @@ export function layoutCompound(
     taken.push([angle, laneHalf]);
     const inner = rimPoint(angle, yardRadius);
     lanes.push({ points: [{ x: gate.x, z: gate.z }, inner], heights: [gate.roadHeight ?? sampleTerrain(gate.x, gate.z).height, y], widthScale: LANE_WIDTH, taperEnds: false });
-  }
-  // The road through a roadside one: it is its own way in, either side - no lane.
-  for (const angle of site.roadAngles) {
-    entrances.push({ kind: "road", angle });
-    taken.push([angle, laneHalf]);
   }
   // Buildings round the rim.
   const buildings: House[] = [];
@@ -401,11 +403,6 @@ export function layoutCompound(
   // The yard's level ground: out under the buildings' fronts - a wide one's corners stand further
   // out than its middle, its front straight and the yard round.
   const level = Math.max(rim, ...buildings.map((b) => Math.hypot(rim, b.width / 2))) + LEVEL_UNDER_FRONTS;
-  // The road through a roadside one is laid at its yard's level across it.
-  if (site.roadAngles.length > 0) {
-    const through = roadLines.reduce<RoadLine | null>((best, line) => (!best || distanceToLine(line.points, x, z) < distanceToLine(best.points, x, z) ? line : best), null);
-    if (through) levelThrough(through, x, z, y, level);
-  }
 
   // Then the trails, through the rim the gates and the buildings leave.
   const trails: RoadLine[] = [];
@@ -447,43 +444,135 @@ export function layoutCompound(
   }
 
   const { props, droppedProps } = placeProps(kind.compound!, site, worldSeed, rng, buildings, lanes, trails, nearbyRoads, sampleTerrain, { x, z, yardRadius, rim });
-  return { featureId, kindId: kind.id, x, z, yard: { x, z, y, radius: yardRadius, level }, entrances, lanes, trails, buildings, dropped, droppedRequired, props, droppedProps, padBlend: { slope: kind.compound!.pads.slope, min: kind.compound!.pads.blend[0], max: kind.compound!.pads.blend[1] } };
+  return { featureId, kindId: kind.id, x, z, yard: { x, z, y, radius: yardRadius, level }, entrances, lanes, trails, buildings, dropped, droppedRequired, props, droppedProps, padBlend: { slope: kind.compound!.pads.slope, min: kind.compound!.pads.blend[0], max: kind.compound!.pads.blend[1] }, padSpill: kind.compound!.pads.spill };
 }
 
-/** A road through a roadside compound comes back to its own profile over this far past its yard's
- *  level ground; and it is cut into pieces this long near it, so its level is held where it is. */
-const THROUGH_RAMP = 20;
-const THROUGH_STEP = 4;
+/** A roadside compound's buildings stand back from its road this far past its level ground (times
+ *  its width), fronts to it - and along it no further than its circle less this. */
+const ROADSIDE_SETBACK = 4;
+const ROADSIDE_SPAN_MARGIN = 12;
+/** And a path to each one's door, this wide next to a road (1). */
+const PATH_WIDTH = 0.4;
+/** How far apart along its road a roadside building is tried. */
+const ROADSIDE_STEP = 2;
 
 /**
- * Lays the road running through a roadside compound at its yard's level `y` out to `level` from its
- * middle, easing back to the road's own surface over THROUGH_RAMP past it - so the road and the yard
- * are one level ground, not a graded road slanting across a levelled yard. Its points near the yard
- * are added to, so the level holds between them.
+ * Lays a roadside compound out (a coaching inn): no yard of its own - its buildings stand along both
+ * sides of the road it was sited on, fronts to it, set back past the road's level ground, each where
+ * the ground under it needs the least cut and fill and as near the middle as it can; and a narrow
+ * path from the road to each one's door. Its props are set down about them (see placeProps). Its
+ * "yard" is the strip between the road and the fronts.
  */
-function levelThrough(line: RoadLine, x: number, z: number, y: number, level: number): void {
-  const reach = level + THROUGH_RAMP;
-  const points: CellPoint[] = [line.points[0]];
-  const heights: number[] = [line.heights[0]];
-  for (let i = 0; i + 1 < line.points.length; i++) {
-    const a = line.points[i];
-    const b = line.points[i + 1];
-    const length = Math.hypot(b.x - a.x, b.z - a.z);
-    const near = distanceToLine([a, b], x, z) < reach;
-    const steps = near ? Math.max(1, Math.ceil(length / THROUGH_STEP)) : 1;
-    for (let k = 1; k <= steps; k++) {
-      const t = k / steps;
-      points.push({ x: a.x + (b.x - a.x) * t, z: a.z + (b.z - a.z) * t });
-      heights.push(line.heights[i] + (line.heights[i + 1] - line.heights[i]) * t);
+function layoutRoadside(featureId: number, kind: FeatureKindDef, site: CompoundSite, roadLines: RoadLine[], sampleTerrain: TerrainSampler, worldSeed: number): CompoundLayout {
+  const rng = mulberry32(deriveSeed(site.seed, COMPOUND_LAYOUT_SALT));
+  const { x, z } = site;
+  const nearbyRoads = roadLines.filter((line) => distanceToLine(line.points, x, z) < site.radius + TRAIL_ROAD_CLEARANCE);
+  const [way] = waysOut(nearbyRoads, [], x, z, true);
+  const entrances: CompoundEntrance[] = site.roadAngles.map((angle) => ({ kind: "road", angle }));
+  const buildings: House[] = [];
+  const lanes: RoadLine[] = [];
+  let dropped = 0;
+  let droppedRequired = 0;
+  const padBlend = { slope: kind.compound!.pads.slope, min: kind.compound!.pads.blend[0], max: kind.compound!.pads.blend[1] };
+  if (!way) {
+    return { featureId, kindId: kind.id, x, z, yard: { x, z, y: site.height, radius: 0, level: 0 }, entrances, lanes, trails: [], buildings, dropped: site.buildings.length, droppedRequired: site.buildings.filter((b) => b.required).length, props: [], droppedProps: [], padBlend, padSpill: kind.compound!.pads.spill };
+  }
+  const road = way.line;
+  const setback = ROAD_HALF_WIDTH * (road.widthScale ?? 1) + ROADSIDE_SETBACK;
+  const span = Math.max(10, site.radius - ROADSIDE_SPAN_MARGIN);
+  const heightAt = (s: number): number => {
+    const { lengths } = way;
+    let i = 1;
+    while (i < lengths.length - 1 && lengths[i] < s) i++;
+    const t = Math.max(0, Math.min(1, (s - lengths[i - 1]) / Math.max(1e-6, lengths[i] - lengths[i - 1])));
+    return road.heights[i - 1] + (road.heights[i] - road.heights[i - 1]) * t;
+  };
+  const footprints: Box[] = [];
+  for (const building of site.buildings) {
+    type Spot = { house: House; box: Box; s: number; cost: number };
+    let best: Spot | null = null;
+    let bestAny: Spot | null = null;
+    const first = rng() < 0.5 ? 1 : -1;
+    for (let t = -span; t <= span; t += ROADSIDE_STEP) {
+      const s = way.start + t;
+      const p = alongWay(way, s);
+      if (!p) continue;
+      for (const side of [first, -first]) {
+        // Out from the road on this side, its front back to it.
+        const nx = -p.dz * side;
+        const nz = p.dx * side;
+        const out = setback + building.depth / 2;
+        const cx = p.x + nx * out;
+        const cz = p.z + nz * out;
+        const box: Box = { x: cx, z: cz, ax: p.dx, az: p.dz, hw: building.width / 2, hd: building.depth / 2 };
+        if (footprints.some((other) => boxGap(other, box) < BUILDING_GAP)) continue;
+        if (nearbyRoads.some((line) => lineToBox(line.points, box) < ROAD_HALF_WIDTH * (line.widthScale ?? 1) + 1)) continue;
+        let total = 0;
+        let worst = 0;
+        let dry = true;
+        const samples: number[] = [];
+        for (const [a, b] of [[-1, -1], [1, -1], [1, 1], [-1, 1], [0, -1], [0, 1], [-1, 0], [1, 0], [0, 0]]) {
+          const sample = sampleTerrain(cx + p.dx * box.hw * a + nx * box.hd * b, cz + p.dz * box.hw * a + nz * box.hd * b);
+          if (!sample.isLand || sample.lakeFactor > MAX_LAKE_FACTOR) dry = false;
+          samples.push(sample.height);
+        }
+        if (!dry) continue;
+        const ground = samples.reduce((sum, h) => sum + h, 0) / samples.length;
+        for (const h of samples) {
+          worst = Math.max(worst, Math.abs(h - ground));
+          total += Math.abs(h - ground);
+        }
+        // Level ground first, then near the middle, and a little chance.
+        const cost = total / samples.length + Math.abs(t) * 0.02 + rng() * 0.3;
+        const house: House = { x: cx, z: cz, y: ground + HOUSE_FLOOR_ABOVE_STREET, frontX: -nx, frontZ: -nz, width: building.width, depth: building.depth, building: building.building, variant: building.variant };
+        const candidate = { house, box, s, cost };
+        if (!bestAny || cost < bestAny.cost) bestAny = candidate;
+        if (worst <= HOUSE_MAX_CUT_FILL && (!best || cost < best.cost)) best = candidate;
+      }
     }
+    const chosen = best ?? (building.required ? bestAny : null);
+    if (!chosen) {
+      dropped++;
+      if (building.required) droppedRequired++;
+      continue;
+    }
+    buildings.push(chosen.house);
+    footprints.push(chosen.box);
+    lanes.push(pathToDoor(way, chosen.s, chosen.house, building.door, heightAt));
   }
-  for (let i = 0; i < points.length; i++) {
-    const d = Math.hypot(points[i].x - x, points[i].z - z);
-    const own = smoothstep(level, reach, d);
-    heights[i] = y + (heights[i] - y) * own;
-  }
-  line.points = points;
-  line.heights = heights;
+  const { props, droppedProps } = placeProps(kind.compound!, site, worldSeed, rng, buildings, lanes, [], nearbyRoads, sampleTerrain, { x, z, yardRadius: 0, rim: 0 });
+  return { featureId, kindId: kind.id, x, z, yard: { x, z, y: site.height, radius: 0, level: 0 }, entrances, lanes, trails: [], buildings, dropped, droppedRequired, props, droppedProps, padBlend, padSpill: kind.compound!.pads.spill };
+}
+
+/** A path ends this far out from the door it leads to. */
+const PATH_DOOR_GAP = 1.5;
+
+/**
+ * The path from a roadside compound's road to one of its buildings' doors (`door` in the building's
+ * own frame - x along its front, z out of it): from the road's middle square across to a door in its
+ * front; to one in a side wall, across to the front and round its corner. From the road's level to
+ * the building's ground. A door at the back is come to at the front's middle instead.
+ */
+function pathToDoor(way: WayOut, s: number, house: House, door: { x: number; z: number }, heightAt: (s: number) => number): RoadLine {
+  // The building's own axes in the world: x along its front, z out of it.
+  const ax = house.frontZ;
+  const az = -house.frontX;
+  const world = (x: number, z: number): CellPoint => ({ x: house.x + ax * x + house.frontX * z, z: house.z + az * x + house.frontZ * z });
+  const hd = house.depth / 2;
+  const hw = house.width / 2;
+  const front = door.z > hd * 0.5;
+  const side = !front && Math.abs(door.x) > hw * 0.5 ? Math.sign(door.x) : 0;
+  // Where it meets the front: before the door, or past the corner on the door's side.
+  const frontX = front ? door.x : side !== 0 ? door.x + side * PATH_DOOR_GAP : 0;
+  // (Its depth measures its eaves too: a door in its front stands on the wall, further in.)
+  const ends: CellPoint[] = [world(frontX, (front ? door.z : hd) + PATH_DOOR_GAP)];
+  if (side !== 0) ends.push(world(door.x + side * PATH_DOOR_GAP, door.z));
+  // Along the road to square across from where it meets the front.
+  const road = alongWay(way, s)!;
+  const along = ((ends[0].x - road.x) * road.dx + (ends[0].z - road.z) * road.dz);
+  const start = alongWay(way, s + along) ?? road;
+  const ground = house.y - HOUSE_FLOOR_ABOVE_STREET;
+  return { points: [{ x: start.x, z: start.z }, ...ends], heights: [heightAt(s + along), ...ends.map(() => ground)], widthScale: PATH_WIDTH, taperEnds: false };
 }
 
 /** A prop keeps this far from anything else - a building, another prop. */
@@ -590,8 +679,10 @@ function placeProps(
     const ahead = house.depth / 2 + DOOR_APRON / 2;
     return { x: house.x + house.frontX * ahead, z: house.z + house.frontZ * ahead, ax: house.frontZ, az: -house.frontX, hw: house.width / 2, hd: DOOR_APRON / 2 };
   });
-  // The ways across the yard: from where each lane and trail meets it to its middle.
-  const paths: CellPoint[][] = [...lanes.map((line) => line.points[line.points.length - 1]), ...trails.map((line) => line.points[0])].map((end) => [end, { x: at.x, z: at.z }]);
+  const roadside = site.roadAngles.length > 0;
+  // The ways across the yard: from where each lane and trail meets it to its middle. A roadside
+  // one has no yard to cross - its paths are its lanes.
+  const paths: CellPoint[][] = roadside ? [] : [...lanes.map((line) => line.points[line.points.length - 1]), ...trails.map((line) => line.points[0])].map((end) => [end, { x: at.x, z: at.z }]);
   /** The lanes with a gate across them already. */
   const gated = new Set<RoadLine>();
   // The roads leading away from it, and those with a prop by them already.
@@ -607,10 +698,11 @@ function placeProps(
     });
   };
   // A gate stands across its lane: only the other ways are kept clear of it.
-  const fits = (box: Box, limit: number | null, onTrail: RoadLine | null, acrossLane: RoadLine | null = null): boolean => {
+  // One set before a building's front stands on its apron, off the path to its door.
+  const fits = (box: Box, limit: number | null, onTrail: RoadLine | null, acrossLane: RoadLine | null = null, onApron = false): boolean => {
     if (limit !== null && corners(box).some((p) => Math.hypot(p.x - at.x, p.z - at.z) > limit)) return false;
     if (!acrossLane && paths.some((path) => lineToBox(path, box) < YARD_PATH_CLEARANCE)) return false;
-    if (houseBoxes.some((house) => boxGap(house, box) < PROP_GAP) || aprons.some((apron) => boxGap(apron, box) < 0)) return false;
+    if (houseBoxes.some((house) => boxGap(house, box) < PROP_GAP) || (!onApron && aprons.some((apron) => boxGap(apron, box) < 0))) return false;
     if (lanes.some((line) => line !== acrossLane && lineToBox(line.points, box) < PROP_LANE_CLEARANCE)) return false;
     if (trails.some((line) => line !== onTrail && lineToBox(line.points, box) < PROP_LANE_CLEARANCE)) return false;
     if (onTrail && lineToBox(onTrail.points, box) < PROP_TRAIL_OFFSET - 0.01) return false;
@@ -632,7 +724,7 @@ function placeProps(
       const r = arranged.reach;
       /** Candidates: where, which way it faces, the trail it lies by, and how far from the middle it
        *  may reach (null: no matter). */
-      const candidates: { x: number; z: number; fx: number; fz: number; trail: RoadLine | null; limit: number | null; lane?: RoadLine; way?: WayOut }[] = [];
+      const candidates: { x: number; z: number; fx: number; fz: number; trail: RoadLine | null; limit: number | null; lane?: RoadLine; way?: WayOut; front?: boolean }[] = [];
       /** Where its footprint lies, set down as a candidate says. */
       const boxAt = (c: (typeof candidates)[number]): Box => {
         const length = Math.hypot(c.fx, c.fz) || 1;
@@ -641,7 +733,24 @@ function placeProps(
         const { cx, cz, hw, hd } = arranged.box;
         return { x: c.x + fz * cx + fx * cz, z: c.z - fx * cx + fz * cz, ax: fz, az: -fx, hw, hd };
       };
-      if (entry.at === "yard") {
+      if (roadside && (entry.at === "yard" || entry.at === "yardEdge") && ways.length > 0) {
+        // A roadside one's yard: the strip either side of its road, between it and the fronts -
+        // further out for its edge - turned freely.
+        const way = ways[0];
+        const span = Math.max(10, site.radius - ROADSIDE_SPAN_MARGIN);
+        const near = ROAD_HALF_WIDTH * (way.line.widthScale ?? 1) + r + 1;
+        const offsets = entry.at === "yard" ? [near, near + 2, near + 4] : [near + 8, near + 12];
+        for (let t = -span; t <= span; t += YARD_STEP) {
+          const p = alongWay(way, way.start + t);
+          if (!p) continue;
+          for (const side of [-1, 1]) {
+            for (const off of offsets) {
+              const turn = rng() * Math.PI * 2;
+              candidates.push({ x: p.x - p.dz * side * off, z: p.z + p.dx * side * off, fx: Math.sin(turn), fz: Math.cos(turn), trail: null, limit: null });
+            }
+          }
+        }
+      } else if (entry.at === "yard") {
         // Anywhere in the yard, on rings out from its middle, turned freely.
         for (let ring = 0; ring * YARD_STEP <= at.yardRadius - Math.min(arranged.box.hw, arranged.box.hd); ring++) {
           const radius = ring * YARD_STEP;
@@ -678,6 +787,20 @@ function placeProps(
             for (const side of rng() < 0.5 ? [-1, 1] : [1, -1]) candidates.push(at(side * (hw + r + PROP_GAP + 0.05), w));
           }
           for (let u = -hw + r; u <= hw - r; u += 1.5) candidates.push(at(u, -(hd + r + PROP_GAP + 0.05)));
+        }
+      } else if (entry.at === "front") {
+        // Along a building's front, just out from it (past its eaves), anywhere across it the path
+        // to its door leaves free - facing out as it does.
+        const named = buildings.filter((house) => house.building === entry.building);
+        const houses = entry.building && named.length > 0 ? named : buildings;
+        for (const house of shuffled(houses, rng)) {
+          const hw = house.width / 2;
+          const out = house.depth / 2 + r + PROP_GAP;
+          const across: number[] = [];
+          for (let u = -hw + r; u <= hw - r; u += 1) across.push(u);
+          for (const u of shuffled(across, rng)) {
+            candidates.push({ x: house.x + house.frontZ * u + house.frontX * out, z: house.z - house.frontX * u + house.frontZ * out, fx: house.frontX, fz: house.frontZ, trail: null, limit: null, front: true });
+          }
         }
       } else if (entry.at === "gate") {
         // Across a lane not gated yet, out past the yard's rim, facing out along it.
@@ -739,7 +862,7 @@ function placeProps(
       let bestSpread = -Infinity;
       for (const c of candidates) {
         const box = boxAt(c);
-        if (!(c.way ? fitsByRoad(box, c.way.line) : fits(box, c.limit, c.trail, c.lane ?? null))) continue;
+        if (!(c.way ? fitsByRoad(box, c.way.line) : fits(box, c.limit, c.trail, c.lane ?? null, c.front === true))) continue;
         const score = spread(box) + rng() * 2;
         if (score > bestSpread) {
           bestSpread = score;
@@ -747,7 +870,7 @@ function placeProps(
           bestBox = box;
           // Along a building or a trail, the first that fits - near the front, near the yard; a gate
           // on the first lane it fits.
-          if (entry.at === "byBuilding" || entry.at === "trail" || entry.at === "gate" || entry.at === "road") break;
+          if (entry.at === "byBuilding" || entry.at === "front" || entry.at === "trail" || entry.at === "gate" || entry.at === "road") break;
         }
       }
       if (!best) {

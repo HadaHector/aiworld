@@ -12,6 +12,7 @@ import { generateBuilding } from "../world/buildings/buildingGenerator";
 import { generateProp } from "../world/props/propGenerator";
 import { deriveSeed, mulberry32 } from "../world/rng";
 import { smoothstep } from "../world/mathUtils";
+import { TREE_ROAD_CLEARANCE, TREE_ROAD_FADE } from "../world/foliage/foliageConfig";
 
 /**
  * A feature (a compound - a logging camp) on its own on a patch of ground, for the workbench: sited
@@ -142,12 +143,18 @@ export function buildFeaturePreview(
         const x = gx + (rng() - 0.5) * TREE_SPACING * 0.8;
         const z = gz + (rng() - 0.5) * TREE_SPACING * 0.8;
         if (Math.abs(x) > half - 2 || Math.abs(z) > half - 2) continue;
-        const cleared = rng() > smoothstep(clear, full, Math.hypot(x, z));
+        // Cleared round it as far as its kind clears (none for a roadside one), and off every pad -
+        // its buildings' and props' - as the world's scatter has it.
+        const cleared = (kind.clearing[1] > 0 && rng() > smoothstep(clear, full, Math.hypot(x, z))) || rng() > smoothstep(2.5, 7, pads?.query(x, z)?.gap ?? Infinity);
         // One the clearing took, past the compound's own circle, may be left as its stump - or, too
         // thick to fell, standing (as the world's scatter has it).
         const felling = cleared && Math.hypot(x, z) > site.radius && rng() < kind.stumps;
         if (cleared && !felling) continue;
-        if (lines.some((line) => distanceToLine(line.points, x, z) < line.width / 2 + 3)) continue;
+        // Off the roads, lanes and trails as the world's scatter keeps them: by distance in each one's
+        // own widths (a path half a road's width keeps trees half as far), none within
+        // TREE_ROAD_CLEARANCE, full by TREE_ROAD_FADE.
+        const roadGap = Math.min(Infinity, ...lines.map((line) => distanceToLine(line.points, x, z) / (line.width / (ROAD_HALF * 2))));
+        if (rng() > smoothstep(TREE_ROAD_CLEARANCE, TREE_ROAD_FADE, roadGap)) continue;
         const id = kinds[Math.floor(rng() * kinds.length)];
         const treeKind = content.treeKinds.find((t) => t.id === id)!;
         const scale = treeKind.scale[0] + rng() * (treeKind.scale[1] - treeKind.scale[0]);
@@ -161,5 +168,5 @@ export function buildFeaturePreview(
       }
     }
   }
-  return { size, heightAt, placed, lines, pads: padList, yards: [{ x: layout.yard.x, z: layout.yard.z, radius: layout.yard.level }], trees, farTrees, biome, layout };
+  return { size, heightAt, placed, lines, pads: padList, yards: layout.yard.level > 0 ? [{ x: layout.yard.x, z: layout.yard.z, radius: layout.yard.level }] : [], trees, farTrees, biome, layout };
 }

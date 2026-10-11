@@ -82,6 +82,7 @@ export function sampleBiomeArea(seed: number, content: WorldContent, biomeId: st
     featureClear: 0,
     featureStumps: 0,
     featureStumpAge: 0,
+    padGap: Infinity,
     spill: 0,
     spillMaterial: -1,
   });

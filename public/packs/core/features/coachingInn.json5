@@ -1,7 +1,8 @@
 // A coaching inn: a waystation on the road between two towns, where carters and travellers stop for
-// the night. The road runs straight through its yard - the inn on one side of it, the stable and a
-// shed round the rest, a well in the yard and a trough by the stable - with no fence round it: the
-// road goes on through. (FEATURES.md; the design panel's pitches.)
+// the night. Its buildings stand either side of the road, fronts to it, a path in from the road to
+// each door - the inn, the stable and a shed by chance - a well beside the road and a trough by the
+// stable; no yard of its own, no fence: the road goes on through. (FEATURES.md; the design panel's
+// pitches.)
 //
 // Sited once the roads are laid (`roadside`): on a road, not a track, nearly straight across the
 // yard, with no junction in it, on gentle ground, and well away from any settlement - an inn just
@@ -13,25 +14,29 @@
     // Gentle ground (rise over run across it), anywhere the road goes - wood or open - at least
     // 500 m past every settlement's edge, the further the better.
     site: { grade: [0, 0.1], cover: [0, 1], fromSettlements: 500 },
-    // The yard the road crosses: room for the road through its middle and the yard either side.
+    // How much room it takes along its road (a roadside one has no yard of its own - see
+    // compound.ts's layoutRoadside).
     yard: { radius: [15, 19] },
-    pads: { slope: 0.6, blend: [1.5, 10] },
+    // Its buildings' and props' ground trodden to earth, fraying out into the grass 3 m past them.
+    pads: { slope: 0.6, blend: [1.5, 10], spill: { material: "track", reach: 3 } },
     arrangement: "roadside",
-    // The inn always, its front to the yard and the road through it; a stable most times; a shed now
-    // and then.
+    // The inn always, its front to the road; a stable most times; a shed now and then.
     buildings: [
       { building: "inn", count: [1, 1], required: true },
       { building: "stable", count: [1, 1], chance: 0.8 },
       { building: "toolShed", count: [1, 1], chance: 0.5 },
     ],
-    // A well in the yard, off the road; a trough, the fodder and the dung heap by the stable (or,
-    // with none, by whatever there is); stores and a wood corner by the inn.
+    // A well beside the road; a trough before the stable (or, with none, whatever there is), its
+    // fodder and dung heap beside it; barrels before the inn and crates before the shed, stores and a
+    // wood corner by the inn; a log stack further back.
     props: [
       { prop: "well", count: [1, 1], at: "yard", chance: 0.9 },
-      { prop: "trough", count: [1, 1], at: "byBuilding", building: "stable" },
+      { prop: "trough", count: [1, 1], at: "front", building: "stable" },
+      { prop: "barrel", count: [1, 3], at: "front", building: "inn", chance: 0.8 },
+      { prop: "crate", count: [1, 2], at: "front", building: "toolShed", chance: 0.7 },
       { group: "fodderPile", count: [1, 1], at: "byBuilding", building: "stable", chance: 0.8 },
       { prop: "dungHeap", count: [1, 1], at: "byBuilding", building: "stable", chance: 0.8 },
-      { group: "storePile", count: [1, 2], at: "byBuilding", building: "inn" },
+      { group: "storePile", count: [1, 1], at: "byBuilding", building: "inn" },
       { group: "woodCorner", count: [1, 1], at: "byBuilding", building: "inn", chance: 0.8 },
       { prop: "logStack", count: [0, 1], at: "yardEdge" },
       // A sign up the road each way, naming the inn to those coming.
@@ -67,22 +72,8 @@
       place: ["Ford", "Gate", "Bridge", "Crossways", "Well", "Stile", "Ridge", "Heath", "Hollow", "Mill", "Cross", "Pass"],
     },
   },
-  // Trees and bushes cleared 25 m past the yard, growing back by 50.
-  clearing: [25, 50],
+  // No clearing of its own: trees keep off its buildings', props' and paths' ground (and the road's)
+  // and nowhere else, so it stands in the wood or the field as the road found it.
+  clearing: [0, 0],
   stumps: 0,
-  // The yard trodden hard, out to the buildings' fronts, fraying out by 10 m past it.
-  ground: {
-    material: "track",
-    weight: {
-      noises: [{ name: "yardEdge", type: "fbm", octaves: 2, frequency: 0.08, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
-      steps: [
-        { output: "gapRaw", op: "input", name: "featureGap" },
-        { output: "edgeRaw", op: "sample", noise: "yardEdge" },
-        { output: "edge", op: "scale", input: "edgeRaw", factor: 2 },
-        { output: "gap", op: "add", a: "gapRaw", b: "edge" },
-        { output: "raw", op: "remap", input: "gap", inMin: 10, inMax: 5, outMin: 0, outMax: 1 },
-        { output: "result", op: "clamp", input: "raw", min: 0, max: 1 },
-      ],
-    },
-  },
 }

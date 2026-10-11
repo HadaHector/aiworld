@@ -1,4 +1,5 @@
 import type { FeatureNaming } from "../naming/nameGenerator";
+import type { Spill } from "../props/propTypes";
 import type { MaterialLayer } from "../materials/materialTypes";
 import type { SettlementTier } from "../settlements/settlementConfig";
 import type { BuildingDef } from "../buildings/buildingTypes";
@@ -85,13 +86,15 @@ export interface CompoundBuildingSpec {
  *   middle;
  * - `yardEdge`: round the yard's rim, in the gaps the buildings leave, facing the yard;
  * - `byBuilding`: beside a building (of `building`, if given), along its side near its front;
+ * - `front`: before a building's front (of `building`, if given), beside its door but off the way to
+ *   it, facing out - a trough before a stable, crates before a store;
  * - `trail`: beside its trails, out past the buildings, lying along them;
  * - `gate`: across a lane's mouth, between the buildings, facing out along it (a gate) - one to a
  *   lane at most, so `count` is how many of its lanes get one;
  * - `road`: beside a road leading away from it, `distance` metres out along the road (a wayside
  *   sign) - one to a way at most, as a gate is.
  */
-export const PROP_ANCHORS = ["yard", "yardEdge", "byBuilding", "trail", "gate", "road"] as const;
+export const PROP_ANCHORS = ["yard", "yardEdge", "byBuilding", "front", "trail", "gate", "road"] as const;
 export type PropAnchor = (typeof PROP_ANCHORS)[number];
 
 /** A prop, or a group of them, a compound sets down: `count` of it (rolled), each with `chance`,
@@ -121,8 +124,9 @@ export interface CompoundSpec {
   /** The yard: a level round of trodden ground, this radius. */
   yard: { radius: [number, number] };
   /** How the level ground under its yard, buildings and props blends back to the ground round it -
-   *  see PadBlend: `slope` the steepest its banks stand, `blend` how narrow and wide they may get. */
-  pads: { slope: number; blend: [number, number] };
+   *  see PadBlend: `slope` the steepest its banks stand, `blend` how narrow and wide they may get -
+   *  and `spill`, the ground under and round each of them painted (trodden earth), or none. */
+  pads: { slope: number; blend: [number, number]; spill: Spill | null };
   arrangement: CompoundArrangement;
   trails: CompoundTrailSpec[];
   buildings: CompoundBuildingSpec[];
