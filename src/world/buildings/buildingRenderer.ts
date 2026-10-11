@@ -76,6 +76,8 @@ export interface BuildingRenderer {
    * out of it - `add` and `remove` are the world's (see worldCollision.ts).
    */
   updateCollision: (x: number, z: number, add: (key: string, shapes: ShapeDesc[]) => void, remove: (key: string) => void) => void;
+  /** The houses' own lights (see LIGHTS.md) whose reach a point is in, in the world's space. */
+  lightsNear: (x: number, y: number, z: number) => ModelLight[];
   /** The ground taken out over every cellar with rooms - for the ground's collision. */
   readonly cellarCuts: readonly TerrainCut[];
 }
@@ -161,6 +163,8 @@ export function createBuildingRenderer(
    *  LIGHTS.md): asked for the first time its near model is shown. */
   const meshes: { near: Mesh; far: Mesh; x: number; z: number; reach: number; lights: ModelLight[] | null }[] = [];
   const lightBakes = createLightBakePool();
+  /** Every house's lights in the world's own space, for what moves among them (the player). */
+  const worldLights: { x: number; z: number; reach: number; lights: ModelLight[] }[] = [];
   const enterable: Enterable[] = [];
   /** Each group's houses' collision, from their near models. */
   const collisions: { key: string; x: number; z: number; radius: number; houses: PlacedCollision[] }[] = [];
@@ -192,6 +196,8 @@ export function createBuildingRenderer(
       const near = build(false);
       const far = build(true);
       meshes.push({ near: near.mesh, far: far.mesh, x: house.x, z: house.z, reach: near.reach, lights });
+      const placed = lights as ModelLight[] | null;
+      if (placed) worldLights.push({ x: house.x, z: house.z, reach: near.reach, lights: placed.map((light) => ({ ...light, position: [light.position[0] + house.x, light.position[1], light.position[2] + house.z] })) });
       radius = Math.max(radius, Math.hypot(house.x - group.x, house.z - group.z) + near.reach);
     });
     collisions.push({ key: group.key, x: group.x, z: group.z, radius, houses });
@@ -268,6 +274,17 @@ export function createBuildingRenderer(
       }
     },
     cellarCuts: enterable.flatMap((entry) => entry.cuts),
+    lightsNear(x, y, z) {
+      const found: ModelLight[] = [];
+      for (const house of worldLights) {
+        if (Math.hypot(house.x - x, house.z - z) > house.reach + 12) continue;
+        for (const light of house.lights) {
+          const [lx, ly, lz] = light.position;
+          if (Math.hypot(lx - x, ly - y, lz - z) < light.radius) found.push(light);
+        }
+      }
+      return found;
+    },
     floorAt(x, z, feet) {
       let best: number | null = null;
       for (const { house, interior, reach } of enterable) {

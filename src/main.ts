@@ -49,6 +49,7 @@ const world = await createWorld(scene, content, ({ phase, completed, total }) =>
 
 loadingScreen.update("Placing the player", 0, 0);
 const character = createCharacter(scene, world.collision, world.heightAt, world.groundAt);
+const playerLights = world.lightMover(character.mesh);
 const camera = createThirdPersonCamera(scene, canvas, character.mesh);
 const cameraCollision = createCameraCollision(camera, world.collision.world);
 // Camera near/far and the shadow generator's own frustum both need the real camera, which does
@@ -247,6 +248,7 @@ scene.onBeforeRenderObservable.add(() => {
   if (!spectator.active) {
     const started = performance.now();
     character.update(deltaSeconds, camera);
+    playerLights.update(deltaSeconds);
     collisionPanel.addPlayerMs(performance.now() - started);
     cameraCollision.update(deltaSeconds);
   }

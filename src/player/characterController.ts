@@ -37,6 +37,8 @@ export function createCharacter(
   const mesh = MeshBuilder.CreateCapsule("player", { height, radius }, scene);
   const material = new StandardMaterial("playerMaterial", scene);
   material.diffuseColor = new Color3(0.2, 0.5, 0.9);
+  // The sky and the sun, and the few house lights nearest it (lighting/playerLights.ts).
+  material.maxSimultaneousLights = 6;
   mesh.material = material;
   mesh.isPickable = false;
 

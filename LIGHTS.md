@@ -160,6 +160,10 @@ Phase 1 is in, and the drawing half of phase 2, in the workbench only:
   two workers (`lighting/lightBake.worker.ts`, `lightBakePool.ts`) - the nearest waiting house
   first - from its near mesh's own vertex data and its lights placed as the mesh is; the lightmap
   and each vertex's place on it laid onto the mesh when it comes back (`applyLightmap`).
+- The player lit (`lighting/playerLights.ts`): the three house lights nearest it whose reach it is
+  in, as a fixed pool of point lights lighting its mesh only, each as strong as the bake would make
+  it there (window lights in the sky's colour); a ray from each light to the player against the
+  collision world fades a light out over a sixth of a second while a wall is between them.
 - Cached between visits (`lighting/lightCache.ts`, IndexedDB `aiworld-lightmaps`, least recently
   used past 256 MB): keyed by a hash of exactly what is baked - the mesh, which materials cast
   shadow, the lights - and of the bake's code (`virtual:light-bake-code-hash`), so a changed house,
@@ -167,4 +171,4 @@ Phase 1 is in, and the drawing half of phase 2, in the workbench only:
   too.
 
 Open: indoors the sky's ambient light is as strong as outdoors, everywhere - so a window's light
-hardly shows by day. Not yet: the player lit; the workbench's own Lights view.
+hardly shows by day. Not yet: the workbench's own Lights view.

@@ -1,5 +1,5 @@
 import { treeTintRules } from "./foliage/treeTints";
-import { Color3, type Camera, type Scene } from "@babylonjs/core";
+import { Color3, type Camera, type Mesh, type Scene } from "@babylonjs/core";
 import { createChunkManager, type ChunkLodLevel } from "./terrain/chunkManager";
 import { createWorldCollision, type WorldCollision } from "./worldCollision";
 import { createChunkBuildPool } from "./terrain/chunkBuildPool";
@@ -16,6 +16,7 @@ import type { House } from "./settlements/settlementLayout";
 import { bakeBuildingTextures, createBuildingMaterial } from "./buildings/buildingMesh";
 import type { SettlementLayout } from "./settlements/settlementLayout";
 import { createSunLighting, DEFAULT_DAY_NIGHT_CYCLE_MINUTES } from "./lighting/sunLighting";
+import { createPlayerLights, type PlayerLights } from "./lighting/playerLights";
 import { createSkyDome } from "./sky/skyDome";
 import { createWeatherSystem, type WeatherSystem } from "./weather/weatherSystem";
 import { NO_WEATHER, type WeatherBlend } from "./weather/weatherTypes";
@@ -84,6 +85,9 @@ export interface World {
    *  drives, so previewing the far side of a slow cycle doesn't mean actually waiting for it. */
   setTimeOfDay: (hours: number) => void;
   getTimeOfDay: () => number;
+  /** Lights a mesh that moves about - the player - by the houses' own lights near it (see
+   *  lighting/playerLights.ts); its update is called each frame. */
+  lightMover: (mesh: Mesh) => PlayerLights;
 }
 
 /** The world's seed - also what the workbench previews with until told otherwise. */
@@ -326,5 +330,6 @@ export async function createWorld(
     weather,
     setTimeOfDay: sunLighting.setTimeHours,
     getTimeOfDay: sunLighting.getTimeHours,
+    lightMover: (mesh) => createPlayerLights(scene, mesh, buildings.lightsNear, collision.world, sunLighting),
   };
 }
