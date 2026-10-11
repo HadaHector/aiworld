@@ -26,8 +26,13 @@ import type { ContinentPlan } from "./cells/continentLayout";
 import type { AreaBounds, AreaWeight } from "./cells/areaField";
 import type { SettlementSite } from "./settlements/settlementSites";
 import type { FeatureSite } from "./features/featureSites";
+import type { PlaceLabel } from "../ui/placeLabels";
+
 import type { RoadNetwork } from "./roads/roadNetwork";
 import type { WorldContent } from "./content/worldContent";
+
+/** A thing's label is shown this high over its foot - over a sign's board, at about eye level. */
+const LABEL_HEIGHT = 2.2;
 
 /** Coarse progress for the loading screen. `total` is 0 for phases with no countable steps. */
 export interface WorldLoadProgress {
@@ -53,6 +58,9 @@ export interface World {
   settlements: SettlementSite[];
   /** Each cell's major feature other than a settlement (a quarry) - see features/featureSites.ts. */
   features: FeatureSite[];
+  /** What the world's things say to a player standing by them - each wayside sign its place's name
+   *  (see ui/placeLabels.ts). */
+  labels: PlaceLabel[];
   roads: RoadNetwork;
   /** Streets, squares and houses per settlement - see settlements/settlementLayout.ts. */
   settlementLayouts: SettlementLayout[];
@@ -315,6 +323,11 @@ export async function createWorld(
     areaNames,
     settlements,
     features,
+    labels: compoundLayouts.flatMap((layout) =>
+      layout.props
+        .filter((prop) => prop.prop.label === "place")
+        .map((prop) => ({ x: prop.x, y: prop.y + LABEL_HEIGHT, z: prop.z, text: features[layout.featureId]?.name ?? features[layout.featureId]?.kind.name ?? layout.kindId })),
+    ),
     roads,
     settlementLayouts,
     materialLibrary,

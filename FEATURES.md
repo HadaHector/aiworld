@@ -88,7 +88,7 @@ brainstorm, not yet a plan: a pool to pick from, weighed so the cheap, striking 
 
 | Feature | Size | Sits on | Best in | Needs | Fun | Cost |
 |---|---|---|---|---|---|---|
-| Coaching inn / waystation with stables | M | on a road | any with roads | 1 | 3 | 1 |
+| Coaching inn / waystation with stables (first pass built: `features/coachingInn.json5`, a `roadside` compound; what is left in designers/coaching-inn.md) | M | on a road | any with roads | 1 | 3 | 1 |
 | Caravanserai: a walled courtyard inn with a well | M | on a desert road | sand sea, rocky desert, salt flat, red bush | 1, new style | 5 | 3 |
 | Trading post / fur factory, palisaded | M | a river in the wild | snowy taiga, frost steppe | 1, 6 | 3 | 2 |
 | Crossroads market: stalls, carts, a market cross | M | a road junction | meadow, maquis, savanna | 3 | 3 | 2 |
@@ -731,4 +731,9 @@ Saved for their own steps, so this one stays whole:
 - condition (an abandoned camp);
 - chimney smoke and other effects;
 - people and animals;
-- a river log-flume.
+- a river log-flume;
+- fences: line-based structures - a run of rail fence along part of the camp's edge, so a lane's
+  gate stands in a fence rather than alone with a few metres of rail either side (the same piece
+  as engine piece 8's walls, at a smaller scale - a fence follows the ground between two points);
+- the saw shed's open side is empty: it wants its work under it - a log on trestles or a saw pit,
+  logs waiting and boards sawn, and sawdust spilt over its floor and out in front.

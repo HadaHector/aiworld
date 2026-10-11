@@ -61,7 +61,10 @@ export function buildFeaturePreview(
   if (!kind.compound) return null;
   const rng = mulberry32(deriveSeed(seed, 0x5eed + variant));
   const planned = planCompound(kind, seed, rng);
-  const site = { ...planned, x: 0, z: 0, height: baseHeight(0, 0) };
+  // A roadside one stands on a road running straight through it, across the patch.
+  const roadside = kind.compound.arrangement === "roadside";
+  const through = rng() * Math.PI;
+  const site = { ...planned, x: 0, z: 0, height: baseHeight(0, 0), roadAngles: roadside ? [through, through + Math.PI] : [] };
   const size = Math.ceil((site.radius + WOOD_MARGIN) * 2 / 10) * 10;
   const half = size / 2;
 
@@ -77,10 +80,15 @@ export function buildFeaturePreview(
 
   // Its roads: in from the patch's edge, straight to gates on its circle at rolled angles, spread
   // round it - as many as it takes at most.
-  const links = kind.road ? Math.max(1, Math.round(kind.road.links[0] + rng() * (kind.road.links[1] - kind.road.links[0]))) : 1;
+  const links = roadside ? 0 : kind.road ? Math.max(1, Math.round(kind.road.links[0] + rng() * (kind.road.links[1] - kind.road.links[0]))) : 1;
   const first = rng() * Math.PI * 2;
   const gates: SettlementGate[] = [];
   const roads: RoadLine[] = [];
+  if (roadside) {
+    const ex = Math.cos(through) * half * 1.5;
+    const ez = Math.sin(through) * half * 1.5;
+    roads.push({ points: [{ x: -ex, z: -ez }, { x: ex, z: ez }], heights: [baseHeight(-ex, -ez), baseHeight(ex, ez)] });
+  }
   for (let n = 0; n < links; n++) {
     const angle = first + (n / links) * Math.PI * 2 + (rng() - 0.5) * 0.6;
     const gx = Math.cos(angle) * site.radius;

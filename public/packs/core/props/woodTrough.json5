@@ -1,0 +1,17 @@
+// A wooden trough: a long open box of thick boards, water near its brim - a farm's or a camp's, or
+// an inn's where stone is dear.
+{
+  name: "Wooden Trough",
+  type: "trough",
+  trough: {
+    length: [1.8, 2.4],
+    width: [0.7, 0.85],
+    height: [0.6, 0.75],
+    wall: [0.08, 0.1],
+  },
+  parts: {
+    body: { material: "planks", tints: [[0.72, 0.62, 0.52], [0.62, 0.55, 0.48]] },
+    // Standing water, a little green: no material.
+    water: { tints: [[0.12, 0.16, 0.13]] },
+  },
+}

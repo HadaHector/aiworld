@@ -6,6 +6,7 @@ import { createSpectatorCamera } from "./player/spectatorCamera";
 import { createDebugMap } from "./debug/debugMap";
 import { createSettingsPanel } from "./debug/settingsPanel";
 import { createZoneLabel } from "./debug/zoneLabel";
+import { createPlaceLabels } from "./ui/placeLabels";
 import { createTextureBrowser } from "./debug/textureBrowser";
 import { createPositionPanel, type ViewSnapshot } from "./debug/positionPanel";
 import { createLastView } from "./debug/lastView";
@@ -133,6 +134,7 @@ createSettingsPanel({
 });
 
 const zoneLabel = createZoneLabel();
+const placeLabels = createPlaceLabels(scene, world.labels);
 const textureBrowser = createTextureBrowser(world.materialLibrary);
 const statsPanel = createStatsPanel(scene, engine);
 const collisionPanel = createCollisionPanel(scene, world.collision, statsPanel);
@@ -249,6 +251,7 @@ scene.onBeforeRenderObservable.add(() => {
     const started = performance.now();
     character.update(deltaSeconds, camera);
     playerLights.update(deltaSeconds);
+    placeLabels.update(character.mesh.position, scene.activeCamera);
     collisionPanel.addPlayerMs(performance.now() - started);
     cameraCollision.update(deltaSeconds);
   }

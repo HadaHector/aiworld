@@ -7,6 +7,8 @@ import { NO_FEATURE, type FeatureKindDef } from "./featureTypes";
 import { evaluateQuarry, quarryEntrance, quarryFootprint, type QuarryShape } from "./quarry";
 import { evaluateCompound, planCompound, type CompoundSite } from "./compound";
 import type { TreeCover } from "../foliage/treeScatter";
+import type { RoadStretch } from "../roads/roadGraph";
+import { ROAD_HALF_WIDTH } from "../roads/roadConfig";
 
 /** One feature as it stands in the world. */
 export interface FeatureSite {
@@ -28,6 +30,9 @@ export interface FeatureSite {
   settlement: SettlementSite | null;
   /** A compound as sited - laid out once the roads are built (see compound.ts). */
   compound: CompoundSite | null;
+  /** Its own name, for a kind that names its own (FeatureKindDef.names) - a settlement's is its
+   *  site's. Given once every feature is placed. */
+  name?: string;
 }
 
 /** No feature rolled. */
@@ -113,6 +118,8 @@ export function placeFeatures({ seed, cellSites, sampleTerrain, kinds, rolls, se
     const site = cellSites[cell];
     const rng = mulberry32(deriveSeed(seed, FEATURE_PLACE_SALT + cell));
 
+    // A roadside one is placed once the roads are laid (placeRoadsideFeatures).
+    if (kind.compound?.arrangement === "roadside") continue;
     if (kind.type === "compound" && kind.compound) {
       // Everything that decides its size first, so where it lands does not change how big it is.
       const plan = planCompound(kind, seed, rng);
@@ -138,7 +145,7 @@ export function placeFeatures({ seed, cellSites, sampleTerrain, kinds, rolls, se
         entrance: null,
         quarry: null,
         settlement: null,
-        compound: { ...plan, x: best.x, z: best.z, height: best.height },
+        compound: { ...plan, x: best.x, z: best.z, height: best.height, roadAngles: [] },
       });
       continue;
     }
@@ -182,4 +189,112 @@ export function placeFeatures({ seed, cellSites, sampleTerrain, kinds, rolls, se
   }
   features.forEach((feature, id) => (feature.id = id));
   return features;
+}
+
+/** Along a road, a roadside compound is tried every this many metres. */
+const ROADSIDE_STEP = 8;
+/** The road across a roadside compound's circle may bend this far (radians) from one side to the
+ *  other: it runs through the yard nearly straight. */
+const ROADSIDE_MAX_BEND = 0.35;
+
+/**
+ * The cells that rolled a roadside compound (a coaching inn), placed once the roads are laid: on a
+ * road (not a track) through the cell, nearly straight across the compound's circle, with no other
+ * road and no junction within it, its ground as the kind asks, and as far from the settlements as
+ * the road allows - past its `fromSettlements` from each at the least. A cell with no such road is
+ * left empty. Returned to be added to the features already placed, which they keep clear of.
+ */
+export function placeRoadsideFeatures({ seed, cellSites, sampleTerrain, kinds, rolls, settlements, treeCover, features, stretches }: FeatureInput & { features: FeatureSite[]; stretches: RoadStretch[] }): FeatureSite[] {
+  const placed: FeatureSite[] = [];
+  const roads = stretches.filter((stretch) => stretch.roadClass !== "track");
+  // Each road's length along it, point by point, to walk it by distance.
+  const along = roads.map((stretch) => {
+    const lengths = [0];
+    for (let i = 1; i < stretch.points.length; i++) lengths.push(lengths[i - 1] + Math.hypot(stretch.points[i].x - stretch.points[i - 1].x, stretch.points[i].z - stretch.points[i - 1].z));
+    return lengths;
+  });
+  // Each road's box, to find the few near a cell without walking them all.
+  const boxes = roads.map((stretch) => {
+    const xs = stretch.points.map((p) => p.x);
+    const zs = stretch.points.map((p) => p.z);
+    return { minX: Math.min(...xs), maxX: Math.max(...xs), minZ: Math.min(...zs), maxZ: Math.max(...zs) };
+  });
+  const pointAt = (r: number, s: number): CellPoint => {
+    const { points } = roads[r];
+    const lengths = along[r];
+    let i = 1;
+    while (i < lengths.length - 1 && lengths[i] < s) i++;
+    const t = (s - lengths[i - 1]) / Math.max(1e-6, lengths[i] - lengths[i - 1]);
+    return { x: points[i - 1].x + (points[i].x - points[i - 1].x) * t, z: points[i - 1].z + (points[i].z - points[i - 1].z) * t };
+  };
+  const distanceTo = (points: CellPoint[], x: number, z: number): number => {
+    let best = Infinity;
+    for (let i = 0; i + 1 < points.length; i++) {
+      const a = points[i];
+      const b = points[i + 1];
+      const dx = b.x - a.x;
+      const dz = b.z - a.z;
+      const u = Math.max(0, Math.min(1, ((x - a.x) * dx + (z - a.z) * dz) / (dx * dx + dz * dz || 1)));
+      best = Math.min(best, Math.hypot(x - a.x - u * dx, z - a.z - u * dz));
+    }
+    return best;
+  };
+
+  for (let cell = 0; cell < cellSites.length; cell++) {
+    const index = rolls[cell];
+    if (index === NO_ROLL) continue;
+    const kind = kinds[index];
+    const spec = kind.compound;
+    if (!spec || spec.arrangement !== "roadside") continue;
+    const site = cellSites[cell];
+    const rng = mulberry32(deriveSeed(seed, FEATURE_PLACE_SALT + cell));
+    const plan = planCompound(kind, seed, rng);
+    const away = spec.site.fromSettlements ?? 0;
+    let best: { x: number; z: number; height: number; areaId: number; score: number; roadAngles: number[] } | null = null;
+    const reach = CANDIDATE_RADIUS + plan.radius + ROAD_HALF_WIDTH;
+    const near = boxes.flatMap((box, r) => (box.minX - reach < site.x && box.maxX + reach > site.x && box.minZ - reach < site.z && box.maxZ + reach > site.z ? [r] : []));
+    near.forEach((r) => {
+      const length = along[r][along[r].length - 1];
+      // Its ends are junctions or gates: kept out of the circle.
+      for (let s = plan.radius; s <= length - plan.radius; s += ROADSIDE_STEP) {
+        const p = pointAt(r, s);
+        if (Math.hypot(p.x - site.x, p.z - site.z) > CANDIDATE_RADIUS) continue;
+        const gap = Math.min(Infinity, ...settlements.map((other) => Math.hypot(other.x - p.x, other.z - p.z) - other.radius));
+        if (gap < away) continue;
+        if (![...features, ...placed].every((f) => f.settlement !== null || Math.hypot(f.x - p.x, f.z - p.z) > Math.max(MIN_FEATURE_SPACING, f.footprint + plan.radius))) continue;
+        // Nearly straight across it, both ways out from its middle.
+        const back = pointAt(r, s - plan.radius);
+        const ahead = pointAt(r, s + plan.radius);
+        const a1 = Math.atan2(p.z - back.z, p.x - back.x);
+        const a2 = Math.atan2(ahead.z - p.z, ahead.x - p.x);
+        let bend = Math.abs(a2 - a1) % (Math.PI * 2);
+        if (bend > Math.PI) bend = Math.PI * 2 - bend;
+        if (bend > ROADSIDE_MAX_BEND) continue;
+        if (near.some((o) => o !== r && distanceTo(roads[o].points, p.x, p.z) < plan.radius + ROAD_HALF_WIDTH)) continue;
+        const scored = evaluateCompound(p.x, p.z, spec, plan.radius, sampleTerrain, treeCover);
+        if (!scored) continue;
+        // The further from the towns either way the better - an inn half way between them.
+        const score = 0.5 * scored.score + 0.5 * Math.min(1, gap / Math.max(1, away * 2));
+        if (!best || score > best.score) {
+          best = { x: p.x, z: p.z, height: scored.height, areaId: scored.areaId, score, roadAngles: [Math.atan2(back.z - p.z, back.x - p.x), Math.atan2(ahead.z - p.z, ahead.x - p.x)] };
+        }
+      }
+    });
+    if (!best) continue;
+    const { x, z, height, areaId, roadAngles } = best;
+    placed.push({
+      id: 0,
+      kindIndex: index,
+      kind,
+      x,
+      z,
+      areaId,
+      footprint: plan.radius,
+      entrance: null,
+      quarry: null,
+      settlement: null,
+      compound: { ...plan, x, z, height, roadAngles },
+    });
+  }
+  return placed;
 }

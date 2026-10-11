@@ -12,7 +12,7 @@ import { layoutCompounds, settleProps, type CompoundLayout } from "../features/c
 import { createSpillField, spillMaterials, type SpillField } from "../features/spill";
 import { createTreeCover } from "../foliage/treeScatter";
 import { PAD_PAINT_OFFSET } from "../settlements/settlementConfig";
-import { NO_ROLL, placeFeatures, rollCellFeatures, type FeatureSite } from "../features/featureSites";
+import { NO_ROLL, placeFeatures, placeRoadsideFeatures, rollCellFeatures, type FeatureSite } from "../features/featureSites";
 import { createFeatureField, type FeatureField } from "../features/featureField";
 import {
   ROAD_HALF_WIDTH,
@@ -341,6 +341,17 @@ export function createTerrainSampler(seed: number, content: WorldContent): Terra
     kept.forEach((feature, id) => (feature.id = id));
     features = kept;
     featureField = createFeatureField(features);
+  }
+  // Then the compounds that stand on a road already laid (a coaching inn): placed now, on it.
+  const roadside = timed("Placing roadside features", () => placeRoadsideFeatures({ seed, cellSites: landCellSites, sampleTerrain, kinds, rolls, settlements, treeCover, features, stretches: roads.stretches }));
+  if (roadside.length > 0) {
+    features = [...features, ...roadside];
+    features.forEach((feature, id) => (feature.id = id));
+    featureField = createFeatureField(features);
+  }
+  // Each feature of a kind that names its own, named in its ground's voice.
+  for (const feature of features) {
+    if (feature.kind.names && !feature.settlement) feature.name = nameGenerator.featureNameFor(feature.kind.names, sampleTerrain(feature.x, feature.z).primaryBiome.voiceId, feature.id);
   }
   const compoundLayouts = timed("Laying out compounds", () => layoutCompounds(features, roads, sampleTerrain, seed));
   roadField = createRoadField(

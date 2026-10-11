@@ -1,0 +1,52 @@
+// Rough stone: one solid, undressed stone - a well's curb blocks, a trough hewn from a boulder, a
+// mounting block, a milestone. Grey and weathered, a coarse grain, darker where the rain runs and
+// the odd spot of lichen - no joints of its own (each piece of it is a stone; rubbleStone is a wall).
+{
+  name: "Rough Stone",
+  // Metres one repeat covers - its grain twice life size, so it reads from afar.
+  size: 5,
+  shine: 0.04,
+  texture: {
+    bumpStrength: 1.8,
+    pipeline: {
+      noises: [
+        { name: "grain", type: "fbm", octaves: 4, tileCycles: 40, amplitude: 1, persistence: 0.6, lacunarity: 2 },
+        { name: "mottle", type: "fbm", octaves: 3, tileCycles: 4, amplitude: 1, persistence: 0.5, lacunarity: 2 },
+        { name: "lichen", type: "fbm", octaves: 3, tileCycles: 14, amplitude: 1, persistence: 0.5, lacunarity: 2 },
+        { name: "pits", type: "worley", tileCycles: 22, amplitude: 1, mode: "f1" },
+      ],
+      steps: [
+        { output: "grainRaw", op: "sample", noise: "grain" },
+        { output: "mottleRaw", op: "sample", noise: "mottle" },
+        { output: "pitRaw", op: "sample", noise: "pits" },
+        {
+          output: "tone",
+          op: "colorRamp",
+          input: "mottleRaw",
+          stops: [
+            { at: -1, color: [0.42, 0.41, 0.38] },
+            { at: 0, color: [0.53, 0.52, 0.48] },
+            { at: 1, color: [0.6, 0.58, 0.53] },
+          ],
+        },
+        { output: "grainShade", op: "remap", input: "grainRaw", inMin: -1, inMax: 1, outMin: 0.82, outMax: 1.12 },
+        { output: "stone", op: "multiply", a: "tone", b: "grainShade" },
+        // Pits, darker.
+        { output: "pit", op: "mask", input: "pitRaw", at: 0.0, off: 0.07 },
+        { output: "pitColor", op: "color", value: [0.3, 0.29, 0.27] },
+        { output: "pitted", op: "mix", a: "stone", b: "pitColor", t: "pit" },
+        // Spots of pale lichen.
+        { output: "lichenRaw", op: "sample", noise: "lichen" },
+        { output: "lichenSpot", op: "mask", input: "lichenRaw", at: 0.62, off: 0.5 },
+        { output: "lichenColor", op: "color", value: [0.7, 0.72, 0.6] },
+        { output: "lichenAmount", op: "scale", input: "lichenSpot", factor: 0.6 },
+        { output: "diffuse", op: "mix", a: "pitted", b: "lichenColor", t: "lichenAmount" },
+        { output: "roughness", op: "constant", value: 0.92 },
+        { output: "pitDepth", op: "scale", input: "pit", factor: -0.25 },
+        { output: "grainBump", op: "scale", input: "grainRaw", factor: 0.12 },
+        { output: "height", op: "add", a: "pitDepth", b: "grainBump" },
+      ],
+      outputs: { diffuse: "diffuse", roughness: "roughness", height: "height" },
+    },
+  },
+}

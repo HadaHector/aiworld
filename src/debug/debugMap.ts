@@ -505,7 +505,7 @@ export function createDebugMap(
       const left = `${(x / SAMPLE_RESOLUTION) * 100}%`;
       const top = `${(y / SAMPLE_RESOLUTION) * 100}%`;
       const square = document.createElement("div");
-      square.title = `${feature.kind.name} #${feature.id}`;
+      square.title = `${feature.name ?? feature.kind.name} (${feature.kind.name} #${feature.id})`;
       square.style.cssText = `
         position: absolute; left: ${left}; top: ${top};
         width: ${FEATURE_SQUARE_PX}px; height: ${FEATURE_SQUARE_PX}px; margin: ${-FEATURE_SQUARE_PX / 2}px 0 0 ${-FEATURE_SQUARE_PX / 2}px;
@@ -514,7 +514,7 @@ export function createDebugMap(
       markerLayer.appendChild(square);
       if (!labelled) continue;
       const name = document.createElement("div");
-      name.textContent = feature.kind.name;
+      name.textContent = feature.name ?? feature.kind.name;
       name.style.cssText = `
         position: absolute; left: ${left}; top: ${top};
         transform: translate(-50%, 0); margin-top: ${FEATURE_SQUARE_PX}px;

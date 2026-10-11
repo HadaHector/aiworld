@@ -1,3 +1,5 @@
+import { VOICE_NAME_TOKENS, type FeatureNaming } from "../naming/nameGenerator";
+import { PROP_LABELS } from "../props/propTypes";
 import JSON5 from "json5";
 import type { BiomeDayNight, BiomeDefinition, BorderType, BoundaryHillStyle, TreeTintPart, TreeTintRuleDef } from "../biomes/biomeTypes";
 import type { MaterialDef, MaterialDetail, MaterialLayer } from "../materials/materialTypes";
@@ -674,7 +676,7 @@ function readSpill(obj: RawObject, reader: Reader): Spill | null {
 function readProp(id: string, obj: RawObject, reader: Reader): PropDef {
   const names = Object.keys(PROP_GENERATORS);
   const type = reader.oneOf(obj, "type", "", names);
-  reader.onlyKeys(obj, "", ["name", "type", type, "parts", "collide", "ground", "spill", "mount", "light"]);
+  reader.onlyKeys(obj, "", ["name", "type", type, "parts", "collide", "ground", "spill", "mount", "light", "label"]);
   const generator = PROP_GENERATORS[type];
   const settings: PropSettings = {};
   if (generator) {
@@ -720,7 +722,7 @@ function readProp(id: string, obj: RawObject, reader: Reader): PropDef {
     if (tints.length === 0) reader.fail(`${at}.tints`, "needs at least one colour");
     parts[part] = { material: raw.material === undefined || raw.material === null ? null : reader.string(raw, "material", at), tints: tints.length > 0 ? tints : [[1, 1, 1]] };
   }
-  return { id, name: reader.string(obj, "name", ""), generator: type, settings, parts, collide: obj.collide === undefined ? true : obj.collide === true, ground: obj.ground === undefined ? "level" : reader.oneOf(obj, "ground", "", ["level", "slope"] as const), spill: readSpill(obj, reader), mount: readMount(obj, reader), light: readLight(obj, reader) };
+  return { id, name: reader.string(obj, "name", ""), generator: type, settings, parts, collide: obj.collide === undefined ? true : obj.collide === true, ground: obj.ground === undefined ? "level" : reader.oneOf(obj, "ground", "", ["level", "slope"] as const), spill: readSpill(obj, reader), mount: readMount(obj, reader), light: readLight(obj, reader), label: obj.label === undefined ? null : reader.oneOf(obj, "label", "", PROP_LABELS) };
 }
 
 /** A rooms/ file - see RoomTypeDef. */
@@ -1367,15 +1369,15 @@ function readBuildingPart(id: string, obj: RawObject, reader: Reader): BuildingP
 
 /** A features/ file - see FeatureKindDef. */
 function readFeatureKind(id: string, obj: RawObject, reader: Reader, buildings: Map<string, BuildingDef>, props: Map<string, PropDef>, groups: Map<string, PropGroupDef>): FeatureKindDef {
-  reader.onlyKeys(obj, "", ["name", "type", "quarry", "compound", "clearing", "stumps", "road", "ground"]);
+  reader.onlyKeys(obj, "", ["name", "type", "quarry", "compound", "clearing", "stumps", "road", "ground", "names"]);
   const type = reader.oneOf(obj, "type", "", FEATURE_TYPES);
   // A settlement is laid out by its own code, in its biome's settlement style: it takes nothing else.
   if (type === "settlement") {
     reader.onlyKeys(obj, "", ["name", "type", "road"]);
-    return { id, name: reader.string(obj, "name", ""), type, quarry: null, compound: null, clearing: [0, 0], stumps: 0, road: readPlaceRoad(obj, reader, true), ground: null };
+    return { id, name: reader.string(obj, "name", ""), type, quarry: null, compound: null, clearing: [0, 0], stumps: 0, road: readPlaceRoad(obj, reader, true), ground: null, names: null };
   }
   // Each type takes its own block and not another's.
-  reader.onlyKeys(obj, "", ["name", "type", type, "clearing", "stumps", "road", "ground"]);
+  reader.onlyKeys(obj, "", ["name", "type", type, "clearing", "stumps", "road", "ground", "names"]);
   const ground = obj.ground === undefined ? null : reader.object(obj.ground, "ground");
   if (ground) reader.onlyKeys(ground, "ground", ["material", "weight"]);
   return {
@@ -1388,7 +1390,39 @@ function readFeatureKind(id: string, obj: RawObject, reader: Reader, buildings: 
     stumps: reader.optionalNumber(obj, "stumps", "", 0, { min: 0, max: 1 }),
     road: readPlaceRoad(obj, reader, false),
     ground: ground ? readLayer(ground, reader, "ground", `feature-${id}`) : null,
+    names: readNaming(obj, reader),
   };
+}
+
+/** A feature's `names` - see FeatureNaming. Every `{word}` in its patterns is one of its `words` or
+ *  one its voice gives (VOICE_NAME_TOKENS). */
+function readNaming(obj: RawObject, reader: Reader): FeatureNaming | null {
+  if (obj.names === undefined) return null;
+  const names = reader.object(obj.names, "names");
+  reader.onlyKeys(names, "names", ["patterns", "words"]);
+  const patterns = reader.array(names, "patterns", "names").map((raw, i) => {
+    const path = `names.patterns[${i}]`;
+    const entry = reader.object(raw, path);
+    reader.onlyKeys(entry, path, ["text", "odds"]);
+    return { text: reader.string(entry, "text", path), odds: reader.optionalNumber(entry, "odds", path, 1, { min: 0 }) };
+  });
+  const wordsRaw = names.words === undefined ? {} : reader.object(names.words, "names.words");
+  const words: Record<string, Record<string, string[]>> = {};
+  for (const [key, value] of Object.entries(wordsRaw)) {
+    if (Array.isArray(value)) {
+      words[key] = { any: reader.stringList(wordsRaw, key, "names.words") };
+      continue;
+    }
+    const path = `names.words.${key}`;
+    const byVoice = reader.object(value, path);
+    words[key] = Object.fromEntries(Object.keys(byVoice).map((voice) => [voice, reader.stringList(byVoice, voice, path)]));
+  }
+  patterns.forEach((pattern, i) => {
+    for (const [, token] of pattern.text.matchAll(/\{(\w+)\}/g)) {
+      if (!(token in words) && !(VOICE_NAME_TOKENS as readonly string[]).includes(token)) reader.fail(`names.patterns[${i}].text`, `no word list "${token}" (known: ${[...Object.keys(words), ...VOICE_NAME_TOKENS].join(", ")})`);
+    }
+  });
+  return { patterns, words };
 }
 
 function readQuarry(quarry: RawObject, reader: Reader): QuarrySpec {
@@ -1417,7 +1451,7 @@ function readCompound(compound: RawObject, reader: Reader, buildings: Map<string
   };
   if (pads.blend[0] < 0) reader.fail("compound.pads.blend", "is at least 0");
   const site = reader.object(compound.site, "compound.site");
-  reader.onlyKeys(site, "compound.site", ["grade", "cover", "nearWater"]);
+  reader.onlyKeys(site, "compound.site", ["grade", "cover", "nearWater", "fromSettlements"]);
   const yard = reader.object(compound.yard, "compound.yard");
   reader.onlyKeys(yard, "compound.yard", ["radius"]);
   const cover = reader.range(site, "cover", "compound.site", { allowEqual: true });
@@ -1457,6 +1491,7 @@ function readCompound(compound: RawObject, reader: Reader, buildings: Map<string
       grade: reader.range(site, "grade", "compound.site", { allowEqual: true }),
       cover,
       nearWater: site.nearWater === undefined ? null : reader.number(site, "nearWater", "compound.site", { min: 0 }),
+      fromSettlements: site.fromSettlements === undefined ? null : reader.number(site, "fromSettlements", "compound.site", { min: 0 }),
     },
     yard: { radius: reader.range(yard, "radius", "compound.yard", { allowEqual: true }) },
     pads,
@@ -1466,7 +1501,7 @@ function readCompound(compound: RawObject, reader: Reader, buildings: Map<string
     props: reader.optionalArray(compound, "props", "compound").flatMap((raw, i): CompoundPropSpec[] => {
       const path = `compound.props[${i}]`;
       const entry = reader.object(raw, path);
-      reader.onlyKeys(entry, path, ["prop", "group", "count", "chance", "at", "building"]);
+      reader.onlyKeys(entry, path, ["prop", "group", "count", "chance", "at", "building", "distance"]);
       let placed: CompoundPropSpec["placed"] | null = null;
       if ((entry.prop === undefined) === (entry.group === undefined)) reader.fail(path, "names a `prop` or a `group`, one of them");
       else if (entry.prop !== undefined) {
@@ -1486,7 +1521,10 @@ function readCompound(compound: RawObject, reader: Reader, buildings: Map<string
         if (!building) reader.fail(`${path}.building`, `no building "${String(entry.building)}"`);
       }
       if (!placed) return [];
-      return [{ placed, count, chance: reader.optionalNumber(entry, "chance", path, 1, { min: 0, max: 1 }), at: reader.oneOf(entry, "at", path, PROP_ANCHORS), building }];
+      const at = reader.oneOf(entry, "at", path, PROP_ANCHORS);
+      const distance: [number, number] = entry.distance === undefined ? [0, 0] : reader.range(entry, "distance", path, { allowEqual: true });
+      if (at === "road" && entry.distance === undefined) reader.fail(joinPath(path, "distance"), "a prop by the road needs a distance out along it");
+      return [{ placed, count, chance: reader.optionalNumber(entry, "chance", path, 1, { min: 0, max: 1 }), at, building, distance }];
     }),
   };
 }

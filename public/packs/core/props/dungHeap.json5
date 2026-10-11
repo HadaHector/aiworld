@@ -1,0 +1,15 @@
+// A dung heap: the stable's muck and straw, piled behind it - a dark, lumpy mound, longer one way,
+// the straw through it its texture's (buildingMaterials/dung.json5).
+{
+  name: "Dung Heap",
+  type: "heap",
+  heap: {
+    radius: [1.0, 1.3],
+    height: [0.9, 1.3],
+    stretch: [1.2, 1.6],
+    lumps: [0.15, 0.22],
+  },
+  parts: {
+    body: { material: "dung", tints: [[1, 1, 1], [0.92, 0.9, 0.86], [1.05, 1.0, 0.95]] },
+  },
+}

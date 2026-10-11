@@ -48,7 +48,13 @@ export interface PropDef {
   mount: Mount;
   /** The light it gives, or none (see LIGHTS.md) - where, its generator says. */
   light: PropLight | null;
+  /** What it says to a player standing by it, or nothing: `place` - the name of the place it is set
+   *  down for (a wayside sign, its inn's name). */
+  label: PropLabel | null;
 }
+
+export const PROP_LABELS = ["place"] as const;
+export type PropLabel = (typeof PROP_LABELS)[number];
 
 /**
  * The light a prop gives - a fire, a lantern, a candle: its colour, its strength, how far it reaches

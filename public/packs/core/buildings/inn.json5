@@ -44,11 +44,11 @@
     ],
     // Inside (see the README's "Interiors"): a taproom two storeys tall behind the front door, a
     // stair up to a gallery round it with guest rooms off it, a kitchen beside it, stores, and a
-    // cellar under it - and a second way out, round the back.
+    // cellar under it - and always a second way out, round the back, for the kitchen and the yard.
     interior: {
       type: "rooms",
       rooms: {
-        exits: [1, 2],
+        exits: [2, 2],
         fakeDoors: 0.4,
         rooms: [
           { room: "taproom", priority: 10, levels: [2, 2], tiles: [20, 28], grow: 1.5, minSide: 3, at: "entrance", stair: true },

@@ -1,3 +1,4 @@
+import type { FeatureNaming } from "../naming/nameGenerator";
 import type { MaterialLayer } from "../materials/materialTypes";
 import type { SettlementTier } from "../settlements/settlementConfig";
 import type { BuildingDef } from "../buildings/buildingTypes";
@@ -44,8 +45,11 @@ export interface QuarrySpec {
 }
 
 /** How a compound's buildings stand round its yard - see FEATURES.md. Each is built with the first
- *  compound that needs it: `ring`, round the yard's rim facing in, its entrances kept free. */
-export const COMPOUND_ARRANGEMENTS = ["ring"] as const;
+ *  compound that needs it: `ring`, round the yard's rim facing in, its entrances kept free - its
+ *  roads come to it; `roadside`, the same ring round a yard a road already laid runs straight
+ *  through - sited after the roads, on one (a coaching inn), its two ways in where the road
+ *  crosses its rim. */
+export const COMPOUND_ARRANGEMENTS = ["ring", "roadside"] as const;
 export type CompoundArrangement = (typeof COMPOUND_ARRANGEMENTS)[number];
 
 /** Where a compound's trail leads: `clearing` - out into the ground round it, the way furthest from
@@ -83,9 +87,11 @@ export interface CompoundBuildingSpec {
  * - `byBuilding`: beside a building (of `building`, if given), along its side near its front;
  * - `trail`: beside its trails, out past the buildings, lying along them;
  * - `gate`: across a lane's mouth, between the buildings, facing out along it (a gate) - one to a
- *   lane at most, so `count` is how many of its lanes get one.
+ *   lane at most, so `count` is how many of its lanes get one;
+ * - `road`: beside a road leading away from it, `distance` metres out along the road (a wayside
+ *   sign) - one to a way at most, as a gate is.
  */
-export const PROP_ANCHORS = ["yard", "yardEdge", "byBuilding", "trail", "gate"] as const;
+export const PROP_ANCHORS = ["yard", "yardEdge", "byBuilding", "trail", "gate", "road"] as const;
 export type PropAnchor = (typeof PROP_ANCHORS)[number];
 
 /** A prop, or a group of them, a compound sets down: `count` of it (rolled), each with `chance`,
@@ -96,6 +102,8 @@ export interface CompoundPropSpec {
   chance: number;
   at: PropAnchor;
   building: BuildingDef | null;
+  /** For `road`: how far out along the road it stands, metres from the compound's middle. */
+  distance: [number, number];
 }
 
 /**
@@ -106,8 +114,10 @@ export interface CompoundPropSpec {
 export interface CompoundSpec {
   /** The ground it wants: the grade across it within the range (rise over run); tree cover round
    *  it at least the first, the more the better up to the second (0-1, as the trees scatter by);
-   *  and a river within `nearWater` counts in its favour (null: no matter). */
-  site: { grade: [number, number]; cover: [number, number]; nearWater: number | null };
+   *  a river within `nearWater` counts in its favour (null: no matter); and at least
+   *  `fromSettlements` metres past every settlement's edge (null: no matter) - a roadside inn is
+   *  for the road between towns, not beside one. */
+  site: { grade: [number, number]; cover: [number, number]; nearWater: number | null; fromSettlements: number | null };
   /** The yard: a level round of trodden ground, this radius. */
   yard: { radius: [number, number] };
   /** How the level ground under its yard, buildings and props blends back to the ground round it -
@@ -157,6 +167,9 @@ export interface FeatureKindDef {
   stumps: number;
   /** Its place in the road network (see PlaceRoadSpec), or null for a feature nobody drives to. */
   road: PlaceRoadSpec | null;
+  /** How each of its own is named (see FeatureNaming) - shown on the map and on its signs - or null:
+   *  known by its kind's name. */
+  names: FeatureNaming | null;
   /** What the feature's ground is painted with: a material, laid over everything else, and its
    *  weight - a graph that can read `featureGap` (distance past the feature's edge, 0 inside it),
    *  `featureDepth` (how far the ground was cut or filled there) and the usual inputs. */

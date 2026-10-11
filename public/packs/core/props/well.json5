@@ -1,0 +1,24 @@
+// A well: a curb of stone blocks round its shaft, dark water down in it - most often a windlass on
+// two posts over it (a roller, a crank, a rope down to a bucket), now and then a little roof of
+// boards over that; otherwise the curb alone.
+{
+  name: "Well",
+  type: "well",
+  well: {
+    radius: [0.75, 0.95],
+    height: [0.9, 1.1],
+    frame: [2.4, 2.8],
+    windlass: 0.7,
+    roof: 0.5,
+  },
+  parts: {
+    stone: { material: "roughStone", tints: [[1, 1, 1], [0.92, 0.9, 0.86], [1.04, 1.02, 0.98]] },
+    wood: { material: "timber", tints: [[0.7, 0.6, 0.5], [0.6, 0.52, 0.45]] },
+    roof: { material: "planks", tints: [[0.75, 0.68, 0.6]] },
+    rope: { tints: [[0.55, 0.47, 0.34]] },
+    bucket: { material: "planks", tints: [[0.6, 0.5, 0.4]] },
+    // Water down a shaft: no material, nearly black.
+    water: { tints: [[0.05, 0.07, 0.08]] },
+    iron: { tints: [[0.18, 0.18, 0.19]] },
+  },
+}

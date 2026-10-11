@@ -20,6 +20,7 @@
   // Hill country: a settlement in some cells, a quarry in others, where there is a hillside to cut it into.
   features: [
     { feature: "settlement", odds: 0.8 },
+    { feature: "coachingInn", odds: 0.5 },
     { feature: "quarry", odds: 0.7 },
     { feature: "none", odds: 0.7 },
   ],

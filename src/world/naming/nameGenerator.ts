@@ -24,6 +24,20 @@ export interface Voice {
   thirdSyllableChance: number;
 }
 
+/**
+ * How a kind of feature names each of its own (a features/ file's `names`): `patterns`, one drawn
+ * per name by its odds, whose `{word}`s are filled from `words` - each a list for every voice
+ * (`any`) and lists for one voice only (by its id), drawn from together - or from the voice itself:
+ * `{keeper}` a person's name in its sounds, `{quality}` and `{feature}` from its own lists.
+ */
+export interface FeatureNaming {
+  patterns: { text: string; odds: number }[];
+  words: Record<string, Record<string, string[]>>;
+}
+
+/** The words a feature's name pattern may take from its voice rather than its own lists. */
+export const VOICE_NAME_TOKENS = ["keeper", "quality", "feature"] as const;
+
 /** Name shapes, chosen per name. A world of nothing but bare words reads as a word list; a world
  *  of nothing but "the Adjective Noun" reads as a parody. Mixing them is what makes a map of 66
  *  zones look like it was named rather than generated. */
@@ -183,6 +197,9 @@ export interface NameGenerator {
    * someone rather than naming a settlement at all.
    */
   settlementNameFor(voiceId: string, id: number): string;
+  /** A name for a feature of a kind that names its own (a coaching inn), by its kind's patterns in
+   *  the voice of the ground it stands on - from the same pool of taken names. */
+  featureNameFor(naming: FeatureNaming, voiceId: string, id: number): string;
 }
 
 const NAME_SALT = 701;
@@ -222,5 +239,20 @@ export function createNameGenerator(seed: number, voices: Record<string, Voice>)
     });
   }
 
-  return { nameFor, settlementNameFor };
+  function featureNameFor(naming: FeatureNaming, voiceId: string, id: number): string {
+    return generate("feature", voiceId, id, (rng, voice) => {
+      let roll = rng() * naming.patterns.reduce((sum, pattern) => sum + pattern.odds, 0);
+      const pattern = naming.patterns.find((p) => (roll -= p.odds) < 0) ?? naming.patterns[naming.patterns.length - 1];
+      return pattern.text.replace(/\{(\w+)\}/g, (_, token: string) => {
+        if (token === "keeper") return buildName(rng, voice);
+        if (token === "quality") return pick(rng, voice.qualities);
+        if (token === "feature") return pick(rng, voice.features);
+        const lists = naming.words[token] ?? {};
+        const pool = [...(lists.any ?? []), ...(lists[voiceId] ?? [])];
+        return pool.length > 0 ? pick(rng, pool) : token;
+      });
+    });
+  }
+
+  return { nameFor, settlementNameFor, featureNameFor };
 }

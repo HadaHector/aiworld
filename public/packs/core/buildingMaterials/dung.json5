@@ -1,0 +1,74 @@
+// Dung: a stable's muck, dark and wet in patches, with straw strewn all through it - pale bits
+// lying every way, each shading the muck beside it. The straw is a `scatter` of thin needles, as
+// the sawdust earth's splinters are.
+{
+  name: "Dung",
+  // Metres one repeat covers: straws some 15-35 cm long, twice life size.
+  size: 3,
+  shine: 0.12,
+  texture: {
+    bumpStrength: 1.6,
+    pipeline: {
+      noises: [
+        { name: "mottle", type: "fbm", octaves: 3, tileCycles: 4, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+        { name: "grain", type: "fbm", octaves: 2, tileCycles: 28, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+        // Straws: thin needles, three to a cell, most cells holding some.
+        { name: "straws", type: "scatter", tileCycles: 12, amplitude: 1, shape: "splinter", count: 3, density: 0.7, size: [0.6, 1.4], aspect: [0.06, 0.12], height: [0.5, 1] },
+      ],
+      steps: [
+        { output: "mottle", op: "sample", noise: "mottle" },
+        { output: "wet", op: "mask", input: "mottle", at: 0.5, off: -0.5 },
+        { output: "grain", op: "sample", noise: "grain" },
+        { output: "grainMask", op: "mask", input: "grain", at: 1.2, off: -1.2 },
+
+        // The muck: a brown, darker and a little greener where it is wet, grainy all over.
+        { output: "dry", op: "color", value: [0.33, 0.25, 0.16] },
+        { output: "wetMuck", op: "color", value: [0.17, 0.14, 0.09] },
+        { output: "muckTone", op: "mix", a: "dry", b: "wetMuck", t: "wet" },
+        { output: "crumb", op: "color", value: [0.4, 0.31, 0.2] },
+        { output: "crumbAmount", op: "scale", input: "grainMask", factor: 0.3 },
+        { output: "muck", op: "mix", a: "muckTone", b: "crumb", t: "crumbAmount" },
+
+        // Each straw's shadow on the muck: its coverage a few pixels down-light.
+        { output: "shadowShift", op: "constant", value: 2 },
+        { output: "strawShadowRaw", op: "sample", noise: "straws", mode: "coverage", offset: ["shadowShift", "shadowShift"] },
+        { output: "shadowDepth", op: "remap", input: "strawShadowRaw", inMin: 0, inMax: 1, outMin: 1, outMax: 0.6 },
+        { output: "shaded", op: "multiply", a: "muck", b: "shadowDepth" },
+
+        // The straws, each its own shade - fresh gold to soiled brown - lit along their ridge.
+        { output: "straw", op: "sample", noise: "straws" },
+        { output: "strawId", op: "sample", noise: "straws", mode: "cell" },
+        { output: "strawCover", op: "sample", noise: "straws", mode: "coverage" },
+        {
+          output: "strawTone",
+          op: "colorRamp",
+          input: "strawId",
+          stops: [
+            { at: 0.0, color: [0.78, 0.66, 0.38] },
+            { at: 0.45, color: [0.66, 0.54, 0.3] },
+            { at: 0.75, color: [0.5, 0.4, 0.24] },
+            { at: 1.0, color: [0.38, 0.3, 0.18] },
+          ],
+        },
+        { output: "strawRidge", op: "remap", input: "straw", inMin: 0, inMax: 1, outMin: 0.7, outMax: 1.1 },
+        { output: "strawLit", op: "multiply", a: "strawTone", b: "strawRidge" },
+        // Half sunk in the muck: wet straw is darker.
+        { output: "soiled", op: "mix", a: "strawLit", b: "wetMuck", t: "wet" },
+        { output: "strawSeen", op: "scale", input: "strawCover", factor: 0.9 },
+        { output: "diffuse", op: "mix", a: "shaded", b: "soiled", t: "strawSeen" },
+
+        // Wet muck shines a little; straw does not.
+        { output: "wetGloss", op: "remap", input: "wet", inMin: 0, inMax: 1, outMin: 0.9, outMax: 0.55 },
+        { output: "roughness", op: "max", a: "wetGloss", b: "strawCover" },
+
+        // Relief: the muck's crumb, the straws lying on it.
+        { output: "bed", op: "constant", value: 0.3 },
+        { output: "tooth", op: "scale", input: "grainMask", factor: 0.15 },
+        { output: "ground", op: "add", a: "bed", b: "tooth" },
+        { output: "strawLift", op: "scale", input: "straw", factor: 0.35 },
+        { output: "height", op: "max", a: "ground", b: "strawLift" },
+      ],
+      outputs: { diffuse: "diffuse", roughness: "roughness", height: "height" },
+    },
+  },
+}
