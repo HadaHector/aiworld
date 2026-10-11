@@ -65,10 +65,14 @@ out float vHeight;
 // x below 0 on bark. Marked by an axis longer than a limb's unit one (treeGenerator.ts's cap).
 out vec2 vCut;
 flat out float vTintRow;
+// A stump's age, 0-1 - from its instance colour's alpha, the fraction after its tint row (see
+// treeField.ts's STUMP_AGE_SCALE); 0 for a standing tree.
+flat out float vAge;
 
 void main() {
   mat4 finalWorld = world * mat4(world0, world1, world2, world3);
   vec4 worldPosition = finalWorld * vec4(position, 1.0);
+  vAge = fract(instanceColor.a) / 0.45;
   // Trees are only ever scaled uniformly, so the upper 3x3 turns normals correctly.
   mat3 turn = mat3(finalWorld);
   vNormal = normalize(turn * normal);
@@ -96,6 +100,7 @@ in float vViewDepth;
 in float vHeight;
 in vec2 vCut;
 flat in float vTintRow;
+flat in float vAge;
 ${TREE_TINT_GLSL}
 
 uniform sampler2D barkColor;
@@ -124,6 +129,20 @@ vec3 endGrain(vec2 cut) {
   return mix(wood, vec3(0.3, 0.25, 0.2), smoothstep(0.9, 0.94, out_));
 }
 
+/** A cheap value noise, 0-1, for patches of moss. */
+float hash3(vec3 p) {
+  p = fract(p * 0.3183099 + 0.1);
+  p *= 17.0;
+  return fract(p.x * p.y * p.z * (p.x + p.y + p.z));
+}
+float patches(vec3 p) {
+  vec3 i = floor(p);
+  vec3 f = fract(p);
+  f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(mix(hash3(i), hash3(i + vec3(1, 0, 0)), f.x), mix(hash3(i + vec3(0, 1, 0)), hash3(i + vec3(1, 1, 0)), f.x), f.y),
+             mix(mix(hash3(i + vec3(0, 0, 1)), hash3(i + vec3(1, 0, 1)), f.x), mix(hash3(i + vec3(0, 1, 1)), hash3(i + vec3(1, 1, 1)), f.x), f.y), f.z);
+}
+
 void main() {
   bool sawn = vCut.x >= 0.0;
   vec3 albedo = sawn ? endGrain(vCut) : max(treeTint(vTintRow, 3) * texture(barkColor, vUV).rgb, 0.0);
@@ -136,6 +155,16 @@ void main() {
 
   // Darker low down, where roots and the ground close in - a cheap stand-in for occlusion.
   float occlusion = mix(0.55, 1.0, smoothstep(-0.5, 5.0, vHeight));
+  // A stump left for years: its cut weathered grey, the bark dulled, and moss creeping over
+  // whatever faces up - in patches at first, over most of the oldest's top.
+  if (vAge > 0.0) {
+    vec3 grey = vec3(dot(albedo, vec3(0.3, 0.5, 0.2))) * vec3(0.95, 0.93, 0.88) + 0.06;
+    albedo = mix(albedo, grey, smoothstep(0.05, 0.55, vAge) * (sawn ? 0.9 : 0.5));
+    float spots = patches(vWorldPosition * 3.0) * 0.6 + patches(vWorldPosition * 9.0) * 0.4;
+    float up = sawn ? 1.0 : smoothstep(-0.3, 0.7, n.y);
+    float moss = smoothstep(1.15 - vAge * 0.5, 1.27 - vAge * 0.5, spots + up * 0.35);
+    albedo = mix(albedo, vec3(0.3, 0.4, 0.12) * (0.8 + 0.4 * spots), moss);
+  }
   // Snow along the tops of the limbs and in the crooks - on whatever faces up enough, the bark's
   // own relief breaking its edge. A trunk stands too steep to hold any.
   float snow = treeSnow(vTintRow);

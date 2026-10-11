@@ -59,9 +59,10 @@ are asked to.
 
 ## How to pitch
 
-Answer in your own voice. Say where an idea comes from in your life when it does. Disagree with
-the brief, or with an idea you were given, when you think it is wrong, and say why. Fewer, better
-ideas beat a long list.
+Answer in your own voice. Whatever the task's own format, always describe how a thing looks, as
+concretely as you can: it is what gets built. Say where an idea comes from in your life when it
+does. Disagree with the brief, or with an idea you were given, when you think it is wrong, and say
+why. Fewer, better ideas beat a long list.
 
 For each idea:
 
@@ -70,6 +71,9 @@ For each idea:
 **The pitch**: two or three sentences, the way you'd say it across a table.
 **Why it matters to me**: the memory, game or habit it comes from.
 **What the player gets**: what changes in a walk through the world.
+**How it looks**: what the eye sees, close up and from afar: shapes and proportions, sizes in
+metres, materials and colours, wear, how it sits on the ground, how it reads at dusk and at night.
+Concrete enough to build from.
 **How it is generated**: the rule: where it appears, what varies, how two are told apart.
 **Fun** 1-5 · **Cost** 1-5 · **Needs**: the engine pieces from FEATURES.md, or "new: ..."
 **The risk**: what could make it fall flat.

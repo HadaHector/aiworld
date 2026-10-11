@@ -1,0 +1,17 @@
+// A field gate where a lane comes in: two posts across the lane, a railed and braced leaf hung on
+// one of them standing open, and a short run of rail fence out from each post. Never shut - a
+// lane's gate is its only way in.
+{
+  name: "Gate",
+  type: "gate",
+  gate: {
+    opening: [3.8, 4.4],
+    height: [1.5, 1.7],
+    open: [70, 110],
+    wings: [1.5, 3],
+  },
+  parts: {
+    posts: { material: "roundLog", tints: [[1, 1, 1], [0.88, 0.84, 0.8]] },
+    rails: { material: "timber", tints: [[0.78, 0.7, 0.6], [0.68, 0.6, 0.52]] },
+  },
+}

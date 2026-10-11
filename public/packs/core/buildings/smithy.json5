@@ -29,6 +29,8 @@
       { part: "stoneChimney", priority: 2, chance: 0.3, maxCount: 1, walls: ["side", "back"] },
       { part: "stoneWindow", priority: 1, chance: 0.12 },
     ],
+    // Its windows with a lamp behind them at night, this share of them.
+    litWindows: 0.3,
     parts: {
       walls: { material: "rubbleStone", tints: [[1, 1, 1], [0.86, 0.84, 0.82], [0.95, 0.9, 0.84]] },
       timber: { material: "timber", tints: [[0.45, 0.4, 0.38], [0.38, 0.34, 0.32]] },

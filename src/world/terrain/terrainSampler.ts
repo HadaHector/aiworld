@@ -64,6 +64,8 @@ export interface TerrainSample {
   featureClear: number;
   /** The share of the trees cleared here left as stumps, 0-1 (see FeatureGround.stumps). */
   featureStumps: number;
+  /** How long ago a tree cut here was felled, 0-1 (see FeatureGround.stumpAge). */
+  featureStumpAge: number;
   /** How far (0-1) a prop's or building's spill paints the ground here, and which of
    *  spillMaterials it is (-1 for none) - see features/spill.ts. */
   spill: number;
@@ -288,6 +290,7 @@ export function createTerrainSampler(seed: number, content: WorldContent): Terra
       featureDepth: feature ? feature.depth : 0,
       featureClear: feature ? feature.clear : 0,
       featureStumps: feature ? feature.stumps : 0,
+      featureStumpAge: feature ? feature.stumpAge : 0,
       ...spillAt(worldX, worldZ),
     };
   }

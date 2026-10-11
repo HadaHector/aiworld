@@ -451,6 +451,8 @@ const PROP_RIM_STEPS = 72;
 const YARD_PATH_CLEARANCE = 2.5;
 /** In the yard, a prop is tried on rings this far apart, and this far apart round each. */
 const YARD_STEP = 2.5;
+/** A lane's gate stands this far out past the yard's rim - back among the buildings' sides. */
+const GATE_SET_BACK = 3;
 
 /**
  * Sets a compound's props down by their anchors, in their list's order: each where it fits - clear
@@ -482,11 +484,14 @@ function placeProps(
   });
   // The ways across the yard: from where each lane and trail meets it to its middle.
   const paths: CellPoint[][] = [...lanes.map((line) => line.points[line.points.length - 1]), ...trails.map((line) => line.points[0])].map((end) => [end, { x: at.x, z: at.z }]);
-  const fits = (box: Box, limit: number | null, onTrail: RoadLine | null): boolean => {
+  /** The lanes with a gate across them already. */
+  const gated = new Set<RoadLine>();
+  // A gate stands across its lane: only the other ways are kept clear of it.
+  const fits = (box: Box, limit: number | null, onTrail: RoadLine | null, acrossLane: RoadLine | null = null): boolean => {
     if (limit !== null && corners(box).some((p) => Math.hypot(p.x - at.x, p.z - at.z) > limit)) return false;
-    if (paths.some((path) => lineToBox(path, box) < YARD_PATH_CLEARANCE)) return false;
+    if (!acrossLane && paths.some((path) => lineToBox(path, box) < YARD_PATH_CLEARANCE)) return false;
     if (houseBoxes.some((house) => boxGap(house, box) < PROP_GAP) || aprons.some((apron) => boxGap(apron, box) < 0)) return false;
-    if (lanes.some((line) => lineToBox(line.points, box) < PROP_LANE_CLEARANCE)) return false;
+    if (lanes.some((line) => line !== acrossLane && lineToBox(line.points, box) < PROP_LANE_CLEARANCE)) return false;
     if (trails.some((line) => line !== onTrail && lineToBox(line.points, box) < PROP_LANE_CLEARANCE)) return false;
     if (onTrail && lineToBox(onTrail.points, box) < PROP_TRAIL_OFFSET - 0.01) return false;
     if (roads.some((line) => distanceToLine(line.points, box.x, box.z) < Math.hypot(box.hw, box.hd) + ROAD_HALF_WIDTH + 1)) return false;
@@ -507,7 +512,7 @@ function placeProps(
       const r = arranged.reach;
       /** Candidates: where, which way it faces, the trail it lies by, and how far from the middle it
        *  may reach (null: no matter). */
-      const candidates: { x: number; z: number; fx: number; fz: number; trail: RoadLine | null; limit: number | null }[] = [];
+      const candidates: { x: number; z: number; fx: number; fz: number; trail: RoadLine | null; limit: number | null; lane?: RoadLine }[] = [];
       /** Where its footprint lies, set down as a candidate says. */
       const boxAt = (c: (typeof candidates)[number]): Box => {
         const length = Math.hypot(c.fx, c.fz) || 1;
@@ -554,6 +559,16 @@ function placeProps(
           }
           for (let u = -hw + r; u <= hw - r; u += 1.5) candidates.push(at(u, -(hd + r + PROP_GAP + 0.05)));
         }
+      } else if (entry.at === "gate") {
+        // Across a lane not gated yet, out past the yard's rim, facing out along it.
+        const open = lanes.filter((line) => !gated.has(line));
+        if (open.length === 0) continue;
+        for (const lane of shuffled(open, rng)) {
+          const outer = lane.points[0];
+          const angle = Math.atan2(outer.z - at.z, outer.x - at.x);
+          const radius = at.rim + GATE_SET_BACK;
+          candidates.push({ x: at.x + Math.cos(angle) * radius, z: at.z + Math.sin(angle) * radius, fx: Math.cos(angle), fz: Math.sin(angle), trail: null, limit: null, lane });
+        }
       } else {
         // Beside a trail, out past the buildings, lying along it.
         for (const trail of trails) {
@@ -586,20 +601,22 @@ function placeProps(
       let bestSpread = -Infinity;
       for (const c of candidates) {
         const box = boxAt(c);
-        if (!fits(box, c.limit, c.trail)) continue;
+        if (!fits(box, c.limit, c.trail, c.lane ?? null)) continue;
         const score = spread(box) + rng() * 2;
         if (score > bestSpread) {
           bestSpread = score;
           best = c;
           bestBox = box;
-          // Along a building or a trail, the first that fits - near the front, near the yard.
-          if (entry.at === "byBuilding" || entry.at === "trail") break;
+          // Along a building or a trail, the first that fits - near the front, near the yard; a gate
+          // on the first lane it fits.
+          if (entry.at === "byBuilding" || entry.at === "trail" || entry.at === "gate") break;
         }
       }
       if (!best) {
         droppedProps.push(entry.placed.kind === "prop" ? entry.placed.prop.id : entry.placed.group.id);
         continue;
       }
+      if (best.lane) gated.add(best.lane);
       const length = Math.hypot(best.fx, best.fz) || 1;
       props.push(...setDown(arranged, best.x, best.z, best.fx / length, best.fz / length, down.length));
       down.push(bestBox!);

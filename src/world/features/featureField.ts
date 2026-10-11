@@ -17,6 +17,9 @@ export interface FeatureGround {
   /** 0-1: the share of the trees cleared here left as stumps (FeatureKindDef.stumps) - none inside
    *  a compound's own circle, where its yard and buildings are. */
   stumps: number;
+  /** 0-1: how long ago a tree cut here was felled - 1 by the compound's circle, where the work
+   *  began, 0 out where its clearing ends: a camp works its way out into the wood. */
+  stumpAge: number;
 }
 
 export interface FeatureField {
@@ -25,7 +28,7 @@ export interface FeatureField {
 }
 
 const BUCKET_SIZE = 128;
-const NONE_HERE = { kind: -1, gap: Infinity, depth: 0, clear: 0, stumps: 0 };
+const NONE_HERE = { kind: -1, gap: Infinity, depth: 0, clear: 0, stumps: 0, stumpAge: 0 };
 /** How much cut or fill counts as ground a feature took, for clearing. */
 const CLEAR_DEPTH: [number, number] = [0.3, 1.0];
 
@@ -87,7 +90,8 @@ export function createFeatureField(features: FeatureSite[]): FeatureField {
     const clear = Math.max(1 - smoothstep(inner, outer, nearestGap), smoothstep(CLEAR_DEPTH[0], CLEAR_DEPTH[1], depth));
     const site = nearest.compound;
     const stumps = site && nearestGap > site.radius - site.yardRadius ? nearest.kind.stumps : 0;
-    return { height, kind: nearest.kindIndex, gap: nearestGap, depth, clear, stumps };
+    const stumpAge = site ? 1 - smoothstep(site.radius - site.yardRadius, outer, nearestGap) : 0;
+    return { height, kind: nearest.kindIndex, gap: nearestGap, depth, clear, stumps, stumpAge };
   }
 
   return { apply };

@@ -69,6 +69,8 @@ uniform float shines[${MAX_BUILDING_MATERIALS}];
 uniform float glows[${MAX_BUILDING_MATERIALS}];
 // Per material: how far it is drawn with the daylight through it (a pane seen from inside).
 uniform float daylights[${MAX_BUILDING_MATERIALS}];
+// Per material: the lamp it glows with as the day fails (a lit window seen from outside), or black.
+uniform vec3 lamps[${MAX_BUILDING_MATERIALS}];
 // The house's own lights, baked (see LIGHTS.md): their light in their colours, and the strength of
 // the daylight its windows let in - lit by the sky as it is now. Off for a mesh with none.
 uniform sampler2D lightmap;
@@ -87,6 +89,7 @@ void main() {
   float shine = 0.0;
   float glow = 0.0;
   float through = 0.0;
+  vec3 lamp = vec3(0.0);
   vec3 surfaceNormal = n;
   if (vLayer >= 0) {
     vec3 at = vec3(vUV / sizes[vLayer], float(vLayer));
@@ -96,6 +99,7 @@ void main() {
     shine = shines[vLayer];
     glow = glows[vLayer];
     through = daylights[vLayer];
+    lamp = lamps[vLayer];
     // The texture's own bumps: its u along the face's tangent, its v along normal x tangent.
     vec3 bump = texture(normalArray, at).xyz * 2.0 - 1.0;
     vec3 t = normalize(vTangent - n * dot(vTangent, n));
@@ -128,6 +132,12 @@ void main() {
     + sky * fresnel * shine;
   lit = mix(lit, albedo, glow);
   lit = mix(lit, albedo * daylight, through);
+  // A lamp behind it, showing as the daylight it would be drowned in fails: from dusk to dawn, and on
+  // a dark enough day.
+  if (lamp != vec3(0.0)) {
+    float dark = 1.0 - smoothstep(0.3, 0.65, dot(daylight, vec3(0.3, 0.59, 0.11)));
+    lit = mix(lit, lamp, dark);
+  }
   outColor = vec4(applyFog(lit, length(vPositionFromCamera)), 1.0);
 }
 `;
@@ -191,7 +201,7 @@ export function createBuildingMaterial(scene: Scene, litShading: LitShading, tex
 
   const material = new ShaderMaterial("texturedBuilding", scene, "texturedBuilding", {
     attributes: ["position", "normal", "btangent", "uv", "layer", "color", "lightUv"],
-    uniforms: ["world", "view", "projection", "sizes", "shines", "glows", "daylights", "lightmapOn", ...LIT_SHADING_UNIFORMS],
+    uniforms: ["world", "view", "projection", "sizes", "shines", "glows", "daylights", "lamps", "lightmapOn", ...LIT_SHADING_UNIFORMS],
     samplers: ["colorArray", "normalArray", "lightmap", ...LIT_SHADING_SAMPLERS],
   });
   material.setTexture("colorArray", colorArray);
@@ -200,7 +210,9 @@ export function createBuildingMaterial(scene: Scene, litShading: LitShading, tex
   const shines = new Array<number>(MAX_BUILDING_MATERIALS).fill(0);
   const glows = new Array<number>(MAX_BUILDING_MATERIALS).fill(0);
   const daylights = new Array<number>(MAX_BUILDING_MATERIALS).fill(0);
+  const lamps = new Array<number>(MAX_BUILDING_MATERIALS * 3).fill(0);
   materials.forEach((def, i) => {
+    if (def.lamp) lamps.splice(i * 3, 3, ...def.lamp);
     sizes[i * 2] = def.size[0];
     sizes[i * 2 + 1] = def.size[1];
     shines[i] = def.shine;
@@ -211,6 +223,7 @@ export function createBuildingMaterial(scene: Scene, litShading: LitShading, tex
   material.setFloats("shines", shines);
   material.setFloats("glows", glows);
   material.setFloats("daylights", daylights);
+  material.setArray3("lamps", lamps);
   // One side only, the back faces culled: every face is wound counter-clockwise seen from the side it
   // faces (see ModelBuilder.fan) - in the model's own right-handed sense, which Babylon's left-handed
   // view sees as clockwise.

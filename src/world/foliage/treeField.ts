@@ -19,6 +19,10 @@ function speciesKey(kind: string, variant: number, far: boolean, stump = false):
   return `${kind}#${variant}${stump ? "~stump" : far ? "~far" : ""}`;
 }
 
+/** A stump's age (0-1) is kept as this share of a unit in its instance colour's alpha, after its
+ *  tint row - below a half, so the row still rounds to itself. */
+const STUMP_AGE_SCALE = 0.45;
+
 export interface TreeField {
   /** Replaces whatever trees were registered under this key. `level` is the chunk's level of detail
    *  (0 the finest): beyond the first, trees are drawn with their cheaper far model, if they have one. */
@@ -272,7 +276,8 @@ export async function createTreeField(
       // here; every other kind's shaders apply it to the finished colour, from the row in alpha.
       if (!shaderTint && row > 0) colour = applyColorMatrix(tintRows[row].leaves, colour);
       block.colours.set(colour, at * 4);
-      block.colours[at * 4 + 3] = shaderTint ? row : 1;
+      // A stump's age rides in the alpha's fraction, under its row (see the bark shader's vAge).
+      block.colours[at * 4 + 3] = shaderTint ? row + (tree.stump ? (tree.age ?? 0) * STUMP_AGE_SCALE : 0) : 1;
     });
     return blocks;
   }

@@ -43,6 +43,8 @@
       { part: "wideWindow", priority: 1, chance: 0.15, storeys: ["upper"] },
       { part: "timberWindow", priority: 1, chance: 0.4 },
     ],
+    // Its windows with a lamp behind them at night, this share of them.
+    litWindows: 0.45,
     parts: {
       walls: { material: "plaster", tints: [[1.05, 0.88, 0.7], [0.85, 0.92, 0.98], [0.98, 0.82, 0.8], [0.9, 0.98, 0.86], [1.05, 1.0, 0.82]] },
       timber: { material: "timber", tints: [[0.42, 0.36, 0.34], [0.55, 0.5, 0.46]] },

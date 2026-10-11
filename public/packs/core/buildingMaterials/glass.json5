@@ -6,6 +6,8 @@
   shine: 1,
   // Seen from inside a room: the day through it.
   inside: "dayPane",
+  // A window with a lamp behind it at night (see a house's litWindows).
+  lit: "litGlass",
   texture: {
     bumpStrength: 0.25,
     pipeline: {

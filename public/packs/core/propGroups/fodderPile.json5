@@ -1,0 +1,12 @@
+// Fodder for the oxen: sacks of oats leant together by the stable, now and then one laid on them,
+// and a barrel of salt.
+{
+  name: "Fodder Pile",
+  members: [
+    { prop: "sack", at: [0, 0], turn: [0, 360] },
+    { prop: "sack", at: [1.0, 0.15], turn: [0, 360] },
+    { prop: "sack", at: [0.5, -0.85], turn: [0, 360], chance: 0.7 },
+    { prop: "sack", at: [-1.0, 0.1], turn: [0, 360], chance: 0.5 },
+    { prop: "barrel", at: [2.3, -0.3], chance: 0.6 },
+  ],
+}

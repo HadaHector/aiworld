@@ -149,3 +149,102 @@ export const barrel: PropGenerator = {
     }
   },
 };
+
+/**
+ * A grindstone for the axes: a stone wheel on an iron axle across a frame of rails on four legs, a
+ * crank on the axle's end, and a trough of water under the wheel for it to turn through.
+ */
+export const grindstone: PropGenerator = {
+  doc: "A grindstone - a stone wheel in a wooden frame, a crank, a water trough under it.",
+  params: {
+    radius: { kind: "range", default: [0.6, 0.78], min: 0.2, doc: "the wheel's radius" },
+    thickness: { kind: "range", default: [0.22, 0.32], min: 0.05, doc: "the wheel's thickness" },
+    height: { kind: "range", default: [1.25, 1.4], min: 0.4, doc: "the axle's height" },
+  },
+  parts: ["frame", "stone", "trough", "water", "iron"],
+  build(ctx) {
+    const { shape } = ctx;
+    const r = ctx.range("radius");
+    const t = ctx.range("thickness");
+    // The wheel's foot dips into the trough under it.
+    const h = Math.max(ctx.range("height"), r + 0.45);
+    const frame = ctx.paint("frame");
+    const iron = ctx.paint("iron");
+    const stone = ctx.paint("stone");
+    shape.cylinder(between(ORIGIN, [0, h, -t / 2], [0, h, t / 2]), t, r, stone, { ends: stone, collide: true, sides: ctx.far ? 8 : 16 });
+    // The rails either side of the wheel, along it, the axle resting on them; a leg under each end.
+    const leg = 0.16;
+    const half = r + 0.35;
+    const railZ = t / 2 + 0.12 + leg / 2;
+    for (const side of [-1, 1]) {
+      shape.beam(ORIGIN, [-half, h - 0.08, side * railZ], [half, h - 0.08, side * railZ], leg, leg, frame, { collide: true });
+      for (const end of [-1, 1]) {
+        // Splayed a little out at the foot.
+        shape.beam(ORIGIN, [end * (half - leg), 0, side * (railZ + 0.12)], [end * (half - leg), h - 0.08 - leg / 2, side * railZ], leg, leg, frame, { collide: true, taper: [0.85, 1] });
+      }
+    }
+    // The trough between the legs, its water just over the wheel's foot.
+    const troughTop = h - r + 0.14;
+    const troughHalf: Vec3 = [r * 0.8, troughTop / 2, t / 2 + 0.1];
+    shape.box(moved(ORIGIN, [0, troughTop / 2, 0]), troughHalf, ctx.paint("trough"), { bottom: false, top: ctx.paint("water"), collide: true });
+    if (ctx.far) return;
+    // The axle through the wheel and out over the rails, on the crank's side further.
+    const reach = railZ + leg / 2 + 0.25;
+    shape.cylinder(between(ORIGIN, [0, h, -railZ - leg / 2 - 0.05], [0, h, reach]), railZ + leg / 2 + 0.05 + reach, 0.045, iron, { ends: iron, sides: 6 });
+    // The crank: an arm down off the axle's end, a handle out from its foot.
+    const arm = 0.35;
+    const turn = ctx.rng() * Math.PI * 2;
+    const foot: Vec3 = [Math.sin(turn) * arm, h - Math.cos(turn) * arm, reach];
+    shape.beam(ORIGIN, [0, h, reach], foot, 0.06, 0.06, iron);
+    shape.cylinder(between(ORIGIN, foot, [foot[0], foot[1], reach + 0.3]), 0.3, 0.05, frame, { ends: frame, sides: 6 });
+  },
+};
+
+/**
+ * A field gate where a lane comes in: two posts across the lane, a leaf of rails and a brace hung on
+ * one of them and swung open into the place - never shut: a lane's gate is its only way in - and
+ * a short run of rail fence out from each post. Its front (+z) faces out along the lane.
+ */
+export const gate: PropGenerator = {
+  doc: "A field gate - two posts, a railed leaf swung open, a little fence out from each post.",
+  params: {
+    opening: { kind: "range", default: [3.8, 4.4], min: 1, doc: "between the posts" },
+    height: { kind: "range", default: [1.5, 1.7], min: 0.5, doc: "the leaf's height" },
+    open: { kind: "range", default: [70, 110], min: 10, doc: "how far the leaf stands open (degrees)" },
+    wings: { kind: "range", default: [1.5, 3], min: 0, doc: "how far the fence runs out from each post" },
+  },
+  parts: ["posts", "rails"],
+  build(ctx) {
+    const { shape, rng } = ctx;
+    const opening = ctx.range("opening");
+    const h = ctx.range("height");
+    const open = (ctx.range("open") * Math.PI) / 180;
+    const wings = ctx.range("wings");
+    const posts = ctx.paint("posts");
+    const rails = ctx.paint("rails");
+    const post = 0.3;
+    const postTop = h + 0.35;
+    const postX = opening / 2 + post / 2;
+    for (const side of [-1, 1]) shape.box(moved(ORIGIN, [side * postX, postTop / 2, 0]), [post / 2, postTop / 2, post / 2], posts, { bottom: false, collide: true, taper: [1, 0.9], taperAxis: "y" });
+    // The leaf, from its hinge by one post, swung back (toward -z, into the place).
+    const hinge = rng() < 0.5 ? -1 : 1;
+    const leafFrame = turned(moved(ORIGIN, [hinge * opening / 2, 0, -post / 2 - 0.08]), "y", hinge < 0 ? open : Math.PI - open);
+    const length = opening - 0.1;
+    const bar = 0.1;
+    const foot = 0.25;
+    const railYs = ctx.far ? [foot, h] : [foot, foot + (h - foot) * 0.35, foot + (h - foot) * 0.68, h];
+    railYs.forEach((y, i) => shape.beam(leafFrame, [0, y, 0], [length, y, 0], bar, i === railYs.length - 1 ? bar * 1.4 : bar, rails, { collide: i === 0 || i === railYs.length - 1 }));
+    // Its stiles at each end, and a brace from the hinge's foot up to the far top.
+    for (const x of [bar / 2, length - bar / 2]) shape.beam(leafFrame, [x, foot - bar, PROUD], [x, h + bar * 0.7, PROUD], bar * 1.3, bar, rails, { collide: true });
+    if (!ctx.far) shape.beam(leafFrame, [bar * 1.5, foot + bar, -PROUD], [length - bar * 1.5, h - bar, -PROUD], bar, bar * 0.8, rails);
+    // The fence out from each post: two rails to a post at its end, another half way if it is long.
+    if (wings <= 0.3) return;
+    for (const side of [-1, 1]) {
+      const from = side * (postX + post / 2);
+      const to = side * (postX + post / 2 + wings);
+      const stakes = wings > 2.5 ? [to - side * wings / 2, to] : [to];
+      for (const x of stakes) shape.box(moved(ORIGIN, [x, (h + 0.15) / 2, 0]), [0.1, (h + 0.15) / 2, 0.1], posts, { bottom: false, collide: true });
+      for (const y of [h * 0.45, h * 0.9]) shape.beam(ORIGIN, [from, y, 0.12], [to + side * 0.1, y, 0.12], 0.09, 0.12, rails, { collide: true });
+    }
+  },
+};

@@ -169,6 +169,10 @@ Phase 1 is in, and the drawing half of phase 2, in the workbench only:
   shadow, the lights - and of the bake's code (`virtual:light-bake-code-hash`), so a changed house,
   content or bake bakes again. Looked up and kept by the worker; the texture cache's Clear clears it
   too.
+- Windows lit at night, from outside: a house's `litWindows` (0-1) is the share of its windows with
+  a lamp behind them - lived-in houses only; barns, sheds and stables have none. Their glass is its
+  material's `lit` (glass: `litGlass`), whose `lamp` colour it is drawn in as the daylight fails
+  (dusk to dawn, or a dark enough day) - glowing, not lighting anything round it.
 
 Open: indoors the sky's ambient light is as strong as outdoors, everywhere - so a window's light
 hardly shows by day. Not yet: the workbench's own Lights view.

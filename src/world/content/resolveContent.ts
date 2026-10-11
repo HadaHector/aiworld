@@ -252,8 +252,10 @@ export function resolveContent(packs: PackSource[]): WorldContent {
   const buildingMaterials = readAll("buildingMaterials", (e, o, r) => readBuildingMaterial(e.id, o, r));
   const buildingMaterialIds = new Set(buildingMaterials.map((m) => m.id));
   const insideOf = new Map(buildingMaterials.map((m) => [m.id, m.inside]));
+  const litOf = new Map(buildingMaterials.map((m) => [m.id, m.lit]));
   for (const m of buildingMaterials) {
     if (m.inside !== null && !buildingMaterialIds.has(m.inside)) issues.push({ file: `buildingMaterials/${m.id}`, path: "inside", message: `no building material "${m.inside}" (known: ${[...buildingMaterialIds].join(", ")})` });
+    if (m.lit !== null && !buildingMaterialIds.has(m.lit)) issues.push({ file: `buildingMaterials/${m.id}`, path: "lit", message: `no building material "${m.lit}" (known: ${[...buildingMaterialIds].join(", ")})` });
   }
   const buildingParts = readAll("buildingParts", (e, o, r) => readBuildingPart(e.id, o, r));
   const partById = new Map(buildingParts.map((part) => [part.id, part]));
@@ -290,6 +292,8 @@ export function resolveContent(packs: PackSource[]): WorldContent {
       }
       // What it is seen as from inside, its material's say.
       if (def.house && id !== undefined) def.house.parts[part].inside = insideOf.get(id) ?? null;
+      // And where a lamp burns behind it.
+      if (def.house && id !== undefined) def.house.parts[part].lit = litOf.get(id) ?? null;
     }
   }
   const buildingById = new Map(buildings.map((building) => [building.id, building]));
@@ -601,7 +605,7 @@ function readFeatureChances(obj: RawObject, reader: Reader): FeatureChance[] {
 
 /** A buildingMaterials/ file - see BuildingMaterialDef. */
 function readBuildingMaterial(id: string, obj: RawObject, reader: Reader): BuildingMaterialDef {
-  reader.onlyKeys(obj, "", ["name", "texture", "size", "shine", "glow", "daylight", "inside"]);
+  reader.onlyKeys(obj, "", ["name", "texture", "size", "shine", "glow", "daylight", "inside", "lit", "lamp"]);
   const size = obj.size;
   let repeat: [number, number] = [1, 1];
   if (typeof size === "number" && size > 0) repeat = [size, size];
@@ -616,6 +620,8 @@ function readBuildingMaterial(id: string, obj: RawObject, reader: Reader): Build
     glow: reader.optionalNumber(obj, "glow", "", 0, { min: 0, max: 1 }),
     daylight: reader.optionalNumber(obj, "daylight", "", 0, { min: 0, max: 1 }),
     inside: obj.inside === undefined || obj.inside === null ? null : reader.string(obj, "inside", ""),
+    lit: obj.lit === undefined || obj.lit === null ? null : reader.string(obj, "lit", ""),
+    lamp: obj.lamp === undefined || obj.lamp === null ? null : reader.color(obj, "lamp", ""),
   };
 }
 
@@ -806,7 +812,7 @@ function readBuilding(id: string, obj: RawObject, reader: Reader, partById: Map<
   let house: BuildingDef["house"] = null;
   if (generator === "house") {
     const path = "house";
-    reader.onlyKeys(block, path, ["tile", "width", "depth", "plan", "storeys", "cellars", "wallHeight", "upperHeight", "cellarHeight", "plinth", "plinthOutset", "framing", "jetty", "roof", "doors", "wallExtras", "parts", "interior"]);
+    reader.onlyKeys(block, path, ["tile", "width", "depth", "plan", "storeys", "cellars", "wallHeight", "upperHeight", "cellarHeight", "plinth", "plinthOutset", "framing", "jetty", "roof", "doors", "wallExtras", "parts", "interior", "litWindows"]);
     // A list of building parts, each with a weight.
     const partNamed = (entry: RawObject, at: string, key = "part"): BuildingPartDef | undefined => {
       const partId = reader.string(entry, key, at);
@@ -1103,6 +1109,7 @@ function readBuilding(id: string, obj: RawObject, reader: Reader, partById: Map<
       wallExtras,
       parts,
       interior: readInterior(),
+      litWindows: reader.optionalNumber(block, "litWindows", path, 0, { min: 0, max: 1 }),
     };
   }
   return { id, name: reader.string(obj, "name", ""), generator, boxes, house, spill: readSpill(obj, reader) };

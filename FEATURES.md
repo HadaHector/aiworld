@@ -52,6 +52,7 @@ brainstorm, not yet a plan: a pool to pick from, weighed so the cheap, striking 
 | Ranch / cattle corrals and a water trough | M | open flat | savanna, red bush, sage hills | 1, 3 | 3 | 2 |
 | Apiary: skeps or hives on a bench | S | a flowery slope | meadow, heather moor, maquis | 3 | 2 | 1 |
 | Logging camp: stumps, log piles, bunkhouse | M | dense wood | snowy taiga, autumn wood, bluebell wood | 1, 3, clearing as stumps | 4 | 2 |
+| Abandoned logging camp: the same camp given up - roofs sagging, the yard greening, the felling grown back with birch and rowan, logs rotting where they lay, no fire or lamp | M | dense wood | snowy taiga, autumn wood, bluebell wood | the camp's own kind, own buildings and props (not a general condition) | 5 | 3 |
 | Charcoal burners: smoking earth mounds, wood stacks | S-M | in the wood | bluebell wood, autumn wood | 3, 4 (mounds), 9 (smoke) | 4 | 2 |
 | Quarry (exists) | M | a hillside | maquis, heather moor, windswept fell | - | 3 | done |
 | Mine: an adit in the hill, spoil heaps, a winch house, ore carts | M | a hillside | (Mountains), windswept fell, desert range | 4 (adit: the quarry cut plus a hole) | 4 | 3 |
@@ -223,7 +224,10 @@ What the features above keep asking for, roughly by how much each unlocks.
 8. **Linear features.** Walls, aqueducts, beacon chains and old roads, which cross cells. This is
    the heaviest piece, and should come last.
 9. **Effects.** Smoke (kilns, charcoal, chimneys), steam (hot springs), turning wheels and sails,
-   glow and floating stones for magic.
+   glow and floating stones for magic. Chimney smoke first: a thin plume from the chimneys of
+   buildings people live in (none from a shed or an empty house - its absence is a clue too), bent
+   by the weather's wind and pressed down in rain, kept thin and short so every camp and village
+   does not become a landmark from every hill.
 
 ## A possible first slice
 

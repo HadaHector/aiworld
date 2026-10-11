@@ -45,6 +45,8 @@
     // What each part is made of (see buildingMaterials/), and the tints - one picked per house - its
     // colour is multiplied by: 1 is the material as it is. Timber is the posts, the frames, and the
     // boards under the roof and along its edges.
+    // Its windows with a lamp behind them at night, this share of them.
+    litWindows: 0.5,
     parts: {
       walls: { material: "plaster", tints: [[1, 1, 1], [1.02, 0.95, 0.82], [0.95, 0.88, 0.76], [0.9, 0.93, 0.95]] },
       timber: { material: "timber", tints: [[0.6, 0.55, 0.5], [0.8, 0.75, 0.7], [0.5, 0.45, 0.42]] },

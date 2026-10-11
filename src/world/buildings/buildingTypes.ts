@@ -39,6 +39,12 @@ export interface BuildingMaterialDef {
   /** The material it is seen as from inside a room, where it is not itself - glass, seen from
    *  inside as the day through it - or none. */
   inside: string | null;
+  /** The material it is drawn as where a lamp burns behind it (glass: a window lit at night - see
+   *  HouseSpec.litWindows), or none. */
+  lit: string | null;
+  /** The colour it glows as the day fails, as if a lamp burned behind it - itself by day, the lamp's
+   *  by night - or none. */
+  lamp: Rgb | null;
 }
 
 /** How one face of a building is drawn: a building material (by id - null for plain colour), and a
@@ -111,7 +117,10 @@ export interface HouseSpec {
   wallExtras: WallExtra[];
   /** What each part is made of, and the tints - one picked per house - its colour is multiplied by.
    *  Timber is the posts, the frames, and the roof's underside and edges. */
-  parts: Record<HousePart, { material: string; tints: Rgb[]; inside?: string | null }>;
+  parts: Record<HousePart, { material: string; tints: Rgb[]; inside?: string | null; lit?: string | null }>;
+  /** 0-1: the share of its windows with a lamp behind them at night, glowing (their glass's `lit`) -
+   *  a house people live in; none for a barn or a shed. */
+  litWindows: number;
   /** What is inside it - a generator and its settings - or null: a house nobody goes into, its doors
    *  shut and nothing behind its walls. */
   interior: InteriorSpec | null;

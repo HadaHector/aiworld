@@ -35,16 +35,20 @@
       { building: "stable", count: [1, 1], chance: 0.5 },
       { building: "toolShed", count: [1, 1], chance: 0.6 },
     ],
-    // Its props, set down where they fit, each kind in turn: in the yard, decks of logs waiting to
-    // be hauled, logs dragged in and lying about, and the saw spot; log stacks round its edge; a
-    // wood corner by the cookhouse (or any building), store piles by the buildings; and felled logs
-    // along the skid trail.
+    // Its props, set down where they fit, each kind in turn: a gate across each lane, standing
+    // open; in the yard, decks of logs waiting to be hauled, logs dragged in and lying about, and
+    // the saw spot; log stacks round its edge; a wood corner by the cookhouse (or any building), a
+    // grindstone for the axes by the tool shed, oats for the oxen by the stable, store piles by the
+    // buildings; and felled logs along the skid trail.
     props: [
+      { prop: "gate", count: [2, 2], chance: 0.8, at: "gate" },
       { group: "logDeck", count: [1, 2], at: "yard" },
       { group: "sawSpot", count: [1, 1], at: "yard" },
       { prop: "felledLog", count: [1, 3], at: "yard" },
       { prop: "logStack", count: [1, 3], at: "yardEdge" },
       { group: "woodCorner", count: [1, 1], at: "byBuilding", building: "cookhouse", chance: 0.9 },
+      { prop: "grindstone", count: [1, 1], at: "byBuilding", building: "toolShed", chance: 0.8 },
+      { group: "fodderPile", count: [1, 1], at: "byBuilding", building: "stable", chance: 0.85 },
       { group: "storePile", count: [1, 2], at: "byBuilding" },
       { prop: "felledLog", count: [1, 4], at: "trail" },
     ],

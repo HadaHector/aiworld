@@ -81,9 +81,11 @@ export interface CompoundBuildingSpec {
  *   middle;
  * - `yardEdge`: round the yard's rim, in the gaps the buildings leave, facing the yard;
  * - `byBuilding`: beside a building (of `building`, if given), along its side near its front;
- * - `trail`: beside its trails, out past the buildings, lying along them.
+ * - `trail`: beside its trails, out past the buildings, lying along them;
+ * - `gate`: across a lane's mouth, between the buildings, facing out along it (a gate) - one to a
+ *   lane at most, so `count` is how many of its lanes get one.
  */
-export const PROP_ANCHORS = ["yard", "yardEdge", "byBuilding", "trail"] as const;
+export const PROP_ANCHORS = ["yard", "yardEdge", "byBuilding", "trail", "gate"] as const;
 export type PropAnchor = (typeof PROP_ANCHORS)[number];
 
 /** A prop, or a group of them, a compound sets down: `count` of it (rolled), each with `chance`,

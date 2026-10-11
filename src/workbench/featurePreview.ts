@@ -5,7 +5,7 @@ import type { BiomeDefinition } from "../world/biomes/biomeTypes";
 import type { TerrainSample, TerrainSampler } from "../world/terrain/terrainSampler";
 import type { RoadLine } from "../world/roads/roadField";
 import type { SettlementGate } from "../world/settlements/gates";
-import { FELL_MAX_RADIUS, type TreePlacement } from "../world/foliage/treeScatter";
+import { FELL_MAX_RADIUS, STUMP_SINK, type TreePlacement } from "../world/foliage/treeScatter";
 import { layoutCompound, planCompound, settleProps, type CompoundLayout } from "../world/features/compound";
 import { compoundPads, createPadField, propPads, type Pad, type PadField } from "../world/settlements/padField";
 import { generateBuilding } from "../world/buildings/buildingGenerator";
@@ -146,7 +146,9 @@ export function buildFeaturePreview(
         const shape = treeKind.shape;
         const girth = shape.model === "branching" || shape.model === "conifer" ? shape.trunk.radius * scale : 0;
         const stump = felling && girth <= FELL_MAX_RADIUS;
-        const tree = { kind: treeKind.id, scale, x, y: heightAt(x, z), z, rotation: rng() * Math.PI * 2, tint: rng(), stump };
+        // A stump older the nearer the yard, as the world's scatter has it (FeatureGround.stumpAge).
+        const age = stump ? Math.min(1, Math.max(0, 1 - smoothstep(site.radius, full, Math.hypot(x, z)) + (rng() - 0.5) * 0.6)) : 0;
+        const tree = { kind: treeKind.id, scale, x, y: heightAt(x, z) - age * STUMP_SINK, z, rotation: rng() * Math.PI * 2, tint: rng(), stump, age };
         (Math.hypot(x, z) < full + NEAR_WOOD ? trees : farTrees).push(tree);
       }
     }

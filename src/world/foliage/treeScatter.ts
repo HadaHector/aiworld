@@ -80,6 +80,8 @@ export interface TreePlacement {
   lean?: [number, number];
   /** Felled: drawn as its kind's stump (see treeModels.ts) - where a feature cleared the wood. */
   stump?: boolean;
+  /** A stump's age, 0-1: fresh-cut and pale (0), or grey, sunk and mossed over (1). */
+  age?: number;
   /** Which of its kind's models it is drawn with. Left out, as the scatter does, it is hashed from
    *  where the tree stands (see treeField.ts); the workbench names one to show it. */
   variant?: number;
@@ -656,9 +658,13 @@ function createScatter(seed: number, level: ScatterLevel): { scatter: TreeScatte
         const stumps = ground.sample.featureStumps;
         if (stumps > 0 && !stone && (kind.shape.model === "branching" || kind.shape.model === "conifer") && stumpRoll(candidate) < stumps) {
           if (candidate.densityRoll < wanted * survivalFade(ground, kind.wetFeet === true, true)) {
+            // Older the nearer the yard, where the felling began - but not in neat rings: a stump
+            // left from one year stands among the next year's.
+            const age = Math.min(1, Math.max(0, ground.sample.featureStumpAge + (stumpRoll({ rotation: candidate.rotation * 3.7 }) - 0.5) * 0.6));
             trees.push({
               x: candidate.x,
-              y: ground.surfaceHeight - level.sink * size,
+              // An old one sunk into the ground as it rots.
+              y: ground.surfaceHeight - level.sink * size - age * STUMP_SINK,
               z: candidate.z,
               kind: kind.id,
               scale: (kind.scale[0] + candidate.scaleRoll * (kind.scale[1] - kind.scale[0])) * size,
@@ -667,6 +673,7 @@ function createScatter(seed: number, level: ScatterLevel): { scatter: TreeScatte
               area: areaFor(ground.sample.areaWeights, candidate.areaRoll),
               shade: candidate.shadeRoll,
               stump: true,
+              age,
             });
           }
         }
@@ -767,6 +774,9 @@ function createScatter(seed: number, level: ScatterLevel): { scatter: TreeScatte
 export const FELL_MAX_RADIUS = 1.6;
 
 /** A dart's roll for being left a stump: from its spin, which nothing else reads that way. */
+/** How far the oldest stump has sunk into the ground, metres. */
+export const STUMP_SINK = 0.3;
+
 function stumpRoll(candidate: { rotation: number }): number {
   const spun = (candidate.rotation / (Math.PI * 2)) * 7.31;
   return spun - Math.floor(spun);

@@ -42,6 +42,8 @@
         ],
       },
     },
+    // Its windows with a lamp behind them at night, this share of them.
+    litWindows: 0.3,
     parts: {
       walls: { material: "rubbleStone", tints: [[1.04, 1.02, 0.98], [0.95, 0.93, 0.9], [1.05, 0.98, 0.88]] },
       timber: { material: "timber", tints: [[0.5, 0.45, 0.42]] },

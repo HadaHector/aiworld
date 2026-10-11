@@ -831,7 +831,11 @@ export function buildHouse(spec: HouseSpec, rng: () => number, far = false, meas
     for (const { run, level, bay } of spots) {
       if (extra.maxCount !== null && count >= extra.maxCount) break;
       if (!isFree(run, level, bay, bay + span) || rng() >= extra.chance) continue;
-      const extent = buildWallPart(extra.part, slotAt(run, bay + span / 2, span, level), paints, rng);
+      // A window with a lamp behind it at night, by the house's share - rolled only for a house
+      // that has any, so the rest roll as they always have.
+      const litGlass = spec.parts.glass.lit;
+      const lamp = !isDoor(extra.part) && spec.litWindows > 0 && rng() < spec.litWindows && litGlass ? litGlass : null;
+      const extent = buildWallPart(extra.part, slotAt(run, bay + span / 2, span, level), lamp ? { ...paints, glass: { ...paints.glass, material: lamp } } : paints, rng);
       if (!extent) continue;
       place(run, level, bay + span / 2, span, extent);
       count++;

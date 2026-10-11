@@ -59,6 +59,8 @@
         ],
       },
     },
+    // Its windows with a lamp behind them at night, this share of them.
+    litWindows: 0.7,
     parts: {
       walls: { material: "plaster", tints: [[1.04, 0.92, 0.72], [1.0, 0.8, 0.66], [0.95, 0.96, 0.9], [1.02, 0.98, 0.84]] },
       timber: { material: "timber", tints: [[0.42, 0.36, 0.34], [0.5, 0.44, 0.4]] },
