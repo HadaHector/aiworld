@@ -1141,7 +1141,19 @@ function readBuildingPart(id: string, obj: RawObject, reader: Reader): BuildingP
   const role = (key: string, at: string, from: RawObject): HousePart => reader.oneOf(from, key, at, HOUSE_PARTS);
   let framed: BuildingPartDef["framed"] = null;
   if (generator === "framed") {
-    reader.onlyKeys(block, path, ["span", "width", "height", "sill", "frame", "headReach", "bars", "sillReach", "parts"]);
+    reader.onlyKeys(block, path, ["span", "width", "height", "sill", "frame", "headReach", "bars", "sillReach", "steps", "parts"]);
+    let steps: NonNullable<BuildingPartDef["framed"]>["steps"] = null;
+    if (block.steps !== undefined) {
+      const at = `${path}.steps`;
+      const raw = reader.object(block.steps, at);
+      reader.onlyKeys(raw, at, ["count", "tread", "reach", "part"]);
+      steps = {
+        count: reader.number(raw, "count", at, { min: 1, integer: true }),
+        tread: reader.optionalNumber(raw, "tread", at, 0.38, { min: 0.1 }),
+        reach: reader.optionalNumber(raw, "reach", at, 0.2, { min: 0 }),
+        part: raw.part === undefined ? "stone" : role("part", at, raw),
+      };
+    }
     const span = reader.number(block, "span", path, { min: 1 });
     if (!Number.isInteger(span)) reader.fail(`${path}.span`, "is in whole bays");
     const bars = block.bars === undefined ? [0, 0] : block.bars;
@@ -1159,6 +1171,7 @@ function readBuildingPart(id: string, obj: RawObject, reader: Reader): BuildingP
       headReach: reader.optionalNumber(block, "headReach", path, 0, { min: 0 }),
       bars: barCounts,
       sillReach: block.sillReach === undefined ? null : reader.number(block, "sillReach", path, { min: 0 }),
+      steps,
       parts: { frame: role("frame", `${path}.parts`, parts), panel: role("panel", `${path}.parts`, parts) },
     };
   }

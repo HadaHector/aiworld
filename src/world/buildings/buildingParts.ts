@@ -130,6 +130,11 @@ export function buildWallPart(part: BuildingPartDef, slot: WallSlot, paints: Par
   }
 }
 
+/** A door's step rises at least this much (else it has none, or fewer); its foot is this far into
+ *  the ground, so it never stands on air where the ground dips. */
+const STEP_MIN_RISE = 0.18;
+const STEP_SINK = 0.3;
+
 function buildFramed(spec: FramedSpec, slot: WallSlot, paints: PartPaints): PartExtent | null {
   const { box } = slot;
   const f = spec.frame;
@@ -154,6 +159,15 @@ function buildFramed(spec: FramedSpec, slot: WallSlot, paints: PartPaints): Part
     } else box(-half, half, bottom, top, SET_IN, OUT.panel, panel);
   }
   const extent = { half: half + f + reach, foot: spec.sillReach !== null ? bottom - f : bottom, top: top + f, opening: { half, bottom, top } };
+  // A door's steps, from the ground up to its threshold, out past the plinth's face - each rising as
+  // much as the next and the last to the threshold, tucked a little into the plinth.
+  if (spec.steps && spec.sill <= 0.01 && slot.storey === "ground" && bottom >= STEP_MIN_RISE) {
+    const { count, tread, reach: past, part } = spec.steps;
+    const n = Math.min(count, Math.floor(bottom / STEP_MIN_RISE));
+    const rise = bottom / (n + 1);
+    const stepHalf = half + f + past;
+    for (let k = 1; k <= n; k++) box(-stepHalf, stepHalf, -STEP_SINK, bottom - k * rise, slot.plinthOutset - 0.02, slot.plinthOutset + k * tread, paints[part]);
+  }
   // From afar an opening is its panel: the frame, bars and sill are too fine to see.
   if (slot.far) return extent;
   // Jambs at its two edges, and a head over them, reaching past them.

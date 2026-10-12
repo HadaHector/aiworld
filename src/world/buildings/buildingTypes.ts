@@ -412,6 +412,11 @@ export interface FramedSpec {
   bars: [number, number];
   /** A sill under the panel, reaching this far past the jambs either way and out - or none. */
   sillReach: number | null;
+  /** A door's steps up from the ground to its threshold, on the ground storey: as many as its
+   *  floor stands high for (each rising at least STEP_MIN_RISE, all alike), at most `count`; each
+   *  `tread` deep out past the plinth's face, reaching `reach` past the jambs either way, painted as
+   *  `part` - or none. */
+  steps: { count: number; tread: number; reach: number; part: HousePart } | null;
   /** Which of the building's parts the frame and the panel are painted as. */
   parts: { frame: HousePart; panel: HousePart };
 }

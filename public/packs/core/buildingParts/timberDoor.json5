@@ -13,6 +13,9 @@
     // The jambs and the lintel: this wide, the lintel reaching this far past the jambs.
     frame: 0.25,
     headReach: 0.06,
+    // Up to two steps of the plinth's stone from the ground to its threshold, as the plinth's
+    // height wants.
+    steps: { count: 2, tread: 0.38, reach: 0.15, part: "plinth" },
     // What its pieces are painted as - the house's parts.
     parts: { frame: "timber", panel: "door" },
   },
