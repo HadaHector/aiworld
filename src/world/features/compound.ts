@@ -191,7 +191,8 @@ export function planCompound(
   // A `rows` one: its yard long and narrow, a building at each end - its circle round them all.
   if (spec.arrangement === "rows") {
     const yardWidth = roll(spec.yard.width ?? spec.yard.radius, rng);
-    const reach = (place: CompoundPlace): number => Math.max(0, ...buildings.filter((b) => b.place === place).map((b) => b.depth + ROWS_END_GAP));
+    // (Turned to face its door to the yard, a building may lie either way: its longer side counts.)
+    const reach = (place: CompoundPlace): number => Math.max(0, ...buildings.filter((b) => b.place === place).map((b) => Math.max(b.depth, b.width) + ROWS_END_GAP));
     const along = yardRadius + Math.max(reach("head"), reach("foot"));
     const across = yardWidth / 2 + ROWS_WALL_SET_BACK + reach("side");
     return { yardRadius, yardWidth, radius: Math.hypot(along, across) + RING_MARGIN, buildings, trails, seed: Math.floor(rng() * 0x7fffffff) };
@@ -787,9 +788,12 @@ function layoutRows(featureId: number, kind: FeatureKindDef, site: CompoundSite,
     return { points, heights: points.map((p, k) => (k === 0 && fromHeight !== undefined ? fromHeight : ground(p))), widthScale, taperEnds: false };
   };
 
-  // Its buildings: at its ends, fronts to it - and by its far side, backs to its wall.
+  // Its buildings: at its ends, turned so their doors face it, wherever in them their doors are (a
+  // chapel's may be in its side) - and by its far side, backs to its wall.
   const buildings: House[] = [];
-  const doors: { place: CompoundPlace; at: CellPoint }[] = [];
+  /** Each building's door, a step out before it, and how far the building reaches along the yard
+   *  from its middle. */
+  const doors: { place: CompoundPlace; at: CellPoint; reach: number }[] = [];
   let dropped = 0;
   let droppedRequired = 0;
   const sides = { side: 0 };
@@ -801,6 +805,13 @@ function layoutRows(featureId: number, kind: FeatureKindDef, site: CompoundSite,
       continue;
     }
     let cx: number, cz: number, fx: number, fz: number;
+    let reach = building.depth / 2;
+    // Which way its door faces, in its own frame (x across its front, z out of it): out of its
+    // front, its back, or a side.
+    const { door } = building;
+    const [ox, oz] = door.z >= (building.depth / 2) * 0.5 ? [0, 1] : door.z <= -(building.depth / 2) * 0.5 ? [0, -1] : [Math.sign(door.x) || 1, 0];
+    let tx = 0;
+    let tz = 0;
     if (building.place === "side") {
       const a = (rng() - 0.5) * halfLength + sides.side * (building.width + BUILDING_GAP);
       const p = P(a, -(halfWidth + ROWS_WALL_SET_BACK + 0.5 + building.depth / 2));
@@ -808,20 +819,22 @@ function layoutRows(featureId: number, kind: FeatureKindDef, site: CompoundSite,
       sides.side++;
     } else {
       const sign = building.place === "head" ? 1 : -1;
-      const p = P(sign * (halfLength + ROWS_END_GAP + building.depth / 2), 0);
-      [cx, cz, fx, fz] = [p.x, p.z, -ux * sign, -uz * sign];
+      // Its door toward the yard: its front turned so its door's own way out points there (its +x
+      // is (fz, -fx) to its front).
+      [tx, tz] = [-ux * sign, -uz * sign];
+      [fx, fz] = oz === 1 ? [tx, tz] : oz === -1 ? [-tx, -tz] : ox === 1 ? [-tz, tx] : [tz, -tx];
+      reach = Math.abs(fx * ux + fz * uz) * (building.depth / 2) + Math.abs(fz * ux - fx * uz) * (building.width / 2);
+      const p = P(sign * (halfLength + ROWS_END_GAP + reach), 0);
+      [cx, cz] = [p.x, p.z];
     }
     // On the mean of the ground under it.
     let sum = 0;
     for (const [a, b] of [[-1, -1], [1, -1], [1, 1], [-1, 1], [0, 0]]) sum += sampleTerrain(cx + fz * (building.width / 2) * a + fx * (building.depth / 2) * b, cz - fx * (building.width / 2) * a + fz * (building.depth / 2) * b).height;
     const house: House = { x: cx, z: cz, y: sum / 5 + HOUSE_FLOOR_ABOVE_STREET, frontX: fx, frontZ: fz, width: building.width, depth: building.depth, building: building.building, variant: building.variant };
     buildings.push(house);
-    // Its door, and the ground before it a step out - a door not in its front come to at the front's
-    // middle.
-    const inFront = building.door.z > (building.depth / 2) * 0.5;
-    const [dx, dz] = inFront ? [building.door.x, building.door.z] : [0, building.depth / 2];
-    const door = { x: cx + fz * dx + fx * (dz + PATH_DOOR_GAP), z: cz - fx * dx + fz * (dz + PATH_DOOR_GAP) };
-    doors.push({ place: building.place, at: door });
+    // Its door, and the ground a step out before it.
+    const at = { x: cx + fz * door.x + fx * door.z + tx * PATH_DOOR_GAP, z: cz - fx * door.x + fz * door.z + tz * PATH_DOOR_GAP };
+    doors.push({ place: building.place, at, reach });
   }
 
   // Its paths: down its middle, door to door; its road's lane to its long side, and on in.
@@ -838,10 +851,7 @@ function layoutRows(featureId: number, kind: FeatureKindDef, site: CompoundSite,
   lanes.push(path(outside, P(0, 0), ROWS_PATH_WIDTH));
 
   // Its wall: round the yard, its ends through its head and foot buildings.
-  const endReach = (place: CompoundPlace): number => {
-    const house = buildings[doors.findIndex((d) => d.place === place)];
-    return halfLength + ROWS_END_GAP + (house ? house.depth / 2 : 0);
-  };
+  const endReach = (place: CompoundPlace): number => halfLength + ROWS_END_GAP + (doors.find((d) => d.place === place)?.reach ?? 0);
   const [head, foot] = [endReach("head"), endReach("foot")];
   const across = halfWidth + ROWS_WALL_SET_BACK;
   const outline = [P(head, across), P(-foot, across), P(-foot, -across), P(head, -across)];
