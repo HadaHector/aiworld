@@ -49,8 +49,10 @@ export interface QuarrySpec {
  *  compound that needs it: `ring`, round the yard's rim facing in, its entrances kept free - its
  *  roads come to it; `roadside`, the same ring round a yard a road already laid runs straight
  *  through - sited after the roads, on one (a coaching inn), its two ways in where the road
- *  crosses its rim. */
-export const COMPOUND_ARRANGEMENTS = ["ring", "roadside"] as const;
+ *  crosses its rim; `rows`, a long yard - a churchyard - a building at its head and one at its
+ *  foot (CompoundBuildingSpec.place), a path between their doors down its middle, its graves in
+ *  rows either side (CompoundSpec.graves), its way in from its road across one long side. */
+export const COMPOUND_ARRANGEMENTS = ["ring", "roadside", "rows"] as const;
 export type CompoundArrangement = (typeof COMPOUND_ARRANGEMENTS)[number];
 
 /** Where a compound's trail leads: `clearing` - out into the ground round it, the way furthest from
@@ -70,6 +72,12 @@ export interface CompoundTrailSpec {
 export const COMPOUND_DOORS = ["yard"] as const;
 export type CompoundDoor = (typeof COMPOUND_DOORS)[number];
 
+/** Where a building stands in a `rows` compound: at its yard's `head` (a chapel), its `foot` (a
+ *  crypt), or by its `side` (a keeper's hut) - by the long side away from its way in. Unused by the
+ *  others. */
+export const COMPOUND_PLACES = ["head", "foot", "side"] as const;
+export type CompoundPlace = (typeof COMPOUND_PLACES)[number];
+
 /** A building a compound puts up: `count` of it (rolled), each with `chance`. A `required` one must
  *  fit, or the compound is not placed there. */
 export interface CompoundBuildingSpec {
@@ -78,6 +86,7 @@ export interface CompoundBuildingSpec {
   chance: number;
   required: boolean;
   doorTo: CompoundDoor;
+  place: CompoundPlace;
 }
 
 /**
@@ -129,6 +138,19 @@ export interface BoundaryOpeningSpec {
   chance: number;
 }
 
+/**
+ * A `rows` compound's graves: slots in rows down either side of its middle path, `spacing` metres
+ * apart along it and across it, each filled with `fill` chance by a marker - a prop or a group, its
+ * front toward the grave's foot, so its head is toward the yard's head. Which marker by where the
+ * slot is down the yard, 0 at its head and 1 at its foot: one of those whose [from, to] holds it,
+ * by `weight` - so the oldest graves lie by the chapel and the newest by the far end.
+ */
+export interface GravesSpec {
+  spacing: [number, number];
+  fill: number;
+  markers: { placed: CompoundPropSpec["placed"]; from: number; to: number; weight: number }[];
+}
+
 /** A compound's boundary: a line prop (a wall, a fence - see PropGenerator.line) round it, between
  *  its buildings' sides - each building standing in it as part of it - broken by its openings. */
 export interface CompoundBoundarySpec {
@@ -148,8 +170,9 @@ export interface CompoundSpec {
    *  `fromSettlements` metres past every settlement's edge (null: no matter) - a roadside inn is
    *  for the road between towns, not beside one. */
   site: { grade: [number, number]; cover: [number, number]; nearWater: number | null; fromSettlements: number | null };
-  /** The yard: a level round of trodden ground, this radius. */
-  yard: { radius: [number, number] };
+  /** The yard: a level round of trodden ground, this radius - or, `rows`, half its length, `width`
+   *  across (null for the others). */
+  yard: { radius: [number, number]; width: [number, number] | null };
   /** How the level ground under its yard, buildings and props blends back to the ground round it -
    *  see PadBlend: `slope` the steepest its banks stand, `blend` how narrow and wide they may get -
    *  and `spill`, the ground under and round each of them painted (trodden earth), or none. */
@@ -160,6 +183,8 @@ export interface CompoundSpec {
   props: CompoundPropSpec[];
   /** A wall or fence round it, or none. */
   boundary: CompoundBoundarySpec | null;
+  /** A `rows` compound's graves, or none. */
+  graves: GravesSpec | null;
 }
 
 /**

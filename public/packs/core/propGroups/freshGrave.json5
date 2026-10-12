@@ -1,0 +1,8 @@
+// A fresh grave: its mound, and a wooden post at its head (toward -z - its front, +z, to its foot).
+{
+  name: "Fresh grave",
+  members: [
+    { prop: "graveMound", at: [0, 0.15], turn: 90 },
+    { prop: "gravePost", at: [0, -1.15] },
+  ],
+}

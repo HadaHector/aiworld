@@ -1,0 +1,9 @@
+// A grave with a headstone at its head (toward -z), its mound sunk away to nothing, now and then a
+// low one left.
+{
+  name: "Stone grave",
+  members: [
+    { prop: "headstone", at: [0, -1.1] },
+    { prop: "graveMound", at: [0, 0.1], turn: 90, chance: 0.3 },
+  ],
+}

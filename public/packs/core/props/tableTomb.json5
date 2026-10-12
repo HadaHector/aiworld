@@ -1,0 +1,19 @@
+// A table tomb: a stone chest over a family's grave, under a lid that overhangs it - now and then
+// shoved aside. The older, richer graves by the chapel.
+{
+  name: "Table tomb",
+  type: "tomb",
+  tomb: {
+    length: [1.9, 2.2],
+    width: [0.85, 1.05],
+    height: [0.6, 0.8],
+    lid: [0.1, 0.14],
+    overhang: [0.06, 0.1],
+    askew: 0.08,
+  },
+  ground: "plumb",
+  parts: {
+    stone: { material: "dressedStone", tints: [[0.92, 0.92, 0.9], [0.84, 0.84, 0.82]] },
+    lid: { material: "roughStone", tints: [[1, 1, 1], [0.9, 0.9, 0.88]] },
+  },
+}

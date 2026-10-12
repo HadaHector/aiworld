@@ -1,0 +1,78 @@
+// A churchyard out in the land: a parish's dead, a walk from the farms it served. A chapel at its
+// head, a crypt at its foot, a path down the middle between their doors, graves in rows either side -
+// the oldest by the chapel (slabs, table tombs, headstones), the newest by the crypt (mounds and
+// wooden posts) - inside a drystone wall, a lychgate where its track comes in. The first of the
+// cemetery kinds (designers/cemetery-chapel.md); other faiths' come as kinds of their own.
+{
+  name: "Churchyard",
+  type: "compound",
+  compound: {
+    // Gentle ground, open or thinly wooded, well out of any settlement.
+    site: { grade: [0, 0.12], cover: [0, 0.7], fromSettlements: 400 },
+    // Its yard: `radius` half its length (chapel to crypt), `width` across - near square, the
+    // graves' ground.
+    yard: { radius: [11, 14], width: [20, 27] },
+    // Its buildings' pads blend back gently; the ground under and round them trodden to earth.
+    pads: { slope: 0.5, blend: [1.5, 8], spill: { material: "track", reach: 2 } },
+    arrangement: "rows",
+    buildings: [
+      { building: "chapel", count: [1, 1], required: true, place: "head" },
+      { building: "crypt", count: [1, 1], chance: 0.8, place: "foot" },
+    ],
+    // Down either side of the middle path, 2.7 m apart along it and 1.5 m across, eight slots in
+    // ten filled - by where they are down the yard (0 its head, the chapel; 1 its foot).
+    graves: {
+      spacing: [2.7, 1.5],
+      fill: 0.85,
+      markers: [
+        { prop: "ledgerSlab", from: 0, to: 0.35, weight: 2 },
+        { prop: "tableTomb", from: 0, to: 0.3, weight: 0.6 },
+        { group: "stoneGrave", from: 0.05, to: 0.85, weight: 4 },
+        { group: "freshGrave", from: 0.5, to: 1, weight: 3 },
+      ],
+    },
+    // A drystone wall round it: a lychgate where its track comes in, a wicket or two of its own -
+    // each with a path in to the middle one - and now and then a stretch or two fallen.
+    boundary: {
+      wall: "drystoneWall",
+      openings: [
+        { at: "road", gate: "lychgate" },
+        { at: "anywhere", gate: "wicketGate", count: [1, 2] },
+        { at: "anywhere", breach: [2, 3.5], count: [0, 2], chance: 0.6 },
+      ],
+    },
+    props: [
+      { prop: "well", count: [1, 1], at: "byBuilding", building: "chapel", chance: 0.3 },
+    ],
+  },
+  // Its ground cleared of trees round it, the wood coming back by 45 m.
+  clearing: [20, 45],
+  stumps: 0,
+  // A dead end off the roads: its own track from the settlement it serves.
+  road: { importance: 1, links: [1, 1], wants: ["settlement"], maxLength: 2000 },
+  names: {
+    // No real faith's saints: the world's own faiths name their grounds by the place, the trees and
+    // the lamps they keep.
+    patterns: [
+      { text: "The Acre at {place}", odds: 3 },
+      { text: "{tree} Garth", odds: 3 },
+      { text: "The {light} Acre", odds: 2 },
+      { text: "The Old Chapel", odds: 1 },
+      { text: "The Chapel on the {rise}", odds: 2 },
+    ],
+    words: {
+      light: ["Lamp", "Candle", "Lantern", "Ember", "Wick"],
+      tree: {
+        any: ["Yew", "Thorn", "Ash"],
+        verdant: ["Rowan", "Hollin", "Linden"],
+        arid: ["Cypress", "Juniper"],
+        frozen: ["Birch", "Juniper"],
+        murky: ["Willow", "Alder"],
+        stony: ["Rowan", "Thorn"],
+        shaded: ["Yew", "Holly"],
+      },
+      place: ["Ford", "Crossways", "Well", "Heath", "Hollow", "Mill", "Stile", "Green"],
+      rise: ["Rise", "Knoll", "Hill", "Shelf", "Brow"],
+    },
+  },
+}

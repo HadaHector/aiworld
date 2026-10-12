@@ -835,12 +835,20 @@ a barrel. Like a building, it names its generator by `type` and gives its settin
 name; `parts` says what each piece the generator paints is made of - `{ material, tints }`, a
 building material (or none, for a plain colour - iron) and tints, one picked per prop; and
 `collide: false` keeps a small one out of the way (they are in it by default); `ground` says how it
-meets the ground - `level` (the default), on ground levelled for it, or `slope`, lying on the ground
-as it is, tilted to it (a felled log); `spill: { material, reach }` paints the ground round it with
+meets the ground - `level` (the default), on ground levelled for it, `slope`, lying on the ground
+as it is, tilted to it (a felled log), or `plumb`, standing upright on the ground as it lies, sunk
+into it, nothing levelled (a headstone, a lychgate - too many or too open for ground of their own); `spill: { material, reach }` paints the ground round it with
 a ground material, over everything else there, fading out `reach` metres past its footprint - sawdust
 round a sawbuck (a building takes a `spill` too: a saw shed's). Each setting is a
-range rolled per prop (`[lo, hi]`), a count (whole numbers), a chance, or a number, as the
-generator declares it; any left out takes the generator's default.
+range rolled per prop (`[lo, hi]`), a count (whole numbers), a chance, a number, or a choice - one
+name or a list, one picked per prop - as the generator declares it; any left out takes the
+generator's default.
+
+`emblems` is the world's own faiths' marks, set proud on a stone or a board, readable at 20 m - no
+real faith's: `ringDot` (a ring and a dot: the lamp that shows the dead the way), `gable` (the roof
+the dead are kept under), `flame` (three triangles stacked), `threeDots` (the stones carried up to
+a grave), `barRing` (a lid weighed down), `waves` (the water that carries the dead away). A faith's
+kind names its own.
 
 | `type` | What | Settings | Parts |
 |---|---|---|---|
@@ -850,6 +858,10 @@ generator declares it; any left out takes the generator's default.
 | `sawbuck` | two crossed-leg trestles and a rail | `length`, `height`, `spread` | `wood` |
 | `crate` | boards, battens down its corners and round its top and foot | `width`, `depth`, `height` | `boards`, `battens` |
 | `barrel` | staves bulging at the middle, iron hoops, a boarded head | `height`, `radius`, `bulge` | `staves`, `hoops`, `head` |
+| `headstone` | an upright slab, its top round, gabled or square, an emblem proud on its face, leaning | `width`, `height`, `thickness`, `round`, `gabled`, `emblem` (chances), `emblems`, `lean` (degrees) | `stone` |
+| `gravePost` | a wooden post, an emblem board high on it, now and then a little roof over it | `height`, `board`, `roof` (chance), `emblems`, `lean` | `wood`, `roof`, `emblem` |
+| `tomb` | a stone chest under an overhanging lid (a table tomb), or with `height` 0 the lid alone, flat (a ledger slab) | `length`, `width`, `height`, `lid`, `overhang`, `askew` (chance) | `stone`, `lid` |
+| `lychgate` | a churchyard's roofed gateway: four posts, a steep roof, benches under it | `opening`, `depth`, `height`, `pitch`, `bench` (chance) | `posts`, `roof`, `bench` |
 
 A prop's model is a building's kind of model, so it is drawn with the buildings' materials, has a
 far model of its own (coarser, its small pieces left out) and its own collision. Its log ends show
@@ -882,6 +894,15 @@ clear of the buildings and the ground before their doors, the lanes, the roads a
 already - as far from those as it can be, so they spread - and one that fits nowhere is left out.
 What it takes up is its footprint: the rectangle its members fill, turned as it is set down.
 The ground under each is levelled to it.
+
+A `rows` compound (a churchyard) lays its yard out long: `yard: { radius, width }` - `radius` half
+its length - a building at its `head` and one at its `foot` (a building's `place`; `side` ones
+stand outside its far long side), a path down its middle between their doors, its road's lane in
+across one long side; and `graves: { spacing: [along, across], fill, markers }` in rows either side
+of the middle path - each slot filled with `fill` chance by a marker (`{ prop | group, from, to,
+weight }`): one of those whose [`from`, `to`] holds where the slot is down the yard (0 its head, 1
+its foot), by weight - so the oldest graves lie by the chapel. A group's front is the grave's foot.
+Its boundary runs round the yard, through its head and foot buildings.
 
 A compound may have a `boundary` - a wall or a fence round it: `{ wall, openings }`, `wall` a line
 prop (below) and `openings` where it is broken, each `{ at, gate | gap | breach, count, chance }`:

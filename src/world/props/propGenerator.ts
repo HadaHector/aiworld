@@ -21,6 +21,8 @@ export interface PropContext {
   count(name: string): number;
   chance(name: string): boolean;
   number(name: string): number;
+  /** A `choice` setting: one of its names, picked. */
+  choice(name: string): string;
   /** A setting's raw [lo, hi], for a generator that rolls it more than once (a size per log). */
   bounds(name: string): [number, number];
   /** The prop's light (its `light`), burning at `at` - nothing if it gives none, or in the far
@@ -111,6 +113,7 @@ function generate(def: PropDef, seed: number, variant: number, far: boolean, mea
     count: (name) => rollInt(s[name] as [number, number], rng),
     chance: (name) => rng() < (s[name] as number),
     number: (name) => s[name] as number,
+    choice: (name) => pick(s[name] as string[], rng),
     bounds: (name) => s[name] as [number, number],
     light(at) {
       if (def.light && !far && !measure) b.lights.push({ position: at, ...def.light, sky: false, facing: null });

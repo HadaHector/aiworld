@@ -113,7 +113,7 @@ export function settlementPads(layouts: SettlementLayout[]): Pad[] {
 export function propPads(layouts: CompoundLayout[]): Pad[] {
   return layouts.flatMap((layout) =>
     layout.props
-      .filter((prop) => !prop.on && prop.prop.ground !== "slope")
+      .filter((prop) => !prop.on && prop.prop.ground === "level")
       .map((prop) => ({ x: prop.x, z: prop.z, y: prop.y, ux: -prop.frontZ, uz: prop.frontX, hw: prop.halfWidth + 0.3, hd: prop.halfDepth + 0.3, radius: 0, firm: true, blend: layout.padBlend, unpainted: true })),
   );
 }

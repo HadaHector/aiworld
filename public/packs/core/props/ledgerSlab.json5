@@ -1,0 +1,18 @@
+// A ledger slab: a stone laid flat over a grave, sunk nearly flush with the grass - the oldest
+// graves, by the chapel. Walked over.
+{
+  name: "Ledger slab",
+  type: "tomb",
+  tomb: {
+    length: [1.8, 2.1],
+    width: [0.75, 0.95],
+    height: [0, 0],
+    lid: [0.12, 0.15],
+  },
+  ground: "plumb",
+  collide: false,
+  parts: {
+    stone: { material: "roughStone", tints: [[1, 1, 1]] },
+    lid: { material: "roughStone", tints: [[0.95, 0.95, 0.93], [0.85, 0.85, 0.83], [0.78, 0.8, 0.74]] },
+  },
+}

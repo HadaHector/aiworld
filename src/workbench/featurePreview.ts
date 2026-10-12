@@ -5,14 +5,13 @@ import type { BiomeDefinition } from "../world/biomes/biomeTypes";
 import type { TerrainSample, TerrainSampler } from "../world/terrain/terrainSampler";
 import type { RoadLine } from "../world/roads/roadField";
 import type { SettlementGate } from "../world/settlements/gates";
-import { FELL_MAX_RADIUS, STUMP_SINK, type TreePlacement } from "../world/foliage/treeScatter";
-import { layoutCompound, planCompound, settleProps, settleWalls, wallStretches, type CompoundLayout } from "../world/features/compound";
+import { createTreeCover, createTreeScatter, type TreeGround, type TreePlacement } from "../world/foliage/treeScatter";
+import { compoundGap, layoutCompound, planCompound, settleProps, settleOnGround, wallStretches, type CompoundLayout } from "../world/features/compound";
 import { compoundPads, createPadField, propPads, type Pad, type PadField } from "../world/settlements/padField";
 import { generateBuilding } from "../world/buildings/buildingGenerator";
 import { generateProp } from "../world/props/propGenerator";
 import { deriveSeed, mulberry32 } from "../world/rng";
 import { smoothstep } from "../world/mathUtils";
-import { TREE_ROAD_CLEARANCE, TREE_ROAD_FADE } from "../world/foliage/foliageConfig";
 
 /**
  * A feature (a compound - a logging camp) on its own on a patch of ground, for the workbench: sited
@@ -45,9 +44,10 @@ export interface FeaturePreview {
 const ROAD_HALF = 4;
 /** Room round the camp's circle for the wood, out to the patch's edge. */
 const WOOD_MARGIN = 45;
-/** Trees stand on a jittered lattice this far apart - sparser than the world's, as the wood is only
- *  a frame round the place. */
-const TREE_SPACING = 10;
+/** How many places in the world are tried for the patch's wood (see buildFeaturePreview). */
+const COVER_TRIES = 200;
+/** How far inland (metres above the sea) the wood round the patch is judged as growing. */
+const INLAND = 25;
 /** Trees further than this past the clearing's edge are drawn as the world draws distant ones. */
 const NEAR_WOOD = 20;
 
@@ -66,7 +66,8 @@ export function buildFeaturePreview(
   const roadside = kind.compound.arrangement === "roadside";
   const through = rng() * Math.PI;
   const site = { ...planned, x: 0, z: 0, height: baseHeight(0, 0), roadAngles: roadside ? [through, through + Math.PI] : [] };
-  const size = Math.ceil((site.radius + WOOD_MARGIN) * 2 / 10) * 10;
+  // Out past its clearing, where the wood stands as thick as it grows, and a margin of that.
+  const size = Math.ceil((Math.max(site.radius, site.yardRadius + kind.clearing[1]) + WOOD_MARGIN) * 2 / 10) * 10;
   const half = size / 2;
 
   // The ground as a sampler for the world's layout code: dry land everywhere, at the patch's
@@ -106,7 +107,7 @@ export function buildFeaturePreview(
   settleProps([layout], sampleTerrain);
   const padList = [...propPads([layout]), ...compoundPads([layout])];
   pads = createPadField(padList);
-  settleWalls([layout], sampleTerrain);
+  settleOnGround([layout], sampleTerrain);
 
   const placed: FeaturePreview["placed"] = [
     ...layout.buildings.map((house) => ({ x: house.x, y: house.y, z: house.z, frontX: house.frontX, frontZ: house.frontZ, model: generateBuilding(house.building, seed, house.variant, far) })),
@@ -119,15 +120,16 @@ export function buildFeaturePreview(
     ...layout.trails.map((line) => ({ points: line.points, width: ROAD_HALF * 2 * (line.widthScale ?? 1), kind: "trail" as const })),
   ];
 
-  // The wood: the biome that grows this feature, its trees thinning in to its clearing, off the
-  // roads and the trails.
+  // The wood: the biome that grows this feature, scattered by the world's own tree scatter on the
+  // ground as the world would give it - the feature's clearing (and its stumps), the pads, the roads,
+  // lanes and trails each by their own width - so it grows as thick, and thins the same way.
   const biome = content.biomes.find((b) => b.features.some((chance) => chance.featureId === kind.id)) ?? null;
-  const kinds = biome?.outputs.foliage?.outputs ? Object.keys(biome.outputs.foliage.outputs).filter((id) => content.treeKinds.some((t) => t.id === id)) : [];
   const trees: TreePlacement[] = [];
   const farTrees: TreePlacement[] = [];
-  if (kinds.length > 0) {
-    const clear = site.radius + kind.clearing[0] * 0.2;
-    const full = clear + kind.clearing[1] * 0.5;
+  if (biome) {
+    const kindIndex = content.featureKinds.indexOf(kind);
+    const [inner, outer] = kind.clearing;
+    const areaWeights = [{ areaId: 0, biome, weight: 1 }];
     const distanceToLine = (points: { x: number; z: number }[], x: number, z: number): number => {
       let best = Infinity;
       for (let i = 0; i + 1 < points.length; i++) {
@@ -140,34 +142,77 @@ export function buildFeaturePreview(
       }
       return best;
     };
-    for (let gx = -half + TREE_SPACING / 2; gx < half; gx += TREE_SPACING) {
-      for (let gz = -half + TREE_SPACING / 2; gz < half; gz += TREE_SPACING) {
-        const x = gx + (rng() - 0.5) * TREE_SPACING * 0.8;
-        const z = gz + (rng() - 0.5) * TREE_SPACING * 0.8;
-        if (Math.abs(x) > half - 2 || Math.abs(z) > half - 2) continue;
-        // Cleared round it as far as its kind clears (none for a roadside one), and off every pad -
-        // its buildings' and props' - as the world's scatter has it.
-        const cleared = (kind.clearing[1] > 0 && rng() > smoothstep(clear, full, Math.hypot(x, z))) || rng() > smoothstep(2.5, 7, pads?.query(x, z)?.gap ?? Infinity);
-        // One the clearing took, past the compound's own circle, may be left as its stump - or, too
-        // thick to fell, standing (as the world's scatter has it).
-        const felling = cleared && Math.hypot(x, z) > site.radius && rng() < kind.stumps;
-        if (cleared && !felling) continue;
-        // Off the roads, lanes and trails as the world's scatter keeps them: by distance in each one's
-        // own widths (a path half a road's width keeps trees half as far), none within
-        // TREE_ROAD_CLEARANCE, full by TREE_ROAD_FADE.
-        const roadGap = Math.min(Infinity, ...lines.map((line) => distanceToLine(line.points, x, z) / (line.width / (ROAD_HALF * 2))));
-        if (rng() > smoothstep(TREE_ROAD_CLEARANCE, TREE_ROAD_FADE, roadGap)) continue;
-        const id = kinds[Math.floor(rng() * kinds.length)];
-        const treeKind = content.treeKinds.find((t) => t.id === id)!;
-        const scale = treeKind.scale[0] + rng() * (treeKind.scale[1] - treeKind.scale[0]);
-        const shape = treeKind.shape;
-        const girth = shape.model === "branching" || shape.model === "conifer" ? shape.trunk.radius * scale : 0;
-        const stump = felling && girth <= FELL_MAX_RADIUS;
-        // A stump older the nearer the yard, as the world's scatter has it (FeatureGround.stumpAge).
-        const age = stump ? Math.min(1, Math.max(0, 1 - smoothstep(site.radius, full, Math.hypot(x, z)) + (rng() - 0.5) * 0.6)) : 0;
-        const tree = { kind: treeKind.id, scale, x, y: heightAt(x, z) - age * STUMP_SINK, z, rotation: rng() * Math.PI * 2, tint: rng(), stump, age };
-        (Math.hypot(x, z) < full + NEAR_WOOD ? trees : farTrees).push(tree);
-      }
+    const sampleAt = (x: number, z: number): TerrainSample => {
+      const natural = baseHeight(x, z);
+      const levelled = pads?.level(x, z, natural, 1) ?? null;
+      // Its clearing, as featureField gives it.
+      const gap = compoundGap(site, x, z);
+      const inReach = gap < outer;
+      return {
+        height: levelled?.height ?? natural,
+        primaryAreaId: 0,
+        primaryBiome: biome,
+        secondaryBiome: biome,
+        biomeBlend: 0,
+        areaWeights,
+        isLand: true,
+        landmass: 1,
+        lakeFactor: 0,
+        isRiverEdge: false,
+        areaBorderGap: Infinity,
+        riverGap: Infinity,
+        // In each line's own widths (a path half a road's width keeps trees half as far).
+        roadGap: Math.min(Infinity, ...lines.map((line) => distanceToLine(line.points, x, z) / (line.width / (ROAD_HALF * 2)))),
+        featureKind: inReach ? kindIndex : -1,
+        featureGap: inReach ? gap : Infinity,
+        featureDepth: 0,
+        featureClear: inReach ? 1 - smoothstep(inner, outer, gap) : 0,
+        featureStumps: inReach && gap > site.radius - site.yardRadius ? kind.stumps : 0,
+        featureStumpAge: inReach ? 1 - smoothstep(site.radius - site.yardRadius, outer, gap) : 0,
+        padGap: levelled?.edge ?? Infinity,
+        spill: 0,
+        spillMaterial: -1,
+      } as TerrainSample;
+    };
+    // The patch's ground lies near sea level, where the zones' shore rule thins every wood: the
+    // scatter decides as if inland, by INLAND metres higher, and plants on the ground as it is.
+    // Its woods' noises vary across the world: the patch is grown where the world's wood is as thick
+    // round it as the kind's siting asks (its site.cover - judged out where the world judges it),
+    // as the world would only have put it there.
+    const treeCover = createTreeCover(seed, content);
+    // (On open ground: no clearing, pad or road of its own in the way.)
+    const open: TerrainSample = { ...sampleAt(half, half), featureKind: -1, featureGap: Infinity, featureClear: 0, featureStumps: 0, featureStumpAge: 0, padGap: Infinity, roadGap: Infinity };
+    open.height += INLAND;
+    const coverAt = (x: number, z: number): number => treeCover(x, z, { height: open.height, surfaceHeight: open.height, slope: 0, sample: open });
+    const [lo, hi] = kind.compound!.site.cover;
+    const wanted = (lo + Math.min(1, hi)) / 2;
+    let offset = { x: 0, z: 0, off: Infinity };
+    for (let k = 0; k < COVER_TRIES && offset.off > 0.02; k++) {
+      const ox = (rng() - 0.5) * 40000;
+      const oz = (rng() - 0.5) * 40000;
+      let cover = 0;
+      for (let n = 0; n < 8; n++) cover += coverAt(ox + Math.cos((n / 8) * Math.PI * 2) * site.radius * 1.8, oz + Math.sin((n / 8) * Math.PI * 2) * site.radius * 1.8) / 8;
+      if (cover >= lo && Math.abs(cover - wanted) < offset.off) offset = { x: ox, z: oz, off: Math.abs(cover - wanted) };
+    }
+    // The world's point the scatter sees for one of the patch's, and back.
+    const probe = (wx: number, wz: number): TreeGround | null => {
+      const x = wx - offset.x;
+      const z = wz - offset.z;
+      if (Math.abs(x) > half || Math.abs(z) > half) return null;
+      const sample = sampleAt(x, z);
+      const surface = sample.height;
+      sample.height += INLAND;
+      const gx = (heightAt(x + 1, z) - heightAt(x - 1, z)) / 2;
+      const gz = (heightAt(x, z + 1) - heightAt(x, z - 1)) / 2;
+      const g = Math.hypot(gx, gz);
+      return { height: sample.height, surfaceHeight: surface, slope: g / Math.sqrt(1 + g * g), sample };
+    };
+    const full = site.radius - site.yardRadius + outer;
+    if (!Number.isFinite(offset.off)) offset = { x: 0, z: 0, off: 0 };
+    for (const tree of createTreeScatter(seed, content)(offset.x - half, offset.z - half, offset.x + half, offset.z + half, probe)) {
+      tree.x -= offset.x;
+      tree.z -= offset.z;
+      (Math.hypot(tree.x, tree.z) < site.yardRadius + full + NEAR_WOOD ? trees : farTrees).push(tree);
     }
   }
   return { size, heightAt, placed, lines, pads: padList, yards: layout.yard.level > 0 ? [{ x: layout.yard.x, z: layout.yard.z, radius: layout.yard.level }] : [], trees, farTrees, biome, layout };

@@ -43,6 +43,8 @@ import type { WeatherChance, WeatherDef } from "../weather/weatherTypes";
 import {
   BOUNDARY_OPENINGS,
   COMPOUND_ARRANGEMENTS,
+  COMPOUND_PLACES,
+  type GravesSpec,
   PROP_ANCHORS,
   type BoundaryOpeningSpec,
   type CompoundBoundarySpec,
@@ -709,6 +711,13 @@ function readProp(id: string, obj: RawObject, reader: Reader): PropDef {
         case "number":
           settings[key] = reader.number(raw, key, at, { min: param.min, max: param.max });
           break;
+        case "choice": {
+          const list = Array.isArray(raw[key]) ? (raw[key] as unknown[]) : [raw[key]];
+          const names = list.filter((value): value is string => typeof value === "string" && param.options.includes(value));
+          if (names.length === 0 || names.length !== list.length) reader.fail(`${at}.${key}`, `expected one or a list of: ${param.options.join(", ")}`);
+          settings[key] = names.length > 0 ? names : (param.default ?? [param.options[0]]);
+          break;
+        }
       }
     }
   }
@@ -727,7 +736,7 @@ function readProp(id: string, obj: RawObject, reader: Reader): PropDef {
     if (tints.length === 0) reader.fail(`${at}.tints`, "needs at least one colour");
     parts[part] = { material: raw.material === undefined || raw.material === null ? null : reader.string(raw, "material", at), tints: tints.length > 0 ? tints : [[1, 1, 1]] };
   }
-  return { id, name: reader.string(obj, "name", ""), generator: type, settings, parts, collide: obj.collide === undefined ? true : obj.collide === true, ground: obj.ground === undefined ? "level" : reader.oneOf(obj, "ground", "", ["level", "slope"] as const), spill: readSpill(obj, reader), mount: readMount(obj, reader), light: readLight(obj, reader), label: obj.label === undefined ? null : reader.oneOf(obj, "label", "", PROP_LABELS) };
+  return { id, name: reader.string(obj, "name", ""), generator: type, settings, parts, collide: obj.collide === undefined ? true : obj.collide === true, ground: obj.ground === undefined ? "level" : reader.oneOf(obj, "ground", "", ["level", "slope", "plumb"] as const), spill: readSpill(obj, reader), mount: readMount(obj, reader), light: readLight(obj, reader), label: obj.label === undefined ? null : reader.oneOf(obj, "label", "", PROP_LABELS) };
 }
 
 /** A rooms/ file - see RoomTypeDef. */
@@ -1446,7 +1455,7 @@ function readQuarry(quarry: RawObject, reader: Reader): QuarrySpec {
 
 /** A compound's block - see CompoundSpec. */
 function readCompound(compound: RawObject, reader: Reader, buildings: Map<string, BuildingDef>, props: Map<string, PropDef>, groups: Map<string, PropGroupDef>): CompoundSpec {
-  reader.onlyKeys(compound, "compound", ["site", "yard", "pads", "arrangement", "trails", "buildings", "props", "boundary"]);
+  reader.onlyKeys(compound, "compound", ["site", "yard", "pads", "arrangement", "trails", "buildings", "props", "boundary", "graves"]);
   // How its level ground blends back - the settlements' own unless it says.
   const padsRaw = compound.pads === undefined ? {} : reader.object(compound.pads, "compound.pads");
   reader.onlyKeys(padsRaw, "compound.pads", ["slope", "blend", "spill"]);
@@ -1459,7 +1468,7 @@ function readCompound(compound: RawObject, reader: Reader, buildings: Map<string
   const site = reader.object(compound.site, "compound.site");
   reader.onlyKeys(site, "compound.site", ["grade", "cover", "nearWater", "fromSettlements"]);
   const yard = reader.object(compound.yard, "compound.yard");
-  reader.onlyKeys(yard, "compound.yard", ["radius"]);
+  reader.onlyKeys(yard, "compound.yard", ["radius", "width"]);
   const cover = reader.range(site, "cover", "compound.site", { allowEqual: true });
   if (cover[0] < 0 || cover[1] > 1) reader.fail("compound.site.cover", `expected a range within 0-1, got [${cover[0]}, ${cover[1]}]`);
   const trails = reader.optionalArray(compound, "trails", "compound").map((raw, i): CompoundTrailSpec => {
@@ -1475,7 +1484,7 @@ function readCompound(compound: RawObject, reader: Reader, buildings: Map<string
   const buildingList = reader.array(compound, "buildings", "compound").flatMap((raw, i): CompoundBuildingSpec[] => {
     const path = `compound.buildings[${i}]`;
     const entry = reader.object(raw, path);
-    reader.onlyKeys(entry, path, ["building", "count", "chance", "required", "doorTo"]);
+    reader.onlyKeys(entry, path, ["building", "count", "chance", "required", "doorTo", "place"]);
     const buildingId = reader.string(entry, "building", path);
     const building = buildings.get(buildingId);
     if (!building) {
@@ -1490,6 +1499,7 @@ function readCompound(compound: RawObject, reader: Reader, buildings: Map<string
       chance: reader.optionalNumber(entry, "chance", path, 1, { min: 0, max: 1 }),
       required: reader.boolean(entry, "required", path, false),
       doorTo: entry.doorTo === undefined ? "yard" : reader.oneOf(entry, "doorTo", path, COMPOUND_DOORS),
+      place: entry.place === undefined ? "side" : reader.oneOf(entry, "place", path, COMPOUND_PLACES),
     }];
   });
   return {
@@ -1499,7 +1509,7 @@ function readCompound(compound: RawObject, reader: Reader, buildings: Map<string
       nearWater: site.nearWater === undefined ? null : reader.number(site, "nearWater", "compound.site", { min: 0 }),
       fromSettlements: site.fromSettlements === undefined ? null : reader.number(site, "fromSettlements", "compound.site", { min: 0 }),
     },
-    yard: { radius: reader.range(yard, "radius", "compound.yard", { allowEqual: true }) },
+    yard: { radius: reader.range(yard, "radius", "compound.yard", { allowEqual: true }), width: yard.width === undefined ? null : reader.range(yard, "width", "compound.yard", { allowEqual: true }) },
     pads,
     arrangement: reader.oneOf(compound, "arrangement", "compound", COMPOUND_ARRANGEMENTS),
     trails,
@@ -1533,7 +1543,41 @@ function readCompound(compound: RawObject, reader: Reader, buildings: Map<string
       return [{ placed, count, chance: reader.optionalNumber(entry, "chance", path, 1, { min: 0, max: 1 }), at, building, distance }];
     }),
     boundary: compound.boundary === undefined ? null : readBoundary(compound.boundary, reader, props),
+    graves: compound.graves === undefined ? null : readGraves(compound.graves, reader, props, groups),
   };
+}
+
+/** A `rows` compound's `graves` - see GravesSpec. */
+function readGraves(raw: unknown, reader: Reader, props: Map<string, PropDef>, groups: Map<string, PropGroupDef>): GravesSpec {
+  const path = "compound.graves";
+  const obj = reader.object(raw, path);
+  reader.onlyKeys(obj, path, ["spacing", "fill", "markers"]);
+  // [along, across] - a pair, not a range.
+  const raw2 = obj.spacing;
+  let spacing: [number, number] = [2.8, 1.7];
+  if (Array.isArray(raw2) && raw2.length === 2 && raw2.every((v) => typeof v === "number" && v > 0)) spacing = [raw2[0], raw2[1]];
+  else reader.fail(`${path}.spacing`, "expected [along, across] metres, both more than 0");
+  const markers = reader.array(obj, "markers", path).flatMap((rawMarker, i): GravesSpec["markers"] => {
+    const at = `${path}.markers[${i}]`;
+    const entry = reader.object(rawMarker, at);
+    reader.onlyKeys(entry, at, ["prop", "group", "from", "to", "weight"]);
+    let placed: CompoundPropSpec["placed"] | null = null;
+    if ((entry.prop === undefined) === (entry.group === undefined)) reader.fail(at, "names a `prop` or a `group`, one of them");
+    else if (entry.prop !== undefined) {
+      const prop = props.get(reader.string(entry, "prop", at));
+      if (prop) placed = { kind: "prop", prop };
+      else reader.fail(`${at}.prop`, `no prop "${String(entry.prop)}" (known: ${[...props.keys()].join(", ") || "none"})`);
+    } else {
+      const group = groups.get(reader.string(entry, "group", at));
+      if (group) placed = { kind: "group", group };
+      else reader.fail(`${at}.group`, `no prop group "${String(entry.group)}" (known: ${[...groups.keys()].join(", ") || "none"})`);
+    }
+    const from = reader.optionalNumber(entry, "from", at, 0, { min: 0, max: 1 });
+    const to = reader.optionalNumber(entry, "to", at, 1, { min: 0, max: 1 });
+    if (to < from) reader.fail(`${at}.to`, "is down the yard from `from` (0 its head, 1 its foot)");
+    return placed ? [{ placed, from, to, weight: reader.optionalNumber(entry, "weight", at, 1, { min: 0 }) }] : [];
+  });
+  return { spacing, fill: reader.optionalNumber(obj, "fill", path, 0.8, { min: 0, max: 1 }), markers };
 }
 
 /** A compound's `boundary`: its wall (a line prop) and its openings - see CompoundBoundarySpec. */

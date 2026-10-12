@@ -1,0 +1,17 @@
+// A grave's mound: a long, low heap of earth over a fresh grave, grass coming back over it. Lies on
+// the ground as it is.
+{
+  name: "Grave mound",
+  type: "heap",
+  heap: {
+    radius: [0.42, 0.5],
+    height: [0.2, 0.3],
+    stretch: [2.1, 2.4],
+    lumps: [0.05, 0.08],
+  },
+  ground: "slope",
+  collide: false,
+  parts: {
+    body: { material: "graveEarth", tints: [[1, 1, 1], [0.92, 0.9, 0.88]] },
+  },
+}

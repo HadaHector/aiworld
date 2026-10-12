@@ -1,0 +1,33 @@
+// A crypt: a churchyard's house of the dead - a squat block of rubble stone with no windows, a heavy
+// door in its front, under a steep stone-grey roof; where the family vaults are, and the bones
+// lifted from old graves. Shut - its stair down is for later.
+{
+  name: "Crypt",
+  type: "house",
+  house: {
+    tile: [2.4, 2.7],
+    width: [2, 2],
+    depth: [2, 3],
+    plan: {
+      type: "house",
+      house: { backWing: 0, sideWing: 0, wingLength: [1, 1], wingWidth: [2, 2] },
+    },
+    storeys: [1, 1],
+    wallHeight: [3.0, 3.4],
+    plinth: [0.5, 0.7],
+    plinthOutset: 0.4,
+    framing: "stoneFrame",
+    roof: "chapelRoof",
+    doors: [{ part: "stoneDoor", weight: 1 }],
+    wallExtras: [],
+    parts: {
+      walls: { material: "rubbleStone", tints: [[0.9, 0.9, 0.88], [0.82, 0.82, 0.8]] },
+      timber: { material: "timber", tints: [[0.45, 0.4, 0.38]] },
+      stone: { material: "dressedStone", tints: [[0.92, 0.92, 0.9]] },
+      roof: { material: "roofTiles", tints: [[0.55, 0.56, 0.58], [0.5, 0.5, 0.52]] },
+      plinth: { material: "stoneBricks", tints: [[0.9, 0.9, 0.9]] },
+      door: { material: "doorBoards", tints: [[0.35, 0.3, 0.27]] },
+      glass: { material: "glass", tints: [[1, 1, 1]] },
+    },
+  },
+}

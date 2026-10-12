@@ -8,7 +8,7 @@ import { generateRoadNetwork, type RoadNetwork } from "../roads/roadNetwork";
 import { createRoadField, type RoadField } from "../roads/roadField";
 import { generateSettlementLayouts, type SettlementLayout } from "../settlements/settlementLayout";
 import { compoundPads, createPadField, propPads, settlementPads, type PadField } from "../settlements/padField";
-import { layoutCompounds, settleProps, settleWalls, type CompoundLayout } from "../features/compound";
+import { layoutCompounds, settleProps, settleOnGround, type CompoundLayout } from "../features/compound";
 import { createSpillField, spillMaterials, type SpillField } from "../features/spill";
 import { createTreeCover } from "../foliage/treeScatter";
 import { PAD_PAINT_OFFSET } from "../settlements/settlementConfig";
@@ -370,7 +370,7 @@ export function createTerrainSampler(seed: number, content: WorldContent): Terra
   // each is levelled to it.
   settleProps(compoundLayouts, sampleTerrain);
   padField = createPadField([...propPads(compoundLayouts), ...settlementPads(settlementLayouts), ...compoundPads(compoundLayouts)]);
-  settleWalls(compoundLayouts, sampleTerrain);
+  settleOnGround(compoundLayouts, sampleTerrain);
   spillField = createSpillField(compoundLayouts, spillMaterials(content));
 
   return { sampleTerrain, worldExtent, continents, areaBounds, areaNames, settlements, features, roads, settlementLayouts, compoundLayouts, areaBiomes };

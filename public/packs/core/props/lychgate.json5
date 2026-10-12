@@ -1,0 +1,21 @@
+// A lychgate: the roofed way into a churchyard - four oak posts under a steep shingled roof, its
+// ridge along the wall, benches under it where the coffin and its bearers waited for the priest.
+// Set in a churchyard's wall, standing open.
+{
+  name: "Lychgate",
+  type: "lychgate",
+  lychgate: {
+    opening: [2.4, 2.8],
+    depth: [1.8, 2.2],
+    height: [2.3, 2.6],
+    pitch: [45, 52],
+    bench: 0.7,
+  },
+  // Plumb on the ground as it lies, its posts sunk deep: no level ground of its own.
+  ground: "plumb",
+  parts: {
+    posts: { material: "timber", tints: [[0.55, 0.5, 0.45], [0.48, 0.44, 0.4]] },
+    roof: { material: "woodShingles", tints: [[0.8, 0.8, 0.8], [0.7, 0.72, 0.74]] },
+    bench: { material: "planks", tints: [[0.6, 0.55, 0.5]] },
+  },
+}

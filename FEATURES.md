@@ -98,7 +98,7 @@ brainstorm, not yet a plan: a pool to pick from, weighed so the cheap, striking 
 | Hermitage: cells cut in a cliff, a ladder | S | a cliff | rocky desert, red bush, cloud forest | 4 | 4 | 2 |
 | Wayside shrine / cross / cairn | S | a road, a summit | any | - | 2 | 1 |
 | Pilgrim church on a summit | S | a peak | windswept fell, green alps | - | 3 | 1 |
-| Graveyard / necropolis: tombs, mausolea | M | a gentle slope | autumn wood, maquis, sage hills | 3 | 3 | 2 |
+| Graveyard / necropolis: tombs, mausolea - **first pass: the churchyard** (`features/cemetery.json5`: chapel, crypt, graves in rows by age, drystone wall, lychgate); other faiths as kinds of their own (designers/cemetery-faiths.md) | M | a gentle slope | autumn wood, maquis, sage hills | 3 | 3 | 2 |
 | Bathhouse at a hot spring, steaming pools | M | a valley | green alps, ice peaks, polar desert | 6, 9 (steam) | 4 | 3 |
 | Lighthouse | S | a headland | palm grove, frost steppe coast | 7 | 4 | 2 |
 | Border post / customs house | S | a road at a biome's edge | any | 1 | 2 | 1 |
@@ -371,11 +371,12 @@ Nothing in it is specific to logging: the homestead, the sheepfold and the coach
 | Arrangement | How | For |
 |---|---|---|
 | `ring` | round the yard's rim, facing in, the entrances kept free | logging camp, sheepfold, summer pasture |
+| `rows` | a long yard: a building at its head and one at its foot, a path between, graves (or anything) in rows either side | churchyard, cemeteries of other faiths |
 | `courtyard` | closing the yard on three or four sides, corners touching | farmstead, caravanserai, inn, monastery |
 | `row` | in a line along the lane, facing it | trapper's camp, waystation |
 | `scatter` | loosely spaced, turned freely | nomad camp, army camp |
 
-Only `ring` is built for the logging camp. Each of the others is built with the first compound that
+`ring` is built for the logging camp, `rows` for the churchyard (and `roadside`, not in this table, for the coaching inn). Each of the others is built with the first compound that
 needs it, so there is something to test it against.
 
 **Entrances**, each with a kind:
@@ -394,8 +395,8 @@ buildings may face it (`doorTo: "lane"`) rather than the yard's middle (`doorTo:
 **Boundary:** a line prop (a rail fence, a drystone wall) round the yard, through the buildings'
 sides where the lanes' gates stand, each building part of it; broken by its openings - a gate or a
 gap across each lane and trail, and openings `anywhere`: a wicket, a gap, a breach (the wall fallen,
-walked over). The logging camp has a rail fence. Only round a `ring` so far; other arrangements
-(the cemetery's rows) give it their own outline when they come.
+walked over). It runs round any closed outline - a circle round a `ring`, a rectangle round
+`rows`. The logging camp has a rail fence, the churchyard a drystone wall.
 
 ```json5
 // features/loggingCamp.json5 (sketch)

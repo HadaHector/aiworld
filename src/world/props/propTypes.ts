@@ -8,16 +8,18 @@ import type { Rgb } from "../buildings/buildingTypes";
  * - `range`: [lo, hi] metres (or any amount), rolled per prop;
  * - `count`: [lo, hi] whole numbers, rolled per prop;
  * - `chance`: 0-1, how likely something is;
- * - `number`: a fixed amount.
+ * - `number`: a fixed amount;
+ * - `choice`: a list of names out of its `options`, one picked per prop (an emblem).
  */
 export type PropParam =
   | { kind: "range"; default: [number, number] | null; min?: number; doc: string }
   | { kind: "count"; default: [number, number] | null; min?: number; doc: string }
   | { kind: "chance"; default: number | null; doc: string }
-  | { kind: "number"; default: number | null; min?: number; max?: number; doc: string };
+  | { kind: "number"; default: number | null; min?: number; max?: number; doc: string }
+  | { kind: "choice"; options: readonly string[]; default: string[] | null; doc: string };
 
 /** A prop's settings as read: each of its generator's params, by name. */
-export type PropSettings = Record<string, number | [number, number]>;
+export type PropSettings = Record<string, number | [number, number] | string[]>;
 
 /** What one of a prop's parts is painted: a building material (or none - a plain colour), and
  *  tints, one picked per prop. */
@@ -39,9 +41,11 @@ export interface PropDef {
   parts: Record<string, PropPaint>;
   /** Whether it is in the way - a stack, a barrel; not a scatter of chips. */
   collide: boolean;
-  /** How it meets the ground: `level` - the ground under it levelled to it (a stack, a crate) - or
-   *  `slope` - lying on the ground as it is, tilted to it (a felled log). */
-  ground: "level" | "slope";
+  /** How it meets the ground: `level` - the ground under it levelled to it (a stack, a crate) -
+   *  `slope` - lying on the ground as it is, tilted to it (a felled log) - or `plumb` - standing
+   *  upright on the ground as it is, sunk into it, nothing levelled (a headstone, a post: too many
+   *  and too small for ground of their own). */
+  ground: "level" | "slope" | "plumb";
   /** The ground round it painted with a material of its own, or none (see Spill). */
   spill: Spill | null;
   /** How it is set down in a room (see FURNITURE.md). */

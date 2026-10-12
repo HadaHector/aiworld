@@ -1,0 +1,22 @@
+// A headstone: an upright slab of dressed stone at a grave's head, its top rounded, gabled or square,
+// its faith's emblem standing proud on its face now and then - the lamp's ring and dot, or its
+// flame (src/world/props/emblems.ts) - - leaning a little, as old ones do. Stands plumb
+// on the ground as it lies, sunk into it.
+{
+  name: "Headstone",
+  type: "headstone",
+  headstone: {
+    width: [0.55, 0.85],
+    height: [0.85, 1.25],
+    thickness: [0.12, 0.16],
+    round: 0.45,
+    gabled: 0.3,
+    emblem: 0.6,
+    emblems: ["ringDot", "flame"],
+    lean: 6,
+  },
+  ground: "plumb",
+  parts: {
+    stone: { material: "dressedStone", tints: [[1, 1, 1], [0.9, 0.9, 0.88], [0.8, 0.8, 0.78], [1.04, 1.02, 0.96]] },
+  },
+}
