@@ -109,6 +109,33 @@ export interface CompoundPropSpec {
   distance: [number, number];
 }
 
+/** Where a compound's boundary is opened: across each `road` entrance's lane, across each `trail`
+ *  where it leaves, or `anywhere` along it - `count` of it, rolled, where it fits. */
+export const BOUNDARY_OPENINGS = ["road", "trail", "anywhere"] as const;
+export type BoundaryOpeningAt = (typeof BOUNDARY_OPENINGS)[number];
+
+/**
+ * An opening in a compound's boundary: a `gate` (a prop set in it, the gap its width), a plain `gap`
+ * or a `breach` - the wall fallen there, its rubble or its rails down (both `width` metres, rolled).
+ * An entrance with no opening of its own kind gets a plain gap - a way in is never walled up.
+ */
+export interface BoundaryOpeningSpec {
+  at: BoundaryOpeningAt;
+  kind: "gate" | "gap" | "breach";
+  gate: PropDef | null;
+  width: [number, number];
+  /** For `anywhere`: how many (rolled), each with `chance`. */
+  count: [number, number];
+  chance: number;
+}
+
+/** A compound's boundary: a line prop (a wall, a fence - see PropGenerator.line) round it, between
+ *  its buildings' sides - each building standing in it as part of it - broken by its openings. */
+export interface CompoundBoundarySpec {
+  wall: PropDef;
+  openings: BoundaryOpeningSpec[];
+}
+
 /**
  * A compound: a yard with buildings standing round it, its entrances where its roads arrive (its
  * `road` block decides how many) and its trails lead off. No streets - one open space everything
@@ -131,6 +158,8 @@ export interface CompoundSpec {
   trails: CompoundTrailSpec[];
   buildings: CompoundBuildingSpec[];
   props: CompoundPropSpec[];
+  /** A wall or fence round it, or none. */
+  boundary: CompoundBoundarySpec | null;
 }
 
 /**

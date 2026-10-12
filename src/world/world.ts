@@ -12,6 +12,7 @@ import { createGrassField, type GrassField } from "./foliage/grassField";
 import { createBuildingRenderer } from "./buildings/buildingRenderer";
 import { generateBuilding } from "./buildings/buildingGenerator";
 import { generateProp } from "./props/propGenerator";
+import { wallStretches } from "./features/compound";
 import type { House } from "./settlements/settlementLayout";
 import { bakeBuildingTextures, createBuildingMaterial } from "./buildings/buildingMesh";
 import type { SettlementLayout } from "./settlements/settlementLayout";
@@ -202,7 +203,11 @@ export async function createWorld(
         key: `compound:${layout.featureId}`,
         x: layout.x,
         z: layout.z,
-        houses: [...layout.buildings.map(houseModel), ...layout.props.map((prop) => ({ ...prop, model: (far: boolean) => generateProp(prop.prop, WORLD_SEED, prop.variant, far) }))],
+        houses: [
+          ...layout.buildings.map(houseModel),
+          ...layout.props.map((prop) => ({ ...prop, model: (far: boolean) => generateProp(prop.prop, WORLD_SEED, prop.variant, far) })),
+          ...layout.walls.flatMap((run) => wallStretches(run, WORLD_SEED)),
+        ],
       })),
     ],
     buildingMaterial,

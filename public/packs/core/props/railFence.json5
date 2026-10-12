@@ -1,0 +1,17 @@
+// A split-rail fence: round posts every few metres, two or three split rails nailed along them
+// following the ground - round a camp, a pen, a paddock. Laid along a line (a compound's
+// `boundary`), its gates set in the gaps it leaves.
+{
+  name: "Rail fence",
+  type: "railFence",
+  railFence: {
+    height: [1.1, 1.3],
+    spacing: [2.2, 2.8],
+    rails: [2, 3],
+    missing: 0.04,
+  },
+  parts: {
+    posts: { material: "roundLog", tints: [[1, 1, 1], [0.88, 0.84, 0.8]] },
+    rails: { material: "timber", tints: [[0.78, 0.7, 0.6], [0.68, 0.6, 0.52]] },
+  },
+}

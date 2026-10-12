@@ -883,6 +883,29 @@ already - as far from those as it can be, so they spread - and one that fits now
 What it takes up is its footprint: the rectangle its members fill, turned as it is set down.
 The ground under each is levelled to it.
 
+A compound may have a `boundary` - a wall or a fence round it: `{ wall, openings }`, `wall` a line
+prop (below) and `openings` where it is broken, each `{ at, gate | gap | breach, count, chance }`:
+`at` is `road` (across each lane, where a road comes in), `trail` (where each trail leaves) or
+`anywhere` (`count` of it, rolled, each where the whole of it is wall, spread out); in it stands a
+`gate` (a prop - its width the gap's), nothing (`gap: [min, max]` metres) or the wall fallen
+(`breach: [min, max]` - its rubble, its rails down, walked over). A road or a trail with no opening
+of its own kind gets a plain gap: a way in is never walled up. The boundary runs round a circle
+through the buildings' sides, where the lanes' gates stand - each building standing in it as part
+of it - and follows the ground; props keep off it. In the logging camp: a rail fence, a field gate
+across each lane, a wide gap for the skid trail, now and then a wicket, a bay or two fallen.
+
+A **line prop** is laid along a run of ground rather than set down whole - a wall, a fence. Its
+generator has a `line` as well as its `build` (which builds a short straight run, for the
+workbench); its settings, parts and paints are a prop's like any other:
+
+| Generator | What | Settings | Parts |
+|---|---|---|---|
+| `railFence` | posts every few metres, plumb; split rails along one face, following the slope | `height`, `spacing`, `rails`, `missing` | `posts`, `rails` |
+| `drystoneWall` | battered (wider at its foot), coped with stones on edge, through-stones showing; its courses follow the ground | `height`, `base`, `top`, `cope`, `throughStones` | `face`, `cope` |
+
+A run ends free (a pier, an end post) at a gate, a gap or a building, steps down into a breach, and
+is drawn in stretches of up to 24 m, each in the way bay by bay or segment by segment.
+
 A new generator is code (`src/world/props/generators/`): a table of its settings, its parts, and
 how it builds from the shared shapes (`propShapes.ts`: boxes, beams, round logs, turned shapes, in
 local frames) - nothing else needs to know about it.

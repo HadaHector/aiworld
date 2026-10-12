@@ -6,7 +6,7 @@ import type { TerrainSample, TerrainSampler } from "../world/terrain/terrainSamp
 import type { RoadLine } from "../world/roads/roadField";
 import type { SettlementGate } from "../world/settlements/gates";
 import { FELL_MAX_RADIUS, STUMP_SINK, type TreePlacement } from "../world/foliage/treeScatter";
-import { layoutCompound, planCompound, settleProps, type CompoundLayout } from "../world/features/compound";
+import { layoutCompound, planCompound, settleProps, settleWalls, wallStretches, type CompoundLayout } from "../world/features/compound";
 import { compoundPads, createPadField, propPads, type Pad, type PadField } from "../world/settlements/padField";
 import { generateBuilding } from "../world/buildings/buildingGenerator";
 import { generateProp } from "../world/props/propGenerator";
@@ -106,10 +106,12 @@ export function buildFeaturePreview(
   settleProps([layout], sampleTerrain);
   const padList = [...propPads([layout]), ...compoundPads([layout])];
   pads = createPadField(padList);
+  settleWalls([layout], sampleTerrain);
 
   const placed: FeaturePreview["placed"] = [
     ...layout.buildings.map((house) => ({ x: house.x, y: house.y, z: house.z, frontX: house.frontX, frontZ: house.frontZ, model: generateBuilding(house.building, seed, house.variant, far) })),
     ...layout.props.map((prop) => ({ x: prop.x, y: prop.y, z: prop.z, frontX: prop.frontX, frontZ: prop.frontZ, up: prop.up, model: generateProp(prop.prop, seed, prop.variant, far) })),
+    ...layout.walls.flatMap((run) => wallStretches(run, seed).map((stretch) => ({ ...stretch, model: stretch.model(far) }))),
   ];
   const lines: FeaturePreview["lines"] = [
     ...roads.map((line) => ({ points: line.points, width: ROAD_HALF * 2, kind: "road" as const })),

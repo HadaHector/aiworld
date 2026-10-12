@@ -36,12 +36,16 @@ import { AREA_ROLL_SALT } from "../cells/config";
 import type { WorldContent } from "./worldContent";
 import type { GroupMember, Mount, PropDef, PropLight, PropGroupDef, PropPaint, PropSettings, Spill } from "../props/propTypes";
 import { PROP_GENERATORS } from "../props/generators/index";
+import { isLineProp } from "../props/propGenerator";
 import type { TextureDef } from "../materials/textureGen";
 import { adjustMatrix, chainMatrix, NO_ADJUST, type ColorAdjust } from "../materials/colorAdjust";
 import type { WeatherChance, WeatherDef } from "../weather/weatherTypes";
 import {
+  BOUNDARY_OPENINGS,
   COMPOUND_ARRANGEMENTS,
   PROP_ANCHORS,
+  type BoundaryOpeningSpec,
+  type CompoundBoundarySpec,
   type CompoundPropSpec,
   COMPOUND_DOORS,
   FEATURE_TYPES,
@@ -1442,7 +1446,7 @@ function readQuarry(quarry: RawObject, reader: Reader): QuarrySpec {
 
 /** A compound's block - see CompoundSpec. */
 function readCompound(compound: RawObject, reader: Reader, buildings: Map<string, BuildingDef>, props: Map<string, PropDef>, groups: Map<string, PropGroupDef>): CompoundSpec {
-  reader.onlyKeys(compound, "compound", ["site", "yard", "pads", "arrangement", "trails", "buildings", "props"]);
+  reader.onlyKeys(compound, "compound", ["site", "yard", "pads", "arrangement", "trails", "buildings", "props", "boundary"]);
   // How its level ground blends back - the settlements' own unless it says.
   const padsRaw = compound.pads === undefined ? {} : reader.object(compound.pads, "compound.pads");
   reader.onlyKeys(padsRaw, "compound.pads", ["slope", "blend", "spill"]);
@@ -1528,7 +1532,49 @@ function readCompound(compound: RawObject, reader: Reader, buildings: Map<string
       if (at === "road" && entry.distance === undefined) reader.fail(joinPath(path, "distance"), "a prop by the road needs a distance out along it");
       return [{ placed, count, chance: reader.optionalNumber(entry, "chance", path, 1, { min: 0, max: 1 }), at, building, distance }];
     }),
+    boundary: compound.boundary === undefined ? null : readBoundary(compound.boundary, reader, props),
   };
+}
+
+/** A compound's `boundary`: its wall (a line prop) and its openings - see CompoundBoundarySpec. */
+function readBoundary(raw: unknown, reader: Reader, props: Map<string, PropDef>): CompoundBoundarySpec | null {
+  const path = "compound.boundary";
+  const obj = reader.object(raw, path);
+  reader.onlyKeys(obj, path, ["wall", "openings"]);
+  const wallId = reader.string(obj, "wall", path);
+  const wall = props.get(wallId);
+  if (!wall) reader.fail(`${path}.wall`, `no prop "${wallId}" (known: ${[...props.keys()].join(", ") || "none"})`);
+  else if (!isLineProp(wall)) reader.fail(`${path}.wall`, `"${wallId}" is not laid along a line (its generator "${wall.generator}" has no line - a wall or a fence has)`);
+  const openings = reader.optionalArray(obj, "openings", path).flatMap((rawOpening, i): BoundaryOpeningSpec[] => {
+    const at = `${path}.openings[${i}]`;
+    const entry = reader.object(rawOpening, at);
+    reader.onlyKeys(entry, at, ["at", "gate", "gap", "breach", "count", "chance"]);
+    const where = reader.oneOf(entry, "at", at, BOUNDARY_OPENINGS);
+    const given = (["gate", "gap", "breach"] as const).filter((key) => entry[key] !== undefined);
+    if (given.length !== 1) {
+      reader.fail(at, "names one of `gate` (a prop), `gap` or `breach` (a width range, metres)");
+      return [];
+    }
+    const kind = given[0];
+    let gate: PropDef | null = null;
+    let width: [number, number] = [0, 0];
+    if (kind === "gate") {
+      const id = reader.string(entry, "gate", at);
+      gate = props.get(id) ?? null;
+      if (!gate) {
+        reader.fail(`${at}.gate`, `no prop "${id}" (known: ${[...props.keys()].join(", ") || "none"})`);
+        return [];
+      }
+    } else {
+      width = reader.range(entry, kind, at, { allowEqual: true });
+      if (width[0] <= 0) reader.fail(`${at}.${kind}`, "is a width in metres, more than 0");
+    }
+    const count: [number, number] = entry.count === undefined ? [1, 1] : reader.range(entry, "count", at, { allowEqual: true });
+    if (count[0] < 0 || !Number.isInteger(count[0]) || !Number.isInteger(count[1])) reader.fail(`${at}.count`, `expected whole numbers, got [${count[0]}, ${count[1]}]`);
+    if (where !== "anywhere" && entry.count !== undefined) reader.fail(`${at}.count`, "only an opening `anywhere` takes a count - one at a road or a trail is one to each");
+    return [{ at: where, kind, gate, width, count, chance: reader.optionalNumber(entry, "chance", at, 1, { min: 0, max: 1 }) }];
+  });
+  return wall && isLineProp(wall) ? { wall, openings } : null;
 }
 
 /** A propGroups/ file - see PropGroupDef: its members, each a prop at a place in the group or on an

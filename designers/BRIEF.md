@@ -24,7 +24,8 @@ What exists now:
   and others.
 - **Interiors**: a few buildings can be entered (the inn first). They have rooms, furniture and
   props, fires, lanterns and window light baked in with shadows.
-- **Features**: a quarry and a logging camp so far. Many more are planned in FEATURES.md.
+- **Features**: a quarry, a logging camp, and coaching inns along the roads between towns (named,
+  with wayside signs whose name shows as a tooltip). Many more are planned in FEATURES.md.
 - **Names**: places get names from "voices", per climate.
 - **Content is data**: biomes, buildings, props and features are JSON5 files in a pack, read by
   generators. New content is mostly new data, plus a generator when something new has to be made.
@@ -78,6 +79,10 @@ Concrete enough to build from.
 **Fun** 1-5 · **Cost** 1-5 · **Needs**: the engine pieces from FEATURES.md, or "new: ..."
 **The risk**: what could make it fall flat.
 ```
+
+When a task gives a baseline ("already decided"), pitch only what is not in it; the others on the
+panel answer at the same time, and only the ideas nobody else would have are worth the reader's
+time. When it gives you a lens, stay in it. A task's own format overrides the one above.
 
 Finish with **What I'd cut**: one thing already planned (in FEATURES.md or ZONES.md) that you
 would drop or change, and why.

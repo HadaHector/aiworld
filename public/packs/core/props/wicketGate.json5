@@ -1,0 +1,16 @@
+// A wicket: a small gate in a wall or a fence, for people on foot - where a path leaves, or just a
+// way through. Two posts and a narrow railed leaf, standing open.
+{
+  name: "Wicket gate",
+  type: "gate",
+  gate: {
+    opening: [1.1, 1.3],
+    height: [1.1, 1.25],
+    open: [50, 100],
+    wings: [0, 0],
+  },
+  parts: {
+    posts: { material: "roundLog", tints: [[1, 1, 1], [0.88, 0.84, 0.8]] },
+    rails: { material: "timber", tints: [[0.78, 0.7, 0.6], [0.68, 0.6, 0.52]] },
+  },
+}

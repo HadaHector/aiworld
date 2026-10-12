@@ -1,0 +1,63 @@
+// Drystone walling: field stones laid without mortar - flat ones, wider than tall, in rough courses,
+// the gaps between them dark, deep shadow rather than lime - a field wall, a churchyard's, a fold's.
+// Greyer and more lichened than rubbleStone, as stone out in the weather is.
+{
+  name: "Drystone",
+  // Metres one repeat covers: ten courses up it, each some 0.4 m tall and its stones near a metre
+  // long - twice life size, so they read from afar, and still a few courses to a wall's height.
+  size: 4,
+  shine: 0.04,
+  texture: {
+    bumpStrength: 2.4,
+    pipeline: {
+      noises: [
+        // Stones wider than tall, as they would be laid.
+        { name: "stones", type: "worley", tileCycles: 10, amplitude: 1, mode: "edge", stretch: [2.2, 1] },
+        { name: "lichen", type: "fbm", octaves: 3, tileCycles: 12, amplitude: 1, persistence: 0.5, lacunarity: 2 },
+        { name: "grain", type: "fbm", octaves: 3, tileCycles: 50, amplitude: 1, persistence: 0.55, lacunarity: 2 },
+        { name: "mottle", type: "fbm", octaves: 2, tileCycles: 6, amplitude: 1, persistence: 0.5, lacunarity: 2 },
+      ],
+      steps: [
+        { output: "joint", op: "sample", noise: "stones" },
+        { output: "stoneId", op: "sample", noise: "stones", mode: "cell" },
+        { output: "grainRaw", op: "sample", noise: "grain" },
+        { output: "mottleRaw", op: "sample", noise: "mottle" },
+        { output: "fray", op: "scale", input: "grainRaw", factor: 0.025 },
+        { output: "jointFrayed", op: "add", a: "joint", b: "fray" },
+        { output: "mortar", op: "mask", input: "jointFrayed", at: 0.04, off: 0.09 },
+        {
+          output: "stoneTone",
+          op: "colorRamp",
+          input: "stoneId",
+          stops: [
+            { at: 0.0, color: [0.46, 0.45, 0.42] },
+            { at: 0.25, color: [0.55, 0.54, 0.5] },
+            { at: 0.5, color: [0.41, 0.41, 0.4] },
+            { at: 0.75, color: [0.58, 0.57, 0.53] },
+            { at: 1.0, color: [0.49, 0.47, 0.42] },
+          ],
+        },
+        { output: "shadeRaw", op: "add", a: "mottleRaw", b: "grainRaw" },
+        { output: "shade", op: "remap", input: "shadeRaw", inMin: -1, inMax: 1, outMin: 0.8, outMax: 1.12 },
+        { output: "stone", op: "multiply", a: "stoneTone", b: "shade" },
+        // The gaps: shadow, not mortar.
+        { output: "gapColor", op: "color", value: [0.12, 0.12, 0.11] },
+        { output: "laid", op: "mix", a: "stone", b: "gapColor", t: "mortar" },
+        // Grey-green lichen in patches over the stones.
+        { output: "lichenRaw", op: "sample", noise: "lichen" },
+        { output: "lichenPatch", op: "mask", input: "lichenRaw", at: 0.35, off: 0.1 },
+        { output: "lichenColor", op: "color", value: [0.62, 0.65, 0.52] },
+        { output: "lichenAmount", op: "scale", input: "lichenPatch", factor: 0.45 },
+        { output: "diffuse", op: "mix", a: "laid", b: "lichenColor", t: "lichenAmount" },
+        { output: "roughness", op: "constant", value: 0.92 },
+        // Height: each stone domed towards its middle, the mortar sunk deep.
+        { output: "domeRaw", op: "remap", input: "joint", inMin: 0.03, inMax: 0.3, outMin: 0, outMax: 1 },
+        { output: "dome", op: "clamp", input: "domeRaw", min: 0, max: 1 },
+        { output: "domeRound", op: "power", input: "dome", exponent: 0.6 },
+        { output: "grainBump", op: "scale", input: "grainRaw", factor: 0.1 },
+        { output: "height", op: "add", a: "domeRound", b: "grainBump" },
+      ],
+      outputs: { diffuse: "diffuse", roughness: "roughness", height: "height" },
+    },
+  },
+}

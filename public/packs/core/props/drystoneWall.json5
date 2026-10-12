@@ -1,0 +1,18 @@
+// A drystone wall: field stones laid without mortar, wider at the foot than the top, coped with
+// stones on edge - round a churchyard, a fold, a field. Laid along a line (a compound's
+// `boundary`), its gates set in the gaps it leaves; where it has fallen, a bank of rubble.
+{
+  name: "Drystone wall",
+  type: "drystoneWall",
+  drystoneWall: {
+    height: [1.15, 1.35],
+    base: [0.75, 0.85],
+    top: [0.42, 0.5],
+    cope: [0.24, 0.32],
+    throughStones: 0.3,
+  },
+  parts: {
+    face: { material: "drystone", tints: [[1, 1, 1], [0.94, 0.94, 0.92]] },
+    cope: { material: "roughStone", tints: [[0.92, 0.92, 0.9], [0.84, 0.84, 0.82], [1, 0.98, 0.95]] },
+  },
+}

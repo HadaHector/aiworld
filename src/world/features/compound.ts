@@ -9,12 +9,15 @@ import { measureBuilding } from "../buildings/buildingGenerator";
 import { HOUSE_FLOOR_ABOVE_STREET, HOUSE_MAX_CUT_FILL } from "../settlements/settlementConfig";
 import { smoothstep } from "../mathUtils";
 import { deriveSeed, mulberry32 } from "../rng";
-import type { CompoundDoor, CompoundSpec, FeatureKindDef, TrailDestination } from "./featureTypes";
+import type { BoundaryOpeningSpec, CompoundDoor, CompoundSpec, FeatureKindDef, TrailDestination } from "./featureTypes";
 import type { FeatureSite } from "./featureSites";
 import type { RoadNetwork } from "../roads/roadNetwork";
 import { ROAD_HALF_WIDTH } from "../roads/roadConfig";
 import { arrangeGroup, arrangeProp, setDown, type Arranged, type PlacedProp } from "../props/propGroups";
-import type { Spill } from "../props/propTypes";
+import type { PropDef, Spill } from "../props/propTypes";
+import { generateLine, type LineEnd, type LineRun } from "../props/propGenerator";
+import type { BuildingModel } from "../buildings/buildingTypes";
+import type { Vec3 } from "../buildings/buildingGeometry";
 
 /**
  * A compound (see FEATURES.md): a yard with buildings round it, entrances where its roads arrive and
@@ -92,6 +95,22 @@ export interface CompoundLayout {
   /** The ground under and round each of its buildings and props painted (its kind's pads.spill), or
    *  none. */
   padSpill: Spill | null;
+  /** Its boundary's runs, between its buildings and openings (see WallRun) - none without one. */
+  walls: WallRun[];
+}
+
+/**
+ * A run of a compound's boundary: its wall (a line prop) along `points` - their ground `heights`
+ * filled in once the ground is final (see settleWalls) - and how each end is finished (see LineRun):
+ * `breach`, where it has fallen.
+ */
+export interface WallRun {
+  prop: PropDef;
+  variant: number;
+  points: CellPoint[];
+  heights: number[];
+  ends: [LineEnd, LineEnd];
+  breach: boolean;
 }
 
 /** A building variant is drawn from this many, as a settlement's houses are. */
@@ -443,8 +462,177 @@ export function layoutCompound(
     trails.push({ points, heights, widthScale: TRAIL_WIDTH, taperEnds: false });
   }
 
-  const { props, droppedProps } = placeProps(kind.compound!, site, worldSeed, rng, buildings, lanes, trails, nearbyRoads, sampleTerrain, { x, z, yardRadius, rim });
-  return { featureId, kindId: kind.id, x, z, yard: { x, z, y, radius: yardRadius, level }, entrances, lanes, trails, buildings, dropped, droppedRequired, props, droppedProps, padBlend: { slope: kind.compound!.pads.slope, min: kind.compound!.pads.blend[0], max: kind.compound!.pads.blend[1] }, padSpill: kind.compound!.pads.spill };
+  const boundary = kind.compound!.boundary ? layoutBoundary(kind.compound!.boundary, worldSeed, rng, buildings, lanes, trails, sampleTerrain, { x, z, radius: rim + GATE_SET_BACK }) : { walls: [], gates: [] };
+  const { props, droppedProps } = placeProps(kind.compound!, site, worldSeed, rng, buildings, lanes, trails, nearbyRoads, sampleTerrain, { x, z, yardRadius, rim }, boundary);
+  return { featureId, kindId: kind.id, x, z, yard: { x, z, y, radius: yardRadius, level }, entrances, lanes, trails, buildings, dropped, droppedRequired, props, droppedProps, padBlend: { slope: kind.compound!.pads.slope, min: kind.compound!.pads.blend[0], max: kind.compound!.pads.blend[1] }, padSpill: kind.compound!.pads.spill, walls: boundary.walls };
+}
+
+/** A boundary is followed this finely - for where buildings and openings break it - and its runs'
+ *  points are this far apart. */
+const BOUNDARY_STEP = 0.25;
+const WALL_POINT_STEP = 1.5;
+/** A boundary keeps this clear of a building's footprint (eaves and all - so its end stands under
+ *  them, by the building's wall) - more than the half step its runs reach past their last step. */
+const BOUNDARY_BUILDING_GAP = 0.2;
+/** An opening `anywhere` keeps this far from any other opening and from a building. */
+const OPENING_SPACING = 4;
+/** A way in with no opening of its own kind is left this wide open: a lane, a trail. */
+const ROAD_GAP = 5;
+const TRAIL_GAP = 2.5;
+/** A wall variant is drawn from this many. */
+const WALL_VARIANT_SPACE = 1 << 20;
+
+/**
+ * A compound's boundary (see CompoundBoundarySpec), round a circle through its buildings' sides - at
+ * its lanes' gates - its buildings standing in it as part of it: an opening across each lane and
+ * each trail where it crosses the circle (a gate set in it, as its kind's openings say, or a plain
+ * gap), then its openings `anywhere`, each where it fits, spread out; then its wall in runs between
+ * them all, each end finished to what it meets - a gate or a gap (a free end), a building (the same),
+ * a breach (broken). A breach is a run of its own, of fallen wall.
+ */
+function layoutBoundary(
+  spec: NonNullable<CompoundSpec["boundary"]>,
+  worldSeed: number,
+  rng: () => number,
+  buildings: House[],
+  lanes: RoadLine[],
+  trails: RoadLine[],
+  sampleTerrain: TerrainSampler,
+  circle: { x: number; z: number; radius: number },
+): { walls: WallRun[]; gates: PlacedProp[] } {
+  const { x, z, radius } = circle;
+  const steps = Math.max(16, Math.ceil((2 * Math.PI * radius) / BOUNDARY_STEP));
+  const angleOf = (i: number): number => (i / steps) * Math.PI * 2;
+  const pointAt = (angle: number): CellPoint => ({ x: x + Math.cos(angle) * radius, z: z + Math.sin(angle) * radius });
+  // What each step is: the wall (-1), a building in it (-2), or an opening (its index).
+  const BUILT = -2;
+  const WALL = -1;
+  const at: number[] = new Array(steps).fill(WALL);
+  const boxes = buildings.map((house): Box => ({ x: house.x, z: house.z, ax: house.frontZ, az: -house.frontX, hw: house.width / 2 + BOUNDARY_BUILDING_GAP, hd: house.depth / 2 + BOUNDARY_BUILDING_GAP }));
+  for (let i = 0; i < steps; i++) {
+    const p = pointAt(angleOf(i));
+    const ground = sampleTerrain(p.x, p.z);
+    if (!ground.isLand || ground.lakeFactor > 0.02 || boxes.some((box) => lineToBox([p, p], box) === 0)) at[i] = BUILT;
+  }
+  /** The step nearest an angle, and how many steps a width takes either side of it. */
+  const stepOf = (angle: number): number => ((Math.round((angle / (Math.PI * 2)) * steps) % steps) + steps) % steps;
+  // Its steps either side of the middle one: the opening reaching to within a step short of its
+  // width's edge, so a wall's end meets a gate's post rather than leave a slot beside it.
+  const halfSteps = (width: number): number => Math.max(0, Math.floor(width / 2 / ((2 * Math.PI * radius) / steps) - 0.5));
+
+  interface Opening {
+    spec: BoundaryOpeningSpec | null;
+    kind: "gate" | "gap" | "breach";
+    centre: number;
+    half: number;
+    angle: number;
+    arranged: Arranged | null;
+  }
+  const openings: Opening[] = [];
+  const open = (opening: Omit<Opening, "centre" | "half">, width: number): void => {
+    const centre = stepOf(opening.angle);
+    const half = halfSteps(width);
+    const index = openings.length;
+    openings.push({ ...opening, centre, half });
+    for (let k = -half; k <= half; k++) {
+      const i = (centre + k + steps) % steps;
+      if (at[i] !== BUILT) at[i] = index;
+    }
+  };
+  const widthOf = (spec: BoundaryOpeningSpec, arranged: Arranged | null): number => (arranged ? arranged.box.hw * 2 : spec.width[0] + (spec.width[1] - spec.width[0]) * rng());
+  const arrange = (spec: BoundaryOpeningSpec | null): Arranged | null => (spec?.kind === "gate" && spec.gate ? arrangeProp(spec.gate, worldSeed, rng) : null);
+  // Where the lanes and trails cross the circle.
+  const crossing = (line: RoadLine): number | null => {
+    for (let i = 0; i + 1 < line.points.length; i++) {
+      const a = line.points[i];
+      const b = line.points[i + 1];
+      const ra = Math.hypot(a.x - x, a.z - z) - radius;
+      const rb = Math.hypot(b.x - x, b.z - z) - radius;
+      if (ra * rb > 0) continue;
+      const t = ra / (ra - rb || 1);
+      return Math.atan2(a.z + (b.z - a.z) * t - z, a.x + (b.x - a.x) * t - x);
+    }
+    return null;
+  };
+  for (const [lines, kind, gap] of [[lanes, "road", ROAD_GAP], [trails, "trail", TRAIL_GAP]] as const) {
+    const opening = spec.openings.find((o) => o.at === kind) ?? null;
+    for (const line of lines) {
+      const angle = crossing(line);
+      if (angle === null) continue;
+      const arranged = arrange(opening);
+      open({ spec: opening, kind: opening?.kind ?? "gap", angle, arranged }, opening ? widthOf(opening, arranged) : gap);
+    }
+  }
+  // Then those anywhere: where the whole of one is wall, as far from the others as it can be.
+  for (const opening of spec.openings) {
+    if (opening.at !== "anywhere") continue;
+    const count = opening.count[0] + Math.floor(rng() * (opening.count[1] - opening.count[0] + 1));
+    for (let n = 0; n < count; n++) {
+      if (rng() >= opening.chance) continue;
+      const arranged = arrange(opening);
+      const width = widthOf(opening, arranged);
+      const half = halfSteps(width) + halfSteps(OPENING_SPACING * 2);
+      let best: { angle: number; score: number } | null = null;
+      for (let i = 0; i < steps; i += 2) {
+        let clear = true;
+        for (let k = -half; k <= half && clear; k++) clear = at[(i + k + steps) % steps] === WALL;
+        if (!clear) continue;
+        const angle = angleOf(i);
+        const spread = Math.min(Math.PI, ...openings.map((o) => angleBetween(o.angle, angle)));
+        const score = spread + rng() * 0.5;
+        if (!best || score > best.score) best = { angle, score };
+      }
+      if (!best) continue;
+      open({ spec: opening, kind: opening.kind, angle: best.angle, arranged }, width);
+    }
+  }
+
+  // The gates set in their openings, facing out.
+  const gates: PlacedProp[] = [];
+  openings.forEach((opening, n) => {
+    if (!opening.arranged) return;
+    const p = pointAt(opening.angle);
+    gates.push(...setDown(opening.arranged, p.x, p.z, Math.cos(opening.angle), Math.sin(opening.angle), -1 - n));
+  });
+
+  // The runs: each stretch of steps that is all wall - or all one breach - from where it starts.
+  const walls: WallRun[] = [];
+  const kindOf = (i: number): "wall" | "breach" | "stop" => (at[i] === WALL ? "wall" : at[i] >= 0 && openings[at[i]].kind === "breach" ? "breach" : "stop");
+  const endFor = (i: number, self: "wall" | "breach"): LineEnd => {
+    const kind = kindOf((i + steps) % steps);
+    if (self === "wall") return kind === "breach" ? "broken" : "free";
+    return "free";
+  };
+  // Start where one kind gives way to another, so no run wraps past the start.
+  let start = 0;
+  while (start < steps && kindOf(start) === kindOf((start - 1 + steps) % steps)) start++;
+  const closed = start === steps;
+  if (closed) start = 0;
+  // Each step stands for the half step either side of it.
+  const pointsFor = (from: number, count: number): CellPoint[] => {
+    const length = (count * 2 * Math.PI * radius) / steps;
+    const n = Math.max(1, Math.round(length / WALL_POINT_STEP));
+    return Array.from({ length: n + 1 }, (_, k) => pointAt(angleOf(from - 0.5) + ((count / steps) * Math.PI * 2 * k) / n));
+  };
+  let i = 0;
+  while (i < steps) {
+    const first = (start + i) % steps;
+    const kind = kindOf(first);
+    let length = 1;
+    while (i + length < steps && kindOf((start + i + length) % steps) === kind && (kind !== "breach" || at[(start + i + length) % steps] === at[first])) length++;
+    if (kind !== "stop") {
+      walls.push({
+        prop: spec.wall,
+        variant: Math.floor(rng() * WALL_VARIANT_SPACE),
+        points: pointsFor(first, closed ? steps : length),
+        heights: [],
+        ends: closed ? ["join", "join"] : [endFor(first - 1, kind), endFor(first + length, kind)],
+        breach: kind === "breach",
+      });
+    }
+    i += length;
+  }
+  return { walls, gates };
 }
 
 /** A roadside compound's buildings stand back from its road this far past its level ground (times
@@ -475,7 +663,7 @@ function layoutRoadside(featureId: number, kind: FeatureKindDef, site: CompoundS
   let droppedRequired = 0;
   const padBlend = { slope: kind.compound!.pads.slope, min: kind.compound!.pads.blend[0], max: kind.compound!.pads.blend[1] };
   if (!way) {
-    return { featureId, kindId: kind.id, x, z, yard: { x, z, y: site.height, radius: 0, level: 0 }, entrances, lanes, trails: [], buildings, dropped: site.buildings.length, droppedRequired: site.buildings.filter((b) => b.required).length, props: [], droppedProps: [], padBlend, padSpill: kind.compound!.pads.spill };
+    return { featureId, kindId: kind.id, x, z, yard: { x, z, y: site.height, radius: 0, level: 0 }, entrances, lanes, trails: [], buildings, dropped: site.buildings.length, droppedRequired: site.buildings.filter((b) => b.required).length, props: [], droppedProps: [], padBlend, padSpill: kind.compound!.pads.spill, walls: [] };
   }
   const road = way.line;
   const setback = ROAD_HALF_WIDTH * (road.widthScale ?? 1) + ROADSIDE_SETBACK;
@@ -541,7 +729,7 @@ function layoutRoadside(featureId: number, kind: FeatureKindDef, site: CompoundS
     lanes.push(pathToDoor(way, chosen.s, chosen.house, building.door, heightAt));
   }
   const { props, droppedProps } = placeProps(kind.compound!, site, worldSeed, rng, buildings, lanes, [], nearbyRoads, sampleTerrain, { x, z, yardRadius: 0, rim: 0 });
-  return { featureId, kindId: kind.id, x, z, yard: { x, z, y: site.height, radius: 0, level: 0 }, entrances, lanes, trails: [], buildings, dropped, droppedRequired, props, droppedProps, padBlend, padSpill: kind.compound!.pads.spill };
+  return { featureId, kindId: kind.id, x, z, yard: { x, z, y: site.height, radius: 0, level: 0 }, entrances, lanes, trails: [], buildings, dropped, droppedRequired, props, droppedProps, padBlend, padSpill: kind.compound!.pads.spill, walls: [] };
 }
 
 /** A path ends this far out from the door it leads to. */
@@ -577,6 +765,8 @@ function pathToDoor(way: WayOut, s: number, house: House, door: { x: number; z: 
 
 /** A prop keeps this far from anything else - a building, another prop. */
 const PROP_GAP = 0.6;
+/** And this far from a boundary's line (a wall's middle). */
+const WALL_PROP_GAP = 0.9;
 /** And clear of the ground before a building's front, this deep - its door's approach. */
 const DOOR_APRON = 4;
 /** And this far from a lane's middle or a trail's (beyond its own reach); a trail's props lie this
@@ -668,10 +858,13 @@ function placeProps(
   roads: RoadLine[],
   sampleTerrain: TerrainSampler,
   at: { x: number; z: number; yardRadius: number; rim: number },
+  boundary: { walls: WallRun[]; gates: PlacedProp[] } = { walls: [], gates: [] },
 ): { props: PlacedProp[]; droppedProps: string[] } {
-  const props: PlacedProp[] = [];
+  // The boundary's gates are down already, and its wall in the way.
+  const props: PlacedProp[] = [...boundary.gates];
   /** The footprints of what is down already. */
-  const down: Box[] = [];
+  const down: Box[] = boundary.gates.map((gate): Box => ({ x: gate.x, z: gate.z, ax: gate.frontZ, az: -gate.frontX, hw: gate.halfWidth, hd: gate.halfDepth }));
+  const walled = (box: Box): boolean => boundary.walls.some((run) => lineToBox(run.points, box) < WALL_PROP_GAP);
   const droppedProps: string[] = [];
   // The buildings, and the ground before each one's door.
   const houseBoxes = buildings.map((house): Box => ({ x: house.x, z: house.z, ax: house.frontZ, az: -house.frontX, hw: house.width / 2, hd: house.depth / 2 }));
@@ -708,6 +901,7 @@ function placeProps(
     if (onTrail && lineToBox(onTrail.points, box) < PROP_TRAIL_OFFSET - 0.01) return false;
     if (roads.some((line) => distanceToLine(line.points, box.x, box.z) < Math.hypot(box.hw, box.hd) + ROAD_HALF_WIDTH + 1)) return false;
     if (down.some((other) => boxGap(other, box) < PROP_GAP)) return false;
+    if (!acrossLane && walled(box)) return false;
     return corners(box).every((p) => {
       const ground = sampleTerrain(p.x, p.z);
       return ground.isLand && ground.lakeFactor < 0.02;
@@ -981,6 +1175,63 @@ export function settleProps(layouts: CompoundLayout[], sampleTerrain: TerrainSam
     for (const prop of layout.props) {
       if (prop.on) prop.y = prop.on.y + prop.lift;
       else if (prop.prop.ground !== "slope") prop.y = mean(levels.get(prop.group)!);
+    }
+  }
+}
+
+/** A boundary run is drawn (and comes into the collision world) in stretches no longer than this. */
+const WALL_STRETCH = 24;
+
+/**
+ * A boundary run as the stretches it is drawn in - each its own model, stood at its first point, its
+ * points in its own space from there - joined end to end (see LineRun's `join`).
+ */
+export function wallStretches(run: WallRun, seed: number): { x: number; y: number; z: number; frontX: number; frontZ: number; model: (far: boolean) => BuildingModel }[] {
+  const cuts = [0];
+  let travelled = 0;
+  for (let k = 1; k < run.points.length; k++) {
+    travelled += Math.hypot(run.points[k].x - run.points[k - 1].x, run.points[k].z - run.points[k - 1].z);
+    if (travelled >= WALL_STRETCH && k < run.points.length - 1) {
+      cuts.push(k);
+      travelled = 0;
+    }
+  }
+  cuts.push(run.points.length - 1);
+  const stretches = [];
+  for (let n = 0; n + 1 < cuts.length; n++) {
+    const from = cuts[n];
+    const to = cuts[n + 1];
+    const origin = { x: run.points[from].x, y: run.heights[from], z: run.points[from].z };
+    const points: Vec3[] = [];
+    for (let k = from; k <= to; k++) points.push([run.points[k].x - origin.x, run.heights[k] - origin.y, run.points[k].z - origin.z]);
+    const line: LineRun = { points, ends: [n === 0 ? run.ends[0] : "join", n === cuts.length - 2 ? run.ends[1] : "join"], breach: run.breach };
+    const variant = run.variant + n;
+    stretches.push({ ...origin, frontX: 0, frontZ: 1, model: (far: boolean) => generateLine(run.prop, seed, variant, line, far) });
+  }
+  return stretches;
+}
+
+/** A wall run's ground is read at least this often along it. */
+const WALL_GROUND_STEP = 1.5;
+
+/**
+ * Each boundary run's ground, once the ground is final - pads, props' pads and all: its line (any
+ * polyline - a long straight side as well as a curve) filled in with points no further apart than
+ * WALL_GROUND_STEP, its corners kept where they are, and the ground read at each - so it follows
+ * every dip and rise between its corners.
+ */
+export function settleWalls(layouts: CompoundLayout[], sampleTerrain: TerrainSampler): void {
+  for (const layout of layouts) {
+    for (const run of layout.walls) {
+      const points: CellPoint[] = [run.points[0]];
+      for (let k = 1; k < run.points.length; k++) {
+        const a = run.points[k - 1];
+        const b = run.points[k];
+        const n = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.z - a.z) / WALL_GROUND_STEP));
+        for (let i = 1; i <= n; i++) points.push({ x: a.x + ((b.x - a.x) * i) / n, z: a.z + ((b.z - a.z) * i) / n });
+      }
+      run.points = points;
+      run.heights = points.map((p) => sampleTerrain(p.x, p.z).height);
     }
   }
 }

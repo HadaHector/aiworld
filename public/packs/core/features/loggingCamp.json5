@@ -35,13 +35,23 @@
       { building: "stable", count: [1, 1], chance: 0.5 },
       { building: "toolShed", count: [1, 1], chance: 0.6 },
     ],
-    // Its props, set down where they fit, each kind in turn: a gate across each lane, standing
-    // open; in the yard, decks of logs waiting to be hauled, logs dragged in and lying about, and
+    // A rail fence round it, between its buildings' sides (each building standing in it): a field
+    // gate across each lane, a wide gap where the skid trail leaves (logs are dragged through it), now
+    // and then a wicket of its own, and a bay or two with its rails down.
+    boundary: {
+      wall: "railFence",
+      openings: [
+        { at: "road", gate: "fieldGate" },
+        { at: "trail", gap: [4, 5] },
+        { at: "anywhere", gate: "wicketGate", count: [0, 1], chance: 0.5 },
+        { at: "anywhere", breach: [2.2, 3], count: [0, 2] },
+      ],
+    },
+    // Its props, set down where they fit, each kind in turn: in the yard, decks of logs waiting to be hauled, logs dragged in and lying about, and
     // the saw spot; log stacks round its edge; a wood corner by the cookhouse (or any building), a
     // grindstone for the axes by the tool shed, oats and a trough for the oxen by the stable, store
     // piles by the buildings; and felled logs along the skid trail.
     props: [
-      { prop: "gate", count: [2, 2], chance: 0.8, at: "gate" },
       { group: "logDeck", count: [1, 2], at: "yard" },
       { group: "sawSpot", count: [1, 1], at: "yard" },
       { prop: "felledLog", count: [1, 3], at: "yard" },

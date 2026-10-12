@@ -1,0 +1,16 @@
+// A field gate set in a wall or a fence: two posts, a railed leaf standing open - no fence of its
+// own, the boundary it stands in runs up to its posts. (The lone `gate` has a little fence each side.)
+{
+  name: "Field gate",
+  type: "gate",
+  gate: {
+    opening: [3.8, 4.4],
+    height: [1.4, 1.6],
+    open: [70, 110],
+    wings: [0, 0],
+  },
+  parts: {
+    posts: { material: "roundLog", tints: [[1, 1, 1], [0.88, 0.84, 0.8]] },
+    rails: { material: "timber", tints: [[0.78, 0.7, 0.6], [0.68, 0.6, 0.52]] },
+  },
+}

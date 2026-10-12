@@ -31,18 +31,49 @@ export interface PropContext {
 /**
  * A prop generator: the settings it takes (each with its default, if it has one), the parts it is
  * painted by, and how it builds - its model standing on y 0, its front toward +z.
+ *
+ * A line prop (a wall, a fence) also builds `line`: itself along a run of ground (see LineRun),
+ * not set down whole but laid along it. Its `build` is a short straight run of it, for the
+ * workbench.
  */
 export interface PropGenerator {
   doc: string;
   params: Record<string, PropParam>;
   parts: string[];
   build(ctx: PropContext): void;
+  line?(ctx: PropContext, run: LineRun): void;
 }
+
+/**
+ * A stretch of a line prop: its points along the ground, x, y (the ground's height there) and z, in
+ * the model's space, at most a metre or two apart; and how each end is finished - `free` (an end of
+ * its own, at a gap or a gate: a pier, an end post), `join` (it carries on into the next stretch: no
+ * end), `broken` (falling away into a breach) - and whether it is one: `breach`, what is left of it
+ * where it fell (rubble, rails down) - walked over.
+ */
+export interface LineRun {
+  points: Vec3[];
+  ends: [LineEnd, LineEnd];
+  breach: boolean;
+}
+
+export type LineEnd = "free" | "join" | "broken";
 
 /** A prop's model: built from its seed and variant, the same every time - `far`: coarser, its
  *  small pieces left out, and no colliders. */
 export function generateProp(def: PropDef, seed: number, variant: number, far = false): BuildingModel {
   return generate(def, seed, variant, far, false);
+}
+
+/** Whether a prop is laid along a line (a wall, a fence) rather than set down whole. */
+export function isLineProp(def: PropDef): boolean {
+  return PROP_GENERATORS[def.generator]?.line !== undefined;
+}
+
+/** A line prop's model along one stretch of its run (see LineRun) - the same every time for the same
+ *  seed, variant and run. */
+export function generateLine(def: PropDef, seed: number, variant: number, run: LineRun, far = false): BuildingModel {
+  return generate(def, seed, variant, far, false, run);
 }
 
 /** How far a prop reaches either side of its middle and how tall it is - worked out as its model is,
@@ -54,7 +85,7 @@ export function measureProp(def: PropDef, seed: number, variant: number): { half
   return { halfWidth, halfDepth, height, bounds: bounds! };
 }
 
-function generate(def: PropDef, seed: number, variant: number, far: boolean, measure: boolean): BuildingModel & { bounds?: [number, number, number, number] } {
+function generate(def: PropDef, seed: number, variant: number, far: boolean, measure: boolean, run?: LineRun): BuildingModel & { bounds?: [number, number, number, number] } {
   const generator = PROP_GENERATORS[def.generator];
   let hash = 0;
   for (let i = 0; i < def.id.length; i++) hash = (Math.imul(hash, 31) + def.id.charCodeAt(i)) | 0;
@@ -85,7 +116,8 @@ function generate(def: PropDef, seed: number, variant: number, far: boolean, mea
       if (def.light && !far && !measure) b.lights.push({ position: at, ...def.light, sky: false, facing: null });
     },
   };
-  generator.build(ctx);
+  if (run) generator.line!(ctx, run);
+  else generator.build(ctx);
   const model = b.finish({ x: 0, z: Math.max(Math.abs(b.minZ), Math.abs(b.maxZ)) });
   if (colliders) model.colliders = colliders.finish();
   return measure ? { ...model, bounds: [b.minX, b.maxX, b.minZ, b.maxZ] } : model;

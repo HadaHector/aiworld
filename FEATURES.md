@@ -222,7 +222,8 @@ What the features above keep asking for, roughly by how much each unlocks.
 7. **Round and tall shapes.** Towers, windmills, yurts, lighthouses, and ring layouts (stone
    circles). Houses today are built from rectangular masses.
 8. **Linear features.** Walls, aqueducts, beacon chains and old roads, which cross cells. This is
-   the heaviest piece, and should come last.
+   the heaviest piece, and should come last. Its small form is in: line props (a rail fence, a
+   drystone wall) laid along a run of ground, round a compound as its `boundary`.
 9. **Effects.** Smoke (kilns, charcoal, chimneys), steam (hot springs), turning wheels and sails,
    glow and floating stones for magic. Chimney smoke first: a thin plume from the chimneys of
    buildings people live in (none from a shed or an empty house - its absence is a clue too), bent
@@ -390,8 +391,11 @@ through-stop by construction, not a special mode.
 **Lanes:** between each pair of entrances, a lane crosses the yard. Props keep off it, and
 buildings may face it (`doorTo: "lane"`) rather than the yard's middle (`doorTo: "yard"`).
 
-**Boundary:** the format has it. Its generator waits for the first compound that needs one (a
-farmstead, a stockade).
+**Boundary:** a line prop (a rail fence, a drystone wall) round the yard, through the buildings'
+sides where the lanes' gates stand, each building part of it; broken by its openings - a gate or a
+gap across each lane and trail, and openings `anywhere`: a wicket, a gap, a breach (the wall fallen,
+walked over). The logging camp has a rail fence. Only round a `ring` so far; other arrangements
+(the cemetery's rows) give it their own outline when they come.
 
 ```json5
 // features/loggingCamp.json5 (sketch)
@@ -732,8 +736,5 @@ Saved for their own steps, so this one stays whole:
 - chimney smoke and other effects;
 - people and animals;
 - a river log-flume;
-- fences: line-based structures - a run of rail fence along part of the camp's edge, so a lane's
-  gate stands in a fence rather than alone with a few metres of rail either side (the same piece
-  as engine piece 8's walls, at a smaller scale - a fence follows the ground between two points);
 - the saw shed's open side is empty: it wants its work under it - a log on trestles or a saw pit,
   logs waiting and boards sawn, and sawdust spilt over its floor and out in front.

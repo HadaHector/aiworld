@@ -216,6 +216,8 @@ let stageSubject = "";
 let textureSubject = "";
 /** Bumped by every preview, so one overtaken by a newer one throws its result away. */
 let previewToken = 0;
+/** The last feature previewed, for the console. */
+let lastFeature: ReturnType<typeof buildFeaturePreview> = null;
 
 engine.runRenderLoop(() => {
   if (stage && stageCanvas.style.display !== "none") stage.scene.render();
@@ -229,6 +231,10 @@ engine.runRenderLoop(() => {
   },
   get content() {
     return lastContent;
+  },
+  /** The feature on screen as laid out (its layout, buildings, props, walls), or null. */
+  get feature() {
+    return lastFeature;
   },
   preview: () => runPreview(),
 };
@@ -880,6 +886,7 @@ async function preview3d(token: number, asset: Asset, view: ViewDef, content: Wo
     setStatus("Laying it out");
     await nextPaint();
     const built = buildFeaturePreview(kind, content, seed, variant, far, heightFunction(options.shape as GroundShape));
+    lastFeature = built;
     if (!built) {
       showMode("none");
       setStatus(`No preview for a ${kind.type} yet - only compounds. The JSON checks out.`);
