@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>aiworld music</title>
+    <style>
+      :root {
+        --bg: #161b21;
+        --panel: #1d242c;
+        --line: #333e4b;
+        --text: #dfe6ee;
+        --muted: #8d9aa8;
+        --accent: #6fa8c7;
+        --now: #2b3a48;
+        font: 13px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
+        color-scheme: dark;
+      }
+      html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); overflow: hidden; }
+      #app { display: grid; grid-template-columns: 1fr 300px; grid-template-rows: auto 1fr; height: 100%; }
+      header { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding: 8px 12px; border-bottom: 1px solid var(--line); background: var(--panel); }
+      header h1 { font-size: 14px; margin: 0 6px 0 0; font-weight: 600; }
+      header label { display: flex; align-items: center; gap: 5px; color: var(--muted); }
+      input[type="number"] { width: 90px; }
+      select, button, input { font: inherit; color: var(--text); background: #242c36; border: 1px solid var(--line); border-radius: 4px; padding: 4px 8px; }
+      button:hover { border-color: var(--accent); }
+      button.on { background: var(--accent); color: #10151a; border-color: var(--accent); }
+      #main { display: grid; grid-template-rows: auto auto auto 1fr; min-height: 0; min-width: 0; }
+      #summary { padding: 6px 12px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 4px 16px; }
+      #summary b { color: var(--text); font-weight: 500; }
+      #overview { display: flex; gap: 3px; padding: 0 12px 6px; overflow-x: auto; }
+      #overview div { flex: 1 0 auto; min-width: 70px; padding: 4px 6px; border: 1px solid var(--line); border-radius: 4px; cursor: pointer; font-size: 12px; }
+      #overview div small { display: block; color: var(--muted); font-family: ui-monospace, Consolas, monospace; font-size: 11px; }
+      #overview div.view { border-color: var(--accent); }
+      #overview div.now { background: var(--now); }
+      #roll { width: 100%; height: 230px; display: block; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); cursor: pointer; }
+      #gridWrap { overflow: auto; min-height: 0; }
+      #grid { border-collapse: collapse; font: 12px/1.35 ui-monospace, Consolas, monospace; white-space: pre; }
+      #grid th { position: sticky; top: 0; background: var(--panel); color: var(--muted); font-weight: 500; text-align: left; padding: 3px 8px; border-bottom: 1px solid var(--line); }
+      #grid td { padding: 0 8px; border-right: 1px solid #232b34; color: #b9c3ce; }
+      #grid td.row { color: var(--muted); text-align: right; }
+      #grid tr.beat td { background: #1a2027; }
+      #grid tr.bar td { border-top: 1px solid var(--line); }
+      #grid tr.now td { background: var(--now); }
+      #grid .n { color: var(--text); }
+      #grid .x { color: #c9a35e; }
+      #grid .e { color: #4b5866; }
+      #panel { background: var(--panel); border-left: 1px solid var(--line); overflow-y: auto; padding: 10px 12px; }
+      h2 { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 16px 0 6px; }
+      h2:first-child { margin-top: 0; }
+      .channel { display: grid; grid-template-columns: 10px 1fr auto auto; gap: 6px; align-items: center; margin-bottom: 3px; }
+      .channel .swatch { width: 10px; height: 10px; border-radius: 2px; }
+      .channel small { color: var(--muted); }
+      .channel button { padding: 0 6px; font-size: 11px; }
+      .instrument { border: 1px solid var(--line); border-radius: 4px; padding: 6px; margin-bottom: 8px; }
+      .instrument .title { display: flex; justify-content: space-between; }
+      .instrument small { color: var(--muted); display: block; }
+      .instrument canvas { width: 100%; height: 44px; display: block; margin: 4px 0; background: #161b21; border-radius: 3px; }
+      .keys { display: flex; flex-wrap: wrap; gap: 2px; }
+      .keys button { padding: 1px 4px; font-size: 11px; min-width: 32px; }
+      .hint { color: var(--muted); font-size: 12px; }
+      #status { color: var(--muted); }
+    </style>
+  </head>
+  <body>
+    <div id="app">
+      <header>
+        <h1>aiworld music</h1>
+        <label>Style <select id="style"></select></label>
+        <label>Place seed <input id="place" type="number" /></label><button id="newPlace" title="New place">🎲</button>
+        <label>Visit seed <input id="visit" type="number" /></label><button id="newVisit" title="New visit">🎲</button>
+        <button id="play">▶ Play</button>
+        <button id="stop">■ Stop</button>
+        <label><input id="continuous" type="checkbox" /> Keep playing, gaps of</label>
+        <input id="gap" type="number" min="0" value="20" style="width: 56px" /><span class="hint">s, next piece:</span>
+        <select id="next"><option value="place">new place</option><option value="visit">new visit</option></select>
+        <span id="status"></span>
+      </header>
+      <div id="main">
+        <div id="summary"></div>
+        <div id="overview"></div>
+        <canvas id="roll"></canvas>
+        <div id="gridWrap"><table id="grid"></table></div>
+      </div>
+      <div id="panel">
+        <h2>Channels</h2>
+        <div id="channels"></div>
+        <h2>Instruments</h2>
+        <p class="hint" style="margin-top: 0">Synth stand-ins rendered to samples. Click a key to hear it.</p>
+        <div id="instruments"></div>
+      </div>
+    </div>
+    <script type="module" src="/src/musicPage/main.ts"></script>
+  </body>
+</html>
