@@ -180,12 +180,27 @@ the forest style using synth stand-ins.
   `src/musicPage/`.
 - `npm run probe -- scripts/probe/music.mjs [place] [visit] [patterns]` prints a song as tracker
   text, without audio.
+- **Styles:**
+  - **Forest:** medieval ambient.
+  - **Glade:** mysterious, magical nature. Mostly Lydian, slow and built over a drone. A choir pad
+    breathes (it swells and fades back every bar), harp arpeggios sweep up, and a flute comes and
+    goes with bird-like trills. Bells sparkle high up, echoing away through retriggers. There is
+    hardly any percussion.
+  - Optional style knobs, all off unless a style sets them: lead rests, trills, pad breath, pluck
+    register, sparkles, and a mix per part. A knob that is off draws nothing from the seed, so
+    existing styles keep their songs.
 - **Sample library.** `src/music/xi.ts` reads FastTracker 2 `.xi` instruments: keymapped
   samples, volume envelope with a sustain point, fadeout, auto-vibrato, and ping-pong loops (baked
   forward). Candidates from kiarchive.com sit in `public/samples/kiarchive/<role>/`, which is
   gitignored because their licence is a grey zone. `index.json` lists them by role and
   `SOURCES.txt` records where each one came from. On the music page, each instrument card has a
-  picker to swap the synth for a library sound; the choice is kept per browser. Choir sounds can
+  picker to swap the synth for a library sound; the choice is kept per browser. The sounds picked
+  by ear are the defaults (`DEFAULT_SOUNDS` in `src/musicPage/main.ts`):
+  - guitar `nlgtr01f`, strings `ostrs03`, bass `cbass01`, flute `flute09`
+  - frame drum `pandr02`, tambourine `tamb02`, low drum `tom008l`
+  - choir `aahh02`, harp `plharp01`, bells `glock01`
+
+  On a machine without the library, each instrument falls back to its synth. Choir sounds can
   be auditioned, but the forest style does not use a choir yet.
 - Simplifications for now:
   - Styles and instruments live in code, not packs.

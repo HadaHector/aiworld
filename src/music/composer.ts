@@ -28,6 +28,7 @@ const BASS = 5;
 const FRAME = 6;
 const TAMB = 7;
 const LOW = 8;
+const SPARKLE = 9;
 
 const CHANNELS: Channel[] = [
   { name: "Lead", role: "lead", pan: -0.1, reverb: 0.4 },
@@ -40,6 +41,9 @@ const CHANNELS: Channel[] = [
   { name: "Tambourine", role: "percussion", pan: 0.45, reverb: 0.3 },
   { name: "Low drum", role: "percussion", pan: 0, reverb: 0.35 },
 ];
+
+/** Only for styles with sparkles. */
+const SPARKLE_CHANNEL: Channel = { name: "Sparkle", role: "counter", pan: 0.2, reverb: 0.7 };
 
 /** Drum articulations to keys, as the drum instruments lay them out. */
 const DRUM_KEYS: Record<string, number> = { dum: 60, tek: 62, shake: 60, hit: 62, boom: 60 };
@@ -169,8 +173,16 @@ export function composeSong(style: Style, placeSeed: number, visitSeed: number):
   const ornamentedA2 = ornament(visit, key.mode, melodyA2);
   for (const notes of [melodyA, melodyA2, melodyB, melodyB2]) for (const n of notes) if (n.dur >= 4 && visit() < 0.1) n.slideIn = slideFromBelow(key.mode, n.degree);
 
+  // Optional knobs. Each draws from the visit only when the style uses it, so styles without it
+  // keep their songs.
+  const part = (name: keyof NonNullable<Style["mix"]>): number => style.mix?.[name] ?? 1;
+  // The lead never sits out the outro, nor the first phrase that brings its theme.
+  const firstTheme = form.find((id) => id !== "I1" && id !== "I2");
+  const leadRests = new Set(style.leadRestChance ? form.filter((id) => !["I1", "I2", "O1", "O2"].includes(id) && id !== firstTheme && visit() < style.leadRestChance!) : []);
+  const channels = style.instruments.sparkle ? [...CHANNELS, SPARKLE_CHANNEL] : CHANNELS;
+
   const totalRows = form.length * phraseRows;
-  const cells: (Cell | undefined)[][] = Array.from({ length: totalRows }, () => CHANNELS.map(() => undefined));
+  const cells: (Cell | undefined)[][] = Array.from({ length: totalRows }, () => channels.map(() => undefined));
   const put = (row: number, channel: number, cell: Cell): void => {
     if (row < 0 || row >= totalRows) return;
     const existing = cells[row][channel];
@@ -190,6 +202,7 @@ export function composeSong(style: Style, placeSeed: number, visitSeed: number):
   let padPlaying: number[] | undefined;
   let bassPlaying: number | undefined;
   let padStarted = false;
+  let plucking = false;
   const patterns: Pattern[] = [];
 
   form.forEach((id, index) => {
@@ -203,6 +216,8 @@ export function composeSong(style: Style, placeSeed: number, visitSeed: number):
       : id === "B'" ? bSecond
       : outroChords;
     const layers = sectionLayers(id, pluckFirst);
+    if (style.instruments.sparkle && id !== "I1") layers.add("sparkle");
+    if (leadRests.has(id)) layers.delete("lead");
     patterns.push({
       section: SECTION_LABELS[id] ?? id,
       rows: phraseRows,
@@ -224,9 +239,15 @@ export function composeSong(style: Style, placeSeed: number, visitSeed: number):
       const loud = id === "B" || id === "B'" ? 0.06 : 0;
       melody.forEach((n, i) => {
         const row = start + n.row;
-        const volume = 0.58 + loud + 0.08 * Math.sin((Math.PI * n.row) / phraseRows) + (n.row % barRows === 0 ? 0.04 : 0) + jitter(0.03);
+        const volume = (0.58 + loud + 0.08 * Math.sin((Math.PI * n.row) / phraseRows) + (n.row % barRows === 0 ? 0.04 : 0) + jitter(0.03)) * part("lead");
         const effects: Effect[] = n.slideIn ? [{ type: "slideIn", semis: n.slideIn, ticks: 3 }] : [];
-        put(row, LEAD, { note: degreeToMidi(key.mode, leadTonic, n.degree), instrument: style.instruments.lead, volume, effects: effects.length ? effects : undefined });
+        const note = degreeToMidi(key.mode, leadTonic, n.degree);
+        put(row, LEAD, { note, instrument: style.instruments.lead, volume, effects: effects.length ? effects : undefined });
+        // A trill: the note and the step above it, a tick apart, as birds do.
+        if (style.trillChance && n.dur >= 6 && visit() < style.trillChance) {
+          const x = degreeToMidi(key.mode, leadTonic, n.degree + 1) - note;
+          for (let r = 1; r <= 3; r++) put(row + r, LEAD, { effects: [{ type: "arpeggio", x, y: 0 }] });
+        }
         if (n.dur >= 8) slideRows(LEAD, row + 4, n.dur - 4, -volume * (n.fade ?? 0.3));
         const next = melody[i + 1];
         if (!next || next.row > n.row + n.dur) put(row + n.dur, LEAD, { note: "off" });
@@ -237,7 +258,7 @@ export function composeSong(style: Style, placeSeed: number, visitSeed: number):
     const fadeIn = layers.has("pad") && !padStarted;
     const fadeOut = isLast;
     if (layers.has("pad")) {
-      const base = id === "B" || id === "B'" ? 0.5 : 0.42;
+      const base = (id === "B" || id === "B'" ? 0.5 : 0.42) * part("pad");
       chords.forEach((c, b) => {
         const voicing = padVoicing(key, c, padPlaying);
         voicing.forEach((note, v) => {
@@ -250,6 +271,17 @@ export function composeSong(style: Style, placeSeed: number, visitSeed: number):
       });
       if (fadeIn) for (const ch of PADS) slideRows(ch, start, barRows * 2, base);
       if (fadeOut) for (const ch of PADS) slideRows(ch, start + barRows * 2, barRows * 2, -base);
+      // Breathing: each bar swells and ebbs back, where no fade is running.
+      const breath = (style.padBreath ?? 0) * base;
+      if (breath) {
+        for (let b = 0; b < 4; b++) {
+          if ((fadeIn && b < 2) || (fadeOut && b >= 2)) continue;
+          for (const ch of PADS) {
+            slideRows(ch, start + b * barRows, barRows / 2, breath);
+            slideRows(ch, start + b * barRows + barRows / 2, barRows / 2, -breath);
+          }
+        }
+      }
       padStarted = true;
     } else {
       if (padPlaying) for (const ch of PADS) put(start, ch, { note: "off" });
@@ -257,7 +289,7 @@ export function composeSong(style: Style, placeSeed: number, visitSeed: number):
     }
 
     if (layers.has("bass")) {
-      const base = 0.5;
+      const base = 0.5 * part("bass");
       const enterBar = fadeIn ? 2 : 0;
       chords.forEach((c, b) => {
         if (b < enterBar) return;
@@ -277,15 +309,20 @@ export function composeSong(style: Style, placeSeed: number, visitSeed: number):
       const pattern = id === "B" || id === "B'" ? plucksB : plucksA;
       chords.forEach((c, b) => {
         if (id === "O2" && b === 2) return;
-        const tones = pluckTones(key, c);
+        const tones = pluckTones(key, c).map((t) => t + (style.pluckShift ?? 0));
         const steps = id === "O2" && b === 3 ? [pattern[0]] : id === "O2" && b === 1 ? pattern.slice(0, 2) : pattern;
         steps.forEach(([row, tone]) => {
           const strong = row === 0 ? 0.56 : row % style.rowsPerBeat === 0 ? 0.46 : 0.38;
           const quiet = id === "O2" ? 0.7 : 1;
           const effects: Effect[] | undefined = row > 0 && visit() < 0.2 ? [{ type: "noteDelay", ticks: 1 }] : undefined;
-          put(start + b * barRows + row, PLUCK, { note: tones[tone], instrument: style.instruments.pluck, volume: (strong + jitter(0.05)) * quiet, effects });
+          put(start + b * barRows + row, PLUCK, { note: tones[tone], instrument: style.instruments.pluck, volume: (strong + jitter(0.05)) * quiet * part("pluck"), effects });
         });
       });
+      plucking = true;
+    } else if (plucking) {
+      // Sampled plucks hold a quiet loop until let go.
+      put(start, PLUCK, { note: "off" });
+      plucking = false;
     }
 
     // Percussion.
@@ -298,30 +335,54 @@ export function composeSong(style: Style, placeSeed: number, visitSeed: number):
       for (let b = 0; b < 4; b++) {
         const bar = start + b * barRows;
         if (level === 1) {
-          if (b % 2 === 0) put(bar, FRAME, { note: DRUM_KEYS.dum, instrument: style.instruments.frameDrum, volume: 0.45 + jitter(0.04) });
+          if (b % 2 === 0) put(bar, FRAME, { note: DRUM_KEYS.dum, instrument: style.instruments.frameDrum, volume: (0.45 + jitter(0.04)) * part("drums") });
           continue;
         }
         for (const [row, name] of framePattern) {
-          const volume = (name === "dum" ? 0.55 : 0.34) + jitter(0.05);
+          const volume = ((name === "dum" ? 0.55 : 0.34) + jitter(0.05)) * part("drums");
           put(bar + row, FRAME, { note: DRUM_KEYS[name], instrument: style.instruments.frameDrum, volume });
         }
         const rollBar = b === 3 && (id === "B'" || id === "Ar'");
         for (const [row, name] of tambPattern) {
           if (rollBar && row >= barRows - style.rowsPerBeat) continue;
-          put(bar + row, TAMB, { note: DRUM_KEYS[name], instrument: style.instruments.tambourine, volume: (name === "hit" ? 0.32 : 0.24) + jitter(0.04) });
+          put(bar + row, TAMB, { note: DRUM_KEYS[name], instrument: style.instruments.tambourine, volume: ((name === "hit" ? 0.32 : 0.24) + jitter(0.04)) * part("drums") });
         }
         if (rollBar) {
           put(bar + barRows - style.rowsPerBeat, TAMB, {
             note: DRUM_KEYS.shake,
             instrument: style.instruments.tambourine,
-            volume: 0.3,
+            volume: 0.3 * part("drums"),
             effects: [{ type: "retrigger", every: 2, volumeFactor: 0.9 }],
           });
           for (let r = barRows - style.rowsPerBeat + 1; r < barRows; r++) put(bar + r, TAMB, { effects: [{ type: "retrigger", every: 2, volumeFactor: 0.92 }] });
         }
       }
-      put(start, LOW, { note: DRUM_KEYS.boom, instrument: style.instruments.lowDrum, volume: 0.5 + jitter(0.04) });
-      if (id === "B" || id === "B'") put(start + 2 * barRows, LOW, { note: DRUM_KEYS.boom, instrument: style.instruments.lowDrum, volume: 0.36 + jitter(0.04) });
+      put(start, LOW, { note: DRUM_KEYS.boom, instrument: style.instruments.lowDrum, volume: (0.5 + jitter(0.04)) * part("drums") });
+      if (id === "B" || id === "B'") put(start + 2 * barRows, LOW, { note: DRUM_KEYS.boom, instrument: style.instruments.lowDrum, volume: (0.36 + jitter(0.04)) * part("drums") });
+    }
+
+    // Sparkles: now and then a quick run over the chord high up, echoing away.
+    const sparkle = style.sparkle;
+    if (sparkle && style.instruments.sparkle && layers.has("sparkle")) {
+      chords.forEach((c, b) => {
+        if (visit() >= sparkle.chance * (id === "O2" ? 0.5 : 1)) return;
+        const count = sparkle.notes[0] + Math.floor(visit() * (sparkle.notes[1] - sparkle.notes[0] + 1));
+        const step = pick(visit, [1, 1, 2]);
+        const at = start + b * barRows + Math.floor(visit() * Math.max(1, barRows - count * step));
+        const tones = [...triadDegrees(c), mod(c + 1, 7)].flatMap((d) => pitchesOf(key, d, 76, 98)).sort((x, y) => x - y);
+        const up = visit() < 0.7;
+        let index = up ? Math.floor(visit() * Math.max(1, tones.length - count)) : tones.length - 1 - Math.floor(visit() * Math.max(1, tones.length - count));
+        let volume = (0.42 + jitter(0.06)) * part("sparkle");
+        for (let k = 0; k < count && index >= 0 && index < tones.length; k++) {
+          put(at + k * step, SPARKLE, { note: tones[index], instrument: style.instruments.sparkle, volume });
+          volume *= 0.85;
+          index += up ? 1 : -1;
+        }
+        const last = at + (count - 1) * step;
+        for (let r = 0; r < 4; r++) put(last + r, SPARKLE, { effects: [{ type: "retrigger", every: 3, volumeFactor: 0.55 }] });
+        // Let go after the echoes: a sampled bell then rings down on its own envelope.
+        if (!cells[last + 4]?.[SPARKLE]?.note) put(last + 4, SPARKLE, { note: "off" });
+      });
     }
   });
 
@@ -335,7 +396,7 @@ export function composeSong(style: Style, placeSeed: number, visitSeed: number):
     rowsPerBeat: style.rowsPerBeat,
     ticksPerRow: style.ticksPerRow,
     beatsPerBar: meter.beats,
-    channels: CHANNELS,
+    channels,
     patterns,
     summary: {
       key: `${pitchClassName(key.tonic)} ${key.mode}`,
@@ -345,6 +406,7 @@ export function composeSong(style: Style, placeSeed: number, visitSeed: number):
       percussion: hasPercussion ? "yes" : "no",
       bass: drone ? "drone" : "follows the chords",
       intro: pluckFirst ? "pluck alone" : "pad",
+      ...(leadRests.size ? { "lead rests in": [...leadRests].map((id) => SECTION_LABELS[id] ?? id).join(", ") } : {}),
     },
   };
 }

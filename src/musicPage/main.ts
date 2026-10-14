@@ -194,18 +194,29 @@ function applyGains(): void {
 // (public/samples/, gitignored; index.json lists it by role). The choice is kept per browser.
 
 const synths: Record<string, Instrument> = { ...instruments };
-/** Roles with no synth, only library sounds; not played by the style yet. */
-const EXTRA_LOOKS: Record<string, { name: string; short: string; color: string; gain: number; range: [number, number] }> = {
-  choir: { name: "Choir", short: "ch", color: "#d8c8ec", gain: 0.3, range: [48, 79] },
-};
+/** Roles with no synth, only library sounds. */
+const EXTRA_LOOKS: Record<string, { name: string; short: string; color: string; gain: number; range: [number, number] }> = {};
 const LIBRARY = "/samples/kiarchive/";
 const SOUNDS_KEY = "aiworld.music.sounds";
+/** The sounds picked by ear, used wherever the library has them; "" in a choice means the synth. */
+const DEFAULT_SOUNDS: Record<string, string> = {
+  guitar: "guitar/nlgtr01f.xi",
+  strings: "strings/ostrs03.xi",
+  bass: "bass/cbass01.xi",
+  flute: "flute/flute09.xi",
+  frameDrum: "frameDrum/pandr02.xi",
+  tambourine: "tambourine/tamb02.xi",
+  lowDrum: "lowDrum/tom008l.xi",
+  choir: "choir/aahh02.xi",
+  harp: "harp/plharp01.xi",
+  bells: "bells/glock01.xi",
+};
 let library: Record<string, string[]> = {};
 const sounds: Record<string, string> = ((): Record<string, string> => {
   try {
-    return JSON.parse(localStorage.getItem(SOUNDS_KEY) ?? "{}");
+    return { ...DEFAULT_SOUNDS, ...JSON.parse(localStorage.getItem(SOUNDS_KEY) ?? "{}") };
   } catch {
-    return {};
+    return { ...DEFAULT_SOUNDS };
   }
 })();
 
@@ -222,7 +233,7 @@ async function useSound(id: string, path: string): Promise<void> {
   if (!path) {
     if (synths[id]) instruments[id] = synths[id];
     else delete instruments[id];
-    delete sounds[id];
+    sounds[id] = "";
     return;
   }
   const response = await fetch(LIBRARY + path);
@@ -242,12 +253,13 @@ async function loadLibrary(): Promise<void> {
   } catch {
     library = {};
   }
+  // Without the library (it is not in git) every instrument stays its synth.
   for (const [id, path] of Object.entries(sounds)) {
+    if (!path || !library[id]?.includes(path)) continue;
     try {
       await useSound(id, path);
     } catch (e) {
       console.warn("music: could not load", path, e);
-      delete sounds[id];
     }
   }
 }
@@ -274,7 +286,7 @@ function renderInstrument(div: HTMLElement, id: string): void {
     const select = document.createElement("select");
     select.add(new Option(synths[id] ? "Synth stand-in" : "None", ""));
     for (const path of choices) select.add(new Option(path.split("/").pop()!.replace(/\.xi$/, ""), path));
-    select.value = sounds[id] ?? "";
+    select.value = instruments[id] === synths[id] ? "" : (sounds[id] ?? "");
     select.onchange = async () => {
       select.disabled = true;
       try {
@@ -289,7 +301,7 @@ function renderInstrument(div: HTMLElement, id: string): void {
     div.append(select);
   }
   if (!inst) {
-    div.insertAdjacentHTML("beforeend", `<small>Not in the forest style yet - pick a sound to hear it.</small>`);
+    div.insertAdjacentHTML("beforeend", `<small>Pick a sound to hear it.</small>`);
     return;
   }
   const env = inst.envelope;

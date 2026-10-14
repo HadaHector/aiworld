@@ -206,29 +206,108 @@ function renderFlute(root: number, seed: number): SampleZone {
  * line one period long, averaged a little on every pass so the high partials die first. The delay is
  * a whole number of samples, so the zone's root is the pitch that actually comes out.
  */
-function renderPluck(root: number, seed: number): SampleZone {
+function renderPluck(root: number, seed: number, string: PluckedString = GUT): SampleZone {
   const rng = mulberry32(seed);
   const period = Math.max(2, Math.round(SAMPLE_RATE / midiToHz(root) - 0.5));
-  const length = Math.floor(3 * SAMPLE_RATE);
+  const length = Math.floor(string.seconds * SAMPLE_RATE);
   const data = new Float32Array(length);
   const burst = new Float32Array(period);
   for (let i = 0; i < period; i++) burst[i] = rng() * 2 - 1;
-  // Plucked a fifth of the way along the string: that comb takes out some partials, the lowpass
-  // makes it a finger rather than a pick.
-  const pick = Math.max(1, Math.floor(period * 0.2));
+  // Where along the string it is plucked: that comb takes out some partials; the lowpass makes it
+  // a finger rather than a pick.
+  const pick = Math.max(1, Math.floor(period * string.pick));
   for (let i = period - 1; i >= pick; i--) burst[i] -= burst[i - pick];
   let y = 0;
-  for (let i = 0; i < period; i++) burst[i] = y += 0.5 * (burst[i] - y);
-  const loss = 0.9965;
+  for (let i = 0; i < period; i++) burst[i] = y += string.bright * (burst[i] - y);
+  const loss = string.loss;
   for (let i = 0; i < length; i++) {
     if (i < period) data[i] = burst[i];
     else data[i] = loss * 0.5 * (data[i - period] + data[i - period - 1 >= 0 ? i - period - 1 : 0]);
   }
   onePoleHighpass(data, 60);
-  onePoleLowpass(data, 5000);
+  onePoleLowpass(data, string.lowpass);
   normalize(data, 0.9);
   const actual = hzToMidi(SAMPLE_RATE / (period + 0.5));
   return zone(data, actual, root, root);
+}
+
+interface PluckedString {
+  /** Fraction of the string from the end where it is plucked. */
+  pick: number;
+  /** 0..1: how much of the burst's top end survives the finger. */
+  bright: number;
+  /** Per-pass loss: closer to 1 rings longer. */
+  loss: number;
+  lowpass: number;
+  seconds: number;
+}
+
+const GUT: PluckedString = { pick: 0.2, bright: 0.5, loss: 0.9965, lowpass: 5000, seconds: 3 };
+const HARP: PluckedString = { pick: 0.12, bright: 0.8, loss: 0.9982, lowpass: 7500, seconds: 4.5 };
+
+/** RBJ band-pass, constant peak gain, run in place. */
+function bandpass(data: Float32Array, hz: number, q: number): Float32Array {
+  const w = (2 * Math.PI * hz) / SAMPLE_RATE;
+  const alpha = Math.sin(w) / (2 * q);
+  const a0 = 1 + alpha;
+  const [b0, b2, a1, a2] = [alpha / a0, -alpha / a0, (-2 * Math.cos(w)) / a0, (1 - alpha) / a0];
+  const out = new Float32Array(data.length);
+  let [x1, x2, y1, y2] = [0, 0, 0, 0];
+  for (let i = 0; i < data.length; i++) {
+    const x = data[i];
+    const yv = b0 * x + b2 * x2 - a1 * y1 - a2 * y2;
+    out[i] = yv;
+    [x2, x1, y2, y1] = [x1, x, y1, yv];
+  }
+  return out;
+}
+
+/**
+ * A soft choir pad: detuned saws through vowel formants, between "ooh" and "aah", with a breath of
+ * noise. Looped. Library choirs (aahh, oohh) can replace it.
+ */
+function renderChoir(root: number, seed: number): SampleZone {
+  const rng = mulberry32(seed);
+  const hz = midiToHz(root);
+  const length = Math.floor(3.6 * SAMPLE_RATE);
+  const source = new Float32Array(length);
+  const table = wavetable((h) => 1 / h, hz * 1.01);
+  for (const cents of [-11, -4, 3, 9, 14]) {
+    const step = (hz * 2 ** (cents / 1200)) / SAMPLE_RATE;
+    let phase = rng();
+    const swell = 0.2 + rng() * 0.3;
+    const offset = rng() * Math.PI * 2;
+    for (let i = 0; i < length; i++) {
+      source[i] += readTable(table, phase) * (1 + 0.15 * Math.sin((2 * Math.PI * swell * i) / SAMPLE_RATE + offset));
+      phase = (phase + step) % 1;
+    }
+  }
+  for (let i = 0; i < length; i++) source[i] += (rng() * 2 - 1) * 0.15;
+  // Formants of a vowel between "oo" (300, 870 Hz) and "ah" (700, 1100 Hz), plus a little air.
+  const f1 = bandpass(source, 480, 4);
+  const f2 = bandpass(source, 980, 6);
+  const f3 = bandpass(source, 2600, 8);
+  const data = new Float32Array(length);
+  for (let i = 0; i < length; i++) data[i] = f1[i] + 0.5 * f2[i] + 0.12 * f3[i];
+  onePoleLowpass(data, 3500);
+  normalize(data, 0.8);
+  const start = Math.floor(0.8 * SAMPLE_RATE);
+  const end = Math.floor(3.5 * SAMPLE_RATE);
+  crossfadeLoop(data, start, end, Math.floor(0.7 * SAMPLE_RATE));
+  return zone(data, root, root, root, { start: start / SAMPLE_RATE, end: end / SAMPLE_RATE });
+}
+
+/** A bell or celesta: two-operator FM at an inharmonic ratio, bright at the strike, ringing long. */
+function renderBell(root: number): SampleZone {
+  const hz = midiToHz(root);
+  const data = render(4, (t) => {
+    const index = 2.2 * Math.exp(-t / 0.25) + 0.4 * Math.exp(-t / 1.5);
+    const body = Math.sin(2 * Math.PI * hz * t + index * Math.sin(2 * Math.PI * hz * 3.5 * t));
+    const shimmer = 0.25 * Math.sin(2 * Math.PI * hz * 2.76 * t) * Math.exp(-t / 0.6);
+    return (body * Math.exp(-t / 1.6) + shimmer) * Math.min(1, t / 0.002);
+  });
+  normalize(data, 0.85);
+  return zone(data, root, root, root);
 }
 
 function render(seconds: number, sample: (t: number, i: number) => number): Float32Array {
@@ -335,6 +414,37 @@ export function createInstruments(): Record<string, Instrument> {
       gain: 0.5,
       range: [40, 76],
       color: "#d98a5f",
+    },
+    {
+      id: "choir",
+      name: "Choir",
+      short: "ch",
+      zones: spread(45, 84, 6, (r) => renderChoir(r, 7000 + r)),
+      envelope: { attack: 0.9, decay: 0.8, sustain: 0.85, release: 2 },
+      autoVibrato: { depth: 8, rate: 4.2, delay: 0.8, sweep: 1.5 },
+      gain: 0.3,
+      range: [48, 79],
+      color: "#d8c8ec",
+    },
+    {
+      id: "harp",
+      name: "Harp",
+      short: "hp",
+      zones: spread(36, 96, 5, (r) => renderPluck(r, 8000 + r, HARP)),
+      envelope: { attack: 0.002, decay: 0, sustain: 1, release: 1.2 },
+      gain: 0.42,
+      range: [40, 91],
+      color: "#e8a6b8",
+    },
+    {
+      id: "bells",
+      name: "Bells",
+      short: "bl",
+      zones: spread(60, 102, 6, (r) => renderBell(r)),
+      envelope: { attack: 0.001, decay: 0, sustain: 1, release: 1.5 },
+      gain: 0.22,
+      range: [72, 98],
+      color: "#9fe0e6",
     },
     {
       id: "frameDrum",

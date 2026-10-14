@@ -44,7 +44,20 @@ export interface Style {
   droneChance: number;
   /** Chance the intro starts with the plucked instrument alone instead of the pad. */
   pluckFirstChance: number;
-  instruments: { lead: string; pluck: string; pad: string; bass: string; frameDrum: string; tambourine: string; lowDrum: string };
+  instruments: { lead: string; pluck: string; pad: string; bass: string; frameDrum: string; tambourine: string; lowDrum: string; sparkle?: string };
+  // Optional knobs; absent is off.
+  /** Chance a lead phrase sits out (never the outro's), leaving the accompaniment alone. */
+  leadRestChance?: number;
+  /** Chance a long lead note opens with a trill to the step above. */
+  trillChance?: number;
+  /** Pads swell and ebb in every bar by this share of their volume. */
+  padBreath?: number;
+  /** Semitones the plucked accompaniment sits above its usual low-middle register. */
+  pluckShift?: number;
+  /** Quick high runs over the chord on their own channel: chance per bar and how many notes. */
+  sparkle?: { chance: number; notes: [number, number] };
+  /** Volume of each part, 1 by default. */
+  mix?: Partial<Record<"lead" | "pluck" | "pad" | "bass" | "drums" | "sparkle", number>>;
 }
 
 const FOUR: MeterRules = {
@@ -132,4 +145,87 @@ export const FOREST: Style = {
   instruments: { lead: "flute", pluck: "guitar", pad: "strings", bass: "bass", frameDrum: "frameDrum", tambourine: "tambourine", lowDrum: "lowDrum" },
 };
 
-export const STYLES: Style[] = [FOREST];
+const GLADE_FOUR: MeterRules = {
+  beats: 4,
+  rhythms: [
+    [8, 8],
+    [12, 4],
+    [4, 12],
+    [-4, 12],
+    [6, 2, 8],
+    [-8, 4, 4],
+  ],
+  calmRhythms: [[16], [-8, 8], [12, 4], [-4, 12]],
+  cadenceRhythms: [[16], [4, 12]],
+  plucks: [
+    // Harp: rising sweeps that leave space, and slow broken chords.
+    [[0, 0], [1, 1], [2, 2], [3, 3], [4, 4], [10, 3], [12, 2]],
+    [[0, 0], [2, 2], [4, 3], [6, 4], [8, 3], [10, 2], [12, 1], [14, 2]],
+    [[0, 0], [6, 2], [8, 3], [14, 4]],
+    [[0, 0], [4, 1], [8, 2], [12, 4]],
+  ],
+  frameDrum: [[[0, "dum"]], [[0, "dum"], [10, "tek"]]],
+  tambourine: [[[8, "shake"]], [[12, "shake"]]],
+};
+
+const GLADE_THREE: MeterRules = {
+  beats: 3,
+  rhythms: [
+    [12],
+    [8, 4],
+    [4, 8],
+    [-4, 8],
+    [6, 6],
+  ],
+  calmRhythms: [[12], [-4, 8], [-6, 6]],
+  cadenceRhythms: [[12], [4, 8]],
+  plucks: [
+    [[0, 0], [2, 1], [4, 2], [6, 3], [8, 4], [10, 2]],
+    [[0, 0], [4, 2], [8, 4]],
+    [[0, 0], [1, 1], [2, 2], [3, 3], [8, 4]],
+  ],
+  frameDrum: [[[0, "dum"]]],
+  tambourine: [[[6, "shake"]]],
+};
+
+/**
+ * Ambient and a little mysterious, but alive: a breathing choir over a drone, harp sweeps, a flute
+ * that comes and goes with bird-like trills, and bells sparkling high up. Lydian for the magic,
+ * Dorian and Aeolian for the shade. Hardly any percussion.
+ */
+export const GLADE: Style = {
+  id: "glade",
+  name: "Glade - mysterious, magical nature",
+  modes: [
+    ["lydian", 4],
+    ["dorian", 2],
+    ["aeolian", 1],
+    ["mixolydian", 1],
+  ],
+  tonics: [0, 2, 4, 5, 7, 9],
+  bpm: [54, 68],
+  meters: [
+    [GLADE_FOUR, 3],
+    [GLADE_THREE, 2],
+  ],
+  rowsPerBeat: 4,
+  ticksPerRow: 6,
+  chordWeights: { 0: 3, 1: 2.2, 2: 1.2, 3: 1, 4: 1.2, 5: 1.8, 6: 1.4 },
+  forms: [
+    [["I1", "I2", "A", "A'", "B", "B'", "Ar'", "O1", "O2"], 2],
+    [["I1", "I2", "B", "A", "A'", "B'", "O1", "O2"], 1],
+    [["I1", "I2", "A", "A'", "B", "B'", "Ar", "Ar'", "O1", "O2"], 1],
+  ],
+  percussionChance: 0.25,
+  droneChance: 0.8,
+  pluckFirstChance: 0.4,
+  instruments: { lead: "flute", pluck: "harp", pad: "choir", bass: "bass", frameDrum: "frameDrum", tambourine: "tambourine", lowDrum: "lowDrum", sparkle: "bells" },
+  leadRestChance: 0.3,
+  trillChance: 0.35,
+  padBreath: 0.3,
+  pluckShift: 12,
+  sparkle: { chance: 0.4, notes: [3, 6] },
+  mix: { lead: 0.85, pluck: 0.8, pad: 1.15, bass: 0.8, drums: 0.6 },
+};
+
+export const STYLES: Style[] = [FOREST, GLADE];
