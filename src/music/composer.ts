@@ -109,9 +109,10 @@ export function composeSong(style: Style, placeSeed: number, visitSeed: number):
     const options = set.filter(([d]) => usable(d));
     return options.length ? weighted(place, options) : 0;
   };
-  const HALF: [number, number][] = [[4, 1.5], [6, 2], [3, 1]];
-  const LEADING: [number, number][] = [[6, 2], [4, 1.5], [3, 1.5], [5, 1]];
-  const CONTRAST: [number, number][] = [[2, 1], [5, 1.5], [3, 1.5]];
+  const HALF: [number, number][] = style.cadences?.half ?? [[4, 1.5], [6, 2], [3, 1]];
+  const LEADING: [number, number][] = style.cadences?.leading ?? [[6, 2], [4, 1.5], [3, 1.5], [5, 1]];
+  const CONTRAST: [number, number][] = style.cadences?.contrast ?? [[2, 1], [5, 1.5], [3, 1.5]];
+  const BACK: [number, number][] = style.cadences?.back ?? [[4, 1], [6, 2]];
 
   const aAnte = ((): number[] => {
     const last = fromSet(HALF);
@@ -130,7 +131,7 @@ export function composeSong(style: Style, placeSeed: number, visitSeed: number):
   })();
   const bSecond = ((): number[] => {
     const first = fromSet(CONTRAST);
-    const last = fromSet([[4, 1], [6, 2]]);
+    const last = fromSet(BACK);
     const c1 = chordStep(first);
     return [first, c1, chordStep(c1, [last]), last];
   })();
@@ -172,6 +173,14 @@ export function composeSong(style: Style, placeSeed: number, visitSeed: number):
   const ornamentedA = ornament(visit, key.mode, melodyA);
   const ornamentedA2 = ornament(visit, key.mode, melodyA2);
   for (const notes of [melodyA, melodyA2, melodyB, melodyB2]) for (const n of notes) if (n.dur >= 4 && visit() < 0.1) n.slideIn = slideFromBelow(key.mode, n.degree);
+  if (style.slideChance) {
+    for (const notes of [melodyA, melodyA2, melodyB, melodyB2, ornamentedA, ornamentedA2]) {
+      for (const n of notes) {
+        if (n.dur < 2 || visit() >= style.slideChance) continue;
+        n.slideIn = visit() < 0.5 ? slideFromBelow(key.mode, n.degree) : degreeSemitones(key.mode, n.degree + 1) - degreeSemitones(key.mode, n.degree);
+      }
+    }
+  }
 
   // Optional knobs. Each draws from the visit only when the style uses it, so styles without it
   // keep their songs.
@@ -179,7 +188,7 @@ export function composeSong(style: Style, placeSeed: number, visitSeed: number):
   // The lead never sits out the outro, nor the first phrase that brings its theme.
   const firstTheme = form.find((id) => id !== "I1" && id !== "I2");
   const leadRests = new Set(style.leadRestChance ? form.filter((id) => !["I1", "I2", "O1", "O2"].includes(id) && id !== firstTheme && visit() < style.leadRestChance!) : []);
-  const channels = style.instruments.sparkle ? [...CHANNELS, SPARKLE_CHANNEL] : CHANNELS;
+  const channels = style.instruments.sparkle ? [...CHANNELS, { ...SPARKLE_CHANNEL, name: style.sparkle?.name ?? SPARKLE_CHANNEL.name }] : CHANNELS;
 
   const totalRows = form.length * phraseRows;
   const cells: (Cell | undefined)[][] = Array.from({ length: totalRows }, () => channels.map(() => undefined));
@@ -249,6 +258,9 @@ export function composeSong(style: Style, placeSeed: number, visitSeed: number):
           for (let r = 1; r <= 3; r++) put(row + r, LEAD, { effects: [{ type: "arpeggio", x, y: 0 }] });
         }
         if (n.dur >= 8) slideRows(LEAD, row + 4, n.dur - 4, -volume * (n.fade ?? 0.3));
+        if (style.vibratoChance && n.dur >= 8 && visit() < style.vibratoChance) {
+          for (let r = 4; r < n.dur; r++) put(row + r, LEAD, { effects: [{ type: "vibrato", depth: 0.25, rate: 5.5 }] });
+        }
         const next = melody[i + 1];
         if (!next || next.row > n.row + n.dur) put(row + n.dur, LEAD, { note: "off" });
       });
@@ -311,7 +323,12 @@ export function composeSong(style: Style, placeSeed: number, visitSeed: number):
         if (id === "O2" && b === 2) return;
         const tones = pluckTones(key, c).map((t) => t + (style.pluckShift ?? 0));
         const steps = id === "O2" && b === 3 ? [pattern[0]] : id === "O2" && b === 1 ? pattern.slice(0, 2) : pattern;
-        steps.forEach(([row, tone]) => {
+        steps.forEach(([row, tone], i) => {
+          // Tremolo picking, as on an oud: the note struck again and again until the next.
+          const gap = (steps[i + 1]?.[0] ?? barRows) - row;
+          if (style.pluckTremolo && gap >= 4 && visit() < style.pluckTremolo) {
+            for (let r = 0; r < gap; r++) put(start + b * barRows + row + r, PLUCK, { effects: [{ type: "retrigger", every: 2, volumeFactor: 0.97 }] });
+          }
           const strong = row === 0 ? 0.56 : row % style.rowsPerBeat === 0 ? 0.46 : 0.38;
           const quiet = id === "O2" ? 0.7 : 1;
           const effects: Effect[] | undefined = row > 0 && visit() < 0.2 ? [{ type: "noteDelay", ticks: 1 }] : undefined;
@@ -327,6 +344,7 @@ export function composeSong(style: Style, placeSeed: number, visitSeed: number):
 
     // Percussion.
     const level = !hasPercussion ? 0
+      : style.percussion ? (style.percussion[id] ?? 0)
       : id === "B" || id === "B'" || id === "Ar'" ? 2
       : id === "Ar" ? 1
       : id === "A'" && lightConsequent ? 1
@@ -363,7 +381,20 @@ export function composeSong(style: Style, placeSeed: number, visitSeed: number):
 
     // Sparkles: now and then a quick run over the chord high up, echoing away.
     const sparkle = style.sparkle;
-    if (sparkle && style.instruments.sparkle && layers.has("sparkle")) {
+    if (sparkle?.kind === "wail" && style.instruments.sparkle && layers.has("sparkle") && id !== "O2" && visit() < sparkle.chance) {
+      // A voice rising out of nowhere into a long tonic or fifth, wavering, and fading away.
+      const bar = visit() < 0.6 ? 0 : 2;
+      const at = start + bar * barRows;
+      const dur = barRows * 2;
+      const note = pitchesOf(key, visit() < 0.6 ? 0 : 4, 60, 74)[0];
+      const peak = (0.5 + jitter(0.05)) * part("sparkle");
+      put(at, SPARKLE, { note, instrument: style.instruments.sparkle, volume: 0, effects: [{ type: "slideIn", semis: -pick(visit, [2, 3, 5]), ticks: style.ticksPerRow * 3 }] });
+      slideRows(SPARKLE, at, barRows / 2, peak);
+      slideRows(SPARKLE, at + barRows, dur - barRows, -peak);
+      for (let r = barRows / 2; r < dur; r++) put(at + r, SPARKLE, { effects: [{ type: "vibrato", depth: 0.3, rate: 4.8 }] });
+      put(at + dur, SPARKLE, { note: "off" });
+    }
+    if (sparkle && sparkle.kind !== "wail" && style.instruments.sparkle && layers.has("sparkle")) {
       chords.forEach((c, b) => {
         if (visit() >= sparkle.chance * (id === "O2" ? 0.5 : 1)) return;
         const count = sparkle.notes[0] + Math.floor(visit() * (sparkle.notes[1] - sparkle.notes[0] + 1));

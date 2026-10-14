@@ -4,7 +4,7 @@
 
 import { composeSong } from "../music/composer";
 import { cellText, effectsText, noteText, volumeText } from "../music/format";
-import { createInstruments, zoneFor, type Instrument } from "../music/instruments";
+import { createInstruments, zoneFor, type Instrument, type SampleZone } from "../music/instruments";
 import { Player } from "../music/player";
 import { parseXi } from "../music/xi";
 import { songNotes, songRows, type Song } from "../music/song";
@@ -197,6 +197,10 @@ const synths: Record<string, Instrument> = { ...instruments };
 /** Roles with no synth, only library sounds. */
 const EXTRA_LOOKS: Record<string, { name: string; short: string; color: string; gain: number; range: [number, number] }> = {};
 const LIBRARY = "/samples/kiarchive/";
+/** Library folders an instrument may pick from besides its own. */
+const LIBRARY_ALIASES: Record<string, string[]> = { ney: ["flute"], oud: ["guitar"], darbuka: ["frameDrum"] };
+/** Where single drum strokes for a kit are picked from. */
+const DRUM_FOLDERS = ["darbuka", "frameDrum", "tambourine", "lowDrum"];
 const SOUNDS_KEY = "aiworld.music.sounds";
 /** The sounds picked by ear, used wherever the library has them; "" in a choice means the synth. */
 const DEFAULT_SOUNDS: Record<string, string> = {
@@ -212,6 +216,7 @@ const DEFAULT_SOUNDS: Record<string, string> = {
   bells: "bells/glock01.xi",
 };
 let library: Record<string, string[]> = {};
+/** Choices by instrument id; a drum's strokes by "id:stroke". "" means the synth. */
 const sounds: Record<string, string> = ((): Record<string, string> => {
   try {
     return { ...DEFAULT_SOUNDS, ...JSON.parse(localStorage.getItem(SOUNDS_KEY) ?? "{}") };
@@ -228,22 +233,62 @@ function saveSounds(): void {
   }
 }
 
-/** Puts the chosen sound in place for an instrument id: a library path, or "" for the synth. */
-async function useSound(id: string, path: string): Promise<void> {
-  if (!path) {
-    if (synths[id]) instruments[id] = synths[id];
-    else delete instruments[id];
-    sounds[id] = "";
-    return;
+const strokeKey = (id: string, stroke: string): string => `${id}:${stroke}`;
+const choicesFor = (id: string): string[] => [id, ...(LIBRARY_ALIASES[id] ?? [])].flatMap((folder) => library[folder] ?? []);
+const strokeChoices = (): string[] => DRUM_FOLDERS.flatMap((folder) => library[folder] ?? []);
+const available = (path: string | undefined): path is string => !!path && Object.values(library).some((files) => files.includes(path));
+const fileLabel = (path: string): string => path.replace(/\.xi$/, "");
+
+const files = new Map<string, Promise<ArrayBuffer>>();
+function fetchXi(path: string): Promise<ArrayBuffer> {
+  let file = files.get(path);
+  if (!file) {
+    file = fetch(LIBRARY + path).then((r) => {
+      if (!r.ok) throw new Error(`${path}: ${r.status}`);
+      return r.arrayBuffer();
+    });
+    files.set(path, file);
   }
-  const response = await fetch(LIBRARY + path);
-  if (!response.ok) throw new Error(`${path}: ${response.status}`);
+  return file;
+}
+
+/** One drum stroke on one key: the file's sample as it sounds on C-4, never looping, faded at its end. */
+function strokeZone(zone: SampleZone, note: number): SampleZone {
+  let data = zone.data;
+  if (zone.loop) {
+    data = data.slice(0, Math.floor(zone.loop.end * zone.sampleRate));
+    const fade = Math.min(data.length, Math.floor(0.02 * zone.sampleRate));
+    for (let i = 0; i < fade; i++) data[data.length - fade + i] *= 1 - i / fade;
+  }
+  return { ...zone, data, loop: undefined, low: note, high: note, root: zone.root + note - 60 };
+}
+
+/**
+ * Puts an instrument together from its choices: its sound (a library file or the synth) and, for a
+ * drum, a file for any stroke picked on its own, laid over that stroke's key.
+ */
+async function buildInstrument(id: string): Promise<void> {
   const look = synths[id] ?? EXTRA_LOOKS[id];
-  const inst = parseXi(await response.arrayBuffer(), id, { short: look.short, color: look.color, gain: look.gain });
-  inst.range = look.range;
-  if (synths[id]?.keys) inst.keys = synths[id].keys;
-  instruments[id] = inst;
-  sounds[id] = path;
+  let inst: Instrument | undefined = synths[id];
+  const path = sounds[id];
+  if (available(path)) {
+    inst = parseXi(await fetchXi(path), id, { short: look.short, color: look.color, gain: look.gain });
+    inst.range = look.range;
+    if (synths[id]?.keys) inst.keys = synths[id].keys;
+  }
+  const strokes = synths[id]?.keys;
+  if (inst && strokes) {
+    const zones: SampleZone[] = [];
+    for (const [stroke, note] of Object.entries(strokes)) {
+      const strokePath = sounds[strokeKey(id, stroke)];
+      if (!available(strokePath)) continue;
+      const xi = parseXi(await fetchXi(strokePath), id, { short: look.short, color: look.color, gain: 1 });
+      zones.push(strokeZone(zoneFor(xi, 60), note));
+    }
+    if (zones.length) inst = { ...inst, zones: [...zones, ...inst.zones] };
+  }
+  if (inst) instruments[id] = inst;
+  else delete instruments[id];
 }
 
 async function loadLibrary(): Promise<void> {
@@ -254,12 +299,12 @@ async function loadLibrary(): Promise<void> {
     library = {};
   }
   // Without the library (it is not in git) every instrument stays its synth.
-  for (const [id, path] of Object.entries(sounds)) {
-    if (!path || !library[id]?.includes(path)) continue;
+  const ids = new Set(Object.keys(sounds).map((key) => key.split(":")[0]));
+  for (const id of ids) {
     try {
-      await useSound(id, path);
+      await buildInstrument(id);
     } catch (e) {
-      console.warn("music: could not load", path, e);
+      console.warn("music: could not load sounds for", id, e);
     }
   }
 }
@@ -276,29 +321,47 @@ function renderInstruments(): void {
   }
 }
 
+/** A dropdown over library files that stores its pick under `key` and rebuilds the instrument. */
+function soundPicker(div: HTMLElement, id: string, key: string, first: string, choices: string[], label = (path: string) => path.split("/").pop()!.replace(/\.xi$/, "")): HTMLSelectElement {
+  const select = document.createElement("select");
+  select.add(new Option(first, ""));
+  for (const path of choices) select.add(new Option(label(path), path));
+  select.value = available(sounds[key]) ? sounds[key] : "";
+  select.onchange = async () => {
+    select.disabled = true;
+    sounds[key] = select.value;
+    try {
+      await buildInstrument(id);
+    } catch (e) {
+      console.warn("music: could not load", select.value, e);
+    }
+    saveSounds();
+    renderInstrument(div, id);
+  };
+  return select;
+}
+
 function renderInstrument(div: HTMLElement, id: string): void {
   const inst = instruments[id] as (Instrument & { xi?: { name: string; samples: number } }) | undefined;
   const look = synths[id] ?? EXTRA_LOOKS[id];
   div.innerHTML = `<div class="title"><b>${look.name}</b><small>${look.short} · ${id}</small></div>`;
 
-  const choices = library[id] ?? [];
+  const choices = choicesFor(id);
   if (choices.length) {
-    const select = document.createElement("select");
-    select.add(new Option(synths[id] ? "Synth stand-in" : "None", ""));
-    for (const path of choices) select.add(new Option(path.split("/").pop()!.replace(/\.xi$/, ""), path));
-    select.value = instruments[id] === synths[id] ? "" : (sounds[id] ?? "");
-    select.onchange = async () => {
-      select.disabled = true;
-      try {
-        await useSound(id, select.value);
-      } catch (e) {
-        console.warn("music: could not load", select.value, e);
-      }
-      saveSounds();
-      renderInstrument(div, id);
-    };
+    const select = soundPicker(div, id, id, synths[id] ? "Synth stand-in" : "None", choices, choices.some((c) => !c.startsWith(id + "/")) ? fileLabel : undefined);
     select.style.margin = "4px 0";
     div.append(select);
+  }
+  // A drum kit: each stroke may come from its own file.
+  const strokes = synths[id]?.keys;
+  if (strokes && inst && strokeChoices().length) {
+    for (const stroke of Object.keys(strokes)) {
+      const row = document.createElement("label");
+      row.className = "stroke";
+      row.textContent = stroke;
+      row.append(soundPicker(div, id, strokeKey(id, stroke), "from the sound above", strokeChoices(), fileLabel));
+      div.append(row);
+    }
   }
   if (!inst) {
     div.insertAdjacentHTML("beforeend", `<small>Pick a sound to hear it.</small>`);

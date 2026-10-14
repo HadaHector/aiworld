@@ -186,8 +186,15 @@ the forest style using synth stand-ins.
     breathes (it swells and fades back every bar), harp arpeggios sweep up, and a flute comes and
     goes with bird-like trills. Bells sparkle high up, echoing away through retriggers. There is
     hardly any percussion.
+  - **Desert:** Arabic, after Aladdin, Dune and Diablo II's second act.
+    - Hijaz and double harmonic over a drone, with bII–I cadences.
+    - An oud ostinato with tremolo picking.
+    - A ney that slides into its notes and wavers.
+    - Darbuka on maqsum, baladi and saidi, with riq and deep drums.
+    - Now and then, a distant voice wails into a long note.
   - Optional style knobs, all off unless a style sets them: lead rests, trills, pad breath, pluck
-    register, sparkles, and a mix per part. A knob that is off draws nothing from the seed, so
+    register, sparkles or wails, a mix per part, cadence chords, slides, vibrato, tremolo
+    picking, and percussion per section. A knob that is off draws nothing from the seed, so
     existing styles keep their songs.
 - **Sample library.** `src/music/xi.ts` reads FastTracker 2 `.xi` instruments: keymapped
   samples, volume envelope with a sustain point, fadeout, auto-vibrato, and ping-pong loops (baked
@@ -200,7 +207,11 @@ the forest style using synth stand-ins.
   - frame drum `pandr02`, tambourine `tamb02`, low drum `tom008l`
   - choir `aahh02`, harp `plharp01`, bells `glock01`
 
-  On a machine without the library, each instrument falls back to its synth. Choir sounds can
+  On a machine without the library, each instrument falls back to its synth.
+- **Drum kits.** A drum card also lets each stroke (dum and tek, shake and hit, boom) come from
+  its own file, picked from any drum folder. That stroke's key then plays the file's sample as a
+  one-shot, at the pitch it has on C-4. Instruments without a folder of their own also pick from a
+  near one: ney from flute, oud from guitar, darbuka from frame drum. Choir sounds can
   be auditioned, but the forest style does not use a choir yet.
 - Simplifications for now:
   - Styles and instruments live in code, not packs.

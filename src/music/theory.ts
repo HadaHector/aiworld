@@ -9,6 +9,11 @@ export const MODES = {
   lydian: [0, 2, 4, 6, 7, 9, 11],
   mixolydian: [0, 2, 4, 5, 7, 9, 10],
   aeolian: [0, 2, 3, 5, 7, 8, 10],
+  harmonicMinor: [0, 2, 3, 5, 7, 8, 11],
+  /** Phrygian dominant: the maqam Hijaz on its tonic, with the augmented second from 2 to 3. */
+  hijaz: [0, 1, 4, 5, 7, 8, 10],
+  /** Hijaz with a raised seventh: two augmented seconds. */
+  doubleHarmonic: [0, 1, 4, 5, 7, 8, 11],
 } as const;
 
 export type ModeName = keyof typeof MODES;

@@ -171,14 +171,24 @@ function renderStrings(root: number, seed: number): SampleZone {
   return zone(data, root, root, root, { start: start / SAMPLE_RATE, end: end / SAMPLE_RATE });
 }
 
+/** How a flute is blown: its harmonics, and how much breath goes past the edge. */
+interface Blown {
+  harmonics: number[];
+  breath: number;
+  chiff: number;
+}
+
+const FLUTE: Blown = { harmonics: [1, 0.32, 0.12, 0.06, 0.03, 0.015], breath: 0.05, chiff: 0.5 };
+/** The ney: an end-blown reed flute, hollow and very breathy. */
+const NEY: Blown = { harmonics: [1, 0.12, 0.22, 0.05, 0.06, 0.02], breath: 0.16, chiff: 0.8 };
+
 /** Flute: a nearly pure tone with a little second harmonic, breath noise and a chiff. Looped. */
-function renderFlute(root: number, seed: number): SampleZone {
+function renderFlute(root: number, seed: number, blown: Blown = FLUTE): SampleZone {
   const rng = mulberry32(seed);
   const hz = midiToHz(root);
   const length = Math.floor(2.6 * SAMPLE_RATE);
   const data = new Float32Array(length);
-  const amps = [1, 0.32, 0.12, 0.06, 0.03, 0.015];
-  const table = wavetable((h) => amps[h - 1] ?? 0, hz);
+  const table = wavetable((h) => blown.harmonics[h - 1] ?? 0, hz);
   const step = hz / SAMPLE_RATE;
   let phase = 0;
   for (let i = 0; i < length; i++) {
@@ -189,7 +199,7 @@ function renderFlute(root: number, seed: number): SampleZone {
   const breath = new Float32Array(length);
   for (let i = 0; i < length; i++) {
     const chiff = Math.exp(-i / (0.035 * SAMPLE_RATE));
-    breath[i] = (rng() * 2 - 1) * (0.05 + 0.5 * chiff);
+    breath[i] = (rng() * 2 - 1) * (blown.breath + blown.chiff * chiff);
   }
   onePoleLowpass(breath, Math.min(hz * 3, 5000));
   onePoleHighpass(breath, hz * 0.7);
@@ -244,6 +254,8 @@ interface PluckedString {
 
 const GUT: PluckedString = { pick: 0.2, bright: 0.5, loss: 0.9965, lowpass: 5000, seconds: 3 };
 const HARP: PluckedString = { pick: 0.12, bright: 0.8, loss: 0.9982, lowpass: 7500, seconds: 4.5 };
+/** Oud: picked with a plectrum near the bridge, no frets, a short dark ring. */
+const OUD: PluckedString = { pick: 0.08, bright: 0.7, loss: 0.9945, lowpass: 4200, seconds: 2.2 };
 
 /** RBJ band-pass, constant peak gain, run in place. */
 function bandpass(data: Float32Array, hz: number, q: number): Float32Array {
@@ -363,6 +375,13 @@ function tambourine(seed: number): SampleZone[] {
   return [zone(shake, 60, 60, 60), zone(hit, 62, 62, 62)];
 }
 
+/** Darbuka: the doum, deep from the middle of the head, and the tek, a sharp crack at its rim. */
+function darbuka(seed: number): SampleZone[] {
+  const doum = mix([thump(140, 88, 0.025, 0.32, 1.2), 1], [noise(seed, 1.2, 0.012, 200, 2500), 0.35]);
+  const tek = mix([noise(seed + 1, 0.3, 0.018, 2200, 9000), 1], [thump(720, 640, 0.01, 0.04, 0.3), 0.5]);
+  return [zone(doum, 60, 60, 60), zone(tek, 62, 62, 62)];
+}
+
 function lowDrum(seed: number): SampleZone[] {
   const boom = mix([thump(78, 46, 0.09, 0.5, 2), 1], [noise(seed, 2, 0.02, 40, 400), 0.4]);
   return [zone(boom, 60, 60, 60)];
@@ -445,6 +464,38 @@ export function createInstruments(): Record<string, Instrument> {
       gain: 0.22,
       range: [72, 98],
       color: "#9fe0e6",
+    },
+    {
+      id: "ney",
+      name: "Ney",
+      short: "ny",
+      zones: spread(55, 96, 6, (r) => renderFlute(r, 9000 + r, NEY)),
+      envelope: { attack: 0.12, decay: 0.3, sustain: 0.85, release: 0.35 },
+      autoVibrato: { depth: 10, rate: 5, delay: 0.5 },
+      gain: 0.42,
+      range: [60, 89],
+      color: "#e0b36a",
+    },
+    {
+      id: "oud",
+      name: "Oud",
+      short: "od",
+      zones: spread(36, 79, 5, (r) => renderPluck(r, 10000 + r, OUD)),
+      envelope: { attack: 0.002, decay: 0, sustain: 1, release: 0.4 },
+      gain: 0.5,
+      range: [40, 76],
+      color: "#c8794a",
+    },
+    {
+      id: "darbuka",
+      name: "Darbuka",
+      short: "db",
+      zones: darbuka(11000),
+      envelope: { attack: 0.001, decay: 0, sustain: 1, release: 0.25 },
+      gain: 0.55,
+      range: [60, 62],
+      keys: { dum: 60, tek: 62 },
+      color: "#b9a66f",
     },
     {
       id: "frameDrum",

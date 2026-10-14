@@ -54,8 +54,21 @@ export interface Style {
   padBreath?: number;
   /** Semitones the plucked accompaniment sits above its usual low-middle register. */
   pluckShift?: number;
-  /** Quick high runs over the chord on their own channel: chance per bar and how many notes. */
-  sparkle?: { chance: number; notes: [number, number] };
+  /**
+   * A colour part on its own channel. "run": quick high runs over the chord, chance per bar, with
+   * `notes` notes. "wail": a long voice rising into the tonic or fifth, chance per phrase.
+   */
+  sparkle?: { kind?: "run" | "wail"; name?: string; chance: number; notes: [number, number] };
+  /** Chords that end phrases and open the B section, as [degree, weight]; defaults suit Western modes. */
+  cadences?: { half?: [number, number][]; leading?: [number, number][]; contrast?: [number, number][]; back?: [number, number][] };
+  /** Chance a melody note slides in from the step above or below. */
+  slideChance?: number;
+  /** Chance a long lead note wavers with vibrato after its start. */
+  vibratoChance?: number;
+  /** Chance a plucked note with room after it is tremolo-picked until the next. */
+  pluckTremolo?: number;
+  /** Percussion level per section id (0 none, 1 light, 2 full) when a song has percussion. */
+  percussion?: Partial<Record<string, 0 | 1 | 2>>;
   /** Volume of each part, 1 by default. */
   mix?: Partial<Record<"lead" | "pluck" | "pad" | "bass" | "drums" | "sparkle", number>>;
 }
@@ -228,4 +241,83 @@ export const GLADE: Style = {
   mix: { lead: 0.85, pluck: 0.8, pad: 1.15, bass: 0.8, drums: 0.6 },
 };
 
-export const STYLES: Style[] = [FOREST, GLADE];
+const DESERT_FOUR: MeterRules = {
+  beats: 4,
+  rhythms: [
+    [2, 2, 4, 8],
+    [4, 2, 2, 4, 4],
+    [6, 2, 2, 2, 4],
+    [2, 2, 2, 2, 8],
+    [8, 2, 2, 4],
+    [-4, 2, 2, 8],
+    [4, 4, 8],
+  ],
+  calmRhythms: [[12, 4], [8, 8], [16], [-4, 4, 8]],
+  // Phrases end on a long note, often reached by a quick run down into it.
+  cadenceRhythms: [[2, 2, 12], [4, 12], [16], [2, 2, 2, 2, 8]],
+  plucks: [
+    // Oud ostinatos: the root and octave driven by sixteenth pickups.
+    [[0, 0], [3, 0], [4, 2], [6, 0], [8, 3], [10, 2], [12, 0], [14, 1]],
+    [[0, 0], [2, 3], [4, 2], [6, 3], [8, 0], [11, 0], [12, 2], [14, 1]],
+    [[0, 0], [6, 0], [8, 2], [12, 3], [14, 2]],
+    [[0, 0], [4, 0], [6, 1], [8, 2], [12, 0]],
+  ],
+  // Darbuka rhythms in sixteenths: maqsum, baladi, saidi, and a busy maqsum.
+  frameDrum: [
+    [[0, "dum"], [2, "tek"], [6, "tek"], [8, "dum"], [12, "tek"]],
+    [[0, "dum"], [2, "dum"], [6, "tek"], [8, "dum"], [12, "tek"]],
+    [[0, "dum"], [2, "tek"], [6, "dum"], [8, "dum"], [12, "tek"]],
+    [[0, "dum"], [2, "tek"], [4, "tek"], [6, "tek"], [8, "dum"], [10, "tek"], [12, "tek"], [14, "tek"]],
+  ],
+  // Riq: offbeat jingles, or a jingle and a slap.
+  tambourine: [
+    [[2, "shake"], [6, "shake"], [10, "shake"], [14, "shake"]],
+    [[4, "shake"], [12, "hit"]],
+  ],
+};
+
+/**
+ * The desert: Arabic maqam colours, after Aladdin, Dune and Diablo II's second act. Hijaz and the
+ * double harmonic over a drone, an oud ostinato with tremolo, a ney that slides into its notes and
+ * wavers, darbuka and riq on maqsum and baladi, deep drums, and now and then a voice wailing in
+ * the distance.
+ */
+export const DESERT: Style = {
+  id: "desert",
+  name: "Desert - Arabic, maqam and drums",
+  modes: [
+    ["hijaz", 5],
+    ["doubleHarmonic", 2],
+    ["phrygian", 2],
+    ["harmonicMinor", 1],
+  ],
+  tonics: [0, 2, 4, 5, 7, 9],
+  bpm: [74, 100],
+  meters: [[DESERT_FOUR, 1]],
+  rowsPerBeat: 4,
+  ticksPerRow: 6,
+  // Mostly the tonic; bII is the colour chord, iv and bvii the shade.
+  chordWeights: { 0: 5, 1: 3, 3: 1.5, 5: 1, 6: 1.5 },
+  cadences: {
+    half: [[1, 3], [6, 1.5], [3, 1]],
+    leading: [[1, 3], [6, 1.5], [3, 1]],
+    contrast: [[3, 1.5], [5, 1.5], [6, 1]],
+    back: [[1, 2], [6, 1]],
+  },
+  forms: [
+    [["I1", "I2", "A", "A'", "B", "B'", "Ar", "Ar'", "O1", "O2"], 2],
+    [["I1", "A", "A'", "B", "B'", "Ar'", "O1", "O2"], 1],
+  ],
+  percussionChance: 0.85,
+  droneChance: 0.9,
+  pluckFirstChance: 0.5,
+  instruments: { lead: "ney", pluck: "oud", pad: "strings", bass: "bass", frameDrum: "darbuka", tambourine: "tambourine", lowDrum: "lowDrum", sparkle: "choir" },
+  slideChance: 0.3,
+  vibratoChance: 0.5,
+  pluckTremolo: 0.3,
+  percussion: { I2: 1, A: 2, "A'": 2, B: 2, "B'": 2, Ar: 2, "Ar'": 2, O1: 1 },
+  sparkle: { kind: "wail", name: "Wail", chance: 0.35, notes: [1, 1] },
+  mix: { lead: 0.9, pad: 0.65, bass: 0.9, drums: 1, sparkle: 0.8 },
+};
+
+export const STYLES: Style[] = [FOREST, GLADE, DESERT];
