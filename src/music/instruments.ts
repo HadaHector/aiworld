@@ -144,13 +144,13 @@ function spread(low: number, high: number, step: number, render: (root: number) 
 // The synths.
 
 /** Bowed strings: four slightly detuned saws, softened, with a slow uneven bow. Looped. `bright` sets the tone: cellos dark, violins bright. */
-function renderStrings(root: number, seed: number, bright = 5): SampleZone {
+function renderStrings(root: number, seed: number, bright = 5, players = [-8, -2.5, 3, 7.5]): SampleZone {
   const rng = mulberry32(seed);
   const hz = midiToHz(root);
   const length = Math.floor(3.4 * SAMPLE_RATE);
   const data = new Float32Array(length);
   const table = wavetable((h) => 1 / h, hz * 1.01);
-  for (const cents of [-8, -2.5, 3, 7.5]) {
+  for (const cents of players) {
     const step = (hz * 2 ** (cents / 1200)) / SAMPLE_RATE;
     let phase = rng();
     const bowRate = 0.25 + rng() * 0.4;
@@ -179,6 +179,8 @@ interface Blown {
 }
 
 const FLUTE: Blown = { harmonics: [1, 0.32, 0.12, 0.06, 0.03, 0.015], breath: 0.05, chiff: 0.5 };
+/** Clarinet, low: a cylinder bore, so the odd harmonics, dark and hollow. */
+const CLARINET: Blown = { harmonics: [1, 0.04, 0.5, 0.03, 0.25, 0.02, 0.12, 0.01, 0.06], breath: 0.025, chiff: 0.15 };
 /** The ney: an end-blown reed flute, hollow and very breathy. */
 const NEY: Blown = { harmonics: [1, 0.12, 0.22, 0.05, 0.06, 0.02], breath: 0.16, chiff: 0.8 };
 
@@ -336,6 +338,78 @@ function renderHorn(root: number, seed: number): SampleZone {
   return zone(data, root, root, root, { start: start / SAMPLE_RATE, end: end / SAMPLE_RATE });
 }
 
+/**
+ * A music box: a steel tine and its bright overtones, with a second tine a few cents off so the
+ * two beat against each other - a little out of tune, as old ones are.
+ */
+function renderMusicBox(root: number): SampleZone {
+  const hz = midiToHz(root);
+  const off = hz * 2 ** (7 / 1200);
+  const data = render(2.5, (t) => {
+    const tine = Math.sin(2 * Math.PI * hz * t) * Math.exp(-t / 1.1) + 0.5 * Math.sin(2 * Math.PI * off * t) * Math.exp(-t / 0.9);
+    const over = 0.3 * Math.sin(2 * Math.PI * hz * 2 * t) * Math.exp(-t / 0.35) + 0.2 * Math.sin(2 * Math.PI * hz * 5.4 * t) * Math.exp(-t / 0.07);
+    return (tine + over) * Math.min(1, t / 0.001);
+  });
+  normalize(data, 0.85);
+  return zone(data, root, root, root);
+}
+
+/** A drop of water: a short ping whose pitch rises as the bubble closes. */
+function renderDrip(root: number): SampleZone {
+  const hz = midiToHz(root);
+  let phase = 0;
+  const data = render(0.6, (t) => {
+    phase += (hz * (1 + 0.7 * (1 - Math.exp(-t / 0.025)))) / SAMPLE_RATE;
+    return Math.sin(2 * Math.PI * phase) * Math.exp(-t / 0.11) * Math.min(1, t / 0.002);
+  });
+  normalize(data, 0.85);
+  const actual = hzToMidi(hz * 1.7);
+  return zone(data, actual, root, root);
+}
+
+/** A ghost of a voice, or a theremin: nearly a pure sine, wavering. Looped. */
+function renderGhost(root: number): SampleZone {
+  const hz = midiToHz(root);
+  const data = render(2.4, (t) => {
+    const p = 2 * Math.PI * hz * t;
+    return (Math.sin(p) + 0.12 * Math.sin(2 * p) + 0.05 * Math.sin(3 * p)) * (1 + 0.08 * Math.sin(2 * Math.PI * 0.7 * t));
+  });
+  normalize(data, 0.8);
+  const start = Math.floor(0.4 * SAMPLE_RATE);
+  const end = Math.floor(2.3 * SAMPLE_RATE);
+  crossfadeLoop(data, start, end, Math.floor(0.4 * SAMPLE_RATE));
+  return zone(data, root, root, root, { start: start / SAMPLE_RATE, end: end / SAMPLE_RATE });
+}
+
+/**
+ * Wind: noise through a resonant band around the note, with a fainter band above it and a low
+ * rush beneath, fluttering. Sliding the note moves the howl; loud and soft is the gust. Looped.
+ */
+function renderWind(root: number, seed: number): SampleZone {
+  const rng = mulberry32(seed);
+  const hz = midiToHz(root);
+  const length = Math.floor(6 * SAMPLE_RATE);
+  const white = new Float32Array(length);
+  for (let i = 0; i < length; i++) white[i] = rng() * 2 - 1;
+  const howl = bandpass(white, hz, 7);
+  const whistle = bandpass(white, hz * 2.1, 12);
+  const rush = white.slice();
+  onePoleLowpass(rush, Math.min(hz * 1.5, 1200));
+  onePoleLowpass(rush, Math.min(hz * 1.5, 1200));
+  const data = new Float32Array(length);
+  const flutter = rng() * Math.PI * 2;
+  for (let i = 0; i < length; i++) {
+    const t = i / SAMPLE_RATE;
+    const f = 1 + 0.25 * Math.sin(2 * Math.PI * 0.31 * t + flutter) + 0.15 * Math.sin(2 * Math.PI * 0.83 * t + flutter * 2);
+    data[i] = (howl[i] + 0.35 * whistle[i] + 0.5 * rush[i]) * f;
+  }
+  normalize(data, 0.8);
+  const start = Math.floor(1 * SAMPLE_RATE);
+  const end = Math.floor(5.9 * SAMPLE_RATE);
+  crossfadeLoop(data, start, end, Math.floor(1 * SAMPLE_RATE));
+  return zone(data, root, root, root, { start: start / SAMPLE_RATE, end: end / SAMPLE_RATE });
+}
+
 /** A bell or celesta: two-operator FM at an inharmonic ratio, bright at the strike, ringing long. */
 function renderBell(root: number): SampleZone {
   const hz = midiToHz(root);
@@ -417,6 +491,14 @@ function timpani(seed: number): SampleZone[] {
   return [zone(mix([body, 1], [noise(seed, 3, 0.03, 60, 700), 0.35]), 60, 60, 60)];
 }
 
+/** Knocks: a hollow log drum (dum) and a dry wood block (tek). */
+function knock(seed: number): SampleZone[] {
+  const partial = (hz: number, decay: number, seconds: number): Float32Array => render(seconds, (t) => Math.sin(2 * Math.PI * hz * t) * Math.exp(-t / decay) * Math.min(1, t / 0.0008));
+  const log = mix([partial(165, 0.28, 1.2), 1], [partial(165 * 2.76, 0.07, 1.2), 0.5], [noise(seed, 1.2, 0.006, 300, 4000), 0.4]);
+  const block = mix([partial(940, 0.045, 0.4), 1], [partial(2550, 0.02, 0.4), 0.6], [noise(seed + 1, 0.4, 0.004, 1500, 9000), 0.5]);
+  return [zone(log, 60, 60, 60), zone(block, 62, 62, 62)];
+}
+
 function lowDrum(seed: number): SampleZone[] {
   const boom = mix([thump(78, 46, 0.09, 0.5, 2), 1], [noise(seed, 2, 0.02, 40, 400), 0.4]);
   return [zone(boom, 60, 60, 60)];
@@ -458,6 +540,17 @@ export function createInstruments(): Record<string, Instrument> {
       gain: 0.3,
       range: [55, 91],
       color: "#9cc0e8",
+    },
+    {
+      id: "violin",
+      name: "Violin",
+      short: "vn",
+      zones: spread(52, 100, 6, (r) => renderStrings(r, 1800 + r, 8, [-2, 2])),
+      envelope: { attack: 0.12, decay: 0.4, sustain: 0.85, release: 0.6 },
+      autoVibrato: { depth: 18, rate: 5.6, delay: 0.3, sweep: 0.6 },
+      gain: 0.36,
+      range: [55, 96],
+      color: "#cfa0a0",
     },
     {
       id: "pizz",
@@ -585,6 +678,69 @@ export function createInstruments(): Record<string, Instrument> {
       range: [60, 60],
       keys: { boom: 60 },
       color: "#9fb3c8",
+    },
+    {
+      id: "clarinet",
+      name: "Bass clarinet",
+      short: "cl",
+      zones: spread(34, 84, 6, (r) => renderFlute(r, 14000 + r, CLARINET)),
+      envelope: { attack: 0.09, decay: 0.3, sustain: 0.85, release: 0.3 },
+      autoVibrato: { depth: 4, rate: 4.5, delay: 0.8 },
+      gain: 0.42,
+      range: [38, 82],
+      color: "#8a9a6a",
+    },
+    {
+      id: "musicBox",
+      name: "Music box",
+      short: "mb",
+      zones: spread(55, 102, 6, (r) => renderMusicBox(r)),
+      envelope: { attack: 0.001, decay: 0, sustain: 1, release: 0.8 },
+      gain: 0.32,
+      range: [60, 98],
+      color: "#c7b3d9",
+    },
+    {
+      id: "drip",
+      name: "Drips",
+      short: "dr",
+      zones: spread(55, 103, 12, (r) => renderDrip(r)),
+      envelope: { attack: 0.001, decay: 0, sustain: 1, release: 0.2 },
+      gain: 0.3,
+      range: [60, 98],
+      color: "#7fc8c0",
+    },
+    {
+      id: "ghost",
+      name: "Ghost",
+      short: "gh",
+      zones: spread(48, 96, 6, (r) => renderGhost(r)),
+      envelope: { attack: 0.5, decay: 0.5, sustain: 0.85, release: 1.4 },
+      autoVibrato: { depth: 32, rate: 5.6, delay: 0.25, sweep: 1 },
+      gain: 0.3,
+      range: [52, 86],
+      color: "#b8d0c8",
+    },
+    {
+      id: "knock",
+      name: "Knocks",
+      short: "kn",
+      zones: knock(15000),
+      envelope: { attack: 0.001, decay: 0, sustain: 1, release: 0.3 },
+      gain: 0.5,
+      range: [60, 62],
+      keys: { dum: 60, tek: 62 },
+      color: "#a89070",
+    },
+    {
+      id: "wind",
+      name: "Wind",
+      short: "wd",
+      zones: spread(36, 96, 12, (r) => renderWind(r, 16000 + r)),
+      envelope: { attack: 1.5, decay: 0, sustain: 1, release: 2.5 },
+      gain: 0.35,
+      range: [43, 91],
+      color: "#b0bcc8",
     },
     {
       id: "frameDrum",

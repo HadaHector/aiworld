@@ -55,7 +55,7 @@ export interface Style {
   /** Chance the intro starts with the plucked instrument alone instead of the pad. */
   pluckFirstChance: number;
   /** frameDrum and tambourine may be "" for none. */
-  instruments: { lead: string; pluck: string; pad: string; bass: string; frameDrum: string; tambourine: string; lowDrum: string; sparkle?: string; wail?: string };
+  instruments: { lead: string; pluck: string; pad: string; bass: string; frameDrum: string; tambourine: string; lowDrum: string; sparkle?: string; wail?: string; wind?: string };
   // Optional knobs; absent is off.
   /** Chance a lead phrase sits out (never the outro's), leaving the accompaniment alone. */
   leadRestChance?: number;
@@ -68,7 +68,13 @@ export interface Style {
   /** Quick high runs over the chord on their own channel: chance per bar, notes per run, rows per note. */
   sparkle?: { name?: string; chance: number; notes: [number, number]; steps?: number[] };
   /** A long voice rising into the tonic or fifth on its own channel, chance per phrase, sliding up from `slide` semitones below. At a climax it doubles the melody instead. */
-  wail?: { name?: string; chance: number; slide?: number[] };
+  wail?: { name?: string; chance: number; slide?: number[]; double?: number };
+  /**
+   * Wind on its own channel, now and then: a passage of `bars` bars may start at any quiet bar with
+   * `chance`, around `pitch` (where the howl sits), at `level`, sliding to a new pitch up to
+   * `drift` semitones away and gusting every bar.
+   */
+  wind?: { pitch: number; level: number; drift: number; chance: number; bars: [number, number] };
   /** Semitones the lead sits from its usual register. */
   leadShift?: number;
   /** Semitones a climax section ("A+") moves the key, one picked per song. */
@@ -79,6 +85,14 @@ export interface Style {
   cadences?: { half?: [number, number][]; leading?: [number, number][]; contrast?: [number, number][]; back?: [number, number][] };
   /** Chance a melody note slides in from the step above or below. */
   slideChance?: number;
+  /** Chance a lead phrase is played by another instrument instead, `shift` semitones from the usual. */
+  leadAlternate?: { instrument: string; chance: number; shift?: number };
+  /** Chance a lead phrase glides from note to note where they join, like a musical saw. */
+  glideChance?: number;
+  /** Chance a long lead note sags flat as it fades. */
+  sagChance?: number;
+  /** In the last outro the plucks slow and drop in pitch, a music box running down. */
+  windDown?: boolean;
   /** Chance a long lead note wavers with vibrato after its start. */
   vibratoChance?: number;
   /** Chance a plucked note with room after it is tremolo-picked until the next. */
@@ -103,7 +117,7 @@ export interface Style {
     pizzicato?: string;
   };
   /** Volume of each part, 1 by default. */
-  mix?: Partial<Record<"lead" | "pluck" | "pad" | "bass" | "drums" | "sparkle" | "wail", number>>;
+  mix?: Partial<Record<"lead" | "pluck" | "pad" | "bass" | "drums" | "sparkle" | "wail" | "wind", number>>;
 }
 
 const FOUR: MeterRules = {
@@ -452,7 +466,8 @@ export const SNOW: Style = {
   percussionChance: 0.7,
   droneChance: 0.45,
   pluckFirstChance: 0.25,
-  instruments: { lead: "horn", pluck: "harp", pad: "strings", bass: "bass", frameDrum: "", tambourine: "", lowDrum: "timpani", sparkle: "bells", wail: "choir" },
+  instruments: { lead: "horn", pluck: "harp", pad: "strings", bass: "bass", frameDrum: "", tambourine: "", lowDrum: "timpani", sparkle: "bells", wail: "choir", wind: "wind" },
+  wind: { pitch: 76, level: 0.3, drift: 7, chance: 0.07, bars: [3, 6] },
   leadRestChance: 0.2,
   vibratoChance: 0.25,
   padBreath: 0.15,
@@ -475,4 +490,112 @@ export const SNOW: Style = {
   mix: { lead: 0.85, pluck: 0.6, pad: 1.2, bass: 1, drums: 0.8, sparkle: 0.55, wail: 0.7 },
 };
 
-export const STYLES: Style[] = [FOREST, GLADE, DESERT, SNOW];
+const SWAMP_THREE: MeterRules = {
+  beats: 3,
+  rhythms: [
+    [8, 4],
+    [4, 8],
+    [6, 2, 4],
+    [12],
+    [-4, 4, 4],
+    [4, 4, 4],
+  ],
+  calmRhythms: [[12], [-6, 6], [-4, 8]],
+  cadenceRhythms: [[12], [4, 8], [2, 2, 8]],
+  plucks: [
+    // Music box: a broken waltz, never quite filling the bar.
+    [[0, 0], [4, 2], [8, 4]],
+    [[0, 4], [2, 3], [4, 2], [6, 1]],
+    [[0, 0], [6, 3]],
+    [[4, 2], [8, 3]],
+  ],
+  // Knocks in the dark: a log, a block, somewhere off the beat.
+  frameDrum: [[[0, "dum"]], [[0, "dum"], [8, "tek"]], [[4, "tek"], [6, "tek"]]],
+  tambourine: [[]],
+};
+
+const SWAMP_FOUR: MeterRules = {
+  beats: 4,
+  rhythms: [
+    [8, 8],
+    [6, 2, 8],
+    [4, 4, 8],
+    [-4, 12],
+    [12, 4],
+  ],
+  calmRhythms: [[16], [-8, 8]],
+  cadenceRhythms: [[16], [4, 12]],
+  plucks: [
+    [[0, 0], [6, 2], [8, 4], [14, 3]],
+    [[0, 4], [2, 3], [4, 2], [6, 1], [12, 0]],
+    [[0, 0], [10, 3]],
+  ],
+  frameDrum: [[[0, "dum"], [10, "tek"]], [[0, "dum"], [6, "tek"], [7, "tek"]], [[12, "tek"]]],
+  tambourine: [[]],
+};
+
+/**
+ * The swamp: dark and spooky. A bass clarinet creeping in Phrygian and harmonic minor, a music box
+ * a little out of tune playing a broken waltz, a humming choir over low strings that tremble, a
+ * heartbeat drum, knocks off the beat, water dripping, and a ghost - a theremin of a voice -
+ * sliding up out of the murk. Its climax only creeps a semitone higher.
+ */
+export const SWAMP: Style = {
+  id: "swamp",
+  name: "Swamp - dark and spooky",
+  modes: [
+    ["phrygian", 3],
+    ["harmonicMinor", 3],
+    ["aeolian", 2],
+    ["dorian", 1],
+  ],
+  tonics: [0, 2, 4, 5, 7, 9],
+  bpm: [52, 70],
+  meters: [
+    [SWAMP_THREE, 2],
+    [SWAMP_FOUR, 1],
+  ],
+  rowsPerBeat: 4,
+  ticksPerRow: 6,
+  chordWeights: { 0: 4, 1: 1.5, 3: 2, 4: 1.5, 5: 2, 6: 1 },
+  cadences: {
+    half: [[4, 2], [1, 1.5], [5, 1]],
+    leading: [[1, 1.5], [4, 2], [5, 1]],
+    contrast: [[5, 1.5], [3, 1.5], [1, 1]],
+    back: [[4, 2], [1, 1]],
+  },
+  forms: [
+    [["I1", "I2", "A", "A'", "B", "B'", "Br", "D", "Ar'+", "O1", "O2"], 2],
+    [["I1", "A", "A'", "C", "B", "B'", "D", "Ar", "O1", "O2"], 1],
+  ],
+  percussionChance: 0.7,
+  droneChance: 0.7,
+  pluckFirstChance: 0.5,
+  instruments: { lead: "clarinet", pluck: "musicBox", pad: "choir", bass: "bass", frameDrum: "knock", tambourine: "", lowDrum: "lowDrum", sparkle: "drip", wail: "ghost", wind: "wind" },
+  wind: { pitch: 55, level: 0.28, drift: 5, chance: 0.07, bars: [2, 5] },
+  leadRestChance: 0.3,
+  slideChance: 0.35,
+  leadAlternate: { instrument: "violin", chance: 0.35, shift: 12 },
+  glideChance: 0.35,
+  sagChance: 0.45,
+  windDown: true,
+  vibratoChance: 0.3,
+  leadShift: -12,
+  pluckShift: 12,
+  sparkle: { name: "Drips", chance: 0.3, notes: [1, 2], steps: [3, 5] },
+  wail: { name: "Ghost", chance: 0.5, slide: [3, 5, 7], double: 12 },
+  climaxShift: [1],
+  drumRoll: 0.3,
+  percussion: { "A'": 1, Ar: 1, B: 2, "B'": 2, D: 2, "Ar'+": 2 },
+  pad: {
+    suspensions: 0.4,
+    stagger: 0.4,
+    passing: 0.15,
+    swell: true,
+    textures: { I1: "open", I2: "tremolo", B: "tremolo", D: "tremolo", Br: "open", "Ar'+": "wide" },
+    voices: ["stringsLow", "choir", "strings"],
+  },
+  mix: { lead: 0.8, pluck: 0.7, pad: 1.05, bass: 1, drums: 0.9, sparkle: 0.6, wail: 0.75 },
+};
+
+export const STYLES: Style[] = [FOREST, GLADE, DESERT, SNOW, SWAMP];

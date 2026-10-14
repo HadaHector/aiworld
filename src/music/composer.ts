@@ -46,6 +46,7 @@ const CHANNELS: Channel[] = [
 /** Only for styles with sparkles, then wails, in that order after the others. */
 const SPARKLE_CHANNEL: Channel = { name: "Sparkle", role: "counter", pan: 0.2, reverb: 0.7 };
 const WAIL_CHANNEL: Channel = { name: "Wail", role: "counter", pan: 0.2, reverb: 0.7 };
+const WIND_CHANNEL: Channel = { name: "Wind", role: "pad", pan: -0.3, reverb: 0.4 };
 
 /** Drum articulations to keys, as the drum instruments lay them out. */
 const DRUM_KEYS: Record<string, number> = { dum: 60, tek: 62, shake: 60, hit: 62, boom: 60 };
@@ -228,7 +229,9 @@ export function composeSong(style: Style, placeSeed: number, visitSeed: number):
     ...CHANNELS,
     ...(style.instruments.sparkle ? [{ ...SPARKLE_CHANNEL, name: style.sparkle?.name ?? SPARKLE_CHANNEL.name }] : []),
     ...(style.instruments.wail ? [{ ...WAIL_CHANNEL, name: style.wail?.name ?? WAIL_CHANNEL.name }] : []),
+    ...(style.wind && style.instruments.wind ? [WIND_CHANNEL] : []),
   ];
+  const WIND = channels.length - 1;
 
   const totalRows = form.length * phraseRows;
   const cells: (Cell | undefined)[][] = Array.from({ length: totalRows }, () => channels.map(() => undefined));
@@ -327,12 +330,27 @@ export function composeSong(style: Style, placeSeed: number, visitSeed: number):
       : undefined;
     if (melody && layers.has("lead")) {
       const loud = (id === "B" || id === "B'" ? 0.06 : 0) + (climax ? 0.08 : 0);
+      // Now and then the phrase goes to another instrument, or glides from note to note.
+      const alternate = style.leadAlternate && visit() < style.leadAlternate.chance ? style.leadAlternate : undefined;
+      const glide = !!style.glideChance && visit() < style.glideChance;
+      const leadInstrument = alternate?.instrument ?? style.instruments.lead;
+      const pitchOf = (degree: number): number => degreeToMidi(key.mode, leadTonic, degree) + (alternate?.shift ?? 0);
+      const joined = (a: MelodyNote | undefined, b: MelodyNote | undefined): boolean => !!a && !!b && a.row + a.dur === b.row;
       melody.forEach((n, i) => {
         const row = start + n.row;
         const volume = (0.58 + loud + 0.08 * Math.sin((Math.PI * n.row) / phraseRows) + (n.row % barRows === 0 ? 0.04 : 0) + jitter(0.03)) * part("lead");
-        const effects: Effect[] = n.slideIn ? [{ type: "slideIn", semis: n.slideIn, ticks: 3 }] : [];
-        const note = degreeToMidi(key.mode, leadTonic, n.degree);
-        put(row, LEAD, { note, instrument: style.instruments.lead, volume, effects: effects.length ? effects : undefined });
+        const note = pitchOf(n.degree);
+        const prev = melody[i - 1];
+        const glides = glide && joined(prev, n);
+        if (glides) {
+          // Gliding in from the note before, over two rows: XM tone portamento on both.
+          const perTick = Math.max(0.05, Math.abs(note - pitchOf(prev!.degree)) / (2 * (style.ticksPerRow - 1)));
+          put(row, LEAD, { note, instrument: leadInstrument, volume, effects: [{ type: "tonePortamento", perTick }] });
+          put(row + 1, LEAD, { effects: [{ type: "tonePortamento", perTick }] });
+        } else {
+          const effects: Effect[] = n.slideIn ? [{ type: "slideIn", semis: n.slideIn, ticks: 3 }] : [];
+          put(row, LEAD, { note, instrument: leadInstrument, volume, effects: effects.length ? effects : undefined });
+        }
         // A trill: the note and the step above it, a tick apart, as birds do.
         if (style.trillChance && n.dur >= 6 && visit() < style.trillChance) {
           const x = degreeToMidi(key.mode, leadTonic, n.degree + 1) - note;
@@ -343,10 +361,16 @@ export function composeSong(style: Style, placeSeed: number, visitSeed: number):
           for (let r = 4; r < n.dur; r++) put(row + r, LEAD, { effects: [{ type: "vibrato", depth: 0.25, rate: 5.5 }] });
         }
         const next = melody[i + 1];
+        // A long note may sag half a semitone flat over its last quarter, like a dying breath.
+        if (style.sagChance && n.dur >= 8 && !(glide && joined(n, next)) && visit() < style.sagChance) {
+          const rows = Math.max(2, Math.floor(n.dur / 4));
+          const perTick = -0.5 / (rows * (style.ticksPerRow - 1));
+          for (let r = n.dur - rows; r < n.dur; r++) put(row + r, LEAD, { effects: [{ type: "portamento", perTick }] });
+        }
         if (!next || next.row > n.row + n.dur) put(row + n.dur, LEAD, { note: "off" });
-        // At a climax the choir takes up the melody an octave below.
+        // At a climax the choir takes up the melody, an octave below unless the style says otherwise.
         if (climax && style.instruments.wail) {
-          put(row, WAIL, { note: note - 12, instrument: style.instruments.wail, volume: 0.4 * part("wail") });
+          put(row, WAIL, { note: note + (style.wail?.double ?? -12), instrument: style.instruments.wail, volume: 0.4 * part("wail") });
           if (!next || next.row > n.row + n.dur) put(row + n.dur, WAIL, { note: "off" });
         }
       });
@@ -488,7 +512,12 @@ export function composeSong(style: Style, placeSeed: number, visitSeed: number):
           }
           const strong = row === 0 ? 0.56 : row % style.rowsPerBeat === 0 ? 0.46 : 0.38;
           const quiet = id === "O2" ? 0.7 : 1;
-          const effects: Effect[] | undefined = row > 0 && visit() < 0.2 ? [{ type: "noteDelay", ticks: 1 }] : undefined;
+          let effects: Effect[] | undefined = row > 0 && visit() < 0.2 ? [{ type: "noteDelay", ticks: 1 }] : undefined;
+          if (style.windDown && id === "O2" && b > 0) {
+            // Running down: each note later and sinking, more with every bar.
+            effects = [{ type: "noteDelay", ticks: Math.min(style.ticksPerRow - 1, b * 2) }];
+            for (let r = 1; r < gap; r++) put(start + b * barRows + row + r, PLUCK, { effects: [{ type: "portamento", perTick: -0.03 * b }] });
+          }
           put(start + b * barRows + row, PLUCK, { note: tones[tone], instrument: style.instruments.pluck, volume: (strong + jitter(0.05)) * quiet * part("pluck"), effects });
         });
       });
@@ -582,11 +611,50 @@ export function composeSong(style: Style, placeSeed: number, visitSeed: number):
     if (shift) {
       for (let r = start; r < start + phraseRows; r++) {
         cells[r].forEach((cell, channel) => {
-          if (cell && typeof cell.note === "number" && MELODIC(channel)) cell.note += shift;
+          if (cell && typeof cell.note === "number" && MELODIC(channel) && !(style.wind && channel === WIND)) cell.note += shift;
         });
       }
     }
   });
+
+  // Wind now and then: a passage of a few bars rising out of silence, the howl sliding to a new
+  // pitch and gusting every bar, then dying away and let go. Quiet most of the time between.
+  const wind = style.wind;
+  if (wind && style.instruments.wind) {
+    const level = wind.level * part("wind");
+    const bars = totalRows / barRows;
+    for (let b = 0; b < bars; b++) {
+      if (visit() >= wind.chance) continue;
+      const length = Math.min(bars - b, wind.bars[0] + Math.floor(visit() * (wind.bars[1] - wind.bars[0] + 1)));
+      if (length < 2) break;
+      const rise = Math.ceil(length / 3);
+      const fall = Math.ceil(length / 3);
+      let pitch = wind.pitch + Math.round((visit() * 2 - 1) * wind.drift);
+      put(b * barRows, WIND, { note: pitch, instrument: style.instruments.wind, volume: 0 });
+      slideRows(WIND, b * barRows, rise * barRows, level);
+      for (let k = 0; k < length; k++) {
+        const row = (b + k) * barRows;
+        if (k > 0) {
+          // XM tone portamento slides only on rows that carry it: every row of the bar does.
+          const target = wind.pitch + Math.round((visit() * 2 - 1) * wind.drift);
+          const perTick = Math.max(0.01, Math.abs(target - pitch) / (barRows * style.ticksPerRow));
+          put(row, WIND, { note: target, effects: [{ type: "tonePortamento", perTick }] });
+          for (let r = row + 1; r < row + barRows; r++) put(r, WIND, { effects: [{ type: "tonePortamento", perTick }] });
+          pitch = target;
+        }
+        if (k >= rise && k < length - fall) {
+          const gust = level * (0.2 + 0.5 * visit());
+          const up = Math.max(1, Math.floor(barRows * (0.3 + 0.4 * visit())));
+          slideRows(WIND, row, up, gust);
+          slideRows(WIND, row + up, barRows - up, -gust);
+        }
+      }
+      slideRows(WIND, (b + length - fall) * barRows, fall * barRows, -level);
+      put((b + length) * barRows, WIND, { note: "off" });
+      // At least a bar of quiet before the next.
+      b += length;
+    }
+  }
 
   patterns.forEach((p, i) => (p.cells = cells.slice(i * phraseRows, (i + 1) * phraseRows)));
 

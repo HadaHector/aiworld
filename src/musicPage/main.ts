@@ -5,7 +5,7 @@
 import { composeSong } from "../music/composer";
 import { cellText, effectsText, noteText, volumeText } from "../music/format";
 import { createInstruments, zoneFor, type Instrument, type SampleZone } from "../music/instruments";
-import { Player } from "../music/player";
+import { Player, type PlayPosition } from "../music/player";
 import { parseXi } from "../music/xi";
 import { songNotes, songRows, type Song } from "../music/song";
 import { STYLES } from "../music/styles";
@@ -25,7 +25,7 @@ const gridWrap = element<HTMLElement>("gridWrap");
 const overview = element<HTMLElement>("overview");
 const inUse = element<HTMLInputElement>("inUse");
 
-const CHANNEL_COLORS = ["#e7c26a", "#d98a5f", "#7fa7d9", "#6f97cc", "#5f87bf", "#4f6fa8", "#a8c47a", "#c9a3d9", "#8fc4b8", "#9fe0e6", "#d8c8ec"];
+const CHANNEL_COLORS = ["#e7c26a", "#d98a5f", "#7fa7d9", "#6f97cc", "#5f87bf", "#4f6fa8", "#a8c47a", "#c9a3d9", "#8fc4b8", "#9fe0e6", "#d8c8ec", "#b0bcc8"];
 
 const instruments = createInstruments();
 const shorts = Object.fromEntries(Object.values(instruments).map((i) => [i.id, i.short]));
@@ -68,11 +68,17 @@ function compose(): void {
   if (inUse.checked) renderInstruments();
 }
 
-function play(): void {
+function play(from?: PlayPosition): void {
   window.clearTimeout(gapTimer);
   statusLabel.textContent = "";
   follow = true;
-  ensurePlayer().play(song);
+  ensurePlayer().play(song, from);
+}
+
+/** A click jumps there while playing; a double click plays from there. Otherwise it only shows it. */
+function goTo(from: PlayPosition, start: boolean): void {
+  if (start || player?.playing) play(from);
+  else showPattern(from.pattern, false);
 }
 
 function stop(): void {
@@ -115,7 +121,8 @@ function renderOverview(): void {
   song.patterns.forEach((p, i) => {
     const div = document.createElement("div");
     div.innerHTML = `${p.section}<small>${p.chords.map((c) => c.name).join(" ")}</small>`;
-    div.onclick = () => showPattern(i, false);
+    div.onclick = () => goTo({ pattern: i, row: 0 }, false);
+    div.ondblclick = () => goTo({ pattern: i, row: 0 }, true);
     overview.append(div);
   });
   markOverview(-1);
@@ -208,9 +215,14 @@ const LIBRARY_ALIASES: Record<string, string[]> = {
   stringsLow: ["bass", "strings"],
   stringsHigh: ["strings"],
   pizz: ["harp", "guitar"],
+  clarinet: ["ney"],
+  drip: ["nature"],
+  ghost: ["atmosphere", "choir"],
+  wind: ["atmosphere"],
+  violin: ["stringsHigh", "strings"],
 };
 /** Where single drum strokes for a kit are picked from. */
-const DRUM_FOLDERS = ["darbuka", "frameDrum", "tambourine", "lowDrum"];
+const DRUM_FOLDERS = ["darbuka", "frameDrum", "tambourine", "lowDrum", "knock"];
 const SOUNDS_KEY = "aiworld.music.sounds";
 /** The sounds picked by ear, used wherever the library has them; "" in a choice means the synth. */
 const DEFAULT_SOUNDS: Record<string, string> = {
@@ -505,14 +517,23 @@ function drawRoll(playRow = -1): void {
   }
 }
 
-roll.onclick = (e) => {
-  const row = (e.offsetX / roll.clientWidth) * songRows(song);
+/** The bar under a point of the piano roll. */
+function rollPosition(x: number): PlayPosition {
+  const row = Math.floor((x / roll.clientWidth) * songRows(song));
+  const barRows = song.beatsPerBar * song.rowsPerBeat;
   let base = 0;
   for (let i = 0; i < song.patterns.length; i++) {
-    if (row < base + song.patterns[i].rows) return showPattern(i, false), drawRoll();
+    if (row < base + song.patterns[i].rows) return { pattern: i, row: Math.floor((row - base) / barRows) * barRows };
     base += song.patterns[i].rows;
   }
+  return { pattern: song.patterns.length - 1, row: 0 };
+}
+roll.onclick = (e) => {
+  goTo(rollPosition(e.offsetX), false);
+  drawRoll();
 };
+roll.ondblclick = (e) => goTo(rollPosition(e.offsetX), true);
+roll.title = overview.title = "Click: show it, or jump there while playing. Double-click: play from there.";
 
 // ---------------------------------------------------------------------------------------------
 
@@ -536,7 +557,7 @@ function frame(): void {
   requestAnimationFrame(frame);
 }
 
-element("play").onclick = play;
+element("play").onclick = () => play();
 element("stop").onclick = stop;
 element("newPlace").onclick = () => {
   placeInput.value = String(randomSeed());

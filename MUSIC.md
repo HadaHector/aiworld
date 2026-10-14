@@ -197,6 +197,26 @@ the forest style using synth stand-ins.
     - Harp arpeggios fall slowly and a glockenspiel glints like snowflakes.
     - A distant choir rises in, and timpani roll into the big sections.
     - Pieces run 3–4 minutes, and the form travels instead of just repeating A and B.
+  - **Swamp:** dark and spooky, often a slow 3/4 waltz.
+    - A bass clarinet creeps in Phrygian and harmonic minor.
+    - A slightly out-of-tune music box plays a broken waltz.
+    - A humming choir sits between low strings that tremble.
+    - A heartbeat drum, and log and wood-block knocks off the beat.
+    - Water drips in the high register.
+    - A ghost (a theremin-like voice) slides up out of the murk. At the climax it doubles the
+      melody an octave above.
+    - The climax rises only a semitone.
+    - Sliding notes:
+      - About a third of the lead phrases glide from note to note where they join, like a
+        musical saw.
+      - Long notes often sag half a semitone flat as they fade.
+      - In the last outro the music box runs down, each note later and sinking.
+    - About a third of the phrases go to a violin, an octave above the clarinet.
+  - **Wind** (`wind` in a style; snow and swamp use it): a synth voice of noise through a resonant
+    band, on its own channel, only now and then: about a fifth of the time, in 2–3 passages of a few bars
+    per piece. Each passage rises out of silence, slides to a new pitch every bar (the howl) and
+    gusts, then dies away and is let go. It stays in its key through a climax. The archive has no wind
+    recordings, so it is synth only; the Wind card can borrow from the atmosphere files.
   - **Sections beyond the A and B themes**, for any style that lists them in its forms:
     - **C:** a third theme on a motif of its own, starting away from the home chord.
     - **D:** a development, carrying the motif down a chain of chords.

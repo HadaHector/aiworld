@@ -94,18 +94,53 @@ export class Player {
     return this.song !== undefined;
   }
 
-  play(song: Song): void {
+  /** Plays a song from its start, or from `from`, picking up what would be sounding there. */
+  play(song: Song, from: PlayPosition = { pattern: 0, row: 0 }): void {
     this.stop();
     this.song = song;
     this.outs = song.channels.map((c, i) => this.createOut(c.pan, c.reverb, this.gains[i] ?? 1));
     this.states = song.channels.map(() => ({ volume: 1, pitch: 0, offset: 0, vibratoPhase: 0, tremoloPhase: 0, trembling: false }));
-    this.patternIndex = 0;
-    this.row = 0;
+    this.patternIndex = Math.min(from.pattern, song.patterns.length - 1);
+    this.row = Math.min(from.row, song.patterns[this.patternIndex].rows - 1);
     this.nextRowTime = this.ctx.currentTime + 0.1;
     this.endTime = Infinity;
     this.timeline = [];
+    if (this.patternIndex > 0 || this.row > 0) this.pickUp(song);
     this.timer = window.setInterval(() => this.schedule(), 50);
     this.schedule();
+  }
+
+  /**
+   * Starting mid-song: reads every row before the start for each channel's instrument, volume
+   * (slides included) and held note, and strikes the held notes that sustain - pads, drones, long
+   * notes. Plucks and drums that would already have died away stay silent.
+   */
+  private pickUp(song: Song): void {
+    const held: (number | undefined)[] = song.channels.map(() => undefined);
+    for (let p = 0; p <= this.patternIndex; p++) {
+      const pattern = song.patterns[p];
+      const rows = p === this.patternIndex ? this.row : pattern.rows;
+      for (let r = 0; r < rows; r++) {
+        pattern.cells[r].forEach((cell, channel) => {
+          if (!cell) return;
+          const state = this.states[channel];
+          if (cell.instrument) state.instrument = this.instruments[cell.instrument];
+          if (cell.volume !== undefined) state.volume = cell.volume;
+          if (cell.note === "off") held[channel] = undefined;
+          else if (cell.note !== undefined) held[channel] = cell.note;
+          for (const effect of cell.effects ?? []) {
+            if (effect.type === "volumeSlide") state.volume = Math.min(1, Math.max(0, state.volume + effect.perTick * (song.ticksPerRow - 1)));
+            if (effect.type === "noteCut") held[channel] = undefined;
+          }
+        });
+      }
+    }
+    held.forEach((note, channel) => {
+      const state = this.states[channel];
+      if (note === undefined || !state.instrument?.zones.some((z) => z.loop)) return;
+      state.pitch = note;
+      state.voice = this.startVoice(this.outs[channel], state.instrument, note, state.volume, this.nextRowTime);
+    });
   }
 
   stop(): void {
