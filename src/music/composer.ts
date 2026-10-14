@@ -97,7 +97,9 @@ export function composeSong(style: Style, placeSeed: number, visitSeed: number):
   const meter: MeterRules = weighted(place, style.meters);
   const barRows = meter.beats * style.rowsPerBeat;
   const phraseRows = barRows * 4;
-  const leadTonic = (72 + key.tonic > 77 ? 60 + key.tonic : 72 + key.tonic) + (style.leadShift ?? 0);
+  const leadTonic = style.leadCenter !== undefined
+    ? style.leadCenter - 6 + mod(key.tonic - (style.leadCenter - 6), 12)
+    : (72 + key.tonic > 77 ? 60 + key.tonic : 72 + key.tonic) + (style.leadShift ?? 0);
   const range = { lo: -2, hi: 9 };
 
   const usable = (d: number): boolean => {
@@ -343,6 +345,8 @@ export function composeSong(style: Style, placeSeed: number, visitSeed: number):
       : id === "C" ? melodyC
       : id === "D" ? melodyD
       : undefined;
+    /** The lead as sung, for a chorale to harmonise: row, length, pitch, and whether a rest follows. */
+    const leadLine: { row: number; dur: number; note: number; rest: boolean }[] = [];
     if (melody && layers.has("lead")) {
       const loud = (id === "B" || id === "B'" ? 0.06 : 0) + (climax ? 0.08 : 0);
       // Now and then the phrase goes to another instrument, or glides from note to note.
@@ -376,6 +380,7 @@ export function composeSong(style: Style, placeSeed: number, visitSeed: number):
           for (let r = 4; r < n.dur; r++) put(row + r, LEAD, { effects: [{ type: "vibrato", depth: 0.25, rate: 5.5 }] });
         }
         const next = melody[i + 1];
+        leadLine.push({ row, dur: n.dur, note, rest: !next || next.row > n.row + n.dur });
         // A long note may sag half a semitone flat over its last quarter, like a dying breath.
         if (style.sagChance && n.dur >= 8 && !(glide && joined(n, next)) && visit() < style.sagChance) {
           const rows = Math.max(2, Math.floor(n.dur / 4));
@@ -385,7 +390,9 @@ export function composeSong(style: Style, placeSeed: number, visitSeed: number):
         if (!next || next.row > n.row + n.dur) put(row + n.dur, LEAD, { note: "off" });
         // At a climax the choir takes up the melody, an octave below unless the style says otherwise.
         if (climax && style.instruments.wail) {
-          put(row, WAIL, { note: note + (style.wail?.double ?? -12), instrument: style.instruments.wail, volume: 0.4 * part("wail") });
+          let doubled = note + (style.wail?.double ?? -12);
+          while (doubled < 40) doubled += 12;
+          put(row, WAIL, { note: doubled, instrument: style.instruments.wail, volume: 0.4 * part("wail") });
           if (!next || next.row > n.row + n.dur) put(row + n.dur, WAIL, { note: "off" });
         }
       });
@@ -398,9 +405,43 @@ export function composeSong(style: Style, placeSeed: number, visitSeed: number):
     if (pad && layers.has("pad")) {
       const base = (id === "B" || id === "B'" ? 0.5 : 0.42) * (climax ? 1.15 : 1) * part("pad");
       const choice = pad.textures?.[formId] ?? pad.textures?.[id] ?? "sustain";
-      const texture: PadTexture = Array.isArray(choice) ? pick(visit, choice) : choice;
+      const picked: PadTexture = Array.isArray(choice) ? pick(visit, choice) : choice;
+      // A chorale needs a melody to sing with; without one the chords are held.
+      const texture: PadTexture = picked === "chorale" && leadLine.length === 0 ? "sustain" : picked;
       const voiceInstrument = (v: number): string => (texture === "pizzicato" ? (pad.pizzicato ?? "pizz") : (pad.voices?.[v] ?? style.instruments.pad));
-      if (texture === "pizzicato") {
+      if (texture === "chorale") {
+        // Voices singing with the melody, note for note: each takes a tone of the bar's chord below
+        // the voice above it, as near as it can to where it was. Low voice on the root if it can.
+        const ranges: [number, number][] = [[41, 60], [48, 67], [55, 72]];
+        let last: (number | undefined)[] = [undefined, undefined, undefined];
+        for (const sung of leadLine) {
+          const chord = chords[Math.min(3, Math.floor((sung.row - start) / barRows))];
+          const tones = triadDegrees(chord);
+          // Voiced below the soprano's register: a low lead (a horn) then sings inside the choir.
+          let above = sung.note;
+          while (above < 64) above += 12;
+          const voicing: number[] = [];
+          for (const v of [2, 1, 0]) {
+            const [lo, hi] = ranges[v];
+            const wanted = v === 0 ? [tones[0]] : tones;
+            let options = wanted.flatMap((d) => pitchesOf(key, d, lo, hi)).filter((m) => m <= above - 2);
+            if (options.length === 0) options = tones.flatMap((d) => pitchesOf(key, d, Math.max(38, lo - 7), hi)).filter((m) => m <= above - 2);
+            const from = last[v] ?? (lo + hi) / 2;
+            const note = options.reduce((best, m) => (Math.abs(m - from) < Math.abs(best - from) ? m : best), options[0] ?? above - 12);
+            voicing[v] = note;
+            above = note;
+          }
+          voicing.forEach((note, v) => {
+            put(sung.row, PADS[v], { note, instrument: voiceInstrument(v), volume: (0.4 + jitter(0.03)) * (climax ? 1.15 : 1) * part("pad") });
+            if (sung.rest) put(sung.row + sung.dur, PADS[v], { note: "off" });
+          });
+          last = voicing;
+        }
+        // The chorale ends with the section: the next one strikes its chords afresh.
+        for (const ch of PADS) put(start + phraseRows, ch, { note: "off" });
+        padPlaying = undefined;
+        padCore = undefined;
+      } else if (texture === "pizzicato") {
         // Plucked chords: the voices take the beats in turn, low, middle, high, middle.
         chords.forEach((c, b) => {
           const voicing = padVoicing(key, triadDegrees(c), padCore);
@@ -451,7 +492,7 @@ export function composeSong(style: Style, placeSeed: number, visitSeed: number):
       if (fadeIn) for (const ch of PADS) slideRows(ch, start, barRows * 2, base);
       if (fadeOut) for (const ch of PADS) slideRows(ch, start + barRows * 2, barRows * 2, -base);
       // Each voice swells and ebbs on its own, over two bars, a bar and a half and a bar.
-      if (pad.swell && texture !== "pizzicato") {
+      if (pad.swell && texture !== "pizzicato" && texture !== "chorale") {
         PADS.forEach((ch, v) => {
           const length = [barRows * 2, (barRows * 3) / 2, barRows][v];
           const amount = 0.25 * base;
@@ -700,7 +741,7 @@ export function composeSong(style: Style, placeSeed: number, visitSeed: number):
     rowsPerBeat: style.rowsPerBeat,
     ticksPerRow: style.ticksPerRow,
     beatsPerBar: meter.beats,
-    channels,
+    channels: style.reverb ? channels.map((c) => ({ ...c, reverb: Math.min(1, c.reverb * style.reverb!) })) : channels,
     patterns,
     summary: {
       key: `${pitchClassName(key.tonic)} ${key.mode}`,

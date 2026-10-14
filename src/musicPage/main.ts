@@ -253,6 +253,8 @@ const LIBRARY_ALIASES: Record<string, string[]> = {
   wind: ["atmosphere"],
   violin: ["stringsHigh", "strings"],
   clap: ["claps"],
+  choirHigh: ["choir"],
+  choirLow: ["choir"],
 };
 /** Where single drum strokes for a kit are picked from. */
 const DRUM_FOLDERS = ["darbuka", "frameDrum", "tambourine", "lowDrum", "knock", "claps"];

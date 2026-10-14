@@ -282,7 +282,12 @@ function bandpass(data: Float32Array, hz: number, q: number): Float32Array {
  * A soft choir pad: detuned saws through vowel formants, between "ooh" and "aah", with a breath of
  * noise. Looped. Library choirs (aahh, oohh) can replace it.
  */
-function renderChoir(root: number, seed: number): SampleZone {
+/** Where a choir's vowel sits: its first three formants, in Hz. Women sing them higher than men. */
+const MIXED_VOWEL: [number, number, number] = [480, 980, 2600];
+const WOMEN_VOWEL: [number, number, number] = [620, 1150, 2900];
+const MEN_VOWEL: [number, number, number] = [420, 850, 2400];
+
+function renderChoir(root: number, seed: number, vowel = MIXED_VOWEL): SampleZone {
   const rng = mulberry32(seed);
   const hz = midiToHz(root);
   const length = Math.floor(3.6 * SAMPLE_RATE);
@@ -300,9 +305,9 @@ function renderChoir(root: number, seed: number): SampleZone {
   }
   for (let i = 0; i < length; i++) source[i] += (rng() * 2 - 1) * 0.15;
   // Formants of a vowel between "oo" (300, 870 Hz) and "ah" (700, 1100 Hz), plus a little air.
-  const f1 = bandpass(source, 480, 4);
-  const f2 = bandpass(source, 980, 6);
-  const f3 = bandpass(source, 2600, 8);
+  const f1 = bandpass(source, vowel[0], 4);
+  const f2 = bandpass(source, vowel[1], 6);
+  const f3 = bandpass(source, vowel[2], 8);
   const data = new Float32Array(length);
   for (let i = 0; i < length; i++) data[i] = f1[i] + 0.5 * f2[i] + 0.12 * f3[i];
   onePoleLowpass(data, 3500);
@@ -648,6 +653,28 @@ export function createInstruments(): Record<string, Instrument> {
       gain: 0.3,
       range: [48, 79],
       color: "#d8c8ec",
+    },
+    {
+      id: "choirHigh",
+      name: "Women's choir",
+      short: "cw",
+      zones: spread(52, 90, 6, (r) => renderChoir(r, 7400 + r, WOMEN_VOWEL)),
+      envelope: { attack: 0.8, decay: 0.8, sustain: 0.85, release: 2 },
+      autoVibrato: { depth: 9, rate: 4.6, delay: 0.7, sweep: 1.5 },
+      gain: 0.3,
+      range: [55, 86],
+      color: "#e8d0f0",
+    },
+    {
+      id: "choirLow",
+      name: "Men's choir",
+      short: "cm",
+      zones: spread(36, 72, 6, (r) => renderChoir(r, 7700 + r, MEN_VOWEL)),
+      envelope: { attack: 0.9, decay: 0.8, sustain: 0.85, release: 2 },
+      autoVibrato: { depth: 7, rate: 4, delay: 0.9, sweep: 1.5 },
+      gain: 0.32,
+      range: [38, 69],
+      color: "#b8a8d8",
     },
     {
       id: "harp",

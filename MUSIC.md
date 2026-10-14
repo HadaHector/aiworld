@@ -231,6 +231,15 @@ the forest style using synth stand-ins.
     - The crowd claps on the beats in about half the full sections, a little ragged (`claps`;
       synth claps, or library hand claps). Shouts were tried and dropped: the archive's voice
       shouts were too rough, and the synth ones no better.
+  - **Holy:** churches and temples, choirs and strings, no organ or bells.
+    - Church modes at 44–58 bpm, in a big, wet space (`reverb` multiplies every send).
+    - The choir sings in parts as a chorale (a `chorale` pad texture): the melody, which for some
+      themes is a horn inside the choir, plus three voices singing with it note for note, each
+      on a chord tone below the voice above.
+    - Bare fifths of held voices open it and breathe in it, with suspensions everywhere.
+    - A soft harp, another voice rising in, and the theme returning in a new key with the choir
+      doubling it. No drums.
+    - The lead sits around `leadCenter` (its tonic within a tritone of F4), so it is a soprano.
   - **Sections beyond the A and B themes**, for any style that lists them in its forms:
     - **C:** a third theme on a motif of its own, starting away from the home chord.
     - **D:** a development, carrying the motif down a chain of chords.

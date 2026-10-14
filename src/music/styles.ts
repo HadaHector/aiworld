@@ -6,9 +6,11 @@ import type { ModeName } from "./theory";
 
 /**
  * How the pad plays a section: held chords ("sustain"), bare fifths and octaves ("open"), spread an
- * octave wider ("wide"), bowed tremolo ("tremolo"), or plucked on the beats ("pizzicato").
+ * octave wider ("wide"), bowed tremolo ("tremolo"), plucked on the beats ("pizzicato"), or as voices
+ * singing with the melody note for note, in harmony below it ("chorale"; held chords where there
+ * is no melody).
  */
-export type PadTexture = "sustain" | "open" | "wide" | "tremolo" | "pizzicato";
+export type PadTexture = "sustain" | "open" | "wide" | "tremolo" | "pizzicato" | "chorale";
 
 /** A rhythm for one bar, in rows; a negative length is a rest. */
 export type Rhythm = number[];
@@ -79,6 +81,9 @@ export interface Style {
   wind?: { pitch: number; level: number; drift: number; chance: number; bars: [number, number] };
   /** Semitones the lead sits from its usual register. */
   leadShift?: number;
+  /** Instead, the lead's tonic is the one within a tritone of this pitch. */
+  leadCenter?: number;
+
   /** Semitones a climax section ("A+") moves the key, one picked per song. */
   climaxShift?: number[];
   /** Chance the low drum rolls into a climax or a full section. */
@@ -95,6 +100,8 @@ export interface Style {
   sagChance?: number;
   /** In the last outro the plucks slow and drop in pitch, a music box running down. */
   windDown?: boolean;
+  /** Every channel's reverb send times this: a bigger, wetter space. */
+  reverb?: number;
   /** The crowd claps on every beat, a little ragged, in a full section with this chance. */
   claps?: { chance: number };
   /** The bass strikes every beat, root and fifth in turn, instead of holding the chord. */
@@ -703,4 +710,96 @@ export const TAVERN: Style = {
   mix: { lead: 1, pluck: 0.8, pad: 0.75, bass: 0.9, drums: 0.9, claps: 0.8 },
 };
 
-export const STYLES: Style[] = [FOREST, GLADE, DESERT, SNOW, SWAMP, TAVERN];
+const HOLY_FOUR: MeterRules = {
+  beats: 4,
+  rhythms: [
+    [8, 8],
+    [4, 4, 8],
+    [12, 4],
+    [4, 4, 4, 4],
+    [8, 4, 4],
+    [16],
+  ],
+  calmRhythms: [[16], [8, 8], [12, 4]],
+  cadenceRhythms: [[16], [8, 8], [4, 12]],
+  plucks: [
+    [[0, 0], [4, 2], [8, 3], [12, 4]],
+    [[0, 0], [8, 2]],
+    [[0, 0], [2, 1], [4, 2], [6, 3], [8, 4]],
+  ],
+  frameDrum: [[]],
+  tambourine: [[]],
+};
+
+const HOLY_THREE: MeterRules = {
+  beats: 3,
+  rhythms: [
+    [8, 4],
+    [4, 4, 4],
+    [12],
+    [4, 8],
+  ],
+  calmRhythms: [[12], [8, 4]],
+  cadenceRhythms: [[12], [4, 8]],
+  plucks: [
+    [[0, 0], [4, 2], [8, 3]],
+    [[0, 0], [6, 2]],
+  ],
+  frameDrum: [[]],
+  tambourine: [[]],
+};
+
+/**
+ * Holy places: churches and temples. A choir sings in parts: the women the melody (a horn for some
+ * themes) and the alto, the men the tenor and the low voice, note for note, as a chorale; bare fifths of held voices open it and
+ * breathe in it, as in organum. A harp now and then, another voice rising in, and the theme coming back in a new key
+ * with everyone, the choir doubling it below. No drums. All of it in a big, wet space.
+ */
+export const HOLY: Style = {
+  id: "holy",
+  name: "Holy - choirs and strings",
+  modes: [
+    ["ionian", 3],
+    ["mixolydian", 2],
+    ["dorian", 2],
+    ["lydian", 1],
+  ],
+  tonics: [0, 2, 5, 7, 9, 10],
+  bpm: [44, 58],
+  meters: [
+    [HOLY_FOUR, 3],
+    [HOLY_THREE, 1],
+  ],
+  rowsPerBeat: 4,
+  ticksPerRow: 6,
+  chordWeights: { 0: 3, 1: 1.2, 3: 2.5, 4: 2.5, 5: 2, 6: 0.8 },
+  forms: [
+    [["I1", "I2", "A", "A'", "B", "B'", "Br", "C", "Ar+", "Ar'+", "O1", "O2"], 2],
+    [["I1", "A", "A'", "B", "B'", "D", "Ar'+", "Br", "O1", "O2"], 1],
+  ],
+  percussionChance: 0,
+  droneChance: 0.5,
+  pluckFirstChance: 0.1,
+  instruments: { lead: "choirHigh", pluck: "harp", pad: "choirLow", bass: "stringsLow", frameDrum: "", tambourine: "", lowDrum: "timpani", wail: "choirLow" },
+  leadCenter: 64,
+  leadAlternate: { instrument: "horn", chance: 0.25, shift: -12 },
+  leadRestChance: 0.15,
+  vibratoChance: 0.2,
+  pluckShift: 12,
+  wail: { name: "Voice", chance: 0.3, slide: [1, 2] },
+  climaxShift: [2, 5],
+  reverb: 1.6,
+  pad: {
+    suspensions: 0.6,
+    stagger: 0.4,
+    passing: 0.3,
+    swell: true,
+    textures: { I1: "open", I2: "open", Br: "open", A: "chorale", "A'": "chorale", B: ["chorale", "sustain"], "B'": "chorale", C: "chorale", D: "sustain", "Ar+": "chorale", "Ar'+": "chorale", O1: "chorale" },
+    colour: { sus4: 0.2, add9: 0.15, sus2: 0.1 },
+    // Men below, women on top: the low voice and tenor, then the alto under the women's melody.
+    voices: ["choirLow", "choirLow", "choirHigh"],
+  },
+  mix: { lead: 0.8, pluck: 0.45, pad: 1.2, bass: 0.75, wail: 0.65 },
+};
+
+export const STYLES: Style[] = [FOREST, GLADE, DESERT, SNOW, SWAMP, TAVERN, HOLY];
