@@ -38,13 +38,18 @@ export interface Style {
   ticksPerRow: number;
   /** How likely each degree is as a chord, before the cadence rules. */
   chordWeights: Record<number, number>;
-  /** Forms, as lists of section ids (see composer). */
+  /**
+   * Forms, as lists of section ids: I1 I2 intro, A A' the theme, B B' its contrast, Ar Ar' the theme
+   * decorated, C a third theme, D a development, Br a breath, O1 O2 outro; "+" makes a section a
+   * climax in a new key.
+   */
   forms: [string[], number][];
   percussionChance: number;
   droneChance: number;
   /** Chance the intro starts with the plucked instrument alone instead of the pad. */
   pluckFirstChance: number;
-  instruments: { lead: string; pluck: string; pad: string; bass: string; frameDrum: string; tambourine: string; lowDrum: string; sparkle?: string };
+  /** frameDrum and tambourine may be "" for none. */
+  instruments: { lead: string; pluck: string; pad: string; bass: string; frameDrum: string; tambourine: string; lowDrum: string; sparkle?: string; wail?: string };
   // Optional knobs; absent is off.
   /** Chance a lead phrase sits out (never the outro's), leaving the accompaniment alone. */
   leadRestChance?: number;
@@ -54,11 +59,16 @@ export interface Style {
   padBreath?: number;
   /** Semitones the plucked accompaniment sits above its usual low-middle register. */
   pluckShift?: number;
-  /**
-   * A colour part on its own channel. "run": quick high runs over the chord, chance per bar, with
-   * `notes` notes. "wail": a long voice rising into the tonic or fifth, chance per phrase.
-   */
-  sparkle?: { kind?: "run" | "wail"; name?: string; chance: number; notes: [number, number] };
+  /** Quick high runs over the chord on their own channel: chance per bar, notes per run, rows per note. */
+  sparkle?: { name?: string; chance: number; notes: [number, number]; steps?: number[] };
+  /** A long voice rising into the tonic or fifth on its own channel, chance per phrase, sliding up from `slide` semitones below. At a climax it doubles the melody instead. */
+  wail?: { name?: string; chance: number; slide?: number[] };
+  /** Semitones the lead sits from its usual register. */
+  leadShift?: number;
+  /** Semitones a climax section ("A+") moves the key, one picked per song. */
+  climaxShift?: number[];
+  /** Chance the low drum rolls into a climax or a full section. */
+  drumRoll?: number;
   /** Chords that end phrases and open the B section, as [degree, weight]; defaults suit Western modes. */
   cadences?: { half?: [number, number][]; leading?: [number, number][]; contrast?: [number, number][]; back?: [number, number][] };
   /** Chance a melody note slides in from the step above or below. */
@@ -70,7 +80,7 @@ export interface Style {
   /** Percussion level per section id (0 none, 1 light, 2 full) when a song has percussion. */
   percussion?: Partial<Record<string, 0 | 1 | 2>>;
   /** Volume of each part, 1 by default. */
-  mix?: Partial<Record<"lead" | "pluck" | "pad" | "bass" | "drums" | "sparkle", number>>;
+  mix?: Partial<Record<"lead" | "pluck" | "pad" | "bass" | "drums" | "sparkle" | "wail", number>>;
 }
 
 const FOUR: MeterRules = {
@@ -311,13 +321,102 @@ export const DESERT: Style = {
   percussionChance: 0.85,
   droneChance: 0.9,
   pluckFirstChance: 0.5,
-  instruments: { lead: "ney", pluck: "oud", pad: "strings", bass: "bass", frameDrum: "darbuka", tambourine: "tambourine", lowDrum: "lowDrum", sparkle: "choir" },
+  instruments: { lead: "ney", pluck: "oud", pad: "strings", bass: "bass", frameDrum: "darbuka", tambourine: "tambourine", lowDrum: "lowDrum", wail: "choir" },
   slideChance: 0.3,
   vibratoChance: 0.5,
   pluckTremolo: 0.3,
   percussion: { I2: 1, A: 2, "A'": 2, B: 2, "B'": 2, Ar: 2, "Ar'": 2, O1: 1 },
-  sparkle: { kind: "wail", name: "Wail", chance: 0.35, notes: [1, 1] },
-  mix: { lead: 0.9, pad: 0.65, bass: 0.9, drums: 1, sparkle: 0.8 },
+  wail: { name: "Wail", chance: 0.35 },
+  mix: { lead: 0.9, pad: 0.65, bass: 0.9, drums: 1, wail: 0.8 },
 };
 
-export const STYLES: Style[] = [FOREST, GLADE, DESERT];
+const SNOW_FOUR: MeterRules = {
+  beats: 4,
+  rhythms: [
+    [8, 8],
+    [12, 4],
+    [4, 4, 8],
+    [6, 2, 8],
+    [8, 4, 4],
+    [-4, 4, 8],
+  ],
+  calmRhythms: [[16], [-8, 8], [12, 4]],
+  cadenceRhythms: [[16], [8, 8], [4, 12]],
+  plucks: [
+    // Harp: slow broken chords, open as snowfall.
+    [[0, 0], [4, 2], [8, 3], [12, 4]],
+    [[0, 0], [2, 1], [4, 2], [6, 3], [8, 4]],
+    [[0, 0], [8, 2]],
+    [[0, 0], [6, 2], [8, 3], [14, 4]],
+  ],
+  frameDrum: [[]],
+  tambourine: [[]],
+};
+
+const SNOW_THREE: MeterRules = {
+  beats: 3,
+  rhythms: [
+    [12],
+    [8, 4],
+    [4, 8],
+    [6, 2, 4],
+    [-4, 8],
+  ],
+  calmRhythms: [[12], [-4, 8]],
+  cadenceRhythms: [[12], [4, 8]],
+  plucks: [
+    [[0, 0], [4, 2], [8, 3]],
+    [[0, 0], [2, 1], [4, 2], [6, 3]],
+    [[0, 0], [6, 4]],
+  ],
+  frameDrum: [[]],
+  tambourine: [[]],
+};
+
+/**
+ * Snowfields: slow symphonic ambient. A horn sings over a wide string pad and a contrabass, harp
+ * arpeggios fall like snow, a glockenspiel glints, a distant choir rises. The form travels: a third
+ * theme, a development carried down a chain of chords, a breath, then the theme as a climax in a
+ * new key with the choir doubling it and the timpani rolling in.
+ */
+export const SNOW: Style = {
+  id: "snow",
+  name: "Snow - slow symphonic ambient",
+  modes: [
+    ["aeolian", 3],
+    ["dorian", 2],
+    ["lydian", 1.5],
+    ["ionian", 1],
+  ],
+  tonics: [0, 2, 4, 5, 7, 9],
+  bpm: [48, 62],
+  meters: [
+    [SNOW_FOUR, 3],
+    [SNOW_THREE, 1],
+  ],
+  rowsPerBeat: 4,
+  ticksPerRow: 6,
+  chordWeights: { 0: 3, 2: 1.6, 3: 2, 4: 1, 5: 2.6, 6: 2 },
+  forms: [
+    [["I1", "I2", "A", "A'", "B", "B'", "C", "D", "Ar+", "Ar'+", "Br", "O1", "O2"], 3],
+    [["I1", "I2", "A", "A'", "C", "B", "B'", "Br", "D", "Ar'+", "O1", "O2"], 2],
+    [["I1", "A", "A'", "B", "B'", "D", "Ar+", "Ar'+", "O1", "O2"], 1],
+  ],
+  percussionChance: 0.7,
+  droneChance: 0.45,
+  pluckFirstChance: 0.25,
+  instruments: { lead: "horn", pluck: "harp", pad: "strings", bass: "bass", frameDrum: "", tambourine: "", lowDrum: "timpani", sparkle: "bells", wail: "choir" },
+  leadRestChance: 0.2,
+  vibratoChance: 0.25,
+  padBreath: 0.15,
+  pluckShift: 12,
+  leadShift: -12,
+  sparkle: { name: "Snowflakes", chance: 0.22, notes: [3, 5], steps: [2, 3] },
+  wail: { name: "Choir", chance: 0.3, slide: [1, 2] },
+  climaxShift: [2, 2, 3, 5],
+  drumRoll: 0.6,
+  percussion: { "B'": 2, D: 1, "Ar+": 2, "Ar'+": 2 },
+  mix: { lead: 0.85, pluck: 0.6, pad: 1.2, bass: 1, drums: 0.8, sparkle: 0.55, wail: 0.7 },
+};
+
+export const STYLES: Style[] = [FOREST, GLADE, DESERT, SNOW];

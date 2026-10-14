@@ -24,7 +24,7 @@ const grid = element<HTMLTableElement>("grid");
 const gridWrap = element<HTMLElement>("gridWrap");
 const overview = element<HTMLElement>("overview");
 
-const CHANNEL_COLORS = ["#e7c26a", "#d98a5f", "#7fa7d9", "#6f97cc", "#5f87bf", "#4f6fa8", "#a8c47a", "#c9a3d9", "#8fc4b8"];
+const CHANNEL_COLORS = ["#e7c26a", "#d98a5f", "#7fa7d9", "#6f97cc", "#5f87bf", "#4f6fa8", "#a8c47a", "#c9a3d9", "#8fc4b8", "#9fe0e6", "#d8c8ec"];
 
 const instruments = createInstruments();
 const shorts = Object.fromEntries(Object.values(instruments).map((i) => [i.id, i.short]));
@@ -187,7 +187,7 @@ function renderChannels(): void {
 function applyGains(): void {
   if (!player) return;
   const anySolo = soloed.some(Boolean);
-  for (let i = 0; i < CHANNEL_COLORS.length; i++) player.setChannelGain(i, (anySolo ? soloed[i] : !muted[i]) ? 1 : 0);
+  for (let i = 0; i < Math.max(song.channels.length, muted.length, soloed.length); i++) player.setChannelGain(i, (anySolo ? soloed[i] : !muted[i]) ? 1 : 0);
 }
 
 // Sounds: each instrument is its synth stand-in or a sample instrument from the local library
@@ -198,7 +198,7 @@ const synths: Record<string, Instrument> = { ...instruments };
 const EXTRA_LOOKS: Record<string, { name: string; short: string; color: string; gain: number; range: [number, number] }> = {};
 const LIBRARY = "/samples/kiarchive/";
 /** Library folders an instrument may pick from besides its own. */
-const LIBRARY_ALIASES: Record<string, string[]> = { ney: ["flute"], oud: ["guitar"], darbuka: ["frameDrum"] };
+const LIBRARY_ALIASES: Record<string, string[]> = { ney: ["flute"], oud: ["guitar"], darbuka: ["frameDrum"], timpani: ["lowDrum"] };
 /** Where single drum strokes for a kit are picked from. */
 const DRUM_FOLDERS = ["darbuka", "frameDrum", "tambourine", "lowDrum"];
 const SOUNDS_KEY = "aiworld.music.sounds";

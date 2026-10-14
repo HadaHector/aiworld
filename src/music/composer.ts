@@ -29,6 +29,7 @@ const FRAME = 6;
 const TAMB = 7;
 const LOW = 8;
 const SPARKLE = 9;
+const MELODIC = (channel: number): boolean => channel !== FRAME && channel !== TAMB && channel !== LOW;
 
 const CHANNELS: Channel[] = [
   { name: "Lead", role: "lead", pan: -0.1, reverb: 0.4 },
@@ -42,13 +43,16 @@ const CHANNELS: Channel[] = [
   { name: "Low drum", role: "percussion", pan: 0, reverb: 0.35 },
 ];
 
-/** Only for styles with sparkles. */
+/** Only for styles with sparkles, then wails, in that order after the others. */
 const SPARKLE_CHANNEL: Channel = { name: "Sparkle", role: "counter", pan: 0.2, reverb: 0.7 };
+const WAIL_CHANNEL: Channel = { name: "Wail", role: "counter", pan: 0.2, reverb: 0.7 };
 
 /** Drum articulations to keys, as the drum instruments lay them out. */
 const DRUM_KEYS: Record<string, number> = { dum: 60, tek: 62, shake: 60, hit: 62, boom: 60 };
 
-const SECTION_LABELS: Record<string, string> = { I1: "Intro", I2: "Intro", A: "A", "A'": "A'", B: "B", "B'": "B'", Ar: "A", "Ar'": "A'", O1: "Outro", O2: "Outro" };
+const SECTION_LABELS: Record<string, string> = { I1: "Intro", I2: "Intro", A: "A", "A'": "A'", B: "B", "B'": "B'", Ar: "A", "Ar'": "A'", C: "C", D: "Dev", Br: "Breath", O1: "Outro", O2: "Outro" };
+/** A section id with "+" is that section as a climax: in a new key, the whole orchestra. */
+const sectionLabel = (id: string): string => (id.endsWith("+") ? (SECTION_LABELS[id.slice(0, -1)] ?? id) + "+" : (SECTION_LABELS[id] ?? id));
 
 interface MelodyNote {
   /** Rows from the start of the phrase. */
@@ -91,7 +95,7 @@ export function composeSong(style: Style, placeSeed: number, visitSeed: number):
   const meter: MeterRules = weighted(place, style.meters);
   const barRows = meter.beats * style.rowsPerBeat;
   const phraseRows = barRows * 4;
-  const leadTonic = 72 + key.tonic > 77 ? 60 + key.tonic : 72 + key.tonic;
+  const leadTonic = (72 + key.tonic > 77 ? 60 + key.tonic : 72 + key.tonic) + (style.leadShift ?? 0);
   const range = { lo: -2, hi: 9 };
 
   const usable = (d: number): boolean => {
@@ -138,13 +142,14 @@ export function composeSong(style: Style, placeSeed: number, visitSeed: number):
   const introChords = [0, 0, fromSet([[6, 2], [3, 1.5]]), 0];
   const outroChords = [0, fromSet([[6, 1], [3, 1]]), 0, 0];
 
-  const motif: Motif = ((): Motif => {
+  const makeMotif = (): Motif => {
     const candidates = meter.rhythms.filter((r) => r.filter((n) => n > 0).length >= 2);
     const rhythm = pick(place, candidates);
     const count = rhythm.filter((n) => n > 0).length;
     const steps = Array.from({ length: Math.max(1, count - 1) }, () => weighted(place, STEP_WEIGHTS));
     return { rhythm, steps, start: pick(place, [0, 2, 4]) };
-  })();
+  };
+  const motif = makeMotif();
 
   const melodyContext: MelodyContext = { rng: place, meter, barRows, range };
   const melodyA = phraseMelody(melodyContext, motif, aAnte, "half", "A");
@@ -158,6 +163,35 @@ export function composeSong(style: Style, placeSeed: number, visitSeed: number):
     notes.push({ row: barRows, dur: barRows * 2, degree: nearestTone(d, [0]), fade: 0.9 });
     return notes;
   })();
+
+  // Further sections, composed only for styles whose forms have them, so other styles keep their
+  // songs. C: a third theme on a motif of its own, away from home. D: a development, the motif
+  // carried down a chain of chords. Br: a breath, the harmony alone.
+  const uses = (section: string): boolean => style.forms.some(([f]) => f.some((id) => id.replace("+", "") === section));
+  const cChords = uses("C") ? ((): number[] => {
+    const first = fromSet([[5, 2], [2, 1.5], [3, 1]]);
+    const last = fromSet(HALF);
+    const c1 = chordStep(first);
+    return [first, c1, chordStep(c1, [last]), last];
+  })() : [];
+  const melodyC = uses("C") ? phraseMelody(melodyContext, makeMotif(), cChords, "half", "A") : [];
+  const devChords = uses("D") ? ((): number[] => {
+    const chain = [fromSet(CONTRAST)];
+    for (let b = 1; b < 3; b++) {
+      let d = chain[b - 1] - 1;
+      while (!usable(d)) d--;
+      chain.push(mod(d, 7));
+    }
+    return [...chain, fromSet(BACK)];
+  })() : [];
+  const melodyD = uses("D") ? ((): MelodyNote[] => {
+    const notes: MelodyNote[] = [];
+    let d = motif.start;
+    for (let b = 0; b < 3; b++) d = realiseBar(melodyContext, motif.rhythm, motif.steps, nearestTone(motif.start + 1 - b, triadDegrees(devChords[b])), devChords[b], b * barRows, notes);
+    notes.push({ row: barRows * 3, dur: barRows, degree: nearestTone(d, triadDegrees(devChords[3])) });
+    return notes;
+  })() : [];
+  const breathChords = uses("Br") ? [0, fromSet([[5, 1], [3, 1]]), 0, fromSet(BACK)] : [];
 
   // --- The visit: tempo, form, accompaniment, percussion, ornaments.
   const bpm = Math.round(style.bpm[0] + visit() * (style.bpm[1] - style.bpm[0]));
@@ -187,8 +221,14 @@ export function composeSong(style: Style, placeSeed: number, visitSeed: number):
   const part = (name: keyof NonNullable<Style["mix"]>): number => style.mix?.[name] ?? 1;
   // The lead never sits out the outro, nor the first phrase that brings its theme.
   const firstTheme = form.find((id) => id !== "I1" && id !== "I2");
-  const leadRests = new Set(style.leadRestChance ? form.filter((id) => !["I1", "I2", "O1", "O2"].includes(id) && id !== firstTheme && visit() < style.leadRestChance!) : []);
-  const channels = style.instruments.sparkle ? [...CHANNELS, { ...SPARKLE_CHANNEL, name: style.sparkle?.name ?? SPARKLE_CHANNEL.name }] : CHANNELS;
+  const leadRests = new Set(style.leadRestChance ? form.filter((id) => !["I1", "I2", "O1", "O2", "Br"].includes(id) && !id.endsWith("+") && id !== firstTheme && visit() < style.leadRestChance!) : []);
+  const climaxShift = form.some((id) => id.endsWith("+")) ? pick(visit, style.climaxShift ?? [2]) : 0;
+  const WAIL = style.instruments.sparkle ? SPARKLE + 1 : SPARKLE;
+  const channels = [
+    ...CHANNELS,
+    ...(style.instruments.sparkle ? [{ ...SPARKLE_CHANNEL, name: style.sparkle?.name ?? SPARKLE_CHANNEL.name }] : []),
+    ...(style.instruments.wail ? [{ ...WAIL_CHANNEL, name: style.wail?.name ?? WAIL_CHANNEL.name }] : []),
+  ];
 
   const totalRows = form.length * phraseRows;
   const cells: (Cell | undefined)[][] = Array.from({ length: totalRows }, () => channels.map(() => undefined));
@@ -212,23 +252,45 @@ export function composeSong(style: Style, placeSeed: number, visitSeed: number):
   let bassPlaying: number | undefined;
   let padStarted = false;
   let plucking = false;
+  let keyShift = 0;
   const patterns: Pattern[] = [];
+  const levelOf = (formId: string): number => {
+    const id = formId.replace("+", "");
+    return !hasPercussion ? 0
+      : style.percussion ? (style.percussion[formId] ?? 0)
+      : id === "B" || id === "B'" || id === "Ar'" ? 2
+      : id === "Ar" ? 1
+      : id === "A'" && lightConsequent ? 1
+      : 0;
+  };
 
-  form.forEach((id, index) => {
+  form.forEach((formId, index) => {
+    const climax = formId.endsWith("+");
+    const id = climax ? formId.slice(0, -1) : formId;
     const start = index * phraseRows;
     const isLast = index === form.length - 1;
+    // Into or out of a new key, the held chords are struck afresh.
+    const shift = climax ? climaxShift : 0;
+    if (shift !== keyShift) {
+      padPlaying = undefined;
+      bassPlaying = undefined;
+      keyShift = shift;
+    }
     const chords =
       id === "I1" ? introChords
       : id === "I2" || id === "A" || id === "Ar" ? aAnte
       : id === "A'" || id === "Ar'" || id === "O1" ? aCons
       : id === "B" ? bFirst
       : id === "B'" ? bSecond
+      : id === "C" ? cChords
+      : id === "D" ? devChords
+      : id === "Br" ? breathChords
       : outroChords;
     const layers = sectionLayers(id, pluckFirst);
-    if (style.instruments.sparkle && id !== "I1") layers.add("sparkle");
-    if (leadRests.has(id)) layers.delete("lead");
+    if ((style.instruments.sparkle || style.instruments.wail) && id !== "I1") layers.add("sparkle");
+    if (leadRests.has(formId)) layers.delete("lead");
     patterns.push({
-      section: SECTION_LABELS[id] ?? id,
+      section: sectionLabel(formId),
       rows: phraseRows,
       cells: [],
       chords: chords.map((c, b) => ({ row: b * barRows, name: chordName(key.mode, c) })),
@@ -243,9 +305,11 @@ export function composeSong(style: Style, placeSeed: number, visitSeed: number):
       : id === "Ar" ? ornamentedA
       : id === "Ar'" ? ornamentedA2
       : id === "O1" ? melodyOutro
+      : id === "C" ? melodyC
+      : id === "D" ? melodyD
       : undefined;
     if (melody && layers.has("lead")) {
-      const loud = id === "B" || id === "B'" ? 0.06 : 0;
+      const loud = (id === "B" || id === "B'" ? 0.06 : 0) + (climax ? 0.08 : 0);
       melody.forEach((n, i) => {
         const row = start + n.row;
         const volume = (0.58 + loud + 0.08 * Math.sin((Math.PI * n.row) / phraseRows) + (n.row % barRows === 0 ? 0.04 : 0) + jitter(0.03)) * part("lead");
@@ -263,6 +327,11 @@ export function composeSong(style: Style, placeSeed: number, visitSeed: number):
         }
         const next = melody[i + 1];
         if (!next || next.row > n.row + n.dur) put(row + n.dur, LEAD, { note: "off" });
+        // At a climax the choir takes up the melody an octave below.
+        if (climax && style.instruments.wail) {
+          put(row, WAIL, { note: note - 12, instrument: style.instruments.wail, volume: 0.4 * part("wail") });
+          if (!next || next.row > n.row + n.dur) put(row + n.dur, WAIL, { note: "off" });
+        }
       });
     }
 
@@ -270,7 +339,7 @@ export function composeSong(style: Style, placeSeed: number, visitSeed: number):
     const fadeIn = layers.has("pad") && !padStarted;
     const fadeOut = isLast;
     if (layers.has("pad")) {
-      const base = (id === "B" || id === "B'" ? 0.5 : 0.42) * part("pad");
+      const base = (id === "B" || id === "B'" ? 0.5 : 0.42) * (climax ? 1.15 : 1) * part("pad");
       chords.forEach((c, b) => {
         const voicing = padVoicing(key, c, padPlaying);
         voicing.forEach((note, v) => {
@@ -342,26 +411,21 @@ export function composeSong(style: Style, placeSeed: number, visitSeed: number):
       plucking = false;
     }
 
-    // Percussion.
-    const level = !hasPercussion ? 0
-      : style.percussion ? (style.percussion[id] ?? 0)
-      : id === "B" || id === "B'" || id === "Ar'" ? 2
-      : id === "Ar" ? 1
-      : id === "A'" && lightConsequent ? 1
-      : 0;
+    // Percussion. A style may leave out the frame drum or tambourine ("").
+    const level = levelOf(formId);
     if (level >= 1) {
       for (let b = 0; b < 4; b++) {
         const bar = start + b * barRows;
         if (level === 1) {
-          if (b % 2 === 0) put(bar, FRAME, { note: DRUM_KEYS.dum, instrument: style.instruments.frameDrum, volume: (0.45 + jitter(0.04)) * part("drums") });
+          if (b % 2 === 0 && style.instruments.frameDrum) put(bar, FRAME, { note: DRUM_KEYS.dum, instrument: style.instruments.frameDrum, volume: (0.45 + jitter(0.04)) * part("drums") });
           continue;
         }
-        for (const [row, name] of framePattern) {
+        for (const [row, name] of style.instruments.frameDrum ? framePattern : []) {
           const volume = ((name === "dum" ? 0.55 : 0.34) + jitter(0.05)) * part("drums");
           put(bar + row, FRAME, { note: DRUM_KEYS[name], instrument: style.instruments.frameDrum, volume });
         }
-        const rollBar = b === 3 && (id === "B'" || id === "Ar'");
-        for (const [row, name] of tambPattern) {
+        const rollBar = b === 3 && (id === "B'" || id === "Ar'") && !!style.instruments.tambourine;
+        for (const [row, name] of style.instruments.tambourine ? tambPattern : []) {
           if (rollBar && row >= barRows - style.rowsPerBeat) continue;
           put(bar + row, TAMB, { note: DRUM_KEYS[name], instrument: style.instruments.tambourine, volume: ((name === "hit" ? 0.32 : 0.24) + jitter(0.04)) * part("drums") });
         }
@@ -379,26 +443,36 @@ export function composeSong(style: Style, placeSeed: number, visitSeed: number):
       if (id === "B" || id === "B'") put(start + 2 * barRows, LOW, { note: DRUM_KEYS.boom, instrument: style.instruments.lowDrum, volume: (0.36 + jitter(0.04)) * part("drums") });
     }
 
+    // A roll on the low drum swelling into a climax or a full section, landing on its first beat.
+    const next = form[index + 1];
+    if (style.drumRoll && next && (next.endsWith("+") || levelOf(next) === 2) && visit() < style.drumRoll) {
+      const from = start + phraseRows - barRows / 2;
+      put(from, LOW, { note: DRUM_KEYS.boom, instrument: style.instruments.lowDrum, volume: 0.12 * part("drums"), effects: [{ type: "retrigger", every: 2, volumeFactor: 1.12 }] });
+      for (let r = from + 1; r < start + phraseRows; r++) put(r, LOW, { effects: [{ type: "retrigger", every: 2, volumeFactor: 1.12 }] });
+      put(start + phraseRows, LOW, { note: DRUM_KEYS.boom, instrument: style.instruments.lowDrum, volume: 0.65 * part("drums") });
+    }
+
     // Sparkles: now and then a quick run over the chord high up, echoing away.
     const sparkle = style.sparkle;
-    if (sparkle?.kind === "wail" && style.instruments.sparkle && layers.has("sparkle") && id !== "O2" && visit() < sparkle.chance) {
+    const wail = style.wail;
+    if (wail && style.instruments.wail && layers.has("sparkle") && id !== "O2" && !climax && visit() < wail.chance) {
       // A voice rising out of nowhere into a long tonic or fifth, wavering, and fading away.
       const bar = visit() < 0.6 ? 0 : 2;
       const at = start + bar * barRows;
       const dur = barRows * 2;
       const note = pitchesOf(key, visit() < 0.6 ? 0 : 4, 60, 74)[0];
-      const peak = (0.5 + jitter(0.05)) * part("sparkle");
-      put(at, SPARKLE, { note, instrument: style.instruments.sparkle, volume: 0, effects: [{ type: "slideIn", semis: -pick(visit, [2, 3, 5]), ticks: style.ticksPerRow * 3 }] });
-      slideRows(SPARKLE, at, barRows / 2, peak);
-      slideRows(SPARKLE, at + barRows, dur - barRows, -peak);
-      for (let r = barRows / 2; r < dur; r++) put(at + r, SPARKLE, { effects: [{ type: "vibrato", depth: 0.3, rate: 4.8 }] });
-      put(at + dur, SPARKLE, { note: "off" });
+      const peak = (0.5 + jitter(0.05)) * part("wail");
+      put(at, WAIL, { note, instrument: style.instruments.wail, volume: 0, effects: [{ type: "slideIn", semis: -pick(visit, wail.slide ?? [2, 3, 5]), ticks: style.ticksPerRow * 3 }] });
+      slideRows(WAIL, at, barRows / 2, peak);
+      slideRows(WAIL, at + barRows, dur - barRows, -peak);
+      for (let r = barRows / 2; r < dur; r++) put(at + r, WAIL, { effects: [{ type: "vibrato", depth: 0.3, rate: 4.8 }] });
+      put(at + dur, WAIL, { note: "off" });
     }
-    if (sparkle && sparkle.kind !== "wail" && style.instruments.sparkle && layers.has("sparkle")) {
+    if (sparkle && style.instruments.sparkle && layers.has("sparkle")) {
       chords.forEach((c, b) => {
         if (visit() >= sparkle.chance * (id === "O2" ? 0.5 : 1)) return;
         const count = sparkle.notes[0] + Math.floor(visit() * (sparkle.notes[1] - sparkle.notes[0] + 1));
-        const step = pick(visit, [1, 1, 2]);
+        const step = pick(visit, sparkle.steps ?? [1, 1, 2]);
         const at = start + b * barRows + Math.floor(visit() * Math.max(1, barRows - count * step));
         const tones = [...triadDegrees(c), mod(c + 1, 7)].flatMap((d) => pitchesOf(key, d, 76, 98)).sort((x, y) => x - y);
         const up = visit() < 0.7;
@@ -414,6 +488,15 @@ export function composeSong(style: Style, placeSeed: number, visitSeed: number):
         // Let go after the echoes: a sampled bell then rings down on its own envelope.
         if (!cells[last + 4]?.[SPARKLE]?.note) put(last + 4, SPARKLE, { note: "off" });
       });
+    }
+
+    // The climax's key: everything but the drums, up.
+    if (shift) {
+      for (let r = start; r < start + phraseRows; r++) {
+        cells[r].forEach((cell, channel) => {
+          if (cell && typeof cell.note === "number" && MELODIC(channel)) cell.note += shift;
+        });
+      }
     }
   });
 
@@ -433,11 +516,12 @@ export function composeSong(style: Style, placeSeed: number, visitSeed: number):
       key: `${pitchClassName(key.tonic)} ${key.mode}`,
       tempo: `${bpm} bpm`,
       meter: `${meter.beats}/4`,
-      form: form.map((id) => SECTION_LABELS[id] ?? id).join(" "),
+      form: form.map(sectionLabel).join(" "),
       percussion: hasPercussion ? "yes" : "no",
       bass: drone ? "drone" : "follows the chords",
       intro: pluckFirst ? "pluck alone" : "pad",
-      ...(leadRests.size ? { "lead rests in": [...leadRests].map((id) => SECTION_LABELS[id] ?? id).join(", ") } : {}),
+      ...(leadRests.size ? { "lead rests in": [...leadRests].map(sectionLabel).join(", ") } : {}),
+      ...(climaxShift ? { climax: `up ${climaxShift} semitones` } : {}),
     },
   };
 }
@@ -449,6 +533,8 @@ function sectionLayers(id: string, pluckFirst: boolean): Set<string> {
     case "I2":
     case "O2":
       return new Set(["pad", "bass", "pluck"]);
+    case "Br":
+      return new Set(["pad", "bass"]);
     default:
       return new Set(["pad", "bass", "pluck", "lead"]);
   }

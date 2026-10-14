@@ -192,6 +192,19 @@ the forest style using synth stand-ins.
     - A ney that slides into its notes and wavers.
     - Darbuka on maqsum, baladi and saidi, with riq and deep drums.
     - Now and then, a distant voice wails into a long note.
+  - **Snow:** slow, symphonic ambient.
+    - A horn sings over a wide string pad and a contrabass.
+    - Harp arpeggios fall slowly and a glockenspiel glints like snowflakes.
+    - A distant choir rises in, and timpani roll into the big sections.
+    - Pieces run 3–4 minutes, and the form travels instead of just repeating A and B.
+  - **Sections beyond the A and B themes**, for any style that lists them in its forms:
+    - **C:** a third theme on a motif of its own, starting away from the home chord.
+    - **D:** a development, carrying the motif down a chain of chords.
+    - **Br:** a breath, where only the harmony plays.
+    - **"+" (e.g. `Ar+`):** turns a section into a climax. It moves into a new key, the pad gets
+      fuller, the lead louder, and the choir doubles the melody an octave below.
+  - **Colour parts:** the sparkle (quick high runs) and the wail (a long voice rising in) are now
+    separate parts, each on its own channel, so a style can have both.
   - Optional style knobs, all off unless a style sets them: lead rests, trills, pad breath, pluck
     register, sparkles or wails, a mix per part, cadence chords, slides, vibrato, tremolo
     picking, and percussion per section. A knob that is off draws nothing from the seed, so

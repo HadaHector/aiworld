@@ -309,6 +309,31 @@ function renderChoir(root: number, seed: number): SampleZone {
   return zone(data, root, root, root, { start: start / SAMPLE_RATE, end: end / SAMPLE_RATE });
 }
 
+/** French horn: a round brass tone, its upper partials kept low, two players a little apart. Looped. */
+function renderHorn(root: number, seed: number): SampleZone {
+  const rng = mulberry32(seed);
+  const hz = midiToHz(root);
+  const length = Math.floor(3 * SAMPLE_RATE);
+  const data = new Float32Array(length);
+  const table = wavetable((h) => 1 / h ** 1.25, hz * 1.005);
+  for (const cents of [-3, 4]) {
+    const step = (hz * 2 ** (cents / 1200)) / SAMPLE_RATE;
+    let phase = rng();
+    for (let i = 0; i < length; i++) {
+      data[i] += readTable(table, phase) * (1 + 0.05 * Math.sin((2 * Math.PI * 0.6 * i) / SAMPLE_RATE + cents));
+      phase = (phase + step) % 1;
+    }
+  }
+  const cutoff = Math.min(hz * 3.5, 2400);
+  onePoleLowpass(data, cutoff);
+  onePoleLowpass(data, cutoff);
+  normalize(data, 0.8);
+  const start = Math.floor(0.5 * SAMPLE_RATE);
+  const end = Math.floor(2.9 * SAMPLE_RATE);
+  crossfadeLoop(data, start, end, Math.floor(0.5 * SAMPLE_RATE));
+  return zone(data, root, root, root, { start: start / SAMPLE_RATE, end: end / SAMPLE_RATE });
+}
+
 /** A bell or celesta: two-operator FM at an inharmonic ratio, bright at the strike, ringing long. */
 function renderBell(root: number): SampleZone {
   const hz = midiToHz(root);
@@ -380,6 +405,14 @@ function darbuka(seed: number): SampleZone[] {
   const doum = mix([thump(140, 88, 0.025, 0.32, 1.2), 1], [noise(seed, 1.2, 0.012, 200, 2500), 0.35]);
   const tek = mix([noise(seed + 1, 0.3, 0.018, 2200, 9000), 1], [thump(720, 640, 0.01, 0.04, 0.3), 0.5]);
   return [zone(doum, 60, 60, 60), zone(tek, 62, 62, 62)];
+}
+
+/** Timpani: a tuned kettle, a clear low pitch with its inharmonic partials, struck soft. */
+function timpani(seed: number): SampleZone[] {
+  const f = 73;
+  const partials: [number, number, number][] = [[1, 1, 2.2], [1.5, 0.5, 1.2], [1.98, 0.3, 0.9], [2.44, 0.15, 0.6]];
+  const body = render(3, (t) => partials.reduce((sum, [ratio, amp, decay]) => sum + amp * Math.sin(2 * Math.PI * f * ratio * t) * Math.exp(-t / decay), 0) * Math.min(1, t / 0.004));
+  return [zone(mix([body, 1], [noise(seed, 3, 0.03, 60, 700), 0.35]), 60, 60, 60)];
 }
 
 function lowDrum(seed: number): SampleZone[] {
@@ -496,6 +529,28 @@ export function createInstruments(): Record<string, Instrument> {
       range: [60, 62],
       keys: { dum: 60, tek: 62 },
       color: "#b9a66f",
+    },
+    {
+      id: "horn",
+      name: "Horn",
+      short: "hn",
+      zones: spread(36, 84, 6, (r) => renderHorn(r, 12000 + r)),
+      envelope: { attack: 0.2, decay: 0.4, sustain: 0.85, release: 0.7 },
+      autoVibrato: { depth: 5, rate: 4.8, delay: 0.7 },
+      gain: 0.4,
+      range: [45, 77],
+      color: "#d9b26a",
+    },
+    {
+      id: "timpani",
+      name: "Timpani",
+      short: "tp",
+      zones: timpani(13000),
+      envelope: { attack: 0.001, decay: 0, sustain: 1, release: 1 },
+      gain: 0.6,
+      range: [60, 60],
+      keys: { boom: 60 },
+      color: "#9fb3c8",
     },
     {
       id: "frameDrum",

@@ -249,7 +249,7 @@ export class Player {
         current.volume.gain.linearRampToValueAtTime(0, t + 0.005);
       }
       if (retrigger && k > delay && (k - delay) % retrigger.every === 0) {
-        state.volume *= retrigger.volumeFactor;
+        state.volume = Math.min(1, state.volume * retrigger.volumeFactor);
         this.release(current, t, 0.03);
         current = this.startVoice(out, current.instrument, state.pitch, state.volume, t);
         state.voice = current;
