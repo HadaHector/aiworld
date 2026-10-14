@@ -250,6 +250,18 @@ export function composeSong(style: Style, placeSeed: number, visitSeed: number):
     for (let r = from; r < from + rows; r++) put(r, channel, { effects: [{ type: "volumeSlide", perTick }] });
   };
   const jitter = (amount: number): number => (visit() - 0.5) * 2 * amount;
+  /**
+   * Which instrument plays a theme's lead, chosen once per theme: A and A' and their returns (and
+   * the outro, which quotes A) share one, B and B' another, so a statement and its answer match.
+   */
+  const alternates = new Map<string, Style["leadAlternate"]>();
+  const alternateFor = (id: string): Style["leadAlternate"] => {
+    const alternate = style.leadAlternate;
+    if (!alternate) return undefined;
+    const theme = id.startsWith("A") || id === "O1" ? "A" : id.startsWith("B") ? "B" : id;
+    if (!alternates.has(theme)) alternates.set(theme, visit() < alternate.chance ? alternate : undefined);
+    return alternates.get(theme);
+  };
   /** A chord's three tones, sometimes coloured: an added ninth for the fifth, or a sus2 or sus4 for the third. */
   const chordColour = (c: number): number[] => {
     const colour = style.pad?.colour;
@@ -331,7 +343,7 @@ export function composeSong(style: Style, placeSeed: number, visitSeed: number):
     if (melody && layers.has("lead")) {
       const loud = (id === "B" || id === "B'" ? 0.06 : 0) + (climax ? 0.08 : 0);
       // Now and then the phrase goes to another instrument, or glides from note to note.
-      const alternate = style.leadAlternate && visit() < style.leadAlternate.chance ? style.leadAlternate : undefined;
+      const alternate = alternateFor(id);
       const glide = !!style.glideChance && visit() < style.glideChance;
       const leadInstrument = alternate?.instrument ?? style.instruments.lead;
       const pitchOf = (degree: number): number => degreeToMidi(key.mode, leadTonic, degree) + (alternate?.shift ?? 0);

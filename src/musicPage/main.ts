@@ -51,9 +51,27 @@ function ensurePlayer(): Player {
     player.onEnd = onSongEnd;
     applyGains();
   }
-  void player.ctx.resume();
+  setPaused(false);
   return player;
 }
+
+/**
+ * Pausing suspends the audio clock itself: everything scheduled waits, and carries on from the
+ * same point when it runs again. Playing, stopping or trying an instrument resumes it.
+ */
+let paused = false;
+const pauseButton = element<HTMLButtonElement>("pause");
+function setPaused(on: boolean): void {
+  paused = on;
+  pauseButton.textContent = on ? "⏯ Resume" : "⏸ Pause";
+  pauseButton.classList.toggle("on", on);
+  if (!player) return;
+  if (on) void player.ctx.suspend();
+  else void player.ctx.resume();
+}
+pauseButton.onclick = () => {
+  if (player?.playing) setPaused(!paused);
+};
 
 function compose(): void {
   const style = STYLES.find((s) => s.id === styleSelect.value) ?? STYLES[0];
@@ -84,6 +102,7 @@ function goTo(from: PlayPosition, start: boolean): void {
 function stop(): void {
   window.clearTimeout(gapTimer);
   statusLabel.textContent = "";
+  if (player) setPaused(false);
   player?.stop();
 }
 
