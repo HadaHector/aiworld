@@ -23,6 +23,7 @@ const roll = element<HTMLCanvasElement>("roll");
 const grid = element<HTMLTableElement>("grid");
 const gridWrap = element<HTMLElement>("gridWrap");
 const overview = element<HTMLElement>("overview");
+const inUse = element<HTMLInputElement>("inUse");
 
 const CHANNEL_COLORS = ["#e7c26a", "#d98a5f", "#7fa7d9", "#6f97cc", "#5f87bf", "#4f6fa8", "#a8c47a", "#c9a3d9", "#8fc4b8", "#9fe0e6", "#d8c8ec"];
 
@@ -64,6 +65,7 @@ function compose(): void {
   renderChannels();
   renderGrid();
   drawRoll();
+  if (inUse.checked) renderInstruments();
 }
 
 function play(): void {
@@ -320,10 +322,18 @@ async function loadLibrary(): Promise<void> {
   }
 }
 
+/** The instruments the song's cells name. */
+function songInstruments(): Set<string> {
+  const ids = new Set<string>();
+  for (const pattern of song.patterns) for (const row of pattern.cells) for (const cell of row) if (cell?.instrument) ids.add(cell.instrument);
+  return ids;
+}
+
 function renderInstruments(): void {
   const box = element("instruments");
   box.innerHTML = "";
-  const ids = [...Object.keys(synths), ...Object.keys(EXTRA_LOOKS).filter((id) => library[id]?.length)];
+  const used = inUse.checked ? songInstruments() : undefined;
+  const ids = [...Object.keys(synths), ...Object.keys(EXTRA_LOOKS).filter((id) => library[id]?.length)].filter((id) => !used || used.has(id));
   for (const id of ids) {
     const div = document.createElement("div");
     div.className = "instrument";
@@ -537,6 +547,19 @@ element("newVisit").onclick = () => {
   compose();
 };
 placeInput.onchange = visitInput.onchange = styleSelect.onchange = compose;
+try {
+  inUse.checked = localStorage.getItem("aiworld.music.inUse") === "1";
+} catch {
+  // No storage: starts unticked.
+}
+inUse.onchange = () => {
+  try {
+    localStorage.setItem("aiworld.music.inUse", inUse.checked ? "1" : "0");
+  } catch {
+    // No storage: the choice lasts this visit.
+  }
+  renderInstruments();
+};
 addEventListener("resize", () => drawRoll());
 
 compose();

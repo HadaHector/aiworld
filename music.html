@@ -57,6 +57,7 @@
       .instrument .title { display: flex; justify-content: space-between; }
       .instrument small { color: var(--muted); display: block; }
       .instrument canvas { width: 100%; height: 44px; display: block; margin: 4px 0; background: #161b21; border-radius: 3px; }
+      label.check { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; color: var(--muted); }
       .keys { display: flex; flex-wrap: wrap; gap: 2px; }
       .stroke { display: grid; grid-template-columns: 44px 1fr; align-items: center; gap: 6px; color: var(--muted); font-size: 12px; margin-bottom: 3px; }
       .stroke select, .instrument > select { width: 100%; }
@@ -90,6 +91,7 @@
         <div id="channels"></div>
         <h2>Instruments</h2>
         <p class="hint" style="margin-top: 0">Synth stand-ins rendered to samples. Click a key to hear it.</p>
+        <label class="check"><input id="inUse" type="checkbox" /> Only the ones this song plays</label>
         <div id="instruments"></div>
       </div>
     </div>
