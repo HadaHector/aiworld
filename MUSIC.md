@@ -240,6 +240,14 @@ the forest style using synth stand-ins.
     - A soft harp, another voice rising in, and the theme returning in a new key with the choir
       doubling it. No drums.
     - The lead sits around `leadCenter` (its tonic within a tritone of F4), so it is a soprano.
+  - **Epic:** cinematic outdoors, like a film score.
+    - Low spiccato strings (a new short-bowed instrument) drive an ostinato: eighths on a pedal,
+      or a gallop. Above them, a wide, swelling string pad.
+    - A heroic horn leads; the violins take some themes.
+    - Big taiko drums (a new synth) and timpani roll into the climaxes.
+    - A choir rises in, then doubles the theme when it returns in a new key.
+    - A glint of glockenspiel and a little wind.
+    - Film harmony: i VI III VII and its kin, at 72–92 bpm.
   - **Sections beyond the A and B themes**, for any style that lists them in its forms:
     - **C:** a third theme on a motif of its own, starting away from the home chord.
     - **D:** a development, carrying the motif down a chain of chords.

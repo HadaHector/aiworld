@@ -802,4 +802,83 @@ export const HOLY: Style = {
   mix: { lead: 0.8, pluck: 0.45, pad: 1.2, bass: 0.75, wail: 0.65 },
 };
 
-export const STYLES: Style[] = [FOREST, GLADE, DESERT, SNOW, SWAMP, TAVERN, HOLY];
+const EPIC_FOUR: MeterRules = {
+  beats: 4,
+  rhythms: [
+    [8, 8],
+    [6, 2, 8],
+    [4, 4, 8],
+    [12, 4],
+    [8, 4, 4],
+    [-4, 4, 8],
+  ],
+  calmRhythms: [[16], [8, 8], [12, 4]],
+  cadenceRhythms: [[16], [4, 12], [8, 8]],
+  plucks: [
+    // Low-string ostinatos: driving eighths on a pedal, and a gallop.
+    [[0, 0], [2, 0], [4, 2], [6, 0], [8, 3], [10, 0], [12, 2], [14, 0]],
+    [[0, 0], [2, 2], [4, 3], [6, 2], [8, 0], [10, 2], [12, 3], [14, 2]],
+    [[0, 0], [1, 0], [2, 2], [4, 0], [5, 0], [6, 3], [8, 0], [9, 0], [10, 2], [12, 0], [13, 0], [14, 3]],
+    [[0, 0], [3, 0], [6, 2], [8, 0], [11, 0], [14, 3]],
+  ],
+  // Taiko: the big drum on the strong beats, the small one pushing toward them.
+  frameDrum: [
+    [[0, "dum"], [6, "tek"], [8, "dum"], [11, "tek"], [12, "tek"]],
+    [[0, "dum"], [8, "dum"], [12, "tek"], [14, "tek"]],
+    [[0, "dum"], [3, "tek"], [6, "dum"], [8, "dum"], [12, "tek"], [13, "tek"], [14, "tek"]],
+  ],
+  tambourine: [[]],
+};
+
+/**
+ * The open world, as a film score would have it: low strings driving an ostinato under a wide,
+ * swelling string pad, a heroic horn (the violins for some themes), big drums and timpani rolling
+ * into the climaxes, a choir rising and then carrying the theme home in a new key, a glint of
+ * glockenspiel, and some wind. Cinematic harmony: i VI III VII and its kin.
+ */
+export const EPIC: Style = {
+  id: "epic",
+  name: "Epic - cinematic outdoors",
+  modes: [
+    ["aeolian", 3],
+    ["dorian", 2],
+    ["ionian", 2],
+    ["lydian", 1],
+  ],
+  tonics: [0, 2, 4, 5, 7, 9],
+  bpm: [72, 92],
+  meters: [[EPIC_FOUR, 1]],
+  rowsPerBeat: 4,
+  ticksPerRow: 6,
+  chordWeights: { 0: 3, 2: 2.2, 3: 1.6, 4: 1.2, 5: 3, 6: 2.6 },
+  forms: [
+    [["I1", "I2", "A", "A'", "B", "B'", "D", "Ar+", "Ar'+", "Br", "O1", "O2"], 2],
+    [["I1", "A", "A'", "C", "B", "B'", "D", "Ar'+", "O1", "O2"], 1],
+    [["I1", "I2", "A", "A'", "B", "B'", "Ar", "Ar'", "D", "Ar+", "Ar'+", "O1", "O2"], 1],
+  ],
+  percussionChance: 0.9,
+  droneChance: 0.3,
+  pluckFirstChance: 0.45,
+  instruments: { lead: "horn", pluck: "spiccato", pad: "strings", bass: "bass", frameDrum: "taiko", tambourine: "", lowDrum: "timpani", sparkle: "bells", wail: "choir", wind: "wind" },
+  leadShift: -12,
+  leadAlternate: { instrument: "violin", chance: 0.3, shift: 12 },
+  vibratoChance: 0.3,
+  sparkle: { name: "Glints", chance: 0.12, notes: [3, 5], steps: [1, 2] },
+  wail: { name: "Choir", chance: 0.3, slide: [1, 2] },
+  wind: { pitch: 72, level: 0.18, drift: 6, chance: 0.05, bars: [3, 5] },
+  climaxShift: [2, 3],
+  drumRoll: 0.7,
+  percussion: { A: 1, "A'": 1, C: 1, B: 2, "B'": 2, Ar: 1, "Ar'": 2, D: 2, "Ar+": 2, "Ar'+": 2 },
+  pad: {
+    suspensions: 0.4,
+    stagger: 0.3,
+    passing: 0.2,
+    swell: true,
+    textures: { I1: "open", Br: "open", D: "tremolo", "Ar+": "wide", "Ar'+": "wide" },
+    colour: { add9: 0.15, sus2: 0.1, sus4: 0.1 },
+    voices: ["stringsLow", "strings", "stringsHigh"],
+  },
+  mix: { lead: 0.95, pluck: 0.55, pad: 1.1, bass: 1, drums: 0.9, sparkle: 0.45, wail: 0.7, wind: 0.8 },
+};
+
+export const STYLES: Style[] = [FOREST, GLADE, DESERT, SNOW, SWAMP, TAVERN, HOLY, EPIC];

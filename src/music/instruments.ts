@@ -548,6 +548,13 @@ function claps(seed: number): SampleZone[] {
   return [zone(out, 60, 60, 60)];
 }
 
+/** Taiko: the big drum struck in the middle (dum), deep and long, and a smaller drum (tek). */
+function taiko(seed: number): SampleZone[] {
+  const big = mix([thump(96, 50, 0.05, 0.8, 2.6), 1], [noise(seed, 2.6, 0.025, 40, 700), 0.5]);
+  const small = mix([thump(210, 150, 0.02, 0.2, 0.9), 1], [noise(seed + 1, 0.9, 0.012, 300, 3500), 0.6]);
+  return [zone(big, 60, 60, 60), zone(small, 62, 62, 62)];
+}
+
 function lowDrum(seed: number): SampleZone[] {
   const boom = mix([thump(78, 46, 0.09, 0.5, 2), 1], [noise(seed, 2, 0.02, 40, 400), 0.4]);
   return [zone(boom, 60, 60, 60)];
@@ -567,6 +574,16 @@ export function createInstruments(): Record<string, Instrument> {
       gain: 0.32,
       range: [36, 81],
       color: "#7fa7d9",
+    },
+    {
+      id: "spiccato",
+      name: "Spiccato strings",
+      short: "sp",
+      zones: strings,
+      envelope: { attack: 0.012, decay: 0.12, sustain: 0.35, release: 0.12 },
+      gain: 0.4,
+      range: [36, 76],
+      color: "#8fb3e0",
     },
     {
       id: "stringsLow",
@@ -833,6 +850,17 @@ export function createInstruments(): Record<string, Instrument> {
       range: [60, 60],
       keys: { clap: 60 },
       color: "#e8c9a0",
+    },
+    {
+      id: "taiko",
+      name: "Taiko",
+      short: "tk",
+      zones: taiko(22000),
+      envelope: { attack: 0.001, decay: 0, sustain: 1, release: 0.6 },
+      gain: 0.6,
+      range: [60, 62],
+      keys: { dum: 60, tek: 62 },
+      color: "#c89070",
     },
     {
       id: "frameDrum",

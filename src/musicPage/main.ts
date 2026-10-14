@@ -254,6 +254,8 @@ const LIBRARY_ALIASES: Record<string, string[]> = {
   violin: ["stringsHigh", "strings"],
   clap: ["claps"],
   choirHigh: ["choir"],
+  spiccato: ["strings", "pizz"],
+  taiko: ["lowDrum", "frameDrum"],
   choirLow: ["choir"],
 };
 /** Where single drum strokes for a kit are picked from. */
