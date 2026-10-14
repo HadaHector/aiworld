@@ -881,4 +881,83 @@ export const EPIC: Style = {
   mix: { lead: 0.95, pluck: 0.55, pad: 1.1, bass: 1, drums: 0.9, sparkle: 0.45, wail: 0.7, wind: 0.8 },
 };
 
-export const STYLES: Style[] = [FOREST, GLADE, DESERT, SNOW, SWAMP, TAVERN, HOLY, EPIC];
+// Twelve eighths in four dotted beats, six rows a beat: two rows an eighth.
+const JUNGLE_TWELVE: MeterRules = {
+  beats: 4,
+  name: "12/8",
+  rhythms: [
+    [4, 2, 4, 2, 4, 2, 4, 2],
+    [6, 6, 6, 6],
+    [4, 2, 6, 4, 2, 6],
+    [2, 2, 2, 6, 4, 2, 6],
+    [12, 4, 2, 6],
+    [-6, 4, 2, 6, 6],
+  ],
+  calmRhythms: [[12, 12], [18, 6], [-12, 12]],
+  cadenceRhythms: [[4, 2, 18], [6, 18], [24]],
+  plucks: [
+    // Marimba: interlocking figures, two against three.
+    [[0, 0], [4, 2], [6, 3], [10, 2], [12, 0], [16, 2], [18, 3], [22, 1]],
+    [[0, 0], [2, 2], [4, 3], [8, 2], [12, 0], [14, 2], [16, 3], [20, 4]],
+    [[0, 3], [4, 2], [8, 0], [12, 3], [16, 2], [20, 0]],
+  ],
+  // Log drum (dum) under the twelve-eight bell on the wood block (tek), or a looser groove.
+  frameDrum: [
+    [[0, "dum"], [4, "tek"], [8, "tek"], [10, "tek"], [12, "dum"], [14, "tek"], [18, "tek"], [22, "tek"]],
+    [[0, "dum"], [6, "tek"], [12, "dum"], [16, "dum"], [18, "tek"]],
+    [[0, "dum"], [8, "dum"], [12, "tek"], [14, "dum"], [20, "tek"]],
+  ],
+  // Shakers on the eighths, the beat accented.
+  tambourine: [
+    [[0, "hit"], [2, "shake"], [4, "shake"], [6, "hit"], [8, "shake"], [10, "shake"], [12, "hit"], [14, "shake"], [16, "shake"], [18, "hit"], [20, "shake"], [22, "shake"]],
+    [[2, "shake"], [4, "shake"], [8, "shake"], [10, "shake"], [14, "shake"], [16, "shake"], [20, "shake"], [22, "shake"]],
+  ],
+};
+
+/**
+ * The jungle: humid and teeming. Twelve-eight time, a marimba's interlocking figures and a low
+ * marimba on the beat, log drum and wood block on the twelve-eight bell, shakers, a breathy bamboo
+ * flute (the marimba takes some themes) and far-off flute calls, birds chirping high up, and a
+ * soft choir hanging in the air like mist.
+ */
+export const JUNGLE: Style = {
+  id: "jungle",
+  name: "Jungle - marimba and drums in 12/8",
+  modes: [
+    ["dorian", 3],
+    ["mixolydian", 2],
+    ["aeolian", 2],
+    ["lydian", 1],
+  ],
+  tonics: [0, 2, 4, 5, 7, 9],
+  bpm: [84, 104],
+  meters: [[JUNGLE_TWELVE, 1]],
+  rowsPerBeat: 6,
+  ticksPerRow: 4,
+  chordWeights: { 0: 4, 2: 1.5, 3: 2.2, 4: 1.6, 5: 1.6, 6: 2 },
+  forms: [
+    [["I1", "I2", "A", "A'", "B", "B'", "Br", "Ar", "Ar'", "O1", "O2"], 2],
+    [["I1", "A", "A'", "B", "B'", "D", "Ar'", "O1", "O2"], 1],
+  ],
+  percussionChance: 0.95,
+  droneChance: 0.4,
+  pluckFirstChance: 0.5,
+  instruments: { lead: "ney", pluck: "marimba", pad: "choir", bass: "marimbaBass", frameDrum: "knock", tambourine: "shaker", lowDrum: "lowDrum", sparkle: "bird", wail: "ney" },
+  leadAlternate: { instrument: "marimba", chance: 0.3 },
+  slideChance: 0.2,
+  trillChance: 0.15,
+  bassBeats: true,
+  sparkle: { name: "Birds", chance: 0.45, notes: [2, 4], steps: [1, 1, 2] },
+  wail: { name: "Calls", chance: 0.3, slide: [2, 3] },
+  drumRoll: 0.3,
+  percussion: { I2: 1, A: 2, "A'": 2, B: 2, "B'": 2, D: 2, Ar: 2, "Ar'": 2, O1: 1 },
+  pad: {
+    stagger: 0.3,
+    swell: true,
+    textures: { I1: "open", Br: "open" },
+    colour: { add9: 0.2, sus2: 0.1 },
+  },
+  mix: { lead: 0.9, pluck: 0.75, pad: 0.6, bass: 0.9, drums: 0.85, sparkle: 0.6, wail: 0.6 },
+};
+
+export const STYLES: Style[] = [FOREST, GLADE, DESERT, SNOW, SWAMP, TAVERN, HOLY, EPIC, JUNGLE];

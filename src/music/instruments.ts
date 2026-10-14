@@ -440,6 +440,33 @@ function renderAccordion(root: number, seed: number): SampleZone {
   return zone(data, root, root, root, { start: start / SAMPLE_RATE, end: end / SAMPLE_RATE });
 }
 
+/**
+ * Marimba: a rosewood bar over its tube, the fundamental and the bar's tuned fourth partial, a
+ * bright tick from the mallet; low bars ring longer.
+ */
+function renderMarimba(root: number, seed: number): SampleZone {
+  const hz = midiToHz(root);
+  const ring = 0.25 + 0.9 * Math.max(0, (84 - root) / 48);
+  const bar = render(1.6, (t) => (Math.sin(2 * Math.PI * hz * t) * Math.exp(-t / ring) + 0.3 * Math.sin(2 * Math.PI * hz * 3.93 * t) * Math.exp(-t / 0.06) + 0.08 * Math.sin(2 * Math.PI * hz * 9.2 * t) * Math.exp(-t / 0.015)) * Math.min(1, t / 0.0015));
+  const data = mix([bar, 1], [noise(seed, 1.6, 0.004, 1500, 8000), 0.25]);
+  return zone(data, root, root, root);
+}
+
+/** A bird: a quick whistled chirp sliding down onto its note, warbling as it goes. */
+function renderBird(root: number, seed: number): SampleZone {
+  const rng = mulberry32(seed);
+  const hz = midiToHz(root);
+  const warble = 18 + rng() * 14;
+  let phase = 0;
+  const data = render(0.4, (t) => {
+    const pitch = hz * (1 + 0.35 * Math.exp(-t / 0.04)) * (1 + 0.04 * Math.sin(2 * Math.PI * warble * t));
+    phase += pitch / SAMPLE_RATE;
+    return Math.sin(2 * Math.PI * phase) * Math.min(1, t / 0.006) * Math.exp(-t / 0.09);
+  });
+  normalize(data, 0.85);
+  return zone(data, root, root, root);
+}
+
 /** A bell or celesta: two-operator FM at an inharmonic ratio, bright at the strike, ringing long. */
 function renderBell(root: number): SampleZone {
   const hz = midiToHz(root);
@@ -555,6 +582,18 @@ function taiko(seed: number): SampleZone[] {
   return [zone(big, 60, 60, 60), zone(small, 62, 62, 62)];
 }
 
+/** Shaker: seeds in a gourd - a soft shake, and a harder accented one. */
+function shaker(seed: number): SampleZone[] {
+  const grains = (s: number, attack: number, decay: number): Float32Array => {
+    const data = noise(s, 0.3, decay, 3500, 12000);
+    for (let i = 0; i < data.length; i++) data[i] *= Math.min(1, i / (attack * SAMPLE_RATE));
+    return data;
+  };
+  const shake = mix([grains(seed, 0.012, 0.05), 1]);
+  const hit = mix([grains(seed + 1, 0.003, 0.035), 1], [noise(seed + 2, 0.3, 0.01, 1500, 6000), 0.4]);
+  return [zone(shake, 60, 60, 60), zone(hit, 62, 62, 62)];
+}
+
 function lowDrum(seed: number): SampleZone[] {
   const boom = mix([thump(78, 46, 0.09, 0.5, 2), 1], [noise(seed, 2, 0.02, 40, 400), 0.4]);
   return [zone(boom, 60, 60, 60)];
@@ -563,6 +602,7 @@ function lowDrum(seed: number): SampleZone[] {
 /** Every instrument there is, by id. */
 export function createInstruments(): Record<string, Instrument> {
   const strings = spread(33, 84, 6, (r) => renderStrings(r, 1000 + r));
+  const marimba = spread(33, 96, 6, (r) => renderMarimba(r, 23000 + r));
   const list: Instrument[] = [
     {
       id: "strings",
@@ -861,6 +901,47 @@ export function createInstruments(): Record<string, Instrument> {
       range: [60, 62],
       keys: { dum: 60, tek: 62 },
       color: "#c89070",
+    },
+    {
+      id: "marimba",
+      name: "Marimba",
+      short: "mr",
+      zones: marimba,
+      envelope: { attack: 0.001, decay: 0, sustain: 1, release: 0.4 },
+      gain: 0.42,
+      range: [36, 91],
+      color: "#c89a68",
+    },
+    {
+      id: "marimbaBass",
+      name: "Bass marimba",
+      short: "bm",
+      zones: marimba,
+      envelope: { attack: 0.001, decay: 0, sustain: 1, release: 0.5 },
+      gain: 0.46,
+      range: [33, 60],
+      color: "#a87a50",
+    },
+    {
+      id: "bird",
+      name: "Birds",
+      short: "bd",
+      zones: spread(72, 108, 8, (r) => renderBird(r, 24000 + r)),
+      envelope: { attack: 0.001, decay: 0, sustain: 1, release: 0.1 },
+      gain: 0.22,
+      range: [76, 104],
+      color: "#a8d878",
+    },
+    {
+      id: "shaker",
+      name: "Shaker",
+      short: "sk",
+      zones: shaker(25000),
+      envelope: { attack: 0.001, decay: 0, sustain: 1, release: 0.08 },
+      gain: 0.32,
+      range: [60, 62],
+      keys: { shake: 60, hit: 62 },
+      color: "#d8c888",
     },
     {
       id: "frameDrum",

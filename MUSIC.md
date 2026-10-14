@@ -248,6 +248,12 @@ the forest style using synth stand-ins.
     - A choir rises in, then doubles the theme when it returns in a new key.
     - A glint of glockenspiel and a little wind.
     - Film harmony: i VI III VII and its kin, at 72–92 bpm.
+  - **Jungle:** humid and teeming, in 12/8 (six rows a beat).
+    - A marimba (new synth) plays interlocking two-against-three figures; a low marimba strikes
+      every beat.
+    - Log drum and wood block on the 12/8 bell pattern, shakers on the eighths.
+    - A breathy bamboo flute leads (the marimba takes some themes), with far-off flute calls.
+    - Birds chirp high up (new synth), and a soft choir hangs underneath like mist.
   - **Sections beyond the A and B themes**, for any style that lists them in its forms:
     - **C:** a third theme on a motif of its own, starting away from the home chord.
     - **D:** a development, carrying the motif down a chain of chords.
