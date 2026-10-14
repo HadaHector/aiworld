@@ -21,6 +21,8 @@ export type DrumPattern = [number, string][];
 
 export interface MeterRules {
   beats: number;
+  /** For display, when beats over four is not it: "6/8" for two beats of three eighths. */
+  name?: string;
   /** Motif and free-bar rhythms. */
   rhythms: Rhythm[];
   /** Longer rhythms for the contrasting B section. */
@@ -55,7 +57,7 @@ export interface Style {
   /** Chance the intro starts with the plucked instrument alone instead of the pad. */
   pluckFirstChance: number;
   /** frameDrum and tambourine may be "" for none. */
-  instruments: { lead: string; pluck: string; pad: string; bass: string; frameDrum: string; tambourine: string; lowDrum: string; sparkle?: string; wail?: string; wind?: string };
+  instruments: { lead: string; pluck: string; pad: string; bass: string; frameDrum: string; tambourine: string; lowDrum: string; sparkle?: string; wail?: string; wind?: string; clap?: string };
   // Optional knobs; absent is off.
   /** Chance a lead phrase sits out (never the outro's), leaving the accompaniment alone. */
   leadRestChance?: number;
@@ -93,6 +95,10 @@ export interface Style {
   sagChance?: number;
   /** In the last outro the plucks slow and drop in pitch, a music box running down. */
   windDown?: boolean;
+  /** The crowd claps on every beat, a little ragged, in a full section with this chance. */
+  claps?: { chance: number };
+  /** The bass strikes every beat, root and fifth in turn, instead of holding the chord. */
+  bassBeats?: boolean;
   /** Chance a long lead note wavers with vibrato after its start. */
   vibratoChance?: number;
   /** Chance a plucked note with room after it is tremolo-picked until the next. */
@@ -117,7 +123,7 @@ export interface Style {
     pizzicato?: string;
   };
   /** Volume of each part, 1 by default. */
-  mix?: Partial<Record<"lead" | "pluck" | "pad" | "bass" | "drums" | "sparkle" | "wail" | "wind", number>>;
+  mix?: Partial<Record<"lead" | "pluck" | "pad" | "bass" | "drums" | "sparkle" | "wail" | "wind" | "claps", number>>;
 }
 
 const FOUR: MeterRules = {
@@ -598,4 +604,103 @@ export const SWAMP: Style = {
   mix: { lead: 0.8, pluck: 0.7, pad: 1.05, bass: 1, drums: 0.9, sparkle: 0.6, wail: 0.75 },
 };
 
-export const STYLES: Style[] = [FOREST, GLADE, DESERT, SNOW, SWAMP];
+// Jigs count in eighths: a beat is a dotted quarter of three eighths, two rows each, so six rows.
+const JIG: MeterRules = {
+  beats: 2,
+  name: "6/8",
+  rhythms: [
+    [2, 2, 2, 2, 2, 2],
+    [4, 2, 4, 2],
+    [2, 2, 2, 4, 2],
+    [6, 2, 2, 2],
+    [4, 2, 2, 2, 2],
+    [2, 2, 2, 6],
+    // Room to breathe inside the tune.
+    [4, 2, -2, 2, 2],
+    [2, 2, 2, -4, 2],
+  ],
+  calmRhythms: [[4, 2, 4, 2], [6, 4, 2], [6, 6], [4, -2, 6]],
+  cadenceRhythms: [[2, 2, 2, 6], [4, 2, 6], [6, 6]],
+  plucks: [
+    // Guitar vamping: bass note, then the chord on the off-eighths.
+    [[0, 0], [2, 1], [4, 2], [6, 3], [8, 2], [10, 1]],
+    [[0, 0], [4, 2], [6, 3], [10, 2]],
+    [[0, 0], [2, 2], [4, 3], [6, 1], [8, 2], [10, 3]],
+  ],
+  // Bodhrán: the down-stroke on the beat and the triplet drive between.
+  frameDrum: [
+    [[0, "dum"], [2, "tek"], [4, "tek"], [6, "dum"], [8, "tek"], [10, "tek"]],
+    [[0, "dum"], [4, "tek"], [6, "dum"], [10, "tek"]],
+    [[0, "dum"], [2, "tek"], [4, "tek"], [6, "dum"], [8, "tek"], [9, "tek"], [10, "tek"]],
+  ],
+  tambourine: [
+    [[2, "shake"], [4, "shake"], [8, "shake"], [10, "shake"]],
+    [[0, "shake"], [6, "hit"]],
+  ],
+};
+
+const SLIP_JIG: MeterRules = {
+  beats: 3,
+  name: "9/8",
+  rhythms: [
+    [2, 2, 2, 2, 2, 2, 2, 2, 2],
+    [4, 2, 4, 2, 4, 2],
+    [6, 2, 2, 2, 4, 2],
+    [4, 2, 2, 2, 2, 6],
+  ],
+  calmRhythms: [[6, 4, 2, 6], [4, 2, 6, 6]],
+  cadenceRhythms: [[4, 2, 12], [2, 2, 2, 12], [6, 12]],
+  plucks: [
+    [[0, 0], [2, 1], [4, 2], [6, 3], [8, 2], [10, 1], [12, 0], [14, 2], [16, 3]],
+    [[0, 0], [4, 2], [6, 3], [10, 2], [12, 1], [16, 2]],
+  ],
+  frameDrum: [
+    [[0, "dum"], [2, "tek"], [4, "tek"], [6, "dum"], [8, "tek"], [10, "tek"], [12, "dum"], [14, "tek"], [16, "tek"]],
+    [[0, "dum"], [4, "tek"], [6, "dum"], [10, "tek"], [12, "dum"], [16, "tek"]],
+  ],
+  tambourine: [[[2, "shake"], [4, "shake"], [8, "shake"], [10, "shake"], [14, "shake"], [16, "shake"]]],
+};
+
+/**
+ * The tavern: an upbeat session. Jigs and slip jigs on a fiddle (now and then a whistle), an
+ * accordion pumping the chords, a guitar vamping, the bass on every beat, bodhrán and tambourine
+ * driving. Like a session set, the tune goes round - A A B B - ornamented the second time, and the
+ * last time round it jumps up a key.
+ */
+export const TAVERN: Style = {
+  id: "tavern",
+  name: "Tavern - upbeat jigs",
+  modes: [
+    ["ionian", 3],
+    ["mixolydian", 3],
+    ["dorian", 2],
+  ],
+  tonics: [2, 7, 9, 4],
+  bpm: [104, 126],
+  meters: [
+    [JIG, 3],
+    [SLIP_JIG, 1],
+  ],
+  rowsPerBeat: 6,
+  ticksPerRow: 4,
+  chordWeights: { 0: 4, 1: 1, 3: 2.5, 4: 3, 5: 1.5, 6: 1 },
+  forms: [
+    [["I1", "A", "A'", "A", "A'", "B", "B'", "B", "B'", "Br", "Ar", "Ar'", "Ar", "Ar'", "B", "B'", "B", "B'", "Ar+", "Ar'+", "O1", "O2"], 2],
+    [["I1", "A", "A'", "A", "A'", "B", "B'", "B", "B'", "Ar", "Ar'", "B", "B'", "Br", "Ar+", "Ar'+", "O1", "O2"], 2],
+  ],
+  percussionChance: 0.95,
+  droneChance: 0.15,
+  pluckFirstChance: 0.65,
+  instruments: { lead: "violin", pluck: "guitar", pad: "accordion", bass: "bass", frameDrum: "frameDrum", tambourine: "tambourine", lowDrum: "lowDrum", clap: "clap" },
+  leadAlternate: { instrument: "flute", chance: 0.35, shift: 0 },
+  leadRestChance: 0.12,
+  claps: { chance: 0.45 },
+  trillChance: 0.25,
+  bassBeats: true,
+  climaxShift: [2, 5],
+  percussion: { I1: 1, A: 1, "A'": 2, B: 2, "B'": 2, Br: 2, Ar: 2, "Ar'": 2, "Ar+": 2, "Ar'+": 2, O1: 1 },
+  pad: { stagger: 0.1, swell: true },
+  mix: { lead: 1, pluck: 0.8, pad: 0.75, bass: 0.9, drums: 0.9, claps: 0.8 },
+};
+
+export const STYLES: Style[] = [FOREST, GLADE, DESERT, SNOW, SWAMP, TAVERN];

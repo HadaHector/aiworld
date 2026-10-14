@@ -25,7 +25,7 @@ const gridWrap = element<HTMLElement>("gridWrap");
 const overview = element<HTMLElement>("overview");
 const inUse = element<HTMLInputElement>("inUse");
 
-const CHANNEL_COLORS = ["#e7c26a", "#d98a5f", "#7fa7d9", "#6f97cc", "#5f87bf", "#4f6fa8", "#a8c47a", "#c9a3d9", "#8fc4b8", "#9fe0e6", "#d8c8ec", "#b0bcc8"];
+const CHANNEL_COLORS = ["#e7c26a", "#d98a5f", "#7fa7d9", "#6f97cc", "#5f87bf", "#4f6fa8", "#a8c47a", "#c9a3d9", "#8fc4b8", "#9fe0e6", "#d8c8ec", "#b0bcc8", "#e0a0a0", "#e8c9a0"];
 
 const instruments = createInstruments();
 const shorts = Object.fromEntries(Object.values(instruments).map((i) => [i.id, i.short]));
@@ -72,6 +72,18 @@ function setPaused(on: boolean): void {
 pauseButton.onclick = () => {
   if (player?.playing) setPaused(!paused);
 };
+
+// Space: play when stopped, pause when playing, resume when paused - unless typing in a field.
+addEventListener("keydown", (e) => {
+  if (e.code !== "Space" || e.repeat) return;
+  const target = e.target as HTMLElement;
+  if (target.tagName === "INPUT" && (target as HTMLInputElement).type !== "checkbox") return;
+  if (target.tagName === "SELECT" || target.tagName === "TEXTAREA") return;
+  // Also keeps a focused button from being clicked by the same key.
+  e.preventDefault();
+  if (player?.playing) setPaused(!paused);
+  else play();
+});
 
 function compose(): void {
   const style = STYLES.find((s) => s.id === styleSelect.value) ?? STYLES[0];
@@ -239,9 +251,10 @@ const LIBRARY_ALIASES: Record<string, string[]> = {
   ghost: ["atmosphere", "choir"],
   wind: ["atmosphere"],
   violin: ["stringsHigh", "strings"],
+  clap: ["claps"],
 };
 /** Where single drum strokes for a kit are picked from. */
-const DRUM_FOLDERS = ["darbuka", "frameDrum", "tambourine", "lowDrum", "knock"];
+const DRUM_FOLDERS = ["darbuka", "frameDrum", "tambourine", "lowDrum", "knock", "claps"];
 const SOUNDS_KEY = "aiworld.music.sounds";
 /** The sounds picked by ear, used wherever the library has them; "" in a choice means the synth. */
 const DEFAULT_SOUNDS: Record<string, string> = {

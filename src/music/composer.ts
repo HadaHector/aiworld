@@ -47,6 +47,7 @@ const CHANNELS: Channel[] = [
 const SPARKLE_CHANNEL: Channel = { name: "Sparkle", role: "counter", pan: 0.2, reverb: 0.7 };
 const WAIL_CHANNEL: Channel = { name: "Wail", role: "counter", pan: 0.2, reverb: 0.7 };
 const WIND_CHANNEL: Channel = { name: "Wind", role: "pad", pan: -0.3, reverb: 0.4 };
+const CLAP_CHANNEL: Channel = { name: "Claps", role: "percussion", pan: -0.35, reverb: 0.3 };
 
 /** Drum articulations to keys, as the drum instruments lay them out. */
 const DRUM_KEYS: Record<string, number> = { dum: 60, tek: 62, shake: 60, hit: 62, boom: 60 };
@@ -230,8 +231,10 @@ export function composeSong(style: Style, placeSeed: number, visitSeed: number):
     ...(style.instruments.sparkle ? [{ ...SPARKLE_CHANNEL, name: style.sparkle?.name ?? SPARKLE_CHANNEL.name }] : []),
     ...(style.instruments.wail ? [{ ...WAIL_CHANNEL, name: style.wail?.name ?? WAIL_CHANNEL.name }] : []),
     ...(style.wind && style.instruments.wind ? [WIND_CHANNEL] : []),
+    ...(style.claps && style.instruments.clap ? [CLAP_CHANNEL] : []),
   ];
-  const WIND = channels.length - 1;
+  const CLAP = channels.indexOf(CLAP_CHANNEL);
+  const WIND = channels.indexOf(WIND_CHANNEL);
 
   const totalRows = form.length * phraseRows;
   const cells: (Cell | undefined)[][] = Array.from({ length: totalRows }, () => channels.map(() => undefined));
@@ -498,6 +501,15 @@ export function composeSong(style: Style, placeSeed: number, visitSeed: number):
       const enterBar = fadeIn ? 2 : 0;
       chords.forEach((c, b) => {
         if (b < enterBar) return;
+        if (style.bassBeats) {
+          // Struck on every beat, root and fifth in turn: the "oom" of a dance.
+          for (let beat = 0; beat < meter.beats; beat++) {
+            const note = beat % 2 === 0 || drone ? bassNote(key, drone ? 0 : c) : bassNote(key, c + 4);
+            put(start + b * barRows + beat * style.rowsPerBeat, BASS, { note, instrument: style.instruments.bass, volume: base * (beat === 0 ? 1 : 0.8) });
+            bassPlaying = note;
+          }
+          return;
+        }
         const note = bassNote(key, drone ? 0 : c);
         if (bassPlaying === note && b !== enterBar) return;
         put(start + b * barRows, BASS, { note, instrument: style.instruments.bass, volume: base });
@@ -619,11 +631,21 @@ export function composeSong(style: Style, placeSeed: number, visitSeed: number):
       });
     }
 
+    // The crowd clapping along on the beats of a full section, never quite together.
+    if (style.claps && style.instruments.clap && level === 2 && visit() < style.claps.chance) {
+      for (let b = 0; b < 4; b++) {
+        for (let beat = 0; beat < meter.beats; beat++) {
+          const late: Effect[] | undefined = visit() < 0.4 ? [{ type: "noteDelay", ticks: 1 }] : undefined;
+          put(start + b * barRows + beat * style.rowsPerBeat, CLAP, { note: 60, instrument: style.instruments.clap, volume: ((beat === 0 ? 0.5 : 0.42) + jitter(0.06)) * part("claps"), effects: late });
+        }
+      }
+    }
+
     // The climax's key: everything but the drums, up.
     if (shift) {
       for (let r = start; r < start + phraseRows; r++) {
         cells[r].forEach((cell, channel) => {
-          if (cell && typeof cell.note === "number" && MELODIC(channel) && !(style.wind && channel === WIND)) cell.note += shift;
+          if (cell && typeof cell.note === "number" && MELODIC(channel) && channel !== WIND && channel !== CLAP) cell.note += shift;
         });
       }
     }
@@ -683,7 +705,7 @@ export function composeSong(style: Style, placeSeed: number, visitSeed: number):
     summary: {
       key: `${pitchClassName(key.tonic)} ${key.mode}`,
       tempo: `${bpm} bpm`,
-      meter: `${meter.beats}/4`,
+      meter: meter.name ?? `${meter.beats}/4`,
       form: form.map(sectionLabel).join(" "),
       percussion: hasPercussion ? "yes" : "no",
       bass: drone ? "drone" : "follows the chords",

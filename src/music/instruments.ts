@@ -410,6 +410,31 @@ function renderWind(root: number, seed: number): SampleZone {
   return zone(data, root, root, root, { start: start / SAMPLE_RATE, end: end / SAMPLE_RATE });
 }
 
+/** Accordion: three reeds a little apart (the musette), reedy and nasal, the bellows breathing. Looped. */
+function renderAccordion(root: number, seed: number): SampleZone {
+  const rng = mulberry32(seed);
+  const hz = midiToHz(root);
+  const length = Math.floor(2.6 * SAMPLE_RATE);
+  const data = new Float32Array(length);
+  const table = wavetable((h) => (h % 2 === 1 ? 1 / h : 0.35 / h), hz * 1.02);
+  for (const cents of [-11, 0, 12]) {
+    const step = (hz * 2 ** (cents / 1200)) / SAMPLE_RATE;
+    let phase = rng();
+    for (let i = 0; i < length; i++) {
+      data[i] += readTable(table, phase);
+      phase = (phase + step) % 1;
+    }
+  }
+  for (let i = 0; i < length; i++) data[i] *= 1 + 0.06 * Math.sin((2 * Math.PI * 0.9 * i) / SAMPLE_RATE);
+  const cutoff = Math.min(hz * 7, 5000);
+  onePoleLowpass(data, cutoff);
+  normalize(data, 0.8);
+  const start = Math.floor(0.4 * SAMPLE_RATE);
+  const end = Math.floor(2.5 * SAMPLE_RATE);
+  crossfadeLoop(data, start, end, Math.floor(0.4 * SAMPLE_RATE));
+  return zone(data, root, root, root, { start: start / SAMPLE_RATE, end: end / SAMPLE_RATE });
+}
+
 /** A bell or celesta: two-operator FM at an inharmonic ratio, bright at the strike, ringing long. */
 function renderBell(root: number): SampleZone {
   const hz = midiToHz(root);
@@ -497,6 +522,25 @@ function knock(seed: number): SampleZone[] {
   const log = mix([partial(165, 0.28, 1.2), 1], [partial(165 * 2.76, 0.07, 1.2), 0.5], [noise(seed, 1.2, 0.006, 300, 4000), 0.4]);
   const block = mix([partial(940, 0.045, 0.4), 1], [partial(2550, 0.02, 0.4), 0.6], [noise(seed + 1, 0.4, 0.004, 1500, 9000), 0.5]);
   return [zone(log, 60, 60, 60), zone(block, 62, 62, 62)];
+}
+
+/** Hand claps from a few people in a crowd, each a little early or late, each clap a quick flutter. */
+function claps(seed: number): SampleZone[] {
+  const rng = mulberry32(seed);
+  const out = new Float32Array(Math.floor(0.4 * SAMPLE_RATE));
+  for (let person = 0; person < 5; person++) {
+    const at = rng() * 0.025;
+    const hand = noise(seed + person, 0.35, 0.045, 700 + rng() * 500, 2500 + rng() * 1500);
+    const offset = Math.floor(at * SAMPLE_RATE);
+    for (let i = 0; i < hand.length && offset + i < out.length; i++) {
+      // Palms meeting: three quick bursts before the ring.
+      const t = i / SAMPLE_RATE;
+      const flutter = t < 0.02 ? 0.5 + 0.5 * Math.cos(2 * Math.PI * t * 150) : 1;
+      out[offset + i] += hand[i] * flutter * (0.7 + 0.3 * rng());
+    }
+  }
+  normalize(out, 0.9);
+  return [zone(out, 60, 60, 60)];
 }
 
 function lowDrum(seed: number): SampleZone[] {
@@ -741,6 +785,27 @@ export function createInstruments(): Record<string, Instrument> {
       gain: 0.35,
       range: [43, 91],
       color: "#b0bcc8",
+    },
+    {
+      id: "accordion",
+      name: "Accordion",
+      short: "ac",
+      zones: spread(36, 90, 6, (r) => renderAccordion(r, 17000 + r)),
+      envelope: { attack: 0.06, decay: 0.2, sustain: 0.9, release: 0.25 },
+      gain: 0.26,
+      range: [41, 84],
+      color: "#d9a66f",
+    },
+    {
+      id: "clap",
+      name: "Claps",
+      short: "cp",
+      zones: claps(19000),
+      envelope: { attack: 0.001, decay: 0, sustain: 1, release: 0.15 },
+      gain: 0.4,
+      range: [60, 60],
+      keys: { clap: 60 },
+      color: "#e8c9a0",
     },
     {
       id: "frameDrum",

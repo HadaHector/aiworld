@@ -217,6 +217,20 @@ the forest style using synth stand-ins.
     per piece. Each passage rises out of silence, slides to a new pitch every bar (the howl) and
     gusts, then dies away and is let go. It stays in its key through a climax. The archive has no wind
     recordings, so it is synth only; the Wind card can borrow from the atmosphere files.
+  - **Tavern:** an upbeat session.
+    - Jigs in 6/8, sometimes slip jigs in 9/8. Beats are in threes, so this style uses six rows
+      per beat.
+    - A fiddle lead; about a third of the themes go to a whistle instead.
+    - An accordion pumping the chords (a new musette synth), and a guitar vamping.
+    - The bass strikes every beat, root and fifth in turn (`bassBeats`).
+    - Bodhrán triplet drives and tambourine.
+    - The form goes round like a session set: A A B B, ornamented the second time, and the last
+      round jumps up a key.
+    - Breaths: rests inside the tune, the lead laying out a phrase now and then, and one drum
+      break (Br), where only the drums, bass and accordion play.
+    - The crowd claps on the beats in about half the full sections, a little ragged (`claps`;
+      synth claps, or library hand claps). Shouts were tried and dropped: the archive's voice
+      shouts were too rough, and the synth ones no better.
   - **Sections beyond the A and B themes**, for any style that lists them in its forms:
     - **C:** a third theme on a motif of its own, starting away from the home chord.
     - **D:** a development, carrying the motif down a chain of chords.
