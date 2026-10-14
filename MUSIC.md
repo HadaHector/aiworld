@@ -269,6 +269,10 @@ the forest style using synth stand-ins.
   - choir `aahh02`, harp `plharp01`, bells `glock01`
 
   On a machine without the library, each instrument falls back to its synth.
+- **Picks are kept per style.** The page stores `{ style: { instrument: file } }` in the
+  `aiworld.music.soundsByStyle` localStorage entry. A style starts from the shared defaults.
+  Picks made before this split became every style's starting point. Switching style rebuilds
+  every instrument from that style's picks.
 - **Drum kits.** A drum card also lets each stroke (dum and tek, shake and hit, boom) come from
   its own file, picked from any drum folder. That stroke's key then plays the file's sample as a
   one-shot, at the pitch it has on C-4. Instruments without a folder of their own also pick from a

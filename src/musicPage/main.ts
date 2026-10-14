@@ -89,6 +89,7 @@ function compose(): void {
   const style = STYLES.find((s) => s.id === styleSelect.value) ?? STYLES[0];
   song = composeSong(style, Number(placeInput.value) || 0, Number(visitInput.value) || 0);
   history.replaceState(null, "", `?style=${style.id}&place=${song.placeSeed}&visit=${song.visitSeed}`);
+  if (style.id !== soundsStyle) void useStyleSounds(style.id);
   viewPattern = 0;
   renderSummary();
   renderOverview();
@@ -255,7 +256,10 @@ const LIBRARY_ALIASES: Record<string, string[]> = {
 };
 /** Where single drum strokes for a kit are picked from. */
 const DRUM_FOLDERS = ["darbuka", "frameDrum", "tambourine", "lowDrum", "knock", "claps"];
-const SOUNDS_KEY = "aiworld.music.sounds";
+/** Picks are kept per style: { styleId: { instrument or "id:stroke": library path or "" } }. */
+const SOUNDS_KEY = "aiworld.music.soundsByStyle";
+/** Before that, one set of picks for every style: it becomes each style's starting point. */
+const SHARED_SOUNDS_KEY = "aiworld.music.sounds";
 /** The sounds picked by ear, used wherever the library has them; "" in a choice means the synth. */
 const DEFAULT_SOUNDS: Record<string, string> = {
   guitar: "guitar/nlgtr01f.xi",
@@ -273,21 +277,44 @@ const DEFAULT_SOUNDS: Record<string, string> = {
   bells: "bells/glock01.xi",
 };
 let library: Record<string, string[]> = {};
-/** Choices by instrument id; a drum's strokes by "id:stroke". "" means the synth. */
-const sounds: Record<string, string> = ((): Record<string, string> => {
+const soundsByStyle: Record<string, Record<string, string>> = ((): Record<string, Record<string, string>> => {
   try {
-    return { ...DEFAULT_SOUNDS, ...JSON.parse(localStorage.getItem(SOUNDS_KEY) ?? "{}") };
+    const byStyle = JSON.parse(localStorage.getItem(SOUNDS_KEY) ?? "null");
+    if (byStyle) return byStyle;
+    const shared = JSON.parse(localStorage.getItem(SHARED_SOUNDS_KEY) ?? "{}");
+    return Object.fromEntries(STYLES.map((s) => [s.id, { ...shared }]));
   } catch {
-    return { ...DEFAULT_SOUNDS };
+    return {};
   }
 })();
+/** The style whose picks `sounds` holds. */
+let soundsStyle = styleSelect.value || STYLES[0].id;
+/** The current style's choices by instrument id; a drum's strokes by "id:stroke". "" means the synth. */
+const sounds: Record<string, string> = { ...DEFAULT_SOUNDS, ...soundsByStyle[soundsStyle] };
 
 function saveSounds(): void {
+  soundsByStyle[soundsStyle] = { ...sounds };
   try {
-    localStorage.setItem(SOUNDS_KEY, JSON.stringify(sounds));
+    localStorage.setItem(SOUNDS_KEY, JSON.stringify(soundsByStyle));
   } catch {
     // Private mode: the choice lasts this visit only.
   }
+}
+
+/** Another style: its own picks replace the last one's, and every instrument is put together again. */
+async function useStyleSounds(styleId: string): Promise<void> {
+  if (styleId === soundsStyle) return;
+  soundsStyle = styleId;
+  for (const key of Object.keys(sounds)) delete sounds[key];
+  Object.assign(sounds, DEFAULT_SOUNDS, soundsByStyle[styleId]);
+  for (const id of new Set([...Object.keys(synths), ...Object.keys(instruments)])) {
+    try {
+      await buildInstrument(id);
+    } catch (e) {
+      console.warn("music: could not load sounds for", id, e);
+    }
+  }
+  renderInstruments();
 }
 
 const strokeKey = (id: string, stroke: string): string => `${id}:${stroke}`;
