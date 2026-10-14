@@ -18,6 +18,18 @@ export interface SampleZone {
   high: number;
   /** Seconds; a looped sample sustains until released. */
   loop?: { start: number; end: number };
+  /** Sample level, 1 when absent. */
+  gain?: number;
+}
+
+/**
+ * A volume envelope as XM has it: points of [seconds, level 0..1], ramped between. It holds at the
+ * sustain point until the note is released, then plays on while the instrument's release fades
+ * the note out. Without a sustain point it plays through and holds its last level.
+ */
+export interface VolumeEnvelope {
+  points: [number, number][];
+  sustain?: number;
 }
 
 /** Seconds, except sustain: the level held after the decay, 0..1. */
@@ -34,9 +46,11 @@ export interface Instrument {
   /** Two letters for the pattern grid. */
   short: string;
   zones: SampleZone[];
+  /** Attack, decay and sustain shape the note unless there is a volumeEnvelope; release always applies. */
   envelope: Envelope;
-  /** Depth in cents, rate in Hz, delay in seconds before it fades in. */
-  autoVibrato?: { depth: number; rate: number; delay: number };
+  volumeEnvelope?: VolumeEnvelope;
+  /** Depth in cents, rate in Hz, delay in seconds before it fades in over `sweep` (default 0.5). */
+  autoVibrato?: { depth: number; rate: number; delay: number; sweep?: number };
   gain: number;
   /** Where it sounds natural; the composer stays inside. */
   range: [number, number];
@@ -277,17 +291,29 @@ function lowDrum(seed: number): SampleZone[] {
 
 /** Every instrument there is, by id. */
 export function createInstruments(): Record<string, Instrument> {
+  const strings = spread(33, 84, 6, (r) => renderStrings(r, 1000 + r));
   const list: Instrument[] = [
     {
       id: "strings",
       name: "Strings",
       short: "st",
-      zones: spread(33, 84, 6, (r) => renderStrings(r, 1000 + r)),
+      zones: strings,
       envelope: { attack: 0.5, decay: 0.6, sustain: 0.85, release: 1.4 },
       autoVibrato: { depth: 6, rate: 4.6, delay: 0.6 },
       gain: 0.32,
       range: [36, 81],
       color: "#7fa7d9",
+    },
+    {
+      id: "bass",
+      name: "Bass",
+      short: "bs",
+      zones: strings,
+      envelope: { attack: 0.5, decay: 0.6, sustain: 0.85, release: 1.4 },
+      autoVibrato: { depth: 6, rate: 4.6, delay: 0.6 },
+      gain: 0.32,
+      range: [33, 60],
+      color: "#4f6fa8",
     },
     {
       id: "flute",

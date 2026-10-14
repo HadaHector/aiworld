@@ -6,6 +6,7 @@ import { composeSong } from "../music/composer";
 import { cellText, effectsText, noteText, volumeText } from "../music/format";
 import { createInstruments, zoneFor, type Instrument } from "../music/instruments";
 import { Player } from "../music/player";
+import { parseXi } from "../music/xi";
 import { songNotes, songRows, type Song } from "../music/song";
 import { STYLES } from "../music/styles";
 import { noteName } from "../music/theory";
@@ -189,35 +190,132 @@ function applyGains(): void {
   for (let i = 0; i < CHANNEL_COLORS.length; i++) player.setChannelGain(i, (anySolo ? soloed[i] : !muted[i]) ? 1 : 0);
 }
 
+// Sounds: each instrument is its synth stand-in or a sample instrument from the local library
+// (public/samples/, gitignored; index.json lists it by role). The choice is kept per browser.
+
+const synths: Record<string, Instrument> = { ...instruments };
+/** Roles with no synth, only library sounds; not played by the style yet. */
+const EXTRA_LOOKS: Record<string, { name: string; short: string; color: string; gain: number; range: [number, number] }> = {
+  choir: { name: "Choir", short: "ch", color: "#d8c8ec", gain: 0.3, range: [48, 79] },
+};
+const LIBRARY = "/samples/kiarchive/";
+const SOUNDS_KEY = "aiworld.music.sounds";
+let library: Record<string, string[]> = {};
+const sounds: Record<string, string> = ((): Record<string, string> => {
+  try {
+    return JSON.parse(localStorage.getItem(SOUNDS_KEY) ?? "{}");
+  } catch {
+    return {};
+  }
+})();
+
+function saveSounds(): void {
+  try {
+    localStorage.setItem(SOUNDS_KEY, JSON.stringify(sounds));
+  } catch {
+    // Private mode: the choice lasts this visit only.
+  }
+}
+
+/** Puts the chosen sound in place for an instrument id: a library path, or "" for the synth. */
+async function useSound(id: string, path: string): Promise<void> {
+  if (!path) {
+    if (synths[id]) instruments[id] = synths[id];
+    else delete instruments[id];
+    delete sounds[id];
+    return;
+  }
+  const response = await fetch(LIBRARY + path);
+  if (!response.ok) throw new Error(`${path}: ${response.status}`);
+  const look = synths[id] ?? EXTRA_LOOKS[id];
+  const inst = parseXi(await response.arrayBuffer(), id, { short: look.short, color: look.color, gain: look.gain });
+  inst.range = look.range;
+  if (synths[id]?.keys) inst.keys = synths[id].keys;
+  instruments[id] = inst;
+  sounds[id] = path;
+}
+
+async function loadLibrary(): Promise<void> {
+  try {
+    const response = await fetch(LIBRARY + "index.json");
+    if (response.ok) library = (await response.json()).roles ?? {};
+  } catch {
+    library = {};
+  }
+  for (const [id, path] of Object.entries(sounds)) {
+    try {
+      await useSound(id, path);
+    } catch (e) {
+      console.warn("music: could not load", path, e);
+      delete sounds[id];
+    }
+  }
+}
+
 function renderInstruments(): void {
   const box = element("instruments");
-  for (const inst of Object.values(instruments)) {
+  box.innerHTML = "";
+  const ids = [...Object.keys(synths), ...Object.keys(EXTRA_LOOKS).filter((id) => library[id]?.length)];
+  for (const id of ids) {
     const div = document.createElement("div");
     div.className = "instrument";
-    const env = inst.envelope;
-    const looped = inst.zones.some((z) => z.loop);
-    div.innerHTML =
-      `<div class="title"><b>${inst.name}</b><small>${inst.short} · ${inst.id}</small></div>` +
-      `<small>${inst.zones.length} zone${inst.zones.length > 1 ? "s" : ""}${looped ? ", looped" : ", one-shot"} · A ${env.attack}s D ${env.decay}s S ${env.sustain} R ${env.release}s` +
-      `${inst.autoVibrato ? ` · vibrato ${inst.autoVibrato.depth}¢` : ""}</small>`;
-    const canvas = document.createElement("canvas");
-    div.append(canvas);
-    const keys = document.createElement("div");
-    keys.className = "keys";
-    const notes = inst.keys ? Object.entries(inst.keys) : keyboardNotes(inst).map((n) => [noteName(n), n] as const);
-    for (const [label, note] of notes) {
-      const b = document.createElement("button");
-      b.textContent = label;
-      b.onclick = () => {
-        ensurePlayer().audition(inst.id, note, inst.keys ? 0.5 : 1.2);
-        drawWave(canvas, inst, note);
-      };
-      keys.append(b);
-    }
-    div.append(keys);
     box.append(div);
-    requestAnimationFrame(() => drawWave(canvas, inst, notes[Math.floor(notes.length / 2)][1]));
+    renderInstrument(div, id);
   }
+}
+
+function renderInstrument(div: HTMLElement, id: string): void {
+  const inst = instruments[id] as (Instrument & { xi?: { name: string; samples: number } }) | undefined;
+  const look = synths[id] ?? EXTRA_LOOKS[id];
+  div.innerHTML = `<div class="title"><b>${look.name}</b><small>${look.short} · ${id}</small></div>`;
+
+  const choices = library[id] ?? [];
+  if (choices.length) {
+    const select = document.createElement("select");
+    select.add(new Option(synths[id] ? "Synth stand-in" : "None", ""));
+    for (const path of choices) select.add(new Option(path.split("/").pop()!.replace(/\.xi$/, ""), path));
+    select.value = sounds[id] ?? "";
+    select.onchange = async () => {
+      select.disabled = true;
+      try {
+        await useSound(id, select.value);
+      } catch (e) {
+        console.warn("music: could not load", select.value, e);
+      }
+      saveSounds();
+      renderInstrument(div, id);
+    };
+    select.style.margin = "4px 0";
+    div.append(select);
+  }
+  if (!inst) {
+    div.insertAdjacentHTML("beforeend", `<small>Not in the forest style yet - pick a sound to hear it.</small>`);
+    return;
+  }
+  const env = inst.envelope;
+  const looped = inst.zones.some((z) => z.loop);
+  const shape = inst.volumeEnvelope ? `envelope ${inst.volumeEnvelope.points.length} points, release ${env.release.toFixed(2)}s` : `A ${env.attack}s D ${env.decay}s S ${env.sustain} R ${env.release}s`;
+  div.insertAdjacentHTML(
+    "beforeend",
+    `<small>${inst.xi ? `"${inst.xi.name}" · ` : ""}${inst.zones.length} zone${inst.zones.length > 1 ? "s" : ""}${looped ? ", looped" : ", one-shot"} · ${shape}` +
+      `${inst.autoVibrato ? ` · vibrato ${inst.autoVibrato.depth}¢` : ""}</small>`,
+  );
+  const canvas = document.createElement("canvas");
+  div.append(canvas);
+  const keys = document.createElement("div");
+  keys.className = "keys";
+  const notes = inst.keys ? Object.entries(inst.keys) : keyboardNotes(inst).map((n) => [noteName(n), n] as const);
+  for (const [label, note] of notes) {
+    const b = document.createElement("button");
+    b.textContent = label;
+    b.onclick = () => {
+      ensurePlayer().audition(id, note, inst.keys ? 0.5 : 1.2);
+      drawWave(canvas, inst, note);
+    };
+    keys.append(b);
+  }
+  div.append(keys);
+  requestAnimationFrame(() => drawWave(canvas, inst, notes[Math.floor(notes.length / 2)][1]));
 }
 
 /** The natural notes over about two octaves in the middle of an instrument's range. */
@@ -250,7 +348,8 @@ function drawWave(canvas: HTMLCanvasElement, inst: Instrument, note: number): vo
       lo = Math.min(lo, data[i]);
       hi = Math.max(hi, data[i]);
     }
-    g.fillRect(x, h / 2 - (hi * h) / 2, 1, Math.max(1, ((hi - lo) * h) / 2));
+    const k = zone.gain ?? 1;
+    g.fillRect(x, h / 2 - (hi * k * h) / 2, 1, Math.max(1, ((hi - lo) * k * h) / 2));
   }
   g.fillStyle = "#8d9aa8";
   g.font = `${10 * dpr}px system-ui`;
@@ -356,6 +455,7 @@ addEventListener("resize", () => drawRoll());
 
 compose();
 renderInstruments();
+void loadLibrary().then(renderInstruments);
 requestAnimationFrame(frame);
 
-(window as unknown as { __music: unknown }).__music = { get song() { return song; }, get player() { return player; }, instruments };
+(window as unknown as { __music: unknown }).__music = { get song() { return song; }, get player() { return player; }, instruments, sounds };

@@ -26,3 +26,4 @@ dist-ssr
 # Probe scratch scripts (scripts/probe/README.md) - the harness itself is checked in
 scripts/probe/scratch.mjs
 scripts/probe/*.local.mjs
+public/samples/kiarchive/

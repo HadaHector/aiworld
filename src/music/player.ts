@@ -13,6 +13,8 @@ const TAIL = 4;
 interface Voice {
   source: AudioBufferSourceNode;
   envelope: GainNode;
+  /** The release: 1 until the note is let go, then down to 0. */
+  fade: GainNode;
   volume: GainNode;
   vibrato?: OscillatorNode;
   instrument: Instrument;
@@ -50,7 +52,7 @@ export class Player {
   private readonly instruments: Record<string, Instrument>;
   private readonly master: GainNode;
   private readonly reverb: ConvolverNode;
-  private readonly buffers = new Map<SampleZone, AudioBuffer>();
+  private readonly buffers = new WeakMap<Float32Array, AudioBuffer>();
   private readonly voices = new Set<Voice>();
   private outs: ChannelOut[] = [];
   private preview?: ChannelOut;
@@ -290,16 +292,25 @@ export class Player {
       source.loopEnd = zone.loop.end;
     }
     const envelope = ctx.createGain();
+    const fade = ctx.createGain();
     const gain = ctx.createGain();
-    source.connect(envelope).connect(gain).connect(out.input);
+    source.connect(envelope).connect(fade).connect(gain).connect(out.input);
 
-    const env = instrument.envelope;
-    envelope.gain.setValueAtTime(0, t);
-    envelope.gain.setTargetAtTime(1, t, Math.max(0.0005, env.attack / 3));
-    if (env.sustain < 1) envelope.gain.setTargetAtTime(env.sustain, t + env.attack, Math.max(0.001, env.decay / 3));
-    gain.gain.setValueAtTime(volume * instrument.gain, t);
+    const points = instrument.volumeEnvelope?.points;
+    if (points) {
+      // XM envelope: ramp point to point, up to the sustain point (or the end) and hold there.
+      const last = instrument.volumeEnvelope?.sustain ?? points.length - 1;
+      envelope.gain.setValueAtTime(points[0][1], t);
+      for (let i = 1; i <= last && i < points.length; i++) envelope.gain.linearRampToValueAtTime(points[i][1], t + points[i][0]);
+    } else {
+      const env = instrument.envelope;
+      envelope.gain.setValueAtTime(0, t);
+      envelope.gain.setTargetAtTime(1, t, Math.max(0.0005, env.attack / 3));
+      if (env.sustain < 1) envelope.gain.setTargetAtTime(env.sustain, t + env.attack, Math.max(0.001, env.decay / 3));
+    }
+    gain.gain.setValueAtTime(volume * instrument.gain * (zone.gain ?? 1), t);
 
-    const voice: Voice = { source, envelope, volume: gain, instrument, root: zone.root, start: t, stopped: false };
+    const voice: Voice = { source, envelope, fade, volume: gain, instrument, root: zone.root, start: t, stopped: false };
     if (slideIn) {
       source.detune.setValueAtTime(cents(note + slideIn.semis, voice), t);
       source.detune.linearRampToValueAtTime(cents(note, voice), t + slideIn.ticks * tick);
@@ -313,7 +324,7 @@ export class Player {
       const depth = ctx.createGain();
       depth.gain.setValueAtTime(0, t);
       depth.gain.setValueAtTime(0, t + vib.delay);
-      depth.gain.linearRampToValueAtTime(vib.depth, t + vib.delay + 0.5);
+      depth.gain.linearRampToValueAtTime(vib.depth, t + vib.delay + (vib.sweep ?? 0.5));
       lfo.connect(depth).connect(source.detune);
       lfo.start(t);
       voice.vibrato = lfo;
@@ -321,6 +332,7 @@ export class Player {
     source.start(t);
     source.onended = () => {
       envelope.disconnect();
+      fade.disconnect();
       gain.disconnect();
       voice.vibrato?.disconnect();
       this.voices.delete(voice);
@@ -334,19 +346,28 @@ export class Player {
     if (voice.stopped) return;
     voice.stopped = true;
     const at = Math.max(t, voice.start);
-    voice.envelope.gain.cancelScheduledValues(at);
-    voice.envelope.gain.setTargetAtTime(0, at, Math.max(0.005, release / 4));
+    // An XM envelope plays on past its sustain point after key-off.
+    const env = voice.instrument.volumeEnvelope;
+    if (env?.sustain !== undefined && env.sustain < env.points.length - 1 && release > 0.05) {
+      const param = voice.envelope.gain;
+      const held = env.points[env.sustain];
+      if (param.cancelAndHoldAtTime) param.cancelAndHoldAtTime(at);
+      else param.cancelScheduledValues(at), param.setValueAtTime(held[1], at);
+      for (let i = env.sustain + 1; i < env.points.length; i++) param.linearRampToValueAtTime(env.points[i][1], at + env.points[i][0] - held[0]);
+    }
+    voice.fade.gain.setValueAtTime(1, at);
+    voice.fade.gain.setTargetAtTime(0, at, Math.max(0.005, release / 4));
     const end = at + release * 1.6 + 0.05;
     voice.source.stop(end);
     voice.vibrato?.stop(end);
   }
 
   private bufferFor(zone: SampleZone): AudioBuffer {
-    let buffer = this.buffers.get(zone);
+    let buffer = this.buffers.get(zone.data);
     if (!buffer) {
       buffer = this.ctx.createBuffer(1, zone.data.length, zone.sampleRate);
       buffer.copyToChannel(zone.data as Float32Array<ArrayBuffer>, 0);
-      this.buffers.set(zone, buffer);
+      this.buffers.set(zone.data, buffer);
     }
     return buffer;
   }

@@ -9,7 +9,7 @@ const placeSeed = Number(process.argv[2] ?? 1);
 const visitSeed = Number(process.argv[3] ?? 1);
 const show = Number(process.argv[4] ?? 2);
 const song = composeSong(FOREST, placeSeed, visitSeed);
-const shorts = { flute: "fl", guitar: "gt", strings: "st", frameDrum: "fd", tambourine: "tb", lowDrum: "ld" };
+const shorts = { flute: "fl", guitar: "gt", strings: "st", bass: "bs", frameDrum: "fd", tambourine: "tb", lowDrum: "ld" };
 console.log(song.summary);
 console.log(`${song.patterns.length} patterns, ${songRows(song)} rows, ${(songRows(song) * rowSeconds(song)).toFixed(0)} s, ${songNotes(song).length} notes`);
 for (const pattern of song.patterns.slice(0, show)) console.log("\n" + patternText(song, pattern, shorts));

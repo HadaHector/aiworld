@@ -129,7 +129,7 @@ export const FOREST: Style = {
   percussionChance: 0.65,
   droneChance: 0.35,
   pluckFirstChance: 0.3,
-  instruments: { lead: "flute", pluck: "guitar", pad: "strings", bass: "strings", frameDrum: "frameDrum", tambourine: "tambourine", lowDrum: "lowDrum" },
+  instruments: { lead: "flute", pluck: "guitar", pad: "strings", bass: "bass", frameDrum: "frameDrum", tambourine: "tambourine", lowDrum: "lowDrum" },
 };
 
 export const STYLES: Style[] = [FOREST];

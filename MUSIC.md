@@ -180,6 +180,13 @@ the forest style using synth stand-ins.
   `src/musicPage/`.
 - `npm run probe -- scripts/probe/music.mjs [place] [visit] [patterns]` prints a song as tracker
   text, without audio.
+- **Sample library.** `src/music/xi.ts` reads FastTracker 2 `.xi` instruments: keymapped
+  samples, volume envelope with a sustain point, fadeout, auto-vibrato, and ping-pong loops (baked
+  forward). Candidates from kiarchive.com sit in `public/samples/kiarchive/<role>/`, which is
+  gitignored because their licence is a grey zone. `index.json` lists them by role and
+  `SOURCES.txt` records where each one came from. On the music page, each instrument card has a
+  picker to swap the synth for a library sound; the choice is kept per browser. Choir sounds can
+  be auditioned, but the forest style does not use a choir yet.
 - Simplifications for now:
   - Styles and instruments live in code, not packs.
   - Envelopes are ADSR rather than point lists.
