@@ -7,7 +7,7 @@
 
 import { deriveSeed, mulberry32 } from "../world/rng";
 import type { Cell, Channel, Effect, Pattern, Song } from "./song";
-import type { MeterRules, Rhythm, Style } from "./styles";
+import type { MeterRules, PadTexture, Rhythm, Style } from "./styles";
 import { chordName, degreeSemitones, degreeToMidi, mod, MODES, nearestTone, pitchClassName, triadDegrees, triadQuality, type ModeName } from "./theory";
 
 type Rng = () => number;
@@ -247,8 +247,24 @@ export function composeSong(style: Style, placeSeed: number, visitSeed: number):
     for (let r = from; r < from + rows; r++) put(r, channel, { effects: [{ type: "volumeSlide", perTick }] });
   };
   const jitter = (amount: number): number => (visit() - 0.5) * 2 * amount;
+  /** A chord's three tones, sometimes coloured: an added ninth for the fifth, or a sus2 or sus4 for the third. */
+  const chordColour = (c: number): number[] => {
+    const colour = style.pad?.colour;
+    if (!colour) return triadDegrees(c);
+    const interval = (steps: number): number => mod(degreeSemitones(key.mode, c + steps) - degreeSemitones(key.mode, c), 12);
+    const r = visit();
+    const add9 = colour.add9 ?? 0;
+    const sus2 = add9 + (colour.sus2 ?? 0);
+    const sus4 = sus2 + (colour.sus4 ?? 0);
+    if (r < add9 && interval(1) === 2) return [c, c + 2, c + 1];
+    if (r >= add9 && r < sus2 && interval(1) === 2) return [c, c + 1, c + 4];
+    if (r >= sus2 && r < sus4 && interval(3) === 5) return [c, c + 3, c + 4];
+    return triadDegrees(c);
+  };
 
   let padPlaying: number[] | undefined;
+  /** The pad's voicing before a texture spreads it: what the next chord leads on from. */
+  let padCore: number[] | undefined;
   let bassPlaying: number | undefined;
   let padStarted = false;
   let plucking = false;
@@ -273,6 +289,7 @@ export function composeSong(style: Style, placeSeed: number, visitSeed: number):
     const shift = climax ? climaxShift : 0;
     if (shift !== keyShift) {
       padPlaying = undefined;
+      padCore = undefined;
       bassPlaying = undefined;
       keyShift = shift;
     }
@@ -338,10 +355,80 @@ export function composeSong(style: Style, placeSeed: number, visitSeed: number):
     // Pads and bass: held chords, notes only where the chord changes.
     const fadeIn = layers.has("pad") && !padStarted;
     const fadeOut = isLast;
-    if (layers.has("pad")) {
+    const pad = style.pad;
+    if (pad && layers.has("pad")) {
+      const base = (id === "B" || id === "B'" ? 0.5 : 0.42) * (climax ? 1.15 : 1) * part("pad");
+      const choice = pad.textures?.[formId] ?? pad.textures?.[id] ?? "sustain";
+      const texture: PadTexture = Array.isArray(choice) ? pick(visit, choice) : choice;
+      const voiceInstrument = (v: number): string => (texture === "pizzicato" ? (pad.pizzicato ?? "pizz") : (pad.voices?.[v] ?? style.instruments.pad));
+      if (texture === "pizzicato") {
+        // Plucked chords: the voices take the beats in turn, low, middle, high, middle.
+        chords.forEach((c, b) => {
+          const voicing = padVoicing(key, triadDegrees(c), padCore);
+          for (let beat = 0; beat < meter.beats; beat++) {
+            const v = [0, 1, 2, 1][beat % 4];
+            const volume = ((beat === 0 ? 0.6 : 0.46) + jitter(0.04)) * part("pad");
+            put(start + b * barRows + beat * style.rowsPerBeat, PADS[v], { note: voicing[v], instrument: voiceInstrument(v), volume });
+          }
+          padCore = voicing;
+        });
+        // Plucks die away: the next section strikes its chords afresh.
+        padPlaying = undefined;
+        padCore = undefined;
+      } else {
+        chords.forEach((c, b) => {
+          const row0 = start + b * barRows;
+          const core = padVoicing(key, texture === "open" ? [c, c + 4, c] : chordColour(c), padCore);
+          const voicing = texture === "wide" ? [core[0] - 12, core[1], core[2] + 12] : core;
+          let suspended = false;
+          voicing.forEach((note, v) => {
+            if (b === 0) put(row0, PADS[v], { volume: fadeIn ? 0 : base });
+            const before = padPlaying?.[v];
+            if (before === note) return;
+            let row = row0;
+            if (before !== undefined && pad.suspensions && !suspended && before > note && before - note <= 2 && visit() < pad.suspensions) {
+              // A suspension: the old note held into the new chord, stepping down a beat or two late.
+              row += style.rowsPerBeat * pick(visit, [1, 2]);
+              suspended = true;
+            } else if (pad.stagger && before === undefined) {
+              // Entering afresh, the voices come in one by one, low to high.
+              row += v * style.rowsPerBeat;
+            } else if (pad.stagger && visit() < pad.stagger) {
+              row += 2;
+            }
+            // A passing note walks a third, on the last beat before the chord.
+            if (before !== undefined && b > 0 && pad.passing && Math.abs(note - before) >= 3 && Math.abs(note - before) <= 4 && visit() < pad.passing) {
+              const between = scaleBetween(key, before, note);
+              const at = row0 - style.rowsPerBeat;
+              if (between !== undefined && cells[at]?.[PADS[v]]?.note === undefined) put(at, PADS[v], { note: between, instrument: voiceInstrument(v) });
+            }
+            put(row, PADS[v], { note, instrument: voiceInstrument(v) });
+          });
+          padCore = core;
+          padPlaying = voicing;
+        });
+        if (texture === "tremolo") for (let r = start; r < start + phraseRows; r++) for (const ch of PADS) put(r, ch, { effects: [{ type: "tremolo", depth: 0.45, rate: 9 }] });
+      }
+      if (fadeIn) for (const ch of PADS) slideRows(ch, start, barRows * 2, base);
+      if (fadeOut) for (const ch of PADS) slideRows(ch, start + barRows * 2, barRows * 2, -base);
+      // Each voice swells and ebbs on its own, over two bars, a bar and a half and a bar.
+      if (pad.swell && texture !== "pizzicato") {
+        PADS.forEach((ch, v) => {
+          const length = [barRows * 2, (barRows * 3) / 2, barRows][v];
+          const amount = 0.25 * base;
+          for (let r = 0; r < phraseRows; r++) {
+            const bar = Math.floor(r / barRows);
+            if ((fadeIn && bar < 2) || (fadeOut && bar >= 2)) continue;
+            const phase = (r / length + v / 3) % 1;
+            put(start + r, ch, { effects: [{ type: "volumeSlide", perTick: ((phase < 0.5 ? 1 : -1) * amount) / ((length / 2) * style.ticksPerRow) }] });
+          }
+        });
+      }
+      padStarted = true;
+    } else if (layers.has("pad")) {
       const base = (id === "B" || id === "B'" ? 0.5 : 0.42) * (climax ? 1.15 : 1) * part("pad");
       chords.forEach((c, b) => {
-        const voicing = padVoicing(key, c, padPlaying);
+        const voicing = padVoicing(key, triadDegrees(c), padPlaying);
         voicing.forEach((note, v) => {
           const cell: Cell = {};
           if (!padPlaying || padPlaying[v] !== note) Object.assign(cell, { note, instrument: style.instruments.pad });
@@ -367,6 +454,7 @@ export function composeSong(style: Style, placeSeed: number, visitSeed: number):
     } else {
       if (padPlaying) for (const ch of PADS) put(start, ch, { note: "off" });
       padPlaying = undefined;
+      padCore = undefined;
     }
 
     if (layers.has("bass")) {
@@ -686,21 +774,30 @@ function pitchesOf(key: Key, degree: number, lo: number, hi: number): number[] {
   return out;
 }
 
-/** Three close voices of the chord, moving as little as they can from the last voicing. */
-function padVoicing(key: Key, chord: number, previous?: number[]): number[] {
-  const [r, t, f] = triadDegrees(chord).map((d) => pitchesOf(key, d, 53, 70));
+/** Three close voices on a chord's tones (degrees), moving as little as they can from the last voicing. */
+function padVoicing(key: Key, tones: number[], previous?: number[], lo = 53, hi = 70, span = 12): number[] {
+  const [r, t, f] = tones.map((d) => pitchesOf(key, d, lo, hi));
+  const last = previous?.length === 3 ? previous : undefined;
   let best: number[] = [];
   let bestScore = Infinity;
   for (const a of r) for (const b of t) for (const c of f) {
     const v = [a, b, c].sort((x, y) => x - y);
-    if (v[2] - v[0] > 12 || v[0] === v[1] || v[1] === v[2]) continue;
-    const score = previous ? v.reduce((s, n, i) => s + Math.abs(n - previous[i]), 0) : Math.abs((v[0] + v[2]) / 2 - 62);
+    if (v[2] - v[0] > span || v[0] === v[1] || v[1] === v[2]) continue;
+    const score = last ? v.reduce((s, n, i) => s + Math.abs(n - last[i]), 0) : Math.abs((v[0] + v[2]) / 2 - 62);
     if (score < bestScore) {
       bestScore = score;
       best = v;
     }
   }
+  // Open fifths and octaves need more room than a close triad.
+  if (best.length === 0 && span === 12) return padVoicing(key, tones, previous, 48, 77, 19);
   return best;
+}
+
+/** The scale note between two pitches a third apart, if there is one. */
+function scaleBetween(key: Key, a: number, b: number): number | undefined {
+  for (let m = Math.min(a, b) + 1; m < Math.max(a, b); m++) if ((MODES[key.mode] as readonly number[]).includes(mod(m - key.tonic, 12))) return m;
+  return undefined;
 }
 
 function bassNote(key: Key, chord: number): number {

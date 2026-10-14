@@ -203,6 +203,20 @@ the forest style using synth stand-ins.
     - **Br:** a breath, where only the harmony plays.
     - **"+" (e.g. `Ar+`):** turns a section into a climax. It moves into a new key, the pad gets
       fuller, the lead louder, and the choir doubles the melody an octave below.
+  - **The pad as three parts** (`pad` in a style; all four styles use it):
+    - **Voices that move on their own:**
+      - A voice may hold its note into the next chord and step down a beat or two late (a
+        suspension).
+      - Fresh entries come in one by one, and chord changes are sometimes staggered.
+      - A voice moving by a third may walk through the note in between.
+      - Each voice swells and fades on its own cycle.
+    - **Textures by section:** sustain, open (bare fifths and octaves), wide (spread an octave
+      either way), tremolo (bowed, a new XM-style `7` effect), or pizzicato (plucked, voices taking
+      the beats in turn).
+    - **Chord colour:** add9, sus2 and sus4, each only where the interval is right in the mode.
+    - **An instrument per voice:** low strings, strings and high strings, each with its own synth
+      and picker. The defaults for low (`lstrs01`) and high (`ostrs09`) are guesses, not yet picked
+      by ear.
   - **Colour parts:** the sparkle (quick high runs) and the wail (a long voice rising in) are now
     separate parts, each on its own channel, so a style can have both.
   - Optional style knobs, all off unless a style sets them: lead rests, trills, pad breath, pluck

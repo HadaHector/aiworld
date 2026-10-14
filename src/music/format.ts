@@ -27,6 +27,8 @@ export function effectText(effect: Effect): string {
       return `3${effect.perTick.toFixed(2)}`;
     case "vibrato":
       return `4${effect.depth.toFixed(1)}/${effect.rate}`;
+    case "tremolo":
+      return `7${effect.depth.toFixed(1)}/${effect.rate}`;
     case "volumeSlide":
       return `A${signed(effect.perTick * 64, 2)}`;
     case "noteDelay":

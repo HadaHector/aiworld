@@ -17,6 +17,8 @@ export type Effect =
   | { type: "tonePortamento"; perTick: number }
   /** XM 4xy: depth in semitones, rate in cycles per second. */
   | { type: "vibrato"; depth: number; rate: number }
+  /** XM 7xy: the volume wavers by up to `depth` (0..1), `rate` times a second - bowed tremolo. */
+  | { type: "tremolo"; depth: number; rate: number }
   /** XM Axy: volume per tick. */
   | { type: "volumeSlide"; perTick: number }
   /** XM EDx: the note starts this many ticks into the row. */

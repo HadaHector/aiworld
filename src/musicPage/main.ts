@@ -198,7 +198,15 @@ const synths: Record<string, Instrument> = { ...instruments };
 const EXTRA_LOOKS: Record<string, { name: string; short: string; color: string; gain: number; range: [number, number] }> = {};
 const LIBRARY = "/samples/kiarchive/";
 /** Library folders an instrument may pick from besides its own. */
-const LIBRARY_ALIASES: Record<string, string[]> = { ney: ["flute"], oud: ["guitar"], darbuka: ["frameDrum"], timpani: ["lowDrum"] };
+const LIBRARY_ALIASES: Record<string, string[]> = {
+  ney: ["flute"],
+  oud: ["guitar"],
+  darbuka: ["frameDrum"],
+  timpani: ["lowDrum"],
+  stringsLow: ["bass", "strings"],
+  stringsHigh: ["strings"],
+  pizz: ["harp", "guitar"],
+};
 /** Where single drum strokes for a kit are picked from. */
 const DRUM_FOLDERS = ["darbuka", "frameDrum", "tambourine", "lowDrum"];
 const SOUNDS_KEY = "aiworld.music.sounds";
@@ -206,6 +214,9 @@ const SOUNDS_KEY = "aiworld.music.sounds";
 const DEFAULT_SOUNDS: Record<string, string> = {
   guitar: "guitar/nlgtr01f.xi",
   strings: "strings/ostrs03.xi",
+  // Guesses, not yet picked by ear: low strings for the pad's bottom voice, another orchestra set on top.
+  stringsLow: "bass/lstrs01.xi",
+  stringsHigh: "strings/ostrs09.xi",
   bass: "bass/cbass01.xi",
   flute: "flute/flute09.xi",
   frameDrum: "frameDrum/pandr02.xi",

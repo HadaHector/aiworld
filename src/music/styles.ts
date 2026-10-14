@@ -4,6 +4,12 @@
 
 import type { ModeName } from "./theory";
 
+/**
+ * How the pad plays a section: held chords ("sustain"), bare fifths and octaves ("open"), spread an
+ * octave wider ("wide"), bowed tremolo ("tremolo"), or plucked on the beats ("pizzicato").
+ */
+export type PadTexture = "sustain" | "open" | "wide" | "tremolo" | "pizzicato";
+
 /** A rhythm for one bar, in rows; a negative length is a rest. */
 export type Rhythm = number[];
 
@@ -79,6 +85,23 @@ export interface Style {
   pluckTremolo?: number;
   /** Percussion level per section id (0 none, 1 light, 2 full) when a song has percussion. */
   percussion?: Partial<Record<string, 0 | 1 | 2>>;
+  /**
+   * The pad as three parts that move on their own. Chances: a voice suspending into the next chord,
+   * a voice entering a little late (and fresh entries coming in one by one), a passing note across a
+   * third. `swell`: each voice breathes on its own (instead of padBreath). `textures`: per section id,
+   * one or a list to pick from. `colour`: chances of add9, sus2, sus4 chords. `voices`: an
+   * instrument per voice, low to high; `pizzicato`: the instrument for plucked sections.
+   */
+  pad?: {
+    suspensions?: number;
+    stagger?: number;
+    passing?: number;
+    swell?: boolean;
+    textures?: Partial<Record<string, PadTexture | PadTexture[]>>;
+    colour?: { add9?: number; sus2?: number; sus4?: number };
+    voices?: [string, string, string];
+    pizzicato?: string;
+  };
   /** Volume of each part, 1 by default. */
   mix?: Partial<Record<"lead" | "pluck" | "pad" | "bass" | "drums" | "sparkle" | "wail", number>>;
 }
@@ -166,6 +189,15 @@ export const FOREST: Style = {
   droneChance: 0.35,
   pluckFirstChance: 0.3,
   instruments: { lead: "flute", pluck: "guitar", pad: "strings", bass: "bass", frameDrum: "frameDrum", tambourine: "tambourine", lowDrum: "lowDrum" },
+  pad: {
+    suspensions: 0.35,
+    stagger: 0.25,
+    passing: 0.2,
+    swell: true,
+    textures: { I1: "open", O2: "open", B: ["sustain", "sustain", "pizzicato"] },
+    colour: { sus4: 0.12, sus2: 0.08 },
+    voices: ["stringsLow", "strings", "stringsHigh"],
+  },
 };
 
 const GLADE_FOUR: MeterRules = {
@@ -248,6 +280,14 @@ export const GLADE: Style = {
   padBreath: 0.3,
   pluckShift: 12,
   sparkle: { chance: 0.4, notes: [3, 6] },
+  pad: {
+    suspensions: 0.3,
+    stagger: 0.35,
+    passing: 0.15,
+    swell: true,
+    textures: { I1: "open" },
+    colour: { add9: 0.25, sus2: 0.15 },
+  },
   mix: { lead: 0.85, pluck: 0.8, pad: 1.15, bass: 0.8, drums: 0.6 },
 };
 
@@ -327,6 +367,13 @@ export const DESERT: Style = {
   pluckTremolo: 0.3,
   percussion: { I2: 1, A: 2, "A'": 2, B: 2, "B'": 2, Ar: 2, "Ar'": 2, O1: 1 },
   wail: { name: "Wail", chance: 0.35 },
+  pad: {
+    suspensions: 0.2,
+    stagger: 0.2,
+    swell: true,
+    textures: { I1: "open", I2: "open", B: "tremolo", "B'": ["sustain", "tremolo"] },
+    voices: ["stringsLow", "strings", "stringsHigh"],
+  },
   mix: { lead: 0.9, pad: 0.65, bass: 0.9, drums: 1, wail: 0.8 },
 };
 
@@ -414,6 +461,15 @@ export const SNOW: Style = {
   sparkle: { name: "Snowflakes", chance: 0.22, notes: [3, 5], steps: [2, 3] },
   wail: { name: "Choir", chance: 0.3, slide: [1, 2] },
   climaxShift: [2, 2, 3, 5],
+  pad: {
+    suspensions: 0.45,
+    stagger: 0.35,
+    passing: 0.25,
+    swell: true,
+    textures: { I1: "open", Br: "open", D: "tremolo", "Ar+": "wide", "Ar'+": "wide", B: ["sustain", "pizzicato"] },
+    colour: { add9: 0.25, sus2: 0.12, sus4: 0.08 },
+    voices: ["stringsLow", "strings", "stringsHigh"],
+  },
   drumRoll: 0.6,
   percussion: { "B'": 2, D: 1, "Ar+": 2, "Ar'+": 2 },
   mix: { lead: 0.85, pluck: 0.6, pad: 1.2, bass: 1, drums: 0.8, sparkle: 0.55, wail: 0.7 },

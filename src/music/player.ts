@@ -18,6 +18,8 @@ interface Voice {
   volume: GainNode;
   vibrato?: OscillatorNode;
   instrument: Instrument;
+  /** The instrument's gain times its zone's: what a channel volume of 1 comes to. */
+  level: number;
   root: number;
   start: number;
   stopped: boolean;
@@ -34,6 +36,9 @@ interface ChannelState {
   /** Pitch offset the last tick left (vibrato, arpeggio), to clear when the effect stops. */
   offset: number;
   vibratoPhase: number;
+  tremoloPhase: number;
+  /** The last row wavered the volume, which the next must put back. */
+  trembling: boolean;
 }
 
 interface ChannelOut {
@@ -93,7 +98,7 @@ export class Player {
     this.stop();
     this.song = song;
     this.outs = song.channels.map((c, i) => this.createOut(c.pan, c.reverb, this.gains[i] ?? 1));
-    this.states = song.channels.map(() => ({ volume: 1, pitch: 0, offset: 0, vibratoPhase: 0 }));
+    this.states = song.channels.map(() => ({ volume: 1, pitch: 0, offset: 0, vibratoPhase: 0, tremoloPhase: 0, trembling: false }));
     this.patternIndex = 0;
     this.row = 0;
     this.nextRowTime = this.ctx.currentTime + 0.1;
@@ -219,7 +224,7 @@ export class Player {
     const voice = state.voice;
     if (cell?.volume !== undefined && !started) {
       state.volume = cell.volume;
-      if (voice) voice.volume.gain.linearRampToValueAtTime(state.volume * voice.instrument.gain, tNote + 0.01);
+      if (voice) voice.volume.gain.linearRampToValueAtTime(state.volume * voice.level, tNote + 0.01);
     }
     if (!voice) return;
 
@@ -230,19 +235,29 @@ export class Player {
     const arpeggio = effect("arpeggio");
     const cut = effect("noteCut");
     const retrigger = effect("retrigger");
+    const tremolo = effect("tremolo");
+    if (!tremolo && state.trembling) {
+      state.trembling = false;
+      voice.volume.gain.linearRampToValueAtTime(state.volume * voice.level, t0);
+    }
     const movesPitch = portamento || (tonePorta && state.target !== undefined) || vibrato || arpeggio;
     if (!movesPitch && state.offset !== 0) {
       state.offset = 0;
       voice.source.detune.setValueAtTime(cents(state.pitch, voice), t0);
     }
-    if (!slide && !movesPitch && !cut && !retrigger) return;
+    if (!slide && !movesPitch && !cut && !retrigger && !tremolo) return;
 
     let current = voice;
     for (let k = delay; k < ticksPerRow; k++) {
       const t = t0 + k * tick;
-      if (slide && k > 0) {
-        state.volume = Math.min(1, Math.max(0, state.volume + slide.perTick));
-        current.volume.gain.linearRampToValueAtTime(state.volume * current.instrument.gain, t);
+      if (slide && k > 0) state.volume = Math.min(1, Math.max(0, state.volume + slide.perTick));
+      if (tremolo) {
+        const waver = 1 - tremolo.depth * (0.5 + 0.5 * Math.sin(2 * Math.PI * state.tremoloPhase));
+        state.tremoloPhase += tremolo.rate * tick;
+        state.trembling = true;
+        current.volume.gain.linearRampToValueAtTime(state.volume * waver * current.level, t);
+      } else if (slide && k > 0) {
+        current.volume.gain.linearRampToValueAtTime(state.volume * current.level, t);
       }
       if (cut && k === cut.ticks) {
         state.volume = 0;
@@ -308,9 +323,10 @@ export class Player {
       envelope.gain.setTargetAtTime(1, t, Math.max(0.0005, env.attack / 3));
       if (env.sustain < 1) envelope.gain.setTargetAtTime(env.sustain, t + env.attack, Math.max(0.001, env.decay / 3));
     }
-    gain.gain.setValueAtTime(volume * instrument.gain * (zone.gain ?? 1), t);
+    const level = instrument.gain * (zone.gain ?? 1);
+    gain.gain.setValueAtTime(volume * level, t);
 
-    const voice: Voice = { source, envelope, fade, volume: gain, instrument, root: zone.root, start: t, stopped: false };
+    const voice: Voice = { source, envelope, fade, volume: gain, instrument, level, root: zone.root, start: t, stopped: false };
     if (slideIn) {
       source.detune.setValueAtTime(cents(note + slideIn.semis, voice), t);
       source.detune.linearRampToValueAtTime(cents(note, voice), t + slideIn.ticks * tick);

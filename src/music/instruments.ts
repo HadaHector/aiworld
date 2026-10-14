@@ -143,8 +143,8 @@ function spread(low: number, high: number, step: number, render: (root: number) 
 // ---------------------------------------------------------------------------------------------
 // The synths.
 
-/** Bowed strings: four slightly detuned saws, softened, with a slow uneven bow. Looped. */
-function renderStrings(root: number, seed: number): SampleZone {
+/** Bowed strings: four slightly detuned saws, softened, with a slow uneven bow. Looped. `bright` sets the tone: cellos dark, violins bright. */
+function renderStrings(root: number, seed: number, bright = 5): SampleZone {
   const rng = mulberry32(seed);
   const hz = midiToHz(root);
   const length = Math.floor(3.4 * SAMPLE_RATE);
@@ -161,7 +161,7 @@ function renderStrings(root: number, seed: number): SampleZone {
       phase = (phase + step) % 1;
     }
   }
-  const cutoff = Math.min(hz * 5, 4200);
+  const cutoff = Math.min(hz * bright, 4200);
   onePoleLowpass(data, cutoff);
   onePoleLowpass(data, cutoff * 1.5);
   normalize(data, 0.8);
@@ -254,6 +254,8 @@ interface PluckedString {
 
 const GUT: PluckedString = { pick: 0.2, bright: 0.5, loss: 0.9965, lowpass: 5000, seconds: 3 };
 const HARP: PluckedString = { pick: 0.12, bright: 0.8, loss: 0.9982, lowpass: 7500, seconds: 4.5 };
+/** Pizzicato: a bowed string plucked with the finger, dull and short. */
+const PIZZ: PluckedString = { pick: 0.3, bright: 0.45, loss: 0.988, lowpass: 2800, seconds: 1.2 };
 /** Oud: picked with a plectrum near the bridge, no frets, a short dark ring. */
 const OUD: PluckedString = { pick: 0.08, bright: 0.7, loss: 0.9945, lowpass: 4200, seconds: 2.2 };
 
@@ -434,6 +436,38 @@ export function createInstruments(): Record<string, Instrument> {
       gain: 0.32,
       range: [36, 81],
       color: "#7fa7d9",
+    },
+    {
+      id: "stringsLow",
+      name: "Low strings",
+      short: "sl",
+      zones: spread(28, 72, 6, (r) => renderStrings(r, 1500 + r, 3.5)),
+      envelope: { attack: 0.6, decay: 0.6, sustain: 0.85, release: 1.5 },
+      autoVibrato: { depth: 5, rate: 4.3, delay: 0.7 },
+      gain: 0.32,
+      range: [36, 67],
+      color: "#6f97cc",
+    },
+    {
+      id: "stringsHigh",
+      name: "High strings",
+      short: "sh",
+      zones: spread(48, 96, 6, (r) => renderStrings(r, 1700 + r, 7)),
+      envelope: { attack: 0.45, decay: 0.6, sustain: 0.85, release: 1.3 },
+      autoVibrato: { depth: 8, rate: 5.2, delay: 0.5 },
+      gain: 0.3,
+      range: [55, 91],
+      color: "#9cc0e8",
+    },
+    {
+      id: "pizz",
+      name: "Pizzicato",
+      short: "pz",
+      zones: spread(36, 91, 5, (r) => renderPluck(r, 1900 + r, PIZZ)),
+      envelope: { attack: 0.002, decay: 0, sustain: 1, release: 0.25 },
+      gain: 0.45,
+      range: [36, 84],
+      color: "#a7b8d6",
     },
     {
       id: "bass",
