@@ -12,6 +12,13 @@ import type { ModeName } from "./theory";
  */
 export type PadTexture = "sustain" | "open" | "wide" | "tremolo" | "pizzicato" | "chorale";
 
+/** Another instrument that may take a theme's lead, `shift` semitones from the usual. */
+export interface LeadAlternate {
+  instrument: string;
+  chance: number;
+  shift?: number;
+}
+
 /** A rhythm for one bar, in rows; a negative length is a rest. */
 export type Rhythm = number[];
 
@@ -93,7 +100,9 @@ export interface Style {
   /** Chance a melody note slides in from the step above or below. */
   slideChance?: number;
   /** Chance a lead phrase is played by another instrument instead, `shift` semitones from the usual. */
-  leadAlternate?: { instrument: string; chance: number; shift?: number };
+  leadAlternate?: LeadAlternate | LeadAlternate[];
+  /** Call and response: the second phrase of every theme (A', B'...) is sung by this instead. */
+  answer?: { instrument: string; shift?: number };
   /** Chance a lead phrase glides from note to note where they join, like a musical saw. */
   glideChance?: number;
   /** Chance a long lead note sags flat as it fades. */
@@ -699,7 +708,10 @@ export const TAVERN: Style = {
   droneChance: 0.15,
   pluckFirstChance: 0.65,
   instruments: { lead: "violin", pluck: "guitar", pad: "accordion", bass: "bass", frameDrum: "frameDrum", tambourine: "tambourine", lowDrum: "lowDrum", clap: "clap" },
-  leadAlternate: { instrument: "flute", chance: 0.35, shift: 0 },
+  leadAlternate: [
+    { instrument: "flute", chance: 0.3 },
+    { instrument: "guitar", chance: 0.25, shift: -12 },
+  ],
   leadRestChance: 0.12,
   claps: { chance: 0.45 },
   trillChance: 0.25,
@@ -960,4 +972,177 @@ export const JUNGLE: Style = {
   mix: { lead: 0.9, pluck: 0.75, pad: 0.6, bass: 0.9, drums: 0.85, sparkle: 0.6, wail: 0.6 },
 };
 
-export const STYLES: Style[] = [FOREST, GLADE, DESERT, SNOW, SWAMP, TAVERN, HOLY, EPIC, JUNGLE];
+const NORDIC_FOUR: MeterRules = {
+  beats: 4,
+  rhythms: [
+    [8, 8],
+    [6, 2, 8],
+    [4, 4, 8],
+    [12, 4],
+    [4, 4, 4, 4],
+    [-4, 4, 8],
+  ],
+  calmRhythms: [[16], [8, 8], [12, 4]],
+  cadenceRhythms: [[16], [4, 12], [8, 8]],
+  plucks: [
+    // Kantele: open strings ringing in slow broken chords.
+    [[0, 0], [4, 2], [8, 3], [12, 2]],
+    [[0, 0], [2, 2], [4, 3], [6, 4], [8, 3], [12, 2]],
+    [[0, 0], [8, 3]],
+  ],
+  // The big frame drum: a ritual beat, a heartbeat, a march.
+  frameDrum: [
+    [[0, "dum"], [8, "dum"]],
+    [[0, "dum"], [6, "tek"], [8, "dum"]],
+    [[0, "dum"], [4, "dum"], [8, "dum"], [12, "dum"]],
+  ],
+  tambourine: [[]],
+};
+
+const POLSKA: MeterRules = {
+  beats: 3,
+  name: "3/4 polska",
+  rhythms: [
+    [6, 2, 4],
+    [4, 4, 4],
+    [2, 2, 4, 4],
+    [6, 6],
+    [8, 4],
+  ],
+  calmRhythms: [[12], [8, 4]],
+  cadenceRhythms: [[12], [4, 8]],
+  plucks: [
+    [[0, 0], [4, 2], [8, 3]],
+    [[0, 0], [2, 2], [4, 3], [8, 2]],
+  ],
+  // The polska leans on the first and the third beat.
+  frameDrum: [[[0, "dum"], [8, "dum"]], [[0, "dum"], [6, "tek"], [8, "dum"]]],
+  tambourine: [[]],
+};
+
+/**
+ * The north: mountains and cold heights, a darker, older cousin of the epic. A fiddle (now and then
+ * a lur-like horn) over a deep men's choir chanting on drones of bare fifths, a big frame drum
+ * beating out a ritual, a kantele ringing, high kulning calls sliding down the valley, wind, and
+ * now and then a polska in three.
+ */
+export const NORDIC: Style = {
+  id: "nordic",
+  name: "Nordic - fiddle, chant and drum",
+  modes: [
+    ["aeolian", 3],
+    ["dorian", 3],
+    ["mixolydian", 1],
+  ],
+  tonics: [0, 2, 4, 5, 7, 9],
+  bpm: [60, 80],
+  meters: [
+    [NORDIC_FOUR, 3],
+    [POLSKA, 1],
+  ],
+  rowsPerBeat: 4,
+  ticksPerRow: 6,
+  chordWeights: { 0: 4, 2: 1.8, 3: 2, 4: 1, 5: 2.4, 6: 2.6 },
+  forms: [
+    [["I1", "I2", "A", "A'", "B", "B'", "Br", "D", "Ar+", "Ar'+", "O1", "O2"], 2],
+    [["I1", "A", "A'", "B", "B'", "Ar", "Ar'", "Br", "O1", "O2"], 1],
+  ],
+  percussionChance: 0.85,
+  droneChance: 0.85,
+  pluckFirstChance: 0.35,
+  instruments: { lead: "violin", pluck: "harp", pad: "choirLow", bass: "stringsLow", frameDrum: "taiko", tambourine: "", lowDrum: "timpani", wail: "choir", wind: "wind" },
+  leadAlternate: { instrument: "horn", chance: 0.25, shift: -12 },
+  slideChance: 0.15,
+  trillChance: 0.15,
+  wail: { name: "Kulning", chance: 0.35, slide: [5, 7] },
+  wind: { pitch: 70, level: 0.24, drift: 7, chance: 0.08, bars: [3, 6] },
+  climaxShift: [2],
+  drumRoll: 0.5,
+  percussion: { I2: 1, A: 1, "A'": 2, B: 2, "B'": 2, D: 2, Ar: 2, "Ar'": 2, "Ar+": 2, "Ar'+": 2 },
+  pad: {
+    suspensions: 0.3,
+    stagger: 0.4,
+    swell: true,
+    textures: { I1: "open", I2: "open", A: ["open", "sustain"], Br: "open", D: "tremolo", "Ar+": "wide", "Ar'+": "wide" },
+    voices: ["stringsLow", "choirLow", "choirLow"],
+  },
+  mix: { lead: 0.9, pluck: 0.55, pad: 1.1, bass: 1, drums: 0.9, wail: 0.6, wind: 0.85 },
+};
+
+const SAVANNA_FOUR: MeterRules = {
+  beats: 4,
+  rhythms: [
+    [4, 4, 8],
+    [2, 2, 4, 8],
+    [6, 2, 4, 4],
+    [4, 2, 2, 4, 4],
+    [8, 4, 4],
+    [-4, 4, 4, 4],
+  ],
+  calmRhythms: [[8, 8], [12, 4], [-4, 12]],
+  cadenceRhythms: [[4, 12], [16], [2, 2, 12]],
+  plucks: [
+    // Balafon: the tresillo, three and three and two, and a busier weave.
+    [[0, 0], [3, 2], [6, 3], [8, 0], [11, 2], [14, 4]],
+    [[0, 0], [2, 2], [4, 0], [6, 3], [8, 0], [10, 2], [12, 4], [14, 3]],
+    [[0, 3], [3, 2], [6, 0], [10, 2], [12, 3]],
+  ],
+  // Djembe: the bass in the middle of the skin, tones and slaps at the rim.
+  frameDrum: [
+    [[0, "dum"], [3, "tek"], [6, "tek"], [8, "dum"], [10, "tek"], [12, "tek"], [14, "tek"]],
+    [[0, "dum"], [4, "tek"], [6, "dum"], [8, "dum"], [12, "tek"], [14, "tek"]],
+    [[0, "dum"], [2, "tek"], [3, "tek"], [8, "dum"], [11, "tek"], [12, "tek"]],
+  ],
+  // Shekere: the gourd and its net of beads on the off-beats.
+  tambourine: [
+    [[2, "shake"], [4, "hit"], [6, "shake"], [10, "shake"], [12, "hit"], [14, "shake"]],
+    [[0, "hit"], [2, "shake"], [4, "shake"], [6, "shake"], [8, "hit"], [10, "shake"], [12, "shake"], [14, "shake"]],
+  ],
+};
+
+/**
+ * The savanna: call and response under a wide sky. A lead voice sings each theme and the group
+ * answers it; a balafon on the tresillo, a bass marimba on every beat, djembe and shekere, a
+ * kalimba taking some themes, birds, and a warm wind.
+ */
+export const SAVANNA: Style = {
+  id: "savanna",
+  name: "Savanna - call and response",
+  modes: [
+    ["mixolydian", 3],
+    ["dorian", 2],
+    ["ionian", 2],
+  ],
+  tonics: [0, 2, 4, 5, 7, 9],
+  bpm: [96, 116],
+  meters: [[SAVANNA_FOUR, 1]],
+  rowsPerBeat: 4,
+  ticksPerRow: 6,
+  chordWeights: { 0: 5, 3: 3, 4: 2.5, 6: 1.5, 1: 1 },
+  forms: [
+    [["I1", "I2", "A", "A'", "A", "A'", "B", "B'", "B", "B'", "Br", "Ar", "Ar'", "O1", "O2"], 2],
+    [["I1", "A", "A'", "B", "B'", "A", "A'", "Br", "Ar+", "Ar'+", "O1", "O2"], 1],
+  ],
+  percussionChance: 0.95,
+  droneChance: 0.3,
+  pluckFirstChance: 0.4,
+  instruments: { lead: "choirLow", pluck: "marimba", pad: "choir", bass: "marimbaBass", frameDrum: "darbuka", tambourine: "shaker", lowDrum: "lowDrum", sparkle: "bird", wind: "wind" },
+  leadCenter: 57,
+  answer: { instrument: "choir" },
+  leadAlternate: { instrument: "musicBox", chance: 0.3, shift: 12 },
+  slideChance: 0.15,
+  bassBeats: true,
+  sparkle: { name: "Birds", chance: 0.2, notes: [2, 3], steps: [1, 2] },
+  wind: { pitch: 62, level: 0.2, drift: 5, chance: 0.05, bars: [3, 5] },
+  climaxShift: [2],
+  drumRoll: 0.3,
+  percussion: { I2: 1, A: 2, "A'": 2, B: 2, "B'": 2, Br: 2, Ar: 2, "Ar'": 2, "Ar+": 2, "Ar'+": 2, O1: 1 },
+  pad: {
+    stagger: 0.3,
+    swell: true,
+    textures: { I1: "open", Br: "open" },
+  },
+  mix: { lead: 0.95, pluck: 0.75, pad: 0.55, bass: 0.9, drums: 0.9, sparkle: 0.5, wind: 0.7 },
+};
+
+export const STYLES: Style[] = [FOREST, GLADE, DESERT, SNOW, SWAMP, TAVERN, HOLY, EPIC, JUNGLE, NORDIC, SAVANNA];

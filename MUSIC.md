@@ -254,6 +254,17 @@ the forest style using synth stand-ins.
     - Log drum and wood block on the 12/8 bell pattern, shakers on the eighths.
     - A breathy bamboo flute leads (the marimba takes some themes), with far-off flute calls.
     - Birds chirp high up (new synth), and a soft choir hangs underneath like mist.
+  - **Nordic:** mountains, an older and darker cousin of epic.
+    - A fiddle (sometimes a lur-like horn) over a deep men's choir chanting on bare-fifth drones.
+    - A big frame drum beats a ritual, and a kantele-like harp rings.
+    - Kulning calls slide down from far off, with wind.
+    - Now and then a polska in 3/4.
+  - **Savanna:** call and response (`answer`). A lead voice (a man's, or a kalimba for some
+    themes) sings each theme, and the group choir answers it in the second phrase (A', B').
+    Under them, a balafon on the 3-3-2 tresillo, a bass marimba on every beat, djembe-style drums
+    and shekere, with birds and a warm wind.
+  - **Several alternate leads:** `leadAlternate` can be a list, chosen with one draw per theme.
+    The tavern now hands themes to the whistle (30%) or a guitar an octave down (25%).
   - **Sections beyond the A and B themes**, for any style that lists them in its forms:
     - **C:** a third theme on a motif of its own, starting away from the home chord.
     - **D:** a development, carrying the motif down a chain of chords.

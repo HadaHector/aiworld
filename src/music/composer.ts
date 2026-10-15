@@ -7,7 +7,7 @@
 
 import { deriveSeed, mulberry32 } from "../world/rng";
 import type { Cell, Channel, Effect, Pattern, Song } from "./song";
-import type { MeterRules, PadTexture, Rhythm, Style } from "./styles";
+import type { LeadAlternate, MeterRules, PadTexture, Rhythm, Style } from "./styles";
 import { chordName, degreeSemitones, degreeToMidi, mod, MODES, nearestTone, pitchClassName, triadDegrees, triadQuality, type ModeName } from "./theory";
 
 type Rng = () => number;
@@ -259,12 +259,21 @@ export function composeSong(style: Style, placeSeed: number, visitSeed: number):
    * Which instrument plays a theme's lead, chosen once per theme: A and A' and their returns (and
    * the outro, which quotes A) share one, B and B' another, so a statement and its answer match.
    */
-  const alternates = new Map<string, Style["leadAlternate"]>();
-  const alternateFor = (id: string): Style["leadAlternate"] => {
+  const alternates = new Map<string, LeadAlternate | undefined>();
+  const alternateFor = (id: string): LeadAlternate | undefined => {
     const alternate = style.leadAlternate;
     if (!alternate) return undefined;
     const theme = id.startsWith("A") || id === "O1" ? "A" : id.startsWith("B") ? "B" : id;
-    if (!alternates.has(theme)) alternates.set(theme, visit() < alternate.chance ? alternate : undefined);
+    if (!alternates.has(theme)) {
+      if (Array.isArray(alternate)) {
+        // Several: one draw, each taking its share of chance in turn.
+        const r = visit();
+        let share = 0;
+        alternates.set(theme, alternate.find((a) => r < (share += a.chance)));
+      } else {
+        alternates.set(theme, visit() < alternate.chance ? alternate : undefined);
+      }
+    }
     return alternates.get(theme);
   };
   /** A chord's three tones, sometimes coloured: an added ninth for the fifth, or a sus2 or sus4 for the third. */
@@ -352,8 +361,11 @@ export function composeSong(style: Style, placeSeed: number, visitSeed: number):
       // Now and then the phrase goes to another instrument, or glides from note to note.
       const alternate = alternateFor(id);
       const glide = !!style.glideChance && visit() < style.glideChance;
-      const leadInstrument = alternate?.instrument ?? style.instruments.lead;
-      const pitchOf = (degree: number): number => degreeToMidi(key.mode, leadTonic, degree) + (alternate?.shift ?? 0);
+      // Call and response: the second phrase of a theme is the group's answer.
+      const answering = style.answer && id.endsWith("'") ? style.answer : undefined;
+      const voice = answering ?? alternate;
+      const leadInstrument = voice?.instrument ?? style.instruments.lead;
+      const pitchOf = (degree: number): number => degreeToMidi(key.mode, leadTonic, degree) + (voice?.shift ?? 0);
       const joined = (a: MelodyNote | undefined, b: MelodyNote | undefined): boolean => !!a && !!b && a.row + a.dur === b.row;
       melody.forEach((n, i) => {
         const row = start + n.row;
@@ -372,7 +384,7 @@ export function composeSong(style: Style, placeSeed: number, visitSeed: number):
         }
         // A trill: the note and the step above it, a tick apart, as birds do.
         if (style.trillChance && n.dur >= 6 && visit() < style.trillChance) {
-          const x = degreeToMidi(key.mode, leadTonic, n.degree + 1) - note;
+          const x = pitchOf(n.degree + 1) - note;
           for (let r = 1; r <= 3; r++) put(row + r, LEAD, { effects: [{ type: "arpeggio", x, y: 0 }] });
         }
         if (n.dur >= 8) slideRows(LEAD, row + 4, n.dur - 4, -volume * (n.fade ?? 0.3));
