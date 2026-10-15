@@ -97,6 +97,8 @@ function normalize(data: Float32Array, peak: number): void {
  * last samples of the loop become the samples just before loopStart.
  */
 function crossfadeLoop(data: Float32Array, start: number, end: number, fade: number): void {
+  // It blends in what comes before the loop's start, so it can be no longer than that.
+  fade = Math.min(fade, start, end - start);
   for (let i = 0; i < fade; i++) {
     const t = i / fade;
     const a = Math.sqrt(1 - t);
@@ -256,6 +258,8 @@ interface PluckedString {
 
 const GUT: PluckedString = { pick: 0.2, bright: 0.5, loss: 0.9965, lowpass: 5000, seconds: 3 };
 const HARP: PluckedString = { pick: 0.12, bright: 0.8, loss: 0.9982, lowpass: 7500, seconds: 4.5 };
+/** Mandolin: paired steel strings picked hard, bright and quick to fade. */
+const MANDOLIN: PluckedString = { pick: 0.12, bright: 0.85, loss: 0.993, lowpass: 7000, seconds: 1.4 };
 /** Pizzicato: a bowed string plucked with the finger, dull and short. */
 const PIZZ: PluckedString = { pick: 0.3, bright: 0.45, loss: 0.988, lowpass: 2800, seconds: 1.2 };
 /** Oud: picked with a plectrum near the bridge, no frets, a short dark ring. */
@@ -467,6 +471,32 @@ function renderBird(root: number, seed: number): SampleZone {
   return zone(data, root, root, root);
 }
 
+/**
+ * Bagpipe drones and chanter: a buzzing reed, every harmonic there and the middle ones pushed up
+ * (the nasal edge), steady as only bagpipes are. Looped.
+ */
+function renderPipes(root: number, seed: number): SampleZone {
+  const rng = mulberry32(seed);
+  const hz = midiToHz(root);
+  const length = Math.floor(2.4 * SAMPLE_RATE);
+  const data = new Float32Array(length);
+  const table = wavetable((h) => (h >= 3 && h <= 9 ? 1.6 : 1) / h, hz * 1.01);
+  for (const cents of [-2, 2]) {
+    const step = (hz * 2 ** (cents / 1200)) / SAMPLE_RATE;
+    let phase = rng();
+    for (let i = 0; i < length; i++) {
+      data[i] += readTable(table, phase);
+      phase = (phase + step) % 1;
+    }
+  }
+  onePoleLowpass(data, Math.min(hz * 12, 6000));
+  normalize(data, 0.8);
+  const start = Math.floor(0.3 * SAMPLE_RATE);
+  const end = Math.floor(2.3 * SAMPLE_RATE);
+  crossfadeLoop(data, start, end, Math.floor(0.25 * SAMPLE_RATE));
+  return zone(data, root, root, root, { start: start / SAMPLE_RATE, end: end / SAMPLE_RATE });
+}
+
 /** A bell or celesta: two-operator FM at an inharmonic ratio, bright at the strike, ringing long. */
 function renderBell(root: number): SampleZone {
   const hz = midiToHz(root);
@@ -594,6 +624,20 @@ function shaker(seed: number): SampleZone[] {
   return [zone(shake, 60, 60, 60), zone(hit, 62, 62, 62)];
 }
 
+/** Castanets: two shells of hard wood clapping - a single click, and a quick roll of them. */
+function castanets(seed: number): SampleZone[] {
+  const click = (s: number, at: number, level: number, length: number): Float32Array => {
+    const out = new Float32Array(Math.floor(length * SAMPLE_RATE));
+    const body = mix([render(0.08, (t) => Math.sin(2 * Math.PI * 2300 * t) * Math.exp(-t / 0.012)), 1], [noise(s, 0.08, 0.006, 1500, 9000), 0.8]);
+    const offset = Math.floor(at * SAMPLE_RATE);
+    for (let i = 0; i < body.length && offset + i < out.length; i++) out[offset + i] += body[i] * level;
+    return out;
+  };
+  const one = click(seed, 0, 1, 0.12);
+  const roll = mix(...[0, 0.035, 0.07, 0.1].map((at, i): [Float32Array, number] => [click(seed + i, at, 0.6 + 0.15 * i, 0.25), 1]));
+  return [zone(mix([one, 1]), 60, 60, 60), zone(roll, 62, 62, 62)];
+}
+
 function lowDrum(seed: number): SampleZone[] {
   const boom = mix([thump(78, 46, 0.09, 0.5, 2), 1], [noise(seed, 2, 0.02, 40, 400), 0.4]);
   return [zone(boom, 60, 60, 60)];
@@ -657,6 +701,26 @@ export function createInstruments(): Record<string, Instrument> {
       gain: 0.36,
       range: [55, 96],
       color: "#cfa0a0",
+    },
+    {
+      id: "mandolin",
+      name: "Mandolin",
+      short: "md",
+      zones: spread(48, 96, 5, (r) => renderPluck(r, 26000 + r, MANDOLIN)),
+      envelope: { attack: 0.001, decay: 0, sustain: 1, release: 0.25 },
+      gain: 0.42,
+      range: [55, 91],
+      color: "#e0b070",
+    },
+    {
+      id: "pipes",
+      name: "Pipes",
+      short: "pp",
+      zones: spread(33, 84, 6, (r) => renderPipes(r, 27000 + r)),
+      envelope: { attack: 0.15, decay: 0.2, sustain: 0.95, release: 0.6 },
+      gain: 0.22,
+      range: [36, 79],
+      color: "#b0a070",
     },
     {
       id: "pizz",
@@ -942,6 +1006,17 @@ export function createInstruments(): Record<string, Instrument> {
       range: [60, 62],
       keys: { shake: 60, hit: 62 },
       color: "#d8c888",
+    },
+    {
+      id: "castanets",
+      name: "Castanets",
+      short: "cn",
+      zones: castanets(28000),
+      envelope: { attack: 0.001, decay: 0, sustain: 1, release: 0.1 },
+      gain: 0.35,
+      range: [60, 62],
+      keys: { dum: 60, tek: 62 },
+      color: "#c87850",
     },
     {
       id: "frameDrum",

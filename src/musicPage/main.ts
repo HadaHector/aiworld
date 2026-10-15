@@ -263,12 +263,15 @@ const LIBRARY_ALIASES: Record<string, string[]> = {
   marimbaBass: ["marimba", "musicBox"],
   lowDrum: ["congas", "darbuka", "knock"],
   bird: ["nature"],
-  shaker: ["tambourine"],
+  shaker: ["shakers", "tambourine"],
+  mandolin: ["oud", "guitar"],
+  pipes: ["accordion", "clarinet"],
+  castanets: ["knock", "shakers"],
   taiko: ["lowDrum", "frameDrum"],
   choirLow: ["choir"],
 };
 /** Where single drum strokes for a kit are picked from. */
-const DRUM_FOLDERS = ["darbuka", "frameDrum", "tambourine", "lowDrum", "knock", "congas", "claps"];
+const DRUM_FOLDERS = ["darbuka", "frameDrum", "tambourine", "lowDrum", "knock", "congas", "shakers", "claps"];
 /** Picks are kept per style: { styleId: { instrument or "id:stroke": library path or "" } }. */
 const SOUNDS_KEY = "aiworld.music.soundsByStyle";
 /** Before that, one set of picks for every style: it becomes each style's starting point. */

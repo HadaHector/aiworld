@@ -117,8 +117,6 @@ export interface Style {
   bassBeats?: boolean;
   /** Chance a long lead note wavers with vibrato after its start. */
   vibratoChance?: number;
-  /** Chance a plucked note with room after it is tremolo-picked until the next. */
-  pluckTremolo?: number;
   /** Percussion level per section id (0 none, 1 light, 2 full) when a song has percussion. */
   percussion?: Partial<Record<string, 0 | 1 | 2>>;
   /**
@@ -364,7 +362,7 @@ const DESERT_FOUR: MeterRules = {
 
 /**
  * The desert: Arabic maqam colours, after Aladdin, Dune and Diablo II's second act. Hijaz and the
- * double harmonic over a drone, an oud ostinato with tremolo, a ney that slides into its notes and
+ * double harmonic over a drone, an oud ostinato, a ney that slides into its notes and
  * wavers, darbuka and riq on maqsum and baladi, deep drums, and now and then a voice wailing in
  * the distance.
  */
@@ -400,7 +398,6 @@ export const DESERT: Style = {
   instruments: { lead: "ney", pluck: "oud", pad: "strings", bass: "bass", frameDrum: "darbuka", tambourine: "tambourine", lowDrum: "lowDrum", wail: "choir" },
   slideChance: 0.3,
   vibratoChance: 0.5,
-  pluckTremolo: 0.3,
   percussion: { I2: 1, A: 2, "A'": 2, B: 2, "B'": 2, Ar: 2, "Ar'": 2, O1: 1 },
   wail: { name: "Wail", chance: 0.35 },
   pad: {
@@ -1145,4 +1142,194 @@ export const SAVANNA: Style = {
   mix: { lead: 0.95, pluck: 0.75, pad: 0.55, bass: 0.9, drums: 0.9, sparkle: 0.5, wind: 0.7 },
 };
 
-export const STYLES: Style[] = [FOREST, GLADE, DESERT, SNOW, SWAMP, TAVERN, HOLY, EPIC, JUNGLE, NORDIC, SAVANNA];
+const MED_WALTZ: MeterRules = {
+  beats: 3,
+  rhythms: [
+    [4, 2, 2, 4],
+    [6, 2, 4],
+    [4, 4, 4],
+    [2, 2, 2, 2, 4],
+    [8, 4],
+    [-4, 4, 4],
+  ],
+  calmRhythms: [[12], [8, 4], [6, 6]],
+  cadenceRhythms: [[12], [4, 8], [2, 2, 8]],
+  plucks: [
+    // Nylon guitar: the bass, then the chord on two and three.
+    [[0, 0], [4, 2], [6, 3], [8, 2], [10, 3]],
+    [[0, 0], [2, 2], [4, 3], [6, 1], [8, 2], [10, 3]],
+    [[0, 0], [4, 1], [8, 2]],
+  ],
+  // Castanets: clicks on the beats, a roll (tek) into the next bar.
+  frameDrum: [
+    [[0, "dum"], [4, "dum"], [8, "dum"]],
+    [[0, "dum"], [4, "dum"], [6, "dum"], [8, "tek"]],
+    [[0, "dum"], [8, "tek"]],
+  ],
+  tambourine: [[[4, "shake"], [8, "shake"]], [[0, "hit"], [6, "shake"]]],
+};
+
+const MED_FOUR: MeterRules = {
+  beats: 4,
+  rhythms: [
+    [4, 2, 2, 8],
+    [6, 2, 4, 4],
+    [4, 4, 4, 4],
+    [3, 3, 2, 8],
+    [8, 4, 4],
+    [-4, 4, 4, 4],
+  ],
+  calmRhythms: [[16], [8, 8], [12, 4]],
+  cadenceRhythms: [[16], [4, 12], [2, 2, 12]],
+  plucks: [
+    // A light rumba strum: three and three and two.
+    [[0, 0], [3, 2], [6, 3], [8, 0], [11, 2], [14, 3]],
+    [[0, 0], [2, 2], [4, 3], [6, 2], [8, 1], [10, 2], [12, 3], [14, 2]],
+  ],
+  frameDrum: [
+    [[0, "dum"], [3, "dum"], [6, "dum"], [8, "dum"], [12, "tek"]],
+    [[0, "dum"], [4, "dum"], [8, "dum"], [12, "dum"], [14, "tek"]],
+  ],
+  tambourine: [[[4, "shake"], [12, "shake"]], [[2, "shake"], [6, "shake"], [10, "shake"], [14, "shake"]]],
+};
+
+/**
+ * Scrubland by the sea: warm and sunny, with a Spanish or Greek turn now and then. A mandolin sings
+ * (an accordion or a clarinet takes some themes), a nylon guitar strums a waltz
+ * or a light rumba, the accordion holds the chords softly, castanets and a tambourine click along,
+ * and the minor keys walk the Andalusian way down, i VII VI V.
+ */
+export const MEDITERRANEAN: Style = {
+  id: "mediterranean",
+  name: "Mediterranean - mandolin and guitar in the sun",
+  modes: [
+    ["ionian", 2],
+    ["mixolydian", 2],
+    ["harmonicMinor", 2],
+    ["aeolian", 1],
+    ["hijaz", 1],
+  ],
+  tonics: [0, 2, 4, 5, 7, 9],
+  bpm: [92, 120],
+  meters: [
+    [MED_WALTZ, 2],
+    [MED_FOUR, 1],
+  ],
+  rowsPerBeat: 4,
+  ticksPerRow: 6,
+  chordWeights: { 0: 4, 1: 1, 3: 2, 4: 2.5, 5: 2, 6: 2.2 },
+  cadences: {
+    half: [[4, 3], [6, 1], [3, 1]],
+    leading: [[4, 3], [6, 1.5], [3, 1]],
+    contrast: [[5, 1.5], [3, 1.5], [6, 1]],
+    back: [[4, 2], [6, 1]],
+  },
+  forms: [
+    [["I1", "A", "A'", "B", "B'", "A", "A'", "B", "B'", "Ar", "Ar'", "O1", "O2"], 2],
+    [["I1", "I2", "A", "A'", "B", "B'", "Br", "A", "A'", "B", "B'", "Ar", "Ar'+", "O1", "O2"], 1],
+  ],
+  percussionChance: 0.8,
+  droneChance: 0.1,
+  pluckFirstChance: 0.7,
+  instruments: { lead: "mandolin", pluck: "guitar", pad: "accordion", bass: "bass", frameDrum: "castanets", tambourine: "tambourine", lowDrum: "lowDrum" },
+  leadAlternate: [
+    { instrument: "accordion", chance: 0.2 },
+    { instrument: "clarinet", chance: 0.15, shift: -12 },
+  ],
+  slideChance: 0.1,
+  bassBeats: true,
+  climaxShift: [2],
+  percussion: { A: 1, "A'": 2, B: 2, "B'": 2, Br: 2, Ar: 2, "Ar'": 2, "Ar'+": 2, O1: 1 },
+  pad: { stagger: 0.2, swell: true, textures: { I1: "open", Br: "open" }, colour: { sus4: 0.1 } },
+  mix: { lead: 0.9, pluck: 0.9, pad: 0.5, bass: 0.85, drums: 0.8 },
+};
+
+const AIR_THREE: MeterRules = {
+  beats: 3,
+  rhythms: [
+    [6, 2, 4],
+    [8, 4],
+    [4, 4, 4],
+    [12],
+    [4, 2, 2, 4],
+    [-4, 8],
+  ],
+  calmRhythms: [[12], [8, 4], [-4, 8]],
+  cadenceRhythms: [[12], [4, 8], [2, 2, 8]],
+  plucks: [
+    // Celtic harp: slow broken chords, rising.
+    [[0, 0], [4, 2], [8, 3]],
+    [[0, 0], [2, 1], [4, 2], [6, 3], [8, 4]],
+    [[0, 0], [8, 2]],
+  ],
+  frameDrum: [[[0, "dum"], [8, "tek"]], [[0, "dum"], [4, "tek"], [8, "tek"]]],
+  tambourine: [[]],
+};
+
+const AIR_FOUR: MeterRules = {
+  beats: 4,
+  rhythms: [
+    [8, 8],
+    [6, 2, 8],
+    [4, 4, 8],
+    [12, 4],
+    [-4, 4, 8],
+  ],
+  calmRhythms: [[16], [8, 8], [-8, 8]],
+  cadenceRhythms: [[16], [4, 12], [8, 8]],
+  plucks: [
+    [[0, 0], [4, 2], [8, 3], [12, 2]],
+    [[0, 0], [8, 3]],
+  ],
+  frameDrum: [[[0, "dum"], [8, "dum"], [12, "tek"]], [[0, "dum"], [6, "tek"], [8, "dum"]]],
+  tambourine: [[]],
+};
+
+/**
+ * The highlands: a lonely air on an open moor. A whistle (a fiddle for some themes) with cuts,
+ * slides and the odd trill, over bagpipe drones on bare fifths and a drone bass, a Celtic harp,
+ * a bodhran only when it fills out, long silences in the tune, and the wind across the heather.
+ */
+export const HIGHLANDS: Style = {
+  id: "highlands",
+  name: "Highlands - a lonely air over drones",
+  modes: [
+    ["mixolydian", 3],
+    ["dorian", 2],
+    ["ionian", 1],
+    ["aeolian", 1],
+  ],
+  tonics: [0, 2, 7, 9],
+  bpm: [54, 70],
+  meters: [
+    [AIR_THREE, 2],
+    [AIR_FOUR, 1],
+  ],
+  rowsPerBeat: 4,
+  ticksPerRow: 6,
+  chordWeights: { 0: 4, 3: 2, 4: 1.5, 5: 1.5, 6: 2.2 },
+  forms: [
+    [["I1", "I2", "A", "A'", "B", "B'", "Br", "Ar", "Ar'", "O1", "O2"], 2],
+    [["I1", "A", "A'", "B", "B'", "Ar'", "O1", "O2"], 1],
+  ],
+  percussionChance: 0.4,
+  droneChance: 1,
+  pluckFirstChance: 0.3,
+  instruments: { lead: "flute", pluck: "harp", pad: "pipes", bass: "pipes", frameDrum: "frameDrum", tambourine: "", lowDrum: "lowDrum", wind: "wind" },
+  leadAlternate: { instrument: "violin", chance: 0.35 },
+  leadRestChance: 0.2,
+  slideChance: 0.25,
+  trillChance: 0.2,
+  vibratoChance: 0.15,
+  wind: { pitch: 64, level: 0.25, drift: 6, chance: 0.07, bars: [3, 6] },
+  percussion: { B: 1, "B'": 2, "Ar'": 1 },
+  pad: {
+    stagger: 0.3,
+    swell: true,
+    textures: { I1: "open", I2: "open", A: "open", "A'": "open", B: "sustain", "B'": "sustain", Br: "open", Ar: "open", "Ar'": "open", O1: "open", O2: "open" },
+    voices: ["stringsLow", "pipes", "pipes"],
+  },
+  mix: { lead: 0.9, pluck: 0.6, pad: 0.75, bass: 0.6, drums: 0.7, wind: 0.85 },
+};
+
+export const STYLES: Style[] = [FOREST, GLADE, DESERT, SNOW, SWAMP, TAVERN, HOLY, EPIC, JUNGLE, NORDIC, SAVANNA, MEDITERRANEAN, HIGHLANDS];

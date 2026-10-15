@@ -582,11 +582,7 @@ export function composeSong(style: Style, placeSeed: number, visitSeed: number):
         const tones = pluckTones(key, c).map((t) => t + (style.pluckShift ?? 0));
         const steps = id === "O2" && b === 3 ? [pattern[0]] : id === "O2" && b === 1 ? pattern.slice(0, 2) : pattern;
         steps.forEach(([row, tone], i) => {
-          // Tremolo picking, as on an oud: the note struck again and again until the next.
           const gap = (steps[i + 1]?.[0] ?? barRows) - row;
-          if (style.pluckTremolo && gap >= 4 && visit() < style.pluckTremolo) {
-            for (let r = 0; r < gap; r++) put(start + b * barRows + row + r, PLUCK, { effects: [{ type: "retrigger", every: 2, volumeFactor: 0.97 }] });
-          }
           const strong = row === 0 ? 0.56 : row % style.rowsPerBeat === 0 ? 0.46 : 0.38;
           const quiet = id === "O2" ? 0.7 : 1;
           let effects: Effect[] | undefined = row > 0 && visit() < 0.2 ? [{ type: "noteDelay", ticks: 1 }] : undefined;

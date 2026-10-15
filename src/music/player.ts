@@ -417,7 +417,10 @@ export class Player {
     let buffer = this.buffers.get(zone.data);
     if (!buffer) {
       buffer = this.ctx.createBuffer(1, zone.data.length, zone.sampleRate);
-      buffer.copyToChannel(zone.data as Float32Array<ArrayBuffer>, 0);
+      // A single NaN reaching the reverb or the limiter silences everything for good: such samples
+      // play as silence instead.
+      const data = zone.data.some((v) => !Number.isFinite(v)) ? zone.data.map((v) => (Number.isFinite(v) ? v : 0)) : zone.data;
+      buffer.copyToChannel(data as Float32Array<ArrayBuffer>, 0);
       this.buffers.set(zone.data, buffer);
     }
     return buffer;

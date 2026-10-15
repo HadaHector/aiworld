@@ -188,7 +188,7 @@ the forest style using synth stand-ins.
     hardly any percussion.
   - **Desert:** Arabic, after Aladdin, Dune and Diablo II's second act.
     - Hijaz and double harmonic over a drone, with bII–I cadences.
-    - An oud ostinato with tremolo picking.
+    - An oud ostinato.
     - A ney that slides into its notes and wavers.
     - Darbuka on maqsum, baladi and saidi, with riq and deep drums.
     - Now and then, a distant voice wails into a long note.
@@ -263,6 +263,17 @@ the forest style using synth stand-ins.
     themes) sings each theme, and the group choir answers it in the second phrase (A', B').
     Under them, a balafon on the 3-3-2 tresillo, a bass marimba on every beat, djembe-style drums
     and shekere, with birds and a warm wind.
+  - **Mediterranean:** scrubland by the sea, warm and sunny.
+    - A mandolin sings; an accordion or a clarinet takes some themes.
+    - A nylon guitar strums a waltz (or a light rumba on the 3-3-2), the accordion holds the
+      chords softly, and the bass plays on the beats.
+    - Castanets (new synth) click with a tambourine.
+    - Minor keys walk the Andalusian way down (i VII VI V), with a touch of Hijaz.
+  - **Highlands:** a lonely Celtic air on an open moor, often in a slow 3/4.
+    - A whistle (a fiddle for some themes) with cuts, slides and trills, resting now and then.
+    - Pipes (a new bagpipe-like drone) on bare fifths above low strings, over a drone bass, with a
+      Celtic harp.
+    - A bodhran only when it fills out, and wind across the heather.
   - **Several alternate leads:** `leadAlternate` can be a list, chosen with one draw per theme.
     The tavern now hands themes to the whistle (30%) or a guitar an octave down (25%).
   - **Sections beyond the A and B themes**, for any style that lists them in its forms:
@@ -288,8 +299,9 @@ the forest style using synth stand-ins.
   - **Colour parts:** the sparkle (quick high runs) and the wail (a long voice rising in) are now
     separate parts, each on its own channel, so a style can have both.
   - Optional style knobs, all off unless a style sets them: lead rests, trills, pad breath, pluck
-    register, sparkles or wails, a mix per part, cadence chords, slides, vibrato, tremolo
-    picking, and percussion per section. A knob that is off draws nothing from the seed, so
+    register, sparkles or wails, a mix per part, cadence chords, slides, vibrato and
+    percussion per section. (Tremolo picking, re-striking a pluck every two ticks, was tried
+    and dropped: with these samples it stutters instead of shimmering.) A knob that is off draws nothing from the seed, so
     existing styles keep their songs.
 - **Sample library.** `src/music/xi.ts` reads FastTracker 2 `.xi` instruments: keymapped
   samples, volume envelope with a sustain point, fadeout, auto-vibrato, and ping-pong loops (baked
