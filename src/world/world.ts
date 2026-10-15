@@ -12,7 +12,8 @@ import { createGrassField, type GrassField } from "./foliage/grassField";
 import { createBuildingRenderer } from "./buildings/buildingRenderer";
 import { generateBuilding } from "./buildings/buildingGenerator";
 import { generateProp } from "./props/propGenerator";
-import { wallStretches } from "./features/compound";
+import { settleWallRuns, wallStretches } from "./features/compound";
+import { planRoadFences } from "./roads/roadFences";
 import type { House } from "./settlements/settlementLayout";
 import { bakeBuildingTextures, createBuildingMaterial } from "./buildings/buildingMesh";
 import type { SettlementLayout } from "./settlements/settlementLayout";
@@ -31,6 +32,9 @@ import type { PlaceLabel } from "../ui/placeLabels";
 
 import type { RoadNetwork } from "./roads/roadNetwork";
 import type { WorldContent } from "./content/worldContent";
+
+/** The roads' fences are drawn (and come into the collision world) in cells this wide. */
+const FENCE_CELL = 256;
 
 /** A thing's label is shown this high over its foot - over a sign's board, at about eye level. */
 const LABEL_HEIGHT = 2.2;
@@ -196,6 +200,18 @@ export async function createWorld(
   await phase(`Baking ${content.buildingMaterials.length} building materials`);
   const buildingMaterial = createBuildingMaterial(scene, materialLibrary.litShading, await bakeBuildingTextures(WORLD_SEED, content.buildingMaterials));
   await phase(`Planning the buildings of ${settlementLayouts.length} settlements and ${compoundLayouts.length} compounds`);
+  // The roads' fences where the ground falls away beside them, set on the ground, drawn in cells.
+  const roadFences = planRoadFences(roads.stretches, sampleTerrain, new Map(content.props.map((prop) => [prop.id, prop])), WORLD_SEED);
+  settleWallRuns(roadFences, sampleTerrain);
+  const fenceCells = new Map<string, { key: string; x: number; z: number; houses: ReturnType<typeof wallStretches> }>();
+  for (const run of roadFences) {
+    const gx = Math.floor(run.points[0].x / FENCE_CELL);
+    const gz = Math.floor(run.points[0].z / FENCE_CELL);
+    const key = `fences:${gx},${gz}`;
+    const cell = fenceCells.get(key) ?? { key, x: (gx + 0.5) * FENCE_CELL, z: (gz + 0.5) * FENCE_CELL, houses: [] };
+    cell.houses.push(...wallStretches(run, WORLD_SEED));
+    fenceCells.set(key, cell);
+  }
   const houseModel = (house: House) => ({ ...house, model: (far: boolean) => generateBuilding(house.building, WORLD_SEED, house.variant, far) });
   const buildings = createBuildingRenderer(
     scene,
@@ -211,6 +227,7 @@ export async function createWorld(
           ...layout.walls.flatMap((run) => wallStretches(run, WORLD_SEED)),
         ],
       })),
+      ...fenceCells.values(),
     ],
     buildingMaterial,
     sunLighting.shadowGenerator,

@@ -145,6 +145,9 @@ export interface BiomeDefinition {
    *  is the zone's own choice - a track through a desert is not a track through a forest. Biomes
    *  may share one, and sharing is what keeps the material roster small at a border between them. */
   roadMaterialId: string;
+  /** What a road through this zone is fenced with where the ground falls away beside it - a line
+   *  prop (a rail fence, a drystone wall); see roads/roadFences.ts. */
+  roadFenceId: string;
   /** Layers checked only where this biome has a say, on top of the universal ones. This is what
    *  keeps per-vertex cost flat as more biomes grow their own layers: a point only ever evaluates
    *  the universal list plus its own biomes' lists, never every biome's layers put together. */

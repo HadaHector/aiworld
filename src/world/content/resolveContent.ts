@@ -332,6 +332,11 @@ export function resolveContent(packs: PackSource[]): WorldContent {
       return { file: entry.file, source, biome: readRolledBiome(entry.id, source, MIDDLE_ROLLER, reader, defaults, styleById, entry.id) };
     });
   const biomes = biomeReads.map((b) => b.biome);
+  for (const { file, biome } of biomeReads) {
+    const fence = propById.get(biome.roadFenceId);
+    if (!fence) issues.push({ file, path: "roadFence", message: `no prop "${biome.roadFenceId}" (known: ${[...propById.keys()].join(", ")})` });
+    else if (!isLineProp(fence)) issues.push({ file, path: "roadFence", message: `"${biome.roadFenceId}" is not laid along a line - a wall or a fence is` });
+  }
 
   // --- references between definitions ---
   const materialIds = new Set(materials.map((m) => m.id));
@@ -2389,6 +2394,7 @@ function readBiome(id: string, obj: RawObject, reader: Reader, defaults: Default
     "name",
     "voice",
     "spawnWeight",
+    "roadFence",
     "lakeChance",
     "borderType",
     "height",
@@ -2460,6 +2466,7 @@ function readBiome(id: string, obj: RawObject, reader: Reader, defaults: Default
     lakeChance: reader.optionalNumber(obj, "lakeChance", "", 0, { min: 0, max: 1 }),
     baseMaterialId: reader.string(ground, "base", "ground"),
     roadMaterialId: reader.string(ground, "road", "ground"),
+    roadFenceId: obj.roadFence === undefined ? "railFence" : reader.string(obj, "roadFence", ""),
     materialLayers,
     groundAdjust: ground.adjust === undefined ? NO_ADJUST : readColorAdjust(reader.object(ground.adjust, "ground.adjust"), reader, "ground.adjust"),
     groundTints: reader.optionalArray(ground, "tints", "ground").map((raw, i) => {

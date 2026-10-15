@@ -70,6 +70,8 @@
   treeTints: [
     { kinds: ["shatteredBoulder"], snow: { range: [0.5, 0.8] }, stone: { hue: { range: [-10, 10] }, saturation: { range: [0.3, 0.6] }, value: { range: [0.8, 1.0] }, spread: { saturation: 0.1, value: 0.12 } } },
   ],
+  // Where the ground falls away beside a road, a drystone wall along its verge - stone, not timber.
+  roadFence: "drystoneWall",
   ground: {
     base: "snow",
     road: "trackStone",

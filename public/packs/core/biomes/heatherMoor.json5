@@ -144,6 +144,8 @@
   treeTints: [
     { kinds: ["graniteBoulder"], stone: { hue: { range: [-8, 8] }, saturation: { range: [0.7, 1.1] }, value: { range: [0.92, 1.08] }, spread: { saturation: 0.1, value: 0.1 } } },
   ],
+  // Where the ground falls away beside a road, a drystone wall along its verge - stone, not timber.
+  roadFence: "drystoneWall",
   ground: {
     base: "heather",
     road: "track",

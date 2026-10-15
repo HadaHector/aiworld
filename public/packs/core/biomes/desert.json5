@@ -126,6 +126,8 @@
       bark: { hue: { range: [-8, 8] }, saturation: { range: [0.8, 1.1] }, value: { range: [0.9, 1.08] }, spread: { value: 0.08 } },
     },
   ],
+  // Where the ground falls away beside a road, a drystone wall along its verge - stone, not timber.
+  roadFence: "drystoneWall",
   ground: {
     base: "orangeSand",
     road: "trackSand",

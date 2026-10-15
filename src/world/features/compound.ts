@@ -1530,17 +1530,23 @@ export function settleOnGround(layouts: CompoundLayout[], sampleTerrain: Terrain
       // (And one lying on the slope again - a pad may have changed it.)
       else if (prop.prop.ground === "slope") lieOnSlope(prop, sampleTerrain);
     }
-    for (const run of layout.walls) {
-      const points: CellPoint[] = [run.points[0]];
-      for (let k = 1; k < run.points.length; k++) {
-        const a = run.points[k - 1];
-        const b = run.points[k];
-        const n = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.z - a.z) / WALL_GROUND_STEP));
-        for (let i = 1; i <= n; i++) points.push({ x: a.x + ((b.x - a.x) * i) / n, z: a.z + ((b.z - a.z) * i) / n });
-      }
-      run.points = points;
-      run.heights = points.map((p) => sampleTerrain(p.x, p.z).height);
+    settleWallRuns(layout.walls, sampleTerrain);
+  }
+}
+
+/** Wall runs set on the ground as it lies (see settleOnGround) - a compound's boundary, a road's
+ *  fences. */
+export function settleWallRuns(runs: WallRun[], sampleTerrain: TerrainSampler): void {
+  for (const run of runs) {
+    const points: CellPoint[] = [run.points[0]];
+    for (let k = 1; k < run.points.length; k++) {
+      const a = run.points[k - 1];
+      const b = run.points[k];
+      const n = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.z - a.z) / WALL_GROUND_STEP));
+      for (let i = 1; i <= n; i++) points.push({ x: a.x + ((b.x - a.x) * i) / n, z: a.z + ((b.z - a.z) * i) / n });
     }
+    run.points = points;
+    run.heights = points.map((p) => sampleTerrain(p.x, p.z).height);
   }
 }
 
