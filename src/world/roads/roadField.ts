@@ -1,3 +1,4 @@
+import { ROAD_CLASSES, type RoadClassId, type RoadProfile } from "./roadConfig";
 import type { CellPoint } from "../cells/cellGrid";
 
 /** Anything the ground is graded to and painted as road: countryside roads and settlement streets. */
@@ -10,6 +11,9 @@ export interface RoadLine {
   /** False for a line that joins another at its ends (a road at a gate, a street at a junction),
    *  whose grading must not fade out there. */
   taperEnds?: boolean;
+  /** A road's class (see ROAD_CLASSES) - its cross-section - or none: a street, a lane, a path,
+   *  level across. */
+  roadClass?: RoadClassId;
 }
 
 export interface RoadQuery {
@@ -22,9 +26,17 @@ export interface RoadQuery {
   /** 0 at either end of the road, 1 once clear of both. What lets a road's grading die away
    *  instead of leaving a step where the road stops. */
   taper: number;
+  /** The nearest road's cross-section, or null for one level across - and how much of it there
+   *  is: none at its ends, all of it ROAD_PROFILE_END_FADE along, so where two roads meet (a track
+   *  and a road at a junction) neither's cross-section steps into the other's. */
+  profile: RoadProfile | null;
+  profileWeight: number;
 }
 
-const MISS: RoadQuery = { distance: Infinity, height: 0, taper: 0 };
+/** A road's cross-section fades in over this far from either of its ends. */
+const ROAD_PROFILE_END_FADE = 25;
+
+const MISS: RoadQuery = { distance: Infinity, height: 0, taper: 0, profile: null, profileWeight: 0 };
 
 
 interface Segment {
@@ -42,6 +54,7 @@ interface Segment {
   /** 1 / widthScale: multiplies true distance into countryside-road units. */
   inverseWidth: number;
   taperEnds: boolean;
+  profile: RoadProfile | null;
 }
 
 /**
@@ -114,6 +127,7 @@ export function createRoadField(links: RoadLine[], searchRadius: number, endTape
         total,
         inverseWidth: 1 / (link.widthScale ?? 1),
         taperEnds: link.taperEnds ?? true,
+        profile: link.roadClass ? (ROAD_CLASSES.find((c) => c.id === link.roadClass)?.profile ?? null) : null,
       };
       travelled += lengths[i];
       if (lengthSq <= 0) continue;
@@ -167,6 +181,8 @@ export function createRoadField(links: RoadLine[], searchRadius: number, endTape
       distance: Math.sqrt(bestDistSq),
       height: best.h0 + (best.h1 - best.h0) * bestU,
       taper: t * t * (3 - 2 * t),
+      profile: best.profile,
+      profileWeight: Math.min(1, fromEnds / ROAD_PROFILE_END_FADE),
     };
   }
 

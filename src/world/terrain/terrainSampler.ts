@@ -20,6 +20,7 @@ import {
   ROAD_SHOULDER_MIN,
   ROAD_SHOULDER_MAX,
   ROAD_QUERY_RADIUS,
+  roadProfileOffset,
   ROAD_GRADE_END_TAPER,
 } from "../roads/roadConfig";
 import type { ContinentPlan } from "../cells/continentLayout";
@@ -247,6 +248,8 @@ export function createTerrainSampler(seed: number, content: WorldContent): Terra
         const shoulder = Math.min(ROAD_SHOULDER_MAX, Math.max(ROAD_SHOULDER_MIN, drop / ROAD_SIDE_SLOPE));
         const blend = (1 - smoothstep(ROAD_HALF_WIDTH, ROAD_HALF_WIDTH + shoulder, road.distance)) * road.taper;
         gradedHeight = lerp(landHeight, road.height, blend);
+        // Its cross-section on top: a crown, ditches, a track worn down into the ground.
+        if (road.profile) gradedHeight += roadProfileOffset(road.profile, road.distance) * road.taper * road.profileWeight;
       }
     }
 

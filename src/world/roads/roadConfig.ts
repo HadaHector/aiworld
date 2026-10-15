@@ -134,12 +134,55 @@ export interface RoadClass {
   id: RoadClassId;
   minTraffic: number;
   width: number;
+  profile: RoadProfile;
 }
+
+/**
+ * A road's cross-section, on top of its level ground - in countryside-road units out from its
+ * middle (so it widens with the road), metres up and down:
+ * - `crown`: its middle raised this much over its edges, falling away to nothing by CROWN_REACH, so
+ *   the rain runs off it;
+ * - `ditch`: a ditch either side, `depth` deep at `at` units out, `width` either side of that -
+ *   wider than two of the terrain's vertices, or it is not there to see - or none;
+ * - `sink`: its running width worn this far down into the ground, rising back by SINK_REACH - a
+ *   track trodden into a hollow.
+ */
+export interface RoadProfile {
+  crown: number;
+  ditch: { at: number; depth: number; width: number } | null;
+  sink: number;
+}
+
+export const ROAD_CROWN_REACH = 7;
+export const ROAD_SINK_REACH: [number, number] = [4, 8.5];
+
 export const ROAD_CLASSES: readonly RoadClass[] = [
-  { id: "highway", minTraffic: 6, width: 1.25 },
-  { id: "road", minTraffic: 1, width: 1 },
-  { id: "track", minTraffic: 0, width: 0.5 },
+  // Crowned and ditched either side - a made road.
+  { id: "highway", minTraffic: 6, width: 1.25, profile: { crown: 0.75, ditch: { at: 10, depth: 2.1, width: 2.4 }, sink: 0 } },
+  { id: "road", minTraffic: 1, width: 1, profile: { crown: 0.45, ditch: { at: 10, depth: 1.2, width: 2.2 }, sink: 0 } },
+  // Worn into the ground, no made edge.
+  { id: "track", minTraffic: 0, width: 0.5, profile: { crown: 0, ditch: null, sink: 1.05 } },
 ];
+
+/** How far a road's cross-section moves its ground at `distance` (countryside-road units) out from
+ *  its middle - see RoadProfile. */
+export function roadProfileOffset(profile: RoadProfile, distance: number): number {
+  let offset = 0;
+  if (profile.crown > 0 && distance < ROAD_CROWN_REACH) {
+    const t = distance / ROAD_CROWN_REACH;
+    offset += profile.crown * (1 - t * t);
+  }
+  if (profile.ditch) {
+    const t = Math.abs(distance - profile.ditch.at) / profile.ditch.width;
+    if (t < 1) offset -= profile.ditch.depth * 0.5 * (1 + Math.cos(Math.PI * t));
+  }
+  if (profile.sink > 0) {
+    const [full, gone] = ROAD_SINK_REACH;
+    const t = Math.min(1, Math.max(0, (distance - full) / (gone - full)));
+    offset -= profile.sink * (1 - t * t * (3 - 2 * t));
+  }
+  return offset;
+}
 
 // A link's length over its two places' importance (the root of their product) is what the plan
 // sorts by: important places are joined first and most directly, and the less important hang off
