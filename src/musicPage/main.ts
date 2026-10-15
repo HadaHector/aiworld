@@ -85,11 +85,15 @@ addEventListener("keydown", (e) => {
   else play();
 });
 
+/** Composes the song for the style and seeds shown; if one was playing, the new one plays instead. */
 function compose(): void {
+  const wasPlaying = player?.playing ?? false;
   const style = STYLES.find((s) => s.id === styleSelect.value) ?? STYLES[0];
   song = composeSong(style, Number(placeInput.value) || 0, Number(visitInput.value) || 0);
   history.replaceState(null, "", `?style=${style.id}&place=${song.placeSeed}&visit=${song.visitSeed}`);
-  if (style.id !== soundsStyle) void useStyleSounds(style.id);
+  // A new style brings its own instrument picks: play once they are in place.
+  const ready = style.id !== soundsStyle ? useStyleSounds(style.id) : Promise.resolve();
+  if (wasPlaying) void ready.then(() => play());
   viewPattern = 0;
   renderSummary();
   renderOverview();
