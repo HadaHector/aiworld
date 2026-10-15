@@ -330,6 +330,29 @@ the forest style using synth stand-ins.
   - There is no delay send.
   - The patterns are the song in play order; there is no separate order list.
 
+## In the game
+
+`src/music/gameMusic.ts` plays music in the game, driven from `src/main.ts` every frame.
+
+- **Where:** the zone's biome picks the style (`BIOME_STYLES` in `src/music/places.ts`).
+  - Outdoors, a zone keeps its own theme (its place seed), varied on each visit.
+  - Inside an inn, chapel or crypt (`BUILDING_STYLES`), the building's style plays instead:
+    tavern, holy or swamp. Each piece inside is a new tune, not a variation. The world's
+    `buildingAt(x, y, z)` says which building the player stands in.
+- **When:**
+  - Pieces play one at a time, with 25–60 s of silence between them outdoors and 4–10 s inside.
+  - Through a door, the playing piece fades out in 1.5 s and the new place's music follows
+    shortly after.
+  - Crossing into a zone with another style lets the piece go after 4 s, so it does not flap
+    at borders.
+  - Audio starts with the first click or key press.
+- **Sounds:** each style's picked samples (`src/music/sounds.ts`) are copied into the repository
+  under `public/music/samples` (57 files, 26.7 MB, sources in its `SOURCES.txt`). They are fetched
+  the first time a style needs them. Synths render lazily too: an instrument's zones are made the
+  first time they are used.
+- **Volume:** a small control in the bottom-right corner. The slider is eased, and clicking ♪
+  mutes. It is remembered in `aiworld.music.volume`, and shows what plays or "silence".
+
 ## Milestones
 
 1. **Player and music page skeleton:** the song model, synth voices, a hand-written test pattern

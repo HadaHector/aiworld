@@ -13,6 +13,9 @@ import { createLastView } from "./debug/lastView";
 import { createStatsPanel } from "./debug/statsPanel";
 import { createCollisionPanel } from "./debug/collisionPanel";
 import { createLoadingScreen } from "./ui/loadingScreen";
+import { createMusicControl } from "./ui/musicControl";
+import { createGameMusic } from "./music/gameMusic";
+import { BIOME_STYLES, BUILDING_STYLES, DEFAULT_STYLE } from "./music/places";
 import { loadContent } from "./world/content/loadContent";
 import { ContentError, formatIssue } from "./world/content/contentReader";
 import type { WorldContent } from "./world/content/worldContent";
@@ -153,6 +156,9 @@ function gotoView({ x, z, alpha, beta, radius }: Partial<ViewSnapshot> & { x: nu
 }
 
 const positionPanel = createPositionPanel(gotoView);
+// Music for wherever the player is - see MUSIC.md. It starts with the first click or key press.
+const musicControl = createMusicControl((volume) => music.setVolume(volume));
+const music = createGameMusic(musicControl.volume);
 
 // Right-click (a click, not a drag) to put the player where the pointer is: on what it hits in the
 // collision world - a roof, a floor, a tree - or, past where that reaches, on the ground drawn.
@@ -225,6 +231,7 @@ function gotoLoaded(view: Partial<ViewSnapshot> & { x: number; z: number }, iter
     gotoLoaded({ x, z, alpha: Math.atan2(q.az, q.ax), beta: 1.25, radius: 30 });
   },
   world,
+  music,
   character,
   camera,
   spectator,
@@ -266,6 +273,16 @@ scene.onBeforeRenderObservable.add(() => {
   // Day-night first: it owns the clock, and updateAtmosphere reads that clock's current value
   // (world.ts's updateAtmosphere calls sunLighting.getTimeHours() itself) - calling it after this
   // is what makes that read this frame's time rather than last frame's.
+  // Inside a building with music of its own, that; else the zone's.
+  const feet = spectator.active ? spectator.camera.position : character.mesh.position;
+  const building = world.buildingAt(feet.x, feet.y, feet.z);
+  const buildingStyle = building && BUILDING_STYLES[building.id];
+  music.update(
+    buildingStyle
+      ? { style: buildingStyle, place: building.key, inside: true }
+      : { style: BIOME_STYLES[here.primaryBiome.id] ?? DEFAULT_STYLE, place: here.primaryAreaId, inside: false },
+  );
+  musicControl.setStatus(music.status());
   world.updateWeather(deltaSeconds, here.areaWeights, focus.x, focus.z);
   world.updateDayNight(deltaSeconds, here.areaWeights);
   world.updateAtmosphere(here.areaWeights);

@@ -65,6 +65,8 @@ export interface World {
   roads: RoadNetwork;
   /** Streets, squares and houses per settlement - see settlements/settlementLayout.ts. */
   settlementLayouts: SettlementLayout[];
+  /** The building whose footprint (x, y, z) stands in, with a key unique to that one building. */
+  buildingAt: (x: number, y: number, z: number) => { id: string; key: number } | undefined;
   materialLibrary: MaterialLibrary;
   trees: TreeField;
   grass: GrassField;
@@ -316,7 +318,34 @@ export async function createWorld(
   };
   const updateAtmosphere = (areaWeights: AreaWeight[]) => sky.update(areaWeights, drawDistance, sunLighting.getTimeHours(), sunLighting.direction, weatherNow);
 
+  // Every building of every settlement and compound, bucketed by where it stands, for buildingAt.
+  const BUILDING_CELL = 32;
+  const buildingCells = new Map<string, { house: House; key: number }[]>();
+  [...settlementLayouts.flatMap((l) => l.houses), ...compoundLayouts.flatMap((l) => l.buildings)].forEach((house, key) => {
+    const reach = Math.hypot(house.width, house.depth) / 2;
+    for (let cx = Math.floor((house.x - reach) / BUILDING_CELL); cx <= Math.floor((house.x + reach) / BUILDING_CELL); cx++) {
+      for (let cz = Math.floor((house.z - reach) / BUILDING_CELL); cz <= Math.floor((house.z + reach) / BUILDING_CELL); cz++) {
+        const cell = `${cx},${cz}`;
+        const list = buildingCells.get(cell);
+        if (list) list.push({ house, key });
+        else buildingCells.set(cell, [{ house, key }]);
+      }
+    }
+  });
+  const buildingAt = (x: number, y: number, z: number): { id: string; key: number } | undefined => {
+    for (const { house, key } of buildingCells.get(`${Math.floor(x / BUILDING_CELL)},${Math.floor(z / BUILDING_CELL)}`) ?? []) {
+      // Depth runs along the front (toward the street), width across it.
+      const dx = x - house.x;
+      const dz = z - house.z;
+      const along = dx * house.frontX + dz * house.frontZ;
+      const across = -dx * house.frontZ + dz * house.frontX;
+      if (Math.abs(along) <= house.depth / 2 && Math.abs(across) <= house.width / 2 && y > house.y - 1 && y < house.y + 12) return { id: house.building.id, key };
+    }
+    return undefined;
+  };
+
   return {
+    buildingAt,
     heightAt,
     groundAt,
     sampleTerrain,

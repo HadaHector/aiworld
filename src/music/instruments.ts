@@ -645,14 +645,24 @@ function lowDrum(seed: number): SampleZone[] {
 
 /** Every instrument there is, by id. */
 export function createInstruments(): Record<string, Instrument> {
-  const strings = spread(33, 84, 6, (r) => renderStrings(r, 1000 + r));
-  const marimba = spread(33, 96, 6, (r) => renderMarimba(r, 23000 + r));
+  // Rendering every synth takes seconds: each instrument's zones are rendered the first time they
+  // are asked for, and kept.
+  const rendered = new Map<string, SampleZone[]>();
+  const once = (key: string, make: () => SampleZone[]): SampleZone[] => {
+    let zones = rendered.get(key);
+    if (!zones) rendered.set(key, (zones = make()));
+    return zones;
+  };
+  const strings = (): SampleZone[] => once("strings", () => spread(33, 84, 6, (r) => renderStrings(r, 1000 + r)));
+  const marimba = (): SampleZone[] => once("marimba", () => spread(33, 96, 6, (r) => renderMarimba(r, 23000 + r)));
   const list: Instrument[] = [
     {
       id: "strings",
       name: "Strings",
       short: "st",
-      zones: strings,
+      get zones() {
+        return strings();
+      },
       envelope: { attack: 0.5, decay: 0.6, sustain: 0.85, release: 1.4 },
       autoVibrato: { depth: 6, rate: 4.6, delay: 0.6 },
       gain: 0.32,
@@ -663,7 +673,9 @@ export function createInstruments(): Record<string, Instrument> {
       id: "spiccato",
       name: "Spiccato strings",
       short: "sp",
-      zones: strings,
+      get zones() {
+        return strings();
+      },
       envelope: { attack: 0.012, decay: 0.12, sustain: 0.35, release: 0.12 },
       gain: 0.4,
       range: [36, 76],
@@ -673,7 +685,9 @@ export function createInstruments(): Record<string, Instrument> {
       id: "stringsLow",
       name: "Low strings",
       short: "sl",
-      zones: spread(28, 72, 6, (r) => renderStrings(r, 1500 + r, 3.5)),
+      get zones() {
+        return once("stringsLow", () => spread(28, 72, 6, (r) => renderStrings(r, 1500 + r, 3.5)));
+      },
       envelope: { attack: 0.6, decay: 0.6, sustain: 0.85, release: 1.5 },
       autoVibrato: { depth: 5, rate: 4.3, delay: 0.7 },
       gain: 0.32,
@@ -684,7 +698,9 @@ export function createInstruments(): Record<string, Instrument> {
       id: "stringsHigh",
       name: "High strings",
       short: "sh",
-      zones: spread(48, 96, 6, (r) => renderStrings(r, 1700 + r, 7)),
+      get zones() {
+        return once("stringsHigh", () => spread(48, 96, 6, (r) => renderStrings(r, 1700 + r, 7)));
+      },
       envelope: { attack: 0.45, decay: 0.6, sustain: 0.85, release: 1.3 },
       autoVibrato: { depth: 8, rate: 5.2, delay: 0.5 },
       gain: 0.3,
@@ -695,7 +711,9 @@ export function createInstruments(): Record<string, Instrument> {
       id: "violin",
       name: "Violin",
       short: "vn",
-      zones: spread(52, 100, 6, (r) => renderStrings(r, 1800 + r, 8, [-2, 2])),
+      get zones() {
+        return once("violin", () => spread(52, 100, 6, (r) => renderStrings(r, 1800 + r, 8, [-2, 2])));
+      },
       envelope: { attack: 0.12, decay: 0.4, sustain: 0.85, release: 0.6 },
       autoVibrato: { depth: 18, rate: 5.6, delay: 0.3, sweep: 0.6 },
       gain: 0.36,
@@ -706,7 +724,9 @@ export function createInstruments(): Record<string, Instrument> {
       id: "mandolin",
       name: "Mandolin",
       short: "md",
-      zones: spread(48, 96, 5, (r) => renderPluck(r, 26000 + r, MANDOLIN)),
+      get zones() {
+        return once("mandolin", () => spread(48, 96, 5, (r) => renderPluck(r, 26000 + r, MANDOLIN)));
+      },
       envelope: { attack: 0.001, decay: 0, sustain: 1, release: 0.25 },
       gain: 0.42,
       range: [55, 91],
@@ -716,7 +736,9 @@ export function createInstruments(): Record<string, Instrument> {
       id: "pipes",
       name: "Pipes",
       short: "pp",
-      zones: spread(33, 84, 6, (r) => renderPipes(r, 27000 + r)),
+      get zones() {
+        return once("pipes", () => spread(33, 84, 6, (r) => renderPipes(r, 27000 + r)));
+      },
       envelope: { attack: 0.15, decay: 0.2, sustain: 0.95, release: 0.6 },
       gain: 0.22,
       range: [36, 79],
@@ -726,7 +748,9 @@ export function createInstruments(): Record<string, Instrument> {
       id: "pizz",
       name: "Pizzicato",
       short: "pz",
-      zones: spread(36, 91, 5, (r) => renderPluck(r, 1900 + r, PIZZ)),
+      get zones() {
+        return once("pizz", () => spread(36, 91, 5, (r) => renderPluck(r, 1900 + r, PIZZ)));
+      },
       envelope: { attack: 0.002, decay: 0, sustain: 1, release: 0.25 },
       gain: 0.45,
       range: [36, 84],
@@ -736,7 +760,9 @@ export function createInstruments(): Record<string, Instrument> {
       id: "bass",
       name: "Bass",
       short: "bs",
-      zones: strings,
+      get zones() {
+        return strings();
+      },
       envelope: { attack: 0.5, decay: 0.6, sustain: 0.85, release: 1.4 },
       autoVibrato: { depth: 6, rate: 4.6, delay: 0.6 },
       gain: 0.32,
@@ -747,7 +773,9 @@ export function createInstruments(): Record<string, Instrument> {
       id: "flute",
       name: "Flute",
       short: "fl",
-      zones: spread(59, 98, 6, (r) => renderFlute(r, 2000 + r)),
+      get zones() {
+        return once("flute", () => spread(59, 98, 6, (r) => renderFlute(r, 2000 + r)));
+      },
       envelope: { attack: 0.07, decay: 0.25, sustain: 0.85, release: 0.25 },
       autoVibrato: { depth: 14, rate: 5.2, delay: 0.35 },
       gain: 0.42,
@@ -758,7 +786,9 @@ export function createInstruments(): Record<string, Instrument> {
       id: "guitar",
       name: "Guitar",
       short: "gt",
-      zones: spread(38, 79, 5, (r) => renderPluck(r, 3000 + r)),
+      get zones() {
+        return once("guitar", () => spread(38, 79, 5, (r) => renderPluck(r, 3000 + r)));
+      },
       envelope: { attack: 0.002, decay: 0, sustain: 1, release: 0.5 },
       gain: 0.5,
       range: [40, 76],
@@ -768,7 +798,9 @@ export function createInstruments(): Record<string, Instrument> {
       id: "choir",
       name: "Choir",
       short: "ch",
-      zones: spread(45, 84, 6, (r) => renderChoir(r, 7000 + r)),
+      get zones() {
+        return once("choir", () => spread(45, 84, 6, (r) => renderChoir(r, 7000 + r)));
+      },
       envelope: { attack: 0.9, decay: 0.8, sustain: 0.85, release: 2 },
       autoVibrato: { depth: 8, rate: 4.2, delay: 0.8, sweep: 1.5 },
       gain: 0.3,
@@ -779,7 +811,9 @@ export function createInstruments(): Record<string, Instrument> {
       id: "choirHigh",
       name: "Women's choir",
       short: "cw",
-      zones: spread(52, 90, 6, (r) => renderChoir(r, 7400 + r, WOMEN_VOWEL)),
+      get zones() {
+        return once("choirHigh", () => spread(52, 90, 6, (r) => renderChoir(r, 7400 + r, WOMEN_VOWEL)));
+      },
       envelope: { attack: 0.8, decay: 0.8, sustain: 0.85, release: 2 },
       autoVibrato: { depth: 9, rate: 4.6, delay: 0.7, sweep: 1.5 },
       gain: 0.3,
@@ -790,7 +824,9 @@ export function createInstruments(): Record<string, Instrument> {
       id: "choirLow",
       name: "Men's choir",
       short: "cm",
-      zones: spread(36, 72, 6, (r) => renderChoir(r, 7700 + r, MEN_VOWEL)),
+      get zones() {
+        return once("choirLow", () => spread(36, 72, 6, (r) => renderChoir(r, 7700 + r, MEN_VOWEL)));
+      },
       envelope: { attack: 0.9, decay: 0.8, sustain: 0.85, release: 2 },
       autoVibrato: { depth: 7, rate: 4, delay: 0.9, sweep: 1.5 },
       gain: 0.32,
@@ -801,7 +837,9 @@ export function createInstruments(): Record<string, Instrument> {
       id: "harp",
       name: "Harp",
       short: "hp",
-      zones: spread(36, 96, 5, (r) => renderPluck(r, 8000 + r, HARP)),
+      get zones() {
+        return once("harp", () => spread(36, 96, 5, (r) => renderPluck(r, 8000 + r, HARP)));
+      },
       envelope: { attack: 0.002, decay: 0, sustain: 1, release: 1.2 },
       gain: 0.42,
       range: [40, 91],
@@ -811,7 +849,9 @@ export function createInstruments(): Record<string, Instrument> {
       id: "bells",
       name: "Bells",
       short: "bl",
-      zones: spread(60, 102, 6, (r) => renderBell(r)),
+      get zones() {
+        return once("bells", () => spread(60, 102, 6, (r) => renderBell(r)));
+      },
       envelope: { attack: 0.001, decay: 0, sustain: 1, release: 1.5 },
       gain: 0.22,
       range: [72, 98],
@@ -821,7 +861,9 @@ export function createInstruments(): Record<string, Instrument> {
       id: "ney",
       name: "Ney",
       short: "ny",
-      zones: spread(55, 96, 6, (r) => renderFlute(r, 9000 + r, NEY)),
+      get zones() {
+        return once("ney", () => spread(55, 96, 6, (r) => renderFlute(r, 9000 + r, NEY)));
+      },
       envelope: { attack: 0.12, decay: 0.3, sustain: 0.85, release: 0.35 },
       autoVibrato: { depth: 10, rate: 5, delay: 0.5 },
       gain: 0.42,
@@ -832,7 +874,9 @@ export function createInstruments(): Record<string, Instrument> {
       id: "oud",
       name: "Oud",
       short: "od",
-      zones: spread(36, 79, 5, (r) => renderPluck(r, 10000 + r, OUD)),
+      get zones() {
+        return once("oud", () => spread(36, 79, 5, (r) => renderPluck(r, 10000 + r, OUD)));
+      },
       envelope: { attack: 0.002, decay: 0, sustain: 1, release: 0.4 },
       gain: 0.5,
       range: [40, 76],
@@ -842,7 +886,9 @@ export function createInstruments(): Record<string, Instrument> {
       id: "darbuka",
       name: "Darbuka",
       short: "db",
-      zones: darbuka(11000),
+      get zones() {
+        return once("darbuka", () => darbuka(11000));
+      },
       envelope: { attack: 0.001, decay: 0, sustain: 1, release: 0.25 },
       gain: 0.55,
       range: [60, 62],
@@ -853,7 +899,9 @@ export function createInstruments(): Record<string, Instrument> {
       id: "horn",
       name: "Horn",
       short: "hn",
-      zones: spread(36, 84, 6, (r) => renderHorn(r, 12000 + r)),
+      get zones() {
+        return once("horn", () => spread(36, 84, 6, (r) => renderHorn(r, 12000 + r)));
+      },
       envelope: { attack: 0.2, decay: 0.4, sustain: 0.85, release: 0.7 },
       autoVibrato: { depth: 5, rate: 4.8, delay: 0.7 },
       gain: 0.4,
@@ -864,7 +912,9 @@ export function createInstruments(): Record<string, Instrument> {
       id: "timpani",
       name: "Timpani",
       short: "tp",
-      zones: timpani(13000),
+      get zones() {
+        return once("timpani", () => timpani(13000));
+      },
       envelope: { attack: 0.001, decay: 0, sustain: 1, release: 1 },
       gain: 0.6,
       range: [60, 60],
@@ -875,7 +925,9 @@ export function createInstruments(): Record<string, Instrument> {
       id: "clarinet",
       name: "Bass clarinet",
       short: "cl",
-      zones: spread(34, 84, 6, (r) => renderFlute(r, 14000 + r, CLARINET)),
+      get zones() {
+        return once("clarinet", () => spread(34, 84, 6, (r) => renderFlute(r, 14000 + r, CLARINET)));
+      },
       envelope: { attack: 0.09, decay: 0.3, sustain: 0.85, release: 0.3 },
       autoVibrato: { depth: 4, rate: 4.5, delay: 0.8 },
       gain: 0.42,
@@ -886,7 +938,9 @@ export function createInstruments(): Record<string, Instrument> {
       id: "musicBox",
       name: "Music box",
       short: "mb",
-      zones: spread(55, 102, 6, (r) => renderMusicBox(r)),
+      get zones() {
+        return once("musicBox", () => spread(55, 102, 6, (r) => renderMusicBox(r)));
+      },
       envelope: { attack: 0.001, decay: 0, sustain: 1, release: 0.8 },
       gain: 0.32,
       range: [60, 98],
@@ -896,7 +950,9 @@ export function createInstruments(): Record<string, Instrument> {
       id: "drip",
       name: "Drips",
       short: "dr",
-      zones: spread(55, 103, 12, (r) => renderDrip(r)),
+      get zones() {
+        return once("drip", () => spread(55, 103, 12, (r) => renderDrip(r)));
+      },
       envelope: { attack: 0.001, decay: 0, sustain: 1, release: 0.2 },
       gain: 0.3,
       range: [60, 98],
@@ -906,7 +962,9 @@ export function createInstruments(): Record<string, Instrument> {
       id: "ghost",
       name: "Ghost",
       short: "gh",
-      zones: spread(48, 96, 6, (r) => renderGhost(r)),
+      get zones() {
+        return once("ghost", () => spread(48, 96, 6, (r) => renderGhost(r)));
+      },
       envelope: { attack: 0.5, decay: 0.5, sustain: 0.85, release: 1.4 },
       autoVibrato: { depth: 32, rate: 5.6, delay: 0.25, sweep: 1 },
       gain: 0.3,
@@ -917,7 +975,9 @@ export function createInstruments(): Record<string, Instrument> {
       id: "knock",
       name: "Knocks",
       short: "kn",
-      zones: knock(15000),
+      get zones() {
+        return once("knock", () => knock(15000));
+      },
       envelope: { attack: 0.001, decay: 0, sustain: 1, release: 0.3 },
       gain: 0.5,
       range: [60, 62],
@@ -928,7 +988,9 @@ export function createInstruments(): Record<string, Instrument> {
       id: "wind",
       name: "Wind",
       short: "wd",
-      zones: spread(36, 96, 12, (r) => renderWind(r, 16000 + r)),
+      get zones() {
+        return once("wind", () => spread(36, 96, 12, (r) => renderWind(r, 16000 + r)));
+      },
       envelope: { attack: 1.5, decay: 0, sustain: 1, release: 2.5 },
       gain: 0.35,
       range: [43, 91],
@@ -938,7 +1000,9 @@ export function createInstruments(): Record<string, Instrument> {
       id: "accordion",
       name: "Accordion",
       short: "ac",
-      zones: spread(36, 90, 6, (r) => renderAccordion(r, 17000 + r)),
+      get zones() {
+        return once("accordion", () => spread(36, 90, 6, (r) => renderAccordion(r, 17000 + r)));
+      },
       envelope: { attack: 0.06, decay: 0.2, sustain: 0.9, release: 0.25 },
       gain: 0.26,
       range: [41, 84],
@@ -948,7 +1012,9 @@ export function createInstruments(): Record<string, Instrument> {
       id: "clap",
       name: "Claps",
       short: "cp",
-      zones: claps(19000),
+      get zones() {
+        return once("clap", () => claps(19000));
+      },
       envelope: { attack: 0.001, decay: 0, sustain: 1, release: 0.15 },
       gain: 0.4,
       range: [60, 60],
@@ -959,7 +1025,9 @@ export function createInstruments(): Record<string, Instrument> {
       id: "taiko",
       name: "Taiko",
       short: "tk",
-      zones: taiko(22000),
+      get zones() {
+        return once("taiko", () => taiko(22000));
+      },
       envelope: { attack: 0.001, decay: 0, sustain: 1, release: 0.6 },
       gain: 0.6,
       range: [60, 62],
@@ -970,7 +1038,9 @@ export function createInstruments(): Record<string, Instrument> {
       id: "marimba",
       name: "Marimba",
       short: "mr",
-      zones: marimba,
+      get zones() {
+        return marimba();
+      },
       envelope: { attack: 0.001, decay: 0, sustain: 1, release: 0.4 },
       gain: 0.42,
       range: [36, 91],
@@ -980,7 +1050,9 @@ export function createInstruments(): Record<string, Instrument> {
       id: "marimbaBass",
       name: "Bass marimba",
       short: "bm",
-      zones: marimba,
+      get zones() {
+        return marimba();
+      },
       envelope: { attack: 0.001, decay: 0, sustain: 1, release: 0.5 },
       gain: 0.46,
       range: [33, 60],
@@ -990,7 +1062,9 @@ export function createInstruments(): Record<string, Instrument> {
       id: "bird",
       name: "Birds",
       short: "bd",
-      zones: spread(72, 108, 8, (r) => renderBird(r, 24000 + r)),
+      get zones() {
+        return once("bird", () => spread(72, 108, 8, (r) => renderBird(r, 24000 + r)));
+      },
       envelope: { attack: 0.001, decay: 0, sustain: 1, release: 0.1 },
       gain: 0.22,
       range: [76, 104],
@@ -1000,7 +1074,9 @@ export function createInstruments(): Record<string, Instrument> {
       id: "shaker",
       name: "Shaker",
       short: "sk",
-      zones: shaker(25000),
+      get zones() {
+        return once("shaker", () => shaker(25000));
+      },
       envelope: { attack: 0.001, decay: 0, sustain: 1, release: 0.08 },
       gain: 0.32,
       range: [60, 62],
@@ -1011,7 +1087,9 @@ export function createInstruments(): Record<string, Instrument> {
       id: "castanets",
       name: "Castanets",
       short: "cn",
-      zones: castanets(28000),
+      get zones() {
+        return once("castanets", () => castanets(28000));
+      },
       envelope: { attack: 0.001, decay: 0, sustain: 1, release: 0.1 },
       gain: 0.35,
       range: [60, 62],
@@ -1022,7 +1100,9 @@ export function createInstruments(): Record<string, Instrument> {
       id: "frameDrum",
       name: "Frame drum",
       short: "fd",
-      zones: frameDrum(4000),
+      get zones() {
+        return once("frameDrum", () => frameDrum(4000));
+      },
       envelope: { attack: 0.001, decay: 0, sustain: 1, release: 0.3 },
       gain: 0.55,
       range: [60, 62],
@@ -1033,7 +1113,9 @@ export function createInstruments(): Record<string, Instrument> {
       id: "tambourine",
       name: "Tambourine",
       short: "tb",
-      zones: tambourine(5000),
+      get zones() {
+        return once("tambourine", () => tambourine(5000));
+      },
       envelope: { attack: 0.001, decay: 0, sustain: 1, release: 0.2 },
       gain: 0.3,
       range: [60, 62],
@@ -1044,7 +1126,9 @@ export function createInstruments(): Record<string, Instrument> {
       id: "lowDrum",
       name: "Low drum",
       short: "ld",
-      zones: lowDrum(6000),
+      get zones() {
+        return once("lowDrum", () => lowDrum(6000));
+      },
       envelope: { attack: 0.001, decay: 0, sustain: 1, release: 0.6 },
       gain: 0.6,
       range: [60, 60],

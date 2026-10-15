@@ -5,6 +5,15 @@ does not mean re-deriving why it matters. Newest first within each section.
 
 ## Performance
 
+### The music samples are fetched one file at a time
+
+The game's picked music samples (public/music/samples, 57 .xi files, 26.7 MB) are each fetched on
+their own, the first time a style needs them (src/music/gameMusic.ts). They could be packed into
+one archive and downloaded as a single file instead: fewer requests, and compressed. Uncompressed
+16-bit PCM in tracker instruments should shrink well. A plain zip read in the browser
+(DecompressionStream handles deflate) or a custom concatenation with an index would both do, kept
+in step with src/music/sounds.ts by a small build script.
+
 ### Every house's models are built at startup
 
 All settlements' houses are generated near and far while the world loads: 1870 houses on one

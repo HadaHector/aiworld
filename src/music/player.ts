@@ -56,6 +56,9 @@ export class Player {
   readonly ctx: AudioContext;
   private readonly instruments: Record<string, Instrument>;
   private readonly master: GainNode;
+  private readonly fade: GainNode;
+  private readonly volume: GainNode;
+  private fadeTimer?: number;
   private readonly reverb: ConvolverNode;
   private readonly buffers = new WeakMap<Float32Array, AudioBuffer>();
   private readonly voices = new Set<Voice>();
@@ -79,7 +82,10 @@ export class Player {
     const limiter = ctx.createDynamicsCompressor();
     limiter.threshold.value = -6;
     limiter.ratio.value = 8;
-    limiter.connect(ctx.destination);
+    // After the limiter: a fade for letting a song go, then the listener's volume.
+    this.fade = ctx.createGain();
+    this.volume = ctx.createGain();
+    limiter.connect(this.fade).connect(this.volume).connect(ctx.destination);
     this.master = ctx.createGain();
     this.master.gain.value = 2;
     this.master.connect(limiter);
@@ -97,6 +103,9 @@ export class Player {
   /** Plays a song from its start, or from `from`, picking up what would be sounding there. */
   play(song: Song, from: PlayPosition = { pattern: 0, row: 0 }): void {
     this.stop();
+    window.clearTimeout(this.fadeTimer);
+    this.fade.gain.cancelScheduledValues(this.ctx.currentTime);
+    this.fade.gain.setValueAtTime(1, this.ctx.currentTime);
     this.song = song;
     this.outs = song.channels.map((c, i) => this.createOut(c.pan, c.reverb, this.gains[i] ?? 1));
     this.states = song.channels.map(() => ({ volume: 1, pitch: 0, offset: 0, vibratoPhase: 0, tremoloPhase: 0, trembling: false }));
@@ -155,6 +164,25 @@ export class Player {
     this.outs = [];
     this.song = undefined;
     this.timeline = [];
+  }
+
+  /** The listener's volume, 0..1, eased in over a moment. */
+  setVolume(volume: number): void {
+    this.volume.gain.setTargetAtTime(Math.max(0, volume), this.ctx.currentTime, 0.05);
+  }
+
+  /** Lets the song die away over `seconds`, then stops it. onEnd is not called. */
+  fadeOut(seconds: number): void {
+    if (!this.song) return;
+    const now = this.ctx.currentTime;
+    this.fade.gain.cancelScheduledValues(now);
+    this.fade.gain.setValueAtTime(this.fade.gain.value, now);
+    this.fade.gain.linearRampToValueAtTime(0, now + seconds);
+    window.clearTimeout(this.fadeTimer);
+    this.fadeTimer = window.setTimeout(() => {
+      this.stop();
+      this.fade.gain.setValueAtTime(1, this.ctx.currentTime + 0.1);
+    }, seconds * 1000 + 50);
   }
 
   /** Mute (0) or play (1) a channel; kept across songs. */

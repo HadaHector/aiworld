@@ -4,10 +4,10 @@
 
 import { composeSong } from "../music/composer";
 import { cellText, effectsText, noteText, volumeText } from "../music/format";
-import { createInstruments, zoneFor, type Instrument, type SampleZone } from "../music/instruments";
+import { createInstruments, zoneFor, type Instrument } from "../music/instruments";
 import { Player, type PlayPosition } from "../music/player";
-import { parseXi } from "../music/xi";
 import { songNotes, songRows, type Song } from "../music/song";
+import { buildInstrument as buildInstrument_, PICKED_FILES, SAMPLES, strokeKey } from "../music/library";
 import { SHARED_SOUNDS, STYLE_SOUNDS } from "../music/sounds";
 import { STYLES } from "../music/styles";
 import { noteName } from "../music/theory";
@@ -318,62 +318,33 @@ async function useStyleSounds(styleId: string): Promise<void> {
   renderInstruments();
 }
 
-const strokeKey = (id: string, stroke: string): string => `${id}:${stroke}`;
 const choicesFor = (id: string): string[] => [id, ...(LIBRARY_ALIASES[id] ?? [])].flatMap((folder) => library[folder] ?? []);
 const strokeChoices = (): string[] => DRUM_FOLDERS.flatMap((folder) => library[folder] ?? []);
-const available = (path: string | undefined): path is string => !!path && Object.values(library).some((files) => files.includes(path));
+/** In the full library (not in git), or among the picked files kept in the repository. */
+const available = (path: string | undefined): path is string => !!path && (PICKED_FILES.has(path) || Object.values(library).some((files) => files.includes(path)));
 const fileLabel = (path: string): string => path.replace(/\.xi$/, "");
 
 const files = new Map<string, Promise<ArrayBuffer>>();
+/** A file from the full library, or failing that from the picked files kept in the repository. */
 function fetchXi(path: string): Promise<ArrayBuffer> {
   let file = files.get(path);
   if (!file) {
-    file = fetch(LIBRARY + path).then((r) => {
-      if (!r.ok) throw new Error(`${path}: ${r.status}`);
-      return r.arrayBuffer();
-    });
+    const get = (base: string): Promise<ArrayBuffer> =>
+      fetch(base + path).then((r) => {
+        if (!r.ok) throw new Error(`${path}: ${r.status}`);
+        return r.arrayBuffer();
+      });
+    file = get(LIBRARY).catch(() => get(SAMPLES));
     files.set(path, file);
   }
   return file;
 }
 
-/** One drum stroke on one key: the file's sample as it sounds on C-4, never looping, faded at its end. */
-function strokeZone(zone: SampleZone, note: number): SampleZone {
-  let data = zone.data;
-  if (zone.loop) {
-    data = data.slice(0, Math.floor(zone.loop.end * zone.sampleRate));
-    const fade = Math.min(data.length, Math.floor(0.02 * zone.sampleRate));
-    for (let i = 0; i < fade; i++) data[data.length - fade + i] *= 1 - i / fade;
-  }
-  return { ...zone, data, loop: undefined, low: note, high: note, root: zone.root + note - 60 };
-}
-
-/**
- * Puts an instrument together from its choices: its sound (a library file or the synth) and, for a
- * drum, a file for any stroke picked on its own, laid over that stroke's key.
- */
+/** Puts an instrument together from the current style's picks. */
 async function buildInstrument(id: string): Promise<void> {
-  const look = synths[id] ?? EXTRA_LOOKS[id];
-  let inst: Instrument | undefined = synths[id];
-  const path = sounds[id];
-  if (available(path)) {
-    inst = parseXi(await fetchXi(path), id, { short: look.short, color: look.color, gain: look.gain });
-    inst.range = look.range;
-    if (synths[id]?.keys) inst.keys = synths[id].keys;
-  }
-  const strokes = synths[id]?.keys;
-  if (inst && strokes) {
-    const zones: SampleZone[] = [];
-    for (const [stroke, note] of Object.entries(strokes)) {
-      const strokePath = sounds[strokeKey(id, stroke)];
-      if (!available(strokePath)) continue;
-      const xi = parseXi(await fetchXi(strokePath), id, { short: look.short, color: look.color, gain: 1 });
-      zones.push(strokeZone(zoneFor(xi, 60), note));
-    }
-    if (zones.length) inst = { ...inst, zones: [...zones, ...inst.zones] };
-  }
-  if (inst) instruments[id] = inst;
-  else delete instruments[id];
+  const synth = synths[id];
+  if (!synth) return;
+  instruments[id] = await buildInstrument_(synth, sounds, async (path) => (available(path) ? fetchXi(path) : undefined));
 }
 
 async function loadLibrary(): Promise<void> {
