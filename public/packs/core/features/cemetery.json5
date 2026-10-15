@@ -11,19 +11,19 @@
     site: { grade: [0, 0.12], cover: [0, 0.7], fromSettlements: 400 },
     // Its yard: `radius` half its length (chapel to crypt), `width` across - near square, the
     // graves' ground.
-    yard: { radius: [11, 14], width: [20, 27] },
+    yard: { radius: [14, 24], width: [30, 50] },
     // Its buildings' pads blend back gently; the ground under and round them trodden to earth.
-    pads: { slope: 0.5, blend: [1.5, 8], spill: { material: "track", reach: 2 } },
+    pads: { slope: 0.25, blend: [1.5, 8], spill: { material: "track", reach: 2 } },
     arrangement: "rows",
     buildings: [
       { building: "chapel", count: [1, 1], required: true, place: "head" },
       { building: "crypt", count: [1, 1], chance: 0.8, place: "foot" },
     ],
-    // Down either side of the middle path, 2.7 m apart along it and 1.5 m across, eight slots in
-    // ten filled - by where they are down the yard (0 its head, the chapel; 1 its foot).
+    // Down either side of the middle path, 3.7 m apart along it and 3.5 m across, three slots in
+    // four filled - by where they are down the yard (0 its head, the chapel; 1 its foot).
     graves: {
-      spacing: [2.7, 1.5],
-      fill: 0.85,
+      spacing: [3.7, 3.5],
+      fill: 0.75,
       markers: [
         { prop: "ledgerSlab", from: 0, to: 0.35, weight: 2 },
         { prop: "tableTomb", from: 0, to: 0.3, weight: 0.6 },
@@ -45,8 +45,8 @@
       { prop: "well", count: [1, 1], at: "byBuilding", building: "chapel", chance: 0.3 },
     ],
   },
-  // Its ground cleared of trees round it, the wood coming back by 45 m.
-  clearing: [20, 45],
+  // Its ground cleared of trees round it, the wood coming back by 25 m.
+  clearing: [10, 25],
   stumps: 0,
   // A dead end off the roads: its own track from the settlement it serves.
   road: { importance: 1, links: [1, 1], wants: ["settlement"], maxLength: 2000 },
