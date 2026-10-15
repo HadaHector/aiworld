@@ -242,7 +242,8 @@ function applyGains(): void {
 const synths: Record<string, Instrument> = { ...instruments };
 /** Roles with no synth, only library sounds. */
 const EXTRA_LOOKS: Record<string, { name: string; short: string; color: string; gain: number; range: [number, number] }> = {};
-const LIBRARY = "/samples/kiarchive/";
+/** The full library, where it exists (it is not in git): beside the page, like the packs. */
+const LIBRARY = `${import.meta.env.BASE_URL}samples/kiarchive/`;
 /** Library folders an instrument may pick from besides its own. */
 const LIBRARY_ALIASES: Record<string, string[]> = {
   ney: ["flute"],
@@ -318,8 +319,10 @@ async function useStyleSounds(styleId: string): Promise<void> {
   renderInstruments();
 }
 
-const choicesFor = (id: string): string[] => [id, ...(LIBRARY_ALIASES[id] ?? [])].flatMap((folder) => library[folder] ?? []);
-const strokeChoices = (): string[] => DRUM_FOLDERS.flatMap((folder) => library[folder] ?? []);
+/** A folder's files: the full library's where it exists, else the picked ones kept in the repository. */
+const folderFiles = (folder: string): string[] => library[folder] ?? [...PICKED_FILES].filter((path) => path.startsWith(`${folder}/`)).sort();
+const choicesFor = (id: string): string[] => [id, ...(LIBRARY_ALIASES[id] ?? [])].flatMap(folderFiles);
+const strokeChoices = (): string[] => DRUM_FOLDERS.flatMap(folderFiles);
 /** In the full library (not in git), or among the picked files kept in the repository. */
 const available = (path: string | undefined): path is string => !!path && (PICKED_FILES.has(path) || Object.values(library).some((files) => files.includes(path)));
 const fileLabel = (path: string): string => path.replace(/\.xi$/, "");
@@ -334,7 +337,8 @@ function fetchXi(path: string): Promise<ArrayBuffer> {
         if (!r.ok) throw new Error(`${path}: ${r.status}`);
         return r.arrayBuffer();
       });
-    file = get(LIBRARY).catch(() => get(SAMPLES));
+    const inLibrary = Object.values(library).some((paths) => paths.includes(path));
+    file = inLibrary ? get(LIBRARY).catch(() => get(SAMPLES)) : get(SAMPLES);
     files.set(path, file);
   }
   return file;

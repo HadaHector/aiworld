@@ -6,8 +6,11 @@ import { zoneFor, type Instrument, type SampleZone } from "./instruments";
 import { SHARED_SOUNDS, STYLE_SOUNDS } from "./sounds";
 import { parseXi } from "./xi";
 
-/** Where the picked sample files are served from. */
-export const SAMPLES = "/music/samples/";
+/**
+ * Where the picked sample files are served from: beside the page, so the site works under any path
+ * (GitHub Pages serves it from /<repository>/). Outside Vite (a probe) there is no base: the root.
+ */
+export const SAMPLES = `${import.meta.env?.BASE_URL ?? "/"}music/samples/`;
 
 /** Every file some style picks: the ones kept under SAMPLES. */
 export const PICKED_FILES = new Set([...Object.values(SHARED_SOUNDS), ...Object.values(STYLE_SOUNDS).flatMap((picks) => Object.values(picks))].filter(Boolean));
