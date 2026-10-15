@@ -14,6 +14,7 @@ import { generateBuilding } from "./buildings/buildingGenerator";
 import { generateProp } from "./props/propGenerator";
 import { settleWallRuns, wallStretches } from "./features/compound";
 import { planRoadFences } from "./roads/roadFences";
+import { planRoadSigns } from "./roads/roadSigns";
 import type { House } from "./settlements/settlementLayout";
 import { bakeBuildingTextures, createBuildingMaterial } from "./buildings/buildingMesh";
 import type { SettlementLayout } from "./settlements/settlementLayout";
@@ -201,8 +202,11 @@ export async function createWorld(
   const buildingMaterial = createBuildingMaterial(scene, materialLibrary.litShading, await bakeBuildingTextures(WORLD_SEED, content.buildingMaterials));
   await phase(`Planning the buildings of ${settlementLayouts.length} settlements and ${compoundLayouts.length} compounds`);
   // The roads' fences where the ground falls away beside them, set on the ground, drawn in cells.
-  const roadFences = planRoadFences(roads.stretches, sampleTerrain, new Map(content.props.map((prop) => [prop.id, prop])), WORLD_SEED);
+  const propById = new Map(content.props.map((prop) => [prop.id, prop]));
+  const roadFences = planRoadFences(roads.stretches, sampleTerrain, propById, WORLD_SEED);
   settleWallRuns(roadFences, sampleTerrain);
+  // And fingerposts at their junctions, an arm down each road saying where it leads.
+  const roadSigns = planRoadSigns(roads, sampleTerrain, propById, WORLD_SEED);
   const fenceCells = new Map<string, { key: string; x: number; z: number; houses: ReturnType<typeof wallStretches> }>();
   for (const run of roadFences) {
     const gx = Math.floor(run.points[0].x / FENCE_CELL);
@@ -210,6 +214,14 @@ export async function createWorld(
     const key = `fences:${gx},${gz}`;
     const cell = fenceCells.get(key) ?? { key, x: (gx + 0.5) * FENCE_CELL, z: (gz + 0.5) * FENCE_CELL, houses: [] };
     cell.houses.push(...wallStretches(run, WORLD_SEED));
+    fenceCells.set(key, cell);
+  }
+  for (const prop of roadSigns.props) {
+    const gx = Math.floor(prop.x / FENCE_CELL);
+    const gz = Math.floor(prop.z / FENCE_CELL);
+    const key = `fences:${gx},${gz}`;
+    const cell = fenceCells.get(key) ?? { key, x: (gx + 0.5) * FENCE_CELL, z: (gz + 0.5) * FENCE_CELL, houses: [] };
+    cell.houses.push({ ...prop, model: (far: boolean) => generateProp(prop.prop, WORLD_SEED, prop.variant, far) });
     fenceCells.set(key, cell);
   }
   const houseModel = (house: House) => ({ ...house, model: (far: boolean) => generateBuilding(house.building, WORLD_SEED, house.variant, far) });
@@ -378,7 +390,7 @@ export async function createWorld(
       layout.props
         .filter((prop) => prop.prop.label === "place")
         .map((prop) => ({ x: prop.x, y: prop.y + LABEL_HEIGHT, z: prop.z, text: features[layout.featureId]?.name ?? features[layout.featureId]?.kind.name ?? layout.kindId })),
-    ),
+    ).concat(roadSigns.labels),
     roads,
     settlementLayouts,
     materialLibrary,

@@ -1,0 +1,17 @@
+// One arm of a fingerpost: a board pointing down its road, its end cut to a point, a painted band
+// along it. A player by the post reads where its road leads by pointing at it.
+{
+  name: "Fingerpost arm",
+  type: "fingerArm",
+  fingerArm: {
+    length: [1.0, 1.2],
+    height: [0.22, 0.26],
+    thickness: 0.05,
+  },
+  collide: false,
+  parts: {
+    board: { material: "planks", tints: [[0.78, 0.72, 0.62], [0.72, 0.66, 0.58]] },
+    // Painted, gone a little dull: white, black or a muted red.
+    band: { tints: [[0.85, 0.83, 0.78], [0.15, 0.15, 0.15], [0.5, 0.16, 0.12]] },
+  },
+}

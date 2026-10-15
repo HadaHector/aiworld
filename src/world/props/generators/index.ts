@@ -3,6 +3,7 @@ import { felledLog, logStack } from "./logs";
 import { barrel, choppingBlock, crate, gate, grindstone, sawbuck } from "./woodwork";
 import { heap, signpost, trough, well } from "./yard";
 import { drystoneWall, railFence } from "./walls";
+import { fingerArm, fingerpost } from "./signs";
 import { gravePost, headstone, lychgate, tomb } from "./graves";
 import { altar, armchair, banner, bed, bench, cabinet, chair, chest, counter, fireplace, lantern, rack, sack, sconce, stool, stove, table } from "./furniture";
 
@@ -21,6 +22,8 @@ export const PROP_GENERATORS: Record<string, PropGenerator> = {
   trough,
   heap,
   signpost,
+  fingerpost,
+  fingerArm,
   railFence,
   headstone,
   gravePost,

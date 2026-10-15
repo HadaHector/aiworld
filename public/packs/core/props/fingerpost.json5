@@ -1,0 +1,15 @@
+// A fingerpost's post, at a road junction: squared, tapering a little, a little cap on its head. Its
+// arms - one down each road, saying where it leads - are props of their own (fingerArm), set on it.
+{
+  name: "Fingerpost",
+  type: "fingerpost",
+  fingerpost: {
+    height: [3.0, 3.4],
+    thickness: [0.18, 0.22],
+  },
+  ground: "plumb",
+  parts: {
+    post: { material: "timber", tints: [[0.62, 0.54, 0.46], [0.55, 0.48, 0.42]] },
+    cap: { material: "planks", tints: [[0.5, 0.44, 0.38]] },
+  },
+}
