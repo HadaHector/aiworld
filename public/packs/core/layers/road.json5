@@ -48,7 +48,7 @@
       // steps at its own vertex resolution. Widening this fade does not touch it - measured, the
       // staircase is unchanged either way.
       { output: "raw", op: "remap", input: "gap", inMin: 9, inMax: 4, outMin: 0, outMax: 1 },
-      { output: "surface", op: "clamp", input: "raw", min: 0, max: 1 },
+      { output: "surfaceRaw", op: "clamp", input: "raw", min: 0, max: 1 },
 
       // Weighted above 1 so the surface actually reads as a road. Layer weights are conserved -
       // scaled to sum to 1, with whatever is left over going to the biome base - so a weight of 1
@@ -67,9 +67,17 @@
       // C = 0.5, the share across the fade goes 0.00 / 0.07 / 0.39 / 0.68 / 0.84 / 0.91 rather than
       // the flat boost's 0.00 / 0.67 / 0.80 / 0.86 / 0.89 / 0.91, which was a line with a smudge
       // on it. Same 5 at the centre either way.
-      { output: "square", op: "multiply", a: "surface", b: "surface" },
-      { output: "cube", op: "multiply", a: "square", b: "surface" },
-      { output: "result", op: "scale", input: "cube", factor: 5 },
+      { output: "square", op: "multiply", a: "surfaceRaw", b: "surfaceRaw" },
+      { output: "cube", op: "multiply", a: "square", b: "surfaceRaw" },
+      { output: "boosted", op: "scale", input: "cube", factor: 5 },
+
+      // Over a carriage way's middle (`roadMiddle`, 1 there - see RoadProfile.median) the zone's own
+      // ground shows through between its two wheel tracks, mixed with the road's: most of the
+      // boosted weight taken off there (19 parts in 20) leaves the grass the larger share.
+      { output: "middleRaw", op: "input", name: "roadMiddle" },
+      { output: "middle", op: "scale", input: "middleRaw", factor: 0.95 },
+      { output: "unpaved", op: "invert", input: "middle" },
+      { output: "result", op: "multiply", a: "boosted", b: "unpaved" },
     ],
   },
 }

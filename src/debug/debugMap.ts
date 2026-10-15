@@ -345,6 +345,7 @@ export function createDebugMap(
             lakeFactor: sample.lakeFactor,
             riverGap: sample.riverGap,
             roadGap: sample.roadGap,
+            roadMiddle: sample.roadMiddle,
             featureKind: sample.featureKind,
             featureGap: sample.featureGap,
             featureDepth: sample.featureDepth,

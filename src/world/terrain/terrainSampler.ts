@@ -20,6 +20,7 @@ import {
   ROAD_SHOULDER_MIN,
   ROAD_SHOULDER_MAX,
   ROAD_QUERY_RADIUS,
+  roadMiddleShare,
   roadProfileOffset,
   ROAD_GRADE_END_TAPER,
 } from "../roads/roadConfig";
@@ -56,6 +57,9 @@ export interface TerrainSample {
   /** True distance to the nearest road centreline, Infinity past the road field's search radius.
    *  The material pipeline paints the road surface from this - there is no road mesh. */
   roadGap: number;
+  /** How much of a point lies on a road's unpaved middle - between a carriage way's wheel tracks -
+   *  0-1 (see RoadProfile.median); 0 off a road, and on a street. */
+  roadMiddle: number;
   /** The nearest feature in reach (a quarry): its kind's index into WorldContent.featureKinds, or
    *  -1; the distance past its edge (0 inside, Infinity with none); how far it cut or filled the
    *  ground here; and how far plants are cleared, 0-1. See features/featureField.ts. */
@@ -237,6 +241,7 @@ export function createTerrainSampler(seed: number, content: WorldContent): Terra
     // seabed - a road running into water simply disappears under it.
     let gradedHeight = landHeight;
     let roadGap = Infinity;
+    let roadMiddle = 0;
     if (roadField) {
       const road = roadField.query(worldX, worldZ);
       roadGap = road.distance;
@@ -249,7 +254,10 @@ export function createTerrainSampler(seed: number, content: WorldContent): Terra
         const blend = (1 - smoothstep(ROAD_HALF_WIDTH, ROAD_HALF_WIDTH + shoulder, road.distance)) * road.taper;
         gradedHeight = lerp(landHeight, road.height, blend);
         // Its cross-section on top: a crown, ditches, a track worn down into the ground.
-        if (road.profile) gradedHeight += roadProfileOffset(road.profile, road.distance) * road.taper * road.profileWeight;
+        if (road.profile) {
+          gradedHeight += roadProfileOffset(road.profile, road.distance) * road.taper * road.profileWeight;
+          roadMiddle = roadMiddleShare(road.profile, road.distance) * road.profileWeight;
+        }
       }
     }
 
@@ -275,6 +283,8 @@ export function createTerrainSampler(seed: number, content: WorldContent): Terra
       if (levelled) {
         height = levelled.height;
         roadGap = Math.min(roadGap, levelled.gap + PAD_PAINT_OFFSET);
+        // A pad's own ground is paved all over.
+        if (levelled.gap + PAD_PAINT_OFFSET < ROAD_HALF_WIDTH) roadMiddle = 0;
         padGap = levelled.edge;
       }
     }
@@ -293,6 +303,7 @@ export function createTerrainSampler(seed: number, content: WorldContent): Terra
       isRiverEdge: area.isRiverEdge,
       riverGap: area.riverGap,
       roadGap,
+      roadMiddle,
       featureKind: feature ? feature.kind : -1,
       featureGap: feature ? feature.gap : Infinity,
       featureDepth: feature ? feature.depth : 0,

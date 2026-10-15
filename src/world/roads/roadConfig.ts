@@ -145,12 +145,17 @@ export interface RoadClass {
  * - `ditch`: a ditch either side, `depth` deep at `at` units out, `width` either side of that -
  *   wider than two of the terrain's vertices, or it is not there to see - or none;
  * - `sink`: its running width worn this far down into the ground, rising back by SINK_REACH - a
- *   track trodden into a hollow.
+ *   track trodden into a hollow;
+ * - `median`: the middle of it this far either side of its middle left unpaved - the ground
+ *   between the two wheel tracks of a carriage way, the zone's own showing through (see the road
+ *   layer's `roadMiddle`) - or 0 for none. Wider than a terrain vertex's spacing, or it is not there
+ *   to see.
  */
 export interface RoadProfile {
   crown: number;
   ditch: { at: number; depth: number; width: number } | null;
   sink: number;
+  median: number;
 }
 
 export const ROAD_CROWN_REACH = 7;
@@ -158,11 +163,19 @@ export const ROAD_SINK_REACH: [number, number] = [4, 8.5];
 
 export const ROAD_CLASSES: readonly RoadClass[] = [
   // Crowned and ditched either side - a made road.
-  { id: "highway", minTraffic: 6, width: 1.25, profile: { crown: 0.75, ditch: { at: 10, depth: 2.1, width: 2.4 }, sink: 0 } },
-  { id: "road", minTraffic: 1, width: 1, profile: { crown: 0.45, ditch: { at: 10, depth: 1.2, width: 2.2 }, sink: 0 } },
+  { id: "highway", minTraffic: 6, width: 1.25, profile: { crown: 0.75, ditch: { at: 10, depth: 2.1, width: 2.4 }, sink: 0, median: 2 } },
+  { id: "road", minTraffic: 1, width: 1, profile: { crown: 0.45, ditch: { at: 10, depth: 1.2, width: 2.2 }, sink: 0, median: 2 } },
   // Worn into the ground, no made edge.
-  { id: "track", minTraffic: 0, width: 0.5, profile: { crown: 0, ditch: null, sink: 1.05 } },
+  { id: "track", minTraffic: 0, width: 0.5, profile: { crown: 0, ditch: null, sink: 1.05, median: 0 } },
 ];
+
+/** How much of a point lies on a road's unpaved middle (see RoadProfile.median), 0-1: all of it
+ *  out to half the median's width, none past its edge. */
+export function roadMiddleShare(profile: RoadProfile, distance: number): number {
+  if (profile.median <= 0) return 0;
+  const t = Math.min(1, Math.max(0, (distance - profile.median * 0.5) / (profile.median * 0.5)));
+  return 1 - t * t * (3 - 2 * t);
+}
 
 /** How far a road's cross-section moves its ground at `distance` (countryside-road units) out from
  *  its middle - see RoadProfile. */
