@@ -122,17 +122,41 @@ What fixed most of it was resampling before snapping (see `snapToNetwork`). The 
 real splice - where a new route follows an existing road, adopt that road's own points rather than
 snapping a copy onto them - which would also stop the shared stretch being stored twice.
 
-### Road crossings are fords, and the road passes under the water
+### Too few rivers for the roads to cross
 
-Where a road crosses a river it is graded down the carved channel and back up, so it goes under the
-sea-level water plane for the width of the crossing. It reads as a ford, which is honest, but the
-beds run to -8 near a river mouth and nobody fords eight units of water.
+A whole continent has 3-5 rivers (RIVERS_PER_CONTINENT_RANGE, src/world/cells/config.ts), so the
+roads cross water only a handful of times: on seed 1338, 8 bridges for 186 km of road. Rivers - and
+with them bridges, mills, fords and river towns - should be far more common, so most walks meet
+water. The aim, roughly, is a river through every zone that should have one:
 
-It does not dam anything - measured, 0 of 570 road samples inside a river bed are above sea level,
-because ROAD_PROFILE_MAX_FILL holds the road within five units of the ground it was routed over and
-that ground is the channel. The decision taken earlier stands: ford where the bed is shallow, a
-generated deck where it is not. A heightfield cannot express a road over water, so a deck would have
-to be its own mesh - the one place the everything-is-terrain rule has to give.
+- **By zone, not by continent.** How many rivers a zone gets should be its biome's say - a desert
+  none (a dry wadi at most), a meadow or a wood one, a swamp, a marsh or a bayou several - rather than
+  a flat 3-5 for the whole continent.
+- **Branching rivers.** Tributaries joining a main river - a tree of channels rather than one line
+  from source to mouth - is the cheapest way to reach many zones with few rivers: one river system
+  can water a whole run of zones on its way to the sea. Each branch narrower and shallower toward its
+  source, as the main channel already tapers.
+- **Shorter ones.** Streams that rise in hills and run a few cells, not only coast-to-mountain rivers.
+
+Mind what they cost: the river field's query radius and carving, the road pathfinder's
+river-crossing term, the feature placement that keeps clear of them - and where two channels join,
+the carve has to be one confluence, not two valleys cut through each other. And one constraint
+that shapes all of it: the water is a single plane at sea level (see terrain/rivers/riverConfig.ts),
+so a river is a channel cut below 0 wherever it runs. A stream high in the hills is then a deep cut
+valley, not a brook at its own level - small high streams would want water of their own height.
+
+### One kind of bridge
+
+Every bridge is the same: stone-brick piers carrying a timber deck (`pierBridge`, props/bridge.json5;
+roads/bridges.ts places them, and each zone names its own with `roadBridge`). More kinds, each a line
+generator and a prop file, chosen by zone - and by road class, once a zone can name one per class:
+
+- a stone arch bridge: piers with round arches between them, parapet walls (highways, stony zones);
+- a timber trestle: post-and-brace frames, a plank deck (tracks, wooded zones);
+- for a short, shallow crossing, a clapper bridge (stone slabs on stone piles) or a ford left as it
+  is, the road wading through.
+
+Not yet checked: walking across one - the deck and rails have colliders, but nobody has crossed.
 
 ### Two roads sharing a stretch can disagree about its height
 
