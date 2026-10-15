@@ -6,6 +6,7 @@ import { createBedrockSampler } from "../bedrock";
 import { generateSettlementSites, type SettlementSite } from "../settlements/settlementSites";
 import { generateRoadNetwork, type RoadNetwork } from "../roads/roadNetwork";
 import { createRoadField, type RoadField } from "../roads/roadField";
+import { planBridges, type Bridge } from "../roads/bridges";
 import { generateSettlementLayouts, type SettlementLayout } from "../settlements/settlementLayout";
 import { compoundPads, createPadField, propPads, settlementPads, type PadField } from "../settlements/padField";
 import { layoutCompounds, settleProps, settleOnGround, type CompoundLayout } from "../features/compound";
@@ -96,6 +97,8 @@ export interface TerrainWorld {
   settlementLayouts: SettlementLayout[];
   /** Each compound's yard, entrances and buildings - see features/compound.ts. */
   compoundLayouts: CompoundLayout[];
+  /** The roads' bridges over the rivers they cross - see roads/bridges.ts. */
+  bridges: Bridge[];
   /** Each area's own roll of its biome, by area id (see cells/areaField.ts). */
   areaBiomes: BiomeDefinition[];
 }
@@ -244,8 +247,9 @@ export function createTerrainSampler(seed: number, content: WorldContent): Terra
     let roadMiddle = 0;
     if (roadField) {
       const road = roadField.query(worldX, worldZ);
-      roadGap = road.distance;
-      if (road.distance < ROAD_QUERY_RADIUS) {
+      // A road on a bridge leaves the ground under it be - nor is it painted there.
+      roadGap = road.bridged ? Infinity : road.distance;
+      if (!road.bridged && road.distance < ROAD_QUERY_RADIUS) {
         // The shoulder is as wide as it has to be to get from the road's level back to the
         // ground's at ROAD_SIDE_SLOPE, so its gradient is the constant and its width follows.
         // A fixed width would be a wall wherever the cut or fill happened to be deep.
@@ -342,6 +346,10 @@ export function createTerrainSampler(seed: number, content: WorldContent): Terra
   // last of all - joining the settlements and the features that want roads, and keeping off the
   // rest of the features' ground.
   const roads = timed("Routing roads", () => generateRoadNetwork(seed, settlements, sampleTerrain, features));
+  // Over the rivers they cross, carried on bridges rather than run under the water - before they are
+  // graded into the ground.
+  const propById = new Map(content.props.map((prop) => [prop.id, prop]));
+  const bridges = timed("Bridging rivers", () => planBridges(roads.stretches, sampleTerrain, (x, z) => propById.get(sampleTerrain(x, z).primaryBiome.roadBridgeId) ?? null));
   roadField = createRoadField(roads.stretches, ROAD_QUERY_RADIUS, ROAD_GRADE_END_TAPER);
 
   // Settlements are laid out on the terrain as the roads left it, then their streets join the road
@@ -387,5 +395,5 @@ export function createTerrainSampler(seed: number, content: WorldContent): Terra
   settleOnGround(compoundLayouts, sampleTerrain);
   spillField = createSpillField(compoundLayouts, spillMaterials(content));
 
-  return { sampleTerrain, worldExtent, continents, areaBounds, areaNames, settlements, features, roads, settlementLayouts, compoundLayouts, areaBiomes };
+  return { sampleTerrain, worldExtent, continents, areaBounds, areaNames, settlements, features, roads, settlementLayouts, compoundLayouts, bridges, areaBiomes };
 }

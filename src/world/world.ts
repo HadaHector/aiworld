@@ -36,6 +36,8 @@ import type { WorldContent } from "./content/worldContent";
 
 /** The roads' fences are drawn (and come into the collision world) in cells this wide. */
 const FENCE_CELL = 256;
+/** A bridge's piers reach down to this height - the deepest river's bed, under the water. */
+const BRIDGE_PIER_FOOT = -9;
 
 /** A thing's label is shown this high over its foot - over a sign's board, at about eye level. */
 const LABEL_HEIGHT = 2.2;
@@ -179,7 +181,7 @@ export async function createWorld(
   };
 
   await phase("Shaping the world: continents, zones, rivers, roads and settlements");
-  const { sampleTerrain, worldExtent, continents, areaBounds, areaNames, settlements, features, roads, settlementLayouts, compoundLayouts, areaBiomes } = createTerrainSampler(WORLD_SEED, content);
+  const { sampleTerrain, worldExtent, continents, areaBounds, areaNames, settlements, features, roads, settlementLayouts, compoundLayouts, bridges, areaBiomes } = createTerrainSampler(WORLD_SEED, content);
 
   const materialLibrary = await createMaterialLibrary(scene, WORLD_SEED, content, areaBiomes, sunLighting, (done, total) => {
     onProgress?.({ phase: "Baking material textures", completed: done, total });
@@ -211,6 +213,16 @@ export async function createWorld(
   for (const run of roadFences) {
     const gx = Math.floor(run.points[0].x / FENCE_CELL);
     const gz = Math.floor(run.points[0].z / FENCE_CELL);
+    const key = `fences:${gx},${gz}`;
+    const cell = fenceCells.get(key) ?? { key, x: (gx + 0.5) * FENCE_CELL, z: (gz + 0.5) * FENCE_CELL, houses: [] };
+    cell.houses.push(...wallStretches(run, WORLD_SEED));
+    fenceCells.set(key, cell);
+  }
+  // The bridges: each a line prop along its deck, its piers down under the water.
+  for (const bridge of bridges) {
+    const run = { prop: bridge.prop, variant: bridge.variant, points: bridge.points, heights: bridge.heights, ends: ["free", "free"] as ["free", "free"], breach: false, width: bridge.width, base: BRIDGE_PIER_FOOT };
+    const gx = Math.floor(bridge.points[0].x / FENCE_CELL);
+    const gz = Math.floor(bridge.points[0].z / FENCE_CELL);
     const key = `fences:${gx},${gz}`;
     const cell = fenceCells.get(key) ?? { key, x: (gx + 0.5) * FENCE_CELL, z: (gz + 0.5) * FENCE_CELL, houses: [] };
     cell.houses.push(...wallStretches(run, WORLD_SEED));

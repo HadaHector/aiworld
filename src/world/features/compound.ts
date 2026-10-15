@@ -114,6 +114,9 @@ export interface WallRun {
   heights: number[];
   ends: [LineEnd, LineEnd];
   breach: boolean;
+  /** For one not on the ground - a bridge - its width and how low its piers reach (see LineRun). */
+  width?: number;
+  base?: number;
 }
 
 /** A building variant is drawn from this many, as a settlement's houses are. */
@@ -1489,7 +1492,7 @@ export function wallStretches(run: WallRun, seed: number): { x: number; y: numbe
     const origin = { x: run.points[from].x, y: run.heights[from], z: run.points[from].z };
     const points: Vec3[] = [];
     for (let k = from; k <= to; k++) points.push([run.points[k].x - origin.x, run.heights[k] - origin.y, run.points[k].z - origin.z]);
-    const line: LineRun = { points, ends: [n === 0 ? run.ends[0] : "join", n === cuts.length - 2 ? run.ends[1] : "join"], breach: run.breach };
+    const line: LineRun = { points, ends: [n === 0 ? run.ends[0] : "join", n === cuts.length - 2 ? run.ends[1] : "join"], breach: run.breach, width: run.width, base: run.base === undefined ? undefined : run.base - origin.y };
     const variant = run.variant + n;
     stretches.push({ ...origin, frontX: 0, frontZ: 1, model: (far: boolean) => generateLine(run.prop, seed, variant, line, far) });
   }

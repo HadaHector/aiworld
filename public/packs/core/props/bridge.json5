@@ -1,0 +1,24 @@
+// A bridge where a road crosses a river: piers of stone brick every twenty-odd metres, a stone
+// abutment at each bank, carrying a timber deck - planks on two stringers - with a post-and-rail
+// handrail along each side. Laid along the road's deck (see src/world/roads/bridges.ts), humped a
+// little over the water.
+{
+  name: "Bridge",
+  type: "pierBridge",
+  // At twice life size, as everything is: its piers twenty-odd metres apart, its deck over half a
+  // metre thick, its rail at a hand's height still but of heavy lumber.
+  pierBridge: {
+    span: [20, 26],
+    deck: [0.56, 0.64],
+    rail: [1.05, 1.15],
+    lumber: [0.24, 0.3],
+    pier: [3.4, 4.2],
+    pierReach: [1.4, 1.8],
+  },
+  parts: {
+    stone: { material: "stoneBricks", tints: [[1, 1, 1], [0.92, 0.9, 0.86]] },
+    deck: { material: "deckBoards", tints: [[0.75, 0.7, 0.62], [0.68, 0.63, 0.56]] },
+    beams: { material: "timber", tints: [[0.55, 0.5, 0.45]] },
+    rails: { material: "timber", tints: [[0.62, 0.56, 0.5]] },
+  },
+}

@@ -26,7 +26,7 @@ function sampleRun(): LineRun {
 }
 
 /** Where a run is `s` metres along it (measured flat), and its ground there. */
-interface Walker {
+export interface Walker {
   /** Its whole length, flat. */
   length: number;
   /**
@@ -40,7 +40,7 @@ interface Walker {
   dir(s: number): [number, number];
 }
 
-function walk(points: Vec3[]): Walker {
+export function walk(points: Vec3[]): Walker {
   const lengths = [0];
   for (let i = 1; i < points.length; i++) lengths.push(lengths[i - 1] + Math.hypot(points[i][0] - points[i - 1][0], points[i][2] - points[i - 1][2]));
   const segment = (s: number): number => {

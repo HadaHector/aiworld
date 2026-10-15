@@ -4,6 +4,7 @@ import { barrel, choppingBlock, crate, gate, grindstone, sawbuck } from "./woodw
 import { heap, signpost, trough, well } from "./yard";
 import { drystoneWall, railFence } from "./walls";
 import { fingerArm, fingerpost } from "./signs";
+import { pierBridge } from "./bridges";
 import { gravePost, headstone, lychgate, tomb } from "./graves";
 import { altar, armchair, banner, bed, bench, cabinet, chair, chest, counter, fireplace, lantern, rack, sack, sconce, stool, stove, table } from "./furniture";
 
@@ -24,6 +25,7 @@ export const PROP_GENERATORS: Record<string, PropGenerator> = {
   signpost,
   fingerpost,
   fingerArm,
+  pierBridge,
   railFence,
   headstone,
   gravePost,

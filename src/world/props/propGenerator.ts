@@ -57,6 +57,11 @@ export interface LineRun {
   points: Vec3[];
   ends: [LineEnd, LineEnd];
   breach: boolean;
+  /** For a line prop that is not set on the ground but carries something (a bridge, its points its
+   *  deck): how wide it is, and how low (in the model's space) what it stands on lies - its piers'
+   *  feet. */
+  width?: number;
+  base?: number;
 }
 
 export type LineEnd = "free" | "join" | "broken";

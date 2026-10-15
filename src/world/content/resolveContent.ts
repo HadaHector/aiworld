@@ -336,6 +336,9 @@ export function resolveContent(packs: PackSource[]): WorldContent {
     const fence = propById.get(biome.roadFenceId);
     if (!fence) issues.push({ file, path: "roadFence", message: `no prop "${biome.roadFenceId}" (known: ${[...propById.keys()].join(", ")})` });
     else if (!isLineProp(fence)) issues.push({ file, path: "roadFence", message: `"${biome.roadFenceId}" is not laid along a line - a wall or a fence is` });
+    const bridge = propById.get(biome.roadBridgeId);
+    if (!bridge) issues.push({ file, path: "roadBridge", message: `no prop "${biome.roadBridgeId}" (known: ${[...propById.keys()].join(", ")})` });
+    else if (!isLineProp(bridge)) issues.push({ file, path: "roadBridge", message: `"${biome.roadBridgeId}" is not laid along a line - a bridge is` });
   }
 
   // --- references between definitions ---
@@ -2395,6 +2398,7 @@ function readBiome(id: string, obj: RawObject, reader: Reader, defaults: Default
     "voice",
     "spawnWeight",
     "roadFence",
+    "roadBridge",
     "lakeChance",
     "borderType",
     "height",
@@ -2467,6 +2471,7 @@ function readBiome(id: string, obj: RawObject, reader: Reader, defaults: Default
     baseMaterialId: reader.string(ground, "base", "ground"),
     roadMaterialId: reader.string(ground, "road", "ground"),
     roadFenceId: obj.roadFence === undefined ? "railFence" : reader.string(obj, "roadFence", ""),
+    roadBridgeId: obj.roadBridge === undefined ? "bridge" : reader.string(obj, "roadBridge", ""),
     materialLayers,
     groundAdjust: ground.adjust === undefined ? NO_ADJUST : readColorAdjust(reader.object(ground.adjust, "ground.adjust"), reader, "ground.adjust"),
     groundTints: reader.optionalArray(ground, "tints", "ground").map((raw, i) => {

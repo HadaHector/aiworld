@@ -14,6 +14,9 @@ export interface RoadLine {
   /** A road's class (see ROAD_CLASSES) - its cross-section - or none: a street, a lane, a path,
    *  level across. */
   roadClass?: RoadClassId;
+  /** Where along it (metres, from its start) it is carried over the water on a bridge - see
+   *  bridges.ts: there it grades and paints nothing, the ground under it left as it lies. */
+  bridges?: [number, number][];
 }
 
 export interface RoadQuery {
@@ -31,12 +34,14 @@ export interface RoadQuery {
    *  and a road at a junction) neither's cross-section steps into the other's. */
   profile: RoadProfile | null;
   profileWeight: number;
+  /** Whether the nearest road is on a bridge there. */
+  bridged: boolean;
 }
 
 /** A road's cross-section fades in over this far from either of its ends. */
 const ROAD_PROFILE_END_FADE = 25;
 
-const MISS: RoadQuery = { distance: Infinity, height: 0, taper: 0, profile: null, profileWeight: 0 };
+const MISS: RoadQuery = { distance: Infinity, height: 0, taper: 0, profile: null, profileWeight: 0, bridged: false };
 
 
 interface Segment {
@@ -55,6 +60,10 @@ interface Segment {
   inverseWidth: number;
   taperEnds: boolean;
   profile: RoadProfile | null;
+  /** Wholly on a bridge. */
+  bridged: boolean;
+  /** Its road's bridges, by arc length - its cross-section fades out toward their ends too. */
+  bridges: [number, number][];
 }
 
 /**
@@ -128,6 +137,8 @@ export function createRoadField(links: RoadLine[], searchRadius: number, endTape
         inverseWidth: 1 / (link.widthScale ?? 1),
         taperEnds: link.taperEnds ?? true,
         profile: link.roadClass ? (ROAD_CLASSES.find((c) => c.id === link.roadClass)?.profile ?? null) : null,
+        bridged: (link.bridges ?? []).some(([s0, s1]) => travelled >= s0 - 1e-3 && travelled + lengths[i] <= s1 + 1e-3),
+        bridges: link.bridges ?? [],
       };
       travelled += lengths[i];
       if (lengthSq <= 0) continue;
@@ -182,7 +193,9 @@ export function createRoadField(links: RoadLine[], searchRadius: number, endTape
       height: best.h0 + (best.h1 - best.h0) * bestU,
       taper: t * t * (3 - 2 * t),
       profile: best.profile,
-      profileWeight: Math.min(1, fromEnds / ROAD_PROFILE_END_FADE),
+      // (And toward a bridge's ends, where the deck takes over from the ground.)
+      profileWeight: Math.min(1, Math.min(fromEnds, ...best.bridges.map(([s0, s1]) => Math.max(0, s0 - arc, arc - s1))) / ROAD_PROFILE_END_FADE),
+      bridged: best.bridged,
     };
   }
 

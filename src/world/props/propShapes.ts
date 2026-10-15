@@ -143,13 +143,17 @@ export class Shaper {
    * head. The same eight corners, so no more polygons, but it reads as shaped rather than sawn
    * square. Its sides then lean, and are lit as they lean.
    *
-   * `bevel` (metres) cuts every edge off at 45 degrees with a face of its own, and every corner with
+   * `grain` lays its texture's grain along one of its axes rather than its longest (see above).
+ *
+ * `bevel` (metres) cuts every edge off at 45 degrees with a face of its own, and every corner with
    * a small triangle - 26 faces rather than 6: worn timber, dressed stone, a cushion's roll. It goes
    * with `taper` too.
    */
-  box(f: Frame, half: Vec3, paint: Paint, options: ShapeOptions & { top?: Paint; bottom?: boolean; taper?: [number, number]; taperAxis?: "y" | "z"; bevel?: number } = {}): void {
+  box(f: Frame, half: Vec3, paint: Paint, options: ShapeOptions & { top?: Paint; bottom?: boolean; taper?: [number, number]; taperAxis?: "y" | "z"; bevel?: number; grain?: "x" | "y" | "z" } = {}): void {
     const [hx, hy, hz] = half;
-    const longest = hx >= hy && hx >= hz ? f.x : hy >= hz ? f.y : f.z;
+    // Its texture's grain: along its longest side - or the way it is told (masonry: up it, so its
+    // courses lie level however it is shaped).
+    const longest = options.grain ? f[options.grain] : hx >= hy && hx >= hz ? f.x : hy >= hz ? f.y : f.z;
     const [low, high] = options.taper ?? [1, 1];
     const alongZ = options.taperAxis === "z";
     // A point in the box's own half-extent space, tapered by which end of the taper's axis it is at.
