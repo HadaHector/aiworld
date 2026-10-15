@@ -8,6 +8,7 @@ import { createInstruments, zoneFor, type Instrument, type SampleZone } from "..
 import { Player, type PlayPosition } from "../music/player";
 import { parseXi } from "../music/xi";
 import { songNotes, songRows, type Song } from "../music/song";
+import { SHARED_SOUNDS, STYLE_SOUNDS } from "../music/sounds";
 import { STYLES } from "../music/styles";
 import { noteName } from "../music/theory";
 
@@ -275,29 +276,13 @@ const DRUM_FOLDERS = ["darbuka", "frameDrum", "tambourine", "lowDrum", "knock", 
 /** Picks are kept per style: { styleId: { instrument or "id:stroke": library path or "" } }. */
 const SOUNDS_KEY = "aiworld.music.soundsByStyle";
 /** Before that, one set of picks for every style: it becomes each style's starting point. */
-const SHARED_SOUNDS_KEY = "aiworld.music.sounds";
-/** The sounds picked by ear, used wherever the library has them; "" in a choice means the synth. */
-const DEFAULT_SOUNDS: Record<string, string> = {
-  guitar: "guitar/nlgtr01f.xi",
-  strings: "strings/ostrs03.xi",
-  // Guesses, not yet picked by ear: low strings for the pad's bottom voice, another orchestra set on top.
-  stringsLow: "bass/lstrs01.xi",
-  stringsHigh: "strings/ostrs09.xi",
-  bass: "bass/cbass01.xi",
-  flute: "flute/flute09.xi",
-  frameDrum: "frameDrum/pandr02.xi",
-  tambourine: "tambourine/tamb02.xi",
-  lowDrum: "lowDrum/tom008l.xi",
-  choir: "choir/aahh02.xi",
-  harp: "harp/plharp01.xi",
-  bells: "bells/glock01.xi",
-};
+const LEGACY_SOUNDS_KEY = "aiworld.music.sounds";
 let library: Record<string, string[]> = {};
 const soundsByStyle: Record<string, Record<string, string>> = ((): Record<string, Record<string, string>> => {
   try {
     const byStyle = JSON.parse(localStorage.getItem(SOUNDS_KEY) ?? "null");
     if (byStyle) return byStyle;
-    const shared = JSON.parse(localStorage.getItem(SHARED_SOUNDS_KEY) ?? "{}");
+    const shared = JSON.parse(localStorage.getItem(LEGACY_SOUNDS_KEY) ?? "{}");
     return Object.fromEntries(STYLES.map((s) => [s.id, { ...shared }]));
   } catch {
     return {};
@@ -306,7 +291,7 @@ const soundsByStyle: Record<string, Record<string, string>> = ((): Record<string
 /** The style whose picks `sounds` holds. */
 let soundsStyle = styleSelect.value || STYLES[0].id;
 /** The current style's choices by instrument id; a drum's strokes by "id:stroke". "" means the synth. */
-const sounds: Record<string, string> = { ...DEFAULT_SOUNDS, ...soundsByStyle[soundsStyle] };
+const sounds: Record<string, string> = { ...SHARED_SOUNDS, ...STYLE_SOUNDS[soundsStyle], ...soundsByStyle[soundsStyle] };
 
 function saveSounds(): void {
   soundsByStyle[soundsStyle] = { ...sounds };
@@ -322,7 +307,7 @@ async function useStyleSounds(styleId: string): Promise<void> {
   if (styleId === soundsStyle) return;
   soundsStyle = styleId;
   for (const key of Object.keys(sounds)) delete sounds[key];
-  Object.assign(sounds, DEFAULT_SOUNDS, soundsByStyle[styleId]);
+  Object.assign(sounds, SHARED_SOUNDS, STYLE_SOUNDS[styleId], soundsByStyle[styleId]);
   for (const id of new Set([...Object.keys(synths), ...Object.keys(instruments)])) {
     try {
       await buildInstrument(id);

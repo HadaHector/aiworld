@@ -309,10 +309,9 @@ the forest style using synth stand-ins.
   gitignored because their licence is a grey zone. `index.json` lists them by role and
   `SOURCES.txt` records where each one came from. On the music page, each instrument card has a
   picker to swap the synth for a library sound; the choice is kept per browser. The sounds picked
-  by ear are the defaults (`DEFAULT_SOUNDS` in `src/musicPage/main.ts`):
-  - guitar `nlgtr01f`, strings `ostrs03`, bass `cbass01`, flute `flute09`
-  - frame drum `pandr02`, tambourine `tamb02`, low drum `tom008l`
-  - choir `aahh02`, harp `plharp01`, bells `glock01`
+  by ear are the defaults, per style, in `src/music/sounds.ts`. `SHARED_SOUNDS` applies to every
+  style, and `STYLE_SOUNDS` holds each style's own picks on top ("" keeps the synth, as for the
+  jungle's birds and the nordic wind). A browser's own picks go on top of those.
 
   On a machine without the library, each instrument falls back to its synth.
 - **Picks are kept per style.** The page stores `{ style: { instrument: file } }` in the
