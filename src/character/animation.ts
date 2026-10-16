@@ -42,10 +42,10 @@ const SWING_TIME = 0.62;
  * for, so nothing snaps.
  *
  * - **Idle** breathes, shifts its weight now and then and looks round.
- * - **Walk and run** are one gait whose phase advances with the distance covered, so its strides
- *   fit its speed: stride, knee lift, bounce, lean, arm swing and elbow bend all grow with speed,
- *   walking turning into running between 4 and 9 m/s (the game walks at 6 and runs at 12). The
- *   body is lowered as far as the leg standing under it has shortened, so its foot stays down.
+ * - **Walk and run** are two cycles on one phase, which advances with the distance covered so the
+ *   strides fit the speed; walking (about 1.2-1.5 m/s) turns into running - a jog, about 3 m/s -
+ *   between 1.8 and 2.6. Walking lowers the body as far as the leg standing under it has
+ *   shortened, so that foot stays down; running flies between its steps.
  * - **In the air** the legs tuck while rising and reach down while falling, the arms out for
  *   balance; landing dips the body.
  * - **Swimming** lies the body along the water and strokes: arms forward, out and back, the legs
@@ -72,11 +72,14 @@ export function createAnimator(skeleton: RaceSkeleton): Animator {
     update(input, dt) {
       time += dt;
       const speed = Math.max(0, input.speed);
-      // A cycle (two steps) covers more ground the faster it goes, up to a point; past it the legs
+      // Walking turns into running between 1.8 and 2.6 m/s. A cycle (two steps) covers more ground
+      // the faster it goes, a running one more than a walking one, up to a point; past it the legs
       // only turn over faster.
-      const stride = leg * Math.min(4.2, 1.4 + 0.35 * speed);
+      const run = smooth(1.8, 2.6, speed);
+      const walkStride = leg * Math.min(2.6, 1.2 + 0.4 * speed);
+      const runStride = leg * Math.min(4.2, 1.6 + 0.35 * speed);
+      const stride = walkStride + (runStride - walkStride) * run;
       if (input.grounded && !input.swimming) phase = (phase + (speed * dt) / stride) % 1;
-      const run = smooth(4, 9, speed);
       moving = ease(moving, input.grounded && speed > 0.3 ? 1 : 0, 8, dt);
       air = ease(air, input.grounded || input.swimming ? 0 : 1, 12, dt);
       swim = ease(swim, input.swimming ? 1 : 0, 4, dt);
@@ -89,7 +92,9 @@ export function createAnimator(skeleton: RaceSkeleton): Animator {
       swimPhase = (swimPhase + dt / 1.5) % 1;
 
       const idlePose = idle(time);
-      const gaitPose = gait(phase, Math.min(1, speed / 3), run);
+      const walkPose = walking(phase, Math.min(1, speed / 1.3));
+      const runPose = running(phase, Math.min(1, speed / 3));
+      const gaitPose = { pose: mix(walkPose.pose, runPose.pose, run), offset: lerp3(walkPose.offset, runPose.offset, run) };
       let pose = mix(idlePose.pose, gaitPose.pose, moving);
       let offset = lerp3(idlePose.offset, gaitPose.offset, moving);
       pose = mix(pose, inAir(input.verticalSpeed), air);
@@ -134,43 +139,79 @@ export function createAnimator(skeleton: RaceSkeleton): Animator {
   }
 
   /**
-   * One step cycle at `p` (0-1, the +x leg's; the other half a cycle behind it). `amount` grows
-   * from a shuffle to a full stride; `run` from walking to running.
+   * A walking cycle at `p` (0-1, the +x leg's; the other half a cycle behind it), `amount` growing
+   * from a shuffle to a full stride: one foot always down, the knee bending as the leg swings
+   * through, the body rising over the standing leg, the arms swinging loosely against the legs.
    */
-  function gait(p: number, amount: number, run: number): AnimatedPose {
-    const thighSwing = (0.42 + 0.38 * run) * (0.4 + 0.6 * amount);
-    const kneeLift = (0.75 + 0.75 * run) * (0.4 + 0.6 * amount);
+  function walking(p: number, amount: number): AnimatedPose {
+    const reach = 0.4 + 0.6 * amount;
     const pose: Pose = {};
     let lowest = 0;
     for (const [suffix, offset] of [["R", 0], ["L", 0.5]] as const) {
       const a = 2 * Math.PI * (p + offset);
-      const thigh = thighSwing * Math.sin(a) + 0.08 * run;
+      const thigh = 0.42 * reach * Math.sin(a);
       // The knee bends most while the leg swings forward (its thigh angle rising), a little as it
       // takes the weight.
-      const knee = -(0.08 + 0.12 * run + kneeLift * Math.max(0, Math.cos(a - 0.5)) ** 1.6);
+      const knee = -(0.08 + 0.75 * reach * Math.max(0, Math.cos(a - 0.5)) ** 1.6);
       // The foot held near level through the stance, toes up as the heel strikes.
-      const foot = -(thigh + knee) * 0.75 + 0.2 * Math.max(0, Math.sin(a + 0.6)) - 0.15 * run * Math.max(0, -Math.sin(a));
+      const foot = -(thigh + knee) * 0.75 + 0.2 * Math.max(0, Math.sin(a + 0.6));
       pose[`thigh${suffix}`] = [thigh, 0, suffix === "R" ? 0.03 : -0.03];
       pose[`shin${suffix}`] = [knee, 0, 0];
       pose[`foot${suffix}`] = [foot, 0, 0];
-      // How far down this leg reaches with the hip where it is.
-      const reach = skeleton.thigh * Math.cos(thigh) + skeleton.shin * Math.cos(thigh + knee);
-      lowest = Math.max(lowest, reach);
+      lowest = Math.max(lowest, skeleton.thigh * Math.cos(thigh) + skeleton.shin * Math.cos(thigh + knee));
       // The arm on the other side swings with this leg.
       const other = suffix === "R" ? "L" : "R";
-      const arm = -(0.3 + 0.45 * run) * (0.4 + 0.6 * amount) * Math.sin(a);
-      pose[`upperArm${other}`] = [arm + 0.1 * run, 0, other === "R" ? 0.06 : -0.06];
-      pose[`forearm${other}`] = [0.3 + 1.1 * run + 0.25 * Math.max(0, -Math.sin(a)) * (0.4 + run), 0, 0];
+      pose[`upperArm${other}`] = [-0.3 * reach * Math.sin(a), 0, other === "R" ? 0.06 : -0.06];
+      pose[`forearm${other}`] = [0.3 + 0.25 * Math.max(0, -Math.sin(a)) * reach, 0, 0];
     }
     const a = 2 * Math.PI * p;
-    // The body lowered to stand on the longest leg; walking rises over it, running sinks into it.
-    const drop = leg - lowest;
-    const bob = (0.012 + 0.03 * run) * amount * Math.cos(2 * a) * (run > 0.5 ? -1 : 1);
-    pose.pelvis = [0.04 * run, 0.12 * amount * Math.sin(a), 0];
-    pose.spine = [0.06 + 0.16 * run, -0.08 * amount * Math.sin(a), 0];
-    pose.chest = [0.02 * run, -0.1 * amount * Math.sin(a), 0];
-    pose.head = [-0.05 - 0.12 * run, 0.04 * amount * Math.sin(a), 0];
-    return { pose, offset: [0, -drop + bob, 0] };
+    // Lowered onto the longer leg, and rising over it at mid-stance.
+    const bob = 0.012 * amount * Math.cos(2 * a);
+    pose.pelvis = [0, 0.12 * amount * Math.sin(a), 0];
+    pose.spine = [0.06, -0.08 * amount * Math.sin(a), 0];
+    pose.chest = [0, -0.1 * amount * Math.sin(a), 0];
+    pose.head = [-0.05, 0.04 * amount * Math.sin(a), 0];
+    return { pose, offset: [0, -(leg - lowest) + bob, 0] };
+  }
+
+  /**
+   * A running cycle - a jog - at `p`: each foot pushes off behind and the body flies between
+   * steps, lowest as it lands on the next; the swinging leg's heel kicks up behind and its knee
+   * drives high in front; the body leans into it, the elbows held bent and pumping.
+   */
+  function running(p: number, amount: number): AnimatedPose {
+    const reach = 0.5 + 0.5 * amount;
+    const pose: Pose = {};
+    let lowest = 0;
+    for (const [suffix, offset] of [["R", 0], ["L", 0.5]] as const) {
+      const a = 2 * Math.PI * (p + offset);
+      // Further forward than back: the knee drives up in front.
+      const thigh = 0.2 + 0.6 * reach * Math.sin(a);
+      // Folded tight through the swing - the heel up behind as the thigh comes through - and a
+      // little through the stance, taking the landing.
+      const swingFold = Math.max(0, Math.cos(a + 0.3)) ** 1.2;
+      const knee = -(0.3 + 1.55 * reach * swingFold + 0.25 * Math.max(0, -Math.cos(a)));
+      // Toes pointed after the push-off, the foot flat again to land.
+      const foot = -(thigh + knee) * 0.55 - 0.35 * Math.max(0, -Math.sin(a + 0.4)) * reach;
+      pose[`thigh${suffix}`] = [thigh, 0, suffix === "R" ? 0.02 : -0.02];
+      pose[`shin${suffix}`] = [knee, 0, 0];
+      pose[`foot${suffix}`] = [foot, 0, 0];
+      lowest = Math.max(lowest, skeleton.thigh * Math.cos(thigh) + skeleton.shin * Math.cos(thigh + knee));
+      // The arm on the other side pumps with this leg, elbow bent near square, crossing a little.
+      const other = suffix === "R" ? "L" : "R";
+      pose[`upperArm${other}`] = [0.15 - 0.55 * reach * Math.sin(a), 0, other === "R" ? -0.08 : 0.08];
+      pose[`forearm${other}`] = [1.45 + 0.2 * Math.sin(a), 0, 0];
+    }
+    const a = 2 * Math.PI * p;
+    // Down onto the leg under it at each mid-stance, so that foot is on the ground; up in the
+    // flight between steps.
+    const flight = 0.05 * reach * Math.max(0, -Math.cos(2 * a));
+    const bob = -(leg - lowest) + flight;
+    pose.pelvis = [0.08, 0.08 * reach * Math.sin(a), 0];
+    pose.spine = [0.16, -0.06 * reach * Math.sin(a), 0];
+    pose.chest = [0.04, -0.12 * reach * Math.sin(a), 0];
+    pose.head = [-0.2, 0.04 * reach * Math.sin(a), 0];
+    return { pose, offset: [0, bob, 0] };
   }
 
   /** Rising: legs tucked, one more than the other, arms up and out. Falling: legs reaching down. */

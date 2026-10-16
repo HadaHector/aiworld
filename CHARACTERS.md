@@ -215,10 +215,11 @@ vertical speed, swimming, and a swing trigger.
 Each is a function from time and inputs to a pose (a rotation per bone). Poses are blended by
 weights that ease in and out, and the swing is layered on the upper body.
 
-As built (`src/character/animation.ts`): the game walks at 6 m/s and runs at 12 (the world's 2×
-scale), so a cycle covers more ground the faster it goes, up to about four leg lengths, and walking
-turns into running between 4 and 9 m/s. The body is lowered as far as the leg under it has
-shortened, which keeps that foot on the ground on the flat. Take-off has no crouch: the animation
+As built (`src/character/animation.ts`): walking (about 1.2-1.5 m/s) and running (a jog, about
+3 m/s; the game's own speeds are not final) are two cycles on one phase, blended between 1.8 and
+2.6 m/s. The jog has a flight between steps, the heel kicking up behind, the knee driving in front
+and the elbows bent and pumping. A cycle covers more ground the faster it goes. Both lower the body
+as far as the leg under it has shortened, which keeps that foot on the ground on the flat. Take-off has no crouch: the animation
 learns of a jump only when the body leaves the ground. The workbench's *Play* menu runs each
 animation on the spot or round a circle, at the game's speeds, jumping and swinging on a timer.
 

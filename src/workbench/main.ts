@@ -128,7 +128,7 @@ const DEFAULT_OPTIONS: Options = {
   smallclothes: "on",
   sex: "",
   animation: "idle",
-  speed: "6",
+  speed: "1.2",
   path: "place",
 };
 
@@ -634,7 +634,7 @@ function renderPreviewBar(): void {
         ...(options.animation === "still" || options.animation === "idle"
           ? []
           : [
-              select("Speed", "speed", [["0", "Standing"], ["1.5", "1.5 m/s"], ["3", "3 m/s"], ["6", "6 m/s (walk)"], ["9", "9 m/s"], ["12", "12 m/s (run)"]], rebuild),
+              select("Speed", "speed", [["0", "Standing"], ["0.6", "0.6 m/s"], ["1.2", "1.2 m/s (walk)"], ["1.5", "1.5 m/s"], ["2.2", "2.2 m/s"], ["3", "3 m/s (run)"], ["4.5", "4.5 m/s"], ["6", "6 m/s"]], rebuild),
               select("Path", "path", [["place", "On the spot"], ["circle", "Round a circle"]], rebuild),
             ]),
         select("Sex", "sex", [["", "By seed"], ["male", "Male"], ["female", "Female"]], rebuild),
@@ -924,7 +924,7 @@ function characterInputs(asset: Asset): { race: RaceDef; gear: Map<string, GearM
         seed,
         sex: options.sex === "male" || options.sex === "female" ? options.sex : null,
         animation: (options.animation in ANIMATIONS ? options.animation : "still") as FigureOptions["animation"],
-        speed: Number.isFinite(Number(options.speed)) ? Number(options.speed) : 6,
+        speed: Number.isFinite(Number(options.speed)) ? Number(options.speed) : 1.2,
         path: options.path === "circle" ? "circle" : "place",
       },
     };
