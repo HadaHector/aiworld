@@ -1,8 +1,9 @@
-import { VertexData } from "@babylonjs/core";
-import type { TerrainSample, TerrainSampler } from "./terrainSampler";
-import { RELIEF_CURVATURE_RADIUS_STEPS, buildVertexContext } from "../materials/materialContext";
+import { computeNormals } from "../mathUtils";
+import type { TerrainSampler } from "./terrainSampler";
+import { buildVertexContext } from "../materials/materialContext";
+import { heightInSquare, sampleChunkGround } from "./chunkGround";
 import { MATERIALS_PER_TRIANGLE, type MaterialBlender } from "../materials/materialBlend";
-import type { TreeCover, TreeGround, TreePlacement, TreeScatter } from "../foliage/treeScatter";
+import type { TreeCover, TreePlacement, TreeScatter } from "../foliage/treeScatter";
 import { scatterGrass, type ChunkGrass } from "../foliage/grassScatter";
 import type { GrassKindDef } from "../foliage/grassConfig";
 import { BUSH_MAX_DETAIL_RATIO, ROCK_MAX_DETAIL_RATIO } from "../foliage/foliageConfig";
@@ -130,40 +131,12 @@ function toSlots(weights: Map<number, number>, ownerList: MaterialList, allowed:
  * point, which drops out smoothly rather than turning up as a wrong material.
  */
 export function buildChunkGeometry(request: ChunkBuildRequest, context: ChunkBuildContext): ChunkGeometry {
-  const { size, subdivisions, detailSubdivisions, originX, originZ } = request;
+  const { size, subdivisions, originX, originZ } = request;
   const { sampleTerrain, materialBlender, scatterTrees, scatterBushes, scatterRocks, treeCover, seed, groundColors, grassKinds } = context;
 
+  const ground = sampleChunkGround(request, context);
+  const { detailRatio, curvatureSteps, pad, paddedSize, paddedPositions, paddedSamples, padded, probeGround } = ground;
   const gridSize = subdivisions + 1;
-  const detailRatio = detailSubdivisions / subdivisions;
-  const curvatureSteps = RELIEF_CURVATURE_RADIUS_STEPS / detailRatio;
-  if (!Number.isInteger(detailRatio) || !Number.isInteger(curvatureSteps)) {
-    throw new Error(`${subdivisions} subdivisions is not a level of detail ${detailSubdivisions} can be reduced to`);
-  }
-  // One ring more than curvature needs, so the ring just outside the chunk (whose material weights
-  // feed border vertices' lists) gets its own curvature from real terrain too.
-  const pad = curvatureSteps + 1;
-  const paddedSize = gridSize + pad * 2;
-  const step = size / subdivisions;
-
-  // Z decreases as the grid row increases, matching the layout @babylonjs/core's CreateGround uses
-  // (which this mesh used to be) so a grid position means the same thing it always has.
-  const paddedPositions = new Float32Array(paddedSize * paddedSize * 3);
-  const paddedSamples: TerrainSample[] = new Array(paddedSize * paddedSize);
-  for (let row = 0; row < paddedSize; row++) {
-    const rowActual = row - pad;
-    const localZ = ((subdivisions - rowActual) * size) / subdivisions - size / 2;
-    for (let col = 0; col < paddedSize; col++) {
-      const colActual = col - pad;
-      const localX = (colActual * size) / subdivisions - size / 2;
-      const sample = sampleTerrain(originX + localX, originZ + localZ);
-
-      const paddedIndex = row * paddedSize + col;
-      paddedPositions[paddedIndex * 3] = localX;
-      paddedPositions[paddedIndex * 3 + 1] = sample.height;
-      paddedPositions[paddedIndex * 3 + 2] = localZ;
-      paddedSamples[paddedIndex] = sample;
-    }
-  }
 
   const paddedIndices: number[] = [];
   for (let row = 0; row < paddedSize - 1; row++) {
@@ -174,9 +147,7 @@ export function buildChunkGeometry(request: ChunkBuildRequest, context: ChunkBui
     }
   }
   const paddedNormals: number[] = [];
-  VertexData.ComputeNormals(paddedPositions, paddedIndices, paddedNormals);
-
-  const padded = (row: number, col: number): number => (row + pad) * paddedSize + (col + pad);
+  computeNormals(paddedPositions, paddedIndices, paddedNormals);
 
   // Full material weights for the rendered grid plus one ring around it (rows/cols -1..gridSize).
   const ringSize = gridSize + 2;
@@ -424,80 +395,6 @@ export function buildChunkGeometry(request: ChunkBuildRequest, context: ChunkBui
     shadowIndices.push(top0, top1, low1, top0, low1, low0);
     shadowIndices.push(top0, low1, top1, top0, low0, low1);
   }
-  /** Height inside one grid square, split the same 8 ways the visible mesh is. */
-  function heightInSquare(heightOf: (row: number, col: number) => number, row: number, col: number, u: number, v: number): number {
-    const h00 = heightOf(row, col);
-    const h10 = heightOf(row, col + 1);
-    const h01 = heightOf(row + 1, col);
-    const h11 = heightOf(row + 1, col + 1);
-    const centre = (h00 + h10 + h01 + h11) / 4;
-
-    // The quadrant nearest (u, v) is owned by that corner; inside it, the owner-to-centre diagonal
-    // splits it into the triangle toward the horizontal-edge midpoint and the one toward the
-    // vertical-edge midpoint.
-    const ou = u < 0.5 ? 0 : 1;
-    const ov = v < 0.5 ? 0 : 1;
-    const hOwner = [[h00, h01], [h10, h11]][ou][ov];
-    const hAlongU = (hOwner + [[h10, h11], [h00, h01]][ou][ov]) / 2;
-    const hAlongV = (hOwner + [[h01, h00], [h11, h10]][ou][ov]) / 2;
-    // Distances from the owner corner, measured toward the centre, each in 0..0.5.
-    const du = Math.abs(u - ou);
-    const dv = Math.abs(v - ov);
-    return du >= dv
-      ? hOwner + (du - dv) * 2 * (hAlongU - hOwner) + dv * 2 * (centre - hOwner)
-      : hOwner + (dv - du) * 2 * (hAlongV - hOwner) + du * 2 * (centre - hOwner);
-  }
-
-  /** A full-detail grid point's sample, taken from the padded grid when this chunk is at full
-   *  detail (it is the same point, sampled the same way) and sampled afresh otherwise. */
-  function detailSample(row: number, col: number): TerrainSample {
-    if (detailRatio === 1) return paddedSamples[padded(row, col)];
-    const localX = (col * size) / detailSubdivisions - size / 2;
-    const localZ = ((detailSubdivisions - row) * size) / detailSubdivisions - size / 2;
-    return sampleTerrain(originX + localX, originZ + localZ);
-  }
-
-  /**
-   * The ground under a tree candidate.
-   *
-   * Which trees grow is decided on the full-detail surface at every level of detail, so a chunk
-   * changing level re-scatters exactly the same trees: height is interpolated in the full-detail
-   * square the point falls in, slope is that square's gradient there, and the sample is its nearest
-   * corner's. Only where a trunk stands - `surfaceHeight` - comes from the grid actually drawn, so
-   * a far tree sits on the coarse ground rather than floating over or sunk into it.
-   */
-  function probeGround(worldX: number, worldZ: number): TreeGround | null {
-    const colF = (worldX - originX + size / 2) / step + pad;
-    const rowF = subdivisions - (worldZ - originZ + size / 2) / step + pad;
-    const col = Math.floor(colF);
-    const row = Math.floor(rowF);
-    if (col < 0 || row < 0 || col >= paddedSize - 1 || row >= paddedSize - 1) return null;
-    const paddedHeight = (r: number, c: number): number => paddedPositions[(r * paddedSize + c) * 3 + 1];
-    const surfaceHeight = heightInSquare(paddedHeight, row, col, colF - col, rowF - row);
-
-    const detailStep = size / detailSubdivisions;
-    const dColF = (worldX - originX + size / 2) / detailStep;
-    const dRowF = detailSubdivisions - (worldZ - originZ + size / 2) / detailStep;
-    const dCol = Math.floor(dColF);
-    const dRow = Math.floor(dRowF);
-    const u = dColF - dCol;
-    const v = dRowF - dRow;
-    const corners = [detailSample(dRow, dCol), detailSample(dRow, dCol + 1), detailSample(dRow + 1, dCol), detailSample(dRow + 1, dCol + 1)];
-    const [h00, h10, h01, h11] = corners.map((sample) => sample.height);
-    const height = heightInSquare((r, c) => corners[(r - dRow) * 2 + (c - dCol)].height, dRow, dCol, u, v);
-
-    // Rise per world unit along each grid axis, from the square's bilinear gradient at (u, v).
-    const gradU = ((h10 - h00) * (1 - v) + (h11 - h01) * v) / detailStep;
-    const gradV = ((h01 - h00) * (1 - u) + (h11 - h10) * u) / detailStep;
-    const gradient = Math.hypot(gradU, gradV);
-    return {
-      height,
-      surfaceHeight,
-      slope: gradient / Math.sqrt(1 + gradient * gradient),
-      sample: corners[(v >= 0.5 ? 2 : 0) + (u >= 0.5 ? 1 : 0)],
-    };
-  }
-
   const trees = scatterTrees(
     originX - size / 2,
     originZ - size / 2,

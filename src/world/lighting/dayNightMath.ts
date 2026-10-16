@@ -1,4 +1,3 @@
-import { Color3 } from "@babylonjs/core";
 import { lerp, smoothstep } from "../mathUtils";
 import type { ColorTuple } from "../terrain/pipeline/pipelineTypes";
 
@@ -25,15 +24,8 @@ export const NIGHT_BRIGHTNESS = 0.35;
 // cooler tone" half of the same request. Applied before NIGHT_BRIGHTNESS's darkening, so a strongly
 // warm day colour (the desert's sand-toned ambient) still reads as cool at night rather than merely
 // dim.
-const NIGHT_COOL_TINT = Color3.FromInts(90, 115, 160);
+const NIGHT_COOL_TINT: ColorTuple = [90 / 255, 115 / 255, 160 / 255];
 const NIGHT_COOL_AMOUNT = 0.4;
-
-// The sky/fog's own, separately-tuned night knobs - much darker and bluer than the light's, since a
-// night sky reads as close to black-blue long before a moonlit face does. deriveNightSkyColor below
-// is the only thing that reads these.
-const SKY_NIGHT_BRIGHTNESS = 0.35;
-const SKY_NIGHT_COOL_TINT = Color3.FromInts(18, 26, 58);
-const SKY_NIGHT_COOL_AMOUNT = 0.8;
 
 export interface DayNightFactors {
   /** One sine over the full 24h, zero at SUNRISE_HOUR/SUNSET_HOUR, positive by day, negative by
@@ -63,29 +55,15 @@ export function computeDayNightFactors(timeHours: number): DayNightFactors {
 
 /** A day colour's hue shifted toward night's cool tint - brightness untouched, since for a
  *  Babylon light (ambient/moon) that is `intensity`'s job (see deriveNightIntensity) and for a flat
- *  sky/fog colour with no separate intensity it is deriveNightSkyColor's job below. */
+ *  sky/fog colour with no separate intensity it is skyDome.ts's deriveNightSkyColor's job. */
 export function coolNightTone(day: ColorTuple): ColorTuple {
   return [
-    lerp(day[0], NIGHT_COOL_TINT.r, NIGHT_COOL_AMOUNT),
-    lerp(day[1], NIGHT_COOL_TINT.g, NIGHT_COOL_AMOUNT),
-    lerp(day[2], NIGHT_COOL_TINT.b, NIGHT_COOL_AMOUNT),
+    lerp(day[0], NIGHT_COOL_TINT[0], NIGHT_COOL_AMOUNT),
+    lerp(day[1], NIGHT_COOL_TINT[1], NIGHT_COOL_AMOUNT),
+    lerp(day[2], NIGHT_COOL_TINT[2], NIGHT_COOL_AMOUNT),
   ];
 }
 
 export function deriveNightIntensity(dayIntensity: number): number {
   return dayIntensity * NIGHT_BRIGHTNESS;
-}
-
-/** For a colour with no separate intensity uniform (the sky dome, whose fragment shader outputs a
- *  colour directly - see skyDome.ts) - the darkening has to be baked into the colour itself rather
- *  than left to a scalar nothing downstream multiplies by. Uses its own SKY_NIGHT_* knobs, not the
- *  light's - see their own comment for why a night sky needs to go much darker and bluer than an
- *  equally "night-brightness" lit surface does. */
-export function deriveNightSkyColor(day: Color3): Color3 {
-  const cooled = new Color3(
-    lerp(day.r, SKY_NIGHT_COOL_TINT.r, SKY_NIGHT_COOL_AMOUNT),
-    lerp(day.g, SKY_NIGHT_COOL_TINT.g, SKY_NIGHT_COOL_AMOUNT),
-    lerp(day.b, SKY_NIGHT_COOL_TINT.b, SKY_NIGHT_COOL_AMOUNT),
-  );
-  return cooled.scale(SKY_NIGHT_BRIGHTNESS);
 }

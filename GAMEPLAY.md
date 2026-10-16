@@ -279,9 +279,10 @@ What the answers above force on the code, before any one system is designed.
 
 A proposal, to be confirmed. Each step gets its own plan document.
 
-1. **Split simulation from client.** Move world generation and collision behind a headless module
-   that runs in Node; an in-process server with the message boundary above; a `npm run server`
-   that runs it without a client. The game still plays exactly as now.
+1. **Split simulation from client: done** - see [SIMULATION.md](SIMULATION.md). Move world
+   generation and collision behind a headless module that runs in Node; an in-process server with
+   the message boundary above; a `npm run server` that runs it without a client. The game still
+   plays exactly as now.
 2. **Large-world positions.** 64-bit positions in the simulation, camera-relative rendering.
 3. **Entities, stats and resources** from data, owned by the server.
 4. **Ability system:** effects, auras, targeting, cooldowns and the GCD, threat.

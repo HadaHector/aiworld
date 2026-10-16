@@ -1,4 +1,3 @@
-import type { FloatArray } from "@babylonjs/core";
 import type { TerrainSample } from "../terrain/terrainSampler";
 import type { TreeCover } from "../foliage/treeScatter";
 
@@ -21,7 +20,7 @@ export const RELIEF_CURVATURE_RADIUS_STEPS = 4;
  *  that need this to be accurate right up to a chunk's own boundary must pass a grid padded by at
  *  least RELIEF_CURVATURE_RADIUS_STEPS rings beyond what's actually rendered (see terrainMesh.ts),
  *  so the clamp never actually triggers for a real, rendered vertex. */
-function computeReliefCurvature(positions: FloatArray, gridSize: number, vertexIndex: number, radiusSteps: number): number {
+function computeReliefCurvature(positions: ArrayLike<number>, gridSize: number, vertexIndex: number, radiusSteps: number): number {
   const row = Math.floor(vertexIndex / gridSize);
   const col = vertexIndex % gridSize;
 
@@ -53,8 +52,8 @@ function computeReliefCurvature(positions: FloatArray, gridSize: number, vertexI
  * chunk's curvature-driven layers do not shift when it changes level of detail.
  */
 export function buildVertexContext(
-  positions: FloatArray,
-  normals: FloatArray,
+  positions: ArrayLike<number>,
+  normals: ArrayLike<number>,
   samples: TerrainSample[],
   gridSize: number,
   vertexIndex: number,

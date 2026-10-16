@@ -1,4 +1,5 @@
 import { Color3, Constants, Effect, RawTexture, RawTexture2DArray, ShaderMaterial, StandardMaterial, Texture, type Material, type Scene } from "@babylonjs/core";
+import type { TerrainCut } from "../buildings/buildingCollision";
 import type { AreaWeight } from "../cells/areaField";
 import type { SunLighting } from "../lighting/sunLighting";
 import { LIT_SHADING_GLSL, LIT_SHADING_SAMPLERS, LIT_SHADING_UNIFORMS, createLitShading, type LitShading } from "./litShading";
@@ -179,16 +180,8 @@ const TABLE_WIDTH = 5;
 /** How many holes the ground can have taken out of it at once (see setTerrainCuts). */
 export const MAX_TERRAIN_CUTS = 8;
 
-/** A rectangle taken out of the ground: its middle, the unit direction its width runs, and half
- *  its width and depth. */
-export interface TerrainCut {
-  x: number;
-  z: number;
-  ux: number;
-  uz: number;
-  halfWidth: number;
-  halfDepth: number;
-}
+// What a cut is lives with the buildings' collision, which the simulation needs without Babylon.
+export type { TerrainCut };
 
 /** Takes holes out of the ground drawn with these materials - the first MAX_TERRAIN_CUTS of them. */
 export function applyTerrainCuts(materials: ShaderMaterial[], cuts: TerrainCut[]): void {

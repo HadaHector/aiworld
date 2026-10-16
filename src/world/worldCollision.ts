@@ -1,7 +1,7 @@
-import { collisionStats, createCollisionWorld, type CollisionWorld, type ShapeDesc, type Vec3 } from "./collision/index";
-import type { ChunkGeometry } from "./terrain/chunkGeometry";
-import type { TreeField } from "./foliage/treeField";
-import type { TerrainCut } from "./materials/materialLibrary";
+import { collisionStats, createCollisionWorld, type CollisionWorld, type ConvexDesc, type ShapeDesc, type Vec3 } from "./collision/index";
+import type { ChunkCollisionSource } from "./terrain/chunkGround";
+import type { TreePlacement } from "./foliage/treeScatter";
+import type { TerrainCut } from "./buildings/buildingCollision";
 
 /**
  * The world as the player collides with it (see COLLISION.md): the ground and the trees of every
@@ -11,7 +11,7 @@ import type { TerrainCut } from "./materials/materialLibrary";
 export interface WorldCollision {
   readonly world: CollisionWorld;
   /** Replaces what a chunk puts in the way. Only a full-detail chunk (level 0) puts anything. */
-  setChunk: (key: string, geometry: ChunkGeometry, centerX: number, centerZ: number, level: number, subdivisions: number) => void;
+  setChunk: (key: string, geometry: ChunkCollisionSource, centerX: number, centerZ: number, level: number, subdivisions: number) => void;
   clearChunk: (key: string) => void;
   /** Puts other shapes in, under a key of their own - replacing whatever was there under it. */
   setExtra: (key: string, shapes: ShapeDesc[]) => void;
@@ -28,10 +28,16 @@ export interface WorldCollision {
 const PATCH_DEPTH = 1;
 
 /**
- * `cellarCuts` are where the ground is taken out over cellars (see buildings/buildingRenderer.ts): the
- * ground's collision is cut there too, so a cellar can be walked down into.
+ * `trees` turns a chunk's trees into what they put in the way (see foliage/treeColliders.ts).
+ * `cellarCuts` are where the ground is taken out over cellars (see buildings/buildingCollision.ts):
+ * the ground's collision is cut there too, so a cellar can be walked down into. Pure, so the
+ * simulation and the drawn world each keep one (see SIMULATION.md).
  */
-export function createWorldCollision(trees: TreeField, chunkSize: number, cellarCuts: readonly TerrainCut[] = []): WorldCollision {
+export function createWorldCollision(
+  trees: { colliders: (trees: readonly TreePlacement[]) => ConvexDesc[] },
+  chunkSize: number,
+  cellarCuts: readonly TerrainCut[] = [],
+): WorldCollision {
   const world = createCollisionWorld();
   const batches = new Map<string, number>();
   const shapeCount = new Map<string, number>();
@@ -60,7 +66,7 @@ export function createWorldCollision(trees: TreeField, chunkSize: number, cellar
     clear(chunkKey(key));
   }
 
-  function setChunk(key: string, geometry: ChunkGeometry, centerX: number, centerZ: number, level: number, subdivisions: number): void {
+  function setChunk(key: string, geometry: ChunkCollisionSource, centerX: number, centerZ: number, level: number, subdivisions: number): void {
     clearChunk(key);
     if (level !== 0) return;
     const started = performance.now();
@@ -81,7 +87,7 @@ export function createWorldCollision(trees: TreeField, chunkSize: number, cellar
    * Where a cellar's cut crosses a square, the square is a hole - and what of it lies outside the
    * cut is put back, as slabs of ground of its own.
    */
-  function ground(geometry: ChunkGeometry, centerX: number, centerZ: number, subdivisions: number): ShapeDesc[] {
+  function ground(geometry: ChunkCollisionSource, centerX: number, centerZ: number, subdivisions: number): ShapeDesc[] {
     const size = subdivisions + 1;
     const cell = chunkSize / subdivisions;
     const originX = centerX - chunkSize / 2;

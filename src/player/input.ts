@@ -1,5 +1,3 @@
-import { Vector2 } from "@babylonjs/core";
-
 const FORWARD_KEYS = new Set(["w", "arrowup"]);
 const BACK_KEYS = new Set(["s", "arrowdown"]);
 const LEFT_KEYS = new Set(["a", "arrowleft"]);
@@ -25,7 +23,7 @@ export function createInput() {
   window.addEventListener("keydown", onKeyDown);
   window.addEventListener("keyup", onKeyUp);
 
-  function getMoveAxis(): Vector2 {
+  function getMoveAxis(): { x: number; y: number } {
     let x = 0;
     let y = 0;
     for (const key of pressed) {
@@ -34,8 +32,8 @@ export function createInput() {
       if (RIGHT_KEYS.has(key)) x += 1;
       if (LEFT_KEYS.has(key)) x -= 1;
     }
-    const axis = new Vector2(x, y);
-    return axis.lengthSquared() > 1 ? axis.normalize() : axis;
+    const length = Math.hypot(x, y);
+    return length > 1 ? { x: x / length, y: y / length } : { x, y };
   }
 
   /** Whether Space was pressed (lately) since this was last asked. */

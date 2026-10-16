@@ -1,6 +1,10 @@
 import { createEngine, createScene } from "./core/engine";
-import { createWorld, DEFAULT_DRAW_DISTANCE, MIN_DRAW_DISTANCE, MAX_DRAW_DISTANCE } from "./world/world";
+import { createWorldData, WORLD_SEED } from "./world/worldData";
+import { createChunkBuildPool, createWorld, DEFAULT_DRAW_DISTANCE, MIN_DRAW_DISTANCE, MAX_DRAW_DISTANCE } from "./world/world";
 import { createCharacter } from "./player/characterController";
+import { createServer } from "./sim/server";
+import { createLocalChannel } from "./sim/channel";
+import { PROTOCOL_VERSION, type ClientMessage } from "./sim/protocol";
 import { createCameraCollision, createThirdPersonCamera } from "./player/thirdPersonCamera";
 import { createSpectatorCamera } from "./player/spectatorCamera";
 import { createDebugMap } from "./debug/debugMap";
@@ -45,14 +49,55 @@ try {
 const engine = createEngine(canvas);
 const scene = createScene(engine);
 
+// Started first: each terrain worker spends a few seconds building its own copy of the world, which
+// overlaps with this thread building its own below.
+const chunkBuildPool = createChunkBuildPool(WORLD_SEED, content);
+loadingScreen.update("Shaping the world: continents, zones, rivers, roads and settlements", 0, 0);
+// A paint for that line first - or a moment's wait, in a background tab, which never paints.
+await new Promise<void>((resolve) => {
+  requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+  setTimeout(resolve, 60);
+});
+const worldData = createWorldData(WORLD_SEED, content);
 // World creation is async because material textures are baked across a worker pool (see
 // textureBakePool.ts), which is the bulk of startup time unless the texture cache already has them.
-const world = await createWorld(scene, content, ({ phase, completed, total }) => {
-  loadingScreen.update(phase, completed, total);
-});
+const world = await createWorld(
+  scene,
+  worldData,
+  ({ phase, completed, total }) => {
+    loadingScreen.update(phase, completed, total);
+  },
+  chunkBuildPool,
+);
 
 loadingScreen.update("Placing the player", 0, 0);
-const character = createCharacter(scene, world.collision, world.heightAt, world.groundAt);
+// The simulation, in this page: single player is a server of one, over an in-memory channel - the
+// same server `npm run server` runs on its own (see SIMULATION.md). It takes the world this page has
+// already generated rather than generating it again: the same, read-only, from the same seed.
+const server = createServer(worldData, { treeHulls: world.trees.hulls, buildingModels: world.buildingModels });
+const channel = createLocalChannel();
+server.connect(channel.server);
+let playerId = -1;
+let intentSeq = 0;
+const character = createCharacter(scene, { x: 0, y: world.heightAt(0, 0), z: 0 });
+/** Applies whatever the server has said since last time - where the player is now, above all. */
+function takeServerMessages(): void {
+  for (const message of channel.client.receive()) {
+    if (message.type === "welcome") playerId = message.playerId;
+    else if (message.type === "snapshot") {
+      const me = message.players.find((p) => p.id === playerId);
+      if (me) character.show(me);
+    }
+  }
+}
+/** Sends a command and has the server take it at once, so a teleport is done when this returns -
+ *  what the console's `goto` and the map's clicks always had. */
+function command(message: ClientMessage): void {
+  channel.client.send(message);
+  server.step(0);
+  takeServerMessages();
+}
+command({ type: "hello", protocol: PROTOCOL_VERSION, name: "player" });
 const playerLights = world.lightMover(character.mesh);
 const camera = createThirdPersonCamera(scene, canvas, character.mesh);
 const cameraCollision = createCameraCollision(camera, world.collision.world);
@@ -77,7 +122,7 @@ function teleport(x: number, z: number): void {
     const above = from.y - world.heightAt(from.x, from.z);
     spectator.moveTo(x, world.heightAt(x, z) + Math.max(2, above), z);
   }
-  character.teleport(x, z);
+  command({ type: "teleport", x, z });
 }
 
 const debugMap = createDebugMap(world.sampleTerrain, world.worldExtent, world.continents, world.materialLibrary, world.areaBounds, world.areaNames, world.settlements, world.features, world.roads, (worldX, worldZ) => {
@@ -180,14 +225,14 @@ const music = createGameMusic(musicControl.volume);
     const hit = world.collision.world.raycast(origin, direction, 3000);
     if (hit) {
       // Stood on what it hit - or, on a wall, just in front of it.
-      const radius = character.motor.settings.radius;
+      const radius = character.settings.radius;
       const lift = hit.normal.y > 0.5 ? 0.05 : 0;
       const off = hit.normal.y > 0.5 ? 0 : radius * 1.2;
-      character.teleportTo({ x: hit.point.x + hit.normal.x * off, y: hit.point.y + lift, z: hit.point.z + hit.normal.z * off });
+      command({ type: "teleportTo", x: hit.point.x + hit.normal.x * off, y: hit.point.y + lift, z: hit.point.z + hit.normal.z * off });
       return;
     }
     const pick = scene.pickWithRay(ray, (mesh) => mesh.name.startsWith("terrainChunk_"));
-    if (pick?.hit && pick.pickedPoint) character.teleport(pick.pickedPoint.x, pick.pickedPoint.z);
+    if (pick?.hit && pick.pickedPoint) command({ type: "teleport", x: pick.pickedPoint.x, z: pick.pickedPoint.z });
   });
 }
 
@@ -232,7 +277,14 @@ function gotoLoaded(view: Partial<ViewSnapshot> & { x: number; z: number }, iter
   },
   world,
   music,
-  character,
+  /** The player as drawn, with teleports that go through the server like the map's. */
+  character: {
+    ...character,
+    teleport: (x: number, z: number) => command({ type: "teleport", x, z }),
+    teleportTo: (feet: { x: number; y: number; z: number }) => command({ type: "teleportTo", ...feet }),
+  },
+  /** The simulation running in this page - `server.debug` has its collision and players. */
+  server,
   camera,
   spectator,
   /** The collision profiler's last half second (see debug/collisionPanel.ts). */
@@ -254,9 +306,15 @@ scene.onBeforeRenderObservable.add(() => {
   const deltaSeconds = engine.getDeltaTime() / 1000;
   // The world streams, and its weather and light follow, wherever is being looked from: the player,
   // or the spectator camera while it flies.
+  // What the player wants, to the server; the server steps; where the player is, back. While the
+  // spectator camera flies the keys are its own, and the player stands.
+  const started = performance.now();
+  const intent = spectator.active ? { moveX: 0, moveZ: 0, run: false, jump: false } : character.readIntent(camera);
+  intentSeq = (intentSeq + 1) & 0xffff;
+  channel.client.send({ type: "intent", seq: intentSeq, ...intent });
+  server.step(deltaSeconds);
+  takeServerMessages();
   if (!spectator.active) {
-    const started = performance.now();
-    character.update(deltaSeconds, camera);
     playerLights.update(deltaSeconds);
     placeLabels.update(character.mesh.position, scene.activeCamera);
     collisionPanel.addPlayerMs(performance.now() - started);

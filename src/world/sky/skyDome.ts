@@ -1,7 +1,7 @@
 import { Color3, Effect, Mesh, MeshBuilder, ShaderMaterial, Vector2, Vector3, type Scene } from "@babylonjs/core";
 import type { AreaWeight } from "../cells/areaField";
 import { lerp, smoothstep } from "../mathUtils";
-import { computeDayNightFactors, deriveNightSkyColor } from "../lighting/dayNightMath";
+import { computeDayNightFactors } from "../lighting/dayNightMath";
 import { FAIR_CLOUD_COVER, type WeatherBlend } from "../weather/weatherTypes";
 
 // How strongly the sunrise/sunset glow (each in-range biome's own sunHorizonColor - the same warm
@@ -237,6 +237,27 @@ export interface SkyDome {
    *  weather - for the water to reflect (see terrain/ocean.ts). The direction is the light's. */
   discColor: Color3;
   dispose: () => void;
+}
+
+// The sky/fog's own, separately-tuned night knobs - much darker and bluer than the light's (see
+// lighting/dayNightMath.ts's NIGHT_*), since a night sky reads as close to black-blue long before a
+// moonlit face does. deriveNightSkyColor below is the only thing that reads these.
+const SKY_NIGHT_BRIGHTNESS = 0.35;
+const SKY_NIGHT_COOL_TINT = Color3.FromInts(18, 26, 58);
+const SKY_NIGHT_COOL_AMOUNT = 0.8;
+
+/** For a colour with no separate intensity uniform (the sky dome, whose fragment shader outputs a
+ *  colour directly - see skyDome.ts) - the darkening has to be baked into the colour itself rather
+ *  than left to a scalar nothing downstream multiplies by. Uses its own SKY_NIGHT_* knobs, not the
+ *  light's - see their own comment for why a night sky needs to go much darker and bluer than an
+ *  equally "night-brightness" lit surface does. */
+function deriveNightSkyColor(day: Color3): Color3 {
+  const cooled = new Color3(
+    lerp(day.r, SKY_NIGHT_COOL_TINT.r, SKY_NIGHT_COOL_AMOUNT),
+    lerp(day.g, SKY_NIGHT_COOL_TINT.g, SKY_NIGHT_COOL_AMOUNT),
+    lerp(day.b, SKY_NIGHT_COOL_TINT.b, SKY_NIGHT_COOL_AMOUNT),
+  );
+  return cooled.scale(SKY_NIGHT_BRIGHTNESS);
 }
 
 /**

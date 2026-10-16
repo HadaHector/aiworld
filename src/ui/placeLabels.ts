@@ -1,17 +1,7 @@
 import { Matrix, Vector3, type Camera, type Scene } from "@babylonjs/core";
+import type { PlaceLabel } from "../world/worldData";
 
-/** Something in the world that says something to a player standing by it - a wayside sign, its
- *  inn's name - at a point over it. */
-export interface PlaceLabel {
-  x: number;
-  y: number;
-  z: number;
-  text: string;
-  /** Read by pointing at it rather than by standing by it - one of several close together, a
-   *  fingerpost's arms: shown while the pointer is over it on screen, the player within
-   *  HOVER_DISTANCE. */
-  hover?: boolean;
-}
+export type { PlaceLabel };
 
 export interface PlaceLabels {
   /** Shows the label nearest `player` if it is close enough to read, over its point on screen - each

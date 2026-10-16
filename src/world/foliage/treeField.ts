@@ -10,8 +10,8 @@ import { applyColorMatrix, type ColorMatrix } from "../materials/colorAdjust";
 import { castNearShadowOnly } from "../lighting/sunLighting";
 import { TREE_TINT_WIDTH } from "./treeShaders";
 import type { TreeShade, TreeTintRule } from "./treeTints";
-import type { Vec3 } from "../collision/vec";
 import type { ConvexDesc } from "../collision/shapes";
+import { treeColliders, treeVariant, type TreeHulls } from "./treeColliders";
 
 const IDENTITY: ColorMatrix = [1, 0, 0, 0, 1, 0, 0, 0, 1];
 
@@ -37,6 +37,9 @@ export interface TreeField {
   /** What these trees put in the way, in world space: each tree's convex pieces, ready for a
    *  collision world (see TreeModel.colliders). */
   colliders: (trees: readonly TreePlacement[]) => ConvexDesc[];
+  /** Every kind's hulls those come from - what a server in the same page takes rather than
+   *  generating them again (see SIMULATION.md). */
+  readonly hulls: TreeHulls;
   readonly treeCount: number;
   dispose: () => void;
 }
@@ -126,9 +129,14 @@ export async function createTreeField(
   // its own pair of master meshes with its own instances.
   const species = new Map<string, Species>();
   const variantCount = new Map<string, number>();
+  // What the trees put in the way, taken from the models just made rather than generated again.
+  const hulls: TreeHulls = new Map();
   const models = treeKinds.flatMap((def) => {
     const kindModels = createTreeModels(scene, def, seed, bakedBark.get(def.id), litShading, prebaked?.atlases?.get(def.id));
     variantCount.set(def.id, kindModels.length);
+    if (kindModels.some((model) => model.colliders)) {
+      hulls.set(def.id, kindModels.map((model) => ({ near: model.colliders ?? [], stump: model.stump?.colliders ?? [] })));
+    }
     const bush = def.shape.model === "bush";
     return kindModels.flatMap((model, variant) => [
       { key: speciesKey(def.id, variant, false), model, bush },
@@ -221,9 +229,7 @@ export async function createTreeField(
   /** Which of its kind's models a tree is drawn with: hashed from where it stands, so it is the same
    *  tree every time its chunk is built. */
   function keyOf(tree: TreePlacement, far: boolean): string {
-    const variants = variantCount.get(tree.kind) ?? 1;
-    const hash = (Math.imul(Math.floor(tree.x * 8), 0x27d4eb2d) ^ Math.imul(Math.floor(tree.z * 8), 0x165667b1)) >>> 0;
-    const variant = tree.variant !== undefined ? tree.variant % variants : variants === 1 ? 0 : (hash >>> 7) % variants;
+    const variant = treeVariant(tree, variantCount.get(tree.kind) ?? 1);
     // A stump is one model near and far: it is small. A kind with no stump stands whole.
     if (tree.stump && species.has(speciesKey(tree.kind, variant, false, true))) return speciesKey(tree.kind, variant, false, true);
     const key = speciesKey(tree.kind, variant, far);
@@ -407,27 +413,8 @@ export async function createTreeField(
       }
       return { radius, height };
     },
-    colliders(trees) {
-      const pieces: ConvexDesc[] = [];
-      const corner = new Vector3();
-      const moved = new Vector3();
-      for (const tree of trees) {
-        const hulls = species.get(keyOf(tree, false))?.model.colliders;
-        if (!hulls || hulls.length === 0) continue;
-        composeTree(tree, matrix);
-        for (const hull of hulls) {
-          const points: Vec3[] = [];
-          for (let i = 0; i < hull.corners.length; i += 3) {
-            corner.set(hull.corners[i], hull.corners[i + 1], hull.corners[i + 2]);
-            Vector3.TransformCoordinatesToRef(corner, matrix, moved);
-            points.push({ x: moved.x, y: moved.y, z: moved.z });
-          }
-          // Moved, turned and scaled evenly, a hull is still one, with the same faces.
-          pieces.push({ kind: "convex", points, triangles: hull.triangles });
-        }
-      }
-      return pieces;
-    },
+    colliders: (trees) => treeColliders(hulls, trees),
+    hulls,
     get treeCount() {
       return count;
     },

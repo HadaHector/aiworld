@@ -2,20 +2,16 @@ import { treeTintRules } from "./foliage/treeTints";
 import { Color3, type Camera, type Mesh, type Scene } from "@babylonjs/core";
 import { createChunkManager, type ChunkLodLevel } from "./terrain/chunkManager";
 import { createWorldCollision, type WorldCollision } from "./worldCollision";
-import { createChunkBuildPool } from "./terrain/chunkBuildPool";
-import { createTerrainSampler, type TerrainSampler } from "./terrain/terrainSampler";
+import { createChunkBuildPool, type ChunkBuildPool } from "./terrain/chunkBuildPool";
+
+export { createChunkBuildPool };
+import type { TerrainSampler } from "./terrain/terrainSampler";
 import { createOceanPlane } from "./terrain/ocean";
 import { createMaterialLibrary, type MaterialLibrary } from "./materials/materialLibrary";
 import { createBushScatter, createRockScatter, createTreeCover, createTreeScatter } from "./foliage/treeScatter";
 import { createTreeField, type TreeField } from "./foliage/treeField";
 import { createGrassField, type GrassField } from "./foliage/grassField";
 import { createBuildingRenderer } from "./buildings/buildingRenderer";
-import { generateBuilding } from "./buildings/buildingGenerator";
-import { generateProp } from "./props/propGenerator";
-import { settleWallRuns, wallStretches } from "./features/compound";
-import { planRoadFences } from "./roads/roadFences";
-import { planRoadSigns } from "./roads/roadSigns";
-import type { House } from "./settlements/settlementLayout";
 import { bakeBuildingTextures, createBuildingMaterial } from "./buildings/buildingMesh";
 import type { SettlementLayout } from "./settlements/settlementLayout";
 import { createSunLighting, DEFAULT_DAY_NIGHT_CYCLE_MINUTES } from "./lighting/sunLighting";
@@ -29,18 +25,10 @@ import type { ContinentPlan } from "./cells/continentLayout";
 import type { AreaBounds, AreaWeight } from "./cells/areaField";
 import type { SettlementSite } from "./settlements/settlementSites";
 import type { FeatureSite } from "./features/featureSites";
-import type { PlaceLabel } from "../ui/placeLabels";
+import { WORLD_SEED, type PlaceLabel, type WorldData } from "./worldData";
+import type { ModelledGroup } from "./buildings/buildingCollision";
 
 import type { RoadNetwork } from "./roads/roadNetwork";
-import type { WorldContent } from "./content/worldContent";
-
-/** The roads' fences are drawn (and come into the collision world) in cells this wide. */
-const FENCE_CELL = 256;
-/** A bridge's piers reach down to this height - the deepest river's bed, under the water. */
-const BRIDGE_PIER_FOOT = -9;
-
-/** A thing's label is shown this high over its foot - over a sign's board, at about eye level. */
-const LABEL_HEIGHT = 2.2;
 
 /** Coarse progress for the loading screen. `total` is 0 for phases with no countable steps. */
 export interface WorldLoadProgress {
@@ -81,6 +69,8 @@ export interface World {
    *  main.ts creates after the world exists - call this once it does. */
   /** What the player collides with: the ground and trees around it (see worldCollision.ts). */
   collision: WorldCollision;
+  /** Every building group with its near models made (see buildings/buildingCollision.ts). */
+  buildingModels: readonly ModelledGroup[];
   attachCamera: (camera: Camera) => void;
   setShadowsEnabled: (enabled: boolean) => void;
   /** Draws the terrain as wireframe, to see mesh density and where each level of detail starts. */
@@ -108,8 +98,8 @@ export interface World {
   lightMover: (mesh: Mesh) => PlayerLights;
 }
 
-/** The world's seed - also what the workbench previews with until told otherwise. */
-export const WORLD_SEED = 1338;
+// The seed lives with the world's data, which the simulation makes too; here for older importers.
+export { WORLD_SEED };
 
 const CHUNK_SIZE = 64;
 // Grid spacing doubles as distance doubles, which keeps a triangle about the same size on screen.
@@ -165,14 +155,18 @@ function nextPaint(): Promise<void> {
 
 export async function createWorld(
   scene: Scene,
-  content: WorldContent,
+  /** The world to draw, generated from the seed and the packs (see worldData.ts). */
+  data: WorldData,
   onProgress?: (progress: WorldLoadProgress) => void,
+  /** The chunk build workers, if they were started before `data` was made - each spends a few
+   *  seconds building its own copy of the world (see chunkBuild.worker.ts), which is best overlapped
+   *  with this thread making `data`. Started here otherwise. */
+  startedPool?: ChunkBuildPool | null,
 ): Promise<World> {
+  const { content, seed } = data;
   const sunLighting = createSunLighting(scene);
 
-  // Started first: each worker spends a few seconds building its own copy of the world (see
-  // chunkBuild.worker.ts), which overlaps with this thread building its own below.
-  let buildPool = createChunkBuildPool(WORLD_SEED, content);
+  let buildPool = startedPool === undefined ? createChunkBuildPool(seed, content) : startedPool;
 
   /** Says what comes next, and lets it be painted before the (synchronous) work starts. */
   const phase = async (text: string): Promise<void> => {
@@ -180,10 +174,9 @@ export async function createWorld(
     await nextPaint();
   };
 
-  await phase("Shaping the world: continents, zones, rivers, roads and settlements");
-  const { sampleTerrain, worldExtent, continents, areaBounds, areaNames, settlements, features, roads, settlementLayouts, compoundLayouts, bridges, areaBiomes } = createTerrainSampler(WORLD_SEED, content);
+  const { sampleTerrain, worldExtent, continents, areaBounds, areaNames, settlements, features, roads, settlementLayouts, compoundLayouts, areaBiomes, heightAt } = data;
 
-  const materialLibrary = await createMaterialLibrary(scene, WORLD_SEED, content, areaBiomes, sunLighting, (done, total) => {
+  const materialLibrary = await createMaterialLibrary(scene, seed, content, areaBiomes, sunLighting, (done, total) => {
     onProgress?.({ phase: "Baking material textures", completed: done, total });
   });
 
@@ -193,66 +186,19 @@ export async function createWorld(
     scene,
     sunLighting.shadowGenerator,
     [...content.treeKinds, ...content.rockKinds, ...content.bushKinds],
-    WORLD_SEED,
+    seed,
     materialLibrary.litShading,
     undefined,
-    areaBiomes.map((biome, areaId) => treeTintRules(WORLD_SEED, areaId, biome)),
+    areaBiomes.map((biome, areaId) => treeTintRules(seed, areaId, biome)),
   );
   await phase(`Sowing ${content.grassKinds.length} kinds of grass`);
-  const grass = createGrassField(scene, WORLD_SEED, materialLibrary.litShading, content.grassKinds);
+  const grass = createGrassField(scene, seed, materialLibrary.litShading, content.grassKinds);
   await phase(`Baking ${content.buildingMaterials.length} building materials`);
-  const buildingMaterial = createBuildingMaterial(scene, materialLibrary.litShading, await bakeBuildingTextures(WORLD_SEED, content.buildingMaterials));
-  await phase(`Planning the buildings of ${settlementLayouts.length} settlements and ${compoundLayouts.length} compounds`);
-  // The roads' fences where the ground falls away beside them, set on the ground, drawn in cells.
-  const propById = new Map(content.props.map((prop) => [prop.id, prop]));
-  const roadFences = planRoadFences(roads.stretches, sampleTerrain, propById, WORLD_SEED);
-  settleWallRuns(roadFences, sampleTerrain);
-  // And fingerposts at their junctions, an arm down each road saying where it leads.
-  const roadSigns = planRoadSigns(roads, sampleTerrain, propById, WORLD_SEED);
-  const fenceCells = new Map<string, { key: string; x: number; z: number; houses: ReturnType<typeof wallStretches> }>();
-  for (const run of roadFences) {
-    const gx = Math.floor(run.points[0].x / FENCE_CELL);
-    const gz = Math.floor(run.points[0].z / FENCE_CELL);
-    const key = `fences:${gx},${gz}`;
-    const cell = fenceCells.get(key) ?? { key, x: (gx + 0.5) * FENCE_CELL, z: (gz + 0.5) * FENCE_CELL, houses: [] };
-    cell.houses.push(...wallStretches(run, WORLD_SEED));
-    fenceCells.set(key, cell);
-  }
-  // The bridges: each a line prop along its deck, its piers down under the water.
-  for (const bridge of bridges) {
-    const run = { prop: bridge.prop, variant: bridge.variant, points: bridge.points, heights: bridge.heights, ends: ["free", "free"] as ["free", "free"], breach: false, width: bridge.width, base: BRIDGE_PIER_FOOT };
-    const gx = Math.floor(bridge.points[0].x / FENCE_CELL);
-    const gz = Math.floor(bridge.points[0].z / FENCE_CELL);
-    const key = `fences:${gx},${gz}`;
-    const cell = fenceCells.get(key) ?? { key, x: (gx + 0.5) * FENCE_CELL, z: (gz + 0.5) * FENCE_CELL, houses: [] };
-    cell.houses.push(...wallStretches(run, WORLD_SEED));
-    fenceCells.set(key, cell);
-  }
-  for (const prop of roadSigns.props) {
-    const gx = Math.floor(prop.x / FENCE_CELL);
-    const gz = Math.floor(prop.z / FENCE_CELL);
-    const key = `fences:${gx},${gz}`;
-    const cell = fenceCells.get(key) ?? { key, x: (gx + 0.5) * FENCE_CELL, z: (gz + 0.5) * FENCE_CELL, houses: [] };
-    cell.houses.push({ ...prop, model: (far: boolean) => generateProp(prop.prop, WORLD_SEED, prop.variant, far) });
-    fenceCells.set(key, cell);
-  }
-  const houseModel = (house: House) => ({ ...house, model: (far: boolean) => generateBuilding(house.building, WORLD_SEED, house.variant, far) });
+  const buildingMaterial = createBuildingMaterial(scene, materialLibrary.litShading, await bakeBuildingTextures(seed, content.buildingMaterials));
+  await phase(`Building the buildings of ${settlementLayouts.length} settlements and ${compoundLayouts.length} compounds`);
   const buildings = createBuildingRenderer(
     scene,
-    [
-      ...settlementLayouts.map((layout) => ({ key: `settlement:${layout.siteId}`, x: layout.x, z: layout.z, houses: layout.houses.map(houseModel) })),
-      ...compoundLayouts.map((layout) => ({
-        key: `compound:${layout.featureId}`,
-        x: layout.x,
-        z: layout.z,
-        houses: [
-          ...layout.buildings.map(houseModel),
-          ...layout.props.map((prop) => ({ ...prop, model: (far: boolean) => generateProp(prop.prop, WORLD_SEED, prop.variant, far) })),
-          ...layout.walls.flatMap((run) => wallStretches(run, WORLD_SEED)),
-        ],
-      })),
-      ...fenceCells.values(),
-    ],
+    data.buildingGroups,
     buildingMaterial,
     sunLighting.shadowGenerator,
     DEFAULT_DRAW_DISTANCE,
@@ -282,12 +228,12 @@ export async function createWorld(
     buildContext: {
       sampleTerrain,
       materialBlender: materialLibrary.blender,
-      scatterTrees: createTreeScatter(WORLD_SEED, content),
-      scatterBushes: createBushScatter(WORLD_SEED, content, sampleTerrain),
-      scatterRocks: createRockScatter(WORLD_SEED, content, sampleTerrain),
-      treeCover: createTreeCover(WORLD_SEED, content),
+      scatterTrees: createTreeScatter(seed, content),
+      scatterBushes: createBushScatter(seed, content, sampleTerrain),
+      scatterRocks: createRockScatter(seed, content, sampleTerrain),
+      treeCover: createTreeCover(seed, content),
       grassKinds: content.grassKinds,
-      seed: WORLD_SEED,
+      seed: seed,
       groundColors: materialLibrary.averageColors,
     },
     buildPool,
@@ -315,11 +261,10 @@ export async function createWorld(
   // main.ts having to know or pass the draw distance itself every frame.
   let drawDistance = DEFAULT_DRAW_DISTANCE;
 
-  const heightAt = (worldX: number, worldZ: number) => sampleTerrain(worldX, worldZ).height;
   const groundAt = (worldX: number, worldZ: number, feet: number) => buildings.floorAt(worldX, worldZ, feet) ?? heightAt(worldX, worldZ);
   const updateChunks = (playerX: number, playerZ: number, immediate?: boolean) => {
     chunkManager.update(playerX, playerZ, immediate);
-    buildings.updateCollision(playerX, playerZ, collision.setExtra, collision.clearExtra);
+    buildings.updateCollision([{ x: playerX, z: playerZ }], collision.setExtra, collision.clearExtra);
   };
   const setDrawDistance = (loadRadius: number) => {
     drawDistance = loadRadius;
@@ -339,7 +284,7 @@ export async function createWorld(
   // Reads sunLighting's own clock rather than taking timeHours as a parameter, so main.ts doesn't
   // have to thread it through - callers just need to call updateDayNight first each frame (main.ts
   // does) so this reads the frame's current time rather than the previous frame's.
-  const weather = createWeatherSystem(WORLD_SEED, content.weathers);
+  const weather = createWeatherSystem(seed, content.weathers);
   let weatherNow: WeatherBlend = NO_WEATHER;
   const precipitation = createPrecipitation(scene, heightAt);
   // The light the rain and snow are seen by: the sky's fill and some of the sun's - so they are
@@ -359,34 +304,8 @@ export async function createWorld(
   };
   const updateAtmosphere = (areaWeights: AreaWeight[]) => sky.update(areaWeights, drawDistance, sunLighting.getTimeHours(), sunLighting.direction, weatherNow);
 
-  // Every building of every settlement and compound, bucketed by where it stands, for buildingAt.
-  const BUILDING_CELL = 32;
-  const buildingCells = new Map<string, { house: House; key: number }[]>();
-  [...settlementLayouts.flatMap((l) => l.houses), ...compoundLayouts.flatMap((l) => l.buildings)].forEach((house, key) => {
-    const reach = Math.hypot(house.width, house.depth) / 2;
-    for (let cx = Math.floor((house.x - reach) / BUILDING_CELL); cx <= Math.floor((house.x + reach) / BUILDING_CELL); cx++) {
-      for (let cz = Math.floor((house.z - reach) / BUILDING_CELL); cz <= Math.floor((house.z + reach) / BUILDING_CELL); cz++) {
-        const cell = `${cx},${cz}`;
-        const list = buildingCells.get(cell);
-        if (list) list.push({ house, key });
-        else buildingCells.set(cell, [{ house, key }]);
-      }
-    }
-  });
-  const buildingAt = (x: number, y: number, z: number): { id: string; key: number } | undefined => {
-    for (const { house, key } of buildingCells.get(`${Math.floor(x / BUILDING_CELL)},${Math.floor(z / BUILDING_CELL)}`) ?? []) {
-      // Depth runs along the front (toward the street), width across it.
-      const dx = x - house.x;
-      const dz = z - house.z;
-      const along = dx * house.frontX + dz * house.frontZ;
-      const across = -dx * house.frontZ + dz * house.frontX;
-      if (Math.abs(along) <= house.depth / 2 && Math.abs(across) <= house.width / 2 && y > house.y - 1 && y < house.y + 12) return { id: house.building.id, key };
-    }
-    return undefined;
-  };
-
   return {
-    buildingAt,
+    buildingAt: data.buildingAt,
     heightAt,
     groundAt,
     sampleTerrain,
@@ -398,17 +317,14 @@ export async function createWorld(
     areaNames,
     settlements,
     features,
-    labels: compoundLayouts.flatMap((layout) =>
-      layout.props
-        .filter((prop) => prop.prop.label === "place")
-        .map((prop) => ({ x: prop.x, y: prop.y + LABEL_HEIGHT, z: prop.z, text: features[layout.featureId]?.name ?? features[layout.featureId]?.kind.name ?? layout.kindId })),
-    ).concat(roadSigns.labels),
+    labels: data.labels,
     roads,
     settlementLayouts,
     materialLibrary,
     trees,
     grass,
     collision,
+    buildingModels: buildings.models,
     attachCamera: sunLighting.attachCamera,
     setShadowsEnabled,
     setWireframe: materialLibrary.setWireframe,

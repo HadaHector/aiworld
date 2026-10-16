@@ -19,25 +19,20 @@ import type { ColorTuple } from "../terrain/pipeline/pipelineTypes";
 import { LIT_SHADING_SAMPLERS, LIT_SHADING_UNIFORMS, type LitShading } from "../materials/litShading";
 import { deriveSeed } from "../rng";
 import { WIND } from "./wind";
-import { generateBush, generateConifer, generateTree, type TreeDetail, type TreeGeometry } from "./treeGenerator";
+import { generateBush, type TreeDetail, type TreeGeometry } from "./treeGenerator";
 import { FOLIAGE_TEXTURE_SIZE, bakeBushFoliage, bakeConiferFoliage, bakeFoliage } from "./treeTextures";
 import { TEXTURE_RESOLUTION } from "../materials/textureGen";
 import { BARK_FRAGMENT_SHADER, BARK_VERTEX_SHADER, LEAF_FRAGMENT_SHADER, LEAF_VERTEX_SHADER, ROCK_FRAGMENT_SHADER, ROCK_VERTEX_SHADER } from "./treeShaders";
 import { generateBoulder } from "./boulderGenerator";
 import type { ColorMatrix } from "../materials/colorAdjust";
-import { convexHull } from "../collision/hull";
+import { generateTreeGeometry, hullPiece, kindSeed, stumpCut, type TreeCollider } from "./treeColliders";
 
 /**
  * One archetype's geometry, built in tree space: the base of the trunk sits at the origin and the
  * crown is already lifted into place, so a whole tree is one transform - position, uniform scale, a
  * spin about Y - and both meshes are driven by the same matrix. See treeField.ts.
  */
-/** One convex piece of a tree: its hull's corners (x, y, z in turn) and triangles, counter-clockwise
- *  seen from outside. */
-export interface TreeCollider {
-  corners: Float32Array;
-  triangles: Uint16Array;
-}
+export type { TreeCollider };
 
 export interface TreeModel {
   /** None for a bush, which is all leaves, or a boulder, which is all stone. */
@@ -46,7 +41,7 @@ export interface TreeModel {
   canopy: Mesh;
   /** A cheaper model of the same tree for distant chunks, if the kind has one. */
   far?: TreeModel;
-  /** The same tree felled: its stump, if the kind has one (see STUMP_HEIGHT). */
+  /** The same tree felled: its stump, if the kind has one (see treeColliders.ts's STUMP_HEIGHT). */
   stump?: TreeModel;
   /** What stands in the way, in tree space: convex pieces (see TreeGeometry.colliders), their hulls
    *  worked out once here so a tree placed in the world only has to move their corners. None for a
@@ -240,9 +235,6 @@ function createLeafMaterial(scene: Scene, id: string, atlasPixels: Uint8Array, s
 }
 
 /** A seed of a kind's own, from its id, so each kind's variants and atlas are its own. */
-function kindSeed(seed: number, id: string): number {
-  return deriveSeed(seed, [...id].reduce((h, c) => (Math.imul(h, 31) + c.charCodeAt(0)) | 0, 7));
-}
 
 /** A generated tree's two materials: its baked bark, and its leaves from `atlasPixels`. */
 function createWoodAndLeafMaterials(
@@ -296,14 +288,14 @@ function generatedKind(shape: Extract<TreeKindDef["shape"], { model: "branching"
       atlas: (seed) => bakeConiferFoliage(seed, shape.foliage),
       // A conifer's tiers are stiff: they sway less for their height than a broadleaf's crown.
       swayHeight: shape.trunk.height * 2.4,
-      generate: (seed, detail, cut) => generateConifer(shape, seed, detail, cut ?? null),
+      generate: (seed, detail, cut) => generateTreeGeometry(shape, seed, detail, cut),
     };
   }
   return {
     variants: shape.variants,
     atlas: (seed) => (!shape.foliage ? null : isClumpFoliage(shape.foliage) ? bakeFoliage(seed, shape.foliage) : bakeBushFoliage(seed, shape.foliage, shape.crown, shape.vines?.leaves ? shape.vines.leaves.tile / shape.vines.leaves.width : 1)),
     swayHeight: shape.trunk.height * 1.8,
-    generate: (seed, detail, cut) => generateTree(shape, seed, detail, cut ?? null),
+    generate: (seed, detail, cut) => generateTreeGeometry(shape, seed, detail, cut),
   };
 }
 
@@ -365,7 +357,7 @@ function createGeneratedModels(scene: Scene, def: TreeKindDef, kind: GeneratedKi
   };
 
   // Sawn off STUMP_HEIGHT up, at the kind's middling size.
-  const cut = Math.max(0.15, STUMP_HEIGHT / ((def.scale[0] + def.scale[1]) / 2));
+  const cut = stumpCut(def);
   const models: TreeModel[] = [];
   for (let variant = 0; variant < kind.variants; variant++) {
     const variantSeed = deriveSeed(ownSeed, variant + 1);
@@ -378,15 +370,7 @@ function createGeneratedModels(scene: Scene, def: TreeKindDef, kind: GeneratedKi
   return models;
 }
 
-/** How high a tree is sawn off, in metres - about the knee, at the world's twice life size. */
-const STUMP_HEIGHT = 0.9;
 
-function hullPiece(corners: Float32Array): TreeCollider {
-  const points = [];
-  for (let i = 0; i < corners.length; i += 3) points.push({ x: corners[i], y: corners[i + 1], z: corners[i + 2] });
-  const hull = convexHull(points);
-  return { corners: new Float32Array(hull.points.flatMap((p) => [p.x, p.y, p.z])), triangles: Uint16Array.from(hull.triangles) };
-}
 
 /** One leaf-only model per variant, all sharing the kind's atlas and material. */
 function createBushModels(scene: Scene, def: TreeKindDef, shape: BushShape, seed: number, litShading: LitShading, atlas?: Uint8Array): TreeModel[] {

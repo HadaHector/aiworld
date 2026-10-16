@@ -5,7 +5,7 @@ import { arrangeProp, setDown, type PlacedProp } from "../props/propGroups";
 import { measureProp } from "../props/propGenerator";
 import { deriveSeed, mulberry32 } from "../rng";
 import type { RoadNetwork } from "./roadNetwork";
-import type { PlaceLabel } from "../../ui/placeLabels";
+import type { PlaceLabel } from "../worldData";
 
 /**
  * Fingerposts at the roads' junctions: a post in the widest wedge between the roads, and on it an

@@ -21,7 +21,7 @@ import type { ConvexDesc } from "../world/collision/shapes";
 import { NO_WEATHER } from "../world/weather/weatherTypes";
 import type { BuildingModel } from "../world/buildings/buildingTypes";
 import { DEFAULT_PAD_BLEND, type Pad } from "../world/settlements/padField";
-import { placedAxes } from "../world/buildings/buildingRenderer";
+import { placedAxes } from "../world/buildings/buildingCollision";
 import { appendModel, bakeBuildingTextures, bakeModelLight, createBuildingMaterial, createBuildingMesh, emptyGeometry, type BuildingMaterial } from "../world/buildings/buildingMesh";
 
 /**
