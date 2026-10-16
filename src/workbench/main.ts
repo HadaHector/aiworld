@@ -27,8 +27,9 @@ import type { BuildingModel } from "../world/buildings/buildingTypes";
 import { buildPartSample, houseUsing } from "../world/buildings/partSample";
 import { isWholeHousePart } from "../world/buildings/buildingParts";
 import { bakeBuildingTextures } from "../world/buildings/buildingMesh";
-import { resolveRaces } from "../character/raceDef";
-import { POSES, figureFor, type FigureOptions } from "./figurePreview";
+import { resolveRaces, type RaceDef } from "../character/raceDef";
+import { bakeGearMaterial, resolveGearMaterials, type GearMaterialDef } from "../character/gearMaterial";
+import { POSES, figureFor, paintedBody, type FigureOptions } from "./figurePreview";
 
 // ---------------------------------------------------------------------------------------------
 // Assets: every file of every pack, by "pack/folder/id".
@@ -45,13 +46,13 @@ interface Asset {
 }
 
 /** The folders with a preview, and what each asset kind can be looked at as. */
-type PreviewFolder = "materials" | "trees" | "bushes" | "rocks" | "grass" | "biomes" | "buildings" | "buildingParts" | "buildingMaterials" | "props" | "features" | "races";
-const PREVIEW_FOLDERS: PreviewFolder[] = ["materials", "trees", "bushes", "rocks", "grass", "biomes", "buildings", "buildingParts", "buildingMaterials", "props", "features", "races"];
+type PreviewFolder = "materials" | "trees" | "bushes" | "rocks" | "grass" | "biomes" | "buildings" | "buildingParts" | "buildingMaterials" | "props" | "features" | "races" | "gearMaterials";
+const PREVIEW_FOLDERS: PreviewFolder[] = ["materials", "trees", "bushes", "rocks", "grass", "biomes", "buildings", "buildingParts", "buildingMaterials", "props", "features", "races", "gearMaterials"];
 /** How many variants of a building the Variant menu steps through - a building has no fixed count,
  *  every seed is one. */
 const BUILDING_VARIANTS = 8;
 /** Everything else is listed after these, its JSON still checked by Preview. */
-const FOLDER_ORDER = ["materials", "trees", "bushes", "rocks", "grass", "biomes", "buildings", "buildingParts", "buildingMaterials", "props", "features", "races", "layers", "borderHills", "settlements", "voices", "patches", ""];
+const FOLDER_ORDER = ["materials", "trees", "bushes", "rocks", "grass", "biomes", "buildings", "buildingParts", "buildingMaterials", "props", "features", "races", "gearMaterials", "layers", "borderHills", "settlements", "voices", "patches", ""];
 
 interface ViewDef {
   id: string;
@@ -123,6 +124,8 @@ const DEFAULT_OPTIONS: Options = {
   detail: "1",
   bones: "off",
   lattice: "on",
+  texture: "painted",
+  smallclothes: "on",
 };
 
 /** A building cut open as the Cut menu says: over a level's floor - its plan - or through its middle. */
@@ -522,7 +525,10 @@ function viewsFor(asset: Asset | null, content: WorldContent | null): ViewDef[] 
       return [
         { id: "model", label: "Model", mode: "3d" },
         { id: "placed", label: "On the ground", mode: "3d" },
+        { id: "atlas", label: "Atlas", mode: "2d" },
       ];
+    case "gearMaterials":
+      return [{ id: "texture", label: "Texture", mode: "2d" }];
     case "biomes":
       return [
         { id: "height", label: "Height", mode: "2d" },
@@ -620,6 +626,8 @@ function renderPreviewBar(): void {
     if (current.folder === "races") {
       viewOptions.append(
         select("Pose", "pose", Object.entries(POSES).map(([id, entry]): [string, string] => [id, entry.label]), rebuild),
+        select("Texture", "texture", [["painted", "Painted (512)"], ["retro", "Retro (128)"], ["flat", "Flat colour"]], rebuild),
+        checkbox("Smallclothes", "smallclothes", rebuild),
         select("Detail", "detail", [["0.5", "Low"], ["1", "As drawn"], ["2", "High"]], rebuild),
         select("Lattice", "lattice", [["on", "On"], ["off", "Off"], ["shown", "Shown"]], rebuild),
         checkbox("Bones", "bones", rebuild),
@@ -677,7 +685,13 @@ function renderPreviewBar(): void {
         ], rebuild));
       }
     }
-  } else if (current.folder === "biomes") {
+  } else if (current.folder === "races") {
+    viewOptions.append(
+      select("Texture", "texture", [["painted", "Painted (512)"], ["retro", "Retro (128)"]], rebuild),
+      checkbox("Smallclothes", "smallclothes", rebuild),
+      select("Detail", "detail", [["0.5", "Low"], ["1", "As drawn"], ["2", "High"]], rebuild),
+    );
+} else if (current.folder === "biomes") {
     viewOptions.append(
       select("Area", "roll", Array.from({ length: 8 }, (_, i): [string, string] => [String(i), `Roll ${i + 1}`]), rebuild),
       select("Size", "extent", [["512", "512 m"], ["1024", "1 km"], ["2048", "2 km"]], rebuild),
@@ -878,6 +892,33 @@ function groundMaterial(content: WorldContent, asset: Asset): MaterialDef {
   return content.materials.find((material) => material.id === id)!;
 }
 
+/** A race's body as the options ask for it, and the gear materials it may be painted with - or
+ *  null, with the problems shown, if the character packs do not read. */
+function characterInputs(asset: Asset): { race: RaceDef; gear: Map<string, GearMaterialDef>; options: FigureOptions } | null {
+  try {
+    const packs = sourcesWithEdit();
+    const race = resolveRaces(packs).get(asset.id)!;
+    return {
+      race,
+      gear: resolveGearMaterials(packs),
+      options: {
+        detail: Number(options.detail) || 1,
+        lattice: options.lattice as FigureOptions["lattice"],
+        pose: (options.pose in POSES ? options.pose : "stand") as FigureOptions["pose"],
+        bones: options.bones === "on",
+        texture: options.texture as FigureOptions["texture"],
+        smallclothes: options.smallclothes === "on",
+        seed,
+      },
+    };
+  } catch (error) {
+    if (!(error instanceof ContentError)) throw error;
+    showIssues(error.issues.map(formatIssue));
+    setStatus("");
+    return null;
+  }
+}
+
 async function preview3d(token: number, asset: Asset, view: ViewDef, content: WorldContent): Promise<void> {
   const lightBiome = content.biomes.find((biome) => biome.id === options.sky) ?? autoSkyBiome(content, asset);
   const grassOn = options.grass === "on";
@@ -924,23 +965,14 @@ async function preview3d(token: number, asset: Asset, view: ViewDef, content: Wo
   } else if (asset.folder === "races") {
     ground = groundMaterial(content, asset);
     if (grassOn) grass = ground.grass;
-    let races;
-    try {
-      races = resolveRaces(sourcesWithEdit());
-    } catch (error) {
-      if (!(error instanceof ContentError)) throw error;
-      showIssues(error.issues.map(formatIssue));
-      setStatus("");
-      return;
-    }
-    const built = figureFor(races.get(asset.id)!, {
-      detail: Number(options.detail) || 1,
-      lattice: options.lattice as FigureOptions["lattice"],
-      pose: (options.pose in POSES ? options.pose : "stand") as FigureOptions["pose"],
-      bones: options.bones === "on",
-    });
-    figure = built.figure;
-    summary = built.summary;
+    const inputs = characterInputs(asset);
+    if (!inputs) return;
+    setStatus("Painting");
+    await nextPaint();
+    const painted = await paintedBody(inputs.race, inputs.gear, seed, inputs.options);
+    if (token !== previewToken) return;
+    figure = figureFor(inputs.race, painted, inputs.options);
+    summary = painted.summary;
   } else if (asset.folder === "props") {
     ground = groundMaterial(content, asset);
     if (grassOn) grass = ground.grass;
@@ -1073,11 +1105,54 @@ async function preview2d(token: number, asset: Asset, view: ViewDef, content: Wo
   await nextPaint();
   let image: TextureImage;
 
+  if (asset.folder === "races") {
+    const inputs = characterInputs(asset);
+    if (!inputs) return;
+    const painted = await paintedBody(inputs.race, inputs.gear, seed, inputs.options.texture === "flat" ? { ...inputs.options, texture: "painted" } : inputs.options);
+    const layout = painted.layout!;
+    const pixels = painted.pixels!;
+    const names = painted.body.regions.map((r) => r.name);
+    image = {
+      width: layout.size,
+      height: layout.size,
+      pixels,
+      tiles: 1,
+      describe: (x, y) => {
+        const region = layout.texels.region[y * layout.size + x];
+        return `${x}, ${y}${region >= 0 ? ` · ${names[region]}` : ""}`;
+      },
+    };
+    if (token !== previewToken) return;
+    showMode("2d");
+    textureView.show(image, textureSubject === subject);
+    textureSubject = subject;
+    setStatus("");
+    mapLegend.replaceChildren(painted.summary);
+    return;
+  }
+
   if (view.id === "texture" || view.id === "bark") {
     let color: Uint8Array;
     let normal: Uint8Array;
     let matrix: ColorMatrix | undefined;
-    if (view.id === "texture" && asset.folder === "buildingMaterials") {
+    if (view.id === "texture" && asset.folder === "gearMaterials") {
+      const inputs = (() => {
+        try {
+          return resolveGearMaterials(sourcesWithEdit()).get(asset.id)!;
+        } catch (error) {
+          if (!(error instanceof ContentError)) throw error;
+          showIssues(error.issues.map(formatIssue));
+          return null;
+        }
+      })();
+      if (!inputs) {
+        setStatus("");
+        return;
+      }
+      const baked = await bakeGearMaterial(seed, inputs);
+      color = baked.color;
+      normal = baked.normal;
+    } else if (view.id === "texture" && asset.folder === "buildingMaterials") {
       const def = content.buildingMaterials.find((m) => m.id === asset.id)!;
       const baked = await bakeBuildingTextures(seed, [def]);
       color = baked.colorBuffer;

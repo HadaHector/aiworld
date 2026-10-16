@@ -1,0 +1,38 @@
+// Plate - breastplates, helms, greaves: bright steel hammered into shallow dents, brushed along one
+// way, with scratches and dull patches. Near white-grey, so a tint can blacken or gild it.
+{
+  name: "Plate",
+  size: 0.5,
+  texture: {
+    bumpStrength: 1.2,
+    pipeline: {
+      noises: [
+        { name: "dents", type: "worley", tileCycles: 10, amplitude: 1, mode: "f1", sizeJitter: 0.3 },
+        { name: "brush", type: "fbm", octaves: 2, tileCycles: 60, amplitude: 1, persistence: 0.5, lacunarity: 2, stretch: [1, 20] },
+        { name: "dull", type: "fbm", octaves: 4, tileCycles: 3, amplitude: 1, persistence: 0.55, lacunarity: 2 },
+        { name: "scratches", type: "ridged", octaves: 2, tileCycles: 14, amplitude: 1, persistence: 0.5, lacunarity: 2, stretch: [6, 1] },
+      ],
+      steps: [
+        { output: "dentRaw", op: "sample", noise: "dents" },
+        { output: "dent", op: "mask", input: "dentRaw", at: 0.0, off: 0.5 },
+        { output: "brushRaw", op: "sample", noise: "brush" },
+        { output: "brushShade", op: "remap", input: "brushRaw", inMin: -1, inMax: 1, outMin: 0.92, outMax: 1.05 },
+        { output: "dullRaw", op: "sample", noise: "dull" },
+        { output: "dullness", op: "mask", input: "dullRaw", at: 0.5, off: 0.35 },
+        { output: "scratchRaw", op: "sample", noise: "scratches" },
+        { output: "scratch", op: "mask", input: "scratchRaw", at: 0.95, off: 0.82 },
+        { output: "steel", op: "color", value: [0.7, 0.72, 0.75] },
+        { output: "dentShade", op: "remap", input: "dent", inMin: 0, inMax: 1, outMin: 1.08, outMax: 0.86 },
+        { output: "hammered", op: "multiply", a: "steel", b: "dentShade" },
+        { output: "brushed", op: "multiply", a: "hammered", b: "brushShade" },
+        { output: "dullColor", op: "color", value: [0.58, 0.59, 0.6] },
+        { output: "dulled", op: "mix", a: "brushed", b: "dullColor", t: "dullness" },
+        { output: "scratchColor", op: "color", value: [0.95, 0.96, 0.97] },
+        { output: "diffuse", op: "mix", a: "dulled", b: "scratchColor", t: "scratch" },
+        { output: "roughness", op: "remap", input: "dullness", inMin: 0, inMax: 1, outMin: 0.3, outMax: 0.7 },
+        { output: "height", op: "scale", input: "dent", factor: -0.5 },
+      ],
+      outputs: { diffuse: "diffuse", roughness: "roughness", height: "height" },
+    },
+  },
+}

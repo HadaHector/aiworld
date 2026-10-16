@@ -4,7 +4,16 @@
 // bone]: 0 at the bone's start (its upper end, for a limb), 1 at its end.
 {
   name: "Human",
-  skin: [0.82, 0.6, 0.46],
+  // A character picks its skin, hair and eyes from these by its seed.
+  look: {
+    skin: ["#e8b896", "#dba57f", "#c98d66", "#a8704c", "#7d5036"],
+    hair: ["#2a1d14", "#4a3020", "#6e4a2a", "#a87a44", "#d4b070", "#8a3a1e", "#3a3a3a"],
+    eyes: ["#4a6a8a", "#5a7a4a", "#5a4030", "#3a2a20", "#6a7a80"],
+    beard: 0.45,
+    // Where the face is painted: heights up the head, from the jaw's hinge (0) to the crown (1) -
+    // matched to the head's front curve below (the nose's tip at 0.55, the brow at 0.75).
+    face: { eyes: 0.64, brows: 0.73, nose: 0.53, mouth: 0.4, hairline: 0.84 },
+  },
   skeleton: {
     ankle: 0.09,
     shin: 0.4,

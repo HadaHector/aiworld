@@ -1,10 +1,16 @@
-import { Bone, Color3, Material, Matrix, Mesh, Quaternion, Skeleton, StandardMaterial, VertexData, type Scene } from "@babylonjs/core";
+import { Bone, Color3, Material, Matrix, Mesh, Quaternion, RawTexture, Skeleton, StandardMaterial, Texture, VertexData, type Scene } from "@babylonjs/core";
 import type { BodyGeometry } from "./bodyMesh";
 import { cross, frameFor, normalize, sub, type BoneDef, type Vec } from "./skeleton";
 
 /** A pose: per bone name, a turn about the bone's own axes - x across it (bending forward and
  *  back), y along it (twisting), z toward its front (swinging out and in) - in radians. */
 export type Pose = Record<string, [number, number, number]>;
+
+/** How a body is coloured: one colour all over, or a painted atlas (atlas.ts, paint.ts) - its
+ *  pixels, its size, and where each triangle corner is in it. */
+export type BodySkin =
+  | { color: [number, number, number] }
+  | { pixels: Uint8Array; size: number; uvs: Float32Array; nearest: boolean };
 
 export interface CharacterMesh {
   mesh: Mesh;
@@ -20,7 +26,7 @@ export interface CharacterMesh {
  * run y along it, z toward its front, x across, so a pose can bend a knee about x whichever way
  * the leg points.
  */
-export function createCharacterMesh(scene: Scene, name: string, body: BodyGeometry, skin: [number, number, number]): CharacterMesh {
+export function createCharacterMesh(scene: Scene, name: string, body: BodyGeometry, skin: BodySkin): CharacterMesh {
   const skeleton = new Skeleton(`${name}Skeleton`, `${name}Skeleton`, scene);
   const absolute = body.bones.map(boneMatrix);
   const rests: Quaternion[] = [];
@@ -41,13 +47,16 @@ export function createCharacterMesh(scene: Scene, name: string, body: BodyGeomet
   const normals: number[] = [];
   const joints: number[] = [];
   const weights: number[] = [];
+  const uvs: number[] = [];
+  const atlas = "uvs" in skin ? skin : null;
   for (let t = 0; t < body.indices.length; t += 3) {
     const [a, b, c] = [body.indices[t], body.indices[t + 1], body.indices[t + 2]];
     const pa: Vec = [P[a * 3], P[a * 3 + 1], P[a * 3 + 2]];
     const pb: Vec = [P[b * 3], P[b * 3 + 1], P[b * 3 + 2]];
     const pc: Vec = [P[c * 3], P[c * 3 + 1], P[c * 3 + 2]];
     const n = normalize(cross(sub(pb, pa), sub(pc, pa)));
-    for (const v of [a, b, c]) {
+    for (const [corner, v] of [a, b, c].entries()) {
+      if (atlas) uvs.push(atlas.uvs[(t + corner) * 2], atlas.uvs[(t + corner) * 2 + 1]);
       positions.push(P[v * 3], P[v * 3 + 1], P[v * 3 + 2]);
       normals.push(n[0], n[1], n[2]);
       for (let k = 0; k < 4; k++) {
@@ -63,12 +72,22 @@ export function createCharacterMesh(scene: Scene, name: string, body: BodyGeomet
   data.indices = Array.from({ length: positions.length / 3 }, (_, i) => i);
   data.matricesIndices = joints;
   data.matricesWeights = weights;
+  if (atlas) data.uvs = uvs;
   data.applyToMesh(mesh);
   mesh.numBoneInfluencers = 4;
   mesh.skeleton = skeleton;
 
   const material = new StandardMaterial(`${name}Material`, scene);
-  material.diffuseColor = new Color3(...skin);
+  let texture: RawTexture | null = null;
+  if (atlas) {
+    texture = RawTexture.CreateRGBATexture(atlas.pixels, atlas.size, atlas.size, scene, !atlas.nearest, false, atlas.nearest ? Texture.NEAREST_SAMPLINGMODE : Texture.TRILINEAR_SAMPLINGMODE);
+    texture.name = `${name}Atlas`;
+    texture.wrapU = Texture.CLAMP_ADDRESSMODE;
+    texture.wrapV = Texture.CLAMP_ADDRESSMODE;
+    material.diffuseTexture = texture;
+  } else {
+    material.diffuseColor = new Color3(..."color" in skin ? skin.color : [1, 1, 1]);
+  }
   material.specularColor = new Color3(0.05, 0.05, 0.05);
   // The sky and the sun, and the few house lights nearest it (lighting/playerLights.ts).
   material.maxSimultaneousLights = 6;
@@ -94,6 +113,7 @@ export function createCharacterMesh(scene: Scene, name: string, body: BodyGeomet
       });
     },
     dispose() {
+      texture?.dispose();
       material.dispose();
       mesh.dispose();
       skeleton.dispose();

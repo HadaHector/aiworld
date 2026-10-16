@@ -1,0 +1,37 @@
+// Leather - jerkins, boots, belts, gloves: a pale tan hide (tinted to its dye) with a pebbled grain,
+// darker creases, and patches worn lighter. Its grain twice life size.
+{
+  name: "Leather",
+  size: 0.35,
+  texture: {
+    bumpStrength: 1.4,
+    pipeline: {
+      noises: [
+        { name: "grain", type: "worley", tileCycles: 40, amplitude: 1, mode: "f1", sizeJitter: 0.4 },
+        { name: "creases", type: "worley", tileCycles: 7, amplitude: 1, mode: "edge", warp: 0.25 },
+        { name: "wear", type: "fbm", octaves: 4, tileCycles: 2, amplitude: 1, persistence: 0.55, lacunarity: 2 },
+      ],
+      steps: [
+        { output: "grainRaw", op: "sample", noise: "grain" },
+        { output: "pebble", op: "mask", input: "grainRaw", at: 0.0, off: 0.6 },
+        { output: "creaseRaw", op: "sample", noise: "creases" },
+        { output: "crease", op: "mask", input: "creaseRaw", at: 0.0, off: 0.05 },
+        { output: "wearRaw", op: "sample", noise: "wear" },
+        { output: "wornRaw", op: "mask", input: "wearRaw", at: 0.6, off: 0.25 },
+        { output: "worn", op: "scale", input: "wornRaw", factor: 0.45 },
+        { output: "base", op: "color", value: [0.86, 0.74, 0.6] },
+        { output: "pebbleShade", op: "remap", input: "pebble", inMin: 0, inMax: 1, outMin: 1.04, outMax: 0.88 },
+        { output: "pebbled", op: "multiply", a: "base", b: "pebbleShade" },
+        { output: "creaseColor", op: "color", value: [0.55, 0.44, 0.34] },
+        { output: "creased", op: "mix", a: "pebbled", b: "creaseColor", t: "crease" },
+        { output: "wornColor", op: "color", value: [0.95, 0.86, 0.74] },
+        { output: "diffuse", op: "mix", a: "creased", b: "wornColor", t: "worn" },
+        { output: "roughness", op: "remap", input: "worn", inMin: 0, inMax: 1, outMin: 0.75, outMax: 0.55 },
+        { output: "pebbleHeight", op: "scale", input: "pebble", factor: -0.35 },
+        { output: "creaseHeight", op: "scale", input: "crease", factor: -0.6 },
+        { output: "height", op: "add", a: "pebbleHeight", b: "creaseHeight" },
+      ],
+      outputs: { diffuse: "diffuse", roughness: "roughness", height: "height" },
+    },
+  },
+}

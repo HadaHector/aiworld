@@ -17,6 +17,22 @@ export interface BodyGeometry {
   /** Triangles, all told and by part. */
   triangles: number;
   parts: Record<string, number>;
+  /** The stretches of body the atlas unrolls as cylinders (see atlas.ts), and which one each
+   *  triangle is in. */
+  regions: BodyRegion[];
+  triangleRegions: number[];
+}
+
+/** A stretch of body round one axis - the torso, an arm, a leg - unrolled into one rectangle of
+ *  the atlas: round it across, along it down. */
+export interface BodyRegion {
+  name: string;
+  /** Its axis, as a line through joints (moved by the lattice, as the body is). */
+  axis: Vec[];
+  /** Toward its front, for where round it the atlas starts. */
+  reference: Vec;
+  /** -1, 0 or 1, as bones' sides: a -x region is unrolled mirrored, so both sides read alike. */
+  side: number;
 }
 
 export interface BodyOptions {
@@ -61,7 +77,15 @@ export function buildBody(race: RaceDef, options: BodyOptions = {}): BodyGeometr
   const extras: number[][] = [];
   const indices: number[] = [];
   const parts: Record<string, number> = {};
+  const triangleRegions: number[] = [];
+  const regionAxes: { name: string; axis: Vec[]; reference: Vec; side: number }[] = [];
   let part = "";
+  let region = 0;
+  /** From here on triangles are in a new region round this axis. */
+  const enter = (name: string, axis: Vec[], reference: Vec, side: number): void => {
+    regionAxes.push({ name, axis, reference, side });
+    region = regionAxes.length - 1;
+  };
 
   const vertex = (p: Vec, home: number, extra: number[] = []): number => {
     points.push(p);
@@ -72,6 +96,7 @@ export function buildBody(race: RaceDef, options: BodyOptions = {}): BodyGeometr
   const tri = (a: number, b: number, c: number): void => {
     indices.push(a, b, c);
     parts[part] = (parts[part] ?? 0) + 1;
+    triangleRegions.push(region);
   };
 
   const samplers = new Map<BoneShape, ((t: number) => number)[]>();
@@ -176,6 +201,7 @@ export function buildBody(race: RaceDef, options: BodyOptions = {}): BodyGeometr
   const pelvis = bone("pelvis");
   const spine = bone("spine");
   const chest = bone("chest");
+  enter("torso", [pelvis.head, spine.head, chest.head, chest.tail], FORWARD, 0);
   const iPelvis = skeleton.index("pelvis");
   const iSpine = skeleton.index("spine");
   const iChest = skeleton.index("chest");
@@ -211,6 +237,7 @@ export function buildBody(race: RaceDef, options: BodyOptions = {}): BodyGeometr
     const thigh = bones[iThigh];
     const shin = bones[iShin];
     part = "legs";
+    enter(`leg${suffix}`, [thigh.head, shin.head, shin.tail], FORWARD, side);
     const half = side > 0 ? hipRing.verts.slice(0, N / 2 + 1) : [...hipRing.verts.slice(N / 2), hipRing.verts[0]];
     const leg: Ring[] = [];
     for (const t of [thighStart, ...spread(thighStart, 1, loops(race.shape.thigh))]) leg.push(ring(iThigh, race.shape.thigh, thigh.head, thigh.tail, t, FORWARD, side));
@@ -219,10 +246,13 @@ export function buildBody(race: RaceDef, options: BodyOptions = {}): BodyGeometr
     zip([...half, crotch], leg[0].verts, down, FORWARD);
     for (let r = 0; r + 1 < leg.length; r++) zip(leg[r].verts, leg[r + 1].verts, down, FORWARD);
     for (const v of leg[leg.length - 1].verts) extras[v] = [iFoot];
+    const legRegion = region;
 
     // --- the foot, along its own axis from heel to toe, the ankle plugged into its top ---
     part = "feet";
     const axis = footAxis(race, side);
+    enter(`foot${suffix}`, [axis.from, axis.to], UP, side);
+    const footRegion = region;
     const footShape = race.shape.foot;
     const footLength = length(sub(axis.to, axis.from));
     const tAnkle = s.heel / footLength;
@@ -237,8 +267,10 @@ export function buildBody(race: RaceDef, options: BodyOptions = {}): BodyGeometr
     const hole = [foot[r - 1].verts[F - 1], foot[r - 1].verts[0], foot[r - 1].verts[1], foot[r].verts[1], foot[r + 1].verts[1], foot[r + 1].verts[0], foot[r + 1].verts[F - 1], foot[r].verts[F - 1]];
     for (const v of hole) extras[v] = [iShin];
     part = "legs";
+    region = legRegion;
     zip(leg[leg.length - 1].verts, hole, sub(shin.tail, shin.head), FORWARD);
     part = "feet";
+    region = footRegion;
     cap(foot[0], lerp(axis.from, axis.to, 0), iFoot, true);
     cap(foot[foot.length - 1], axis.to, iFoot);
   }
@@ -254,6 +286,7 @@ export function buildBody(race: RaceDef, options: BodyOptions = {}): BodyGeometr
     const fore = bones[iFore];
     const hand = bones[iHand];
     part = "arms";
+    enter(`arm${suffix}`, [upper.head, fore.head, fore.tail], FORWARD, side);
     const c = holeColumn(side);
     const at = (row: number, col: number): number => torso[armpit + row].verts[(col + N) % N];
     const hole = [at(0, c - 1), at(0, c), at(0, c + 1), at(1, c + 1), at(2, c + 1), at(2, c), at(2, c - 1), at(1, c - 1)];
@@ -267,6 +300,7 @@ export function buildBody(race: RaceDef, options: BodyOptions = {}): BodyGeometr
     for (let r = 0; r + 1 < arm.length; r++) zip(arm[r].verts, arm[r + 1].verts, along, FORWARD);
 
     part = "hands";
+    enter(`hand${suffix}`, [hand.head, hand.tail], FORWARD, side);
     const palm: Ring[] = [arm[arm.length - 1]];
     for (const t of [0.04, ...spread(0.04, 0.92, loops(race.shape.hand)), 0.92]) palm.push(ring(iHand, race.shape.hand, hand.head, hand.tail, t, FORWARD, side));
     for (let r = 0; r + 1 < palm.length; r++) zip(palm[r].verts, palm[r + 1].verts, along, FORWARD);
@@ -290,6 +324,7 @@ export function buildBody(race: RaceDef, options: BodyOptions = {}): BodyGeometr
 
   // --- the neck and head, zipped onto the torso's top ring ---
   part = "head";
+  enter("head", [bone("neck").head, bone("head").head, bone("head").tail], FORWARD, 0);
   const iNeck = skeleton.index("neck");
   const iHead = skeleton.index("head");
   const neck = bones[iNeck];
@@ -316,6 +351,7 @@ export function buildBody(race: RaceDef, options: BodyOptions = {}): BodyGeometr
     const l = lattice;
     for (let i = 0; i < points.length; i++) points[i] = l.apply(points[i]);
     finalBones = bones.map((b) => ({ ...b, head: l.apply(b.head), tail: l.apply(b.tail) }));
+    for (const r of regionAxes) r.axis = r.axis.map((p) => l.apply(p));
   }
 
   // --- skinning: each vertex follows the nearest of its own bone and the bones next to it ---
@@ -347,7 +383,7 @@ export function buildBody(race: RaceDef, options: BodyOptions = {}): BodyGeometr
     }
   }
 
-  return { positions: points.flat(), indices, joints, weights, bones: finalBones, lattice, triangles: indices.length / 3, parts };
+  return { positions: points.flat(), indices, joints, weights, bones: finalBones, lattice, triangles: indices.length / 3, parts, regions: regionAxes, triangleRegions };
 }
 
 function segmentDistance(p: Vec, a: Vec, b: Vec): number {

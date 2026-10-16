@@ -123,7 +123,7 @@ export const GAME_FOLDERS = ["stats", "modifiers", "resources", "entities"] as c
 
 /** The folders characters' bodies are drawn from - races, gear, outfits (see CHARACTERS.md). Read by
  *  the client alone (src/character); the world's resolver passes over them too. */
-export const CHARACTER_FOLDERS = ["races"] as const;
+export const CHARACTER_FOLDERS = ["races", "gearMaterials"] as const;
 
 /** How many grass kinds the packs may define between them: each is a layer of the blade atlas and
  *  an entry in the grass shader's per-kind uniform arrays (four vectors a kind, plus its petal
@@ -1957,7 +1957,7 @@ function readColorAdjust(obj: RawObject, reader: Reader, path: string): ColorAdj
 
 /** A baked texture: a graph with a colour `diffuse` output and optional `roughness` and `height`,
  *  and how strongly its height reads as bumps. Materials and bark both use it. */
-function readTexture(raw: unknown, reader: Reader, path: string): TextureDef {
+export function readTexture(raw: unknown, reader: Reader, path: string): TextureDef {
   const failed = raw === FAILED_GENERATOR;
   const texture = failed ? { bumpStrength: 0, pipeline: FAILED_GENERATOR } : reader.object(raw, path);
   reader.onlyKeys(texture, path, ["bumpStrength", "pipeline"]);

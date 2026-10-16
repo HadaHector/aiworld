@@ -11,10 +11,21 @@ import type { CurvePoints } from "./curve";
 export interface RaceDef {
   id: string;
   name: string;
-  skin: ColorTuple;
+  look: RaceLook;
   skeleton: RaceSkeleton;
   shape: Record<ShapedBone, BoneShape>;
   lattice: LatticeDef | null;
+}
+
+/** What a character of the race can look like: each picks from these by its seed (paint.ts). */
+export interface RaceLook {
+  skin: ColorTuple[];
+  hair: ColorTuple[];
+  eyes: ColorTuple[];
+  /** The share of characters with a beard. */
+  beard: number;
+  /** Where the face is painted on the head: heights from the jaw's hinge (0) to the crown (1). */
+  face: { eyes: number; brows: number; nose: number; mouth: number; hairline: number };
 }
 
 export interface RaceSkeleton {
@@ -83,11 +94,20 @@ const ID_PATTERN = /^[A-Za-z0-9_-]+$/;
  *  every problem found. */
 export function resolveRaces(packs: PackSource[]): Map<string, RaceDef> {
   const issues: ContentIssue[] = [];
+  const entries = characterEntries(packs, "races", issues);
+  const races = new Map<string, RaceDef>();
+  for (const [id, entry] of entries) races.set(id, readRace(id, entry.data, new Reader(issues, entry.file)));
+  if (issues.length > 0) throw new ContentError(issues);
+  return races;
+}
+
+/** One character folder's files, parsed, by id - later packs replacing earlier ones - in id order. */
+export function characterEntries(packs: PackSource[], folder: (typeof CHARACTER_FOLDERS)[number], issues: ContentIssue[]): Map<string, { file: string; data: unknown }> {
   const entries = new Map<string, { file: string; data: unknown }>();
   for (const pack of orderPacks(packs, issues)) {
     for (const { path, text } of pack.files) {
       const parts = path.split("/");
-      if (parts.length !== 2 || parts[0] !== CHARACTER_FOLDERS[0]) continue;
+      if (parts.length !== 2 || parts[0] !== folder) continue;
       const file = `${pack.id}/${path}`;
       const id = parts[1].replace(/\.json5$/, "");
       if (!ID_PATTERN.test(id)) {
@@ -98,15 +118,12 @@ export function resolveRaces(packs: PackSource[]): Map<string, RaceDef> {
       if (data !== undefined) entries.set(id, { file, data });
     }
   }
-  const races = new Map<string, RaceDef>();
-  for (const [id, entry] of [...entries].sort(([a], [b]) => a.localeCompare(b))) races.set(id, readRace(id, entry.data, new Reader(issues, entry.file)));
-  if (issues.length > 0) throw new ContentError(issues);
-  return races;
+  return new Map([...entries].sort(([a], [b]) => a.localeCompare(b)));
 }
 
 function readRace(id: string, data: unknown, reader: Reader): RaceDef {
   const obj = reader.object(data, "");
-  reader.onlyKeys(obj, "", ["name", "skin", "skeleton", "shape", "lattice"]);
+  reader.onlyKeys(obj, "", ["name", "look", "skeleton", "shape", "lattice"]);
   const rawSkeleton = reader.object(obj.skeleton, "skeleton");
   reader.onlyKeys(rawSkeleton, "skeleton", SKELETON_KEYS);
   const skeleton = Object.fromEntries(SKELETON_KEYS.map((key) => [key, reader.number(rawSkeleton, key, "skeleton", { min: key === "armDown" ? -90 : 0, max: key === "armDown" ? 90 : 3 })])) as unknown as RaceSkeleton;
@@ -119,10 +136,29 @@ function readRace(id: string, data: unknown, reader: Reader): RaceDef {
   return {
     id,
     name: reader.optionalString(obj, "name", "") ?? id,
-    skin: obj.skin === undefined ? [0.8, 0.62, 0.5] : reader.color(obj, "skin", ""),
+    look: readLook(reader.object(obj.look, "look"), reader),
     skeleton,
     shape,
     lattice: obj.lattice === undefined ? null : readLattice(reader.object(obj.lattice, "lattice"), reader),
+  };
+}
+
+function readLook(obj: RawObject, reader: Reader): RaceLook {
+  reader.onlyKeys(obj, "look", ["skin", "hair", "eyes", "beard", "face"]);
+  const colors = (key: string): ColorTuple[] => {
+    const list = reader.array(obj, key, "look").map((value, i) => reader.colorValue(value, `look.${key}[${i}]`));
+    if (list.length === 0) reader.fail(`look.${key}`, "needs at least one colour");
+    return list.length > 0 ? list : [[1, 0, 1]];
+  };
+  const face = obj.face === undefined ? {} : reader.object(obj.face, "look.face");
+  reader.onlyKeys(face, "look.face", ["eyes", "brows", "nose", "mouth", "hairline"]);
+  const height = (key: string, fallback: number): number => reader.optionalNumber(face, key, "look.face", fallback, { min: 0, max: 1 });
+  return {
+    skin: colors("skin"),
+    hair: colors("hair"),
+    eyes: colors("eyes"),
+    beard: reader.optionalNumber(obj, "beard", "look", 0, { min: 0, max: 1 }),
+    face: { eyes: height("eyes", 0.6), brows: height("brows", 0.69), nose: height("nose", 0.5), mouth: height("mouth", 0.36), hairline: height("hairline", 0.82) },
   };
 }
 

@@ -6,7 +6,8 @@ procedurally from parts, textured and animated procedurally, look good enough fo
 WoW-Classic-like third-person RPG? Afterwards a body can be looked at in the workbench with any
 race and outfit, playing any of its animations, and the own player in the game is drawn with one.
 
-**Status: building.** Step 1 is built: the bare human in the workbench (`?asset=core/races/human`).
+**Status: building.** Steps 1-2 are built: the human in the workbench (`?asset=core/races/human`),
+painted, and its Atlas view; gear materials in `gearMaterials/`.
 
 ## Decisions
 
@@ -166,6 +167,12 @@ material and tint; the world's materials stay the world's.
 
 Resolution and filtering are settings, so two looks can be compared on the same body: 512 smooth
 (hand-painted) and 128 nearest (chunky retro).
+
+As built (step 2): the atlas is rasterised once into a buffer that says, per texel, which region it
+is in, where on the bind-pose body and which way its smooth normal faces; every layer paints from
+that, so the face is drawn in the head's own measures (`look.face` in the race gives the heights of
+eyes, brows, nose, mouth and hairline) and light and occlusion come from the body's real shape.
+Until there is gear, the workbench's *Smallclothes* paints linen over the hips as a stand-in.
 
 ## Animation
 
