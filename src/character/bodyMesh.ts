@@ -50,6 +50,8 @@ interface Ring {
 }
 
 const FORWARD: Vec = [0, 0, 1];
+/** How far up its bone the neck's first ring is: below it, the collar joins it to the shoulders. */
+const NECK_START = 0.5;
 const UP: Vec = [0, 1, 0];
 
 /**
@@ -288,12 +290,13 @@ export function buildBody(race: RaceDef, options: BodyOptions = {}): BodyGeometr
   };
   slope(torso[torso.length - 1], s.shoulderDrop * 0.7);
   slope(torso[torso.length - 2], s.shoulderDrop * 0.25);
-  // A collar between the shoulders' top and the neck: halfway in, so the neck rises out of a
+  // A collar between the shoulders' top and the neck's first ring - halfway in and a little way up,
+  // never below the top ring's middle, which would fold the surface - so the neck rises out of a
   // slope (the trapezius) rather than off a shelf.
   const chestTop = sampled(race.shape.chest).map((f) => f(1));
-  const neckBase = sampled(race.shape.neck).map((f) => f(0.2));
+  const neckBase = sampled(race.shape.neck).map((f) => f(NECK_START));
   const toward = (i: number, k: number): number => chestTop[i] + (neckBase[i] - chestTop[i]) * k;
-  const collarY = chest.tail[1] - s.shoulderDrop * 0.1;
+  const collarY = chest.tail[1] + s.neck * NECK_START * 0.45;
   const collar = ring(iChest, evenShape(toward(0, 0.45), toward(1, 0.4), toward(2, 0.58), 0.8, N), [0, collarY, 0], [0, collarY + 1, 0], 0, FORWARD, 0);
   slope(collar, s.shoulderDrop * 0.35);
   for (const v of collar.verts) fixed.set(v, [[iChest, 0.55], [skeleton.index("neck"), 0.45]]);
@@ -436,7 +439,7 @@ export function buildBody(race: RaceDef, options: BodyOptions = {}): BodyGeometr
   const neck = bones[iNeck];
   const head = bones[iHead];
   const column: Ring[] = [];
-  for (const t of [0.2, ...spread(0.2, 1, loops(race.shape.neck))]) column.push(ring(iNeck, race.shape.neck, neck.head, neck.tail, t, FORWARD, 0));
+  for (const t of [NECK_START, ...spread(NECK_START, 1, loops(race.shape.neck))]) column.push(ring(iNeck, race.shape.neck, neck.head, neck.tail, t, FORWARD, 0));
   for (const t of [0, ...spread(0, 0.94, loops(race.shape.head)), 0.94]) column.push(ring(iHead, race.shape.head, head.head, head.tail, t, FORWARD, 0));
   zip(torsoTop.verts, column[0].verts, UP, FORWARD);
   for (let r = 0; r + 1 < column.length; r++) zip(column[r].verts, column[r + 1].verts, UP, FORWARD);
