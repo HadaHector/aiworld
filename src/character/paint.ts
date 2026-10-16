@@ -106,7 +106,8 @@ export function paintAtlas(body: BodyGeometry, layout: AtlasLayout, race: RaceDe
     pixels[o * 4 + 2] = clampByte(color[2] * shade);
     pixels[o * 4 + 3] = 255;
   }
-  dilate(pixels, texels.region, size, 4);
+  // Out far enough that no texel is left empty: a corner a little off its region still finds colour.
+  dilate(pixels, texels.region, size, Math.ceil(size / 16));
   return pixels;
 }
 

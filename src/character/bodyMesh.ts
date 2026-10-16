@@ -75,6 +75,8 @@ export function buildBody(race: RaceDef, options: BodyOptions = {}): BodyGeometr
   const points: Vec[] = [];
   const homes: number[] = [];
   const extras: number[][] = [];
+  /** Weights set by hand where the body joins itself, overriding the nearest-bones rule: bone, share. */
+  const fixed = new Map<number, [number, number][]>();
   const indices: number[] = [];
   const parts: Record<string, number> = {};
   const triangleRegions: number[] = [];
@@ -234,6 +236,7 @@ export function buildBody(race: RaceDef, options: BodyOptions = {}): BodyGeometr
   const spine = bone("spine");
   const chest = bone("chest");
   enter("torso", [pelvis.head, spine.head, chest.head, chest.tail], FORWARD, 0);
+  const torsoRegion = region;
   const iPelvis = skeleton.index("pelvis");
   const iSpine = skeleton.index("spine");
   const iChest = skeleton.index("chest");
@@ -269,7 +272,7 @@ export function buildBody(race: RaceDef, options: BodyOptions = {}): BodyGeometr
   const collarY = chest.tail[1] - s.shoulderDrop * 0.1;
   const collar = ring(iChest, evenShape(toward(0, 0.45), toward(1, 0.4), toward(2, 0.58), 0.8, N), [0, collarY, 0], [0, collarY + 1, 0], 0, FORWARD, 0);
   slope(collar, s.shoulderDrop * 0.35);
-  for (const v of collar.verts) extras[v] = [skeleton.index("neck")];
+  for (const v of collar.verts) fixed.set(v, [[iChest, 0.55], [skeleton.index("neck"), 0.45]]);
   torso.push(collar);
   bands(torso, skip);
   const torsoTop = collar;
@@ -343,7 +346,9 @@ export function buildBody(race: RaceDef, options: BodyOptions = {}): BodyGeometr
     const c = holeColumn(side);
     const at = (row: number, col: number): number => torso[armpit + row].verts[(col + N) % N];
     const hole = [at(0, c - 1), at(0, c), at(0, c + 1), at(1, c + 1), at(2, c + 1), at(2, c), at(2, c - 1), at(1, c - 1)];
-    for (const v of hole) extras[v] = [iClavicle, iUpper];
+    // The shoulder's rings go from the chest to the arm in steps: the hole mostly the chest's, the
+    // ring over it shared, the root mostly the arm's - the clavicle in each, so a shrug lifts them all.
+    for (const v of hole) fixed.set(v, [[iChest, 0.55], [iClavicle, 0.3], [iUpper, 0.15]]);
     // The arm's first ring level with the armpit, so the hole's bottom row runs straight across to it.
     const along = sub(upper.tail, upper.head);
     // The arm's root: a ring over the joint tilted halfway between the torso's side and the arm, so
@@ -354,7 +359,7 @@ export function buildBody(race: RaceDef, options: BodyOptions = {}): BodyGeometr
     const bisector = normalize(add(normalize(along), [side, 0, 0]));
     const rootAt = lerp(upper.head, upper.tail, 0.18);
     const root = ring(iUpper, race.shape.upperArm, rootAt, add(rootAt, bisector), 0, FORWARD, side);
-    for (const v of root.verts) extras[v] = [iClavicle];
+    for (const v of root.verts) fixed.set(v, [[iUpper, 0.8], [iClavicle, 0.2]]);
     // Below it the arm proper, from level with the armpit down.
     const armStart = Math.min(0.6, Math.max(0.3, (s.armpit * 0.85) / s.upperArm));
     const arm: Ring[] = [];
@@ -363,9 +368,13 @@ export function buildBody(race: RaceDef, options: BodyOptions = {}): BodyGeometr
     // And between the hole and the root a ring halfway, puffed out, so the shoulder rounds over
     // (the deltoid) rather than turning at a crease.
     const deltoid = blend(hole, root.verts, bisector, FORWARD, 0.5, 0.25, iUpper);
-    for (const v of deltoid) extras[v] = [iClavicle, iChest];
+    for (const v of deltoid) fixed.set(v, [[iUpper, 0.5], [iClavicle, 0.35], [iChest, 0.15]]);
+    // Unrolled with the torso: on its side, over the joint, the arm's own axis has no angle for them.
+    const armRegion = region;
+    region = torsoRegion;
     zip(hole, deltoid, bisector, FORWARD);
     zip(deltoid, root.verts, bisector, FORWARD);
+    region = armRegion;
     zip(root.verts, arm[0].verts, along, FORWARD);
     for (let r = 0; r + 1 < arm.length; r++) zip(arm[r].verts, arm[r + 1].verts, along, FORWARD);
 
@@ -437,6 +446,14 @@ export function buildBody(race: RaceDef, options: BodyOptions = {}): BodyGeometr
   const joints: number[] = [];
   const weights: number[] = [];
   for (let v = 0; v < points.length; v++) {
+    const set = fixed.get(v);
+    if (set) {
+      for (let k = 0; k < 4; k++) {
+        joints.push(set[k]?.[0] ?? 0);
+        weights.push(set[k]?.[1] ?? 0);
+      }
+      continue;
+    }
     const candidates = new Set([...neighbours[homes[v]], ...extras[v]]);
     const scored = [...candidates]
       .filter((b) => b > 0)

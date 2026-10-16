@@ -123,7 +123,12 @@ atlas places, but share their vertex's normal.
 
 **Skinning.** Every vertex of a loop belongs to its bone, with a blend over the last and first
 loops either side of a joint, so elbows and knees bend without collapsing. Patch vertices carry
-their weights in the patch.
+their weights in the patch. As built: a vertex follows the nearest of its own bone and the bones next to it
+(inverse distance to the fourth power, its own bone favoured); where the body joins itself the
+weights are set by hand - the shoulder's hole, the ring over it and the arm's root go from mostly
+the chest to mostly the arm in steps, the clavicle in each so a shrug lifts them, and the collar is
+shared by the chest and the neck. The shoulder's joining triangles are unrolled with the torso in the
+atlas, and every empty texel is filled from its neighbours, so nothing samples black.
 
 **The head** is a short chain on the head bone with its own four curves (front gives nose, chin
 and brow in profile, the sides give cheeks and jaw), and a lattice of its own for the face's
