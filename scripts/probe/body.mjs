@@ -22,6 +22,16 @@ for (const race of races.values()) {
     }
   }
   const open = [...edges].filter(([, n]) => n !== 2);
+  // Wound consistently, each shared edge is walked one way by one triangle and back by the other:
+  // the same way twice means one of them is turned over.
+  const directed = new Map();
+  const regionOf = (t) => body.regions[body.triangleRegions[t]].name;
+  for (let t = 0; t < I.length; t += 3) for (let e = 0; e < 3; e++) {
+    const key = `${I[t + e]},${I[t + ((e + 1) % 3)]}`;
+    directed.set(key, [...(directed.get(key) ?? []), t / 3]);
+  }
+  const flipped = new Map();
+  for (const [, list] of directed) if (list.length > 1) for (const t of list) flipped.set(regionOf(t), (flipped.get(regionOf(t)) ?? 0) + 1);
   // Faces turned toward their bone: the normal against the way from the bone to the triangle.
   // (A thumb stands off its hand's axis, so some of its faces turn toward it - expected.)
   let inward = 0;
@@ -47,6 +57,7 @@ for (const race of races.values()) {
   }
   const ys = P.filter((_, i) => i % 3 === 1);
   console.log(`${race.id}: ${body.triangles} triangles (${Object.entries(body.parts).map(([k, n]) => `${k} ${n}`).join(", ")}), ${(Math.max(...ys) - Math.min(...ys)).toFixed(2)} m tall, lowest ${Math.min(...ys).toFixed(3)}`);
+  console.log(`  ${[...flipped.values()].reduce((x, y) => x + y, 0)} triangles turned against their neighbours${flipped.size ? ` (${[...flipped].map(([k, n]) => `${k} ${n}`).join(", ")})` : ""}`);
   console.log(`  ${open.length} edges not shared by two triangles${open.length ? `: ${open.slice(0, 8).map(([k, n]) => `${k}×${n}`).join(" ")}` : ""}`);
   console.log(`  ${inward} triangles facing their bone${inward ? ` (${[...inwardBones].map(([k, n]) => `${k} ${n}`).join(", ")})` : ""}, ${degenerate.length} degenerate, ${badWeights} vertices whose weights don't sum to 1`);
 }

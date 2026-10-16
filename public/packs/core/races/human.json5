@@ -32,6 +32,8 @@
     armDown: 77,
     foot: 0.31,
     heel: 0.075,
+    armpit: 0.16,
+    crotch: 0.085,
   },
   shape: {
     // The torso: the hip joints up to the waist, the ribs, then the chest to the top of the shoulders.

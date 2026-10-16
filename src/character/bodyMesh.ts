@@ -240,7 +240,7 @@ export function buildBody(race: RaceDef, options: BodyOptions = {}): BodyGeometr
   const torso: Ring[] = [];
   const shoulderY = chest.tail[1] - s.shoulderDrop;
   const tM = Math.min(0.9, Math.max(0.3, (shoulderY - chest.head[1]) / (chest.tail[1] - chest.head[1])));
-  const tA = Math.max(0.05, 2 * tM - 1);
+  const tA = Math.min(tM - 0.1, Math.max(0.05, (shoulderY - s.armpit - chest.head[1]) / (chest.tail[1] - chest.head[1])));
   for (const t of [0, ...spread(0, 1, loops(race.shape.pelvis))]) torso.push(ring(iPelvis, race.shape.pelvis, pelvis.head, pelvis.tail, t, FORWARD, 0));
   for (const t of [0, ...spread(0, 1, loops(race.shape.spine))]) torso.push(ring(iSpine, race.shape.spine, spine.head, spine.tail, t, FORWARD, 0));
   for (const t of [0, ...spread(0, tA, loops(race.shape.chest))]) torso.push(ring(iChest, race.shape.chest, chest.head, chest.tail, t, FORWARD, 0));
@@ -276,8 +276,12 @@ export function buildBody(race: RaceDef, options: BodyOptions = {}): BodyGeometr
 
   // --- the legs, each hanging from its half of the hip ring and a crotch vertex ---
   const hipRing = torso[0];
-  const thighStart = 0.16;
-  const crotch = vertex([0, pelvis.head[1] - s.thigh * thighStart * 0.75, 0], iPelvis, [skeleton.index("thighR"), skeleton.index("thighL")]);
+  // The hip ring dips toward the middle, front and back, so the legs part low - at the crotch -
+  // rather than in a V rising to the hips.
+  const hipWidest = Math.max(...hipRing.verts.map((v) => Math.abs(points[v][0])));
+  for (const v of hipRing.verts) points[v] = [points[v][0], points[v][1] - s.crotch * 0.7 * Math.max(0, 1 - (points[v][0] / hipWidest) ** 2), points[v][2]];
+  const thighStart = Math.min(0.5, (s.crotch + 0.025) / s.thigh);
+  const crotch = vertex([0, pelvis.head[1] - s.crotch, 0], iPelvis, [skeleton.index("thighR"), skeleton.index("thighL")]);
   for (const side of [1, -1]) {
     const suffix = side > 0 ? "R" : "L";
     const iThigh = skeleton.index(`thigh${suffix}`);
@@ -340,17 +344,29 @@ export function buildBody(race: RaceDef, options: BodyOptions = {}): BodyGeometr
     const at = (row: number, col: number): number => torso[armpit + row].verts[(col + N) % N];
     const hole = [at(0, c - 1), at(0, c), at(0, c + 1), at(1, c + 1), at(2, c + 1), at(2, c), at(2, c - 1), at(1, c - 1)];
     for (const v of hole) extras[v] = [iClavicle, iUpper];
-    const armStart = 0.22;
+    // The arm's first ring level with the armpit, so the hole's bottom row runs straight across to it.
+    const along = sub(upper.tail, upper.head);
+    // The arm's root: a ring over the joint tilted halfway between the torso's side and the arm, so
+    // its outer edge rises toward the shoulder's top, its inner edge drops to the armpit, and the
+    // hole - in a wall the arm hangs beside - meets it all round rather than folding into a step.
+    // Round that same halfway axis the hole and the root are both true loops, so the zips between
+    // them measure their angles round it.
+    const bisector = normalize(add(normalize(along), [side, 0, 0]));
+    const rootAt = lerp(upper.head, upper.tail, 0.18);
+    const root = ring(iUpper, race.shape.upperArm, rootAt, add(rootAt, bisector), 0, FORWARD, side);
+    for (const v of root.verts) extras[v] = [iClavicle];
+    // Below it the arm proper, from level with the armpit down.
+    const armStart = Math.min(0.6, Math.max(0.3, (s.armpit * 0.85) / s.upperArm));
     const arm: Ring[] = [];
     for (const t of [armStart, ...spread(armStart, 1, loops(race.shape.upperArm))]) arm.push(ring(iUpper, race.shape.upperArm, upper.head, upper.tail, t, FORWARD, side));
     for (const t of [0, ...spread(0, 1, loops(race.shape.forearm))]) arm.push(ring(iFore, race.shape.forearm, fore.head, fore.tail, t, FORWARD, side));
-    const along = sub(upper.tail, upper.head);
-    // A ring halfway between the hole and the arm, puffed out, so the shoulder rounds over into the
-    // arm (the deltoid) rather than turning at a crease.
-    const deltoid = blend(hole, arm[0].verts, along, FORWARD, 0.5, 0.3, iUpper);
+    // And between the hole and the root a ring halfway, puffed out, so the shoulder rounds over
+    // (the deltoid) rather than turning at a crease.
+    const deltoid = blend(hole, root.verts, bisector, FORWARD, 0.5, 0.25, iUpper);
     for (const v of deltoid) extras[v] = [iClavicle, iChest];
-    zip(hole, deltoid, along, FORWARD);
-    zip(deltoid, arm[0].verts, along, FORWARD);
+    zip(hole, deltoid, bisector, FORWARD);
+    zip(deltoid, root.verts, bisector, FORWARD);
+    zip(root.verts, arm[0].verts, along, FORWARD);
     for (let r = 0; r + 1 < arm.length; r++) zip(arm[r].verts, arm[r + 1].verts, along, FORWARD);
 
     part = "hands";

@@ -52,6 +52,10 @@ export interface RaceSkeleton {
   /** Heel to toe, and how far the heel reaches behind the ankle. */
   foot: number;
   heel: number;
+  /** How far under the shoulder joint the armpit is, and how far under the hip joints the legs
+   *  part (the crotch). */
+  armpit: number;
+  crotch: number;
 }
 
 /** The bones a body is shaped round. The clavicles carry no shape of their own. */
@@ -87,7 +91,7 @@ export interface LatticeDef {
 }
 
 const MIDDLE_BONES: readonly ShapedBone[] = ["pelvis", "spine", "chest", "neck", "head"];
-const SKELETON_KEYS: (keyof RaceSkeleton)[] = ["ankle", "shin", "thigh", "hipWidth", "pelvis", "spine", "chest", "neck", "head", "shoulderWidth", "shoulderDrop", "upperArm", "forearm", "hand", "armDown", "foot", "heel"];
+const SKELETON_KEYS: (keyof RaceSkeleton)[] = ["ankle", "shin", "thigh", "hipWidth", "pelvis", "spine", "chest", "neck", "head", "shoulderWidth", "shoulderDrop", "upperArm", "forearm", "hand", "armDown", "foot", "heel", "armpit", "crotch"];
 const ID_PATTERN = /^[A-Za-z0-9_-]+$/;
 
 /** Every race in the packs, later packs replacing earlier ones' by id. Throws a ContentError with

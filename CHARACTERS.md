@@ -111,9 +111,13 @@ lattice so the skeleton still sits inside the deformed body. Gear shells are bui
 the deformed body, so they fit whatever the lattice made.
 
 As built: the shoulders' top ring slopes down from the neck to the arms; a collar ring sits halfway
-between it and the neck, so the neck rises out of a slope; and between each arm hole and the arm's
-first ring is a ring blended halfway and puffed out, so the shoulder rounds over into the arm (the
-deltoid) instead of turning at a crease. The arms are built hanging 77° below level, against the chest's side, near how they
+between it and the neck, so the neck rises out of a slope; each arm starts with a root ring over the
+joint tilted halfway between the torso's side and the arm, then a ring blended halfway from the hole
+to it and puffed out, so the shoulder rounds over into the arm (the deltoid) instead of turning at a
+crease; zips there measure angles round that halfway axis, since down an arm hanging beside a wall
+the hole's top and bottom fall at the same angle. The race sets how far under the shoulder joint the
+armpit is (`armpit`) and how far under the hips the legs part (`crotch`); the hip ring dips toward
+the middle to meet them. The arms are built hanging 77° below level, against the chest's side, near how they
 stand, so standing deforms the shoulders little. The body is smooth-shaded: corners keep their own
 atlas places, but share their vertex's normal.
 
