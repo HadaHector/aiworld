@@ -193,6 +193,8 @@ export function createBuildingMaterial(scene: Scene, litShading: LitShading, tex
   const layers = Math.max(1, materials.length);
   const colorArray = RawTexture2DArray.CreateRGBATexture(textures.colorBuffer, TEXTURE_RESOLUTION, TEXTURE_RESOLUTION, layers, scene, true, false);
   const normalArray = RawTexture2DArray.CreateRGBATexture(textures.normalBuffer, TEXTURE_RESOLUTION, TEXTURE_RESOLUTION, layers, scene, true, false);
+  colorArray.name = "buildingColors";
+  normalArray.name = "buildingNormals";
   for (const texture of [colorArray, normalArray]) {
     texture.wrapU = Texture.WRAP_ADDRESSMODE;
     texture.wrapV = Texture.WRAP_ADDRESSMODE;
@@ -232,6 +234,7 @@ export function createBuildingMaterial(scene: Scene, litShading: LitShading, tex
   litShading.register(material);
   // Each mesh its own lightmap, bound as it is drawn - one shader for lit and unlit houses alike.
   const none = RawTexture.CreateRGBATexture(new Uint8Array(4), 1, 1, scene, false);
+  none.name = "noLightmap";
   material.setTexture("lightmap", none);
   material.onBindObservable.add((mesh) => {
     const effect = material.getEffect();
@@ -275,6 +278,7 @@ interface MeshLightmap {
 export function applyLightmap(scene: Scene, mesh: Mesh, baked: { width: number; height: number; half: Uint16Array; uvs?: Float32Array }): void {
   if (baked.uvs) mesh.setVerticesData("lightUv", baked.uvs, false, 2);
   const texture = RawTexture.CreateRGBATexture(baked.half, baked.width, baked.height, scene, false, false, Texture.BILINEAR_SAMPLINGMODE, Constants.TEXTURETYPE_HALF_FLOAT);
+  texture.name = "houseLightmap";
   texture.wrapU = Texture.CLAMP_ADDRESSMODE;
   texture.wrapV = Texture.CLAMP_ADDRESSMODE;
   const previous = (mesh.metadata as { lightmap?: MeshLightmap } | null)?.lightmap;

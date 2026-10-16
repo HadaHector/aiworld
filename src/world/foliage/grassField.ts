@@ -239,6 +239,7 @@ export function createGrassField(
     true,
     false,
   );
+  atlas.name = "grassBlades";
   atlas.wrapU = Texture.CLAMP_ADDRESSMODE;
   atlas.wrapV = Texture.CLAMP_ADDRESSMODE;
 

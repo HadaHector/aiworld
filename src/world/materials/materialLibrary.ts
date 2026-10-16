@@ -505,10 +505,12 @@ export async function createTerrainMaterial(
   const textures = prebaked ?? (await bakeTerrainTextures(seed, materialDefs, onProgress));
 
   const materialAtlas = RawTexture2DArray.CreateRGBATexture(textures.colorBuffer, TEXTURE_RESOLUTION, TEXTURE_RESOLUTION, layers.length, scene, true, false);
+  materialAtlas.name = "terrainColors";
   materialAtlas.wrapU = Texture.WRAP_ADDRESSMODE;
   materialAtlas.wrapV = Texture.WRAP_ADDRESSMODE;
 
   const normalAtlas = RawTexture2DArray.CreateRGBATexture(textures.normalBuffer, TEXTURE_RESOLUTION, TEXTURE_RESOLUTION, layers.length, scene, true, false);
+  normalAtlas.name = "terrainNormals";
   normalAtlas.wrapU = Texture.WRAP_ADDRESSMODE;
   normalAtlas.wrapV = Texture.WRAP_ADDRESSMODE;
 
@@ -534,6 +536,7 @@ export async function createTerrainMaterial(
     Constants.TEXTURE_NEAREST_SAMPLINGMODE,
     Constants.TEXTURETYPE_FLOAT,
   );
+  materialTable.name = "terrainMaterialTable";
 
   Effect.ShadersStore["terrainBlendVertexShader"] = vertexShader(false);
   Effect.ShadersStore["terrainBlendFragmentShader"] = FRAGMENT_SHADER;

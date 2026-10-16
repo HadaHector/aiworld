@@ -163,6 +163,7 @@ export async function createTreeField(
     tintTable[row * TREE_TINT_WIDTH * 4 + 3] = snow;
   });
   const tintTexture = new RawTexture(tintTable, TREE_TINT_WIDTH, tintRows.length, Constants.TEXTUREFORMAT_RGBA, scene, false, false, Constants.TEXTURE_NEAREST_SAMPLINGMODE, Constants.TEXTURETYPE_FLOAT);
+  tintTexture.name = "treeTints";
   for (const { model } of models) {
     if (!model.shaderTint) continue;
     for (const mesh of meshesOf(model)) {

@@ -1,6 +1,7 @@
 import type { ChunkBuildRequest, ChunkGeometry } from "./chunkGeometry";
 import type { ChunkWorkerMessage, ChunkWorkerResponse } from "./chunkBuild.worker";
 import type { WorldContent } from "../content/worldContent";
+import { trackBuffers, typedArraysOf } from "../../debug/memoryTracker";
 
 /**
  * Walking around needs a few chunks a second, and each worker holds its own copy of the world
@@ -62,7 +63,11 @@ export function createChunkBuildPool(seed: number, content: WorldContent): Chunk
             outstanding.set(worker, outstanding.get(worker)! - 1);
             const job = pending.get(response.jobId);
             pending.delete(response.jobId);
-            if (response.type === "built") job?.resolve(response.geometry);
+            if (response.type === "built") {
+              // Cloned in from the worker, so no constructor here saw them made.
+              trackBuffers("chunk geometry (from workers)", ...typedArraysOf(response.geometry));
+              job?.resolve(response.geometry);
+            }
             else job?.reject(new Error(response.message));
           };
           const init: ChunkWorkerMessage = { type: "init", seed, content };

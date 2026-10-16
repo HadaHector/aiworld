@@ -1,3 +1,5 @@
+// First, so it can wrap the buffer constructors before anything allocates (`?memory`).
+import "./debug/installMemoryTracking";
 import { createEngine } from "./core/engine";
 import { WORLD_SEED } from "./world/worldData";
 import { DEFAULT_DRAW_DISTANCE, nextPaint } from "./world/world";
@@ -7,6 +9,7 @@ import { PROTOCOL_VERSION, type ClientMessage, type PlayerState, type Transfer }
 import type { DimensionWorld } from "./sim/dimension";
 import { createDimensionView, type DimensionView, type ViewSettings } from "./game/dimensionView";
 import { createZoneLabel } from "./debug/zoneLabel";
+import { describeMemory, memoryReport } from "./debug/memoryPanel";
 import { createPositionPanel, type ViewSnapshot } from "./debug/positionPanel";
 import { createLoadingScreen } from "./ui/loadingScreen";
 import { createMusicControl } from "./ui/musicControl";
@@ -334,6 +337,14 @@ function gotoLoaded(target: Partial<ViewSnapshot> & { x: number; z: number }, it
   },
   get spectator() {
     return view?.spectator;
+  },
+  /** Where the memory goes (see debug/memoryPanel.ts): printed, and returned for poking at.
+   *  `?memory` in the URL counts every big CPU buffer by what made it. */
+  memory() {
+    if (!view) return null;
+    const report = memoryReport(engine, view.scene);
+    console.log(describeMemory(report));
+    return report;
   },
   /** The collision profiler's last half second (see debug/collisionPanel.ts). */
   collisionProfile: () => view?.collisionPanel.last,

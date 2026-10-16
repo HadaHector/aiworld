@@ -15,6 +15,7 @@ import type { ViewSnapshot } from "../debug/positionPanel";
 import { createLastView, type LastView } from "../debug/lastView";
 import { createStatsPanel } from "../debug/statsPanel";
 import { createCollisionPanel, type CollisionPanel } from "../debug/collisionPanel";
+import { createMemoryPanel } from "../debug/memoryPanel";
 import type { PlayerLights } from "../world/lighting/playerLights";
 
 /** What the settings panel sets that outlasts a dimension: the next one starts with them. */
@@ -198,6 +199,7 @@ export async function createDimensionView(options: DimensionViewOptions): Promis
   const textureBrowser = createTextureBrowser(world.materialLibrary);
   const statsPanel = createStatsPanel(scene, engine);
   const collisionPanel = createCollisionPanel(scene, world.collision, statsPanel);
+  createMemoryPanel(engine, scene, statsPanel);
   // Each config's and dimension's own: a spot in one world is open sea in another.
   const lastView = createLastView(content.config, content.dimension.start ? null : content.dimension.id);
 

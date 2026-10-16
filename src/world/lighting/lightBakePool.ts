@@ -1,4 +1,5 @@
 import type { LightBakeRequest, LightBakeResponse } from "./lightBake.worker";
+import { trackBuffers } from "../../debug/memoryTracker";
 
 /** How many houses bake at once - few, so they never crowd out the chunks being built. */
 const WORKERS = 2;
@@ -30,6 +31,8 @@ export function createLightBakePool(): LightBakePool {
     workers = Array.from({ length: WORKERS }, () => {
       const worker = new Worker(new URL("./lightBake.worker.ts", import.meta.url), { type: "module" });
       worker.onmessage = (event: MessageEvent<LightBakeResponse>): void => {
+        // Cloned in from the worker, so no constructor here saw them made.
+        trackBuffers("house lightmaps (from workers)", event.data.half, event.data.uvs);
         const job = running.get(event.data.id);
         running.delete(event.data.id);
         idle.push(worker);

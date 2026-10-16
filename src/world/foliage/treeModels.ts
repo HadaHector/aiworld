@@ -211,6 +211,7 @@ export interface BakedBark {
  */
 function createLeafMaterial(scene: Scene, id: string, atlasPixels: Uint8Array, swayHeight: number, litShading: LitShading): LeafMaterial {
   const atlas = RawTexture.CreateRGBATexture(atlasPixels, FOLIAGE_TEXTURE_SIZE, FOLIAGE_TEXTURE_SIZE, scene, true, false, Texture.TRILINEAR_SAMPLINGMODE);
+  atlas.name = `leaves:${id}`;
   atlas.wrapU = Texture.CLAMP_ADDRESSMODE;
   atlas.wrapV = Texture.CLAMP_ADDRESSMODE;
   atlas.hasAlpha = true;
@@ -247,6 +248,8 @@ function createWoodAndLeafMaterials(
 ): { bark: ShaderMaterial; leaves: LeafMaterial | null } {
   const barkColor = RawTexture.CreateRGBATexture(bakedBark.color, TEXTURE_RESOLUTION, TEXTURE_RESOLUTION, scene, true, false, Texture.TRILINEAR_SAMPLINGMODE);
   const barkNormal = RawTexture.CreateRGBATexture(bakedBark.normal, TEXTURE_RESOLUTION, TEXTURE_RESOLUTION, scene, true, false, Texture.TRILINEAR_SAMPLINGMODE);
+  barkColor.name = "barkColor";
+  barkNormal.name = "barkNormal";
   for (const texture of [barkColor, barkNormal]) {
     texture.wrapU = Texture.WRAP_ADDRESSMODE;
     texture.wrapV = Texture.WRAP_ADDRESSMODE;
@@ -425,6 +428,8 @@ function recoloured(pixels: Uint8Array, m: ColorMatrix): Uint8Array {
 function createBoulderModels(scene: Scene, def: TreeKindDef, shape: BoulderShape, seed: number, stone: BakedBark, litShading: LitShading): TreeModel[] {
   const stoneColor = RawTexture.CreateRGBATexture(recoloured(stone.color, shape.stone.adjust), TEXTURE_RESOLUTION, TEXTURE_RESOLUTION, scene, true, false, Texture.TRILINEAR_SAMPLINGMODE);
   const stoneNormal = RawTexture.CreateRGBATexture(stone.normal, TEXTURE_RESOLUTION, TEXTURE_RESOLUTION, scene, true, false, Texture.TRILINEAR_SAMPLINGMODE);
+  stoneColor.name = `stoneColor:${def.id}`;
+  stoneNormal.name = `stoneNormal:${def.id}`;
   for (const texture of [stoneColor, stoneNormal]) {
     texture.wrapU = Texture.WRAP_ADDRESSMODE;
     texture.wrapV = Texture.WRAP_ADDRESSMODE;
