@@ -347,7 +347,7 @@ export function buildBody(race: RaceDef, options: BodyOptions = {}): BodyGeometr
     const along = sub(upper.tail, upper.head);
     // A ring halfway between the hole and the arm, puffed out, so the shoulder rounds over into the
     // arm (the deltoid) rather than turning at a crease.
-    const deltoid = blend(hole, arm[0].verts, along, FORWARD, 0.5, 0.18, iUpper);
+    const deltoid = blend(hole, arm[0].verts, along, FORWARD, 0.5, 0.3, iUpper);
     for (const v of deltoid) extras[v] = [iClavicle, iChest];
     zip(hole, deltoid, along, FORWARD);
     zip(deltoid, arm[0].verts, along, FORWARD);
