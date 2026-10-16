@@ -14,6 +14,8 @@ export interface BodyGeometry {
   bones: BoneDef[];
   /** The lattice the body was shaped by - null if it has none or it was left off. */
   lattice: Lattice | null;
+  /** Points the race's bumps mark - a nipple at a pec's peak - for painting. */
+  marks: { name: string; position: Vec }[];
   /** Triangles, all told and by part. */
   triangles: number;
   parts: Record<string, number>;
@@ -113,22 +115,38 @@ export function buildBody(race: RaceDef, options: BodyOptions = {}): BodyGeometr
 
   /** A ring of `shape` at `t` along the axis from `from` to `to`, its `front` toward `reference`. */
   function ring(home: number, shape: BoneShape, from: Vec, to: Vec, t: number, reference: Vec, side: number, verts = shape.verts, grow = 0): Ring {
+    const list: number[] = [];
+    for (let k = 0; k < verts; k++) list.push(vertex(surface(shape, from, to, t, (2 * Math.PI * k) / verts, reference, side, grow), home));
+    return { verts: list, center: lerp(from, to, t) };
+  }
+
+  /** The point of `shape`'s surface at `t` along the axis from `from` to `to`, `theta` round it
+   *  from its front (toward the frame's side): its four curves filled between as a superellipse,
+   *  then its bumps. */
+  function surface(shape: BoneShape, from: Vec, to: Vec, t: number, theta: number, reference: Vec, side: number, grow = 0): Vec {
     const frame = frameFor(sub(to, from), reference);
     const [front, back, out, inner] = sampled(shape).map((f) => f(t) + grow);
     // Which of the frame's sides is away from the body's middle.
     const outSign = side === 0 ? 1 : Math.sign(dot(frame.side, [side, 0, 0])) || 1;
     const n = 2 + (1 - shape.round) * 4;
-    const center = lerp(from, to, t);
-    const list: number[] = [];
-    for (let k = 0; k < verts; k++) {
-      const theta = (2 * Math.PI * k) / verts;
-      const c = Math.cos(theta);
-      const sn = Math.sin(theta);
-      const x = (c >= 0 ? front : back) * Math.sign(c) * Math.abs(c) ** (2 / n);
-      const y = ((sn >= 0) === outSign > 0 ? out : inner) * Math.sign(sn) * Math.abs(sn) ** (2 / n);
-      list.push(vertex(add(center, add(scale(frame.front, x), scale(frame.side, y))), home));
+    const c = Math.cos(theta);
+    const sn = Math.sin(theta);
+    const x = (c >= 0 ? front : back) * Math.sign(c) * Math.abs(c) ** (2 / n);
+    const y = ((sn >= 0) === outSign > 0 ? out : inner) * Math.sign(sn) * Math.abs(sn) ** (2 / n);
+    let offset = add(scale(frame.front, x), scale(frame.side, y));
+    if (shape.bumps.length > 0) {
+      // Degrees round from the front toward the outer side; a middle bone's bumps on both sides.
+      let toward = ((theta * 180) / Math.PI) * outSign;
+      toward = ((toward + 540) % 360) - 180;
+      let rise = 0;
+      for (const bump of shape.bumps) {
+        const along = (t - bump.at) / bump.length;
+        const round = (side === 0 ? Math.abs(Math.abs(toward) - Math.abs(bump.angle)) : Math.abs((((toward - bump.angle + 540) % 360) - 180))) / bump.width;
+        rise += bump.height * Math.exp(-3 * (along * along + round * round));
+      }
+      offset = add(offset, scale(normalize(offset), rise));
     }
-    return { verts: list, center };
+    return add(lerp(from, to, t), offset);
   }
 
   /** Ring `a` to ring `b` further along `along`: triangles walking both by angle round their own
@@ -246,16 +264,22 @@ export function buildBody(race: RaceDef, options: BodyOptions = {}): BodyGeometr
   const tA = Math.min(tM - 0.1, Math.max(0.05, (shoulderY - s.armpit - chest.head[1]) / (chest.tail[1] - chest.head[1])));
   for (const t of [0, ...spread(0, 1, loops(race.shape.pelvis))]) torso.push(ring(iPelvis, race.shape.pelvis, pelvis.head, pelvis.tail, t, FORWARD, 0));
   for (const t of [0, ...spread(0, 1, loops(race.shape.spine))]) torso.push(ring(iSpine, race.shape.spine, spine.head, spine.tail, t, FORWARD, 0));
-  for (const t of [0, ...spread(0, tA, loops(race.shape.chest))]) torso.push(ring(iChest, race.shape.chest, chest.head, chest.tail, t, FORWARD, 0));
+  // The chest's loops shared out by length between below the armpit and the armpit-to-shoulder
+  // stretch the arm hole spans, so the chest has rings where its shape is (and its bumps are).
+  const chestLoops = loops(race.shape.chest);
+  const besideArm = Math.round((chestLoops * (tM - tA)) / tM);
+  for (const t of [0, ...spread(0, tA, chestLoops - besideArm)]) torso.push(ring(iChest, race.shape.chest, chest.head, chest.tail, t, FORWARD, 0));
   const armpit = torso.length;
-  for (const t of [tA, tM, 1]) torso.push(ring(iChest, race.shape.chest, chest.head, chest.tail, t, FORWARD, 0));
+  for (const t of [tA, ...spread(tA, tM, besideArm), tM, 1]) torso.push(ring(iChest, race.shape.chest, chest.head, chest.tail, t, FORWARD, 0));
+  /** The rings the arm hole is cut through, from the armpit to the shoulders' top. */
+  const holeRows = besideArm + 3;
   const N = race.shape.pelvis.verts;
   // Laid out from the front toward +x (frameFor: up × forward), so +x is a quarter of the way round.
   const holeColumn = (side: number): number => (side > 0 ? N / 4 : (3 * N) / 4);
   const skip = new Set<string>();
   for (const side of [1, -1]) {
     const c = holeColumn(side);
-    for (const band of [armpit, armpit + 1]) for (const col of [c - 1, c]) skip.add(`${band},${(col + N) % N}`);
+    for (let band = armpit; band < armpit + holeRows - 1; band++) for (const col of [c - 1, c]) skip.add(`${band},${(col + N) % N}`);
   }
   // The shoulders' top slopes down from the neck to the arms, the joint's ring a little too.
   const slope = (r: Ring, drop: number): void => {
@@ -345,7 +369,10 @@ export function buildBody(race: RaceDef, options: BodyOptions = {}): BodyGeometr
     enter(`arm${suffix}`, [upper.head, fore.head, fore.tail], FORWARD, side);
     const c = holeColumn(side);
     const at = (row: number, col: number): number => torso[armpit + row].verts[(col + N) % N];
-    const hole = [at(0, c - 1), at(0, c), at(0, c + 1), at(1, c + 1), at(2, c + 1), at(2, c), at(2, c - 1), at(1, c - 1)];
+    // Round the hole: along the armpit's row, up its back column, back along the top, down the front.
+    const top = holeRows - 1;
+    const rows = Array.from({ length: holeRows - 2 }, (_, i) => i + 1);
+    const hole = [at(0, c - 1), at(0, c), at(0, c + 1), ...rows.map((r) => at(r, c + 1)), at(top, c + 1), at(top, c), at(top, c - 1), ...rows.reverse().map((r) => at(r, c - 1))];
     // The shoulder's rings go from the chest to the arm in steps: the hole mostly the chest's, the
     // ring over it shared, the root mostly the arm's - the clavicle in each, so a shrug lifts them all.
     for (const v of hole) fixed.set(v, [[iChest, 0.55], [iClavicle, 0.3], [iUpper, 0.15]]);
@@ -392,7 +419,7 @@ export function buildBody(race: RaceDef, options: BodyOptions = {}): BodyGeometr
     const thumbDir = normalize(add(scale(handFrame.along, 0.75), scale(handFrame.front, 0.65)));
     const thumbLength = s.hand * 0.55;
     const thumbWidth = Math.max(0.012, handFront * 0.45);
-    const thumbShape: BoneShape = { front: [[0, thumbWidth], [1, thumbWidth * 0.8]], back: [[0, thumbWidth], [1, thumbWidth * 0.8]], out: [[0, thumbWidth], [1, thumbWidth * 0.8]], in: [[0, thumbWidth], [1, thumbWidth * 0.8]], round: 0.6, loops: 1, verts: 5 };
+    const thumbShape: BoneShape = { front: [[0, thumbWidth], [1, thumbWidth * 0.8]], back: [[0, thumbWidth], [1, thumbWidth * 0.8]], out: [[0, thumbWidth], [1, thumbWidth * 0.8]], in: [[0, thumbWidth], [1, thumbWidth * 0.8]], round: 0.6, loops: 1, verts: 5, bumps: [] };
     const tip = add(base, scale(thumbDir, thumbLength));
     const t0 = ring(iHand, thumbShape, base, tip, 0, handFrame.side, side);
     const t1 = ring(iHand, thumbShape, base, tip, 0.75, handFrame.side, side);
@@ -415,6 +442,23 @@ export function buildBody(race: RaceDef, options: BodyOptions = {}): BodyGeometr
   for (let r = 0; r + 1 < column.length; r++) zip(column[r].verts, column[r + 1].verts, UP, FORWARD);
   cap(column[column.length - 1], head.tail, iHead);
 
+  // --- the points bumps mark, at their peaks ---
+  const marks: { name: string; position: Vec }[] = [];
+  for (const b of bones) {
+    if (!b.shape) continue;
+    const shape = race.shape[b.shape];
+    const [from, to] = b.shape === "foot" ? [footAxis(race, b.side).from, footAxis(race, b.side).to] : [b.head, b.tail];
+    const reference = b.shape === "foot" ? UP : FORWARD;
+    const outSign = b.side === 0 ? 1 : Math.sign(dot(frameFor(sub(to, from), reference).side, [b.side, 0, 0])) || 1;
+    for (const bump of shape.bumps) {
+      if (!bump.mark) continue;
+      for (const sign of b.side === 0 && bump.angle !== 0 ? [1, -1] : [1]) {
+        const theta = ((sign * bump.angle * Math.PI) / 180) * outSign;
+        marks.push({ name: bump.mark, position: surface(shape, from, to, bump.at, theta, reference, b.side) });
+      }
+    }
+  }
+
   // --- the lattice, over the body and its joints alike ---
   let lattice: Lattice | null = null;
   let finalBones = bones;
@@ -431,6 +475,7 @@ export function buildBody(race: RaceDef, options: BodyOptions = {}): BodyGeometr
     for (let i = 0; i < points.length; i++) points[i] = l.apply(points[i]);
     finalBones = bones.map((b) => ({ ...b, head: l.apply(b.head), tail: l.apply(b.tail) }));
     for (const r of regionAxes) r.axis = r.axis.map((p) => l.apply(p));
+    for (const m of marks) m.position = l.apply(m.position);
   }
 
   // --- skinning: each vertex follows the nearest of its own bone and the bones next to it ---
@@ -470,12 +515,12 @@ export function buildBody(race: RaceDef, options: BodyOptions = {}): BodyGeometr
     }
   }
 
-  return { positions: points.flat(), indices, joints, weights, bones: finalBones, lattice, triangles: indices.length / 3, parts, regions: regionAxes, triangleRegions };
+  return { positions: points.flat(), indices, joints, weights, bones: finalBones, lattice, marks, triangles: indices.length / 3, parts, regions: regionAxes, triangleRegions };
 }
 
 /** A shape the same all along: front, back and both sides at the given distances. */
 function evenShape(front: number, back: number, side: number, round: number, verts: number): BoneShape {
-  return { front: [[0, front]], back: [[0, back]], out: [[0, side]], in: [[0, side]], round, loops: 0, verts };
+  return { front: [[0, front]], back: [[0, back]], out: [[0, side]], in: [[0, side]], round, loops: 0, verts, bumps: [] };
 }
 
 function segmentDistance(p: Vec, a: Vec, b: Vec): number {

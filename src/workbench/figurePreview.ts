@@ -1,7 +1,7 @@
 import { Color3, MeshBuilder, SkeletonViewer, Vector3 } from "@babylonjs/core";
 import { buildBody, type BodyGeometry } from "../character/bodyMesh";
 import { createCharacterMesh, type BodySkin, type Pose } from "../character/characterMesh";
-import type { RaceDef } from "../character/raceDef";
+import { forSex, type RaceDef, type Sex } from "../character/raceDef";
 import { layoutAtlas, type AtlasLayout } from "../character/atlas";
 import { chooseAppearance, paintAtlas, type PaintedCover } from "../character/paint";
 import { bakeGearMaterial, type GearMaterialDef } from "../character/gearMaterial";
@@ -19,8 +19,10 @@ export interface FigureOptions {
   texture: "painted" | "retro" | "flat";
   /** Linen smallclothes painted on, standing in for gear until there is some. */
   smallclothes: boolean;
-  /** The character's own seed: its skin, hair, eyes and face. */
+  /** The character's own seed: its sex, skin, hair, eyes and face. */
   seed: number;
+  /** A sex to show instead of the seed's. */
+  sex: Sex | null;
 }
 
 /** A body and the atlas painted for it. */
@@ -33,8 +35,8 @@ export interface PaintedBody {
 
 /** Builds a race's body and paints its atlas, as the options say. */
 export async function paintedBody(race: RaceDef, gear: Map<string, GearMaterialDef>, worldSeed: number, options: FigureOptions): Promise<PaintedBody> {
-  const body = buildBody(race, { detail: options.detail, lattice: options.lattice !== "off" });
-  const look = chooseAppearance(race, options.seed);
+  const look = chooseAppearance(race, options.seed, options.sex ?? undefined);
+  const body = buildBody(forSex(race, look.sex), { detail: options.detail, lattice: options.lattice !== "off" });
   let layout: AtlasLayout | null = null;
   let pixels: Uint8Array | null = null;
   if (options.texture !== "flat") {
@@ -43,7 +45,12 @@ export async function paintedBody(race: RaceDef, gear: Map<string, GearMaterialD
     const linen = gear.get("linen");
     if (options.smallclothes && linen) {
       const hips = race.skeleton.ankle + race.skeleton.shin + race.skeleton.thigh;
-      covers.push({ material: await bakeGearMaterial(worldSeed, linen), tint: [0.86, 0.8, 0.68], from: hips - 0.14, to: hips + 0.06, regions: ["torso", "legR", "legL"] });
+      const material = await bakeGearMaterial(worldSeed, linen);
+      const tint: [number, number, number] = [0.86, 0.8, 0.68];
+      covers.push({ material, tint, from: hips - 0.14, to: hips + 0.06, regions: ["torso", "legR", "legL"] });
+      // A band over the breasts, too.
+      const nipple = body.marks.find((m) => m.name === "nipple");
+      if (look.sex === "female" && nipple) covers.push({ material, tint, from: nipple.position[1] - 0.075, to: nipple.position[1] + 0.05, regions: ["torso"] });
     }
     pixels = paintAtlas(body, layout, race, look, covers);
   }
@@ -54,7 +61,7 @@ export async function paintedBody(race: RaceDef, gear: Map<string, GearMaterialD
   const table = document.createElement("table");
   const rows: [string, string | number][] = [...Object.entries(body.parts), ["triangles", body.triangles]];
   if (layout) rows.push(["atlas", `${layout.size}², ${(layout.density / 100).toFixed(1)} texels/cm`]);
-  rows.push(["look", `${look.beard ? "beard, " : ""}seed ${options.seed}`]);
+  rows.push(["look", `${look.sex}, ${look.beard ? "beard, " : ""}seed ${options.seed}`]);
   for (const [label, value] of rows) {
     const row = table.insertRow();
     row.insertCell().textContent = label;
@@ -115,7 +122,7 @@ export const POSES = {
 export function figureFor(race: RaceDef, painted: PaintedBody, options: FigureOptions): NonNullable<StageOptions["figure"]> {
   const { body, layout, pixels } = painted;
   const tall = Math.max(...body.positions.filter((_, i) => i % 3 === 1));
-  const skin: BodySkin = layout && pixels ? { pixels, size: layout.size, uvs: layout.uvs, nearest: options.texture === "retro" } : { color: chooseAppearance(race, options.seed).skin };
+  const skin: BodySkin = layout && pixels ? { pixels, size: layout.size, uvs: layout.uvs, nearest: options.texture === "retro" } : { color: chooseAppearance(race, options.seed, options.sex ?? undefined).skin };
   return (scene, shadows, height) => {
       const ground = height(0, 0);
       const character = createCharacterMesh(scene, `race_${race.id}`, body, skin);

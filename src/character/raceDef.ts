@@ -15,6 +15,34 @@ export interface RaceDef {
   skeleton: RaceSkeleton;
   shape: Record<ShapedBone, BoneShape>;
   lattice: LatticeDef | null;
+  /** How each sex differs from the shape above (see `forSex`). */
+  sexes: Record<Sex, SexDef>;
+}
+
+export const SEXES = ["male", "female"] as const;
+export type Sex = (typeof SEXES)[number];
+
+/** One sex's differences from its race's body: factors on skeleton lengths, factors on a bone's
+ *  curves, bumps added to them, and its own share of beards. */
+export interface SexDef {
+  skeleton: Partial<Record<keyof RaceSkeleton, number>>;
+  shape: Partial<Record<ShapedBone, { scale: { front: number; back: number; out: number; in: number }; bumps: Bump[] }>>;
+  beard: number;
+}
+
+/**
+ * A swelling on a bone's surface - a pec, a shoulder blade, a buttock, a breast: highest at `at`
+ * along the bone and `angle` degrees round it from its front toward its outer side (on a bone in
+ * the middle, toward both sides alike), fading over `length` along and `width` degrees round.
+ * `mark` names a point to paint at its peak (paint.ts: "nipple").
+ */
+export interface Bump {
+  at: number;
+  angle: number;
+  width: number;
+  length: number;
+  height: number;
+  mark?: string;
 }
 
 /** What a character of the race can look like: each picks from these by its seed (paint.ts). */
@@ -78,6 +106,7 @@ export interface BoneShape {
   /** Rings cut along the bone, and vertices round each ring. */
   loops: number;
   verts: number;
+  bumps: Bump[];
 }
 
 /** A free-form deformation over the whole body (see lattice.ts). */
@@ -127,20 +156,25 @@ export function characterEntries(packs: PackSource[], folder: (typeof CHARACTER_
 
 function readRace(id: string, data: unknown, reader: Reader): RaceDef {
   const obj = reader.object(data, "");
-  reader.onlyKeys(obj, "", ["name", "look", "skeleton", "shape", "lattice"]);
+  reader.onlyKeys(obj, "", ["name", "look", "skeleton", "shape", "lattice", "sexes"]);
   const rawSkeleton = reader.object(obj.skeleton, "skeleton");
   reader.onlyKeys(rawSkeleton, "skeleton", SKELETON_KEYS);
   const skeleton = Object.fromEntries(SKELETON_KEYS.map((key) => [key, reader.number(rawSkeleton, key, "skeleton", { min: key === "armDown" ? -90 : 0, max: key === "armDown" ? 90 : 3 })])) as unknown as RaceSkeleton;
   const rawShape = reader.object(obj.shape, "shape");
   reader.onlyKeys(rawShape, "shape", SHAPED_BONES);
   const shape = Object.fromEntries(SHAPED_BONES.map((bone) => [bone, readShape(rawShape[bone], bone, reader)])) as Record<ShapedBone, BoneShape>;
+  const rawSexes = obj.sexes === undefined ? {} : reader.object(obj.sexes, "sexes");
+  reader.onlyKeys(rawSexes, "sexes", SEXES);
+  const look = readLook(reader.object(obj.look, "look"), reader);
+  const sexes = Object.fromEntries(SEXES.map((sex) => [sex, readSex(rawSexes[sex], `sexes.${sex}`, look.beard, reader)])) as Record<Sex, SexDef>;
   const torsoVerts = shape.pelvis.verts;
   if (torsoVerts !== 12 && torsoVerts !== 16) reader.fail("shape.pelvis.verts", "the torso's rings need 12 or 16 vertices - the legs, arms and neck join them at fixed places");
   for (const bone of ["spine", "chest"] as const) if (shape[bone].verts !== torsoVerts) reader.fail(`shape.${bone}.verts`, `the torso's rings all have the pelvis's count (${torsoVerts})`);
   return {
     id,
     name: reader.optionalString(obj, "name", "") ?? id,
-    look: readLook(reader.object(obj.look, "look"), reader),
+    look,
+    sexes,
     skeleton,
     shape,
     lattice: obj.lattice === undefined ? null : readLattice(reader.object(obj.lattice, "lattice"), reader),
@@ -172,7 +206,7 @@ function readShape(raw: unknown, bone: ShapedBone, reader: Reader): BoneShape {
   const middle = MIDDLE_BONES.includes(bone);
   const foot = bone === "foot";
   const sides = middle ? ["front", "back", "side"] : foot ? ["top", "sole", "out", "in"] : ["front", "back", "out", "in"];
-  reader.onlyKeys(obj, path, [...sides, "round", "loops", "verts"]);
+  reader.onlyKeys(obj, path, [...sides, "round", "loops", "verts", "bumps"]);
   const curve = (key: string): CurvePoints => readCurve(obj, key, path, reader);
   const front = curve(foot ? "top" : "front");
   const back = curve(foot ? "sole" : "back");
@@ -185,7 +219,71 @@ function readShape(raw: unknown, bone: ShapedBone, reader: Reader): BoneShape {
     round: reader.optionalNumber(obj, "round", path, 0.7, { min: 0, max: 1 }),
     loops: reader.optionalNumber(obj, "loops", path, 2, { min: 0, max: 12, integer: true }),
     verts: reader.optionalNumber(obj, "verts", path, 8, { min: 4, max: 24, integer: true }),
+    bumps: readBumps(obj, path, reader),
   };
+}
+
+function readBumps(obj: RawObject, path: string, reader: Reader): Bump[] {
+  return reader.optionalArray(obj, "bumps", path).map((raw, i) => {
+    const at = `${path}.bumps[${i}]`;
+    const bump = reader.object(raw, at);
+    reader.onlyKeys(bump, at, ["at", "angle", "width", "length", "height", "mark"]);
+    return {
+      at: reader.number(bump, "at", at, { min: 0, max: 1 }),
+      angle: reader.number(bump, "angle", at, { min: -180, max: 180 }),
+      width: reader.number(bump, "width", at, { min: 1, max: 180 }),
+      length: reader.number(bump, "length", at, { min: 0.01, max: 1 }),
+      height: reader.number(bump, "height", at, { min: -0.2, max: 0.2 }),
+      mark: reader.optionalString(bump, "mark", at),
+    };
+  });
+}
+
+function readSex(raw: unknown, path: string, beard: number, reader: Reader): SexDef {
+  const obj = raw === undefined ? {} : reader.object(raw, path);
+  reader.onlyKeys(obj, path, ["skeleton", "shape", "beard"]);
+  const rawSkeleton = obj.skeleton === undefined ? {} : reader.object(obj.skeleton, `${path}.skeleton`);
+  reader.onlyKeys(rawSkeleton, `${path}.skeleton`, SKELETON_KEYS);
+  const skeleton: SexDef["skeleton"] = {};
+  for (const key of Object.keys(rawSkeleton) as (keyof RaceSkeleton)[]) skeleton[key] = reader.number(rawSkeleton, key, `${path}.skeleton`, { min: 0.1, max: 3 });
+  const rawShape = obj.shape === undefined ? {} : reader.object(obj.shape, `${path}.shape`);
+  reader.onlyKeys(rawShape, `${path}.shape`, SHAPED_BONES);
+  const shape: SexDef["shape"] = {};
+  for (const bone of Object.keys(rawShape) as ShapedBone[]) {
+    const at = `${path}.shape.${bone}`;
+    const entry = reader.object(rawShape[bone], at);
+    reader.onlyKeys(entry, at, ["scale", "bumps"]);
+    const rawScale = entry.scale === undefined ? {} : reader.object(entry.scale, `${at}.scale`);
+    const middle = MIDDLE_BONES.includes(bone);
+    reader.onlyKeys(rawScale, `${at}.scale`, middle ? ["front", "back", "side"] : bone === "foot" ? ["top", "sole", "out", "in"] : ["front", "back", "out", "in"]);
+    const factor = (key: string): number => reader.optionalNumber(rawScale, key, `${at}.scale`, 1, { min: 0.1, max: 3 });
+    const front = factor(bone === "foot" ? "top" : "front");
+    const back = factor(bone === "foot" ? "sole" : "back");
+    const out = factor(middle ? "side" : "out");
+    shape[bone] = { scale: { front, back, out, in: middle ? out : factor("in") }, bumps: readBumps(entry, at, reader) };
+  }
+  return { skeleton, shape, beard: reader.optionalNumber(obj, "beard", path, beard, { min: 0, max: 1 }) };
+}
+
+/** The race's body as one sex has it: its lengths and curves scaled, its bumps added. */
+export function forSex(race: RaceDef, sex: Sex): RaceDef {
+  const def = race.sexes[sex];
+  const skeleton = { ...race.skeleton };
+  for (const [key, factor] of Object.entries(def.skeleton) as [keyof RaceSkeleton, number][]) skeleton[key] *= factor;
+  const shape = { ...race.shape };
+  for (const [bone, change] of Object.entries(def.shape) as [ShapedBone, NonNullable<SexDef["shape"][ShapedBone]>][]) {
+    const base = race.shape[bone];
+    const scaled = (curve: CurvePoints, k: number): CurvePoints => curve.map(([t, d]) => [t, d * k]);
+    shape[bone] = {
+      ...base,
+      front: scaled(base.front, change.scale.front),
+      back: scaled(base.back, change.scale.back),
+      out: scaled(base.out, change.scale.out),
+      in: scaled(base.in, change.scale.in),
+      bumps: [...base.bumps, ...change.bumps],
+    };
+  }
+  return { ...race, skeleton, shape, look: { ...race.look, beard: def.beard } };
 }
 
 function readCurve(obj: RawObject, key: string, path: string, reader: Reader): CurvePoints {

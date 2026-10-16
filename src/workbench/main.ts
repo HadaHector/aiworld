@@ -126,6 +126,7 @@ const DEFAULT_OPTIONS: Options = {
   lattice: "on",
   texture: "painted",
   smallclothes: "on",
+  sex: "",
 };
 
 /** A building cut open as the Cut menu says: over a level's floor - its plan - or through its middle. */
@@ -626,6 +627,7 @@ function renderPreviewBar(): void {
     if (current.folder === "races") {
       viewOptions.append(
         select("Pose", "pose", Object.entries(POSES).map(([id, entry]): [string, string] => [id, entry.label]), rebuild),
+        select("Sex", "sex", [["", "By seed"], ["male", "Male"], ["female", "Female"]], rebuild),
         select("Texture", "texture", [["painted", "Painted (512)"], ["retro", "Retro (128)"], ["flat", "Flat colour"]], rebuild),
         checkbox("Smallclothes", "smallclothes", rebuild),
         select("Detail", "detail", [["0.5", "Low"], ["1", "As drawn"], ["2", "High"]], rebuild),
@@ -687,6 +689,7 @@ function renderPreviewBar(): void {
     }
   } else if (current.folder === "races") {
     viewOptions.append(
+      select("Sex", "sex", [["", "By seed"], ["male", "Male"], ["female", "Female"]], rebuild),
       select("Texture", "texture", [["painted", "Painted (512)"], ["retro", "Retro (128)"]], rebuild),
       checkbox("Smallclothes", "smallclothes", rebuild),
       select("Detail", "detail", [["0.5", "Low"], ["1", "As drawn"], ["2", "High"]], rebuild),
@@ -909,6 +912,7 @@ function characterInputs(asset: Asset): { race: RaceDef; gear: Map<string, GearM
         texture: options.texture as FigureOptions["texture"],
         smallclothes: options.smallclothes === "on",
         seed,
+        sex: options.sex === "male" || options.sex === "female" ? options.sex : null,
       },
     };
   } catch (error) {

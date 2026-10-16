@@ -5,11 +5,12 @@ import { smoothNormals } from "./atlas";
 import type { BodyGeometry } from "./bodyMesh";
 import { curveSampler } from "./curve";
 import { sampleGearMaterial, type BakedGearMaterial } from "./gearMaterial";
-import type { RaceDef } from "./raceDef";
+import { SEXES, type RaceDef, type Sex } from "./raceDef";
 import { dot, frameFor, length, sub, type Vec } from "./skeleton";
 
 /** One character's looks, picked from its race's by its seed. */
 export interface Appearance {
+  sex: Sex;
   skin: ColorTuple;
   hair: ColorTuple;
   eyes: ColorTuple;
@@ -20,14 +21,18 @@ export interface Appearance {
   mouthWidth: number;
 }
 
-export function chooseAppearance(race: RaceDef, seed: number): Appearance {
+/** A character's looks from its seed - its sex too, unless one is given. */
+export function chooseAppearance(race: RaceDef, seed: number, sex?: Sex): Appearance {
   const random = mulberry32(deriveSeed(seed, 0x6c6f6f6b));
   const pick = <T>(list: T[]): T => list[Math.floor(random() * list.length)];
+  const rolled = pick([...SEXES]);
+  const chosen = sex ?? rolled;
   return {
+    sex: chosen,
     skin: pick(race.look.skin),
     hair: pick(race.look.hair),
     eyes: pick(race.look.eyes),
-    beard: random() < race.look.beard,
+    beard: random() < race.sexes[chosen].beard,
     eyeSpacing: random() * 2 - 1,
     browTilt: random() * 2 - 1,
     mouthWidth: random() * 2 - 1,
@@ -87,6 +92,18 @@ export function paintAtlas(body: BodyGeometry, layout: AtlasLayout, race: RaceDe
       const facing = dot(n, headFrame.front);
       const angle = Math.atan2(dot(off, [1, 0, 0]), forward);
       color = paintHead(color, look, race.look.face, X, H, facing, angle, around, along);
+    }
+
+    // Nipples where the race's bumps mark them: a darker areola, the nipple darker still.
+    for (const mark of body.marks) {
+      if (mark.name !== "nipple") continue;
+      const d = length(sub(p, mark.position));
+      if (d < 0.02) {
+        const tone: [number, number, number] = [look.skin[0] * 0.78, look.skin[1] * 0.58, look.skin[2] * 0.56];
+        const t = smooth(0.02, 0.014, d);
+        color = [color[0] + (tone[0] - color[0]) * t, color[1] + (tone[1] - color[1]) * t, color[2] + (tone[2] - color[2]) * t];
+        if (d < 0.006) color = [tone[0] * 0.85, tone[1] * 0.8, tone[2] * 0.8];
+      }
     }
 
     covers.forEach((cover, i) => {

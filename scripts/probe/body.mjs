@@ -5,11 +5,13 @@
 import { packSourcesFromDisk, readConfigFromDisk } from "../diskContent.mjs";
 const { resolveRaces } = await import("../../src/character/raceDef.ts");
 const { buildBody } = await import("../../src/character/bodyMesh.ts");
+const { forSex, SEXES } = await import("../../src/character/raceDef.ts");
 
 const [only, detailArg] = process.argv.slice(2);
 const races = resolveRaces(packSourcesFromDisk(readConfigFromDisk()).sources);
-for (const race of races.values()) {
-  if (only && race.id !== only) continue;
+for (const base of races.values()) for (const sex of SEXES) {
+  if (only && base.id !== only) continue;
+  const race = { ...forSex(base, sex), id: `${base.id} (${sex})` };
   const body = buildBody(race, { detail: Number(detailArg) || 1 });
   const P = body.positions, I = body.indices;
   const p = (i) => [P[i * 3], P[i * 3 + 1], P[i * 3 + 2]];

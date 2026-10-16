@@ -37,9 +37,27 @@
   },
   shape: {
     // The torso: the hip joints up to the waist, the ribs, then the chest to the top of the shoulders.
-    pelvis: { front: [[0, 0.13], [1, 0.125]], back: [[0, 0.15], [1, 0.13]], side: [[0, 0.205], [1, 0.18]], round: 0.6, loops: 1, verts: 12 },
-    spine: { front: [[0, 0.125], [1, 0.155]], back: [[0, 0.13], [1, 0.14]], side: [[0, 0.18], [1, 0.195]], round: 0.6, loops: 1, verts: 12 },
-    chest: { front: [[0, 0.155], [0.5, 0.17], [0.85, 0.14], [1, 0.08]], back: [[0, 0.14], [0.5, 0.155], [1, 0.09]], side: [[0, 0.195], [0.45, 0.205], [1, 0.22]], round: 0.55, loops: 1, verts: 12 },
+    // Round rings, narrowing to the waist and widening to the ribs; the buttocks and shoulder blades
+    // as bumps (round from the front toward the side, in degrees). The sexes below add the rest.
+    pelvis: {
+      front: [[0, 0.13], [1, 0.12]],
+      back: [[0, 0.15], [1, 0.125]],
+      side: [[0, 0.2], [1, 0.17]],
+      round: 0.78,
+      loops: 1,
+      verts: 16,
+      bumps: [{ at: 0.1, angle: 150, width: 35, length: 0.6, height: 0.025 }],
+    },
+    spine: { front: [[0, 0.12], [0.6, 0.13], [1, 0.15]], back: [[0, 0.125], [1, 0.14]], side: [[0, 0.168], [0.5, 0.172], [1, 0.19]], round: 0.8, loops: 1, verts: 16 },
+    chest: {
+      front: [[0, 0.15], [0.5, 0.16], [0.85, 0.135], [1, 0.08]],
+      back: [[0, 0.14], [0.5, 0.15], [1, 0.09]],
+      side: [[0, 0.19], [0.45, 0.205], [1, 0.22]],
+      round: 0.75,
+      loops: 4,
+      verts: 16,
+      bumps: [{ at: 0.6, angle: 145, width: 30, length: 0.3, height: 0.015 }],
+    },
     neck: { front: [[0, 0.058], [1, 0.05]], back: [[0, 0.066], [1, 0.052]], side: [[0, 0.07], [1, 0.056]], round: 0.9, loops: 0, verts: 8 },
     // The face in the front curve's profile: chin, mouth, the nose's tip, the eyes set back under the
     // brow, the forehead. Eyes halfway up from the chin, as a real head has them.
@@ -61,6 +79,31 @@
     forearm: { front: [[0, 0.062], [0.3, 0.068], [1, 0.045]], back: [[0, 0.065], [0.3, 0.072], [1, 0.045]], out: [[0, 0.06], [1, 0.04]], in: [[0, 0.06], [1, 0.04]], round: 0.75, loops: 1, verts: 8 },
     // Flat: wide across (front, the thumb's side, and back), thin from its back (out) to the palm (in).
     hand: { front: [[0, 0.05], [0.5, 0.062], [1, 0.05]], back: [[0, 0.05], [0.5, 0.062], [1, 0.045]], out: [[0, 0.032], [0.5, 0.032], [1, 0.02]], in: [[0, 0.032], [0.5, 0.032], [1, 0.02]], round: 0.5, loops: 1, verts: 6 },
+  },
+  // How the sexes differ: factors on the skeleton's lengths and on bones' curves, and bumps added.
+  sexes: {
+    male: {
+      shape: {
+        chest: { bumps: [{ at: 0.55, angle: 32, width: 28, length: 0.22, height: 0.022, mark: "nipple" }] },
+      },
+    },
+    female: {
+      beard: 0,
+      skeleton: { shoulderWidth: 0.88, hipWidth: 1.06, spine: 0.98, chest: 0.96, neck: 1.05, head: 0.97, upperArm: 0.95, forearm: 0.95, hand: 0.9, thigh: 0.98, shin: 0.97, foot: 0.9 },
+      shape: {
+        pelvis: { scale: { side: 1.04, back: 1.06 }, bumps: [{ at: 0.1, angle: 150, width: 35, length: 0.6, height: 0.015 }] },
+        spine: { scale: { side: 0.86, front: 0.92, back: 0.92 } },
+        chest: { scale: { side: 0.88, front: 0.92, back: 0.92 }, bumps: [{ at: 0.33, angle: 30, width: 28, length: 0.22, height: 0.07, mark: "nipple" }] },
+        neck: { scale: { front: 0.82, back: 0.82, side: 0.82 } },
+        head: { scale: { front: 0.96, back: 0.96, side: 0.96 } },
+        upperArm: { scale: { front: 0.82, back: 0.82, out: 0.82, in: 0.82 } },
+        forearm: { scale: { front: 0.82, back: 0.82, out: 0.82, in: 0.82 } },
+        hand: { scale: { front: 0.88, back: 0.88, out: 0.88, in: 0.88 } },
+        thigh: { scale: { front: 0.97, back: 0.97, out: 0.97, in: 0.97 } },
+        shin: { scale: { front: 0.88, back: 0.88, out: 0.88, in: 0.88 } },
+        foot: { scale: { top: 0.9, sole: 1, out: 0.9, in: 0.9 } },
+      },
+    },
   },
   // A last pass over the whole body: a deeper chest. Points counted from -x, the bottom, the back.
   lattice: {

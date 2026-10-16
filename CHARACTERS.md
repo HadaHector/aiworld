@@ -75,6 +75,11 @@ thigh: {
   each: the low-poly cut is a setting, not part of the shape. Rings are spread evenly along each
   bone for now; placing them where the curves bend most, so a calf or a shoulder keeps its outline
   with few loops, is left for when it shows.
+- **Bumps** add what four curves cannot: a swelling at a place along the bone and an angle round it
+  (a pec, a shoulder blade, a buttock, a breast), fading over a length and a width. A bump can mark
+  a point at its peak for the painter (`mark: "nipple"`).
+- **Sexes.** A race has a `male` and a `female` block: factors on its skeleton's lengths and on
+  bones' curves, bumps added, and its own share of beards. A character's seed picks its sex.
 - A race gives the curves; look sliders scale them (all four, or front/back only for a belly,
   left/right only for breadth).
 
