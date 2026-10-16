@@ -18,12 +18,17 @@ export interface LastView {
  * back to the spot being looked at instead of the world's origin. Storage can be missing or throw
  * (private windows, blocked site data); the page then simply starts at the origin as before.
  */
-export function createLastView(): LastView {
+export function createLastView(
+  /** The world config the page runs (see CONFIG.md): each world is its own, so each has its own last
+   *  view - a spot in the full world is open sea in a small one. */
+  config = "default",
+): LastView {
+  const key = config === "default" ? STORAGE_KEY : `${STORAGE_KEY}.${config}`;
   let lastSave = 0;
   return {
     restore() {
       try {
-        const raw = localStorage.getItem(STORAGE_KEY);
+        const raw = localStorage.getItem(key);
         if (!raw) return null;
         const view = JSON.parse(raw) as Partial<ViewSnapshot>;
         const keys = ["x", "z", "alpha", "beta", "radius"] as const;
@@ -38,7 +43,7 @@ export function createLastView(): LastView {
       lastSave = now;
       const view: ViewSnapshot = { x: position.x, z: position.z, alpha: camera.alpha, beta: camera.beta, radius: camera.radius };
       try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(view));
+        localStorage.setItem(key, JSON.stringify(view));
       } catch {
         // No storage here - nothing to remember with.
       }

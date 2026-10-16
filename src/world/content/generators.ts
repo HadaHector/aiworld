@@ -397,7 +397,7 @@ const snowCover: Generator = (params, reader, path) => {
   return {
     ...(params.chance === undefined ? {} : { chance: params.chance }),
     id: reader.string(params, "id", path),
-    material: reader.optionalString(params, "material", path) ?? "snow",
+    material: reader.optionalString(params, "material", path) ?? DEFAULT_SNOW_MATERIAL,
     weight: {
       // Five octaves, the finer ones strong: a patch's edge ragged and broken into islands, not a blob.
       noises: [{ name: "patch", ...sharedAs, type: "fbm", octaves: 5, frequency: reader.optionalNumber(params, "frequency", path, 0.008, { min: 0 }), amplitude: 1, persistence: 0.6, lacunarity: 2.1 }],
@@ -411,6 +411,10 @@ export const GENERATORS: Record<string, Generator> = { detailHeight, standDensit
 /** Stands in for a generator call that could not be made. Its problem is already reported, so
  *  whatever reads this value skips it quietly rather than piling "missing field" errors on top. */
 export const FAILED_GENERATOR: RawObject = Object.freeze({});
+
+/** The material snow cover lies as, where it names none - an id the code supplies, so a config's
+ *  whitelist keeps it (see resolveContent.ts's CODE_DEFAULT_IDS). */
+export const DEFAULT_SNOW_MATERIAL = "snow";
 
 /**
  * Replaces every `{ generator: ... }` object in a parsed file with its generator's result,

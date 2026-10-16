@@ -1,5 +1,6 @@
 import { Engine } from "@babylonjs/core";
-import { fetchPackSources } from "../world/content/loadContent";
+import { configNameFromUrl, fetchPackSources, fetchWorldConfig } from "../world/content/loadContent";
+import { DEFAULT_CONFIG, type WorldConfig } from "../world/content/worldConfig";
 import { resolveContent, type PackSource } from "../world/content/resolveContent";
 import { ContentError, formatIssue } from "../world/content/contentReader";
 import type { WorldContent } from "../world/content/worldContent";
@@ -242,6 +243,9 @@ engine.runRenderLoop(() => {
 // ---------------------------------------------------------------------------------------------
 // URL
 
+/** The world config the page was opened with (`?config=`, see CONFIG.md): which packs, and what of them. */
+let worldConfig: WorldConfig = DEFAULT_CONFIG;
+
 function readUrl(): string | null {
   const params = new URLSearchParams(location.search);
   const parsedSeed = Number(params.get("seed"));
@@ -258,6 +262,7 @@ function readUrl(): string | null {
 
 function writeUrl(): void {
   const params = new URLSearchParams();
+  if (worldConfig.name !== DEFAULT_CONFIG.name) params.set("config", worldConfig.name);
   if (current) params.set("asset", current.key);
   params.set("seed", String(seed));
   if (viewId) params.set("view", viewId);
@@ -819,7 +824,7 @@ async function runPreview(): Promise<void> {
 
   let content: WorldContent;
   try {
-    content = resolveContent(sourcesWithEdit());
+    content = resolveContent(sourcesWithEdit(), worldConfig);
   } catch (error) {
     showIssues(error instanceof ContentError ? error.issues.map(formatIssue) : [String(error)]);
     setStatus("");
@@ -1186,7 +1191,8 @@ async function start(): Promise<void> {
   showMode("none");
   setStatus("Loading packs");
   try {
-    sources = await fetchPackSources();
+    worldConfig = await fetchWorldConfig(configNameFromUrl());
+    sources = await fetchPackSources(undefined, worldConfig);
   } catch (error) {
     showIssues(error instanceof ContentError ? error.issues.map(formatIssue) : [String(error)]);
     setStatus("The packs could not be loaded");
@@ -1195,7 +1201,7 @@ async function start(): Promise<void> {
   assets = listAssets(sources);
   // The menus need content before the first preview has resolved any.
   try {
-    lastContent = resolveContent(sources);
+    lastContent = resolveContent(sources, worldConfig);
   } catch {
     lastContent = null;
   }

@@ -5,10 +5,9 @@ export const CELL_SPACING = 1000; // world units, nominal pre-relaxation point s
 export const LLOYD_RELAX_ITERATIONS = 1;
 export const CELL_BOUNDS_MARGIN = CELL_SPACING * 2;
 
-// Content-first sizing: the user sets how many continents and how large they are; world size is
-// derived from this (see cells/continentLayout.ts), not the other way around.
-export const CONTINENT_COUNT_RANGE: [number, number] = [1, 1];
-export const AREAS_PER_CONTINENT_RANGE: [number, number] = [20, 30];
+// Content-first sizing: how many continents there are and how many areas each has is the world
+// config's (content/worldConfig.ts, CONFIG.md); world size is derived from that (see
+// cells/continentLayout.ts), not the other way around.
 export const CELLS_PER_AREA = 10;
 
 // Ratio of actual growth bounding radius to a naive equal-area-circle radius, empirically
@@ -65,10 +64,6 @@ export const COAST_NOISE_AMPLITUDE = COAST_BORDER_WIDTH * 4;
 export const LAKE_BORDER_WIDTH = 100;
 export const LAKE_NOISE_FREQUENCY = 1 / CELL_SPACING;
 export const LAKE_NOISE_AMPLITUDE = LAKE_BORDER_WIDTH * 3;
-
-// Rivers per continent, and how many cells long each one's path walk runs (see cells/riverGeneration.ts).
-export const RIVERS_PER_CONTINENT_RANGE: [number, number] = [3, 5];
-export const RIVER_LENGTH_RANGE: [number, number] = [8, 10];
 
 // Salts for deriving independent sub-seeds from one root world seed (see ../rng.ts deriveSeed).
 export const GRID_JITTER_SALT = 601;

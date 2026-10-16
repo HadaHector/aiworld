@@ -1,0 +1,12 @@
+// A small world for working on systems rather than places (see CONFIG.md): a handful of zones of
+// two biomes, one with villages and woods, one river. Loads in seconds rather than a minute.
+{
+  world: {
+    areasPerContinent: [4, 4],
+    riversPerContinent: [1, 1],
+    riverLength: [5, 6],
+  },
+  content: {
+    only: { biomes: ["meadow", "bluebellWood"] },
+  },
+}

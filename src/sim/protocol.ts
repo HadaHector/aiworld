@@ -6,7 +6,7 @@
  */
 
 /** Bumped whenever a message changes shape. */
-export const PROTOCOL_VERSION = 1;
+export const PROTOCOL_VERSION = 2;
 
 // --- Client to server ------------------------------------------------------------------------
 
@@ -56,7 +56,9 @@ export interface Welcome {
   protocol: number; // u16
   playerId: number; // u32
   seed: number; // u32
-  /** Which packs the server runs, by id - so a client can tell the player what differs. */
+  /** Which world config (see CONFIG.md) and packs the server runs, by name and id - so a client can
+   *  tell the player what differs. */
+  config: string;
   packs: string[];
 }
 

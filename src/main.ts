@@ -237,7 +237,7 @@ const music = createGameMusic(musicControl.volume);
 }
 
 // Back where the page was last left, so a reload after a change shows the same spot.
-const lastView = createLastView();
+const lastView = createLastView(content.config);
 const resumeView = lastView.restore();
 if (resumeView) gotoView(resumeView);
 

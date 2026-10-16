@@ -9,6 +9,7 @@ import type { WeatherDef } from "../weather/weatherTypes";
 import type { FeatureKindDef } from "../features/featureTypes";
 import type { BuildingDef, BuildingMaterialDef, BuildingPartDef, RoomTypeDef } from "../buildings/buildingTypes";
 import type { PropDef, PropGroupDef } from "../props/propTypes";
+import type { WorldShape } from "./worldConfig";
 
 /**
  * Everything a world is generated from that is content rather than code: its biomes, ground
@@ -21,6 +22,10 @@ import type { PropDef, PropGroupDef } from "../props/propTypes";
  * one WorldContent agrees with everything else built from it.
  */
 export interface WorldContent {
+  /** The world config this was loaded under (see CONFIG.md), by name. */
+  config: string;
+  /** How big the world is - the config's say. */
+  world: WorldShape;
   /** Every biome as its middle roll (see content/biomeRolls.ts) - what picks a biome for an area,
    *  and what a biome is when shown alone. The world's areas each have their own roll of theirs
    *  (content/resolveContent.ts's rollAreaBiome). */

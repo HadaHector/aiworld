@@ -1,6 +1,7 @@
 import { VOICE_NAME_TOKENS, type FeatureNaming } from "../naming/nameGenerator";
 import { PROP_LABELS } from "../props/propTypes";
 import JSON5 from "json5";
+import { DEFAULT_CONFIG, ROOT_KINDS, type WorldConfig } from "./worldConfig";
 import type { BiomeDayNight, BiomeDefinition, BorderType, BoundaryHillStyle, TreeTintPart, TreeTintRuleDef } from "../biomes/biomeTypes";
 import type { MaterialDef, MaterialDetail, MaterialLayer } from "../materials/materialTypes";
 import { FLOWER_SHAPES, type GrassKindDef } from "../foliage/grassConfig";
@@ -28,7 +29,7 @@ import { PAD_BLEND_MAX, PAD_BLEND_MIN, PAD_SIDE_SLOPE, SETTLEMENT_TIERS, STREET_
 import type { ColorTuple } from "../terrain/pipeline/pipelineTypes";
 import { coolNightTone, deriveNightIntensity } from "../lighting/dayNightMath";
 import { ContentError, isObject, joinPath, Reader, type ContentIssue, type RawObject } from "./contentReader";
-import { expandGenerators, FAILED_GENERATOR } from "./generators";
+import { DEFAULT_SNOW_MATERIAL, expandGenerators, FAILED_GENERATOR } from "./generators";
 import { readPipeline } from "./pipelineReader";
 import { checkPlans, checkRoller, describeCheckPlan, MIDDLE_ROLLER, randomRoller, rollValue, type Roller } from "./biomeRolls";
 import { deriveSeed, mulberry32 } from "../rng";
@@ -149,7 +150,7 @@ function parseFile(file: string, text: string, issues: ContentIssue[]): unknown 
  * definitions by id, applies patches, expands generators, and checks every field and every
  * reference between definitions. Throws a ContentError listing every problem found.
  */
-export function resolveContent(packs: PackSource[]): WorldContent {
+export function resolveContent(packs: PackSource[], config: WorldConfig = DEFAULT_CONFIG): WorldContent {
   const issues: ContentIssue[] = [];
 
   // --- pack order ---
@@ -233,6 +234,9 @@ export function resolveContent(packs: PackSource[]): WorldContent {
     }
   }
   const defaults = readDefaults(defaultsRaw, new Reader(issues, defaultsLayers.at(-1)?.file ?? "defaults.json5"));
+
+  // --- the config's whitelist: its roots, and whatever they use (see CONFIG.md) ---
+  if (Object.keys(config.only).length > 0) pruneEntries(entries, config, [defaultsRaw, CODE_DEFAULT_IDS], issues);
 
   // --- read every definition, in id order ---
   function readAll<T>(folder: ContentFolder, read: (entry: Entry, obj: RawObject, reader: Reader) => T): T[] {
@@ -502,6 +506,8 @@ export function resolveContent(packs: PackSource[]): WorldContent {
   if (issues.length > 0) throw new ContentError(issues);
 
   return {
+    config: config.name,
+    world: config.world,
     biomes,
     biomeSources: Object.fromEntries(biomeReads.map(({ file, source, biome }) => [biome.id, { file, data: source, rolls: hasRolls(source) }])),
     biomeDefaults: defaults,
@@ -526,6 +532,69 @@ export function resolveContent(packs: PackSource[]): WorldContent {
     props,
     propGroups,
   };
+}
+
+/** The props a biome's roads are fenced and bridged with, where it names none. */
+const DEFAULT_ROAD_FENCE = "railFence";
+const DEFAULT_ROAD_BRIDGE = "bridge";
+
+/** Ids the code itself supplies where a file leaves one out - nothing in a file names them, so a
+ *  config's whitelist keeps them as if something kept did. A new default id belongs here. */
+const CODE_DEFAULT_IDS = [DEFAULT_ROAD_FENCE, DEFAULT_ROAD_BRIDGE, DEFAULT_SNOW_MATERIAL];
+
+/** Definitions kept whatever a whitelist says: they apply everywhere. */
+const ALWAYS_KEPT: readonly ContentFolder[] = ["layers"];
+
+/**
+ * Drops what a config does not want: the root kinds' definitions its `only` leaves out, then every
+ * other definition nothing kept uses. A definition is used when its id turns up - as a string value
+ * or an object key, anywhere - in something kept (or in `alsoKept`, the defaults); that is
+ * generous, never mean, so nothing a kept definition refers to is lost.
+ */
+function pruneEntries(entries: Map<ContentFolder, Map<string, Entry>>, config: WorldConfig, alsoKept: unknown[], issues: ContentIssue[]): void {
+  const file = `configs/${config.name}.json5`;
+  const roots = new Set<ContentFolder>([...ROOT_KINDS, ...ALWAYS_KEPT]);
+  for (const kind of ROOT_KINDS) {
+    const wanted = config.only[kind];
+    if (!wanted) continue;
+    const defined = entries.get(kind)!;
+    wanted.forEach((id, i) => {
+      if (!defined.has(id)) issues.push({ file, path: `content.only.${kind}[${i}]`, message: `no ${kind} "${id}" (known: ${[...defined.keys()].join(", ")})` });
+    });
+    for (const id of [...defined.keys()]) if (!wanted.includes(id)) defined.delete(id);
+  }
+
+  // Everything that is kept only when used, by id - several definitions can share one.
+  const used = new Map<string, Entry[]>();
+  for (const [folder, defined] of entries) {
+    if (roots.has(folder)) continue;
+    for (const entry of defined.values()) used.set(entry.id, [...(used.get(entry.id) ?? []), entry]);
+  }
+  const kept = new Set<Entry>();
+  const pending: unknown[] = [...alsoKept];
+  for (const folder of roots) for (const entry of entries.get(folder)!.values()) pending.push(entry.data);
+  const visit = (text: string): void => {
+    for (const entry of used.get(text) ?? []) {
+      if (kept.has(entry)) continue;
+      kept.add(entry);
+      pending.push(entry.data);
+    }
+  };
+  while (pending.length > 0) {
+    const value = pending.pop();
+    if (typeof value === "string") visit(value);
+    else if (Array.isArray(value)) pending.push(...value);
+    else if (isObject(value)) {
+      for (const [key, inner] of Object.entries(value)) {
+        visit(key);
+        pending.push(inner);
+      }
+    }
+  }
+  for (const [folder, defined] of entries) {
+    if (roots.has(folder)) continue;
+    for (const [id, entry] of [...defined]) if (!kept.has(entry)) defined.delete(id);
+  }
 }
 
 /** A patch's `append`: each key names a list in the target (a dotted path reaches into nested
@@ -2470,8 +2539,8 @@ function readBiome(id: string, obj: RawObject, reader: Reader, defaults: Default
     lakeChance: reader.optionalNumber(obj, "lakeChance", "", 0, { min: 0, max: 1 }),
     baseMaterialId: reader.string(ground, "base", "ground"),
     roadMaterialId: reader.string(ground, "road", "ground"),
-    roadFenceId: obj.roadFence === undefined ? "railFence" : reader.string(obj, "roadFence", ""),
-    roadBridgeId: obj.roadBridge === undefined ? "bridge" : reader.string(obj, "roadBridge", ""),
+    roadFenceId: obj.roadFence === undefined ? DEFAULT_ROAD_FENCE : reader.string(obj, "roadFence", ""),
+    roadBridgeId: obj.roadBridge === undefined ? DEFAULT_ROAD_BRIDGE : reader.string(obj, "roadBridge", ""),
     materialLayers,
     groundAdjust: ground.adjust === undefined ? NO_ADJUST : readColorAdjust(reader.object(ground.adjust, "ground.adjust"), reader, "ground.adjust"),
     groundTints: reader.optionalArray(ground, "tints", "ground").map((raw, i) => {

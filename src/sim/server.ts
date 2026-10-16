@@ -84,7 +84,7 @@ export function createServer(world: WorldData, shared: ServerOptions = {}): Serv
         players.set(id, joined);
         connection.player = joined;
         streamer.loadAround(0, 0, points());
-        connection.end.send({ type: "welcome", protocol: PROTOCOL_VERSION, playerId: id, seed, packs: shared.packs ?? [] });
+        connection.end.send({ type: "welcome", protocol: PROTOCOL_VERSION, playerId: id, seed, config: content.config, packs: shared.packs ?? [] });
         return;
       }
       case "intent": {

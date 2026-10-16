@@ -1,0 +1,11 @@
+// The least world there is (see CONFIG.md): one zone of one biome, no rivers - for the headless
+// server and probes, where loading time is all that matters.
+{
+  world: {
+    areasPerContinent: [1, 1],
+    riversPerContinent: [0, 0],
+  },
+  content: {
+    only: { biomes: ["meadow"] },
+  },
+}

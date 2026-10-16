@@ -1,5 +1,6 @@
 import { mulberry32, deriveSeed } from "../rng";
-import { RIVERS_PER_CONTINENT_RANGE, RIVER_LENGTH_RANGE, RIVER_SOURCE_SALT, RIVER_LENGTH_SALT, RIVER_WALK_SALT } from "./config";
+import type { WorldShape } from "../content/worldConfig";
+import { RIVER_SOURCE_SALT, RIVER_LENGTH_SALT, RIVER_WALK_SALT } from "./config";
 
 function randomIntInRange(rng: () => number, [min, max]: [number, number]): number {
   return Math.round(min + rng() * (max - min));
@@ -108,6 +109,8 @@ export interface RiverGenParams {
   landCells: ReadonlySet<number>;
   lakeCells: ReadonlySet<number>;
   usedRiverCells: Set<number>;
+  /** How many rivers, and how long - the world config's. */
+  shape: WorldShape;
 }
 
 /**
@@ -123,10 +126,10 @@ export interface RiverGenParams {
  * than a cell away from it (see findMouthLink).
  */
 export function generateRiversForContinent(params: RiverGenParams): RiverPath[] {
-  const { continentSeed, adjacency, continentCells, landCells, lakeCells, usedRiverCells } = params;
+  const { continentSeed, adjacency, continentCells, landCells, lakeCells, usedRiverCells, shape } = params;
 
   const countRng = mulberry32(deriveSeed(continentSeed, RIVER_SOURCE_SALT));
-  const riverCount = randomIntInRange(countRng, RIVERS_PER_CONTINENT_RANGE);
+  const riverCount = randomIntInRange(countRng, shape.riversPerContinent);
   const lengthRng = mulberry32(deriveSeed(continentSeed, RIVER_LENGTH_SALT));
   const walkRng = mulberry32(deriveSeed(continentSeed, RIVER_WALK_SALT));
 
@@ -138,7 +141,7 @@ export function generateRiversForContinent(params: RiverGenParams): RiverPath[] 
 
     const mouth = mouths[Math.floor(walkRng() * mouths.length)];
     const mouthLink = findMouthLink(mouth, adjacency, landCells, lakeCells, usedRiverCells);
-    const length = randomIntInRange(lengthRng, RIVER_LENGTH_RANGE);
+    const length = randomIntInRange(lengthRng, shape.riverLength);
     const path = walkRiver(walkRng, adjacency, continentCells, landCells, lakeCells, usedRiverCells, mouth, length);
     if (path.length >= 2) paths.push({ cells: path, mouthLink });
   }

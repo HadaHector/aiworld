@@ -1,7 +1,6 @@
+import type { WorldShape } from "../content/worldConfig";
 import { mulberry32, deriveSeed } from "../rng";
 import {
-  CONTINENT_COUNT_RANGE,
-  AREAS_PER_CONTINENT_RANGE,
   CELLS_PER_AREA,
   GROWTH_RADIUS_SAFETY_FACTOR,
   CONTINENT_OCEAN_GAP,
@@ -42,14 +41,14 @@ function continentRadius(cellCount: number): number {
  * character spawns at heightAt(0,0)) so separation between any two continents is guaranteed by
  * construction, not just probable. World size is derived to comfortably contain the result.
  */
-export function planWorld(seed: number): WorldLayout {
+export function planWorld(seed: number, shape: WorldShape): WorldLayout {
   const countRng = mulberry32(deriveSeed(seed, CONTINENT_COUNT_SALT));
-  const continentCount = randomIntInRange(countRng, CONTINENT_COUNT_RANGE);
+  const continentCount = randomIntInRange(countRng, shape.continents);
 
   const areaCountRng = mulberry32(deriveSeed(seed, AREAS_PER_CONTINENT_SALT));
   const areaCounts: number[] = [];
   for (let i = 0; i < continentCount; i++) {
-    areaCounts.push(randomIntInRange(areaCountRng, AREAS_PER_CONTINENT_RANGE));
+    areaCounts.push(randomIntInRange(areaCountRng, shape.areasPerContinent));
   }
 
   const radii = areaCounts.map((areaCount) => continentRadius(areaCount * CELLS_PER_AREA));

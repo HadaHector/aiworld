@@ -1,9 +1,4 @@
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
-import { buildPackIndex } from "../packIndex.mjs";
-import { resolveContent } from "../../src/world/content/resolveContent.ts";
-
-const PACKS_DIR = fileURLToPath(new URL("../../public/packs/", import.meta.url));
+import { loadContentFromDisk } from "../diskContent.mjs";
 
 /**
  * The same WorldContent the game loads, read straight from public/packs - what a probe passes to
@@ -11,13 +6,8 @@ const PACKS_DIR = fileURLToPath(new URL("../../public/packs/", import.meta.url))
  *
  *   import { loadContent } from "./loadContent.mjs";
  *   const world = createTerrainSampler(1337, loadContent());
+ *   const small = createTerrainSampler(1337, loadContent({ config: "small" }));  // see CONFIG.md
  */
-export function loadContent(root = PACKS_DIR) {
-  const { packs } = buildPackIndex(root);
-  return resolveContent(
-    packs.map((pack) => ({
-      id: pack.id,
-      files: pack.files.map((path) => ({ path, text: readFileSync(`${root}/${pack.id}/${path}`, "utf8") })),
-    })),
-  );
+export function loadContent({ config } = {}) {
+  return loadContentFromDisk(config).content;
 }

@@ -209,7 +209,7 @@ function resolveBoundaryHillStyle(
 
 /** Composes the cell diagram, multi-continent land growth, and area partitioning into one queryable per-position sample. */
 export function createAreaSampler(seed: number, content: WorldContent): AreaWorld {
-  const layout = planWorld(seed);
+  const layout = planWorld(seed, content.world);
   const bounds = computeCellBounds(WORLD_CENTER_X, WORLD_CENTER_Z, layout.worldExtent, CELL_BOUNDS_MARGIN);
   const { points, adjacency, seamBetween } = timed("Laying out the cells", () => generateCellDiagram(seed, bounds, CELL_SPACING));
   const continentsStarted = performance.now();
@@ -261,6 +261,7 @@ export function createAreaSampler(seed: number, content: WorldContent): AreaWorl
       landCells,
       lakeCells,
       usedRiverCells,
+      shape: content.world,
     });
     for (const { cells: path, mouthLink } of riverPaths) {
       // The centreline runs through the midpoint of each consecutive pair's shared Voronoi border -
