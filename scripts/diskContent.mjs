@@ -38,7 +38,7 @@ export function loadRulesFromDisk(configName = DEFAULT_CONFIG.name) {
   return resolveGameRules(packSourcesFromDisk(readConfigFromDisk(configName)).sources);
 }
 
-function packSourcesFromDisk(config) {
+export function packSourcesFromDisk(config) {
   const root = `${PUBLIC_DIR}packs`;
   const packs = selectPacks(buildPackIndex(root).packs, config);
   const sources = packs.map((pack) => ({ id: pack.id, files: pack.files.map((path) => ({ path, text: readFileSync(`${root}/${pack.id}/${path}`, "utf8") })) }));

@@ -121,6 +121,10 @@ type ContentFolder = (typeof CONTENT_FOLDERS)[number];
  *  server. */
 export const GAME_FOLDERS = ["stats", "modifiers", "resources", "entities"] as const;
 
+/** The folders characters' bodies are drawn from - races, gear, outfits (see CHARACTERS.md). Read by
+ *  the client alone (src/character); the world's resolver passes over them too. */
+export const CHARACTER_FOLDERS = ["races"] as const;
+
 /** How many grass kinds the packs may define between them: each is a layer of the blade atlas and
  *  an entry in the grass shader's per-kind uniform arrays (four vectors a kind, plus its petal
  *  colours), which must stay inside the 256 vertex uniform vectors WebGL2 guarantees. */
@@ -197,7 +201,7 @@ export function resolveContent(packs: PackSource[], config: WorldConfig = DEFAUL
       const file = `${pack.id}/${path}`;
       const parts = path.split("/");
       // Gameplay content: read by the game rules' own resolver (src/sim/rules/gameRules.ts).
-      if (parts.length === 2 && (GAME_FOLDERS as readonly string[]).includes(parts[0])) continue;
+      if (parts.length === 2 && ([...GAME_FOLDERS, ...CHARACTER_FOLDERS] as readonly string[]).includes(parts[0])) continue;
       const data = parseFile(file, text, issues);
       if (data === undefined) continue;
 
@@ -211,7 +215,7 @@ export function resolveContent(packs: PackSource[], config: WorldConfig = DEFAUL
       }
       const folder = parts[0] as ContentFolder;
       if (parts.length !== 2 || !CONTENT_FOLDERS.includes(folder)) {
-        issues.push({ file, path: "", message: `not a place content is read from (expected ${[...CONTENT_FOLDERS, ...GAME_FOLDERS, "patches"].map((f) => `${f}/`).join(", ")} or defaults.json5)` });
+        issues.push({ file, path: "", message: `not a place content is read from (expected ${[...CONTENT_FOLDERS, ...GAME_FOLDERS, ...CHARACTER_FOLDERS, "patches"].map((f) => `${f}/`).join(", ")} or defaults.json5)` });
         continue;
       }
       const id = parts[1].replace(/\.json5$/, "");

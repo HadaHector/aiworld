@@ -1,0 +1,58 @@
+// The human body: the middle of the three races, stylised as WoW's are - broad shoulders, big hands
+// and feet, a head a little large - so it reads from the third-person camera (see CHARACTERS.md).
+// Lengths in metres. Each bone's shape is four profile curves along it, [along, distance from the
+// bone]: 0 at the bone's start (its upper end, for a limb), 1 at its end.
+{
+  name: "Human",
+  skin: [0.82, 0.6, 0.46],
+  skeleton: {
+    ankle: 0.09,
+    shin: 0.4,
+    thigh: 0.41,
+    hipWidth: 0.11,
+    pelvis: 0.13,
+    spine: 0.19,
+    chest: 0.27,
+    neck: 0.07,
+    head: 0.29,
+    shoulderWidth: 0.29,
+    shoulderDrop: 0.08,
+    upperArm: 0.29,
+    forearm: 0.27,
+    hand: 0.16,
+    armDown: 55,
+    foot: 0.31,
+    heel: 0.075,
+  },
+  shape: {
+    // The torso: the hip joints up to the waist, the ribs, then the chest to the top of the shoulders.
+    pelvis: { front: [[0, 0.13], [1, 0.125]], back: [[0, 0.15], [1, 0.13]], side: [[0, 0.205], [1, 0.18]], round: 0.6, loops: 1, verts: 12 },
+    spine: { front: [[0, 0.125], [1, 0.155]], back: [[0, 0.13], [1, 0.14]], side: [[0, 0.18], [1, 0.215]], round: 0.6, loops: 1, verts: 12 },
+    chest: { front: [[0, 0.155], [0.5, 0.17], [0.85, 0.14], [1, 0.08]], back: [[0, 0.14], [0.5, 0.155], [1, 0.09]], side: [[0, 0.215], [0.45, 0.25], [1, 0.265]], round: 0.55, loops: 1, verts: 12 },
+    neck: { front: [[0, 0.07], [1, 0.062]], back: [[0, 0.075], [1, 0.062]], side: [[0, 0.08], [1, 0.065]], round: 0.9, loops: 0, verts: 8 },
+    // Chin, mouth, nose and brow in the front curve's profile.
+    head: {
+      front: [[0, 0.07], [0.15, 0.115], [0.4, 0.12], [0.55, 0.14], [0.75, 0.125], [1, 0.035]],
+      back: [[0, 0.065], [0.3, 0.1], [0.6, 0.125], [0.85, 0.1], [1, 0.035]],
+      side: [[0, 0.075], [0.3, 0.1], [0.6, 0.115], [0.85, 0.1], [1, 0.035]],
+      round: 0.75,
+      loops: 4,
+      verts: 10,
+    },
+    thigh: { front: [[0, 0.11], [0.3, 0.115], [1, 0.075]], back: [[0, 0.12], [0.2, 0.12], [1, 0.075]], out: [[0, 0.12], [0.4, 0.105], [1, 0.075]], in: [[0, 0.095], [1, 0.07]], round: 0.7, loops: 2, verts: 8 },
+    // The calf at the back.
+    shin: { front: [[0, 0.07], [1, 0.055]], back: [[0, 0.075], [0.3, 0.095], [1, 0.055]], out: [[0, 0.07], [0.3, 0.078], [1, 0.055]], in: [[0, 0.07], [0.3, 0.078], [1, 0.055]], round: 0.7, loops: 2, verts: 8 },
+    // Heel to toe: its top, and its sole down to the ground.
+    foot: { top: [[0, 0.035], [0.3, 0.06], [0.7, 0.045], [1, 0.025]], sole: [[0, 0.05], [1, 0.032]], out: [[0, 0.05], [0.6, 0.065], [1, 0.055]], in: [[0, 0.05], [0.6, 0.06], [1, 0.05]], round: 0.5, loops: 2, verts: 8 },
+    upperArm: { front: [[0, 0.075], [1, 0.058]], back: [[0, 0.075], [0.4, 0.082], [1, 0.058]], out: [[0, 0.085], [0.3, 0.082], [1, 0.058]], in: [[0, 0.07], [1, 0.056]], round: 0.75, loops: 1, verts: 8 },
+    // Forearms as thick as the upper arm's elbow end and more, as WoW draws them.
+    forearm: { front: [[0, 0.062], [0.3, 0.068], [1, 0.045]], back: [[0, 0.065], [0.3, 0.072], [1, 0.045]], out: [[0, 0.06], [1, 0.04]], in: [[0, 0.06], [1, 0.04]], round: 0.75, loops: 1, verts: 8 },
+    // Flat: wide across (front, the thumb's side, and back), thin from its back (out) to the palm (in).
+    hand: { front: [[0, 0.05], [0.5, 0.062], [1, 0.05]], back: [[0, 0.05], [0.5, 0.062], [1, 0.045]], out: [[0, 0.032], [0.5, 0.032], [1, 0.02]], in: [[0, 0.032], [0.5, 0.032], [1, 0.02]], round: 0.5, loops: 1, verts: 6 },
+  },
+  // A last pass over the whole body: a deeper chest. Points counted from -x, the bottom, the back.
+  lattice: {
+    divisions: [3, 4, 3],
+    moves: [{ at: [1, 2, 2], by: [0, 0, 0.025] }],
+  },
+}

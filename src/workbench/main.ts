@@ -27,6 +27,8 @@ import type { BuildingModel } from "../world/buildings/buildingTypes";
 import { buildPartSample, houseUsing } from "../world/buildings/partSample";
 import { isWholeHousePart } from "../world/buildings/buildingParts";
 import { bakeBuildingTextures } from "../world/buildings/buildingMesh";
+import { resolveRaces } from "../character/raceDef";
+import { POSES, figureFor, type FigureOptions } from "./figurePreview";
 
 // ---------------------------------------------------------------------------------------------
 // Assets: every file of every pack, by "pack/folder/id".
@@ -43,13 +45,13 @@ interface Asset {
 }
 
 /** The folders with a preview, and what each asset kind can be looked at as. */
-type PreviewFolder = "materials" | "trees" | "bushes" | "rocks" | "grass" | "biomes" | "buildings" | "buildingParts" | "buildingMaterials" | "props" | "features";
-const PREVIEW_FOLDERS: PreviewFolder[] = ["materials", "trees", "bushes", "rocks", "grass", "biomes", "buildings", "buildingParts", "buildingMaterials", "props", "features"];
+type PreviewFolder = "materials" | "trees" | "bushes" | "rocks" | "grass" | "biomes" | "buildings" | "buildingParts" | "buildingMaterials" | "props" | "features" | "races";
+const PREVIEW_FOLDERS: PreviewFolder[] = ["materials", "trees", "bushes", "rocks", "grass", "biomes", "buildings", "buildingParts", "buildingMaterials", "props", "features", "races"];
 /** How many variants of a building the Variant menu steps through - a building has no fixed count,
  *  every seed is one. */
 const BUILDING_VARIANTS = 8;
 /** Everything else is listed after these, its JSON still checked by Preview. */
-const FOLDER_ORDER = ["materials", "trees", "bushes", "rocks", "grass", "biomes", "buildings", "buildingParts", "buildingMaterials", "props", "features", "layers", "borderHills", "settlements", "voices", "patches", ""];
+const FOLDER_ORDER = ["materials", "trees", "bushes", "rocks", "grass", "biomes", "buildings", "buildingParts", "buildingMaterials", "props", "features", "races", "layers", "borderHills", "settlements", "voices", "patches", ""];
 
 interface ViewDef {
   id: string;
@@ -116,6 +118,11 @@ const DEFAULT_OPTIONS: Options = {
   cut: "none",
   colliders: "off",
   pads: "off",
+  // A race's body (see CHARACTERS.md): its pose, how finely it is cut, its bones and lattice.
+  pose: "stand",
+  detail: "1",
+  bones: "off",
+  lattice: "on",
 };
 
 /** A building cut open as the Cut menu says: over a level's floor - its plan - or through its middle. */
@@ -511,6 +518,11 @@ function viewsFor(asset: Asset | null, content: WorldContent | null): ViewDef[] 
       return [{ id: "texture", label: "Texture", mode: "2d" }];
     case "features":
       return [{ id: "placed", label: "On the ground", mode: "3d" }];
+    case "races":
+      return [
+        { id: "model", label: "Model", mode: "3d" },
+        { id: "placed", label: "On the ground", mode: "3d" },
+      ];
     case "biomes":
       return [
         { id: "height", label: "Height", mode: "2d" },
@@ -605,6 +617,14 @@ function renderPreviewBar(): void {
       }),
     );
     if (current.folder === "props" || current.folder === "features") viewOptions.append(checkbox("Colliders", "colliders", rebuild));
+    if (current.folder === "races") {
+      viewOptions.append(
+        select("Pose", "pose", Object.entries(POSES).map(([id, entry]): [string, string] => [id, entry.label]), rebuild),
+        select("Detail", "detail", [["0.5", "Low"], ["1", "As drawn"], ["2", "High"]], rebuild),
+        select("Lattice", "lattice", [["on", "On"], ["off", "Off"], ["shown", "Shown"]], rebuild),
+        checkbox("Bones", "bones", rebuild),
+      );
+    }
     // The level ground under a place's yard, buildings and props, outlined.
     if (current.folder === "features") viewOptions.append(checkbox("Pads", "pads", rebuild));
     if (current.folder === "buildings") {
@@ -866,6 +886,8 @@ async function preview3d(token: number, asset: Asset, view: ViewDef, content: Wo
   let trees: Parameters<typeof createStage>[2]["trees"];
   let buildings: Parameters<typeof createStage>[2]["buildings"];
   let site: Parameters<typeof createStage>[2]["site"];
+  let figure: Parameters<typeof createStage>[2]["figure"];
+  let summary: HTMLElement | null = null;
 
   if (asset.folder === "materials") {
     ground = content.materials.find((material) => material.id === asset.id)!;
@@ -899,6 +921,26 @@ async function preview3d(token: number, asset: Asset, view: ViewDef, content: Wo
       return;
     }
     site = { size: built.size, heightAt: built.heightAt, placed: built.placed, lines: built.lines, yards: built.yards, trees: built.trees, farTrees: built.farTrees, far, pads: options.pads === "on" ? built.pads : undefined };
+  } else if (asset.folder === "races") {
+    ground = groundMaterial(content, asset);
+    if (grassOn) grass = ground.grass;
+    let races;
+    try {
+      races = resolveRaces(sourcesWithEdit());
+    } catch (error) {
+      if (!(error instanceof ContentError)) throw error;
+      showIssues(error.issues.map(formatIssue));
+      setStatus("");
+      return;
+    }
+    const built = figureFor(races.get(asset.id)!, {
+      detail: Number(options.detail) || 1,
+      lattice: options.lattice as FigureOptions["lattice"],
+      pose: (options.pose in POSES ? options.pose : "stand") as FigureOptions["pose"],
+      bones: options.bones === "on",
+    });
+    figure = built.figure;
+    summary = built.summary;
   } else if (asset.folder === "props") {
     ground = groundMaterial(content, asset);
     if (grassOn) grass = ground.grass;
@@ -938,6 +980,7 @@ async function preview3d(token: number, asset: Asset, view: ViewDef, content: Wo
     buildings,
     buildingColliders: options.colliders === "on" && (asset.folder === "buildings" || asset.folder === "props" || asset.folder === "features"),
     site,
+    figure,
     footprints: options.marks === "on" && asset.folder === "buildings",
     timeHours: timeHours(),
     lightBiome,
@@ -969,6 +1012,7 @@ async function preview3d(token: number, asset: Asset, view: ViewDef, content: Wo
   });
   recordCamera();
   setStatus("");
+  if (summary) mapLegend.replaceChildren(summary);
 }
 
 /** The last biome area sampled, and what it was sampled from - a view or an option of a view

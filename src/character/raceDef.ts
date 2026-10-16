@@ -1,0 +1,188 @@
+import { CHARACTER_FOLDERS, orderPacks, parseFile, type PackSource } from "../world/content/resolveContent";
+import { ContentError, Reader, type ContentIssue, type RawObject } from "../world/content/contentReader";
+import type { ColorTuple } from "../world/terrain/pipeline/pipelineTypes";
+import type { CurvePoints } from "./curve";
+
+/**
+ * A race's body, as its pack file gives it (races/<id>.json5, see CHARACTERS.md): the skeleton's
+ * proportions, the four profile curves round each bone, and a lattice that shapes the whole.
+ * Lengths are in metres, angles in degrees.
+ */
+export interface RaceDef {
+  id: string;
+  name: string;
+  skin: ColorTuple;
+  skeleton: RaceSkeleton;
+  shape: Record<ShapedBone, BoneShape>;
+  lattice: LatticeDef | null;
+}
+
+export interface RaceSkeleton {
+  /** The ankle joint over the ground. */
+  ankle: number;
+  shin: number;
+  thigh: number;
+  /** Each hip joint out from the middle. */
+  hipWidth: number;
+  /** Up the torso, from the hips: pelvis to the waist, spine to the ribs, chest to the shoulders' top. */
+  pelvis: number;
+  spine: number;
+  chest: number;
+  neck: number;
+  head: number;
+  /** Each shoulder joint out from the middle, and down from the top of the chest. */
+  shoulderWidth: number;
+  shoulderDrop: number;
+  upperArm: number;
+  forearm: number;
+  hand: number;
+  /** How far the arms hang below level in the bind pose. */
+  armDown: number;
+  /** Heel to toe, and how far the heel reaches behind the ankle. */
+  foot: number;
+  heel: number;
+}
+
+/** The bones a body is shaped round. The clavicles carry no shape of their own. */
+export const SHAPED_BONES = ["pelvis", "spine", "chest", "neck", "head", "thigh", "shin", "upperArm", "forearm", "hand", "foot"] as const;
+export type ShapedBone = (typeof SHAPED_BONES)[number];
+
+/**
+ * The surface round one bone: how far it stands from the bone's axis toward each of four sides,
+ * along the bone. `front` and `back` are toward the character's front and back - for a foot, its
+ * top and sole; `out` and `in` away from and toward the body's middle - for a bone in the middle,
+ * both sides alike (`side` in the file).
+ */
+export interface BoneShape {
+  front: CurvePoints;
+  back: CurvePoints;
+  out: CurvePoints;
+  in: CurvePoints;
+  /** Between the four sides: boxy (0) to round (1). */
+  round: number;
+  /** Rings cut along the bone, and vertices round each ring. */
+  loops: number;
+  verts: number;
+}
+
+/** A free-form deformation over the whole body (see lattice.ts). */
+export interface LatticeDef {
+  /** Control points along x (across), y (up) and z (front to back), at least 2 each. */
+  divisions: [number, number, number];
+  /** Control points moved, by index from the lattice's -x, bottom, back corner. With `mirror`, a
+   *  move is made on the other side too, mirrored. */
+  moves: { at: [number, number, number]; by: [number, number, number] }[];
+  mirror: boolean;
+}
+
+const MIDDLE_BONES: readonly ShapedBone[] = ["pelvis", "spine", "chest", "neck", "head"];
+const SKELETON_KEYS: (keyof RaceSkeleton)[] = ["ankle", "shin", "thigh", "hipWidth", "pelvis", "spine", "chest", "neck", "head", "shoulderWidth", "shoulderDrop", "upperArm", "forearm", "hand", "armDown", "foot", "heel"];
+const ID_PATTERN = /^[A-Za-z0-9_-]+$/;
+
+/** Every race in the packs, later packs replacing earlier ones' by id. Throws a ContentError with
+ *  every problem found. */
+export function resolveRaces(packs: PackSource[]): Map<string, RaceDef> {
+  const issues: ContentIssue[] = [];
+  const entries = new Map<string, { file: string; data: unknown }>();
+  for (const pack of orderPacks(packs, issues)) {
+    for (const { path, text } of pack.files) {
+      const parts = path.split("/");
+      if (parts.length !== 2 || parts[0] !== CHARACTER_FOLDERS[0]) continue;
+      const file = `${pack.id}/${path}`;
+      const id = parts[1].replace(/\.json5$/, "");
+      if (!ID_PATTERN.test(id)) {
+        issues.push({ file, path: "", message: "file names (which are ids) may only use letters, digits, - and _" });
+        continue;
+      }
+      const data = parseFile(file, text, issues);
+      if (data !== undefined) entries.set(id, { file, data });
+    }
+  }
+  const races = new Map<string, RaceDef>();
+  for (const [id, entry] of [...entries].sort(([a], [b]) => a.localeCompare(b))) races.set(id, readRace(id, entry.data, new Reader(issues, entry.file)));
+  if (issues.length > 0) throw new ContentError(issues);
+  return races;
+}
+
+function readRace(id: string, data: unknown, reader: Reader): RaceDef {
+  const obj = reader.object(data, "");
+  reader.onlyKeys(obj, "", ["name", "skin", "skeleton", "shape", "lattice"]);
+  const rawSkeleton = reader.object(obj.skeleton, "skeleton");
+  reader.onlyKeys(rawSkeleton, "skeleton", SKELETON_KEYS);
+  const skeleton = Object.fromEntries(SKELETON_KEYS.map((key) => [key, reader.number(rawSkeleton, key, "skeleton", { min: key === "armDown" ? -90 : 0, max: key === "armDown" ? 90 : 3 })])) as unknown as RaceSkeleton;
+  const rawShape = reader.object(obj.shape, "shape");
+  reader.onlyKeys(rawShape, "shape", SHAPED_BONES);
+  const shape = Object.fromEntries(SHAPED_BONES.map((bone) => [bone, readShape(rawShape[bone], bone, reader)])) as Record<ShapedBone, BoneShape>;
+  const torsoVerts = shape.pelvis.verts;
+  if (torsoVerts !== 12 && torsoVerts !== 16) reader.fail("shape.pelvis.verts", "the torso's rings need 12 or 16 vertices - the legs, arms and neck join them at fixed places");
+  for (const bone of ["spine", "chest"] as const) if (shape[bone].verts !== torsoVerts) reader.fail(`shape.${bone}.verts`, `the torso's rings all have the pelvis's count (${torsoVerts})`);
+  return {
+    id,
+    name: reader.optionalString(obj, "name", "") ?? id,
+    skin: obj.skin === undefined ? [0.8, 0.62, 0.5] : reader.color(obj, "skin", ""),
+    skeleton,
+    shape,
+    lattice: obj.lattice === undefined ? null : readLattice(reader.object(obj.lattice, "lattice"), reader),
+  };
+}
+
+function readShape(raw: unknown, bone: ShapedBone, reader: Reader): BoneShape {
+  const path = `shape.${bone}`;
+  const obj: RawObject = reader.object(raw, path);
+  const middle = MIDDLE_BONES.includes(bone);
+  const foot = bone === "foot";
+  const sides = middle ? ["front", "back", "side"] : foot ? ["top", "sole", "out", "in"] : ["front", "back", "out", "in"];
+  reader.onlyKeys(obj, path, [...sides, "round", "loops", "verts"]);
+  const curve = (key: string): CurvePoints => readCurve(obj, key, path, reader);
+  const front = curve(foot ? "top" : "front");
+  const back = curve(foot ? "sole" : "back");
+  const out = curve(middle ? "side" : "out");
+  return {
+    front,
+    back,
+    out,
+    in: middle ? out : curve("in"),
+    round: reader.optionalNumber(obj, "round", path, 0.7, { min: 0, max: 1 }),
+    loops: reader.optionalNumber(obj, "loops", path, 2, { min: 0, max: 12, integer: true }),
+    verts: reader.optionalNumber(obj, "verts", path, 8, { min: 4, max: 24, integer: true }),
+  };
+}
+
+function readCurve(obj: RawObject, key: string, path: string, reader: Reader): CurvePoints {
+  const list = reader.array(obj, key, path);
+  const points: CurvePoints = [];
+  list.forEach((point, i) => {
+    if (!Array.isArray(point) || point.length !== 2 || !point.every((v) => typeof v === "number" && Number.isFinite(v))) {
+      reader.fail(`${path}.${key}[${i}]`, "expected [along, distance]");
+      return;
+    }
+    const [t, d] = point as [number, number];
+    if (t < 0 || t > 1) reader.fail(`${path}.${key}[${i}]`, `along must be 0 to 1, got ${t}`);
+    if (d < 0) reader.fail(`${path}.${key}[${i}]`, `distance can't be negative, got ${d}`);
+    if (points.length > 0 && t <= points[points.length - 1][0]) reader.fail(`${path}.${key}[${i}]`, "points must rise along the bone");
+    points.push([t, d]);
+  });
+  if (list.length === 0) reader.fail(`${path}.${key}`, "needs at least one point");
+  return points;
+}
+
+function readLattice(obj: RawObject, reader: Reader): LatticeDef {
+  reader.onlyKeys(obj, "lattice", ["divisions", "moves", "mirror"]);
+  const divisions = readTriple(obj.divisions, "lattice.divisions", reader).map((n) => Math.round(n)) as [number, number, number];
+  if (divisions.some((n) => n < 2 || n > 8)) reader.fail("lattice.divisions", "each must be 2 to 8");
+  const moves = reader.optionalArray(obj, "moves", "lattice").map((raw, i) => {
+    const path = `lattice.moves[${i}]`;
+    const move = reader.object(raw, path);
+    reader.onlyKeys(move, path, ["at", "by"]);
+    const at = readTriple(move.at, `${path}.at`, reader).map((n) => Math.round(n)) as [number, number, number];
+    if (at.some((n, axis) => n < 0 || n >= divisions[axis])) reader.fail(`${path}.at`, `outside the lattice (${divisions.join(" × ")} points)`);
+    return { at, by: readTriple(move.by, `${path}.by`, reader) };
+  });
+  return { divisions, moves, mirror: reader.boolean(obj, "mirror", "lattice", true) };
+}
+
+function readTriple(value: unknown, path: string, reader: Reader): [number, number, number] {
+  if (Array.isArray(value) && value.length === 3 && value.every((v) => typeof v === "number" && Number.isFinite(v))) return value as [number, number, number];
+  reader.fail(path, "expected [x, y, z]");
+  return [0, 0, 0];
+}
