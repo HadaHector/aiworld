@@ -7,4 +7,7 @@
   links: [
     { id: "ferry", to: "mainland", at: [60, -30], arrive: [120, 40] },
   ],
+  entities: [
+    { template: "trainingDummy", at: [4, 5], facing: 200 },
+  ],
 }

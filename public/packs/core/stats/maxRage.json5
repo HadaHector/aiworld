@@ -1,0 +1,1 @@
+{ name: "Max rage", default: 100, min: 0, visible: "all" }

@@ -1,0 +1,7 @@
+{
+  name: "Max mana",
+  formula: { mul: ["intellect", 15] },
+  min: 0,
+  round: "floor",
+  visible: "all",
+}

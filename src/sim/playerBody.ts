@@ -18,7 +18,8 @@ export interface PlayerBody {
   readonly motor: CharacterMotor;
   /** Radians about y, 0 facing +z: the way it last moved. */
   readonly facing: number;
-  step: (deltaSeconds: number, input: BodyInput) => void;
+  /** `speedScale` multiplies walking and running pace: the entity's `speed` stat (see ENTITIES.md). */
+  step: (deltaSeconds: number, input: BodyInput, speedScale?: number) => void;
   /** Puts it on the ground at a point. */
   teleport: (x: number, z: number) => void;
   /** Puts its feet at a point - on a roof, a floor, anywhere - pushed out of whatever is there. */
@@ -40,8 +41,8 @@ export function createPlayerBody(
   const motor = createCharacterMotor(collision.world, {}, { x: start.x, y: heightAt(start.x, start.z), z: start.z });
   let facing = 0;
 
-  function step(deltaSeconds: number, input: BodyInput): void {
-    const speed = input.run ? RUN_SPEED : WALK_SPEED;
+  function step(deltaSeconds: number, input: BodyInput, speedScale = 1): void {
+    const speed = (input.run ? RUN_SPEED : WALK_SPEED) * speedScale;
     const moveX = input.moveX * speed;
     const moveZ = input.moveZ * speed;
     const feet = motor.state.feet;

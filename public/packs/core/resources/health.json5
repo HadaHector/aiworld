@@ -1,0 +1,10 @@
+// Every entity with resources has health (see ENTITIES.md).
+{
+  name: "Health",
+  max: "maxHealth",
+  start: 1,
+  // Per second, out of combat only; in two-second ticks, as in WoW Classic.
+  regen: { outOfCombat: { add: [{ mul: ["maxHealth", 0.02] }, { mul: ["spirit", 0.5] }] }, inCombat: 0 },
+  interval: 2,
+  visible: "all",
+}

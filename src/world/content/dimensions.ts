@@ -20,6 +20,18 @@ export interface DimensionDef {
   /** Which biomes its zones roll from: only these, all but these, or (null) all of them. */
   biomes: { only: string[] } | { except: string[] } | null;
   links: DimensionLink[];
+  /** Entities that stand in it from the moment it loads: a training dummy, later portals and chests
+   *  (see ENTITIES.md). Their templates are checked against the game rules by the host. */
+  entities: PlacedEntity[];
+}
+
+/** An entity a dimension's definition places. */
+export interface PlacedEntity {
+  /** Its template, by id (`entities/<id>.json5`). */
+  template: string;
+  at: { x: number; z: number };
+  /** Radians about y, 0 facing +z - written in degrees in the file. */
+  facing: number;
 }
 
 /** A way from one dimension to another: a portal, a dock. Data only for now - nothing stands at
@@ -36,14 +48,14 @@ export interface DimensionLink {
 
 /** What a pack set with no `dimensions` folder at all gets: one world with the defaults, so a pack
  *  that only adds biomes still makes one. */
-export const IMPLICIT_DIMENSION: DimensionDef = { id: "main", name: "The World", start: true, spawn: { x: 0, z: 0 }, world: {}, biomes: null, links: [] };
+export const IMPLICIT_DIMENSION: DimensionDef = { id: "main", name: "The World", start: true, spawn: { x: 0, z: 0 }, world: {}, biomes: null, links: [], entities: [] };
 
 /** Passed as the dimension to resolve: no dimension's biome list applies, every biome the config
  *  keeps is resolved - what the workbench wants, to preview any of them. */
 export const ALL_DIMENSIONS = "*";
 
 /** FNV-1a over a string's UTF-16 code units: a dimension's id as a number, for its seed. */
-function hashString(text: string): number {
+export function hashString(text: string): number {
   let hash = 0x811c9dc5;
   for (let i = 0; i < text.length; i++) {
     hash ^= text.charCodeAt(i);
@@ -81,7 +93,7 @@ function readPoint(reader: Reader, obj: RawObject, key: string, path: string, fa
 /** Reads one `dimensions/<id>.json5`. References to biomes and other dimensions are checked by
  *  `checkDimensions`, once every definition is known. */
 export function readDimension(id: string, obj: RawObject, reader: Reader): DimensionDef {
-  reader.onlyKeys(obj, "", ["name", "start", "spawn", "world", "biomes", "links"]);
+  reader.onlyKeys(obj, "", ["name", "start", "spawn", "world", "biomes", "links", "entities"]);
   const name = reader.optionalString(obj, "name", "") ?? id;
   const start = reader.boolean(obj, "start", "", false);
   const spawn = readPoint(reader, obj, "spawn", "", { x: 0, z: 0 });
@@ -109,7 +121,18 @@ export function readDimension(id: string, obj: RawObject, reader: Reader): Dimen
       arrive: readPoint(reader, raw, "arrive", path),
     });
   });
-  return { id, name, start, spawn, world, biomes, links };
+  const entities: PlacedEntity[] = [];
+  reader.optionalArray(obj, "entities", "").forEach((value, i) => {
+    const path = `entities[${i}]`;
+    const raw = reader.object(value, path);
+    reader.onlyKeys(raw, path, ["template", "at", "facing"]);
+    entities.push({
+      template: reader.string(raw, "template", path),
+      at: readPoint(reader, raw, "at", path),
+      facing: (reader.optionalNumber(raw, "facing", path, 0) * Math.PI) / 180,
+    });
+  });
+  return { id, name, start, spawn, world, biomes, links, entities };
 }
 
 /**
@@ -134,6 +157,9 @@ export function checkDimensions(
       if (!biomeIds.has(id)) issues.push({ file, path: `biomes.${list.key}[${i}]`, message: `no biome "${id}" (known: ${[...biomeIds].join(", ")})` });
     });
     if (!inside(def, def.spawn)) issues.push({ file, path: "spawn", message: `outside the world (${halfWidth(def).toFixed(0)} m from 0 at most)` });
+    def.entities.forEach((placed, i) => {
+      if (!inside(def, placed.at)) issues.push({ file, path: `entities[${i}].at`, message: `outside the world (${halfWidth(def).toFixed(0)} m from 0 at most)` });
+    });
     def.links.forEach((link, i) => {
       const path = `links[${i}]`;
       const target = byId.get(link.to);

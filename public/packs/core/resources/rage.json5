@@ -1,0 +1,2 @@
+// Starts empty and drains away out of combat.
+{ name: "Rage", max: "maxRage", start: 0, regen: { outOfCombat: -2, inCombat: 0 }, interval: 1, visible: "all" }

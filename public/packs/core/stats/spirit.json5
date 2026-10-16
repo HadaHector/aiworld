@@ -1,0 +1,2 @@
+// How fast health and mana come back.
+{ name: "Spirit", min: 0 }

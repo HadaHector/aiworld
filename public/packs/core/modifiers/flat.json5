@@ -1,0 +1,2 @@
+// +10 stamina: added to the base, first.
+{ name: "Flat", order: 100, gather: "sum", apply: { add: ["value", "total"] } }

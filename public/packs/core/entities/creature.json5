@@ -1,0 +1,7 @@
+// A base for creatures: abstract, so never made itself.
+{
+  abstract: true,
+  stats: { level: 1 },
+  resources: ["health"],
+  look: { shape: "capsule", height: 1.6, radius: 0.5, color: [0.55, 0.45, 0.35] },
+}

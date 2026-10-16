@@ -6,7 +6,7 @@
  */
 
 /** Bumped whenever a message changes shape. */
-export const PROTOCOL_VERSION = 3;
+export const PROTOCOL_VERSION = 4;
 
 // --- Client to server ------------------------------------------------------------------------
 
@@ -60,7 +60,68 @@ export interface Arrived {
   type: "arrived";
 }
 
-export type ClientMessage = Hello | Intent | Teleport | TeleportTo | Travel | Arrived;
+// Debug commands on entities (see ENTITIES.md) - a real game would not take these from a client.
+// `entity` 0 is the sender's own player. Stats, kinds and resources are indices into the game rules.
+
+/** Debug: adds a modifier. */
+export interface DebugModifier {
+  type: "debugModifier";
+  entity: number; // u32
+  stat: number; // u16
+  kind: number; // u16
+  value: number; // f64
+  source: string;
+}
+
+/** Debug: removes every modifier from a source. */
+export interface DebugRemoveSource {
+  type: "debugRemoveSource";
+  entity: number; // u32
+  source: string;
+}
+
+/** Debug: puts an entity in or out of combat. */
+export interface DebugCombat {
+  type: "debugCombat";
+  entity: number; // u32
+  inCombat: boolean;
+}
+
+/** Debug: changes a resource - negative spends, positive restores. */
+export interface DebugResource {
+  type: "debugResource";
+  entity: number; // u32
+  resource: number; // u16
+  delta: number; // f64
+}
+
+/** Debug: makes an entity from a template, on the ground at a point in the sender's dimension. */
+export interface DebugSpawn {
+  type: "debugSpawn";
+  template: string;
+  x: number; // f64
+  z: number; // f64
+}
+
+/** Debug: removes an entity (not a player). */
+export interface DebugDespawn {
+  type: "debugDespawn";
+  entity: number; // u32
+}
+
+export type ClientMessage =
+  | Hello
+  | Intent
+  | Teleport
+  | TeleportTo
+  | Travel
+  | Arrived
+  | DebugModifier
+  | DebugRemoveSource
+  | DebugCombat
+  | DebugResource
+  | DebugSpawn
+  | DebugDespawn;
 
 // --- Server to client ------------------------------------------------------------------------
 
@@ -73,6 +134,9 @@ export interface Welcome {
    *  tell the player what differs. */
   config: string;
   packs: string[];
+  /** A hash of the game rules' tables (see ENTITIES.md): stats and resources are sent by index, so
+   *  a client whose own packs hash differently would show the wrong names. */
+  rules: number; // u32
 }
 
 /**
@@ -88,8 +152,8 @@ export interface Transfer {
   z: number; // f64
 }
 
-/** One player as the server has it. */
-export interface PlayerState {
+/** Where one entity is, as the server has it. */
+export interface EntityMotion {
   id: number; // u32
   x: number; // f64
   y: number; // f64
@@ -99,13 +163,75 @@ export interface PlayerState {
   grounded: boolean;
 }
 
-/** Where everything is in the receiver's dimension, after a step. */
+/** One stat's final value, by its index in the game rules. */
+export interface StatValue {
+  stat: number; // u16
+  value: number; // f64
+}
+
+/** One resource's current value and maximum, by its index in the game rules. */
+export interface ResourceValue {
+  resource: number; // u16
+  current: number; // f64
+  max: number; // f64
+}
+
+/** One modifier on the receiver's own player. */
+export interface ModifierState {
+  stat: number; // u16
+  kind: number; // u16
+  value: number; // f64
+  source: string;
+}
+
+/**
+ * An entity has come into the receiver's view (see ENTITIES.md, *Replication*): what it is, where,
+ * and every value the receiver may see of it - all of them for its own player, else only those the
+ * game rules mark `visible: "all"`.
+ */
+export interface EntitySpawn {
+  type: "entitySpawn";
+  id: number; // u32
+  /** Its template's id: the client looks it up in its own packs for a look. */
+  template: string;
+  name: string;
+  x: number; // f64
+  y: number; // f64
+  z: number; // f64
+  facing: number; // f32
+  stats: StatValue[];
+  resources: ResourceValue[];
+}
+
+/** Values the receiver may see of an entity have changed since it was last told: only those. */
+export interface EntityValues {
+  type: "entityValues";
+  id: number; // u32
+  stats: StatValue[];
+  resources: ResourceValue[];
+}
+
+/** The receiver's own player's modifier stack has changed: the whole of it. */
+export interface EntityModifiers {
+  type: "entityModifiers";
+  id: number; // u32
+  modifiers: ModifierState[];
+}
+
+/** An entity has left the receiver's view, or is gone. */
+export interface EntityDespawn {
+  type: "entityDespawn";
+  id: number; // u32
+}
+
+/** Where everything in view has moved to, after a step: every entity that moved, and always the
+ *  receiver's own player. Spawns, values and despawns of the same step come before it. */
 export interface Snapshot {
   type: "snapshot";
   tick: number; // u32
   /** The last Intent seq the server had taken from this client by then. */
   ackSeq: number; // u16
-  players: PlayerState[];
+  entities: EntityMotion[];
 }
 
-export type ServerMessage = Welcome | Transfer | Snapshot;
+export type ServerMessage = Welcome | Transfer | EntitySpawn | EntityValues | EntityModifiers | EntityDespawn | Snapshot;

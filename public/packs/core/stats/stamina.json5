@@ -1,0 +1,2 @@
+// What max health is mostly made of.
+{ name: "Stamina", min: 0 }

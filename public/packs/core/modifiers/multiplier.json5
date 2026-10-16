@@ -1,0 +1,2 @@
+// x1.1. Multipliers multiply: two x1.1 make x1.21. Applied last.
+{ name: "Multiplier", order: 300, gather: "product", apply: { mul: ["value", "total"] } }

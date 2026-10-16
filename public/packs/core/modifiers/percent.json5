@@ -1,0 +1,2 @@
+// +10 is +10%. Percentages on one stat add up: two +10% make +20%.
+{ name: "Percent", order: 200, gather: "sum", apply: { mul: ["value", { add: [1, { div: ["total", 100] }] }] } }

@@ -1,0 +1,2 @@
+// A character's level: set by templates now, by skills later (GAMEPLAY.md, step 8).
+{ name: "Level", default: 1, min: 1, round: "floor", visible: "all" }

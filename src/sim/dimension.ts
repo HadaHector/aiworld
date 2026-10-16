@@ -5,6 +5,7 @@ import { createPlacedBuildings, modelGroups, type ModelledGroup, type PlacedBuil
 import type { WorldData } from "../world/worldData";
 import { COLLISION_CHUNK_SIZE, createCollisionStreamer, type CollisionStreamer } from "./collisionStreamer";
 import { createPlayerBody, type PlayerBody } from "./playerBody";
+import type { Entity } from "./entity";
 
 /**
  * What a host hands the server for one dimension: its world as generated from its seed and its
@@ -28,6 +29,11 @@ export interface Dimension {
   readonly buildings: PlacedBuildings;
   /** A body standing on the ground at a point, in this dimension's collision. */
   createBody: (x: number, z: number) => PlayerBody;
+  /** What is stood on at a point: the floor of a building there, or the ground. */
+  groundAt: (x: number, z: number) => number;
+  /** Every entity in it, by id: the ones it places, those made in it since, and the players in it
+   *  that have a body (see ENTITIES.md). */
+  readonly entities: Map<number, Entity>;
 }
 
 /**
@@ -48,5 +54,7 @@ export function createDimension(id: string, { world, treeHulls, buildingModels }
     streamer,
     buildings,
     createBody: (x, z) => createPlayerBody(collision, world.heightAt, groundAt, { x, z }),
+    groundAt: (x, z) => groundAt(x, z, world.heightAt(x, z) + 0.5),
+    entities: new Map(),
   };
 }

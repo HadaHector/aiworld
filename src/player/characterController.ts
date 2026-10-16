@@ -1,7 +1,7 @@
 import { Color3, MeshBuilder, StandardMaterial, Vector3, type ArcRotateCamera, type Mesh, type Scene } from "@babylonjs/core";
 import { DEFAULT_MOTOR, type MotorSettings } from "../world/collision/index";
 import type { BodyInput } from "../sim/playerBody";
-import type { PlayerState } from "../sim/protocol";
+import type { EntityMotion } from "../sim/protocol";
 import { createInput } from "./input";
 
 export interface Character {
@@ -13,7 +13,7 @@ export interface Character {
    *  and z - forward is where the camera looks - running, and a jump (taken once per press). */
   readIntent: (camera: ArcRotateCamera) => BodyInput;
   /** Draws the player where the server says it is. */
-  show: (state: PlayerState) => void;
+  show: (state: EntityMotion) => void;
   dispose: () => void;
 }
 
@@ -55,7 +55,7 @@ export function createCharacter(scene: Scene, start: { x: number; y: number; z: 
     };
   }
 
-  function show(state: PlayerState): void {
+  function show(state: EntityMotion): void {
     mesh.position.set(state.x, state.y + height / 2, state.z);
     mesh.rotation.y = state.facing;
   }

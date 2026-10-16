@@ -1,0 +1,8 @@
+{
+  name: "Mana",
+  max: "maxMana",
+  start: 1,
+  regen: { outOfCombat: { add: [{ mul: ["maxMana", 0.01] }, { mul: ["spirit", 0.5] }] }, inCombat: { mul: ["spirit", 0.1] } },
+  interval: 2,
+  visible: "all",
+}

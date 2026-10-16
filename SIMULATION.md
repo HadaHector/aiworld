@@ -110,7 +110,9 @@ the browser. Everything under `src/sim` is plain TypeScript that runs in either.
 
 ## The message boundary
 
-As built in step 1. Step 2 (DIMENSIONS.md) added `travel`, `arrived` and `transfer`, a `dimension`
+As built in step 1. Step 3 (ENTITIES.md) made the snapshot's `players` into `entities`, and added
+entity spawn, values, modifiers and despawn messages, a `rules` hash in `welcome`, and debug
+commands on entities (protocol 4). Step 2 (DIMENSIONS.md) added `travel`, `arrived` and `transfer`, a `dimension`
 in `hello`, and moved the seed from `welcome` to `transfer`; `src/sim/protocol.ts` is current.
 
 Client to server:
@@ -238,7 +240,7 @@ Each left the game working, checked in the dev server and with `npm run probe` a
 
 - The world clock, day and night, and weather stay in the client. When gameplay needs the clock
   (respawn timers, GAMEPLAY.md's world delta), the server owns it and sends the hour in snapshots.
-- No entities other than players, no stats, no saves.
+- No entities other than players, no stats, no saves. (Entities and stats came in step 3: ENTITIES.md.)
 - No fixed tick or prediction in single player; no Worker; no WebSocket; no binary codec yet.
 - 64-bit positions and camera-relative rendering (step 2).
 - No moving of drawing files into a `src/client` folder. Worth doing once the split has settled and

@@ -1,0 +1,8 @@
+// A derived stat: its base is this formula of other stats; modifiers go on top.
+{
+  name: "Max health",
+  formula: { add: [20, { mul: ["stamina", 10] }, { mul: ["level", 15] }] },
+  min: 1,
+  round: "floor",
+  visible: "all",
+}

@@ -116,6 +116,11 @@ export interface PackSource {
 const CONTENT_FOLDERS = ["dimensions", "biomes", "materials", "layers", "grass", "trees", "bushes", "rocks", "voices", "borderHills", "settlements", "weathers", "features", "buildings", "buildingParts", "buildingMaterials", "rooms", "props", "propGroups"] as const;
 type ContentFolder = (typeof CONTENT_FOLDERS)[number];
 
+/** The folders gameplay content lives in - stats, resources, templates (see ENTITIES.md). Not world
+ *  content: the world's resolver passes over them, and the game rules' resolver reads them, once per
+ *  server. */
+export const GAME_FOLDERS = ["stats", "modifiers", "resources", "entities"] as const;
+
 /** How many grass kinds the packs may define between them: each is a layer of the blade atlas and
  *  an entry in the grass shader's per-kind uniform arrays (four vectors a kind, plus its petal
  *  colours), which must stay inside the 256 vertex uniform vectors WebGL2 guarantees. */
@@ -135,7 +140,7 @@ function compareIds(a: string, b: string): number {
   return a < b ? -1 : a > b ? 1 : 0;
 }
 
-function parseFile(file: string, text: string, issues: ContentIssue[]): unknown {
+export function parseFile(file: string, text: string, issues: ContentIssue[]): unknown {
   try {
     return JSON5.parse(text);
   } catch (error) {
@@ -146,19 +151,10 @@ function parseFile(file: string, text: string, issues: ContentIssue[]): unknown 
   }
 }
 
-/**
- * Turns the packs into one WorldContent: parses every file, lets higher-priority packs replace
- * definitions by id, applies patches, expands generators, and checks every field and every
- * reference between definitions. Throws a ContentError listing every problem found.
- *
- * The content is one dimension's (see DIMENSIONS.md): `dimension` by id, the start dimension if
- * null, or ALL_DIMENSIONS for every biome the config keeps.
- */
-export function resolveContent(packs: PackSource[], config: WorldConfig = DEFAULT_CONFIG, dimension: string | null = null): WorldContent {
-  const issues: ContentIssue[] = [];
-
-  // --- pack order ---
-  const ordered = packs
+/** The packs in the order they load - by their manifests' `priority`, lowest first, then by id - so a
+ *  later one's definition replaces an earlier one's. Problems with a manifest go in `issues`. */
+export function orderPacks(packs: PackSource[], issues: ContentIssue[]): PackSource[] {
+  return packs
     .map((pack) => {
       const manifestFile = pack.files.find((f) => f.path === "pack.json5");
       const file = `${pack.id}/pack.json5`;
@@ -174,6 +170,21 @@ export function resolveContent(packs: PackSource[], config: WorldConfig = DEFAUL
     })
     .sort((a, b) => a.priority - b.priority || compareIds(a.pack.id, b.pack.id))
     .map(({ pack }) => pack);
+}
+
+/**
+ * Turns the packs into one WorldContent: parses every file, lets higher-priority packs replace
+ * definitions by id, applies patches, expands generators, and checks every field and every
+ * reference between definitions. Throws a ContentError listing every problem found.
+ *
+ * The content is one dimension's (see DIMENSIONS.md): `dimension` by id, the start dimension if
+ * null, or ALL_DIMENSIONS for every biome the config keeps.
+ */
+export function resolveContent(packs: PackSource[], config: WorldConfig = DEFAULT_CONFIG, dimension: string | null = null): WorldContent {
+  const issues: ContentIssue[] = [];
+
+  // --- pack order ---
+  const ordered = orderPacks(packs, issues);
 
   // --- collect definitions, later packs replacing earlier ones ---
   const entries = new Map<ContentFolder, Map<string, Entry>>(CONTENT_FOLDERS.map((folder) => [folder, new Map()]));
@@ -185,6 +196,8 @@ export function resolveContent(packs: PackSource[], config: WorldConfig = DEFAUL
       if (path === "pack.json5") continue;
       const file = `${pack.id}/${path}`;
       const parts = path.split("/");
+      // Gameplay content: read by the game rules' own resolver (src/sim/rules/gameRules.ts).
+      if (parts.length === 2 && (GAME_FOLDERS as readonly string[]).includes(parts[0])) continue;
       const data = parseFile(file, text, issues);
       if (data === undefined) continue;
 
@@ -198,7 +211,7 @@ export function resolveContent(packs: PackSource[], config: WorldConfig = DEFAUL
       }
       const folder = parts[0] as ContentFolder;
       if (parts.length !== 2 || !CONTENT_FOLDERS.includes(folder)) {
-        issues.push({ file, path: "", message: `not a place content is read from (expected ${[...CONTENT_FOLDERS, "patches"].map((f) => `${f}/`).join(", ")} or defaults.json5)` });
+        issues.push({ file, path: "", message: `not a place content is read from (expected ${[...CONTENT_FOLDERS, ...GAME_FOLDERS, "patches"].map((f) => `${f}/`).join(", ")} or defaults.json5)` });
         continue;
       }
       const id = parts[1].replace(/\.json5$/, "");

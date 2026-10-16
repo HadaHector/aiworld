@@ -1,0 +1,2 @@
+// How fast the body walks and runs: 1 is normal, 1.5 half as fast again (see ENTITIES.md).
+{ name: "Movement speed", default: 1, min: 0.1, max: 4 }

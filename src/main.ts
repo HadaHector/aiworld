@@ -5,7 +5,11 @@ import { WORLD_SEED } from "./world/worldData";
 import { DEFAULT_DRAW_DISTANCE, nextPaint } from "./world/world";
 import { createServer } from "./sim/server";
 import { createLocalChannel } from "./sim/channel";
-import { PROTOCOL_VERSION, type ClientMessage, type PlayerState, type Transfer } from "./sim/protocol";
+import { PROTOCOL_VERSION, type ClientMessage, type EntityMotion, type Transfer } from "./sim/protocol";
+import { createEntityMirror } from "./game/entityMirror";
+import { createEntityMeshes, type EntityMeshes } from "./game/entityMeshes";
+import { createEntityPanel } from "./debug/entityPanel";
+import { describeEntity } from "./sim/entityText";
 import type { DimensionWorld } from "./sim/dimension";
 import { createDimensionView, type DimensionView, type ViewSettings } from "./game/dimensionView";
 import { createZoneLabel } from "./debug/zoneLabel";
@@ -18,6 +22,7 @@ import { BIOME_STYLES, BUILDING_STYLES, DEFAULT_STYLE } from "./music/places";
 import { loadPackSet, type PackSet } from "./world/content/loadContent";
 import { ContentError, formatIssue } from "./world/content/contentReader";
 import type { WorldContent } from "./world/content/worldContent";
+import { checkPlacements, resolveGameRules, type GameRules } from "./sim/rules/gameRules";
 
 const canvasElement = document.getElementById("renderCanvas");
 if (!(canvasElement instanceof HTMLCanvasElement)) {
@@ -39,10 +44,14 @@ function failLoading(title: string, error: unknown): never {
 // fetched once; each dimension resolves its own content from them when it is entered.
 let packSet: PackSet;
 let startContent: WorldContent;
+let gameRules: GameRules;
 try {
   loadingScreen.update("Loading content packs", 0, 0);
   packSet = await loadPackSet();
   startContent = packSet.resolve(null);
+  // Stats, resources and entity templates (see ENTITIES.md): once for the page, not per dimension.
+  gameRules = resolveGameRules(packSet.sources);
+  checkPlacements(gameRules, startContent.dimensions);
 } catch (error) {
   failLoading("The content packs could not be loaded", error);
 }
@@ -59,6 +68,7 @@ const server = createServer({
   config: packSet.config.name,
   packs: packSet.packs,
   dimensions: startContent.dimensions,
+  rules: gameRules,
   loadDimension: (definition) => new Promise<DimensionWorld>((resolve) => built.set(definition.id, resolve)),
 });
 const channel = createLocalChannel();
@@ -73,17 +83,25 @@ let pendingTransfer: Transfer | null = null;
 /** Set while a dimension is being built: no frames are drawn and the server is not stepped. */
 let entering = false;
 /** Where the player is, as the last snapshot that had it said - null since the last Transfer. */
-let me: PlayerState | null = null;
+let me: EntityMotion | null = null;
+/** Every entity the server has told this page of (see ENTITIES.md) - cleared on each Transfer. */
+const mirror = createEntityMirror(gameRules);
+/** The other entities drawn in the current view's scene. */
+let entityMeshes: EntityMeshes | null = null;
 
 /** Applies whatever the server has said since last time - where the player is now, above all. */
 function takeServerMessages(): void {
   for (const message of channel.client.receive()) {
-    if (message.type === "welcome") playerId = message.playerId;
-    else if (message.type === "transfer") {
+    if (mirror.apply(message)) continue;
+    if (message.type === "welcome") {
+      playerId = message.playerId;
+      if (message.rules !== gameRules.hash) console.warn(`The server's game rules (${message.rules.toString(16)}) differ from this page's (${gameRules.hash.toString(16)}): stats and resources may show under the wrong names.`);
+    } else if (message.type === "transfer") {
       pendingTransfer = message;
       me = null;
+      mirror.clear();
     } else if (message.type === "snapshot") {
-      const mine = message.players.find((p) => p.id === playerId);
+      const mine = message.entities.find((p) => p.id === playerId);
       if (mine) {
         me = mine;
         view?.character.show(mine);
@@ -125,6 +143,8 @@ function leave(): void {
   settings.timeOfDay = view.world.getTimeOfDay();
   const old = view;
   view = null;
+  entityMeshes?.dispose();
+  entityMeshes = null;
   old.dispose();
 }
 
@@ -160,6 +180,7 @@ async function enter(transfer: Transfer, resume: boolean): Promise<void> {
   built.get(transfer.dimension)?.(next.shared);
   built.delete(transfer.dimension);
   view = next;
+  entityMeshes = createEntityMeshes(next.scene, mirror, gameRules, () => playerId);
   channel.client.send({ type: "arrived" });
   // The server puts the body in once it has the dimension too - a moment, as its load resolves.
   while (!me) {
@@ -201,6 +222,7 @@ function frame(): void {
   server.step(deltaSeconds);
   takeServerMessages();
   if (pendingTransfer) return;
+  entityMeshes?.update();
   if (!spectator.active) {
     v.playerLights.update(deltaSeconds);
     v.placeLabels.update(character.mesh.position, v.scene.activeCamera);
@@ -231,6 +253,46 @@ function frame(): void {
   world.updateWeather(deltaSeconds, here.areaWeights, focus.x, focus.z);
   world.updateDayNight(deltaSeconds, here.areaWeights);
   world.updateAtmosphere(here.areaWeights);
+}
+
+/** A debug command for the server, taken at once. */
+function debugCommand(message: ClientMessage): void {
+  command(message);
+}
+
+/** Makes an entity from a template a few metres in front of the player. */
+function spawnInFront(template: string): void {
+  const own = mirror.entities.get(playerId);
+  if (!own) return;
+  debugCommand({ type: "debugSpawn", template, x: own.x + Math.sin(own.facing) * 4, z: own.z + Math.cos(own.facing) * 4 });
+}
+
+/** The server's own account of an entity - single player has the server in the page. */
+function inspectOnServer(id: number): string[] | null {
+  const entity = server.debug.entity(id);
+  return entity ? describeEntity(gameRules, entity) : null;
+}
+
+// The entity inspector (see ENTITIES.md): I toggles it; a left click on an entity shows it.
+const entityPanel = createEntityPanel({ rules: gameRules, mirror, ownId: () => playerId, command: debugCommand, spawnDummy: () => spawnInFront("trainingDummy"), inspectOnServer });
+{
+  let down: { x: number; y: number } | null = null;
+  canvas.addEventListener("pointerdown", (e) => {
+    if (e.button === 0) down = { x: e.clientX, y: e.clientY };
+  });
+  canvas.addEventListener("pointerup", (e) => {
+    if (e.button !== 0 || !down || !view || !entityMeshes) return;
+    const moved = Math.hypot(e.clientX - down.x, e.clientY - down.y);
+    down = null;
+    if (moved > 4) return;
+    const rect = canvas.getBoundingClientRect();
+    const meshes = entityMeshes;
+    const pick = view.scene.pick(e.clientX - rect.left, e.clientY - rect.top, (mesh) => meshes.entityOf(mesh) !== null);
+    const id = pick?.hit ? meshes.entityOf(pick.pickedMesh) : null;
+    if (id === null) return;
+    entityPanel.select(id);
+    entityPanel.setVisible(true);
+  });
 }
 
 // Right-click (a click, not a drag) to put the player where the pointer is: on what it hits in the
@@ -332,6 +394,27 @@ function gotoLoaded(target: Partial<ViewSnapshot> & { x: number; z: number }, it
   },
   /** The simulation running in this page - `server.debug` has its dimensions and players. */
   server,
+  /** Entities, stats and resources (see ENTITIES.md): what this page was told, the server's own
+   *  account, and the inspector's debug commands. `entity` 0 (the default) is the own player. */
+  entities: {
+    rules: gameRules,
+    /** The own player, as the mirror has it. */
+    mine: () => mirror.entities.get(playerId),
+    /** Every entity this page knows. */
+    list: () => [...mirror.entities.values()],
+    /** The server's breakdown of an entity, as text. */
+    inspect: (id = playerId) => inspectOnServer(id)?.join("\n"),
+    /** The server's own entity - single player only. */
+    server: (id = playerId) => server.debug.entity(id),
+    modify: (stat: string, kind: string, value: number, source = "debug", entity = 0) =>
+      debugCommand({ type: "debugModifier", entity, stat: gameRules.statIndex.get(stat) ?? -1, kind: gameRules.kindIndex.get(kind) ?? -1, value, source }),
+    removeSource: (source = "debug", entity = 0) => debugCommand({ type: "debugRemoveSource", entity, source }),
+    combat: (inCombat: boolean, entity = 0) => debugCommand({ type: "debugCombat", entity, inCombat }),
+    resource: (resource: string, delta: number, entity = 0) => debugCommand({ type: "debugResource", entity, resource: gameRules.resourceIndex.get(resource) ?? -1, delta }),
+    spawn: (template = "trainingDummy") => spawnInFront(template),
+    despawn: (entity: number) => debugCommand({ type: "debugDespawn", entity }),
+    panel: entityPanel,
+  },
   get camera() {
     return view?.camera;
   },

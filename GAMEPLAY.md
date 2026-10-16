@@ -289,7 +289,10 @@ A proposal, to be confirmed. Each step gets its own plan document.
    them through a loading screen. The multi-continent layout inside one world is removed. (The saved
    delta per dimension comes with saves; large-world positions were planned here and dropped: see
    Architecture notes.)
-3. **Entities, stats and resources** from data, owned by the server.
+3. **Entities, stats and resources: done** - see [ENTITIES.md](ENTITIES.md). Entities built from
+   parts, stats and derived stats as formula trees in packs, modifier kinds whose order and stacking
+   are data, any number of resources with regen and decay, templates with inheritance; replicated
+   to clients near them, the owner seeing everything and others only what is marked visible.
 4. **Ability system:** effects, auras, targeting, cooldowns and the GCD, threat.
 5. **Character spike, in parallel:** a body built from parts and procedural animation, judged
    early because it is the riskiest piece.

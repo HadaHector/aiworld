@@ -82,6 +82,11 @@ same before and after.
   links: [
     { id: "ferry", to: "mainland", at: [900, -300], arrive: [-2400, 5100] },
   ],
+  // Entities standing here from the moment it loads (added in step 3, see ENTITIES.md); facing in
+  // degrees. Templates are checked against the game rules.
+  entities: [
+    { template: "trainingDummy", at: [4, 5], facing: 200 },
+  ],
 }
 ```
 

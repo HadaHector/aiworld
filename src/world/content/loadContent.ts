@@ -25,13 +25,15 @@ export interface PackSet {
   packs: string[];
   /** One dimension's content - the start dimension's if null. Throws a ContentError. */
   resolve: (dimension: string | null) => WorldContent;
+  /** The packs' files as fetched - what the game rules are resolved from (see ENTITIES.md). */
+  sources: PackSource[];
 }
 
 /** Fetches the page's config (from its URL) and every pack it uses. Throws a ContentError. */
 export async function loadPackSet(baseUrl: string = import.meta.env.BASE_URL): Promise<PackSet> {
   const config = await fetchWorldConfig(configNameFromUrl(), baseUrl);
   const sources = await fetchPackSources(baseUrl, config);
-  return { config, packs: sources.map((pack) => pack.id), resolve: (dimension) => resolveContent(sources, config, dimension) };
+  return { config, packs: sources.map((pack) => pack.id), resolve: (dimension) => resolveContent(sources, config, dimension), sources };
 }
 
 /** The world config the page's URL asks for - `?config=small` - or "default". */

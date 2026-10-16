@@ -7,4 +7,8 @@
     // Data only for now: nothing stands at `at` yet; the debug map marks it.
     { id: "ferry", to: "isles", at: [120, 40], arrive: [0, 0] },
   ],
+  // Entities that stand here from the start (see ENTITIES.md); facing in degrees.
+  entities: [
+    { template: "trainingDummy", at: [6, 4], facing: 225 },
+  ],
 }

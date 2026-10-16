@@ -43,6 +43,10 @@ packs/<pack>/
   props/<id>.json5        a thing set about a place: a log stack, a chopping block, a barrel
   propGroups/<id>.json5   props set down together: a pile of crates and barrels
   patches/<any>.json5     additions to another pack's lists
+  stats/<id>.json5        gameplay: a stat - primary, or derived by a formula (ENTITIES.md)
+  modifiers/<id>.json5    gameplay: a kind of modifier - where it applies and what it does
+  resources/<id>.json5    gameplay: health, mana, rage... - a maximum from a stat, regen and decay
+  entities/<id>.json5     gameplay: an entity template - the player, a dummy, later creatures
 ```
 
 A definition's **id is its file name**: `materials/peat.json5` defines the material `peat`, and
@@ -931,6 +935,27 @@ is drawn in stretches of up to 24 m, each in the way bay by bay or segment by se
 A new generator is code (`src/world/props/generators/`): a table of its settings, its parts, and
 how it builds from the shared shapes (`propShapes.ts`: boxes, beams, round logs, turned shapes, in
 local frames) - nothing else needs to know about it.
+
+## Gameplay: stats, modifiers, resources, entities
+
+Read once per server by their own resolver (`src/sim/rules/gameRules.ts`), not per dimension;
+[ENTITIES.md](../../ENTITIES.md) has every field. In short:
+
+```json5
+// stats/maxHealth.json5 - a derived stat: its base is a formula tree of other stats
+{ name: "Max health", formula: { add: [20, { mul: ["stamina", 10] }] }, min: 1, round: "floor", visible: "all" }
+// modifiers/percent.json5 - kinds apply by `order`; `apply` gets the stat so far (`value`) and the kind's `total`
+{ order: 200, gather: "sum", apply: { mul: ["value", { add: [1, { div: ["total", 100] }] }] } }
+// resources/health.json5 - required: every entity with resources has health
+{ max: "maxHealth", regen: { outOfCombat: { mul: ["maxHealth", 0.02] }, inCombat: 0 }, interval: 2 }
+// entities/trainingDummy.json5 - one parent; objects merge, lists replace
+{ extends: "creature", stats: { stamina: 500 }, modifiers: [{ stat: "maxHealth", kind: "percent", value: 100 }] }
+```
+
+Formulas are JSON trees (`add`, `sub`, `mul`, `div`, `min`, `max`, `clamp`, `floor`, `pow` with a
+whole power, `if`, comparisons...), compiled at load; unknown names and circles between stats are
+errors. Players are made from `entities/player.json5`. A dimension places entities with its
+`entities` list.
 
 ## Example
 

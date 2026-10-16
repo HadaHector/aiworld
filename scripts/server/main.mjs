@@ -7,9 +7,13 @@
 //   npm run server -- --config small     a world config from public/configs (see CONFIG.md)
 //   npm run server -- --bot --dimension isles   the bot starts in another dimension
 //   npm run server -- --bot --travel 300        the bot travels to the next dimension every 300 ticks
+//   npm run server -- --bot --inspect           every second, the bot's entity and those near it: stats,
+//                                               modifiers, resources (see ENTITIES.md)
 // A dimension is generated when the first player heads for it and dropped when the last one leaves,
 // so with no bot the server holds no world at all.
-import { loadContentFromDisk } from "../diskContent.mjs";
+import { loadContentFromDisk, loadRulesFromDisk } from "../diskContent.mjs";
+import { checkPlacements } from "../../src/sim/rules/gameRules.ts";
+import { describeEntity } from "../../src/sim/entityText.ts";
 import { createWorldData, WORLD_SEED } from "../../src/world/worldData.ts";
 import { createServer } from "../../src/sim/server.ts";
 import { createLocalChannel } from "../../src/sim/channel.ts";
@@ -37,12 +41,18 @@ let started = performance.now();
 const { content: startContent, packs } = loadContentFromDisk(configName);
 const dimensions = startContent.dimensions;
 console.log(`config ${configName}: packs ${packs.join(", ")}; dimensions ${dimensions.map((d) => `${d.id}${d.start ? " (start)" : ""}`).join(", ")} (${ms(started)})`);
+// Stats, resources and entity templates (see ENTITIES.md): once for the server, not per dimension.
+started = performance.now();
+const rules = loadRulesFromDisk(configName);
+checkPlacements(rules, dimensions);
+console.log(`game rules: ${rules.stats.length} stats, ${rules.modifierKinds.length} modifier kinds, ${rules.resources.length} resources, ${rules.templates.size} templates (${ms(started)})`);
 
 const server = createServer({
   seed,
   config: configName,
   packs,
   dimensions,
+  rules,
   loadDimension(definition, dimensionSeed) {
     let at = performance.now();
     const content = definition.start ? startContent : loadContentFromDisk(configName, definition.id).content;
@@ -63,7 +73,23 @@ if (flag("bot")) {
   const channel = createLocalChannel();
   server.connect(channel.server);
   channel.client.send({ type: "hello", protocol: PROTOCOL_VERSION, name: "bot", dimension: text("dimension", "") });
-  bot = { end: channel.client, id: 0, seq: 0, last: null, dimension: "" };
+  bot = { end: channel.client, id: 0, seq: 0, last: null, dimension: "", entityMessages: 0 };
+}
+
+/** One entity message, short, with stats and resources by name. */
+function describeMessage(message) {
+  const stats = (list) => list.map((s) => `${rules.stats[s.stat].id} ${+s.value.toFixed(2)}`).join(", ");
+  const resources = (list) => list.map((r) => `${rules.resources[r.resource].id} ${+r.current.toFixed(2)}/${+r.max.toFixed(2)}`).join(", ");
+  switch (message.type) {
+    case "entitySpawn":
+      return `spawn #${message.id} ${message.name} (${message.template}) · ${resources(message.resources)} · ${stats(message.stats)}`;
+    case "entityValues":
+      return `values #${message.id} · ${[resources(message.resources), stats(message.stats)].filter(Boolean).join(" · ")}`;
+    case "entityModifiers":
+      return `modifiers #${message.id} · ${message.modifiers.map((m) => `${rules.stats[m.stat].id} ${rules.modifierKinds[m.kind].id} ${m.value} (${m.source})`).join(", ") || "none"}`;
+    case "entityDespawn":
+      return `despawn #${message.id}`;
+  }
 }
 
 function driveBot() {
@@ -75,8 +101,18 @@ function driveBot() {
       bot.last = null;
       bot.end.send({ type: "arrived" });
     }
-    if (message.type === "snapshot") bot.last = message.players.find((p) => p.id === bot.id) ?? bot.last;
+    if (message.type === "snapshot") bot.last = message.entities.find((p) => p.id === bot.id) ?? bot.last;
+    // What the bot is told of entities (see ENTITIES.md): the first few in full, then a count a second.
+    if (message.type.startsWith("entity")) {
+      bot.entityMessages++;
+      if (bot.entityMessages <= 20) console.log(`bot: ${describeMessage(message)}`);
+    }
   }
+  // A scripted test of resources: some health spent, then a while in combat - regen stops while in
+  // it and comes back after.
+  if (server.tick === 60) bot.end.send({ type: "debugResource", entity: 0, resource: rules.health, delta: -100 });
+  if (server.tick === 150) bot.end.send({ type: "debugCombat", entity: 0, inCombat: true });
+  if (server.tick === 300) bot.end.send({ type: "debugCombat", entity: 0, inCombat: false });
   if (travelEvery > 0 && server.tick > 0 && server.tick % travelEvery === 0) {
     const next = dimensions[(dimensions.findIndex((d) => d.id === bot.dimension) + 1) % dimensions.length];
     bot.end.send({ type: "travel", dimension: next.id });
@@ -87,6 +123,19 @@ function driveBot() {
 }
 
 console.log(`startup ${ms(0)}`);
+
+/** How far around the bot `--inspect` looks. */
+const INSPECT_RADIUS = 150;
+const inspect = flag("inspect");
+
+/** Prints the bot's entity and every entity near it, as the server has them. */
+function inspectBot() {
+  const me = server.debug.entity(bot.id);
+  const dimension = me && server.debug.dimensions.get(me.dimension);
+  if (!me || !dimension) return;
+  const near = [...dimension.entities.values()].filter((e) => e !== me && Math.hypot(e.x - me.x, e.z - me.z) <= INSPECT_RADIUS);
+  for (const entity of [me, ...near]) for (const line of describeEntity(rules, entity)) console.log(`  ${line}`);
+}
 
 let stepMs = 0;
 let steps = 0;
@@ -104,11 +153,15 @@ const timer = setInterval(() => {
   if (now - lastReport >= 1000 || server.tick >= maxTicks) {
     const { dimensions: loaded, players } = server.debug;
     const worlds = [...loaded.values()].map((d) => {
-      const inIt = [...players.values()].filter((p) => p.dimension === d.id && p.body).length;
-      return `${d.id}: ${inIt} players, ${d.streamer.chunkCount} chunks, ${d.collision.shapeCount} shapes`;
+      const inIt = [...players.values()].filter((p) => p.entity.dimension === d.id && p.entity.body).length;
+      return `${d.id}: ${inIt} players, ${d.entities.size} entities, ${d.streamer.chunkCount} chunks, ${d.collision.shapeCount} shapes`;
     });
     const at = bot?.last ? ` · bot in ${bot.dimension} at ${bot.last.x.toFixed(1)}, ${bot.last.y.toFixed(1)}, ${bot.last.z.toFixed(1)}${bot.last.grounded ? "" : " (in the air)"}` : "";
-    console.log(`tick ${server.tick} · ${players.size} players · step ${(stepMs / steps).toFixed(2)} ms · ${worlds.join(" · ") || "no dimension loaded"}${at}`);
+    const told = bot ? ` · ${bot.entityMessages} entity messages` : "";
+    const me = bot && server.debug.entity(bot.id);
+    const health = me?.resources ? ` · bot health ${me.resources.current[rules.health].toFixed(0)}/${me.resources.max[rules.health]}${me.inCombat ? " (in combat)" : ""}` : "";
+    console.log(`tick ${server.tick} · ${players.size} players · step ${(stepMs / steps).toFixed(2)} ms · ${worlds.join(" · ") || "no dimension loaded"}${at}${health}${told}`);
+    if (inspect && bot) inspectBot();
     stepMs = 0;
     steps = 0;
     lastReport = now;
