@@ -68,7 +68,7 @@ its own plan document when it is started, as zones and music did.
 |---|---|
 | Size | Bounded, configurable. The hard limit is precision: positions must stay accurate to 0.1 mm |
 | Continents | Further worlds (another continent, a "dimension") are reached through a loading screen, entered by a portal, a ship or similar |
-| Persistence | The world regenerates from the seed. Persistent world changes are rare, contained exceptions (e.g. one building upgrading to its next stage) |
+| Persistence | The world regenerates from the seed. A small saved delta remembers what is cleared, looted or gathered until it respawns; permanent world changes are rare, contained exceptions (e.g. one building upgrading to its next stage). See [Saved state](#saved-state) |
 | Terrain editing | None by the player |
 | Change over time | None, apart from the contained exceptions above |
 | History | Generated per seed, and can go deep: one mystery spread over several quests and NPCs |
@@ -105,7 +105,7 @@ its own plan document when it is started, as zones and music did.
 - **Creatures:** wildlife is an important source of fights. Most creatures are fantastical, even
   when they look like real animals. Taming is possible later. The creature roster is pack data,
   per zone.
-- **Spawning:** mobs and nodes respawn on unsaved timers, at a random spot within a range rather
+- **Spawning:** mobs and nodes respawn on timers (saved, see [World delta](#world-delta)), at a random spot within a range rather
   than at the exact same coordinates.
 - **Other dangers:** falling, drowning, maybe traps.
 - **Stealth:** possible, without a big system.
@@ -204,7 +204,7 @@ The first chain the generator must be able to make, and the yardstick for its pa
 
 ## Saved state
 
-Only characters are saved, plus the few contained world exceptions.
+Two things are saved: characters, and a small *world delta*.
 
 | Per character | |
 |---|---|
@@ -213,9 +213,25 @@ Only characters are saved, plus the few contained world exceptions.
 | Belongings | Inventory, equipment, bank, money and minor currencies |
 | Quests | Active quests and their progress, completed quests |
 | Standing | Reputation per faction |
-| Travel | Explored map, unlocked travel points, current home |
+| Travel | Where they logged out, explored map, unlocked travel points, current home |
 
-Mob, node and chest respawn timers are not saved.
+### World delta
+
+The world is regenerated from the seed, and the delta records only how it differs from a fresh
+generation, so quitting and coming back does not refill chests or bring back a cleared camp.
+This holds for single player and for a restarted dedicated server alike.
+
+- **Keyed by generated ids.** Every spawn point, node, chest and dungeon has a stable id derived
+  from the seed, so the delta needs no positions or copies of the things themselves.
+- **Entries expire.** A killed mob, a gathered node or an emptied chest is stored with the world
+  time when it comes back. Once that time has passed, the entry is dropped, so the delta stays
+  small however long a world is played.
+- **The world clock runs only while the server runs.** Time does not pass while a single-player
+  world is closed. What was cleared stays cleared until you have played long enough.
+- **Also in the delta:** the state of a dungeon run in progress, items dropped on the ground
+  (until they expire), and the contained permanent exceptions (e.g. a building's upgrade stage).
+- **Not in it:** where mobs stand, their health or what they are doing. A mob that was alive is
+  regenerated fresh at its spawn point.
 
 ## First milestone
 
