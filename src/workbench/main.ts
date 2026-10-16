@@ -29,7 +29,7 @@ import { isWholeHousePart } from "../world/buildings/buildingParts";
 import { bakeBuildingTextures } from "../world/buildings/buildingMesh";
 import { resolveRaces, type RaceDef } from "../character/raceDef";
 import { bakeGearMaterial, resolveGearMaterials, type GearMaterialDef } from "../character/gearMaterial";
-import { POSES, figureFor, paintedBody, type FigureOptions } from "./figurePreview";
+import { ANIMATIONS, POSES, figureFor, paintedBody, type FigureOptions } from "./figurePreview";
 
 // ---------------------------------------------------------------------------------------------
 // Assets: every file of every pack, by "pack/folder/id".
@@ -127,6 +127,9 @@ const DEFAULT_OPTIONS: Options = {
   texture: "painted",
   smallclothes: "on",
   sex: "",
+  animation: "idle",
+  speed: "6",
+  path: "place",
 };
 
 /** A building cut open as the Cut menu says: over a level's floor - its plan - or through its middle. */
@@ -626,7 +629,14 @@ function renderPreviewBar(): void {
     if (current.folder === "props" || current.folder === "features") viewOptions.append(checkbox("Colliders", "colliders", rebuild));
     if (current.folder === "races") {
       viewOptions.append(
-        select("Pose", "pose", Object.entries(POSES).map(([id, entry]): [string, string] => [id, entry.label]), rebuild),
+        select("Play", "animation", Object.entries(ANIMATIONS).map(([id, entry]): [string, string] => [id, entry.label]), rebuild),
+        ...(options.animation === "still" ? [select("Pose", "pose", Object.entries(POSES).map(([id, entry]): [string, string] => [id, entry.label]), rebuild)] : []),
+        ...(options.animation === "still" || options.animation === "idle"
+          ? []
+          : [
+              select("Speed", "speed", [["0", "Standing"], ["1.5", "1.5 m/s"], ["3", "3 m/s"], ["6", "6 m/s (walk)"], ["9", "9 m/s"], ["12", "12 m/s (run)"]], rebuild),
+              select("Path", "path", [["place", "On the spot"], ["circle", "Round a circle"]], rebuild),
+            ]),
         select("Sex", "sex", [["", "By seed"], ["male", "Male"], ["female", "Female"]], rebuild),
         select("Texture", "texture", [["painted", "Painted (512)"], ["retro", "Retro (128)"], ["flat", "Flat colour"]], rebuild),
         checkbox("Smallclothes", "smallclothes", rebuild),
@@ -913,6 +923,9 @@ function characterInputs(asset: Asset): { race: RaceDef; gear: Map<string, GearM
         smallclothes: options.smallclothes === "on",
         seed,
         sex: options.sex === "male" || options.sex === "female" ? options.sex : null,
+        animation: (options.animation in ANIMATIONS ? options.animation : "still") as FigureOptions["animation"],
+        speed: Number.isFinite(Number(options.speed)) ? Number(options.speed) : 6,
+        path: options.path === "circle" ? "circle" : "place",
       },
     };
   } catch (error) {

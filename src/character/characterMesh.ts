@@ -1,4 +1,4 @@
-import { Bone, Color3, Material, Matrix, Mesh, Quaternion, RawTexture, Skeleton, StandardMaterial, Texture, VertexData, type Scene } from "@babylonjs/core";
+import { Bone, Color3, Material, Matrix, Mesh, Quaternion, RawTexture, Skeleton, StandardMaterial, Texture, Vector3, VertexData, type Scene } from "@babylonjs/core";
 import type { BodyGeometry } from "./bodyMesh";
 import { smoothNormals } from "./atlas";
 import { cross, frameFor, sub, type BoneDef } from "./skeleton";
@@ -16,8 +16,9 @@ export type BodySkin =
 export interface CharacterMesh {
   mesh: Mesh;
   skeleton: Skeleton;
-  /** Puts the body in a pose; bones it leaves out go back to the bind pose. */
-  setPose: (pose: Pose) => void;
+  /** Puts the body in a pose; bones it leaves out go back to the bind pose. `offset` moves the
+   *  whole body, in metres (an animation's bob and crouch). */
+  setPose: (pose: Pose, offset?: [number, number, number]) => void;
   dispose: () => void;
 }
 
@@ -32,14 +33,17 @@ export function createCharacterMesh(scene: Scene, name: string, body: BodyGeomet
   const skeleton = new Skeleton(`${name}Skeleton`, `${name}Skeleton`, scene);
   const absolute = body.bones.map(boneMatrix);
   const rests: Quaternion[] = [];
+  const restPositions: Vector3[] = [];
   const babylonBones: Bone[] = [];
   body.bones.forEach((def, i) => {
     const parent = def.parent >= 0 ? babylonBones[def.parent] : null;
     const local = def.parent >= 0 ? absolute[i].multiply(Matrix.Invert(absolute[def.parent])) : absolute[i].clone();
     const bone = new Bone(def.name, skeleton, parent, local, local.clone(), local.clone(), i);
     const rotation = new Quaternion();
-    local.decompose(undefined, rotation);
+    const position = new Vector3();
+    local.decompose(undefined, rotation, position);
     rests.push(rotation);
+    restPositions.push(position);
     babylonBones.push(bone);
   });
 
@@ -100,7 +104,8 @@ export function createCharacterMesh(scene: Scene, name: string, body: BodyGeomet
   return {
     mesh,
     skeleton,
-    setPose(pose) {
+    setPose(pose, offset) {
+      if (babylonBones[0]) babylonBones[0].setPosition(offset ? restPositions[0].add(new Vector3(...offset)) : restPositions[0]);
       body.bones.forEach((def, i) => {
         const angles = pose[def.name];
         if (angles) {

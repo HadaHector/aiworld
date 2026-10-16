@@ -1,6 +1,7 @@
-import { Color3, MeshBuilder, SkeletonViewer, Vector3 } from "@babylonjs/core";
+import { Color3, MeshBuilder, SkeletonViewer, Vector3, type Scene } from "@babylonjs/core";
 import { buildBody, type BodyGeometry } from "../character/bodyMesh";
-import { createCharacterMesh, type BodySkin, type Pose } from "../character/characterMesh";
+import { createCharacterMesh, type BodySkin, type CharacterMesh, type Pose } from "../character/characterMesh";
+import { createAnimator } from "../character/animation";
 import { forSex, type RaceDef, type Sex } from "../character/raceDef";
 import { layoutAtlas, type AtlasLayout } from "../character/atlas";
 import { chooseAppearance, paintAtlas, type PaintedCover } from "../character/paint";
@@ -23,10 +24,28 @@ export interface FigureOptions {
   seed: number;
   /** A sex to show instead of the seed's. */
   sex: Sex | null;
+  /** "still" holds `pose`; the others play (animation.ts). */
+  animation: keyof typeof ANIMATIONS;
+  /** How fast it moves while walking, jumping, swimming or swinging, metres a second. */
+  speed: number;
+  /** Moving on the spot, or round a circle on the ground. */
+  path: "place" | "circle";
 }
+
+/** What the workbench can play, and what each asks of the animator. */
+export const ANIMATIONS = {
+  still: { label: "Still pose" },
+  idle: { label: "Idle" },
+  walk: { label: "Walk / run" },
+  jump: { label: "Jumping" },
+  swim: { label: "Swimming" },
+  swing: { label: "Swinging" },
+} satisfies Record<string, { label: string }>;
 
 /** A body and the atlas painted for it. */
 export interface PaintedBody {
+  /** The race as the character's sex has it - what the body was built from. */
+  race: RaceDef;
   body: BodyGeometry;
   layout: AtlasLayout | null;
   pixels: Uint8Array | null;
@@ -36,7 +55,8 @@ export interface PaintedBody {
 /** Builds a race's body and paints its atlas, as the options say. */
 export async function paintedBody(race: RaceDef, gear: Map<string, GearMaterialDef>, worldSeed: number, options: FigureOptions): Promise<PaintedBody> {
   const look = chooseAppearance(race, options.seed, options.sex ?? undefined);
-  const body = buildBody(forSex(race, look.sex), { detail: options.detail, lattice: options.lattice !== "off" });
+  const sexed = forSex(race, look.sex);
+  const body = buildBody(sexed, { detail: options.detail, lattice: options.lattice !== "off" });
   let layout: AtlasLayout | null = null;
   let pixels: Uint8Array | null = null;
   if (options.texture !== "flat") {
@@ -68,7 +88,61 @@ export async function paintedBody(race: RaceDef, gear: Map<string, GearMaterialD
     row.insertCell().textContent = String(value);
   }
   summary.append(title, table);
-  return { body, layout, pixels, summary };
+  return { race: sexed, body, layout, pixels, summary };
+}
+
+/**
+ * Plays an animation on the stage: the animator fed what the game would feed it - speed, whether
+ * it is on the ground, how fast it rises or falls - with a jump every so often or a swing, on the
+ * spot or round a circle over the ground.
+ */
+function play(scene: Scene, character: CharacterMesh, race: RaceDef, options: FigureOptions, height: (x: number, z: number) => number): void {
+  const animator = createAnimator(race.skeleton);
+  const radius = 3;
+  let angle = 0;
+  let time = 0;
+  let lift = 0;
+  let rise = 0;
+  let nextJump = 0.8;
+  let nextSwing = 0.5;
+  const moving = options.animation !== "idle";
+  const speed = moving ? options.speed : 0;
+  scene.onBeforeRenderObservable.add(() => {
+    const dt = Math.min(0.05, scene.getEngine().getDeltaTime() / 1000);
+    time += dt;
+    let x = 0;
+    let z = 0;
+    let facing = 0;
+    if (options.path === "circle" && speed > 0) {
+      angle += (speed * dt) / radius;
+      x = radius * Math.cos(angle);
+      z = radius * Math.sin(angle);
+      facing = Math.atan2(-Math.sin(angle), Math.cos(angle));
+    }
+    // A jump as the game's body jumps (sim/playerBody.ts: 7.6 m/s up, 24 m/s² down).
+    if (options.animation === "jump") {
+      if (lift <= 0 && rise <= 0 && time >= nextJump) rise = 7.6;
+      if (lift > 0 || rise > 0) {
+        rise -= 24 * dt;
+        lift += rise * dt;
+        if (lift <= 0) {
+          lift = 0;
+          rise = 0;
+          nextJump = time + 0.7;
+        }
+      }
+    }
+    let swing = false;
+    if (options.animation === "swing" && time >= nextSwing) {
+      swing = true;
+      nextSwing = time + 1.3;
+    }
+    const grounded = lift <= 0 && rise <= 0;
+    const { pose, offset } = animator.update({ speed, grounded, verticalSpeed: rise, swimming: options.animation === "swim", swing }, dt);
+    character.setPose(pose, offset);
+    character.mesh.position.set(x, height(x, z) + lift, z);
+    character.mesh.rotation.y = facing;
+  });
 }
 
 /** Mirrors a turn made on a bone of the +x side onto its -x twin (see characterMesh.ts's Pose). */
@@ -129,6 +203,7 @@ export function figureFor(race: RaceDef, painted: PaintedBody, options: FigureOp
       character.mesh.position.y = ground;
       character.setPose(POSES[options.pose].pose);
       shadows.addShadowCaster(character.mesh, false);
+      if (options.animation !== "still") play(scene, character, painted.race, options, height);
       if (options.bones) {
         const viewer = new SkeletonViewer(character.skeleton, character.mesh, scene, true, 1, { displayMode: SkeletonViewer.DISPLAY_SPHERE_AND_SPURS });
         viewer.isEnabled = true;

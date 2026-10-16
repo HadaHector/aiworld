@@ -6,8 +6,9 @@ procedurally from parts, textured and animated procedurally, look good enough fo
 WoW-Classic-like third-person RPG? Afterwards a body can be looked at in the workbench with any
 race and outfit, playing any of its animations, and the own player in the game is drawn with one.
 
-**Status: building.** Steps 1-2 are built: the human in the workbench (`?asset=core/races/human`),
-painted, and its Atlas view; gear materials in `gearMaterials/`.
+**Status: building.** Steps 1-3 are built: the human, male and female, in the workbench
+(`?asset=core/races/human`), painted, with its Atlas view, playing its animations; gear materials in
+`gearMaterials/`.
 
 ## Decisions
 
@@ -213,6 +214,13 @@ vertical speed, swimming, and a swing trigger.
 
 Each is a function from time and inputs to a pose (a rotation per bone). Poses are blended by
 weights that ease in and out, and the swing is layered on the upper body.
+
+As built (`src/character/animation.ts`): the game walks at 6 m/s and runs at 12 (the world's 2×
+scale), so a cycle covers more ground the faster it goes, up to about four leg lengths, and walking
+turns into running between 4 and 9 m/s. The body is lowered as far as the leg under it has
+shortened, which keeps that foot on the ground on the flat. Take-off has no crouch: the animation
+learns of a jump only when the body leaves the ground. The workbench's *Play* menu runs each
+animation on the spot or round a circle, at the game's speeds, jumping and swinging on a timer.
 
 ## Data
 
