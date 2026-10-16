@@ -1,6 +1,7 @@
 import { Bone, Color3, Material, Matrix, Mesh, Quaternion, RawTexture, Skeleton, StandardMaterial, Texture, VertexData, type Scene } from "@babylonjs/core";
 import type { BodyGeometry } from "./bodyMesh";
-import { cross, frameFor, normalize, sub, type BoneDef, type Vec } from "./skeleton";
+import { smoothNormals } from "./atlas";
+import { cross, frameFor, sub, type BoneDef } from "./skeleton";
 
 /** A pose: per bone name, a turn about the bone's own axes - x across it (bending forward and
  *  back), y along it (twisting), z toward its front (swinging out and in) - in radians. */
@@ -21,8 +22,9 @@ export interface CharacterMesh {
 }
 
 /**
- * A body drawn: the bind-pose geometry made flat-shaded (each triangle its own three vertices, so
- * the facets read), skinned to a Babylon skeleton built from the same bones. Each bone's own axes
+ * A body drawn: the bind-pose geometry smooth-shaded - every triangle its own three vertices, for
+ * its corners' places in the atlas, but each with its vertex's normal averaged over the faces round
+ * it - skinned to a Babylon skeleton built from the same bones. Each bone's own axes
  * run y along it, z toward its front, x across, so a pose can bend a knee about x whichever way
  * the leg points.
  */
@@ -41,8 +43,9 @@ export function createCharacterMesh(scene: Scene, name: string, body: BodyGeomet
     babylonBones.push(bone);
   });
 
-  // Flat: every triangle its own vertices, its normal its face's.
+  // Every triangle its own vertices (a corner's atlas place is its own), the normals smooth.
   const P = body.positions;
+  const smooth = smoothNormals(body);
   const positions: number[] = [];
   const normals: number[] = [];
   const joints: number[] = [];
@@ -51,14 +54,10 @@ export function createCharacterMesh(scene: Scene, name: string, body: BodyGeomet
   const atlas = "uvs" in skin ? skin : null;
   for (let t = 0; t < body.indices.length; t += 3) {
     const [a, b, c] = [body.indices[t], body.indices[t + 1], body.indices[t + 2]];
-    const pa: Vec = [P[a * 3], P[a * 3 + 1], P[a * 3 + 2]];
-    const pb: Vec = [P[b * 3], P[b * 3 + 1], P[b * 3 + 2]];
-    const pc: Vec = [P[c * 3], P[c * 3 + 1], P[c * 3 + 2]];
-    const n = normalize(cross(sub(pb, pa), sub(pc, pa)));
     for (const [corner, v] of [a, b, c].entries()) {
       if (atlas) uvs.push(atlas.uvs[(t + corner) * 2], atlas.uvs[(t + corner) * 2 + 1]);
       positions.push(P[v * 3], P[v * 3 + 1], P[v * 3 + 2]);
-      normals.push(n[0], n[1], n[2]);
+      normals.push(smooth[v * 3], smooth[v * 3 + 1], smooth[v * 3 + 2]);
       for (let k = 0; k < 4; k++) {
         joints.push(body.joints[v * 4 + k]);
         weights.push(body.weights[v * 4 + k]);

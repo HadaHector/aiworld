@@ -82,7 +82,7 @@ export const POSES = {
   stand: {
     label: "Standing",
     pose: pose((p) => {
-      both(p, "upperArm", [0.1, 0, -0.5]);
+      both(p, "upperArm", [0.1, 0, -0.15]);
       both(p, "forearm", [-0.25, 0, 0]);
       both(p, "thigh", [0.04, 0, 0]);
       both(p, "shin", [-0.06, 0, 0]);

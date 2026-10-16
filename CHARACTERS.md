@@ -110,6 +110,13 @@ amount). It runs in the bind pose, before skinning, and the joints are moved thr
 lattice so the skeleton still sits inside the deformed body. Gear shells are built after it, from
 the deformed body, so they fit whatever the lattice made.
 
+As built: the shoulders' top ring slopes down from the neck to the arms; a collar ring sits halfway
+between it and the neck, so the neck rises out of a slope; and between each arm hole and the arm's
+first ring is a ring blended halfway and puffed out, so the shoulder rounds over into the arm (the
+deltoid) instead of turning at a crease. The arms are built hanging 70° below level, near how they
+stand, so standing deforms the shoulders little. The body is smooth-shaded: corners keep their own
+atlas places, but share their vertex's normal.
+
 **Skinning.** Every vertex of a loop belongs to its bone, with a blend over the last and first
 loops either side of a joint, so elbows and knees bend without collapsing. Patch vertices carry
 their weights in the patch.

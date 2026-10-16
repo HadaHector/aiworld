@@ -11,8 +11,8 @@
     eyes: ["#4a6a8a", "#5a7a4a", "#5a4030", "#3a2a20", "#6a7a80"],
     beard: 0.45,
     // Where the face is painted: heights up the head, from the jaw's hinge (0) to the crown (1) -
-    // matched to the head's front curve below (the nose's tip at 0.55, the brow at 0.75).
-    face: { eyes: 0.64, brows: 0.73, nose: 0.53, mouth: 0.4, hairline: 0.84 },
+    // matched to the head's front curve below (the nose's tip at 0.4, the eyes at 0.5, the brow at 0.6).
+    face: { eyes: 0.5, brows: 0.585, nose: 0.385, mouth: 0.26, hairline: 0.76 },
   },
   skeleton: {
     ankle: 0.09,
@@ -20,16 +20,16 @@
     thigh: 0.41,
     hipWidth: 0.11,
     pelvis: 0.13,
-    spine: 0.19,
-    chest: 0.27,
-    neck: 0.07,
-    head: 0.29,
-    shoulderWidth: 0.29,
+    spine: 0.18,
+    chest: 0.26,
+    neck: 0.1,
+    head: 0.255,
+    shoulderWidth: 0.3,
     shoulderDrop: 0.08,
     upperArm: 0.29,
     forearm: 0.27,
     hand: 0.16,
-    armDown: 55,
+    armDown: 70,
     foot: 0.31,
     heel: 0.075,
   },
@@ -37,15 +37,16 @@
     // The torso: the hip joints up to the waist, the ribs, then the chest to the top of the shoulders.
     pelvis: { front: [[0, 0.13], [1, 0.125]], back: [[0, 0.15], [1, 0.13]], side: [[0, 0.205], [1, 0.18]], round: 0.6, loops: 1, verts: 12 },
     spine: { front: [[0, 0.125], [1, 0.155]], back: [[0, 0.13], [1, 0.14]], side: [[0, 0.18], [1, 0.215]], round: 0.6, loops: 1, verts: 12 },
-    chest: { front: [[0, 0.155], [0.5, 0.17], [0.85, 0.14], [1, 0.08]], back: [[0, 0.14], [0.5, 0.155], [1, 0.09]], side: [[0, 0.215], [0.45, 0.25], [1, 0.265]], round: 0.55, loops: 1, verts: 12 },
-    neck: { front: [[0, 0.07], [1, 0.062]], back: [[0, 0.075], [1, 0.062]], side: [[0, 0.08], [1, 0.065]], round: 0.9, loops: 0, verts: 8 },
-    // Chin, mouth, nose and brow in the front curve's profile.
+    chest: { front: [[0, 0.155], [0.5, 0.17], [0.85, 0.14], [1, 0.08]], back: [[0, 0.14], [0.5, 0.155], [1, 0.09]], side: [[0, 0.205], [0.45, 0.225], [1, 0.235]], round: 0.55, loops: 1, verts: 12 },
+    neck: { front: [[0, 0.058], [1, 0.05]], back: [[0, 0.066], [1, 0.052]], side: [[0, 0.07], [1, 0.056]], round: 0.9, loops: 0, verts: 8 },
+    // The face in the front curve's profile: chin, mouth, the nose's tip, the eyes set back under the
+    // brow, the forehead. Eyes halfway up from the chin, as a real head has them.
     head: {
-      front: [[0, 0.07], [0.15, 0.115], [0.4, 0.12], [0.55, 0.14], [0.75, 0.125], [1, 0.035]],
-      back: [[0, 0.065], [0.3, 0.1], [0.6, 0.125], [0.85, 0.1], [1, 0.035]],
-      side: [[0, 0.075], [0.3, 0.1], [0.6, 0.115], [0.85, 0.1], [1, 0.035]],
+      front: [[0, 0.045], [0.12, 0.09], [0.26, 0.096], [0.4, 0.118], [0.5, 0.1], [0.6, 0.108], [0.8, 0.094], [1, 0.03]],
+      back: [[0, 0.055], [0.3, 0.085], [0.6, 0.104], [0.85, 0.085], [1, 0.03]],
+      side: [[0, 0.056], [0.3, 0.084], [0.6, 0.096], [0.85, 0.083], [1, 0.03]],
       round: 0.75,
-      loops: 4,
+      loops: 6,
       verts: 10,
     },
     thigh: { front: [[0, 0.11], [0.3, 0.115], [1, 0.075]], back: [[0, 0.12], [0.2, 0.12], [1, 0.075]], out: [[0, 0.12], [0.4, 0.105], [1, 0.075]], in: [[0, 0.095], [1, 0.07]], round: 0.7, loops: 2, verts: 8 },
