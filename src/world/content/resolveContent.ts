@@ -35,6 +35,7 @@ import { checkPlans, checkRoller, describeCheckPlan, MIDDLE_ROLLER, randomRoller
 import { deriveSeed, mulberry32 } from "../rng";
 import { AREA_ROLL_SALT } from "../cells/config";
 import type { WorldContent } from "./worldContent";
+import { ALL_DIMENSIONS, checkDimensions, dimensionBiomes, dimensionShape, IMPLICIT_DIMENSION, readDimension, type DimensionDef } from "./dimensions";
 import type { GroupMember, Mount, PropDef, PropLight, PropGroupDef, PropPaint, PropSettings, Spill } from "../props/propTypes";
 import { PROP_GENERATORS } from "../props/generators/index";
 import { isLineProp } from "../props/propGenerator";
@@ -112,7 +113,7 @@ export interface PackSource {
 
 /** The folders a pack's content lives in, one kind of definition each. A definition's id is its
  *  file name, and a pack with a higher priority replaces a lower one's definition of the same id. */
-const CONTENT_FOLDERS = ["biomes", "materials", "layers", "grass", "trees", "bushes", "rocks", "voices", "borderHills", "settlements", "weathers", "features", "buildings", "buildingParts", "buildingMaterials", "rooms", "props", "propGroups"] as const;
+const CONTENT_FOLDERS = ["dimensions", "biomes", "materials", "layers", "grass", "trees", "bushes", "rocks", "voices", "borderHills", "settlements", "weathers", "features", "buildings", "buildingParts", "buildingMaterials", "rooms", "props", "propGroups"] as const;
 type ContentFolder = (typeof CONTENT_FOLDERS)[number];
 
 /** How many grass kinds the packs may define between them: each is a layer of the blade atlas and
@@ -149,8 +150,11 @@ function parseFile(file: string, text: string, issues: ContentIssue[]): unknown 
  * Turns the packs into one WorldContent: parses every file, lets higher-priority packs replace
  * definitions by id, applies patches, expands generators, and checks every field and every
  * reference between definitions. Throws a ContentError listing every problem found.
+ *
+ * The content is one dimension's (see DIMENSIONS.md): `dimension` by id, the start dimension if
+ * null, or ALL_DIMENSIONS for every biome the config keeps.
  */
-export function resolveContent(packs: PackSource[], config: WorldConfig = DEFAULT_CONFIG): WorldContent {
+export function resolveContent(packs: PackSource[], config: WorldConfig = DEFAULT_CONFIG, dimension: string | null = null): WorldContent {
   const issues: ContentIssue[] = [];
 
   // --- pack order ---
@@ -235,8 +239,44 @@ export function resolveContent(packs: PackSource[], config: WorldConfig = DEFAUL
   }
   const defaults = readDefaults(defaultsRaw, new Reader(issues, defaultsLayers.at(-1)?.file ?? "defaults.json5"));
 
-  // --- the config's whitelist: its roots, and whatever they use (see CONFIG.md) ---
-  if (Object.keys(config.only).length > 0) pruneEntries(entries, config, [defaultsRaw, CODE_DEFAULT_IDS], issues);
+  // --- dimensions: the ones the config keeps, and which one this content is for ---
+  const dimensionEntries = entries.get("dimensions")!;
+  const anyDimensions = dimensionEntries.size > 0;
+  config.only.dimensions?.forEach((id, i) => {
+    if (!dimensionEntries.has(id)) issues.push({ file: `configs/${config.name}.json5`, path: `content.only.dimensions[${i}]`, message: `no dimension "${id}" (known: ${[...dimensionEntries.keys()].join(", ")})` });
+  });
+  const keptDimensions = anyDimensions
+    ? [...dimensionEntries.values()]
+        .filter((entry) => !config.only.dimensions || config.only.dimensions.includes(entry.id))
+        .sort((a, b) => compareIds(a.id, b.id))
+        .map((entry) => {
+          const reader = new Reader(issues, entry.file);
+          return { file: entry.file, def: readDimension(entry.id, reader.object(entry.data, ""), reader) };
+        })
+    : [{ file: "(all packs)", def: IMPLICIT_DIMENSION }];
+  if (keptDimensions.length === 0) issues.push({ file: `configs/${config.name}.json5`, path: "content.only.dimensions", message: "keeps no dimension" });
+  const allBiomeIds = [...entries.get("biomes")!.keys()].sort(compareIds);
+  const start = checkDimensions(keptDimensions, new Set(dimensionEntries.keys()), new Set(allBiomeIds), config.world, issues);
+  const keptIds = new Set(keptDimensions.map(({ def }) => def.id));
+  const dimensions: DimensionDef[] = keptDimensions.map(({ def }) => ({ ...def, start: def.id === start.id, links: def.links.filter((link) => keptIds.has(link.to)) }));
+  let current = dimensions.find((def) => def.id === start.id) ?? IMPLICIT_DIMENSION;
+  if (dimension !== null && dimension !== ALL_DIMENSIONS) {
+    const found = dimensions.find((def) => def.id === dimension);
+    if (found) current = found;
+    else issues.push({ file: `configs/${config.name}.json5`, path: "", message: `no dimension "${dimension}" in this config (known: ${dimensions.map((def) => def.id).join(", ")})` });
+  }
+
+  // --- the config's whitelist and the dimension's biomes: the roots, and whatever they use (see
+  // CONFIG.md). Nothing is pruned when every definition stays a root - pruning would also drop what
+  // nothing uses, and the full game's world is generated from all of it.
+  const available = config.only.biomes ? allBiomeIds.filter((id) => config.only.biomes!.includes(id)) : allBiomeIds;
+  const only = { ...config.only };
+  delete only.dimensions;
+  if (dimension !== ALL_DIMENSIONS) {
+    const chosen = dimensionBiomes(current, available);
+    if (chosen.length !== allBiomeIds.length) only.biomes = chosen;
+  }
+  if (Object.keys(only).length > 0) pruneEntries(entries, { ...config, only }, [defaultsRaw, CODE_DEFAULT_IDS], issues);
 
   // --- read every definition, in id order ---
   function readAll<T>(folder: ContentFolder, read: (entry: Entry, obj: RawObject, reader: Reader) => T): T[] {
@@ -507,7 +547,9 @@ export function resolveContent(packs: PackSource[], config: WorldConfig = DEFAUL
 
   return {
     config: config.name,
-    world: config.world,
+    world: dimensionShape(current, config.world),
+    dimension: current,
+    dimensions,
     biomes,
     biomeSources: Object.fromEntries(biomeReads.map(({ file, source, biome }) => [biome.id, { file, data: source, rolls: hasRolls(source) }])),
     biomeDefaults: defaults,
@@ -555,6 +597,8 @@ function pruneEntries(entries: Map<ContentFolder, Map<string, Entry>>, config: W
   const file = `configs/${config.name}.json5`;
   const roots = new Set<ContentFolder>([...ROOT_KINDS, ...ALWAYS_KEPT]);
   for (const kind of ROOT_KINDS) {
+    // Dimensions are picked before this (resolveContent), and nothing refers to them.
+    if (kind === "dimensions") continue;
     const wanted = config.only[kind];
     if (!wanted) continue;
     const defined = entries.get(kind)!;

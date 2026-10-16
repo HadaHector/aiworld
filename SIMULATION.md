@@ -110,6 +110,9 @@ the browser. Everything under `src/sim` is plain TypeScript that runs in either.
 
 ## The message boundary
 
+As built in step 1. Step 2 (DIMENSIONS.md) added `travel`, `arrived` and `transfer`, a `dimension`
+in `hello`, and moved the seed from `welcome` to `transfer`; `src/sim/protocol.ts` is current.
+
 Client to server:
 
 ```ts

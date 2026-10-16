@@ -33,7 +33,7 @@ export interface SettlementSite {
 
 // Candidates are drawn inside each land cell rather than over a world-wide grid, so the search
 // effort follows the land instead of the ocean, and every cell gets the same number of chances
-// however big the continent around it is.
+// however big the land around it is.
 const CANDIDATES_PER_CELL = 12;
 const CANDIDATE_RADIUS = CELL_SPACING * 0.42;
 

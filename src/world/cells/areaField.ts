@@ -4,10 +4,10 @@ import { computeCellBounds, generateCellDiagram, type CellPoint } from "./cellGr
 import { createRiverField } from "./riverField";
 import { createCentrelineShaper } from "./riverCentreline";
 import { createNameGenerator, type NameGenerator } from "../naming/nameGenerator";
-import { planWorld, type ContinentPlan } from "./continentLayout";
+import { planWorld } from "./worldLayout";
 import { pickStartCell, growLandmass } from "./regionGrowth";
 import { partitionIntoAreas, assignAreaBiomes } from "./areaAssignment";
-import { generateRiversForContinent } from "./riverGeneration";
+import { generateRivers } from "./riverGeneration";
 import { createBaseNoise2D } from "../terrain/noise";
 import { deriveSeed, mulberry32 } from "../rng";
 import { smoothstep } from "../mathUtils";
@@ -89,7 +89,6 @@ export type AreaSampler = (worldX: number, worldZ: number) => AreaSample;
 export interface AreaWorld {
   sampleArea: AreaSampler;
   worldExtent: number;
-  continents: ContinentPlan[];
   /** Where each area is, keyed by the id AreaSample reports. Built from the cell sites that make
    *  the area up, so it is the area's own footprint rather than a fixed zoom guess. */
   areaBounds: Map<number, AreaBounds>;
@@ -207,12 +206,12 @@ function resolveBoundaryHillStyle(
   return styles[pairSeed % styles.length];
 }
 
-/** Composes the cell diagram, multi-continent land growth, and area partitioning into one queryable per-position sample. */
+/** Composes the cell diagram, land growth, and area partitioning into one queryable per-position sample. */
 export function createAreaSampler(seed: number, content: WorldContent): AreaWorld {
   const layout = planWorld(seed, content.world);
   const bounds = computeCellBounds(WORLD_CENTER_X, WORLD_CENTER_Z, layout.worldExtent, CELL_BOUNDS_MARGIN);
   const { points, adjacency, seamBetween } = timed("Laying out the cells", () => generateCellDiagram(seed, bounds, CELL_SPACING));
-  const continentsStarted = performance.now();
+  const landStarted = performance.now();
 
   const landCells = new Set<number>();
   const cellToAreaId = new Map<number, number>();
@@ -221,48 +220,33 @@ export function createAreaSampler(seed: number, content: WorldContent): AreaWorl
   const usedRiverCells = new Set<number>();
   const riverPolylines: CellPoint[][] = [];
   const shapeCentreline = createCentrelineShaper(seed);
-  let areaIdOffset = 0;
 
-  for (const continent of layout.continents) {
-    const startIndex = pickStartCell(continent.seed, points, continent.centerX, continent.centerZ, CELL_SPACING, landCells);
-    const continentCells = growLandmass(continent.seed, adjacency, startIndex, continent.cellCount, landCells);
-    continentCells.forEach((index) => landCells.add(index));
+  {
+    const { landSeed } = layout;
+    const startIndex = pickStartCell(landSeed, points, 0, 0, CELL_SPACING);
+    growLandmass(landSeed, adjacency, startIndex, layout.cellCount).forEach((index) => landCells.add(index));
 
-    const localAreaId = partitionIntoAreas(continent.seed, adjacency, continentCells, continent.areaCount);
-    localAreaId.forEach((id, cellIndex) => cellToAreaId.set(cellIndex, id + areaIdOffset));
+    const localAreaId = partitionIntoAreas(landSeed, adjacency, landCells, layout.areaCount);
+    localAreaId.forEach((id, cellIndex) => cellToAreaId.set(cellIndex, id));
 
     // Each area its own roll of its biome - its own ranges, options and noise seeds (see
     // content/biomeRolls.ts) - so everything that asks an area for its biome gets the area's.
-    const continentBiomes = assignAreaBiomes(continent.seed, continent.areaCount, content.biomes).map((biome, i) =>
-      rollAreaBiome(seed, areaIdOffset + i, biome, content),
-    );
-    areaBiomes.push(...continentBiomes);
-    areaIdOffset += continent.areaCount;
+    areaBiomes.push(...assignAreaBiomes(landSeed, layout.areaCount, content.biomes).map((biome, i) => rollAreaBiome(seed, i, biome, content)));
 
-    // Rolled per-cell, one shared stream per continent (matches growLandmass/partitionIntoAreas/
-    // assignAreaBiomes's own convention of seeding fresh off continent.seed, not one stream spanning
-    // the whole world) - never lets the continent's own land-growth start cell become a lake, since
-    // that's where continent 0 sits (the player spawns at heightAt(0,0)) and could otherwise spawn
-    // the player inside a lake. Also excludes any cell touching open ocean - a lake sitting right on
-    // the coastline would just read as a notch in the coast, not a distinct inland body of water.
-    const lakeRng = mulberry32(deriveSeed(continent.seed, LAKE_ROLL_SALT));
-    for (const cellIndex of continentCells) {
+    // Rolled per-cell - never lets the land-growth start cell become a lake, since that's at 0, 0
+    // (the player spawns at heightAt(0,0)) and could otherwise spawn the player inside a lake. Also
+    // excludes any cell touching open ocean - a lake sitting right on the coastline would just read
+    // as a notch in the coast, not a distinct inland body of water.
+    const lakeRng = mulberry32(deriveSeed(landSeed, LAKE_ROLL_SALT));
+    for (const cellIndex of landCells) {
       const roll = lakeRng();
       if (cellIndex === startIndex) continue;
       if (adjacency[cellIndex].some((n) => !landCells.has(n))) continue;
-      const biome = continentBiomes[localAreaId.get(cellIndex)!];
+      const biome = areaBiomes[localAreaId.get(cellIndex)!];
       if (roll < (biome.lakeChance ?? 0)) lakeCells.add(cellIndex);
     }
 
-    const riverPaths = generateRiversForContinent({
-      continentSeed: continent.seed,
-      adjacency,
-      continentCells,
-      landCells,
-      lakeCells,
-      usedRiverCells,
-      shape: content.world,
-    });
+    const riverPaths = generateRivers({ landSeed, adjacency, landCells, lakeCells, usedRiverCells, shape: content.world });
     for (const { cells: path, mouthLink } of riverPaths) {
       // The centreline runs through the midpoint of each consecutive pair's shared Voronoi border -
       // the actual point on the ground between the two cells, not the midpoint of their two sites,
@@ -314,7 +298,7 @@ export function createAreaSampler(seed: number, content: WorldContent): AreaWorl
     }
   }
 
-  console.info(`[shaping] Growing continents, zones, lakes and rivers: ${((performance.now() - continentsStarted) / 1000).toFixed(2)} s`);
+  console.info(`[shaping] Growing the land, zones, lakes and rivers: ${((performance.now() - landStarted) / 1000).toFixed(2)} s`);
   const riverField = timed("Indexing rivers", () => createRiverField(riverPolylines, RIVER_QUERY_RADIUS));
 
   // landField is built from a filtered point array, so its query indices need remapping back to
@@ -492,7 +476,6 @@ export function createAreaSampler(seed: number, content: WorldContent): AreaWorl
   return {
     sampleArea,
     worldExtent: layout.worldExtent,
-    continents: layout.continents,
     areaBounds,
     areaNames,
     landCellSites,

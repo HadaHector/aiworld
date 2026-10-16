@@ -1,23 +1,19 @@
 // 1 world unit = 1 meter (the character capsule is 1.8 units tall). CELL_SPACING is chosen so
-// that CELLS_PER_AREA * CELL_SPACING^2 ~= 10 km^2 per zone, which combined with a 20-30 zone
-// range per continent lands continents in the "hundreds of km^2" target range.
+// that CELLS_PER_AREA * CELL_SPACING^2 ~= 10 km^2 per zone, which combined with the full game's
+// 20-30 zones lands a world in the "hundreds of km^2" target range.
 export const CELL_SPACING = 1000; // world units, nominal pre-relaxation point spacing
 export const LLOYD_RELAX_ITERATIONS = 1;
 export const CELL_BOUNDS_MARGIN = CELL_SPACING * 2;
 
-// Content-first sizing: how many continents there are and how many areas each has is the world
-// config's (content/worldConfig.ts, CONFIG.md); world size is derived from that (see
-// cells/continentLayout.ts), not the other way around.
+// Content-first sizing: how many areas the world has is the world config's (content/worldConfig.ts,
+// CONFIG.md); world size is derived from that (see cells/worldLayout.ts), not the other way around.
 export const CELLS_PER_AREA = 10;
 
 // Ratio of actual growth bounding radius to a naive equal-area-circle radius, empirically
 // measured across the weighted-frontier BFS growth algorithm: p99 ~= 1.7-2.3, worst observed
 // single sample 2.6. 3.0 leaves >15% headroom above the worst case so growth never hits the
-// generated region's edge (the original cause of the "world border cuts the continent" bug).
+// generated region's edge (the original cause of the "world border cuts the land" bug).
 export const GROWTH_RADIUS_SAFETY_FACTOR = 1.5;
-
-// Minimum guaranteed open ocean between any two continents' safety-radius circles.
-export const CONTINENT_OCEAN_GAP = CELL_SPACING * 6;
 
 // Border BLEND WIDTH is deliberately NOT scaled with CELL_SPACING - it's a "how far do you have
 // to walk before a transition completes" distance, tied to the player's local visible/traversable
@@ -73,10 +69,9 @@ export const AREA_SEED_SALT = 604;
 export const AREA_GROWTH_SALT = 605;
 export const AREA_BIOME_SALT = 606;
 export const EDGE_NOISE_SALT = 607;
-export const CONTINENT_COUNT_SALT = 608;
-export const AREAS_PER_CONTINENT_SALT = 609;
-export const CONTINENT_LAYOUT_SALT = 610;
-export const CONTINENT_SEED_BASE = 700; // continentSeed[i] = deriveSeed(seed, CONTINENT_SEED_BASE + i)
+// 608 and 610 were the old multi-continent layout's (continent count, ring jitter).
+export const AREA_COUNT_SALT = 609;
+export const LAND_SEED_SALT = 700; // the landmass's seed - the old layout's continent 0
 
 export const LAKE_ROLL_SALT = 613;
 export const LAKE_EDGE_NOISE_SALT = 614;

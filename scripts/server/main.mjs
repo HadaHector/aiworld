@@ -1,10 +1,14 @@
 // The headless server: the simulation on its own in Node, with no client and no Babylon (see
-// SIMULATION.md).
-//   npm run server                      run until stopped, a line a second
-//   npm run server -- --bot             with a player that walks in a circle
-//   npm run server -- --bot --ticks 300 stop after 300 steps (for scripted checks)
-//   npm run server -- --seed 1337       another world
-//   npm run server -- --config small    a world config from public/configs (see CONFIG.md)
+// SIMULATION.md and DIMENSIONS.md).
+//   npm run server                       run until stopped, a line a second
+//   npm run server -- --bot              with a player that walks in a circle
+//   npm run server -- --bot --ticks 300  stop after 300 steps (for scripted checks)
+//   npm run server -- --seed 1337        another world
+//   npm run server -- --config small     a world config from public/configs (see CONFIG.md)
+//   npm run server -- --bot --dimension isles   the bot starts in another dimension
+//   npm run server -- --bot --travel 300        the bot travels to the next dimension every 300 ticks
+// A dimension is generated when the first player heads for it and dropped when the last one leaves,
+// so with no bot the server holds no world at all.
 import { loadContentFromDisk } from "../diskContent.mjs";
 import { createWorldData, WORLD_SEED } from "../../src/world/worldData.ts";
 import { createServer } from "../../src/sim/server.ts";
@@ -23,36 +27,59 @@ const option = (name, fallback) => Number(text(name, fallback));
 const seed = option("seed", WORLD_SEED);
 const maxTicks = option("ticks", Infinity);
 const configName = text("config", "default");
+const travelEvery = option("travel", 0);
 
 const ms = (since) => `${(performance.now() - since).toFixed(0)} ms`;
 
-// The packs from disk, under the config, resolved exactly as the game resolves the ones it fetches.
+// The packs from disk, under the config, resolved exactly as the game resolves the ones it fetches -
+// once here for the list of dimensions, then per dimension as each is loaded.
 let started = performance.now();
-const { content, packs } = loadContentFromDisk(configName);
-console.log(`config ${configName}: packs ${packs.join(", ")}; ${content.biomes.length} biomes, ${content.materials.length} materials, ${content.treeKinds.length + content.bushKinds.length + content.rockKinds.length} plant kinds, ${content.buildings.length} buildings (${ms(started)})`);
+const { content: startContent, packs } = loadContentFromDisk(configName);
+const dimensions = startContent.dimensions;
+console.log(`config ${configName}: packs ${packs.join(", ")}; dimensions ${dimensions.map((d) => `${d.id}${d.start ? " (start)" : ""}`).join(", ")} (${ms(started)})`);
 
-started = performance.now();
-const world = createWorldData(seed, content);
-console.log(`world ${seed}: ${world.settlements.length} settlements, ${world.buildingGroups.length} building groups (${ms(started)})`);
-
-started = performance.now();
-const server = createServer(world, { packs });
-console.log(`server ready (${ms(started)})`);
+const server = createServer({
+  seed,
+  config: configName,
+  packs,
+  dimensions,
+  loadDimension(definition, dimensionSeed) {
+    let at = performance.now();
+    const content = definition.start ? startContent : loadContentFromDisk(configName, definition.id).content;
+    const resolved = ms(at);
+    at = performance.now();
+    const world = createWorldData(dimensionSeed, content);
+    console.log(`dimension ${definition.id} (seed ${dimensionSeed}): ${content.biomes.length} biomes, ${world.settlements.length} settlements, ${world.buildingGroups.length} building groups (content ${resolved}, world ${ms(at)})`);
+    return { world };
+  },
+  onLoadError: (definition, error) => console.error(`dimension ${definition.id} failed to load:`, error),
+});
 
 // A player that walks a slow circle, jumping now and then - so a headless run exercises the body
-// and the collision streaming the way a real client would, over the same channel.
+// and the collision streaming the way a real client would, over the same channel. It answers every
+// Transfer with Arrived at once, having no world of its own to build.
 let bot = null;
 if (flag("bot")) {
   const channel = createLocalChannel();
   server.connect(channel.server);
-  channel.client.send({ type: "hello", protocol: PROTOCOL_VERSION, name: "bot" });
-  bot = { end: channel.client, id: 0, seq: 0, last: null };
+  channel.client.send({ type: "hello", protocol: PROTOCOL_VERSION, name: "bot", dimension: text("dimension", "") });
+  bot = { end: channel.client, id: 0, seq: 0, last: null, dimension: "" };
 }
 
 function driveBot() {
   for (const message of bot.end.receive()) {
     if (message.type === "welcome") bot.id = message.playerId;
-    if (message.type === "snapshot") bot.last = message.players.find((p) => p.id === bot.id) ?? null;
+    if (message.type === "transfer") {
+      console.log(`bot: to ${message.dimension} at ${message.x}, ${message.z}`);
+      bot.dimension = message.dimension;
+      bot.last = null;
+      bot.end.send({ type: "arrived" });
+    }
+    if (message.type === "snapshot") bot.last = message.players.find((p) => p.id === bot.id) ?? bot.last;
+  }
+  if (travelEvery > 0 && server.tick > 0 && server.tick % travelEvery === 0) {
+    const next = dimensions[(dimensions.findIndex((d) => d.id === bot.dimension) + 1) % dimensions.length];
+    bot.end.send({ type: "travel", dimension: next.id });
   }
   const t = server.tick / TICK_HZ;
   bot.seq = (bot.seq + 1) & 0xffff;
@@ -75,9 +102,13 @@ const timer = setInterval(() => {
   stepMs += performance.now() - before;
   steps++;
   if (now - lastReport >= 1000 || server.tick >= maxTicks) {
-    const { collision, streamer, players } = server.debug;
-    const at = bot?.last ? ` · bot at ${bot.last.x.toFixed(1)}, ${bot.last.y.toFixed(1)}, ${bot.last.z.toFixed(1)}${bot.last.grounded ? "" : " (in the air)"}` : "";
-    console.log(`tick ${server.tick} · ${players.size} players · step ${(stepMs / steps).toFixed(2)} ms · ${streamer.chunkCount} chunks, ${collision.shapeCount} shapes${at}`);
+    const { dimensions: loaded, players } = server.debug;
+    const worlds = [...loaded.values()].map((d) => {
+      const inIt = [...players.values()].filter((p) => p.dimension === d.id && p.body).length;
+      return `${d.id}: ${inIt} players, ${d.streamer.chunkCount} chunks, ${d.collision.shapeCount} shapes`;
+    });
+    const at = bot?.last ? ` · bot in ${bot.dimension} at ${bot.last.x.toFixed(1)}, ${bot.last.y.toFixed(1)}, ${bot.last.z.toFixed(1)}${bot.last.grounded ? "" : " (in the air)"}` : "";
+    console.log(`tick ${server.tick} · ${players.size} players · step ${(stepMs / steps).toFixed(2)} ms · ${worlds.join(" · ") || "no dimension loaded"}${at}`);
     stepMs = 0;
     steps = 0;
     lastReport = now;

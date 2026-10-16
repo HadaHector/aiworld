@@ -17,6 +17,23 @@ export async function loadContent(config?: WorldConfig, baseUrl: string = import
   return resolveContent(await fetchPackSources(baseUrl, config), config);
 }
 
+/** The packs a page runs, under its config: fetched once, resolved per dimension as each is entered
+ *  (see DIMENSIONS.md). */
+export interface PackSet {
+  config: WorldConfig;
+  /** Which packs, by id. */
+  packs: string[];
+  /** One dimension's content - the start dimension's if null. Throws a ContentError. */
+  resolve: (dimension: string | null) => WorldContent;
+}
+
+/** Fetches the page's config (from its URL) and every pack it uses. Throws a ContentError. */
+export async function loadPackSet(baseUrl: string = import.meta.env.BASE_URL): Promise<PackSet> {
+  const config = await fetchWorldConfig(configNameFromUrl(), baseUrl);
+  const sources = await fetchPackSources(baseUrl, config);
+  return { config, packs: sources.map((pack) => pack.id), resolve: (dimension) => resolveContent(sources, config, dimension) };
+}
+
 /** The world config the page's URL asks for - `?config=small` - or "default". */
 export function configNameFromUrl(): string {
   return new URLSearchParams(location.search).get("config") || DEFAULT_CONFIG.name;

@@ -212,9 +212,9 @@ function isLeaf(place: Place): boolean {
  *
  * No place is given more than its most. Two dead ends are never joined to each other, which would
  * leave them a pair on their own. Links longer than ROAD_MAX_LINK_LENGTH (or either end's own
- * maxLength) are dropped before any of that; continents are separated by six times the cell
- * spacing, so this is also what stops the triangulation from proposing a route across open ocean -
- * which would otherwise spend its entire expansion budget failing.
+ * maxLength) are dropped before any of that, which is also what stops the triangulation from
+ * proposing a route across a wide bay - which would otherwise spend its entire expansion budget
+ * failing.
  */
 function planLinks(places: Place[]): { hubs: Candidate[]; leaves: Candidate[]; all: Candidate[] } {
   const seen = new Set<number>();

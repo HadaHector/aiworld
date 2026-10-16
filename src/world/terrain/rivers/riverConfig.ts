@@ -24,7 +24,7 @@ export const RIVER_BED_HEIGHT_SOURCE = -3;
 //
 // The visible waterline sits further out than the flat bed, where the bank climbs back up through
 // 0: with a mouth bed at -8 and RIVER_BANK_SLOPE, that is another 32 units, so the water is ~124
-// units across at the mouth. That is what has to stay wide enough to register at Continent-view
+// units across at the mouth. That is what has to stay wide enough to register at World-view
 // debug-map resolution (~60 world units/pixel, measured).
 export const RIVER_BED_HALF_WIDTH_MOUTH = 30;
 export const RIVER_BED_HALF_WIDTH_SOURCE = 10;

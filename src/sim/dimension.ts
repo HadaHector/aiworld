@@ -1,0 +1,52 @@
+import { createWorldCollision, type WorldCollision } from "../world/worldCollision";
+import { createTreeScatter } from "../world/foliage/treeScatter";
+import { generateTreeHulls, treeColliders, type TreeHulls } from "../world/foliage/treeColliders";
+import { createPlacedBuildings, modelGroups, type ModelledGroup, type PlacedBuildings } from "../world/buildings/buildingCollision";
+import type { WorldData } from "../world/worldData";
+import { COLLISION_CHUNK_SIZE, createCollisionStreamer, type CollisionStreamer } from "./collisionStreamer";
+import { createPlayerBody, type PlayerBody } from "./playerBody";
+
+/**
+ * What a host hands the server for one dimension: its world as generated from its seed and its
+ * content, and whatever it has already made from that in the same process. Each extra is pure,
+ * read-only data - the server would make exactly the same itself.
+ */
+export interface DimensionWorld {
+  world: WorldData;
+  /** Every tree kind's hulls (see foliage/treeColliders.ts). */
+  treeHulls?: TreeHulls;
+  /** Every building group with its near models made (see buildings/buildingCollision.ts). */
+  buildingModels?: readonly ModelledGroup[];
+}
+
+/** One loaded dimension on the server: its world's collision, kept around the bodies in it. */
+export interface Dimension {
+  readonly id: string;
+  readonly world: WorldData;
+  readonly collision: WorldCollision;
+  readonly streamer: CollisionStreamer;
+  readonly buildings: PlacedBuildings;
+  /** A body standing on the ground at a point, in this dimension's collision. */
+  createBody: (x: number, z: number) => PlayerBody;
+}
+
+/**
+ * One world on the server (see DIMENSIONS.md): its ground, trees and buildings in a collision world
+ * of its own, streamed in around whichever bodies walk it. Nothing in it knows any other dimension.
+ */
+export function createDimension(id: string, { world, treeHulls, buildingModels }: DimensionWorld): Dimension {
+  const { seed, content } = world;
+  const hulls = treeHulls ?? generateTreeHulls(content.treeKinds, seed);
+  const buildings = createPlacedBuildings(buildingModels ?? modelGroups(world.buildingGroups));
+  const collision = createWorldCollision({ colliders: (trees) => treeColliders(hulls, trees) }, COLLISION_CHUNK_SIZE, buildings.cellarCuts);
+  const streamer = createCollisionStreamer({ sampleTerrain: world.sampleTerrain, scatterTrees: createTreeScatter(seed, content) }, collision, buildings);
+  const groundAt = (x: number, z: number, feet: number): number => buildings.floorAt(x, z, feet) ?? world.heightAt(x, z);
+  return {
+    id,
+    world,
+    collision,
+    streamer,
+    buildings,
+    createBody: (x, z) => createPlayerBody(collision, world.heightAt, groundAt, { x, z }),
+  };
+}

@@ -2,8 +2,8 @@
 // two biomes, one with villages and woods, one river. Loads in seconds rather than a minute.
 {
   world: {
-    areasPerContinent: [4, 4],
-    riversPerContinent: [1, 1],
+    areas: [4, 4],
+    rivers: [1, 1],
     riverLength: [5, 6],
   },
   content: {

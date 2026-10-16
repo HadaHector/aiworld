@@ -10,6 +10,7 @@ import type { FeatureKindDef } from "../features/featureTypes";
 import type { BuildingDef, BuildingMaterialDef, BuildingPartDef, RoomTypeDef } from "../buildings/buildingTypes";
 import type { PropDef, PropGroupDef } from "../props/propTypes";
 import type { WorldShape } from "./worldConfig";
+import type { DimensionDef } from "./dimensions";
 
 /**
  * Everything a world is generated from that is content rather than code: its biomes, ground
@@ -24,8 +25,12 @@ import type { WorldShape } from "./worldConfig";
 export interface WorldContent {
   /** The world config this was loaded under (see CONFIG.md), by name. */
   config: string;
-  /** How big the world is - the config's say. */
+  /** How big the world is: the dimension's, with the config's say over it. */
   world: WorldShape;
+  /** The dimension this content is for (see DIMENSIONS.md): its biomes are the ones here. */
+  dimension: DimensionDef;
+  /** Every dimension the config keeps - where links lead, and what can be travelled to. */
+  dimensions: DimensionDef[];
   /** Every biome as its middle roll (see content/biomeRolls.ts) - what picks a biome for an area,
    *  and what a biome is when shown alone. The world's areas each have their own roll of theirs
    *  (content/resolveContent.ts's rollAreaBiome). */

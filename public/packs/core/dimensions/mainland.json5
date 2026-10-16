@@ -1,0 +1,10 @@
+// The mainland: the world the game starts in - every biome, the full game's size (see
+// DIMENSIONS.md). As the start dimension it is generated from the world seed itself.
+{
+  name: "The Mainland",
+  start: true,
+  links: [
+    // Data only for now: nothing stands at `at` yet; the debug map marks it.
+    { id: "ferry", to: "isles", at: [120, 40], arrive: [0, 0] },
+  ],
+}

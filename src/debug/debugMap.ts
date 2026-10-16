@@ -1,11 +1,11 @@
 import { Color3 } from "@babylonjs/core";
 import type { TerrainSample, TerrainSampler } from "../world/terrain/terrainSampler";
-import type { ContinentPlan } from "../world/cells/continentLayout";
 import { SEA_LEVEL, type AreaBounds } from "../world/cells/areaField";
 import { GROWTH_RADIUS_SAFETY_FACTOR } from "../world/cells/config";
 import type { MaterialLibrary } from "../world/materials/materialLibrary";
 import type { SettlementSite } from "../world/settlements/settlementSites";
 import type { FeatureSite } from "../world/features/featureSites";
+import type { DimensionLink } from "../world/content/dimensions";
 import type { RoadClassId } from "../world/roads/roadConfig";
 import type { RoadNetwork } from "../world/roads/roadNetwork";
 
@@ -16,12 +16,12 @@ const LAKE_COLOR = new Color3(0.45, 0.68, 0.88); // lighter blue: inland water b
 const MARKER_COLOR = "rgb(255, 60, 60)";
 const MARKER_RADIUS_PX = 4;
 const HEADING_LENGTH_PX = 14;
-const CONTINENT_VIEW_MARGIN = 1.5; // margin beyond a continent's true (non-safety-inflated) radius
+const WORLD_VIEW_MARGIN = 1.5; // margin beyond the land's true (non-safety-inflated) radius
 const ZONE_VIEW_MARGIN = 1.25; // margin beyond the zone's own footprint, so its borders stay visible
 const ZONE_MIN_HALF_SIZE = 600; // a one-cell zone would otherwise zoom in past anything useful
 
 // Zone view dims everything outside the zone the player is standing in. Without it the view is
-// just "Continent, but closer" - the whole point is to see where THIS zone begins and ends, and a
+// just "World, but closer" - the whole point is to see where THIS zone begins and ends, and a
 // zone boundary is a blend rather than a line, so there is no outline to draw. Dimming the
 // surroundings instead shows the real, jittered shape the blend produces.
 const ZONE_OUTSIDE_DIM = 0.4;
@@ -32,8 +32,10 @@ const ZONE_OUTSIDE_DIM = 0.4;
 // nothing to position in CSS and render at the screen's own resolution.
 const SETTLEMENT_DOT_PX = 7;
 const FEATURE_SQUARE_PX = 6;
+// Links to other dimensions (see DIMENSIONS.md): a ringed diamond, clickable to travel by it.
+const LINK_MARKER_PX = 12;
 // Names are only legible where the map is zoomed in far enough for the dots to be spread out; in
-// World view the whole continent is a few dozen pixels across and every label would overlap.
+// World view of a full-size world every label would overlap.
 const SETTLEMENT_LABEL_MIN_HALF_SIZE = 12000;
 
 // Roads are drawn as SVG in the same layer, under the settlement markers. Vector rather than
@@ -50,19 +52,15 @@ const ROAD_STYLES: [RoadClassId, string, number, number][] = [
 ];
 
 // Emboss/relief shading: each land pixel is compared against its upper-left neighbor (one pixel
-// away, so the offset self-scales with zoom - a big offset in World view, a fine one in Continent
+// away, so the offset self-scales with zoom - a big offset in World view, a fine one in Zone
 // view), and darkened/lightened by the height difference, like a classic emboss filter or a
-// cartographic shaded-relief layer laid over land-cover color. Only meaningful at Continent-view
-// resolution (World view's per-pixel step is thousands of world units, so neighboring pixels are
-// essentially uncorrelated - shading there would just be noise/static, not relief), so it's only
-// enabled for that view. Water stays flat so land relief reads clearly against it.
+// cartographic shaded-relief layer laid over land-cover color. Water stays flat so land relief
+// reads clearly against it.
 const EMBOSS_STRENGTH = 0.05; // world-height-units -> shade magnitude
 const EMBOSS_INTENSITY = 0.6; // shade -> brightness multiplier range (0.4x .. 1.6x at full shade)
 
 // Material detail (rock/snow/valley variety, same as materialLibrary.resolveMaterialIndex uses in
-// 3D) is only computed at Continent-view resolution, for the same reason emboss is: World view's
-// per-pixel step is thousands of world units, far too coarse for a slope/curvature estimate to
-// mean anything. World view instead shows each biome's own flat base color (getBiomeBaseColor).
+// 3D), computed from the same one-pixel neighbours as emboss.
 const SLOPE_SAMPLE_STEP_PX = 1; // matches emboss's own "one pixel, self-scales with zoom" approach
 const CURVATURE_RADIUS_WORLD = 10; // matches materialContext.ts's RELIEF_CURVATURE_RADIUS_STEPS*step
 
@@ -72,23 +70,18 @@ interface Viewport {
   halfSize: number;
 }
 
-type ViewMode = "world" | "continent" | "zone";
+type ViewMode = "world" | "zone";
 
 export interface DebugMap {
   toggle: () => void;
   updateMarker: (worldX: number, worldZ: number, headingRadians: number) => void;
-}
-
-function distanceSq(ax: number, az: number, bx: number, bz: number): number {
-  const dx = ax - bx;
-  const dz = az - bz;
-  return dx * dx + dz * dz;
+  /** Takes it off the page, for the next dimension's (see DIMENSIONS.md). */
+  dispose: () => void;
 }
 
 /**
- * A large, full-screen-ish top-down debug map. Three views: "World" (every continent at once),
- * "Continent" (zoomed to whichever continent is nearest the player, revealing individual area
- * shapes) and "Zone" (zoomed to the area the player is standing in, with everything outside it
+ * A large, full-screen-ish top-down debug map. Two views: "World" (the whole land, revealing
+ * individual area shapes) and "Zone" (zoomed to the area the player is standing in, with everything outside it
  * dimmed). Each view's base image is rendered once (lazily, on first need) and cached, since a
  * full sample pass is relatively expensive; a small live marker with a heading indicator is
  * cheaply redrawn on top every frame while visible. Click anywhere on the map to teleport there.
@@ -96,14 +89,16 @@ function distanceSq(ax: number, az: number, bx: number, bz: number): number {
 export function createDebugMap(
   sampleTerrain: TerrainSampler,
   worldExtent: number,
-  continents: ContinentPlan[],
   materialLibrary: MaterialLibrary,
   areaBounds: Map<number, AreaBounds>,
   areaNames: Map<number, string>,
   settlements: SettlementSite[],
   features: FeatureSite[],
   roads: RoadNetwork,
+  /** Where this dimension's links stand - drawn always, and clicking one travels by it. */
+  links: readonly DimensionLink[],
   onTeleport: (worldX: number, worldZ: number) => void,
+  onTravel: (dimension: string) => void,
 ): DebugMap {
   const overlay = document.createElement("div");
   overlay.style.cssText = `
@@ -136,7 +131,6 @@ export function createDebugMap(
   }
 
   const worldTabButton = createTabButton("World");
-  const continentTabButton = createTabButton("Continent");
   const zoneTabButton = createTabButton("Zone");
 
   // In its own row: this is an overlay on whichever view is showing, not a fourth view.
@@ -190,7 +184,7 @@ export function createDebugMap(
   const viewportCache = new Map<string, Viewport>();
 
   let visible = false;
-  let viewMode: ViewMode = "continent";
+  let viewMode: ViewMode = "world";
   // Which zone the Zone view is framed on. Held rather than recomputed per redraw so that walking
   // across a border does not re-frame and re-render the map underneath the player mid-look; it is
   // refreshed when the view is opened or switched to.
@@ -201,30 +195,14 @@ export function createDebugMap(
   let markerZ = 0;
   let heading = 0;
 
-  const worldViewport: Viewport = { centerX: 0, centerZ: 0, halfSize: worldExtent / 2 };
+  // The land's true radius is the world's half-extent without the growth's safety margin.
+  const worldViewport: Viewport = { centerX: 0, centerZ: 0, halfSize: (worldExtent / 2 / GROWTH_RADIUS_SAFETY_FACTOR) * WORLD_VIEW_MARGIN };
 
   /** One extra terrain sample, only when the Zone view is opened or switched to. */
   function areaIdAtMarker(): number {
     return sampleTerrain(markerX, markerZ).primaryAreaId;
   }
 
-  function nearestContinent(): ContinentPlan | null {
-    if (continents.length === 0) return null;
-    let best = continents[0];
-    let bestDistSq = distanceSq(markerX, markerZ, best.centerX, best.centerZ);
-    for (const c of continents) {
-      const d = distanceSq(markerX, markerZ, c.centerX, c.centerZ);
-      if (d < bestDistSq) {
-        bestDistSq = d;
-        best = c;
-      }
-    }
-    return best;
-  }
-
-  function continentViewKey(c: ContinentPlan): string {
-    return `continent:${c.centerX},${c.centerZ}`;
-  }
 
   function zoneViewport(areaId: number): Viewport | null {
     const bounds = areaBounds.get(areaId);
@@ -242,37 +220,18 @@ export function createDebugMap(
       const cached = viewportCache.get(key);
       if (cached) return cached;
       const viewport = zoneViewport(zoneAreaId);
-      // No zone here (standing at sea) - fall through to the continent framing rather than
-      // showing nothing.
-      if (!viewport) return continentViewport();
+      // No zone here (standing at sea) - fall through to the world framing rather than showing
+      // nothing.
+      if (!viewport) return worldViewport;
       viewportCache.set(key, viewport);
       return viewport;
     }
-    if (viewMode === "world") return worldViewport;
-    return continentViewport();
+    return worldViewport;
   }
 
-  function continentViewport(): Viewport {
-    const c = nearestContinent();
-    if (!c) return worldViewport;
-    const key = continentViewKey(c);
-    const cached = viewportCache.get(key);
-    if (cached) return cached;
-    const trueRadius = c.radius / GROWTH_RADIUS_SAFETY_FACTOR;
-    const viewport: Viewport = { centerX: c.centerX, centerZ: c.centerZ, halfSize: trueRadius * CONTINENT_VIEW_MARGIN };
-    viewportCache.set(key, viewport);
-    return viewport;
-  }
 
   function activeViewKey(): string {
-    if (viewMode === "zone") return areaBounds.has(zoneAreaId) ? `zone:${zoneAreaId}` : continentViewKey2();
-    if (viewMode === "world") return "world";
-    return continentViewKey2();
-  }
-
-  function continentViewKey2(): string {
-    const c = nearestContinent();
-    return c ? continentViewKey(c) : "world";
+    return viewMode === "zone" && areaBounds.has(zoneAreaId) ? `zone:${zoneAreaId}` : "world";
   }
 
   /** Clamped grid lookup - reuses the one sampleTerrain pass below for every neighbor query
@@ -384,9 +343,7 @@ export function createDebugMap(
     const key = activeViewKey();
     const cached = baseCanvasCache.get(key);
     if (cached) return cached;
-    // Detail is off only in World view, where a pixel spans thousands of world units - see the
-    // note on SLOPE_SAMPLE_STEP_PX. Zone view is closer still than Continent, so it always wants it.
-    const canvas = renderBaseMap(activeViewport(), viewMode !== "world", viewMode === "zone" ? zoneAreaId : -1);
+    const canvas = renderBaseMap(activeViewport(), true, viewMode === "zone" ? zoneAreaId : -1);
     baseCanvasCache.set(key, canvas);
     return canvas;
   }
@@ -412,7 +369,6 @@ export function createDebugMap(
       button.style.background = active ? "rgba(255,255,255,0.35)" : "rgba(255,255,255,0.1)";
     };
     highlight(worldTabButton, viewMode === "world");
-    highlight(continentTabButton, viewMode === "continent");
     highlight(zoneTabButton, viewMode === "zone");
     settlementToggle.style.background = showSettlements ? "rgba(255,255,255,0.35)" : "rgba(255,255,255,0.1)";
     roadToggle.style.background = showRoads ? "rgba(255,255,255,0.35)" : "rgba(255,255,255,0.1)";
@@ -492,6 +448,24 @@ export function createDebugMap(
     markerLayer.replaceChildren();
     const roadLayer = drawRoads();
     if (roadLayer) markerLayer.appendChild(roadLayer);
+    for (const link of links) {
+      const { x, y } = worldToPixel(link.at.x, link.at.z);
+      if (x < 0 || y < 0 || x > SAMPLE_RESOLUTION || y > SAMPLE_RESOLUTION) continue;
+      const marker = document.createElement("div");
+      marker.title = `${link.id}: to ${link.to} (click to travel)`;
+      marker.style.cssText = `
+        position: absolute; left: ${(x / SAMPLE_RESOLUTION) * 100}%; top: ${(y / SAMPLE_RESOLUTION) * 100}%;
+        width: ${LINK_MARKER_PX}px; height: ${LINK_MARKER_PX}px; margin: ${-LINK_MARKER_PX / 2}px 0 0 ${-LINK_MARKER_PX / 2}px;
+        transform: rotate(45deg); background: rgb(190, 120, 255); border: 2px solid rgb(255, 255, 255);
+        box-sizing: border-box; pointer-events: auto; cursor: pointer;
+      `;
+      marker.addEventListener("click", (e) => {
+        e.stopPropagation();
+        setVisible(false);
+        onTravel(link.to);
+      });
+      markerLayer.appendChild(marker);
+    }
     if (!showSettlements) return;
 
     const viewport = activeViewport();
@@ -601,7 +575,6 @@ export function createDebugMap(
   }
 
   worldTabButton.addEventListener("click", () => setViewMode("world"));
-  continentTabButton.addEventListener("click", () => setViewMode("continent"));
   zoneTabButton.addEventListener("click", () => setViewMode("zone"));
   settlementToggle.addEventListener("click", () => {
     showSettlements = !showSettlements;
@@ -623,9 +596,10 @@ export function createDebugMap(
     if (visible) redraw();
   };
 
-  window.addEventListener("keydown", (e) => {
+  const onKey = (e: KeyboardEvent): void => {
     if (e.key === "Escape" && visible) setVisible(false);
-  });
+  };
+  window.addEventListener("keydown", onKey);
 
   displayCanvas.addEventListener("click", (e) => {
     const rect = displayCanvas.getBoundingClientRect();
@@ -636,5 +610,12 @@ export function createDebugMap(
     setVisible(false);
   });
 
-  return { toggle, updateMarker };
+  return {
+    toggle,
+    updateMarker,
+    dispose() {
+      window.removeEventListener("keydown", onKey);
+      overlay.remove();
+    },
+  };
 }

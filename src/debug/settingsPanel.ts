@@ -36,8 +36,13 @@ export interface SettingsPanelOptions {
   selects?: SettingsSelect[];
 }
 
+export interface SettingsPanel {
+  /** Takes it off the page, for the next dimension's (see DIMENSIONS.md). */
+  dispose: () => void;
+}
+
 /** A small, always-visible dev-tool panel with a draw-distance slider and any switches handed to it. */
-export function createSettingsPanel(options: SettingsPanelOptions): void {
+export function createSettingsPanel(options: SettingsPanelOptions): SettingsPanel {
   const { min, max, initial, onChange, toggles = [], sliders = [], selects = [] } = options;
 
   const container = document.createElement("div");
@@ -125,4 +130,5 @@ export function createSettingsPanel(options: SettingsPanelOptions): void {
   }
 
   document.body.appendChild(container);
+  return { dispose: () => container.remove() };
 }

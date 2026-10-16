@@ -7,6 +7,8 @@ export interface PlaceLabels {
   /** Shows the label nearest `player` if it is close enough to read, over its point on screen - each
    *  frame. */
   update: (player: Vector3, camera: Camera | null) => void;
+  /** Takes it off the page, for the next dimension's (see DIMENSIONS.md). */
+  dispose: () => void;
 }
 
 /** How near (metres, across the ground) a player must stand to read a label - or, one read by
@@ -100,5 +102,5 @@ export function createPlaceLabels(scene: Scene, labels: PlaceLabel[]): PlaceLabe
     card.style.opacity = pointed ? "1" : String(Math.min(1, (READ_DISTANCE - nearestDistance) / 2));
   }
 
-  return { update };
+  return { update, dispose: () => card.remove() };
 }

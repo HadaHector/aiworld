@@ -1,0 +1,10 @@
+// The Sunward Isles: a few warm zones over the sea from the mainland - small, so it loads in
+// seconds (see DIMENSIONS.md).
+{
+  name: "The Sunward Isles",
+  world: { areas: [6, 8], rivers: [1, 2], riverLength: [5, 7] },
+  biomes: { only: ["palmGrove", "savanna", "redBush", "maquis", "desert", "saltFlat"] },
+  links: [
+    { id: "ferry", to: "mainland", at: [60, -30], arrive: [120, 40] },
+  ],
+}

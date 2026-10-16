@@ -25,7 +25,6 @@ import {
   roadProfileOffset,
   ROAD_GRADE_END_TAPER,
 } from "../roads/roadConfig";
-import type { ContinentPlan } from "../cells/continentLayout";
 import type { BiomeDefinition } from "../biomes/biomeTypes";
 import type { WorldContent } from "../content/worldContent";
 import { createBaseNoise2D } from "./noise";
@@ -86,7 +85,6 @@ export type TerrainSampler = (worldX: number, worldZ: number) => TerrainSample;
 export interface TerrainWorld {
   sampleTerrain: TerrainSampler;
   worldExtent: number;
-  continents: ContinentPlan[];
   areaBounds: Map<number, AreaBounds>;
   areaNames: Map<number, string>;
   settlements: SettlementSite[];
@@ -176,9 +174,9 @@ export function createZoneHeight(seed: number): (worldX: number, worldZ: number,
   };
 }
 
-/** Composes continent shape + biome zoning + height noise into one queryable per-position sample. */
+/** Composes the land's shape + biome zoning + height noise into one queryable per-position sample. */
 export function createTerrainSampler(seed: number, content: WorldContent): TerrainWorld {
-  const { sampleArea, worldExtent, continents, areaBounds, areaNames, landCellSites, nameGenerator, areaBiomes } =
+  const { sampleArea, worldExtent, areaBounds, areaNames, landCellSites, nameGenerator, areaBiomes } =
     createAreaSampler(seed, content);
   const oceanNoise2D = createBaseNoise2D(deriveSeed(seed, OCEAN_SALT));
   const zoneHeight = createZoneHeight(seed);
@@ -395,5 +393,5 @@ export function createTerrainSampler(seed: number, content: WorldContent): Terra
   settleOnGround(compoundLayouts, sampleTerrain);
   spillField = createSpillField(compoundLayouts, spillMaterials(content));
 
-  return { sampleTerrain, worldExtent, continents, areaBounds, areaNames, settlements, features, roads, settlementLayouts, compoundLayouts, bridges, areaBiomes };
+  return { sampleTerrain, worldExtent, areaBounds, areaNames, settlements, features, roads, settlementLayouts, compoundLayouts, bridges, areaBiomes };
 }

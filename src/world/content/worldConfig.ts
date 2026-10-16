@@ -1,5 +1,6 @@
 import JSON5 from "json5";
-import { ContentError, Reader, type ContentIssue } from "./contentReader";
+import { ContentError, Reader, type ContentIssue, type RawObject } from "./contentReader";
+import { MAX_WORLD_EXTENT, worldExtentFor } from "../cells/worldLayout";
 
 /**
  * A world config: how big the world is and which content goes into it (see CONFIG.md). It filters
@@ -9,41 +10,64 @@ import { ContentError, Reader, type ContentIssue } from "./contentReader";
 
 /** How big the world is - each a [low, high] range rolled per seed. */
 export interface WorldShape {
-  continents: [number, number];
-  /** Zones per continent. */
-  areasPerContinent: [number, number];
-  riversPerContinent: [number, number];
+  /** How many zones. */
+  areas: [number, number];
+  rivers: [number, number];
   /** Cells a river's path walks. */
   riverLength: [number, number];
 }
 
 /** Kinds used for their own sake, which a config's `only` may name. Everything else is kept only
  *  when something kept uses it. */
-export const ROOT_KINDS = ["biomes", "borderHills", "voices"] as const;
+export const ROOT_KINDS = ["dimensions", "biomes", "borderHills", "voices"] as const;
 export type RootKind = (typeof ROOT_KINDS)[number];
 
 export interface WorldConfig {
   name: string;
-  world: WorldShape;
+  /** What it sets of the world's size - over every dimension's own (see DIMENSIONS.md). */
+  world: Partial<WorldShape>;
   /** Which pack folders load, by id - null for all of them. */
   packs: string[] | null;
   /** Per root kind, the ids to keep; a kind not here is kept whole. */
   only: Partial<Record<RootKind, string[]>>;
 }
 
+/** Keys a config's `world` once had, and what became of them (null: gone). */
+const RENAMED_SHAPE_KEYS: Record<string, string | null> = { continents: null, areasPerContinent: "areas", riversPerContinent: "rivers" };
+
 /** The full game's world - what a config leaves out of `world` it gets from here. */
 export const DEFAULT_WORLD_SHAPE: WorldShape = {
-  continents: [1, 1],
-  areasPerContinent: [20, 30],
-  riversPerContinent: [3, 5],
+  areas: [20, 30],
+  rivers: [3, 5],
   riverLength: [8, 10],
 };
 
 /** The config every caller that names none gets: the full game. */
-export const DEFAULT_CONFIG: WorldConfig = { name: "default", world: DEFAULT_WORLD_SHAPE, packs: null, only: {} };
+export const DEFAULT_CONFIG: WorldConfig = { name: "default", world: {}, packs: null, only: {} };
 
 /** A config's name: what goes in `?config=` and `--config`, and its file name. */
 export const CONFIG_NAME_PATTERN = /^[A-Za-z0-9_-]+$/;
+
+/** Reads a `world` block - a config's or a dimension's: the size fields it sets, each checked. */
+export function readWorldShape(raw: RawObject, reader: Reader, path: string): Partial<WorldShape> {
+  const world: Partial<WorldShape> = {};
+  for (const [old, now] of Object.entries(RENAMED_SHAPE_KEYS)) {
+    if (raw[old] !== undefined) reader.fail(`${path}.${old}`, now ? `renamed to "${now}"` : "gone: a world is one landmass, more land is another dimension (see DIMENSIONS.md)");
+  }
+  const keys = Object.keys(DEFAULT_WORLD_SHAPE) as (keyof WorldShape)[];
+  reader.onlyKeys(raw, path, [...keys, ...Object.keys(RENAMED_SHAPE_KEYS)]);
+  for (const key of keys) {
+    if (raw[key] === undefined) continue;
+    const range = reader.range(raw, key, path, { allowEqual: true });
+    if (range.some((v) => !Number.isInteger(v) || v < (key === "rivers" ? 0 : 1))) {
+      reader.fail(`${path}.${key}`, `expected whole numbers of at least ${key === "rivers" ? 0 : 1}, got [${range.join(", ")}]`);
+    } else if (key === "areas" && worldExtentFor(range[1]) > MAX_WORLD_EXTENT) {
+      reader.fail(`${path}.${key}`, `${range[1]} zones make a world ${(worldExtentFor(range[1]) / 1000).toFixed(0)} km across, wider than the ${MAX_WORLD_EXTENT / 1000} km limit - more land belongs in another dimension (see DIMENSIONS.md)`);
+    }
+    world[key] = range;
+  }
+  return world;
+}
 
 /** Reads `configs/<name>.json5`. Throws a ContentError listing every problem in it. */
 export function readWorldConfig(name: string, text: string): WorldConfig {
@@ -59,20 +83,7 @@ export function readWorldConfig(name: string, text: string): WorldConfig {
   const obj = reader.object(data, "");
   reader.onlyKeys(obj, "", ["world", "content"]);
 
-  const world: WorldShape = { ...DEFAULT_WORLD_SHAPE };
-  if (obj.world !== undefined) {
-    const raw = reader.object(obj.world, "world");
-    const keys = Object.keys(DEFAULT_WORLD_SHAPE) as (keyof WorldShape)[];
-    reader.onlyKeys(raw, "world", keys);
-    for (const key of keys) {
-      if (raw[key] === undefined) continue;
-      const range = reader.range(raw, key, "world", { allowEqual: true });
-      if (range.some((v) => !Number.isInteger(v) || v < (key === "riversPerContinent" ? 0 : 1))) {
-        reader.fail(`world.${key}`, `expected whole numbers of at least ${key === "riversPerContinent" ? 0 : 1}, got [${range.join(", ")}]`);
-      }
-      world[key] = range;
-    }
-  }
+  const world = obj.world === undefined ? {} : readWorldShape(reader.object(obj.world, "world"), reader, "world");
 
   let packs: string[] | null = null;
   const only: Partial<Record<RootKind, string[]>> = {};

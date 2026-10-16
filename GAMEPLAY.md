@@ -66,8 +66,8 @@ its own plan document when it is started, as zones and music did.
 
 | Topic | Decision |
 |---|---|
-| Size | Bounded, configurable. The hard limit is precision: positions must stay accurate to 0.1 mm |
-| Continents | Further worlds (another continent, a "dimension") are reached through a loading screen, entered by a portal, a ship or similar |
+| Size | Bounded, configurable, up to about 50 × 50 km. Rendering uses 32-bit floats, so positions at the edge are accurate to 1-2 mm, which is acceptable |
+| Dimensions | One continent per world. More land comes as further *dimensions* (another continent, an underworld...), each its own generated world with its own origin, reached through a loading screen from a portal, a ship or similar. Multi-continent layout inside one world is dropped |
 | Persistence | The world regenerates from the seed. A small saved delta remembers what is cleared, looted or gathered until it respawns; permanent world changes are rare, contained exceptions (e.g. one building upgrading to its next stage). See [Saved state](#saved-state) |
 | Terrain editing | None by the player |
 | Change over time | None, apart from the contained exceptions above |
@@ -252,7 +252,7 @@ Complete a quest that needs combat, and come out of it with XP, skills, loot and
 | Raids | Real network transport |
 | Distributed servers | Script sandboxing |
 | Sending packs from server to client | Daily and repeatable quests |
-| | Dev pages per system (quest viewer, NPC inspector) |
+| Large-world rendering; several continents in one world | Dev pages per system (quest viewer, NPC inspector) |
 
 ## Architecture notes
 
@@ -265,10 +265,11 @@ What the answers above force on the code, before any one system is designed.
 - **One message boundary.** The client sends intents (move, target, cast, use, talk); the server
   sends state and events. In single player both run in one process over an in-memory channel. A
   WebSocket can replace that channel later without the gameplay code noticing.
-- **Positions in 64-bit floats in the simulation; rendering relative to the camera.** 32-bit floats
-  keep 0.1 mm only within about 1 km of the origin, so they must not hold world positions. With
-  64-bit positions and a moving render origin, precision stops limiting world size, and the limit
-  becomes a content choice. The renderer does not do this yet.
+- **Small worlds, many of them.** The renderer's 32-bit floats are accurate to 1-2 mm out to about
+  25 km from the origin, so one world stays within about 50 × 50 km, centred on 0. Large-world
+  rendering (64-bit positions, a moving render origin) is not needed. Further land comes as more
+  dimensions, each centred on its own origin. Collision runs in 64-bit JS numbers and is exact
+  everywhere.
 - **Entities made of data-defined parts.** Creatures, NPCs, players, nodes, chests and projectiles
   are all entities. Their stats, resources and abilities come from packs.
 - **Determinism.** Everything generated derives its seed from the world seed (`src/world/rng.ts`),
@@ -283,7 +284,11 @@ A proposal, to be confirmed. Each step gets its own plan document.
    generation and collision behind a headless module that runs in Node; an in-process server with
    the message boundary above; a `npm run server` that runs it without a client. The game still
    plays exactly as now.
-2. **Large-world positions.** 64-bit positions in the simulation, camera-relative rendering.
+2. **Dimensions: done** - see [DIMENSIONS.md](DIMENSIONS.md). A server hosts several worlds, each
+   with its own seed, content and origin, loaded while players are in them; players move between
+   them through a loading screen. The multi-continent layout inside one world is removed. (The saved
+   delta per dimension comes with saves; large-world positions were planned here and dropped: see
+   Architecture notes.)
 3. **Entities, stats and resources** from data, owned by the server.
 4. **Ability system:** effects, auras, targeting, cooldowns and the GCD, threat.
 5. **Character spike, in parallel:** a body built from parts and procedural animation, judged

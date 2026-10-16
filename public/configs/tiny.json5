@@ -2,8 +2,8 @@
 // server and probes, where loading time is all that matters.
 {
   world: {
-    areasPerContinent: [1, 1],
-    riversPerContinent: [0, 0],
+    areas: [1, 1],
+    rivers: [0, 0],
   },
   content: {
     only: { biomes: ["meadow"] },

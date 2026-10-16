@@ -22,8 +22,10 @@ export function createLastView(
   /** The world config the page runs (see CONFIG.md): each world is its own, so each has its own last
    *  view - a spot in the full world is open sea in a small one. */
   config = "default",
+  /** The dimension, unless it is the start one (see DIMENSIONS.md) - each its own world too. */
+  dimension: string | null = null,
 ): LastView {
-  const key = config === "default" ? STORAGE_KEY : `${STORAGE_KEY}.${config}`;
+  const key = [STORAGE_KEY, config === "default" ? null : config, dimension === null ? null : `@${dimension}`].filter((part) => part !== null).join(".");
   let lastSave = 0;
   return {
     restore() {

@@ -27,6 +27,8 @@ export interface StatsPanel {
    * with). `onToggle` hears whether it is shown.
    */
   addSection: (label: string, content: HTMLElement, onToggle?: (shown: boolean) => void) => void;
+  /** Takes it off the page, for the next dimension's (see DIMENSIONS.md). */
+  dispose: () => void;
 }
 
 export function createStatsPanel(scene: Scene, engine: Engine): StatsPanel {
@@ -89,5 +91,5 @@ export function createStatsPanel(scene: Scene, engine: Engine): StatsPanel {
       `(view ${formatCount(mainDrawn)}, shadows ${formatCount(totalDrawn - mainDrawn)})`;
   });
 
-  return { addSection };
+  return { addSection, dispose: () => container.remove() };
 }

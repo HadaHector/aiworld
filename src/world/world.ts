@@ -21,7 +21,6 @@ import { createWeatherSystem, type WeatherSystem } from "./weather/weatherSystem
 import { NO_WEATHER, type WeatherBlend } from "./weather/weatherTypes";
 import { setWindStrength } from "./foliage/wind";
 import { createPrecipitation } from "./weather/precipitation";
-import type { ContinentPlan } from "./cells/continentLayout";
 import type { AreaBounds, AreaWeight } from "./cells/areaField";
 import type { SettlementSite } from "./settlements/settlementSites";
 import type { FeatureSite } from "./features/featureSites";
@@ -48,7 +47,6 @@ export interface World {
   updateChunks: (playerX: number, playerZ: number, immediate?: boolean) => void;
   setDrawDistance: (loadRadius: number) => void;
   worldExtent: number;
-  continents: ContinentPlan[];
   areaBounds: Map<number, AreaBounds>;
   areaNames: Map<number, string>;
   settlements: SettlementSite[];
@@ -96,6 +94,9 @@ export interface World {
   /** Lights a mesh that moves about - the player - by the houses' own lights near it (see
    *  lighting/playerLights.ts); its update is called each frame. */
   lightMover: (mesh: Mesh) => PlayerLights;
+  /** Stops what lives outside the scene - the chunk build and light bake workers, chunks still
+   *  coming. The meshes, materials and textures go with `scene.dispose()`, after this. */
+  dispose: () => void;
 }
 
 // The seed lives with the world's data, which the simulation makes too; here for older importers.
@@ -127,9 +128,9 @@ export { DEFAULT_DAY_NIGHT_CYCLE_MINUTES };
 const FOG_END_FRACTION = 0.95;
 
 /**
- * Orchestrates world content: the cell-based continent/area system, and terrain streamed in as
+ * Orchestrates world content: the cell-based land/area system, and terrain streamed in as
  * chunks around the player. World size is derived from generated content (see
- * cells/continentLayout.ts), not manually set. sampleTerrain is exposed for future
+ * cells/worldLayout.ts), not manually set. sampleTerrain is exposed for future
  * props/structures/gameplay systems to query biome/land at a point.
  */
 /**
@@ -139,8 +140,12 @@ const FOG_END_FRACTION = 0.95;
  * The timeout is not belt-and-braces: requestAnimationFrame does not fire at all in a background
  * tab, so without it, loading the page in one would hang world creation indefinitely rather than
  * merely skipping a repaint. Whichever fires first wins; missing a paint is fine, hanging is not.
+ *
+ * Use this rather than writing the same promise inline: in a background tab the frame callbacks stay
+ * queued until the tab is shown, and an inline arrow keeps its whole enclosing function's scope alive
+ * that long - a torn-down dimension's world among it (see DIMENSIONS.md).
  */
-function nextPaint(): Promise<void> {
+export function nextPaint(): Promise<void> {
   return new Promise((resolve) => {
     let settled = false;
     const finish = (): void => {
@@ -162,6 +167,8 @@ export async function createWorld(
    *  seconds building its own copy of the world (see chunkBuild.worker.ts), which is best overlapped
    *  with this thread making `data`. Started here otherwise. */
   startedPool?: ChunkBuildPool | null,
+  /** Where the terrain is built first: where the player arrives. */
+  start: { x: number; z: number } = { x: 0, z: 0 },
 ): Promise<World> {
   const { content, seed } = data;
   const sunLighting = createSunLighting(scene);
@@ -174,7 +181,7 @@ export async function createWorld(
     await nextPaint();
   };
 
-  const { sampleTerrain, worldExtent, continents, areaBounds, areaNames, settlements, features, roads, settlementLayouts, compoundLayouts, areaBiomes, heightAt } = data;
+  const { sampleTerrain, worldExtent, areaBounds, areaNames, settlements, features, roads, settlementLayouts, compoundLayouts, areaBiomes, heightAt } = data;
 
   const materialLibrary = await createMaterialLibrary(scene, seed, content, areaBiomes, sunLighting, (done, total) => {
     onProgress?.({ phase: "Baking material textures", completed: done, total });
@@ -251,7 +258,7 @@ export async function createWorld(
   // "building terrain" message before it starts - otherwise the loading screen sits on the
   // previous phase for the whole thing.
   await phase("Building the terrain around the start: ground, trees, grass and collision");
-  chunkManager.loadInitial(0, 0);
+  chunkManager.loadInitial(start.x, start.z);
   await phase("Flooding the ocean");
 
   // Only needs to reach past the farthest fog - it follows the camera (see ocean.ts).
@@ -273,7 +280,7 @@ export async function createWorld(
     scene.fogEnd = loadRadius * FOG_END_FRACTION;
   };
   // Sets the initial fog-end directly rather than through setDrawDistance, which would otherwise
-  // re-run chunkManager's own enqueue/unload pass a second time against the (0,0) it already
+  // re-run chunkManager's own enqueue/unload pass a second time against the start it already
   // loaded via loadInitial above. fogStart is set by the first updateAtmosphere call instead of
   // here - it depends on the player's own zone, which does not exist until main.ts's first frame.
   scene.fogEnd = DEFAULT_DRAW_DISTANCE * FOG_END_FRACTION;
@@ -312,7 +319,6 @@ export async function createWorld(
     updateChunks,
     setDrawDistance,
     worldExtent,
-    continents,
     areaBounds,
     areaNames,
     settlements,
@@ -335,5 +341,10 @@ export async function createWorld(
     setTimeOfDay: sunLighting.setTimeHours,
     getTimeOfDay: sunLighting.getTimeHours,
     lightMover: (mesh) => createPlayerLights(scene, mesh, buildings.lightsNear, collision.world, sunLighting),
+    dispose() {
+      chunkManager.dispose();
+      buildPool?.dispose();
+      buildings.dispose();
+    },
   };
 }

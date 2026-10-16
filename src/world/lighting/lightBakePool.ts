@@ -7,6 +7,8 @@ export interface LightBakePool {
   /** Bakes a house's lights; of those waiting, the one whose `priority` is lowest (the nearest)
    *  goes next, asked as a worker comes free. */
   bake(request: Omit<LightBakeRequest, "id">, priority: () => number): Promise<LightBakeResponse>;
+  /** Stops the workers; bakes not done yet never finish. */
+  dispose(): void;
 }
 
 interface Job {
@@ -69,6 +71,13 @@ export function createLightBakePool(): LightBakePool {
         waiting.push({ request: { ...request, id: nextId++ }, priority, resolve, reject });
         dispatch();
       });
+    },
+    dispose() {
+      for (const worker of workers ?? []) worker.terminate();
+      workers = null;
+      idle.length = 0;
+      waiting.length = 0;
+      running.clear();
     },
   };
 }

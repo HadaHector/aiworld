@@ -226,9 +226,8 @@ export const ROAD_THROUGH_MAX_DEPTH = 3;
 // round. An access or rescue link exists precisely because nothing better was available, and for
 // those an indirect road beats no road.
 export const ROAD_MAX_PATH_RATIO = 1.9;
-// Continents are separated by CONTINENT_OCEAN_GAP (6000), so this also keeps the triangulation from
-// proposing links across open ocean, which A* would spend its whole expansion budget failing to
-// route.
+// This also keeps the triangulation from proposing links across wide bays, which A* would spend its
+// whole expansion budget failing to route.
 export const ROAD_MAX_LINK_LENGTH = 5000;
 
 // Shaping the raw grid path. An 8-neighbour grid can only travel at multiples of 45 degrees, so

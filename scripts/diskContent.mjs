@@ -19,16 +19,18 @@ export function readConfigFromDisk(name = DEFAULT_CONFIG.name) {
 }
 
 /**
- * The same WorldContent the game loads under a config, read straight from public/packs. Returns
- * the pack ids it was made from too, for a server's welcome.
+ * The same WorldContent the game loads under a config, read straight from public/packs - one
+ * dimension's (see DIMENSIONS.md), the start dimension's if none is named. Returns the pack ids it
+ * was made from too, for a server's welcome.
  */
-export function loadContentFromDisk(configName = DEFAULT_CONFIG.name) {
+export function loadContentFromDisk(configName = DEFAULT_CONFIG.name, dimension = null) {
   const config = readConfigFromDisk(configName);
   const root = `${PUBLIC_DIR}packs`;
   const packs = selectPacks(buildPackIndex(root).packs, config);
   const content = resolveContent(
     packs.map((pack) => ({ id: pack.id, files: pack.files.map((path) => ({ path, text: readFileSync(`${root}/${pack.id}/${path}`, "utf8") })) })),
     config,
+    dimension,
   );
   return { content, packs: packs.map((pack) => pack.id) };
 }

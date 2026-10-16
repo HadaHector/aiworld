@@ -1,14 +1,10 @@
-import { createWorldCollision, type WorldCollision } from "../world/worldCollision";
-import { createTreeScatter } from "../world/foliage/treeScatter";
-import { generateTreeHulls, treeColliders, type TreeHulls } from "../world/foliage/treeColliders";
-import { createPlacedBuildings, modelGroups, type ModelledGroup, type PlacedBuildings } from "../world/buildings/buildingCollision";
-import type { WorldData } from "../world/worldData";
-import { COLLISION_CHUNK_SIZE, createCollisionStreamer, type CollisionStreamer } from "./collisionStreamer";
-import { createPlayerBody, type BodyInput, type PlayerBody } from "./playerBody";
+import { dimensionSeed, type DimensionDef } from "../world/content/dimensions";
+import { createDimension, type Dimension, type DimensionWorld } from "./dimension";
+import type { BodyInput, PlayerBody } from "./playerBody";
 import { PROTOCOL_VERSION, type ClientMessage, type PlayerState, type ServerMessage } from "./protocol";
 import type { ServerEnd } from "./channel";
 
-/** Each step spends at most this long bringing in collision chunks (always at least one). */
+/** Each step spends at most this long bringing in collision chunks per dimension (always at least one). */
 const CHUNK_BUDGET_MS = 2;
 
 /** One connected client and the player it plays. */
@@ -20,21 +16,43 @@ interface Connection {
 interface Player {
   id: number;
   name: string;
-  body: PlayerBody;
+  /** The dimension it is in - or on its way to, while `body` is null. */
+  dimension: string;
+  /** Null while travelling: from a Transfer until its client has Arrived and the dimension is loaded. */
+  body: PlayerBody | null;
+  /** Where the body goes once it can be made. */
+  arrival: { x: number; z: number };
+  /** Whether the client has said Arrived since the last Transfer. */
+  arrived: boolean;
   /** The latest intent; a jump stays set until a step takes it. */
   input: BodyInput;
   ackSeq: number;
 }
 
+/** A dimension the server has asked its host for: loading, then loaded. */
+interface Slot {
+  dimension: Dimension | null;
+  /** Set when nobody wants it any more: a load still running is thrown away when it finishes. */
+  dropped: boolean;
+}
+
 export interface ServerOptions {
-  /** Which packs `world` was made from, by id - told to every client that joins. */
+  /** The world seed: the start dimension's own, and the root of every other's (see DIMENSIONS.md). */
+  seed: number;
+  /** Which world config the server runs, by name - told to every client that joins. */
+  config: string;
+  /** Which packs it runs, by id - told to every client that joins. */
   packs?: string[];
-  // What a host can hand the server that it has already made, in the same process. Each is pure,
-  // read-only data generated from the seed - the server would make exactly the same itself.
-  /** Every tree kind's hulls (see foliage/treeColliders.ts). */
-  treeHulls?: TreeHulls;
-  /** Every building group with its near models made (see buildings/buildingCollision.ts). */
-  buildingModels?: readonly ModelledGroup[];
+  /** Every dimension the config keeps. */
+  dimensions: readonly DimensionDef[];
+  /**
+   * Makes a dimension's world, when the first player heads for it. The host's: in Node, it resolves
+   * the dimension's content from disk and generates it; in the page, it hands over the page's own
+   * build of it, so nothing is generated twice.
+   */
+  loadDimension: (definition: DimensionDef, seed: number) => DimensionWorld | Promise<DimensionWorld>;
+  /** Called when a load fails; the players waiting for it stay waiting. */
+  onLoadError?: (definition: DimensionDef, error: unknown) => void;
 }
 
 export interface Server {
@@ -45,33 +63,78 @@ export interface Server {
   readonly tick: number;
   /** For hosts and debugging - not for clients, which only see messages. */
   readonly debug: {
-    readonly collision: WorldCollision;
-    readonly streamer: CollisionStreamer;
-    readonly buildings: PlacedBuildings;
-    readonly players: ReadonlyMap<number, { name: string; body: PlayerBody }>;
+    /** The dimensions loaded now, by id. */
+    readonly dimensions: ReadonlyMap<string, Dimension>;
+    readonly players: ReadonlyMap<number, { name: string; dimension: string; body: PlayerBody | null }>;
   };
 }
 
 /**
- * The simulation: the world's collision around its players, and the players themselves - their
- * bodies walking it. Everything it knows comes from `world` (the seed and the packs) and from its
- * clients' messages; everything it tells them goes out as messages. No Babylon, no browser: the same
- * server runs inside the page for single player and on its own in Node (see SIMULATION.md).
+ * The simulation: the players, the dimensions they are in, and each dimension's collision around
+ * them (see DIMENSIONS.md). A dimension is loaded when the first player heads for it and dropped
+ * when the last one leaves. Everything it knows comes from its host (the seed, the packs, the worlds
+ * it is handed) and from its clients' messages; everything it tells them goes out as messages. No
+ * Babylon, no browser: the same server runs inside the page for single player and on its own in Node
+ * (see SIMULATION.md).
  */
-export function createServer(world: WorldData, shared: ServerOptions = {}): Server {
-  const { seed, content } = world;
-  const hulls = shared.treeHulls ?? generateTreeHulls(content.treeKinds, seed);
-  const buildings = createPlacedBuildings(shared.buildingModels ?? modelGroups(world.buildingGroups));
-  const collision = createWorldCollision({ colliders: (trees) => treeColliders(hulls, trees) }, COLLISION_CHUNK_SIZE, buildings.cellarCuts);
-  const streamer = createCollisionStreamer({ sampleTerrain: world.sampleTerrain, scatterTrees: createTreeScatter(seed, content) }, collision, buildings);
-  const groundAt = (x: number, z: number, feet: number): number => buildings.floorAt(x, z, feet) ?? world.heightAt(x, z);
+export function createServer(options: ServerOptions): Server {
+  const definitions = new Map(options.dimensions.map((def) => [def.id, def]));
+  const start = options.dimensions.find((def) => def.start) ?? options.dimensions[0];
+  if (!start) throw new Error("A server needs at least one dimension");
 
   const connections: Connection[] = [];
   const players = new Map<number, Player>();
+  const slots = new Map<string, Slot>();
+  const loaded = new Map<string, Dimension>();
   let nextId = 1;
   let tick = 0;
 
-  const points = (): { x: number; z: number }[] => [...players.values()].map((p) => ({ x: p.body.motor.state.feet.x, z: p.body.motor.state.feet.z }));
+  /** Asks the host for a dimension, unless it is loaded or on its way. */
+  function want(id: string): void {
+    if (slots.has(id)) return;
+    const definition = definitions.get(id)!;
+    const slot: Slot = { dimension: null, dropped: false };
+    slots.set(id, slot);
+    Promise.resolve()
+      .then(() => options.loadDimension(definition, dimensionSeed(options.seed, definition)))
+      .then(
+        (world) => {
+          if (slot.dropped) return;
+          slot.dimension = createDimension(id, world);
+          loaded.set(id, slot.dimension);
+        },
+        (error) => {
+          if (slots.get(id) === slot) slots.delete(id);
+          options.onLoadError?.(definition, error);
+        },
+      );
+  }
+
+  /** Drops a dimension nobody is in or heading for. */
+  function release(id: string): void {
+    for (const player of players.values()) if (player.dimension === id) return;
+    const slot = slots.get(id);
+    if (!slot) return;
+    slot.dropped = true;
+    slots.delete(id);
+    loaded.delete(id);
+  }
+
+  /** Takes a player out of where it is and sends it to a dimension, at a point. */
+  function transfer(connection: Connection, player: Player, to: DimensionDef, at: { x: number; z: number }): void {
+    const from = player.dimension;
+    player.dimension = to.id;
+    player.body = null;
+    player.arrival = at;
+    player.arrived = false;
+    player.input = { moveX: 0, moveZ: 0, run: false, jump: false };
+    want(to.id);
+    if (from !== to.id) release(from);
+    connection.end.send({ type: "transfer", dimension: to.id, seed: dimensionSeed(options.seed, to), x: at.x, z: at.z });
+  }
+
+  const pointsIn = (id: string): { x: number; z: number }[] =>
+    [...players.values()].filter((p) => p.dimension === id && p.body).map((p) => ({ x: p.body!.motor.state.feet.x, z: p.body!.motor.state.feet.z }));
 
   function handle(connection: Connection, message: ClientMessage): void {
     const player = connection.player;
@@ -79,12 +142,12 @@ export function createServer(world: WorldData, shared: ServerOptions = {}): Serv
       case "hello": {
         if (player || message.protocol !== PROTOCOL_VERSION) return;
         const id = nextId++;
-        const body = createPlayerBody(collision, world.heightAt, groundAt, { x: 0, z: 0 });
-        const joined: Player = { id, name: message.name, body, input: { moveX: 0, moveZ: 0, run: false, jump: false }, ackSeq: 0 };
+        const first = definitions.get(message.dimension) ?? start;
+        const joined: Player = { id, name: message.name, dimension: "", body: null, arrival: first.spawn, arrived: false, input: { moveX: 0, moveZ: 0, run: false, jump: false }, ackSeq: 0 };
         players.set(id, joined);
         connection.player = joined;
-        streamer.loadAround(0, 0, points());
-        connection.end.send({ type: "welcome", protocol: PROTOCOL_VERSION, playerId: id, seed, config: content.config, packs: shared.packs ?? [] });
+        connection.end.send({ type: "welcome", protocol: PROTOCOL_VERSION, playerId: id, config: options.config, packs: options.packs ?? [] });
+        transfer(connection, joined, first, first.spawn);
         return;
       }
       case "intent": {
@@ -96,15 +159,26 @@ export function createServer(world: WorldData, shared: ServerOptions = {}): Serv
         return;
       }
       case "teleport": {
-        if (!player) return;
+        if (!player?.body) return;
         player.body.teleport(message.x, message.z);
-        streamer.loadAround(message.x, message.z, points());
+        loaded.get(player.dimension)!.streamer.loadAround(message.x, message.z, pointsIn(player.dimension));
         return;
       }
       case "teleportTo": {
-        if (!player) return;
+        if (!player?.body) return;
         player.body.teleportTo({ x: message.x, y: message.y, z: message.z });
-        streamer.loadAround(message.x, message.z, points());
+        loaded.get(player.dimension)!.streamer.loadAround(message.x, message.z, pointsIn(player.dimension));
+        return;
+      }
+      case "travel": {
+        const to = definitions.get(message.dimension);
+        if (!player || !to) return;
+        const link = definitions.get(player.dimension)?.links.find((l) => l.to === to.id);
+        transfer(connection, player, to, link ? link.arrive : to.spawn);
+        return;
+      }
+      case "arrived": {
+        if (player) player.arrived = true;
         return;
       }
     }
@@ -115,22 +189,38 @@ export function createServer(world: WorldData, shared: ServerOptions = {}): Serv
       const connection = connections[i];
       for (const message of connection.end.receive()) handle(connection, message);
       if (connection.end.closed) {
-        if (connection.player) players.delete(connection.player.id);
+        const gone = connection.player;
         connections.splice(i, 1);
+        if (gone) {
+          players.delete(gone.id);
+          release(gone.dimension);
+        }
       }
     }
-    streamer.update(points(), CHUNK_BUDGET_MS);
+    // Into the world: every player whose client is ready and whose dimension has loaded.
     for (const player of players.values()) {
+      const dimension = loaded.get(player.dimension);
+      if (player.body || !player.arrived || !dimension) continue;
+      player.body = dimension.createBody(player.arrival.x, player.arrival.z);
+      dimension.streamer.loadAround(player.arrival.x, player.arrival.z, pointsIn(player.dimension));
+    }
+    for (const [id, dimension] of loaded) dimension.streamer.update(pointsIn(id), CHUNK_BUDGET_MS);
+    for (const player of players.values()) {
+      if (!player.body) continue;
       player.body.step(deltaSeconds, player.input);
       player.input = { ...player.input, jump: false };
     }
     tick++;
-    const states: PlayerState[] = [...players.values()].map(({ id, body }) => {
+    const statesIn = new Map<string, PlayerState[]>();
+    for (const { id, dimension, body } of players.values()) {
+      if (!body) continue;
       const { feet, grounded } = body.motor.state;
-      return { id, x: feet.x, y: feet.y, z: feet.z, facing: body.facing, grounded };
-    });
+      if (!statesIn.has(dimension)) statesIn.set(dimension, []);
+      statesIn.get(dimension)!.push({ id, x: feet.x, y: feet.y, z: feet.z, facing: body.facing, grounded });
+    }
     for (const connection of connections) {
-      const message: ServerMessage = { type: "snapshot", tick, ackSeq: connection.player?.ackSeq ?? 0, players: states };
+      const player = connection.player;
+      const message: ServerMessage = { type: "snapshot", tick, ackSeq: player?.ackSeq ?? 0, players: (player && statesIn.get(player.dimension)) ?? [] };
       connection.end.send(message);
     }
   }
@@ -143,6 +233,6 @@ export function createServer(world: WorldData, shared: ServerOptions = {}): Serv
     get tick() {
       return tick;
     },
-    debug: { collision, streamer, buildings, players },
+    debug: { dimensions: loaded, players },
   };
 }

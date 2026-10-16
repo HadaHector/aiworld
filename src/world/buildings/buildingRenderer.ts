@@ -32,6 +32,8 @@ export interface BuildingRenderer extends PlacedBuildings {
   /** Every group with its near models - what a server in the same page takes rather than making
    *  them again (see SIMULATION.md). */
   readonly models: readonly ModelledGroup[];
+  /** Stops what lives outside the scene (the light bake workers); the meshes go with the scene. */
+  dispose: () => void;
 }
 
 /** Cellars within this far of the camera have the ground taken out over them. */
@@ -154,6 +156,7 @@ export function createBuildingRenderer(
   return {
     ...placedBuildings,
     models: modelled,
+    dispose: () => lightBakes.dispose(),
     setDrawDistance(distance) {
       drawDistance = distance;
     },

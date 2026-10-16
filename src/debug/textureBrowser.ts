@@ -3,6 +3,8 @@ import { TEXTURE_RESOLUTION } from "../world/materials/textureGen";
 
 export interface TextureBrowser {
   toggle: () => void;
+  /** Takes it off the page, for the next dimension's (see DIMENSIONS.md). */
+  dispose: () => void;
 }
 
 const PREVIEW_SIZE_PX = 96; // downscaled from the full TEXTURE_RESOLUTION bake, plenty for browsing
@@ -91,11 +93,18 @@ export function createTextureBrowser(materialLibrary: MaterialLibrary): TextureB
     setVisible(!visible);
   }
 
-  window.addEventListener("keydown", (e) => {
+  const onKey = (e: KeyboardEvent): void => {
     if (e.key === "Escape" && visible) setVisible(false);
-  });
+  };
+  window.addEventListener("keydown", onKey);
 
   document.body.appendChild(overlay);
 
-  return { toggle };
+  return {
+    toggle,
+    dispose() {
+      window.removeEventListener("keydown", onKey);
+      overlay.remove();
+    },
+  };
 }

@@ -37,24 +37,25 @@ in 53 s (measured in a hidden browser pane, which runs slower than a visible tab
 
 ```json5
 {
-  // How big the world is. Anything left out is the full game's.
+  // How big the world is - over every dimension's own size (see DIMENSIONS.md). Anything left out
+  // is the dimension's.
   world: {
-    continents: [1, 1],          // how many continents, a range rolled per seed
-    areasPerContinent: [4, 4],   // zones per continent
-    riversPerContinent: [1, 1],
+    areas: [4, 4],               // how many zones, a range rolled per seed
+    rivers: [1, 1],
     riverLength: [6, 8],         // cells
   },
   content: {
     packs: ["core"],             // which pack folders load; all of them if left out
     only: {                      // whitelists of root kinds; a kind left out is kept whole
       biomes: ["meadow", "savanna"],
+      dimensions: ["mainland"],  // which dimensions run; all of them if left out
     },
   },
 }
 ```
 
-- **Root kinds** - used for their own sake, so a whitelist may name them: `biomes`, `borderHills`,
-  `voices`. `layers` and `defaults.json5` are always kept: they apply everywhere. Whitelisting
+- **Root kinds** - used for their own sake, so a whitelist may name them: `dimensions`, `biomes`,
+  `borderHills`, `voices`. `layers` and `defaults.json5` are always kept: they apply everywhere. Whitelisting
   nothing prunes nothing, so a config that only changes the world's size keeps every definition.
 - **Kinds kept only when used**: `materials`, `grass`, `trees`, `bushes`, `rocks`, `weathers`,
   `features`, `settlements`, `buildings`, `buildingParts`, `buildingMaterials`, `rooms`, `props`,
@@ -66,8 +67,11 @@ in 53 s (measured in a hidden browser pane, which runs slower than a visible tab
   listed in `resolveContent.ts`'s `CODE_DEFAULT_IDS` and always kept; a new default id belongs
   there. If one is missed, nothing breaks quietly: resolving reports the missing reference, as it
   did for the bridge.
-- `default` is the full game and needs no file: its world size is `DEFAULT_WORLD_SHAPE` in
-  `content/worldConfig.ts` (once constants in `cells/config.ts`).
+- `default` is the full game and needs no file. A world's size is `DEFAULT_WORLD_SHAPE` in
+  `content/worldConfig.ts`, then its dimension's `world`, then the config's `world` over both.
+- **Dimensions** (DIMENSIONS.md): each resolves its own content - its biome list, filtered by the
+  config's `only.biomes` (all of the config's if that leaves none). A link to a dimension the config
+  leaves out is dropped.
 - A whitelisted id or a pack that does not exist, or a config that does not, is a content error,
   shown on the loading screen like any other.
 
@@ -77,20 +81,20 @@ in 53 s (measured in a hidden browser pane, which runs slower than a visible tab
 |---|---|
 | The game, the workbench, the collision sandbox | `?config=small` in the URL; `default` without |
 | `npm run server` | `--config small` |
-| Probes | `loadContent({ config: "small" })` in `scripts/probe/loadContent.mjs` |
+| Probes | `loadContent({ config: "small", dimension: "isles" })` in `scripts/probe/loadContent.mjs` |
 
 Node reads configs and packs through `scripts/diskContent.mjs`. The server's welcome message
 carries the config's name next to its packs, so a client can tell a player what differs. Each
-config keeps its own last view in the page (`debug/lastView.ts`): a spot in the full world is open
-sea in a small one.
+config, and each dimension in it, keeps its own last view in the page (`debug/lastView.ts`): a spot
+in the full world is open sea in a small one.
 
 ## Layers
 
 ```
 configs/<name>.json5 → readWorldConfig → { world, packs, only }
 packs                → selectPacks(config)        which pack folders to read
-                     → resolveContent(packs, config): prune by the whitelist and what kept
-                       content uses, then read and check as always
+                     → resolveContent(packs, config, dimension): prune by the whitelist, the
+                       dimension's biomes and what kept content uses, then read and check as always
 WorldContent.world   → the world's size, read by planWorld and the river walk (was cells/config.ts)
 ```
 

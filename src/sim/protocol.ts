@@ -6,15 +6,17 @@
  */
 
 /** Bumped whenever a message changes shape. */
-export const PROTOCOL_VERSION = 2;
+export const PROTOCOL_VERSION = 3;
 
 // --- Client to server ------------------------------------------------------------------------
 
-/** Joins the server; answered with a Welcome. */
+/** Joins the server; answered with a Welcome, then a Transfer to the first dimension. */
 export interface Hello {
   type: "hello";
   protocol: number; // u16
   name: string;
+  /** Debug: the dimension to start in, by id - "" for the server's choice (see DIMENSIONS.md). */
+  dimension: string;
 }
 
 /**
@@ -46,20 +48,44 @@ export interface TeleportTo {
   z: number; // f64
 }
 
-export type ClientMessage = Hello | Intent | Teleport | TeleportTo;
+/** Debug: go to another dimension - by a link from this one if one leads there, else to its spawn.
+ *  Answered with a Transfer. */
+export interface Travel {
+  type: "travel";
+  dimension: string;
+}
+
+/** The client has built the dimension a Transfer sent it to, and is ready to be put in it. */
+export interface Arrived {
+  type: "arrived";
+}
+
+export type ClientMessage = Hello | Intent | Teleport | TeleportTo | Travel | Arrived;
 
 // --- Server to client ------------------------------------------------------------------------
 
-/** The server's answer to a Hello: who the client is, and what world it is in. */
+/** The server's answer to a Hello: who the client is, and what it runs. A Transfer follows. */
 export interface Welcome {
   type: "welcome";
   protocol: number; // u16
   playerId: number; // u32
-  seed: number; // u32
   /** Which world config (see CONFIG.md) and packs the server runs, by name and id - so a client can
    *  tell the player what differs. */
   config: string;
   packs: string[];
+}
+
+/**
+ * The player is now in this dimension, at this point (see DIMENSIONS.md) - on joining, and on every
+ * travel. The client builds the dimension from its own packs and the seed, then says Arrived; until
+ * then the player has no body and no snapshot includes it.
+ */
+export interface Transfer {
+  type: "transfer";
+  dimension: string;
+  seed: number; // u32
+  x: number; // f64
+  z: number; // f64
 }
 
 /** One player as the server has it. */
@@ -73,7 +99,7 @@ export interface PlayerState {
   grounded: boolean;
 }
 
-/** Where everything is, after a step. */
+/** Where everything is in the receiver's dimension, after a step. */
 export interface Snapshot {
   type: "snapshot";
   tick: number; // u32
@@ -82,4 +108,4 @@ export interface Snapshot {
   players: PlayerState[];
 }
 
-export type ServerMessage = Welcome | Snapshot;
+export type ServerMessage = Welcome | Transfer | Snapshot;

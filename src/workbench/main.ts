@@ -2,6 +2,7 @@ import { Engine } from "@babylonjs/core";
 import { configNameFromUrl, fetchPackSources, fetchWorldConfig } from "../world/content/loadContent";
 import { DEFAULT_CONFIG, type WorldConfig } from "../world/content/worldConfig";
 import { resolveContent, type PackSource } from "../world/content/resolveContent";
+import { ALL_DIMENSIONS } from "../world/content/dimensions";
 import { ContentError, formatIssue } from "../world/content/contentReader";
 import type { WorldContent } from "../world/content/worldContent";
 import type { MaterialDef, GrassSpec } from "../world/materials/materialTypes";
@@ -824,7 +825,7 @@ async function runPreview(): Promise<void> {
 
   let content: WorldContent;
   try {
-    content = resolveContent(sourcesWithEdit(), worldConfig);
+    content = resolveContent(sourcesWithEdit(), worldConfig, ALL_DIMENSIONS);
   } catch (error) {
     showIssues(error instanceof ContentError ? error.issues.map(formatIssue) : [String(error)]);
     setStatus("");
@@ -1201,7 +1202,7 @@ async function start(): Promise<void> {
   assets = listAssets(sources);
   // The menus need content before the first preview has resolved any.
   try {
-    lastContent = resolveContent(sources, worldConfig);
+    lastContent = resolveContent(sources, worldConfig, ALL_DIMENSIONS);
   } catch {
     lastContent = null;
   }

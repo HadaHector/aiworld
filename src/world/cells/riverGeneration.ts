@@ -55,7 +55,7 @@ function isMouthCandidate(
 }
 
 /**
- * Randomized walk through the adjacency graph, staying inside this continent's land, never
+ * Randomized walk through the adjacency graph, staying on land, never
  * crossing into a lake cell, never revisiting an already-used cell. After the mouth, PREFERS a
  * cell that isn't itself ocean-adjacent (steering inland, away from the coast, so a river doesn't
  * read as a short shortcut connecting one patch of open water to another) but FALLS BACK to an
@@ -69,7 +69,6 @@ function isMouthCandidate(
 function walkRiver(
   rng: () => number,
   adjacency: number[][],
-  continentCells: ReadonlySet<number>,
   landCells: ReadonlySet<number>,
   lakeCells: ReadonlySet<number>,
   usedRiverCells: Set<number>,
@@ -81,7 +80,7 @@ function walkRiver(
 
   for (let i = 0; i < maxLength - 1; i++) {
     const current = path[path.length - 1];
-    const allCandidates = adjacency[current].filter((n) => continentCells.has(n) && !lakeCells.has(n) && !usedRiverCells.has(n));
+    const allCandidates = adjacency[current].filter((n) => landCells.has(n) && !lakeCells.has(n) && !usedRiverCells.has(n));
     if (allCandidates.length === 0) break;
 
     const inlandCandidates = allCandidates.filter((n) => !isOceanAdjacent(n, adjacency, landCells));
@@ -103,9 +102,9 @@ export interface RiverPath {
 }
 
 export interface RiverGenParams {
-  continentSeed: number;
+  /** The landmass's seed (see cells/worldLayout.ts). */
+  landSeed: number;
   adjacency: number[][];
-  continentCells: ReadonlySet<number>;
   landCells: ReadonlySet<number>;
   lakeCells: ReadonlySet<number>;
   usedRiverCells: Set<number>;
@@ -125,24 +124,24 @@ export interface RiverGenParams {
  * path also carries the neighbour it drains into, so its centreline can start at that shore rather
  * than a cell away from it (see findMouthLink).
  */
-export function generateRiversForContinent(params: RiverGenParams): RiverPath[] {
-  const { continentSeed, adjacency, continentCells, landCells, lakeCells, usedRiverCells, shape } = params;
+export function generateRivers(params: RiverGenParams): RiverPath[] {
+  const { landSeed, adjacency, landCells, lakeCells, usedRiverCells, shape } = params;
 
-  const countRng = mulberry32(deriveSeed(continentSeed, RIVER_SOURCE_SALT));
-  const riverCount = randomIntInRange(countRng, shape.riversPerContinent);
-  const lengthRng = mulberry32(deriveSeed(continentSeed, RIVER_LENGTH_SALT));
-  const walkRng = mulberry32(deriveSeed(continentSeed, RIVER_WALK_SALT));
+  const countRng = mulberry32(deriveSeed(landSeed, RIVER_SOURCE_SALT));
+  const riverCount = randomIntInRange(countRng, shape.rivers);
+  const lengthRng = mulberry32(deriveSeed(landSeed, RIVER_LENGTH_SALT));
+  const walkRng = mulberry32(deriveSeed(landSeed, RIVER_WALK_SALT));
 
   const paths: RiverPath[] = [];
 
   for (let i = 0; i < riverCount; i++) {
-    const mouths = [...continentCells].filter((c) => isMouthCandidate(c, adjacency, landCells, lakeCells, usedRiverCells));
+    const mouths = [...landCells].filter((c) => isMouthCandidate(c, adjacency, landCells, lakeCells, usedRiverCells));
     if (mouths.length === 0) break;
 
     const mouth = mouths[Math.floor(walkRng() * mouths.length)];
     const mouthLink = findMouthLink(mouth, adjacency, landCells, lakeCells, usedRiverCells);
     const length = randomIntInRange(lengthRng, shape.riverLength);
-    const path = walkRiver(walkRng, adjacency, continentCells, landCells, lakeCells, usedRiverCells, mouth, length);
+    const path = walkRiver(walkRng, adjacency, landCells, lakeCells, usedRiverCells, mouth, length);
     if (path.length >= 2) paths.push({ cells: path, mouthLink });
   }
 
