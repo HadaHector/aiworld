@@ -48,6 +48,7 @@ interface Entity {
   id: number;                  // u32, unique on the server for its run; never reused
   template: string;            // its template's id - the client looks it up for a name and a look
   name: string;                // the template's, or the player's own
+  look: EntityAppearance;      // its seed, and a player's race, outfit and sex - see *Looks* below
   dimension: string;           // the dimension it is in ("" while a player travels)
   x: number; y: number; z: number;   // feet, f64
   facing: number;              // radians about y, 0 facing +z
@@ -246,7 +247,7 @@ kind, changes or adds a file.
   stats: { level: 10, stamina: 500 },
   resources: ["health", "rage"],
   modifiers: [{ stat: "maxHealth", kind: "percent", value: 100 }],   // source "template"
-  look: { color: [0.75, 0.6, 0.35], height: 1.9, radius: 0.45 },
+  look: { race: "human", outfit: "knight", color: [0.75, 0.6, 0.35], height: 1.9, radius: 0.45 },
 }
 
 // entities/player.json5 - what every player is made from
@@ -261,7 +262,7 @@ kind, changes or adds a file.
 | `stats` | Base values of primary stats; the rest take their `default` |
 | `resources` | Which resources it has (`health` always added) |
 | `modifiers` | Standing modifiers, under the source `template` |
-| `look` | For the client only: how to draw it until bodies are built from parts (step 5). `shape: "capsule"`, `height`, `radius`, `color` |
+| `look` | For the client only: how to draw it. `race`, `outfit` and `sex` name a body (CHARACTERS.md) from the packs' `races/` and `outfits/`; without a `race` it is a capsule of `color`. `height` and `radius` size the capsule, which is also what a click hits. `shape: "capsule"` |
 
 - **Chains are resolved at load** into flat templates; a cycle or a missing parent is a content
   error.
@@ -305,7 +306,7 @@ sent of each. After a step it sends:
 
 ```ts
 // When an entity comes into view (or the client arrives somewhere): everything this client may see.
-{ type: "entitySpawn", id, template, name, x, y, z, facing,
+{ type: "entitySpawn", id, template, name, look: EntityAppearance, x, y, z, facing,
   stats: StatValue[], resources: ResourceValue[] }
 // When values this client may see have changed since it was last told: only the changed ones.
 { type: "entityValues", id, stats: StatValue[], resources: ResourceValue[] }
@@ -317,6 +318,7 @@ sent of each. After a step it sends:
 StatValue      { stat, value }                    // stat u16 index, value f64
 ResourceValue  { resource, current, max }         // resource u16 index, f64s
 ModifierState  { stat, kind, value, source }      // u16, u16, f64, short string
+EntityAppearance { seed, race, outfit, sex }      // u32, short strings ("" for the template's)
 ```
 
 - **Snapshot's `players` becomes `entities`**: one `EntityMotion { id, x, y, z, facing, grounded }`
@@ -331,7 +333,24 @@ ModifierState  { stat, kind, value, source }      // u16, u16, f64, short string
 - **Continuous regen sends a value every step.** With the core pack's two-second intervals it is
   one message per tick instead. Sending less (quantised values, a value only when it moved by
   some amount) is the codec's business, later.
-- `PROTOCOL_VERSION` goes to 4.
+- `PROTOCOL_VERSION` goes to 4 (5 with looks, below).
+
+### Looks
+
+Every entity is drawn the same on every client (CHARACTERS.md, *Next steps* 1): the template's
+`look` says what it is - a race and an outfit, or a capsule - and the entity's own `look`, sent
+once in its spawn, says who: its **seed** (face, skin, hair, build) and, for a player, the race,
+outfit and sex it chose, each "" for the template's.
+
+- **The seed** of a placed entity is a hash of its key, so the dummy has the same face from run to
+  run; of a debug-spawned one, of its id.
+- **A player's look** comes in its Hello (`look`, optional) - from the page's address until
+  character creation saves it. The server keeps it to plain names of at most 32 characters and a
+  u32, and never reads them: races and outfits are the clients' business. Without one a player is
+  the `player` template's look (a human scout) with a seed of its id.
+- **Names, not indices, and outside the rules hash.** A race or outfit is sent by its id, as a
+  template is, so a client with different packs draws a stand-in race or no outfit, never the
+  wrong stat; nothing in the hash's tables moves.
 
 ### The client
 
@@ -339,8 +358,10 @@ ModifierState  { stat, kind, value, source }      // u16, u16, f64, short string
   the client knows, with its template, motion, the values it was sent, and for its own player the
   modifier stack. The client's only source for anything about an entity.
 - **Others are drawn** by `game/entityMeshes.ts` (per dimension view) from their template's
-  `look`: a capsule of its colour and size, placed and turned from the mirror. Other players use
-  the `player` template's look. The client's own player is drawn as now.
+  `look` and their own: a body (`game/characterBody.ts`, as the own player's) when the look names
+  a race, built in the background with the capsule standing in, then animated from the mirror's
+  motion; else a capsule of its colour and size. The capsule stays, unseen, as what a click hits.
+  Other players use the `player` template's look. The client's own player is drawn as now.
 
 ## Debug, the inspector and the server
 
@@ -429,6 +450,9 @@ Each leaves the game working: dev server, `npm run probe`, `npm run server`, `np
 - **The debug commands came in step 4**, with the protocol bump, so the bot's scripted run (spend
   100 health at tick 60, combat from 150 to 300) could show regen pausing headless.
 - **Clicking a capsule** in the world opens the inspector on it - a first step towards targeting.
+- **Bodies for everyone** came after (protocol 5, *Looks*): the template look's `race`, `outfit`
+  and `sex`, the entity's `look`, Hello's `look`. `__aiworld.entities.addPlayer({ race, outfit,
+  sex, seed })` puts a second player in the page's server, walking a slow circle, to see one.
 - **The combat button** toggles what it last set: the client is not told who is in combat.
 - **The probe** (`scripts/probe/entities.mjs`, 98 checks) runs a real server on the `small`
   config's mainland with two clients; it takes about 15 s, most of it generating the world.

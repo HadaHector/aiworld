@@ -3,5 +3,6 @@
   name: "Adventurer",
   stats: { level: 1, strength: 10, agility: 10, stamina: 12, intellect: 10, spirit: 8 },
   resources: ["health", "mana", "rage"],
-  look: { shape: "capsule", height: 1.8, radius: 0.4, color: [0.35, 0.55, 0.85] },
+  // A human scout unless the player says otherwise (their Hello's look); the capsule is what a click hits.
+  look: { race: "human", outfit: "scout", height: 1.8, radius: 0.4, color: [0.35, 0.55, 0.85] },
 }

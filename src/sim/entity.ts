@@ -2,6 +2,8 @@ import type { GameRules, TemplateDef } from "./rules/gameRules";
 import { createStatBlock, statValue, type StatBlock } from "./stats";
 import { createResourceBlock, stepResourceBlock, tickPhase, type ResourceBlock } from "./resources";
 import type { PlayerBody } from "./playerBody";
+import type { EntityAppearance } from "./protocol";
+import { hashString } from "../world/content/dimensions";
 
 /**
  * Anything in a dimension the server keeps track of: a player, a creature, an NPC, a node, a chest
@@ -13,6 +15,9 @@ export interface Entity {
   readonly id: number;
   readonly template: TemplateDef;
   name: string;
+  /** Who it is to look at, over its template's look: sent in its spawn, so every client draws the
+   *  same character. */
+  look: EntityAppearance;
   /** The dimension it is in - for a player, the one it is in or on its way to. */
   dimension: string;
   /** For an entity a dimension places: `<dimension>/<index>`, stable from run to run - what the
@@ -42,6 +47,8 @@ export interface EntityPlace {
   key?: string;
   /** Its own name, over the template's - a player's. */
   name?: string;
+  /** Its own look - a player's; else its seed comes from its key, or its id when it has none. */
+  look?: EntityAppearance;
 }
 
 /** An entity as its template makes it: stats and resources if the template has them, all at their
@@ -51,6 +58,7 @@ export function createEntity(rules: GameRules, template: TemplateDef, id: number
     id,
     template,
     name: place.name ?? template.name,
+    look: place.look ?? { seed: hashString(place.key || `#${id}`), race: "", outfit: "", sex: "" },
     dimension: place.dimension,
     key: place.key ?? "",
     x: place.x,

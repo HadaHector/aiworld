@@ -955,7 +955,9 @@ Read once per server by their own resolver (`src/sim/rules/gameRules.ts`), not p
 Formulas are JSON trees (`add`, `sub`, `mul`, `div`, `min`, `max`, `clamp`, `floor`, `pow` with a
 whole power, `if`, comparisons...), compiled at load; unknown names and circles between stats are
 errors. Players are made from `entities/player.json5`. A dimension places entities with its
-`entities` list.
+`entities` list. A template's `look` names a body - `race`, `outfit`, `sex`, from `races/` and
+`outfits/` (CHARACTERS.md) - or, without a race, a capsule of `color`; `height` and `radius` size
+the capsule, which is what a click hits either way.
 
 ## Example
 

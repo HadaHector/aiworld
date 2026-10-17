@@ -276,7 +276,7 @@ json5 rebuilds the preview at once:
 The own player is drawn with a body instead of the capsule, from the player template's look,
 animated from what the client already gets: position, facing and `grounded` per snapshot (speed
 and vertical speed are worked out from the change in position). A key plays the swing. Other
-entities keep their capsules for now.
+entities kept their capsules in the spike; since *Next steps* 1 they have bodies too (below).
 
 As built (`src/game/playerBody.ts`): there is no character creation yet, so who the player is comes
 from the page's address - `race`, `outfit`, `sex` and `look` (the character's seed), a human scout
@@ -286,6 +286,20 @@ what the camera and the house lights follow. Speed and vertical speed come from 
 moved since the last snapshot, eased; a move of more than 3 m is a teleport. The body turns toward
 the player's facing rather than snapping. 1 or F swings. The game's own walk (6 m/s) and run
 (12 m/s) are not final: at them the gait runs; at 1.2-1.5 and 3 m/s it would walk and jog as tuned.
+
+**Bodies for everyone** (after the verdict, *Next steps* 1): every humanoid entity the client
+knows - other players, NPCs, the training dummy - is drawn with a body when its template's `look`
+names a `race` (and an `outfit`, a `sex`); one without keeps its capsule. Each entity's own look
+- its seed, and a player's race, outfit and sex - is sent in its spawn (ENTITIES.md, *Looks*), so
+every client draws the same character; the own player's comes from the address as before and goes
+to the server in Hello. `src/game/characterBody.ts` is what `playerBody.ts` was, made for any
+entity: the packs' races, gear, outfits and gear materials resolved once (`createBodyKit`), then
+`createCharacterBody` per entity. `entityMeshes.ts` builds each in the background behind the
+template's capsule, hides the capsule once the body is in (it stays as what a click hits), and
+feeds it the mirror's motion each frame. The core pack's player is a human scout and the dummy a
+human knight. `__aiworld.entities.addPlayer({ race, outfit, sex, seed })` adds a second player,
+walking a slow circle at 1.5 m/s. Each body bakes its own gear materials and paints its own
+atlas - fine for a few; a crowd is *Next steps* 2.
 
 ## Build steps
 
@@ -333,11 +347,9 @@ What the spike showed:
 
 In rough order of need; each belongs to the build-order step named, or is its own task.
 
-1. **Bodies for everyone, not just the own player.** Other players, NPCs and humanoid creatures
-   drawn with bodies (replacing `entityMeshes.ts`'s capsules), animated from the mirror's motion as
-   the player's is. Needs the template's `look` to name a race and outfit and each entity's look seed
-   to reach the client - a small change to the game rules' template reader and to what is
-   replicated (ENTITIES.md), which this spike left alone.
+1. **Bodies for everyone, not just the own player.** *Done* (see *In game*): other players, NPCs
+   and humanoid creatures drawn with bodies from the template's `look` and the entity's replicated
+   look seed, animated from the mirror's motion as the player's is.
 2. **Many bodies at once.** One body shared by every character with the same race, sex, sliders,
    seed and gear; a lower detail far away (the `detail` setting already halves it); gear meshes of
    one material merged; smaller atlases far away. Measure first with a crowd in a town.

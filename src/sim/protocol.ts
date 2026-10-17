@@ -6,7 +6,7 @@
  */
 
 /** Bumped whenever a message changes shape. */
-export const PROTOCOL_VERSION = 4;
+export const PROTOCOL_VERSION = 5;
 
 // --- Client to server ------------------------------------------------------------------------
 
@@ -17,6 +17,9 @@ export interface Hello {
   name: string;
   /** Debug: the dimension to start in, by id - "" for the server's choice (see DIMENSIONS.md). */
   dimension: string;
+  /** Who the player is to look at, until character creation saves it (CHARACTERS.md) - left out
+   *  for the player template's look and a seed of the server's. */
+  look?: EntityAppearance;
 }
 
 /**
@@ -152,6 +155,18 @@ export interface Transfer {
   z: number; // f64
 }
 
+/**
+ * Who one entity is to look at, over its template's `look` (see ENTITIES.md): its own seed - its
+ * face, skin, hair and build (CHARACTERS.md) - and, for a player, the race, outfit and sex it chose.
+ * Names, not indices: the client finds them in its own packs, and "" means the template's.
+ */
+export interface EntityAppearance {
+  seed: number; // u32
+  race: string;
+  outfit: string;
+  sex: string; // "male", "female" or ""
+}
+
 /** Where one entity is, as the server has it. */
 export interface EntityMotion {
   id: number; // u32
@@ -195,6 +210,7 @@ export interface EntitySpawn {
   /** Its template's id: the client looks it up in its own packs for a look. */
   template: string;
   name: string;
+  look: EntityAppearance;
   x: number; // f64
   y: number; // f64
   z: number; // f64

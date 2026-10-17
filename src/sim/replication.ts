@@ -107,7 +107,7 @@ export function createReplicator(rules: GameRules): Replicator {
       const last = known.get(entity.id) ?? null;
       if (!last) {
         const { stats, resources } = values(entity, own, null);
-        out.push({ type: "entitySpawn", id: entity.id, template: entity.template.id, name: entity.name, x: entity.x, y: entity.y, z: entity.z, facing: entity.facing, stats, resources });
+        out.push({ type: "entitySpawn", id: entity.id, template: entity.template.id, name: entity.name, look: entity.look, x: entity.x, y: entity.y, z: entity.z, facing: entity.facing, stats, resources });
       } else {
         const { stats, resources } = values(entity, own, last);
         if (stats.length > 0 || resources.length > 0) valueMessages.push({ type: "entityValues", id: entity.id, stats, resources });

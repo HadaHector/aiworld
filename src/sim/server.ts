@@ -1,7 +1,7 @@
 import { dimensionSeed, type DimensionDef } from "../world/content/dimensions";
 import { createDimension, type Dimension, type DimensionWorld } from "./dimension";
 import type { BodyInput } from "./playerBody";
-import { PROTOCOL_VERSION, type ClientMessage } from "./protocol";
+import { PROTOCOL_VERSION, type ClientMessage, type EntityAppearance } from "./protocol";
 import { createReplicator, type Replicator } from "./replication";
 import { addModifier, removeSource } from "./stats";
 import { restore } from "./resources";
@@ -189,7 +189,7 @@ export function createServer(options: ServerOptions): Server {
       case "hello": {
         if (player || message.protocol !== PROTOCOL_VERSION) return;
         const first = definitions.get(message.dimension) ?? start;
-        const entity = createEntity(rules, playerTemplate!, nextId++, { dimension: "", x: first.spawn.x, y: 0, z: first.spawn.z, facing: 0, name: message.name });
+        const entity = createEntity(rules, playerTemplate!, nextId++, { dimension: "", x: first.spawn.x, y: 0, z: first.spawn.z, facing: 0, name: message.name, look: message.look && cleanLook(message.look) });
         const joined: Player = { entity, arrival: first.spawn, arrived: false, input: { moveX: 0, moveZ: 0, run: false, jump: false }, ackSeq: 0 };
         players.set(entity.id, joined);
         connection.player = joined;
@@ -335,4 +335,11 @@ export function createServer(options: ServerOptions): Server {
       },
     },
   };
+}
+
+/** A look a client asked for, kept to what one can be: names of a few plain characters, a u32 seed.
+ *  Whether the names are races and outfits is the clients' business - the server never reads them. */
+function cleanLook(look: EntityAppearance): EntityAppearance {
+  const name = (s: unknown): string => (typeof s === "string" && /^[A-Za-z0-9_-]{0,32}$/.test(s) ? s : "");
+  return { seed: Number(look.seed) >>> 0, race: name(look.race), outfit: name(look.outfit), sex: look.sex === "male" || look.sex === "female" ? look.sex : "" };
 }

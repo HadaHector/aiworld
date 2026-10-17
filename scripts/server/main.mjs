@@ -82,7 +82,7 @@ function describeMessage(message) {
   const resources = (list) => list.map((r) => `${rules.resources[r.resource].id} ${+r.current.toFixed(2)}/${+r.max.toFixed(2)}`).join(", ");
   switch (message.type) {
     case "entitySpawn":
-      return `spawn #${message.id} ${message.name} (${message.template}) · ${resources(message.resources)} · ${stats(message.stats)}`;
+      return `spawn #${message.id} ${message.name} (${message.template}, look ${message.look.seed}${message.look.race ? ` ${message.look.race} ${message.look.outfit}` : ""}) · ${resources(message.resources)} · ${stats(message.stats)}`;
     case "entityValues":
       return `values #${message.id} · ${[resources(message.resources), stats(message.stats)].filter(Boolean).join(" · ")}`;
     case "entityModifiers":

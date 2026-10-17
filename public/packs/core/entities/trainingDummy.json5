@@ -5,5 +5,5 @@
   stats: { level: 10, stamina: 500 },
   resources: ["health", "rage"],
   modifiers: [{ stat: "maxHealth", kind: "percent", value: 100 }],
-  look: { height: 1.9, radius: 0.45, color: [0.75, 0.6, 0.35] },
+  look: { race: "human", outfit: "knight", height: 1.9, radius: 0.45, color: [0.75, 0.6, 0.35] },
 }

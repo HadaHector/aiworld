@@ -61,12 +61,19 @@ export interface ResourceDef {
   visible: Visibility;
 }
 
-/** How the client draws an entity until bodies are built from parts. */
+/** How the client draws an entity: a body of a race (CHARACTERS.md) when it names one, else a
+ *  capsule. The capsule's size is also what a click on the entity hits. */
 export interface EntityLook {
   shape: "capsule";
   height: number;
   radius: number;
   color: ColorTuple;
+  /** A race in the packs' `races/` - for the client alone, which finds it there. "" for a capsule. */
+  race: string;
+  /** An outfit in `outfits/` its body wears; "" for none. */
+  outfit: string;
+  /** A sex instead of the entity's seed's; "" to leave it to the seed. */
+  sex: "male" | "female" | "";
 }
 
 /** A standing modifier a template gives the entities made from it. */
@@ -122,7 +129,7 @@ export const HEALTH = "health";
 export const PLAYER_TEMPLATE = "player";
 
 const ID_PATTERN = /^[A-Za-z0-9_-]+$/;
-const DEFAULT_LOOK: EntityLook = { shape: "capsule", height: 1.8, radius: 0.4, color: [0.7, 0.7, 0.7] };
+const DEFAULT_LOOK: EntityLook = { shape: "capsule", height: 1.8, radius: 0.4, color: [0.7, 0.7, 0.7], race: "", outfit: "", sex: "" };
 
 interface Entry {
   id: string;
@@ -386,12 +393,15 @@ function readTemplate(id: string, obj: RawObject, reader: Reader, { statIndex, k
   let look = DEFAULT_LOOK;
   if (obj.look !== undefined) {
     const raw = reader.object(obj.look, "look");
-    reader.onlyKeys(raw, "look", ["shape", "height", "radius", "color"]);
+    reader.onlyKeys(raw, "look", ["shape", "height", "radius", "color", "race", "outfit", "sex"]);
     look = {
       shape: raw.shape === undefined ? "capsule" : reader.oneOf(raw, "shape", "look", ["capsule"] as const),
       height: reader.optionalNumber(raw, "height", "look", DEFAULT_LOOK.height, { min: 0.1 }),
       radius: reader.optionalNumber(raw, "radius", "look", DEFAULT_LOOK.radius, { min: 0.05 }),
       color: raw.color === undefined ? DEFAULT_LOOK.color : reader.color(raw, "color", "look"),
+      race: reader.optionalString(raw, "race", "look") ?? "",
+      outfit: reader.optionalString(raw, "outfit", "look") ?? "",
+      sex: raw.sex === undefined ? "" : reader.oneOf(raw, "sex", "look", ["male", "female"] as const),
     };
   }
 

@@ -23,7 +23,8 @@ import { loadPackSet, type PackSet } from "./world/content/loadContent";
 import { ContentError, formatIssue } from "./world/content/contentReader";
 import type { WorldContent } from "./world/content/worldContent";
 import { checkPlacements, resolveGameRules, type GameRules } from "./sim/rules/gameRules";
-import { lookFromUrl } from "./game/playerBody";
+import { appearanceOf, lookFromUrl, type PlayerLook } from "./game/playerBody";
+import { createBodyKit } from "./game/characterBody";
 
 const canvasElement = document.getElementById("renderCanvas");
 if (!(canvasElement instanceof HTMLCanvasElement)) {
@@ -61,6 +62,8 @@ const engine = createEngine(canvas);
 // Who the player is, as far as their body goes - from the address, until there is character
 // creation (see CHARACTERS.md): ?race=dwarf&outfit=knight&sex=female&look=7.
 const playerLook = lookFromUrl();
+/** Races, gear and outfits for everyone else's bodies, resolved once. */
+const bodyKit = createBodyKit(packSet.sources);
 
 // The simulation, in this page: single player is a server of one, over an in-memory channel - the
 // same server `npm run server` runs on its own (see SIMULATION.md). It holds the dimensions (see
@@ -186,7 +189,12 @@ async function enter(transfer: Transfer, resume: boolean): Promise<void> {
   built.get(transfer.dimension)?.(next.shared);
   built.delete(transfer.dimension);
   view = next;
-  entityMeshes = createEntityMeshes(next.scene, mirror, gameRules, () => playerId);
+  const world = next.world;
+  entityMeshes = createEntityMeshes(next.scene, mirror, gameRules, () => playerId, {
+    kit: bodyKit,
+    worldSeed: transfer.seed,
+    onBody: (meshes) => meshes.forEach((mesh) => world.castShadow(mesh)),
+  });
   channel.client.send({ type: "arrived" });
   // The server puts the body in once it has the dimension too - a moment, as its load resolves.
   while (!me) {
@@ -225,6 +233,7 @@ function frame(): void {
   const intent = spectator.active ? { moveX: 0, moveZ: 0, run: false, jump: false } : character.readIntent(camera);
   intentSeq = (intentSeq + 1) & 0xffff;
   channel.client.send({ type: "intent", seq: intentSeq, ...intent });
+  for (const extra of extraPlayers) extra.step();
   server.step(deltaSeconds);
   takeServerMessages();
   if (pendingTransfer) return;
@@ -271,6 +280,29 @@ function spawnInFront(template: string): void {
   const own = mirror.entities.get(playerId);
   if (!own) return;
   debugCommand({ type: "debugSpawn", template, x: own.x + Math.sin(own.facing) * 4, z: own.z + Math.cos(own.facing) * 4 });
+}
+
+/**
+ * Debug: a second player in this page's server, over its own channel, as `npm run server -- --bot`
+ * has one - walking a slow circle, so its body can be seen walk. It answers each Transfer with
+ * Arrived at once, and its messages are read and dropped every frame.
+ */
+const extraPlayers: { step: () => void }[] = [];
+function addPlayer(look: Partial<PlayerLook> = {}): void {
+  const extra = createLocalChannel();
+  server.connect(extra.server);
+  const full: PlayerLook = { race: "elf", outfit: "apprentice", seed: 1 + extraPlayers.length, ...look };
+  extra.client.send({ type: "hello", protocol: PROTOCOL_VERSION, name: `player ${extraPlayers.length + 2}`, dimension: currentDimension, look: appearanceOf(full) });
+  let seq = 0;
+  const started = performance.now() / 1000;
+  extraPlayers.push({
+    step() {
+      for (const message of extra.client.receive()) if (message.type === "transfer") extra.client.send({ type: "arrived" });
+      const t = performance.now() / 1000 - started;
+      seq = (seq + 1) & 0xffff;
+      extra.client.send({ type: "intent", seq, moveX: Math.cos(t / 4) * 0.25, moveZ: Math.sin(t / 4) * 0.25, run: false, jump: false });
+    },
+  });
 }
 
 /** The server's own account of an entity - single player has the server in the page. */
@@ -418,6 +450,8 @@ function gotoLoaded(target: Partial<ViewSnapshot> & { x: number; z: number }, it
     combat: (inCombat: boolean, entity = 0) => debugCommand({ type: "debugCombat", entity, inCombat }),
     resource: (resource: string, delta: number, entity = 0) => debugCommand({ type: "debugResource", entity, resource: gameRules.resourceIndex.get(resource) ?? -1, delta }),
     spawn: (template = "trainingDummy") => spawnInFront(template),
+    /** A second player (and third...) walking a circle near the start - its look as given, else an elf. */
+    addPlayer,
     despawn: (entity: number) => debugCommand({ type: "debugDespawn", entity }),
     panel: entityPanel,
   },
@@ -466,7 +500,7 @@ async function follow(resume: boolean): Promise<void> {
 
 // Joining is travelling: the server answers Hello with a Transfer to the first dimension -
 // `?dimension=isles` asks for one (debug).
-command({ type: "hello", protocol: PROTOCOL_VERSION, name: "player", dimension: new URLSearchParams(location.search).get("dimension") ?? "" });
+command({ type: "hello", protocol: PROTOCOL_VERSION, name: "player", dimension: new URLSearchParams(location.search).get("dimension") ?? "", look: appearanceOf(playerLook) });
 if (!pendingTransfer) throw new Error("The server sent no dimension to enter");
 await follow(true);
 

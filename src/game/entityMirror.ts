@@ -1,5 +1,5 @@
 import type { GameRules, TemplateDef } from "../sim/rules/gameRules";
-import type { EntityMotion, ModifierState, ServerMessage } from "../sim/protocol";
+import type { EntityAppearance, EntityMotion, ModifierState, ServerMessage } from "../sim/protocol";
 
 /** One entity as the client knows it: only what the server has told it (see ENTITIES.md). */
 export interface MirroredEntity {
@@ -8,6 +8,8 @@ export interface MirroredEntity {
   template: TemplateDef | null;
   templateId: string;
   name: string;
+  /** Who it is to look at, over its template's look: its seed, and a player's race and outfit. */
+  look: EntityAppearance;
   x: number;
   y: number;
   z: number;
@@ -64,6 +66,7 @@ export function createEntityMirror(rules: GameRules): EntityMirror {
           template: rules.templates.get(message.template) ?? null,
           templateId: message.template,
           name: message.name,
+          look: message.look,
           x: message.x,
           y: message.y,
           z: message.z,

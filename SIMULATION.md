@@ -113,7 +113,8 @@ the browser. Everything under `src/sim` is plain TypeScript that runs in either.
 As built in step 1. Step 3 (ENTITIES.md) made the snapshot's `players` into `entities`, and added
 entity spawn, values, modifiers and despawn messages, a `rules` hash in `welcome`, and debug
 commands on entities (protocol 4). Step 2 (DIMENSIONS.md) added `travel`, `arrived` and `transfer`, a `dimension`
-in `hello`, and moved the seed from `welcome` to `transfer`; `src/sim/protocol.ts` is current.
+in `hello`, and moved the seed from `welcome` to `transfer`. Bodies for everyone (CHARACTERS.md)
+added a `look` to `hello` and `entitySpawn` (protocol 5); `src/sim/protocol.ts` is current.
 
 Client to server:
 
