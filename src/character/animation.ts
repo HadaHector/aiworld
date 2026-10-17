@@ -14,6 +14,8 @@ export interface MotionInput {
   swimming: boolean;
   /** Set on the frame a melee swing starts. */
   swing?: boolean;
+  /** Dead: the body falls and lies still until this is false again. */
+  dead?: boolean;
 }
 
 /** A pose to set on the body (characterMesh.ts) and how far to move the whole of it, in metres. */
@@ -52,6 +54,8 @@ const SWING_TIME = 0.62;
  *   kicking together.
  * - **A melee swing** - wind-up, strike, follow-through - is laid over the upper body whatever the
  *   legs are doing.
+ * - **Death**: the knees give, the body tips back and falls, bounces once and lies still - over
+ *   whatever else it was doing, until it is alive again.
  */
 export function createAnimator(skeleton: RaceSkeleton): Animator {
   const leg = skeleton.thigh + skeleton.shin;
@@ -65,6 +69,9 @@ export function createAnimator(skeleton: RaceSkeleton): Animator {
   let airTime = 0;
   let landing = 0;
   let swimPhase = 0;
+  /** Seconds since death, or -1 while alive; and how far the body is given over to it. */
+  let deadFor = -1;
+  let death = 0;
 
   const ease = (current: number, target: number, rate: number, dt: number): number => current + (target - current) * Math.min(1, rate * dt);
 
@@ -89,6 +96,10 @@ export function createAnimator(skeleton: RaceSkeleton): Animator {
       wasGrounded = input.grounded;
       landing = Math.max(0, landing - dt * 4);
       if (input.swing) swingAt = time;
+      deadFor = input.dead ? (deadFor < 0 ? 0 : deadFor + dt) : -1;
+      // Into death at once (what the body was doing gives way within a few frames); out of it
+      // gently, when it comes back.
+      death = input.dead ? Math.min(1, death + dt * 10) : Math.max(0, death - dt * 3);
       swimPhase = (swimPhase + dt / 1.5) % 1;
 
       const idlePose = idle(time);
@@ -113,9 +124,54 @@ export function createAnimator(skeleton: RaceSkeleton): Animator {
         const envelope = smooth(0, 0.08, swingTime) * (1 - smooth(SWING_TIME - 0.15, SWING_TIME, swingTime));
         pose = { ...pose, ...mix(pose, { ...pose, ...swing(swingTime / SWING_TIME) }, envelope) };
       }
+      if (death > 0) {
+        const dying = dyingPose(Math.max(0, deadFor));
+        pose = mix(pose, dying.pose, death);
+        offset = lerp3(offset, dying.offset, death);
+      }
       return { pose, offset };
     },
   };
+
+  /**
+   * Death, `t` seconds in: the knees give and the body sags forward; then it tips back from the
+   * hips, slowly at first and faster as it goes, as a falling thing does; it lands on its back with
+   * a small bounce, and lies there - arms flung out, one knee raised a little, head rolled aside.
+   */
+  function dyingPose(t: number): AnimatedPose {
+    const hips = skeleton.ankle + leg;
+    // The knees giving, in the first quarter of a second.
+    const sag = smooth(0, 0.25, t);
+    // The fall: eased in like a drop, landing at 0.8 s.
+    const f = Math.min(1, Math.max(0, (t - 0.15) / 0.65));
+    const fall = f * f;
+    // A bounce on landing, gone by 1.1 s.
+    const bounce = t > 0.8 ? Math.sin(Math.min(1, (t - 0.8) / 0.3) * Math.PI) * 0.06 * (1 - smooth(0.8, 1.1, t)) : 0;
+    const lying = smooth(0.6, 1.0, t);
+    const pose: Pose = {
+      // Tipping back from the hips, the whole body with it.
+      pelvis: [-1.5 * fall + bounce * 0.5, 0, 0.08 * fall],
+      spine: [0.3 * sag * (1 - fall) - 0.05 * lying, 0.1 * lying, 0],
+      chest: [0.15 * sag * (1 - fall), 0.08 * lying, 0],
+      neck: [0.2 * sag * (1 - fall), 0.3 * lying, 0],
+      head: [0.25 * sag * (1 - fall) - 0.15 * lying, 0.55 * lying, 0.1 * lying],
+      // The knees bent as they give, straightening as the body lands - the +x one staying up a little.
+      thighR: [0.55 * sag * (1 - fall) + 0.35 * lying, 0, 0.1 * lying],
+      shinR: [-1.1 * sag * (1 - fall) - 0.7 * lying, 0, 0],
+      footR: [0.4 * sag * (1 - fall) + 0.2 * lying, 0, 0],
+      thighL: [0.45 * sag * (1 - fall) + 0.05 * lying, 0, -0.15 * lying],
+      shinL: [-0.9 * sag * (1 - fall) - 0.12 * lying, 0, 0],
+      footL: [0.35 * sag * (1 - fall) - 0.3 * lying, 0, 0],
+      // Arms hanging limp as it sags, thrown out as it falls, lying spread.
+      ...both("upperArm", [0.25 * sag * (1 - fall) + 0.5 * fall, 0, 0.15 + 0.9 * fall]),
+      ...both("forearm", [0.3 + 0.4 * fall * (1 - lying) + 0.15 * lying, 0, 0]),
+      ...both("hand", [0.2 * lying, 0, 0]),
+    };
+    // Down as the knees give, then all the way down as it tips over - the hips coming to rest at
+    // the body's own thickness off the ground.
+    const down = 0.15 * sag * (1 - fall) + (hips - 0.14) * fall;
+    return { pose, offset: [0, -down + bounce, 0] };
+  }
 
   /** Standing: breathing, a slow shift of weight from foot to foot, the head turning now and then. */
   function idle(t: number): AnimatedPose {

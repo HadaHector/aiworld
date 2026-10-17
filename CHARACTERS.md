@@ -232,6 +232,10 @@ vertical speed, swimming, and a swing trigger.
   workbench for now: the simulation has no water state yet.
 - **Melee swing** - wind-up, strike and follow-through for the arm with the weapon, the spine
   twisting with it, played over whatever the legs do.
+- **Death** (added after the spike) - the knees give, the body tips back from the hips, faster as it
+  falls, bounces once and lies on its back, arms flung out, a knee raised, the head rolled aside;
+  it eases out again when the body comes back to life. Driven by a `dead` input; the workbench's
+  *Dying* plays it on a loop. Not yet tied to the game's own `dead` flag.
 
 Each is a function from time and inputs to a pose (a rotation per bone). Poses are blended by
 weights that ease in and out, and the swing is layered on the upper body.

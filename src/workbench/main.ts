@@ -642,7 +642,7 @@ function renderPreviewBar(): void {
         ...characterChoices(rebuild),
         select("Play", "animation", Object.entries(ANIMATIONS).map(([id, entry]): [string, string] => [id, entry.label]), rebuild),
         ...(options.animation === "still" ? [select("Pose", "pose", Object.entries(POSES).map(([id, entry]): [string, string] => [id, entry.label]), rebuild)] : []),
-        ...(options.animation === "still" || options.animation === "idle"
+        ...(options.animation === "still" || options.animation === "idle" || options.animation === "die"
           ? []
           : [
               select("Speed", "speed", [["0", "Standing"], ["0.6", "0.6 m/s"], ["1.2", "1.2 m/s (walk)"], ["1.5", "1.5 m/s"], ["2.2", "2.2 m/s"], ["3", "3 m/s (run)"], ["4.5", "4.5 m/s"], ["6", "6 m/s"]], rebuild),

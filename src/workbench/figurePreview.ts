@@ -46,6 +46,7 @@ export const ANIMATIONS = {
   jump: { label: "Jumping" },
   swim: { label: "Swimming" },
   swing: { label: "Swinging" },
+  die: { label: "Dying" },
 } satisfies Record<string, { label: string }>;
 
 /** A body and the atlas painted for it. */
@@ -101,7 +102,7 @@ function play(scene: Scene, character: CharacterMesh, race: RaceDef, options: Fi
   let rise = 0;
   let nextJump = 0.8;
   let nextSwing = 0.5;
-  const moving = options.animation !== "idle";
+  const moving = options.animation !== "idle" && options.animation !== "die";
   const speed = moving ? options.speed : 0;
   scene.onBeforeRenderObservable.add(() => {
     const dt = Math.min(0.05, scene.getEngine().getDeltaTime() / 1000);
@@ -134,7 +135,9 @@ function play(scene: Scene, character: CharacterMesh, race: RaceDef, options: Fi
       nextSwing = time + 1.3;
     }
     const grounded = lift <= 0 && rise <= 0;
-    const { pose, offset } = animator.update({ speed, grounded, verticalSpeed: rise, swimming: options.animation === "swim", swing }, dt);
+    // Dying: standing a moment and a half, dead for four seconds, then up again.
+    const dead = options.animation === "die" && time % 5.5 > 1.5;
+    const { pose, offset } = animator.update({ speed: dead ? 0 : speed, grounded, verticalSpeed: rise, swimming: options.animation === "swim", swing, dead }, dt);
     character.setPose(pose, offset);
     character.mesh.position.set(x, height(x, z) + lift, z);
     character.mesh.rotation.y = facing;
