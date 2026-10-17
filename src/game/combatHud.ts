@@ -58,8 +58,8 @@ interface Frame {
 }
 
 function makeFrame(left: string): Frame {
-  // Below the debug panels down the top left, which reach about 200 px.
-  const root = el("div", `position: fixed; top: 206px; left: ${left}; width: 250px; padding: 6px 8px; z-index: 900; display: none; ${PANEL}`, document.body);
+  // Its top is set each frame (see `frameTop`).
+  const root = el("div", `position: fixed; top: 60px; left: ${left}; width: 250px; padding: 6px 8px; z-index: 900; display: none; ${PANEL}`, document.body);
   const name = el("div", "font-weight: 600; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;", root);
   const bars = el("div", "", root);
   const cast = el("div", "position: relative; height: 14px; margin-top: 4px; background: #333; border-radius: 3px; overflow: hidden; display: none;", root);
@@ -67,6 +67,13 @@ function makeFrame(left: string): Frame {
   const castText = el("div", "position: absolute; inset: 0; text-align: center; font-size: 11px; line-height: 14px; color: #fff; text-shadow: 0 1px 1px #000;", cast);
   const auras = el("div", "display: flex; flex-wrap: wrap; gap: 3px; margin-top: 4px;", root);
   return { root, name, bars, cast, castFill, castText, auras };
+}
+
+/** Where the unit frames sit: just under the settings bar at the top, when the window is wide
+ *  enough for them to clear the debug panels down the left (about 330 px wide); else below those
+ *  panels, which reach about 200 px down. */
+function frameTop(): string {
+  return window.innerWidth / 2 - 270 >= 340 ? "60px" : "206px";
 }
 
 export function createCombatHud(options: CombatHudOptions): CombatHud {
@@ -189,6 +196,8 @@ export function createCombatHud(options: CombatHudOptions): CombatHud {
 
   return {
     update(targetId) {
+      const top = frameTop();
+      if (ownFrame.root.style.top !== top) ownFrame.root.style.top = targetFrame.root.style.top = top;
       const now = mirror.serverTime();
       const own = mirror.entities.get(ownId());
       drawFrame(ownFrame, own, now, false);

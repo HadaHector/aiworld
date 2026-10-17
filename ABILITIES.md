@@ -715,6 +715,16 @@ Each leaves the game working: dev server, `npm run probe`, `npm run server`, `np
   the box, Respawn standing it at the spawn with full health; a second player falling, lying when
   seen again after leaving view, and getting up where it lay when revived.
 
+- **Floating combat text** (asked for after the step, `src/game/floatingText.ts`): numbers rise over
+  the unit a hit or heal lands on, from the combat events, for the own player's fights only - what
+  it deals over its target, what it takes over itself. Defaults, WoW Classic-like: weapon damage
+  white, spell damage yellow, damage taken red with a minus, healing green with a plus; crits
+  larger with a "!" and a pop; damage and healing over time smaller; "Miss", "Immune", "Resist",
+  "Absorb" (or "(n absorbed)" beside a number) and "Interrupted" as words; healing that only
+  overheals shows nothing; numbers landing together spread left and right; 1.4 s each, 1.9 s for a
+  crit. Summons' damage (the totem's) is not shown: the client is not told who owns a summon.
+  Fixed on the way: a state entered from a tick (auto-attack's swing) was flagged periodic.
+
 ## Not in this step
 
 - Creature AI (aggro, chasing, leashing): step 6. The dummy's bolt is a passive, not a brain.

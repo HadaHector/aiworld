@@ -32,6 +32,7 @@ import { GROUND_ITEM_TEMPLATE } from "./sim/items/itemSystem";
 import { appearanceOf, lookFromUrl, type PlayerLook } from "./game/playerBody";
 import { createBodyKit } from "./game/characterBody";
 import { createCombatHud } from "./game/combatHud";
+import { createFloatingText, type FloatingText } from "./game/floatingText";
 import { nextEnemy } from "./game/targeting";
 import { EVENT_KIND } from "./sim/skills/events";
 import { FLAG } from "./sim/skills/flags";
@@ -112,6 +113,8 @@ const mirror = createEntityMirror(gameRules);
 const belongings = createBelongingsMirror();
 /** The other entities drawn in the current view's scene. */
 let entityMeshes: EntityMeshes | null = null;
+/** Damage and healing numbers over the units the own player fights, in the current view. */
+let floatingText: FloatingText | null = null;
 /** The unit the player has selected (see ABILITIES.md): 0 for none. */
 let targetId = 0;
 
@@ -140,6 +143,7 @@ function takeServerMessages(): void {
         else entityMeshes?.swing(event.source);
       }
       combatHud.log(message.events);
+      floatingText?.add(message.events);
     } else if (message.type === "snapshot") {
       const mine = message.entities.find((p) => p.id === playerId);
       if (mine) {
@@ -184,6 +188,8 @@ function leave(): void {
   const old = view;
   view = null;
   entityMeshes?.dispose();
+  floatingText?.dispose();
+  floatingText = null;
   entityMeshes = null;
   old.dispose();
 }
@@ -223,6 +229,7 @@ async function enter(transfer: Transfer, resume: boolean): Promise<void> {
   built.delete(transfer.dimension);
   view = next;
   const world = next.world;
+  floatingText = createFloatingText(next.scene, mirror, gameRules, () => playerId);
   entityMeshes = createEntityMeshes(next.scene, mirror, gameRules, () => playerId, {
     kit: bodyKit,
     worldSeed: transfer.seed,
@@ -275,6 +282,7 @@ function frame(): void {
   entityMeshes?.setTarget(targetId);
   entityMeshes?.update();
   combatHud.update(targetId);
+  floatingText?.update();
   if (!spectator.active) {
     v.playerLights.update(deltaSeconds);
     v.placeLabels.update(character.mesh.position, v.scene.activeCamera);

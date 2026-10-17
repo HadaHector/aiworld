@@ -242,6 +242,17 @@ function stateLength(sys: Sys, magic: Magic, state: StateDef): number {
 
 /** Enters a state at a time (the moment the last one ran out, so ticks and swings do not drift). */
 function enterState(sys: Sys, magic: Magic, index: number, at: number): void {
+  // A state entered from a tick (a swing a ready state's tick starts) is not itself a tick.
+  const ticking = sys.ticking;
+  sys.ticking = false;
+  try {
+    enterStateNow(sys, magic, index, at);
+  } finally {
+    sys.ticking = ticking;
+  }
+}
+
+function enterStateNow(sys: Sys, magic: Magic, index: number, at: number): void {
   const state = magic.skill.states[index];
   magic.state = index;
   magic.serial++;
