@@ -80,6 +80,8 @@
     // Flat: wide across (front, the thumb's side, and back), thin from its back (out) to the palm (in).
     hand: { front: [[0, 0.05], [0.5, 0.062], [1, 0.05]], back: [[0, 0.05], [0.5, 0.062], [1, 0.045]], out: [[0, 0.032], [0.5, 0.032], [1, 0.02]], in: [[0, 0.032], [0.5, 0.032], [1, 0.02]], round: 0.5, loops: 1, verts: 6 },
   },
+  // How far one character may stray from these: a factor on its lengths and on its girth.
+  sliders: { height: [0.94, 1.06], build: [0.88, 1.14] },
   // How the sexes differ: factors on the skeleton's lengths and on bones' curves, and bumps added.
   sexes: {
     male: {

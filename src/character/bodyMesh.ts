@@ -56,6 +56,8 @@ export interface BodyOptions {
   lattice?: boolean;
   /** Gear worn, its geometry built onto the body (see gearDef.ts). */
   gear?: GearDef[];
+  /** The skin's colour, for the race's own pieces (an elf's ears) - the race's first if left out. */
+  skin?: [number, number, number];
 }
 
 interface Ring {
@@ -692,6 +694,33 @@ export function buildBody(race: RaceDef, options: BodyOptions = {}): BodyGeometr
   }
 
   region = -1;
+  // The race's own pieces: tapering spikes in the skin's colour (an elf's ears).
+  part = "head";
+  for (const piece of race.pieces) {
+    for (const suffix of piece.sides) {
+      // A bone in the middle (the head) carries both sides' pieces itself.
+      const iBone = skeleton.index(`${piece.bone}${suffix}`) >= 0 ? skeleton.index(`${piece.bone}${suffix}`) : skeleton.index(piece.bone);
+      if (iBone < 0) continue;
+      const mirror = suffix === "L" ? -1 : 1;
+      const side = suffix === "R" ? 1 : suffix === "L" ? -1 : 0;
+      const root = add(bones[iBone].head, [piece.at[0] * mirror, piece.at[1], piece.at[2]]);
+      const axis = normalize([piece.axis[0] * mirror, piece.axis[1], piece.axis[2]]);
+      const tip = add(root, scale(axis, piece.length));
+      const start = points.length;
+      layer = layerOf({ material: "skin", tint: options.skin ?? race.look.skin[0] });
+      const rings = ([[0, 1], [0.45, 0.65], [0.8, 0.3]] as [number, number][]).map(([t, f]) => {
+        const r = piece.radius * f;
+        const made = ring(iBone, evenShape(r * piece.flat, r * piece.flat, r, 0.7, 6), root, tip, t, FORWARD, side);
+        mapRing(made, t * piece.length);
+        return made;
+      });
+      for (let k = 0; k + 1 < rings.length; k++) zip(rings[k].verts, rings[k + 1].verts, axis, FORWARD);
+      capRing(rings[0], root, iBone, 0, true);
+      capRing(rings[rings.length - 1], tip, iBone, piece.length);
+      fixAll(start, [[iBone, 1]]);
+    }
+  }
+  layer = -1;
   part = "gear";
   for (const piece of options.gear ?? []) {
     for (const def of piece.shells) for (const chainName of sided(def.chain)) buildShell(def, chainName);

@@ -131,6 +131,8 @@ const DEFAULT_OPTIONS: Options = {
   smallclothes: "on",
   outfit: "",
   race: "",
+  height: "",
+  build: "",
   sex: "",
   animation: "idle",
   speed: "1.2",
@@ -536,6 +538,7 @@ function viewsFor(asset: Asset | null, content: WorldContent | null): ViewDef[] 
       return [
         { id: "model", label: "Model", mode: "3d" },
         { id: "placed", label: "On the ground", mode: "3d" },
+        { id: "lineup", label: "Line-up", mode: "3d" },
         { id: "atlas", label: "Atlas", mode: "2d" },
       ];
     case "gearMaterials":
@@ -617,17 +620,17 @@ function renderPreviewBar(): void {
   if (view.mode === "3d") {
     viewOptions.append(
       select("Light", "time", TIME_PRESETS.map(([name]) => [name, name]), () => stage?.setTime(timeHours())),
-      ...(view.id === "model" ? [] : [select("Sky", "sky", [["", content ? `Auto (${autoSkyBiome(content, current).name})` : "Auto"], ...(content?.biomes ?? []).map((biome): [string, string] => [biome.id, biome.name])], rebuild),
+      ...(view.id === "model" || view.id === "lineup" ? [] : [select("Sky", "sky", [["", content ? `Auto (${autoSkyBiome(content, current).name})` : "Auto"], ...(content?.biomes ?? []).map((biome): [string, string] => [biome.id, biome.name])], rebuild),
       select("Ground", "shape", [
         ["flat", "Flat"],
         ["hills", "Hills"],
         ["steep", "Steep"],
       ], rebuild)]),
     );
-    if (current.folder !== "materials" && content && view.id !== "model") {
+    if (current.folder !== "materials" && content && view.id !== "model" && view.id !== "lineup") {
       viewOptions.append(select("On", "ground", groundChoices(content, current), rebuild));
     }
-    if (view.id !== "model") viewOptions.append(checkbox("Grass", "grass", rebuild));
+    if (view.id !== "model" && view.id !== "lineup") viewOptions.append(checkbox("Grass", "grass", rebuild));
     viewOptions.append(
       checkbox("Wireframe", "wire", () => {
         if (stage) stage.scene.forceWireframe = options.wire === "on";
@@ -646,6 +649,7 @@ function renderPreviewBar(): void {
               select("Path", "path", [["place", "On the spot"], ["circle", "Round a circle"]], rebuild),
             ]),
         select("Sex", "sex", [["", "By seed"], ["male", "Male"], ["female", "Female"]], rebuild),
+        ...SLIDER_MENUS.map(([key, label]) => select(label, key, [["", "By seed"], ["0", "Low"], ["0.5", "Middle"], ["1", "High"]], rebuild)),
         select("Texture", "texture", [["painted", "Painted (512)"], ["retro", "Retro (128)"], ["flat", "Flat colour"]], rebuild),
         checkbox("Smallclothes", "smallclothes", rebuild),
         select("Detail", "detail", [["0.5", "Low"], ["1", "As drawn"], ["2", "High"]], rebuild),
@@ -939,6 +943,7 @@ function characterInputs(asset: Asset): { race: RaceDef; gear: Map<string, GearM
         smallclothes: options.smallclothes === "on",
         seed,
         sex: options.sex === "male" || options.sex === "female" ? options.sex : null,
+        sliders: Object.fromEntries((["height", "build"] as const).filter((key) => options[key] !== "").map((key) => [key, Number(options[key])])),
         animation: (options.animation in ANIMATIONS ? options.animation : "still") as FigureOptions["animation"],
         speed: Number.isFinite(Number(options.speed)) ? Number(options.speed) : 1.2,
         path: options.path === "circle" ? "circle" : "place",
@@ -951,6 +956,12 @@ function characterInputs(asset: Asset): { race: RaceDef; gear: Map<string, GearM
     return null;
   }
 }
+
+/** A race's look sliders, as the preview bar offers them (raceDef.ts, SLIDERS). */
+const SLIDER_MENUS: [string, string][] = [
+  ["height", "Height"],
+  ["build", "Build"],
+];
 
 /** The races and outfits the packs have, as the last character preview read them - for the menus. */
 let characterLists: { races: [string, string][]; outfits: [string, string][] } = { races: [], outfits: [] };
@@ -1020,10 +1031,35 @@ async function preview3d(token: number, asset: Asset, view: ViewDef, content: Wo
     if (!inputs) return;
     setStatus("Painting");
     await nextPaint();
-    const painted = await paintedBody(inputs.race, inputs.gear, seed, inputs.options);
-    if (token !== previewToken) return;
-    figure = figureFor(inputs.race, painted, inputs.options);
-    summary = painted.summary;
+    if (view.id === "lineup") {
+      // Every race side by side, shortest first, in the same outfit, pose and animation.
+      const races = [...resolveRaces(sourcesWithEdit()).values()];
+      const painted = await Promise.all(races.map((race) => paintedBody(race, inputs.gear, seed, inputs.options)));
+      if (token !== previewToken) return;
+      const order = races.map((race, i) => ({ race, painted: painted[i], tall: Math.max(...painted[i].body.positions.filter((_, k) => k % 3 === 1)) })).sort((a, b) => a.tall - b.tall);
+      const gap = 1.1;
+      const figures = order.map((entry, i) => figureFor(entry.race, entry.painted, inputs.options, (i - (order.length - 1) / 2) * gap));
+      figure = (scene, shadows, height) => {
+        let tallest = 0;
+        for (const f of figures) tallest = Math.max(tallest, f(scene, shadows, height).height);
+        return { width: gap * order.length, height: tallest };
+      };
+      // One line a race: its height and triangles.
+      summary = document.createElement("div");
+      const table = document.createElement("table");
+      for (const entry of order) {
+        const row = table.insertRow();
+        row.insertCell().textContent = entry.race.name;
+        row.insertCell().textContent = `${entry.tall.toFixed(2)} m`;
+        row.insertCell().textContent = `${entry.painted.body.triangles} triangles`;
+      }
+      summary.append(table);
+    } else {
+      const painted = await paintedBody(inputs.race, inputs.gear, seed, inputs.options);
+      if (token !== previewToken) return;
+      figure = figureFor(inputs.race, painted, inputs.options);
+      summary = painted.summary;
+    }
   } else if (asset.folder === "props") {
     ground = groundMaterial(content, asset);
     if (grassOn) grass = ground.grass;
@@ -1058,7 +1094,7 @@ async function preview3d(token: number, asset: Asset, view: ViewDef, content: Wo
     ground,
     grass,
     shape: options.shape as GroundShape,
-    bare: view.id === "model",
+    bare: view.id === "model" || view.id === "lineup",
     trees,
     buildings,
     buildingColliders: options.colliders === "on" && (asset.folder === "buildings" || asset.folder === "props" || asset.folder === "features"),

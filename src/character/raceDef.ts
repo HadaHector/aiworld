@@ -17,6 +17,29 @@ export interface RaceDef {
   lattice: LatticeDef | null;
   /** How each sex differs from the shape above (see `forSex`). */
   sexes: Record<Sex, SexDef>;
+  /** Rigid pieces of the body itself, in its skin's colour - an elf's long ears. */
+  pieces: RacePiece[];
+  /** How far a character's looks may stray from the race's, each picked by its seed between the
+   *  two factors (see `withLook`): `height` scales its lengths, `build` its girth. */
+  sliders: Record<Slider, [number, number]>;
+}
+
+export const SLIDERS = ["height", "build"] as const;
+export type Slider = (typeof SLIDERS)[number];
+
+/**
+ * A tapering spike on a bone, flattened to `flat` of its width one way - an ear: from `at` (metres
+ * from the bone's head, x mirrored on the -x side) out along `axis` for `length`, `radius` wide at
+ * its root. `sides` "both" makes one each side.
+ */
+export interface RacePiece {
+  bone: string;
+  sides: ("R" | "L" | "")[];
+  at: [number, number, number];
+  axis: [number, number, number];
+  length: number;
+  radius: number;
+  flat: number;
 }
 
 export const SEXES = ["male", "female"] as const;
@@ -156,7 +179,7 @@ export function characterEntries(packs: PackSource[], folder: (typeof CHARACTER_
 
 function readRace(id: string, data: unknown, reader: Reader): RaceDef {
   const obj = reader.object(data, "");
-  reader.onlyKeys(obj, "", ["name", "look", "skeleton", "shape", "lattice", "sexes"]);
+  reader.onlyKeys(obj, "", ["name", "look", "skeleton", "shape", "lattice", "sexes", "pieces", "sliders"]);
   const rawSkeleton = reader.object(obj.skeleton, "skeleton");
   reader.onlyKeys(rawSkeleton, "skeleton", SKELETON_KEYS);
   const skeleton = Object.fromEntries(SKELETON_KEYS.map((key) => [key, reader.number(rawSkeleton, key, "skeleton", { min: key === "armDown" ? -90 : 0, max: key === "armDown" ? 90 : 3 })])) as unknown as RaceSkeleton;
@@ -175,6 +198,8 @@ function readRace(id: string, data: unknown, reader: Reader): RaceDef {
     name: reader.optionalString(obj, "name", "") ?? id,
     look,
     sexes,
+    pieces: reader.optionalArray(obj, "pieces", "").map((piece, i) => readPiece(reader.object(piece, `pieces[${i}]`), `pieces[${i}]`, reader)),
+    sliders: readSliders(obj.sliders === undefined ? {} : reader.object(obj.sliders, "sliders"), reader),
     skeleton,
     shape,
     lattice: obj.lattice === undefined ? null : readLattice(reader.object(obj.lattice, "lattice"), reader),
@@ -266,6 +291,49 @@ function readSex(raw: unknown, path: string, beard: number, reader: Reader): Sex
 }
 
 /** The race's body as one sex has it: its lengths and curves scaled, its bumps added. */
+function readPiece(obj: RawObject, path: string, reader: Reader): RacePiece {
+  reader.onlyKeys(obj, path, ["bone", "sides", "at", "axis", "length", "radius", "flat"]);
+  const triple = (key: string): [number, number, number] => {
+    const value = obj[key];
+    if (Array.isArray(value) && value.length === 3 && value.every((v) => typeof v === "number" && Number.isFinite(v))) return value as [number, number, number];
+    reader.fail(`${path}.${key}`, "expected [x, y, z]");
+    return [0, 1, 0];
+  };
+  const sides = obj.sides === undefined ? "" : reader.oneOf(obj, "sides", path, ["both", "R", "L"] as const);
+  return {
+    bone: reader.string(obj, "bone", path),
+    sides: (sides === "both" ? ["R", "L"] : [sides]) as ("R" | "L" | "")[],
+    at: triple("at"),
+    axis: triple("axis"),
+    length: reader.number(obj, "length", path, { min: 0.01, max: 1 }),
+    radius: reader.number(obj, "radius", path, { min: 0.002, max: 0.5 }),
+    flat: reader.optionalNumber(obj, "flat", path, 1, { min: 0.05, max: 1 }),
+  };
+}
+
+function readSliders(obj: RawObject, reader: Reader): Record<Slider, [number, number]> {
+  reader.onlyKeys(obj, "sliders", SLIDERS);
+  return Object.fromEntries(SLIDERS.map((key) => [key, obj[key] === undefined ? [1, 1] : reader.range(obj, key, "sliders", { allowEqual: true })])) as Record<Slider, [number, number]>;
+}
+
+/** The race's body as one character's sliders have it: its lengths scaled by `height`, the girth
+ *  of every bone below the head - and how far apart its shoulders and hips are - by `build`. */
+export function withLook(race: RaceDef, height: number, build: number): RaceDef {
+  const skeleton = { ...race.skeleton };
+  for (const key of Object.keys(skeleton) as (keyof RaceSkeleton)[]) if (key !== "armDown") skeleton[key] *= height;
+  // The joints apart as the body is wide, so the arms and legs still meet it where they did.
+  skeleton.shoulderWidth *= build;
+  skeleton.hipWidth *= build;
+  const shape = { ...race.shape };
+  for (const bone of SHAPED_BONES) {
+    const k = bone === "head" ? height : height * build;
+    const base = race.shape[bone];
+    const scaled = (curve: CurvePoints): CurvePoints => curve.map(([t, d]) => [t, d * k]);
+    shape[bone] = { ...base, front: scaled(base.front), back: scaled(base.back), out: scaled(base.out), in: scaled(base.in), bumps: base.bumps.map((b) => ({ ...b, height: b.height * k })) };
+  }
+  return { ...race, skeleton, shape };
+}
+
 export function forSex(race: RaceDef, sex: Sex): RaceDef {
   const def = race.sexes[sex];
   const skeleton = { ...race.skeleton };

@@ -6,9 +6,10 @@ procedurally from parts, textured and animated procedurally, look good enough fo
 WoW-Classic-like third-person RPG? Afterwards a body can be looked at in the workbench with any
 race and outfit, playing any of its animations, and the own player in the game is drawn with one.
 
-**Status: building.** Steps 1-4 are built: the human, male and female, in the workbench
-(`?asset=core/races/human`), painted, with its Atlas view, playing its animations, in three outfits;
-gear materials in `gearMaterials/`, gear in `gear/`, outfits in `outfits/`.
+**Status: building.** Steps 1-5 are built: three races (human, dwarf, elf), male and female, in the
+workbench (`?asset=core/races/human`), painted, with an Atlas view and a Line-up view, playing their
+animations, in three outfits; gear materials in `gearMaterials/`, gear in `gear/`, outfits in
+`outfits/`.
 
 ## Decisions
 
@@ -81,6 +82,11 @@ thigh: {
   a point at its peak for the painter (`mark: "nipple"`).
 - **Sexes.** A race has a `male` and a `female` block: factors on its skeleton's lengths and on
   bones' curves, bumps added, and its own share of beards. A character's seed picks its sex.
+- **Race pieces.** A race can carry rigid pieces of its own, in its skin's colour: the elf's long
+  ears are tapering spikes on the head bone.
+- **Sliders.** A race gives each slider a range - `height` (all its lengths) and `build` (the girth
+  of every bone below the head, and how far apart the shoulders and hips are) - and a character's
+  seed picks where in it the character falls. The workbench can force low, middle or high.
 - A race gives the curves; look sliders scale them (all four, or front/back only for a belly,
   left/right only for breadth).
 
@@ -260,6 +266,7 @@ json5 rebuilds the preview at once:
   seed, look sliders, animation (idle, walk, run, a speed slider, jump, swim, swing), wireframe,
   bones, texture look (smooth or retro). A gear piece is shown worn by a chosen race.
 - **Line-up** (3D) - the three races side by side in the same outfit, to judge gear fitting each.
+  As built: every race in the packs, shortest first, in the same outfit, sex, seed and animation.
 - **Atlas** (2D) - the painted texture.
 - **Stats** - triangle count per part, so the cost of gear is visible.
 

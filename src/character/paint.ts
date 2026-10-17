@@ -5,7 +5,7 @@ import { smoothNormals } from "./atlas";
 import type { BodyGeometry } from "./bodyMesh";
 import { curveSampler } from "./curve";
 import { sampleGearMaterial, type BakedGearMaterial } from "./gearMaterial";
-import { SEXES, type RaceDef, type Sex } from "./raceDef";
+import { SEXES, SLIDERS, type RaceDef, type Sex, type Slider } from "./raceDef";
 import { dot, frameFor, length, sub, type Vec } from "./skeleton";
 
 /** One character's looks, picked from its race's by its seed. */
@@ -19,10 +19,14 @@ export interface Appearance {
   eyeSpacing: number;
   browTilt: number;
   mouthWidth: number;
+  /** Factors on the race's lengths and girth, between its sliders' limits (raceDef.ts, withLook). */
+  height: number;
+  build: number;
 }
 
-/** A character's looks from its seed - its sex too, unless one is given. */
-export function chooseAppearance(race: RaceDef, seed: number, sex?: Sex): Appearance {
+/** A character's looks from its seed - its sex too, unless one is given, and its sliders, unless
+ *  they are (each 0 at the race's low limit to 1 at its high one). */
+export function chooseAppearance(race: RaceDef, seed: number, sex?: Sex, sliders: Partial<Record<Slider, number>> = {}): Appearance {
   const random = mulberry32(deriveSeed(seed, 0x6c6f6f6b));
   const pick = <T>(list: T[]): T => list[Math.floor(random() * list.length)];
   const rolled = pick([...SEXES]);
@@ -36,7 +40,18 @@ export function chooseAppearance(race: RaceDef, seed: number, sex?: Sex): Appear
     eyeSpacing: random() * 2 - 1,
     browTilt: random() * 2 - 1,
     mouthWidth: random() * 2 - 1,
+    ...pickSliders(race, random, sliders),
   };
+}
+
+function pickSliders(race: RaceDef, random: () => number, chosen: Partial<Record<Slider, number>>): Record<Slider, number> {
+  const out = {} as Record<Slider, number>;
+  for (const key of SLIDERS) {
+    const [low, high] = race.sliders[key];
+    const k = random();
+    out[key] = low + (high - low) * (chosen[key] ?? k);
+  }
+  return out;
 }
 
 /** Something worn painted on, until gear is (CHARACTERS.md, step 4): a material over the body

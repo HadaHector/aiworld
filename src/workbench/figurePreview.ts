@@ -2,7 +2,7 @@ import { Color3, MeshBuilder, SkeletonViewer, Vector3, type Scene } from "@babyl
 import { buildBody, type BodyGeometry } from "../character/bodyMesh";
 import { createCharacterMesh, type BodySkin, type CharacterMesh, type Pose } from "../character/characterMesh";
 import { createAnimator } from "../character/animation";
-import { forSex, type RaceDef, type Sex } from "../character/raceDef";
+import { forSex, withLook, type RaceDef, type Sex, type Slider } from "../character/raceDef";
 import { layoutAtlas, type AtlasLayout } from "../character/atlas";
 import { chooseAppearance, paintAtlas, type PaintedCover } from "../character/paint";
 import { bakeGearMaterial, type BakedGearMaterial, type GearMaterialDef } from "../character/gearMaterial";
@@ -27,6 +27,8 @@ export interface FigureOptions {
   seed: number;
   /** A sex to show instead of the seed's. */
   sex: Sex | null;
+  /** Slider positions to show instead of the seed's (0 low, 1 high). */
+  sliders: Partial<Record<Slider, number>>;
   /** "still" holds `pose`; the others play (animation.ts). */
   animation: keyof typeof ANIMATIONS;
   /** How fast it moves while walking, jumping, swimming or swinging, metres a second. */
@@ -59,9 +61,9 @@ export interface PaintedBody {
 
 /** Builds a race's body and paints its atlas, as the options say. */
 export async function paintedBody(race: RaceDef, gear: Map<string, GearMaterialDef>, worldSeed: number, options: FigureOptions): Promise<PaintedBody> {
-  const look = chooseAppearance(race, options.seed, options.sex ?? undefined);
-  const sexed = forSex(race, look.sex);
-  const body = buildBody(sexed, { detail: options.detail, lattice: options.lattice !== "off", gear: options.gear });
+  const look = chooseAppearance(race, options.seed, options.sex ?? undefined, options.sliders);
+  const sexed = forSex(withLook(race, look.height, look.build), look.sex);
+  const body = buildBody(sexed, { detail: options.detail, lattice: options.lattice !== "off", gear: options.gear, skin: look.skin });
   const baked = new Map<string, BakedGearMaterial>();
   const bake = async (id: string): Promise<BakedGearMaterial | null> => {
     const def = gear.get(id);
@@ -101,6 +103,7 @@ export async function paintedBody(race: RaceDef, gear: Map<string, GearMaterialD
   const rows: [string, string | number][] = [...Object.entries(body.parts), ["triangles", body.triangles]];
   if (layout) rows.push(["atlas", `${layout.size}², ${(layout.density / 100).toFixed(1)} texels/cm`]);
   rows.push(["look", `${look.sex}, ${look.beard ? "beard, " : ""}seed ${options.seed}`]);
+  rows.push(["sliders", `height ×${look.height.toFixed(2)}, build ×${look.build.toFixed(2)}`]);
   for (const [label, value] of rows) {
     const row = table.insertRow();
     row.insertCell().textContent = label;
@@ -115,7 +118,7 @@ export async function paintedBody(race: RaceDef, gear: Map<string, GearMaterialD
  * it is on the ground, how fast it rises or falls - with a jump every so often or a swing, on the
  * spot or round a circle over the ground.
  */
-function play(scene: Scene, character: CharacterMesh, race: RaceDef, options: FigureOptions, height: (x: number, z: number) => number): void {
+function play(scene: Scene, character: CharacterMesh, race: RaceDef, options: FigureOptions, height: (x: number, z: number) => number, at = 0): void {
   const animator = createAnimator(race.skeleton);
   const radius = 3;
   let angle = 0;
@@ -129,12 +132,12 @@ function play(scene: Scene, character: CharacterMesh, race: RaceDef, options: Fi
   scene.onBeforeRenderObservable.add(() => {
     const dt = Math.min(0.05, scene.getEngine().getDeltaTime() / 1000);
     time += dt;
-    let x = 0;
+    let x = at;
     let z = 0;
     let facing = 0;
     if (options.path === "circle" && speed > 0) {
       angle += (speed * dt) / radius;
-      x = radius * Math.cos(angle);
+      x = at + radius * Math.cos(angle);
       z = radius * Math.sin(angle);
       facing = Math.atan2(-Math.sin(angle), Math.cos(angle));
     }
@@ -212,17 +215,17 @@ export const POSES = {
  * painted or in its skin's colour, in one of the still poses, with its bones and its lattice drawn
  * if asked.
  */
-export function figureFor(race: RaceDef, painted: PaintedBody, options: FigureOptions): NonNullable<StageOptions["figure"]> {
+export function figureFor(race: RaceDef, painted: PaintedBody, options: FigureOptions, at = 0): NonNullable<StageOptions["figure"]> {
   const { body, layout, pixels } = painted;
   const tall = Math.max(...body.positions.filter((_, i) => i % 3 === 1));
   const skin: BodySkin = layout && pixels ? { pixels, size: layout.size, uvs: layout.uvs, nearest: options.texture === "retro" } : { color: chooseAppearance(race, options.seed, options.sex ?? undefined).skin };
   return (scene, shadows, height) => {
-      const ground = height(0, 0);
+      const ground = height(at, 0);
       const character = createCharacterMesh(scene, `race_${race.id}`, body, skin, painted.baked);
-      character.mesh.position.y = ground;
+      character.mesh.position.set(at, ground, 0);
       character.setPose(POSES[options.pose].pose);
       for (const mesh of character.meshes) shadows.addShadowCaster(mesh, false);
-      if (options.animation !== "still") play(scene, character, painted.race, options, height);
+      if (options.animation !== "still") play(scene, character, painted.race, options, height, at);
       if (options.bones) {
         const viewer = new SkeletonViewer(character.skeleton, character.mesh, scene, true, 1, { displayMode: SkeletonViewer.DISPLAY_SPHERE_AND_SPURS });
         viewer.isEnabled = true;
