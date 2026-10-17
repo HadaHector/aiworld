@@ -4,6 +4,7 @@ import { createResourceBlock, stepResourceBlock, tickPhase, type ResourceBlock }
 import type { PlayerBody } from "./playerBody";
 import type { EntityAppearance } from "./protocol";
 import type { CombatPart } from "./skills/types";
+import type { Belongings, LootPart } from "./items/items";
 import { createCombatPart } from "./skills/unit";
 import { hashString } from "../world/content/dimensions";
 
@@ -41,6 +42,13 @@ export interface Entity {
   combat?: CombatPart;
   /** A capsule walking the dimension's collision: players now, creatures that walk later. */
   body?: PlayerBody | null;
+  /** Its bag, bank, equipment and wallet (see ITEMS.md): a player's. */
+  belongings?: Belongings;
+  /** What it holds for others to take: a corpse's loot, a chest's, an item on the ground. */
+  loot?: LootPart;
+  /** The item types it shows on its body, from what it wears (ITEMS.md, *Equipment*) - sent to
+   *  everyone who sees it. Left out for an entity without belongings: its template's outfit shows. */
+  gear?: string[];
 }
 
 export interface EntityPlace {
