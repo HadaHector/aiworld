@@ -1,0 +1,14 @@
+// A short stun: a control flag held for as long as the state lasts, lengthened by the caster's
+// stunDuration and the victim's stunTaken (see ABILITIES.md, *Attributes in expressions*).
+{
+  name: "Charge Stun",
+  tags: ["stun"],
+  display: "debuff",
+  stacking: { per: "host", duration: "longer" },
+  states: {
+    stunned: {
+      length: { mul: [1, "caster.stunDuration", "host.stunTaken"] },
+      hold: [{ do: "flag", flags: ["stunned"] }],
+    },
+  },
+}

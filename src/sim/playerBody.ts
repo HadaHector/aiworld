@@ -1,5 +1,6 @@
 import { collisionStats, createCharacterMotor, type CharacterMotor, type Vec3 } from "../world/collision/index";
 import type { WorldCollision } from "../world/worldCollision";
+import type { ForcedMotion } from "./skills/types";
 
 /** Walking pace, and running - metres a second. */
 export const WALK_SPEED = 6;
@@ -24,6 +25,11 @@ export interface PlayerBody {
   teleport: (x: number, z: number) => void;
   /** Puts its feet at a point - on a roof, a floor, anywhere - pushed out of whatever is there. */
   teleportTo: (feet: Vec3) => void;
+  /** Carries it along a forced motion - a dash, a leap, a knockback (ABILITIES.md, `move`) - its
+   *  own input ignored until the motion ends. */
+  push: (motion: ForcedMotion) => void;
+  /** Whether a forced motion carries it now. */
+  readonly pushed: boolean;
 }
 
 /**
@@ -40,12 +46,24 @@ export function createPlayerBody(
 ): PlayerBody {
   const motor = createCharacterMotor(collision.world, {}, { x: start.x, y: heightAt(start.x, start.z), z: start.z });
   let facing = 0;
+  let forced: (ForcedMotion & { left: number }) | null = null;
 
   function step(deltaSeconds: number, input: BodyInput, speedScale = 1): void {
     const speed = (input.run ? RUN_SPEED : WALK_SPEED) * speedScale;
-    const moveX = input.moveX * speed;
-    const moveZ = input.moveZ * speed;
+    let moveX = input.moveX * speed;
+    let moveZ = input.moveZ * speed;
     const feet = motor.state.feet;
+    if (forced) {
+      // A forced motion: its own pace, whatever the keys say, until it runs out or arrives.
+      const near = forced.stopAt && Math.hypot(forced.stopAt.x - feet.x, forced.stopAt.z - feet.z) <= forced.stopAt.within;
+      if (forced.left <= 0 || near) forced = null;
+      else {
+        forced.left -= deltaSeconds;
+        moveX = forced.vx;
+        moveZ = forced.vz;
+        input = { ...input, jump: false };
+      }
+    }
     if (!collision.hasGroundAt(feet.x, feet.z)) {
       // No collision here yet: stand on the terrain itself until it comes.
       motor.teleport({ x: feet.x + moveX * deltaSeconds, y: heightAt(feet.x, feet.z), z: feet.z + moveZ * deltaSeconds });
@@ -68,7 +86,23 @@ export function createPlayerBody(
       return facing;
     },
     step,
-    teleport: (x, z) => motor.teleport({ x, y: heightAt(x, z), z }),
-    teleportTo: (feet) => motor.teleport({ x: feet.x, y: feet.y, z: feet.z }),
+    teleport: (x, z) => {
+      forced = null;
+      motor.teleport({ x, y: heightAt(x, z), z });
+    },
+    teleportTo: (feet) => {
+      forced = null;
+      motor.teleport({ x: feet.x, y: feet.y, z: feet.z });
+    },
+    push(motion) {
+      forced = { ...motion, left: motion.duration };
+      if (motion.vy > 0) {
+        motor.state.velocity.y = motion.vy;
+        motor.state.grounded = false;
+      }
+    },
+    get pushed() {
+      return forced !== null;
+    },
   };
 }

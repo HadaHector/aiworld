@@ -1,4 +1,5 @@
 import { Color3, MeshBuilder, StandardMaterial, type Mesh, type Scene } from "@babylonjs/core";
+import { FLAG } from "../sim/skills/flags";
 import type { EntityMirror, MirroredEntity } from "./entityMirror";
 import { PLAYER_TEMPLATE, type EntityLook, type GameRules } from "../sim/rules/gameRules";
 import { createCharacterBody, type BodyKit, type BodyLook, type CharacterBody } from "./characterBody";
@@ -8,6 +9,10 @@ export interface EntityMeshes {
   update: () => void;
   /** The entity a mesh draws, for picking - null for any other mesh. */
   entityOf: (mesh: unknown) => number | null;
+  /** Plays a melee swing on an entity's body: the server says when. */
+  swing: (id: number) => void;
+  /** Rings the selected unit on the ground - red for one that fights players, green otherwise. */
+  setTarget: (id: number) => void;
   dispose: () => void;
 }
 
@@ -38,6 +43,29 @@ export function createEntityMeshes(scene: Scene, mirror: EntityMirror, rules: Ga
   const drawn = new Map<number, Drawn>();
   const ids = new Map<unknown, number>();
   const fallback = rules.templates.get(PLAYER_TEMPLATE)!.look;
+  // The selection ring: a flat torus at the target's feet.
+  const ring = MeshBuilder.CreateTorus("targetRing", { diameter: 1, thickness: 0.06, tessellation: 40 }, scene);
+  const ringMaterial = new StandardMaterial("targetRingMaterial", scene);
+  ringMaterial.disableLighting = true;
+  ring.material = ringMaterial;
+  ring.isPickable = false;
+  ring.isVisible = false;
+  let targetId = 0;
+  function placeRing(): void {
+    const entity = targetId ? mirror.entities.get(targetId) : undefined;
+    const own = targetId === ownId();
+    if (!entity) {
+      ring.isVisible = false;
+      return;
+    }
+    const look = entity.template?.look ?? fallback;
+    ring.isVisible = true;
+    ring.position.set(entity.x, entity.y + 0.05, entity.z);
+    ring.scaling.setAll(look.radius * 2.6);
+    const hostile = !own && entity.template?.hostility === "hostile";
+    const dead = (entity.flags & (1 << FLAG.dead)) !== 0;
+    ringMaterial.emissiveColor = dead ? new Color3(0.4, 0.4, 0.4) : hostile ? new Color3(0.95, 0.2, 0.15) : new Color3(0.3, 0.9, 0.35);
+  }
 
   function add(entity: MirroredEntity): void {
     if (entity.id === ownId() || drawn.has(entity.id)) return;
@@ -95,11 +123,19 @@ export function createEntityMeshes(scene: Scene, mirror: EntityMirror, rules: Ga
         const entity = mirror.entities.get(id);
         if (entity) place(entity, entry);
       }
+      placeRing();
     },
     entityOf: (mesh) => ids.get(mesh) ?? null,
+    swing: (id) => drawn.get(id)?.body?.swing(),
+    setTarget: (id) => {
+      targetId = id;
+      placeRing();
+    },
     dispose: () => {
       offSpawn();
       offDespawn();
+      ring.material?.dispose();
+      ring.dispose();
       for (const entity of [...mirror.entities.values()]) remove(entity);
       for (const entry of drawn.values()) {
         entry.gone = true;

@@ -1,5 +1,5 @@
 import type { GameRules, TemplateDef } from "../sim/rules/gameRules";
-import type { EntityAppearance, EntityMotion, ModifierState, ServerMessage } from "../sim/protocol";
+import type { AuraState, EntityAppearance, EntityMotion, ModifierState, ServerMessage, SpellState } from "../sim/protocol";
 
 /** One entity as the client knows it: only what the server has told it (see ENTITIES.md). */
 export interface MirroredEntity {
@@ -21,6 +21,21 @@ export interface MirroredEntity {
   resources: Map<number, { current: number; max: number }>;
   /** The modifier stack - the client's own player only. */
   modifiers: ModifierState[];
+  /** Its cast bar, if it is casting (ABILITIES.md, *Messages*): times are the server's. */
+  cast: { skill: number; start: number; length: number; channel: boolean } | null;
+  /** The buffs and debuffs shown on it. */
+  auras: AuraState[];
+  /** The control flags it holds, a bit each (FLAG_NAMES' order). */
+  flags: number;
+  /** Whom it has selected, 0 for nobody. */
+  target: number;
+}
+
+/** What the client's own player knows and can do: its spells, its GCD, whether it auto-attacks. */
+export interface OwnSpells {
+  spells: SpellState[];
+  gcdUntil: number;
+  attacking: boolean;
 }
 
 /**
@@ -30,6 +45,10 @@ export interface MirroredEntity {
  */
 export interface EntityMirror {
   readonly entities: ReadonlyMap<number, MirroredEntity>;
+  /** The own player's spells, as the server last said. */
+  readonly own: OwnSpells;
+  /** The server's clock now, as near as the client can tell: the last snapshot's time, run on. */
+  serverTime: () => number;
   /** Takes one message from the server; returns whether it was one of the mirror's. */
   apply: (message: ServerMessage) => boolean;
   clear: () => void;
@@ -40,6 +59,9 @@ export interface EntityMirror {
 
 export function createEntityMirror(rules: GameRules): EntityMirror {
   const entities = new Map<number, MirroredEntity>();
+  const own: OwnSpells = { spells: [], gcdUntil: 0, attacking: false };
+  let time = 0;
+  let timeAt = performance.now();
   const spawnListeners = new Set<(entity: MirroredEntity) => void>();
   const despawnListeners = new Set<(entity: MirroredEntity) => void>();
 
@@ -75,6 +97,10 @@ export function createEntityMirror(rules: GameRules): EntityMirror {
           stats: new Map(message.stats.map((s) => [s.stat, s.value])),
           resources: new Map(message.resources.map((r) => [r.resource, { current: r.current, max: r.max }])),
           modifiers: [],
+          cast: null,
+          auras: [],
+          flags: 0,
+          target: 0,
         };
         entities.set(entity.id, entity);
         for (const listener of spawnListeners) listener(entity);
@@ -95,7 +121,34 @@ export function createEntityMirror(rules: GameRules): EntityMirror {
       case "entityDespawn":
         remove(message.id);
         return true;
+      case "entityCast": {
+        const entity = entities.get(message.id);
+        if (entity) entity.cast = message.skill < 0 ? null : { skill: message.skill, start: message.start, length: message.length, channel: message.channel };
+        return true;
+      }
+      case "entityAuras": {
+        const entity = entities.get(message.id);
+        if (entity) entity.auras = message.auras;
+        return true;
+      }
+      case "entityFlags": {
+        const entity = entities.get(message.id);
+        if (entity) entity.flags = message.flags;
+        return true;
+      }
+      case "entityTarget": {
+        const entity = entities.get(message.id);
+        if (entity) entity.target = message.target;
+        return true;
+      }
+      case "entitySpells":
+        own.spells = message.spells;
+        own.gcdUntil = message.gcdUntil;
+        own.attacking = message.attacking;
+        return true;
       case "snapshot":
+        time = message.time;
+        timeAt = performance.now();
         for (const m of message.entities) {
           const entity = entities.get(m.id);
           if (entity) move(entity, m);
@@ -113,9 +166,13 @@ export function createEntityMirror(rules: GameRules): EntityMirror {
 
   return {
     entities,
+    own,
+    serverTime: () => time + (performance.now() - timeAt) / 1000,
     apply,
     clear: () => {
       for (const id of [...entities.keys()]) remove(id);
+      own.spells = [];
+      own.attacking = false;
     },
     onSpawn: (listener) => listen(spawnListeners, listener),
     onDespawn: (listener) => listen(despawnListeners, listener),

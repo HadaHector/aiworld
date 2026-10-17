@@ -1,0 +1,25 @@
+// Rush at an enemy, gain rage, and stun it for a moment.
+{
+  name: "Charge",
+  type: "physical",
+  tags: ["melee"],
+  target: "enemy",
+  range: 25,
+  minRange: 8,
+  los: true,
+  cooldown: 15,
+  gcd: false,
+  states: {
+    rush: {
+      enter: [{ do: "move", group: "caster", kind: "dash", speed: 30, toTarget: true }],
+      length: { travel: 30 },
+      next: "arrive",
+    },
+    arrive: {
+      enter: [
+        { do: "resource", group: "caster", resource: "rage", amount: 15 },
+        { do: "cast", skill: "chargeStun", group: "target" },
+      ],
+    },
+  },
+}

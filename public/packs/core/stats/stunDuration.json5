@@ -1,0 +1,2 @@
+// A factor on how long the unit's stuns last: a talent-style attribute.
+{ name: "Stun duration", default: 1, min: 0 }

@@ -114,7 +114,10 @@ As built in step 1. Step 3 (ENTITIES.md) made the snapshot's `players` into `ent
 entity spawn, values, modifiers and despawn messages, a `rules` hash in `welcome`, and debug
 commands on entities (protocol 4). Step 2 (DIMENSIONS.md) added `travel`, `arrived` and `transfer`, a `dimension`
 in `hello`, and moved the seed from `welcome` to `transfer`. Bodies for everyone (CHARACTERS.md)
-added a `look` to `hello` and `entitySpawn` (protocol 5); `src/sim/protocol.ts` is current.
+added a `look` to `hello` and `entitySpawn` (protocol 5). Step 4 (ABILITIES.md) added the combat
+intents (`target`, `cast`, `stopCast`, `attack`, `respawn`), `combatEvents`, `entityCast`,
+`entityAuras`, `entityFlags`, `entitySpells`, `entityTarget`, the server's `time` in snapshots, and
+`debugApply` and `debugKill` (protocol 6); `src/sim/protocol.ts` is current.
 
 Client to server:
 
@@ -132,7 +135,7 @@ Server to client:
 { type: "snapshot", tick, ackSeq, players: [{ id, x, y, z, facing, grounded }] }
 ```
 
-Events (combat, loot) come with the systems that need them. `src/sim/protocol.ts` has the field
+Events come with the systems that need them: combat's are `combatEvents` (ABILITIES.md, *Messages*). `src/sim/protocol.ts` has the field
 widths a binary codec would use.
 
 - **Intents carry a world-space direction**, not keys. The camera is the client's, so the client

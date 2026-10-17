@@ -1,0 +1,7 @@
+// Left by Shield: while a unit has it, Shield cannot be cast on it.
+{
+  name: "Weakened Soul",
+  display: "debuff",
+  stacking: { per: "host", duration: "restart" },
+  states: { weakened: { length: 15 } },
+}

@@ -1,0 +1,14 @@
+// The training dummy's one habit: every 8 s it casts a bolt at whoever tops its threat table, so
+// there is a cast to kick and damage for a shield to soak. A passive, not a brain (that is step 6).
+{
+  name: "Dummy's Habit",
+  passive: true,
+  groups: { top: { from: "threat", max: 1 } },
+  states: {
+    rest: { length: 8, next: "bolt" },
+    bolt: {
+      enter: [{ do: "cast", skill: "dummyBolt", group: "top", mode: "cast", by: "host" }],
+      next: "rest",
+    },
+  },
+}

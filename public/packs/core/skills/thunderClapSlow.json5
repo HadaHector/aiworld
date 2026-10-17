@@ -1,0 +1,12 @@
+// Thunder Clap's slow: -30% movement speed while it lasts.
+{
+  name: "Thunder Clap",
+  display: "debuff",
+  stacking: { per: "host" },
+  states: {
+    slowed: {
+      length: 10,
+      hold: [{ do: "modifier", stat: "speed", kind: "percent", value: -30 }],
+    },
+  },
+}

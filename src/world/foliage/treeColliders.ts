@@ -3,7 +3,7 @@ import type { TreePlacement } from "./treeScatter";
 import { generateConifer, generateTree, type TreeDetail, type TreeGeometry } from "./treeGenerator";
 import { deriveSeed } from "../rng";
 import { convexHull } from "../collision/hull";
-import type { ConvexDesc } from "../collision/shapes";
+import { Layers, type ConvexDesc } from "../collision/shapes";
 import type { Vec3 } from "../collision/vec";
 
 /**
@@ -157,8 +157,9 @@ export function treeColliders(hulls: TreeHulls, trees: readonly TreePlacement[])
     for (const hull of own) {
       const points: Vec3[] = [];
       for (let i = 0; i < hull.corners.length; i += 3) points.push(place(hull.corners[i], hull.corners[i + 1], hull.corners[i + 2]));
-      // Moved, turned and scaled evenly, a hull is still one, with the same faces.
-      pieces.push({ kind: "convex", points, triangles: hull.triangles });
+      // Moved, turned and scaled evenly, a hull is still one, with the same faces. Trees stop a body
+      // and a shot but not sight: a spell can be aimed through a wood (see ABILITIES.md, *Casting*).
+      pieces.push({ kind: "convex", points, triangles: hull.triangles, layers: Layers.solid | Layers.shot });
     }
   }
   return pieces;

@@ -1,0 +1,2 @@
+// A factor on how long the unit's damage over time lasts: a talent-style attribute.
+{ name: "Damage over time duration", default: 1, min: 0.1 }

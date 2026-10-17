@@ -25,7 +25,7 @@ its own plan document when it is started, as zones and music did.
 - **Data first, scripts second.** Gameplay content lives in packs (json5) alongside biomes and
   buildings: items, creatures, NPCs, quests, abilities, factions. Behaviour that data cannot
   express goes in scripts, which are a separate kind of pack (see [Modding](#modding)).
-- **The engine has mechanisms; the game config has rules.** Resources, skills, progression, death
+- **The engine has mechanisms; the game config has rules.** Resources, disciplines, progression, death
   penalties and the like are generic systems. The core pack decides what they mean.
 - **Server-authoritative from the start.** All gameplay runs in the server; the client only shows
   it and sends input. Single player runs the same server inside the client.
@@ -86,8 +86,8 @@ its own plan document when it is started, as zones and music did.
 | Races and classes | Generated from templates; the core pack starts with about 3 races and 5 classes |
 | Camera | Third person |
 | Resources | Health always. Others (mana, rage, energy, hunger...) depend on class or game config; any number must be possible |
-| Progression | Many "skills", each with its own level and progression. Combat level, class level, gathering and crafting are all skills; the game's rules say what each means |
-| Talents | Skill trees and talent choices must be possible |
+| Progression | Many *disciplines*, each with its own level and progression. Combat level, class level, gathering and crafting are all disciplines; the game's rules say what each means. (Called "skills" until step 4, when that word went to abilities: see ABILITIES.md) |
+| Talents | Talent trees and talent choices must be possible (as modifiers on attributes skills read: ABILITIES.md) |
 | Death | The world keeps going and the player respawns at a location ("home"). Penalties are configurable: none, durability loss, corpse run, XP debt |
 | Movement | Walk, run, jump, swim, plus movement skills (dash, leap...) as abilities |
 | Mounts | Yes. Other vehicles maybe later |
@@ -209,7 +209,7 @@ Two things are saved: characters, and a small *world delta*.
 | Per character | |
 |---|---|
 | Identity | Race, class, looks |
-| Progression | Every skill's level and progress, skill trees, talent choices |
+| Progression | Every discipline's level and progress, talent trees and choices, the spells known |
 | Belongings | Inventory, equipment, bank, money and minor currencies |
 | Quests | Active quests and their progress, completed quests |
 | Standing | Reputation per faction |
@@ -235,7 +235,7 @@ This holds for single player and for a restarted dedicated server alike.
 
 ## First milestone
 
-Complete a quest that needs combat, and come out of it with XP, skills, loot and equipment.
+Complete a quest that needs combat, and come out of it with XP, disciplines, loot and equipment.
 
 ## Out, and later
 
@@ -293,13 +293,17 @@ A proposal, to be confirmed. Each step gets its own plan document.
    parts, stats and derived stats as formula trees in packs, modifier kinds whose order and stacking
    are data, any number of resources with regen and decay, templates with inheritance; replicated
    to clients near them, the owner seeing everything and others only what is marked visible.
-4. **Ability system:** effects, auras, targeting, cooldowns and the GCD, threat.
+4. **Ability system: built; the death animation (ABILITIES.md step 7) is still to do** - see [ABILITIES.md](ABILITIES.md). Skills, spells and magics: skills
+   as state machines of composable actions in packs, auras and gameplay elements as magics with a
+   stacking model, engine control flags, attributes in every expression; casting with tab
+   targeting, range and sight, cast times, channels, the GCD and a queue, interrupts; deterministic
+   rolls, threat with summons, combat events; a target frame, a combat log and a server-driven swing.
 5. **Character spike: done** - see [CHARACTERS.md](CHARACTERS.md). A body built from curves along
    the bones, a painted atlas, gear as geometry, three races and two sexes, procedural animation, on
    the player in the game; judged good enough, and the approach stays.
 6. **Creatures:** per-zone rosters, spawning in ranges, simple AI, respawn.
 7. **Items:** inventory grid, equipment, loot tables, rarity, durability.
-8. **Skills and progression:** XP per skill, levels, unlocks.
+8. **Disciplines and progression:** XP per discipline, levels, unlocks.
 9. **NPCs and the quest generator,** up to the test chain.
 10. **HUD and screens:** unit frames, action bar, inventory, quest log.
 

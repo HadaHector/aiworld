@@ -1,0 +1,2 @@
+// A factor on fire spells' cast times: a talent-style attribute skills read (see ABILITIES.md).
+{ name: "Fire cast time", default: 1, min: 0.1 }

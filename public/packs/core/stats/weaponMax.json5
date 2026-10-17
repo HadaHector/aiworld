@@ -1,0 +1,2 @@
+// The high end of a weapon hit before rolls; bare hands by default.
+{ name: "Weapon damage (high)", default: 4, min: 0 }

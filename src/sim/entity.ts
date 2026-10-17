@@ -3,6 +3,8 @@ import { createStatBlock, statValue, type StatBlock } from "./stats";
 import { createResourceBlock, stepResourceBlock, tickPhase, type ResourceBlock } from "./resources";
 import type { PlayerBody } from "./playerBody";
 import type { EntityAppearance } from "./protocol";
+import type { CombatPart } from "./skills/types";
+import { createCombatPart } from "./skills/unit";
 import { hashString } from "../world/content/dimensions";
 
 /**
@@ -30,10 +32,13 @@ export interface Entity {
   /** Radians about y, 0 facing +z. */
   facing: number;
   grounded: boolean;
-  /** Set by debug now, by the ability system later: which regen rates apply. */
+  /** Whether it is fighting - which regen rates apply. Worked out by the skill system each step from
+   *  threat and hostile acts (see ABILITIES.md, *Threat*). */
   inCombat: boolean;
   stats?: StatBlock;
   resources?: ResourceBlock;
+  /** What it knows, what runs on it, its flags and threat (see ABILITIES.md): every entity with stats. */
+  combat?: CombatPart;
   /** A capsule walking the dimension's collision: players now, creatures that walk later. */
   body?: PlayerBody | null;
 }
@@ -71,6 +76,7 @@ export function createEntity(rules: GameRules, template: TemplateDef, id: number
   if (template.hasStats) {
     entity.stats = createStatBlock(rules, template);
     entity.resources = createResourceBlock(rules, template, entity.stats, tickPhase(id));
+    entity.combat = createCombatPart(template.threat);
   }
   return entity;
 }

@@ -25,6 +25,9 @@ import type { WorldContent } from "./world/content/worldContent";
 import { checkPlacements, resolveGameRules, type GameRules } from "./sim/rules/gameRules";
 import { appearanceOf, lookFromUrl, type PlayerLook } from "./game/playerBody";
 import { createBodyKit } from "./game/characterBody";
+import { createCombatHud } from "./game/combatHud";
+import { nextEnemy } from "./game/targeting";
+import { EVENT_KIND } from "./sim/skills/events";
 
 const canvasElement = document.getElementById("renderCanvas");
 if (!(canvasElement instanceof HTMLCanvasElement)) {
@@ -95,6 +98,8 @@ let me: EntityMotion | null = null;
 const mirror = createEntityMirror(gameRules);
 /** The other entities drawn in the current view's scene. */
 let entityMeshes: EntityMeshes | null = null;
+/** The unit the player has selected (see ABILITIES.md): 0 for none. */
+let targetId = 0;
 
 /** Applies whatever the server has said since last time - where the player is now, above all. */
 function takeServerMessages(): void {
@@ -106,7 +111,16 @@ function takeServerMessages(): void {
     } else if (message.type === "transfer") {
       pendingTransfer = message;
       me = null;
+      targetId = 0;
       mirror.clear();
+    } else if (message.type === "combatEvents") {
+      // Swings are played on the body that swings; everything goes in the combat log.
+      for (const event of message.events) {
+        if (event.kind !== EVENT_KIND.animation || event.name !== "swing") continue;
+        if (event.source === playerId) view?.character.swing();
+        else entityMeshes?.swing(event.source);
+      }
+      combatHud.log(message.events);
     } else if (message.type === "snapshot") {
       const mine = message.entities.find((p) => p.id === playerId);
       if (mine) {
@@ -237,7 +251,10 @@ function frame(): void {
   server.step(deltaSeconds);
   takeServerMessages();
   if (pendingTransfer) return;
+  if (targetId && !mirror.entities.has(targetId)) setTarget(0);
+  entityMeshes?.setTarget(targetId);
   entityMeshes?.update();
+  combatHud.update(targetId);
   if (!spectator.active) {
     v.playerLights.update(deltaSeconds);
     v.placeLabels.update(character.mesh.position, v.scene.activeCamera);
@@ -313,6 +330,50 @@ function inspectOnServer(id: number): string[] | null {
 
 // The entity inspector (see ENTITIES.md): I toggles it; a left click on an entity shows it.
 const entityPanel = createEntityPanel({ rules: gameRules, mirror, ownId: () => playerId, command: debugCommand, spawnDummy: () => spawnInFront("trainingDummy"), inspectOnServer });
+
+// Combat (see ABILITIES.md): a target, spells on keys 1-9, the frames and the log.
+function setTarget(id: number): void {
+  targetId = id;
+  channel.client.send({ type: "target", id });
+  if (id && entityPanel.visible) entityPanel.select(id);
+}
+function castSpell(skill: number): void {
+  intentSeq = (intentSeq + 1) & 0xffff;
+  channel.client.send({ type: "cast", seq: intentSeq, skill, target: 0, x: NaN, z: NaN });
+}
+const combatHud = createCombatHud({
+  rules: gameRules,
+  mirror,
+  ownId: () => playerId,
+  onKey: castSpell,
+  onRespawn: () => command({ type: "respawn" }),
+});
+window.addEventListener("keydown", (e) => {
+  if (!view || entering || view.spectator.active) return;
+  if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+  if (e.key === "Tab") {
+    e.preventDefault();
+    // The camera sits at its alpha from +x round the player, looking back across it.
+    const alpha = view.camera.alpha;
+    setTarget(nextEnemy(mirror, playerId, targetId, { x: -Math.cos(alpha), z: -Math.sin(alpha) }));
+    return;
+  }
+  if (e.key === "Escape") {
+    if (mirror.entities.get(playerId)?.cast) channel.client.send({ type: "stopCast" });
+    else if (targetId) setTarget(0);
+    return;
+  }
+  if (e.repeat) return;
+  if (e.key.toLowerCase() === "r") {
+    channel.client.send({ type: "attack", on: !mirror.own.attacking });
+    return;
+  }
+  const n = Number(e.key);
+  if (Number.isInteger(n) && n >= 1 && n <= 9) {
+    const skill = combatHud.keys()[n - 1];
+    if (skill !== undefined) castSpell(skill);
+  }
+});
 {
   let down: { x: number; y: number } | null = null;
   canvas.addEventListener("pointerdown", (e) => {
@@ -328,8 +389,8 @@ const entityPanel = createEntityPanel({ rules: gameRules, mirror, ownId: () => p
     const pick = view.scene.pick(e.clientX - rect.left, e.clientY - rect.top, (mesh) => meshes.entityOf(mesh) !== null);
     const id = pick?.hit ? meshes.entityOf(pick.pickedMesh) : null;
     if (id === null) return;
-    entityPanel.select(id);
-    entityPanel.setVisible(true);
+    // A click targets it; the inspector, if open, follows.
+    setTarget(id);
   });
 }
 
@@ -444,6 +505,11 @@ function gotoLoaded(target: Partial<ViewSnapshot> & { x: number; z: number }, it
     inspect: (id = playerId) => inspectOnServer(id)?.join("\n"),
     /** The server's own entity - single player only. */
     server: (id = playerId) => server.debug.entity(id),
+    /** Abilities (ABILITIES.md): target, cast by skill id, start a skill's magic on an entity, kill. */
+    target: (id: number) => setTarget(id),
+    cast: (skill: string) => castSpell(gameRules.skillIndex.get(skill) ?? -1),
+    apply: (skill: string, entity = 0) => debugCommand({ type: "debugApply", entity, skill: gameRules.skillIndex.get(skill) ?? -1 }),
+    kill: (entity = 0, revive = false) => debugCommand({ type: "debugKill", entity, revive }),
     modify: (stat: string, kind: string, value: number, source = "debug", entity = 0) =>
       debugCommand({ type: "debugModifier", entity, stat: gameRules.statIndex.get(stat) ?? -1, kind: gameRules.kindIndex.get(kind) ?? -1, value, source }),
     removeSource: (source = "debug", entity = 0) => debugCommand({ type: "debugRemoveSource", entity, source }),

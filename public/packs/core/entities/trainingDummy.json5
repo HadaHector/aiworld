@@ -1,9 +1,14 @@
-// Stands near the start for testing stats, modifiers and resources (see ENTITIES.md).
+// Stands near the start for testing stats, modifiers and resources (see ENTITIES.md) and abilities
+// (ABILITIES.md): hostile, keeps a threat table, never dies, and casts a bolt now and then.
 {
   extends: "creature",
   name: "Training Dummy",
-  stats: { level: 10, stamina: 500 },
+  stats: { level: 10, stamina: 500, armor: 300 },
   resources: ["health", "rage"],
   modifiers: [{ stat: "maxHealth", kind: "percent", value: 100 }],
+  spells: [{ skill: "dummyCaster" }],
+  hostility: "hostile",
+  threat: true,
+  mortal: false,
   look: { race: "human", outfit: "knight", height: 1.9, radius: 0.45, color: [0.75, 0.6, 0.35] },
 }

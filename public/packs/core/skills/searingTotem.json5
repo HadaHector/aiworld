@@ -1,0 +1,12 @@
+// Summons a totem for 20 s that burns the nearest enemy every 2 s: a summon with its own threat row.
+{
+  name: "Searing Totem",
+  type: "spell",
+  tags: ["school.fire"],
+  target: "none",
+  cost: { mana: 25 },
+  cooldown: 20,
+  states: {
+    place: { enter: [{ do: "summon", template: "searingTotem", duration: 20 }] },
+  },
+}

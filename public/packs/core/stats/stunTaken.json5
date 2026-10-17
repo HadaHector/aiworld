@@ -1,0 +1,2 @@
+// A factor on how long stuns on this unit last: resilience, diminishing returns later.
+{ name: "Stun taken", default: 1, min: 0 }

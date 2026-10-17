@@ -3,6 +3,19 @@
   name: "Adventurer",
   stats: { level: 1, strength: 10, agility: 10, stamina: 12, intellect: 10, spirit: 8 },
   resources: ["health", "mana", "rage"],
+  // The test kit (see ABILITIES.md, *The test*): keys 1-9 cast the active ones in this order.
+  spells: [
+    { skill: "autoAttack" },
+    { skill: "heroicStrike" },
+    { skill: "fireball" },
+    { skill: "renew" },
+    { skill: "shield" },
+    { skill: "charge" },
+    { skill: "thunderClap" },
+    { skill: "kick" },
+    { skill: "searingTotem" },
+  ],
+  hostility: "friendly",
   // A human scout unless the player says otherwise (their Hello's look); the capsule is what a click hits.
   look: { race: "human", outfit: "scout", height: 1.8, radius: 0.4, color: [0.35, 0.55, 0.85] },
 }

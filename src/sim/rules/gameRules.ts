@@ -3,6 +3,7 @@ import { GAME_FOLDERS, orderPacks, parseFile, type PackSource } from "../../worl
 import { hashString } from "../../world/content/dimensions";
 import type { ColorTuple } from "../../world/terrain/pipeline/pipelineTypes";
 import { compileFormula, type CompiledFormula } from "./formula";
+import { readCombatRules, readSkills, type CombatRules, type SkillDef } from "./skillRules";
 
 /** Who a stat's or a resource's value is sent to (see ENTITIES.md, *Replication*). */
 export type Visibility = "owner" | "all";
@@ -95,7 +96,17 @@ export interface TemplateDef {
   resources: number[];
   modifiers: TemplateModifier[];
   look: EntityLook;
+  /** Skills its entities know (ABILITIES.md, *Spells*), by index. */
+  spells: { skill: number; level: number }[];
+  /** How it stands toward players until factions come: who may attack it, and whom it attacks. */
+  hostility: Hostility;
+  /** Whether its entities keep a threat table. */
+  threat: boolean;
+  /** False: it does not die at 0 health (the training dummy). */
+  mortal: boolean;
 }
+
+export type Hostility = "hostile" | "neutral" | "friendly";
 
 /**
  * Everything gameplay is made of that is content rather than code (see ENTITIES.md): read once per
@@ -119,6 +130,11 @@ export interface GameRules {
   resourceIndex: ReadonlyMap<string, number>;
   /** The resource every entity with resources has (see ENTITIES.md). */
   health: number;
+  /** In id order: a skill's index is its place here (ABILITIES.md). */
+  skills: SkillDef[];
+  skillIndex: ReadonlyMap<string, number>;
+  /** `rules/combat.json5`. */
+  combat: CombatRules;
   /** A hash of the tables' ids and visibility - in Welcome, so a client can tell its packs differ. */
   hash: number;
 }
@@ -236,9 +252,16 @@ export function resolveGameRules(packs: PackSource[]): GameRules {
   const health = resourceIndex.get(HEALTH);
   if (health === undefined) issues.push({ file: "(all packs)", path: "", message: `no pack defines resources/${HEALTH}.json5 - every entity with resources has health` });
 
+  // --- combat rules and skills ---
+  const combat = readCombatRules(folders.get("rules")!.get("combat"), stats, issues);
+  const { skills, skillIndex, templateRefs } = readSkills(entries("skills"), { stats, statIndex, kindIndex, resourceIndex }, combat, issues);
+
   // --- templates ---
-  const templates = resolveTemplates(entries("entities"), { statIndex, kindIndex, resourceIndex, stats, health: health ?? 0 }, issues);
+  const templates = resolveTemplates(entries("entities"), { statIndex, kindIndex, resourceIndex, skillIndex, stats, health: health ?? 0 }, issues);
   if (!templates.has(PLAYER_TEMPLATE)) issues.push({ file: "(all packs)", path: "", message: `no pack defines entities/${PLAYER_TEMPLATE}.json5 - what players are made from` });
+  for (const ref of templateRefs) {
+    if (!templates.has(ref.id)) issues.push({ file: ref.file, path: ref.path, message: `no template "${ref.id}" that can be made (known: ${[...templates.keys()].join(", ")})` });
+  }
 
   if (issues.length > 0) throw new ContentError(issues);
 
@@ -246,8 +269,12 @@ export function resolveGameRules(packs: PackSource[]): GameRules {
     stats.map((s) => `${s.id}:${s.visible}`).join(","),
     modifierKinds.map((k) => k.id).join(","),
     resources.map((r) => `${r.id}:${r.visible}`).join(","),
+    skills.map((s) => s.id).join(","),
   ].join("|");
-  return { stats, statOrder, modifierKinds, applyOrder, resources, templates, statIndex, kindIndex, resourceIndex, health: health!, hash: hashString(signature) };
+  return {
+    stats, statOrder, modifierKinds, applyOrder, resources, templates, statIndex, kindIndex, resourceIndex, health: health!,
+    skills, skillIndex, combat, hash: hashString(signature),
+  };
 }
 
 /** Checks that every entity the dimensions place names a template that can be made. Throws a
@@ -292,11 +319,12 @@ interface TemplateContext {
   statIndex: ReadonlyMap<string, number>;
   kindIndex: ReadonlyMap<string, number>;
   resourceIndex: ReadonlyMap<string, number>;
+  skillIndex: ReadonlyMap<string, number>;
   stats: StatDef[];
   health: number;
 }
 
-const TEMPLATE_KEYS = ["extends", "abstract", "name", "stats", "resources", "modifiers", "look"];
+const TEMPLATE_KEYS = ["extends", "abstract", "name", "stats", "resources", "modifiers", "look", "spells", "hostility", "threat", "mortal"];
 
 /** Merges each template's `extends` chain - objects key by key, the child winning; lists whole - and
  *  reads the result. Abstract templates are left out of what is returned. */
@@ -348,7 +376,7 @@ function mergeTemplate(base: RawObject, child: RawObject): RawObject {
   return result;
 }
 
-function readTemplate(id: string, obj: RawObject, reader: Reader, { statIndex, kindIndex, resourceIndex, stats, health }: TemplateContext): TemplateDef {
+function readTemplate(id: string, obj: RawObject, reader: Reader, { statIndex, kindIndex, resourceIndex, skillIndex, stats, health }: TemplateContext): TemplateDef {
   const statValues: TemplateDef["stats"] = [];
   const hasStats = obj.stats !== undefined || obj.resources !== undefined || obj.modifiers !== undefined;
   if (obj.stats !== undefined) {
@@ -405,6 +433,19 @@ function readTemplate(id: string, obj: RawObject, reader: Reader, { statIndex, k
     };
   }
 
+  const spells: TemplateDef["spells"] = [];
+  reader.optionalArray(obj, "spells", "").forEach((value, i) => {
+    const path = `spells[${i}]`;
+    const raw = reader.object(value, path);
+    reader.onlyKeys(raw, path, ["skill", "level"]);
+    const skillId = reader.string(raw, "skill", path);
+    const skill = skillIndex.get(skillId);
+    if (skillId && skill === undefined) reader.fail(`${path}.skill`, `no skill "${skillId}" (known: ${[...skillIndex.keys()].join(", ")})`);
+    const level = reader.optionalNumber(raw, "level", path, 1, { min: 0, integer: true });
+    if (skill !== undefined) spells.push({ skill, level });
+  });
+  if (spells.length > 0 && !hasStats) reader.fail("spells", "an entity with spells needs stats and resources");
+
   return {
     id,
     name: reader.optionalString(obj, "name", "") ?? id,
@@ -413,5 +454,9 @@ function readTemplate(id: string, obj: RawObject, reader: Reader, { statIndex, k
     resources: [...resources].sort((a, b) => a - b),
     modifiers,
     look,
+    spells,
+    hostility: obj.hostility === undefined ? "neutral" : reader.oneOf(obj, "hostility", "", ["hostile", "neutral", "friendly"] as const),
+    threat: reader.boolean(obj, "threat", "", false),
+    mortal: reader.boolean(obj, "mortal", "", true),
   };
 }

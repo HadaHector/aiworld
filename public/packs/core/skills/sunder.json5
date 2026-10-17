@@ -1,0 +1,13 @@
+// A gameplay element (see ABILITIES.md, *Stacking*): applied by other skills, up to five stacks on a
+// unit, shared by everyone who applies it - the newest applier owns it - each taking armour off.
+{
+  name: "Sunder Armor",
+  display: "debuff",
+  stacking: { per: "host", max: 5, add: "stack", duration: "restart" },
+  states: {
+    sundered: {
+      length: 30,
+      hold: [{ do: "modifier", stat: "armor", kind: "flat", value: -50, perStack: true }],
+    },
+  },
+}

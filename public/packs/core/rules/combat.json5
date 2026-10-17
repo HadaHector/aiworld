@@ -1,0 +1,29 @@
+// The combat rules (see ABILITIES.md, *Rolls*): the global cooldown, the queue window, the rolls
+// damage and healing go through, and how threat is counted. Roll expressions read the attacker as
+// `caster.<stat>`, the defender as `target.<stat>`, and the amount so far as `amount`.
+{
+  gcd: 1.5,
+  queueWindow: 0.4,
+  rangeLeeway: 1,
+  losHeight: 1.6,
+  rolls: {
+    // Weapons: a miss chance growing with the level gap, crits from agility, armour mitigating.
+    default: {
+      hit: { clamp: [{ sub: [0.95, { mul: [{ sub: ["target.level", "caster.level"] }, 0.01] }] }, 0.6, 1] },
+      crit: { add: [0.05, { div: ["caster.agility", 2000] }] },
+      critMultiplier: 2,
+      mitigate: { mul: ["amount", { sub: [1, { div: ["target.armor", { add: ["target.armor", 400, { mul: ["caster.level", 85] }] }] }] }] },
+    },
+    // Spells: rarely miss, crit from intellect, not mitigated by armour.
+    spell: {
+      hit: { clamp: [{ sub: [0.96, { mul: [{ sub: ["target.level", "caster.level"] }, 0.01] }] }, 0.6, 1] },
+      crit: { add: [0.02, { div: ["caster.intellect", 3000] }] },
+      critMultiplier: 1.5,
+      mitigate: "amount",
+    },
+    // Damage over time and the like: always lands, never crits.
+    noCrit: { hit: 1, crit: 0, mitigate: "amount" },
+  },
+  threat: { damage: 1, heal: 0.5, forgetAfter: 6 },
+  combatTimeout: 5,
+}

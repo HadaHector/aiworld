@@ -1,7 +1,8 @@
 import type { Entity } from "./entity";
 import type { GameRules } from "./rules/gameRules";
-import type { EntityMotion, ResourceValue, ServerMessage, StatValue } from "./protocol";
+import type { AuraState, CombatEvent, EntityMotion, ResourceValue, ServerMessage, StatValue } from "./protocol";
 import { statValues } from "./stats";
+import { EVENT_KIND } from "./skills/events";
 
 /** Entities come into a client's view this close to its player, metres... */
 export const INTEREST_IN = 150;
@@ -19,6 +20,18 @@ interface Known {
   z: number;
   facing: number;
   grounded: boolean;
+  /** What it was last told of the unit's combat (ABILITIES.md, *Messages*), as short signatures. */
+  cast: string;
+  auras: string;
+  flags: number;
+  target: number;
+  spells: string;
+}
+
+/** A combat event, and where it happened. */
+export interface PlacedEvent {
+  event: CombatEvent;
+  dimension: string;
 }
 
 /**
@@ -29,7 +42,7 @@ interface Known {
 export interface Replicator {
   /** Every message for this step, in order: despawns, spawns, values, modifiers, then the snapshot.
    *  `viewer` is the client's player, null while it has no body (travelling). */
-  update: (viewer: Entity | null, entities: Iterable<Entity>, tick: number, ackSeq: number) => ServerMessage[];
+  update: (viewer: Entity | null, entities: Iterable<Entity>, tick: number, ackSeq: number, time: number, events: readonly PlacedEvent[]) => ServerMessage[];
   /** Forgets everything the client was told - on a Transfer, which clears the client's own mirror. */
   reset: () => void;
   /** The ids the client knows now. */
@@ -74,6 +87,11 @@ export function createReplicator(rules: GameRules): Replicator {
       z: 0,
       facing: 0,
       grounded: false,
+      cast: "",
+      auras: "",
+      flags: 0,
+      target: 0,
+      spells: "",
     };
     if (entity.stats) k.stats.set(statValues(entity.stats));
     if (entity.resources) {
@@ -83,7 +101,47 @@ export function createReplicator(rules: GameRules): Replicator {
     return k;
   }
 
-  function update(viewer: Entity | null, entities: Iterable<Entity>, tick: number, ackSeq: number): ServerMessage[] {
+  /** Cast bars, auras, flags and targets of a unit that have changed since the client was told. */
+  function combatMessages(entity: Entity, own: boolean, k: Known, out: ServerMessage[]): void {
+    const combat = entity.combat;
+    if (!combat) return;
+    const casting = combat.casting;
+    const castSig = casting ? `${casting.id}:${casting.state}` : "";
+    if (castSig !== k.cast) {
+      k.cast = castSig;
+      if (casting) {
+        const state = casting.skill.states[casting.state];
+        out.push({ type: "entityCast", id: entity.id, skill: casting.skill.index, start: casting.stateStart, length: casting.stateEnds - casting.stateStart, channel: state.bar === "channel" });
+      } else out.push({ type: "entityCast", id: entity.id, skill: -1, start: 0, length: 0, channel: false });
+    }
+    const auras: AuraState[] = [];
+    for (const m of combat.magics) {
+      if (m.ended || m.skill.display === "hidden") continue;
+      auras.push({ magic: m.id, skill: m.skill.index, caster: m.caster, stacks: m.stacks, start: m.stateStart, ends: Number.isFinite(m.stateEnds) ? m.stateEnds : 0 });
+    }
+    const auraSig = auras.map((a) => `${a.magic}:${a.stacks}:${a.start}:${a.ends}`).join(",");
+    if (auraSig !== k.auras) {
+      k.auras = auraSig;
+      out.push({ type: "entityAuras", id: entity.id, auras });
+    }
+    if (combat.flags.bits !== k.flags) {
+      k.flags = combat.flags.bits;
+      out.push({ type: "entityFlags", id: entity.id, flags: combat.flags.bits });
+    }
+    if (combat.target !== k.target) {
+      k.target = combat.target;
+      out.push({ type: "entityTarget", id: entity.id, target: combat.target });
+    }
+    if (own) {
+      const spellSig = `${combat.gcdUntil}|${combat.attacking}|${combat.spells.map((sp) => `${sp.skill}:${sp.level}:${sp.ready}`).join(",")}`;
+      if (spellSig !== k.spells) {
+        k.spells = spellSig;
+        out.push({ type: "entitySpells", id: entity.id, spells: combat.spells.map(({ skill, level, ready }) => ({ skill, level, ready })), gcdUntil: combat.gcdUntil, attacking: combat.attacking });
+      }
+    }
+  }
+
+  function update(viewer: Entity | null, entities: Iterable<Entity>, tick: number, ackSeq: number, time: number, events: readonly PlacedEvent[]): ServerMessage[] {
     const out: ServerMessage[] = [];
     // Who is in view: everything near the viewer, with some slack for what it already knows.
     const inView = new Map<number, Entity>();
@@ -115,6 +173,7 @@ export function createReplicator(rules: GameRules): Replicator {
       const k = remember(entity, last);
       known.set(entity.id, k);
       ids.add(entity.id);
+      combatMessages(entity, own, k, valueMessages);
       if (own && entity.stats && entity.stats.modifierVersion !== k.modifierVersion) {
         k.modifierVersion = entity.stats.modifierVersion;
         modifiers = { type: "entityModifiers", id: entity.id, modifiers: entity.stats.modifiers.map(({ stat, kind, value, source }) => ({ stat, kind, value, source })) };
@@ -131,7 +190,14 @@ export function createReplicator(rules: GameRules): Replicator {
     if (viewer && !motion.some((m) => m.id === viewer.id)) motion.push({ id: viewer.id, x: viewer.x, y: viewer.y, z: viewer.z, facing: viewer.facing, grounded: viewer.grounded });
     out.push(...valueMessages);
     if (modifiers) out.push(modifiers);
-    out.push({ type: "snapshot", tick, ackSeq, entities: motion });
+    // Events the client may see: those whose source or target it has in view, and its own failed casts.
+    if (viewer) {
+      const seen = events
+        .filter(({ event, dimension }) => dimension === viewer.dimension && (event.kind === EVENT_KIND.castFailed ? event.source === viewer.id : inView.has(event.source) || inView.has(event.target)))
+        .map(({ event }) => event);
+      if (seen.length > 0) out.push({ type: "combatEvents", events: seen });
+    }
+    out.push({ type: "snapshot", tick, time, ackSeq, entities: motion });
     return out;
   }
 

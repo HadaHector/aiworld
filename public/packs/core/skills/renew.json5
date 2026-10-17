@@ -1,0 +1,21 @@
+// A heal over time on an ally (or the caster), hosted on whoever it is cast on.
+{
+  name: "Renew",
+  type: "spell",
+  tags: ["school.holy"],
+  target: "ally",
+  hostOn: "target",
+  range: 40,
+  los: true,
+  cost: { mana: 20 },
+  display: "buff",
+  dispel: "magic",
+  stacking: { per: "caster" },   // a second Renew from the same caster starts it again
+  states: {
+    renewing: {
+      length: 15,
+      period: 3,
+      tick: [{ do: "heal", amount: { add: [8, { div: ["caster.spirit", 4] }] } }],
+    },
+  },
+}

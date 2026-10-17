@@ -1,0 +1,8 @@
+// Summoned by the Searing Totem skill: stands where it was put and burns the nearest enemy.
+{
+  name: "Searing Totem",
+  stats: { level: 1, stamina: 2 },
+  resources: ["health"],
+  spells: [{ skill: "totemBolt" }],
+  look: { height: 0.9, radius: 0.2, color: [0.8, 0.3, 0.15] },
+}

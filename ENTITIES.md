@@ -52,7 +52,7 @@ interface Entity {
   dimension: string;           // the dimension it is in ("" while a player travels)
   x: number; y: number; z: number;   // feet, f64
   facing: number;              // radians about y, 0 facing +z
-  inCombat: boolean;           // set by debug now, by the ability system in step 4
+  inCombat: boolean;           // worked out by the ability system from threat and hostile acts (ABILITIES.md)
   // Parts - each optional, each its own module:
   stats?: StatBlock;           // src/sim/stats.ts
   resources?: ResourceBlock;   // src/sim/resources.ts
@@ -450,6 +450,9 @@ Each leaves the game working: dev server, `npm run probe`, `npm run server`, `np
 - **The debug commands came in step 4**, with the protocol bump, so the bot's scripted run (spend
   100 health at tick 60, combat from 150 to 300) could show regen pausing headless.
 - **Clicking a capsule** in the world opens the inspector on it - a first step towards targeting.
+  Since step 4 (ABILITIES.md) a click targets the entity instead, and the inspector, when open
+  (`I`), follows the target. `debugCombat` now forces combat on rather than setting the flag, which
+  the ability system works out each step.
 - **Bodies for everyone** came after (protocol 5, *Looks*): the template look's `race`, `outfit`
   and `sex`, the entity's `look`, Hello's `look`. `__aiworld.entities.addPlayer({ race, outfit,
   sex, seed })` puts a second player in the page's server, walking a slow circle, to see one.

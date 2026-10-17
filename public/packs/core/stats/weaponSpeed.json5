@@ -1,0 +1,2 @@
+// Seconds between auto-attack swings (see ABILITIES.md). Weapons set it through modifiers.
+{ name: "Weapon speed", default: 2, min: 0.5 }

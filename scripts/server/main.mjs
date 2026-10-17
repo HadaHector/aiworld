@@ -9,6 +9,8 @@
 //   npm run server -- --bot --travel 300        the bot travels to the next dimension every 300 ticks
 //   npm run server -- --bot --inspect           every second, the bot's entity and those near it: stats,
 //                                               modifiers, resources (see ENTITIES.md)
+//   npm run server -- --bot --fight             the bot walks to the training dummy and fights it with
+//                                               its spells, printing the combat log (see ABILITIES.md)
 // A dimension is generated when the first player heads for it and dropped when the last one leaves,
 // so with no bot the server holds no world at all.
 import { loadContentFromDisk, loadRulesFromDisk } from "../diskContent.mjs";
@@ -18,6 +20,8 @@ import { createWorldData, WORLD_SEED } from "../../src/world/worldData.ts";
 import { createServer } from "../../src/sim/server.ts";
 import { createLocalChannel } from "../../src/sim/channel.ts";
 import { PROTOCOL_VERSION } from "../../src/sim/protocol.ts";
+import { describeEvent } from "../../src/sim/skills/combatLog.ts";
+import { createFightClient } from "./fightBot.mjs";
 
 const TICK_HZ = 30;
 
@@ -45,7 +49,7 @@ console.log(`config ${configName}: packs ${packs.join(", ")}; dimensions ${dimen
 started = performance.now();
 const rules = loadRulesFromDisk(configName);
 checkPlacements(rules, dimensions);
-console.log(`game rules: ${rules.stats.length} stats, ${rules.modifierKinds.length} modifier kinds, ${rules.resources.length} resources, ${rules.templates.size} templates (${ms(started)})`);
+console.log(`game rules: ${rules.stats.length} stats, ${rules.modifierKinds.length} modifier kinds, ${rules.resources.length} resources, ${rules.templates.size} templates, ${rules.skills.length} skills (${ms(started)})`);
 
 const server = createServer({
   seed,
@@ -73,7 +77,7 @@ if (flag("bot")) {
   const channel = createLocalChannel();
   server.connect(channel.server);
   channel.client.send({ type: "hello", protocol: PROTOCOL_VERSION, name: "bot", dimension: text("dimension", "") });
-  bot = { end: channel.client, id: 0, seq: 0, last: null, dimension: "", entityMessages: 0 };
+  bot = { end: channel.client, id: 0, seq: 0, last: null, dimension: "", entityMessages: 0, fighter: flag("fight") ? createFightClient(rules, channel.client) : null };
 }
 
 /** One entity message, short, with stats and resources by name. */
@@ -89,10 +93,16 @@ function describeMessage(message) {
       return `modifiers #${message.id} · ${message.modifiers.map((m) => `${rules.stats[m.stat].id} ${rules.modifierKinds[m.kind].id} ${m.value} (${m.source})`).join(", ") || "none"}`;
     case "entityDespawn":
       return `despawn #${message.id}`;
+    default:
+      return null;
   }
 }
 
 function driveBot() {
+  if (bot.fighter) {
+    driveFighter();
+    return;
+  }
   for (const message of bot.end.receive()) {
     if (message.type === "welcome") bot.id = message.playerId;
     if (message.type === "transfer") {
@@ -105,7 +115,8 @@ function driveBot() {
     // What the bot is told of entities (see ENTITIES.md): the first few in full, then a count a second.
     if (message.type.startsWith("entity")) {
       bot.entityMessages++;
-      if (bot.entityMessages <= 20) console.log(`bot: ${describeMessage(message)}`);
+      const line = describeMessage(message);
+      if (line && bot.entityMessages <= 20) console.log(`bot: ${line}`);
     }
   }
   // A scripted test of resources: some health spent, then a while in combat - regen stops while in
@@ -120,6 +131,19 @@ function driveBot() {
   const t = server.tick / TICK_HZ;
   bot.seq = (bot.seq + 1) & 0xffff;
   bot.end.send({ type: "intent", seq: bot.seq, moveX: Math.cos(t / 20), moveZ: Math.sin(t / 20), run: true, jump: server.tick % 90 === 0 });
+}
+
+/** The --fight bot: the fight client plays, and the combat log is printed as it comes. */
+function driveFighter() {
+  const fighter = bot.fighter;
+  fighter.receive();
+  bot.id = fighter.state.id;
+  bot.dimension = fighter.state.dimension;
+  bot.last = fighter.state.me;
+  for (const event of fighter.state.events.splice(0)) {
+    if (fighter.loggable(event)) console.log(`  [${event.time.toFixed(1)}] ${describeEvent(rules, event, fighter.nameOf)}`);
+  }
+  fighter.drive(server.tick);
 }
 
 console.log(`startup ${ms(0)}`);

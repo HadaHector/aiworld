@@ -1,0 +1,17 @@
+// What the training dummy casts: 3 s, interruptible, hurts a little.
+{
+  name: "Straw Bolt",
+  type: "spell",
+  tags: ["school.arcane"],
+  target: "enemy",
+  range: 40,
+  los: true,
+  gcd: false,
+  states: {
+    cast: { length: 3, bar: "cast", interruptible: true, next: "hit" },
+    hit: {
+      commit: true,
+      enter: [{ do: "damage", group: "target", amount: { add: [15, { mul: ["random", 10] }] } }],
+    },
+  },
+}

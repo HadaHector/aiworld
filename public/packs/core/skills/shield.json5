@@ -1,0 +1,24 @@
+// An absorb on an ally that leaves Weakened Soul behind, so it cannot be cast on them again at once.
+{
+  name: "Shield",
+  type: "spell",
+  tags: ["school.holy"],
+  target: "ally",
+  hostOn: "target",
+  range: 40,
+  los: true,
+  cost: { mana: 30 },
+  cooldown: 4,
+  targetBlockedBy: ["weakenedSoul"],
+  display: "buff",
+  dispel: "magic",
+  stacking: { per: "host", add: "replace" },
+  states: {
+    shielded: {
+      length: 30,
+      enter: [{ do: "cast", skill: "weakenedSoul" }],
+      hold: [{ do: "absorb", amount: { add: [40, { mul: ["caster.intellect", 2] }] } }],
+      on: { absorbedOut: "end" },
+    },
+  },
+}

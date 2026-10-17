@@ -1,0 +1,18 @@
+// A damage over time, applied by fireball and whatever else burns. One per caster on a unit, up to
+// three stacks; a new application restarts it and keeps the stronger of the two.
+{
+  name: "Burn",
+  type: "spell",
+  tags: ["school.fire", "dot"],
+  display: "debuff",
+  dispel: "magic",
+  vars: { perTick: 5 },
+  stacking: { group: "burn", per: "caster", max: 3, add: "stack", duration: "restart", value: "stronger", strength: "var.perTick" },
+  states: {
+    burning: {
+      length: { mul: [8, "caster.dotDuration"] },
+      period: 2,
+      tick: [{ do: "damage", amount: { mul: ["var.perTick", "stacks"] }, roll: "noCrit" }],
+    },
+  },
+}

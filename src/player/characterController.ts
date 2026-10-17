@@ -15,6 +15,8 @@ export interface Character {
   readIntent: (camera: ArcRotateCamera) => BodyInput;
   /** Draws the player where the server says it is. */
   show: (state: EntityMotion) => void;
+  /** Plays a melee swing: the server says when (an ability's `animation` action). */
+  swing: () => void;
   /** Draws the player with a body (game/playerBody.ts) instead of the capsule, which stays as the
    *  place the camera and the lights follow. */
   attachBody: (body: PlayerBody) => void;
@@ -63,10 +65,7 @@ export function createCharacter(scene: Scene, start: { x: number; y: number; z: 
   function show(state: EntityMotion): void {
     mesh.position.set(state.x, state.y + height / 2, state.z);
     mesh.rotation.y = state.facing;
-    if (body) {
-      if (input.takeSwing()) body.swing();
-      body.show(state);
-    }
+    body?.show(state);
   }
 
   return {
@@ -74,6 +73,7 @@ export function createCharacter(scene: Scene, start: { x: number; y: number; z: 
     settings,
     readIntent,
     show,
+    swing: () => body?.swing(),
     attachBody(attached) {
       body?.dispose();
       body = attached;

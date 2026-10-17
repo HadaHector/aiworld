@@ -116,10 +116,10 @@ export interface PackSource {
 const CONTENT_FOLDERS = ["dimensions", "biomes", "materials", "layers", "grass", "trees", "bushes", "rocks", "voices", "borderHills", "settlements", "weathers", "features", "buildings", "buildingParts", "buildingMaterials", "rooms", "props", "propGroups"] as const;
 type ContentFolder = (typeof CONTENT_FOLDERS)[number];
 
-/** The folders gameplay content lives in - stats, resources, templates (see ENTITIES.md). Not world
- *  content: the world's resolver passes over them, and the game rules' resolver reads them, once per
- *  server. */
-export const GAME_FOLDERS = ["stats", "modifiers", "resources", "entities"] as const;
+/** The folders gameplay content lives in - stats, resources, templates (see ENTITIES.md), skills and
+ *  game rules files (ABILITIES.md). Not world content: the world's resolver passes over them, and
+ *  the game rules' resolver reads them, once per server. */
+export const GAME_FOLDERS = ["stats", "modifiers", "resources", "entities", "skills", "rules"] as const;
 
 /** The folders characters' bodies are drawn from - races, gear, outfits (see CHARACTERS.md). Read by
  *  the client alone (src/character); the world's resolver passes over them too. */

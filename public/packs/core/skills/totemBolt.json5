@@ -1,0 +1,16 @@
+// The searing totem's passive: every 2 s, a firebolt at the nearest enemy in sight within 20 m.
+{
+  name: "Searing Bolt",
+  passive: true,
+  type: "spell",
+  tags: ["school.fire"],
+  areas: { around: { shape: "circle", radius: 20, at: "host" } },
+  groups: { foe: { from: "area:around", filter: { relation: "enemy", los: true }, sort: "nearest", max: 1 } },
+  states: {
+    wait: { length: 2, next: "fire" },
+    fire: {
+      enter: [{ do: "damage", group: "foe", amount: { add: [6, { mul: ["random", 4] }] } }],
+      next: "wait",
+    },
+  },
+}

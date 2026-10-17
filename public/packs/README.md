@@ -47,6 +47,8 @@ packs/<pack>/
   modifiers/<id>.json5    gameplay: a kind of modifier - where it applies and what it does
   resources/<id>.json5    gameplay: health, mana, rage... - a maximum from a stat, regen and decay
   entities/<id>.json5     gameplay: an entity template - the player, a dummy, later creatures
+  skills/<id>.json5       gameplay: a skill - its casting, states, actions, areas, groups (ABILITIES.md)
+  rules/combat.json5      gameplay: the GCD, the queue window, the rolls, threat (ABILITIES.md)
 ```
 
 A definition's **id is its file name**: `materials/peat.json5` defines the material `peat`, and
@@ -958,6 +960,38 @@ errors. Players are made from `entities/player.json5`. A dimension places entiti
 `entities` list. A template's `look` names a body - `race`, `outfit`, `sex`, from `races/` and
 `outfits/` (CHARACTERS.md) - or, without a race, a capsule of `color`; `height` and `radius` size
 the capsule, which is what a click hits either way.
+
+## Gameplay: skills and combat rules
+
+Also read by the game rules' resolver (`src/sim/rules/skillRules.ts`); [ABILITIES.md](../../ABILITIES.md)
+has every field. A skill is a small state machine: each state has a length, ticks, transitions on
+events, and actions that run on entering, on each tick, on leaving, or are held while it lasts.
+Every number is an expression of the caster's, target's and host's stats (`caster.intellect`),
+the spell's `level`, the magic's `stacks` and `var.<name>`s.
+
+```json5
+// skills/fireball.json5 - a cast, a travel time, a hit, and a burn applied to the target
+{
+  type: "spell", tags: ["school.fire"], target: "enemy", range: 35, los: true, facing: true,
+  cost: { mana: 30 },
+  states: {
+    cast: { length: { mul: [2.5, "caster.fireCastTime"] }, bar: "cast", breakOnMove: true, interruptible: true, next: "travel" },
+    travel: { commit: true, length: { travel: 24 }, next: "impact" },
+    impact: { enter: [{ do: "damage", group: "target", amount: 40 }, { do: "cast", skill: "burn", group: "target", vars: { perTick: 8 } }] },
+  },
+}
+// skills/burn.json5 - a gameplay element other skills apply; `stacking` says how applications meet
+{ display: "debuff", vars: { perTick: 5 }, stacking: { per: "caster", max: 3, value: "stronger" },
+  states: { burning: { length: 8, period: 2, tick: [{ do: "damage", amount: { mul: ["var.perTick", "stacks"] }, roll: "noCrit" }] } } }
+```
+
+Actions (`do`): `damage`, `heal`, `resource`, `modifier`, `flag` and `absorb` (held), `cast`,
+`stacks`, `remove`, `interrupt`, `move`, `summon`, `threat`, `animation`, `effect`, `goto`, `set`,
+`if`, `chance`, `end`. Control flags (`stunned`, `rooted`, `silenced`, `pacified`, `disarmed`,
+`immune`, `stealthed`, `dead`, and `immune.<flag>`) are the engine's; tags are free. A state left
+without a `length` lasts 0 s, unless it waits for an event, holds something or ticks. A template
+gives `spells: [{ skill, level }]`, a `hostility` (`hostile`, `neutral`, `friendly`), `threat: true`
+for a threat table, and `mortal: false` for one that never dies.
 
 ## Example
 

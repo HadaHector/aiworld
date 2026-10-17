@@ -1,0 +1,32 @@
+// Auto-attack (see ABILITIES.md): a passive that swings at its unit's target at the weapon's speed,
+// while the unit is attacking and the target is within reach and in front. No engine code of its own.
+{
+  name: "Attack",
+  passive: true,
+  type: "physical",
+  weapon: true,
+  tags: ["melee"],
+  groups: {
+    foe: { from: "attacking", filter: { relation: "enemy", range: 5, facing: true } },
+  },
+  states: {
+    ready: {
+      period: 0.1,
+      refill: ["foe"],
+      tick: [{ do: "if", has: "foe", then: [{ do: "goto", state: "swing" }] }],
+    },
+    swing: {
+      enter: [
+        { do: "animation", name: "swing" },
+        {
+          do: "damage",
+          group: "foe",
+          amount: { add: ["caster.weaponMin", { mul: ["random", { sub: ["caster.weaponMax", "caster.weaponMin"] }] }, { div: ["caster.strength", 7] }] },
+        },
+        { do: "resource", group: "caster", resource: "rage", amount: 5 },
+      ],
+      length: "caster.weaponSpeed",
+      next: "ready",
+    },
+  },
+}

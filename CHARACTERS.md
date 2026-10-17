@@ -358,7 +358,9 @@ In rough order of need; each belongs to the build-order step named, or is its ow
    works in the data.
 4. **Character creation and saves.** A screen to pick race, sex, look seed and sliders, saved with
    the character (GAMEPLAY.md, *Saved state*) - replacing the address's `?race=&outfit=&sex=&look=`.
-5. **Animation from abilities (build step 4).** Swings, casts and hits played by the ability system
+5. **Animation from abilities (build step 4).** *Swings done* (ABILITIES.md): an ability's
+   `animation` action sends an event and every client that sees the unit plays the swing; the key
+   that played it is gone. Still to come: casts and hits played by the ability system
    instead of a key; a swing per weapon kind (one-handed, two-handed, bow, staff); a take-off crouch
    once the server says a jump started; swimming once the simulation has water.
 6. **Creatures (build step 6).** Non-humanoid skeletons - quadrupeds, birds - from the same parts:

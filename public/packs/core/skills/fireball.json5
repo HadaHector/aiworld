@@ -1,0 +1,23 @@
+// Cast, travel, hit, and leave a burn on the target (see ABILITIES.md, *Skills*).
+{
+  name: "Fireball",
+  type: "spell",
+  tags: ["school.fire"],
+  target: "enemy",
+  range: 35,
+  los: true,
+  facing: true,
+  cost: { mana: { add: [30, { mul: ["level", 5] }] } },
+  start: "cast",
+  states: {
+    cast: { length: { mul: [2.5, "caster.fireCastTime"] }, bar: "cast", breakOnMove: true, interruptible: true, next: "travel" },
+    travel: { commit: true, length: { travel: 24 }, next: "impact" },
+    impact: {
+      enter: [
+        { do: "damage", group: "target", amount: { add: [40, { mul: ["random", 10] }, { mul: ["caster.intellect", 0.8] }] } },
+        // The burn is its own skill: fireball says how hard it burns, the burn how burns stack.
+        { do: "cast", skill: "burn", group: "target", vars: { perTick: { add: [3, { mul: ["caster.intellect", 0.25] }] } } },
+      ],
+    },
+  },
+}

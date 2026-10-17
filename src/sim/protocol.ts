@@ -5,8 +5,11 @@
  * Babylon type.
  */
 
+import type { CombatEvent } from "./skills/events";
+export type { CombatEvent } from "./skills/events";
+
 /** Bumped whenever a message changes shape. */
-export const PROTOCOL_VERSION = 5;
+export const PROTOCOL_VERSION = 6;
 
 // --- Client to server ------------------------------------------------------------------------
 
@@ -63,6 +66,42 @@ export interface Arrived {
   type: "arrived";
 }
 
+// Combat (see ABILITIES.md, *Casting*).
+
+/** Selects a unit: 0 clears. */
+export interface SetTarget {
+  type: "target";
+  id: number; // u32
+}
+
+/** Asks to cast a spell the player knows. Answered by events: castStart or castDone, or castFailed. */
+export interface Cast {
+  type: "cast";
+  seq: number; // u16
+  skill: number; // u16, index into the game rules' skills
+  /** 0 for the player's own target. */
+  target: number; // u32
+  /** For a skill aimed at a point. */
+  x: number; // f64
+  z: number; // f64
+}
+
+/** Stops the player's cast before it lands (Escape). */
+export interface StopCast {
+  type: "stopCast";
+}
+
+/** Auto-attack on or off, at the player's target. */
+export interface Attack {
+  type: "attack";
+  on: boolean;
+}
+
+/** Dead: back at the dimension's spawn with full health. */
+export interface Respawn {
+  type: "respawn";
+}
+
 // Debug commands on entities (see ENTITIES.md) - a real game would not take these from a client.
 // `entity` 0 is the sender's own player. Stats, kinds and resources are indices into the game rules.
 
@@ -112,6 +151,20 @@ export interface DebugDespawn {
   entity: number; // u32
 }
 
+/** Debug: starts a skill's magic on an entity, cast by the sender (ABILITIES.md). */
+export interface DebugApply {
+  type: "debugApply";
+  entity: number; // u32
+  skill: number; // u16
+}
+
+/** Debug: kills an entity outright, or brings it back (`revive`). */
+export interface DebugKill {
+  type: "debugKill";
+  entity: number; // u32
+  revive: boolean;
+}
+
 export type ClientMessage =
   | Hello
   | Intent
@@ -124,7 +177,14 @@ export type ClientMessage =
   | DebugCombat
   | DebugResource
   | DebugSpawn
-  | DebugDespawn;
+  | DebugDespawn
+  | SetTarget
+  | Cast
+  | StopCast
+  | Attack
+  | Respawn
+  | DebugApply
+  | DebugKill;
 
 // --- Server to client ------------------------------------------------------------------------
 
@@ -245,9 +305,90 @@ export interface EntityDespawn {
 export interface Snapshot {
   type: "snapshot";
   tick: number; // u32
+  /** The server's clock, seconds: what cooldowns, cast bars and auras count against. */
+  time: number; // f64
   /** The last Intent seq the server had taken from this client by then. */
   ackSeq: number; // u16
   entities: EntityMotion[];
 }
 
-export type ServerMessage = Welcome | Transfer | EntitySpawn | EntityValues | EntityModifiers | EntityDespawn | Snapshot;
+/** Everything that happened this step that the receiver may see (ABILITIES.md, *Messages*): events
+ *  whose source or target it has in view, and its own failed casts. */
+export interface CombatEvents {
+  type: "combatEvents";
+  events: CombatEvent[];
+}
+
+/** A unit's cast bar: a cast or channel has started (skill ≥ 0), or it has stopped (skill -1). */
+export interface EntityCast {
+  type: "entityCast";
+  id: number; // u32
+  skill: number; // i16
+  start: number; // f64, server time
+  length: number; // f32, seconds
+  channel: boolean;
+}
+
+/** One buff or debuff shown on a unit. */
+export interface AuraState {
+  magic: number; // u32
+  skill: number; // u16
+  caster: number; // u32
+  stacks: number; // u8
+  start: number; // f64, server time
+  /** Server time it ends; 0 for one that lasts until something ends it. */
+  ends: number; // f64
+}
+
+/** The buffs and debuffs on a unit have changed: the whole list. */
+export interface EntityAuras {
+  type: "entityAuras";
+  id: number; // u32
+  auras: AuraState[];
+}
+
+/** The control flags a unit holds have changed (ABILITIES.md, *States on a unit*). */
+export interface EntityFlags {
+  type: "entityFlags";
+  id: number; // u32
+  flags: number; // u32, a bit per flag in FLAG_NAMES' order
+}
+
+/** One spell the receiver's player knows. */
+export interface SpellState {
+  skill: number; // u16
+  level: number; // u16
+  /** Server time its cooldown ends. */
+  ready: number; // f64
+}
+
+/** The receiver's own player's spells, its GCD and auto-attack have changed. */
+export interface EntitySpells {
+  type: "entitySpells";
+  id: number; // u32
+  spells: SpellState[];
+  gcdUntil: number; // f64, server time
+  attacking: boolean;
+}
+
+/** Whom a unit has selected: 0 for nobody (for target-of-target). */
+export interface EntityTarget {
+  type: "entityTarget";
+  id: number; // u32
+  target: number; // u32
+}
+
+export type ServerMessage =
+  | Welcome
+  | Transfer
+  | EntitySpawn
+  | EntityValues
+  | EntityModifiers
+  | EntityDespawn
+  | Snapshot
+  | CombatEvents
+  | EntityCast
+  | EntityAuras
+  | EntityFlags
+  | EntitySpells
+  | EntityTarget;

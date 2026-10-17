@@ -1,0 +1,20 @@
+// Interrupts the target's cast and locks it out of that school for 4 s.
+{
+  name: "Kick",
+  type: "physical",
+  tags: ["melee"],
+  target: "enemy",
+  range: 5,
+  facing: true,
+  cost: { rage: 10 },
+  cooldown: 10,
+  gcd: false,
+  states: {
+    kick: {
+      enter: [
+        { do: "interrupt", group: "target", lockout: 4 },
+        { do: "damage", group: "target", amount: 5 },
+      ],
+    },
+  },
+}

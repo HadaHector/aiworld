@@ -1,0 +1,19 @@
+// Strikes every enemy within 8 m of the caster and slows them.
+{
+  name: "Thunder Clap",
+  type: "physical",
+  tags: ["melee"],
+  target: "none",
+  cost: { rage: 20 },
+  cooldown: 6,
+  areas: { around: { shape: "circle", radius: 8 } },
+  groups: { hit: { from: "area:around", filter: { relation: "enemy" }, max: 10 } },
+  states: {
+    clap: {
+      enter: [
+        { do: "damage", group: "hit", amount: { add: [10, { div: ["caster.strength", 4] }] } },
+        { do: "cast", skill: "thunderClapSlow", group: "hit" },
+      ],
+    },
+  },
+}
