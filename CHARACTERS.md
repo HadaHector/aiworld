@@ -358,9 +358,9 @@ In rough order of need; each belongs to the build-order step named, or is its ow
 2. **Many bodies at once.** One body shared by every character with the same race, sex, sliders,
    seed and gear; a lower detail far away (the `detail` setting already halves it); gear meshes of
    one material merged; smaller atlases far away. Measure first with a crowd in a town.
-3. **Equipment from items (build step 7).** Item types name gear pieces, equipment slots replace
-   outfits, gear tints and materials come from the item's rarity and kind. Mixing pieces already
-   works in the data.
+3. **Equipment from items (build step 7).** *Done* (ITEMS.md, *Equipment*): item types name gear
+   pieces and a tint over them; what an entity wears in visible slots replaces its outfit, and its
+   body is built again when that changes. An entity without belongings (the dummy) keeps its outfit.
 4. **Character creation and saves.** A screen to pick race, sex, look seed and sliders, saved with
    the character (GAMEPLAY.md, *Saved state*) - replacing the address's `?race=&outfit=&sex=&look=`.
 5. **Animation from abilities (build step 4).** *Swings done* (ABILITIES.md): an ability's

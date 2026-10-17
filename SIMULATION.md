@@ -117,7 +117,11 @@ in `hello`, and moved the seed from `welcome` to `transfer`. Bodies for everyone
 added a `look` to `hello` and `entitySpawn` (protocol 5). Step 4 (ABILITIES.md) added the combat
 intents (`target`, `cast`, `stopCast`, `attack`, `respawn`), `combatEvents`, `entityCast`,
 `entityAuras`, `entityFlags`, `entitySpells`, `entityTarget`, the server's `time` in snapshots, and
-`debugApply` and `debugKill` (protocol 6); `src/sim/protocol.ts` is current.
+`debugApply` and `debugKill` (protocol 6). Step 7 (ITEMS.md) added the item intents (`itemMove`,
+`itemEquip`, `itemUnequip`, `itemUse`, `itemDrop`, `itemPickUp`, `lootOpen`, `lootTake`,
+`lootClose`, `itemRepair`), `container`, `itemSlot`, `wallet`, `bankReach`, `loot`,
+`itemRefused`, `entityGear`, `entityLootable`, the item rules' hash and the seed in `welcome`,
+and `debugItem` and `debugWear` (protocol 7); `src/sim/protocol.ts` is current.
 
 Client to server:
 

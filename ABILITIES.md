@@ -695,7 +695,7 @@ Each leaves the game working: dev server, `npm run probe`, `npm run server`, `np
   casts once, `equip` grants under the source, `unequip` takes every spell from it away. Items had
   not landed, so wiring it into `createServer`'s `itemHooks`, `checkSkillRefs` for
   `ItemRules.abilityRefs`, and calling the wear functions on hits are left to whichever lands
-  second.
+  second. Items did all three when they landed (ITEMS.md, *As built*).
 - **In the game** (`?config=tiny`): Tab (or a click) targets; 1-9 cast the spells the player knows,
   in its template's order (Heroic Strike, Fireball, Renew, Shield, Charge, Thunder Clap, Kick,
   Searing Totem); R toggles auto-attack; Escape stops a cast or clears the target. The frames sit

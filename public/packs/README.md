@@ -49,6 +49,13 @@ packs/<pack>/
   entities/<id>.json5     gameplay: an entity template - the player, a dummy, later creatures
   skills/<id>.json5       gameplay: a skill - its casting, states, actions, areas, groups (ABILITIES.md)
   rules/combat.json5      gameplay: the GCD, the queue window, the rolls, threat (ABILITIES.md)
+  items/<id>.json5        gameplay: an item type - a sword, a shirt, bread, a key (ITEMS.md)
+  itemTemplates/<id>.json5  gameplay: item types made from parts - metal x form x rarity
+  rarities/<id>.json5     gameplay: a rarity tier - its rank, colour and stat budget
+  equipSlots/<id>.json5   gameplay: an equipment slot, and whether it shows on the body
+  currencies/<id>.json5   gameplay: money - one main currency, any number of minor ones
+  lootTables/<id>.json5   gameplay: weighted, nested, conditional loot
+  rules/items.json5       gameplay: wear, repair costs, reach, how long dropped items lie (ITEMS.md)
 ```
 
 A definition's **id is its file name**: `materials/peat.json5` defines the material `peat`, and
@@ -992,6 +999,32 @@ Actions (`do`): `damage`, `heal`, `resource`, `modifier`, `flag` and `absorb` (h
 without a `length` lasts 0 s, unless it waits for an event, holds something or ticks. A template
 gives `spells: [{ skill, level }]`, a `hostility` (`hostile`, `neutral`, `friendly`), `threat: true`
 for a threat table, and `mortal: false` for one that never dies.
+
+## Gameplay: items
+
+Read by their own resolver (`src/sim/rules/itemRules.ts`) once per server, with the world seed:
+templates' rarer types draw their extra stats from it. [ITEMS.md](../../ITEMS.md) has every field.
+
+```json5
+// items/leatherBoots.json5 - a stat is a flat modifier, rolled per item within its range
+{ name: "Leather Boots", kind: "armour", rarity: "common", slot: "feet", gear: ["boots"], stats: { armor: [8, 12] }, durability: 35, value: 25 }
+// items/bread.json5 - stacks, and using it casts a skill
+{ name: "Bread", kind: "food", stack: 20, use: { skill: "eatBread", consume: true }, value: 2 }
+// itemTemplates/sword.json5 - one type per choice of every axis and rarity: "Iron Longsword"...
+{ kind: "weapon", slot: "mainHand", gear: ["sword"], name: "{material} {form}",
+  axes: { material: [{ id: "bronze", name: "Bronze", budget: 1 }, { id: "iron", name: "Iron", level: 8, budget: 1.5 }],
+          form: [{ id: "long", name: "Longsword", stats: { strength: [1, 2] } }, { id: "great", name: "Greatsword", fills: ["offHand"] }] },
+  rarities: ["common", "uncommon", "rare"], extra: { stamina: [1, 3], spirit: [1, 2] }, unscaled: ["weaponSpeed"] }
+// lootTables/trainingDummy.json5 - picks by weight, nested tables, templates, money, conditions
+{ rolls: [1, 2], pick: [{ weight: 30, item: "bread", count: [1, 3] }, { weight: 35, table: "starterGear" }, { weight: 10 }],
+  always: [{ money: [20, 80] }, { item: "rustyKey", when: { lt: ["looter.level", 5] } }] }
+```
+
+A generated type's id is its template's, its parts' and its rarity's, joined by dots
+(`sword.iron.long.rare`). A template's `items` field gives its entities belongings (`bag`, `bank`,
+`start`), loot (`loot` - rolled at 0 health, or when first opened with `container: true`) or a
+strongbox (`banker: true`). `entities/groundItem.json5` is what a dropped item lies as; a `look`
+with `shape: "box"` draws a box. A currency's `denominations` say how its one integer is shown.
 
 ## Example
 

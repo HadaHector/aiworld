@@ -303,7 +303,10 @@ A proposal, to be confirmed. Each step gets its own plan document.
    the bones, a painted atlas, gear as geometry, three races and two sexes, procedural animation, on
    the player in the game; judged good enough, and the approach stays.
 6. **Creatures:** per-zone rosters, spawning in ranges, simple AI, respawn.
-7. **Items:** inventory grid, equipment, loot tables, rarity, durability.
+7. **Items: done** - see [ITEMS.md](ITEMS.md). Item types from packs and from templates that
+   generate them per seed, rolled stats, rarity, durability and repair, stacks, currencies; a bag, a
+   bank and equipment that adds modifiers and shows on the body; loot tables, loot from the dummy,
+   a chest and the ground; items cast skills on use and equip.
 8. **Disciplines and progression:** XP per discipline, levels, unlocks.
 9. **NPCs and the quest generator,** up to the test chain.
 10. **HUD and screens:** unit frames, action bar, inventory, quest log.

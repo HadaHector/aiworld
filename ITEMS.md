@@ -8,7 +8,7 @@ and puts its gear on the body (CHARACTERS.md); the training dummy and a chest dr
 in packs; items can be dropped on the ground and picked up by anyone. The ability system (step 4)
 is built beside this, so items only define where an ability is triggered and leave the rest.
 
-**Status: approved; being built.**
+**Status: done** (steps 1-6 below). [As built](#as-built) notes where the build differs.
 
 ## Decisions
 
@@ -197,8 +197,7 @@ Every player has a **belongings** part, from its template:
 
 ```json5
 // entities/player.json5 - added
-inventory: { bag: 20, bank: 40 },
-startItems: [{ item: "linenShirt" }, { item: "linenTrousers" }, { item: "bread", count: 5 }],
+items: { bag: 20, bank: 40, start: [{ item: "tunic" }, { item: "linenTrousers" }, { item: "sandals" }, { item: "bread", count: 5 }] },
 ```
 
 ```ts
@@ -315,8 +314,8 @@ interface Belongings {
 The connection point, nothing more:
 
 ```json5
-use:   { ability: "eatBread", consume: true },   // when used from the bag
-equip: { ability: "thornsAura" },                // while equipped
+use:   { skill: "eatBread", consume: true },     // when used from the bag
+equip: { skill: "thornsAura" },                  // while equipped
 ```
 
 ```ts
@@ -445,3 +444,41 @@ Each leaves the game working: dev server, `npm run probe`, `npm run server`, `np
 - Item icons: the screens show a coloured square with the kind's letter until icons are made.
 - Saving belongings and the item store: with character saves.
 - Party loot rules (round robin, need and greed): with parties, if ever.
+
+## As built
+
+- **Files**: `src/sim/rules/itemRules.ts` (the rules, generation, `itemStats`, `rollQuality`,
+  `rollLoot`, `formatMoney`); `src/sim/items/`: `items.ts` (instances, the store, belongings and
+  loot parts, refusals), `belongings.ts` (moves, equipment as modifiers, receiving, using, wear and
+  repair), `itemSystem.ts` (what the server calls: adopting, loot at 0 health, chests, the ground,
+  reach), `itemReplication.ts`, `itemMessages.ts`, `itemHooks.ts`. Client: `game/belongingsMirror.ts`,
+  `game/itemGear.ts`, `ui/inventoryScreen.ts` (the screen and the loot window); `entityMirror.ts`,
+  `entityMeshes.ts`, `characterBody.ts`, `dimensionView.ts` and `main.ts` grew.
+  `scripts/diskContent.mjs` gained `loadItemRulesFromDisk`.
+- **A template's item fields are one `items` object** (`bag`, `bank`, `start`, `loot`, `container`,
+  `respawn`, `banker`), merged along `extends` like `look`, and checked by the item rules. Start items
+  that can be worn are put on.
+- **Hooks name a `skill`**, the ability system's word. The ability system had landed first, so the
+  server hands the item system `skills.items` (`itemHooks` overrides it), `checkSkillRefs` checks
+  `abilityRefs` in the page and in Node, and wear comes from the step's combat events: a `death`
+  wears what the dead wear, a `hit` the attacker's weapon and one of the target's pieces, by chance.
+  Bread casts `eatBread`, a heal over time on the eater.
+- **Messages** as planned, with these names: `itemSlot` (not `slot`), `entityLootable`, `bankReach`;
+  `itemUnequip` and `itemRepair` were added. Open loot travels in its own `loot` message, money
+  included, rather than as container 3. An emptied loot window closes.
+- **Generated types**: a template's `unscaled` lists stats the budgets leave alone (a weapon's
+  speed); a zero roll adds no modifier. The core pack makes 33 types from two templates beside 17
+  authored ones.
+- **The looter** a corpse's conditions read is the top of its threat table; with none, its stats are
+  0 - so the dummy's rusty key drops to a player under level 5 who has not fought it.
+- **`rules/items.json5` is replaced whole** by a later pack, like other files, not key by key.
+- **Loot is opened with E only**; a click on a corpse still targets it.
+- **The probe** (`scripts/probe/items.mjs`, 123 checks, about 10 s) covers rules, rolls, loot,
+  belongings, equipment and durability on the item system alone, and the boundary on a real
+  `tiny` server with two clients. `npm run server -- --config tiny --bot --loot` prints the bot's
+  stats and belongings before and after looting the dummy.
+- **Checked in the game** (`?config=tiny`): the dummy and the chest glint; E opens their loot; Take
+  all fills the bag and the wallet; B shows equipment, bag and wallet, and the bank at the
+  strongbox; equipping bracers, a helm and swords changes the stats and the body (a greatsword
+  fades the off hand); bread eats; a dropped item lies as a box and E picks it up; tooltips show
+  the rolled stats and the roll's quality.

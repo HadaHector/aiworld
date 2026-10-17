@@ -453,6 +453,9 @@ Each leaves the game working: dev server, `npm run probe`, `npm run server`, `np
   Since step 4 (ABILITIES.md) a click targets the entity instead, and the inspector, when open
   (`I`), follows the target. `debugCombat` now forces combat on rather than setting the flag, which
   the ability system works out each step.
+- **Items** (ITEMS.md) added a template's `items` field - belongings, loot, a chest's or a strongbox's
+  part, read by the item rules - the look's `shape: "box"`, and an entity's `belongings`, `loot` and
+  `gear` parts.
 - **Bodies for everyone** came after (protocol 5, *Looks*): the template look's `race`, `outfit`
   and `sex`, the entity's `look`, Hello's `look`. `__aiworld.entities.addPlayer({ race, outfit,
   sex, seed })` puts a second player in the page's server, walking a slow circle, to see one.
