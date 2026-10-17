@@ -1,0 +1,6 @@
+// A leather belt at the waist.
+{
+  name: "Belt",
+  slot: "waist",
+  paint: [{ regions: ["torso"], from: 0.17, to: 0.25, material: "leather", tint: "#5a3a22" }],
+}

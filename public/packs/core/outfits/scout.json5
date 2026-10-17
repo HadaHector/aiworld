@@ -1,0 +1,2 @@
+// Leather and mail: thin shells over a mail shirt, boots and bracers.
+{ name: "Scout", gear: ["mailShirt", "trousers", "jerkin", "belt", "boots", "bracers"] }

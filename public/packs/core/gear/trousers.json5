@@ -1,0 +1,9 @@
+// Woollen trousers - linen dyed dark for now - from the waist to the ankles.
+{
+  name: "Trousers",
+  slot: "legs",
+  paint: [
+    { regions: ["legs"], from: -0.2, to: 0.95, material: "linen", tint: "#4a4034" },
+    { regions: ["torso"], from: -0.6, to: 0.2, material: "linen", tint: "#4a4034" },
+  ],
+}

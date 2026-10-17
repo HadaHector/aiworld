@@ -1,0 +1,9 @@
+// Leather boots: a shell up the shin, its cuff turned out, and over the foot, closed at the toe.
+{
+  name: "Leather boots",
+  slot: "feet",
+  shells: [
+    { chain: "legs", from: 0.62, to: 0.95, thickness: 0.012, flare: [0.025, 0], loops: 3, material: "leather", tint: "#5a3a22" },
+    { chain: "feet", from: 0, to: 0.97, thickness: 0.012, loops: 4, cap: true, material: "leather", tint: "#5a3a22" },
+  ],
+}

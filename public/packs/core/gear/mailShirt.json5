@@ -1,0 +1,9 @@
+// A mail shirt to the hips, its sleeves to the forearms.
+{
+  name: "Mail shirt",
+  slot: "shirt",
+  paint: [
+    { regions: ["torso"], from: -0.15, to: 1, material: "mail", tint: "#c8c8cc" },
+    { regions: ["arms"], from: -0.2, to: 0.7, material: "mail", tint: "#c8c8cc" },
+  ],
+}

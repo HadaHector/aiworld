@@ -1,0 +1,6 @@
+// A leather jerkin: a thin shell over the torso from the hips to under the arms.
+{
+  name: "Leather jerkin",
+  slot: "chest",
+  shells: [{ chain: "torso", from: 0.04, to: 0.6, thickness: 0.012, flare: [0.012, 0.004], loops: 6, material: "leather", tint: "#7a4e2c" }],
+}

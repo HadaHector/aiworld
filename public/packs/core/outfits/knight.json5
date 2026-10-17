@@ -1,0 +1,2 @@
+// Heavy plate over mail: breastplate, tassets, pauldrons, gauntlets, leg plate, a helm and a sword.
+{ name: "Knight", gear: ["mailShirt", "trousers", "breastplate", "tassets", "pauldrons", "gauntlets", "legPlate", "helm", "sword"] }

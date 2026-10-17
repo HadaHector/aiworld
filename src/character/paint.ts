@@ -44,11 +44,15 @@ export function chooseAppearance(race: RaceDef, seed: number, sex?: Sex): Appear
 export interface PaintedCover {
   material: BakedGearMaterial;
   tint: ColorTuple;
-  /** From and to, in metres over the ground in the bind pose. */
+  /** From and to: metres over the ground in the bind pose ("height"), or shares of each region's
+   *  length from its top ("along"). */
+  span: "height" | "along";
   from: number;
   to: number;
   /** The regions it covers. */
   regions: string[];
+  /** A darker hem along its edges. */
+  hem: boolean;
 }
 
 /**
@@ -71,6 +75,7 @@ export function paintAtlas(body: BodyGeometry, layout: AtlasLayout, race: RaceDe
   const occlusion = createOcclusion(body);
   const tall = Math.max(...body.positions.filter((_, i) => i % 3 === 1));
   const coverRegions = covers.map((cover) => new Set(cover.regions.map((name) => regionNames.indexOf(name))));
+  const regionLengths = body.regions.map((r) => r.axis.slice(1).reduce((sum, p, i) => sum + length(sub(p, r.axis[i])), 0));
 
   for (let o = 0; o < size * size; o++) {
     const region = texels.region[o];
@@ -107,12 +112,15 @@ export function paintAtlas(body: BodyGeometry, layout: AtlasLayout, race: RaceDe
     }
 
     covers.forEach((cover, i) => {
-      if (!coverRegions[i].has(region) || p[1] < cover.from || p[1] > cover.to) return;
+      if (!coverRegions[i].has(region)) return;
+      // How far inside the cover the texel is, in metres from its nearer edge.
+      const scale = cover.span === "height" ? 1 : regionLengths[region];
+      const at = cover.span === "height" ? p[1] : along / scale;
+      const inside = Math.min(at - cover.from, cover.to - at) * (cover.span === "height" ? 1 : scale);
+      if (inside < 0) return;
       const m = sampleGearMaterial(cover.material, around, along);
       color = [m[0] * cover.tint[0], m[1] * cover.tint[1], m[2] * cover.tint[2]];
-      // A darker hem along its edges.
-      const edge = Math.min(p[1] - cover.from, cover.to - p[1]);
-      if (edge < 0.012) color = color.map((c) => c * 0.72) as [number, number, number];
+      if (cover.hem && inside < 0.012) color = color.map((c) => c * 0.72) as [number, number, number];
     });
 
     // Light painted in.

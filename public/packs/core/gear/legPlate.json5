@@ -1,0 +1,10 @@
+// Leg plate: cuisses over the thighs, greaves over the shins, sabatons over the feet.
+{
+  name: "Leg plate",
+  slot: "legs",
+  shells: [
+    { chain: "legs", from: 0.14, to: 0.46, thickness: 0.022, flare: [0.01, 0.006], loops: 3, material: "plate", tint: "#d8dce2", rim: "#8a7a5a" },
+    { chain: "legs", from: 0.52, to: 0.95, thickness: 0.022, flare: [0.02, 0], loops: 3, material: "plate", tint: "#d8dce2", rim: "#8a7a5a" },
+    { chain: "feet", from: 0, to: 0.97, thickness: 0.014, loops: 4, cap: true, material: "plate", tint: "#c8ccd2" },
+  ],
+}

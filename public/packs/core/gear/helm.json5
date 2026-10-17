@@ -1,0 +1,6 @@
+// An open-faced helm: a shell over the head from the brow up, its rim flared.
+{
+  name: "Helm",
+  slot: "head",
+  shells: [{ chain: "head", from: 0.6, to: 1, thickness: 0.022, flare: [0.018, 0], loops: 3, cap: true, material: "plate", tint: "#d8dce2", rim: "#8a7a5a" }],
+}

@@ -1,0 +1,6 @@
+// Tassets: a short skirt of plate hanging from the breastplate over the hips.
+{
+  name: "Tassets",
+  slot: "waist",
+  skirts: [{ from: 0.13, length: 0.24, flare: 1.25, thickness: 0.035, loops: 2, material: "plate", tint: "#d8dce2", rim: "#8a7a5a" }],
+}

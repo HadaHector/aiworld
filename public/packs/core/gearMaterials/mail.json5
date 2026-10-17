@@ -1,0 +1,33 @@
+// Mail - shirts, coifs, sleeves under plate: rows of small iron rings, each a bright loop round a
+// dark hole, the rows offset like courses of brick. Rings twice life size.
+{
+  name: "Mail",
+  size: 0.3,
+  shine: 0.35,
+  texture: {
+    bumpStrength: 1.5,
+    pipeline: {
+      noises: [
+        // 20 rings across a tile, about a centimetre each on the body, in offset rows.
+        { name: "rings", type: "bricks", tileCycles: [20, 26], stagger: 0.5, amplitude: 1, mode: "edge" },
+        { name: "grime", type: "fbm", octaves: 3, tileCycles: 3, amplitude: 1, persistence: 0.5, lacunarity: 2 },
+      ],
+      steps: [
+        { output: "ringRaw", op: "sample", noise: "rings" },
+        // Bright between just inside a cell's edge and a little way in: a loop round a dark hole.
+        { output: "ringIn", op: "mask", input: "ringRaw", at: 0.05, off: 0.0 },
+        { output: "ringOut", op: "mask", input: "ringRaw", at: 0.3, off: 0.42 },
+        { output: "ring", op: "multiply", a: "ringIn", b: "ringOut" },
+        { output: "grimeRaw", op: "sample", noise: "grime" },
+        { output: "grime", op: "remap", input: "grimeRaw", inMin: -1, inMax: 1, outMin: 0.82, outMax: 1.05 },
+        { output: "hole", op: "color", value: [0.16, 0.16, 0.18] },
+        { output: "iron", op: "color", value: [0.62, 0.63, 0.66] },
+        { output: "linked", op: "mix", a: "hole", b: "iron", t: "ring" },
+        { output: "diffuse", op: "multiply", a: "linked", b: "grime" },
+        { output: "roughness", op: "remap", input: "ring", inMin: 0, inMax: 1, outMin: 0.9, outMax: 0.45 },
+        { output: "height", op: "scale", input: "ring", factor: 0.6 },
+      ],
+      outputs: { diffuse: "diffuse", roughness: "roughness", height: "height" },
+    },
+  },
+}

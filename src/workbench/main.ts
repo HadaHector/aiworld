@@ -29,6 +29,7 @@ import { isWholeHousePart } from "../world/buildings/buildingParts";
 import { bakeBuildingTextures } from "../world/buildings/buildingMesh";
 import { resolveRaces, type RaceDef } from "../character/raceDef";
 import { bakeGearMaterial, resolveGearMaterials, type GearMaterialDef } from "../character/gearMaterial";
+import { resolveGear, resolveOutfits } from "../character/gearDef";
 import { ANIMATIONS, POSES, figureFor, paintedBody, type FigureOptions } from "./figurePreview";
 
 // ---------------------------------------------------------------------------------------------
@@ -46,13 +47,15 @@ interface Asset {
 }
 
 /** The folders with a preview, and what each asset kind can be looked at as. */
-type PreviewFolder = "materials" | "trees" | "bushes" | "rocks" | "grass" | "biomes" | "buildings" | "buildingParts" | "buildingMaterials" | "props" | "features" | "races" | "gearMaterials";
-const PREVIEW_FOLDERS: PreviewFolder[] = ["materials", "trees", "bushes", "rocks", "grass", "biomes", "buildings", "buildingParts", "buildingMaterials", "props", "features", "races", "gearMaterials"];
+type PreviewFolder = "materials" | "trees" | "bushes" | "rocks" | "grass" | "biomes" | "buildings" | "buildingParts" | "buildingMaterials" | "props" | "features" | "races" | "gearMaterials" | "gear" | "outfits";
+const PREVIEW_FOLDERS: PreviewFolder[] = ["materials", "trees", "bushes", "rocks", "grass", "biomes", "buildings", "buildingParts", "buildingMaterials", "props", "features", "races", "gearMaterials", "gear", "outfits"];
+/** The folders whose preview is a character: a race's body, or gear worn by one. */
+const isCharacterFolder = (folder: string): boolean => folder === "races" || folder === "gear" || folder === "outfits";
 /** How many variants of a building the Variant menu steps through - a building has no fixed count,
  *  every seed is one. */
 const BUILDING_VARIANTS = 8;
 /** Everything else is listed after these, its JSON still checked by Preview. */
-const FOLDER_ORDER = ["materials", "trees", "bushes", "rocks", "grass", "biomes", "buildings", "buildingParts", "buildingMaterials", "props", "features", "races", "gearMaterials", "layers", "borderHills", "settlements", "voices", "patches", ""];
+const FOLDER_ORDER = ["materials", "trees", "bushes", "rocks", "grass", "biomes", "buildings", "buildingParts", "buildingMaterials", "props", "features", "races", "outfits", "gear", "gearMaterials", "layers", "borderHills", "settlements", "voices", "patches", ""];
 
 interface ViewDef {
   id: string;
@@ -126,6 +129,8 @@ const DEFAULT_OPTIONS: Options = {
   lattice: "on",
   texture: "painted",
   smallclothes: "on",
+  outfit: "",
+  race: "",
   sex: "",
   animation: "idle",
   speed: "1.2",
@@ -526,6 +531,8 @@ function viewsFor(asset: Asset | null, content: WorldContent | null): ViewDef[] 
     case "features":
       return [{ id: "placed", label: "On the ground", mode: "3d" }];
     case "races":
+    case "gear":
+    case "outfits":
       return [
         { id: "model", label: "Model", mode: "3d" },
         { id: "placed", label: "On the ground", mode: "3d" },
@@ -627,8 +634,9 @@ function renderPreviewBar(): void {
       }),
     );
     if (current.folder === "props" || current.folder === "features") viewOptions.append(checkbox("Colliders", "colliders", rebuild));
-    if (current.folder === "races") {
+    if (isCharacterFolder(current.folder)) {
       viewOptions.append(
+        ...characterChoices(rebuild),
         select("Play", "animation", Object.entries(ANIMATIONS).map(([id, entry]): [string, string] => [id, entry.label]), rebuild),
         ...(options.animation === "still" ? [select("Pose", "pose", Object.entries(POSES).map(([id, entry]): [string, string] => [id, entry.label]), rebuild)] : []),
         ...(options.animation === "still" || options.animation === "idle"
@@ -697,8 +705,9 @@ function renderPreviewBar(): void {
         ], rebuild));
       }
     }
-  } else if (current.folder === "races") {
+  } else if (isCharacterFolder(current.folder)) {
     viewOptions.append(
+      ...characterChoices(rebuild),
       select("Sex", "sex", [["", "By seed"], ["male", "Male"], ["female", "Female"]], rebuild),
       select("Texture", "texture", [["painted", "Painted (512)"], ["retro", "Retro (128)"]], rebuild),
       checkbox("Smallclothes", "smallclothes", rebuild),
@@ -910,11 +919,18 @@ function groundMaterial(content: WorldContent, asset: Asset): MaterialDef {
 function characterInputs(asset: Asset): { race: RaceDef; gear: Map<string, GearMaterialDef>; options: FigureOptions } | null {
   try {
     const packs = sourcesWithEdit();
-    const race = resolveRaces(packs).get(asset.id)!;
+    const races = resolveRaces(packs);
+    const gearDefs = resolveGear(packs);
+    const outfits = resolveOutfits(packs, gearDefs);
+    characterLists = { races: [...races.values()].map((r) => [r.id, r.name]), outfits: [...outfits.values()].map((o) => [o.id, o.name]) };
+    // A race shows the outfit chosen; gear and an outfit are shown worn by the race chosen.
+    const race = asset.folder === "races" ? races.get(asset.id)! : races.get(options.race) ?? [...races.values()][0];
+    const worn = asset.folder === "gear" ? [gearDefs.get(asset.id)!] : (outfits.get(asset.folder === "outfits" ? asset.id : options.outfit)?.gear ?? []).map((id) => gearDefs.get(id)!);
     return {
       race,
       gear: resolveGearMaterials(packs),
       options: {
+        gear: worn,
         detail: Number(options.detail) || 1,
         lattice: options.lattice as FigureOptions["lattice"],
         pose: (options.pose in POSES ? options.pose : "stand") as FigureOptions["pose"],
@@ -934,6 +950,24 @@ function characterInputs(asset: Asset): { race: RaceDef; gear: Map<string, GearM
     setStatus("");
     return null;
   }
+}
+
+/** The races and outfits the packs have, as the last character preview read them - for the menus. */
+let characterLists: { races: [string, string][]; outfits: [string, string][] } = { races: [], outfits: [] };
+
+/** The menus a character preview adds: the outfit a race wears, or the race gear is worn by. */
+function characterChoices(rebuild: () => void): HTMLLabelElement[] {
+  if (!current) return [];
+  if (characterLists.races.length === 0) {
+    try {
+      const packs = sourcesWithEdit();
+      characterLists = { races: [...resolveRaces(packs).values()].map((r) => [r.id, r.name]), outfits: [...resolveOutfits(packs, resolveGear(packs)).values()].map((o) => [o.id, o.name]) };
+    } catch {
+      // The preview reports what does not read.
+    }
+  }
+  if (current.folder === "races") return [select("Outfit", "outfit", [["", "None"], ...characterLists.outfits], rebuild)];
+  return characterLists.races.length > 0 ? [select("Race", "race", characterLists.races, rebuild)] : [];
 }
 
 async function preview3d(token: number, asset: Asset, view: ViewDef, content: WorldContent): Promise<void> {
@@ -979,7 +1013,7 @@ async function preview3d(token: number, asset: Asset, view: ViewDef, content: Wo
       return;
     }
     site = { size: built.size, heightAt: built.heightAt, placed: built.placed, lines: built.lines, yards: built.yards, trees: built.trees, farTrees: built.farTrees, far, pads: options.pads === "on" ? built.pads : undefined };
-  } else if (asset.folder === "races") {
+  } else if (isCharacterFolder(asset.folder)) {
     ground = groundMaterial(content, asset);
     if (grassOn) grass = ground.grass;
     const inputs = characterInputs(asset);
@@ -1122,7 +1156,7 @@ async function preview2d(token: number, asset: Asset, view: ViewDef, content: Wo
   await nextPaint();
   let image: TextureImage;
 
-  if (asset.folder === "races") {
+  if (isCharacterFolder(asset.folder)) {
     const inputs = characterInputs(asset);
     if (!inputs) return;
     const painted = await paintedBody(inputs.race, inputs.gear, seed, inputs.options.texture === "flat" ? { ...inputs.options, texture: "painted" } : inputs.options);

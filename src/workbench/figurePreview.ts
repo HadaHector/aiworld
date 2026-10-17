@@ -5,7 +5,8 @@ import { createAnimator } from "../character/animation";
 import { forSex, type RaceDef, type Sex } from "../character/raceDef";
 import { layoutAtlas, type AtlasLayout } from "../character/atlas";
 import { chooseAppearance, paintAtlas, type PaintedCover } from "../character/paint";
-import { bakeGearMaterial, type GearMaterialDef } from "../character/gearMaterial";
+import { bakeGearMaterial, type BakedGearMaterial, type GearMaterialDef } from "../character/gearMaterial";
+import { sided, type GearDef } from "../character/gearDef";
 import type { StageOptions } from "./stage";
 
 export interface FigureOptions {
@@ -18,8 +19,10 @@ export interface FigureOptions {
   /** "painted": a 512 atlas, smoothly filtered; "retro": 128, its texels square; "flat": the skin's
    *  colour alone, no atlas. */
   texture: "painted" | "retro" | "flat";
-  /** Linen smallclothes painted on, standing in for gear until there is some. */
+  /** Linen smallclothes painted on, under any gear. */
   smallclothes: boolean;
+  /** The gear worn, in order: later pieces paint over earlier ones. */
+  gear: GearDef[];
   /** The character's own seed: its sex, skin, hair, eyes and face. */
   seed: number;
   /** A sex to show instead of the seed's. */
@@ -49,6 +52,8 @@ export interface PaintedBody {
   body: BodyGeometry;
   layout: AtlasLayout | null;
   pixels: Uint8Array | null;
+  /** The gear materials its gear is drawn in, baked. */
+  baked: Map<string, BakedGearMaterial>;
   summary: HTMLElement;
 }
 
@@ -56,7 +61,15 @@ export interface PaintedBody {
 export async function paintedBody(race: RaceDef, gear: Map<string, GearMaterialDef>, worldSeed: number, options: FigureOptions): Promise<PaintedBody> {
   const look = chooseAppearance(race, options.seed, options.sex ?? undefined);
   const sexed = forSex(race, look.sex);
-  const body = buildBody(sexed, { detail: options.detail, lattice: options.lattice !== "off" });
+  const body = buildBody(sexed, { detail: options.detail, lattice: options.lattice !== "off", gear: options.gear });
+  const baked = new Map<string, BakedGearMaterial>();
+  const bake = async (id: string): Promise<BakedGearMaterial | null> => {
+    const def = gear.get(id);
+    if (!def) return null;
+    if (!baked.has(id)) baked.set(id, await bakeGearMaterial(worldSeed, def));
+    return baked.get(id)!;
+  };
+  for (const layer of body.layers) await bake(layer.material);
   let layout: AtlasLayout | null = null;
   let pixels: Uint8Array | null = null;
   if (options.texture !== "flat") {
@@ -65,12 +78,18 @@ export async function paintedBody(race: RaceDef, gear: Map<string, GearMaterialD
     const linen = gear.get("linen");
     if (options.smallclothes && linen) {
       const hips = race.skeleton.ankle + race.skeleton.shin + race.skeleton.thigh;
-      const material = await bakeGearMaterial(worldSeed, linen);
+      const material = (await bake(linen.id))!;
       const tint: [number, number, number] = [0.86, 0.8, 0.68];
-      covers.push({ material, tint, from: hips - 0.14, to: hips + 0.06, regions: ["torso", "legR", "legL"] });
+      covers.push({ material, tint, span: "height", from: hips - 0.14, to: hips + 0.06, regions: ["torso", "legR", "legL"], hem: true });
       // A band over the breasts, too.
       const nipple = body.marks.find((m) => m.name === "nipple");
-      if (look.sex === "female" && nipple) covers.push({ material, tint, from: nipple.position[1] - 0.075, to: nipple.position[1] + 0.05, regions: ["torso"] });
+      if (look.sex === "female" && nipple) covers.push({ material, tint, span: "height", from: nipple.position[1] - 0.075, to: nipple.position[1] + 0.05, regions: ["torso"], hem: true });
+    }
+    for (const piece of options.gear) {
+      for (const paint of piece.paint) {
+        const material = await bake(paint.material);
+        if (material) covers.push({ material, tint: paint.tint, span: "along", from: paint.from, to: paint.to, regions: paint.regions.flatMap(sided), hem: paint.hem });
+      }
     }
     pixels = paintAtlas(body, layout, race, look, covers);
   }
@@ -88,7 +107,7 @@ export async function paintedBody(race: RaceDef, gear: Map<string, GearMaterialD
     row.insertCell().textContent = String(value);
   }
   summary.append(title, table);
-  return { race: sexed, body, layout, pixels, summary };
+  return { race: sexed, body, layout, pixels, baked, summary };
 }
 
 /**
@@ -199,10 +218,10 @@ export function figureFor(race: RaceDef, painted: PaintedBody, options: FigureOp
   const skin: BodySkin = layout && pixels ? { pixels, size: layout.size, uvs: layout.uvs, nearest: options.texture === "retro" } : { color: chooseAppearance(race, options.seed, options.sex ?? undefined).skin };
   return (scene, shadows, height) => {
       const ground = height(0, 0);
-      const character = createCharacterMesh(scene, `race_${race.id}`, body, skin);
+      const character = createCharacterMesh(scene, `race_${race.id}`, body, skin, painted.baked);
       character.mesh.position.y = ground;
       character.setPose(POSES[options.pose].pose);
-      shadows.addShadowCaster(character.mesh, false);
+      for (const mesh of character.meshes) shadows.addShadowCaster(mesh, false);
       if (options.animation !== "still") play(scene, character, painted.race, options, height);
       if (options.bones) {
         const viewer = new SkeletonViewer(character.skeleton, character.mesh, scene, true, 1, { displayMode: SkeletonViewer.DISPLAY_SPHERE_AND_SPURS });

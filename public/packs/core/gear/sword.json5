@@ -1,0 +1,6 @@
+// An arming sword in the right hand.
+{
+  name: "Arming sword",
+  slot: "mainHand",
+  pieces: [{ kind: "blade", bone: "hand", sides: "R", length: 0.85, width: 0.06, material: "plate", tint: "#e4e8ee", hilt: { material: "leather", tint: "#3a2618" } }],
+}

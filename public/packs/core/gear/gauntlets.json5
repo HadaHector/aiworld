@@ -1,0 +1,9 @@
+// Gauntlets: plate from the elbows, flaring at the cuff, and over the hands.
+{
+  name: "Gauntlets",
+  slot: "hands",
+  shells: [
+    { chain: "arms", from: 0.56, to: 0.97, thickness: 0.02, flare: [0, 0.03], loops: 3, material: "plate", tint: "#d8dce2", rim: "#8a7a5a" },
+    { chain: "hands", from: 0, to: 0.9, thickness: 0.012, loops: 2, cap: true, material: "plate", tint: "#c8ccd2" },
+  ],
+}

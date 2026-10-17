@@ -52,7 +52,9 @@ export function layoutAtlas(body: BodyGeometry, size: number): AtlasLayout {
   const round = new Float32Array(triangles * 3);
   const along = new Float32Array(triangles * 3);
   const radius = new Float32Array(triangles * 3);
+  // Gear's triangles (region -1) are textured with their own materials, not the atlas.
   for (let t = 0; t < triangles; t++) {
+    if (body.triangleRegions[t] < 0) continue;
     const r = body.regions[body.triangleRegions[t]];
     for (let k = 0; k < 3; k++) {
       const c = cylinderOf(r, at(I[t * 3 + k]));
@@ -67,6 +69,7 @@ export function layoutAtlas(body: BodyGeometry, size: number): AtlasLayout {
   // its length.
   const extents = body.regions.map(() => ({ circumference: 0, roundMax: 1, alongMin: Infinity, alongMax: -Infinity }));
   for (let t = 0; t < triangles; t++) {
+    if (body.triangleRegions[t] < 0) continue;
     const e = extents[body.triangleRegions[t]];
     for (let k = t * 3; k < t * 3 + 3; k++) {
       e.circumference = Math.max(e.circumference, 2 * Math.PI * radius[k]);
@@ -100,6 +103,7 @@ export function layoutAtlas(body: BodyGeometry, size: number): AtlasLayout {
   const surface = new Float32Array(triangles * 6);
   for (let t = 0; t < triangles; t++) {
     const region = body.triangleRegions[t];
+    if (region < 0) continue;
     const rect = rects[region];
     const e = extents[region];
     const d = density * boost(body.regions[region]);
@@ -188,6 +192,7 @@ function rasterize(body: BodyGeometry, uvs: Float32Array, surface: Float32Array,
     surface: new Float32Array(size * size * 2),
   };
   for (let t = 0; t < I.length / 3; t++) {
+    if (body.triangleRegions[t] < 0) continue;
     const xs = [0, 1, 2].map((k) => uvs[(t * 3 + k) * 2] * size);
     const ys = [0, 1, 2].map((k) => uvs[(t * 3 + k) * 2 + 1] * size);
     const area = (xs[1] - xs[0]) * (ys[2] - ys[0]) - (xs[2] - xs[0]) * (ys[1] - ys[0]);

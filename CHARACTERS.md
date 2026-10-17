@@ -6,9 +6,9 @@ procedurally from parts, textured and animated procedurally, look good enough fo
 WoW-Classic-like third-person RPG? Afterwards a body can be looked at in the workbench with any
 race and outfit, playing any of its animations, and the own player in the game is drawn with one.
 
-**Status: building.** Steps 1-3 are built: the human, male and female, in the workbench
-(`?asset=core/races/human`), painted, with its Atlas view, playing its animations; gear materials in
-`gearMaterials/`.
+**Status: building.** Steps 1-4 are built: the human, male and female, in the workbench
+(`?asset=core/races/human`), painted, with its Atlas view, playing its animations, in three outfits;
+gear materials in `gearMaterials/`, gear in `gear/`, outfits in `outfits/`.
 
 ## Decisions
 
@@ -162,6 +162,20 @@ about 1500 for full plate.
 
 A gear piece is defined once and fits every race: its curves are given relative to the body's
 (offsets and factors), so the same breastplate sits on a dwarf and on an elf.
+
+As built (`src/character/gearDef.ts`, gear in `bodyMesh.ts`): a piece paints the atlas over shares
+of regions' lengths (`paint`), and adds `shells` (a chain of bones - torso, head, arms, hands, legs,
+feet - grown out by a thickness between two shares of its length, flared at its ends, a lip at each
+edge showing its thickness, `cap` closing a helm), `skirts` (level rings hanging from the torso,
+flaring, following the thighs) and `pieces` (a `dome` of lames - a pauldron - or a `blade` with its
+hilt, on one bone). Gear is built with the body, so it follows the lattice and is skinned the same
+way, rigid pieces wholly to their bone. Each material and tint is its own mesh, textured by its gear
+material in metres round and along, sharing the body's skeleton. Body triangles under gear are kept:
+nothing showed through in the three outfits, but a stride can push a thigh through a long skirt, and
+shells over the feet sink a centimetre into the ground. The spike's outfits: an apprentice (a
+painted robe with a skirt, belt, sandals - about 1500 triangles), a scout (mail, a leather jerkin,
+boots, bracers - about 2200) and a knight (breastplate, tassets, three-lame pauldrons, gauntlets,
+leg plate, helm, sword over mail - about 3300).
 
 ## Texture: a painted atlas
 

@@ -1,0 +1,9 @@
+// Sandals: leather soles and straps over the feet and round the ankles.
+{
+  name: "Sandals",
+  slot: "feet",
+  paint: [
+    { regions: ["feet"], from: 0, to: 1, material: "leather", tint: "#7a5232" },
+    { regions: ["legs"], from: 0.92, to: 0.96, material: "leather", tint: "#7a5232" },
+  ],
+}

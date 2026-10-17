@@ -1,0 +1,2 @@
+// Cloth: a robe, a belt and sandals - painted, but for the robe's skirt.
+{ name: "Apprentice", gear: ["robe", "belt", "sandals"] }

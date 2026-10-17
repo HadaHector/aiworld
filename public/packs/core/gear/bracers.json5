@@ -1,0 +1,6 @@
+// Leather bracers on the forearms.
+{
+  name: "Leather bracers",
+  slot: "wrists",
+  shells: [{ chain: "arms", from: 0.66, to: 0.96, thickness: 0.01, flare: [0, 0.01], loops: 2, material: "leather", tint: "#6a4428" }],
+}

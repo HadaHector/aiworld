@@ -1,0 +1,6 @@
+// Pauldrons: three lames of plate over each shoulder, big - as WoW's are.
+{
+  name: "Pauldrons",
+  slot: "shoulders",
+  pieces: [{ kind: "dome", bone: "upperArm", sides: "both", at: [0.03, 0.06, 0], axis: [0.55, 1, 0], radius: 0.14, height: 0.08, layers: 3, material: "plate", tint: "#d8dce2", rim: "#8a7a5a" }],
+}

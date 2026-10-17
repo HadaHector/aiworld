@@ -123,7 +123,7 @@ export const GAME_FOLDERS = ["stats", "modifiers", "resources", "entities"] as c
 
 /** The folders characters' bodies are drawn from - races, gear, outfits (see CHARACTERS.md). Read by
  *  the client alone (src/character); the world's resolver passes over them too. */
-export const CHARACTER_FOLDERS = ["races", "gearMaterials"] as const;
+export const CHARACTER_FOLDERS = ["races", "gearMaterials", "gear", "outfits"] as const;
 
 /** How many grass kinds the packs may define between them: each is a layer of the blade atlas and
  *  an entry in the grass shader's per-kind uniform arrays (four vectors a kind, plus its petal

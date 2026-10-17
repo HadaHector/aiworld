@@ -1,0 +1,11 @@
+// An apprentice's robe: linen over the body and down the arms, a skirt to below the knees. Shares
+// of a region are counted from its top: the torso's from the hips up, a limb's from its root down.
+{
+  name: "Apprentice's robe",
+  slot: "chest",
+  paint: [
+    { regions: ["torso"], from: -0.6, to: 1, material: "linen", tint: "#5a4a8a" },
+    { regions: ["arms"], from: -0.2, to: 0.96, material: "linen", tint: "#5a4a8a" },
+  ],
+  skirts: [{ from: 0.2, length: 0.72, flare: 1.55, thickness: 0.02, loops: 4, material: "linen", tint: "#5a4a8a", rim: "#c9a24a" }],
+}

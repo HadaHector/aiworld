@@ -1,0 +1,6 @@
+// A steel breastplate: a thick shell over the torso, flaring at its waist.
+{
+  name: "Breastplate",
+  slot: "chest",
+  shells: [{ chain: "torso", from: 0.12, to: 0.6, thickness: 0.03, flare: [0.015, 0.006], loops: 6, material: "plate", tint: "#d8dce2", rim: "#8a7a5a" }],
+}

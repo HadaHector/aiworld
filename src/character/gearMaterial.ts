@@ -14,6 +14,8 @@ export interface GearMaterialDef {
   name: string;
   /** How many metres of body one tile of its texture covers. */
   size: number;
+  /** How much it shines: 0 matte cloth, toward 1 polished steel. */
+  shine: number;
   texture: TextureDef;
 }
 
@@ -23,11 +25,12 @@ export function resolveGearMaterials(packs: PackSource[]): Map<string, GearMater
   for (const [id, entry] of characterEntries(packs, "gearMaterials", issues)) {
     const reader = new Reader(issues, entry.file);
     const obj = reader.object(entry.data, "");
-    reader.onlyKeys(obj, "", ["name", "size", "texture"]);
+    reader.onlyKeys(obj, "", ["name", "size", "shine", "texture"]);
     materials.set(id, {
       id,
       name: reader.optionalString(obj, "name", "") ?? id,
       size: reader.number(obj, "size", "", { min: 0.01 }),
+      shine: reader.optionalNumber(obj, "shine", "", 0.05, { min: 0, max: 1 }),
       texture: readTexture(obj.texture, reader, "texture"),
     });
   }
