@@ -110,7 +110,7 @@ export function createEntityMeshes(scene: Scene, mirror: EntityMirror, rules: Ga
   function place(entity: MirroredEntity, entry: Drawn): void {
     entry.capsule.position.set(entity.x, entity.y + (entry.capsule.metadata as { halfHeight: number }).halfHeight, entity.z);
     entry.capsule.rotation.y = entity.facing;
-    entry.body?.show(entity);
+    entry.body?.show({ ...entity, dead: (entity.flags & (1 << FLAG.dead)) !== 0 });
   }
 
   for (const entity of mirror.entities.values()) add(entity);

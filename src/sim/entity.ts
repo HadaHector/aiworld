@@ -81,9 +81,10 @@ export function createEntity(rules: GameRules, template: TemplateDef, id: number
   return entity;
 }
 
-/** One step of every entity's regen and decay. */
+/** One step of every entity's regen and decay - none for the dead (see ABILITIES.md, *Death*). */
 export function stepResources(entities: Iterable<Entity>, deltaSeconds: number): void {
   for (const entity of entities) {
+    if (entity.combat?.dead) continue;
     if (entity.stats && entity.resources) stepResourceBlock(entity.resources, entity.stats, entity.inCombat, deltaSeconds);
   }
 }

@@ -12,9 +12,8 @@ skill's behaviour is a set of **states**, each with **actions**, plus **areas** 
 that the actions aim at. Buffs and debuffs are magics as well, and so are passive skills and the
 auto-attack. One mechanism carries all of it.
 
-**Status: steps 1-6 done; step 7, the death animation, planned and waiting for approval.** The user
-asked for it before this step is finished. [As built](#as-built) notes where the build differs from
-this plan.
+**Status: done** (steps 1-7 below; the death animation itself was built by the characters
+session). [As built](#as-built) notes where the build differs from this plan.
 
 ## Decisions
 
@@ -706,6 +705,15 @@ Each leaves the game working: dev server, `npm run probe`, `npm run server`, `np
   stand-in world for everything but the fight, with a probe-only pack of test skills, and fights
   on a real `tiny` server twice. Checked in the game: targeting, the frames, cast bars, shield and
   weakened soul, sunder stacks, charge, the dummy's bolt, the totem, and the swing on the body.
+
+- **The death animation** (step 7): `animation.ts`'s `dead` input (the characters session's fall
+  and lie) is fed each body's mirrored `dead` flag - `entityMeshes.ts` for others, the own player's
+  controller from `main.ts`. The animator gained `snap`: a body first shown already dead lies at
+  once, and one that comes back more than 3 m away (a respawn) stands at once; dying and getting up
+  in view play out (getting up eases in about a third of a second, not the second planned). The dead
+  no longer regenerate (`stepResources` skips them). Checked in the game: the own player falling,
+  the box, Respawn standing it at the spawn with full health; a second player falling, lying when
+  seen again after leaving view, and getting up where it lay when revived.
 
 ## Not in this step
 

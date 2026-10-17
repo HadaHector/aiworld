@@ -13,8 +13,8 @@ export interface Character {
   /** What the player wants this frame, from the keys and the camera: a direction in the world's x
    *  and z - forward is where the camera looks - running, and a jump (taken once per press). */
   readIntent: (camera: ArcRotateCamera) => BodyInput;
-  /** Draws the player where the server says it is. */
-  show: (state: EntityMotion) => void;
+  /** Draws the player where the server says it is - lying, when dead. */
+  show: (state: EntityMotion, dead?: boolean) => void;
   /** Plays a melee swing: the server says when (an ability's `animation` action). */
   swing: () => void;
   /** Draws the player with a body (game/playerBody.ts) instead of the capsule, which stays as the
@@ -62,10 +62,10 @@ export function createCharacter(scene: Scene, start: { x: number; y: number; z: 
   }
 
   let body: PlayerBody | null = null;
-  function show(state: EntityMotion): void {
+  function show(state: EntityMotion, dead = false): void {
     mesh.position.set(state.x, state.y + height / 2, state.z);
     mesh.rotation.y = state.facing;
-    body?.show(state);
+    body?.show({ ...state, dead });
   }
 
   return {

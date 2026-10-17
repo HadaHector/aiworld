@@ -16,6 +16,9 @@ export interface MotionInput {
   swing?: boolean;
   /** Dead: the body falls and lies still until this is false again. */
   dead?: boolean;
+  /** Be as `dead` says at once, with no fall or getting up: a unit first seen already dead lies
+   *  there, and one that comes back somewhere else (a respawn) stands there (ABILITIES.md). */
+  snap?: boolean;
 }
 
 /** A pose to set on the body (characterMesh.ts) and how far to move the whole of it, in metres. */
@@ -100,6 +103,10 @@ export function createAnimator(skeleton: RaceSkeleton): Animator {
       // Into death at once (what the body was doing gives way within a few frames); out of it
       // gently, when it comes back.
       death = input.dead ? Math.min(1, death + dt * 10) : Math.max(0, death - dt * 3);
+      if (input.snap) {
+        death = input.dead ? 1 : 0;
+        if (input.dead) deadFor = Math.max(deadFor, 2);
+      }
       swimPhase = (swimPhase + dt / 1.5) % 1;
 
       const idlePose = idle(time);

@@ -28,6 +28,7 @@ import { createBodyKit } from "./game/characterBody";
 import { createCombatHud } from "./game/combatHud";
 import { nextEnemy } from "./game/targeting";
 import { EVENT_KIND } from "./sim/skills/events";
+import { FLAG } from "./sim/skills/flags";
 
 const canvasElement = document.getElementById("renderCanvas");
 if (!(canvasElement instanceof HTMLCanvasElement)) {
@@ -125,7 +126,7 @@ function takeServerMessages(): void {
       const mine = message.entities.find((p) => p.id === playerId);
       if (mine) {
         me = mine;
-        view?.character.show(mine);
+        view?.character.show(mine, ((mirror.entities.get(playerId)?.flags ?? 0) & (1 << FLAG.dead)) !== 0);
       }
     }
   }

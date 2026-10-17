@@ -293,11 +293,12 @@ A proposal, to be confirmed. Each step gets its own plan document.
    parts, stats and derived stats as formula trees in packs, modifier kinds whose order and stacking
    are data, any number of resources with regen and decay, templates with inheritance; replicated
    to clients near them, the owner seeing everything and others only what is marked visible.
-4. **Ability system: built; the death animation (ABILITIES.md step 7) is still to do** - see [ABILITIES.md](ABILITIES.md). Skills, spells and magics: skills
+4. **Ability system: done** - see [ABILITIES.md](ABILITIES.md). Skills, spells and magics: skills
    as state machines of composable actions in packs, auras and gameplay elements as magics with a
    stacking model, engine control flags, attributes in every expression; casting with tab
    targeting, range and sight, cast times, channels, the GCD and a queue, interrupts; deterministic
-   rolls, threat with summons, combat events; a target frame, a combat log and a server-driven swing.
+   rolls, threat with summons, combat events; a target frame, a combat log, a server-driven swing,
+   and bodies that fall when they die.
 5. **Character spike: done** - see [CHARACTERS.md](CHARACTERS.md). A body built from curves along
    the bones, a painted atlas, gear as geometry, three races and two sexes, procedural animation, on
    the player in the game; judged good enough, and the approach stays.

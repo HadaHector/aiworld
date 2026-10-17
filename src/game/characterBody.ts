@@ -33,8 +33,9 @@ export function createBodyKit(packs: PackSource[]): BodyKit {
  *  it moves between snapshots. */
 export interface CharacterBody {
   meshes: Mesh[];
-  /** Moves the body to where the server says the entity is, and animates it - each frame. */
-  show: (state: Pick<EntityMotion, "x" | "y" | "z" | "facing" | "grounded">) => void;
+  /** Moves the body to where the server says the entity is, and animates it - each frame. `dead`:
+   *  it falls and lies (ABILITIES.md, *The death animation*). */
+  show: (state: Pick<EntityMotion, "x" | "y" | "z" | "facing" | "grounded"> & { dead?: boolean }) => void;
   /** Plays a melee swing. */
   swing: () => void;
   dispose: () => void;
@@ -68,6 +69,7 @@ export async function createCharacterBody(scene: Scene, name: string, kit: BodyK
   let rise = 0;
   let facing: number | null = null;
   let swinging = false;
+  let wasDead: boolean | null = null;
 
   return {
     meshes: character.meshes,
@@ -86,7 +88,13 @@ export async function createCharacterBody(scene: Scene, name: string, kit: BodyK
       if (facing === null) facing = state.facing;
       const turn = Math.atan2(Math.sin(state.facing - facing), Math.cos(state.facing - facing));
       facing += turn * Math.min(1, dt * TURN_RATE);
-      const { pose, offset } = animator.update({ speed, grounded: state.grounded, verticalSpeed: rise, swimming: false, swing: swinging }, dt);
+      // Seen for the first time already dead, it lies there; back to life somewhere else (a respawn),
+      // it stands there. Dying or getting up in view plays out.
+      const dead = state.dead ?? false;
+      const jumped = last !== null && dt > 0 && Math.hypot(state.x - last.x, state.z - last.z) > TELEPORT;
+      const snap = (wasDead === null && dead) || (wasDead === true && !dead && jumped);
+      wasDead = dead;
+      const { pose, offset } = animator.update({ speed, grounded: state.grounded, verticalSpeed: rise, swimming: false, swing: swinging, dead, snap }, dt);
       swinging = false;
       character.setPose(pose, offset);
       character.mesh.position.set(state.x, state.y, state.z);

@@ -235,7 +235,8 @@ vertical speed, swimming, and a swing trigger.
 - **Death** (added after the spike) - the knees give, the body tips back from the hips, faster as it
   falls, bounces once and lies on its back, arms flung out, a knee raised, the head rolled aside;
   it eases out again when the body comes back to life. Driven by a `dead` input; the workbench's
-  *Dying* plays it on a loop. Not yet tied to the game's own `dead` flag.
+  *Dying* plays it on a loop. Tied to the game's own `dead` flag (ABILITIES.md, *The death animation*): every body falls when its
+  unit dies, lies when first seen dead, and stands at once when it respawns elsewhere (`snap`).
 
 Each is a function from time and inputs to a pose (a rotation per bone). Poses are blended by
 weights that ease in and out, and the swing is layered on the upper body.
