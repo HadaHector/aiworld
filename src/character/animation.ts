@@ -162,10 +162,12 @@ export function createAnimator(skeleton: RaceSkeleton): Animator {
       thighL: [0.45 * sag * (1 - fall) + 0.05 * lying, 0, -0.15 * lying],
       shinL: [-0.9 * sag * (1 - fall) - 0.12 * lying, 0, 0],
       footL: [0.35 * sag * (1 - fall) - 0.3 * lying, 0, 0],
-      // Arms hanging limp as it sags, thrown out as it falls, lying spread.
-      ...both("upperArm", [0.25 * sag * (1 - fall) + 0.5 * fall, 0, 0.15 + 0.9 * fall]),
-      ...both("forearm", [0.3 + 0.4 * fall * (1 - lying) + 0.15 * lying, 0, 0]),
-      ...both("hand", [0.2 * lying, 0, 0]),
+      // Arms hanging limp as it sags, thrown up and out as it falls, then lying spread on the ground:
+      // on its back, the body's forward is up, so a lying arm swings only out to the side (along
+      // the ground), a little back, its elbow near straight.
+      ...both("upperArm", [0.25 * sag * (1 - fall) + 0.5 * fall * (1 - lying) - 0.12 * lying, 0, 0.15 + 0.9 * fall]),
+      ...both("forearm", [0.3 * (1 - lying) + 0.4 * fall * (1 - lying) + 0.05 * lying, 0, 0]),
+      ...both("hand", [-0.1 * lying, 0, 0]),
     };
     // Down as the knees give, then all the way down as it tips over - the hips coming to rest at
     // the body's own thickness off the ground.
