@@ -11,6 +11,11 @@ import { createEntity, entityStat, stepResources, type Entity } from "./entity";
 import { createSkillSystem, type SkillSystem } from "./skills/system";
 import { canMove } from "./skills/flags";
 import { Layers } from "../world/collision/shapes";
+import type { ItemRules } from "./rules/itemRules";
+import { createItemSystem, type ItemSystem } from "./items/itemSystem";
+import { createItemReplicator, type ItemReplicator } from "./items/itemReplication";
+import { handleItemMessage } from "./items/itemMessages";
+import type { ItemHooks } from "./items/itemHooks";
 
 /** Each step spends at most this long bringing in collision chunks per dimension (always at least one). */
 const CHUNK_BUDGET_MS = 2;
@@ -21,6 +26,8 @@ interface Connection {
   player: Player | null;
   /** What this client has been told of the entities around its player. */
   replicator: Replicator;
+  /** ...and of items: its own, and the gear and loot of what it sees (null without item rules). */
+  items: ItemReplicator | null;
 }
 
 /** A connected player: its entity, and what its client has said. */
@@ -63,6 +70,10 @@ export interface ServerOptions {
   loadDimension: (definition: DimensionDef, seed: number) => DimensionWorld | Promise<DimensionWorld>;
   /** Called when a load fails; the players waiting for it stay waiting. */
   onLoadError?: (definition: DimensionDef, error: unknown) => void;
+  /** Item types, slots, currencies and loot (see ITEMS.md); left out, nobody has items. */
+  items?: ItemRules;
+  /** How items cast skills - the ability system's own hooks unless a host says otherwise. */
+  itemHooks?: ItemHooks;
 }
 
 export interface Server {
@@ -82,6 +93,8 @@ export interface Server {
     entity: (id: number) => Entity | undefined;
     /** The ability system (ABILITIES.md). */
     readonly skills: SkillSystem;
+    /** The item system (ITEMS.md), null without item rules. */
+    readonly items: ItemSystem | null;
   };
   /** The server's clock: seconds stepped since it started. */
   readonly time: number;
@@ -130,6 +143,7 @@ export function createServer(options: ServerOptions): Server {
     const entity = createEntity(rules, def, id, { dimension: dimension.id, x, y: dimension.groundAt(x, z), z, facing, key });
     dimension.entities.set(id, entity);
     skills.adopt(entity);
+    itemSystem?.adopt(entity);
     return entity;
   }
 
@@ -183,6 +197,28 @@ export function createServer(options: ServerOptions): Server {
       }
     },
   });
+
+  const itemSystem: ItemSystem | null = options.items
+    ? createItemSystem(
+        rules,
+        options.items,
+        {
+          seed: options.seed,
+          time: () => time,
+          entity: findEntity,
+          entitiesIn: (dimension) => loaded.get(dimension)?.entities.values() ?? [],
+          spawn: (dimension, template, x, z, facing) => {
+            const dim = loaded.get(dimension);
+            return dim ? spawnIn(dim, template, x, z, facing) : undefined;
+          },
+          despawn: (entity) => {
+            skills.leave(entity, true);
+            loaded.get(entity.dimension)?.entities.delete(entity.id);
+          },
+        },
+        options.itemHooks ?? skills.items,
+      )
+    : null;
 
   /** Makes the entities a dimension's definition places, standing on its ground. */
   function placeEntities(dimension: Dimension, definition: DimensionDef): void {
@@ -240,6 +276,7 @@ export function createServer(options: ServerOptions): Server {
     if (from !== to.id) release(from);
     // The client clears what it knows of entities on a Transfer; so does what tells it of them.
     connection.replicator.reset();
+    connection.items?.reset();
     connection.end.send({ type: "transfer", dimension: to.id, seed: dimensionSeed(options.seed, to), x: at.x, z: at.z });
   }
 
@@ -265,16 +302,24 @@ export function createServer(options: ServerOptions): Server {
   function handle(connection: Connection, message: ClientMessage): void {
     const player = connection.player;
     const body = player?.entity.body;
+    // Items (see ITEMS.md): only for a player standing in a dimension.
+    if (message.type.startsWith("item") || message.type.startsWith("loot") || message.type === "debugItem" || message.type === "debugWear") {
+      if (!itemSystem || !player || !body) return;
+      const why = handleItemMessage(itemSystem, player.entity, message);
+      if (why) connection.end.send({ type: "itemRefused", reason: why });
+      return;
+    }
     switch (message.type) {
       case "hello": {
         if (player || message.protocol !== PROTOCOL_VERSION) return;
         const first = definitions.get(message.dimension) ?? start;
         const entity = createEntity(rules, playerTemplate!, nextId++, { dimension: "", x: first.spawn.x, y: 0, z: first.spawn.z, facing: 0, name: message.name, look: message.look && cleanLook(message.look) });
         skills.adopt(entity);
+        itemSystem?.adopt(entity);
         const joined: Player = { entity, arrival: first.spawn, arrived: false, input: { moveX: 0, moveZ: 0, run: false, jump: false }, ackSeq: 0 };
         players.set(entity.id, joined);
         connection.player = joined;
-        connection.end.send({ type: "welcome", protocol: PROTOCOL_VERSION, playerId: entity.id, config: options.config, packs: options.packs ?? [], rules: rules.hash });
+        connection.end.send({ type: "welcome", protocol: PROTOCOL_VERSION, playerId: entity.id, config: options.config, packs: options.packs ?? [], rules: rules.hash, items: options.items?.hash ?? 0, seed: options.seed >>> 0 });
         transfer(connection, joined, first, first.spawn);
         return;
       }
@@ -439,6 +484,8 @@ export function createServer(options: ServerOptions): Server {
     }
     skills.step(loaded.values());
     const events = skills.drainEvents();
+    itemSystem?.combatEvents(events);
+    itemSystem?.step(loaded.values());
     for (const dimension of loaded.values()) stepResources(dimension.entities.values(), deltaSeconds);
     tick++;
     // What each client is told: the entities around its player, then where they have moved to.
@@ -446,13 +493,18 @@ export function createServer(options: ServerOptions): Server {
       const entity = connection.player?.entity;
       const viewer = entity?.body ? entity : null;
       const around = viewer ? loaded.get(viewer.dimension)?.entities.values() ?? [] : [];
-      for (const message of connection.replicator.update(viewer, around, tick, connection.player?.ackSeq ?? 0, time, events)) connection.end.send(message);
+      const messages = connection.replicator.update(viewer, around, tick, connection.player?.ackSeq ?? 0, time, events);
+      // Items go after the entity messages and before the snapshot, which is last.
+      const snapshot = messages.pop()!;
+      if (connection.items) messages.push(...connection.items.update(viewer, connection.replicator.known, findEntity));
+      messages.push(snapshot);
+      for (const message of messages) connection.end.send(message);
     }
   }
 
   return {
     connect: (end) => {
-      connections.push({ end, player: null, replicator: createReplicator(rules) });
+      connections.push({ end, player: null, replicator: createReplicator(rules), items: itemSystem && options.items ? createItemReplicator(options.items, itemSystem) : null });
     },
     step,
     get tick() {
@@ -467,6 +519,7 @@ export function createServer(options: ServerOptions): Server {
       players,
       entity: findEntity,
       skills,
+      items: itemSystem,
     },
   };
 }

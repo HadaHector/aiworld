@@ -11,10 +11,14 @@
 //                                               modifiers, resources (see ENTITIES.md)
 //   npm run server -- --bot --fight             the bot walks to the training dummy and fights it with
 //                                               its spells, printing the combat log (see ABILITIES.md)
+//   npm run server -- --bot --loot              the bot loots the training dummy, puts on what it can and
+//                                               prints its stats and belongings before and after (ITEMS.md)
 // A dimension is generated when the first player heads for it and dropped when the last one leaves,
 // so with no bot the server holds no world at all.
 import { loadContentFromDisk, loadItemRulesFromDisk, loadRulesFromDisk } from "../diskContent.mjs";
 import { checkSkillRefs } from "../../src/sim/rules/skillRules.ts";
+import { formatMoney } from "../../src/sim/rules/itemRules.ts";
+import { statValue } from "../../src/sim/stats.ts";
 import { checkPlacements } from "../../src/sim/rules/gameRules.ts";
 import { describeEntity } from "../../src/sim/entityText.ts";
 import { createWorldData, WORLD_SEED } from "../../src/world/worldData.ts";
@@ -63,6 +67,7 @@ const server = createServer({
   packs,
   dimensions,
   rules,
+  items,
   loadDimension(definition, dimensionSeed) {
     let at = performance.now();
     const content = definition.start ? startContent : loadContentFromDisk(configName, definition.id).content;
@@ -118,12 +123,17 @@ function driveBot() {
       bot.end.send({ type: "arrived" });
     }
     if (message.type === "snapshot") bot.last = message.entities.find((p) => p.id === bot.id) ?? bot.last;
+    if (lootRun) lootRun.receive(message);
     // What the bot is told of entities (see ENTITIES.md): the first few in full, then a count a second.
     if (message.type.startsWith("entity")) {
       bot.entityMessages++;
       const line = describeMessage(message);
       if (line && bot.entityMessages <= 20) console.log(`bot: ${line}`);
     }
+  }
+  if (lootRun) {
+    lootRun.drive(server.tick);
+    return;
   }
   // A scripted test of resources: some health spent, then a while in combat - regen stops while in
   // it and comes back after.
@@ -150,6 +160,55 @@ function driveFighter() {
     if (fighter.loggable(event)) console.log(`  [${event.time.toFixed(1)}] ${describeEvent(rules, event, fighter.nameOf)}`);
   }
   fighter.drive(server.tick);
+}
+
+/**
+ * The --loot bot (see ITEMS.md, *Debug, the server and the test*): it walks to the dummy, spends all
+ * its health, loots it, puts on whatever it can and prints its stats and belongings before and after.
+ */
+const lootRun = bot && flag("loot") ? createLootRun() : null;
+function createLootRun() {
+  const containers = [[], [], []];
+  let dummy = 0;
+  let wallet = [];
+  const nameOf = (state) => (state ? `${items.types[items.typeIndex.get(state.type)]?.name ?? state.type}${state.count > 1 ? ` x${state.count}` : ""}` : null);
+  const stat = (id) => {
+    const me = server.debug.entity(bot.id);
+    return me?.stats ? +statValue(me.stats, rules.statIndex.get(id)).toFixed(2) : 0;
+  };
+  const report = (when) => {
+    console.log(`bot (${when}): strength ${stat("strength")}, stamina ${stat("stamina")}, armor ${stat("armor")}, weapon ${stat("weaponMin")}-${stat("weaponMax")} every ${stat("weaponSpeed")} s`);
+    console.log(`  worn: ${containers[2].map((s, i) => (s ? `${items.slots[i].id} ${nameOf(s)}` : null)).filter(Boolean).join(", ")}`);
+    console.log(`  bag: ${containers[0].map(nameOf).filter(Boolean).join(", ")}`);
+    console.log(`  money: ${wallet.map((n, c) => formatMoney(items.currencies[c], n)).join(", ")} · gear on the body: ${server.debug.entity(bot.id)?.gear?.join(", ")}`);
+  };
+  const send = (message) => bot.end.send(message);
+  return {
+    receive(message) {
+      if (message.type === "entitySpawn" && message.template === "trainingDummy") dummy = message.id;
+      if (message.type === "container") containers[message.container] = [...message.items];
+      if (message.type === "itemSlot") containers[message.container][message.slot] = message.item;
+      if (message.type === "wallet") wallet = message.amounts;
+      if (message.type === "itemRefused") console.log(`bot: refused - ${message.reason}`);
+      if (message.type === "loot" && message.entity) console.log(`bot: loot of #${message.entity}: ${message.items.map(nameOf).filter(Boolean).join(", ")}; ${message.money.map((n, c) => (n ? formatMoney(items.currencies[c], n) : "")).filter(Boolean).join(", ")}`);
+      if (message.type === "entityLootable" && message.id === dummy) console.log(`bot: the dummy is ${message.lootable ? "" : "no longer "}lootable`);
+    },
+    drive(tick) {
+      bot.seq = (bot.seq + 1) & 0xffff;
+      send({ type: "intent", seq: bot.seq, moveX: 0, moveZ: 0, run: false, jump: false });
+      if (tick === 30) send({ type: "teleport", x: 5, z: 3 });
+      if (tick === 40) report("before");
+      if (tick === 45) send({ type: "debugResource", entity: dummy, resource: rules.health, delta: -1e9 });
+      if (tick === 50) send({ type: "lootOpen", entity: dummy });
+      if (tick === 55) send({ type: "lootTake", slot: 0xffff });
+      if (tick === 60) {
+        containers[0].forEach((state, slot) => {
+          if (state && items.types[items.typeIndex.get(state.type)].slots.length > 0) send({ type: "itemEquip", from: { container: 0, slot } });
+        });
+      }
+      if (tick === 70) report("after");
+    },
+  };
 }
 
 console.log(`startup ${ms(0)}`);

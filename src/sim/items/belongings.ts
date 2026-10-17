@@ -52,7 +52,9 @@ function activate(ctx: ItemContext, entity: Entity, slot: number): void {
   const source = slotSource(ctx.items, slot);
   if (entity.stats) {
     const values = itemStats(type, item.roll);
-    type.stats.forEach((s, i) => addModifier(entity.stats!, { stat: s.stat, kind: s.kind, value: values[i], source }));
+    type.stats.forEach((s, i) => {
+      if (values[i] !== 0) addModifier(entity.stats!, { stat: s.stat, kind: s.kind, value: values[i], source });
+    });
   }
   if (type.equip) ctx.hooks.equip(entity, item, type.equip.skill, source);
   b.active[slot] = true;

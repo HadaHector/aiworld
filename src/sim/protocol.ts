@@ -9,7 +9,7 @@ import type { CombatEvent } from "./skills/events";
 export type { CombatEvent } from "./skills/events";
 
 /** Bumped whenever a message changes shape. */
-export const PROTOCOL_VERSION = 6;
+export const PROTOCOL_VERSION = 7;
 
 // --- Client to server ------------------------------------------------------------------------
 
@@ -184,7 +184,101 @@ export type ClientMessage =
   | Attack
   | Respawn
   | DebugApply
-  | DebugKill;
+  | DebugKill
+  | ItemMove
+  | ItemEquip
+  | ItemUnequip
+  | ItemUse
+  | ItemDrop
+  | ItemPickUp
+  | LootOpen
+  | LootTake
+  | LootClose
+  | ItemRepair
+  | DebugItem
+  | DebugWear;
+
+// Items (see ITEMS.md, *Messages*): containers are 0 bag, 1 bank, 2 equipment; a slot is its index.
+
+/** One slot of the sender's containers. */
+export interface SlotRef {
+  container: number; // u8
+  slot: number; // u16
+}
+
+/** Moves an item from a slot to a slot - merging, splitting off `count`, swapping, equipping and
+ *  taking off are all this. `count` 0 is the whole stack. */
+export interface ItemMove {
+  type: "itemMove";
+  from: SlotRef;
+  to: SlotRef;
+  count: number; // u16
+}
+
+/** Puts an item on, in whichever of its slots is free. */
+export interface ItemEquip {
+  type: "itemEquip";
+  from: SlotRef;
+}
+
+/** Takes off what is worn in an equipment slot, into the bag. */
+export interface ItemUnequip {
+  type: "itemUnequip";
+  slot: number; // u16
+}
+
+/** Uses an item from the bag: its skill goes off. */
+export interface ItemUse {
+  type: "itemUse";
+  from: SlotRef;
+}
+
+/** Drops an item - `count` of a stack, 0 for all - on the ground in front of the sender. */
+export interface ItemDrop {
+  type: "itemDrop";
+  from: SlotRef;
+  count: number; // u16
+}
+
+/** Picks up an item lying on the ground. */
+export interface ItemPickUp {
+  type: "itemPickUp";
+  entity: number; // u32
+}
+
+/** Opens a corpse's or a chest's loot, in reach. */
+export interface LootOpen {
+  type: "lootOpen";
+  entity: number; // u32
+}
+
+/** Takes a slot of the open loot - 0xffff for everything, money too. */
+export interface LootTake {
+  type: "lootTake";
+  slot: number; // u16
+}
+
+export interface LootClose {
+  type: "lootClose";
+}
+
+/** Mends everything worn and in the bag, at a strongbox, for money. */
+export interface ItemRepair {
+  type: "itemRepair";
+}
+
+/** Debug: gives the sender `count` of an item type. */
+export interface DebugItem {
+  type: "debugItem";
+  item: string;
+  count: number; // u16
+}
+
+/** Debug: wears the sender's gear as dying or a hit would, or mends it for nothing. */
+export interface DebugWear {
+  type: "debugWear";
+  what: "death" | "weapon" | "armour" | "repair";
+}
 
 // --- Server to client ------------------------------------------------------------------------
 
@@ -200,6 +294,10 @@ export interface Welcome {
   /** A hash of the game rules' tables (see ENTITIES.md): stats and resources are sent by index, so
    *  a client whose own packs hash differently would show the wrong names. */
   rules: number; // u32
+  /** A hash of the item rules' tables (see ITEMS.md): items are sent by type id and roll. */
+  items: number; // u32
+  /** The world seed: item types are generated from it, so a client makes the same catalogue. */
+  seed: number; // u32
 }
 
 /**
@@ -378,7 +476,83 @@ export interface EntityTarget {
   target: number; // u32
 }
 
+// Items (see ITEMS.md, *Messages*). Containers: 0 bag, 1 bank, 2 equipment.
+
+/** One item as a client is told it: what it is and its roll; the rest the client works out. */
+export interface ItemState {
+  id: number; // u32
+  /** Its type's id: the client finds it in its own item rules. */
+  type: string;
+  roll: number; // u32
+  count: number; // u16
+  durability: number; // u16
+}
+
+/** The whole of one of the receiver's containers: on arrival, and after a Transfer. */
+export interface ContainerState {
+  type: "container";
+  container: number; // u8
+  items: (ItemState | null)[];
+}
+
+/** One slot of the receiver's containers has changed. */
+export interface ItemSlot {
+  type: "itemSlot";
+  container: number; // u8
+  slot: number; // u16
+  item: ItemState | null;
+}
+
+/** The receiver's money, by currency index, when it changes. */
+export interface Wallet {
+  type: "wallet";
+  amounts: number[]; // f64 each: whole numbers
+}
+
+/** Whether a strongbox is in the receiver's reach, so its bank can be used. */
+export interface BankReach {
+  type: "bankReach";
+  open: boolean;
+}
+
+/** The loot the receiver has open, whenever it or what is in it changes; entity 0 when it closed. */
+export interface LootState {
+  type: "loot";
+  entity: number; // u32
+  items: (ItemState | null)[];
+  money: number[]; // by currency index
+}
+
+/** Something an item message asked for did not happen, and why (`REFUSALS` in sim/items/items.ts). */
+export interface ItemRefused {
+  type: "itemRefused";
+  reason: string;
+}
+
+/** The item types an entity in view shows on its body (ITEMS.md, *Equipment*): in its spawn's step
+ *  and whenever it changes. An entity never sent one wears its template's outfit. */
+export interface EntityGear {
+  type: "entityGear";
+  id: number; // u32
+  gear: string[];
+}
+
+/** Whether an entity in view has loot to take - a corpse, a chest, an item on the ground. */
+export interface EntityLootable {
+  type: "entityLootable";
+  id: number; // u32
+  lootable: boolean;
+}
+
 export type ServerMessage =
+  | ContainerState
+  | ItemSlot
+  | Wallet
+  | BankReach
+  | LootState
+  | ItemRefused
+  | EntityGear
+  | EntityLootable
   | Welcome
   | Transfer
   | EntitySpawn

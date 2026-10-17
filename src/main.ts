@@ -86,6 +86,7 @@ const server = createServer({
   packs: packSet.packs,
   dimensions: startContent.dimensions,
   rules: gameRules,
+  items: itemRules,
   loadDimension: (definition) => new Promise<DimensionWorld>((resolve) => built.set(definition.id, resolve)),
 });
 const channel = createLocalChannel();

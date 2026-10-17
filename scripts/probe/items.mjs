@@ -9,6 +9,11 @@ import { createEntity } from "../../src/sim/entity.ts";
 import { statValue } from "../../src/sim/stats.ts";
 import { createItemSystem, GROUND_ITEM_TEMPLATE, TAKE_ALL } from "../../src/sim/items/itemSystem.ts";
 import { BAG, BANK, EQUIPMENT } from "../../src/sim/items/items.ts";
+import { loadContentFromDisk } from "../diskContent.mjs";
+import { createServer } from "../../src/sim/server.ts";
+import { createLocalChannel } from "../../src/sim/channel.ts";
+import { PROTOCOL_VERSION } from "../../src/sim/protocol.ts";
+import { createWorldData, WORLD_SEED } from "../../src/world/worldData.ts";
 
 let failures = 0;
 let checks = 0;
@@ -325,6 +330,140 @@ await section("belongings", () => {
   time += items.config.groundLifetime + 1;
   system.step(dims);
   check("an item left on the ground goes", !entities.has(second.id));
+});
+
+// --- over the boundary: a real server on the tiny config's mainland, two clients ---
+await section("boundary", async () => {
+  const { content, packs } = loadContentFromDisk(CONFIG);
+  const server = createServer({
+    seed: WORLD_SEED,
+    config: CONFIG,
+    packs,
+    dimensions: content.dimensions,
+    rules: game,
+    items: loadItemRulesFromDisk(CONFIG, game, WORLD_SEED),
+    loadDimension: (definition, seed) => ({ world: createWorldData(seed, definition.start ? content : loadContentFromDisk(CONFIG, definition.id).content) }),
+  });
+  const rulesHere = server.debug.items.ctx.items;
+  const client = (name) => {
+    const channel = createLocalChannel();
+    server.connect(channel.server);
+    channel.client.send({ type: "hello", protocol: PROTOCOL_VERSION, name, dimension: "" });
+    return { end: channel.client, id: 0, inbox: [] };
+  };
+  const a = client("a");
+  const b = client("b");
+  const pump = async (steps = 1) => {
+    for (let i = 0; i < steps; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      server.step(1 / 30);
+      for (const c of [a, b]) {
+        for (const m of c.end.receive()) {
+          if (m.type === "welcome") c.id = m.playerId;
+          if (m.type === "transfer") c.end.send({ type: "arrived" });
+          c.inbox.push(m);
+        }
+      }
+    }
+  };
+  const take = (c) => c.inbox.splice(0);
+  const send = async (c, message, steps = 1) => {
+    c.end.send(message);
+    await pump(steps);
+  };
+  await pump(10);
+  let inA = take(a);
+  let inB = take(b);
+  const welcome = inA.find((m) => m.type === "welcome");
+  check("welcome carries the item rules' hash and the seed", welcome?.items === rulesHere.hash && welcome?.seed === WORLD_SEED >>> 0);
+  check("a is told its bag, bank and equipment whole", [0, 1, 2].every((c) => inA.some((m) => m.type === "container" && m.container === c)));
+  const equipment = inA.find((m) => m.type === "container" && m.container === EQUIPMENT);
+  check("its equipment has the start clothes", equipment?.items[rulesHere.slotIndex.get("chest")]?.type === "tunic");
+  check("a is told its wallet", inA.some((m) => m.type === "wallet"));
+  check("b sees what a wears", inB.some((m) => m.type === "entityGear" && m.id === a.id && m.gear.includes("tunic")));
+  check("b is not told a's bag", !inB.some((m) => m.type === "container" && m.items.length === 20 && false) && inB.filter((m) => m.type === "container").length === 3);
+  const snapshotLast = (msgs) => msgs.length > 0 && msgs[msgs.length - 1].type === "snapshot";
+  check("item messages come before the snapshot", snapshotLast(inA) && inA.findIndex((m) => m.type === "container") < inA.length - 1);
+  const dummy = inA.find((m) => m.type === "entitySpawn" && m.template === "trainingDummy");
+  const chest = inA.find((m) => m.type === "entitySpawn" && m.template === "chest");
+  check("the chest and the strongbox are placed", !!chest && inA.some((m) => m.type === "entitySpawn" && m.template === "strongbox"));
+  check("an unopened chest is lootable", inA.some((m) => m.type === "entityLootable" && m.id === chest?.id && m.lootable));
+
+  // The dummy at 0 health: lootable to both.
+  await send(a, { type: "debugResource", entity: dummy.id, resource: game.health, delta: -1e9 }, 2);
+  inA = take(a);
+  inB = take(b);
+  check("the dummy at 0 health is lootable to both", [inA, inB].every((msgs) => msgs.some((m) => m.type === "entityLootable" && m.id === dummy.id && m.lootable)));
+  await send(a, { type: "lootOpen", entity: dummy.id });
+  check("out of reach it is refused", take(a).some((m) => m.type === "itemRefused" && m.reason === "range"));
+  a.end.send({ type: "teleport", x: 5, z: 3 });
+  b.end.send({ type: "teleport", x: 5.5, z: 3 });
+  await pump(2);
+  take(a);
+  take(b);
+  await send(a, { type: "lootOpen", entity: dummy.id });
+  await send(b, { type: "lootOpen", entity: dummy.id });
+  const lootA = take(a).find((m) => m.type === "loot");
+  const lootB = take(b).find((m) => m.type === "loot");
+  check("both see the loot", lootA?.entity === dummy.id && lootB?.entity === dummy.id && lootA.items.length > 0, JSON.stringify(lootA));
+  const first = lootA.items.findIndex((i) => i);
+  await send(a, { type: "lootTake", slot: first });
+  inA = take(a);
+  inB = take(b);
+  check("a takes an item: it is in a's bag", inA.some((m) => m.type === "itemSlot" && m.container === BAG && m.item?.id === lootA.items[first].id));
+  check("b's window loses it", inB.some((m) => m.type === "loot" && m.items[first] === null));
+  await send(b, { type: "lootTake", slot: 0xffff });
+  inA = take(a);
+  inB = take(b);
+  check("b takes the rest and the money", inB.some((m) => m.type === "wallet" && m.amounts[rulesHere.main] > 0));
+  check("emptied, it is no longer lootable", inA.some((m) => m.type === "entityLootable" && m.id === dummy.id && !m.lootable));
+
+  // Dropping and picking up.
+  const bag = server.debug.entity(a.id).belongings.bag;
+  const at = bag.findIndex((id) => id != null && !rulesHere.types[server.debug.items.store.get(id).type].quest);
+  const droppedId = bag[at];
+  await send(a, { type: "itemDrop", from: { container: BAG, slot: at }, count: 0 }, 2);
+  inA = take(a);
+  inB = take(b);
+  const ground = inB.find((m) => m.type === "entitySpawn" && m.template === "groundItem");
+  check("a drop is a ground item b sees", !!ground && inA.some((m) => m.type === "itemSlot" && m.slot === at && m.item === null));
+  await send(b, { type: "itemPickUp", entity: ground.id }, 2);
+  inA = take(a);
+  inB = take(b);
+  // Onto a stack of its own, or as itself into a free slot.
+  check("b picks it up", !inB.some((m) => m.type === "itemRefused") && inB.some((m) => m.type === "itemSlot" && m.container === BAG && m.item && (m.item.id === droppedId || m.item.type === rulesHere.types[server.debug.items.store.get(m.item.id).type].id)));
+  check("and it is gone for a", inA.some((m) => m.type === "entityDespawn" && m.id === ground.id));
+
+  // Equipping changes the look for the other client.
+  await send(a, { type: "debugItem", item: "sword.iron.long.uncommon", count: 1 });
+  const swordAt = server.debug.entity(a.id).belongings.bag.findIndex((id) => id != null && rulesHere.types[server.debug.items.store.get(id).type].id === "sword.iron.long.uncommon");
+  take(a);
+  take(b);
+  await send(a, { type: "itemEquip", from: { container: BAG, slot: swordAt } });
+  inA = take(a);
+  inB = take(b);
+  check("b sees a's new sword", inB.some((m) => m.type === "entityGear" && m.id === a.id && m.gear.includes("sword.iron.long.uncommon")));
+  check("a gets the sword's modifiers", inA.some((m) => m.type === "entityModifiers" && m.modifiers.some((x) => x.source === "item:mainHand")));
+  await send(a, { type: "itemMove", from: { container: BAG, slot: 19 }, to: { container: EQUIPMENT, slot: 0 }, count: 0 });
+  check("a bad move is refused with a reason", take(a).some((m) => m.type === "itemRefused" && m.reason === "empty"));
+
+  // The chest, and the bank at the strongbox.
+  a.end.send({ type: "teleport", x: -4.5, z: 5.5 });
+  await pump(2);
+  take(a);
+  await send(a, { type: "lootOpen", entity: chest.id });
+  const chestLoot = take(a).find((m) => m.type === "loot");
+  check("opening the chest rolls it", chestLoot?.entity === chest.id && chestLoot.items.length >= 2);
+  await send(a, { type: "itemMove", from: { container: BAG, slot: swordAt }, to: { container: BANK, slot: 0 }, count: 0 });
+  check("the bank is out of reach here", take(a).some((m) => m.type === "itemRefused" && m.reason === "bank"));
+  a.end.send({ type: "teleport", x: 4, z: -4 });
+  await pump(2);
+  inA = take(a);
+  check("the strongbox puts the bank in reach", inA.some((m) => m.type === "bankReach" && m.open));
+  check("walking away closed the chest", inA.some((m) => m.type === "loot" && m.entity === 0));
+  const some = server.debug.entity(a.id).belongings.bag.findIndex((id) => id != null);
+  await send(a, { type: "itemMove", from: { container: BAG, slot: some }, to: { container: BANK, slot: 0 }, count: 0 });
+  check("into the bank", take(a).some((m) => m.type === "itemSlot" && m.container === BANK && m.slot === 0 && m.item));
 });
 
 console.log(`${checks - failures}/${checks} checks passed`);
