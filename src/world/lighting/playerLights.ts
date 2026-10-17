@@ -14,6 +14,8 @@ const CLEAR_OF_SOURCE = 0.3;
 export interface PlayerLights {
   /** Lights `mesh` (whose middle is at its position) by the houses' lights nearest it - each frame. */
   update: (deltaSeconds: number) => void;
+  /** Has the same lights light another mesh too - the player's body and gear (game/playerBody.ts). */
+  include: (other: Mesh) => void;
 }
 
 /**
@@ -89,5 +91,10 @@ export function createPlayerLights(
     });
   }
 
-  return { update };
+  return {
+    update,
+    include(other) {
+      for (const light of pool) light.includedOnlyMeshes = [...light.includedOnlyMeshes, other];
+    },
+  };
 }

@@ -5,6 +5,8 @@ import { createChunkBuildPool, createWorld, MAX_DRAW_DISTANCE, MIN_DRAW_DISTANCE
 import type { WorldContent } from "../world/content/worldContent";
 import type { DimensionWorld } from "../sim/dimension";
 import { createCharacter, type Character } from "../player/characterController";
+import { createPlayerBody, type PlayerLook } from "./playerBody";
+import type { PackSource } from "../world/content/resolveContent";
 import { createCameraCollision, createThirdPersonCamera } from "../player/thirdPersonCamera";
 import { createSpectatorCamera, type SpectatorCamera } from "../player/spectatorCamera";
 import { createDebugMap, type DebugMap } from "../debug/debugMap";
@@ -42,6 +44,9 @@ export interface DimensionViewOptions {
   teleport: (x: number, z: number) => void;
   /** Asks the server to go to another dimension (the settings panel's choice). */
   travel: (dimension: string) => void;
+  /** The packs, and who the player is: their body is built from them (game/playerBody.ts). */
+  packs: PackSource[];
+  look: PlayerLook;
 }
 
 /**
@@ -102,6 +107,18 @@ export async function createDimensionView(options: DimensionViewOptions): Promis
   onProgress("Placing the player", 0, 0);
   const character = createCharacter(scene, { x: arrival.x, y: world.heightAt(arrival.x, arrival.z), z: arrival.z });
   const playerLights = world.lightMover(character.mesh);
+  // The player's body: built while the rest goes on, the capsule standing in until it is ready.
+  let disposed = false;
+  createPlayerBody(scene, options.packs, options.look, seed)
+    .then((body) => {
+      if (disposed) return body.dispose();
+      character.attachBody(body);
+      for (const mesh of body.meshes) {
+        world.castShadow(mesh);
+        playerLights.include(mesh);
+      }
+    })
+    .catch((error) => console.error("The player's body could not be built - the capsule stays.", error));
   const camera = createThirdPersonCamera(scene, canvas, character.mesh);
   const cameraCollision = createCameraCollision(camera, world.collision.world);
   // Camera near/far and the shadow generator's own frustum both need the real camera, which does
@@ -221,6 +238,7 @@ export async function createDimensionView(options: DimensionViewOptions): Promis
     teleport,
     gotoView,
     dispose() {
+      disposed = true;
       // Out of the scene first - workers, chunks still coming - then the scene, which takes every
       // mesh, material, texture, camera and observer in it.
       world.dispose();

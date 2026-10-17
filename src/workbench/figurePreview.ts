@@ -1,12 +1,13 @@
 import { Color3, MeshBuilder, SkeletonViewer, Vector3, type Scene } from "@babylonjs/core";
-import { buildBody, type BodyGeometry } from "../character/bodyMesh";
+import type { BodyGeometry } from "../character/bodyMesh";
 import { createCharacterMesh, type BodySkin, type CharacterMesh, type Pose } from "../character/characterMesh";
 import { createAnimator } from "../character/animation";
-import { forSex, withLook, type RaceDef, type Sex, type Slider } from "../character/raceDef";
-import { layoutAtlas, type AtlasLayout } from "../character/atlas";
-import { chooseAppearance, paintAtlas, type PaintedCover } from "../character/paint";
-import { bakeGearMaterial, type BakedGearMaterial, type GearMaterialDef } from "../character/gearMaterial";
-import { sided, type GearDef } from "../character/gearDef";
+import type { RaceDef, Sex, Slider } from "../character/raceDef";
+import type { AtlasLayout } from "../character/atlas";
+import { chooseAppearance } from "../character/paint";
+import type { BakedGearMaterial, GearMaterialDef } from "../character/gearMaterial";
+import type { GearDef } from "../character/gearDef";
+import { dressCharacter } from "../character/character";
 import type { StageOptions } from "./stage";
 
 export interface FigureOptions {
@@ -61,40 +62,13 @@ export interface PaintedBody {
 
 /** Builds a race's body and paints its atlas, as the options say. */
 export async function paintedBody(race: RaceDef, gear: Map<string, GearMaterialDef>, worldSeed: number, options: FigureOptions): Promise<PaintedBody> {
-  const look = chooseAppearance(race, options.seed, options.sex ?? undefined, options.sliders);
-  const sexed = forSex(withLook(race, look.height, look.build), look.sex);
-  const body = buildBody(sexed, { detail: options.detail, lattice: options.lattice !== "off", gear: options.gear, skin: look.skin });
-  const baked = new Map<string, BakedGearMaterial>();
-  const bake = async (id: string): Promise<BakedGearMaterial | null> => {
-    const def = gear.get(id);
-    if (!def) return null;
-    if (!baked.has(id)) baked.set(id, await bakeGearMaterial(worldSeed, def));
-    return baked.get(id)!;
-  };
-  for (const layer of body.layers) await bake(layer.material);
-  let layout: AtlasLayout | null = null;
-  let pixels: Uint8Array | null = null;
-  if (options.texture !== "flat") {
-    layout = layoutAtlas(body, options.texture === "retro" ? 128 : 512);
-    const covers: PaintedCover[] = [];
-    const linen = gear.get("linen");
-    if (options.smallclothes && linen) {
-      const hips = race.skeleton.ankle + race.skeleton.shin + race.skeleton.thigh;
-      const material = (await bake(linen.id))!;
-      const tint: [number, number, number] = [0.86, 0.8, 0.68];
-      covers.push({ material, tint, span: "height", from: hips - 0.14, to: hips + 0.06, regions: ["torso", "legR", "legL"], hem: true });
-      // A band over the breasts, too.
-      const nipple = body.marks.find((m) => m.name === "nipple");
-      if (look.sex === "female" && nipple) covers.push({ material, tint, span: "height", from: nipple.position[1] - 0.075, to: nipple.position[1] + 0.05, regions: ["torso"], hem: true });
-    }
-    for (const piece of options.gear) {
-      for (const paint of piece.paint) {
-        const material = await bake(paint.material);
-        if (material) covers.push({ material, tint: paint.tint, span: "along", from: paint.from, to: paint.to, regions: paint.regions.flatMap(sided), hem: paint.hem });
-      }
-    }
-    pixels = paintAtlas(body, layout, race, look, covers);
-  }
+  const dressed = await dressCharacter(
+    { race, seed: options.seed, sex: options.sex ?? undefined, sliders: options.sliders, gear: options.gear, smallclothes: options.smallclothes },
+    gear,
+    worldSeed,
+    { detail: options.detail, lattice: options.lattice !== "off", atlas: options.texture === "flat" ? 0 : options.texture === "retro" ? 128 : 512 },
+  );
+  const { body, layout, pixels, baked, look } = dressed;
   const tall = Math.max(...body.positions.filter((_, i) => i % 3 === 1));
   const summary = document.createElement("div");
   const title = document.createElement("h3");
@@ -110,7 +84,7 @@ export async function paintedBody(race: RaceDef, gear: Map<string, GearMaterialD
     row.insertCell().textContent = String(value);
   }
   summary.append(title, table);
-  return { race: sexed, body, layout, pixels, baked, summary };
+  return { race: dressed.race, body, layout, pixels, baked, summary };
 }
 
 /**

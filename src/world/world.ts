@@ -94,6 +94,8 @@ export interface World {
   /** Lights a mesh that moves about - the player - by the houses' own lights near it (see
    *  lighting/playerLights.ts); its update is called each frame. */
   lightMover: (mesh: Mesh) => PlayerLights;
+  /** Has a mesh cast the sun's shadow - the player's body (game/playerBody.ts). */
+  castShadow: (mesh: Mesh) => void;
   /** Stops what lives outside the scene - the chunk build and light bake workers, chunks still
    *  coming. The meshes, materials and textures go with `scene.dispose()`, after this. */
   dispose: () => void;
@@ -341,6 +343,7 @@ export async function createWorld(
     setTimeOfDay: sunLighting.setTimeHours,
     getTimeOfDay: sunLighting.getTimeHours,
     lightMover: (mesh) => createPlayerLights(scene, mesh, buildings.lightsNear, collision.world, sunLighting),
+    castShadow: (mesh) => sunLighting.shadowGenerator.addShadowCaster(mesh, false),
     dispose() {
       chunkManager.dispose();
       buildPool?.dispose();

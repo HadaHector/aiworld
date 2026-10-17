@@ -3,6 +3,7 @@ import { DEFAULT_MOTOR, type MotorSettings } from "../world/collision/index";
 import type { BodyInput } from "../sim/playerBody";
 import type { EntityMotion } from "../sim/protocol";
 import { createInput } from "./input";
+import type { PlayerBody } from "../game/playerBody";
 
 export interface Character {
   mesh: Mesh;
@@ -14,6 +15,9 @@ export interface Character {
   readIntent: (camera: ArcRotateCamera) => BodyInput;
   /** Draws the player where the server says it is. */
   show: (state: EntityMotion) => void;
+  /** Draws the player with a body (game/playerBody.ts) instead of the capsule, which stays as the
+   *  place the camera and the lights follow. */
+  attachBody: (body: PlayerBody) => void;
   dispose: () => void;
 }
 
@@ -55,10 +59,29 @@ export function createCharacter(scene: Scene, start: { x: number; y: number; z: 
     };
   }
 
+  let body: PlayerBody | null = null;
   function show(state: EntityMotion): void {
     mesh.position.set(state.x, state.y + height / 2, state.z);
     mesh.rotation.y = state.facing;
+    if (body) {
+      if (input.takeSwing()) body.swing();
+      body.show(state);
+    }
   }
 
-  return { mesh, settings, readIntent, show, dispose: () => input.dispose() };
+  return {
+    mesh,
+    settings,
+    readIntent,
+    show,
+    attachBody(attached) {
+      body?.dispose();
+      body = attached;
+      mesh.isVisible = false;
+    },
+    dispose() {
+      input.dispose();
+      body?.dispose();
+    },
+  };
 }

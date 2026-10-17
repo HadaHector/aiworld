@@ -8,14 +8,16 @@ const RIGHT_KEYS = new Set(["d", "arrowright"]);
 const JUMP_KEPT_MS = 200;
 
 /** Tracks WASD/arrow key state and exposes a normalized movement axis (x = strafe, y = forward) -
- *  and Space, as a jump to take once per press, and Shift held, to run. */
+ *  and Space, as a jump to take once per press, Shift held, to run, and 1 or F, a melee swing. */
 export function createInput() {
   const pressed = new Set<string>();
   let jumpAt = -Infinity;
+  let swing = false;
 
   const onKeyDown = (e: KeyboardEvent) => {
     const key = e.key.toLowerCase();
     if (key === " " && !pressed.has(key)) jumpAt = performance.now();
+    if ((key === "1" || key === "f") && !pressed.has(key)) swing = true;
     pressed.add(key);
   };
   const onKeyUp = (e: KeyboardEvent) => pressed.delete(e.key.toLowerCase());
@@ -43,6 +45,13 @@ export function createInput() {
     return taken;
   }
 
+  /** Whether a swing was asked for since this was last asked. */
+  function takeSwing(): boolean {
+    const taken = swing;
+    swing = false;
+    return taken;
+  }
+
   function running(): boolean {
     return pressed.has("shift");
   }
@@ -52,5 +61,5 @@ export function createInput() {
     window.removeEventListener("keyup", onKeyUp);
   }
 
-  return { getMoveAxis, takeJump, running, dispose };
+  return { getMoveAxis, takeJump, takeSwing, running, dispose };
 }

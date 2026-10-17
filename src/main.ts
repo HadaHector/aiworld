@@ -23,6 +23,7 @@ import { loadPackSet, type PackSet } from "./world/content/loadContent";
 import { ContentError, formatIssue } from "./world/content/contentReader";
 import type { WorldContent } from "./world/content/worldContent";
 import { checkPlacements, resolveGameRules, type GameRules } from "./sim/rules/gameRules";
+import { lookFromUrl } from "./game/playerBody";
 
 const canvasElement = document.getElementById("renderCanvas");
 if (!(canvasElement instanceof HTMLCanvasElement)) {
@@ -57,6 +58,9 @@ try {
 }
 
 const engine = createEngine(canvas);
+// Who the player is, as far as their body goes - from the address, until there is character
+// creation (see CHARACTERS.md): ?race=dwarf&outfit=knight&sex=female&look=7.
+const playerLook = lookFromUrl();
 
 // The simulation, in this page: single player is a server of one, over an in-memory channel - the
 // same server `npm run server` runs on its own (see SIMULATION.md). It holds the dimensions (see
@@ -176,6 +180,8 @@ async function enter(transfer: Transfer, resume: boolean): Promise<void> {
     onProgress: (phase, completed, total) => loadingScreen.update(phase, completed, total),
     teleport: (x, z) => command({ type: "teleport", x, z }),
     travel,
+    packs: packSet.sources,
+    look: playerLook,
   });
   built.get(transfer.dimension)?.(next.shared);
   built.delete(transfer.dimension);

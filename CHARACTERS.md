@@ -6,7 +6,8 @@ procedurally from parts, textured and animated procedurally, look good enough fo
 WoW-Classic-like third-person RPG? Afterwards a body can be looked at in the workbench with any
 race and outfit, playing any of its animations, and the own player in the game is drawn with one.
 
-**Status: building.** Steps 1-5 are built: three races (human, dwarf, elf), male and female, in the
+**Status: built, awaiting the verdict.** Steps 1-6 are built - the player in the game has a body
+(`?race=dwarf&outfit=knight&sex=female&look=7` picks it) - and before that: three races (human, dwarf, elf), male and female, in the
 workbench (`?asset=core/races/human`), painted, with an Atlas view and a Line-up view, playing their
 animations, in three outfits; gear materials in `gearMaterials/`, gear in `gear/`, outfits in
 `outfits/`.
@@ -276,6 +277,15 @@ The own player is drawn with a body instead of the capsule, from the player temp
 animated from what the client already gets: position, facing and `grounded` per snapshot (speed
 and vertical speed are worked out from the change in position). A key plays the swing. Other
 entities keep their capsules for now.
+
+As built (`src/game/playerBody.ts`): there is no character creation yet, so who the player is comes
+from the page's address - `race`, `outfit`, `sex` and `look` (the character's seed), a human scout
+if left out - rather than from the player template, which keeps `src/sim` untouched. The body is
+built while the dimension loads; the capsule stands in until it is ready and then stays, unseen, as
+what the camera and the house lights follow. Speed and vertical speed come from how far the player
+moved since the last snapshot, eased; a move of more than 3 m is a teleport. The body turns toward
+the player's facing rather than snapping. 1 or F swings. The game's own walk (6 m/s) and run
+(12 m/s) are not final: at them the gait runs; at 1.2-1.5 and 3 m/s it would walk and jog as tuned.
 
 ## Build steps
 
