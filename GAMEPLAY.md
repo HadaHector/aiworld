@@ -294,8 +294,9 @@ A proposal, to be confirmed. Each step gets its own plan document.
    are data, any number of resources with regen and decay, templates with inheritance; replicated
    to clients near them, the owner seeing everything and others only what is marked visible.
 4. **Ability system:** effects, auras, targeting, cooldowns and the GCD, threat.
-5. **Character spike, in parallel:** a body built from parts and procedural animation, judged
-   early because it is the riskiest piece.
+5. **Character spike: done** - see [CHARACTERS.md](CHARACTERS.md). A body built from curves along
+   the bones, a painted atlas, gear as geometry, three races and two sexes, procedural animation, on
+   the player in the game; judged good enough, and the approach stays.
 6. **Creatures:** per-zone rosters, spawning in ranges, simple AI, respawn.
 7. **Items:** inventory grid, equipment, loot tables, rarity, durability.
 8. **Skills and progression:** XP per skill, levels, unlocks.

@@ -6,7 +6,7 @@ procedurally from parts, textured and animated procedurally, look good enough fo
 WoW-Classic-like third-person RPG? Afterwards a body can be looked at in the workbench with any
 race and outfit, playing any of its animations, and the own player in the game is drawn with one.
 
-**Status: built, awaiting the verdict.** Steps 1-6 are built - the player in the game has a body
+**Status: done - judged good enough; the approach stays** (see [Verdict](#verdict)). Steps 1-6 are built - the player in the game has a body
 (`?race=dwarf&outfit=knight&sex=female&look=7` picks it) - and before that: three races (human, dwarf, elf), male and female, in the
 workbench (`?asset=core/races/human`), painted, with an Atlas view and a Line-up view, playing their
 animations, in three outfits; gear materials in `gearMaterials/`, gear in `gear/`, outfits in
@@ -310,4 +310,50 @@ simulation; facial animation.
 
 ## Verdict
 
-Not judged yet.
+**Good enough for a WoW-Classic-like game: keep this approach.** Judged by the user on the workbench
+and in the game, after the rounds of fixes this spike went through (smooth shading, the shoulders,
+neck and crotch, a rounder chest, the face's heights, a walk and a jog of their own).
+
+What the spike showed:
+
+- **Bodies from curves work.** Four profile curves per bone, bumps and a lattice give a humanoid
+  that reads at third-person distance, and three races and two sexes come from data alone. The hard
+  part was where the body joins itself - the shoulders above all - and it needed fixed places in
+  code (ports, a tilted root ring, a blended deltoid ring, hand-set weights) rather than more data.
+- **A painted atlas carries the face and the look.** Unrolling regions as cylinders and painting
+  from what each texel is on the body gives faces, hair, beards, smallclothes and painted light
+  without any hand-made texture.
+- **Gear as geometry carries the WoW feel.** Shells, skirts, layered pauldrons and a sword, built
+  with the body and skinned with it, fit every race unchanged. A knight is about 3300 triangles, a
+  bare body about 1300-1500.
+- **Procedural animation is enough** for idle, walk, jog, jump, swim and a swing, driven only by what
+  the client already knows of an entity.
+
+## Next steps
+
+In rough order of need; each belongs to the build-order step named, or is its own task.
+
+1. **Bodies for everyone, not just the own player.** Other players, NPCs and humanoid creatures
+   drawn with bodies (replacing `entityMeshes.ts`'s capsules), animated from the mirror's motion as
+   the player's is. Needs the template's `look` to name a race and outfit and each entity's look seed
+   to reach the client - a small change to the game rules' template reader and to what is
+   replicated (ENTITIES.md), which this spike left alone.
+2. **Many bodies at once.** One body shared by every character with the same race, sex, sliders,
+   seed and gear; a lower detail far away (the `detail` setting already halves it); gear meshes of
+   one material merged; smaller atlases far away. Measure first with a crowd in a town.
+3. **Equipment from items (build step 7).** Item types name gear pieces, equipment slots replace
+   outfits, gear tints and materials come from the item's rarity and kind. Mixing pieces already
+   works in the data.
+4. **Character creation and saves.** A screen to pick race, sex, look seed and sliders, saved with
+   the character (GAMEPLAY.md, *Saved state*) - replacing the address's `?race=&outfit=&sex=&look=`.
+5. **Animation from abilities (build step 4).** Swings, casts and hits played by the ability system
+   instead of a key; a swing per weapon kind (one-handed, two-handed, bow, staff); a take-off crouch
+   once the server says a jump started; swimming once the simulation has water.
+6. **Creatures (build step 6).** Non-humanoid skeletons - quadrupeds, birds - from the same parts:
+   bones carrying curves, junction patches for their own branchings.
+7. **Known flaws to fix when they show:** a long skirt lets a striding thigh through; shells over
+   the feet sink a centimetre into the ground; a dwarf's sword is a human's length and drags; a darker
+   band under the armpit from some angles; the gait is tuned for 1.2-1.5 m/s walking and 3 m/s
+   running, so the game's speeds and the gait should be settled together. Hair is painted only - hair
+   geometry (tails, braids, beards that stand out) can come with character creation. Foot IK stays
+   out unless slopes show feet floating badly.
