@@ -1,0 +1,1 @@
+{ name: "Apprentice Robe", kind: "clothing", rarity: "uncommon", slot: "chest", gear: ["robe"], stats: { intellect: [2, 3], spirit: [1, 2] }, durability: 35, value: 60 }

@@ -1,0 +1,1 @@
+{ name: "Knight Pauldrons", kind: "armour", rarity: "uncommon", slot: "shoulders", gear: ["pauldrons"], stats: { armor: [35, 45], strength: [2, 3] }, durability: 60, value: 130, level: 10 }

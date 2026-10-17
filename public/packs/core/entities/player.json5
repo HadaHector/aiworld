@@ -16,6 +16,8 @@
     { skill: "searingTotem" },
   ],
   hostility: "friendly",
+  // A bag, a bank, and what they start with (see ITEMS.md, Belongings).
+  items: { bag: 20, bank: 40, start: [{ item: "tunic" }, { item: "linenTrousers" }, { item: "sandals" }, { item: "bread", count: 5 }] },
   // A human scout unless the player says otherwise (their Hello's look); the capsule is what a click hits.
   look: { race: "human", outfit: "scout", height: 1.8, radius: 0.4, color: [0.35, 0.55, 0.85] },
 }

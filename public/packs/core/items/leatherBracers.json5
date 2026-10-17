@@ -1,0 +1,1 @@
+{ name: "Leather Bracers", kind: "armour", rarity: "common", slot: "wrists", gear: ["bracers"], stats: { armor: [4, 6], strength: [0, 1] }, durability: 30, value: 18 }

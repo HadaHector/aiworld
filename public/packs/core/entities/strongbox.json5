@@ -1,0 +1,6 @@
+// Where the bank is reached, and gear repaired, until there are bankers and smiths (see ITEMS.md).
+{
+  name: "Strongbox",
+  look: { shape: "box", height: 0.9, radius: 0.5, color: [0.3, 0.32, 0.38] },
+  items: { banker: true },
+}

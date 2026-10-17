@@ -1,0 +1,13 @@
+// The item rules a game sets (see ITEMS.md): how gear wears and what repairing costs, how near
+// things must be, and how long a dropped item lies.
+{
+  // Death takes a share of every worn item's maximum; a hit given or taken wears one point, sometimes.
+  wear: { onDeath: 0.1, onHit: 1, onHitTaken: 1, hitChance: 0.2 },
+  // Per item, in copper: of the durability missing, its maximum, its value and its item level.
+  repair: { cost: { ceil: { mul: ["missing", { add: [1, { div: ["value", 20] }] }, 0.5] } } },
+  bankRange: 4,
+  pickUpRange: 3,
+  lootRange: 4,
+  groundLifetime: 300,
+  maxGenerated: 2000,
+}

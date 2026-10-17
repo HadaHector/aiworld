@@ -1,0 +1,2 @@
+// What every adventurer starts in (see ITEMS.md, Item types).
+{ name: "Linen Tunic", kind: "clothing", rarity: "common", slot: "chest", gear: ["tunic"], stats: { stamina: [0, 1] }, durability: 25, value: 8 }

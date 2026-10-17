@@ -1,0 +1,2 @@
+// Green: a little better, and one extra stat on a generated type.
+{ name: "Uncommon", order: 2, color: "#1eff00", budget: 1.25, extraStats: 1 }

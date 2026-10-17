@@ -13,7 +13,8 @@
 //                                               its spells, printing the combat log (see ABILITIES.md)
 // A dimension is generated when the first player heads for it and dropped when the last one leaves,
 // so with no bot the server holds no world at all.
-import { loadContentFromDisk, loadRulesFromDisk } from "../diskContent.mjs";
+import { loadContentFromDisk, loadItemRulesFromDisk, loadRulesFromDisk } from "../diskContent.mjs";
+import { checkSkillRefs } from "../../src/sim/rules/skillRules.ts";
 import { checkPlacements } from "../../src/sim/rules/gameRules.ts";
 import { describeEntity } from "../../src/sim/entityText.ts";
 import { createWorldData, WORLD_SEED } from "../../src/world/worldData.ts";
@@ -50,6 +51,11 @@ started = performance.now();
 const rules = loadRulesFromDisk(configName);
 checkPlacements(rules, dimensions);
 console.log(`game rules: ${rules.stats.length} stats, ${rules.modifierKinds.length} modifier kinds, ${rules.resources.length} resources, ${rules.templates.size} templates, ${rules.skills.length} skills (${ms(started)})`);
+// Items (see ITEMS.md): generated types depend on the world seed.
+started = performance.now();
+const items = loadItemRulesFromDisk(configName, rules, seed);
+checkSkillRefs(rules, items.abilityRefs);
+console.log(`item rules: ${items.types.length} item types (${[...items.generated.values()].reduce((n, t) => n + t.length, 0)} generated), ${items.slots.length} equipment slots, ${items.lootTables.size} loot tables (${ms(started)})`);
 
 const server = createServer({
   seed,

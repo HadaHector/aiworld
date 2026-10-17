@@ -1,0 +1,2 @@
+// A ring: worn, but the ring slot is not shown on the body.
+{ name: "Copper Ring", kind: "trinket", rarity: "uncommon", slot: "ring", stats: { stamina: [1, 2], spirit: [1, 2] }, value: 45 }

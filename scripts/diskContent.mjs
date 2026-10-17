@@ -5,6 +5,7 @@ import { resolveContent } from "../src/world/content/resolveContent.ts";
 import { DEFAULT_CONFIG, readWorldConfig, selectPacks } from "../src/world/content/worldConfig.ts";
 import { ContentError } from "../src/world/content/contentReader.ts";
 import { resolveGameRules } from "../src/sim/rules/gameRules.ts";
+import { resolveItemRules } from "../src/sim/rules/itemRules.ts";
 
 const PUBLIC_DIR = fileURLToPath(new URL("../public/", import.meta.url));
 
@@ -36,6 +37,14 @@ export function loadContentFromDisk(configName = DEFAULT_CONFIG.name, dimension 
  */
 export function loadRulesFromDisk(configName = DEFAULT_CONFIG.name) {
   return resolveGameRules(packSourcesFromDisk(readConfigFromDisk(configName)).sources);
+}
+
+/**
+ * The item rules (see ITEMS.md) the game loads under a config, for the game rules and a world seed -
+ * generated item types depend on it. Once per server, as the game rules are.
+ */
+export function loadItemRulesFromDisk(configName = DEFAULT_CONFIG.name, rules = loadRulesFromDisk(configName), seed = 0) {
+  return resolveItemRules(packSourcesFromDisk(readConfigFromDisk(configName)).sources, rules, seed);
 }
 
 export function packSourcesFromDisk(config) {

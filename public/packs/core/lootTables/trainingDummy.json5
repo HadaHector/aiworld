@@ -1,0 +1,14 @@
+// What the training dummy drops each time it reaches 0 health (see ITEMS.md, Loot).
+{
+  rolls: [1, 2],
+  pick: [
+    { weight: 30, item: "bread", count: [1, 3] },
+    { weight: 35, table: "starterGear" },
+    { weight: 25, template: "sword", rarity: ["common", "uncommon"], where: { material: "bronze" } },
+    { weight: 10 },
+  ],
+  always: [
+    { money: [20, 80] },
+    { item: "rustyKey", when: { lt: ["looter.level", 5] } },
+  ],
+}

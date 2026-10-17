@@ -1,0 +1,9 @@
+// A plain linen tunic over the body and the upper arms.
+{
+  name: "Tunic",
+  slot: "chest",
+  paint: [
+    { regions: ["torso"], from: -0.25, to: 1, material: "linen", tint: "#cfc4ae" },
+    { regions: ["arms"], from: -0.2, to: 0.45, material: "linen", tint: "#cfc4ae" },
+  ],
+}

@@ -1,0 +1,1 @@
+{ name: "Knight Tassets", kind: "armour", rarity: "uncommon", slot: "waist", gear: ["tassets"], stats: { armor: [20, 26] }, durability: 50, value: 90, level: 10 }

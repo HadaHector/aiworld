@@ -1,0 +1,12 @@
+// Plain gear for a beginner, nested in other tables.
+{
+  pick: [
+    { weight: 2, item: "tunic" },
+    { weight: 2, item: "leatherBoots" },
+    { weight: 2, item: "leatherBelt" },
+    { weight: 2, item: "leatherBracers" },
+    { weight: 1, item: "copperRing" },
+    { weight: 1, item: "apprenticeRobe" },
+    { weight: 3, template: "chestpiece", where: { material: ["leather", "mail"] } },
+  ],
+}

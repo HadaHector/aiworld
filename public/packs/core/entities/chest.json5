@@ -1,0 +1,6 @@
+// A chest in the world (see ITEMS.md, Loot): rolled when first opened, then empty for a while.
+{
+  name: "Old Chest",
+  look: { shape: "box", height: 0.6, radius: 0.45, color: [0.45, 0.3, 0.16] },
+  items: { loot: "chest", container: true, respawn: 600 },
+}

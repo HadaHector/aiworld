@@ -1,0 +1,2 @@
+// The knight pieces: heavier, and a level to wear them (see ITEMS.md, requires).
+{ name: "Knight Helm", kind: "armour", rarity: "uncommon", slot: "head", gear: ["helm"], stats: { armor: [40, 50], stamina: [3, 4] }, requires: { ge: ["level", 1] }, durability: 60, value: 140, level: 10 }

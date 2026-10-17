@@ -1,0 +1,14 @@
+// Eating bread (an item use, see ITEMS.md, Abilities): health back over a few seconds.
+{
+  name: "Eat Bread",
+  target: "self",
+  hostOn: "target",
+  display: "buff",
+  states: {
+    eating: {
+      length: 9,
+      period: 3,
+      tick: [{ do: "heal", amount: 15 }],
+    },
+  },
+}

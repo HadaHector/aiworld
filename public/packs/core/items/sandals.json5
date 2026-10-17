@@ -1,0 +1,1 @@
+{ name: "Sandals", kind: "clothing", rarity: "common", slot: "feet", gear: ["sandals"], durability: 20, value: 5 }

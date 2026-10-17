@@ -65,7 +65,8 @@ export interface ResourceDef {
 /** How the client draws an entity: a body of a race (CHARACTERS.md) when it names one, else a
  *  capsule. The capsule's size is also what a click on the entity hits. */
 export interface EntityLook {
-  shape: "capsule";
+  /** A capsule, or a box (a chest, an item on the ground: `radius` its half width). */
+  shape: "capsule" | "box";
   height: number;
   radius: number;
   color: ColorTuple;
@@ -104,6 +105,11 @@ export interface TemplateDef {
   threat: boolean;
   /** False: it does not die at 0 health (the training dummy). */
   mortal: boolean;
+  /** Its `items` field as written, merged along its chain: belongings, loot, a chest's or a
+   *  strongbox's part (ITEMS.md). Read and checked by the item rules. */
+  items: RawObject | null;
+  /** The file it was read from, for the item rules' errors. */
+  file: string;
 }
 
 export type Hostility = "hostile" | "neutral" | "friendly";
@@ -324,7 +330,7 @@ interface TemplateContext {
   health: number;
 }
 
-const TEMPLATE_KEYS = ["extends", "abstract", "name", "stats", "resources", "modifiers", "look", "spells", "hostility", "threat", "mortal"];
+const TEMPLATE_KEYS = ["extends", "abstract", "name", "stats", "resources", "modifiers", "look", "spells", "hostility", "threat", "mortal", "items"];
 
 /** Merges each template's `extends` chain - objects key by key, the child winning; lists whole - and
  *  reads the result. Abstract templates are left out of what is returned. */
@@ -362,7 +368,8 @@ function resolveTemplates(entries: Entry[], context: TemplateContext, issues: Co
     if (!obj) continue;
     const reader = new Reader(issues, entry.file);
     if (reader.boolean(obj, "abstract", "", false)) continue;
-    templates.set(entry.id, readTemplate(entry.id, obj, reader, context));
+    const items = obj.items === undefined ? null : reader.object(obj.items, "items");
+    templates.set(entry.id, { ...readTemplate(entry.id, obj, reader, context), items, file: entry.file });
   }
   return templates;
 }
@@ -376,7 +383,7 @@ function mergeTemplate(base: RawObject, child: RawObject): RawObject {
   return result;
 }
 
-function readTemplate(id: string, obj: RawObject, reader: Reader, { statIndex, kindIndex, resourceIndex, skillIndex, stats, health }: TemplateContext): TemplateDef {
+function readTemplate(id: string, obj: RawObject, reader: Reader, { statIndex, kindIndex, resourceIndex, skillIndex, stats, health }: TemplateContext): Omit<TemplateDef, "items" | "file"> {
   const statValues: TemplateDef["stats"] = [];
   const hasStats = obj.stats !== undefined || obj.resources !== undefined || obj.modifiers !== undefined;
   if (obj.stats !== undefined) {
@@ -423,7 +430,7 @@ function readTemplate(id: string, obj: RawObject, reader: Reader, { statIndex, k
     const raw = reader.object(obj.look, "look");
     reader.onlyKeys(raw, "look", ["shape", "height", "radius", "color", "race", "outfit", "sex"]);
     look = {
-      shape: raw.shape === undefined ? "capsule" : reader.oneOf(raw, "shape", "look", ["capsule"] as const),
+      shape: raw.shape === undefined ? "capsule" : reader.oneOf(raw, "shape", "look", ["capsule", "box"] as const),
       height: reader.optionalNumber(raw, "height", "look", DEFAULT_LOOK.height, { min: 0.1 }),
       radius: reader.optionalNumber(raw, "radius", "look", DEFAULT_LOOK.radius, { min: 0.05 }),
       color: raw.color === undefined ? DEFAULT_LOOK.color : reader.color(raw, "color", "look"),

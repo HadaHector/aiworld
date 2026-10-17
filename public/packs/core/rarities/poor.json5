@@ -1,0 +1,2 @@
+// Grey: junk, worth a few coins at a vendor (see ITEMS.md, Rarities).
+{ name: "Poor", order: 0, color: "#9d9d9d", budget: 0.7 }

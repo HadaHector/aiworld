@@ -1,0 +1,23 @@
+// Body armour from parts: a material (which sets the gear and the piece) times how well it is made
+// times a rarity - 3 x 3 x 2 = 18 types, none of them a worn uncommon.
+{
+  kind: "armour",
+  slot: "chest",
+  name: "{make} {material}",
+  axes: {
+    material: [
+      { id: "leather", name: "Leather Jerkin", gear: ["jerkin"], stats: { armor: [18, 24], agility: [1, 2] }, durability: 40 },
+      { id: "mail", name: "Mail Hauberk", gear: ["mailShirt"], stats: { armor: [40, 50], stamina: [1, 2] }, level: 5, budget: 1.2, durability: 55 },
+      { id: "plate", name: "Plate Cuirass", gear: ["mailShirt", "breastplate"], stats: { armor: [70, 85], stamina: [2, 3] }, level: 10, budget: 1.4, durability: 75 },
+    ],
+    make: [
+      { id: "worn", name: "Worn", budget: 0.8 },
+      { id: "sturdy", name: "Sturdy" },
+      { id: "fine", name: "Fine", budget: 1.15 },
+    ],
+  },
+  rarities: ["common", "uncommon"],
+  never: [{ make: "worn", rarity: "uncommon" }],
+  extra: { stamina: [1, 2], strength: [1, 2], agility: [1, 2], spirit: [1, 2] },
+  value: 35,
+}

@@ -1,0 +1,2 @@
+// Blue: clearly better, two extra stats on a generated type.
+{ name: "Rare", order: 3, color: "#0070dd", budget: 1.5, extraStats: 2 }

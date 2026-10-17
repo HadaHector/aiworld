@@ -23,6 +23,8 @@ import { loadPackSet, type PackSet } from "./world/content/loadContent";
 import { ContentError, formatIssue } from "./world/content/contentReader";
 import type { WorldContent } from "./world/content/worldContent";
 import { checkPlacements, resolveGameRules, type GameRules } from "./sim/rules/gameRules";
+import { resolveItemRules, type ItemRules } from "./sim/rules/itemRules";
+import { checkSkillRefs } from "./sim/rules/skillRules";
 import { appearanceOf, lookFromUrl, type PlayerLook } from "./game/playerBody";
 import { createBodyKit } from "./game/characterBody";
 import { createCombatHud } from "./game/combatHud";
@@ -51,6 +53,7 @@ function failLoading(title: string, error: unknown): never {
 let packSet: PackSet;
 let startContent: WorldContent;
 let gameRules: GameRules;
+let itemRules: ItemRules;
 try {
   loadingScreen.update("Loading content packs", 0, 0);
   packSet = await loadPackSet();
@@ -58,6 +61,9 @@ try {
   // Stats, resources and entity templates (see ENTITIES.md): once for the page, not per dimension.
   gameRules = resolveGameRules(packSet.sources);
   checkPlacements(gameRules, startContent.dimensions);
+  // Items (see ITEMS.md): generated types depend on the world seed; the skills items name are checked.
+  itemRules = resolveItemRules(packSet.sources, gameRules, WORLD_SEED);
+  checkSkillRefs(gameRules, itemRules.abilityRefs);
 } catch (error) {
   failLoading("The content packs could not be loaded", error);
 }

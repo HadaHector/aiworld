@@ -1,0 +1,2 @@
+// A quest item: cannot be dropped, nor held twice.
+{ name: "Rusty Key", kind: "key", rarity: "common", quest: true }

@@ -1,0 +1,25 @@
+// Swords from parts (see ITEMS.md, Generated item types): a metal times a form times a rarity, so
+// 2 x 3 x 3 = 18 types. The rarer tiers draw extra stats from the pool below, which ones by the seed.
+{
+  kind: "weapon",
+  slot: "mainHand",
+  gear: ["sword"],
+  name: "{material} {form}",
+  axes: {
+    material: [
+      { id: "bronze", name: "Bronze", tint: "#c89a5a", level: 1, budget: 1 },
+      { id: "iron", name: "Iron", tint: "#d6dae0", level: 8, budget: 1.5 },
+    ],
+    form: [
+      { id: "short", name: "Shortsword", stats: { weaponMin: [2, 3], weaponMax: [4, 5], weaponSpeed: -0.4, agility: [1, 2] } },
+      { id: "long", name: "Longsword", stats: { weaponMin: [3, 4], weaponMax: [6, 8], strength: [1, 2] } },
+      { id: "great", name: "Greatsword", fills: ["offHand"], stats: { weaponMin: [6, 8], weaponMax: [11, 14], weaponSpeed: 1.2, strength: [2, 3] }, durability: 60 },
+    ],
+  },
+  rarities: ["common", "uncommon", "rare"],
+  unscaled: ["weaponSpeed"],
+  extra: { stamina: [1, 3], strength: [1, 2], agility: [1, 2], spirit: [1, 2], intellect: [1, 2] },
+  durability: 45,
+  value: 40,
+  requires: { ge: ["level", { sub: ["itemLevel", 8] }] },
+}

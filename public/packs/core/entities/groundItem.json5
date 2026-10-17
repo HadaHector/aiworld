@@ -1,0 +1,5 @@
+// An item lying on the ground: what dropping one makes (see ITEMS.md, Loot). The engine knows this id.
+{
+  name: "Item",
+  look: { shape: "box", height: 0.18, radius: 0.18, color: [0.85, 0.75, 0.4] },
+}

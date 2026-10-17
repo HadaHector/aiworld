@@ -1,0 +1,19 @@
+// A chest by the start: more and better than the dummy, and some Hunter Marks.
+{
+  rolls: [2, 3],
+  pick: [
+    { weight: 20, item: "wolfPelt", count: [1, 4] },
+    { weight: 15, item: "brokenTooth", count: [2, 6] },
+    { weight: 10, item: "plateHelm" },
+    { weight: 10, item: "platePauldrons" },
+    { weight: 10, item: "plateGauntlets" },
+    { weight: 10, item: "plateLegguards" },
+    { weight: 8, item: "plateTassets" },
+    { weight: 12, template: "sword", rarity: ["uncommon", "rare"] },
+    { weight: 8, template: "chestpiece", where: { material: "plate" } },
+  ],
+  always: [
+    { money: [100, 500] },
+    { money: [1, 3], currency: "marks" },
+  ],
+}

@@ -1,0 +1,11 @@
+// The main currency: one integer of copper, shown in copper, silver and gold (see ITEMS.md).
+// A game wanting pounds, shillings and pence lists them here with per 1, 12 and 20.
+{
+  name: "Money",
+  main: true,
+  denominations: [
+    { name: "Copper", short: "c", per: 1 },
+    { name: "Silver", short: "s", per: 100 },
+    { name: "Gold", short: "g", per: 100 },
+  ],
+}

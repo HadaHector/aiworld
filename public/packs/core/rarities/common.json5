@@ -1,0 +1,2 @@
+// White: the plain version of anything.
+{ name: "Common", order: 1, color: "#ffffff", budget: 1 }

@@ -1,0 +1,2 @@
+// Food: stacks, and eating it is a skill (see ITEMS.md, Abilities).
+{ name: "Bread", kind: "food", rarity: "common", stack: 20, use: { skill: "eatBread", consume: true }, value: 2 }

@@ -1,0 +1,1 @@
+{ name: "Leather Belt", kind: "armour", rarity: "common", slot: "waist", gear: ["belt"], stats: { armor: [3, 5] }, durability: 30, value: 15 }

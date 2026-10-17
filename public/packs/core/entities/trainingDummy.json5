@@ -10,5 +10,7 @@
   hostility: "hostile",
   threat: true,
   mortal: false,
+  // Rolled each time it reaches 0 health (see ITEMS.md, Loot).
+  items: { loot: "trainingDummy" },
   look: { race: "human", outfit: "knight", height: 1.9, radius: 0.45, color: [0.75, 0.6, 0.35] },
 }

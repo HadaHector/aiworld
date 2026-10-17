@@ -1,0 +1,2 @@
+// An equipment slot (see ITEMS.md): visible ones show what is worn there on the body.
+{ name: "Off hand", order: 130, visible: true }

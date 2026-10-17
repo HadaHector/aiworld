@@ -1,0 +1,1 @@
+{ name: "Knight Gauntlets", kind: "armour", rarity: "uncommon", slot: "hands", gear: ["gauntlets"], stats: { armor: [25, 32], strength: [1, 2] }, durability: 50, value: 110, level: 10 }

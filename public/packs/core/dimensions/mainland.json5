@@ -10,5 +10,8 @@
   // Entities that stand here from the start (see ENTITIES.md); facing in degrees.
   entities: [
     { template: "trainingDummy", at: [6, 4], facing: 225 },
+    // Items (see ITEMS.md): a chest to loot, and the strongbox the bank is reached at.
+    { template: "chest", at: [-5, 6], facing: 160 },
+    { template: "strongbox", at: [4, -5], facing: 0 },
   ],
 }
