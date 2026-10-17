@@ -220,7 +220,9 @@ export function createItemSystem(game: GameRules, items: ItemRules, world: ItemW
         for (const player of players) {
           const b = player.belongings!;
           b.bankOpen = bankers.some((banker) => near(player, banker, items.config.bankRange));
-          if (b.lootOpen && !openSource(player)) b.lootOpen = 0;
+          // Out of reach, gone, or emptied: the window closes.
+          const source = b.lootOpen ? openSource(player) : undefined;
+          if (b.lootOpen && (!source || !hasContents(source.loot!))) b.lootOpen = 0;
         }
       }
     },

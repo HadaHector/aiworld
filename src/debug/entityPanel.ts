@@ -21,6 +21,8 @@ export interface EntityPanelOptions {
    * what it may see.
    */
   inspectOnServer: (id: number) => string[] | null;
+  /** Every item type, by id and name (ITEMS.md): a list to give the own player one from. */
+  itemTypes?: { id: string; name: string }[];
 }
 
 export interface EntityPanel {
@@ -111,6 +113,20 @@ export function createEntityPanel(options: EntityPanelOptions): EntityPanel {
     if (selected !== null && selected !== ownId()) command({ type: "debugDespawn", entity: selected });
     selected = null;
   });
+  // Items (see ITEMS.md): loot from the shown entity, gear worn down and mended, an item given.
+  if (options.itemTypes) {
+    button("Spend all health", spendFraction("health", 1));
+    button("Wear: death", () => command({ type: "debugWear", what: "death" }));
+    button("Wear: armour", () => command({ type: "debugWear", what: "armour" }));
+    button("Wear: weapon", () => command({ type: "debugWear", what: "weapon" }));
+    button("Repair", () => command({ type: "debugWear", what: "repair" }));
+    const pick = document.createElement("select");
+    pick.style.cssText = "font: 11px system-ui; max-width: 170px; background: #2c3138; color: #e8e8e8; border: 1px solid #454c55; border-radius: 3px;";
+    for (const { id, name } of options.itemTypes) pick.add(new Option(`${name} (${id})`, id));
+    pick.addEventListener("click", (e) => e.stopPropagation());
+    buttons.appendChild(pick);
+    button("Give item", () => command({ type: "debugItem", item: pick.value, count: 1 }));
+  }
 
   function bar(name: string, current: number, max: number): HTMLElement {
     const row = document.createElement("div");

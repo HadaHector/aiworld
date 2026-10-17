@@ -6,6 +6,7 @@ import type { WorldContent } from "../world/content/worldContent";
 import type { DimensionWorld } from "../sim/dimension";
 import { createCharacter, type Character } from "../player/characterController";
 import { createPlayerBody, type PlayerLook } from "./playerBody";
+import type { BodyGear } from "./characterBody";
 import type { PackSource } from "../world/content/resolveContent";
 import { createCameraCollision, createThirdPersonCamera } from "../player/thirdPersonCamera";
 import { createSpectatorCamera, type SpectatorCamera } from "../player/spectatorCamera";
@@ -71,6 +72,8 @@ export interface DimensionView {
   readonly collisionPanel: CollisionPanel;
   readonly lastView: LastView;
   setSpectating: (on: boolean) => void;
+  /** Puts the player's body in what it wears (ITEMS.md, *Equipment*): built again when it changes. */
+  dress: (gear: BodyGear[]) => void;
   /** Moves the player - and, while flying, the spectator camera with it, as high over the new
    *  ground as it was over the old. */
   teleport: (x: number, z: number) => void;
@@ -107,18 +110,39 @@ export async function createDimensionView(options: DimensionViewOptions): Promis
   onProgress("Placing the player", 0, 0);
   const character = createCharacter(scene, { x: arrival.x, y: world.heightAt(arrival.x, arrival.z), z: arrival.z });
   const playerLights = world.lightMover(character.mesh);
-  // The player's body: built while the rest goes on, the capsule standing in until it is ready.
+  // The player's body: built while the rest goes on, the capsule standing in until it is ready -
+  // in its outfit, then again in what it wears once the server says (`dress`).
   let disposed = false;
-  createPlayerBody(scene, options.packs, options.look, seed)
-    .then((body) => {
-      if (disposed) return body.dispose();
-      character.attachBody(body);
-      for (const mesh of body.meshes) {
-        world.castShadow(mesh);
-        playerLights.include(mesh);
-      }
-    })
-    .catch((error) => console.error("The player's body could not be built - the capsule stays.", error));
+  let building = false;
+  let built = "";
+  let wanted: { gear: BodyGear[] | undefined; signature: string } = { gear: undefined, signature: "outfit" };
+  function buildBody(): void {
+    if (building || disposed || wanted.signature === built) return;
+    building = true;
+    const { gear, signature } = wanted;
+    createPlayerBody(scene, options.packs, { ...options.look, gear }, seed)
+      .then((body) => {
+        building = false;
+        if (disposed) return body.dispose();
+        built = signature;
+        character.attachBody(body);
+        for (const mesh of body.meshes) {
+          world.castShadow(mesh);
+          playerLights.include(mesh);
+        }
+        buildBody();
+      })
+      .catch((error) => {
+        building = false;
+        built = signature;
+        console.error("The player's body could not be built - the capsule stays.", error);
+      });
+  }
+  buildBody();
+  const dress = (gear: BodyGear[]): void => {
+    wanted = { gear, signature: gear.map((g) => `${g.piece}${g.tint}`).join() };
+    buildBody();
+  };
   const camera = createThirdPersonCamera(scene, canvas, character.mesh);
   const cameraCollision = createCameraCollision(camera, world.collision.world);
   // Camera near/far and the shadow generator's own frustum both need the real camera, which does
@@ -235,6 +259,7 @@ export async function createDimensionView(options: DimensionViewOptions): Promis
     collisionPanel,
     lastView,
     setSpectating,
+    dress,
     teleport,
     gotoView,
     dispose() {

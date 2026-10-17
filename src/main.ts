@@ -25,6 +25,10 @@ import type { WorldContent } from "./world/content/worldContent";
 import { checkPlacements, resolveGameRules, type GameRules } from "./sim/rules/gameRules";
 import { resolveItemRules, type ItemRules } from "./sim/rules/itemRules";
 import { checkSkillRefs } from "./sim/rules/skillRules";
+import { createBelongingsMirror } from "./game/belongingsMirror";
+import { gearOfItems } from "./game/itemGear";
+import { createInventoryScreen, createLootWindow } from "./ui/inventoryScreen";
+import { GROUND_ITEM_TEMPLATE } from "./sim/items/itemSystem";
 import { appearanceOf, lookFromUrl, type PlayerLook } from "./game/playerBody";
 import { createBodyKit } from "./game/characterBody";
 import { createCombatHud } from "./game/combatHud";
@@ -104,6 +108,8 @@ let entering = false;
 let me: EntityMotion | null = null;
 /** Every entity the server has told this page of (see ENTITIES.md) - cleared on each Transfer. */
 const mirror = createEntityMirror(gameRules);
+/** The own player's bag, bank, equipment, wallet and open loot (see ITEMS.md) - as the server says. */
+const belongings = createBelongingsMirror();
 /** The other entities drawn in the current view's scene. */
 let entityMeshes: EntityMeshes | null = null;
 /** The unit the player has selected (see ABILITIES.md): 0 for none. */
@@ -112,15 +118,20 @@ let targetId = 0;
 /** Applies whatever the server has said since last time - where the player is now, above all. */
 function takeServerMessages(): void {
   for (const message of channel.client.receive()) {
+    // What the own player wears goes on its body (ITEMS.md, *Equipment*).
+    if (message.type === "entityGear" && message.id === playerId) view?.dress(gearOfItems(itemRules, message.gear));
     if (mirror.apply(message)) continue;
+    if (belongings.apply(message)) continue;
     if (message.type === "welcome") {
       playerId = message.playerId;
+      if (message.items !== itemRules.hash) console.warn(`The server's item rules (${message.items.toString(16)}) differ from this page's (${itemRules.hash.toString(16)}): items may show as the wrong things.`);
       if (message.rules !== gameRules.hash) console.warn(`The server's game rules (${message.rules.toString(16)}) differ from this page's (${gameRules.hash.toString(16)}): stats and resources may show under the wrong names.`);
     } else if (message.type === "transfer") {
       pendingTransfer = message;
       me = null;
       targetId = 0;
       mirror.clear();
+      belongings.clear();
     } else if (message.type === "combatEvents") {
       // Swings are played on the body that swings; everything goes in the combat log.
       for (const event of message.events) {
@@ -216,6 +227,7 @@ async function enter(transfer: Transfer, resume: boolean): Promise<void> {
     kit: bodyKit,
     worldSeed: transfer.seed,
     onBody: (meshes) => meshes.forEach((mesh) => world.castShadow(mesh)),
+    items: itemRules,
   });
   channel.client.send({ type: "arrived" });
   // The server puts the body in once it has the dimension too - a moment, as its load resolves.
@@ -337,7 +349,48 @@ function inspectOnServer(id: number): string[] | null {
 }
 
 // The entity inspector (see ENTITIES.md): I toggles it; a left click on an entity shows it.
-const entityPanel = createEntityPanel({ rules: gameRules, mirror, ownId: () => playerId, command: debugCommand, spawnDummy: () => spawnInFront("trainingDummy"), inspectOnServer });
+const entityPanel = createEntityPanel({
+  rules: gameRules,
+  mirror,
+  ownId: () => playerId,
+  command: debugCommand,
+  spawnDummy: () => spawnInFront("trainingDummy"),
+  inspectOnServer,
+  itemTypes: itemRules.types.map((t) => ({ id: t.id, name: t.name })),
+});
+
+// Items (see ITEMS.md): B toggles the inventory; E loots or picks up the nearest thing in reach.
+const sendItem = (message: ClientMessage): void => channel.client.send(message);
+const inventory = createInventoryScreen({ game: gameRules, items: itemRules, mirror: belongings, send: sendItem });
+createLootWindow({ game: gameRules, items: itemRules, mirror: belongings, send: sendItem });
+/** The nearest entity with loot in reach of the own player, or 0. */
+function nearestLootable(): number {
+  const me = mirror.entities.get(playerId);
+  if (!me) return 0;
+  let best = 0;
+  let nearest = itemRules.config.lootRange;
+  for (const entity of mirror.entities.values()) {
+    if (!entity.lootable) continue;
+    const range = entity.templateId === GROUND_ITEM_TEMPLATE ? itemRules.config.pickUpRange : itemRules.config.lootRange;
+    const distance = Math.hypot(entity.x - me.x, entity.z - me.z);
+    if (distance <= range && distance <= nearest) {
+      nearest = distance;
+      best = entity.id;
+    }
+  }
+  return best;
+}
+function interact(id = nearestLootable()): void {
+  const entity = mirror.entities.get(id);
+  if (!entity) return;
+  if (entity.templateId === GROUND_ITEM_TEMPLATE) sendItem({ type: "itemPickUp", entity: id });
+  else sendItem({ type: "lootOpen", entity: id });
+}
+window.addEventListener("keydown", (e) => {
+  if (!view || entering || e.repeat) return;
+  if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement) return;
+  if (e.key.toLowerCase() === "e") interact();
+});
 
 // Combat (see ABILITIES.md): a target, spells on keys 1-9, the frames and the log.
 function setTarget(id: number): void {
@@ -528,6 +581,27 @@ function gotoLoaded(target: Partial<ViewSnapshot> & { x: number; z: number }, it
     addPlayer,
     despawn: (entity: number) => debugCommand({ type: "debugDespawn", entity }),
     panel: entityPanel,
+  },
+  /** Items (see ITEMS.md): what this page was told of the own belongings, and the messages a
+   *  player sends. Containers: 0 bag, 1 bank, 2 equipment. */
+  items: {
+    rules: itemRules,
+    belongings,
+    bag: () => belongings.containers[0].map((s, i) => s && `${i}: ${s.type}${s.count > 1 ? ` x${s.count}` : ""}`).filter(Boolean),
+    worn: () => belongings.containers[2].map((s, i) => s && `${itemRules.slots[i].id}: ${s.type}`).filter(Boolean),
+    catalogue: () => itemRules.types.map((t) => t.id),
+    give: (type: string, count = 1) => sendItem({ type: "debugItem", item: type, count }),
+    move: (from: { container: number; slot: number }, to: { container: number; slot: number }, count = 0) => sendItem({ type: "itemMove", from, to, count }),
+    equip: (slot: number) => sendItem({ type: "itemEquip", from: { container: 0, slot } }),
+    unequip: (slot: string) => sendItem({ type: "itemUnequip", slot: itemRules.slotIndex.get(slot) ?? -1 }),
+    use: (slot: number) => sendItem({ type: "itemUse", from: { container: 0, slot } }),
+    drop: (slot: number, count = 0) => sendItem({ type: "itemDrop", from: { container: 0, slot }, count }),
+    loot: (entity = nearestLootable()) => interact(entity),
+    take: (slot = 0xffff) => sendItem({ type: "lootTake", slot }),
+    wear: (what: "death" | "weapon" | "armour" | "repair") => sendItem({ type: "debugWear", what }),
+    screen: inventory,
+    /** The server's own item system - single player only. */
+    server: () => server.debug.items,
   },
   get camera() {
     return view?.camera;

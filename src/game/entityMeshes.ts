@@ -3,6 +3,8 @@ import { FLAG } from "../sim/skills/flags";
 import type { EntityMirror, MirroredEntity } from "./entityMirror";
 import { PLAYER_TEMPLATE, type EntityLook, type GameRules } from "../sim/rules/gameRules";
 import { createCharacterBody, type BodyKit, type BodyLook, type CharacterBody } from "./characterBody";
+import type { ItemRules } from "../sim/rules/itemRules";
+import { gearOfItems } from "./itemGear";
 
 export interface EntityMeshes {
   /** Moves every drawn entity to where the mirror has it, and animates its body - each frame. */
@@ -23,14 +25,24 @@ export interface EntityBodies {
   worldSeed: number;
   /** Each body's meshes as it is made - for shadows. */
   onBody?: (meshes: Mesh[]) => void;
+  /** Item types, so what an entity wears can be put on its body (ITEMS.md, *Equipment*). */
+  items?: ItemRules;
 }
 
 interface Drawn {
-  /** The template's capsule: drawn until the body is ready, or for good when the look names no
-   *  race; afterwards unseen but still what a click hits. */
+  /** The template's capsule (or box): drawn until the body is ready, or for good when the look
+   *  names no race; afterwards unseen but still what a click hits. */
   capsule: Mesh;
   body: CharacterBody | null;
   gone: boolean;
+  /** The look it wants a body for, null for none; what its body was last built for; and whether a
+   *  build is under way. A body is built in `update`, after the step's gear has arrived, and built
+   *  again when what it wears changes. */
+  wanted: BodyLook | null;
+  built: string;
+  building: boolean;
+  /** A glint over it while it has loot to take. */
+  sparkle: Mesh | null;
 }
 
 /**
@@ -70,32 +82,72 @@ export function createEntityMeshes(scene: Scene, mirror: EntityMirror, rules: Ga
   function add(entity: MirroredEntity): void {
     if (entity.id === ownId() || drawn.has(entity.id)) return;
     const look: EntityLook = entity.template?.look ?? fallback;
-    const capsule = MeshBuilder.CreateCapsule(`entity${entity.id}`, { height: look.height, radius: look.radius }, scene);
+    const capsule =
+      look.shape === "box"
+        ? MeshBuilder.CreateBox(`entity${entity.id}`, { width: look.radius * 2, depth: look.radius * 1.4, height: look.height }, scene)
+        : MeshBuilder.CreateCapsule(`entity${entity.id}`, { height: look.height, radius: look.radius }, scene);
     const material = new StandardMaterial(`entity${entity.id}Material`, scene);
     material.diffuseColor = new Color3(...look.color);
     material.maxSimultaneousLights = 6;
     capsule.material = material;
     capsule.metadata = { entity: entity.id, halfHeight: look.height / 2 };
-    const entry: Drawn = { capsule, body: null, gone: false };
+    // The entity's own choices over its template's - a player's race, outfit and sex.
+    const race = entity.look.race || look.race;
+    const sex = entity.look.sex || look.sex;
+    const wanted: BodyLook | null = race ? { race, outfit: entity.look.outfit || look.outfit, sex: sex === "male" || sex === "female" ? sex : undefined, seed: entity.look.seed } : null;
+    if (race && !bodies.kit.races.has(race)) console.warn(`Entity #${entity.id} (${entity.templateId}) wants race "${race}", which these packs lack - a stand-in race is drawn.`);
+    const entry: Drawn = { capsule, body: null, gone: false, wanted, built: "", building: false, sparkle: null };
     drawn.set(entity.id, entry);
     ids.set(capsule, entity.id);
     place(entity, entry);
+  }
 
-    // The entity's own choices over its template's - a player's race, outfit and sex.
-    const race = entity.look.race || look.race;
-    if (!race) return;
-    const sex = entity.look.sex || look.sex;
-    const wanted: BodyLook = { race, outfit: entity.look.outfit || look.outfit, sex: sex === "male" || sex === "female" ? sex : undefined, seed: entity.look.seed };
-    if (!bodies.kit.races.has(race)) console.warn(`Entity #${entity.id} (${entity.templateId}) wants race "${race}", which these packs lack - a stand-in race is drawn.`);
-    createCharacterBody(scene, `entity${entity.id}Body`, bodies.kit, wanted, bodies.worldSeed)
+  /** Builds (or builds again) an entity's body when what it should wear differs from what it has. */
+  function dress(entity: MirroredEntity, entry: Drawn): void {
+    if (!entry.wanted || entry.building) return;
+    const gear = entity.gear && bodies.items ? gearOfItems(bodies.items, entity.gear) : undefined;
+    const signature = gear ? gear.map((g) => `${g.piece}${g.tint}`).join() : `outfit:${entry.wanted.outfit}`;
+    if (signature === entry.built) return;
+    entry.building = true;
+    createCharacterBody(scene, `entity${entity.id}Body`, bodies.kit, { ...entry.wanted, gear }, bodies.worldSeed)
       .then((body) => {
+        entry.building = false;
         if (entry.gone) return body.dispose();
+        entry.body?.dispose();
         entry.body = body;
-        capsule.isVisible = false;
+        entry.built = signature;
+        entry.capsule.isVisible = false;
         bodies.onBody?.(body.meshes);
         place(entity, entry);
       })
-      .catch((error) => console.error(`Entity #${entity.id}'s body could not be built - its capsule stays.`, error));
+      .catch((error) => {
+        entry.building = false;
+        entry.built = signature;
+        console.error(`Entity #${entity.id}'s body could not be built - its capsule stays.`, error);
+      });
+  }
+
+  /** A slowly turning glint above an entity with loot, so a corpse or chest shows from afar. */
+  function glint(entity: MirroredEntity, entry: Drawn): void {
+    if (entity.lootable && !entry.sparkle) {
+      const sparkle = MeshBuilder.CreatePolyhedron(`entity${entity.id}Loot`, { type: 1, size: 0.12 }, scene);
+      const material = new StandardMaterial(`entity${entity.id}LootMaterial`, scene);
+      material.disableLighting = true;
+      material.emissiveColor = new Color3(1, 0.85, 0.3);
+      sparkle.material = material;
+      sparkle.isPickable = false;
+      entry.sparkle = sparkle;
+    } else if (!entity.lootable && entry.sparkle) {
+      entry.sparkle.material?.dispose();
+      entry.sparkle.dispose();
+      entry.sparkle = null;
+    }
+    if (entry.sparkle) {
+      const look = entity.template?.look ?? fallback;
+      const t = performance.now() / 1000;
+      entry.sparkle.position.set(entity.x, entity.y + look.height + 0.35 + Math.sin(t * 2.5) * 0.08, entity.z);
+      entry.sparkle.rotation.y = t * 1.5;
+    }
   }
   function remove(entity: MirroredEntity): void {
     const entry = drawn.get(entity.id);
@@ -106,6 +158,8 @@ export function createEntityMeshes(scene: Scene, mirror: EntityMirror, rules: Ga
     entry.capsule.material?.dispose();
     entry.capsule.dispose();
     entry.body?.dispose();
+    entry.sparkle?.material?.dispose();
+    entry.sparkle?.dispose();
   }
   function place(entity: MirroredEntity, entry: Drawn): void {
     entry.capsule.position.set(entity.x, entity.y + (entry.capsule.metadata as { halfHeight: number }).halfHeight, entity.z);
@@ -121,7 +175,10 @@ export function createEntityMeshes(scene: Scene, mirror: EntityMirror, rules: Ga
     update: () => {
       for (const [id, entry] of drawn) {
         const entity = mirror.entities.get(id);
-        if (entity) place(entity, entry);
+        if (!entity) continue;
+        dress(entity, entry);
+        glint(entity, entry);
+        place(entity, entry);
       }
       placeRing();
     },

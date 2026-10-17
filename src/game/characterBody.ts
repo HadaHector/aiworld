@@ -14,6 +14,35 @@ export interface BodyLook {
   outfit: string;
   sex?: Sex;
   seed: number;
+  /** Gear pieces from what it wears (ITEMS.md, *Equipment*), in place of the outfit when given. */
+  gear?: BodyGear[];
+}
+
+/** A gear piece an item puts on the body, and the item's tint over the piece's own ("" for none). */
+export interface BodyGear {
+  piece: string;
+  tint: string;
+}
+
+/** A gear piece with a tint over its surfaces' own colours - not over rims or a hilt. */
+function tinted(piece: GearDef, tint: string): GearDef {
+  const match = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(tint);
+  if (!match) return piece;
+  const color: [number, number, number] = [parseInt(match[1], 16) / 255, parseInt(match[2], 16) / 255, parseInt(match[3], 16) / 255];
+  return {
+    ...piece,
+    paint: piece.paint.map((p) => ({ ...p, tint: color })),
+    shells: piece.shells.map((s) => ({ ...s, tint: color })),
+    skirts: piece.skirts.map((s) => ({ ...s, tint: color })),
+    pieces: piece.pieces.map((p) => ({ ...p, tint: color })),
+  };
+}
+
+/** The gear a body wears: its items' pieces when it has them, else its outfit's. Unknown pieces
+ *  are left out. */
+function gearOf(kit: BodyKit, look: BodyLook): GearDef[] {
+  if (look.gear) return look.gear.flatMap(({ piece, tint }) => (kit.gear.has(piece) ? [tinted(kit.gear.get(piece)!, tint)] : []));
+  return (kit.outfits.get(look.outfit)?.gear ?? []).map((id) => kit.gear.get(id)!);
 }
 
 /** What bodies are built from, resolved from the packs once and shared by every body. */
@@ -54,9 +83,8 @@ const TELEPORT = 3;
  */
 export async function createCharacterBody(scene: Scene, name: string, kit: BodyKit, look: BodyLook, worldSeed: number): Promise<CharacterBody> {
   const race = kit.races.get(look.race) ?? kit.races.get("human") ?? [...kit.races.values()][0];
-  const outfit = kit.outfits.get(look.outfit);
   const dressed = await dressCharacter(
-    { race, seed: look.seed, sex: look.sex, gear: (outfit?.gear ?? []).map((id) => kit.gear.get(id)!), smallclothes: true },
+    { race, seed: look.seed, sex: look.sex, gear: gearOf(kit, look), smallclothes: true },
     kit.materials,
     worldSeed,
   );

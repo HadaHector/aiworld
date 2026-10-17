@@ -29,6 +29,11 @@ export interface MirroredEntity {
   flags: number;
   /** Whom it has selected, 0 for nobody. */
   target: number;
+  /** The item types it shows on its body (ITEMS.md, *Equipment*); null until told - its template's
+   *  outfit shows. */
+  gear: string[] | null;
+  /** Whether it has loot to take: a corpse, a chest, an item on the ground. */
+  lootable: boolean;
 }
 
 /** What the client's own player knows and can do: its spells, its GCD, whether it auto-attacks. */
@@ -101,6 +106,8 @@ export function createEntityMirror(rules: GameRules): EntityMirror {
           auras: [],
           flags: 0,
           target: 0,
+          gear: null,
+          lootable: false,
         };
         entities.set(entity.id, entity);
         for (const listener of spawnListeners) listener(entity);
@@ -134,6 +141,16 @@ export function createEntityMirror(rules: GameRules): EntityMirror {
       case "entityFlags": {
         const entity = entities.get(message.id);
         if (entity) entity.flags = message.flags;
+        return true;
+      }
+      case "entityGear": {
+        const entity = entities.get(message.id);
+        if (entity) entity.gear = message.gear;
+        return true;
+      }
+      case "entityLootable": {
+        const entity = entities.get(message.id);
+        if (entity) entity.lootable = message.lootable;
         return true;
       }
       case "entityTarget": {
