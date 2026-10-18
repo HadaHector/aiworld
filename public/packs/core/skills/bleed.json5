@@ -1,0 +1,15 @@
+// A bleeding wound: damage over time, stacking up to three.
+{
+  name: "Bleed",
+  tags: ["bleed", "dot"],
+  display: "debuff",
+  vars: { perTick: 2 },
+  stacking: { per: "host", max: 3, add: "stack", duration: "restart", value: "stronger", strength: "var.perTick" },
+  states: {
+    bleeding: {
+      length: 9,
+      period: 3,
+      tick: [{ do: "damage", amount: { mul: ["var.perTick", "stacks"] }, roll: "noCrit" }],
+    },
+  },
+}

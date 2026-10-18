@@ -522,7 +522,8 @@ unit id → amount:
   debug flag (the debug command stays and forces it). A player hit by something without a table
   stays in combat for `combatTimeout` seconds.
 - **A table forgets** a unit that is dead, in another dimension, or has done nothing to it for
-  `forgetAfter` seconds while it has no AI to chase (until creatures, step 6, which add leashing).
+  `forgetAfter` seconds - unless the table's holder is a creature: its brain leashes instead
+  (CREATURES.md, *The brain*).
 - `group: { from: "threat" }` reads the table, highest first. The dummy uses it to pick whom to
   cast at.
 

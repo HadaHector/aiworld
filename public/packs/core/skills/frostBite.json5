@@ -1,0 +1,18 @@
+// A frost wolf's bite: some damage and a chill that slows.
+{
+  name: "Frost Bite",
+  type: "physical",
+  tags: ["melee", "school.frost"],
+  target: "enemy",
+  range: 5,
+  facing: true,
+  cooldown: 10,
+  states: {
+    bite: {
+      enter: [
+        { do: "damage", group: "target", amount: { add: ["caster.weaponMin", { div: ["caster.strength", 10] }] } },
+        { do: "cast", skill: "chilled", group: "target" },
+      ],
+    },
+  },
+}

@@ -69,6 +69,9 @@ export interface CombatPart {
   /** Forced into combat by debug. */
   forceCombat: boolean;
   dead: boolean;
+  /** Who was on its threat table when it last died, most threat first - who gets the credit and
+   *  whose stats its loot reads (see CREATURES.md, *Kills and XP*). Empty until it dies. */
+  killers: number[];
   /** Server time a summon goes, Infinity for a unit that stays. */
   expires: number;
   /** Set by the server's step when the unit moved by its own input since the last step. */

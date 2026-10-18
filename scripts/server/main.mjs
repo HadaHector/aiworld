@@ -15,7 +15,7 @@
 //                                               prints its stats and belongings before and after (ITEMS.md)
 // A dimension is generated when the first player heads for it and dropped when the last one leaves,
 // so with no bot the server holds no world at all.
-import { loadContentFromDisk, loadItemRulesFromDisk, loadRulesFromDisk } from "../diskContent.mjs";
+import { loadContentFromDisk, loadCreatureRulesFromDisk, loadItemRulesFromDisk, loadRulesFromDisk } from "../diskContent.mjs";
 import { checkSkillRefs } from "../../src/sim/rules/skillRules.ts";
 import { formatMoney } from "../../src/sim/rules/itemRules.ts";
 import { statValue } from "../../src/sim/stats.ts";
@@ -27,6 +27,8 @@ import { createLocalChannel } from "../../src/sim/channel.ts";
 import { PROTOCOL_VERSION } from "../../src/sim/protocol.ts";
 import { describeEvent } from "../../src/sim/skills/combatLog.ts";
 import { createFightClient } from "./fightBot.mjs";
+import { createHuntClient } from "./huntBot.mjs";
+import { EVENT_KIND } from "../../src/sim/skills/events.ts";
 
 const TICK_HZ = 30;
 
@@ -55,6 +57,11 @@ started = performance.now();
 const rules = loadRulesFromDisk(configName);
 checkPlacements(rules, dimensions);
 console.log(`game rules: ${rules.stats.length} stats, ${rules.modifierKinds.length} modifier kinds, ${rules.resources.length} resources, ${rules.templates.size} templates, ${rules.skills.length} skills (${ms(started)})`);
+// Creatures (see CREATURES.md): kinds and their traits depend on the world seed; they join the
+// templates, so before the item rules.
+started = performance.now();
+const creatures = loadCreatureRulesFromDisk(configName, rules, seed);
+console.log(`creature rules: ${creatures.kindList.length} kinds (${creatures.kindList.map((k) => k.id).join(", ")}), ${creatures.camps.length} camps (${ms(started)})`);
 // Items (see ITEMS.md): generated types depend on the world seed.
 started = performance.now();
 const items = loadItemRulesFromDisk(configName, rules, seed);
@@ -68,6 +75,7 @@ const server = createServer({
   dimensions,
   rules,
   items,
+  creatures,
   loadDimension(definition, dimensionSeed) {
     let at = performance.now();
     const content = definition.start ? startContent : loadContentFromDisk(configName, definition.id).content;
@@ -88,7 +96,16 @@ if (flag("bot")) {
   const channel = createLocalChannel();
   server.connect(channel.server);
   channel.client.send({ type: "hello", protocol: PROTOCOL_VERSION, name: "bot", dimension: text("dimension", "") });
-  bot = { end: channel.client, id: 0, seq: 0, last: null, dimension: "", entityMessages: 0, fighter: flag("fight") ? createFightClient(rules, channel.client) : null };
+  bot = {
+    end: channel.client,
+    id: 0,
+    seq: 0,
+    last: null,
+    dimension: "",
+    entityMessages: 0,
+    fighter: flag("fight") ? createFightClient(rules, channel.client) : null,
+    hunter: flag("hunt") ? createHuntClient(rules, creatures, channel.client) : null,
+  };
 }
 
 /** One entity message, short, with stats and resources by name. */
@@ -112,6 +129,10 @@ function describeMessage(message) {
 function driveBot() {
   if (bot.fighter) {
     driveFighter();
+    return;
+  }
+  if (bot.hunter) {
+    driveHunter();
     return;
   }
   for (const message of bot.end.receive()) {
@@ -147,6 +168,28 @@ function driveBot() {
   const t = server.tick / TICK_HZ;
   bot.seq = (bot.seq + 1) & 0xffff;
   bot.end.send({ type: "intent", seq: bot.seq, moveX: Math.cos(t / 20), moveZ: Math.sin(t / 20), run: true, jump: server.tick % 90 === 0 });
+}
+
+/** The --hunt bot (CREATURES.md): hunts the nearest creatures, printing what it fights and loots,
+ *  and every ten seconds a line on how it is doing. */
+function driveHunter() {
+  const hunter = bot.hunter;
+  hunter.receive();
+  bot.id = hunter.state.id;
+  bot.dimension = hunter.state.dimension;
+  const me = hunter.state.entities.get(hunter.state.id);
+  bot.last = me ? { x: me.x, y: me.y, z: me.z } : bot.last;
+  for (const line of hunter.state.log.splice(0)) console.log(`bot: ${line}`);
+  for (const event of hunter.state.events.splice(0)) {
+    if (hunter.loggable(event) && (event.kind === EVENT_KIND.death || event.source === bot.id || event.target === bot.id)) console.log(`  [${event.time.toFixed(1)}] ${describeEvent(rules, event, hunter.nameOf)}`);
+  }
+  for (const loot of hunter.state.loots.splice(0)) console.log(`bot: looted ${loot.from}: ${[...loot.items, loot.money ? `${loot.money} money` : ""].filter(Boolean).join(", ")}`);
+  if (server.tick % (TICK_HZ * 10) === 0) {
+    const health = server.debug.entity(bot.id)?.resources;
+    const c = server.debug.creatures?.debug.creatures(bot.dimension) ?? [];
+    console.log(`bot: ${hunter.state.kills} kills, ${hunter.state.deaths} deaths; health ${health ? Math.round(health.current[rules.health]) : "?"}; ${c.filter((e) => !e.combat?.dead).length} creatures alive near players, delta ${server.debug.delta.size}; at ${bot.last ? `${bot.last.x.toFixed(0)}, ${bot.last.z.toFixed(0)}` : "?"}${hunter.state.prey ? `, ${hunter.nameOf(hunter.state.prey)} ${Math.hypot((hunter.state.entities.get(hunter.state.prey)?.x ?? 0) - (bot.last?.x ?? 0), (hunter.state.entities.get(hunter.state.prey)?.z ?? 0) - (bot.last?.z ?? 0)).toFixed(0)} m off` : ""}`);
+  }
+  hunter.drive(server.tick);
 }
 
 /** The --fight bot: the fight client plays, and the combat log is printed as it comes. */

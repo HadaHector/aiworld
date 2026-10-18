@@ -75,6 +75,8 @@ type ViewMode = "world" | "zone";
 export interface DebugMap {
   toggle: () => void;
   updateMarker: (worldX: number, worldZ: number, headingRadians: number) => void;
+  /** Marks spawn points (CREATURES.md): a dot each, coloured, with a tooltip; null clears them. */
+  setSpawnPoints: (points: { x: number; z: number; color: string; title: string }[] | null) => void;
   /** Takes it off the page, for the next dimension's (see DIMENSIONS.md). */
   dispose: () => void;
 }
@@ -191,6 +193,7 @@ export function createDebugMap(
   let zoneAreaId = -1;
   let showSettlements = true;
   let showRoads = true;
+  let spawnPoints: { x: number; z: number; color: string; title: string }[] = [];
   let markerX = 0;
   let markerZ = 0;
   let heading = 0;
@@ -448,6 +451,18 @@ export function createDebugMap(
     markerLayer.replaceChildren();
     const roadLayer = drawRoads();
     if (roadLayer) markerLayer.appendChild(roadLayer);
+    for (const point of spawnPoints) {
+      const { x, y } = worldToPixel(point.x, point.z);
+      if (x < 0 || y < 0 || x > SAMPLE_RESOLUTION || y > SAMPLE_RESOLUTION) continue;
+      const dot = document.createElement("div");
+      dot.title = point.title;
+      dot.style.cssText = `
+        position: absolute; left: ${(x / SAMPLE_RESOLUTION) * 100}%; top: ${(y / SAMPLE_RESOLUTION) * 100}%;
+        width: 7px; height: 7px; margin: -3.5px 0 0 -3.5px; border-radius: 50%;
+        background: ${point.color}; border: 1px solid rgba(0,0,0,0.8); box-sizing: border-box; pointer-events: auto;
+      `;
+      markerLayer.appendChild(dot);
+    }
     for (const link of links) {
       const { x, y } = worldToPixel(link.at.x, link.at.z);
       if (x < 0 || y < 0 || x > SAMPLE_RESOLUTION || y > SAMPLE_RESOLUTION) continue;
@@ -613,6 +628,10 @@ export function createDebugMap(
   return {
     toggle,
     updateMarker,
+    setSpawnPoints(points) {
+      spawnPoints = points ?? [];
+      drawOverlays();
+    },
     dispose() {
       window.removeEventListener("keydown", onKey);
       overlay.remove();

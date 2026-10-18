@@ -1,0 +1,27 @@
+// A giant spider (see CREATURES.md): a fantastical beast that webs its prey and poisons it.
+{
+  entity: "beast",
+  name: "{variant} Spider",
+  family: "beast",
+  hostility: "hostile",
+  stats: { stamina: 3, strength: 7, agility: 14, armor: 30, weaponMin: 2, weaponMax: 4, weaponSpeed: 2.8 },
+  perLevel: { stamina: 1.5, strength: 1.2, agility: 1.8, armor: 12, weaponMin: 1, weaponMax: 1.5 },
+  spells: [{ skill: "venom" }, { skill: "web" }],
+  tactics: [
+    { skill: "web", every: [16, 20], when: { gt: ["distance", 4] } },
+    { skill: "venom", every: [10, 14] },
+  ],
+  speed: { walk: 0.2, run: 0.42 },
+  group: { size: [1, 2], spread: 8 },
+  habitat: { bluebellWood: 2, autumnWood: 1, rainforest: 3, cloudForest: 3, cypressBayou: 3, reedMarsh: 1, meadow: 1, desert: 1, redBush: 1 },
+  levelOffset: 1,
+  respawn: [300, 420],
+  loot: "spider",
+  look: { height: 1.1, radius: 0.75, color: [0.2, 0.18, 0.2] },
+  variants: [
+    { id: "giant", name: "Giant", habitat: ["meadow", "bluebellWood", "autumnWood", "reedMarsh"] },
+    { id: "jungle", name: "Jungle", habitat: ["rainforest", "cloudForest", "cypressBayou"], look: { color: [0.25, 0.4, 0.2] } },
+    { id: "sand", name: "Sand", habitat: ["desert", "redBush"], look: { color: [0.75, 0.55, 0.35] }, stats: { armor: 50 } },
+  ],
+  traits: { pick: [0, 1], pool: ["swift", "old"] },
+}

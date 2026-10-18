@@ -1,0 +1,8 @@
+// Gore's knock-down: a short stun.
+{
+  name: "Gored",
+  tags: ["stun"],
+  display: "debuff",
+  stacking: { per: "host", duration: "longer" },
+  states: { stunned: { length: { mul: [0.8, "host.stunTaken"] }, hold: [{ do: "flag", flags: ["stunned"] }] } },
+}

@@ -105,6 +105,9 @@ export interface AreaWorld {
   /** Each area's own roll of its biome, by area id - the objects every AreaWeight and primaryBiome
    *  carries, so anything built per biome can be built per area from this list up front. */
   areaBiomes: BiomeDefinition[];
+  /** Which areas touch each area: two do where neighbouring land cells belong to them. In ascending
+   *  id order - what zone levels are counted out by (see CREATURES.md, *Zones*). */
+  areaNeighbours: Map<number, number[]>;
 }
 
 /**
@@ -468,6 +471,18 @@ export function createAreaSampler(seed: number, content: WorldContent): AreaWorl
     areaNames.set(areaId, nameGenerator.nameFor(areaBiomes[areaId].voiceId, areaId));
   }
 
+  const touching = new Map<number, Set<number>>();
+  for (const [cellIndex, areaId] of cellToAreaId) {
+    for (const neighbour of adjacency[cellIndex]) {
+      const other = cellToAreaId.get(neighbour);
+      if (other === undefined || other === areaId) continue;
+      if (!touching.has(areaId)) touching.set(areaId, new Set());
+      touching.get(areaId)!.add(other);
+    }
+  }
+  const areaNeighbours = new Map<number, number[]>();
+  for (let areaId = 0; areaId < areaBiomes.length; areaId++) areaNeighbours.set(areaId, [...(touching.get(areaId) ?? [])].sort((a, b) => a - b));
+
   const landCellSites: CellPoint[] = [];
   for (const cellIndex of landCells) {
     if (!lakeCells.has(cellIndex)) landCellSites.push(points[cellIndex]);
@@ -481,5 +496,6 @@ export function createAreaSampler(seed: number, content: WorldContent): AreaWorl
     landCellSites,
     nameGenerator,
     areaBiomes,
+    areaNeighbours,
   };
 }

@@ -127,7 +127,9 @@ export function createSkillSystem(rules: GameRules, world: SkillWorld): SkillSys
         if (!table) continue;
         for (const [id, entry] of table) {
           const other = world.entity(id);
-          if (!other || other.dimension !== unit.dimension || !isAlive(other) || now - entry.last > forgetAfter) table.delete(id);
+          // A creature's brain leashes instead of forgetting by time (CREATURES.md, *The brain*).
+          const idle = !unit.creature && now - entry.last > forgetAfter;
+          if (!other || other.dimension !== unit.dimension || !isAlive(other) || idle) table.delete(id);
           else onTables.add(id);
         }
       }

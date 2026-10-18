@@ -121,7 +121,9 @@ intents (`target`, `cast`, `stopCast`, `attack`, `respawn`), `combatEvents`, `en
 `itemEquip`, `itemUnequip`, `itemUse`, `itemDrop`, `itemPickUp`, `lootOpen`, `lootTake`,
 `lootClose`, `itemRepair`), `container`, `itemSlot`, `wallet`, `bankReach`, `loot`,
 `itemRefused`, `entityGear`, `entityLootable`, the item rules' hash and the seed in `welcome`,
-and `debugItem` and `debugWear` (protocol 7); `src/sim/protocol.ts` is current.
+and `debugItem` and `debugWear` (protocol 7). Step 6 (CREATURES.md) added the creature catalogue's
+hash, `creatures`, to `welcome` (protocol 8): creatures are entities, so nothing else changed;
+`src/sim/protocol.ts` is current.
 
 Client to server:
 

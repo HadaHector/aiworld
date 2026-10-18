@@ -1,0 +1,16 @@
+// A spider's poison: damage over time.
+{
+  name: "Poison",
+  tags: ["poison", "dot", "school.nature"],
+  display: "debuff",
+  dispel: "poison",
+  vars: { perTick: 3 },
+  stacking: { per: "caster", max: 2, add: "stack", duration: "restart", value: "stronger", strength: "var.perTick" },
+  states: {
+    poisoned: {
+      length: 12,
+      period: 3,
+      tick: [{ do: "damage", amount: { mul: ["var.perTick", "stacks"] }, roll: "noCrit" }],
+    },
+  },
+}

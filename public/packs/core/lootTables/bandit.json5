@@ -1,0 +1,11 @@
+// What a bandit drops: money, food, and now and then their gear.
+{
+  rolls: [1, 2],
+  pick: [
+    { weight: 35, item: "bread", count: [1, 2] },
+    { weight: 20, table: "starterGear" },
+    { weight: 15, template: "sword", rarity: ["common", "uncommon"], where: { material: "bronze" } },
+    { weight: 30 },
+  ],
+  always: [{ money: [10, 40] }],
+}

@@ -1,0 +1,2 @@
+// Quick on its feet: runs faster and strikes a little faster.
+{ name: "Swift", speed: 1.08, modifiers: [{ stat: "weaponSpeed", kind: "percent", value: -15 }] }

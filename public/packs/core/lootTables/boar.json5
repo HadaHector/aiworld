@@ -1,0 +1,10 @@
+// What a boar drops.
+{
+  rolls: [1, 2],
+  pick: [
+    { weight: 50, item: "boarMeat", count: [1, 2] },
+    { weight: 35, item: "boarHide" },
+    { weight: 15 },
+  ],
+  always: [{ money: [1, 5] }],
+}

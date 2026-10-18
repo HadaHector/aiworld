@@ -46,7 +46,7 @@ packs/<pack>/
   stats/<id>.json5        gameplay: a stat - primary, or derived by a formula (ENTITIES.md)
   modifiers/<id>.json5    gameplay: a kind of modifier - where it applies and what it does
   resources/<id>.json5    gameplay: health, mana, rage... - a maximum from a stat, regen and decay
-  entities/<id>.json5     gameplay: an entity template - the player, a dummy, later creatures
+  entities/<id>.json5     gameplay: an entity template - the player, a dummy, bases for creatures
   skills/<id>.json5       gameplay: a skill - its casting, states, actions, areas, groups (ABILITIES.md)
   rules/combat.json5      gameplay: the GCD, the queue window, the rolls, threat (ABILITIES.md)
   items/<id>.json5        gameplay: an item type - a sword, a shirt, bread, a key (ITEMS.md)
@@ -56,6 +56,10 @@ packs/<pack>/
   currencies/<id>.json5   gameplay: money - one main currency, any number of minor ones
   lootTables/<id>.json5   gameplay: weighted, nested, conditional loot
   rules/items.json5       gameplay: wear, repair costs, reach, how long dropped items lie (ITEMS.md)
+  creatures/<id>.json5    gameplay: a creature species - one kind per variant, traits from the seed (CREATURES.md)
+  creatureTraits/<id>.json5  gameplay: a trait a world's kinds may roll - modifiers, spells, tactics, a name
+  camps/<id>.json5        gameplay: a camp - one group of members around a centre
+  rules/creatures.json5   gameplay: rosters, spawn points, the brain's numbers, zone levels (CREATURES.md)
 ```
 
 A definition's **id is its file name**: `materials/peat.json5` defines the material `peat`, and
@@ -1025,6 +1029,31 @@ A generated type's id is its template's, its parts' and its rarity's, joined by 
 `start`), loot (`loot` - rolled at 0 health, or when first opened with `container: true`) or a
 strongbox (`banker: true`). `entities/groundItem.json5` is what a dropped item lies as; a `look`
 with `shape: "box"` draws a box. A currency's `denominations` say how its one integer is shown.
+
+## Gameplay: creatures
+
+Read by their own resolver (`src/sim/rules/creatureRules.ts`) once per server, with the world seed,
+which picks each kind's traits; every kind joins the entity templates, so it comes before the item
+rules. [CREATURES.md](../../CREATURES.md) has every field.
+
+```json5
+// creatures/wolf.json5 - a species on an entity template; a kind per variant: "wolf.timber", "wolf.frost"
+{ entity: "beast", name: "{variant} Wolf", hostility: "hostile",
+  stats: { stamina: 3, strength: 8, weaponMin: 2, weaponMax: 4 }, perLevel: { stamina: 1.5, weaponMax: 1.6 },
+  spells: [{ skill: "bite" }], tactics: [{ skill: "bite", every: [5, 8] }],
+  group: { size: [2, 4], spread: 6 }, habitat: { meadow: 2, bluebellWood: 3 }, respawn: [240, 360], loot: "wolf",
+  variants: [{ id: "timber", name: "Timber", habitat: ["meadow", "bluebellWood"] }, { id: "frost", name: "Frost", habitat: ["snowyTaiga"], spells: [{ skill: "frostBite" }] }],
+  traits: { pick: [0, 1], pool: ["rabid", "thickHide"] } }
+// creatureTraits/rabid.json5 - what a kind that rolls it gains
+{ name: "Rabid", spells: [{ skill: "rabidBite" }], tactics: [{ skill: "rabidBite", every: [8, 12] }] }
+// camps/banditCamp.json5 - members name kinds (or a species: the variant whose habitat fits the zone)
+{ habitat: { meadow: 1 }, radius: 12, members: [{ kind: "bandit.thug", count: [2, 3] }, { kind: "bandit.thug", levelOffset: 2, name: "Bandit Captain", at: "centre" }] }
+```
+
+A zone's roster is rolled from the kinds whose habitat lists its biome; a species with `roster:
+false` (bandits) only comes in camps. `neutral` kinds fight only when attacked; `flee: { at, time }`
+makes one run at low health; `keepRange` keeps a caster at a distance. `rules/creatures.json5`'s
+`never` turns species, kinds or traits off.
 
 ## Example
 

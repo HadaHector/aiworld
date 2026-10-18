@@ -1,0 +1,2 @@
+// Old and grizzled: tougher and harder-hitting, but slower.
+{ name: "Old", speed: 0.9, modifiers: [{ stat: "maxHealth", kind: "percent", value: 25 }, { stat: "weaponMax", kind: "percent", value: 15 }] }

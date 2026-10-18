@@ -43,7 +43,12 @@ interface Drawn {
   building: boolean;
   /** A glint over it while it has loot to take. */
   sparkle: Mesh | null;
+  /** How far a capsule has fallen over, 0 standing to 1 lying: a dead creature without a body. */
+  fall: number;
 }
+
+/** Seconds a capsule takes to fall over when its unit dies, or to stand again. */
+const CAPSULE_FALL = 0.5;
 
 /**
  * Every entity the client knows, except its own player, drawn in one dimension's scene from its
@@ -75,8 +80,10 @@ export function createEntityMeshes(scene: Scene, mirror: EntityMirror, rules: Ga
     ring.position.set(entity.x, entity.y + 0.05, entity.z);
     ring.scaling.setAll(look.radius * 2.6);
     const hostile = !own && entity.template?.hostility === "hostile";
+    // Neutral creatures (CREATURES.md) yellow, as in Classic: they fight only when attacked.
+    const neutral = !own && entity.template?.hostility === "neutral" && entity.templateId !== PLAYER_TEMPLATE;
     const dead = (entity.flags & (1 << FLAG.dead)) !== 0;
-    ringMaterial.emissiveColor = dead ? new Color3(0.4, 0.4, 0.4) : hostile ? new Color3(0.95, 0.2, 0.15) : new Color3(0.3, 0.9, 0.35);
+    ringMaterial.emissiveColor = dead ? new Color3(0.4, 0.4, 0.4) : hostile ? new Color3(0.95, 0.2, 0.15) : neutral ? new Color3(0.95, 0.85, 0.2) : new Color3(0.3, 0.9, 0.35);
   }
 
   function add(entity: MirroredEntity): void {
@@ -96,7 +103,7 @@ export function createEntityMeshes(scene: Scene, mirror: EntityMirror, rules: Ga
     const sex = entity.look.sex || look.sex;
     const wanted: BodyLook | null = race ? { race, outfit: entity.look.outfit || look.outfit, sex: sex === "male" || sex === "female" ? sex : undefined, seed: entity.look.seed } : null;
     if (race && !bodies.kit.races.has(race)) console.warn(`Entity #${entity.id} (${entity.templateId}) wants race "${race}", which these packs lack - a stand-in race is drawn.`);
-    const entry: Drawn = { capsule, body: null, gone: false, wanted, built: "", building: false, sparkle: null };
+    const entry: Drawn = { capsule, body: null, gone: false, wanted, built: "", building: false, sparkle: null, fall: (entity.flags & (1 << FLAG.dead)) !== 0 ? 1 : 0 };
     drawn.set(entity.id, entry);
     ids.set(capsule, entity.id);
     place(entity, entry);
@@ -162,20 +169,32 @@ export function createEntityMeshes(scene: Scene, mirror: EntityMirror, rules: Ga
     entry.sparkle?.dispose();
   }
   function place(entity: MirroredEntity, entry: Drawn): void {
-    entry.capsule.position.set(entity.x, entity.y + (entry.capsule.metadata as { halfHeight: number }).halfHeight, entity.z);
+    // A capsule that stands for a unit lies down along its facing when it dies (bodies fall on
+    // their own): tipped about its foot, so it ends lying on the ground.
+    const { halfHeight } = entry.capsule.metadata as { halfHeight: number };
+    const tip = entry.capsule.isVisible && entity.template?.look.shape !== "box" ? (1 - Math.cos(entry.fall * Math.PI)) / 2 : 0;
+    const radius = entity.template?.look.radius ?? halfHeight;
+    entry.capsule.position.set(entity.x, entity.y + halfHeight + (radius - halfHeight) * tip, entity.z);
     entry.capsule.rotation.y = entity.facing;
+    entry.capsule.rotation.x = (tip * Math.PI) / 2;
     entry.body?.show({ ...entity, dead: (entity.flags & (1 << FLAG.dead)) !== 0 });
   }
 
+  let lastUpdate = 0;
   for (const entity of mirror.entities.values()) add(entity);
   const offSpawn = mirror.onSpawn(add);
   const offDespawn = mirror.onDespawn(remove);
 
   return {
     update: () => {
+      const now = performance.now() / 1000;
+      const dt = Math.min(0.1, now - (lastUpdate || now));
+      lastUpdate = now;
       for (const [id, entry] of drawn) {
         const entity = mirror.entities.get(id);
         if (!entity) continue;
+        const dead = (entity.flags & (1 << FLAG.dead)) !== 0;
+        entry.fall = Math.min(1, Math.max(0, entry.fall + ((dead ? 1 : -1) * dt) / CAPSULE_FALL));
         dress(entity, entry);
         glint(entity, entry);
         place(entity, entry);

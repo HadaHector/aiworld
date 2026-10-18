@@ -232,6 +232,8 @@ export function die(sys: Sys, unit: Entity, killer: Entity | undefined, skill: S
   combat.attacking = false;
   combat.queued = null;
   raiseFlag(combat.flags, FLAG.dead);
+  combat.killers = [...(combat.threat ?? [])].sort((a, b) => b[1].amount - a[1].amount).map(([id]) => id);
+  if (killer && !combat.killers.includes(killer.id)) combat.killers.push(killer.id);
   emit(sys, "death", { source: killer?.id ?? 0, target: unit.id, skill: skill?.index ?? -1, at: unit });
   for (const magic of [...combat.magics]) {
     if (magic.skill.passive || magic.skill.keepOnDeath) continue;

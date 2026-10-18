@@ -1,0 +1,15 @@
+// A spider's venomous bite: a poison that ticks.
+{
+  name: "Venom",
+  type: "physical",
+  tags: ["melee", "school.nature"],
+  target: "enemy",
+  range: 5,
+  facing: true,
+  cooldown: 6,
+  states: {
+    bite: {
+      enter: [{ do: "cast", skill: "poison", group: "target", vars: { perTick: { add: [3, { mul: ["caster.level", 0.9] }] } } }],
+    },
+  },
+}

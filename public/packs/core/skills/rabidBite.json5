@@ -1,0 +1,15 @@
+// A rabid beast's bite: it bleeds.
+{
+  name: "Rabid Bite",
+  type: "physical",
+  tags: ["melee"],
+  target: "enemy",
+  range: 5,
+  facing: true,
+  cooldown: 8,
+  states: {
+    bite: {
+      enter: [{ do: "cast", skill: "bleed", group: "target", vars: { perTick: { add: [2, { mul: ["caster.level", 0.8] }] } } }],
+    },
+  },
+}

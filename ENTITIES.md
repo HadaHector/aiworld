@@ -456,6 +456,9 @@ Each leaves the game working: dev server, `npm run probe`, `npm run server`, `np
 - **Items** (ITEMS.md) added a template's `items` field - belongings, loot, a chest's or a strongbox's
   part, read by the item rules - the look's `shape: "box"`, and an entity's `belongings`, `loot` and
   `gear` parts.
+- **Creatures** (CREATURES.md) are entities with a walking `body` and a `creature` part (kind, spawn
+  point, brain). Their kinds are templates made by the creature rules, which add them to `templates`;
+  `GameRules.rawTemplates` keeps every template as written (abstract ones too) for them to build on.
 - **Bodies for everyone** came after (protocol 5, *Looks*): the template look's `race`, `outfit`
   and `sex`, the entity's `look`, Hello's `look`. `__aiworld.entities.addPlayer({ race, outfit,
   sex, seed })` puts a second player in the page's server, walking a slow circle, to see one.

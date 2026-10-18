@@ -1,0 +1,22 @@
+// Creatures (see CREATURES.md): rosters, spawn points, the brain's numbers, and zone levels until
+// world generation sets them.
+{
+  rosterSize: [3, 5],              // kinds per zone
+  campsPerZone: [1, 2],            // camp kinds per zone, of those whose habitat fits
+  spacing: 80,                     // metres between spawn points, jittered
+  emptyChance: 0.15,
+  campChance: 0.08,
+  groups: { single: 0.6, pair: 0.28, group: 0.12 },  // mostly alone; packs now and then
+  maxSlope: 0.7,
+  safeRadius: 60,                  // no points this near the dimension's spawn or a link
+  activeRadius: 140,               // points this near a player are filled
+  releaseRadius: 180,              // ...and dropped when nobody is this near
+  releaseAfter: 30,
+  corpse: { time: 120, emptied: 30 },
+  leash: 60,
+  stuck: 4,
+  // Classic: about 20 m, a metre more per level the creature is above the player, 5-45 m.
+  aggro: { clamp: [{ add: [20, { sub: ["caster.level", "target.level"] }] }, 5, 45] },
+  evadeSkill: "evade",
+  levels: { start: [1, 4], step: 3, width: 3, cap: 60 },
+}

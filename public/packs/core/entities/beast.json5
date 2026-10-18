@@ -1,0 +1,10 @@
+// A base for beasts (see CREATURES.md): abstract, so only species are made on it. A capsule until
+// beast bodies come; each species sizes and tints its own.
+{
+  extends: "creature",
+  abstract: true,
+  resources: ["health"],
+  threat: true,
+  spells: [{ skill: "autoAttack" }],
+  look: { shape: "capsule", height: 1.0, radius: 0.5, color: [0.5, 0.42, 0.34] },
+}

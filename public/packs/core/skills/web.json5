@@ -1,0 +1,14 @@
+// A spider's web, spat from a distance: its target cannot move for a few seconds.
+{
+  name: "Web",
+  type: "physical",
+  tags: ["school.nature"],
+  target: "enemy",
+  range: 25,
+  los: true,
+  cooldown: 14,
+  states: {
+    spit: { length: { travel: 25 }, next: "stick" },
+    stick: { enter: [{ do: "cast", skill: "webbed", group: "target" }] },
+  },
+}

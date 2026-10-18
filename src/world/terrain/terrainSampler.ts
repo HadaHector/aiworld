@@ -99,6 +99,8 @@ export interface TerrainWorld {
   bridges: Bridge[];
   /** Each area's own roll of its biome, by area id (see cells/areaField.ts). */
   areaBiomes: BiomeDefinition[];
+  /** Which areas touch each area, by area id (see cells/areaField.ts). */
+  areaNeighbours: Map<number, number[]>;
 }
 
 const OCEAN_FLOOR_DEPTH = -14;
@@ -176,7 +178,7 @@ export function createZoneHeight(seed: number): (worldX: number, worldZ: number,
 
 /** Composes the land's shape + biome zoning + height noise into one queryable per-position sample. */
 export function createTerrainSampler(seed: number, content: WorldContent): TerrainWorld {
-  const { sampleArea, worldExtent, areaBounds, areaNames, landCellSites, nameGenerator, areaBiomes } =
+  const { sampleArea, worldExtent, areaBounds, areaNames, landCellSites, nameGenerator, areaBiomes, areaNeighbours } =
     createAreaSampler(seed, content);
   const oceanNoise2D = createBaseNoise2D(deriveSeed(seed, OCEAN_SALT));
   const zoneHeight = createZoneHeight(seed);
@@ -393,5 +395,5 @@ export function createTerrainSampler(seed: number, content: WorldContent): Terra
   settleOnGround(compoundLayouts, sampleTerrain);
   spillField = createSpillField(compoundLayouts, spillMaterials(content));
 
-  return { sampleTerrain, worldExtent, areaBounds, areaNames, settlements, features, roads, settlementLayouts, compoundLayouts, bridges, areaBiomes };
+  return { sampleTerrain, worldExtent, areaBounds, areaNames, settlements, features, roads, settlementLayouts, compoundLayouts, bridges, areaBiomes, areaNeighbours };
 }

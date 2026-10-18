@@ -39,6 +39,9 @@ export interface ItemWorld {
   /** Makes an entity of a template on the ground at a point - an item dropped there. */
   spawn(dimension: string, template: string, x: number, z: number, facing: number): Entity | undefined;
   despawn(entity: Entity): void;
+  /** Where an emptied chest's time to come back is kept, by its placement key, so a dimension loaded
+   *  again does not refill it early (see CREATURES.md, *Death, corpses and respawn*). */
+  delta?: { get(key: string): number | undefined; set(key: string, until: number): void };
 }
 
 /**
@@ -72,6 +75,10 @@ export interface ItemSystem {
   wear(entity: Entity, what: "death" | "weapon" | "armour"): void;
   /** Whether an entity has loot to take, or a chest that would roll some when opened. */
   lootable(entity: Entity): boolean;
+  /** Whether an entity holds loot that nobody has taken yet (a corpse not emptied). */
+  hasLoot(entity: Entity): boolean;
+  /** An entity is going: whatever its loot holds goes from the store with it. */
+  release(entity: Entity): void;
 }
 
 export function createItemSystem(game: GameRules, items: ItemRules, world: ItemWorld, hooks: ItemHooks = NO_ITEM_HOOKS): ItemSystem {
@@ -120,6 +127,8 @@ export function createItemSystem(game: GameRules, items: ItemRules, world: ItemW
 
   /** Who a corpse's loot counts as rolled for: the top of its threat table, if it keeps one. */
   function looterOf(entity: Entity): Entity | undefined {
+    // The dead have no table left: who was on it when it died.
+    if (entity.combat?.dead && entity.combat.killers.length > 0) return world.entity(entity.combat.killers[0]);
     let best: Entity | undefined;
     let most = -Infinity;
     for (const [id, entry] of entity.combat?.threat ?? []) {
@@ -140,6 +149,7 @@ export function createItemSystem(game: GameRules, items: ItemRules, world: ItemW
     if (def?.container) {
       loot.rolled = false;
       loot.respawnAt = world.time() + def.respawn;
+      if (source.key) world.delta?.set(source.key, loot.respawnAt);
     } else if (source.template.id === GROUND_ITEM_TEMPLATE) {
       world.despawn(source);
     }
@@ -187,6 +197,8 @@ export function createItemSystem(game: GameRules, items: ItemRules, world: ItemW
         updateGear(entity);
       }
       if (def.loot) entity.loot = { items: [], money: new Array<number>(items.currencies.length).fill(0), rolled: false, armed: true, rolls: 0, respawnAt: 0, expires: Infinity };
+      // A chest emptied before its dimension was last unloaded stays empty until its time.
+      if (def.container && entity.loot && entity.key) entity.loot.respawnAt = world.delta?.get(entity.key) ?? 0;
     },
 
     step(dimensions) {
@@ -329,6 +341,13 @@ export function createItemSystem(game: GameRules, items: ItemRules, world: ItemW
       }
     },
 
+    hasLoot: (entity) => !!entity.loot && hasContents(entity.loot),
+    release(entity) {
+      const loot = entity.loot;
+      if (!loot) return;
+      for (const id of loot.items) if (id != null) store.remove(id);
+      loot.items = [];
+    },
     lootable(entity) {
       const loot = entity.loot;
       if (!loot) return false;

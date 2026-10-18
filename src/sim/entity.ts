@@ -5,6 +5,7 @@ import type { PlayerBody } from "./playerBody";
 import type { EntityAppearance } from "./protocol";
 import type { CombatPart } from "./skills/types";
 import type { Belongings, LootPart } from "./items/items";
+import type { CreaturePart } from "./creatures/creature";
 import { createCombatPart } from "./skills/unit";
 import { hashString } from "../world/content/dimensions";
 
@@ -42,6 +43,8 @@ export interface Entity {
   combat?: CombatPart;
   /** A capsule walking the dimension's collision: players now, creatures that walk later. */
   body?: PlayerBody | null;
+  /** Its kind, spawn point and brain (see CREATURES.md): a creature's. */
+  creature?: CreaturePart;
   /** Its bag, bank, equipment and wallet (see ITEMS.md): a player's. */
   belongings?: Belongings;
   /** What it holds for others to take: a corpse's loot, a chest's, an item on the ground. */

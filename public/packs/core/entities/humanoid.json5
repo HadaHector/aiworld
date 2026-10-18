@@ -1,0 +1,9 @@
+// A base for humanoid creatures (see CREATURES.md): bandits and their like, drawn with bodies.
+{
+  extends: "creature",
+  abstract: true,
+  resources: ["health", "mana"],
+  threat: true,
+  spells: [{ skill: "autoAttack" }],
+  look: { race: "human", outfit: "scout", height: 1.8, radius: 0.4, color: [0.6, 0.35, 0.3] },
+}

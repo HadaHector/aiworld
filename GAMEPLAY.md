@@ -302,7 +302,13 @@ A proposal, to be confirmed. Each step gets its own plan document.
 5. **Character spike: done** - see [CHARACTERS.md](CHARACTERS.md). A body built from curves along
    the bones, a painted atlas, gear as geometry, three races and two sexes, procedural animation, on
    the player in the game; judged good enough, and the approach stays.
-6. **Creatures:** per-zone rosters, spawning in ranges, simple AI, respawn.
+6. **Creatures: done** - see [CREATURES.md](CREATURES.md). Species templates in packs that make a
+   kind per variant, with traits picked from the world seed; rosters per zone, and zone levels in
+   rings from the start as a stub; spawn points with stable keys derived from the seed - lone
+   creatures, groups and camps - filled only near players and dropped when nobody is near; a brain
+   on the server (wander, aggro, group aggro, chase, tactics, flee, leash and evade); corpses with
+   loot, respawn at a random spot from the world delta; kill records for progression to read.
+   Bodies stay capsules (bandits have humanoid bodies); beast bodies are a later step.
 7. **Items: done** - see [ITEMS.md](ITEMS.md). Item types from packs and from templates that
    generate them per seed, rolled stats, rarity, durability and repair, stacks, currencies; a bag, a
    bank and equipment that adds modifiers and shows on the body; loot tables, loot from the dummy,

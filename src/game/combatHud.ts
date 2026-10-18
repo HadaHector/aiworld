@@ -1,5 +1,5 @@
 import type { EntityMirror, MirroredEntity } from "./entityMirror";
-import type { GameRules } from "../sim/rules/gameRules";
+import { PLAYER_TEMPLATE, type GameRules } from "../sim/rules/gameRules";
 import type { CombatEvent } from "../sim/protocol";
 import { describeEvent } from "../sim/skills/combatLog";
 import { EVENT_KIND } from "../sim/skills/events";
@@ -132,7 +132,8 @@ export function createCombatHud(options: CombatHudOptions): CombatHud {
     const level = entity.stats.get(rules.statIndex.get("level") ?? -1);
     const flags = FLAG_NAMES.filter((_, i) => entity.flags & (1 << i) && i < 8);
     const hostile = target && entity.template?.hostility === "hostile";
-    frame.name.style.color = hostile ? "#ff8a7a" : "#eee";
+    const neutral = target && entity.template?.hostility === "neutral" && entity.templateId !== PLAYER_TEMPLATE;
+    frame.name.style.color = hostile ? "#ff8a7a" : neutral ? "#ffe27a" : "#eee";
     text(frame.name, `${entity.name}${level !== undefined ? ` · level ${level}` : ""}${flags.length ? ` · ${flags.join(", ")}` : ""}`);
     drawBars(frame, entity);
     // Cast bar.

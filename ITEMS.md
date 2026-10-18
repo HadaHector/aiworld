@@ -469,9 +469,12 @@ Each leaves the game working: dev server, `npm run probe`, `npm run server`, `np
 - **Generated types**: a template's `unscaled` lists stats the budgets leave alone (a weapon's
   speed); a zero roll adds no modifier. The core pack makes 33 types from two templates beside 17
   authored ones.
-- **The looter** a corpse's conditions read is the top of its threat table; with none, its stats are
-  0 - so the dummy's rusty key drops to a player under level 5 who has not fought it.
+- **The looter** a corpse's conditions read is the top of its threat table - for a dead creature,
+  who was on it when it died (`combat.killers`, CREATURES.md); with none, its stats are 0 - so the dummy's rusty key drops to a player under level 5 who has not fought it.
 - **`rules/items.json5` is replaced whole** by a later pack, like other files, not key by key.
+- **Chests on the world delta** (CREATURES.md): an emptied chest's time to come back is kept under
+  its placement key, so a dimension unloaded and loaded again does not refill it early. A despawned
+  corpse's items go from the store with it (`ItemSystem.release`).
 - **Loot is opened with E only**; a click on a corpse still targets it.
 - **The probe** (`scripts/probe/items.mjs`, 123 checks, about 10 s) covers rules, rolls, loot,
   belongings, equipment and durability on the item system alone, and the boundary on a real

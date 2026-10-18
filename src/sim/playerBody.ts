@@ -21,6 +21,8 @@ export interface PlayerBody {
   readonly facing: number;
   /** `speedScale` multiplies walking and running pace: the entity's `speed` stat (see ENTITIES.md). */
   step: (deltaSeconds: number, input: BodyInput, speedScale?: number) => void;
+  /** Turns it to a facing where it stands - a creature turning to its target (CREATURES.md). */
+  face: (facing: number) => void;
   /** Puts it on the ground at a point. */
   teleport: (x: number, z: number) => void;
   /** Puts its feet at a point - on a roof, a floor, anywhere - pushed out of whatever is there. */
@@ -86,6 +88,9 @@ export function createPlayerBody(
       return facing;
     },
     step,
+    face: (to) => {
+      facing = to;
+    },
     teleport: (x, z) => {
       forced = null;
       motor.teleport({ x, y: heightAt(x, z), z });

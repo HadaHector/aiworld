@@ -16,6 +16,9 @@ import { createItemSystem, type ItemSystem } from "./items/itemSystem";
 import { createItemReplicator, type ItemReplicator } from "./items/itemReplication";
 import { handleItemMessage } from "./items/itemMessages";
 import type { ItemHooks } from "./items/itemHooks";
+import type { CreatureRules } from "./rules/creatureRules";
+import { createCreatureSystem, type CreatureSystem, type KillRecord } from "./creatures/system";
+import { createWorldDelta, type WorldDelta } from "./creatures/worldDelta";
 
 /** Each step spends at most this long bringing in collision chunks per dimension (always at least one). */
 const CHUNK_BUDGET_MS = 2;
@@ -74,6 +77,10 @@ export interface ServerOptions {
   items?: ItemRules;
   /** How items cast skills - the ability system's own hooks unless a host says otherwise. */
   itemHooks?: ItemHooks;
+  /** Creature kinds, rosters and spawning (see CREATURES.md); left out, no creatures spawn. */
+  creatures?: CreatureRules;
+  /** Called for every creature killed - what progression turns into XP (CREATURES.md, *Kills and XP*). */
+  onKill?: (kill: KillRecord) => void;
 }
 
 export interface Server {
@@ -95,6 +102,10 @@ export interface Server {
     readonly skills: SkillSystem;
     /** The item system (ITEMS.md), null without item rules. */
     readonly items: ItemSystem | null;
+    /** The creature system (CREATURES.md), null without creature rules. */
+    readonly creatures: CreatureSystem | null;
+    /** What has been cleared or emptied, until when (GAMEPLAY.md, *World delta*). */
+    readonly delta: WorldDelta;
   };
   /** The server's clock: seconds stepped since it started. */
   readonly time: number;
@@ -123,6 +134,7 @@ export function createServer(options: ServerOptions): Server {
   let nextId = 1;
   let tick = 0;
   let time = 0;
+  const delta = createWorldDelta(() => time);
 
   /** Any entity by id: a player's wherever it is, or one in a loaded dimension. */
   function findEntity(id: number): Entity | undefined {
@@ -215,9 +227,34 @@ export function createServer(options: ServerOptions): Server {
             skills.leave(entity, true);
             loaded.get(entity.dimension)?.entities.delete(entity.id);
           },
+          delta,
         },
         options.itemHooks ?? skills.items,
       )
+    : null;
+
+  /** The players standing in a dimension. */
+  const playersIn = (id: string): Entity[] => [...players.values()].filter((p) => p.entity.dimension === id && p.entity.body).map((p) => p.entity);
+
+  const creatureSystem: CreatureSystem | null = options.creatures
+    ? createCreatureSystem(rules, options.creatures, skills, {
+        seed: options.seed,
+        time: () => time,
+        entity: findEntity,
+        spawn: (dimension, template, x, z, facing, key) => {
+          const dim = loaded.get(dimension);
+          return dim ? spawnIn(dim, template, x, z, facing, key) : undefined;
+        },
+        despawn: (entity) => {
+          skills.leave(entity, true);
+          itemSystem?.release(entity);
+          loaded.get(entity.dimension)?.entities.delete(entity.id);
+        },
+        playersIn,
+        lineOfSight: (dimension, from, to) => skills.sys.world.lineOfSight(dimension, from, to),
+        hasLoot: (entity) => itemSystem?.hasLoot(entity) ?? false,
+        delta,
+      })
     : null;
 
   /** Makes the entities a dimension's definition places, standing on its ground. */
@@ -242,6 +279,7 @@ export function createServer(options: ServerOptions): Server {
           if (slot.dropped) return;
           slot.dimension = createDimension(id, world);
           placeEntities(slot.dimension, definition);
+          creatureSystem?.load(slot.dimension, definition);
           loaded.set(id, slot.dimension);
         },
         (error) => {
@@ -259,6 +297,7 @@ export function createServer(options: ServerOptions): Server {
     slot.dropped = true;
     slots.delete(id);
     loaded.delete(id);
+    creatureSystem?.unload(id);
   }
 
   /** Takes a player out of where it is and sends it to a dimension, at a point. */
@@ -319,7 +358,7 @@ export function createServer(options: ServerOptions): Server {
         const joined: Player = { entity, arrival: first.spawn, arrived: false, input: { moveX: 0, moveZ: 0, run: false, jump: false }, ackSeq: 0 };
         players.set(entity.id, joined);
         connection.player = joined;
-        connection.end.send({ type: "welcome", protocol: PROTOCOL_VERSION, playerId: entity.id, config: options.config, packs: options.packs ?? [], rules: rules.hash, items: options.items?.hash ?? 0, seed: options.seed >>> 0 });
+        connection.end.send({ type: "welcome", protocol: PROTOCOL_VERSION, playerId: entity.id, config: options.config, packs: options.packs ?? [], rules: rules.hash, items: options.items?.hash ?? 0, creatures: options.creatures?.hash ?? 0, seed: options.seed >>> 0 });
         transfer(connection, joined, first, first.spawn);
         return;
       }
@@ -482,6 +521,11 @@ export function createServer(options: ServerOptions): Server {
       const tried = input.jump || input.moveX !== 0 || input.moveZ !== 0;
       if (entity.combat && tried && !entity.body.pushed && Math.hypot(entity.x - x, entity.y - y, entity.z - z) > 0.02) entity.combat.moved = true;
     }
+    // Creatures think and move (CREATURES.md), then every magic runs.
+    if (creatureSystem) {
+      creatureSystem.step(deltaSeconds);
+      if (options.onKill) for (const kill of creatureSystem.drainKills()) options.onKill(kill);
+    }
     skills.step(loaded.values());
     const events = skills.drainEvents();
     itemSystem?.combatEvents(events);
@@ -520,6 +564,8 @@ export function createServer(options: ServerOptions): Server {
       entity: findEntity,
       skills,
       items: itemSystem,
+      creatures: creatureSystem,
+      delta,
     },
   };
 }

@@ -1,0 +1,24 @@
+// Boars (see CREATURES.md): neutral until hit, then a gore; they run at low health.
+{
+  entity: "beast",
+  name: "{variant} Boar",
+  family: "beast",
+  hostility: "neutral",
+  stats: { stamina: 4, strength: 10, agility: 6, armor: 40, weaponMin: 2, weaponMax: 5, weaponSpeed: 3.2 },
+  perLevel: { stamina: 1.8, strength: 1.5, agility: 1, armor: 15, weaponMin: 1.2, weaponMax: 1.8 },
+  spells: [{ skill: "gore" }],
+  tactics: [{ skill: "gore", every: [14, 18] }],
+  speed: { walk: 0.2, run: 0.4 },
+  group: { size: [2, 3], spread: 5 },
+  habitat: { meadow: 3, bluebellWood: 2, autumnWood: 3, maquis: 2, sageHills: 2, savanna: 2, rainforest: 1, cloudForest: 1, reedMarsh: 1, redBush: 1 },
+  flee: { at: 0.2, time: 6 },
+  respawn: [240, 360],
+  loot: "boar",
+  look: { height: 0.9, radius: 0.6, color: [0.36, 0.28, 0.22] },
+  variants: [
+    { id: "bristle", name: "Bristleback", habitat: ["meadow", "bluebellWood", "autumnWood"] },
+    { id: "dust", name: "Dust", habitat: ["savanna", "sageHills", "redBush", "maquis"], look: { color: [0.62, 0.48, 0.34] } },
+    { id: "mire", name: "Mire", habitat: ["reedMarsh", "rainforest", "cloudForest"], look: { color: [0.25, 0.27, 0.2] }, stats: { stamina: 6 } },
+  ],
+  traits: { pick: [0, 1], pool: ["thickHide", "old"] },
+}

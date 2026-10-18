@@ -1,0 +1,2 @@
+// Foaming at the mouth: its bites leave a bleeding wound.
+{ name: "Rabid", spells: [{ skill: "rabidBite" }], tactics: [{ skill: "rabidBite", every: [12, 16] }] }

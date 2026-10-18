@@ -25,6 +25,7 @@ export function createCombatPart(threat: boolean): CombatPart {
     lastHostile: -Infinity,
     forceCombat: false,
     dead: false,
+    killers: [],
     expires: Infinity,
     moved: false,
   };

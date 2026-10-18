@@ -9,7 +9,7 @@ import type { CombatEvent } from "./skills/events";
 export type { CombatEvent } from "./skills/events";
 
 /** Bumped whenever a message changes shape. */
-export const PROTOCOL_VERSION = 7;
+export const PROTOCOL_VERSION = 8;
 
 // --- Client to server ------------------------------------------------------------------------
 
@@ -296,6 +296,9 @@ export interface Welcome {
   rules: number; // u32
   /** A hash of the item rules' tables (see ITEMS.md): items are sent by type id and roll. */
   items: number; // u32
+  /** A hash of the creature catalogue (see CREATURES.md): kinds are templates sent by id, and their
+   *  traits come from the seed. 0 when the server runs no creatures. */
+  creatures: number; // u32
   /** The world seed: item types are generated from it, so a client makes the same catalogue. */
   seed: number; // u32
 }

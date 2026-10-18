@@ -1,0 +1,9 @@
+// Frost Bite's slow.
+{
+  name: "Chilled",
+  tags: ["school.frost"],
+  display: "debuff",
+  dispel: "magic",
+  stacking: { per: "host" },
+  states: { chilled: { length: 6, hold: [{ do: "modifier", stat: "speed", kind: "percent", value: -40 }] } },
+}

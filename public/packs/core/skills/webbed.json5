@@ -1,0 +1,9 @@
+// Web's root.
+{
+  name: "Webbed",
+  tags: ["root"],
+  display: "debuff",
+  dispel: "magic",
+  stacking: { per: "host", duration: "longer" },
+  states: { webbed: { length: 3, hold: [{ do: "flag", flags: ["rooted"] }] } },
+}

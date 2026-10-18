@@ -24,6 +24,7 @@ import { ContentError, formatIssue } from "./world/content/contentReader";
 import type { WorldContent } from "./world/content/worldContent";
 import { checkPlacements, resolveGameRules, type GameRules } from "./sim/rules/gameRules";
 import { resolveItemRules, type ItemRules } from "./sim/rules/itemRules";
+import { resolveCreatureRules, type CreatureRules } from "./sim/rules/creatureRules";
 import { checkSkillRefs } from "./sim/rules/skillRules";
 import { createBelongingsMirror } from "./game/belongingsMirror";
 import { gearOfItems } from "./game/itemGear";
@@ -59,6 +60,7 @@ let packSet: PackSet;
 let startContent: WorldContent;
 let gameRules: GameRules;
 let itemRules: ItemRules;
+let creatureRules: CreatureRules;
 try {
   loadingScreen.update("Loading content packs", 0, 0);
   packSet = await loadPackSet();
@@ -66,6 +68,9 @@ try {
   // Stats, resources and entity templates (see ENTITIES.md): once for the page, not per dimension.
   gameRules = resolveGameRules(packSet.sources);
   checkPlacements(gameRules, startContent.dimensions);
+  // Creatures (see CREATURES.md): kinds depend on the world seed, and join the templates before the
+  // item rules check their loot.
+  creatureRules = resolveCreatureRules(packSet.sources, gameRules, WORLD_SEED);
   // Items (see ITEMS.md): generated types depend on the world seed; the skills items name are checked.
   itemRules = resolveItemRules(packSet.sources, gameRules, WORLD_SEED);
   checkSkillRefs(gameRules, itemRules.abilityRefs);
@@ -92,6 +97,7 @@ const server = createServer({
   dimensions: startContent.dimensions,
   rules: gameRules,
   items: itemRules,
+  creatures: creatureRules,
   loadDimension: (definition) => new Promise<DimensionWorld>((resolve) => built.set(definition.id, resolve)),
 });
 const channel = createLocalChannel();
@@ -127,6 +133,7 @@ function takeServerMessages(): void {
     if (belongings.apply(message)) continue;
     if (message.type === "welcome") {
       playerId = message.playerId;
+      if (message.creatures !== creatureRules.hash) console.warn(`The server's creatures (${message.creatures.toString(16)}) differ from this page's (${creatureRules.hash.toString(16)}): creatures may show as the wrong kinds.`);
       if (message.items !== itemRules.hash) console.warn(`The server's item rules (${message.items.toString(16)}) differ from this page's (${itemRules.hash.toString(16)}): items may show as the wrong things.`);
       if (message.rules !== gameRules.hash) console.warn(`The server's game rules (${message.rules.toString(16)}) differ from this page's (${gameRules.hash.toString(16)}): stats and resources may show under the wrong names.`);
     } else if (message.type === "transfer") {
@@ -321,6 +328,19 @@ function debugCommand(message: ClientMessage): void {
 }
 
 /** Makes an entity from a template a few metres in front of the player. */
+/** Spawn points near the player as map dots: red hostile, yellow neutral, purple camps; grey while
+ *  all of a point's members are dead. */
+function creaturePoints(radius: number): { x: number; z: number; color: string; title: string }[] {
+  const own = mirror.entities.get(playerId);
+  if (!own || !server.debug.creatures) return [];
+  return server.debug.creatures.debug.points(currentDimension, own.x, own.z, radius).map((p) => {
+    const dead = p.members.every((m) => server.debug.delta.get(m.key) !== undefined);
+    const hostile = p.members.some((m) => m.kind.template.hostility === "hostile");
+    const color = dead ? "rgb(140,140,140)" : p.camp ? "rgb(190,120,255)" : hostile ? "rgb(235,70,60)" : "rgb(240,215,60)";
+    return { x: p.x, z: p.z, color, title: `${p.key}: ${p.camp ? `${p.camp.id}, ` : ""}${p.members.map((m) => `${m.kind.template.name} L${m.level}`).join(", ")}` };
+  });
+}
+
 function spawnInFront(template: string): void {
   const own = mirror.entities.get(playerId);
   if (!own) return;
@@ -589,6 +609,46 @@ function gotoLoaded(target: Partial<ViewSnapshot> & { x: number; z: number }, it
     addPlayer,
     despawn: (entity: number) => debugCommand({ type: "debugDespawn", entity }),
     panel: entityPanel,
+  },
+  /** Creatures (see CREATURES.md), from this page's own server - single player only. */
+  creatures: {
+    rules: creatureRules,
+    /** Every kind this world has, with its traits. */
+    kinds: () => creatureRules.kindList.map((k) => `${k.id}: ${k.template.name}${k.traits.length ? ` (${k.traits.join(", ")})` : ""}`),
+    /** The zone the player stands in: its ring, level band, roster and camps. */
+    zone() {
+      const own = mirror.entities.get(playerId);
+      const zone = own && server.debug.creatures?.debug.zoneAt(currentDimension, own.x, own.z);
+      return zone && { id: zone.id, name: zone.name, biome: zone.biome, ring: zone.ring, levels: zone.levels, roster: zone.roster.map((r) => `${r.kind.id} ${r.weight.toFixed(1)}`), camps: zone.camps.map((c) => c.camp.id) };
+    },
+    /** The spawn points within `radius` of the player, nearest first, with what stands at each and
+     *  when its dead come back. */
+    points(radius = 300) {
+      const own = mirror.entities.get(playerId);
+      if (!own || !server.debug.creatures) return [];
+      return server.debug.creatures.debug
+        .points(currentDimension, own.x, own.z, radius)
+        .map((p) => ({ key: p.key, distance: Math.round(Math.hypot(p.x - own.x, p.z - own.z)), x: Math.round(p.x), z: Math.round(p.z), camp: p.camp?.id ?? "", members: p.members.map((m) => `${m.kind.id} L${m.level}${server.debug.delta.get(m.key) !== undefined ? ` (back in ${Math.ceil(server.debug.delta.get(m.key)! - server.time)} s)` : ""}`) }))
+        .sort((a, b) => a.distance - b.distance);
+    },
+    /** Marks the spawn points within `radius` on the debug map (M); `showPoints(0)` clears them. */
+    showPoints(radius = 800) {
+      const points = radius > 0 ? creaturePoints(radius) : null;
+      view?.debugMap.setSpawnPoints(points);
+      return points?.length ?? 0;
+    },
+    /** Makes a creature of a kind 6 m in front of the player, at a level (the zone's lowest if left out). */
+    spawn(kind: string, level?: number) {
+      const own = mirror.entities.get(playerId);
+      if (!own) return undefined;
+      return server.debug.creatures?.debug.spawn(currentDimension, kind, own.x + Math.sin(own.facing) * 6, own.z + Math.cos(own.facing) * 6, level)?.id;
+    },
+    /** What is dead and until when (the world delta). */
+    delta: () => server.debug.delta.entries().map(([key, until]) => `${key}: back in ${Math.ceil(until - server.time)} s`),
+    /** Kills since the last call (what progression will turn into XP). */
+    kills: () => server.debug.creatures?.drainKills() ?? [],
+    /** The server's own creature system. */
+    server: () => server.debug.creatures,
   },
   /** Items (see ITEMS.md): what this page was told of the own belongings, and the messages a
    *  player sends. Containers: 0 bag, 1 bank, 2 equipment. */

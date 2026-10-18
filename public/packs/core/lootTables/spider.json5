@@ -1,0 +1,10 @@
+// What a giant spider drops.
+{
+  rolls: [1, 2],
+  pick: [
+    { weight: 55, item: "spiderSilk", count: [1, 3] },
+    { weight: 20, item: "venomSac" },
+    { weight: 25 },
+  ],
+  always: [{ money: [2, 8] }],
+}

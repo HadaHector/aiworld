@@ -1,0 +1,8 @@
+// What a leashing creature is given (see CREATURES.md, *The brain*): immune while it runs home. Its
+// brain ends it on arriving.
+{
+  name: "Evading",
+  display: "buff",
+  stacking: { per: "host" },
+  states: { evading: { hold: [{ do: "flag", flags: ["immune"] }] } },
+}

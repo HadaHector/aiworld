@@ -1,0 +1,11 @@
+// What a wolf drops (see CREATURES.md).
+{
+  rolls: [1, 2],
+  pick: [
+    { weight: 45, item: "wolfPelt" },
+    { weight: 30, item: "wolfFang", count: [1, 2] },
+    { weight: 15, item: "brokenTooth", count: [1, 3] },
+    { weight: 10 },
+  ],
+  always: [{ money: [1, 6] }],
+}

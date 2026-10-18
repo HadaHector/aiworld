@@ -1,0 +1,2 @@
+// Hard to cut: more armour and health.
+{ name: "Thick-hided", modifiers: [{ stat: "armor", kind: "percent", value: 40 }, { stat: "maxHealth", kind: "percent", value: 10 }] }

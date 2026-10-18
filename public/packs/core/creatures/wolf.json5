@@ -1,0 +1,24 @@
+// Wolves (see CREATURES.md): hostile packs that come together. One kind per variant; the world seed
+// gives each kind its traits.
+{
+  entity: "beast",
+  name: "{variant} Wolf",
+  family: "beast",
+  hostility: "hostile",
+  stats: { stamina: 3, strength: 8, agility: 12, armor: 20, weaponMin: 2, weaponMax: 4, weaponSpeed: 3 },
+  perLevel: { stamina: 1.5, strength: 1.5, agility: 1.5, armor: 10, weaponMin: 1.1, weaponMax: 1.6 },
+  spells: [{ skill: "bite" }],
+  tactics: [{ skill: "bite", every: [8, 12] }],
+  speed: { walk: 0.25, run: 0.45 },
+  group: { size: [2, 3], spread: 6 },
+  habitat: { meadow: 2, bluebellWood: 3, autumnWood: 3, snowyTaiga: 3, frostSteppe: 2, heatherMoor: 2, alpineMeadow: 1, windsweptFell: 2, greenAlps: 1, savanna: 1 },
+  respawn: [240, 360],
+  loot: "wolf",
+  look: { height: 1.0, radius: 0.55, color: [0.45, 0.42, 0.38] },
+  variants: [
+    { id: "timber", name: "Timber", habitat: ["meadow", "bluebellWood", "autumnWood", "heatherMoor", "alpineMeadow", "greenAlps"] },
+    { id: "frost", name: "Frost", habitat: ["snowyTaiga", "frostSteppe", "windsweptFell"], look: { color: [0.85, 0.88, 0.92] }, stats: { armor: 35 }, spells: [{ skill: "frostBite" }], tactics: [{ skill: "frostBite", every: [14, 18] }] },
+    { id: "plains", name: "Plains", habitat: ["meadow", "savanna"], look: { color: [0.7, 0.58, 0.4] }, never: ["thickHide"] },
+  ],
+  traits: { pick: [0, 1], pool: ["rabid", "thickHide", "swift", "old"] },
+}

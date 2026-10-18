@@ -1,0 +1,23 @@
+// A boar's gore: it rushes in and knocks its target off its feet for a moment.
+{
+  name: "Gore",
+  type: "physical",
+  tags: ["melee"],
+  target: "enemy",
+  range: 20,
+  los: true,
+  cooldown: 12,
+  states: {
+    rush: {
+      enter: [{ do: "move", group: "caster", kind: "dash", speed: 22, toTarget: true }],
+      length: { travel: 22 },
+      next: "hit",
+    },
+    hit: {
+      enter: [
+        { do: "damage", group: "target", amount: { add: ["caster.weaponMax", { div: ["caster.strength", 6] }] } },
+        { do: "cast", skill: "goreStun", group: "target" },
+      ],
+    },
+  },
+}

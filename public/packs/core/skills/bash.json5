@@ -1,0 +1,20 @@
+// A bandit thug's shield bash: a hit that sunders armour.
+{
+  name: "Bash",
+  type: "physical",
+  weapon: true,
+  tags: ["melee"],
+  target: "enemy",
+  range: 5,
+  facing: true,
+  cooldown: 6,
+  states: {
+    bash: {
+      enter: [
+        { do: "animation", name: "swing" },
+        { do: "damage", group: "target", amount: { add: ["caster.weaponMax", { div: ["caster.strength", 5] }] } },
+        { do: "cast", skill: "sunder", group: "target" },
+      ],
+    },
+  },
+}

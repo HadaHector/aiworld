@@ -1,0 +1,18 @@
+// A beast's bite: an instant strike on top of its swings.
+{
+  name: "Bite",
+  type: "physical",
+  tags: ["melee"],
+  target: "enemy",
+  range: 5,
+  facing: true,
+  cooldown: 8,
+  states: {
+    bite: {
+      enter: [
+        { do: "animation", name: "swing" },
+        { do: "damage", group: "target", amount: { add: ["caster.weaponMax", { mul: ["random", 3] }, { div: ["caster.strength", 8] }] } },
+      ],
+    },
+  },
+}

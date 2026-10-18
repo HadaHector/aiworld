@@ -1,0 +1,12 @@
+// A bandit camp (see CREATURES.md, *Camps*): one group - pull one and the camp comes.
+{
+  habitat: { meadow: 1, bluebellWood: 1, autumnWood: 1, sageHills: 1, maquis: 1, savanna: 1, heatherMoor: 1, redBush: 1, desert: 1 },
+  radius: 12,
+  members: [
+    { kind: "bandit.thug", count: [2, 3] },
+    { kind: "bandit.hexer", count: [1, 2] },
+    { kind: "bandit.thug", levelOffset: 2, name: "Bandit Captain", at: "centre" },
+  ],
+  respawn: [480, 600],
+  wander: 4,
+}

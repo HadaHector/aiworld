@@ -1,0 +1,18 @@
+// A bandit hexer's bolt: a cast to kick.
+{
+  name: "Hex Bolt",
+  type: "spell",
+  tags: ["school.shadow", "spell"],
+  target: "enemy",
+  range: 30,
+  los: true,
+  facing: true,
+  gcd: true,
+  states: {
+    cast: { length: 2, bar: "cast", breakOnMove: true, interruptible: true, next: "travel" },
+    travel: { commit: true, length: { travel: 20 }, next: "hit" },
+    hit: {
+      enter: [{ do: "damage", group: "target", amount: { add: [6, { mul: ["random", 4] }, { mul: ["caster.intellect", 0.5] }] } }],
+    },
+  },
+}

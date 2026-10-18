@@ -129,8 +129,12 @@ export interface GameRules {
   applyOrder: number[];
   /** In id order. */
   resources: ResourceDef[];
-  /** Every template that can be made, by id - abstract ones left out. */
+  /** Every template that can be made, by id - abstract ones left out. Creature kinds (CREATURES.md)
+   *  join it when the creature rules are resolved. */
   templates: Map<string, TemplateDef>;
+  /** Every template as written with its `extends` chain merged, abstract ones too - what creature
+   *  species are built on (CREATURES.md). */
+  rawTemplates: ReadonlyMap<string, { obj: RawObject; file: string }>;
   statIndex: ReadonlyMap<string, number>;
   kindIndex: ReadonlyMap<string, number>;
   resourceIndex: ReadonlyMap<string, number>;
@@ -263,7 +267,7 @@ export function resolveGameRules(packs: PackSource[]): GameRules {
   const { skills, skillIndex, templateRefs } = readSkills(entries("skills"), { stats, statIndex, kindIndex, resourceIndex }, combat, issues);
 
   // --- templates ---
-  const templates = resolveTemplates(entries("entities"), { statIndex, kindIndex, resourceIndex, skillIndex, stats, health: health ?? 0 }, issues);
+  const { templates, rawTemplates } = resolveTemplates(entries("entities"), { statIndex, kindIndex, resourceIndex, skillIndex, stats, health: health ?? 0 }, issues);
   if (!templates.has(PLAYER_TEMPLATE)) issues.push({ file: "(all packs)", path: "", message: `no pack defines entities/${PLAYER_TEMPLATE}.json5 - what players are made from` });
   for (const ref of templateRefs) {
     if (!templates.has(ref.id)) issues.push({ file: ref.file, path: ref.path, message: `no template "${ref.id}" that can be made (known: ${[...templates.keys()].join(", ")})` });
@@ -278,7 +282,7 @@ export function resolveGameRules(packs: PackSource[]): GameRules {
     skills.map((s) => s.id).join(","),
   ].join("|");
   return {
-    stats, statOrder, modifierKinds, applyOrder, resources, templates, statIndex, kindIndex, resourceIndex, health: health!,
+    stats, statOrder, modifierKinds, applyOrder, resources, templates, rawTemplates, statIndex, kindIndex, resourceIndex, health: health!,
     skills, skillIndex, combat, hash: hashString(signature),
   };
 }
@@ -334,7 +338,7 @@ const TEMPLATE_KEYS = ["extends", "abstract", "name", "stats", "resources", "mod
 
 /** Merges each template's `extends` chain - objects key by key, the child winning; lists whole - and
  *  reads the result. Abstract templates are left out of what is returned. */
-function resolveTemplates(entries: Entry[], context: TemplateContext, issues: ContentIssue[]): Map<string, TemplateDef> {
+function resolveTemplates(entries: Entry[], context: TemplateContext, issues: ContentIssue[]): { templates: Map<string, TemplateDef>; rawTemplates: Map<string, { obj: RawObject; file: string }> } {
   const raw = new Map(entries.map((e) => [e.id, e]));
   const merged = new Map<string, RawObject | null>();
 
@@ -363,18 +367,30 @@ function resolveTemplates(entries: Entry[], context: TemplateContext, issues: Co
   };
 
   const templates = new Map<string, TemplateDef>();
+  const rawTemplates = new Map<string, { obj: RawObject; file: string }>();
   for (const entry of entries) {
     const obj = flatten(entry.id, []);
     if (!obj) continue;
+    rawTemplates.set(entry.id, { obj, file: entry.file });
     const reader = new Reader(issues, entry.file);
     if (reader.boolean(obj, "abstract", "", false)) continue;
     const items = obj.items === undefined ? null : reader.object(obj.items, "items");
     templates.set(entry.id, { ...readTemplate(entry.id, obj, reader, context), items, file: entry.file });
   }
-  return templates;
+  return { templates, rawTemplates };
 }
 
-function mergeTemplate(base: RawObject, child: RawObject): RawObject {
+/** Reads a template made in code from written parts - a creature kind (CREATURES.md) - as a file's
+ *  template is read, its problems reported against `reader`'s file. */
+export function makeTemplate(rules: GameRules, id: string, obj: RawObject, reader: Reader): TemplateDef {
+  const { statIndex, kindIndex, resourceIndex, skillIndex, stats, health } = rules;
+  reader.onlyKeys(obj, "", TEMPLATE_KEYS);
+  const items = obj.items === undefined ? null : reader.object(obj.items, "items");
+  return { ...readTemplate(id, obj, reader, { statIndex, kindIndex, resourceIndex, skillIndex, stats, health }), items, file: reader.file };
+}
+
+/** Objects merge key by key, the child winning; anything else the child's replaces the base's. */
+export function mergeTemplate(base: RawObject, child: RawObject): RawObject {
   const result: RawObject = { ...base };
   for (const [key, value] of Object.entries(child)) {
     const under = base[key];
