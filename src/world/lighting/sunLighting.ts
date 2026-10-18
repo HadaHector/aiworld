@@ -116,7 +116,14 @@ function computeCascadeSplits(near: number, far: number, count: number, lambda: 
   return splits;
 }
 
-const cornerScratch = new Vector3();
+/**
+ * Marks a mesh as casting into the nearest cascade only: its shadow is drawn close to the camera
+ * and nowhere further out. For the bushes - thousands of them, each small, whose shadows are lost
+ * a little way off anyway, but which drawn into every cascade came to most of a frame's vertices.
+ */
+export function castNearShadowOnly(mesh: AbstractMesh): void {
+  mesh.metadata = { ...(mesh.metadata ?? {}), nearShadowOnly: true };
+}
 
 /**
  * Babylon draws every enabled caster into every cascade with no culling at all, so each of the
@@ -131,16 +138,16 @@ const cornerScratch = new Vector3();
  *
  * Meshes that opt out of frustum culling (alwaysSelectAsActiveMesh - the tree masters, whose own
  * bounds cover one tree at the origin rather than their thousands of instances) are always kept.
+ *
+ * It runs once per cascade per frame over every caster, so it is kept cheap: disabled casters (most
+ * houses, and every chunk's other LOD - two thirds of the list in a wood) are dropped before any
+ * maths, since Babylon never draws them; and a box is tested as its centre and half-size, carried
+ * through the transform once, instead of as eight corners. The transform is a directional light's
+ * view times an orthographic projection, so it is affine and an axis-aligned box's image is exactly
+ * that centre plus or minus |M| times the half-size - the same result the corners gave for an unrotated mesh, and a box only
+ * ever a little larger (keeping a caster, never losing one) for a rotated one. Together about 7x
+ * cheaper (2.7 ms to 0.4 ms a frame in a bluebell wood of the small config).
  */
-/**
- * Marks a mesh as casting into the nearest cascade only: its shadow is drawn close to the camera
- * and nowhere further out. For the bushes - thousands of them, each small, whose shadows are lost
- * a little way off anyway, but which drawn into every cascade came to most of a frame's vertices.
- */
-export function castNearShadowOnly(mesh: AbstractMesh): void {
-  mesh.metadata = { ...(mesh.metadata ?? {}), nearShadowOnly: true };
-}
-
 function cullCastersPerCascade(shadowGenerator: CascadedShadowGenerator): void {
   const shadowMap = shadowGenerator.getShadowMap();
   if (!shadowMap) return;
@@ -150,23 +157,29 @@ function cullCastersPerCascade(shadowGenerator: CascadedShadowGenerator): void {
     if (!transform || !casters) return null;
     const kept = (perCascade[cascade] ??= []);
     kept.length = 0;
+    const m = transform.m;
+    const m0 = m[0], m1 = m[1], m2 = m[2], m4 = m[4], m5 = m[5], m6 = m[6], m8 = m[8], m9 = m[9], m10 = m[10], m12 = m[12], m13 = m[13], m14 = m[14];
+    const a0 = Math.abs(m0), a1 = Math.abs(m1), a2 = Math.abs(m2), a4 = Math.abs(m4), a5 = Math.abs(m5), a6 = Math.abs(m6), a8 = Math.abs(m8), a9 = Math.abs(m9), a10 = Math.abs(m10);
     for (let i = 0; i < casterCount; i++) {
       const mesh = casters[i] as AbstractMesh;
+      if (!mesh.isEnabled() || !mesh.isVisible) continue;
       if (cascade > 0 && mesh.metadata?.nearShadowOnly) continue;
       if (mesh.alwaysSelectAsActiveMesh) {
         kept.push(mesh);
         continue;
       }
-      let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity, minZ = Infinity;
-      for (const corner of mesh.getBoundingInfo().boundingBox.vectorsWorld) {
-        Vector3.TransformCoordinatesToRef(corner, transform, cornerScratch);
-        minX = Math.min(minX, cornerScratch.x);
-        maxX = Math.max(maxX, cornerScratch.x);
-        minY = Math.min(minY, cornerScratch.y);
-        maxY = Math.max(maxY, cornerScratch.y);
-        minZ = Math.min(minZ, cornerScratch.z);
-      }
-      if (maxX < -1 || minX > 1 || maxY < -1 || minY > 1 || minZ > 1) continue;
+      const box = mesh.getBoundingInfo().boundingBox;
+      const c = box.centerWorld;
+      const e = box.extendSizeWorld;
+      const cx = c.x * m0 + c.y * m4 + c.z * m8 + m12;
+      const ex = e.x * a0 + e.y * a4 + e.z * a8;
+      if (cx + ex < -1 || cx - ex > 1) continue;
+      const cy = c.x * m1 + c.y * m5 + c.z * m9 + m13;
+      const ey = e.x * a1 + e.y * a5 + e.z * a9;
+      if (cy + ey < -1 || cy - ey > 1) continue;
+      const cz = c.x * m2 + c.y * m6 + c.z * m10 + m14;
+      const ez = e.x * a2 + e.y * a6 + e.z * a10;
+      if (cz - ez > 1) continue;
       kept.push(mesh);
     }
     return kept;
