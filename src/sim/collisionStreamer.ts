@@ -1,4 +1,5 @@
 import { buildChunkCollision } from "../world/terrain/chunkGround";
+import type { ChunkBuildRequest } from "../world/terrain/chunkGeometry";
 import type { TreeScatter } from "../world/foliage/treeScatter";
 import type { TerrainSampler } from "../world/terrain/terrainSampler";
 import type { WorldCollision } from "../world/worldCollision";
@@ -8,6 +9,12 @@ import type { PlacedBuildings } from "../world/buildings/buildingCollision";
  *  ground is the same heightfield the client draws near the player. */
 export const COLLISION_CHUNK_SIZE = 64;
 const SUBDIVISIONS = 24;
+
+/** What builds a chunk's collision: the same request for the same chunk every time, so whoever
+ *  else scatters its trees (see trunks.ts) gets the trees it holds. */
+export function collisionChunkRequest(cx: number, cz: number): ChunkBuildRequest {
+  return { size: COLLISION_CHUNK_SIZE, subdivisions: SUBDIVISIONS, detailSubdivisions: SUBDIVISIONS, originX: (cx + 0.5) * COLLISION_CHUNK_SIZE, originZ: (cz + 0.5) * COLLISION_CHUNK_SIZE };
+}
 
 /** A chunk comes in once its middle is this near a player, and goes again past UNLOAD_RADIUS. */
 const LOAD_RADIUS = 128;
@@ -39,7 +46,7 @@ export function createCollisionStreamer(
   const centre = (c: number): number => (c + 0.5) * COLLISION_CHUNK_SIZE;
 
   function build(cx: number, cz: number): void {
-    const request = { size: COLLISION_CHUNK_SIZE, subdivisions: SUBDIVISIONS, detailSubdivisions: SUBDIVISIONS, originX: centre(cx), originZ: centre(cz) };
+    const request = collisionChunkRequest(cx, cz);
     collision.setChunk(key(cx, cz), buildChunkCollision(request, context), request.originX, request.originZ, 0, SUBDIVISIONS);
     loaded.add(key(cx, cz));
   }

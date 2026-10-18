@@ -145,7 +145,15 @@ world needs no list of them and a 50 km world costs nothing until someone walks 
 - **Candidates**: one per cell of a lattice at `spacing` (default 80 m), moved by a roll within 0.4
   of a spacing of the cell's middle. A candidate is dropped when it stands in water or on ground too steep
   (`maxSlope`), on a road, inside a settlement or a compound's ground, inside a building, or within
-  `safeRadius` (default 60 m) of the dimension's spawn or a link.
+  `safeRadius` (default 60 m) of the dimension's spawn or a link. One that falls on a tree - in its
+  trunk, or its roots where they stand higher than a step - moves to the nearest spot with room for a
+  body, up to 16 m off, before it is dropped.
+- **Room for a body** (`src/sim/trunks.ts`): every spot a creature is put down at - the point, each
+  member's, a respawn, a wander goal - keeps a body's radius and some clear of every tree and building.
+  A tree is rings round its foot: how high its collision pieces stand at each distance, all the way
+  round, from its kind's hulls; it is in the way where a piece stands higher than a step and lower
+  than a head over the ground there. The trees are the ones the server's collision chunks scatter,
+  so the check holds whether that chunk's collision is in yet or not.
 - **What stands there** is drawn from the roster of the zone it is in: a kind, and how many - a
   lone creature, a pair, or the species' `group` size - or, with `campChance`, a camp. A small share
   of points (`emptyChance`) stay empty so the land is not a lattice.
@@ -414,7 +422,8 @@ Each leaves the game working: dev server, `npm run probe`, `npm run server`, `np
 - **Files**: `src/sim/rules/creatureRules.ts` (species to kinds, traits, camps, the config,
   `levelBand`); `src/sim/creatures/`: `zones.ts`, `spawnPoints.ts` (the lattice, `open` ground,
   `respawnSpot`), `worldDelta.ts`, `creature.ts` (the part and the brain's state), `brain.ts`,
-  `system.ts` (spawner, bodies, corpses, kills, debug). `scripts/server/huntBot.mjs`. Small additions:
+  `system.ts` (spawner, bodies, corpses, kills, debug); `src/sim/trunks.ts` (room for a body among
+  the trees and buildings, `Dimension.trunks`). `scripts/server/huntBot.mjs`. Small additions:
   `GameRules.rawTemplates` and `makeTemplate` (gameRules.ts), `areaNeighbours` (areaField.ts, through
   the terrain sampler), `PlayerBody.face`, `CombatPart.killers`, `ItemSystem.hasLoot`/`release` and
   `ItemWorld.delta`; `createServer` takes `creatures` and `onKill`, `server.debug` has `creatures`

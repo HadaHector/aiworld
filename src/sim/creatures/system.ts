@@ -1,5 +1,6 @@
 import type { DimensionDef } from "../../world/content/dimensions";
 import { hashString } from "../../world/content/dimensions";
+import { DEFAULT_MOTOR } from "../../world/collision/index";
 import { deriveSeed, mulberry32 } from "../../world/rng";
 import type { Dimension } from "../dimension";
 import { entityStat, type Entity } from "../entity";
@@ -91,6 +92,8 @@ interface DimensionState {
 const SPAWN_EVERY = 0.5;
 /** Seconds between drops of passed delta entries. */
 const PRUNE_EVERY = 10;
+/** How far a creature is put down from any trunk or wall: its body's radius, and some room. */
+const ROOM = DEFAULT_MOTOR.radius + 0.3;
 
 export function createCreatureSystem(rules: GameRules, creatures: CreatureRules, skills: SkillSystem, world: CreatureWorld): CreatureSystem {
   const { config } = creatures;
@@ -280,7 +283,7 @@ export function createCreatureSystem(rules: GameRules, creatures: CreatureRules,
     load(dimension, definition) {
       const zones = createZones(dimension.world, creatures, definition.spawn);
       const keepOut = [definition.spawn, ...definition.links.map((l) => l.at), ...definition.entities.map((e) => e.at)];
-      const field = createSpawnPointField(dimension.id, dimension.world, creatures, zones, keepOut);
+      const field = createSpawnPointField(dimension.id, dimension.world, creatures, zones, keepOut, (x, z) => dimension.trunks.clear(x, z, ROOM));
       states.set(dimension.id, { dimension, definition, zones, field, active: new Map(), loose: new Set(), looseNear: new Map() });
     },
     unload(id) {

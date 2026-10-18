@@ -42,6 +42,9 @@ const SETTLEMENT_CLEARANCE = 25;
 const YARD_CLEARANCE = 15;
 /** Ground under this much over the sea is the shore or under water. */
 const SHORE_HEIGHT = 0.6;
+/** How far a point that fell on a tree or a wall may move to find room, and in what steps. */
+const NUDGE = 16;
+const NUDGE_STEP = 1;
 
 export interface SpawnPointField {
   /** Every spawn point whose place is within `radius` of (x, z): worked out the first time it is
@@ -49,7 +52,7 @@ export interface SpawnPointField {
   near(x: number, z: number, radius: number): SpawnPoint[];
   /** The zones, by id. */
   zones: readonly Zone[];
-  /** Whether a creature may stand at a point: wild, dry, walkable ground. */
+  /** Whether a creature may stand at a point: wild, dry, walkable ground, with room for its body. */
   open(x: number, z: number): boolean;
 }
 
@@ -58,7 +61,15 @@ export interface SpawnPointField {
  * lattice at the rules' spacing, each candidate kept only on open wild ground, and what stands there
  * drawn from its zone's roster.
  */
-export function createSpawnPointField(dimension: string, world: WorldData, rules: CreatureRules, zones: readonly Zone[], keepOut: readonly { x: number; z: number }[]): SpawnPointField {
+export function createSpawnPointField(
+  dimension: string,
+  world: WorldData,
+  rules: CreatureRules,
+  zones: readonly Zone[],
+  keepOut: readonly { x: number; z: number }[],
+  /** Whether a body standing at a point is clear of every tree and building (see trunks.ts). */
+  roomAt: (x: number, z: number) => boolean = () => true,
+): SpawnPointField {
   const { config } = rules;
   const spacing = config.spacing;
   const cache = new Map<string, SpawnPoint | null>();
@@ -71,8 +82,8 @@ export function createSpawnPointField(dimension: string, world: WorldData, rules
     return Math.max(Math.abs(dx), Math.abs(dz), Math.abs(world.heightAt(x, z) - h));
   }
 
-  /** Whether a creature may stand at (x, z): wild, dry, walkable ground. */
-  function open(x: number, z: number): boolean {
+  /** Whether (x, z) is wild, dry, walkable ground - trees and walls aside. */
+  function ground(x: number, z: number): boolean {
     if (Math.abs(x) > half || Math.abs(z) > half) return false;
     const s = world.sampleTerrain(x, z);
     if (!s.isLand || s.height < SEA_LEVEL + SHORE_HEIGHT || s.lakeFactor > 0.05) return false;
@@ -82,6 +93,28 @@ export function createSpawnPointField(dimension: string, world: WorldData, rules
     for (const l of world.settlementLayouts) if (Math.hypot(x - l.x, z - l.z) < l.radius + SETTLEMENT_CLEARANCE) return false;
     for (const c of world.compoundLayouts) if (Math.hypot(x - c.yard.x, z - c.yard.z) < c.yard.radius + YARD_CLEARANCE) return false;
     return true;
+  }
+
+  /** Whether a creature may stand at (x, z): wild, dry, walkable ground, with room for its body -
+   *  not inside a trunk, its roots or a wall, where a body put down would be stuck. */
+  function open(x: number, z: number): boolean {
+    return ground(x, z) && roomAt(x, z);
+  }
+
+  /** The nearest spot to open ground (x, z) with room for a body, rings out to NUDGE metres, or
+   *  null - a point that fell on a tree moves off it rather than going. */
+  function roomNear(x: number, z: number): { x: number; z: number } | null {
+    if (roomAt(x, z)) return { x, z };
+    for (let r = NUDGE_STEP; r <= NUDGE; r += NUDGE_STEP) {
+      const around = Math.ceil((2 * Math.PI * r) / NUDGE_STEP);
+      for (let k = 0; k < around; k++) {
+        const angle = (k / around) * Math.PI * 2;
+        const sx = x + Math.sin(angle) * r;
+        const sz = z + Math.cos(angle) * r;
+        if (open(sx, sz)) return { x: sx, z: sz };
+      }
+    }
+    return null;
   }
 
   /** A spot within `spread` of (x, z) that is open, tried a few times; the point itself failing that. */
@@ -106,14 +139,23 @@ export function createSpawnPointField(dimension: string, world: WorldData, rules
     return list.length - 1;
   }
 
-  function make(i: number, j: number): SpawnPoint | null {
+  /** A cell's stream of rolls, and the place it rolls first - before a point there moves for room. */
+  function rolls(i: number, j: number): { key: string; random: () => number; jitteredX: number; jitteredZ: number } {
     const key = `${dimension}/s/${i},${j}`;
     const random = mulberry32(deriveSeed(world.seed, hashString(key)));
-    const x = (i + 0.5 + (random() - 0.5) * 0.8) * spacing;
-    const z = (j + 0.5 + (random() - 0.5) * 0.8) * spacing;
+    const jitteredX = (i + 0.5 + (random() - 0.5) * 0.8) * spacing;
+    const jitteredZ = (j + 0.5 + (random() - 0.5) * 0.8) * spacing;
+    return { key, random, jitteredX, jitteredZ };
+  }
+
+  function make(i: number, j: number): SpawnPoint | null {
+    const { key, random, jitteredX, jitteredZ } = rolls(i, j);
     if (random() < config.emptyChance) return null;
-    if (keepOut.some((p) => Math.hypot(x - p.x, z - p.z) < config.safeRadius)) return null;
-    if (!open(x, z)) return null;
+    if (keepOut.some((p) => Math.hypot(jitteredX - p.x, jitteredZ - p.z) < config.safeRadius)) return null;
+    if (!ground(jitteredX, jitteredZ)) return null;
+    const room = roomNear(jitteredX, jitteredZ);
+    if (!room) return null;
+    const { x, z } = room;
     const zone = zones[world.sampleTerrain(x, z).primaryAreaId];
     if (!zone || zone.roster.length === 0) return null;
     const levelFor = (offset: number): number => Math.max(1, rollRange(zone.levels, random) + offset);
@@ -162,6 +204,10 @@ export function createSpawnPointField(dimension: string, world: WorldData, rules
           const id = `${i},${j}`;
           let point = cache.get(id);
           if (point === undefined) {
+            // Too far for the point to be near even once moved for room: left unmade for now, since
+            // making one looks for trees round it.
+            const { jitteredX, jitteredZ } = rolls(i, j);
+            if (Math.hypot(jitteredX - x, jitteredZ - z) > radius + NUDGE) continue;
             point = make(i, j);
             cache.set(id, point);
           }

@@ -6,6 +6,7 @@ import type { WorldData } from "../world/worldData";
 import { COLLISION_CHUNK_SIZE, createCollisionStreamer, type CollisionStreamer } from "./collisionStreamer";
 import { createPlayerBody, type PlayerBody } from "./playerBody";
 import type { Entity } from "./entity";
+import { createTrunkField, type TrunkField } from "./trunks";
 
 /**
  * What a host hands the server for one dimension: its world as generated from its seed and its
@@ -27,6 +28,8 @@ export interface Dimension {
   readonly collision: WorldCollision;
   readonly streamer: CollisionStreamer;
   readonly buildings: PlacedBuildings;
+  /** Its trees as rings round each foot, and its buildings' footprints: where a body fits, collision in or not. */
+  readonly trunks: TrunkField;
   /** A body standing on the ground at a point, in this dimension's collision. */
   createBody: (x: number, z: number) => PlayerBody;
   /** What is stood on at a point: the floor of a building there, or the ground. */
@@ -45,7 +48,8 @@ export function createDimension(id: string, { world, treeHulls, buildingModels }
   const hulls = treeHulls ?? generateTreeHulls(content.treeKinds, seed);
   const buildings = createPlacedBuildings(buildingModels ?? modelGroups(world.buildingGroups));
   const collision = createWorldCollision({ colliders: (trees) => treeColliders(hulls, trees) }, COLLISION_CHUNK_SIZE, buildings.cellarCuts);
-  const streamer = createCollisionStreamer({ sampleTerrain: world.sampleTerrain, scatterTrees: createTreeScatter(seed, content) }, collision, buildings);
+  const scatterTrees = createTreeScatter(seed, content);
+  const streamer = createCollisionStreamer({ sampleTerrain: world.sampleTerrain, scatterTrees }, collision, buildings);
   const groundAt = (x: number, z: number, feet: number): number => buildings.floorAt(x, z, feet) ?? world.heightAt(x, z);
   return {
     id,
@@ -53,6 +57,7 @@ export function createDimension(id: string, { world, treeHulls, buildingModels }
     collision,
     streamer,
     buildings,
+    trunks: createTrunkField(world, hulls, scatterTrees),
     createBody: (x, z) => createPlayerBody(collision, world.heightAt, groundAt, { x, z }),
     groundAt: (x, z) => groundAt(x, z, world.heightAt(x, z) + 0.5),
     entities: new Map(),
