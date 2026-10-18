@@ -204,7 +204,10 @@ await section("belongings", () => {
   check("start bread is in the bag", bagIndex(p, "bread") >= 0 && bagItem(p, bagIndex(p, "bread")).count === 5);
   // Tidy the bag: the bread first.
   system.move(p, B(bagIndex(p, "bread")), B(0), 0);
-  check("the body shows what is worn", p.gear.join() === "tunic,linenTrousers,sandals", p.gear.join());
+  check("the start sword is worn", typeIdOf(worn(p, "mainHand")) === "sword.bronze.short.common");
+  check("the body shows what is worn", p.gear.join() === "tunic,linenTrousers,sandals,sword.bronze.short.common", p.gear.join());
+  // Bare-handed for the equipment checks below.
+  check("the start sword comes off", system.unequip(p, slot("mainHand")) === "" && !p.gear.includes("sword.bronze.short.common"));
   check("the dummy has loot, not belongings", !!make("trainingDummy").loot);
 
   // Stacks: merge, split, swap.
