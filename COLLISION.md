@@ -83,7 +83,9 @@ A capsule moved by velocity, gravity and jumps:
   upward.
 - **Jumps** only from the ground, or a moment after leaving it.
 - **Pushed out**: if it ever ends up inside something - spawned, teleported - it is pushed out the
-  shortest way.
+  shortest way. Wedged where that leads only into something else - inside a tree's trunk, whose
+  pieces are stacked - it looks for the nearest room instead, up or out sideways, up to 6 m away;
+  finding none it stops dead rather than gathering speed and pushing again every step.
 
 ## Sandbox
 

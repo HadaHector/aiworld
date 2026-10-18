@@ -32,7 +32,7 @@ function shapeCore(shape: Exclude<Shape, Heightfield>): { points: PointSet; radi
     case "capsule":
       return { points: [shape.a, shape.b], radius: shape.radius };
     case "box":
-      return { points: boxCorners(shape), radius: 0 };
+      return { points: polytopeOf(shape).points, radius: 0 };
     case "convex":
       return { points: shape.points, radius: 0 };
   }

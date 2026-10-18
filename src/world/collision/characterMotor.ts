@@ -85,6 +85,10 @@ export interface CharacterMotor {
 
 const MAX_SLIDES = 4;
 const MAX_PUSHES = 4;
+/** How far a body wedged in something - a tree's trunk, made of pieces - looks for room, at most. */
+const ESCAPE_REACH = 6;
+/** Which ways it looks: up, then round about. */
+const ESCAPE_WAYS = [vec3(0, 1, 0), ...Array.from({ length: 8 }, (_, i) => vec3(Math.cos((i * Math.PI) / 4), 0, Math.sin((i * Math.PI) / 4)))];
 /** The ground probe's radius, as a share of the capsule's. */
 const PROBE_SHARE = 0.5;
 
@@ -127,8 +131,14 @@ export function createCharacterMotor(world: CollisionWorld, initial: Partial<Mot
     state.velocity.y = Math.min(state.velocity.y, Math.max(before, 0));
   }
 
-  /** Pushes the feet out of whatever the capsule is in, deepest first; true if it ends clear. */
+  /**
+   * Pushes the feet out of whatever the capsule is in, deepest first; true if it ends clear. Wedged
+   * in a gap narrower than itself - each way out of one shape leads into the other - it is lifted
+   * out over the top instead; and if even that finds no room it stops dead, so a body stuck for good
+   * neither gathers speed nor costs more each step.
+   */
   function pushOut(): boolean {
+    const start = state.feet;
     for (let i = 0; i < MAX_PUSHES; i++) {
       const contacts = world.overlap(capsule(), settings.mask);
       if (contacts.length === 0) return true;
@@ -137,7 +147,22 @@ export function createCharacterMotor(world: CollisionWorld, initial: Partial<Mot
       state.contacts.push({ point: deepest.point, normal: deepest.normal, kind: kindOf(deepest.normal), shape: deepest.shape });
       stopInto(deepest.normal);
     }
-    return world.overlap(capsule(), settings.mask).length === 0;
+    if (world.overlap(capsule(), settings.mask).length === 0) return true;
+    // Nearest room first: straight up, or out sideways a little further each round.
+    const ring = settings.radius;
+    for (let reach = ring; reach <= ESCAPE_REACH; reach += ring) {
+      for (const way of ESCAPE_WAYS) {
+        const at = madd(start, way, reach);
+        if (world.overlap(capsule(at), settings.mask).length === 0) {
+          state.feet = at;
+          state.velocity = vec3();
+          return true;
+        }
+      }
+    }
+    state.feet = start;
+    state.velocity = vec3();
+    return false;
   }
 
   /**
@@ -158,7 +183,8 @@ export function createCharacterMotor(world: CollisionWorld, initial: Partial<Mot
       }
       note(hit);
       if (hit.startedInside) {
-        pushOut();
+        // Stuck for good: sweeping again from the same place would only find the same.
+        if (!pushOut()) break;
         continue;
       }
       const total = length(remaining);

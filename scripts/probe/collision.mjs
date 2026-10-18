@@ -7,6 +7,7 @@ import {
 } from "../../src/world/collision/index.ts";
 import { PRESETS } from "../../src/collisionSandbox/presets.ts";
 import { heightfieldTriangles } from "../../src/world/collision/raycast.ts";
+import { takeCollisionStats } from "../../src/world/collision/stats.ts";
 
 const rng = mulberry32(7);
 const rand = (lo, hi) => lo + rng() * (hi - lo);
@@ -377,6 +378,22 @@ const moved = (q, d) => (q.kind === "sphere" ? { ...q, center: madd(q.center, d,
     const motor = createCharacterMotor(world);
     motor.teleport(vec3(3.9, 0.2, 0.3));
     report("spawn in", world.overlap(motor.capsule()).length === 0, `put at (3.9, 0.2), pushed to (${motor.state.feet.x.toFixed(2)}, ${motor.state.feet.y.toFixed(2)}, ${motor.state.feet.z.toFixed(2)})`);
+  }
+
+  // Put down inside a trunk of stacked pieces, each thinner than the capsule is tall - every
+  // shortest way out of one leads into the next: still got out, and walks on at no great cost.
+  {
+    const world = createCollisionWorld();
+    const pieces = [{ kind: "box", center: vec3(0, -0.5, 0), half: vec3(20, 0.5, 20) }];
+    for (let i = 0; i < 6; i++) pieces.push({ kind: "box", center: vec3(0, 0.45 + i * 0.9, 0), half: vec3(1.5, 0.45, 1.5) });
+    world.addBatch(pieces);
+    const motor = createCharacterMotor(world);
+    motor.teleport(vec3(0.2, 1.2, 0.1));
+    const freed = world.overlap(motor.capsule()).length === 0;
+    takeCollisionStats();
+    for (let i = 0; i < 60; i++) motor.update(1 / 30, { move: vec3(-3, 0, 0), jump: false });
+    const overlaps = takeCollisionStats().overlaps;
+    report("in a trunk", freed && world.overlap(motor.capsule()).length === 0 && overlaps < 200, `got out to (${motor.state.feet.x.toFixed(2)}, ${motor.state.feet.y.toFixed(2)}, ${motor.state.feet.z.toFixed(2)}), ${overlaps} overlaps over the next 60 steps`);
   }
 }
 
