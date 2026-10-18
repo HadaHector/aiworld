@@ -87,6 +87,8 @@ export async function createCharacterBody(scene: Scene, name: string, kit: BodyK
     { race, seed: look.seed, sex: look.sex, gear: gearOf(kit, look), smallclothes: true },
     kit.materials,
     worldSeed,
+    // In slices, so a crowd coming into view (a bandit camp) does not stop the frames.
+    { pause: () => new Promise((resolve) => setTimeout(resolve, 0)) },
   );
   const character: CharacterMesh = createCharacterMesh(scene, name, dressed.body, { pixels: dressed.pixels!, size: dressed.layout!.size, uvs: dressed.layout!.uvs, nearest: false }, dressed.baked);
   for (const mesh of character.meshes) mesh.isPickable = false;

@@ -79,6 +79,31 @@ export interface PaintedCover {
  * covers take their neighbours' colour, so filtering never reaches the background.
  */
 export function paintAtlas(body: BodyGeometry, layout: AtlasLayout, race: RaceDef, look: Appearance, covers: PaintedCover[] = []): Uint8Array {
+  const steps = paintSteps(body, layout, race, look, covers);
+  let step = steps.next();
+  while (!step.done) step = steps.next();
+  return step.value;
+}
+
+/**
+ * The same painting, a few milliseconds at a time: between slices it awaits `pause`, so the page
+ * keeps drawing frames while a body is painted (a bandit camp coming into view, CREATURES.md).
+ */
+export async function paintAtlasSliced(body: BodyGeometry, layout: AtlasLayout, race: RaceDef, look: Appearance, covers: PaintedCover[], pause: () => Promise<void>, budgetMs = 4): Promise<Uint8Array> {
+  const steps = paintSteps(body, layout, race, look, covers);
+  for (;;) {
+    const started = performance.now();
+    let step = steps.next();
+    while (!step.done && performance.now() - started < budgetMs) step = steps.next();
+    if (step.done) return step.value;
+    await pause();
+  }
+}
+
+/** Texels painted between chances to stop. */
+const PAINT_SLICE = 2048;
+
+function* paintSteps(body: BodyGeometry, layout: AtlasLayout, race: RaceDef, look: Appearance, covers: PaintedCover[]): Generator<void, Uint8Array> {
   const { size, texels } = layout;
   const pixels = new Uint8Array(size * size * 4);
   const regionNames = body.regions.map((r) => r.name);
@@ -93,6 +118,7 @@ export function paintAtlas(body: BodyGeometry, layout: AtlasLayout, race: RaceDe
   const regionLengths = body.regions.map((r) => r.axis.slice(1).reduce((sum, p, i) => sum + length(sub(p, r.axis[i])), 0));
 
   for (let o = 0; o < size * size; o++) {
+    if (o % PAINT_SLICE === 0) yield;
     const region = texels.region[o];
     if (region < 0) continue;
     const p: Vec = [texels.position[o * 3], texels.position[o * 3 + 1], texels.position[o * 3 + 2]];
@@ -217,14 +243,18 @@ function createOcclusion(body: BodyGeometry): (p: Vec, n: Vec) => number {
   const normals = smoothNormals(body);
   const cell = 0.08;
   const reach = 0.16;
-  const grid = new Map<string, number[]>();
-  const key = (x: number, y: number, z: number): string => `${x},${y},${z}`;
+  // Vertices bucketed by cell under a numeric key (no strings: this runs for every texel).
+  const OFFSET = 512;
+  const SPAN = 1024;
+  const key = (x: number, y: number, z: number): number => ((x + OFFSET) * SPAN + (y + OFFSET)) * SPAN + (z + OFFSET);
+  const lists = new Map<number, number[]>();
   for (let v = 0; v < P.length / 3; v++) {
     const k = key(Math.floor(P[v * 3] / cell), Math.floor(P[v * 3 + 1] / cell), Math.floor(P[v * 3 + 2] / cell));
-    let list = grid.get(k);
-    if (!list) grid.set(k, (list = []));
+    let list = lists.get(k);
+    if (!list) lists.set(k, (list = []));
     list.push(v);
   }
+  const grid = new Map<number, Int32Array>([...lists].map(([k, list]) => [k, Int32Array.from(list)]));
   return (p, n) => {
     const cx = Math.floor(p[0] / cell);
     const cy = Math.floor(p[1] / cell);
@@ -235,14 +265,18 @@ function createOcclusion(body: BodyGeometry): (p: Vec, n: Vec) => number {
         for (let dz = -2; dz <= 2; dz++) {
           const list = grid.get(key(cx + dx, cy + dy, cz + dz));
           if (!list) continue;
-          for (const v of list) {
-            const d: Vec = [P[v * 3] - p[0], P[v * 3 + 1] - p[1], P[v * 3 + 2] - p[2]];
-            const distance = length(d);
+          for (let i = 0; i < list.length; i++) {
+            const v = list[i] * 3;
+            const x = P[v] - p[0];
+            const y = P[v + 1] - p[1];
+            const z = P[v + 2] - p[2];
+            const distance = Math.sqrt(x * x + y * y + z * z);
             if (distance < 0.03 || distance > reach) continue;
-            const toward = dot(d, n) / distance;
+            const toward = (x * n[0] + y * n[1] + z * n[2]) / distance;
+            if (toward <= 0.2) continue;
             // Only what faces back at it - the other side of a fold, not its own surface curving away.
-            const facing = -(d[0] * normals[v * 3] + d[1] * normals[v * 3 + 1] + d[2] * normals[v * 3 + 2]) / distance;
-            if (toward > 0.2 && facing > 0) hidden += toward * facing * (1 - distance / reach);
+            const facing = -(x * normals[v] + y * normals[v + 1] + z * normals[v + 2]) / distance;
+            if (facing > 0) hidden += toward * facing * (1 - distance / reach);
           }
         }
       }

@@ -1,6 +1,6 @@
 import { buildBody, type BodyGeometry } from "./bodyMesh";
 import { layoutAtlas, type AtlasLayout } from "./atlas";
-import { chooseAppearance, paintAtlas, type Appearance, type PaintedCover } from "./paint";
+import { chooseAppearance, paintAtlas, paintAtlasSliced, type Appearance, type PaintedCover } from "./paint";
 import { bakeGearMaterial, type BakedGearMaterial, type GearMaterialDef } from "./gearMaterial";
 import { sided, type GearDef } from "./gearDef";
 import { forSex, withLook, type RaceDef, type Sex, type Slider } from "./raceDef";
@@ -26,6 +26,9 @@ export interface CharacterBuildOptions {
   lattice?: boolean;
   /** The atlas's size in texels a side, or 0 for none (the skin's colour alone). */
   atlas?: number;
+  /** Given, the work is done a few milliseconds at a time with this awaited between, so a page keeps
+   *  drawing while a body is made; left out, all at once. */
+  pause?: () => Promise<void>;
 }
 
 /** A character made: its body, its atlas painted, the gear materials it is drawn in baked. */
@@ -48,6 +51,7 @@ export async function dressCharacter(spec: CharacterSpec, materials: Map<string,
   const look = chooseAppearance(spec.race, spec.seed, spec.sex, spec.sliders ?? {});
   const race = forSex(withLook(spec.race, look.height, look.build), look.sex);
   const body = buildBody(race, { detail: options.detail, lattice: options.lattice, gear: spec.gear, skin: look.skin });
+  await options.pause?.();
   const baked = new Map<string, BakedGearMaterial>();
   const bake = async (id: string): Promise<BakedGearMaterial | null> => {
     const def = materials.get(id);
@@ -60,6 +64,7 @@ export async function dressCharacter(spec: CharacterSpec, materials: Map<string,
   if (size <= 0) return { race, look, body, layout: null, pixels: null, baked };
 
   const layout = layoutAtlas(body, size);
+  await options.pause?.();
   const covers: PaintedCover[] = [];
   const linen = spec.smallclothes ? await bake("linen") : null;
   if (linen) {
@@ -76,6 +81,6 @@ export async function dressCharacter(spec: CharacterSpec, materials: Map<string,
       if (material) covers.push({ material, tint: paint.tint, span: "along", from: paint.from, to: paint.to, regions: paint.regions.flatMap(sided), hem: paint.hem });
     }
   }
-  const pixels = paintAtlas(body, layout, race, look, covers);
+  const pixels = options.pause ? await paintAtlasSliced(body, layout, race, look, covers, options.pause) : paintAtlas(body, layout, race, look, covers);
   return { race, look, body, layout, pixels, baked };
 }
