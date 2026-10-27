@@ -445,6 +445,11 @@ Each leaves the game working: dev server, `npm run probe`, `npm run server`, `np
   `stuck`, `no foes left`).
 - **Kill records** are kept (the latest 256) for `server.debug.creatures.drainKills()` when no
   `onKill` reads them.
+- **Health bars** (asked for after the step, `src/game/healthBars.ts`): a bar floats over every
+  living hostile (red) or neutral (yellow) unit within 50 m, the target's outlined white, a red glow
+  round the bar of every unit targeting the player; drawn as DOM over the canvas like the floating
+  numbers. Finer threat (Classic's warnings before pulling aggro) would need the player's threat
+  share sent; it is not yet.
 - **The client**: dead capsules tip over along their facing in half a second; neutral units are
   yellow on the target ring and the frame's name; the inspector has a creature line (kind, traits,
   point, brain state, distance from home and from the pull). `__aiworld.creatures` - `kinds()`,

@@ -34,6 +34,7 @@ import { appearanceOf, lookFromUrl, type PlayerLook } from "./game/playerBody";
 import { createBodyKit } from "./game/characterBody";
 import { createCombatHud } from "./game/combatHud";
 import { createFloatingText, type FloatingText } from "./game/floatingText";
+import { createHealthBars, type HealthBars } from "./game/healthBars";
 import { nextEnemy } from "./game/targeting";
 import { EVENT_KIND } from "./sim/skills/events";
 import { FLAG } from "./sim/skills/flags";
@@ -121,6 +122,7 @@ const belongings = createBelongingsMirror();
 let entityMeshes: EntityMeshes | null = null;
 /** Damage and healing numbers over the units the own player fights, in the current view. */
 let floatingText: FloatingText | null = null;
+let healthBars: HealthBars | null = null;
 /** The unit the player has selected (see ABILITIES.md): 0 for none. */
 let targetId = 0;
 
@@ -197,6 +199,8 @@ function leave(): void {
   entityMeshes?.dispose();
   floatingText?.dispose();
   floatingText = null;
+  healthBars?.dispose();
+  healthBars = null;
   entityMeshes = null;
   old.dispose();
 }
@@ -237,6 +241,7 @@ async function enter(transfer: Transfer, resume: boolean): Promise<void> {
   view = next;
   const world = next.world;
   floatingText = createFloatingText(next.scene, mirror, gameRules, () => playerId);
+  healthBars = createHealthBars(next.scene, mirror, gameRules, () => playerId);
   entityMeshes = createEntityMeshes(next.scene, mirror, gameRules, () => playerId, {
     kit: bodyKit,
     worldSeed: transfer.seed,
@@ -290,6 +295,7 @@ function frame(): void {
   entityMeshes?.update();
   combatHud.update(targetId);
   floatingText?.update();
+  healthBars?.update(targetId);
   if (!spectator.active) {
     v.playerLights.update(deltaSeconds);
     v.placeLabels.update(character.mesh.position, v.scene.activeCamera);
