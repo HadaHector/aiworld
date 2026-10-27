@@ -10,7 +10,7 @@ fireball roars in the caster's hands, flies, and bursts on its target, a crit sh
 and pauses for an instant, deaths thud, and loot glints and chimes. A dev page plays every cue,
 sound and particle effect on its own, so it can be tuned.
 
-**Status: step 1 of 7 done** (rules and content, headless). [As built](#as-built) notes where the
+**Status: steps 1-2 of 7 done** (rules and content; sound in the game). [As built](#as-built) notes where the
 build differs from this plan.
 
 ## Decisions
@@ -478,6 +478,35 @@ Each leaves the game working: dev server, `npm run probe`, `npm run server`, `np
   of broken content, every take of every sound (no NaN, within full scale, not silent, its length,
   dying away, loops joining without a click, the same take from the same seed), every texture
   variant (drawn, clear at the edge, variants differing) and the atlas packing without overlaps.
+- **Step 2: sound in the game.** `src/audio/context.ts` makes the page's one `AudioContext` on the
+  first click or key press, with a music bus and an effects bus meeting in a gentle limiter; the
+  music's `Player` takes its output (`gameMusic.ts` plays into the music bus; the music page still
+  plays straight out). `src/audio/sfx.ts` plays sounds: a random take, pitch and volume per play, a
+  `PannerNode` (equal power, linear from `near` to `far`) and a low-pass that dulls far sounds,
+  buses from `mix`, each sound's `maxVoices` and the overall `voices` (the quietest gives way, the
+  player's own fights counted louder), samples fetched from `packs/<pack>/<file>` with stand-ins
+  dropping out once one has loaded, and every sound's takes rendered ahead, one sound per task.
+  Babylon's world is left-handed and WebAudio's right-handed: z is flipped on the way in.
+- **`src/feedback/cues.ts`** maps combat events to cues - a skill's phase (`impact`, `tick`,
+  `release`, `swing` so far), else the event table, `effect` by name - and plays their sound parts.
+  A source's same sound within 50 ms plays once. **Own fights**: the player is the source or the
+  target, the target is the player's target, or - for an event with no target, as a swing has - the
+  source is the player's target or is going for the player.
+- **`src/game/feedback.ts`** ties it to the game: each unit's weapon (a worn item's template or id,
+  else a gear piece, through `weapons`) and armour (the material of the outermost piece over the
+  torso, through `armors`), falling back to the look's `feedback`, then `unarmed` and `flesh`;
+  bones placed by height on the unit until bodies say (step 3); the listener on the camera.
+  `__aiworld.feedback` has it, `feedback.sfx()` the player.
+- **The corner control** has an Effects slider (✦) after the music's, kept in
+  `aiworld.effects.volume`.
+- **`fx.html`** (`src/fxPage/`): every sound - play it varied or take by take, its waveforms (the
+  loop shaded), its layers with stand-ins marked, the render time - and every cue, played with crit,
+  periodic and own toggled and the weapon, armour and family picked; distance and angle sliders
+  move the sound or the cue's target round a listener facing +z; a voice meter and Stop all.
+- **Checked in the game** (`?config=tiny`): auto-attacking the dummy plays a swing at the sword and
+  `hit.blade.metal` on its chest; a frost wolf's bites play `hit.fang`, its swings at the player
+  count as the player's own fight; misses whiff; no console errors. The probe gained the mapping
+  (285 checks).
 
 ## Not in this step
 

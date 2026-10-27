@@ -101,8 +101,9 @@ export default defineConfig({
     format: "es",
     plugins: () => [lightBakeCodeHash()],
   },
-  // Four pages: the game, the workbench (workbench.html) for looking at one pack asset at a time,
-  // the collision sandbox (collision.html) and the music page (music.html).
+  // Five pages: the game, the workbench (workbench.html) for looking at one pack asset at a time,
+  // the collision sandbox (collision.html), the music page (music.html) and the feedback page
+  // (fx.html).
   build: {
     rollupOptions: {
       input: {
@@ -110,6 +111,7 @@ export default defineConfig({
         workbench: fileURLToPath(new URL("./workbench.html", import.meta.url)),
         collision: fileURLToPath(new URL("./collision.html", import.meta.url)),
         music: fileURLToPath(new URL("./music.html", import.meta.url)),
+        fx: fileURLToPath(new URL("./fx.html", import.meta.url)),
       },
     },
   },

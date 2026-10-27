@@ -1,8 +1,9 @@
 // Music in the game: pieces composed for wherever the player is, one at a time with silence
 // between them (see MUSIC.md). The style follows the zone's biome, or the building the player is
 // inside; going into or out of such a building lets the playing piece go and soon starts its own.
-// Audio starts with the first click or key press, as browsers ask.
+// Audio starts with the first click or key press, as browsers ask (src/audio/context.ts).
 
+import { whenAudio } from "../audio/context";
 import { composeSong } from "./composer";
 import { createInstruments, type Instrument } from "./instruments";
 import { buildInstrument, SAMPLES, stylePicks } from "./library";
@@ -57,20 +58,16 @@ export function createGameMusic(initialVolume: number): GameMusic {
   let changedSince: number | undefined;
   let visit = 1;
 
-  const unlock = (): void => {
-    if (!player) {
-      player = new Player(new AudioContext(), instruments);
-      player.setVolume(volume);
-      player.onEnd = () => {
-        const gap = playing?.inside ? GAP_INSIDE : GAP_OUTSIDE;
-        playing = undefined;
-        nextAt = performance.now() + (gap[0] + Math.random() * (gap[1] - gap[0])) * 1000;
-      };
-    }
-    void player.ctx.resume();
-  };
-  addEventListener("pointerdown", unlock);
-  addEventListener("keydown", unlock);
+  // The page's audio, shared with the sound effects, comes with the first click or key press.
+  whenAudio((audio) => {
+    player = new Player(audio.ctx, instruments, audio.music);
+    player.setVolume(volume);
+    player.onEnd = () => {
+      const gap = playing?.inside ? GAP_INSIDE : GAP_OUTSIDE;
+      playing = undefined;
+      nextAt = performance.now() + (gap[0] + Math.random() * (gap[1] - gap[0])) * 1000;
+    };
+  });
 
   /** The style's instruments for the song, put together and rendered, a little at a time. */
   const prepare = async (song: Song): Promise<void> => {

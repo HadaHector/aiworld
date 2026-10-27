@@ -17,6 +17,8 @@ import { describeMemory, memoryReport } from "./debug/memoryPanel";
 import { createPositionPanel, type ViewSnapshot } from "./debug/positionPanel";
 import { createLoadingScreen } from "./ui/loadingScreen";
 import { createMusicControl } from "./ui/musicControl";
+import { resolveFeedback, type FeedbackRules } from "./feedback/rules";
+import { createGameFeedback } from "./game/feedback";
 import { createGameMusic } from "./music/gameMusic";
 import { BIOME_STYLES, BUILDING_STYLES, DEFAULT_STYLE } from "./music/places";
 import { loadPackSet, type PackSet } from "./world/content/loadContent";
@@ -62,6 +64,7 @@ let startContent: WorldContent;
 let gameRules: GameRules;
 let itemRules: ItemRules;
 let creatureRules: CreatureRules;
+let feedbackRules: FeedbackRules;
 try {
   loadingScreen.update("Loading content packs", 0, 0);
   packSet = await loadPackSet();
@@ -75,6 +78,8 @@ try {
   // Items (see ITEMS.md): generated types depend on the world seed; the skills items name are checked.
   itemRules = resolveItemRules(packSet.sources, gameRules, WORLD_SEED);
   checkSkillRefs(gameRules, itemRules.abilityRefs);
+  // Sounds, particle effects and cues (see FEEDBACK.md), checked against the skills and the looks.
+  feedbackRules = resolveFeedback(packSet.sources, gameRules);
 } catch (error) {
   failLoading("The content packs could not be loaded", error);
 }
@@ -153,6 +158,7 @@ function takeServerMessages(): void {
       }
       combatHud.log(message.events);
       floatingText?.add(message.events);
+      feedback.events(message.events);
     } else if (message.type === "snapshot") {
       const mine = message.entities.find((p) => p.id === playerId);
       if (mine) {
@@ -183,8 +189,23 @@ const settings: ViewSettings = { drawDistance: DEFAULT_DRAW_DISTANCE, trees: tru
 const zoneLabel = createZoneLabel();
 const positionPanel = createPositionPanel((v) => view?.gotoView(v));
 // Music for wherever the player is - see MUSIC.md. It starts with the first click or key press.
-const musicControl = createMusicControl((volume) => music.setVolume(volume));
+const musicControl = createMusicControl(
+  (volume) => music.setVolume(volume),
+  (volume) => feedback.setVolume(volume),
+);
 const music = createGameMusic(musicControl.volume);
+// Sounds, effects and hit feel for what happens (see FEEDBACK.md), from the combat events.
+const feedback = createGameFeedback({
+  rules: feedbackRules,
+  game: gameRules,
+  items: itemRules,
+  kit: bodyKit,
+  mirror,
+  player: () => playerId,
+  target: () => targetId,
+  ownOutfit: () => playerLook.outfit,
+  volume: musicControl.effects,
+});
 
 /**
  * Tears down the dimension being drawn. Not inside `enter`: an async function's suspended frame can
@@ -320,6 +341,7 @@ function frame(): void {
       : { style: BIOME_STYLES[here.primaryBiome.id] ?? DEFAULT_STYLE, place: here.primaryAreaId, inside: false },
   );
   musicControl.setStatus(music.status());
+  feedback.update(v.scene.activeCamera);
   // Day-night first: it owns the clock, and updateAtmosphere reads that clock's current value
   // (world.ts's updateAtmosphere calls sunLighting.getTimeHours() itself) - calling it after this
   // is what makes that read this frame's time rather than last frame's.
@@ -576,6 +598,8 @@ function gotoLoaded(target: Partial<ViewSnapshot> & { x: number; z: number }, it
     return view?.world;
   },
   music,
+  /** Sounds, effects and cues (FEEDBACK.md): `feedback.sfx()?.play("swing")`, `feedback.sfx()?.voices()`. */
+  feedback,
   /** The player as drawn, with teleports that go through the server like the map's. */
   get character() {
     return (

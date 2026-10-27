@@ -10,6 +10,8 @@ import { resolveFeedback, resolveRef, matchesPattern } from "../../src/feedback/
 import { layerLength, renderSynth } from "../../src/audio/synth.ts";
 import { SAMPLE_RATE } from "../../src/audio/dsp.ts";
 import { buildParticleAtlas, drawParticleTexture } from "../../src/particles/textures.ts";
+import { createCuePlayer } from "../../src/feedback/cues.ts";
+import { EVENT_FLAG, EVENT_KIND } from "../../src/sim/skills/events.ts";
 
 let failures = 0;
 let checks = 0;
@@ -65,6 +67,40 @@ await section("placeholders", () => {
   check("a missing value stops the id", sound({ armor: "metal" }) === "hit");
   check("a plain id", resolveRef("swing", {}, has) === "swing" && resolveRef("nothing", {}, has) === null);
   check("patterns", matchesPattern("*Grass", "leafyGrass") && matchesPattern("snow*", "snowDrift") && !matchesPattern("*Sand", "sandstone") && matchesPattern("*", "x"));
+});
+
+// --- events to cues --------------------------------------------------------------------------------
+await section("events to cues", () => {
+  // Unit 1 is the player with a sword, 2 a dummy in plate, 3 a wolf going for the player, 4 someone else.
+  const traits = { 1: { weapon: "blade", armor: "leather" }, 2: { armor: "metal" }, 3: { weapon: "fang", armor: "fur" }, 4: { weapon: "blade" } };
+  const played = [];
+  const fakeSfx = { play: (id, options) => (played.push({ id, own: options.own, gain: options.gain }), null) };
+  const cues = createCuePlayer(feedback, game, {
+    player: () => 1,
+    target: () => 2,
+    targetOf: (unit) => (unit === 3 ? 1 : 0),
+    place: (unit) => ({ x: unit, y: 0, z: 0 }),
+    traits: (unit) => traits[unit] ?? {},
+  }, () => fakeSfx);
+  const skill = (id) => game.skillIndex.get(id);
+  const event = (kind, source, target, skillId, flags = 0, name = "") => ({ kind: EVENT_KIND[kind], source, target, skill: skillId === undefined ? -1 : skill(skillId), amount: 10, extra: 0, absorbed: 0, flags, reason: 0, name, time: 0 });
+  const run = (...events) => {
+    played.length = 0;
+    cues.events(events);
+    return played.map((p) => p.id).join(",");
+  };
+  check("a sword on plate", run(event("hit", 1, 2, "autoAttack")) === "hit.blade.metal", run(event("hit", 1, 2, "autoAttack")));
+  check("a bite on leather falls back to the fang", run(event("hit", 3, 1, "bite")) === "hit.fang");
+  check("a swing", run(event("animation", 1, 0, "autoAttack", 0, "swing")) === "swing");
+  check("a melee miss", run(event("miss", 1, 2, "autoAttack")) === "whiff");
+  check("a fireball's own impact", run(event("hit", 1, 2, "fireball")) === "impact.fire");
+  check("a fireball's release", run(event("castDone", 1, 2, "fireball")) === "fire.release");
+  check("an event with no cue plays nothing", run(event("heal", 1, 1, "renew")) === "");
+  run(event("animation", 3, 0, "autoAttack", 0, "swing"));
+  check("a wolf swinging at the player is the player's fight", played[0]?.own === true);
+  run(event("hit", 4, 5, "autoAttack"));
+  check("others' fights are quieter", played[0]?.own === false && played[0]?.gain === feedback.config.others.volume, JSON.stringify(played[0]));
+  check("a hit on five targets sounds once", run(...[2, 5, 6, 7, 8].map((t) => event("hit", 1, t, "autoAttack", EVENT_FLAG.crit))).split(",").length <= 2);
 });
 
 // --- broken content --------------------------------------------------------------------------------

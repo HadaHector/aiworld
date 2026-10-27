@@ -86,7 +86,8 @@ export class Player {
   /** Called once a song has played out, tail included - not when stopped. */
   onEnd?: () => void;
 
-  constructor(ctx: AudioContext, instruments: Record<string, Instrument>) {
+  /** `output`: where it plays into - the speakers, or the game's music bus (src/audio/context.ts). */
+  constructor(ctx: AudioContext, instruments: Record<string, Instrument>, output: AudioNode = ctx.destination) {
     this.ctx = ctx;
     this.instruments = instruments;
     const limiter = ctx.createDynamicsCompressor();
@@ -95,7 +96,7 @@ export class Player {
     // After the limiter: a fade for letting a song go, then the listener's volume.
     this.fade = ctx.createGain();
     this.volume = ctx.createGain();
-    limiter.connect(this.fade).connect(this.volume).connect(ctx.destination);
+    limiter.connect(this.fade).connect(this.volume).connect(output);
     this.master = ctx.createGain();
     this.master.gain.value = 2;
     this.master.connect(limiter);
