@@ -136,6 +136,12 @@ export interface Style {
     voices?: [string, string, string];
     pizzicato?: string;
   };
+  /** How much the tempo breathes: 0 strict (dances), 1 the most. Default 0.5. */
+  rubato?: number;
+  /** The room: reverb length in seconds, and how soft its walls are (0 stone, 1 absorbent). */
+  room?: { seconds: number; damping: number };
+  /** How much goes to the tempo-timed echo, mostly from the lead and colour parts. Default 0.4. */
+  echo?: number;
   /** Volume of each part, 1 by default. */
   mix?: Partial<Record<"lead" | "pluck" | "pad" | "bass" | "drums" | "sparkle" | "wail" | "wind" | "claps", number>>;
 }
@@ -232,6 +238,9 @@ export const FOREST: Style = {
     colour: { sus4: 0.12, sus2: 0.08 },
     voices: ["stringsLow", "strings", "stringsHigh"],
   },
+  rubato: 0.5,
+  room: { seconds: 2.6, damping: 0.6 },
+  echo: 0.3,
 };
 
 const GLADE_FOUR: MeterRules = {
@@ -322,6 +331,9 @@ export const GLADE: Style = {
     textures: { I1: "open" },
     colour: { add9: 0.25, sus2: 0.15 },
   },
+  rubato: 0.8,
+  room: { seconds: 3.6, damping: 0.4 },
+  echo: 0.7,
   mix: { lead: 0.85, pluck: 0.8, pad: 1.15, bass: 0.8, drums: 0.6 },
 };
 
@@ -407,6 +419,9 @@ export const DESERT: Style = {
     textures: { I1: "open", I2: "open", B: "tremolo", "B'": ["sustain", "tremolo"] },
     voices: ["stringsLow", "strings", "stringsHigh"],
   },
+  rubato: 0.3,
+  room: { seconds: 2.8, damping: 0.3 },
+  echo: 0.5,
   mix: { lead: 0.9, pad: 0.65, bass: 0.9, drums: 1, wail: 0.8 },
 };
 
@@ -506,6 +521,9 @@ export const SNOW: Style = {
   },
   drumRoll: 0.6,
   percussion: { "B'": 2, D: 1, "Ar+": 2, "Ar'+": 2 },
+  rubato: 1,
+  room: { seconds: 4.2, damping: 0.3 },
+  echo: 0.5,
   mix: { lead: 0.85, pluck: 0.6, pad: 1.2, bass: 1, drums: 0.8, sparkle: 0.55, wail: 0.7 },
 };
 
@@ -614,6 +632,9 @@ export const SWAMP: Style = {
     textures: { I1: "open", I2: "tremolo", B: "tremolo", D: "tremolo", Br: "open", "Ar'+": "wide" },
     voices: ["stringsLow", "choir", "strings"],
   },
+  rubato: 0.7,
+  room: { seconds: 3.8, damping: 0.8 },
+  echo: 0.6,
   mix: { lead: 0.8, pluck: 0.7, pad: 1.05, bass: 1, drums: 0.9, sparkle: 0.6, wail: 0.75 },
 };
 
@@ -716,6 +737,9 @@ export const TAVERN: Style = {
   climaxShift: [2, 5],
   percussion: { I1: 1, A: 1, "A'": 2, B: 2, "B'": 2, Br: 2, Ar: 2, "Ar'": 2, "Ar+": 2, "Ar'+": 2, O1: 1 },
   pad: { stagger: 0.1, swell: true },
+  rubato: 0.1,
+  room: { seconds: 1.2, damping: 0.7 },
+  echo: 0.1,
   mix: { lead: 1, pluck: 0.8, pad: 0.75, bass: 0.9, drums: 0.9, claps: 0.8 },
 };
 
@@ -808,6 +832,9 @@ export const HOLY: Style = {
     // Men below, women on top: the low voice and tenor, then the alto under the women's melody.
     voices: ["choirLow", "choirLow", "choirHigh"],
   },
+  rubato: 1,
+  room: { seconds: 5.5, damping: 0.2 },
+  echo: 0.2,
   mix: { lead: 0.8, pluck: 0.45, pad: 1.2, bass: 0.75, wail: 0.65 },
 };
 
@@ -887,6 +914,9 @@ export const EPIC: Style = {
     colour: { add9: 0.15, sus2: 0.1, sus4: 0.1 },
     voices: ["stringsLow", "strings", "stringsHigh"],
   },
+  rubato: 0.6,
+  room: { seconds: 3.6, damping: 0.4 },
+  echo: 0.35,
   mix: { lead: 0.95, pluck: 0.55, pad: 1.1, bass: 1, drums: 0.9, sparkle: 0.45, wail: 0.7, wind: 0.8 },
 };
 
@@ -966,6 +996,9 @@ export const JUNGLE: Style = {
     textures: { I1: "open", Br: "open" },
     colour: { add9: 0.2, sus2: 0.1 },
   },
+  rubato: 0.1,
+  room: { seconds: 2.2, damping: 0.7 },
+  echo: 0.4,
   mix: { lead: 0.9, pluck: 0.75, pad: 0.6, bass: 0.9, drums: 0.85, sparkle: 0.6, wail: 0.6 },
 };
 
@@ -1063,6 +1096,9 @@ export const NORDIC: Style = {
     textures: { I1: "open", I2: "open", A: ["open", "sustain"], Br: "open", D: "tremolo", "Ar+": "wide", "Ar'+": "wide" },
     voices: ["stringsLow", "choirLow", "choirLow"],
   },
+  rubato: 0.6,
+  room: { seconds: 4, damping: 0.4 },
+  echo: 0.45,
   mix: { lead: 0.9, pluck: 0.55, pad: 1.1, bass: 1, drums: 0.9, wail: 0.6, wind: 0.85 },
 };
 
@@ -1139,6 +1175,9 @@ export const SAVANNA: Style = {
     swell: true,
     textures: { I1: "open", Br: "open" },
   },
+  rubato: 0.1,
+  room: { seconds: 2, damping: 0.6 },
+  echo: 0.3,
   mix: { lead: 0.95, pluck: 0.75, pad: 0.55, bass: 0.9, drums: 0.9, sparkle: 0.5, wind: 0.7 },
 };
 
@@ -1241,6 +1280,9 @@ export const MEDITERRANEAN: Style = {
   climaxShift: [2],
   percussion: { A: 1, "A'": 2, B: 2, "B'": 2, Br: 2, Ar: 2, "Ar'": 2, "Ar'+": 2, O1: 1 },
   pad: { stagger: 0.2, swell: true, textures: { I1: "open", Br: "open" }, colour: { sus4: 0.1 } },
+  rubato: 0.4,
+  room: { seconds: 1.8, damping: 0.6 },
+  echo: 0.2,
   mix: { lead: 0.9, pluck: 0.9, pad: 0.5, bass: 0.85, drums: 0.8 },
 };
 
@@ -1329,6 +1371,9 @@ export const HIGHLANDS: Style = {
     textures: { I1: "open", I2: "open", A: "open", "A'": "open", B: "sustain", "B'": "sustain", Br: "open", Ar: "open", "Ar'": "open", O1: "open", O2: "open" },
     voices: ["stringsLow", "pipes", "pipes"],
   },
+  rubato: 0.9,
+  room: { seconds: 3.5, damping: 0.4 },
+  echo: 0.6,
   mix: { lead: 0.9, pluck: 0.6, pad: 0.75, bass: 0.6, drums: 0.7, wind: 0.85 },
 };
 

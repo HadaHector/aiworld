@@ -751,6 +751,9 @@ export function composeSong(style: Style, placeSeed: number, visitSeed: number):
     beatsPerBar: meter.beats,
     channels: style.reverb ? channels.map((c) => ({ ...c, reverb: Math.min(1, c.reverb * style.reverb!) })) : channels,
     patterns,
+    rubato: style.rubato ?? 0.5,
+    room: style.room ?? { seconds: 3.2, damping: 0.5 },
+    echo: style.echo ?? 0.4,
     summary: {
       key: `${pitchClassName(key.tonic)} ${key.mode}`,
       tempo: `${bpm} bpm`,

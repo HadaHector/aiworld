@@ -21,6 +21,8 @@ interface Voice {
   /** The instrument's gain times its zone's: what a channel volume of 1 comes to. */
   level: number;
   root: number;
+  /** A strike's own few cents off, so repeats are never identical. */
+  offset: number;
   start: number;
   stopped: boolean;
 }
@@ -45,7 +47,11 @@ interface ChannelOut {
   input: GainNode;
   pan: StereoPannerNode;
   send: GainNode;
+  echo: GainNode;
 }
+
+/** How much of each role goes to the echo, before a song's own echo amount. */
+const ECHO_BY_ROLE: Record<string, number> = { lead: 0.16, counter: 0.3, pad: 0.05, bass: 0, percussion: 0.04 };
 
 export interface PlayPosition {
   pattern: number;
@@ -60,6 +66,10 @@ export class Player {
   private readonly volume: GainNode;
   private fadeTimer?: number;
   private readonly reverb: ConvolverNode;
+  private readonly echoIn: GainNode;
+  private readonly echoLeft: DelayNode;
+  private readonly echoRight: DelayNode;
+  private readonly rooms = new Map<string, AudioBuffer>();
   private readonly buffers = new WeakMap<Float32Array, AudioBuffer>();
   private readonly voices = new Set<Voice>();
   private outs: ChannelOut[] = [];
@@ -90,10 +100,30 @@ export class Player {
     this.master.gain.value = 2;
     this.master.connect(limiter);
     this.reverb = ctx.createConvolver();
-    this.reverb.buffer = impulseResponse(ctx, 3.2);
+    this.reverb.buffer = this.room(3.2, 0.5);
     const reverbReturn = ctx.createGain();
     reverbReturn.gain.value = 0.7;
     this.reverb.connect(reverbReturn).connect(limiter);
+    // The echo: a stereo ping-pong, each repeat a little darker, feeding the reverb a touch too.
+    this.echoIn = ctx.createGain();
+    this.echoLeft = ctx.createDelay(2);
+    this.echoRight = ctx.createDelay(2);
+    const feedback = ctx.createGain();
+    feedback.gain.value = 0.38;
+    const darken = ctx.createBiquadFilter();
+    darken.type = "lowpass";
+    darken.frequency.value = 3200;
+    const merge = ctx.createChannelMerger(2);
+    this.echoIn.connect(darken).connect(this.echoLeft);
+    this.echoLeft.connect(this.echoRight);
+    this.echoRight.connect(feedback).connect(darken);
+    this.echoLeft.connect(merge, 0, 0);
+    this.echoRight.connect(merge, 0, 1);
+    const echoReturn = ctx.createGain();
+    echoReturn.gain.value = 0.55;
+    merge.connect(echoReturn);
+    echoReturn.connect(limiter);
+    echoReturn.connect(this.reverb);
   }
 
   get playing(): boolean {
@@ -107,7 +137,13 @@ export class Player {
     this.fade.gain.cancelScheduledValues(this.ctx.currentTime);
     this.fade.gain.setValueAtTime(1, this.ctx.currentTime);
     this.song = song;
-    this.outs = song.channels.map((c, i) => this.createOut(c.pan, c.reverb, this.gains[i] ?? 1));
+    // The style's room, and an echo a dotted eighth long.
+    const room = song.room ?? { seconds: 3.2, damping: 0.5 };
+    this.reverb.buffer = this.room(room.seconds, room.damping);
+    const beat = 60 / song.bpm;
+    this.echoLeft.delayTime.setValueAtTime(Math.min(1.9, beat * 0.75), this.ctx.currentTime);
+    this.echoRight.delayTime.setValueAtTime(Math.min(1.9, beat * 0.75), this.ctx.currentTime);
+    this.outs = song.channels.map((c, i) => this.createOut(c.pan, c.reverb, this.gains[i] ?? 1, (song.echo ?? 0) * (ECHO_BY_ROLE[c.role] ?? 0)));
     this.states = song.channels.map(() => ({ volume: 1, pitch: 0, offset: 0, vibratoPhase: 0, tremoloPhase: 0, trembling: false }));
     this.patternIndex = Math.min(from.pattern, song.patterns.length - 1);
     this.row = Math.min(from.row, song.patterns[this.patternIndex].rows - 1);
@@ -214,7 +250,7 @@ export class Player {
 
   // -------------------------------------------------------------------------------------------
 
-  private createOut(pan: number, reverb: number, gain: number): ChannelOut {
+  private createOut(pan: number, reverb: number, gain: number, echo = 0): ChannelOut {
     const input = this.ctx.createGain();
     input.gain.value = gain;
     const panner = this.ctx.createStereoPanner();
@@ -224,17 +260,20 @@ export class Player {
     input.connect(panner);
     panner.connect(this.master);
     panner.connect(send).connect(this.reverb);
-    return { input, pan: panner, send };
+    const echoSend = this.ctx.createGain();
+    echoSend.gain.value = echo;
+    if (echo > 0) panner.connect(echoSend).connect(this.echoIn);
+    return { input, pan: panner, send, echo: echoSend };
   }
 
   private schedule(): void {
     const song = this.song;
     if (!song) return;
     const horizon = this.ctx.currentTime + LOOKAHEAD;
-    const tick = tickSeconds(song);
     while (this.endTime === Infinity && this.nextRowTime < horizon) {
       const pattern = song.patterns[this.patternIndex];
       const t0 = this.nextRowTime;
+      const tick = tickSeconds(song) * breathing(song, this.patternIndex, this.row);
       pattern.cells[this.row].forEach((cell, channel) => this.playCell(channel, cell, t0, tick, song.ticksPerRow));
       this.timeline.push({ time: t0, position: { pattern: this.patternIndex, row: this.row } });
       this.nextRowTime += tick * song.ticksPerRow;
@@ -372,7 +411,16 @@ export class Player {
     const envelope = ctx.createGain();
     const fade = ctx.createGain();
     const gain = ctx.createGain();
-    source.connect(envelope).connect(fade).connect(gain).connect(out.input);
+    // Louder is brighter, as with anything struck, plucked, bowed or blown: a soft note is darker.
+    const tone = ctx.createBiquadFilter();
+    tone.type = "lowpass";
+    tone.Q.value = 0.5;
+    tone.frequency.value = brightness(instrument, note, volume);
+    source.connect(envelope).connect(fade).connect(tone).connect(gain).connect(out.input);
+    // No two strikes alike: a few cents, a little level, and for one-shots a hair later into the sample.
+    const oneShot = !zone.loop;
+    const offset = (Math.random() * 2 - 1) * (oneShot ? 7 : 3);
+    const strike = oneShot ? 0.9 + Math.random() * 0.18 : 1;
 
     const points = instrument.volumeEnvelope?.points;
     if (points) {
@@ -387,9 +435,9 @@ export class Player {
       if (env.sustain < 1) envelope.gain.setTargetAtTime(env.sustain, t + env.attack, Math.max(0.001, env.decay / 3));
     }
     const level = instrument.gain * (zone.gain ?? 1);
-    gain.gain.setValueAtTime(volume * level, t);
+    gain.gain.setValueAtTime(volume * level * strike, t);
 
-    const voice: Voice = { source, envelope, fade, volume: gain, instrument, level, root: zone.root, start: t, stopped: false };
+    const voice: Voice = { source, envelope, fade, volume: gain, instrument, level: level * strike, root: zone.root, offset, start: t, stopped: false };
     if (slideIn) {
       source.detune.setValueAtTime(cents(note + slideIn.semis, voice), t);
       source.detune.linearRampToValueAtTime(cents(note, voice), t + slideIn.ticks * tick);
@@ -408,10 +456,11 @@ export class Player {
       lfo.start(t);
       voice.vibrato = lfo;
     }
-    source.start(t);
+    source.start(t, oneShot ? Math.random() * 0.004 : 0);
     source.onended = () => {
       envelope.disconnect();
       fade.disconnect();
+      tone.disconnect();
       gain.disconnect();
       voice.vibrato?.disconnect();
       this.voices.delete(voice);
@@ -441,6 +490,17 @@ export class Player {
     voice.vibrato?.stop(end);
   }
 
+  /** A room's response, made once per size and damping. */
+  private room(seconds: number, damping: number): AudioBuffer {
+    const key = `${seconds}:${damping}`;
+    let buffer = this.rooms.get(key);
+    if (!buffer) {
+      buffer = impulseResponse(this.ctx, seconds, damping);
+      this.rooms.set(key, buffer);
+    }
+    return buffer;
+  }
+
   private bufferFor(zone: SampleZone): AudioBuffer {
     let buffer = this.buffers.get(zone.data);
     if (!buffer) {
@@ -456,26 +516,68 @@ export class Player {
 }
 
 function cents(pitch: number, voice: Voice): number {
-  return (pitch - voice.root) * 100;
+  return (pitch - voice.root) * 100 + voice.offset;
 }
 
-/** A plain hall: stereo noise decaying over `seconds`, darker as it fades, after a short gap. */
-function impulseResponse(ctx: AudioContext, seconds: number): AudioBuffer {
+/**
+ * The tone filter's cutoff for a note: high for loud notes, low for soft ones, and above the note's
+ * own pitch either way. Drums (an instrument of named strokes) go by loudness alone.
+ */
+function brightness(instrument: Instrument, note: number, volume: number): number {
+  const v = Math.min(1, Math.max(0, volume));
+  if (instrument.keys) return 1800 + 16000 * v * v;
+  const hz = 440 * 2 ** ((note - 69) / 12);
+  return Math.min(18000, Math.max(500, hz * (3 + 36 * v * v)));
+}
+
+/**
+ * How much longer than written a row lasts: music breathes. Each section broadens a little into its
+ * last bar, the piece slows into its final chord, and a climax ("+") presses on a touch. A song's
+ * rubato (0 for strict dance time, 1 for the most) scales all of it.
+ */
+function breathing(song: Song, patternIndex: number, row: number): number {
+  const rubato = song.rubato ?? 0;
+  if (rubato === 0) return 1;
+  const pattern = song.patterns[patternIndex];
+  const bar = song.beatsPerBar * song.rowsPerBeat;
+  const toEnd = pattern.rows - row;
+  let factor = 1;
+  if (toEnd <= bar) factor += 0.08 * rubato * (1 - toEnd / bar) ** 2;
+  if (patternIndex === song.patterns.length - 1 && toEnd <= bar * 2) factor += 0.35 * rubato * (1 - toEnd / (bar * 2)) ** 2;
+  if (pattern.section.endsWith("+")) factor -= 0.03 * rubato;
+  return factor;
+}
+
+/**
+ * A room's response: a gap, a few early reflections off near walls (different on each side), then a
+ * dense tail ringing down over `seconds` and growing darker as it goes - more so the more `damping`
+ * (0 bright stone, 1 soft and absorbent). Each ear's tail is its own noise, for width.
+ */
+function impulseResponse(ctx: AudioContext, seconds: number, damping: number): AudioBuffer {
   const rate = ctx.sampleRate;
   const length = Math.floor(seconds * rate);
   const buffer = ctx.createBuffer(2, length, rate);
-  const predelay = Math.floor(0.025 * rate);
+  const predelay = Math.floor((0.012 + 0.012 * Math.min(1, seconds / 4)) * rate);
   for (let c = 0; c < 2; c++) {
     const data = buffer.getChannelData(c);
     let seed = 12345 + c * 777;
-    let low = 0;
-    for (let i = predelay; i < length; i++) {
+    const random = (): number => {
       seed = (Math.imul(seed, 1664525) + 1013904223) | 0;
-      const white = (seed >>> 0) / 4294967296 - 0.5;
-      const t = (i - predelay) / rate;
-      const a = 0.9 * Math.exp(-t / 0.5) + 0.05;
-      low += a * (white - low);
-      data[i] = low * Math.exp(-t / (seconds / 5)) * 2;
+      return (seed >>> 0) / 4294967296;
+    };
+    // Early reflections: a handful of taps within the first tenth of a second or so.
+    for (let k = 0; k < 7; k++) {
+      const at = predelay + Math.floor((0.004 + random() * 0.07 * Math.min(1.5, seconds / 2.5)) * rate);
+      if (at < length) data[at] += (random() < 0.5 ? -1 : 1) * (0.5 - k * 0.05);
+    }
+    let low = 0;
+    const tailStart = predelay + Math.floor(0.02 * rate);
+    for (let i = tailStart; i < length; i++) {
+      const t = (i - tailStart) / rate;
+      // The one-pole lowpass closes as the tail ages: high frequencies die first.
+      const open = (1 - 0.6 * damping) * Math.exp(-t / (seconds * (0.5 - 0.3 * damping))) + 0.04;
+      low += Math.min(1, open) * (random() - 0.5 - low);
+      data[i] += low * Math.exp(-t / (seconds / 6.9)) * 2.2 * Math.min(1, t / 0.03);
     }
   }
   return buffer;

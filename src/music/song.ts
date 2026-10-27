@@ -72,6 +72,12 @@ export interface Song {
   channels: Channel[];
   /** In play order. */
   patterns: Pattern[];
+  /** How much the tempo breathes (0 strict, 1 the most): see the player's breathing. */
+  rubato?: number;
+  /** The room the song is played in: reverb length in seconds, and how soft its walls are (0..1). */
+  room?: { seconds: number; damping: number };
+  /** How much of the song goes to the echo. */
+  echo?: number;
   /** What the composer chose, for display. */
   summary: Record<string, string>;
 }

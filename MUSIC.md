@@ -330,6 +330,27 @@ the forest style using synth stand-ins.
   - There is no delay send.
   - The patterns are the song in play order; there is no separate order list.
 
+## Playback
+
+These are things the player does for every song, so they change how the same notes sound.
+
+- **Louder is brighter.** Each note passes a gentle lowpass set by its volume: soft notes are
+  darker, loud ones open up. A pitched note's cutoff stays well above its own pitch; drums go by
+  loudness alone.
+- **No identical repeats.** Each strike of a one-shot (drums, plucks) gets a few cents of detune,
+  a little level and a start up to 4 ms into the sample. Looped sounds get only a slight detune.
+- **Breathing tempo** (`rubato` per style, 0 to 1):
+  - Each section broadens into its last bar.
+  - The piece slows into its final chord.
+  - A climax presses on slightly.
+  - Dances keep near-strict time (0.1); the holy and snow styles breathe the most (1).
+- **A room per style** (`room`): the reverb is a gap, early reflections off near walls (different
+  for each ear), then a tail that darkens as it rings down. `seconds` is its length, `damping` how
+  soft the walls are. For example, the tavern is a small soft room (1.2 s), the holy style a stone
+  hall (5.5 s), and the swamp damp and dark (3.8 s, heavy damping).
+- **An echo** (`echo` per style): a stereo ping-pong delay a dotted eighth long, each repeat a bit
+  darker. It is sent mostly from the lead and the colour parts, with a little from pads and drums.
+
 ## In the game
 
 `src/music/gameMusic.ts` plays music in the game, driven from `src/main.ts` every frame.
