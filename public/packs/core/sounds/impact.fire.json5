@@ -1,0 +1,11 @@
+// Fire bursting on its target: a soft boom, a roar falling away, embers crackling after.
+{
+  near: 5, far: 55, maxVoices: 4,
+  pitch: [-1.5, 1], volume: [0.9, 1],
+  takes: 3,
+  layers: [
+    { synth: { tone: "sine", hz: [130, 38], env: { attack: 0.003, decay: 0.45, curve: 2 }, gain: 1, drive: 3 }, standIn: true },
+    { synth: { noise: "pink", filter: { type: "lowpass", hz: [5000, 300], q: 0.8 }, env: { attack: 0.002, hold: 0.04, decay: 0.55, curve: 2 }, gain: 1.3 }, standIn: true },
+    { synth: { crackle: true, density: 60, click: 0.005, filter: { type: "highpass", hz: 1500 }, env: { attack: 0.02, decay: 0.7 }, gain: 0.5, delay: 0.08 }, standIn: true },
+  ],
+}

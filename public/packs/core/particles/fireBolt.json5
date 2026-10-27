@@ -1,0 +1,11 @@
+// A fireball in flight: a bright core carried along, and embers and smoke left behind it. Loops.
+{
+  loop: true,
+  emitters: [
+    { sprite: "softDot", blend: "add", rate: 30, life: 0.12, local: true, size: [[0, 0.55], [1, 0.4]], colour: [[0, "#fff2c0d0"], [1, "#ff902000"]] },
+    { sprite: "flame", blend: "add", rate: 60, life: [0.15, 0.3], shape: { sphere: 0.1 }, speed: [0.2, 0.6], size: [[0, 0.3], [1, 0.08]], colour: [[0, "#ffe090"], [0.4, "#ff7a20"], [1, "#a0100000"]] },
+    { sprite: "smoke", blend: "alpha", rate: 18, life: [0.4, 0.7], shape: { sphere: 0.1 }, speed: [0.1, 0.4], gravity: -0.6, spin: [-1.5, 1.5],
+      size: [[0, 0.15], [1, 0.45]], colour: [[0, "#30282060"], [1, "#30282000"]] },
+    { mesh: "ember", blend: "add", rate: 20, life: [0.3, 0.6], shape: { sphere: 0.12 }, speed: [0.5, 1.5], gravity: -1, size: 0.03, colour: [[0, "#ffd060"], [1, "#ff402000"]] },
+  ],
+}

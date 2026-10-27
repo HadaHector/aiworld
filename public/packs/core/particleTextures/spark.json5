@@ -1,0 +1,2 @@
+// A thin streak, stretched along its velocity: sparks off metal.
+{ kind: "spark", size: 64, width: 0.07, power: 3 }

@@ -1,0 +1,2 @@
+// Flame tongues, three different ones.
+{ kind: "flame", size: 64, variants: 3, rough: 0.7 }

@@ -1,0 +1,8 @@
+// Metal struck: a spray of stretched sparks and a white glint.
+{
+  emitters: [
+    { sprite: "spark", blend: "add", burst: 14, life: [0.15, 0.35], shape: { sphere: 0.08 }, speed: [4, 9], gravity: 8, drag: 1, stretch: 0.05,
+      size: [[0, 0.12], [1, 0.04]], colour: [[0, "#fff6d0"], [0.4, "#ffc050"], [1, "#ff602000"]] },
+    { sprite: "star", blend: "add", burst: 1, life: 0.12, size: [[0, 0.5], [1, 0.2]], colour: [[0, "#ffffffff"], [1, "#ffe0a000"]] },
+  ],
+}

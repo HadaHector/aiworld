@@ -1,0 +1,7 @@
+// Fire gathering in the caster's hands while a fire spell is cast.
+{
+  parts: [
+    { sound: "fire.cast", at: "source", bone: "hands" },
+    { particles: "fireHands", at: "source", bone: "hands" },
+  ],
+}

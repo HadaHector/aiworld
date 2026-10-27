@@ -14,7 +14,7 @@
   habitat: { meadow: 2, bluebellWood: 3, autumnWood: 3, snowyTaiga: 3, frostSteppe: 2, heatherMoor: 2, alpineMeadow: 1, windsweptFell: 2, greenAlps: 1, savanna: 1 },
   respawn: [240, 360],
   loot: "wolf",
-  look: { height: 1.0, radius: 0.55, color: [0.45, 0.42, 0.38] },
+  look: { height: 1.0, radius: 0.55, color: [0.45, 0.42, 0.38], feedback: { weapon: "fang", armor: "fur", family: "wolf" } },
   variants: [
     { id: "timber", name: "Timber", habitat: ["meadow", "bluebellWood", "autumnWood", "heatherMoor", "alpineMeadow", "greenAlps"] },
     { id: "frost", name: "Frost", habitat: ["snowyTaiga", "frostSteppe", "windsweptFell"], look: { color: [0.85, 0.88, 0.92] }, stats: { armor: 35 }, spells: [{ skill: "frostBite" }], tactics: [{ skill: "frostBite", every: [14, 18] }] },

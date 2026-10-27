@@ -14,7 +14,7 @@
   flee: { at: 0.2, time: 6 },
   respawn: [240, 360],
   loot: "boar",
-  look: { height: 0.9, radius: 0.6, color: [0.36, 0.28, 0.22] },
+  look: { height: 0.9, radius: 0.6, color: [0.36, 0.28, 0.22], feedback: { weapon: "tusk", armor: "fur", family: "boar" } },
   variants: [
     { id: "bristle", name: "Bristleback", habitat: ["meadow", "bluebellWood", "autumnWood"] },
     { id: "dust", name: "Dust", habitat: ["savanna", "sageHills", "redBush", "maquis"], look: { color: [0.62, 0.48, 0.34] } },

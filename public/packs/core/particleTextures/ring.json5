@@ -1,0 +1,2 @@
+// A thin ring: shockwaves and shields.
+{ kind: "ring", size: 128, radius: 0.75, width: 0.06 }

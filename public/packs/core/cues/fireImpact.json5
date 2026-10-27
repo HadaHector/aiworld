@@ -1,0 +1,11 @@
+// Fire bursting on its target.
+{
+  parts: [
+    { sound: "impact.fire" },
+    { particles: "fireBurst" },
+    { flash: [1, 0.55, 0.2], time: 0.15 },
+    { flinch: 0.5 },
+    { shake: 0.3, when: { crit: true } },
+    { pause: 0.05, when: { crit: true } },
+  ],
+}

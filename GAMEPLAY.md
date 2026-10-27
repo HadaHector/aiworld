@@ -200,7 +200,7 @@ The first chain the generator must be able to make, and the yardstick for its pa
 - **Text in English first,** but built for localisation. Generated text must therefore come from
   translatable templates, not strings put together in code.
 - **Keyboard and mouse first.**
-- **Sound:** combat needs good sound effects; how they are made is open.
+- **Sound:** combat needs good sound effects: generated for now, samples later (FEEDBACK.md).
 
 ## Saved state
 
@@ -314,6 +314,13 @@ A proposal, to be confirmed. Each step gets its own plan document.
    bank and equipment that adds modifiers and shows on the body; loot tables, loot from the dummy,
    a chest and the ground; items cast skills on use and equip.
 8. **Disciplines and progression:** XP per discipline, levels, unlocks.
+
+   *Alongside step 8:* **Feedback** - see [FEEDBACK.md](FEEDBACK.md). Sound effects, particle
+   effects and hit feel, driven by cues in packs that map combat events and client events to
+   feedback; skills name cues for their cast, release, projectile, impact and aura phases.
+   Generated synth sounds that samples can replace later, a particle system with generated
+   textures, flash, flinch, camera shake and hit pause, footsteps by surface, and a dev page
+   (`fx.html`). Client side, plus pack data and the `cues` field of skills.
 9. **NPCs and the quest generator,** up to the test chain.
 10. **HUD and screens:** unit frames, action bar, inventory, quest log.
 

@@ -1,0 +1,12 @@
+// Fire gathering in the hands: a low roar with crackles and a humming shimmer that wavers. Loops.
+{
+  near: 4, far: 40, maxVoices: 4,
+  volume: [0.8, 0.9],
+  takes: 1,
+  loop: 2,
+  layers: [
+    { synth: { noise: "brown", filter: { type: "lowpass", hz: 700, q: 1.2 }, env: { attack: 0.4 }, gain: 1.1, tremolo: { rate: 3.3, depth: 0.35 } }, standIn: true },
+    { synth: { crackle: true, density: 30, click: 0.006, filter: { type: "highpass", hz: 1200 }, env: { attack: 0.3 }, gain: 0.5 }, standIn: true },
+    { synth: { fm: true, hz: 196, ratio: 1.5, index: 1.2, env: { attack: 0.5 }, gain: 0.12, vibrato: { rate: 5, depth: 0.25 }, tremolo: { rate: 7, depth: 0.3 } }, standIn: true },
+  ],
+}

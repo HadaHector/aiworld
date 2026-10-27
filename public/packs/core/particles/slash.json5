@@ -1,0 +1,6 @@
+// A swing's arc, a pale crescent that fades as it sweeps.
+{
+  emitters: [
+    { sprite: "slash", blend: "add", burst: 1, life: 0.18, spin: [8, 8], size: [[0, 0.9], [1, 1.2]], colour: [[0, "#ffffff70"], [1, "#ffffff00"]] },
+  ],
+}

@@ -1,0 +1,11 @@
+// A fireball in flight: a fluttering roar with sparks crackling off it. Loops.
+{
+  near: 3, far: 35, maxVoices: 6,
+  pitch: [-1, 1], volume: [0.7, 0.8],
+  takes: 1,
+  loop: 1,
+  layers: [
+    { synth: { noise: "pink", filter: { type: "bandpass", hz: 900, q: 0.9 }, env: { attack: 0.08 }, gain: 0.8, tremolo: { rate: 13, depth: 0.5 } }, standIn: true },
+    { synth: { crackle: true, density: 45, click: 0.004, filter: { type: "highpass", hz: 2000 }, env: { attack: 0.05 }, gain: 0.45 }, standIn: true },
+  ],
+}

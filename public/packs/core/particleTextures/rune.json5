@@ -1,0 +1,2 @@
+// Glyphs in a circle, six different ones, for spells being cast.
+{ kind: "rune", size: 64, variants: 6, strokes: [3, 5], ring: true, width: 0.07, glow: 0.25 }

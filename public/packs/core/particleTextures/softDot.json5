@@ -1,0 +1,2 @@
+// A soft round glow: the workhorse of fire, magic and motes.
+{ kind: "dot", size: 64, power: 2 }

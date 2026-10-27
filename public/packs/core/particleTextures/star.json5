@@ -1,0 +1,2 @@
+// A four-pointed glint.
+{ kind: "star", size: 64, points: 4, power: 3, glow: 0.3 }

@@ -1,0 +1,9 @@
+// A blow landing on something soft: a small puff of dust and a few flecks.
+{
+  emitters: [
+    { sprite: "smoke", blend: "alpha", burst: 5, life: [0.35, 0.6], shape: { sphere: 0.15 }, speed: [0.6, 1.4], drag: 3, spin: [-2, 2],
+      size: [[0, 0.25], [1, 0.6]], colour: [[0, "#d8ccb8a0"], [1, "#d8ccb800"]] },
+    { mesh: "chip", blend: "alpha", burst: 6, life: [0.3, 0.5], speed: [2, 4], gravity: 9, spin: [-12, 12],
+      size: 0.05, colour: [[0, "#7a6a58ff"], [0.7, "#7a6a58ff"], [1, "#7a6a5800"]] },
+  ],
+}

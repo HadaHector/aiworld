@@ -3,7 +3,7 @@ import { GAME_FOLDERS, orderPacks, parseFile, type PackSource } from "../../worl
 import { hashString } from "../../world/content/dimensions";
 import type { ColorTuple } from "../../world/terrain/pipeline/pipelineTypes";
 import { compileFormula, type CompiledFormula } from "./formula";
-import { readCombatRules, readSkills, type CombatRules, type SkillDef } from "./skillRules";
+import { readCombatRules, readSkills, stringMap, type CombatRules, type SkillDef } from "./skillRules";
 
 /** Who a stat's or a resource's value is sent to (see ENTITIES.md, *Replication*). */
 export type Visibility = "owner" | "all";
@@ -76,6 +76,9 @@ export interface EntityLook {
   outfit: string;
   /** A sex instead of the entity's seed's; "" to leave it to the seed. */
   sex: "male" | "female" | "";
+  /** What its hits and deaths sound and look like (FEEDBACK.md): `weapon`, `armor`, `family`. For
+   *  the client alone. */
+  feedback: Readonly<Record<string, string>>;
 }
 
 /** A standing modifier a template gives the entities made from it. */
@@ -155,7 +158,7 @@ export const HEALTH = "health";
 export const PLAYER_TEMPLATE = "player";
 
 const ID_PATTERN = /^[A-Za-z0-9_-]+$/;
-const DEFAULT_LOOK: EntityLook = { shape: "capsule", height: 1.8, radius: 0.4, color: [0.7, 0.7, 0.7], race: "", outfit: "", sex: "" };
+const DEFAULT_LOOK: EntityLook = { shape: "capsule", height: 1.8, radius: 0.4, color: [0.7, 0.7, 0.7], race: "", outfit: "", sex: "", feedback: {} };
 
 interface Entry {
   id: string;
@@ -444,7 +447,7 @@ function readTemplate(id: string, obj: RawObject, reader: Reader, { statIndex, k
   let look = DEFAULT_LOOK;
   if (obj.look !== undefined) {
     const raw = reader.object(obj.look, "look");
-    reader.onlyKeys(raw, "look", ["shape", "height", "radius", "color", "race", "outfit", "sex"]);
+    reader.onlyKeys(raw, "look", ["shape", "height", "radius", "color", "race", "outfit", "sex", "feedback"]);
     look = {
       shape: raw.shape === undefined ? "capsule" : reader.oneOf(raw, "shape", "look", ["capsule", "box"] as const),
       height: reader.optionalNumber(raw, "height", "look", DEFAULT_LOOK.height, { min: 0.1 }),
@@ -453,6 +456,7 @@ function readTemplate(id: string, obj: RawObject, reader: Reader, { statIndex, k
       race: reader.optionalString(raw, "race", "look") ?? "",
       outfit: reader.optionalString(raw, "outfit", "look") ?? "",
       sex: raw.sex === undefined ? "" : reader.oneOf(raw, "sex", "look", ["male", "female"] as const),
+      feedback: stringMap(reader, raw, "feedback", "look"),
     };
   }
 

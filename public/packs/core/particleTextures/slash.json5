@@ -1,0 +1,2 @@
+// An arc for a weapon's swing.
+{ kind: "slash", size: 128, sweep: 140, radius: 0.72, width: 0.14 }

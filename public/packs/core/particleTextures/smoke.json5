@@ -1,0 +1,2 @@
+// Lumpy puffs of smoke and dust, four different ones.
+{ kind: "smoke", size: 128, variants: 4, rough: 0.6 }

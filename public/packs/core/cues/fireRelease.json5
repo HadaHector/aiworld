@@ -1,0 +1,6 @@
+// A fire spell let go.
+{
+  parts: [
+    { sound: "fire.release", at: "source", bone: "hands" },
+  ],
+}

@@ -1,0 +1,9 @@
+// A swing that hits nothing: airier and higher than a swing, with a little fall at the end.
+{
+  near: 3, far: 30, maxVoices: 4,
+  pitch: [-1, 1.5], volume: [0.7, 0.9],
+  layers: [
+    { synth: { noise: "white", filter: { type: "bandpass", hz: [1400, 3200], q: 2.2 }, env: { attack: 0.05, decay: 0.2, curve: 2.5 }, gain: 1.1 }, standIn: true },
+    { synth: { tone: "triangle", hz: [520, 360], env: { attack: 0.04, decay: 0.12 }, gain: 0.08, delay: 0.05 }, standIn: true },
+  ],
+}

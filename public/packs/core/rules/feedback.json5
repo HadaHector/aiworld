@@ -1,0 +1,17 @@
+// Feedback (see FEEDBACK.md): which cue each event plays when its skill names none, what weapons
+// and armour sound like, the mix and the budgets. A later pack replaces this file whole.
+{
+  events: {
+    hit: [{ tags: ["melee"], cue: "meleeHit" }],
+    miss: [{ tags: ["melee"], cue: "whiff" }],
+    animation: [{ name: "swing", cue: "swing" }],
+  },
+  // Weapon kinds by item template or gear piece.
+  weapons: { sword: "blade", greatsword: "blade", axe: "blade", dagger: "blade", mace: "blunt", hammer: "blunt", staff: "blunt" },
+  // Armour kinds by gear material.
+  armors: { linen: "cloth", wool: "cloth", leather: "leather", studdedLeather: "leather", mail: "metal", plate: "metal", bronze: "metal", fur: "fur" },
+  mix: { master: 0.8, combat: 1, footsteps: 0.45, ui: 0.6 },
+  voices: 28,
+  particles: { sprites: 3000, meshes: 600 },
+  others: { volume: 0.5, particles: 0.5 },
+}

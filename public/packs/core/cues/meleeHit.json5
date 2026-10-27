@@ -1,0 +1,10 @@
+// A melee blow landing: the sound of this weapon on this armour, a puff or sparks, and on a crit a
+// harder knock for the player's own fights.
+{
+  parts: [
+    { sound: "hit.{weapon}.{armor}" },
+    { particles: "hit.{armor}" },
+    { shake: 0.25, when: { crit: true } },
+    { pause: 0.04, when: { crit: true } },
+  ],
+}

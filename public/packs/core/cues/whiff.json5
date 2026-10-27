@@ -1,0 +1,6 @@
+// A melee blow that misses.
+{
+  parts: [
+    { sound: "whiff", at: "source", bone: "weapon" },
+  ],
+}

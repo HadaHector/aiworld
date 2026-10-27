@@ -1,0 +1,9 @@
+// A fireball let go: a whoosh rising fast, and a bright zap with it.
+{
+  near: 4, far: 45, maxVoices: 4,
+  pitch: [-1, 1], volume: [0.85, 1],
+  layers: [
+    { synth: { noise: "pink", filter: { type: "bandpass", hz: [300, 2600], q: 1.4 }, env: { attack: 0.04, hold: 0.05, decay: 0.3 }, gain: 1.6 }, standIn: true },
+    { synth: { tone: "saw", hz: [220, 880], env: { attack: 0.01, decay: 0.22 }, gain: 0.1, filter: { type: "lowpass", hz: [800, 4000] }, crush: { bits: 7 } }, standIn: true },
+  ],
+}

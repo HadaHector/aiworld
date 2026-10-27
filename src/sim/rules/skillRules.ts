@@ -209,6 +209,8 @@ export interface SkillDef {
   states: StateDef[];
   start: number;
   scope: ScopeLayout;
+  /** Phase → cue id (FEEDBACK.md): for the client alone, which checks them against its cues. */
+  cues: Readonly<Record<string, string>>;
 }
 
 export interface SkillRules {
@@ -234,6 +236,7 @@ interface Entry {
 const SKILL_KEYS = [
   "name", "tags", "type", "weapon", "passive", "target", "hostOn", "range", "minRange", "los", "facing", "cost", "cooldown", "category", "gcd",
   "requires", "blockedBy", "targetRequires", "targetBlockedBy", "display", "dispel", "keepOnDeath", "stacking", "areas", "groups", "vars", "start", "states",
+  "cues",
 ];
 const STATE_KEYS = ["length", "period", "enter", "tick", "exit", "hold", "next", "on", "bar", "breakOnMove", "interruptible", "commit", "refill"];
 const FILTER_KEYS = ["relation", "alive", "has", "hasNot", "flags", "notFlags", "self", "los", "range", "facing"];
@@ -562,7 +565,21 @@ function readSkill(entry: Entry, index: number, vars: string[], read: ReadContex
     states,
     start: obj.start === undefined ? 0 : Math.max(stateRef(obj.start, "start"), 0),
     scope,
+    cues: stringMap(reader, obj, "cues"),
   };
+}
+
+/** An optional object of strings, passed through unread: fields only the client uses. */
+export function stringMap(reader: Reader, obj: RawObject, key: string, path = ""): Record<string, string> {
+  if (obj[key] === undefined) return {};
+  const at = joinPath(path, key);
+  const raw = reader.object(obj[key], at);
+  const out: Record<string, string> = {};
+  for (const name of Object.keys(raw)) {
+    if (typeof raw[name] === "string") out[name] = raw[name] as string;
+    else reader.fail(joinPath(at, name), "expected text");
+  }
+  return out;
 }
 
 /** A list of actions. In a `hold` only held kinds may stand, and held kinds only there. */

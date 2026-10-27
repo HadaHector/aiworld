@@ -1,0 +1,6 @@
+// A weapon swinging (the `animation` event): the whoosh, at the swinger's weapon.
+{
+  parts: [
+    { sound: "swing", at: "source", bone: "weapon" },
+  ],
+}

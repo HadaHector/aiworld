@@ -1,0 +1,2 @@
+// A bright point with a hard core, for embers and glints.
+{ kind: "dot", size: 32, power: 5, glow: 0.25 }
