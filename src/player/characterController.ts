@@ -5,6 +5,7 @@ import type { EntityMotion } from "../sim/protocol";
 import { createInput } from "./input";
 import type { PlayerBody } from "../game/playerBody";
 import type { BodyPlace } from "../game/characterBody";
+import type { Feelable } from "../feedback/feel";
 
 export interface Character {
   mesh: Mesh;
@@ -21,6 +22,8 @@ export interface Character {
   /** Draws the player with a body (game/playerBody.ts) instead of the capsule, which stays as the
    *  place the camera and the lights follow. */
   attachBody: (body: PlayerBody) => void;
+  /** Its body, for flashes, flinches and pauses (FEEDBACK.md); null before the body is in. */
+  feelable: () => Feelable | null;
   /** Where a bone of its body is (FEEDBACK.md); false before the body is in. */
   place: (bone: BodyPlace, out: Vector3) => boolean;
   dispose: () => void;
@@ -77,6 +80,7 @@ export function createCharacter(scene: Scene, start: { x: number; y: number; z: 
     readIntent,
     show,
     swing: () => body?.swing(),
+    feelable: () => body,
     place(bone, out) {
       if (!body) return false;
       body.place(bone, out);

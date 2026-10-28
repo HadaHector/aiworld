@@ -118,20 +118,7 @@ export function drawParticleTexture(def: ParticleTextureDef, variant: number): T
   const lumps = valueNoise(rng, 5);
   const fine = valueNoise(rng, 11);
 
-  // Rune strokes: points on a 5x5 grid inside the circle, joined.
-  const segments: [number, number, number, number][] = [];
-  if (def.kind === "rune") {
-    const count = def.strokes[0] + Math.floor(rng() * (def.strokes[1] - def.strokes[0] + 1));
-    const point = (): [number, number] => [(Math.floor(rng() * 5) - 2) * 0.22, (Math.floor(rng() * 5) - 2) * 0.22];
-    let last = point();
-    for (let i = 0; i < count; i++) {
-      let next = point();
-      for (let tries = 0; tries < 8 && next[0] === last[0] && next[1] === last[1]; tries++) next = point();
-      segments.push([last[0], last[1], next[0], next[1]]);
-      // Mostly a running line; now and then a stroke starts somewhere new.
-      last = rng() < 0.7 ? next : point();
-    }
-  }
+  const segments = def.kind === "rune" ? runeStrokes(rng, def.strokes[0] + Math.floor(rng() * (def.strokes[1] - def.strokes[0] + 1))) : [];
 
   for (let py = 0; py < size; py++) {
     for (let px = 0; px < size; px++) {
@@ -207,6 +194,57 @@ export function drawParticleTexture(def: ParticleTextureDef, variant: number): T
     }
   }
   return { size, luminance, alpha };
+}
+
+/**
+ * A rune's strokes, cut the way runes are, not scribbled: a straight vertical stave (or two), with
+ * short twigs at about 45° branching off it at the top, the middle or the bottom - often in mirror
+ * pairs - and now and then a closed diamond instead. `strokes` is about how many lines it has.
+ * Coordinates run -1..1, y up; everything stays inside a ring of radius 0.8.
+ */
+function runeStrokes(rng: () => number, strokes: number): [number, number, number, number][] {
+  const top = 0.56;
+  const out: [number, number, number, number][] = [];
+  const kind = rng();
+  if (kind < 0.12) {
+    // A diamond, with crossing tails when there are strokes to spare.
+    const w = 0.3;
+    const h = strokes > 4 ? 0.3 : 0.45;
+    out.push([0, h, w, 0], [w, 0, 0, -h], [0, -h, -w, 0], [-w, 0, 0, h]);
+    if (strokes > 4) out.push([-w * 0.5, h * 0.5, w * 1.4, -top], [w * 0.5, h * 0.5, -w * 1.4, -top]);
+    return out;
+  }
+  if (kind < 0.32) {
+    // Two staves, joined by a crossbar, a cross or a diagonal.
+    const x = 0.24;
+    out.push([-x, -top, -x, top], [x, -top, x, top]);
+    const join = rng();
+    if (join < 0.34) out.push([-x, 0.15, x, -0.15]);
+    else if (join < 0.67) out.push([-x, top, x, 0], [x, top, -x, 0]);
+    else out.push([-x, top, x, -top], [x, top, -x, -top]);
+    return out;
+  }
+  // One stave and its twigs.
+  out.push([0, -top, 0, top]);
+  const anchors = [top, top * 0.3, -top * 0.3, -top];
+  const mirrored = rng() < 0.45;
+  let twigs = Math.max(1, strokes - 1);
+  while (twigs > 0 && anchors.length > 0) {
+    const y = anchors.splice(Math.floor(rng() * anchors.length), 1)[0];
+    // From the stave's ends twigs can only go inward; from the middle either way.
+    const down = y === top ? true : y === -top ? false : rng() < 0.5;
+    const length = 0.32 + rng() * 0.12;
+    const dx = length * 0.72;
+    const dy = (down ? -1 : 1) * length * 0.72;
+    const side = rng() < 0.5 ? -1 : 1;
+    out.push([0, y, side * dx, y + dy]);
+    twigs--;
+    if (mirrored && twigs > 0) {
+      out.push([0, y, -side * dx, y + dy]);
+      twigs--;
+    }
+  }
+  return out;
 }
 
 function hashId(id: string): number {

@@ -9,6 +9,7 @@ import { createSfx, type Sfx, type Vec3 } from "../audio/sfx";
 import type { RenderedSound } from "../audio/synth";
 import { createEngine } from "../core/engine";
 import { createCuePlayer, type Bone, type CuePlayer, type UnitTraits } from "../feedback/cues";
+import { createFeel } from "../feedback/feel";
 import { resolveFeedback, type FeedbackRules, type ParticleEffectDef, type SoundDef } from "../feedback/rules";
 import { createBodyKit, createCharacterBody, type CharacterBody } from "../game/characterBody";
 import { createParticleRenderer } from "../particles/render";
@@ -117,7 +118,8 @@ const place = (unit: number, bone: Bone): Vec3 | null => {
   return { x: p.x, y: p.y + HEIGHTS[bone], z: p.z };
 };
 
-// --- particles ---------------------------------------------------------------------------------
+// --- particles and hit feel ---------------------------------------------------------------------
+const feel = createFeel();
 const particles = createParticleSystem(rules);
 const renderer = createParticleRenderer(scene, particles, rules);
 
@@ -151,9 +153,12 @@ const cues: CuePlayer = createCuePlayer(
     targetOf: () => 0,
     place,
     traits: (unit) => (unit === SOURCE ? traits.source : traits.target),
+    feelable: (unit) => bodies.get(unit) ?? null,
+    maxHealth: () => 100,
   },
   () => sfx,
   () => particles,
+  () => feel,
 );
 
 // --- every frame -------------------------------------------------------------------------------
@@ -170,6 +175,8 @@ engine.runRenderLoop(() => {
   cues.update();
   particles.update(dt * Number(speed.value), camera.globalPosition);
   renderer.update();
+  const shake = feel.update(dt);
+  camera.targetScreenOffset.set(shake.x, shake.y);
   if (sfx) {
     camera.getDirectionToRef(Vector3.Forward(), forward);
     sfx.setListener(camera.globalPosition, forward, { x: 0, y: 1, z: 0 });
@@ -538,8 +545,7 @@ function cueDetail(id: string): void {
   for (const part of cue.parts) {
     const what = part.kind === "sound" || part.kind === "particles" ? part.ref : part.kind === "flash" ? part.colour.map((c) => c.toFixed(2)).join(", ") : String(part.strength);
     const when = Object.entries(part.when).map(([k, v]) => `${k}=${v}`).join(" ");
-    const shown = part.kind === "sound" || part.kind === "particles";
-    detail.append(layer(`${part.kind} ${what} · at ${part.at}${part.kind === "shake" || part.kind === "pause" ? "" : ` (${part.bone})`}${when ? ` · when ${when}` : ""}${part.delay ? ` · delay ${part.delay}` : ""}`, shown ? "" : "not shown yet"));
+    detail.append(layer(`${part.kind} ${what} · at ${part.at}${part.kind === "shake" || part.kind === "pause" ? "" : ` (${part.bone})`}${when ? ` · when ${when}` : ""}${part.delay ? ` · delay ${part.delay}` : ""}`, part.kind === "shake" || part.kind === "pause" ? "own fights only" : ""));
   }
 }
 

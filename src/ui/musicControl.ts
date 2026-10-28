@@ -1,16 +1,19 @@
-// A small sound control in the corner: the music's volume and what is playing, and the sound
-// effects' volume (FEEDBACK.md). Both volumes are kept between visits.
+// A small sound control in the corner: the music's volume and what is playing, the sound effects'
+// volume and how much the screen shakes (FEEDBACK.md). All three are kept between visits.
 
 export interface MusicControl {
   /** The music volume set, 0..1 (already eased: the slider's middle is not half the loudness). */
   volume: number;
   /** The effects volume set, 0..1, eased the same way. */
   effects: number;
+  /** How much the screen shakes in the player's own fights, 0 (never) to 1. */
+  shake: number;
   setStatus: (text: string) => void;
 }
 
 const MUSIC_KEY = "aiworld.music.volume";
 const EFFECTS_KEY = "aiworld.effects.volume";
+const SHAKE_KEY = "aiworld.effects.shake";
 
 const toVolume = (p: number): number => (p / 100) ** 2;
 
@@ -61,7 +64,7 @@ function volumeSlider(symbol: string, title: string, key: string, fallback: numb
   return { elements: [label, slider], volume: toVolume(percent) };
 }
 
-export function createMusicControl(onVolume: (volume: number) => void, onEffects: (volume: number) => void = () => {}): MusicControl {
+export function createMusicControl(onVolume: (volume: number) => void, onEffects: (volume: number) => void = () => {}, onShake: (shake: number) => void = () => {}): MusicControl {
   const container = document.createElement("div");
   container.style.cssText = `
     position: fixed; bottom: 16px; right: 16px; z-index: 900;
@@ -79,10 +82,15 @@ export function createMusicControl(onVolume: (volume: number) => void, onEffects
     control.effects = v;
     onEffects(v);
   });
-  container.append(...music.elements, status, ...effects.elements);
+  const shake = volumeSlider("≈", "Screen shake", SHAKE_KEY, 100, (v) => {
+    control.shake = v;
+    onShake(v);
+  });
+  shake.elements[1].style.width = "50px";
+  container.append(...music.elements, status, ...effects.elements, ...shake.elements);
   document.body.appendChild(container);
 
-  const control: MusicControl = { volume: music.volume, effects: effects.volume, setStatus };
+  const control: MusicControl = { volume: music.volume, effects: effects.volume, shake: shake.volume, setStatus };
   let lastStatus = "";
   function setStatus(text: string): void {
     if (text === lastStatus) return;

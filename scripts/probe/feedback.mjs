@@ -11,6 +11,7 @@ import { layerLength, renderSynth } from "../../src/audio/synth.ts";
 import { SAMPLE_RATE } from "../../src/audio/dsp.ts";
 import { buildParticleAtlas, drawParticleTexture } from "../../src/particles/textures.ts";
 import { createCuePlayer } from "../../src/feedback/cues.ts";
+import { createFeel } from "../../src/feedback/feel.ts";
 import { createParticleSystem, curveAt } from "../../src/particles/system.ts";
 import { EVENT_FLAG, EVENT_KIND } from "../../src/sim/skills/events.ts";
 
@@ -56,7 +57,7 @@ await section("rules", () => {
   check("the dummy's look carries its feedback", game.templates.get("trainingDummy")?.look.feedback.armor === "metal");
   check("the event table has melee hits", feedback.config.events.get("hit")?.some((r) => r.cue === "meleeHit" && r.tags.includes("melee")));
   const meleeHit = feedback.cues.get("meleeHit");
-  check("meleeHit's parts", meleeHit?.parts.map((p) => p.kind).join() === "sound,particles,shake,pause", meleeHit?.parts.map((p) => p.kind).join());
+  check("meleeHit's parts", meleeHit?.parts.map((p) => p.kind).join() === "sound,particles,flash,flinch,shake,shake,pause", meleeHit?.parts.map((p) => p.kind).join());
 });
 
 // --- placeholders and patterns -----------------------------------------------------------------------
@@ -200,6 +201,49 @@ await section("lasting phases", () => {
   check("a unit leaving takes its cast and auras with it", cues.lasting().casts === 0 && cues.lasting().auras === 0);
   cues.events([event("death", 1, 3)]);
   check("a death plays its family's sound, else the general one", sounds.at(-1)?.sound === "death");
+});
+
+// --- hit feel --------------------------------------------------------------------------------------
+await section("hit feel", () => {
+  // Unit 1 the player at x 0, 2 its target at x 4, 3 and 4 someone else's fight.
+  const felt = [];
+  const feelable = (unit) => ({
+    flash: (colour, seconds) => felt.push({ unit, kind: "flash", colour, seconds }),
+    flinch: (x, z, strength) => felt.push({ unit, kind: "flinch", x, z, strength }),
+    pause: (seconds) => felt.push({ unit, kind: "pause", seconds }),
+  });
+  const feel = createFeel();
+  const cues = createCuePlayer(
+    feedback,
+    game,
+    { player: () => 1, target: () => 2, targetOf: () => 0, place: (u) => ({ x: u === 1 ? 0 : 4, y: 1, z: u === 3 ? 4 : 0 }), traits: () => ({}), feelable, maxHealth: () => 100 },
+    () => null,
+    () => null,
+    () => feel,
+  );
+  const hit = (source, target, crit, amount) => {
+    felt.length = 0;
+    cues.play("meleeHit", { source, target, skill: null, crit, periodic: false, amount });
+  };
+  hit(1, 2, false, 5);
+  const flinch = felt.find((f) => f.kind === "flinch");
+  check("a hit flashes and flinches its target", felt.some((f) => f.kind === "flash" && f.unit === 2) && flinch?.unit === 2);
+  check("the flinch points at where the blow came from", flinch && flinch.x < 0 && Math.abs(flinch.z) < 1e-9, JSON.stringify(flinch));
+  const small = flinch.strength;
+  hit(1, 2, false, 30);
+  check("a bigger hit flinches harder", felt.find((f) => f.kind === "flinch").strength > small);
+  check("no pause without a crit", !felt.some((f) => f.kind === "pause"));
+  const before = feel.trauma();
+  hit(1, 2, true, 30);
+  check("a crit in the player's fight pauses both and shakes", felt.filter((f) => f.kind === "pause").map((f) => f.unit).join() === "1,2" && feel.trauma() > before);
+  for (let i = 0; i < 120; i++) feel.update(1 / 60);
+  check("the shake dies away", feel.trauma() === 0);
+  hit(3, 4, true, 30);
+  check("others' fights flash and flinch but never pause or shake", felt.some((f) => f.kind === "flinch") && !felt.some((f) => f.kind === "pause") && feel.trauma() === 0);
+  feel.shake(1);
+  feel.setShake(0);
+  const still = feel.update(1 / 60);
+  check("Screen shake at 0 keeps the camera still", still.x === 0 && still.y === 0);
 });
 
 // --- broken content --------------------------------------------------------------------------------

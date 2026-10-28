@@ -10,7 +10,8 @@ fireball roars in the caster's hands, flies, and bursts on its target, a crit sh
 and pauses for an instant, deaths thud, and loot glints and chimes. A dev page plays every cue,
 sound and particle effect on its own, so it can be tuned.
 
-**Status: steps 1-4 of 7 done** (rules and content; sound in the game; particles; abilities). [As built](#as-built) notes where the
+**Status: steps 1-5 of 7 done** (rules and content; sound in the game; particles; abilities; hit
+feel). [As built](#as-built) notes where the
 build differs from this plan.
 
 ## Decisions
@@ -584,6 +585,39 @@ Each leaves the game working: dev server, `npm run probe`, `npm run server`, `np
   slow, Charge's stars. Not checked in the game: Thunder Clap landing (rage ran short), Kick's own
   interrupt, Hex Bolt, Web, and the spider's and boar's deaths. The probe gained the lasting phases
   (813 checks).
+- **Step 5: hit feel.** `src/feedback/feel.ts` has `Feelable` - flash, flinch, pause - which bodies
+  (`CharacterBody`), capsules (`entityMeshes.feelable`) and the player's character hand over, and the
+  shake: trauma added by parts, capped at 1, losing 1.8 a second, the camera moved by its square
+  through two sines at unrelated rates, up to 0.35 screen units, by setting the camera's
+  `targetScreenOffset` - so the orbit, the player's controls and camera collision are left alone.
+- **Flash**: Babylon's overlay on every mesh of the body (or the capsule), 0.6 at its height, fading
+  over the part's `time`. **Flinch**: `animation.ts` gained a `flinch` input - where the blow came from
+  in the body's frame and how hard - laid over everything but death: the spine, chest and head jerk
+  away (at their furthest after 0.05 s, home by 0.28 s); a capsule is pushed up to 12 cm away and
+  back. **Hit pause**: the body's pose stops (the animator is not stepped) while it still goes where
+  its entity is. A capsule has nothing to pause.
+- **Own fights only**: the cue player plays `shake` and `pause` only when the fight is the player's;
+  flashes and flinches play for everyone. **`scale: "amount"`** works now: the hit's amount against
+  the struck unit's maximum health (0.3 for a tick, 1 at a tenth of it, up to 2).
+- **Core**: `meleeHit` flashes white and flinches by the hit's size, shakes a little by its size and
+  harder on a crit, with a 0.04 s pause on a crit; `spellHit`, `stunHit` (Charge, Gore: a 0.06 s
+  pause and a 0.45 shake), Thunder Clap, Heroic Strike and the interrupt carry their own.
+- **Screen shake** setting: a third slider (≈) in the corner control, kept in `aiworld.effects.shake`;
+  0 keeps the camera still.
+- **The workbench** plays *Flinching*: a blow every 0.9 s from the front, the +x side, behind and the
+  -x side in turn. **`fx.html`** shakes its camera and flashes, flinches and pauses its bodies.
+- **Checked**: on `fx.html` with the body driven by hand, a crit's melee hit holds the knight still
+  for three frames, then its head jerks 15 cm away from the scout and eases back while the flash
+  fades; in the game (`?config=tiny`, frames driven by hand while the pane was hidden), auto-attacks
+  on the dummy flash its body, and the camera shakes (trauma up to 0.26). The probe gained the hit
+  feel (892 checks). Not looked at by eye in the game: the pane was hidden, so no screenshot.
+- **Runes cut, not scribbled** (asked for after step 5): a `rune` texture is now made the way runes
+  are cut - one straight vertical stave with short twigs at about 45 degrees off its top, middle or
+  bottom, often in mirror pairs; or two staves joined by a crossbar, a cross or a diagonal; or now
+  and then a closed diamond - instead of a random walk on a grid. `strokes` is about how many lines.
+- **Firefox**: its audio listener (and in some versions panners) has no position AudioParams, and
+  the error stopped every frame - the particles with it. `sfx.ts` falls back to `setPosition` and
+  `setOrientation` when they are missing.
 
 ## Not in this step
 

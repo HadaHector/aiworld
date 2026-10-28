@@ -38,6 +38,9 @@ export interface FigureOptions {
   path: "place" | "circle";
 }
 
+/** Where a blow comes from while flinching, in the body's frame: [forward, side]. */
+const FLINCH_FROM: [number, number][] = [[1, 0], [0, 1], [-1, 0], [0, -1]];
+
 /** What the workbench can play, and what each asks of the animator. */
 export const ANIMATIONS = {
   still: { label: "Still pose" },
@@ -47,6 +50,7 @@ export const ANIMATIONS = {
   swim: { label: "Swimming" },
   swing: { label: "Swinging" },
   die: { label: "Dying" },
+  flinch: { label: "Flinching" },
 } satisfies Record<string, { label: string }>;
 
 /** A body and the atlas painted for it. */
@@ -102,7 +106,9 @@ function play(scene: Scene, character: CharacterMesh, race: RaceDef, options: Fi
   let rise = 0;
   let nextJump = 0.8;
   let nextSwing = 0.5;
-  const moving = options.animation !== "idle" && options.animation !== "die";
+  let nextFlinch = 0.5;
+  let blows = 0;
+  const moving = options.animation !== "idle" && options.animation !== "die" && options.animation !== "flinch";
   const speed = moving ? options.speed : 0;
   scene.onBeforeRenderObservable.add(() => {
     const dt = Math.min(0.05, scene.getEngine().getDeltaTime() / 1000);
@@ -134,10 +140,18 @@ function play(scene: Scene, character: CharacterMesh, race: RaceDef, options: Fi
       swing = true;
       nextSwing = time + 1.3;
     }
+    // Flinching (FEEDBACK.md): a blow every 0.9 s, from the front, the +x side, behind and the -x
+    // side in turn.
+    let flinch: { forward: number; side: number; strength: number } | undefined;
+    if (options.animation === "flinch" && time >= nextFlinch) {
+      const from = FLINCH_FROM[blows++ % FLINCH_FROM.length];
+      flinch = { forward: from[0], side: from[1], strength: 1 };
+      nextFlinch = time + 0.9;
+    }
     const grounded = lift <= 0 && rise <= 0;
     // Dying: standing a moment and a half, dead for four seconds, then up again.
     const dead = options.animation === "die" && time % 5.5 > 1.5;
-    const { pose, offset } = animator.update({ speed: dead ? 0 : speed, grounded, verticalSpeed: rise, swimming: options.animation === "swim", swing, dead }, dt);
+    const { pose, offset } = animator.update({ speed: dead ? 0 : speed, grounded, verticalSpeed: rise, swimming: options.animation === "swim", swing, flinch, dead }, dt);
     character.setPose(pose, offset);
     character.mesh.position.set(x, height(x, z) + lift, z);
     character.mesh.rotation.y = facing;

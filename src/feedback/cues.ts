@@ -10,6 +10,7 @@ import type { GameRules } from "../sim/rules/gameRules";
 import type { SkillDef } from "../sim/rules/skillRules";
 import type { SoundHandle, Sfx, Vec3 } from "../audio/sfx";
 import type { EffectHandle, ParticleSystem } from "../particles/system";
+import type { Feel, Feelable } from "./feel";
 import { resolveRef, type CueDef, type CuePart, type EventRule, type FeedbackRules, type Phase } from "./rules";
 
 export type Bone = CuePart["bone"];
@@ -31,6 +32,10 @@ export interface CueStage {
   /** Where a unit's bone is in the world now, or null for a unit not known. */
   place: (unit: number, bone: Bone) => Vec3 | null;
   traits: (unit: number) => UnitTraits;
+  /** A unit's drawn body or capsule, for flashes, flinches and pauses; null for one not drawn. */
+  feelable?: (unit: number) => Feelable | null;
+  /** A unit's maximum health, for parts scaled by `amount`; 0 when not known. */
+  maxHealth?: (unit: number) => number;
 }
 
 /** One play of a cue: who and what it is about. */
@@ -46,6 +51,8 @@ export interface CueContext {
   values?: Record<string, string>;
   /** A moving place every part plays at instead of its own: a projectile in flight. */
   travel?: () => Vec3 | null;
+  /** The event's amount (a hit's damage), for parts scaled by `amount`. */
+  amount?: number;
 }
 
 /** A cue playing: its looping sounds and effects go on until it is stopped. */
@@ -83,7 +90,14 @@ interface Playing {
 }
 type Lasting = CueHandle & { playing: Playing };
 
-export function createCuePlayer(rules: FeedbackRules, game: GameRules, stage: CueStage, sfx: () => Sfx | null, particles: () => ParticleSystem | null = () => null): CuePlayer {
+export function createCuePlayer(
+  rules: FeedbackRules,
+  game: GameRules,
+  stage: CueStage,
+  sfx: () => Sfx | null,
+  particles: () => ParticleSystem | null = () => null,
+  feel: () => Feel | null = () => null,
+): CuePlayer {
   const recent = new Map<string, number>();
   const now = (): number => performance.now() / 1000;
 
@@ -117,9 +131,41 @@ export function createCuePlayer(rules: FeedbackRules, game: GameRules, stage: Cu
     return (unit ? stage.place(unit, part.bone) : null) ?? c.point ?? null;
   };
 
+  /** A part's `scale`: its number, or for `amount` the hit's size against the struck unit's health -
+   *  a tick is small, a blow taking a tenth of it full, a bigger one up to twice that. */
+  const scaleOf = (part: CuePart, c: CueContext): number => {
+    if (part.scale !== "amount") return part.scale;
+    const max = c.target ? (stage.maxHealth?.(c.target) ?? 0) : 0;
+    if (!max || c.amount === undefined) return 1;
+    return Math.min(2, 0.3 + (7 * c.amount) / max);
+  };
+
   const playPart = (cue: CueDef, part: CuePart, c: CueContext, own: boolean, playing: Playing): void => {
     if (playing.stopped) return;
-    const scale = typeof part.scale === "number" ? part.scale : 1;
+    const scale = scaleOf(part, c);
+    const unit = part.at === "source" ? c.source : c.target;
+    switch (part.kind) {
+      case "flash":
+        if (unit) stage.feelable?.(unit)?.flash(part.colour, part.time);
+        return;
+      case "flinch": {
+        // Away from whoever it came from.
+        const other = part.at === "source" ? c.target : c.source;
+        const body = unit ? stage.feelable?.(unit) : null;
+        const here = unit ? stage.place(unit, "chest") : null;
+        const from = other ? stage.place(other, "chest") : null;
+        if (body && here) body.flinch(from ? from.x - here.x : 0, from ? from.z - here.z : 1, Math.min(1, part.strength * scale));
+        return;
+      }
+      // The camera and the hit pause are only ever the player's own fight's.
+      case "shake":
+        if (own) feel()?.shake(part.strength * scale);
+        return;
+      case "pause":
+        if (!own) return;
+        for (const u of [c.source, c.target]) if (u) stage.feelable?.(u)?.pause(part.strength);
+        return;
+    }
     if (part.kind === "sound") {
       const player = sfx();
       if (!player) return;
@@ -148,7 +194,6 @@ export function createCuePlayer(rules: FeedbackRules, game: GameRules, stage: Cu
       });
       if (handle) playing.effects.push(handle);
     }
-    // flash, flinch, shake and pause come with step 5.
   };
 
   const play = (cueId: string, c: CueContext): Lasting | null => {
@@ -258,6 +303,7 @@ export function createCuePlayer(rules: FeedbackRules, game: GameRules, stage: Cu
           skill,
           crit: (event.flags & EVENT_FLAG.crit) !== 0,
           periodic: (event.flags & EVENT_FLAG.periodic) !== 0,
+          amount: event.amount,
         };
         switch (kind) {
           case "effect":

@@ -222,6 +222,7 @@ const positionPanel = createPositionPanel((v) => view?.gotoView(v));
 const musicControl = createMusicControl(
   (volume) => music.setVolume(volume),
   (volume) => feedback.setVolume(volume),
+  (shake) => feedback.setShake(shake),
 );
 const music = createGameMusic(musicControl.volume);
 // Sounds, effects and hit feel for what happens (see FEEDBACK.md), from the combat events.
@@ -236,6 +237,8 @@ const feedback = createGameFeedback({
   ownOutfit: () => playerLook.outfit,
   volume: musicControl.effects,
   bodyPlace: (unit, bone, out) => (unit === playerId ? (view?.character.place(bone, out) ?? false) : (entityMeshes?.place(unit, bone, out) ?? false)),
+  feelable: (unit) => (unit === playerId ? (view?.character.feelable() ?? null) : (entityMeshes?.feelable(unit) ?? null)),
+  shake: musicControl.shake,
 });
 
 /**

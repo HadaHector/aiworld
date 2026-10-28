@@ -1,10 +1,12 @@
-// Feedback in the game (see FEEDBACK.md): the combat events of each step played as cues - sounds
-// and particle effects now, hit feel to come - at the units the mirror knows (on their bodies'
-// bones where they have bodies), heard and seen from the camera. The sound effects start with the
+// Feedback in the game (see FEEDBACK.md): the combat events of each step played as cues - sounds,
+// particle effects and hit feel - at the units the mirror knows (on their bodies' bones where they
+// have bodies), heard and seen from the camera, which shakes in the player's own fights. The sound effects start with the
 // page's audio (the first click or key press); they and the particles live for the page, across
 // dimensions, and each dimension's scene gets its own particle drawers.
 
 import type { Camera } from "@babylonjs/core/Cameras/camera";
+import type { ArcRotateCamera } from "@babylonjs/core/Cameras/arcRotateCamera";
+import { createFeel, type Feel, type Feelable } from "../feedback/feel";
 import { Vector3 } from "@babylonjs/core/Maths/math.vector";
 import type { Scene } from "@babylonjs/core/scene";
 import { createParticleSystem, type ParticleSystem } from "../particles/system";
@@ -30,6 +32,9 @@ export interface GameFeedback {
   update: (camera: Camera | null) => void;
   /** The Effects volume, 0..1. */
   setVolume: (volume: number) => void;
+  /** The Screen shake setting, 0..1: 0 turns it off. */
+  setShake: (scale: number) => void;
+  feel: Feel;
   /** The sound effects player, once audio has started - for the console. */
   sfx: () => Sfx | null;
   cues: CuePlayer;
@@ -53,6 +58,10 @@ export interface GameFeedbackOptions {
   baseUrl?: string;
   /** Where a bone of a unit's body is, when it has one drawn (the player's, entityMeshes'). */
   bodyPlace: (unit: number, bone: Bone, out: Vector3) => boolean;
+  /** A unit's drawn body or capsule, for hit feel. */
+  feelable: (unit: number) => Feelable | null;
+  /** The Screen shake setting to start with. */
+  shake?: number;
 }
 
 const BABYLON_FORWARD = new Vector3(0, 0, 1);
@@ -121,7 +130,11 @@ export function createGameFeedback(options: GameFeedbackOptions): GameFeedback {
       const e = mirror.entities.get(unit);
       return e ? traitsOf(e) : {};
     },
-  }, () => sfx, () => particles);
+    feelable: options.feelable,
+    maxHealth: (unit) => mirror.entities.get(unit)?.resources.get(game.health)?.max ?? 0,
+  }, () => sfx, () => particles, () => feel);
+  const feel = createFeel();
+  feel.setShake(options.shake ?? 1);
   // A unit gone from view takes what lasts on it (its cast, its auras) with it.
   mirror.onDespawn((entity) => {
     traitCache.delete(entity.id);
@@ -153,6 +166,10 @@ export function createGameFeedback(options: GameFeedbackOptions): GameFeedback {
       cues.update();
       particles.update(dt, eye);
       renderer?.update();
+      // The shake moves what the camera looks at across the screen, leaving its orbit alone.
+      const shake = feel.update(dt);
+      const offset = (camera as ArcRotateCamera | null)?.targetScreenOffset;
+      offset?.set(shake.x, shake.y);
       if (!sfx || !camera) return;
       const p = camera.globalPosition;
       const f = camera.getDirection(BABYLON_FORWARD);
@@ -168,6 +185,8 @@ export function createGameFeedback(options: GameFeedbackOptions): GameFeedback {
       volume = v;
       sfx?.setVolume(v);
     },
+    setShake: (v) => feel.setShake(v),
+    feel,
     sfx: () => sfx,
     cues,
     particles,

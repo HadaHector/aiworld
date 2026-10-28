@@ -1,5 +1,6 @@
 import { Color3, MeshBuilder, StandardMaterial, type Mesh, type Scene, type Vector3 } from "@babylonjs/core";
 import { FLAG } from "../sim/skills/flags";
+import type { Feelable } from "../feedback/feel";
 import type { EntityMirror, MirroredEntity } from "./entityMirror";
 import { PLAYER_TEMPLATE, type EntityLook, type GameRules } from "../sim/rules/gameRules";
 import { createCharacterBody, type BodyKit, type BodyLook, type BodyPlace, type CharacterBody } from "./characterBody";
@@ -13,6 +14,8 @@ export interface EntityMeshes {
   entityOf: (mesh: unknown) => number | null;
   /** Plays a melee swing on an entity's body: the server says when. */
   swing: (id: number) => void;
+  /** An entity's body, or its capsule, for flashes, flinches and pauses (FEEDBACK.md). */
+  feelable: (id: number) => Feelable | null;
   /** Where a bone of an entity's body is (FEEDBACK.md); false when it has no body drawn. */
   place: (id: number, bone: BodyPlace, out: Vector3) => boolean;
   /** Rings the selected unit on the ground - red for one that fights players, green otherwise. */
@@ -47,7 +50,14 @@ interface Drawn {
   sparkle: Mesh | null;
   /** How far a capsule has fallen over, 0 standing to 1 lying: a dead creature without a body. */
   fall: number;
+  /** A capsule's hit feel (FEEDBACK.md): pushed away from a blow and back, flashing. A body has its own. */
+  push: { x: number; z: number; at: number } | null;
+  flash: { r: number; g: number; b: number; at: number; seconds: number } | null;
 }
+
+/** Seconds a capsule's flinch takes, and how far it is pushed at full strength, in metres. */
+const PUSH_TIME = 0.22;
+const PUSH_DISTANCE = 0.12;
 
 /** Seconds a capsule takes to fall over when its unit dies, or to stand again. */
 const CAPSULE_FALL = 0.5;
@@ -105,7 +115,7 @@ export function createEntityMeshes(scene: Scene, mirror: EntityMirror, rules: Ga
     const sex = entity.look.sex || look.sex;
     const wanted: BodyLook | null = race ? { race, outfit: entity.look.outfit || look.outfit, sex: sex === "male" || sex === "female" ? sex : undefined, seed: entity.look.seed } : null;
     if (race && !bodies.kit.races.has(race)) console.warn(`Entity #${entity.id} (${entity.templateId}) wants race "${race}", which these packs lack - a stand-in race is drawn.`);
-    const entry: Drawn = { capsule, body: null, gone: false, wanted, built: "", building: false, sparkle: null, fall: (entity.flags & (1 << FLAG.dead)) !== 0 ? 1 : 0 };
+    const entry: Drawn = { capsule, body: null, gone: false, wanted, built: "", building: false, sparkle: null, fall: (entity.flags & (1 << FLAG.dead)) !== 0 ? 1 : 0, push: null, flash: null };
     drawn.set(entity.id, entry);
     ids.set(capsule, entity.id);
     place(entity, entry);
@@ -177,6 +187,24 @@ export function createEntityMeshes(scene: Scene, mirror: EntityMirror, rules: Ga
     const tip = entry.capsule.isVisible && entity.template?.look.shape !== "box" ? (1 - Math.cos(entry.fall * Math.PI)) / 2 : 0;
     const radius = entity.template?.look.radius ?? halfHeight;
     entry.capsule.position.set(entity.x, entity.y + halfHeight + (radius - halfHeight) * tip, entity.z);
+    const now = performance.now() / 1000;
+    if (entry.push) {
+      // Out fast and back eased.
+      const t = (now - entry.push.at) / PUSH_TIME;
+      const k = t < 0.2 ? t / 0.2 : 1 - (t - 0.2) / 0.8;
+      if (t >= 1) entry.push = null;
+      else {
+        entry.capsule.position.x += entry.push.x * k;
+        entry.capsule.position.z += entry.push.z * k;
+      }
+    }
+    if (entry.flash) {
+      const left = 1 - (now - entry.flash.at) / entry.flash.seconds;
+      entry.capsule.renderOverlay = left > 0;
+      entry.capsule.overlayAlpha = 0.6 * Math.max(0, left);
+      entry.capsule.overlayColor.set(entry.flash.r, entry.flash.g, entry.flash.b);
+      if (left <= 0) entry.flash = null;
+    }
     entry.capsule.rotation.y = entity.facing;
     entry.capsule.rotation.x = (tip * Math.PI) / 2;
     entry.body?.show({ ...entity, dead: (entity.flags & (1 << FLAG.dead)) !== 0 });
@@ -205,6 +233,22 @@ export function createEntityMeshes(scene: Scene, mirror: EntityMirror, rules: Ga
     },
     entityOf: (mesh) => ids.get(mesh) ?? null,
     swing: (id) => drawn.get(id)?.body?.swing(),
+    feelable(id) {
+      const entry = drawn.get(id);
+      if (!entry) return null;
+      if (entry.body) return entry.body;
+      return {
+        flash(colour, seconds) {
+          entry.flash = { r: colour[0], g: colour[1], b: colour[2], at: performance.now() / 1000, seconds };
+        },
+        flinch(x, z, strength) {
+          const length = Math.hypot(x, z) || 1;
+          entry.push = { x: (-x / length) * PUSH_DISTANCE * strength, z: (-z / length) * PUSH_DISTANCE * strength, at: performance.now() / 1000 };
+        },
+        // A capsule has no animation to stop.
+        pause() {},
+      };
+    },
     place(id, bone, out) {
       const body = drawn.get(id)?.body;
       if (!body) return false;

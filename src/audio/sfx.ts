@@ -172,6 +172,11 @@ export function createSfx(ctx: AudioContext, output: AudioNode, rules: FeedbackR
   /** Babylon's world is left-handed and WebAudio's right-handed: z flips between them. */
   const place = (panner: PannerNode, at: Vec3): void => {
     const t = ctx.currentTime;
+    // Browsers without a panner's AudioParams have only the older setter.
+    if (!panner.positionX) {
+      panner.setPosition(at.x, at.y, -at.z);
+      return;
+    }
     panner.positionX.setTargetAtTime(at.x, t, 0.02);
     panner.positionY.setTargetAtTime(at.y, t, 0.02);
     panner.positionZ.setTargetAtTime(-at.z, t, 0.02);
@@ -231,9 +236,11 @@ export function createSfx(ctx: AudioContext, output: AudioNode, rules: FeedbackR
         panner.refDistance = sound.near;
         panner.maxDistance = sound.far;
         panner.rolloffFactor = 1;
-        panner.positionX.value = at.x;
-        panner.positionY.value = at.y;
-        panner.positionZ.value = -at.z;
+        if (panner.positionX) {
+          panner.positionX.value = at.x;
+          panner.positionY.value = at.y;
+          panner.positionZ.value = -at.z;
+        } else panner.setPosition(at.x, at.y, -at.z);
         panner.connect(into);
         filter = ctx.createBiquadFilter();
         filter.type = "lowpass";
@@ -316,6 +323,12 @@ export function createSfx(ctx: AudioContext, output: AudioNode, rules: FeedbackR
       listener.z = at.z;
       const l = ctx.listener;
       const t = ctx.currentTime;
+      // Firefox's listener has no AudioParams, only the older setters.
+      if (!l.positionX) {
+        l.setPosition(at.x, at.y, -at.z);
+        l.setOrientation(forward.x, forward.y, -forward.z, up.x, up.y, -up.z);
+        return;
+      }
       l.positionX.setTargetAtTime(at.x, t, 0.02);
       l.positionY.setTargetAtTime(at.y, t, 0.02);
       l.positionZ.setTargetAtTime(-at.z, t, 0.02);

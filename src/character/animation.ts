@@ -14,6 +14,9 @@ export interface MotionInput {
   swimming: boolean;
   /** Set on the frame a melee swing starts. */
   swing?: boolean;
+  /** Set on the frame a blow lands (FEEDBACK.md, *Hit feel*): where it came from, in the body's own
+   *  frame - `forward` +1 from in front, `side` +1 from the +x side - and how hard, 0-1. */
+  flinch?: { forward: number; side: number; strength: number };
   /** Dead: the body falls and lies still until this is false again. */
   dead?: boolean;
   /** Be as `dead` says at once, with no fall or getting up: a unit first seen already dead lies
@@ -40,6 +43,9 @@ export interface Animator {
 type Turn = [number, number, number];
 
 const SWING_TIME = 0.62;
+/** A flinch: a jerk away from the blow, at its furthest after this, gone after FLINCH_TIME. */
+const FLINCH_PEAK = 0.05;
+const FLINCH_TIME = 0.28;
 
 /**
  * Procedural animation (CHARACTERS.md): each kind of motion is a function from time and the
@@ -57,6 +63,8 @@ const SWING_TIME = 0.62;
  *   kicking together.
  * - **A melee swing** - wind-up, strike, follow-through - is laid over the upper body whatever the
  *   legs are doing.
+ * - **A flinch** - the spine, chest and head jerking away from a blow and coming back - is laid
+ *   over everything but death.
  * - **Death**: the knees give, the body tips back and falls, bounces once and lies still - over
  *   whatever else it was doing, until it is alive again.
  */
@@ -68,6 +76,8 @@ export function createAnimator(skeleton: RaceSkeleton): Animator {
   let air = 0;
   let swim = 0;
   let swingAt = -1;
+  let flinchAt = -1;
+  let flinch = { forward: 0, side: 0, strength: 0 };
   let wasGrounded = true;
   let airTime = 0;
   let landing = 0;
@@ -99,6 +109,10 @@ export function createAnimator(skeleton: RaceSkeleton): Animator {
       wasGrounded = input.grounded;
       landing = Math.max(0, landing - dt * 4);
       if (input.swing) swingAt = time;
+      if (input.flinch && !input.dead) {
+        flinchAt = time;
+        flinch = input.flinch;
+      }
       deadFor = input.dead ? (deadFor < 0 ? 0 : deadFor + dt) : -1;
       // Into death at once (what the body was doing gives way within a few frames); out of it
       // gently, when it comes back.
@@ -130,6 +144,14 @@ export function createAnimator(skeleton: RaceSkeleton): Animator {
       if (swingTime >= 0 && swingTime < SWING_TIME) {
         const envelope = smooth(0, 0.08, swingTime) * (1 - smooth(SWING_TIME - 0.15, SWING_TIME, swingTime));
         pose = { ...pose, ...mix(pose, { ...pose, ...swing(swingTime / SWING_TIME) }, envelope) };
+      }
+      const flinchTime = flinchAt < 0 ? -1 : time - flinchAt;
+      if (flinchTime >= 0 && flinchTime < FLINCH_TIME) {
+        // Snapped back fast, eased home: on these bones +x leans forward and +z toward -x.
+        const k = flinch.strength * (flinchTime < FLINCH_PEAK ? smooth(0, FLINCH_PEAK, flinchTime) : 1 - smooth(FLINCH_PEAK, FLINCH_TIME, flinchTime));
+        const back = -flinch.forward * k;
+        const away = flinch.side * k;
+        pose = add(pose, { spine: [0.2 * back, 0.1 * away, 0.15 * away], chest: [0.15 * back, 0.05 * away, 0.12 * away], head: [0.35 * back, 0, 0.25 * away] });
       }
       if (death > 0) {
         const dying = dyingPose(Math.max(0, deadFor));

@@ -1,4 +1,5 @@
-import { Vector3, type Mesh, type Scene } from "@babylonjs/core";
+import { Color3, Vector3, type Mesh, type Scene } from "@babylonjs/core";
+import type { Feelable } from "../feedback/feel";
 import type { PackSource } from "../world/content/resolveContent";
 import { resolveRaces, type RaceDef, type Sex } from "../character/raceDef";
 import { resolveGear, resolveOutfits, type GearDef, type OutfitDef } from "../character/gearDef";
@@ -60,7 +61,7 @@ export function createBodyKit(packs: PackSource[]): BodyKit {
 
 /** A character's body (CHARACTERS.md) drawn where the server has its entity, and animated from how
  *  it moves between snapshots. */
-export interface CharacterBody {
+export interface CharacterBody extends Feelable {
   meshes: Mesh[];
   /** Moves the body to where the server says the entity is, and animates it - each frame. `dead`:
    *  it falls and lies (ABILITIES.md, *The death animation*). */
@@ -111,6 +112,11 @@ export async function createCharacterBody(scene: Scene, name: string, kit: BodyK
   let facing: number | null = null;
   let swinging = false;
   let wasDead: boolean | null = null;
+  // Hit feel (FEEDBACK.md): a flinch for the next frame, a pause until a time, a flash fading out.
+  let flinching: { forward: number; side: number; strength: number } | undefined;
+  let pausedUntil = 0;
+  let flash: { start: number; seconds: number } | null = null;
+  const flashColour = new Color3();
 
   return {
     meshes: character.meshes,
@@ -135,14 +141,41 @@ export async function createCharacterBody(scene: Scene, name: string, kit: BodyK
       const jumped = last !== null && dt > 0 && Math.hypot(state.x - last.x, state.z - last.z) > TELEPORT;
       const snap = (wasDead === null && dead) || (wasDead === true && !dead && jumped);
       wasDead = dead;
-      const { pose, offset } = animator.update({ speed, grounded: state.grounded, verticalSpeed: rise, swimming: false, swing: swinging, dead, snap }, dt);
-      swinging = false;
-      character.setPose(pose, offset);
+      // A hit pause stops the pose where it is; the body still goes where the entity is.
+      if (now >= pausedUntil) {
+        const { pose, offset } = animator.update({ speed, grounded: state.grounded, verticalSpeed: rise, swimming: false, swing: swinging, flinch: flinching, dead, snap }, dt);
+        swinging = false;
+        flinching = undefined;
+        character.setPose(pose, offset);
+      }
+      if (flash) {
+        const left = 1 - (now - flash.start) / flash.seconds;
+        for (const mesh of character.meshes) {
+          mesh.renderOverlay = left > 0;
+          mesh.overlayAlpha = 0.6 * Math.max(0, left);
+          mesh.overlayColor = flashColour;
+        }
+        if (left <= 0) flash = null;
+      }
       character.mesh.position.set(state.x, state.y, state.z);
       character.mesh.rotation.y = facing;
     },
     swing() {
       swinging = true;
+    },
+    flash(colour, seconds) {
+      flashColour.set(colour[0], colour[1], colour[2]);
+      flash = { start: performance.now() / 1000, seconds };
+    },
+    flinch(x, z, strength) {
+      // The blow's direction in the body's own frame: its forward is (sin, cos) of its facing, its
+      // +x side (cos, -sin).
+      const length = Math.hypot(x, z) || 1;
+      const f = facing ?? 0;
+      flinching = { forward: (x * Math.sin(f) + z * Math.cos(f)) / length, side: (x * Math.cos(f) - z * Math.sin(f)) / length, strength };
+    },
+    pause(seconds) {
+      pausedUntil = Math.max(pausedUntil, performance.now() / 1000 + seconds);
     },
     place(at, out) {
       const mesh = character.mesh;
