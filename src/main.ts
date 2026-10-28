@@ -519,6 +519,7 @@ const progressPanel = createProgressPanel({
   entities: mirror,
   ownId: () => playerId,
   send: (message) => channel.client.send(message),
+  openBook: (key) => (key ? ruleBook.open(key) : ruleBook.toggle()),
 });
 progressMirror.onEvents((events) => {
   const context = { source: playerId, target: playerId, skill: null, crit: false, periodic: false };
@@ -541,7 +542,17 @@ window.addEventListener("keydown", (e) => {
   if (e.key.toLowerCase() === "k") ruleBook.toggle();
 });
 // How this game works, written from its rules (PROGRESSION.md, *The client*): K.
-const ruleBook = createRuleBook({ game: gameRules, progression: progressionRules, items: itemRules });
+const ruleBook = createRuleBook({
+  game: gameRules,
+  progression: progressionRules,
+  items: itemRules,
+  own() {
+    const p = progressMirror.progress;
+    const me = mirror.entities.get(playerId);
+    if (!p || !me) return null;
+    return { stats: me.stats, levels: new Map(p.disciplines.map((d) => [d.discipline, d.level])), origins: p.origins.filter((o) => o >= 0) };
+  },
+});
 window.addEventListener("keydown", (e) => {
   if (!view || entering || view.spectator.active) return;
   if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;

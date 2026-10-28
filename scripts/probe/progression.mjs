@@ -11,7 +11,7 @@ import { addXp, createProgress, learn, nextOf, pickTalent, resetTree, setLevel }
 import { exportProgress, importProgress } from "../../src/sim/progression/save.ts";
 import { loadContentFromDisk } from "../diskContent.mjs";
 import { formulaText } from "../../src/sim/rules/formulaText.ts";
-import { ruleBookChapters } from "../../src/ui/ruleBook.ts";
+import { chapterText, ruleBookChapters } from "../../src/ui/ruleBook.ts";
 import { createWorldData, WORLD_SEED } from "../../src/world/worldData.ts";
 import { createServer } from "../../src/sim/server.ts";
 import { createLocalChannel } from "../../src/sim/channel.ts";
@@ -141,12 +141,24 @@ await section("rule book", () => {
   const chapters = ruleBookChapters(game, progression, items);
   const titles = chapters.map((c) => c.title);
   for (const t of ["Disciplines", "People", "Class", "Talents", "Stats", "Resources", "Combat", "Abilities"]) check(`chapter ${t}`, titles.includes(t), titles.join(","));
-  const text = chapters.map((c) => [c.title, c.intro, ...c.sections.flatMap((s) => [s.heading, ...s.lines.map((l) => (Array.isArray(l) ? l.join(" | ") : l))])].join("\n")).join("\n");
+  const text = chapterText(chapters);
   const unreadable = /\?(?![a-z]+=)/;
   check("no formula left unreadable", !unreadable.test(text), text.split("\n").filter((l) => unreadable.test(l)).slice(0, 5).join(" / "));
-  check("the kill XP reads", text.includes("Killing a creature: (45 + 5 × victim level) × victim XP value"), text.split("\n").find((l) => l.startsWith("Killing")));
+  check("the kill XP reads", text.includes("Killing a creature: (45 + 5 × the victim's Level) × the victim's XP value"), text.split("\n").find((l) => l.includes("Killing")));
   check("an unlock reads", text.includes("At level 2: you learn Thunder Clap."));
   check("a generated class says so", text.includes('invented it from the template "hybrid"'));
+  // What a stat does and where it comes from; what a discipline does; what an ability does.
+  const section = (heading) => text.split("\n## ").find((s) => s.startsWith(`${heading}\n`)) ?? "";
+  check("intellect: what reads it", section("Intellect").includes("Max mana") && section("Intellect").includes("Fireball"), section("Intellect"));
+  check("intellect: where it comes from", section("Intellect").includes("Mage: +4") && section("Intellect").includes("Talent Focus"));
+  check("swords: what it does", section("Swords (combat)").includes("Iron") && section("Swords (combat)").includes("How it rises"), section("Swords (combat)"));
+  check("defence: what it does", section("Defence (combat)").includes("level × 4 Armor"), section("Defence (combat)"));
+  check("fireball described", section("Fireball").includes("damage to the target") && section("Fireball").includes("Mage from the start"), section("Fireball"));
+  check("burn is an effect", section("Burn").startsWith("Burn\nAn effect Fireball applies"), section("Burn"));
+  const own = { stats: new Map([[game.statIndex.get("intellect"), 14]]), levels: new Map([[progression.disciplineIndex.get("adventure"), 3]]), origins: [progression.originIndex.get("elf"), progression.originIndex.get("mage")] };
+  const mine = chapterText(ruleBookChapters(game, progression, items, own));
+  check("your character chapter", mine.startsWith("# Your character") && mine.includes("Intellect: 14") && mine.includes("class: Mage"), mine.slice(0, 300));
+  check("your values on their pages", mine.includes("Yours: 14.") && mine.includes("You are level 3."));
   if (process.env.BOOK) console.log(text);
 });
 

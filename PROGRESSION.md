@@ -605,6 +605,14 @@ Each leaves the game working: dev server, `npm run probe`, `npm run server`, `np
   `talentPools/general` (`<origin>.tree`). Iron swords require sword skill 10 through their template
   part's own `requires`.
 - **Not built**: `free: true` on books and trainers; a respec cost (the formula is read, core's is 0).
+- **The rule book explains itself** (asked for after the step): `src/sim/rules/ruleIndex.ts` finds, in
+  the rules, what reads each stat (derived stats, resources, skills, rolls, item requirements,
+  disciplines) and what changes it (disciplines, unlocks, origins, talents, items, auras);
+  `skillText.ts` describes each skill from its actions. The book opens with *Your character*, gives
+  every stat and discipline "what it does / where it comes from / how it rises" with the player's own
+  values, every ability its effects and who gets it, and links every name to its page. The panel has
+  a Character section of the own stats, and its names open the book there (`book.open(key)`). It
+  shows honestly where a discipline does nothing yet (Unarmed, Mining, Herbalism).
 - **Feedback**: the `levelUp` combat event reaches everyone near; the page raises the client events
   `xpGained`, `levelUp`, `disciplineUp`, `learned` and `talentPicked`, which play nothing until the
   feedback rules list them (`CLIENT_EVENTS`) and core maps them to cues.

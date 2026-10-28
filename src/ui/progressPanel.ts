@@ -5,6 +5,7 @@ import { formulaText } from "../sim/rules/formulaText";
 import type { ClientMessage, ProgressEventState } from "../sim/protocol";
 import type { ProgressMirror } from "../game/progressMirror";
 import type { EntityMirror } from "../game/entityMirror";
+import { indexRules } from "../sim/rules/ruleIndex";
 
 /**
  * The progression panel (PROGRESSION.md, *The client*), on P: the own origins, every discipline
@@ -26,6 +27,8 @@ export interface ProgressPanelOptions {
   entities: EntityMirror;
   ownId: () => number;
   send: (message: ClientMessage) => void;
+  /** Opens the rule book at a topic (`stat:<id>`, `disc:<id>`...), or at its start for "". */
+  openBook: (key: string) => void;
 }
 
 const PANEL = "background: rgba(18, 20, 24, 0.92); color: #eee; border-radius: 6px; font: 12px/1.35 system-ui, sans-serif; box-shadow: 0 2px 8px rgba(0,0,0,0.45);";
@@ -67,7 +70,16 @@ export function modifierText(game: GameRules, m: UnlockModifier, variable: strin
 }
 
 export function createProgressPanel(options: ProgressPanelOptions): ProgressPanel {
-  const { game, rules, items, progress, entities, send } = options;
+  const { game, rules, items, progress, entities, send, openBook } = options;
+  const index = indexRules(game, rules, items);
+  const LINK = "color: #9fc7ff; cursor: pointer;";
+  /** A name that opens the rule book at its page. */
+  const bookLink = (parent: HTMLElement, text: string, key: string, css = ""): HTMLElement => {
+    const e = el("span", `${LINK} ${css}`, parent, text);
+    e.addEventListener("click", () => openBook(key));
+    return e;
+  };
+  const ownStats = (): ReadonlyMap<number, number> => entities.entities.get(options.ownId())?.stats ?? new Map();
   const root = el("div", `position: fixed; right: 16px; top: 60px; width: 380px; max-height: calc(100vh - 140px); overflow-y: auto; padding: 8px 10px; z-index: 960; display: none; ${PANEL}`, document.body);
   const body = el("div", "", root);
   const log = el("div", "margin-top: 8px; border-top: 1px solid #444; padding-top: 4px; font-size: 11px; color: #bbb;", root);
@@ -105,7 +117,9 @@ export function createProgressPanel(options: ProgressPanelOptions): ProgressPane
       body.textContent = "No progress yet.";
       return;
     }
-    el("div", "font-weight: 600; font-size: 14px;", body, "Progression");
+    const top = el("div", "display: flex; align-items: center;", body);
+    el("div", "font-weight: 600; font-size: 14px; flex: 1;", top, "Progression");
+    el("button", BUTTON, top, "Rule book (K)").addEventListener("click", () => openBook(""));
     el("div", "color: #bbb;", body, rules.config.slots.map((slot, i) => `${slot.id}: ${rules.origins[p.origins[i]]?.name ?? "-"}`).join(" · "));
 
     // Disciplines, by group.
@@ -122,7 +136,11 @@ export function createProgressPanel(options: ProgressPanelOptions): ProgressPane
       for (const d of list) {
         const def = rules.disciplines[d.discipline];
         const row = el("div", "display: flex; align-items: center; gap: 6px; margin: 2px 0;", box);
-        el("div", "width: 92px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;", row, def.name);
+        const name = el("div", "width: 92px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;", row);
+        const what = def.stat >= 0 ? (index.readBy.get(def.stat) ?? []).map((u) => u.what) : [];
+        const gives = def.unlocks.length + rules.origins.reduce((n, o) => n + (o.unlocks.get(d.discipline)?.length ?? 0), 0);
+        const hint = [what.length ? `Used by: ${what.join(", ")}` : "", gives ? `Its levels give ${gives} thing${gives > 1 ? "s" : ""}` : "", what.length || gives ? "" : "Nothing reads it yet"];
+        bookLink(name, def.name, `disc:${def.id}`).title = [...hint.filter(Boolean), "Click for what it does and how it rises"].join("\n");
         el("div", "width: 54px; color: #ccc;", row, `${d.level} / ${d.cap}`);
         const bar = el("div", "position: relative; flex: 1; height: 12px; background: #2a2a2a; border-radius: 3px; overflow: hidden;", row);
         el("div", `position: absolute; left: 0; top: 0; bottom: 0; width: ${Math.min(100, (100 * d.xp) / d.next)}%; background: ${d.level >= d.cap ? "#7a6a3a" : "#8a5ad8"};`, bar);
@@ -134,6 +152,19 @@ export function createProgressPanel(options: ProgressPanelOptions): ProgressPane
         up.title = "Debug: one level";
         up.addEventListener("click", () => send({ type: "debugLevel", discipline: d.discipline, level: d.level + 1 }));
       }
+    }
+
+    // The own stats, each a link to what it does.
+    const character = section("Character");
+    const stats = ownStats();
+    const grid = el("div", "display: grid; grid-template-columns: 1fr 1fr; gap: 1px 12px;", character);
+    for (const stat of game.stats) {
+      const value = stats.get(stat.index);
+      if (value === undefined) continue;
+      const cell = el("div", "display: flex; justify-content: space-between;", grid);
+      const uses = (index.readBy.get(stat.index) ?? []).map((u) => u.what);
+      bookLink(cell, stat.name, `stat:${stat.id}`).title = uses.length ? `Used by: ${uses.slice(0, 6).join(", ")}${uses.length > 6 ? "..." : ""}` : "Nothing reads it yet";
+      el("span", "color: #ddd;", cell, String(Math.round(value * 100) / 100));
     }
 
     // Points and trees.
@@ -158,7 +189,8 @@ export function createProgressPanel(options: ProgressPanelOptions): ProgressPane
           const rank = ranks.get(node.index) ?? 0;
           const button = el("button", `${BUTTON} margin: 0; ${rank > 0 ? "border-color: #c9a040; color: #ffd27a;" : ""}`, row, `${node.name} ${rank}/${node.ranks}`);
           const gives = [...node.modifiers.map((m) => modifierText(game, m, "rank")), node.skill >= 0 ? `teaches ${skillName(node.skill)}` : "", node.requires.length ? `needs ${node.requires.map((r) => tree.nodes[r].name).join(", ")}` : ""].filter(Boolean);
-          button.title = `${gives.join("\n")}\ncosts ${node.cost} ${tree.points} a rank`;
+          const yours = [...new Set(node.modifiers.map((m) => m.stat))].map((s) => `your ${game.stats[s].name}: ${Math.round((stats.get(s) ?? 0) * 100) / 100}`);
+          button.title = `${gives.join("\n")}\ncosts ${node.cost} ${tree.points} a rank${yours.length ? `\n(${yours.join(", ")})` : ""}`;
           button.addEventListener("click", () => send({ type: "talentPick", tree: treeIndex, node: node.index }));
         }
       });
