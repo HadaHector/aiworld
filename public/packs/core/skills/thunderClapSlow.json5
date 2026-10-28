@@ -1,6 +1,7 @@
 // Thunder Clap's slow: -30% movement speed while it lasts.
 {
   name: "Thunder Clap",
+  cues: { aura: "slowed" },
   display: "debuff",
   stacking: { per: "host" },
   states: {

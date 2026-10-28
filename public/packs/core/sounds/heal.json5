@@ -1,0 +1,9 @@
+// A heal landing: a warm rising arpeggio of bells.
+{
+  near: 4, far: 40, maxVoices: 4, pitch: [-0.5, 0.5], volume: [0.7, 0.8], takes: 2,
+  layers: [
+    { synth: { modal: true, hz: 523, partials: [[1, 0.5, 0.5], [2, 0.2, 0.3], [3, 0.1, 0.2]], gain: 0.35 }, standIn: true },
+    { synth: { modal: true, hz: 659, partials: [[1, 0.5, 0.5], [2, 0.2, 0.3]], gain: 0.3, delay: 0.07 }, standIn: true },
+    { synth: { modal: true, hz: 784, partials: [[1, 0.5, 0.6], [2, 0.2, 0.3]], gain: 0.28, delay: 0.14 }, standIn: true },
+  ],
+}

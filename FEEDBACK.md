@@ -10,7 +10,7 @@ fireball roars in the caster's hands, flies, and bursts on its target, a crit sh
 and pauses for an instant, deaths thud, and loot glints and chimes. A dev page plays every cue,
 sound and particle effect on its own, so it can be tuned.
 
-**Status: steps 1-3 of 7 done** (rules and content; sound in the game; particles). [As built](#as-built) notes where the
+**Status: steps 1-4 of 7 done** (rules and content; sound in the game; particles; abilities). [As built](#as-built) notes where the
 build differs from this plan.
 
 ## Decisions
@@ -538,6 +538,52 @@ Each leaves the game working: dev server, `npm run probe`, `npm run server`, `np
   the knight, at full speed and slowed; the atlas tab; in the game
   (`?config=tiny`), auto-attacks on the dummy throwing sparks off its plate. The probe gained the
   particle system and cue particles (297 checks).
+- **Step 4: abilities.** Every phase is played (`src/feedback/cues.ts`): `castStart` loops the
+  skill's `cast` (or `channel`, from the event's flags) - or the table's `castStart` - at the caster
+  until `castDone`, `castStopped`, `castFailed`, an `interrupted` naming it as target, or its death;
+  `castDone` plays `release` and, when the committing state's length is `{ travel: speed }` and the
+  speed is a plain number (20 m/s otherwise), sends the `projectile` cue flying from the caster's
+  hands to the target's chest at that speed, ended by the skill's next hit, miss or heal on that
+  target or 0.3 s after it is due; `auraOn` plays `applied` and loops `aura` on the host (the event's
+  target) by host, skill and caster, so an aura applied again goes on as it was; `auraOff` stops it
+  and plays `faded`. Lasting sounds follow what they are on each frame; a unit leaving view takes
+  its cast and auras with it; changing dimension stops them all.
+- **The event table gained `type`** (`spell`, `physical`): `castDone` plays a release only for
+  spells. **Core's table** carries most of it by school, through placeholders: `spellCast` (sound and
+  glow `cast.{school}`), `spellRelease`, `spellHit` (`impact.{school}`), `dotTick` (`tick.{school}`),
+  `heal` and `healTick`, `spellMiss`, `interrupt`, `error` (a failed cast, the player's only),
+  `summon`, `death` (`death.{family}`, then a thud and dust as the body lands). Skills name only
+  what is their own: Fireball and Hex Bolt their `bolt`, Web its shot; the burn, Renew, Shield, the
+  stuns, the slows, Chilled and Webbed their applied, aura and faded cues; Heroic Strike a heavier
+  hit over the table's (`table: true`); Charge and Gore a rush; Thunder Clap a boom and a ground ring;
+  Sunder a crunch; the totem's bolt a lash of embers from the totem to its target; bread a crunch.
+  Fireball's step 1 cues gave way to the table's (`fire.cast` became `cast.fire`, and so on).
+- **Core content now**: 50 sounds, 40 particle effects, 9 textures, 35 cues. Schools with their own:
+  fire, holy, shadow, frost, nature, physical (bleeds); arcane (the dummy) and anything new fall back
+  to the general `cast`, `release`, `bolt`, `impact` and `tick`.
+- **Small changes on the way**: an FM `index` may be 0; a mesh particle that does not spin keeps the
+  shape's own orientation (a ring lies flat); the ring shape has 24 segments and a thin band; mesh
+  particles draw with a small depth offset so they do not flicker on the ground.
+- **Old-school melee, at the user's asking.** The metal hit's ring ("ding") on every sword blow was
+  too much: swings, misses and hits (`hit`, `hit.blade`, `hit.blade.metal`, `hit.fang`) are now short
+  dull thwacks in the manner of Old School RuneScape - a punchy low thump and a slap, crushed to a
+  low sample rate - and the metal hit's long ring is in one take of eight. That needed a synth
+  layer's **`chance`**: the share of a sound's takes it is in, at least one (each layer starts on a
+  different take); rendered without its take's place, a draw decides. Every take of a sound stays as
+  long as all its layers. `impact.frost` lost its pitched tinkle for a crack, crackling ice and a long
+  cold hiss.
+- **`fx.html`** gained a **Skills** tab: a skill played whole - the events the server would send, at
+  its times, fed to the cue player: its cast bar, release, flight over the stage's distance, hit or
+  heal, the auras it applies with their ticks, an aura on its own for 5 s - with crit and own
+  toggles, and **Fight**, auto-attacks on a loop with misses and crits.
+- **Checked** in the game (`?config=tiny`): Fireball's cast, release, bolt, impact, the burn catching
+  and burning; Charge's rush, stun and stars (and its stun interrupting the dummy's bolt); Heroic
+  Strike and Sunder; Renew; Shield; the totem and its bolts; the dummy's arcane cast and bolt; a
+  failed Thunder Clap's error; a frost wolf's bites, Frost Bite's chill, bleed ticks and its death,
+  thud and dust; no console errors. On `fx.html`: Fireball's flight and burn, Thunder Clap's ring and
+  slow, Charge's stars. Not checked in the game: Thunder Clap landing (rage ran short), Kick's own
+  interrupt, Hex Bolt, Web, and the spider's and boar's deaths. The probe gained the lasting phases
+  (813 checks).
 
 ## Not in this step
 

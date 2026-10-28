@@ -1,0 +1,7 @@
+// The extra weight of a strong blow: a deep body thump under the hit.
+{
+  near: 4, far: 45, maxVoices: 4, pitch: [-1.5, 1], volume: [0.85, 1], takes: 3,
+  layers: [
+    { synth: { tone: "sine", hz: [120, 40], env: { attack: 0.002, decay: 0.3 }, gain: 1, drive: 4 }, standIn: true },
+  ],
+}

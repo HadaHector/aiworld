@@ -49,11 +49,12 @@ await section("rules", () => {
   console.log(`feedback: ${feedback.sounds.size} sounds, ${feedback.effects.size} particle effects, ${feedback.textures.length} textures, ${feedback.cues.size} cues`);
   check("core has sounds, effects, textures and cues", feedback.sounds.size > 0 && feedback.effects.size > 0 && feedback.textures.length > 0 && feedback.cues.size > 0);
   const fireball = feedback.skillCues[game.skillIndex.get("fireball")];
-  check("fireball names its phases' cues", fireball.cast === "fireCast" && fireball.projectile === "fireBolt" && fireball.impact === "fireImpact", JSON.stringify(fireball));
+  check("fireball names its bolt", fireball.projectile === "bolt" && fireball.cast === undefined, JSON.stringify(fireball));
+  check("shield names its applied, aura and faded cues", JSON.stringify(feedback.skillCues[game.skillIndex.get("shield")]) === JSON.stringify({ applied: "shieldOn", aura: "shielded", faded: "shieldBreak" }));
   const wolf = [...game.templates.values()].find((t) => t.id.startsWith("wolf"));
   check("a wolf kind's look carries its feedback", wolf?.look.feedback.weapon === "fang" && wolf?.look.feedback.armor === "fur", JSON.stringify(wolf?.look.feedback));
   check("the dummy's look carries its feedback", game.templates.get("trainingDummy")?.look.feedback.armor === "metal");
-  check("the event table has melee hits", feedback.config.events.get("hit")?.[0]?.cue === "meleeHit");
+  check("the event table has melee hits", feedback.config.events.get("hit")?.some((r) => r.cue === "meleeHit" && r.tags.includes("melee")));
   const meleeHit = feedback.cues.get("meleeHit");
   check("meleeHit's parts", meleeHit?.parts.map((p) => p.kind).join() === "sound,particles,shake,pause", meleeHit?.parts.map((p) => p.kind).join());
 });
@@ -95,8 +96,8 @@ await section("events to cues", () => {
   check("a swing", run(event("animation", 1, 0, "autoAttack", 0, "swing")) === "swing");
   check("a melee miss", run(event("miss", 1, 2, "autoAttack")) === "whiff");
   check("a fireball's own impact", run(event("hit", 1, 2, "fireball")) === "impact.fire");
-  check("a fireball's release", run(event("castDone", 1, 2, "fireball")) === "fire.release");
-  check("an event with no cue plays nothing", run(event("heal", 1, 1, "renew")) === "");
+  check("a fireball goes off from the table by its school, and its bolt flies", run(event("castDone", 1, 2, "fireball")) === "release.fire,bolt.fire");
+  check("an event with no cue plays nothing", run(event("auraStacks", 1, 2, "sunder")) === "");
   run(event("animation", 3, 0, "autoAttack", 0, "swing"));
   check("a wolf swinging at the player is the player's fight", played[0]?.own === true);
   run(event("hit", 4, 5, "autoAttack"));
@@ -118,18 +119,18 @@ await section("particles", () => {
   system.spawn("hit", () => ({ x: 0, y: 5, z: 0 }), { own: true });
   const chips = () => [...Array(system.meshes.count).keys()];
   const y0 = chips().reduce((sum, i) => sum + system.meshes.y[i], 0) / system.meshes.count;
-  for (let i = 0; i < 6; i++) system.update(1 / 30, near);
+  for (let i = 0; i < 12; i++) system.update(1 / 30, near);
   const y1 = chips().reduce((sum, i) => sum + system.meshes.y[i], 0) / Math.max(1, system.meshes.count);
   check("chips fall", y1 < y0, `${y0.toFixed(2)} -> ${y1.toFixed(2)}`);
   check("curves", curveAt([[0, 1], [0.5, 3], [1, 0]], 0.25) === 2 && curveAt([[0, 1], [1, 0]], 2) === 0 && curveAt([[0, 4]], 0.7) === 4);
   system.clear();
   // A looping effect plays until stopped; its local particles follow what it is on.
   const hand = { x: 0, y: 1, z: 0 };
-  const fire = system.spawn("fireHands", () => hand, { own: true });
+  const fire = system.spawn("cast.fire", () => hand, { own: true });
   for (let i = 0; i < 60; i++) system.update(1 / 30, near);
   check("a loop goes on", fire.alive && system.sprites.count > 10, `${system.sprites.count} sprites`);
-  const glow = feedback.effects.get("fireHands").emitters.findIndex((e) => e.local);
-  const glowIndex = system.emitters.indexOf(feedback.effects.get("fireHands").emitters[glow]);
+  const glow = feedback.effects.get("cast.fire").emitters.findIndex((e) => e.local);
+  const glowIndex = system.emitters.indexOf(feedback.effects.get("cast.fire").emitters[glow]);
   hand.x = 10;
   system.update(1 / 30, near);
   let followed = true;
@@ -143,9 +144,9 @@ await section("particles", () => {
   check("others' bursts are smaller", system.sprites.count === Math.round(14 * 0.5) + Math.round(1 * 0.5), String(system.sprites.count));
   system.clear();
   system.update(0, { x: 0, y: 0, z: 0 });
-  check("effects beyond 60 m are not started", system.spawn("fireBurst", () => ({ x: 100, y: 0, z: 0 })) === null);
+  check("effects beyond 60 m are not started", system.spawn("impact.fire", () => ({ x: 100, y: 0, z: 0 })) === null);
   // The budget: others' particles stop at it; the player's own push the oldest of others' out.
-  for (let i = 0; i < 400; i++) system.spawn("fireBurst", () => near);
+  for (let i = 0; i < 400; i++) system.spawn("impact.fire", () => near);
   check("the budget holds", system.sprites.count === system.sprites.capacity, `${system.sprites.count} of ${system.sprites.capacity}`);
   system.spawn("hit.metal", () => near, { own: true });
   let own = 0;
@@ -161,6 +162,44 @@ await section("particles", () => {
   cues.play("meleeHit", { source: 1, target: 2, skill: null, crit: false, periodic: false });
   cues.play("meleeHit", { source: 1, target: 3, skill: null, crit: false, periodic: false });
   check("a cue's particles by armour", spawned.join() === "hit.metal,hit", spawned.join());
+});
+
+// --- lasting phases --------------------------------------------------------------------------------
+await section("lasting phases", () => {
+  const sounds = [];
+  const fakeSfx = {
+    play: (id) => {
+      const handle = { sound: id, playing: true, stopped: false, move() {}, stop() { handle.stopped = true; handle.playing = false; } };
+      sounds.push(handle);
+      return handle;
+    },
+  };
+  const cues = createCuePlayer(feedback, game, { player: () => 1, target: () => 2, targetOf: () => 0, place: (u) => ({ x: u * 5, y: 1, z: 0 }), traits: () => ({}) }, () => fakeSfx);
+  const skill = (id) => game.skillIndex.get(id);
+  const event = (kind, source, target, skillId, flags = 0) => ({ kind: EVENT_KIND[kind], source, target, skill: skillId === undefined ? -1 : skill(skillId), amount: 2.5, extra: 0, absorbed: 0, flags, reason: 0, name: "", time: 0 });
+  const playing = (id) => sounds.filter((h) => h.sound === id && !h.stopped).length;
+  cues.events([event("castStart", 1, 2, "fireball")]);
+  check("a cast loops", cues.lasting().casts === 1 && playing("cast.fire") === 1);
+  cues.events([event("castDone", 1, 2, "fireball")]);
+  check("a cast ends when it goes off, and its bolt flies", cues.lasting().casts === 0 && playing("cast.fire") === 0 && cues.lasting().projectiles === 1 && playing("bolt.fire") === 1);
+  cues.events([event("hit", 1, 2, "fireball")]);
+  check("the bolt's hit ends its flight", cues.lasting().projectiles === 0 && playing("bolt.fire") === 0 && sounds.some((h) => h.sound === "impact.fire"));
+  cues.events([event("castStart", 2, 1, "hexBolt")]);
+  cues.events([event("interrupted", 1, 2, "hexBolt")]);
+  check("an interrupt ends the interrupted unit's cast", cues.lasting().casts === 0 && playing("cast.shadow") === 0 && sounds.some((h) => h.sound === "interrupt"));
+  cues.events([event("auraOn", 1, 2, "burn")]);
+  check("an aura loops on its host", cues.lasting().auras === 1 && playing("burning") === 1);
+  cues.events([event("auraOn", 1, 2, "burn")]);
+  check("an aura applied again goes on as it was", cues.lasting().auras === 1 && playing("burning") === 1);
+  cues.events([event("auraOff", 1, 2, "burn")]);
+  check("an aura going stops", cues.lasting().auras === 0 && playing("burning") === 0);
+  cues.events([event("auraOn", 1, 2, "shield"), event("auraOff", 1, 2, "shield")]);
+  check("a shield breaking plays its faded cue", sounds.some((h) => h.sound === "shield.break"));
+  cues.events([event("castStart", 2, 1, "dummyBolt"), event("auraOn", 1, 2, "burn")]);
+  cues.forget(2);
+  check("a unit leaving takes its cast and auras with it", cues.lasting().casts === 0 && cues.lasting().auras === 0);
+  cues.events([event("death", 1, 3)]);
+  check("a death plays its family's sound, else the general one", sounds.at(-1)?.sound === "death");
 });
 
 // --- broken content --------------------------------------------------------------------------------
@@ -197,7 +236,7 @@ await section("broken content", () => {
   expectErrors("a texture not a power of two", { "particleTextures/bad.json5": `{ kind: "dot", size: 48 }` }, "power of two");
   expectErrors("an unknown texture kind", { "particleTextures/bad.json5": `{ kind: "blob" }` }, `"blob"`);
   expectErrors("a skill naming a cue that does not exist", { "skills/bad.json5": `{ target: "self", states: { go: {} }, cues: { impact: "nope" } }` }, `no cue "nope"`);
-  expectErrors("a skill naming an unknown phase", { "skills/bad.json5": `{ target: "self", states: { go: {} }, cues: { boom: "fireImpact" } }` }, "unknown phase");
+  expectErrors("a skill naming an unknown phase", { "skills/bad.json5": `{ target: "self", states: { go: {} }, cues: { boom: "spellHit" } }` }, "unknown phase");
   expectErrors("a look's unknown feedback field", { "entities/bad.json5": `{ look: { feedback: { smell: "wet" } } }` }, "unknown field (expected one of: weapon, armor, family)");
   expectErrors("an unknown event", { "rules/feedback.json5": `{ events: { hitt: [{ cue: "meleeHit" }] } }` }, "unknown event");
   expectErrors("an event naming no cue", { "rules/feedback.json5": `{ events: { hit: [{ cue: "nope" }] } }` }, `no cue "nope"`);
@@ -214,7 +253,7 @@ await section("sounds", () => {
     if (synths.length === 0) continue;
     for (let take = 0; take < sound.takes; take++) {
       const t0 = performance.now();
-      const rendered = renderSynth(synths, 1000 + take, sound.loop);
+      const rendered = renderSynth(synths, 1000 + take, sound.loop, undefined, { index: take, count: sound.takes });
       longest = Math.max(longest, performance.now() - t0);
       renders++;
       const { data } = rendered;
@@ -247,6 +286,15 @@ await section("sounds", () => {
     }
   }
   console.log(`sounds: ${renders} takes rendered in ${(performance.now() - started).toFixed(0)} ms, longest ${longest.toFixed(1)} ms`);
+  // A layer with a chance is in that share of the takes: the metal hit rings in one take of eight.
+  const metal = feedback.sounds.get("hit.blade.metal");
+  const ringing = [...Array(metal.takes).keys()].filter((take) => {
+    const data = renderSynth(metal.layers.map((l) => l.synth), 1000 + take, 0, undefined, { index: take, count: metal.takes }).data;
+    let tail = 0;
+    for (let i = Math.floor(0.15 * SAMPLE_RATE); i < data.length; i++) tail = Math.max(tail, Math.abs(data[i]));
+    return tail > 0.03;
+  });
+  check("the metal hit rings now and then, not always", ringing.length === 1, `${ringing.length} of ${metal.takes} takes ring`);
   // The same seed gives the same take.
   const swing = feedback.sounds.get("swing").layers.map((l) => l.synth);
   const a = renderSynth(swing, 7).data;

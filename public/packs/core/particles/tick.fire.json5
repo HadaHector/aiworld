@@ -1,0 +1,6 @@
+// A burn ticking: a flare of flame tongues licking up.
+{
+  emitters: [
+    { sprite: "flame", blend: "add", burst: 8, life: [0.25, 0.45], shape: { sphere: 0.25 }, direction: [0, 1, 0], spread: 30, speed: [0.8, 1.6], size: [[0, 0.3], [1, 0.08]], colour: [[0, "#fff0b0"], [0.3, "#ff8a20"], [1, "#a0200000"]] },
+  ],
+}

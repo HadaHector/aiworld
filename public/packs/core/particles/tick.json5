@@ -1,0 +1,6 @@
+// A damage over time ticking, any school: a small dark puff.
+{
+  emitters: [
+    { sprite: "smoke", blend: "alpha", burst: 3, life: [0.4, 0.6], shape: { sphere: 0.15 }, speed: [0.3, 0.6], size: [[0, 0.2], [1, 0.45]], colour: [[0, "#40384070"], [1, "#40384000"]] },
+  ],
+}

@@ -1,0 +1,6 @@
+// A shield round its host, until it breaks or runs out.
+{
+  parts: [
+    { particles: "shield" },
+  ],
+}

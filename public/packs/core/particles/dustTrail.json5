@@ -1,0 +1,6 @@
+// A charge's wake: dust kicked up behind the running feet.
+{
+  emitters: [
+    { sprite: "smoke", blend: "alpha", rate: 40, duration: 0.6, life: [0.5, 0.8], shape: { sphere: 0.2 }, speed: [0.2, 0.6], gravity: -0.3, spin: [-1, 1], size: [[0, 0.3], [1, 0.8]], colour: [[0, "#c8b89870"], [1, "#c8b89800"]] },
+  ],
+}

@@ -1,0 +1,7 @@
+// A death, any family: a falling, fading tone.
+{
+  near: 5, far: 50, maxVoices: 3, pitch: [-1, 1], volume: [0.8, 0.9],
+  layers: [
+    { synth: { tone: "triangle", hz: [440, 110], env: { attack: 0.02, hold: 0.1, decay: 0.7 }, gain: 0.15, vibrato: { rate: 6, depth: 0.4 } }, standIn: true },
+  ],
+}

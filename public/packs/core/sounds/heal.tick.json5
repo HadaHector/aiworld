@@ -1,0 +1,7 @@
+// A heal over time ticking: one soft bell.
+{
+  near: 3, far: 30, maxVoices: 4, pitch: [-1, 1], volume: [0.45, 0.55], takes: 3,
+  layers: [
+    { synth: { modal: true, hz: 784, partials: [[1, 0.5, 0.4], [2.01, 0.2, 0.25], [3, 0.08, 0.15]], gain: 0.3 }, standIn: true },
+  ],
+}

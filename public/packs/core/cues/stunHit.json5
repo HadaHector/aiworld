@@ -1,0 +1,10 @@
+// A stunning blow landing: a thud, dust round the feet, and a hard knock for the player's own fights.
+{
+  parts: [
+    { sound: "stun" },
+    { particles: "stunDust", bone: "feet" },
+    { flinch: 1 },
+    { shake: 0.45 },
+    { pause: 0.06 },
+  ],
+}

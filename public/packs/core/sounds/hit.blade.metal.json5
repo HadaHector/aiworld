@@ -1,11 +1,14 @@
-// Steel on mail or plate: a clang of inharmonic partials ringing out, over a dull knock.
+// Steel on mail or plate, old-school: a dull clank - the thwack with a short damped clink - and only
+// now and then (about one take in seven) a ring that carries on.
 {
   near: 4, far: 45, maxVoices: 6,
-  pitch: [-2, 2], volume: [0.8, 1],
-  takes: 4,
+  pitch: [-2, 2], volume: [0.8, 0.95],
+  takes: 8,
   layers: [
-    { synth: { modal: true, hz: 620, partials: [[1, 0.5, 0.25], [2.76, 0.35, 0.18], [5.4, 0.25, 0.1], [8.93, 0.15, 0.06]], env: { attack: 0.001 }, gain: 0.55 }, standIn: true },
-    { synth: { noise: "white", filter: { type: "bandpass", hz: [5000, 2500], q: 1.2 }, env: { attack: 0.001, decay: 0.05, curve: 3 }, gain: 0.6 }, standIn: true },
-    { synth: { tone: "sine", hz: [150, 70], env: { attack: 0.002, decay: 0.1 }, gain: 0.5 }, standIn: true },
+    { synth: { tone: "sine", hz: [230, 85], env: { attack: 0.001, decay: 0.08, curve: 3 }, gain: 0.8, drive: 4, crush: { bits: 8, rate: 2 } }, standIn: true },
+    { synth: { modal: true, hz: 520, partials: [[1, 0.5, 0.045], [2.31, 0.35, 0.03], [3.9, 0.2, 0.02]], env: { attack: 0.001 }, gain: 0.5, crush: { bits: 8, rate: 2 } }, standIn: true },
+    { synth: { noise: "white", filter: { type: "bandpass", hz: 3500, q: 1.5 }, env: { attack: 0.001, decay: 0.03, curve: 3 }, gain: 0.5, crush: { bits: 7, rate: 2 } }, standIn: true },
+    // The rare ring.
+    { synth: { modal: true, hz: 640, partials: [[1, 0.4, 0.3], [2.76, 0.3, 0.2], [5.4, 0.15, 0.1]], env: { attack: 0.001 }, gain: 0.3, delay: 0.01, chance: 0.15 }, standIn: true },
   ],
 }

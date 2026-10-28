@@ -1,0 +1,8 @@
+// A cast cut off: a sharp crack and a broken glassy note.
+{
+  near: 4, far: 45, maxVoices: 3, pitch: [-1, 1], volume: [0.85, 1], takes: 3,
+  layers: [
+    { synth: { noise: "white", filter: { type: "bandpass", hz: 3000, q: 1 }, env: { attack: 0.001, decay: 0.06, curve: 3 }, gain: 1.2 }, standIn: true },
+    { synth: { tone: "triangle", hz: [1200, 300], env: { attack: 0.002, decay: 0.25 }, gain: 0.15, crush: { bits: 5 } }, standIn: true },
+  ],
+}

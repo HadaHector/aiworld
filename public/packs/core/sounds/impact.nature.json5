@@ -1,0 +1,8 @@
+// Venom or sap striking: a wet splat with a bubbly hiss.
+{
+  near: 5, far: 45, maxVoices: 4, pitch: [-1.5, 1.5], volume: [0.85, 1], takes: 3,
+  layers: [
+    { synth: { noise: "pink", filter: { type: "lowpass", hz: [3000, 500], q: 2 }, env: { attack: 0.002, decay: 0.15 }, gain: 1.4 }, standIn: true },
+    { synth: { crackle: true, density: 120, click: 0.008, filter: { type: "bandpass", hz: 1500, q: 2 }, env: { attack: 0.01, decay: 0.35 }, gain: 0.4 }, standIn: true },
+  ],
+}

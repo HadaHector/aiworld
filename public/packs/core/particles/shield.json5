@@ -1,0 +1,8 @@
+// A shield of light round someone: a pale ring turning about the body, glints on it. Loops.
+{
+  loop: true,
+  emitters: [
+    { sprite: "ring", blend: "add", rate: 3, life: 0.9, local: true, size: [[0, 1.9], [0.5, 2], [1, 1.9]], colour: [[0, "#fff4c000"], [0.5, "#fff4c030"], [1, "#fff4c000"]] },
+    { sprite: "star", blend: "add", rate: 6, life: [0.5, 0.8], shape: { sphere: 0.9 }, local: true, size: [[0, 0.04], [0.5, 0.12], [1, 0.02]], colour: [[0, "#ffffff"], [1, "#ffe08000"]] },
+  ],
+}

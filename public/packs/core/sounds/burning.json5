@@ -1,0 +1,8 @@
+// Something on fire: a steady flutter of flame and crackle. Loops.
+{
+  near: 3, far: 30, maxVoices: 4, volume: [0.45, 0.5], takes: 1, loop: 2,
+  layers: [
+    { synth: { noise: "brown", filter: { type: "lowpass", hz: 900 }, env: { attack: 0.3 }, gain: 1.2, tremolo: { rate: 5, depth: 0.4 } }, standIn: true },
+    { synth: { crackle: true, density: 25, click: 0.004, filter: { type: "highpass", hz: 2000 }, env: { attack: 0.2 }, gain: 0.45 }, standIn: true },
+  ],
+}

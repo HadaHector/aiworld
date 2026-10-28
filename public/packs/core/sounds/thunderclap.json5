@@ -1,0 +1,9 @@
+// Thunder Clap: a big boom rolling out over the ground.
+{
+  near: 6, far: 60, maxVoices: 2, pitch: [-1, 0.5], volume: [0.95, 1], takes: 2,
+  layers: [
+    { synth: { tone: "sine", hz: [90, 30], env: { attack: 0.003, decay: 0.7 }, gain: 1, drive: 4 }, standIn: true },
+    { synth: { noise: "brown", filter: { type: "lowpass", hz: [3000, 150], q: 1 }, env: { attack: 0.003, hold: 0.05, decay: 1 }, gain: 2.5 }, standIn: true },
+    { synth: { noise: "white", filter: { type: "highpass", hz: 2500 }, env: { attack: 0.001, decay: 0.06 }, gain: 0.6 }, standIn: true },
+  ],
+}

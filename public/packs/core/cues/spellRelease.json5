@@ -1,0 +1,7 @@
+// A spell going off: its school's sound and a flash from the caster's hands.
+{
+  parts: [
+    { sound: "release.{school}", at: "source", bone: "hands" },
+    { particles: "release", at: "source", bone: "hands" },
+  ],
+}

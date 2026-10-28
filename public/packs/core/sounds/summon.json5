@@ -1,0 +1,8 @@
+// Something summoned into the ground: a heavy thump and a rumble.
+{
+  near: 5, far: 50, maxVoices: 2, pitch: [-1, 1], volume: [0.85, 1],
+  layers: [
+    { synth: { tone: "sine", hz: [100, 35], env: { attack: 0.002, decay: 0.4 }, gain: 1, drive: 3 }, standIn: true },
+    { synth: { noise: "brown", filter: { type: "lowpass", hz: 600 }, env: { attack: 0.01, decay: 0.6 }, gain: 1.5 }, standIn: true },
+  ],
+}

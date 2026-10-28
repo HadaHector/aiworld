@@ -1,0 +1,7 @@
+// A spell that misses: a dull fizz, deflating.
+{
+  near: 4, far: 35, maxVoices: 3, pitch: [-1, 1], volume: [0.7, 0.85],
+  layers: [
+    { synth: { noise: "pink", filter: { type: "bandpass", hz: [2000, 400], q: 2 }, env: { attack: 0.01, decay: 0.3 }, gain: 0.9, crush: { bits: 6, rate: 2 } }, standIn: true },
+  ],
+}

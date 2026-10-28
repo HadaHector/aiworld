@@ -1,0 +1,6 @@
+// A spell that misses or is resisted.
+{
+  parts: [
+    { sound: "fizzle" },
+  ],
+}

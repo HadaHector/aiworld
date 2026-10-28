@@ -1,0 +1,9 @@
+// Holy light gathering in a caster's hands: a golden glow, motes rising, a slow ring. Loops.
+{
+  loop: true,
+  emitters: [
+    { sprite: "softDot", blend: "add", rate: 6, life: 0.4, local: true, size: [[0, 0.8], [0.5, 1], [1, 0.8]], colour: [[0, "#ffe09000"], [0.3, "#ffe09060"], [1, "#ffe09000"]] },
+    { sprite: "star", blend: "add", rate: 14, life: [0.6, 1], shape: { sphere: 0.35 }, direction: [0, 1, 0], spread: 30, speed: [0.3, 0.7], size: [[0, 0.05], [0.3, 0.14], [1, 0.03]], colour: [[0, "#fff6d0"], [1, "#ffd06000"]] },
+    { sprite: "ring", blend: "add", rate: 1.5, life: 1, local: true, size: [[0, 0.2], [1, 0.9]], colour: [[0, "#ffe8a000"], [0.3, "#ffe8a070"], [1, "#ffe8a000"]] },
+  ],
+}

@@ -1,0 +1,8 @@
+// A charge: a long rushing whoosh with feet pounding under it.
+{
+  near: 4, far: 45, maxVoices: 3, pitch: [-1, 1], volume: [0.85, 1],
+  layers: [
+    { synth: { noise: "pink", filter: { type: "bandpass", hz: [400, 1500], q: 1.2 }, env: { attack: 0.08, hold: 0.25, decay: 0.3 }, gain: 1.4 }, standIn: true },
+    { synth: { tone: "sine", hz: [90, 60], env: { attack: 0.005, hold: 0.4, decay: 0.15 }, gain: 0.3, tremolo: { rate: 9, depth: 0.9 } }, standIn: true },
+  ],
+}

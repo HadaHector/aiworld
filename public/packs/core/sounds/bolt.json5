@@ -1,0 +1,8 @@
+// A bolt of magic in flight, any school: a buzzing, fluttering hum. Loops.
+{
+  near: 3, far: 35, maxVoices: 6, pitch: [-1, 1], volume: [0.6, 0.7], takes: 1, loop: 1,
+  layers: [
+    { synth: { tone: "saw", hz: 196, env: { attack: 0.05 }, gain: 0.07, filter: { type: "lowpass", hz: 1200, q: 3 }, tremolo: { rate: 17, depth: 0.5 } }, standIn: true },
+    { synth: { noise: "pink", filter: { type: "bandpass", hz: 1800, q: 3 }, env: { attack: 0.05 }, gain: 0.5 }, standIn: true },
+  ],
+}

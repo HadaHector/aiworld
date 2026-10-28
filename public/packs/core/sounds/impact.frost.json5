@@ -1,0 +1,14 @@
+// Frost striking: a brittle crack, then ice crackling as it spreads under a long cold hiss. No pitched
+// layer, so it does not ring like an instrument.
+{
+  near: 5, far: 50, maxVoices: 4, pitch: [-1, 1.5], volume: [0.85, 1], takes: 4,
+  layers: [
+    // The crack.
+    { synth: { noise: "white", filter: { type: "bandpass", hz: [4000, 2200], q: 0.9 }, env: { attack: 0.001, decay: 0.06, curve: 3 }, gain: 1.1 }, standIn: true },
+    // Ice crackling as it spreads, thinning out.
+    { synth: { crackle: true, density: 260, click: 0.003, filter: { type: "highpass", hz: 2500 }, env: { attack: 0.01, hold: 0.1, decay: 0.55, curve: 1.6 }, gain: 0.75 }, standIn: true },
+    { synth: { crackle: true, density: 60, click: 0.008, filter: { type: "bandpass", hz: 1400, q: 1.2 }, env: { attack: 0.02, decay: 0.4, curve: 2 }, gain: 0.5, delay: 0.03 }, standIn: true },
+    // The cold breath: a long hiss falling away.
+    { synth: { noise: "white", filter: { type: "highpass", hz: [7000, 3000], q: 0.7 }, env: { attack: 0.03, hold: 0.08, decay: 0.75, curve: 1.8 }, gain: 0.45 }, standIn: true },
+  ],
+}

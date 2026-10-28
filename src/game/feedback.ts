@@ -11,7 +11,7 @@ import { createParticleSystem, type ParticleSystem } from "../particles/system";
 import { createParticleRenderer, type ParticleRenderer } from "../particles/render";
 import { whenAudio } from "../audio/context";
 import { createSfx, type Sfx, type Vec3 } from "../audio/sfx";
-import { createCuePlayer, type Bone, type CueContext, type UnitTraits } from "../feedback/cues";
+import { createCuePlayer, type Bone, type CueContext, type CuePlayer, type UnitTraits } from "../feedback/cues";
 import type { FeedbackRules } from "../feedback/rules";
 import type { GameRules } from "../sim/rules/gameRules";
 import type { ItemRules } from "../sim/rules/itemRules";
@@ -32,6 +32,7 @@ export interface GameFeedback {
   setVolume: (volume: number) => void;
   /** The sound effects player, once audio has started - for the console. */
   sfx: () => Sfx | null;
+  cues: CuePlayer;
   particles: ParticleSystem;
   /** Particles drawn last frame. */
   stats: () => { sprites: number; meshes: number; effects: number };
@@ -98,7 +99,6 @@ export function createGameFeedback(options: GameFeedbackOptions): GameFeedback {
     traitCache.set(entity.id, { key, traits });
     return traits;
   };
-  mirror.onDespawn((entity) => traitCache.delete(entity.id));
 
   const cues = createCuePlayer(rules, game, {
     player: options.player,
@@ -122,6 +122,11 @@ export function createGameFeedback(options: GameFeedbackOptions): GameFeedback {
       return e ? traitsOf(e) : {};
     },
   }, () => sfx, () => particles);
+  // A unit gone from view takes what lasts on it (its cast, its auras) with it.
+  mirror.onDespawn((entity) => {
+    traitCache.delete(entity.id);
+    cues.forget(entity.id);
+  });
 
   const particles = createParticleSystem(rules);
   let renderer: ParticleRenderer | null = null;
@@ -137,6 +142,7 @@ export function createGameFeedback(options: GameFeedbackOptions): GameFeedback {
       renderer?.dispose();
       renderer = null;
       particles.clear();
+      cues.stopAll();
       if (scene) renderer = createParticleRenderer(scene, particles, rules);
     },
     update(camera) {
@@ -144,6 +150,7 @@ export function createGameFeedback(options: GameFeedbackOptions): GameFeedback {
       const dt = Math.min(0.1, (time - lastFrame) / 1000);
       lastFrame = time;
       const eye = camera?.globalPosition ?? null;
+      cues.update();
       particles.update(dt, eye);
       renderer?.update();
       if (!sfx || !camera) return;
@@ -162,6 +169,7 @@ export function createGameFeedback(options: GameFeedbackOptions): GameFeedback {
       sfx?.setVolume(v);
     },
     sfx: () => sfx,
+    cues,
     particles,
     stats: () => ({ ...(renderer?.stats() ?? { sprites: 0, meshes: 0 }), effects: particles.effects() }),
   };

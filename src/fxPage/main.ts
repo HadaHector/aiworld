@@ -16,6 +16,9 @@ import { createParticleSystem, type EffectHandle } from "../particles/system";
 import { drawParticleTexture } from "../particles/textures";
 import { resolveCreatureRules } from "../sim/rules/creatureRules";
 import { resolveGameRules, type GameRules } from "../sim/rules/gameRules";
+import type { SkillDef } from "../sim/rules/skillRules";
+import type { CastData } from "../sim/skills/actions";
+import { EVENT_FLAG, EVENT_KIND, type CombatEvent, type CombatEventKind } from "../sim/skills/events";
 import { ContentError, formatIssue } from "../world/content/contentReader";
 import { configNameFromUrl, fetchPackSources, fetchWorldConfig } from "../world/content/loadContent";
 import type { PackSource } from "../world/content/resolveContent";
@@ -130,6 +133,7 @@ whenAudio((audio) => {
 });
 volume.addEventListener("input", () => sfx?.setVolume((Number(volume.value) / 100) ** 2));
 $("stop").addEventListener("click", () => {
+  stopSkill();
   sfx?.stopAll();
   stopLooping();
   particles.clear();
@@ -163,6 +167,7 @@ engine.runRenderLoop(() => {
     const p = positionOf(unit);
     body.show({ ...p, facing: facingOf(unit), grounded: true });
   }
+  cues.update();
   particles.update(dt * Number(speed.value), camera.globalPosition);
   renderer.update();
   if (sfx) {
@@ -179,12 +184,14 @@ setInterval(() => {
 }, 100);
 
 // --- the list ------------------------------------------------------------------------------------
-type Tab = "sounds" | "cues" | "particles" | "atlas";
-const TABS: Tab[] = ["sounds", "cues", "particles", "atlas"];
-const state = { tab: (location.hash.match(/tab=(\w+)/)?.[1] as Tab) ?? "sounds", selected: decodeURIComponent(location.hash.match(/[#&]id=([^&]+)/)?.[1] ?? ""), filter: "" };
+type Tab = "skills" | "sounds" | "cues" | "particles" | "atlas";
+const TABS: Tab[] = ["skills", "sounds", "cues", "particles", "atlas"];
+const state = { tab: (location.hash.match(/tab=(\w+)/)?.[1] as Tab) ?? "skills", selected: decodeURIComponent(location.hash.match(/[#&]id=([^&]+)/)?.[1] ?? ""), filter: "" };
 const remember = (): void => history.replaceState(null, "", `#tab=${state.tab}&id=${encodeURIComponent(state.selected)}`);
 const idsOf = (tab: Tab): string[] =>
-  tab === "sounds" ? [...rules.sounds.keys()] : tab === "cues" ? [...rules.cues.keys()] : tab === "particles" ? [...rules.effects.keys()] : rules.textures.map((t) => t.id);
+  tab === "skills"
+    ? game.skills.map((k) => k.id)
+    : tab === "sounds" ? [...rules.sounds.keys()] : tab === "cues" ? [...rules.cues.keys()] : tab === "particles" ? [...rules.effects.keys()] : rules.textures.map((t) => t.id);
 
 function render(): void {
   list.innerHTML = "";
@@ -219,7 +226,10 @@ function render(): void {
       const name = document.createElement("span");
       name.textContent = id;
       const note = document.createElement("small");
-      if (state.tab === "sounds") {
+      if (state.tab === "skills") {
+        const cued = Object.keys(rules.skillCues[game.skillIndex.get(id)!]);
+        note.textContent = cued.length ? cued.join(", ") : "table";
+      } else if (state.tab === "sounds") {
         const s = rules.sounds.get(id)!;
         note.textContent = `${s.bus}${s.loop ? " · loop" : ""}`;
       } else if (state.tab === "cues") note.textContent = `${rules.cues.get(id)!.parts.length} parts`;
@@ -232,7 +242,8 @@ function render(): void {
         state.selected = id;
         remember();
         render();
-        if (state.tab === "sounds") playSound(id);
+        if (state.tab === "skills") playSkill(game.skills[game.skillIndex.get(id)!]);
+        else if (state.tab === "sounds") playSound(id);
         else if (state.tab === "cues") playCue(id);
         else if (state.tab === "particles") playEffect(id);
       };
@@ -287,15 +298,119 @@ function playEffect(id: string): void {
   if (handle) looping.push(handle);
 }
 
+// --- skills --------------------------------------------------------------------------------------
+// A skill played whole: the combat events the server would send for it, at the times it would send
+// them, fed to the cue player - cast, release, flight, impact, the auras it applies, their ticks.
+let timers: number[] = [];
+let fighting = 0;
+function stopSkill(): void {
+  for (const t of timers) clearTimeout(t);
+  timers = [];
+  clearInterval(fighting);
+  fighting = 0;
+  cues.stopAll();
+}
+const at = (seconds: number, run: () => void): void => {
+  timers.push(window.setTimeout(run, seconds * 1000));
+};
+function send(kind: CombatEventKind, skill: SkillDef, source: number, target: number, flags = 0, name = "", amount = 10): void {
+  const event: CombatEvent = { kind: EVENT_KIND[kind], source, target, skill: skill.index, amount, extra: 0, absorbed: 0, flags: flags | (flags & EVENT_FLAG.periodic ? 0 : critFlag()), reason: 0, name, time: 0 };
+  cues.events([event]);
+}
+const critFlag = (): number => (flags.crit ? EVENT_FLAG.crit : 0);
+const fixed = (length: SkillDef["states"][number]["length"], fallback: number): number => (length.kind === "fixed" ? (length.length.constant ?? fallback) : fallback);
+const actionsOf = (skill: SkillDef): { kind: string; data: unknown }[] => skill.states.flatMap((s) => [...s.enter, ...s.tick, ...s.hold, ...s.exit]);
+const distanceBetween = (): number => {
+  const a = place(SOURCE, "hands")!;
+  const b = place(TARGET, "chest")!;
+  return Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
+};
+
+/** Plays an aura skill on its host from `start`: applied, its ticks, and going after a while. */
+function playAura(skill: SkillDef, host: number, start: number, seconds = 5): void {
+  const heals = actionsOf(skill).some((a) => a.kind === "heal");
+  const damages = actionsOf(skill).some((a) => a.kind === "damage");
+  at(start, () => send("auraOn", skill, SOURCE, host));
+  const ticking = skill.states.find((s) => s.period);
+  const period = ticking?.period?.constant ?? 2;
+  if (ticking && (heals || damages)) for (let t = period; t < seconds; t += period) at(start + t, () => send(heals ? "heal" : "hit", skill, SOURCE, host, EVENT_FLAG.periodic));
+  at(start + seconds, () => send("auraOff", skill, SOURCE, host));
+}
+
+function playSkill(skill: SkillDef | undefined): void {
+  if (!skill) return;
+  stopSkill();
+  // A buff on an ally or the caster lands on the caster here; anything else on the target.
+  const host = skill.target === "ally" || skill.target === "self" ? SOURCE : TARGET;
+  if (skill.display !== "hidden") {
+    playAura(skill, host, 0);
+    return;
+  }
+  const actions = actionsOf(skill);
+  let t = 0;
+  const bar = skill.states.find((s) => s.bar);
+  if (bar) {
+    const length = fixed(bar.length, 1.5);
+    send("castStart", skill, SOURCE, host, bar.bar === "channel" ? 1 : 0, "", length);
+    t += length;
+  }
+  at(t, () => send("castDone", skill, SOURCE, host));
+  if (actions.some((a) => a.kind === "animation")) at(t, () => send("animation", skill, SOURCE, 0, 0, "swing"));
+  const travel = skill.states.find((s) => s.length.kind === "travel");
+  if (travel && travel.length.kind === "travel") t += distanceBetween() / (travel.length.speed.constant ?? 20);
+  if (actions.some((a) => a.kind === "damage")) at(t, () => send("hit", skill, SOURCE, TARGET));
+  if (actions.some((a) => a.kind === "heal")) at(t, () => send("heal", skill, SOURCE, host));
+  if (actions.some((a) => a.kind === "interrupt")) at(t, () => send("interrupted", skill, SOURCE, TARGET));
+  if (actions.some((a) => a.kind === "summon")) at(t, () => send("summon", skill, SOURCE, TARGET));
+  // The auras it applies.
+  for (const a of actions) {
+    if (a.kind !== "cast") continue;
+    const applied = game.skills[(a.data as CastData).skill];
+    if (applied && applied.display !== "hidden") playAura(applied, skill.hostOn === "target" || applied.target === "ally" ? host : TARGET, t + 0.05);
+  }
+}
+
+/** Auto-attacks on a loop, the target's dummy bolt now and then: the rhythm of a fight. */
+function fight(): void {
+  stopSkill();
+  const swing = game.skills[game.skillIndex.get("autoAttack") ?? 0];
+  const round = (): void => {
+    send("animation", swing, SOURCE, 0, 0, "swing");
+    at(0.25, () => send(Math.random() < 0.15 ? "miss" : "hit", swing, SOURCE, TARGET, Math.random() < 0.2 ? EVENT_FLAG.crit : 0));
+  };
+  round();
+  fighting = window.setInterval(round, 1800);
+}
+
+function skillDetail(skill: SkillDef | undefined): void {
+  if (!skill) return;
+  const buttons = row(button("▶ Play", () => playSkill(skill)), button("⚔ Fight (auto-attacks)", fight), button("■ Stop", stopSkill));
+  for (const flag of ["crit", "own"] as const) {
+    const b = button(flag, () => {
+      flags[flag] = !flags[flag];
+      b.className = flags[flag] ? "on" : "";
+    }, flags[flag]);
+    buttons.append(b);
+  }
+  detail.append(heading(`${skill.name} (${skill.id})`), buttons);
+  const cued = rules.skillCues[skill.index];
+  const facts = document.createElement("p");
+  facts.className = "hint";
+  facts.textContent = `${skill.type} · ${skill.tags.join(", ") || "no tags"} · ${skill.display !== "hidden" ? `a ${skill.display}` : skill.passive ? "passive" : `target ${skill.target}`}. The scout casts; buffs land on the scout, everything else on the knight.`;
+  detail.append(facts);
+  detail.append(layer(Object.keys(cued).length ? Object.entries(cued).map(([phase, cue]) => `${phase}: ${cue || "(nothing)"}`).join(" · ") : "Names no cues: the event table plays its events."));
+}
+
 // --- the detail ----------------------------------------------------------------------------------
 function renderDetail(): void {
   detail.innerHTML = "";
   if (state.tab === "atlas") return atlasDetail();
   if (!state.selected) {
-    detail.innerHTML = `<p class="hint">Pick something on the left: a click plays it on the stage. Drag on the stage to turn the camera, which is where sounds are heard from; the sliders move the target and slow the particles.</p>`;
+    detail.innerHTML = `<p class="hint">Pick something on the left: a click plays it on the stage - a skill plays whole, with the cues its events call for. Drag on the stage to turn the camera, which is where sounds are heard from; the sliders move the target and slow the particles.</p>`;
     return;
   }
-  if (state.tab === "sounds") soundDetail(rules.sounds.get(state.selected));
+  if (state.tab === "skills") skillDetail(game.skills[game.skillIndex.get(state.selected) ?? -1]);
+  else if (state.tab === "sounds") soundDetail(rules.sounds.get(state.selected));
   else if (state.tab === "cues") cueDetail(state.selected);
   else effectDetail(rules.effects.get(state.selected));
 }

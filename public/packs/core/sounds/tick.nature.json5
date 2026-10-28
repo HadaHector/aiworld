@@ -1,0 +1,8 @@
+// Poison ticking: a sickly bubble rising and popping.
+{
+  near: 3, far: 30, maxVoices: 4, pitch: [-2, 2], volume: [0.55, 0.7], takes: 3,
+  layers: [
+    { synth: { tone: "sine", hz: [300, 900], env: { attack: 0.005, decay: 0.09 }, gain: 0.25 }, standIn: true },
+    { synth: { tone: "sine", hz: [450, 1200], env: { attack: 0.005, decay: 0.07 }, gain: 0.2, delay: 0.08 }, standIn: true },
+  ],
+}

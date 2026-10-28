@@ -1,0 +1,8 @@
+// A cast cut off: the interrupted unit's magic breaking in its hands.
+{
+  parts: [
+    { sound: "interrupt", bone: "hands" },
+    { particles: "interrupt", bone: "hands" },
+    { flinch: 0.4 },
+  ],
+}

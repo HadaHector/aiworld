@@ -1,6 +1,7 @@
 // An absorb on an ally that leaves Weakened Soul behind, so it cannot be cast on them again at once.
 {
   name: "Shield",
+  cues: { applied: "shieldOn", aura: "shielded", faded: "shieldBreak" },
   type: "spell",
   tags: ["school.holy"],
   target: "ally",

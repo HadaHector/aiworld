@@ -1,0 +1,9 @@
+// A shield shattering: glass breaking and tinkling down.
+{
+  near: 4, far: 45, maxVoices: 3, pitch: [-1, 1], volume: [0.85, 1], takes: 3,
+  layers: [
+    { synth: { noise: "white", filter: { type: "highpass", hz: 2500 }, env: { attack: 0.001, decay: 0.2, curve: 3 }, gain: 1 }, standIn: true },
+    { synth: { modal: true, hz: 2300, partials: [[1, 0.3, 0.3], [1.73, 0.25, 0.25], [2.9, 0.2, 0.2], [4.4, 0.15, 0.15], [6.1, 0.1, 0.1]], gain: 0.35, delay: 0.03 }, standIn: true },
+    { synth: { crackle: true, density: 60, click: 0.01, filter: { type: "highpass", hz: 4000 }, env: { attack: 0.05, decay: 0.6 }, gain: 0.35, delay: 0.08 }, standIn: true },
+  ],
+}

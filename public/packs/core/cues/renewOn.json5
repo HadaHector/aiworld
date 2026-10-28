@@ -1,0 +1,7 @@
+// Renew taking hold.
+{
+  parts: [
+    { sound: "heal.tick" },
+    { particles: "heal.tick", bone: "feet" },
+  ],
+}

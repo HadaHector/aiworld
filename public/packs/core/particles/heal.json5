@@ -1,0 +1,7 @@
+// A heal landing: green-gold sparkles swirling up the body.
+{
+  emitters: [
+    { sprite: "star", blend: "add", burst: 16, life: [0.6, 1], shape: { ring: 0.45 }, direction: [0, 1, 0], spread: 15, speed: [0.8, 1.6], size: [[0, 0.06], [0.3, 0.16], [1, 0.03]], colour: [[0, "#f0ffc0"], [1, "#60ff6000"]] },
+    { sprite: "softDot", blend: "add", burst: 1, life: 0.35, size: [[0, 0.8], [1, 1.4]], colour: [[0, "#a0ff8060"], [1, "#a0ff8000"]] },
+  ],
+}

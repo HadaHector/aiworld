@@ -1,0 +1,6 @@
+// A bleed ticking: dark red drops falling.
+{
+  emitters: [
+    { mesh: "ember", blend: "alpha", burst: 5, life: [0.4, 0.6], shape: { sphere: 0.15 }, speed: [0.3, 1], gravity: 9, size: 0.06, colour: [[0, "#801010ff"], [0.8, "#801010ff"], [1, "#80101000"]] },
+  ],
+}

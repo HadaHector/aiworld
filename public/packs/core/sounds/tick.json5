@@ -1,0 +1,8 @@
+// A damage over time ticking, any school: a soft muted thud.
+{
+  near: 3, far: 30, maxVoices: 4, pitch: [-2, 2], volume: [0.5, 0.65], takes: 3,
+  layers: [
+    { synth: { tone: "sine", hz: [220, 80], env: { attack: 0.002, decay: 0.12 }, gain: 0.5 }, standIn: true },
+    { synth: { noise: "pink", filter: { type: "lowpass", hz: 1500 }, env: { attack: 0.002, decay: 0.06 }, gain: 0.5 }, standIn: true },
+  ],
+}

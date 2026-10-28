@@ -1,0 +1,8 @@
+// Shadow gathering: a low breathy drone that throbs, with a dark hiss. Loops.
+{
+  near: 4, far: 40, maxVoices: 4, volume: [0.8, 0.9], takes: 1, loop: 2,
+  layers: [
+    { synth: { tone: "saw", hz: 73, env: { attack: 0.4 }, gain: 0.12, filter: { type: "lowpass", hz: 400, q: 2 }, tremolo: { rate: 3, depth: 0.5 } }, standIn: true },
+    { synth: { noise: "brown", filter: { type: "bandpass", hz: 600, q: 1.5 }, env: { attack: 0.5 }, gain: 1.2, tremolo: { rate: 1.3, depth: 0.5 } }, standIn: true },
+  ],
+}

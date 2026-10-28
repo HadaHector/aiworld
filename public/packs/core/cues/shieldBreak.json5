@@ -1,0 +1,7 @@
+// A shield breaking.
+{
+  parts: [
+    { sound: "shield.break" },
+    { particles: "shieldBreak" },
+  ],
+}

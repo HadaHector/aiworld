@@ -1,0 +1,9 @@
+// Magic gathering in a caster's hands, any school: a violet glow with runes drifting round. Loops.
+{
+  loop: true,
+  emitters: [
+    { sprite: "softDot", blend: "add", rate: 6, life: 0.4, local: true, size: [[0, 0.7], [0.5, 0.9], [1, 0.7]], colour: [[0, "#a070ff00"], [0.3, "#a070ff50"], [1, "#a070ff00"]] },
+    { sprite: "hardDot", blend: "add", rate: 30, life: [0.4, 0.7], shape: { sphere: 0.3 }, speed: [0.2, 0.5], drag: 1, gravity: -0.5, size: [[0, 0.08], [1, 0.02]], colour: [[0, "#e0c8ff"], [1, "#8040ff00"]] },
+    { sprite: "rune", blend: "add", rate: 2.5, life: [0.9, 1.2], shape: { ring: 0.35 }, direction: [0, 1, 0], spread: 10, speed: [0.25, 0.4], spin: [-1, 1], size: [[0, 0.18], [0.2, 0.3], [1, 0.24]], colour: [[0, "#b090ff00"], [0.25, "#b090ffc0"], [1, "#7040ff00"]] },
+  ],
+}

@@ -1,0 +1,8 @@
+// A bolt of magic in flight, any school: a violet core trailing motes. Loops.
+{
+  loop: true,
+  emitters: [
+    { sprite: "softDot", blend: "add", rate: 30, life: 0.12, local: true, size: [[0, 0.6], [1, 0.45]], colour: [[0, "#e0c8ffd0"], [1, "#8040ff00"]] },
+    { sprite: "hardDot", blend: "add", rate: 60, life: [0.2, 0.4], shape: { sphere: 0.08 }, speed: [0.2, 0.5], size: [[0, 0.1], [1, 0.02]], colour: [[0, "#d0b0ff"], [1, "#6020ff00"]] },
+  ],
+}

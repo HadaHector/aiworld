@@ -1,0 +1,7 @@
+// A charge: the rush and the dust of it behind the runner.
+{
+  parts: [
+    { sound: "rush", at: "source" },
+    { particles: "dustTrail", at: "source", bone: "feet" },
+  ],
+}

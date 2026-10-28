@@ -277,7 +277,9 @@ export function createParticleSystem(rules: FeedbackRules): ParticleSystem {
     pool.life[i] = range(e.life);
     pool.age[i] = 0;
     pool.spin[i] = range(e.spin);
-    pool.rot[i] = Math.random() * Math.PI * 2;
+    // A mesh that does not spin keeps the shape's own orientation (a ring lies flat); anything else
+    // starts turned at random.
+    pool.rot[i] = e.mesh && e.spin[0] === 0 && e.spin[1] === 0 ? 0 : Math.random() * Math.PI * 2;
     pool.sizeScale[i] = inst.size;
     pool.emitter[i] = index;
     pool.own[i] = inst.own ? 1 : 0;

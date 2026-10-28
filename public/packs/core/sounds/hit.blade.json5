@@ -1,11 +1,10 @@
-// An edge biting into flesh or cloth: a sharp slice of noise over the thump, a short bright tick.
+// An edge landing, old-school: the dull thwack with a short crunchy slice on top.
 {
   near: 4, far: 40, maxVoices: 6,
   pitch: [-2, 2], volume: [0.85, 1],
-  takes: 4,
+  takes: 6,
   layers: [
-    { synth: { tone: "sine", hz: [170, 60], env: { attack: 0.002, decay: 0.15, curve: 2.5 }, gain: 0.7, drive: 2 }, standIn: true },
-    { synth: { noise: "white", filter: { type: "highpass", hz: [1800, 3500], q: 0.9 }, env: { attack: 0.001, decay: 0.11, curve: 2.5 }, gain: 0.7 }, standIn: true },
-    { synth: { tone: "square", hz: [1900, 1300], env: { attack: 0.001, decay: 0.03 }, gain: 0.08, crush: { bits: 6 } }, standIn: true },
+    { synth: { tone: "sine", hz: [240, 80], env: { attack: 0.001, decay: 0.085, curve: 3 }, gain: 0.85, drive: 4, crush: { bits: 8, rate: 2 } }, standIn: true },
+    { synth: { noise: "white", filter: { type: "bandpass", hz: [3200, 1800], q: 1.2 }, env: { attack: 0.001, decay: 0.045, curve: 2.5 }, gain: 0.8, crush: { bits: 7, rate: 2 } }, standIn: true },
   ],
 }

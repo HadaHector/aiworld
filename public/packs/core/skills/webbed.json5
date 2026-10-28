@@ -1,6 +1,7 @@
 // Web's root.
 {
   name: "Webbed",
+  cues: { applied: "webStick", aura: "webbed" },
   tags: ["root"],
   display: "debuff",
   dispel: "magic",

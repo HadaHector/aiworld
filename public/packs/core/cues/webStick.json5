@@ -1,0 +1,7 @@
+// A web landing on its target.
+{
+  parts: [
+    { sound: "stick", bone: "feet" },
+    { particles: "webStick", bone: "feet" },
+  ],
+}

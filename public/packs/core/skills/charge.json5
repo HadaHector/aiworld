@@ -1,6 +1,7 @@
 // Rush at an enemy, gain rage, and stun it for a moment.
 {
   name: "Charge",
+  cues: { release: "rush" },
   type: "physical",
   tags: ["melee"],
   target: "enemy",

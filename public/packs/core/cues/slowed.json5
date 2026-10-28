@@ -1,0 +1,6 @@
+// A slowed or chilled unit: cold motes round its legs until it wears off.
+{
+  parts: [
+    { particles: "frostMotes", bone: "chest" },
+  ],
+}

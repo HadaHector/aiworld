@@ -1,0 +1,8 @@
+// Holy light let go: a bright chime, a fifth ringing over it.
+{
+  near: 4, far: 45, maxVoices: 4, pitch: [-0.5, 0.5], volume: [0.8, 0.9],
+  layers: [
+    { synth: { modal: true, hz: 1046, partials: [[1, 0.5, 0.9], [1.5, 0.3, 0.7], [2, 0.2, 0.5], [3.01, 0.1, 0.3]], gain: 0.4 }, standIn: true },
+    { synth: { noise: "white", filter: { type: "highpass", hz: 6000 }, env: { attack: 0.01, decay: 0.4 }, gain: 0.15 }, standIn: true },
+  ],
+}

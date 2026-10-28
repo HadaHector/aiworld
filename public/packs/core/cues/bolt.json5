@@ -1,0 +1,7 @@
+// A bolt in flight (a projectile cue: it flies from the caster's hands to its target).
+{
+  parts: [
+    { sound: "bolt.{school}", at: "source" },
+    { particles: "bolt.{school}", at: "source" },
+  ],
+}

@@ -1,0 +1,10 @@
+// Holy light gathering: a bright choir-like chord swelling, with glittering bells. Loops.
+{
+  near: 4, far: 40, maxVoices: 4, volume: [0.7, 0.8], takes: 1, loop: 2,
+  layers: [
+    { synth: { tone: "triangle", hz: 523, env: { attack: 0.5 }, gain: 0.07, vibrato: { rate: 5, depth: 0.15 } }, standIn: true },
+    { synth: { tone: "triangle", hz: 659, env: { attack: 0.6 }, gain: 0.06, vibrato: { rate: 5.5, depth: 0.15 } }, standIn: true },
+    { synth: { tone: "triangle", hz: 784, env: { attack: 0.7 }, gain: 0.05, vibrato: { rate: 4.7, depth: 0.15 } }, standIn: true },
+    { synth: { crackle: true, density: 12, click: 0.02, filter: { type: "highpass", hz: 5000 }, env: { attack: 0.3 }, gain: 0.25 }, standIn: true },
+  ],
+}

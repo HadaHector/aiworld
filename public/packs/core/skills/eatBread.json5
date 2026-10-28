@@ -1,6 +1,7 @@
 // Eating bread (an item use, see ITEMS.md, Abilities): health back over a few seconds.
 {
   name: "Eat Bread",
+  cues: { applied: "eat" },
   target: "self",
   hostOn: "target",
   display: "buff",

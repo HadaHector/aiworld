@@ -1,0 +1,7 @@
+// A spell being cast (a cast bar): its school's sound and glow in the caster's hands, until the cast ends.
+{
+  parts: [
+    { sound: "cast.{school}", at: "source", bone: "hands" },
+    { particles: "cast.{school}", at: "source", bone: "hands" },
+  ],
+}

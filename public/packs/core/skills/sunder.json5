@@ -2,6 +2,7 @@
 // unit, shared by everyone who applies it - the newest applier owns it - each taking armour off.
 {
   name: "Sunder Armor",
+  cues: { applied: "sunderOn" },
   display: "debuff",
   stacking: { per: "host", max: 5, add: "stack", duration: "restart" },
   states: {

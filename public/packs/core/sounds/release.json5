@@ -1,0 +1,8 @@
+// A spell let go, any school: a quick rising zap.
+{
+  near: 4, far: 45, maxVoices: 4, pitch: [-1, 1], volume: [0.8, 0.95],
+  layers: [
+    { synth: { tone: "square", hz: [330, 1320], env: { attack: 0.005, decay: 0.18 }, gain: 0.08, crush: { bits: 6 } }, standIn: true },
+    { synth: { noise: "pink", filter: { type: "bandpass", hz: [600, 3000], q: 2 }, env: { attack: 0.02, decay: 0.2 }, gain: 0.9 }, standIn: true },
+  ],
+}

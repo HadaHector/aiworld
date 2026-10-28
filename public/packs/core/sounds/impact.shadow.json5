@@ -1,0 +1,8 @@
+// Shadow striking: a deep thump and a hiss swallowed back.
+{
+  near: 5, far: 50, maxVoices: 4, pitch: [-1.5, 1], volume: [0.9, 1], takes: 3,
+  layers: [
+    { synth: { tone: "sine", hz: [160, 40], env: { attack: 0.002, decay: 0.35 }, gain: 0.9, drive: 3 }, standIn: true },
+    { synth: { noise: "brown", filter: { type: "lowpass", hz: [2500, 200], q: 1 }, env: { attack: 0.002, decay: 0.45 }, gain: 2 }, standIn: true },
+  ],
+}

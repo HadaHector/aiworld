@@ -1,0 +1,8 @@
+// A shadow bolt in flight: a low moaning whirr. Loops.
+{
+  near: 3, far: 35, maxVoices: 6, pitch: [-1, 1], volume: [0.7, 0.8], takes: 1, loop: 1,
+  layers: [
+    { synth: { noise: "brown", filter: { type: "bandpass", hz: 500, q: 2.5 }, env: { attack: 0.05 }, gain: 1.6, tremolo: { rate: 9, depth: 0.5 } }, standIn: true },
+    { synth: { tone: "triangle", hz: 147, env: { attack: 0.05 }, gain: 0.12, vibrato: { rate: 6, depth: 0.6 } }, standIn: true },
+  ],
+}

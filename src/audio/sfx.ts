@@ -115,10 +115,11 @@ export function createSfx(ctx: AudioContext, output: AudioNode, rules: FeedbackR
     const keptBuffers: AudioBuffer[] = [];
     for (let take = 0; take < sound.takes; take++) {
       const seed = seedOf(sound.id, take);
-      const one = renderSynth(all, seed, sound.loop);
+      const which = { index: take, count: sound.takes };
+      const one = renderSynth(all, seed, sound.loop, undefined, which);
       raw.push(one);
       allBuffers.push(toBuffer(one));
-      if (kept.length > 0) keptBuffers.push(kept.length === all.length ? allBuffers[take] : toBuffer(renderSynth(kept, seed, sound.loop)));
+      if (kept.length > 0) keptBuffers.push(kept.length === all.length ? allBuffers[take] : toBuffer(renderSynth(kept, seed, sound.loop, undefined, which)));
     }
     r = { all: allBuffers, kept: keptBuffers, raw };
     rendered.set(sound.id, r);

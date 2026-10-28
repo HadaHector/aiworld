@@ -1,0 +1,7 @@
+// A slowed unit: cold motes drifting down round its legs. Loops.
+{
+  loop: true,
+  emitters: [
+    { sprite: "hardDot", blend: "add", rate: 6, life: [0.8, 1.2], shape: { ring: 0.4 }, direction: [0, -1, 0], spread: 10, speed: [0.2, 0.4], size: [[0, 0.03], [0.4, 0.08], [1, 0.02]], colour: [[0, "#e0f0ff"], [1, "#80b0ff00"]] },
+  ],
+}

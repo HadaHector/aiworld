@@ -1,0 +1,11 @@
+// A spell landing on its target: its school's burst; on a crit a knock for the player's own fights.
+{
+  parts: [
+    { sound: "impact.{school}" },
+    { particles: "impact.{school}" },
+    { flash: [1, 0.85, 1], time: 0.12 },
+    { flinch: 0.4 },
+    { shake: 0.25, when: { crit: true } },
+    { pause: 0.04, when: { crit: true } },
+  ],
+}

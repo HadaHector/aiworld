@@ -1,6 +1,7 @@
 // A spider's web, spat from a distance: its target cannot move for a few seconds.
 {
   name: "Web",
+  cues: { projectile: "webShot" },
   type: "physical",
   tags: ["school.nature"],
   target: "enemy",

@@ -1,0 +1,7 @@
+// Something summoned: dust bursting out round where it lands, and a few sparks.
+{
+  emitters: [
+    { sprite: "smoke", blend: "alpha", burst: 12, life: [0.6, 1], shape: { ring: 0.3 }, speed: [1.5, 3], drag: 3, gravity: -0.4, spin: [-1, 1], size: [[0, 0.4], [1, 1]], colour: [[0, "#b0a08890"], [1, "#b0a08800"]] },
+    { sprite: "hardDot", blend: "add", burst: 10, life: [0.3, 0.6], speed: [2, 4], drag: 2, size: [[0, 0.08], [1, 0.02]], colour: [[0, "#ffd080"], [1, "#ff602000"]] },
+  ],
+}

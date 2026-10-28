@@ -1,0 +1,6 @@
+// A web landing: white strands splaying out.
+{
+  emitters: [
+    { sprite: "spark", blend: "alpha", burst: 14, life: [0.3, 0.5], speed: [1.5, 3], drag: 4, stretch: 0.15, size: [[0, 0.1], [1, 0.05]], colour: [[0, "#f0f0e8e0"], [1, "#f0f0e800"]] },
+  ],
+}

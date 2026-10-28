@@ -1,0 +1,7 @@
+// A heal over time ticking.
+{
+  parts: [
+    { sound: "heal.tick" },
+    { particles: "heal.tick", bone: "feet" },
+  ],
+}

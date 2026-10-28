@@ -2,6 +2,7 @@
 // stunDuration and the victim's stunTaken (see ABILITIES.md, *Attributes in expressions*).
 {
   name: "Charge Stun",
+  cues: { applied: "stunHit", aura: "stunned" },
   tags: ["stun"],
   display: "debuff",
   stacking: { per: "host", duration: "longer" },

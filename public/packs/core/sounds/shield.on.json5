@@ -1,0 +1,8 @@
+// A shield of light closing round someone: a glassy shimmering swell.
+{
+  near: 4, far: 40, maxVoices: 3, pitch: [-0.5, 0.5], volume: [0.75, 0.85],
+  layers: [
+    { synth: { fm: true, hz: [392, 784], ratio: 3.5, index: [2.5, 0.3], env: { attack: 0.15, hold: 0.1, decay: 0.6 }, gain: 0.18 }, standIn: true },
+    { synth: { noise: "white", filter: { type: "bandpass", hz: [2000, 7000], q: 4 }, env: { attack: 0.2, decay: 0.5 }, gain: 0.4 }, standIn: true },
+  ],
+}

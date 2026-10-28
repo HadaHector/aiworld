@@ -1,0 +1,7 @@
+// Frost taking hold.
+{
+  parts: [
+    { sound: "chill" },
+    { particles: "frost" },
+  ],
+}

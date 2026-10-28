@@ -1,0 +1,8 @@
+// Shadow let go: a hollow whoosh falling away.
+{
+  near: 4, far: 45, maxVoices: 4, pitch: [-1, 1], volume: [0.85, 1],
+  layers: [
+    { synth: { noise: "brown", filter: { type: "bandpass", hz: [1500, 300], q: 2 }, env: { attack: 0.03, decay: 0.35 }, gain: 2 }, standIn: true },
+    { synth: { tone: "sine", hz: [220, 110], env: { attack: 0.01, decay: 0.3 }, gain: 0.25 }, standIn: true },
+  ],
+}

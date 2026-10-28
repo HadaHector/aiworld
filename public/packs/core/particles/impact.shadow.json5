@@ -1,0 +1,7 @@
+// Shadow bursting on its target: a dark puff swallowing purple sparks.
+{
+  emitters: [
+    { sprite: "smoke", blend: "alpha", burst: 8, life: [0.5, 0.9], shape: { sphere: 0.2 }, speed: [0.8, 1.8], drag: 3, spin: [-1.5, 1.5], size: [[0, 0.4], [1, 1]], colour: [[0, "#180820b0"], [1, "#10041800"]] },
+    { sprite: "hardDot", blend: "add", burst: 16, life: [0.3, 0.6], shape: { sphere: 0.15 }, speed: [2, 4], drag: 3, size: [[0, 0.1], [1, 0.02]], colour: [[0, "#f0b0ff"], [1, "#6000a000"]] },
+  ],
+}

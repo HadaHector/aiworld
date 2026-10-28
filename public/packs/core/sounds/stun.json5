@@ -1,0 +1,8 @@
+// A stunning blow: a hard thud and a dizzy ringing bonk.
+{
+  near: 4, far: 45, maxVoices: 3, pitch: [-1, 1], volume: [0.9, 1], takes: 3,
+  layers: [
+    { synth: { tone: "sine", hz: [140, 45], env: { attack: 0.002, decay: 0.3 }, gain: 1, drive: 3 }, standIn: true },
+    { synth: { modal: true, hz: 880, partials: [[1, 0.4, 0.5], [2.4, 0.2, 0.3]], gain: 0.25, delay: 0.04, vibrato: { rate: 7, depth: 0.5 } }, standIn: true },
+  ],
+}

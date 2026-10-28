@@ -1,0 +1,6 @@
+// Eating: a few crumbs falling.
+{
+  emitters: [
+    { mesh: "chip", blend: "alpha", burst: 6, life: [0.4, 0.6], speed: [0.3, 1], gravity: 9, spin: [-10, 10], size: 0.04, colour: [[0, "#c09050ff"], [0.8, "#c09050ff"], [1, "#c0905000"]] },
+  ],
+}

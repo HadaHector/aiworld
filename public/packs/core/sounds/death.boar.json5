@@ -1,0 +1,8 @@
+// A boar dying: a hoarse falling grunt.
+{
+  near: 5, far: 50, maxVoices: 3, pitch: [-1.5, 1.5], volume: [0.85, 1], takes: 3,
+  layers: [
+    { synth: { tone: "saw", hz: [220, 90], env: { attack: 0.02, hold: 0.15, decay: 0.4 }, gain: 0.18, filter: { type: "lowpass", hz: 900, q: 3 }, tremolo: { rate: 24, depth: 0.6 } }, standIn: true },
+    { synth: { noise: "brown", filter: { type: "lowpass", hz: 700 }, env: { attack: 0.02, decay: 0.5 }, gain: 1 }, standIn: true },
+  ],
+}

@@ -2,9 +2,17 @@
 // and armour sound like, the mix and the budgets. A later pack replaces this file whole.
 {
   events: {
-    hit: [{ tags: ["melee"], cue: "meleeHit" }],
-    miss: [{ tags: ["melee"], cue: "whiff" }],
+    // A cast bar loops its school's cast until it ends; a spell going off flashes from the hands.
+    castStart: [{ cue: "spellCast" }],
+    castDone: [{ type: "spell", cue: "spellRelease" }],
+    castFailed: [{ role: "dealt", cue: "error" }],
+    interrupted: [{ cue: "interrupt" }],
+    hit: [{ periodic: true, cue: "dotTick" }, { tags: ["melee"], cue: "meleeHit" }, { type: "spell", cue: "spellHit" }, { cue: "meleeHit" }],
+    miss: [{ tags: ["melee"], cue: "whiff" }, { cue: "spellMiss" }],
+    heal: [{ periodic: true, cue: "healTick" }, { cue: "heal" }],
     animation: [{ name: "swing", cue: "swing" }],
+    death: [{ cue: "death" }],
+    summon: [{ cue: "summon" }],
   },
   // Weapon kinds by item template or gear piece.
   weapons: { sword: "blade", greatsword: "blade", axe: "blade", dagger: "blade", mace: "blunt", hammer: "blunt", staff: "blunt" },

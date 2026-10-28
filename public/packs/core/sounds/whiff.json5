@@ -1,9 +1,9 @@
-// A swing that hits nothing: airier and higher than a swing, with a little fall at the end.
+// A swing that hits nothing, old-school: a longer, airier "fwoosh" than a swing, trailing off.
 {
   near: 3, far: 30, maxVoices: 4,
-  pitch: [-1, 1.5], volume: [0.7, 0.9],
+  pitch: [-1, 1.5], volume: [0.7, 0.85],
+  takes: 4,
   layers: [
-    { synth: { noise: "white", filter: { type: "bandpass", hz: [1400, 3200], q: 2.2 }, env: { attack: 0.05, decay: 0.2, curve: 2.5 }, gain: 1.1 }, standIn: true },
-    { synth: { tone: "triangle", hz: [520, 360], env: { attack: 0.04, decay: 0.12 }, gain: 0.08, delay: 0.05 }, standIn: true },
+    { synth: { noise: "white", filter: { type: "bandpass", hz: [1600, 700], q: 1.6 }, env: { attack: 0.03, decay: 0.16, curve: 2 }, gain: 1.1, crush: { bits: 8, rate: 2 } }, standIn: true },
   ],
 }

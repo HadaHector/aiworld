@@ -1,0 +1,9 @@
+// A strong melee blow (Heroic Strike): the ordinary hit with a heavy thump and a bigger knock.
+{
+  table: true,
+  parts: [
+    { sound: "heavy" },
+    { flinch: 0.8 },
+    { shake: 0.2, when: { own: true } },
+  ],
+}

@@ -1,0 +1,8 @@
+// Frost taking hold: a crackling freeze and a cold breath.
+{
+  near: 4, far: 40, maxVoices: 3, pitch: [-1, 1], volume: [0.75, 0.9], takes: 2,
+  layers: [
+    { synth: { crackle: true, density: 200, click: 0.003, filter: { type: "highpass", hz: 4000 }, env: { attack: 0.01, decay: 0.5 }, gain: 0.6 }, standIn: true },
+    { synth: { noise: "white", filter: { type: "bandpass", hz: [5000, 2500], q: 2 }, env: { attack: 0.05, decay: 0.4 }, gain: 0.35 }, standIn: true },
+  ],
+}

@@ -1,6 +1,7 @@
 // Gore's knock-down: a short stun.
 {
   name: "Gored",
+  cues: { applied: "stunHit", aura: "stunned" },
   tags: ["stun"],
   display: "debuff",
   stacking: { per: "host", duration: "longer" },

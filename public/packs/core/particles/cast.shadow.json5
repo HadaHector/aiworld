@@ -1,0 +1,9 @@
+// Shadow gathering in a caster's hands: dark smoke curling round a purple core. Loops.
+{
+  loop: true,
+  emitters: [
+    { sprite: "softDot", blend: "add", rate: 6, life: 0.4, local: true, size: [[0, 0.5], [1, 0.6]], colour: [[0, "#7020a000"], [0.3, "#7020a070"], [1, "#7020a000"]] },
+    { sprite: "smoke", blend: "alpha", rate: 18, life: [0.6, 1], shape: { sphere: 0.3 }, speed: [0.1, 0.3], gravity: -0.4, spin: [-1.5, 1.5], size: [[0, 0.15], [1, 0.5]], colour: [[0, "#20102860"], [1, "#10081800"]] },
+    { sprite: "rune", blend: "add", rate: 2, life: [0.9, 1.2], shape: { ring: 0.35 }, direction: [0, 1, 0], spread: 10, speed: [0.2, 0.3], spin: [-1, 1], size: [[0, 0.18], [0.2, 0.28], [1, 0.22]], colour: [[0, "#c050ff00"], [0.25, "#c050ffa0"], [1, "#6010a000"]] },
+  ],
+}

@@ -1,7 +1,0 @@
-// A fire bolt in flight (a projectile cue: it travels from the caster's hands to its target).
-{
-  parts: [
-    { sound: "fire.bolt", at: "source" },
-    { particles: "fireBolt", at: "source" },
-  ],
-}

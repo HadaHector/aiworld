@@ -1,0 +1,8 @@
+// A spider dying: a dry chittering rattle, slowing.
+{
+  near: 5, far: 45, maxVoices: 3, pitch: [-1.5, 1.5], volume: [0.85, 1], takes: 3,
+  layers: [
+    { synth: { crackle: true, density: 70, click: 0.006, filter: { type: "bandpass", hz: 2500, q: 2 }, env: { attack: 0.01, decay: 0.8, curve: 1.5 }, gain: 1.1 }, standIn: true },
+    { synth: { noise: "white", filter: { type: "bandpass", hz: [3000, 1200], q: 4 }, env: { attack: 0.01, decay: 0.3 }, gain: 0.4 }, standIn: true },
+  ],
+}

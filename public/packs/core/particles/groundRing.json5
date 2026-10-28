@@ -1,0 +1,7 @@
+// A shockwave over the ground: a flat ring racing out, and dust thrown up.
+{
+  emitters: [
+    { mesh: "ring", blend: "add", burst: 1, life: 0.45, size: [[0, 1], [1, 16]], colour: [[0, "#e8f0ffc0"], [1, "#a0c0ff00"]] },
+    { sprite: "smoke", blend: "alpha", burst: 20, life: [0.6, 1], shape: { ring: 0.8 }, speed: [4, 7], drag: 3, spin: [-1, 1], size: [[0, 0.5], [1, 1.2]], colour: [[0, "#c8b898a0"], [1, "#c8b89800"]] },
+  ],
+}

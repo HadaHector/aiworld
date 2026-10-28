@@ -101,12 +101,13 @@ function shapeTriangles(shape: (typeof MESH_SHAPES)[number]): number[][] {
       return [[0, 0.5, 0], [0.25, 0, 0], [0, -0.5, 0], [0, 0.5, 0], [0, -0.5, 0], [-0.25, 0, 0]];
     case "ring": {
       const out: number[][] = [];
-      const n = 8;
+      // A thin band: it is grown to metres across (a shockwave), so it needs the segments.
+      const n = 24;
       for (let k = 0; k < n; k++) {
         const a0 = (k / n) * Math.PI * 2;
         const a1 = ((k + 1) / n) * Math.PI * 2;
         const p = (r: number, a: number): number[] => [Math.cos(a) * r, 0, Math.sin(a) * r];
-        out.push(p(0.5, a0), p(0.5, a1), p(0.36, a1), p(0.5, a0), p(0.36, a1), p(0.36, a0));
+        out.push(p(0.5, a0), p(0.5, a1), p(0.46, a1), p(0.5, a0), p(0.46, a1), p(0.46, a0));
       }
       return out;
     }
@@ -187,6 +188,8 @@ export function createParticleRenderer(scene: Scene, system: ParticleSystem, rul
     m.alphaMode = additive ? Constants.ALPHA_ADD : Constants.ALPHA_COMBINE;
     m.disableDepthWrite = true;
     m.backFaceCulling = false;
+    // Drawn a little toward the camera, so a ring or chips lying on the ground do not flicker in it.
+    if (shape) m.zOffset = -2;
     return m;
   };
 

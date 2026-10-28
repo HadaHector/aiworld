@@ -1,0 +1,7 @@
+// Eating.
+{
+  parts: [
+    { sound: "eat", bone: "head" },
+    { particles: "crumbs", bone: "head" },
+  ],
+}

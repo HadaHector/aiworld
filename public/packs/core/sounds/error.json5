@@ -1,0 +1,8 @@
+// A cast that cannot happen (not ready, out of range): a short low double buzz, for the player only.
+{
+  bus: "ui", flat: true, maxVoices: 1, volume: [0.6, 0.6], takes: 1,
+  layers: [
+    { synth: { tone: "square", hz: 147, env: { attack: 0.005, hold: 0.05, decay: 0.05 }, gain: 0.3, filter: { type: "lowpass", hz: 1500 } }, standIn: true },
+    { synth: { tone: "square", hz: 139, env: { attack: 0.005, hold: 0.05, decay: 0.08 }, gain: 0.3, delay: 0.12, filter: { type: "lowpass", hz: 1500 } }, standIn: true },
+  ],
+}

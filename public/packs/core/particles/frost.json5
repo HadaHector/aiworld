@@ -1,0 +1,7 @@
+// Frost taking hold: a cold glittering puff.
+{
+  emitters: [
+    { sprite: "smoke", blend: "alpha", burst: 6, life: [0.5, 0.8], shape: { sphere: 0.3 }, speed: [0.4, 1], size: [[0, 0.35], [1, 0.8]], colour: [[0, "#e0f4ff80"], [1, "#e0f4ff00"]] },
+    { sprite: "star", blend: "add", burst: 10, life: [0.4, 0.7], shape: { sphere: 0.4 }, speed: [0.2, 0.6], size: [[0, 0.12], [1, 0.03]], colour: [[0, "#ffffff"], [1, "#80c0ff00"]] },
+  ],
+}

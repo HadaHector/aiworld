@@ -1,0 +1,8 @@
+// A heal landing.
+{
+  parts: [
+    { sound: "heal" },
+    { particles: "heal", bone: "feet" },
+    { flash: [0.6, 1, 0.5], time: 0.2 },
+  ],
+}

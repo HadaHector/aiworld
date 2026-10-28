@@ -1,0 +1,7 @@
+// Something summoned: a thump and dust where it lands.
+{
+  parts: [
+    { sound: "summon", bone: "feet" },
+    { particles: "summonDust", bone: "feet" },
+  ],
+}

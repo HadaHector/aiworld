@@ -1,6 +1,7 @@
 // A heal over time on an ally (or the caster), hosted on whoever it is cast on.
 {
   name: "Renew",
+  cues: { applied: "renewOn", aura: "renewing" },
   type: "spell",
   tags: ["school.holy"],
   target: "ally",

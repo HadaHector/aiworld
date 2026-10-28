@@ -1,0 +1,6 @@
+// A unit stuck in web, until it breaks free.
+{
+  parts: [
+    { particles: "webbed", bone: "feet" },
+  ],
+}

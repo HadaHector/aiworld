@@ -1,0 +1,7 @@
+// Armour sundered.
+{
+  parts: [
+    { sound: "sunder" },
+    { particles: "hit.metal" },
+  ],
+}

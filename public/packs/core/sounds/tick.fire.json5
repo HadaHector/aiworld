@@ -1,0 +1,8 @@
+// A burn ticking: a short flare of crackle.
+{
+  near: 3, far: 30, maxVoices: 4, pitch: [-2, 2], volume: [0.55, 0.7], takes: 3,
+  layers: [
+    { synth: { noise: "pink", filter: { type: "bandpass", hz: [1200, 600], q: 1 }, env: { attack: 0.01, decay: 0.2 }, gain: 0.8 }, standIn: true },
+    { synth: { crackle: true, density: 90, click: 0.004, filter: { type: "highpass", hz: 1800 }, env: { attack: 0.005, decay: 0.3 }, gain: 0.5 }, standIn: true },
+  ],
+}

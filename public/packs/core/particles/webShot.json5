@@ -1,0 +1,8 @@
+// A web in flight: a white sticky blob with strands trailing. Loops.
+{
+  loop: true,
+  emitters: [
+    { sprite: "softDot", blend: "alpha", rate: 30, life: 0.1, local: true, size: [[0, 0.35], [1, 0.3]], colour: [[0, "#f0f0e8e0"], [1, "#f0f0e800"]] },
+    { sprite: "spark", blend: "alpha", rate: 40, life: [0.2, 0.4], shape: { sphere: 0.08 }, speed: [0.2, 0.5], stretch: 0.3, size: [[0, 0.06], [1, 0.03]], colour: [[0, "#f0f0e8c0"], [1, "#f0f0e800"]] },
+  ],
+}

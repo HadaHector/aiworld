@@ -1,0 +1,6 @@
+// A stunned unit: stars circling its head until it comes round.
+{
+  parts: [
+    { particles: "stars", bone: "head" },
+  ],
+}

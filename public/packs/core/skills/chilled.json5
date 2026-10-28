@@ -1,6 +1,7 @@
 // Frost Bite's slow.
 {
   name: "Chilled",
+  cues: { applied: "chillOn", aura: "slowed" },
   tags: ["school.frost"],
   display: "debuff",
   dispel: "magic",

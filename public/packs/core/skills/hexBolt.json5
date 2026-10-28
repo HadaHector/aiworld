@@ -1,6 +1,7 @@
 // A bandit hexer's bolt: a cast to kick.
 {
   name: "Hex Bolt",
+  cues: { projectile: "bolt" },
   type: "spell",
   tags: ["school.shadow", "spell"],
   target: "enemy",

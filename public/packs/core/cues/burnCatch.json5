@@ -1,0 +1,7 @@
+// A burn catching on its host.
+{
+  parts: [
+    { sound: "tick.fire" },
+    { particles: "tick.fire" },
+  ],
+}

@@ -1,0 +1,9 @@
+// A totem's fire bolt: embers streaking to the target, and a small burst.
+{
+  parts: [
+    { sound: "tick.fire" },
+    { particles: "fireLash", at: "source", bone: "head" },
+    { particles: "tick.fire" },
+    { flinch: 0.3 },
+  ],
+}

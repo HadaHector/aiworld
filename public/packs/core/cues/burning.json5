@@ -1,0 +1,7 @@
+// A burn on its host: flames and a crackle until it goes out.
+{
+  parts: [
+    { sound: "burning" },
+    { particles: "burning" },
+  ],
+}

@@ -1,0 +1,8 @@
+// A damage over time ticking: its school's small flare and sound.
+{
+  parts: [
+    { sound: "tick.{school}" },
+    { particles: "tick.{school}" },
+    { flash: [1, 0.6, 0.4], time: 0.08 },
+  ],
+}

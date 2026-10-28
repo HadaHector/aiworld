@@ -1,0 +1,8 @@
+// A body hitting the ground.
+{
+  near: 4, far: 40, maxVoices: 4, pitch: [-2, 1], volume: [0.85, 1], takes: 3,
+  layers: [
+    { synth: { tone: "sine", hz: [110, 40], env: { attack: 0.002, decay: 0.25 }, gain: 0.9, drive: 2 }, standIn: true },
+    { synth: { noise: "brown", filter: { type: "lowpass", hz: 800 }, env: { attack: 0.002, decay: 0.2 }, gain: 1.4 }, standIn: true },
+  ],
+}

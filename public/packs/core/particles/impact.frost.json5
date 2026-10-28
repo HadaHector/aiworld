@@ -1,0 +1,8 @@
+// Frost bursting on its target: ice shards and a cold glittering puff.
+{
+  emitters: [
+    { mesh: "shard", blend: "alpha", burst: 10, life: [0.4, 0.7], shape: { sphere: 0.15 }, speed: [2, 4.5], gravity: 9, spin: [-10, 10], size: 0.14, colour: [[0, "#d8f0ffe0"], [0.7, "#d8f0ffe0"], [1, "#d8f0ff00"]] },
+    { sprite: "star", blend: "add", burst: 12, life: [0.3, 0.6], shape: { sphere: 0.25 }, speed: [0.5, 1.5], size: [[0, 0.15], [1, 0.03]], colour: [[0, "#ffffff"], [1, "#80c0ff00"]] },
+    { sprite: "smoke", blend: "alpha", burst: 4, life: [0.6, 0.9], shape: { sphere: 0.2 }, speed: [0.3, 0.8], size: [[0, 0.4], [1, 0.9]], colour: [[0, "#e0f4ff60"], [1, "#e0f4ff00"]] },
+  ],
+}

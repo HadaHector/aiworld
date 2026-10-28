@@ -1,0 +1,7 @@
+// A web in flight (a projectile cue).
+{
+  parts: [
+    { sound: "spit", at: "source" },
+    { particles: "webShot", at: "source" },
+  ],
+}

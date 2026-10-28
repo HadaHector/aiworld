@@ -1,0 +1,7 @@
+// A spell let go: a quick flash and a puff of sparks from the hands.
+{
+  emitters: [
+    { sprite: "softDot", blend: "add", burst: 1, life: 0.15, size: [[0, 0.6], [1, 1]], colour: [[0, "#ffffffa0"], [1, "#ffffff00"]] },
+    { sprite: "hardDot", blend: "add", burst: 10, life: [0.2, 0.4], speed: [2, 4], drag: 4, size: [[0, 0.08], [1, 0.02]], colour: [[0, "#ffffff"], [1, "#a0c0ff00"]] },
+  ],
+}

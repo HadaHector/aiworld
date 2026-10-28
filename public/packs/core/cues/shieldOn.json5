@@ -1,0 +1,7 @@
+// A shield closing round its host.
+{
+  parts: [
+    { sound: "shield.on" },
+    { particles: "release" },
+  ],
+}

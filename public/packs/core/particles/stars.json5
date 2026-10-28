@@ -1,0 +1,7 @@
+// A stunned unit: little stars twinkling in a ring over its head. Loops.
+{
+  loop: true,
+  emitters: [
+    { sprite: "star", blend: "add", rate: 14, life: 0.7, shape: { ring: 0.35 }, local: true, spin: [-2, 2], size: [[0, 0.12], [0.5, 0.3], [1, 0.1]], colour: [[0, "#fff09000"], [0.3, "#fff4a0ff"], [1, "#fff09000"]] },
+  ],
+}

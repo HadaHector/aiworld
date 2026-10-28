@@ -1,6 +1,7 @@
 // An instant weapon strike that also sunders the target's armour.
 {
   name: "Heroic Strike",
+  cues: { impact: "heavyHit" },
   type: "physical",
   weapon: true,
   tags: ["melee"],

@@ -133,6 +133,8 @@ export const EVENT_NAMES: readonly string[] = [...COMBAT_EVENT_KINDS, ...CLIENT_
 export interface EventRule {
   /** Every one of these must be among the skill's tags. */
   tags: string[];
+  /** The skill's engine-level type (`spell`, `physical`), or "" for any. */
+  type: "" | "spell" | "physical" | "none";
   /** An animation's or an effect's name. */
   name: string;
   /** An item's rarity, one of these. */
@@ -524,11 +526,12 @@ function readConfig(entry: Entry | undefined, issues: ContentIssue[], cues: Read
       events.set(name, list.map((r, i) => {
         const at = joinPath(path, i);
         const rule = reader.object(r, at);
-        reader.onlyKeys(rule, at, ["tags", "name", "rarity", "role", "crit", "periodic", "cue"]);
+        reader.onlyKeys(rule, at, ["tags", "type", "name", "rarity", "role", "crit", "periodic", "cue"]);
         const cue = typeof rule.cue === "string" ? rule.cue : reader.string(rule, "cue", at);
         if (cue && !cues.has(cue)) reader.fail(joinPath(at, "cue"), `no cue "${cue}"`);
         return {
           tags: rule.tags === undefined ? [] : reader.stringList(rule, "tags", at),
+          type: rule.type === undefined ? "" : reader.oneOf(rule, "type", at, ["spell", "physical", "none"] as const),
           name: reader.optionalString(rule, "name", at) ?? "",
           rarity: rule.rarity === undefined ? [] : typeof rule.rarity === "string" ? [rule.rarity] : reader.stringList(rule, "rarity", at),
           role: rule.role === undefined ? undefined : reader.oneOf(rule, "role", at, ["dealt", "taken"] as const),

@@ -1,0 +1,8 @@
+// Thunder Clap: a boom and a shockwave over the ground from the caster.
+{
+  parts: [
+    { sound: "thunderclap", at: "source", bone: "feet" },
+    { particles: "groundRing", at: "source", bone: "feet" },
+    { shake: 0.35 },
+  ],
+}

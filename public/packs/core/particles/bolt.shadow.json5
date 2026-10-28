@@ -1,0 +1,9 @@
+// A shadow bolt in flight: a dark core with purple smoke and sparks behind. Loops.
+{
+  loop: true,
+  emitters: [
+    { sprite: "softDot", blend: "add", rate: 30, life: 0.12, local: true, size: [[0, 0.6], [1, 0.45]], colour: [[0, "#c060ffc0"], [1, "#40008000"]] },
+    { sprite: "smoke", blend: "alpha", rate: 30, life: [0.3, 0.6], shape: { sphere: 0.1 }, speed: [0.1, 0.3], spin: [-2, 2], size: [[0, 0.25], [1, 0.5]], colour: [[0, "#18082090"], [1, "#10041800"]] },
+    { sprite: "hardDot", blend: "add", rate: 30, life: [0.2, 0.4], shape: { sphere: 0.1 }, speed: [0.3, 0.8], size: [[0, 0.07], [1, 0.02]], colour: [[0, "#e090ff"], [1, "#6000a000"]] },
+  ],
+}

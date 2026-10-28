@@ -1,11 +1,10 @@
-// A bite: a crunchy, crushed snap with a growl of low noise under it.
+// A bite, old-school: a quick crunchy snap over the thump.
 {
   near: 4, far: 40, maxVoices: 6,
   pitch: [-2, 2], volume: [0.85, 1],
-  takes: 4,
+  takes: 6,
   layers: [
-    { synth: { noise: "white", filter: { type: "bandpass", hz: [1500, 900], q: 1.5 }, env: { attack: 0.001, decay: 0.08, curve: 2 }, gain: 1.2, crush: { bits: 5, rate: 3 } }, standIn: true },
-    { synth: { noise: "brown", filter: { type: "lowpass", hz: 400, q: 1 }, env: { attack: 0.01, decay: 0.2 }, gain: 1.1, tremolo: { rate: 30, depth: 0.6 } }, standIn: true },
-    { synth: { tone: "sine", hz: [160, 60], env: { attack: 0.002, decay: 0.12 }, gain: 0.6 }, standIn: true },
+    { synth: { tone: "sine", hz: [220, 80], env: { attack: 0.001, decay: 0.08, curve: 3 }, gain: 0.7, drive: 4, crush: { bits: 8, rate: 2 } }, standIn: true },
+    { synth: { noise: "white", filter: { type: "bandpass", hz: [1600, 900], q: 1.5 }, env: { attack: 0.001, decay: 0.06, curve: 2 }, gain: 1.1, crush: { bits: 5, rate: 3 } }, standIn: true },
   ],
 }

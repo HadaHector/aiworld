@@ -1,0 +1,7 @@
+// Web spat: a sticky wet spurt.
+{
+  near: 4, far: 35, maxVoices: 3, pitch: [-1.5, 1.5], volume: [0.8, 0.95], takes: 2,
+  layers: [
+    { synth: { noise: "pink", filter: { type: "bandpass", hz: [800, 2500], q: 3 }, env: { attack: 0.005, decay: 0.15 }, gain: 1.2 }, standIn: true },
+  ],
+}

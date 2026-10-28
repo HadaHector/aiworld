@@ -1,0 +1,6 @@
+// Renew on its host: golden motes drifting up until it ends.
+{
+  parts: [
+    { particles: "motes.holy", bone: "feet" },
+  ],
+}

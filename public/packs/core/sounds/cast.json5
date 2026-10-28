@@ -1,0 +1,8 @@
+// Magic gathering in the hands, any school without its own: a soft wavering hum with a glassy shimmer. Loops.
+{
+  near: 4, far: 40, maxVoices: 4, volume: [0.75, 0.85], takes: 1, loop: 2,
+  layers: [
+    { synth: { fm: true, hz: 262, ratio: 2.01, index: 0.8, env: { attack: 0.4 }, gain: 0.14, vibrato: { rate: 4.5, depth: 0.3 }, tremolo: { rate: 6, depth: 0.25 } }, standIn: true },
+    { synth: { noise: "pink", filter: { type: "bandpass", hz: 2400, q: 4 }, env: { attack: 0.5 }, gain: 0.35, tremolo: { rate: 2.5, depth: 0.6 } }, standIn: true },
+  ],
+}

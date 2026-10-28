@@ -2,6 +2,7 @@
 // three stacks; a new application restarts it and keeps the stronger of the two.
 {
   name: "Burn",
+  cues: { applied: "burnCatch", aura: "burning" },
   type: "spell",
   tags: ["school.fire", "dot"],
   display: "debuff",

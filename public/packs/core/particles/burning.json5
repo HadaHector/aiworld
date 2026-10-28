@@ -1,0 +1,8 @@
+// Something on fire: small flames licking up off it, and a little smoke. Loops.
+{
+  loop: true,
+  emitters: [
+    { sprite: "flame", blend: "add", rate: 14, life: [0.3, 0.5], shape: { sphere: 0.3 }, direction: [0, 1, 0], spread: 20, speed: [0.5, 1], size: [[0, 0.22], [1, 0.06]], colour: [[0, "#fff0b0"], [0.3, "#ff8a20"], [1, "#a0200000"]] },
+    { sprite: "smoke", blend: "alpha", rate: 4, life: [0.8, 1.2], shape: { sphere: 0.2 }, direction: [0, 1, 0], spread: 15, speed: [0.4, 0.7], spin: [-1, 1], size: [[0, 0.2], [1, 0.6]], colour: [[0, "#30282050"], [1, "#30282000"]] },
+  ],
+}

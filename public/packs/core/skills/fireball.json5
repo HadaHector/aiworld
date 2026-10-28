@@ -9,8 +9,9 @@
   facing: true,
   cost: { mana: { add: [30, { mul: ["level", 5] }] } },
   start: "cast",
-  // What it looks and sounds like (FEEDBACK.md): fire in the hands, a bolt in flight, a burst.
-  cues: { cast: "fireCast", release: "fireRelease", projectile: "fireBolt", impact: "fireImpact" },
+  // What it looks and sounds like (FEEDBACK.md): its cast, release and impact come from the event
+  // table by its school; it names only the bolt that flies.
+  cues: { projectile: "bolt" },
   states: {
     cast: { length: { mul: [2.5, "caster.fireCastTime"] }, bar: "cast", breakOnMove: true, interruptible: true, next: "travel" },
     travel: { commit: true, length: { travel: 24 }, next: "impact" },

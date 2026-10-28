@@ -56,6 +56,8 @@ export interface SynthLayer {
   tremolo: { rate: number; depth: number } | null;
   /** Repeats: seconds apart, each this much quieter. */
   echo: { time: number; feedback: number; count: number } | null;
+  /** 0..1: the share of a sound's takes this layer is in (1, all of them, by default). */
+  chance: number;
 }
 
 /** A rendered take: mono samples at SAMPLE_RATE, and a loop for a looping sound. */
@@ -67,7 +69,7 @@ export interface RenderedSound {
 
 // --- reading recipes ---------------------------------------------------------------------------
 
-const LAYER_KEYS = [...GENERATORS, "hz", "partials", "ratio", "index", "pick", "bright", "loss", "density", "click", "env", "gain", "delay", "filter", "drive", "crush", "vibrato", "tremolo", "echo"];
+const LAYER_KEYS = [...GENERATORS, "hz", "partials", "ratio", "index", "pick", "bright", "loss", "density", "click", "env", "gain", "delay", "filter", "drive", "crush", "vibrato", "tremolo", "echo", "chance"];
 
 function sweep(reader: Reader, obj: RawObject, key: string, path: string, fallback: number): Sweep {
   const value = obj[key];
@@ -76,6 +78,16 @@ function sweep(reader: Reader, obj: RawObject, key: string, path: string, fallba
   if (Array.isArray(value) && value.length === 2 && value.every((v) => typeof v === "number" && v > 0)) return [value[0], value[1]];
   reader.fail(joinPath(path, key), "expected a frequency above 0, or [from, to]");
   return [fallback, fallback];
+}
+
+/** An FM index: a number, or [from, to] over the layer - unlike a frequency, it may be 0. */
+function readIndex(reader: Reader, obj: RawObject, path: string): Sweep {
+  const value = obj.index;
+  if (value === undefined) return [2, 2];
+  if (typeof value === "number" && value >= 0) return [value, value];
+  if (Array.isArray(value) && value.length === 2 && value.every((v) => typeof v === "number" && v >= 0)) return [value[0], value[1]];
+  reader.fail(joinPath(path, "index"), "expected an index of 0 or more, or [from, to]");
+  return [2, 2];
 }
 
 /** Reads a layer's `synth` recipe. */
@@ -144,7 +156,7 @@ export function readSynth(reader: Reader, value: unknown, path: string): SynthLa
     hz: sweep(reader, obj, "hz", path, 440),
     partials,
     ratio: reader.optionalNumber(obj, "ratio", path, 2, { min: 0.01, max: 32 }),
-    index: obj.index === undefined ? [2, 2] : Array.isArray(obj.index) ? sweep(reader, obj, "index", path, 2) : [reader.number(obj, "index", path, { min: 0 }), reader.number(obj, "index", path, { min: 0 })],
+    index: readIndex(reader, obj, path),
     pick: reader.optionalNumber(obj, "pick", path, 0.2, { min: 0.01, max: 0.5 }),
     bright: reader.optionalNumber(obj, "bright", path, 0.6, { min: 0.01, max: 1 }),
     loss: reader.optionalNumber(obj, "loss", path, 0.996, { min: 0.9, max: 0.9999 }),
@@ -152,6 +164,7 @@ export function readSynth(reader: Reader, value: unknown, path: string): SynthLa
     click: reader.optionalNumber(obj, "click", path, 0.004, { min: 0.0005, max: 0.1 }),
     env,
     gain: reader.optionalNumber(obj, "gain", path, 1, { min: 0, max: 4 }),
+    chance: reader.optionalNumber(obj, "chance", path, 1, { min: 0, max: 1 }),
     delay: reader.optionalNumber(obj, "delay", path, 0, { min: 0, max: 5 }),
     filter,
     drive: reader.optionalNumber(obj, "drive", path, 0, { min: 0, max: 20 }),
@@ -353,7 +366,18 @@ const LOOP_FADE = 0.25;
  * into its start so it repeats without a click. Clipping is avoided by scaling the take down if its
  * peak passes `ceiling`, never by scaling up: layers' gains are what make sounds louder or softer.
  */
-export function renderSynth(layers: readonly SynthLayer[], seed: number, loop = 0, ceiling = 0.98): RenderedSound {
+export function renderSynth(all: readonly SynthLayer[], seed: number, loop = 0, ceiling = 0.98, take?: { index: number; count: number }): RenderedSound {
+  // A layer with a `chance` is in only that share of a sound's takes - at least one - so a rare ring
+  // on a hit is heard now and then, never always and never not at all. Without the take's place
+  // among the others, a draw decides, from a stream of its own so the other layers sound the same.
+  const draw = mulberry32((seed ^ 0x5bd1e995) >>> 0);
+  const layers = all.filter((l, i) => {
+    if (l.chance >= 1) return true;
+    if (!take) return draw() < l.chance;
+    const share = Math.max(1, Math.round(l.chance * take.count));
+    // Each layer starts on a different take, so two rare layers do not always meet.
+    return (take.index + i) % take.count < share;
+  });
   const rng = mulberry32(seed);
   if (loop > 0) {
     const fade = Math.floor(LOOP_FADE * SAMPLE_RATE);
@@ -365,7 +389,8 @@ export function renderSynth(layers: readonly SynthLayer[], seed: number, loop = 
     limit(data, ceiling);
     return { data, sampleRate: SAMPLE_RATE, loop: { start: start / SAMPLE_RATE, end: end / SAMPLE_RATE } };
   }
-  const seconds = Math.max(0.01, ...layers.map(layerLength));
+  // As long as all its layers, whichever this take has, so every take of a sound is one length.
+  const seconds = Math.max(0.01, ...all.map(layerLength));
   const data = new Float32Array(Math.ceil(seconds * SAMPLE_RATE));
   for (const layer of layers) renderLayer(layer, data, rng, 0);
   limit(data, ceiling);

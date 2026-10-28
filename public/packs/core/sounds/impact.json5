@@ -1,0 +1,9 @@
+// Magic bursting on its target, any school: a bright pop and a sparkling tail.
+{
+  near: 5, far: 50, maxVoices: 4, pitch: [-1.5, 1], volume: [0.85, 1], takes: 3,
+  layers: [
+    { synth: { tone: "sine", hz: [400, 90], env: { attack: 0.002, decay: 0.25 }, gain: 0.6, drive: 2 }, standIn: true },
+    { synth: { noise: "pink", filter: { type: "bandpass", hz: [3000, 800], q: 1.5 }, env: { attack: 0.002, decay: 0.3 }, gain: 1 }, standIn: true },
+    { synth: { fm: true, hz: 880, ratio: 1.41, index: [3, 0], env: { attack: 0.002, decay: 0.35 }, gain: 0.12, delay: 0.02 }, standIn: true },
+  ],
+}

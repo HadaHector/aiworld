@@ -1,0 +1,6 @@
+// A cast the player tried that cannot happen.
+{
+  parts: [
+    { sound: "error", at: "source" },
+  ],
+}
