@@ -40,6 +40,7 @@ import { createFloatingText, type FloatingText } from "./game/floatingText";
 import { createProgressMirror } from "./game/progressMirror";
 import { createProgressPanel } from "./ui/progressPanel";
 import { createRuleBook } from "./ui/ruleBook";
+import { createMenuBar } from "./ui/menuBar";
 import { createHealthBars, type HealthBars } from "./game/healthBars";
 import { nextEnemy } from "./game/targeting";
 import { EVENT_KIND } from "./sim/skills/events";
@@ -553,6 +554,15 @@ const ruleBook = createRuleBook({
     return { stats: me.stats, levels: new Map(p.disciplines.map((d) => [d.discipline, d.level])), origins: p.origins.filter((o) => o >= 0) };
   },
 });
+// The screens that open from keys, as a row of buttons too (above the music control).
+createMenuBar([
+  { icon: "bag", label: "Inventory", key: "B", toggle: () => inventory.toggle(), open: () => inventory.visible },
+  { icon: "progress", label: "Progression", key: "P", toggle: () => progressPanel.toggle(), open: () => progressPanel.visible },
+  { icon: "book", label: "Rule book", key: "K", toggle: () => ruleBook.toggle(), open: () => ruleBook.visible },
+  { icon: "inspect", label: "Inspector", key: "I", toggle: () => entityPanel.toggle(), open: () => entityPanel.visible, debug: true },
+  { icon: "map", label: "Debug map", key: "M", toggle: () => view?.debugMap.toggle(), debug: true },
+  { icon: "textures", label: "Textures", key: "T", toggle: () => view?.textureBrowser.toggle(), debug: true },
+]);
 window.addEventListener("keydown", (e) => {
   if (!view || entering || view.spectator.active) return;
   if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
