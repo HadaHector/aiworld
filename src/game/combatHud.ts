@@ -94,7 +94,11 @@ export function createCombatHud(options: CombatHudOptions): CombatHud {
   const castText = el("div", "position: absolute; inset: 0; text-align: center; font-size: 12px; line-height: 18px; color: #fff; text-shadow: 0 1px 1px #000;", castBar);
 
   // The spell bar.
-  const bar = el("div", "position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); display: flex; gap: 4px; z-index: 900;", document.body);
+  const bar = el("div", "position: fixed; left: 50%; bottom: 26px; transform: translateX(-50%); display: flex; gap: 4px; z-index: 900;", document.body);
+  // The XP bar under it (PROGRESSION.md): the character level's progress, as wide as the spell bar.
+  const xpBar = el("div", `position: fixed; left: 50%; bottom: 10px; transform: translateX(-50%); width: 280px; height: 12px; z-index: 900; display: none; ${PANEL} background: #1c1a22; overflow: hidden;`, document.body);
+  const xpBarFill = el("div", "position: absolute; left: 0; top: 0; bottom: 0; background: linear-gradient(#a27ae8, #6a3fc0); transition: width 0.3s;", xpBar);
+  const xpBarText = el("div", "position: absolute; inset: 0; text-align: center; font-size: 9px; line-height: 12px; color: #fff; text-shadow: 0 1px 1px #000;", xpBar);
   const slots: { root: HTMLElement; cool: HTMLElement; label: HTMLElement; skill: number }[] = [];
 
   // The combat log.
@@ -214,7 +218,12 @@ export function createCombatHud(options: CombatHudOptions): CombatHud {
       if (experience) {
         ownFrame.xpFill.style.width = `${Math.round(Math.min(1, experience.fraction) * 1000) / 10}%`;
         ownFrame.xp.title = experience.label;
+        xpBarFill.style.width = ownFrame.xpFill.style.width;
+        text(xpBarText, experience.label);
+        const width = `${Math.max(280, bar.offsetWidth)}px`;
+        if (xpBar.style.width !== width) xpBar.style.width = width;
       }
+      xpBar.style.display = experience ? "block" : "none";
       drawFrame(targetFrame, targetId ? mirror.entities.get(targetId) : undefined, now, true);
       // The own cast bar.
       if (own?.cast) {
@@ -238,7 +247,7 @@ export function createCombatHud(options: CombatHudOptions): CombatHud {
     },
     keys,
     dispose() {
-      for (const e of [ownFrame.root, targetFrame.root, castBar, bar, logBox, deadBox]) e.remove();
+      for (const e of [ownFrame.root, targetFrame.root, castBar, bar, xpBar, logBox, deadBox]) e.remove();
     },
   };
 }
