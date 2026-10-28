@@ -6,6 +6,7 @@ import type { EntityAppearance } from "./protocol";
 import type { CombatPart } from "./skills/types";
 import type { Belongings, LootPart } from "./items/items";
 import type { CreaturePart } from "./creatures/creature";
+import type { ProgressPart } from "./progression/progress";
 import { createCombatPart } from "./skills/unit";
 import { hashString } from "../world/content/dimensions";
 
@@ -52,6 +53,8 @@ export interface Entity {
   /** The item types it shows on its body, from what it wears (ITEMS.md, *Equipment*) - sent to
    *  everyone who sees it. Left out for an entity without belongings: its template's outfit shows. */
   gear?: string[];
+  /** Its origins, disciplines, talents and what it has learned (see PROGRESSION.md): a player's. */
+  progress?: ProgressPart;
 }
 
 export interface EntityPlace {

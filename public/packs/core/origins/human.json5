@@ -1,0 +1,8 @@
+// A people (PROGRESSION.md, *Origins*): the human body, and 10% more Adventure XP.
+{
+  slot: "people",
+  name: "Human",
+  look: { race: "human" },
+  stats: { spirit: 1 },
+  modifiers: [{ stat: "adventureXpRate", kind: "percent", value: 10 }],
+}

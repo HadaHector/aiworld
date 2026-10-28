@@ -1,0 +1,6 @@
+// Reading the Tome of Frost Nova (an item's use): teaches the reader Frost Nova, if it may learn it.
+{
+  name: "Read: Frost Nova",
+  target: "self",
+  states: { read: { enter: [{ do: "learn", skill: "frostNova" }] } },
+}

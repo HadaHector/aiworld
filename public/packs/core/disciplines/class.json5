@@ -1,0 +1,12 @@
+// The class level (PROGRESSION.md): only characters with a class have it; it rises by casting the
+// class's own abilities and cannot pass the character's level. Each class says what its levels give.
+{
+  name: "Class",
+  stat: "classLevel",
+  group: "character",
+  start: 0,
+  cap: "level",
+  overflow: "keep",
+  next: { add: [40, { mul: ["own", 30] }] },
+  xp: [{ on: "cast", spellSource: "origin:class", amount: 8 }],
+}

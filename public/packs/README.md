@@ -60,6 +60,13 @@ packs/<pack>/
   creatureTraits/<id>.json5  gameplay: a trait a world's kinds may roll - modifiers, spells, tactics, a name
   camps/<id>.json5        gameplay: a camp - one group of members around a centre
   rules/creatures.json5   gameplay: rosters, spawn points, the brain's numbers, zone levels (CREATURES.md)
+  disciplines/<id>.json5  gameplay: a discipline - its curve, cap, XP sources and unlocks (PROGRESSION.md)
+  disciplineTemplates/<id>.json5  gameplay: disciplines made from parts, curves rolled per seed
+  origins/<id>.json5      gameplay: an origin - a people, a class, whatever slot it fills
+  originTemplates/<id>.json5  gameplay: origins (classes) a world invents from parts
+  talentTrees/<id>.json5  gameplay: a talent tree - tiers of nodes bought with points
+  talentPools/<id>.json5  gameplay: talent nodes generated trees draw from
+  rules/progression.json5 gameplay: the slots, the base template, "the" level, trainers, respec cost
 ```
 
 A definition's **id is its file name**: `materials/peat.json5` defines the material `peat`, and
@@ -1054,6 +1061,32 @@ A zone's roster is rolled from the kinds whose habitat lists its biome; a specie
 false` (bandits) only comes in camps. `neutral` kinds fight only when attacked; `flee: { at, time }`
 makes one run at low health; `keepRange` keeps a caster at a distance. `rules/creatures.json5`'s
 `never` turns species, kinds or traits off.
+
+## Gameplay: progression
+
+Read by their own resolver (`src/sim/rules/progressionRules.ts`) once per server, with the world
+seed, which the templates read; every allowed combination of origins becomes a player template
+(`player.dwarf.mage`), so it comes before the item rules. A discipline's level is a stat, so any
+formula - an item's `requires`, a skill - can read it. [PROGRESSION.md](../../PROGRESSION.md) has
+every field.
+
+```json5
+// disciplines/defence.json5 - rises by being hit, five levels a character level, armour each level
+{ name: "Defence", stat: "defenceSkill", cap: { mul: ["level", 5] }, next: { add: [20, { mul: ["own", 8] }] },
+  xp: [{ on: "hitTaken", amount: { min: [{ div: ["amount", 4] }, 5] } }],
+  unlocks: [{ from: 1, modifiers: [{ stat: "armor", kind: "flat", value: { mul: ["own", 4] } }] }] }
+// origins/warrior.json5 - a class: its template fields, its discipline, what its levels teach
+{ slot: "class", name: "Warrior", resources: ["rage"], stats: { strength: 3 }, spells: [{ skill: "heroicStrike" }],
+  disciplines: { class: 1 }, unlocks: { class: [{ at: 2, skill: "thunderClap" }, { at: 3, skill: "kick", how: "trainer", cost: 50 }] },
+  trees: ["warriorArms"] }
+// talentTrees/milestones.json5 - a choice row: one pick per tier, at a level
+{ points: "choice", discipline: "adventure", tiers: [{ pick: 1, level: 3 }], nodes: { vigour: { tier: 0, modifiers: [{ stat: "stamina", kind: "percent", value: 10 }] } } }
+```
+
+XP sources (`on`): `kill`, `defeat`, `hitDealt`, `hitTaken`, `healDealt`, `cast`, `skill` (a skill's
+`xp` action), and `gather`, `craft`, `quest` for the systems to come. Ability unlocks are learned
+`auto`, from a `trainer`, from an `item` (a book whose skill has a `learn` action), as a `talent`,
+or by `quest`. `rules/progression.json5`'s `never` turns disciplines, origins or templates off.
 
 ## Example
 

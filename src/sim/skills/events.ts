@@ -6,6 +6,8 @@
 export const COMBAT_EVENT_KINDS = [
   "hit", "miss", "heal", "castStart", "castDone", "castFailed", "castStopped", "interrupted",
   "auraOn", "auraOff", "auraStacks", "dispelled", "death", "summon", "animation", "effect", "resisted", "respawn",
+  // A character's discipline went up a level (PROGRESSION.md): `amount` the level, `name` the discipline.
+  "levelUp",
 ] as const;
 export type CombatEventKind = (typeof COMBAT_EVENT_KINDS)[number];
 export const EVENT_KIND: Readonly<Record<CombatEventKind, number>> = Object.fromEntries(COMBAT_EVENT_KINDS.map((k, i) => [k, i])) as Record<CombatEventKind, number>;

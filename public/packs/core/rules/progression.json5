@@ -1,0 +1,14 @@
+// Progression's game config (PROGRESSION.md): the slots a character is made from, which discipline
+// is "the" level, and who teaches.
+{
+  slots: {
+    people: { required: true, default: "human" },
+    class: { required: true, default: "warrior" },
+  },
+  // The template every combination of origins is made over.
+  base: "character",
+  level: "adventure",
+  trainRange: 4,
+  respec: { cost: 0 },
+  trainers: { trainer: { teaches: "*" } },
+}

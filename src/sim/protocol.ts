@@ -9,7 +9,7 @@ import type { CombatEvent } from "./skills/events";
 export type { CombatEvent } from "./skills/events";
 
 /** Bumped whenever a message changes shape. */
-export const PROTOCOL_VERSION = 8;
+export const PROTOCOL_VERSION = 9;
 
 // --- Client to server ------------------------------------------------------------------------
 
@@ -23,6 +23,9 @@ export interface Hello {
   /** Who the player is to look at, until character creation saves it (CHARACTERS.md) - left out
    *  for the player template's look and a seed of the server's. */
   look?: EntityAppearance;
+  /** Slot to origin id - a people, a class (PROGRESSION.md, *Origins*) - until character creation;
+   *  a slot left out or named wrong takes its default. */
+  origins?: Record<string, string>;
 }
 
 /**
@@ -165,6 +168,43 @@ export interface DebugKill {
   revive: boolean;
 }
 
+// Progression (see PROGRESSION.md, *Messages*): trees, nodes, disciplines and skills by index.
+
+/** Takes a talent node one rank further. */
+export interface TalentPick {
+  type: "talentPick";
+  tree: number; // u16
+  node: number; // u16
+}
+
+/** Gives back every point spent in a tree, for its cost. */
+export interface TalentReset {
+  type: "talentReset";
+  tree: number; // u16
+}
+
+/** Learns an available skill from a trainer in range. */
+export interface Learn {
+  type: "learn";
+  trainer: number; // u32 entity
+  skill: number; // u16
+}
+
+/** Debug: XP to one of the sender's disciplines, or a level outright, or every skill it could learn. */
+export interface DebugXp {
+  type: "debugXp";
+  discipline: number; // u16
+  amount: number; // f64
+}
+export interface DebugLevel {
+  type: "debugLevel";
+  discipline: number; // u16
+  level: number; // u16
+}
+export interface DebugLearnAll {
+  type: "debugLearnAll";
+}
+
 export type ClientMessage =
   | Hello
   | Intent
@@ -196,7 +236,13 @@ export type ClientMessage =
   | LootClose
   | ItemRepair
   | DebugItem
-  | DebugWear;
+  | DebugWear
+  | TalentPick
+  | TalentReset
+  | Learn
+  | DebugXp
+  | DebugLevel
+  | DebugLearnAll;
 
 // Items (see ITEMS.md, *Messages*): containers are 0 bag, 1 bank, 2 equipment; a slot is its index.
 
@@ -301,6 +347,9 @@ export interface Welcome {
   creatures: number; // u32
   /** The world seed: item types are generated from it, so a client makes the same catalogue. */
   seed: number; // u32
+  /** A hash of the progression tables (PROGRESSION.md): generated disciplines and classes come from
+   *  the seed too. 0 when the server runs no progression. */
+  progression: number; // u32
 }
 
 /**
@@ -547,7 +596,67 @@ export interface EntityLootable {
   lootable: boolean;
 }
 
+// Progression (see PROGRESSION.md, *Messages*): the own player's only.
+
+export interface DisciplineState {
+  discipline: number; // u16
+  level: number; // u16
+  xp: number; // f64, towards the next level
+  next: number; // f64, XP from this level to the next
+  cap: number; // u16
+  banked: number; // f64
+}
+export interface PointState {
+  pool: string; // short string
+  left: number; // i16
+  total: number; // u16
+}
+export interface TalentState {
+  tree: number; // u16
+  node: number; // u16
+  rank: number; // u8
+}
+export interface LearnedState {
+  skill: number; // u16
+  how: string; // short string
+}
+export interface AvailableState {
+  skill: number; // u16
+  how: string; // short string: "trainer", "item", "quest"
+  cost: number; // u32, money
+}
+
+/** The own progress, whole, whenever it changes (it is small). */
+export interface Progress {
+  type: "progress";
+  /** Origin indices, by the config's slots. */
+  origins: number[]; // u16s
+  disciplines: DisciplineState[];
+  points: PointState[];
+  /** Trees it has. */
+  trees: number[]; // u16s
+  talents: TalentState[];
+  learned: LearnedState[];
+  available: AvailableState[];
+}
+
+/** What happened to the own progress this step: XP, level-ups, learning, talents, refusals. */
+export interface ProgressEvents {
+  type: "progressEvents";
+  events: ProgressEventState[];
+}
+export interface ProgressEventState {
+  kind: string; // short string: xp, levelUp, learned, unlocked, talent, refused
+  discipline: number; // i16
+  amount: number; // f64
+  level: number; // u16
+  skill: number; // i16
+  source: string; // short string
+}
+
 export type ServerMessage =
+  | Progress
+  | ProgressEvents
   | ContainerState
   | ItemSlot
   | Wallet

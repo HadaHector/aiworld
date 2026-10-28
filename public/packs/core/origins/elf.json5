@@ -1,0 +1,8 @@
+// A people: quick and bright, and knows its herbs.
+{
+  slot: "people",
+  name: "Elf",
+  look: { race: "elf" },
+  stats: { agility: 2, intellect: 1, stamina: -1 },
+  disciplines: { herbalism: 5 },
+}

@@ -122,7 +122,10 @@ intents (`target`, `cast`, `stopCast`, `attack`, `respawn`), `combatEvents`, `en
 `lootClose`, `itemRepair`), `container`, `itemSlot`, `wallet`, `bankReach`, `loot`,
 `itemRefused`, `entityGear`, `entityLootable`, the item rules' hash and the seed in `welcome`,
 and `debugItem` and `debugWear` (protocol 7). Step 6 (CREATURES.md) added the creature catalogue's
-hash, `creatures`, to `welcome` (protocol 8): creatures are entities, so nothing else changed;
+hash, `creatures`, to `welcome` (protocol 8): creatures are entities, so nothing else changed.
+Step 8 (PROGRESSION.md) added `origins` to `hello`, `progress` and `progressEvents` to the owner,
+the `levelUp` combat event, the progression hash in `welcome`, the intents `talentPick`,
+`talentReset` and `learn`, and `debugXp`, `debugLevel` and `debugLearnAll` (protocol 9);
 `src/sim/protocol.ts` is current.
 
 Client to server:

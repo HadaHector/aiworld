@@ -1,0 +1,2 @@
+// A book (PROGRESSION.md, *Learning*): teaches Frost Nova to a mage of class level 3 - kept when it cannot.
+{ name: "Tome of Frost Nova", kind: "book", rarity: "uncommon", use: { skill: "readFrostNova", consume: true }, value: 150 }

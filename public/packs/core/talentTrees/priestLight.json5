@@ -1,0 +1,13 @@
+// A point tree: more spirit and health, then a quicker smite.
+{
+  name: "Light",
+  points: "talent",
+  tiers: [{ requires: 0 }, { requires: 3 }, { requires: 5 }],
+  nodes: {
+    devotion: { name: "Devotion", tier: 0, ranks: 3, modifiers: [{ stat: "spirit", kind: "percent", value: { mul: ["rank", 4] } }] },
+    fortitude: { name: "Fortitude", tier: 0, ranks: 2, modifiers: [{ stat: "maxHealth", kind: "percent", value: { mul: ["rank", 4] } }] },
+    steadyHands: { name: "Steady Hands", tier: 1, ranks: 2, modifiers: [{ stat: "stunTaken", kind: "flat", value: { mul: ["rank", -0.1] } }] },
+    brightMind: { name: "Bright Mind", tier: 1, ranks: 2, requires: ["devotion"], modifiers: [{ stat: "intellect", kind: "flat", value: { mul: ["rank", 2] } }] },
+    zeal: { name: "Zeal", tier: 2, requires: ["brightMind"], modifiers: [{ stat: "speed", kind: "percent", value: 10 }] },
+  },
+}

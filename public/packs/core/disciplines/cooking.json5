@@ -1,0 +1,10 @@
+// A crafting discipline (PROGRESSION.md): the hook for nodes and recipes, which come later. Eating gives it a little through the `xp` action, to show the path.
+{
+  name: "Cooking",
+  stat: "cookingSkill",
+  group: "crafting",
+  start: 1,
+  cap: 300,
+  next: { add: [10, { mul: ["own", 2] }] },
+  xp: [{ on: "craft" }, { on: "skill" }],
+}

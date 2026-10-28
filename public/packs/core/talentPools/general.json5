@@ -1,0 +1,16 @@
+// Talent nodes generated classes draw their trees from (PROGRESSION.md): no tiers here - a
+// generated tree deals the nodes it picks into tiers by their `weight`, lighter first.
+{
+  nodes: {
+    hardy: { name: "Hardy", weight: 1, ranks: 3, modifiers: [{ stat: "stamina", kind: "percent", value: { mul: ["rank", 3] } }] },
+    keen: { name: "Keen", weight: 1, ranks: 3, modifiers: [{ stat: "agility", kind: "percent", value: { mul: ["rank", 3] } }] },
+    learned: { name: "Learned", weight: 1, ranks: 3, modifiers: [{ stat: "intellect", kind: "percent", value: { mul: ["rank", 3] } }] },
+    strong: { name: "Strong", weight: 1, ranks: 3, modifiers: [{ stat: "strength", kind: "percent", value: { mul: ["rank", 3] } }] },
+    plated: { name: "Plated", weight: 2, ranks: 2, modifiers: [{ stat: "armor", kind: "percent", value: { mul: ["rank", 5] } }] },
+    calm: { name: "Calm", weight: 2, ranks: 2, modifiers: [{ stat: "spirit", kind: "percent", value: { mul: ["rank", 6] } }] },
+    swift: { name: "Swift", weight: 2, ranks: 2, modifiers: [{ stat: "speed", kind: "percent", value: { mul: ["rank", 3] } }] },
+    steady: { name: "Steady", weight: 3, ranks: 1, modifiers: [{ stat: "stunTaken", kind: "flat", value: -0.2 }] },
+    vital: { name: "Vital", weight: 3, ranks: 1, modifiers: [{ stat: "maxHealth", kind: "percent", value: 8 }] },
+    edge: { name: "Edge", weight: 3, ranks: 1, modifiers: [{ stat: "weaponMax", kind: "percent", value: 10 }] },
+  },
+}

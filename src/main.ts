@@ -27,6 +27,7 @@ import type { WorldContent } from "./world/content/worldContent";
 import { checkPlacements, resolveGameRules, type GameRules } from "./sim/rules/gameRules";
 import { resolveItemRules, type ItemRules } from "./sim/rules/itemRules";
 import { resolveCreatureRules, type CreatureRules } from "./sim/rules/creatureRules";
+import { checkProgressionItems, resolveProgressionRules, type ProgressionRules } from "./sim/rules/progressionRules";
 import { checkSkillRefs } from "./sim/rules/skillRules";
 import { createBelongingsMirror } from "./game/belongingsMirror";
 import { gearOfItems } from "./game/itemGear";
@@ -36,6 +37,9 @@ import { appearanceOf, lookFromUrl, type PlayerLook } from "./game/playerBody";
 import { createBodyKit } from "./game/characterBody";
 import { createCombatHud } from "./game/combatHud";
 import { createFloatingText, type FloatingText } from "./game/floatingText";
+import { createProgressMirror } from "./game/progressMirror";
+import { createProgressPanel } from "./ui/progressPanel";
+import { createRuleBook } from "./ui/ruleBook";
 import { createHealthBars, type HealthBars } from "./game/healthBars";
 import { nextEnemy } from "./game/targeting";
 import { EVENT_KIND } from "./sim/skills/events";
@@ -64,6 +68,7 @@ let startContent: WorldContent;
 let gameRules: GameRules;
 let itemRules: ItemRules;
 let creatureRules: CreatureRules;
+let progressionRules: ProgressionRules;
 let feedbackRules: FeedbackRules;
 try {
   loadingScreen.update("Loading content packs", 0, 0);
@@ -75,9 +80,13 @@ try {
   // Creatures (see CREATURES.md): kinds depend on the world seed, and join the templates before the
   // item rules check their loot.
   creatureRules = resolveCreatureRules(packSet.sources, gameRules, WORLD_SEED);
+  // Progression (see PROGRESSION.md): generated disciplines and classes depend on the world seed, and
+  // the origins' combinations join the templates before the item rules check their start items.
+  progressionRules = resolveProgressionRules(packSet.sources, gameRules, WORLD_SEED);
   // Items (see ITEMS.md): generated types depend on the world seed; the skills items name are checked.
   itemRules = resolveItemRules(packSet.sources, gameRules, WORLD_SEED);
   checkSkillRefs(gameRules, itemRules.abilityRefs);
+  checkProgressionItems(progressionRules, itemRules);
   // Sounds, particle effects and cues (see FEEDBACK.md), checked against the skills and the looks.
   feedbackRules = resolveFeedback(packSet.sources, gameRules);
 } catch (error) {
@@ -88,6 +97,22 @@ const engine = createEngine(canvas);
 // Who the player is, as far as their body goes - from the address, until there is character
 // creation (see CHARACTERS.md): ?race=dwarf&outfit=knight&sex=female&look=7.
 const playerLook = lookFromUrl();
+// Who the player is in the game's rules - its origins (see PROGRESSION.md, *Origins*) - from the
+// address too, one parameter per slot: ?people=dwarf&class=mage. A slot left out takes its default.
+const originParams = new URLSearchParams(location.search);
+const requestedOrigins: Record<string, string> = {};
+for (const slot of progressionRules.config.slots) {
+  const id = originParams.get(slot.id);
+  const origin = id === null ? undefined : progressionRules.origins[progressionRules.originIndex.get(id) ?? -1];
+  requestedOrigins[slot.id] = origin && origin.slot === slot.id ? origin.id : slot.default;
+}
+// A people's body race is the player's unless the address names one.
+if (!originParams.has("race")) {
+  for (const id of Object.values(requestedOrigins)) {
+    const look = progressionRules.origins[progressionRules.originIndex.get(id) ?? -1]?.raw.look;
+    if (look && typeof look === "object" && typeof (look as { race?: unknown }).race === "string") playerLook.race = (look as { race: string }).race;
+  }
+}
 /** Races, gear and outfits for everyone else's bodies, resolved once. */
 const bodyKit = createBodyKit(packSet.sources);
 
@@ -104,6 +129,7 @@ const server = createServer({
   rules: gameRules,
   items: itemRules,
   creatures: creatureRules,
+  progression: progressionRules,
   loadDimension: (definition) => new Promise<DimensionWorld>((resolve) => built.set(definition.id, resolve)),
 });
 const channel = createLocalChannel();
@@ -123,6 +149,8 @@ let me: EntityMotion | null = null;
 const mirror = createEntityMirror(gameRules);
 /** The own player's bag, bank, equipment, wallet and open loot (see ITEMS.md) - as the server says. */
 const belongings = createBelongingsMirror();
+/** The own player's disciplines, talents and what it has learned (see PROGRESSION.md). */
+const progressMirror = createProgressMirror();
 /** The other entities drawn in the current view's scene. */
 let entityMeshes: EntityMeshes | null = null;
 /** Damage and healing numbers over the units the own player fights, in the current view. */
@@ -138,10 +166,12 @@ function takeServerMessages(): void {
     if (message.type === "entityGear" && message.id === playerId) view?.dress(gearOfItems(itemRules, message.gear));
     if (mirror.apply(message)) continue;
     if (belongings.apply(message)) continue;
+    if (progressMirror.apply(message)) continue;
     if (message.type === "welcome") {
       playerId = message.playerId;
       if (message.creatures !== creatureRules.hash) console.warn(`The server's creatures (${message.creatures.toString(16)}) differ from this page's (${creatureRules.hash.toString(16)}): creatures may show as the wrong kinds.`);
       if (message.items !== itemRules.hash) console.warn(`The server's item rules (${message.items.toString(16)}) differ from this page's (${itemRules.hash.toString(16)}): items may show as the wrong things.`);
+      if (message.progression !== progressionRules.hash) console.warn(`The server's progression (${message.progression.toString(16)}) differs from this page's (${progressionRules.hash.toString(16)}): disciplines and talents may show under the wrong names.`);
       if (message.rules !== gameRules.hash) console.warn(`The server's game rules (${message.rules.toString(16)}) differ from this page's (${gameRules.hash.toString(16)}): stats and resources may show under the wrong names.`);
     } else if (message.type === "transfer") {
       pendingTransfer = message;
@@ -467,7 +497,48 @@ const combatHud = createCombatHud({
   ownId: () => playerId,
   onKey: castSpell,
   onRespawn: () => command({ type: "respawn" }),
+  experience() {
+    const level = progressionRules.config.level;
+    const d = progressMirror.progress?.disciplines.find((x) => x.discipline === level);
+    if (!d) return null;
+    const name = progressionRules.disciplines[level].name;
+    return { label: `${name} ${d.level}: ${Math.floor(d.xp)} / ${Math.ceil(d.next)} XP`, fraction: d.level >= d.cap ? 1 : d.xp / d.next };
+  },
 });
+
+// Progression (see PROGRESSION.md): P toggles the panel; XP and level-ups float over the player and
+// are client events for the feedback system's cues.
+const progressPanel = createProgressPanel({
+  game: gameRules,
+  rules: progressionRules,
+  items: itemRules,
+  progress: progressMirror,
+  entities: mirror,
+  ownId: () => playerId,
+  send: (message) => channel.client.send(message),
+});
+progressMirror.onEvents((events) => {
+  const context = { source: playerId, target: playerId, skill: null, crit: false, periodic: false };
+  for (const e of events) {
+    const discipline = progressionRules.disciplines[e.discipline];
+    if (e.kind === "xp" && e.discipline === progressionRules.config.level) floatingText?.say(playerId, `+${Math.round(e.amount)} XP`, "#c9a8ff");
+    if (e.kind === "levelUp" && discipline) {
+      floatingText?.say(playerId, `${discipline.name} ${e.level}!`, "#ffd27a", true);
+      feedback.client(e.discipline === progressionRules.config.level ? "levelUp" : "disciplineUp", context);
+    }
+    if (e.kind === "xp") feedback.client("xpGained", context);
+    if (e.kind === "learned") feedback.client("learned", { ...context, skill: gameRules.skills[e.skill] ?? null });
+    if (e.kind === "talent" && e.amount >= 0) feedback.client("talentPicked", context);
+  }
+});
+window.addEventListener("keydown", (e) => {
+  if (!view || entering || e.repeat) return;
+  if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement) return;
+  if (e.key.toLowerCase() === "p") progressPanel.toggle();
+  if (e.key.toLowerCase() === "k") ruleBook.toggle();
+});
+// How this game works, written from its rules (PROGRESSION.md, *The client*): K.
+const ruleBook = createRuleBook({ game: gameRules, progression: progressionRules, items: itemRules });
 window.addEventListener("keydown", (e) => {
   if (!view || entering || view.spectator.active) return;
   if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
@@ -683,6 +754,34 @@ function gotoLoaded(target: Partial<ViewSnapshot> & { x: number; z: number }, it
     /** The server's own creature system. */
     server: () => server.debug.creatures,
   },
+  /** Progression (see PROGRESSION.md): what this page was told of the own progress, and the messages
+   *  a player sends. Disciplines and trees by id. */
+  progress: {
+    rules: progressionRules,
+    mirror: progressMirror,
+    mine: () => progressMirror.progress,
+    xp: (discipline: string, amount: number) => channel.client.send({ type: "debugXp", discipline: progressionRules.disciplineIndex.get(discipline) ?? -1, amount }),
+    level: (discipline: string, level: number) => channel.client.send({ type: "debugLevel", discipline: progressionRules.disciplineIndex.get(discipline) ?? -1, level }),
+    pick(tree: string, node: string) {
+      const t = progressionRules.treeIndex.get(tree) ?? -1;
+      channel.client.send({ type: "talentPick", tree: t, node: progressionRules.trees[t]?.nodes.find((n) => n.id === node)?.index ?? -1 });
+    },
+    reset: (tree: string) => channel.client.send({ type: "talentReset", tree: progressionRules.treeIndex.get(tree) ?? -1 }),
+    learn: (trainer: number, skill: string) => channel.client.send({ type: "learn", trainer, skill: gameRules.skillIndex.get(skill) ?? -1 }),
+    learnAll: () => channel.client.send({ type: "debugLearnAll" }),
+    /** The own character's progress as it would be saved, and loading one into it - single player only. */
+    export: () => {
+      const me = server.debug.entity(playerId);
+      return me ? server.debug.progression?.export(me) : null;
+    },
+    import: (saved: Parameters<NonNullable<typeof server.debug.progression>["import"]>[1]) => {
+      const me = server.debug.entity(playerId);
+      return me ? server.debug.progression?.import(me, saved) : null;
+    },
+    panel: progressPanel,
+    book: ruleBook,
+    server: () => server.debug.progression,
+  },
   /** Items (see ITEMS.md): what this page was told of the own belongings, and the messages a
    *  player sends. Containers: 0 bag, 1 bank, 2 equipment. */
   items: {
@@ -749,7 +848,7 @@ async function follow(resume: boolean): Promise<void> {
 
 // Joining is travelling: the server answers Hello with a Transfer to the first dimension -
 // `?dimension=isles` asks for one (debug).
-command({ type: "hello", protocol: PROTOCOL_VERSION, name: "player", dimension: new URLSearchParams(location.search).get("dimension") ?? "", look: appearanceOf(playerLook) });
+command({ type: "hello", protocol: PROTOCOL_VERSION, name: "player", dimension: new URLSearchParams(location.search).get("dimension") ?? "", look: appearanceOf(playerLook), origins: requestedOrigins });
 if (!pendingTransfer) throw new Error("The server sent no dimension to enter");
 await follow(true);
 

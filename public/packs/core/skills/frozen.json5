@@ -1,0 +1,9 @@
+// Frost Nova's root.
+{
+  name: "Frozen",
+  tags: ["root", "school.frost"],
+  display: "debuff",
+  dispel: "magic",
+  stacking: { per: "host", duration: "longer" },
+  states: { frozen: { length: 5, hold: [{ do: "flag", flags: ["rooted"] }] } },
+}

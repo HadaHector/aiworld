@@ -7,6 +7,7 @@
 //   npm run server -- --config small     a world config from public/configs (see CONFIG.md)
 //   npm run server -- --bot --dimension isles   the bot starts in another dimension
 //   npm run server -- --bot --travel 300        the bot travels to the next dimension every 300 ticks
+//   npm run server -- --bot --class mage --people dwarf   the bot's origins (PROGRESSION.md)
 //   npm run server -- --bot --inspect           every second, the bot's entity and those near it: stats,
 //                                               modifiers, resources (see ENTITIES.md)
 //   npm run server -- --bot --fight             the bot walks to the training dummy and fights it with
@@ -15,7 +16,8 @@
 //                                               prints its stats and belongings before and after (ITEMS.md)
 // A dimension is generated when the first player heads for it and dropped when the last one leaves,
 // so with no bot the server holds no world at all.
-import { loadContentFromDisk, loadCreatureRulesFromDisk, loadItemRulesFromDisk, loadRulesFromDisk } from "../diskContent.mjs";
+import { loadContentFromDisk, loadCreatureRulesFromDisk, loadItemRulesFromDisk, loadProgressionRulesFromDisk, loadRulesFromDisk } from "../diskContent.mjs";
+import { checkProgressionItems } from "../../src/sim/rules/progressionRules.ts";
 import { checkSkillRefs } from "../../src/sim/rules/skillRules.ts";
 import { formatMoney } from "../../src/sim/rules/itemRules.ts";
 import { statValue } from "../../src/sim/stats.ts";
@@ -62,10 +64,16 @@ console.log(`game rules: ${rules.stats.length} stats, ${rules.modifierKinds.leng
 started = performance.now();
 const creatures = loadCreatureRulesFromDisk(configName, rules, seed);
 console.log(`creature rules: ${creatures.kindList.length} kinds (${creatures.kindList.map((k) => k.id).join(", ")}), ${creatures.camps.length} camps (${ms(started)})`);
+// Progression (see PROGRESSION.md): templates generate disciplines and classes from the seed, and the
+// origins' combinations join the templates, so before the item rules too.
+started = performance.now();
+const progression = loadProgressionRulesFromDisk(configName, rules, seed);
+console.log(`progression rules: ${progression.disciplines.length} disciplines, ${progression.origins.length} origins, ${progression.trees.length} talent trees, ${progression.combinations.size} origin combinations (${ms(started)})`);
 // Items (see ITEMS.md): generated types depend on the world seed.
 started = performance.now();
 const items = loadItemRulesFromDisk(configName, rules, seed);
 checkSkillRefs(rules, items.abilityRefs);
+checkProgressionItems(progression, items);
 console.log(`item rules: ${items.types.length} item types (${[...items.generated.values()].reduce((n, t) => n + t.length, 0)} generated), ${items.slots.length} equipment slots, ${items.lootTables.size} loot tables (${ms(started)})`);
 
 const server = createServer({
@@ -76,6 +84,7 @@ const server = createServer({
   rules,
   items,
   creatures,
+  progression,
   loadDimension(definition, dimensionSeed) {
     let at = performance.now();
     const content = definition.start ? startContent : loadContentFromDisk(configName, definition.id).content;
@@ -95,7 +104,9 @@ let bot = null;
 if (flag("bot")) {
   const channel = createLocalChannel();
   server.connect(channel.server);
-  channel.client.send({ type: "hello", protocol: PROTOCOL_VERSION, name: "bot", dimension: text("dimension", "") });
+  // --people and --class pick the bot's origins (PROGRESSION.md): a slot's id names its parameter.
+  const origins = Object.fromEntries(progression.config.slots.map((slot) => [slot.id, text(slot.id, slot.default)]));
+  channel.client.send({ type: "hello", protocol: PROTOCOL_VERSION, name: "bot", dimension: text("dimension", ""), origins });
   bot = {
     end: channel.client,
     id: 0,
@@ -104,7 +115,7 @@ if (flag("bot")) {
     dimension: "",
     entityMessages: 0,
     fighter: flag("fight") ? createFightClient(rules, channel.client) : null,
-    hunter: flag("hunt") ? createHuntClient(rules, creatures, channel.client) : null,
+    hunter: flag("hunt") ? createHuntClient(rules, creatures, channel.client, progression) : null,
   };
 }
 

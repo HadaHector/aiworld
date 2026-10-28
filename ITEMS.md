@@ -480,6 +480,10 @@ Each leaves the game working: dev server, `npm run probe`, `npm run server`, `np
   belongings, equipment and durability on the item system alone, and the boundary on a real
   `tiny` server with two clients. `npm run server -- --config tiny --bot --loot` prints the bot's
   stats and belongings before and after looting the dummy.
+- **Progression** (PROGRESSION.md): a discipline's level is a stat, so iron swords `require` sword
+  skill 10 through the template part's own `requires`; books are items whose use skill has a
+  `learn` action, refused (and kept) before their reader may learn from them; the chest always
+  holds the Tome of Frost Nova.
 - **Checked in the game** (`?config=tiny`): the dummy and the chest glint; E opens their loot; Take
   all fills the bag and the wallet; B shows equipment, bag and wallet, and the bank at the
   strongbox; equipping bracers, a helm and swords changes the stats and the body (a greatsword

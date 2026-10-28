@@ -443,6 +443,8 @@ Each leaves the game working: dev server, `npm run probe`, `npm run server`, `np
 - **Evading** clears threat every step, ends the `evade` magic on arriving home, and refills every
   resource. One that cannot get home in 20 s is put there. The inspector says why it evaded (`leash`,
   `stuck`, `no foes left`).
+- **Progression** (PROGRESSION.md) reads every kill record at once, through the creature world's
+  `killed`; the species' `xpValue` stat scales what a kind is worth.
 - **Kill records** are kept (the latest 256) for `server.debug.creatures.drainKills()` when no
   `onKill` reads them.
 - **Health bars** (asked for after the step, `src/game/healthBars.ts`): a bar floats over every

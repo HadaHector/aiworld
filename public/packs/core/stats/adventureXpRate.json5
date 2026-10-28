@@ -1,0 +1,2 @@
+// A factor on every Adventure XP gain (PROGRESSION.md): a people's +10% is a percent modifier on it.
+{ name: "Adventure XP rate", default: 1, min: 0 }

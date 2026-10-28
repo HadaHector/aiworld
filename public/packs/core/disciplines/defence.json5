@@ -1,0 +1,11 @@
+// OSRS style (PROGRESSION.md): rises by being hit, cannot run more than five levels a character
+// level ahead, and gives armour every level.
+{
+  name: "Defence",
+  stat: "defenceSkill",
+  group: "combat",
+  cap: { mul: ["level", 5] },
+  next: { add: [20, { mul: ["own", 8] }] },
+  xp: [{ on: "hitTaken", amount: { min: [{ div: ["amount", 4] }, 5] } }],
+  unlocks: [{ from: 1, modifiers: [{ stat: "armor", kind: "flat", value: { mul: ["own", 4] } }] }],
+}

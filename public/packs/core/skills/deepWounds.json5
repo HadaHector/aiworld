@@ -1,0 +1,6 @@
+// A talent (warriorArms): while known, the warrior's weapon hits harder.
+{
+  name: "Deep Wounds",
+  passive: true,
+  states: { held: { hold: [{ do: "modifier", stat: "weaponMax", kind: "percent", value: 15 }] } },
+}

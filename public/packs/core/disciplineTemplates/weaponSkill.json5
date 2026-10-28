@@ -1,0 +1,18 @@
+// One discipline per weapon (PROGRESSION.md, *Generated disciplines and origins*): weapon skills
+// rise with melee hits made with that weapon, up to five a character level, on a curve the world's
+// seed rolls. Each part's stat must exist in stats/.
+{
+  name: "{weapon}",
+  stat: "{weapon.stat}",
+  group: "combat",
+  cap: { mul: ["level", 5] },
+  next: { add: ["var.base", { mul: ["own", "var.slope"] }] },
+  vars: { base: [6, 10], slope: [1.5, 3] },
+  axes: {
+    weapon: [
+      { id: "sword", name: "Swords", stat: "swordSkill", match: { template: "sword" } },
+      { id: "unarmed", name: "Unarmed", stat: "unarmedSkill", match: "none" },
+    ],
+  },
+  xp: [{ on: "hitDealt", tags: ["melee"], weapon: "{weapon.match}", amount: 1 }],
+}

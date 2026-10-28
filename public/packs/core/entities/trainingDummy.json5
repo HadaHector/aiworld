@@ -3,7 +3,8 @@
 {
   extends: "creature",
   name: "Training Dummy",
-  stats: { level: 10, stamina: 500, armor: 300 },
+  // Worth a fifth of a creature of its level, each time it is beaten (PROGRESSION.md, *XP sources*).
+  stats: { level: 10, stamina: 500, armor: 300, xpValue: 0.2 },
   resources: ["health", "rage"],
   modifiers: [{ stat: "maxHealth", kind: "percent", value: 100 }],
   spells: [{ skill: "dummyCaster" }],

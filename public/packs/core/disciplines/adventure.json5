@@ -1,0 +1,47 @@
+// The character level, Classic style (PROGRESSION.md): from kills (everyone who fought gets it all)
+// and from beating the training dummy. Its level is the `level` stat.
+{
+  name: "Adventure",
+  stat: "level",
+  group: "character",
+  cap: 60,
+  // About five same-level kills to level 2, slowing as Classic does.
+  next: { add: [{ mul: [{ pow: ["own", 2] }, 40] }, { mul: ["own", 210] }] },
+  rate: "adventureXpRate",
+  visible: "all",
+  xp: [
+    { on: "kill", credit: "all", amount: {
+      mul: [
+        { add: [45, { mul: [5, "victim.level"] }] },
+        "victim.xpValue",
+        // Classic's shape: up to +50% for a higher level, down to nothing five levels below.
+        {
+          if: [
+            { ge: ["victim.level", "earner.level"] },
+            { min: [1.5, { add: [1, { mul: [0.05, { sub: ["victim.level", "earner.level"] }] }] }] },
+            { max: [0, { sub: [1, { div: [{ sub: ["earner.level", "victim.level"] }, 5] }] }] },
+          ],
+        },
+      ],
+    } },
+    { on: "defeat", credit: "all", amount: {
+      mul: [
+        { add: [45, { mul: [5, "victim.level"] }] },
+        "victim.xpValue",
+        // Classic's shape: up to +50% for a higher level, down to nothing five levels below.
+        {
+          if: [
+            { ge: ["victim.level", "earner.level"] },
+            { min: [1.5, { add: [1, { mul: [0.05, { sub: ["victim.level", "earner.level"] }] }] }] },
+            { max: [0, { sub: [1, { div: [{ sub: ["earner.level", "victim.level"] }, 5] }] }] },
+          ],
+        },
+      ],
+    } },
+    { on: "quest" },
+  ],
+  unlocks: [
+    { from: 2, points: { talent: 1 } },
+    { at: [3, 6, 9], points: { choice: 1 } },
+  ],
+}

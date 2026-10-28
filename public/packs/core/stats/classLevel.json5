@@ -1,0 +1,2 @@
+// A discipline's level (PROGRESSION.md, *Levels are stats*): set by the discipline, read by any formula.
+{ name: "Class level", default: 0, min: 0, round: "floor" }

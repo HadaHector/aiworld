@@ -1,0 +1,10 @@
+// A gathering discipline (PROGRESSION.md): the hook for nodes and recipes, which come later.
+{
+  name: "Herbalism",
+  stat: "herbalismSkill",
+  group: "gathering",
+  start: 0,
+  cap: 300,
+  next: { add: [10, { mul: ["own", 2] }] },
+  xp: [{ on: "gather" }],
+}

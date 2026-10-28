@@ -1,0 +1,13 @@
+// A point tree: faster fireballs, longer burns, then more mana.
+{
+  name: "Fire",
+  points: "talent",
+  tiers: [{ requires: 0 }, { requires: 3 }, { requires: 5 }],
+  nodes: {
+    quickCast: { name: "Quick Cast", tier: 0, ranks: 3, modifiers: [{ stat: "fireCastTime", kind: "flat", value: { mul: ["rank", -0.05] } }] },
+    insight: { name: "Insight", tier: 0, ranks: 2, modifiers: [{ stat: "intellect", kind: "percent", value: { mul: ["rank", 3] } }] },
+    lingeringFlame: { name: "Lingering Flame", tier: 1, ranks: 2, modifiers: [{ stat: "dotDuration", kind: "flat", value: { mul: ["rank", 0.15] } }] },
+    deepWell: { name: "Deep Well", tier: 1, ranks: 2, requires: ["insight"], modifiers: [{ stat: "maxMana", kind: "percent", value: { mul: ["rank", 5] } }] },
+    frostNova: { name: "Frost Nova", tier: 2, requires: ["lingeringFlame"], skill: "frostNova" },
+  },
+}

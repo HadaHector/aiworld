@@ -438,14 +438,14 @@ await section("boundary", async () => {
   check("and it is gone for a", inA.some((m) => m.type === "entityDespawn" && m.id === ground.id));
 
   // Equipping changes the look for the other client.
-  await send(a, { type: "debugItem", item: "sword.iron.long.uncommon", count: 1 });
-  const swordAt = server.debug.entity(a.id).belongings.bag.findIndex((id) => id != null && rulesHere.types[server.debug.items.store.get(id).type].id === "sword.iron.long.uncommon");
+  await send(a, { type: "debugItem", item: "sword.bronze.long.uncommon", count: 1 });
+  const swordAt = server.debug.entity(a.id).belongings.bag.findIndex((id) => id != null && rulesHere.types[server.debug.items.store.get(id).type].id === "sword.bronze.long.uncommon");
   take(a);
   take(b);
   await send(a, { type: "itemEquip", from: { container: BAG, slot: swordAt } });
   inA = take(a);
   inB = take(b);
-  check("b sees a's new sword", inB.some((m) => m.type === "entityGear" && m.id === a.id && m.gear.includes("sword.iron.long.uncommon")));
+  check("b sees a's new sword", inB.some((m) => m.type === "entityGear" && m.id === a.id && m.gear.includes("sword.bronze.long.uncommon")));
   check("a gets the sword's modifiers", inA.some((m) => m.type === "entityModifiers" && m.modifiers.some((x) => x.source === "item:mainHand")));
   await send(a, { type: "itemMove", from: { container: BAG, slot: 19 }, to: { container: EQUIPMENT, slot: 0 }, count: 0 });
   check("a bad move is refused with a reason", take(a).some((m) => m.type === "itemRefused" && m.reason === "empty"));

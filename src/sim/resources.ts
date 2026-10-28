@@ -7,8 +7,9 @@ import { statValues, type StatBlock } from "./stats";
  */
 export interface ResourceBlock {
   readonly rules: GameRules;
-  /** The resources it has, by index into the game rules' resources, in that order. */
-  readonly has: readonly number[];
+  /** The resources it has, by index into the game rules' resources, in that order: its template's,
+   *  and any it gained since (`addResource`: a level's unlock, PROGRESSION.md). */
+  readonly has: number[];
   /** By resource index; 0 for one it does not have. */
   readonly current: Float64Array;
   readonly max: Float64Array;
@@ -22,7 +23,7 @@ export interface ResourceBlock {
  */
 export function createResourceBlock(rules: GameRules, template: TemplateDef, stats: StatBlock, phase: number): ResourceBlock {
   const count = rules.resources.length;
-  const block: ResourceBlock = { rules, has: template.resources, current: new Float64Array(count), max: new Float64Array(count), untilTick: new Float64Array(count) };
+  const block: ResourceBlock = { rules, has: [...template.resources], current: new Float64Array(count), max: new Float64Array(count), untilTick: new Float64Array(count) };
   const values = statValues(stats);
   for (const index of block.has) {
     const def = rules.resources[index];
@@ -70,6 +71,17 @@ export function stepResourceBlock(block: ResourceBlock, stats: StatBlock, inComb
     }
     if (change !== 0) block.current[index] = Math.min(Math.max(block.current[index] + change, 0), block.max[index]);
   }
+}
+
+/** Gives the block a resource it did not have, at its `start` share of its maximum. */
+export function addResource(block: ResourceBlock, stats: StatBlock, resource: number): void {
+  if (block.has.includes(resource)) return;
+  const def = block.rules.resources[resource];
+  block.has.push(resource);
+  block.has.sort((a, b) => a - b);
+  block.max[resource] = Math.max(0, statValues(stats)[def.max]);
+  block.current[resource] = block.max[resource] * def.start;
+  block.untilTick[resource] = def.interval;
 }
 
 /** Takes `amount` of a resource if there is that much; returns whether it did. */

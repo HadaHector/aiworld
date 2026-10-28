@@ -244,3 +244,15 @@ registerAction<ChanceData>("chance", {
 });
 
 registerAction<null>("end", { keys: [], check: () => null });
+
+// Progression's kinds (PROGRESSION.md, *Actions*): read here, beside the rest; their effects are
+// attached by src/sim/progression, and a discipline's id is checked by the progression rules.
+export interface LearnData { skill: number }
+export interface XpData { discipline: string; amount: CompiledFormula }
+
+registerAction<LearnData>("learn", { keys: ["skill"], check: (obj, path, ctx) => ({ skill: ctx.skill(obj.skill, `${path}.skill`) }) });
+
+registerAction<XpData>("xp", {
+  keys: ["discipline", "amount"],
+  check: (obj, path, ctx) => ({ discipline: ctx.reader.string(obj, "discipline", path), amount: ctx.expr(obj.amount, `${path}.amount`) }),
+});

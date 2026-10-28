@@ -1,0 +1,16 @@
+// A class: mana and fire. Searing Totem comes at class level 2, Frost Nova from a book at 3.
+{
+  slot: "class",
+  name: "Mage",
+  resources: ["mana"],
+  stats: { intellect: 4, stamina: -1 },
+  spells: [{ skill: "autoAttack" }, { skill: "fireball" }],
+  disciplines: { class: 1 },
+  unlocks: {
+    class: [
+      { at: 2, skill: "searingTotem" },
+      { at: 3, skill: "frostNova", how: "item" },
+    ],
+  },
+  trees: ["mageFire"],
+}

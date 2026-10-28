@@ -1,0 +1,15 @@
+// What every character is made from before its origins (PROGRESSION.md, *Origins*): health, the
+// basic stats, belongings and a body. Its people and class add the rest - stats, resources,
+// abilities - and rules/progression.json5 names it as their `base`.
+{
+  abstract: true,
+  name: "Adventurer",
+  stats: { level: 1, strength: 10, agility: 10, stamina: 12, intellect: 10, spirit: 8 },
+  resources: ["health"],
+  spells: [{ skill: "autoAttack" }],
+  hostility: "friendly",
+  // A bag, a bank, and what they start with (see ITEMS.md, Belongings).
+  items: { bag: 20, bank: 40, start: [{ item: "sword.bronze.short.common" }, { item: "tunic" }, { item: "linenTrousers" }, { item: "sandals" }, { item: "bread", count: 5 }] },
+  // A human scout unless the origins or the player say otherwise; the capsule is what a click hits.
+  look: { race: "human", outfit: "scout", height: 1.8, radius: 0.4, color: [0.35, 0.55, 0.85], feedback: { family: "humanoid" } },
+}

@@ -462,6 +462,11 @@ Each leaves the game working: dev server, `npm run probe`, `npm run server`, `np
 - **Bodies for everyone** came after (protocol 5, *Looks*): the template look's `race`, `outfit`
   and `sex`, the entity's `look`, Hello's `look`. `__aiworld.entities.addPlayer({ race, outfit,
   sex, seed })` puts a second player in the page's server, walking a slow circle, to see one.
+- **Progression** (PROGRESSION.md) made players from their origins: `entities/character.json5` is
+  the abstract base, and each allowed people and class makes a template `player.<people>.<class>`
+  over it; `player` (with the old test kit) is what a server without progression makes. The `level`
+  stat is set by the Adventure discipline; resource blocks gained `addResource` for a level's
+  unlock; entities gained a `progress` part.
 - **The combat button** toggles what it last set: the client is not told who is in combat.
 - **The probe** (`scripts/probe/entities.mjs`, 98 checks) runs a real server on the `small`
   config's mainland with two clients; it takes about 15 s, most of it generating the world.

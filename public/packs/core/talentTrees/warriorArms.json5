@@ -1,0 +1,13 @@
+// A point tree (PROGRESSION.md, *Talent trees*): three tiers, the next opening at 3 and 5 points spent.
+{
+  name: "Arms",
+  points: "talent",
+  tiers: [{ requires: 0 }, { requires: 3 }, { requires: 5 }],
+  nodes: {
+    toughness: { name: "Toughness", tier: 0, ranks: 3, modifiers: [{ stat: "armor", kind: "percent", value: { mul: ["rank", 3] } }] },
+    might: { name: "Might", tier: 0, ranks: 2, modifiers: [{ stat: "strength", kind: "flat", value: { mul: ["rank", 2] } }] },
+    longStun: { name: "Concussion", tier: 1, ranks: 2, modifiers: [{ stat: "stunDuration", kind: "flat", value: { mul: ["rank", 0.25] } }] },
+    deepWounds: { name: "Deep Wounds", tier: 1, requires: ["might"], skill: "deepWounds" },
+    mortalStrike: { name: "Mortal Strike", tier: 2, requires: ["deepWounds"], skill: "mortalStrike" },
+  },
+}

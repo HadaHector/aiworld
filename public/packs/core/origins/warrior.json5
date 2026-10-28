@@ -1,0 +1,17 @@
+// A class (PROGRESSION.md, *Origins*): rage and a weapon. Thunder Clap comes at class level 2, Kick
+// from the trainer at 3.
+{
+  slot: "class",
+  name: "Warrior",
+  resources: ["rage"],
+  stats: { strength: 3, stamina: 2 },
+  spells: [{ skill: "autoAttack" }, { skill: "heroicStrike" }, { skill: "charge" }],
+  disciplines: { class: 1 },
+  unlocks: {
+    class: [
+      { at: 2, skill: "thunderClap" },
+      { at: 3, skill: "kick", how: "trainer", cost: 50 },
+    ],
+  },
+  trees: ["warriorArms"],
+}

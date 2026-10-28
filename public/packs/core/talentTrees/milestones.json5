@@ -1,0 +1,19 @@
+// A choice row (PROGRESSION.md, *Talent trees*): at Adventure levels 3, 6 and 9, pick one of three.
+// The same mechanism as a point tree: one point a tier, one pick a tier.
+{
+  name: "Milestones",
+  points: "choice",
+  discipline: "adventure",
+  tiers: [{ pick: 1, level: 3 }, { pick: 1, level: 6 }, { pick: 1, level: 9 }],
+  nodes: {
+    vigour: { name: "Vigour", tier: 0, modifiers: [{ stat: "stamina", kind: "percent", value: 10 }] },
+    focus: { name: "Focus", tier: 0, modifiers: [{ stat: "intellect", kind: "percent", value: 10 }] },
+    swiftness: { name: "Swiftness", tier: 0, modifiers: [{ stat: "speed", kind: "percent", value: 6 }] },
+    ironSkin: { name: "Iron Skin", tier: 1, modifiers: [{ stat: "armor", kind: "percent", value: 15 }] },
+    wellspring: { name: "Wellspring", tier: 1, modifiers: [{ stat: "spirit", kind: "percent", value: 15 }] },
+    bruteForce: { name: "Brute Force", tier: 1, modifiers: [{ stat: "strength", kind: "percent", value: 10 }] },
+    tenacity: { name: "Tenacity", tier: 2, modifiers: [{ stat: "stunTaken", kind: "flat", value: -0.25 }] },
+    lifeblood: { name: "Lifeblood", tier: 2, modifiers: [{ stat: "maxHealth", kind: "percent", value: 10 }] },
+    keenEdge: { name: "Keen Edge", tier: 2, modifiers: [{ stat: "weaponMax", kind: "percent", value: 10 }] },
+  },
+}

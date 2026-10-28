@@ -13,5 +13,7 @@
     // Items (see ITEMS.md): a chest to loot, and the strongbox the bank is reached at.
     { template: "chest", at: [-5, 6], facing: 160 },
     { template: "strongbox", at: [4, -5], facing: 0 },
+    // Progression (see PROGRESSION.md): teaches what a character has unlocked to learn from a trainer.
+    { template: "trainer", at: [-4, -5], facing: 20 },
   ],
 }

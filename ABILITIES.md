@@ -716,6 +716,9 @@ Each leaves the game working: dev server, `npm run probe`, `npm run server`, `np
   the box, Respawn standing it at the spawn with full health; a second player falling, lying when
   seen again after leaving view, and getting up where it lay when revived.
 
+- **Progression** (PROGRESSION.md) added the action kinds `learn` and `xp` (read in `actions.ts`, run by
+  `src/sim/progression/actions.ts`), and the combat event `levelUp`. Spells it grants come from the
+  sources `learn:<how>` and `talent:<tree>`; the player's spells now come from its class.
 - **Floating combat text** (asked for after the step, `src/game/floatingText.ts`): numbers rise over
   the unit a hit or heal lands on, from the combat events, for the own player's fights only - what
   it deals over its target, what it takes over itself. Defaults, WoW Classic-like: weapon damage

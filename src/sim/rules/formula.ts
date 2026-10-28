@@ -12,6 +12,8 @@ export interface CompiledFormula {
   reads: number[];
   /** Whether it is a plain number, and which: lets a caller skip running it. */
   constant: number | null;
+  /** The tree it was compiled from, as written - for showing it (the rule book, PROGRESSION.md). */
+  source: unknown;
 }
 
 /** How many arguments an operation takes: a fixed number, or at least one. */
@@ -187,5 +189,6 @@ export function compileFormula(value: unknown, path: string, reader: Reader, nam
     run: (values) => finite(inner(values)),
     reads: [...reads].sort((x, y) => x - y),
     constant: typeof value === "number" && Number.isFinite(value) ? value : null,
+    source: value,
   };
 }

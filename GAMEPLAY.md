@@ -313,7 +313,13 @@ A proposal, to be confirmed. Each step gets its own plan document.
    generate them per seed, rolled stats, rarity, durability and repair, stacks, currencies; a bag, a
    bank and equipment that adds modifiers and shows on the body; loot tables, loot from the dummy,
    a chest and the ground; items cast skills on use and equip.
-8. **Disciplines and progression:** XP per discipline, levels, unlocks.
+8. **Disciplines and progression: done** - see [PROGRESSION.md](PROGRESSION.md). Disciplines in
+   packs, each with its XP, curve and cap as formulas and its level a stat; XP from kills, defeats,
+   hits, heals, casts and skills, with hooks for gathering, crafting and quests, and kill credit as
+   data; unlocks of abilities (learned at once, from a trainer, a book or a talent), modifiers,
+   resources, points and knowledge; talent trees for point trees and choice rows; origins (a people,
+   a class) as template parts; disciplines and classes generated per seed from templates; saved
+   state by id; a panel (P) and a rule book (K) written from the rules.
 
    *Alongside step 8:* **Feedback** - see [FEEDBACK.md](FEEDBACK.md). Sound effects, particle
    effects and hit feel, driven by cues in packs that map combat events and client events to

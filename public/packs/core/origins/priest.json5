@@ -1,0 +1,16 @@
+// A class: mana, light and mending. Shield comes at class level 2, Kick from the trainer at 4.
+{
+  slot: "class",
+  name: "Priest",
+  resources: ["mana"],
+  stats: { spirit: 3, intellect: 2 },
+  spells: [{ skill: "autoAttack" }, { skill: "smite" }, { skill: "renew" }],
+  disciplines: { class: 1 },
+  unlocks: {
+    class: [
+      { at: 2, skill: "shield" },
+      { at: 4, skill: "kick", how: "trainer", cost: 80 },
+    ],
+  },
+  trees: ["priestLight"],
+}

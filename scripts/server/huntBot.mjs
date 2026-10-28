@@ -10,7 +10,7 @@ const MANA_COSTS = { renew: 20, shield: 30 };
 /** Seconds the bot heads one way while it sees nothing to hunt, before it turns. */
 const ROAM_LEG = 40;
 
-export function createHuntClient(rules, creatures, end) {
+export function createHuntClient(rules, creatures, end, progression = null) {
   const state = {
     id: 0,
     seq: 0,
@@ -108,6 +108,15 @@ export function createHuntClient(rules, creatures, end) {
           for (const event of message.events) {
             if (event.kind === EVENT_KIND.death && event.target !== state.id && state.entities.has(event.target) && isCreature(state.entities.get(event.target).template)) state.kills++;
             if (event.kind === EVENT_KIND.death && event.target === state.id) state.deaths++;
+          }
+          break;
+        case "progressEvents":
+          // XP and level-ups (PROGRESSION.md), as lines of its log.
+          for (const e of message.events) {
+            const d = progression?.disciplines[e.discipline]?.name ?? `discipline ${e.discipline}`;
+            if (e.kind === "xp" && e.source !== "hitDealt" && e.source !== "hitTaken" && e.source !== "cast") state.log.push(`+${Math.round(e.amount)} ${d} XP (${e.source})`);
+            if (e.kind === "levelUp") state.log.push(`${d} is now level ${e.level}`);
+            if (e.kind === "learned") state.log.push(`learned ${rules.skills[e.skill]?.name ?? e.skill} (${e.source})`);
           }
           break;
         case "loot":

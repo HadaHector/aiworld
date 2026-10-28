@@ -36,6 +36,8 @@ export interface CreatureWorld {
   spawn(dimension: string, template: string, x: number, z: number, facing: number, key?: string): Entity | undefined;
   /** Takes an entity out of its dimension: off every table, its loot freed. */
   despawn(entity: Entity): void;
+  /** A creature died: what progression turns into XP (PROGRESSION.md). */
+  killed?(kill: KillRecord): void;
   /** The players standing in a dimension (with a body). */
   playersIn(dimension: string): readonly Entity[];
   lineOfSight(dimension: string, from: Entity, to: Entity): boolean;
@@ -176,9 +178,11 @@ export function createCreatureSystem(rules: GameRules, creatures: CreatureRules,
       world.delta.set(member.key, now + member.respawn[0] + random() * (member.respawn[1] - member.respawn[0]));
       comebacks.set(member.key, (comebacks.get(member.key) ?? 0) + 1);
     }
-    // Nobody reading them (no progression yet): only the latest are kept.
+    // Progression is told at once (`killed`); the latest are also kept, for the debug tools.
+    const record: KillRecord = { creature: entity.id, kind: part.kind.id, level: part.level, dimension: entity.dimension, credit: [...(entity.combat?.killers ?? [])], time: now };
     if (kills.length >= 256) kills.shift();
-    kills.push({ creature: entity.id, kind: part.kind.id, level: part.level, dimension: entity.dimension, credit: [...(entity.combat?.killers ?? [])], time: now });
+    kills.push(record);
+    world.killed?.(record);
   }
 
   /** Whether a corpse has lain long enough: its time, or a while once emptied. */

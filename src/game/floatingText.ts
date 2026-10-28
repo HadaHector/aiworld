@@ -12,6 +12,8 @@ import { EVENT_FLAG, EVENT_KIND } from "../sim/skills/events";
  */
 export interface FloatingText {
   add: (events: readonly CombatEvent[]) => void;
+  /** Words over a unit that are not a combat event's: "+50 XP", a level gained (PROGRESSION.md). */
+  say: (entity: number, label: string, colour: string, big?: boolean) => void;
   /** Moves and fades every number - each frame. */
   update: () => void;
   dispose: () => void;
@@ -130,6 +132,7 @@ export function createFloatingText(scene: Scene, mirror: EntityMirror, rules: Ga
 
   return {
     add,
+    say: (entity, label, colour, big = false) => spawn(entity, label, colour, big, !big),
     update,
     dispose() {
       for (const f of floaters) f.el.remove();

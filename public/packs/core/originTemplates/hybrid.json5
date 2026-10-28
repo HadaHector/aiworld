@@ -1,0 +1,23 @@
+// Classes the world's seed invents from parts (PROGRESSION.md, *Generated disciplines and origins*):
+// a role and a school make a "Flame Blade" or a "Holy Warden"; a world keeps two of them, and each
+// draws its later abilities and its talent tree from the pools below.
+{
+  slot: "class",
+  name: "{school} {role}",
+  keep: 2,
+  disciplines: { class: 1 },
+  spells: [{ skill: "autoAttack" }],
+  axes: {
+    role: [
+      { id: "blade", name: "Blade", resources: ["rage"], spells: [{ skill: "heroicStrike" }], stats: { strength: 3 } },
+      { id: "warden", name: "Warden", resources: ["mana"], spells: [{ skill: "shield" }], stats: { stamina: 3 } },
+    ],
+    school: [
+      { id: "flame", name: "Flame", resources: ["mana"], spells: [{ skill: "fireball" }], stats: { intellect: 2 } },
+      { id: "holy", name: "Holy", resources: ["mana"], spells: [{ skill: "renew" }], stats: { spirit: 2 } },
+    ],
+  },
+  never: [{ role: "warden", school: "holy" }],
+  abilities: { pick: [2, 3], pool: [{ skill: "charge" }, { skill: "thunderClap" }, { skill: "kick" }, { skill: "searingTotem" }, { skill: "smite" }], at: [2, 6] },
+  tree: { name: "{school} {role}", tiers: 3, step: 3, nodes: { pick: [5, 6], pool: "general" } },
+}

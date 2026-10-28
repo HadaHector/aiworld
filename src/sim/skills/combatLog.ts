@@ -57,6 +57,8 @@ export function describeEvent(rules: GameRules, event: CombatEvent, nameOf: (id:
       return `${source} ${event.name}s`;
     case "effect":
       return `${event.name} on ${target}`;
+    case "levelUp":
+      return `${source} reaches ${event.name} level ${n(event.amount)}`;
     default:
       return `event ${event.kind}`;
   }

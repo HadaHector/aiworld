@@ -19,6 +19,10 @@ import type { ItemHooks } from "./items/itemHooks";
 import type { CreatureRules } from "./rules/creatureRules";
 import { createCreatureSystem, type CreatureSystem, type KillRecord } from "./creatures/system";
 import { createWorldDelta, type WorldDelta } from "./creatures/worldDelta";
+import type { ProgressionRules } from "./rules/progressionRules";
+import { createProgressionSystem, type ProgressionSystem } from "./progression/system";
+import type { ProgressEvent } from "./progression/progress";
+import { progressMessages } from "./progression/replication";
 
 /** Each step spends at most this long bringing in collision chunks per dimension (always at least one). */
 const CHUNK_BUDGET_MS = 2;
@@ -31,6 +35,8 @@ interface Connection {
   replicator: Replicator;
   /** ...and of items: its own, and the gear and loot of what it sees (null without item rules). */
   items: ItemReplicator | null;
+  /** Whether it has been told its player's whole progress since it arrived somewhere. */
+  progressSent: boolean;
 }
 
 /** A connected player: its entity, and what its client has said. */
@@ -81,6 +87,9 @@ export interface ServerOptions {
   creatures?: CreatureRules;
   /** Called for every creature killed - what progression turns into XP (CREATURES.md, *Kills and XP*). */
   onKill?: (kill: KillRecord) => void;
+  /** Disciplines, origins and talents (see PROGRESSION.md); left out, players are made from the
+   *  `player` template and nobody gains XP. */
+  progression?: ProgressionRules;
 }
 
 export interface Server {
@@ -106,6 +115,10 @@ export interface Server {
     readonly creatures: CreatureSystem | null;
     /** What has been cleared or emptied, until when (GAMEPLAY.md, *World delta*). */
     readonly delta: WorldDelta;
+    /** The progression system (PROGRESSION.md), null without progression rules. */
+    readonly progression: ProgressionSystem | null;
+    /** The latest progress events, by character (the last 256). */
+    readonly progressEvents: { entity: number; event: ProgressEvent }[];
   };
   /** The server's clock: seconds stepped since it started. */
   readonly time: number;
@@ -210,6 +223,26 @@ export function createServer(options: ServerOptions): Server {
     },
   });
 
+  const progression: ProgressionSystem | null = options.progression
+    ? createProgressionSystem(rules, options.progression, skills, {
+        entity: findEntity,
+        mainHand(entity) {
+          const slot = options.items?.slotIndex.get("mainHand");
+          const id = slot === undefined ? null : entity.belongings?.equipment[slot];
+          const item = id == null ? undefined : itemSystem?.store.get(id);
+          return item ? options.items!.types[item.type] : null;
+        },
+        pay(entity, amount) {
+          const wallet = entity.belongings?.wallet;
+          const main = options.items?.main;
+          if (!wallet || main === undefined || wallet[main] < amount) return false;
+          wallet[main] -= amount;
+          return true;
+        },
+      })
+    : null;
+  const progressEvents: { entity: number; event: ProgressEvent }[] = [];
+
   const itemSystem: ItemSystem | null = options.items
     ? createItemSystem(
         rules,
@@ -229,7 +262,7 @@ export function createServer(options: ServerOptions): Server {
           },
           delta,
         },
-        options.itemHooks ?? skills.items,
+        progression ? progression.itemHooks(options.itemHooks ?? skills.items) : (options.itemHooks ?? skills.items),
       )
     : null;
 
@@ -251,6 +284,7 @@ export function createServer(options: ServerOptions): Server {
           loaded.get(entity.dimension)?.entities.delete(entity.id);
         },
         playersIn,
+        killed: (kill) => progression?.kill(kill),
         lineOfSight: (dimension, from, to) => skills.sys.world.lineOfSight(dimension, from, to),
         hasLoot: (entity) => itemSystem?.hasLoot(entity) ?? false,
         delta,
@@ -316,6 +350,7 @@ export function createServer(options: ServerOptions): Server {
     // The client clears what it knows of entities on a Transfer; so does what tells it of them.
     connection.replicator.reset();
     connection.items?.reset();
+    connection.progressSent = false;
     connection.end.send({ type: "transfer", dimension: to.id, seed: dimensionSeed(options.seed, to), x: at.x, z: at.z });
   }
 
@@ -352,13 +387,17 @@ export function createServer(options: ServerOptions): Server {
       case "hello": {
         if (player || message.protocol !== PROTOCOL_VERSION) return;
         const first = definitions.get(message.dimension) ?? start;
-        const entity = createEntity(rules, playerTemplate!, nextId++, { dimension: "", x: first.spawn.x, y: 0, z: first.spawn.z, facing: 0, name: message.name, look: message.look && cleanLook(message.look) });
+        // Its origins make its template (PROGRESSION.md, *Origins*).
+        const chosen = progression?.originsFor(message.origins && typeof message.origins === "object" ? message.origins : undefined);
+        const template = (chosen && rules.templates.get(chosen.template)) || playerTemplate!;
+        const entity = createEntity(rules, template, nextId++, { dimension: "", x: first.spawn.x, y: 0, z: first.spawn.z, facing: 0, name: message.name, look: message.look && cleanLook(message.look) });
         skills.adopt(entity);
         itemSystem?.adopt(entity);
+        if (chosen) progression!.adopt(entity, chosen.origins);
         const joined: Player = { entity, arrival: first.spawn, arrived: false, input: { moveX: 0, moveZ: 0, run: false, jump: false }, ackSeq: 0 };
         players.set(entity.id, joined);
         connection.player = joined;
-        connection.end.send({ type: "welcome", protocol: PROTOCOL_VERSION, playerId: entity.id, config: options.config, packs: options.packs ?? [], rules: rules.hash, items: options.items?.hash ?? 0, creatures: options.creatures?.hash ?? 0, seed: options.seed >>> 0 });
+        connection.end.send({ type: "welcome", protocol: PROTOCOL_VERSION, playerId: entity.id, config: options.config, packs: options.packs ?? [], rules: rules.hash, items: options.items?.hash ?? 0, creatures: options.creatures?.hash ?? 0, seed: options.seed >>> 0, progression: options.progression?.hash ?? 0 });
         transfer(connection, joined, first, first.spawn);
         return;
       }
@@ -446,6 +485,34 @@ export function createServer(options: ServerOptions): Server {
         else skills.kill(target);
         return;
       }
+      // Progression (see PROGRESSION.md, *Messages*).
+      case "talentPick": {
+        if (player && progression) progression.pick(player.entity, message.tree >>> 0, message.node >>> 0);
+        return;
+      }
+      case "talentReset": {
+        if (player && progression) progression.reset(player.entity, message.tree >>> 0);
+        return;
+      }
+      case "learn": {
+        const trainer = player && loaded.get(player.entity.dimension)?.entities.get(message.trainer >>> 0);
+        if (!player || !progression || !trainer || !rules.skills[message.skill]) return;
+        const why = progression.train(player.entity, trainer, message.skill);
+        if (why) player.entity.progress?.events.push({ kind: "refused", discipline: -1, amount: 0, level: 0, skill: message.skill, source: why });
+        return;
+      }
+      case "debugXp": {
+        if (player && progression?.rules.disciplines[message.discipline] && Number.isFinite(message.amount)) progression.debugXp(player.entity, message.discipline, message.amount);
+        return;
+      }
+      case "debugLevel": {
+        if (player && progression?.rules.disciplines[message.discipline] && Number.isInteger(message.level)) progression.debugLevel(player.entity, message.discipline, Math.max(1, Math.min(1000, message.level)));
+        return;
+      }
+      case "debugLearnAll": {
+        if (player && progression) progression.learnAll(player.entity);
+        return;
+      }
       // Combat (see ABILITIES.md, *Casting*).
       case "target": {
         if (!player) return;
@@ -489,6 +556,7 @@ export function createServer(options: ServerOptions): Server {
         connections.splice(i, 1);
         if (gone) {
           skills.leave(gone.entity);
+          progression?.leave(gone.entity);
           players.delete(gone.entity.id);
           loaded.get(gone.entity.dimension)?.entities.delete(gone.entity.id);
           release(gone.entity.dimension);
@@ -529,6 +597,13 @@ export function createServer(options: ServerOptions): Server {
     skills.step(loaded.values());
     const events = skills.drainEvents();
     itemSystem?.combatEvents(events);
+    // XP from what happened, and level-ups as combat events for those near (PROGRESSION.md).
+    progression?.combatEvents(events);
+    const progressed = progression?.drain() ?? null;
+    if (progressed) {
+      for (const [entity, list] of progressed) for (const event of list) progressEvents.push({ entity, event });
+      if (progressEvents.length > 256) progressEvents.splice(0, progressEvents.length - 256);
+    }
     itemSystem?.step(loaded.values());
     for (const dimension of loaded.values()) stepResources(dimension.entities.values(), deltaSeconds);
     tick++;
@@ -541,6 +616,11 @@ export function createServer(options: ServerOptions): Server {
       // Items go after the entity messages and before the snapshot, which is last.
       const snapshot = messages.pop()!;
       if (connection.items) messages.push(...connection.items.update(viewer, connection.replicator.known, findEntity));
+      // Its own progress (PROGRESSION.md): whole when it changed or on arrival, and the step's events.
+      if (progression && entity?.progress) {
+        messages.push(...progressMessages(progression.ctx, entity, progressed?.get(entity.id), !connection.progressSent));
+        connection.progressSent = true;
+      }
       messages.push(snapshot);
       for (const message of messages) connection.end.send(message);
     }
@@ -548,7 +628,7 @@ export function createServer(options: ServerOptions): Server {
 
   return {
     connect: (end) => {
-      connections.push({ end, player: null, replicator: createReplicator(rules), items: itemSystem && options.items ? createItemReplicator(options.items, itemSystem) : null });
+      connections.push({ end, player: null, replicator: createReplicator(rules), items: itemSystem && options.items ? createItemReplicator(options.items, itemSystem) : null, progressSent: false });
     },
     step,
     get tick() {
@@ -566,6 +646,8 @@ export function createServer(options: ServerOptions): Server {
       items: itemSystem,
       creatures: creatureSystem,
       delta,
+      progression,
+      progressEvents,
     },
   };
 }

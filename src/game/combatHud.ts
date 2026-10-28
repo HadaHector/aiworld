@@ -28,6 +28,9 @@ export interface CombatHudOptions {
   /** Casts the spell on key n. */
   onKey: (skill: number) => void;
   onRespawn: () => void;
+  /** The own level's XP (PROGRESSION.md), as a share of the way to the next level, for a thin bar
+   *  under the own frame - null to show none. */
+  experience?: () => { label: string; fraction: number } | null;
 }
 
 const LOG_LINES = 14;
@@ -55,6 +58,8 @@ interface Frame {
   castFill: HTMLElement;
   castText: HTMLElement;
   auras: HTMLElement;
+  xp: HTMLElement;
+  xpFill: HTMLElement;
 }
 
 function makeFrame(left: string): Frame {
@@ -66,7 +71,9 @@ function makeFrame(left: string): Frame {
   const castFill = el("div", "position: absolute; left: 0; top: 0; bottom: 0; background: #d8a630;", cast);
   const castText = el("div", "position: absolute; inset: 0; text-align: center; font-size: 11px; line-height: 14px; color: #fff; text-shadow: 0 1px 1px #000;", cast);
   const auras = el("div", "display: flex; flex-wrap: wrap; gap: 3px; margin-top: 4px;", root);
-  return { root, name, bars, cast, castFill, castText, auras };
+  const xp = el("div", "position: relative; height: 5px; margin-top: 3px; background: #2a2a2a; border-radius: 2px; overflow: hidden; display: none;", root);
+  const xpFill = el("div", "position: absolute; left: 0; top: 0; bottom: 0; background: #8a5ad8; transition: width 0.3s;", xp);
+  return { root, name, bars, cast, castFill, castText, auras, xp, xpFill };
 }
 
 /** Where the unit frames sit: just under the settings bar at the top, when the window is wide
@@ -202,6 +209,12 @@ export function createCombatHud(options: CombatHudOptions): CombatHud {
       const now = mirror.serverTime();
       const own = mirror.entities.get(ownId());
       drawFrame(ownFrame, own, now, false);
+      const experience = options.experience?.() ?? null;
+      ownFrame.xp.style.display = experience ? "block" : "none";
+      if (experience) {
+        ownFrame.xpFill.style.width = `${Math.round(Math.min(1, experience.fraction) * 1000) / 10}%`;
+        ownFrame.xp.title = experience.label;
+      }
       drawFrame(targetFrame, targetId ? mirror.entities.get(targetId) : undefined, now, true);
       // The own cast bar.
       if (own?.cast) {

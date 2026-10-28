@@ -1,0 +1,9 @@
+// A people: sturdy, slow, and a miner from the start.
+{
+  slot: "people",
+  name: "Dwarf",
+  look: { race: "dwarf" },
+  stats: { stamina: 2, strength: 1, agility: -1 },
+  modifiers: [{ stat: "armor", kind: "percent", value: 5 }],
+  disciplines: { mining: 5 },
+}

@@ -1,0 +1,6 @@
+// Teaches abilities a character has unlocked to learn from a trainer (PROGRESSION.md, *Learning*),
+// until there are trainer NPCs: rules/progression.json5 names it among the trainers.
+{
+  name: "Trainer",
+  look: { race: "human", outfit: "knight", height: 1.8, radius: 0.4, color: [0.55, 0.45, 0.8] },
+}

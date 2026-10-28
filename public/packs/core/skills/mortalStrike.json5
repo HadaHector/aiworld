@@ -1,0 +1,20 @@
+// The top of the Arms tree: a heavy instant strike.
+{
+  name: "Mortal Strike",
+  type: "physical",
+  weapon: true,
+  tags: ["melee"],
+  target: "enemy",
+  range: 5,
+  facing: true,
+  cost: { rage: 25 },
+  cooldown: 6,
+  states: {
+    strike: {
+      enter: [
+        { do: "animation", name: "swing" },
+        { do: "damage", group: "target", amount: { add: [{ mul: ["caster.weaponMax", 1.5] }, 20, { div: ["caster.strength", 3] }] } },
+      ],
+    },
+  },
+}

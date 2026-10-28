@@ -1,7 +1,7 @@
-// What every player is made from. Races and classes will be templates on top of it.
+// A player on a server without progression (the ability and item probes): a character with the
+// whole test kit. With progression, players are made from their origins over `character` instead.
 {
-  name: "Adventurer",
-  stats: { level: 1, strength: 10, agility: 10, stamina: 12, intellect: 10, spirit: 8 },
+  extends: "character",
   resources: ["health", "mana", "rage"],
   // The test kit (see ABILITIES.md, *The test*): keys 1-9 cast the active ones in this order.
   spells: [
@@ -15,9 +15,4 @@
     { skill: "kick" },
     { skill: "searingTotem" },
   ],
-  hostility: "friendly",
-  // A bag, a bank, and what they start with (see ITEMS.md, Belongings).
-  items: { bag: 20, bank: 40, start: [{ item: "sword.bronze.short.common" }, { item: "tunic" }, { item: "linenTrousers" }, { item: "sandals" }, { item: "bread", count: 5 }] },
-  // A human scout unless the player says otherwise (their Hello's look); the capsule is what a click hits.
-  look: { race: "human", outfit: "scout", height: 1.8, radius: 0.4, color: [0.35, 0.55, 0.85], feedback: { family: "humanoid" } },
 }

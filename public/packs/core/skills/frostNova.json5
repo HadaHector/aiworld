@@ -1,0 +1,19 @@
+// Frost bursts around the caster: a little damage and a short root on every enemy close by.
+{
+  name: "Frost Nova",
+  type: "spell",
+  tags: ["school.frost"],
+  target: "none",
+  cost: { mana: 35 },
+  cooldown: 20,
+  areas: { around: { shape: "circle", radius: 8 } },
+  groups: { hit: { from: "area:around", filter: { relation: "enemy" }, max: 10 } },
+  states: {
+    burst: {
+      enter: [
+        { do: "damage", group: "hit", amount: { add: [12, { mul: ["caster.intellect", 0.3] }] } },
+        { do: "cast", skill: "frozen", group: "hit" },
+      ],
+    },
+  },
+}

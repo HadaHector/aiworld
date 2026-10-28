@@ -8,7 +8,8 @@
   axes: {
     material: [
       { id: "bronze", name: "Bronze", tint: "#c89a5a", level: 1, budget: 1 },
-      { id: "iron", name: "Iron", tint: "#d6dae0", level: 8, budget: 1.5 },
+      // Iron needs some skill with swords (PROGRESSION.md: a discipline's level is a stat items require).
+      { id: "iron", name: "Iron", tint: "#d6dae0", level: 8, budget: 1.5, requires: { and: [{ ge: ["level", { sub: ["itemLevel", 8] }] }, { ge: ["swordSkill", 10] }] } },
     ],
     form: [
       { id: "short", name: "Shortsword", stats: { weaponMin: [2, 3], weaponMax: [4, 5], weaponSpeed: -0.4, agility: [1, 2] } },

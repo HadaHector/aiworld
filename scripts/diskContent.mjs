@@ -7,6 +7,7 @@ import { ContentError } from "../src/world/content/contentReader.ts";
 import { resolveGameRules } from "../src/sim/rules/gameRules.ts";
 import { resolveItemRules } from "../src/sim/rules/itemRules.ts";
 import { resolveCreatureRules } from "../src/sim/rules/creatureRules.ts";
+import { resolveProgressionRules } from "../src/sim/rules/progressionRules.ts";
 
 const PUBLIC_DIR = fileURLToPath(new URL("../public/", import.meta.url));
 
@@ -55,6 +56,15 @@ export function loadItemRulesFromDisk(configName = DEFAULT_CONFIG.name, rules = 
  */
 export function loadCreatureRulesFromDisk(configName = DEFAULT_CONFIG.name, rules = loadRulesFromDisk(configName), seed = 0) {
   return resolveCreatureRules(packSourcesFromDisk(readConfigFromDisk(configName)).sources, rules, seed);
+}
+
+/**
+ * The progression rules (see PROGRESSION.md) under a config, for the game rules and a world seed -
+ * templates generate disciplines and classes from it. Their origin combinations join
+ * `rules.templates`, so load them before the item rules.
+ */
+export function loadProgressionRulesFromDisk(configName = DEFAULT_CONFIG.name, rules = loadRulesFromDisk(configName), seed = 0) {
+  return resolveProgressionRules(packSourcesFromDisk(readConfigFromDisk(configName)).sources, rules, seed);
 }
 
 export function packSourcesFromDisk(config) {

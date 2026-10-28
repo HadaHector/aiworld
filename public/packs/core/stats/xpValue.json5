@@ -1,0 +1,2 @@
+// What a unit is worth in XP, as a factor: core's kill and defeat formulas multiply by it (PROGRESSION.md).
+{ name: "XP value", default: 1, min: 0 }

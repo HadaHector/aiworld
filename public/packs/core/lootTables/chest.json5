@@ -15,5 +15,7 @@
   always: [
     { money: [100, 500] },
     { money: [1, 3], currency: "marks" },
+    // A mage learns Frost Nova from it at class level 3 (PROGRESSION.md, *Learning*).
+    { item: "tomeOfFrostNova" },
   ],
 }
