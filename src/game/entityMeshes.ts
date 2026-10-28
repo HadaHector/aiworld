@@ -1,8 +1,8 @@
-import { Color3, MeshBuilder, StandardMaterial, type Mesh, type Scene } from "@babylonjs/core";
+import { Color3, MeshBuilder, StandardMaterial, type Mesh, type Scene, type Vector3 } from "@babylonjs/core";
 import { FLAG } from "../sim/skills/flags";
 import type { EntityMirror, MirroredEntity } from "./entityMirror";
 import { PLAYER_TEMPLATE, type EntityLook, type GameRules } from "../sim/rules/gameRules";
-import { createCharacterBody, type BodyKit, type BodyLook, type CharacterBody } from "./characterBody";
+import { createCharacterBody, type BodyKit, type BodyLook, type BodyPlace, type CharacterBody } from "./characterBody";
 import type { ItemRules } from "../sim/rules/itemRules";
 import { gearOfItems } from "./itemGear";
 
@@ -13,6 +13,8 @@ export interface EntityMeshes {
   entityOf: (mesh: unknown) => number | null;
   /** Plays a melee swing on an entity's body: the server says when. */
   swing: (id: number) => void;
+  /** Where a bone of an entity's body is (FEEDBACK.md); false when it has no body drawn. */
+  place: (id: number, bone: BodyPlace, out: Vector3) => boolean;
   /** Rings the selected unit on the ground - red for one that fights players, green otherwise. */
   setTarget: (id: number) => void;
   dispose: () => void;
@@ -203,6 +205,12 @@ export function createEntityMeshes(scene: Scene, mirror: EntityMirror, rules: Ga
     },
     entityOf: (mesh) => ids.get(mesh) ?? null,
     swing: (id) => drawn.get(id)?.body?.swing(),
+    place(id, bone, out) {
+      const body = drawn.get(id)?.body;
+      if (!body) return false;
+      body.place(bone, out);
+      return true;
+    },
     setTarget: (id) => {
       targetId = id;
       placeRing();

@@ -1,4 +1,4 @@
-import type { Mesh, Scene } from "@babylonjs/core";
+import { Vector3, type Mesh, type Scene } from "@babylonjs/core";
 import type { PackSource } from "../world/content/resolveContent";
 import { resolveRaces, type RaceDef, type Sex } from "../character/raceDef";
 import { resolveGear, resolveOutfits, type GearDef, type OutfitDef } from "../character/gearDef";
@@ -67,8 +67,17 @@ export interface CharacterBody {
   show: (state: Pick<EntityMotion, "x" | "y" | "z" | "facing" | "grounded"> & { dead?: boolean }) => void;
   /** Plays a melee swing. */
   swing: () => void;
+  /** Where one of its bones is in the world now, for effects and sounds on it (FEEDBACK.md): the
+   *  hands, the weapon's tip, the head, the chest, the feet. */
+  place: (bone: BodyPlace, out: Vector3) => void;
   dispose: () => void;
 }
+
+/** The places on a body cues attach to (FEEDBACK.md, *Cues*). */
+export type BodyPlace = "chest" | "head" | "feet" | "mainHand" | "offHand" | "hands" | "weapon";
+
+const UP = new Vector3(0, 1, 0);
+const scratch = new Vector3();
 
 /** How fast the body turns to face where the entity faces, per second - the server turns at once. */
 const TURN_RATE = 14;
@@ -93,6 +102,8 @@ export async function createCharacterBody(scene: Scene, name: string, kit: BodyK
   const character: CharacterMesh = createCharacterMesh(scene, name, dressed.body, { pixels: dressed.pixels!, size: dressed.layout!.size, uvs: dressed.layout!.uvs, nearest: false }, dressed.baked);
   for (const mesh of character.meshes) mesh.isPickable = false;
   const animator: Animator = createAnimator(dressed.race.skeleton);
+  const boneIndex = new Map(character.skeleton.bones.map((b, i) => [b.name, i]));
+  const index = (name: string): number => boneIndex.get(name) ?? 0;
 
   let last: { x: number; y: number; z: number; at: number } | null = null;
   let speed = 0;
@@ -132,6 +143,48 @@ export async function createCharacterBody(scene: Scene, name: string, kit: BodyK
     },
     swing() {
       swinging = true;
+    },
+    place(at, out) {
+      const mesh = character.mesh;
+      const bone = (name: string): Vector3 => {
+        character.skeleton.bones[index(name)].getAbsolutePositionToRef(mesh, scratch);
+        return scratch;
+      };
+      switch (at) {
+        case "feet":
+          out.copyFrom(mesh.position);
+          return;
+        case "head":
+          // The head bone starts at the neck's top: halfway up the head.
+          out.copyFrom(bone("head")).addInPlace(UP.scale(0.12));
+          return;
+        case "chest":
+          // Mid-torso, between the waist and the top of the chest.
+          out.copyFrom(bone("spine")).addInPlace(bone("neck")).scaleInPlace(0.5);
+          return;
+        case "mainHand":
+          out.copyFrom(bone("handR"));
+          return;
+        case "offHand":
+          out.copyFrom(bone("handL"));
+          return;
+        case "hands": {
+          // Between the hands, a little in front of the body: where a spell is held.
+          out.copyFrom(bone("handR")).addInPlace(bone("handL")).scaleInPlace(0.5);
+          const f = facing ?? 0;
+          out.x += Math.sin(f) * 0.25;
+          out.z += Math.cos(f) * 0.25;
+          return;
+        }
+        case "weapon": {
+          // Along the hand from the wrist, about where a held blade's middle is.
+          const hand = character.skeleton.bones[index("handR")];
+          hand.getAbsolutePositionToRef(mesh, out);
+          hand.getDirectionToRef(UP, mesh, scratch);
+          out.addInPlace(scratch.normalize().scaleInPlace(0.55));
+          return;
+        }
+      }
     },
     dispose: () => character.dispose(),
   };

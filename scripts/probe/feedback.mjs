@@ -11,6 +11,7 @@ import { layerLength, renderSynth } from "../../src/audio/synth.ts";
 import { SAMPLE_RATE } from "../../src/audio/dsp.ts";
 import { buildParticleAtlas, drawParticleTexture } from "../../src/particles/textures.ts";
 import { createCuePlayer } from "../../src/feedback/cues.ts";
+import { createParticleSystem, curveAt } from "../../src/particles/system.ts";
 import { EVENT_FLAG, EVENT_KIND } from "../../src/sim/skills/events.ts";
 
 let failures = 0;
@@ -101,6 +102,65 @@ await section("events to cues", () => {
   run(event("hit", 4, 5, "autoAttack"));
   check("others' fights are quieter", played[0]?.own === false && played[0]?.gain === feedback.config.others.volume, JSON.stringify(played[0]));
   check("a hit on five targets sounds once", run(...[2, 5, 6, 7, 8].map((t) => event("hit", 1, t, "autoAttack", EVENT_FLAG.crit))).split(",").length <= 2);
+});
+
+// --- particles -------------------------------------------------------------------------------------
+await section("particles", () => {
+  const system = createParticleSystem(feedback);
+  const near = { x: 0, y: 0, z: 0 };
+  const burst = (id) => feedback.effects.get(id).emitters.reduce((n, e) => n + e.bursts.reduce((m, b) => m + b.count, 0), 0);
+  // A one-shot's bursts at 0 are out at once, and gone when their lives are.
+  const sparks = system.spawn("hit.metal", () => ({ x: 1, y: 1, z: 1 }), { own: true });
+  check("a burst is out at once", system.sprites.count === burst("hit.metal"), `${system.sprites.count} of ${burst("hit.metal")}`);
+  for (let i = 0; i < 30; i++) system.update(1 / 30, near);
+  check("a one-shot is over once its particles are", system.sprites.count === 0 && !sparks.alive && system.effects() === 0);
+  // Particles fall under gravity and are shaded by their curves.
+  system.spawn("hit", () => ({ x: 0, y: 5, z: 0 }), { own: true });
+  const chips = () => [...Array(system.meshes.count).keys()];
+  const y0 = chips().reduce((sum, i) => sum + system.meshes.y[i], 0) / system.meshes.count;
+  for (let i = 0; i < 6; i++) system.update(1 / 30, near);
+  const y1 = chips().reduce((sum, i) => sum + system.meshes.y[i], 0) / Math.max(1, system.meshes.count);
+  check("chips fall", y1 < y0, `${y0.toFixed(2)} -> ${y1.toFixed(2)}`);
+  check("curves", curveAt([[0, 1], [0.5, 3], [1, 0]], 0.25) === 2 && curveAt([[0, 1], [1, 0]], 2) === 0 && curveAt([[0, 4]], 0.7) === 4);
+  system.clear();
+  // A looping effect plays until stopped; its local particles follow what it is on.
+  const hand = { x: 0, y: 1, z: 0 };
+  const fire = system.spawn("fireHands", () => hand, { own: true });
+  for (let i = 0; i < 60; i++) system.update(1 / 30, near);
+  check("a loop goes on", fire.alive && system.sprites.count > 10, `${system.sprites.count} sprites`);
+  const glow = feedback.effects.get("fireHands").emitters.findIndex((e) => e.local);
+  const glowIndex = system.emitters.indexOf(feedback.effects.get("fireHands").emitters[glow]);
+  hand.x = 10;
+  system.update(1 / 30, near);
+  let followed = true;
+  for (let i = 0; i < system.sprites.count; i++) if (system.sprites.emitter[i] === glowIndex && system.sprites.x[i] < 9) followed = false;
+  check("local particles move with their attachment", followed);
+  fire.stop();
+  for (let i = 0; i < 90; i++) system.update(1 / 30, near);
+  check("a stopped loop dies away", !fire.alive && system.sprites.count === 0);
+  // Others' fights make fewer; far away makes none.
+  system.spawn("hit.metal", () => near, { count: 0.5 });
+  check("others' bursts are smaller", system.sprites.count === Math.round(14 * 0.5) + Math.round(1 * 0.5), String(system.sprites.count));
+  system.clear();
+  system.update(0, { x: 0, y: 0, z: 0 });
+  check("effects beyond 60 m are not started", system.spawn("fireBurst", () => ({ x: 100, y: 0, z: 0 })) === null);
+  // The budget: others' particles stop at it; the player's own push the oldest of others' out.
+  for (let i = 0; i < 400; i++) system.spawn("fireBurst", () => near);
+  check("the budget holds", system.sprites.count === system.sprites.capacity, `${system.sprites.count} of ${system.sprites.capacity}`);
+  system.spawn("hit.metal", () => near, { own: true });
+  let own = 0;
+  for (let i = 0; i < system.sprites.count; i++) if (system.sprites.emitter[i] === system.emitters.indexOf(feedback.effects.get("hit.metal").emitters[0])) own++;
+  check("the player's own particles get in over budget", own === 14, String(own));
+  const t0 = performance.now();
+  for (let i = 0; i < 60; i++) system.update(1 / 60, near);
+  console.log(`particles: a full pool (${system.sprites.capacity} sprites) steps in ${((performance.now() - t0) / 60).toFixed(2)} ms`);
+  // Cues spawn their particle parts, with placeholders filled.
+  const spawned = [];
+  const fakeParticles = { spawn: (id) => (spawned.push(id), null) };
+  const cues = createCuePlayer(feedback, game, { player: () => 1, target: () => 2, targetOf: () => 0, place: () => near, traits: (u) => (u === 2 ? { armor: "metal" } : u === 3 ? { armor: "fur" } : { weapon: "blade" }) }, () => null, () => fakeParticles);
+  cues.play("meleeHit", { source: 1, target: 2, skill: null, crit: false, periodic: false });
+  cues.play("meleeHit", { source: 1, target: 3, skill: null, crit: false, periodic: false });
+  check("a cue's particles by armour", spawned.join() === "hit.metal,hit", spawned.join());
 });
 
 // --- broken content --------------------------------------------------------------------------------
@@ -225,6 +285,7 @@ await section("textures", () => {
     }
   }
   const atlas = buildParticleAtlas(feedback.textures);
+  console.log(`atlas: ${atlas.size}²`);
   const variants = feedback.textures.reduce((n, t) => n + t.variants, 0);
   check("the atlas places every variant", atlas.rects.flat().length === variants);
   const rects = atlas.rects.flat();

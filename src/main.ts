@@ -205,6 +205,7 @@ const feedback = createGameFeedback({
   target: () => targetId,
   ownOutfit: () => playerLook.outfit,
   volume: musicControl.effects,
+  bodyPlace: (unit, bone, out) => (unit === playerId ? (view?.character.place(bone, out) ?? false) : (entityMeshes?.place(unit, bone, out) ?? false)),
 });
 
 /**
@@ -218,6 +219,7 @@ function leave(): void {
   const old = view;
   view = null;
   entityMeshes?.dispose();
+  feedback.setScene(null);
   floatingText?.dispose();
   floatingText = null;
   healthBars?.dispose();
@@ -263,6 +265,7 @@ async function enter(transfer: Transfer, resume: boolean): Promise<void> {
   const world = next.world;
   floatingText = createFloatingText(next.scene, mirror, gameRules, () => playerId);
   healthBars = createHealthBars(next.scene, mirror, gameRules, () => playerId);
+  feedback.setScene(next.scene);
   entityMeshes = createEntityMeshes(next.scene, mirror, gameRules, () => playerId, {
     kit: bodyKit,
     worldSeed: transfer.seed,

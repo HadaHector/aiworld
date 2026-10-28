@@ -2,10 +2,10 @@
 {
   loop: true,
   emitters: [
-    { sprite: "softDot", blend: "add", rate: 6, life: 0.4, local: true, size: [[0, 0.5], [0.5, 0.65], [1, 0.5]], colour: [[0, "#ff801000"], [0.3, "#ff8a2050"], [1, "#ff801000"]] },
-    { sprite: "flame", blend: "add", rate: 28, life: [0.3, 0.5], shape: { sphere: 0.12 }, direction: [0, 1, 0], spread: 25, speed: [0.6, 1.2], gravity: -1.5,
-      size: [[0, 0.16], [1, 0.05]], colour: [[0, "#fff0b0"], [0.3, "#ff9a30"], [1, "#c0200000"]] },
+    { sprite: "softDot", blend: "add", rate: 6, life: 0.4, local: true, size: [[0, 0.8], [0.5, 1.0], [1, 0.8]], colour: [[0, "#ff801000"], [0.3, "#ff8a2050"], [1, "#ff801000"]] },
+    { sprite: "flame", blend: "add", rate: 34, life: [0.3, 0.5], shape: { sphere: 0.12 }, direction: [0, 1, 0], spread: 25, speed: [0.6, 1.2], gravity: -1.5,
+      size: [[0, 0.3], [1, 0.08]], colour: [[0, "#fff0b0"], [0.3, "#ff9a30"], [1, "#c0200000"]] },
     { sprite: "rune", blend: "add", rate: 2.5, life: [0.9, 1.2], shape: { ring: 0.35 }, direction: [0, 1, 0], spread: 10, speed: [0.25, 0.4], spin: [-1, 1],
-      size: [[0, 0.12], [0.2, 0.2], [1, 0.16]], colour: [[0, "#ffb04000"], [0.25, "#ffb040c0"], [1, "#ff602000"]] },
+      size: [[0, 0.18], [0.2, 0.3], [1, 0.24]], colour: [[0, "#ffb04000"], [0.25, "#ffb040c0"], [1, "#ff602000"]] },
   ],
 }

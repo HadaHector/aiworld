@@ -1,10 +1,14 @@
 // Feedback in the game (see FEEDBACK.md): the combat events of each step played as cues - sounds
-// now, particles and hit feel to come - at the units the mirror knows, heard from the camera. The
-// sound effects start with the page's audio (the first click or key press) and live for the page,
-// across dimensions.
+// and particle effects now, hit feel to come - at the units the mirror knows (on their bodies'
+// bones where they have bodies), heard and seen from the camera. The sound effects start with the
+// page's audio (the first click or key press); they and the particles live for the page, across
+// dimensions, and each dimension's scene gets its own particle drawers.
 
 import type { Camera } from "@babylonjs/core/Cameras/camera";
 import { Vector3 } from "@babylonjs/core/Maths/math.vector";
+import type { Scene } from "@babylonjs/core/scene";
+import { createParticleSystem, type ParticleSystem } from "../particles/system";
+import { createParticleRenderer, type ParticleRenderer } from "../particles/render";
 import { whenAudio } from "../audio/context";
 import { createSfx, type Sfx, type Vec3 } from "../audio/sfx";
 import { createCuePlayer, type Bone, type CueContext, type UnitTraits } from "../feedback/cues";
@@ -20,12 +24,17 @@ export interface GameFeedback {
   events: (events: readonly CombatEvent[]) => void;
   /** A client event (`lootOpen`, `itemTake`...) at a unit or a point. */
   client: (name: string, context: CueContext, match?: { rarity?: string }) => void;
-  /** Each frame: where the listener is. */
+  /** The scene being drawn, for the particles: on entering a dimension, null on leaving. */
+  setScene: (scene: Scene | null) => void;
+  /** Each frame: steps the particles and puts the listener on the camera. */
   update: (camera: Camera | null) => void;
   /** The Effects volume, 0..1. */
   setVolume: (volume: number) => void;
   /** The sound effects player, once audio has started - for the console. */
   sfx: () => Sfx | null;
+  particles: ParticleSystem;
+  /** Particles drawn last frame. */
+  stats: () => { sprites: number; meshes: number; effects: number };
 }
 
 export interface GameFeedbackOptions {
@@ -41,9 +50,12 @@ export interface GameFeedbackOptions {
   volume: number;
   /** Where the packs are served from. */
   baseUrl?: string;
+  /** Where a bone of a unit's body is, when it has one drawn (the player's, entityMeshes'). */
+  bodyPlace: (unit: number, bone: Bone, out: Vector3) => boolean;
 }
 
 const BABYLON_FORWARD = new Vector3(0, 0, 1);
+const scratch = new Vector3();
 
 /** How high up a unit's bones are, as a share of its height, until bodies say (step 3). */
 const BONE_HEIGHT: Record<Bone, number> = { chest: 0.65, head: 0.92, feet: 0.03, mainHand: 0.55, offHand: 0.55, hands: 0.6, weapon: 0.6 };
@@ -95,6 +107,7 @@ export function createGameFeedback(options: GameFeedbackOptions): GameFeedback {
     place(unit, bone) {
       const e = mirror.entities.get(unit);
       if (!e) return null;
+      if (options.bodyPlace(unit, bone, scratch)) return { x: scratch.x, y: scratch.y, z: scratch.z };
       const height = e.template?.look.height ?? 1.8;
       const radius = e.template?.look.radius ?? 0.4;
       // Hands and the weapon a little ahead of the unit, the main hand to its right.
@@ -108,7 +121,11 @@ export function createGameFeedback(options: GameFeedbackOptions): GameFeedback {
       const e = mirror.entities.get(unit);
       return e ? traitsOf(e) : {};
     },
-  }, () => sfx);
+  }, () => sfx, () => particles);
+
+  const particles = createParticleSystem(rules);
+  let renderer: ParticleRenderer | null = null;
+  let lastFrame = performance.now();
 
   const at: Vec3 = { x: 0, y: 0, z: 0 };
   const forward: Vec3 = { x: 0, y: 0, z: 1 };
@@ -116,7 +133,19 @@ export function createGameFeedback(options: GameFeedbackOptions): GameFeedback {
   return {
     events: (events) => cues.events(events),
     client: (name, context, match) => cues.client(name, context, match),
+    setScene(scene) {
+      renderer?.dispose();
+      renderer = null;
+      particles.clear();
+      if (scene) renderer = createParticleRenderer(scene, particles, rules);
+    },
     update(camera) {
+      const time = performance.now();
+      const dt = Math.min(0.1, (time - lastFrame) / 1000);
+      lastFrame = time;
+      const eye = camera?.globalPosition ?? null;
+      particles.update(dt, eye);
+      renderer?.update();
       if (!sfx || !camera) return;
       const p = camera.globalPosition;
       const f = camera.getDirection(BABYLON_FORWARD);
@@ -133,5 +162,7 @@ export function createGameFeedback(options: GameFeedbackOptions): GameFeedback {
       sfx?.setVolume(v);
     },
     sfx: () => sfx,
+    particles,
+    stats: () => ({ ...(renderer?.stats() ?? { sprites: 0, meshes: 0 }), effects: particles.effects() }),
   };
 }

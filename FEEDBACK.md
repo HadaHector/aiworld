@@ -10,7 +10,7 @@ fireball roars in the caster's hands, flies, and bursts on its target, a crit sh
 and pauses for an instant, deaths thud, and loot glints and chimes. A dev page plays every cue,
 sound and particle effect on its own, so it can be tuned.
 
-**Status: steps 1-2 of 7 done** (rules and content; sound in the game). [As built](#as-built) notes where the
+**Status: steps 1-3 of 7 done** (rules and content; sound in the game; particles). [As built](#as-built) notes where the
 build differs from this plan.
 
 ## Decisions
@@ -507,6 +507,37 @@ Each leaves the game working: dev server, `npm run probe`, `npm run server`, `np
   `hit.blade.metal` on its chest; a frost wolf's bites play `hit.fang`, its swings at the player
   count as the player's own fight; misses whiff; no console errors. The probe gained the mapping
   (285 checks).
+- **Step 3: particles.** `src/particles/system.ts` simulates every effect on the CPU in two pools
+  (sprites, meshes) of flat typed arrays sized by `particles`, allocated once: bursts and rates,
+  shapes, direction within `spread` (a point throws every way, a sphere or ring straight out, unless
+  a direction is given), gravity, drag, spin, size and colour curves, `local` particles moving with
+  their attachment, `inherit`. Attachments are asked again every frame, so an effect follows the
+  bone it is on; one whose unit has gone stops where it was. Over budget, others' particles are
+  dropped and the player's own push out the oldest of others'. `src/particles/render.ts` draws each
+  blend mode as one mesh of camera-facing quads (sorted far to near when blended) and one of small
+  flat-shaded shapes, rebuilt each frame into buffers allocated once - four draw calls in all.
+  Streaks stretch along their velocity as the camera sees it. Not in the plan: the atlas is the
+  smallest power of two the textures fit (core's is 512²), and alpha particles take a `light`
+  factor (1 for now; day and night can set it later).
+- **Bones.** `CharacterBody.place(bone)` says where a body's chest (mid-torso), head, feet, hands
+  (between them, a little ahead), main and off hand (`handR`, `handL`) and weapon (along the right
+  hand) are; the player's character and `entityMeshes` pass it on, and units without a body keep
+  the heights from step 2. Cues spawn their particle parts there, following the unit, with
+  placeholders filled (`hit.{armor}`), fewer for others' fights, and return a handle that stops a
+  cue's loops - what step 4's casts and auras need.
+- **`fx.html`** gained a stage: a scout and a knight on a patch of ground with rings at 5, 10, 20 and
+  40 m, the camera as listener, the distance and angle sliders moving the knight, a speed slider
+  slowing the particles; a Particles tab (each effect played on the knight's chest or feet, or the
+  scout's hands, weapon or head, with its emitters listed) and an Atlas tab (the atlas, the picked
+  texture's variants outlined and drawn larger); a particle meter. `window.__fx` has the stage's
+  systems for the console.
+- **Content**: core's hand fire, bolt and hit effects were made larger after seeing them on the stage.
+- **Cost**: a full pool (3000 sprites, 600 meshes) steps in about 0.7 ms in Node and costs about
+  3.4 ms a frame in the game with the drawers; a fight on the dummy uses a few dozen.
+- **Checked**: on `fx.html`, the hand fire on the scout, and the fire burst and the hit effects on
+  the knight, at full speed and slowed; the atlas tab; in the game
+  (`?config=tiny`), auto-attacks on the dummy throwing sparks off its plate. The probe gained the
+  particle system and cue particles (297 checks).
 
 ## Not in this step
 

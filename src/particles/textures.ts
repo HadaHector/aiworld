@@ -231,35 +231,52 @@ export interface ParticleAtlas {
   rects: AtlasRect[][];
 }
 
-/** Packs every variant of every texture into one square atlas, largest first, in shelves. */
-export function buildParticleAtlas(defs: readonly ParticleTextureDef[], size = 1024): ParticleAtlas {
-  const pixels = new Uint8ClampedArray(size * size * 4);
-  const rects: AtlasRect[][] = defs.map(() => []);
-  const items = defs.flatMap((def, index) => Array.from({ length: def.variants }, (_, variant) => ({ def, index, variant })));
+/** Packs every variant of every texture into the smallest square atlas they fit (256² to 4096²),
+ *  largest first, in shelves. */
+export function buildParticleAtlas(defs: readonly ParticleTextureDef[]): ParticleAtlas {
+  for (let size = 256; ; size *= 2) {
+    const atlas = packAtlas(defs, size);
+    if (atlas || size >= 4096) {
+      if (!atlas) throw new Error("particle textures do not fit a 4096² atlas");
+      return atlas;
+    }
+  }
+}
+
+function packAtlas(defs: readonly ParticleTextureDef[], size: number): ParticleAtlas | null {
+  const items = defs.flatMap((def, index) => Array.from({ length: def.variants }, (_, variant) => ({ def, index, variant, x: 0, y: 0 })));
   items.sort((a, b) => b.def.size - a.def.size || a.index - b.index || a.variant - b.variant);
+  // Places first: shelves of the tallest left, left to right.
   let x = 0;
   let y = 0;
   let shelf = 0;
-  for (const { def, index, variant } of items) {
-    if (x + def.size > size) {
+  for (const item of items) {
+    if (x + item.def.size > size) {
       x = 0;
       y += shelf;
       shelf = 0;
     }
-    if (y + def.size > size) throw new Error(`particle textures do not fit a ${size}² atlas`);
+    if (y + item.def.size > size) return null;
+    item.x = x;
+    item.y = y;
+    x += item.def.size;
+    shelf = Math.max(shelf, item.def.size);
+  }
+  // Then the pixels.
+  const pixels = new Uint8ClampedArray(size * size * 4);
+  const rects: AtlasRect[][] = defs.map(() => []);
+  for (const { def, index, variant, x: left, y: top } of items) {
     const drawn = drawParticleTexture(def, variant);
     for (let row = 0; row < def.size; row++) {
       for (let col = 0; col < def.size; col++) {
         const from = row * def.size + col;
-        const to = ((y + row) * size + x + col) * 4;
+        const to = ((top + row) * size + left + col) * 4;
         const lum = Math.round(drawn.luminance[from] * 255);
         pixels[to] = pixels[to + 1] = pixels[to + 2] = lum;
         pixels[to + 3] = Math.round(drawn.alpha[from] * 255);
       }
     }
-    rects[index][variant] = { u0: x / size, v0: y / size, u1: (x + def.size) / size, v1: (y + def.size) / size };
-    x += def.size;
-    shelf = Math.max(shelf, def.size);
+    rects[index][variant] = { u0: left / size, v0: top / size, u1: (left + def.size) / size, v1: (top + def.size) / size };
   }
   return { size, pixels, rects };
 }

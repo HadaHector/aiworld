@@ -6,7 +6,8 @@
 import { COMBAT_EVENT_KINDS, EVENT_FLAG, type CombatEvent } from "../sim/skills/events";
 import type { GameRules } from "../sim/rules/gameRules";
 import type { SkillDef } from "../sim/rules/skillRules";
-import type { Sfx, Vec3 } from "../audio/sfx";
+import type { SoundHandle, Sfx, Vec3 } from "../audio/sfx";
+import type { EffectHandle, ParticleSystem } from "../particles/system";
 import { resolveRef, type CueDef, type CuePart, type EventRule, type FeedbackRules, type Phase } from "./rules";
 
 export type Bone = CuePart["bone"];
@@ -43,19 +44,25 @@ export interface CueContext {
   values?: Record<string, string>;
 }
 
+/** A cue playing: its looping sounds and effects go on until it is stopped. */
+export interface CueHandle {
+  /** Stops it: looping sounds fade, effects stop emitting and let what is out live on. */
+  stop: (fade?: number) => void;
+}
+
 export interface CuePlayer {
   /** A step's combat events. */
   events: (events: readonly CombatEvent[]) => void;
   /** A client event (FEEDBACK.md's `lootOpen`, `itemTake`...): the event table's cue for it. */
   client: (name: string, context: CueContext, match?: { rarity?: string }) => void;
   /** Plays a cue by id. */
-  play: (cue: string, context: CueContext) => void;
+  play: (cue: string, context: CueContext) => CueHandle | null;
 }
 
 /** Seconds within which one source's same cue plays its sound only once (a hit on five targets). */
 const COALESCE = 0.05;
 
-export function createCuePlayer(rules: FeedbackRules, game: GameRules, stage: CueStage, sfx: () => Sfx | null): CuePlayer {
+export function createCuePlayer(rules: FeedbackRules, game: GameRules, stage: CueStage, sfx: () => Sfx | null, particles: () => ParticleSystem | null = () => null): CuePlayer {
   const recent = new Map<string, number>();
   const now = (): number => performance.now() / 1000;
 
@@ -88,31 +95,64 @@ export function createCuePlayer(rules: FeedbackRules, game: GameRules, stage: Cu
     return (unit ? stage.place(unit, part.bone) : null) ?? c.point ?? null;
   };
 
-  const playPart = (cue: CueDef, part: CuePart, c: CueContext, own: boolean): void => {
-    if (part.kind !== "sound") return; // particles and hit feel come with steps 3 and 5
-    const player = sfx();
-    if (!player) return;
-    const id = resolveRef(part.ref, valuesOf(c), (s) => rules.sounds.has(s));
-    if (!id) return;
-    const key = `${cue.id}:${c.source}:${id}`;
-    const t = now();
-    if ((recent.get(key) ?? -1) > t - COALESCE) return;
-    recent.set(key, t);
-    if (recent.size > 512) for (const [k, v] of recent) if (v < t - 1) recent.delete(k);
-    const at = placeOf(part, c);
-    const gain = (typeof part.scale === "number" ? part.scale : 1) * (own ? 1 : rules.config.others.volume);
-    player.play(id, { at, gain, own });
+  /** What a playing cue has started, to stop it. */
+  interface Playing {
+    sounds: SoundHandle[];
+    effects: EffectHandle[];
+    stopped: boolean;
+  }
+
+  const playPart = (cue: CueDef, part: CuePart, c: CueContext, own: boolean, playing: Playing): void => {
+    if (playing.stopped) return;
+    const scale = typeof part.scale === "number" ? part.scale : 1;
+    if (part.kind === "sound") {
+      const player = sfx();
+      if (!player) return;
+      const id = resolveRef(part.ref, valuesOf(c), (s) => rules.sounds.has(s));
+      if (!id) return;
+      const key = `${cue.id}:${c.source}:${id}`;
+      const t = now();
+      if ((recent.get(key) ?? -1) > t - COALESCE) return;
+      recent.set(key, t);
+      if (recent.size > 512) for (const [k, v] of recent) if (v < t - 1) recent.delete(k);
+      const handle = player.play(id, { at: placeOf(part, c), gain: scale * (own ? 1 : rules.config.others.volume), own });
+      if (handle) playing.sounds.push(handle);
+    } else if (part.kind === "particles") {
+      const system = particles();
+      if (!system) return;
+      const id = resolveRef(part.ref, valuesOf(c), (e) => rules.effects.has(e));
+      if (!id) return;
+      // It follows the unit (or bone) it is on, every frame, for as long as it plays.
+      const at = (): Vec3 | null => placeOf(part, c);
+      const target = part.at === "source" ? c.target : c.source;
+      const handle = system.spawn(id, at, {
+        own,
+        count: own ? 1 : rules.config.others.particles,
+        size: scale,
+        toward: target ? () => stage.place(target, "chest") : undefined,
+      });
+      if (handle) playing.effects.push(handle);
+    }
+    // flash, flinch, shake and pause come with step 5.
   };
 
-  const play = (cueId: string, c: CueContext): void => {
+  const play = (cueId: string, c: CueContext): CueHandle | null => {
     const cue = rules.cues.get(cueId);
-    if (!cue) return;
+    if (!cue) return null;
     const own = isOwn(c);
+    const playing: Playing = { sounds: [], effects: [], stopped: false };
     for (const part of cue.parts) {
       if (!whenHolds(part, c, own)) continue;
-      if (part.delay > 0) setTimeout(() => playPart(cue, part, c, own), part.delay * 1000);
-      else playPart(cue, part, c, own);
+      if (part.delay > 0) setTimeout(() => playPart(cue, part, c, own, playing), part.delay * 1000);
+      else playPart(cue, part, c, own, playing);
     }
+    return {
+      stop(fade = 0.25) {
+        playing.stopped = true;
+        for (const sound of playing.sounds) if (rules.sounds.get(sound.sound)?.loop) sound.stop(fade);
+        for (const effect of playing.effects) effect.stop();
+      },
+    };
   };
 
   /** The first line of the event table that matches, or undefined. "" means: play nothing. */

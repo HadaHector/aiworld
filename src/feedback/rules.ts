@@ -63,7 +63,7 @@ export interface EmitterDef {
   speed: [number, number];
   /** Unit vector, or null: outward from the shape (up for a point). */
   direction: [number, number, number] | null;
-  /** Degrees around `direction`. */
+  /** Degrees around `direction` (or outward from the shape, or up). */
   spread: number;
   gravity: number;
   drag: number;
@@ -387,7 +387,8 @@ function readEmitter(reader: Reader, value: unknown, path: string, loop: boolean
     shape,
     speed: pairOf(reader, obj, "speed", path, [0, 0], { min: 0, max: 200 }),
     direction,
-    spread: reader.optionalNumber(obj, "spread", path, 180, { min: 0, max: 180 }),
+    // Without a direction a point (or a box, a line) throws every way and a sphere or ring straight out.
+    spread: reader.optionalNumber(obj, "spread", path, direction === null && (shape.kind === "point" || shape.kind === "box" || shape.kind === "line") ? 180 : 0, { min: 0, max: 180 }),
     gravity: reader.optionalNumber(obj, "gravity", path, 0, { min: -100, max: 100 }),
     drag: reader.optionalNumber(obj, "drag", path, 0, { min: 0, max: 50 }),
     size: readCurve(reader, obj, "size", path, 0.2),
