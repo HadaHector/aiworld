@@ -1,5 +1,5 @@
 import type { EntityMirror, MirroredEntity } from "./entityMirror";
-import { BAR_COLOURS, BAR_TEXT, BAR_TRACK, BUTTON_CLASS, GOLD, PANEL, QUIET_PANEL, SLOT, SLOT_CLASS, TITLE_FONT, barFill } from "../ui/theme";
+import { BAR_COLOURS, BAR_TEXT, BAR_TRACK, BUTTON_CLASS, GOLD, PANEL, QUIET_PANEL, TITLE_FONT, barFill } from "../ui/theme";
 import { PLAYER_TEMPLATE, type GameRules } from "../sim/rules/gameRules";
 import type { CombatEvent } from "../sim/protocol";
 import { describeEvent } from "../sim/skills/combatLog";
@@ -17,10 +17,8 @@ export interface CombatHud {
   update: (target: number) => void;
   /** Adds the events of a step to the log. */
   log: (events: readonly CombatEvent[]) => void;
-  /** Fits the spell slots into a width (the HUD's layout pass). */
-  fitWidth: (width: number) => void;
-  /** The skills on keys 1-9, in the order the player knows them: passives left out. */
-  readonly keys: () => number[];
+  /** Where the action bar goes (ui/actionBar.ts): between the cast bar and the XP bar. */
+  readonly barSlot: HTMLElement;
   dispose: () => void;
 }
 
@@ -28,8 +26,6 @@ export interface CombatHudOptions {
   rules: GameRules;
   mirror: EntityMirror;
   ownId: () => number;
-  /** Casts the spell on key n. */
-  onKey: (skill: number) => void;
   onRespawn: () => void;
   /** Where its parts go (ui/hud.ts): the unit frames, the cast, spell and XP bars, the log. */
   regions: { frames: HTMLElement; actions: HTMLElement; log: HTMLElement };
@@ -91,14 +87,12 @@ export function createCombatHud(options: CombatHudOptions): CombatHud {
   const castFill = el("div", barFill(BAR_COLOURS.cast), castBar);
   const castText = el("div", `${BAR_TEXT} font-size: 11px; line-height: 18px;`, castBar);
 
-  // The spell bar.
-  const bar = el("div", "display: flex; gap: 4px;", regions.actions);
+  // The action bar's place (ui/actionBar.ts fills it).
+  const bar = el("div", "", regions.actions);
   // The XP bar under it (PROGRESSION.md): the character level's progress, as wide as the spell bar.
   const xpBar = el("div", `${BAR_TRACK} width: 280px; height: 12px; display: none;`, regions.actions);
   const xpBarFill = el("div", `${barFill(BAR_COLOURS.xp)} transition: width 0.3s;`, xpBar);
   const xpBarText = el("div", `${BAR_TEXT} font-size: 9px; line-height: 12px; font-weight: 600;`, xpBar);
-  const slots: { root: HTMLElement; cool: HTMLElement; label: HTMLElement; skill: number }[] = [];
-  let slotWidth = 64;
 
   // The combat log.
   const logBox = el("div", `width: 100%; box-sizing: border-box; padding: 6px 8px; ${QUIET_PANEL} white-space: pre-wrap; overflow: hidden; color: #d8ceb6;`, regions.log);
@@ -112,7 +106,6 @@ export function createCombatHud(options: CombatHudOptions): CombatHud {
   respawn.textContent = "Respawn";
   respawn.addEventListener("click", () => options.onRespawn());
 
-  const keys = (): number[] => mirror.own.spells.filter((s) => !rules.skills[s.skill]?.passive).map((s) => s.skill).slice(0, 9);
 
   function drawBars(frame: Frame, entity: MirroredEntity): void {
     const rows: string[] = [];
@@ -170,51 +163,8 @@ export function createCombatHud(options: CombatHudOptions): CombatHud {
     }
   }
 
-  function drawSpellBar(now: number): void {
-    const skills = keys();
-    if (slots.length !== skills.length || slots.some((s, i) => s.skill !== skills[i])) {
-      bar.innerHTML = "";
-      slots.length = 0;
-      skills.forEach((skill, i) => {
-        const root = el("div", `position: relative; width: ${slotWidth}px; height: 48px; ${SLOT} cursor: pointer; overflow: hidden; text-align: center; font: 11px/1.2 system-ui, sans-serif;`, bar);
-        root.className = SLOT_CLASS;
-        el("div", `position: absolute; left: 4px; top: 2px; font: 700 10px/1 system-ui, sans-serif; color: ${GOLD}; text-shadow: 0 1px 1px #000;`, root).textContent = String(i + 1);
-        const label = el("div", "position: absolute; left: 3px; right: 3px; top: 15px; font-size: 10px; line-height: 1.15; text-shadow: 0 1px 2px #000;", root);
-        label.textContent = rules.skills[skill]?.name ?? "?";
-        const cool = el("div", `position: absolute; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.66); font: 700 15px/48px system-ui, sans-serif; color: ${GOLD}; text-shadow: 0 1px 2px #000;`, root);
-        root.addEventListener("click", () => options.onKey(skill));
-        slots.push({ root, cool, label, skill });
-      });
-    }
-    const own = mirror.own;
-    const ownEntity = mirror.entities.get(ownId());
-    for (const slot of slots) {
-      const spell = own.spells.find((s) => s.skill === slot.skill);
-      const def = rules.skills[slot.skill];
-      const gcd = def && def.gcd !== "none" ? own.gcdUntil : 0;
-      const until = Math.max(spell?.ready ?? 0, gcd);
-      const left = until - now;
-      // Greyed when the cost cannot be paid - from what the mirror has of the own resources.
-      const short = def?.cost.some((c) => c.amount.constant !== null && (ownEntity?.resources.get(c.resource)?.current ?? 0) < c.amount.constant);
-      slot.root.style.opacity = short ? "0.5" : "1";
-      if (left > 0.05) {
-        slot.cool.style.height = "100%";
-        text(slot.cool, left > 1.6 ? left.toFixed(0) : "");
-      } else {
-        slot.cool.style.height = "0";
-        text(slot.cool, "");
-      }
-    }
-  }
-
   return {
-    fitWidth(width) {
-      // Nine slots and their gaps within the width, from 64 px down to 40.
-      const fit = Math.max(40, Math.min(64, Math.floor((width - 8 * 4) / 9)));
-      if (fit === slotWidth) return;
-      slotWidth = fit;
-      for (const s of slots) s.root.style.width = `${fit}px`;
-    },
+    barSlot: bar,
     update(targetId) {
       const now = mirror.serverTime();
       const own = mirror.entities.get(ownId());
@@ -238,7 +188,6 @@ export function createCombatHud(options: CombatHudOptions): CombatHud {
         castFill.style.width = `${(own.cast.channel ? 1 - done : done) * 100}%`;
         text(castText, `${rules.skills[own.cast.skill]?.name ?? "?"}  ${Math.max(0, own.cast.start + own.cast.length - now).toFixed(1)}`);
       } else castBar.style.display = "none";
-      drawSpellBar(now);
       deadBox.style.display = own && own.flags & (1 << FLAG.dead) ? "block" : "none";
     },
     log(events) {
@@ -253,7 +202,6 @@ export function createCombatHud(options: CombatHudOptions): CombatHud {
       // A short log (the HUD caps its height on small screens) shows the newest lines.
       logBox.scrollTop = logBox.scrollHeight;
     },
-    keys,
     dispose() {
       for (const e of [ownFrame.root, targetFrame.root, castBar, bar, xpBar, logBox, deadBox]) e.remove();
     },

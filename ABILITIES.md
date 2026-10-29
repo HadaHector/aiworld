@@ -719,6 +719,12 @@ Each leaves the game working: dev server, `npm run probe`, `npm run server`, `np
 - **Progression** (PROGRESSION.md) added the action kinds `learn` and `xp` (read in `actions.ts`, run by
   `src/sim/progression/actions.ts`), and the combat event `levelUp`. Spells it grants come from the
   sources `learn:<how>` and `talent:<tree>`; the player's spells now come from its class.
+- **The action bar and the spell book** (asked for after the step, `src/ui/actionBar.ts`,
+  `src/ui/spellBook.ts`): twelve slots on 1-9, 0, - and = hold spells, the attack toggle (which
+  replaced R) and items to use (bread); the player drags from the spell book (L) or the bag onto a
+  slot, between slots to swap, off the bar to clear. Spells learned later fill the first free slot;
+  the layout is kept per people and class in the browser until character saves. The bag's right
+  click equips, unequips and uses, as its double click does.
 - **Floating combat text** (asked for after the step, `src/game/floatingText.ts`): numbers rise over
   the unit a hit or heal lands on, from the combat events, for the own player's fights only - what
   it deals over its target, what it takes over itself. Defaults, WoW Classic-like: weapon damage

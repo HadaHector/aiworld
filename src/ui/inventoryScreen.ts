@@ -1,3 +1,4 @@
+import { ACTION_DRAG_TYPE, takenByBar } from "./actionBar";
 import { BUTTON_CLASS, DIM, GOLD, HEADING, PANEL, SLOT, SLOT_CLASS, windowHead } from "./theme";
 import type { GameRules } from "../sim/rules/gameRules";
 import { formatMoney, itemStats, rollQuality, type ItemRules } from "../sim/rules/itemRules";
@@ -136,6 +137,10 @@ export function createInventoryScreen({ game, items, mirror, send }: InventoryOp
       dragging = { container, slot };
       dropped = false;
       e.dataTransfer?.setData("text/plain", "item");
+      // An item that is used (food) can go on the action bar too.
+      const state = mirror.containers[container]?.[slot];
+      const type = state ? items.types[items.typeIndex.get(state.type) ?? -1] : undefined;
+      if (state && type?.use) e.dataTransfer?.setData(ACTION_DRAG_TYPE, JSON.stringify({ kind: "item", item: state.type }));
     });
     cell.addEventListener("dragover", (e) => e.preventDefault());
     cell.addEventListener("drop", (e) => {
@@ -153,10 +158,13 @@ export function createInventoryScreen({ game, items, mirror, send }: InventoryOp
       // Let go outside the screen: dropped on the ground.
       const r = root.getBoundingClientRect();
       const outside = e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom;
-      if (!dropped && dragging && outside) send({ type: "itemDrop", from: dragging, count: 0 });
+      // Not if something else took it - the action bar takes an item to use, and keeps it in the bag.
+      const taken = takenByBar();
+      if (!dropped && dragging && outside && !taken) send({ type: "itemDrop", from: dragging, count: 0 });
       dragging = null;
     });
-    cell.addEventListener("dblclick", () => {
+    // Double-click or right-click: put it on, take it off, use it - or move it to and from the bank.
+    const activate = (): void => {
       const state = mirror.containers[container]?.[slot];
       if (!state) return;
       const type = items.types[items.typeIndex.get(state.type) ?? -1];
@@ -170,6 +178,11 @@ export function createInventoryScreen({ game, items, mirror, send }: InventoryOp
         const free = mirror.containers[BANK].indexOf(null);
         if (free >= 0) send({ type: "itemMove", from: { container, slot }, to: { container: BANK, slot: free }, count: 0 });
       }
+    };
+    cell.addEventListener("dblclick", activate);
+    cell.addEventListener("contextmenu", (e) => {
+      e.preventDefault();
+      activate();
     });
     cell.addEventListener("mousemove", (e) => {
       const state = mirror.containers[container]?.[slot];

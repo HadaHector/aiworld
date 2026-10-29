@@ -41,6 +41,8 @@ import { createProgressMirror } from "./game/progressMirror";
 import { createProgressPanel } from "./ui/progressPanel";
 import { createRuleBook } from "./ui/ruleBook";
 import { createMenuBar } from "./ui/menuBar";
+import { createActionBar } from "./ui/actionBar";
+import { createSpellBook } from "./ui/spellBook";
 import { createHud, dock } from "./ui/hud";
 import { GOLD, QUIET_PANEL, TITLE_FONT } from "./ui/theme";
 import { createHealthBars, type HealthBars } from "./game/healthBars";
@@ -365,6 +367,7 @@ function frame(): void {
   entityMeshes?.setTarget(targetId);
   entityMeshes?.update();
   combatHud.update(targetId);
+  actionBar.update();
   floatingText?.update();
   healthBars?.update(targetId);
   if (!spectator.active) {
@@ -529,7 +532,6 @@ const combatHud = createCombatHud({
   rules: gameRules,
   mirror,
   ownId: () => playerId,
-  onKey: castSpell,
   onRespawn: () => command({ type: "respawn" }),
   regions: { frames: hud.frames, actions: hud.actions, log: hud.log },
   experience() {
@@ -539,6 +541,32 @@ const combatHud = createCombatHud({
     const name = progressionRules.disciplines[level].name;
     return { label: `${name} ${d.level}: ${Math.floor(d.xp)} / ${Math.ceil(d.next)} XP`, fraction: d.level >= d.cap ? 1 : d.xp / d.next };
   },
+});
+
+// The action bar (ui/actionBar.ts) in the combat HUD's place for it, and the spell book (L) it is
+// filled from: the player arranges spells, the attack and items to use on it.
+const actionBar = createActionBar(combatHud.barSlot, {
+  game: gameRules,
+  items: itemRules,
+  mirror,
+  belongings,
+  ownId: () => playerId,
+  character: Object.values(requestedOrigins).join("."),
+  cast: castSpell,
+  setAttacking: (on) => channel.client.send({ type: "attack", on }),
+  useItem: (bagSlot) => sendItem({ type: "itemUse", from: { container: 0, slot: bagSlot } }),
+});
+const spellBook = createSpellBook({
+  game: gameRules,
+  mirror,
+  progress: progressMirror,
+  cast: castSpell,
+  setAttacking: (on) => channel.client.send({ type: "attack", on }),
+});
+window.addEventListener("keydown", (e) => {
+  if (!view || entering || e.repeat) return;
+  if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement) return;
+  if (e.key.toLowerCase() === "l") spellBook.toggle();
 });
 
 // Progression (see PROGRESSION.md): P toggles the panel; XP and level-ups float over the player and
@@ -589,14 +617,16 @@ const ruleBook = createRuleBook({
 const menuBar = createMenuBar([
   { icon: "bag", label: "Inventory", key: "B", toggle: () => inventory.toggle(), open: () => inventory.visible },
   { icon: "progress", label: "Progression", key: "P", toggle: () => progressPanel.toggle(), open: () => progressPanel.visible },
+  { icon: "spells", label: "Spell book", key: "L", toggle: () => spellBook.toggle(), open: () => spellBook.visible },
   { icon: "book", label: "Rule book", key: "K", toggle: () => ruleBook.toggle(), open: () => ruleBook.visible },
   { icon: "options", label: "Options", key: "O", toggle: () => (hud.optionsVisible = !hud.optionsVisible), open: () => hud.optionsVisible },
   { icon: "debug", label: "Debug panel", key: "F2", toggle: () => (hud.debugVisible = !hud.debugVisible), open: () => hud.debugVisible, debug: true },
 ]);
 dock(menuBar.element, hud.menu);
 hud.onMenuVertical((vertical) => menuBar.setVertical(vertical));
-hud.onActionsWidth((width) => combatHud.fitWidth(width));
+hud.onActionsWidth((width) => actionBar.fitWidth(width));
 dockWindow(progressPanel.element);
+dockWindow(spellBook.element);
 // The debug panel's tools: what M, T and I open.
 for (const [label, key, open] of [
   ["Inspector", "I", () => entityPanel.toggle()],
@@ -636,15 +666,9 @@ window.addEventListener("keydown", (e) => {
     return;
   }
   if (e.repeat) return;
-  if (e.key.toLowerCase() === "r") {
-    channel.client.send({ type: "attack", on: !mirror.own.attacking });
-    return;
-  }
-  const n = Number(e.key);
-  if (Number.isInteger(n) && n >= 1 && n <= 9) {
-    const skill = combatHud.keys()[n - 1];
-    if (skill !== undefined) castSpell(skill);
-  }
+  // The action bar's keys: 1-9, 0, - and =. The attack is on the bar too (its first slot to begin with).
+  const slot = actionBar.keys.indexOf(e.key);
+  if (slot >= 0) actionBar.press(slot);
 });
 {
   let down: { x: number; y: number } | null = null;
