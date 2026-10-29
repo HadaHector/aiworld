@@ -1,3 +1,4 @@
+import { BRONZE, CLOSE_CLASS, GOLD, PANEL as GAME_PANEL, TEXT, TITLE_FONT } from "./theme";
 import type { GameRules } from "../sim/rules/gameRules";
 import type { ProgressionRules, SourceDef, UnlockDef } from "../sim/rules/progressionRules";
 import { formatMoney, type ItemRules } from "../sim/rules/itemRules";
@@ -54,7 +55,7 @@ export interface Chapter {
   sections: Section[];
 }
 
-const PANEL = "background: rgba(24, 22, 18, 0.95); color: #eee; border-radius: 8px; font: 13px/1.5 Georgia, serif; box-shadow: 0 4px 16px rgba(0,0,0,0.55);";
+const PANEL = `${GAME_PANEL} font: 13px/1.55 ${TITLE_FONT};`;
 
 const say = (...parts: Part[]): { parts: Part[] } => ({ parts });
 const link = (text: string, key: string): Part => (key ? { text, key } : text);
@@ -346,18 +347,21 @@ export function createRuleBook(options: RuleBookOptions): RuleBook {
   const build = (): Chapter[] => ruleBookChapters(options.game, options.progression, options.items, options.own?.() ?? null, index);
   let chapters = build();
   const root = el("div", `position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(920px, calc(100vw - 32px)); height: min(680px, calc(100vh - 80px)); display: none; z-index: 980; ${PANEL}`, document.body);
-  const nav = el("div", "position: absolute; left: 0; top: 0; bottom: 0; width: 170px; padding: 14px 10px; border-right: 1px solid #554a36; overflow-y: auto;", root);
+  const nav = el("div", `position: absolute; left: 0; top: 0; bottom: 0; width: 170px; padding: 14px 10px; box-sizing: border-box; border-right: 1px solid ${BRONZE}; overflow-y: auto; background: linear-gradient(90deg, rgba(58, 47, 29, 0.55), rgba(33, 26, 16, 0.35));`, root);
+  nav.className = "game-scroll";
   const page = el("div", "position: absolute; left: 171px; right: 0; top: 0; bottom: 0; padding: 14px 20px; overflow-y: auto;", root);
-  const close = el("button", "position: absolute; right: 10px; top: 8px; font: 16px sans-serif; background: none; border: none; color: #ccc; cursor: pointer;", root, "×");
+  page.className = "game-scroll";
+  const close = el("span", "position: absolute; right: 10px; top: 10px;", root, "×");
+  close.className = CLOSE_CLASS;
   let visible = false;
   let current = 0;
   close.addEventListener("click", () => toggle());
 
   function drawNav(): void {
     nav.innerHTML = "";
-    el("div", "font-size: 18px; font-weight: 600; color: #ffd27a; margin-bottom: 10px;", nav, "Rule Book");
+    el("div", `font: 600 20px/1.2 ${TITLE_FONT}; color: ${GOLD}; letter-spacing: 0.05em; text-shadow: 0 1px 3px #000; margin-bottom: 12px;`, nav, "Rule Book");
     chapters.forEach((chapter, i) => {
-      const item = el("div", `cursor: pointer; padding: 3px 0; color: ${i === current ? "#ffd27a" : "#ccc"};`, nav, chapter.title);
+      const item = el("div", `cursor: pointer; padding: 4px 6px; border-radius: 3px; color: ${i === current ? GOLD : TEXT}; ${i === current ? "background: rgba(240, 201, 121, 0.12); box-shadow: inset 2px 0 0 #f0c979;" : ""}`, nav, chapter.title);
       item.addEventListener("click", () => show(i));
     });
   }
@@ -367,14 +371,14 @@ export function createRuleBook(options: RuleBookOptions): RuleBook {
     drawNav();
     page.innerHTML = "";
     const chapter = chapters[chapterIndex];
-    el("div", "font-size: 20px; font-weight: 600; color: #ffd27a;", page, chapter.title);
+    el("div", `font: 600 22px/1.2 ${TITLE_FONT}; color: ${GOLD}; letter-spacing: 0.04em; text-shadow: 0 1px 3px #000; padding-bottom: 4px; border-bottom: 1px solid ${BRONZE};`, page, chapter.title);
     el("p", "color: #ccc; margin: 4px 0 10px;", page, chapter.intro);
     let target: HTMLElement | null = null;
     for (const s of chapter.sections) {
-      const heading = el("div", "font-size: 15px; font-weight: 600; margin: 14px 0 4px; color: #f0e2c0;", page, s.heading);
+      const heading = el("div", `font: 600 15px/1.3 ${TITLE_FONT}; margin: 16px 0 4px; color: #f0e2c0;`, page, s.heading);
       if (key && s.key === key) {
         target = heading;
-        heading.style.color = "#ffd27a";
+        heading.style.color = GOLD;
       }
       let table: HTMLElement | null = null;
       for (const line of s.lines) {
@@ -390,7 +394,11 @@ export function createRuleBook(options: RuleBookOptions): RuleBook {
         const div = el("div", `margin: 2px 0; ${indent ? "padding-left: 16px; color: #ddd;" : ""}`, page);
         line.parts.forEach((part, i) => {
           if (typeof part === "string") div.appendChild(document.createTextNode(i === 0 ? part.trimStart() : part));
-          else el("span", "color: #9fc7ff; cursor: pointer; text-decoration: underline dotted;", div, part.text).addEventListener("click", () => open(part.key));
+          else {
+            const a = el("span", "text-decoration: underline dotted;", div, part.text);
+            a.className = "game-link";
+            a.addEventListener("click", () => open(part.key));
+          }
         });
       }
     }

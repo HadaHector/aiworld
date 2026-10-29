@@ -1,3 +1,5 @@
+import { HEADING, PANEL, installTheme, windowHead } from "./theme";
+
 /**
  * Where everything on screen goes: fixed regions that panels are put into, so they stack inside
  * their region instead of each picking its own corner and landing on another (GAMEPLAY.md: a normal
@@ -46,10 +48,10 @@ export function dock(element: HTMLElement, parent: HTMLElement): void {
 
 const EDGE = 12;
 const GAP = 8;
-const PANEL = "background: rgba(18, 20, 24, 0.9); color: #eee; border-radius: 6px; font: 12px/1.35 system-ui, sans-serif; box-shadow: 0 2px 8px rgba(0,0,0,0.45);";
 const DEBUG_KEY = "aiworld.debugPanel";
 
 export function createHud(): Hud {
+  installTheme();
   // Regions take no clicks themselves - only what is in them does.
   const style = document.createElement("style");
   style.textContent = ".hud-region { position: fixed; pointer-events: none; display: flex; gap: 8px; } .hud-region > * { pointer-events: auto; }";
@@ -78,25 +80,20 @@ export function createHud(): Hud {
 
   // The options window, in the windows region.
   const optionsRoot = document.createElement("div");
-  optionsRoot.style.cssText = `${PANEL} padding: 8px 10px; width: 300px; display: none; flex-direction: column; gap: 6px;`;
-  const optionsHead = document.createElement("div");
-  optionsHead.style.cssText = "display: flex; justify-content: space-between; font-weight: 600; font-size: 13px;";
-  optionsHead.textContent = "Options";
-  const close = document.createElement("span");
-  close.textContent = "×";
-  close.style.cssText = "cursor: pointer; color: #aaa;";
-  optionsHead.appendChild(close);
+  optionsRoot.style.cssText = `${PANEL} padding: 8px 10px; width: 300px; display: none; flex-direction: column; gap: 4px;`;
+  windowHead(optionsRoot, "Options", () => (hud.optionsVisible = false));
   const heading = (text: string): void => {
     const h = document.createElement("div");
-    h.style.cssText = "color: #ffd27a; font-weight: 600; margin-top: 4px;";
+    h.style.cssText = HEADING;
     h.textContent = text;
     optionsRoot.appendChild(h);
   };
-  optionsRoot.appendChild(optionsHead);
   heading("Sound");
   const sound = section(optionsRoot);
   heading("Graphics");
   const graphics = section(optionsRoot);
+  sound.classList.add("game-options-section");
+  graphics.classList.add("game-options-section");
   windows.appendChild(optionsRoot);
 
   /** Open windows, in the order they were opened: when they do not fit side by side, the one open
@@ -169,7 +166,6 @@ export function createHud(): Hud {
     // No storage: the panel starts hidden.
   }
   debugRoot.style.display = debugVisible ? "flex" : "none";
-  close.addEventListener("click", () => (hud.optionsVisible = false));
 
   const hud: Hud = {
     frames,

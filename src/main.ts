@@ -42,6 +42,7 @@ import { createProgressPanel } from "./ui/progressPanel";
 import { createRuleBook } from "./ui/ruleBook";
 import { createMenuBar } from "./ui/menuBar";
 import { createHud, dock } from "./ui/hud";
+import { GOLD, QUIET_PANEL, TITLE_FONT } from "./ui/theme";
 import { createHealthBars, type HealthBars } from "./game/healthBars";
 import { nextEnemy } from "./game/targeting";
 import { EVENT_KIND } from "./sim/skills/events";
@@ -222,6 +223,8 @@ const settings: ViewSettings = { drawDistance: DEFAULT_DRAW_DISTANCE, trees: tru
 const hud = createHud();
 const zoneLabel = createZoneLabel();
 dock(zoneLabel.element, hud.info);
+// The zone name is the player's, not a debug readout: the game's look (ui/theme.ts).
+zoneLabel.element.style.cssText = `${QUIET_PANEL} padding: 4px 10px; font: 600 13px/1.3 ${TITLE_FONT}; color: ${GOLD}; letter-spacing: 0.03em; text-shadow: 0 1px 2px #000; white-space: nowrap;`;
 const positionPanel = createPositionPanel((v) => view?.gotoView(v));
 dock(positionPanel.element, hud.debug.position);
 // Music for wherever the player is - see MUSIC.md. It starts with the first click or key press.

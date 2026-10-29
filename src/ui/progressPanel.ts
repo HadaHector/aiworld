@@ -1,3 +1,4 @@
+import { BAR_COLOURS, BAR_TEXT, BAR_TRACK, BUTTON_CLASS, DIM, GOLD, HEADING, PANEL, barFill, windowHead } from "./theme";
 import type { GameRules } from "../sim/rules/gameRules";
 import type { ProgressionRules, UnlockModifier } from "../sim/rules/progressionRules";
 import { formatMoney, type ItemRules } from "../sim/rules/itemRules";
@@ -33,8 +34,8 @@ export interface ProgressPanelOptions {
   openBook: (key: string) => void;
 }
 
-const PANEL = "background: rgba(18, 20, 24, 0.92); color: #eee; border-radius: 6px; font: 12px/1.35 system-ui, sans-serif; box-shadow: 0 2px 8px rgba(0,0,0,0.45);";
-const BUTTON = "font: inherit; font-size: 11px; padding: 1px 6px; margin-left: 4px; cursor: pointer; background: #333; color: #eee; border: 1px solid #555; border-radius: 3px;";
+/** A small button's own spacing; its look is the theme's (every button here gets its class). */
+const BUTTON = "margin-left: 4px; padding: 2px 6px; font-size: 10px;";
 
 const REFUSALS: Record<string, string> = {
   known: "You already know that.",
@@ -57,6 +58,7 @@ const REFUSALS: Record<string, string> = {
 function el(tag: string, css: string, parent?: HTMLElement, text?: string): HTMLElement {
   const e = document.createElement(tag);
   e.style.cssText = css;
+  if (tag === "button") e.className = BUTTON_CLASS;
   if (text !== undefined) e.textContent = text;
   parent?.appendChild(e);
   return e;
@@ -74,15 +76,20 @@ export function modifierText(game: GameRules, m: UnlockModifier, variable: strin
 export function createProgressPanel(options: ProgressPanelOptions): ProgressPanel {
   const { game, rules, items, progress, entities, send, openBook } = options;
   const index = indexRules(game, rules, items);
-  const LINK = "color: #9fc7ff; cursor: pointer;";
+  const LINK = "";
   /** A name that opens the rule book at its page. */
   const bookLink = (parent: HTMLElement, text: string, key: string, css = ""): HTMLElement => {
     const e = el("span", `${LINK} ${css}`, parent, text);
+    e.className = "game-link";
     e.addEventListener("click", () => openBook(key));
     return e;
   };
   const ownStats = (): ReadonlyMap<number, number> => entities.entities.get(options.ownId())?.stats ?? new Map();
   const root = el("div", `position: fixed; right: 16px; top: 60px; width: 380px; max-height: 100%; overflow-y: auto; box-sizing: border-box; padding: 8px 10px; z-index: 960; display: none; ${PANEL}`, document.body);
+  const { head } = windowHead(root, "Progression", () => toggle());
+  const book = el("button", "margin-left: auto; padding: 3px 8px;", undefined, "Rule book (K)");
+  book.addEventListener("click", () => openBook(""));
+  head.insertBefore(book, head.lastChild);
   const body = el("div", "", root);
   const log = el("div", "margin-top: 8px; border-top: 1px solid #444; padding-top: 4px; font-size: 11px; color: #bbb;", root);
   let visible = false;
@@ -108,7 +115,7 @@ export function createProgressPanel(options: ProgressPanelOptions): ProgressPane
   }
 
   function section(title: string): HTMLElement {
-    el("div", "font-weight: 600; margin: 8px 0 3px; color: #ffd27a;", body, title);
+    el("div", HEADING, body, title);
     return el("div", "", body);
   }
 
@@ -119,10 +126,7 @@ export function createProgressPanel(options: ProgressPanelOptions): ProgressPane
       body.textContent = "No progress yet.";
       return;
     }
-    const top = el("div", "display: flex; align-items: center;", body);
-    el("div", "font-weight: 600; font-size: 14px; flex: 1;", top, "Progression");
-    el("button", BUTTON, top, "Rule book (K)").addEventListener("click", () => openBook(""));
-    el("div", "color: #bbb;", body, rules.config.slots.map((slot, i) => `${slot.id}: ${rules.origins[p.origins[i]]?.name ?? "-"}`).join(" · "));
+    el("div", `color: ${DIM}; text-transform: capitalize;`, body, rules.config.slots.map((slot, i) => `${slot.id}: ${rules.origins[p.origins[i]]?.name ?? "-"}`).join(" · "));
 
     // Disciplines, by group.
     const groups = new Map<string, typeof p.disciplines>();
@@ -144,9 +148,9 @@ export function createProgressPanel(options: ProgressPanelOptions): ProgressPane
         const hint = [what.length ? `Used by: ${what.join(", ")}` : "", gives ? `Its levels give ${gives} thing${gives > 1 ? "s" : ""}` : "", what.length || gives ? "" : "Nothing reads it yet"];
         bookLink(name, def.name, `disc:${def.id}`).title = [...hint.filter(Boolean), "Click for what it does and how it rises"].join("\n");
         el("div", "width: 54px; color: #ccc;", row, `${d.level} / ${d.cap}`);
-        const bar = el("div", "position: relative; flex: 1; height: 12px; background: #2a2a2a; border-radius: 3px; overflow: hidden;", row);
-        el("div", `position: absolute; left: 0; top: 0; bottom: 0; width: ${Math.min(100, (100 * d.xp) / d.next)}%; background: ${d.level >= d.cap ? "#7a6a3a" : "#8a5ad8"};`, bar);
-        el("div", "position: absolute; inset: 0; text-align: center; font-size: 10px; line-height: 12px; text-shadow: 0 1px 1px #000;", bar, d.level >= d.cap ? `at cap${d.banked > 0 ? ` (${Math.floor(d.banked)} banked)` : ""}` : `${Math.floor(d.xp)} / ${Math.ceil(d.next)}`);
+        const bar = el("div", `${BAR_TRACK} flex: 1; height: 12px;`, row);
+        el("div", `${barFill(d.level >= d.cap ? "#8a6d3b" : BAR_COLOURS.xp)} width: ${d.level >= d.cap ? 100 : Math.min(100, (100 * d.xp) / d.next)}%;`, bar);
+        el("div", `${BAR_TEXT} font-size: 9px; line-height: 12px;`, bar, d.level >= d.cap ? `at cap${d.banked > 0 ? ` (${Math.floor(d.banked)} banked)` : ""}` : `${Math.floor(d.xp)} / ${Math.ceil(d.next)}`);
         const xp = el("button", BUTTON, row, "+XP");
         xp.title = "Debug: a quarter of a level's XP";
         xp.addEventListener("click", () => send({ type: "debugXp", discipline: d.discipline, amount: Math.ceil(d.next / 4) }));
@@ -178,7 +182,7 @@ export function createProgressPanel(options: ProgressPanelOptions): ProgressPane
       let spent = 0;
       for (const [node, rank] of ranks) spent += rank * tree.nodes[node].cost;
       const head = el("div", "display: flex; align-items: center; margin-top: 6px;", points);
-      el("div", "font-weight: 600; flex: 1;", head, `${tree.name} (${tree.points}, ${spent} spent)`);
+      el("div", `flex: 1; font-weight: 600; color: ${GOLD};`, head, `${tree.name} (${tree.points}, ${spent} spent)`);
       const reset = el("button", BUTTON, head, "Reset");
       reset.addEventListener("click", () => send({ type: "talentReset", tree: treeIndex }));
       const disciplineLevel = tree.discipline >= 0 ? (p.disciplines.find((d) => d.discipline === tree.discipline)?.level ?? 0) : Infinity;
@@ -189,7 +193,7 @@ export function createProgressPanel(options: ProgressPanelOptions): ProgressPane
         el("div", "width: 100%; font-size: 10px; color: #999;", row, `Tier ${t + 1}${needs ? ` - ${needs}` : ""}`);
         for (const node of tree.nodes.filter((n) => n.tier === t)) {
           const rank = ranks.get(node.index) ?? 0;
-          const button = el("button", `${BUTTON} margin: 0; ${rank > 0 ? "border-color: #c9a040; color: #ffd27a;" : ""}`, row, `${node.name} ${rank}/${node.ranks}`);
+          const button = el("button", `${BUTTON} margin: 0; ${rank > 0 ? `border-color: ${GOLD}; color: ${GOLD}; box-shadow: 0 0 0 1px #000, 0 0 6px rgba(240, 201, 121, 0.4);` : ""}`, row, `${node.name} ${rank}/${node.ranks}`);
           const gives = [...node.modifiers.map((m) => modifierText(game, m, "rank")), node.skill >= 0 ? `teaches ${skillName(node.skill)}` : "", node.requires.length ? `needs ${node.requires.map((r) => tree.nodes[r].name).join(", ")}` : ""].filter(Boolean);
           const yours = [...new Set(node.modifiers.map((m) => m.stat))].map((s) => `your ${game.stats[s].name}: ${Math.round((stats.get(s) ?? 0) * 100) / 100}`);
           button.title = `${gives.join("\n")}\ncosts ${node.cost} ${tree.points} a rank${yours.length ? `\n(${yours.join(", ")})` : ""}`;
@@ -247,19 +251,21 @@ export function createProgressPanel(options: ProgressPanelOptions): ProgressPane
     if (visible && trainerInReach() !== trainer) draw();
   }, 500);
 
+  function toggle(): void {
+    visible = !visible;
+    root.style.display = visible ? "block" : "none";
+    if (visible) {
+      draw();
+      drawLog();
+    }
+  }
+
   return {
     element: root,
     get visible() {
       return visible;
     },
-    toggle() {
-      visible = !visible;
-      root.style.display = visible ? "block" : "none";
-      if (visible) {
-        draw();
-        drawLog();
-      }
-    },
+    toggle,
     dispose() {
       clearInterval(timer);
       root.remove();

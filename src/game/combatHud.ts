@@ -1,4 +1,5 @@
 import type { EntityMirror, MirroredEntity } from "./entityMirror";
+import { BAR_COLOURS, BAR_TEXT, BAR_TRACK, BUTTON_CLASS, GOLD, PANEL, QUIET_PANEL, SLOT, SLOT_CLASS, TITLE_FONT, barFill } from "../ui/theme";
 import { PLAYER_TEMPLATE, type GameRules } from "../sim/rules/gameRules";
 import type { CombatEvent } from "../sim/protocol";
 import { describeEvent } from "../sim/skills/combatLog";
@@ -38,7 +39,7 @@ export interface CombatHudOptions {
 }
 
 const LOG_LINES = 14;
-const RESOURCE_COLOURS: Record<string, string> = { health: "#3fb04a", mana: "#3a6fd8", rage: "#c43b2e" };
+const barColour = (id: string): string => BAR_COLOURS[id] ?? "#7a7a7a";
 
 function el(tag: string, css: string, parent?: HTMLElement): HTMLElement {
   const e = document.createElement(tag);
@@ -52,7 +53,7 @@ function text(e: HTMLElement, value: string): void {
   if (e.textContent !== value) e.textContent = value;
 }
 
-const PANEL = "background: rgba(18, 20, 24, 0.82); color: #eee; border-radius: 6px; font: 12px/1.35 system-ui, sans-serif; box-shadow: 0 2px 8px rgba(0,0,0,0.4);";
+const NAME = `font: 600 13px/1.2 ${TITLE_FONT}; color: ${GOLD}; letter-spacing: 0.02em; text-shadow: 0 1px 2px #000;`;
 
 interface Frame {
   root: HTMLElement;
@@ -67,15 +68,15 @@ interface Frame {
 }
 
 function makeFrame(parent: HTMLElement): Frame {
-  const root = el("div", `width: 250px; padding: 6px 8px; display: none; box-sizing: border-box; ${PANEL}`, parent);
-  const name = el("div", "font-weight: 600; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;", root);
+  const root = el("div", `width: 250px; padding: 7px 9px; display: none; box-sizing: border-box; ${PANEL}`, parent);
+  const name = el("div", `${NAME} margin-bottom: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;`, root);
   const bars = el("div", "", root);
-  const cast = el("div", "position: relative; height: 14px; margin-top: 4px; background: #333; border-radius: 3px; overflow: hidden; display: none;", root);
-  const castFill = el("div", "position: absolute; left: 0; top: 0; bottom: 0; background: #d8a630;", cast);
-  const castText = el("div", "position: absolute; inset: 0; text-align: center; font-size: 11px; line-height: 14px; color: #fff; text-shadow: 0 1px 1px #000;", cast);
-  const auras = el("div", "display: flex; flex-wrap: wrap; gap: 3px; margin-top: 4px;", root);
-  const xp = el("div", "position: relative; height: 5px; margin-top: 3px; background: #2a2a2a; border-radius: 2px; overflow: hidden; display: none;", root);
-  const xpFill = el("div", "position: absolute; left: 0; top: 0; bottom: 0; background: #8a5ad8; transition: width 0.3s;", xp);
+  const cast = el("div", `${BAR_TRACK} height: 14px; margin-top: 5px; display: none;`, root);
+  const castFill = el("div", barFill(BAR_COLOURS.cast), cast);
+  const castText = el("div", `${BAR_TEXT} font-size: 10px; line-height: 14px;`, cast);
+  const auras = el("div", "display: flex; flex-wrap: wrap; gap: 3px; margin-top: 5px;", root);
+  const xp = el("div", `${BAR_TRACK} height: 5px; margin-top: 4px; display: none;`, root);
+  const xpFill = el("div", `${barFill(BAR_COLOURS.xp)} transition: width 0.3s;`, xp);
   return { root, name, bars, cast, castFill, castText, auras, xp, xpFill };
 }
 
@@ -86,27 +87,28 @@ export function createCombatHud(options: CombatHudOptions): CombatHud {
   const targetFrame = makeFrame(regions.frames);
 
   // The own cast bar, above the spell bar.
-  const castBar = el("div", `position: relative; width: 280px; height: 18px; display: none; ${PANEL} background: #222; overflow: hidden;`, regions.actions);
-  const castFill = el("div", "position: absolute; left: 0; top: 0; bottom: 0; background: #d8a630;", castBar);
-  const castText = el("div", "position: absolute; inset: 0; text-align: center; font-size: 12px; line-height: 18px; color: #fff; text-shadow: 0 1px 1px #000;", castBar);
+  const castBar = el("div", `${BAR_TRACK} width: 280px; height: 18px; display: none; margin-bottom: 6px;`, regions.actions);
+  const castFill = el("div", barFill(BAR_COLOURS.cast), castBar);
+  const castText = el("div", `${BAR_TEXT} font-size: 11px; line-height: 18px;`, castBar);
 
   // The spell bar.
   const bar = el("div", "display: flex; gap: 4px;", regions.actions);
   // The XP bar under it (PROGRESSION.md): the character level's progress, as wide as the spell bar.
-  const xpBar = el("div", `position: relative; width: 280px; height: 12px; display: none; ${PANEL} background: #1c1a22; overflow: hidden;`, regions.actions);
-  const xpBarFill = el("div", "position: absolute; left: 0; top: 0; bottom: 0; background: linear-gradient(#a27ae8, #6a3fc0); transition: width 0.3s;", xpBar);
-  const xpBarText = el("div", "position: absolute; inset: 0; text-align: center; font-size: 9px; line-height: 12px; color: #fff; text-shadow: 0 1px 1px #000;", xpBar);
+  const xpBar = el("div", `${BAR_TRACK} width: 280px; height: 12px; display: none;`, regions.actions);
+  const xpBarFill = el("div", `${barFill(BAR_COLOURS.xp)} transition: width 0.3s;`, xpBar);
+  const xpBarText = el("div", `${BAR_TEXT} font-size: 9px; line-height: 12px; font-weight: 600;`, xpBar);
   const slots: { root: HTMLElement; cool: HTMLElement; label: HTMLElement; skill: number }[] = [];
   let slotWidth = 64;
 
   // The combat log.
-  const logBox = el("div", `width: 100%; box-sizing: border-box; padding: 6px 8px; ${PANEL} font-size: 11px; white-space: pre-wrap; overflow: hidden;`, regions.log);
+  const logBox = el("div", `width: 100%; box-sizing: border-box; padding: 6px 8px; ${QUIET_PANEL} white-space: pre-wrap; overflow: hidden; color: #d8ceb6;`, regions.log);
   const logLines: string[] = [];
 
   // Dead: a button to come back.
-  const deadBox = el("div", `position: fixed; left: 50%; top: 35%; transform: translateX(-50%); padding: 12px 18px; z-index: 950; display: none; text-align: center; ${PANEL}`, document.body);
-  el("div", "font-size: 16px; font-weight: 600; margin-bottom: 8px;", deadBox).textContent = "You have died.";
-  const respawn = el("button", "font: inherit; padding: 4px 12px; cursor: pointer;", deadBox);
+  const deadBox = el("div", `position: fixed; left: 50%; top: 35%; transform: translateX(-50%); padding: 14px 24px; z-index: 950; display: none; text-align: center; ${PANEL}`, document.body);
+  el("div", `font: 600 20px/1.3 ${TITLE_FONT}; color: #e06a5a; letter-spacing: 0.04em; text-shadow: 0 1px 3px #000; margin-bottom: 10px;`, deadBox).textContent = "You have died.";
+  const respawn = el("button", "font-size: 12px; padding: 5px 16px;", deadBox);
+  respawn.className = BUTTON_CLASS;
   respawn.textContent = "Respawn";
   respawn.addEventListener("click", () => options.onRespawn());
 
@@ -126,9 +128,9 @@ export function createCombatHud(options: CombatHudOptions): CombatHud {
     for (const [index, value] of entity.resources) {
       const def = rules.resources[index];
       if (!def || value.max <= 0) continue;
-      const row = el("div", "position: relative; height: 14px; margin: 2px 0; background: #2a2a2a; border-radius: 3px; overflow: hidden;", frame.bars);
-      el("div", `position: absolute; left: 0; top: 0; bottom: 0; width: ${(100 * value.current) / value.max}%; background: ${RESOURCE_COLOURS[def.id] ?? "#888"};`, row);
-      el("div", "position: absolute; inset: 0; text-align: center; font-size: 11px; line-height: 14px; text-shadow: 0 1px 1px #000;", row).textContent = `${def.name} ${Math.round(value.current)} / ${Math.round(value.max)}`;
+      const row = el("div", `${BAR_TRACK} height: 15px; margin: 3px 0;`, frame.bars);
+      el("div", `${barFill(barColour(def.id))} width: ${(100 * value.current) / value.max}%;`, row);
+      el("div", `${BAR_TEXT} font-size: 10px; line-height: 15px;`, row).textContent = `${def.name} ${Math.round(value.current)} / ${Math.round(value.max)}`;
     }
   }
 
@@ -142,7 +144,7 @@ export function createCombatHud(options: CombatHudOptions): CombatHud {
     const flags = FLAG_NAMES.filter((_, i) => entity.flags & (1 << i) && i < 8);
     const hostile = target && entity.template?.hostility === "hostile";
     const neutral = target && entity.template?.hostility === "neutral" && entity.templateId !== PLAYER_TEMPLATE;
-    frame.name.style.color = hostile ? "#ff8a7a" : neutral ? "#ffe27a" : "#eee";
+    frame.name.style.color = hostile ? "#ff8a7a" : neutral ? "#ffe27a" : GOLD;
     text(frame.name, `${entity.name}${level !== undefined ? ` · level ${level}` : ""}${flags.length ? ` · ${flags.join(", ")}` : ""}`);
     drawBars(frame, entity);
     // Cast bar.
@@ -163,7 +165,7 @@ export function createCombatHud(options: CombatHudOptions): CombatHud {
       frame.auras.dataset.sig = signature;
       frame.auras.innerHTML = "";
       for (const chip of chips) {
-        el("span", `padding: 1px 5px; border-radius: 3px; font-size: 10px; background: ${chip.debuff ? "#6b2320" : "#1f4d6b"};`, frame.auras).textContent = chip.label;
+        el("span", `padding: 1px 6px; border-radius: 3px; font-size: 10px; border: 1px solid ${chip.debuff ? "#b0453a" : "#4a86b0"}; background: ${chip.debuff ? "linear-gradient(#6b2320, #3e1210)" : "linear-gradient(#1f4d6b, #102a3e)"}; box-shadow: 0 0 0 1px #000;`, frame.auras).textContent = chip.label;
       }
     }
   }
@@ -174,11 +176,12 @@ export function createCombatHud(options: CombatHudOptions): CombatHud {
       bar.innerHTML = "";
       slots.length = 0;
       skills.forEach((skill, i) => {
-        const root = el("div", `position: relative; width: ${slotWidth}px; height: 46px; ${PANEL} cursor: pointer; overflow: hidden; text-align: center;`, bar);
-        el("div", "position: absolute; left: 4px; top: 2px; font-size: 10px; color: #aaa;", root).textContent = String(i + 1);
-        const label = el("div", "position: absolute; left: 2px; right: 2px; top: 14px; font-size: 10px; line-height: 1.15;", root);
+        const root = el("div", `position: relative; width: ${slotWidth}px; height: 48px; ${SLOT} cursor: pointer; overflow: hidden; text-align: center; font: 11px/1.2 system-ui, sans-serif;`, bar);
+        root.className = SLOT_CLASS;
+        el("div", `position: absolute; left: 4px; top: 2px; font: 700 10px/1 system-ui, sans-serif; color: ${GOLD}; text-shadow: 0 1px 1px #000;`, root).textContent = String(i + 1);
+        const label = el("div", "position: absolute; left: 3px; right: 3px; top: 15px; font-size: 10px; line-height: 1.15; text-shadow: 0 1px 2px #000;", root);
         label.textContent = rules.skills[skill]?.name ?? "?";
-        const cool = el("div", "position: absolute; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.6); font-size: 11px; line-height: 46px;", root);
+        const cool = el("div", `position: absolute; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.66); font: 700 15px/48px system-ui, sans-serif; color: ${GOLD}; text-shadow: 0 1px 2px #000;`, root);
         root.addEventListener("click", () => options.onKey(skill));
         slots.push({ root, cool, label, skill });
       });

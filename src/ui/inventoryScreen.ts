@@ -1,3 +1,4 @@
+import { BUTTON_CLASS, DIM, GOLD, HEADING, PANEL, SLOT, SLOT_CLASS, windowHead } from "./theme";
 import type { GameRules } from "../sim/rules/gameRules";
 import { formatMoney, itemStats, rollQuality, type ItemRules } from "../sim/rules/itemRules";
 import type { ClientMessage, ItemState } from "../sim/protocol";
@@ -26,7 +27,8 @@ export interface InventoryScreen {
   dispose: () => void;
 }
 
-const PANEL = "background: rgba(18, 20, 24, 0.9); color: #eee; border-radius: 6px; font: 12px/1.35 system-ui, sans-serif; box-shadow: 0 2px 8px rgba(0,0,0,0.45);";
+/** An empty cell: the slot's dark inset square, a little smaller. */
+const CELL_STYLE = `${SLOT} border-color: #4d3f26;`;
 const CELL = 38;
 
 const REFUSAL_TEXT: Record<string, string> = {
@@ -83,8 +85,8 @@ export function itemTooltip(game: GameRules, items: ItemRules, state: ItemState)
 export function drawItem(cell: HTMLElement, items: ItemRules, state: ItemState | null, label = ""): void {
   cell.innerHTML = "";
   if (!state) {
-    if (label) el("div", "position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:#555; font-size:9px; text-align:center;", cell).textContent = label;
-    cell.style.borderColor = "#333";
+    if (label) el("div", `position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:${DIM}; opacity: 0.55; font-size:9px; text-align:center;`, cell).textContent = label;
+    cell.style.borderColor = "#4d3f26";
     return;
   }
   const index = items.typeIndex.get(state.type);
@@ -105,22 +107,19 @@ export function drawItem(cell: HTMLElement, items: ItemRules, state: ItemState |
 export function createInventoryScreen({ game, items, mirror, send }: InventoryOptions): InventoryScreen {
   const root = el("div", `position: fixed; right: 16px; bottom: 120px; z-index: 950; padding: 10px; display: none; ${PANEL} user-select: none;`, document.body);
   root.addEventListener("contextmenu", (e) => e.preventDefault());
-  const title = el("div", "font-weight: 600; margin-bottom: 6px; display:flex; justify-content:space-between; gap: 12px;", root);
-  title.textContent = "Inventory";
-  const close = el("span", "cursor:pointer; color:#aaa;", title);
-  close.textContent = "×";
-  close.addEventListener("click", () => setVisible(false));
+  windowHead(root, "Inventory", () => setVisible(false));
   const columns = el("div", "display: flex; gap: 12px; align-items: flex-start;", root);
   const equipment = el("div", "display: grid; grid-template-columns: repeat(2, auto); gap: 4px;", columns);
   const right = el("div", "display:flex; flex-direction:column; gap:8px;", columns);
   const bag = el("div", `display: grid; grid-template-columns: repeat(5, ${CELL}px); gap: 4px;`, right);
   const bankBox = el("div", "display:none;", right);
-  el("div", "color:#aaa; margin: 2px 0;", bankBox).textContent = "Bank";
+  el("div", HEADING, bankBox).textContent = "Bank";
   const bank = el("div", `display: grid; grid-template-columns: repeat(8, ${CELL}px); gap: 4px;`, bankBox);
-  const repair = el("button", "margin-top:4px; font: 11px system-ui; cursor:pointer;", bankBox) as HTMLButtonElement;
+  const repair = el("button", "margin-top: 6px;", bankBox) as HTMLButtonElement;
+  repair.className = BUTTON_CLASS;
   repair.textContent = "Repair all";
   repair.addEventListener("click", () => send({ type: "itemRepair" }));
-  const money = el("div", "margin-top: 8px; color: #cb8;", root);
+  const money = el("div", `margin-top: 8px; padding-top: 6px; border-top: 1px solid #4d3f26; color: ${GOLD}; font-weight: 600;`, root);
   const message = el("div", "margin-top: 4px; min-height: 16px; color: #e88;", root);
   const tip = el("div", `position: fixed; z-index: 960; padding: 6px 8px; max-width: 240px; pointer-events: none; display: none; ${PANEL}`, document.body);
 
@@ -128,7 +127,8 @@ export function createInventoryScreen({ game, items, mirror, send }: InventoryOp
   let dropped = false;
 
   function cellFor(parent: HTMLElement, container: number, slot: number, label = ""): HTMLElement {
-    const cell = el("div", `position: relative; width: ${CELL}px; height: ${CELL}px; border: 1px solid #333; border-radius: 4px; background: #111; cursor: pointer;`, parent);
+    const cell = el("div", `position: relative; width: ${CELL}px; height: ${CELL}px; ${CELL_STYLE} cursor: pointer;`, parent);
+    cell.className = SLOT_CLASS;
     cell.draggable = true;
     cell.dataset.label = label;
     cell.addEventListener("dragstart", (e) => {
@@ -265,13 +265,10 @@ export function createInventoryScreen({ game, items, mirror, send }: InventoryOp
  */
 export function createLootWindow({ game, items, mirror, send }: InventoryOptions): { element: HTMLElement; dispose: () => void } {
   const root = el("div", `position: fixed; left: 16px; top: 330px; width: 230px; z-index: 950; padding: 8px; display: none; ${PANEL}`, document.body);
-  const head = el("div", "display:flex; justify-content:space-between; font-weight:600; margin-bottom:6px;", root);
-  const title = el("span", "", head);
-  const close = el("span", "cursor:pointer; color:#aaa;", head);
-  close.textContent = "×";
-  close.addEventListener("click", () => send({ type: "lootClose" }));
+  const { title } = windowHead(root, "Loot", () => send({ type: "lootClose" }));
   const list = el("div", "display:flex; flex-direction:column; gap:4px;", root);
-  const all = el("button", "margin-top:6px; width:100%; font: 12px system-ui; cursor:pointer;", root) as HTMLButtonElement;
+  const all = el("button", "margin-top:6px; width:100%;", root) as HTMLButtonElement;
+  all.className = BUTTON_CLASS;
   all.textContent = "Take all";
   all.addEventListener("click", () => send({ type: "lootTake", slot: TAKE_ALL }));
   const tip = el("div", `position: fixed; z-index: 960; padding: 6px 8px; max-width: 240px; pointer-events: none; display: none; ${PANEL}`, document.body);
@@ -286,11 +283,11 @@ export function createLootWindow({ game, items, mirror, send }: InventoryOptions
     title.textContent = "Loot";
     list.innerHTML = "";
     const coins = loot.money.map((n, c) => (n > 0 ? formatMoney(items.currencies[c], n) + (c === items.main ? "" : ` ${items.currencies[c].name}`) : "")).filter(Boolean);
-    if (coins.length > 0) el("div", "color:#cb8; padding: 2px 0;", list).textContent = coins.join(", ");
+    if (coins.length > 0) el("div", `color:${GOLD}; font-weight: 600; padding: 2px 0;`, list).textContent = coins.join(", ");
     loot.items.forEach((state, slot) => {
       if (!state) return;
       const row = el("div", "display:flex; align-items:center; gap:6px; cursor:pointer;", list);
-      const cell = el("div", `position: relative; width: ${CELL - 6}px; height: ${CELL - 6}px; border: 1px solid #333; border-radius: 4px; background:#111; flex: none;`, row);
+      const cell = el("div", `position: relative; width: ${CELL - 6}px; height: ${CELL - 6}px; ${CELL_STYLE} flex: none;`, row);
       drawItem(cell, items, state);
       const type = items.types[items.typeIndex.get(state.type) ?? -1];
       const name = el("div", `color:${type ? items.rarities[type.rarity].color : "#f0f"};`, row);

@@ -1,3 +1,5 @@
+import { BRONZE, GOLD, PANEL, SLOT, SLOT_CLASS, TEXT } from "./theme";
+
 /**
  * A row of icon buttons for the screens that otherwise open only from a key: each shows its key, a
  * tooltip, and lights up while its screen is open. Game screens first, then a smaller debug group.
@@ -35,18 +37,17 @@ const ICONS = {
   textures: '<rect x="3.5" y="3.5" width="5" height="5"/><rect x="11.5" y="3.5" width="5" height="5"/><rect x="3.5" y="11.5" width="5" height="5"/><rect x="11.5" y="11.5" width="5" height="5"/>',
 } as const;
 
-const PANEL = "background: rgba(18, 20, 24, 0.82); border-radius: 6px; box-shadow: 0 2px 8px rgba(0,0,0,0.4);";
 
 export function createMenuBar(entries: MenuEntry[]): MenuBar {
   const root = document.createElement("div");
-  root.style.cssText = `position: fixed; right: 16px; bottom: 56px; z-index: 900; display: flex; gap: 4px; padding: 4px; align-items: flex-end; ${PANEL}`;
+  root.style.cssText = `position: fixed; right: 16px; bottom: 56px; z-index: 900; ${PANEL} display: flex; gap: 4px; padding: 5px; align-items: flex-end;`;
   document.body.appendChild(root);
   const buttons: { button: HTMLButtonElement; entry: MenuEntry }[] = [];
   let lastDebug = false;
   for (const entry of entries) {
     if (entry.debug && !lastDebug && buttons.length) {
       const gap = document.createElement("div");
-      gap.style.cssText = "width: 1px; align-self: stretch; margin: 2px 3px; background: #444;";
+      gap.style.cssText = `width: 1px; align-self: stretch; margin: 2px 3px; background: ${BRONZE};`;
       gap.dataset.gap = "1";
       root.appendChild(gap);
     }
@@ -54,19 +55,18 @@ export function createMenuBar(entries: MenuEntry[]): MenuBar {
     const size = entry.debug ? 28 : 36;
     const button = document.createElement("button");
     button.title = `${entry.label} (${entry.key})`;
-    button.style.cssText = `position: relative; width: ${size}px; height: ${size}px; padding: 0; border: 1px solid #444; border-radius: 5px;
-      background: #24272d; color: #d8d8d8; cursor: pointer; display: flex; align-items: center; justify-content: center;`;
+    button.style.cssText = `position: relative; width: ${size}px; height: ${size}px; padding: 0; ${SLOT}
+      cursor: pointer; display: flex; align-items: center; justify-content: center;`;
+    button.className = SLOT_CLASS;
     const icon = Math.round(size * 0.6);
     button.innerHTML = `<svg width="${icon}" height="${icon}" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">${ICONS[entry.icon]}</svg>
-      <span style="position: absolute; right: 2px; bottom: 0; font: 600 9px/1 system-ui, sans-serif; color: #999;">${entry.key}</span>`;
+      <span style="position: absolute; right: 2px; bottom: 1px; font: 700 9px/1 system-ui, sans-serif; color: ${GOLD}; text-shadow: 0 1px 1px #000;">${entry.key}</span>`;
     // Clicking must not leave focus on the button, or the next key press would go to it.
     button.addEventListener("mousedown", (e) => e.preventDefault());
     button.addEventListener("click", () => {
       entry.toggle();
       refresh();
     });
-    button.addEventListener("mouseenter", () => (button.style.borderColor = "#888"));
-    button.addEventListener("mouseleave", () => refresh());
     root.appendChild(button);
     buttons.push({ button, entry });
   }
@@ -75,9 +75,10 @@ export function createMenuBar(entries: MenuEntry[]): MenuBar {
   function refresh(): void {
     for (const { button, entry } of buttons) {
       const open = entry.open?.() ?? false;
-      button.style.borderColor = open ? "#c9a040" : "#444";
-      button.style.color = open ? "#ffd27a" : "#d8d8d8";
-      button.style.background = open ? "#33302a" : "#24272d";
+      // Lit: gold, glowing. Not lit: the slot's own look (its hover comes from the stylesheet).
+      button.style.borderColor = open ? GOLD : "";
+      button.style.color = open ? GOLD : TEXT;
+      button.style.boxShadow = open ? "0 0 0 1px #000, 0 0 8px rgba(240, 201, 121, 0.55), inset 0 0 10px rgba(240, 201, 121, 0.18)" : "";
     }
   }
   const timer = setInterval(refresh, 250);
