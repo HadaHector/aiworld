@@ -1,0 +1,10 @@
+// A wolf turning on someone: a snarl that breaks into a short bark.
+{
+  near: 5, far: 50, maxVoices: 3, pitch: [-2, 2], volume: [0.85, 1], takes: 4,
+  layers: [
+    { synth: { tone: "saw", hz: [130, 180], env: { attack: 0.04, hold: 0.2, decay: 0.15 }, gain: 0.14, filter: { type: "bandpass", hz: 700, q: 2 }, tremolo: { rate: 32, depth: 0.7 }, crush: { bits: 8, rate: 2 } }, standIn: true },
+    { synth: { noise: "pink", filter: { type: "bandpass", hz: 900, q: 2.5 }, env: { attack: 0.04, hold: 0.2, decay: 0.15 }, gain: 0.8, tremolo: { rate: 32, depth: 0.6 }, crush: { bits: 8, rate: 2 } }, standIn: true },
+    { synth: { tone: "saw", hz: [700, 420], env: { attack: 0.005, decay: 0.12 }, gain: 0.16, delay: 0.36, filter: { type: "bandpass", hz: 1100, q: 2 }, crush: { bits: 8, rate: 2 } }, standIn: true },
+    { synth: { noise: "white", filter: { type: "bandpass", hz: 1400, q: 2 }, env: { attack: 0.003, decay: 0.08 }, gain: 0.6, delay: 0.36, crush: { bits: 8, rate: 2 } }, standIn: true },
+  ],
+}

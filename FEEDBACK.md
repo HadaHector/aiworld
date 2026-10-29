@@ -10,9 +10,7 @@ fireball roars in the caster's hands, flies, and bursts on its target, a crit sh
 and pauses for an instant, deaths thud, and loot glints and chimes. A dev page plays every cue,
 sound and particle effect on its own, so it can be tuned.
 
-**Status: steps 1-6 of 7 done** (rules and content; sound in the game; particles; abilities; hit
-feel; loot, UI, progression and footsteps). [As built](#as-built) notes where the
-build differs from this plan.
+**Status: done** (steps 1-7). [As built](#as-built) notes where the build differs from this plan.
 
 ## Decisions
 
@@ -657,6 +655,24 @@ Each leaves the game working: dev server, `npm run probe`, `npm run server`, `np
   `learned`; no console errors. The E key did not reach the page while driven this way, so loot was
   opened through `__aiworld.items.loot()`. The probe gained the client events and surfaces (1339
   checks).
+- **Step 7: wrap-up.** The probe's last part fights ABILITIES.md's fight on a real `tiny` server -
+  the fight bot's rotation on the dummy for 60 s - and feeds its whole combat log to a cue player,
+  on the server's clock: every hit, miss, heal, cast start and aura finds feedback; the only silent
+  events are the ones meant to be (Weakened Soul, which only keeps a rule; stacks counted; auras and
+  casts ending; a physical instant going off, which its swing and hit carry). 1311 checks, about
+  15 s. `public/packs/README.md` lists the new folders and has a section on them; ABILITIES.md's
+  `effect` action and *Not in this step* point here; CHARACTERS.md's animation has the flinch and
+  the steps; GAMEPLAY.md's feedback step is marked done.
+- **Aggro and creatures' swings** (asked for after step 7): a creature - a unit with a threat table
+  that can die, so not players and not the dummy - turning on someone (its replicated target going
+  from nobody to a unit) plays the client event `aggro`, at most once in 4 s, with its own family in
+  the placeholder: core's wolf snarls into a bark, the spider hisses and chitters, the boar squeals,
+  bandits shout, anything else growls. The swing cue became `swing.{weapon}`, so a bite snaps with a
+  growl (`swing.fang`) and a tusk huffs (`swing.tusk`) where a blade keeps the whoosh. Checked by the
+  probe (1459 checks); not yet heard in the game.
+- **Left for later**, beside *Not in this step*: water underfoot (the world has to say where its sea
+  is); recorded samples (the format and the stand-ins are ready, no sample set is chosen); creature
+  voices beyond deaths; and the alpha particles' `light`, which day and night could set.
 
 ## Not in this step
 

@@ -1,0 +1,2 @@
+// A creature turning on someone: its family's call, from its head.
+{ parts: [{ sound: "aggro.{family}", at: "source", bone: "head" }] }

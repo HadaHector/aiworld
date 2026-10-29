@@ -1,0 +1,8 @@
+// A bite going in: jaws snapping, with a growl under them.
+{
+  near: 3, far: 35, maxVoices: 6, pitch: [-2, 2], volume: [0.8, 0.95], takes: 6,
+  layers: [
+    { synth: { noise: "brown", filter: { type: "bandpass", hz: 450, q: 2 }, env: { attack: 0.02, decay: 0.15 }, gain: 1.2, tremolo: { rate: 30, depth: 0.6 }, crush: { bits: 8, rate: 2 } }, standIn: true },
+    { synth: { noise: "white", filter: { type: "bandpass", hz: 2200, q: 2 }, env: { attack: 0.001, decay: 0.03, curve: 3 }, gain: 0.8, delay: 0.1, crush: { bits: 8, rate: 2 } }, standIn: true },
+  ],
+}

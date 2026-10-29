@@ -1,0 +1,8 @@
+// A spider turning on someone: a dry hiss and a rattle of chitter.
+{
+  near: 5, far: 40, maxVoices: 3, pitch: [-2, 2], volume: [0.8, 0.95], takes: 3,
+  layers: [
+    { synth: { noise: "white", filter: { type: "highpass", hz: [3000, 5000] }, env: { attack: 0.03, hold: 0.15, decay: 0.3 }, gain: 0.6, crush: { bits: 8, rate: 2 } }, standIn: true },
+    { synth: { crackle: true, density: 90, click: 0.004, filter: { type: "bandpass", hz: 2500, q: 2 }, env: { attack: 0.02, decay: 0.45 }, gain: 0.9, delay: 0.05, crush: { bits: 8, rate: 2 } }, standIn: true },
+  ],
+}

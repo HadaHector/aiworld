@@ -1,0 +1,9 @@
+// A bandit turning on someone: a short gruff shout.
+{
+  near: 5, far: 50, maxVoices: 3, pitch: [-2, 2], volume: [0.85, 1], takes: 4,
+  layers: [
+    { synth: { tone: "saw", hz: [170, 230], env: { attack: 0.02, hold: 0.15, decay: 0.12 }, gain: 0.16, filter: { type: "bandpass", hz: [600, 900], q: 3 }, crush: { bits: 8, rate: 2 } }, standIn: true },
+    { synth: { tone: "saw", hz: [170, 230], env: { attack: 0.02, hold: 0.15, decay: 0.12 }, gain: 0.1, filter: { type: "bandpass", hz: [1100, 1500], q: 4 }, crush: { bits: 8, rate: 2 } }, standIn: true },
+    { synth: { noise: "pink", filter: { type: "bandpass", hz: 1800, q: 3 }, env: { attack: 0.01, decay: 0.08 }, gain: 0.3, crush: { bits: 8, rate: 2 } }, standIn: true },
+  ],
+}

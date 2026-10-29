@@ -1,0 +1,8 @@
+// A boar turning on someone: a squealing grunt and a snort.
+{
+  near: 5, far: 45, maxVoices: 3, pitch: [-2, 2], volume: [0.85, 1], takes: 3,
+  layers: [
+    { synth: { tone: "saw", hz: [300, 520], env: { attack: 0.02, hold: 0.12, decay: 0.12 }, gain: 0.13, filter: { type: "bandpass", hz: 900, q: 3 }, tremolo: { rate: 20, depth: 0.5 }, crush: { bits: 8, rate: 2 } }, standIn: true },
+    { synth: { noise: "pink", filter: { type: "bandpass", hz: 700, q: 1.5 }, env: { attack: 0.01, decay: 0.12 }, gain: 0.9, delay: 0.3, crush: { bits: 8, rate: 2 } }, standIn: true },
+  ],
+}

@@ -1,0 +1,8 @@
+// A tusk swung: a huffing grunt.
+{
+  near: 3, far: 35, maxVoices: 6, pitch: [-2, 2], volume: [0.8, 0.95], takes: 6,
+  layers: [
+    { synth: { noise: "pink", filter: { type: "bandpass", hz: [600, 350], q: 1.5 }, env: { attack: 0.01, decay: 0.12 }, gain: 1.1, crush: { bits: 8, rate: 2 } }, standIn: true },
+    { synth: { tone: "saw", hz: [160, 110], env: { attack: 0.01, decay: 0.1 }, gain: 0.1, filter: { type: "lowpass", hz: 700 }, crush: { bits: 8, rate: 2 } }, standIn: true },
+  ],
+}

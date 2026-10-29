@@ -237,6 +237,11 @@ vertical speed, swimming, and a swing trigger.
   it eases out again when the body comes back to life. Driven by a `dead` input; the workbench's
   *Dying* plays it on a loop. Tied to the game's own `dead` flag (ABILITIES.md, *The death animation*): every body falls when its
   unit dies, lies when first seen dead, and stands at once when it respawns elsewhere (`snap`).
+- **Flinch** (added with FEEDBACK.md's hit feel) - a `flinch` input: where a blow came from in the
+  body's frame and how hard; the spine, chest and head jerk away and come back within 0.28 s, over
+  everything but death. The workbench's *Flinching* plays a blow from each side in turn.
+- **Footsteps** (FEEDBACK.md) - the animator reports each foot coming down (`step`, as the gait
+  passes the point where that thigh is furthest forward), for footstep sounds.
 
 Each is a function from time and inputs to a pose (a rotation per bone). Poses are blended by
 weights that ease in and out, and the swing is layered on the upper body.

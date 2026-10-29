@@ -173,7 +173,7 @@ magic's host.
 | `summon` | `template`, `count`, `at` (an area), `duration`. The summon belongs to the caster, takes its side, and ends with a magic hosted on it |
 | `threat` | `amount` added to the group's tables against the caster. `taunt: true` puts the caster on top and flags `taunted` |
 | `animation` | `name` (`swing` now; `cast`, `shoot` later): played by the clients that see the unit (CHARACTERS.md, *Next steps* 5) |
-| `effect` | `name`: a visual or a sound at the group. Sent as an event; drawn later |
+| `effect` | `name`: a cue (FEEDBACK.md) played at the group - sounds, particles, hit feel. Sent as an event |
 | `goto` | Moves this magic to another state now |
 | `set` | `var`, `value`: changes one of the magic's variables |
 | `if`, `chance` | `when` (a formula) or `p` (a probability, a formula), then `then` and `else` lists of actions |
@@ -734,7 +734,9 @@ Each leaves the game working: dev server, `npm run probe`, `npm run server`, `np
 - Creature AI (aggro, chasing, leashing): step 6. The dummy's bolt is a passive, not a brain.
 - Talents, ranks from trainers, and spells from classes: steps 8 and 9.
 - An action bar to drag spells onto, spell tooltips and icons: step 10. Keys go by spellbook order.
-- Visual effects for `effect` actions, floating combat text, sounds: only the event exists.
+- Visual effects for `effect` actions, floating combat text, sounds: only the event exists. (Since
+  built: floating text after this step, and sounds, effects and hit feel by
+  [FEEDBACK.md](FEEDBACK.md) - skills name cues by phase in `cues`.)
 - Projectiles as entities, dodging them, and client-side prediction of casts.
 - PvP and factions: a template's hostility stands in.
 - Scripts that register actions: the registry is ready for them; loading script packs comes with

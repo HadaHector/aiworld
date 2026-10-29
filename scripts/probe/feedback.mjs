@@ -5,7 +5,13 @@
 import { ContentError } from "../../src/world/content/contentReader.ts";
 import { resolveGameRules } from "../../src/sim/rules/gameRules.ts";
 import { resolveCreatureRules } from "../../src/sim/rules/creatureRules.ts";
-import { packSourcesFromDisk, readConfigFromDisk } from "../diskContent.mjs";
+import { loadContentFromDisk, loadRulesFromDisk, packSourcesFromDisk, readConfigFromDisk } from "../diskContent.mjs";
+import { createServer } from "../../src/sim/server.ts";
+import { createLocalChannel } from "../../src/sim/channel.ts";
+import { PROTOCOL_VERSION } from "../../src/sim/protocol.ts";
+import { createWorldData, WORLD_SEED } from "../../src/world/worldData.ts";
+import { COMBAT_EVENT_KINDS } from "../../src/sim/skills/events.ts";
+import { createFightClient } from "../server/fightBot.mjs";
 import { resolveFeedback, resolveRef, matchesPattern } from "../../src/feedback/rules.ts";
 import { layerLength, renderSynth } from "../../src/audio/synth.ts";
 import { SAMPLE_RATE } from "../../src/audio/dsp.ts";
@@ -79,7 +85,7 @@ await section("placeholders", () => {
 // --- events to cues --------------------------------------------------------------------------------
 await section("events to cues", () => {
   // Unit 1 is the player with a sword, 2 a dummy in plate, 3 a wolf going for the player, 4 someone else.
-  const traits = { 1: { weapon: "blade", armor: "leather" }, 2: { armor: "metal" }, 3: { weapon: "fang", armor: "fur" }, 4: { weapon: "blade" } };
+  const traits = { 1: { weapon: "blade", armor: "leather" }, 2: { armor: "metal" }, 3: { weapon: "fang", armor: "fur" }, 4: { weapon: "blade" }, 6: { weapon: "fang", armor: "fur" } };
   const played = [];
   const fakeSfx = { play: (id, options) => (played.push({ id, own: options.own, gain: options.gain }), null) };
   const cues = createCuePlayer(feedback, game, {
@@ -112,6 +118,9 @@ await section("events to cues", () => {
     cues.client(name, { source: 1, target: 0, skill: null, crit: false, periodic: false, ...context }, match);
     return played.map((p) => p.id).join(",");
   };
+  check("a wolf's aggro is its own family's call", clientRun("aggro", { source: 3, target: 1, values: { family: "wolf" } }) === "aggro.wolf");
+  check("an unknown family's aggro is the general growl", clientRun("aggro", { source: 3, target: 1, values: { family: "dragon" } }) === "aggro");
+  check("a wolf's swing snaps", run(event("animation", 6, 0, "autoAttack", 0, "swing")) === "swing.fang");
   check("a footstep by its surface", clientRun("footstep", { values: { surface: "grass" } }) === "footstep.grass");
   check("a footstep on a surface with no sound of its own", clientRun("footstep", { values: { surface: "lava" } }) === "footstep");
   check("a rare item taken chimes", clientRun("itemTake", {}, { rarity: "rare" }) === "item.take,item.rare" && clientRun("itemTake", {}, { rarity: "common" }) === "item.take");
@@ -399,6 +408,78 @@ await section("textures", () => {
   const overlaps = rects.some((r, i) => rects.some((s, j) => i < j && r.u0 < s.u1 && s.u0 < r.u1 && r.v0 < s.v1 && s.v0 < r.v1));
   check("no two variants overlap in the atlas", !overlaps);
   console.log(`textures: ${variants} variants drawn and packed in ${(performance.now() - started).toFixed(0)} ms`);
+});
+
+// --- a fight -------------------------------------------------------------------------------------
+// ABILITIES.md's fight - a real server on tiny, the fight bot's rotation on the dummy for 60 s - its
+// whole combat log fed to a cue player: every hit, miss, heal and cast, and every aura but those
+// that are only bookkeeping, finds feedback.
+await section("a fight", async () => {
+  const fightRules = loadRulesFromDisk(CONFIG);
+  const { content, packs } = loadContentFromDisk(CONFIG);
+  const server = createServer({
+    seed: WORLD_SEED,
+    config: CONFIG,
+    packs,
+    dimensions: content.dimensions,
+    rules: fightRules,
+    loadDimension: (definition, seed) => ({ world: createWorldData(seed, definition.start ? content : loadContentFromDisk(CONFIG, definition.id).content) }),
+  });
+  const channel = createLocalChannel();
+  server.connect(channel.server);
+  channel.client.send({ type: "hello", protocol: PROTOCOL_VERSION, name: "fighter", dimension: "" });
+  const fighter = createFightClient(fightRules, channel.client);
+  const events = [];
+  for (let step = 0; step < 60 * 30 + 60; step++) {
+    if (step < 5) await new Promise((resolve) => setTimeout(resolve, 0));
+    fighter.receive();
+    events.push(...fighter.state.events.splice(0));
+    fighter.drive(server.tick);
+    server.step(1 / 30);
+  }
+  fighter.receive();
+  events.push(...fighter.state.events.splice(0));
+
+  const fightFeedback = resolveFeedback(sources, fightRules);
+  let played = 0;
+  const handle = (id) => ({ sound: id, playing: true, move() {}, stop() {} });
+  const sfx = { play: (id) => (played++, handle(id)) };
+  const particles = { spawn: () => (played++, { alive: true, stop() {}, kill() {} }) };
+  const cues = createCuePlayer(fightFeedback, fightRules, {
+    player: () => fighter.state.id,
+    target: () => fighter.state.dummy?.id ?? 0,
+    targetOf: () => 0,
+    place: () => ({ x: 0, y: 1, z: 0 }),
+    traits: (u) => (u === fighter.state.id ? { weapon: "blade", armor: "leather" } : { armor: "metal", family: "humanoid" }),
+  }, () => sfx, () => particles);
+  // The cue player keeps sounds a moment apart by the clock; it runs on the server's here.
+  const realNow = performance.now.bind(performance);
+  let clock = 0;
+  performance.now = () => clock;
+  const silent = new Map();
+  try {
+    for (const event of events) {
+      clock = event.time * 1000;
+      const before = played;
+      cues.events([event]);
+      const kind = COMBAT_EVENT_KINDS[event.kind];
+      if (played === before) {
+        const key = `${kind} ${fightRules.skills[event.skill]?.id ?? "-"}`;
+        silent.set(key, (silent.get(key) ?? 0) + 1);
+      }
+    }
+  } finally {
+    performance.now = realNow;
+  }
+  const kinds = new Set(events.map((e) => COMBAT_EVENT_KINDS[e.kind]));
+  console.log(`a fight: ${events.length} events (${[...kinds].join(", ")}); silent: ${[...silent].map(([k, n]) => `${k} x${n}`).join(", ") || "none"}`);
+  // Silent by design: an aura that only keeps a rule (Weakened Soul), the ends of things (a cast
+  // stopped, an aura's stacks counted), a physical instant going off (its swing and hit carry it),
+  // and what the fight bot's own client is told only for its bars.
+  const allowed = (key) => /^(castStopped|auraStacks|castFailed|summon|resisted|respawn|dispelled) /.test(key) || key === "auraOn weakenedSoul" || key === "auraOff weakenedSoul" || /^castDone (heroicStrike|kick|sunder|thunderClap|charge)$/.test(key) || /^auraOff /.test(key);
+  const missing = [...silent.keys()].filter((k) => !allowed(k));
+  check("every hit, miss, heal, cast and aura of the fight finds feedback", missing.length === 0, missing.join(", "));
+  check("the fight's events are many and varied", events.length > 100 && ["hit", "heal", "castStart", "castDone", "auraOn", "interrupted"].every((k) => kinds.has(k)));
 });
 
 console.log(`${checks - failures}/${checks} checks passed`);

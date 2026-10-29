@@ -321,12 +321,12 @@ A proposal, to be confirmed. Each step gets its own plan document.
    a class) as template parts; disciplines and classes generated per seed from templates; saved
    state by id; a panel (P) and a rule book (K) written from the rules.
 
-   *Alongside step 8:* **Feedback** - see [FEEDBACK.md](FEEDBACK.md). Sound effects, particle
-   effects and hit feel, driven by cues in packs that map combat events and client events to
-   feedback; skills name cues for their cast, release, projectile, impact and aura phases.
+   *Alongside step 8:* **Feedback: done** - see [FEEDBACK.md](FEEDBACK.md). Sound effects,
+   particle effects and hit feel, driven by cues in packs that map combat events and client events
+   to feedback; skills name cues for their cast, release, projectile, impact and aura phases.
    Generated synth sounds that samples can replace later, a particle system with generated
-   textures, flash, flinch, camera shake and hit pause, footsteps by surface, and a dev page
-   (`fx.html`). Client side, plus pack data and the `cues` field of skills.
+   textures, flash, flinch, camera shake and hit pause, footsteps by surface, loot and level-ups,
+   and a dev page (`fx.html`). Client side, plus pack data and the `cues` field of skills.
 9. **NPCs and the quest generator,** up to the test chain.
 10. **HUD and screens:** unit frames, action bar, inventory, quest log.
 

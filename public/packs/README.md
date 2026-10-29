@@ -67,6 +67,12 @@ packs/<pack>/
   talentTrees/<id>.json5  gameplay: a talent tree - tiers of nodes bought with points
   talentPools/<id>.json5  gameplay: talent nodes generated trees draw from
   rules/progression.json5 gameplay: the slots, the base template, "the" level, trainers, respec cost
+  sounds/<id>.json5       feedback: a sound - synth layers or samples, falloff, variation (FEEDBACK.md)
+  particles/<id>.json5    feedback: a particle effect - its emitters, one-shot or looping
+  particleTextures/<id>.json5  feedback: a generated sprite texture - a dot, spark, smoke, rune...
+  cues/<id>.json5         feedback: what plays together - sounds, effects, flash, flinch, shake, pause
+  rules/feedback.json5    feedback: which cue each event plays, weapons, armours, surfaces, the mix
+  sfx/<file>.wav          feedback: sample files sounds name (not read as json5)
 ```
 
 A definition's **id is its file name**: `materials/peat.json5` defines the material `peat`, and
@@ -1087,6 +1093,38 @@ XP sources (`on`): `kill`, `defeat`, `hitDealt`, `hitTaken`, `healDealt`, `cast`
 `xp` action), and `gather`, `craft`, `quest` for the systems to come. Ability unlocks are learned
 `auto`, from a `trainer`, from an `item` (a book whose skill has a `learn` action), as a `talent`,
 or by `quest`. `rules/progression.json5`'s `never` turns disciplines, origins or templates off.
+
+## Feedback: sounds, particles and cues
+
+Read on the client alone (`src/feedback/rules.ts`), checked against the skills and looks; a
+headless server loads them unread. Feedback ids may have dots, and an id with placeholders falls
+back from most specific to least: `hit.{weapon}.{armor}` tries `hit.blade.metal`, `hit.blade`,
+then `hit`. [FEEDBACK.md](../../FEEDBACK.md) has every field.
+
+```json5
+// sounds/swing.json5 - generated layers (tone, noise, modal, fm, pluck, crackle) or samples; standIn
+// layers drop out once a sample layer has loaded; `chance` puts a layer in only that share of takes
+{ near: 3, far: 35, maxVoices: 6, pitch: [-2, 2], volume: [0.75, 0.9], takes: 6,
+  layers: [{ synth: { noise: "white", filter: { type: "bandpass", hz: [900, 2600], q: 1.8 }, env: { attack: 0.03, decay: 0.09 }, crush: { bits: 8, rate: 2 } }, standIn: true }] }
+// particles/hit.metal.json5 - emitters of sprites (a particleTextures id) or meshes (shard, chip, ember, cube, leaf, ring)
+{ emitters: [{ sprite: "spark", blend: "add", burst: 14, life: [0.15, 0.35], shape: { sphere: 0.08 }, speed: [4, 9], gravity: 8, stretch: 0.06,
+  size: [[0, 0.16], [1, 0.06]], colour: [[0, "#fff6d0"], [0.4, "#ffc050"], [1, "#ff602000"]] }] }
+// particleTextures/rune.json5 - dot, spark, star, smoke, flame, ring, rune, slash
+{ kind: "rune", size: 64, variants: 6, strokes: [3, 5], ring: true, width: 0.07, glow: 0.25 }
+// cues/meleeHit.json5 - parts at the event's source or target, on a bone; shake and pause in the player's own fights only
+{ parts: [{ sound: "hit.{weapon}.{armor}" }, { particles: "hit.{armor}" }, { flash: [1, 1, 1], time: 0.1 }, { flinch: 0.6, scale: "amount" },
+  { shake: 0.25, when: { crit: true } }, { pause: 0.04, when: { crit: true } }] }
+```
+
+A **skill names cues by phase**: `cues: { cast, channel, release, projectile, impact, tick, applied,
+aura, faded, swing }` - a cast loops at the hands until it ends, a projectile flies to its target, an
+aura loops on its host. What a skill does not name, `rules/feedback.json5`'s `events` plays: per
+event kind, the first rule whose `tags`, `type`, `name`, `rarity`, `role`, `crit` and `periodic` hold.
+Client events (`lootable`, `lootOpen`, `itemTake`, `moneyTake`, `itemDrop`, `itemPickUp`, `equip`,
+`use`, `target`, `footstep`, `xpGained`, `disciplineUp`, `learned`, `talentPicked`) go through the
+same table. An entity's `look.feedback` gives `weapon`, `armor` and `family` for the placeholders;
+worn items give the weapon (`weapons`, by template or gear piece) and the armour (`armors`, by gear
+material); `surfaces` turns ground materials into what footsteps sound like.
 
 ## Example
 

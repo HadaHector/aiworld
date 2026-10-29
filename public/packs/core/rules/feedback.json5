@@ -28,6 +28,7 @@
     equip: [{ cue: "equip" }],
     target: [{ cue: "target" }],
     footstep: [{ cue: "footstep" }],
+    aggro: [{ cue: "aggro" }],
   },
   // Weapon kinds by item template or gear piece.
   weapons: { sword: "blade", greatsword: "blade", axe: "blade", dagger: "blade", mace: "blunt", hammer: "blunt", staff: "blunt" },

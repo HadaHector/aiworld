@@ -127,7 +127,7 @@ export type Phase = (typeof PHASES)[number];
 
 /** Events the client sees happen that are not combat events. */
 export const CLIENT_EVENTS = [
-  "lootable", "lootOpen", "itemTake", "moneyTake", "itemDrop", "itemPickUp", "equip", "use", "target", "footstep",
+  "lootable", "lootOpen", "itemTake", "moneyTake", "itemDrop", "itemPickUp", "equip", "use", "target", "footstep", "aggro",
   // Progression (PROGRESSION.md): the game's own client sends these; `levelUp` is a combat event too.
   "xpGained", "levelUp", "disciplineUp", "learned", "talentPicked",
 ] as const;

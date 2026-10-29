@@ -28,6 +28,7 @@ import type { World } from "../world/world";
 import { createSurfaceProbe, type SurfaceProbe } from "./footsteps";
 import { GROUND_ITEM_TEMPLATE, TAKE_ALL } from "../sim/items/itemSystem";
 import type { CueHandle } from "../feedback/cues";
+import { FLAG } from "../sim/skills/flags";
 
 export interface GameFeedback {
   /** A step's combat events. */
@@ -81,6 +82,9 @@ export interface GameFeedbackOptions {
 
 /** Footsteps are heard from units this near the player, at most. */
 const FOOTSTEP_REACH = 25;
+/** Seconds before a creature that let go calls out again when it turns on someone. */
+const AGGRO_AGAIN = 4;
+const DEAD = 1 << FLAG.dead;
 
 const BABYLON_FORWARD = new Vector3(0, 0, 1);
 const scratch = new Vector3();
@@ -205,6 +209,33 @@ export function createGameFeedback(options: GameFeedbackOptions): GameFeedback {
       seen.z = entity.z;
     }
   };
+  /** Each creature's target last frame, and when it last called out: a creature turning on someone
+   *  - its target going from nobody to a unit - is its aggro. */
+  const targets = new Map<number, { target: number; called: number }>();
+  const aggroAll = (): void => {
+    const now = performance.now() / 1000;
+    for (const entity of mirror.entities.values()) {
+      // Creatures, the ones with a threat table that can die: not players, not the dummy.
+      const template = entity.template;
+      if (!template?.threat || !template.mortal || (entity.flags & DEAD) !== 0) {
+        targets.delete(entity.id);
+        continue;
+      }
+      const seen = targets.get(entity.id);
+      if (!seen) {
+        // Seen already fighting: it turned before it came into view.
+        targets.set(entity.id, { target: entity.target, called: -Infinity });
+        continue;
+      }
+      if (!seen.target && entity.target && now - seen.called > AGGRO_AGAIN) {
+        seen.called = now;
+        // Its own family's call, not its victim's.
+        const family = traitsOf(entity).family;
+        cues.client("aggro", { source: entity.id, target: entity.target, skill: null, crit: false, periodic: false, values: family ? { family } : undefined });
+      }
+      seen.target = entity.target;
+    }
+  };
   /** Glints looping over everything that has loot to take. */
   const glints = new Map<number, CueHandle>();
   const glintAll = (): void => {
@@ -289,6 +320,7 @@ export function createGameFeedback(options: GameFeedbackOptions): GameFeedback {
       for (const handle of glints.values()) handle.stop();
       glints.clear();
       stepsSeen.clear();
+      targets.clear();
       surfaces = world ? createSurfaceProbe(world, rules) : null;
       if (scene) renderer = createParticleRenderer(scene, particles, rules);
     },
@@ -299,6 +331,7 @@ export function createGameFeedback(options: GameFeedbackOptions): GameFeedback {
       const eye = camera?.globalPosition ?? null;
       stepAll();
       glintAll();
+      aggroAll();
       cues.update();
       particles.update(dt, eye);
       renderer?.update();

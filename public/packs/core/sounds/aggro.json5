@@ -1,0 +1,8 @@
+// A creature turning on someone, any family: a short rising growl.
+{
+  near: 5, far: 45, maxVoices: 3, pitch: [-2, 2], volume: [0.8, 0.95], takes: 3,
+  layers: [
+    { synth: { tone: "saw", hz: [110, 160], env: { attack: 0.05, hold: 0.15, decay: 0.25 }, gain: 0.14, filter: { type: "lowpass", hz: 900, q: 3 }, tremolo: { rate: 28, depth: 0.6 }, crush: { bits: 8, rate: 2 } }, standIn: true },
+    { synth: { noise: "brown", filter: { type: "bandpass", hz: 500, q: 2 }, env: { attack: 0.05, hold: 0.1, decay: 0.25 }, gain: 1.2, tremolo: { rate: 28, depth: 0.5 }, crush: { bits: 8, rate: 2 } }, standIn: true },
+  ],
+}
