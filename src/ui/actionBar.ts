@@ -12,12 +12,12 @@ import { GOLD, SLOT, SLOT_CLASS } from "./theme";
  * first free slot. The layout is kept per character in this browser - a character save will hold it
  * later.
  */
-export type BarAction = { kind: "skill"; skill: string } | { kind: "item"; item: string } | { kind: "attack" };
+export type BarAction = { kind: "skill"; skill: string } | { kind: "item"; item: string } | { kind: "attack" } | { kind: "teleport" };
 
 export interface ActionBar {
   readonly element: HTMLElement;
-  /** Uses slot n (0-based): the key handler's. */
-  press: (slot: number) => void;
+  /** Uses slot n (0-based): the key handler's (`byKey`), or a click on the slot. */
+  press: (slot: number, byKey?: boolean) => void;
   /** The key that uses slot n, as shown on it. */
   readonly keys: readonly string[];
   /** Fits the slots into a width (the HUD's layout pass). */
@@ -39,6 +39,8 @@ export interface ActionBarOptions {
   setAttacking: (on: boolean) => void;
   /** Uses an item from a bag slot. */
   useItem: (bagSlot: number) => void;
+  /** The debug teleport: to the pointer at once from a key, or aimed by the next click from the bar. */
+  teleport: (byKey: boolean) => void;
 }
 
 /** What a drag carries onto the bar, as JSON under this type: a BarAction. */
@@ -51,6 +53,9 @@ const KEYS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "-", "="];
 let lastTaken = -Infinity;
 export const takenByBar = (): boolean => performance.now() - lastTaken < 1000;
 const STORAGE = "aiworld.actionBar.";
+/** Marks, in `seen`, that the bar was given the teleport. */
+const TELEPORT_SEEN = "@teleport";
+export const TELEPORT_TEXT = "Puts you where the pointer is: its key teleports at once, a click on the slot waits for a click on the world (Escape to cancel).";
 const BAG = 0;
 
 interface Saved {
@@ -99,7 +104,7 @@ export function createActionBar(parent: HTMLElement, options: ActionBarOptions):
     const name = el("div", "position: absolute; left: 3px; right: 3px; top: 15px; font-size: 10px; line-height: 1.15; text-shadow: 0 1px 2px #000;", cell);
     const count = el("div", "position: absolute; right: 3px; bottom: 2px; font: 700 10px/1 system-ui, sans-serif; color: #fff; text-shadow: 0 1px 1px #000; z-index: 2;", cell);
     const cool = el("div", `position: absolute; left: 0; right: 0; bottom: 0; height: 0; background: rgba(0, 0, 0, 0.66); font: 700 15px/48px system-ui, sans-serif; color: ${GOLD}; text-shadow: 0 1px 2px #000;`, cell);
-    cell.addEventListener("click", () => press(i));
+    cell.addEventListener("click", () => press(i, false));
     // Dragging: a slot onto another swaps them; off the bar clears it.
     cell.addEventListener("dragstart", (e) => {
       const action = saved.slots[i];
@@ -152,10 +157,11 @@ export function createActionBar(parent: HTMLElement, options: ActionBarOptions):
   const bagSlotOf = (type: string): number => belongings.containers[BAG]?.findIndex((s) => s?.type === type) ?? -1;
   const bagCount = (type: string): number => (belongings.containers[BAG] ?? []).reduce((n, s) => n + (s?.type === type ? s.count : 0), 0);
 
-  function press(i: number): void {
+  function press(i: number, byKey = false): void {
     const action = saved.slots[i];
     if (!action) return;
-    if (action.kind === "attack") options.setAttacking(!mirror.own.attacking);
+    if (action.kind === "teleport") options.teleport(byKey);
+    else if (action.kind === "attack") options.setAttacking(!mirror.own.attacking);
     else if (action.kind === "skill") {
       const skill = game.skillIndex.get(action.skill);
       if (skill !== undefined && mirror.own.spells.some((s) => s.skill === skill)) options.cast(skill);
@@ -168,6 +174,7 @@ export function createActionBar(parent: HTMLElement, options: ActionBarOptions):
   /** What a slot says about its action, on hover. */
   function tooltip(action: BarAction): string {
     if (action.kind === "attack") return "Attack\nSwing at your target with your weapon until you stop or it dies. Press again to stop.";
+    if (action.kind === "teleport") return `Teleport (debug)\n${TELEPORT_TEXT}`;
     if (action.kind === "skill") {
       const skill = game.skills[game.skillIndex.get(action.skill) ?? -1];
       return skill ? [skill.name, ...describeSkill(game, skill)].join("\n") : action.skill;
@@ -182,6 +189,7 @@ export function createActionBar(parent: HTMLElement, options: ActionBarOptions):
       c.cell.title = action ? `${tooltip(action)}\n\nDrag to move it, or off the bar to clear the slot.` : "Empty: drag a spell from the spell book (L) or an item from your bag here.";
       if (!action) c.name.textContent = "";
       else if (action.kind === "attack") c.name.textContent = "Attack";
+      else if (action.kind === "teleport") c.name.textContent = "Teleport";
       else if (action.kind === "skill") c.name.textContent = game.skills[game.skillIndex.get(action.skill) ?? -1]?.name ?? "?";
       else {
         const type = items.types[items.typeIndex.get(action.item) ?? -1];
@@ -196,6 +204,14 @@ export function createActionBar(parent: HTMLElement, options: ActionBarOptions):
   /** Spells learned since the bar last looked go into the first free slots. */
   let lastSpells = "";
   function placeNew(): void {
+    // The debug teleport is given once, in the last free slot.
+    if (!saved.seen.includes(TELEPORT_SEEN)) {
+      saved.seen.push(TELEPORT_SEEN);
+      const free = saved.slots.lastIndexOf(null);
+      if (free >= 0 && !saved.slots.some((a) => a?.kind === "teleport")) saved.slots[free] = { kind: "teleport" };
+      save();
+      draw();
+    }
     const known = mirror.own.spells.filter((s) => !game.skills[s.skill]?.passive).map((s) => game.skills[s.skill].id);
     const signature = known.join(",");
     if (signature === lastSpells) return;

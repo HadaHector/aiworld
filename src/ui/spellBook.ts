@@ -2,7 +2,7 @@ import type { GameRules } from "../sim/rules/gameRules";
 import { describeSkill } from "../sim/rules/skillText";
 import type { EntityMirror } from "../game/entityMirror";
 import type { ProgressMirror } from "../game/progressMirror";
-import { ACTION_DRAG_TYPE, type BarAction } from "./actionBar";
+import { ACTION_DRAG_TYPE, TELEPORT_TEXT, type BarAction } from "./actionBar";
 import { DIM, GOLD, HEADING, PANEL, SLOT, SLOT_CLASS, windowHead } from "./theme";
 
 /**
@@ -22,6 +22,7 @@ export interface SpellBookOptions {
   progress: ProgressMirror;
   cast: (skill: number) => void;
   setAttacking: (on: boolean) => void;
+  teleport: () => void;
 }
 
 const HOW: Record<string, string> = { auto: "learned at a level", trainer: "taught by a trainer", item: "learned from a book", talent: "a talent", quest: "a quest's reward" };
@@ -61,6 +62,12 @@ export function createSpellBook(options: SpellBookOptions): SpellBook {
   }
 
   function draw(): void {
+    drawSpells();
+    el("div", HEADING, body, "Debug");
+    entry(body, "Teleport", "debug", [TELEPORT_TEXT], { kind: "teleport" }, () => options.teleport());
+  }
+
+  function drawSpells(): void {
     body.innerHTML = "";
     const learned = new Map((progress.progress?.learned ?? []).map((l) => [l.skill, l.how]));
     const spells = mirror.own.spells.filter((s) => game.skills[s.skill]);

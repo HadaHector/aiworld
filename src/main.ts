@@ -481,6 +481,7 @@ function dockWindow(element: HTMLElement): void {
   dock(element, hud.windows);
   element.style.maxHeight = "100%";
   element.style.overflowY = "auto";
+  element.style.overflowX = "hidden";
   element.style.boxSizing = "border-box";
   // Windows keep their size: when they do not fit side by side, the HUD closes the oldest instead.
   element.style.flexShrink = "0";
@@ -555,6 +556,7 @@ const actionBar = createActionBar(combatHud.barSlot, {
   cast: castSpell,
   setAttacking: (on) => channel.client.send({ type: "attack", on }),
   useItem: (bagSlot) => sendItem({ type: "itemUse", from: { container: 0, slot: bagSlot } }),
+  teleport: (byKey) => aimTeleport(byKey),
 });
 const spellBook = createSpellBook({
   game: gameRules,
@@ -562,6 +564,7 @@ const spellBook = createSpellBook({
   progress: progressMirror,
   cast: castSpell,
   setAttacking: (on) => channel.client.send({ type: "attack", on }),
+  teleport: () => aimTeleport(false),
 });
 window.addEventListener("keydown", (e) => {
   if (!view || entering || e.repeat) return;
@@ -661,14 +664,15 @@ window.addEventListener("keydown", (e) => {
     return;
   }
   if (e.key === "Escape") {
-    if (mirror.entities.get(playerId)?.cast) channel.client.send({ type: "stopCast" });
+    if (teleportArmed) setTeleportArmed(false);
+    else if (mirror.entities.get(playerId)?.cast) channel.client.send({ type: "stopCast" });
     else if (targetId) setTarget(0);
     return;
   }
   if (e.repeat) return;
   // The action bar's keys: 1-9, 0, - and =. The attack is on the bar too (its first slot to begin with).
   const slot = actionBar.keys.indexOf(e.key);
-  if (slot >= 0) actionBar.press(slot);
+  if (slot >= 0) actionBar.press(slot, true);
 });
 {
   let down: { x: number; y: number } | null = null;
@@ -680,6 +684,12 @@ window.addEventListener("keydown", (e) => {
     const moved = Math.hypot(e.clientX - down.x, e.clientY - down.y);
     down = null;
     if (moved > 4) return;
+    // An aimed teleport takes this click.
+    if (teleportArmed) {
+      setTeleportArmed(false);
+      teleportAt(e.clientX, e.clientY);
+      return;
+    }
     const rect = canvas.getBoundingClientRect();
     const meshes = entityMeshes;
     const pick = view.scene.pick(e.clientX - rect.left, e.clientY - rect.top, (mesh) => meshes.entityOf(mesh) !== null);
@@ -690,8 +700,45 @@ window.addEventListener("keydown", (e) => {
   });
 }
 
-// Right-click (a click, not a drag) to put the player where the pointer is: on what it hits in the
-// collision world - a roof, a floor, a tree - or, past where that reaches, on the ground drawn.
+// The debug teleport (an action on the bar and in the spell book): to where the pointer is, on what
+// it hits in the collision world - a roof, a floor, a tree - or, past where that reaches, on the
+// ground drawn. From its key it goes at once to the pointer; from a click on its slot it waits for
+// the next click on the world.
+let teleportArmed = false;
+let pointer: { x: number; y: number } | null = null;
+canvas.addEventListener("pointermove", (e) => (pointer = { x: e.clientX, y: e.clientY }));
+canvas.addEventListener("pointerleave", () => (pointer = null));
+function setTeleportArmed(on: boolean): void {
+  teleportArmed = on;
+  canvas.style.cursor = on ? "crosshair" : "";
+}
+function aimTeleport(byKey: boolean): void {
+  if (byKey && pointer) teleportAt(pointer.x, pointer.y);
+  else setTeleportArmed(true);
+}
+function teleportAt(clientX: number, clientY: number): void {
+  if (!view) return;
+  const { scene, world, character } = view;
+  const rect = canvas.getBoundingClientRect();
+  const ray = scene.createPickingRay(clientX - rect.left, clientY - rect.top, null, scene.activeCamera);
+  const origin = { x: ray.origin.x, y: ray.origin.y, z: ray.origin.z };
+  const direction = { x: ray.direction.x, y: ray.direction.y, z: ray.direction.z };
+  const hit = world.collision.world.raycast(origin, direction, 3000);
+  if (hit) {
+    // Stood on what it hit - or, on a wall, just in front of it.
+    const radius = character.settings.radius;
+    const lift = hit.normal.y > 0.5 ? 0.05 : 0;
+    const off = hit.normal.y > 0.5 ? 0 : radius * 1.2;
+    command({ type: "teleportTo", x: hit.point.x + hit.normal.x * off, y: hit.point.y + lift, z: hit.point.z + hit.normal.z * off });
+    return;
+  }
+  const pick = scene.pickWithRay(ray, (mesh) => mesh.name.startsWith("terrainChunk_"));
+  if (pick?.hit && pick.pickedPoint) command({ type: "teleport", x: pick.pickedPoint.x, z: pick.pickedPoint.z });
+}
+
+// Right-click (a click, not a drag - a drag turns the camera) to interact with what is under the
+// pointer: open a corpse's or a chest's loot, pick up an item on the ground, see a trainer's lessons,
+// or target and attack an enemy.
 {
   let down: { x: number; y: number } | null = null;
   canvas.addEventListener("contextmenu", (e) => e.preventDefault());
@@ -699,26 +746,26 @@ window.addEventListener("keydown", (e) => {
     if (e.button === 2) down = { x: e.clientX, y: e.clientY };
   });
   canvas.addEventListener("pointerup", (e) => {
-    if (e.button !== 2 || !down || !view) return;
+    if (e.button !== 2 || !down || !view || !entityMeshes) return;
     const moved = Math.hypot(e.clientX - down.x, e.clientY - down.y);
     down = null;
     if (moved > 4) return;
-    const { scene, world, character } = view;
+    if (teleportArmed) return setTeleportArmed(false);
     const rect = canvas.getBoundingClientRect();
-    const ray = scene.createPickingRay(e.clientX - rect.left, e.clientY - rect.top, null, scene.activeCamera);
-    const origin = { x: ray.origin.x, y: ray.origin.y, z: ray.origin.z };
-    const direction = { x: ray.direction.x, y: ray.direction.y, z: ray.direction.z };
-    const hit = world.collision.world.raycast(origin, direction, 3000);
-    if (hit) {
-      // Stood on what it hit - or, on a wall, just in front of it.
-      const radius = character.settings.radius;
-      const lift = hit.normal.y > 0.5 ? 0.05 : 0;
-      const off = hit.normal.y > 0.5 ? 0 : radius * 1.2;
-      command({ type: "teleportTo", x: hit.point.x + hit.normal.x * off, y: hit.point.y + lift, z: hit.point.z + hit.normal.z * off });
+    const meshes = entityMeshes;
+    const pick = view.scene.pick(e.clientX - rect.left, e.clientY - rect.top, (mesh) => meshes.entityOf(mesh) !== null);
+    const id = pick?.hit ? meshes.entityOf(pick.pickedMesh) : null;
+    const entity = id === null ? undefined : mirror.entities.get(id);
+    if (id === null || !entity) return;
+    if (entity.lootable || entity.templateId === GROUND_ITEM_TEMPLATE) return interact(id);
+    if (progressionRules.config.trainers.has(entity.templateId)) {
+      if (!progressPanel.visible) progressPanel.toggle();
       return;
     }
-    const pick = scene.pickWithRay(ray, (mesh) => mesh.name.startsWith("terrainChunk_"));
-    if (pick?.hit && pick.pickedPoint) command({ type: "teleport", x: pick.pickedPoint.x, z: pick.pickedPoint.z });
+    setTarget(id);
+    const dead = (entity.flags & (1 << FLAG.dead)) !== 0;
+    const enemy = entity.template?.hostility === "hostile" || entity.template?.hostility === "neutral";
+    if (enemy && !dead && id !== playerId) channel.client.send({ type: "attack", on: true });
   });
 }
 

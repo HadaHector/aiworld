@@ -725,6 +725,9 @@ Each leaves the game working: dev server, `npm run probe`, `npm run server`, `np
   slot, between slots to swap, off the bar to clear. Spells learned later fill the first free slot;
   the layout is kept per people and class in the browser until character saves. The bag's right
   click equips, unequips and uses, as its double click does.
+- **Right click on the world interacts** (it was the debug teleport, now a debug action on the bar's
+  last slot and in the spell book): it opens a corpse's or a chest's loot, picks up an item on the
+  ground, opens the progression panel at a trainer, and targets and attacks an enemy.
 - **Floating combat text** (asked for after the step, `src/game/floatingText.ts`): numbers rise over
   the unit a hit or heal lands on, from the combat events, for the own player's fights only - what
   it deals over its target, what it takes over itself. Defaults, WoW Classic-like: weapon damage
