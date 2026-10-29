@@ -179,6 +179,9 @@ export interface SkillDef {
   tags: string[];
   type: SkillType;
   weapon: boolean;
+  /** Whether casting it at an enemy turns auto-attack on against it (and turns the caster to face
+   *  it). Default: physical skills cast at an enemy - Charge, Heroic Strike - but not spells. */
+  startsAttack: boolean;
   passive: boolean;
   target: TargetKind;
   /** Where its magic lives: on its caster (a cast, a passive) or on its target (a buff cast on an ally). */
@@ -234,7 +237,7 @@ interface Entry {
 }
 
 const SKILL_KEYS = [
-  "name", "tags", "type", "weapon", "passive", "target", "hostOn", "range", "minRange", "los", "facing", "cost", "cooldown", "category", "gcd",
+  "name", "tags", "type", "weapon", "startsAttack", "passive", "target", "hostOn", "range", "minRange", "los", "facing", "cost", "cooldown", "category", "gcd",
   "requires", "blockedBy", "targetRequires", "targetBlockedBy", "display", "dispel", "keepOnDeath", "stacking", "areas", "groups", "vars", "start", "states",
   "cues",
 ];
@@ -531,15 +534,18 @@ function readSkill(entry: Entry, index: number, vars: string[], read: ReadContex
     strength: stack.strength === undefined ? null : expr(stack.strength, "stacking.strength"),
   };
 
+  const type = obj.type === undefined ? "none" : reader.oneOf(obj, "type", "", ["spell", "physical", "none"] as const);
+  const target = obj.target === undefined ? (passive ? "none" : "self") : reader.oneOf(obj, "target", "", ["enemy", "ally", "self", "point", "none"] as const);
   return {
     id: entry.id,
     index,
     name: reader.optionalString(obj, "name", "") ?? entry.id,
     tags: obj.tags === undefined ? [] : reader.stringList(obj, "tags", ""),
-    type: obj.type === undefined ? "none" : reader.oneOf(obj, "type", "", ["spell", "physical", "none"] as const),
+    type,
     weapon: reader.boolean(obj, "weapon", "", false),
+    startsAttack: reader.boolean(obj, "startsAttack", "", type === "physical" && target === "enemy"),
     passive,
-    target: obj.target === undefined ? (passive ? "none" : "self") : reader.oneOf(obj, "target", "", ["enemy", "ally", "self", "point", "none"] as const),
+    target,
     hostOn,
     range: obj.range === undefined ? null : expr(obj.range, "range"),
     minRange: obj.minRange === undefined ? null : expr(obj.minRange, "minRange"),

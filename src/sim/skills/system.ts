@@ -1,7 +1,7 @@
 import type { Entity } from "../entity";
 import type { GameRules } from "../rules/gameRules";
 import "./runs";
-import { castingHooks, expireLockouts, fireQueued, interrupt, requestCast, stopCast, unitMoved, type CastOptions, type CastResult } from "./casting";
+import { castingHooks, expireLockouts, faceUnit, fireQueued, interrupt, requestCast, stopCast, unitMoved, type CastOptions, type CastResult } from "./casting";
 import { die, revive } from "./combat";
 import type { CombatEvent, Reason } from "./events";
 import { endMagic, signal, startMagic, stepMagic } from "./magic";
@@ -169,7 +169,11 @@ export function createSkillSystem(rules: GameRules, world: SkillWorld): SkillSys
       entity.combat.target = target;
     },
     setAttacking(entity, on) {
-      if (entity.combat) entity.combat.attacking = on && entity.combat.target !== 0 && !entity.combat.dead;
+      if (!entity.combat) return;
+      entity.combat.attacking = on && entity.combat.target !== 0 && !entity.combat.dead;
+      // Starting an attack turns the unit to face what it attacks.
+      const target = entity.combat.attacking ? world.entity(entity.combat.target) : undefined;
+      if (target && target.id !== entity.id) faceUnit(entity, target);
     },
     kill(entity) {
       if (!entity.combat || entity.combat.dead || !entity.resources) return;

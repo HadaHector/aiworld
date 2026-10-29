@@ -725,6 +725,10 @@ Each leaves the game working: dev server, `npm run probe`, `npm run server`, `np
   slot, between slots to swap, off the bar to clear. Spells learned later fill the first free slot;
   the layout is kept per people and class in the browser until character saves. The bag's right
   click equips, unequips and uses, as its double click does.
+- **Blows start the fight** (asked for after the step): a skill's `startsAttack` (default: physical
+  skills cast at an enemy - Charge, Heroic Strike - not spells) turns auto-attack on against its
+  target when it commits, and turns the caster to face it; turning auto-attack on (the bar's Attack,
+  a right click on an enemy) faces the target too.
 - **Right click on the world interacts** (it was the debug teleport, now a debug action on the bar's
   last slot and in the spell book): it opens a corpse's or a chest's loot, picks up an item on the
   ground, opens the progression panel at a trainer, and targets and attacks an enemy.

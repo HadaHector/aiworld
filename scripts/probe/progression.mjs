@@ -450,6 +450,31 @@ await section("server", async () => {
   const ok = t.server.debug.items.equip(a, { container: 0, slot: ironSlot() });
   check("iron worn at sword skill 10", !ok && ironSlot() < 0, String(ok));
 
+  // A physical blow at an enemy turns auto-attack on and faces it; a spell does not; the attack
+  // message alone faces the target too.
+  t.clients[0].send({ type: "teleport", x: dummy.x + 2.5, z: dummy.z });
+  await t.pump(5);
+  a.combat.attacking = false;
+  a.body.face(0);
+  a.resources.current[t.rules.resourceIndex.get("rage")] = 100;
+  t.clients[0].send({ type: "target", id: dummy.id });
+  // Facing away: the attack message alone turns the player round.
+  t.clients[0].send({ type: "attack", on: true });
+  await t.pump(2);
+  const toward = Math.atan2(dummy.x - a.x, dummy.z - a.z);
+  const off = (x) => Math.abs(Math.atan2(Math.sin(x - toward), Math.cos(x - toward)));
+  check("starting an attack faces the target", a.combat.attacking && off(a.facing) < 0.05, `${a.facing} vs ${toward}`);
+  a.combat.attacking = false;
+  t.clients[0].send({ type: "cast", seq: 2, skill: t.rules.skillIndex.get("heroicStrike"), target: dummy.id, x: NaN, z: NaN });
+  await t.pump(3);
+  check("a physical blow at an enemy starts the attack", a.combat.attacking && a.combat.target === dummy.id);
+  b.combat.attacking = false;
+  b.resources.current[t.rules.resourceIndex.get("mana")] = 500;
+  t.clients[1].send({ type: "target", id: dummy.id });
+  t.clients[1].send({ type: "cast", seq: 9, skill: t.rules.skillIndex.get("fireball"), target: dummy.id, x: NaN, z: NaN });
+  await t.pump(120);
+  check("a spell does not", !b.combat.attacking);
+
   // Talents over the boundary.
   t.server.debug.progression.debugLevel(a, R.disciplineIndex.get("adventure"), 5);
   const arms = R.treeIndex.get("warriorArms");

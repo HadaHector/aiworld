@@ -6,7 +6,7 @@ import { REASON, type Reason } from "./events";
 import { canStart, FLAG } from "./flags";
 import { endMagic, evaluate, signal, startMagic } from "./magic";
 import type { Magic, Spell, Sys } from "./types";
-import { gap, hasMagic, hiddenFrom, inFront, isAlive, relation } from "./unit";
+import { gap, hasMagic, hiddenFrom, inFront, isAlive, relation, relationIs } from "./unit";
 
 /**
  * Casting (see ABILITIES.md, *Casting*): whether a unit may start a spell now, at what, and what
@@ -171,7 +171,24 @@ function commit(sys: Sys, magic: Magic): boolean {
   spell.ready = now + Math.max(0, evaluate(sys, magic, skill.cooldown, target));
   if (skill.category) unit.combat.categories.set(skill.category, spell.ready);
   emit(sys, "castDone", { source: unit.id, target: magic.target, skill: skill.index, at: unit });
+  // A blow at an enemy starts the fight in earnest: auto-attack on, facing it.
+  if (skill.startsAttack && target && target.id !== unit.id && relationIs(sys, unit, target, "enemy")) startAttack(unit, target);
   return true;
+}
+
+/** Auto-attack on against a unit, turned to face it (ABILITIES.md, *As built*). */
+export function startAttack(unit: Entity, target: Entity): void {
+  if (!unit.combat || unit.combat.dead) return;
+  unit.combat.target = target.id;
+  unit.combat.attacking = true;
+  faceUnit(unit, target);
+}
+
+/** Turns a unit to face another where it stands. */
+export function faceUnit(unit: Entity, target: Entity): void {
+  const facing = Math.atan2(target.x - unit.x, target.z - unit.z);
+  if (unit.body) unit.body.face(facing);
+  unit.facing = facing;
 }
 
 /** The casting hooks magics call (Sys.hooks). */
