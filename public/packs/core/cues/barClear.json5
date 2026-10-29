@@ -1,0 +1,2 @@
+// A slot dragged off the action bar.
+{ parts: [{ sound: "bar.clear" }] }

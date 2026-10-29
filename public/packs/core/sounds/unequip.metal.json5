@@ -1,0 +1,8 @@
+// Metal taken off: a clank and a lower clink, plates set down.
+{
+  bus: "ui", flat: true, maxVoices: 2, pitch: [-1, 1], volume: [0.7, 0.8], takes: 3,
+  layers: [
+    { synth: { modal: true, hz: 560, partials: [[1, 0.4, 0.07], [2.7, 0.25, 0.04]], gain: 0.45, crush: { bits: 8, rate: 2 } }, standIn: true },
+    { synth: { modal: true, hz: 430, partials: [[1, 0.4, 0.08], [2.4, 0.3, 0.05]], gain: 0.4, delay: 0.1, crush: { bits: 8, rate: 2 } }, standIn: true },
+  ],
+}

@@ -1,0 +1,7 @@
+// Leather taken off: a strap let go and a creak.
+{
+  bus: "ui", flat: true, maxVoices: 2, pitch: [-1, 1], volume: [0.7, 0.8], takes: 3,
+  layers: [
+    { synth: { crackle: true, density: 140, click: 0.004, filter: { type: "bandpass", hz: 700, q: 2 }, env: { attack: 0.02, decay: 0.18 }, gain: 0.7, crush: { bits: 8, rate: 2 } }, standIn: true },
+  ],
+}

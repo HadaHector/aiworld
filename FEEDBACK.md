@@ -670,6 +670,15 @@ Each leaves the game working: dev server, `npm run probe`, `npm run server`, `np
   bandits shout, anything else growls. The swing cue became `swing.{weapon}`, so a bite snaps with a
   growl (`swing.fang`) and a tusk huffs (`swing.tusk`) where a blade keeps the whoosh. Checked by the
   probe (1459 checks); not yet heard in the game.
+- **The screens** (asked for after the HUD came): `GameFeedback.watchScreens` watches the HUD's
+  windows region - a window (its direct child) whose `display` changes plays `windowOpen` or
+  `windowClose`, whatever opened or closed it - and the action bar's drags through document
+  listeners on its own drag type: lifting a spell or item (`barLift`), putting it on the bar
+  (`barPlace`, when the bar took the drop) and dragging a slot off (`barClear`), with no change to
+  the bar or the windows themselves. Unequipping plays `unequip.{armor}`. Taking loot is louder,
+  with a bag's rustle under the pluck, and opening it louder. Checked in the game: the inventory
+  and spell book opening and closing, a bronze sword taken off (`unequip.metal`), a slot put on the
+  bar and dragged off, and the chest's loot with its window's sounds.
 - **Left for later**, beside *Not in this step*: water underfoot (the world has to say where its sea
   is); recorded samples (the format and the stand-ins are ready, no sample set is chosen); creature
   voices beyond deaths; and the alpha particles' `light`, which day and night could set.

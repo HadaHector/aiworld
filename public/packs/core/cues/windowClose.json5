@@ -1,0 +1,2 @@
+// A window closing.
+{ parts: [{ sound: "window.close" }] }

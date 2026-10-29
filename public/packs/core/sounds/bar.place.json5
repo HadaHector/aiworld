@@ -1,0 +1,8 @@
+// A spell or item put on the action bar: a firm, satisfying click into its slot.
+{
+  bus: "ui", flat: true, maxVoices: 2, pitch: [-1, 1], volume: [0.7, 0.8], takes: 3,
+  layers: [
+    { synth: { tone: "sine", hz: [300, 140], env: { attack: 0.001, decay: 0.06 }, gain: 0.5, drive: 2, crush: { bits: 8, rate: 2 } }, standIn: true },
+    { synth: { noise: "white", filter: { type: "bandpass", hz: 2600, q: 2 }, env: { attack: 0.001, decay: 0.02, curve: 3 }, gain: 0.5, crush: { bits: 8, rate: 2 } }, standIn: true },
+  ],
+}

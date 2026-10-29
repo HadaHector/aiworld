@@ -1,0 +1,7 @@
+// Something taken off: a cloth rustle, falling.
+{
+  bus: "ui", flat: true, maxVoices: 2, pitch: [-1, 1], volume: [0.7, 0.8], takes: 3,
+  layers: [
+    { synth: { noise: "pink", filter: { type: "bandpass", hz: [1800, 800], q: 1 }, env: { attack: 0.02, hold: 0.04, decay: 0.14 }, gain: 0.8, crush: { bits: 8, rate: 2 } }, standIn: true },
+  ],
+}

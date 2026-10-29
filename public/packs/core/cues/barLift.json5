@@ -1,0 +1,2 @@
+// A spell or item lifted to drag.
+{ parts: [{ sound: "bar.lift" }] }

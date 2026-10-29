@@ -121,6 +121,9 @@ await section("events to cues", () => {
   check("a wolf's aggro is its own family's call", clientRun("aggro", { source: 3, target: 1, values: { family: "wolf" } }) === "aggro.wolf");
   check("an unknown family's aggro is the general growl", clientRun("aggro", { source: 3, target: 1, values: { family: "dragon" } }) === "aggro");
   check("a wolf's swing snaps", run(event("animation", 6, 0, "autoAttack", 0, "swing")) === "swing.fang");
+  check("taking off metal clanks, anything else rustles", clientRun("unequip", { values: { armor: "metal" } }) === "unequip.metal" && clientRun("unequip", {}) === "unequip");
+  check("windows open and close", clientRun("windowOpen", {}) === "window.open" && clientRun("windowClose", {}) === "window.close");
+  check("the action bar's drags", clientRun("barLift", {}) === "bar.lift" && clientRun("barPlace", {}) === "bar.place" && clientRun("barClear", {}) === "bar.clear");
   check("a footstep by its surface", clientRun("footstep", { values: { surface: "grass" } }) === "footstep.grass");
   check("a footstep on a surface with no sound of its own", clientRun("footstep", { values: { surface: "lava" } }) === "footstep");
   check("a rare item taken chimes", clientRun("itemTake", {}, { rarity: "rare" }) === "item.take,item.rare" && clientRun("itemTake", {}, { rarity: "common" }) === "item.take");

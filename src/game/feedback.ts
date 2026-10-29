@@ -27,6 +27,8 @@ import type { ClientMessage } from "../sim/protocol";
 import type { World } from "../world/world";
 import { createSurfaceProbe, type SurfaceProbe } from "./footsteps";
 import { GROUND_ITEM_TEMPLATE, TAKE_ALL } from "../sim/items/itemSystem";
+import { EQUIPMENT } from "../sim/items/items";
+import { ACTION_DRAG_TYPE, takenByBar } from "../ui/actionBar";
 import type { CueHandle } from "../feedback/cues";
 import { FLAG } from "../sim/skills/flags";
 
@@ -40,6 +42,8 @@ export interface GameFeedback {
   setScene: (scene: Scene | null, world?: World) => void;
   /** An item intent the player sends (take, drop, pick up, equip, use): its sound, at once. */
   itemIntent: (message: ClientMessage) => void;
+  /** Listens to the screens: windows in `windows` opening and closing, and the action bar's drags. */
+  watchScreens: (windows: HTMLElement) => void;
   /** Each frame: steps the particles and puts the listener on the camera. */
   update: (camera: Camera | null) => void;
   /** The Effects volume, 0..1. */
@@ -263,6 +267,18 @@ export function createGameFeedback(options: GameFeedbackOptions): GameFeedback {
     const def = items.types[items.typeIndex.get(type) ?? -1];
     return def ? (items.rarities[def.rarity]?.id ?? "") : "";
   };
+  /** What an item type's gear is made of, as an armour kind (`armors`), or undefined. */
+  const armorOf = (type: string): string | undefined => {
+    const def = items.types[items.typeIndex.get(type) ?? -1];
+    for (const id of def?.gear ?? []) {
+      const piece = kit.gear.get(id);
+      for (const surface of [...(piece?.paint ?? []), ...(piece?.shells ?? []), ...(piece?.skirts ?? []), ...(piece?.pieces ?? [])]) {
+        const armor = rules.config.armors[surface.material];
+        if (armor) return armor;
+      }
+    }
+    return undefined;
+  };
   const itemIntent = (message: ClientMessage): void => {
     switch (message.type) {
       case "lootTake": {
@@ -285,16 +301,12 @@ export function createGameFeedback(options: GameFeedbackOptions): GameFeedback {
       case "itemDrop":
         cues.client("itemDrop", self());
         return;
-      case "itemEquip": {
-        // Equipping sounds like what the piece is made of.
-        const item = options.belongings.containers[message.from.container]?.[message.from.slot];
-        const def = item ? items.types[items.typeIndex.get(item.type) ?? -1] : undefined;
-        let armor: string | undefined;
-        for (const id of def?.gear ?? []) {
-          const piece = kit.gear.get(id);
-          for (const surface of [...(piece?.paint ?? []), ...(piece?.shells ?? []), ...(piece?.skirts ?? []), ...(piece?.pieces ?? [])]) armor ??= rules.config.armors[surface.material];
-        }
-        cues.client("equip", { ...self(), values: armor ? { armor } : undefined }, { rarity: item ? rarityOf(item.type) : "" });
+      case "itemEquip":
+      case "itemUnequip": {
+        // Putting on and taking off sound like what the piece is made of.
+        const item = message.type === "itemEquip" ? options.belongings.containers[message.from.container]?.[message.from.slot] : options.belongings.containers[EQUIPMENT]?.[message.slot];
+        const armor = item ? armorOf(item.type) : undefined;
+        cues.client(message.type === "itemEquip" ? "equip" : "unequip", { ...self(), values: armor ? { armor } : undefined }, { rarity: item ? rarityOf(item.type) : "" });
         return;
       }
       case "itemUse":
@@ -312,6 +324,40 @@ export function createGameFeedback(options: GameFeedbackOptions): GameFeedback {
       cues.client(name, context, match);
     },
     itemIntent,
+    watchScreens(windows) {
+      const ui = (name: string): void => {
+        cues.client(name, self());
+      };
+      // A window is open while it shows: hidden or shown again by anything - its key, its close
+      // cross, the layout closing the oldest for room - it is heard. Windows are the container's
+      // children, added at any time; their own style is what opens and closes them.
+      const shown = new Map<Element, boolean>();
+      const visible = (w: Element): boolean => (w as HTMLElement).style.display !== "none";
+      for (const w of windows.children) shown.set(w, visible(w));
+      new MutationObserver((changes) => {
+        for (const change of changes) {
+          for (const w of change.type === "childList" ? [...change.addedNodes] : [change.target]) {
+            if (!(w instanceof HTMLElement) || w.parentElement !== windows) continue;
+            const now = visible(w);
+            const was = shown.get(w);
+            shown.set(w, now);
+            if (was !== undefined && was !== now) ui(now ? "windowOpen" : "windowClose");
+          }
+        }
+      }).observe(windows, { subtree: true, childList: true, attributes: true, attributeFilter: ["style"] });
+      // The action bar: a spell or item lifted from the book, the bag or the bar, put on the bar, or
+      // dragged off it.
+      document.addEventListener("dragstart", (e) => {
+        if (e.dataTransfer?.types.includes(ACTION_DRAG_TYPE)) ui("barLift");
+      }, true);
+      document.addEventListener("drop", (e) => {
+        if (e.dataTransfer?.types.includes(ACTION_DRAG_TYPE)) setTimeout(() => takenByBar() && ui("barPlace"), 0);
+      }, true);
+      document.addEventListener("dragend", (e) => {
+        // From a slot of the bar, let go of anywhere but the bar: the slot is cleared.
+        if (e.dataTransfer?.types.includes("text/x-aiworld-bar-slot") && !takenByBar()) ui("barClear");
+      }, true);
+    },
     setScene(scene, world) {
       renderer?.dispose();
       renderer = null;

@@ -1,0 +1,7 @@
+// A spell or item lifted to drag: a light quick tick.
+{
+  bus: "ui", flat: true, maxVoices: 2, pitch: [-1, 1], volume: [0.55, 0.6], takes: 3,
+  layers: [
+    { synth: { tone: "triangle", hz: [880, 1180], env: { attack: 0.002, decay: 0.04 }, gain: 0.16, crush: { bits: 8, rate: 2 } }, standIn: true },
+  ],
+}

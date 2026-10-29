@@ -1,0 +1,8 @@
+// A window closing: the flap falling shut - a lower flup and a softer tap.
+{
+  bus: "ui", flat: true, maxVoices: 2, pitch: [-1, 1], volume: [0.7, 0.8], takes: 3,
+  layers: [
+    { synth: { noise: "pink", filter: { type: "bandpass", hz: [2200, 800], q: 1.2 }, env: { attack: 0.01, decay: 0.08 }, gain: 0.7, crush: { bits: 8, rate: 2 } }, standIn: true },
+    { synth: { tone: "triangle", hz: [560, 380], env: { attack: 0.002, decay: 0.04 }, gain: 0.1, delay: 0.05, crush: { bits: 8, rate: 2 } }, standIn: true },
+  ],
+}

@@ -1,0 +1,2 @@
+// A spell or item put on the action bar.
+{ parts: [{ sound: "bar.place" }] }

@@ -1,0 +1,2 @@
+// A window opening.
+{ parts: [{ sound: "window.open" }] }

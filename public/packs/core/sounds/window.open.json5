@@ -1,0 +1,8 @@
+// A window opening: a page or flap flipped open - a soft papery flup and a click.
+{
+  bus: "ui", flat: true, maxVoices: 2, pitch: [-1, 1], volume: [0.7, 0.8], takes: 3,
+  layers: [
+    { synth: { noise: "pink", filter: { type: "bandpass", hz: [900, 2600], q: 1.2 }, env: { attack: 0.015, decay: 0.09 }, gain: 0.8, crush: { bits: 8, rate: 2 } }, standIn: true },
+    { synth: { tone: "triangle", hz: [520, 780], env: { attack: 0.002, decay: 0.04 }, gain: 0.12, delay: 0.06, crush: { bits: 8, rate: 2 } }, standIn: true },
+  ],
+}

@@ -1,7 +1,8 @@
-// An item taken: a quick soft pluck.
+// An item taken: a quick pluck, and the bag it goes into rustling.
 {
-  bus: "ui", flat: true, maxVoices: 3, pitch: [-1, 1], volume: [0.6, 0.7],
+  bus: "ui", flat: true, maxVoices: 3, pitch: [-1, 1], volume: [0.85, 0.95], takes: 3,
   layers: [
-    { synth: { pluck: true, hz: 392, bright: 0.5, loss: 0.99, env: { attack: 0.001, decay: 0.25 }, gain: 0.5, crush: { bits: 8, rate: 2 } }, standIn: true },
+    { synth: { pluck: true, hz: 392, bright: 0.5, loss: 0.99, env: { attack: 0.001, decay: 0.25 }, gain: 0.6, crush: { bits: 8, rate: 2 } }, standIn: true },
+    { synth: { noise: "pink", filter: { type: "bandpass", hz: [1300, 700], q: 1.2 }, env: { attack: 0.01, decay: 0.12 }, gain: 0.6, delay: 0.04, crush: { bits: 8, rate: 2 } }, standIn: true },
   ],
 }

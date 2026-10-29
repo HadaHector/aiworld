@@ -223,6 +223,8 @@ const settings: ViewSettings = { drawDistance: DEFAULT_DRAW_DISTANCE, trees: tru
 
 // Where everything on screen goes (ui/hud.ts): regions that keep the panels apart at any width.
 const hud = createHud();
+// Windows opening and closing, the action bar's drags (FEEDBACK.md).
+queueMicrotask(() => feedback.watchScreens(hud.windows));
 const zoneLabel = createZoneLabel();
 dock(zoneLabel.element, hud.info);
 // The zone name is the player's, not a debug readout: the game's look (ui/theme.ts).
