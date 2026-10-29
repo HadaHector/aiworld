@@ -14,6 +14,8 @@ export interface EntityMeshes {
   entityOf: (mesh: unknown) => number | null;
   /** Plays a melee swing on an entity's body: the server says when. */
   swing: (id: number) => void;
+  /** How many steps an entity's body has taken, or -1 for one without a body (FEEDBACK.md). */
+  steps: (id: number) => number;
   /** An entity's body, or its capsule, for flashes, flinches and pauses (FEEDBACK.md). */
   feelable: (id: number) => Feelable | null;
   /** Where a bone of an entity's body is (FEEDBACK.md); false when it has no body drawn. */
@@ -46,8 +48,6 @@ interface Drawn {
   wanted: BodyLook | null;
   built: string;
   building: boolean;
-  /** A glint over it while it has loot to take. */
-  sparkle: Mesh | null;
   /** How far a capsule has fallen over, 0 standing to 1 lying: a dead creature without a body. */
   fall: number;
   /** A capsule's hit feel (FEEDBACK.md): pushed away from a blow and back, flashing. A body has its own. */
@@ -115,7 +115,7 @@ export function createEntityMeshes(scene: Scene, mirror: EntityMirror, rules: Ga
     const sex = entity.look.sex || look.sex;
     const wanted: BodyLook | null = race ? { race, outfit: entity.look.outfit || look.outfit, sex: sex === "male" || sex === "female" ? sex : undefined, seed: entity.look.seed } : null;
     if (race && !bodies.kit.races.has(race)) console.warn(`Entity #${entity.id} (${entity.templateId}) wants race "${race}", which these packs lack - a stand-in race is drawn.`);
-    const entry: Drawn = { capsule, body: null, gone: false, wanted, built: "", building: false, sparkle: null, fall: (entity.flags & (1 << FLAG.dead)) !== 0 ? 1 : 0, push: null, flash: null };
+    const entry: Drawn = { capsule, body: null, gone: false, wanted, built: "", building: false, fall: (entity.flags & (1 << FLAG.dead)) !== 0 ? 1 : 0, push: null, flash: null };
     drawn.set(entity.id, entry);
     ids.set(capsule, entity.id);
     place(entity, entry);
@@ -146,28 +146,6 @@ export function createEntityMeshes(scene: Scene, mirror: EntityMirror, rules: Ga
       });
   }
 
-  /** A slowly turning glint above an entity with loot, so a corpse or chest shows from afar. */
-  function glint(entity: MirroredEntity, entry: Drawn): void {
-    if (entity.lootable && !entry.sparkle) {
-      const sparkle = MeshBuilder.CreatePolyhedron(`entity${entity.id}Loot`, { type: 1, size: 0.12 }, scene);
-      const material = new StandardMaterial(`entity${entity.id}LootMaterial`, scene);
-      material.disableLighting = true;
-      material.emissiveColor = new Color3(1, 0.85, 0.3);
-      sparkle.material = material;
-      sparkle.isPickable = false;
-      entry.sparkle = sparkle;
-    } else if (!entity.lootable && entry.sparkle) {
-      entry.sparkle.material?.dispose();
-      entry.sparkle.dispose();
-      entry.sparkle = null;
-    }
-    if (entry.sparkle) {
-      const look = entity.template?.look ?? fallback;
-      const t = performance.now() / 1000;
-      entry.sparkle.position.set(entity.x, entity.y + look.height + 0.35 + Math.sin(t * 2.5) * 0.08, entity.z);
-      entry.sparkle.rotation.y = t * 1.5;
-    }
-  }
   function remove(entity: MirroredEntity): void {
     const entry = drawn.get(entity.id);
     if (!entry) return;
@@ -177,8 +155,6 @@ export function createEntityMeshes(scene: Scene, mirror: EntityMirror, rules: Ga
     entry.capsule.material?.dispose();
     entry.capsule.dispose();
     entry.body?.dispose();
-    entry.sparkle?.material?.dispose();
-    entry.sparkle?.dispose();
   }
   function place(entity: MirroredEntity, entry: Drawn): void {
     // A capsule that stands for a unit lies down along its facing when it dies (bodies fall on
@@ -226,13 +202,13 @@ export function createEntityMeshes(scene: Scene, mirror: EntityMirror, rules: Ga
         const dead = (entity.flags & (1 << FLAG.dead)) !== 0;
         entry.fall = Math.min(1, Math.max(0, entry.fall + ((dead ? 1 : -1) * dt) / CAPSULE_FALL));
         dress(entity, entry);
-        glint(entity, entry);
         place(entity, entry);
       }
       placeRing();
     },
     entityOf: (mesh) => ids.get(mesh) ?? null,
     swing: (id) => drawn.get(id)?.body?.swing(),
+    steps: (id) => drawn.get(id)?.body?.steps() ?? -1,
     feelable(id) {
       const entry = drawn.get(id);
       if (!entry) return null;

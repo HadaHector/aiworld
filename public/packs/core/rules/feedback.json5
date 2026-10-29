@@ -13,11 +13,39 @@
     animation: [{ name: "swing", cue: "swing" }],
     death: [{ cue: "death" }],
     summon: [{ cue: "summon" }],
+    // The character's level, seen by everyone near; other disciplines' only by the player.
+    levelUp: [{ name: "adventure", cue: "levelUp" }],
+    disciplineUp: [{ cue: "disciplineUp" }],
+    learned: [{ cue: "learned" }],
+    talentPicked: [{ cue: "talentPicked" }],
+    // What the client sees happen itself.
+    lootable: [{ cue: "lootGlint" }],
+    lootOpen: [{ cue: "lootOpen" }],
+    itemTake: [{ rarity: ["rare", "epic", "legendary"], cue: "itemTakeRare" }, { cue: "itemTake" }],
+    moneyTake: [{ cue: "coins" }],
+    itemDrop: [{ cue: "itemDrop" }],
+    itemPickUp: [{ cue: "itemTake" }],
+    equip: [{ cue: "equip" }],
+    target: [{ cue: "target" }],
+    footstep: [{ cue: "footstep" }],
   },
   // Weapon kinds by item template or gear piece.
   weapons: { sword: "blade", greatsword: "blade", axe: "blade", dagger: "blade", mace: "blunt", hammer: "blunt", staff: "blunt" },
   // Armour kinds by gear material.
   armors: { linen: "cloth", wool: "cloth", leather: "leather", studdedLeather: "leather", mail: "metal", plate: "metal", bronze: "metal", fur: "fur" },
+  // Ground materials to the surface footsteps sound like: patterns on material ids, `*` any run of
+  // letters, first match wins.
+  surfaces: {
+    "snow*": "snow", "frost*": "snow", "*Ice": "stone", "*Sandstone": "stone",
+    "*Sand*": "sand", "sand*": "sand", "dune*": "sand", saltCrust: "sand",
+    "*Gravel*": "gravel", gravel: "gravel", pebbles: "gravel", "*scree": "gravel", scree: "gravel",
+    cobblestone: "stone", trackStone: "stone", "*Rock*": "stone", "rock*": "stone", granite: "stone", limestone: "stone", quarryFloor: "stone",
+    mud: "mud", peat: "mud", sphagnum: "mud", "marsh*": "mud", "reed*": "mud", "*uckweed": "mud",
+    forestFloor: "leaves", leafLitter: "leaves", jungleFloor: "leaves",
+    "*Grass*": "grass", "grass*": "grass", "meadow*": "grass", "heather*": "grass", "savanna*": "grass", "steppe*": "grass",
+    wildflowers: "grass", alpineFlowers: "grass", weeds: "grass", bluebellFloor: "grass", tundraGround: "grass",
+    "*": "dirt",
+  },
   mix: { master: 0.8, combat: 1, footsteps: 0.45, ui: 0.6 },
   voices: 28,
   particles: { sprites: 3000, meshes: 600 },

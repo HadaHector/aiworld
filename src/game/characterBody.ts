@@ -71,6 +71,8 @@ export interface CharacterBody extends Feelable {
   /** Where one of its bones is in the world now, for effects and sounds on it (FEEDBACK.md): the
    *  hands, the weapon's tip, the head, the chest, the feet. */
   place: (bone: BodyPlace, out: Vector3) => void;
+  /** How many times a foot has come down since it was made, for footsteps (FEEDBACK.md). */
+  steps: () => number;
   dispose: () => void;
 }
 
@@ -115,6 +117,7 @@ export async function createCharacterBody(scene: Scene, name: string, kit: BodyK
   // Hit feel (FEEDBACK.md): a flinch for the next frame, a pause until a time, a flash fading out.
   let flinching: { forward: number; side: number; strength: number } | undefined;
   let pausedUntil = 0;
+  let steps = 0;
   let flash: { start: number; seconds: number } | null = null;
   const flashColour = new Color3();
 
@@ -143,9 +146,10 @@ export async function createCharacterBody(scene: Scene, name: string, kit: BodyK
       wasDead = dead;
       // A hit pause stops the pose where it is; the body still goes where the entity is.
       if (now >= pausedUntil) {
-        const { pose, offset } = animator.update({ speed, grounded: state.grounded, verticalSpeed: rise, swimming: false, swing: swinging, flinch: flinching, dead, snap }, dt);
+        const { pose, offset, step } = animator.update({ speed, grounded: state.grounded, verticalSpeed: rise, swimming: false, swing: swinging, flinch: flinching, dead, snap }, dt);
         swinging = false;
         flinching = undefined;
+        if (step) steps++;
         character.setPose(pose, offset);
       }
       if (flash) {
@@ -174,6 +178,7 @@ export async function createCharacterBody(scene: Scene, name: string, kit: BodyK
       const f = facing ?? 0;
       flinching = { forward: (x * Math.sin(f) + z * Math.cos(f)) / length, side: (x * Math.cos(f) - z * Math.sin(f)) / length, strength };
     },
+    steps: () => steps,
     pause(seconds) {
       pausedUntil = Math.max(pausedUntil, performance.now() / 1000 + seconds);
     },

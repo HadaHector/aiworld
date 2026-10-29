@@ -1,0 +1,11 @@
+// A level gained: a short bright fanfare climbing a major arpeggio, old-school.
+{
+  near: 6, far: 40, maxVoices: 2, volume: [0.8, 0.8], takes: 1,
+  layers: [
+    { synth: { tone: "square", hz: 523, env: { attack: 0.005, hold: 0.08, decay: 0.08 }, gain: 0.12, crush: { bits: 6 } }, standIn: true },
+    { synth: { tone: "square", hz: 659, env: { attack: 0.005, hold: 0.08, decay: 0.08 }, gain: 0.12, delay: 0.14, crush: { bits: 6 } }, standIn: true },
+    { synth: { tone: "square", hz: 784, env: { attack: 0.005, hold: 0.08, decay: 0.08 }, gain: 0.12, delay: 0.28, crush: { bits: 6 } }, standIn: true },
+    { synth: { tone: "square", hz: 1046, env: { attack: 0.005, hold: 0.35, decay: 0.5 }, gain: 0.12, delay: 0.42, vibrato: { rate: 6, depth: 0.15 }, crush: { bits: 6 } }, standIn: true },
+    { synth: { tone: "triangle", hz: 262, env: { attack: 0.005, hold: 0.35, decay: 0.5 }, gain: 0.2, delay: 0.42 }, standIn: true },
+  ],
+}

@@ -24,6 +24,8 @@ export interface Character {
   attachBody: (body: PlayerBody) => void;
   /** Its body, for flashes, flinches and pauses (FEEDBACK.md); null before the body is in. */
   feelable: () => Feelable | null;
+  /** How many steps its body has taken, or -1 before the body is in (FEEDBACK.md). */
+  steps: () => number;
   /** Where a bone of its body is (FEEDBACK.md); false before the body is in. */
   place: (bone: BodyPlace, out: Vector3) => boolean;
   dispose: () => void;
@@ -81,6 +83,7 @@ export function createCharacter(scene: Scene, start: { x: number; y: number; z: 
     show,
     swing: () => body?.swing(),
     feelable: () => body,
+    steps: () => body?.steps() ?? -1,
     place(bone, out) {
       if (!body) return false;
       body.place(bone, out);

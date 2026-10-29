@@ -1,0 +1,8 @@
+// Something learned: a sparkling rising sweep.
+{
+  bus: "ui", flat: true, maxVoices: 2, volume: [0.7, 0.7], takes: 1,
+  layers: [
+    { synth: { fm: true, hz: [523, 1046], ratio: 2, index: [2, 0.3], env: { attack: 0.02, hold: 0.2, decay: 0.4 }, gain: 0.15 }, standIn: true },
+    { synth: { crackle: true, density: 40, click: 0.02, filter: { type: "highpass", hz: 5000 }, env: { attack: 0.05, decay: 0.6 }, gain: 0.25 }, standIn: true },
+  ],
+}

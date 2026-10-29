@@ -69,6 +69,10 @@ await section("placeholders", () => {
   check("falls back to the base", sound({ weapon: "tusk", armor: "fur" }) === "hit");
   check("a missing value stops the id", sound({ armor: "metal" }) === "hit");
   check("a plain id", resolveRef("swing", {}, has) === "swing" && resolveRef("nothing", {}, has) === null);
+  const surface = (material) => feedback.config.surfaces.find(([pattern]) => matchesPattern(pattern, material))?.[1];
+  const expected = { meadowShort: "grass", cobblestone: "stone", redSandstone: "stone", duneSand: "sand", desertScree: "gravel", snow: "snow", peat: "mud", leafLitter: "leaves", track: "dirt", pondIce: "stone" };
+  const wrong = Object.entries(expected).filter(([m, s]) => surface(m) !== s).map(([m, s]) => `${m}: ${surface(m)} (not ${s})`);
+  check("core's ground materials map to surfaces", wrong.length === 0, wrong.join(", "));
   check("patterns", matchesPattern("*Grass", "leafyGrass") && matchesPattern("snow*", "snowDrift") && !matchesPattern("*Sand", "sandstone") && matchesPattern("*", "x"));
 });
 
@@ -103,6 +107,17 @@ await section("events to cues", () => {
   check("a wolf swinging at the player is the player's fight", played[0]?.own === true);
   run(event("hit", 4, 5, "autoAttack"));
   check("others' fights are quieter", played[0]?.own === false && played[0]?.gain === feedback.config.others.volume, JSON.stringify(played[0]));
+  const clientRun = (name, context, match) => {
+    played.length = 0;
+    cues.client(name, { source: 1, target: 0, skill: null, crit: false, periodic: false, ...context }, match);
+    return played.map((p) => p.id).join(",");
+  };
+  check("a footstep by its surface", clientRun("footstep", { values: { surface: "grass" } }) === "footstep.grass");
+  check("a footstep on a surface with no sound of its own", clientRun("footstep", { values: { surface: "lava" } }) === "footstep");
+  check("a rare item taken chimes", clientRun("itemTake", {}, { rarity: "rare" }) === "item.take,item.rare" && clientRun("itemTake", {}, { rarity: "common" }) === "item.take");
+  check("equipping by what it is made of", clientRun("equip", { values: { armor: "metal" } }) === "equip.metal");
+  check("a client level-up plays from its combat event, not twice", clientRun("levelUp", {}) === "" && run(event("levelUp", 1, 1, undefined, 0, "adventure")) === "levelUp");
+  check("another discipline's combat level-up plays nothing", run(event("levelUp", 1, 1, undefined, 0, "class")) === "");
   check("a hit on five targets sounds once", run(...[2, 5, 6, 7, 8].map((t) => event("hit", 1, t, "autoAttack", EVENT_FLAG.crit))).split(",").length <= 2);
 });
 

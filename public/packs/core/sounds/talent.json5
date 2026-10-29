@@ -1,0 +1,8 @@
+// A talent picked: two firm notes, a fourth apart.
+{
+  bus: "ui", flat: true, maxVoices: 2, volume: [0.7, 0.7], takes: 1,
+  layers: [
+    { synth: { pluck: true, hz: 392, bright: 0.6, loss: 0.995, env: { attack: 0.001, decay: 0.4 }, gain: 0.45 }, standIn: true },
+    { synth: { pluck: true, hz: 523, bright: 0.6, loss: 0.995, env: { attack: 0.001, decay: 0.6 }, gain: 0.45, delay: 0.12 }, standIn: true },
+  ],
+}

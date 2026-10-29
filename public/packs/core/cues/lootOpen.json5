@@ -1,0 +1,2 @@
+// Loot opened, at what is opened.
+{ parts: [{ sound: "loot.open", bone: "chest" }] }

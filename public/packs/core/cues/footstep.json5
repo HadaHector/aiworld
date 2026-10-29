@@ -1,0 +1,2 @@
+// A foot coming down: by the surface under it.
+{ parts: [{ sound: "footstep.{surface}", at: "source", bone: "feet" }] }

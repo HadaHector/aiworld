@@ -1,0 +1,8 @@
+// A level gained: a pillar of golden light rising round the body, a ring flaring at its feet.
+{
+  emitters: [
+    { sprite: "softDot", blend: "add", rate: 80, duration: 0.8, life: [0.6, 1], shape: { ring: 0.5 }, direction: [0, 1, 0], spread: 5, speed: [2, 3.5], size: [[0, 0.25], [1, 0.05]], colour: [[0, "#fff4c0c0"], [1, "#ffc04000"]] },
+    { sprite: "star", blend: "add", rate: 25, duration: 1, life: [0.8, 1.2], shape: { ring: 0.6 }, direction: [0, 1, 0], spread: 15, speed: [1, 2.5], spin: [-2, 2], size: [[0, 0.1], [0.5, 0.25], [1, 0.05]], colour: [[0, "#ffffff"], [1, "#ffd06000"]] },
+    { mesh: "ring", blend: "add", burst: 1, life: 0.6, size: [[0, 0.5], [1, 3]], colour: [[0, "#ffe8a0e0"], [1, "#ffc04000"]] },
+  ],
+}

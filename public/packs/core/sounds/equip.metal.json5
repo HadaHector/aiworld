@@ -1,0 +1,8 @@
+// Metal put on: a clink and a clank of plates.
+{
+  bus: "ui", flat: true, maxVoices: 2, pitch: [-1, 1], volume: [0.6, 0.7],
+  layers: [
+    { synth: { modal: true, hz: 700, partials: [[1, 0.4, 0.06], [2.4, 0.3, 0.04]], gain: 0.45, crush: { bits: 8, rate: 2 } }, standIn: true },
+    { synth: { modal: true, hz: 560, partials: [[1, 0.4, 0.07], [2.7, 0.25, 0.04]], gain: 0.4, delay: 0.1, crush: { bits: 8, rate: 2 } }, standIn: true },
+  ],
+}

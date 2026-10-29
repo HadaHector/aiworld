@@ -1,0 +1,8 @@
+// A footstep on bare earth: a soft dull pat.
+{
+  bus: "footsteps", near: 2, far: 18, maxVoices: 6, pitch: [-2, 2], volume: [0.7, 0.9], takes: 6,
+  layers: [
+    { synth: { tone: "sine", hz: [140, 60], env: { attack: 0.002, decay: 0.06 }, gain: 0.45, crush: { bits: 8, rate: 2 } }, standIn: true },
+    { synth: { noise: "pink", filter: { type: "lowpass", hz: 900 }, env: { attack: 0.002, decay: 0.05 }, gain: 0.5, crush: { bits: 8, rate: 2 } }, standIn: true },
+  ],
+}

@@ -1,0 +1,8 @@
+// Loot opened: a rustle of cloth and a latch clicking.
+{
+  near: 3, far: 20, maxVoices: 2, pitch: [-1, 1], volume: [0.7, 0.8],
+  layers: [
+    { synth: { noise: "pink", filter: { type: "bandpass", hz: [1200, 2500], q: 1.2 }, env: { attack: 0.02, decay: 0.18 }, gain: 0.7, crush: { bits: 8, rate: 2 } }, standIn: true },
+    { synth: { tone: "square", hz: [900, 600], env: { attack: 0.001, decay: 0.03 }, gain: 0.12, delay: 0.16, crush: { bits: 8, rate: 2 } }, standIn: true },
+  ],
+}

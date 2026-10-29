@@ -126,7 +126,11 @@ export const PHASES = ["cast", "channel", "release", "projectile", "impact", "ti
 export type Phase = (typeof PHASES)[number];
 
 /** Events the client sees happen that are not combat events. */
-export const CLIENT_EVENTS = ["lootable", "lootOpen", "itemTake", "moneyTake", "itemDrop", "itemPickUp", "equip", "use", "target", "footstep"] as const;
+export const CLIENT_EVENTS = [
+  "lootable", "lootOpen", "itemTake", "moneyTake", "itemDrop", "itemPickUp", "equip", "use", "target", "footstep",
+  // Progression (PROGRESSION.md): the game's own client sends these; `levelUp` is a combat event too.
+  "xpGained", "levelUp", "disciplineUp", "learned", "talentPicked",
+] as const;
 export const EVENT_NAMES: readonly string[] = [...COMBAT_EVENT_KINDS, ...CLIENT_EVENTS];
 
 /** One line of the event table: the first whose conditions all hold picks the cue. */

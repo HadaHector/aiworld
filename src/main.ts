@@ -240,6 +240,8 @@ const feedback = createGameFeedback({
   bodyPlace: (unit, bone, out) => (unit === playerId ? (view?.character.place(bone, out) ?? false) : (entityMeshes?.place(unit, bone, out) ?? false)),
   feelable: (unit) => (unit === playerId ? (view?.character.feelable() ?? null) : (entityMeshes?.feelable(unit) ?? null)),
   shake: musicControl.shake,
+  steps: (unit) => (unit === playerId ? (view?.character.steps() ?? -1) : (entityMeshes?.steps(unit) ?? -1)),
+  belongings,
 });
 
 /**
@@ -299,7 +301,7 @@ async function enter(transfer: Transfer, resume: boolean): Promise<void> {
   const world = next.world;
   floatingText = createFloatingText(next.scene, mirror, gameRules, () => playerId);
   healthBars = createHealthBars(next.scene, mirror, gameRules, () => playerId);
-  feedback.setScene(next.scene);
+  feedback.setScene(next.scene, next.world);
   entityMeshes = createEntityMeshes(next.scene, mirror, gameRules, () => playerId, {
     kit: bodyKit,
     worldSeed: transfer.seed,
@@ -453,7 +455,11 @@ const entityPanel = createEntityPanel({
 });
 
 // Items (see ITEMS.md): B toggles the inventory; E loots or picks up the nearest thing in reach.
-const sendItem = (message: ClientMessage): void => channel.client.send(message);
+const sendItem = (message: ClientMessage): void => {
+  channel.client.send(message);
+  // Its sound at once, as the hand does it (FEEDBACK.md).
+  feedback.itemIntent(message);
+};
 const inventory = createInventoryScreen({ game: gameRules, items: itemRules, mirror: belongings, send: sendItem });
 createLootWindow({ game: gameRules, items: itemRules, mirror: belongings, send: sendItem });
 /** The nearest entity with loot in reach of the own player, or 0. */
@@ -487,6 +493,7 @@ window.addEventListener("keydown", (e) => {
 
 // Combat (see ABILITIES.md): a target, spells on keys 1-9, the frames and the log.
 function setTarget(id: number): void {
+  if (id && id !== targetId) feedback.client("target", { source: playerId, target: id, skill: null, crit: false, periodic: false });
   targetId = id;
   channel.client.send({ type: "target", id });
   if (id && entityPanel.visible) entityPanel.select(id);

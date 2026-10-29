@@ -1,0 +1,7 @@
+// A footstep on gravel: a crunch of small stones.
+{
+  bus: "footsteps", near: 2, far: 18, maxVoices: 6, pitch: [-2, 2], volume: [0.7, 0.9], takes: 6,
+  layers: [
+    { synth: { crackle: true, density: 500, click: 0.003, filter: { type: "bandpass", hz: 2000, q: 1 }, env: { attack: 0.005, decay: 0.1 }, gain: 0.8, crush: { bits: 8, rate: 2 } }, standIn: true },
+  ],
+}

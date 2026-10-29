@@ -1,8 +1,10 @@
 // Feedback in the game (see FEEDBACK.md): the combat events of each step played as cues - sounds,
 // particle effects and hit feel - at the units the mirror knows (on their bodies' bones where they
-// have bodies), heard and seen from the camera, which shakes in the player's own fights. The sound effects start with the
-// page's audio (the first click or key press); they and the particles live for the page, across
-// dimensions, and each dimension's scene gets its own particle drawers.
+// have bodies), heard and seen from the camera, which shakes in the player's own fights; and what
+// the client sees happen itself - footsteps, loot glinting and being opened and taken, items
+// equipped, used and dropped, a target picked. The sound effects start with the page's audio (the
+// first click or key press); they and the particles live for the page, across dimensions, and each
+// dimension's scene gets its own particle drawers.
 
 import type { Camera } from "@babylonjs/core/Cameras/camera";
 import type { ArcRotateCamera } from "@babylonjs/core/Cameras/arcRotateCamera";
@@ -20,14 +22,23 @@ import type { ItemRules } from "../sim/rules/itemRules";
 import type { CombatEvent } from "../sim/skills/events";
 import type { BodyKit } from "./characterBody";
 import type { EntityMirror, MirroredEntity } from "./entityMirror";
+import type { BelongingsMirror } from "./belongingsMirror";
+import type { ClientMessage } from "../sim/protocol";
+import type { World } from "../world/world";
+import { createSurfaceProbe, type SurfaceProbe } from "./footsteps";
+import { GROUND_ITEM_TEMPLATE, TAKE_ALL } from "../sim/items/itemSystem";
+import type { CueHandle } from "../feedback/cues";
 
 export interface GameFeedback {
   /** A step's combat events. */
   events: (events: readonly CombatEvent[]) => void;
   /** A client event (`lootOpen`, `itemTake`...) at a unit or a point. */
   client: (name: string, context: CueContext, match?: { rarity?: string }) => void;
-  /** The scene being drawn, for the particles: on entering a dimension, null on leaving. */
-  setScene: (scene: Scene | null) => void;
+  /** The scene and world being drawn, for the particles and the ground under feet: on entering a
+   *  dimension, null on leaving. */
+  setScene: (scene: Scene | null, world?: World) => void;
+  /** An item intent the player sends (take, drop, pick up, equip, use): its sound, at once. */
+  itemIntent: (message: ClientMessage) => void;
   /** Each frame: steps the particles and puts the listener on the camera. */
   update: (camera: Camera | null) => void;
   /** The Effects volume, 0..1. */
@@ -62,7 +73,14 @@ export interface GameFeedbackOptions {
   feelable: (unit: number) => Feelable | null;
   /** The Screen shake setting to start with. */
   shake?: number;
+  /** How many steps a unit's body has taken, or -1 for one without a body. */
+  steps: (unit: number) => number;
+  /** The own player's things, for what loot holds and what an item is. */
+  belongings: BelongingsMirror;
 }
+
+/** Footsteps are heard from units this near the player, at most. */
+const FOOTSTEP_REACH = 25;
 
 const BABYLON_FORWARD = new Vector3(0, 0, 1);
 const scratch = new Vector3();
@@ -143,19 +161,135 @@ export function createGameFeedback(options: GameFeedbackOptions): GameFeedback {
 
   const particles = createParticleSystem(rules);
   let renderer: ParticleRenderer | null = null;
+  let surfaces: SurfaceProbe | null = null;
   let lastFrame = performance.now();
+
+  // --- what the client sees happen ---
+  const self = (target = options.player()): CueContext => ({ source: options.player(), target, skill: null, crit: false, periodic: false });
+  /** Each unit's steps last frame, or for a capsule the ground it has covered since its last one. */
+  const stepsSeen = new Map<number, { steps: number; walked: number; x: number; z: number }>();
+  const footstep = (entity: MirroredEntity): void => {
+    const surface = surfaces?.at(entity.x, entity.y, entity.z) ?? "dirt";
+    cues.client("footstep", { source: entity.id, target: 0, skill: null, crit: false, periodic: false, values: { surface } });
+  };
+  const stepAll = (): void => {
+    const me = mirror.entities.get(options.player());
+    if (!me) return;
+    for (const entity of mirror.entities.values()) {
+      const look = entity.template?.look;
+      if (!look || look.shape === "box" || entity.lootable) continue;
+      if (Math.hypot(entity.x - me.x, entity.z - me.z) > FOOTSTEP_REACH) {
+        stepsSeen.delete(entity.id);
+        continue;
+      }
+      const steps = options.steps(entity.id);
+      const seen = stepsSeen.get(entity.id);
+      if (!seen) {
+        stepsSeen.set(entity.id, { steps, walked: 0, x: entity.x, z: entity.z });
+        continue;
+      }
+      if (steps >= 0) {
+        // A body says when its feet come down.
+        if (steps > seen.steps) footstep(entity);
+        seen.steps = steps;
+      } else if (entity.grounded) {
+        // A capsule steps at a stride from its size.
+        const moved = Math.hypot(entity.x - seen.x, entity.z - seen.z);
+        if (moved < 3) seen.walked += moved;
+        if (seen.walked > 0.5 + look.height * 0.5) {
+          seen.walked = 0;
+          footstep(entity);
+        }
+      }
+      seen.x = entity.x;
+      seen.z = entity.z;
+    }
+  };
+  /** Glints looping over everything that has loot to take. */
+  const glints = new Map<number, CueHandle>();
+  const glintAll = (): void => {
+    for (const entity of mirror.entities.values()) {
+      if (entity.lootable && !glints.has(entity.id)) {
+        const handle = cues.client("lootable", { source: options.player(), target: entity.id, skill: null, crit: false, periodic: false });
+        if (handle) glints.set(entity.id, handle);
+      }
+    }
+    for (const [id, handle] of glints) {
+      if (mirror.entities.get(id)?.lootable) continue;
+      handle.stop();
+      glints.delete(id);
+    }
+  };
+  // Loot opening, as the server says, at what is opened.
+  let openLoot = 0;
+  options.belongings.onChange(() => {
+    const loot = options.belongings.loot?.entity ?? 0;
+    if (loot && loot !== openLoot) cues.client("lootOpen", self(loot));
+    openLoot = loot;
+  });
+  /** An item's rarity's id, from its type. */
+  const rarityOf = (type: string): string => {
+    const def = items.types[items.typeIndex.get(type) ?? -1];
+    return def ? (items.rarities[def.rarity]?.id ?? "") : "";
+  };
+  const itemIntent = (message: ClientMessage): void => {
+    switch (message.type) {
+      case "lootTake": {
+        const loot = options.belongings.loot;
+        if (!loot) return;
+        // Taking all sounds like its best item, and the coins.
+        const taken = message.slot === TAKE_ALL ? loot.items.filter((i) => i !== null) : [loot.items[message.slot]].filter((i) => i !== null && i !== undefined);
+        if (taken.length > 0) {
+          const best = taken.map((i) => items.types[items.typeIndex.get(i!.type) ?? -1]?.rarity ?? 0).reduce((a, b) => Math.max(a, b), 0);
+          cues.client("itemTake", self(loot.entity), { rarity: items.rarities[best]?.id ?? "" });
+        }
+        if (message.slot === TAKE_ALL && loot.money.some((m) => m > 0)) cues.client("moneyTake", self(loot.entity));
+        return;
+      }
+      case "itemPickUp": {
+        const entity = mirror.entities.get(message.entity);
+        if (entity?.templateId === GROUND_ITEM_TEMPLATE) cues.client("itemPickUp", self(entity.id));
+        return;
+      }
+      case "itemDrop":
+        cues.client("itemDrop", self());
+        return;
+      case "itemEquip": {
+        // Equipping sounds like what the piece is made of.
+        const item = options.belongings.containers[message.from.container]?.[message.from.slot];
+        const def = item ? items.types[items.typeIndex.get(item.type) ?? -1] : undefined;
+        let armor: string | undefined;
+        for (const id of def?.gear ?? []) {
+          const piece = kit.gear.get(id);
+          for (const surface of [...(piece?.paint ?? []), ...(piece?.shells ?? []), ...(piece?.skirts ?? []), ...(piece?.pieces ?? [])]) armor ??= rules.config.armors[surface.material];
+        }
+        cues.client("equip", { ...self(), values: armor ? { armor } : undefined }, { rarity: item ? rarityOf(item.type) : "" });
+        return;
+      }
+      case "itemUse":
+        cues.client("use", self());
+        return;
+    }
+  };
 
   const at: Vec3 = { x: 0, y: 0, z: 0 };
   const forward: Vec3 = { x: 0, y: 0, z: 1 };
   const up: Vec3 = { x: 0, y: 1, z: 0 };
   return {
     events: (events) => cues.events(events),
-    client: (name, context, match) => cues.client(name, context, match),
-    setScene(scene) {
+    client: (name, context, match) => {
+      cues.client(name, context, match);
+    },
+    itemIntent,
+    setScene(scene, world) {
       renderer?.dispose();
       renderer = null;
       particles.clear();
       cues.stopAll();
+      for (const handle of glints.values()) handle.stop();
+      glints.clear();
+      stepsSeen.clear();
+      surfaces = world ? createSurfaceProbe(world, rules) : null;
       if (scene) renderer = createParticleRenderer(scene, particles, rules);
     },
     update(camera) {
@@ -163,6 +297,8 @@ export function createGameFeedback(options: GameFeedbackOptions): GameFeedback {
       const dt = Math.min(0.1, (time - lastFrame) / 1000);
       lastFrame = time;
       const eye = camera?.globalPosition ?? null;
+      stepAll();
+      glintAll();
       cues.update();
       particles.update(dt, eye);
       renderer?.update();

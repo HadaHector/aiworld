@@ -1,0 +1,7 @@
+// Something put on: a cloth rustle.
+{
+  bus: "ui", flat: true, maxVoices: 2, pitch: [-1, 1], volume: [0.6, 0.7],
+  layers: [
+    { synth: { noise: "pink", filter: { type: "bandpass", hz: [900, 1800], q: 1 }, env: { attack: 0.03, hold: 0.05, decay: 0.15 }, gain: 0.8, crush: { bits: 8, rate: 2 } }, standIn: true },
+  ],
+}

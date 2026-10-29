@@ -1,0 +1,7 @@
+// An item taken: a quick soft pluck.
+{
+  bus: "ui", flat: true, maxVoices: 3, pitch: [-1, 1], volume: [0.6, 0.7],
+  layers: [
+    { synth: { pluck: true, hz: 392, bright: 0.5, loss: 0.99, env: { attack: 0.001, decay: 0.25 }, gain: 0.5, crush: { bits: 8, rate: 2 } }, standIn: true },
+  ],
+}

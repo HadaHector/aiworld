@@ -64,8 +64,9 @@ export interface CueHandle {
 export interface CuePlayer {
   /** A step's combat events. */
   events: (events: readonly CombatEvent[]) => void;
-  /** A client event (FEEDBACK.md's `lootOpen`, `itemTake`...): the event table's cue for it. */
-  client: (name: string, context: CueContext, match?: { rarity?: string }) => void;
+  /** A client event (FEEDBACK.md's `lootOpen`, `itemTake`...): the event table's cue for it - a
+   *  handle to stop it by, for one that loops (`lootable`'s glint). */
+  client: (name: string, context: CueContext, match?: { rarity?: string }) => CueHandle | null;
   /** Plays a cue by id. */
   play: (cue: string, context: CueContext) => CueHandle | null;
   /** Each frame: moves lasting cues' sounds with what they are on, and ends projectiles that are due. */
@@ -183,6 +184,12 @@ export function createCuePlayer(
       if (!system) return;
       const id = resolveRef(part.ref, valuesOf(c), (e) => rules.effects.has(e));
       if (!id) return;
+      // Once per source and target in a moment: five levels at once rise as one pillar, but a
+      // blow on five targets still bursts on each.
+      const key = `${cue.id}:${c.source}:${c.target}:${id}`;
+      const t = now();
+      if ((recent.get(key) ?? -1) > t - COALESCE) return;
+      recent.set(key, t);
       // It follows the unit (or bone, or projectile) it is on, every frame, for as long as it plays.
       const at = (): Vec3 | null => placeOf(part, c);
       const other = part.at === "source" ? c.target : c.source;
@@ -386,8 +393,11 @@ export function createCuePlayer(
       }
     },
     client(name, context, match = {}) {
+      // A client event that is a combat event too (`levelUp`) plays from the combat event, which
+      // everyone near is told, so it is not heard twice.
+      if ((COMBAT_EVENT_KINDS as readonly string[]).includes(name)) return null;
       const cue = fromTable(name, context, match);
-      if (cue) play(cue, context);
+      return cue ? play(cue, context) : null;
     },
     play,
     update() {

@@ -1,0 +1,9 @@
+// Another discipline rising a level: a quick three-note rise.
+{
+  bus: "ui", flat: true, maxVoices: 2, volume: [0.7, 0.7], takes: 1,
+  layers: [
+    { synth: { tone: "square", hz: 659, env: { attack: 0.005, hold: 0.05, decay: 0.06 }, gain: 0.1, crush: { bits: 6 } }, standIn: true },
+    { synth: { tone: "square", hz: 784, env: { attack: 0.005, hold: 0.05, decay: 0.06 }, gain: 0.1, delay: 0.1, crush: { bits: 6 } }, standIn: true },
+    { synth: { tone: "square", hz: 988, env: { attack: 0.005, hold: 0.15, decay: 0.3 }, gain: 0.1, delay: 0.2, crush: { bits: 6 } }, standIn: true },
+  ],
+}

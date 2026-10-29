@@ -28,6 +28,9 @@ export interface MotionInput {
 export interface AnimatedPose {
   pose: Pose;
   offset: [number, number, number];
+  /** Set by the animator on the frame a foot comes down while walking or running: which (FEEDBACK.md,
+   *  *Footsteps*). */
+  step?: "R" | "L";
 }
 
 export interface Animator {
@@ -99,7 +102,12 @@ export function createAnimator(skeleton: RaceSkeleton): Animator {
       const walkStride = leg * Math.min(2.6, 1.2 + 0.4 * speed);
       const runStride = leg * Math.min(4.2, 1.6 + 0.35 * speed);
       const stride = walkStride + (runStride - walkStride) * run;
+      const lastPhase = phase;
       if (input.grounded && !input.swimming) phase = (phase + (speed * dt) / stride) % 1;
+      // A foot comes down where its thigh is furthest forward: the +x one at 0.25 of the cycle, the
+      // other at 0.75.
+      const crossed = (at: number): boolean => (lastPhase < at && phase >= at) || (phase < lastPhase && (lastPhase < at || phase >= at));
+      const step: AnimatedPose["step"] = input.grounded && !input.swimming && !input.dead && speed > 0.5 ? (crossed(0.25) ? "R" : crossed(0.75) ? "L" : undefined) : undefined;
       moving = ease(moving, input.grounded && speed > 0.3 ? 1 : 0, 8, dt);
       air = ease(air, input.grounded || input.swimming ? 0 : 1, 12, dt);
       swim = ease(swim, input.swimming ? 1 : 0, 4, dt);
@@ -158,7 +166,7 @@ export function createAnimator(skeleton: RaceSkeleton): Animator {
         pose = mix(pose, dying.pose, death);
         offset = lerp3(offset, dying.offset, death);
       }
-      return { pose, offset };
+      return { pose, offset, step };
     },
   };
 

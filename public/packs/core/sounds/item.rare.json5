@@ -1,0 +1,9 @@
+// Something rare taken: a bright rising chime over the pluck.
+{
+  bus: "ui", flat: true, maxVoices: 2, volume: [0.7, 0.7], takes: 1,
+  layers: [
+    { synth: { modal: true, hz: 784, partials: [[1, 0.4, 0.5], [2, 0.15, 0.3]], gain: 0.3 }, standIn: true },
+    { synth: { modal: true, hz: 988, partials: [[1, 0.4, 0.5], [2, 0.15, 0.3]], gain: 0.3, delay: 0.08 }, standIn: true },
+    { synth: { modal: true, hz: 1175, partials: [[1, 0.4, 0.7], [2, 0.15, 0.4]], gain: 0.3, delay: 0.16 }, standIn: true },
+  ],
+}

@@ -1,0 +1,2 @@
+// A skill learned: a sweep and a few sparkles round the player.
+{ parts: [{ sound: "learned" }, { particles: "heal.tick", bone: "feet" }] }

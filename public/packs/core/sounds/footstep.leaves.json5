@@ -1,0 +1,8 @@
+// A footstep on fallen leaves: a dry rustling crackle.
+{
+  bus: "footsteps", near: 2, far: 18, maxVoices: 6, pitch: [-2, 2], volume: [0.7, 0.9], takes: 6,
+  layers: [
+    { synth: { crackle: true, density: 250, click: 0.004, filter: { type: "highpass", hz: 2500 }, env: { attack: 0.01, decay: 0.12 }, gain: 0.6, crush: { bits: 8, rate: 2 } }, standIn: true },
+    { synth: { noise: "pink", filter: { type: "bandpass", hz: 1500, q: 1 }, env: { attack: 0.01, decay: 0.06 }, gain: 0.25 }, standIn: true },
+  ],
+}

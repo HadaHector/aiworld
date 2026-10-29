@@ -10,8 +10,8 @@ fireball roars in the caster's hands, flies, and bursts on its target, a crit sh
 and pauses for an instant, deaths thud, and loot glints and chimes. A dev page plays every cue,
 sound and particle effect on its own, so it can be tuned.
 
-**Status: steps 1-5 of 7 done** (rules and content; sound in the game; particles; abilities; hit
-feel). [As built](#as-built) notes where the
+**Status: steps 1-6 of 7 done** (rules and content; sound in the game; particles; abilities; hit
+feel; loot, UI, progression and footsteps). [As built](#as-built) notes where the
 build differs from this plan.
 
 ## Decisions
@@ -618,6 +618,45 @@ Each leaves the game working: dev server, `npm run probe`, `npm run server`, `np
 - **Firefox**: its audio listener (and in some versions panners) has no position AudioParams, and
   the error stopped every frame - the particles with it. `sfx.ts` falls back to `setPosition` and
   `setOrientation` when they are missing.
+- **Step 6: loot, UI, progression and footsteps.** `src/game/feedback.ts` plays what the client sees
+  happen itself, through the event table's client events:
+  - **The glint** over a lootable corpse, chest or ground item is the looping `lootable` cue (core:
+    golden twinkles), started and stopped as the mirror's `lootable` changes; the spinning
+    polyhedron in `entityMeshes.ts` is gone.
+  - **Loot opening** plays when the server's open loot changes to a new entity (the belongings
+    mirror), at that entity. **Taking, picking up, dropping, equipping and using** play on the
+    intent, as the hand does it (`itemIntent`, from `main.ts`'s `sendItem`): taking all sounds like
+    its best item's rarity, and the coins if there is money; equipping by what the piece is made of
+    (`equip.{armor}`, through `armors`). **Picking a target** plays a blip.
+  - **Progression** (PROGRESSION.md): `CLIENT_EVENTS` gained `xpGained`, `levelUp`, `disciplineUp`,
+    `learned` and `talentPicked`, which the game's client sends. A level-up comes twice - a combat
+    event everyone near is told, and the player's own client event - so a client event that is also a
+    combat event is not played: the character's level (`adventure`) plays from the combat event,
+    by its name; other disciplines from the client's `disciplineUp`, for the player only.
+  - **Particle parts coalesce** too, by cue, source and target within 50 ms: five levels at once
+    rise as one pillar, a blow on five targets still bursts on each.
+- **Footsteps**: the animator reports a foot coming down (`AnimatedPose.step`: the gait phase passing
+  0.25 for the +x foot, 0.75 for the other, grounded, faster than 0.5 m/s); bodies count their
+  steps (`CharacterBody.steps`, and `steps` on the player's character and `entityMeshes`), and a
+  capsule steps every 0.5 m plus half its height of ground covered. Units within 25 m of the player
+  are heard. **The surface** (`src/game/footsteps.ts`): a building's floor is `wood`; else the ground
+  material that wins there, asked of the world's material rules from five terrain samples as the
+  debug map asks them, kept per metre, through `surfaces` (patterns, first match wins). **Not done**:
+  water - whether a point is under water depends on the dimension's own sea, which the test world
+  does not draw, so neither `isLand` nor the height says; `footstep.water` waits for the world to.
+- **Core content**: sounds for loot, items, coins, the target blip, a level-up fanfare (an
+  old-school square-wave arpeggio), a discipline's jingle, learning and talents, and footsteps on
+  dirt, grass, gravel, sand, snow, wood, mud, leaves and water - stone keeps the plain dirt step, which
+  the user found better than its own click; mud is a soft low wet crunch like gravel's, wood a deep
+  hollow thud with a faint creak (both reworked after listening); a glint and a level-up pillar;
+  13 cues; `surfaces` for every core ground material.
+- **Checked** in the game (`?config=tiny`, frames driven by hand): a second player walking a circle
+  steps on `sand` (the ground there is sand); the chest glints, opens with `loot.open`, take-all plays
+  `item.take` and `coins` and the glint goes; a plate chestpiece equips with `equip.metal`; a target
+  blips; XP for the character level plays the fanfare and the pillar, a class level its jingle and
+  `learned`; no console errors. The E key did not reach the page while driven this way, so loot was
+  opened through `__aiworld.items.loot()`. The probe gained the client events and surfaces (1339
+  checks).
 
 ## Not in this step
 

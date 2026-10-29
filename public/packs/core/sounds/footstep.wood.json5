@@ -1,0 +1,9 @@
+// A footstep on a wooden floor: a deep hollow thud of boards, with a faint creak of crackle.
+{
+  bus: "footsteps", near: 2, far: 18, maxVoices: 6, pitch: [-2, 2], volume: [0.7, 0.9], takes: 6,
+  layers: [
+    { synth: { tone: "sine", hz: [120, 55], env: { attack: 0.002, decay: 0.1, curve: 2.5 }, gain: 0.6, drive: 2, crush: { bits: 8, rate: 2 } }, standIn: true },
+    { synth: { modal: true, hz: 105, partials: [[1, 0.5, 0.09], [2.3, 0.2, 0.05]], gain: 0.45, crush: { bits: 8, rate: 2 } }, standIn: true },
+    { synth: { crackle: true, density: 70, click: 0.004, filter: { type: "bandpass", hz: 1400, q: 1.5 }, env: { attack: 0.01, decay: 0.12 }, gain: 0.3, crush: { bits: 8, rate: 2 } }, standIn: true },
+  ],
+}

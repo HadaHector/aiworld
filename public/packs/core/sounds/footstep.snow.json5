@@ -1,0 +1,8 @@
+// A footstep in snow: a squeaky crunch.
+{
+  bus: "footsteps", near: 2, far: 18, maxVoices: 6, pitch: [-2, 2], volume: [0.7, 0.9], takes: 6,
+  layers: [
+    { synth: { crackle: true, density: 300, click: 0.006, filter: { type: "bandpass", hz: 1400, q: 1.5 }, env: { attack: 0.02, decay: 0.12 }, gain: 0.8, crush: { bits: 8, rate: 2 } }, standIn: true },
+    { synth: { noise: "white", filter: { type: "highpass", hz: 3000 }, env: { attack: 0.02, decay: 0.08 }, gain: 0.2 }, standIn: true },
+  ],
+}

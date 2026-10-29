@@ -1,0 +1,7 @@
+// A footstep in sand: a soft dry hiss.
+{
+  bus: "footsteps", near: 2, far: 18, maxVoices: 6, pitch: [-2, 2], volume: [0.7, 0.9], takes: 6,
+  layers: [
+    { synth: { noise: "white", filter: { type: "bandpass", hz: [3500, 2000], q: 1 }, env: { attack: 0.02, decay: 0.1 }, gain: 0.4, crush: { bits: 8, rate: 2 } }, standIn: true },
+  ],
+}

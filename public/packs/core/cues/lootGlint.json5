@@ -1,0 +1,2 @@
+// Loot waiting: golden twinkles over it until it is taken (a looping client cue).
+{ parts: [{ particles: "glint", bone: "head" }] }

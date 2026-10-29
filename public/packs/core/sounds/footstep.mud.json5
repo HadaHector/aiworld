@@ -1,0 +1,9 @@
+// A footstep in mud or bog: a soft wet crunch - like gravel, but lower and duller, with a little
+// squelch under it.
+{
+  bus: "footsteps", near: 2, far: 18, maxVoices: 6, pitch: [-2, 2], volume: [0.7, 0.9], takes: 6,
+  layers: [
+    { synth: { crackle: true, density: 380, click: 0.005, filter: { type: "bandpass", hz: 900, q: 1.2 }, env: { attack: 0.008, decay: 0.12 }, gain: 0.8, crush: { bits: 8, rate: 2 } }, standIn: true },
+    { synth: { noise: "pink", filter: { type: "lowpass", hz: [900, 300], q: 1.5 }, env: { attack: 0.01, decay: 0.09 }, gain: 0.45, crush: { bits: 8, rate: 2 } }, standIn: true },
+  ],
+}

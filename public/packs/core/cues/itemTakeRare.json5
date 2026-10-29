@@ -1,0 +1,2 @@
+// Something rare or better taken: the pluck and a chime.
+{ parts: [{ sound: "item.take" }, { sound: "item.rare" }] }

@@ -1,0 +1,7 @@
+// Something with loot to take: a slow twinkle of golden stars over it. Loops.
+{
+  loop: true,
+  emitters: [
+    { sprite: "star", blend: "add", rate: 3, life: [0.7, 1], shape: { sphere: 0.2 }, direction: [0, 1, 0], spread: 20, speed: [0.1, 0.3], spin: [-1.5, 1.5], size: [[0, 0.05], [0.4, 0.22], [1, 0.04]], colour: [[0, "#fff0a000"], [0.3, "#fff0a0ff"], [1, "#ffd06000"]] },
+  ],
+}

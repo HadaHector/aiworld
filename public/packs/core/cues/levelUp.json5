@@ -1,0 +1,2 @@
+// A level gained: the fanfare and a pillar of light, seen by everyone near.
+{ parts: [{ sound: "levelUp", at: "source" }, { particles: "levelUp", at: "source", bone: "feet" }] }

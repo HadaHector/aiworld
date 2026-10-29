@@ -1,0 +1,7 @@
+// A target picked: a tiny soft blip.
+{
+  bus: "ui", flat: true, maxVoices: 1, volume: [0.35, 0.35], takes: 1,
+  layers: [
+    { synth: { tone: "triangle", hz: 1320, env: { attack: 0.002, decay: 0.05 }, gain: 0.25, crush: { bits: 8, rate: 2 } }, standIn: true },
+  ],
+}

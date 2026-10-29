@@ -1,0 +1,2 @@
+// An item dropped at the player's feet.
+{ parts: [{ sound: "item.drop", bone: "feet" }] }
