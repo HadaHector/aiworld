@@ -181,6 +181,16 @@ export const STYLE_SOUNDS: Record<string, Record<string, string>> = {
     spiccato: "pizz/pizz01.xi",
     taiko: "lowDrum/tom020l.xi",
   },
+  mainTheme: {
+    strings: "strings/flstrs02.xi",
+    stringsLow: "strings/ostrs07.xi",
+    stringsHigh: "strings/flstrs01.xi",
+    bass: "bass/dblbs01.xi",
+    violin: "violin/vln03.xi",
+    horn: "horn/frhrn06.xi",
+    timpani: "lowDrum/timp03.xi",
+    taiko: "lowDrum/tom020l.xi",
+  },
   jungle: {
     lowDrum: "congas/conga02.xi",
     ney: "ney/wateki1.xi",

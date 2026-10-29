@@ -330,6 +330,28 @@ the forest style using synth stand-ins.
   - There is no delay send.
   - The patterns are the song in play order; there is no separate order list.
 
+## Composed pieces
+
+A style can carry a fixed `score` instead of rules. The composer then returns that song as written,
+and it plays through the same player, with the same instruments, picks and playback.
+
+**The main theme** (`src/music/themes/mainTheme.ts`) is written note for note: melodies, counter
+melodies and horn calls are spelt out in a small notation (`"D5:6 A4:2 D5:4 E5:4 | ..."`, lengths
+in sixteenths, checked bar by bar). The harp, string chords, bass, drums and choir follow its
+chords by rules chosen section by section. It runs about 1:43 in D major at 96 bpm, aiming for
+the classic OSRS kind of theme:
+
+- **Intro:** strings swell in on a bare fifth under a rising harp, and a horn calls the head of
+  the theme over D D C A.
+- **A:** the theme on the flute over harp and soft strings.
+- **A2:** the theme on the horn an octave down, a violin counter-melody above, soft drums.
+- **B:** a contrasting violin theme in B minor with choir, the drums building, ending on B.
+- **A3+:** the theme a whole step up in E, violin with the horn doubling below, choir, full drums,
+  wide strings.
+- **Outro:** a fanfare cadence onto a long E chord with a timpani roll.
+
+There is no main menu yet; the theme is ready to play there once one exists.
+
 ## Playback
 
 These are things the player does for every song, so they change how the same notes sound.

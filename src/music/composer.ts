@@ -89,6 +89,8 @@ const STEP_WEIGHTS: [number, number][] = [
 ];
 
 export function composeSong(style: Style, placeSeed: number, visitSeed: number): Song {
+  // A composed piece is played as written.
+  if (style.score) return style.score();
   const place = mulberry32(deriveSeed(placeSeed, 0x6d75));
   const visit = mulberry32(deriveSeed(visitSeed, 0x7669) ^ placeSeed);
 

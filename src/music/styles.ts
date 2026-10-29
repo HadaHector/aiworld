@@ -2,6 +2,8 @@
 // chords move, rhythms, form, which instruments play which roles - never pre-written bars. Kept in
 // code for the first pass; they move to pack json5 once the shape settles. See MUSIC.md.
 
+import type { Song } from "./song";
+import { mainThemeSong } from "./themes/mainTheme";
 import type { ModeName } from "./theory";
 
 /**
@@ -142,6 +144,8 @@ export interface Style {
   room?: { seconds: number; damping: number };
   /** How much goes to the tempo-timed echo, mostly from the lead and colour parts. Default 0.4. */
   echo?: number;
+  /** A composed piece instead of rules: the song as written, the same every time (themes/). */
+  score?: () => Song;
   /** Volume of each part, 1 by default. */
   mix?: Partial<Record<"lead" | "pluck" | "pad" | "bass" | "drums" | "sparkle" | "wail" | "wind" | "claps", number>>;
 }
@@ -1377,4 +1381,7 @@ export const HIGHLANDS: Style = {
   mix: { lead: 0.9, pluck: 0.6, pad: 0.75, bass: 0.6, drums: 0.7, wind: 0.85 },
 };
 
-export const STYLES: Style[] = [FOREST, GLADE, DESERT, SNOW, SWAMP, TAVERN, HOLY, EPIC, JUNGLE, NORDIC, SAVANNA, MEDITERRANEAN, HIGHLANDS];
+/** The main theme: composed note for note (themes/mainTheme.ts), on the epic style's instruments. */
+export const MAIN_THEME: Style = { ...EPIC, id: "mainTheme", name: "Main theme (composed)", score: mainThemeSong };
+
+export const STYLES: Style[] = [MAIN_THEME, FOREST, GLADE, DESERT, SNOW, SWAMP, TAVERN, HOLY, EPIC, JUNGLE, NORDIC, SAVANNA, MEDITERRANEAN, HIGHLANDS];
