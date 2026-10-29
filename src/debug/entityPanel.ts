@@ -26,6 +26,8 @@ export interface EntityPanelOptions {
 }
 
 export interface EntityPanel {
+  /** Its element, for a HUD region to take (ui/hud.ts). */
+  readonly element: HTMLElement;
   readonly visible: boolean;
   setVisible: (on: boolean) => void;
   toggle: () => void;
@@ -205,6 +207,7 @@ export function createEntityPanel(options: EntityPanelOptions): EntityPanel {
   window.addEventListener("keydown", onKey);
 
   return {
+    element: root,
     get visible() {
       return root.style.display !== "none";
     },

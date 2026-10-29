@@ -14,6 +14,8 @@ import { indexRules } from "../sim/rules/ruleIndex";
  * HUD proper is step 10. Debug buttons give XP and levels.
  */
 export interface ProgressPanel {
+  /** Its element, for a HUD region to take (ui/hud.ts). */
+  readonly element: HTMLElement;
   readonly visible: boolean;
   toggle: () => void;
   dispose: () => void;
@@ -80,7 +82,7 @@ export function createProgressPanel(options: ProgressPanelOptions): ProgressPane
     return e;
   };
   const ownStats = (): ReadonlyMap<number, number> => entities.entities.get(options.ownId())?.stats ?? new Map();
-  const root = el("div", `position: fixed; right: 16px; top: 60px; width: 380px; max-height: calc(100vh - 140px); overflow-y: auto; padding: 8px 10px; z-index: 960; display: none; ${PANEL}`, document.body);
+  const root = el("div", `position: fixed; right: 16px; top: 60px; width: 380px; max-height: 100%; overflow-y: auto; box-sizing: border-box; padding: 8px 10px; z-index: 960; display: none; ${PANEL}`, document.body);
   const body = el("div", "", root);
   const log = el("div", "margin-top: 8px; border-top: 1px solid #444; padding-top: 4px; font-size: 11px; color: #bbb;", root);
   let visible = false;
@@ -246,6 +248,7 @@ export function createProgressPanel(options: ProgressPanelOptions): ProgressPane
   }, 500);
 
   return {
+    element: root,
     get visible() {
       return visible;
     },

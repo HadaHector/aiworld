@@ -16,6 +16,8 @@ export interface CombatHud {
   update: (target: number) => void;
   /** Adds the events of a step to the log. */
   log: (events: readonly CombatEvent[]) => void;
+  /** Fits the spell slots into a width (the HUD's layout pass). */
+  fitWidth: (width: number) => void;
   /** The skills on keys 1-9, in the order the player knows them: passives left out. */
   readonly keys: () => number[];
   dispose: () => void;
@@ -28,6 +30,8 @@ export interface CombatHudOptions {
   /** Casts the spell on key n. */
   onKey: (skill: number) => void;
   onRespawn: () => void;
+  /** Where its parts go (ui/hud.ts): the unit frames, the cast, spell and XP bars, the log. */
+  regions: { frames: HTMLElement; actions: HTMLElement; log: HTMLElement };
   /** The own level's XP (PROGRESSION.md), as a share of the way to the next level, for a thin bar
    *  under the own frame - null to show none. */
   experience?: () => { label: string; fraction: number } | null;
@@ -62,9 +66,8 @@ interface Frame {
   xpFill: HTMLElement;
 }
 
-function makeFrame(left: string): Frame {
-  // Its top is set each frame (see `frameTop`).
-  const root = el("div", `position: fixed; top: 60px; left: ${left}; width: 250px; padding: 6px 8px; z-index: 900; display: none; ${PANEL}`, document.body);
+function makeFrame(parent: HTMLElement): Frame {
+  const root = el("div", `width: 250px; padding: 6px 8px; display: none; box-sizing: border-box; ${PANEL}`, parent);
   const name = el("div", "font-weight: 600; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;", root);
   const bars = el("div", "", root);
   const cast = el("div", "position: relative; height: 14px; margin-top: 4px; background: #333; border-radius: 3px; overflow: hidden; display: none;", root);
@@ -76,33 +79,28 @@ function makeFrame(left: string): Frame {
   return { root, name, bars, cast, castFill, castText, auras, xp, xpFill };
 }
 
-/** Where the unit frames sit: just under the settings bar at the top, when the window is wide
- *  enough for them to clear the debug panels down the left (about 330 px wide); else below those
- *  panels, which reach about 200 px down. */
-function frameTop(): string {
-  return window.innerWidth / 2 - 270 >= 340 ? "60px" : "206px";
-}
-
 export function createCombatHud(options: CombatHudOptions): CombatHud {
   const { rules, mirror, ownId } = options;
-  const ownFrame = makeFrame("calc(50% - 270px)");
-  const targetFrame = makeFrame("calc(50% + 20px)");
+  const { regions } = options;
+  const ownFrame = makeFrame(regions.frames);
+  const targetFrame = makeFrame(regions.frames);
 
   // The own cast bar, above the spell bar.
-  const castBar = el("div", `position: fixed; left: 50%; bottom: 96px; transform: translateX(-50%); width: 280px; height: 18px; z-index: 900; display: none; ${PANEL} background: #222; overflow: hidden;`, document.body);
+  const castBar = el("div", `position: relative; width: 280px; height: 18px; display: none; ${PANEL} background: #222; overflow: hidden;`, regions.actions);
   const castFill = el("div", "position: absolute; left: 0; top: 0; bottom: 0; background: #d8a630;", castBar);
   const castText = el("div", "position: absolute; inset: 0; text-align: center; font-size: 12px; line-height: 18px; color: #fff; text-shadow: 0 1px 1px #000;", castBar);
 
   // The spell bar.
-  const bar = el("div", "position: fixed; left: 50%; bottom: 26px; transform: translateX(-50%); display: flex; gap: 4px; z-index: 900;", document.body);
+  const bar = el("div", "display: flex; gap: 4px;", regions.actions);
   // The XP bar under it (PROGRESSION.md): the character level's progress, as wide as the spell bar.
-  const xpBar = el("div", `position: fixed; left: 50%; bottom: 10px; transform: translateX(-50%); width: 280px; height: 12px; z-index: 900; display: none; ${PANEL} background: #1c1a22; overflow: hidden;`, document.body);
+  const xpBar = el("div", `position: relative; width: 280px; height: 12px; display: none; ${PANEL} background: #1c1a22; overflow: hidden;`, regions.actions);
   const xpBarFill = el("div", "position: absolute; left: 0; top: 0; bottom: 0; background: linear-gradient(#a27ae8, #6a3fc0); transition: width 0.3s;", xpBar);
   const xpBarText = el("div", "position: absolute; inset: 0; text-align: center; font-size: 9px; line-height: 12px; color: #fff; text-shadow: 0 1px 1px #000;", xpBar);
   const slots: { root: HTMLElement; cool: HTMLElement; label: HTMLElement; skill: number }[] = [];
+  let slotWidth = 64;
 
   // The combat log.
-  const logBox = el("div", `position: fixed; left: 16px; bottom: 16px; width: 400px; padding: 6px 8px; z-index: 900; ${PANEL} font-size: 11px; white-space: pre-wrap;`, document.body);
+  const logBox = el("div", `width: 100%; box-sizing: border-box; padding: 6px 8px; ${PANEL} font-size: 11px; white-space: pre-wrap; overflow: hidden;`, regions.log);
   const logLines: string[] = [];
 
   // Dead: a button to come back.
@@ -176,7 +174,7 @@ export function createCombatHud(options: CombatHudOptions): CombatHud {
       bar.innerHTML = "";
       slots.length = 0;
       skills.forEach((skill, i) => {
-        const root = el("div", `position: relative; width: 64px; height: 46px; ${PANEL} cursor: pointer; overflow: hidden; text-align: center;`, bar);
+        const root = el("div", `position: relative; width: ${slotWidth}px; height: 46px; ${PANEL} cursor: pointer; overflow: hidden; text-align: center;`, bar);
         el("div", "position: absolute; left: 4px; top: 2px; font-size: 10px; color: #aaa;", root).textContent = String(i + 1);
         const label = el("div", "position: absolute; left: 2px; right: 2px; top: 14px; font-size: 10px; line-height: 1.15;", root);
         label.textContent = rules.skills[skill]?.name ?? "?";
@@ -207,9 +205,14 @@ export function createCombatHud(options: CombatHudOptions): CombatHud {
   }
 
   return {
+    fitWidth(width) {
+      // Nine slots and their gaps within the width, from 64 px down to 40.
+      const fit = Math.max(40, Math.min(64, Math.floor((width - 8 * 4) / 9)));
+      if (fit === slotWidth) return;
+      slotWidth = fit;
+      for (const s of slots) s.root.style.width = `${fit}px`;
+    },
     update(targetId) {
-      const top = frameTop();
-      if (ownFrame.root.style.top !== top) ownFrame.root.style.top = targetFrame.root.style.top = top;
       const now = mirror.serverTime();
       const own = mirror.entities.get(ownId());
       drawFrame(ownFrame, own, now, false);
@@ -220,7 +223,7 @@ export function createCombatHud(options: CombatHudOptions): CombatHud {
         ownFrame.xp.title = experience.label;
         xpBarFill.style.width = ownFrame.xpFill.style.width;
         text(xpBarText, experience.label);
-        const width = `${Math.max(280, bar.offsetWidth)}px`;
+        const width = `${Math.max(200, bar.offsetWidth)}px`;
         if (xpBar.style.width !== width) xpBar.style.width = width;
       }
       xpBar.style.display = experience ? "block" : "none";
@@ -244,6 +247,8 @@ export function createCombatHud(options: CombatHudOptions): CombatHud {
       }
       if (logLines.length > LOG_LINES) logLines.splice(0, logLines.length - LOG_LINES);
       text(logBox, logLines.join("\n") || "Combat log");
+      // A short log (the HUD caps its height on small screens) shows the newest lines.
+      logBox.scrollTop = logBox.scrollHeight;
     },
     keys,
     dispose() {

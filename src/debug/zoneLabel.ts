@@ -1,4 +1,6 @@
 export interface ZoneLabel {
+  /** Its element, for a HUD region to take (ui/hud.ts). */
+  readonly element: HTMLElement;
   update: (zoneName: string, biomeName: string, weather?: string | null) => void;
 }
 
@@ -25,5 +27,5 @@ export function createZoneLabel(): ZoneLabel {
     container.textContent = text;
   };
 
-  return { update };
+  return { element: container, update };
 }

@@ -41,6 +41,7 @@ import { createProgressMirror } from "./game/progressMirror";
 import { createProgressPanel } from "./ui/progressPanel";
 import { createRuleBook } from "./ui/ruleBook";
 import { createMenuBar } from "./ui/menuBar";
+import { createHud, dock } from "./ui/hud";
 import { createHealthBars, type HealthBars } from "./game/healthBars";
 import { nextEnemy } from "./game/targeting";
 import { EVENT_KIND } from "./sim/skills/events";
@@ -217,14 +218,20 @@ function travel(dimension: string): void {
 // What the settings panel sets, kept from one dimension to the next.
 const settings: ViewSettings = { drawDistance: DEFAULT_DRAW_DISTANCE, trees: true, grass: true, shadows: true, wireframe: false, timeOfDay: 12 };
 
+// Where everything on screen goes (ui/hud.ts): regions that keep the panels apart at any width.
+const hud = createHud();
 const zoneLabel = createZoneLabel();
+dock(zoneLabel.element, hud.info);
 const positionPanel = createPositionPanel((v) => view?.gotoView(v));
+dock(positionPanel.element, hud.debug.position);
 // Music for wherever the player is - see MUSIC.md. It starts with the first click or key press.
 const musicControl = createMusicControl(
   (volume) => music.setVolume(volume),
   (volume) => feedback.setVolume(volume),
   (shake) => feedback.setShake(shake),
 );
+// The volumes and the shake are options (O), beside the graphics the dimension view adds.
+dock(musicControl.element, hud.options.sound);
 const music = createGameMusic(musicControl.volume);
 // Sounds, effects and hit feel for what happens (see FEEDBACK.md), from the combat events.
 const feedback = createGameFeedback({
@@ -294,6 +301,7 @@ async function enter(transfer: Transfer, resume: boolean): Promise<void> {
     travel,
     packs: packSet.sources,
     look: playerLook,
+    hud: { graphics: hud.options.graphics, debugSettings: hud.debug.settings, debugStats: hud.debug.stats },
   });
   built.get(transfer.dimension)?.(next.shared);
   built.delete(transfer.dimension);
@@ -461,7 +469,19 @@ const sendItem = (message: ClientMessage): void => {
   feedback.itemIntent(message);
 };
 const inventory = createInventoryScreen({ game: gameRules, items: itemRules, mirror: belongings, send: sendItem });
-createLootWindow({ game: gameRules, items: itemRules, mirror: belongings, send: sendItem });
+const lootWindow = createLootWindow({ game: gameRules, items: itemRules, mirror: belongings, send: sendItem });
+/** A window in the windows region: no taller than it, scrolling inside. */
+function dockWindow(element: HTMLElement): void {
+  dock(element, hud.windows);
+  element.style.maxHeight = "100%";
+  element.style.overflowY = "auto";
+  element.style.boxSizing = "border-box";
+  // Windows keep their size: when they do not fit side by side, the HUD closes the oldest instead.
+  element.style.flexShrink = "0";
+}
+dockWindow(inventory.element);
+dockWindow(lootWindow.element);
+dockWindow(entityPanel.element);
 /** The nearest entity with loot in reach of the own player, or 0. */
 function nearestLootable(): number {
   const me = mirror.entities.get(playerId);
@@ -508,6 +528,7 @@ const combatHud = createCombatHud({
   ownId: () => playerId,
   onKey: castSpell,
   onRespawn: () => command({ type: "respawn" }),
+  regions: { frames: hud.frames, actions: hud.actions, log: hud.log },
   experience() {
     const level = progressionRules.config.level;
     const d = progressMirror.progress?.disciplines.find((x) => x.discipline === level);
@@ -561,15 +582,41 @@ const ruleBook = createRuleBook({
     return { stats: me.stats, levels: new Map(p.disciplines.map((d) => [d.discipline, d.level])), origins: p.origins.filter((o) => o >= 0) };
   },
 });
-// The screens that open from keys, as a row of buttons too (above the music control).
-createMenuBar([
+// The screens that open from keys, as a row of buttons too; the debug tools sit in the debug panel.
+const menuBar = createMenuBar([
   { icon: "bag", label: "Inventory", key: "B", toggle: () => inventory.toggle(), open: () => inventory.visible },
   { icon: "progress", label: "Progression", key: "P", toggle: () => progressPanel.toggle(), open: () => progressPanel.visible },
   { icon: "book", label: "Rule book", key: "K", toggle: () => ruleBook.toggle(), open: () => ruleBook.visible },
-  { icon: "inspect", label: "Inspector", key: "I", toggle: () => entityPanel.toggle(), open: () => entityPanel.visible, debug: true },
-  { icon: "map", label: "Debug map", key: "M", toggle: () => view?.debugMap.toggle(), debug: true },
-  { icon: "textures", label: "Textures", key: "T", toggle: () => view?.textureBrowser.toggle(), debug: true },
+  { icon: "options", label: "Options", key: "O", toggle: () => (hud.optionsVisible = !hud.optionsVisible), open: () => hud.optionsVisible },
+  { icon: "debug", label: "Debug panel", key: "F2", toggle: () => (hud.debugVisible = !hud.debugVisible), open: () => hud.debugVisible, debug: true },
 ]);
+dock(menuBar.element, hud.menu);
+hud.onMenuVertical((vertical) => menuBar.setVertical(vertical));
+hud.onActionsWidth((width) => combatHud.fitWidth(width));
+dockWindow(progressPanel.element);
+// The debug panel's tools: what M, T and I open.
+for (const [label, key, open] of [
+  ["Inspector", "I", () => entityPanel.toggle()],
+  ["Debug map", "M", () => view?.debugMap.toggle()],
+  ["Textures", "T", () => view?.textureBrowser.toggle()],
+] as const) {
+  const button = document.createElement("button");
+  button.textContent = `${label} (${key})`;
+  button.style.cssText = "font: 11px sans-serif; color: #eee; background: rgba(0,0,0,0.6); border: 1px solid rgba(255,255,255,0.3); border-radius: 4px; padding: 3px 8px; cursor: pointer;";
+  button.addEventListener("mousedown", (e) => e.preventDefault());
+  button.addEventListener("click", open);
+  hud.debug.tools.appendChild(button);
+}
+hud.debug.tools.style.flexDirection = "row";
+window.addEventListener("keydown", (e) => {
+  if (!view || entering || e.repeat) return;
+  if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement) return;
+  if (e.key.toLowerCase() === "o") hud.optionsVisible = !hud.optionsVisible;
+  if (e.key === "F2") {
+    e.preventDefault();
+    hud.debugVisible = !hud.debugVisible;
+  }
+});
 window.addEventListener("keydown", (e) => {
   if (!view || entering || view.spectator.active) return;
   if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;

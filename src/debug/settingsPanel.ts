@@ -24,10 +24,11 @@ export interface SettingsSelect {
 }
 
 export interface SettingsPanelOptions {
-  min: number;
-  max: number;
-  initial: number;
-  onChange: (value: number) => void;
+  /** The draw-distance slider; left out, the panel has none (the debug half of the settings). */
+  min?: number;
+  max?: number;
+  initial?: number;
+  onChange?: (value: number) => void;
   toggles?: SettingsToggle[];
   /** Additional sliders beyond the built-in draw-distance one - each gets its own label + input,
    *  laid out the same way. */
@@ -37,13 +38,15 @@ export interface SettingsPanelOptions {
 }
 
 export interface SettingsPanel {
+  /** Its element, for a HUD region to take (ui/hud.ts). */
+  readonly element: HTMLElement;
   /** Takes it off the page, for the next dimension's (see DIMENSIONS.md). */
   dispose: () => void;
 }
 
 /** A small, always-visible dev-tool panel with a draw-distance slider and any switches handed to it. */
 export function createSettingsPanel(options: SettingsPanelOptions): SettingsPanel {
-  const { min, max, initial, onChange, toggles = [], sliders = [], selects = [] } = options;
+  const { min = 0, max = 0, initial = 0, onChange, toggles = [], sliders = [], selects = [] } = options;
 
   const container = document.createElement("div");
   container.style.cssText = `
@@ -68,11 +71,13 @@ export function createSettingsPanel(options: SettingsPanelOptions): SettingsPane
   slider.addEventListener("input", () => {
     const value = Number(slider.value);
     label.textContent = `Draw distance: ${value}`;
-    onChange(value);
+    onChange?.(value);
   });
 
-  container.appendChild(label);
-  container.appendChild(slider);
+  if (onChange) {
+    container.appendChild(label);
+    container.appendChild(slider);
+  }
 
   for (const extra of sliders) {
     const extraLabel = document.createElement("span");
@@ -130,5 +135,5 @@ export function createSettingsPanel(options: SettingsPanelOptions): SettingsPane
   }
 
   document.body.appendChild(container);
-  return { dispose: () => container.remove() };
+  return { element: container, dispose: () => container.remove() };
 }

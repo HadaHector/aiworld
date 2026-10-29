@@ -16,6 +16,10 @@ export interface MenuEntry {
 }
 
 export interface MenuBar {
+  /** Its element, for a HUD region to take (ui/hud.ts). */
+  readonly element: HTMLElement;
+  /** Stands it on end - a column - when the window is too narrow for a row. */
+  setVertical: (on: boolean) => void;
   dispose: () => void;
 }
 
@@ -26,6 +30,8 @@ const ICONS = {
   book: '<path d="M4 4.5h5a1.5 1.5 0 0 1 1.5 1.5v10a1.5 1.5 0 0 0-1.5-1.5H4z"/><path d="M16 4.5h-5A1.5 1.5 0 0 0 9.5 6v10a1.5 1.5 0 0 1 1.5-1.5h5z"/>',
   inspect: '<circle cx="8.5" cy="8.5" r="4.5"/><path d="M12 12l4.5 4.5"/>',
   map: '<path d="M3 5l4.5-1.5 5 1.5L17 3.5v11.5L12.5 16.5l-5-1.5L3 16.5z"/><path d="M7.5 3.5v11.5M12.5 5v11.5"/>',
+  options: '<circle cx="10" cy="10" r="2.5"/><path d="M10 2.5v2.2M10 15.3v2.2M2.5 10h2.2M15.3 10h2.2M4.7 4.7l1.6 1.6M13.7 13.7l1.6 1.6M4.7 15.3l1.6-1.6M13.7 6.3l1.6-1.6"/>',
+  debug: '<rect x="6" y="6.5" width="8" height="10" rx="4"/><path d="M8 6.5a2 2 0 0 1 4 0M3.5 9.5H6M14 9.5h2.5M3.5 13.5H6M14 13.5h2.5M10 9v7"/>',
   textures: '<rect x="3.5" y="3.5" width="5" height="5"/><rect x="11.5" y="3.5" width="5" height="5"/><rect x="3.5" y="11.5" width="5" height="5"/><rect x="11.5" y="11.5" width="5" height="5"/>',
 } as const;
 
@@ -41,6 +47,7 @@ export function createMenuBar(entries: MenuEntry[]): MenuBar {
     if (entry.debug && !lastDebug && buttons.length) {
       const gap = document.createElement("div");
       gap.style.cssText = "width: 1px; align-self: stretch; margin: 2px 3px; background: #444;";
+      gap.dataset.gap = "1";
       root.appendChild(gap);
     }
     lastDebug = !!entry.debug;
@@ -77,6 +84,16 @@ export function createMenuBar(entries: MenuEntry[]): MenuBar {
   refresh();
 
   return {
+    element: root,
+    setVertical(on) {
+      root.style.flexDirection = on ? "column-reverse" : "row";
+      root.style.alignItems = on ? "center" : "flex-end";
+      for (const gap of root.querySelectorAll<HTMLElement>("[data-gap]")) {
+        gap.style.width = on ? "auto" : "1px";
+        gap.style.height = on ? "1px" : "auto";
+        gap.style.alignSelf = "stretch";
+      }
+    },
     dispose() {
       clearInterval(timer);
       root.remove();

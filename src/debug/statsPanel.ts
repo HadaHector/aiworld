@@ -22,6 +22,8 @@ function formatCount(count: number): string {
  * Under it, how much the texture cache keeps on disk (textureCacheLabel.ts).
  */
 export interface StatsPanel {
+  /** Its element, for a HUD region to take (ui/hud.ts). */
+  readonly element: HTMLElement;
   /**
    * A section of more detail, under a button of its own that shows and hides it (hidden to begin
    * with). `onToggle` hears whether it is shown.
@@ -91,5 +93,5 @@ export function createStatsPanel(scene: Scene, engine: Engine): StatsPanel {
       `(view ${formatCount(mainDrawn)}, shadows ${formatCount(totalDrawn - mainDrawn)})`;
   });
 
-  return { addSection, dispose: () => container.remove() };
+  return { element: container, addSection, dispose: () => container.remove() };
 }

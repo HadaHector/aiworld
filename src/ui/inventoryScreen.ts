@@ -18,6 +18,8 @@ export interface InventoryOptions {
 }
 
 export interface InventoryScreen {
+  /** Its element, for a HUD region to take (ui/hud.ts). */
+  readonly element: HTMLElement;
   readonly visible: boolean;
   toggle: () => void;
   setVisible: (on: boolean) => void;
@@ -241,6 +243,7 @@ export function createInventoryScreen({ game, items, mirror, send }: InventoryOp
   window.addEventListener("keydown", onKey);
 
   return {
+    element: root,
     get visible() {
       return root.style.display !== "none";
     },
@@ -260,7 +263,7 @@ export function createInventoryScreen({ game, items, mirror, send }: InventoryOp
  * The loot window: what the open corpse, chest or ground item holds, shown while the server says
  * it is open. Click an item to take it, or take everything.
  */
-export function createLootWindow({ game, items, mirror, send }: InventoryOptions): { dispose: () => void } {
+export function createLootWindow({ game, items, mirror, send }: InventoryOptions): { element: HTMLElement; dispose: () => void } {
   const root = el("div", `position: fixed; left: 16px; top: 330px; width: 230px; z-index: 950; padding: 8px; display: none; ${PANEL}`, document.body);
   const head = el("div", "display:flex; justify-content:space-between; font-weight:600; margin-bottom:6px;", root);
   const title = el("span", "", head);
@@ -305,6 +308,7 @@ export function createLootWindow({ game, items, mirror, send }: InventoryOptions
   }
   const off = mirror.onChange(refresh);
   return {
+    element: root,
     dispose() {
       off();
       root.remove();

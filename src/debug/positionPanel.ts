@@ -1,6 +1,8 @@
 import type { ArcRotateCamera, Vector3 } from "@babylonjs/core";
 
 export interface PositionPanel {
+  /** Its element, for a HUD region to take (ui/hud.ts). */
+  readonly element: HTMLElement;
   update: (position: Vector3, camera: ArcRotateCamera, zoneName: string, biomeName: string) => void;
 }
 
@@ -210,5 +212,5 @@ export function createPositionPanel(onGo: (view: Partial<ViewSnapshot> & { x: nu
     readout.textContent = text;
   };
 
-  return { update };
+  return { element: container, update };
 }

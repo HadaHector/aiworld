@@ -17,6 +17,7 @@ import { createTextureBrowser, type TextureBrowser } from "../debug/textureBrows
 import type { ViewSnapshot } from "../debug/positionPanel";
 import { createLastView, type LastView } from "../debug/lastView";
 import { createStatsPanel } from "../debug/statsPanel";
+import { dock } from "../ui/hud";
 import { createCollisionPanel, type CollisionPanel } from "../debug/collisionPanel";
 import { createMemoryPanel } from "../debug/memoryPanel";
 import type { PlayerLights } from "../world/lighting/playerLights";
@@ -48,6 +49,9 @@ export interface DimensionViewOptions {
   /** The packs, and who the player is: their body is built from them (game/playerBody.ts). */
   packs: PackSource[];
   look: PlayerLook;
+  /** Where its panels go (ui/hud.ts): the graphics settings in the options window, the debug
+   *  switches and stats in the debug panel. */
+  hud: { graphics: HTMLElement; debugSettings: HTMLElement; debugStats: HTMLElement };
 }
 
 /**
@@ -180,7 +184,8 @@ export async function createDimensionView(options: DimensionViewOptions): Promis
   world.setTimeOfDay(settings.timeOfDay);
 
   const debugMap = createDebugMap(world.sampleTerrain, world.worldExtent, world.materialLibrary, world.areaBounds, world.areaNames, world.settlements, world.features, world.roads, content.dimension.links, (x, z) => teleport(x, z), options.travel);
-  const settingsPanel: SettingsPanel = createSettingsPanel({
+  // The player's graphics options, in the options window...
+  const graphicsPanel: SettingsPanel = createSettingsPanel({
     min: MIN_DRAW_DISTANCE,
     max: MAX_DRAW_DISTANCE,
     initial: settings.drawDistance,
@@ -192,6 +197,12 @@ export async function createDimensionView(options: DimensionViewOptions): Promis
       { label: "Trees", initial: settings.trees, onChange: (on) => world.trees.setVisible((settings.trees = on)) },
       { label: "Grass", initial: settings.grass, onChange: (on) => world.grass.setVisible((settings.grass = on)) },
       { label: "Shadows", initial: settings.shadows, onChange: (on) => world.setShadowsEnabled((settings.shadows = on)) },
+    ],
+  });
+  dock(graphicsPanel.element, options.hud.graphics);
+  // ...and the developer's switches, in the debug panel.
+  const settingsPanel: SettingsPanel = createSettingsPanel({
+    toggles: [
       { label: "Wireframe", initial: settings.wireframe, onChange: (on) => world.setWireframe((settings.wireframe = on)) },
       {
         label: "Spectator",
@@ -236,9 +247,12 @@ export async function createDimensionView(options: DimensionViewOptions): Promis
     ],
   });
 
+  dock(settingsPanel.element, options.hud.debugSettings);
+
   const placeLabels = createPlaceLabels(scene, world.labels);
   const textureBrowser = createTextureBrowser(world.materialLibrary);
   const statsPanel = createStatsPanel(scene, engine);
+  dock(statsPanel.element, options.hud.debugStats);
   const collisionPanel = createCollisionPanel(scene, world.collision, statsPanel);
   createMemoryPanel(engine, scene, statsPanel);
   // Each config's and dimension's own: a spot in one world is open sea in another.
@@ -271,6 +285,7 @@ export async function createDimensionView(options: DimensionViewOptions): Promis
       spectator.dispose();
       debugMap.dispose();
       settingsPanel.dispose();
+      graphicsPanel.dispose();
       placeLabels.dispose();
       textureBrowser.dispose();
       statsPanel.dispose();
