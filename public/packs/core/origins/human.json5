@@ -2,6 +2,7 @@
 {
   slot: "people",
   name: "Human",
+  description: "Restless and many, found on every road. What humans lack in gifts they make up in will, and they learn fast from what they live through.",
   look: { race: "human" },
   stats: { spirit: 1 },
   modifiers: [{ stat: "adventureXpRate", kind: "percent", value: 10 }],

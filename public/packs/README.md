@@ -985,7 +985,9 @@ whole power, `if`, comparisons...), compiled at load; unknown names and circles 
 errors. Players are made from `entities/player.json5`. A dimension places entities with its
 `entities` list. A template's `look` names a body - `race`, `outfit`, `sex`, from `races/` and
 `outfits/` (CHARACTERS.md) - or, without a race, a capsule of `color`; `height` and `radius` size
-the capsule, which is what a click hits either way.
+the capsule, which is what a click hits either way. A race's `look.hairStyles` lists its painted hair
+styles - `{ id, name, hairline, nape, temples, shaved, thickness }`, each how the plain short cut's
+edges move - which a character's seed picks from and character creation offers (FRONTEND.md).
 
 ## Gameplay: skills and combat rules
 
@@ -1083,8 +1085,9 @@ every field.
 { name: "Defence", stat: "defenceSkill", cap: { mul: ["level", 5] }, next: { add: [20, { mul: ["own", 8] }] },
   xp: [{ on: "hitTaken", amount: { min: [{ div: ["amount", 4] }, 5] } }],
   unlocks: [{ from: 1, modifiers: [{ stat: "armor", kind: "flat", value: { mul: ["own", 4] } }] }] }
-// origins/warrior.json5 - a class: its template fields, its discipline, what its levels teach
-{ slot: "class", name: "Warrior", resources: ["rage"], stats: { strength: 3 }, spells: [{ skill: "heroicStrike" }],
+// origins/warrior.json5 - a class: its template fields, its discipline, what its levels teach, and a
+// `description` that character creation shows (FRONTEND.md)
+{ slot: "class", name: "Warrior", description: "A fighter of steel and fury...", resources: ["rage"], stats: { strength: 3 }, spells: [{ skill: "heroicStrike" }],
   disciplines: { class: 1 }, unlocks: { class: [{ at: 2, skill: "thunderClap" }, { at: 3, skill: "kick", how: "trainer", cost: 50 }] },
   trees: ["warriorArms"] }
 // talentTrees/milestones.json5 - a choice row: one pick per tier, at a level

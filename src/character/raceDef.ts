@@ -77,7 +77,32 @@ export interface RaceLook {
   beard: number;
   /** Where the face is painted on the head: heights from the jaw's hinge (0) to the crown (1). */
   face: { eyes: number; brows: number; nose: number; mouth: number; hairline: number };
+  /** The painted hair styles a character picks from (by its seed, or as it chose); none, the plain
+   *  short cut every character had before there were styles. */
+  hairStyles: HairStyle[];
 }
+
+/**
+ * A painted hair style: how the plain cut's edges move. Heights are in the head's own measures
+ * (`face`), 0 at the jaw's hinge and 1 at the crown.
+ */
+export interface HairStyle {
+  id: string;
+  name: string;
+  /** Added to the race's hairline over the brow: up recedes, down is a fringe. */
+  hairline: number;
+  /** How far down the back of the head it reaches: 0.3 is the plain cut's, lower is longer. */
+  nape: number;
+  /** How much the hairline rises toward the temples. */
+  temples: number;
+  /** How much of the sides above the ears is shaved, 0 to 1. */
+  shaved: number;
+  /** How thick it is, 0 to 1: less is cropped close. */
+  thickness: number;
+}
+
+/** The plain short cut: what a race with no styles paints. */
+export const PLAIN_HAIR: HairStyle = { id: "short", name: "Short", hairline: 0, nape: 0.3, temples: 0.05, shaved: 0, thickness: 1 };
 
 export interface RaceSkeleton {
   /** The ankle joint over the ground. */
@@ -207,7 +232,7 @@ function readRace(id: string, data: unknown, reader: Reader): RaceDef {
 }
 
 function readLook(obj: RawObject, reader: Reader): RaceLook {
-  reader.onlyKeys(obj, "look", ["skin", "hair", "eyes", "beard", "face"]);
+  reader.onlyKeys(obj, "look", ["skin", "hair", "eyes", "beard", "face", "hairStyles"]);
   const colors = (key: string): ColorTuple[] => {
     const list = reader.array(obj, key, "look").map((value, i) => reader.colorValue(value, `look.${key}[${i}]`));
     if (list.length === 0) reader.fail(`look.${key}`, "needs at least one colour");
@@ -222,6 +247,21 @@ function readLook(obj: RawObject, reader: Reader): RaceLook {
     eyes: colors("eyes"),
     beard: reader.optionalNumber(obj, "beard", "look", 0, { min: 0, max: 1 }),
     face: { eyes: height("eyes", 0.6), brows: height("brows", 0.69), nose: height("nose", 0.5), mouth: height("mouth", 0.36), hairline: height("hairline", 0.82) },
+    hairStyles: reader.optionalArray(obj, "hairStyles", "look").map((raw, i) => {
+      const path = `look.hairStyles[${i}]`;
+      const style = reader.object(raw, path);
+      reader.onlyKeys(style, path, ["id", "name", "hairline", "nape", "temples", "shaved", "thickness"]);
+      const id = reader.string(style, "id", path);
+      return {
+        id,
+        name: reader.optionalString(style, "name", path) ?? id,
+        hairline: reader.optionalNumber(style, "hairline", path, PLAIN_HAIR.hairline, { min: -0.5, max: 0.5 }),
+        nape: reader.optionalNumber(style, "nape", path, PLAIN_HAIR.nape, { min: -0.5, max: 1 }),
+        temples: reader.optionalNumber(style, "temples", path, PLAIN_HAIR.temples, { min: 0, max: 1 }),
+        shaved: reader.optionalNumber(style, "shaved", path, PLAIN_HAIR.shaved, { min: 0, max: 1 }),
+        thickness: reader.optionalNumber(style, "thickness", path, PLAIN_HAIR.thickness, { min: 0, max: 1 }),
+      };
+    }),
   };
 }
 

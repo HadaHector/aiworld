@@ -9,6 +9,14 @@
     eyes: ["#c8a040", "#5aa8a0", "#9ac0d8", "#a0c860"],
     beard: 0,
     face: { eyes: 0.52, brows: 0.6, nose: 0.4, mouth: 0.27, hairline: 0.8 },
+    // Painted hair styles (FRONTEND.md, *Looks*): how the plain cut's hairline, nape and sides move.
+    hairStyles: [
+      { id: "short", name: "Short" },
+      { id: "long", name: "Long", hairline: -0.03, nape: -0.15 },
+      { id: "swept", name: "Swept back", hairline: 0.05, temples: 0.12, nape: 0.1 },
+      { id: "shavedSides", name: "Shaved sides", shaved: 1 },
+      { id: "cropped", name: "Cropped", thickness: 0.45 },
+    ],
   },
   skeleton: {
     ankle: 0.1,

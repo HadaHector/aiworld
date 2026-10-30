@@ -7,7 +7,7 @@ progression panel and the rule book. This step adds what comes before and around
 a main menu, worlds, characters with a creation screen, saving and loading them, a pause menu, and
 logging out. The quest log comes after step 9, which has the quests to put in it.
 
-**Status: in progress.** Approved; steps 1 to 3 done (see [As built](#as-built)).
+**Status: in progress.** Approved; steps 1 to 4 done (see [As built](#as-built)).
 
 ## Decisions
 
@@ -394,7 +394,7 @@ Each step leaves the game working: the dev server, `npm run probe`, `npm run ser
    theme, Options, Continue, and the world list with create, rename and delete. The bare URL shows
    the menu. A character can only be entered through the list, with a default look. The notes go to
    the other sessions.
-4. **Character creation.** The character list, the stage and preview, origins, the look choosers,
+4. **Character creation: done.** The character list, the stage and preview, origins, the look choosers,
    appearance overrides and hair styles (with the workbench's choosers), and names.
 5. **In the game.** The pause menu, logging out and exiting, the "Saved" mark, the action bar's
    layout in the record, the loading screen's heading and *Back to menu*, and pausing single player.
@@ -440,7 +440,7 @@ Each step leaves the game working: the dev server, `npm run probe`, `npm run ser
     separate `quickCharacter` message was needed and no bot changed.
   - **Entered** (`playerId`, `character`, `interface`) comes before the Transfer, since a Welcome
     that selects has no player yet (`playerId` 0). Welcome gains `world` (its name) and `saves`.
-    `PROTOCOL_VERSION` is 10.
+    `PROTOCOL_VERSION` is 10 (11 since step 4: looks carry `choices`, list entries a look and gear).
   - **The world record keeps the rules' hashes** (`rules`, `items`, `creatures`, `progression`) and
     the pack ids, rather than a hash per pack: the hashes are what the server already sends in
     Welcome. A character summary has `place` (the dimension's name) instead of a zone, since the
@@ -522,6 +522,49 @@ Each step leaves the game working: the dev server, `npm run probe`, `npm run ser
     starting had resolved, so it took Entered and Transfer from it. The menu now stops reading when
     a game starts, not when it has started.
   - Not yet: `names` in `rules/frontend.json5` is read but the server still uses its own 2-16 limits.
+
+- **Step 4.**
+  - **The look choices.**
+    - `EntityAppearance` gains `choices` (protocol's `LOOK_CHOICES`): height, build, skin, hair,
+      eyes, hairStyle, beard, eyeSpacing, browTilt, mouthWidth.
+    - The server keeps them with `cleanChoices`, which drops unknown names and clamps to range.
+    - `chooseAppearance(race, seed, sex, sliders, choices)` draws the seed in its old order whatever
+      was chosen, so a choice changes only itself. The hair style is drawn last, so looks from before
+      styles keep every other pick.
+    - `BodyLook.choices` carries them to every body: the player's, others', and the stage's.
+  - **Hair styles.** `races/*.json5` `look.hairStyles` (`HairStyle` in `raceDef.ts`) move the plain
+    cut's edges: hairline, nape, temples, shaved sides, thickness. `paint.ts` paints them where it
+    painted the one cut. Each core race has five: humans short, long, receding, shaved sides and
+    cropped; dwarves a bald crown instead of receding; elves swept back.
+  - **Origins** gain an optional `description`; the six core ones have one.
+  - **The stage** is part of the showcase (`showcase.stage(look, framing)`). The character stands at
+    `rules/frontend.json5`'s `stage`, idling with a slow sway. The camera glides there from its drift
+    in 1.4 s and stands in front of it, with the character either centred or right of centre, clear
+    of the list's panel. Dragging turns it; the wheel goes from the whole body (4.5 m) to the face
+    (1.1 m). A new look builds behind the old body, and "Preparing the character…" shows until it is in.
+    The first body takes several seconds while its gear materials bake; later ones are quicker.
+  - **The list** shows the chosen character on the stage, highlighted. Double-click or *Enter world*
+    plays it. A list entry (`CharacterEntry`) now carries the character's look and worn item types.
+    A new character shows in its class's start items.
+  - **Creation:**
+    - origins per slot as buttons, a combination `never`/`only` forbids greyed with why, and each
+      chosen origin's description, stats, starting abilities and disciplines;
+    - on the right, the race (the people's), sex, height, build, skin, hair and eye swatches, hair
+      style, beard (where the race and sex have them), the three face sliders, and *Randomise*;
+    - a name, then *Create and enter*.
+
+    Picking a class swings the character once.
+  - **Checked in the page:**
+    - a dwarf woman with long hair as a warrior: made, entered, and the same look in the game
+      (`choices: { hairStyle: 1 }`);
+    - back on the list with "Level 1 Dwarf Warrior", shown on the stage;
+    - turning by drag, zooming to the face.
+
+    The saves probe has 55 checks, adding clamping the choices and keeping them through create,
+    enter and the list.
+  - **Not done:** the workbench's Model view has no choosers yet (the plan had them); a people with
+    no race does not offer a free race choice (no core people lacks one); idle fidgets are a slow
+    sway rather than separate moves.
 
 ## Later
 

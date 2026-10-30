@@ -168,7 +168,7 @@ export async function startSession(page: Page, options: SessionOptions): Promise
       } else if (message.type === "entered") {
         playerId = message.playerId;
         const look = message.look;
-        Object.assign(playerLook, { race: look.race || "human", outfit: look.outfit || "scout", sex: look.sex || undefined, seed: look.seed });
+        Object.assign(playerLook, { race: look.race || "human", outfit: look.outfit || "scout", sex: look.sex || undefined, seed: look.seed, choices: look.choices });
       } else if (message.type === "refused") {
         refusal = message.reason;
       } else if (message.type === "transfer") {

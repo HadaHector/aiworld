@@ -2,6 +2,7 @@
 {
   slot: "class",
   name: "Mage",
+  description: "A scholar of the arcane who hurls fire from afar and freezes those who come too close. Fragile, and deadly at range.",
   resources: ["mana"],
   stats: { intellect: 4, stamina: -1 },
   spells: [{ skill: "autoAttack" }, { skill: "fireball" }],

@@ -2,6 +2,7 @@
 {
   slot: "class",
   name: "Priest",
+  description: "A servant of the light who mends wounds, shields allies and smites the wicked. Best beside others, never helpless alone.",
   resources: ["mana"],
   stats: { spirit: 3, intellect: 2 },
   spells: [{ skill: "autoAttack" }, { skill: "smite" }, { skill: "renew" }],

@@ -3,6 +3,7 @@
 {
   slot: "class",
   name: "Warrior",
+  description: "A fighter of steel and fury who charges in, strikes hard and grows angrier with every blow taken. Built to stand in front.",
   resources: ["rage"],
   stats: { strength: 3, stamina: 2 },
   spells: [{ skill: "autoAttack" }, { skill: "heroicStrike" }, { skill: "charge" }],

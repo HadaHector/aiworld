@@ -2,6 +2,7 @@
 {
   slot: "people",
   name: "Dwarf",
+  description: "Stout folk of the deep halls, slow to tire and slower to yield. They take to a pick as others take to bread.",
   look: { race: "dwarf" },
   stats: { stamina: 2, strength: 1, agility: -1 },
   modifiers: [{ stat: "armor", kind: "percent", value: 5 }],

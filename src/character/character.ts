@@ -4,6 +4,7 @@ import { chooseAppearance, paintAtlas, paintAtlasSliced, type Appearance, type P
 import { bakeGearMaterial, type BakedGearMaterial, type GearMaterialDef } from "./gearMaterial";
 import { sided, type GearDef } from "./gearDef";
 import { forSex, withLook, type RaceDef, type Sex, type Slider } from "./raceDef";
+import type { LookChoices } from "../sim/protocol";
 
 /** Who a character is, as far as its body goes: everything else comes from its race and seed. */
 export interface CharacterSpec {
@@ -14,6 +15,8 @@ export interface CharacterSpec {
   sex?: Sex;
   /** Slider positions instead of the seed's (0 at the race's low limit, 1 at its high one). */
   sliders?: Partial<Record<Slider, number>>;
+  /** What the player chose over the seed's picks (FRONTEND.md, *Looks*). */
+  choices?: LookChoices;
   /** The gear worn, in order: later pieces paint over earlier ones. */
   gear: GearDef[];
   /** Linen smallclothes painted on under the gear. */
@@ -48,7 +51,7 @@ export interface DressedCharacter {
  * paint - and the gear materials baked. What the workbench shows and the game draws.
  */
 export async function dressCharacter(spec: CharacterSpec, materials: Map<string, GearMaterialDef>, worldSeed: number, options: CharacterBuildOptions = {}): Promise<DressedCharacter> {
-  const look = chooseAppearance(spec.race, spec.seed, spec.sex, spec.sliders ?? {});
+  const look = chooseAppearance(spec.race, spec.seed, spec.sex, spec.sliders ?? {}, spec.choices ?? {});
   const race = forSex(withLook(spec.race, look.height, look.build), look.sex);
   const body = buildBody(race, { detail: options.detail, lattice: options.lattice, gear: spec.gear, skin: look.skin });
   await options.pause?.();

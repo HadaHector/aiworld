@@ -5,7 +5,8 @@ import { smoothNormals } from "./atlas";
 import type { BodyGeometry } from "./bodyMesh";
 import { curveSampler } from "./curve";
 import { sampleGearMaterial, type BakedGearMaterial } from "./gearMaterial";
-import { SEXES, SLIDERS, type RaceDef, type Sex, type Slider } from "./raceDef";
+import { PLAIN_HAIR, SEXES, SLIDERS, type HairStyle, type RaceDef, type Sex, type Slider } from "./raceDef";
+import type { LookChoices } from "../sim/protocol";
 import { dot, frameFor, length, sub, type Vec } from "./skeleton";
 
 /** One character's looks, picked from its race's by its seed. */
@@ -22,34 +23,56 @@ export interface Appearance {
   /** Factors on the race's lengths and girth, between its sliders' limits (raceDef.ts, withLook). */
   height: number;
   build: number;
+  hairStyle: HairStyle;
 }
 
-/** A character's looks from its seed - its sex too, unless one is given, and its sliders, unless
- *  they are (each 0 at the race's low limit to 1 at its high one). */
-export function chooseAppearance(race: RaceDef, seed: number, sex?: Sex, sliders: Partial<Record<Slider, number>> = {}): Appearance {
+/**
+ * A character's looks from its seed - its sex too, unless one is given, and its sliders, unless
+ * they are (each 0 at the race's low limit to 1 at its high one) - with what the player chose over
+ * the seed's picks (FRONTEND.md, *Looks*). The seed is drawn from in the same order whatever was
+ * chosen, so a choice changes only itself.
+ */
+export function chooseAppearance(race: RaceDef, seed: number, sex?: Sex, sliders: Partial<Record<Slider, number>> = {}, choices: LookChoices = {}): Appearance {
   const random = mulberry32(deriveSeed(seed, 0x6c6f6f6b));
-  const pick = <T>(list: T[]): T => list[Math.floor(random() * list.length)];
-  const rolled = pick([...SEXES]);
-  const chosen = sex ?? rolled;
+  const index = (length: number): number => Math.floor(random() * length);
+  const from = <T>(list: T[], rolled: number, chosen: number | undefined): T => list[chosen === undefined ? rolled : ((Math.round(chosen) % list.length) + list.length) % list.length];
+  const rolledSex = SEXES[index(SEXES.length)];
+  const chosenSex = sex ?? rolledSex;
+  const skin = from(race.look.skin, index(race.look.skin.length), choices.skin);
+  const hair = from(race.look.hair, index(race.look.hair.length), choices.hair);
+  const eyes = from(race.look.eyes, index(race.look.eyes.length), choices.eyes);
+  const beardRoll = random() < race.sexes[chosenSex].beard;
+  const shift = (chosen: number | undefined): number => {
+    const rolled = random() * 2 - 1;
+    return chosen === undefined ? rolled : Math.max(-1, Math.min(1, chosen));
+  };
+  const eyeSpacing = shift(choices.eyeSpacing);
+  const browTilt = shift(choices.browTilt);
+  const mouthWidth = shift(choices.mouthWidth);
+  const shaped = pickSliders(race, random, { height: choices.height ?? sliders.height, build: choices.build ?? sliders.build });
+  // Drawn last, so looks from before there were styles keep every other pick.
+  const styles = race.look.hairStyles;
+  const hairStyle = styles.length > 0 ? from(styles, index(styles.length), choices.hairStyle) : PLAIN_HAIR;
   return {
-    sex: chosen,
-    skin: pick(race.look.skin),
-    hair: pick(race.look.hair),
-    eyes: pick(race.look.eyes),
-    beard: random() < race.sexes[chosen].beard,
-    eyeSpacing: random() * 2 - 1,
-    browTilt: random() * 2 - 1,
-    mouthWidth: random() * 2 - 1,
-    ...pickSliders(race, random, sliders),
+    sex: chosenSex,
+    skin,
+    hair,
+    eyes,
+    beard: choices.beard === undefined ? beardRoll : choices.beard >= 0.5,
+    eyeSpacing,
+    browTilt,
+    mouthWidth,
+    ...shaped,
+    hairStyle,
   };
 }
 
-function pickSliders(race: RaceDef, random: () => number, chosen: Partial<Record<Slider, number>>): Record<Slider, number> {
+function pickSliders(race: RaceDef, random: () => number, chosen: Partial<Record<Slider, number | undefined>>): Record<Slider, number> {
   const out = {} as Record<Slider, number>;
   for (const key of SLIDERS) {
     const [low, high] = race.sliders[key];
     const k = random();
-    out[key] = low + (high - low) * (chosen[key] ?? k);
+    out[key] = low + (high - low) * Math.max(0, Math.min(1, chosen[key] ?? k));
   }
   return out;
 }
@@ -218,11 +241,15 @@ function paintHead(skin: [number, number, number], look: Appearance, face: RaceD
     darken(0.25 * smooth(face.mouth - 0.12, face.mouth - 0.22, H) * smooth(-0.15, 0.05, H) * front);
   }
 
-  // Hair: down to a hairline over the brow in front, to the nape behind.
+  // Hair: down to a hairline over the brow in front, to the nape behind, as its style moves them -
+  // the sides above the ears shaved to stubble where it says, all of it thinner when cropped.
+  const style = look.hairStyle;
   const back = Math.min(1, Math.max(0, (Math.abs(angle) - 1.0) / 0.9));
-  const hairline = face.hairline + 0.05 * ax * ax + (0.3 - face.hairline) * back;
+  const brow = face.hairline + style.hairline;
+  const hairline = brow + style.temples * ax * ax + (style.nape - brow) * back;
   const strands = 0.82 + 0.28 * noise3(around * 120, along * 10, 0.5);
-  const hair = smooth(hairline - 0.015, hairline + 0.015, H);
+  const sides = style.shaved * smooth(0.32, 0.5, ax) * (1 - smooth(0.8, 0.9, H));
+  const hair = smooth(hairline - 0.015, hairline + 0.015, H) * style.thickness * (1 - 0.75 * sides);
   mix(scaleColor(look.hair, strands), hair);
 
   if (look.beard && front > 0) {

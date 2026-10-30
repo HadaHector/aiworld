@@ -366,7 +366,9 @@ In rough order of need; each belongs to the build-order step named, or is its ow
 3. **Equipment from items (build step 7).** *Done* (ITEMS.md, *Equipment*): item types name gear
    pieces and a tint over them; what an entity wears in visible slots replaces its outfit, and its
    body is built again when that changes. An entity without belongings (the dummy) keeps its outfit.
-4. **Character creation and saves.** A screen to pick race, sex, look seed and sliders, saved with
+4. **Character creation and saves.** *Done* (FRONTEND.md, *Character creation*): race by people, sex,
+   the sliders, skin, hair and eye colours, painted hair styles, beard and face shifts over the seed,
+   saved with the character and sent in its look. The original note: a screen to pick race, sex, look seed and sliders, saved with
    the character (GAMEPLAY.md, *Saved state*) - replacing the address's `?race=&outfit=&sex=&look=`.
 5. **Animation from abilities (build step 4).** *Swings done* (ABILITIES.md): an ability's
    `animation` action sends an event and every client that sees the unit plays the swing; the key

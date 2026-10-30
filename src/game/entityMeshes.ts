@@ -113,7 +113,7 @@ export function createEntityMeshes(scene: Scene, mirror: EntityMirror, rules: Ga
     // The entity's own choices over its template's - a player's race, outfit and sex.
     const race = entity.look.race || look.race;
     const sex = entity.look.sex || look.sex;
-    const wanted: BodyLook | null = race ? { race, outfit: entity.look.outfit || look.outfit, sex: sex === "male" || sex === "female" ? sex : undefined, seed: entity.look.seed } : null;
+    const wanted: BodyLook | null = race ? { race, outfit: entity.look.outfit || look.outfit, sex: sex === "male" || sex === "female" ? sex : undefined, seed: entity.look.seed, choices: entity.look.choices } : null;
     if (race && !bodies.kit.races.has(race)) console.warn(`Entity #${entity.id} (${entity.templateId}) wants race "${race}", which these packs lack - a stand-in race is drawn.`);
     const entry: Drawn = { capsule, body: null, gone: false, wanted, built: "", building: false, fall: (entity.flags & (1 << FLAG.dead)) !== 0 ? 1 : 0, push: null, flash: null };
     drawn.set(entity.id, entry);

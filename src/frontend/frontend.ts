@@ -1,7 +1,7 @@
 import type { Page, Session } from "../game/session";
 import { startSession } from "../game/session";
 import { connectLocal, type Connection } from "../game/connection";
-import { createShowcase, type Showcase } from "./showcase";
+import { createShowcase, type Framing, type Showcase } from "./showcase";
 import type { FrontendRules } from "./frontendRules";
 import type { SaveStore } from "../save/store";
 import { createWorldRecord, makeSaveId, type CharacterSummary, type WorldRecord } from "../save/records";
@@ -11,6 +11,11 @@ import { fetchWorldConfig } from "../world/content/loadContent";
 import { hashString } from "../world/content/dimensions";
 import { PROTOCOL_VERSION, type ServerMessage } from "../sim/protocol";
 import { BUTTON_CLASS, DIM, GOLD, HEADING, PANEL, TEXT, TITLE_FONT, installTheme } from "../ui/theme";
+import { createBodyKit, type BodyLook } from "../game/characterBody";
+import { gearOfItems } from "../game/itemGear";
+import { chooseAppearance } from "../character/paint";
+import type { RaceDef, Sex } from "../character/raceDef";
+import type { EntityAppearance, LookChoices } from "../sim/protocol";
 
 /** The sizes a new world can have: one per config in public/configs, and the full game (CONFIG.md). */
 const SIZES = [
@@ -96,6 +101,11 @@ export function createFrontend(options: FrontendOptions): Frontend {
   el("div", `font: 600 clamp(34px, 6vw, 58px)/1.05 ${TITLE_FONT}; color: ${GOLD}; letter-spacing: 0.06em; text-shadow: 0 2px 8px #000, 0 0 30px rgba(240, 201, 121, 0.25);`, column, rules.title);
   const panel = el("div", `${PANEL} padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; max-height: 62vh; overflow-y: auto;`, column);
   panel.className = "game-scroll";
+  /** Character creation's looks, on the right; hidden on every other screen. */
+  const side = el("div", `${PANEL} position: absolute; right: clamp(16px, 4vw, 60px); top: 50%; transform: translateY(-50%); width: min(300px, calc(100vw - 32px)); max-height: 80vh; overflow-y: auto; padding: 12px 14px; display: none; flex-direction: column; gap: 6px; pointer-events: auto; color: ${TEXT};`, root);
+  side.className = "game-scroll";
+  /** Over the stage while its character is being made. */
+  const preparing = el("div", `position: absolute; left: 62%; top: 46%; transform: translate(-50%, -50%); padding: 6px 12px; ${PANEL} font: 600 13px ${TITLE_FONT}; color: ${GOLD}; display: none; pointer-events: none;`, root, "Preparing the character…");
   const status = el("div", `position: absolute; right: 16px; bottom: 12px; font: 11px/1.4 sans-serif; color: ${DIM}; text-shadow: 0 1px 2px #000; text-align: right;`, root);
   const small = el("div", `font: 11px/1.4 sans-serif; color: ${DIM};`, column);
 
@@ -124,12 +134,25 @@ export function createFrontend(options: FrontendOptions): Frontend {
   };
   const clear = (onBack: (() => void) | null): void => {
     panel.replaceChildren();
+    side.replaceChildren();
+    side.style.display = "none";
     back = onBack;
+    stage(null);
   };
   const row = (): HTMLElement => el("div", "display: flex; gap: 6px; flex-wrap: wrap;", panel);
 
   // --- The showcase world and the theme ---
   let showcase: Showcase | null = null;
+  /** What the stage shows, kept for a showcase still being built. */
+  let staging: BodyLook | null = null;
+  let framing: Framing = "centre";
+  function stage(look: BodyLook | null, frame: Framing = "centre"): void {
+    staging = look;
+    framing = frame;
+    showcase?.stage(look, frame);
+  }
+  /** Races, gear and outfits: the creation screen's palettes come from them. */
+  const kit = createBodyKit(options.sources as PackSource[]);
   let building: Promise<void> | null = null;
   function buildShowcase(): void {
     if (showcase || building) return;
@@ -149,6 +172,7 @@ export function createFrontend(options: FrontendOptions): Frontend {
         if (root.style.display === "none") built.dispose();
         else {
           showcase = built;
+          built.stage(staging, framing);
           backdrop.style.opacity = "0";
         }
         status.textContent = "";
@@ -163,6 +187,9 @@ export function createFrontend(options: FrontendOptions): Frontend {
   const musicTimer = window.setInterval(() => {
     if (root.style.display === "none") return;
     music.update({ style: rules.music.menu, place: 0, inside: true });
+    // On the list the character stands right of the middle; on creation, in it.
+    preparing.style.display = showcase?.preparing || (staging && !showcase) ? "" : "none";
+    preparing.style.left = framing === "right" ? "62%" : "50%";
     page.musicControl.setStatus(music.status());
   }, 250);
   void musicTimer;
@@ -314,7 +341,24 @@ export function createFrontend(options: FrontendOptions): Frontend {
     name.focus();
   }
 
-  async function charactersScreen(id: string): Promise<void> {
+  /** What a character's body wears on the stage: its worn items, or - new - its class's start items. */
+  function stageGear(origins: Record<string, string>, worn: readonly string[]): BodyLook["gear"] {
+    const r = connection!.rules;
+    if (worn.length > 0) return gearOfItems(r.items, worn);
+    const template = ["player", ...r.progression.config.slots.map((slot) => origins[slot.id])].join(".");
+    const start = r.items.entities.get(template)?.start ?? [];
+    return gearOfItems(r.items, start.filter((s) => r.items.types[s.type].slots.length > 0).map((s) => r.items.types[s.type].id));
+  }
+  const bodyLook = (look: EntityAppearance, gear: BodyLook["gear"]): BodyLook => ({
+    race: look.race || "human",
+    outfit: look.outfit || "scout",
+    sex: look.sex === "male" || look.sex === "female" ? look.sex : undefined,
+    seed: look.seed,
+    choices: look.choices,
+    gear,
+  });
+
+  async function charactersScreen(id: string, selected?: string): Promise<void> {
     clear(() => void worldsScreen());
     if (!(await openWorld(id)) || !connection || !world) return void worldsScreen();
     heading(world.name);
@@ -328,51 +372,219 @@ export function createFrontend(options: FrontendOptions): Frontend {
       newCharacterScreen();
       return;
     }
-    for (const c of [...characters].sort((a, b) => b.played - a.played)) {
-      const entry = el("div", "display: flex; align-items: center; gap: 8px; padding: 8px; border: 1px solid rgba(138,109,59,0.4); border-radius: 3px; background: rgba(0,0,0,0.25);", panel);
+    const sorted = [...characters].sort((a, b) => b.played - a.played);
+    let chosen = sorted.find((c) => c.id === selected) ?? sorted[0];
+    const entries: [CharacterSummary, HTMLElement][] = [];
+    const choose = (c: CharacterSummary): void => {
+      chosen = c;
+      for (const [summary, entry] of entries) entry.style.borderColor = summary === c ? GOLD : "rgba(138,109,59,0.4)";
+      // A character saved before lists had looks shows as its seed would.
+      stage(bodyLook(c.look ?? { seed: 0, race: "", outfit: "", sex: "" }, stageGear(c.origins, c.gear ?? [])), "right");
+    };
+    for (const c of sorted) {
+      const entry = el("div", "display: flex; align-items: center; gap: 8px; padding: 8px; border: 1px solid rgba(138,109,59,0.4); border-radius: 3px; background: rgba(0,0,0,0.25); cursor: pointer;", panel);
+      entries.push([c, entry]);
+      entry.addEventListener("click", () => choose(c));
+      entry.addEventListener("dblclick", () => void enter(c.id));
       const text = el("div", "flex: 1; display: flex; flex-direction: column; gap: 2px;", entry);
       el("div", `font: 600 15px ${TITLE_FONT}; color: ${GOLD};`, text, c.name);
       el("div", `font: 12px sans-serif; color: ${DIM};`, text, `Level ${c.level} ${Object.values(c.origins).map(originName).join(" ")} · ${c.place} · ${ago(c.played)}`);
-      button(entry, "Enter world", () => void enter(c.id), "font-size: 12px; padding: 6px 10px;");
       button(entry, "Delete", () => {
         if (!confirm(`Delete ${c.name}? This cannot be undone.`)) return;
         void ask({ type: "characterDelete", id: c.id }).then(() => charactersScreen(id));
       }, "font-size: 12px; padding: 6px 10px;");
     }
     const actions = row();
+    button(actions, "Enter world", () => void enter(chosen.id));
     button(actions, "Create character", newCharacterScreen);
     button(actions, "Back", () => void worldsScreen());
+    choose(chosen);
   }
 
-  /** Making a character: a name and the origins, for now (step 4 brings looks and the preview). */
+  /**
+   * Making a character (FRONTEND.md, *Character creation*): its origins on the left, with what each
+   * gives; its looks on the right, each chooser over what the seed picks; a name; and the character
+   * itself on the stage, built again as the choices change.
+   */
   function newCharacterScreen(): void {
     if (!connection || !world) return void worldsScreen();
     const id = world.id;
     clear(() => (characters.length ? void charactersScreen(id) : void worldsScreen()));
+    const r = connection.rules;
+    const progression = r.progression;
+    const game = r.game;
     heading(`New character in ${world.name}`);
-    const progression = connection.rules.progression;
-    const selects = new Map<string, HTMLSelectElement>();
+
+    // --- What it is ---
+    const origins: Record<string, string> = Object.fromEntries(progression.config.slots.map((slot) => [slot.id, slot.default]));
+    const originOf = (id: string) => progression.origins[progression.originIndex.get(id) ?? -1];
+    /** Why an origin cannot go with the others chosen, or "". */
+    const conflict = (slot: string, id: string): string => {
+      const origin = originOf(id);
+      for (const [other, otherId] of Object.entries(origins)) {
+        if (other === slot) continue;
+        const o = originOf(otherId);
+        if (!origin || !o) continue;
+        if (origin.never.includes(otherId) || o.never.includes(id)) return `Not with ${o.name}.`;
+        if (origin.only.length > 0 && !origin.only.some((only) => originOf(only)?.slot === other && only === otherId) && origin.only.some((only) => originOf(only)?.slot === other)) return `Only with ${origin.only.map((only) => originOf(only)?.name ?? only).join(", ")}.`;
+      }
+      return "";
+    };
+    const raceOf = (): string => {
+      for (const originId of Object.values(origins)) {
+        const look = originOf(originId)?.raw.look as { race?: unknown } | undefined;
+        if (typeof look?.race === "string" && kit.races.has(look.race)) return look.race;
+      }
+      return kit.races.has("human") ? "human" : [...kit.races.keys()][0];
+    };
+    const statName = (id: string): string => game.stats[game.statIndex.get(id) ?? -1]?.name ?? id;
+    const skillName = (id: string): string => game.skills[game.skillIndex.get(id) ?? -1]?.name ?? id;
+    const describe = (id: string): string[] => {
+      const origin = originOf(id);
+      if (!origin) return [];
+      const lines: string[] = [];
+      const stats = origin.raw.stats as Record<string, number> | undefined;
+      if (stats) lines.push(Object.entries(stats).map(([stat, v]) => `${statName(stat)} ${v > 0 ? "+" : ""}${v}`).join(", "));
+      const spells = ((origin.raw.spells as { skill: string }[] | undefined) ?? []).map((s) => s.skill).filter((skill) => skill !== "autoAttack");
+      if (spells.length > 0) lines.push(`Starts with ${spells.map(skillName).join(", ")}`);
+      const disciplines = origin.disciplines.filter((d) => progression.disciplines[d.discipline] && progression.disciplines[d.discipline].id !== "class");
+      if (disciplines.length > 0) lines.push(disciplines.map((d) => `${progression.disciplines[d.discipline].name} ${d.level}`).join(", "));
+      return lines;
+    };
+    const slotRows = new Map<string, HTMLElement>();
+    const about = el("div", "display: flex; flex-direction: column; gap: 6px;");
     for (const slot of progression.config.slots) {
-      const select = document.createElement("select");
-      for (const origin of progression.origins) if (origin.slot === slot.id) select.add(new Option(origin.name, origin.id, false, origin.id === slot.default));
-      field(slot.id.charAt(0).toUpperCase() + slot.id.slice(1), select);
-      selects.set(slot.id, select);
+      el("div", `font: 600 12px sans-serif; color: ${DIM}; margin-top: 2px;`, panel, slot.id.charAt(0).toUpperCase() + slot.id.slice(1));
+      slotRows.set(slot.id, el("div", "display: flex; gap: 5px; flex-wrap: wrap;", panel));
     }
+    panel.appendChild(about);
+    const showOrigins = (): void => {
+      for (const slot of progression.config.slots) {
+        const list = slotRows.get(slot.id)!;
+        list.replaceChildren();
+        for (const origin of progression.origins) {
+          if (origin.slot !== slot.id) continue;
+          const why = conflict(slot.id, origin.id);
+          const b = button(list, origin.name, () => {
+            origins[slot.id] = origin.id;
+            if (slot.id === "people") look.race = raceOf();
+            showOrigins();
+            showLooks();
+            update();
+            // The class shown off once its body is in.
+            if (slot.id === "class") setTimeout(() => showcase?.flourish(), 900);
+          }, `font-size: 12px; padding: 5px 9px; ${origins[slot.id] === origin.id ? `border-color: ${GOLD}; color: #fff;` : ""}`);
+          b.disabled = why !== "" && origins[slot.id] !== origin.id;
+          if (why) b.title = why;
+          if (b.disabled) b.style.opacity = "0.45";
+        }
+      }
+      about.replaceChildren();
+      for (const slot of progression.config.slots) {
+        const origin = originOf(origins[slot.id]);
+        if (!origin) continue;
+        const box = el("div", "padding: 6px 8px; border-left: 2px solid rgba(240,201,121,0.5); background: rgba(0,0,0,0.2);", about);
+        el("div", `font: 600 13px ${TITLE_FONT}; color: ${GOLD};`, box, origin.name);
+        if (origin.description) el("div", "font: 12px/1.45 sans-serif;", box, origin.description);
+        for (const line of describe(origin.id)) el("div", `font: 11px/1.4 sans-serif; color: ${DIM};`, box, line);
+      }
+    };
+
+    // --- How it looks ---
+    const look: { seed: number; race: string; sex: Sex | undefined; choices: LookChoices } = { seed: Math.floor(Math.random() * 4294967296) >>> 0, race: raceOf(), sex: undefined, choices: {} };
+    const race = (): RaceDef => kit.races.get(look.race)!;
+    const appearance = () => chooseAppearance(race(), look.seed, look.sex, {}, look.choices);
+    const sameColour = (a: readonly number[], b: readonly number[]): boolean => a.every((v, i) => Math.abs(v - b[i]) < 1e-6);
+    const css = (c: readonly number[]): string => `rgb(${c.map((v) => Math.round(v * 255)).join(",")})`;
+    const lookHeading = (text: string): void => void el("div", `font: 600 12px sans-serif; color: ${DIM}; margin-top: 4px;`, side, text);
+    const choose = (key: keyof LookChoices, value: number): void => {
+      look.choices = { ...look.choices, [key]: value };
+      showLooks();
+      update();
+    };
+    const slider = (label: string, key: keyof LookChoices, value: number, low: number, high: number): void => {
+      const row_ = el("label", "display: grid; grid-template-columns: 82px 1fr; align-items: center; gap: 6px; font: 12px sans-serif;", side, label);
+      const input = el("input", "accent-color: #c9a040;", row_);
+      input.type = "range";
+      input.min = String(low);
+      input.max = String(high);
+      input.step = "0.01";
+      input.value = String(value);
+      input.addEventListener("change", () => choose(key, Number(input.value)));
+    };
+    const showLooks = (): void => {
+      side.replaceChildren();
+      const r_ = race();
+      const a = appearance();
+      el("div", `${HEADING} font-size: 15px; margin: 0;`, side, `${r_.name}`);
+      lookHeading("Body");
+      const sexes = el("div", "display: flex; gap: 5px;", side);
+      for (const sex of ["male", "female"] as const) {
+        button(sexes, sex === "male" ? "Male" : "Female", () => {
+          look.sex = sex;
+          showLooks();
+          update();
+        }, `font-size: 12px; padding: 5px 10px; ${a.sex === sex ? `border-color: ${GOLD}; color: #fff;` : ""}`);
+      }
+      const [hl, hh] = r_.sliders.height;
+      const [bl, bh] = r_.sliders.build;
+      slider("Height", "height", (a.height - hl) / (hh - hl || 1), 0, 1);
+      slider("Build", "build", (a.build - bl) / (bh - bl || 1), 0, 1);
+      const swatches = (label: string, key: "skin" | "hair" | "eyes", list: readonly (readonly number[])[], current: readonly number[]): void => {
+        lookHeading(label);
+        const row_ = el("div", "display: flex; gap: 4px; flex-wrap: wrap;", side);
+        list.forEach((colour, i) => {
+          const swatch = el("div", `width: 22px; height: 22px; border-radius: 3px; cursor: pointer; background: ${css(colour)}; border: 2px solid ${sameColour(colour, current) ? GOLD : "#000"}; box-shadow: 0 0 0 1px #6b5530;`, row_);
+          swatch.addEventListener("click", () => choose(key, i));
+        });
+      };
+      swatches("Skin", "skin", r_.look.skin, a.skin);
+      swatches("Hair", "hair", r_.look.hair, a.hair);
+      swatches("Eyes", "eyes", r_.look.eyes, a.eyes);
+      if (r_.look.hairStyles.length > 0) {
+        lookHeading("Hair style");
+        const row_ = el("div", "display: flex; gap: 4px; flex-wrap: wrap;", side);
+        r_.look.hairStyles.forEach((style, i) => {
+          button(row_, style.name, () => choose("hairStyle", i), `font-size: 11px; padding: 4px 7px; ${a.hairStyle.id === style.id ? `border-color: ${GOLD}; color: #fff;` : ""}`);
+        });
+      }
+      if (r_.sexes[a.sex].beard > 0) {
+        const row_ = el("label", "display: flex; align-items: center; gap: 6px; font: 12px sans-serif; margin-top: 4px;", side);
+        const box = el("input", "accent-color: #c9a040;", row_);
+        box.type = "checkbox";
+        box.checked = a.beard;
+        row_.append("Beard");
+        box.addEventListener("change", () => choose("beard", box.checked ? 1 : 0));
+      }
+      lookHeading("Face");
+      slider("Eyes apart", "eyeSpacing", a.eyeSpacing, -1, 1);
+      slider("Brows", "browTilt", a.browTilt, -1, 1);
+      slider("Mouth", "mouthWidth", a.mouthWidth, -1, 1);
+      const actions = el("div", "display: flex; gap: 5px; margin-top: 8px;", side);
+      button(actions, "Randomise", () => {
+        look.seed = Math.floor(Math.random() * 4294967296) >>> 0;
+        look.sex = undefined;
+        look.choices = {};
+        showLooks();
+        update();
+      }, "font-size: 12px; padding: 6px 10px;");
+      el("div", `font: 11px/1.4 sans-serif; color: ${DIM}; margin-top: 4px;`, side, "Drag the character to turn it; the wheel brings the camera to its face.");
+    };
+    const update = (): void => {
+      const a = appearance();
+      stage(bodyLook({ seed: look.seed, race: look.race, outfit: "", sex: a.sex, choices: look.choices }, stageGear(origins, [])));
+    };
+
+    // --- Its name ---
     const name = document.createElement("input");
     name.maxLength = rules.names.max;
     field("Name", name);
     const problem = note("", "#e88");
     const actions = row();
     const create = (): void => {
-      const origins = Object.fromEntries([...selects].map(([slot, s]) => [slot, s.value]));
-      // A people's body race; the rest of the look from a seed, until step 4's choosers.
-      let race = "human";
-      for (const originId of Object.values(origins)) {
-        const look = progression.origins[progression.originIndex.get(originId) ?? -1]?.raw.look as { race?: unknown } | undefined;
-        if (typeof look?.race === "string") race = look.race;
-      }
-      const look = { seed: Math.floor(Math.random() * 4294967296) >>> 0, race, outfit: "", sex: "" };
-      void ask({ type: "characterCreate", name: name.value, origins, look }).then((why) => {
+      const a = appearance();
+      const sent: EntityAppearance = { seed: look.seed, race: look.race, outfit: "", sex: a.sex, ...(Object.keys(look.choices).length > 0 ? { choices: look.choices } : {}) };
+      void ask({ type: "characterCreate", name: name.value, origins, look: sent }).then((why) => {
         if (why) problem.textContent = why;
         else {
           const made = characters.find((c) => c.name.toLowerCase() === name.value.trim().toLowerCase());
@@ -385,6 +597,11 @@ export function createFrontend(options: FrontendOptions): Frontend {
     button(actions, "Create and enter", create);
     if (characters.length) button(actions, "Back", () => void charactersScreen(id));
     else button(actions, "Back", () => void worldsScreen());
+
+    side.style.display = "flex";
+    showOrigins();
+    showLooks();
+    update();
     name.focus();
   }
 

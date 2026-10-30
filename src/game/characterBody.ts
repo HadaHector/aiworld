@@ -7,7 +7,7 @@ import { resolveGearMaterials, type GearMaterialDef } from "../character/gearMat
 import { dressCharacter } from "../character/character";
 import { createCharacterMesh, type CharacterMesh } from "../character/characterMesh";
 import { createAnimator, type Animator } from "../character/animation";
-import type { EntityMotion } from "../sim/protocol";
+import type { EntityMotion, LookChoices } from "../sim/protocol";
 
 /** Who a character is, as far as its body goes - a race, an outfit and its seed, by their ids. */
 export interface BodyLook {
@@ -15,6 +15,8 @@ export interface BodyLook {
   outfit: string;
   sex?: Sex;
   seed: number;
+  /** What the player chose over the seed's picks (FRONTEND.md, *Looks*). */
+  choices?: LookChoices;
   /** Gear pieces from what it wears (ITEMS.md, *Equipment*), in place of the outfit when given. */
   gear?: BodyGear[];
 }
@@ -96,7 +98,7 @@ const TELEPORT = 3;
 export async function createCharacterBody(scene: Scene, name: string, kit: BodyKit, look: BodyLook, worldSeed: number): Promise<CharacterBody> {
   const race = kit.races.get(look.race) ?? kit.races.get("human") ?? [...kit.races.values()][0];
   const dressed = await dressCharacter(
-    { race, seed: look.seed, sex: look.sex, gear: gearOf(kit, look), smallclothes: true },
+    { race, seed: look.seed, sex: look.sex, choices: look.choices, gear: gearOf(kit, look), smallclothes: true },
     kit.materials,
     worldSeed,
     // In slices, so a crowd coming into view (a bandit camp) does not stop the frames.

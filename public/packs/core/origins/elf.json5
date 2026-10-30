@@ -2,6 +2,7 @@
 {
   slot: "people",
   name: "Elf",
+  description: "Long-lived and light of foot, quick of mind and eye. Elves know the herbs of every wood they pass through.",
   look: { race: "elf" },
   stats: { agility: 2, intellect: 1, stamina: -1 },
   disciplines: { herbalism: 5 },

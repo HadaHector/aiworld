@@ -23,7 +23,7 @@ export function lookFromUrl(search = location.search): PlayerLook {
 
 /** The player's look as Hello carries it. */
 export function appearanceOf(look: PlayerLook): EntityAppearance {
-  return { seed: look.seed >>> 0, race: look.race, outfit: look.outfit, sex: look.sex ?? "" };
+  return { seed: look.seed >>> 0, race: look.race, outfit: look.outfit, sex: look.sex ?? "", ...(look.choices ? { choices: look.choices } : {}) };
 }
 
 /** The player's body (CHARACTERS.md, build step 6): drawn where the server has the player. */

@@ -139,6 +139,8 @@ export interface OriginDef {
   index: number;
   slot: string;
   name: string;
+  /** A sentence or two for character creation (FRONTEND.md) - "" when it has none. */
+  description?: string;
   /** Template fields merged over the player's (stats add, lists add, `look` merges). */
   raw: RawObject;
   disciplines: { discipline: number; level: number }[];
@@ -226,7 +228,7 @@ const SOURCE_KEYS = ["on", "amount", "when", "rate", "credit", "tags", "notTags"
 const UNLOCK_KEYS = ["at", "from", "to", "every", "skill", "level", "how", "cost", "modifiers", "points", "resource", "disciplines", "knows"];
 const TREE_KEYS = ["name", "points", "discipline", "tiers", "nodes"];
 const NODE_KEYS = ["name", "tier", "ranks", "cost", "requires", "modifiers", "skill", "resource", "points"];
-export const ORIGIN_KEYS = ["slot", "name", "look", "stats", "modifiers", "resources", "spells", "disciplines", "unlocks", "trees", "only", "never"];
+export const ORIGIN_KEYS = ["slot", "name", "description", "look", "stats", "modifiers", "resources", "spells", "disciplines", "unlocks", "trees", "only", "never"];
 /** The highest level any discipline may have: levels are sent as u16. */
 const LEVEL_LIMIT = 1000;
 
@@ -716,6 +718,7 @@ function readOrigin(entry: Entry & { template: string }, index: number, ctx: Rea
     index,
     slot: reader.string(obj, "slot", ""),
     name: reader.optionalString(obj, "name", "") ?? entry.id,
+    description: reader.optionalString(obj, "description", "") ?? "",
     raw,
     disciplines: readStartingDisciplines(reader, obj, "", ctx),
     unlocks,

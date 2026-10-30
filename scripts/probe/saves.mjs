@@ -9,7 +9,7 @@ import { loadRulesFromDisk, loadCreatureRulesFromDisk, loadItemRulesFromDisk, lo
 import { createWorldData, WORLD_SEED } from "../../src/world/worldData.ts";
 import { createServer } from "../../src/sim/server.ts";
 import { createLocalChannel } from "../../src/sim/channel.ts";
-import { PROTOCOL_VERSION } from "../../src/sim/protocol.ts";
+import { PROTOCOL_VERSION, cleanChoices } from "../../src/sim/protocol.ts";
 import { createMemoryStore } from "../../src/save/memoryStore.ts";
 import { migrateWorld } from "../../src/save/migrate.ts";
 import { createWorldRecord, nameProblem, SAVE_VERSION } from "../../src/save/records.ts";
@@ -42,6 +42,9 @@ await section("records", () => {
   check("too long", nameProblem("Abcdefghijklmnopq", []) !== "");
   check("letters only", nameProblem("Bob2", []) !== "" && nameProblem("-Bob", []) !== "" && nameProblem("Bo b", []) !== "");
   check("taken, without case", nameProblem("aria", ["Aria"]) !== "");
+  const choices = cleanChoices({ hairStyle: 2.6, height: 3, eyeSpacing: -5, beard: 0.7, bogus: 1, skin: "red" });
+  check("look choices kept to their ranges", JSON.stringify(choices) === JSON.stringify({ height: 1, hairStyle: 3, beard: 1, eyeSpacing: -1 }), JSON.stringify(choices));
+  check("no choices, none kept", cleanChoices({}) === undefined && cleanChoices(null) === undefined);
   let refused = "";
   try {
     migrateWorld({ version: SAVE_VERSION + 1 });
@@ -146,7 +149,7 @@ await section("server", async () => {
   a.send({ type: "characterCreate", name: "aria", origins: { people: "dwarf", class: "nobody" }, look: { seed: 3, race: "dwarf", outfit: "", sex: "female" } });
   await t.pump(1);
   check("an origin that is not there is refused", /cannot be chosen/.test(a.last("refused")?.reason ?? ""), a.last("refused")?.reason);
-  a.send({ type: "characterCreate", name: "aria", origins: { people: "dwarf", class: "warrior" }, look: { seed: 3, race: "dwarf", outfit: "", sex: "female" } });
+  a.send({ type: "characterCreate", name: "aria", origins: { people: "dwarf", class: "warrior" }, look: { seed: 3, race: "dwarf", outfit: "", sex: "female", choices: { hairStyle: 1, height: 0.2 } } });
   await t.pump(2);
   const made = a.last("characters")?.list ?? [];
   check("made, its name capitalised", made.length === 1 && made[0].name === "Aria" && made[0].origins.class === "warrior", JSON.stringify(made));
@@ -160,6 +163,8 @@ await section("server", async () => {
   let me = t.entity(a);
   check("entered as its origins", me?.template.id === "player.dwarf.warrior", me?.template.id);
   check("with its look", me?.look.race === "dwarf" && me.look.sex === "female");
+  check("and its chosen looks", me?.look.choices?.hairStyle === 1 && me.look.choices.height === 0.2 && a.last("entered")?.look.choices?.hairStyle === 1, JSON.stringify(me?.look));
+  check("the list shows its look", a.last("characters")?.list[0]?.look?.race === "dwarf");
   const b = t.connect();
   await t.pump(2);
   b.send({ type: "enterWorld", character: made[0].id, dimension: "" });

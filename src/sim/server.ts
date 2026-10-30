@@ -1,7 +1,7 @@
 import { dimensionSeed, type DimensionDef } from "../world/content/dimensions";
 import { createDimension, type Dimension, type DimensionWorld } from "./dimension";
 import type { BodyInput } from "./playerBody";
-import { PROTOCOL_VERSION, type ClientMessage, type EntityAppearance, type ServerMessage } from "./protocol";
+import { PROTOCOL_VERSION, cleanChoices, type ClientMessage, type EntityAppearance, type ServerMessage } from "./protocol";
 import { createReplicator, type Replicator } from "./replication";
 import { addModifier, removeSource } from "./stats";
 import { restore } from "./resources";
@@ -457,12 +457,12 @@ export function createServer(options: ServerOptions): Server {
     record.playedSeconds += player.playing;
     player.playing = 0;
     const summary = world?.characters.find((c) => c.id === record.id);
-    if (summary) Object.assign(summary, summaryOf(record, levelOf(entity)));
+    if (summary) Object.assign(summary, summaryOf(record, levelOf(entity), entity.gear ?? []));
     return record;
   }
 
-  function summaryOf(record: CharacterRecord, level: number): CharacterSummary {
-    return { id: record.id, name: record.name, origins: { ...record.origins }, level, place: definitions.get(record.travel.dimension)?.name ?? record.travel.dimension, played: record.played };
+  function summaryOf(record: CharacterRecord, level: number, gear: string[]): CharacterSummary {
+    return { id: record.id, name: record.name, origins: { ...record.origins }, level, place: definitions.get(record.travel.dimension)?.name ?? record.travel.dimension, played: record.played, look: structuredClone(record.look), gear: [...gear] };
   }
 
   /** Writes a player's character as it is now; the client is told once it is written. */
@@ -483,7 +483,8 @@ export function createServer(options: ServerOptions): Server {
     return Promise.all(writes).then(() => undefined);
   }
 
-  const characterList = (): ServerMessage => ({ type: "characters", list: (world?.characters ?? []).map((c) => ({ ...c, origins: { ...c.origins } })) });
+  // Summaries saved before they had looks get the record's when it is next written; until then, none.
+  const characterList = (): ServerMessage => ({ type: "characters", list: (world?.characters ?? []).map((c) => ({ ...structuredClone(c), look: c.look ?? { seed: 0, race: "", outfit: "", sex: "" }, gear: c.gear ?? [] })) });
 
   /** A player goes from the world: its body, its things in the store, and its dimension if it was the last. */
   function removePlayer(player: Player): void {
@@ -566,7 +567,7 @@ export function createServer(options: ServerOptions): Server {
       travel: { ...place, home: { dimension: place.dimension, x: place.x, z: place.z } },
       interface: "",
     };
-    world.characters.push(summaryOf(record, 1));
+    world.characters.push(summaryOf(record, 1, []));
     void queue(`character ${record.id}`, () => saves.store.writeCharacter(world.id, structuredClone(record)));
     void writeWorld();
     return "";
@@ -942,5 +943,6 @@ export function createServer(options: ServerOptions): Server {
  *  Whether the names are races and outfits is the clients' business - the server never reads them. */
 function cleanLook(look: EntityAppearance): EntityAppearance {
   const name = (s: unknown): string => (typeof s === "string" && /^[A-Za-z0-9_-]{0,32}$/.test(s) ? s : "");
-  return { seed: Number(look.seed) >>> 0, race: name(look.race), outfit: name(look.outfit), sex: look.sex === "male" || look.sex === "female" ? look.sex : "" };
+  const choices = cleanChoices(look.choices);
+  return { seed: Number(look.seed) >>> 0, race: name(look.race), outfit: name(look.outfit), sex: look.sex === "male" || look.sex === "female" ? look.sex : "", ...(choices ? { choices } : {}) };
 }

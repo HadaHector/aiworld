@@ -9,7 +9,7 @@ import type { CombatEvent } from "./skills/events";
 export type { CombatEvent } from "./skills/events";
 
 /** Bumped whenever a message changes shape. */
-export const PROTOCOL_VERSION = 10;
+export const PROTOCOL_VERSION = 11;
 
 // --- Client to server ------------------------------------------------------------------------
 
@@ -414,6 +414,9 @@ export interface CharacterEntry {
   place: string;
   /** When it was last played, ms since 1970. */
   played: number; // f64
+  /** Its look, and the item types it wears where they show - for showing it on the list. */
+  look: EntityAppearance;
+  gear: string[];
 }
 
 /** The world's characters: after a Welcome that selects, and after a create, a delete or a logout. */
@@ -474,6 +477,41 @@ export interface EntityAppearance {
   race: string;
   outfit: string;
   sex: string; // "male", "female" or ""
+  /** What character creation chose over what the seed would pick (FRONTEND.md, *Looks*); a choice
+   *  left out is the seed's, so a look without any stays as it was. */
+  choices?: LookChoices;
+}
+
+/**
+ * Looks a player chose: the sliders and face shifts as numbers in their ranges, palette entries and
+ * hair styles by index in the race's lists (taken round when out of them), a beard as 0 or 1.
+ */
+export const LOOK_CHOICES = {
+  height: [0, 1],
+  build: [0, 1],
+  skin: [0, 63],
+  hair: [0, 63],
+  eyes: [0, 63],
+  hairStyle: [0, 63],
+  beard: [0, 1],
+  eyeSpacing: [-1, 1],
+  browTilt: [-1, 1],
+  mouthWidth: [-1, 1],
+} as const;
+export type LookChoice = keyof typeof LOOK_CHOICES;
+export type LookChoices = Partial<Record<LookChoice, number>>; // each f32
+
+/** Choices kept to what they can be: known names, finite numbers in range, indices whole. */
+export function cleanChoices(raw: unknown): LookChoices | undefined {
+  if (!raw || typeof raw !== "object") return undefined;
+  const out: LookChoices = {};
+  for (const [key, [low, high]] of Object.entries(LOOK_CHOICES) as [LookChoice, readonly [number, number]][]) {
+    const value = (raw as Record<string, unknown>)[key];
+    if (typeof value !== "number" || !Number.isFinite(value)) continue;
+    const whole = high > 1 || key === "beard";
+    out[key] = Math.min(high, Math.max(low, whole ? Math.round(value) : value));
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
 }
 
 /** Where one entity is, as the server has it. */
