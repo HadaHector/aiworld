@@ -124,6 +124,15 @@ const particles = createParticleSystem(rules);
 const renderer = createParticleRenderer(scene, particles, rules);
 
 // --- audio -------------------------------------------------------------------------------------
+// The volume is the game's own Effects volume (ui/musicControl.ts), kept between visits, so the
+// page and the game sound alike.
+const EFFECTS_KEY = "aiworld.effects.volume";
+try {
+  const kept = localStorage.getItem(EFFECTS_KEY);
+  if (kept !== null && Number.isFinite(Number(kept))) volume.value = kept;
+} catch {
+  // No storage: the default.
+}
 let sfx: Sfx | null = null;
 whenAudio((audio) => {
   sfx = createSfx(audio.ctx, audio.effects, rules, (sound, file) => `${import.meta.env.BASE_URL}packs/${sound.file.split("/")[0]}/${file}`);
@@ -133,7 +142,14 @@ whenAudio((audio) => {
   // it lands on is not replaced under it.
   if (state.tab === "sounds") addEventListener("pointerup", () => setTimeout(renderDetail, 0), { once: true });
 });
-volume.addEventListener("input", () => sfx?.setVolume((Number(volume.value) / 100) ** 2));
+volume.addEventListener("input", () => {
+  sfx?.setVolume((Number(volume.value) / 100) ** 2);
+  try {
+    localStorage.setItem(EFFECTS_KEY, volume.value);
+  } catch {
+    // No storage: kept for this visit.
+  }
+});
 $("stop").addEventListener("click", () => {
   stopSkill();
   sfx?.stopAll();
