@@ -25,7 +25,15 @@ export interface GameMusic {
   setVolume: (volume: number) => void;
   /** What is happening, for the UI: the style playing, or the silence before the next piece. */
   status: () => string;
+  /**
+   * The page is about to be busy - a world being generated - or is done with it: while any hold is
+   * on, the music is scheduled far ahead, so the main thread being held does not starve it. Holds nest.
+   */
+  hold: (on: boolean) => void;
 }
+
+/** Seconds scheduled ahead while held: longer than generating the full world blocks for. */
+const HELD_AHEAD = 15;
 
 /** Silence between pieces outdoors, and inside a building, in seconds. */
 const GAP_OUTSIDE: [number, number] = [25, 60];
@@ -57,11 +65,14 @@ export function createGameMusic(initialVolume: number): GameMusic {
   let nextAt = performance.now() + 3000;
   let changedSince: number | undefined;
   let visit = 1;
+  /** Holds on (see `hold`). */
+  let holds = 0;
 
   // The page's audio, shared with the sound effects: at once, or with the first click or key press.
   whenAudio((audio) => {
     player = new Player(audio.ctx, instruments, audio.music);
     player.setVolume(volume);
+    if (holds > 0) player.setLookahead(HELD_AHEAD);
     player.onEnd = () => {
       const gap = playing?.inside ? GAP_INSIDE : GAP_OUTSIDE;
       playing = undefined;
@@ -133,6 +144,10 @@ export function createGameMusic(initialVolume: number): GameMusic {
   };
 
   return {
+    hold(on) {
+      holds = Math.max(0, holds + (on ? 1 : -1));
+      player?.setLookahead(holds > 0 ? HELD_AHEAD : 0);
+    },
     update,
     setVolume(v) {
       volume = v;

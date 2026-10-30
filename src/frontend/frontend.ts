@@ -157,6 +157,8 @@ export function createFrontend(options: FrontendOptions): Frontend {
   function buildShowcase(): void {
     if (showcase || building) return;
     backdrop.style.opacity = "1";
+    // Generating the menu's world holds the main thread: the theme is scheduled far ahead meanwhile.
+    music.hold(true);
     building = (async () => {
       try {
         const config = await fetchWorldConfig(rules.showcase.config);
@@ -181,6 +183,7 @@ export function createFrontend(options: FrontendOptions): Frontend {
         status.textContent = "";
       } finally {
         building = null;
+        music.hold(false);
       }
     })();
   }

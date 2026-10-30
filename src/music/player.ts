@@ -7,6 +7,8 @@ import { tickSeconds, type Cell, type Effect, type Song } from "./song";
 
 /** How far ahead of the audio clock rows are scheduled. Long, so a throttled background tab keeps up. */
 const LOOKAHEAD = 1.5;
+/** The scheduler runs on the page's main thread: anything that holds that thread longer than the
+ *  lookahead (generating a world) leaves the audio thread with nothing to play. */
 /** After the last row: time for releases and reverb to die away before the song counts as ended. */
 const TAIL = 4;
 
@@ -87,6 +89,18 @@ export class Player {
   onEnd?: () => void;
 
   /** `output`: where it plays into - the speakers, or the game's music bus (src/audio/context.ts). */
+  private lookahead = LOOKAHEAD;
+
+  /**
+   * How far ahead rows are scheduled, in seconds - longer before the page is busy for a while, so
+   * what has been scheduled carries the music through. Scheduling up to the new horizon happens at
+   * once, before the busy work starts.
+   */
+  setLookahead(seconds: number): void {
+    this.lookahead = Math.max(LOOKAHEAD, seconds);
+    this.schedule();
+  }
+
   constructor(ctx: AudioContext, instruments: Record<string, Instrument>, output: AudioNode = ctx.destination) {
     this.ctx = ctx;
     this.instruments = instruments;
@@ -270,7 +284,7 @@ export class Player {
   private schedule(): void {
     const song = this.song;
     if (!song) return;
-    const horizon = this.ctx.currentTime + LOOKAHEAD;
+    const horizon = this.ctx.currentTime + this.lookahead;
     while (this.endTime === Infinity && this.nextRowTime < horizon) {
       const pattern = song.patterns[this.patternIndex];
       const t0 = this.nextRowTime;

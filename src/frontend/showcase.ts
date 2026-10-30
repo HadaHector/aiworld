@@ -129,7 +129,7 @@ export async function createShowcase(options: {
   window.addEventListener("pointerup", () => (dragging = null), { signal: listening.signal });
   window.addEventListener("pointermove", (e) => {
     if (dragging === null) return;
-    turn += (e.clientX - dragging) * 0.008;
+    turn -= (e.clientX - dragging) * 0.008;
     dragging = e.clientX;
   }, { signal: listening.signal });
   canvas.addEventListener("wheel", (e) => {

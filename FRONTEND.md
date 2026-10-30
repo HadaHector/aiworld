@@ -498,7 +498,11 @@ Each step leaves the game working: the dev server, `npm run probe`, `npm run ser
   - **The menu's music.** Audio now starts at once wherever the browser allows sound without a
     click (`src/audio/context.ts` makes the context straight away and hands it out once it runs). The
     in-app browser pane allows it, and Chrome does for sites it has seen media played on. Elsewhere it
-    still waits for the first click or key press. The menu asks for the `mainTheme` style four times a second. The theme
+    still waits for the first click or key press. The menu asks for the `mainTheme` style four times a second. The music's scheduler runs on the main thread, 1.5 s ahead of the audio clock. Generating a world
+    held that thread for 3-3.5 s at a stretch (the menu's world, entering a game), and the theme
+    stuttered. While the loading screen is up or the menu's world is being built, `music.hold()` now
+    schedules 15 s ahead, more than the full world's longest hold. Moving the scheduler into an
+    AudioWorklet would be the thorough fix. The theme
     keeps playing through the loading screen, and gives way to the zone's music on the usual 4 s
     settle once the game draws.
   - **The screens:**

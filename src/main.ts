@@ -54,6 +54,23 @@ const musicControl = createMusicControl(
 // The volumes and the shake are options (O), beside the graphics the dimension view adds.
 dock(musicControl.element, hud.options.sound);
 const music = createGameMusic(musicControl.volume);
+// While the loading screen is up the page generates worlds, holding its main thread for seconds -
+// where the music's scheduler runs: it schedules far ahead then, so the music plays through. The
+// loading screen is up from the first paint.
+{
+  let held = true;
+  music.hold(true);
+  const show = loadingScreen.show;
+  const hide = loadingScreen.hide;
+  loadingScreen.show = () => {
+    if (!held) music.hold((held = true));
+    show();
+  };
+  loadingScreen.hide = () => {
+    if (held) music.hold((held = false));
+    hide();
+  };
+}
 
 const page: Page = { engine, canvas, loadingScreen, failLoading, hud, zoneLabel, positionPanel, musicControl, music };
 
