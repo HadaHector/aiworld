@@ -34,17 +34,23 @@ function unlock(): void {
 }
 
 /** Calls back with the page's audio once the player has clicked or pressed a key - at once if they
- *  already have. */
-export function whenAudio(callback: (audio: GameAudio) => void): void {
+ *  already have. Returns what cancels a call still waiting, so a game that ends before audio starts
+ *  is not kept alive by its callback. */
+export function whenAudio(callback: (audio: GameAudio) => void): () => void {
   if (audio) {
     callback(audio);
-    return;
+    return () => {};
   }
   waiting.push(callback);
-  if (listening) return;
-  listening = true;
-  addEventListener("pointerdown", unlock);
-  addEventListener("keydown", unlock);
+  if (!listening) {
+    listening = true;
+    addEventListener("pointerdown", unlock);
+    addEventListener("keydown", unlock);
+  }
+  return () => {
+    const i = waiting.indexOf(callback);
+    if (i >= 0) waiting.splice(i, 1);
+  };
 }
 
 /** The page's audio, or null before the first click or key press. */

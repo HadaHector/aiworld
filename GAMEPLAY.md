@@ -204,7 +204,9 @@ The first chain the generator must be able to make, and the yardstick for its pa
 
 ## Saved state
 
-Two things are saved: characters, and a small *world delta*.
+Two things are saved: characters, and a small *world delta*. A character belongs to one world,
+since its classes and items are generated from that world's seed. How and when they are written is
+in [FRONTEND.md](FRONTEND.md), *Saves*.
 
 | Per character | |
 |---|---|
@@ -327,8 +329,17 @@ A proposal, to be confirmed. Each step gets its own plan document.
    Generated synth sounds that samples can replace later, a particle system with generated
    textures, flash, flinch, camera shake and hit pause, footsteps by surface, loot and level-ups,
    and a dev page (`fx.html`). Client side, plus pack data and the `cues` field of skills.
-9. **NPCs and the quest generator,** up to the test chain.
-10. **HUD and screens:** unit frames, action bar, inventory, quest log.
+9. **NPCs and the quest generator,** up to the test chain, and the quest log. A generated starting
+   village per people, which `startingPlace` (FRONTEND.md) then returns for new characters.
+10. **HUD, screens and the front end** - see [FRONTEND.md](FRONTEND.md). *Planned, and done ahead of step 9*, so
+   the beginner experience can be tried from a real start. The HUD was built along the earlier
+   steps: its layout and look, unit frames, action bar and spell book, XP bar, inventory,
+   progression panel and rule book. This step adds a main menu over a showcase world with the main
+   theme; single-player worlds made from a name, seed and size, and *Join a server* through the same
+   handshake (a stub until networking); character creation with origins, looks and a live preview;
+   characters and the world delta saved continuously by the server (IndexedDB in the browser, files
+   for a dedicated server); a pause menu and logging out; UI sounds; and `?play` to skip the menu.
 
-Step 10 reaches the first milestone. After it: character saves, zone levels in world generation,
-parties, chat, trade and mail, then real networking.
+**Order:** 10 is done before 9. The quest log moves to step 9, which has the quests to put in it.
+Step 9 then reaches the first milestone. After it: zone levels in world generation, parties, chat,
+trade and mail, then real networking.

@@ -57,6 +57,8 @@ export interface GameFeedback {
   particles: ParticleSystem;
   /** Particles drawn last frame. */
   stats: () => { sprites: number; meshes: number; effects: number };
+  /** Stops every sound and effect and lets go of the screens and the audio - when a game ends. */
+  dispose: () => void;
 }
 
 export interface GameFeedbackOptions {
@@ -101,7 +103,11 @@ export function createGameFeedback(options: GameFeedbackOptions): GameFeedback {
   const baseUrl = options.baseUrl ?? import.meta.env.BASE_URL;
   let sfx: Sfx | null = null;
   let volume = options.volume;
-  whenAudio((audio) => {
+  let disposed = false;
+  /** What `watchScreens` started, for `dispose` to stop. */
+  const unwatch: (() => void)[] = [];
+  const stopWaiting = whenAudio((audio) => {
+    if (disposed) return;
     sfx = createSfx(audio.ctx, audio.effects, rules, (sound, file) => `${baseUrl}packs/${sound.file.split("/")[0]}/${file}`);
     sfx.setVolume(volume);
     sfx.prewarm();
@@ -334,7 +340,7 @@ export function createGameFeedback(options: GameFeedbackOptions): GameFeedback {
       const shown = new Map<Element, boolean>();
       const visible = (w: Element): boolean => (w as HTMLElement).style.display !== "none";
       for (const w of windows.children) shown.set(w, visible(w));
-      new MutationObserver((changes) => {
+      const observer = new MutationObserver((changes) => {
         for (const change of changes) {
           for (const w of change.type === "childList" ? [...change.addedNodes] : [change.target]) {
             if (!(w instanceof HTMLElement) || w.parentElement !== windows) continue;
@@ -344,19 +350,24 @@ export function createGameFeedback(options: GameFeedbackOptions): GameFeedback {
             if (was !== undefined && was !== now) ui(now ? "windowOpen" : "windowClose");
           }
         }
-      }).observe(windows, { subtree: true, childList: true, attributes: true, attributeFilter: ["style"] });
+      });
+      observer.observe(windows, { subtree: true, childList: true, attributes: true, attributeFilter: ["style"] });
+      unwatch.push(() => observer.disconnect());
+      const listening = new AbortController();
+      unwatch.push(() => listening.abort());
+      const listen = { capture: true, signal: listening.signal };
       // The action bar: a spell or item lifted from the book, the bag or the bar, put on the bar, or
       // dragged off it.
       document.addEventListener("dragstart", (e) => {
         if (e.dataTransfer?.types.includes(ACTION_DRAG_TYPE)) ui("barLift");
-      }, true);
+      }, listen);
       document.addEventListener("drop", (e) => {
         if (e.dataTransfer?.types.includes(ACTION_DRAG_TYPE)) setTimeout(() => takenByBar() && ui("barPlace"), 0);
-      }, true);
+      }, listen);
       document.addEventListener("dragend", (e) => {
         // From a slot of the bar, let go of anywhere but the bar: the slot is cleared.
         if (e.dataTransfer?.types.includes("text/x-aiworld-bar-slot") && !takenByBar()) ui("barClear");
-      }, true);
+      }, listen);
     },
     setScene(scene, world) {
       renderer?.dispose();
@@ -406,5 +417,13 @@ export function createGameFeedback(options: GameFeedbackOptions): GameFeedback {
     cues,
     particles,
     stats: () => ({ ...(renderer?.stats() ?? { sprites: 0, meshes: 0 }), effects: particles.effects() }),
+    dispose() {
+      disposed = true;
+      stopWaiting();
+      this.setScene(null);
+      for (const stop of unwatch.splice(0)) stop();
+      sfx?.dispose();
+      sfx = null;
+    },
   };
 }

@@ -29,9 +29,9 @@ export interface PackSet {
   sources: PackSource[];
 }
 
-/** Fetches the page's config (from its URL) and every pack it uses. Throws a ContentError. */
-export async function loadPackSet(baseUrl: string = import.meta.env.BASE_URL): Promise<PackSet> {
-  const config = await fetchWorldConfig(configNameFromUrl(), baseUrl);
+/** Fetches a config (the page's URL's if not named) and every pack it uses. Throws a ContentError. */
+export async function loadPackSet(configName: string = configNameFromUrl(), baseUrl: string = import.meta.env.BASE_URL): Promise<PackSet> {
+  const config = await fetchWorldConfig(configName, baseUrl);
   const sources = await fetchPackSources(baseUrl, config);
   return { config, packs: sources.map((pack) => pack.id), resolve: (dimension) => resolveContent(sources, config, dimension), sources };
 }

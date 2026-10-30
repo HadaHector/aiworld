@@ -27,10 +27,11 @@ export interface Hud {
   readonly options: { readonly root: HTMLElement; readonly sound: HTMLElement; readonly graphics: HTMLElement };
   debugVisible: boolean;
   optionsVisible: boolean;
-  /** Called on every layout pass with the width the spell bar may take: its slots fit themselves to it. */
-  onActionsWidth: (listener: (width: number) => void) => void;
-  /** Called with whether the menu should stand on end. */
-  onMenuVertical: (listener: (vertical: boolean) => void) => void;
+  /** Called on every layout pass with the width the spell bar may take: its slots fit themselves to
+   *  it. Returns what stops the calls. */
+  onActionsWidth: (listener: (width: number) => void) => () => void;
+  /** Called with whether the menu should stand on end. Returns what stops the calls. */
+  onMenuVertical: (listener: (vertical: boolean) => void) => () => void;
   /** Lays the bottom row out again - after something in it changed size. */
   layout: () => void;
 }
@@ -195,10 +196,19 @@ export function createHud(): Hud {
     set optionsVisible(on: boolean) {
       optionsRoot.style.display = on ? "flex" : "none";
     },
-    onActionsWidth: (listener) => void widthListeners.push(listener),
-    onMenuVertical: (listener) => void verticalListeners.push(listener),
+    onActionsWidth: (listener) => unlisten(widthListeners, listener),
+    onMenuVertical: (listener) => unlisten(verticalListeners, listener),
     layout,
   };
   requestAnimationFrame(layout);
   return hud;
+}
+
+/** Adds a listener to a list, and returns what takes it out again. */
+function unlisten<T>(list: T[], listener: T): () => void {
+  list.push(listener);
+  return () => {
+    const i = list.indexOf(listener);
+    if (i >= 0) list.splice(i, 1);
+  };
 }
