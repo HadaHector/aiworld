@@ -161,7 +161,9 @@ export function createFrontend(options: FrontendOptions): Frontend {
     })();
   }
   const musicTimer = window.setInterval(() => {
-    if (root.style.display !== "none") music.update({ style: rules.music.menu, place: 0, inside: true });
+    if (root.style.display === "none") return;
+    music.update({ style: rules.music.menu, place: 0, inside: true });
+    page.musicControl.setStatus(music.status());
   }, 250);
   void musicTimer;
 

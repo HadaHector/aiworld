@@ -1,0 +1,11 @@
+// The world behind the main menu (see FRONTEND.md, rules/frontend.json5): one zone of one wooded
+// biome and no rivers - the least to generate, so the menu's view is up in seconds.
+{
+  world: {
+    areas: [1, 1],
+    rivers: [0, 0],
+  },
+  content: {
+    only: { biomes: ["bluebellWood"] },
+  },
+}

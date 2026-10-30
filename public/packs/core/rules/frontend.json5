@@ -4,16 +4,20 @@
 {
   title: "aiworld",
   showcase: {
-    // A small world, so the menu is up in seconds: the `tiny` config, this seed, its start dimension.
-    config: "tiny",
-    seed: 1338,
-    hour: 17.5,
-    // Round `around` at `radius` metres, `height` over the ground, a whole turn in `period` seconds,
-    // rising and falling by `bob`; looking at `look` metres over the ground at the centre.
-    camera: { around: [837, 390], radius: 130, height: 48, bob: 6, period: 240, look: 4 },
+    // public/configs/menu.json5 - one zone of bluebell wood, no rivers: the least to generate. At this
+    // seed its village Brymyth Bridge stands deep in the wood, the sea 1.2 km away or more all round
+    // (scripts/probe/showcaseSpot.local.mjs finds such spots).
+    config: "menu",
+    seed: 8,
+    hour: 11,
+    // Round `around` at `radius` metres, `height` over the ground (more over tree crowns in the
+    // way), rising and falling by `bob`; looking at `look` metres over the ground at the centre. With
+    // `arc` (degrees from +x, the camera's side) it sways from one end to the other and back in
+    // `period` seconds - here on the east side, looking west, where the land goes on furthest.
+    camera: { around: [1242, 255], radius: 40, height: 9, bob: 1.5, period: 240, look: 4, arc: [125, 185] },
     // Where the character list and creation stand the character (facing in degrees), and how far
     // the camera is from it.
-    stage: { at: [800, 360], facing: 180, distance: 3.2 },
+    stage: { at: [1225, 240], facing: 180, distance: 3.2 },
   },
   music: { menu: "mainTheme" },
   save: { interval: 30 },

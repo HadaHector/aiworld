@@ -16,9 +16,11 @@ export interface FrontendRules {
     dimension: string;
     /** The hour of the day, fixed. */
     hour: number;
-    /** The camera's path: round `around` at `radius`, `height` over the ground there, a turn in
-     *  `period` seconds, rising and falling by `bob`; looking at `look` metres over the centre. */
-    camera: { around: [number, number]; radius: number; height: number; bob: number; period: number; look: number };
+    /** The camera's path: round `around` at `radius`, `height` over the ground there, rising and
+     *  falling by `bob`; looking at `look` metres over the centre. With `arc` (degrees from +x, the
+     *  camera's side of the centre) it sways from one end to the other and back in `period` seconds,
+     *  so it can keep to the side where the land goes on; without, it goes round in `period`. */
+    camera: { around: [number, number]; radius: number; height: number; bob: number; period: number; look: number; arc: [number, number] | null };
     /** Where the character list and creation stand the character, which way it faces (degrees), and
      *  how far the camera is from it. */
     stage: { at: [number, number]; facing: number; distance: number };
@@ -35,7 +37,7 @@ export const DEFAULT_FRONTEND: FrontendRules = {
     seed: 1338,
     dimension: "",
     hour: 17.5,
-    camera: { around: [0, 0], radius: 90, height: 30, bob: 6, period: 240, look: 4 },
+    camera: { around: [0, 0], radius: 90, height: 30, bob: 6, period: 240, look: 4, arc: null },
     stage: { at: [0, 0], facing: 180, distance: 3.2 },
   },
   music: { menu: "mainTheme" },
@@ -75,7 +77,7 @@ export function resolveFrontend(packs: readonly PackSource[]): FrontendRules {
   const showcase = section("showcase");
   reader.onlyKeys(showcase, "showcase", ["config", "seed", "dimension", "hour", "camera", "stage"]);
   const camera = showcase.camera === undefined ? {} : reader.object(showcase.camera, "showcase.camera");
-  reader.onlyKeys(camera, "showcase.camera", ["around", "radius", "height", "bob", "period", "look"]);
+  reader.onlyKeys(camera, "showcase.camera", ["around", "radius", "height", "bob", "period", "look", "arc"]);
   const stage = showcase.stage === undefined ? {} : reader.object(showcase.stage, "showcase.stage");
   reader.onlyKeys(stage, "showcase.stage", ["at", "facing", "distance"]);
   const music = section("music");
@@ -98,6 +100,7 @@ export function resolveFrontend(packs: readonly PackSource[]): FrontendRules {
         bob: reader.optionalNumber(camera, "bob", "showcase.camera", d.showcase.camera.bob, { min: 0 }),
         period: reader.optionalNumber(camera, "period", "showcase.camera", d.showcase.camera.period, { min: 1 }),
         look: reader.optionalNumber(camera, "look", "showcase.camera", d.showcase.camera.look),
+        arc: camera.arc === undefined ? null : pair(reader, camera.arc, "showcase.camera.arc", [0, 360]),
       },
       stage: {
         at: pair(reader, stage.at, "showcase.stage.at", d.showcase.stage.at),

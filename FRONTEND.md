@@ -311,13 +311,14 @@ character's people. Nothing else changes.
 {
   title: "aiworld",
   showcase: {
-    config: "tiny", seed: 1338, dimension: "mainland",
-    hour: 17.5, weather: "clear",
-    // The camera's path: round `around` at `radius`, a full turn in `period` seconds, rising and
-    // falling by `bob` metres; looking at `look` metres above the ground at the centre.
-    camera: { around: [120, -40], radius: 90, height: 28, bob: 6, period: 240, look: 4 },
+    config: "menu", seed: 8,     // configs/menu.json5: one zone of bluebell wood, no rivers
+    hour: 11,
+    // The camera's path: round `around` at `radius`, `height` over the ground, rising and falling by
+    // `bob`; looking at `look` metres above the ground at the centre. With `arc` (degrees) it sways
+    // between its ends and back in `period` seconds; without, it goes round.
+    camera: { around: [1242, 255], radius: 40, height: 9, bob: 1.5, period: 240, look: 4, arc: [125, 185] },
     // Where creation and the character list stand the character, and the camera's distance there.
-    stage: { at: [96, -52], facing: 200, distance: 3.2 },
+    stage: { at: [1225, 240], facing: 180, distance: 3.2 },
   },
   music: { menu: "mainTheme", gap: [8, 15] },  // seconds of silence between loops
   save: { interval: 30 },
@@ -476,11 +477,28 @@ Each step leaves the game working: the dev server, `npm run probe`, `npm run ser
     menu's world, and `src/frontend/frontend.ts` holds the screens and starts and ends games.
     `main.ts` fetches every pack once (`packSetFrom` narrows them per config without fetching again)
     and starts the front end. With `?play` it starts a quick game instead.
-  - **The showcase** is the tiny world at seed 1338, the camera circling the village at (837, 390)
-    at 17:30. The start spawn of that world is low and wet, and a village at dusk looks better.
+  - **The showcase**, after the user looked at it:
+    - **The world:** its own config, `configs/menu.json5`, one zone of bluebell wood with no rivers,
+      the least to generate.
+    - **The spot:** at seed 8, the village Brymyth Bridge stands deep in the wood with the sea at
+      least 1.15 km away all round. `scripts/probe/showcaseSpot.local.mjs` (git-ignored) found it by
+      listing every settlement's tree cover and how far the sea is in each direction, over 40 seeds.
+    - **Why:** the tiny world's village was on an island coast, and the camera saw far trees as flat
+      fog-coloured silhouettes against the sea.
+    - **The camera** sits in the clearing, 40 m out and 9 m up. It sways over a 60° arc (`arc`, new)
+      looking across the houses into the wood, rather than circling high over everything.
+    - **The time** is 11:00.
+    - **Lifting the camera over tree crowns was tried and dropped:** the tree scatter alone places
+      trees in clearings that the chunks never draw, so it lifted the camera 50-100 m for trees
+      that are not there.
+    - **The first visit** bakes bluebell wood's materials (27 s); later visits are cached.
+
     `createDimensionView` gained `body: false` (no player body, no capsule drawn), and the HUD gained
     `playing` (off, only the windows region shows, so Options works over the menu).
-  - **The menu's music.** The menu asks for the `mainTheme` style four times a second. The theme
+  - **The menu's music.** Audio now starts at once wherever the browser allows sound without a
+    click (`src/audio/context.ts` makes the context straight away and hands it out once it runs). The
+    in-app browser pane allows it, and Chrome does for sites it has seen media played on. Elsewhere it
+    still waits for the first click or key press. The menu asks for the `mainTheme` style four times a second. The theme
     keeps playing through the loading screen, and gives way to the zone's music on the usual 4 s
     settle once the game draws.
   - **The screens:**

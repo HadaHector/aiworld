@@ -11,6 +11,7 @@ gameplay, the HUD) rather than on places.
 | default | 29 zones, 70 settlements | 25 biomes, 74 materials, 40 plant kinds | 10-11 s | 22 s |
 | `small` | 4 zones, 18 settlements | meadow, bluebell wood: 27 materials, 7 plant kinds | 2 s | 5.6 s |
 | `tiny` | 1 zone, 3 settlements | meadow: 23 materials, 5 plant kinds | 0.5 s | 2.3 s |
+| `menu` | 1 zone, no rivers | bluebell wood: the world behind the main menu (FRONTEND.md) | | |
 
 In the page, with the texture cache warm, `?config=small` was ready in 14-20 s and the full world
 in 53 s (measured in a hidden browser pane, which runs slower than a visible tab).

@@ -1,7 +1,7 @@
 // Music in the game: pieces composed for wherever the player is, one at a time with silence
 // between them (see MUSIC.md). The style follows the zone's biome, or the building the player is
 // inside; going into or out of such a building lets the playing piece go and soon starts its own.
-// Audio starts with the first click or key press, as browsers ask (src/audio/context.ts).
+// Audio starts at once where the browser allows, else with the first click or key press (src/audio/context.ts).
 
 import { whenAudio } from "../audio/context";
 import { composeSong } from "./composer";
@@ -58,7 +58,7 @@ export function createGameMusic(initialVolume: number): GameMusic {
   let changedSince: number | undefined;
   let visit = 1;
 
-  // The page's audio, shared with the sound effects, comes with the first click or key press.
+  // The page's audio, shared with the sound effects: at once, or with the first click or key press.
   whenAudio((audio) => {
     player = new Player(audio.ctx, instruments, audio.music);
     player.setVolume(volume);

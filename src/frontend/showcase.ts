@@ -4,7 +4,6 @@ import { DEFAULT_DRAW_DISTANCE } from "../world/world";
 import type { PackSet } from "../world/content/loadContent";
 import type { FrontendRules } from "./frontendRules";
 import type { Hud } from "../ui/hud";
-
 /** The world behind the main menu, drawn with the camera drifting over it. */
 export interface Showcase {
   readonly view: DimensionView;
@@ -53,16 +52,19 @@ export async function createShowcase(options: {
   const centre = new Vector3(cx, world.heightAt(cx, cz) + rules.camera.look, cz);
   const eye = new Vector3();
   const started = performance.now();
+  const arc = rules.camera.arc;
 
   const frame = (): void => {
     const t = (performance.now() - started) / 1000;
-    const angle = (t / rules.camera.period) * Math.PI * 2;
+    const phase = (t / rules.camera.period) * Math.PI * 2;
+    // Along the arc and back, slowing at the ends - or round and round.
+    const angle = arc ? ((arc[0] + arc[1]) / 2 + ((arc[1] - arc[0]) / 2) * Math.sin(phase)) * (Math.PI / 180) : phase;
     const x = cx + Math.cos(angle) * rules.camera.radius;
     const z = cz + Math.sin(angle) * rules.camera.radius;
     // Over the higher of the ground below the camera and the point it circles, so a hill on the
     // way does not swallow it.
     const ground = Math.max(world.heightAt(x, z), centre.y - rules.camera.look);
-    eye.set(x, ground + rules.camera.height + Math.sin(angle * 3) * rules.camera.bob, z);
+    eye.set(x, ground + rules.camera.height + Math.sin(phase * 3) * rules.camera.bob, z);
     camera.setTarget(centre);
     camera.setPosition(eye);
     world.updateChunks(cx, cz);

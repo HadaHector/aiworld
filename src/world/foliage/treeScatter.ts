@@ -216,7 +216,7 @@ function treeLevel(content: Pick<WorldContent, "treeKinds" | "oldTrees">): Scatt
  * probe covers. The chunk's probe decides on the same full-detail surface, only interpolated, so
  * the two agree on all but the odd tree whose density roll lands right on its threshold.
  */
-function samplerGround(sampleTerrain: TerrainSampler): TreeGroundProbe {
+export function samplerGround(sampleTerrain: TerrainSampler): TreeGroundProbe {
   return (x, z) => {
     const sample = sampleTerrain(x, z);
     const riseX = sampleTerrain(x + 1, z).height - sample.height;
