@@ -7,7 +7,7 @@ progression panel and the rule book. This step adds what comes before and around
 a main menu, worlds, characters with a creation screen, saving and loading them, a pause menu, and
 logging out. The quest log comes after step 9, which has the quests to put in it.
 
-**Status: in progress.** Approved; step 1 done (see [As built](#as-built)).
+**Status: in progress.** Approved; steps 1 and 2 done (see [As built](#as-built)).
 
 ## Decisions
 
@@ -384,7 +384,7 @@ Each step leaves the game working: the dev server, `npm run probe`, `npm run ser
    Welcome carries the seed and config, and the rules are resolved after it. `WORLD_SEED` becomes the
    dev default only. `?play` is added, but the bare URL still plays, as now. Check for leaks: start
    and dispose a session several times under `small`, with the heap steady.
-2. **Saves, headless.** Records, the store (memory, IndexedDB, files), migrations, belongings export
+2. **Saves, headless: done.** Records, the store (memory, IndexedDB, files), migrations, belongings export
    and import, the handshake messages, `startingPlace`, the autosave, and the world clock and delta
    in the record. `npm run server -- --world test` makes, saves and loads a world. The probe
    round-trips a character with progress, belongings and resources through each store, restarts a
@@ -424,7 +424,48 @@ Each step leaves the game working: the dev server, `npm run probe`, `npm run ser
   Babylon disposes a disposed scene's shaders at the end of the next frame, so with nothing drawing,
   the old scene's shell stays until something renders.
 - **Not yet:** Welcome already carried the seed. The session now warns when it differs from the one
-  its rules were resolved from. Resolving the rules *from* Welcome comes with the handshake (step 2).
+  its rules were resolved from. Resolving the rules *from* Welcome comes when the page uses the
+  handshake (step 3).
+- **Step 2.** `src/save/` has the records, the `SaveStore` interface, the memory and IndexedDB stores
+  and `migrate.ts`. `scripts/server/fileStore.mjs` is the Node store (in `scripts/` because `src` has
+  no Node types). `src/sim/items/save.ts` exports and imports belongings, and `src/sim/spawn.ts` has
+  `startingPlace`. `createServer` takes `saves: { store, world, interval, onProblem }`. The world's clock,
+  delta and next item id carry on from the record. `server.save()` writes everything now.
+  `npm run server -- --world <name>` keeps a world in `saves/<name>`, and its bot plays a saved "Bot".
+  Where the build differs from the plan above:
+  - **Hello keeps its quick fields** (`name`, `dimension`, `look`, `origins`) and gains `select`.
+    With `select` the client gets Welcome and Characters and chooses. Without it, a quick unsaved
+    character plays at once, as before. That is the dev shortcut's and the bots' path, so no
+    separate `quickCharacter` message was needed and no bot changed.
+  - **Entered** (`playerId`, `character`, `interface`) comes before the Transfer, since a Welcome
+    that selects has no player yet (`playerId` 0). Welcome gains `world` (its name) and `saves`.
+    `PROTOCOL_VERSION` is 10.
+  - **The world record keeps the rules' hashes** (`rules`, `items`, `creatures`, `progression`) and
+    the pack ids, rather than a hash per pack: the hashes are what the server already sends in
+    Welcome. A character summary has `place` (the dimension's name) instead of a zone, since the
+    server knows no zone names.
+  - **The interface** is JSON text the server keeps and never parses (16 KB at most).
+  - **Writes are queued per record**, so one character's writes never overtake each other. Each
+    write takes a copy made when it was asked for. An autosave is skipped while any write is still
+    running. Entering a character waits for its last write.
+  - **A character left dead** comes back at home, with the resources a new one has. Respawning
+    goes to its home when the home is in the dimension it died in.
+  - **Leaving** (logout, a closed connection) also takes the player's items out of the item store.
+    Before, they stayed there, unused.
+  - `--fight` and `--hunt` bots read their id from Welcome, so they do not work with `--world` yet.
+- **Checked:** `scripts/probe/saves.mjs`, 51 checks:
+  - names;
+  - a newer save refused;
+  - the memory and file stores round-tripped;
+  - a real `tiny` server: making characters (bad names and origins refused), entering, playing a
+    character twice and deleting one in play both refused, autosave, logout, and a restart that
+    finds the level, bag, worn gear, money, health, position, layout, clock and delta kept;
+  - closing the tab saves;
+  - a character left dead comes back alive at home.
+
+  The IndexedDB store was round-tripped in the page. The entities, abilities, items, progression,
+  creatures and feedback probes pass. The feedback probe's "chips fall" check failed once in three
+  runs. It uses unseeded randomness, and this step does not touch it.
 
 ## Later
 

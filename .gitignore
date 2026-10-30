@@ -27,3 +27,6 @@ dist-ssr
 scripts/probe/scratch.mjs
 scripts/probe/*.local.mjs
 public/samples/kiarchive/
+
+# Saved worlds of `npm run server -- --world` (FRONTEND.md)
+saves/

@@ -1,7 +1,7 @@
 import { dimensionSeed, type DimensionDef } from "../world/content/dimensions";
 import { createDimension, type Dimension, type DimensionWorld } from "./dimension";
 import type { BodyInput } from "./playerBody";
-import { PROTOCOL_VERSION, type ClientMessage, type EntityAppearance } from "./protocol";
+import { PROTOCOL_VERSION, type ClientMessage, type EntityAppearance, type ServerMessage } from "./protocol";
 import { createReplicator, type Replicator } from "./replication";
 import { addModifier, removeSource } from "./stats";
 import { restore } from "./resources";
@@ -23,6 +23,11 @@ import type { ProgressionRules } from "./rules/progressionRules";
 import { createProgressionSystem, type ProgressionSystem } from "./progression/system";
 import type { ProgressEvent } from "./progression/progress";
 import { progressMessages } from "./progression/replication";
+import { EVENT_KIND } from "./skills/events";
+import { exportBelongings, importBelongings } from "./items/save";
+import { startingPlace } from "./spawn";
+import type { SaveStore } from "../save/store";
+import { SAVE_VERSION, makeSaveId, nameProblem, tidyName, type CharacterRecord, type CharacterSummary, type WorldRecord } from "../save/records";
 
 /** Each step spends at most this long bringing in collision chunks per dimension (always at least one). */
 const CHUNK_BUDGET_MS = 2;
@@ -37,6 +42,10 @@ interface Connection {
   items: ItemReplicator | null;
   /** Whether it has been told its player's whole progress since it arrived somewhere. */
   progressSent: boolean;
+  /** Choosing a character (a Hello that selects, or after a logout), with none in the world. */
+  selecting: boolean;
+  /** A character being read from the store, to enter. */
+  entering: boolean;
 }
 
 /** A connected player: its entity, and what its client has said. */
@@ -51,6 +60,10 @@ export interface Player {
   /** The latest intent; a jump stays set until a step takes it. */
   input: BodyInput;
   ackSeq: number;
+  /** The saved character it plays - null for a quick, unsaved one. */
+  character: CharacterRecord | null;
+  /** Seconds in the world since its record was last brought up to date. */
+  playing: number;
 }
 
 /** A dimension the server has asked its host for: loading, then loaded. */
@@ -90,6 +103,19 @@ export interface ServerOptions {
   /** Disciplines, origins and talents (see PROGRESSION.md); left out, players are made from the
    *  `player` template and nobody gains XP. */
   progression?: ProgressionRules;
+  /** Where the world and its characters are saved (FRONTEND.md, *Saves*); left out, only quick
+   *  characters play and nothing is kept. */
+  saves?: ServerSaves;
+}
+
+export interface ServerSaves {
+  store: SaveStore;
+  /** The world, as read from the store: its clock, delta and item ids carry on from where it was. */
+  world: WorldRecord;
+  /** Seconds of world time between autosaves; 30 if left out. */
+  interval?: number;
+  /** A write that failed, or ids a load skipped - the host says where it goes. */
+  onProblem?: (message: string) => void;
 }
 
 export interface Server {
@@ -120,8 +146,11 @@ export interface Server {
     /** The latest progress events, by character (the last 256). */
     readonly progressEvents: { entity: number; event: ProgressEvent }[];
   };
-  /** The server's clock: seconds stepped since it started. */
+  /** The server's clock: seconds stepped since it started - or since the saved world began. */
   readonly time: number;
+  /** Saves every character in the world and the world itself now: when a page is hidden, or a
+   *  dedicated server is told to stop. Resolves once written. */
+  save: () => Promise<void>;
 }
 
 /**
@@ -146,8 +175,11 @@ export function createServer(options: ServerOptions): Server {
   const loaded = new Map<string, Dimension>();
   let nextId = 1;
   let tick = 0;
-  let time = 0;
+  const saves = options.saves ?? null;
+  const world = saves?.world ?? null;
+  let time = world?.time ?? 0;
   const delta = createWorldDelta(() => time);
+  for (const [key, until] of world?.delta ?? []) if (until > time) delta.set(key, until);
 
   /** Any entity by id: a player's wherever it is, or one in a loaded dimension. */
   function findEntity(id: number): Entity | undefined {
@@ -261,6 +293,7 @@ export function createServer(options: ServerOptions): Server {
             loaded.get(entity.dimension)?.entities.delete(entity.id);
           },
           delta,
+          firstItemId: world?.nextItemId,
         },
         progression ? progression.itemHooks(options.itemHooks ?? skills.items) : (options.itemHooks ?? skills.items),
       )
@@ -373,6 +406,172 @@ export function createServer(options: ServerOptions): Server {
     return id === 0 || id === player.entity.id ? player.entity : loaded.get(player.entity.dimension)?.entities.get(id);
   }
 
+  // --- Saves (FRONTEND.md, *Saves*) -------------------------------------------------------------
+
+  /** Writes waiting or running, by what they write: each key's in order, one at a time. */
+  const writing = new Map<string, Promise<void>>();
+  let lastAutosave = time;
+  const problem = (message: string): void => (saves?.onProblem ?? console.warn)(message);
+
+  function queue(key: string, write: () => Promise<void>): Promise<void> {
+    const next = (writing.get(key) ?? Promise.resolve()).then(write).catch((error: unknown) => problem(`Saving ${key} failed: ${String(error)}`));
+    writing.set(key, next);
+    void next.then(() => {
+      if (writing.get(key) === next) writing.delete(key);
+    });
+    return next;
+  }
+
+  /** The world's record brought up to date and written. */
+  function writeWorld(): Promise<void> {
+    if (!saves || !world) return Promise.resolve();
+    world.time = time;
+    world.delta = delta.entries();
+    world.nextItemId = itemSystem?.store.nextId ?? world.nextItemId;
+    world.played = Date.now();
+    const copy = structuredClone(world);
+    return queue("world", () => saves.store.writeWorld(copy));
+  }
+
+  const levelOf = (entity: Entity): number => {
+    const level = progression?.rules.config.level;
+    return (level === undefined ? undefined : entity.progress?.disciplines.get(level)?.level) ?? 1;
+  };
+
+  /** A player's record brought up to date from its entity: progress, belongings, resources, where it is. */
+  function capture(player: Player): CharacterRecord | null {
+    const record = player.character;
+    if (!record) return null;
+    const entity = player.entity;
+    record.progress = progression?.export(entity) ?? record.progress;
+    if (itemSystem && entity.belongings) record.belongings = exportBelongings(itemSystem.ctx, entity);
+    if (entity.resources) {
+      record.resources = {};
+      for (const index of entity.resources.has) record.resources[rules.resources[index].id] = entity.resources.current[index];
+    }
+    record.dead = entity.combat?.dead ?? false;
+    // Travelling, it has no body yet: it is wherever it is headed.
+    const at = entity.body ? { x: entity.x, z: entity.z } : player.arrival;
+    record.travel = { ...record.travel, dimension: entity.dimension, x: at.x, z: at.z, facing: entity.facing };
+    record.played = Date.now();
+    record.playedSeconds += player.playing;
+    player.playing = 0;
+    const summary = world?.characters.find((c) => c.id === record.id);
+    if (summary) Object.assign(summary, summaryOf(record, levelOf(entity)));
+    return record;
+  }
+
+  function summaryOf(record: CharacterRecord, level: number): CharacterSummary {
+    return { id: record.id, name: record.name, origins: { ...record.origins }, level, place: definitions.get(record.travel.dimension)?.name ?? record.travel.dimension, played: record.played };
+  }
+
+  /** Writes a player's character as it is now; the client is told once it is written. */
+  function writeCharacter(player: Player, connection?: Connection): Promise<void> {
+    const record = capture(player);
+    if (!saves || !world || !record) return Promise.resolve();
+    const copy = structuredClone(record);
+    return queue(`character ${record.id}`, () => saves.store.writeCharacter(world.id, copy)).then(() => {
+      if (connection && !connection.end.closed) connection.end.send({ type: "saved" });
+    });
+  }
+
+  /** Every character in the world and the world itself. */
+  function saveAll(): Promise<void> {
+    const writes: Promise<void>[] = [];
+    for (const connection of connections) if (connection.player?.character) writes.push(writeCharacter(connection.player, connection));
+    writes.push(writeWorld());
+    return Promise.all(writes).then(() => undefined);
+  }
+
+  const characterList = (): ServerMessage => ({ type: "characters", list: (world?.characters ?? []).map((c) => ({ ...c, origins: { ...c.origins } })) });
+
+  /** A player goes from the world: its body, its things in the store, and its dimension if it was the last. */
+  function removePlayer(player: Player): void {
+    const entity = player.entity;
+    skills.leave(entity);
+    progression?.leave(entity);
+    const b = entity.belongings;
+    if (b && itemSystem) for (const list of [b.bag, b.bank, b.equipment]) for (const id of list) if (id != null) itemSystem.store.remove(id);
+    players.delete(entity.id);
+    loaded.get(entity.dimension)?.entities.delete(entity.id);
+    release(entity.dimension);
+  }
+
+  /** Makes a character's entity from its record and puts it in the world where it was left. */
+  function enterCharacter(connection: Connection, record: CharacterRecord, debugDimension: string): void {
+    const origins = record.progress?.origins ?? record.origins;
+    const chosen = progression?.originsFor(origins);
+    const template = (chosen && rules.templates.get(chosen.template)) || playerTemplate!;
+    const asked = definitions.get(debugDimension);
+    const left = definitions.get(record.travel.dimension);
+    const home = definitions.get(record.travel.home.dimension) ? record.travel.home : null;
+    // Where it was left - at home if it left dead; the start's spawn if that dimension has gone.
+    const to = asked ?? (record.dead && home ? definitions.get(home.dimension)! : left ?? start);
+    const at = asked ? asked.spawn : record.dead && home ? home : left ? record.travel : start.spawn;
+    const entity = createEntity(rules, template, nextId++, { dimension: "", x: at.x, y: 0, z: at.z, facing: asked ? 0 : record.travel.facing, name: record.name, look: cleanLook(record.look) });
+    skills.adopt(entity);
+    itemSystem?.adopt(entity);
+    if (chosen) progression!.adopt(entity, chosen.origins);
+    const skipped: string[] = [];
+    if (record.progress && progression) skipped.push(...progression.import(entity, record.progress));
+    if (record.belongings && itemSystem && entity.belongings) skipped.push(...importBelongings(itemSystem.ctx, entity, record.belongings));
+    if (entity.resources && !record.dead) {
+      for (const [id, value] of Object.entries(record.resources)) {
+        const index = rules.resourceIndex.get(id);
+        if (index === undefined || !entity.resources.has.includes(index)) continue;
+        entity.resources.current[index] = Math.max(0, Math.min(entity.resources.max[index], Number(value) || 0));
+      }
+    }
+    if (skipped.length > 0) problem(`${record.name}'s save names what the packs no longer have: ${skipped.join(", ")}`);
+    const joined: Player = { entity, arrival: { x: at.x, z: at.z }, arrived: false, input: { moveX: 0, moveZ: 0, run: false, jump: false }, ackSeq: 0, character: record, playing: 0 };
+    players.set(entity.id, joined);
+    connection.player = joined;
+    connection.selecting = false;
+    connection.end.send({ type: "entered", playerId: entity.id, character: record.id, interface: record.interface });
+    transfer(connection, joined, to, { x: at.x, z: at.z });
+  }
+
+  /** Makes a character from what the client chose; why it will not do, or "" once it is saved. */
+  function createCharacter(message: Extract<ClientMessage, { type: "characterCreate" }>): string {
+    if (!saves || !world) return "Characters are not kept on this server.";
+    const name = tidyName(String(message.name ?? ""));
+    const why = nameProblem(name, world.characters.map((c) => c.name));
+    if (why) return why;
+    const requested = message.origins && typeof message.origins === "object" ? message.origins : {};
+    const origins: Record<string, string> = {};
+    if (progression) {
+      const chosen = progression.originsFor(requested);
+      for (const [slot, index] of chosen.origins) {
+        const id = progression.rules.origins[index].id;
+        // A slot given wrong falls to its default in originsFor: here it is refused instead.
+        if (requested[slot] !== undefined && requested[slot] !== id) return `"${requested[slot]}" cannot be chosen as ${slot} with the rest.`;
+        origins[slot] = id;
+      }
+    }
+    const place = startingPlace(start, origins);
+    const now = Date.now();
+    const record: CharacterRecord = {
+      version: SAVE_VERSION,
+      id: makeSaveId(name, now),
+      name,
+      origins,
+      look: cleanLook(message.look ?? { seed: 0, race: "", outfit: "", sex: "" }),
+      created: now,
+      played: now,
+      playedSeconds: 0,
+      progress: null,
+      belongings: null,
+      resources: {},
+      dead: false,
+      travel: { ...place, home: { dimension: place.dimension, x: place.x, z: place.z } },
+      interface: "",
+    };
+    world.characters.push(summaryOf(record, 1));
+    void queue(`character ${record.id}`, () => saves.store.writeCharacter(world.id, structuredClone(record)));
+    void writeWorld();
+    return "";
+  }
+
   function handle(connection: Connection, message: ClientMessage): void {
     const player = connection.player;
     const body = player?.entity.body;
@@ -385,7 +584,13 @@ export function createServer(options: ServerOptions): Server {
     }
     switch (message.type) {
       case "hello": {
-        if (player || message.protocol !== PROTOCOL_VERSION) return;
+        if (player || connection.selecting || message.protocol !== PROTOCOL_VERSION) return;
+        if (message.select) {
+          connection.selecting = true;
+          connection.end.send({ type: "welcome", protocol: PROTOCOL_VERSION, playerId: 0, world: world?.name ?? "", saves: saves !== null, config: options.config, packs: options.packs ?? [], rules: rules.hash, items: options.items?.hash ?? 0, creatures: options.creatures?.hash ?? 0, seed: options.seed >>> 0, progression: options.progression?.hash ?? 0 });
+          connection.end.send(characterList());
+          return;
+        }
         const first = definitions.get(message.dimension) ?? start;
         // Its origins make its template (PROGRESSION.md, *Origins*).
         const chosen = progression?.originsFor(message.origins && typeof message.origins === "object" ? message.origins : undefined);
@@ -394,11 +599,73 @@ export function createServer(options: ServerOptions): Server {
         skills.adopt(entity);
         itemSystem?.adopt(entity);
         if (chosen) progression!.adopt(entity, chosen.origins);
-        const joined: Player = { entity, arrival: first.spawn, arrived: false, input: { moveX: 0, moveZ: 0, run: false, jump: false }, ackSeq: 0 };
+        const joined: Player = { entity, arrival: first.spawn, arrived: false, input: { moveX: 0, moveZ: 0, run: false, jump: false }, ackSeq: 0, character: null, playing: 0 };
         players.set(entity.id, joined);
         connection.player = joined;
-        connection.end.send({ type: "welcome", protocol: PROTOCOL_VERSION, playerId: entity.id, config: options.config, packs: options.packs ?? [], rules: rules.hash, items: options.items?.hash ?? 0, creatures: options.creatures?.hash ?? 0, seed: options.seed >>> 0, progression: options.progression?.hash ?? 0 });
+        connection.end.send({ type: "welcome", protocol: PROTOCOL_VERSION, playerId: entity.id, world: world?.name ?? "", saves: saves !== null, config: options.config, packs: options.packs ?? [], rules: rules.hash, items: options.items?.hash ?? 0, creatures: options.creatures?.hash ?? 0, seed: options.seed >>> 0, progression: options.progression?.hash ?? 0 });
         transfer(connection, joined, first, first.spawn);
+        return;
+      }
+      case "characterCreate": {
+        if (!connection.selecting || player) return;
+        const why = createCharacter(message);
+        connection.end.send(why ? { type: "refused", what: "characterCreate", reason: why } : characterList());
+        return;
+      }
+      case "characterDelete": {
+        if (!connection.selecting || player || !saves || !world) return;
+        const i = world.characters.findIndex((c) => c.id === message.id);
+        const playing = [...players.values()].some((p) => p.character?.id === message.id);
+        if (i < 0 || playing) {
+          connection.end.send({ type: "refused", what: "characterDelete", reason: playing ? "That character is in the world." : "There is no such character." });
+          return;
+        }
+        world.characters.splice(i, 1);
+        void queue(`character ${message.id}`, () => saves.store.deleteCharacter(world.id, message.id));
+        void writeWorld();
+        connection.end.send(characterList());
+        return;
+      }
+      case "enterWorld": {
+        if (!connection.selecting || player || connection.entering) return;
+        const refuse = (reason: string): void => connection.end.send({ type: "refused", what: "enterWorld", reason });
+        if (!saves || !world || !world.characters.some((c) => c.id === message.character)) return refuse("There is no such character.");
+        if ([...players.values()].some((p) => p.character?.id === message.character)) return refuse("That character is already in the world.");
+        connection.entering = true;
+        // After any write of it still under way.
+        const key = `character ${message.character}`;
+        void (writing.get(key) ?? Promise.resolve())
+          .then(() => saves.store.readCharacter(world.id, message.character))
+          .then(
+            (record) => {
+              connection.entering = false;
+              if (connection.end.closed || connection.player) return;
+              if (!record) return refuse("That character's save is missing.");
+              enterCharacter(connection, record, message.dimension);
+            },
+            (error: unknown) => {
+              connection.entering = false;
+              refuse(`That character could not be loaded: ${String(error instanceof Error ? error.message : error)}`);
+            },
+          );
+        return;
+      }
+      case "logout": {
+        if (!player) return;
+        const write = writeCharacter(player);
+        removePlayer(player);
+        connection.player = null;
+        connection.selecting = true;
+        const wrote = Promise.all([write, writeWorld()]);
+        void wrote.then(() => {
+          if (connection.end.closed) return;
+          connection.end.send({ type: "loggedOut" });
+          connection.end.send(characterList());
+        });
+        return;
+      }
+      case "saveInterface": {
+        if (player?.character && typeof message.value === "string" && message.value.length <= 16384) player.character.interface = message.value;
         return;
       }
       case "intent": {
@@ -428,6 +695,7 @@ export function createServer(options: ServerOptions): Server {
         if (!player || !to) return;
         const link = definitions.get(player.entity.dimension)?.links.find((l) => l.to === to.id);
         transfer(connection, player, to, link ? link.arrive : to.spawn);
+        void writeCharacter(player, connection);
         return;
       }
       case "arrived": {
@@ -537,7 +805,9 @@ export function createServer(options: ServerOptions): Server {
       }
       case "respawn": {
         if (!player?.entity.combat?.dead || !body) return;
-        const spawn = definitions.get(player.entity.dimension)?.spawn ?? start.spawn;
+        // Home, if it is in this dimension; else the dimension's spawn.
+        const home = player.character?.travel.home;
+        const spawn = home && home.dimension === player.entity.dimension ? home : (definitions.get(player.entity.dimension)?.spawn ?? start.spawn);
         skills.revive(player.entity);
         body.teleport(spawn.x, spawn.z);
         follow(player.entity);
@@ -555,11 +825,9 @@ export function createServer(options: ServerOptions): Server {
         const gone = connection.player;
         connections.splice(i, 1);
         if (gone) {
-          skills.leave(gone.entity);
-          progression?.leave(gone.entity);
-          players.delete(gone.entity.id);
-          loaded.get(gone.entity.dimension)?.entities.delete(gone.entity.id);
-          release(gone.entity.dimension);
+          // Gone without logging out: saved as it was.
+          void writeCharacter(gone);
+          removePlayer(gone);
         }
       }
     }
@@ -578,6 +846,7 @@ export function createServer(options: ServerOptions): Server {
     for (const player of players.values()) {
       const entity = player.entity;
       if (!entity.body) continue;
+      player.playing += deltaSeconds;
       // Stunned, rooted or dead: the body stands (ABILITIES.md, *States on a unit*).
       const free = canMove(entity.combat?.flags);
       const input = free ? player.input : { moveX: 0, moveZ: 0, run: false, jump: false };
@@ -604,6 +873,22 @@ export function createServer(options: ServerOptions): Server {
       for (const [entity, list] of progressed) for (const event of list) progressEvents.push({ entity, event });
       if (progressEvents.length > 256) progressEvents.splice(0, progressEvents.length - 256);
     }
+    // A level gained or a death is saved at once (FRONTEND.md, *When the server saves*).
+    if (saves) {
+      const now = new Set<number>();
+      for (const [id, list] of progressed ?? []) if (list.some((e) => e.kind === "levelUp")) now.add(id);
+      for (const { event } of events) if (event.kind === EVENT_KIND.death && players.get(event.target)?.character) now.add(event.target);
+      for (const id of now) {
+        const connection = connections.find((c) => c.player?.entity.id === id);
+        const player = players.get(id);
+        if (player?.character) void writeCharacter(player, connection);
+      }
+      if (time - lastAutosave >= (saves.interval ?? 30)) {
+        lastAutosave = time;
+        // A save still under way is not queued behind: the next one is due soon enough.
+        if (writing.size === 0) void saveAll();
+      }
+    }
     itemSystem?.step(loaded.values());
     for (const dimension of loaded.values()) stepResources(dimension.entities.values(), deltaSeconds);
     tick++;
@@ -628,9 +913,10 @@ export function createServer(options: ServerOptions): Server {
 
   return {
     connect: (end) => {
-      connections.push({ end, player: null, replicator: createReplicator(rules), items: itemSystem && options.items ? createItemReplicator(options.items, itemSystem) : null, progressSent: false });
+      connections.push({ end, player: null, replicator: createReplicator(rules), items: itemSystem && options.items ? createItemReplicator(options.items, itemSystem) : null, progressSent: false, selecting: false, entering: false });
     },
     step,
+    save: saveAll,
     get tick() {
       return tick;
     },

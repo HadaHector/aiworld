@@ -9,14 +9,21 @@ import type { CombatEvent } from "./skills/events";
 export type { CombatEvent } from "./skills/events";
 
 /** Bumped whenever a message changes shape. */
-export const PROTOCOL_VERSION = 9;
+export const PROTOCOL_VERSION = 10;
 
 // --- Client to server ------------------------------------------------------------------------
 
-/** Joins the server; answered with a Welcome, then a Transfer to the first dimension. */
+/**
+ * Joins the server; answered with a Welcome. With `select`, the client chooses or makes a character
+ * from the world's (FRONTEND.md, *Handshake*): Characters follows, and EnterWorld goes in. Without
+ * it the player is a quick, unsaved character made from the fields below - the dev shortcut and the
+ * headless bots: a Transfer to the first dimension follows at once.
+ */
 export interface Hello {
   type: "hello";
   protocol: number; // u16
+  /** Choose a saved character rather than play a quick one. */
+  select?: boolean;
   name: string;
   /** Debug: the dimension to start in, by id - "" for the server's choice (see DIMENSIONS.md). */
   dimension: string;
@@ -205,6 +212,39 @@ export interface DebugLearnAll {
   type: "debugLearnAll";
 }
 
+// Characters and saves (FRONTEND.md, *Handshake*).
+
+/** Makes a character in the world: answered with Characters, or Refused with why. */
+export interface CharacterCreate {
+  type: "characterCreate";
+  name: string;
+  /** Slot -> origin id: one per slot the game config lists. */
+  origins: Record<string, string>;
+  look: EntityAppearance;
+}
+export interface CharacterDelete {
+  type: "characterDelete";
+  id: string;
+}
+/** Plays a character: answered with Entered, then a Transfer to where it was left. */
+export interface EnterWorld {
+  type: "enterWorld";
+  character: string;
+  /** Debug: a dimension to start in instead, by id - "" for where it was left. */
+  dimension: string;
+}
+/** Saves and takes the player out of the world: answered with LoggedOut once the save is written,
+ *  then Characters - the connection stays, choosing again. */
+export interface Logout {
+  type: "logout";
+}
+/** The client's own layout (the action bar), kept with the character and never read by the server:
+ *  JSON text, at most 16 KB. */
+export interface SaveInterface {
+  type: "saveInterface";
+  value: string;
+}
+
 export type ClientMessage =
   | Hello
   | Intent
@@ -242,7 +282,12 @@ export type ClientMessage =
   | Learn
   | DebugXp
   | DebugLevel
-  | DebugLearnAll;
+  | DebugLearnAll
+  | CharacterCreate
+  | CharacterDelete
+  | EnterWorld
+  | Logout
+  | SaveInterface;
 
 // Items (see ITEMS.md, *Messages*): containers are 0 bag, 1 bank, 2 equipment; a slot is its index.
 
@@ -328,11 +373,17 @@ export interface DebugWear {
 
 // --- Server to client ------------------------------------------------------------------------
 
-/** The server's answer to a Hello: who the client is, and what it runs. A Transfer follows. */
+/** The server's answer to a Hello: who the client is, and what it runs. A Transfer follows - or, for
+ *  a Hello that selects, Characters. */
 export interface Welcome {
   type: "welcome";
   protocol: number; // u16
+  /** The player's entity - 0 for a Hello that selects, until Entered says. */
   playerId: number; // u32
+  /** The world's name - "" for a server without saves. */
+  world: string;
+  /** Whether characters are saved here: without, only quick characters can play. */
+  saves: boolean;
   /** Which world config (see CONFIG.md) and packs the server runs, by name and id - so a client can
    *  tell the player what differs. */
   config: string;
@@ -350,6 +401,52 @@ export interface Welcome {
   /** A hash of the progression tables (PROGRESSION.md): generated disciplines and classes come from
    *  the seed too. 0 when the server runs no progression. */
   progression: number; // u32
+}
+
+/** A character in the world, as the lists show it (FRONTEND.md, *A world's characters*). */
+export interface CharacterEntry {
+  id: string;
+  name: string;
+  /** Slot -> origin id. */
+  origins: Record<string, string>;
+  level: number; // u16
+  /** Where it was left: the dimension's name. */
+  place: string;
+  /** When it was last played, ms since 1970. */
+  played: number; // f64
+}
+
+/** The world's characters: after a Welcome that selects, and after a create, a delete or a logout. */
+export interface Characters {
+  type: "characters";
+  list: CharacterEntry[];
+}
+
+/** A character is in the world: its entity, and the layout its client last kept with it. A Transfer
+ *  follows. */
+export interface Entered {
+  type: "entered";
+  playerId: number; // u32
+  character: string;
+  interface: string;
+}
+
+/** Something asked for was not done, and why - a name taken, a character already playing. */
+export interface Refused {
+  type: "refused";
+  /** What was asked: "characterCreate", "characterDelete", "enterWorld"... */
+  what: string;
+  reason: string;
+}
+
+/** The player's character is saved and out of the world. */
+export interface LoggedOut {
+  type: "loggedOut";
+}
+
+/** The player's character has just been saved. */
+export interface Saved {
+  type: "saved";
 }
 
 /**
@@ -655,6 +752,11 @@ export interface ProgressEventState {
 }
 
 export type ServerMessage =
+  | Characters
+  | Entered
+  | Refused
+  | LoggedOut
+  | Saved
   | Progress
   | ProgressEvents
   | ContainerState

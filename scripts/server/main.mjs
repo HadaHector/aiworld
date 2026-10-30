@@ -14,6 +14,10 @@
 //                                               its spells, printing the combat log (see ABILITIES.md)
 //   npm run server -- --bot --loot              the bot loots the training dummy, puts on what it can and
 //                                               prints its stats and belongings before and after (ITEMS.md)
+//   npm run server -- --world test              a saved world in saves/test (FRONTEND.md, *Saves*): made
+//                                               on the first run from --seed and --config, which it keeps
+//                                               after; saved every 30 s and on Ctrl+C. With --bot, the bot
+//                                               plays a saved character, "Bot", made if it is not there yet
 // A dimension is generated when the first player heads for it and dropped when the last one leaves,
 // so with no bot the server holds no world at all.
 import { loadContentFromDisk, loadCreatureRulesFromDisk, loadItemRulesFromDisk, loadProgressionRulesFromDisk, loadRulesFromDisk } from "../diskContent.mjs";
@@ -31,6 +35,8 @@ import { describeEvent } from "../../src/sim/skills/combatLog.ts";
 import { createFightClient } from "./fightBot.mjs";
 import { createHuntClient } from "./huntBot.mjs";
 import { EVENT_KIND } from "../../src/sim/skills/events.ts";
+import { createFileStore } from "./fileStore.mjs";
+import { createWorldRecord } from "../../src/save/records.ts";
 
 const TICK_HZ = 30;
 
@@ -41,9 +47,13 @@ const text = (name, fallback) => {
   return at >= 0 && at + 1 < args.length ? args[at + 1] : fallback;
 };
 const option = (name, fallback) => Number(text(name, fallback));
-const seed = option("seed", WORLD_SEED);
+// A saved world keeps the seed and config it was made with.
+const worldId = text("world", "");
+const store = worldId ? createFileStore("saves") : null;
+const savedWorld = store ? await store.readWorld(worldId) : null;
+const seed = savedWorld ? savedWorld.seed : option("seed", WORLD_SEED);
 const maxTicks = option("ticks", Infinity);
-const configName = text("config", "default");
+const configName = savedWorld ? savedWorld.config : text("config", "default");
 const travelEvery = option("travel", 0);
 
 const ms = (since) => `${(performance.now() - since).toFixed(0)} ms`;
@@ -76,7 +86,17 @@ checkSkillRefs(rules, items.abilityRefs);
 checkProgressionItems(progression, items);
 console.log(`item rules: ${items.types.length} item types (${[...items.generated.values()].reduce((n, t) => n + t.length, 0)} generated), ${items.slots.length} equipment slots, ${items.lootTables.size} loot tables (${ms(started)})`);
 
+let world = savedWorld;
+if (store && !world) {
+  world = createWorldRecord({ id: worldId, name: worldId, seed, config: configName, packs, hashes: { rules: rules.hash, items: items.hash, creatures: creatures.hash, progression: progression.hash } });
+  await store.writeWorld(world);
+  console.log(`world ${worldId}: made in saves/${worldId} (seed ${seed}, config ${configName})`);
+} else if (world) {
+  console.log(`world ${worldId}: seed ${seed}, config ${configName}, clock ${world.time.toFixed(0)} s, ${world.delta.length} delta entries, characters ${world.characters.map((c) => `${c.name} (level ${c.level})`).join(", ") || "none"}`);
+}
+
 const server = createServer({
+  saves: store ? { store, world, onProblem: (message) => console.warn(`saves: ${message}`) } : undefined,
   seed,
   config: configName,
   packs,
@@ -106,7 +126,8 @@ if (flag("bot")) {
   server.connect(channel.server);
   // --people and --class pick the bot's origins (PROGRESSION.md): a slot's id names its parameter.
   const origins = Object.fromEntries(progression.config.slots.map((slot) => [slot.id, text(slot.id, slot.default)]));
-  channel.client.send({ type: "hello", protocol: PROTOCOL_VERSION, name: "bot", dimension: text("dimension", ""), origins });
+  // In a saved world the bot plays a saved character; elsewhere a quick one.
+  channel.client.send({ type: "hello", protocol: PROTOCOL_VERSION, select: Boolean(store), name: "bot", dimension: text("dimension", ""), origins });
   bot = {
     end: channel.client,
     id: 0,
@@ -117,6 +138,39 @@ if (flag("bot")) {
     fighter: flag("fight") ? createFightClient(rules, channel.client) : null,
     hunter: flag("hunt") ? createHuntClient(rules, creatures, channel.client, progression) : null,
   };
+  if (store) {
+    // Its first messages are the world's characters: Bot is entered, or made and then entered.
+    const pick = (list) => list.find((c) => c.name === "Bot");
+    const wait = () => {
+      for (const message of channel.client.receive()) {
+        if (message.type === "characters") {
+          const found = pick(message.list);
+          if (found) channel.client.send({ type: "enterWorld", character: found.id, dimension: text("dimension", "") });
+          else channel.client.send({ type: "characterCreate", name: "Bot", origins, look: { seed: 7, race: "", outfit: "", sex: "" } });
+        }
+        if (message.type === "refused") console.log(`bot: refused (${message.what}): ${message.reason}`);
+        if (message.type === "entered") {
+          console.log(`bot: entered as character ${message.character} (#${message.playerId})`);
+          bot.id = message.playerId;
+        }
+        // The Transfer comes with Entered: answered here, as driveBot would.
+        if (message.type === "transfer") {
+          console.log(`bot: to ${message.dimension} at ${message.x}, ${message.z}`);
+          bot.dimension = message.dimension;
+          channel.client.send({ type: "arrived" });
+        }
+      }
+      if (bot.id) return;
+      server.step(0);
+      setTimeout(wait, 0);
+    };
+    server.step(0);
+    await new Promise((resolve) => {
+      const poll = () => (bot.id ? resolve() : setTimeout(poll, 5));
+      wait();
+      poll();
+    });
+  }
 }
 
 /** One entity message, short, with stats and resources by name. */
@@ -309,5 +363,20 @@ const timer = setInterval(() => {
     steps = 0;
     lastReport = now;
   }
-  if (server.tick >= maxTicks) clearInterval(timer);
+  if (server.tick >= maxTicks) {
+    clearInterval(timer);
+    if (store) void saveAndStop();
+  }
 }, 1000 / TICK_HZ);
+
+/** A saved world is written before the process goes - at --ticks, or on Ctrl+C. */
+async function saveAndStop() {
+  const at = performance.now();
+  await server.save();
+  console.log(`world ${worldId}: saved (clock ${server.time.toFixed(1)} s, ${server.debug.delta.size} delta entries) in ${ms(at)}`);
+  process.exit(0);
+}
+if (store) {
+  process.on("SIGINT", () => void saveAndStop());
+  process.on("SIGTERM", () => void saveAndStop());
+}

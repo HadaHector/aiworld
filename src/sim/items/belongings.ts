@@ -61,7 +61,7 @@ function activate(ctx: ItemContext, entity: Entity, slot: number): void {
 }
 
 /** Turns a slot's effects off. */
-function deactivate(ctx: ItemContext, entity: Entity, slot: number): void {
+export function deactivate(ctx: ItemContext, entity: Entity, slot: number): void {
   const b = entity.belongings!;
   if (!b.active[slot]) return;
   const source = slotSource(ctx.items, slot);

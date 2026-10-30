@@ -42,6 +42,8 @@ export interface ItemWorld {
   /** Where an emptied chest's time to come back is kept, by its placement key, so a dimension loaded
    *  again does not refill it early (see CREATURES.md, *Death, corpses and respawn*). */
   delta?: { get(key: string): number | undefined; set(key: string, until: number): void };
+  /** The first item id to give: the saved world's next one, so ids stay unique from run to run. */
+  firstItemId?: number;
 }
 
 /**
@@ -82,7 +84,7 @@ export interface ItemSystem {
 }
 
 export function createItemSystem(game: GameRules, items: ItemRules, world: ItemWorld, hooks: ItemHooks = NO_ITEM_HOOKS): ItemSystem {
-  const store = createItemStore();
+  const store = createItemStore(world.firstItemId);
   const ctx: ItemContext = { game, items, store, hooks };
   // Chances - wear on a hit - from a stream of the world seed's; loot from each source's own.
   const chance = mulberry32(deriveSeed(world.seed >>> 0, hashString("items")));
