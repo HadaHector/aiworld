@@ -99,6 +99,10 @@ export async function createShowcase(options: {
   let aside = 0;
   let asideWanted = 0;
   const head = new Vector3();
+  /** How high the character's head is over the stage, eased. A body's bones are where its pose put
+   *  them only once it has been drawn: frames posed since it came in, to wait for that. */
+  let headHeight = 1.6;
+  let posed = 0;
 
   function build(): void {
     if (building || !wanted) return;
@@ -112,6 +116,7 @@ export async function createShowcase(options: {
         if (disposed) return made.dispose();
         body?.dispose();
         body = made;
+        posed = 0;
         shown = key;
         for (const mesh of made.meshes) world.castShadow(mesh);
         build();
@@ -166,12 +171,14 @@ export async function createShowcase(options: {
       // In front of the character, at the distance zoomed to, looking at its chest - or its face.
       const k = ease(staged);
       const distance = FAR + (NEAR - FAR) * zoom * (2 - zoom);
-      let headY = stageY + 1.6;
-      if (body) {
+      // A new body's first frames read its head where its bones last were - near the world's
+      // origin - which put the camera in the ground for a frame.
+      if (body && ++posed > 2) {
         body.place("head", head);
-        headY = head.y;
+        const height = head.y - stageY;
+        if (height > 0.6 && height < 3) headHeight += (height - headHeight) * Math.min(1, dt * 6);
       }
-      const lookY = stageY + (headY - stageY) * (0.62 + 0.38 * zoom);
+      const lookY = stageY + headHeight * (0.62 + 0.38 * zoom);
       // In front of it: a body faces along (sin, cos) of its facing.
       const fx = Math.sin(stageFacing);
       const fz = Math.cos(stageFacing);
