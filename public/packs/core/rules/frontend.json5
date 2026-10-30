@@ -1,0 +1,21 @@
+// The front end (see FRONTEND.md, *Pack data*): the game's title, the world behind the main menu and
+// how the camera drifts over it, where character creation stands the character, the menu's music,
+// and the saving and naming rules. Replaced whole by a later pack.
+{
+  title: "aiworld",
+  showcase: {
+    // A small world, so the menu is up in seconds: the `tiny` config, this seed, its start dimension.
+    config: "tiny",
+    seed: 1338,
+    hour: 17.5,
+    // Round `around` at `radius` metres, `height` over the ground, a whole turn in `period` seconds,
+    // rising and falling by `bob`; looking at `look` metres over the ground at the centre.
+    camera: { around: [837, 390], radius: 130, height: 48, bob: 6, period: 240, look: 4 },
+    // Where the character list and creation stand the character (facing in degrees), and how far
+    // the camera is from it.
+    stage: { at: [800, 360], facing: 180, distance: 3.2 },
+  },
+  music: { menu: "mainTheme" },
+  save: { interval: 30 },
+  names: { min: 2, max: 16 },
+}

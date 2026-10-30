@@ -1,30 +1,22 @@
 import type { Engine } from "@babylonjs/core";
 import { DEFAULT_DRAW_DISTANCE, nextPaint } from "../world/world";
-import { createServer } from "../sim/server";
-import { createLocalChannel } from "../sim/channel";
 import { PROTOCOL_VERSION, type ClientMessage, type EntityMotion, type Transfer } from "../sim/protocol";
 import { createEntityMirror } from "./entityMirror";
 import { createEntityMeshes, type EntityMeshes } from "./entityMeshes";
 import { createEntityPanel } from "../debug/entityPanel";
 import { describeEntity } from "../sim/entityText";
-import type { DimensionWorld } from "../sim/dimension";
 import { createDimensionView, type DimensionView, type ViewSettings } from "./dimensionView";
 import type { ZoneLabel } from "../debug/zoneLabel";
 import { describeMemory, memoryReport } from "../debug/memoryPanel";
 import type { PositionPanel, ViewSnapshot } from "../debug/positionPanel";
 import type { LoadingScreen } from "../ui/loadingScreen";
 import type { MusicControl } from "../ui/musicControl";
-import { resolveFeedback, type FeedbackRules } from "../feedback/rules";
 import { createGameFeedback, type GameFeedback } from "./feedback";
+import { welcomeProblems, type Connection } from "./connection";
+import { createLocalChannel } from "../sim/channel";
+import type { WorldContent } from "../world/content/worldContent";
 import type { GameMusic } from "../music/gameMusic";
 import { BIOME_STYLES, BUILDING_STYLES, DEFAULT_STYLE } from "../music/places";
-import { loadPackSet, type PackSet } from "../world/content/loadContent";
-import type { WorldContent } from "../world/content/worldContent";
-import { checkPlacements, resolveGameRules, type GameRules } from "../sim/rules/gameRules";
-import { resolveItemRules, type ItemRules } from "../sim/rules/itemRules";
-import { resolveCreatureRules, type CreatureRules } from "../sim/rules/creatureRules";
-import { checkProgressionItems, resolveProgressionRules, type ProgressionRules } from "../sim/rules/progressionRules";
-import { checkSkillRefs } from "../sim/rules/skillRules";
 import { createBelongingsMirror } from "./belongingsMirror";
 import { gearOfItems } from "./itemGear";
 import { createInventoryScreen, createLootWindow } from "../ui/inventoryScreen";
@@ -72,10 +64,11 @@ export interface QuickCharacter {
 }
 
 export interface SessionOptions {
-  /** The world's seed and config (CONFIG.md). */
-  seed: number;
-  config: string;
-  character: QuickCharacter;
+  /** The world's server, and the rules its seed and config made (game/connection.ts). */
+  connection: Connection;
+  /** Who plays: a quick, unsaved character made from these (`?play`), or a saved one by id, chosen
+   *  from the connection's character list (FRONTEND.md, *Handshake*). */
+  enter: { quick: QuickCharacter } | { character: string; dimension?: string };
 }
 
 /** One world being played: what `dispose` takes down again, leaving the page as it found it. */
@@ -88,13 +81,14 @@ export interface Session {
 }
 
 /**
- * Plays one world: loads its packs under its config and resolves the rules from its seed, starts the
- * simulation in the page (single player is a server of one), and builds the HUD's windows, bars and
- * keys around it. Resolves once the first dimension is drawn.
+ * Plays a character in a world, over its connection: builds the HUD's windows, bars and keys around
+ * it, and draws the dimensions the server sends it to. Resolves once the first one is drawn; throws
+ * (with the loading screen stopped on why) if the server will not let the character in.
  */
 export async function startSession(page: Page, options: SessionOptions): Promise<Session> {
   const { engine, canvas, loadingScreen, hud, zoneLabel, positionPanel, musicControl, music } = page;
-  const seed = options.seed;
+  const { connection } = options;
+  const { seed, server, client } = connection;
   // Every listener on the window and canvas goes when the session does.
   const listening = new AbortController();
   const signal = listening.signal;
@@ -107,52 +101,23 @@ export async function startSession(page: Page, options: SessionOptions): Promise
   /** What else stops when the session does: listeners on the HUD, buttons put in its regions. */
   const unlisten: (() => void)[] = [];
 
-  // Everything the world is generated from that is content rather than code - biomes, materials,
-  // plants - comes from the packs in public/packs. A broken pack stops here, with every problem listed
-  // on the loading screen, rather than halfway through generating a world from it. The packs are
-  // fetched once; each dimension resolves its own content from them when it is entered.
-  let packSet: PackSet;
-  let startContent: WorldContent;
-  let gameRules: GameRules;
-  let itemRules: ItemRules;
-  let creatureRules: CreatureRules;
-  let progressionRules: ProgressionRules;
-  let feedbackRules: FeedbackRules;
-  try {
-    loadingScreen.update("Loading content packs", 0, 0);
-    packSet = await loadPackSet(options.config);
-    startContent = packSet.resolve(null);
-    // Stats, resources and entity templates (see ENTITIES.md): once for the page, not per dimension.
-    gameRules = resolveGameRules(packSet.sources);
-    checkPlacements(gameRules, startContent.dimensions);
-    // Creatures (see CREATURES.md): kinds depend on the world seed, and join the templates before the
-    // item rules check their loot.
-    creatureRules = resolveCreatureRules(packSet.sources, gameRules, seed);
-    // Progression (see PROGRESSION.md): generated disciplines and classes depend on the world seed, and
-    // the origins' combinations join the templates before the item rules check their start items.
-    progressionRules = resolveProgressionRules(packSet.sources, gameRules, seed);
-    // Items (see ITEMS.md): generated types depend on the world seed; the skills items name are checked.
-    itemRules = resolveItemRules(packSet.sources, gameRules, seed);
-    checkSkillRefs(gameRules, itemRules.abilityRefs);
-    checkProgressionItems(progressionRules, itemRules);
-    // Sounds, particle effects and cues (see FEEDBACK.md), checked against the skills and the looks.
-    feedbackRules = resolveFeedback(packSet.sources, gameRules);
-  } catch (error) {
-    page.failLoading("The content packs could not be loaded", error);
-  }
+  // The packs as this world's config keeps them, and the rules its seed made of them.
+  const { packSet, startContent, game: gameRules, items: itemRules, creatures: creatureRules, progression: progressionRules, feedback: feedbackRules } = connection.rules;
 
-  // Who the player is, as far as their body goes, until character creation (see CHARACTERS.md).
-  const playerLook = { ...options.character.look };
-  // Who the player is in the game's rules - its origins (see PROGRESSION.md, *Origins*), one per
+  const quick = "quick" in options.enter ? options.enter.quick : null;
+  // Who the player is, as far as their body goes: a quick character's from its options, a saved
+  // one's as Entered says (see CHARACTERS.md).
+  const playerLook: PlayerLook = quick ? { ...quick.look } : { race: "human", outfit: "scout", seed: 7 };
+  // Who a quick player is in the game's rules - its origins (see PROGRESSION.md, *Origins*), one per
   // slot. A slot left out or named wrong takes its default.
   const requestedOrigins: Record<string, string> = {};
   for (const slot of progressionRules.config.slots) {
-    const id = options.character.origins[slot.id];
+    const id = quick?.origins[slot.id];
     const origin = id === undefined ? undefined : progressionRules.origins[progressionRules.originIndex.get(id) ?? -1];
     requestedOrigins[slot.id] = origin && origin.slot === slot.id ? origin.id : slot.default;
   }
   // A people's body race is the player's unless the character names one.
-  if (!options.character.raceGiven) {
+  if (quick && !quick.raceGiven) {
     for (const id of Object.values(requestedOrigins)) {
       const look = progressionRules.origins[progressionRules.originIndex.get(id) ?? -1]?.raw.look;
       if (look && typeof look === "object" && typeof (look as { race?: unknown }).race === "string") playerLook.race = (look as { race: string }).race;
@@ -161,24 +126,6 @@ export async function startSession(page: Page, options: SessionOptions): Promise
   /** Races, gear and outfits for everyone else's bodies, resolved once. */
   const bodyKit = createBodyKit(packSet.sources);
 
-  // The simulation, in this page: single player is a server of one, over an in-memory channel - the
-  // same server `npm run server` runs on its own (see SIMULATION.md). It holds the dimensions (see
-  // DIMENSIONS.md), and takes each from this page's own build of it rather than generating it again:
-  // the same, read-only, from the same seed.
-  const built = new Map<string, (world: DimensionWorld) => void>();
-  const server = createServer({
-    seed: seed,
-    config: packSet.config.name,
-    packs: packSet.packs,
-    dimensions: startContent.dimensions,
-    rules: gameRules,
-    items: itemRules,
-    creatures: creatureRules,
-    progression: progressionRules,
-    loadDimension: (definition) => new Promise<DimensionWorld>((resolve) => built.set(definition.id, resolve)),
-  });
-  const channel = createLocalChannel();
-  server.connect(channel.server);
   let playerId = -1;
   let intentSeq = 0;
 
@@ -203,24 +150,27 @@ export async function startSession(page: Page, options: SessionOptions): Promise
   let healthBars: HealthBars | null = null;
   /** The unit the player has selected (see ABILITIES.md): 0 for none. */
   let targetId = 0;
+  /** Why the server last refused what was asked - entering the world, above all. */
+  let refusal = "";
 
   /** Applies whatever the server has said since last time - where the player is now, above all. */
   function takeServerMessages(): void {
-    for (const message of channel.client.receive()) {
+    for (const message of client.receive()) {
       // What the own player wears goes on its body (ITEMS.md, *Equipment*).
       if (message.type === "entityGear" && message.id === playerId) view?.dress(gearOfItems(itemRules, message.gear));
       if (mirror.apply(message)) continue;
       if (belongings.apply(message)) continue;
       if (progressMirror.apply(message)) continue;
       if (message.type === "welcome") {
+        // A quick player's Welcome; a saved one's came to the character list.
+        if (message.playerId) playerId = message.playerId;
+        for (const problem of welcomeProblems(message, seed, connection.rules)) console.warn(problem);
+      } else if (message.type === "entered") {
         playerId = message.playerId;
-        // The rules above were resolved from this session's seed; a server on another would differ in
-        // every generated class, item and creature.
-        if (message.seed !== seed) console.warn(`The server's world seed (${message.seed}) differs from this page's (${seed}): generated content will not match.`);
-        if (message.creatures !== creatureRules.hash) console.warn(`The server's creatures (${message.creatures.toString(16)}) differ from this page's (${creatureRules.hash.toString(16)}): creatures may show as the wrong kinds.`);
-        if (message.items !== itemRules.hash) console.warn(`The server's item rules (${message.items.toString(16)}) differ from this page's (${itemRules.hash.toString(16)}): items may show as the wrong things.`);
-        if (message.progression !== progressionRules.hash) console.warn(`The server's progression (${message.progression.toString(16)}) differs from this page's (${progressionRules.hash.toString(16)}): disciplines and talents may show under the wrong names.`);
-        if (message.rules !== gameRules.hash) console.warn(`The server's game rules (${message.rules.toString(16)}) differ from this page's (${gameRules.hash.toString(16)}): stats and resources may show under the wrong names.`);
+        const look = message.look;
+        Object.assign(playerLook, { race: look.race || "human", outfit: look.outfit || "scout", sex: look.sex || undefined, seed: look.seed });
+      } else if (message.type === "refused") {
+        refusal = message.reason;
       } else if (message.type === "transfer") {
         pendingTransfer = message;
         me = null;
@@ -249,7 +199,7 @@ export async function startSession(page: Page, options: SessionOptions): Promise
   /** Sends a command and has the server take it at once, so a teleport is done when this returns -
    *  what the console's `goto` and the map's clicks always had. */
   function command(message: ClientMessage): void {
-    channel.client.send(message);
+    client.send(message);
     server.step(0);
     takeServerMessages();
   }
@@ -336,8 +286,7 @@ export async function startSession(page: Page, options: SessionOptions): Promise
       look: playerLook,
       hud: { graphics: hud.options.graphics, debugSettings: hud.debug.settings, debugStats: hud.debug.stats },
     });
-    built.get(transfer.dimension)?.(next.shared);
-    built.delete(transfer.dimension);
+    connection.provide(transfer.dimension, next.shared);
     view = next;
     const world = next.world;
     floatingText = createFloatingText(next.scene, mirror, gameRules, () => playerId);
@@ -349,7 +298,7 @@ export async function startSession(page: Page, options: SessionOptions): Promise
       onBody: (meshes) => meshes.forEach((mesh) => world.castShadow(mesh)),
       items: itemRules,
     });
-    channel.client.send({ type: "arrived" });
+    client.send({ type: "arrived" });
     // The server puts the body in once it has the dimension too - a moment, as its load resolves.
     while (!me) {
       await new Promise((resolve) => setTimeout(resolve, 0));
@@ -386,7 +335,7 @@ export async function startSession(page: Page, options: SessionOptions): Promise
     const started = performance.now();
     const intent = spectator.active ? { moveX: 0, moveZ: 0, run: false, jump: false } : character.readIntent(camera);
     intentSeq = (intentSeq + 1) & 0xffff;
-    channel.client.send({ type: "intent", seq: intentSeq, ...intent });
+    client.send({ type: "intent", seq: intentSeq, ...intent });
     for (const extra of extraPlayers) extra.step();
     server.step(deltaSeconds);
     takeServerMessages();
@@ -499,7 +448,7 @@ export async function startSession(page: Page, options: SessionOptions): Promise
 
   // Items (see ITEMS.md): B toggles the inventory; E loots or picks up the nearest thing in reach.
   const sendItem = (message: ClientMessage): void => {
-    channel.client.send(message);
+    client.send(message);
     // Its sound at once, as the hand does it (FEEDBACK.md).
     feedback.itemIntent(message);
   };
@@ -551,12 +500,12 @@ export async function startSession(page: Page, options: SessionOptions): Promise
   function setTarget(id: number): void {
     if (id && id !== targetId) feedback.client("target", { source: playerId, target: id, skill: null, crit: false, periodic: false });
     targetId = id;
-    channel.client.send({ type: "target", id });
+    client.send({ type: "target", id });
     if (id && entityPanel.visible) entityPanel.select(id);
   }
   function castSpell(skill: number): void {
     intentSeq = (intentSeq + 1) & 0xffff;
-    channel.client.send({ type: "cast", seq: intentSeq, skill, target: 0, x: NaN, z: NaN });
+    client.send({ type: "cast", seq: intentSeq, skill, target: 0, x: NaN, z: NaN });
   }
   const combatHud = createCombatHud({
     rules: gameRules,
@@ -581,9 +530,9 @@ export async function startSession(page: Page, options: SessionOptions): Promise
     mirror,
     belongings,
     ownId: () => playerId,
-    character: Object.values(requestedOrigins).join("."),
+    character: quick ? Object.values(requestedOrigins).join(".") : `saved:${"character" in options.enter ? options.enter.character : ""}`,
     cast: castSpell,
-    setAttacking: (on) => channel.client.send({ type: "attack", on }),
+    setAttacking: (on) => client.send({ type: "attack", on }),
     useItem: (bagSlot) => sendItem({ type: "itemUse", from: { container: 0, slot: bagSlot } }),
     teleport: (byKey) => aimTeleport(byKey),
   });
@@ -592,7 +541,7 @@ export async function startSession(page: Page, options: SessionOptions): Promise
     mirror,
     progress: progressMirror,
     cast: castSpell,
-    setAttacking: (on) => channel.client.send({ type: "attack", on }),
+    setAttacking: (on) => client.send({ type: "attack", on }),
     teleport: () => aimTeleport(false),
   });
   listenWindow("keydown", (e) => {
@@ -610,7 +559,7 @@ export async function startSession(page: Page, options: SessionOptions): Promise
     progress: progressMirror,
     entities: mirror,
     ownId: () => playerId,
-    send: (message) => channel.client.send(message),
+    send: (message) => client.send(message),
     openBook: (key) => (key ? ruleBook.open(key) : ruleBook.toggle()),
   });
   progressMirror.onEvents((events) => {
@@ -695,7 +644,7 @@ export async function startSession(page: Page, options: SessionOptions): Promise
     }
     if (e.key === "Escape") {
       if (teleportArmed) setTeleportArmed(false);
-      else if (mirror.entities.get(playerId)?.cast) channel.client.send({ type: "stopCast" });
+      else if (mirror.entities.get(playerId)?.cast) client.send({ type: "stopCast" });
       else if (targetId) setTarget(0);
       return;
     }
@@ -795,7 +744,7 @@ export async function startSession(page: Page, options: SessionOptions): Promise
       setTarget(id);
       const dead = (entity.flags & (1 << FLAG.dead)) !== 0;
       const enemy = entity.template?.hostility === "hostile" || entity.template?.hostility === "neutral";
-      if (enemy && !dead && id !== playerId) channel.client.send({ type: "attack", on: true });
+      if (enemy && !dead && id !== playerId) client.send({ type: "attack", on: true });
     });
   }
 
@@ -942,15 +891,15 @@ export async function startSession(page: Page, options: SessionOptions): Promise
       rules: progressionRules,
       mirror: progressMirror,
       mine: () => progressMirror.progress,
-      xp: (discipline: string, amount: number) => channel.client.send({ type: "debugXp", discipline: progressionRules.disciplineIndex.get(discipline) ?? -1, amount }),
-      level: (discipline: string, level: number) => channel.client.send({ type: "debugLevel", discipline: progressionRules.disciplineIndex.get(discipline) ?? -1, level }),
+      xp: (discipline: string, amount: number) => client.send({ type: "debugXp", discipline: progressionRules.disciplineIndex.get(discipline) ?? -1, amount }),
+      level: (discipline: string, level: number) => client.send({ type: "debugLevel", discipline: progressionRules.disciplineIndex.get(discipline) ?? -1, level }),
       pick(tree: string, node: string) {
         const t = progressionRules.treeIndex.get(tree) ?? -1;
-        channel.client.send({ type: "talentPick", tree: t, node: progressionRules.trees[t]?.nodes.find((n) => n.id === node)?.index ?? -1 });
+        client.send({ type: "talentPick", tree: t, node: progressionRules.trees[t]?.nodes.find((n) => n.id === node)?.index ?? -1 });
       },
-      reset: (tree: string) => channel.client.send({ type: "talentReset", tree: progressionRules.treeIndex.get(tree) ?? -1 }),
-      learn: (trainer: number, skill: string) => channel.client.send({ type: "learn", trainer, skill: gameRules.skillIndex.get(skill) ?? -1 }),
-      learnAll: () => channel.client.send({ type: "debugLearnAll" }),
+      reset: (tree: string) => client.send({ type: "talentReset", tree: progressionRules.treeIndex.get(tree) ?? -1 }),
+      learn: (trainer: number, skill: string) => client.send({ type: "learn", trainer, skill: gameRules.skillIndex.get(skill) ?? -1 }),
+      learnAll: () => client.send({ type: "debugLearnAll" }),
       /** The own character's progress as it would be saved, and loading one into it - single player only. */
       export: () => {
         const me = server.debug.entity(playerId);
@@ -1030,8 +979,28 @@ export async function startSession(page: Page, options: SessionOptions): Promise
 
   // Joining is travelling: the server answers Hello with a Transfer to the first dimension - the
   // character's `dimension` asks for one (debug).
-  command({ type: "hello", protocol: PROTOCOL_VERSION, name: options.character.name, dimension: options.character.dimension, look: appearanceOf(playerLook), origins: requestedOrigins });
-  if (!pendingTransfer) throw new Error("The server sent no dimension to enter");
+  if (quick) {
+    command({ type: "hello", protocol: PROTOCOL_VERSION, name: quick.name, dimension: quick.dimension, look: appearanceOf(playerLook), origins: requestedOrigins });
+  } else if ("character" in options.enter) {
+    // The connection has said Hello and been told the characters; the character is read from the
+    // store before the server answers.
+    command({ type: "enterWorld", character: options.enter.character, dimension: options.enter.dimension ?? "" });
+    for (let waited = 0; !pendingTransfer && !refusal && waited < 600; waited++) {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      server.step(0);
+      takeServerMessages();
+    }
+  }
+  if (!pendingTransfer) {
+    listening.abort();
+    page.failLoading("The character could not enter the world", new Error(refusal || "The server sent no dimension to enter."));
+  }
+  // A saved world is written when the page is hidden: the tab may be closed next.
+  if (connection.saved) {
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "hidden") void connection.save();
+    }, { signal });
+  }
   await follow(true);
 
   function render(): void {
@@ -1050,8 +1019,9 @@ export async function startSession(page: Page, options: SessionOptions): Promise
     dispose() {
       listening.abort();
       engine.stopRenderLoop(render);
-      // The server lets the player go and drops the dimensions nobody is left in - as a logout will.
-      channel.client.close();
+      // The server saves the character, lets it go and drops the dimensions nobody is left in; the
+      // connection stays, back at its character list.
+      client.send({ type: "logout" });
       for (const extra of extraPlayers) extra.close();
       server.step(0);
       for (const stop of unlisten.splice(0)) stop();

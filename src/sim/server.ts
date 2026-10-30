@@ -527,7 +527,7 @@ export function createServer(options: ServerOptions): Server {
     players.set(entity.id, joined);
     connection.player = joined;
     connection.selecting = false;
-    connection.end.send({ type: "entered", playerId: entity.id, character: record.id, interface: record.interface });
+    connection.end.send({ type: "entered", playerId: entity.id, character: record.id, look: entity.look, interface: record.interface });
     transfer(connection, joined, to, { x: at.x, z: at.z });
   }
 

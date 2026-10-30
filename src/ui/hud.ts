@@ -27,6 +27,8 @@ export interface Hud {
   readonly options: { readonly root: HTMLElement; readonly sound: HTMLElement; readonly graphics: HTMLElement };
   debugVisible: boolean;
   optionsVisible: boolean;
+  /** Whether a game is being played: off, under the menus (FRONTEND.md), only the windows region shows. */
+  playing: boolean;
   /** Called on every layout pass with the width the spell bar may take: its slots fit themselves to
    *  it. Returns what stops the calls. */
   onActionsWidth: (listener: (width: number) => void) => () => void;
@@ -167,6 +169,11 @@ export function createHud(): Hud {
     // No storage: the panel starts hidden.
   }
   debugRoot.style.display = debugVisible ? "flex" : "none";
+  let playing = true;
+  const showRegions = (): void => {
+    for (const r of [frames, info, actions, log, menu]) r.style.visibility = playing ? "" : "hidden";
+    debugRoot.style.display = debugVisible && playing ? "flex" : "none";
+  };
 
   const hud: Hud = {
     frames,
@@ -182,13 +189,20 @@ export function createHud(): Hud {
     },
     set debugVisible(on: boolean) {
       debugVisible = on;
-      debugRoot.style.display = on ? "flex" : "none";
+      showRegions();
       try {
         localStorage.setItem(DEBUG_KEY, on ? "1" : "0");
       } catch {
         // Not remembered; fine.
       }
       layout();
+    },
+    get playing() {
+      return playing;
+    },
+    set playing(on: boolean) {
+      playing = on;
+      showRegions();
     },
     get optionsVisible() {
       return optionsRoot.style.display !== "none";

@@ -428,6 +428,8 @@ export interface Entered {
   type: "entered";
   playerId: number; // u32
   character: string;
+  /** Its look, for the client to build its body before any spawn says (ENTITIES.md, *Looks*). */
+  look: EntityAppearance;
   interface: string;
 }
 

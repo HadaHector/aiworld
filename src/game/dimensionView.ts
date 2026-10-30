@@ -49,6 +49,9 @@ export interface DimensionViewOptions {
   /** The packs, and who the player is: their body is built from them (game/playerBody.ts). */
   packs: PackSource[];
   look: PlayerLook;
+  /** False for a view with nobody in it - the world behind the main menu (FRONTEND.md): no body is
+   *  built and the capsule is not drawn. */
+  body?: boolean;
   /** Where its panels go (ui/hud.ts): the graphics settings in the options window, the debug
    *  switches and stats in the debug panel. */
   hud: { graphics: HTMLElement; debugSettings: HTMLElement; debugStats: HTMLElement };
@@ -120,8 +123,9 @@ export async function createDimensionView(options: DimensionViewOptions): Promis
   let building = false;
   let built = "";
   let wanted: { gear: BodyGear[] | undefined; signature: string } = { gear: undefined, signature: "outfit" };
+  if (options.body === false) character.mesh.isVisible = false;
   function buildBody(): void {
-    if (building || disposed || wanted.signature === built) return;
+    if (options.body === false || building || disposed || wanted.signature === built) return;
     building = true;
     const { gear, signature } = wanted;
     createPlayerBody(scene, options.packs, { ...options.look, gear }, seed)

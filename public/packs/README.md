@@ -73,6 +73,8 @@ packs/<pack>/
   cues/<id>.json5         feedback: what plays together - sounds, effects, flash, flinch, shake, pause
   rules/feedback.json5    feedback: which cue each event plays, weapons, armours, surfaces, the mix
   sfx/<file>.wav          feedback: sample files sounds name (not read as json5)
+  rules/frontend.json5    front end: the title, the world behind the main menu and its camera, the
+                          character stage, the menu's music, autosave and name rules (FRONTEND.md)
 ```
 
 A definition's **id is its file name**: `materials/peat.json5` defines the material `peat`, and

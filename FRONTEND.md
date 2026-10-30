@@ -7,7 +7,7 @@ progression panel and the rule book. This step adds what comes before and around
 a main menu, worlds, characters with a creation screen, saving and loading them, a pause menu, and
 logging out. The quest log comes after step 9, which has the quests to put in it.
 
-**Status: in progress.** Approved; steps 1 and 2 done (see [As built](#as-built)).
+**Status: in progress.** Approved; steps 1 to 3 done (see [As built](#as-built)).
 
 ## Decisions
 
@@ -363,11 +363,11 @@ particles, only sound.
 
 ## Dev shortcut
 
-**`?play`** skips the menu and goes straight into a game, as the bare URL does today:
+**`?play`** skips the menu and goes straight into a game, as the bare URL did before the menu:
 
-- a throwaway world in a memory store, so nothing is saved, with seed 1338 unless `?seed=` says otherwise;
+- a throwaway world with no saves, with seed 1338 unless `?seed=` says otherwise;
 - `?config=`, `?dimension=`, `?people=`, `?class=`, `?race=`, `?outfit=`, `?sex=` and `?look=`
-  work as now, through the debug `quickCharacter`;
+  work as before, through Hello's quick fields;
 - `?play=<world>` enters that saved world with its last character, or `?play=<world>/<character>`
   with a named one. This is for testing saves.
 
@@ -389,7 +389,7 @@ Each step leaves the game working: the dev server, `npm run probe`, `npm run ser
    in the record. `npm run server -- --world test` makes, saves and loads a world. The probe
    round-trips a character with progress, belongings and resources through each store, restarts a
    server and finds the delta and clock kept, and refuses bad names.
-3. **The main menu.** `rules/frontend.json5`, the showcase world and its camera path, the main
+3. **The main menu: done.** `rules/frontend.json5`, the showcase world and its camera path, the main
    theme, Options, Continue, and the world list with create, rename and delete. The bare URL shows
    the menu. A character can only be entered through the list, with a default look. The notes go to
    the other sessions.
@@ -466,6 +466,44 @@ Each step leaves the game working: the dev server, `npm run probe`, `npm run ser
   The IndexedDB store was round-tripped in the page. The entities, abilities, items, progression,
   creatures and feedback probes pass. The feedback probe's "chips fall" check failed once in three
   runs. It uses unseeded randomness, and this step does not touch it.
+
+- **Step 3.**
+  - **What runs where.** `src/game/connection.ts` resolves a world's rules (moved out of the
+    session), starts its server in the page and connects to it. The front end owns the connection
+    from choosing a world until it goes back to the list. A session plays one character over it and
+    sends `logout` when disposed; a quick game's connection goes with its game.
+    `src/frontend/frontendRules.ts` reads `rules/frontend.json5`, `src/frontend/showcase.ts` is the
+    menu's world, and `src/frontend/frontend.ts` holds the screens and starts and ends games.
+    `main.ts` fetches every pack once (`packSetFrom` narrows them per config without fetching again)
+    and starts the front end. With `?play` it starts a quick game instead.
+  - **The showcase** is the tiny world at seed 1338, the camera circling the village at (837, 390)
+    at 17:30. The start spawn of that world is low and wet, and a village at dusk looks better.
+    `createDimensionView` gained `body: false` (no player body, no capsule drawn), and the HUD gained
+    `playing` (off, only the windows region shows, so Options works over the menu).
+  - **The menu's music.** The menu asks for the `mainTheme` style four times a second. The theme
+    keeps playing through the loading screen, and gives way to the zone's music on the usual 4 s
+    settle once the game draws.
+  - **The screens:**
+    - main: Continue, New character, Worlds, Options;
+    - worlds: play, rename, delete, create with name, seed and size;
+    - a world's characters: enter, delete, create;
+    - a stand-in character creation: origins and a name, the look a random seed and the people's
+      race, until step 4.
+
+    Escape goes back. A world whose rules' hashes changed since it was made says so on its
+    character list.
+  - **Coming back to the menu** is `__aiworldPage.leave()` (to the world's characters) or
+    `leave(true)` (to the main menu) until the pause menu in step 5.
+  - **Checked in the page:**
+    - make a tiny world and a character, enter, level up and move;
+    - leave to the menu, reload the page, Continue: back at level 3 where it was left;
+    - leave to the character list: "Level 3 Human Warrior · The Mainland";
+    - `?play&people=dwarf&class=mage` and `__aiworldPage.restart()` still play quick games;
+    - `?play=<world>` goes straight in (10 s for the tiny world) without building the menu's world.
+  - **A bug found on the way.** The menu read the connection's messages until the session it was
+    starting had resolved, so it took Entered and Transfer from it. The menu now stops reading when
+    a game starts, not when it has started.
+  - Not yet: `names` in `rules/frontend.json5` is read but the server still uses its own 2-16 limits.
 
 ## Later
 

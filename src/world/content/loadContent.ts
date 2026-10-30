@@ -36,6 +36,13 @@ export async function loadPackSet(configName: string = configNameFromUrl(), base
   return { config, packs: sources.map((pack) => pack.id), resolve: (dimension) => resolveContent(sources, config, dimension), sources };
 }
 
+/** A pack set from pack files already fetched - every pack's, as `fetchPackSources` gives them under
+ *  the default config - narrowed to what another config keeps, without fetching again. */
+export function packSetFrom(allSources: readonly PackSource[], config: WorldConfig): PackSet {
+  const sources = selectPacks(allSources, config);
+  return { config, packs: sources.map((pack) => pack.id), resolve: (dimension) => resolveContent(sources, config, dimension), sources };
+}
+
 /** The world config the page's URL asks for - `?config=small` - or "default". */
 export function configNameFromUrl(): string {
   return new URLSearchParams(location.search).get("config") || DEFAULT_CONFIG.name;
