@@ -162,6 +162,9 @@ export async function createShowcase(options: {
     target.copyFrom(centre);
 
     staged = Math.min(1, Math.max(0, staged + (toStage ? dt : -dt) / GLIDE));
+    // Off the stage, once the camera has left it, the character is not there either.
+    const present = toStage || staged > 0;
+    if (body && body.meshes[0].isEnabled() !== present) for (const mesh of body.meshes) mesh.setEnabled(present);
     if (body) {
       // Standing on the stage, shifting its weight a little now and then; turned as dragged.
       const sway = 0.12 * Math.sin(t * 0.35) + 0.05 * Math.sin(t * 0.9);
