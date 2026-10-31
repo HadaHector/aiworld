@@ -5,6 +5,7 @@ import type { EntityMirror, MirroredEntity } from "./entityMirror";
 import { PLAYER_TEMPLATE, type EntityLook, type GameRules } from "../sim/rules/gameRules";
 import { createCharacterBody, type BodyKit, type BodyLook, type BodyPlace, type CharacterBody } from "./characterBody";
 import type { ItemRules } from "../sim/rules/itemRules";
+import { bodyDone } from "../character/bodyTiming";
 import { gearOfItems } from "./itemGear";
 
 export interface EntityMeshes {
@@ -128,9 +129,11 @@ export function createEntityMeshes(scene: Scene, mirror: EntityMirror, rules: Ga
     const signature = gear ? gear.map((g) => `${g.piece}${g.tint}`).join() : `outfit:${entry.wanted.outfit}`;
     if (signature === entry.built) return;
     entry.building = true;
+    const asked = performance.now();
     createCharacterBody(scene, `entity${entity.id}Body`, bodies.kit, { ...entry.wanted, gear }, bodies.worldSeed)
       .then((body) => {
         entry.building = false;
+        bodyDone(performance.now() - asked);
         if (entry.gone) return body.dispose();
         entry.body?.dispose();
         entry.body = body;

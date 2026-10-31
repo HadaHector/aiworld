@@ -1,3 +1,4 @@
+import { addTime } from "./bodyTiming";
 import { deriveSeed, mulberry32 } from "../world/rng";
 import type { ColorTuple } from "../world/terrain/pipeline/pipelineTypes";
 import type { AtlasLayout } from "./atlas";
@@ -118,6 +119,7 @@ export async function paintAtlasSliced(body: BodyGeometry, layout: AtlasLayout, 
     const started = performance.now();
     let step = steps.next();
     while (!step.done && performance.now() - started < budgetMs) step = steps.next();
+    addTime("4a paintAtlas cpu", performance.now() - started);
     if (step.done) return step.value;
     await pause();
   }

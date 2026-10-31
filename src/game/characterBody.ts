@@ -4,6 +4,7 @@ import type { PackSource } from "../world/content/resolveContent";
 import { resolveRaces, type RaceDef, type Sex } from "../character/raceDef";
 import { resolveGear, resolveOutfits, type GearDef, type OutfitDef } from "../character/gearDef";
 import { resolveGearMaterials, type GearMaterialDef } from "../character/gearMaterial";
+import { timed } from "../character/bodyTiming";
 import { dressCharacter } from "../character/character";
 import { createCharacterMesh, type CharacterMesh } from "../character/characterMesh";
 import { createAnimator, type Animator } from "../character/animation";
@@ -104,7 +105,7 @@ export async function createCharacterBody(scene: Scene, name: string, kit: BodyK
     // In slices, so a crowd coming into view (a bandit camp) does not stop the frames.
     { pause: () => new Promise((resolve) => setTimeout(resolve, 0)) },
   );
-  const character: CharacterMesh = createCharacterMesh(scene, name, dressed.body, { pixels: dressed.pixels!, size: dressed.layout!.size, uvs: dressed.layout!.uvs, nearest: false }, dressed.baked);
+  const character: CharacterMesh = timed("5-10 createCharacterMesh total", () => createCharacterMesh(scene, name, dressed.body, { pixels: dressed.pixels!, size: dressed.layout!.size, uvs: dressed.layout!.uvs, nearest: false }, dressed.baked));
   for (const mesh of character.meshes) mesh.isPickable = false;
   const animator: Animator = createAnimator(dressed.race.skeleton);
   const boneIndex = new Map(character.skeleton.bones.map((b, i) => [b.name, i]));

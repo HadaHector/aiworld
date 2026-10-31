@@ -3,6 +3,7 @@ import type { BodyGeometry } from "./bodyMesh";
 import { smoothNormals } from "./atlas";
 import { cross, frameFor, normalize, sub, type BoneDef, type Vec } from "./skeleton";
 import type { BakedGearMaterial } from "./gearMaterial";
+import { timed } from "./bodyTiming";
 import { TEXTURE_RESOLUTION } from "../world/materials/textureGen";
 
 /** A pose: per bone name, a turn about the bone's own axes - x across it (bending forward and
@@ -35,7 +36,7 @@ export interface CharacterMesh {
  * the leg points.
  */
 export function createCharacterMesh(scene: Scene, name: string, body: BodyGeometry, skin: BodySkin, gear?: Map<string, BakedGearMaterial>): CharacterMesh {
-  const skeleton = new Skeleton(`${name}Skeleton`, `${name}Skeleton`, scene);
+  const skeleton = timed("5 skeleton", () => new Skeleton(`${name}Skeleton`, `${name}Skeleton`, scene));
   const absolute = body.bones.map(boneMatrix);
   const rests: Quaternion[] = [];
   const restPositions: Vector3[] = [];
@@ -55,7 +56,7 @@ export function createCharacterMesh(scene: Scene, name: string, body: BodyGeomet
   // Every triangle its own vertices (a corner's texture place is its own), the normals smooth -
   // or, on a flat gear layer (a blade), its face's.
   const P = body.positions;
-  const smooth = smoothNormals(body);
+  const smooth = timed("6 smoothNormals", () => smoothNormals(body));
   const atlas = "uvs" in skin ? skin : null;
   function build(meshName: string, layer: number, uvOf: (corner: number) => [number, number] | null, flat: boolean): Mesh | null {
     const positions: number[] = [];
@@ -94,7 +95,7 @@ export function createCharacterMesh(scene: Scene, name: string, body: BodyGeomet
     built.skeleton = skeleton;
     return built;
   }
-  const mesh = build(name, -1, (corner) => (atlas ? [atlas.uvs[corner * 2], atlas.uvs[corner * 2 + 1]] : null), false)!;
+  const mesh = timed("7 body vertex data + mesh", () => build(name, -1, (corner) => (atlas ? [atlas.uvs[corner * 2], atlas.uvs[corner * 2 + 1]] : null), false)!);
   const materials: Material[] = [];
   const textures: RawTexture[] = [];
   const prepare = (material: StandardMaterial, specular: number): void => {
@@ -111,7 +112,7 @@ export function createCharacterMesh(scene: Scene, name: string, body: BodyGeomet
 
   const material = new StandardMaterial(`${name}Material`, scene);
   if (atlas) {
-    const texture = RawTexture.CreateRGBATexture(atlas.pixels, atlas.size, atlas.size, scene, !atlas.nearest, false, atlas.nearest ? Texture.NEAREST_SAMPLINGMODE : Texture.TRILINEAR_SAMPLINGMODE);
+    const texture = timed("8 atlas RawTexture (upload + mips)", () => RawTexture.CreateRGBATexture(atlas.pixels, atlas.size, atlas.size, scene, !atlas.nearest, false, atlas.nearest ? Texture.NEAREST_SAMPLINGMODE : Texture.TRILINEAR_SAMPLINGMODE));
     texture.name = `${name}Atlas`;
     texture.wrapU = Texture.CLAMP_ADDRESSMODE;
     texture.wrapV = Texture.CLAMP_ADDRESSMODE;
@@ -130,7 +131,7 @@ export function createCharacterMesh(scene: Scene, name: string, body: BodyGeomet
   body.layers.forEach((layer, i) => {
     const baked = gear?.get(layer.material);
     const size = baked?.def.size ?? 1;
-    const part = build(`${name}Gear${i}`, i, (corner) => [body.gearUVs[corner * 2] / size, body.gearUVs[corner * 2 + 1] / size], layer.flat);
+    const part = timed("9 gear layer vertex data + mesh", () => build(`${name}Gear${i}`, i, (corner) => [body.gearUVs[corner * 2] / size, body.gearUVs[corner * 2 + 1] / size], layer.flat));
     if (!part) return;
     part.parent = mesh;
     const gearMaterial = new StandardMaterial(`${name}Gear${i}Material`, scene);
@@ -138,7 +139,7 @@ export function createCharacterMesh(scene: Scene, name: string, body: BodyGeomet
     if (baked) {
       let tile = tiles.get(layer.material);
       if (!tile) {
-        tile = RawTexture.CreateRGBATexture(baked.color, TEXTURE_RESOLUTION, TEXTURE_RESOLUTION, scene, true, false, Texture.TRILINEAR_SAMPLINGMODE);
+        tile = timed("10 gear tile RawTexture (1024^2 upload + mips)", () => RawTexture.CreateRGBATexture(baked.color, TEXTURE_RESOLUTION, TEXTURE_RESOLUTION, scene, true, false, Texture.TRILINEAR_SAMPLINGMODE));
         tile.name = `gear-${layer.material}`;
         tile.wrapU = Texture.WRAP_ADDRESSMODE;
         tile.wrapV = Texture.WRAP_ADDRESSMODE;

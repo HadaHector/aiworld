@@ -1,3 +1,4 @@
+import { addTime, timed } from "./bodyTiming";
 import { buildBody, type BodyGeometry } from "./bodyMesh";
 import { layoutAtlas, type AtlasLayout } from "./atlas";
 import { chooseAppearance, paintAtlas, paintAtlasSliced, type Appearance, type PaintedCover } from "./paint";
@@ -53,20 +54,24 @@ export interface DressedCharacter {
 export async function dressCharacter(spec: CharacterSpec, materials: Map<string, GearMaterialDef>, worldSeed: number, options: CharacterBuildOptions = {}): Promise<DressedCharacter> {
   const look = chooseAppearance(spec.race, spec.seed, spec.sex, spec.sliders ?? {}, spec.choices ?? {});
   const race = forSex(withLook(spec.race, look.height, look.build), look.sex);
-  const body = buildBody(race, { detail: options.detail, lattice: options.lattice, gear: spec.gear, skin: look.skin });
+  const body = timed("1 buildBody", () => buildBody(race, { detail: options.detail, lattice: options.lattice, gear: spec.gear, skin: look.skin }));
   await options.pause?.();
   const baked = new Map<string, BakedGearMaterial>();
   const bake = async (id: string): Promise<BakedGearMaterial | null> => {
     const def = materials.get(id);
     if (!def) return null;
-    if (!baked.has(id)) baked.set(id, await bakeGearMaterial(worldSeed, def));
+    if (!baked.has(id)) {
+      const started = performance.now();
+      baked.set(id, await bakeGearMaterial(worldSeed, def));
+      addTime("2 gearMaterial (wall, cached after the first)", performance.now() - started);
+    }
     return baked.get(id)!;
   };
   for (const layer of body.layers) await bake(layer.material);
   const size = options.atlas ?? 512;
   if (size <= 0) return { race, look, body, layout: null, pixels: null, baked };
 
-  const layout = layoutAtlas(body, size);
+  const layout = timed("3 layoutAtlas", () => layoutAtlas(body, size));
   await options.pause?.();
   const covers: PaintedCover[] = [];
   const linen = spec.smallclothes ? await bake("linen") : null;
@@ -84,6 +89,8 @@ export async function dressCharacter(spec: CharacterSpec, materials: Map<string,
       if (material) covers.push({ material, tint: paint.tint, span: "along", from: paint.from, to: paint.to, regions: paint.regions.flatMap(sided), hem: paint.hem });
     }
   }
+  const paintStarted = performance.now();
   const pixels = options.pause ? await paintAtlasSliced(body, layout, race, look, covers, options.pause) : paintAtlas(body, layout, race, look, covers);
+  addTime("4 paintAtlas (wall incl. waits between slices)", performance.now() - paintStarted);
   return { race, look, body, layout, pixels, baked };
 }
