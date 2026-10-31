@@ -6,7 +6,7 @@ The first half of step 9 of [GAMEPLAY.md](GAMEPLAY.md)'s build order: the **star
 two are built in the order of [Steps](#steps) here and there, and together they reach the first
 milestone.
 
-**Status: in progress.** Step 1 is done (see [As built](#as-built)).
+**Status: in progress.** Steps 1 and 2 are done (see [As built](#as-built)).
 
 ## Decisions
 
@@ -436,6 +436,31 @@ Each leaves the game working: the dev server (`?play`), `npm run probe`, `npm ru
     positions moved to where the start puts things; the hunting bot is put back on the open ground
     at the old spawn, since by the starting village the nearest creatures were a bandit camp whose
     corpses it could not reach in its 10 s.
+    The feedback probe's fight now starts somewhere else, and one heroic strike's swing lands within
+    the cue player's 0.05 s of an auto-attack's and is coalesced, as designed; the probe now allows
+    that.
+- **Step 2.** `src/sim/factions.ts`: `factions/*.json5` and `rules/factions.json5` (WoW's eight tiers,
+  `ally: "friendly"`, `hostile: "hostile"`), read into the game rules as `rules.factions`.
+  - **Every template has a faction**: its `faction`, else one by its hostility (hostile monsters,
+    neutral wildlife, friendly players). A template that names a faction and no hostility gets its
+    hostility from how the faction regards players, so the client, which colours by hostility, needs
+    no change yet. Creature species take `faction` too; bandits are `bandits`.
+  - **Generated factions** are ids with an `@`: `folk@mainland/3` is the template `folk` for one zone.
+  - **Allies and enemies** (`relation` in `skills/unit.ts`) come from `standingBetween`: one faction, or
+    standing at `ally` or above, is an ally; below `hostile` an enemy; otherwise a player and the other
+    side are enemies (a neutral boar can be attacked) and two non-players leave each other be. The
+    creature brain aggroes on a player whose standing with it is below `hostile`, instead of on its
+    template's hostility. Every fight came out as before (the creatures, abilities and feedback probes).
+  - **Standing** is a player entity's `standing` map, saved in the record's `standing`, told to its
+    client whole on arriving and per faction as it changes (`standing`, protocol 12), and changed by
+    the server's `changeStanding` (in `server.debug` for now, for the quests) and a `debugStanding`
+    intent. `__aiworld.standing()` lists it with tiers.
+  - **Not yet:** the reputation tab in the progression panel (with the quest UI, step 8), and colours
+    by standing rather than hostility in the client.
+  - **Checked:** `scripts/probe/npcs.mjs`, 32 checks: the factions and tiers, templates' factions,
+    generated factions, standing between sides, refusals, and on a server allies and enemies, standing
+    moved, told, clamped, saved and loaded.
+  - The NPC rules reader (`src/sim/rules/npcRules.ts`, `rules.npcs`) is in, empty until step 3's data.
 
 ## Later
 

@@ -5,7 +5,7 @@ import type { SkillSystem } from "../skills/system";
 import { addThreat } from "../skills/combat";
 import { endMagic } from "../skills/magic";
 import { canMove, FLAG, hasFlag } from "../skills/flags";
-import { gap, hiddenFrom, isAlive } from "../skills/unit";
+import { gap, hiddenFrom, isAlive, standingOf } from "../skills/unit";
 import { statValues } from "../stats";
 import { restore } from "../resources";
 import type { Brain, CreaturePart } from "./creature";
@@ -157,11 +157,12 @@ export function stepBrain(world: BrainWorld, self: Entity): void {
   switch (brain.state) {
     case "idle":
     case "wander": {
-      // Hostile kinds look round for players to aggro.
-      if (self.template.hostility === "hostile" && kind.aggro > 0 && now >= brain.nextLook) {
+      // Kinds hostile to a player look round for it to aggro (NPCS.md, *Factions*).
+      if (kind.aggro > 0 && now >= brain.nextLook) {
         brain.nextLook = now + LOOK_EVERY;
         for (const player of world.playersIn(self.dimension)) {
           if (!isAlive(player) || hiddenFrom(world.skills.sys, player, self)) continue;
+          if (standingOf(world.skills.sys, self, player) >= world.skills.sys.rules.factions.hostile) continue;
           const distance = Math.hypot(player.x - self.x, player.z - self.z);
           if (distance > 50) continue;
           const radius = config.aggro.run(scopeFor(world, self, player, distance)) * kind.aggro;

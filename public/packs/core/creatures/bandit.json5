@@ -4,6 +4,7 @@
   name: "Bandit {variant}",
   family: "humanoid",
   hostility: "hostile",
+  faction: "bandits",                 // NPCS.md, *Factions*: hostile to players and the folk
   roster: false,
   stats: { stamina: 4, strength: 9, agility: 9, intellect: 8, armor: 40, weaponMin: 3, weaponMax: 6, weaponSpeed: 3 },
   perLevel: { stamina: 1.5, strength: 1.5, agility: 1, intellect: 1.5, armor: 15, weaponMin: 1.2, weaponMax: 1.8 },

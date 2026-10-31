@@ -8,6 +8,7 @@
   resources: ["health"],
   spells: [{ skill: "autoAttack" }],
   hostility: "friendly",
+  faction: "players",
   // A bag, a bank, and what they start with (see ITEMS.md, Belongings).
   items: { bag: 20, bank: 40, start: [{ item: "sword.bronze.short.common" }, { item: "tunic" }, { item: "linenTrousers" }, { item: "sandals" }, { item: "bread", count: 5 }] },
   // A human scout unless the origins or the player say otherwise; the capsule is what a click hits.

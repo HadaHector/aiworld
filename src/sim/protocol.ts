@@ -161,6 +161,13 @@ export interface DebugDespawn {
   entity: number; // u32
 }
 
+/** Debug: changes the sender's standing with a faction (NPCS.md, *Factions*). */
+export interface DebugStanding {
+  type: "debugStanding";
+  faction: string;
+  delta: number; // f64
+}
+
 /** Debug: starts a skill's magic on an entity, cast by the sender (ABILITIES.md). */
 export interface DebugApply {
   type: "debugApply";
@@ -258,6 +265,7 @@ export type ClientMessage =
   | DebugResource
   | DebugSpawn
   | DebugDespawn
+  | DebugStanding
   | SetTarget
   | Cast
   | StopCast
@@ -452,6 +460,13 @@ export interface LoggedOut {
 /** The player's character has just been saved. */
 export interface Saved {
   type: "saved";
+}
+
+/** The player's standing with factions that keep reputation (NPCS.md, *Factions*): all of it on
+ *  arriving, and each faction as it changes. Owner only. */
+export interface Standing {
+  type: "standing";
+  values: [faction: string, value: number][];
 }
 
 /**
@@ -800,6 +815,7 @@ export type ServerMessage =
   | Refused
   | LoggedOut
   | Saved
+  | Standing
   | Progress
   | ProgressEvents
   | ContainerState

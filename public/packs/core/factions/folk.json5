@@ -1,0 +1,3 @@
+// The people of a zone's settlements: one faction per zone, made from this template, e.g. the Folk of
+// Coldwater (folk@mainland/3). Friendly to players to begin with; quests for them raise it.
+{ name: "The Folk of {zone}", per: "zone", reputation: true, relations: { players: "friendly", bandits: "hated", monsters: "hostile" } }

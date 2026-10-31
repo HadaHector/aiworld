@@ -1,0 +1,2 @@
+// Every player character, and anything on their side (summons, friendly templates).
+{ name: "Players" }

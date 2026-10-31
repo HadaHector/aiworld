@@ -1,0 +1,2 @@
+// What attacks players on sight: wolves, spiders, the training dummy's straw bolts.
+{ name: "Monsters", relations: { players: "hostile", folk: "hostile" } }

@@ -135,7 +135,7 @@ const ID_PATTERN = /^[A-Za-z0-9_-]+$/;
 const byId = (a: { id: string }, b: { id: string }): number => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
 
 const SPECIES_KEYS = [
-  "entity", "name", "family", "hostility", "stats", "perLevel", "modifiers", "spells", "tactics", "speed", "group", "habitat", "roster",
+  "entity", "name", "family", "hostility", "faction", "stats", "perLevel", "modifiers", "spells", "tactics", "speed", "group", "habitat", "roster",
   "levelOffset", "respawn", "aggro", "flee", "keepRange", "wander", "loot", "look", "variants", "traits",
 ];
 const VARIANT_KEYS = ["id", "name", "habitat", "stats", "perLevel", "modifiers", "spells", "tactics", "look", "never", "levelOffset", "speed", "flee", "keepRange", "aggro"];
@@ -358,6 +358,9 @@ function makeKind(
     hostility: species.hostility ?? base.hostility ?? "hostile",
     threat: true,
   };
+  // Its faction (NPCS.md, *Factions*): the species', else what its base names, else one by its hostility.
+  const faction = species.faction ?? base.faction;
+  if (faction !== undefined) own.faction = faction;
   if (spells.length > 0) own.spells = [...(Array.isArray(base.spells) ? base.spells : []), ...spells];
   if (modifiers.length > 0) own.modifiers = [...(Array.isArray(base.modifiers) ? base.modifiers : []), ...modifiers];
   if (species.loot !== undefined) own.items = { ...(isObject(base.items) ? base.items : {}), loot: reader.string(species, "loot", "") };

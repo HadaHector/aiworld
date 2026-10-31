@@ -128,7 +128,7 @@ export const PROGRESSION_FOLDERS = ["disciplines", "disciplineTemplates", "origi
 /** The folders gameplay content lives in - stats, resources, templates (see ENTITIES.md), skills and
  *  game rules files (ABILITIES.md). Not world content: the world's resolver passes over them, and
  *  the game rules' resolver reads them, once per server. */
-export const GAME_FOLDERS = ["stats", "modifiers", "resources", "entities", "skills", "rules", ...ITEM_FOLDERS, ...CREATURE_FOLDERS, ...PROGRESSION_FOLDERS] as const;
+export const GAME_FOLDERS = ["stats", "modifiers", "resources", "entities", "skills", "rules", "factions", "npcRoles", "npcRelations", ...ITEM_FOLDERS, ...CREATURE_FOLDERS, ...PROGRESSION_FOLDERS] as const;
 
 /** The folders characters' bodies are drawn from - races, gear, outfits (see CHARACTERS.md). Read by
  *  the client alone (src/character); the world's resolver passes over them too. */

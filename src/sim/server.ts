@@ -27,6 +27,7 @@ import { EVENT_KIND } from "./skills/events";
 import { exportBelongings, importBelongings } from "./items/save";
 import { startingPlace, startPoint } from "./spawn";
 import { chooseStarts, type ChosenStart } from "../world/settlements/starts";
+import { clampStanding, factionDef, standingWith } from "./factions";
 
 /** Where a body is to be made: a point, or (with `start`) the start of that id, once it is placed. */
 type Arrival = { x: number; z: number; start?: string };
@@ -46,6 +47,8 @@ interface Connection {
   items: ItemReplicator | null;
   /** Whether it has been told its player's whole progress since it arrived somewhere. */
   progressSent: boolean;
+  /** ...and its whole standing with factions (NPCS.md, *Factions*). */
+  standingSent: boolean;
   /** Choosing a character (a Hello that selects, or after a logout), with none in the world. */
   selecting: boolean;
   /** A character being read from the store, to enter. */
@@ -150,6 +153,10 @@ export interface Server {
     readonly progression: ProgressionSystem | null;
     /** The latest progress events, by character (the last 256). */
     readonly progressEvents: { entity: number; event: ProgressEvent }[];
+    /** Moves a player's standing with a faction (NPCS.md, *Factions*): the new standing, or null. */
+    changeStanding: (entity: Entity, faction: string, delta: number) => number | null;
+    /** Each loaded dimension's starts (NPCS.md, *The starting site*). */
+    readonly starts: ReadonlyMap<string, readonly ChosenStart[]>;
   };
   /** The server's clock: seconds stepped since it started - or since the saved world began. */
   readonly time: number;
@@ -344,6 +351,25 @@ export function createServer(options: ServerOptions): Server {
     }
   }
 
+  /** Factions whose standing changed this step, by player entity: told to its client with the step. */
+  const standingChanged = new Map<number, Set<string>>();
+
+  /** Moves a player's standing with a faction that keeps reputation (NPCS.md, *Factions*), within
+   *  the scale; the new standing, or null for a faction whose standing cannot change. */
+  function changeStanding(entity: Entity, faction: string, delta: number): number | null {
+    const def = factionDef(rules.factions, faction);
+    if (!entity.standing || !def?.reputation) return null;
+    const value = clampStanding(rules.factions, standingWith(rules.factions, { faction: entity.template.faction, standing: entity.standing }, faction) + delta);
+    entity.standing.set(faction, value);
+    const changed = standingChanged.get(entity.id) ?? new Set<string>();
+    standingChanged.set(entity.id, changed.add(faction));
+    return value;
+  }
+
+  /** A player's standing from its record: only factions that keep it, and only numbers. */
+  const readStanding = (saved: Record<string, number> | undefined): Map<string, number> =>
+    new Map(Object.entries(saved ?? {}).filter(([id, v]) => factionDef(rules.factions, id)?.reputation && Number.isFinite(v)).map(([id, v]) => [id, clampStanding(rules.factions, v)]));
+
   /** Each loaded dimension's starts, placed in its world (NPCS.md, *The starting site*). */
   const startsOf = new Map<string, ChosenStart[]>();
 
@@ -406,6 +432,7 @@ export function createServer(options: ServerOptions): Server {
     connection.replicator.reset();
     connection.items?.reset();
     connection.progressSent = false;
+    connection.standingSent = false;
     connection.end.send({ type: "transfer", dimension: to.id, seed: dimensionSeed(options.seed, to), x: at.x, z: at.z, start: at.start ?? "" });
   }
 
@@ -475,6 +502,7 @@ export function createServer(options: ServerOptions): Server {
       for (const index of entity.resources.has) record.resources[rules.resources[index].id] = entity.resources.current[index];
     }
     record.dead = entity.combat?.dead ?? false;
+    if (entity.standing) record.standing = Object.fromEntries(entity.standing);
     // Travelling, it has no body yet: it is wherever it is headed.
     const at = entity.body ? { x: entity.x, z: entity.z } : player.arrival;
     record.travel = { ...record.travel, dimension: entity.dimension, x: at.x, z: at.z, facing: entity.facing };
@@ -544,6 +572,7 @@ export function createServer(options: ServerOptions): Server {
             ? record.travel
             : startOf(start, record.origins);
     const entity = createEntity(rules, template, nextId++, { dimension: "", x: at.x, y: 0, z: at.z, facing: asked ? 0 : record.travel.facing, name: record.name, look: cleanLook(record.look) });
+    entity.standing = readStanding(record.standing);
     skills.adopt(entity);
     itemSystem?.adopt(entity);
     if (chosen) progression!.adopt(entity, chosen.origins);
@@ -633,6 +662,7 @@ export function createServer(options: ServerOptions): Server {
         const chosen = progression?.originsFor(message.origins && typeof message.origins === "object" ? message.origins : undefined);
         const template = (chosen && rules.templates.get(chosen.template)) || playerTemplate!;
         const entity = createEntity(rules, template, nextId++, { dimension: "", x: first.spawn.x, y: 0, z: first.spawn.z, facing: 0, name: message.name, look: message.look && cleanLook(message.look) });
+        entity.standing = new Map();
         skills.adopt(entity);
         itemSystem?.adopt(entity);
         if (chosen) progression!.adopt(entity, chosen.origins);
@@ -769,6 +799,10 @@ export function createServer(options: ServerOptions): Server {
         if (!dimension || !template) return;
         const { x, z } = message;
         spawnIn(dimension, template.id, x, z, Math.atan2(player!.entity.x - x, player!.entity.z - z));
+        return;
+      }
+      case "debugStanding": {
+        if (player) changeStanding(player.entity, String(message.faction), Number(message.delta) || 0);
         return;
       }
       case "debugDespawn": {
@@ -957,14 +991,22 @@ export function createServer(options: ServerOptions): Server {
         messages.push(...progressMessages(progression.ctx, entity, progressed?.get(entity.id), !connection.progressSent));
         connection.progressSent = true;
       }
+      // ...and its standing with factions: whole on arrival, else what changed.
+      if (entity?.standing) {
+        const changed = connection.standingSent ? standingChanged.get(entity.id) : entity.standing.keys();
+        const values = [...(changed ?? [])].map((faction): [string, number] => [faction, entity.standing!.get(faction) ?? 0]);
+        if (values.length > 0 || !connection.standingSent) messages.push({ type: "standing", values });
+        connection.standingSent = true;
+      }
       messages.push(snapshot);
       for (const message of messages) connection.end.send(message);
     }
+    standingChanged.clear();
   }
 
   return {
     connect: (end) => {
-      connections.push({ end, player: null, replicator: createReplicator(rules), items: itemSystem && options.items ? createItemReplicator(options.items, itemSystem) : null, progressSent: false, selecting: false, entering: false });
+      connections.push({ end, player: null, replicator: createReplicator(rules), items: itemSystem && options.items ? createItemReplicator(options.items, itemSystem) : null, progressSent: false, standingSent: false, selecting: false, entering: false });
     },
     step,
     save: saveAll,
@@ -985,6 +1027,8 @@ export function createServer(options: ServerOptions): Server {
       delta,
       progression,
       progressEvents,
+      changeStanding,
+      starts: startsOf,
     },
   };
 }

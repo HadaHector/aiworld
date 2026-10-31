@@ -71,6 +71,8 @@ export interface CharacterRecord {
   };
   /** The client's own layout (the action bar), as JSON text: kept by the server, never read by it. */
   interface: string;
+  /** Standing with factions that keep reputation, by faction id (NPCS.md, *Factions*). Left out: none earned. */
+  standing?: Record<string, number>;
 }
 
 /** A new world, before anything has been played in it. */

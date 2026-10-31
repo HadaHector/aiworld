@@ -460,13 +460,18 @@ await section("a fight", async () => {
   let clock = 0;
   performance.now = () => clock;
   const silent = new Map();
+  // One source's swings within the cue player's coalescing window (0.05 s) play once, by design: a
+  // heroic strike's swing landing on an auto-attack's.
+  const lastSwing = new Map();
   try {
     for (const event of events) {
       clock = event.time * 1000;
       const before = played;
       cues.events([event]);
       const kind = COMBAT_EVENT_KINDS[event.kind];
-      if (played === before) {
+      const coalesced = kind === "animation" && event.time - (lastSwing.get(event.source) ?? -Infinity) <= 0.05;
+      if (kind === "animation") lastSwing.set(event.source, event.time);
+      if (played === before && !coalesced) {
         const key = `${kind} ${fightRules.skills[event.skill]?.id ?? "-"}`;
         silent.set(key, (silent.get(key) ?? 0) + 1);
       }

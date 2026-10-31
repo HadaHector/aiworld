@@ -1,5 +1,5 @@
 import type { Entity } from "../entity";
-import { PLAYER_TEMPLATE } from "../rules/gameRules";
+import { PLAYERS_FACTION, standingBetween } from "../factions";
 import type { Relation, SkillMatch } from "../rules/skillRules";
 import { createFlagBlock, FLAG, hasFlag } from "./flags";
 import type { CombatPart, Magic, Sys } from "./types";
@@ -33,28 +33,36 @@ export function createCombatPart(threat: boolean): CombatPart {
 
 export const isAlive = (unit: Entity): boolean => unit.combat !== undefined && !unit.combat.dead;
 
-type Side = "players" | "hostile" | "neutral";
-
-/** Which side a unit is on until factions come: players and friendly templates, hostile ones, the
- *  rest. A summon is on its owner's side. */
-function sideOf(sys: Sys, unit: Entity, depth = 0): Side {
+/** What a unit stands with: its owner's faction and standing for a summon, else its own. */
+function sideOf(sys: Sys, unit: Entity, depth = 0): Entity {
   const owner = unit.combat?.owner ?? 0;
   if (owner && depth < 4) {
     const o = sys.world.entity(owner);
     if (o) return sideOf(sys, o, depth + 1);
   }
-  if (unit.template.id === PLAYER_TEMPLATE || unit.template.hostility === "friendly") return "players";
-  return unit.template.hostility === "hostile" ? "hostile" : "neutral";
+  return unit;
 }
 
-/** How `b` stands to `a`: an ally (same side, or itself), an enemy (players against the rest), or
- *  neither (hostile and neutral creatures leave each other alone). */
-export function relation(sys: Sys, a: Entity, b: Entity): "ally" | "enemy" | "none" {
-  if (a === b) return "ally";
+/** On the players' side: a player, or anything of their faction. */
+const isPlayer = (unit: Entity): boolean => unit.template.faction === PLAYERS_FACTION;
+
+/** How `b`'s side and `a`'s stand to each other, on the factions' scale (NPCS.md, *Factions*). */
+export function standingOf(sys: Sys, a: Entity, b: Entity): number {
   const sa = sideOf(sys, a);
   const sb = sideOf(sys, b);
-  if (sa === sb) return "ally";
-  return sa === "players" || sb === "players" ? "enemy" : "none";
+  if (sa === sb) return Infinity;
+  return standingBetween(sys.rules.factions, { faction: sa.template.faction, standing: sa.standing }, { faction: sb.template.faction, standing: sb.standing });
+}
+
+/** How `b` stands to `a`: an ally (one side, or standing at the factions' `ally` or above), an
+ *  enemy (a player and anything it is not allied with, or standing below `hostile`), or neither
+ *  (creatures that leave each other alone). */
+export function relation(sys: Sys, a: Entity, b: Entity): "ally" | "enemy" | "none" {
+  if (a === b) return "ally";
+  const standing = standingOf(sys, a, b);
+  if (standing >= sys.rules.factions.ally) return "ally";
+  if (standing < sys.rules.factions.hostile) return "enemy";
+  return isPlayer(sideOf(sys, a)) || isPlayer(sideOf(sys, b)) ? "enemy" : "none";
 }
 
 export function relationIs(sys: Sys, a: Entity, b: Entity, wanted: Relation): boolean {

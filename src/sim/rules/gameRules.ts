@@ -1,3 +1,5 @@
+import { readNpcRules, type NpcRules } from "./npcRules";
+import { FACTION_BY_HOSTILITY, PLAYERS_FACTION, factionDef, readFactionRules, standingBetween, type FactionRules } from "../factions";
 import { ContentError, isObject, joinPath, Reader, type ContentIssue, type RawObject } from "../../world/content/contentReader";
 import { GAME_FOLDERS, orderPacks, parseFile, type PackSource } from "../../world/content/resolveContent";
 import { hashString } from "../../world/content/dimensions";
@@ -102,8 +104,11 @@ export interface TemplateDef {
   look: EntityLook;
   /** Skills its entities know (ABILITIES.md, *Spells*), by index. */
   spells: { skill: number; level: number }[];
-  /** How it stands toward players until factions come: who may attack it, and whom it attacks. */
+  /** How it stands toward a player of neutral standing: what the client colours it by. The server
+   *  asks its faction (NPCS.md, *Factions*). */
   hostility: Hostility;
+  /** The faction it sides with: its own `faction`, else one by its hostility. */
+  faction: string;
   /** Whether its entities keep a threat table. */
   threat: boolean;
   /** False: it does not die at 0 health (the training dummy). */
@@ -116,6 +121,18 @@ export interface TemplateDef {
 }
 
 export type Hostility = "hostile" | "neutral" | "friendly";
+
+/** A template's faction and hostility (NPCS.md, *Factions*). Either may be left out: a faction
+ *  follows from the hostility (hostile monsters, neutral wildlife, friendly players), and a
+ *  hostility from how the faction regards players. */
+function readSides(obj: RawObject, reader: Reader, factions: FactionRules): { faction: string; hostility: Hostility } {
+  const written = obj.hostility === undefined ? null : reader.oneOf(obj, "hostility", "", ["hostile", "neutral", "friendly"] as const);
+  const faction = reader.optionalString(obj, "faction", "") ?? FACTION_BY_HOSTILITY[written ?? "neutral"];
+  if (!factionDef(factions, faction)) reader.fail("faction", `no faction "${faction}" (known: ${[...factions.factions.keys()].join(", ")})`);
+  if (written) return { faction, hostility: written };
+  const toPlayers = standingBetween(factions, { faction: PLAYERS_FACTION }, { faction });
+  return { faction, hostility: toPlayers < factions.hostile ? "hostile" : toPlayers >= factions.ally ? "friendly" : "neutral" };
+}
 
 /**
  * Everything gameplay is made of that is content rather than code (see ENTITIES.md): read once per
@@ -148,6 +165,10 @@ export interface GameRules {
   skillIndex: ReadonlyMap<string, number>;
   /** `rules/combat.json5`. */
   combat: CombatRules;
+  /** `factions/` and `rules/factions.json5` (NPCS.md, *Factions*). */
+  factions: FactionRules;
+  /** `npcRoles/`, `npcRelations/` and `rules/npcs.json5` (NPCS.md). */
+  npcs: NpcRules;
   /** A hash of the tables' ids and visibility - in Welcome, so a client can tell its packs differ. */
   hash: number;
 }
@@ -270,11 +291,14 @@ export function resolveGameRules(packs: PackSource[]): GameRules {
   const { skills, skillIndex, templateRefs } = readSkills(entries("skills"), { stats, statIndex, kindIndex, resourceIndex }, combat, issues);
 
   // --- templates ---
-  const { templates, rawTemplates } = resolveTemplates(entries("entities"), { statIndex, kindIndex, resourceIndex, skillIndex, stats, health: health ?? 0 }, issues);
+  const factions = readFactionRules(folders.get("rules")!.get("factions"), entries("factions"), issues);
+  const { templates, rawTemplates } = resolveTemplates(entries("entities"), { factions, statIndex, kindIndex, resourceIndex, skillIndex, stats, health: health ?? 0 }, issues);
   if (!templates.has(PLAYER_TEMPLATE)) issues.push({ file: "(all packs)", path: "", message: `no pack defines entities/${PLAYER_TEMPLATE}.json5 - what players are made from` });
   for (const ref of templateRefs) {
     if (!templates.has(ref.id)) issues.push({ file: ref.file, path: ref.path, message: `no template "${ref.id}" that can be made (known: ${[...templates.keys()].join(", ")})` });
   }
+
+  const npcs = readNpcRules(folders.get("rules")!.get("npcs"), entries("npcRoles"), entries("npcRelations"), new Set(templates.keys()), issues);
 
   if (issues.length > 0) throw new ContentError(issues);
 
@@ -283,10 +307,12 @@ export function resolveGameRules(packs: PackSource[]): GameRules {
     modifierKinds.map((k) => k.id).join(","),
     resources.map((r) => `${r.id}:${r.visible}`).join(","),
     skills.map((s) => s.id).join(","),
+    [...factions.factions.keys()].join(","),
+    npcs.roles.map((r) => r.id).join(","),
   ].join("|");
   return {
     stats, statOrder, modifierKinds, applyOrder, resources, templates, rawTemplates, statIndex, kindIndex, resourceIndex, health: health!,
-    skills, skillIndex, combat, hash: hashString(signature),
+    skills, skillIndex, combat, factions, npcs, hash: hashString(signature),
   };
 }
 
@@ -331,6 +357,7 @@ function orderStats(stats: StatDef[], entries: Entry[], issues: ContentIssue[]):
 }
 
 interface TemplateContext {
+  factions: FactionRules;
   statIndex: ReadonlyMap<string, number>;
   kindIndex: ReadonlyMap<string, number>;
   resourceIndex: ReadonlyMap<string, number>;
@@ -339,7 +366,7 @@ interface TemplateContext {
   health: number;
 }
 
-const TEMPLATE_KEYS = ["extends", "abstract", "name", "stats", "resources", "modifiers", "look", "spells", "hostility", "threat", "mortal", "items"];
+const TEMPLATE_KEYS = ["extends", "abstract", "name", "stats", "resources", "modifiers", "look", "spells", "hostility", "faction", "threat", "mortal", "items"];
 
 /** Merges each template's `extends` chain - objects key by key, the child winning; lists whole - and
  *  reads the result. Abstract templates are left out of what is returned. */
@@ -388,10 +415,10 @@ function resolveTemplates(entries: Entry[], context: TemplateContext, issues: Co
 /** Reads a template made in code from written parts - a creature kind (CREATURES.md) - as a file's
  *  template is read, its problems reported against `reader`'s file. */
 export function makeTemplate(rules: GameRules, id: string, obj: RawObject, reader: Reader): TemplateDef {
-  const { statIndex, kindIndex, resourceIndex, skillIndex, stats, health } = rules;
+  const { factions, statIndex, kindIndex, resourceIndex, skillIndex, stats, health } = rules;
   reader.onlyKeys(obj, "", TEMPLATE_KEYS);
   const items = obj.items === undefined ? null : reader.object(obj.items, "items");
-  return { ...readTemplate(id, obj, reader, { statIndex, kindIndex, resourceIndex, skillIndex, stats, health }), items, file: reader.file };
+  return { ...readTemplate(id, obj, reader, { factions, statIndex, kindIndex, resourceIndex, skillIndex, stats, health }), items, file: reader.file };
 }
 
 /** Objects merge key by key, the child winning; anything else the child's replaces the base's. */
@@ -404,7 +431,7 @@ export function mergeTemplate(base: RawObject, child: RawObject): RawObject {
   return result;
 }
 
-function readTemplate(id: string, obj: RawObject, reader: Reader, { statIndex, kindIndex, resourceIndex, skillIndex, stats, health }: TemplateContext): Omit<TemplateDef, "items" | "file"> {
+function readTemplate(id: string, obj: RawObject, reader: Reader, { factions, statIndex, kindIndex, resourceIndex, skillIndex, stats, health }: TemplateContext): Omit<TemplateDef, "items" | "file"> {
   const statValues: TemplateDef["stats"] = [];
   const hasStats = obj.stats !== undefined || obj.resources !== undefined || obj.modifiers !== undefined;
   if (obj.stats !== undefined) {
@@ -484,7 +511,7 @@ function readTemplate(id: string, obj: RawObject, reader: Reader, { statIndex, k
     modifiers,
     look,
     spells,
-    hostility: obj.hostility === undefined ? "neutral" : reader.oneOf(obj, "hostility", "", ["hostile", "neutral", "friendly"] as const),
+    ...readSides(obj, reader, factions),
     threat: reader.boolean(obj, "threat", "", false),
     mortal: reader.boolean(obj, "mortal", "", true),
   };

@@ -1,3 +1,4 @@
+import { tierOf } from "../sim/factions";
 import type { Engine } from "@babylonjs/core";
 import { DEFAULT_DRAW_DISTANCE, nextPaint } from "../world/world";
 import { PROTOCOL_VERSION, type ClientMessage, type EntityMotion, type Transfer } from "../sim/protocol";
@@ -138,6 +139,8 @@ export async function startSession(page: Page, options: SessionOptions): Promise
   let view: DimensionView | null = null;
   /** A Transfer not acted on yet: the next frame starts building where it leads. */
   let pendingTransfer: Transfer | null = null;
+  /** The character's standing with factions that keep reputation, as the server last said. */
+  const standing = new Map<string, number>();
   /** Set while a dimension is being built: no frames are drawn and the server is not stepped. */
   let entering = false;
   /** Where the player is, as the last snapshot that had it said - null since the last Transfer. */
@@ -188,6 +191,9 @@ export async function startSession(page: Page, options: SessionOptions): Promise
         }
       } else if (message.type === "saved") {
         savedMark.show();
+      } else if (message.type === "standing") {
+        // Whole on arrival (NPCS.md, *Factions*), else what changed.
+        for (const [faction, value] of message.values) standing.set(faction, value);
       } else if (message.type === "refused") {
         refusal = message.reason;
       } else if (message.type === "transfer") {
@@ -832,6 +838,10 @@ export async function startSession(page: Page, options: SessionOptions): Promise
     /** Where new characters start in the dimension drawn (NPCS.md, *The starting site*). */
     get starts() {
       return view?.starts;
+    },
+    /** The character's standing with factions, with each one's tier (NPCS.md, *Factions*). */
+    standing() {
+      return [...standing].map(([faction, value]) => ({ faction, value, tier: tierOf(gameRules.factions, value).id }));
     },
     get world() {
       return view?.world;

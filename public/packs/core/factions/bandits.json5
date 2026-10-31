@@ -1,0 +1,2 @@
+// Outlaws in their camps: hostile to players and to the folk of every zone.
+{ name: "Bandits", relations: { players: "hostile", folk: "hated" } }

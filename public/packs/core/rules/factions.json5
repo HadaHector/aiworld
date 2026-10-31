@@ -1,0 +1,18 @@
+// Factions (NPCS.md, *Factions*): the tiers of standing, lowest first, and where they matter. One
+// scale for how factions regard each other and a character's reputation with one. These are WoW's.
+{
+  tiers: [
+    { id: "hated", name: "Hated", from: -42000 },
+    { id: "hostile", name: "Hostile", from: -6000 },
+    { id: "unfriendly", name: "Unfriendly", from: -3000 },
+    { id: "neutral", name: "Neutral", from: 0 },
+    { id: "friendly", name: "Friendly", from: 3000 },
+    { id: "honoured", name: "Honoured", from: 9000 },
+    { id: "revered", name: "Revered", from: 21000 },
+    { id: "exalted", name: "Exalted", from: 42000 },
+  ],
+  // At or above this, two sides are allies: they help each other and never harm each other.
+  ally: "friendly",
+  // At or below this tier, a side attacks the other on sight.
+  hostile: "hostile",
+}
