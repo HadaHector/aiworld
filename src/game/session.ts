@@ -877,8 +877,9 @@ export async function startSession(page: Page, options: SessionOptions): Promise
       const id = pick?.hit ? meshes.entityOf(pick.pickedMesh) : null;
       const entity = id === null ? undefined : mirror.entities.get(id);
       const usable = !!entity && id !== playerId && (entity.lootable || entity.templateId === GROUND_ITEM_TEMPLATE || entity.templateId === gameRules.quests.objects.template || isNpc(entity));
-      const what = usable ? entity!.name : "";
-      canvas.style.cursor = what ? "pointer" : "";
+      // A person's name is already over their head: the hand alone for them.
+      const what = usable && !isNpc(entity!) ? entity!.name : "";
+      canvas.style.cursor = usable ? "pointer" : "";
       label.style.display = what ? "" : "none";
       if (what) {
         label.textContent = what;
