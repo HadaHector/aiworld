@@ -266,7 +266,6 @@ Each leaves the game working: dev server, `npm run probe`, `npm run server`, `np
   party) would be several loaded copies of one definition, keyed by instance.
 - **Portals, docks and ships** as entities standing at a link's `at`, using it when walked into or
   boarded (step 3 onwards).
-- **The saved delta per dimension** (GAMEPLAY.md, *World delta*), keyed by dimension id.
 - **Generating in a worker** on a dedicated server, so one player's travel does not stall the rest.
 - **A character's dimension** saved with its position, replacing `hello`'s debug field. *Done with
   step 10* (FRONTEND.md): a saved character comes back in the dimension and at the point it left;
