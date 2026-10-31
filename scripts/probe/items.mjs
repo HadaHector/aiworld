@@ -389,6 +389,7 @@ await section("boundary", async () => {
   check("item messages come before the snapshot", snapshotLast(inA) && inA.findIndex((m) => m.type === "container") < inA.length - 1);
   const dummy = inA.find((m) => m.type === "entitySpawn" && m.template === "trainingDummy");
   const chest = inA.find((m) => m.type === "entitySpawn" && m.template === "chest");
+  const inSpawns = inA.filter((m) => m.type === "entitySpawn");
   check("the chest and the strongbox are placed", !!chest && inA.some((m) => m.type === "entitySpawn" && m.template === "strongbox"));
   check("an unopened chest is lootable", inA.some((m) => m.type === "entityLootable" && m.id === chest?.id && m.lootable));
 
@@ -399,8 +400,9 @@ await section("boundary", async () => {
   check("the dummy at 0 health is lootable to both", [inA, inB].every((msgs) => msgs.some((m) => m.type === "entityLootable" && m.id === dummy.id && m.lootable)));
   await send(a, { type: "lootOpen", entity: dummy.id });
   check("out of reach it is refused", take(a).some((m) => m.type === "itemRefused" && m.reason === "range"));
-  a.end.send({ type: "teleport", x: 5, z: 3 });
-  b.end.send({ type: "teleport", x: 5.5, z: 3 });
+  // Beside the dummy, wherever the start put it (NPCS.md, *The starting site*).
+  a.end.send({ type: "teleport", x: dummy.x - 1, z: dummy.z - 1 });
+  b.end.send({ type: "teleport", x: dummy.x - 0.5, z: dummy.z - 1 });
   await pump(2);
   take(a);
   take(b);
@@ -451,7 +453,7 @@ await section("boundary", async () => {
   check("a bad move is refused with a reason", take(a).some((m) => m.type === "itemRefused" && m.reason === "empty"));
 
   // The chest, and the bank at the strongbox.
-  a.end.send({ type: "teleport", x: -4.5, z: 5.5 });
+  a.end.send({ type: "teleport", x: chest.x + 0.5, z: chest.z - 0.5 });
   await pump(2);
   take(a);
   await send(a, { type: "lootOpen", entity: chest.id });
@@ -459,7 +461,8 @@ await section("boundary", async () => {
   check("opening the chest rolls it", chestLoot?.entity === chest.id && chestLoot.items.length >= 2);
   await send(a, { type: "itemMove", from: { container: BAG, slot: swordAt }, to: { container: BANK, slot: 0 }, count: 0 });
   check("the bank is out of reach here", take(a).some((m) => m.type === "itemRefused" && m.reason === "bank"));
-  a.end.send({ type: "teleport", x: 4, z: -4 });
+  const strongbox = inSpawns.find((m) => m.template === "strongbox");
+  a.end.send({ type: "teleport", x: strongbox.x, z: strongbox.z + 1 });
   await pump(2);
   inA = take(a);
   check("the strongbox puts the bank in reach", inA.some((m) => m.type === "bankReach" && m.open));

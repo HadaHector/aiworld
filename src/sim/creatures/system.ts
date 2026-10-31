@@ -1,4 +1,5 @@
 import type { DimensionDef } from "../../world/content/dimensions";
+import type { ChosenStart } from "../../world/settlements/starts";
 import { hashString } from "../../world/content/dimensions";
 import { DEFAULT_MOTOR } from "../../world/collision/index";
 import { deriveSeed, mulberry32 } from "../../world/rng";
@@ -47,8 +48,9 @@ export interface CreatureWorld {
 }
 
 export interface CreatureSystem {
-  /** A dimension has loaded: its zones and spawn points. */
-  load(dimension: Dimension, definition: DimensionDef): void;
+  /** A dimension has loaded: its zones and spawn points. Ring 0 is the zone of its first start
+   *  (NPCS.md, *The starting site*); its starts and what stands at them keep creatures away. */
+  load(dimension: Dimension, definition: DimensionDef, starts?: readonly ChosenStart[]): void;
   /** ...and is dropped: its creatures went with its entities. */
   unload(id: string): void;
   /** Fills points near players, drops those nobody is near, steps every brain and body, lays out
@@ -284,9 +286,10 @@ export function createCreatureSystem(rules: GameRules, creatures: CreatureRules,
   }
 
   return {
-    load(dimension, definition) {
-      const zones = createZones(dimension.world, creatures, definition.spawn);
-      const keepOut = [definition.spawn, ...definition.links.map((l) => l.at), ...definition.entities.map((e) => e.at)];
+    load(dimension, definition, starts = []) {
+      const zones = createZones(dimension.world, creatures, starts[0] ?? definition.spawn);
+      const atStarts = starts.flatMap((s) => [s, s.home, ...s.entities]);
+      const keepOut = [definition.spawn, ...definition.links.map((l) => l.at), ...definition.entities.map((e) => e.at), ...atStarts];
       const field = createSpawnPointField(dimension.id, dimension.world, creatures, zones, keepOut, (x, z) => dimension.trunks.clear(x, z, ROOM));
       states.set(dimension.id, { dimension, definition, zones, field, active: new Map(), loose: new Set(), looseNear: new Map() });
     },

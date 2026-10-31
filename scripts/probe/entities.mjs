@@ -160,7 +160,8 @@ section("core pack", () => {
   check("core's kinds apply flat, percent, multiplier", rules.applyOrder.map((k) => rules.modifierKinds[k].id).join() === "flat,percent,multiplier");
   const { content } = loadContentFromDisk();
   checkPlacements(rules, content.dimensions);
-  check("mainland places a dummy", content.dimensions.find((d) => d.id === "mainland").entities.some((e) => e.template === "trainingDummy"));
+  // At its start (NPCS.md, *The starting site*), not at a fixed point.
+  check("mainland places a dummy", content.dimensions.find((d) => d.id === "mainland").starts.some((s) => s.entities.some((e) => e.template === "trainingDummy")));
 });
 
 // --- stacking and removal ---
@@ -328,17 +329,18 @@ await (async () => {
   take(a);
   take(b);
   // a walks out of range: the dummy and b are despawned for a, and come back when it returns.
-  a.end.send({ type: "teleport", x: 400, z: 0 });
+  const home = { x: server.debug.entity(a.id).x, z: server.debug.entity(a.id).z };
+  a.end.send({ type: "teleport", x: home.x + 400, z: home.z });
   await pump(1);
   inA = take(a);
   const despawned = inA.filter((m) => m.type === "entityDespawn").map((m) => m.id);
   check("out of range: despawns", despawned.includes(dummySpawn.id) && despawned.includes(b.id), JSON.stringify(despawned));
-  a.end.send({ type: "teleport", x: 0, z: 0 });
+  a.end.send({ type: "teleport", x: home.x, z: home.z });
   await pump(1);
   inA = take(a);
   check("back in range: spawns again", spawnOf(inA, dummySpawn.id) && spawnOf(inA, b.id));
   // Spawning and despawning by debug command.
-  a.end.send({ type: "debugSpawn", template: "trainingDummy", x: 3, z: 3 });
+  a.end.send({ type: "debugSpawn", template: "trainingDummy", x: home.x + 3, z: home.z + 3 });
   await pump(1);
   inA = take(a);
   const extra = spawnsOf(inA).find((m) => m.template === "trainingDummy");

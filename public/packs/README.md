@@ -30,7 +30,9 @@ packs/<pack>/
   trees/<id>.json5        a kind of tree
   bushes/<id>.json5       a kind of bush (trees, bushes and rocks share one set of ids)
   rocks/<id>.json5        a kind of boulder
-  dimensions/<id>.json5   a whole world: its size, its biomes, its links to others (DIMENSIONS.md)
+  dimensions/<id>.json5   a whole world: its size, its biomes, its links to others (DIMENSIONS.md), and
+                          `starts`: where new characters begin - a fixed point or a rule a generated
+                          settlement is chosen by (NPCS.md, *The starting site*)
   voices/<id>.json5       the sounds a zone's names are built from
   borderHills/<id>.json5  the shape of the hills raised along a zone border
   settlements/<id>.json5  a settlement style: how big places grow, their houses and colours

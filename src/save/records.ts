@@ -65,6 +65,9 @@ export interface CharacterRecord {
     /** Radians. */
     facing: number;
     home: { dimension: string; x: number; z: number };
+    /** A new character not yet placed: the id of the start it appears at (NPCS.md, *The starting
+     *  site*). Its point and home are written when it first enters, once the world is generated. */
+    start?: string;
   };
   /** The client's own layout (the action bar), as JSON text: kept by the server, never read by it. */
   interface: string;

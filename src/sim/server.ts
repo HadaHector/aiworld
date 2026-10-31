@@ -25,7 +25,11 @@ import type { ProgressEvent } from "./progression/progress";
 import { progressMessages } from "./progression/replication";
 import { EVENT_KIND } from "./skills/events";
 import { exportBelongings, importBelongings } from "./items/save";
-import { startingPlace } from "./spawn";
+import { startingPlace, startPoint } from "./spawn";
+import { chooseStarts, type ChosenStart } from "../world/settlements/starts";
+
+/** Where a body is to be made: a point, or (with `start`) the start of that id, once it is placed. */
+type Arrival = { x: number; z: number; start?: string };
 import type { SaveStore } from "../save/store";
 import { SAVE_VERSION, makeSaveId, nameProblem, tidyName, type CharacterRecord, type CharacterSummary, type WorldRecord } from "../save/records";
 
@@ -53,8 +57,9 @@ export interface Player {
   /** Its entity: made on Hello, kept until it leaves, from one dimension to the next. Its `body` is
    *  null while travelling - from a Transfer until its client has Arrived and the dimension is loaded. */
   readonly entity: Entity;
-  /** Where the body goes once it can be made. */
-  arrival: { x: number; z: number };
+  /** Where the body goes once it can be made: a point, or a start of its dimension (`start`, its id),
+   *  whose point is known once the dimension's world is (NPCS.md, *The starting site*). */
+  arrival: Arrival;
   /** Whether the client has said Arrived since the last Transfer. */
   arrived: boolean;
   /** The latest intent; a jump stays set until a step takes it. */
@@ -331,6 +336,21 @@ export function createServer(options: ServerOptions): Server {
       if (!template) return; // checked when the rules were loaded (checkPlacements)
       spawnIn(dimension, template.id, placed.at.x, placed.at.z, placed.facing, `${dimension.id}/${i}`);
     });
+    // ...and what stands at each start: the dummy, the chest.
+    for (const start of startsOf.get(dimension.id) ?? []) {
+      start.entities.forEach((placed, i) => {
+        if (rules.templates.has(placed.template)) spawnIn(dimension, placed.template, placed.x, placed.z, placed.facing, `${dimension.id}/start/${start.id}/${i}`);
+      });
+    }
+  }
+
+  /** Each loaded dimension's starts, placed in its world (NPCS.md, *The starting site*). */
+  const startsOf = new Map<string, ChosenStart[]>();
+
+  /** Where a body is made: its point, or its start's once the dimension has placed its starts. */
+  function arrivalPoint(arrival: Arrival, dimension: string): { x: number; z: number; facing?: number } {
+    const starts = arrival.start !== undefined ? startsOf.get(dimension) : undefined;
+    return starts ? startPoint(starts, arrival.start!) : arrival;
   }
 
   /** Asks the host for a dimension, unless it is loaded or on its way. */
@@ -345,8 +365,9 @@ export function createServer(options: ServerOptions): Server {
         (world) => {
           if (slot.dropped) return;
           slot.dimension = createDimension(id, world);
+          startsOf.set(id, chooseStarts(world.world, definition, problem));
           placeEntities(slot.dimension, definition);
-          creatureSystem?.load(slot.dimension, definition);
+          creatureSystem?.load(slot.dimension, definition, startsOf.get(id)!);
           loaded.set(id, slot.dimension);
         },
         (error) => {
@@ -364,11 +385,12 @@ export function createServer(options: ServerOptions): Server {
     slot.dropped = true;
     slots.delete(id);
     loaded.delete(id);
+    startsOf.delete(id);
     creatureSystem?.unload(id);
   }
 
-  /** Takes a player out of where it is and sends it to a dimension, at a point. */
-  function transfer(connection: Connection, player: Player, to: DimensionDef, at: { x: number; z: number }): void {
+  /** Takes a player out of where it is and sends it to a dimension, at a point or a start. */
+  function transfer(connection: Connection, player: Player, to: DimensionDef, at: Arrival): void {
     const entity = player.entity;
     const from = entity.dimension;
     skills.leave(entity);
@@ -384,8 +406,11 @@ export function createServer(options: ServerOptions): Server {
     connection.replicator.reset();
     connection.items?.reset();
     connection.progressSent = false;
-    connection.end.send({ type: "transfer", dimension: to.id, seed: dimensionSeed(options.seed, to), x: at.x, z: at.z });
+    connection.end.send({ type: "transfer", dimension: to.id, seed: dimensionSeed(options.seed, to), x: at.x, z: at.z, start: at.start ?? "" });
   }
+
+  /** A dimension's own start for a character with these origins: where it arrives with no other point. */
+  const startOf = (dimension: DimensionDef, origins: Readonly<Record<string, string>>): Arrival => ({ ...dimension.spawn, start: startingPlace(dimension, origins).start });
 
   const pointsIn = (id: string): { x: number; z: number }[] =>
     [...players.values()].filter((p) => p.entity.dimension === id && p.entity.body).map((p) => ({ x: p.entity.x, z: p.entity.z }));
@@ -506,9 +531,18 @@ export function createServer(options: ServerOptions): Server {
     const asked = definitions.get(debugDimension);
     const left = definitions.get(record.travel.dimension);
     const home = definitions.get(record.travel.home.dimension) ? record.travel.home : null;
-    // Where it was left - at home if it left dead; the start's spawn if that dimension has gone.
-    const to = asked ?? (record.dead && home ? definitions.get(home.dimension)! : left ?? start);
-    const at = asked ? asked.spawn : record.dead && home ? home : left ? record.travel : start.spawn;
+    // Where it was left - at home if it left dead; a start if it is new or that dimension has gone.
+    const fresh = record.travel.start !== undefined ? left : undefined;
+    const to = asked ?? (fresh ? fresh : record.dead && home ? definitions.get(home.dimension)! : left ?? start);
+    const at: Arrival = asked
+      ? asked.spawn
+      : fresh
+        ? { ...fresh.spawn, start: record.travel.start }
+        : record.dead && home
+          ? home
+          : left
+            ? record.travel
+            : startOf(start, record.origins);
     const entity = createEntity(rules, template, nextId++, { dimension: "", x: at.x, y: 0, z: at.z, facing: asked ? 0 : record.travel.facing, name: record.name, look: cleanLook(record.look) });
     skills.adopt(entity);
     itemSystem?.adopt(entity);
@@ -524,12 +558,13 @@ export function createServer(options: ServerOptions): Server {
       }
     }
     if (skipped.length > 0) problem(`${record.name}'s save names what the packs no longer have: ${skipped.join(", ")}`);
-    const joined: Player = { entity, arrival: { x: at.x, z: at.z }, arrived: false, input: { moveX: 0, moveZ: 0, run: false, jump: false }, ackSeq: 0, character: record, playing: 0 };
+    const arrival: Arrival = { x: at.x, z: at.z, start: (at as Arrival).start };
+    const joined: Player = { entity, arrival, arrived: false, input: { moveX: 0, moveZ: 0, run: false, jump: false }, ackSeq: 0, character: record, playing: 0 };
     players.set(entity.id, joined);
     connection.player = joined;
     connection.selecting = false;
     connection.end.send({ type: "entered", playerId: entity.id, character: record.id, look: entity.look, interface: record.interface });
-    transfer(connection, joined, to, { x: at.x, z: at.z });
+    transfer(connection, joined, to, arrival);
   }
 
   /** Makes a character from what the client chose; why it will not do, or "" once it is saved. */
@@ -564,7 +599,8 @@ export function createServer(options: ServerOptions): Server {
       belongings: null,
       resources: {},
       dead: false,
-      travel: { ...place, home: { dimension: place.dimension, x: place.x, z: place.z } },
+      // Its point and home are written when it first enters, once the start's world is generated.
+      travel: { dimension: place.dimension, x: start.spawn.x, z: start.spawn.z, facing: 0, start: place.start, home: { dimension: place.dimension, ...start.spawn } },
       interface: "",
     };
     world.characters.push(summaryOf(record, 1, []));
@@ -600,11 +636,13 @@ export function createServer(options: ServerOptions): Server {
         skills.adopt(entity);
         itemSystem?.adopt(entity);
         if (chosen) progression!.adopt(entity, chosen.origins);
-        const joined: Player = { entity, arrival: first.spawn, arrived: false, input: { moveX: 0, moveZ: 0, run: false, jump: false }, ackSeq: 0, character: null, playing: 0 };
+        // A quick character starts where a new one would (NPCS.md, *The starting site*).
+        const arrival = startOf(first, message.origins && typeof message.origins === "object" ? message.origins : {});
+        const joined: Player = { entity, arrival, arrived: false, input: { moveX: 0, moveZ: 0, run: false, jump: false }, ackSeq: 0, character: null, playing: 0 };
         players.set(entity.id, joined);
         connection.player = joined;
         connection.end.send({ type: "welcome", protocol: PROTOCOL_VERSION, playerId: entity.id, world: world?.name ?? "", saves: saves !== null, config: options.config, packs: options.packs ?? [], rules: rules.hash, items: options.items?.hash ?? 0, creatures: options.creatures?.hash ?? 0, seed: options.seed >>> 0, progression: options.progression?.hash ?? 0 });
-        transfer(connection, joined, first, first.spawn);
+        transfer(connection, joined, first, arrival);
         return;
       }
       case "characterCreate": {
@@ -695,7 +733,7 @@ export function createServer(options: ServerOptions): Server {
         const to = definitions.get(message.dimension);
         if (!player || !to) return;
         const link = definitions.get(player.entity.dimension)?.links.find((l) => l.to === to.id);
-        transfer(connection, player, to, link ? link.arrive : to.spawn);
+        transfer(connection, player, to, link ? link.arrive : startOf(to, player.character?.origins ?? {}));
         void writeCharacter(player, connection);
         return;
       }
@@ -806,9 +844,10 @@ export function createServer(options: ServerOptions): Server {
       }
       case "respawn": {
         if (!player?.entity.combat?.dead || !body) return;
-        // Home, if it is in this dimension; else the dimension's spawn.
+        // Home, if it is in this dimension; else its first start's home, or its spawn.
         const home = player.character?.travel.home;
-        const spawn = home && home.dimension === player.entity.dimension ? home : (definitions.get(player.entity.dimension)?.spawn ?? start.spawn);
+        const here = player.entity.dimension;
+        const spawn = home && home.dimension === here ? home : (startsOf.get(here)?.[0]?.home ?? definitions.get(here)?.spawn ?? start.spawn);
         skills.revive(player.entity);
         body.teleport(spawn.x, spawn.z);
         follow(player.entity);
@@ -837,10 +876,21 @@ export function createServer(options: ServerOptions): Server {
       const entity = player.entity;
       const dimension = loaded.get(entity.dimension);
       if (entity.body || !player.arrived || !dimension) continue;
-      entity.body = dimension.createBody(player.arrival.x, player.arrival.z);
+      const at = arrivalPoint(player.arrival, entity.dimension);
+      entity.body = dimension.createBody(at.x, at.z);
+      if (at.facing !== undefined) entity.body.face(at.facing);
       follow(entity);
       dimension.entities.set(entity.id, entity);
-      dimension.streamer.loadAround(player.arrival.x, player.arrival.z, pointsIn(entity.dimension));
+      dimension.streamer.loadAround(at.x, at.z, pointsIn(entity.dimension));
+      // A new character placed at its start for the first time: its point and first home kept.
+      const travel = player.character?.travel;
+      if (travel?.start !== undefined && player.arrival.start !== undefined) {
+        const chosen = startPoint(startsOf.get(entity.dimension) ?? [], travel.start);
+        if (chosen) {
+          Object.assign(travel, { dimension: entity.dimension, x: at.x, z: at.z, facing: chosen.facing, home: { dimension: entity.dimension, ...chosen.home } });
+          delete travel.start;
+        }
+      }
     }
     for (const [id, dimension] of loaded) dimension.streamer.update(pointsIn(id), CHUNK_BUDGET_MS);
     time += deltaSeconds;

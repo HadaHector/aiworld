@@ -23,6 +23,51 @@ export interface DimensionDef {
   /** Entities that stand in it from the moment it loads: a training dummy, later portals and chests
    *  (see ENTITIES.md). Their templates are checked against the game rules by the host. */
   entities: PlacedEntity[];
+  /** Where new characters start (NPCS.md, *The starting site*): fixed points, or rules a generated
+   *  settlement is chosen by. Empty: one start at `spawn`. */
+  starts: StartDef[];
+}
+
+/** A place in a starting settlement, named because the layout is generated: its square, the gate
+ *  nearest the world's centre, in front of a building's door - or a fixed point. */
+export type StartAnchor = { kind: "square" } | { kind: "gate" } | { kind: "building"; building: string } | { kind: "point"; x: number; z: number };
+
+/** Where something stands at a start: an anchor, moved by `offset` (metres, x and z). */
+export interface StartSpot {
+  at: StartAnchor;
+  offset: { x: number; z: number };
+}
+
+/** What a rule asks of the settlement a start is chosen as. */
+export interface StartRule {
+  /** Tiers it may be ("hamlet", "village", "town"); null for any. */
+  tiers: string[] | null;
+  /** Buildings (by id) it must have one of each of. */
+  buildings: string[];
+  biomes: { only: string[] } | { except: string[] } | null;
+  /** Within this share of the world's half-extent from 0, 0; null for anywhere. */
+  centre: number | null;
+  /** How the candidates are ranked: weights on nearness to the centre and on the site's own score. */
+  prefer: { centre: number; score: number };
+}
+
+/** One starting place in a dimension's definition. */
+export interface StartDef {
+  id: string;
+  /** Who starts here, by origin slot: the ids a character's origin in that slot must be among.
+   *  Null: everyone. */
+  for: Record<string, string[]> | null;
+  /** A settlement to choose by, or null for a fixed point. */
+  rule: StartRule | null;
+  /** Where a new character appears, and what it faces: radians, or toward an anchor. */
+  arrive: StartSpot;
+  facing: number | StartAnchor;
+  /** Its first home: where it comes back when it dies (PROGRESSION.md). */
+  home: StartSpot;
+  /** What stands there for the start: the dummy, the chest... */
+  entities: { template: string; spot: StartSpot; facing: number | StartAnchor }[];
+  /** The intro chain's plots, in order (QUESTS.md). Read and kept; nothing uses them yet. */
+  intro: string[];
 }
 
 /** An entity a dimension's definition places. */
@@ -48,7 +93,7 @@ export interface DimensionLink {
 
 /** What a pack set with no `dimensions` folder at all gets: one world with the defaults, so a pack
  *  that only adds biomes still makes one. */
-export const IMPLICIT_DIMENSION: DimensionDef = { id: "main", name: "The World", start: true, spawn: { x: 0, z: 0 }, world: {}, biomes: null, links: [], entities: [] };
+export const IMPLICIT_DIMENSION: DimensionDef = { id: "main", name: "The World", start: true, spawn: { x: 0, z: 0 }, world: {}, biomes: null, links: [], entities: [], starts: [] };
 
 /** Passed as the dimension to resolve: no dimension's biome list applies, every biome the config
  *  keeps is resolved - what the workbench wants, to preview any of them. */
@@ -93,21 +138,12 @@ function readPoint(reader: Reader, obj: RawObject, key: string, path: string, fa
 /** Reads one `dimensions/<id>.json5`. References to biomes and other dimensions are checked by
  *  `checkDimensions`, once every definition is known. */
 export function readDimension(id: string, obj: RawObject, reader: Reader): DimensionDef {
-  reader.onlyKeys(obj, "", ["name", "start", "spawn", "world", "biomes", "links", "entities"]);
+  reader.onlyKeys(obj, "", ["name", "start", "spawn", "world", "biomes", "links", "entities", "starts"]);
   const name = reader.optionalString(obj, "name", "") ?? id;
   const start = reader.boolean(obj, "start", "", false);
   const spawn = readPoint(reader, obj, "spawn", "", { x: 0, z: 0 });
   const world = obj.world === undefined ? {} : readWorldShape(reader.object(obj.world, "world"), reader, "world");
-
-  let biomes: DimensionDef["biomes"] = null;
-  if (obj.biomes !== undefined) {
-    const raw = reader.object(obj.biomes, "biomes");
-    reader.onlyKeys(raw, "biomes", ["only", "except"]);
-    if (raw.only !== undefined && raw.except !== undefined) reader.fail("biomes", "a whitelist (only) or a blacklist (except), not both");
-    else if (raw.only !== undefined) biomes = { only: reader.stringList(raw, "only", "biomes") };
-    else if (raw.except !== undefined) biomes = { except: reader.stringList(raw, "except", "biomes") };
-    else reader.fail("biomes", "expected only: [...] or except: [...]");
-  }
+  const biomes = readBiomeList(reader, obj, "biomes", "");
 
   const links: DimensionLink[] = [];
   reader.optionalArray(obj, "links", "").forEach((value, i) => {
@@ -132,7 +168,93 @@ export function readDimension(id: string, obj: RawObject, reader: Reader): Dimen
       facing: (reader.optionalNumber(raw, "facing", path, 0) * Math.PI) / 180,
     });
   });
-  return { id, name, start, spawn, world, biomes, links, entities };
+  const starts = reader.optionalArray(obj, "starts", "").map((value, i) => readStart(reader, reader.object(value, `starts[${i}]`), `starts[${i}]`, spawn));
+  if (new Set(starts.map((s) => s.id)).size !== starts.length) reader.fail("starts", "two starts share an id");
+  return { id, name, start, spawn, world, biomes, links, entities, starts };
+}
+
+/** `only: [...]` or `except: [...]` under `key`, or null when it is left out. */
+function readBiomeList(reader: Reader, obj: RawObject, key: string, path: string): DimensionDef["biomes"] {
+  if (obj[key] === undefined) return null;
+  const at = path ? `${path}.${key}` : key;
+  const raw = reader.object(obj[key], at);
+  reader.onlyKeys(raw, at, ["only", "except"]);
+  if (raw.only !== undefined && raw.except !== undefined) reader.fail(at, "a whitelist (only) or a blacklist (except), not both");
+  else if (raw.only !== undefined) return { only: reader.stringList(raw, "only", at) };
+  else if (raw.except !== undefined) return { except: reader.stringList(raw, "except", at) };
+  else reader.fail(at, "expected only: [...] or except: [...]");
+  return null;
+}
+
+/** An anchor: "square", "gate", { building: id }, or [x, z]. */
+function readAnchor(reader: Reader, raw: RawObject, key: string, path: string): StartAnchor {
+  const value = raw[key];
+  if (value === "square" || value === "gate") return { kind: value };
+  if (Array.isArray(value)) return { kind: "point", ...readPoint(reader, raw, key, path) };
+  if (value && typeof value === "object") {
+    const at = `${path}.${key}`;
+    const building = reader.object(value, at);
+    reader.onlyKeys(building, at, ["building"]);
+    return { kind: "building", building: reader.string(building, "building", at) };
+  }
+  reader.fail(`${path}.${key}`, 'expected "square", "gate", { building: id } or [x, z]');
+  return { kind: "square" };
+}
+
+function readSpot(reader: Reader, raw: RawObject, path: string, fallback: StartAnchor): StartSpot {
+  return {
+    at: raw.at === undefined ? fallback : readAnchor(reader, raw, "at", path),
+    offset: raw.offset === undefined ? { x: 0, z: 0 } : readPoint(reader, raw, "offset", path),
+  };
+}
+
+/** Degrees, or an anchor to face toward. */
+function readFacing(reader: Reader, raw: RawObject, path: string, fallback: number | StartAnchor): number | StartAnchor {
+  if (raw.facing === undefined) return fallback;
+  if (typeof raw.facing === "number") return (raw.facing * Math.PI) / 180;
+  return readAnchor(reader, raw, "facing", path);
+}
+
+function readStart(reader: Reader, raw: RawObject, path: string, spawn: { x: number; z: number }): StartDef {
+  reader.onlyKeys(raw, path, ["id", "for", "at", "facing", "rule", "arrive", "home", "entities", "intro"]);
+  const id = reader.string(raw, "id", path);
+  let who: StartDef["for"] = null;
+  if (raw.for !== undefined) {
+    const list = reader.object(raw.for, `${path}.for`);
+    who = Object.fromEntries(Object.keys(list).map((slot) => [slot, reader.stringList(list, slot, `${path}.for`)]));
+  }
+  let rule: StartRule | null = null;
+  if (raw.rule !== undefined) {
+    const at = `${path}.rule`;
+    const r = reader.object(raw.rule, at);
+    reader.onlyKeys(r, at, ["tiers", "buildings", "biomes", "centre", "prefer"]);
+    const prefer = r.prefer === undefined ? {} : reader.object(r.prefer, `${at}.prefer`);
+    reader.onlyKeys(prefer, `${at}.prefer`, ["centre", "score"]);
+    rule = {
+      tiers: r.tiers === undefined ? null : reader.stringList(r, "tiers", at),
+      buildings: r.buildings === undefined ? [] : reader.stringList(r, "buildings", at),
+      biomes: readBiomeList(reader, r, "biomes", at),
+      centre: r.centre === undefined ? null : reader.optionalNumber(r, "centre", at, 1, { min: 0, max: 1 }),
+      prefer: { centre: reader.optionalNumber(prefer, "centre", `${at}.prefer`, 0.5, { min: 0 }), score: reader.optionalNumber(prefer, "score", `${at}.prefer`, 0.5, { min: 0 }) },
+    };
+    if (raw.at !== undefined) reader.fail(`${path}.at`, "a start has a fixed point (at) or a rule, not both");
+  }
+  // A fixed start stands at its point; a settlement's on its square, with its home by the inn.
+  const fixed: StartAnchor = rule ? { kind: "square" } : { kind: "point", ...readPoint(reader, raw, "at", path, spawn) };
+  const arriveRaw = raw.arrive === undefined ? {} : reader.object(raw.arrive, `${path}.arrive`);
+  reader.onlyKeys(arriveRaw, `${path}.arrive`, ["at", "offset", "facing"]);
+  const arrive = readSpot(reader, arriveRaw, `${path}.arrive`, fixed);
+  const facing = readFacing(reader, arriveRaw, `${path}.arrive`, readFacing(reader, raw, path, rule ? { kind: "gate" } : 0));
+  const homeRaw = raw.home === undefined ? {} : reader.object(raw.home, `${path}.home`);
+  reader.onlyKeys(homeRaw, `${path}.home`, ["at", "offset"]);
+  const home = readSpot(reader, homeRaw, `${path}.home`, rule ? { kind: "building", building: "inn" } : fixed);
+  const entities = reader.optionalArray(raw, "entities", path).map((value, i) => {
+    const at = `${path}.entities[${i}]`;
+    const e = reader.object(value, at);
+    reader.onlyKeys(e, at, ["template", "at", "offset", "facing"]);
+    return { template: reader.string(e, "template", at), spot: readSpot(reader, e, at, fixed), facing: readFacing(reader, e, at, 0) };
+  });
+  return { id, for: who, rule, arrive, facing, home, entities, intro: raw.intro === undefined ? [] : reader.stringList(raw, "intro", path) };
 }
 
 /**
@@ -155,6 +277,11 @@ export function checkDimensions(
     const list = def.biomes && ("only" in def.biomes ? { key: "only", ids: def.biomes.only } : { key: "except", ids: def.biomes.except });
     list?.ids.forEach((id, i) => {
       if (!biomeIds.has(id)) issues.push({ file, path: `biomes.${list.key}[${i}]`, message: `no biome "${id}" (known: ${[...biomeIds].join(", ")})` });
+    });
+    def.starts.forEach((s, i) => {
+      const biomes = s.rule?.biomes;
+      const ids = biomes ? ("only" in biomes ? biomes.only : biomes.except) : [];
+      for (const id of ids) if (!biomeIds.has(id)) issues.push({ file, path: `starts[${i}].rule.biomes`, message: `no biome "${id}"` });
     });
     if (!inside(def, def.spawn)) issues.push({ file, path: "spawn", message: `outside the world (${halfWidth(def).toFixed(0)} m from 0 at most)` });
     def.entities.forEach((placed, i) => {

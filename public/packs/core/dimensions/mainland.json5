@@ -3,17 +3,35 @@
 {
   name: "The Mainland",
   start: true,
+  // Where new characters start (NPCS.md, *The starting site*): a village the seed picks, in a mild
+  // zone near the middle, with an inn to be its first home and a chapel by its square. The zone it
+  // is in is ring 0 of the zone levels (CREATURES.md).
+  starts: [
+    {
+      id: "common",
+      // Who starts here: left out, everyone. Later, e.g. { people: ["dwarf"] } for a dwarven start.
+      rule: {
+        tiers: ["village"],
+        buildings: ["inn", "chapel"],
+        biomes: { only: ["meadow", "bluebellWood", "autumnWood", "heatherMoor", "alpineMeadow", "sageHills"] },
+        centre: 0.45,                          // within this share of the world's half-extent of 0, 0
+        prefer: { centre: 0.5, score: 0.5 },   // then nearer the middle, and the better ground
+      },
+      // On the square, facing the inn; home is in front of the inn's door (the default).
+      arrive: { at: "square", facing: { building: "inn" } },
+      // What stands there for a start: the dummy and the chest on the square, the strongbox (the
+      // bank, until the innkeeper keeps it) by the inn, the trainer (until there are class
+      // trainers) by the chapel. Offsets in metres from the anchor.
+      entities: [
+        { template: "trainingDummy", at: "square", offset: [7, 4], facing: 225 },
+        { template: "chest", at: "square", offset: [-6, 5], facing: 160 },
+        { template: "strongbox", at: { building: "inn" }, offset: [2, 0], facing: 0 },
+        { template: "trainer", at: { building: "chapel" }, facing: "square" },
+      ],
+    },
+  ],
   links: [
     // Data only for now: nothing stands at `at` yet; the debug map marks it.
     { id: "ferry", to: "isles", at: [120, 40], arrive: [0, 0] },
-  ],
-  // Entities that stand here from the start (see ENTITIES.md); facing in degrees.
-  entities: [
-    { template: "trainingDummy", at: [6, 4], facing: 225 },
-    // Items (see ITEMS.md): a chest to loot, and the strongbox the bank is reached at.
-    { template: "chest", at: [-5, 6], facing: 160 },
-    { template: "strongbox", at: [4, -5], facing: 0 },
-    // Progression (see PROGRESSION.md): teaches what a character has unlocked to learn from a trainer.
-    { template: "trainer", at: [-4, -5], facing: 20 },
   ],
 }

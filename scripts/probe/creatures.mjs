@@ -337,10 +337,13 @@ await section("hunt", async () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
     server.step(1 / 30);
     hunter.receive();
+    // On the open ground at the old spawn it was written for, not the starting village by a bandit
+    // camp, whose corpses it cannot always walk to.
+    if (tick === 15) channel.client.send({ type: "teleport", ...tinyContent.dimension.spawn });
     hunter.drive(tick);
   }
   check("the bot kills a creature within 90 s", hunter.state.kills >= 1, `${hunter.state.kills} kills, ${hunter.state.deaths} deaths`);
-  check("...and loots its corpse", hunter.state.loots.length >= 1 && hunter.state.loots[0].items.length + hunter.state.loots[0].money > 0, JSON.stringify(hunter.state.loots));
+  check("...and loots its corpse", hunter.state.loots.length >= 1 && hunter.state.loots[0].items.length + hunter.state.loots[0].money > 0, `${JSON.stringify(hunter.state.loots)} ${hunter.state.log.slice(-6).join(" | ")}`);
 });
 
 console.log(`${checks - failures}/${checks} checks passed`);

@@ -303,6 +303,10 @@ send instead of creating and choosing (see [Dev shortcut](#dev-shortcut)).
 Step 9 replaces the body of `startingPlace` with the generated starting village chosen for the
 character's people. Nothing else changes.
 
+*Done in step 9* (NPCS.md, *The starting site*): `startingPlace` picks one of the start dimension's
+`starts` by the character's origins, with no world needed; the point and first home are placed when
+the character first enters, once the world is generated (`travel.start` in the record until then).
+
 ## Pack data
 
 `rules/frontend.json5`, replaced whole by a later pack as the other rules files are:

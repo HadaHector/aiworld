@@ -9,7 +9,7 @@ import type { CombatEvent } from "./skills/events";
 export type { CombatEvent } from "./skills/events";
 
 /** Bumped whenever a message changes shape. */
-export const PROTOCOL_VERSION = 11;
+export const PROTOCOL_VERSION = 12;
 
 // --- Client to server ------------------------------------------------------------------------
 
@@ -465,6 +465,9 @@ export interface Transfer {
   seed: number; // u32
   x: number; // f64
   z: number; // f64
+  /** A start's id (NPCS.md, *The starting site*): arrive there, at the point both sides work out
+   *  from the generated world, and not at x, z. "" otherwise. */
+  start: string;
 }
 
 /**

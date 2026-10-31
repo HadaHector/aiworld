@@ -10,6 +10,8 @@ import type { BodyGear } from "./characterBody";
 import type { PackSource } from "../world/content/resolveContent";
 import { createCameraCollision, createThirdPersonCamera } from "../player/thirdPersonCamera";
 import { createSpectatorCamera, type SpectatorCamera } from "../player/spectatorCamera";
+import { chooseStarts, type ChosenStart } from "../world/settlements/starts";
+import { startPoint } from "../sim/spawn";
 import { createDebugMap, type DebugMap } from "../debug/debugMap";
 import { createSettingsPanel, type SettingsPanel } from "../debug/settingsPanel";
 import { createPlaceLabels, type PlaceLabels } from "../ui/placeLabels";
@@ -38,8 +40,9 @@ export interface DimensionViewOptions {
   canvas: HTMLCanvasElement;
   content: WorldContent;
   seed: number;
-  /** Where the player arrives. */
-  arrival: { x: number; z: number };
+  /** Where the player arrives: a point, or with `start` that start of the dimension, worked out
+   *  from the generated world as the server does (NPCS.md, *The starting site*). */
+  arrival: { x: number; z: number; start?: string };
   settings: ViewSettings;
   onProgress: (phase: string, completed: number, total: number) => void;
   /** Puts the player on the ground at a point - through the server. */
@@ -74,6 +77,8 @@ export interface DimensionView {
   readonly playerLights: PlayerLights;
   readonly cameraCollision: { update: (deltaSeconds: number) => void };
   readonly debugMap: DebugMap;
+  /** Where new characters start here, as the server places them (NPCS.md, *The starting site*). */
+  readonly starts: readonly ChosenStart[];
   readonly placeLabels: PlaceLabels;
   readonly textureBrowser: TextureBrowser;
   readonly collisionPanel: CollisionPanel;
@@ -100,7 +105,7 @@ function formatClockHours(hours: number): string {
 
 /** Builds a dimension's scene and world, behind the loading screen `onProgress` writes to. */
 export async function createDimensionView(options: DimensionViewOptions): Promise<DimensionView> {
-  const { engine, canvas, content, seed, arrival, settings, onProgress } = options;
+  const { engine, canvas, content, seed, settings, onProgress } = options;
   const scene = createScene(engine);
 
   // Started first: each terrain worker spends a few seconds building its own copy of the world,
@@ -110,6 +115,8 @@ export async function createDimensionView(options: DimensionViewOptions): Promis
   // A paint for that line first - or a moment's wait, in a background tab, which never paints.
   await nextPaint();
   const worldData = createWorldData(seed, content);
+  const starts = chooseStarts(worldData, content.dimension);
+  const arrival = options.arrival.start ? startPoint(starts, options.arrival.start) : options.arrival;
   // World creation is async because material textures are baked across a worker pool (see
   // textureBakePool.ts), which is the bulk of startup time unless the texture cache already has them.
   const world = await createWorld(scene, worldData, ({ phase, completed, total }) => onProgress(phase, completed, total), chunkBuildPool, arrival);
@@ -187,7 +194,7 @@ export async function createDimensionView(options: DimensionViewOptions): Promis
   world.setWireframe(settings.wireframe);
   world.setTimeOfDay(settings.timeOfDay);
 
-  const debugMap = createDebugMap(world.sampleTerrain, world.worldExtent, world.materialLibrary, world.areaBounds, world.areaNames, world.settlements, world.features, world.roads, content.dimension.links, (x, z) => teleport(x, z), options.travel);
+  const debugMap = createDebugMap(world.sampleTerrain, world.worldExtent, world.materialLibrary, world.areaBounds, world.areaNames, world.settlements, world.features, world.roads, content.dimension.links, starts, (x, z) => teleport(x, z), options.travel);
   // The player's graphics options, in the options window...
   const graphicsPanel: SettingsPanel = createSettingsPanel({
     min: MIN_DRAW_DISTANCE,
@@ -272,6 +279,7 @@ export async function createDimensionView(options: DimensionViewOptions): Promis
     playerLights,
     cameraCollision,
     debugMap,
+    starts,
     placeLabels,
     textureBrowser,
     collisionPanel,

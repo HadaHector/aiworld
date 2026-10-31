@@ -243,7 +243,8 @@ await section("server", async () => {
   a.send({ type: "enterWorld", character: made[0].id, dimension: "" });
   await t.pump(40);
   me = t.entity(a);
-  const home = content.dimensions.find((d) => d.start).spawn;
+  // Its first home: the start's (NPCS.md, *The starting site*), written when it first entered.
+  const home = (await store.readCharacter("probe", made[0].id)).travel.home;
   check("left dead, back at home alive", me && !me.combat.dead && Math.hypot(me.x - home.x, me.z - home.z) < 3, me && `${me.x},${me.z} dead ${me.combat.dead}`);
   a.send({ type: "logout" });
   await t.pump(5);

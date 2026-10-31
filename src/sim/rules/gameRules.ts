@@ -292,14 +292,16 @@ export function resolveGameRules(packs: PackSource[]): GameRules {
 
 /** Checks that every entity the dimensions place names a template that can be made. Throws a
  *  ContentError listing every one that does not. */
-export function checkPlacements(rules: GameRules, dimensions: readonly { id: string; entities: readonly { template: string }[] }[]): void {
+export function checkPlacements(rules: GameRules, dimensions: readonly { id: string; entities: readonly { template: string }[]; starts?: readonly { entities: readonly { template: string }[] }[] }[]): void {
   const issues: ContentIssue[] = [];
+  const check = (dimension: string, path: string, template: string): void => {
+    if (!rules.templates.has(template)) {
+      issues.push({ file: `dimensions/${dimension}.json5`, path, message: `no template "${template}" that can be made (known: ${[...rules.templates.keys()].join(", ")})` });
+    }
+  };
   for (const dimension of dimensions) {
-    dimension.entities.forEach((placed, i) => {
-      if (!rules.templates.has(placed.template)) {
-        issues.push({ file: `dimensions/${dimension.id}.json5`, path: `entities[${i}].template`, message: `no template "${placed.template}" that can be made (known: ${[...rules.templates.keys()].join(", ")})` });
-      }
-    });
+    dimension.entities.forEach((placed, i) => check(dimension.id, `entities[${i}].template`, placed.template));
+    dimension.starts?.forEach((start, s) => start.entities.forEach((placed, i) => check(dimension.id, `starts[${s}].entities[${i}].template`, placed.template)));
   }
   if (issues.length > 0) throw new ContentError(issues);
 }

@@ -99,6 +99,8 @@ export function createDebugMap(
   roads: RoadNetwork,
   /** Where this dimension's links stand - drawn always, and clicking one travels by it. */
   links: readonly DimensionLink[],
+  /** Where new characters start (NPCS.md, *The starting site*) - drawn always; clicking one goes there. */
+  starts: readonly { id: string; name: string; x: number; z: number }[],
   onTeleport: (worldX: number, worldZ: number) => void,
   onTravel: (dimension: string) => void,
 ): DebugMap {
@@ -478,6 +480,24 @@ export function createDebugMap(
         e.stopPropagation();
         setVisible(false);
         onTravel(link.to);
+      });
+      markerLayer.appendChild(marker);
+    }
+    for (const start of starts) {
+      const { x, y } = worldToPixel(start.x, start.z);
+      if (x < 0 || y < 0 || x > SAMPLE_RESOLUTION || y > SAMPLE_RESOLUTION) continue;
+      const marker = document.createElement("div");
+      marker.title = `Start "${start.id}": ${start.name} (click to go there)`;
+      marker.textContent = "★";
+      marker.style.cssText = `
+        position: absolute; left: ${(x / SAMPLE_RESOLUTION) * 100}%; top: ${(y / SAMPLE_RESOLUTION) * 100}%;
+        transform: translate(-50%, -55%); font-size: 18px; line-height: 1; color: rgb(255, 210, 90);
+        text-shadow: 0 0 2px #000, 0 0 2px #000; pointer-events: auto; cursor: pointer;
+      `;
+      marker.addEventListener("click", (e) => {
+        e.stopPropagation();
+        setVisible(false);
+        onTeleport(start.x, start.z);
       });
       markerLayer.appendChild(marker);
     }

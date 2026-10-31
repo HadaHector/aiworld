@@ -296,7 +296,7 @@ export async function startSession(page: Page, options: SessionOptions): Promise
       canvas,
       content,
       seed: transfer.seed,
-      arrival: { x: transfer.x, z: transfer.z },
+      arrival: { x: transfer.x, z: transfer.z, start: transfer.start },
       settings,
       onProgress: (phase, completed, total) => loadingScreen.update(phase, completed, total),
       teleport: (x, z) => command({ type: "teleport", x, z }),
@@ -828,6 +828,10 @@ export async function startSession(page: Page, options: SessionOptions): Promise
     /** The dimension being drawn, by id. */
     get dimension() {
       return currentDimension;
+    },
+    /** Where new characters start in the dimension drawn (NPCS.md, *The starting site*). */
+    get starts() {
+      return view?.starts;
     },
     get world() {
       return view?.world;
