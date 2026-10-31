@@ -35,6 +35,9 @@ async function section(name, run) {
 }
 
 const CONFIG = "tiny";
+// The core pack puts creatures down alone for now; the probe turns groups back on to test them.
+const WITH_GROUPS = { single: 0.6, pair: 0.28, group: 0.12 };
+
 const SEED = 1234;
 const sources = packSourcesFromDisk(readConfigFromDisk(CONFIG)).sources;
 const game = loadRulesFromDisk(CONFIG);
@@ -110,6 +113,7 @@ await section("rules", () => {
 await section("zones and points", () => {
   const small = loadRulesFromDisk("small");
   const rules = loadCreatureRulesFromDisk("small", small, WORLD_SEED);
+  rules.config.groups = WITH_GROUPS;
   const { content } = loadContentFromDisk("small");
   const world = createWorldData(WORLD_SEED, content);
   const def = content.dimensions.find((d) => d.start);
@@ -148,6 +152,7 @@ const { content: tinyContent, packs: tinyPacks } = loadContentFromDisk(CONFIG);
 function startServer() {
   const rules = loadRulesFromDisk(CONFIG);
   const kinds = loadCreatureRulesFromDisk(CONFIG, rules, WORLD_SEED);
+  kinds.config.groups = WITH_GROUPS;
   const kills = [];
   const server = createServer({
     seed: WORLD_SEED,

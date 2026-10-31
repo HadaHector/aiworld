@@ -62,11 +62,11 @@ export function createNameplates(scene: Scene, mirror: EntityMirror, ownId: () =
     bubble.style.cssText = `display: none; max-width: 240px; white-space: normal; margin-bottom: 6px; padding: 5px 9px; border-radius: 9px;
       background: rgba(250, 244, 228, 0.94); color: #2a2318; font: 13px/1.3 ${TITLE_FONT}; text-align: center; box-shadow: 0 1px 4px rgba(0,0,0,0.5);`;
     const mark = document.createElement("div");
-    mark.style.cssText = `display: none; font: 700 26px/1 ${TITLE_FONT}; text-shadow: 0 0 3px #000, 0 1px 2px #000; margin-bottom: 1px;`;
+    mark.style.cssText = `display: none; align-self: stretch; text-align: center; font: 700 26px/1 ${TITLE_FONT}; text-shadow: 0 0 3px #000, 0 1px 2px #000; margin-bottom: 1px;`;
     const name = document.createElement("div");
-    name.style.cssText = `font: 600 13px/1.15 ${TITLE_FONT}; color: ${GOLD}; text-shadow: 0 1px 2px #000, 0 0 3px #000;`;
+    name.style.cssText = `align-self: stretch; text-align: center; font: 600 13px/1.15 ${TITLE_FONT}; color: ${GOLD}; text-shadow: 0 1px 2px #000, 0 0 3px #000;`;
     const title = document.createElement("div");
-    title.style.cssText = `font: 11px/1.15 ${TITLE_FONT}; color: ${TEXT}; opacity: 0.85; text-shadow: 0 1px 2px #000, 0 0 3px #000;`;
+    title.style.cssText = `align-self: stretch; text-align: center; font: 11px/1.15 ${TITLE_FONT}; color: ${TEXT}; opacity: 0.85; text-shadow: 0 1px 2px #000, 0 0 3px #000;`;
     root.append(bubble, mark, name, title);
     layer.appendChild(root);
     plate = { root, mark, bubble, name, title, barkUntil: 0 };

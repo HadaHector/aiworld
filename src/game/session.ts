@@ -233,6 +233,7 @@ export async function startSession(page: Page, options: SessionOptions): Promise
           const event = ({ accepted: "questAccept", progress: "questProgress", objectiveDone: "questObjectiveDone", ready: "questReady", failed: "questFailed", done: "questComplete", removed: "questAbandon", refused: "uiError" } as const)[change.what];
           feedback.client(event, { source: playerId, target: playerId, skill: null, crit: false, periodic: false });
           if (change.what === "refused") npcWindow.refused(quests.refused?.reason ?? "");
+          if (change.what === "done") npcWindow.handedIn(change.quest);
         }
       } else if (message.type === "markers") {
         queueMicrotask(drawQuestMap);
@@ -856,6 +857,45 @@ export async function startSession(page: Page, options: SessionOptions): Promise
     }
     const pick = scene.pickWithRay(ray, (mesh) => mesh.name.startsWith("terrainChunk_"));
     if (pick?.hit && pick.pickedPoint) command({ type: "teleport", x: pick.pickedPoint.x, z: pick.pickedPoint.z });
+  }
+
+  // Hovering what can be used - loot, an item or a quest's thing on the ground, a person to talk to -
+  // shows a hand and what it is, by the pointer: nothing else tells that it can be right-clicked.
+  {
+    const label = document.createElement("div");
+    label.style.cssText = `position: fixed; z-index: 944; pointer-events: none; display: none; padding: 3px 8px; ${PANEL} font-size: 12px; white-space: nowrap;`;
+    document.body.appendChild(label);
+    signal.addEventListener("abort", () => label.remove());
+    let next = 0;
+    listenCanvas("pointermove", (e) => {
+      const now = performance.now();
+      if (now < next || !view || !entityMeshes || teleportArmed) return;
+      next = now + 80;
+      const rect = canvas.getBoundingClientRect();
+      const meshes = entityMeshes;
+      const pick = view.scene.pick(e.clientX - rect.left, e.clientY - rect.top, (mesh) => meshes.entityOf(mesh) !== null);
+      const id = pick?.hit ? meshes.entityOf(pick.pickedMesh) : null;
+      const entity = id === null ? undefined : mirror.entities.get(id);
+      const what = !entity || id === playerId
+        ? ""
+        : entity.lootable
+          ? `${entity.name} - right-click to loot`
+          : entity.templateId === GROUND_ITEM_TEMPLATE || entity.templateId === gameRules.quests.objects.template
+            ? `${entity.name} - right-click to pick up`
+            : isNpc(entity)
+              ? `${entity.name} - right-click to talk`
+              : "";
+      canvas.style.cursor = what ? "pointer" : "";
+      label.style.display = what ? "" : "none";
+      if (what) {
+        label.textContent = what;
+        label.style.left = `${e.clientX + 16}px`;
+        label.style.top = `${e.clientY + 14}px`;
+      }
+    });
+    listenCanvas("pointerleave", () => {
+      label.style.display = "none";
+    });
   }
 
   // Right-click (a click, not a drag - a drag turns the camera) to interact with what is under the

@@ -22,6 +22,8 @@ import type { CreatureNeed, PlaceNeed, QuestPlotDef } from "./plots";
 export interface ContextCreature {
   id: string;
   name: string;
+  /** Added to the zone's band for its level (CREATURES.md). */
+  levelOffset: number;
   hostility: string;
   family: string;
 }
@@ -76,7 +78,9 @@ export function generateQuests(input: GeneratorInput): QuestDef[] {
   /** How many quest lines each NPC gives: no more than two each. */
   const lines = new Map<number, number>();
   const usedPlots = new Set<string>();
-  const level = (): number => between(rng, input.levels);
+  /** A quest's level: the middle of the zone's band, and for a quest about creatures, as they stand -
+   *  the band's middle plus their kind's offset, so a quest is never far below what it sends you to fight. */
+  const level = (beast: ContextCreature | null): number => Math.round((input.levels[0] + input.levels[1]) / 2) + (beast?.levelOffset ?? 0);
   const plural = (name: string): string => {
     const words = name.split(" ");
     const last = words[words.length - 1];
@@ -126,7 +130,7 @@ export function generateQuests(input: GeneratorInput): QuestDef[] {
     }
     const object = place ? (place.quest.objects.filter((o) => !plot.place?.objects || plot.place.objects.every((t) => o.tags.includes(t))) ?? [])[0] ?? place.quest.objects[0] : undefined;
     const placeName = place ? place.quest.text.replace("{name}", place.name) : "";
-    const lvl = level();
+    const lvl = level(beast);
     // The arguments every text of the plot can use.
     const args: Record<string, string | number> = { settlement: site.name, zone: input.zone, giver: giver.name, giverGiven: giver.given, place: placeName, object: object?.name ?? "", objects: object ? plural(object.name) : "", creature: beast?.name ?? "", creatures: beast ? plural(beast.name) : "", other: other?.name ?? "" };
     for (const [name, person] of people) {

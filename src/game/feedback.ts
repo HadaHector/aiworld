@@ -246,17 +246,18 @@ export function createGameFeedback(options: GameFeedbackOptions): GameFeedback {
       seen.target = entity.target;
     }
   };
-  /** Glints looping over everything that has loot to take. */
+  /** Glints looping over everything that has loot to take - and a quest's ground objects (QUESTS.md). */
   const glints = new Map<number, CueHandle>();
+  const glinting = (entity: { lootable: boolean; templateId: string } | undefined): boolean => !!entity && (entity.lootable || entity.templateId === options.game.quests.objects.template);
   const glintAll = (): void => {
     for (const entity of mirror.entities.values()) {
-      if (entity.lootable && !glints.has(entity.id)) {
+      if (glinting(entity) && !glints.has(entity.id)) {
         const handle = cues.client("lootable", { source: options.player(), target: entity.id, skill: null, crit: false, periodic: false });
         if (handle) glints.set(entity.id, handle);
       }
     }
     for (const [id, handle] of glints) {
-      if (mirror.entities.get(id)?.lootable) continue;
+      if (glinting(mirror.entities.get(id))) continue;
       handle.stop();
       glints.delete(id);
     }

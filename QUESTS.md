@@ -604,6 +604,17 @@ After NPCS.md's five steps. Each leaves the game working: the dev server (`?play
   innkeeper talked to, *Exit to menu*, the page reloaded, *Continue*: the quest still ready, in the
   tracker; handed in for 18 copper and level 2. Fixed on the way: quest givers' marks now show out to
   90 m (the names only within 28 m), and quests made after a character re-enters are sent to it.
+- **After the user tried it:**
+  - The "!" and "?" are centred over the name (the plate's lines are stretched and centred).
+  - Handing a quest in opens the NPC's window straight on the next in the chain, where that NPC
+    offers it.
+  - A quest's level is the middle of its zone's band, plus the creatures' kind offset for a quest
+    about creatures (a spider quest in ring 0 is level 4, not 2, as spiders there are 2-5).
+  - Creatures stand alone for now (`rules/creatures.json5`'s `groups` all singles); the creature
+    probe turns groups back on to test them. Camps are unchanged.
+  - Ground objects glint as loot does, and the glint is twice the size it was. Hovering anything
+    that can be right-clicked - loot, a ground item or object, a person - shows a hand and a label
+    ("Feverfew - right-click to pick up").
 
 ## Later
 

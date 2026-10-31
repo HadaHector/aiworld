@@ -21,6 +21,9 @@ export interface NpcWindow {
   open: (message: NpcWindowMessage, name: string, title: string) => void;
   /** Why the server would not, said in the window. */
   refused: (reason: string) => void;
+  /** A quest was just handed in: when the window next opens on an NPC offering the one after it,
+   *  that one's page shows at once (QUESTS.md, *Talking*). */
+  handedIn: (quest: string) => void;
   close: () => void;
   dispose: () => void;
 }
@@ -76,6 +79,7 @@ export function createNpcWindow(options: NpcWindowOptions): NpcWindow {
   /** A quest page open in the window, and the reward chosen on it. */
   let page = "";
   let chosen = -1;
+  let after = "";
   let unsubscribe: (() => void) | null = null;
 
   const typeOf = (id: string) => items.types[items.typeIndex.get(id) ?? -1];
@@ -181,12 +185,22 @@ export function createNpcWindow(options: NpcWindowOptions): NpcWindow {
       // The page stays while its quest is as it was; taken, handed in, or another NPC: back to the list.
       const was = current?.npc === message.npc ? current.quests.find((q) => q.id === page)?.state : undefined;
       if (!was || message.quests.find((q) => q.id === page)?.state !== was) page = "";
+      // Straight on to what follows the quest just handed in, where this NPC offers it.
+      const next = after ? message.quests.find((q) => q.state === "offer" && options.quests.defs.get(q.id)?.requires.quests.includes(after)) : undefined;
+      if (next) {
+        page = next.id;
+        chosen = -1;
+      }
+      after = "";
       current = message;
       heading.textContent = title ? `${name} - ${title}` : name;
       note.textContent = "";
       root.style.display = "";
       unsubscribe ??= belongings.onChange(render);
       render();
+    },
+    handedIn(quest) {
+      after = quest;
     },
     refused(reason) {
       note.textContent = REFUSALS[reason] ?? reason;

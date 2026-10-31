@@ -6,7 +6,7 @@
   spacing: 80,                     // metres between spawn points, jittered
   emptyChance: 0.15,
   campChance: 0.08,
-  groups: { single: 0.6, pair: 0.28, group: 0.12 },  // mostly alone; packs now and then
+  groups: { single: 1, pair: 0, group: 0 },  // alone, for now: no packs (pairs and groups later)
   maxSlope: 0.7,
   safeRadius: 60,                  // no points this near the dimension's spawn or a link
   activeRadius: 140,               // points this near a player are filled
