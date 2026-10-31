@@ -182,8 +182,25 @@ export function createNpcWindow(options: NpcWindowOptions): NpcWindow {
       return current?.npc ?? 0;
     },
     open(message, name, title) {
+      // Newly talked to (not the window asked for again after an action), with one thing only to
+      // offer: straight to it - a trainer's lessons, the bank, a quest's page.
+      const fresh = root.style.display === "none" || current?.npc !== message.npc;
+      const offers = message.quests.length + [message.trainer, message.banker, message.repair, message.innkeeper, message.stock.length > 0].filter(Boolean).length;
+      if (fresh && offers === 1 && !after) {
+        if (message.trainer || message.banker) {
+          hide();
+          if (message.trainer) options.train(message.npc);
+          else options.openBag();
+          return;
+        }
+        if (message.quests.length === 1) {
+          current = null;
+          page = message.quests[0].id;
+          chosen = -1;
+        }
+      }
       // The page stays while its quest is as it was; taken, handed in, or another NPC: back to the list.
-      const was = current?.npc === message.npc ? current.quests.find((q) => q.id === page)?.state : undefined;
+      const was = current?.npc === message.npc ? current.quests.find((q) => q.id === page)?.state : fresh && offers === 1 && message.quests.length === 1 ? message.quests[0].state : undefined;
       if (!was || message.quests.find((q) => q.id === page)?.state !== was) page = "";
       // Straight on to what follows the quest just handed in, where this NPC offers it.
       const next = after ? message.quests.find((q) => q.state === "offer" && options.quests.defs.get(q.id)?.requires.quests.includes(after)) : undefined;
