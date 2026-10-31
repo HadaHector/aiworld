@@ -1,0 +1,2 @@
+// Two who cannot stand to be outdone by each other.
+{ kind: "across", count: [0, 2], sides: [{ name: "rival", ages: ["adult", "old"] }, { name: "rival", ages: ["adult", "old"] }] }

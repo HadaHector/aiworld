@@ -79,6 +79,9 @@ export interface DimensionView {
   readonly debugMap: DebugMap;
   /** Where new characters start here, as the server places them (NPCS.md, *The starting site*). */
   readonly starts: readonly ChosenStart[];
+  /** The content it was built from, and its seed. */
+  readonly content: WorldContent;
+  readonly seed: number;
   readonly placeLabels: PlaceLabels;
   readonly textureBrowser: TextureBrowser;
   readonly collisionPanel: CollisionPanel;
@@ -280,6 +283,8 @@ export async function createDimensionView(options: DimensionViewOptions): Promis
     cameraCollision,
     debugMap,
     starts,
+    content,
+    seed,
     placeLabels,
     textureBrowser,
     collisionPanel,

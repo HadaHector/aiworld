@@ -1,3 +1,4 @@
+import { castForSettlement } from "../sim/npcs/cast";
 import { tierOf } from "../sim/factions";
 import type { Engine } from "@babylonjs/core";
 import { DEFAULT_DRAW_DISTANCE, nextPaint } from "../world/world";
@@ -838,6 +839,19 @@ export async function startSession(page: Page, options: SessionOptions): Promise
     /** Where new characters start in the dimension drawn (NPCS.md, *The starting site*). */
     get starts() {
       return view?.starts;
+    },
+    /** Settlements' casts (NPCS.md, *A settlement's cast*): `npcs.cast()` for the settlement nearest
+     *  the player, `npcs.cast(siteId)` for one by its id. */
+    npcs: {
+      cast(siteId?: number) {
+        const v = view;
+        if (!v) return null;
+        const at = me ?? { x: 0, z: 0 };
+        const near = siteId ?? [...v.world.settlementLayouts].sort((a, b) => Math.hypot(a.x - at.x, a.z - at.z) - Math.hypot(b.x - at.x, b.z - at.z))[0]?.siteId;
+        if (near === undefined) return null;
+        const classes = progressionRules.origins.filter((o) => o.slot === "class").map((o) => ({ id: o.id, name: o.name }));
+        return castForSettlement(v.world, near, { seed: v.seed, dimension: currentDimension, voices: v.content.voices, rules: gameRules.npcs, classes, starts: new Set(v.starts.map((s) => s.settlement ?? -1)) });
+      },
     },
     /** The character's standing with factions, with each one's tier (NPCS.md, *Factions*). */
     standing() {

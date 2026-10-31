@@ -1,0 +1,2 @@
+// A quarrel between two houses that nobody remembers the start of.
+{ kind: "across", count: [0, 1], sides: [{ name: "enemy", ages: ["adult", "old"] }, { name: "enemy", ages: ["adult", "old"] }] }

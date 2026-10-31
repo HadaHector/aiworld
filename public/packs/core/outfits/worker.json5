@@ -1,0 +1,2 @@
+// A leather jerkin over trousers, bracers and boots: a smith, a farmer at work (NPCS.md).
+{ name: "Worker", gear: ["jerkin", "trousers", "belt", "boots", "bracers"] }

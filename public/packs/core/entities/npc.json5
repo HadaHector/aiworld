@@ -1,0 +1,9 @@
+// A settlement's person (NPCS.md): a body, health, the folk of its zone. Roles (npcRoles/) say what
+// it does; its look comes from its cast (name, race, sex, colouring and outfit).
+{
+  name: "Villager",
+  faction: "folk",
+  stats: { stamina: 10 },
+  resources: ["health"],
+  look: { race: "human", outfit: "villager", height: 1.8, radius: 0.4, color: [0.55, 0.5, 0.42], feedback: { family: "humanoid" } },
+}

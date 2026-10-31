@@ -1,0 +1,12 @@
+// Sells what a household needs: in a shop where there is one, on the square where there is not.
+{
+  title: "Shopkeeper",
+  outfit: "villager",
+  buildings: ["shopHouse"],
+  settlement: { tiers: ["village", "town"], count: 1 },
+  ages: ["adult", "old"],
+  stand: [{ building: "shopHouse" }, { at: "square" }],
+  services: { vendor: "general" },
+  questGiver: 0.4,
+  barks: "shopkeeper",
+}

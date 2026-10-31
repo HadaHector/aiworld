@@ -1,0 +1,10 @@
+// Brothers and sisters under one roof: alike to look at.
+{
+  kind: "household",
+  family: true,
+  looks: true,
+  sides: [
+    { name: "sibling", ages: ["young", "adult"], call: { male: "brother", female: "sister" } },
+    { name: "sibling", ages: ["young", "adult"], call: { male: "brother", female: "sister" } },
+  ],
+}

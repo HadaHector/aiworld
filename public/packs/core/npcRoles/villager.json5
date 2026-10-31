@@ -1,0 +1,10 @@
+// Someone out about the settlement with no trade to see to: a household's member on the street.
+// The cast gives this role to those it puts out (rules/npcs.json5's `out`); none are held otherwise.
+{
+  title: "",
+  outfit: ["villager", "worker"],
+  settlement: { count: 0 },
+  stand: [{ at: "door" }, { at: "street" }, { at: "square" }],
+  questGiver: 0.25,
+  barks: "villager",
+}

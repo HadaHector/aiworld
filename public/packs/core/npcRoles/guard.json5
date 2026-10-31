@@ -1,0 +1,11 @@
+// Walks the round of a town's gates and square.
+{
+  title: "Guard",
+  outfit: "knight",
+  settlement: { tiers: ["town"], count: 2 },
+  ages: ["adult"],
+  stand: [{ at: "square" }],
+  patrol: "gates",
+  questGiver: 0.2,
+  barks: "guard",
+}

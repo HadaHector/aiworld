@@ -91,6 +91,10 @@ export interface NpcRules {
   peoples: Record<string, Record<string, number>>;
   /** The voice each race's given names are built from (`voices/`). */
   names: Record<string, string>;
+  /** What a class trainer wears (`fromClass`), by class id; `default` for any other. */
+  classOutfits: Record<string, string>;
+  /** The role a household's member out on the street holds. */
+  villager: string;
   /** Buildings people live in. */
   homes: string[];
   households: HouseholdShape[];
@@ -169,7 +173,7 @@ function readRole(entry: Entry, issues: ContentIssue[]): NpcRoleDef {
   if (buildings.length === 0 && !settlement && !perClass) reader.fail("", "a role is held per building (buildings), per settlement (settlement) or per class (perClass)");
   return {
     id: entry.id,
-    title: reader.optionalString(obj, "title", "") ?? entry.id,
+    title: obj.title === "" ? "" : (reader.optionalString(obj, "title", "") ?? entry.id),
     template: reader.optionalString(obj, "template", "") ?? "npc",
     outfits,
     buildings,
@@ -236,7 +240,7 @@ export function readNpcRules(rules: Entry | undefined, roleEntries: readonly Ent
 
   const reader = new Reader(issues, rules?.file ?? "rules/npcs.json5");
   const obj = rules ? reader.object(rules.data, "") : {};
-  reader.onlyKeys(obj, "", ["peoples", "names", "homes", "households", "childRelation", "out", "moods", "ages", "activeRadius", "releaseRadius", "releaseAfter", "talkRange", "bark", "respawn"]);
+  reader.onlyKeys(obj, "", ["peoples", "names", "classOutfits", "villager", "homes", "households", "childRelation", "out", "moods", "ages", "activeRadius", "releaseRadius", "releaseAfter", "talkRange", "bark", "respawn"]);
   const peoples: Record<string, Record<string, number>> = {};
   if (obj.peoples !== undefined) {
     const raw = reader.object(obj.peoples, "peoples");
@@ -248,6 +252,13 @@ export function readNpcRules(rules: Entry | undefined, roleEntries: readonly Ent
     const raw = reader.object(obj.names, "names");
     for (const race of Object.keys(raw)) names[race] = reader.string(raw, race, "names");
   }
+  const classOutfits: Record<string, string> = {};
+  if (obj.classOutfits !== undefined) {
+    const raw = reader.object(obj.classOutfits, "classOutfits");
+    for (const id of Object.keys(raw)) classOutfits[id] = reader.string(raw, id, "classOutfits");
+  }
+  const villager = reader.optionalString(obj, "villager", "") ?? "villager";
+  if (roles.length > 0 && !roleIndex.has(villager)) reader.fail("villager", `no role "${villager}"`);
   const households = reader.optionalArray(obj, "households", "").map((value, i): HouseholdShape => {
     const path = `households[${i}]`;
     const raw = reader.object(value, path);
@@ -268,6 +279,8 @@ export function readNpcRules(rules: Entry | undefined, roleEntries: readonly Ent
     relationIndex,
     peoples,
     names,
+    classOutfits,
+    villager,
     homes: obj.homes === undefined ? [] : reader.stringList(obj, "homes", ""),
     households: households.length > 0 ? households : [{ weight: 1, relation: null, children: [0, 0] }],
     childRelation,

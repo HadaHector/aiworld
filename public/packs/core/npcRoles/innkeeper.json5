@@ -1,0 +1,12 @@
+// Keeps the inn: the bank, food and drink, and a home for travellers (NPCS.md, *The inn*).
+{
+  title: "Innkeeper",
+  outfit: "villager",
+  buildings: ["inn"],
+  livesAtWork: true,
+  ages: ["adult", "old"],
+  stand: [{ building: "inn", room: "taproom" }, { building: "inn" }],
+  services: { innkeeper: true, banker: true, vendor: "inn" },
+  questGiver: 0.6,
+  barks: "innkeeper",
+}

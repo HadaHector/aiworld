@@ -1,0 +1,12 @@
+// Carries the ale and the gossip.
+{
+  title: "Serving Hand",
+  outfit: "villager",
+  buildings: ["inn"],
+  count: [0, 1],
+  livesAtWork: true,
+  ages: ["young", "adult"],
+  stand: [{ building: "inn", room: "taproom" }, { building: "inn" }],
+  questGiver: 0.3,
+  barks: "villager",
+}

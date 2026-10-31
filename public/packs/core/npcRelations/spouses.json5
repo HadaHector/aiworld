@@ -1,0 +1,9 @@
+// Two who keep a house together.
+{
+  kind: "household",
+  family: true,
+  sides: [
+    { name: "spouse", ages: ["adult", "old"], call: { male: "husband", female: "wife" } },
+    { name: "spouse", ages: ["adult", "old"], call: { male: "husband", female: "wife" } },
+  ],
+}

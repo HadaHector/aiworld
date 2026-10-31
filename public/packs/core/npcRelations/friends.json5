@@ -1,0 +1,2 @@
+// Old friends from different houses.
+{ kind: "across", count: [1, 3], sides: [{ name: "friend" }, { name: "friend" }] }

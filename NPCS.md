@@ -6,7 +6,7 @@ The first half of step 9 of [GAMEPLAY.md](GAMEPLAY.md)'s build order: the **star
 two are built in the order of [Steps](#steps) here and there, and together they reach the first
 milestone.
 
-**Status: in progress.** Steps 1 and 2 are done (see [As built](#as-built)).
+**Status: in progress.** Steps 1 to 3 are done (see [As built](#as-built)).
 
 ## Decisions
 
@@ -121,11 +121,11 @@ runs the same `chooseStarts`. The debug map marks each start and its rule's cand
 `castOf(settlement)` is worked out in this order. Each step draws from the settlement's own seed,
 so changing one step's data does not reshuffle the others more than it must.
 
-1. **Roles from the buildings.** Each building kind names the roles it brings (an inn brings an
-   innkeeper and maybe a serving hand, a smithy a smith, a chapel a priest, a town hall a reeve or a
-   mayor). The settlement style adds what its tier needs that no building brought: every village
-   gets at least one quest giver, the starting village gets one trainer per class (generated
-   classes included), and a town gets a guard or two.
+1. **Roles from the buildings.** Each role names the buildings that bring it (an inn brings an
+   innkeeper and maybe a serving hand, a smithy a smith, a chapel a priest), so a new building's
+   people come with a role file, not an edit to the building. A role can also be held per settlement
+   of some tiers (every place has a reeve, a village a shopkeeper, a town two guards), and per class:
+   the starting village gets one trainer per class (generated classes included).
 2. **Households.** Each lived-in house (cottages, farmhouses, town houses) gets a household of one
    to four; workplaces (smithy, shop) belong to one of them. About one in two or three households has
    a member out on the street at any time: that is the villager population.
@@ -146,15 +146,16 @@ The cast is plain data: ids, names, roles, relations, looks and spots. An NPC's 
 
 ### Who lives there
 
-`settlements/<style>.json5` gains `peoples`, the mix of peoples its NPCs are drawn from, e.g.
-`{ human: 6, dwarf: 1, elf: 1 }` for a farm village and `{ dwarf: 5, human: 2 }` for a stone
-village. The voice that names the place (its biome's `voice`) names its people too, so a place and
-its people sound alike.
+`rules/npcs.json5`'s `peoples` gives the mix of races a settlement style's people are drawn from,
+e.g. `{ human: 6, dwarf: 1, elf: 1 }` for a farm village and `{ dwarf: 4, human: 2, elf: 1 }` for a
+stone village. A household is one race. The voice that names the place (its biome's `voice`) gives
+family names, so a place and its families sound alike.
 
 ### Names
 
-- **A given name** from the race's own name sounds (a new `names` block in `races/*.json5`, in the
-  voice format of `voices/`), so a dwarf in a meadow village still sounds dwarven.
+- **A given name** from the voice its race is given in `rules/npcs.json5`'s `names` (dwarves the
+  stony voice, elves the shaded one), so a dwarf in a meadow village still sounds dwarven. Two
+  syllables, kept short.
 - **A family name** from the settlement's voice, shared by a household and by relatives.
 - **A title** from the role, through a template: "Brenna Holloway, Innkeeper"; "Old Tam" for an
   old villager with no role. Titles show under the name on the nameplate, WoW style.
@@ -359,15 +360,13 @@ Spawns carry the NPC's id, so the client finds its cast entry.
 | Kind | What |
 |---|---|
 | `dimensions/*.json5` | `starts` (new) |
-| `settlements/*.json5` | `peoples` (new) |
-| `buildings/*.json5` | `roles`: the roles a building brings (new) |
-| `races/*.json5` | `names`: given-name sounds (new) |
 | `npcRoles/` | Roles, as above |
 | `npcRelations/` | Relation kinds: who, constraints, weights, and the text keys that name them |
 | `barks/` | Bark sets |
 | `factions/`, `factionTemplates/` | Factions and the ones generated per zone |
 | `vendorStocks/` | What vendors sell |
-| `rules/npcs.json5` | Activation radii, bark cooldown, talk range, standing tiers and discounts, NPC respawn |
+| `rules/npcs.json5` | Peoples by settlement style, name voices by race, class trainers' outfits, homes, household shapes, how many are out, moods and ages, activation radii, bark cooldown, talk range, NPC respawn |
+| `rules/factions.json5` | Standing tiers, and where allies and enemies begin |
 | `text/en/*.json5` | Titles, barks, names' templates (QUESTS.md, *Text*) |
 
 ## Code
@@ -461,6 +460,28 @@ Each leaves the game working: the dev server (`?play`), `npm run probe`, `npm ru
     generated factions, standing between sides, refusals, and on a server allies and enemies, standing
     moved, told, clamped, saved and loaded.
   - The NPC rules reader (`src/sim/rules/npcRules.ts`, `rules.npcs`) is in, empty until step 3's data.
+- **Step 3.** `src/sim/npcs/cast.ts`'s `castOf` (and `castForSettlement`), with the core pack's
+  `npcRoles/` (innkeeper, serving hand, smith, priest, shopkeeper, reeve, farmer, class trainer,
+  guard, villager), `npcRelations/` (spouses, siblings, parent and child in households; friends,
+  rivals, a feud, a debt, courting, master and apprentice across them) and `rules/npcs.json5`.
+  - **The order:** a household in every home, by a shape (a couple and children, siblings, one
+    person, a parent and child); then role holders, found in their building's household, in a
+    household that lives where it works, among anyone free, or made alone; then one member out from
+    a share of the households with nobody out; then relations across households.
+  - **Relations make looks:** a child or a sibling takes the first side's skin, hair and eye
+    indices (`choices`, wrapped to each race's palettes), and a child is younger than both parents.
+    Ages move the height and build sliders. Old people's hair is not greyed yet.
+  - **An NPC** has its id (`npc:<dimension>/<site>/<n>`), name, title, role, class (trainers),
+    race, sex, age, look seed and choices, outfit, mood, whether it is out, and its relations with
+    what it calls each one ("brother", "rival").
+  - **Where the build differs from the plan:** roles name their buildings (not buildings their
+    roles), and peoples and name voices are in `rules/npcs.json5` (not in settlement styles and
+    races), so all of it is NPC data. Two outfits were added: `villager` and `worker`.
+  - **Checked:** the NPCs probe's casts over 4 seeds each of `tiny` and `small` (about 70 to 380
+    people a world): the same twice, an innkeeper per inn, a priest, a smith, one reeve, every
+    class's trainer at the start, ids, unique names, families, relations both ways, parents older,
+    children alike. `scripts/probe/cast.local.mjs <config> <seed>` prints the start's cast (git-ignored
+    `.local`), and `__aiworld.npcs.cast()` gives the same in the page.
 
 ## Later
 

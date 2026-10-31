@@ -1,0 +1,11 @@
+// A parent and a child, older by an age at least: the child takes after the parent.
+{
+  kind: "household",
+  family: true,
+  looks: true,
+  older: 1,
+  sides: [
+    { name: "parent", ages: ["adult", "old"], call: { male: "father", female: "mother" } },
+    { name: "child", ages: ["young", "adult"], call: { male: "son", female: "daughter" } },
+  ],
+}

@@ -1,0 +1,38 @@
+// NPCs (NPCS.md): who lives in settlements and how their casts are made, and when they are filled
+// near players.
+{
+  // Which races a settlement's people are, by its style (settlements/), as weights.
+  peoples: {
+    farmVillage: { human: 6, dwarf: 1, elf: 1 },
+    marketTown: { human: 5, dwarf: 1, elf: 2 },
+    stoneVillage: { dwarf: 4, human: 2, elf: 1 },
+    default: { human: 1 },
+  },
+  // The voice (voices/) each race's given names are built from; family names take the settlement's.
+  names: { human: "verdant", dwarf: "stony", elf: "shaded" },
+  // What a class trainer wears, by class (`fromClass` in a role); `default` for the generated ones.
+  classOutfits: { warrior: "knight", mage: "apprentice", priest: "apprentice", default: "scout" },
+  // The buildings people live in: each gets a household.
+  homes: ["cottage", "shingleCottage", "farmhouse", "townHouse", "stoneCottage", "shopHouse"],
+  // How a household is made: the relation it is built on (or one person), and its children.
+  households: [
+    { weight: 3, relation: "spouses", children: [0, 2] },
+    { weight: 1.5, relation: "siblings" },
+    { weight: 2 },
+    { weight: 1, children: [1, 1] },
+  ],
+  childRelation: "parentChild",
+  // The share of households with someone out on the street, beyond those holding a role.
+  out: 0.4,
+  // What colours a person's barks.
+  moods: { cheerful: 3, gruff: 2, weary: 2, nervous: 1 },
+  ages: { young: 1, adult: 4, old: 1.2 },
+  // A settlement this near a player has its people made; dropped once nobody has been within
+  // `releaseRadius` for `releaseAfter` seconds.
+  activeRadius: 160,
+  releaseRadius: 200,
+  releaseAfter: 30,
+  talkRange: 4,
+  bark: { cooldown: 60, range: 8 },
+  respawn: [120, 180],
+}

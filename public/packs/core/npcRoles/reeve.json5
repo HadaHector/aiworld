@@ -1,0 +1,10 @@
+// Speaks for the settlement: often its first quest giver.
+{
+  title: "Reeve",
+  outfit: "villager",
+  settlement: { count: 1 },
+  ages: ["adult", "old"],
+  stand: [{ building: "townHall", room: "mayorsOffice" }, { building: "townHall" }, { at: "square" }],
+  questGiver: 0.9,
+  barks: "reeve",
+}

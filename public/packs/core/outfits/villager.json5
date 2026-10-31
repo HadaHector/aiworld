@@ -1,0 +1,2 @@
+// Plain working clothes: a tunic, trousers, a belt and boots - what most villagers wear (NPCS.md).
+{ name: "Villager", gear: ["tunic", "trousers", "belt", "boots"] }

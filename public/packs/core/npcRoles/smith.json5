@@ -1,0 +1,11 @@
+// Works the forge: sells arms and armour, mends gear.
+{
+  title: "Smith",
+  outfit: "worker",
+  buildings: ["smithy"],
+  ages: ["adult", "old"],
+  stand: [{ building: "smithy" }],
+  services: { vendor: "smith", repair: true },
+  questGiver: 0.4,
+  barks: "smith",
+}

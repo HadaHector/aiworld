@@ -1,0 +1,12 @@
+// Teaches a class what it has unlocked to learn from a trainer (PROGRESSION.md): every class in the
+// starting village, now and then one elsewhere.
+{
+  title: "{class} Trainer",
+  outfit: "fromClass",
+  perClass: { start: "all", other: [0, 1] },
+  ages: ["adult", "old"],
+  stand: [{ building: "chapel", room: "nave", classes: ["priest"] }, { building: "townHall" }, { at: "square" }],
+  services: { trainer: { teaches: "class" } },
+  questGiver: 0.2,
+  barks: "trainer",
+}

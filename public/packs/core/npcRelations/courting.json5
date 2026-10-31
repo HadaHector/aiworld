@@ -1,0 +1,2 @@
+// Two young people who walk out together.
+{ kind: "across", count: [0, 1], sides: [{ name: "sweetheart", ages: ["young", "adult"] }, { name: "sweetheart", ages: ["young", "adult"] }] }

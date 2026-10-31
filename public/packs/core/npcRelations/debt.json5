@@ -1,0 +1,2 @@
+// One owes the other, and both know it.
+{ kind: "across", count: [0, 1], sides: [{ name: "creditor", ages: ["adult", "old"] }, { name: "debtor", ages: ["adult", "old"] }] }

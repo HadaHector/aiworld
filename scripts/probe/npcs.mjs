@@ -3,7 +3,9 @@
 // `tiny` server. Later steps add casts, NPCs in the world and their services.
 //   npm run probe -- scripts/probe/npcs.mjs
 import { ContentError } from "../../src/world/content/contentReader.ts";
-import { loadContentFromDisk, loadCreatureRulesFromDisk, loadRulesFromDisk, packSourcesFromDisk, readConfigFromDisk } from "../diskContent.mjs";
+import { loadContentFromDisk, loadCreatureRulesFromDisk, loadProgressionRulesFromDisk, loadRulesFromDisk, packSourcesFromDisk, readConfigFromDisk } from "../diskContent.mjs";
+import { chooseStarts } from "../../src/world/settlements/starts.ts";
+import { castForSettlement } from "../../src/sim/npcs/cast.ts";
 import { resolveGameRules } from "../../src/sim/rules/gameRules.ts";
 import { factionDef, standingBetween, standingWith, tierOf } from "../../src/sim/factions.ts";
 import { relation } from "../../src/sim/skills/unit.ts";
@@ -83,6 +85,61 @@ await section("factions", () => {
   refused({ "entities/zz.json5": "{ faction: 'nope' }" }, "an unknown faction", /no faction "nope"/);
   refused({ "factions/zz.json5": "{ relations: { nope: 'friendly' } }" }, "a relation to an unknown faction", /no faction "nope"/);
   refused({ "factions/zz.json5": "{ relations: { players: 'chummy' } }" }, "an unknown tier", /expected a number or a tier/);
+});
+
+// --- casts: the people of a settlement, invented from relations, the same every time ---
+await section("casts", () => {
+  for (const [config, seeds] of [["tiny", 4], ["small", 4]]) {
+    const { content } = loadContentFromDisk(config);
+    const game = loadRulesFromDisk(config);
+    for (let s = 0; s < seeds; s++) {
+      const seed = 2000 + s * 6007;
+      const progression = loadProgressionRulesFromDisk(config, game, seed);
+      const classes = progression.origins.filter((o) => o.slot === "class").map((o) => ({ id: o.id, name: o.name }));
+      const world = quiet(() => createWorldData(seed, content));
+      const starts = new Set(chooseStarts(world, content.dimension).map((x) => x.settlement));
+      const context = { seed, dimension: content.dimension.id, voices: content.voices, rules: game.npcs, classes, starts };
+      const tag = `${config} seed ${seed}`;
+      let people = 0;
+      for (const layout of world.settlementLayouts) {
+        const cast = castForSettlement(world, layout.siteId, context);
+        const again = castForSettlement(world, layout.siteId, context);
+        const where = `${tag} #${layout.siteId}`;
+        check(`${where}: the same twice`, JSON.stringify(cast) === JSON.stringify(again));
+        people += cast.npcs.length;
+        const has = (b) => layout.houses.some((h) => h.building.id === b);
+        const holders = (role) => cast.npcs.filter((n) => n.role === role);
+        if (has("inn")) check(`${where}: an innkeeper for its inn`, holders("innkeeper").length === layout.houses.filter((h) => h.building.id === "inn").length);
+        if (has("chapel")) check(`${where}: a priest for its chapel`, holders("priest").length >= 1);
+        if (has("smithy")) check(`${where}: a smith for its smithy`, holders("smith").length >= 1);
+        check(`${where}: one reeve`, holders("reeve").length === 1);
+        if (starts.has(layout.siteId)) check(`${where}: a trainer for every class at the start`, classes.every((c) => cast.npcs.some((n) => n.role === "classTrainer" && n.class === c.id)), cast.npcs.filter((n) => n.class).map((n) => n.class).join());
+        check(`${where}: every role holder is out`, cast.npcs.every((n) => !n.role || n.out));
+        check(`${where}: ids by settlement and index`, cast.npcs.every((n, i) => n.id === `npc:${content.dimension.id}/${layout.siteId}/${i}` && n.index === i));
+        check(`${where}: names unique`, new Set(cast.npcs.map((n) => n.name)).size === cast.npcs.length);
+        check(`${where}: a household shares its family name`, cast.households.every((h) => h.members.every((m) => cast.npcs[m].family === h.family && cast.npcs[m].household === h.index)));
+        const ages = ["young", "adult", "old"];
+        let symmetric = true;
+        let older = true;
+        let alike = true;
+        for (const n of cast.npcs) {
+          for (const r of n.relations) {
+            const back = cast.npcs[r.to].relations.find((x) => x.to === n.index && x.relation === r.relation);
+            if (!back) symmetric = false;
+            if (r.relation === "parentChild" && ["son", "daughter"].includes(r.call)) {
+              const child = cast.npcs[r.to];
+              if (ages.indexOf(n.age) <= ages.indexOf(child.age)) older = false;
+              if (child.choices.skin !== n.choices.skin && cast.npcs.filter((p) => p.relations.some((x) => x.to === child.index && x.relation === "parentChild")).every((p) => p.choices.skin !== child.choices.skin)) alike = false;
+            }
+          }
+        }
+        check(`${where}: relations go both ways`, symmetric);
+        check(`${where}: parents are older than their children`, older);
+        check(`${where}: a child takes after a parent`, alike);
+      }
+      log(`${tag}: ${world.settlementLayouts.length} settlements, ${people} people`);
+    }
+  }
 });
 
 await section("server", async () => {

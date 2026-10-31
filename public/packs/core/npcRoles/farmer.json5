@@ -1,0 +1,10 @@
+// Works the land round a farmhouse.
+{
+  title: "Farmer",
+  outfit: "worker",
+  buildings: ["farmhouse"],
+  ages: ["adult", "old"],
+  stand: [{ at: "door" }],
+  questGiver: 0.5,
+  barks: "farmer",
+}

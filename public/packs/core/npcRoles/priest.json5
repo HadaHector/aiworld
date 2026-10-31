@@ -1,0 +1,11 @@
+// Keeps the chapel.
+{
+  title: "Priest",
+  outfit: "apprentice",
+  buildings: ["chapel"],
+  livesAtWork: true,
+  ages: ["adult", "old"],
+  stand: [{ building: "chapel", room: "nave" }, { building: "chapel" }],
+  questGiver: 0.5,
+  barks: "priest",
+}

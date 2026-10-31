@@ -1,0 +1,10 @@
+// A craftsman and the youngster learning the trade.
+{
+  kind: "across",
+  count: [0, 1],
+  older: 1,
+  sides: [
+    { name: "master", ages: ["adult", "old"], roles: ["smith", "innkeeper", "shopkeeper", "priest"], call: { male: "master", female: "mistress" } },
+    { name: "apprentice", ages: ["young"], call: { male: "apprentice", female: "apprentice" } },
+  ],
+}

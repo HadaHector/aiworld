@@ -138,7 +138,15 @@ function buildWord(rng: () => number, voice: Voice, syllables: number): string {
   return word;
 }
 
-function buildName(rng: () => number, voice: Voice): string {
+/** A person's name in a voice (NPCS.md, *Names*): two syllables, and no longer than `maxLength`
+ *  where a few tries allow - a name is said often, and a three-syllable place name reads as a title. */
+export function personName(rng: () => number, voice: Voice, maxLength = 8): string {
+  let word = buildWord(rng, voice, 2);
+  for (let i = 0; i < 6 && word.length > maxLength; i++) word = buildWord(rng, voice, 2);
+  return capitalise(word);
+}
+
+export function buildName(rng: () => number, voice: Voice): string {
   const syllables = 2 + (rng() < voice.thirdSyllableChance ? 1 : 0);
   let word = buildWord(rng, voice, syllables);
   // Three syllables of a long-vowel voice can run well past readable; fall back rather than clip,
