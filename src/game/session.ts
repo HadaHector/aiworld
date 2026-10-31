@@ -32,6 +32,7 @@ import { createMenuBar } from "../ui/menuBar";
 import { createActionBar } from "../ui/actionBar";
 import { createSpellBook } from "../ui/spellBook";
 import { dock, type Hud } from "../ui/hud";
+import { BUTTON_CLASS, DIM, GOLD, HEADING, PANEL, TITLE_FONT } from "../ui/theme";
 import { createHealthBars, type HealthBars } from "./healthBars";
 import { nextEnemy } from "./targeting";
 import { EVENT_KIND } from "../sim/skills/events";
@@ -69,6 +70,10 @@ export interface SessionOptions {
   /** Who plays: a quick, unsaved character made from these (`?play`), or a saved one by id, chosen
    *  from the connection's character list (FRONTEND.md, *Handshake*). */
   enter: { quick: QuickCharacter } | { character: string; dimension?: string };
+  /** Leaves the game from its pause menu: to the world's characters, or the main menu (FRONTEND.md,
+   *  *In the game*). Left out - a quick game - the menu offers the main menu by reloading the page
+   *  without `?play`. */
+  leave?: (toMenu: boolean) => void;
 }
 
 /** One world being played: what `dispose` takes down again, leaving the page as it found it. */
@@ -152,6 +157,11 @@ export async function startSession(page: Page, options: SessionOptions): Promise
   let targetId = 0;
   /** Why the server last refused what was asked - entering the world, above all. */
   let refusal = "";
+  /** The pause menu is open (FRONTEND.md, *In the game*); the world waits meanwhile, as single
+   *  player has its server in the page. */
+  let menuOpen = false;
+  const pausable = true;
+  const paused = (): boolean => menuOpen && pausable;
 
   /** Applies whatever the server has said since last time - where the player is now, above all. */
   function takeServerMessages(): void {
@@ -169,6 +179,15 @@ export async function startSession(page: Page, options: SessionOptions): Promise
         playerId = message.playerId;
         const look = message.look;
         Object.assign(playerLook, { race: look.race || "human", outfit: look.outfit || "scout", sex: look.sex || undefined, seed: look.seed, choices: look.choices });
+        // The action bar as the character left it (its record's `interface`).
+        try {
+          const kept = message.interface ? (JSON.parse(message.interface) as { actionBar?: unknown }) : {};
+          if (kept.actionBar) actionBar.setLayout(JSON.stringify(kept.actionBar));
+        } catch {
+          // Not a layout: the default bar.
+        }
+      } else if (message.type === "saved") {
+        savedMark.show();
       } else if (message.type === "refused") {
         refusal = message.reason;
       } else if (message.type === "transfer") {
@@ -327,6 +346,8 @@ export async function startSession(page: Page, options: SessionOptions): Promise
     const v = view;
     if (!v) return;
     const { world, character, camera, spectator } = v;
+    // Paused, the server is not stepped and nothing is asked of it: the world waits.
+    if (paused()) return;
     const deltaSeconds = engine.getDeltaTime() / 1000;
     // The world streams, and its weather and light follow, wherever is being looked from: the player,
     // or the spectator camera while it flies.
@@ -491,7 +512,7 @@ export async function startSession(page: Page, options: SessionOptions): Promise
     else sendItem({ type: "lootOpen", entity: id });
   }
   listenWindow("keydown", (e) => {
-    if (!view || entering || e.repeat) return;
+    if (!view || entering || menuOpen || e.repeat) return;
     if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement) return;
     if (e.key.toLowerCase() === "e") interact();
   });
@@ -535,6 +556,8 @@ export async function startSession(page: Page, options: SessionOptions): Promise
     setAttacking: (on) => client.send({ type: "attack", on }),
     useItem: (bagSlot) => sendItem({ type: "itemUse", from: { container: 0, slot: bagSlot } }),
     teleport: (byKey) => aimTeleport(byKey),
+    // A saved character's layout goes to its record; a quick one's stays in this browser.
+    onSave: quick ? undefined : (json) => client.send({ type: "saveInterface", value: JSON.stringify({ actionBar: JSON.parse(json) }) }),
   });
   const spellBook = createSpellBook({
     game: gameRules,
@@ -545,7 +568,7 @@ export async function startSession(page: Page, options: SessionOptions): Promise
     teleport: () => aimTeleport(false),
   });
   listenWindow("keydown", (e) => {
-    if (!view || entering || e.repeat) return;
+    if (!view || entering || menuOpen || e.repeat) return;
     if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement) return;
     if (e.key.toLowerCase() === "l") spellBook.toggle();
   });
@@ -577,7 +600,7 @@ export async function startSession(page: Page, options: SessionOptions): Promise
     }
   });
   listenWindow("keydown", (e) => {
-    if (!view || entering || e.repeat) return;
+    if (!view || entering || menuOpen || e.repeat) return;
     if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement) return;
     if (e.key.toLowerCase() === "p") progressPanel.toggle();
     if (e.key.toLowerCase() === "k") ruleBook.toggle();
@@ -624,7 +647,7 @@ export async function startSession(page: Page, options: SessionOptions): Promise
   }
   hud.debug.tools.style.flexDirection = "row";
   listenWindow("keydown", (e) => {
-    if (!view || entering || e.repeat) return;
+    if (!view || entering || menuOpen || e.repeat) return;
     if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement) return;
     if (e.key.toLowerCase() === "o") hud.optionsVisible = !hud.optionsVisible;
     if (e.key === "F2") {
@@ -643,11 +666,18 @@ export async function startSession(page: Page, options: SessionOptions): Promise
       return;
     }
     if (e.key === "Escape") {
-      if (teleportArmed) setTeleportArmed(false);
+      // Closed in order: the menu's own options, the menu; the aimed teleport, the cast, the target,
+      // the open windows - and with nothing left to close, the menu opens.
+      if (menuOpen) {
+        if (hud.optionsVisible) hud.optionsVisible = false;
+        else setMenu(false);
+      } else if (teleportArmed) setTeleportArmed(false);
       else if (mirror.entities.get(playerId)?.cast) client.send({ type: "stopCast" });
       else if (targetId) setTarget(0);
+      else if (!closeWindows()) setMenu(true);
       return;
     }
+    if (menuOpen) return;
     if (e.repeat) return;
     // The action bar's keys: 1-9, 0, - and =. The attack is on the bar too (its first slot to begin with).
     const slot = actionBar.keys.indexOf(e.key);
@@ -957,7 +987,7 @@ export async function startSession(page: Page, options: SessionOptions): Promise
   };
 
   listenWindow("keydown", (e) => {
-    if (!view || entering) return;
+    if (!view || entering || menuOpen) return;
     if (e.key.toLowerCase() === "m") {
       view.debugMap.toggle();
     }
@@ -965,6 +995,86 @@ export async function startSession(page: Page, options: SessionOptions): Promise
       view.textureBrowser.toggle();
     }
   });
+
+  /** Closes every open window; whether any was. */
+  function closeWindows(): boolean {
+    let closed = false;
+    for (const w of [inventory, spellBook, progressPanel, ruleBook, entityPanel]) {
+      if (!w.visible) continue;
+      w.toggle();
+      closed = true;
+    }
+    if (belongings.loot) {
+      client.send({ type: "lootClose" });
+      closed = true;
+    }
+    if (hud.optionsVisible) {
+      hud.optionsVisible = false;
+      closed = true;
+    }
+    return closed;
+  }
+
+  // The pause menu (FRONTEND.md, *In the game*): under the windows region, so Options shows over it.
+  const pauseMenu = document.createElement("div");
+  pauseMenu.style.cssText = "position: fixed; inset: 0; z-index: 930; display: none; align-items: center; justify-content: center; background: rgba(6, 5, 3, 0.55);";
+  document.body.appendChild(pauseMenu);
+  {
+    const panel = document.createElement("div");
+    panel.style.cssText = `${PANEL} padding: 16px 20px; width: 240px; display: flex; flex-direction: column; gap: 8px;`;
+    pauseMenu.appendChild(panel);
+    const title = document.createElement("div");
+    title.style.cssText = `${HEADING} font: 600 20px ${TITLE_FONT}; color: ${GOLD}; margin: 0 0 4px; text-align: center;`;
+    title.textContent = "Paused";
+    panel.appendChild(title);
+    const note = document.createElement("div");
+    note.style.cssText = `font: 12px/1.4 sans-serif; color: ${DIM}; text-align: center; margin-bottom: 4px;`;
+    note.textContent = pausable ? "The world waits while this is open." : "The world goes on while this is open.";
+    panel.appendChild(note);
+    const button = (label: string, act: () => void): void => {
+      const b = document.createElement("button");
+      b.className = BUTTON_CLASS;
+      b.style.cssText = "font-size: 14px; padding: 9px 14px;";
+      b.textContent = label;
+      b.addEventListener("click", act);
+      panel.appendChild(b);
+    };
+    button("Resume", () => setMenu(false));
+    button("Options", () => (hud.optionsVisible = !hud.optionsVisible));
+    const leave = options.leave;
+    if (leave) {
+      button("Log out", () => leave(false));
+      button("Exit to menu", () => leave(true));
+    } else {
+      // A quick game has no characters to go back to: the menu is the page without `?play`.
+      button("Main menu", () => location.assign(location.pathname));
+    }
+  }
+  function setMenu(open: boolean): void {
+    menuOpen = open;
+    pauseMenu.style.display = open ? "flex" : "none";
+    if (!open) hud.optionsVisible = false;
+  }
+
+  // "Saved", faded in and out at the top right after the server writes the character.
+  const savedMark = (() => {
+    const mark = document.createElement("div");
+    mark.style.cssText = `font: 600 12px ${TITLE_FONT}; color: ${GOLD}; text-shadow: 0 1px 2px #000; opacity: 0; transition: opacity 0.6s ease; pointer-events: none;`;
+    mark.textContent = "Saved";
+    dock(mark, hud.info);
+    let timer = 0;
+    unlisten.push(() => {
+      clearTimeout(timer);
+      mark.remove();
+    });
+    return {
+      show(): void {
+        mark.style.opacity = "1";
+        clearTimeout(timer);
+        timer = window.setTimeout(() => (mark.style.opacity = "0"), 1800);
+      },
+    };
+  })();
 
   /** The dimension last entered, by id. */
   let currentDimension = "";
@@ -992,7 +1102,7 @@ export async function startSession(page: Page, options: SessionOptions): Promise
     }
   }
   if (!pendingTransfer) {
-    listening.abort();
+    disposeAll();
     page.failLoading("The character could not enter the world", new Error(refusal || "The server sent no dimension to enter."));
   }
   // A saved world is written when the page is hidden: the tab may be closed next.
@@ -1016,27 +1126,31 @@ export async function startSession(page: Page, options: SessionOptions): Promise
   return {
     feedback,
     goto: (target) => view?.gotoView(target),
-    dispose() {
-      listening.abort();
-      engine.stopRenderLoop(render);
-      // The server saves the character, lets it go and drops the dimensions nobody is left in; the
-      // connection stays, back at its character list.
-      client.send({ type: "logout" });
-      for (const extra of extraPlayers) extra.close();
-      server.step(0);
-      for (const stop of unlisten.splice(0)) stop();
-      leave();
-      entityPanel.dispose();
-      inventory.dispose();
-      lootWindow.dispose();
-      combatHud.dispose();
-      actionBar.dispose();
-      spellBook.dispose();
-      progressPanel.dispose();
-      ruleBook.dispose();
-      menuBar.dispose();
-      feedback.dispose();
-      delete (window as unknown as { __aiworld?: unknown }).__aiworld;
-    },
+    dispose: disposeAll,
   };
+
+  /** Takes the session down - when it ends, or when the server would not let its character in. */
+  function disposeAll(): void {
+    listening.abort();
+    engine.stopRenderLoop(render);
+    // The server saves the character, lets it go and drops the dimensions nobody is left in; the
+    // connection stays, back at its character list.
+    client.send({ type: "logout" });
+    for (const extra of extraPlayers) extra.close();
+    server.step(0);
+    for (const stop of unlisten.splice(0)) stop();
+    leave();
+    entityPanel.dispose();
+    inventory.dispose();
+    lootWindow.dispose();
+    combatHud.dispose();
+    actionBar.dispose();
+    spellBook.dispose();
+    progressPanel.dispose();
+    ruleBook.dispose();
+    menuBar.dispose();
+    feedback.dispose();
+    delete (window as unknown as { __aiworld?: unknown }).__aiworld;
+    pauseMenu.remove();
+  }
 }

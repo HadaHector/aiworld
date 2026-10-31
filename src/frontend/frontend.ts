@@ -616,9 +616,27 @@ export function createFrontend(options: FrontendOptions): Frontend {
     showMenu(false);
     // Wait for a showcase still building to be done and gone: two worlds at once is too much memory.
     await building;
+    const id = world.id;
+    const name = characters.find((c) => c.id === character)?.name ?? "";
     loadingScreen.show();
-    loadingScreen.update(`Entering ${world.name}`, 0, 0);
-    session = await startSession(page, { connection, enter: { character } });
+    loadingScreen.setHeading(`Entering ${world.name}${name ? ` as ${name}` : ""}`);
+    loadingScreen.update("Reading the character", 0, 0);
+    // A world that will not load, or a character the server will not let in, goes back to the list.
+    loadingScreen.onBack(() => {
+      loadingScreen.hide();
+      showMenu(true);
+      void charactersScreen(id, character);
+    });
+    try {
+      session = await startSession(page, { connection, enter: { character }, leave: (toMenu) => void leaveGame(toMenu) });
+    } catch (error) {
+      // The loading screen says why, with its button back to the list.
+      console.warn("The game could not start:", error);
+      inGame = false;
+      return;
+    }
+    loadingScreen.setHeading("");
+    loadingScreen.onBack(null);
     options.onSession(session);
   }
 

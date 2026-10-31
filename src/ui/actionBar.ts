@@ -9,8 +9,8 @@ import { GOLD, SLOT, SLOT_CLASS } from "./theme";
  * The action bar: twelve slots on keys 1-9, 0, - and =, each holding a spell, the attack toggle or
  * an item to use (bread). The player arranges it: drag from the spell book or the bag onto a slot,
  * drag a slot onto another to swap them, off the bar to clear it. Spells learned later go into the
- * first free slot. The layout is kept per character in this browser - a character save will hold it
- * later.
+ * first free slot. A saved character's layout is kept in its record (FRONTEND.md, *Saves*: the
+ * `interface`); a quick game's in this browser.
  */
 export type BarAction = { kind: "skill"; skill: string } | { kind: "item"; item: string } | { kind: "attack" } | { kind: "teleport" };
 
@@ -20,6 +20,9 @@ export interface ActionBar {
   press: (slot: number, byKey?: boolean) => void;
   /** The key that uses slot n, as shown on it. */
   readonly keys: readonly string[];
+  /** Puts a layout kept elsewhere on the bar - a saved character's, once the server has sent it -
+   *  as JSON text from `onSave`; text that is not a layout leaves the bar as it is. */
+  setLayout: (json: string) => void;
   /** Fits the slots into a width (the HUD's layout pass). */
   fitWidth: (width: number) => void;
   /** Redraws cooldowns and counts - each frame. */
@@ -33,8 +36,10 @@ export interface ActionBarOptions {
   mirror: EntityMirror;
   belongings: BelongingsMirror;
   ownId: () => number;
-  /** Who the layout belongs to: one is kept per key. */
+  /** Who the layout belongs to: one is kept per key, in this browser - unless `onSave` keeps it. */
   character: string;
+  /** Keeps the layout somewhere else (a saved character's record), as JSON text, whenever it changes. */
+  onSave?: (json: string) => void;
   cast: (skill: number) => void;
   setAttacking: (on: boolean) => void;
   /** Uses an item from a bag slot. */
@@ -77,16 +82,25 @@ export function createActionBar(parent: HTMLElement, options: ActionBarOptions):
   const { game, items, mirror, belongings } = options;
   const key = STORAGE + options.character;
   let saved: Saved = { slots: [{ kind: "attack" }, ...new Array(KEYS.length - 1).fill(null)], seen: [] };
-  try {
-    const raw = localStorage.getItem(key);
-    if (raw) {
-      const parsed = JSON.parse(raw) as Saved;
-      if (Array.isArray(parsed.slots) && Array.isArray(parsed.seen)) saved = { slots: KEYS.map((_, i) => parsed.slots[i] ?? null), seen: parsed.seen };
+  const read = (raw: string | null): boolean => {
+    try {
+      const parsed = raw ? (JSON.parse(raw) as Saved) : null;
+      if (!parsed || !Array.isArray(parsed.slots) || !Array.isArray(parsed.seen)) return false;
+      saved = { slots: KEYS.map((_, i) => parsed.slots[i] ?? null), seen: parsed.seen };
+      return true;
+    } catch {
+      return false;
     }
-  } catch {
-    // Nothing kept, or storage closed: the default bar.
+  };
+  if (!options.onSave) {
+    try {
+      read(localStorage.getItem(key));
+    } catch {
+      // Nothing kept, or storage closed: the default bar.
+    }
   }
   const save = (): void => {
+    if (options.onSave) return options.onSave(JSON.stringify(saved));
     try {
       localStorage.setItem(key, JSON.stringify(saved));
     } catch {
@@ -279,6 +293,9 @@ export function createActionBar(parent: HTMLElement, options: ActionBarOptions):
     element: root,
     keys: KEYS,
     press,
+    setLayout(json) {
+      if (read(json)) draw();
+    },
     fitWidth(width) {
       // Twelve slots and their gaps within the width, from 56 px down to 34.
       const fit = Math.max(34, Math.min(56, Math.floor((width - (KEYS.length - 1) * 4) / KEYS.length)));

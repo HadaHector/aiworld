@@ -7,7 +7,7 @@ progression panel and the rule book. This step adds what comes before and around
 a main menu, worlds, characters with a creation screen, saving and loading them, a pause menu, and
 logging out. The quest log comes after step 9, which has the quests to put in it.
 
-**Status: in progress.** Approved; steps 1 to 4 done (see [As built](#as-built)).
+**Status: in progress.** Approved; steps 1 to 5 done (see [As built](#as-built)).
 
 ## Decisions
 
@@ -396,7 +396,7 @@ Each step leaves the game working: the dev server, `npm run probe`, `npm run ser
    the other sessions.
 4. **Character creation: done.** The character list, the stage and preview, origins, the look choosers,
    appearance overrides and hair styles (with the workbench's choosers), and names.
-5. **In the game.** The pause menu, logging out and exiting, the "Saved" mark, the action bar's
+5. **In the game: done.** The pause menu, logging out and exiting, the "Saved" mark, the action bar's
    layout in the record, the loading screen's heading and *Back to menu*, and pausing single player.
 6. **Sounds and Join.** The UI cues and their sounds, and *Join a server* through the handshake to
    its stub failure, with the mismatch screen.
@@ -569,6 +569,31 @@ Each step leaves the game working: the dev server, `npm run probe`, `npm run ser
   - **Not done:** the workbench's Model view has no choosers yet (the plan had them); a people with
     no race does not offer a free race choice (no core people lacks one); idle fidgets are a slow
     sway rather than separate moves.
+
+- **Step 5.**
+  - **The pause menu** is part of the session: a dimmed overlay under the windows region, so
+    Options shows over it.
+    - Escape closes things in order: the aimed teleport, the cast, the target, the open windows
+      (inventory, spell book, progression, rule book, inspector, loot, options). With nothing left
+      to close, it opens the menu; Escape again closes the menu (its Options first).
+    - The menu has *Resume*, *Options*, *Log out* (to the world's characters) and *Exit to menu* (to
+      the main menu): the front end's `leaveGame`, given to the session as `leave`.
+    - A quick `?play` game, with no characters to go back to, offers *Main menu*, which loads the
+      page without `?play`.
+  - **Pausing.** While the menu is open the frame steps nothing and sends no intents, so the world
+    clock stands still. Checked: 0 s of world time passed in 1.5 s paused, and 1.02 s passed in the
+    second after resuming. The game's other keys are ignored meanwhile.
+  - **"Saved"** fades in at the top right, under the zone name, whenever the server answers a
+    write of the character (`saved`): an autosave, a level, a death, a travel.
+  - **The action bar's layout** is the record's `interface`, as `{ actionBar: ... }`. The bar gained
+    `onSave` (to send `saveInterface`) and `setLayout` (fed from Entered). Quick games keep theirs in
+    `localStorage` as before. Checked: a layout changed in the store came back on entering.
+  - **The loading screen** gained a heading ("Entering Pause Test as Pia") and *Back to menu*,
+    which a failure shows when the front end gave it somewhere to go back to. A character the server
+    refuses ("That character's save is missing.") stops there, and the button goes back to the
+    world's list. The session now tears itself down fully in that case too (`disposeAll`).
+  - Not done: "pausable" is always true, as single player is all there is; a server would say in
+    Welcome that it does not pause.
 
 ## Later
 

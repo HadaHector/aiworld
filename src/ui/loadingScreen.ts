@@ -6,6 +6,11 @@ export interface LoadingScreen {
   show: () => void;
   /** Stops on a failure: `title` in place of the phase, and `lines` listed under it. */
   fail: (title: string, lines: string[]) => void;
+  /** A line under the title - "Entering Oakvale as Brynja" - or "" for none. */
+  setHeading: (text: string) => void;
+  /** Where a failure can go back to: a button under it that calls this (and puts the screen back
+   *  as it was); null for none - a failure then stays. */
+  onBack: (back: (() => void) | null) => void;
 }
 
 /**
@@ -26,6 +31,23 @@ export function createLoadingScreen(): LoadingScreen {
   /** When it was last shown: the times it reads out count from here. */
   let shownAt = 0;
   let hideTimer = 0;
+  // Made here rather than in index.html: only the front end uses them.
+  const heading = document.createElement("div");
+  heading.style.cssText = "font-size: 15px; letter-spacing: 0.08em; opacity: 0.8; min-height: 1.4em;";
+  document.getElementById("loadingTitle")?.after(heading);
+  const backButton = document.createElement("button");
+  backButton.textContent = "Back to menu";
+  backButton.style.cssText = "display: none; font: 13px system-ui, sans-serif; padding: 6px 14px; cursor: pointer; background: #2b3a4a; color: #dfe6ee; border: 1px solid #5a7088; border-radius: 3px;";
+  root?.appendChild(backButton);
+  let back: (() => void) | null = null;
+  backButton.addEventListener("click", () => {
+    const go = back;
+    root?.classList.remove("failed");
+    backButton.style.display = "none";
+    const errors = document.getElementById("loadingErrors");
+    if (errors) errors.textContent = "";
+    go?.();
+  });
 
   function update(phase: string, completed: number, total: number): void {
     // Each phase's time in the console, for seeing where a slow start goes.
@@ -73,5 +95,15 @@ export function createLoadingScreen(): LoadingScreen {
     if (errors) errors.textContent = lines.join("\n");
   }
 
-  return { update, hide, show, fail };
+  return {
+    update,
+    hide,
+    show,
+    fail(title, lines) {
+      fail(title, lines);
+      if (back) backButton.style.display = "";
+    },
+    setHeading: (text) => void (heading.textContent = text),
+    onBack: (handler) => void (back = handler),
+  };
 }
