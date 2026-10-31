@@ -135,6 +135,8 @@ export const CLIENT_EVENTS = [
   // The front end (FRONTEND.md): menus and their choosers, a refusal, making a character, entering
   // the world and leaving it.
   "uiHover", "uiClick", "uiBack", "uiError", "uiSwatch", "characterCreated", "enterWorld", "logout",
+  // NPCs (NPCS.md, *Services*): talking to one, and what is done at one.
+  "talk", "shopBuy", "shopSell", "repair", "setHome",
 ] as const;
 export const EVENT_NAMES: readonly string[] = [...COMBAT_EVENT_KINDS, ...CLIENT_EVENTS];
 

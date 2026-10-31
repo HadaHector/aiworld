@@ -6,7 +6,7 @@ The first half of step 9 of [GAMEPLAY.md](GAMEPLAY.md)'s build order: the **star
 two are built in the order of [Steps](#steps) here and there, and together they reach the first
 milestone.
 
-**Status: in progress.** Steps 1 to 4 are done (see [As built](#as-built)).
+**Status: done.** Steps 1 to 5 (see [As built](#as-built)); the quests are [QUESTS.md](QUESTS.md).
 
 ## Decisions
 
@@ -520,6 +520,36 @@ Each leaves the game working: the dev server (`?play`), `npm run probe`, `npm ru
     killed then taken away, kept in the delta and back after its respawn, and dropped once the player
     leaves. The items probe banks at the innkeeper. In the page (`?play&config=small`) Nathcas has
     11 people about, with names, titles and bubbles over their bodies.
+- **Step 5.** Talking, trainers, the shop and the inn.
+  - **Talking:** right-click an NPC (or `__aiworld.npcs.talk(id)`) sends `talk`. The server checks it
+    is within `talkRange` (plus both radii), alive, and that the player's standing with it is
+    unfriendly or better; the NPC turns to the player and answers with `npcWindow`: a greeting (a
+    `click` bark), whether it trains, keeps the bank, mends, keeps an inn (and whether the character's
+    home is that inn), its stock with prices, and what it pays. The window (`src/ui/npcWindow.ts`, in
+    the HUD's windows) has a button per service, the stock with Buy, the bag with Sell, and the purse;
+    Escape closes it, and so does walking 8 m away. Every action checks reach and standing again.
+  - **Class trainers:** the `classTrainer` template, which `rules/progression.json5`'s `trainers`
+    names with `teaches: "class"`: it teaches what a character has unlocked to learn from a trainer,
+    only to characters of its own class (`otherClass` otherwise). The NPC system gives the entity its
+    class (`trainerClass`). *Train* opens the progression panel at that trainer. The placed trainer
+    is gone from the start.
+  - **The shop:** `vendorStocks/*.json5` (smith: swords and chestpieces up to item level 10, bracers
+    and gauntlets; general: bread and plain clothes; inn: bread and boar meat), read into the item
+    rules as `stocks`: `{ item }`, a template's generated types, or a kind, within `levels` and
+    `rarities` (common by default). Buying costs the item's value less the standing discount
+    (`rules/npcs.json5`'s `discounts`: 5% honoured, 10% revered, 20% exalted), paid only for what fits
+    in the bag. Selling pays `rules/items.json5`'s `sellRate` (0.25) of the value, by how worn it
+    is; quest items cannot be sold. `src/sim/items/shop.ts`.
+  - **Mending** at a smith is the item system's repair, paid for. **Home:** *Make this inn your home*
+    sets the character's home in front of the innkeeper (a quick character keeps it in memory), saved
+    at once; dying there comes back there.
+  - **Sounds:** client events `talk` (silent, as frequent UI sounds are), `shopBuy` and `shopSell`
+    (coins), `repair` (metal), `setHome` (a door); a refusal plays `uiError` and is said in the window.
+  - **Checked:** the NPCs probe's services: too far to talk, the smith's window with stock, greeting
+    and repair, turning to the player, no money no sale, bought and paid, sold for a share, mended for
+    money, the innkeeper's bank and inn, home made, said, and respawned at. The progression probe
+    learns Kick from the warriors' class trainer, and another class's trainer refuses. In the page the
+    smith's window shows its greeting, 17 things for sale and bread to sell.
 
 ## Later
 

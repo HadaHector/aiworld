@@ -35,4 +35,6 @@
   talkRange: 4,
   bark: { cooldown: 60, range: 8 },
   respawn: [120, 180],
+  // A vendor's discount by the buyer's standing with its faction (NPCS.md, *Factions*).
+  discounts: { honoured: 0.05, revered: 0.1, exalted: 0.2 },
 }

@@ -1,0 +1,7 @@
+// What an innkeeper sells: food and drink.
+{
+  items: [
+    { item: "bread", count: 5 },
+    { item: "boarMeat", count: 5 },
+  ],
+}

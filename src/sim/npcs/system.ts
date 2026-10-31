@@ -11,6 +11,8 @@ import type { BarkLine, NpcRoleDef, StandAnchor } from "../rules/npcRules";
 import type { WorldDelta } from "../creatures/worldDelta";
 import { EVENT_KIND, type CombatEvent } from "../skills/events";
 import { castForSettlement, type Cast, type CastContext, type CastNpc } from "./cast";
+import { standingBetween } from "../factions";
+import type { Text } from "../../core/text";
 
 /**
  * Settlements' people in the world (NPCS.md, *NPCs in the world*): each settlement near a player
@@ -28,7 +30,7 @@ export interface NpcWorld {
   /** The world's classes, for class trainers. */
   classes: readonly { id: string; name: string }[];
   /** Says a bark: its text as said, to the players near. */
-  bark(npc: Entity, text: string, to: readonly Entity[]): void;
+  bark(npc: Entity, text: Text, to: readonly Entity[]): void;
 }
 
 export interface NpcSystem {
@@ -39,11 +41,21 @@ export interface NpcSystem {
   combatEvents(events: readonly CombatEvent[]): void;
   /** The cast entry an NPC entity was made from. */
   npcOf(entity: Entity): CastNpc | undefined;
+  /** A player talks to an NPC (NPCS.md, *Services*): it turns to them and greets them, and says what
+   *  it offers - or why it will not talk (out of reach, dead, not friendly enough). */
+  talk(player: Entity, npc: Entity): NpcTalk | string;
   debug: {
     cast(dimension: string, siteId: number): Cast | null;
     /** The NPC entities standing in a dimension now. */
     active(dimension: string): Entity[];
   };
+}
+
+/** What talking to an NPC gives: its greeting, and its role's services as the role writes them. */
+export interface NpcTalk {
+  npc: CastNpc;
+  greeting: Text;
+  services: Readonly<Record<string, unknown>>;
 }
 
 /** Where an NPC stands, and which way it faces. */
@@ -269,6 +281,7 @@ export function createNpcSystem(rules: GameRules, world: NpcWorld): NpcSystem {
     entity.name = npc.name;
     entity.title = npc.title;
     entity.faction = state.folkOf(settlement.site);
+    if (npc.class) entity.trainerClass = npc.class;
     entity.look = { seed: npc.seed, race: npc.race, outfit: npc.outfit, sex: npc.sex, choices: { ...npc.choices } };
     let patrol: Patrol | null = null;
     if (role?.patrol && !spot.indoors) {
@@ -319,20 +332,21 @@ export function createNpcSystem(rules: GameRules, world: NpcWorld): NpcSystem {
     return fits.find((l) => (roll -= l.weight) < 0) ?? fits[0] ?? null;
   }
 
-  function say(state: DimensionState, settlement: Settlement, living: Living, when: BarkLine["when"], player: Entity | null): void {
+  /** A line for a moment, filled in: its relatives' names, its own, the settlement's, the player's. */
+  function line(state: DimensionState, settlement: Settlement, living: Living, when: BarkLine["when"], player: Entity | null): Text | null {
     const cast = settlement.cast!;
     const rng = mulberry32(deriveSeed(state.context.seed, Math.floor(world.time() * 10) + living.entity.id));
-    const line = chooseLine(living, when, rng);
-    if (!line) return;
-    const text = line.text.replace(/\{(call:)?([A-Za-z]+)\}/g, (whole, call: string | undefined, token: string) => {
-      if (call) return cast.npcs[living.npc.relations.find((r) => r.call === token)?.to ?? -1]?.given ?? whole;
-      if (token === "name") return living.npc.name;
-      if (token === "given") return living.npc.given;
-      if (token === "title") return living.npc.title;
-      if (token === "settlement") return settlement.site.name;
-      if (token === "player") return player?.name ?? "friend";
-      return whole;
-    });
+    const chosen = chooseLine(living, when, rng);
+    if (!chosen) return null;
+    // The template as written, and what fills it (QUESTS.md, *Text*): the reader's client words it.
+    const args: Record<string, string> = { name: living.npc.name, given: living.npc.given, title: living.npc.title, settlement: settlement.site.name, player: player?.name ?? "" };
+    for (const call of chosen.calls) args[`call:${call}`] = cast.npcs[living.npc.relations.find((r) => r.call === call)?.to ?? -1]?.given ?? "";
+    return { text: chosen.text, args };
+  }
+
+  function say(state: DimensionState, settlement: Settlement, living: Living, when: BarkLine["when"], player: Entity | null): void {
+    const text = line(state, settlement, living, when, player);
+    if (text === null) return;
     living.lastBark = world.time();
     if (player) {
       living.entity.facing = Math.atan2(player.x - living.entity.x, player.z - living.entity.z);
@@ -447,6 +461,22 @@ export function createNpcSystem(rules: GameRules, world: NpcWorld): NpcSystem {
       }
     },
     npcOf: (entity) => byEntity.get(entity.id)?.npc,
+    talk(player, npc) {
+      const living = byEntity.get(npc.id);
+      if (!living) return "notNpc";
+      if (npc.combat?.dead) return "dead";
+      const reach = npcRules.talkRange + npc.template.look.radius + player.template.look.radius;
+      if (npc.dimension !== player.dimension || Math.hypot(npc.x - player.x, npc.z - player.z) > reach) return "range";
+      const standing = standingBetween(rules.factions, { faction: player.faction ?? player.template.faction, standing: player.standing }, { faction: npc.faction ?? npc.template.faction });
+      if (standing < (rules.factions.tiers.find((t) => t.id === "unfriendly")?.from ?? 0)) return "unfriendly";
+      const state = states.get(npc.dimension)!;
+      const settlement = state.settlements.find((s) => s.living.get(living.npc.index) === living)!;
+      // It turns to whoever talks to it.
+      npc.facing = Math.atan2(player.x - npc.x, player.z - npc.z);
+      npc.body?.face(npc.facing);
+      const greeting = line(state, settlement, living, "click", player) ?? { text: "", args: {} };
+      return { npc: living.npc, greeting, services: roleOf(living.npc)?.services ?? {} };
+    },
     debug: {
       cast(dimension, siteId) {
         const state = states.get(dimension);

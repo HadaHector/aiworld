@@ -168,8 +168,9 @@ export interface ProgressionConfig {
   trainRange: number;
   /** Money to reset a tree: a formula of `spent`. */
   respecCost: CompiledFormula;
-  /** Templates that teach, by template id: the skills each teaches (null: any). */
-  trainers: Map<string, Set<number> | null>;
+  /** Templates that teach, by template id: the skills each teaches (null: any), or "class": what a
+   *  class trainer's class teaches, to characters of that class (NPCS.md, *Trainers*). */
+  trainers: Map<string, Set<number> | null | "class">;
   never: string[];
 }
 
@@ -769,6 +770,7 @@ function readConfig(entry: Entry | undefined, ctx: ReadContext, origins: OriginD
       const raw = reader.object(trainers[id], at);
       reader.onlyKeys(raw, at, ["teaches"]);
       if (raw.teaches === "*") config.trainers.set(id, null);
+      else if (raw.teaches === "class") config.trainers.set(id, "class");
       else {
         const skills = new Set<number>();
         reader.stringList(raw, "teaches", at).forEach((skillId, i) => {

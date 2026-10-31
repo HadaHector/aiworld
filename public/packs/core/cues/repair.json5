@@ -1,0 +1,2 @@
+// Gear mended at a smith (NPCS.md, *Services*): metal set right.
+{ parts: [{ sound: "equip.metal" }] }

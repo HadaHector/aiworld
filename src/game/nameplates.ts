@@ -35,9 +35,12 @@ interface Plate {
   barkUntil: number;
 }
 
-/** Who gets a plate: a living NPC with a name - not a player, a creature or a chest. */
-const shows = (entity: MirroredEntity): boolean =>
-  entity.templateId !== PLAYER_TEMPLATE && entity.template?.hostility === "friendly" && entity.title !== undefined && (entity.flags & (1 << FLAG.dead)) === 0 && entity.template?.faction !== "players";
+/** A settlement's person: friendly, and not of the players' side - not a player, a creature or a chest. */
+export const isNpc = (entity: MirroredEntity): boolean =>
+  entity.templateId !== PLAYER_TEMPLATE && entity.template?.hostility === "friendly" && entity.template?.faction !== "players";
+
+/** Who gets a plate: a living NPC. */
+const shows = (entity: MirroredEntity): boolean => isNpc(entity) && (entity.flags & (1 << FLAG.dead)) === 0;
 
 export function createNameplates(scene: Scene, mirror: EntityMirror, ownId: () => number): Nameplates {
   const layer = document.createElement("div");

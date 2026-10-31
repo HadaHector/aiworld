@@ -252,7 +252,44 @@ export interface SaveInterface {
   value: string;
 }
 
+/** Talks to an NPC (NPCS.md, *Services*): answered with NpcWindow, or NpcRefused. */
+export interface Talk {
+  type: "talk";
+  npc: number; // u32
+}
+
+/** Buys from an NPC's stock, by the entry's place in the NpcWindow's `stock`. */
+export interface ShopBuy {
+  type: "shopBuy";
+  npc: number; // u32
+  index: number; // u16
+}
+
+/** Sells what is in a bag slot to an NPC who buys (any vendor). */
+export interface ShopSell {
+  type: "shopSell";
+  npc: number; // u32
+  from: SlotRef;
+}
+
+/** Has an NPC who mends gear mend all of it. */
+export interface NpcRepair {
+  type: "npcRepair";
+  npc: number; // u32
+}
+
+/** Makes an innkeeper's inn the character's home: where it comes back when it dies. */
+export interface SetHome {
+  type: "setHome";
+  npc: number; // u32
+}
+
 export type ClientMessage =
+  | Talk
+  | ShopBuy
+  | ShopSell
+  | NpcRepair
+  | SetHome
   | Hello
   | Intent
   | Teleport
@@ -462,11 +499,47 @@ export interface Saved {
   type: "saved";
 }
 
+/** What talking to an NPC offers (NPCS.md, *Services*): its greeting, and its services - its stock
+ *  with prices, whether it teaches, keeps the bank, mends, or is an innkeeper (and whether the
+ *  character's home is its inn already). */
+export interface NpcWindow {
+  type: "npcWindow";
+  npc: number; // u32
+  /** A template and what fills it, as a bark's. */
+  greeting: string;
+  greetingArgs: Readonly<Record<string, string | number>>;
+  trainer: boolean;
+  banker: boolean;
+  repair: boolean;
+  innkeeper: boolean;
+  home: boolean;
+  /** Item type ids, how many a purchase gives, and what it costs. */
+  stock: { type: string; count: number; price: number }[];
+  /** What it pays for an item: this share of its value (by how worn it is). Zero: it does not buy. */
+  sellRate: number;
+}
+
+/** Something done at an NPC: bought, sold, mended, made home (for the window and the sounds). */
+export interface NpcDone {
+  type: "npcDone";
+  npc: number; // u32
+  what: "buy" | "sell" | "repair" | "home";
+}
+
+/** Why an NPC would not: out of reach, unfriendly, no money... */
+export interface NpcRefused {
+  type: "npcRefused";
+  npc: number; // u32
+  reason: string;
+}
+
 /** An NPC says something (NPCS.md, *Barks*): to the players near, as a bubble over its head. */
 export interface Bark {
   type: "bark";
   npc: number; // u32
+  /** A template and what fills it (QUESTS.md, *Text*): the client translates and fills it. */
   text: string;
+  args: Readonly<Record<string, string | number>>;
 }
 
 /** The player's standing with factions that keep reputation (NPCS.md, *Factions*): all of it on
@@ -826,6 +899,9 @@ export type ServerMessage =
   | Saved
   | Standing
   | Bark
+  | NpcWindow
+  | NpcDone
+  | NpcRefused
   | Progress
   | ProgressEvents
   | ContainerState

@@ -27,7 +27,8 @@ import { EVENT_KIND } from "./skills/events";
 import { exportBelongings, importBelongings } from "./items/save";
 import { startingPlace, startPoint } from "./spawn";
 import { chooseStarts, type ChosenStart } from "../world/settlements/starts";
-import { clampStanding, factionDef, standingWith } from "./factions";
+import { clampStanding, factionDef, standingWith, tierOf } from "./factions";
+import { buy, buyPrice, sell } from "./items/shop";
 import { createNpcSystem, type NpcSystem } from "./npcs/system";
 
 /** Where a body is to be made: a point, or (with `start`) the start of that id, once it is placed. */
@@ -71,6 +72,8 @@ export interface Player {
   ackSeq: number;
   /** The saved character it plays - null for a quick, unsaved one. */
   character: CharacterRecord | null;
+  /** A quick character's home, once it has made an inn its home (NPCS.md, *The inn*). */
+  quickHome?: { dimension: string; x: number; z: number };
   /** Seconds in the world since its record was last brought up to date. */
   playing: number;
 }
@@ -356,7 +359,7 @@ export function createServer(options: ServerOptions): Server {
     classes: (options.progression?.origins ?? []).filter((o) => o.slot === "class").map((o) => ({ id: o.id, name: o.name })),
     bark: (npc, text, to) => {
       const hearers = new Set(to.map((e) => e.id));
-      for (const connection of connections) if (connection.player && hearers.has(connection.player.entity.id)) connection.end.send({ type: "bark", npc: npc.id, text });
+      for (const connection of connections) if (connection.player && hearers.has(connection.player.entity.id)) connection.end.send({ type: "bark", npc: npc.id, text: text.text, args: text.args });
     },
   });
 
@@ -439,6 +442,68 @@ export function createServer(options: ServerOptions): Server {
     startsOf.delete(id);
     creatureSystem?.unload(id);
     npcSystem.unload(id);
+  }
+
+  /** What a player asks of an NPC (NPCS.md, *Services*): to talk, buy, sell, have gear mended, or
+   *  make its inn home. Each checks again that the NPC is near and will talk. */
+  function npcMessage(connection: Connection, player: Player, message: Extract<ClientMessage, { type: "talk" | "shopBuy" | "shopSell" | "npcRepair" | "setHome" }>): void {
+    const id = message.npc >>> 0;
+    const npc = loaded.get(player.entity.dimension)?.entities.get(id);
+    const talked = npc ? npcSystem.talk(player.entity, npc) : "notNpc";
+    const refuse = (reason: string): void => connection.end.send({ type: "npcRefused", npc: id, reason });
+    if (typeof talked === "string") return refuse(talked);
+    const services = talked.services;
+    const stock = typeof services.vendor === "string" ? options.items?.stocks.get(services.vendor) : undefined;
+    const ctx = itemSystem?.ctx;
+    const standing = standingWith(rules.factions, { faction: player.entity.template.faction, standing: player.entity.standing }, npc!.faction ?? npc!.template.faction);
+    const discount = rules.npcs.discounts[tierOf(rules.factions, standing).id] ?? 0;
+    const home = player.character?.travel.home ?? player.quickHome;
+    switch (message.type) {
+      case "talk": {
+        connection.end.send({
+          type: "npcWindow",
+          npc: id,
+          greeting: talked.greeting.text,
+          greetingArgs: talked.greeting.args,
+          trainer: progression?.rules.config.trainers.has(npc!.template.id) ?? false,
+          banker: options.items?.entities.get(npc!.template.id)?.banker ?? false,
+          repair: services.repair === true,
+          innkeeper: services.innkeeper === true,
+          home: !!home && home.dimension === npc!.dimension && Math.hypot(home.x - npc!.x, home.z - npc!.z) < 12,
+          stock: stock && ctx ? stock.items.map((e) => ({ type: ctx.items.types[e.type].id, count: e.count, price: buyPrice(ctx, e, discount) })) : [],
+          sellRate: stock && options.items ? options.items.config.sellRate : 0,
+        });
+        return;
+      }
+      case "shopBuy": {
+        if (!stock || !ctx || !itemSystem) return refuse("notVendor");
+        const why = buy(ctx, player.entity, stock, message.index >>> 0, discount, () => Math.floor(Math.random() * 4294967296) >>> 0);
+        if (why) return refuse(why);
+        break;
+      }
+      case "shopSell": {
+        if (!stock || !ctx) return refuse("notVendor");
+        const why = sell(ctx, player.entity, { container: message.from?.container >>> 0, slot: message.from?.slot >>> 0 });
+        if (why) return refuse(why);
+        break;
+      }
+      case "npcRepair": {
+        if (services.repair !== true || !itemSystem) return refuse("notSmith");
+        const why = itemSystem.repair(player.entity);
+        if (why) return refuse(why);
+        break;
+      }
+      case "setHome": {
+        if (services.innkeeper !== true) return refuse("notInnkeeper");
+        // In front of where the innkeeper stands: in its inn.
+        const at = { dimension: npc!.dimension, x: npc!.x + Math.sin(npc!.facing) * 1.5, z: npc!.z + Math.cos(npc!.facing) * 1.5 };
+        if (player.character) player.character.travel.home = at;
+        else player.quickHome = at;
+        if (player.character) void writeCharacter(player, connection);
+        break;
+      }
+    }
+    connection.end.send({ type: "npcDone", npc: id, what: message.type === "shopBuy" ? "buy" : message.type === "shopSell" ? "sell" : message.type === "npcRepair" ? "repair" : "home" });
   }
 
   /** Takes a player out of where it is and sends it to a dimension, at a point or a start. */
@@ -861,6 +926,14 @@ export function createServer(options: ServerOptions): Server {
         if (player && progression) progression.reset(player.entity, message.tree >>> 0);
         return;
       }
+      case "talk":
+      case "shopBuy":
+      case "shopSell":
+      case "npcRepair":
+      case "setHome": {
+        if (player && body) npcMessage(connection, player, message);
+        return;
+      }
       case "learn": {
         const trainer = player && loaded.get(player.entity.dimension)?.entities.get(message.trainer >>> 0);
         if (!player || !progression || !trainer || !rules.skills[message.skill]) return;
@@ -905,7 +978,7 @@ export function createServer(options: ServerOptions): Server {
       case "respawn": {
         if (!player?.entity.combat?.dead || !body) return;
         // Home, if it is in this dimension; else its first start's home, or its spawn.
-        const home = player.character?.travel.home;
+        const home = player.character?.travel.home ?? player.quickHome;
         const here = player.entity.dimension;
         const spawn = home && home.dimension === here ? home : (startsOf.get(here)?.[0]?.home ?? definitions.get(here)?.spawn ?? start.spawn);
         skills.revive(player.entity);

@@ -1,0 +1,2 @@
+// An inn made home (NPCS.md, *The inn*): a door closing behind you.
+{ parts: [{ sound: "ui.logout" }] }

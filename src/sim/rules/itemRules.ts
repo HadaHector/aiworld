@@ -141,6 +141,14 @@ export interface ItemConfig {
   lootRange: number;
   groundLifetime: number;
   maxGenerated: number;
+  /** A shop buys an item for this share of its value (NPCS.md, *The vendor's shop*). */
+  sellRate: number;
+}
+
+/** What a vendor sells (NPCS.md, *The vendor's shop*): item types, each sold `count` at a time. */
+export interface VendorStock {
+  id: string;
+  items: { type: number; count: number }[];
 }
 
 /**
@@ -168,6 +176,8 @@ export interface ItemRules {
   generated: ReadonlyMap<string, number[]>;
   /** Entity templates with an `items` field, by template id. */
   entities: ReadonlyMap<string, EntityItemsDef>;
+  /** `vendorStocks/`, by id. */
+  stocks: ReadonlyMap<string, VendorStock>;
   config: ItemConfig;
   /** Every skill items name, where - the skill rules check them (`checkSkillRefs`). */
   abilityRefs: { file: string; path: string; id: string }[];
@@ -324,6 +334,10 @@ export function resolveItemRules(packs: PackSource[], game: GameRules, seed: num
     entities.set(template.id, readEntityItems(template.items, reader, typeIndex, tableIds));
   }
 
+  // --- vendors' stocks ---
+  const stocks = new Map<string, VendorStock>();
+  for (const entry of entries("vendorStocks")) stocks.set(entry.id, readStock(entry, new Reader(issues, entry.file), { types, typeIndex, generated, rarityIndex }));
+
   if (issues.length > 0) {
     // A broken template reports the same problem once for every type it makes: once is enough.
     const seen = new Set<string>();
@@ -344,6 +358,7 @@ export function resolveItemRules(packs: PackSource[], game: GameRules, seed: num
     lootTables,
     generated,
     entities,
+    stocks,
     config,
     abilityRefs: context.abilityRefs,
     statCount: game.stats.length,
@@ -352,10 +367,60 @@ export function resolveItemRules(packs: PackSource[], game: GameRules, seed: num
   };
 }
 
+/** How many types one stock entry may bring at most: a template makes many. */
+const STOCK_ENTRY_MAX = 12;
+
+/**
+ * One `vendorStocks/<id>.json5`: a list of what is sold - `{ item: id }`, an item template's
+ * generated types (`{ template: id }`) or every type of a kind (`{ kind: "food" }`), the last two
+ * kept to `levels` (item levels, both ends in) and `rarities` (common if left out); each with an
+ * optional `count` sold at a time.
+ */
+function readStock(entry: Entry, reader: Reader, ctx: { types: ItemTypeDef[]; typeIndex: ReadonlyMap<string, number>; generated: ReadonlyMap<string, number[]>; rarityIndex: ReadonlyMap<string, number> }): VendorStock {
+  const obj = reader.object(entry.data, "");
+  reader.onlyKeys(obj, "", ["items"]);
+  const items: VendorStock["items"] = [];
+  reader.array(obj, "items", "").forEach((value, i) => {
+    const path = `items[${i}]`;
+    const raw = reader.object(value, path);
+    reader.onlyKeys(raw, path, ["item", "template", "kind", "levels", "rarities", "count"]);
+    const count = reader.optionalNumber(raw, "count", path, 1, { min: 1, integer: true });
+    if (raw.item !== undefined) {
+      const id = reader.string(raw, "item", path);
+      const type = ctx.typeIndex.get(id);
+      if (type === undefined) reader.fail(`${path}.item`, `no item "${id}"`);
+      else items.push({ type, count });
+      return;
+    }
+    const levels = raw.levels === undefined ? null : reader.range(raw, "levels", path, { allowEqual: true });
+    const rarityIds = raw.rarities === undefined ? ["common"] : reader.stringList(raw, "rarities", path);
+    const rarities = new Set(rarityIds.flatMap((r) => (ctx.rarityIndex.has(r) ? [ctx.rarityIndex.get(r)!] : (reader.fail(`${path}.rarities`, `no rarity "${r}"`), []))));
+    let pool: number[];
+    if (raw.template !== undefined) {
+      const id = reader.string(raw, "template", path);
+      pool = ctx.generated.get(id) ?? [];
+      if (!ctx.generated.has(id)) reader.fail(`${path}.template`, `no item template "${id}"`);
+    } else if (raw.kind !== undefined) {
+      const kind = reader.string(raw, "kind", path);
+      pool = ctx.types.filter((t) => t.kind === kind).map((t) => t.index);
+    } else {
+      reader.fail(path, "expected item, template or kind");
+      return;
+    }
+    const fits = pool
+      .map((i) => ctx.types[i])
+      .filter((t) => !t.quest && rarities.has(t.rarity) && (!levels || (t.itemLevel >= levels[0] && t.itemLevel <= levels[1])))
+      .sort((a, b) => a.itemLevel - b.itemLevel || a.value - b.value || a.index - b.index)
+      .slice(0, STOCK_ENTRY_MAX);
+    for (const t of fits) if (!items.some((x) => x.type === t.index)) items.push({ type: t.index, count });
+  });
+  return { id: entry.id, items };
+}
+
 function readConfig(entry: Entry | undefined, issues: ContentIssue[]): ItemConfig {
   const reader = new Reader(issues, entry?.file ?? "rules/items.json5");
   const obj = entry ? reader.object(entry.data, "") : {};
-  reader.onlyKeys(obj, "", ["wear", "repair", "bankRange", "pickUpRange", "lootRange", "groundLifetime", "maxGenerated"]);
+  reader.onlyKeys(obj, "", ["wear", "repair", "bankRange", "pickUpRange", "lootRange", "groundLifetime", "maxGenerated", "sellRate"]);
   const wear = obj.wear === undefined ? {} : reader.object(obj.wear, "wear");
   reader.onlyKeys(wear, "wear", ["onDeath", "onHit", "onHitTaken", "hitChance"]);
   const repair = obj.repair === undefined ? {} : reader.object(obj.repair, "repair");
@@ -374,6 +439,7 @@ function readConfig(entry: Entry | undefined, issues: ContentIssue[]): ItemConfi
     lootRange: reader.optionalNumber(obj, "lootRange", "", 4, { min: 0 }),
     groundLifetime: reader.optionalNumber(obj, "groundLifetime", "", 300, { min: 0 }),
     maxGenerated: reader.optionalNumber(obj, "maxGenerated", "", 2000, { min: 1, integer: true }),
+    sellRate: reader.optionalNumber(obj, "sellRate", "", 0.25, { min: 0, max: 1 }),
   };
 }
 

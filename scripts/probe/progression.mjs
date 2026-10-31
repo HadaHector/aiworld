@@ -409,10 +409,16 @@ await section("server", async () => {
   t.server.debug.progression.debugXp(b, R.disciplineIndex.get("adventure"), 1);
   check("banked class XP flows when the character levels", cls(b).banked === 0 && cls(b).xp > 0, JSON.stringify(cls(b)));
 
-  // A trainer: Kick at warrior class 3, for money, in range.
-  const trainer = [...t.server.debug.dimensions.get("mainland").entities.values()].find((e) => e.template.id === "trainer");
+  // A trainer: Kick at warrior class 3, for money, in range - from the warriors' class trainer in
+  // the starting village (NPCS.md, *Trainers*); another class's trainer will not.
+  const ownClass = R.origins[a.progress.origins.get("class")].id;
+  const trainers = t.server.debug.npcs.debug.active("mainland").filter((e) => e.template.id === "classTrainer");
+  const trainer = trainers.find((e) => e.trainerClass === ownClass);
+  const other = trainers.find((e) => e.trainerClass !== ownClass);
+  check("a class trainer for each class at the start", trainers.length === R.origins.filter((o) => o.slot === "class").length && trainer !== undefined, trainers.map((e) => e.trainerClass).join());
   t.server.debug.progression.debugLevel(a, R.disciplineIndex.get("class"), 3);
   const kick = t.rules.skillIndex.get("kick");
+  check("another class's trainer does not teach", t.server.debug.progression.train(a, other, kick) === "otherClass");
   t.clients[0].send({ type: "learn", trainer: trainer.id, skill: kick });
   await t.pump(2);
   check("trainer: out of range", !a.combat.spells.some((s) => s.skill === kick));

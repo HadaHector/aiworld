@@ -10,5 +10,6 @@
   level: "adventure",
   trainRange: 4,
   respec: { cost: 0 },
-  trainers: { trainer: { teaches: "*" } },
+  // Who teaches: the placed trainer anything; a class trainer (NPCS.md) its own class's characters.
+  trainers: { trainer: { teaches: "*" }, classTrainer: { teaches: "class" } },
 }

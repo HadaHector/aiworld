@@ -1,0 +1,6 @@
+// A class trainer (NPCS.md, *Trainers*): a settlement's person who teaches its own class's
+// characters what they have unlocked to learn from a trainer (rules/progression.json5's `trainers`).
+{
+  extends: "npc",
+  name: "Trainer",
+}

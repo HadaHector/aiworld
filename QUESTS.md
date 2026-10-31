@@ -8,7 +8,7 @@ translatable templates, "!" and "?" markers, a quest log and map markers, and re
 GAMEPLAY.md's 7-part *Test chain* must be one of the chains it can produce. Finishing it is the
 first milestone.
 
-**Status: planned.** Nothing here is built yet.
+**Status: in progress.** Step 6 is done (see [As built](#as-built)).
 
 ## Decisions
 
@@ -475,6 +475,18 @@ After NPCS.md's five steps. Each leaves the game working: the dev server (`?play
     way and continued. GAMEPLAY.md's step 9 and the first milestone marked done; FRONTEND.md's
     *Later* quest log, PROGRESSION.md's quest hook, ITEMS.md's shops, FEEDBACK.md's later events and
     `public/packs/README.md` updated.
+
+## As built
+
+- **Step 6, text.** `src/core/text.ts`. Where the build differs from the plan: **the English written
+  in the packs is the key**, as in gettext, rather than separate keys with an English file. A
+  language pack adds `text/<any>.json5` as `{ language: "hu", strings: { "Good day to you.": "..." } }`,
+  read into the game rules as `rules.text`. A `Text` is `{ text, args }`: the template as written
+  and what fills it; `fillText` does `{name}`, `{count, plural, one {# wolf} other {# wolves}}` and
+  `{sex, select, male {he} female {she} other {they}}`, and `renderText` translates first. Barks
+  and NPC greetings now go to the client as a template and arguments (`bark { text, args }`,
+  `npcWindow`'s `greeting` and `greetingArgs`), and the client words them. Only English plurals
+  so far; the language is always "en" until Options has a choice.
 
 ## Later
 

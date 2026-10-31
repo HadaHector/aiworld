@@ -2,6 +2,7 @@
 // starting village, now and then one elsewhere.
 {
   title: "{class} Trainer",
+  template: "classTrainer",
   outfit: "fromClass",
   perClass: { start: "all", other: [0, 1] },
   ages: ["adult", "old"],

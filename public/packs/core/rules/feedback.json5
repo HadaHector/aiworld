@@ -46,6 +46,13 @@
     characterCreated: [{ cue: "characterCreated" }],
     enterWorld: [{ cue: "enterWorld" }],
     logout: [{ cue: "logout" }],
+    // Talking to NPCs (NPCS.md, *Services*): talking itself is frequent, so silent for now; trade
+    // chinks, mending rings, making an inn home shuts a door.
+    talk: [],
+    shopBuy: [{ cue: "coins" }],
+    shopSell: [{ cue: "coins" }],
+    repair: [{ cue: "repair" }],
+    setHome: [{ cue: "setHome" }],
   },
   // Weapon kinds by item template or gear piece.
   weapons: { sword: "blade", greatsword: "blade", axe: "blade", dagger: "blade", mace: "blunt", hammer: "blunt", staff: "blunt" },

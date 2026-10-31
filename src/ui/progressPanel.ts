@@ -19,6 +19,9 @@ export interface ProgressPanel {
   readonly element: HTMLElement;
   readonly visible: boolean;
   toggle: () => void;
+  /** Opens it at a trainer the player talked to (NPCS.md, *Trainers*): that one is used while it is
+   *  in reach, over the nearest. */
+  train: (trainer: number) => void;
   dispose: () => void;
 }
 
@@ -45,6 +48,7 @@ const REFUSALS: Record<string, string> = {
   range: "The trainer is too far away.",
   notTrainer: "That is no trainer.",
   notTaught: "This trainer does not teach that.",
+  otherClass: "This trainer teaches another class.",
   points: "Not enough points.",
   tierLocked: "Spend more points in this tree first.",
   level: "Your level is too low for that tier.",
@@ -97,10 +101,15 @@ export function createProgressPanel(options: ProgressPanelOptions): ProgressPane
   const money = (n: number): string => formatMoney(items.currencies[items.main], n);
   const skillName = (skill: number): string => game.skills[skill]?.name ?? "?";
 
-  /** The nearest trainer in reach of the own player, from what the client sees. */
+  /** The trainer last talked to, kept while it is in reach. */
+  let chosen = 0;
+
+  /** The trainer talked to, or else the nearest in reach of the own player, from what the client sees. */
   function trainerInReach(): number {
     const me = entities.entities.get(options.ownId());
     if (!me) return 0;
+    const talked = entities.entities.get(chosen);
+    if (talked && Math.hypot(talked.x - me.x, talked.z - me.z) <= rules.config.trainRange + 1) return chosen;
     let best = 0;
     let nearest = rules.config.trainRange;
     for (const entity of entities.entities.values()) {
@@ -266,6 +275,11 @@ export function createProgressPanel(options: ProgressPanelOptions): ProgressPane
       return visible;
     },
     toggle,
+    train(id) {
+      chosen = id;
+      if (!visible) toggle();
+      else draw();
+    },
     dispose() {
       clearInterval(timer);
       root.remove();

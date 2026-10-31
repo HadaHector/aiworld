@@ -57,6 +57,8 @@ export interface Entity {
   progress?: ProgressPart;
   /** What it is, shown under its name: an NPC's role ("Innkeeper"); "" for none (NPCS.md). */
   title?: string;
+  /** A class trainer's class (NPCS.md, *Trainers*): it teaches characters of that class. */
+  trainerClass?: string;
   /** The faction it sides with, over its template's: a settlement's people are their zone's folk
    *  (`folk@mainland/3`, NPCS.md, *Factions*). */
   faction?: string;

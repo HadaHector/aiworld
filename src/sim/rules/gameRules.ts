@@ -1,3 +1,4 @@
+import { readTextTable, type TextTable } from "../../core/text";
 import { readNpcRules, type NpcRules } from "./npcRules";
 import { FACTION_BY_HOSTILITY, PLAYERS_FACTION, factionDef, readFactionRules, standingBetween, type FactionRules } from "../factions";
 import { ContentError, isObject, joinPath, Reader, type ContentIssue, type RawObject } from "../../world/content/contentReader";
@@ -169,6 +170,8 @@ export interface GameRules {
   factions: FactionRules;
   /** `npcRoles/`, `npcRelations/` and `rules/npcs.json5` (NPCS.md). */
   npcs: NpcRules;
+  /** `text/`: translations of the packs' English, by language (QUESTS.md, *Text*). */
+  text: TextTable;
   /** A hash of the tables' ids and visibility - in Welcome, so a client can tell its packs differ. */
   hash: number;
 }
@@ -300,6 +303,8 @@ export function resolveGameRules(packs: PackSource[]): GameRules {
 
   const npcs = readNpcRules(folders.get("rules")!.get("npcs"), entries("npcRoles"), entries("npcRelations"), entries("barks"), new Set(templates.keys()), issues);
 
+  const text = readTextTable(entries("text"), (file, message) => issues.push({ file, path: "", message }));
+
   if (issues.length > 0) throw new ContentError(issues);
 
   const signature = [
@@ -312,7 +317,7 @@ export function resolveGameRules(packs: PackSource[]): GameRules {
   ].join("|");
   return {
     stats, statOrder, modifierKinds, applyOrder, resources, templates, rawTemplates, statIndex, kindIndex, resourceIndex, health: health!,
-    skills, skillIndex, combat, factions, npcs, hash: hashString(signature),
+    skills, skillIndex, combat, factions, npcs, text, hash: hashString(signature),
   };
 }
 

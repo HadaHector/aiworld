@@ -289,7 +289,11 @@ export function createProgressionSystem(game: GameRules, rules: ProgressionRules
     train(entity, trainer, skill) {
       const teaches = rules.config.trainers.get(trainer.template.id);
       if (teaches === undefined) return "notTrainer";
-      if (teaches !== null && !teaches.has(skill)) return "notTaught";
+      // A class trainer teaches its own class's characters (NPCS.md, *Trainers*).
+      if (teaches === "class") {
+        const own = entity.progress?.origins.get("class");
+        if (own === undefined || rules.origins[own]?.id !== trainer.trainerClass) return "otherClass";
+      } else if (teaches !== null && !teaches.has(skill)) return "notTaught";
       if (trainer.dimension !== entity.dimension || Math.hypot(trainer.x - entity.x, trainer.z - entity.z) > rules.config.trainRange) return "range";
       const why = whyNotLearn(entity, skill, "trainer");
       if (why) return why;

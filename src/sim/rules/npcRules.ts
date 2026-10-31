@@ -124,6 +124,8 @@ export interface NpcRules {
   talkRange: number;
   bark: { cooldown: number; range: number };
   respawn: [number, number];
+  /** A vendor's discount by the buyer's standing tier with its faction (0.1: 10% off). */
+  discounts: Record<string, number>;
   /** Bark sets by id (`barks/`). */
   barks: ReadonlyMap<string, BarkLine[]>;
 }
@@ -279,7 +281,7 @@ export function readNpcRules(rules: Entry | undefined, roleEntries: readonly Ent
 
   const reader = new Reader(issues, rules?.file ?? "rules/npcs.json5");
   const obj = rules ? reader.object(rules.data, "") : {};
-  reader.onlyKeys(obj, "", ["peoples", "names", "classOutfits", "villager", "homes", "households", "childRelation", "out", "moods", "ages", "activeRadius", "releaseRadius", "releaseAfter", "talkRange", "bark", "respawn"]);
+  reader.onlyKeys(obj, "", ["peoples", "names", "classOutfits", "villager", "homes", "households", "childRelation", "out", "moods", "ages", "activeRadius", "releaseRadius", "releaseAfter", "talkRange", "bark", "respawn", "discounts"]);
   const peoples: Record<string, Record<string, number>> = {};
   if (obj.peoples !== undefined) {
     const raw = reader.object(obj.peoples, "peoples");
@@ -332,6 +334,7 @@ export function readNpcRules(rules: Entry | undefined, roleEntries: readonly Ent
     talkRange: reader.optionalNumber(obj, "talkRange", "", 4, { min: 0 }),
     bark: { cooldown: reader.optionalNumber(bark, "cooldown", "bark", 60, { min: 0 }), range: reader.optionalNumber(bark, "range", "bark", 8, { min: 0 }) },
     respawn: readRange(reader, obj, "respawn", "", [120, 180]),
+    discounts: readWeights(reader, obj, "discounts", "", {}),
     barks,
   };
 }

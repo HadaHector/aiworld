@@ -3,7 +3,8 @@
 // `tiny` server. Later steps add casts, NPCs in the world and their services.
 //   npm run probe -- scripts/probe/npcs.mjs
 import { ContentError } from "../../src/world/content/contentReader.ts";
-import { loadContentFromDisk, loadCreatureRulesFromDisk, loadProgressionRulesFromDisk, loadRulesFromDisk, packSourcesFromDisk, readConfigFromDisk } from "../diskContent.mjs";
+import { loadContentFromDisk, loadCreatureRulesFromDisk, loadItemRulesFromDisk, loadProgressionRulesFromDisk, loadRulesFromDisk, packSourcesFromDisk, readConfigFromDisk } from "../diskContent.mjs";
+import { fillText } from "../../src/core/text.ts";
 import { chooseStarts } from "../../src/world/settlements/starts.ts";
 import { castForSettlement } from "../../src/sim/npcs/cast.ts";
 import { resolveGameRules } from "../../src/sim/rules/gameRules.ts";
@@ -269,7 +270,7 @@ await section("in the world", async () => {
   channel.client.send({ type: "teleport", x: near.x + 2, z: near.z });
   await pump(20);
   const bark = inbox.find((m) => m.type === "bark");
-  check("an NPC barks at a player who comes by", bark !== undefined && bark.text.length > 0 && !bark.text.includes("{"), JSON.stringify(bark));
+  check("an NPC barks at a player who comes by", bark !== undefined && fillText(bark.text, bark.args).length > 0 && !fillText(bark.text, bark.args).includes("{"), JSON.stringify(bark));
 
   // Killed: lies a while, goes, comes back after its respawn.
   const victim = near;
@@ -286,6 +287,87 @@ await section("in the world", async () => {
   channel.client.send({ type: "teleport", x: layout.x + 900, z: layout.z });
   await pump(40, 1);
   check("dropped when nobody is near", npcs.debug.active("mainland").length === 0);
+});
+
+// --- services: talking, the shop, mending, the inn ---
+await section("services", async () => {
+  const { content, packs } = loadContentFromDisk(CONFIG);
+  const rules = loadRulesFromDisk(CONFIG);
+  const progression = loadProgressionRulesFromDisk(CONFIG, rules, SEED);
+  const items = loadItemRulesFromDisk(CONFIG, rules, SEED);
+  const worldData = quiet(() => createWorldData(SEED, content));
+  const server = createServer({ seed: SEED, config: CONFIG, packs, dimensions: content.dimensions, rules, progression, items, loadDimension: () => ({ world: worldData }) });
+  const channel = createLocalChannel();
+  server.connect(channel.server);
+  channel.client.send({ type: "hello", protocol: PROTOCOL_VERSION, name: "Customer", dimension: "" });
+  const inbox = [];
+  let id = 0;
+  const pump = async (steps = 1) => {
+    for (let i = 0; i < steps; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      server.step(1 / 30);
+      for (const m of channel.client.receive()) {
+        if (m.type === "welcome") id = m.playerId;
+        if (m.type === "transfer") channel.client.send({ type: "arrived" });
+        inbox.push(m);
+      }
+    }
+  };
+  const last = (type) => inbox.filter((m) => m.type === type).at(-1);
+  const send = async (m, steps = 2) => {
+    channel.client.send(m);
+    await pump(steps);
+  };
+  await pump(5);
+  const npcs = server.debug.npcs;
+  const me = server.debug.entity(id);
+  const by = (role) => npcs.debug.active("mainland").find((e) => npcs.npcOf(e)?.role === role);
+  const goTo = async (npc) => send({ type: "teleport", x: npc.x + Math.sin(npc.facing) * 1.6, z: npc.z + Math.cos(npc.facing) * 1.6 }, 3);
+  const main = items.main;
+
+  const smith = by("smith");
+  check("the start has a smith", smith !== undefined);
+  await send({ type: "teleport", x: smith.x + 30, z: smith.z });
+  await send({ type: "talk", npc: smith.id });
+  check("too far to talk", last("npcRefused")?.reason === "range");
+  await goTo(smith);
+  await send({ type: "talk", npc: smith.id });
+  const window = last("npcWindow");
+  check("talking opens its window", window?.npc === smith.id && window.repair && window.stock.length > 0 && window.sellRate > 0, JSON.stringify(window)?.slice(0, 200));
+  check("...with a greeting", typeof window?.greeting === "string" && window.greeting.length > 0 && !fillText(window.greeting, window.greetingArgs).includes("{"));
+  check("it turns to the player", Math.abs(Math.atan2(me.x - smith.x, me.z - smith.z) - smith.facing) < 1e-6);
+  me.belongings.wallet[main] = 0;
+  await send({ type: "shopBuy", npc: smith.id, index: 0 });
+  check("no money, no sale", last("npcRefused")?.reason === "money");
+  const price = window.stock[0].price;
+  me.belongings.wallet[main] = price + 10;
+  const bagBefore = me.belongings.bag.filter((x) => x != null).length;
+  await send({ type: "shopBuy", npc: smith.id, index: 0 });
+  check("bought: in the bag, paid for", me.belongings.bag.filter((x) => x != null).length === bagBefore + 1 && me.belongings.wallet[main] === 10, String(me.belongings.wallet[main]));
+  check("...and told", last("npcDone")?.what === "buy");
+  const slot = me.belongings.bag.findIndex((x, i) => x != null && server.debug.items.ctx.store.get(x).type === items.typeIndex.get(window.stock[0].type));
+  await send({ type: "shopSell", npc: smith.id, from: { container: 0, slot } });
+  check("sold back for a share of its value", me.belongings.bag[slot] == null && me.belongings.wallet[main] === 10 + Math.floor(items.types[items.typeIndex.get(window.stock[0].type)].value * items.config.sellRate), String(me.belongings.wallet[main]));
+  server.debug.items.wear(me, "armour");
+  me.belongings.wallet[main] = 1000;
+  await send({ type: "npcRepair", npc: smith.id });
+  check("mended for money", last("npcDone")?.what === "repair" && me.belongings.wallet[main] < 1000, String(me.belongings.wallet[main]));
+
+  // The inn: the bank, and home.
+  const innkeeper = by("innkeeper");
+  await goTo(innkeeper);
+  await send({ type: "talk", npc: innkeeper.id });
+  const inn = last("npcWindow");
+  check("the innkeeper keeps the bank and the inn", inn?.npc === innkeeper.id && inn.banker && inn.innkeeper && !inn.home);
+  await send({ type: "setHome", npc: innkeeper.id });
+  check("its inn made home", last("npcDone")?.what === "home" && Math.hypot(server.debug.players.get(id).quickHome.x - innkeeper.x, server.debug.players.get(id).quickHome.z - innkeeper.z) < 3);
+  await send({ type: "talk", npc: innkeeper.id });
+  check("...and it says so", last("npcWindow")?.home === true);
+  await send({ type: "teleport", x: innkeeper.x + 60, z: innkeeper.z }, 3);
+  server.debug.skills.kill(me);
+  await pump(2);
+  await send({ type: "respawn" }, 3);
+  check("dead, back at home", Math.hypot(me.x - innkeeper.x, me.z - innkeeper.z) < 4, `${me.x - innkeeper.x}, ${me.z - innkeeper.z}`);
 });
 
 console.log(`${checks - failures}/${checks} checks passed`);

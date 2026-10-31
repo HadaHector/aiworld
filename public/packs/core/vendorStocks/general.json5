@@ -1,0 +1,11 @@
+// What a shopkeeper sells: what a household needs, and plain clothes.
+{
+  items: [
+    { item: "bread", count: 5 },
+    { item: "tunic" },
+    { item: "linenTrousers" },
+    { item: "leatherBelt" },
+    { item: "leatherBoots" },
+    { item: "sandals" },
+  ],
+}

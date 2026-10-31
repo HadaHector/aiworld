@@ -1,3 +1,5 @@
+import { renderText } from "../core/text";
+import { createNpcWindow } from "../ui/npcWindow";
 import { castForSettlement } from "../sim/npcs/cast";
 import { tierOf } from "../sim/factions";
 import type { Engine } from "@babylonjs/core";
@@ -36,7 +38,7 @@ import { createSpellBook } from "../ui/spellBook";
 import { dock, type Hud } from "../ui/hud";
 import { BUTTON_CLASS, DIM, GOLD, HEADING, PANEL, TITLE_FONT } from "../ui/theme";
 import { createHealthBars, type HealthBars } from "./healthBars";
-import { createNameplates, type Nameplates } from "./nameplates";
+import { createNameplates, isNpc, type Nameplates } from "./nameplates";
 import { nextEnemy } from "./targeting";
 import { EVENT_KIND } from "../sim/skills/events";
 import { FLAG } from "../sim/skills/flags";
@@ -194,9 +196,20 @@ export async function startSession(page: Page, options: SessionOptions): Promise
         }
       } else if (message.type === "saved") {
         savedMark.show();
+      } else if (message.type === "npcWindow") {
+        const npc = mirror.entities.get(message.npc);
+        npcWindow.open(message, npc?.name ?? "", npc?.title ?? "");
+      } else if (message.type === "npcDone") {
+        // Bought, sold, mended, made home: a sound, and the window asked for again (what it offers changed).
+        const event = ({ buy: "shopBuy", sell: "shopSell", repair: "repair", home: "setHome" } as const)[message.what];
+        feedback.client(event, { source: playerId, target: message.npc, skill: null, crit: false, periodic: false });
+        if (npcWindow.npc === message.npc) client.send({ type: "talk", npc: message.npc });
+      } else if (message.type === "npcRefused") {
+        npcWindow.refused(message.reason);
+        feedback.client("uiError", { source: playerId, target: message.npc, skill: null, crit: false, periodic: false });
       } else if (message.type === "bark") {
         // An NPC says something (NPCS.md, *Barks*): over its head.
-        nameplates?.bark(message.npc, message.text);
+        nameplates?.bark(message.npc, renderText({ text: message.text, args: message.args }, gameRules.text));
       } else if (message.type === "standing") {
         // Whole on arrival (NPCS.md, *Factions*), else what changed.
         for (const [faction, value] of message.values) standing.set(faction, value);
@@ -384,6 +397,12 @@ export async function startSession(page: Page, options: SessionOptions): Promise
     floatingText?.update();
     healthBars?.update(targetId);
     nameplates?.update(targetId);
+    // Walked away from the NPC talked to: the window closes.
+    if (npcWindow.visible) {
+      const npc = mirror.entities.get(npcWindow.npc);
+      const own = mirror.entities.get(playerId);
+      if (!npc || (own && Math.hypot(npc.x - own.x, npc.z - own.z) > 8)) npcWindow.close();
+    }
     if (!spectator.active) {
       v.playerLights.update(deltaSeconds);
       v.placeLabels.update(character.mesh.position, v.scene.activeCamera);
@@ -646,6 +665,18 @@ export async function startSession(page: Page, options: SessionOptions): Promise
   unlisten.push(hud.onMenuVertical((vertical) => menuBar.setVertical(vertical)));
   unlisten.push(hud.onActionsWidth((width) => actionBar.fitWidth(width)));
   dockWindow(progressPanel.element);
+  // Talking to an NPC (NPCS.md, *Services*).
+  const npcWindow = createNpcWindow({
+    items: itemRules,
+    text: gameRules.text,
+    belongings,
+    send: (message) => client.send(message),
+    train: (npc) => progressPanel.train(npc),
+    openBag: () => {
+      if (!inventory.visible) inventory.toggle();
+    },
+  });
+  dockWindow(npcWindow.element);
   dockWindow(spellBook.element);
   // The debug panel's tools: what M, T and I open.
   for (const [label, key, open] of [
@@ -783,6 +814,13 @@ export async function startSession(page: Page, options: SessionOptions): Promise
       const entity = id === null ? undefined : mirror.entities.get(id);
       if (id === null || !entity) return;
       if (entity.lootable || entity.templateId === GROUND_ITEM_TEMPLATE) return interact(id);
+      // A settlement's person: talk to it (NPCS.md, *Services*).
+      if (isNpc(entity)) {
+        setTarget(id);
+        client.send({ type: "talk", npc: id });
+        feedback.client("talk", { source: playerId, target: id, skill: null, crit: false, periodic: false });
+        return;
+      }
       if (progressionRules.config.trainers.has(entity.templateId)) {
         if (!progressPanel.visible) progressPanel.toggle();
         return;
@@ -852,6 +890,10 @@ export async function startSession(page: Page, options: SessionOptions): Promise
     /** Settlements' casts (NPCS.md, *A settlement's cast*): `npcs.cast()` for the settlement nearest
      *  the player, `npcs.cast(siteId)` for one by its id. */
     npcs: {
+      /** Talks to an NPC by entity id, as a right-click on it does. */
+      talk(id: number) {
+        client.send({ type: "talk", npc: id });
+      },
       cast(siteId?: number) {
         const v = view;
         if (!v) return null;
@@ -1041,6 +1083,10 @@ export async function startSession(page: Page, options: SessionOptions): Promise
       w.toggle();
       closed = true;
     }
+    if (npcWindow.visible) {
+      npcWindow.close();
+      closed = true;
+    }
     if (belongings.loot) {
       client.send({ type: "lootClose" });
       closed = true;
@@ -1052,9 +1098,10 @@ export async function startSession(page: Page, options: SessionOptions): Promise
     return closed;
   }
 
-  // The pause menu (FRONTEND.md, *In the game*): under the windows region, so Options shows over it.
+  // The pause menu (FRONTEND.md, *In the game*): over what floats over the world (health bars 930,
+  // nameplates 931, combat numbers 940) and under the windows region (950), so Options shows over it.
   const pauseMenu = document.createElement("div");
-  pauseMenu.style.cssText = "position: fixed; inset: 0; z-index: 930; display: none; align-items: center; justify-content: center; background: rgba(6, 5, 3, 0.55);";
+  pauseMenu.style.cssText = "position: fixed; inset: 0; z-index: 945; display: none; align-items: center; justify-content: center; background: rgba(6, 5, 3, 0.55);";
   document.body.appendChild(pauseMenu);
   {
     const panel = document.createElement("div");
@@ -1193,6 +1240,7 @@ export async function startSession(page: Page, options: SessionOptions): Promise
     actionBar.dispose();
     spellBook.dispose();
     progressPanel.dispose();
+    npcWindow.dispose();
     ruleBook.dispose();
     menuBar.dispose();
     feedback.dispose();
