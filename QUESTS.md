@@ -528,7 +528,8 @@ After NPCS.md's five steps. Each leaves the game working: the dev server (`?play
   - **Markers:** twice a second the server works out the marks over the NPCs within 90 m of each
     player and sends them when they change (`markers`): "?" over "!" over grey "?" over grey "!" (a
     quest a level or two off). The nameplates draw them over the name.
-  - **The quest log is J**, not L, which the spell book already has; it is on the menu bar with a
+  - **The quest log is J**, not L, which the spell book already has; two panes, the quests on the left
+    and the chosen one on the right; it is on the menu bar with a
     scroll. It lists the quests by level colour, with the chosen one written out, *Track*/*Untrack*
     and *Abandon*. **The tracker** sits under the zone name with up to five tracked quests'
     objectives, struck through when done.

@@ -83,13 +83,15 @@ export function renderQuest(parent: HTMLElement, def: QuestDef, active: ActiveQu
 
 export function createQuestLog(options: QuestLogOptions): QuestLog {
   const { mirror, send } = options;
-  const root = el("div", `width: 360px; padding: 8px 10px; display: none; ${PANEL}`);
+  const root = el("div", `width: 580px; padding: 8px 10px; display: none; ${PANEL}`);
   const head = el("div", WINDOW_HEAD, root);
   el("span", "", head, "Quest Log");
   const close = el("button", "", head, "×");
   close.className = CLOSE_CLASS;
-  const list = el("div", "", root);
-  const details = el("div", "margin-top: 8px; border-top: 1px solid #444; padding-top: 6px;", root);
+  // Two panes: the quests on the left, the chosen one written out on the right.
+  const panes = el("div", "display: flex; gap: 10px; align-items: stretch; min-height: 260px;", root);
+  const list = el("div", "flex: 0 0 200px; overflow-y: auto; max-height: 60vh; border-right: 1px solid #444; padding-right: 8px;", panes);
+  const details = el("div", "flex: 1; min-width: 0; overflow-y: auto; max-height: 60vh;", panes);
   const tracker = el("div", `display: none; flex-direction: column; gap: 4px; max-width: 260px; padding: 6px 8px; margin-top: 6px; ${QUIET_PANEL}`);
   let selected = "";
   const untracked = new Set<string>();
