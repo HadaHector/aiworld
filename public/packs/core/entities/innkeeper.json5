@@ -1,0 +1,7 @@
+// An innkeeper (NPCS.md, *The inn*): a settlement's person who keeps the bank - what the strongbox
+// did until there were innkeepers (ITEMS.md).
+{
+  extends: "npc",
+  name: "Innkeeper",
+  items: { banker: true },
+}

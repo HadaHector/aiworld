@@ -82,6 +82,20 @@ export interface HouseholdShape {
   children: [number, number];
 }
 
+/** One thing an NPC may say (NPCS.md, *Barks*). Its text's `{call:brother}` names the one it calls
+ *  its brother - and the line is only said by one who has one; `{name}`, `{given}`, `{title}`,
+ *  `{settlement}` and `{player}` are filled in as they read. */
+export interface BarkLine {
+  text: string;
+  weight: number;
+  /** Said only in these moods; null for any. */
+  moods: string[] | null;
+  /** When: a player coming near, clicking it with nothing to offer, or being hit. */
+  when: "near" | "click" | "hit";
+  /** The relations its `{call:...}` tokens need. */
+  calls: string[];
+}
+
 export interface NpcRules {
   roles: NpcRoleDef[];
   roleIndex: ReadonlyMap<string, number>;
@@ -110,6 +124,8 @@ export interface NpcRules {
   talkRange: number;
   bark: { cooldown: number; range: number };
   respawn: [number, number];
+  /** Bark sets by id (`barks/`). */
+  barks: ReadonlyMap<string, BarkLine[]>;
 }
 
 interface Entry {
@@ -224,13 +240,36 @@ function readRelation(entry: Entry, issues: ContentIssue[]): NpcRelationDef {
 }
 
 /** Reads `npcRoles/`, `npcRelations/` and `rules/npcs.json5`; checks the names they give each other. */
-export function readNpcRules(rules: Entry | undefined, roleEntries: readonly Entry[], relationEntries: readonly Entry[], templates: ReadonlySet<string>, issues: ContentIssue[]): NpcRules {
+function readBarks(entry: Entry, issues: ContentIssue[]): BarkLine[] {
+  const reader = new Reader(issues, entry.file);
+  const obj = reader.object(entry.data, "");
+  reader.onlyKeys(obj, "", ["lines"]);
+  return reader.array(obj, "lines", "").map((value, i) => {
+    const path = `lines[${i}]`;
+    const raw = typeof value === "string" ? { text: value } : reader.object(value, path);
+    reader.onlyKeys(raw, path, ["text", "weight", "moods", "when"]);
+    const text = reader.string(raw, "text", path);
+    return {
+      text,
+      weight: reader.optionalNumber(raw, "weight", path, 1, { min: 0 }),
+      moods: raw.moods === undefined ? null : reader.stringList(raw, "moods", path),
+      when: raw.when === undefined ? "near" : reader.oneOf(raw, "when", path, ["near", "click", "hit"] as const),
+      calls: [...text.matchAll(/\{call:([A-Za-z]+)\}/g)].map((m) => m[1]),
+    };
+  });
+}
+
+export function readNpcRules(rules: Entry | undefined, roleEntries: readonly Entry[], relationEntries: readonly Entry[], barkEntries: readonly Entry[], templates: ReadonlySet<string>, issues: ContentIssue[]): NpcRules {
+  const barks = new Map(barkEntries.map((e) => [e.id, readBarks(e, issues)]));
   const roles = roleEntries.map((e) => readRole(e, issues));
   const relations = relationEntries.map((e) => readRelation(e, issues));
   const roleIndex = new Map(roles.map((r, i) => [r.id, i]));
   const relationIndex = new Map(relations.map((r, i) => [r.id, i]));
   for (const [i, role] of roles.entries()) {
     if (!templates.has(role.template)) issues.push({ file: roleEntries[i].file, path: "template", message: `no template "${role.template}" that can be made` });
+  }
+  for (const [i, role] of roles.entries()) {
+    if (role.barks && !barks.has(role.barks)) issues.push({ file: roleEntries[i].file, path: "barks", message: `no bark set "${role.barks}" (known: ${[...barks.keys()].join(", ")})` });
   }
   for (const [i, relation] of relations.entries()) {
     relation.sides.forEach((side, s) => side.roles?.forEach((r) => {
@@ -293,5 +332,6 @@ export function readNpcRules(rules: Entry | undefined, roleEntries: readonly Ent
     talkRange: reader.optionalNumber(obj, "talkRange", "", 4, { min: 0 }),
     bark: { cooldown: reader.optionalNumber(bark, "cooldown", "bark", 60, { min: 0 }), range: reader.optionalNumber(bark, "range", "bark", 8, { min: 0 }) },
     respawn: readRange(reader, obj, "respawn", "", [120, 180]),
+    barks,
   };
 }

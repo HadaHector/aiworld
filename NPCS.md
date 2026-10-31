@@ -6,7 +6,7 @@ The first half of step 9 of [GAMEPLAY.md](GAMEPLAY.md)'s build order: the **star
 two are built in the order of [Steps](#steps) here and there, and together they reach the first
 milestone.
 
-**Status: in progress.** Steps 1 to 3 are done (see [As built](#as-built)).
+**Status: in progress.** Steps 1 to 4 are done (see [As built](#as-built)).
 
 ## Decisions
 
@@ -482,6 +482,44 @@ Each leaves the game working: the dev server (`?play`), `npm run probe`, `npm ru
     class's trainer at the start, ids, unique names, families, relations both ways, parents older,
     children alike. `scripts/probe/cast.local.mjs <config> <seed>` prints the start's cast (git-ignored
     `.local`), and `__aiworld.npcs.cast()` gives the same in the page.
+- **Step 4.** `src/sim/npcs/system.ts` (the server's NPC system) and `src/game/nameplates.ts`.
+  - **Filling:** a settlement within `activeRadius` of a player, past its own radius, has every
+    cast member who is out made as an entity at once (not on a timer, so a player arriving sees them).
+    One nobody has been near for `releaseAfter` seconds, past `releaseRadius`, is dropped.
+  - **An NPC entity** is its role's template (`npc`, or `innkeeper`, which keeps the bank), with the
+    cast's name, a `title` (new on entities and in spawns), its look (race, sex, outfit, colouring,
+    height and build), and its zone's folk as its faction (`faction`, new on entities, over the
+    template's). Players and the folk are allies, so NPCs cannot be attacked by players.
+  - **Spots:** worked out once per settlement, the same every time. A room anchor takes a free slot
+    of that room's furnishing grid, the most open first, in world space through the house's axes,
+    on its floor. A building anchor stands by the front door, a little to the side. `door` is its
+    home's door, `square` a ring round the square facing in, `street` the verge of a street facing
+    along it. Outdoor spots are kept clear of trees and buildings (`trunks.clear`) and 1.2 m from
+    each other. With nothing that fits, the square.
+  - **Patrols:** a role with `patrol` gets a body and walks its points at a stroll (round the
+    gates and the square, a street, or the square), waiting 3-7 s at each. Only towns have guards,
+    so the starting village has none.
+  - **Barks:** `barks/*.json5` (villager, innkeeper, smith, priest, shopkeeper, reeve, farmer,
+    trainer, guard). A player who comes within `bark.range` gets a line `near`, at most once a
+    `cooldown` per NPC and one bark every 6 s whoever says it. An NPC hit cries out (`hit`). The
+    `{call:brother}` tokens name relatives and decide which lines an NPC can say. Barks go to players
+    within 20 m as `bark { npc, text }`. The text is filled on the server for now; with step 6 it
+    becomes a text key and arguments.
+  - **Death:** an NPC killed lies 20 s, is taken away and goes into the delta for `respawn`
+    (2-3 minutes), and is made again when that has passed.
+  - **The client:** names over the heads of NPCs (friendly, not players) within 28 m, with the title
+    under them in angle brackets, and barks in a bubble over them for 6 s. `setMark` is there for the
+    quest markers.
+  - **The bank** moved from the strongbox to the innkeeper; the start no longer places a strongbox.
+  - **Not done:** guards fighting creatures that come into a town (the creature brain is not
+    shared with NPCs yet); NPCs turning to whoever talks to them waits for talking (step 5); the
+    plate's height is the template's, so it floats high over dwarves.
+  - **Checked:** the NPCs probe on a real `tiny` server: the starting village filled when the
+    player arrives, the innkeeper from its template with its name, title, look and folk, inside its
+    inn, nobody on anyone, all within the village, allies with the player, a bark on coming by,
+    killed then taken away, kept in the delta and back after its respawn, and dropped once the player
+    leaves. The items probe banks at the innkeeper. In the page (`?play&config=small`) Nathcas has
+    11 people about, with names, titles and bubbles over their bodies.
 
 ## Later
 

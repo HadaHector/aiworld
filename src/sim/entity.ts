@@ -55,6 +55,11 @@ export interface Entity {
   gear?: string[];
   /** Its origins, disciplines, talents and what it has learned (see PROGRESSION.md): a player's. */
   progress?: ProgressPart;
+  /** What it is, shown under its name: an NPC's role ("Innkeeper"); "" for none (NPCS.md). */
+  title?: string;
+  /** The faction it sides with, over its template's: a settlement's people are their zone's folk
+   *  (`folk@mainland/3`, NPCS.md, *Factions*). */
+  faction?: string;
   /** Its standing with factions that keep reputation, by faction id (NPCS.md, *Factions*): a
    *  player's. A faction it has none with stands as it regards players. */
   standing?: Map<string, number>;

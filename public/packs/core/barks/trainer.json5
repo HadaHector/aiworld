@@ -1,0 +1,12 @@
+// What trainers say (NPCS.md, *Barks*): `when` near (a player coming by, the default), click (clicked
+// with nothing to offer) or hit; `moods` to say it only in those. `{call:brother}` names the one
+// it calls its brother, and only one who has one says it.
+{
+  lines: [
+    "Practice. Then practice again.",
+    "Every master was once a beginner.",
+    { text: "Your stance is all wrong.", moods: ["gruff"] },
+    { text: "Come back when you've learned what you have.", when: "click" },
+    { text: "A poor strike.", when: "hit" },
+  ],
+}

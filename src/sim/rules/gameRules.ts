@@ -298,7 +298,7 @@ export function resolveGameRules(packs: PackSource[]): GameRules {
     if (!templates.has(ref.id)) issues.push({ file: ref.file, path: ref.path, message: `no template "${ref.id}" that can be made (known: ${[...templates.keys()].join(", ")})` });
   }
 
-  const npcs = readNpcRules(folders.get("rules")!.get("npcs"), entries("npcRoles"), entries("npcRelations"), new Set(templates.keys()), issues);
+  const npcs = readNpcRules(folders.get("rules")!.get("npcs"), entries("npcRoles"), entries("npcRelations"), entries("barks"), new Set(templates.keys()), issues);
 
   if (issues.length > 0) throw new ContentError(issues);
 

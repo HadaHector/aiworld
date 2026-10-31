@@ -462,6 +462,13 @@ export interface Saved {
   type: "saved";
 }
 
+/** An NPC says something (NPCS.md, *Barks*): to the players near, as a bubble over its head. */
+export interface Bark {
+  type: "bark";
+  npc: number; // u32
+  text: string;
+}
+
 /** The player's standing with factions that keep reputation (NPCS.md, *Factions*): all of it on
  *  arriving, and each faction as it changes. Owner only. */
 export interface Standing {
@@ -575,6 +582,8 @@ export interface EntitySpawn {
   /** Its template's id: the client looks it up in its own packs for a look. */
   template: string;
   name: string;
+  /** What it is, under its name: an NPC's role ("Innkeeper"), or "" (NPCS.md). */
+  title: string;
   look: EntityAppearance;
   x: number; // f64
   y: number; // f64
@@ -816,6 +825,7 @@ export type ServerMessage =
   | LoggedOut
   | Saved
   | Standing
+  | Bark
   | Progress
   | ProgressEvents
   | ContainerState

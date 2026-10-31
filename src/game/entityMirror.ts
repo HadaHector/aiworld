@@ -8,6 +8,8 @@ export interface MirroredEntity {
   template: TemplateDef | null;
   templateId: string;
   name: string;
+  /** What it is, under its name: an NPC's role, or "" (NPCS.md). */
+  title: string;
   /** Who it is to look at, over its template's look: its seed, and a player's race and outfit. */
   look: EntityAppearance;
   x: number;
@@ -93,6 +95,7 @@ export function createEntityMirror(rules: GameRules): EntityMirror {
           template: rules.templates.get(message.template) ?? null,
           templateId: message.template,
           name: message.name,
+          title: message.title ?? "",
           look: message.look,
           x: message.x,
           y: message.y,

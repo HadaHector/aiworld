@@ -28,6 +28,7 @@ import { exportBelongings, importBelongings } from "./items/save";
 import { startingPlace, startPoint } from "./spawn";
 import { chooseStarts, type ChosenStart } from "../world/settlements/starts";
 import { clampStanding, factionDef, standingWith } from "./factions";
+import { createNpcSystem, type NpcSystem } from "./npcs/system";
 
 /** Where a body is to be made: a point, or (with `start`) the start of that id, once it is placed. */
 type Arrival = { x: number; z: number; start?: string };
@@ -157,6 +158,8 @@ export interface Server {
     changeStanding: (entity: Entity, faction: string, delta: number) => number | null;
     /** Each loaded dimension's starts (NPCS.md, *The starting site*). */
     readonly starts: ReadonlyMap<string, readonly ChosenStart[]>;
+    /** Settlements' people (NPCS.md). */
+    readonly npcs: NpcSystem;
   };
   /** The server's clock: seconds stepped since it started - or since the saved world began. */
   readonly time: number;
@@ -336,6 +339,27 @@ export function createServer(options: ServerOptions): Server {
       })
     : null;
 
+  // Settlements' people (NPCS.md, *NPCs in the world*).
+  const npcSystem: NpcSystem = createNpcSystem(rules, {
+    time: () => time,
+    spawn: (dimension, template, x, z, facing, key) => {
+      const dim = loaded.get(dimension);
+      return dim ? spawnIn(dim, template, x, z, facing, key) : undefined;
+    },
+    despawn: (entity) => {
+      skills.leave(entity, true);
+      itemSystem?.release(entity);
+      loaded.get(entity.dimension)?.entities.delete(entity.id);
+    },
+    playersIn,
+    delta,
+    classes: (options.progression?.origins ?? []).filter((o) => o.slot === "class").map((o) => ({ id: o.id, name: o.name })),
+    bark: (npc, text, to) => {
+      const hearers = new Set(to.map((e) => e.id));
+      for (const connection of connections) if (connection.player && hearers.has(connection.player.entity.id)) connection.end.send({ type: "bark", npc: npc.id, text });
+    },
+  });
+
   /** Makes the entities a dimension's definition places, standing on its ground. */
   function placeEntities(dimension: Dimension, definition: DimensionDef): void {
     definition.entities.forEach((placed, i) => {
@@ -394,6 +418,7 @@ export function createServer(options: ServerOptions): Server {
           startsOf.set(id, chooseStarts(world.world, definition, problem));
           placeEntities(slot.dimension, definition);
           creatureSystem?.load(slot.dimension, definition, startsOf.get(id)!);
+          npcSystem.load(slot.dimension, definition, dimensionSeed(options.seed, definition), startsOf.get(id)!);
           loaded.set(id, slot.dimension);
         },
         (error) => {
@@ -413,6 +438,7 @@ export function createServer(options: ServerOptions): Server {
     loaded.delete(id);
     startsOf.delete(id);
     creatureSystem?.unload(id);
+    npcSystem.unload(id);
   }
 
   /** Takes a player out of where it is and sends it to a dimension, at a point or a start. */
@@ -948,9 +974,12 @@ export function createServer(options: ServerOptions): Server {
       creatureSystem.step(deltaSeconds);
       if (options.onKill) for (const kill of creatureSystem.drainKills()) options.onKill(kill);
     }
+    // ...and settlements' people stand, walk their rounds and bark (NPCS.md).
+    npcSystem.step(deltaSeconds);
     skills.step(loaded.values());
     const events = skills.drainEvents();
     itemSystem?.combatEvents(events);
+    npcSystem.combatEvents(events.map((e) => e.event));
     // XP from what happened, and level-ups as combat events for those near (PROGRESSION.md).
     progression?.combatEvents(events);
     const progressed = progression?.drain() ?? null;
@@ -1029,6 +1058,7 @@ export function createServer(options: ServerOptions): Server {
       progressEvents,
       changeStanding,
       starts: startsOf,
+      npcs: npcSystem,
     },
   };
 }

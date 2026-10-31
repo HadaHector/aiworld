@@ -117,7 +117,7 @@ const CONTENT_FOLDERS = ["dimensions", "biomes", "materials", "layers", "grass",
 type ContentFolder = (typeof CONTENT_FOLDERS)[number];
 
 /** The folders items are defined in (see ITEMS.md) - gameplay content, read by the item rules. */
-export const ITEM_FOLDERS = ["items", "itemTemplates", "rarities", "equipSlots", "currencies", "lootTables"] as const;
+export const ITEM_FOLDERS = ["items", "itemTemplates", "rarities", "equipSlots", "currencies", "lootTables", "vendorStocks"] as const;
 
 /** The folders creatures are defined in (see CREATURES.md) - read by the creature rules. */
 export const CREATURE_FOLDERS = ["creatures", "creatureTraits", "camps"] as const;
@@ -128,7 +128,7 @@ export const PROGRESSION_FOLDERS = ["disciplines", "disciplineTemplates", "origi
 /** The folders gameplay content lives in - stats, resources, templates (see ENTITIES.md), skills and
  *  game rules files (ABILITIES.md). Not world content: the world's resolver passes over them, and
  *  the game rules' resolver reads them, once per server. */
-export const GAME_FOLDERS = ["stats", "modifiers", "resources", "entities", "skills", "rules", "factions", "npcRoles", "npcRelations", ...ITEM_FOLDERS, ...CREATURE_FOLDERS, ...PROGRESSION_FOLDERS] as const;
+export const GAME_FOLDERS = ["stats", "modifiers", "resources", "entities", "skills", "rules", "factions", "npcRoles", "npcRelations", "barks", ...ITEM_FOLDERS, ...CREATURE_FOLDERS, ...PROGRESSION_FOLDERS] as const;
 
 /** The folders characters' bodies are drawn from - races, gear, outfits (see CHARACTERS.md). Read by
  *  the client alone (src/character); the world's resolver passes over them too. */

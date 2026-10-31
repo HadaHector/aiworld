@@ -1,0 +1,14 @@
+// What farmers say (NPCS.md, *Barks*): `when` near (a player coming by, the default), click (clicked
+// with nothing to offer) or hit; `moods` to say it only in those. `{call:brother}` names the one
+// it calls its brother, and only one who has one says it.
+{
+  lines: [
+    "Rain's coming. Feel it in my knees.",
+    "Keep off the barley, there's a dear.",
+    { text: "Something's been at the hens again.", moods: ["nervous", "weary"] },
+    { text: "{call:son} should be helping with the hay." },
+    { text: "{call:daughter} has more sense than the rest of us." },
+    { text: "Aye?", when: "click" },
+    { text: "Get off my land!", when: "hit" },
+  ],
+}

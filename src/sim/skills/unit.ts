@@ -44,14 +44,14 @@ function sideOf(sys: Sys, unit: Entity, depth = 0): Entity {
 }
 
 /** On the players' side: a player, or anything of their faction. */
-const isPlayer = (unit: Entity): boolean => unit.template.faction === PLAYERS_FACTION;
+const isPlayer = (unit: Entity): boolean => (unit.faction ?? unit.template.faction) === PLAYERS_FACTION;
 
 /** How `b`'s side and `a`'s stand to each other, on the factions' scale (NPCS.md, *Factions*). */
 export function standingOf(sys: Sys, a: Entity, b: Entity): number {
   const sa = sideOf(sys, a);
   const sb = sideOf(sys, b);
   if (sa === sb) return Infinity;
-  return standingBetween(sys.rules.factions, { faction: sa.template.faction, standing: sa.standing }, { faction: sb.template.faction, standing: sb.standing });
+  return standingBetween(sys.rules.factions, { faction: sa.faction ?? sa.template.faction, standing: sa.standing }, { faction: sb.faction ?? sb.template.faction, standing: sb.standing });
 }
 
 /** How `b` stands to `a`: an ally (one side, or standing at the factions' `ally` or above), an

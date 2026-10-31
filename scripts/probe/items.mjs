@@ -390,7 +390,8 @@ await section("boundary", async () => {
   const dummy = inA.find((m) => m.type === "entitySpawn" && m.template === "trainingDummy");
   const chest = inA.find((m) => m.type === "entitySpawn" && m.template === "chest");
   const inSpawns = inA.filter((m) => m.type === "entitySpawn");
-  check("the chest and the strongbox are placed", !!chest && inA.some((m) => m.type === "entitySpawn" && m.template === "strongbox"));
+  // The bank is the innkeeper's (NPCS.md, *The inn*), not a strongbox's.
+  check("the chest and the innkeeper are placed", !!chest && inA.some((m) => m.type === "entitySpawn" && m.template === "innkeeper"));
   check("an unopened chest is lootable", inA.some((m) => m.type === "entityLootable" && m.id === chest?.id && m.lootable));
 
   // The dummy at 0 health: lootable to both.
@@ -452,7 +453,7 @@ await section("boundary", async () => {
   await send(a, { type: "itemMove", from: { container: BAG, slot: 19 }, to: { container: EQUIPMENT, slot: 0 }, count: 0 });
   check("a bad move is refused with a reason", take(a).some((m) => m.type === "itemRefused" && m.reason === "empty"));
 
-  // The chest, and the bank at the strongbox.
+  // The chest, and the bank at the innkeeper.
   a.end.send({ type: "teleport", x: chest.x + 0.5, z: chest.z - 0.5 });
   await pump(2);
   take(a);
@@ -461,11 +462,11 @@ await section("boundary", async () => {
   check("opening the chest rolls it", chestLoot?.entity === chest.id && chestLoot.items.length >= 2);
   await send(a, { type: "itemMove", from: { container: BAG, slot: swordAt }, to: { container: BANK, slot: 0 }, count: 0 });
   check("the bank is out of reach here", take(a).some((m) => m.type === "itemRefused" && m.reason === "bank"));
-  const strongbox = inSpawns.find((m) => m.template === "strongbox");
-  a.end.send({ type: "teleport", x: strongbox.x, z: strongbox.z + 1 });
+  const banker = inSpawns.find((m) => m.template === "innkeeper");
+  a.end.send({ type: "teleport", x: banker.x + 0.8, z: banker.z });
   await pump(2);
   inA = take(a);
-  check("the strongbox puts the bank in reach", inA.some((m) => m.type === "bankReach" && m.open));
+  check("the innkeeper puts the bank in reach", inA.some((m) => m.type === "bankReach" && m.open));
   check("walking away closed the chest", inA.some((m) => m.type === "loot" && m.entity === 0));
   const some = server.debug.entity(a.id).belongings.bag.findIndex((id) => id != null);
   await send(a, { type: "itemMove", from: { container: BAG, slot: some }, to: { container: BANK, slot: 0 }, count: 0 });

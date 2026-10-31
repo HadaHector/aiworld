@@ -1,0 +1,15 @@
+// What innkeepers say (NPCS.md, *Barks*): `when` near (a player coming by, the default), click (clicked
+// with nothing to offer) or hit; `moods` to say it only in those. `{call:brother}` names the one
+// it calls its brother, and only one who has one says it.
+{
+  lines: [
+    "Come in, come in. There's a fire going.",
+    "A room, a meal, a mug - all to be had.",
+    { text: "Wipe your boots, traveller.", moods: ["gruff"] },
+    { text: "Busy night ahead, I can feel it.", moods: ["cheerful"] },
+    { text: "{call:wife} does the cooking. I just take the coin." },
+    { text: "{call:husband} keeps the cellar. Don't ask him for the good stuff." },
+    { text: "What'll it be?", when: "click" },
+    { text: "Not in my inn!", when: "hit" },
+  ],
+}

@@ -1,0 +1,13 @@
+// What smiths say (NPCS.md, *Barks*): `when` near (a player coming by, the default), click (clicked
+// with nothing to offer) or hit; `moods` to say it only in those. `{call:brother}` names the one
+// it calls its brother, and only one who has one says it.
+{
+  lines: [
+    "Mind the sparks.",
+    "Blade needs an edge? I'll see to it.",
+    { text: "Too hot today to be at the forge.", moods: ["weary"] },
+    { text: "{call:apprentice}! More charcoal!" },
+    { text: "Steel or bronze, I work them both.", when: "click" },
+    { text: "You'll pay for that.", when: "hit" },
+  ],
+}

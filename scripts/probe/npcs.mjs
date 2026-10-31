@@ -215,5 +215,78 @@ await section("server", async () => {
   check("told it all again", a.last("standing")?.values.some(([f, v]) => f === folk && v === 3250));
 });
 
+// --- NPCs in the world: filled near a player, at their spots, barking, dying, dropped ---
+await section("in the world", async () => {
+  const { content, packs } = loadContentFromDisk(CONFIG);
+  const rules = loadRulesFromDisk(CONFIG);
+  const progression = loadProgressionRulesFromDisk(CONFIG, rules, SEED);
+  const worldData = quiet(() => createWorldData(SEED, content));
+  const server = createServer({ seed: SEED, config: CONFIG, packs, dimensions: content.dimensions, rules, progression, loadDimension: () => ({ world: worldData }) });
+  const channel = createLocalChannel();
+  server.connect(channel.server);
+  channel.client.send({ type: "hello", protocol: PROTOCOL_VERSION, name: "Visitor", dimension: "" });
+  const inbox = [];
+  let id = 0;
+  const pump = async (steps = 1, dt = 1 / 30) => {
+    for (let i = 0; i < steps; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      server.step(dt);
+      for (const m of channel.client.receive()) {
+        if (m.type === "welcome") id = m.playerId;
+        if (m.type === "transfer") channel.client.send({ type: "arrived" });
+        inbox.push(m);
+      }
+    }
+  };
+  await pump(5);
+  const npcs = server.debug.npcs;
+  const [start] = server.debug.starts.get("mainland");
+  const cast = npcs.debug.cast("mainland", start.settlement);
+  const out = cast.npcs.filter((n) => n.out);
+  let active = npcs.debug.active("mainland");
+  check("the starting village is filled", active.length === out.length && out.length > 3, `${active.length} of ${out.length}`);
+  const spawns = inbox.filter((m) => m.type === "entitySpawn" && m.title !== undefined);
+  const innkeeper = active.find((e) => npcs.npcOf(e)?.role === "innkeeper");
+  check("the innkeeper is made from the innkeeper template, and banks", innkeeper?.template.id === "innkeeper");
+  check("its name and title from the cast", innkeeper?.name === npcs.npcOf(innkeeper).name && innkeeper?.title === "Innkeeper");
+  check("spawns carry the title", spawns.some((m) => m.id === innkeeper?.id && m.title === "Innkeeper"));
+  check("its look from the cast", innkeeper?.look.race === npcs.npcOf(innkeeper).race && innkeeper.look.choices?.skin === npcs.npcOf(innkeeper).choices.skin);
+  const site = worldData.settlements.find((s) => s.id === start.settlement);
+  check("its zone's folk", innkeeper?.faction === `folk@mainland/${site.areaId}`, innkeeper?.faction);
+  const me = server.debug.entity(id);
+  check("a player and the folk are allies", relation(server.debug.skills.sys, me, innkeeper) === "ally");
+  // Indoors: inside its inn's footprint, on its floor.
+  const layout = worldData.settlementLayouts.find((l) => l.siteId === start.settlement);
+  const inn = layout.houses[npcs.npcOf(innkeeper).work];
+  const local = { a: (innkeeper.x - inn.x) * inn.frontX + (innkeeper.z - inn.z) * inn.frontZ, b: (innkeeper.x - inn.x) * inn.frontZ - (innkeeper.z - inn.z) * inn.frontX };
+  check("the innkeeper stands inside the inn", Math.abs(local.a) < inn.depth / 2 + 6 && Math.abs(local.b) < inn.width / 2 + 6, JSON.stringify(local));
+  const spots = active.map((e) => [e.x, e.z]);
+  check("nobody stands on anyone", spots.every(([x, z], i) => spots.every(([x2, z2], j) => i === j || Math.hypot(x - x2, z - z2) >= 1.1)));
+  check("every one within the village", active.every((e) => Math.hypot(e.x - layout.x, e.z - layout.z) <= layout.radius + 15));
+
+  // A bark for a player who comes by.
+  const near = active.find((e) => npcs.npcOf(e)?.role !== "innkeeper") ?? innkeeper;
+  channel.client.send({ type: "teleport", x: near.x + 2, z: near.z });
+  await pump(20);
+  const bark = inbox.find((m) => m.type === "bark");
+  check("an NPC barks at a player who comes by", bark !== undefined && bark.text.length > 0 && !bark.text.includes("{"), JSON.stringify(bark));
+
+  // Killed: lies a while, goes, comes back after its respawn.
+  const victim = near;
+  const victimId = npcs.npcOf(victim).id;
+  server.debug.skills.kill(victim);
+  await pump(25, 1);
+  check("a dead NPC is taken away", !npcs.debug.active("mainland").includes(victim));
+  check("...into the delta", (server.debug.delta.get(victimId) ?? 0) > server.time);
+  await pump(200, 1);
+  active = npcs.debug.active("mainland");
+  check("...and comes back", active.some((e) => npcs.npcOf(e)?.id === victimId));
+
+  // Away: dropped once nobody has been near for long enough.
+  channel.client.send({ type: "teleport", x: layout.x + 900, z: layout.z });
+  await pump(40, 1);
+  check("dropped when nobody is near", npcs.debug.active("mainland").length === 0);
+});
+
 console.log(`${checks - failures}/${checks} checks passed`);
 process.exit(failures > 0 ? 1 : 0);

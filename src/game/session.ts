@@ -36,6 +36,7 @@ import { createSpellBook } from "../ui/spellBook";
 import { dock, type Hud } from "../ui/hud";
 import { BUTTON_CLASS, DIM, GOLD, HEADING, PANEL, TITLE_FONT } from "../ui/theme";
 import { createHealthBars, type HealthBars } from "./healthBars";
+import { createNameplates, type Nameplates } from "./nameplates";
 import { nextEnemy } from "./targeting";
 import { EVENT_KIND } from "../sim/skills/events";
 import { FLAG } from "../sim/skills/flags";
@@ -157,6 +158,7 @@ export async function startSession(page: Page, options: SessionOptions): Promise
   /** Damage and healing numbers over the units the own player fights, in the current view. */
   let floatingText: FloatingText | null = null;
   let healthBars: HealthBars | null = null;
+  let nameplates: Nameplates | null = null;
   /** The unit the player has selected (see ABILITIES.md): 0 for none. */
   let targetId = 0;
   /** Why the server last refused what was asked - entering the world, above all. */
@@ -192,6 +194,9 @@ export async function startSession(page: Page, options: SessionOptions): Promise
         }
       } else if (message.type === "saved") {
         savedMark.show();
+      } else if (message.type === "bark") {
+        // An NPC says something (NPCS.md, *Barks*): over its head.
+        nameplates?.bark(message.npc, message.text);
       } else if (message.type === "standing") {
         // Whole on arrival (NPCS.md, *Factions*), else what changed.
         for (const [faction, value] of message.values) standing.set(faction, value);
@@ -276,6 +281,8 @@ export async function startSession(page: Page, options: SessionOptions): Promise
     floatingText = null;
     healthBars?.dispose();
     healthBars = null;
+    nameplates?.dispose();
+    nameplates = null;
     entityMeshes = null;
     old.dispose();
   }
@@ -317,6 +324,7 @@ export async function startSession(page: Page, options: SessionOptions): Promise
     const world = next.world;
     floatingText = createFloatingText(next.scene, mirror, gameRules, () => playerId);
     healthBars = createHealthBars(next.scene, mirror, gameRules, () => playerId);
+    nameplates = createNameplates(next.scene, mirror, () => playerId);
     feedback.setScene(next.scene, next.world);
     entityMeshes = createEntityMeshes(next.scene, mirror, gameRules, () => playerId, {
       kit: bodyKit,
@@ -375,6 +383,7 @@ export async function startSession(page: Page, options: SessionOptions): Promise
     actionBar.update();
     floatingText?.update();
     healthBars?.update(targetId);
+    nameplates?.update(targetId);
     if (!spectator.active) {
       v.playerLights.update(deltaSeconds);
       v.placeLabels.update(character.mesh.position, v.scene.activeCamera);

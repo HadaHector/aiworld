@@ -1,6 +1,7 @@
 // Keeps the inn: the bank, food and drink, and a home for travellers (NPCS.md, *The inn*).
 {
   title: "Innkeeper",
+  template: "innkeeper",
   outfit: "villager",
   buildings: ["inn"],
   livesAtWork: true,

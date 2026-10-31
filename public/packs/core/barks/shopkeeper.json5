@@ -1,0 +1,13 @@
+// What shopkeepers say (NPCS.md, *Barks*): `when` near (a player coming by, the default), click (clicked
+// with nothing to offer) or hit; `moods` to say it only in those. `{call:brother}` names the one
+// it calls its brother, and only one who has one says it.
+{
+  lines: [
+    "Fresh bread, good rope, honest prices.",
+    "Take a look, no harm in looking.",
+    { text: "Coin up front, mind.", moods: ["gruff"] },
+    { text: "{call:debtor} still owes me for last month." },
+    { text: "What do you need?", when: "click" },
+    { text: "Thief!", when: "hit" },
+  ],
+}

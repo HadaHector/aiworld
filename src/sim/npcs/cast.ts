@@ -19,6 +19,8 @@ export interface CastNpc {
   role: string | null;
   /** A class trainer's class. */
   class: string | null;
+  /** The house it works at (index into the layout's houses), or -1. */
+  work: number;
   given: string;
   family: string;
   /** "Given Family". */
@@ -132,6 +134,7 @@ export function castOf(input: CastInput): Cast {
       household: household.index,
       role: null,
       class: null,
+      work: -1,
       given,
       family: household.family,
       name: `${given} ${household.family}`,
@@ -238,6 +241,7 @@ export function castOf(input: CastInput): Cast {
     if (!holder) holder = person(household(-1, true), role.ages, null);
     holder.role = role.id;
     holder.class = slot.cls?.id ?? null;
+    holder.work = slot.house;
     holder.title = role.title.replace("{class}", slot.cls?.name ?? "");
     holder.out = true;
     holder.outfit = role.outfits[0] === "fromClass" ? (rules.classOutfits[slot.cls?.id ?? ""] ?? rules.classOutfits.default ?? "") : role.outfits.length > 0 ? pick(rng, role.outfits) : "";
