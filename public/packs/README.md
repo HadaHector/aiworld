@@ -1133,6 +1133,27 @@ same table. An entity's `look.feedback` gives `weapon`, `armor` and `family` for
 worn items give the weapon (`weapons`, by template or gear piece) and the armour (`armors`, by gear
 material); `surfaces` turns ground materials into what footsteps sound like.
 
+## Gameplay: NPCs and quests
+
+See NPCS.md and QUESTS.md. Folders, read into the game rules:
+
+```
+  factions/<id>.json5       who sides with whom: relations by tier, `reputation`, `per: "zone"` to make one per zone
+  npcRoles/<id>.json5       a job in a settlement: title, template, outfit, the buildings that bring it, where
+                            it stands, its services (trainer, vendor, banker, repair, innkeeper), its barks
+  npcRelations/<id>.json5   a tie between two people: in a household or across, ages, family, looks shared
+  barks/<id>.json5          what a role's people say: lines by `when` and `moods`, `{call:brother}` for relatives
+  vendorStocks/<id>.json5   what a vendor sells (in the item rules)
+  questParts/<id>.json5     one objective: kind, sizes, item, log line, motive sentences
+  questPlots/<id>.json5     quests put together: givers, people, creatures, place, road, and each quest's text
+  text/<any>.json5          translations: { language, strings: { English: translation } }
+  rules/npcs.json5, rules/factions.json5, rules/quests.json5
+```
+
+A feature (`features/*.json5`) says what it can be in a quest with a `quest` block - `tags`,
+`objects`, `people`, `text` - so a new feature brings its quest data with it. A dimension's `starts`
+name the intro's plots (`intro`).
+
 ## Example
 
 `examples/packs/moor/` is a complete zone in JSON alone - a biome, two materials, a flowering grass

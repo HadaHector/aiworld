@@ -1,4 +1,4 @@
-import { renderText, type TextTable } from "../core/text";
+import { renderText, type TextTable } from "../sim/text";
 import type { ClientMessage } from "../sim/protocol";
 import { needed, questColour, type ActiveQuest, type QuestDef, type QuestRules } from "../sim/quests/quest";
 import { formatMoney, type ItemRules } from "../sim/rules/itemRules";

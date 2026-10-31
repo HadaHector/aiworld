@@ -177,7 +177,8 @@ first match wins, matched on the skill's tags, the event's flags and its name:
     equip:       [{ cue: "equip" }], use: [],
     target:      [{ cue: "targetTick" }],
     footstep:    [{ cue: "footstep" }],
-    // later: levelUp, disciplineUp, questAccept, questDone, discovered - added by the steps that make them
+    // later: discovered - added by the steps that make them (levelUp and disciplineUp came with
+    // PROGRESSION.md; the NPC and quest events with NPCS.md and QUESTS.md)
   },
   weapons: { sword: "blade", axe: "blade", dagger: "blade", mace: "blunt", staff: "blunt" },
   armors:  { linen: "cloth", wool: "cloth", leather: "leather", studdedLeather: "leather", mail: "metal", plate: "metal", bronze: "metal", fur: "fur" },

@@ -1,0 +1,11 @@
+// Kill some of the creatures that trouble the settlement.
+{
+  kind: "kill",
+  count: [4, 6],
+  line: "{creatures} slain",
+  motive: [
+    "The {creatures} have grown bold - they took two lambs from the fold last week.",
+    "Nobody walks the road after dark any more, for the {creatures}.",
+    "The {creatures} are thicker on the ground than anyone here remembers.",
+  ],
+}

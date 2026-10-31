@@ -12,7 +12,7 @@ import { PROTOCOL_VERSION } from "../../src/sim/protocol.ts";
 import { createMemoryStore } from "../../src/save/memoryStore.ts";
 import { createWorldRecord } from "../../src/save/records.ts";
 import { addThreat } from "../../src/sim/skills/combat.ts";
-import { fillText } from "../../src/core/text.ts";
+import { fillText } from "../../src/sim/text.ts";
 
 let failures = 0;
 let checks = 0;
@@ -254,6 +254,228 @@ await section("the test chain", async () => {
   check("out of time: failed", state(7)?.state === "failed");
   await send({ type: "questAbandon", quest: "q:probe/7" });
   check("abandoned: gone, and can be taken again", !state(7) && (await talk(giverE)).quests.some((q) => q.id === "q:probe/7" && q.state === "offer"));
+});
+
+// --- the generator: every settlement's quests, well formed, the same for the same seed ---
+/** A server on a config and seed, with one quick player at the start; its casts made on asking. */
+async function generatedWorld(config, seed) {
+  const { content, packs } = loadContentFromDisk(config);
+  const rules = loadRulesFromDisk(config);
+  const creatures = loadCreatureRulesFromDisk(config, rules, seed);
+  const progression = loadProgressionRulesFromDisk(config, rules, seed);
+  const items = loadItemRulesFromDisk(config, rules, seed);
+  const worldData = quiet(() => createWorldData(seed, content));
+  const server = createServer({ seed, config, packs, dimensions: content.dimensions, rules, creatures, items, progression, loadDimension: () => ({ world: worldData }) });
+  const channel = createLocalChannel();
+  server.connect(channel.server);
+  channel.client.send({ type: "hello", protocol: PROTOCOL_VERSION, name: "Scout", dimension: "" });
+  for (let i = 0; i < 6; i++) {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    server.step(1 / 30);
+    for (const m of channel.client.receive()) if (m.type === "transfer") channel.client.send({ type: "arrived" });
+  }
+  // Every settlement's cast, and with it its quests.
+  const casts = new Map(worldData.settlementLayouts.map((l) => [l.siteId, server.debug.npcs.debug.cast("mainland", l.siteId)]));
+  const quests = [];
+  for (const l of worldData.settlementLayouts) for (let n = 0; ; n++) {
+    const def = server.debug.quests.def(`q:mainland/${l.siteId}/${n}`);
+    if (!def) break;
+    quests.push(def);
+  }
+  return { server, rules, items, worldData, casts, quests, channel };
+}
+
+await section("the generator", async () => {
+  for (const [config, seeds] of [["tiny", 3], ["small", 3]]) {
+    for (let s = 0; s < seeds; s++) {
+      const seed = 4000 + s * 911;
+      const tag = `${config} seed ${seed}`;
+      const w = await generatedWorld(config, seed);
+      const again = await generatedWorld(config, seed);
+      check(`${tag}: the same quests twice`, JSON.stringify(w.quests) === JSON.stringify(again.quests));
+      const npcIds = new Map();
+      for (const cast of w.casts.values()) for (const n of cast?.npcs ?? []) npcIds.set(n.id, n);
+      const [start] = w.server.debug.starts.get("mainland");
+      const startQuests = w.quests.filter((q) => q.id.startsWith(`q:mainland/${start.settlement}/`));
+      check(`${tag}: the start has quests`, startQuests.length >= 8, String(startQuests.length));
+      const intro = startQuests.slice(0, 8);
+      const first = npcIds.get(intro[0]?.giver);
+      check(`${tag}: the intro begins with the reeve`, first?.role === "reeve", first?.role);
+      check(`${tag}: ...as a chain, each after the one before`, intro.every((q, i) => i === 0 || q.requires.quests[0] === intro[i - 1].id), JSON.stringify(intro.map((q) => q.requires.quests)));
+      const kinds = intro.slice(1, 7).flatMap((q) => q.objectives.map((o) => o.kind));
+      check(`${tag}: the test chain's parts in order`, kinds.join() === "talk,kill,loot,talk,gather,receive,use", kinds.join());
+      const letter = intro[7];
+      const to = npcIds.get(letter?.ender);
+      check(`${tag}: the road on to another settlement`, letter?.objectives.at(-1)?.kind === "deliver" && to && !to.id.startsWith(`npc:mainland/${start.settlement}/`), letter?.ender);
+      check(`${tag}: an item to choose at the chain's end`, intro[6]?.rewards.choice.length >= 2, JSON.stringify(intro[6]?.rewards.choice));
+      let bad = 0;
+      for (const q of w.quests) {
+        const site = Number(q.id.split("/")[1]);
+        const layout = w.worldData.settlementLayouts.find((l) => l.siteId === site);
+        const problems = [];
+        if (!npcIds.has(q.giver)) problems.push("giver");
+        if (!npcIds.has(q.ender)) problems.push("ender");
+        for (const o of q.objectives) {
+          if ((o.kind === "talk" && !npcIds.has(o.npc)) || (o.kind === "receive" && !npcIds.has(o.from)) || (o.kind === "deliver" && !npcIds.has(o.to))) problems.push(`${o.kind} npc`);
+          if ((o.kind === "receive" || o.kind === "use" || o.kind === "deliver") && !w.items.typeIndex.has(o.item)) problems.push(`item ${o.item}`);
+          if ((o.kind === "kill" || o.kind === "loot" || o.kind === "use") && (o.kind === "loot" ? o.from : o.kind === "use" ? o.on : o.creatures).kinds.length === 0) problems.push(`${o.kind} creatures`);
+          if ((o.kind === "gather" || o.kind === "reach") && Math.hypot(o.area.x - layout.x, o.area.z - layout.z) > w.rules.quests.reach + 200) problems.push(`${o.kind} too far`);
+          if (fillText(o.line.text, o.line.args).includes("{")) problems.push(`line "${o.line.text}"`);
+        }
+        for (const text of Object.values(q.text)) if (fillText(text.text, text.args).includes("{")) problems.push(`text "${text.text.slice(0, 40)}"`);
+        if (problems.length > 0) {
+          bad++;
+          if (bad <= 3) log(`  ${q.id}: ${problems.join(", ")}`);
+        }
+      }
+      check(`${tag}: every quest well formed (${w.quests.length})`, bad === 0, `${bad} not`);
+      const people = [...w.casts.values()].flatMap((c) => c?.npcs ?? []).filter((n) => n.spot);
+      log(`${tag}: ${w.quests.length} quests in ${w.casts.size} settlements, ${people.length} quest people (${[...new Set(people.map((p) => p.role))].join(", ")})`);
+    }
+  }
+  // One offer as a reader sees it.
+  const w = await generatedWorld("small", 1338);
+  const [start] = w.server.debug.starts.get("mainland");
+  const sick = w.quests.find((q) => q.id === `q:mainland/${start.settlement}/1`);
+  if (sick) log(`\n${fillText(sick.text.title.text, sick.text.title.args)}\n${fillText(sick.text.offer.text, sick.text.offer.args)}\n`);
+});
+
+// --- the intro chain, played: a new character from the start to its gear, with a log out half way ---
+await section("the intro chain", async () => {
+  const config = "tiny";
+  const seed = 1338;
+  const { content, packs } = loadContentFromDisk(config);
+  const rules = loadRulesFromDisk(config);
+  const creatures = loadCreatureRulesFromDisk(config, rules, seed);
+  const progression = loadProgressionRulesFromDisk(config, rules, seed);
+  const items = loadItemRulesFromDisk(config, rules, seed);
+  const worldData = quiet(() => createWorldData(seed, content));
+  const store = createMemoryStore();
+  const world = createWorldRecord({ id: "intro", name: "Intro", seed, config, packs: [], hashes: { rules: rules.hash, items: items.hash, creatures: creatures.hash, progression: progression.hash } });
+  await store.writeWorld(world);
+  const server = createServer({ seed, config, packs, dimensions: content.dimensions, rules, creatures, items, progression, loadDimension: () => ({ world: worldData }), saves: { store, world, interval: 1000 } });
+  const channel = createLocalChannel();
+  server.connect(channel.server);
+  channel.client.send({ type: "hello", protocol: PROTOCOL_VERSION, select: true, name: "", dimension: "" });
+  const inbox = [];
+  let id = 0;
+  const pump = async (steps = 1, dt = 1 / 30) => {
+    for (let i = 0; i < steps; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      server.step(dt);
+      for (const m of channel.client.receive()) {
+        if (m.type === "entered") id = m.playerId;
+        if (m.type === "transfer") channel.client.send({ type: "arrived" });
+        inbox.push(m);
+      }
+    }
+  };
+  const send = async (m, steps = 2) => {
+    channel.client.send(m);
+    await pump(steps);
+  };
+  const last = (type) => inbox.filter((m) => m.type === type).at(-1);
+  await pump(2);
+  await send({ type: "characterCreate", name: "Novice", origins: {}, look: { seed: 21, race: "human", outfit: "", sex: "" } });
+  const character = last("characters").list.find((c) => c.name === "Novice").id;
+  await send({ type: "enterWorld", character, dimension: "" }, 15);
+  let me = server.debug.entity(id);
+  const npcs = server.debug.npcs;
+  const [start] = server.debug.starts.get("mainland");
+  check("the new character stands in the starting village", Math.hypot(me.x - start.x, me.z - start.z) < 3);
+  const intro = [];
+  for (let n = 0; n < 8; n++) intro.push(server.debug.quests.def(`q:mainland/${start.settlement}/${n}`));
+  check("the intro is there", intro.every(Boolean), String(intro.filter(Boolean).length));
+  const marks = () => inbox.filter((m) => m.type === "markers").at(-1)?.list ?? [];
+
+  /** The entity of an NPC id, its settlement filled first if it is not (the letter's end is elsewhere). */
+  const npcEntity = async (npcId) => {
+    let e = npcs.entityOf(npcId);
+    if (!e) {
+      const site = Number(npcId.split("/")[1]);
+      const layout = worldData.settlementLayouts.find((l) => l.siteId === site);
+      await send({ type: "teleport", x: layout.square.x, z: layout.square.z }, 5);
+      e = npcs.entityOf(npcId);
+    }
+    return e;
+  };
+  const goTo = async (npcId) => {
+    const npc = await npcEntity(npcId);
+    await send({ type: "teleport", x: npc.x + Math.sin(npc.facing) * 1.6, z: npc.z + Math.cos(npc.facing) * 1.6 }, 3);
+    return npc;
+  };
+  const talkTo = async (npcId) => {
+    const npc = await goTo(npcId);
+    await send({ type: "talk", npc: npc.id });
+    return npc;
+  };
+  const state = (q) => server.debug.quests.export(me).active.find((a) => a.id === q.id);
+  const done = (q) => server.debug.quests.export(me).done.includes(q.id);
+  const fight = async (kind, health = 0) => {
+    const beast = server.debug.creatures.debug.spawn("mainland", kind, me.x + 3, me.z, 1);
+    if (health === 0) {
+      addThreat(server.debug.skills.sys, beast, me, 10);
+      server.debug.skills.kill(beast);
+    } else beast.resources.current[rules.health] = beast.resources.max[rules.health] * health;
+    await pump(2);
+    return beast;
+  };
+  const adventure = progression.disciplineIndex.get("adventure");
+  const startLevel = me.progress.disciplines.get(adventure).level;
+
+  for (const [n, q] of intro.entries()) {
+    const giver = await npcEntity(q.giver);
+    // The giver's mark, before taking it.
+    await goTo(q.giver);
+    await pump(16);
+    check(`${n + 1}: "!" over its giver`, marks().some(([e, m]) => e === giver.id && m === "!"), JSON.stringify(marks()));
+    await talkTo(q.giver);
+    check(`${n + 1}: offered`, last("npcWindow")?.quests.some((x) => x.id === q.id && x.state === "offer"), JSON.stringify(last("npcWindow")?.quests));
+    await send({ type: "questAccept", npc: giver.id, quest: q.id });
+    for (const [i, o] of q.objectives.entries()) {
+      const at = () => state(q)?.counts[i] ?? (done(q) ? Infinity : 0);
+      if (o.kind === "talk") await talkTo(o.npc);
+      else if (o.kind === "receive") await talkTo(o.from);
+      else if (o.kind === "deliver") await talkTo(o.to);
+      else if (o.kind === "kill") for (let k = 0; k < o.count; k++) await fight(o.creatures.kinds[0]);
+      else if (o.kind === "loot") for (let k = 0; k < 30 && at() < o.count; k++) await fight(o.from.kinds[0]);
+      else if (o.kind === "gather") {
+        await send({ type: "teleport", x: o.area.x, z: o.area.z }, 10);
+        const objects = [...server.debug.dimensions.get("mainland").entities.values()].filter((e) => e.key.startsWith(`qo:${q.id}/${i}/`));
+        for (const object of objects.slice(0, o.count)) {
+          await send({ type: "teleport", x: object.x + 1, z: object.z }, 2);
+          await send({ type: "questObjectTake", entity: object.id });
+        }
+      } else if (o.kind === "use") {
+        const beast = await fight(o.on.kinds[0], Math.min(o.below, 0.5));
+        await send({ type: "target", id: beast.id });
+        const slot = me.belongings.bag.findIndex((x) => x != null && server.debug.items.ctx.store.get(x).type === items.typeIndex.get(o.item));
+        await send({ type: "itemUse", from: { container: 0, slot } }, 80);
+      } else if (o.kind === "reach") await send({ type: "teleport", x: o.area.x, z: o.area.z }, 20);
+      check(`${n + 1}: ${o.kind} done`, at() >= ("count" in o ? o.count : 1), JSON.stringify(state(q)));
+    }
+    check(`${n + 1}: ready`, state(q)?.state === "ready", JSON.stringify(state(q)));
+    const ender = await talkTo(q.ender);
+    await send({ type: "questComplete", npc: ender.id, quest: q.id, choice: 0 });
+    check(`${n + 1}: "${fillText(q.text.title.text, q.text.title.args)}" handed in`, done(q), JSON.stringify(last("questRefused")));
+    if (n === 3) {
+      // Half way: log out and back in.
+      await send({ type: "logout", toMenu: false }, 10);
+      await send({ type: "enterWorld", character, dimension: "" }, 15);
+      me = server.debug.entity(id);
+      check("back half way: the four done, kept", intro.slice(0, 4).every(done));
+    }
+  }
+  const level = me.progress.disciplines.get(adventure).level;
+  check("a level or more gained", level > startLevel, `${startLevel} -> ${level}`);
+  check("money earned", me.belongings.wallet[items.main] > 0, String(me.belongings.wallet[items.main]));
+  const reward = items.typeIndex.get(intro[6].rewards.choice[0]);
+  const slot = me.belongings.bag.findIndex((x) => x != null && server.debug.items.ctx.store.get(x).type === reward);
+  check("the chosen reward in the bag", slot >= 0, intro[6].rewards.choice.join());
+  await send({ type: "itemEquip", from: { container: 0, slot } });
+  check("...and worn", me.belongings.equipment.some((x) => x != null && server.debug.items.ctx.store.get(x).type === reward), JSON.stringify(last("itemRefused")));
+  check("standing with the village's folk", [...me.standing.values()].some((v) => v > 3000), JSON.stringify([...me.standing]));
+  log(`the intro: level ${startLevel} -> ${level}, ${me.belongings.wallet[items.main]} copper, wearing ${items.types[reward].name}`);
 });
 
 console.log(`${checks - failures}/${checks} checks passed`);

@@ -1,0 +1,9 @@
+// A quest person (QUESTS.md, *Quest people*): Works the woods at a logging camp. Held by nobody until a quest needs one.
+{
+  title: "Forester",
+  outfit: "worker",
+  settlement: { count: 0 },
+  ages: ["adult", "old"],
+  questGiver: 0.3,
+  barks: "villager",
+}

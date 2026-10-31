@@ -1,0 +1,22 @@
+// The intro's last step (NPCS.md's `intro`): a letter down the road to the next settlement, where
+// its own quests are waiting.
+{
+  intro: true,
+  giver: ["reeve"],
+  road: true,
+  quests: [
+    {
+      ender: "road",
+      parts: [{ part: "receiveLetter", npc: "giver" }, { part: "deliverLetter", npc: "road" }],
+      title: "A Letter for {other}",
+      offer: [
+        ["You've done well by {settlement}."],
+        ["There's a letter that wants carrying to {roadGiven} in {other}, down the road."],
+        ["They'll have work for someone like you there, I don't doubt."],
+        ["Mind the road - it grows rougher past the fields."],
+      ],
+      progress: ["Have you the letter for {other}?"],
+      done: ["A letter from {settlement}? From {giverGiven}! Well, well. Sit down, traveller - we've troubles of our own here."],
+    },
+  ],
+}

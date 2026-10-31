@@ -1,0 +1,22 @@
+// The first thing a new character is asked (the starting place's `intro`, NPCS.md): find the inn.
+{
+  intro: true,
+  giver: ["reeve"],
+  people: { inn: { roles: ["innkeeper"] } },
+  quests: [
+    {
+      ender: "inn",
+      parts: [{ part: "talkTo", npc: "inn" }],
+      title: "A Bed in {settlement}",
+      offer: [
+        ["Welcome to {settlement}, stranger.", "Another new face in {settlement} - good, we can use one."],
+        ["I'm {giverGiven}, and I speak for the folk here."],
+        ["We've had our share of trouble lately, and every pair of hands counts."],
+        ["But first things first: go and see {innGiven} at the inn and get yourself a bed."],
+        ["{innGiven} will keep your things safe, too."],
+      ],
+      progress: ["Found the inn yet?"],
+      done: ["So {giverGiven} sent you. Welcome! There's a bed upstairs - make this inn your home, if you like, and you'll always wake here."],
+    },
+  ],
+}

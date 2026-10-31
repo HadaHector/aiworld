@@ -1,0 +1,2 @@
+// Carry the letter.
+{ kind: "deliver", item: "sealedLetter", line: "Bring the letter to {npc}" }

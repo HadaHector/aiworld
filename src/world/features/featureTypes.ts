@@ -207,9 +207,23 @@ export interface PlaceRoadSpec {
   maxLength: number;
 }
 
+/** What a place can be in a quest (QUESTS.md, *Places*): said by the place, in its own file. */
+export interface QuestPlaceDef {
+  /** What kind of place it is, for quest parts' `needs`: "graves", "work", "remote"... */
+  tags: string[];
+  /** Things a gather part may scatter here, by name, with tags of their own. */
+  objects: { name: string; tags: string[] }[];
+  /** Quest people who can live here (NPCS.md's roles). */
+  people: string[];
+  /** How quest text speaks of it: "the churchyard at {name}". */
+  text: string;
+}
+
 export interface FeatureKindDef {
   id: string;
   name: string;
+  /** Its `quest` block, or null: a place quests do not use. */
+  quest: QuestPlaceDef | null;
   /** "settlement" is placed and laid out by settlements/ - in the biome's own `settlement` style,
    *  with its streets, plots and gates - and uses none of the fields below but `road`. */
   type: FeatureType;

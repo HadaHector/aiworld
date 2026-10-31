@@ -31,6 +31,10 @@ import { clampStanding, factionDef, standingWith, tierOf } from "./factions";
 import { buy, buyPrice, sell } from "./items/shop";
 import { createNpcSystem, type NpcSystem } from "./npcs/system";
 import { createQuestSystem, type QuestSystem } from "./quests/system";
+import { generateQuests } from "./quests/generator";
+import { castForSettlement, type Cast, type CastContext } from "./npcs/cast";
+import type { SettlementSite } from "../world/settlements/settlementSites";
+import type { SettlementLayout } from "../world/settlements/settlementLayout";
 
 /** Quest marks are worked out for NPCs this near a player. */
 const MARK_RANGE = 90;
@@ -368,6 +372,7 @@ export function createServer(options: ServerOptions): Server {
     playersIn,
     delta,
     classes: (options.progression?.origins ?? []).filter((o) => o.slot === "class").map((o) => ({ id: o.id, name: o.name })),
+    castMade: (dimension, { site, layout }, cast, context) => generateFor(dimension, site, layout, cast, context),
     bark: (npc, text, to) => {
       const hearers = new Set(to.map((e) => e.id));
       for (const connection of connections) if (connection.player && hearers.has(connection.player.entity.id)) connection.end.send({ type: "bark", npc: npc.id, text: text.text, args: text.args });
@@ -499,6 +504,62 @@ export function createServer(options: ServerOptions): Server {
     level: (entity) => entityStat(rules, entity, "level", 1),
     send: (entity, message) => connectionOf(entity)?.end.send(message),
   });
+
+  /**
+   * A settlement's quests (QUESTS.md, *The generator*): what is around it - its zone's level and
+   * creatures, the places near it with a `quest` block, the settlements down the road and their
+   * reeves - and, for a starting settlement, its start's intro. Defined with the quest system.
+   */
+  function generateFor(dimension: string, site: SettlementSite, layout: SettlementLayout, cast: Cast, context: CastContext): void {
+    const loadedDim = loaded.get(dimension) ?? slots.get(dimension)?.dimension;
+    const definition = definitions.get(dimension);
+    if (!loadedDim || !definition) return;
+    const data = loadedDim.world;
+    const zones = creatureSystem?.debug.zones(dimension) ?? [];
+    const zone = zones[site.areaId];
+    const reach = rules.quests.reach;
+    const places = data.features
+      .filter((f) => f.kind.quest && !f.settlement && Math.hypot(f.x - site.x, f.z - site.z) <= reach)
+      .map((f) => ({ name: f.name ?? f.kind.name, x: f.x, z: f.z, radius: Math.max(12, f.footprint * 0.6), quest: f.kind.quest! }));
+    // Down the road: the settlements nearest first, the next ring's before the same ring's.
+    const ring = zone?.ring ?? 0;
+    const others = data.settlementLayouts
+      .filter((l) => l.siteId !== site.id)
+      .map((l) => ({ l, distance: Math.hypot(l.x - site.x, l.z - site.z), ring: zones[data.settlements.find((s) => s.id === l.siteId)?.areaId ?? -1]?.ring ?? 0 }))
+      .sort((a, b) => Number(b.ring > ring) - Number(a.ring > ring) || a.distance - b.distance)
+      .slice(0, 3)
+      .map(({ l, distance }) => {
+        const otherCast = castForSettlement(data, l.siteId, context);
+        const npc = otherCast?.npcs.find((n) => n.role === "reeve") ?? otherCast?.npcs.find((n) => n.out) ?? null;
+        return { name: data.settlements.find((s) => s.id === l.siteId)?.name ?? "", distance, npc };
+      });
+    const start = (startsOf.get(dimension) ?? []).find((s) => s.settlement === site.id);
+    const intro = start ? (definition.starts.find((s) => s.id === start.id)?.intro ?? []) : [];
+    const defs = generateQuests({
+      cast,
+      castInput: { seed: context.seed, dimension, site, layout, voices: context.voices, rules: rules.npcs },
+      site,
+      layout,
+      zone: data.areaNames.get(site.areaId) ?? "",
+      levels: zone?.levels ?? [1, 3],
+      creatures: (zone?.roster ?? []).map((r) => ({ id: r.kind.id, name: r.kind.template.name, hostility: r.kind.template.hostility, family: r.kind.family })),
+      places,
+      others,
+      intro,
+      folk: `folk@${dimension}/${site.areaId}`,
+      rules,
+      items: options.items ?? null,
+    });
+    questSystem.define(defs);
+    // A character back in the world holds quests made only now: its client is told them whole.
+    const ids = new Set(defs.map((d) => d.id));
+    for (const connection of connections) {
+      const entity = connection.player?.entity;
+      if (!entity) continue;
+      const held = questSystem.export(entity).active.filter((a) => ids.has(a.id));
+      if (held.length > 0) connection.end.send({ type: "questDefs", defs: held.map((a) => questSystem.def(a.id)!) });
+    }
+  }
 
   /** A character's quests as it enters: whole, and each one defined. */
   function sendQuestLog(connection: Connection, entity: Entity): void {

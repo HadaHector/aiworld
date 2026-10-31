@@ -62,6 +62,7 @@ import {
   type FeatureKindDef,
   type PlaceRoadSpec,
   type QuarrySpec,
+  type QuestPlaceDef,
 } from "../features/featureTypes";
 import {
   BUILDING_GENERATORS,
@@ -128,7 +129,7 @@ export const PROGRESSION_FOLDERS = ["disciplines", "disciplineTemplates", "origi
 /** The folders gameplay content lives in - stats, resources, templates (see ENTITIES.md), skills and
  *  game rules files (ABILITIES.md). Not world content: the world's resolver passes over them, and
  *  the game rules' resolver reads them, once per server. */
-export const GAME_FOLDERS = ["stats", "modifiers", "resources", "entities", "skills", "rules", "factions", "npcRoles", "npcRelations", "barks", "text", ...ITEM_FOLDERS, ...CREATURE_FOLDERS, ...PROGRESSION_FOLDERS] as const;
+export const GAME_FOLDERS = ["stats", "modifiers", "resources", "entities", "skills", "rules", "factions", "npcRoles", "npcRelations", "barks", "text", "questParts", "questPlots", ...ITEM_FOLDERS, ...CREATURE_FOLDERS, ...PROGRESSION_FOLDERS] as const;
 
 /** The folders characters' bodies are drawn from - races, gear, outfits (see CHARACTERS.md). Read by
  *  the client alone (src/character); the world's resolver passes over them too. */
@@ -1547,20 +1548,22 @@ function readBuildingPart(id: string, obj: RawObject, reader: Reader): BuildingP
 
 /** A features/ file - see FeatureKindDef. */
 function readFeatureKind(id: string, obj: RawObject, reader: Reader, buildings: Map<string, BuildingDef>, props: Map<string, PropDef>, groups: Map<string, PropGroupDef>): FeatureKindDef {
-  reader.onlyKeys(obj, "", ["name", "type", "quarry", "compound", "clearing", "stumps", "road", "ground", "names"]);
+  reader.onlyKeys(obj, "", ["name", "type", "quarry", "compound", "clearing", "stumps", "road", "ground", "names", "quest"]);
+  const quest = readQuestPlace(obj, reader);
   const type = reader.oneOf(obj, "type", "", FEATURE_TYPES);
   // A settlement is laid out by its own code, in its biome's settlement style: it takes nothing else.
   if (type === "settlement") {
-    reader.onlyKeys(obj, "", ["name", "type", "road"]);
-    return { id, name: reader.string(obj, "name", ""), type, quarry: null, compound: null, clearing: [0, 0], stumps: 0, road: readPlaceRoad(obj, reader, true), ground: null, names: null };
+    reader.onlyKeys(obj, "", ["name", "type", "road", "quest"]);
+    return { id, name: reader.string(obj, "name", ""), quest, type, quarry: null, compound: null, clearing: [0, 0], stumps: 0, road: readPlaceRoad(obj, reader, true), ground: null, names: null };
   }
   // Each type takes its own block and not another's.
-  reader.onlyKeys(obj, "", ["name", "type", type, "clearing", "stumps", "road", "ground", "names"]);
+  reader.onlyKeys(obj, "", ["name", "type", type, "clearing", "stumps", "road", "ground", "names", "quest"]);
   const ground = obj.ground === undefined ? null : reader.object(obj.ground, "ground");
   if (ground) reader.onlyKeys(ground, "ground", ["material", "weight"]);
   return {
     id,
     name: reader.string(obj, "name", ""),
+    quest,
     type,
     quarry: type === "quarry" ? readQuarry(reader.object(obj.quarry, "quarry"), reader) : null,
     compound: type === "compound" ? readCompound(reader.object(obj.compound, "compound"), reader, buildings, props, groups) : null,
@@ -1569,6 +1572,25 @@ function readFeatureKind(id: string, obj: RawObject, reader: Reader, buildings: 
     road: readPlaceRoad(obj, reader, false),
     ground: ground ? readLayer(ground, reader, "ground", `feature-${id}`) : null,
     names: readNaming(obj, reader),
+  };
+}
+
+/** A feature's `quest` block (QUESTS.md, *Places*): its tags, its objects, its people, how it is spoken of. */
+function readQuestPlace(obj: RawObject, reader: Reader): QuestPlaceDef | null {
+  if (obj.quest === undefined) return null;
+  const raw = reader.object(obj.quest, "quest");
+  reader.onlyKeys(raw, "quest", ["tags", "objects", "people", "text"]);
+  const objects = reader.optionalArray(raw, "objects", "quest").map((value, i) => {
+    const path = `quest.objects[${i}]`;
+    const o = reader.object(value, path);
+    reader.onlyKeys(o, path, ["name", "tags"]);
+    return { name: reader.string(o, "name", path), tags: o.tags === undefined ? [] : reader.stringList(o, "tags", path) };
+  });
+  return {
+    tags: raw.tags === undefined ? [] : reader.stringList(raw, "tags", "quest"),
+    objects,
+    people: raw.people === undefined ? [] : reader.stringList(raw, "people", "quest"),
+    text: reader.optionalString(raw, "text", "quest") ?? "{name}",
   };
 }
 

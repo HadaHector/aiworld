@@ -1,0 +1,9 @@
+// A quest person (QUESTS.md, *Quest people*): Cuts stone at a quarry. Held by nobody until a quest needs one.
+{
+  title: "Quarryman",
+  outfit: "worker",
+  settlement: { count: 0 },
+  ages: ["adult"],
+  questGiver: 0.3,
+  barks: "villager",
+}

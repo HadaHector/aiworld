@@ -1,0 +1,7 @@
+// Pick up what lies about at a place near: any place with objects will do.
+{
+  kind: "gather",
+  count: [4, 6],
+  line: "{objects} from {place}",
+  motive: ["{objects} grow out at {place}, if you know where to look.", "You'll find {objects} at {place}."],
+}

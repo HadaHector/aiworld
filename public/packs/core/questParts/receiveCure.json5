@@ -1,0 +1,2 @@
+// Be given the salve.
+{ kind: "receive", item: "herbalSalve", line: "Take the salve from {npc}" }

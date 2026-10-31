@@ -76,4 +76,13 @@
   // and nowhere else, so it stands in the wood or the field as the road found it.
   clearing: [0, 0],
   stumps: 0,
+  // What the coaching inn can be in a quest (QUESTS.md, *Places*): the road, travellers, news.
+  quest: {
+    tags: ["road", "travellers"],
+    objects: [
+      { name: "Spilled Parcel", tags: ["lost"] },
+    ],
+    people: ["traveller"],
+    text: "{name}",
+  },
 }

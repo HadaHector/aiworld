@@ -1,0 +1,8 @@
+// Hunt the creatures for what they give.
+{
+  kind: "loot",
+  count: [4, 6],
+  chance: 0.6,
+  line: "Good pelts of {creatures}",
+  motive: ["Winter will come, and the pelts of {creatures} keep a family warm.", "I've buyers for {creatures} pelts, if they're good ones."],
+}

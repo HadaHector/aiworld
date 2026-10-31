@@ -4,7 +4,7 @@
 //   npm run probe -- scripts/probe/npcs.mjs
 import { ContentError } from "../../src/world/content/contentReader.ts";
 import { loadContentFromDisk, loadCreatureRulesFromDisk, loadItemRulesFromDisk, loadProgressionRulesFromDisk, loadRulesFromDisk, packSourcesFromDisk, readConfigFromDisk } from "../diskContent.mjs";
-import { fillText } from "../../src/core/text.ts";
+import { fillText } from "../../src/sim/text.ts";
 import { chooseStarts } from "../../src/world/settlements/starts.ts";
 import { castForSettlement } from "../../src/sim/npcs/cast.ts";
 import { resolveGameRules } from "../../src/sim/rules/gameRules.ts";

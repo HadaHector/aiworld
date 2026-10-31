@@ -1,0 +1,9 @@
+// A quest person (QUESTS.md, *Quest people*): Keeps a churchyard: digs, mends, minds the dead. Held by nobody until a quest needs one.
+{
+  title: "Sexton",
+  outfit: "worker",
+  settlement: { count: 0 },
+  ages: ["adult", "old"],
+  questGiver: 0.3,
+  barks: "villager",
+}

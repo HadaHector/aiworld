@@ -1,5 +1,6 @@
 import { Reader, type ContentIssue } from "../../world/content/contentReader";
-import type { Text } from "../../core/text";
+import type { Text } from "../text";
+import { readQuestParts, readQuestPlots, type QuestPartDef, type QuestPlotDef } from "./plots";
 
 /**
  * A quest (QUESTS.md, *A quest*): who gives and ends it, what it asks, how it reads, what it gives.
@@ -97,12 +98,44 @@ export interface QuestRules {
   colours: { red: number; orange: number; green: number; grey: number };
   /** What a quest's item choice is drawn from: item templates by slot kind. */
   rewardTemplates: string[];
+  /** Quests a settlement gets, by tier, chains counted by their quests. */
+  quota: Record<string, [number, number]>;
+  /** How far round a settlement its quests look for places, in metres. */
+  reach: number;
+  /** Plurals by a name's last word ("Wolf": "Wolves"); others take an "s". */
+  plurals: Record<string, string>;
+  /** The settlement's own fields as a place: what lies about in them. */
+  fields: { objects: { name: string; tags: string[] }[]; text: string };
+  parts: ReadonlyMap<string, QuestPartDef>;
+  plots: QuestPlotDef[];
 }
 
-export function readQuestRules(entry: { file: string; data: unknown } | undefined, issues: ContentIssue[]): QuestRules {
+type Entry = { id: string; file: string; data: unknown };
+
+export function readQuestRules(entry: { file: string; data: unknown } | undefined, partEntries: readonly Entry[], plotEntries: readonly Entry[], issues: ContentIssue[]): QuestRules {
   const reader = new Reader(issues, entry?.file ?? "rules/quests.json5");
   const obj = entry ? reader.object(entry.data, "") : {};
-  reader.onlyKeys(obj, "", ["maxActive", "xp", "money", "standing", "objects", "talkRange", "colours", "rewardTemplates"]);
+  reader.onlyKeys(obj, "", ["maxActive", "xp", "money", "standing", "objects", "talkRange", "colours", "rewardTemplates", "quota", "reach", "plurals", "fields"]);
+  const parts = new Map(readQuestParts(partEntries, issues).map((p) => [p.id, p]));
+  const plots = readQuestPlots(plotEntries, parts, issues);
+  const quota: Record<string, [number, number]> = {};
+  if (obj.quota !== undefined) {
+    const raw = reader.object(obj.quota, "quota");
+    for (const tier of Object.keys(raw)) quota[tier] = reader.range(raw, tier, "quota", { allowEqual: true });
+  }
+  const plurals: Record<string, string> = {};
+  if (obj.plurals !== undefined) {
+    const raw = reader.object(obj.plurals, "plurals");
+    for (const word of Object.keys(raw)) plurals[word] = reader.string(raw, word, "plurals");
+  }
+  const fieldsRaw = obj.fields === undefined ? {} : reader.object(obj.fields, "fields");
+  const fields = {
+    objects: reader.optionalArray(fieldsRaw, "objects", "fields").map((v, i) => {
+      const o = reader.object(v, `fields.objects[${i}]`);
+      return { name: reader.string(o, "name", `fields.objects[${i}]`), tags: o.tags === undefined ? [] : reader.stringList(o, "tags", `fields.objects[${i}]`) };
+    }),
+    text: reader.optionalString(fieldsRaw, "text", "fields") ?? "the fields outside {name}",
+  };
   const xp = obj.xp === undefined ? {} : reader.object(obj.xp, "xp");
   const money = obj.money === undefined ? {} : reader.object(obj.money, "money");
   const objects = obj.objects === undefined ? {} : reader.object(obj.objects, "objects");
@@ -130,6 +163,12 @@ export function readQuestRules(entry: { file: string; data: unknown } | undefine
       grey: reader.optionalNumber(colours, "grey", "colours", -6),
     },
     rewardTemplates: obj.rewardTemplates === undefined ? [] : reader.stringList(obj, "rewardTemplates", ""),
+    quota,
+    reach: reader.optionalNumber(obj, "reach", "", 1000, { min: 0 }),
+    plurals,
+    fields,
+    parts,
+    plots,
   };
 }
 

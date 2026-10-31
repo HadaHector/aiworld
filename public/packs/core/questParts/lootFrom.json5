@@ -1,0 +1,8 @@
+// Bring back something taken from the creatures: counted as it is taken, not carried.
+{
+  kind: "loot",
+  count: 1,
+  chance: 0.6,
+  line: "Tainted blood from a {creature}",
+  motive: ["Bring me a little of their blood, so I can see what ails them."],
+}

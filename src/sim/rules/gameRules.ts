@@ -1,5 +1,5 @@
 import { readQuestRules, type QuestRules } from "../quests/quest";
-import { readTextTable, type TextTable } from "../../core/text";
+import { readTextTable, type TextTable } from "../text";
 import { readNpcRules, type NpcRules } from "./npcRules";
 import { FACTION_BY_HOSTILITY, PLAYERS_FACTION, factionDef, readFactionRules, standingBetween, type FactionRules } from "../factions";
 import { ContentError, isObject, joinPath, Reader, type ContentIssue, type RawObject } from "../../world/content/contentReader";
@@ -306,7 +306,7 @@ export function resolveGameRules(packs: PackSource[]): GameRules {
 
   const npcs = readNpcRules(folders.get("rules")!.get("npcs"), entries("npcRoles"), entries("npcRelations"), entries("barks"), new Set(templates.keys()), issues);
 
-  const quests = readQuestRules(folders.get("rules")!.get("quests"), issues);
+  const quests = readQuestRules(folders.get("rules")!.get("quests"), entries("questParts"), entries("questPlots"), issues);
   const text = readTextTable(entries("text"), (file, message) => issues.push({ file, path: "", message }));
 
   if (issues.length > 0) throw new ContentError(issues);

@@ -16,4 +16,18 @@
   colours: { red: 5, orange: 3, green: -3, grey: -6 },
   // What a quest's item choice is drawn from (item templates).
   rewardTemplates: ["sword", "chestpiece"],
+  // Quests a settlement gets, by tier, after any intro; chains count by their quests.
+  quota: { hamlet: [2, 3], village: [4, 6], town: [7, 10] },
+  // How far round a settlement its quests look for places, in metres.
+  reach: 1000,
+  // Plurals by a name's last word; any other takes an "s".
+  plurals: { Wolf: "Wolves", Boar: "Boars", Spider: "Spiders", Thug: "Thugs", Hexer: "Hexers", Captain: "Captains", Feverfew: "Feverfew", Moss: "Moss", Gravebloom: "Gravebloom", Flint: "Flint", Head: "Heads", Lump: "Lumps", Bell: "Bells" },
+  // The settlement's own fields: a place every settlement has, just out past a gate.
+  fields: {
+    objects: [
+      { name: "Feverfew", tags: ["herb"] },
+      { name: "Strayed Lamb Bell", tags: ["lost"] },
+    ],
+    text: "the fields outside {name}",
+  },
 }

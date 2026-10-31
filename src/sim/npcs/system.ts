@@ -12,7 +12,7 @@ import type { WorldDelta } from "../creatures/worldDelta";
 import { EVENT_KIND, type CombatEvent } from "../skills/events";
 import { castForSettlement, type Cast, type CastContext, type CastNpc } from "./cast";
 import { standingBetween } from "../factions";
-import type { Text } from "../../core/text";
+import type { Text } from "../text";
 
 /**
  * Settlements' people in the world (NPCS.md, *NPCs in the world*): each settlement near a player
@@ -29,6 +29,9 @@ export interface NpcWorld {
   delta: WorldDelta;
   /** The world's classes, for class trainers. */
   classes: readonly { id: string; name: string }[];
+  /** A settlement's cast has just been made: its quests are generated now, and the quest people
+   *  they need added to it before anyone is placed (QUESTS.md, *The generator*). */
+  castMade?(dimension: string, settlement: { site: SettlementSite; layout: SettlementLayout }, cast: Cast, context: CastContext): void;
   /** Says a bark: its text as said, to the players near. */
   bark(npc: Entity, text: Text, to: readonly Entity[]): void;
 }
@@ -251,7 +254,9 @@ export function createNpcSystem(rules: GameRules, world: NpcWorld): NpcSystem {
       if (!npc.out) continue;
       const role = roleOf(npc);
       let spot: Spot | null = null;
-      for (const anchor of role?.stand ?? []) {
+      // A quest person stands at its place (QUESTS.md, *Quest people*).
+      if (npc.spot) spot = outdoors(npc.spot.x, npc.spot.z, rng() * Math.PI * 2);
+      for (const anchor of spot ? [] : (role?.stand ?? [])) {
         spot = tryAnchor(npc, role, anchor);
         if (spot) break;
       }
@@ -297,16 +302,24 @@ export function createNpcSystem(rules: GameRules, world: NpcWorld): NpcSystem {
   }
 
   const spotsOf = new WeakMap<Settlement, Map<number, Spot>>();
+  /** A settlement's cast, made once - with its quests and quest people (QUESTS.md). */
+  function castOfSettlement(state: DimensionState, settlement: Settlement): Cast | null {
+    if (!settlement.cast) {
+      settlement.cast = castForSettlement(state.dimension.world, settlement.site.id, state.context);
+      if (settlement.cast) world.castMade?.(state.dimension.id, settlement, settlement.cast, state.context);
+    }
+    return settlement.cast;
+  }
+
   function fill(state: DimensionState, settlement: Settlement): void {
-    settlement.cast ??= castForSettlement(state.dimension.world, settlement.site.id, state.context);
-    if (!settlement.cast) return;
+    if (!castOfSettlement(state, settlement)) return;
     let spots = spotsOf.get(settlement);
     if (!spots) {
       spots = placeAll(state, settlement);
       spotsOf.set(settlement, spots);
     }
     const now = world.time();
-    for (const npc of settlement.cast.npcs) {
+    for (const npc of settlement.cast!.npcs) {
       if (!npc.out || settlement.living.has(npc.index)) continue;
       // Killed, and not back yet.
       if ((world.delta.get(npc.id) ?? -Infinity) > now) continue;
@@ -438,7 +451,12 @@ export function createNpcSystem(rules: GameRules, world: NpcWorld): NpcSystem {
           // Filled the moment a player comes near; then, now and then, the dead who are due back
           // made again - or all of it dropped once nobody has been near for long enough.
           if (look || !settlement.active) {
-            const nearest = Math.min(Infinity, ...players.map((p) => Math.hypot(p.x - layout.x, p.z - layout.z) - layout.radius));
+            // Near the settlement, or near one of its quest people out at their places.
+            const outside = settlement.cast?.npcs.flatMap((n) => (n.spot ? [n.spot] : [])) ?? [];
+            const nearest = Math.min(
+              Infinity,
+              ...players.map((p) => Math.min(Math.hypot(p.x - layout.x, p.z - layout.z) - layout.radius, ...outside.map((o) => Math.hypot(p.x - o.x, p.z - o.z)))),
+            );
             if (nearest <= npcRules.activeRadius) {
               settlement.lastNear = now;
               fill(state, settlement);
@@ -488,8 +506,7 @@ export function createNpcSystem(rules: GameRules, world: NpcWorld): NpcSystem {
         const state = states.get(dimension);
         const settlement = state?.settlements.find((s) => s.site.id === siteId);
         if (!state || !settlement) return null;
-        settlement.cast ??= castForSettlement(state.dimension.world, siteId, state.context);
-        return settlement.cast;
+        return castOfSettlement(state, settlement);
       },
       active: (dimension) => (states.get(dimension)?.settlements ?? []).flatMap((s) => [...s.living.values()].map((l) => l.entity)),
     },

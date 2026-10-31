@@ -1,7 +1,7 @@
 import type { ClientMessage, NpcWindow as NpcWindowMessage } from "../sim/protocol";
 import { formatMoney, type ItemRules } from "../sim/rules/itemRules";
 import type { BelongingsMirror } from "../game/belongingsMirror";
-import { renderText, type TextTable } from "../core/text";
+import { renderText, type TextTable } from "../sim/text";
 import type { QuestMirror } from "../game/questMirror";
 import type { QuestRules } from "../sim/quests/quest";
 import { renderQuest } from "./questLog";

@@ -40,6 +40,8 @@ export interface CastNpc {
   out: boolean;
   /** Who it is tied to, and what it calls them ("brother", "rival"). */
   relations: { to: number; relation: string; call: string }[];
+  /** Where a quest person stands (QUESTS.md, *Quest people*): out at a place, not in the settlement. */
+  spot?: { x: number; z: number };
 }
 
 export interface Household {
@@ -276,6 +278,56 @@ export function castOf(input: CastInput): Cast {
     }
   }
   return { settlement: site.id, npcs, households };
+}
+
+/**
+ * A quest person (QUESTS.md, *Quest people*): someone a quest needs and the settlement does not have
+ * - a sexton at the churchyard, a quarryman - made for a role, alone in a household of their own,
+ * standing at a place. Appended to the cast, so its id carries on the cast's numbering; made from
+ * `salt`, so the same quest makes the same person.
+ */
+export function addPerson(cast: Cast, input: Pick<CastInput, "seed" | "dimension" | "site" | "layout" | "voices" | "rules">, role: NpcRoleDef, at: { x: number; z: number }, salt: number): CastNpc {
+  const { rules } = input;
+  const rng = mulberry32(deriveSeed(input.seed, CAST_SALT * 7 + hashString(input.dimension) + input.site.id * 131 + salt));
+  const race = weighted(rng, rules.peoples[input.layout.styleId] ?? rules.peoples.default) || "human";
+  const familyVoice = input.voices[input.site.biome.voiceId] ?? Object.values(input.voices)[0];
+  const voice = input.voices[rules.names[race] ?? ""] ?? familyVoice;
+  const taken = new Set(cast.npcs.map((n) => n.name));
+  let given = "";
+  let family = "";
+  for (let i = 0; i < 8 && (!given || taken.has(`${given} ${family}`)); i++) {
+    given = voice ? personName(rng, voice) : `Person${cast.npcs.length}`;
+    family = familyVoice ? personName(rng, familyVoice, 9) : "";
+  }
+  const household: Household = { index: cast.households.length, house: -1, family, race, members: [cast.npcs.length] };
+  cast.households.push(household);
+  const ages = role.ages.length > 0 ? role.ages : ["adult" as const];
+  const age = ages[Math.floor(rng() * ages.length)];
+  const body = AGE_BODY[age];
+  const npc: CastNpc = {
+    id: `npc:${input.dimension}/${input.site.id}/${cast.npcs.length}`,
+    index: cast.npcs.length,
+    household: household.index,
+    role: role.id,
+    class: null,
+    work: -1,
+    given,
+    family,
+    name: `${given} ${family}`,
+    title: role.title,
+    sex: rng() < 0.5 ? "male" : "female",
+    age,
+    race,
+    seed: Math.floor(rng() * 0xffffffff) >>> 0,
+    choices: { skin: Math.floor(rng() * 64), hair: Math.floor(rng() * 64), eyes: Math.floor(rng() * 64), height: body.height[0] + rng() * (body.height[1] - body.height[0]), build: body.build[0] + rng() * (body.build[1] - body.build[0]) },
+    outfit: role.outfits.length > 0 ? role.outfits[Math.floor(rng() * role.outfits.length)] : "",
+    mood: weighted(rng, rules.moods),
+    out: true,
+    relations: [],
+    spot: at,
+  };
+  cast.npcs.push(npc);
+  return npc;
 }
 
 /** What the casts of one dimension are made from, beyond each settlement's own site and layout. */

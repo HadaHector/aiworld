@@ -1,0 +1,15 @@
+// A standalone: hunt creatures for their pelts.
+{
+  weight: 1.5,
+  giver: ["shopkeeper", "smith", "innkeeper", "villager"],
+  creatures: { family: ["beast"] },
+  quests: [
+    {
+      parts: ["huntPelts"],
+      title: "Pelts for {giverGiven}",
+      offer: [["I'll be straight with you: I need pelts."], "$motive", ["Bring me a few and I'll make it worth your while."]],
+      progress: ["Pelts?"],
+      done: ["Fine pelts, these. A fair price, as agreed."],
+    },
+  ],
+}

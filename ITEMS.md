@@ -435,7 +435,8 @@ Each leaves the game working: dev server, `npm run probe`, `npm run server`, `np
 
 ## Not in this step
 
-- Shops, selling and area prices; trading between players; mail.
+- Shops, selling and area prices; trading between players; mail. *Shops and selling done in NPCS.md
+  (step 5): fixed prices, vendor stocks in packs; area prices, buyback, trading and mail remain.*
 - Bags as items that add slots; a bank of more than one tab.
 - Enchanting, upgrading, set items.
 - Crafting and gathering tools' bonuses (they are items with stats here; using them is step 8 and

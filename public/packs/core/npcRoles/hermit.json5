@@ -1,0 +1,9 @@
+// A quest person (QUESTS.md, *Quest people*): Lives alone out at a place, and knows what goes on there. Held by nobody until a quest needs one.
+{
+  title: "Hermit",
+  outfit: ["apprentice", "villager"],
+  settlement: { count: 0 },
+  ages: ["adult", "old"],
+  questGiver: 0.3,
+  barks: "villager",
+}

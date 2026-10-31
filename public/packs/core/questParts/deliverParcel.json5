@@ -1,0 +1,2 @@
+// Carry the parcel.
+{ kind: "deliver", item: "wrappedParcel", line: "Bring the parcel to {npc}" }

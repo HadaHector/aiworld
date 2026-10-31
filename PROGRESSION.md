@@ -139,7 +139,7 @@ depend on the source. Every source may have `when` (a formula that must not be 0
 | `healDealt` | A `heal` the earner did. Overheal does not count | as above |
 | `cast` | The earner's cast went off (`castDone`). `tags`, `spellSource` (a prefix of the spell's source: `origin:class` for the class's own abilities) | `caster.<stat>`, `level` (the spell's) |
 | `skill` | A skill's `xp` action (*Actions* below) gave it: eating, a potion, any skill a gathering node or a recipe casts later | `amount` as the action passed it |
-| `gather`, `craft`, `quest` | Hooks for later steps: `progression.award(entity, on, details)` with a `tags` list. Nothing calls them yet | `amount`, `earner.<stat>`, `node.level` / `recipe.level` / `quest.level` |
+| `gather`, `craft`, `quest` | Hooks for later steps: `progression.award(entity, on, details)` with a `tags` list. The quests call `quest` with their XP (QUESTS.md, *Rewards*); the others wait for their steps | `amount`, `earner.<stat>`, `node.level` / `recipe.level` / `quest.level` |
 
 - **`weapon`** matches the earner's main-hand item: `{ template: "sword" }`, `{ type: "rustyKnife" }`,
   `{ kind: "weapon" }` or `"none"` (bare hands). This is what makes a weapon skill rise only with

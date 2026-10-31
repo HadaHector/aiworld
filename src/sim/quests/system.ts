@@ -124,13 +124,16 @@ export function createQuestSystem(rules: GameRules, quests: QuestRules, world: Q
 
   const near = (a: Entity, b: Entity, range: number): boolean => a.dimension === b.dimension && Math.hypot(a.x - b.x, a.z - b.z) <= range;
 
-  /** The quest items a quest gave (receive) or asks to use: taken back when it ends - unless a quest
-   *  the player has not done yet asks for one (the next in a chain uses the salve it was given). */
+  /** The quest items a quest gave (receive) or asks to use: taken back when it ends - unless another
+   *  quest the player has, or a later one of the same chain, asks for one (the next in a chain uses
+   *  the salve it was given). */
   function questItems(player: Entity, def: QuestDef): string[] {
     const part = partOf(player);
     const wanted = new Set<string>();
     for (const other of defs.values()) {
       if (other === def || part?.done.has(other.id)) continue;
+      const sameChain = def.chain !== null && other.chain?.id === def.chain.id && other.chain.index > def.chain.index;
+      if (!sameChain && !part?.active.has(other.id)) continue;
       for (const o of other.objectives) if (o.kind === "use" || o.kind === "deliver") wanted.add(o.item);
     }
     return def.objectives.flatMap((o) => (o.kind === "receive" || o.kind === "use" ? [o.item] : [])).filter((item) => !wanted.has(item));

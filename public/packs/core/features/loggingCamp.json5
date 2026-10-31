@@ -90,4 +90,14 @@
   // Its place in the road network (see settlement.json5): about a hamlet's worth, one road at the
   // least and two at most, to a settlement by preference.
   road: { importance: 1, links: [1, 2], wants: ["settlement"], maxLength: 2500 },
+  // What the logging camp can be in a quest (QUESTS.md, *Places*): timber, the woods, hard work.
+  quest: {
+    tags: ["work", "wood", "remote"],
+    objects: [
+      { name: "Dropped Axe Head", tags: ["lost", "work"] },
+      { name: "Resin Lump", tags: ["material", "herb"] },
+    ],
+    people: ["forester"],
+    text: "{name}",
+  },
 }

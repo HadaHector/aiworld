@@ -20,8 +20,9 @@ export interface Nameplates {
   dispose: () => void;
 }
 
-/** Plates farther off than this are hidden. */
+/** Names farther off than this are hidden; a quest mark shows out to MARK_RANGE (the server's 90 m). */
 const RANGE = 28;
+const MARK_RANGE = 90;
 const OVER_HEAD = 0.35;
 /** How long a bark stays up, in seconds. */
 const BARK_TIME = 6;
@@ -87,7 +88,8 @@ export function createNameplates(scene: Scene, mirror: EntityMirror, ownId: () =
       const seen = new Set<number>();
       for (const entity of mirror.entities.values()) {
         if (!camera || !shows(entity)) continue;
-        if (own && Math.hypot(entity.x - own.x, entity.z - own.z) > RANGE) continue;
+        const far = own ? Math.hypot(entity.x - own.x, entity.z - own.z) : 0;
+        if (far > MARK_RANGE || (far > RANGE && !marks.has(entity.id))) continue;
         at.set(entity.x, entity.y + (entity.template?.look.height ?? 1.8) + OVER_HEAD, entity.z);
         Vector3.ProjectToRef(at, Matrix.IdentityReadOnly, scene.getTransformMatrix(), camera.viewport.toGlobal(width, height), onScreen);
         if (onScreen.z < 0 || onScreen.z > 1) continue;
@@ -96,6 +98,9 @@ export function createNameplates(scene: Scene, mirror: EntityMirror, ownId: () =
         if (plate.name.textContent !== entity.name) plate.name.textContent = entity.name;
         if (plate.title.textContent !== entity.title) plate.title.textContent = entity.title ? `<${entity.title}>` : "";
         plate.name.style.textDecoration = entity.id === targetId ? "underline" : "none";
+        // Far off, only its quest mark: "!" over a giver is seen across the village.
+        plate.name.style.display = far > RANGE ? "none" : "";
+        plate.title.style.display = far > RANGE ? "none" : "";
         const mark = marks.get(entity.id);
         plate.mark.style.display = mark ? "" : "none";
         if (mark && plate.mark.textContent !== mark.mark) plate.mark.textContent = mark.mark;

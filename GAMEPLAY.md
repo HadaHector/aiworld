@@ -239,6 +239,10 @@ This holds for single player and for a restarted dedicated server alike.
 
 Complete a quest that needs combat, and come out of it with XP, disciplines, loot and equipment.
 
+**Reached** with step 9: a new character made in the front end starts in the generated starting
+village and does the intro chain - the test chain among it - through to levels, money, standing and
+a chosen weapon it wears, with progress kept across logging out (QUESTS.md, *As built*).
+
 ## Out, and later
 
 | Out | Later (design so it can be added) |
@@ -329,8 +333,15 @@ A proposal, to be confirmed. Each step gets its own plan document.
    Generated synth sounds that samples can replace later, a particle system with generated
    textures, flash, flinch, camera shake and hit pause, footsteps by surface, loot and level-ups,
    and a dev page (`fx.html`). Client side, plus pack data and the `cues` field of skills.
-9. **NPCs and the quest generator,** up to the test chain, and the quest log. A generated starting
-   village per people, which `startingPlace` (FRONTEND.md) then returns for new characters.
+9. **NPCs and the quest generator: done** - see [NPCS.md](NPCS.md) and [QUESTS.md](QUESTS.md). The
+   starting site as a rule a generated village is chosen by (one shared start for now, per people
+   possible through a filter), which `startingPlace` returns and ring 0 follows; settlements' people
+   made from relations first, with roles, names, looks, spots indoors and out, barks, factions and
+   standing; trainers, a shop, mending, the bank and home at the inn; translatable text; quests put
+   together from parts and plots in packs with what is around each settlement - its people, its
+   zone's creatures, the places near it - with quest people made for them, "!" and "?", a quest log
+   (J), a tracker and map marks, rewards and saving; the intro chain, GAMEPLAY.md's test chain, in
+   the starting village.
 10. **HUD, screens and the front end: done** - see [FRONTEND.md](FRONTEND.md). Done ahead of step 9, so
    the beginner experience can be tried from a real start. The HUD was built along the earlier
    steps: its layout and look, unit frames, action bar and spell book, XP bar, inventory,

@@ -75,4 +75,15 @@
       rise: ["Rise", "Knoll", "Hill", "Shelf", "Brow"],
     },
   },
+  // What the churchyard can be in a quest (QUESTS.md, *Places*): graves, holy ground, out of the way.
+  quest: {
+    tags: ["graves", "sacred", "remote"],
+    objects: [
+      { name: "Gravebloom", tags: ["herb", "offering"] },
+      { name: "Grave Moss", tags: ["herb"] },
+      { name: "Fallen Candle", tags: ["offering"] },
+    ],
+    people: ["sexton", "hermit"],
+    text: "the churchyard of {name}",
+  },
 }

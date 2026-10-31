@@ -1,0 +1,2 @@
+// Be given a parcel to carry.
+{ kind: "receive", item: "wrappedParcel", line: "Take the parcel from {npc}" }

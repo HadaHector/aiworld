@@ -1,0 +1,2 @@
+// Speak with someone (the plot says who).
+{ kind: "talk", line: "Speak with {npc}" }

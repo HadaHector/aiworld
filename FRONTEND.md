@@ -645,7 +645,8 @@ Each step leaves the game working: the dev server, `npm run probe`, `npm run ser
 
 ## Later
 
-- **The quest log**, after step 9 makes quests (GAMEPLAY.md's build order).
+- **The quest log**, after step 9 makes quests (GAMEPLAY.md's build order). *Done in step 9*:
+  QUESTS.md, *In the game* (J, not L, which the spell book has).
 - **A real transport** for *Join a server*, and logins for a server's players. Today a server trusts
   the name a connection gives, which is fine for co-op among friends until then.
 - **Exporting and importing a world** as a file, for backups and moving saves between browsers.

@@ -54,4 +54,14 @@
       ],
     },
   },
+  // What the quarry can be in a quest (QUESTS.md, *Places*): stone and hard work, a way out of town.
+  quest: {
+    tags: ["work", "stone", "remote"],
+    objects: [
+      { name: "Chipped Flint", tags: ["material", "stone"] },
+      { name: "Lost Chisel", tags: ["lost", "work"] },
+    ],
+    people: ["quarryman"],
+    text: "{name}",
+  },
 }

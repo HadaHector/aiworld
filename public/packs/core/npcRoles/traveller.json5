@@ -1,0 +1,9 @@
+// A quest person (QUESTS.md, *Quest people*): On the road, resting at a coaching inn. Held by nobody until a quest needs one.
+{
+  title: "Traveller",
+  outfit: "scout",
+  settlement: { count: 0 },
+  ages: ["young", "adult"],
+  questGiver: 0.3,
+  barks: "villager",
+}

@@ -8,7 +8,7 @@ translatable templates, "!" and "?" markers, a quest log and map markers, and re
 GAMEPLAY.md's 7-part *Test chain* must be one of the chains it can produce. Finishing it is the
 first milestone.
 
-**Status: in progress.** Steps 6 to 8 are done (see [As built](#as-built)).
+**Status: done.** Steps 6 to 11 (see [As built](#as-built)); with [NPCS.md](NPCS.md), step 9 of GAMEPLAY.md and the first milestone.
 
 ## Decisions
 
@@ -439,7 +439,7 @@ New client events in FEEDBACK.md's table, with cues and generated sounds in the 
 
 | File | What |
 |---|---|
-| `src/core/text.ts` (new) | Text keys, arguments, the plural and pronoun forms; `renderText(text, language, names)` |
+| `src/sim/text.ts` (new) | Text keys, arguments, the plural and pronoun forms; `renderText(text, language, names)` |
 | `src/world/quests/context.ts` (new) | What is around a settlement |
 | `src/world/quests/generator.ts` (new) | `questsOf(settlement)`: plots, slots, quest people, filling, ids. No Babylon: both sides run it |
 | `src/sim/quests/system.ts` (new) | Accepting, tracking, failing, completing, rewards, markers, saving |
@@ -455,7 +455,7 @@ New client events in FEEDBACK.md's table, with cues and generated sounds in the 
 After NPCS.md's five steps. Each leaves the game working: the dev server (`?play`),
 `npm run probe`, `npm run server`, `npm run build`.
 
-6. **Text.** `text/` packs, `src/core/text.ts`, and NPCS.md's titles and barks moved onto it.
+6. **Text.** `text/` packs, `src/sim/text.ts`, and NPCS.md's titles and barks moved onto it.
 7. **Quests by hand.** The quest model, the tracking of every objective kind, quest items and drops,
    ground objects, failing, abandoning, rewards (XP, money, item choice, standing), saving. Tested
    with one hand-written chain in a dev pack that is the test chain, before any generation, so the
@@ -478,7 +478,7 @@ After NPCS.md's five steps. Each leaves the game working: the dev server (`?play
 
 ## As built
 
-- **Step 6, text.** `src/core/text.ts`. Where the build differs from the plan: **the English written
+- **Step 6, text.** `src/sim/text.ts`. Where the build differs from the plan: **the English written
   in the packs is the key**, as in gettext, rather than separate keys with an English file. A
   language pack adds `text/<any>.json5` as `{ language: "hu", strings: { "Good day to you.": "..." } }`,
   read into the game rules as `rules.text`. A `Text` is `{ text, args }`: the template as written
@@ -541,6 +541,69 @@ After NPCS.md's five steps. Each leaves the game working: the dev server (`?play
   - **Checked in the page** with a quest defined from the console: the "!" over the reeve, its page,
     *Accept*, the "!" gone and the tracker showing the objective, the "?" over the smith after talking,
     "Ready to hand in", *Complete*: done, 30 copper and 132 XP (the human's 10% over 120).
+- **Step 9, the generator.** `src/sim/quests/generator.ts` (`generateQuests`), `src/sim/quests/plots.ts`
+  (reading `questParts/` and `questPlots/`), the features' `quest` blocks, and quest people.
+  - **When:** a settlement's quests are made the moment its cast is (the NPC system's `castMade`,
+    when a player first comes near), and defined with the quest system. Ids are
+    `q:<dimension>/<site>/<n>` in the order drawn. A character back in the world whose quests are
+    made only then is sent them (`questDefs`).
+  - **Context:** the cast (people out, with roles and relations), the zone's level band and roster
+    (from the creature system's zones), every feature within `reach` (1 km) with a `quest` block,
+    the settlement's own fields (a place every settlement has, out past a gate:
+    `rules/quests.json5`'s `fields`), and the three nearest other settlements, the next ring's first,
+    each with its reeve (from its own cast, made the same way).
+  - **Places** say what they can be (QUESTS.md, *Places*): `features/*.json5` gained `quest` -
+    `tags`, `objects` (names with tags), `people` (roles that can live there) and `text`. Core: the
+    churchyard (graves, sacred, remote; gravebloom, grave moss, a fallen candle; a sexton or a
+    hermit), the quarry, the logging camp and the coaching inn. Camps and biomes have no blocks yet.
+  - **Parts** (core: talk to, cull beasts, loot from, hunt pelts, gather at, receive the cure, salve
+    a beast, receive and deliver a letter or a parcel, visit a place): a kind, sizes, an item where
+    the kind has one, the log line and motive sentences. **Plots** (core: welcome, strange sickness,
+    the road on - the intro - and troubled flock, pelts, gatherings, a parcel for a friend, word from
+    a remote place): givers by role, people by role and relation to the giver, else made new, a
+    creature need, a place need, a road, and their quests with title, offer (groups of alternatives,
+    one drawn from each, with `$motive` for the parts'), progress and done lines, and an item choice.
+  - **Drawing:** the intro first, in its start's order, each plot chained after the one before; then
+    plots by weight until the tier's quota (`rules/quests.json5`: hamlet 2-3, village 4-6, town 7-10).
+    An NPC gives at most two plots' quests, the intro aside. A plot whose giver, people, creatures,
+    place or road the settlement cannot fill is not used.
+  - **Quest people** (`addPerson` in `npcs/cast.ts`): made for a role (hermit, sexton, quarryman,
+    forester, traveller: roles nobody holds otherwise), alone, appended to the cast so they carry on
+    its ids, standing at the plot's place (`spot`). A settlement also fills when a player is near one
+    of its quest people out at their place.
+  - **Text:** every argument a plot's texts can use - the settlement, zone, giver and each person
+    (name, given name, title), place, object and creature with plurals (`rules/quests.json5`'s
+    `plurals` by a name's last word) - is in each text's `args`. One offer as a reader sees it:
+    "There's something wrong with the Swift Giant Spiders round Nathcas. Two of the herders came back
+    bitten, and one of them is still abed. Thilsell - Innkeeper - knows more of sickness than anyone
+    here. Go and ask what can be done. I'll see you're paid for your trouble."
+  - **Rewards:** XP from `rules/quests.json5`'s `xp` at the quest's level (doubled for a plot's last
+    quest), money, 250 standing with the zone's folk, and for a quest that asks it an item choice:
+    one of each reward template (sword, chestpiece) near the level, not common where it can, and a
+    third sword.
+  - Adding the quest people's roles moved the casts of every seed: each role draws once from the
+    cast's stream. The same packs and seed still give the same people.
+  - **Checked:** the quests probe's generator, 3 seeds each of `tiny` and `small` (14 to 56 quests a
+    world): the same quests twice; the start's intro beginning with the reeve, as a chain; its parts
+    in the test chain's order; the road on to another settlement; an item choice at the chain's end;
+    every quest's people, items, creatures and places there, and every text filled.
+- **Step 10, the intro chain.** The mainland's start names `intro: ["welcome", "strangeSickness",
+  "roadOn"]`: find the inn; the strange sickness - GAMEPLAY.md's test chain (talk to the healer, cull
+  and take a sample, talk to the maker, gather the herb, receive the salve, use it on a weakened
+  beast, back to the giver to choose a reward); then a letter to the reeve of a settlement down the
+  road, the next ring's where it can, whose own quests are there when the letter arrives.
+  - **Checked:** the quests probe plays it on a real `tiny` server with a character made through the
+    front end's messages: the "!" over each giver, each quest offered, every objective done as a
+    player would (walking to NPCs, fighting the zone's creatures, picking up the herbs, using the salve
+    on a weakened beast, carrying the letter to the next village), each handed in, a log out and in
+    after the fourth with everything kept. The character went from level 1 to 4 with 192 copper,
+    chose and wore a Bronze Greatsword, and gained standing with the village's folk.
+- **Step 11, wrap up.** In the page: a world ("Milestone", tiny) and a character (Wren) made from
+  the main menu; Wren entered on the square of Faesell, the generated starting village, home in front
+  of its inn; the reeve's "!" seen across the square, *A Bed in Faesell* read and accepted, the
+  innkeeper talked to, *Exit to menu*, the page reloaded, *Continue*: the quest still ready, in the
+  tracker; handed in for 18 copper and level 2. Fixed on the way: quest givers' marks now show out to
+  90 m (the names only within 28 m), and quests made after a character re-enters are sent to it.
 
 ## Later
 

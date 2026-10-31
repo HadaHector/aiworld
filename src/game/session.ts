@@ -1,6 +1,6 @@
 import { createQuestMirror } from "./questMirror";
 import { createQuestLog } from "../ui/questLog";
-import { renderText } from "../core/text";
+import { renderText } from "../sim/text";
 import { createNpcWindow } from "../ui/npcWindow";
 import { castForSettlement } from "../sim/npcs/cast";
 import { tierOf } from "../sim/factions";

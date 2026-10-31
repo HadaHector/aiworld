@@ -1,0 +1,2 @@
+// Be given a letter to carry.
+{ kind: "receive", item: "sealedLetter", line: "Take the letter from {npc}" }
