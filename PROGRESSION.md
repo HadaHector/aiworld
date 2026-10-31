@@ -489,7 +489,7 @@ ProgressEvent   { kind, discipline, amount, level, skill, source }
 
 | What | |
 |---|---|
-| `adventure` | The character level (`level`): kills (credit `all`, Classic's shape) and the dummy's `defeat`; cap 60; level 2 after about five same-level kills; a talent point a level from 2, a choice at 3, 6 and 9 |
+| `adventure` | The character level (`level`): kills (credit `all`, Classic's shape) and `defeat` (no longer from the training dummy, below); cap 60; level 2 after about five same-level kills; a talent point a level from 2, a choice at 3, 6 and 9 |
 | `class` | The class level, `start: 0`, given by every class: XP from casting the class's own abilities (`spellSource: "origin:class"`), cap the character's level. Each class's unlocks hang on it |
 | `defence` | Use-based: XP from hits taken, cap 5 × level, +4 armour a level |
 | `weaponSkill.sword`, `weaponSkill.unarmed` | Generated: XP from melee hits with that weapon, cap 5 × level, curves rolled per seed. Iron swords `require` sword skill 10 (an item requirement) |
@@ -643,3 +643,11 @@ Each leaves the game working: dev server, `npm run probe`, `npm run server`, `np
 - Party XP sharing and tagging rules for parties: `credit` covers solo and co-op until parties come.
 - Creatures with disciplines: a creature's level stays its spawn's.
 - Trainers as NPCs with prices by area: a placed trainer entity until step 9.
+
+## After step 9
+
+- **The training dummy gives no XP of any kind** (the user's call): its `xpValue` is 0, and the
+  progression system gives nothing for any source whose other unit is worth 0 - beating it, hitting
+  it, being hit by it, casting at it. Every other unit's `xpValue` is 1 or more. It also no longer
+  casts its Straw Bolt; the `dummyCaster` habit stays in the pack, and the abilities and feedback
+  probes give it back to their test fight's dummy.

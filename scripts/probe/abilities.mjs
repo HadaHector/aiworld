@@ -564,6 +564,8 @@ section("threat", () => {
 async function fightOnce() {
   const configName = "tiny";
   const fightRules = loadRulesFromDisk(configName);
+  // The test fight wants a dummy that casts back (ABILITIES.md): the core pack's no longer does.
+  fightRules.templates.get("trainingDummy").spells.push({ skill: fightRules.skillIndex.get("dummyCaster"), level: 1 });
   const { content, packs } = loadContentFromDisk(configName);
   const server = createServer({
     seed: WORLD_SEED,

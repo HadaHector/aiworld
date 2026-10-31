@@ -419,6 +419,8 @@ await section("textures", () => {
 // that are only bookkeeping, finds feedback.
 await section("a fight", async () => {
   const fightRules = loadRulesFromDisk(CONFIG);
+  // The test fight wants a dummy that casts back (ABILITIES.md): the core pack's no longer does.
+  fightRules.templates.get("trainingDummy").spells.push({ skill: fightRules.skillIndex.get("dummyCaster"), level: 1 });
   const { content, packs } = loadContentFromDisk(CONFIG);
   const server = createServer({
     seed: WORLD_SEED,

@@ -90,9 +90,13 @@ export function createProgressionSystem(game: GameRules, rules: ProgressionRules
   const values = new Float64Array(scope.size);
 
   /** XP from one source to one earner: the source's amount, `when` and `rate`, in its scope. */
+  const xpValueIndex = game.statIndex.get("xpValue");
   function award(earner: Entity, discipline: number, source: SourceDef, fill: { other?: Entity; amount?: number; earners?: number; share?: number; spellLevel?: number }, label: string): void {
     const progress = earner.progress?.disciplines.get(discipline);
     if (!progress) return;
+    // A unit worth nothing (`xpValue` 0: the training dummy) gives no XP of any kind - not for
+    // beating it, hitting it, being hit by it or casting at it.
+    if (fill.other?.stats && xpValueIndex !== undefined && statValues(fill.other.stats)[xpValueIndex] === 0) return;
     values.fill(0);
     if (earner.stats) values.set(statValues(earner.stats), scope.earner);
     if (fill.other?.stats) values.set(statValues(fill.other.stats), scope.other);

@@ -6,7 +6,7 @@ import { loadRulesFromDisk, loadCreatureRulesFromDisk, loadItemRulesFromDisk, lo
 import { resolveGameRules } from "../../src/sim/rules/gameRules.ts";
 import { resolveProgressionRules, checkProgressionItems } from "../../src/sim/rules/progressionRules.ts";
 import { createEntity } from "../../src/sim/entity.ts";
-import { statValue } from "../../src/sim/stats.ts";
+import { setBase, statValue } from "../../src/sim/stats.ts";
 import { addXp, createProgress, learn, nextOf, pickTalent, resetTree, setLevel } from "../../src/sim/progression/progress.ts";
 import { exportProgress, importProgress } from "../../src/sim/progression/save.ts";
 import { loadContentFromDisk } from "../diskContent.mjs";
@@ -374,10 +374,23 @@ await section("server", async () => {
   check("the owner is told its progress", own(t.clients[0], "progress").some((m) => m.disciplines.some((d) => d.discipline === R.disciplineIndex.get("adventure") && d.level >= 3)));
   check("the owner is told its events", own(t.clients[0], "progressEvents").some((m) => m.events.some((e) => e.kind === "levelUp")));
   check("nobody else is told another's progress", !own(t.clients[1], "progress").some((m) => m.disciplines.some((d) => d.discipline === R.disciplineIndex.get("adventure") && d.level >= 3)));
-  // The dummy beaten: a defeat, once until it is back above 0.
+  // The training dummy is worth nothing: beating it, hitting it gives no XP of any kind.
   const dummy = [...t.server.debug.dimensions.get("mainland").entities.values()].find((e) => e.template.id === "trainingDummy");
   t.clients[1].send({ type: "teleport", x: dummy.x + 1.5, z: dummy.z });
   await t.pump(5);
+  const everyXp = (e) => [...e.progress.disciplines.values()].reduce((sum, d) => sum + d.xp + d.banked + d.level * 1e4, 0);
+  const worthless = everyXp(b);
+  dummy.resources.current[t.rules.health] = 1;
+  dummy.combat.threat.set(b.id, { amount: 5, last: t.server.time });
+  t.clients[1].send({ type: "target", id: dummy.id });
+  t.clients[1].send({ type: "attack", on: true });
+  await t.pump(150);
+  t.clients[1].send({ type: "attack", on: false });
+  t.server.debug.skills.revive(dummy);
+  await t.pump(5);
+  check("the training dummy gives no XP of any kind", everyXp(b) === worthless, `${everyXp(b) - worthless}`);
+  // Worth something, a dummy beaten is a defeat, once until it is back above 0.
+  setBase(dummy.stats, t.rules.statIndex.get("xpValue"), 1);
   dummy.resources.current[t.rules.health] = 1;
   dummy.combat.threat.set(b.id, { amount: 5, last: t.server.time });
   const before = xp(b);
