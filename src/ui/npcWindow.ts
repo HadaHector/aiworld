@@ -84,13 +84,19 @@ export function createNpcWindow(options: NpcWindowOptions): NpcWindow {
 
   const typeOf = (id: string) => items.types[items.typeIndex.get(id) ?? -1];
 
+  /** How many things an NPC offers: its quests and its services. */
+  const offersOf = (m: NpcWindowMessage): number => m.quests.length + [m.trainer, m.banker, m.repair, m.innkeeper, m.stock.length > 0].filter(Boolean).length;
+
   /** One quest: offered (Accept), in progress, or ready (choose a reward, Complete). */
   function renderPage(npc: number, id: string, state: "offer" | "active" | "ready"): void {
     const def = options.quests.defs.get(id);
-    el("button", "padding: 1px 8px; margin-bottom: 6px;", body, "‹ Back").addEventListener("click", () => {
-      page = "";
-      render();
-    });
+    // Back to the list - when there is one: an NPC with only this quest has nothing else to show.
+    if (current && offersOf(current) > 1) {
+      el("button", "padding: 1px 8px; margin-bottom: 6px;", body, "‹ Back").addEventListener("click", () => {
+        page = "";
+        render();
+      });
+    }
     if (!def) return;
     const active = options.quests.active.get(id);
     const choose = state === "ready" && def.rewards.choice.length > 0 ? (i: number) => ((chosen = i), render()) : undefined;
@@ -185,7 +191,7 @@ export function createNpcWindow(options: NpcWindowOptions): NpcWindow {
       // Newly talked to (not the window asked for again after an action), with one thing only to
       // offer: straight to it - a trainer's lessons, the bank, a quest's page.
       const fresh = root.style.display === "none" || current?.npc !== message.npc;
-      const offers = message.quests.length + [message.trainer, message.banker, message.repair, message.innkeeper, message.stock.length > 0].filter(Boolean).length;
+      const offers = offersOf(message);
       if (fresh && offers === 1 && !after) {
         if (message.trainer || message.banker) {
           hide();
