@@ -1,2 +1,0 @@
-// A menu button pressed.
-{ parts: [{ sound: "ui.click" }] }

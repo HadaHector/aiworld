@@ -598,10 +598,14 @@ Each step leaves the game working: the dev server, `npm run probe`, `npm run ser
 - **Step 6.**
   - **The sounds.** Eight client events join the feedback event table (`CLIENT_EVENTS` in
     `feedback/rules.ts`, `rules/feedback.json5`): `uiHover`, `uiClick`, `uiBack`, `uiError`,
-    `uiSwatch`, `characterCreated`, `enterWorld` and `logout`. Each has a cue of the same name, and
-    there are six new generated sounds in the `ui` bus (`ui.hover`, `ui.click`, `ui.back`, `ui.swatch`,
-    `ui.created`, `ui.enter`, `ui.logout`; `uiError` plays the existing `error`). `saved` has no
-    sound, as planned.
+    `uiSwatch`, `characterCreated`, `enterWorld` and `logout`.
+    - **Silent for now:** hover, click, Back and the look choosers. They had generated sounds at
+      first, but the user judged that sounds heard on nearly every press are better silent than
+      not quite right. Their events stay in the code, and the table maps them to nothing (`[]`), so
+      a pack can give them samples later.
+    - **With sounds:** a refusal plays the existing `error`, and `characterCreated`, `enterWorld` and
+      `logout` play the new `ui.created`, `ui.enter` and `ui.logout` (the `ui` bus).
+    - `saved` has no sound, as planned.
   - **The menus play them** through `src/frontend/menuSounds.ts`: the same cue player and sounds as
     the game, from rules resolved once from every pack, with no scene. The front end's root listens
     once for both:
@@ -619,8 +623,8 @@ Each step leaves the game working: the dev server, `npm run probe`, `npm run ser
     yet", and the screen shows it the way an unreachable server will be shown, with the error sound.
     The rest of the path waits for a real transport: Hello with `select`, Welcome checked by
     `welcomeProblems`, and the character list. A mismatch screen comes with it.
-  - Checked: the feedback probe (1642 checks) renders every sound; in the page each of the eight
-    plays a voice, and Join shows its message.
+  - Checked: the feedback probe renders every sound; in the page each sound played a voice before
+    the frequent ones were made silent, and Join shows its message.
 
 ## Later
 

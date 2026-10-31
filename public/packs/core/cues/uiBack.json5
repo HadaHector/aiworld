@@ -1,2 +1,0 @@
-// Back out of a menu screen.
-{ parts: [{ sound: "ui.back" }] }

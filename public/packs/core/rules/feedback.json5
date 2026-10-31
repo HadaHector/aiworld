@@ -36,11 +36,13 @@
     footstep: [{ cue: "footstep" }],
     aggro: [{ cue: "aggro" }],
     // The front end (FRONTEND.md, *Sounds and cues*): menus, character creation, entering and leaving.
-    uiHover: [{ cue: "uiHover" }],
-    uiClick: [{ cue: "uiClick" }],
-    uiBack: [{ cue: "uiBack" }],
+    // What happens on nearly every press - hovering, clicking, going back, the look choosers - is
+    // silent: no sound is better than a tiresome one until there are good samples.
+    uiHover: [],
+    uiClick: [],
+    uiBack: [],
+    uiSwatch: [],
     uiError: [{ cue: "uiError" }],
-    uiSwatch: [{ cue: "uiSwatch" }],
     characterCreated: [{ cue: "characterCreated" }],
     enterWorld: [{ cue: "enterWorld" }],
     logout: [{ cue: "logout" }],

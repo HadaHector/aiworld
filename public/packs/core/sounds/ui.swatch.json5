@@ -1,7 +1,0 @@
-// A look chooser changed in character creation: a small brush of cloth.
-{
-  bus: "ui", flat: true, maxVoices: 2, pitch: [-2, 2], volume: [0.45, 0.55], takes: 3,
-  layers: [
-    { synth: { noise: "pink", filter: { type: "lowpass", hz: [2400, 900], q: 0.8 }, env: { attack: 0.01, decay: 0.09 }, gain: 0.55, crush: { bits: 8, rate: 2 } }, standIn: true },
-  ],
-}

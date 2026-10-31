@@ -1,2 +1,0 @@
-// A menu button under the pointer.
-{ parts: [{ sound: "ui.hover" }] }
