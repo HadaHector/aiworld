@@ -860,7 +860,7 @@ export async function startSession(page: Page, options: SessionOptions): Promise
   }
 
   // Hovering what can be used - loot, an item or a quest's thing on the ground, a person to talk to -
-  // shows a hand and what it is, by the pointer: nothing else tells that it can be right-clicked.
+  // shows a hand and its name by the pointer: nothing else tells that it can be right-clicked.
   {
     const label = document.createElement("div");
     label.style.cssText = `position: fixed; z-index: 944; pointer-events: none; display: none; padding: 3px 8px; ${PANEL} font-size: 12px; white-space: nowrap;`;
@@ -876,15 +876,8 @@ export async function startSession(page: Page, options: SessionOptions): Promise
       const pick = view.scene.pick(e.clientX - rect.left, e.clientY - rect.top, (mesh) => meshes.entityOf(mesh) !== null);
       const id = pick?.hit ? meshes.entityOf(pick.pickedMesh) : null;
       const entity = id === null ? undefined : mirror.entities.get(id);
-      const what = !entity || id === playerId
-        ? ""
-        : entity.lootable
-          ? `${entity.name} - right-click to loot`
-          : entity.templateId === GROUND_ITEM_TEMPLATE || entity.templateId === gameRules.quests.objects.template
-            ? `${entity.name} - right-click to pick up`
-            : isNpc(entity)
-              ? `${entity.name} - right-click to talk`
-              : "";
+      const usable = !!entity && id !== playerId && (entity.lootable || entity.templateId === GROUND_ITEM_TEMPLATE || entity.templateId === gameRules.quests.objects.template || isNpc(entity));
+      const what = usable ? entity!.name : "";
       canvas.style.cursor = what ? "pointer" : "";
       label.style.display = what ? "" : "none";
       if (what) {

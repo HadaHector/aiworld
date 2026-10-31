@@ -613,8 +613,7 @@ After NPCS.md's five steps. Each leaves the game working: the dev server (`?play
   - Creatures stand alone for now (`rules/creatures.json5`'s `groups` all singles); the creature
     probe turns groups back on to test them. Camps are unchanged.
   - Ground objects glint as loot does, and the glint is twice the size it was. Hovering anything
-    that can be right-clicked - loot, a ground item or object, a person - shows a hand and a label
-    ("Feverfew - right-click to pick up").
+    that can be right-clicked - loot, a ground item or object, a person - shows a hand and its name.
 
 ## Later
 
