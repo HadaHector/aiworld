@@ -1,0 +1,9 @@
+// A quest taken: a low note under a page turned. (QUESTS.md, *Sounds and cues*)
+{
+  bus: "ui", flat: true, maxVoices: 1, volume: [0.6, 0.6], takes: 1,
+  layers: [
+    { synth: { tone: "triangle", hz: 196, env: { attack: 0.005, decay: 0.35 }, gain: 0.16 }, standIn: true },
+    { synth: { noise: "white", filter: { type: "bandpass", hz: 2400, q: 1.5 }, env: { attack: 0.01, decay: 0.12 }, gain: 0.25 }, standIn: true },
+    { synth: { tone: "triangle", hz: 294, env: { attack: 0.005, decay: 0.4 }, gain: 0.12, delay: 0.07 }, standIn: true },
+  ],
+}

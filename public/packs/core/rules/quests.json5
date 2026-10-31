@@ -1,0 +1,19 @@
+// Quests (QUESTS.md): how many a character holds, what they give, ground objects, level colours.
+{
+  maxActive: 25,
+  // XP at the quest's level: base + perLevel x level; as the character outgrows it, less, down to
+  // greyShare at `grey` levels over.
+  xp: { base: 80, perLevel: 45, grey: 6, greyShare: 0.1 },
+  // Money (copper): base + perLevel x level.
+  money: { base: 10, perLevel: 8 },
+  // Standing with the giver's faction.
+  standing: 250,
+  // Ground objects for gathering: how many stand at once, how soon a taken one is back (seconds).
+  objects: { count: 8, respawn: 30, template: "questObject" },
+  // How near an NPC to take or hand in its quests.
+  talkRange: 6,
+  // Level colours: red from 5 over, orange from 3 over, green from 3 under, grey from 6 under.
+  colours: { red: 5, orange: 3, green: -3, grey: -6 },
+  // What a quest's item choice is drawn from (item templates).
+  rewardTemplates: ["sword", "chestpiece"],
+}

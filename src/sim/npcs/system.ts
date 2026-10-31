@@ -41,6 +41,8 @@ export interface NpcSystem {
   combatEvents(events: readonly CombatEvent[]): void;
   /** The cast entry an NPC entity was made from. */
   npcOf(entity: Entity): CastNpc | undefined;
+  /** The entity standing now for an NPC id, if its settlement is filled. */
+  entityOf(id: string): Entity | undefined;
   /** A player talks to an NPC (NPCS.md, *Services*): it turns to them and greets them, and says what
    *  it offers - or why it will not talk (out of reach, dead, not friendly enough). */
   talk(player: Entity, npc: Entity): NpcTalk | string;
@@ -461,6 +463,10 @@ export function createNpcSystem(rules: GameRules, world: NpcWorld): NpcSystem {
       }
     },
     npcOf: (entity) => byEntity.get(entity.id)?.npc,
+    entityOf(id) {
+      for (const living of byEntity.values()) if (living.npc.id === id) return living.entity;
+      return undefined;
+    },
     talk(player, npc) {
       const living = byEntity.get(npc.id);
       if (!living) return "notNpc";

@@ -1,0 +1,13 @@
+// A quest item's use (QUESTS.md): holding a warding charm up to a creature.
+{
+  name: "Hold Up the Charm",
+  type: "spell",
+  target: "enemy",
+  range: 15,
+  los: true,
+  start: "cast",
+  states: {
+    cast: { length: 2, bar: "cast", breakOnMove: true, interruptible: true, next: "done" },
+    done: { commit: true, enter: [{ do: "damage", group: "target", amount: 1 }] },
+  },
+}

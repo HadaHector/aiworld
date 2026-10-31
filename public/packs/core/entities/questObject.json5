@@ -1,0 +1,6 @@
+// Something a quest asks to pick up off the ground (QUESTS.md, *Ground objects*): small, and glinting
+// gold so it is seen. Taken with a right-click by those on the quest; its name is what it is.
+{
+  name: "Quest object",
+  look: { shape: "box", height: 0.35, radius: 0.25, color: [0.95, 0.8, 0.35] },
+}

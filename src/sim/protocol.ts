@@ -1,3 +1,4 @@
+import type { QuestDef, SavedQuests } from "./quests/quest";
 /**
  * Every message between the client and the server (see SIMULATION.md). Each is a closed, flat
  * record: a `type` tag, then fields of known kinds, so a binary codec can be written for every one
@@ -284,7 +285,38 @@ export interface SetHome {
   npc: number; // u32
 }
 
+/** Takes a quest an NPC offers (QUESTS.md, *Talking*). */
+export interface QuestAccept {
+  type: "questAccept";
+  npc: number; // u32
+  quest: string;
+}
+
+/** Hands a quest in at its ender, with the reward chosen (an index into its choice, 0 when none). */
+export interface QuestComplete {
+  type: "questComplete";
+  npc: number; // u32
+  quest: string;
+  choice: number; // u8
+}
+
+/** Gives a quest up: its progress and its quest items go. */
+export interface QuestAbandon {
+  type: "questAbandon";
+  quest: string;
+}
+
+/** Takes a quest's ground object (QUESTS.md, *Ground objects*). */
+export interface QuestObjectTake {
+  type: "questObjectTake";
+  entity: number; // u32
+}
+
 export type ClientMessage =
+  | QuestAccept
+  | QuestComplete
+  | QuestAbandon
+  | QuestObjectTake
   | Talk
   | ShopBuy
   | ShopSell
@@ -517,6 +549,44 @@ export interface NpcWindow {
   stock: { type: string; count: number; price: number }[];
   /** What it pays for an item: this share of its value (by how worn it is). Zero: it does not buy. */
   sellRate: number;
+  /** Its quests for this character (QUESTS.md, *Talking*). */
+  quests: { id: string; state: "offer" | "active" | "ready" }[];
+}
+
+/** Quests the client is to know whole: before it is offered them or has them in its log. */
+export interface QuestDefs {
+  type: "questDefs";
+  defs: QuestDef[];
+}
+
+/** The character's quests on entering: what it has, with counts, and what it has done. */
+export interface QuestLog {
+  type: "questLog";
+  active: SavedQuests["active"];
+  done: string[];
+}
+
+/** One quest changed: a count, ready, failed, handed in (done), given up (removed). */
+export interface QuestUpdate {
+  type: "questUpdate";
+  quest: string;
+  counts: number[];
+  state: "active" | "ready" | "failed" | "done" | "removed";
+}
+
+/** The quest marks over the NPCs near the player (QUESTS.md, *Markers*): "!" a quest to take, "!grey"
+ *  one a level or two away, "?" one to hand in, "?grey" one in progress that ends there. Sent when
+ *  they change; an NPC not listed has none. */
+export interface Markers {
+  type: "markers";
+  list: [npc: number, mark: string][];
+}
+
+/** Why a quest message was not done. */
+export interface QuestRefused {
+  type: "questRefused";
+  quest: string;
+  reason: string;
 }
 
 /** Something done at an NPC: bought, sold, mended, made home (for the window and the sounds). */
@@ -900,6 +970,11 @@ export type ServerMessage =
   | Standing
   | Bark
   | NpcWindow
+  | QuestDefs
+  | QuestLog
+  | QuestUpdate
+  | QuestRefused
+  | Markers
   | NpcDone
   | NpcRefused
   | Progress

@@ -1,0 +1,8 @@
+// A quest failed or given up: a muted falling note. (QUESTS.md, *Sounds and cues*)
+{
+  bus: "ui", flat: true, maxVoices: 1, volume: [0.6, 0.6], takes: 1,
+  layers: [
+    { synth: { tone: "triangle", hz: 330, env: { attack: 0.005, decay: 0.25 }, gain: 0.12 }, standIn: true },
+    { synth: { tone: "triangle", hz: 247, env: { attack: 0.005, decay: 0.45 }, gain: 0.12, delay: 0.12 }, standIn: true },
+  ],
+}

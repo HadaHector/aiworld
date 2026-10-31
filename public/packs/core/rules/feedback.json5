@@ -53,6 +53,15 @@
     shopSell: [{ cue: "coins" }],
     repair: [{ cue: "repair" }],
     setHome: [{ cue: "setHome" }],
+    // Quests (QUESTS.md, *Sounds and cues*).
+    questAccept: [{ cue: "questAccept" }],
+    questProgress: [{ cue: "questProgress" }],
+    questObjectiveDone: [{ cue: "questObjectiveDone" }],
+    questReady: [{ cue: "questReady" }],
+    questComplete: [{ cue: "questComplete" }],
+    questFailed: [{ cue: "questFailed" }],
+    questAbandon: [{ cue: "questFailed" }],
+    standingChange: [{ cue: "standingChange" }],
   },
   // Weapon kinds by item template or gear piece.
   weapons: { sword: "blade", greatsword: "blade", axe: "blade", dagger: "blade", mace: "blunt", hammer: "blunt", staff: "blunt" },

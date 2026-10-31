@@ -77,6 +77,9 @@ export interface DebugMap {
   updateMarker: (worldX: number, worldZ: number, headingRadians: number) => void;
   /** Marks spawn points (CREATURES.md): a dot each, coloured, with a tooltip; null clears them. */
   setSpawnPoints: (points: { x: number; z: number; color: string; title: string }[] | null) => void;
+  /** Quests on the map (QUESTS.md, *Map markers*): "!" and "?" over NPCs, and soft circles where
+   *  tracked objectives are. */
+  setQuestMarks: (marks: { x: number; z: number; radius: number; mark: string; colour: string; title: string }[]) => void;
   /** Takes it off the page, for the next dimension's (see DIMENSIONS.md). */
   dispose: () => void;
 }
@@ -196,6 +199,7 @@ export function createDebugMap(
   let showSettlements = true;
   let showRoads = true;
   let spawnPoints: { x: number; z: number; color: string; title: string }[] = [];
+  let questMarks: { x: number; z: number; radius: number; mark: string; colour: string; title: string }[] = [];
   let markerX = 0;
   let markerZ = 0;
   let heading = 0;
@@ -465,6 +469,25 @@ export function createDebugMap(
       `;
       markerLayer.appendChild(dot);
     }
+    for (const q of questMarks) {
+      const { x, y } = worldToPixel(q.x, q.z);
+      if (x < 0 || y < 0 || x > SAMPLE_RESOLUTION || y > SAMPLE_RESOLUTION) continue;
+      const mark = document.createElement("div");
+      mark.title = q.title;
+      if (q.radius > 0) {
+        // An objective's area: a soft circle, at least a few pixels across.
+        const edge = worldToPixel(q.x + q.radius, q.z).x - x;
+        const size = Math.max(10, (edge / SAMPLE_RESOLUTION) * 100 * 2);
+        mark.style.cssText = `position: absolute; left: ${(x / SAMPLE_RESOLUTION) * 100}%; top: ${(y / SAMPLE_RESOLUTION) * 100}%;
+          width: ${size}${edge > 5 ? "%" : "px"}; aspect-ratio: 1; transform: translate(-50%, -50%); border-radius: 50%;
+          background: rgba(242, 214, 75, 0.18); border: 1px solid rgba(242, 214, 75, 0.7); pointer-events: auto;`;
+      } else {
+        mark.textContent = q.mark;
+        mark.style.cssText = `position: absolute; left: ${(x / SAMPLE_RESOLUTION) * 100}%; top: ${(y / SAMPLE_RESOLUTION) * 100}%;
+          transform: translate(-50%, -60%); font: 700 18px/1 serif; color: ${q.colour}; text-shadow: 0 0 2px #000, 0 0 2px #000; pointer-events: auto;`;
+      }
+      markerLayer.appendChild(mark);
+    }
     for (const link of links) {
       const { x, y } = worldToPixel(link.at.x, link.at.z);
       if (x < 0 || y < 0 || x > SAMPLE_RESOLUTION || y > SAMPLE_RESOLUTION) continue;
@@ -648,6 +671,10 @@ export function createDebugMap(
   return {
     toggle,
     updateMarker,
+    setQuestMarks(marks) {
+      questMarks = marks;
+      drawOverlays();
+    },
     setSpawnPoints(points) {
       spawnPoints = points ?? [];
       drawOverlays();

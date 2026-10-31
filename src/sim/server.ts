@@ -30,6 +30,10 @@ import { chooseStarts, type ChosenStart } from "../world/settlements/starts";
 import { clampStanding, factionDef, standingWith, tierOf } from "./factions";
 import { buy, buyPrice, sell } from "./items/shop";
 import { createNpcSystem, type NpcSystem } from "./npcs/system";
+import { createQuestSystem, type QuestSystem } from "./quests/system";
+
+/** Quest marks are worked out for NPCs this near a player. */
+const MARK_RANGE = 90;
 
 /** Where a body is to be made: a point, or (with `start`) the start of that id, once it is placed. */
 type Arrival = { x: number; z: number; start?: string };
@@ -51,6 +55,8 @@ interface Connection {
   progressSent: boolean;
   /** ...and its whole standing with factions (NPCS.md, *Factions*). */
   standingSent: boolean;
+  /** The quest marks it was last told, as sent (QUESTS.md, *Markers*). */
+  marks: string;
   /** Choosing a character (a Hello that selects, or after a logout), with none in the world. */
   selecting: boolean;
   /** A character being read from the store, to enter. */
@@ -163,6 +169,8 @@ export interface Server {
     readonly starts: ReadonlyMap<string, readonly ChosenStart[]>;
     /** Settlements' people (NPCS.md). */
     readonly npcs: NpcSystem;
+    /** Quests (QUESTS.md). */
+    readonly quests: QuestSystem;
   };
   /** The server's clock: seconds stepped since it started - or since the saved world began. */
   readonly time: number;
@@ -335,7 +343,10 @@ export function createServer(options: ServerOptions): Server {
           loaded.get(entity.dimension)?.entities.delete(entity.id);
         },
         playersIn,
-        killed: (kill) => progression?.kill(kill),
+        killed: (kill) => {
+          progression?.kill(kill);
+          questSystem.kill(kill);
+        },
         lineOfSight: (dimension, from, to) => skills.sys.world.lineOfSight(dimension, from, to),
         hasLoot: (entity) => itemSystem?.hasLoot(entity) ?? false,
         delta,
@@ -444,6 +455,81 @@ export function createServer(options: ServerOptions): Server {
     npcSystem.unload(id);
   }
 
+  // Quests (QUESTS.md, *Tracking*).
+  const typeOf = (id: string) => options.items?.types[options.items.typeIndex.get(id) ?? -1];
+  const connectionOf = (entity: Entity): Connection | undefined => connections.find((c) => c.player?.entity === entity);
+  const questSystem: QuestSystem = createQuestSystem(rules, rules.quests, {
+    time: () => time,
+    entity: findEntity,
+    npcId: (entity) => npcSystem.npcOf(entity)?.id,
+    npcEntity: (id) => npcSystem.entityOf(id),
+    playersIn,
+    spawn: (dimension, template, x, z, key) => {
+      const dim = loaded.get(dimension);
+      return dim && rules.templates.has(template) ? spawnIn(dim, template, x, z, 0, key) : undefined;
+    },
+    despawn: (entity) => {
+      skills.leave(entity, true);
+      loaded.get(entity.dimension)?.entities.delete(entity.id);
+    },
+    give: (entity, type, count) => {
+      const def = typeOf(type);
+      return def && itemSystem ? itemSystem.give(entity, def.index, count) : count;
+    },
+    take: (entity, type) => {
+      const def = typeOf(type);
+      const b = entity.belongings;
+      if (!def || !b || !itemSystem) return false;
+      const slot = b.bag.findIndex((id) => id != null && itemSystem.store.get(id)?.type === def.index);
+      if (slot < 0) return false;
+      itemSystem.store.remove(b.bag[slot]!);
+      b.bag[slot] = null;
+      return true;
+    },
+    has: (entity, type) => {
+      const def = typeOf(type);
+      return !!def && !!itemSystem && !!entity.belongings?.bag.some((id) => id != null && itemSystem.store.get(id)?.type === def.index);
+    },
+    useSkill: (type) => typeOf(type)?.use?.skill ?? "",
+    pay: (entity, money) => {
+      if (entity.belongings && options.items) entity.belongings.wallet[options.items.main] += money;
+    },
+    award: (entity, xp) => progression?.award(entity, "quest", xp),
+    changeStanding: (entity, faction, amount) => void changeStanding(entity, faction, amount),
+    level: (entity) => entityStat(rules, entity, "level", 1),
+    send: (entity, message) => connectionOf(entity)?.end.send(message),
+  });
+
+  /** A character's quests as it enters: whole, and each one defined. */
+  function sendQuestLog(connection: Connection, entity: Entity): void {
+    const saved = questSystem.export(entity);
+    const defs = saved.active.map((a) => questSystem.def(a.id)).filter((d): d is NonNullable<typeof d> => d !== undefined);
+    if (defs.length > 0) connection.end.send({ type: "questDefs", defs });
+    connection.end.send({ type: "questLog", active: saved.active, done: saved.done });
+  }
+
+  /** What a player asks of quests: to take one, hand one in, give one up, take a ground object. */
+  function questMessage(connection: Connection, player: Player, message: Extract<ClientMessage, { type: "questAccept" | "questComplete" | "questAbandon" | "questObjectTake" }>): void {
+    const here = loaded.get(player.entity.dimension);
+    let why = "";
+    let npc: Entity | undefined;
+    if (message.type === "questAbandon") why = questSystem.abandon(player.entity, String(message.quest));
+    else if (message.type === "questObjectTake") {
+      const object = here?.entities.get(message.entity >>> 0);
+      why = object ? questSystem.takeObject(player.entity, object) : "notObject";
+    } else {
+      npc = here?.entities.get(message.npc >>> 0);
+      if (!npc) why = "range";
+      else if (message.type === "questAccept") why = questSystem.accept(player.entity, npc, String(message.quest));
+      else why = questSystem.complete(player.entity, npc, String(message.quest), message.choice >>> 0);
+    }
+    const quest = "quest" in message ? String(message.quest) : "";
+    if (why) connection.end.send({ type: "questRefused", quest, reason: why });
+    // The NPC's window again: what it has now.
+    else if (npc) npcMessage(connection, player, { type: "talk", npc: npc.id });
+    if (!why && message.type === "questComplete" && player.character) void writeCharacter(player, connection);
+  }
+
   /** What a player asks of an NPC (NPCS.md, *Services*): to talk, buy, sell, have gear mended, or
    *  make its inn home. Each checks again that the NPC is near and will talk. */
   function npcMessage(connection: Connection, player: Player, message: Extract<ClientMessage, { type: "talk" | "shopBuy" | "shopSell" | "npcRepair" | "setHome" }>): void {
@@ -460,6 +546,11 @@ export function createServer(options: ServerOptions): Server {
     const home = player.character?.travel.home ?? player.quickHome;
     switch (message.type) {
       case "talk": {
+        // Quests first: what talking to it does, then what it has for this character, defined for the client.
+        questSystem.talked(player.entity, npc!);
+        const quests = questSystem.questsAt(player.entity, npc!);
+        const defs = quests.map((q) => questSystem.def(q.id)).filter((d): d is NonNullable<typeof d> => d !== undefined);
+        if (defs.length > 0) connection.end.send({ type: "questDefs", defs });
         connection.end.send({
           type: "npcWindow",
           npc: id,
@@ -472,6 +563,7 @@ export function createServer(options: ServerOptions): Server {
           home: !!home && home.dimension === npc!.dimension && Math.hypot(home.x - npc!.x, home.z - npc!.z) < 12,
           stock: stock && ctx ? stock.items.map((e) => ({ type: ctx.items.types[e.type].id, count: e.count, price: buyPrice(ctx, e, discount) })) : [],
           sellRate: stock && options.items ? options.items.config.sellRate : 0,
+          quests,
         });
         return;
       }
@@ -594,6 +686,7 @@ export function createServer(options: ServerOptions): Server {
     }
     record.dead = entity.combat?.dead ?? false;
     if (entity.standing) record.standing = Object.fromEntries(entity.standing);
+    record.quests = questSystem.export(entity);
     // Travelling, it has no body yet: it is wherever it is headed.
     const at = entity.body ? { x: entity.x, z: entity.z } : player.arrival;
     record.travel = { ...record.travel, dimension: entity.dimension, x: at.x, z: at.z, facing: entity.facing };
@@ -664,6 +757,7 @@ export function createServer(options: ServerOptions): Server {
             : startOf(start, record.origins);
     const entity = createEntity(rules, template, nextId++, { dimension: "", x: at.x, y: 0, z: at.z, facing: asked ? 0 : record.travel.facing, name: record.name, look: cleanLook(record.look) });
     entity.standing = readStanding(record.standing);
+    questSystem.adopt(entity, record.quests ?? null);
     skills.adopt(entity);
     itemSystem?.adopt(entity);
     if (chosen) progression!.adopt(entity, chosen.origins);
@@ -684,6 +778,7 @@ export function createServer(options: ServerOptions): Server {
     connection.player = joined;
     connection.selecting = false;
     connection.end.send({ type: "entered", playerId: entity.id, character: record.id, look: entity.look, interface: record.interface });
+    sendQuestLog(connection, entity);
     transfer(connection, joined, to, arrival);
   }
 
@@ -754,6 +849,7 @@ export function createServer(options: ServerOptions): Server {
         const template = (chosen && rules.templates.get(chosen.template)) || playerTemplate!;
         const entity = createEntity(rules, template, nextId++, { dimension: "", x: first.spawn.x, y: 0, z: first.spawn.z, facing: 0, name: message.name, look: message.look && cleanLook(message.look) });
         entity.standing = new Map();
+        questSystem.adopt(entity, null);
         skills.adopt(entity);
         itemSystem?.adopt(entity);
         if (chosen) progression!.adopt(entity, chosen.origins);
@@ -764,6 +860,7 @@ export function createServer(options: ServerOptions): Server {
         connection.player = joined;
         connection.end.send({ type: "welcome", protocol: PROTOCOL_VERSION, playerId: entity.id, world: world?.name ?? "", saves: saves !== null, config: options.config, packs: options.packs ?? [], rules: rules.hash, items: options.items?.hash ?? 0, creatures: options.creatures?.hash ?? 0, seed: options.seed >>> 0, progression: options.progression?.hash ?? 0 });
         transfer(connection, joined, first, arrival);
+        sendQuestLog(connection, entity);
         return;
       }
       case "characterCreate": {
@@ -926,6 +1023,13 @@ export function createServer(options: ServerOptions): Server {
         if (player && progression) progression.reset(player.entity, message.tree >>> 0);
         return;
       }
+      case "questAccept":
+      case "questComplete":
+      case "questAbandon":
+      case "questObjectTake": {
+        if (player && body) questMessage(connection, player, message);
+        return;
+      }
       case "talk":
       case "shopBuy":
       case "shopSell":
@@ -1049,10 +1153,12 @@ export function createServer(options: ServerOptions): Server {
     }
     // ...and settlements' people stand, walk their rounds and bark (NPCS.md).
     npcSystem.step(deltaSeconds);
+    questSystem.step();
     skills.step(loaded.values());
     const events = skills.drainEvents();
     itemSystem?.combatEvents(events);
     npcSystem.combatEvents(events.map((e) => e.event));
+    questSystem.combatEvents(events.map((e) => e.event));
     // XP from what happened, and level-ups as combat events for those near (PROGRESSION.md).
     progression?.combatEvents(events);
     const progressed = progression?.drain() ?? null;
@@ -1100,6 +1206,20 @@ export function createServer(options: ServerOptions): Server {
         if (values.length > 0 || !connection.standingSent) messages.push({ type: "standing", values });
         connection.standingSent = true;
       }
+      // The quest marks over the NPCs near it, twice a second, when they changed.
+      if (entity?.body && tick % 15 === 0) {
+        const list: [number, string][] = [];
+        for (const npc of npcSystem.debug.active(entity.dimension)) {
+          if (Math.hypot(npc.x - entity.x, npc.z - entity.z) > MARK_RANGE) continue;
+          const mark = questSystem.markerFor(entity, npc);
+          if (mark) list.push([npc.id, mark]);
+        }
+        const sent = JSON.stringify(list);
+        if (sent !== connection.marks) {
+          connection.marks = sent;
+          messages.push({ type: "markers", list });
+        }
+      }
       messages.push(snapshot);
       for (const message of messages) connection.end.send(message);
     }
@@ -1108,7 +1228,7 @@ export function createServer(options: ServerOptions): Server {
 
   return {
     connect: (end) => {
-      connections.push({ end, player: null, replicator: createReplicator(rules), items: itemSystem && options.items ? createItemReplicator(options.items, itemSystem) : null, progressSent: false, standingSent: false, selecting: false, entering: false });
+      connections.push({ end, player: null, replicator: createReplicator(rules), items: itemSystem && options.items ? createItemReplicator(options.items, itemSystem) : null, progressSent: false, standingSent: false, marks: "", selecting: false, entering: false });
     },
     step,
     save: saveAll,
@@ -1132,6 +1252,7 @@ export function createServer(options: ServerOptions): Server {
       changeStanding,
       starts: startsOf,
       npcs: npcSystem,
+      quests: questSystem,
     },
   };
 }

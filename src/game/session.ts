@@ -1,3 +1,5 @@
+import { createQuestMirror } from "./questMirror";
+import { createQuestLog } from "../ui/questLog";
 import { renderText } from "../core/text";
 import { createNpcWindow } from "../ui/npcWindow";
 import { castForSettlement } from "../sim/npcs/cast";
@@ -143,8 +145,36 @@ export async function startSession(page: Page, options: SessionOptions): Promise
   let view: DimensionView | null = null;
   /** A Transfer not acted on yet: the next frame starts building where it leads. */
   let pendingTransfer: Transfer | null = null;
+  /** The quest marks over NPCs now, by entity. */
+  const shownMarks = new Map<number, string>();
+  /** Quests on the debug map (M): the marked NPCs where they stand, the objectives' areas. */
+  function drawQuestMap(): void {
+    const marks: { x: number; z: number; radius: number; mark: string; colour: string; title: string }[] = [];
+    for (const [id, mark] of shownMarks) {
+      const npc = mirror.entities.get(id);
+      if (npc) marks.push({ x: npc.x, z: npc.z, radius: 0, mark: mark[0], colour: mark.endsWith("grey") ? "#9a9a9a" : "#f2d64b", title: npc.name });
+    }
+    for (const [id, active] of quests.active) {
+      const def = quests.defs.get(id);
+      if (!def || active.state !== "active") continue;
+      const title = renderText(def.text.title, gameRules.text);
+      for (const o of def.objectives) if ((o.kind === "gather" || o.kind === "reach") && o.area.dimension === currentDimension) marks.push({ ...o.area, mark: "", colour: "", title });
+      for (const w of def.where) if (w.dimension === currentDimension) marks.push({ ...w, mark: "", colour: "", title });
+    }
+    view?.debugMap.setQuestMarks(marks);
+  }
+  /** The character's quests, as the server last said (QUESTS.md). */
+  const quests = createQuestMirror();
+  /** The own character's level, for quests' colours. */
+  const ownLevel = (): number => {
+    const own = mirror.entities.get(playerId);
+    const level = gameRules.statIndex.get("level");
+    return (level !== undefined ? own?.stats.get(level) : undefined) ?? 1;
+  };
   /** The character's standing with factions that keep reputation, as the server last said. */
   const standing = new Map<string, number>();
+  /** Whether the whole standing has been told since entering: changes after it chime. */
+  let standingTold = false;
   /** Set while a dimension is being built: no frames are drawn and the server is not stepped. */
   let entering = false;
   /** Where the player is, as the last snapshot that had it said - null since the last Transfer. */
@@ -196,6 +226,23 @@ export async function startSession(page: Page, options: SessionOptions): Promise
         }
       } else if (message.type === "saved") {
         savedMark.show();
+      } else if (message.type.startsWith("quest")) {
+        // Quests: the mirror, and a sound for what moved (FEEDBACK.md's client events).
+        queueMicrotask(drawQuestMap);
+        for (const change of quests.apply(message) ?? []) {
+          const event = ({ accepted: "questAccept", progress: "questProgress", objectiveDone: "questObjectiveDone", ready: "questReady", failed: "questFailed", done: "questComplete", removed: "questAbandon", refused: "uiError" } as const)[change.what];
+          feedback.client(event, { source: playerId, target: playerId, skill: null, crit: false, periodic: false });
+          if (change.what === "refused") npcWindow.refused(quests.refused?.reason ?? "");
+        }
+      } else if (message.type === "markers") {
+        queueMicrotask(drawQuestMap);
+        // Over the NPCs in view: "!" and "?" (QUESTS.md, *Markers*).
+        for (const [id] of shownMarks) if (!message.list.some(([m]) => m === id)) nameplates?.setMark(id, "", "");
+        shownMarks.clear();
+        for (const [id, mark] of message.list) {
+          shownMarks.set(id, mark);
+          nameplates?.setMark(id, mark.startsWith("!") ? "!" : "?", mark.endsWith("grey") ? "#9a9a9a" : "#f2d64b");
+        }
       } else if (message.type === "npcWindow") {
         const npc = mirror.entities.get(message.npc);
         npcWindow.open(message, npc?.name ?? "", npc?.title ?? "");
@@ -211,8 +258,11 @@ export async function startSession(page: Page, options: SessionOptions): Promise
         // An NPC says something (NPCS.md, *Barks*): over its head.
         nameplates?.bark(message.npc, renderText({ text: message.text, args: message.args }, gameRules.text));
       } else if (message.type === "standing") {
-        // Whole on arrival (NPCS.md, *Factions*), else what changed.
+        // Whole on arrival (NPCS.md, *Factions*), else what changed: a chime for standing gained.
+        const gained = standingTold && message.values.some(([faction, value]) => value > (standing.get(faction) ?? -Infinity));
+        standingTold = true;
         for (const [faction, value] of message.values) standing.set(faction, value);
+        if (gained) feedback.client("standingChange", { source: playerId, target: playerId, skill: null, crit: false, periodic: false });
       } else if (message.type === "refused") {
         refusal = message.reason;
       } else if (message.type === "transfer") {
@@ -638,6 +688,7 @@ export async function startSession(page: Page, options: SessionOptions): Promise
     if (!view || entering || menuOpen || e.repeat) return;
     if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement) return;
     if (e.key.toLowerCase() === "p") progressPanel.toggle();
+    if (e.key.toLowerCase() === "j") questLog.toggle();
     if (e.key.toLowerCase() === "k") ruleBook.toggle();
   });
   // How this game works, written from its rules (PROGRESSION.md, *The client*): K.
@@ -652,11 +703,23 @@ export async function startSession(page: Page, options: SessionOptions): Promise
       return { stats: me.stats, levels: new Map(p.disciplines.map((d) => [d.discipline, d.level])), origins: p.origins.filter((o) => o >= 0) };
     },
   });
+  // Quests (QUESTS.md, *In the game*): the log (J), the tracker under the zone name.
+  const questLog = createQuestLog({
+    mirror: quests,
+    rules: gameRules.quests,
+    items: itemRules,
+    text: gameRules.text,
+    send: (message) => client.send(message),
+    level: ownLevel,
+  });
+  dockWindow(questLog.element);
+  dock(questLog.tracker, hud.info);
   // The screens that open from keys, as a row of buttons too; the debug tools sit in the debug panel.
   const menuBar = createMenuBar([
     { icon: "bag", label: "Inventory", key: "B", toggle: () => inventory.toggle(), open: () => inventory.visible },
     { icon: "progress", label: "Progression", key: "P", toggle: () => progressPanel.toggle(), open: () => progressPanel.visible },
     { icon: "spells", label: "Spell book", key: "L", toggle: () => spellBook.toggle(), open: () => spellBook.visible },
+    { icon: "quests", label: "Quest log", key: "J", toggle: () => questLog.toggle(), open: () => questLog.visible },
     { icon: "book", label: "Rule book", key: "K", toggle: () => ruleBook.toggle(), open: () => ruleBook.visible },
     { icon: "options", label: "Options", key: "O", toggle: () => (hud.optionsVisible = !hud.optionsVisible), open: () => hud.optionsVisible },
     { icon: "debug", label: "Debug panel", key: "F2", toggle: () => (hud.debugVisible = !hud.debugVisible), open: () => hud.debugVisible, debug: true },
@@ -668,6 +731,9 @@ export async function startSession(page: Page, options: SessionOptions): Promise
   // Talking to an NPC (NPCS.md, *Services*).
   const npcWindow = createNpcWindow({
     items: itemRules,
+    quests,
+    questRules: gameRules.quests,
+    level: ownLevel,
     text: gameRules.text,
     belongings,
     send: (message) => client.send(message),
@@ -814,6 +880,8 @@ export async function startSession(page: Page, options: SessionOptions): Promise
       const entity = id === null ? undefined : mirror.entities.get(id);
       if (id === null || !entity) return;
       if (entity.lootable || entity.templateId === GROUND_ITEM_TEMPLATE) return interact(id);
+      // A quest's ground object: picked up (QUESTS.md, *Ground objects*).
+      if (entity.templateId === gameRules.quests.objects.template) return client.send({ type: "questObjectTake", entity: id });
       // A settlement's person: talk to it (NPCS.md, *Services*).
       if (isNpc(entity)) {
         setTarget(id);
@@ -1078,7 +1146,7 @@ export async function startSession(page: Page, options: SessionOptions): Promise
   /** Closes every open window; whether any was. */
   function closeWindows(): boolean {
     let closed = false;
-    for (const w of [inventory, spellBook, progressPanel, ruleBook, entityPanel]) {
+    for (const w of [inventory, spellBook, progressPanel, ruleBook, entityPanel, questLog]) {
       if (!w.visible) continue;
       w.toggle();
       closed = true;
@@ -1241,6 +1309,7 @@ export async function startSession(page: Page, options: SessionOptions): Promise
     spellBook.dispose();
     progressPanel.dispose();
     npcWindow.dispose();
+    questLog.dispose();
     ruleBook.dispose();
     menuBar.dispose();
     feedback.dispose();

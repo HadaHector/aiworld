@@ -1,0 +1,8 @@
+// Standing gained with a faction: a soft chime. (QUESTS.md, *Sounds and cues*)
+{
+  bus: "ui", flat: true, maxVoices: 1, volume: [0.6, 0.6], takes: 1,
+  layers: [
+    { synth: { tone: "sine", hz: 1046, env: { attack: 0.005, decay: 0.6 }, gain: 0.06 }, standIn: true },
+    { synth: { tone: "sine", hz: 1318, env: { attack: 0.005, decay: 0.7 }, gain: 0.05, delay: 0.06 }, standIn: true },
+  ],
+}

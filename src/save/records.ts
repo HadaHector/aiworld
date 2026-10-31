@@ -1,3 +1,4 @@
+import type { SavedQuests } from "../sim/quests/quest";
 import type { SavedProgress } from "../sim/progression/save";
 import type { SavedBelongings } from "../sim/items/save";
 import type { CharacterEntry, EntityAppearance } from "../sim/protocol";
@@ -71,6 +72,8 @@ export interface CharacterRecord {
   };
   /** The client's own layout (the action bar), as JSON text: kept by the server, never read by it. */
   interface: string;
+  /** Quests taken and done (QUESTS.md, *Saved*). Left out: none. */
+  quests?: SavedQuests;
   /** Standing with factions that keep reputation, by faction id (NPCS.md, *Factions*). Left out: none earned. */
   standing?: Record<string, number>;
 }

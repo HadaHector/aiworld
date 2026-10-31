@@ -1,0 +1,2 @@
+// A quest item (QUESTS.md): a salve to rub on a sick beast - used on one, at a distance.
+{ name: "Herbal Salve", kind: "quest", rarity: "common", quest: true, use: { skill: "applySalve", consume: false } }

@@ -1,0 +1,9 @@
+// Every objective done: a brighter chord, back to the one who ends it. (QUESTS.md, *Sounds and cues*)
+{
+  bus: "ui", flat: true, maxVoices: 1, volume: [0.6, 0.6], takes: 1,
+  layers: [
+    { synth: { tone: "triangle", hz: 523, env: { attack: 0.005, decay: 0.5 }, gain: 0.14 }, standIn: true },
+    { synth: { tone: "triangle", hz: 659, env: { attack: 0.005, decay: 0.5 }, gain: 0.12, delay: 0.05 }, standIn: true },
+    { synth: { tone: "triangle", hz: 784, env: { attack: 0.005, decay: 0.6 }, gain: 0.12, delay: 0.1 }, standIn: true },
+  ],
+}

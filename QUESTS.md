@@ -8,7 +8,7 @@ translatable templates, "!" and "?" markers, a quest log and map markers, and re
 GAMEPLAY.md's 7-part *Test chain* must be one of the chains it can produce. Finishing it is the
 first milestone.
 
-**Status: in progress.** Step 6 is done (see [As built](#as-built)).
+**Status: in progress.** Steps 6 to 8 are done (see [As built](#as-built)).
 
 ## Decisions
 
@@ -487,6 +487,60 @@ After NPCS.md's five steps. Each leaves the game working: the dev server (`?play
   and NPC greetings now go to the client as a template and arguments (`bark { text, args }`,
   `npcWindow`'s `greeting` and `greetingArgs`), and the client words them. Only English plurals
   so far; the language is always "en" until Options has a choice.
+- **Step 7, quests by hand.** `src/sim/quests/quest.ts` (the model, `rules/quests.json5`) and
+  `src/sim/quests/system.ts` (the server's quest system). Where the build differs from the plan:
+  - **The client is sent each quest whole** (`questDefs`) when it is offered one or has one in its
+    log, rather than generating the same quests itself: simpler, and a quest's text is templates
+    and arguments anyway, so it is still worded on the client.
+  - **Kill, loot and gather objectives are counts**, as WoW's "Wolf Fangs: 3/5": a quest drop is
+    rolled for each credited player who needs it and counted, not carried, so quest items stay
+    "one held" (ITEMS.md). Receive, use and deliver objectives use real quest items: the core pack's
+    `herbalSalve` and `wardingCharm` (whose use casts `applySalve` / `applyWard` on the target),
+    `sealedLetter` and `wrappedParcel`. A quest's items are taken back when it ends, unless a quest
+    the character has not done yet asks for them (the next in a chain uses the salve it was given).
+  - **Ground objects** (`questObject`, a small gold box) are shared: eight stand in an objective's
+    area while a player who needs them is within 150 m; one taken is gone for 30 s. Right-click takes
+    one (`questObjectTake`), counted only for someone on the quest.
+  - **A `use` objective** counts when its item's skill finishes casting on a creature of the kind,
+    at or under `below` of its health.
+  - Talking to an NPC does every talk, receive and deliver objective with it, in order; taking a
+    quest does the giver's too. Ordered quests count only their current objective.
+  - **Rewards** on handing in: XP through PROGRESSION.md's `quest` source (full at the quest's level,
+    falling to a tenth six levels over), money, the chosen item (an index; refused without one), any
+    fixed items, and standing. **Failing:** `within` seconds run out: failed, kept in the log until
+    abandoned; abandoning takes its items and leaves it to be taken again.
+  - **Saved** as the record's `quests` (`active` with counts and states, `done`), sent whole on
+    entering (`questLog`), each change as `questUpdate`.
+  - **Checked:** `scripts/probe/quests.mjs`, 41 checks: the text's plurals and selects, then
+    GAMEPLAY.md's test chain built by hand from the starting village's reeve, priest and smith and
+    its zone's beasts, on a real `tiny` server with a saved character: offered only in order, the
+    client told each quest, talk, two kills then the sample (ordered), a log out and in half way with
+    everything kept, eight ground objects and three picked, the salve received and kept, not
+    droppable, used on a beast, handed in at the first giver with a choice of three swords - XP,
+    75 copper, 250 standing, the sword, the salve taken back - and not offered again; a timed quest
+    failed and abandoned.
+- **Step 8, in the game.** `src/game/questMirror.ts`, `src/ui/questLog.ts`, the NPC window's quest
+  pages, quest marks and sounds.
+  - **The NPC window** lists the NPC's quests for the character with a yellow "!" (to take), a
+    yellow "?" (to hand in) or a grey "?" (in progress); a quest's page has its title in its level
+    colour, its text for the moment, objectives with counts, rewards, the item choice as buttons, and
+    *Accept* or *Complete*.
+  - **Markers:** twice a second the server works out the marks over the NPCs within 90 m of each
+    player and sends them when they change (`markers`): "?" over "!" over grey "?" over grey "!" (a
+    quest a level or two off). The nameplates draw them over the name.
+  - **The quest log is J**, not L, which the spell book already has; it is on the menu bar with a
+    scroll. It lists the quests by level colour, with the chosen one written out, *Track*/*Untrack*
+    and *Abandon*. **The tracker** sits under the zone name with up to five tracked quests'
+    objectives, struck through when done.
+  - **The map** (M, the debug map until a player map) shows the marked NPCs' "!" and "?" and soft
+    circles over gather and reach areas and each quest's `where`.
+  - **Sounds** (generated, the `ui` bus): taken, a count up, an objective done, ready, handed in (a
+    short fanfare), failed or abandoned, and a chime when standing rises. A refusal plays `uiError`
+    and is said in the NPC window.
+  - Right-click on a ground object takes it.
+  - **Checked in the page** with a quest defined from the console: the "!" over the reeve, its page,
+    *Accept*, the "!" gone and the tracker showing the objective, the "?" over the smith after talking,
+    "Ready to hand in", *Complete*: done, 30 copper and 132 XP (the human's 10% over 120).
 
 ## Later
 

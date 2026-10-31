@@ -137,6 +137,8 @@ export const CLIENT_EVENTS = [
   "uiHover", "uiClick", "uiBack", "uiError", "uiSwatch", "characterCreated", "enterWorld", "logout",
   // NPCs (NPCS.md, *Services*): talking to one, and what is done at one.
   "talk", "shopBuy", "shopSell", "repair", "setHome",
+  // Quests (QUESTS.md, *Sounds and cues*).
+  "questAccept", "questProgress", "questObjectiveDone", "questReady", "questComplete", "questFailed", "questAbandon", "standingChange",
 ] as const;
 export const EVENT_NAMES: readonly string[] = [...COMBAT_EVENT_KINDS, ...CLIENT_EVENTS];
 

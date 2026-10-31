@@ -2,6 +2,9 @@ import type { ClientMessage, NpcWindow as NpcWindowMessage } from "../sim/protoc
 import { formatMoney, type ItemRules } from "../sim/rules/itemRules";
 import type { BelongingsMirror } from "../game/belongingsMirror";
 import { renderText, type TextTable } from "../core/text";
+import type { QuestMirror } from "../game/questMirror";
+import type { QuestRules } from "../sim/quests/quest";
+import { renderQuest } from "./questLog";
 import { BUTTON_CLASS, CLOSE_CLASS, DIM, HEADING, PANEL, TEXT, WINDOW_HEAD } from "./theme";
 
 /**
@@ -24,6 +27,10 @@ export interface NpcWindow {
 
 export interface NpcWindowOptions {
   items: ItemRules;
+  /** The character's quests, and how to write one out (QUESTS.md, *Talking*). */
+  quests: QuestMirror;
+  questRules: QuestRules;
+  level: () => number;
   /** Translations (QUESTS.md, *Text*). */
   text: TextTable;
   belongings: BelongingsMirror;
@@ -66,16 +73,55 @@ export function createNpcWindow(options: NpcWindowOptions): NpcWindow {
   const body = el("div", "", root);
   const note = el("div", `min-height: 15px; margin-top: 6px; color: ${DIM}; font-size: 11px;`, root);
   let current: NpcWindowMessage | null = null;
+  /** A quest page open in the window, and the reward chosen on it. */
+  let page = "";
+  let chosen = -1;
   let unsubscribe: (() => void) | null = null;
 
   const typeOf = (id: string) => items.types[items.typeIndex.get(id) ?? -1];
+
+  /** One quest: offered (Accept), in progress, or ready (choose a reward, Complete). */
+  function renderPage(npc: number, id: string, state: "offer" | "active" | "ready"): void {
+    const def = options.quests.defs.get(id);
+    el("button", "padding: 1px 8px; margin-bottom: 6px;", body, "‹ Back").addEventListener("click", () => {
+      page = "";
+      render();
+    });
+    if (!def) return;
+    const active = options.quests.active.get(id);
+    const choose = state === "ready" && def.rewards.choice.length > 0 ? (i: number) => ((chosen = i), render()) : undefined;
+    renderQuest(body, def, active, { items, text: options.text, rules: options.questRules, level: options.level(), page: state === "offer" ? "offer" : state === "ready" ? "done" : "progress", choose, chosen });
+    const row = el("div", "display: flex; gap: 6px; margin-top: 8px;", body);
+    if (state === "offer") el("button", "padding: 3px 10px;", row, "Accept").addEventListener("click", () => send({ type: "questAccept", npc, quest: id }));
+    if (state === "ready") {
+      const done = el("button", "padding: 3px 10px;", row, "Complete") as HTMLButtonElement;
+      done.disabled = def.rewards.choice.length > 0 && chosen < 0;
+      done.addEventListener("click", () => send({ type: "questComplete", npc, quest: id, choice: Math.max(0, chosen) }));
+    }
+  }
 
   function render(): void {
     body.textContent = "";
     if (!current) return;
     const npc = current.npc;
+    const onPage = current.quests.find((q) => q.id === page);
+    if (onPage) return renderPage(npc, onPage.id, onPage.state);
     if (current.greeting) el("div", `font-style: italic; color: ${TEXT}; margin-bottom: 6px;`, body, `"${renderText({ text: current.greeting, args: current.greetingArgs }, options.text)}"`);
-    const buttons = el("div", "display: flex; flex-wrap: wrap; gap: 4px;", body);
+    // Its quests for this character: "!" to take, "?" to hand in (grey while in progress).
+    for (const q of current.quests) {
+      const def = options.quests.defs.get(q.id);
+      if (!def) continue;
+      const mark = q.state === "offer" ? "!" : "?";
+      const row = el("div", `cursor: pointer; padding: 2px 0; color: ${q.state === "active" ? DIM : TEXT};`, body);
+      el("span", `font-weight: 700; color: ${q.state === "active" ? DIM : "#f2d64b"}; margin-right: 6px;`, row, mark);
+      el("span", "", row, renderText(def.text.title, options.text));
+      row.addEventListener("click", () => {
+        page = q.id;
+        chosen = -1;
+        render();
+      });
+    }
+    const buttons = el("div", "display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px;", body);
     const button = (label: string, act: () => void): void => {
       el("button", "padding: 3px 8px;", buttons, label).addEventListener("click", act);
     };
@@ -132,6 +178,9 @@ export function createNpcWindow(options: NpcWindowOptions): NpcWindow {
       return current?.npc ?? 0;
     },
     open(message, name, title) {
+      // The page stays while its quest is as it was; taken, handed in, or another NPC: back to the list.
+      const was = current?.npc === message.npc ? current.quests.find((q) => q.id === page)?.state : undefined;
+      if (!was || message.quests.find((q) => q.id === page)?.state !== was) page = "";
       current = message;
       heading.textContent = title ? `${name} - ${title}` : name;
       note.textContent = "";
