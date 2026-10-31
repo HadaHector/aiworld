@@ -268,7 +268,11 @@ Each leaves the game working: dev server, `npm run probe`, `npm run server`, `np
   boarded (step 3 onwards).
 - **The saved delta per dimension** (GAMEPLAY.md, *World delta*), keyed by dimension id.
 - **Generating in a worker** on a dedicated server, so one player's travel does not stall the rest.
-- **A character's dimension** saved with its position, replacing `hello`'s debug field.
+- **A character's dimension** saved with its position, replacing `hello`'s debug field. *Done with
+  step 10* (FRONTEND.md): a saved character comes back in the dimension and at the point it left;
+  `hello`'s `dimension` stays for quick games, and `enterWorld` has its own debug `dimension`.
+- **The saved delta per dimension** is the one world delta, whose keys already name their dimension
+  (`mainland/1`), saved with the world (FRONTEND.md, *Saves*).
 - **The full world's memory** (see [As built](#as-built)): about 4.8 GB of heap is what blocks
   travelling into it reliably. The stats panel's *Memory* section (`debug/memoryPanel.ts`, or
   `__aiworld.memory()` in the console) shows where it goes: the JS heap, the GPU by texture and mesh

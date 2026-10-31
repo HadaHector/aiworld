@@ -7,7 +7,7 @@ progression panel and the rule book. This step adds what comes before and around
 a main menu, worlds, characters with a creation screen, saving and loading them, a pause menu, and
 logging out. The quest log comes after step 9, which has the quests to put in it.
 
-**Status: in progress.** Approved; steps 1 to 6 done (see [As built](#as-built)).
+**Status: done.** Steps 1 to 7, as built below (see [As built](#as-built)).
 
 ## Decisions
 
@@ -400,7 +400,7 @@ Each step leaves the game working: the dev server, `npm run probe`, `npm run ser
    layout in the record, the loading screen's heading and *Back to menu*, and pausing single player.
 6. **Sounds and Join: done.** The UI cues and their sounds, and *Join a server* through the handshake to
    its stub failure, with the mismatch screen.
-7. **Wrap up.** Run the whole loop by hand: launch, make a world and a character, play, level up and
+7. **Wrap up: done.** Run the whole loop by hand: launch, make a world and a character, play, level up and
    loot, log out, reload the page, Continue, and find everything kept. Check menu ↔ game five times
    for leaks. Update GAMEPLAY.md's step 10 to done, CHARACTERS.md's *Next steps* 4, PROGRESSION.md's
    *Not in this step*, DIMENSIONS.md's *Later*, and `public/packs/README.md`.
@@ -625,6 +625,19 @@ Each step leaves the game working: the dev server, `npm run probe`, `npm run ser
     `welcomeProblems`, and the character list. A mismatch screen comes with it.
   - Checked: the feedback probe renders every sound; in the page each sound played a voice before
     the frequent ones were made silent, and Join shows its message.
+
+- **Step 7.** The whole loop, by hand in the page:
+  - Made "Loop World" (small, seed 4242) and Liriel, an elf priest, and entered: 47 s, in a pane baking
+    the small world's textures for the first time.
+  - Reached level 3, emptied the chest at the start, took bread, and walked to (25, -18).
+  - *Exit to menu* from the pause menu, reloaded the page, then *Continue*.
+  - She came back with the same level, bag (a tome, plate gauntlets, a chestpiece, nine bread),
+    worn items, money (426) and position. The chest was still empty, due back in 578 s of world time.
+
+  Five round trips from the game to the main menu and back: the menu's page had 128 elements every
+  time, and the heap after forced collection stayed at about 2.11 GB (2109, 2114, 2113, 1347, 2115 MB).
+  The entities, abilities, items, progression, creatures and saves probes pass, and so does the
+  build. `npm run server -- --world` made a world, then loaded it with its character and clock.
 
 ## Later
 

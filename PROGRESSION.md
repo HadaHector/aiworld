@@ -633,9 +633,11 @@ Each leaves the game working: dev server, `npm run probe`, `npm run server`, `np
 
 - Generated stats: a generated discipline's `stat` must exist in `stats/`. Generating the stat table
   itself would make every rules table depend on the seed; later, if a game needs it.
-- Character creation (a screen to pick origins and looks): the address picks them until step 10's
+- Character creation (a screen to pick origins and looks): *done with step 10* (FRONTEND.md); before it, the address picked them until step 10's
   screens.
 - Saving to disk: the record and its export and import exist; writing them comes with character saves.
+  *Done with step 10* (FRONTEND.md, *Saves*): the server writes `exportProgress` into each character's
+  record and loads it with `importProgress`.
 - Death penalties (XP debt): game config, later.
 - Quests, gathering nodes and recipes: their sources and `knows` are hooks for the steps that make them.
 - Party XP sharing and tagging rules for parties: `credit` covers solo and co-op until parties come.
