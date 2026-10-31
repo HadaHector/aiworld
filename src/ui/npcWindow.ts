@@ -90,13 +90,7 @@ export function createNpcWindow(options: NpcWindowOptions): NpcWindow {
   /** One quest: offered (Accept), in progress, or ready (choose a reward, Complete). */
   function renderPage(npc: number, id: string, state: "offer" | "active" | "ready"): void {
     const def = options.quests.defs.get(id);
-    // Back to the list - when there is one: an NPC with only this quest has nothing else to show.
-    if (current && offersOf(current) > 1) {
-      el("button", "padding: 1px 8px; margin-bottom: 6px;", body, "‹ Back").addEventListener("click", () => {
-        page = "";
-        render();
-      });
-    }
+    back();
     if (!def) return;
     const active = options.quests.active.get(id);
     const choose = state === "ready" && def.rewards.choice.length > 0 ? (i: number) => ((chosen = i), render()) : undefined;
@@ -110,41 +104,24 @@ export function createNpcWindow(options: NpcWindowOptions): NpcWindow {
     }
   }
 
-  function render(): void {
-    body.textContent = "";
-    if (!current) return;
-    const npc = current.npc;
-    const onPage = current.quests.find((q) => q.id === page);
-    if (onPage) return renderPage(npc, onPage.id, onPage.state);
-    if (current.greeting) el("div", `font-style: italic; color: ${TEXT}; margin-bottom: 6px;`, body, `"${renderText({ text: current.greeting, args: current.greetingArgs }, options.text)}"`);
-    // Its quests for this character: "!" to take, "?" to hand in (grey while in progress).
-    for (const q of current.quests) {
-      const def = options.quests.defs.get(q.id);
-      if (!def) continue;
-      const mark = q.state === "offer" ? "!" : "?";
-      const row = el("div", `cursor: pointer; padding: 2px 0; color: ${q.state === "active" ? DIM : TEXT};`, body);
-      el("span", `font-weight: 700; color: ${q.state === "active" ? DIM : "#f2d64b"}; margin-right: 6px;`, row, mark);
-      el("span", "", row, renderText(def.text.title, options.text));
-      row.addEventListener("click", () => {
-        page = q.id;
-        chosen = -1;
-        render();
-      });
-    }
-    const buttons = el("div", "display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px;", body);
-    const button = (label: string, act: () => void): void => {
-      el("button", "padding: 3px 8px;", buttons, label).addEventListener("click", act);
-    };
-    if (current.trainer) button("Train", () => options.train(npc));
-    if (current.banker) button("Bank", () => options.openBag());
-    if (current.repair) button("Repair all", () => send({ type: "npcRepair", npc }));
-    if (current.innkeeper) {
-      if (current.home) el("span", `color: ${DIM}; font-size: 11px; align-self: center;`, buttons, "This inn is your home.");
-      else button("Make this inn your home", () => send({ type: "setHome", npc }));
-    }
-    if (current.stock.length > 0) {
+  /** The page that is the shop (`page` is a quest's id, this, or "" for the list). */
+  const SHOP = "@shop";
+
+  /** A Back button to the list - when there is one: an NPC with only this to offer has nothing else. */
+  function back(): void {
+    if (!current || offersOf(current) <= 1) return;
+    el("button", "padding: 1px 8px; margin-bottom: 6px;", body, "‹ Back").addEventListener("click", () => {
+      page = "";
+      render();
+    });
+  }
+
+  /** The shop (NPCS.md, *The vendor's shop*): its stock to buy, the bag to sell from, the purse. */
+  function renderShop(npc: number): void {
+    back();
+    if (current!.stock.length > 0) {
       el("div", HEADING, body, "For sale");
-      for (const [index, entry] of current.stock.entries()) {
+      for (const [index, entry] of current!.stock.entries()) {
         const type = typeOf(entry.type);
         const row = el("div", "display: flex; align-items: center; gap: 6px; margin: 2px 0;", body);
         el("span", "flex: 1;", row, `${type?.name ?? entry.type}${entry.count > 1 ? ` ×${entry.count}` : ""}`);
@@ -152,7 +129,7 @@ export function createNpcWindow(options: NpcWindowOptions): NpcWindow {
         el("button", "padding: 1px 6px; font-size: 11px;", row, "Buy").addEventListener("click", () => send({ type: "shopBuy", npc, index }));
       }
     }
-    if (current.sellRate > 0) {
+    if (current!.sellRate > 0) {
       el("div", HEADING, body, "Sell from your bag");
       const bag = belongings.containers[0] ?? [];
       let any = false;
@@ -169,6 +146,47 @@ export function createNpcWindow(options: NpcWindowOptions): NpcWindow {
       if (!any) el("div", `color: ${DIM}; font-size: 11px;`, body, "Nothing to sell.");
     }
     el("div", `margin-top: 6px; color: ${DIM}; font-size: 11px;`, body, `Your purse: ${money(belongings.wallet[items.main] ?? 0)}`);
+  }
+
+  function render(): void {
+    body.textContent = "";
+    if (!current) return;
+    const npc = current.npc;
+    if (page === SHOP && current.stock.length > 0) return renderShop(npc);
+    const onPage = current.quests.find((q) => q.id === page);
+    if (onPage) return renderPage(npc, onPage.id, onPage.state);
+    if (current.greeting) el("div", `font-style: italic; color: ${TEXT}; margin-bottom: 6px;`, body, `"${renderText({ text: current.greeting, args: current.greetingArgs }, options.text)}"`);
+    // One row for each thing it offers: its quests ("!" to take, "?" to hand in, grey while in
+    // progress), then its services, each with its sign.
+    const row = (mark: string, markColour: string, label: string, colour: string, act: () => void): void => {
+      const r = el("div", `cursor: pointer; padding: 2px 0; color: ${colour};`, body);
+      el("span", `display: inline-block; width: 16px; text-align: center; font-weight: 700; color: ${markColour}; margin-right: 4px;`, r, mark);
+      el("span", "", r, label);
+      r.addEventListener("click", act);
+    };
+    for (const q of current.quests) {
+      const def = options.quests.defs.get(q.id);
+      if (!def) continue;
+      const grey = q.state === "active";
+      row(q.state === "offer" ? "!" : "?", grey ? DIM : "#f2d64b", renderText(def.text.title, options.text), grey ? DIM : TEXT, () => {
+        page = q.id;
+        chosen = -1;
+        render();
+      });
+    }
+    if (current.stock.length > 0) {
+      row("$", "#e8c34a", "Shop", TEXT, () => {
+        page = SHOP;
+        render();
+      });
+    }
+    if (current.trainer) row("✦", "#9ad0ff", "Train", TEXT, () => options.train(npc));
+    if (current.banker) row("▣", "#c9b48a", "Bank", TEXT, () => options.openBag());
+    if (current.repair) row("⚒", "#c9b48a", "Repair all", TEXT, () => send({ type: "npcRepair", npc }));
+    if (current.innkeeper) {
+      if (current.home) el("div", `color: ${DIM}; font-size: 11px; padding: 2px 0 2px 20px;`, body, "This inn is your home.");
+      else row("⌂", "#c9b48a", "Make this inn your home", TEXT, () => send({ type: "setHome", npc }));
+    }
   }
 
   function hide(): void {
@@ -204,10 +222,13 @@ export function createNpcWindow(options: NpcWindowOptions): NpcWindow {
           page = message.quests[0].id;
           chosen = -1;
         }
+        if (message.stock.length > 0) page = SHOP;
       }
       // The page stays while its quest is as it was; taken, handed in, or another NPC: back to the list.
       const was = current?.npc === message.npc ? current.quests.find((q) => q.id === page)?.state : fresh && offers === 1 && message.quests.length === 1 ? message.quests[0].state : undefined;
-      if (!was || message.quests.find((q) => q.id === page)?.state !== was) page = "";
+      // The shop stays open across buying and selling, or opens for an NPC that only sells.
+      const keepShop = page === SHOP && (!fresh || (offers === 1 && message.stock.length > 0));
+      if (!keepShop && (!was || message.quests.find((q) => q.id === page)?.state !== was)) page = "";
       // Straight on to what follows the quest just handed in, where this NPC offers it.
       const next = after ? message.quests.find((q) => q.state === "offer" && options.quests.defs.get(q.id)?.requires.quests.includes(after)) : undefined;
       if (next) {

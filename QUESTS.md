@@ -615,9 +615,11 @@ After NPCS.md's five steps. Each leaves the game working: the dev server (`?play
     probe turns groups back on to test them. Camps are unchanged.
   - Ground objects glint as loot does, and the glint is twice the size it was. Hovering anything
     that can be right-clicked - loot, a ground item or object, a person - shows a hand, and its name except for a person, whose name is over their head.
+  - The NPC window is a list: its quests ("!" to take, "?" to hand in) and then a row for each
+    service - "$ Shop", Train, Bank, Repair all, Make this inn your home. The shop is a page of its
+    own, opened from its row (with Back), and stays open while buying and selling.
   - Talking to an NPC with one thing only to offer goes straight to it: a class trainer opens the
-    progression panel at it, a banker alone the bag, one quest its page; a shop alone is the window
-    itself, with no Back button to a list of one. Only when it is newly talked to, not when the window
+    progression panel at it, a banker alone the bag, one quest its page, a shop alone its shop page, with no Back button to a list of one. Only when it is newly talked to, not when the window
     is asked for again after an action.
 
 ## Later
