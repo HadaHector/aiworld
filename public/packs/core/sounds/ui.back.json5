@@ -1,0 +1,8 @@
+// Back, Cancel, Escape in a menu: two notes falling.
+{
+  bus: "ui", flat: true, maxVoices: 1, volume: [0.55, 0.55], takes: 1,
+  layers: [
+    { synth: { tone: "triangle", hz: 660, env: { attack: 0.003, decay: 0.07 }, gain: 0.22, crush: { bits: 8, rate: 2 } }, standIn: true },
+    { synth: { tone: "triangle", hz: 495, env: { attack: 0.003, decay: 0.1 }, gain: 0.22, delay: 0.07, crush: { bits: 8, rate: 2 } }, standIn: true },
+  ],
+}

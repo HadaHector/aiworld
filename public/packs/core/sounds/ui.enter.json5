@@ -1,0 +1,8 @@
+// Entering the world: a soft swell that hands over to the loading screen.
+{
+  bus: "ui", flat: true, maxVoices: 1, volume: [0.6, 0.6], takes: 1,
+  layers: [
+    { synth: { noise: "pink", filter: { type: "lowpass", hz: [300, 2200], q: 0.7 }, env: { attack: 0.5, decay: 0.9 }, gain: 0.45 }, standIn: true },
+    { synth: { tone: "sine", hz: [196, 294], env: { attack: 0.45, decay: 1 }, gain: 0.2 }, standIn: true },
+  ],
+}

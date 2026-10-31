@@ -132,6 +132,9 @@ export const CLIENT_EVENTS = [
   "windowOpen", "windowClose", "barLift", "barPlace", "barClear",
   // Progression (PROGRESSION.md): the game's own client sends these; `levelUp` is a combat event too.
   "xpGained", "levelUp", "disciplineUp", "learned", "talentPicked",
+  // The front end (FRONTEND.md): menus and their choosers, a refusal, making a character, entering
+  // the world and leaving it.
+  "uiHover", "uiClick", "uiBack", "uiError", "uiSwatch", "characterCreated", "enterWorld", "logout",
 ] as const;
 export const EVENT_NAMES: readonly string[] = [...COMBAT_EVENT_KINDS, ...CLIENT_EVENTS];
 

@@ -1,0 +1,2 @@
+// Logging out, or leaving to the menu.
+{ parts: [{ sound: "ui.logout" }] }

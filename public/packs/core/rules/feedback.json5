@@ -35,6 +35,15 @@
     target: [{ cue: "target" }],
     footstep: [{ cue: "footstep" }],
     aggro: [{ cue: "aggro" }],
+    // The front end (FRONTEND.md, *Sounds and cues*): menus, character creation, entering and leaving.
+    uiHover: [{ cue: "uiHover" }],
+    uiClick: [{ cue: "uiClick" }],
+    uiBack: [{ cue: "uiBack" }],
+    uiError: [{ cue: "uiError" }],
+    uiSwatch: [{ cue: "uiSwatch" }],
+    characterCreated: [{ cue: "characterCreated" }],
+    enterWorld: [{ cue: "enterWorld" }],
+    logout: [{ cue: "logout" }],
   },
   // Weapon kinds by item template or gear piece.
   weapons: { sword: "blade", greatsword: "blade", axe: "blade", dagger: "blade", mace: "blunt", hammer: "blunt", staff: "blunt" },

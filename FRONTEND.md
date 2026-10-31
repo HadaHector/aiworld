@@ -7,7 +7,7 @@ progression panel and the rule book. This step adds what comes before and around
 a main menu, worlds, characters with a creation screen, saving and loading them, a pause menu, and
 logging out. The quest log comes after step 9, which has the quests to put in it.
 
-**Status: in progress.** Approved; steps 1 to 5 done (see [As built](#as-built)).
+**Status: in progress.** Approved; steps 1 to 6 done (see [As built](#as-built)).
 
 ## Decisions
 
@@ -398,7 +398,7 @@ Each step leaves the game working: the dev server, `npm run probe`, `npm run ser
    appearance overrides and hair styles (with the workbench's choosers), and names.
 5. **In the game: done.** The pause menu, logging out and exiting, the "Saved" mark, the action bar's
    layout in the record, the loading screen's heading and *Back to menu*, and pausing single player.
-6. **Sounds and Join.** The UI cues and their sounds, and *Join a server* through the handshake to
+6. **Sounds and Join: done.** The UI cues and their sounds, and *Join a server* through the handshake to
    its stub failure, with the mismatch screen.
 7. **Wrap up.** Run the whole loop by hand: launch, make a world and a character, play, level up and
    loot, log out, reload the page, Continue, and find everything kept. Check menu ↔ game five times
@@ -594,6 +594,33 @@ Each step leaves the game working: the dev server, `npm run probe`, `npm run ser
     world's list. The session now tears itself down fully in that case too (`disposeAll`).
   - Not done: "pausable" is always true, as single player is all there is; a server would say in
     Welcome that it does not pause.
+
+- **Step 6.**
+  - **The sounds.** Eight client events join the feedback event table (`CLIENT_EVENTS` in
+    `feedback/rules.ts`, `rules/feedback.json5`): `uiHover`, `uiClick`, `uiBack`, `uiError`,
+    `uiSwatch`, `characterCreated`, `enterWorld` and `logout`. Each has a cue of the same name, and
+    there are six new generated sounds in the `ui` bus (`ui.hover`, `ui.click`, `ui.back`, `ui.swatch`,
+    `ui.created`, `ui.enter`, `ui.logout`; `uiError` plays the existing `error`). `saved` has no
+    sound, as planned.
+  - **The menus play them** through `src/frontend/menuSounds.ts`: the same cue player and sounds as
+    the game, from rules resolved once from every pack, with no scene. The front end's root listens
+    once for both:
+    - every button and chooser ticks on hover and clicks when pressed, or plays what its
+      `data-sound` names (`uiBack` for Back, `uiSwatch` for swatches and the beard, `none` where its
+      action plays its own);
+    - Escape back plays `uiBack`, a refusal `uiError`, a character made `characterCreated`, entering
+      `enterWorld`, leaving `logout`.
+
+    The pause menu plays through the game's own feedback: opening it clicks, closing it plays Back.
+    The Effects volume sets them too. In the console, `__aiworldPage.sounds.play("uiBack")` and
+    `.voices()`.
+  - **Join a server** is on the Worlds screen: an address (remembered), then `openTransport` in
+    `src/game/transport.ts`. That refuses every address for now, saying "Joining servers is not there
+    yet", and the screen shows it the way an unreachable server will be shown, with the error sound.
+    The rest of the path waits for a real transport: Hello with `select`, Welcome checked by
+    `welcomeProblems`, and the character list. A mismatch screen comes with it.
+  - Checked: the feedback probe (1642 checks) renders every sound; in the page each of the eight
+    plays a voice, and Join shows its message.
 
 ## Later
 

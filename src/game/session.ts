@@ -1036,11 +1036,15 @@ export async function startSession(page: Page, options: SessionOptions): Promise
       b.className = BUTTON_CLASS;
       b.style.cssText = "font-size: 14px; padding: 9px 14px;";
       b.textContent = label;
+      b.addEventListener("pointerenter", () => uiSound("uiHover"));
       b.addEventListener("click", act);
       panel.appendChild(b);
     };
     button("Resume", () => setMenu(false));
-    button("Options", () => (hud.optionsVisible = !hud.optionsVisible));
+    button("Options", () => {
+      uiSound("uiClick");
+      hud.optionsVisible = !hud.optionsVisible;
+    });
     const leave = options.leave;
     if (leave) {
       button("Log out", () => leave(false));
@@ -1050,7 +1054,12 @@ export async function startSession(page: Page, options: SessionOptions): Promise
       button("Main menu", () => location.assign(location.pathname));
     }
   }
+  /** The front end's sounds (FRONTEND.md, *Sounds and cues*), through this game's feedback. */
+  function uiSound(name: string): void {
+    feedback.client(name, { source: playerId, target: playerId, skill: null, crit: false, periodic: false });
+  }
   function setMenu(open: boolean): void {
+    if (open !== menuOpen) uiSound(open ? "uiClick" : "uiBack");
     menuOpen = open;
     pauseMenu.style.display = open ? "flex" : "none";
     if (!open) hud.optionsVisible = false;

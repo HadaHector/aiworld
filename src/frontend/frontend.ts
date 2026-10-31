@@ -2,6 +2,8 @@ import type { Page, Session } from "../game/session";
 import { startSession } from "../game/session";
 import { connectLocal, type Connection } from "../game/connection";
 import { createShowcase, type Framing, type Showcase } from "./showcase";
+import { openTransport } from "../game/transport";
+import type { MenuSound, MenuSounds } from "./menuSounds";
 import type { FrontendRules } from "./frontendRules";
 import type { SaveStore } from "../save/store";
 import { createWorldRecord, makeSaveId, type CharacterSummary, type WorldRecord } from "../save/records";
@@ -23,6 +25,9 @@ const SIZES = [
   { config: "small", name: "Small", note: "4 zones - ready in about 20 s" },
   { config: "default", name: "Full", note: "29 zones - about a minute to load, and much memory" },
 ];
+
+/** The server address last joined, offered again. */
+const SERVER_KEY = "aiworld.frontend.server";
 
 /** What Continue enters: the character played last, in its world. */
 const LAST_KEY = "aiworld.frontend.last";
@@ -54,6 +59,8 @@ export interface FrontendOptions {
   rules: FrontendRules;
   /** Called when a session starts or ends, for the page's volume and shake settings. */
   onSession: (session: Session | null) => void;
+  /** The menus' sounds (FRONTEND.md, *Sounds and cues*). */
+  sounds: MenuSounds;
   /** Starts with the menu hidden, its world not built: `?play=<world>` goes straight in. */
   hidden?: boolean;
 }
@@ -90,7 +97,7 @@ const ago = (ms: number): string => {
  */
 export function createFrontend(options: FrontendOptions): Frontend {
   installTheme();
-  const { page, store, rules } = options;
+  const { page, store, rules, sounds } = options;
   const { engine, canvas, hud, loadingScreen, music } = page;
 
   // --- The layers: a dark backdrop until the showcase is drawn, and the menu's column over it. ---
@@ -115,14 +122,30 @@ export function createFrontend(options: FrontendOptions): Frontend {
     if (root.style.display === "none" || !back) return;
     if (e.key === "Escape" && !(e.target instanceof HTMLInputElement)) {
       if (hud.optionsVisible) hud.optionsVisible = false;
-      else back();
+      else {
+        sounds.play("uiBack");
+        back();
+      }
     }
+  });
+  // Every button and chooser in the menus sounds the same way: a tick under the pointer, a click
+  // (or the sound its `data-sound` names, "none" for none) when pressed.
+  root.addEventListener("pointerover", (e) => {
+    const target = (e.target as HTMLElement).closest<HTMLElement>("button, [data-sound]");
+    if (target && !target.contains(e.relatedTarget as Node | null) && !(target as HTMLButtonElement).disabled) sounds.play("uiHover");
+  });
+  root.addEventListener("click", (e) => {
+    const target = (e.target as HTMLElement).closest<HTMLElement>("button, [data-sound]");
+    if (!target || (target as HTMLButtonElement).disabled) return;
+    const sound = target.dataset.sound ?? "uiClick";
+    if (sound !== "none") sounds.play(sound as MenuSound);
   });
 
   const button = (parent: HTMLElement, label: string, onClick: () => void, css = ""): HTMLButtonElement => {
     const b = el("button", `font-size: 14px; padding: 9px 14px; text-align: left; ${css}`, parent, label);
     b.className = BUTTON_CLASS;
     b.addEventListener("click", onClick);
+    if (label === "Back") b.dataset.sound = "uiBack";
     return b;
   };
   const heading = (text: string): HTMLElement => el("div", `${HEADING} font-size: 17px; margin: 0 0 4px;`, panel, text);
@@ -262,7 +285,7 @@ export function createFrontend(options: FrontendOptions): Frontend {
   function mainScreen(): void {
     clear(null);
     const last = readLast();
-    if (last) button(panel, "Continue", () => void play(last.world, last.character));
+    if (last) button(panel, "Continue", () => void play(last.world, last.character)).dataset.sound = "none";
     button(panel, "New character", () => {
       const lastWorld = readLast()?.world;
       void (async () => (lastWorld && (await openWorld(lastWorld)) ? newCharacterScreen() : worldsScreen()))();
@@ -301,7 +324,49 @@ export function createFrontend(options: FrontendOptions): Frontend {
     }
     const actions = row();
     button(actions, "Create a world", createWorldScreen);
+    button(actions, "Join a server", joinScreen);
     button(actions, "Back", mainScreen);
+  }
+
+  /** Joining someone else's server (FRONTEND.md, *Join a server*): an address, then the same
+   *  handshake single player goes through - today it stops at the transport, which is not there yet. */
+  function joinScreen(): void {
+    clear(() => void worldsScreen());
+    heading("Join a server");
+    const address = document.createElement("input");
+    address.placeholder = "host:port";
+    try {
+      address.value = localStorage.getItem(SERVER_KEY) ?? "";
+    } catch {
+      // Not remembered.
+    }
+    field("Address", address);
+    const problem = note("", "#e88");
+    const actions = row();
+    const join = (): void => {
+      try {
+        localStorage.setItem(SERVER_KEY, address.value.trim());
+      } catch {
+        // Not remembered for next time.
+      }
+      problem.style.color = DIM;
+      problem.textContent = "Connecting…";
+      openTransport(address.value).then(
+        (end) => {
+          // Not reached until there is a network transport: Hello, Welcome and the characters follow.
+          end.close();
+        },
+        (error: unknown) => {
+          problem.style.color = "#e88";
+          problem.textContent = String(error instanceof Error ? error.message : error);
+          sounds.play("uiError");
+        },
+      );
+    };
+    address.addEventListener("keydown", (e) => e.key === "Enter" && join());
+    button(actions, "Join", join);
+    button(actions, "Back", () => void worldsScreen());
+    address.focus();
   }
 
   function createWorldScreen(): void {
@@ -337,6 +402,7 @@ export function createFrontend(options: FrontendOptions): Frontend {
           await charactersScreen(record.id);
         } catch (error) {
           problem.textContent = String(error instanceof Error ? error.message : error);
+          sounds.play("uiError");
         }
       })();
     });
@@ -398,7 +464,7 @@ export function createFrontend(options: FrontendOptions): Frontend {
       }, "font-size: 12px; padding: 6px 10px;");
     }
     const actions = row();
-    button(actions, "Enter world", () => void enter(chosen.id));
+    button(actions, "Enter world", () => void enter(chosen.id)).dataset.sound = "none";
     button(actions, "Create character", newCharacterScreen);
     button(actions, "Back", () => void worldsScreen());
     choose(chosen);
@@ -513,7 +579,10 @@ export function createFrontend(options: FrontendOptions): Frontend {
       input.max = String(high);
       input.step = "0.01";
       input.value = String(value);
-      input.addEventListener("change", () => choose(key, Number(input.value)));
+      input.addEventListener("change", () => {
+        sounds.play("uiSwatch");
+        choose(key, Number(input.value));
+      });
     };
     const showLooks = (): void => {
       side.replaceChildren();
@@ -538,6 +607,7 @@ export function createFrontend(options: FrontendOptions): Frontend {
         const row_ = el("div", "display: flex; gap: 4px; flex-wrap: wrap;", side);
         list.forEach((colour, i) => {
           const swatch = el("div", `width: 22px; height: 22px; border-radius: 3px; cursor: pointer; background: ${css(colour)}; border: 2px solid ${sameColour(colour, current) ? GOLD : "#000"}; box-shadow: 0 0 0 1px #6b5530;`, row_);
+          swatch.dataset.sound = "uiSwatch";
           swatch.addEventListener("click", () => choose(key, i));
         });
       };
@@ -557,6 +627,7 @@ export function createFrontend(options: FrontendOptions): Frontend {
         box.type = "checkbox";
         box.checked = a.beard;
         row_.append("Beard");
+        box.dataset.sound = "uiSwatch";
         box.addEventListener("change", () => choose("beard", box.checked ? 1 : 0));
       }
       lookHeading("Face");
@@ -588,16 +659,19 @@ export function createFrontend(options: FrontendOptions): Frontend {
       const a = appearance();
       const sent: EntityAppearance = { seed: look.seed, race: look.race, outfit: "", sex: a.sex, ...(Object.keys(look.choices).length > 0 ? { choices: look.choices } : {}) };
       void ask({ type: "characterCreate", name: name.value, origins, look: sent }).then((why) => {
-        if (why) problem.textContent = why;
-        else {
-          const made = characters.find((c) => c.name.toLowerCase() === name.value.trim().toLowerCase());
-          if (made) void enter(made.id);
-          else void charactersScreen(id);
+        if (why) {
+          problem.textContent = why;
+          sounds.play("uiError");
+          return;
         }
+        sounds.play("characterCreated");
+        const made = characters.find((c) => c.name.toLowerCase() === name.value.trim().toLowerCase());
+        if (made) void enter(made.id);
+        else void charactersScreen(id);
       });
     };
     name.addEventListener("keydown", (e) => e.key === "Enter" && create());
-    button(actions, "Create and enter", create);
+    button(actions, "Create and enter", create).dataset.sound = "none";
     if (characters.length) button(actions, "Back", () => void charactersScreen(id));
     else button(actions, "Back", () => void worldsScreen());
 
@@ -612,6 +686,7 @@ export function createFrontend(options: FrontendOptions): Frontend {
   async function enter(character: string): Promise<void> {
     if (!connection || !world || inGame) return;
     inGame = true;
+    sounds.play("enterWorld");
     writeLast({ world: world.id, character });
     showMenu(false);
     // Wait for a showcase still building to be done and gone: two worlds at once is too much memory.
@@ -659,6 +734,7 @@ export function createFrontend(options: FrontendOptions): Frontend {
 
   async function leaveGame(toMenu: boolean): Promise<void> {
     if (!session || !connection) return;
+    sounds.play("logout");
     const id = world!.id;
     const done = new Promise<void>((resolve) => {
       listen = (m) => {

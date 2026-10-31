@@ -1,0 +1,10 @@
+// A character made: a short rising chord, the three notes one after another.
+{
+  bus: "ui", flat: true, maxVoices: 1, volume: [0.6, 0.6], takes: 1,
+  layers: [
+    { synth: { tone: "triangle", hz: 392, env: { attack: 0.005, decay: 0.5 }, gain: 0.2 }, standIn: true },
+    { synth: { tone: "triangle", hz: 494, env: { attack: 0.005, decay: 0.45 }, gain: 0.18, delay: 0.08 }, standIn: true },
+    { synth: { tone: "triangle", hz: 587, env: { attack: 0.005, decay: 0.6 }, gain: 0.2, delay: 0.16 }, standIn: true },
+    { synth: { tone: "sine", hz: 784, env: { attack: 0.01, decay: 0.7 }, gain: 0.1, delay: 0.24 }, standIn: true },
+  ],
+}

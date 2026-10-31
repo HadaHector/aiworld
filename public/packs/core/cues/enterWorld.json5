@@ -1,0 +1,2 @@
+// Entering the world.
+{ parts: [{ sound: "ui.enter" }] }

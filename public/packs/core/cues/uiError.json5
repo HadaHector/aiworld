@@ -1,0 +1,2 @@
+// A refusal: a name taken, a character that cannot enter.
+{ parts: [{ sound: "error" }] }

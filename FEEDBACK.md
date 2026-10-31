@@ -195,6 +195,9 @@ first match wins, matched on the skill's tags, the event's flags and its name:
   skill that adds its own flourish over the ordinary hit).
 - **Events that hit many targets at once** (Thunder Clap) play a cue's sound once per source per
   50 ms, a little louder, and its particles on each target.
+- **The front end's events** (FRONTEND.md, *Sounds and cues*) - `uiHover`, `uiClick`, `uiBack`,
+  `uiError`, `uiSwatch`, `characterCreated`, `enterWorld`, `logout` - are client events like the
+  screens', played by the menus with no world loaded.
 - **Later events** - a level gained, a quest done - are new keys in `events`. Step 8 and the quest
   step add a client event where they show something, and the table plays it; no feedback code
   changes.

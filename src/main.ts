@@ -14,6 +14,7 @@ import { connectLocal, type Connection } from "./game/connection";
 import { createFrontend, type Frontend } from "./frontend/frontend";
 import { resolveFrontend, type FrontendRules } from "./frontend/frontendRules";
 import { createIndexedDbStore } from "./save/indexedDbStore";
+import { createMenuSounds, type MenuSounds } from "./frontend/menuSounds";
 import { ContentError, formatIssue } from "./world/content/contentReader";
 import { lookFromUrl } from "./game/playerBody";
 import { createHud, dock } from "./ui/hud";
@@ -48,7 +49,10 @@ dock(positionPanel.element, hud.debug.position);
 // Music for wherever the player is - see MUSIC.md. It starts with the first click or key press.
 const musicControl = createMusicControl(
   (volume) => music.setVolume(volume),
-  (volume) => session?.feedback.setVolume(volume),
+  (volume) => {
+    session?.feedback.setVolume(volume);
+    menuSounds?.setVolume(volume);
+  },
   (shake) => session?.feedback.setShake(shake),
 );
 // The volumes and the shake are options (O), beside the graphics the dimension view adds.
@@ -71,6 +75,9 @@ const music = createGameMusic(musicControl.volume);
     hide();
   };
 }
+
+/** The menus' sounds, once there are menus (not in a `?play` game). */
+let menuSounds: MenuSounds | null = null;
 
 const page: Page = { engine, canvas, loadingScreen, failLoading, hud, zoneLabel, positionPanel, musicControl, music };
 
@@ -119,7 +126,8 @@ let frontend: Frontend | null = null;
 if (play === "") {
   session = await quickGame();
 } else {
-  frontend = createFrontend({ page, store: createIndexedDbStore(), sources, rules: frontendRules, onSession: (s) => (session = s), hidden: Boolean(play) });
+  menuSounds = createMenuSounds(sources, musicControl.effects);
+  frontend = createFrontend({ page, store: createIndexedDbStore(), sources, rules: frontendRules, onSession: (s) => (session = s), hidden: Boolean(play), sounds: menuSounds });
   if (!play) loadingScreen.hide();
   else {
     const [world, character] = play.split("/");
@@ -148,6 +156,10 @@ if (play === "") {
   leave: (toMenu = false) => frontend?.leaveGame(toMenu),
   get showcase() {
     return frontend?.showcase ?? null;
+  },
+  /** The menus' sounds (FRONTEND.md, *Sounds and cues*). */
+  get sounds() {
+    return menuSounds;
   },
   get session() {
     return session;

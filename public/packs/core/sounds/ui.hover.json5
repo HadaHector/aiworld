@@ -1,0 +1,7 @@
+// A menu button under the pointer: the softest tick.
+{
+  bus: "ui", flat: true, maxVoices: 1, volume: [0.3, 0.3], takes: 2, pitch: [-1, 1],
+  layers: [
+    { synth: { tone: "triangle", hz: 2200, env: { attack: 0.001, decay: 0.018 }, gain: 0.18, crush: { bits: 8, rate: 2 } }, standIn: true },
+  ],
+}
