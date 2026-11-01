@@ -193,8 +193,11 @@ function rasterize(body: BodyGeometry, uvs: Float32Array, surface: Float32Array,
   };
   for (let t = 0; t < I.length / 3; t++) {
     if (body.triangleRegions[t] < 0) continue;
-    const xs = [0, 1, 2].map((k) => uvs[(t * 3 + k) * 2] * size);
-    const ys = [0, 1, 2].map((k) => uvs[(t * 3 + k) * 2 + 1] * size);
+    const xs = [uvs[t * 6] * size, uvs[t * 6 + 2] * size, uvs[t * 6 + 4] * size];
+    const ys = [uvs[t * 6 + 1] * size, uvs[t * 6 + 3] * size, uvs[t * 6 + 5] * size];
+    const va = I[t * 3] * 3;
+    const vb = I[t * 3 + 1] * 3;
+    const vc = I[t * 3 + 2] * 3;
     const area = (xs[1] - xs[0]) * (ys[2] - ys[0]) - (xs[2] - xs[0]) * (ys[1] - ys[0]);
     if (Math.abs(area) < 1e-9) continue;
     const x0 = Math.max(0, Math.floor(Math.min(...xs)));
@@ -211,21 +214,13 @@ function rasterize(body: BodyGeometry, uvs: Float32Array, surface: Float32Array,
         if (w0 < -0.02 || w1 < -0.02 || w2 < -0.02) continue;
         const o = y * size + x;
         texels.region[o] = body.triangleRegions[t];
-        const w = [w0, w1, w2];
         for (let c = 0; c < 3; c++) {
-          let p = 0;
-          let n = 0;
-          for (let k = 0; k < 3; k++) {
-            const v = I[t * 3 + k];
-            p += P[v * 3 + c] * w[k];
-            n += normals[v * 3 + c] * w[k];
-          }
-          texels.position[o * 3 + c] = p;
-          texels.normal[o * 3 + c] = n;
+          texels.position[o * 3 + c] = P[va + c] * w0 + P[vb + c] * w1 + P[vc + c] * w2;
+          texels.normal[o * 3 + c] = normals[va + c] * w0 + normals[vb + c] * w1 + normals[vc + c] * w2;
         }
-        const n = normalize([texels.normal[o * 3], texels.normal[o * 3 + 1], texels.normal[o * 3 + 2]]);
-        texels.normal.set(n, o * 3);
-        for (let c = 0; c < 2; c++) texels.surface[o * 2 + c] = w.reduce((sum, wk, k) => sum + surface[(t * 3 + k) * 2 + c] * wk, 0);
+        const inv = 1 / Math.max(1e-9, Math.hypot(texels.normal[o * 3], texels.normal[o * 3 + 1], texels.normal[o * 3 + 2]));
+        for (let c = 0; c < 3; c++) texels.normal[o * 3 + c] = texels.normal[o * 3 + c] * inv;
+        for (let c = 0; c < 2; c++) texels.surface[o * 2 + c] = surface[t * 6 + c] * w0 + surface[t * 6 + 2 + c] * w1 + surface[t * 6 + 4 + c] * w2;
       }
     }
   }

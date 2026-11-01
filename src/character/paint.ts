@@ -201,27 +201,32 @@ function* prepareSteps(body: BodyGeometry, layout: AtlasLayout, race: RaceDef, c
     if (o % PAINT_SLICE === 0) yield;
     const region = texels.region[o];
     if (region < 0) continue;
-    const p: Vec = [texels.position[o * 3], texels.position[o * 3 + 1], texels.position[o * 3 + 2]];
-    const n: Vec = [texels.normal[o * 3], texels.normal[o * 3 + 1], texels.normal[o * 3 + 2]];
+    const px = texels.position[o * 3];
+    const py = texels.position[o * 3 + 1];
+    const pz = texels.position[o * 3 + 2];
+    const nx = texels.normal[o * 3];
+    const ny = texels.normal[o * 3 + 1];
+    const nz = texels.normal[o * 3 + 2];
     const around = texels.surface[o * 2];
     const along = texels.surface[o * 2 + 1];
-    mottle[o] = 0.96 + 0.06 * noise3(p[0] * 40, p[1] * 40, p[2] * 40);
+    mottle[o] = 0.96 + 0.06 * noise3(px * 40, py * 40, pz * 40);
     let worn_: [number, number, number] | null = null;
-    covers.forEach((c, i) => {
-      if (!coverRegions[i].has(region)) return;
+    for (let i = 0; i < covers.length; i++) {
+      const c = covers[i];
+      if (!coverRegions[i].has(region)) continue;
       // How far inside the cover the texel is, in metres from its nearer edge.
       const scale = c.span === "height" ? 1 : regionLengths[region];
-      const at = c.span === "height" ? p[1] : along / scale;
+      const at = c.span === "height" ? py : along / scale;
       const inside = Math.min(at - c.from, c.to - at) * (c.span === "height" ? 1 : scale);
-      if (inside < 0) return;
+      if (inside < 0) continue;
       const m = sampleGearMaterial(c.material, around, along);
       let color: [number, number, number] = [m[0] * c.tint[0], m[1] * c.tint[1], m[2] * c.tint[2]];
       if (c.hem && inside < 0.012) color = color.map((x) => x * 0.72) as [number, number, number];
       worn_ = color;
-    });
+    }
     // Light painted in.
-    const up = 0.5 + 0.5 * n[1];
-    const light = (0.8 + 0.22 * up) * (0.9 + 0.1 * Math.min(1, p[1] / tall + 0.2)) * occlusion(p, n);
+    const up = 0.5 + 0.5 * ny;
+    const light = (0.8 + 0.22 * up) * (0.9 + 0.1 * Math.min(1, py / tall + 0.2)) * occlusion(px, py, pz, nx, ny, nz);
     shade[o] = light;
     if (worn_) {
       // What is worn hides the skin, the face and all.
@@ -234,6 +239,8 @@ function* prepareSteps(body: BodyGeometry, layout: AtlasLayout, race: RaceDef, c
       continue;
     }
     if (region === headRegion) {
+      const p: Vec = [px, py, pz];
+      const n: Vec = [nx, ny, nz];
       const off = sub(p, head.head);
       headIndex.push(o);
       headValues.push(
@@ -246,7 +253,7 @@ function* prepareSteps(body: BodyGeometry, layout: AtlasLayout, race: RaceDef, c
       );
     }
     for (const mark of nipples) {
-      const d = length(sub(p, mark.position));
+      const d = Math.hypot(px - mark.position[0], py - mark.position[1], pz - mark.position[2]);
       if (d < 0.02) {
         nippleIndex.push(o);
         nippleDistance.push(d);
@@ -377,7 +384,7 @@ function paintHead(skin: [number, number, number], look: Appearance, face: RaceD
 
 /** How hidden a point of the body is by the body round it, as a shade (1 open, less in a fold): the
  *  body's vertices near it on the side its normal faces darken it. */
-function createOcclusion(body: BodyGeometry): (p: Vec, n: Vec) => number {
+function createOcclusion(body: BodyGeometry): (px: number, py: number, pz: number, nx: number, ny: number, nz: number) => number {
   const P = body.positions;
   const normals = smoothNormals(body);
   const cell = 0.08;
@@ -413,19 +420,19 @@ function createOcclusion(body: BodyGeometry): (p: Vec, n: Vec) => number {
   // Squared distances to compare before the exact test, with a margin so rounding never decides.
   const farthest = reach * reach * 1.000001;
   const nearest = 0.03 * 0.03 * 0.999999;
-  return (p, n) => {
-    const list = neighbourhood(Math.floor(p[0] / cell), Math.floor(p[1] / cell), Math.floor(p[2] / cell));
+  return (px, py, pz, nx, ny, nz) => {
+    const list = neighbourhood(Math.floor(px / cell), Math.floor(py / cell), Math.floor(pz / cell));
     let hidden = 0;
     for (let i = 0; i < list.length; i++) {
       const v = list[i] * 3;
-      const x = P[v] - p[0];
-      const y = P[v + 1] - p[1];
-      const z = P[v + 2] - p[2];
+      const x = P[v] - px;
+      const y = P[v + 1] - py;
+      const z = P[v + 2] - pz;
       const squared = x * x + y * y + z * z;
       if (squared > farthest || squared < nearest) continue;
       const distance = Math.sqrt(squared);
       if (distance < 0.03 || distance > reach) continue;
-      const toward = (x * n[0] + y * n[1] + z * n[2]) / distance;
+      const toward = (x * nx + y * ny + z * nz) / distance;
       if (toward <= 0.2) continue;
       // Only what faces back at it - the other side of a fold, not its own surface curving away.
       const facing = -(x * normals[v] + y * normals[v + 1] + z * normals[v + 2]) / distance;
@@ -493,6 +500,16 @@ function clampByte(v: number): number {
 }
 
 /** Smooth value noise, -1 to 1. */
+function hash3(a: number, b: number, c: number): number {
+  let n = Math.imul(a, 374761393) ^ Math.imul(b, 668265263) ^ Math.imul(c, 2147483647);
+  n = Math.imul(n ^ (n >>> 13), 1274126177);
+  return ((n ^ (n >>> 16)) >>> 0) / 4294967295;
+}
+
+function mix(a: number, b: number, t: number): number {
+  return a + (b - a) * t;
+}
+
 function noise3(x: number, y: number, z: number): number {
   const xi = Math.floor(x);
   const yi = Math.floor(y);
@@ -503,15 +520,9 @@ function noise3(x: number, y: number, z: number): number {
   const u = fx * fx * (3 - 2 * fx);
   const v = fy * fy * (3 - 2 * fy);
   const w = fz * fz * (3 - 2 * fz);
-  const h = (a: number, b: number, c: number): number => {
-    let n = Math.imul(a, 374761393) ^ Math.imul(b, 668265263) ^ Math.imul(c, 2147483647);
-    n = Math.imul(n ^ (n >>> 13), 1274126177);
-    return ((n ^ (n >>> 16)) >>> 0) / 4294967295;
-  };
-  const lerp = (a: number, b: number, t: number): number => a + (b - a) * t;
-  const x00 = lerp(h(xi, yi, zi), h(xi + 1, yi, zi), u);
-  const x10 = lerp(h(xi, yi + 1, zi), h(xi + 1, yi + 1, zi), u);
-  const x01 = lerp(h(xi, yi, zi + 1), h(xi + 1, yi, zi + 1), u);
-  const x11 = lerp(h(xi, yi + 1, zi + 1), h(xi + 1, yi + 1, zi + 1), u);
-  return lerp(lerp(x00, x10, v), lerp(x01, x11, v), w) * 2 - 1;
+  const x00 = mix(hash3(xi, yi, zi), hash3(xi + 1, yi, zi), u);
+  const x10 = mix(hash3(xi, yi + 1, zi), hash3(xi + 1, yi + 1, zi), u);
+  const x01 = mix(hash3(xi, yi, zi + 1), hash3(xi + 1, yi, zi + 1), u);
+  const x11 = mix(hash3(xi, yi + 1, zi + 1), hash3(xi + 1, yi + 1, zi + 1), u);
+  return mix(mix(x00, x10, v), mix(x01, x11, v), w) * 2 - 1;
 }
