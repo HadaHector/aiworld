@@ -1,10 +1,10 @@
-import { addTime, timed } from "./bodyTiming";
-import { buildBody, type BodyGeometry } from "./bodyMesh";
-import { layoutAtlas, type AtlasLayout } from "./atlas";
-import { chooseAppearance, paintAtlas, paintAtlasSliced, type Appearance, type PaintedCover } from "./paint";
-import { bakeGearMaterial, type BakedGearMaterial, type GearMaterialDef } from "./gearMaterial";
-import { sided, type GearDef } from "./gearDef";
-import { forSex, withLook, type RaceDef, type Sex, type Slider } from "./raceDef";
+import type { BodyGeometry } from "./bodyMesh";
+import type { AtlasLayout } from "./atlas";
+import { chooseAppearance, type Appearance } from "./paint";
+import type { BakedGearMaterial, GearMaterialDef } from "./gearMaterial";
+import type { GearDef } from "./gearDef";
+import { forSex, type RaceDef, type Sex, type Slider } from "./raceDef";
+import { canonicalBody, paintedAtlas } from "./bodyCache";
 import type { LookChoices } from "../sim/protocol";
 
 /** Who a character is, as far as its body goes: everything else comes from its race and seed. */
@@ -37,60 +37,41 @@ export interface CharacterBuildOptions {
 
 /** A character made: its body, its atlas painted, the gear materials it is drawn in baked. */
 export interface DressedCharacter {
-  /** The race as the character's sliders and sex have it - what the body was built from. */
+  /** The race as the character's sex has it - what the body was built from. Height and build are
+   *  not in it: they are `scale`, applied to the body. */
   race: RaceDef;
   look: Appearance;
   body: BodyGeometry;
   layout: AtlasLayout | null;
   pixels: Uint8Array | null;
   baked: Map<string, BakedGearMaterial>;
+  /** What to scale the body by, across, up and front to back: its height and build. */
+  scale: [number, number, number];
+}
+
+/** The scale a look's height and build give a body: build is girth, across and front to back. */
+export function bodyScale(look: Pick<Appearance, "height" | "build">): [number, number, number] {
+  return [look.height * look.build, look.height, look.height * look.build];
 }
 
 /**
- * Makes a character's body (CHARACTERS.md): its looks from its seed, its race shaped by its sliders
- * and sex, the body and its gear built, the atlas painted - skin, face, smallclothes, the gear's
- * paint - and the gear materials baked. What the workbench shows and the game draws.
+ * Makes a character's body (CHARACTERS.md): its looks from its seed, its race's body for its sex
+ * dressed in its gear and painted - the body shared by every character of that race, sex and gear
+ * (bodyCache.ts) - then its skin, face, hair and beard painted on it, and the gear materials baked.
+ * Its height and build are the `scale` the body is drawn at, not another body. What the workbench
+ * shows and the game draws.
  */
 export async function dressCharacter(spec: CharacterSpec, materials: Map<string, GearMaterialDef>, worldSeed: number, options: CharacterBuildOptions = {}): Promise<DressedCharacter> {
   const look = chooseAppearance(spec.race, spec.seed, spec.sex, spec.sliders ?? {}, spec.choices ?? {});
-  const race = forSex(withLook(spec.race, look.height, look.build), look.sex);
-  const body = timed("1 buildBody", () => buildBody(race, { detail: options.detail, lattice: options.lattice, gear: spec.gear, skin: look.skin }));
-  await options.pause?.();
-  const baked = new Map<string, BakedGearMaterial>();
-  const bake = async (id: string): Promise<BakedGearMaterial | null> => {
-    const def = materials.get(id);
-    if (!def) return null;
-    if (!baked.has(id)) {
-      const started = performance.now();
-      baked.set(id, await bakeGearMaterial(worldSeed, def));
-      addTime("2 gearMaterial (wall, cached after the first)", performance.now() - started);
-    }
-    return baked.get(id)!;
-  };
-  for (const layer of body.layers) await bake(layer.material);
-  const size = options.atlas ?? 512;
-  if (size <= 0) return { race, look, body, layout: null, pixels: null, baked };
-
-  const layout = timed("3 layoutAtlas", () => layoutAtlas(body, size));
-  await options.pause?.();
-  const covers: PaintedCover[] = [];
-  const linen = spec.smallclothes ? await bake("linen") : null;
-  if (linen) {
-    const hips = race.skeleton.ankle + race.skeleton.shin + race.skeleton.thigh;
-    const tint: [number, number, number] = [0.86, 0.8, 0.68];
-    covers.push({ material: linen, tint, span: "height", from: hips - 0.14, to: hips + 0.06, regions: ["torso", "legR", "legL"], hem: true });
-    // A band over the breasts, too.
-    const nipple = body.marks.find((m) => m.name === "nipple");
-    if (look.sex === "female" && nipple) covers.push({ material: linen, tint, span: "height", from: nipple.position[1] - 0.075, to: nipple.position[1] + 0.05, regions: ["torso"], hem: true });
-  }
-  for (const piece of spec.gear) {
-    for (const paint of piece.paint) {
-      const material = await bake(paint.material);
-      if (material) covers.push({ material, tint: paint.tint, span: "along", from: paint.from, to: paint.to, regions: paint.regions.flatMap(sided), hem: paint.hem });
-    }
-  }
-  const paintStarted = performance.now();
-  const pixels = options.pause ? await paintAtlasSliced(body, layout, race, look, covers, options.pause) : paintAtlas(body, layout, race, look, covers);
-  addTime("4 paintAtlas (wall incl. waits between slices)", performance.now() - paintStarted);
-  return { race, look, body, layout, pixels, baked };
+  const race = forSex(spec.race, look.sex);
+  const canon = await canonicalBody(
+    { race: spec.race, sex: look.sex, gear: spec.gear, smallclothes: spec.smallclothes, detail: options.detail ?? 1, lattice: options.lattice !== false, atlas: options.atlas ?? 512 },
+    race,
+    materials,
+    worldSeed,
+    options.pause,
+  );
+  if (!canon.layout) return { race, look, body: canon.body, layout: null, pixels: null, baked: canon.baked, scale: bodyScale(look) };
+  const pixels = await paintedAtlas(canon, look, options.pause);
+  return { race, look, body: canon.body, layout: canon.layout, pixels, baked: canon.baked, scale: bodyScale(look) };
 }

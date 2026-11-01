@@ -62,6 +62,10 @@ export interface PaintedBody {
   pixels: Uint8Array | null;
   /** The gear materials its gear is drawn in, baked. */
   baked: Map<string, BakedGearMaterial>;
+  /** Its height and build as the scale the body is drawn at. */
+  scale: [number, number, number];
+  /** The skin colour its race's own pieces take. */
+  skin: [number, number, number];
   summary: HTMLElement;
 }
 
@@ -74,7 +78,7 @@ export async function paintedBody(race: RaceDef, gear: Map<string, GearMaterialD
     { detail: options.detail, lattice: options.lattice !== "off", atlas: options.texture === "flat" ? 0 : options.texture === "retro" ? 128 : 512 },
   );
   const { body, layout, pixels, baked, look } = dressed;
-  const tall = Math.max(...body.positions.filter((_, i) => i % 3 === 1));
+  const tall = Math.max(...body.positions.filter((_, i) => i % 3 === 1)) * dressed.scale[1];
   const summary = document.createElement("div");
   const title = document.createElement("h3");
   title.textContent = `${race.name}, ${tall.toFixed(2)} m`;
@@ -89,7 +93,7 @@ export async function paintedBody(race: RaceDef, gear: Map<string, GearMaterialD
     row.insertCell().textContent = String(value);
   }
   summary.append(title, table);
-  return { race: dressed.race, body, layout, pixels, baked, summary };
+  return { race: dressed.race, body, layout, pixels, baked, scale: dressed.scale, skin: look.skin, summary };
 }
 
 /**
@@ -208,11 +212,12 @@ export const POSES = {
  */
 export function figureFor(race: RaceDef, painted: PaintedBody, options: FigureOptions, at = 0): NonNullable<StageOptions["figure"]> {
   const { body, layout, pixels } = painted;
-  const tall = Math.max(...body.positions.filter((_, i) => i % 3 === 1));
+  const tall = Math.max(...body.positions.filter((_, i) => i % 3 === 1)) * painted.scale[1];
   const skin: BodySkin = layout && pixels ? { pixels, size: layout.size, uvs: layout.uvs, nearest: options.texture === "retro" } : { color: chooseAppearance(race, options.seed, options.sex ?? undefined).skin };
   return (scene, shadows, height) => {
       const ground = height(at, 0);
-      const character = createCharacterMesh(scene, `race_${race.id}`, body, skin, painted.baked);
+      const character = createCharacterMesh(scene, `race_${race.id}`, body, skin, painted.baked, painted.skin);
+      character.mesh.scaling.set(...painted.scale);
       character.mesh.position.set(at, ground, 0);
       character.setPose(POSES[options.pose].pose);
       for (const mesh of character.meshes) shadows.addShadowCaster(mesh, false);

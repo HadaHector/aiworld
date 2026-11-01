@@ -35,7 +35,7 @@ export interface CharacterMesh {
  * run y along it, z toward its front, x across, so a pose can bend a knee about x whichever way
  * the leg points.
  */
-export function createCharacterMesh(scene: Scene, name: string, body: BodyGeometry, skin: BodySkin, gear?: Map<string, BakedGearMaterial>): CharacterMesh {
+export function createCharacterMesh(scene: Scene, name: string, body: BodyGeometry, skin: BodySkin, gear?: Map<string, BakedGearMaterial>, skinColor?: [number, number, number]): CharacterMesh {
   const skeleton = timed("5 skeleton", () => new Skeleton(`${name}Skeleton`, `${name}Skeleton`, scene));
   const absolute = body.bones.map(boneMatrix);
   const rests: Quaternion[] = [];
@@ -135,7 +135,8 @@ export function createCharacterMesh(scene: Scene, name: string, body: BodyGeomet
     if (!part) return;
     part.parent = mesh;
     const gearMaterial = new StandardMaterial(`${name}Gear${i}Material`, scene);
-    gearMaterial.diffuseColor = new Color3(...layer.tint);
+    // The race's own pieces (an elf's ears) are in the character's skin, whatever it is.
+    gearMaterial.diffuseColor = new Color3(...(layer.material === "skin" && skinColor ? skinColor : layer.tint));
     if (baked) {
       let tile = tiles.get(layer.material);
       if (!tile) {

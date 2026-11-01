@@ -105,8 +105,11 @@ export async function createCharacterBody(scene: Scene, name: string, kit: BodyK
     // In slices, so a crowd coming into view (a bandit camp) does not stop the frames.
     { pause: () => new Promise((resolve) => setTimeout(resolve, 0)) },
   );
-  const character: CharacterMesh = timed("5-10 createCharacterMesh total", () => createCharacterMesh(scene, name, dressed.body, { pixels: dressed.pixels!, size: dressed.layout!.size, uvs: dressed.layout!.uvs, nearest: false }, dressed.baked));
+  const character: CharacterMesh = timed("5-10 createCharacterMesh total", () => createCharacterMesh(scene, name, dressed.body, { pixels: dressed.pixels!, size: dressed.layout!.size, uvs: dressed.layout!.uvs, nearest: false }, dressed.baked, dressed.look.skin));
   for (const mesh of character.meshes) mesh.isPickable = false;
+  // Its height and build: the one default body of its race, scaled (the gear meshes are its children).
+  const [scaleX, scaleY, scaleZ] = dressed.scale;
+  character.mesh.scaling.set(scaleX, scaleY, scaleZ);
   const animator: Animator = createAnimator(dressed.race.skeleton);
   const boneIndex = new Map(character.skeleton.bones.map((b, i) => [b.name, i]));
   const index = (name: string): number => boneIndex.get(name) ?? 0;
@@ -132,9 +135,10 @@ export async function createCharacterBody(scene: Scene, name: string, kit: BodyK
       if (last && dt > 0) {
         const moved = Math.hypot(state.x - last.x, state.z - last.z);
         const ease = Math.min(1, dt * 12);
-        const groundSpeed = moved > TELEPORT ? 0 : moved / dt;
+        // The animator works in the default body's metres: a taller one covers more ground per stride.
+        const groundSpeed = moved > TELEPORT ? 0 : moved / dt / scaleY;
         speed += (groundSpeed - speed) * ease;
-        rise += ((moved > TELEPORT ? 0 : (state.y - last.y) / dt) - rise) * ease;
+        rise += ((moved > TELEPORT ? 0 : (state.y - last.y) / dt / scaleY) - rise) * ease;
       }
       last = { x: state.x, y: state.y, z: state.z, at: now };
       // Turned toward where the entity faces, the short way round.
