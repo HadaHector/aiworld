@@ -1,6 +1,7 @@
 // A quest item's use (QUESTS.md): holding a warding charm up to a creature.
 {
   name: "Hold Up the Charm",
+  icon: "charm-jewel-red",
   type: "spell",
   target: "enemy",
   range: 15,

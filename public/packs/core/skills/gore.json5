@@ -1,6 +1,7 @@
 // A boar's gore: it rushes in and knocks its target off its feet for a moment.
 {
   name: "Gore",
+  icon: "weapon-sword-bone",
   cues: { release: "rush" },
   type: "physical",
   tags: ["melee"],

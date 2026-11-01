@@ -1,6 +1,7 @@
 // A talent (warriorArms): while known, the warrior's weapon hits harder.
 {
   name: "Deep Wounds",
+  icon: "spell-blood-arc",
   passive: true,
   states: { held: { hold: [{ do: "modifier", stat: "weaponMax", kind: "percent", value: 15 }] } },
 }

@@ -1,1 +1,1 @@
-{ name: "Wolf Fang", kind: "material", rarity: "common", stack: 20, value: 6 }
+{ name: "Wolf Fang", icon: "creature-fang-wrapped", kind: "material", rarity: "common", stack: 20, value: 6 }

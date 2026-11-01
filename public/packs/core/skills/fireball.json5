@@ -1,6 +1,7 @@
 // Cast, travel, hit, and leave a burn on the target (see ABILITIES.md, *Skills*).
 {
   name: "Fireball",
+  icon: "spell-fire-ball",
   type: "spell",
   tags: ["school.fire"],
   target: "enemy",

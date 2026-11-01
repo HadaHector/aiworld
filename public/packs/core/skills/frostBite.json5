@@ -1,6 +1,7 @@
 // A frost wolf's bite: some damage and a chill that slows.
 {
   name: "Frost Bite",
+  icon: "spell-frost-claws",
   type: "physical",
   tags: ["melee", "school.frost"],
   target: "enemy",

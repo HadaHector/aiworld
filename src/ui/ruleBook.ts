@@ -1,3 +1,4 @@
+import { iconBox, skillIcon, type IconSpec } from "./icons";
 import { BRONZE, CLOSE_CLASS, GOLD, PANEL as GAME_PANEL, TEXT, TITLE_FONT } from "./theme";
 import type { GameRules } from "../sim/rules/gameRules";
 import type { ProgressionRules, SourceDef, UnlockDef } from "../sim/rules/progressionRules";
@@ -48,6 +49,8 @@ interface Section {
   heading: string;
   key: string;
   lines: Line[];
+  /** An icon shown beside the heading - an ability's. */
+  icon?: IconSpec;
 }
 export interface Chapter {
   title: string;
@@ -321,6 +324,7 @@ export function ruleBookChapters(game: GameRules, rules: ProgressionRules, items
     sections: game.skills.map((s) => ({
       heading: s.name,
       key: `skill:${s.id}`,
+      icon: skillIcon(s),
       lines: [...describeSkill(game, s).map((l) => say(l)), ...(getters.has(s.index) ? [say("Who gets it: ", ...list(getters.get(s.index)!, "; "), ".")] : [])],
     })),
   });
@@ -375,7 +379,9 @@ export function createRuleBook(options: RuleBookOptions): RuleBook {
     el("p", "color: #ccc; margin: 4px 0 10px;", page, chapter.intro);
     let target: HTMLElement | null = null;
     for (const s of chapter.sections) {
-      const heading = el("div", `font: 600 15px/1.3 ${TITLE_FONT}; margin: 16px 0 4px; color: #f0e2c0;`, page, s.heading);
+      const headRow = el("div", "display: flex; align-items: center; gap: 8px; margin: 16px 0 4px;", page);
+      if (s.icon) iconBox(headRow, s.icon, 32, "border-radius: 4px; overflow: hidden;");
+      const heading = el("div", `font: 600 15px/1.3 ${TITLE_FONT}; color: #f0e2c0;`, headRow, s.heading);
       if (key && s.key === key) {
         target = heading;
         heading.style.color = GOLD;

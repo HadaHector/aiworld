@@ -30,3 +30,6 @@ public/samples/kiarchive/
 
 # Saved worlds of `npm run server -- --world` (FRONTEND.md)
 saves/
+
+# local work folder for graphics
+assets_work

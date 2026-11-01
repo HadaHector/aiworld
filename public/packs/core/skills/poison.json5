@@ -1,6 +1,7 @@
 // A spider's poison: damage over time.
 {
   name: "Poison",
+  icon: "spell-nature-poison-vortex",
   tags: ["poison", "dot", "school.nature"],
   display: "debuff",
   dispel: "poison",

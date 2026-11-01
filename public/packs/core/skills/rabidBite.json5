@@ -1,6 +1,7 @@
 // A rabid beast's bite: it bleeds.
 {
   name: "Rabid Bite",
+  icon: "creature-fang-wrapped",
   type: "physical",
   tags: ["melee"],
   target: "enemy",

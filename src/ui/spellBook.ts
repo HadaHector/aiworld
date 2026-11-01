@@ -3,6 +3,7 @@ import { describeSkill } from "../sim/rules/skillText";
 import type { EntityMirror } from "../game/entityMirror";
 import type { ProgressMirror } from "../game/progressMirror";
 import { ACTION_DRAG_TYPE, TELEPORT_TEXT, type BarAction } from "./actionBar";
+import { TELEPORT_ICON, iconFace, skillIcon, type IconSpec } from "./icons";
 import { DIM, GOLD, HEADING, PANEL, SLOT, SLOT_CLASS, windowHead } from "./theme";
 
 /**
@@ -43,10 +44,11 @@ export function createSpellBook(options: SpellBookOptions): SpellBook {
   const body = el("div", "", root);
   let lastSignature = "";
 
-  /** One entry: a slot-like square with the name, then what it does. */
-  function entry(parent: HTMLElement, name: string, note: string, lines: string[], action: BarAction | null, use: (() => void) | null): void {
+  /** One entry: a slot-like square with the icon, the name, then what it does. */
+  function entry(parent: HTMLElement, name: string, spec: IconSpec, note: string, lines: string[], action: BarAction | null, use: (() => void) | null): void {
     const row = el("div", "display: flex; gap: 8px; align-items: flex-start; margin: 6px 0;", parent);
-    const icon = el("div", `flex: none; width: 40px; height: 40px; ${SLOT} display: flex; align-items: center; justify-content: center; font: 700 15px/1 system-ui, sans-serif; color: ${GOLD}; cursor: ${action ? "grab" : "default"}; ${action ? "" : "opacity: 0.6;"}`, row, name.charAt(0));
+    const icon = el("div", `position: relative; flex: none; width: 40px; height: 40px; ${SLOT} overflow: hidden; cursor: ${action ? "grab" : "default"}; ${action ? "" : "opacity: 0.6;"}`, row);
+    iconFace(icon, spec);
     if (action) {
       icon.className = SLOT_CLASS;
       icon.draggable = true;
@@ -64,7 +66,7 @@ export function createSpellBook(options: SpellBookOptions): SpellBook {
   function draw(): void {
     drawSpells();
     el("div", HEADING, body, "Debug");
-    entry(body, "Teleport", "debug", [TELEPORT_TEXT], { kind: "teleport" }, () => options.teleport());
+    entry(body, "Teleport", TELEPORT_ICON, "debug", [TELEPORT_TEXT], { kind: "teleport" }, () => options.teleport());
   }
 
   function drawSpells(): void {
@@ -74,18 +76,18 @@ export function createSpellBook(options: SpellBookOptions): SpellBook {
     const active = spells.filter((s) => !game.skills[s.skill].passive && game.skills[s.skill].id !== "autoAttack");
     const passive = spells.filter((s) => game.skills[s.skill].passive && game.skills[s.skill].id !== "autoAttack");
     el("div", HEADING, body, "Abilities");
-    entry(body, "Attack", "always", ["Swing at your target with your weapon until you stop or it dies. Use it again to stop."], { kind: "attack" }, () => options.setAttacking(!mirror.own.attacking));
+    entry(body, "Attack", skillIcon(game.skills[game.skillIndex.get("autoAttack") ?? -1]), "always", ["Swing at your target with your weapon until you stop or it dies. Use it again to stop."], { kind: "attack" }, () => options.setAttacking(!mirror.own.attacking));
     for (const s of active) {
       const def = game.skills[s.skill];
       const how = learned.get(s.skill);
-      entry(body, def.name, `rank ${s.level} · ${how ? HOW[how] ?? how : "from the start"}`, describeSkill(game, def), { kind: "skill", skill: def.id }, () => options.cast(s.skill));
+      entry(body, def.name, skillIcon(def), `rank ${s.level} · ${how ? HOW[how] ?? how : "from the start"}`, describeSkill(game, def), { kind: "skill", skill: def.id }, () => options.cast(s.skill));
     }
     if (passive.length) {
       el("div", HEADING, body, "Passive");
       for (const s of passive) {
         const def = game.skills[s.skill];
         const how = learned.get(s.skill);
-        entry(body, def.name, how ? HOW[how] ?? how : "always on", describeSkill(game, def), null, null);
+        entry(body, def.name, skillIcon(def), how ? HOW[how] ?? how : "always on", describeSkill(game, def), null, null);
       }
     }
   }

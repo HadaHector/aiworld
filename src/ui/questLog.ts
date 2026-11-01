@@ -1,8 +1,9 @@
 import { renderText, type TextTable } from "../sim/text";
 import type { ClientMessage } from "../sim/protocol";
 import { needed, questColour, type ActiveQuest, type QuestDef, type QuestRules } from "../sim/quests/quest";
-import { formatMoney, type ItemRules } from "../sim/rules/itemRules";
+import { formatMoney, type ItemRules, type ItemTypeDef } from "../sim/rules/itemRules";
 import type { QuestMirror } from "../game/questMirror";
+import { iconBox, itemIcon } from "./icons";
 import { BUTTON_CLASS, CLOSE_CLASS, DIM, GOLD, HEADING, PANEL, QUIET_PANEL, TEXT, TITLE_FONT, WINDOW_HEAD } from "./theme";
 
 /**
@@ -68,14 +69,21 @@ export function renderQuest(parent: HTMLElement, def: QuestDef, active: ActiveQu
   const r = def.rewards;
   const money = formatMoney(options.items.currencies[options.items.main], r.money);
   el("div", `color: ${TEXT};`, parent, `${r.xp} experience${r.money > 0 ? `, ${money}` : ""}`);
-  for (const id of r.items) el("div", `color: ${TEXT};`, parent, options.items.types[options.items.typeIndex.get(id) ?? -1]?.name ?? id);
+  /** A reward line: the item's icon and name. */
+  const rewardRow = (type: ItemTypeDef | undefined, id: string, css: string, tag = "div", into = parent): HTMLElement => {
+    const row = el(tag, `display: flex; align-items: center; gap: 6px; ${css}`, into);
+    iconBox(row, itemIcon(type, type ? options.items.rarities[type.rarity].color : "#f0f"), 24);
+    el("span", "", row, type?.name ?? id);
+    return row;
+  };
+  for (const id of r.items) rewardRow(options.items.types[options.items.typeIndex.get(id) ?? -1], id, `color: ${TEXT};`);
   if (r.choice.length > 0) {
     el("div", `color: ${DIM}; font-size: 11px; margin-top: 3px;`, parent, "Choose one of:");
     const row = el("div", "display: flex; flex-direction: column; gap: 3px;", parent);
     r.choice.forEach((id, i) => {
       const type = options.items.types[options.items.typeIndex.get(id) ?? -1];
       const rarity = type ? options.items.rarities[type.rarity] : undefined;
-      const b = el(options.choose ? "button" : "div", `text-align: left; padding: 2px 6px; color: ${rarity?.color ?? TEXT}; ${options.chosen === i ? `outline: 1px solid ${GOLD};` : ""}`, row, type?.name ?? id);
+      const b = rewardRow(type, id, `text-align: left; padding: 2px 6px; color: ${rarity?.color ?? TEXT}; ${options.chosen === i ? `outline: 1px solid ${GOLD};` : ""}`, options.choose ? "button" : "div", row);
       if (options.choose) b.addEventListener("click", () => options.choose!(i));
     });
   }

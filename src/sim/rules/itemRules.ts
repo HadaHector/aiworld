@@ -86,6 +86,8 @@ export interface ItemTypeDef {
   /** Base price, in the main currency's smallest unit. */
   value: number;
   itemLevel: number;
+  /** The name of its icon in an icon set (ICONS.md); "" for none - the screens draw a placeholder by kind. */
+  icon: string;
   /** The template it was made from and its parts by axis; "" and {} for an authored type. */
   template: string;
   parts: Record<string, string>;
@@ -189,7 +191,7 @@ export interface ItemRules {
 }
 
 const ID_PATTERN = /^[A-Za-z0-9_-]+$/;
-const ITEM_KEYS = ["name", "kind", "rarity", "slot", "fills", "gear", "tint", "stats", "modifiers", "requires", "durability", "stack", "quest", "use", "equip", "value", "level"];
+const ITEM_KEYS = ["name", "kind", "rarity", "slot", "fills", "gear", "tint", "stats", "modifiers", "requires", "durability", "stack", "quest", "use", "equip", "value", "level", "icon"];
 const TEMPLATE_ONLY_KEYS = ["axes", "rarities", "extra", "only", "never", "unscaled"];
 const PART_ONLY_KEYS = ["id", "name", "level", "budget", "stats"];
 
@@ -554,6 +556,7 @@ function readType(id: string, index: number, obj: RawObject, reader: Reader, ctx
     equip: equip ? { skill: String(equip.skill ?? "") } : null,
     value: reader.optionalNumber(obj, "value", "", 0, { min: 0, integer: true }),
     itemLevel: reader.optionalNumber(obj, "level", "", 1, { integer: true }),
+    icon: reader.optionalString(obj, "icon", "") ?? "",
     template,
     parts,
   };

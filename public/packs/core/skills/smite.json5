@@ -1,6 +1,7 @@
 // A priest's bolt of light: a short cast, holy damage.
 {
   name: "Smite",
+  icon: "spell-holy-sunburst",
   type: "spell",
   tags: ["school.holy"],
   target: "enemy",

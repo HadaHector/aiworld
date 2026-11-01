@@ -1,6 +1,7 @@
 // What the training dummy casts: 3 s, interruptible, hurts a little.
 {
   name: "Straw Bolt",
+  icon: "spell-arcane-orb",
   type: "spell",
   tags: ["school.arcane"],
   target: "enemy",

@@ -1,6 +1,7 @@
 // The top of the Arms tree: a heavy instant strike.
 {
   name: "Mortal Strike",
+  icon: "weapon-sword-ruby-edge",
   type: "physical",
   weapon: true,
   tags: ["melee"],

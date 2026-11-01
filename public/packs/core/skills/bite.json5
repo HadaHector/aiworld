@@ -1,6 +1,7 @@
 // A beast's bite: an instant strike on top of its swings.
 {
   name: "Bite",
+  icon: "creature-fang-wrapped",
   type: "physical",
   tags: ["melee"],
   target: "enemy",

@@ -8,6 +8,7 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
+    "icons": "node scripts/icons/build.mjs",
     "probe": "node --experimental-strip-types --import ./scripts/probe/hook.mjs",
     "server": "node --experimental-strip-types --no-warnings=ExperimentalWarning --import ./scripts/server/hook.mjs scripts/server/main.mjs"
   },

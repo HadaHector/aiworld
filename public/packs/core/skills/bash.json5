@@ -1,6 +1,7 @@
 // A bandit thug's shield bash: a hit that sunders armour.
 {
   name: "Bash",
+  icon: "weapon-cleaver",
   type: "physical",
   weapon: true,
   tags: ["melee"],

@@ -1,6 +1,7 @@
 // A spider's venomous bite: a poison that ticks.
 {
   name: "Venom",
+  icon: "spell-shadow-venom-cloud",
   type: "physical",
   tags: ["melee", "school.nature"],
   target: "enemy",

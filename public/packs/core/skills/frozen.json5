@@ -1,6 +1,7 @@
 // Frost Nova's root.
 {
   name: "Frozen",
+  icon: "spell-frost-spike",
   tags: ["root", "school.frost"],
   display: "debuff",
   dispel: "magic",

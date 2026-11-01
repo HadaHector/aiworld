@@ -12,9 +12,9 @@
       { id: "iron", name: "Iron", tint: "#d6dae0", level: 8, budget: 1.5, requires: { and: [{ ge: ["level", { sub: ["itemLevel", 8] }] }, { ge: ["swordSkill", 10] }] } },
     ],
     form: [
-      { id: "short", name: "Shortsword", stats: { weaponMin: [2, 3], weaponMax: [4, 5], weaponSpeed: -0.4, agility: [1, 2] } },
-      { id: "long", name: "Longsword", stats: { weaponMin: [3, 4], weaponMax: [6, 8], strength: [1, 2] } },
-      { id: "great", name: "Greatsword", fills: ["offHand"], stats: { weaponMin: [6, 8], weaponMax: [11, 14], weaponSpeed: 1.2, strength: [2, 3] }, durability: 60 },
+      { id: "short", icon: "weapon-dagger-plain", name: "Shortsword", stats: { weaponMin: [2, 3], weaponMax: [4, 5], weaponSpeed: -0.4, agility: [1, 2] } },
+      { id: "long", icon: "weapon-sword-plain", name: "Longsword", stats: { weaponMin: [3, 4], weaponMax: [6, 8], strength: [1, 2] } },
+      { id: "great", icon: "weapon-sword-broad", name: "Greatsword", fills: ["offHand"], stats: { weaponMin: [6, 8], weaponMax: [11, 14], weaponSpeed: 1.2, strength: [2, 3] }, durability: 60 },
     ],
   },
   rarities: ["common", "uncommon", "rare"],

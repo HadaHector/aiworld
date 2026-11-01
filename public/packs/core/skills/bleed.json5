@@ -1,6 +1,7 @@
 // A bleeding wound: damage over time, stacking up to three.
 {
   name: "Bleed",
+  icon: "spell-blood-arc",
   tags: ["bleed", "dot"],
   display: "debuff",
   vars: { perTick: 2 },

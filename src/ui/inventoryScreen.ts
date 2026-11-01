@@ -1,4 +1,5 @@
 import { ACTION_DRAG_TYPE, takenByBar } from "./actionBar";
+import { iconFace, iconHtml, itemIcon } from "./icons";
 import { BUTTON_CLASS, DIM, GOLD, HEADING, PANEL, SLOT, SLOT_CLASS, windowHead } from "./theme";
 import type { GameRules } from "../sim/rules/gameRules";
 import { formatMoney, itemStats, rollQuality, type ItemRules } from "../sim/rules/itemRules";
@@ -61,8 +62,9 @@ export function itemTooltip(game: GameRules, items: ItemRules, state: ItemState)
   if (index === undefined) return `<b>${state.type}</b><br><i>not in these packs</i>`;
   const type = items.types[index];
   const rarity = items.rarities[type.rarity];
-  const lines = [`<b style="color:${rarity.color}">${type.name}</b>${state.count > 1 ? ` x${state.count}` : ""}`];
-  lines.push(`<span style="color:#aaa">${rarity.name} ${type.kind}${type.slots.length ? ` · ${type.slots.map((s) => items.slots[s].name).join(" or ")}` : ""}${type.fills.length ? " · two-handed" : ""}</span>`);
+  const head = [`<b style="color:${rarity.color}">${type.name}</b>${state.count > 1 ? ` x${state.count}` : ""}`];
+  head.push(`<span style="color:#aaa">${rarity.name} ${type.kind}${type.slots.length ? ` · ${type.slots.map((s) => items.slots[s].name).join(" or ")}` : ""}${type.fills.length ? " · two-handed" : ""}</span>`);
+  const lines = [`<div style="display:flex; gap:8px; align-items:center;">${iconHtml(itemIcon(type, rarity.color), 36)}<div>${head.join("<br>")}</div></div>`];
   const values = itemStats(type, state.roll);
   type.stats.forEach((s, i) => {
     if (values[i] === 0) return;
@@ -82,7 +84,7 @@ export function itemTooltip(game: GameRules, items: ItemRules, state: ItemState)
   return lines.join("<br>");
 }
 
-/** A slot's face: a square in the rarity's colour with the kind's first letter, and a count. */
+/** A slot's face: the item's icon (or a placeholder for its kind) on a square tinted in the rarity's colour, and a count. */
 export function drawItem(cell: HTMLElement, items: ItemRules, state: ItemState | null, label = ""): void {
   cell.innerHTML = "";
   if (!state) {
@@ -94,8 +96,8 @@ export function drawItem(cell: HTMLElement, items: ItemRules, state: ItemState |
   const type = index === undefined ? null : items.types[index];
   const color = type ? items.rarities[type.rarity].color : "#f0f";
   cell.style.borderColor = color;
-  const face = el("div", `position:absolute; inset:3px; border-radius:3px; background:${color}22; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:16px; color:${color};`, cell);
-  face.textContent = (type?.kind ?? "?").charAt(0).toUpperCase();
+  const face = el("div", `position:absolute; inset:3px; border-radius:3px; background:${color}22;`, cell);
+  iconFace(face, itemIcon(type, color));
   if (type && type.durability > 0 && state.durability === 0) face.style.background = "#a0202066";
   if (state.count > 1) el("div", "position:absolute; right:3px; bottom:1px; font-size:11px; color:#fff; text-shadow:0 1px 1px #000;", cell).textContent = String(state.count);
 }

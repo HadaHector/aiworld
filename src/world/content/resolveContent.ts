@@ -135,6 +135,9 @@ export const GAME_FOLDERS = ["stats", "modifiers", "resources", "entities", "ski
  *  the client alone (src/character); the world's resolver passes over them too. */
 export const CHARACTER_FOLDERS = ["races", "gearMaterials", "gear", "outfits"] as const;
 
+/** The folders icon sets are defined in (see ICONS.md) - read by the client's icon library, not by the world. */
+export const ICON_FOLDERS = ["icons"] as const;
+
 /** The folders feedback is defined in - sounds, particle effects and their textures, cues (see
  *  FEEDBACK.md). Read by the client alone (src/feedback); the world's resolver passes over them. */
 export const FEEDBACK_FOLDERS = ["sounds", "particles", "particleTextures", "cues"] as const;
@@ -215,7 +218,7 @@ export function resolveContent(packs: PackSource[], config: WorldConfig = DEFAUL
       const file = `${pack.id}/${path}`;
       const parts = path.split("/");
       // Gameplay content: read by the game rules' own resolver (src/sim/rules/gameRules.ts).
-      if (parts.length === 2 && ([...GAME_FOLDERS, ...CHARACTER_FOLDERS, ...FEEDBACK_FOLDERS] as readonly string[]).includes(parts[0])) continue;
+      if (parts.length === 2 && ([...GAME_FOLDERS, ...CHARACTER_FOLDERS, ...FEEDBACK_FOLDERS, ...ICON_FOLDERS] as readonly string[]).includes(parts[0])) continue;
       const data = parseFile(file, text, issues);
       if (data === undefined) continue;
 
@@ -229,7 +232,7 @@ export function resolveContent(packs: PackSource[], config: WorldConfig = DEFAUL
       }
       const folder = parts[0] as ContentFolder;
       if (parts.length !== 2 || !CONTENT_FOLDERS.includes(folder)) {
-        issues.push({ file, path: "", message: `not a place content is read from (expected ${[...CONTENT_FOLDERS, ...GAME_FOLDERS, ...CHARACTER_FOLDERS, ...FEEDBACK_FOLDERS, "patches"].map((f) => `${f}/`).join(", ")} or defaults.json5)` });
+        issues.push({ file, path: "", message: `not a place content is read from (expected ${[...CONTENT_FOLDERS, ...GAME_FOLDERS, ...CHARACTER_FOLDERS, ...FEEDBACK_FOLDERS, ...ICON_FOLDERS, "patches"].map((f) => `${f}/`).join(", ")} or defaults.json5)` });
         continue;
       }
       const id = parts[1].replace(/\.json5$/, "");

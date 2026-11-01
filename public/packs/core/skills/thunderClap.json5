@@ -1,6 +1,7 @@
 // Strikes every enemy within 8 m of the caster and slows them.
 {
   name: "Thunder Clap",
+  icon: "spell-earth-quake",
   cues: { release: "thunderClap" },
   type: "physical",
   tags: ["melee"],

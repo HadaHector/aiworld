@@ -5,6 +5,7 @@ import { renderText, type TextTable } from "../sim/text";
 import type { QuestMirror } from "../game/questMirror";
 import type { QuestRules } from "../sim/quests/quest";
 import { renderQuest } from "./questLog";
+import { iconBox, itemIcon } from "./icons";
 import { BUTTON_CLASS, CLOSE_CLASS, DIM, HEADING, PANEL, TEXT, WINDOW_HEAD } from "./theme";
 
 /**
@@ -124,6 +125,7 @@ export function createNpcWindow(options: NpcWindowOptions): NpcWindow {
       for (const [index, entry] of current!.stock.entries()) {
         const type = typeOf(entry.type);
         const row = el("div", "display: flex; align-items: center; gap: 6px; margin: 2px 0;", body);
+        iconBox(row, itemIcon(type, type ? items.rarities[type.rarity].color : "#f0f"), 26);
         el("span", "flex: 1;", row, `${type?.name ?? entry.type}${entry.count > 1 ? ` ×${entry.count}` : ""}`);
         el("span", `color: ${DIM}; font-size: 11px;`, row, money(entry.price));
         el("button", "padding: 1px 6px; font-size: 11px;", row, "Buy").addEventListener("click", () => send({ type: "shopBuy", npc, index }));
@@ -139,6 +141,7 @@ export function createNpcWindow(options: NpcWindowOptions): NpcWindow {
         any = true;
         const worn = type.durability > 0 ? Math.max(0.2, item.durability / type.durability) : 1;
         const row = el("div", "display: flex; align-items: center; gap: 6px; margin: 2px 0;", body);
+        iconBox(row, itemIcon(type, items.rarities[type.rarity].color), 26);
         el("span", "flex: 1;", row, `${type.name}${item.count > 1 ? ` ×${item.count}` : ""}`);
         el("span", `color: ${DIM}; font-size: 11px;`, row, money(Math.floor(type.value * current!.sellRate * item.count * worn)));
         el("button", "padding: 1px 6px; font-size: 11px;", row, "Sell").addEventListener("click", () => send({ type: "shopSell", npc, from: { container: 0, slot } }));

@@ -1,0 +1,6 @@
+{
+  name: "Craftpix icons",
+  description: "Icons for items and skills from four free Craftpix.net sets - weapons, mining, spells, alchemical ingredients - as one atlas. Optional: the game draws generated placeholders without it.",
+  // After core, so a pack that names the same icon replaces it.
+  priority: 10,
+}

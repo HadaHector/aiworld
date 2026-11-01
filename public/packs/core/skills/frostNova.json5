@@ -1,6 +1,7 @@
 // Frost bursts around the caster: a little damage and a short root on every enemy close by.
 {
   name: "Frost Nova",
+  icon: "spell-frost-nova",
   type: "spell",
   tags: ["school.frost"],
   target: "none",

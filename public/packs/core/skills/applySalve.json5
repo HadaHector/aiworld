@@ -2,6 +2,7 @@
 // within reach; the quest counts it when the cast is done.
 {
   name: "Apply Salve",
+  icon: "herb-clover",
   type: "physical",
   target: "enemy",
   range: 8,

@@ -2,6 +2,7 @@
 // while the unit is attacking and the target is within reach and in front. No engine code of its own.
 {
   name: "Attack",
+  icon: "weapon-sword-plain",
   passive: true,
   type: "physical",
   weapon: true,

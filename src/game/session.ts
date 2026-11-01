@@ -44,6 +44,7 @@ import { createNameplates, isNpc, type Nameplates } from "./nameplates";
 import { nextEnemy } from "./targeting";
 import { EVENT_KIND } from "../sim/skills/events";
 import { FLAG } from "../sim/skills/flags";
+import { loadIconSets } from "../ui/icons";
 
 /** What lasts the whole page, that a session draws into and plays through (see FRONTEND.md). */
 export interface Page {
@@ -136,6 +137,7 @@ export async function startSession(page: Page, options: SessionOptions): Promise
     }
   }
   /** Races, gear and outfits for everyone else's bodies, resolved once. */
+  loadIconSets(packSet.sources);
   const bodyKit = createBodyKit(packSet.sources);
 
   let playerId = -1;

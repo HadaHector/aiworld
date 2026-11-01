@@ -3,6 +3,7 @@ import type { ItemRules } from "../sim/rules/itemRules";
 import { describeSkill } from "../sim/rules/skillText";
 import type { EntityMirror } from "../game/entityMirror";
 import type { BelongingsMirror } from "../game/belongingsMirror";
+import { TELEPORT_ICON, hasIcon, iconFace, itemIcon, skillIcon, type IconSpec } from "./icons";
 import { GOLD, SLOT, SLOT_CLASS } from "./theme";
 
 /**
@@ -114,6 +115,7 @@ export function createActionBar(parent: HTMLElement, options: ActionBarOptions):
     const cell = el("div", `position: relative; width: ${slotWidth}px; height: 48px; ${SLOT} cursor: pointer; overflow: hidden; text-align: center; font: 11px/1.2 system-ui, sans-serif; user-select: none;`, root);
     cell.className = SLOT_CLASS;
     cell.draggable = true;
+    const icon = el("div", "position: absolute; inset: 2px;", cell);
     el("div", `position: absolute; left: 4px; top: 2px; font: 700 10px/1 system-ui, sans-serif; color: ${GOLD}; text-shadow: 0 1px 1px #000; z-index: 2;`, cell).textContent = label;
     const name = el("div", "position: absolute; left: 3px; right: 3px; top: 15px; font-size: 10px; line-height: 1.15; text-shadow: 0 1px 2px #000;", cell);
     const count = el("div", "position: absolute; right: 3px; bottom: 2px; font: 700 10px/1 system-ui, sans-serif; color: #fff; text-shadow: 0 1px 1px #000; z-index: 2;", cell);
@@ -153,7 +155,7 @@ export function createActionBar(parent: HTMLElement, options: ActionBarOptions):
         draw();
       } else set(i, action);
     });
-    return { cell, name, count, cool };
+    return { cell, icon, name, count, cool };
   });
   let dragFrom = -1;
   let dropped = false;
@@ -197,10 +199,23 @@ export function createActionBar(parent: HTMLElement, options: ActionBarOptions):
     return type ? `${type.name}\nUse it from your bag.` : action.item;
   }
 
+  /** What to draw on a slot. */
+  function iconOf(action: BarAction): IconSpec {
+    if (action.kind === "attack") return skillIcon(game.skills[game.skillIndex.get("autoAttack") ?? -1]);
+    if (action.kind === "teleport") return TELEPORT_ICON;
+    if (action.kind === "skill") return skillIcon(game.skills[game.skillIndex.get(action.skill) ?? -1]);
+    const type = items.types[items.typeIndex.get(action.item) ?? -1];
+    return itemIcon(type, type ? items.rarities[type.rarity].color : "#f0f");
+  }
+
   function draw(): void {
     saved.slots.forEach((action, i) => {
       const c = cells[i];
       c.cell.title = action ? `${tooltip(action)}\n\nDrag to move it, or off the bar to clear the slot.` : "Empty: drag a spell from the spell book (L) or an item from your bag here.";
+      // The icon, and - over a placeholder, drawn faint - the name.
+      c.icon.innerHTML = "";
+      const spec = action ? iconOf(action) : null;
+      if (spec) iconFace(c.icon, spec, hasIcon(spec.name) ? "" : "opacity: 0.4;");
       if (!action) c.name.textContent = "";
       else if (action.kind === "attack") c.name.textContent = "Attack";
       else if (action.kind === "teleport") c.name.textContent = "Teleport";
@@ -211,6 +226,8 @@ export function createActionBar(parent: HTMLElement, options: ActionBarOptions):
         c.name.style.color = type ? items.rarities[type.rarity].color : "";
       }
       if (action?.kind !== "item") c.name.style.color = "";
+      // A real icon says what it is; the tooltip has the name.
+      if (spec && hasIcon(spec.name)) c.name.textContent = "";
       c.cell.style.opacity = action ? "1" : "0.55";
     });
   }
