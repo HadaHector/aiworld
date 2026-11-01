@@ -103,10 +103,7 @@ export interface PaintedCover {
  * covers take their neighbours' colour, so filtering never reaches the background.
  */
 export function paintAtlas(body: BodyGeometry, layout: AtlasLayout, race: RaceDef, look: Appearance, covers: PaintedCover[] = []): Uint8Array {
-  const steps = paintSteps(body, layout, race, look, covers);
-  let step = steps.next();
-  while (!step.done) step = steps.next();
-  return step.value;
+  return run(paintSteps(preparePaint(body, layout, covers), body, layout, race, look));
 }
 
 /**
@@ -114,12 +111,56 @@ export function paintAtlas(body: BodyGeometry, layout: AtlasLayout, race: RaceDe
  * keeps drawing frames while a body is painted (a bandit camp coming into view, CREATURES.md).
  */
 export async function paintAtlasSliced(body: BodyGeometry, layout: AtlasLayout, race: RaceDef, look: Appearance, covers: PaintedCover[], pause: () => Promise<void>, budgetMs = 4): Promise<Uint8Array> {
-  const steps = paintSteps(body, layout, race, look, covers);
+  const base = await sliced(prepareSteps(body, layout, covers), pause, budgetMs);
+  return paintLookSliced(base, body, layout, race, look, pause, budgetMs);
+}
+
+/** What painting a body needs that does not depend on who it is: where the light and shadow fall,
+ *  the skin's mottle, what is worn over it, and where empty texels take their colour from. */
+export interface PaintBase {
+  size: number;
+  /** Per texel: the light painted in (facing up, folds, toward the feet). */
+  shade: Float32Array;
+  /** Per texel: the skin's mottle (a factor on its colour). */
+  mottle: Float32Array;
+  /** Per texel: whether something worn covers it, and then its colour (three a texel). */
+  covered: Uint8Array;
+  cover: Float32Array;
+  /** Per texel: the texel its pixels are copied from once painted (itself if painted, -1 if none). */
+  source: Int32Array;
+}
+
+/** The painting that does not depend on a character's looks, made once for a body and the gear
+ *  painted on it, then used for every character of that body (bodyCache.ts). */
+export function preparePaint(body: BodyGeometry, layout: AtlasLayout, covers: PaintedCover[] = []): PaintBase {
+  return run(prepareSteps(body, layout, covers));
+}
+
+export function preparePaintSliced(body: BodyGeometry, layout: AtlasLayout, covers: PaintedCover[], pause: () => Promise<void>, budgetMs = 4): Promise<PaintBase> {
+  return sliced(prepareSteps(body, layout, covers), pause, budgetMs);
+}
+
+/** Paints one character's looks - skin, face, hair, beard - on a body's prepared painting. */
+export function paintLook(base: PaintBase, body: BodyGeometry, layout: AtlasLayout, race: RaceDef, look: Appearance): Uint8Array {
+  return run(paintSteps(base, body, layout, race, look));
+}
+
+export function paintLookSliced(base: PaintBase, body: BodyGeometry, layout: AtlasLayout, race: RaceDef, look: Appearance, pause: () => Promise<void>, budgetMs = 4): Promise<Uint8Array> {
+  return sliced(paintSteps(base, body, layout, race, look), pause, budgetMs);
+}
+
+function run<T>(steps: Generator<void, T>): T {
+  let step = steps.next();
+  while (!step.done) step = steps.next();
+  return step.value;
+}
+
+async function sliced<T>(steps: Generator<void, T>, pause: () => Promise<void>, budgetMs: number): Promise<T> {
   for (;;) {
     const started = performance.now();
     let step = steps.next();
     while (!step.done && performance.now() - started < budgetMs) step = steps.next();
-    addTime("4a paintAtlas cpu", performance.now() - started);
+    addTime("4a paint cpu", performance.now() - started);
     if (step.done) return step.value;
     await pause();
   }
@@ -128,7 +169,52 @@ export async function paintAtlasSliced(body: BodyGeometry, layout: AtlasLayout, 
 /** Texels painted between chances to stop. */
 const PAINT_SLICE = 2048;
 
-function* paintSteps(body: BodyGeometry, layout: AtlasLayout, race: RaceDef, look: Appearance, covers: PaintedCover[]): Generator<void, Uint8Array> {
+function* prepareSteps(body: BodyGeometry, layout: AtlasLayout, covers: PaintedCover[]): Generator<void, PaintBase> {
+  const { size, texels } = layout;
+  const count = size * size;
+  const shade = new Float32Array(count);
+  const mottle = new Float32Array(count);
+  const covered = new Uint8Array(count);
+  const cover = new Float32Array(count * 3);
+  const regionNames = body.regions.map((r) => r.name);
+  const occlusion = createOcclusion(body);
+  const tall = Math.max(...body.positions.filter((_, i) => i % 3 === 1));
+  const coverRegions = covers.map((c) => new Set(c.regions.map((name) => regionNames.indexOf(name))));
+  const regionLengths = body.regions.map((r) => r.axis.slice(1).reduce((sum, p, i) => sum + length(sub(p, r.axis[i])), 0));
+
+  for (let o = 0; o < count; o++) {
+    if (o % PAINT_SLICE === 0) yield;
+    const region = texels.region[o];
+    if (region < 0) continue;
+    const p: Vec = [texels.position[o * 3], texels.position[o * 3 + 1], texels.position[o * 3 + 2]];
+    const n: Vec = [texels.normal[o * 3], texels.normal[o * 3 + 1], texels.normal[o * 3 + 2]];
+    const around = texels.surface[o * 2];
+    const along = texels.surface[o * 2 + 1];
+    mottle[o] = 0.96 + 0.06 * noise3(p[0] * 40, p[1] * 40, p[2] * 40);
+    covers.forEach((c, i) => {
+      if (!coverRegions[i].has(region)) return;
+      // How far inside the cover the texel is, in metres from its nearer edge.
+      const scale = c.span === "height" ? 1 : regionLengths[region];
+      const at = c.span === "height" ? p[1] : along / scale;
+      const inside = Math.min(at - c.from, c.to - at) * (c.span === "height" ? 1 : scale);
+      if (inside < 0) return;
+      const m = sampleGearMaterial(c.material, around, along);
+      let color: [number, number, number] = [m[0] * c.tint[0], m[1] * c.tint[1], m[2] * c.tint[2]];
+      if (c.hem && inside < 0.012) color = color.map((x) => x * 0.72) as [number, number, number];
+      covered[o] = 1;
+      cover[o * 3] = color[0];
+      cover[o * 3 + 1] = color[1];
+      cover[o * 3 + 2] = color[2];
+    });
+    // Light painted in.
+    const up = 0.5 + 0.5 * n[1];
+    shade[o] = (0.8 + 0.22 * up) * (0.9 + 0.1 * Math.min(1, p[1] / tall + 0.2)) * occlusion(p, n);
+  }
+  yield;
+  return { size, shade, mottle, covered, cover, source: dilateSource(texels.region, size, Math.ceil(size / 16)) };
+}
+
+function* paintSteps(base: PaintBase, body: BodyGeometry, layout: AtlasLayout, race: RaceDef, look: Appearance): Generator<void, Uint8Array> {
   const { size, texels } = layout;
   const pixels = new Uint8Array(size * size * 4);
   const regionNames = body.regions.map((r) => r.name);
@@ -137,37 +223,39 @@ function* paintSteps(body: BodyGeometry, layout: AtlasLayout, race: RaceDef, loo
   const headFrame = frameFor(sub(head.tail, head.head), [0, 0, 1]);
   const headLength = length(sub(head.tail, head.head));
   const headWidth = curveSampler(race.shape.head.out)(0.55);
-  const occlusion = createOcclusion(body);
-  const tall = Math.max(...body.positions.filter((_, i) => i % 3 === 1));
-  const coverRegions = covers.map((cover) => new Set(cover.regions.map((name) => regionNames.indexOf(name))));
-  const regionLengths = body.regions.map((r) => r.axis.slice(1).reduce((sum, p, i) => sum + length(sub(p, r.axis[i])), 0));
+  const nipples = body.marks.filter((m) => m.name === "nipple");
+  const { shade, mottle, covered, cover } = base;
 
   for (let o = 0; o < size * size; o++) {
     if (o % PAINT_SLICE === 0) yield;
     const region = texels.region[o];
     if (region < 0) continue;
+    if (covered[o]) {
+      // What is worn hides the skin, the face and all.
+      pixels[o * 4] = clampByte(cover[o * 3] * shade[o]);
+      pixels[o * 4 + 1] = clampByte(cover[o * 3 + 1] * shade[o]);
+      pixels[o * 4 + 2] = clampByte(cover[o * 3 + 2] * shade[o]);
+      pixels[o * 4 + 3] = 255;
+      continue;
+    }
     const p: Vec = [texels.position[o * 3], texels.position[o * 3 + 1], texels.position[o * 3 + 2]];
-    const n: Vec = [texels.normal[o * 3], texels.normal[o * 3 + 1], texels.normal[o * 3 + 2]];
-    const around = texels.surface[o * 2];
-    const along = texels.surface[o * 2 + 1];
-    let color: [number, number, number] = [...look.skin];
     // Skin, mottled a little.
-    const mottle = 0.96 + 0.06 * noise3(p[0] * 40, p[1] * 40, p[2] * 40);
-    color = [color[0] * mottle, color[1] * mottle, color[2] * (mottle * 0.98)];
+    const m = mottle[o];
+    let color: [number, number, number] = [look.skin[0] * m, look.skin[1] * m, look.skin[2] * (m * 0.98)];
 
     if (region === headRegion) {
+      const n: Vec = [texels.normal[o * 3], texels.normal[o * 3 + 1], texels.normal[o * 3 + 2]];
       const off = sub(p, head.head);
       const X = dot(off, [1, 0, 0]) / headWidth;
       const H = dot(off, headFrame.along) / headLength;
       const forward = dot(off, headFrame.front);
       const facing = dot(n, headFrame.front);
       const angle = Math.atan2(dot(off, [1, 0, 0]), forward);
-      color = paintHead(color, look, race.look.face, X, H, facing, angle, around, along);
+      color = paintHead(color, look, race.look.face, X, H, facing, angle, texels.surface[o * 2], texels.surface[o * 2 + 1]);
     }
 
     // Nipples where the race's bumps mark them: a darker areola, the nipple darker still.
-    for (const mark of body.marks) {
-      if (mark.name !== "nipple") continue;
+    for (const mark of nipples) {
       const d = length(sub(p, mark.position));
       if (d < 0.02) {
         const tone: [number, number, number] = [look.skin[0] * 0.78, look.skin[1] * 0.58, look.skin[2] * 0.56];
@@ -176,29 +264,14 @@ function* paintSteps(body: BodyGeometry, layout: AtlasLayout, race: RaceDef, loo
         if (d < 0.006) color = [tone[0] * 0.85, tone[1] * 0.8, tone[2] * 0.8];
       }
     }
-
-    covers.forEach((cover, i) => {
-      if (!coverRegions[i].has(region)) return;
-      // How far inside the cover the texel is, in metres from its nearer edge.
-      const scale = cover.span === "height" ? 1 : regionLengths[region];
-      const at = cover.span === "height" ? p[1] : along / scale;
-      const inside = Math.min(at - cover.from, cover.to - at) * (cover.span === "height" ? 1 : scale);
-      if (inside < 0) return;
-      const m = sampleGearMaterial(cover.material, around, along);
-      color = [m[0] * cover.tint[0], m[1] * cover.tint[1], m[2] * cover.tint[2]];
-      if (cover.hem && inside < 0.012) color = color.map((c) => c * 0.72) as [number, number, number];
-    });
-
-    // Light painted in.
-    const up = 0.5 + 0.5 * n[1];
-    const shade = (0.8 + 0.22 * up) * (0.9 + 0.1 * Math.min(1, p[1] / tall + 0.2)) * occlusion(p, n);
-    pixels[o * 4] = clampByte(color[0] * shade);
-    pixels[o * 4 + 1] = clampByte(color[1] * shade);
-    pixels[o * 4 + 2] = clampByte(color[2] * shade);
+    pixels[o * 4] = clampByte(color[0] * shade[o]);
+    pixels[o * 4 + 1] = clampByte(color[1] * shade[o]);
+    pixels[o * 4 + 2] = clampByte(color[2] * shade[o]);
     pixels[o * 4 + 3] = 255;
   }
   // Out far enough that no texel is left empty: a corner a little off its region still finds colour.
-  dilate(pixels, texels.region, size, Math.ceil(size / 16));
+  const { source } = base;
+  for (let o = 0; o < source.length; o++) if (source[o] >= 0 && source[o] !== o) pixels.copyWithin(o * 4, source[o] * 4, source[o] * 4 + 4);
   return pixels;
 }
 
@@ -325,11 +398,16 @@ function createOcclusion(body: BodyGeometry): (p: Vec, n: Vec) => number {
   };
 }
 
-/** Fills the texels no triangle covers from their neighbours, `passes` steps out: each takes the
- *  first filled one of its right, left, lower and upper neighbours as the last step had them. */
-function dilate(pixels: Uint8Array, region: Int16Array, size: number, passes: number): void {
+/** Where the texels no triangle covers take their pixels from, `passes` steps out: each takes the
+ *  first filled one of its right, left, lower and upper neighbours as the last step had them. A
+ *  painted texel is its own source; one never reached has none (-1). */
+function dilateSource(region: Int16Array, size: number, passes: number): Int32Array {
+  const source = new Int32Array(size * size);
   let filled = new Uint8Array(size * size);
-  for (let i = 0; i < filled.length; i++) filled[i] = region[i] >= 0 ? 1 : 0;
+  for (let i = 0; i < filled.length; i++) {
+    filled[i] = region[i] >= 0 ? 1 : 0;
+    source[i] = filled[i] ? i : -1;
+  }
   let next = filled.slice();
   for (let pass = 0; pass < passes; pass++) {
     let changed = false;
@@ -343,17 +421,18 @@ function dilate(pixels: Uint8Array, region: Int16Array, size: number, passes: nu
         else if (y + 1 < size && filled[o + size]) q = o + size;
         else if (y > 0 && filled[o - size]) q = o - size;
         if (q < 0) continue;
-        pixels.copyWithin(o * 4, q * 4, q * 4 + 4);
+        source[o] = source[q];
         next[o] = 1;
         changed = true;
       }
     }
-    if (!changed) return;
+    if (!changed) break;
     const swap = filled;
     filled = next;
     next = swap;
     next.set(filled);
   }
+  return source;
 }
 
 /** 1 inside an ellipse round (cx, cy), fading to 0 just outside it. */
