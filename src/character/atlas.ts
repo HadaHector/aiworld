@@ -119,7 +119,7 @@ export function layoutAtlas(body: BodyGeometry, size: number): AtlasLayout {
 
 /** Where a point is on a region's cylinder: the nearest place on its axis (running on past either
  *  end), the angle round from the region's front, and how far out. */
-export function cylinderOf(region: BodyRegion, p: Vec): { round: number; along: number; radius: number } {
+export function cylinderOf(region: BodyRegion, p: Vec): { round: number; along: number; radius: number; side: number; front: number } {
   const axis = region.axis;
   let best = { distance: Infinity, along: 0, from: axis[0], direction: [0, 1, 0] as Vec };
   let walked = 0;
@@ -137,9 +137,11 @@ export function cylinderOf(region: BodyRegion, p: Vec): { round: number; along: 
   }
   const frame = frameFor(best.direction, region.reference);
   const off = sub(p, best.from);
-  let angle = Math.atan2(dot(off, frame.side), dot(off, frame.front));
-  if (region.side < 0) angle = -angle;
-  return { round: angle / (2 * Math.PI) + 0.5, along: best.along, radius: best.distance };
+  let side = dot(off, frame.side);
+  const front = dot(off, frame.front);
+  if (region.side < 0) side = -side;
+  const angle = Math.atan2(side, front);
+  return { round: angle / (2 * Math.PI) + 0.5, along: best.along, radius: best.distance, side, front };
 }
 
 /** A triangle across the seam at the back gets its low side carried round past 1, so it does not

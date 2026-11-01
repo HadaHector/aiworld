@@ -325,6 +325,27 @@ export function buildBodyOnly(race: RaceDef, options: BodyOptions = {}): BodyGeo
   return { positions: points.flat(), indices, joints, weights, bones: finalBones, lattice, marks, triangles: indices.length / 3, parts, regions: regionAxes, triangleRegions, layers, triangleLayers, gearUVs, pieceTextures: [], hiddenTriangles: [] };
 }
 
+/** Arc length along an ellipse of semi-axes `a` (side) and `b` (front) from the front to the point
+ *  at parameter `t` (0 at the front, + toward the side), by Simpson's rule. */
+function ellipseArc(a: number, b: number, t: number): number {
+  const steps = 24;
+  const h = t / steps;
+  const f = (x: number): number => Math.hypot(a * Math.cos(x), b * Math.sin(x));
+  let sum = f(0) + f(t);
+  for (let i = 1; i < steps; i++) sum += f(i * h) * (i % 2 === 1 ? 4 : 2);
+  return (sum * h) / 3;
+}
+
+/** Where a point is round a cross-section that is an ellipse of semi-axes `a` and `b`: how far
+ *  round by arc length, as a share (0.5 at the front, 0 and 1 at the back), and the perimeter. An
+ *  elliptical torso is wider at its sides than front to back, so an angle round it is not an
+ *  even stretch of cloth; arc length is. */
+function roundOnEllipse(side: number, front: number, a: number, b: number): { round: number; circumference: number } {
+  const t = Math.atan2(side / a, front / b);
+  const perimeter = 2 * ellipseArc(a, b, Math.PI);
+  return { round: 0.5 + (Math.sign(t) * ellipseArc(a, b, Math.abs(t))) / perimeter, circumference: perimeter };
+}
+
 /** Skinning: each vertex follows the nearest of its own bone and the bones next to it, unless its
  *  weights were set by hand. */
 function skinKit(kit: MeshKit, finalBones: BoneDef[]): { joints: number[]; weights: number[] } {
@@ -571,11 +592,13 @@ function addGear(kit: MeshKit, race: RaceDef, unit: GearUnit, body: BodyGeometry
     const cut = islandName && coverBottom && coverBottom.length === N ? body.regions.find((r) => r.name === "torso") : undefined;
     const mapSkirtRing = (r: Ring, drop: number): void => {
       if (!cut) return mapRing(r, along(drop));
-      for (const v of r.verts) {
-        const p = body.lattice ? body.lattice.apply(kit.points[v]) : kit.points[v];
-        const c = cylinderOf(cut, p);
-        kit.mapVertex(v, c.round, c.along, 2 * Math.PI * c.radius);
-      }
+      const at = r.verts.map((v) => cylinderOf(cut, body.lattice ? body.lattice.apply(kit.points[v]) : kit.points[v]));
+      const a = Math.max(0.03, ...at.map((c) => Math.abs(c.side)));
+      const b = Math.max(0.03, ...at.map((c) => Math.abs(c.front)));
+      r.verts.forEach((v, i) => {
+        const across = roundOnEllipse(at[i].side, at[i].front, a, b);
+        kit.mapVertex(v, across.round, at[i].along, across.circumference);
+      });
     };
     // Hung from a cover's bottom edge it shares its vertices, so there is no step and no gap.
     const joined = cut && coverBottom ? coverBottom : null;
@@ -698,8 +721,8 @@ function addGear(kit: MeshKit, race: RaceDef, unit: GearUnit, body: BodyGeometry
     const I = body.indices;
     bodyNormals ??= smoothNormals(body);
     const total = region.axis.slice(1).reduce((sum, p, i) => sum + length(sub(p, region.axis[i])), 0);
-    const places = new Map<number, { round: number; along: number; radius: number }>();
-    const place = (v: number): { round: number; along: number; radius: number } => {
+    const places = new Map<number, ReturnType<typeof cylinderOf>>();
+    const place = (v: number): ReturnType<typeof cylinderOf> => {
       let found = places.get(v);
       if (!found) places.set(v, (found = cylinderOf(region, [P[v * 3], P[v * 3 + 1], P[v * 3 + 2]])));
       return found;
@@ -711,6 +734,57 @@ function addGear(kit: MeshKit, race: RaceDef, unit: GearUnit, body: BodyGeometry
       if (mean >= def.from * total && mean <= def.to * total) picked.push(t);
     }
     if (picked.length === 0) return;
+    // Its cross-section at each height, as an ellipse that holds what the cover has there (a body
+    // is wider at its sides than front to back), so that across is arc length, not an angle.
+    const BIN = 0.01;
+    const reach = new Map<number, { a: number; b: number }>();
+    for (const t of picked) for (let k = 0; k < 3; k++) {
+      const c = place(I[t * 3 + k]);
+      const bin = Math.round(c.along / BIN);
+      const found = reach.get(bin) ?? { a: 0, b: 0 };
+      found.a = Math.max(found.a, Math.abs(c.side));
+      found.b = Math.max(found.b, Math.abs(c.front));
+      reach.set(bin, found);
+    }
+    // Smooth in height - the widest of what is near, averaged - and read between the bins, so the
+    // cloth's width changes evenly and a seam down its middle is a line, not steps.
+    const bins = [...reach.keys()];
+    const lowest = Math.min(...bins);
+    const highest = Math.max(...bins);
+    const widest: { a: number; b: number }[] = [];
+    for (let bin = lowest; bin <= highest; bin++) {
+      let a = 0.03;
+      let b = 0.03;
+      for (let d = -3; d <= 3; d++) {
+        const near = reach.get(bin + d);
+        if (near) {
+          a = Math.max(a, near.a);
+          b = Math.max(b, near.b);
+        }
+      }
+      widest.push({ a, b });
+    }
+    const smooth = widest.map((_, i) => {
+      let a = 0;
+      let b = 0;
+      let n = 0;
+      for (let d = -6; d <= 6; d++) {
+        const near = widest[i + d];
+        if (near) {
+          a += near.a;
+          b += near.b;
+          n++;
+        }
+      }
+      return { a: Math.max(widest[i].a * 0.9, a / n), b: Math.max(widest[i].b * 0.9, b / n) };
+    });
+    const ellipseAt = (along: number): { a: number; b: number } => {
+      const at = Math.min(highest, Math.max(lowest, along / BIN)) - lowest;
+      const i = Math.min(smooth.length - 1, Math.floor(at));
+      const f = Math.min(1, at - i);
+      const next = smooth[Math.min(smooth.length - 1, i + 1)];
+      return { a: smooth[i].a * (1 - f) + next.a * f, b: smooth[i].b * (1 - f) + next.b * f };
+    };
     const down: 1 | -1 = regionName === "torso" || regionName === "head" ? -1 : 1;
     kit.beginIsland(def.island, down);
     // How far down it is: its height up the region's axis. (Round it, the unrolling is as wide as
@@ -766,7 +840,9 @@ function addGear(kit: MeshKit, race: RaceDef, unit: GearUnit, body: BodyGeometry
         for (let k = 0; k < 4; k++) if (body.weights[v * 4 + k] > 0) weights.push([body.joints[v * 4 + k], body.weights[v * 4 + k]]);
         kit.fixed.set(found, weights);
         const c = place(v);
-        kit.mapVertex(found, c.round, rawOf(v), 2 * Math.PI * c.radius);
+        const e = ellipseAt(c.along);
+        const across = roundOnEllipse(c.side, c.front, e.a, e.b);
+        kit.mapVertex(found, across.round, rawOf(v), across.circumference);
         made.set(v, found);
       }
       return found;
