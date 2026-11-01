@@ -3,8 +3,9 @@ import type { ItemRules } from "../sim/rules/itemRules";
 import { describeSkill } from "../sim/rules/skillText";
 import type { EntityMirror } from "../game/entityMirror";
 import type { BelongingsMirror } from "../game/belongingsMirror";
-import { TELEPORT_ICON, hasIcon, iconFace, itemIcon, skillIcon, type IconSpec } from "./icons";
-import { GOLD, SLOT, SLOT_CLASS } from "./theme";
+import { TELEPORT_ICON, hasIcon, iconFace, iconHtml, itemIcon, skillIcon, type IconSpec } from "./icons";
+import { itemTooltip } from "./inventoryScreen";
+import { GOLD, PANEL, SLOT, SLOT_CLASS } from "./theme";
 
 /**
  * The action bar: twelve slots on keys 1-9, 0, - and =, each holding a spell, the attack toggle or
@@ -112,14 +113,17 @@ export function createActionBar(parent: HTMLElement, options: ActionBarOptions):
   const root = el("div", "display: flex; gap: 4px;", parent);
   let slotWidth = 56;
   const cells = KEYS.map((label, i) => {
-    const cell = el("div", `position: relative; width: ${slotWidth}px; height: 48px; ${SLOT} cursor: pointer; overflow: hidden; text-align: center; font: 11px/1.2 system-ui, sans-serif; user-select: none;`, root);
+    const cell = el("div", `position: relative; width: ${slotWidth}px; height: ${slotWidth}px; ${SLOT} cursor: pointer; overflow: hidden; text-align: center; font: 11px/1.2 system-ui, sans-serif; user-select: none;`, root);
     cell.className = SLOT_CLASS;
     cell.draggable = true;
     const icon = el("div", "position: absolute; inset: 2px;", cell);
     el("div", `position: absolute; left: 4px; top: 2px; font: 700 10px/1 system-ui, sans-serif; color: ${GOLD}; text-shadow: 0 1px 1px #000; z-index: 2;`, cell).textContent = label;
     const name = el("div", "position: absolute; left: 3px; right: 3px; top: 15px; font-size: 10px; line-height: 1.15; text-shadow: 0 1px 2px #000;", cell);
     const count = el("div", "position: absolute; right: 3px; bottom: 2px; font: 700 10px/1 system-ui, sans-serif; color: #fff; text-shadow: 0 1px 1px #000; z-index: 2;", cell);
-    const cool = el("div", `position: absolute; left: 0; right: 0; bottom: 0; height: 0; background: rgba(0, 0, 0, 0.66); font: 700 15px/48px system-ui, sans-serif; color: ${GOLD}; text-shadow: 0 1px 2px #000;`, cell);
+    const cool = el("div", `position: absolute; left: 0; right: 0; bottom: 0; height: 0; background: rgba(0, 0, 0, 0.66); display: flex; align-items: center; justify-content: center; font: 700 15px system-ui, sans-serif; color: ${GOLD}; text-shadow: 0 1px 2px #000;`, cell);
+    cell.addEventListener("mouseenter", () => showTip(i));
+    cell.addEventListener("mouseleave", () => (tip.style.display = "none"));
+    cell.addEventListener("dragstart", () => (tip.style.display = "none"));
     cell.addEventListener("click", () => press(i, false));
     // Dragging: a slot onto another swaps them; off the bar clears it.
     cell.addEventListener("dragstart", (e) => {
@@ -187,16 +191,39 @@ export function createActionBar(parent: HTMLElement, options: ActionBarOptions):
     }
   }
 
-  /** What a slot says about its action, on hover. */
+  const escape = (text: string): string => text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+  /** A tooltip for something that is not an item: its icon and name, then what it says. */
+  function describe(spec: IconSpec, name: string, color: string, lines: string[]): string {
+    const head = `<div style="display:flex; gap:8px; align-items:center; margin-bottom:4px;">${iconHtml(spec, 36)}<b style="color:${color}; font-size:13px;">${escape(name)}</b></div>`;
+    return head + lines.map((line) => `<div>${escape(line)}</div>`).join("");
+  }
+
+  /** What a slot says about its action, on hover: an item's own tooltip, or a skill's icon, name and description. */
   function tooltip(action: BarAction): string {
-    if (action.kind === "attack") return "Attack\nSwing at your target with your weapon until you stop or it dies. Press again to stop.";
-    if (action.kind === "teleport") return `Teleport (debug)\n${TELEPORT_TEXT}`;
+    if (action.kind === "attack") return describe(iconOf(action), "Attack", GOLD, ["Swing at your target with your weapon until you stop or it dies. Press again to stop."]);
+    if (action.kind === "teleport") return describe(iconOf(action), "Teleport (debug)", GOLD, [TELEPORT_TEXT]);
     if (action.kind === "skill") {
       const skill = game.skills[game.skillIndex.get(action.skill) ?? -1];
-      return skill ? [skill.name, ...describeSkill(game, skill)].join("\n") : action.skill;
+      return skill ? describe(iconOf(action), skill.name, GOLD, describeSkill(game, skill)) : escape(action.skill);
     }
     const type = items.types[items.typeIndex.get(action.item) ?? -1];
-    return type ? `${type.name}\nUse it from your bag.` : action.item;
+    if (!type) return escape(action.item);
+    const slot = bagSlotOf(action.item);
+    const held = slot >= 0 ? belongings.containers[BAG]?.[slot] : null;
+    return itemTooltip(game, items, held ?? { id: 0, type: action.item, roll: 0, count: 1, durability: type.durability }, { unrolled: !held }) + `<br><span style="color:#6c6">Use it from your bag.</span>`;
+  }
+
+  const tip = el("div", `position: fixed; z-index: 960; padding: 6px 8px; max-width: 280px; pointer-events: none; display: none; ${PANEL}`, document.body);
+  const HINT = `<div style="margin-top:6px; color:#8a8070; font-size:10px;">Drag to move it, or off the bar to clear the slot.</div>`;
+  const EMPTY = `Empty: drag a spell from the spell book (L) or an item from your bag here.`;
+  function showTip(i: number): void {
+    const action = saved.slots[i];
+    tip.innerHTML = action ? tooltip(action) + HINT : EMPTY;
+    tip.style.display = "";
+    const r = cells[i].cell.getBoundingClientRect();
+    tip.style.left = `${Math.max(8, Math.min(window.innerWidth - tip.offsetWidth - 8, r.left + r.width / 2 - tip.offsetWidth / 2))}px`;
+    tip.style.top = `${Math.max(8, r.top - tip.offsetHeight - 8)}px`;
   }
 
   /** What to draw on a slot. */
@@ -211,7 +238,6 @@ export function createActionBar(parent: HTMLElement, options: ActionBarOptions):
   function draw(): void {
     saved.slots.forEach((action, i) => {
       const c = cells[i];
-      c.cell.title = action ? `${tooltip(action)}\n\nDrag to move it, or off the bar to clear the slot.` : "Empty: drag a spell from the spell book (L) or an item from your bag here.";
       // The icon, and - over a placeholder, drawn faint - the name.
       c.icon.innerHTML = "";
       const spec = action ? iconOf(action) : null;
@@ -318,9 +344,15 @@ export function createActionBar(parent: HTMLElement, options: ActionBarOptions):
       const fit = Math.max(34, Math.min(56, Math.floor((width - (KEYS.length - 1) * 4) / KEYS.length)));
       if (fit === slotWidth) return;
       slotWidth = fit;
-      for (const c of cells) c.cell.style.width = `${fit}px`;
+      for (const c of cells) {
+        c.cell.style.width = `${fit}px`;
+        c.cell.style.height = `${fit}px`;
+      }
     },
     update,
-    dispose: () => root.remove(),
+    dispose: () => {
+      tip.remove();
+      root.remove();
+    },
   };
 }
