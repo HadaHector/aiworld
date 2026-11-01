@@ -11,6 +11,7 @@ import type { BiomeDefinition } from "../world/biomes/biomeTypes";
 import { TEXTURE_RESOLUTION } from "../world/materials/textureGen";
 import { applyColorMatrix, materialMatrix, type ColorMatrix } from "../world/materials/colorAdjust";
 import { bakedAtlas, bakedBark, bakedGround } from "./bakeCache";
+import { pieceImage, skinImage, type AtlasParts } from "./pieceTextureView";
 import { FOLIAGE_TEXTURE_SIZE } from "../world/foliage/treeTextures";
 import { GRASS_TEXTURE_SIZE, bakeGrassTextures } from "../world/foliage/grassTextures";
 import { WORLD_SEED } from "../world/world";
@@ -129,6 +130,9 @@ const DEFAULT_OPTIONS: Options = {
   lattice: "on",
   texture: "painted",
   smallclothes: "on",
+  // The Atlas view: the skin or the gear pieces' own textures, and the UV layout over them.
+  show: "body",
+  uvs: "off",
   outfit: "",
   race: "",
   height: "",
@@ -712,6 +716,8 @@ function renderPreviewBar(): void {
   } else if (isCharacterFolder(current.folder)) {
     viewOptions.append(
       ...characterChoices(rebuild),
+      select("Show", "show", [["body", "Skin atlas"], ["pieces", "Gear textures"]], rebuild),
+      checkbox("UV layout", "uvs", rebuild),
       select("Sex", "sex", [["", "By seed"], ["male", "Male"], ["female", "Female"]], rebuild),
       select("Texture", "texture", [["painted", "Painted (512)"], ["retro", "Retro (128)"]], rebuild),
       checkbox("Smallclothes", "smallclothes", rebuild),
@@ -1197,24 +1203,27 @@ async function preview2d(token: number, asset: Asset, view: ViewDef, content: Wo
     if (!inputs) return;
     const painted = await paintedBody(inputs.race, inputs.gear, seed, inputs.options.texture === "flat" ? { ...inputs.options, texture: "painted" } : inputs.options);
     const layout = painted.layout!;
-    const pixels = painted.pixels!;
     const names = painted.body.regions.map((r) => r.name);
-    image = {
-      width: layout.size,
-      height: layout.size,
-      pixels,
-      tiles: 1,
-      describe: (x, y) => {
-        const region = layout.texels.region[y * layout.size + x];
-        return `${x}, ${y}${region >= 0 ? ` · ${names[region]}` : ""}`;
-      },
+    const parts: AtlasParts = {
+      body: painted.body,
+      skin: { pixels: painted.pixels!, size: layout.size, uvs: layout.uvs, regionAt: (x, y) => names[layout.texels.region[y * layout.size + x]] ?? "" },
+      gear: inputs.options.gear,
     };
+    // The skin atlas, or the gear pieces' own textures side by side; the UV layout over either.
+    const pieces = options.show === "pieces" ? pieceImage(parts, options.uvs === "on") : null;
+    image = pieces ? pieces.image : skinImage(parts, options.uvs === "on");
     if (token !== previewToken) return;
     showMode("2d");
-    textureView.show(image, textureSubject === subject);
-    textureSubject = subject;
+    textureView.show(image, textureSubject === `${subject}|${options.show}`);
+    textureSubject = `${subject}|${options.show}`;
     setStatus("");
-    mapLegend.replaceChildren(painted.summary);
+    const legend = [painted.summary];
+    if (options.show === "pieces") {
+      const note = document.createElement("div");
+      note.textContent = pieces ? pieces.summary.join(" · ") : "No piece of this gear has a texture of its own.";
+      legend.push(note);
+    }
+    mapLegend.replaceChildren(...legend);
     return;
   }
 

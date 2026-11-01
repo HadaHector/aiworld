@@ -436,6 +436,10 @@ Not yet done: the other cloth and leather pieces (trousers, jerkin, belt, boots,
 and buckles, smithed plate and mail (hammer marks, rolled edges, rivet rows, ring patterns) - the same
 islands, with other features; per-piece resolution by size; compressed textures.
 
+The workbench shows it: a gear piece, race or outfit's **Atlas** view has *Show: Gear textures* - each
+piece's own texture side by side, its islands named under the pointer - and *UV layout*, which draws
+the triangles' outlines (and the islands' margins) over either the skin atlas or those textures.
+
 ## Build steps
 
 1. **Skeleton and bare body in the workbench.** Bones, four curves per bone and loops sampled
