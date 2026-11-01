@@ -5,7 +5,8 @@ import type { EntityMirror } from "../game/entityMirror";
 import type { BelongingsMirror } from "../game/belongingsMirror";
 import { TELEPORT_ICON, hasIcon, iconFace, iconHtml, itemIcon, skillIcon, type IconSpec } from "./icons";
 import { itemTooltip } from "./inventoryScreen";
-import { GOLD, PANEL, SLOT, SLOT_CLASS } from "./theme";
+import { LOCAL, type SkillDef } from "../sim/rules/skillRules";
+import { BAR_COLOURS, GOLD, PANEL, SLOT, SLOT_CLASS } from "./theme";
 
 /**
  * The action bar: twelve slots on keys 1-9, 0, - and =, each holding a spell, the attack toggle or
@@ -194,9 +195,23 @@ export function createActionBar(parent: HTMLElement, options: ActionBarOptions):
   const escape = (text: string): string => text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
   /** A tooltip for something that is not an item: its icon and name, then what it says. */
-  function describe(spec: IconSpec, name: string, color: string, lines: string[]): string {
-    const head = `<div style="display:flex; gap:8px; align-items:center; margin-bottom:4px;">${iconHtml(spec, 36)}<b style="color:${color}; font-size:13px;">${escape(name)}</b></div>`;
+  function describe(spec: IconSpec, name: string, color: string, lines: string[], cost = ""): string {
+    const head = `<div style="display:flex; gap:8px; align-items:center; margin-bottom:4px;">${iconHtml(spec, 36)}<b style="color:${color}; font-size:13px;">${escape(name)}</b>${cost ? `<span style="margin-left:auto; align-self:flex-start; padding-left:10px;">${cost}</span>` : ""}</div>`;
     return head + lines.map((line) => `<div>${escape(line)}</div>`).join("");
+  }
+
+  /** What casting a skill costs, as coloured text for the tooltip's corner: each cost at the rank the character knows it. */
+  function costText(skill: SkillDef): string {
+    const rank = mirror.own.spells.find((s) => s.skill === skill.index)?.level ?? 1;
+    return skill.cost
+      .map((c) => {
+        const resource = game.resources[c.resource];
+        // A cost that reads only the rank is worked out; one that reads stats stays out of the corner (the text has it).
+        const amount = c.amount.constant ?? (c.amount.reads.every((r) => r === LOCAL.level) ? c.amount.run(Float64Array.of(rank)) : null);
+        return amount === null ? "" : `<b style="color:${BAR_COLOURS[resource.id] ?? "#9cf"};">${Math.round(amount)} ${escape(resource.name)}</b>`;
+      })
+      .filter(Boolean)
+      .join(", ");
   }
 
   /** What a slot says about its action, on hover: an item's own tooltip, or a skill's icon, name and description. */
@@ -205,7 +220,7 @@ export function createActionBar(parent: HTMLElement, options: ActionBarOptions):
     if (action.kind === "teleport") return describe(iconOf(action), "Teleport (debug)", GOLD, [TELEPORT_TEXT]);
     if (action.kind === "skill") {
       const skill = game.skills[game.skillIndex.get(action.skill) ?? -1];
-      return skill ? describe(iconOf(action), skill.name, GOLD, describeSkill(game, skill)) : escape(action.skill);
+      return skill ? describe(iconOf(action), skill.name, GOLD, describeSkill(game, skill), costText(skill)) : escape(action.skill);
     }
     const type = items.types[items.typeIndex.get(action.item) ?? -1];
     if (!type) return escape(action.item);
