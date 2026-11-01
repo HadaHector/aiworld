@@ -1,8 +1,8 @@
 import { createLattice, type Lattice } from "./lattice";
 import type { BoneShape, RaceDef } from "./raceDef";
 import { sided } from "./characterConsts";
-import type { GearCollar, GearCover, GearDef, GearPiece, GearShell, GearSkirt } from "./gearDef";
-import { add, buildSkeleton, dot, footAxis, frameFor, length, lerp, normalize, scale, sub, type BoneDef, type Vec } from "./skeleton";
+import type { GearSole, GearBuckle, GearCollar, GearCover, GearDef, GearPiece, GearShell, GearSkirt } from "./gearDef";
+import { add, buildSkeleton, cross, dot, footAxis, frameFor, length, lerp, normalize, scale, sub, type BoneDef, type Vec } from "./skeleton";
 import { placeIslands, type PieceTexture } from "./pieceTexture";
 import { cylinderOf, smoothNormals } from "./atlas";
 import { createMeshKit, evenShape, segmentDistance, type BodyRegion, type GearLayer, type IslandLoop, type MeshKit, type Ring } from "./meshKit";
@@ -478,7 +478,7 @@ function addGear(kit: MeshKit, race: RaceDef, unit: GearUnit, body: BodyGeometry
   const bones = skeleton.bones;
   const N = race.shape.pelvis.verts;
   const iPelvis = skeleton.index("pelvis");
-  const { points, extras, sampled, ring, zip, layerOf, mapRing, capRing, fixAll } = kit;
+  const { points, extras, sampled, ring, zip, layerOf, mapRing, capRing, fixAll, tile } = kit;
 
   // --- gear: shells over chains of bones, skirts from the waist, rigid pieces on a bone ---
   /** The stretches gear is placed along: bones whose shapes it follows, end to end. */
@@ -638,6 +638,147 @@ function addGear(kit: MeshKit, race: RaceDef, unit: GearUnit, body: BodyGeometry
     }
     kit.layer = -1;
     kit.endIsland();
+    if (def.buckle) buildBuckle(def.buckle, [rings[0], rings[1] ?? rings[0]]);
+  }
+
+  /** A sole: the underside of the foot as a flat slab with a hard welt, from the body's down-facing
+   *  triangles - see GearSole. */
+  function buildSole(def: GearSole, regionName: string): void {
+    const regionIndex = body.regions.findIndex((r) => r.name === regionName);
+    if (regionIndex < 0) return;
+    const region = body.regions[regionIndex];
+    const P = body.positions;
+    const I = body.indices;
+    bodyNormals ??= smoothNormals(body);
+    const n = bodyNormals;
+    const picked: number[] = [];
+    for (let t = 0; t < I.length / 3; t++) {
+      if (body.triangleRegions[t] !== regionIndex) continue;
+      // Every corner faces down, so the sole's edge runs along the body's own rings, not in teeth.
+      if ([0, 1, 2].every((k) => n[I[t * 3 + k] * 3 + 1] < -def.facing)) picked.push(t);
+    }
+    if (picked.length === 0) return;
+    // The open edge of the sole: edges one picked triangle has.
+    const uses = new Map<string, number>();
+    const edgeOf = (a: number, b: number): string => (a < b ? `${a},${b}` : `${b},${a}`);
+    for (const t of picked) for (let k = 0; k < 3; k++) {
+      const key = edgeOf(I[t * 3 + k], I[t * 3 + ((k + 1) % 3)]);
+      uses.set(key, (uses.get(key) ?? 0) + 1);
+    }
+    const onEdge = new Set<number>();
+    for (const [key, count] of uses) if (count === 1) for (const v of key.split(",").map(Number)) onEdge.add(v);
+    // Where along the foot (0 the heel, 1 the toe) and the lowest the upper reaches.
+    const axisFrom = region.axis[0];
+    const axisTo = region.axis[region.axis.length - 1];
+    const axis = sub(axisTo, axisFrom);
+    const total = length(axis);
+    const used = new Set<number>(picked.flatMap((t) => [I[t * 3], I[t * 3 + 1], I[t * 3 + 2]]));
+    const upperOf = (v: number): Vec => [P[v * 3] + n[v * 3] * def.upper, P[v * 3 + 1] + n[v * 3 + 1] * def.upper, P[v * 3 + 2] + n[v * 3 + 2] * def.upper];
+    const floor = Math.min(...[...used].map((v) => upperOf(v)[1]));
+    const shareOf = (v: number): number => Math.min(1, Math.max(0, dot(sub([P[v * 3], P[v * 3 + 1], P[v * 3 + 2]], axisFrom), axis) / (total * total)));
+    // The heel block stays on the floor; the arch lifts, then the toe turns up a little.
+    const lift = (t: number): number => {
+      const arch = Math.max(0, Math.sin(Math.PI * Math.min(1, Math.max(0, (t - 0.22) / 0.5)))) ** 1.5;
+      const toe = Math.max(0, (t - 0.82) / 0.18) ** 2;
+      return def.arch * arch + def.toe * toe;
+    };
+    const flatLayer = layerOf({ material: def.material, tint: def.tint }, true);
+    const weightsOf = (v: number): [number, number][] => {
+      const w: [number, number][] = [];
+      for (let k = 0; k < 4; k++) if (body.weights[v * 4 + k] > 0) w.push([body.joints[v * 4 + k], body.weights[v * 4 + k]]);
+      return w;
+    };
+    const made = (at: Vec, v: number): number => {
+      const c = kit.vertex(at, body.joints[v * 4]);
+      kit.placed.add(c);
+      kit.fixed.set(c, weightsOf(v));
+      tile(c, at[0], at[2]);
+      return c;
+    };
+    const bottom = new Map<number, number>();
+    const upper = new Map<number, number>();
+    for (const v of used) {
+      const up = upperOf(v);
+      const t = shareOf(v);
+      // Pushed out from the foot's own line along the floor, at the edge.
+      const centre: Vec = add(axisFrom, scale(axis, t));
+      let dx = up[0] - centre[0];
+      let dz = up[2] - centre[2];
+      const norm = Math.hypot(dx, dz) || 1;
+      dx /= norm;
+      dz /= norm;
+      const push = onEdge.has(v) ? def.welt : 0;
+      bottom.set(v, made([up[0] + dx * push, floor + lift(t), up[2] + dz * push], v));
+      if (onEdge.has(v)) upper.set(v, made(up, v));
+    }
+    kit.layer = flatLayer;
+    for (const t of picked) kit.tri(bottom.get(I[t * 3])!, bottom.get(I[t * 3 + 1])!, bottom.get(I[t * 3 + 2])!);
+    // The wall from the sole's edge up to the upper, each wound against the sole triangle it hangs
+    // from (an edge is walked one way by one triangle and the other way by its neighbour).
+    for (const t of picked) {
+      for (let k = 0; k < 3; k++) {
+        const u = I[t * 3 + k];
+        const v = I[t * 3 + ((k + 1) % 3)];
+        if (uses.get(edgeOf(u, v)) !== 1) continue;
+        const p = bottom.get(v)!;
+        const q = bottom.get(u)!;
+        const pu = upper.get(v)!;
+        const qu = upper.get(u)!;
+        kit.tri(p, q, pu);
+        kit.tri(q, qu, pu);
+      }
+    }
+    kit.layer = -1;
+  }
+
+  /** A buckle on a belt (a skirt's ring): a frame of bars and a tongue across it, boxes of the
+   *  buckle's metal, flat-shaded, at the front of the ring, riding on the belt. */
+  function buildBuckle(def: GearBuckle, around: Ring[]): void {
+    // The front of the ring (its first vertex is straight ahead), between its top and bottom rings.
+    const front = around.map((r) => kit.points[r.verts[0]]);
+    const centre: Vec = [0, (front[0][1] + front[front.length - 1][1]) / 2, Math.max(...front.map((p) => p[2])) + def.bar * 0.4];
+    const start = points.length;
+    const layer = layerOf({ material: def.material, tint: def.tint }, true);
+    kit.layer = layer;
+    const box = (cx: number, cy: number, cz: number, sx: number, sy: number, sz: number): void => {
+      const corners: Vec[] = [];
+      for (const x of [-1, 1]) for (const y of [-1, 1]) for (const z of [-1, 1]) corners.push([centre[0] + cx + (x * sx) / 2, centre[1] + cy + (y * sy) / 2, centre[2] + cz + (z * sz) / 2]);
+      const index = (x: number, y: number, z: number): number => (x > 0 ? 4 : 0) + (y > 0 ? 2 : 0) + (z > 0 ? 1 : 0);
+      const faces: { n: Vec; c: [number, number, number, number] }[] = [
+        { n: [1, 0, 0], c: [index(1, -1, -1), index(1, 1, -1), index(1, 1, 1), index(1, -1, 1)] },
+        { n: [-1, 0, 0], c: [index(-1, -1, -1), index(-1, -1, 1), index(-1, 1, 1), index(-1, 1, -1)] },
+        { n: [0, 1, 0], c: [index(-1, 1, -1), index(-1, 1, 1), index(1, 1, 1), index(1, 1, -1)] },
+        { n: [0, -1, 0], c: [index(-1, -1, -1), index(1, -1, -1), index(1, -1, 1), index(-1, -1, 1)] },
+        { n: [0, 0, 1], c: [index(-1, -1, 1), index(1, -1, 1), index(1, 1, 1), index(-1, 1, 1)] },
+        { n: [0, 0, -1], c: [index(-1, -1, -1), index(-1, 1, -1), index(1, 1, -1), index(1, -1, -1)] },
+      ];
+      for (const { n: normal, c } of faces) {
+        const ids = c.map((k) => {
+          const id = kit.vertex(corners[k], iPelvis);
+          tile(id, corners[k][0], corners[k][1]);
+          return id;
+        });
+        // Wound so the face looks out: counter-clockwise from outside.
+        const a = corners[c[0]];
+        const winding = dot(cross(sub(corners[c[1]], a), sub(corners[c[2]], a)), normal);
+        if (winding > 0) {
+          kit.tri(ids[0], ids[1], ids[2]);
+          kit.tri(ids[0], ids[2], ids[3]);
+        } else {
+          kit.tri(ids[0], ids[2], ids[1]);
+          kit.tri(ids[0], ids[3], ids[2]);
+        }
+      }
+    };
+    const { width, height, bar } = def;
+    box(-(width / 2 - bar / 2), 0, 0, bar, height, bar);
+    box(width / 2 - bar / 2, 0, 0, bar, height, bar);
+    box(0, height / 2 - bar / 2, 0, width - 2 * bar, bar, bar);
+    box(0, -(height / 2 - bar / 2), 0, width - 2 * bar, bar, bar);
+    // The tongue across the opening, a little proud of the frame.
+    box(0, 0, bar * 0.25, width - 2 * bar, bar * 0.7, bar * 0.8);
+    fixAll(start, [[iPelvis, 1]]);
+    kit.layer = -1;
   }
 
   /** A collar: a ring of vertices at the cover's neckline (the same places, sewn to it), the cloth
@@ -1057,6 +1198,7 @@ function addGear(kit: MeshKit, race: RaceDef, unit: GearUnit, body: BodyGeometry
     const piece = unit.piece;
     for (const def of piece.covers) for (const regionName of sided(def.region)) buildCover(def, regionName);
     for (const def of piece.collars) buildCollar(def);
+    for (const def of piece.soles) for (const regionName of sided(def.region)) buildSole(def, regionName);
     for (const def of piece.shells) for (const chainName of sided(def.chain)) buildShell(def, chainName);
     for (const def of piece.skirts) buildSkirt(def);
     for (const def of piece.pieces) for (const suffix of def.sides) buildPiece(def, suffix);

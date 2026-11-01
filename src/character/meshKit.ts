@@ -130,6 +130,8 @@ export interface MeshKit {
   layerOf: (surface: GearSurface, flat?: boolean) => number;
   /** Gives a ring's vertices their places in a texture: evenly round its circumference, `along`. */
   mapRing: (r: Ring, along: number) => void;
+  /** Gives a vertex a place in the tiling material of its layer: metres across and along. */
+  tile: (vertex: number, u: number, w: number) => void;
   /** A fan cap whose tip takes its texture place round from the ring it closes. */
   capRing: (r: Ring, tip: Vec, home: number, along: number, start?: boolean) => void;
   /** Gives every vertex made since `from` the same hand-set weights. */
@@ -177,7 +179,7 @@ export function createMeshKit(): MeshKit {
     beginPieces,
     vertexInfo,
     placed: new Set<number>(),
-    enter, vertex, tri, sampled, ring, surface, zip, blend, bands, cap, layerOf, mapRing, capRing, fixAll,
+    enter, vertex, tri, sampled, ring, surface, zip, blend, bands, cap, layerOf, mapRing, capRing, fixAll, tile,
   };
 
   /** The islands the pieces being cut go in (kit.island is -2 while it is on). */
@@ -208,6 +210,11 @@ export function createMeshKit(): MeshKit {
     kit.island = at;
     const rec = islands[at];
     return Number.isFinite(rec.rawMin) ? (rec.down > 0 ? rec.rawMax : rec.rawMin) : 0;
+  }
+
+  function tile(v: number, u: number, w: number): void {
+    gearU[v] = u;
+    gearV[v] = w;
   }
 
   function endIsland(): void {

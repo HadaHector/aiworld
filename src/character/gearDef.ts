@@ -22,6 +22,7 @@ export interface GearDef {
   pieces: GearPiece[];
   covers: GearCover[];
   collars: GearCollar[];
+  soles: GearSole[];
   /** The piece's own texture, cut like the real thing (CHARACTERS.md, *Pieces and islands*); the
    *  shells and skirts that name an island are drawn in it, the rest tile their materials. */
   texture: PieceTextureDef | null;
@@ -140,6 +141,31 @@ export interface GearCollar extends GearSurface {
   island: string;
 }
 
+/**
+ * A sole: the foot's underside as a flat slab with a hard edge. The triangles of `region` that face
+ * down are laid flat at the lowest they reach and their edge pushed out `welt` metres, joined to
+ * the upper (`upper` metres off the body) by a wall, all flat-shaded so the edge is an edge. The
+ * heel block stays on the ground; the arch (the middle of the foot's length) and the toe lift by
+ * `arch` and `toe`. Tiles its material.
+ */
+export interface GearSole extends GearSurface {
+  region: string;
+  upper: number;
+  welt: number;
+  arch: number;
+  toe: number;
+  /** How far down a triangle faces to be sole (0 sideways to 1 straight down). */
+  facing: number;
+}
+
+/** A buckle on a skirt (a belt): a frame of `bar`-thick bars `width` by `height`, with a tongue
+ *  across it, at the front, in its own material (flat-shaded, a metal's). */
+export interface GearBuckle extends GearSurface {
+  width: number;
+  height: number;
+  bar: number;
+}
+
 /** A skirt hanging from the torso at `from` (a share of its length): a robe's, a tabard's, plate
  *  tassets - `length` metres long, `flare` times as wide at its hem as at its top. */
 export interface GearSkirt extends GearSurface {
@@ -153,6 +179,7 @@ export interface GearSkirt extends GearSurface {
   island: string | null;
   /** Or the pieces it is cut into, as a cover's (a front and a back that carry on the cover's). */
   pieces: CoverPiece[];
+  buckle: GearBuckle | null;
 }
 
 /**
@@ -212,7 +239,7 @@ export function resolveOutfits(packs: PackSource[], gear: Map<string, GearDef>):
 
 function readGear(id: string, data: unknown, reader: Reader): GearDef {
   const obj = reader.object(data, "");
-  reader.onlyKeys(obj, "", ["name", "slot", "paint", "shells", "skirts", "pieces", "covers", "collars", "texture"]);
+  reader.onlyKeys(obj, "", ["name", "slot", "paint", "shells", "skirts", "pieces", "covers", "collars", "soles", "texture"]);
   const list = (key: string): { raw: RawObject; path: string }[] => reader.optionalArray(obj, key, "").map((raw, i) => ({ raw: reader.object(raw, `${key}[${i}]`), path: `${key}[${i}]` }));
   return {
     id,
@@ -248,7 +275,7 @@ function readGear(id: string, data: unknown, reader: Reader): GearDef {
       };
     }),
     skirts: list("skirts").map(({ raw, path }) => {
-      reader.onlyKeys(raw, path, ["from", "length", "flare", "thickness", "loops", "material", "tint", "rim", "island", "pieces"]);
+      reader.onlyKeys(raw, path, ["from", "length", "flare", "thickness", "loops", "material", "tint", "rim", "island", "pieces", "buckle"]);
       const base = surface(raw, path, reader);
       return {
         ...base,
@@ -260,6 +287,7 @@ function readGear(id: string, data: unknown, reader: Reader): GearDef {
         rim: raw.rim === undefined ? darker(base.tint) : reader.color(raw, "rim", path),
         island: reader.optionalString(raw, "island", path) || null,
         pieces: raw.pieces === undefined ? [] : coverPieces(raw, path, reader),
+        buckle: raw.buckle === undefined ? null : readBuckle(reader.object(raw.buckle, `${path}.buckle`), `${path}.buckle`, reader),
       };
     }),
     pieces: list("pieces").map(({ raw, path }) => {
@@ -310,7 +338,31 @@ function readGear(id: string, data: unknown, reader: Reader): GearDef {
         island: reader.string(raw, "island", path),
       };
     }),
+    soles: list("soles").map(({ raw, path }) => {
+      reader.onlyKeys(raw, path, ["region", "upper", "welt", "arch", "toe", "facing", "material", "tint"]);
+      const region = reader.string(raw, "region", path);
+      if (!REGIONS.includes(region)) reader.fail(`${path}.region`, `no region "${region}" (expected one of: ${REGIONS.join(", ")})`);
+      return {
+        ...surface(raw, path, reader),
+        region,
+        upper: reader.optionalNumber(raw, "upper", path, 0.016, { min: 0, max: 0.1 }),
+        welt: reader.optionalNumber(raw, "welt", path, 0.012, { min: 0, max: 0.05 }),
+        arch: reader.optionalNumber(raw, "arch", path, 0.012, { min: 0, max: 0.1 }),
+        toe: reader.optionalNumber(raw, "toe", path, 0.008, { min: 0, max: 0.1 }),
+        facing: reader.optionalNumber(raw, "facing", path, 0.35, { min: 0, max: 1 }),
+      };
+    }),
     texture: raw_texture(obj, reader),
+  };
+}
+
+function readBuckle(raw: RawObject, path: string, reader: Reader): GearBuckle {
+  reader.onlyKeys(raw, path, ["width", "height", "bar", "material", "tint"]);
+  return {
+    ...surface(raw, path, reader),
+    width: reader.optionalNumber(raw, "width", path, 0.055, { min: 0.01, max: 0.3 }),
+    height: reader.optionalNumber(raw, "height", path, 0.046, { min: 0.01, max: 0.3 }),
+    bar: reader.optionalNumber(raw, "bar", path, 0.009, { min: 0.002, max: 0.05 }),
   };
 }
 

@@ -457,6 +457,12 @@ feature) and **boots** (a shaft cut open at the back with its top turned in, and
 with the sole through the middle of it, cut open along the top where lacing would go; the leather is
 sampled from the same gear material as before).
 
+**Soles and buckles.** A `sole` (`soles`) is a slab under the foot with a hard edge: the foot's
+down-facing triangles laid flat at the lowest the upper reaches, their edge pushed out a welt, a wall
+from it up to the upper, all flat-shaded (a creased, not a smoothed, edge); the heel block stays on
+the floor and the arch and toe lift. A skirt's `buckle` is a frame and a tongue built of boxes in its
+own metal (flat-shaded, tiling the plate material), riding on the front of the belt.
+
 Not yet done: the other cloth and leather pieces (jerkin, robe, bracers, sandals), rivets, lacing
 and buckles, smithed plate and mail (hammer marks, rolled edges, rivet rows, ring patterns) - the same
 islands, with other features; per-piece resolution by size; compressed textures.

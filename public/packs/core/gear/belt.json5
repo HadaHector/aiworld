@@ -1,5 +1,5 @@
 // A leather belt at the waist, a level band round the hips, hung from the waist, edge-stitched
-// along both edges, closing at the back, with a plate for the buckle at the front.
+// along both edges, closing at the back, with a brass buckle at the front, a frame and a tongue in metal.
 {
   name: "Belt",
   slot: "waist",
@@ -14,10 +14,9 @@
           { kind: "seam", at: 0 },
           { kind: "hem", edge: "top", width: 0.008 },
           { kind: "hem", edge: "bottom", width: 0.008 },
-          { kind: "band", at: 0.5, width: 0.045, tint: "#b9b4a0" },
         ],
       },
     },
   },
-  skirts: [{ from: 0.2, length: 0.07, flare: 1.0, thickness: 0.03, loops: 1, material: "leather", tint: "#5a3a22", pieces: [{ island: "belt", centre: 0.5 }] }],
+  skirts: [{ from: 0.2, length: 0.07, flare: 1.0, thickness: 0.03, loops: 1, material: "leather", tint: "#5a3a22", pieces: [{ island: "belt", centre: 0.5 }], buckle: { width: 0.058, height: 0.05, bar: 0.009, material: "plate", tint: "#c9a85c" } }],
 }

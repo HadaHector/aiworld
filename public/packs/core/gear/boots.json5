@@ -1,5 +1,5 @@
 // Leather boots, cut from the body's own surface: a shaft up the shin, cut open at the back and sewn,
-// its top turned in; and the foot, a piece laid out with the sole through the middle of it (a darker
+// a rolled cuff round its top; and the foot, a piece laid out with the sole through the middle of it (a darker
 // band, edge-stitched like a welt) and cut open along the top, where the lacing would go.
 {
   name: "Leather boots",
@@ -13,8 +13,17 @@
         grain: "down",
         features: [
           { kind: "join", edge: "seam", inset: 0.02 },
-          { kind: "hem", edge: "top", width: 0.025 },
           { kind: "join", edge: "bottom", inset: 0.02 },
+        ],
+      },
+      cuff: {
+        material: "leather",
+        tint: "#6a4529",
+        grain: "across",
+        features: [
+          { kind: "seam", at: 0 },
+          { kind: "hem", edge: "top", width: 0.01 },
+          { kind: "hem", edge: "bottom", width: 0.01 },
         ],
       },
       foot: {
@@ -23,12 +32,15 @@
         grain: "across",
         features: [
           { kind: "join", edge: "seam", inset: 0.02 },
-          { kind: "band", at: 0.5, width: 0.07, tint: "#2e2016" },
           { kind: "join", edge: "top", inset: 0.02 },
         ],
       },
     },
   },
+  // The rolled top of the shaft, a ring of its own that stands out from it, so the boot meets the leg
+  // in a line; the sole a flat slab under the foot with a hard welt, a heel block and a lifted arch.
+  shells: [{ chain: "legs", from: 0.6, to: 0.66, thickness: 0.028, loops: 1, material: "leather", tint: "#6a4529", island: "cuff" }],
+  soles: [{ region: "feet", upper: 0.016, welt: 0.012, arch: 0.014, toe: 0.01, material: "leather", tint: "#2a1d14" }],
   covers: [
     { region: "legs", from: 0.62, to: 1.1, thickness: 0.016, material: "leather", tint: "#5a3a22", pieces: [{ island: "shaft", centre: 0.5 }] },
     { region: "feet", from: -1, to: 2, thickness: 0.016, material: "leather", tint: "#5a3a22", pieces: [{ island: "foot", centre: 0 }] },
