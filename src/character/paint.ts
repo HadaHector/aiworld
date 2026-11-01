@@ -284,59 +284,75 @@ function createOcclusion(body: BodyGeometry): (p: Vec, n: Vec) => number {
     list.push(v);
   }
   const grid = new Map<number, Int32Array>([...lists].map(([k, list]) => [k, Int32Array.from(list)]));
-  return (p, n) => {
-    const cx = Math.floor(p[0] / cell);
-    const cy = Math.floor(p[1] / cell);
-    const cz = Math.floor(p[2] / cell);
-    let hidden = 0;
-    for (let dx = -2; dx <= 2; dx++) {
-      for (let dy = -2; dy <= 2; dy++) {
-        for (let dz = -2; dz <= 2; dz++) {
-          const list = grid.get(key(cx + dx, cy + dy, cz + dz));
-          if (!list) continue;
-          for (let i = 0; i < list.length; i++) {
-            const v = list[i] * 3;
-            const x = P[v] - p[0];
-            const y = P[v + 1] - p[1];
-            const z = P[v + 2] - p[2];
-            const distance = Math.sqrt(x * x + y * y + z * z);
-            if (distance < 0.03 || distance > reach) continue;
-            const toward = (x * n[0] + y * n[1] + z * n[2]) / distance;
-            if (toward <= 0.2) continue;
-            // Only what faces back at it - the other side of a fold, not its own surface curving away.
-            const facing = -(x * normals[v] + y * normals[v + 1] + z * normals[v + 2]) / distance;
-            if (facing > 0) hidden += toward * facing * (1 - distance / reach);
-          }
-        }
+  // The vertices in the 5x5x5 cells round a cell, in the order they are walked, made once per cell
+  // however many texels fall in it.
+  const near = new Map<number, Int32Array>();
+  const neighbourhood = (cx: number, cy: number, cz: number): Int32Array => {
+    const k = key(cx, cy, cz);
+    let found = near.get(k);
+    if (!found) {
+      const ids: number[] = [];
+      for (let dx = -2; dx <= 2; dx++) for (let dy = -2; dy <= 2; dy++) for (let dz = -2; dz <= 2; dz++) {
+        const list = grid.get(key(cx + dx, cy + dy, cz + dz));
+        if (list) for (let i = 0; i < list.length; i++) ids.push(list[i]);
       }
+      near.set(k, (found = Int32Array.from(ids)));
+    }
+    return found;
+  };
+  // Squared distances to compare before the exact test, with a margin so rounding never decides.
+  const farthest = reach * reach * 1.000001;
+  const nearest = 0.03 * 0.03 * 0.999999;
+  return (p, n) => {
+    const list = neighbourhood(Math.floor(p[0] / cell), Math.floor(p[1] / cell), Math.floor(p[2] / cell));
+    let hidden = 0;
+    for (let i = 0; i < list.length; i++) {
+      const v = list[i] * 3;
+      const x = P[v] - p[0];
+      const y = P[v + 1] - p[1];
+      const z = P[v + 2] - p[2];
+      const squared = x * x + y * y + z * z;
+      if (squared > farthest || squared < nearest) continue;
+      const distance = Math.sqrt(squared);
+      if (distance < 0.03 || distance > reach) continue;
+      const toward = (x * n[0] + y * n[1] + z * n[2]) / distance;
+      if (toward <= 0.2) continue;
+      // Only what faces back at it - the other side of a fold, not its own surface curving away.
+      const facing = -(x * normals[v] + y * normals[v + 1] + z * normals[v + 2]) / distance;
+      if (facing > 0) hidden += toward * facing * (1 - distance / reach);
     }
     return 1 - Math.min(0.45, hidden * 0.12);
   };
 }
 
-/** Copies colour into empty texels from filled ones beside them, `passes` texels out. */
+/** Fills the texels no triangle covers from their neighbours, `passes` steps out: each takes the
+ *  first filled one of its right, left, lower and upper neighbours as the last step had them. */
 function dilate(pixels: Uint8Array, region: Int16Array, size: number, passes: number): void {
-  const filled = new Uint8Array(size * size);
+  let filled = new Uint8Array(size * size);
   for (let i = 0; i < filled.length; i++) filled[i] = region[i] >= 0 ? 1 : 0;
+  let next = filled.slice();
   for (let pass = 0; pass < passes; pass++) {
-    const next = filled.slice();
+    let changed = false;
     for (let y = 0; y < size; y++) {
       for (let x = 0; x < size; x++) {
         const o = y * size + x;
         if (filled[o]) continue;
-        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-          const nx = x + dx;
-          const ny = y + dy;
-          if (nx < 0 || ny < 0 || nx >= size || ny >= size) continue;
-          const q = ny * size + nx;
-          if (!filled[q]) continue;
-          pixels.copyWithin(o * 4, q * 4, q * 4 + 4);
-          next[o] = 1;
-          break;
-        }
+        let q = -1;
+        if (x + 1 < size && filled[o + 1]) q = o + 1;
+        else if (x > 0 && filled[o - 1]) q = o - 1;
+        else if (y + 1 < size && filled[o + size]) q = o + size;
+        else if (y > 0 && filled[o - size]) q = o - size;
+        if (q < 0) continue;
+        pixels.copyWithin(o * 4, q * 4, q * 4 + 4);
+        next[o] = 1;
+        changed = true;
       }
     }
-    filled.set(next);
+    if (!changed) return;
+    const swap = filled;
+    filled = next;
+    next = swap;
+    next.set(filled);
   }
 }
 
