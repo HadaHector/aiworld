@@ -5,8 +5,10 @@ import { renderText, type TextTable } from "../sim/text";
 import type { QuestMirror } from "../game/questMirror";
 import type { QuestRules } from "../sim/quests/quest";
 import { renderQuest } from "./questLog";
-import { iconBox, itemIcon } from "./icons";
-import { BUTTON_CLASS, CLOSE_CLASS, DIM, HEADING, PANEL, TEXT, WINDOW_HEAD } from "./theme";
+import { drawItem, itemTooltip } from "./inventoryScreen";
+import type { GameRules } from "../sim/rules/gameRules";
+import type { ItemState } from "../sim/protocol";
+import { BUTTON_CLASS, CLOSE_CLASS, DIM, HEADING, PANEL, SLOT, TEXT, WINDOW_HEAD } from "./theme";
 
 /**
  * Talking to an NPC (NPCS.md, *Services*): its name and title, its greeting, and a button for each
@@ -30,6 +32,7 @@ export interface NpcWindow {
 }
 
 export interface NpcWindowOptions {
+  game: GameRules;
   items: ItemRules;
   /** The character's quests, and how to write one out (QUESTS.md, *Talking*). */
   quests: QuestMirror;
@@ -83,6 +86,25 @@ export function createNpcWindow(options: NpcWindowOptions): NpcWindow {
   let after = "";
   let unsubscribe: (() => void) | null = null;
 
+  const tip = el("div", `position: fixed; z-index: 960; padding: 6px 8px; max-width: 240px; pointer-events: none; display: none; ${PANEL}`, document.body);
+  /** One shop line: the item in a slot like the bag's, its name and price, a button - and its tooltip on hover. */
+  function shopRow(state: ItemState, unrolled: boolean, price: string, button: string, act: () => void): void {
+    const row = el("div", "display: flex; align-items: center; gap: 8px; margin: 3px 0;", body);
+    const cell = el("div", `position: relative; flex: none; width: 36px; height: 36px; ${SLOT}`, row);
+    drawItem(cell, items, state);
+    const type = typeOf(state.type);
+    el("span", `flex: 1; color: ${type ? items.rarities[type.rarity].color : "#f0f"};`, row, type?.name ?? state.type);
+    el("span", `color: ${DIM}; font-size: 11px;`, row, price);
+    el("button", "padding: 1px 6px; font-size: 11px;", row, button).addEventListener("click", act);
+    row.addEventListener("mousemove", (e) => {
+      tip.innerHTML = itemTooltip(options.game, items, state, unrolled);
+      tip.style.display = "";
+      tip.style.left = `${Math.max(8, Math.min(window.innerWidth - 250, e.clientX - 260))}px`;
+      tip.style.top = `${Math.max(8, Math.min(window.innerHeight - tip.offsetHeight - 8, e.clientY - 20))}px`;
+    });
+    row.addEventListener("mouseleave", () => (tip.style.display = "none"));
+  }
+
   const typeOf = (id: string) => items.types[items.typeIndex.get(id) ?? -1];
 
   /** How many things an NPC offers: its quests and its services. */
@@ -119,16 +141,14 @@ export function createNpcWindow(options: NpcWindowOptions): NpcWindow {
 
   /** The shop (NPCS.md, *The vendor's shop*): its stock to buy, the bag to sell from, the purse. */
   function renderShop(npc: number): void {
+    tip.style.display = "none";
     back();
     if (current!.stock.length > 0) {
       el("div", HEADING, body, "For sale");
       for (const [index, entry] of current!.stock.entries()) {
         const type = typeOf(entry.type);
-        const row = el("div", "display: flex; align-items: center; gap: 6px; margin: 2px 0;", body);
-        iconBox(row, itemIcon(type, type ? items.rarities[type.rarity].color : "#f0f"), 26);
-        el("span", "flex: 1;", row, `${type?.name ?? entry.type}${entry.count > 1 ? ` ×${entry.count}` : ""}`);
-        el("span", `color: ${DIM}; font-size: 11px;`, row, money(entry.price));
-        el("button", "padding: 1px 6px; font-size: 11px;", row, "Buy").addEventListener("click", () => send({ type: "shopBuy", npc, index }));
+        // Stock is not made until bought: its stats show as ranges.
+        shopRow({ id: 0, type: entry.type, roll: 0, count: entry.count, durability: type?.durability ?? 0 }, true, money(entry.price), "Buy", () => send({ type: "shopBuy", npc, index }));
       }
     }
     if (current!.sellRate > 0) {
@@ -140,11 +160,7 @@ export function createNpcWindow(options: NpcWindowOptions): NpcWindow {
         if (!item || !type || type.quest) return;
         any = true;
         const worn = type.durability > 0 ? Math.max(0.2, item.durability / type.durability) : 1;
-        const row = el("div", "display: flex; align-items: center; gap: 6px; margin: 2px 0;", body);
-        iconBox(row, itemIcon(type, items.rarities[type.rarity].color), 26);
-        el("span", "flex: 1;", row, `${type.name}${item.count > 1 ? ` ×${item.count}` : ""}`);
-        el("span", `color: ${DIM}; font-size: 11px;`, row, money(Math.floor(type.value * current!.sellRate * item.count * worn)));
-        el("button", "padding: 1px 6px; font-size: 11px;", row, "Sell").addEventListener("click", () => send({ type: "shopSell", npc, from: { container: 0, slot } }));
+        shopRow(item, false, money(Math.floor(type.value * current!.sellRate * item.count * worn)), "Sell", () => send({ type: "shopSell", npc, from: { container: 0, slot } }));
       });
       if (!any) el("div", `color: ${DIM}; font-size: 11px;`, body, "Nothing to sell.");
     }
@@ -254,6 +270,7 @@ export function createNpcWindow(options: NpcWindowOptions): NpcWindow {
     },
     close: hide,
     dispose() {
+      tip.remove();
       hide();
       root.remove();
     },

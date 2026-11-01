@@ -733,6 +733,7 @@ export async function startSession(page: Page, options: SessionOptions): Promise
   dockWindow(progressPanel.element);
   // Talking to an NPC (NPCS.md, *Services*).
   const npcWindow = createNpcWindow({
+    game: gameRules,
     items: itemRules,
     quests,
     questRules: gameRules.quests,

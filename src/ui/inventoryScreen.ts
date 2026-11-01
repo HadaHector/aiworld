@@ -56,8 +56,9 @@ function el(tag: string, css: string, parent?: HTMLElement): HTMLElement {
 }
 
 /** An item's tooltip: its name in its rarity's colour, what it is, its rolled stats and how well
- *  they rolled, its durability and value - all worked out from its type and roll. */
-export function itemTooltip(game: GameRules, items: ItemRules, state: ItemState): string {
+ *  they rolled, its durability and value - all worked out from its type and roll. `unrolled` is for
+ *  an item not yet made (a shop's stock): stats show as their ranges, with no roll. */
+export function itemTooltip(game: GameRules, items: ItemRules, state: ItemState, unrolled = false): string {
   const index = items.typeIndex.get(state.type);
   if (index === undefined) return `<b>${state.type}</b><br><i>not in these packs</i>`;
   const type = items.types[index];
@@ -67,13 +68,15 @@ export function itemTooltip(game: GameRules, items: ItemRules, state: ItemState)
   const lines = [`<div style="display:flex; gap:8px; align-items:center;">${iconHtml(itemIcon(type, rarity.color), 36)}<div>${head.join("<br>")}</div></div>`];
   const values = itemStats(type, state.roll);
   type.stats.forEach((s, i) => {
-    if (values[i] === 0) return;
+    if (!unrolled && values[i] === 0) return;
     const kind = game.modifierKinds[s.kind].id;
-    const amount = kind === "percent" ? `${values[i] > 0 ? "+" : ""}${values[i]}%` : `${values[i] > 0 ? "+" : ""}${values[i]}`;
-    const range = s.min !== s.max ? ` <span style="color:#777">(${s.min}-${s.max})</span>` : "";
+    const shown = unrolled ? `${s.min}${s.min !== s.max ? `-${s.max}` : ""}` : String(values[i]);
+    const sign = unrolled ? (s.max > 0 ? "+" : "") : values[i] > 0 ? "+" : "";
+    const amount = `${sign}${shown}${kind === "percent" ? "%" : ""}`;
+    const range = !unrolled && s.min !== s.max ? ` <span style="color:#777">(${s.min}-${s.max})</span>` : "";
     lines.push(`${amount} ${game.stats[s.stat].name}${range}`);
   });
-  const quality = rollQuality(type, state.roll);
+  const quality = unrolled ? null : rollQuality(type, state.roll);
   if (quality !== null) lines.push(`<span style="color:#9c9">Roll: ${Math.round(quality * 100)}%</span>`);
   if (type.durability > 0) lines.push(`<span style="color:${state.durability === 0 ? "#e55" : "#ccc"}">Durability ${state.durability} / ${type.durability}${state.durability === 0 ? " - broken" : ""}</span>`);
   if (type.itemLevel > 1) lines.push(`<span style="color:#aaa">Item level ${type.itemLevel}</span>`);
