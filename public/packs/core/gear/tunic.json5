@@ -1,24 +1,33 @@
 // A plain linen tunic, cut and sewn like the real one (CHARACTERS.md, *Pieces and islands*). It is
-// cloth cut from the body's own surface, so it fits the shoulders and armholes the body has: the torso
-// and the arms, the cloth of each sharing the vertices where they meet, and running on below the waist
-// as a skirt to mid-thigh. A panel for the body, with side seams from the armhole down (at a quarter
-// and three quarters round; the front is in the middle), a bias binding on the neck and a folded hem; a
-// panel for the sleeves, one cloth for both, with its seam under the arm, sewn to the body at the
-// shoulder and hemmed at the cuff. Its cloth is its own texture, one island to a panel.
+// cloth cut from the body's own surface, so it fits the shoulders and armholes the body has, cut into
+// the pieces a tailor would cut: a front and a back, joined at the sides and running on below the
+// waist as a skirt to mid-thigh (a bias binding on the neck, a folded hem), and a sleeve for each arm,
+// one pattern for both, cut open under the arm and sewn to the body at the shoulder. Each piece is its
+// own panel of the tunic's texture, laid out flat as the pattern is, its seams along its cut edges.
 {
   name: "Tunic",
   slot: "chest",
   texture: {
     density: 340,
     islands: {
-      body: {
+      front: {
         material: "linen",
         tint: "#cfc4ae",
         grain: "down",
         features: [
-          { kind: "seam", at: 0.25, from: 0.3 },
-          { kind: "seam", at: 0.75, from: 0.3 },
-          { kind: "seam", at: 0 },
+          { kind: "join", edge: "seam", inset: 0.022 },
+          { kind: "join", edge: "join", inset: 0.016 },
+          { kind: "hem", edge: "bottom", width: 0.035 },
+          { kind: "binding", edge: "top", width: 0.022, tint: "#a89a7c" },
+        ],
+      },
+      back: {
+        material: "linen",
+        tint: "#cfc4ae",
+        grain: "down",
+        features: [
+          { kind: "seam", at: 0.5 },
+          { kind: "join", edge: "seam", inset: 0.022 },
           { kind: "join", edge: "join", inset: 0.016 },
           { kind: "hem", edge: "bottom", width: 0.035 },
           { kind: "binding", edge: "top", width: 0.022, tint: "#a89a7c" },
@@ -29,16 +38,16 @@
         tint: "#cfc4ae",
         grain: "down",
         features: [
-          { kind: "seam", at: 0.25 },
-          { kind: "join", edge: "top", inset: 0.016 },
+          { kind: "join", edge: "seam", inset: 0.022 },
+          { kind: "join", edge: "join", inset: 0.016 },
           { kind: "hem", edge: "bottom", width: 0.03 },
         ],
       },
     },
   },
   covers: [
-    { region: "torso", from: -1, to: 1.3, thickness: 0.02, material: "linen", tint: "#cfc4ae", island: "body" },
-    { region: "arms", from: 0, to: 0.55, thickness: 0.016, material: "linen", tint: "#cfc4ae", island: "sleeve" },
+    { region: "torso", from: -1, to: 1.3, thickness: 0.02, material: "linen", tint: "#cfc4ae", pieces: [{ island: "front", centre: 0.5 }, { island: "back", centre: 0 }] },
+    { region: "arms", from: 0, to: 0.55, thickness: 0.016, material: "linen", tint: "#cfc4ae", pieces: [{ island: "sleeve", centre: 0.25 }] },
   ],
-  skirts: [{ from: 0, length: 0.34, flare: 1.22, thickness: 0.02, loops: 3, material: "linen", tint: "#cfc4ae", island: "body" }],
+  skirts: [{ from: 0, length: 0.34, flare: 1.22, thickness: 0.02, loops: 3, material: "linen", tint: "#cfc4ae", pieces: [{ island: "front", centre: 0.5 }, { island: "back", centre: 0 }] }],
 }

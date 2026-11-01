@@ -5,7 +5,7 @@ import type { GearCover, GearDef, GearPiece, GearShell, GearSkirt } from "./gear
 import { add, buildSkeleton, dot, footAxis, frameFor, length, lerp, normalize, scale, sub, type BoneDef, type Vec } from "./skeleton";
 import { placeIslands, type PieceTexture } from "./pieceTexture";
 import { cylinderOf, smoothNormals } from "./atlas";
-import { createMeshKit, evenShape, segmentDistance, type BodyRegion, type GearLayer, type MeshKit, type Ring } from "./meshKit";
+import { createMeshKit, evenShape, segmentDistance, type BodyRegion, type GearLayer, type IslandLoop, type MeshKit, type Ring } from "./meshKit";
 
 /** What a body is drawn from: one indexed mesh in the bind pose, skinned to its bones. */
 export interface BodyGeometry {
@@ -582,14 +582,22 @@ function addGear(kit: MeshKit, race: RaceDef, unit: GearUnit, body: BodyGeometry
 
   function buildSkirt(def: GearSkirt): void {
     const { seg, t } = locate(chains.torso(), def.from);
-    // In an island it goes on down from where the island ends (a tunic's body, then its skirt).
-    const islandName = islandNameOf(def.island, "torso");
-    const edge = islandName ? kit.beginIsland(islandName, -1) : 0;
-    const direction = islandName ? kit.islands[kit.island].down : 1;
+    // In pieces (a front and a back that carry on the cover's), or in an island it goes on down
+    // from where the island ends (a tunic's body, then its skirt).
+    const texture = unit.kind === "gear" ? unit.piece.texture : null;
+    const pieces = def.pieces.length > 0 && def.pieces.every((p) => texture?.islands[p.island]) ? def.pieces : [];
+    const islandName = pieces.length > 0 ? pieces[0].island : islandNameOf(def.island, "torso");
+    let edge = 0;
+    let direction: 1 | -1 = 1;
+    if (pieces.length > 0) kit.beginPieces(pieces.map((p) => ({ name: p.island, centre: p.centre, span: 1 / pieces.length })), -1);
+    else if (islandName) {
+      edge = kit.beginIsland(islandName, -1);
+      direction = kit.islands[kit.island].down;
+    }
     const along = (drop: number): number => (islandName ? edge + direction * drop : drop);
     // Hung from a cover's bottom edge (cut from the body) it is mapped as the cover is: by where it
     // is round the torso and how far down.
-    const cut = islandName && coverBottom && coverBottom.length === N ? body.regions.find((r) => r.name === "torso") : undefined;
+    const cut = islandName && (pieces.length > 0 || coverBottom) ? body.regions.find((r) => r.name === "torso") : undefined;
     const mapSkirtRing = (r: Ring, drop: number): void => {
       if (!cut) return mapRing(r, along(drop));
       const at = r.verts.map((v) => cylinderOf(cut, body.lattice ? body.lattice.apply(kit.points[v]) : kit.points[v]));
@@ -601,7 +609,7 @@ function addGear(kit: MeshKit, race: RaceDef, unit: GearUnit, body: BodyGeometry
       });
     };
     // Hung from a cover's bottom edge it shares its vertices, so there is no step and no gap.
-    const joined = cut && coverBottom ? coverBottom : null;
+    const joined = cut && coverBottom && coverBottom.length === N ? coverBottom : null;
     const top: Ring = joined ? { verts: joined, center: lerp(seg.from, seg.to, t) } : ring(seg.bone, seg.shape, seg.from, seg.to, t, seg.reference, seg.side, N, def.thickness);
     if (!joined) mapSkirtRing(top, 0);
     const center = lerp(seg.from, seg.to, t);
@@ -628,9 +636,134 @@ function addGear(kit: MeshKit, race: RaceDef, unit: GearUnit, body: BodyGeometry
       mapSkirtRing(tuck, 0);
       zip(top.verts, tuck.verts, [0, 1, 0], FORWARD);
     }
-    if (cut) kit.addLoop("bottom", rings[rings.length - 1].verts);
     kit.layer = -1;
     kit.endIsland();
+  }
+
+  /** The edges of the panels the pieces' cloth is cut in, from the cloth itself: an open edge of a
+   *  panel is a seam if the cloth goes on in another panel, else it is what the body goes on as
+   *  across it - the neck (top), an armhole (join), or nothing (a hem or cuff: bottom). Each panel's
+   *  boundary is walked round and cut into runs of one kind, for the painter to draw along. */
+  function classifyEdges(): void {
+    if (kit.islands.length === 0) return;
+    const key = (a: number, b: number): string => (a < b ? `${a},${b}` : `${b},${a}`);
+    const users = new Map<string, number[]>();
+    const triangles = kit.indices.length / 3;
+    for (let t = 0; t < triangles; t++) {
+      const island = kit.cornerIsland[t * 3];
+      if (island < 0) continue;
+      for (let k = 0; k < 3; k++) {
+        const id = key(kit.indices[t * 3 + k], kit.indices[t * 3 + ((k + 1) % 3)]);
+        if (!users.has(id)) users.set(id, []);
+        users.get(id)!.push(island);
+      }
+    }
+    // What the body is across each of its edges.
+    const across = new Map<string, number[]>();
+    for (let t = 0; t < body.indices.length / 3; t++) {
+      for (let k = 0; k < 3; k++) {
+        const id = key(body.indices[t * 3 + k], body.indices[t * 3 + ((k + 1) % 3)]);
+        if (!across.has(id)) across.set(id, []);
+        across.get(id)!.push(body.triangleRegions[t]);
+      }
+    }
+    const kindOf = (a: number, b: number, island: number, used: number[]): IslandLoop["kind"] => {
+      if (used.some((u) => u !== island)) return "seam";
+      const from = coverSource.get(a);
+      const to = coverSource.get(b);
+      if (!from || !to) return "bottom";
+      const regions = across.get(key(from.vertex, to.vertex)) ?? [];
+      const other = regions.find((r) => r !== from.region);
+      if (other === undefined) return "bottom";
+      const name = body.regions[other].name;
+      if (name === "head") return "top";
+      if (name.startsWith("arm") || name === "torso") return "join";
+      return "bottom";
+    };
+    kit.islands.forEach((rec, island) => {
+      // The island's open edges - where its triangles end, or where the cloth is cut (the two sides
+      // of a cut are in different places in the piece, though they share vertices) - and what each is.
+      interface Open {
+        a: number;
+        b: number;
+        ra: number;
+        rb: number;
+        kind: IslandLoop["kind"];
+      }
+      const seen = new Map<string, { ra: number; rb: number }[]>();
+      for (let t = 0; t < triangles; t++) {
+        if (kit.cornerIsland[t * 3] !== island) continue;
+        for (let k = 0; k < 3; k++) {
+          const a = kit.indices[t * 3 + k];
+          const b = kit.indices[t * 3 + ((k + 1) % 3)];
+          const id = key(a, b);
+          const forward = a < b;
+          const list = seen.get(id) ?? [];
+          // The corner places (round the piece) in the order of the key's vertices.
+          const ra = kit.cornerRound[t * 3 + k];
+          const rb = kit.cornerRound[t * 3 + ((k + 1) % 3)];
+          list.push(forward ? { ra, rb } : { ra: rb, rb: ra });
+          seen.set(id, list);
+        }
+      }
+      const edges: Open[] = [];
+      for (const [id, list] of seen) {
+        const [a, b] = id.split(",").map(Number);
+        const kind = kindOf(a, b, island, users.get(id) ?? []);
+        if (list.length === 1) edges.push({ a, b, ra: list[0].ra, rb: list[0].rb, kind });
+        else if (list.some((p) => Math.abs(p.ra - list[0].ra) > 0.5 || Math.abs(p.rb - list[0].rb) > 0.5)) {
+          // Cut open here: the edge is the edge of the piece on both its sides.
+          for (const p of list) edges.push({ a, b, ra: p.ra, rb: p.rb, kind: "seam" });
+        }
+      }
+      // Walked round, from an edge on to the next at its far end. A vertex on a cut is two places.
+      const nodeOf = (v: number, r: number): string => `${v}:${Math.round(r * 40)}`;
+      const at = new Map<string, number[]>();
+      edges.forEach((e, i) => {
+        for (const n of [nodeOf(e.a, e.ra), nodeOf(e.b, e.rb)]) {
+          if (!at.has(n)) at.set(n, []);
+          at.get(n)!.push(i);
+        }
+      });
+      const used = new Set<number>();
+      rec.loops = [];
+      const place = (v: number, r: number): { round: number; raw: number; circumference: number } => {
+        const info = kit.vertexInfo(v);
+        return { round: r, raw: info.raw, circumference: info.circumference };
+      };
+      for (let first = 0; first < edges.length; first++) {
+        if (used.has(first)) continue;
+        const walk: { from: { v: number; r: number }; to: { v: number; r: number }; kind: IslandLoop["kind"] }[] = [];
+        let edge = first;
+        let from = { v: edges[first].a, r: edges[first].ra };
+        for (;;) {
+          used.add(edge);
+          const e = edges[edge];
+          const forward = nodeOf(e.a, e.ra) === nodeOf(from.v, from.r);
+          const to = forward ? { v: e.b, r: e.rb } : { v: e.a, r: e.ra };
+          walk.push({ from, to, kind: e.kind });
+          const next = (at.get(nodeOf(to.v, to.r)) ?? []).find((i) => !used.has(i));
+          if (next === undefined) break;
+          edge = next;
+          from = to;
+        }
+        // Start at a change of kind, so no run is split by where the walk began.
+        let start = walk.findIndex((w, i) => w.kind !== walk[(i + walk.length - 1) % walk.length].kind);
+        if (start < 0) start = 0;
+        const ordered = [...walk.slice(start), ...walk.slice(0, start)];
+        let run: typeof walk = [];
+        const flush = (): void => {
+          if (run.length === 0) return;
+          rec.loops.push({ kind: run[0].kind, ring: false, points: [place(run[0].from.v, run[0].from.r), ...run.map((w) => place(w.to.v, w.to.r))] });
+          run = [];
+        };
+        for (const w of ordered) {
+          if (run.length > 0 && run[0].kind !== w.kind) flush();
+          run.push(w);
+        }
+        flush();
+      }
+    });
   }
 
   function buildPiece(def: GearPiece, suffix: "R" | "L" | ""): void {
@@ -709,6 +842,8 @@ function addGear(kit: MeshKit, race: RaceDef, unit: GearUnit, body: BodyGeometry
   const hidden: number[] = [];
   /** The vertices round the bottom edge of a torso cover, in order round, for a skirt to hang from. */
   let coverBottom: number[] | null = null;
+  /** For the vertices of a cover: the body vertex and region it is cut from, to tell what its edges are. */
+  const coverSource = new Map<number, { vertex: number; region: number }>();
 
   /** Cloth cut from the body's own surface: the region's triangles in a stretch of its axis, moved
    *  out along their normals and skinned as the body is, unrolled as the atlas unrolls the body. The
@@ -786,7 +921,7 @@ function addGear(kit: MeshKit, race: RaceDef, unit: GearUnit, body: BodyGeometry
       return { a: smooth[i].a * (1 - f) + next.a * f, b: smooth[i].b * (1 - f) + next.b * f };
     };
     const down: 1 | -1 = regionName === "torso" || regionName === "head" ? -1 : 1;
-    kit.beginIsland(def.island, down);
+    kit.beginPieces(def.pieces.map((p) => ({ name: p.island, centre: p.centre, span: 1 / def.pieces.length })), down);
     // How far down it is: its height up the region's axis. (Round it, the unrolling is as wide as
     // the ring is: a pattern piece, wide at the hem and narrow at the neck, not a rectangle.)
     const rawOf = (v: number): number => place(v).along;
@@ -836,6 +971,7 @@ function addGear(kit: MeshKit, race: RaceDef, unit: GearUnit, body: BodyGeometry
         const at: Vec = [P[v * 3] + n[v * 3] * def.thickness, P[v * 3 + 1] + n[v * 3 + 1] * def.thickness, P[v * 3 + 2] + n[v * 3 + 2] * def.thickness];
         found = kit.vertex(at, body.joints[v * 4]);
         kit.placed.add(found);
+        coverSource.set(found, { vertex: v, region: regionIndex });
         const weights: [number, number][] = [];
         for (let k = 0; k < 4; k++) if (body.weights[v * 4 + k] > 0) weights.push([body.joints[v * 4 + k], body.weights[v * 4 + k]]);
         kit.fixed.set(found, weights);
@@ -852,10 +988,6 @@ function addGear(kit: MeshKit, race: RaceDef, unit: GearUnit, body: BodyGeometry
       kit.tri(vertexOf(I[t * 3]), vertexOf(I[t * 3 + 1]), vertexOf(I[t * 3 + 2]));
       if (def.hide) hidden.push(t);
     }
-    loops.forEach((loop, i) => {
-      const kind = i === 0 ? "top" : i === loops.length - 1 ? "bottom" : "join";
-      kit.addLoop(kind, loop.vertices.map((v) => made.get(v)!));
-    });
     if (regionName === "torso" && loops.length > 1) {
       coverBottom = loops[loops.length - 1].vertices.slice().sort((p, q) => place(p).round - place(q).round).map((v) => made.get(v)!);
     }
@@ -871,6 +1003,7 @@ function addGear(kit: MeshKit, race: RaceDef, unit: GearUnit, body: BodyGeometry
     for (const def of piece.skirts) buildSkirt(def);
     for (const def of piece.pieces) for (const suffix of def.sides) buildPiece(def, suffix);
     kit.layer = -1;
+    classifyEdges();
     return hidden;
   }
   // The race's own pieces: tapering spikes in the skin's colour (an elf's ears).

@@ -55,7 +55,7 @@ export type IslandFeature =
   | { kind: "seam"; at: number; from: number; to: number }
   | { kind: "hem"; edge: "top" | "bottom"; width: number }
   | { kind: "binding"; edge: "top" | "bottom"; width: number; tint: ColorTuple }
-  | { kind: "join"; edge: "top" | "bottom" | "join"; inset: number };
+  | { kind: "join"; edge: "top" | "bottom" | "join" | "seam"; inset: number };
 
 /** A material and its colour, as gear names them. */
 export interface GearSurface {
@@ -107,8 +107,16 @@ export interface GearCover extends GearSurface {
   from: number;
   to: number;
   thickness: number;
-  island: string;
+  /** The pattern pieces it is cut into, each a panel of the piece's texture, and how far round
+   *  the body (0-1; the front is 0.5, the back 0) the middle of each is: a front and a back, cut at
+   *  the sides; or one piece, a sleeve, cut open at the side opposite its middle. */
+  pieces: CoverPiece[];
   hide: boolean;
+}
+
+export interface CoverPiece {
+  island: string;
+  centre: number;
 }
 
 /** A skirt hanging from the torso at `from` (a share of its length): a robe's, a tabard's, plate
@@ -122,6 +130,8 @@ export interface GearSkirt extends GearSurface {
   rim: ColorTuple;
   /** The island it is unrolled into, continuing down from the island's end (a tunic's body). */
   island: string | null;
+  /** Or the pieces it is cut into, as a cover's (a front and a back that carry on the cover's). */
+  pieces: CoverPiece[];
 }
 
 /**
@@ -217,7 +227,7 @@ function readGear(id: string, data: unknown, reader: Reader): GearDef {
       };
     }),
     skirts: list("skirts").map(({ raw, path }) => {
-      reader.onlyKeys(raw, path, ["from", "length", "flare", "thickness", "loops", "material", "tint", "rim", "island"]);
+      reader.onlyKeys(raw, path, ["from", "length", "flare", "thickness", "loops", "material", "tint", "rim", "island", "pieces"]);
       const base = surface(raw, path, reader);
       return {
         ...base,
@@ -228,6 +238,7 @@ function readGear(id: string, data: unknown, reader: Reader): GearDef {
         loops: reader.optionalNumber(raw, "loops", path, 4, { min: 1, max: 16, integer: true }),
         rim: raw.rim === undefined ? darker(base.tint) : reader.color(raw, "rim", path),
         island: reader.optionalString(raw, "island", path) || null,
+        pieces: raw.pieces === undefined ? [] : coverPieces(raw, path, reader),
       };
     }),
     pieces: list("pieces").map(({ raw, path }) => {
@@ -253,7 +264,7 @@ function readGear(id: string, data: unknown, reader: Reader): GearDef {
       };
     }),
     covers: list("covers").map(({ raw, path }) => {
-      reader.onlyKeys(raw, path, ["region", "from", "to", "thickness", "island", "hide", "material", "tint"]);
+      reader.onlyKeys(raw, path, ["region", "from", "to", "thickness", "island", "pieces", "hide", "material", "tint"]);
       const region = reader.string(raw, "region", path);
       if (!REGIONS.includes(region)) reader.fail(`${path}.region`, `no region "${region}" (expected one of: ${REGIONS.join(", ")})`);
       return {
@@ -262,12 +273,23 @@ function readGear(id: string, data: unknown, reader: Reader): GearDef {
         from: reader.optionalNumber(raw, "from", path, 0),
         to: reader.optionalNumber(raw, "to", path, 1),
         thickness: reader.number(raw, "thickness", path, { min: 0, max: 0.1 }),
-        island: reader.string(raw, "island", path),
+        pieces: coverPieces(raw, path, reader),
         hide: reader.boolean(raw, "hide", path, false),
       };
     }),
     texture: raw_texture(obj, reader),
   };
+}
+
+/** The pieces a cover or skirt is cut into: `pieces: [{ island, centre }]`, or `island` alone, one
+ *  piece whose middle is the front (the back is where it is cut open). */
+function coverPieces(raw: RawObject, path: string, reader: Reader): CoverPiece[] {
+  if (raw.pieces === undefined) return [{ island: reader.string(raw, "island", path), centre: 0.5 }];
+  return reader.array(raw, "pieces", path).map((item, i) => {
+    const piece = reader.object(item, `${path}.pieces[${i}]`);
+    reader.onlyKeys(piece, `${path}.pieces[${i}]`, ["island", "centre"]);
+    return { island: reader.string(piece, "island", `${path}.pieces[${i}]`), centre: reader.optionalNumber(piece, "centre", `${path}.pieces[${i}]`, 0.5, { min: 0, max: 1 }) };
+  });
 }
 
 function raw_texture(obj: RawObject, reader: Reader): PieceTextureDef | null {
@@ -290,7 +312,7 @@ function raw_texture(obj: RawObject, reader: Reader): PieceTextureDef | null {
       }
       if (kind === "join") {
         reader.onlyKeys(f, fpath, ["kind", "edge", "inset"]);
-        return { kind, edge: reader.oneOf(f, "edge", fpath, ["top", "bottom", "join"] as const), inset: reader.number(f, "inset", fpath, { min: 0.004, max: 0.1 }) };
+        return { kind, edge: reader.oneOf(f, "edge", fpath, ["top", "bottom", "join", "seam"] as const), inset: reader.number(f, "inset", fpath, { min: 0.004, max: 0.1 }) };
       }
       reader.onlyKeys(f, fpath, kind === "hem" ? ["kind", "edge", "width"] : ["kind", "edge", "width", "tint"]);
       const edge = reader.oneOf(f, "edge", fpath, ["top", "bottom"] as const);

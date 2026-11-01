@@ -46,7 +46,7 @@ interface Edge {
   start: number[];
 }
 
-function edgeOf(place: IslandPlace, kinds: ("top" | "bottom" | "join")[], fallback: [number, number, number, number]): Edge {
+function edgeOf(place: IslandPlace, kinds: ("top" | "bottom" | "join" | "seam")[], fallback: [number, number, number, number]): Edge {
   const segments: [number, number, number, number][] = [];
   const start: number[] = [];
   for (const loop of place.loops) {
@@ -98,6 +98,7 @@ function paintIsland(pixels: Uint8Array, texture: PieceTexture, place: IslandPla
     top: edgeOf(place, ["top"], [-width, 0, width, 0]),
     bottom: edgeOf(place, ["bottom"], [-width, height, width, height]),
     join: edgeOf(place, ["join"], [-width, -10, width, -10]),
+    seam: edgeOf(place, ["seam"], [-width, -10, width, -10]),
   };
   const warm = [recipe.tint[0], recipe.tint[1], recipe.tint[2]];
   for (let py = 0; py < place.height; py++) {

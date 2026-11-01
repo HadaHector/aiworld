@@ -22,13 +22,17 @@ export interface IslandRec {
   samples: [number, number][];
   rawMin: number;
   rawMax: number;
+  /** How far round (0-1) the middle of the piece is, and how much of the way round it takes (1 for
+   *  a tube cut open, a half for a front or a back): triangles go to the piece they are nearest. */
+  centre: number;
+  span: number;
   /** Its edges, as the points that make them (round, `along`, circumference there): a top (a
    *  neckline, a sleeve head), a bottom (a hem, a cuff) and joins (an armhole). */
   loops: IslandLoop[];
 }
 
 export interface IslandLoop {
-  kind: "top" | "bottom" | "join";
+  kind: "top" | "bottom" | "join" | "seam";
   /** A ring right round the panel (in order of how far round), or a loop of its own (an armhole:
    *  in the order it is walked, closed). */
   ring: boolean;
@@ -96,9 +100,13 @@ export interface MeshKit {
   /** Puts a vertex made some other way (a cover's, from the body's own) in the island being built:
    *  how far round it (0-1) and its raw `along` (what a cover measures over its own surface). */
   mapVertex: (vertex: number, round: number, along: number, circumference: number) => void;
-  /** Records an edge of the island being built, from vertices already mapped into it. A top or
-   *  bottom replaces the one it had. */
-  addLoop: (kind: IslandLoop["kind"], vertices: number[]) => void;
+  /** From here on cloth is cut into these pieces, each triangle going to the piece it lies in
+   *  (nearest its middle round the body): a front and a back cut at the sides, a sleeve cut under the
+   *  arm. Vertices are shared across the cuts; each triangle has its own places in its piece. */
+  beginPieces: (pieces: { name: string; centre: number; span: number }[], down: 1 | -1) => void;
+  /** Where a vertex was mapped: its island (-2 in a piece, whose island is per triangle), how far
+   *  round, its `along`, and the circumference there. */
+  vertexInfo: (vertex: number) => { round: number; raw: number; circumference: number };
   /** Vertices that are already in their final place (the lattice has been applied to them). */
   placed: Set<number>;
   /** From here on triangles are in a new region round this axis. */
@@ -166,15 +174,35 @@ export function createMeshKit(): MeshKit {
     beginIsland,
     endIsland,
     mapVertex,
-    addLoop,
+    beginPieces,
+    vertexInfo,
     placed: new Set<number>(),
     enter, vertex, tri, sampled, ring, surface, zip, blend, bands, cap, layerOf, mapRing, capRing, fixAll,
   };
 
+  /** The islands the pieces being cut go in (kit.island is -2 while it is on). */
+  let pieceList: number[] | null = null;
+
+  function beginPieces(pieces: { name: string; centre: number; span: number }[], down: 1 | -1): void {
+    pieceList = pieces.map((p) => {
+      let at = islands.findIndex((i) => i.name === p.name);
+      if (at < 0) {
+        islands.push({ name: p.name, down, samples: [], rawMin: Infinity, rawMax: -Infinity, loops: [], centre: p.centre, span: p.span });
+        at = islands.length - 1;
+      }
+      return at;
+    });
+    kit.island = -2;
+  }
+
+  function vertexInfo(v: number): { round: number; raw: number; circumference: number } {
+    return { round: roundOf[v], raw: gearV[v], circumference: circOf[v] };
+  }
+
   function beginIsland(name: string, down: 1 | -1): number {
     let at = islands.findIndex((i) => i.name === name);
     if (at < 0) {
-      islands.push({ name, down, samples: [], rawMin: Infinity, rawMax: -Infinity, loops: [] });
+      islands.push({ name, down, samples: [], rawMin: Infinity, rawMax: -Infinity, loops: [], centre: 0.5, span: 1 });
       at = islands.length - 1;
     }
     kit.island = at;
@@ -184,28 +212,20 @@ export function createMeshKit(): MeshKit {
 
   function endIsland(): void {
     kit.island = -1;
+    pieceList = null;
   }
 
   function mapVertex(v: number, round: number, raw: number, circumference: number): void {
-    const rec = islands[kit.island];
     islandOf[v] = kit.island;
     roundOf[v] = round;
     gearV[v] = raw;
     circOf[v] = circumference;
+    // In pieces a vertex belongs to whichever its triangle does; they count what they hold.
+    if (kit.island < 0) return;
+    const rec = islands[kit.island];
     rec.samples.push([raw, circumference]);
     rec.rawMin = Math.min(rec.rawMin, raw);
     rec.rawMax = Math.max(rec.rawMax, raw);
-  }
-
-  function addLoop(kind: IslandLoop["kind"], vertices: number[]): void {
-    const rec = islands[kit.island];
-    let points = vertices.map((v) => ({ round: roundOf[v], raw: gearV[v], circumference: circOf[v] }));
-    const rounds = points.map((p) => p.round);
-    const ring = Math.max(...rounds) - Math.min(...rounds) > 0.8;
-    if (ring) points = points.sort((a, b) => a.round - b.round);
-    else points = [...points, points[0]];
-    if (kind !== "join") rec.loops = rec.loops.filter((l) => l.kind !== kind);
-    rec.loops.push({ kind, ring, points });
   }
 
   function enter(name: string, axis: Vec[], reference: Vec, side: number): void {
@@ -243,7 +263,43 @@ export function createMeshKit(): MeshKit {
     // its low side past 1) and how far along; tiling material's metres are kept beside it.
     const own = [a, b, c];
     const island = islandOf[a];
-    if (island >= 0) {
+    if (island === -2 && pieceList) {
+      // Cut in pieces: the piece the triangle lies in - by how far round its middle is - and each
+      // corner's place round that piece's own middle, so across a cut is no wrap.
+      let sx = 0;
+      let sy = 0;
+      for (const v of own) {
+        sx += Math.cos(roundOf[v] * 2 * Math.PI);
+        sy += Math.sin(roundOf[v] * 2 * Math.PI);
+      }
+      const middle = Math.atan2(sy, sx) / (2 * Math.PI);
+      let best = pieceList[0];
+      let nearest = Infinity;
+      for (const p of pieceList) {
+        let d = middle - islands[p].centre;
+        d = Math.abs(d - Math.round(d));
+        if (d < nearest) {
+          nearest = d;
+          best = p;
+        }
+      }
+      const rec = islands[best];
+      // The triangle's middle, round the piece's, and each corner a little either side of it: a
+      // triangle across a cut sits whole on one side, reaching a little past the edge.
+      let toMiddle = middle - rec.centre;
+      toMiddle -= Math.round(toMiddle);
+      own.forEach((v) => {
+        let d = roundOf[v] - middle;
+        d -= Math.round(d);
+        cornerIsland.push(best);
+        cornerRound.push(0.5 + toMiddle + d);
+        cornerAlong.push(gearV[v]);
+        cornerCircumference.push(circOf[v]);
+        rec.samples.push([gearV[v], circOf[v] * rec.span]);
+        rec.rawMin = Math.min(rec.rawMin, gearV[v]);
+        rec.rawMax = Math.max(rec.rawMax, gearV[v]);
+      });
+    } else if (island >= 0) {
       const real = own.map((v) => roundOf[v] >= 0);
       const rounds = own.map((v) => roundOf[v]);
       const known = rounds.filter((_, k) => real[k]);
@@ -413,7 +469,7 @@ export function createMeshKit(): MeshKit {
 
   function layerOf(surface: GearSurface, flat = false): number {
     // Inside an island a layer is only a mesh to group triangles in: its texture is the piece's.
-    const textured = kit.island >= 0;
+    const textured = kit.island !== -1;
     const found = layers.findIndex((l) => l.material === surface.material && l.tint.every((c, k) => c === surface.tint[k]) && l.flat === flat && (l.texture !== undefined) === textured);
     if (found >= 0) return found;
     layers.push(textured ? { material: surface.material, tint: surface.tint, flat, texture: 0 } : { material: surface.material, tint: surface.tint, flat });

@@ -409,6 +409,19 @@ the cover, walked in order: a `top` (neckline, sleeve head), a `bottom` (the ski
 distance to them and how far along them, so a hem lies along the hem and a binding follows the neckline
 however the cut curves, and stitches run along the edge.
 
+**Cut into the pieces a tailor cuts.** A cover or skirt names its `pieces`: `[{ island: "front", centre: 0.5 },
+{ island: "back", centre: 0 }]` is a front and a back, cut at the sides, each centred on where it is
+round the body (the front is 0.5, the back 0); a sleeve is one piece with its `centre` on the side
+opposite the cut (`0.25` puts the cut under the arm). Every triangle goes to the piece it lies
+in (`beginPieces` in `meshKit.ts`) and each corner gets its place round that piece's own middle, so a
+triangle across a cut sits whole on one side, reaching a little past the edge; the vertices are shared
+across a cut (the cloth stays whole) and the pieces are flat panels in the texture, as a pattern is.
+The edges of each panel are found from the cloth afterwards (`classifyEdges`): an open edge where the
+cloth goes on in another piece is a `seam`; the body goes on as the head across it, a `top` (neckline);
+as an arm (or the torso, for a sleeve), a `join` (armhole); no body across it, a `bottom` (hem, cuff).
+Each panel's boundary is walked round and cut into runs of one kind, and a recipe draws along them:
+`{ kind: "join", edge: "seam" }` is the sewn side seam, `edge: "join"` the armhole.
+
 **The recipe** (`texture` in the gear's json5): per island, the cloth (a gear material - the painter
 samples its weave), the tint, the `grain` (the warp runs down the panel or across it), `sided`, and
 `features` as a tailor would list them:
@@ -425,12 +438,11 @@ folds (`hang`), the thread is the cloth a few shades darker, and what lies outsi
 cloth's own colour so a mip never mixes in black. A race's panels are its own size (the texture is made
 with the body, so a dwarf's tunic is cut to a dwarf), and a character's dye is the island's `tint`.
 
-**A tunic as it is cut.** A body of one panel (two, joined by the side seams at a quarter and three
-quarters round, from the armhole down: the stitched pairs down each side), running on below the waist as
-a skirt to mid-thigh; one sleeve panel for both arms with its seam under the arm, sewn to the body at the
-shoulder (`join`, top) and hemmed at the cuff; a bias binding on the neck. Seams take `from` and `to`
-shares of the panel's height, so a side seam stops at the armhole. (The round of a panel: its front is
-in the middle, 0.5; its back is the seam where it wraps.)
+**A tunic as it is cut.** A front and a back, sewn along the sides and the shoulders, running on below
+the waist as a skirt to mid-thigh, a bias binding on the neck and a folded hem; the back with a seam
+down its middle; one sleeve panel for both arms, cut open under the arm and sewn to the armhole,
+hemmed at the cuff. The workbench's Atlas view (*Show: gear textures*, *UV layout*) shows the pieces
+laid out as the pattern.
 
 Not yet done: the other cloth and leather pieces (trousers, jerkin, belt, boots, robe), rivets, lacing
 and buckles, smithed plate and mail (hammer marks, rolled edges, rivet rows, ring patterns) - the same

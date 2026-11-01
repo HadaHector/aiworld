@@ -40,7 +40,7 @@ export interface IslandPlace {
   profile: number[];
   /** The edges of the panel as points in metres (across from its middle, down from its top), and
    *  the circumference at each, so a seam or hem is drawn along the real edge. */
-  loops: { kind: "top" | "bottom" | "join"; ring: boolean; points: { round: number; u: number; v: number; circumference: number }[] }[];
+  loops: { kind: "top" | "bottom" | "join" | "seam"; ring: boolean; points: { round: number; u: number; v: number; circumference: number }[] }[];
 }
 
 /** How much wider than its widest the rectangle is, for the triangles across the seam. */
@@ -89,7 +89,8 @@ export function placeIslands(def: PieceTextureDef, islands: IslandRec[], cornerI
       profile[i] = Math.max(profile[i], circumference);
     }
     const widest = Math.max(...profile);
-    return { heightMeters, widthMeters: widest * SEAM_ROOM, profile, downOf };
+    // Room for the seam, and for the triangles that reach a little past a cut.
+    return { heightMeters, widthMeters: widest * SEAM_ROOM + 0.08, profile, downOf };
   });
   const widths = sized.map((s) => Math.ceil(s.widthMeters * def.density) + 2 * PAD);
   const heights = sized.map((s) => Math.ceil(s.heightMeters * def.density) + 2 * PAD);
