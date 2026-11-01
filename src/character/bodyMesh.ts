@@ -2,7 +2,7 @@ import { createLattice, type Lattice } from "./lattice";
 import type { BoneShape, RaceDef } from "./raceDef";
 import { sided, type GearDef, type GearPiece, type GearShell, type GearSkirt } from "./gearDef";
 import { add, buildSkeleton, dot, footAxis, frameFor, length, lerp, normalize, scale, sub, type BoneDef, type Vec } from "./skeleton";
-import { createMeshKit, evenShape, segmentDistance, type BodyRegion, type GearLayer, type Ring } from "./meshKit";
+import { createMeshKit, evenShape, segmentDistance, type BodyRegion, type GearLayer, type MeshKit, type Ring } from "./meshKit";
 
 /** What a body is drawn from: one indexed mesh in the bind pose, skinned to its bones. */
 export interface BodyGeometry {
@@ -66,7 +66,7 @@ const UP: Vec = [0, 1, 0];
  * Triangles all face out by construction: rings are laid out turning one way round their axis
  * (skeleton.ts, frameFor), and each zip and cap is wound to match.
  */
-export function buildBody(race: RaceDef, options: BodyOptions = {}): BodyGeometry {
+export function buildBodyOnly(race: RaceDef, options: BodyOptions = {}): BodyGeometry {
   const detail = options.detail ?? 1;
   const skeleton = buildSkeleton(race);
   const bones = skeleton.bones;
@@ -74,7 +74,7 @@ export function buildBody(race: RaceDef, options: BodyOptions = {}): BodyGeometr
   const s = race.skeleton;
 
   const kit = createMeshKit();
-  const { points, homes, extras, fixed, indices, parts, triangleRegions, regionAxes, layers, triangleLayers, gearUVs, enter, vertex, surface, sampled, ring, zip, blend, bands, cap, layerOf, mapRing, capRing, fixAll } = kit;
+  const { points, extras, fixed, indices, parts, triangleRegions, regionAxes, layers, triangleLayers, gearUVs, enter, vertex, surface, sampled, ring, zip, blend, bands, cap } = kit;
 
   /** Spread `count` rings over (from, to), not touching either end. */
   const spread = (from: number, to: number, count: number): number[] => Array.from({ length: count }, (_, i) => from + ((to - from) * (i + 1)) / (count + 1));
@@ -275,6 +275,170 @@ export function buildBody(race: RaceDef, options: BodyOptions = {}): BodyGeometr
   for (let r = 0; r + 1 < column.length; r++) zip(column[r].verts, column[r + 1].verts, UP, FORWARD);
   cap(column[column.length - 1], head.tail, iHead);
 
+  // --- the points bumps mark, at their peaks ---
+  const marks: { name: string; position: Vec }[] = [];
+  for (const b of bones) {
+    if (!b.shape) continue;
+    const shape = race.shape[b.shape];
+    const [from, to] = b.shape === "foot" ? [footAxis(race, b.side).from, footAxis(race, b.side).to] : [b.head, b.tail];
+    const reference = b.shape === "foot" ? UP : FORWARD;
+    const outSign = b.side === 0 ? 1 : Math.sign(dot(frameFor(sub(to, from), reference).side, [b.side, 0, 0])) || 1;
+    for (const bump of shape.bumps) {
+      if (!bump.mark) continue;
+      for (const sign of b.side === 0 && bump.angle !== 0 ? [1, -1] : [1]) {
+        const theta = ((sign * bump.angle * Math.PI) / 180) * outSign;
+        marks.push({ name: bump.mark, position: surface(shape, from, to, bump.at, theta, reference, b.side) });
+      }
+    }
+  }
+
+  // --- the lattice, over the body and its joints alike ---
+  let lattice: Lattice | null = null;
+  let finalBones = bones;
+  if (race.lattice && options.lattice !== false) {
+    const min: Vec = [Infinity, Infinity, Infinity];
+    const max: Vec = [-Infinity, -Infinity, -Infinity];
+    // The box is the body's alone, so a body is the same whatever it wears.
+    for (const p of points) for (let a = 0; a < 3; a++) {
+      min[a] = Math.min(min[a], p[a]);
+      max[a] = Math.max(max[a], p[a]);
+    }
+    const pad = 0.02;
+    lattice = createLattice(race.lattice, sub(min, [pad, pad, pad]), add(max, [pad, pad, pad]));
+    const l = lattice;
+    for (let i = 0; i < points.length; i++) points[i] = l.apply(points[i]);
+    finalBones = bones.map((b) => ({ ...b, head: l.apply(b.head), tail: l.apply(b.tail) }));
+    for (const r of regionAxes) r.axis = r.axis.map((p) => l.apply(p));
+    for (const m of marks) m.position = l.apply(m.position);
+  }
+
+  const { joints, weights } = skinKit(kit, finalBones);
+
+  return { positions: points.flat(), indices, joints, weights, bones: finalBones, lattice, marks, triangles: indices.length / 3, parts, regions: regionAxes, triangleRegions, layers, triangleLayers, gearUVs };
+}
+
+/** Skinning: each vertex follows the nearest of its own bone and the bones next to it, unless its
+ *  weights were set by hand. */
+function skinKit(kit: MeshKit, finalBones: BoneDef[]): { joints: number[]; weights: number[] } {
+  const { points, homes, extras, fixed } = kit;
+  const neighbours = finalBones.map((_, i) => {
+    const near = new Set<number>([i]);
+    const parent = finalBones[i].parent;
+    if (parent > 0) near.add(parent);
+    finalBones.forEach((b, j) => {
+      if (b.parent === i) near.add(j);
+    });
+    return near;
+  });
+  const joints: number[] = [];
+  const weights: number[] = [];
+  for (let v = 0; v < points.length; v++) {
+    const set = fixed.get(v);
+    if (set) {
+      for (let k = 0; k < 4; k++) {
+        joints.push(set[k]?.[0] ?? 0);
+        weights.push(set[k]?.[1] ?? 0);
+      }
+      continue;
+    }
+    const candidates = new Set([...neighbours[homes[v]], ...extras[v]]);
+    const scored = [...candidates]
+      .filter((b) => b > 0)
+      .map((b) => {
+        const d = segmentDistance(points[v], finalBones[b].head, finalBones[b].tail);
+        return { b, w: (b === homes[v] ? 1.5 : 1) / (d ** 4 + 1e-7) };
+      })
+      .sort((p, q) => q.w - p.w)
+      .slice(0, 4);
+    const total = scored.reduce((sum, e) => sum + e.w, 0);
+    for (let k = 0; k < 4; k++) {
+      joints.push(scored[k]?.b ?? 0);
+      weights.push(scored[k] ? scored[k].w / total : 0);
+    }
+  }
+  return { joints, weights };
+}
+
+
+/** Something worn or grown on a body that is built apart from it: the race's own pieces (an elf's
+ *  ears, in the skin's colour), or one piece of gear. */
+export type GearUnit = { kind: "race"; skin?: [number, number, number] } | { kind: "gear"; piece: GearDef };
+
+/** What one gear unit adds: its own points, triangles, texture places and skin weights, in the bind
+ *  pose, shaped by the body's lattice. Its layers (materials and tints) are its own. */
+export interface PieceGeometry {
+  positions: number[];
+  indices: number[];
+  joints: number[];
+  weights: number[];
+  triangles: number;
+  parts: Record<string, number>;
+  layers: GearLayer[];
+  triangleLayers: number[];
+  gearUVs: number[];
+}
+
+/** Builds one gear unit onto a race's body: it depends on the race's curves and the body's lattice
+ *  and bones, not on the body's triangles, so it can be made, kept and drawn apart from them. */
+export function buildGearPiece(race: RaceDef, body: BodyGeometry, unit: GearUnit): PieceGeometry {
+  const kit = createMeshKit();
+  kit.region = -1;
+  addGear(kit, race, unit);
+  const { points } = kit;
+  const lattice = body.lattice;
+  if (lattice) for (let i = 0; i < points.length; i++) points[i] = lattice.apply(points[i]);
+  const { joints, weights } = skinKit(kit, body.bones);
+  return { positions: points.flat(), indices: kit.indices, joints, weights, triangles: kit.indices.length / 3, parts: kit.parts, layers: kit.layers, triangleLayers: kit.triangleLayers, gearUVs: kit.gearUVs };
+}
+
+/** A body and its gear as one geometry: the pieces' triangles after the body's, their layers
+ *  joined in the order they are first used. */
+export function joinGear(body: BodyGeometry, pieces: PieceGeometry[]): BodyGeometry {
+  const positions = body.positions.slice();
+  const indices = body.indices.slice();
+  const joints = body.joints.slice();
+  const weights = body.weights.slice();
+  const triangleRegions = body.triangleRegions.slice();
+  const layers = body.layers.slice();
+  const triangleLayers = body.triangleLayers.slice();
+  const gearUVs = body.gearUVs.slice();
+  const parts = { ...body.parts };
+  for (const piece of pieces) {
+    const offset = positions.length / 3;
+    for (const v of piece.positions) positions.push(v);
+    for (const i of piece.indices) indices.push(i + offset);
+    for (const v of piece.joints) joints.push(v);
+    for (const v of piece.weights) weights.push(v);
+    const remap = piece.layers.map((layer) => {
+      const found = layers.findIndex((l) => l.material === layer.material && l.tint.every((c, k) => c === layer.tint[k]) && l.flat === layer.flat);
+      if (found >= 0) return found;
+      layers.push(layer);
+      return layers.length - 1;
+    });
+    for (const layer of piece.triangleLayers) {
+      triangleLayers.push(layer < 0 ? layer : remap[layer]);
+      triangleRegions.push(-1);
+    }
+    for (const v of piece.gearUVs) gearUVs.push(v);
+    for (const [name, count] of Object.entries(piece.parts)) parts[name] = (parts[name] ?? 0) + count;
+  }
+  return { ...body, positions, indices, joints, weights, triangles: indices.length / 3, parts, triangleRegions, layers, triangleLayers, gearUVs };
+}
+
+/** A race's body with its gear on: the body, then each piece built apart, joined. */
+export function buildBody(race: RaceDef, options: BodyOptions = {}): BodyGeometry {
+  const body = buildBodyOnly(race, options);
+  const units: GearUnit[] = [{ kind: "race", skin: options.skin }, ...(options.gear ?? []).map((piece): GearUnit => ({ kind: "gear", piece }))];
+  return joinGear(body, units.map((unit) => buildGearPiece(race, body, unit)));
+}
+
+function addGear(kit: MeshKit, race: RaceDef, unit: GearUnit): void {
+  const skeleton = buildSkeleton(race);
+  const bones = skeleton.bones;
+  const N = race.shape.pelvis.verts;
+  const iPelvis = skeleton.index("pelvis");
+  const { points, extras, sampled, ring, zip, layerOf, mapRing, capRing, fixAll } = kit;
+
   // --- gear: shells over chains of bones, skirts from the waist, rigid pieces on a bone ---
   /** The stretches gear is placed along: bones whose shapes it follows, end to end. */
   interface Segment {
@@ -451,7 +615,15 @@ export function buildBody(race: RaceDef, options: BodyOptions = {}): BodyGeometr
     kit.layer = -1;
   }
 
-  kit.region = -1;
+  if (unit.kind === "gear") {
+    kit.part = "gear";
+    const piece = unit.piece;
+    for (const def of piece.shells) for (const chainName of sided(def.chain)) buildShell(def, chainName);
+    for (const def of piece.skirts) buildSkirt(def);
+    for (const def of piece.pieces) for (const suffix of def.sides) buildPiece(def, suffix);
+    kit.layer = -1;
+    return;
+  }
   // The race's own pieces: tapering spikes in the skin's colour (an elf's ears).
   kit.part = "head";
   for (const piece of race.pieces) {
@@ -465,7 +637,7 @@ export function buildBody(race: RaceDef, options: BodyOptions = {}): BodyGeometr
       const axis = normalize([piece.axis[0] * mirror, piece.axis[1], piece.axis[2]]);
       const tip = add(root, scale(axis, piece.length));
       const start = points.length;
-      kit.layer = layerOf({ material: "skin", tint: options.skin ?? race.look.skin[0] });
+      kit.layer = layerOf({ material: "skin", tint: unit.skin ?? race.look.skin[0] });
       const rings = ([[0, 1], [0.45, 0.65], [0.8, 0.3]] as [number, number][]).map(([t, f]) => {
         const r = piece.radius * f;
         const made = ring(iBone, evenShape(r * piece.flat, r * piece.flat, r, 0.7, 6), root, tip, t, FORWARD, side);
@@ -479,86 +651,4 @@ export function buildBody(race: RaceDef, options: BodyOptions = {}): BodyGeometr
     }
   }
   kit.layer = -1;
-  kit.part = "gear";
-  for (const piece of options.gear ?? []) {
-    for (const def of piece.shells) for (const chainName of sided(def.chain)) buildShell(def, chainName);
-    for (const def of piece.skirts) buildSkirt(def);
-    for (const def of piece.pieces) for (const suffix of def.sides) buildPiece(def, suffix);
-  }
-
-  // --- the points bumps mark, at their peaks ---
-  const marks: { name: string; position: Vec }[] = [];
-  for (const b of bones) {
-    if (!b.shape) continue;
-    const shape = race.shape[b.shape];
-    const [from, to] = b.shape === "foot" ? [footAxis(race, b.side).from, footAxis(race, b.side).to] : [b.head, b.tail];
-    const reference = b.shape === "foot" ? UP : FORWARD;
-    const outSign = b.side === 0 ? 1 : Math.sign(dot(frameFor(sub(to, from), reference).side, [b.side, 0, 0])) || 1;
-    for (const bump of shape.bumps) {
-      if (!bump.mark) continue;
-      for (const sign of b.side === 0 && bump.angle !== 0 ? [1, -1] : [1]) {
-        const theta = ((sign * bump.angle * Math.PI) / 180) * outSign;
-        marks.push({ name: bump.mark, position: surface(shape, from, to, bump.at, theta, reference, b.side) });
-      }
-    }
-  }
-
-  // --- the lattice, over the body and its joints alike ---
-  let lattice: Lattice | null = null;
-  let finalBones = bones;
-  if (race.lattice && options.lattice !== false) {
-    const min: Vec = [Infinity, Infinity, Infinity];
-    const max: Vec = [-Infinity, -Infinity, -Infinity];
-    for (const p of points) for (let a = 0; a < 3; a++) {
-      min[a] = Math.min(min[a], p[a]);
-      max[a] = Math.max(max[a], p[a]);
-    }
-    const pad = 0.02;
-    lattice = createLattice(race.lattice, sub(min, [pad, pad, pad]), add(max, [pad, pad, pad]));
-    const l = lattice;
-    for (let i = 0; i < points.length; i++) points[i] = l.apply(points[i]);
-    finalBones = bones.map((b) => ({ ...b, head: l.apply(b.head), tail: l.apply(b.tail) }));
-    for (const r of regionAxes) r.axis = r.axis.map((p) => l.apply(p));
-    for (const m of marks) m.position = l.apply(m.position);
-  }
-
-  // --- skinning: each vertex follows the nearest of its own bone and the bones next to it ---
-  const neighbours = finalBones.map((_, i) => {
-    const near = new Set<number>([i]);
-    const parent = finalBones[i].parent;
-    if (parent > 0) near.add(parent);
-    finalBones.forEach((b, j) => {
-      if (b.parent === i) near.add(j);
-    });
-    return near;
-  });
-  const joints: number[] = [];
-  const weights: number[] = [];
-  for (let v = 0; v < points.length; v++) {
-    const set = fixed.get(v);
-    if (set) {
-      for (let k = 0; k < 4; k++) {
-        joints.push(set[k]?.[0] ?? 0);
-        weights.push(set[k]?.[1] ?? 0);
-      }
-      continue;
-    }
-    const candidates = new Set([...neighbours[homes[v]], ...extras[v]]);
-    const scored = [...candidates]
-      .filter((b) => b > 0)
-      .map((b) => {
-        const d = segmentDistance(points[v], finalBones[b].head, finalBones[b].tail);
-        return { b, w: (b === homes[v] ? 1.5 : 1) / (d ** 4 + 1e-7) };
-      })
-      .sort((p, q) => q.w - p.w)
-      .slice(0, 4);
-    const total = scored.reduce((sum, e) => sum + e.w, 0);
-    for (let k = 0; k < 4; k++) {
-      joints.push(scored[k]?.b ?? 0);
-      weights.push(scored[k] ? scored[k].w / total : 0);
-    }
-  }
-
-  return { positions: points.flat(), indices, joints, weights, bones: finalBones, lattice, marks, triangles: indices.length / 3, parts, regions: regionAxes, triangleRegions, layers, triangleLayers, gearUVs };
 }
-
