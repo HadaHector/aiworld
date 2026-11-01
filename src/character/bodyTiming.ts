@@ -32,10 +32,14 @@ export function bodyDone(ms: number): void {
   latencies.push(ms);
 }
 
-import { bodyCacheStats } from "./bodyCache";
+/** What the body caches report, once bodyCache.ts has said how. */
+let cacheStats: () => unknown = () => null;
+export function registerCacheStats(read: () => unknown): void {
+  cacheStats = read;
+}
 
 const api = {
-  cache: bodyCacheStats,
+  cache: (): unknown => cacheStats(),
   reset(): void {
     stages.clear();
     bodies = 0;

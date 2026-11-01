@@ -5,8 +5,10 @@ import type { AtlasLayout } from "./atlas";
 import { smoothNormals } from "./atlas";
 import type { BodyGeometry } from "./bodyMesh";
 import { curveSampler } from "./curve";
-import { sampleGearMaterial, type BakedGearMaterial } from "./gearMaterial";
-import { PLAIN_HAIR, SEXES, SLIDERS, type HairStyle, type RaceDef, type Sex, type Slider } from "./raceDef";
+import { sampleGearMaterial } from "./gearSample";
+import type { BakedGearMaterial } from "./gearMaterial";
+import { PLAIN_HAIR, SEXES, SLIDERS, type HairStyle, type Sex, type Slider } from "./characterConsts";
+import type { RaceDef } from "./raceDef";
 import type { LookChoices } from "../sim/protocol";
 import { dot, frameFor, length, sub, type Vec } from "./skeleton";
 

@@ -2,6 +2,9 @@ import type { PackSource } from "../world/content/resolveContent";
 import { ContentError, Reader, type ContentIssue, type RawObject } from "../world/content/contentReader";
 import type { ColorTuple } from "../world/terrain/pipeline/pipelineTypes";
 import { characterEntries } from "./raceDef";
+import { sided } from "./characterConsts";
+
+export { sided };
 
 /**
  * One piece of gear (gear/<id>.json5, see CHARACTERS.md, *Gear as geometry*): what it paints on
@@ -117,12 +120,6 @@ export function resolveOutfits(packs: PackSource[], gear: Map<string, GearDef>):
   }
   if (issues.length > 0) throw new ContentError(issues);
   return outfits;
-}
-
-/** Expands a region or chain group ("arms") into the names it stands for. */
-export function sided(name: string): string[] {
-  const groups: Record<string, string[]> = { arms: ["armR", "armL"], hands: ["handR", "handL"], legs: ["legR", "legL"], feet: ["footR", "footL"] };
-  return groups[name] ?? [name];
 }
 
 function readGear(id: string, data: unknown, reader: Reader): GearDef {

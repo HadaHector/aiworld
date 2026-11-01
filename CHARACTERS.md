@@ -341,6 +341,14 @@ body is built or painted (a reload does it too; nothing is kept between launches
 **Gear tile textures** (the gear materials, 1024 texels a side) are one texture per scene however
 many bodies wear them, held by count and disposed by the last to let go (`characterMesh.ts`).
 
+**Built in workers.** In the game (a `pause` is given) a body's whole making - geometry, atlas
+layout and paint base, all plain numbers from plain data - is done by a pool of up to three workers
+(`bodyBuild.worker.ts`, `bodyBuildPool.ts`, `makeBody` in `bodyMake.ts`), the gear materials it
+paints with sent to each worker once; the page gets the result and paints only the character's looks
+on it. If workers cannot be made or one fails, the page builds in place, sliced, as before; the
+workbench and the Node probes always do. A worker's body equals the in-page one (12 race, sex and
+outfit combinations compared array by array).
+
 **Slices share a budget.** Long work (painting a body, building one) is done a few milliseconds at a
 time and waits in `sliceBreak()` (`workSlicer.ts`): two slices a frame between all the bodies in
 progress, through a message channel (a timer's 4 ms minimum, and a background tab's one-second one,
@@ -349,13 +357,14 @@ made a crowd's slices slower than its work).
 **What is measured.** Per body, CPU in Node: build 5-15 ms, layout 45-100 ms, paint 520-670 ms
 before; the painter's occlusion walks a vertex list made once per cell (3x faster, pixels identical)
 and the rest of the painting that does not depend on looks is kept. A village's 14 people in Node:
-9.5 s before, 2.5 s now; in the page 9.7 s before, about 3.3 s now (12 of the 15 are different
-bodies - sex and outfit - so the saving is in the paint, not in sharing yet); the same seen again
-takes under a millisecond.
+9.5 s before, 2.5 s now; in the page the main thread did 9.7 s of it before and about 0.4 s now
+(the per-character painting and the meshes; 12 of the 15 are different bodies - sex and outfit - so
+the saving is in the workers and the painting, not in sharing yet), and the last of the 15 was drawn
+about 3 s after it was asked for, where it took about 10 s; the same seen again takes under a
+millisecond.
 
-**Still to do.** The first body of each race, sex and gear still costs about 250 ms (layout, then the
-paint base: the occlusion): to a worker, and kept between launches by a content hash; nearest bodies
-first; a lower detail and smaller atlas far away; gear meshes of one material merged; geometry shared
+**Still to do.** The first body of each race, sex and gear still costs about 200 ms in a worker
+(mostly the occlusion): kept between launches by a content hash; nearest bodies first; a lower detail and smaller atlas far away; gear meshes of one material merged; geometry shared
 between bodies of one default body (mesh clones); and the bigger change in the notes of the session
 that made this: gear as pieces with their own textures, unwrapped as islands by construction.
 
@@ -411,7 +420,7 @@ In rough order of need; each belongs to the build-order step named, or is its ow
 2. **Many bodies at once.** *Mostly done* (see *Caches*): one body per race, sex and gear, scaled
    by height and build, with the per-character painting kept. Still to do: a lower detail far away
    (the `detail` setting already halves it); gear meshes of one material merged; smaller atlases far
-   away; building in a worker and keeping bodies between launches.
+   away; keeping bodies between launches.
 3. **Equipment from items (build step 7).** *Done* (ITEMS.md, *Equipment*): item types name gear
    pieces and a tint over them; what an entity wears in visible slots replaces its outfit, and its
    body is built again when that changes. An entity without belongings (the dummy) keeps its outfit.

@@ -1,6 +1,7 @@
 import { createLattice, type Lattice } from "./lattice";
 import type { BoneShape, RaceDef } from "./raceDef";
-import { sided, type GearDef, type GearPiece, type GearShell, type GearSkirt } from "./gearDef";
+import { sided } from "./characterConsts";
+import type { GearDef, GearPiece, GearShell, GearSkirt } from "./gearDef";
 import { add, buildSkeleton, dot, footAxis, frameFor, length, lerp, normalize, scale, sub, type BoneDef, type Vec } from "./skeleton";
 import { createMeshKit, evenShape, segmentDistance, type BodyRegion, type GearLayer, type MeshKit, type Ring } from "./meshKit";
 

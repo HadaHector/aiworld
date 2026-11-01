@@ -2,6 +2,9 @@ import { CHARACTER_FOLDERS, orderPacks, parseFile, type PackSource } from "../wo
 import { ContentError, Reader, type ContentIssue, type RawObject } from "../world/content/contentReader";
 import type { ColorTuple } from "../world/terrain/pipeline/pipelineTypes";
 import type { CurvePoints } from "./curve";
+import { PLAIN_HAIR, SEXES, SLIDERS, type HairStyle, type Sex, type Slider } from "./characterConsts";
+
+export { PLAIN_HAIR, SEXES, SLIDERS, type HairStyle, type Sex, type Slider };
 
 /**
  * A race's body, as its pack file gives it (races/<id>.json5, see CHARACTERS.md): the skeleton's
@@ -24,8 +27,6 @@ export interface RaceDef {
   sliders: Record<Slider, [number, number]>;
 }
 
-export const SLIDERS = ["height", "build"] as const;
-export type Slider = (typeof SLIDERS)[number];
 
 /**
  * A tapering spike on a bone, flattened to `flat` of its width one way - an ear: from `at` (metres
@@ -42,8 +43,6 @@ export interface RacePiece {
   flat: number;
 }
 
-export const SEXES = ["male", "female"] as const;
-export type Sex = (typeof SEXES)[number];
 
 /** One sex's differences from its race's body: factors on skeleton lengths, factors on a bone's
  *  curves, bumps added to them, and its own share of beards. */
@@ -81,28 +80,6 @@ export interface RaceLook {
    *  short cut every character had before there were styles. */
   hairStyles: HairStyle[];
 }
-
-/**
- * A painted hair style: how the plain cut's edges move. Heights are in the head's own measures
- * (`face`), 0 at the jaw's hinge and 1 at the crown.
- */
-export interface HairStyle {
-  id: string;
-  name: string;
-  /** Added to the race's hairline over the brow: up recedes, down is a fringe. */
-  hairline: number;
-  /** How far down the back of the head it reaches: 0.3 is the plain cut's, lower is longer. */
-  nape: number;
-  /** How much the hairline rises toward the temples. */
-  temples: number;
-  /** How much of the sides above the ears is shaved, 0 to 1. */
-  shaved: number;
-  /** How thick it is, 0 to 1: less is cropped close. */
-  thickness: number;
-}
-
-/** The plain short cut: what a race with no styles paints. */
-export const PLAIN_HAIR: HairStyle = { id: "short", name: "Short", hairline: 0, nape: 0.3, temples: 0.05, shaved: 0, thickness: 1 };
 
 export interface RaceSkeleton {
   /** The ankle joint over the ground. */

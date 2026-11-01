@@ -1,10 +1,14 @@
 import { buildBody, type BodyGeometry } from "./bodyMesh";
 import { layoutAtlas, type AtlasLayout } from "./atlas";
-import { paintLookSliced, paintLook, preparePaint, preparePaintSliced, type Appearance, type PaintBase, type PaintedCover } from "./paint";
+import { paintLookSliced, paintLook, preparePaint, preparePaintSliced, type Appearance, type PaintBase } from "./paint";
 import { bakeGearMaterial, type BakedGearMaterial, type GearMaterialDef } from "./gearMaterial";
-import { sided, type GearDef } from "./gearDef";
-import type { RaceDef, Sex } from "./raceDef";
-import { addTime, timed } from "./bodyTiming";
+import type { GearDef } from "./gearDef";
+import type { RaceDef } from "./raceDef";
+import { addTime, registerCacheStats, timed } from "./bodyTiming";
+import { coversFor, paintMaterials, type BodyRecipe } from "./bodyMake";
+import { buildInWorker } from "./bodyBuildPool";
+
+export type { BodyRecipe } from "./bodyMake";
 
 /**
  * Bodies kept for the characters that share them (CHARACTERS.md, *Caches*). A character's body is
@@ -22,19 +26,6 @@ import { addTime, timed } from "./bodyTiming";
 /** Bytes the kept bodies (geometry, layout, paint bases) and the kept atlases may take each. */
 const BODY_BUDGET = 96 * 1024 * 1024;
 const ATLAS_BUDGET = 64 * 1024 * 1024;
-
-/** What a body is built from: the race (with its sex), the gear worn, and how it is cut and painted. */
-export interface BodyRecipe {
-  /** The race as defined, and the sex to take of it. */
-  race: RaceDef;
-  sex: Sex;
-  gear: GearDef[];
-  smallclothes: boolean;
-  /** The race's loops times this; whether its lattice applies; the atlas's size, or 0 for none. */
-  detail: number;
-  lattice: boolean;
-  atlas: number;
-}
 
 /** A body made, and everything about it that is the same for every character wearing it. */
 export interface CanonicalBody {
@@ -81,9 +72,19 @@ export function canonicalBody(recipe: BodyRecipe, forSexRace: RaceDef, materials
   return entry.promise;
 }
 
+/** A layout with what a character's painting reads of the body let go (it is in the paint base now);
+ *  the Atlas view needs which region a texel is in, so that stays. */
+function withoutTexelPlaces(layout: AtlasLayout): AtlasLayout {
+  return { ...layout, texels: { region: layout.texels.region, position: new Float32Array(0), normal: new Float32Array(0), surface: new Float32Array(0) } };
+}
+
+function sizeOf(body: BodyGeometry, layout: AtlasLayout | null, base: PaintBase | null): number {
+  let bytes = body.positions.length * 8 * 2 + body.indices.length * 8 + body.gearUVs.length * 8 + body.triangles * 24;
+  if (layout && base) bytes += layout.uvs.byteLength + layout.texels.region.byteLength + base.shade.byteLength + base.mottle.byteLength + base.worn.byteLength + base.source.byteLength + base.covered.byteLength + base.head.values.byteLength + base.nipples.distance.byteLength;
+  return bytes;
+}
+
 async function build(key: string, recipe: BodyRecipe, race: RaceDef, materials: Map<string, GearMaterialDef>, worldSeed: number, pause?: () => Promise<void>): Promise<CanonicalBody> {
-  const body = timed("1 buildBody", () => buildBody(race, { detail: recipe.detail, lattice: recipe.lattice, gear: recipe.gear }));
-  await pause?.();
   const baked = new Map<string, BakedGearMaterial>();
   const bake = async (id: string): Promise<BakedGearMaterial | null> => {
     const def = materials.get(id);
@@ -95,36 +96,34 @@ async function build(key: string, recipe: BodyRecipe, race: RaceDef, materials: 
     }
     return baked.get(id)!;
   };
+  // Off the main thread when there are workers to do it and the page is drawing frames (a probe or
+  // the workbench builds in place).
+  if (pause && recipe.atlas > 0) {
+    for (const id of paintMaterials(recipe)) await bake(id);
+    const started = performance.now();
+    const made = await buildInWorker({ ...recipe, race }, race, [...baked.entries()].map(([id, m]) => ({ id, key: `${worldSeed}|${id}|${hash(JSON.stringify(m.def.texture))}`, size: m.def.size, color: m.color })));
+    if (made) {
+      addTime("1-4 built in a worker (wall)", performance.now() - started);
+      for (const layer of made.body.layers) await bake(layer.material);
+      const layout = withoutTexelPlaces(made.layout!);
+      return { key, race, body: made.body, layout, base: made.base, baked, bytes: sizeOf(made.body, layout, made.base) };
+    }
+  }
+
+  const body = timed("1 buildBody", () => buildBody(race, { detail: recipe.detail, lattice: recipe.lattice, gear: recipe.gear }));
+  await pause?.();
   for (const layer of body.layers) await bake(layer.material);
-  let bytes = body.positions.length * 8 * 2 + body.indices.length * 8 + body.gearUVs.length * 8 + body.triangles * 24;
-  if (recipe.atlas <= 0) return { key, race, body, layout: null, base: null, baked, bytes };
+  for (const id of paintMaterials(recipe)) await bake(id);
+  if (recipe.atlas <= 0) return { key, race, body, layout: null, base: null, baked, bytes: sizeOf(body, null, null) };
 
   const layout = timed("3 layoutAtlas", () => layoutAtlas(body, recipe.atlas));
   await pause?.();
-  const covers: PaintedCover[] = [];
-  const linen = recipe.smallclothes ? await bake("linen") : null;
-  if (linen) {
-    const hips = race.skeleton.ankle + race.skeleton.shin + race.skeleton.thigh;
-    const tint: [number, number, number] = [0.86, 0.8, 0.68];
-    covers.push({ material: linen, tint, span: "height", from: hips - 0.14, to: hips + 0.06, regions: ["torso", "legR", "legL"], hem: true });
-    // A band over the breasts, too.
-    const nipple = body.marks.find((m) => m.name === "nipple");
-    if (recipe.sex === "female" && nipple) covers.push({ material: linen, tint, span: "height", from: nipple.position[1] - 0.075, to: nipple.position[1] + 0.05, regions: ["torso"], hem: true });
-  }
-  for (const piece of recipe.gear) {
-    for (const paint of piece.paint) {
-      const material = await bake(paint.material);
-      if (material) covers.push({ material, tint: paint.tint, span: "along", from: paint.from, to: paint.to, regions: paint.regions.flatMap(sided), hem: paint.hem });
-    }
-  }
+  const covers = coversFor(recipe, race, body, (id) => baked.get(id) ?? null);
   const started = performance.now();
   const base = pause ? await preparePaintSliced(body, layout, race, covers, pause) : preparePaint(body, layout, race, covers);
   addTime("4b paint base (wall)", performance.now() - started);
-  // What a character's painting reads of the body is in the base now: the per-texel places go
-  // (the Atlas view needs which region a texel is in, so that stays).
-  const kept: AtlasLayout = { ...layout, texels: { region: layout.texels.region, position: new Float32Array(0), normal: new Float32Array(0), surface: new Float32Array(0) } };
-  bytes += layout.uvs.byteLength + layout.texels.region.byteLength + base.shade.byteLength + base.mottle.byteLength + base.worn.byteLength + base.source.byteLength + base.covered.byteLength + base.head.values.byteLength + base.nipples.distance.byteLength;
-  return { key, race, body, layout: kept, base, baked, bytes };
+  const kept = withoutTexelPlaces(layout);
+  return { key, race, body, layout: kept, base, baked, bytes: sizeOf(body, kept, base) };
 }
 
 /** The atlas a character's looks paint on a body, kept for the next time they are asked for. */
@@ -171,6 +170,8 @@ export function bodyCacheStats(): typeof stats & { bodies: number; bodyBytes: nu
   const sum = (kept: Map<string, Kept<unknown>>): number => [...kept.values()].reduce((total, e) => total + e.bytes, 0);
   return { ...stats, bodies: bodies.size, bodyBytes: sum(bodies), atlases: atlases.size, atlasBytes: sum(atlases) };
 }
+
+registerCacheStats(bodyCacheStats);
 
 // --- keys ---
 
