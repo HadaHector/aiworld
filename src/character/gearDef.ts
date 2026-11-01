@@ -21,6 +21,7 @@ export interface GearDef {
   skirts: GearSkirt[];
   pieces: GearPiece[];
   covers: GearCover[];
+  collars: GearCollar[];
   /** The piece's own texture, cut like the real thing (CHARACTERS.md, *Pieces and islands*); the
    *  shells and skirts that name an island are drawn in it, the rest tile their materials. */
   texture: PieceTextureDef | null;
@@ -119,6 +120,22 @@ export interface CoverPiece {
   centre: number;
 }
 
+/**
+ * A collar: cloth that stands up the neck, from `from` to `to` shares of the neck's length (the
+ * body's neck starts at a half), and funnels down from it to the neckline of the torso cover - a
+ * ring of vertices at the cover's neckline, sewn to it, rising to the neck - so the opening is the
+ * neck's, not the wide neckline of the body, and nothing between the garment and the skin is open.
+ * Its own island of the texture, a band round the neck.
+ */
+export interface GearCollar extends GearSurface {
+  from: number;
+  to: number;
+  thickness: number;
+  loops: number;
+  /** The band the funnel and the collar are, cut open at the back. */
+  island: string;
+}
+
 /** A skirt hanging from the torso at `from` (a share of its length): a robe's, a tabard's, plate
  *  tassets - `length` metres long, `flare` times as wide at its hem as at its top. */
 export interface GearSkirt extends GearSurface {
@@ -191,7 +208,7 @@ export function resolveOutfits(packs: PackSource[], gear: Map<string, GearDef>):
 
 function readGear(id: string, data: unknown, reader: Reader): GearDef {
   const obj = reader.object(data, "");
-  reader.onlyKeys(obj, "", ["name", "slot", "paint", "shells", "skirts", "pieces", "covers", "texture"]);
+  reader.onlyKeys(obj, "", ["name", "slot", "paint", "shells", "skirts", "pieces", "covers", "collars", "texture"]);
   const list = (key: string): { raw: RawObject; path: string }[] => reader.optionalArray(obj, key, "").map((raw, i) => ({ raw: reader.object(raw, `${key}[${i}]`), path: `${key}[${i}]` }));
   return {
     id,
@@ -275,6 +292,17 @@ function readGear(id: string, data: unknown, reader: Reader): GearDef {
         thickness: reader.number(raw, "thickness", path, { min: 0, max: 0.1 }),
         pieces: coverPieces(raw, path, reader),
         hide: reader.boolean(raw, "hide", path, false),
+      };
+    }),
+    collars: list("collars").map(({ raw, path }) => {
+      reader.onlyKeys(raw, path, ["from", "to", "thickness", "loops", "island", "material", "tint"]);
+      return {
+        ...surface(raw, path, reader),
+        from: reader.optionalNumber(raw, "from", path, 0.5, { min: 0, max: 1 }),
+        to: reader.optionalNumber(raw, "to", path, 0.9, { min: 0, max: 1 }),
+        thickness: reader.optionalNumber(raw, "thickness", path, 0.012, { min: 0, max: 0.05 }),
+        loops: reader.optionalNumber(raw, "loops", path, 2, { min: 0, max: 8, integer: true }),
+        island: reader.string(raw, "island", path),
       };
     }),
     texture: raw_texture(obj, reader),

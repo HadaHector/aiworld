@@ -422,6 +422,13 @@ as an arm (or the torso, for a sleeve), a `join` (armhole); no body across it, a
 Each panel's boundary is walked round and cut into runs of one kind, and a recipe draws along them:
 `{ kind: "join", edge: "seam" }` is the sewn side seam, `edge: "join"` the armhole.
 
+**Collars.** A `collar` (`collars` in the gear's json5) is cloth that stands up the neck, from and to
+shares of the neck's length, and funnels down from it to the neckline of the torso cover: a ring of
+vertices at the cover's neckline - the same places, sewn to it - rising to the neck. The opening is
+then the neck's, not the wide neckline the body's shoulders give, and nothing between the garment and
+the skin is open. It is a band round the neck in an island of its own (cut open at the back), so it
+can be its own cloth and colour; its lower edge is the sewn `seam`, its upper edge the `top`.
+
 **The recipe** (`texture` in the gear's json5): per island, the cloth (a gear material - the painter
 samples its weave), the tint, the `grain` (the warp runs down the panel or across it), `sided`, and
 `features` as a tailor would list them:

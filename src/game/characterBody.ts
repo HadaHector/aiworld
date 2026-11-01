@@ -38,6 +38,7 @@ function tinted(piece: GearDef, tint: string): GearDef {
     ...piece,
     paint: piece.paint.map((p) => ({ ...p, tint: color })),
     // A piece with a texture of its own is dyed in it, its trims left their own colours.
+    collars: piece.collars.map((c) => ({ ...c, tint: color })),
     texture: piece.texture && { ...piece.texture, islands: Object.fromEntries(Object.entries(piece.texture.islands).map(([name, island]) => [name, { ...island, tint: color }])) },
     shells: piece.shells.map((s) => ({ ...s, tint: color })),
     skirts: piece.skirts.map((s) => ({ ...s, tint: color })),

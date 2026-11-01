@@ -1,7 +1,7 @@
 import { createLattice, type Lattice } from "./lattice";
 import type { BoneShape, RaceDef } from "./raceDef";
 import { sided } from "./characterConsts";
-import type { GearCover, GearDef, GearPiece, GearShell, GearSkirt } from "./gearDef";
+import type { GearCollar, GearCover, GearDef, GearPiece, GearShell, GearSkirt } from "./gearDef";
 import { add, buildSkeleton, dot, footAxis, frameFor, length, lerp, normalize, scale, sub, type BoneDef, type Vec } from "./skeleton";
 import { placeIslands, type PieceTexture } from "./pieceTexture";
 import { cylinderOf, smoothNormals } from "./atlas";
@@ -640,6 +640,53 @@ function addGear(kit: MeshKit, race: RaceDef, unit: GearUnit, body: BodyGeometry
     kit.endIsland();
   }
 
+  /** A collar: a ring of vertices at the cover's neckline (the same places, sewn to it), the cloth
+   *  funnelling in from it to the neck, then standing up the neck as a band. */
+  function buildCollar(def: GearCollar): void {
+    if (!coverTop || coverTop.length < 4) return;
+    const texture = unit.kind === "gear" ? unit.piece.texture : null;
+    if (!texture?.islands[def.island]) return;
+    const iNeck = skeleton.index("neck");
+    const neckBone = bones[iNeck];
+    const neckLength = length(sub(neckBone.tail, neckBone.head));
+    const count = coverTop.length;
+    kit.beginIsland(def.island, -1);
+    const rings: Ring[] = [];
+    const steps = def.loops + 2;
+    for (let i = 0; i < steps; i++) {
+      const t = def.from + ((def.to - def.from) * i) / (steps - 1);
+      const r = ring(iNeck, race.shape.neck, neckBone.head, neckBone.tail, t, FORWARD, 0, count, def.thickness);
+      mapRing(r, t * neckLength);
+      rings.push(r);
+    }
+    // The funnel's bottom: a copy of the cover's neckline, sorted round the neck as a ring is, a
+    // little way below the band's first ring.
+    const frame = frameFor(sub(neckBone.tail, neckBone.head), FORWARD);
+    const angleOf = (v: number): number => {
+      const p = kit.points[v];
+      const off = sub(p, neckBone.head);
+      const a = Math.atan2(dot(off, frame.side), dot(off, frame.front));
+      return a < 0 ? a + 2 * Math.PI : a;
+    };
+    const ordered = coverTop.slice().sort((a, b) => angleOf(a) - angleOf(b));
+    const copies = ordered.map((v) => {
+      const c = kit.vertex(kit.points[v], kit.homes[v]);
+      kit.placed.add(c);
+      sewn.add(c);
+      const weights = kit.fixed.get(v);
+      if (weights) kit.fixed.set(c, weights);
+      return c;
+    });
+    const funnel: Ring = { verts: copies, center: lerp(neckBone.head, neckBone.tail, def.from) };
+    mapRing(funnel, def.from * neckLength - 0.03);
+    kit.layer = layerOf(def);
+    zip(funnel.verts, rings[0].verts, sub(neckBone.tail, neckBone.head), FORWARD);
+    for (let i = 0; i + 1 < rings.length; i++) zip(rings[i].verts, rings[i + 1].verts, sub(neckBone.tail, neckBone.head), FORWARD);
+    for (const v of rings[rings.length - 1].verts) rims.add(v);
+    kit.layer = -1;
+    kit.endIsland();
+  }
+
   /** The edges of the panels the pieces' cloth is cut in, from the cloth itself: an open edge of a
    *  panel is a seam if the cloth goes on in another panel, else it is what the body goes on as
    *  across it - the neck (top), an armhole (join), or nothing (a hem or cuff: bottom). Each panel's
@@ -669,6 +716,8 @@ function addGear(kit: MeshKit, race: RaceDef, unit: GearUnit, body: BodyGeometry
     }
     const kindOf = (a: number, b: number, island: number, used: number[]): IslandLoop["kind"] => {
       if (used.some((u) => u !== island)) return "seam";
+      if (sewn.has(a) && sewn.has(b)) return "seam";
+      if (rims.has(a) && rims.has(b)) return "top";
       const from = coverSource.get(a);
       const to = coverSource.get(b);
       if (!from || !to) return "bottom";
@@ -842,6 +891,11 @@ function addGear(kit: MeshKit, race: RaceDef, unit: GearUnit, body: BodyGeometry
   const hidden: number[] = [];
   /** The vertices round the bottom edge of a torso cover, in order round, for a skirt to hang from. */
   let coverBottom: number[] | null = null;
+  /** The vertices round the neckline of a torso cover (its top edge), for a collar to be sewn to. */
+  let coverTop: number[] | null = null;
+  /** Vertices on an edge sewn to the cover (a collar's funnel), and on a collar's open top edge. */
+  const sewn = new Set<number>();
+  const rims = new Set<number>();
   /** For the vertices of a cover: the body vertex and region it is cut from, to tell what its edges are. */
   const coverSource = new Map<number, { vertex: number; region: number }>();
 
@@ -988,6 +1042,7 @@ function addGear(kit: MeshKit, race: RaceDef, unit: GearUnit, body: BodyGeometry
       kit.tri(vertexOf(I[t * 3]), vertexOf(I[t * 3 + 1]), vertexOf(I[t * 3 + 2]));
       if (def.hide) hidden.push(t);
     }
+    if (regionName === "torso" && loops.length > 0) coverTop = loops[0].vertices.map((v) => made.get(v)!);
     if (regionName === "torso" && loops.length > 1) {
       coverBottom = loops[loops.length - 1].vertices.slice().sort((p, q) => place(p).round - place(q).round).map((v) => made.get(v)!);
     }
@@ -999,6 +1054,7 @@ function addGear(kit: MeshKit, race: RaceDef, unit: GearUnit, body: BodyGeometry
     kit.part = "gear";
     const piece = unit.piece;
     for (const def of piece.covers) for (const regionName of sided(def.region)) buildCover(def, regionName);
+    for (const def of piece.collars) buildCollar(def);
     for (const def of piece.shells) for (const chainName of sided(def.chain)) buildShell(def, chainName);
     for (const def of piece.skirts) buildSkirt(def);
     for (const def of piece.pieces) for (const suffix of def.sides) buildPiece(def, suffix);
