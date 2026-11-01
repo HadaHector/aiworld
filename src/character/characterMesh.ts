@@ -127,7 +127,7 @@ export function createCharacterMesh(scene: Scene, name: string, body: BodyGeomet
   // Gear: a mesh per material and colour, on the same skeleton, moving with the body. Its texture
   // tiles by the material's size, its colour the gear's tint.
   const meshes: Mesh[] = [mesh];
-  const tiles = new Map<string, RawTexture>();
+  const held: string[] = [];
   body.layers.forEach((layer, i) => {
     const baked = gear?.get(layer.material);
     const size = baked?.def.size ?? 1;
@@ -138,16 +138,8 @@ export function createCharacterMesh(scene: Scene, name: string, body: BodyGeomet
     // The race's own pieces (an elf's ears) are in the character's skin, whatever it is.
     gearMaterial.diffuseColor = new Color3(...(layer.material === "skin" && skinColor ? skinColor : layer.tint));
     if (baked) {
-      let tile = tiles.get(layer.material);
-      if (!tile) {
-        tile = timed("10 gear tile RawTexture (1024^2 upload + mips)", () => RawTexture.CreateRGBATexture(baked.color, TEXTURE_RESOLUTION, TEXTURE_RESOLUTION, scene, true, false, Texture.TRILINEAR_SAMPLINGMODE));
-        tile.name = `gear-${layer.material}`;
-        tile.wrapU = Texture.WRAP_ADDRESSMODE;
-        tile.wrapV = Texture.WRAP_ADDRESSMODE;
-        tiles.set(layer.material, tile);
-        textures.push(tile);
-      }
-      gearMaterial.diffuseTexture = tile;
+      if (!held.includes(layer.material)) held.push(layer.material);
+      gearMaterial.diffuseTexture = holdTile(scene, layer.material, baked);
     }
     prepare(gearMaterial, baked?.def.shine ?? 0.05);
     part.material = gearMaterial;
@@ -173,6 +165,7 @@ export function createCharacterMesh(scene: Scene, name: string, body: BodyGeomet
     },
     dispose() {
       for (const texture of textures) texture.dispose();
+      for (const id of held) releaseTile(scene, id);
       for (const m of materials) m.dispose();
       for (const m of meshes) m.dispose();
       skeleton.dispose();
@@ -189,4 +182,36 @@ function boneMatrix(def: BoneDef): Matrix {
   const z = frame.front;
   const x = cross(y, z);
   return Matrix.FromArray([x[0], x[1], x[2], 0, y[0], y[1], y[2], 0, z[0], z[1], z[2], 0, def.head[0], def.head[1], def.head[2], 1]);
+}
+
+/** A gear material's tile as a texture: one per scene however many bodies wear it - the bodies hold
+ *  it, and the last to let go disposes it. (A tile is 1024 texels a side: 5.6 MB with its mips.) */
+const tiles = new WeakMap<Scene, Map<string, { texture: RawTexture; holders: number; source: Uint8Array }>>();
+
+function holdTile(scene: Scene, id: string, baked: BakedGearMaterial): RawTexture {
+  let inScene = tiles.get(scene);
+  if (!inScene) tiles.set(scene, (inScene = new Map()));
+  let tile = inScene.get(id);
+  // A material baked again (edited in the workbench) is a new buffer, so a new texture.
+  if (tile && tile.source !== baked.color) {
+    tile.holders = 0;
+    inScene.delete(id);
+    tile = undefined;
+  }
+  if (!tile) {
+    const texture = timed("10 gear tile RawTexture (1024^2 upload + mips)", () => RawTexture.CreateRGBATexture(baked.color, TEXTURE_RESOLUTION, TEXTURE_RESOLUTION, scene, true, false, Texture.TRILINEAR_SAMPLINGMODE));
+    texture.name = `gear-${id}`;
+    texture.wrapU = Texture.WRAP_ADDRESSMODE;
+    texture.wrapV = Texture.WRAP_ADDRESSMODE;
+    inScene.set(id, (tile = { texture, holders: 0, source: baked.color }));
+  }
+  tile.holders++;
+  return tile.texture;
+}
+
+function releaseTile(scene: Scene, id: string): void {
+  const tile = tiles.get(scene)?.get(id);
+  if (!tile || --tile.holders > 0) return;
+  tile.texture.dispose();
+  tiles.get(scene)!.delete(id);
 }

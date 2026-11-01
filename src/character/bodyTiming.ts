@@ -32,7 +32,10 @@ export function bodyDone(ms: number): void {
   latencies.push(ms);
 }
 
+import { bodyCacheStats } from "./bodyCache";
+
 const api = {
+  cache: bodyCacheStats,
   reset(): void {
     stages.clear();
     bodies = 0;

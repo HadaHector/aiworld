@@ -5,6 +5,7 @@ import { resolveRaces, type RaceDef, type Sex } from "../character/raceDef";
 import { resolveGear, resolveOutfits, type GearDef, type OutfitDef } from "../character/gearDef";
 import { resolveGearMaterials, type GearMaterialDef } from "../character/gearMaterial";
 import { timed } from "../character/bodyTiming";
+import { sliceBreak } from "../character/workSlicer";
 import { dressCharacter } from "../character/character";
 import { createCharacterMesh, type CharacterMesh } from "../character/characterMesh";
 import { createAnimator, type Animator } from "../character/animation";
@@ -102,8 +103,8 @@ export async function createCharacterBody(scene: Scene, name: string, kit: BodyK
     { race, seed: look.seed, sex: look.sex, choices: look.choices, gear: gearOf(kit, look), smallclothes: true },
     kit.materials,
     worldSeed,
-    // In slices, so a crowd coming into view (a bandit camp) does not stop the frames.
-    { pause: () => new Promise((resolve) => setTimeout(resolve, 0)) },
+    // In slices sharing a budget a frame, so a crowd coming into view (a bandit camp) does not stop the frames.
+    { pause: sliceBreak },
   );
   const character: CharacterMesh = timed("5-10 createCharacterMesh total", () => createCharacterMesh(scene, name, dressed.body, { pixels: dressed.pixels!, size: dressed.layout!.size, uvs: dressed.layout!.uvs, nearest: false }, dressed.baked, dressed.look.skin));
   for (const mesh of character.meshes) mesh.isPickable = false;
