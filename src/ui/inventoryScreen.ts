@@ -57,8 +57,9 @@ function el(tag: string, css: string, parent?: HTMLElement): HTMLElement {
 
 /** An item's tooltip: its name in its rarity's colour, what it is, its rolled stats and how well
  *  they rolled, its durability and value - all worked out from its type and roll. `unrolled` is for
- *  an item not yet made (a shop's stock): stats show as their ranges, with no roll. */
-export function itemTooltip(game: GameRules, items: ItemRules, state: ItemState, unrolled = false): string {
+ *  an item not yet made (a shop's stock): stats show as their ranges, with no roll. `price` is a line
+ *  that replaces the value - what a shop would charge or pay. */
+export function itemTooltip(game: GameRules, items: ItemRules, state: ItemState, { unrolled = false, price = "" }: { unrolled?: boolean; price?: string } = {}): string {
   const index = items.typeIndex.get(state.type);
   if (index === undefined) return `<b>${state.type}</b><br><i>not in these packs</i>`;
   const type = items.types[index];
@@ -83,7 +84,8 @@ export function itemTooltip(game: GameRules, items: ItemRules, state: ItemState,
   if (type.use) lines.push(`<span style="color:#6c6">Use: ${type.use.skill}</span>`);
   if (type.equip) lines.push(`<span style="color:#6c6">Equip: ${type.equip.skill}</span>`);
   if (type.quest) lines.push(`<span style="color:#fd6">Quest item</span>`);
-  if (type.value > 0) lines.push(`<span style="color:#cb8">${formatMoney(items.currencies[items.main], type.value)}</span>`);
+  if (price) lines.push(`<span style="color:#cb8">${price}</span>`);
+  else if (type.value > 0) lines.push(`<span style="color:#cb8">${formatMoney(items.currencies[items.main], type.value)}</span>`);
   return lines.join("<br>");
 }
 
