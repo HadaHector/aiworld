@@ -1,9 +1,36 @@
-// Leather boots: a shell up the shin, its cuff turned out, and over the foot, closed at the toe.
+// Leather boots, cut from the body's own surface: a shaft up the shin, cut open at the back and sewn,
+// its top turned in; and the foot, a piece laid out with the sole through the middle of it (a darker
+// band, edge-stitched like a welt) and cut open along the top, where the lacing would go.
 {
   name: "Leather boots",
   slot: "feet",
-  shells: [
-    { chain: "legs", from: 0.62, to: 0.95, thickness: 0.012, flare: [0.025, 0], loops: 3, material: "leather", tint: "#5a3a22" },
-    { chain: "feet", from: 0, to: 0.97, thickness: 0.012, loops: 4, cap: true, material: "leather", tint: "#5a3a22" },
+  texture: {
+    density: 300,
+    islands: {
+      shaft: {
+        material: "leather",
+        tint: "#5a3a22",
+        grain: "down",
+        features: [
+          { kind: "join", edge: "seam", inset: 0.02 },
+          { kind: "hem", edge: "top", width: 0.025 },
+          { kind: "join", edge: "bottom", inset: 0.02 },
+        ],
+      },
+      foot: {
+        material: "leather",
+        tint: "#5a3a22",
+        grain: "across",
+        features: [
+          { kind: "join", edge: "seam", inset: 0.02 },
+          { kind: "band", at: 0.5, width: 0.07, tint: "#2e2016" },
+          { kind: "join", edge: "top", inset: 0.02 },
+        ],
+      },
+    },
+  },
+  covers: [
+    { region: "legs", from: 0.62, to: 1.1, thickness: 0.016, material: "leather", tint: "#5a3a22", pieces: [{ island: "shaft", centre: 0.5 }] },
+    { region: "feet", from: -1, to: 2, thickness: 0.016, material: "leather", tint: "#5a3a22", pieces: [{ island: "foot", centre: 0 }] },
   ],
 }

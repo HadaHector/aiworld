@@ -451,7 +451,13 @@ down its middle; one sleeve panel for both arms, cut open under the arm and sewn
 hemmed at the cuff. The workbench's Atlas view (*Show: gear textures*, *UV layout*) shows the pieces
 laid out as the pattern.
 
-Not yet done: the other cloth and leather pieces (trousers, jerkin, belt, boots, robe), rivets, lacing
+Pieces with their own textures so far: the tunic, **trousers** (a leg for each side, one pattern cut open on the
+inside, and a waistband), a **belt** (a level band hung from the waist, a buckle plate as a `band`
+feature) and **boots** (a shaft cut open at the back with its top turned in, and a foot piece laid out
+with the sole through the middle of it, cut open along the top where lacing would go; the leather is
+sampled from the same gear material as before).
+
+Not yet done: the other cloth and leather pieces (jerkin, robe, bracers, sandals), rivets, lacing
 and buckles, smithed plate and mail (hammer marks, rolled edges, rivet rows, ring patterns) - the same
 islands, with other features; per-piece resolution by size; compressed textures.
 

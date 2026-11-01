@@ -112,6 +112,18 @@ function paintIsland(pixels: Uint8Array, texture: PieceTexture, place: IslandPla
       let shade = hang(u, v, circumference);
       let thread = 0;
       for (const f of features) {
+        if (f.kind === "band") {
+          // A strip of another cloth, stitched along each edge.
+          const across = Math.abs(u - (f.at - 0.5) * circumference);
+          if (across < f.width / 2) {
+            [r, g, b] = fabric(cloth, recipe, u, v, true, f.tint);
+            shade *= 0.97;
+            if (f.width / 2 - across < 0.003) shade *= 0.88;
+          }
+          if (Math.abs(across - (f.width / 2 - 0.007)) < THREAD / 2) thread = Math.max(thread, dash(v));
+          if (Math.abs(across - f.width / 2) < 0.0016) shade *= 0.78;
+          continue;
+        }
         if (f.kind === "seam") {
           // A seam sewn flat: the allowance pressed to one side, an edge each side of it, and a row
           // of stitches over each edge. `at` is how far round the panel (the front is its middle),

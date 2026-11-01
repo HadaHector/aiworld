@@ -47,7 +47,8 @@ export interface IslandDef {
   features: IslandFeature[];
 }
 
-/** What a tailor does to a panel (metres throughout, along the panel's real edges - its top, bottom
+/** What a tailor does to a panel (a `band` is a strip of another cloth or leather up and down it, centred
+ *  `at` how far round, `width` wide, edge-stitched: a sole, a buckle plate; metres throughout, along the panel's real edges - its top, bottom
  *  and "join" edges, an armhole): a `seam` up and down it, `at` how far round
  *  (0-1; the front is in the middle, 0.5), between `from` and `to` shares of the panel's height from
  *  its top (a side seam stops at the armhole); a `hem` folded and stitched, or a `binding` of another cloth sewn over, along
@@ -56,7 +57,8 @@ export type IslandFeature =
   | { kind: "seam"; at: number; from: number; to: number }
   | { kind: "hem"; edge: "top" | "bottom"; width: number }
   | { kind: "binding"; edge: "top" | "bottom"; width: number; tint: ColorTuple }
-  | { kind: "join"; edge: "top" | "bottom" | "join" | "seam"; inset: number };
+  | { kind: "join"; edge: "top" | "bottom" | "join" | "seam"; inset: number }
+  | { kind: "band"; at: number; width: number; tint: ColorTuple };
 
 /** A material and its colour, as gear names them. */
 export interface GearSurface {
@@ -336,7 +338,11 @@ function raw_texture(obj: RawObject, reader: Reader): PieceTextureDef | null {
     const features = reader.optionalArray(raw, "features", path).map((item, i): IslandFeature => {
       const fpath = `${path}.features[${i}]`;
       const f = reader.object(item, fpath);
-      const kind = reader.oneOf(f, "kind", fpath, ["seam", "hem", "binding", "join"] as const);
+      const kind = reader.oneOf(f, "kind", fpath, ["seam", "hem", "binding", "join", "band"] as const);
+      if (kind === "band") {
+        reader.onlyKeys(f, fpath, ["kind", "at", "width", "tint"]);
+        return { kind, at: reader.number(f, "at", fpath, { min: 0, max: 1 }), width: reader.number(f, "width", fpath, { min: 0.005, max: 0.5 }), tint: reader.color(f, "tint", fpath) };
+      }
       if (kind === "seam") {
         reader.onlyKeys(f, fpath, ["kind", "at", "from", "to"]);
         return { kind, at: reader.number(f, "at", fpath, { min: 0, max: 1 }), from: reader.optionalNumber(f, "from", fpath, 0, { min: 0, max: 1 }), to: reader.optionalNumber(f, "to", fpath, 1, { min: 0, max: 1 }) };

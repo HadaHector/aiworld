@@ -1,6 +1,23 @@
-// A leather belt at the waist.
+// A leather belt at the waist, a level band round the hips, hung from the waist, edge-stitched
+// along both edges, closing at the back, with a plate for the buckle at the front.
 {
   name: "Belt",
   slot: "waist",
-  paint: [{ regions: ["torso"], from: 0.17, to: 0.25, material: "leather", tint: "#5a3a22" }],
+  texture: {
+    density: 300,
+    islands: {
+      belt: {
+        material: "leather",
+        tint: "#5a3a22",
+        grain: "across",
+        features: [
+          { kind: "seam", at: 0 },
+          { kind: "hem", edge: "top", width: 0.008 },
+          { kind: "hem", edge: "bottom", width: 0.008 },
+          { kind: "band", at: 0.5, width: 0.045, tint: "#b9b4a0" },
+        ],
+      },
+    },
+  },
+  skirts: [{ from: 0.2, length: 0.07, flare: 1.0, thickness: 0.03, loops: 1, material: "leather", tint: "#5a3a22", pieces: [{ island: "belt", centre: 0.5 }] }],
 }

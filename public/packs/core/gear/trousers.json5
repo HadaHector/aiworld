@@ -1,9 +1,35 @@
-// Woollen trousers - linen dyed dark for now - from the waist to the ankles.
+// Woollen trousers - linen dyed dark for now - cut from the body's own surface (CHARACTERS.md,
+// *Pieces and islands*): a leg for each side, one pattern for both, cut open on the inside and
+// sewn, from the hip to the ankle, hemmed at the foot; and a waistband round the hips with its
+// own fold. The body's legs and hips are where they join, so there is nothing to patch.
 {
   name: "Trousers",
   slot: "legs",
-  paint: [
-    { regions: ["legs"], from: -0.2, to: 0.95, material: "linen", tint: "#4a4034" },
-    { regions: ["torso"], from: -0.6, to: 0.2, material: "linen", tint: "#4a4034" },
+  texture: {
+    density: 300,
+    islands: {
+      leg: {
+        material: "linen",
+        tint: "#4a4034",
+        grain: "down",
+        features: [
+          { kind: "join", edge: "seam", inset: 0.022 },
+          { kind: "hem", edge: "bottom", width: 0.03 },
+        ],
+      },
+      waist: {
+        material: "linen",
+        tint: "#4a4034",
+        grain: "across",
+        features: [
+          { kind: "seam", at: 0 },
+          { kind: "hem", edge: "top", width: 0.03 },
+        ],
+      },
+    },
+  },
+  covers: [
+    { region: "legs", from: -1, to: 0.95, thickness: 0.01, material: "linen", tint: "#4a4034", pieces: [{ island: "leg", centre: 0.25 }] },
+    { region: "torso", from: -1, to: 0.19, thickness: 0.01, material: "linen", tint: "#4a4034", pieces: [{ island: "waist", centre: 0.5 }] },
   ],
 }
