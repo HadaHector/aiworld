@@ -368,6 +368,52 @@ millisecond.
 between bodies of one default body (mesh clones); and the bigger change in the notes of the session
 that made this: gear as pieces with their own textures, unwrapped as islands by construction.
 
+## Pieces and islands
+
+Gear that is *made* rather than painted on has a texture of its own: the tunic first (`gear/tunic.json5`),
+the other pieces to follow. The aim is a piece cut and sewn the way the real thing is, with detail a
+tiling material cannot have (a hem, a seam, a binding, rivets), drawn in one texture per piece that no
+other piece shares.
+
+**Islands.** A piece's texture is a set of *islands*, each one panel of the piece unrolled: round it
+across (from its front, wrapping at the seam), along it down from its top. A `shell` or `skirt` names
+its island (`island: "body"`); a shell on a sided chain (`arms`) makes one for each side
+(`sleeveR`, `sleeveL`) when the recipe is `sided`. The builders (`meshKit.ts`: `beginIsland`,
+`mapRing`) give every vertex its place in its island; a skirt continues down from where its island's
+shell ends, so a tunic's body and skirt are one panel. `placeIslands` (`pieceTexture.ts`) then packs the
+islands into the smallest square that holds them at the piece's `density` (texels a metre, about 300
+for a tunic: 512 square) and rewrites the triangle corners' places into it. The layout needs only the
+geometry, so every body has it; the pixels are painted when the gear materials are baked
+(`paintPieces`, in the worker like the rest). Layers whose triangles are in a texture of their own
+carry its index (`layer.texture`); the mesh gives each its own `RawTexture`, held once per scene for
+every body that wears it.
+
+**The recipe** (`texture` in the gear's json5): per island, the cloth (a gear material - the painter
+samples its weave), the tint, the `grain` (the warp runs down the panel or across it), `sided`, and
+`features` as a tailor would list them:
+
+| Feature | What it makes |
+|---|---|
+| `seam` at a share round the panel | a seam sewn flat: the allowance pressed to one side, an edge each side, a row of stitches over each |
+| `hem` on the top or bottom edge, a width | a fold of cloth a shade heavier, its cut edge turned under, a stitch row along the fold |
+| `binding` on an edge, a width, a tint | a bias-cut band of another cloth (its threads at 45 degrees) with a stitch row each side |
+| `join` on an edge, an inset | the edge where this panel is sewn to the next: the allowance turned in, a shadow, a stitch row |
+
+All widths are metres, drawn about twice life size so they read from the camera. Cloth hangs in slow
+folds (`hang`), the thread is the cloth a few shades darker, and what lies outside the islands is the
+cloth's own colour so a mip never mixes in black. A race's panels are its own size (the texture is made
+with the body, so a dwarf's tunic is cut to a dwarf), and a character's dye is the island's `tint`.
+
+**A tunic as it is cut.** A body of one panel (two, joined by the side seams at a quarter and three
+quarters round: the stitched pairs down each side), running on below the waist as a skirt to mid-thigh;
+a sleeve each side with its seam under the arm, sewn to the body at the shoulder (`join`, top) and hemmed
+at the cuff; a bias binding on the neck. A shell may start *before* its chain (`from < 0`): the sleeve's
+first rings go on up from the shoulder joint toward the neck, so the sleeve closes over the shoulder.
+
+Not yet done: the other cloth and leather pieces (trousers, jerkin, belt, boots, robe), rivets, lacing
+and buckles, smithed plate and mail (hammer marks, rolled edges, rivet rows, ring patterns) - the same
+islands, with other features; per-piece resolution by size; compressed textures.
+
 ## Build steps
 
 1. **Skeleton and bare body in the workbench.** Bones, four curves per bone and loops sampled

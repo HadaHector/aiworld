@@ -3,6 +3,7 @@ import type { BoneShape, RaceDef } from "./raceDef";
 import { sided } from "./characterConsts";
 import type { GearDef, GearPiece, GearShell, GearSkirt } from "./gearDef";
 import { add, buildSkeleton, dot, footAxis, frameFor, length, lerp, normalize, scale, sub, type BoneDef, type Vec } from "./skeleton";
+import { placeIslands, type PieceTexture } from "./pieceTexture";
 import { createMeshKit, evenShape, segmentDistance, type BodyRegion, type GearLayer, type MeshKit, type Ring } from "./meshKit";
 
 /** What a body is drawn from: one indexed mesh in the bind pose, skinned to its bones. */
@@ -31,6 +32,9 @@ export interface BodyGeometry {
   layers: GearLayer[];
   triangleLayers: number[];
   gearUVs: number[];
+  /** The own textures of the gear that has them: a layer with a `texture` is drawn in one of these,
+   *  and its `gearUVs` are places in it (0-1) instead of metres of a tiling material. */
+  pieceTextures: PieceTexture[];
 }
 
 export type { BodyRegion, GearLayer } from "./meshKit";
@@ -315,7 +319,7 @@ export function buildBodyOnly(race: RaceDef, options: BodyOptions = {}): BodyGeo
 
   const { joints, weights } = skinKit(kit, finalBones);
 
-  return { positions: points.flat(), indices, joints, weights, bones: finalBones, lattice, marks, triangles: indices.length / 3, parts, regions: regionAxes, triangleRegions, layers, triangleLayers, gearUVs };
+  return { positions: points.flat(), indices, joints, weights, bones: finalBones, lattice, marks, triangles: indices.length / 3, parts, regions: regionAxes, triangleRegions, layers, triangleLayers, gearUVs, pieceTextures: [] };
 }
 
 /** Skinning: each vertex follows the nearest of its own bone and the bones next to it, unless its
@@ -377,6 +381,8 @@ export interface PieceGeometry {
   layers: GearLayer[];
   triangleLayers: number[];
   gearUVs: number[];
+  /** Its own texture, laid out (its pixels painted later), if it has one. */
+  texture: PieceTexture | null;
 }
 
 /** Builds one gear unit onto a race's body: it depends on the race's curves and the body's lattice
@@ -389,7 +395,8 @@ export function buildGearPiece(race: RaceDef, body: BodyGeometry, unit: GearUnit
   const lattice = body.lattice;
   if (lattice) for (let i = 0; i < points.length; i++) points[i] = lattice.apply(points[i]);
   const { joints, weights } = skinKit(kit, body.bones);
-  return { positions: points.flat(), indices: kit.indices, joints, weights, triangles: kit.indices.length / 3, parts: kit.parts, layers: kit.layers, triangleLayers: kit.triangleLayers, gearUVs: kit.gearUVs };
+  const texture = unit.kind === "gear" && unit.piece.texture && kit.islands.length > 0 ? placeIslands(unit.piece.texture, kit.islands, kit.cornerIsland, kit.cornerRound, kit.cornerAlong, kit.gearUVs) : null;
+  return { positions: points.flat(), indices: kit.indices, joints, weights, triangles: kit.indices.length / 3, parts: kit.parts, layers: kit.layers, triangleLayers: kit.triangleLayers, gearUVs: kit.gearUVs, texture };
 }
 
 /** A body and its gear as one geometry: the pieces' triangles after the body's, their layers
@@ -403,15 +410,19 @@ export function joinGear(body: BodyGeometry, pieces: PieceGeometry[]): BodyGeome
   const layers = body.layers.slice();
   const triangleLayers = body.triangleLayers.slice();
   const gearUVs = body.gearUVs.slice();
+  const pieceTextures = body.pieceTextures.slice();
   const parts = { ...body.parts };
   for (const piece of pieces) {
     const offset = positions.length / 3;
+    const textureAt = pieceTextures.length;
+    if (piece.texture) pieceTextures.push(piece.texture);
     for (const v of piece.positions) positions.push(v);
     for (const i of piece.indices) indices.push(i + offset);
     for (const v of piece.joints) joints.push(v);
     for (const v of piece.weights) weights.push(v);
-    const remap = piece.layers.map((layer) => {
-      const found = layers.findIndex((l) => l.material === layer.material && l.tint.every((c, k) => c === layer.tint[k]) && l.flat === layer.flat);
+    const remap = piece.layers.map((own) => {
+      const layer = own.texture === undefined ? own : { ...own, texture: textureAt + own.texture };
+      const found = layers.findIndex((l) => l.material === layer.material && l.tint.every((c, k) => c === layer.tint[k]) && l.flat === layer.flat && l.texture === layer.texture);
       if (found >= 0) return found;
       layers.push(layer);
       return layers.length - 1;
@@ -423,7 +434,7 @@ export function joinGear(body: BodyGeometry, pieces: PieceGeometry[]): BodyGeome
     for (const v of piece.gearUVs) gearUVs.push(v);
     for (const [name, count] of Object.entries(piece.parts)) parts[name] = (parts[name] ?? 0) + count;
   }
-  return { ...body, positions, indices, joints, weights, triangles: indices.length / 3, parts, triangleRegions, layers, triangleLayers, gearUVs };
+  return { ...body, positions, indices, joints, weights, triangles: indices.length / 3, parts, triangleRegions, layers, triangleLayers, gearUVs, pieceTextures };
 }
 
 /** A race's body with its gear on: the body, then each piece built apart, joined. */
@@ -468,10 +479,18 @@ function addGear(kit: MeshKit, race: RaceDef, unit: GearUnit): void {
     chains[`foot${suffix}`] = () => [segment(`foot${suffix}`)];
   }
   /** Where a share `u` of a chain's length falls: which segment, how far along it, and how many
-   *  metres from the chain's start. */
+   *  metres from the chain's start. Before its start it goes on up toward the neck from the first
+   *  bone's joint, in the first bone's shape (a sleeve's cap, over the shoulder). */
   const locate = (chain: Segment[], u: number): { seg: Segment; t: number; along: number } => {
     const total = chain.reduce((sum, seg) => sum + seg.length, 0);
-    let at = Math.min(total, Math.max(0, u * total));
+    if (u < 0) {
+      const first = chain[0];
+      const neck: Vec = [0, bones[skeleton.index("chest")].tail[1], 0];
+      const toward = normalize(sub(neck, first.from));
+      const distance = -u * total;
+      return { seg: { ...first, from: add(first.from, scale(toward, distance)), to: first.from, length: distance }, t: 0, along: u * total };
+    }
+    let at = Math.min(total, u * total);
     for (const seg of chain) {
       if (at <= seg.length || seg === chain[chain.length - 1]) return { seg, t: at / seg.length, along: u * total };
       at -= seg.length;
@@ -479,8 +498,18 @@ function addGear(kit: MeshKit, race: RaceDef, unit: GearUnit): void {
     return { seg: chain[0], t: 0, along: 0 };
   };
 
+  /** The island of the piece's texture a shell or skirt goes in, or null: it tiles its material. */
+  const islandNameOf = (island: string | null, chainName: string): string | null => {
+    const recipe = island && unit.kind === "gear" ? unit.piece.texture?.islands[island] : undefined;
+    if (!island || !recipe) return null;
+    return island + (recipe.sided && /[RL]$/.test(chainName) ? chainName.slice(-1) : "");
+  };
+
   function buildShell(def: GearShell, chainName: string): void {
     const chain = chains[chainName]();
+    const islandName = islandNameOf(def.island, chainName);
+    // Up the torso and the head `along` grows toward the top; down a limb, away from it.
+    if (islandName) kit.beginIsland(islandName, chainName === "torso" || chainName === "head" ? -1 : 1);
     const n = def.loops + 2;
     const verts = def.verts ?? chain[0].shape.verts;
     const rings: { ring: Ring; along: number; seg: Segment; t: number }[] = [];
@@ -507,19 +536,25 @@ function addGear(kit: MeshKit, race: RaceDef, unit: GearUnit): void {
     const first = rings[0];
     const last = rings[rings.length - 1];
     kit.layer = rim;
-    zip(lip(first).verts, first.ring.verts, direction(first.ring, rings[1].ring), first.seg.reference);
+    if (def.lips[0]) zip(lip(first).verts, first.ring.verts, direction(first.ring, rings[1].ring), first.seg.reference);
     const alongN = direction(rings[rings.length - 2].ring, last.ring);
     if (def.cap) {
       kit.layer = outer;
       capRing(last.ring, add(last.seg.to, scale(normalize(alongN), def.thickness)), last.seg.bone, last.along + def.thickness);
-    } else zip(last.ring.verts, lip(last).verts, alongN, last.seg.reference);
+    } else if (def.lips[1]) zip(last.ring.verts, lip(last).verts, alongN, last.seg.reference);
     kit.layer = -1;
+    kit.endIsland();
   }
 
   function buildSkirt(def: GearSkirt): void {
     const { seg, t } = locate(chains.torso(), def.from);
+    // In an island it goes on down from where the island ends (a tunic's body, then its skirt).
+    const islandName = islandNameOf(def.island, "torso");
+    const edge = islandName ? kit.beginIsland(islandName, -1) : 0;
+    const direction = islandName ? kit.islands[kit.island].down : 1;
+    const along = (drop: number): number => (islandName ? edge + direction * drop : drop);
     const top = ring(seg.bone, seg.shape, seg.from, seg.to, t, seg.reference, seg.side, N, def.thickness);
-    mapRing(top, 0);
+    mapRing(top, along(0));
     const center = lerp(seg.from, seg.to, t);
     const [front, back, side] = sampled(seg.shape).map((f) => f(t) + def.thickness);
     const iThighs = [skeleton.index("thighR"), skeleton.index("thighL")];
@@ -528,7 +563,7 @@ function addGear(kit: MeshKit, race: RaceDef, unit: GearUnit): void {
       const y = center[1] - drop;
       const r = ring(iPelvis, evenShape(front * f - inset, back * f - inset, side * f - inset, 0.75, N), [0, y, center[2]], [0, y + 1, center[2]], 0, FORWARD, 0);
       for (const v of r.verts) extras[v] = iThighs;
-      mapRing(r, drop);
+      mapRing(r, along(drop));
       return r;
     };
     const rings: Ring[] = [top];
@@ -540,9 +575,10 @@ function addGear(kit: MeshKit, race: RaceDef, unit: GearUnit): void {
     kit.layer = layerOf({ material: def.material, tint: def.rim });
     zip(rings[rings.length - 1].verts, level(def.length, def.flare, def.thickness).verts, down, FORWARD);
     const tuck = ring(seg.bone, seg.shape, seg.from, seg.to, t, seg.reference, seg.side, N, 0.004);
-    mapRing(tuck, 0);
+    mapRing(tuck, along(0));
     zip(top.verts, tuck.verts, [0, 1, 0], FORWARD);
     kit.layer = -1;
+    kit.endIsland();
   }
 
   function buildPiece(def: GearPiece, suffix: "R" | "L" | ""): void {

@@ -20,7 +20,39 @@ export interface GearDef {
   shells: GearShell[];
   skirts: GearSkirt[];
   pieces: GearPiece[];
+  /** The piece's own texture, cut like the real thing (CHARACTERS.md, *Pieces and islands*); the
+   *  shells and skirts that name an island are drawn in it, the rest tile their materials. */
+  texture: PieceTextureDef | null;
 }
+
+/**
+ * A piece's own texture: its islands - the panels it is cut in, each a rectangle of the texture
+ * that a shell or skirt is unrolled into - and how each is made. `density` is texels a metre.
+ */
+export interface PieceTextureDef {
+  density: number;
+  islands: Record<string, IslandDef>;
+}
+
+/** One panel of a piece: its cloth, which way the threads run and what is done to it. */
+export interface IslandDef {
+  material: string;
+  tint: ColorTuple;
+  /** The warp: "down" along the panel (a tunic's body), or "across" it. */
+  grain: "down" | "across";
+  /** A panel of a left and right pair is made once for each side, `at`s mirrored on the left. */
+  sided: boolean;
+  features: IslandFeature[];
+}
+
+/** What a tailor does to a panel (metres throughout): a `seam` up and down it, `at` how far round
+ *  from the front (0-1); a `hem` folded and stitched, or a `binding` of another cloth sewn over, along
+ *  its top or bottom edge; a `join`, where it is sewn to the next panel, a stitch row `inset` in. */
+export type IslandFeature =
+  | { kind: "seam"; at: number }
+  | { kind: "hem"; edge: "top" | "bottom"; width: number }
+  | { kind: "binding"; edge: "top" | "bottom"; width: number; tint: ColorTuple }
+  | { kind: "join"; edge: "top" | "bottom"; inset: number };
 
 /** A material and its colour, as gear names them. */
 export interface GearSurface {
@@ -54,6 +86,10 @@ export interface GearShell extends GearSurface {
   verts: number | null;
   cap: boolean;
   rim: ColorTuple;
+  /** The island of the piece's texture it is unrolled into (a sided chain's is made for each side),
+   *  or null to tile its material; and whether it turns an edge in at its start and end. */
+  island: string | null;
+  lips: [boolean, boolean];
 }
 
 /** A skirt hanging from the torso at `from` (a share of its length): a robe's, a tabard's, plate
@@ -65,6 +101,8 @@ export interface GearSkirt extends GearSurface {
   thickness: number;
   loops: number;
   rim: ColorTuple;
+  /** The island it is unrolled into, continuing down from the island's end (a tunic's body). */
+  island: string | null;
 }
 
 /**
@@ -124,7 +162,7 @@ export function resolveOutfits(packs: PackSource[], gear: Map<string, GearDef>):
 
 function readGear(id: string, data: unknown, reader: Reader): GearDef {
   const obj = reader.object(data, "");
-  reader.onlyKeys(obj, "", ["name", "slot", "paint", "shells", "skirts", "pieces"]);
+  reader.onlyKeys(obj, "", ["name", "slot", "paint", "shells", "skirts", "pieces", "texture"]);
   const list = (key: string): { raw: RawObject; path: string }[] => reader.optionalArray(obj, key, "").map((raw, i) => ({ raw: reader.object(raw, `${key}[${i}]`), path: `${key}[${i}]` }));
   return {
     id,
@@ -139,7 +177,7 @@ function readGear(id: string, data: unknown, reader: Reader): GearDef {
       return { ...surface(raw, path, reader), regions, from: reader.optionalNumber(raw, "from", path, 0), to: reader.optionalNumber(raw, "to", path, 1), hem: reader.boolean(raw, "hem", path, true) };
     }),
     shells: list("shells").map(({ raw, path }) => {
-      reader.onlyKeys(raw, path, ["chain", "from", "to", "thickness", "flare", "loops", "verts", "cap", "material", "tint", "rim"]);
+      reader.onlyKeys(raw, path, ["chain", "from", "to", "thickness", "flare", "loops", "verts", "cap", "material", "tint", "rim", "island", "lips"]);
       const chain = reader.string(raw, "chain", path);
       if (!CHAINS.includes(chain)) reader.fail(`${path}.chain`, `no chain "${chain}" (expected one of: ${CHAINS.join(", ")})`);
       const flare = raw.flare === undefined ? [0, 0] : pair(raw.flare, `${path}.flare`, reader);
@@ -155,10 +193,12 @@ function readGear(id: string, data: unknown, reader: Reader): GearDef {
         verts: raw.verts === undefined ? null : reader.number(raw, "verts", path, { min: 4, max: 32, integer: true }),
         cap: reader.boolean(raw, "cap", path, false),
         rim: raw.rim === undefined ? darker(base.tint) : reader.color(raw, "rim", path),
+        island: reader.optionalString(raw, "island", path) || null,
+        lips: raw.lips === undefined ? [true, true] : (pair(raw.lips, `${path}.lips`, reader).map((v) => v !== 0) as [boolean, boolean]),
       };
     }),
     skirts: list("skirts").map(({ raw, path }) => {
-      reader.onlyKeys(raw, path, ["from", "length", "flare", "thickness", "loops", "material", "tint", "rim"]);
+      reader.onlyKeys(raw, path, ["from", "length", "flare", "thickness", "loops", "material", "tint", "rim", "island"]);
       const base = surface(raw, path, reader);
       return {
         ...base,
@@ -168,6 +208,7 @@ function readGear(id: string, data: unknown, reader: Reader): GearDef {
         thickness: reader.optionalNumber(raw, "thickness", path, 0.015, { min: 0, max: 0.2 }),
         loops: reader.optionalNumber(raw, "loops", path, 4, { min: 1, max: 16, integer: true }),
         rim: raw.rim === undefined ? darker(base.tint) : reader.color(raw, "rim", path),
+        island: reader.optionalString(raw, "island", path) || null,
       };
     }),
     pieces: list("pieces").map(({ raw, path }) => {
@@ -192,7 +233,46 @@ function readGear(id: string, data: unknown, reader: Reader): GearDef {
         rim: raw.rim === undefined ? darker(base.tint) : reader.color(raw, "rim", path),
       };
     }),
+    texture: raw_texture(obj, reader),
   };
+}
+
+function raw_texture(obj: RawObject, reader: Reader): PieceTextureDef | null {
+  if (obj.texture === undefined) return null;
+  const texture = reader.object(obj.texture, "texture");
+  reader.onlyKeys(texture, "texture", ["density", "islands"]);
+  const islandsRaw = reader.object(texture.islands, "texture.islands");
+  const islands: Record<string, IslandDef> = {};
+  for (const name of Object.keys(islandsRaw)) {
+    const path = `texture.islands.${name}`;
+    const raw = reader.object(islandsRaw[name], path);
+    reader.onlyKeys(raw, path, ["material", "tint", "grain", "sided", "features"]);
+    const features = reader.optionalArray(raw, "features", path).map((item, i): IslandFeature => {
+      const fpath = `${path}.features[${i}]`;
+      const f = reader.object(item, fpath);
+      const kind = reader.oneOf(f, "kind", fpath, ["seam", "hem", "binding", "join"] as const);
+      if (kind === "seam") {
+        reader.onlyKeys(f, fpath, ["kind", "at"]);
+        return { kind, at: reader.number(f, "at", fpath, { min: 0, max: 1 }) };
+      }
+      if (kind === "join") {
+        reader.onlyKeys(f, fpath, ["kind", "edge", "inset"]);
+        return { kind, edge: reader.oneOf(f, "edge", fpath, ["top", "bottom"] as const), inset: reader.number(f, "inset", fpath, { min: 0.004, max: 0.1 }) };
+      }
+      reader.onlyKeys(f, fpath, kind === "hem" ? ["kind", "edge", "width"] : ["kind", "edge", "width", "tint"]);
+      const edge = reader.oneOf(f, "edge", fpath, ["top", "bottom"] as const);
+      const width = reader.number(f, "width", fpath, { min: 0.002, max: 0.2 });
+      return kind === "hem" ? { kind, edge, width } : { kind, edge, width, tint: reader.color(f, "tint", fpath) };
+    });
+    islands[name] = {
+      material: reader.string(raw, "material", path),
+      tint: raw.tint === undefined ? [1, 1, 1] : reader.color(raw, "tint", path),
+      grain: reader.optionalString(raw, "grain", path) === "across" ? "across" : "down",
+      sided: reader.boolean(raw, "sided", path, false),
+      features,
+    };
+  }
+  return { density: reader.optionalNumber(texture, "density", "texture", 300, { min: 50, max: 1200 }), islands };
 }
 
 function surface(raw: RawObject, path: string, reader: Reader): GearSurface {

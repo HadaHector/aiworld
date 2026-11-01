@@ -43,6 +43,7 @@ self.onmessage = (event: MessageEvent<BuildRequest>): void => {
     // The lattice is a set of functions; the page has no use for it (the workbench builds in place).
     const body: BodyGeometry = { ...made.body, lattice: null };
     const transfer: ArrayBuffer[] = [];
+    for (const texture of body.pieceTextures) if (texture.pixels) transfer.push(texture.pixels.buffer as ArrayBuffer);
     if (made.layout) transfer.push(made.layout.uvs.buffer as ArrayBuffer, made.layout.texels.region.buffer as ArrayBuffer);
     if (made.base) {
       const b = made.base;

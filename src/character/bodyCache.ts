@@ -5,7 +5,7 @@ import { bakeGearMaterial, type BakedGearMaterial, type GearMaterialDef } from "
 import type { GearDef } from "./gearDef";
 import type { RaceDef } from "./raceDef";
 import { addTime, registerCacheStats, timed } from "./bodyTiming";
-import { coversFor, paintMaterials, type BodyRecipe } from "./bodyMake";
+import { coversFor, paintMaterials, paintPieces, type BodyRecipe } from "./bodyMake";
 import { buildInWorker } from "./bodyBuildPool";
 
 export type { BodyRecipe } from "./bodyMake";
@@ -80,6 +80,7 @@ function withoutTexelPlaces(layout: AtlasLayout): AtlasLayout {
 
 function sizeOf(body: BodyGeometry, layout: AtlasLayout | null, base: PaintBase | null): number {
   let bytes = body.positions.length * 8 * 2 + body.indices.length * 8 + body.gearUVs.length * 8 + body.triangles * 24;
+  for (const texture of body.pieceTextures) bytes += texture.pixels?.byteLength ?? 0;
   if (layout && base) bytes += layout.uvs.byteLength + layout.texels.region.byteLength + base.shade.byteLength + base.mottle.byteLength + base.worn.byteLength + base.source.byteLength + base.covered.byteLength + base.head.values.byteLength + base.nipples.distance.byteLength;
   return bytes;
 }
@@ -114,6 +115,7 @@ async function build(key: string, recipe: BodyRecipe, race: RaceDef, materials: 
   await pause?.();
   for (const layer of body.layers) await bake(layer.material);
   for (const id of paintMaterials(recipe)) await bake(id);
+  paintPieces(body, (id) => baked.get(id) ?? null);
   if (recipe.atlas <= 0) return { key, race, body, layout: null, base: null, baked, bytes: sizeOf(body, null, null) };
 
   const layout = timed("3 layoutAtlas", () => layoutAtlas(body, recipe.atlas));

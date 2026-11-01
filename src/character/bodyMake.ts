@@ -5,6 +5,7 @@ import type { BakedGearMaterial } from "./gearMaterial";
 import { sided } from "./characterConsts";
 import type { GearDef } from "./gearDef";
 import type { RaceDef, Sex } from "./raceDef";
+import { paintPieceTexture } from "./pieceTexturePaint";
 
 /** What a body is built from: the race (with its sex), the gear worn, and how it is cut and painted. */
 export interface BodyRecipe {
@@ -23,8 +24,17 @@ export interface BodyRecipe {
 export function paintMaterials(recipe: Pick<BodyRecipe, "gear" | "smallclothes">): string[] {
   const ids = new Set<string>();
   if (recipe.smallclothes) ids.add("linen");
-  for (const piece of recipe.gear) for (const paint of piece.paint) ids.add(paint.material);
+  for (const piece of recipe.gear) {
+    for (const paint of piece.paint) ids.add(paint.material);
+    for (const island of Object.values(piece.texture?.islands ?? {})) ids.add(island.material);
+  }
   return [...ids];
+}
+
+/** Paints the pieces' own textures (their layout is in the body already): what the gear's cloth is
+ *  cut and sewn into. */
+export function paintPieces(body: BodyGeometry, material: (id: string) => BakedGearMaterial | null): void {
+  for (const texture of body.pieceTextures) if (!texture.pixels) texture.pixels = paintPieceTexture(texture, material);
 }
 
 /** What is painted on a body's skin: smallclothes, then each piece of gear's paint, over it. */
@@ -51,6 +61,7 @@ export function coversFor(recipe: Pick<BodyRecipe, "sex" | "gear" | "smallclothe
 /** The whole of a body's making, with no waiting: what a worker does (bodyBuild.worker.ts). */
 export function makeBody(recipe: BodyRecipe, race: RaceDef, material: (id: string) => BakedGearMaterial | null): { body: BodyGeometry; layout: AtlasLayout | null; base: PaintBase | null } {
   const body = buildBody(race, { detail: recipe.detail, lattice: recipe.lattice, gear: recipe.gear });
+  paintPieces(body, material);
   if (recipe.atlas <= 0) return { body, layout: null, base: null };
   const layout = layoutAtlas(body, recipe.atlas);
   return { body, layout, base: preparePaint(body, layout, race, coversFor(recipe, race, body, material)) };

@@ -129,15 +129,22 @@ export function createCharacterMesh(scene: Scene, name: string, body: BodyGeomet
   const meshes: Mesh[] = [mesh];
   const held: string[] = [];
   body.layers.forEach((layer, i) => {
-    const baked = gear?.get(layer.material);
+    // A piece with a texture of its own has its places in it; the rest tile a material in metres.
+    const own = layer.texture !== undefined ? body.pieceTextures[layer.texture] : undefined;
+    const painted = own?.pixels ? own : undefined;
+    const baked = painted ? undefined : gear?.get(layer.material);
     const size = baked?.def.size ?? 1;
-    const part = timed("9 gear layer vertex data + mesh", () => build(`${name}Gear${i}`, i, (corner) => [body.gearUVs[corner * 2] / size, body.gearUVs[corner * 2 + 1] / size], layer.flat));
+    const part = timed("9 gear layer vertex data + mesh", () => build(`${name}Gear${i}`, i, painted ? (corner) => [body.gearUVs[corner * 2], body.gearUVs[corner * 2 + 1]] : (corner) => [body.gearUVs[corner * 2] / size, body.gearUVs[corner * 2 + 1] / size], layer.flat));
     if (!part) return;
     part.parent = mesh;
     const gearMaterial = new StandardMaterial(`${name}Gear${i}Material`, scene);
     // The race's own pieces (an elf's ears) are in the character's skin, whatever it is.
-    gearMaterial.diffuseColor = new Color3(...(layer.material === "skin" && skinColor ? skinColor : layer.tint));
-    if (baked) {
+    gearMaterial.diffuseColor = painted ? new Color3(1, 1, 1) : new Color3(...(layer.material === "skin" && skinColor ? skinColor : layer.tint));
+    if (painted) {
+      const id = `piece:${layer.texture}:${identityOf(painted.pixels!)}`;
+      if (!held.includes(id)) held.push(id);
+      gearMaterial.diffuseTexture = holdPieceTexture(scene, `piece:${layer.texture}`, painted.pixels!, painted.size);
+    } else if (baked) {
       if (!held.includes(layer.material)) held.push(layer.material);
       gearMaterial.diffuseTexture = holdTile(scene, layer.material, baked);
     }
@@ -214,4 +221,31 @@ function releaseTile(scene: Scene, id: string): void {
   if (!tile || --tile.holders > 0) return;
   tile.texture.dispose();
   tiles.get(scene)!.delete(id);
+}
+
+/** A piece's own texture, held as the gear tiles are: one texture however many bodies (of one
+ *  default body) wear the piece, a new one when its pixels are painted again. */
+function holdPieceTexture(scene: Scene, id: string, pixels: Uint8Array, size: number): RawTexture {
+  let inScene = tiles.get(scene);
+  if (!inScene) tiles.set(scene, (inScene = new Map()));
+  // The pixels are what says it is the same texture, not the index, which is a body's own.
+  const key = `${id}:${identityOf(pixels)}`;
+  let tile = inScene.get(key);
+  if (!tile) {
+    const texture = timed("10 piece texture (upload + mips)", () => RawTexture.CreateRGBATexture(pixels, size, size, scene, true, false, Texture.TRILINEAR_SAMPLINGMODE));
+    texture.name = `piece-${size}`;
+    texture.wrapU = Texture.CLAMP_ADDRESSMODE;
+    texture.wrapV = Texture.CLAMP_ADDRESSMODE;
+    inScene.set(key, (tile = { texture, holders: 0, source: pixels }));
+  }
+  tile.holders++;
+  return tile.texture;
+}
+
+const identities = new WeakMap<object, number>();
+let nextIdentity = 1;
+function identityOf(thing: object): number {
+  let id = identities.get(thing);
+  if (!id) identities.set(thing, (id = nextIdentity++));
+  return id;
 }

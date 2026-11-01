@@ -1,9 +1,40 @@
-// A plain linen tunic over the body and the upper arms.
+// A plain linen tunic, cut and sewn like the real one (CHARACTERS.md, *Pieces and islands*): a body
+// of two panels joined by side seams, running on below the waist as a skirt to mid-thigh; a sleeve to
+// each arm, sewn on at the shoulder; a bias binding on the neck, a folded hem on the body and the cuffs.
+// Its cloth is its own texture, one island to a panel, so it is drawn in one texture, not a tiled linen.
 {
   name: "Tunic",
   slot: "chest",
-  paint: [
-    { regions: ["torso"], from: -0.25, to: 1, material: "linen", tint: "#cfc4ae" },
-    { regions: ["arms"], from: -0.2, to: 0.45, material: "linen", tint: "#cfc4ae" },
+  texture: {
+    density: 300,
+    islands: {
+      body: {
+        material: "linen",
+        tint: "#cfc4ae",
+        grain: "down",
+        features: [
+          { kind: "seam", at: 0.25 },
+          { kind: "seam", at: 0.75 },
+          { kind: "hem", edge: "bottom", width: 0.035 },
+          { kind: "binding", edge: "top", width: 0.022, tint: "#a89a7c" },
+        ],
+      },
+      sleeve: {
+        material: "linen",
+        tint: "#cfc4ae",
+        grain: "down",
+        sided: true,
+        features: [
+          { kind: "seam", at: 0.25 },
+          { kind: "join", edge: "top", inset: 0.016 },
+          { kind: "hem", edge: "bottom", width: 0.03 },
+        ],
+      },
+    },
+  },
+  shells: [
+    { chain: "torso", from: 0.05, to: 1, thickness: 0.02, loops: 6, material: "linen", tint: "#cfc4ae", island: "body", lips: [0, 1] },
+    { chain: "arms", from: -0.13, to: 0.55, thickness: 0.012, flare: [0.02, 0], loops: 6, material: "linen", tint: "#cfc4ae", island: "sleeve" },
   ],
+  skirts: [{ from: 0.05, length: 0.34, flare: 1.22, thickness: 0.02, loops: 3, material: "linen", tint: "#cfc4ae", island: "body" }],
 }

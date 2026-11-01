@@ -6,6 +6,21 @@ import { add, dot, frameFor, length, lerp, normalize, scale, sub, type Vec } fro
 /** One material and colour gear is drawn in; `flat` faces keep their edges (a blade's). */
 export interface GearLayer extends GearSurface {
   flat: boolean;
+  /** Set when its triangles are textured by a piece's own texture (an index into the body's
+   *  `pieceTextures`; 0 until the piece is joined to a body) instead of tiling a material. */
+  texture?: number;
+}
+
+/** A stretch of a piece unrolled into one rectangle of its own texture (CHARACTERS.md, *Pieces and
+ *  islands*): round it across, along it down from its top. */
+export interface IslandRec {
+  name: string;
+  /** Which way along the raw `along` the island goes down: +1 increasing, -1 decreasing. */
+  down: 1 | -1;
+  /** The circumference of every ring mapped into it, and the extent of its raw `along`. */
+  circumferences: number[];
+  rawMin: number;
+  rawMax: number;
 }
 
 /** A stretch of body round one axis - the torso, an arm, a leg - unrolled into one rectangle of
@@ -47,10 +62,23 @@ export interface MeshKit {
   layers: GearLayer[];
   triangleLayers: number[];
   gearUVs: number[];
-  /** What the triangles made from now on are: a part to count in, an atlas region, a gear layer. */
+  /** The islands of the piece being built, and per triangle corner the island it is in (-1 for
+   *  none), how far round it (0-1, past 1 across the seam) and how far along it (raw metres). */
+  islands: IslandRec[];
+  cornerIsland: number[];
+  cornerRound: number[];
+  cornerAlong: number[];
+  /** What the triangles made from now on are: a part to count in, an atlas region, a gear layer,
+   *  an island of the piece's texture (-1 for none: the layers' material tiles). */
   part: string;
   region: number;
   layer: number;
+  island: number;
+  /** From here on rings are mapped into the island of that name, made if new. `down`: which way
+   *  its `along` runs toward the bottom. Returns how far down it already reaches, in raw `along`
+   *  (the end a continuing part - a skirt under a tunic's body - picks up from). */
+  beginIsland: (name: string, down: 1 | -1) => number;
+  endIsland: () => void;
   /** From here on triangles are in a new region round this axis. */
   enter: (name: string, axis: Vec[], reference: Vec, side: number) => void;
   vertex: (p: Vec, home: number, extra?: number[]) => number;
@@ -95,15 +123,41 @@ export function createMeshKit(): MeshKit {
   const gearU: number[] = [];
   const gearV: number[] = [];
   const gearC: number[] = [];
+  const islands: IslandRec[] = [];
+  const cornerIsland: number[] = [];
+  const cornerRound: number[] = [];
+  const cornerAlong: number[] = [];
+  /** Per vertex: its island (-1 none) and how far round its ring it is (-1 for a cap's tip). */
+  const islandOf: number[] = [];
+  const roundOf: number[] = [];
   const samplers = new Map<BoneShape, ((t: number) => number)[]>();
 
   const kit: MeshKit = {
     points, homes, extras, fixed, indices, parts, triangleRegions, regionAxes, layers, triangleLayers, gearUVs,
+    islands, cornerIsland, cornerRound, cornerAlong,
     part: "",
     region: 0,
     layer: -1,
+    island: -1,
+    beginIsland,
+    endIsland,
     enter, vertex, tri, sampled, ring, surface, zip, blend, bands, cap, layerOf, mapRing, capRing, fixAll,
   };
+
+  function beginIsland(name: string, down: 1 | -1): number {
+    let at = islands.findIndex((i) => i.name === name);
+    if (at < 0) {
+      islands.push({ name, down, circumferences: [], rawMin: Infinity, rawMax: -Infinity });
+      at = islands.length - 1;
+    }
+    kit.island = at;
+    const rec = islands[at];
+    return Number.isFinite(rec.rawMin) ? (rec.down > 0 ? rec.rawMax : rec.rawMin) : 0;
+  }
+
+  function endIsland(): void {
+    kit.island = -1;
+  }
 
   function enter(name: string, axis: Vec[], reference: Vec, side: number): void {
     regionAxes.push({ name, axis, reference, side });
@@ -117,6 +171,8 @@ export function createMeshKit(): MeshKit {
     gearU.push(0);
     gearV.push(0);
     gearC.push(0);
+    islandOf.push(-1);
+    roundOf.push(-1);
     return points.length - 1;
   }
 
@@ -127,7 +183,30 @@ export function createMeshKit(): MeshKit {
     triangleLayers.push(kit.layer);
     if (kit.layer < 0) {
       gearUVs.push(0, 0, 0, 0, 0, 0);
+      cornerIsland.push(-1, -1, -1);
+      cornerRound.push(0, 0, 0);
+      cornerAlong.push(0, 0, 0);
       return;
+    }
+    // In an island, a corner's place is how far round its ring (a triangle across the seam carries
+    // its low side past 1) and how far along; tiling material's metres are kept beside it.
+    const own = [a, b, c];
+    const island = islandOf[a];
+    if (island >= 0) {
+      const real = own.map((v) => roundOf[v] >= 0);
+      const rounds = own.map((v) => roundOf[v]);
+      const known = rounds.filter((_, k) => real[k]);
+      if (known.length > 0 && Math.max(...known) - Math.min(...known) > 0.5) rounds.forEach((r, k) => (rounds[k] = real[k] && r < 0.5 ? r + 1 : r));
+      const mean = rounds.filter((_, k) => real[k]).reduce((x, y) => x + y, 0) / Math.max(1, real.filter(Boolean).length);
+      own.forEach((v, k) => {
+        cornerIsland.push(island);
+        cornerRound.push(real[k] ? rounds[k] : mean);
+        cornerAlong.push(gearV[v]);
+      });
+    } else {
+      cornerIsland.push(-1, -1, -1);
+      cornerRound.push(0, 0, 0);
+      cornerAlong.push(0, 0, 0);
     }
     // Round the seam as the atlas does: a triangle across it carries its low side past the wrap.
     const corners = [a, b, c];
@@ -279,9 +358,11 @@ export function createMeshKit(): MeshKit {
   }
 
   function layerOf(surface: GearSurface, flat = false): number {
-    const found = layers.findIndex((l) => l.material === surface.material && l.tint.every((c, k) => c === surface.tint[k]) && l.flat === flat);
+    // Inside an island a layer is only a mesh to group triangles in: its texture is the piece's.
+    const textured = kit.island >= 0;
+    const found = layers.findIndex((l) => l.material === surface.material && l.tint.every((c, k) => c === surface.tint[k]) && l.flat === flat && (l.texture !== undefined) === textured);
     if (found >= 0) return found;
-    layers.push({ material: surface.material, tint: surface.tint, flat });
+    layers.push(textured ? { material: surface.material, tint: surface.tint, flat, texture: 0 } : { material: surface.material, tint: surface.tint, flat });
     return layers.length - 1;
   }
 
@@ -293,13 +374,29 @@ export function createMeshKit(): MeshKit {
       gearU[v] = (k / n) * circumference;
       gearV[v] = along;
       gearC[v] = circumference;
+      if (kit.island >= 0) {
+        islandOf[v] = kit.island;
+        roundOf[v] = k / n;
+      }
     });
+    if (kit.island >= 0) {
+      const rec = islands[kit.island];
+      rec.circumferences.push(circumference);
+      rec.rawMin = Math.min(rec.rawMin, along);
+      rec.rawMax = Math.max(rec.rawMax, along);
+    }
   }
 
   function capRing(r: Ring, tip: Vec, home: number, along: number, start = false): void {
     const before = points.length;
     cap(r, tip, home, start);
     gearV[before] = along;
+    if (kit.island >= 0) {
+      islandOf[before] = kit.island;
+      const rec = islands[kit.island];
+      rec.rawMin = Math.min(rec.rawMin, along);
+      rec.rawMax = Math.max(rec.rawMax, along);
+    }
   }
 
   function fixAll(from: number, weights: [number, number][]): void {
