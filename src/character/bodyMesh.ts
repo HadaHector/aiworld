@@ -655,7 +655,9 @@ function addGear(kit: MeshKit, race: RaceDef, unit: GearUnit, body: BodyGeometry
     const steps = def.loops + 2;
     for (let i = 0; i < steps; i++) {
       const t = def.from + ((def.to - def.from) * i) / (steps - 1);
-      const r = ring(iNeck, race.shape.neck, neckBone.head, neckBone.tail, t, FORWARD, 0, count, def.thickness);
+      // The neck's own width here, and the collar that much wider again.
+      const radius = sampled(race.shape.neck).reduce((sum, f) => sum + f(t), 0) / 4;
+      const r = ring(iNeck, race.shape.neck, neckBone.head, neckBone.tail, t, FORWARD, 0, count, def.thickness + def.spread * radius);
       mapRing(r, t * neckLength);
       rings.push(r);
     }

@@ -132,6 +132,8 @@ export interface GearCollar extends GearSurface {
   to: number;
   thickness: number;
   loops: number;
+  /** How much wider than the neck it stands, as a share of the neck's radius. */
+  spread: number;
   /** The band the funnel and the collar are, cut open at the back. */
   island: string;
 }
@@ -295,13 +297,14 @@ function readGear(id: string, data: unknown, reader: Reader): GearDef {
       };
     }),
     collars: list("collars").map(({ raw, path }) => {
-      reader.onlyKeys(raw, path, ["from", "to", "thickness", "loops", "island", "material", "tint"]);
+      reader.onlyKeys(raw, path, ["from", "to", "thickness", "loops", "spread", "island", "material", "tint"]);
       return {
         ...surface(raw, path, reader),
         from: reader.optionalNumber(raw, "from", path, 0.5, { min: 0, max: 1 }),
         to: reader.optionalNumber(raw, "to", path, 0.9, { min: 0, max: 1 }),
         thickness: reader.optionalNumber(raw, "thickness", path, 0.012, { min: 0, max: 0.05 }),
         loops: reader.optionalNumber(raw, "loops", path, 2, { min: 0, max: 8, integer: true }),
+        spread: reader.optionalNumber(raw, "spread", path, 0, { min: -0.5, max: 2 }),
         island: reader.string(raw, "island", path),
       };
     }),
