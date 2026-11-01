@@ -9,7 +9,7 @@
   name: "Tunic",
   slot: "chest",
   texture: {
-    density: 260,
+    density: 340,
     islands: {
       body: {
         material: "linen",
@@ -18,6 +18,8 @@
         features: [
           { kind: "seam", at: 0.25, from: 0.3 },
           { kind: "seam", at: 0.75, from: 0.3 },
+          { kind: "seam", at: 0 },
+          { kind: "join", edge: "join", inset: 0.016 },
           { kind: "hem", edge: "bottom", width: 0.035 },
           { kind: "binding", edge: "top", width: 0.022, tint: "#a89a7c" },
         ],

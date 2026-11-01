@@ -46,7 +46,8 @@ export interface IslandDef {
   features: IslandFeature[];
 }
 
-/** What a tailor does to a panel (metres throughout): a `seam` up and down it, `at` how far round
+/** What a tailor does to a panel (metres throughout, along the panel's real edges - its top, bottom
+ *  and "join" edges, an armhole): a `seam` up and down it, `at` how far round
  *  (0-1; the front is in the middle, 0.5), between `from` and `to` shares of the panel's height from
  *  its top (a side seam stops at the armhole); a `hem` folded and stitched, or a `binding` of another cloth sewn over, along
  *  its top or bottom edge; a `join`, where it is sewn to the next panel, a stitch row `inset` in. */
@@ -54,7 +55,7 @@ export type IslandFeature =
   | { kind: "seam"; at: number; from: number; to: number }
   | { kind: "hem"; edge: "top" | "bottom"; width: number }
   | { kind: "binding"; edge: "top" | "bottom"; width: number; tint: ColorTuple }
-  | { kind: "join"; edge: "top" | "bottom"; inset: number };
+  | { kind: "join"; edge: "top" | "bottom" | "join"; inset: number };
 
 /** A material and its colour, as gear names them. */
 export interface GearSurface {
@@ -289,7 +290,7 @@ function raw_texture(obj: RawObject, reader: Reader): PieceTextureDef | null {
       }
       if (kind === "join") {
         reader.onlyKeys(f, fpath, ["kind", "edge", "inset"]);
-        return { kind, edge: reader.oneOf(f, "edge", fpath, ["top", "bottom"] as const), inset: reader.number(f, "inset", fpath, { min: 0.004, max: 0.1 }) };
+        return { kind, edge: reader.oneOf(f, "edge", fpath, ["top", "bottom", "join"] as const), inset: reader.number(f, "inset", fpath, { min: 0.004, max: 0.1 }) };
       }
       reader.onlyKeys(f, fpath, kind === "hem" ? ["kind", "edge", "width"] : ["kind", "edge", "width", "tint"]);
       const edge = reader.oneOf(f, "edge", fpath, ["top", "bottom"] as const);

@@ -388,9 +388,7 @@ every vertex out along its smooth normal by `thickness`, and skins it with the b
 (`buildCover` in `bodyMesh.ts`). It fits every curve the body has, the torso's and the sleeve's
 sharing the vertices at the armhole, so there is no gap and no join to design, and the neckline,
 armhole and cuff are simply where the selection ends. It is unrolled as the atlas unrolls the body
-(`cylinderOf`), but measured *down over its own surface from the edge it hangs from* (the neckline for
-a body, the armhole for a sleeve): the shortest path along the cloth, so a binding follows the neckline
-all round although the neckline is neither level nor a function of the angle. A skirt can hang from a
+(`cylinderOf`): how far round, and how far down its axis. A skirt can hang from a
 torso cover's bottom edge, sharing its vertices and carrying the measure on, so a tunic's body and
 skirt are one panel with no step. `hide: true` takes the body triangles under a cover out of the
 drawing (`hiddenTriangles`): the cloth replaces the skin where it is a whole garment. `placeIslands` (`pieceTexture.ts`) then packs the
@@ -401,6 +399,16 @@ geometry, so every body has it; the pixels are painted when the gear materials a
 carry its index (`layer.texture`); the mesh gives each its own `RawTexture`, held once per scene for
 every body that wears it.
 
+**An island is a pattern piece, not a rectangle.** It is centred and as wide round as the cloth is at
+each height (`placeIslands`: a width profile every centimetre down), so it is narrow at a neckline and
+wide at a hem, a texel covers the same cloth everywhere (the neck is not stretched across the width of
+the hips), and its outline is the cut. Every vertex's place across is its angle round the axis times
+its own circumference. The panel's edges are recorded as the geometry has them - the open edges of
+the cover, walked in order: a `top` (neckline, sleeve head), a `bottom` (the skirt's hem, a cuff) and
+`join`s (armholes) - and the painter draws hems, bindings and joins along those polylines, by the
+distance to them and how far along them, so a hem lies along the hem and a binding follows the neckline
+however the cut curves, and stitches run along the edge.
+
 **The recipe** (`texture` in the gear's json5): per island, the cloth (a gear material - the painter
 samples its weave), the tint, the `grain` (the warp runs down the panel or across it), `sided`, and
 `features` as a tailor would list them:
@@ -410,7 +418,7 @@ samples its weave), the tint, the `grain` (the warp runs down the panel or acros
 | `seam` at a share round the panel | a seam sewn flat: the allowance pressed to one side, an edge each side, a row of stitches over each |
 | `hem` on the top or bottom edge, a width | a fold of cloth a shade heavier, its cut edge turned under, a stitch row along the fold |
 | `binding` on an edge, a width, a tint | a bias-cut band of another cloth (its threads at 45 degrees) with a stitch row each side |
-| `join` on an edge, an inset | the edge where this panel is sewn to the next: the allowance turned in, a shadow, a stitch row |
+| `join` on an edge (`top`, `bottom` or `join`, the armholes), an inset | the edge where this panel is sewn to the next: the allowance turned in, a shadow, a stitch row |
 
 All widths are metres, drawn about twice life size so they read from the camera. Cloth hangs in slow
 folds (`hang`), the thread is the cloth a few shades darker, and what lies outside the islands is the

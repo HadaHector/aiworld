@@ -17,10 +17,22 @@ export interface IslandRec {
   name: string;
   /** Which way along the raw `along` the island goes down: +1 increasing, -1 decreasing. */
   down: 1 | -1;
-  /** The circumference of every ring mapped into it, and the extent of its raw `along`. */
-  circumferences: number[];
+  /** How wide it is round at each `along` (raw, circumference) wherever something is mapped into
+   *  it, and the extent of its raw `along`: the width of the panel, which is its outline. */
+  samples: [number, number][];
   rawMin: number;
   rawMax: number;
+  /** Its edges, as the points that make them (round, `along`, circumference there): a top (a
+   *  neckline, a sleeve head), a bottom (a hem, a cuff) and joins (an armhole). */
+  loops: IslandLoop[];
+}
+
+export interface IslandLoop {
+  kind: "top" | "bottom" | "join";
+  /** A ring right round the panel (in order of how far round), or a loop of its own (an armhole:
+   *  in the order it is walked, closed). */
+  ring: boolean;
+  points: { round: number; raw: number; circumference: number }[];
 }
 
 /** A stretch of body round one axis - the torso, an arm, a leg - unrolled into one rectangle of
@@ -68,6 +80,8 @@ export interface MeshKit {
   cornerIsland: number[];
   cornerRound: number[];
   cornerAlong: number[];
+  /** The circumference round the ring each corner is on (0 for a cap's tip, which has none). */
+  cornerCircumference: number[];
   /** What the triangles made from now on are: a part to count in, an atlas region, a gear layer,
    *  an island of the piece's texture (-1 for none: the layers' material tiles). */
   part: string;
@@ -82,6 +96,9 @@ export interface MeshKit {
   /** Puts a vertex made some other way (a cover's, from the body's own) in the island being built:
    *  how far round it (0-1) and its raw `along` (what a cover measures over its own surface). */
   mapVertex: (vertex: number, round: number, along: number, circumference: number) => void;
+  /** Records an edge of the island being built, from vertices already mapped into it. A top or
+   *  bottom replaces the one it had. */
+  addLoop: (kind: IslandLoop["kind"], vertices: number[]) => void;
   /** Vertices that are already in their final place (the lattice has been applied to them). */
   placed: Set<number>;
   /** From here on triangles are in a new region round this axis. */
@@ -132,14 +149,16 @@ export function createMeshKit(): MeshKit {
   const cornerIsland: number[] = [];
   const cornerRound: number[] = [];
   const cornerAlong: number[] = [];
+  const cornerCircumference: number[] = [];
   /** Per vertex: its island (-1 none) and how far round its ring it is (-1 for a cap's tip). */
   const islandOf: number[] = [];
   const roundOf: number[] = [];
+  const circOf: number[] = [];
   const samplers = new Map<BoneShape, ((t: number) => number)[]>();
 
   const kit: MeshKit = {
     points, homes, extras, fixed, indices, parts, triangleRegions, regionAxes, layers, triangleLayers, gearUVs,
-    islands, cornerIsland, cornerRound, cornerAlong,
+    islands, cornerIsland, cornerRound, cornerAlong, cornerCircumference,
     part: "",
     region: 0,
     layer: -1,
@@ -147,6 +166,7 @@ export function createMeshKit(): MeshKit {
     beginIsland,
     endIsland,
     mapVertex,
+    addLoop,
     placed: new Set<number>(),
     enter, vertex, tri, sampled, ring, surface, zip, blend, bands, cap, layerOf, mapRing, capRing, fixAll,
   };
@@ -154,7 +174,7 @@ export function createMeshKit(): MeshKit {
   function beginIsland(name: string, down: 1 | -1): number {
     let at = islands.findIndex((i) => i.name === name);
     if (at < 0) {
-      islands.push({ name, down, circumferences: [], rawMin: Infinity, rawMax: -Infinity });
+      islands.push({ name, down, samples: [], rawMin: Infinity, rawMax: -Infinity, loops: [] });
       at = islands.length - 1;
     }
     kit.island = at;
@@ -171,9 +191,21 @@ export function createMeshKit(): MeshKit {
     islandOf[v] = kit.island;
     roundOf[v] = round;
     gearV[v] = raw;
-    rec.circumferences.push(circumference);
+    circOf[v] = circumference;
+    rec.samples.push([raw, circumference]);
     rec.rawMin = Math.min(rec.rawMin, raw);
     rec.rawMax = Math.max(rec.rawMax, raw);
+  }
+
+  function addLoop(kind: IslandLoop["kind"], vertices: number[]): void {
+    const rec = islands[kit.island];
+    let points = vertices.map((v) => ({ round: roundOf[v], raw: gearV[v], circumference: circOf[v] }));
+    const rounds = points.map((p) => p.round);
+    const ring = Math.max(...rounds) - Math.min(...rounds) > 0.8;
+    if (ring) points = points.sort((a, b) => a.round - b.round);
+    else points = [...points, points[0]];
+    if (kind !== "join") rec.loops = rec.loops.filter((l) => l.kind !== kind);
+    rec.loops.push({ kind, ring, points });
   }
 
   function enter(name: string, axis: Vec[], reference: Vec, side: number): void {
@@ -190,6 +222,7 @@ export function createMeshKit(): MeshKit {
     gearC.push(0);
     islandOf.push(-1);
     roundOf.push(-1);
+    circOf.push(0);
     return points.length - 1;
   }
 
@@ -203,6 +236,7 @@ export function createMeshKit(): MeshKit {
       cornerIsland.push(-1, -1, -1);
       cornerRound.push(0, 0, 0);
       cornerAlong.push(0, 0, 0);
+      cornerCircumference.push(0, 0, 0);
       return;
     }
     // In an island, a corner's place is how far round its ring (a triangle across the seam carries
@@ -215,15 +249,18 @@ export function createMeshKit(): MeshKit {
       const known = rounds.filter((_, k) => real[k]);
       if (known.length > 0 && Math.max(...known) - Math.min(...known) > 0.5) rounds.forEach((r, k) => (rounds[k] = real[k] && r < 0.5 ? r + 1 : r));
       const mean = rounds.filter((_, k) => real[k]).reduce((x, y) => x + y, 0) / Math.max(1, real.filter(Boolean).length);
+      const meanCirc = own.filter((_, k) => real[k]).reduce((x, v) => x + circOf[v], 0) / Math.max(1, real.filter(Boolean).length);
       own.forEach((v, k) => {
         cornerIsland.push(island);
         cornerRound.push(real[k] ? rounds[k] : mean);
         cornerAlong.push(gearV[v]);
+        cornerCircumference.push(real[k] ? circOf[v] : meanCirc);
       });
     } else {
       cornerIsland.push(-1, -1, -1);
       cornerRound.push(0, 0, 0);
       cornerAlong.push(0, 0, 0);
+      cornerCircumference.push(0, 0, 0);
     }
     // Round the seam as the atlas does: a triangle across it carries its low side past the wrap.
     const corners = [a, b, c];
@@ -398,7 +435,8 @@ export function createMeshKit(): MeshKit {
     });
     if (kit.island >= 0) {
       const rec = islands[kit.island];
-      rec.circumferences.push(circumference);
+      for (const v of r.verts) circOf[v] = circumference;
+      rec.samples.push([along, circumference]);
       rec.rawMin = Math.min(rec.rawMin, along);
       rec.rawMax = Math.max(rec.rawMax, along);
     }

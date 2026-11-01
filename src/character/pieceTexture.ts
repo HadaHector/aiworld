@@ -2,9 +2,12 @@ import type { IslandDef, PieceTextureDef } from "./gearDef";
 import type { IslandRec } from "./meshKit";
 
 /**
- * A piece's own texture (CHARACTERS.md, *Pieces and islands*): the islands its shells and skirts
- * are unrolled into, laid out in one square, and - once painted - its pixels. The layout needs only
- * the geometry, so bodies are built with it; the pixels are painted when the materials are baked.
+ * A piece's own texture (CHARACTERS.md, *Pieces and islands*): the islands its shells, skirts and
+ * covers are unrolled into, laid out in one square, and - once painted - its pixels. The layout needs
+ * only the geometry, so bodies are built with it; the pixels are painted when the materials are baked.
+ *
+ * An island is a pattern piece: centred, as wide round as the cloth is at each height (wide at a
+ * hem, narrow at a neck), so a texel covers the same cloth everywhere and the outline is the cut.
  */
 export interface PieceTexture {
   /** Texels a side. */
@@ -30,23 +33,63 @@ export interface IslandPlace {
   y: number;
   width: number;
   height: number;
-  /** How wide round it (the mean circumference, a little past it for the seam) and how tall, in metres. */
+  /** How wide the rectangle holds (the widest the cloth gets, with room for the seam) and how tall, in metres. */
   widthMeters: number;
   heightMeters: number;
+  /** How wide round the cloth is at each `PROFILE_STEP` metres down from the top. */
+  profile: number[];
+  /** The edges of the panel as points in metres (across from its middle, down from its top), and
+   *  the circumference at each, so a seam or hem is drawn along the real edge. */
+  loops: { kind: "top" | "bottom" | "join"; ring: boolean; points: { round: number; u: number; v: number; circumference: number }[] }[];
 }
 
-/** How far past the circumference an island reaches, for the triangles across the seam. */
+/** How much wider than its widest the rectangle is, for the triangles across the seam. */
 export const SEAM_ROOM = 1.15;
 const PAD = 3;
+/** Metres between the profile's entries. */
+export const PROFILE_STEP = 0.01;
 
 /**
  * Lays a piece's islands out in a square - tallest first, in shelves, the smallest square that
  * holds them - and gives every triangle corner in them its place in it (`gearUVs`, replaced).
  */
-export function placeIslands(def: PieceTextureDef, islands: IslandRec[], cornerIsland: number[], cornerRound: number[], cornerAlong: number[], gearUVs: number[]): PieceTexture {
+export function placeIslands(def: PieceTextureDef, islands: IslandRec[], cornerIsland: number[], cornerRound: number[], cornerAlong: number[], cornerCircumference: number[], gearUVs: number[]): PieceTexture {
   const sized = islands.map((rec) => {
-    const circumference = rec.circumferences.reduce((a, b) => a + b, 0) / Math.max(1, rec.circumferences.length);
-    return { widthMeters: circumference * SEAM_ROOM, heightMeters: Math.max(0.01, rec.rawMax - rec.rawMin), circumference };
+    const heightMeters = Math.max(0.01, rec.rawMax - rec.rawMin);
+    const downOf = (raw: number): number => (rec.down > 0 ? raw - rec.rawMin : rec.rawMax - raw);
+    // Widest the cloth is at each step down, and between the steps where nothing is, on a line.
+    const steps = Math.ceil(heightMeters / PROFILE_STEP) + 1;
+    const profile = new Array<number>(steps).fill(0);
+    for (const [raw, circumference] of rec.samples) {
+      const i = Math.min(steps - 1, Math.max(0, Math.round(downOf(raw) / PROFILE_STEP)));
+      profile[i] = Math.max(profile[i], circumference);
+    }
+    const known = profile.map((c) => c > 0);
+    const firstKnown = known.indexOf(true);
+    const lastKnown = known.lastIndexOf(true);
+    for (let i = 0; i < steps; i++) {
+      if (known[i]) continue;
+      if (i < firstKnown) profile[i] = profile[firstKnown];
+      else if (i > lastKnown) profile[i] = profile[lastKnown];
+      else {
+        let before = i - 1;
+        while (!known[before]) before--;
+        let after = i + 1;
+        while (!known[after]) after++;
+        profile[i] = profile[before] + ((profile[after] - profile[before]) * (i - before)) / (after - before);
+      }
+    }
+    for (let pass = 0; pass < 2; pass++) {
+      const copy = profile.slice();
+      for (let i = 0; i < steps; i++) profile[i] = (copy[Math.max(0, i - 1)] + copy[i] * 2 + copy[Math.min(steps - 1, i + 1)]) / 4;
+    }
+    // The smoothing must not narrow it below what a vertex needs.
+    for (const [raw, circumference] of rec.samples) {
+      const i = Math.min(steps - 1, Math.max(0, Math.round(downOf(raw) / PROFILE_STEP)));
+      profile[i] = Math.max(profile[i], circumference);
+    }
+    const widest = Math.max(...profile);
+    return { heightMeters, widthMeters: widest * SEAM_ROOM, profile, downOf };
   });
   const widths = sized.map((s) => Math.ceil(s.widthMeters * def.density) + 2 * PAD);
   const heights = sized.map((s) => Math.ceil(s.heightMeters * def.density) + 2 * PAD);
@@ -58,16 +101,34 @@ export function placeIslands(def: PieceTextureDef, islands: IslandRec[], cornerI
 
   const placed: IslandPlace[] = islands.map((rec, i) => {
     const base = islandBase(rec.name, def);
-    return { name: rec.name, recipe: base.recipe, mirrored: base.mirrored, x: places![i].x, y: places![i].y, width: widths[i], height: heights[i], widthMeters: sized[i].widthMeters, heightMeters: sized[i].heightMeters };
+    const s = sized[i];
+    return {
+      name: rec.name,
+      recipe: base.recipe,
+      mirrored: base.mirrored,
+      x: places![i].x,
+      y: places![i].y,
+      width: widths[i],
+      height: heights[i],
+      widthMeters: s.widthMeters,
+      heightMeters: s.heightMeters,
+      profile: s.profile,
+      loops: rec.loops.map((loop) => ({
+        kind: loop.kind,
+        ring: loop.ring,
+        points: loop.points.map((p) => ({ round: p.round, u: (p.round - 0.5) * p.circumference, v: s.downOf(p.raw), circumference: p.circumference })),
+      })),
+    };
   });
   for (let corner = 0; corner < cornerIsland.length; corner++) {
     const at = cornerIsland[corner];
     if (at < 0) continue;
-    const rec = islands[at];
+    const s = sized[at];
     const place = placed[at];
-    const down = rec.down > 0 ? cornerAlong[corner] - rec.rawMin : rec.rawMax - cornerAlong[corner];
-    const x = place.x + PAD + cornerRound[corner] * sized[at].circumference * def.density;
-    const y = place.y + PAD + down * def.density;
+    const v = s.downOf(cornerAlong[corner]);
+    const circumference = cornerCircumference[corner] > 0 ? cornerCircumference[corner] : s.profile[Math.min(s.profile.length - 1, Math.max(0, Math.round(v / PROFILE_STEP)))];
+    const x = place.x + PAD + (s.widthMeters / 2 + (cornerRound[corner] - 0.5) * circumference) * def.density;
+    const y = place.y + PAD + v * def.density;
     gearUVs[corner * 2] = x / size;
     gearUVs[corner * 2 + 1] = y / size;
   }
