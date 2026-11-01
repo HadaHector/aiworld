@@ -56,6 +56,7 @@ export function createCharacterMesh(scene: Scene, name: string, body: BodyGeomet
   // Every triangle its own vertices (a corner's texture place is its own), the normals smooth -
   // or, on a flat gear layer (a blade), its face's.
   const P = body.positions;
+  const hidden = new Set(body.hiddenTriangles);
   const smooth = timed("6 smoothNormals", () => smoothNormals(body));
   const atlas = "uvs" in skin ? skin : null;
   function build(meshName: string, layer: number, uvOf: (corner: number) => [number, number] | null, flat: boolean): Mesh | null {
@@ -66,6 +67,8 @@ export function createCharacterMesh(scene: Scene, name: string, body: BodyGeomet
     const uvs: number[] = [];
     for (let t = 0; t < body.indices.length; t += 3) {
       if (body.triangleLayers[t / 3] !== layer) continue;
+      // Skin under a cover that takes its place is not drawn.
+      if (layer < 0 && hidden.has(t / 3)) continue;
       const corners = [body.indices[t], body.indices[t + 1], body.indices[t + 2]];
       const at = (v: number): Vec => [P[v * 3], P[v * 3 + 1], P[v * 3 + 2]];
       const face = normalize(cross(sub(at(corners[1]), at(corners[0])), sub(at(corners[2]), at(corners[0]))));

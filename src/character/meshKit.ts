@@ -79,6 +79,11 @@ export interface MeshKit {
    *  (the end a continuing part - a skirt under a tunic's body - picks up from). */
   beginIsland: (name: string, down: 1 | -1) => number;
   endIsland: () => void;
+  /** Puts a vertex made some other way (a cover's, from the body's own) in the island being built:
+   *  how far round it (0-1) and its raw `along` (what a cover measures over its own surface). */
+  mapVertex: (vertex: number, round: number, along: number, circumference: number) => void;
+  /** Vertices that are already in their final place (the lattice has been applied to them). */
+  placed: Set<number>;
   /** From here on triangles are in a new region round this axis. */
   enter: (name: string, axis: Vec[], reference: Vec, side: number) => void;
   vertex: (p: Vec, home: number, extra?: number[]) => number;
@@ -141,6 +146,8 @@ export function createMeshKit(): MeshKit {
     island: -1,
     beginIsland,
     endIsland,
+    mapVertex,
+    placed: new Set<number>(),
     enter, vertex, tri, sampled, ring, surface, zip, blend, bands, cap, layerOf, mapRing, capRing, fixAll,
   };
 
@@ -157,6 +164,16 @@ export function createMeshKit(): MeshKit {
 
   function endIsland(): void {
     kit.island = -1;
+  }
+
+  function mapVertex(v: number, round: number, raw: number, circumference: number): void {
+    const rec = islands[kit.island];
+    islandOf[v] = kit.island;
+    roundOf[v] = round;
+    gearV[v] = raw;
+    rec.circumferences.push(circumference);
+    rec.rawMin = Math.min(rec.rawMin, raw);
+    rec.rawMax = Math.max(rec.rawMax, raw);
   }
 
   function enter(name: string, axis: Vec[], reference: Vec, side: number): void {

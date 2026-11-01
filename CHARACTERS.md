@@ -376,11 +376,24 @@ tiling material cannot have (a hem, a seam, a binding, rivets), drawn in one tex
 other piece shares.
 
 **Islands.** A piece's texture is a set of *islands*, each one panel of the piece unrolled: round it
-across (from its front, wrapping at the seam), along it down from its top. A `shell` or `skirt` names
-its island (`island: "body"`); a shell on a sided chain (`arms`) makes one for each side
-(`sleeveR`, `sleeveL`) when the recipe is `sided`. The builders (`meshKit.ts`: `beginIsland`,
-`mapRing`) give every vertex its place in its island; a skirt continues down from where its island's
-shell ends, so a tunic's body and skirt are one panel. `placeIslands` (`pieceTexture.ts`) then packs the
+across (wrapping at the seam), along it down from its top. A `shell`, `skirt` or `cover` names its
+island (`island: "body"`); a shell on a sided chain (`arms`) makes one for each side (`sleeveR`,
+`sleeveL`) when the recipe is `sided`. The builders (`meshKit.ts`: `beginIsland`, `mapRing`,
+`mapVertex`) give every vertex its place in its island.
+
+**Covers: cloth cut from the body's own surface.** A shell is a tube round a bone, which does not
+fit where the body is not a tube - the shoulders above all. A `cover` (`covers` in the gear's json5)
+takes the body's own triangles of a region (`torso`, `arms`...) between two shares of its axis, moves
+every vertex out along its smooth normal by `thickness`, and skins it with the body's own weights
+(`buildCover` in `bodyMesh.ts`). It fits every curve the body has, the torso's and the sleeve's
+sharing the vertices at the armhole, so there is no gap and no join to design, and the neckline,
+armhole and cuff are simply where the selection ends. It is unrolled as the atlas unrolls the body
+(`cylinderOf`), but measured *down over its own surface from the edge it hangs from* (the neckline for
+a body, the armhole for a sleeve): the shortest path along the cloth, so a binding follows the neckline
+all round although the neckline is neither level nor a function of the angle. A skirt can hang from a
+torso cover's bottom edge, sharing its vertices and carrying the measure on, so a tunic's body and
+skirt are one panel with no step. `hide: true` takes the body triangles under a cover out of the
+drawing (`hiddenTriangles`): the cloth replaces the skin where it is a whole garment. `placeIslands` (`pieceTexture.ts`) then packs the
 islands into the smallest square that holds them at the piece's `density` (texels a metre, about 300
 for a tunic: 512 square) and rewrites the triangle corners' places into it. The layout needs only the
 geometry, so every body has it; the pixels are painted when the gear materials are baked
@@ -405,10 +418,11 @@ cloth's own colour so a mip never mixes in black. A race's panels are its own si
 with the body, so a dwarf's tunic is cut to a dwarf), and a character's dye is the island's `tint`.
 
 **A tunic as it is cut.** A body of one panel (two, joined by the side seams at a quarter and three
-quarters round: the stitched pairs down each side), running on below the waist as a skirt to mid-thigh;
-a sleeve each side with its seam under the arm, sewn to the body at the shoulder (`join`, top) and hemmed
-at the cuff; a bias binding on the neck. A shell may start *before* its chain (`from < 0`): the sleeve's
-first rings go on up from the shoulder joint toward the neck, so the sleeve closes over the shoulder.
+quarters round, from the armhole down: the stitched pairs down each side), running on below the waist as
+a skirt to mid-thigh; one sleeve panel for both arms with its seam under the arm, sewn to the body at the
+shoulder (`join`, top) and hemmed at the cuff; a bias binding on the neck. Seams take `from` and `to`
+shares of the panel's height, so a side seam stops at the armhole. (The round of a panel: its front is
+in the middle, 0.5; its back is the seam where it wraps.)
 
 Not yet done: the other cloth and leather pieces (trousers, jerkin, belt, boots, robe), rivets, lacing
 and buckles, smithed plate and mail (hammer marks, rolled edges, rivet rows, ring patterns) - the same

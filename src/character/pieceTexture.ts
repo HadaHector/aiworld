@@ -36,7 +36,7 @@ export interface IslandPlace {
 }
 
 /** How far past the circumference an island reaches, for the triangles across the seam. */
-const SEAM_ROOM = 1.2;
+export const SEAM_ROOM = 1.15;
 const PAD = 3;
 
 /**

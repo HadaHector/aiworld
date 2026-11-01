@@ -20,6 +20,7 @@ export interface GearDef {
   shells: GearShell[];
   skirts: GearSkirt[];
   pieces: GearPiece[];
+  covers: GearCover[];
   /** The piece's own texture, cut like the real thing (CHARACTERS.md, *Pieces and islands*); the
    *  shells and skirts that name an island are drawn in it, the rest tile their materials. */
   texture: PieceTextureDef | null;
@@ -46,10 +47,11 @@ export interface IslandDef {
 }
 
 /** What a tailor does to a panel (metres throughout): a `seam` up and down it, `at` how far round
- *  from the front (0-1); a `hem` folded and stitched, or a `binding` of another cloth sewn over, along
+ *  (0-1; the front is in the middle, 0.5), between `from` and `to` shares of the panel's height from
+ *  its top (a side seam stops at the armhole); a `hem` folded and stitched, or a `binding` of another cloth sewn over, along
  *  its top or bottom edge; a `join`, where it is sewn to the next panel, a stitch row `inset` in. */
 export type IslandFeature =
-  | { kind: "seam"; at: number }
+  | { kind: "seam"; at: number; from: number; to: number }
   | { kind: "hem"; edge: "top" | "bottom"; width: number }
   | { kind: "binding"; edge: "top" | "bottom"; width: number; tint: ColorTuple }
   | { kind: "join"; edge: "top" | "bottom"; inset: number };
@@ -90,6 +92,22 @@ export interface GearShell extends GearSurface {
    *  or null to tile its material; and whether it turns an edge in at its start and end. */
   island: string | null;
   lips: [boolean, boolean];
+}
+
+/**
+ * Cloth cut from the body's own surface (CHARACTERS.md, *Pieces and islands*): the triangles of a
+ * region from and to shares of its axis, moved out along their normals by `thickness`, with the
+ * body's own skin weights - so it fits the shoulders, the armholes and every curve the body has,
+ * the torso's and the arm's sharing the vertices where they meet. It is unrolled as the atlas
+ * unrolls the body, into `island`. `hide` takes the body triangles under it out of the drawing.
+ */
+export interface GearCover extends GearSurface {
+  region: string;
+  from: number;
+  to: number;
+  thickness: number;
+  island: string;
+  hide: boolean;
 }
 
 /** A skirt hanging from the torso at `from` (a share of its length): a robe's, a tabard's, plate
@@ -162,7 +180,7 @@ export function resolveOutfits(packs: PackSource[], gear: Map<string, GearDef>):
 
 function readGear(id: string, data: unknown, reader: Reader): GearDef {
   const obj = reader.object(data, "");
-  reader.onlyKeys(obj, "", ["name", "slot", "paint", "shells", "skirts", "pieces", "texture"]);
+  reader.onlyKeys(obj, "", ["name", "slot", "paint", "shells", "skirts", "pieces", "covers", "texture"]);
   const list = (key: string): { raw: RawObject; path: string }[] => reader.optionalArray(obj, key, "").map((raw, i) => ({ raw: reader.object(raw, `${key}[${i}]`), path: `${key}[${i}]` }));
   return {
     id,
@@ -233,6 +251,20 @@ function readGear(id: string, data: unknown, reader: Reader): GearDef {
         rim: raw.rim === undefined ? darker(base.tint) : reader.color(raw, "rim", path),
       };
     }),
+    covers: list("covers").map(({ raw, path }) => {
+      reader.onlyKeys(raw, path, ["region", "from", "to", "thickness", "island", "hide", "material", "tint"]);
+      const region = reader.string(raw, "region", path);
+      if (!REGIONS.includes(region)) reader.fail(`${path}.region`, `no region "${region}" (expected one of: ${REGIONS.join(", ")})`);
+      return {
+        ...surface(raw, path, reader),
+        region,
+        from: reader.optionalNumber(raw, "from", path, 0),
+        to: reader.optionalNumber(raw, "to", path, 1),
+        thickness: reader.number(raw, "thickness", path, { min: 0, max: 0.1 }),
+        island: reader.string(raw, "island", path),
+        hide: reader.boolean(raw, "hide", path, false),
+      };
+    }),
     texture: raw_texture(obj, reader),
   };
 }
@@ -252,8 +284,8 @@ function raw_texture(obj: RawObject, reader: Reader): PieceTextureDef | null {
       const f = reader.object(item, fpath);
       const kind = reader.oneOf(f, "kind", fpath, ["seam", "hem", "binding", "join"] as const);
       if (kind === "seam") {
-        reader.onlyKeys(f, fpath, ["kind", "at"]);
-        return { kind, at: reader.number(f, "at", fpath, { min: 0, max: 1 }) };
+        reader.onlyKeys(f, fpath, ["kind", "at", "from", "to"]);
+        return { kind, at: reader.number(f, "at", fpath, { min: 0, max: 1 }), from: reader.optionalNumber(f, "from", fpath, 0, { min: 0, max: 1 }), to: reader.optionalNumber(f, "to", fpath, 1, { min: 0, max: 1 }) };
       }
       if (kind === "join") {
         reader.onlyKeys(f, fpath, ["kind", "edge", "inset"]);

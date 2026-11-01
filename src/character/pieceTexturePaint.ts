@@ -1,7 +1,7 @@
 import type { BakedGearMaterial } from "./gearMaterial";
 import { sampleGearMaterial } from "./gearSample";
 import type { IslandDef, IslandFeature } from "./gearDef";
-import { islandRecipe, type IslandPlace, type PieceTexture } from "./pieceTexture";
+import { islandRecipe, SEAM_ROOM, type IslandPlace, type PieceTexture } from "./pieceTexture";
 
 /**
  * Paints a piece's own texture (CHARACTERS.md, *Pieces and islands*), island by island, the way the
@@ -35,13 +35,13 @@ export function paintPieceTexture(texture: PieceTexture, material: (id: string) 
 }
 
 /** Texels a thread of stitching is wide, and how long a stitch and its gap are: in metres. */
-const THREAD = 0.0036;
-const STITCH = 0.009;
-const GAP = 0.006;
+const THREAD = 0.0055;
+const STITCH = 0.012;
+const GAP = 0.007;
 
 function paintIsland(pixels: Uint8Array, texture: PieceTexture, place: IslandPlace, recipe: IslandDef, cloth: BakedGearMaterial): void {
   const { size, density, pad } = texture;
-  const circumference = place.widthMeters / 1.2;
+  const circumference = place.widthMeters / SEAM_ROOM;
   const height = place.heightMeters;
   const features: IslandFeature[] = recipe.features.map((f) => (f.kind === "seam" && place.mirrored ? { ...f, at: 1 - f.at } : f));
   const warm = [recipe.tint[0], recipe.tint[1], recipe.tint[2]];
@@ -88,6 +88,8 @@ function paintIsland(pixels: Uint8Array, texture: PieceTexture, place: IslandPla
           // of stitches over each edge.
           const centre = f.at * circumference;
           const across = Math.abs(wrapDistance(u, centre, circumference));
+          // Only the stretch of the panel it runs along: a side seam stops at the armhole.
+          if (v / height < f.from || v / height > f.to) continue;
           if (across < 0.0125) shade *= 0.95;
           if (Math.abs(across - 0.0125) < 0.0017) shade *= 0.82;
           if (across < 0.0017) shade *= 0.9;
@@ -101,9 +103,9 @@ function paintIsland(pixels: Uint8Array, texture: PieceTexture, place: IslandPla
       b *= shade;
       if (thread > 0) {
         const t = Math.min(1, thread);
-        r += (r * 0.55 - r) * t;
-        g += (g * 0.55 - g) * t;
-        b += (b * 0.55 - b) * t;
+        r += (r * 0.5 - r) * t;
+        g += (g * 0.5 - g) * t;
+        b += (b * 0.5 - b) * t;
       }
       // Below the hem the bottom edge's last row carries on, a little darker.
       if (beyond > height) {
@@ -147,7 +149,7 @@ function fabric(cloth: BakedGearMaterial, recipe: IslandDef, u: number, v: numbe
 /** How cloth hangs: slow, long folds down the panel and a little unevenness across it. */
 function hang(u: number, v: number, circumference: number): number {
   const a = (u / circumference) * Math.PI * 2;
-  return 1 + 0.035 * Math.sin(a * 3 + 0.7 + v * 2.1) + 0.02 * Math.sin(a * 7 + v * 5.3) - 0.02 * Math.min(1, v * 0.5);
+  return 1 + 0.022 * Math.sin(a * 3 + 0.7 + v * 2.1) + 0.012 * Math.sin(a * 7 + v * 5.3) - 0.02 * Math.min(1, v * 0.5);
 }
 
 /** The distance from `a` to `b` round a circle of `circumference`. */

@@ -1,9 +1,10 @@
 import { createLattice, type Lattice } from "./lattice";
 import type { BoneShape, RaceDef } from "./raceDef";
 import { sided } from "./characterConsts";
-import type { GearDef, GearPiece, GearShell, GearSkirt } from "./gearDef";
+import type { GearCover, GearDef, GearPiece, GearShell, GearSkirt } from "./gearDef";
 import { add, buildSkeleton, dot, footAxis, frameFor, length, lerp, normalize, scale, sub, type BoneDef, type Vec } from "./skeleton";
 import { placeIslands, type PieceTexture } from "./pieceTexture";
+import { cylinderOf, smoothNormals } from "./atlas";
 import { createMeshKit, evenShape, segmentDistance, type BodyRegion, type GearLayer, type MeshKit, type Ring } from "./meshKit";
 
 /** What a body is drawn from: one indexed mesh in the bind pose, skinned to its bones. */
@@ -35,6 +36,8 @@ export interface BodyGeometry {
   /** The own textures of the gear that has them: a layer with a `texture` is drawn in one of these,
    *  and its `gearUVs` are places in it (0-1) instead of metres of a tiling material. */
   pieceTextures: PieceTexture[];
+  /** Body triangles that gear covers and takes the place of: not drawn. */
+  hiddenTriangles: number[];
 }
 
 export type { BodyRegion, GearLayer } from "./meshKit";
@@ -319,7 +322,7 @@ export function buildBodyOnly(race: RaceDef, options: BodyOptions = {}): BodyGeo
 
   const { joints, weights } = skinKit(kit, finalBones);
 
-  return { positions: points.flat(), indices, joints, weights, bones: finalBones, lattice, marks, triangles: indices.length / 3, parts, regions: regionAxes, triangleRegions, layers, triangleLayers, gearUVs, pieceTextures: [] };
+  return { positions: points.flat(), indices, joints, weights, bones: finalBones, lattice, marks, triangles: indices.length / 3, parts, regions: regionAxes, triangleRegions, layers, triangleLayers, gearUVs, pieceTextures: [], hiddenTriangles: [] };
 }
 
 /** Skinning: each vertex follows the nearest of its own bone and the bones next to it, unless its
@@ -383,6 +386,8 @@ export interface PieceGeometry {
   gearUVs: number[];
   /** Its own texture, laid out (its pixels painted later), if it has one. */
   texture: PieceTexture | null;
+  /** The body triangles it covers and takes the place of. */
+  hidden: number[];
 }
 
 /** Builds one gear unit onto a race's body: it depends on the race's curves and the body's lattice
@@ -390,13 +395,14 @@ export interface PieceGeometry {
 export function buildGearPiece(race: RaceDef, body: BodyGeometry, unit: GearUnit): PieceGeometry {
   const kit = createMeshKit();
   kit.region = -1;
-  addGear(kit, race, unit);
+  const hidden = addGear(kit, race, unit, body);
   const { points } = kit;
   const lattice = body.lattice;
-  if (lattice) for (let i = 0; i < points.length; i++) points[i] = lattice.apply(points[i]);
+  // What is cut from the body's own surface is already where the lattice put it.
+  if (lattice) for (let i = 0; i < points.length; i++) if (!kit.placed.has(i)) points[i] = lattice.apply(points[i]);
   const { joints, weights } = skinKit(kit, body.bones);
   const texture = unit.kind === "gear" && unit.piece.texture && kit.islands.length > 0 ? placeIslands(unit.piece.texture, kit.islands, kit.cornerIsland, kit.cornerRound, kit.cornerAlong, kit.gearUVs) : null;
-  return { positions: points.flat(), indices: kit.indices, joints, weights, triangles: kit.indices.length / 3, parts: kit.parts, layers: kit.layers, triangleLayers: kit.triangleLayers, gearUVs: kit.gearUVs, texture };
+  return { positions: points.flat(), indices: kit.indices, joints, weights, triangles: kit.indices.length / 3, parts: kit.parts, layers: kit.layers, triangleLayers: kit.triangleLayers, gearUVs: kit.gearUVs, texture, hidden };
 }
 
 /** A body and its gear as one geometry: the pieces' triangles after the body's, their layers
@@ -411,11 +417,13 @@ export function joinGear(body: BodyGeometry, pieces: PieceGeometry[]): BodyGeome
   const triangleLayers = body.triangleLayers.slice();
   const gearUVs = body.gearUVs.slice();
   const pieceTextures = body.pieceTextures.slice();
+  const hiddenTriangles = body.hiddenTriangles.slice();
   const parts = { ...body.parts };
   for (const piece of pieces) {
     const offset = positions.length / 3;
     const textureAt = pieceTextures.length;
     if (piece.texture) pieceTextures.push(piece.texture);
+    for (const t of piece.hidden) hiddenTriangles.push(t);
     for (const v of piece.positions) positions.push(v);
     for (const i of piece.indices) indices.push(i + offset);
     for (const v of piece.joints) joints.push(v);
@@ -434,7 +442,7 @@ export function joinGear(body: BodyGeometry, pieces: PieceGeometry[]): BodyGeome
     for (const v of piece.gearUVs) gearUVs.push(v);
     for (const [name, count] of Object.entries(piece.parts)) parts[name] = (parts[name] ?? 0) + count;
   }
-  return { ...body, positions, indices, joints, weights, triangles: indices.length / 3, parts, triangleRegions, layers, triangleLayers, gearUVs, pieceTextures };
+  return { ...body, positions, indices, joints, weights, triangles: indices.length / 3, parts, triangleRegions, layers, triangleLayers, gearUVs, pieceTextures, hiddenTriangles };
 }
 
 /** A race's body with its gear on: the body, then each piece built apart, joined. */
@@ -444,7 +452,7 @@ export function buildBody(race: RaceDef, options: BodyOptions = {}): BodyGeometr
   return joinGear(body, units.map((unit) => buildGearPiece(race, body, unit)));
 }
 
-function addGear(kit: MeshKit, race: RaceDef, unit: GearUnit): void {
+function addGear(kit: MeshKit, race: RaceDef, unit: GearUnit, body: BodyGeometry): number[] {
   const skeleton = buildSkeleton(race);
   const bones = skeleton.bones;
   const N = race.shape.pelvis.verts;
@@ -488,7 +496,12 @@ function addGear(kit: MeshKit, race: RaceDef, unit: GearUnit): void {
       const neck: Vec = [0, bones[skeleton.index("chest")].tail[1], 0];
       const toward = normalize(sub(neck, first.from));
       const distance = -u * total;
-      return { seg: { ...first, from: add(first.from, scale(toward, distance)), to: first.from, length: distance }, t: 0, along: u * total };
+      // Over the shoulder it flattens and widens, front to back, from the arm's round to a yoke:
+      // shoulders are a slope, not a tube.
+      const k = Math.min(1, distance / 0.12);
+      const [front, back, out, inner] = sampled(first.shape).map((f) => f(0));
+      const shape = evenShape(front * (1 + 0.9 * k), back * (1 + 0.9 * k), ((out + inner) / 2) * (1 - 0.3 * k), first.shape.round, first.shape.verts);
+      return { seg: { ...first, shape, from: add(first.from, scale(toward, distance)), to: first.from, length: distance }, t: 0, along: u * total };
     }
     let at = Math.min(total, u * total);
     for (const seg of chain) {
@@ -553,8 +566,35 @@ function addGear(kit: MeshKit, race: RaceDef, unit: GearUnit): void {
     const edge = islandName ? kit.beginIsland(islandName, -1) : 0;
     const direction = islandName ? kit.islands[kit.island].down : 1;
     const along = (drop: number): number => (islandName ? edge + direction * drop : drop);
-    const top = ring(seg.bone, seg.shape, seg.from, seg.to, t, seg.reference, seg.side, N, def.thickness);
-    mapRing(top, along(0));
+    // Hung from a cover's bottom edge (cut from the body) it carries on its measure: each ring's
+    // vertices as far further down as they are from the vertex of the ring above that is nearest round.
+    const cut = islandName && coverBottom && coverBottom.length === N ? body.regions.find((r) => r.name === "torso") : undefined;
+    let above: { round: number; raw: number; at: Vec }[] = coverBottom ?? [];
+    const mapSkirtRing = (r: Ring, drop: number): void => {
+      if (!cut) return mapRing(r, along(drop));
+      const here: { round: number; raw: number; at: Vec }[] = [];
+      for (const v of r.verts) {
+        const p = body.lattice ? body.lattice.apply(kit.points[v]) : kit.points[v];
+        const c = cylinderOf(cut, p);
+        let nearest = above[0];
+        let gap = Infinity;
+        for (const a of above) {
+          const d = Math.min(Math.abs(a.round - c.round), 1 - Math.abs(a.round - c.round));
+          if (d < gap) {
+            gap = d;
+            nearest = a;
+          }
+        }
+        const raw = nearest.raw - length(sub(p, nearest.at));
+        kit.mapVertex(v, c.round, raw, 2 * Math.PI * c.radius);
+        here.push({ round: c.round, raw, at: p });
+      }
+      above = here;
+    };
+    // Hung from a cover's bottom edge it shares its vertices, so there is no step and no gap.
+    const joined = cut && coverBottom ? (coverBottom as { vertex: number }[]).map((b) => b.vertex) : null;
+    const top: Ring = joined ? { verts: joined, center: lerp(seg.from, seg.to, t) } : ring(seg.bone, seg.shape, seg.from, seg.to, t, seg.reference, seg.side, N, def.thickness);
+    if (!joined) mapSkirtRing(top, 0);
     const center = lerp(seg.from, seg.to, t);
     const [front, back, side] = sampled(seg.shape).map((f) => f(t) + def.thickness);
     const iThighs = [skeleton.index("thighR"), skeleton.index("thighL")];
@@ -563,7 +603,7 @@ function addGear(kit: MeshKit, race: RaceDef, unit: GearUnit): void {
       const y = center[1] - drop;
       const r = ring(iPelvis, evenShape(front * f - inset, back * f - inset, side * f - inset, 0.75, N), [0, y, center[2]], [0, y + 1, center[2]], 0, FORWARD, 0);
       for (const v of r.verts) extras[v] = iThighs;
-      mapRing(r, along(drop));
+      mapSkirtRing(r, drop);
       return r;
     };
     const rings: Ring[] = [top];
@@ -574,9 +614,11 @@ function addGear(kit: MeshKit, race: RaceDef, unit: GearUnit): void {
     // Its hem turned in, and its top tucked to the body.
     kit.layer = layerOf({ material: def.material, tint: def.rim });
     zip(rings[rings.length - 1].verts, level(def.length, def.flare, def.thickness).verts, down, FORWARD);
-    const tuck = ring(seg.bone, seg.shape, seg.from, seg.to, t, seg.reference, seg.side, N, 0.004);
-    mapRing(tuck, along(0));
-    zip(top.verts, tuck.verts, [0, 1, 0], FORWARD);
+    if (!joined) {
+      const tuck = ring(seg.bone, seg.shape, seg.from, seg.to, t, seg.reference, seg.side, N, 0.004);
+      mapSkirtRing(tuck, 0);
+      zip(top.verts, tuck.verts, [0, 1, 0], FORWARD);
+    }
     kit.layer = -1;
     kit.endIsland();
   }
@@ -652,14 +694,162 @@ function addGear(kit: MeshKit, race: RaceDef, unit: GearUnit): void {
     kit.layer = -1;
   }
 
+  /** The body's smooth normals, made when a cover first needs them. */
+  let bodyNormals: Float32Array | null = null;
+  const hidden: number[] = [];
+  /** The vertices round the bottom edge of a torso cover, in order round, for a skirt to hang from. */
+  let coverBottom: { vertex: number; round: number; raw: number; at: Vec }[] | null = null;
+
+  /** Cloth cut from the body's own surface: the region's triangles in a stretch of its axis, moved
+   *  out along their normals and skinned as the body is, unrolled as the atlas unrolls the body. The
+   *  island is measured down from its own top edge (a neckline, a sleeve head), which is not level. */
+  function buildCover(def: GearCover, regionName: string): void {
+    const regionIndex = body.regions.findIndex((r) => r.name === regionName);
+    if (regionIndex < 0) return;
+    const region = body.regions[regionIndex];
+    const P = body.positions;
+    const I = body.indices;
+    bodyNormals ??= smoothNormals(body);
+    const total = region.axis.slice(1).reduce((sum, p, i) => sum + length(sub(p, region.axis[i])), 0);
+    const places = new Map<number, { round: number; along: number; radius: number }>();
+    const place = (v: number): { round: number; along: number; radius: number } => {
+      let found = places.get(v);
+      if (!found) places.set(v, (found = cylinderOf(region, [P[v * 3], P[v * 3 + 1], P[v * 3 + 2]])));
+      return found;
+    };
+    const picked: number[] = [];
+    for (let t = 0; t < I.length / 3; t++) {
+      if (body.triangleRegions[t] !== regionIndex) continue;
+      const mean = (place(I[t * 3]).along + place(I[t * 3 + 1]).along + place(I[t * 3 + 2]).along) / 3;
+      if (mean >= def.from * total && mean <= def.to * total) picked.push(t);
+    }
+    if (picked.length === 0) return;
+    const down: 1 | -1 = regionName === "torso" || regionName === "head" ? -1 : 1;
+    kit.beginIsland(def.island, down);
+    // How far down the cloth every vertex is, over its own surface, from the edge it hangs from: the
+    // neckline for a body, the armhole for a sleeve. (Its top edge is not level, and round the neck
+    // it is not even a function of the angle round the body.)
+    const near = new Map<number, [number, number][]>();
+    const edgeUses = new Map<string, number>();
+    for (const t of picked) for (let k = 0; k < 3; k++) {
+      const a = I[t * 3 + k];
+      const b = I[t * 3 + ((k + 1) % 3)];
+      const key = a < b ? `${a},${b}` : `${b},${a}`;
+      if (!edgeUses.has(key)) {
+        const d = Math.hypot(P[a * 3] - P[b * 3], P[a * 3 + 1] - P[b * 3 + 1], P[a * 3 + 2] - P[b * 3 + 2]);
+        if (!near.has(a)) near.set(a, []);
+        if (!near.has(b)) near.set(b, []);
+        near.get(a)!.push([b, d]);
+        near.get(b)!.push([a, d]);
+      }
+      edgeUses.set(key, (edgeUses.get(key) ?? 0) + 1);
+    }
+    // The loops its open edges make; the one that is highest (lowest for a limb) is what it hangs from.
+    const open = new Map<number, number[]>();
+    for (const [key, count] of edgeUses) {
+      if (count !== 1) continue;
+      const [a, b] = key.split(",").map(Number);
+      if (!open.has(a)) open.set(a, []);
+      if (!open.has(b)) open.set(b, []);
+      open.get(a)!.push(b);
+      open.get(b)!.push(a);
+    }
+    const seen = new Set<number>();
+    let hangs: number[] = [];
+    let best = down < 0 ? -Infinity : Infinity;
+    for (const start of open.keys()) {
+      if (seen.has(start)) continue;
+      const loop: number[] = [];
+      const stack = [start];
+      seen.add(start);
+      while (stack.length > 0) {
+        const v = stack.pop()!;
+        loop.push(v);
+        for (const w of open.get(v) ?? []) if (!seen.has(w)) {
+          seen.add(w);
+          stack.push(w);
+        }
+      }
+      const mean = loop.reduce((sum, v) => sum + place(v).along, 0) / loop.length;
+      if (down < 0 ? mean > best : mean < best) {
+        best = mean;
+        hangs = loop;
+      }
+    }
+    const distance = new Map<number, number>(hangs.map((v) => [v, 0]));
+    const queue = hangs.slice();
+    // Shortest paths over the surface (small meshes: a sorted frontier is plenty).
+    while (queue.length > 0) {
+      queue.sort((p, q) => distance.get(q)! - distance.get(p)!);
+      const v = queue.pop()!;
+      for (const [w, d] of near.get(v) ?? []) {
+        const through = distance.get(v)! + d;
+        if (through < (distance.get(w) ?? Infinity)) {
+          distance.set(w, through);
+          queue.push(w);
+        }
+      }
+    }
+    const rawOf = (v: number): number => (down < 0 ? -1 : 1) * (distance.get(v) ?? 0);
+    const made = new Map<number, number>();
+    const vertexOf = (v: number): number => {
+      let found = made.get(v);
+      if (found === undefined) {
+        const n = bodyNormals!;
+        const at: Vec = [P[v * 3] + n[v * 3] * def.thickness, P[v * 3 + 1] + n[v * 3 + 1] * def.thickness, P[v * 3 + 2] + n[v * 3 + 2] * def.thickness];
+        found = kit.vertex(at, body.joints[v * 4]);
+        kit.placed.add(found);
+        const weights: [number, number][] = [];
+        for (let k = 0; k < 4; k++) if (body.weights[v * 4 + k] > 0) weights.push([body.joints[v * 4 + k], body.weights[v * 4 + k]]);
+        kit.fixed.set(found, weights);
+        const c = place(v);
+        kit.mapVertex(found, c.round, rawOf(v), 2 * Math.PI * c.radius);
+        made.set(v, found);
+      }
+      return found;
+    };
+    kit.layer = kit.layerOf(def);
+    for (const t of picked) {
+      kit.tri(vertexOf(I[t * 3]), vertexOf(I[t * 3 + 1]), vertexOf(I[t * 3 + 2]));
+      if (def.hide) hidden.push(t);
+    }
+    if (regionName === "torso") {
+      // Its bottom edge: the edges only one of its triangles has, in its lower half.
+      const edges = new Map<string, number>();
+      for (const t of picked) for (let k = 0; k < 3; k++) {
+        const a = I[t * 3 + k];
+        const b = I[t * 3 + ((k + 1) % 3)];
+        const key = a < b ? `${a},${b}` : `${b},${a}`;
+        edges.set(key, (edges.get(key) ?? 0) + 1);
+      }
+      const alongs = [...made.keys()].map((v) => place(v).along);
+      const middle = (Math.min(...alongs) + Math.max(...alongs)) / 2;
+      const bottom = new Set<number>();
+      for (const [key, count] of edges) {
+        if (count !== 1) continue;
+        const [a, b] = key.split(",").map(Number);
+        if (place(a).along < middle && place(b).along < middle) {
+          bottom.add(a);
+          bottom.add(b);
+        }
+      }
+      coverBottom = [...bottom]
+        .sort((a, b) => place(a).round - place(b).round)
+        .map((v) => ({ vertex: made.get(v)!, round: place(v).round, raw: rawOf(v), at: kit.points[made.get(v)!] }));
+    }
+    kit.layer = -1;
+    kit.endIsland();
+  }
+
   if (unit.kind === "gear") {
     kit.part = "gear";
     const piece = unit.piece;
+    for (const def of piece.covers) for (const regionName of sided(def.region)) buildCover(def, regionName);
     for (const def of piece.shells) for (const chainName of sided(def.chain)) buildShell(def, chainName);
     for (const def of piece.skirts) buildSkirt(def);
     for (const def of piece.pieces) for (const suffix of def.sides) buildPiece(def, suffix);
     kit.layer = -1;
-    return;
+    return hidden;
   }
   // The race's own pieces: tapering spikes in the skin's colour (an elf's ears).
   kit.part = "head";
@@ -688,4 +878,5 @@ function addGear(kit: MeshKit, race: RaceDef, unit: GearUnit): void {
     }
   }
   kit.layer = -1;
+  return hidden;
 }

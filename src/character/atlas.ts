@@ -119,7 +119,7 @@ export function layoutAtlas(body: BodyGeometry, size: number): AtlasLayout {
 
 /** Where a point is on a region's cylinder: the nearest place on its axis (running on past either
  *  end), the angle round from the region's front, and how far out. */
-function cylinderOf(region: BodyRegion, p: Vec): { round: number; along: number; radius: number } {
+export function cylinderOf(region: BodyRegion, p: Vec): { round: number; along: number; radius: number } {
   const axis = region.axis;
   let best = { distance: Infinity, along: 0, from: axis[0], direction: [0, 1, 0] as Vec };
   let walked = 0;
