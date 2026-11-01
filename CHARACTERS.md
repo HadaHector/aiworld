@@ -120,8 +120,9 @@ across bones and patches at once: a hunched back, a barrel chest that spills ove
 a heavy jaw, a pot belly, the dwarf's squat mass or the elf's lean lift. Lattices are data, in the
 race (its overall shape) and in look sliders (each slider moves some control points by an
 amount). It runs in the bind pose, before skinning, and the joints are moved through the same
-lattice so the skeleton still sits inside the deformed body. Gear shells are built after it, from
-the deformed body, so they fit whatever the lattice made.
+lattice so the skeleton still sits inside the deformed body. Gear is built on the same lattice, from
+the same curves, and the lattice's box is the body's alone, so a dressed body's skin is exactly the
+bare body's.
 
 As built: the shoulders' top ring slopes down from the neck to the arms; a collar ring sits halfway
 between it and the neck, so the neck rises out of a slope; each arm starts with a root ring over the
@@ -308,8 +309,55 @@ entity: the packs' races, gear, outfits and gear materials resolved once (`creat
 template's capsule, hides the capsule once the body is in (it stays as what a click hits), and
 feeds it the mirror's motion each frame. The core pack's player is a human scout and the dummy a
 human knight. `__aiworld.entities.addPlayer({ race, outfit, sex, seed })` adds a second player,
-walking a slow circle at 1.5 m/s. Each body bakes its own gear materials and paints its own
-atlas - fine for a few; a crowd is *Next steps* 2.
+walking a slow circle at 1.5 m/s. Many bodies at once: see *Caches*.
+
+## Caches
+
+Making a body was the page's main cost in a village (14 people about 9.5 s of main-thread work, the
+atlas painting nine tenths of it; measured with `__bodyTiming.report()` and
+`scripts/probe/bodyTime.local.mjs`), so what characters share is made once.
+
+**One default body per race, sex and gear.** `dressCharacter` takes the race's body for the
+character's sex, dressed in its gear (`bodyCache.ts`, `canonicalBody`) - its mesh, atlas layout,
+and a *paint base* (`paint.ts`, `PaintBase`: the light and shade painted in, the skin's mottle, what
+is worn painted on, the head's measures, where empty texels copy from) - and keeps it. Characters
+differ by **scale**: height and build are not another body but the scale the body is drawn at (the
+mesh's scaling, `[height*build, height, height*build]`, `bodyScale`; the animator works in the default
+body's metres, so the game feeds it speeds divided by the height). Only who a character is - skin,
+face, hair, beard - is painted per character (`paintLook`, about 10 ms), on the base, and that atlas
+is kept too (`paintedAtlas`). The race's own pieces (an elf's ears) are drawn in the character's skin
+colour, taken at draw time from its looks, so they are not a reason for another body.
+
+**Keys and bounds.** A body's key is the race def (by object identity, so a race edited in the
+workbench is a new body), its sex, the gear pieces by a hash of their content (a tint is content), the
+gear materials map, detail, lattice, atlas size and world seed. A character's atlas is its body's key
+plus a hash of its skin, hair, eyes, beard, face shifts and hair style. Both caches hold promises, so
+characters asked for at once share one build, and are bounded by size (bodies 96 MB - about 6 MB
+each, atlases 64 MB - 1 MB each), least recently used out first; `bodyCacheStats()` /
+`__bodyTiming.cache()` shows them. To **invalidate**: edit the race, gear or material (the workbench
+does - it is a new key), or call `clearBodyCaches()` in a page left open across a change to how a
+body is built or painted (a reload does it too; nothing is kept between launches yet).
+
+**Gear tile textures** (the gear materials, 1024 texels a side) are one texture per scene however
+many bodies wear them, held by count and disposed by the last to let go (`characterMesh.ts`).
+
+**Slices share a budget.** Long work (painting a body, building one) is done a few milliseconds at a
+time and waits in `sliceBreak()` (`workSlicer.ts`): two slices a frame between all the bodies in
+progress, through a message channel (a timer's 4 ms minimum, and a background tab's one-second one,
+made a crowd's slices slower than its work).
+
+**What is measured.** Per body, CPU in Node: build 5-15 ms, layout 45-100 ms, paint 520-670 ms
+before; the painter's occlusion walks a vertex list made once per cell (3x faster, pixels identical)
+and the rest of the painting that does not depend on looks is kept. A village's 14 people in Node:
+9.5 s before, 2.5 s now; in the page 9.7 s before, about 3.3 s now (12 of the 15 are different
+bodies - sex and outfit - so the saving is in the paint, not in sharing yet); the same seen again
+takes under a millisecond.
+
+**Still to do.** The first body of each race, sex and gear still costs about 250 ms (layout, then the
+paint base: the occlusion): to a worker, and kept between launches by a content hash; nearest bodies
+first; a lower detail and smaller atlas far away; gear meshes of one material merged; geometry shared
+between bodies of one default body (mesh clones); and the bigger change in the notes of the session
+that made this: gear as pieces with their own textures, unwrapped as islands by construction.
 
 ## Build steps
 
@@ -360,9 +408,10 @@ In rough order of need; each belongs to the build-order step named, or is its ow
 1. **Bodies for everyone, not just the own player.** *Done* (see *In game*): other players, NPCs
    and humanoid creatures drawn with bodies from the template's `look` and the entity's replicated
    look seed, animated from the mirror's motion as the player's is.
-2. **Many bodies at once.** One body shared by every character with the same race, sex, sliders,
-   seed and gear; a lower detail far away (the `detail` setting already halves it); gear meshes of
-   one material merged; smaller atlases far away. Measure first with a crowd in a town.
+2. **Many bodies at once.** *Mostly done* (see *Caches*): one body per race, sex and gear, scaled
+   by height and build, with the per-character painting kept. Still to do: a lower detail far away
+   (the `detail` setting already halves it); gear meshes of one material merged; smaller atlases far
+   away; building in a worker and keeping bodies between launches.
 3. **Equipment from items (build step 7).** *Done* (ITEMS.md, *Equipment*): item types name gear
    pieces and a tint over them; what an entity wears in visible slots replaces its outfit, and its
    body is built again when that changes. An entity without belongings (the dummy) keeps its outfit.
