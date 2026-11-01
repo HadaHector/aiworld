@@ -1,8 +1,8 @@
-import { curveSampler } from "./curve";
 import { createLattice, type Lattice } from "./lattice";
 import type { BoneShape, RaceDef } from "./raceDef";
-import { sided, type GearDef, type GearPiece, type GearShell, type GearSkirt, type GearSurface } from "./gearDef";
+import { sided, type GearDef, type GearPiece, type GearShell, type GearSkirt } from "./gearDef";
 import { add, buildSkeleton, dot, footAxis, frameFor, length, lerp, normalize, scale, sub, type BoneDef, type Vec } from "./skeleton";
+import { createMeshKit, evenShape, segmentDistance, type BodyRegion, type GearLayer, type Ring } from "./meshKit";
 
 /** What a body is drawn from: one indexed mesh in the bind pose, skinned to its bones. */
 export interface BodyGeometry {
@@ -32,22 +32,7 @@ export interface BodyGeometry {
   gearUVs: number[];
 }
 
-/** One material and colour gear is drawn in; `flat` faces keep their edges (a blade's). */
-export interface GearLayer extends GearSurface {
-  flat: boolean;
-}
-
-/** A stretch of body round one axis - the torso, an arm, a leg - unrolled into one rectangle of
- *  the atlas: round it across, along it down. */
-export interface BodyRegion {
-  name: string;
-  /** Its axis, as a line through joints (moved by the lattice, as the body is). */
-  axis: Vec[];
-  /** Toward its front, for where round it the atlas starts. */
-  reference: Vec;
-  /** -1, 0 or 1, as bones' sides: a -x region is unrolled mirrored, so both sides read alike. */
-  side: number;
-}
+export type { BodyRegion, GearLayer } from "./meshKit";
 
 export interface BodyOptions {
   /** How finely the curves are cut: the race's loops per bone times this. */
@@ -60,10 +45,6 @@ export interface BodyOptions {
   skin?: [number, number, number];
 }
 
-interface Ring {
-  verts: number[];
-  center: Vec;
-}
 
 const FORWARD: Vec = [0, 0, 1];
 /** How far up its bone the neck's first ring is: below it, the collar joins it to the shoulders. */
@@ -92,217 +73,20 @@ export function buildBody(race: RaceDef, options: BodyOptions = {}): BodyGeometr
   const bone = (name: string): BoneDef => bones[skeleton.index(name)];
   const s = race.skeleton;
 
-  const points: Vec[] = [];
-  const homes: number[] = [];
-  const extras: number[][] = [];
-  /** Weights set by hand where the body joins itself, overriding the nearest-bones rule: bone, share. */
-  const fixed = new Map<number, [number, number][]>();
-  const indices: number[] = [];
-  const parts: Record<string, number> = {};
-  const triangleRegions: number[] = [];
-  const regionAxes: { name: string; axis: Vec[]; reference: Vec; side: number }[] = [];
-  let part = "";
-  let region = 0;
-  // Gear: the layer triangles are in (-1, the body), and per vertex its place in its material's
-  // texture - round (metres), along (metres), and the circumference round which it wraps (0 for a
-  // cap's tip, which takes its neighbours').
-  const layers: GearLayer[] = [];
-  const triangleLayers: number[] = [];
-  const gearUVs: number[] = [];
-  const gearU: number[] = [];
-  const gearV: number[] = [];
-  const gearC: number[] = [];
-  let layer = -1;
-  /** From here on triangles are in a new region round this axis. */
-  const enter = (name: string, axis: Vec[], reference: Vec, side: number): void => {
-    regionAxes.push({ name, axis, reference, side });
-    region = regionAxes.length - 1;
-  };
-
-  const vertex = (p: Vec, home: number, extra: number[] = []): number => {
-    points.push(p);
-    homes.push(home);
-    extras.push(extra);
-    gearU.push(0);
-    gearV.push(0);
-    gearC.push(0);
-    return points.length - 1;
-  };
-  const tri = (a: number, b: number, c: number): void => {
-    indices.push(a, b, c);
-    parts[part] = (parts[part] ?? 0) + 1;
-    triangleRegions.push(region);
-    triangleLayers.push(layer);
-    if (layer < 0) {
-      gearUVs.push(0, 0, 0, 0, 0, 0);
-      return;
-    }
-    // Round the seam as the atlas does: a triangle across it carries its low side past the wrap.
-    const corners = [a, b, c];
-    const wrap = Math.max(...corners.map((v) => gearC[v]));
-    const us = corners.map((v) => gearU[v]);
-    const real = corners.map((v) => gearC[v] > 0);
-    if (wrap > 0) {
-      const known = us.filter((_, k) => real[k]);
-      if (Math.max(...known) - Math.min(...known) > wrap / 2) us.forEach((u, k) => (us[k] = real[k] && u < wrap / 2 ? u + wrap : u));
-      const mean = us.filter((_, k) => real[k]).reduce((x, y) => x + y, 0) / Math.max(1, real.filter(Boolean).length);
-      us.forEach((u, k) => (us[k] = real[k] ? u : mean));
-    }
-    corners.forEach((v, k) => gearUVs.push(us[k], gearV[v]));
-  };
-
-  const samplers = new Map<BoneShape, ((t: number) => number)[]>();
-  const sampled = (shape: BoneShape): ((t: number) => number)[] => {
-    let found = samplers.get(shape);
-    if (!found) {
-      found = [curveSampler(shape.front), curveSampler(shape.back), curveSampler(shape.out), curveSampler(shape.in)];
-      samplers.set(shape, found);
-    }
-    return found;
-  };
-
-  /** A ring of `shape` at `t` along the axis from `from` to `to`, its `front` toward `reference`. */
-  function ring(home: number, shape: BoneShape, from: Vec, to: Vec, t: number, reference: Vec, side: number, verts = shape.verts, grow = 0): Ring {
-    const list: number[] = [];
-    for (let k = 0; k < verts; k++) list.push(vertex(surface(shape, from, to, t, (2 * Math.PI * k) / verts, reference, side, grow), home));
-    return { verts: list, center: lerp(from, to, t) };
-  }
-
-  /** The point of `shape`'s surface at `t` along the axis from `from` to `to`, `theta` round it
-   *  from its front (toward the frame's side): its four curves filled between as a superellipse,
-   *  then its bumps. */
-  function surface(shape: BoneShape, from: Vec, to: Vec, t: number, theta: number, reference: Vec, side: number, grow = 0): Vec {
-    const frame = frameFor(sub(to, from), reference);
-    const [front, back, out, inner] = sampled(shape).map((f) => f(t) + grow);
-    // Which of the frame's sides is away from the body's middle.
-    const outSign = side === 0 ? 1 : Math.sign(dot(frame.side, [side, 0, 0])) || 1;
-    const n = 2 + (1 - shape.round) * 4;
-    const c = Math.cos(theta);
-    const sn = Math.sin(theta);
-    const x = (c >= 0 ? front : back) * Math.sign(c) * Math.abs(c) ** (2 / n);
-    const y = ((sn >= 0) === outSign > 0 ? out : inner) * Math.sign(sn) * Math.abs(sn) ** (2 / n);
-    let offset = add(scale(frame.front, x), scale(frame.side, y));
-    if (shape.bumps.length > 0) {
-      // Degrees round from the front toward the outer side; a middle bone's bumps on both sides.
-      let toward = ((theta * 180) / Math.PI) * outSign;
-      toward = ((toward + 540) % 360) - 180;
-      let rise = 0;
-      for (const bump of shape.bumps) {
-        const along = (t - bump.at) / bump.length;
-        const round = (side === 0 ? Math.abs(Math.abs(toward) - Math.abs(bump.angle)) : Math.abs((((toward - bump.angle + 540) % 360) - 180))) / bump.width;
-        rise += bump.height * Math.exp(-3 * (along * along + round * round));
-      }
-      offset = add(offset, scale(normalize(offset), rise));
-    }
-    return add(lerp(from, to, t), offset);
-  }
-
-  /** Ring `a` to ring `b` further along `along`: triangles walking both by angle round their own
-   *  middles, turning the way every ring is laid out. */
-  function zip(a: number[], b: number[], along: Vec, reference: Vec): void {
-    const frame = frameFor(along, reference);
-    const angles = (list: number[]): { v: number; u: number }[] => {
-      const mid = scale(list.reduce<Vec>((sum, v) => add(sum, points[v]), [0, 0, 0]), 1 / list.length);
-      return list
-        .map((v) => {
-          const d = sub(points[v], mid);
-          const u = Math.atan2(dot(d, frame.side), dot(d, frame.front)) / (2 * Math.PI);
-          return { v, u: u < 0 ? u + 1 : u };
-        })
-        .sort((p, q) => p.u - q.u);
-    };
-    const A = angles(a);
-    const B = angles(b);
-    const at = (list: { v: number; u: number }[], i: number): { v: number; u: number } => {
-      const wrapped = list[i % list.length];
-      return { v: wrapped.v, u: wrapped.u + Math.floor(i / list.length) };
-    };
-    // Both walks start from the vertex nearest angle 0.
-    let i = 0;
-    let j = 0;
-    while (i < A.length || j < B.length) {
-      const nextA = at(A, i + 1).u;
-      const nextB = at(B, j + 1).u;
-      if (j >= B.length || (i < A.length && nextA <= nextB)) {
-        tri(at(A, i).v, at(A, i + 1).v, at(B, j).v);
-        i++;
-      } else {
-        tri(at(A, i).v, at(B, j + 1).v, at(B, j).v);
-        j++;
-      }
-    }
-  }
-
-  /** A ring between `a` and `b` (further along `along`), with `b`'s count: each of `b`'s vertices
-   *  matched to the point of `a` at its angle, a share `k` of the way from that point to it, and
-   *  pushed out from the axis between the two rings' middles by `puff` of its distance from it. */
-  function blend(a: number[], b: number[], along: Vec, reference: Vec, k: number, puff: number, home: number): number[] {
-    const frame = frameFor(along, reference);
-    const middle = (list: number[]): Vec => scale(list.reduce<Vec>((sum, v) => add(sum, points[v]), [0, 0, 0]), 1 / list.length);
-    const ma = middle(a);
-    const mb = middle(b);
-    const angleOf = (p: Vec, mid: Vec): number => {
-      const d = sub(p, mid);
-      const u = Math.atan2(dot(d, frame.side), dot(d, frame.front));
-      return u < 0 ? u + 2 * Math.PI : u;
-    };
-    const around = a.map((v) => ({ p: points[v], u: angleOf(points[v], ma) })).sort((p, q) => p.u - q.u);
-    const onA = (u: number): Vec => {
-      for (let i = 0; i < around.length; i++) {
-        const p = around[i];
-        const q = around[(i + 1) % around.length];
-        const u0 = p.u;
-        const u1 = i + 1 < around.length ? q.u : q.u + 2 * Math.PI;
-        const uu = u < u0 ? u + 2 * Math.PI : u;
-        if (uu >= u0 && uu <= u1) return lerp(p.p, q.p, (uu - u0) / Math.max(1e-9, u1 - u0));
-      }
-      return around[0].p;
-    };
-    const axis = lerp(ma, mb, k);
-    return b.map((v) => {
-      const p = lerp(onA(angleOf(points[v], mb)), points[v], k);
-      return vertex(add(p, scale(sub(p, axis), puff)), home);
-    });
-  }
-
-  /** Rings of equal count as quads, leaving out the ones `skip` names (by "band,column"). */
-  function bands(rings: Ring[], skip: Set<string> = new Set()): void {
-    for (let r = 0; r + 1 < rings.length; r++) {
-      const a = rings[r].verts;
-      const b = rings[r + 1].verts;
-      const n = a.length;
-      for (let k = 0; k < n; k++) {
-        if (skip.has(`${r},${k}`)) continue;
-        const k1 = (k + 1) % n;
-        tri(a[k], a[k1], b[k]);
-        tri(a[k1], b[k1], b[k]);
-      }
-    }
-  }
-
-  /** A ring closed with a fan to a point: at the far end of its chain, or (`start`) the near end. */
-  function cap(r: Ring, tip: Vec, home: number, start = false): void {
-    const c = vertex(tip, home);
-    const n = r.verts.length;
-    for (let k = 0; k < n; k++) {
-      const a = r.verts[k];
-      const b = r.verts[(k + 1) % n];
-      if (start) tri(b, a, c);
-      else tri(a, b, c);
-    }
-  }
+  const kit = createMeshKit();
+  const { points, homes, extras, fixed, indices, parts, triangleRegions, regionAxes, layers, triangleLayers, gearUVs, enter, vertex, surface, sampled, ring, zip, blend, bands, cap, layerOf, mapRing, capRing, fixAll } = kit;
 
   /** Spread `count` rings over (from, to), not touching either end. */
   const spread = (from: number, to: number, count: number): number[] => Array.from({ length: count }, (_, i) => from + ((to - from) * (i + 1)) / (count + 1));
   const loops = (shape: BoneShape): number => Math.max(0, Math.round(shape.loops * detail));
 
   // --- the torso: pelvis, spine and chest, one ring count all the way up ---
-  part = "torso";
+  kit.part = "torso";
   const pelvis = bone("pelvis");
   const spine = bone("spine");
   const chest = bone("chest");
   enter("torso", [pelvis.head, spine.head, chest.head, chest.tail], FORWARD, 0);
-  const torsoRegion = region;
+  const torsoRegion = kit.region;
   const iPelvis = skeleton.index("pelvis");
   const iSpine = skeleton.index("spine");
   const iChest = skeleton.index("chest");
@@ -365,7 +149,7 @@ export function buildBody(race: RaceDef, options: BodyOptions = {}): BodyGeometr
     const iFoot = skeleton.index(`foot${suffix}`);
     const thigh = bones[iThigh];
     const shin = bones[iShin];
-    part = "legs";
+    kit.part = "legs";
     enter(`leg${suffix}`, [thigh.head, shin.head, shin.tail], FORWARD, side);
     const half = side > 0 ? hipRing.verts.slice(0, N / 2 + 1) : [...hipRing.verts.slice(N / 2), hipRing.verts[0]];
     const leg: Ring[] = [];
@@ -375,13 +159,13 @@ export function buildBody(race: RaceDef, options: BodyOptions = {}): BodyGeometr
     zip([...half, crotch], leg[0].verts, down, FORWARD);
     for (let r = 0; r + 1 < leg.length; r++) zip(leg[r].verts, leg[r + 1].verts, down, FORWARD);
     for (const v of leg[leg.length - 1].verts) extras[v] = [iFoot];
-    const legRegion = region;
+    const legRegion = kit.region;
 
     // --- the foot, along its own axis from heel to toe, the ankle plugged into its top ---
-    part = "feet";
+    kit.part = "feet";
     const axis = footAxis(race, side);
     enter(`foot${suffix}`, [axis.from, axis.to], UP, side);
-    const footRegion = region;
+    const footRegion = kit.region;
     const footShape = race.shape.foot;
     const footLength = length(sub(axis.to, axis.from));
     const tAnkle = s.heel / footLength;
@@ -395,11 +179,11 @@ export function buildBody(race: RaceDef, options: BodyOptions = {}): BodyGeometr
     bands(foot, footSkip);
     const hole = [foot[r - 1].verts[F - 1], foot[r - 1].verts[0], foot[r - 1].verts[1], foot[r].verts[1], foot[r + 1].verts[1], foot[r + 1].verts[0], foot[r + 1].verts[F - 1], foot[r].verts[F - 1]];
     for (const v of hole) extras[v] = [iShin];
-    part = "legs";
-    region = legRegion;
+    kit.part = "legs";
+    kit.region = legRegion;
     zip(leg[leg.length - 1].verts, hole, sub(shin.tail, shin.head), FORWARD);
-    part = "feet";
-    region = footRegion;
+    kit.part = "feet";
+    kit.region = footRegion;
     cap(foot[0], lerp(axis.from, axis.to, 0), iFoot, true);
     cap(foot[foot.length - 1], axis.to, iFoot);
   }
@@ -414,7 +198,7 @@ export function buildBody(race: RaceDef, options: BodyOptions = {}): BodyGeometr
     const upper = bones[iUpper];
     const fore = bones[iFore];
     const hand = bones[iHand];
-    part = "arms";
+    kit.part = "arms";
     enter(`arm${suffix}`, [upper.head, fore.head, fore.tail], FORWARD, side);
     const c = holeColumn(side);
     const at = (row: number, col: number): number => torso[armpit + row].verts[(col + N) % N];
@@ -446,15 +230,15 @@ export function buildBody(race: RaceDef, options: BodyOptions = {}): BodyGeometr
     const deltoid = blend(hole, root.verts, bisector, FORWARD, 0.5, 0.25, iUpper);
     for (const v of deltoid) fixed.set(v, [[iUpper, 0.5], [iClavicle, 0.35], [iChest, 0.15]]);
     // Unrolled with the torso: on its side, over the joint, the arm's own axis has no angle for them.
-    const armRegion = region;
-    region = torsoRegion;
+    const armRegion = kit.region;
+    kit.region = torsoRegion;
     zip(hole, deltoid, bisector, FORWARD);
     zip(deltoid, root.verts, bisector, FORWARD);
-    region = armRegion;
+    kit.region = armRegion;
     zip(root.verts, arm[0].verts, along, FORWARD);
     for (let r = 0; r + 1 < arm.length; r++) zip(arm[r].verts, arm[r + 1].verts, along, FORWARD);
 
-    part = "hands";
+    kit.part = "hands";
     enter(`hand${suffix}`, [hand.head, hand.tail], FORWARD, side);
     const palm: Ring[] = [arm[arm.length - 1]];
     for (const t of [0.04, ...spread(0.04, 0.92, loops(race.shape.hand)), 0.92]) palm.push(ring(iHand, race.shape.hand, hand.head, hand.tail, t, FORWARD, side));
@@ -478,7 +262,7 @@ export function buildBody(race: RaceDef, options: BodyOptions = {}): BodyGeometr
   }
 
   // --- the neck and head, zipped onto the torso's top ring ---
-  part = "head";
+  kit.part = "head";
   enter("head", [bone("neck").head, bone("head").head, bone("head").tail], FORWARD, 0);
   const iNeck = skeleton.index("neck");
   const iHead = skeleton.index("head");
@@ -529,32 +313,6 @@ export function buildBody(race: RaceDef, options: BodyOptions = {}): BodyGeometr
     }
     return { seg: chain[0], t: 0, along: 0 };
   };
-  const layerOf = (surface: GearSurface, flat = false): number => {
-    const found = layers.findIndex((l) => l.material === surface.material && l.tint.every((c, k) => c === surface.tint[k]) && l.flat === flat);
-    if (found >= 0) return found;
-    layers.push({ material: surface.material, tint: surface.tint, flat });
-    return layers.length - 1;
-  };
-  /** Gives a ring's vertices their places in a texture: evenly round its circumference, `along`. */
-  const mapRing = (r: Ring, along: number): void => {
-    const n = r.verts.length;
-    let circumference = 0;
-    for (let k = 0; k < n; k++) circumference += length(sub(points[r.verts[(k + 1) % n]], points[r.verts[k]]));
-    r.verts.forEach((v, k) => {
-      gearU[v] = (k / n) * circumference;
-      gearV[v] = along;
-      gearC[v] = circumference;
-    });
-  };
-  /** A fan cap whose tip takes its texture place round from the ring it closes. */
-  const capRing = (r: Ring, tip: Vec, home: number, along: number, start = false): void => {
-    const before = points.length;
-    cap(r, tip, home, start);
-    gearV[before] = along;
-  };
-  const fixAll = (from: number, weights: [number, number][]): void => {
-    for (let v = from; v < points.length; v++) fixed.set(v, weights);
-  };
 
   function buildShell(def: GearShell, chainName: string): void {
     const chain = chains[chainName]();
@@ -573,7 +331,7 @@ export function buildBody(race: RaceDef, options: BodyOptions = {}): BodyGeometr
     const outer = layerOf(def);
     const rim = layerOf({ material: def.material, tint: def.rim });
     const direction = (a: Ring, b: Ring): Vec => (length(sub(b.center, a.center)) > 1e-6 ? sub(b.center, a.center) : sub(rings[0].seg.to, rings[0].seg.from));
-    layer = outer;
+    kit.layer = outer;
     for (let i = 0; i + 1 < rings.length; i++) zip(rings[i].ring.verts, rings[i + 1].ring.verts, direction(rings[i].ring, rings[i + 1].ring), rings[i].seg.reference);
     // Its edges: a lip turned in to the body, so the shell shows its thickness.
     const lip = (end: (typeof rings)[number]): Ring => {
@@ -583,14 +341,14 @@ export function buildBody(race: RaceDef, options: BodyOptions = {}): BodyGeometr
     };
     const first = rings[0];
     const last = rings[rings.length - 1];
-    layer = rim;
+    kit.layer = rim;
     zip(lip(first).verts, first.ring.verts, direction(first.ring, rings[1].ring), first.seg.reference);
     const alongN = direction(rings[rings.length - 2].ring, last.ring);
     if (def.cap) {
-      layer = outer;
+      kit.layer = outer;
       capRing(last.ring, add(last.seg.to, scale(normalize(alongN), def.thickness)), last.seg.bone, last.along + def.thickness);
     } else zip(last.ring.verts, lip(last).verts, alongN, last.seg.reference);
-    layer = -1;
+    kit.layer = -1;
   }
 
   function buildSkirt(def: GearSkirt): void {
@@ -611,15 +369,15 @@ export function buildBody(race: RaceDef, options: BodyOptions = {}): BodyGeometr
     const rings: Ring[] = [top];
     for (let i = 1; i <= def.loops; i++) rings.push(level(def.length * (i / def.loops), 1 + (def.flare - 1) * (i / def.loops), 0));
     const down: Vec = [0, -1, 0];
-    layer = layerOf(def);
+    kit.layer = layerOf(def);
     for (let i = 0; i + 1 < rings.length; i++) zip(rings[i].verts, rings[i + 1].verts, down, FORWARD);
     // Its hem turned in, and its top tucked to the body.
-    layer = layerOf({ material: def.material, tint: def.rim });
+    kit.layer = layerOf({ material: def.material, tint: def.rim });
     zip(rings[rings.length - 1].verts, level(def.length, def.flare, def.thickness).verts, down, FORWARD);
     const tuck = ring(seg.bone, seg.shape, seg.from, seg.to, t, seg.reference, seg.side, N, 0.004);
     mapRing(tuck, 0);
     zip(top.verts, tuck.verts, [0, 1, 0], FORWARD);
-    layer = -1;
+    kit.layer = -1;
   }
 
   function buildPiece(def: GearPiece, suffix: "R" | "L" | ""): void {
@@ -644,11 +402,11 @@ export function buildBody(race: RaceDef, options: BodyOptions = {}): BodyGeometr
           mapRing(r, def.height * h);
           return r;
         });
-        layer = layerOf(def);
+        kit.layer = layerOf(def);
         for (let k = 0; k + 1 < rings.length; k++) zip(rings[k].verts, rings[k + 1].verts, axis, FORWARD);
         capRing(rings[rings.length - 1], add(base, scale(axis, def.height)), iBone, def.height);
         // Its underside: a rolled rim, showing the plate's thickness.
-        layer = layerOf({ material: def.material, tint: def.rim });
+        kit.layer = layerOf({ material: def.material, tint: def.rim });
         const under = add(base, scale(axis, -0.012));
         const lip = ring(iBone, evenShape(radius * 0.93, radius * 0.93, radius * 0.93, 0.85, 12), under, add(under, axis), 0, FORWARD, side);
         mapRing(lip, -0.012);
@@ -675,14 +433,14 @@ export function buildBody(race: RaceDef, options: BodyOptions = {}): BodyGeometr
         capRing(rings[0], tipFrom, iBone, 0, true);
         capRing(rings[1], tipTo, iBone, length(sub(to, from)));
       };
-      layer = layerOf(def.hilt);
+      kit.layer = layerOf(def.hilt);
       const gripFrom = add(grip, scale(dir, -0.075));
       const gripTo = add(grip, scale(dir, 0.06));
       closed(tube(gripFrom, gripTo, 0.017, 0.017, 6, 0.9), gripFrom, gripTo, add(gripFrom, scale(dir, -0.025)), gripTo);
       const guardTo = add(gripTo, scale(dir, 0.025));
-      layer = layerOf(def.hilt, true);
+      kit.layer = layerOf(def.hilt, true);
       closed(tube(gripTo, guardTo, def.width * 1.8, 0.016, 4, 0), gripTo, guardTo, gripTo, guardTo);
-      layer = layerOf(def, true);
+      kit.layer = layerOf(def, true);
       const bladeTo = add(guardTo, scale(dir, def.length * 0.88));
       const blade = tube(guardTo, bladeTo, def.width / 2, 0.008, 4, 1);
       zip(blade[0].verts, blade[1].verts, dir, along);
@@ -690,12 +448,12 @@ export function buildBody(race: RaceDef, options: BodyOptions = {}): BodyGeometr
       capRing(blade[1], add(guardTo, scale(dir, def.length)), iBone, def.length);
       fixAll(start, [[iBone, 1]]);
     }
-    layer = -1;
+    kit.layer = -1;
   }
 
-  region = -1;
+  kit.region = -1;
   // The race's own pieces: tapering spikes in the skin's colour (an elf's ears).
-  part = "head";
+  kit.part = "head";
   for (const piece of race.pieces) {
     for (const suffix of piece.sides) {
       // A bone in the middle (the head) carries both sides' pieces itself.
@@ -707,7 +465,7 @@ export function buildBody(race: RaceDef, options: BodyOptions = {}): BodyGeometr
       const axis = normalize([piece.axis[0] * mirror, piece.axis[1], piece.axis[2]]);
       const tip = add(root, scale(axis, piece.length));
       const start = points.length;
-      layer = layerOf({ material: "skin", tint: options.skin ?? race.look.skin[0] });
+      kit.layer = layerOf({ material: "skin", tint: options.skin ?? race.look.skin[0] });
       const rings = ([[0, 1], [0.45, 0.65], [0.8, 0.3]] as [number, number][]).map(([t, f]) => {
         const r = piece.radius * f;
         const made = ring(iBone, evenShape(r * piece.flat, r * piece.flat, r, 0.7, 6), root, tip, t, FORWARD, side);
@@ -720,8 +478,8 @@ export function buildBody(race: RaceDef, options: BodyOptions = {}): BodyGeometr
       fixAll(start, [[iBone, 1]]);
     }
   }
-  layer = -1;
-  part = "gear";
+  kit.layer = -1;
+  kit.part = "gear";
   for (const piece of options.gear ?? []) {
     for (const def of piece.shells) for (const chainName of sided(def.chain)) buildShell(def, chainName);
     for (const def of piece.skirts) buildSkirt(def);
@@ -802,16 +560,5 @@ export function buildBody(race: RaceDef, options: BodyOptions = {}): BodyGeometr
   }
 
   return { positions: points.flat(), indices, joints, weights, bones: finalBones, lattice, marks, triangles: indices.length / 3, parts, regions: regionAxes, triangleRegions, layers, triangleLayers, gearUVs };
-}
-
-/** A shape the same all along: front, back and both sides at the given distances. */
-function evenShape(front: number, back: number, side: number, round: number, verts: number): BoneShape {
-  return { front: [[0, front]], back: [[0, back]], out: [[0, side]], in: [[0, side]], round, loops: 0, verts, bumps: [] };
-}
-
-function segmentDistance(p: Vec, a: Vec, b: Vec): number {
-  const ab = sub(b, a);
-  const t = Math.min(1, Math.max(0, dot(sub(p, a), ab) / Math.max(1e-9, dot(ab, ab))));
-  return length(sub(p, add(a, scale(ab, t))));
 }
 

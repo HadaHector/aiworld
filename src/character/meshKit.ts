@@ -1,0 +1,322 @@
+import { curveSampler } from "./curve";
+import type { BoneShape } from "./raceDef";
+import type { GearSurface } from "./gearDef";
+import { add, dot, frameFor, length, lerp, normalize, scale, sub, type Vec } from "./skeleton";
+
+/** One material and colour gear is drawn in; `flat` faces keep their edges (a blade's). */
+export interface GearLayer extends GearSurface {
+  flat: boolean;
+}
+
+/** A stretch of body round one axis - the torso, an arm, a leg - unrolled into one rectangle of
+ *  the atlas: round it across, along it down. */
+export interface BodyRegion {
+  name: string;
+  /** Its axis, as a line through joints (moved by the lattice, as the body is). */
+  axis: Vec[];
+  /** Toward its front, for where round it the atlas starts. */
+  reference: Vec;
+  /** -1, 0 or 1, as bones' sides: a -x region is unrolled mirrored, so both sides read alike. */
+  side: number;
+}
+
+export interface Ring {
+  verts: number[];
+  center: Vec;
+}
+
+/**
+ * The tools a body is built with, and the geometry as it grows (CHARACTERS.md, *Body from curves*):
+ * points, triangles, rings sampled from a bone's curves, zips between rings, caps, and the
+ * bookkeeping of which part, atlas region and gear layer the triangles being made belong to. A
+ * humanoid (bodyMesh.ts) is one recipe on top of it; a creature's body would be another.
+ */
+export interface MeshKit {
+  points: Vec[];
+  /** Per vertex: the bone it belongs to, and further bones its skin weights may follow. */
+  homes: number[];
+  extras: number[][];
+  /** Weights set by hand where the body joins itself, overriding the nearest-bones rule: bone, share. */
+  fixed: Map<number, [number, number][]>;
+  indices: number[];
+  parts: Record<string, number>;
+  triangleRegions: number[];
+  regionAxes: BodyRegion[];
+  /** Gear: the layer triangles are in (-1, the body), and per triangle corner its place in its
+   *  material's texture, in metres round and along. */
+  layers: GearLayer[];
+  triangleLayers: number[];
+  gearUVs: number[];
+  /** What the triangles made from now on are: a part to count in, an atlas region, a gear layer. */
+  part: string;
+  region: number;
+  layer: number;
+  /** From here on triangles are in a new region round this axis. */
+  enter: (name: string, axis: Vec[], reference: Vec, side: number) => void;
+  vertex: (p: Vec, home: number, extra?: number[]) => number;
+  tri: (a: number, b: number, c: number) => void;
+  sampled: (shape: BoneShape) => ((t: number) => number)[];
+  /** A ring of `shape` at `t` along the axis from `from` to `to`, its `front` toward `reference`. */
+  ring: (home: number, shape: BoneShape, from: Vec, to: Vec, t: number, reference: Vec, side: number, verts?: number, grow?: number) => Ring;
+  /** The point of `shape`'s surface at `t` along the axis, `theta` round it from its front. */
+  surface: (shape: BoneShape, from: Vec, to: Vec, t: number, theta: number, reference: Vec, side: number, grow?: number) => Vec;
+  /** Ring `a` to ring `b` further along `along`: triangles walking both by angle round their own
+   *  middles, turning the way every ring is laid out. */
+  zip: (a: number[], b: number[], along: Vec, reference: Vec) => void;
+  /** A ring between `a` and `b`, with `b`'s count, `k` of the way from one to the other, puffed out. */
+  blend: (a: number[], b: number[], along: Vec, reference: Vec, k: number, puff: number, home: number) => number[];
+  /** Rings of equal count as quads, leaving out the ones `skip` names (by "band,column"). */
+  bands: (rings: Ring[], skip?: Set<string>) => void;
+  /** A ring closed with a fan to a point: at the far end of its chain, or (`start`) the near end. */
+  cap: (r: Ring, tip: Vec, home: number, start?: boolean) => void;
+  layerOf: (surface: GearSurface, flat?: boolean) => number;
+  /** Gives a ring's vertices their places in a texture: evenly round its circumference, `along`. */
+  mapRing: (r: Ring, along: number) => void;
+  /** A fan cap whose tip takes its texture place round from the ring it closes. */
+  capRing: (r: Ring, tip: Vec, home: number, along: number, start?: boolean) => void;
+  /** Gives every vertex made since `from` the same hand-set weights. */
+  fixAll: (from: number, weights: [number, number][]) => void;
+}
+
+export function createMeshKit(): MeshKit {
+  const points: Vec[] = [];
+  const homes: number[] = [];
+  const extras: number[][] = [];
+  const fixed = new Map<number, [number, number][]>();
+  const indices: number[] = [];
+  const parts: Record<string, number> = {};
+  const triangleRegions: number[] = [];
+  const regionAxes: BodyRegion[] = [];
+  const layers: GearLayer[] = [];
+  const triangleLayers: number[] = [];
+  const gearUVs: number[] = [];
+  // Per vertex, its place in its material's texture - round (metres), along (metres), and the
+  // circumference round which it wraps (0 for a cap's tip, which takes its neighbours').
+  const gearU: number[] = [];
+  const gearV: number[] = [];
+  const gearC: number[] = [];
+  const samplers = new Map<BoneShape, ((t: number) => number)[]>();
+
+  const kit: MeshKit = {
+    points, homes, extras, fixed, indices, parts, triangleRegions, regionAxes, layers, triangleLayers, gearUVs,
+    part: "",
+    region: 0,
+    layer: -1,
+    enter, vertex, tri, sampled, ring, surface, zip, blend, bands, cap, layerOf, mapRing, capRing, fixAll,
+  };
+
+  function enter(name: string, axis: Vec[], reference: Vec, side: number): void {
+    regionAxes.push({ name, axis, reference, side });
+    kit.region = regionAxes.length - 1;
+  }
+
+  function vertex(p: Vec, home: number, extra: number[] = []): number {
+    points.push(p);
+    homes.push(home);
+    extras.push(extra);
+    gearU.push(0);
+    gearV.push(0);
+    gearC.push(0);
+    return points.length - 1;
+  }
+
+  function tri(a: number, b: number, c: number): void {
+    indices.push(a, b, c);
+    parts[kit.part] = (parts[kit.part] ?? 0) + 1;
+    triangleRegions.push(kit.region);
+    triangleLayers.push(kit.layer);
+    if (kit.layer < 0) {
+      gearUVs.push(0, 0, 0, 0, 0, 0);
+      return;
+    }
+    // Round the seam as the atlas does: a triangle across it carries its low side past the wrap.
+    const corners = [a, b, c];
+    const wrap = Math.max(...corners.map((v) => gearC[v]));
+    const us = corners.map((v) => gearU[v]);
+    const real = corners.map((v) => gearC[v] > 0);
+    if (wrap > 0) {
+      const known = us.filter((_, k) => real[k]);
+      if (Math.max(...known) - Math.min(...known) > wrap / 2) us.forEach((u, k) => (us[k] = real[k] && u < wrap / 2 ? u + wrap : u));
+      const mean = us.filter((_, k) => real[k]).reduce((x, y) => x + y, 0) / Math.max(1, real.filter(Boolean).length);
+      us.forEach((u, k) => (us[k] = real[k] ? u : mean));
+    }
+    corners.forEach((v, k) => gearUVs.push(us[k], gearV[v]));
+  }
+
+  function sampled(shape: BoneShape): ((t: number) => number)[] {
+    let found = samplers.get(shape);
+    if (!found) {
+      found = [curveSampler(shape.front), curveSampler(shape.back), curveSampler(shape.out), curveSampler(shape.in)];
+      samplers.set(shape, found);
+    }
+    return found;
+  }
+
+  function ring(home: number, shape: BoneShape, from: Vec, to: Vec, t: number, reference: Vec, side: number, verts = shape.verts, grow = 0): Ring {
+    const list: number[] = [];
+    for (let k = 0; k < verts; k++) list.push(vertex(surface(shape, from, to, t, (2 * Math.PI * k) / verts, reference, side, grow), home));
+    return { verts: list, center: lerp(from, to, t) };
+  }
+
+  /** The point of `shape`'s surface at `t` along the axis from `from` to `to`, `theta` round it
+   *  from its front (toward the frame's side): its four curves filled between as a superellipse,
+   *  then its bumps. */
+  function surface(shape: BoneShape, from: Vec, to: Vec, t: number, theta: number, reference: Vec, side: number, grow = 0): Vec {
+    const frame = frameFor(sub(to, from), reference);
+    const [front, back, out, inner] = sampled(shape).map((f) => f(t) + grow);
+    // Which of the frame's sides is away from the body's middle.
+    const outSign = side === 0 ? 1 : Math.sign(dot(frame.side, [side, 0, 0])) || 1;
+    const n = 2 + (1 - shape.round) * 4;
+    const c = Math.cos(theta);
+    const sn = Math.sin(theta);
+    const x = (c >= 0 ? front : back) * Math.sign(c) * Math.abs(c) ** (2 / n);
+    const y = ((sn >= 0) === outSign > 0 ? out : inner) * Math.sign(sn) * Math.abs(sn) ** (2 / n);
+    let offset = add(scale(frame.front, x), scale(frame.side, y));
+    if (shape.bumps.length > 0) {
+      // Degrees round from the front toward the outer side; a middle bone's bumps on both sides.
+      let toward = ((theta * 180) / Math.PI) * outSign;
+      toward = ((toward + 540) % 360) - 180;
+      let rise = 0;
+      for (const bump of shape.bumps) {
+        const along = (t - bump.at) / bump.length;
+        const round = (side === 0 ? Math.abs(Math.abs(toward) - Math.abs(bump.angle)) : Math.abs((((toward - bump.angle + 540) % 360) - 180))) / bump.width;
+        rise += bump.height * Math.exp(-3 * (along * along + round * round));
+      }
+      offset = add(offset, scale(normalize(offset), rise));
+    }
+    return add(lerp(from, to, t), offset);
+  }
+
+  function zip(a: number[], b: number[], along: Vec, reference: Vec): void {
+    const frame = frameFor(along, reference);
+    const angles = (list: number[]): { v: number; u: number }[] => {
+      const mid = scale(list.reduce<Vec>((sum, v) => add(sum, points[v]), [0, 0, 0]), 1 / list.length);
+      return list
+        .map((v) => {
+          const d = sub(points[v], mid);
+          const u = Math.atan2(dot(d, frame.side), dot(d, frame.front)) / (2 * Math.PI);
+          return { v, u: u < 0 ? u + 1 : u };
+        })
+        .sort((p, q) => p.u - q.u);
+    };
+    const A = angles(a);
+    const B = angles(b);
+    const at = (list: { v: number; u: number }[], i: number): { v: number; u: number } => {
+      const wrapped = list[i % list.length];
+      return { v: wrapped.v, u: wrapped.u + Math.floor(i / list.length) };
+    };
+    // Both walks start from the vertex nearest angle 0.
+    let i = 0;
+    let j = 0;
+    while (i < A.length || j < B.length) {
+      const nextA = at(A, i + 1).u;
+      const nextB = at(B, j + 1).u;
+      if (j >= B.length || (i < A.length && nextA <= nextB)) {
+        tri(at(A, i).v, at(A, i + 1).v, at(B, j).v);
+        i++;
+      } else {
+        tri(at(A, i).v, at(B, j + 1).v, at(B, j).v);
+        j++;
+      }
+    }
+  }
+
+  /** Each of `b`'s vertices matched to the point of `a` at its angle, a share `k` of the way from
+   *  that point to it, and pushed out from the axis between the two rings' middles by `puff` of
+   *  its distance from it. */
+  function blend(a: number[], b: number[], along: Vec, reference: Vec, k: number, puff: number, home: number): number[] {
+    const frame = frameFor(along, reference);
+    const middle = (list: number[]): Vec => scale(list.reduce<Vec>((sum, v) => add(sum, points[v]), [0, 0, 0]), 1 / list.length);
+    const ma = middle(a);
+    const mb = middle(b);
+    const angleOf = (p: Vec, mid: Vec): number => {
+      const d = sub(p, mid);
+      const u = Math.atan2(dot(d, frame.side), dot(d, frame.front));
+      return u < 0 ? u + 2 * Math.PI : u;
+    };
+    const around = a.map((v) => ({ p: points[v], u: angleOf(points[v], ma) })).sort((p, q) => p.u - q.u);
+    const onA = (u: number): Vec => {
+      for (let i = 0; i < around.length; i++) {
+        const p = around[i];
+        const q = around[(i + 1) % around.length];
+        const u0 = p.u;
+        const u1 = i + 1 < around.length ? q.u : q.u + 2 * Math.PI;
+        const uu = u < u0 ? u + 2 * Math.PI : u;
+        if (uu >= u0 && uu <= u1) return lerp(p.p, q.p, (uu - u0) / Math.max(1e-9, u1 - u0));
+      }
+      return around[0].p;
+    };
+    const axis = lerp(ma, mb, k);
+    return b.map((v) => {
+      const p = lerp(onA(angleOf(points[v], mb)), points[v], k);
+      return vertex(add(p, scale(sub(p, axis), puff)), home);
+    });
+  }
+
+  function bands(rings: Ring[], skip: Set<string> = new Set()): void {
+    for (let r = 0; r + 1 < rings.length; r++) {
+      const a = rings[r].verts;
+      const b = rings[r + 1].verts;
+      const n = a.length;
+      for (let k = 0; k < n; k++) {
+        if (skip.has(`${r},${k}`)) continue;
+        const k1 = (k + 1) % n;
+        tri(a[k], a[k1], b[k]);
+        tri(a[k1], b[k1], b[k]);
+      }
+    }
+  }
+
+  function cap(r: Ring, tip: Vec, home: number, start = false): void {
+    const c = vertex(tip, home);
+    const n = r.verts.length;
+    for (let k = 0; k < n; k++) {
+      const a = r.verts[k];
+      const b = r.verts[(k + 1) % n];
+      if (start) tri(b, a, c);
+      else tri(a, b, c);
+    }
+  }
+
+  function layerOf(surface: GearSurface, flat = false): number {
+    const found = layers.findIndex((l) => l.material === surface.material && l.tint.every((c, k) => c === surface.tint[k]) && l.flat === flat);
+    if (found >= 0) return found;
+    layers.push({ material: surface.material, tint: surface.tint, flat });
+    return layers.length - 1;
+  }
+
+  function mapRing(r: Ring, along: number): void {
+    const n = r.verts.length;
+    let circumference = 0;
+    for (let k = 0; k < n; k++) circumference += length(sub(points[r.verts[(k + 1) % n]], points[r.verts[k]]));
+    r.verts.forEach((v, k) => {
+      gearU[v] = (k / n) * circumference;
+      gearV[v] = along;
+      gearC[v] = circumference;
+    });
+  }
+
+  function capRing(r: Ring, tip: Vec, home: number, along: number, start = false): void {
+    const before = points.length;
+    cap(r, tip, home, start);
+    gearV[before] = along;
+  }
+
+  function fixAll(from: number, weights: [number, number][]): void {
+    for (let v = from; v < points.length; v++) fixed.set(v, weights);
+  }
+
+  return kit;
+}
+
+/** A shape the same all along: front, back and both sides at the given distances. */
+export function evenShape(front: number, back: number, side: number, round: number, verts: number): BoneShape {
+  return { front: [[0, front]], back: [[0, back]], out: [[0, side]], in: [[0, side]], round, loops: 0, verts, bumps: [] };
+}
+
+/** Skinning by distance: a point's distance from a bone's segment. */
+export function segmentDistance(p: Vec, a: Vec, b: Vec): number {
+  const ab = sub(b, a);
+  const t = Math.min(1, Math.max(0, dot(sub(p, a), ab) / Math.max(1e-9, dot(ab, ab))));
+  return length(sub(p, add(a, scale(ab, t))));
+}
