@@ -305,8 +305,9 @@ All eight steps, each committed on its own. Where this differs from the plan abo
   elsewhere. Checked in the page (`?play&config=tiny`): the village on the minimap with its houses,
   the reeve's and others' "!", creature dots, the services when turned on, the grey "?" over the
   innkeeper after taking the reeve's quest, the world map's pan and zoom and the next village's name.
-  **Not checked in the page:** a gather or reach objective's area and its edge arrow (covered by the
-  probe's marker rules), and settings kept across logging out of a saved game.
+  In a saved tiny world, the minimap's zoom and kinds and the world map's choices changed, logged out,
+  the page reloaded and *Continue*: all three came back. **Not checked in the page:** a gather or
+  reach objective's area and its edge arrow (covered by the probe's marker rules).
 
 ## Later
 
