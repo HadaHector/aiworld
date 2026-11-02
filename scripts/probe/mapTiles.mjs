@@ -8,7 +8,7 @@ import { loadContentFromDisk } from "../diskContent.mjs";
 import { createWorldData } from "../../src/world/worldData.ts";
 import { chooseStarts } from "../../src/world/settlements/starts.ts";
 import { createMaterialBlender } from "../../src/world/materials/materialBlend.ts";
-import { createTreeCover } from "../../src/world/foliage/treeScatter.ts";
+import { createBushScatter, createRockScatter, createTreeCover, createTreeScatter, samplerGround } from "../../src/world/foliage/treeScatter.ts";
 import { SEA_LEVEL } from "../../src/world/cells/areaField.ts";
 import { buildMapTile, mapTileAt, mapTileKey, MAP_TILE_PIXELS, MAP_TILE_METRES, MAP_METRES_PER_PIXEL } from "../../src/map/tiles.ts";
 
@@ -57,9 +57,25 @@ const ground = {
   groundColors: probeColors(blender.materialDefs),
   treeCover: createTreeCover(SEED, content),
 };
+const things = {
+  groups: world.buildingGroups,
+  buildingColors: Object.fromEntries(content.buildingMaterials.map((m) => [m.id, probeColors([m])[0]])),
+  scatterTrees: createTreeScatter(SEED, content),
+  scatterBushes: createBushScatter(SEED, content, world.sampleTerrain),
+  scatterRocks: createRockScatter(SEED, content, world.sampleTerrain),
+  treeGround: samplerGround(world.sampleTerrain),
+  treeKinds: content.treeKinds,
+  treeColors: {},
+  seed: SEED,
+  cut: 8,
+  treeCut: process.env.TREECUT ? Number(process.env.TREECUT) : undefined,
+  near: process.env.FAR !== "1",
+};
 
 // A 3 x 3 block of tiles round the start: the village and its edges.
-const centre = mapTileAt(start.x, start.z);
+// AT=x,z centres the tiles elsewhere instead (a wood, a coast) to look at.
+const at = process.env.AT?.split(",").map(Number);
+const centre = at ? mapTileAt(at[0], at[1]) : mapTileAt(start.x, start.z);
 const tiles = [];
 const started = performance.now();
 for (let dz = -1; dz <= 1; dz++) {
@@ -67,14 +83,23 @@ for (let dz = -1; dz <= 1; dz++) {
     const tx = centre.tx + dx;
     const tz = centre.tz + dz;
     const t = performance.now();
-    tiles.push({ tx, tz, pixels: buildMapTile(ground, tx, tz), ms: performance.now() - t });
+    tiles.push({ tx, tz, pixels: buildMapTile(ground, tx, tz, things), ms: performance.now() - t });
   }
 }
 const totalMs = performance.now() - started;
-log(`${config} seed ${SEED}: start "${start.id}" at ${Math.round(start.x)}, ${Math.round(start.z)}; ${tiles.length} tiles in ${Math.round(totalMs)} ms (${Math.round(totalMs / tiles.length)} ms each, ${MAP_TILE_METRES} m at ${MAP_METRES_PER_PIXEL} m/px)`);
+log(`${config} seed ${SEED}: start "${start.id}" at ${Math.round(start.x)}, ${Math.round(start.z)}; ${tiles.length} tiles in ${Math.round(totalMs)} ms (${Math.round(totalMs / tiles.length)} ms each, slowest ${Math.round(Math.max(...tiles.map((t) => t.ms)))}, ${MAP_TILE_METRES} m at ${MAP_METRES_PER_PIXEL} m/px, ${things.near ? "near" : "far"} models)`);
+{
+  const t = performance.now();
+  const bare = buildMapTile(ground, centre.tx, centre.tz);
+  const groundMs = performance.now() - t;
+  let changed = 0;
+  for (let i = 0; i < bare.length; i += 4) if (bare[i] !== tiles[4].pixels[i] || bare[i + 1] !== tiles[4].pixels[i + 1]) changed++;
+  log(`the village tile: ground alone ${Math.round(groundMs)} ms; things changed ${((changed / (bare.length / 4)) * 100).toFixed(1)}% of its pixels`);
+  if (!at) check("buildings and trees drawn over the village", changed > bare.length / 4 / 20, `${changed} pixels`);
+}
 
 for (const tile of tiles) check(`tile ${tile.tx},${tile.tz} size`, tile.pixels.length === MAP_TILE_PIXELS * MAP_TILE_PIXELS * 4, String(tile.pixels.length));
-const again = buildMapTile(ground, centre.tx, centre.tz);
+const again = buildMapTile(ground, centre.tx, centre.tz, things);
 check("the same bytes twice", Buffer.from(again).equals(Buffer.from(tiles[4].pixels)));
 const keys = new Set(tiles.map((t) => mapTileKey("w", "mainland", t.tx, t.tz)));
 check("distinct keys", keys.size === tiles.length);
@@ -110,7 +135,7 @@ if (outDir) {
     const oy = Math.floor(k / 3) * MAP_TILE_PIXELS;
     for (let y = 0; y < MAP_TILE_PIXELS; y++) rgba.set(tile.pixels.subarray(y * MAP_TILE_PIXELS * 4, (y + 1) * MAP_TILE_PIXELS * 4), ((oy + y) * n + ox) * 4);
   });
-  const path = `${outDir}/mapTiles-${config}.png`;
+  const path = `${outDir}/mapTiles-${config}${process.env.TREECUT ? `-trees${process.env.TREECUT}` : ""}.png`;
   writePng(path, rgba, n);
   log(`wrote ${path}`);
 }

@@ -2,6 +2,7 @@ import { SEA_LEVEL } from "../world/cells/areaField";
 import type { TerrainSample, TerrainSampler } from "../world/terrain/terrainSampler";
 import type { MaterialBlender } from "../world/materials/materialBlend";
 import type { TreeCover } from "../world/foliage/treeScatter";
+import { drawThings, type MapThings } from "./things";
 
 /**
  * The map's tiles (see MAP.md): one picture of the world at one resolution, cut into squares so only
@@ -66,9 +67,9 @@ function normalize(v: [number, number, number]): [number, number, number] {
 /**
  * Draws tile (tx, tz): its RGBA pixels, row by row from its north-west corner (smallest x and z).
  * The ground pass: each pixel's materials blended as the chunks blend them, hill-shaded, water flat
- * and darker the deeper it is.
+ * and darker the deeper it is; then, given `things`, everything set down in it (things.ts).
  */
-export function buildMapTile(ground: MapGround, tx: number, tz: number): Uint8ClampedArray {
+export function buildMapTile(ground: MapGround, tx: number, tz: number, things?: MapThings): Uint8ClampedArray {
   const n = MAP_TILE_PIXELS;
   const step = MAP_METRES_PER_PIXEL;
   const x0 = tx * MAP_TILE_METRES;
@@ -105,6 +106,7 @@ export function buildMapTile(ground: MapGround, tx: number, tz: number): Uint8Cl
   };
 
   const out = new Uint8ClampedArray(n * n * 4);
+  const depth = new Float32Array(n * n);
   const colors = ground.groundColors;
   for (let row = 0; row < n; row++) {
     for (let col = 0; col < n; col++) {
@@ -172,6 +174,7 @@ export function buildMapTile(ground: MapGround, tx: number, tz: number): Uint8Cl
         g *= shade;
         b *= shade;
       }
+      depth[row * n + col] = Math.max(SEA_LEVEL, sample.height);
       const o = (row * n + col) * 4;
       out[o] = r * 255;
       out[o + 1] = g * 255;
@@ -179,5 +182,6 @@ export function buildMapTile(ground: MapGround, tx: number, tz: number): Uint8Cl
       out[o + 3] = 255;
     }
   }
+  if (things) drawThings({ out, depth, size: n, x0, z0, step }, things);
   return out;
 }
