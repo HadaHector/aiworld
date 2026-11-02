@@ -4,7 +4,8 @@ A **minimap** in the HUD and a **world map** window (M), drawn from one tile sou
 model. GAMEPLAY.md asks for "a map" with quest and map markers, and roads that guide the
 player; QUESTS.md has been drawing its marks on the debug map until this exists.
 
-**Status: plan, waiting for approval.** Nothing below is built yet.
+**Status: done.** Steps 1 to 8, with changes the user asked for along the way: see [As built](#as-built),
+which wins where it differs from the plan above it.
 
 ## Decisions
 
@@ -15,7 +16,8 @@ Agreed with the user in two question rounds and two rounds of changes to this pl
 | Shape | **Round, north-up.** A bronze ring; the map stays fixed and the player arrow turns. The world map is north-up too, so the two read the same |
 | Look | **The real terrain, cleaned up**: the world's own ground colours (biomes, rock, snow, sand, road surfaces) with soft hill shading and flat water; roads and rivers show as they are on the ground |
 | Buildings and props | **Projected from above with a cut 8 m over the ground.** Everything set down in the world - houses, compounds' props, walls, fences, bridges, signs, trees, bushes, rocks - is drawn as seen from straight above, but anything higher than 8 m over the ground beneath it is cut away. A tall house shows its walls and rooms rather than its roof, a wood shows its crowns' cross-sections. Drawn from data, so it works at any distance and headless |
-| Zoom | **1x to 0.5x of one resolution.** 1x is 0.25 m to a pixel, 0.5x is 0.5 m, changed smoothly by the minimap's buttons or the mouse wheel. On a 180 px ring that is about 22 to 45 m around the player. No zoomed-out levels: a whole-dimension view is the debug map's job |
+| Zoom | **1x to 0.5x of one resolution.** 1x is 1 m to a pixel (first 0.25 m; the user found that too dense once it was in the game), 0.5x is 2 m, changed smoothly by the minimap's buttons or the mouse wheel. On a 180 px ring that is about 90 to 180 m around the player. No zoomed-out levels: a whole-dimension view is the debug map's job |
+| Trees under the cut | **Cut like everything else.** Trees stand 25-40 m, so at 8 m most show only their trunks; the user chose that over whole crowns (`treeCut` in map/things.ts can tell them apart) |
 | Default markers | **Quests** ("!", "?" and the tracked objectives' areas) **and creatures nearby**. The others (NPC services, places, the home) are kinds a player can turn on |
 | Fog of exploration | **None.** Everything is shown from the start; nothing about the map is stored per character except the player's own map settings. GAMEPLAY.md's "map that fills in" is dropped for now (see [Later](#later)) |
 | Debug map | **Kept as it is.** It stays the way to see a whole dimension. The world map takes M; the debug map moves to Shift+M and stays on the menu bar's debug entries |
@@ -237,6 +239,74 @@ Each leaves the game working: `?play` in the dev server, the probes, `npm run bu
    the village's plan, the reeve's "!", the tracked objective's area and its edge arrow on the road
    to the first creatures, their dots; the world map from the minimap's button; the minimap settings
    kept after logging out and Continue; frame time with both open. GAMEPLAY.md updated.
+
+## As built
+
+All eight steps, each committed on its own. Where this differs from the plan above, this is how it is.
+
+- **One resolution, 1 m a pixel.** `src/map/tiles.ts`: a tile is 256 px, 256 m. `MAP_VERSION` is 2. The
+  ground pass blends each pixel's materials exactly as the chunks do (`buildMaterialBlend` with the
+  chunks' own vertex context, curvature from a coarse grid round the tile), hill-shades it and draws
+  water below sea level flat, darker with depth. About 0.6 s a tile on one thread, most of it the
+  sampling and the blend.
+- **North is +z.** The world is left-handed: seen from above, +x is right when +z is up. The first
+  minimap drew +z down and was mirrored against the 3D view (the user caught it); the view now draws
+  tiles upside down rather than changing the tiles.
+- **The cut** (`src/map/things.ts`): every placed model's triangles clipped to 8 m over its foot and
+  rasterised from above, the highest surface winning; upright faces drawn as their top edge, so cut
+  walls read as a plan. The game uses the **far models** - at 1 m a pixel rooms and furniture are
+  smaller than a pixel, and far models cost less (the probe can use near ones: `NEAR=1`). Trees,
+  bushes and rocks are discs: a crown's width under the cut from its near model's leaves (95% of them,
+  so a stray card does not make a crown), a trunk's from the middle of its wood at that height.
+- **Colours** are the game's own: the ground's baked averages, building materials' averages (now kept
+  by `bakeBuildingTextures`), and `TreeField.mapColors` (bark averages; leaves the middle of a
+  kind's tint times a leaf green, since the leaf atlases are baked out of reach).
+- **Built in the chunk workers** (`chunkBuild.worker.ts`): `mapColors` and `mapTile` messages; a
+  tile is drawn a slice (16 rows) at a time with `setTimeout` between, so a chunk job waits a slice.
+  The worker makes its building groups lazily on the first tile, from its own terrain
+  (`createWorldData` takes one). Without workers, `World.buildMapTile` draws on the main thread,
+  4 ms at a time. `src/map/maker.ts` gathers what a tile is drawn from.
+- **Cache** (`src/map/tileCache.ts`): 120 bitmaps in memory; `aiworld-map` in IndexedDB as WebP,
+  1500 tiles, oldest pruned; at most two tiles in the making, nearest wanted first. Keyed by the seed
+  and a hash of the content's JSON, so a pack change never shows an old tile.
+- **No `rules/map.json5`**: the cut (`MAP_CUT`), the ring's size and the zoom range are constants in
+  `map/maker.ts`, `ui/minimap.ts` and `ui/mapView.ts`.
+- **Marker kinds** (`mapMarkers/`, `src/map/markers.ts`): a kind says which NPCs it stands for with
+  `mark` (a quest mark: "!", "?", "!grey", "?grey") or `service` (a role's service: vendor, trainer,
+  innkeeper, repair) instead of a `mapMarker` field on roles. An NPC shows its quest kind and its
+  highest-priority service kind. Shapes: icon (an icon name, else the glyph), dot, area, label. 15
+  core kinds; services, the home and links start off.
+- **Server** (`sim/server.ts`, `sim/protocol.ts`, `PROTOCOL_VERSION` 13): `mapPins` twice a second
+  when it changed - every NPC within 400 m with its quest mark for the player and its role's services
+  (`NpcSystem.servicesOf`), and the home if it is in this dimension; `mapZones` on coming to a
+  dimension - each zone's level band. Creatures, the tracked quests' areas (`QuestLog.isTracked`) and
+  links come from the client's own mirrors and content.
+- **The minimap** (`ui/minimap.ts`, `ui/mapView.ts`, `ui/mapMarkers.ts`): top of the info region
+  in place of the zone label, which is gone; the name plate under it (settlement within its radius,
+  else the zone; biome and weather in its tooltip) with a fold toggle; zoom buttons, the wheel, an M
+  button; redrawn on a move of half a pixel, a turn, a new tile, and ten times a second for moving
+  markers. A redraw measured about 0.1 ms.
+- **The world map** (`ui/worldMap.ts`): M, the minimap's M button or a click on it, and the menu bar's
+  map button; Escape closes it with the other windows. Up to 1100 x 800 px; drag to pan (tiles
+  stream in as they come into view), wheel to zoom about the pointer, *Centre* to follow the player
+  again. The title is the zone at the middle with its level band, coloured as quests are by its
+  lowest level against the character's. Settlements are named (the `settlement` label kind). The
+  legend's checkboxes are its own choices. A full redraw measured about 0.5 ms; the frame rate is the
+  same with it open or shut.
+- **Saved**: the minimap's settings (shown, zoom, kinds) and the world map's choices go into the
+  character record's `interface` beside the action bar, a second after the last change. A quick
+  (`?play`) game keeps nothing.
+- **The debug map** is Shift+M, as before otherwise.
+- **Tests**: `npm run probe -- scripts/probe/mapTiles.mjs [outDir] [config]` builds nine tiles over
+  the tiny world's starting village and checks their size, the same bytes twice, keys, a water pixel,
+  that the village's buildings are drawn, and the marker rules (kinds read from the packs, an
+  innkeeper giving a quest, a marker inside the ring, one pinned to its edge, ranges, a kind off by
+  default, the drawing order); with `outDir` it writes the tiles as a PNG, and `AT=x,z` centres them
+  elsewhere. Checked in the page (`?play&config=tiny`): the village on the minimap with its houses,
+  the reeve's and others' "!", creature dots, the services when turned on, the grey "?" over the
+  innkeeper after taking the reeve's quest, the world map's pan and zoom and the next village's name.
+  **Not checked in the page:** a gather or reach objective's area and its edge arrow (covered by the
+  probe's marker rules), and settings kept across logging out of a saved game.
 
 ## Later
 

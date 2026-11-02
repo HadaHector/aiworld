@@ -4,7 +4,8 @@
 //   npm run probe -- scripts/probe/mapTiles.mjs [outDir] [config]
 import { writeFileSync } from "node:fs";
 import { deflateSync } from "node:zlib";
-import { loadContentFromDisk } from "../diskContent.mjs";
+import { loadContentFromDisk, packSourcesFromDisk, readConfigFromDisk } from "../diskContent.mjs";
+import { loadMarkerKinds, npcMarkers, placeMarkers } from "../../src/map/markers.ts";
 import { createWorldData } from "../../src/world/worldData.ts";
 import { chooseStarts } from "../../src/world/settlements/starts.ts";
 import { createMaterialBlender } from "../../src/world/materials/materialBlend.ts";
@@ -69,7 +70,7 @@ const things = {
   seed: SEED,
   cut: 8,
   treeCut: process.env.TREECUT ? Number(process.env.TREECUT) : undefined,
-  near: process.env.FAR !== "1",
+  near: process.env.NEAR === "1",
 };
 
 // A 3 x 3 block of tiles round the start: the village and its edges.
@@ -138,6 +139,35 @@ if (outDir) {
   const path = `${outDir}/mapTiles-${config}${process.env.TREECUT ? `-trees${process.env.TREECUT}` : ""}.png`;
   writePng(path, rgba, n);
   log(`wrote ${path}`);
+}
+
+// Markers (MAP.md, *Markers*): the core kinds read from the packs, NPCs matched to kinds by their
+// marks and services, and where they go on a round minimap - inside, pinned to the ring, or left out.
+{
+  const kinds = loadMarkerKinds(packSourcesFromDisk(readConfigFromDisk(config)).sources);
+  check("core marker kinds read", ["questAvailable", "questReady", "questArea", "creatureHostile", "shop", "inn", "home"].every((id) => kinds.has(id)), [...kinds.keys()].join());
+  const innkeeper = npcMarkers(kinds, 10, 0, "!", ["innkeeper", "banker", "vendor"], "Inn");
+  check("an innkeeper giving a quest is its quest kind and its inn, not also a shop", innkeeper.map((m) => m.kind).sort().join() === "inn,questAvailable", innkeeper.map((m) => m.kind).join());
+  // A ring of radius 90 px at 1 px a metre, the player at the middle.
+  const toScreen = (x, z) => ({ x: 90 + x, y: 90 - z });
+  const view = { round: { cx: 90, cy: 90, r: 90, player: { x: 0, z: 0 } }, width: 180, height: 180 };
+  const markers = [
+    { kind: "questAvailable", x: 20, z: 30, title: "near" },
+    { kind: "questReady", x: 300, z: 0, title: "far, edge" },
+    { kind: "questActive", x: 300, z: 0, title: "far, no edge" },
+    { kind: "questArea", x: 0, z: -150, radius: 70, title: "area overlapping the ring" },
+    { kind: "creatureHostile", x: 500, z: 0, title: "out of range" },
+    { kind: "shop", x: 5, z: 5, title: "off by default" },
+  ];
+  const placed = placeMarkers(markers, kinds, {}, toScreen, view);
+  const byTitle = new Map(placed.map((p) => [p.marker.title, p]));
+  check("a marker in the ring is placed at its point", byTitle.get("near")?.edge === null && byTitle.get("near")?.x === 110);
+  check("a far edge kind is pinned to the ring, pointing east", byTitle.get("far, edge")?.edge !== null && Math.abs(byTitle.get("far, edge").edge - Math.PI / 2) < 1e-6);
+  check("a far kind without edge arrows is left out", !byTitle.has("far, no edge"));
+  check("an area reaching into the ring is drawn as an area", byTitle.get("area overlapping the ring")?.edge === null);
+  check("past its range is left out", !byTitle.has("out of range"));
+  check("a kind off by default is left out, and shown when chosen", !byTitle.has("off by default") && placeMarkers(markers, kinds, { shop: true }, toScreen, view).some((p) => p.marker.title === "off by default"));
+  check("drawn lowest priority first", placed.every((p, i) => i === 0 || placed[i - 1].kind.priority <= p.kind.priority));
 }
 
 log(`${checks - failures}/${checks} checks passed`);

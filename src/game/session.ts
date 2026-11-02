@@ -209,7 +209,8 @@ export async function startSession(page: Page, options: SessionOptions): Promise
     for (const entity of mirror.entities.values()) {
       if (entity.id === playerId || entity.templateId === PLAYER_TEMPLATE) continue;
       const hostility = entity.template?.hostility;
-      if ((hostility !== "hostile" && hostility !== "neutral") || (entity.flags & (1 << FLAG.dead)) !== 0) continue;
+      // Creatures only: not a chest, which has no stats.
+      if ((hostility !== "hostile" && hostility !== "neutral") || !entity.template?.hasStats || (entity.flags & (1 << FLAG.dead)) !== 0) continue;
       markers.push({ kind: hostility === "hostile" ? "creatureHostile" : "creatureNeutral", x: entity.x, z: entity.z, title: entity.name });
     }
     return markers;
@@ -1117,6 +1118,7 @@ export async function startSession(page: Page, options: SessionOptions): Promise
     /** The map (MAP.md): the minimap, and this dimension's tiles (`map.tiles.size` in memory). */
     map: {
       minimap,
+      worldMap,
       /** Each zone's level band here, by area id, as the server said (MapZones). */
       get zones() {
         return zoneLevels;

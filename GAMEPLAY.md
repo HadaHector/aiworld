@@ -180,10 +180,12 @@ The first chain the generator must be able to make, and the yardstick for its pa
 
 - **The world is vast**, with every kind of point of interest: ruins, shrines, caves, camps, towers,
   wrecks, treasure.
-- **A map** that fills in as zones and areas are explored.
+- **A map**: a minimap and a world map (M), drawn from the world's own data, with quest, NPC and
+  creature markers - see [MAP.md](MAP.md). It does not fill in as areas are explored: the user
+  dropped the fog for now.
 - **Collections and discovery logs:** later, maybe.
 - **Puzzles and secrets:** only in dungeons.
-- **Fast travel:** limited, by teleporting between travel points (as in FFXIV).
+- **Fast travel:** none for now (MAP.md); limited teleporting between travel points (as in FFXIV) may come later.
 - **Roads and fingerposts** guide the player to places they have not yet explored.
 
 ## Setting
@@ -215,7 +217,7 @@ in [FRONTEND.md](FRONTEND.md), *Saves*.
 | Belongings | Inventory, equipment, bank, money and minor currencies |
 | Quests | Active quests and their progress, completed quests |
 | Standing | Reputation per faction |
-| Travel | Where they logged out, explored map, unlocked travel points, current home |
+| Travel | Where they logged out and current home. (No explored map: MAP.md has no fog. Travel points, if they come, add theirs) |
 
 ### World delta
 
@@ -352,6 +354,13 @@ A proposal, to be confirmed. Each step gets its own plan document.
    for a dedicated server); a pause menu and logging out; UI sounds; and `?play` to skip the menu.
    Checked end to end: a new world and character, played, logged out, the page reloaded, and
    Continue found the level, belongings, money, position and the emptied chest kept.
+
+*After step 10:* **The map: done** - see [MAP.md](MAP.md). A minimap in the HUD and a world map
+window from one tile source drawn in the chunk workers at 1 m a pixel (the ground's real colours,
+buildings, props and trees seen from above with everything over 8 m cut away), marker kinds in
+packs (quest marks and areas, creatures, NPC services, the home), the server's map pins and zone
+levels, and the settings kept with the character. No fog of exploration and no travel points, by
+the user's choice.
 
 **Order:** 10 is done before 9. The quest log moves to step 9, which has the quests to put in it.
 Step 9 then reaches the first milestone. After it: zone levels in world generation, parties, chat,
