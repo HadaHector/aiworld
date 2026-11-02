@@ -64,7 +64,7 @@ const things = {
   scatterBushes: createBushScatter(SEED, content, world.sampleTerrain),
   scatterRocks: createRockScatter(SEED, content, world.sampleTerrain),
   treeGround: samplerGround(world.sampleTerrain),
-  treeKinds: content.treeKinds,
+  treeKinds: [...content.treeKinds, ...content.bushKinds, ...content.rockKinds],
   treeColors: {},
   seed: SEED,
   cut: 8,

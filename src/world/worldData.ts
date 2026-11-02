@@ -51,8 +51,12 @@ export interface WorldData extends ReturnType<typeof createTerrainSampler> {
   buildingAt: (x: number, y: number, z: number) => { id: string; key: number } | undefined;
 }
 
-export function createWorldData(seed: number, content: WorldContent): WorldData {
-  const terrain = createTerrainSampler(seed, content);
+export function createWorldData(
+  seed: number,
+  content: WorldContent,
+  /** The terrain, where it is already made from this seed and content (a chunk worker's copy). */
+  terrain: ReturnType<typeof createTerrainSampler> = createTerrainSampler(seed, content),
+): WorldData {
   const { sampleTerrain, features, roads, settlementLayouts, compoundLayouts, bridges } = terrain;
 
   // The roads' fences where the ground falls away beside them, set on the ground, drawn in cells.

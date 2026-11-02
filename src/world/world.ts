@@ -28,6 +28,7 @@ import { WORLD_SEED, type PlaceLabel, type WorldData } from "./worldData";
 import type { ModelledGroup } from "./buildings/buildingCollision";
 
 import type { RoadNetwork } from "./roads/roadNetwork";
+import { createMapTileMaker } from "../map/maker";
 
 /** Coarse progress for the loading screen. `total` is 0 for phases with no countable steps. */
 export interface WorldLoadProgress {
@@ -78,6 +79,8 @@ export interface World {
    *  so this is meant to be called every frame from the same sampleTerrain result main.ts already
    *  takes for the zone label, not gated behind any dirty check of its own. */
   updateAtmosphere: (areaWeights: AreaWeight[]) => void;
+  /** A map tile's pixels (MAP.md) - drawn in a chunk worker, or a slice a frame here without one. */
+  buildMapTile: (tx: number, tz: number) => Promise<Uint8ClampedArray>;
   /** Advances the day-night cycle and re-blends lighting for wherever the player is now - see
    *  lighting/sunLighting.ts's updateDayNight. Meant to be called every frame alongside
    *  updateAtmosphere, with the same areaWeights and the frame's own delta time. */
@@ -203,7 +206,9 @@ export async function createWorld(
   await phase(`Sowing ${content.grassKinds.length} kinds of grass`);
   const grass = createGrassField(scene, seed, materialLibrary.litShading, content.grassKinds);
   await phase(`Baking ${content.buildingMaterials.length} building materials`);
-  const buildingMaterial = createBuildingMaterial(scene, materialLibrary.litShading, await bakeBuildingTextures(seed, content.buildingMaterials));
+  const buildingTextures = await bakeBuildingTextures(seed, content.buildingMaterials);
+  const buildingMaterial = createBuildingMaterial(scene, materialLibrary.litShading, buildingTextures);
+  const mapColors = { buildings: Object.fromEntries(content.buildingMaterials.map((m, i) => [m.id, buildingTextures.averageColors[i]])), trees: trees.mapColors };
   await phase(`Building the buildings of ${settlementLayouts.length} settlements and ${compoundLayouts.length} compounds`);
   const buildings = createBuildingRenderer(
     scene,
@@ -219,6 +224,7 @@ export async function createWorld(
   // Sent now that the textures are baked; queued behind each worker's own world building if it is
   // still busy with that, and ahead of any chunk it is asked to build.
   buildPool?.setGroundColors(materialLibrary.averageColors);
+  buildPool?.setMapColors(mapColors);
 
   if (buildPool) {
     await phase("Waiting for the terrain workers to build their own copy of the world");
@@ -256,6 +262,33 @@ export async function createWorld(
     loadRadius: DEFAULT_DRAW_DISTANCE,
     unloadRadius: DEFAULT_DRAW_DISTANCE + UNLOAD_HYSTERESIS,
   });
+  /** Without workers, tiles are made here, about 4 ms of one at a time between frames. */
+  let makeTileHere: ReturnType<typeof createMapTileMaker> | null = null;
+  function buildMapTile(tx: number, tz: number): Promise<Uint8ClampedArray> {
+    if (buildPool) return buildPool.buildMapTile(tx, tz);
+    makeTileHere ??= createMapTileMaker(
+      { seed, content, sampleTerrain, materialBlender: materialLibrary.blender, treeCover: createTreeCover(seed, content), scatterTrees: createTreeScatter(seed, content), scatterBushes: createBushScatter(seed, content, sampleTerrain), scatterRocks: createRockScatter(seed, content, sampleTerrain), buildingGroups: () => data.buildingGroups },
+      { ...mapColors, ground: materialLibrary.averageColors },
+    );
+    const steps = makeTileHere(tx, tz);
+    return new Promise((resolve, reject) => {
+      const pump = (): void => {
+        try {
+          const until = performance.now() + 4;
+          for (;;) {
+            const next = steps.next();
+            if (next.done) return resolve(next.value);
+            if (performance.now() > until) break;
+          }
+          setTimeout(pump, 0);
+        } catch (error) {
+          reject(error);
+        }
+      };
+      pump();
+    });
+  }
+
   // loadInitial blocks for a few hundred ms, so give the browser a frame to actually paint the
   // "building terrain" message before it starts - otherwise the loading screen sits on the
   // previous phase for the whole thing.
@@ -333,6 +366,7 @@ export async function createWorld(
     grass,
     collision,
     buildingModels: buildings.models,
+    buildMapTile,
     attachCamera: sunLighting.attachCamera,
     setShadowsEnabled,
     setWireframe: materialLibrary.setWireframe,

@@ -58,6 +58,8 @@ const SHADE = 0.9;
 const CURVATURE_REACH = 10;
 /** The coarse height grid curvature is read from, in metres. */
 const CURVATURE_STEP = 2;
+/** Rows of a tile between the slices mapTileSteps yields at. */
+const SLICE_ROWS = 16;
 
 function normalize(v: [number, number, number]): [number, number, number] {
   const l = Math.hypot(v[0], v[1], v[2]);
@@ -70,6 +72,16 @@ function normalize(v: [number, number, number]): [number, number, number] {
  * and darker the deeper it is; then, given `things`, everything set down in it (things.ts).
  */
 export function buildMapTile(ground: MapGround, tx: number, tz: number, things?: MapThings): Uint8ClampedArray {
+  const steps = mapTileSteps(ground, tx, tz, things);
+  for (;;) {
+    const next = steps.next();
+    if (next.done) return next.value;
+  }
+}
+
+/** buildMapTile a slice at a time - each `next()` a few milliseconds' work - so a thread that has
+ *  other work (a chunk to build, a frame to draw) can take it between slices. */
+export function* mapTileSteps(ground: MapGround, tx: number, tz: number, things?: MapThings): Generator<void, Uint8ClampedArray> {
   const n = MAP_TILE_PIXELS;
   const step = MAP_METRES_PER_PIXEL;
   const x0 = tx * MAP_TILE_METRES;
@@ -84,6 +96,7 @@ export function buildMapTile(ground: MapGround, tx: number, tz: number, things?:
       samples[row * padded + col] = s;
       heights[row * padded + col] = s.height;
     }
+    if (row % SLICE_ROWS === 0) yield;
   }
   // Curvature reads ground CURVATURE_REACH away, beyond the tile: from a coarse grid round it.
   const coarseReach = Math.ceil(CURVATURE_REACH / CURVATURE_STEP) + 1;
@@ -105,6 +118,7 @@ export function buildMapTile(ground: MapGround, tx: number, tz: number, things?:
     return (coarse[i] * (1 - u) + coarse[i + 1] * u) * (1 - v) + (coarse[i + coarseSize] * (1 - u) + coarse[i + coarseSize + 1] * u) * v;
   };
 
+  yield;
   const out = new Uint8ClampedArray(n * n * 4);
   const depth = new Float32Array(n * n);
   const colors = ground.groundColors;
@@ -181,6 +195,7 @@ export function buildMapTile(ground: MapGround, tx: number, tz: number, things?:
       out[o + 2] = b * 255;
       out[o + 3] = 255;
     }
+    if (row % SLICE_ROWS === SLICE_ROWS - 1) yield;
   }
   if (things) drawThings({ out, depth, size: n, x0, z0, step }, things);
   return out;

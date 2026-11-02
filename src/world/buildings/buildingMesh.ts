@@ -148,6 +148,8 @@ export interface BuildingTextures {
   materials: BuildingMaterialDef[];
   colorBuffer: Uint8Array;
   normalBuffer: Uint8Array;
+  /** Each material's average colour, 0-1, in the same order - what the map draws it as. */
+  averageColors: [number, number, number][];
 }
 
 /** Bakes building materials' textures - through the same baker, cache and workers as the ground's. */
@@ -155,13 +157,13 @@ export async function bakeBuildingTextures(seed: number, materials: BuildingMate
   const layerBytes = TEXTURE_RESOLUTION * TEXTURE_RESOLUTION * 4;
   const colorBuffer = new Uint8Array(layerBytes * Math.max(1, materials.length));
   const normalBuffer = new Uint8Array(layerBytes * Math.max(1, materials.length));
-  await bakeMaterialTextures(
+  const { averageColors } = await bakeMaterialTextures(
     materials.map((def) => ({ id: `building-${def.id}`, texture: def.texture })),
     seed,
     colorBuffer,
     normalBuffer,
   );
-  return { materials, colorBuffer, normalBuffer };
+  return { materials, colorBuffer, normalBuffer, averageColors };
 }
 
 /** The shader buildings are drawn with, over baked building materials, and which layer each of

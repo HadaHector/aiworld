@@ -2,7 +2,6 @@
 import "./debug/installMemoryTracking";
 import { createEngine } from "./core/engine";
 import { WORLD_SEED } from "./world/worldData";
-import { createZoneLabel } from "./debug/zoneLabel";
 import { createPositionPanel } from "./debug/positionPanel";
 import { createLoadingScreen } from "./ui/loadingScreen";
 import { createMusicControl } from "./ui/musicControl";
@@ -18,7 +17,7 @@ import { createMenuSounds, type MenuSounds } from "./frontend/menuSounds";
 import { ContentError, formatIssue } from "./world/content/contentReader";
 import { lookFromUrl } from "./game/playerBody";
 import { createHud, dock } from "./ui/hud";
-import { GOLD, QUIET_PANEL, TITLE_FONT } from "./ui/theme";
+import { createMinimap } from "./ui/minimap";
 import { startSession, type Page, type Session } from "./game/session";
 
 // What lasts the whole page (see FRONTEND.md): the engine, the loading screen, the HUD's regions,
@@ -40,10 +39,9 @@ function failLoading(title: string, error: unknown): never {
 const engine = createEngine(canvas);
 // Where everything on screen goes (ui/hud.ts): regions that keep the panels apart at any width.
 const hud = createHud();
-const zoneLabel = createZoneLabel();
-dock(zoneLabel.element, hud.info);
-// The zone name is the player's, not a debug readout: the game's look (ui/theme.ts).
-zoneLabel.element.style.cssText = `${QUIET_PANEL} padding: 4px 10px; font: 600 13px/1.3 ${TITLE_FONT}; color: ${GOLD}; letter-spacing: 0.03em; text-shadow: 0 1px 2px #000; white-space: nowrap;`;
+// The minimap and the place's name under it, at the top of the info region (MAP.md).
+const minimap = createMinimap();
+dock(minimap.element, hud.info);
 const positionPanel = createPositionPanel((v) => session?.goto(v));
 dock(positionPanel.element, hud.debug.position);
 // Music for wherever the player is - see MUSIC.md. It starts with the first click or key press.
@@ -79,7 +77,7 @@ const music = createGameMusic(musicControl.volume);
 /** The menus' sounds, once there are menus (not in a `?play` game). */
 let menuSounds: MenuSounds | null = null;
 
-const page: Page = { engine, canvas, loadingScreen, failLoading, hud, zoneLabel, positionPanel, musicControl, music };
+const page: Page = { engine, canvas, loadingScreen, failLoading, hud, minimap, positionPanel, musicControl, music };
 
 // Every pack's files, fetched once for the page: each world narrows them to what its config keeps.
 // A broken pack stops here, with every problem listed on the loading screen.

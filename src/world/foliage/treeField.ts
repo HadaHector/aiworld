@@ -41,7 +41,29 @@ export interface TreeField {
    *  generating them again (see SIMULATION.md). */
   readonly hulls: TreeHulls;
   readonly treeCount: number;
+  /** Each kind's leaves' and wood's colours as the map draws them (see map/things.ts): the wood its
+   *  baked bark's average, a boulder's leaves its stone's, other leaves the middle of its tint. */
+  readonly mapColors: Record<string, { leaves: [number, number, number]; wood: [number, number, number] }>;
   dispose: () => void;
+}
+
+/** What the map draws a kind without baked bark as, and leaves before their tint. */
+const MAP_WOOD: [number, number, number] = [0.35, 0.27, 0.2];
+const MAP_LEAVES: [number, number, number] = [0.3, 0.45, 0.2];
+
+/** A baked texture's average colour, 0-1, from every 16th pixel. */
+function averageOf(rgba: Uint8Array): [number, number, number] {
+  let r = 0;
+  let g = 0;
+  let b = 0;
+  let n = 0;
+  for (let i = 0; i < rgba.length; i += 64) {
+    r += rgba[i];
+    g += rgba[i + 1];
+    b += rgba[i + 2];
+    n++;
+  }
+  return n ? [r / n / 255, g / n / 255, b / n / 255] : MAP_WOOD;
 }
 
 function meshesOf(model: TreeModel): Mesh[] {
@@ -124,6 +146,13 @@ export async function createTreeField(
 ): Promise<TreeField> {
   const missingBark = treeKinds.filter((def) => !prebaked?.barks?.has(def.id));
   const bakedBark = new Map([...(prebaked?.barks ?? []), ...(await bakeBarks(missingBark, seed))]);
+  const mapColors: TreeField["mapColors"] = {};
+  for (const def of treeKinds) {
+    const bark = bakedBark.get(def.id);
+    const wood = bark ? averageOf(bark.color) : MAP_WOOD;
+    const tint = def.tint[0].map((c, i) => (c + def.tint[1][i]) / 2);
+    mapColors[def.id] = { wood, leaves: def.shape.model === "boulder" ? wood : [MAP_LEAVES[0] * tint[0], MAP_LEAVES[1] * tint[1], MAP_LEAVES[2] * tint[2]] };
+  }
 
   // One "species" per model: a primitive kind has one, a branching kind one per variant, and each is
   // its own pair of master meshes with its own instances.
@@ -416,6 +445,7 @@ export async function createTreeField(
     },
     colliders: (trees) => treeColliders(hulls, trees),
     hulls,
+    mapColors,
     get treeCount() {
       return count;
     },

@@ -12,7 +12,7 @@ import { createEntityMeshes, type EntityMeshes } from "./entityMeshes";
 import { createEntityPanel } from "../debug/entityPanel";
 import { describeEntity } from "../sim/entityText";
 import { createDimensionView, type DimensionView, type ViewSettings } from "./dimensionView";
-import type { ZoneLabel } from "../debug/zoneLabel";
+import type { Minimap } from "../ui/minimap";
 import { describeMemory, memoryReport } from "../debug/memoryPanel";
 import type { PositionPanel, ViewSnapshot } from "../debug/positionPanel";
 import type { LoadingScreen } from "../ui/loadingScreen";
@@ -54,7 +54,7 @@ export interface Page {
   /** Stops on the loading screen with what went wrong. */
   failLoading: (title: string, error: unknown) => never;
   hud: Hud;
-  zoneLabel: ZoneLabel;
+  minimap: Minimap;
   positionPanel: PositionPanel;
   musicControl: MusicControl;
   music: GameMusic;
@@ -99,7 +99,7 @@ export interface Session {
  * (with the loading screen stopped on why) if the server will not let the character in.
  */
 export async function startSession(page: Page, options: SessionOptions): Promise<Session> {
-  const { engine, canvas, loadingScreen, hud, zoneLabel, positionPanel, musicControl, music } = page;
+  const { engine, canvas, loadingScreen, hud, minimap, positionPanel, musicControl, music } = page;
   const { connection } = options;
   const { seed, server, client } = connection;
   // Every listener on the window and canvas goes when the session does.
@@ -341,6 +341,7 @@ export async function startSession(page: Page, options: SessionOptions): Promise
     settings.timeOfDay = view.world.getTimeOfDay();
     const old = view;
     view = null;
+    minimap.setCache(null);
     entityMeshes?.dispose();
     feedback.setScene(null);
     floatingText?.dispose();
@@ -387,6 +388,7 @@ export async function startSession(page: Page, options: SessionOptions): Promise
     });
     connection.provide(transfer.dimension, next.shared);
     view = next;
+    minimap.setCache(next.mapTiles);
     const world = next.world;
     floatingText = createFloatingText(next.scene, mirror, gameRules, () => playerId);
     healthBars = createHealthBars(next.scene, mirror, gameRules, () => playerId);
@@ -467,7 +469,12 @@ export async function startSession(page: Page, options: SessionOptions): Promise
     v.debugMap.updateMarker(focus.x, focus.z, camera.alpha);
     const here = world.sampleTerrain(focus.x, focus.z);
     const zoneName = world.areaNames.get(here.primaryAreaId) ?? "Uncharted";
-    zoneLabel.update(zoneName, here.primaryBiome.name, world.weather.describe(here.primaryAreaId));
+    // Under the minimap: the settlement the player is in, else the zone.
+    const weather = world.weather.describe(here.primaryAreaId);
+    const settlement = world.settlements.find((s) => Math.hypot(s.x - focus.x, s.z - focus.z) <= s.radius);
+    minimap.setPlace(settlement?.name ?? zoneName, `${zoneName} (${here.primaryBiome.name})${weather ? ` · ${weather}` : ""}`);
+    // The camera looks along -(cos alpha, sin alpha) across the ground, as the debug map draws it.
+    minimap.update(focus.x, focus.z, character.mesh.rotation.y, -Math.cos(camera.alpha), -Math.sin(camera.alpha));
     positionPanel.update(character.mesh.position, camera, zoneName, here.primaryBiome.name);
     v.lastView.remember(character.mesh.position, camera);
     // Inside a building with music of its own, that; else the zone's.
@@ -1015,6 +1022,13 @@ export async function startSession(page: Page, options: SessionOptions): Promise
     },
     get world() {
       return view?.world;
+    },
+    /** The map (MAP.md): the minimap, and this dimension's tiles (`map.tiles.size` in memory). */
+    map: {
+      minimap,
+      get tiles() {
+        return view?.mapTiles;
+      },
     },
     music,
     /** Sounds, effects and cues (FEEDBACK.md): `feedback.sfx()?.play("swing")`, `feedback.sfx()?.voices()`. */

@@ -13,6 +13,8 @@ import { createSpectatorCamera, type SpectatorCamera } from "../player/spectator
 import { chooseStarts, type ChosenStart } from "../world/settlements/starts";
 import { startPoint } from "../sim/spawn";
 import { createDebugMap, type DebugMap } from "../debug/debugMap";
+import { createMapTileCache, type MapTileCache } from "../map/tileCache";
+import { hashString } from "../world/content/dimensions";
 import { createSettingsPanel, type SettingsPanel } from "../debug/settingsPanel";
 import { createPlaceLabels, type PlaceLabels } from "../ui/placeLabels";
 import { createTextureBrowser, type TextureBrowser } from "../debug/textureBrowser";
@@ -77,6 +79,8 @@ export interface DimensionView {
   readonly playerLights: PlayerLights;
   readonly cameraCollision: { update: (deltaSeconds: number) => void };
   readonly debugMap: DebugMap;
+  /** The map's tiles for this dimension (MAP.md), for the minimap and the world map. */
+  readonly mapTiles: MapTileCache;
   /** Where new characters start here, as the server places them (NPCS.md, *The starting site*). */
   readonly starts: readonly ChosenStart[];
   /** The content it was built from, and its seed. */
@@ -197,6 +201,8 @@ export async function createDimensionView(options: DimensionViewOptions): Promis
   world.setWireframe(settings.wireframe);
   world.setTimeOfDay(settings.timeOfDay);
 
+  // Keyed by the seed and everything the packs say, so a change to either never shows an old tile.
+  const mapTiles = createMapTileCache(`${seed}-${hashString(JSON.stringify(content)).toString(36)}`, content.dimension.id, world.buildMapTile);
   const debugMap = createDebugMap(world.sampleTerrain, world.worldExtent, world.materialLibrary, world.areaBounds, world.areaNames, world.settlements, world.features, world.roads, content.dimension.links, starts, (x, z) => teleport(x, z), options.travel);
   // The player's graphics options, in the options window...
   const graphicsPanel: SettingsPanel = createSettingsPanel({
@@ -282,6 +288,7 @@ export async function createDimensionView(options: DimensionViewOptions): Promis
     playerLights,
     cameraCollision,
     debugMap,
+    mapTiles,
     starts,
     content,
     seed,
@@ -301,6 +308,7 @@ export async function createDimensionView(options: DimensionViewOptions): Promis
       character.dispose();
       spectator.dispose();
       debugMap.dispose();
+      mapTiles.dispose();
       settingsPanel.dispose();
       graphicsPanel.dispose();
       placeLabels.dispose();
