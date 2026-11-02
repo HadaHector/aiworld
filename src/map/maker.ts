@@ -49,7 +49,7 @@ export function createMapTileMaker(world: MapWorld, colors: MapColors): (tx: num
       treeColors: colors.trees,
       seed: world.seed,
       cut: MAP_CUT,
-      near: true,
+      near: false,
     };
     return mapTileSteps(ground, tx, tz, things);
   };

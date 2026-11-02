@@ -65,9 +65,11 @@ export function drawMarkers(ctx: CanvasRenderingContext2D, placed: readonly Plac
       ctx.textBaseline = "middle";
       ctx.lineWidth = 3;
       ctx.strokeStyle = "rgba(0, 0, 0, 0.85)";
-      ctx.strokeText(p.marker.title, p.x, p.y);
+      // Over its point rather than on it, so it does not hide what stands there.
+      const y = p.y - kind.size * 1.6;
+      ctx.strokeText(p.marker.title, p.x, y);
       ctx.fillStyle = kind.colour;
-      ctx.fillText(p.marker.title, p.x, p.y);
+      ctx.fillText(p.marker.title, p.x, y);
     } else {
       const cell = kind.icon ? iconCell(kind.icon) : null;
       const image = cell ? atlas(cell.url, onLoad) : null;

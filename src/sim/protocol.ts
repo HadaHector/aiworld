@@ -10,7 +10,7 @@ import type { CombatEvent } from "./skills/events";
 export type { CombatEvent } from "./skills/events";
 
 /** Bumped whenever a message changes shape. */
-export const PROTOCOL_VERSION = 12;
+export const PROTOCOL_VERSION = 13;
 
 // --- Client to server ------------------------------------------------------------------------
 
@@ -582,6 +582,23 @@ export interface Markers {
   list: [npc: number, mark: string][];
 }
 
+/** What the map shows near the player (MAP.md, *Where they come from*), owner-only: the NPCs standing
+ *  within the map's reach with the quest mark each has for it (as in Markers, "" for none) and its
+ *  role's services by name, and its home if it is in this dimension. Sent when it changes. */
+export interface MapPins {
+  type: "mapPins";
+  npcs: [x: number, z: number, mark: string, services: string[], name: string, title: string][];
+  home: [x: number, z: number] | null;
+}
+
+/** Each zone's level band in the dimension the player has come to (CREATURES.md, *Levels*), by area
+ *  id - for the world map. */
+export interface MapZones {
+  type: "mapZones";
+  dimension: string;
+  zones: [area: number, low: number, high: number][];
+}
+
 /** Why a quest message was not done. */
 export interface QuestRefused {
   type: "questRefused";
@@ -975,6 +992,8 @@ export type ServerMessage =
   | QuestUpdate
   | QuestRefused
   | Markers
+  | MapPins
+  | MapZones
   | NpcDone
   | NpcRefused
   | Progress

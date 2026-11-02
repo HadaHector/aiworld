@@ -95,7 +95,7 @@ log(`${config} seed ${SEED}: start "${start.id}" at ${Math.round(start.x)}, ${Ma
   let changed = 0;
   for (let i = 0; i < bare.length; i += 4) if (bare[i] !== tiles[4].pixels[i] || bare[i + 1] !== tiles[4].pixels[i + 1]) changed++;
   log(`the village tile: ground alone ${Math.round(groundMs)} ms; things changed ${((changed / (bare.length / 4)) * 100).toFixed(1)}% of its pixels`);
-  if (!at) check("buildings and trees drawn over the village", changed > bare.length / 4 / 20, `${changed} pixels`);
+  if (!at) check("buildings and trees drawn over the village", changed > bare.length / 4 / 100, `${changed} pixels`);
 }
 
 for (const tile of tiles) check(`tile ${tile.tx},${tile.tz} size`, tile.pixels.length === MAP_TILE_PIXELS * MAP_TILE_PIXELS * 4, String(tile.pixels.length));
@@ -104,7 +104,7 @@ check("the same bytes twice", Buffer.from(again).equals(Buffer.from(tiles[4].pix
 const keys = new Set(tiles.map((t) => mapTileKey("w", "mainland", t.tx, t.tz)));
 check("distinct keys", keys.size === tiles.length);
 check("keys differ by dimension", mapTileKey("w", "a", 0, 0) !== mapTileKey("w", "b", 0, 0));
-check("negative tiles", mapTileAt(-0.01, -64.01).tx === -1 && mapTileAt(-0.01, -64.01).tz === -2);
+check("negative tiles", mapTileAt(-0.01, -MAP_TILE_METRES - 0.01).tx === -1 && mapTileAt(-0.01, -MAP_TILE_METRES - 0.01).tz === -2);
 check("every pixel opaque", tiles.every((t) => t.pixels.every((v, i) => i % 4 !== 3 || v === 255)));
 
 // Water: find a sea point somewhere and check its tile's pixel is water-blue (blue over red).

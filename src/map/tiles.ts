@@ -13,11 +13,11 @@ import { drawThings, type MapThings } from "./things";
 /** A tile's side in pixels. */
 export const MAP_TILE_PIXELS = 256;
 /** The map's one resolution: metres to a pixel at 1x. */
-export const MAP_METRES_PER_PIXEL = 0.25;
+export const MAP_METRES_PER_PIXEL = 1;
 /** A tile's side in metres. */
 export const MAP_TILE_METRES = MAP_TILE_PIXELS * MAP_METRES_PER_PIXEL;
 /** Goes up whenever the drawing changes, so no cache shows an old tile. */
-export const MAP_VERSION = 1;
+export const MAP_VERSION = 2;
 
 export type Rgb = readonly [number, number, number];
 

@@ -28,6 +28,12 @@ export interface MarkerKind {
   cluster: number;
   /** On until the player turns it off. */
   default: boolean;
+  /** An NPC with this quest mark for the character (QUESTS.md, *Markers*: "!", "?", "!grey",
+   *  "?grey") is shown as this kind. */
+  mark: string;
+  /** An NPC whose role has this service (npcRoles' `services`) is shown as this kind - only its
+   *  highest-priority service kind, beside any quest kind. */
+  service: string;
 }
 
 /** One thing on the map. */
@@ -73,10 +79,24 @@ export function loadMarkerKinds(sources: readonly PackSource[]): Map<string, Mar
         worldMap: d.worldMap !== false,
         cluster: num(d.cluster, 0),
         default: d.default !== false,
+        mark: str(d.mark, ""),
+        service: str(d.service, ""),
       });
     }
   }
   return kinds;
+}
+
+/** An NPC on the map (the server's MapPins): its quest kind, and its highest service kind. */
+export function npcMarkers(kinds: ReadonlyMap<string, MarkerKind>, x: number, z: number, mark: string, services: readonly string[], title: string): MapMarker[] {
+  const out: MapMarker[] = [];
+  let service: MarkerKind | null = null;
+  for (const kind of kinds.values()) {
+    if (mark && kind.mark === mark) out.push({ kind: kind.id, x, z, title });
+    if (kind.service && services.includes(kind.service) && (!service || kind.priority > service.priority)) service = kind;
+  }
+  if (service) out.push({ kind: service.id, x, z, title });
+  return out;
 }
 
 /** Whether a kind shows: the player's choice where they made one, else the kind's default. */

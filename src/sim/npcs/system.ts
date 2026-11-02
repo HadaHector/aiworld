@@ -44,6 +44,8 @@ export interface NpcSystem {
   combatEvents(events: readonly CombatEvent[]): void;
   /** The cast entry an NPC entity was made from. */
   npcOf(entity: Entity): CastNpc | undefined;
+  /** An NPC entity's role's services by name ("vendor", "trainer"...) - for the map's pins. */
+  servicesOf(entity: Entity): string[];
   /** The entity standing now for an NPC id, if its settlement is filled. */
   entityOf(id: string): Entity | undefined;
   /** A player talks to an NPC (NPCS.md, *Services*): it turns to them and greets them, and says what
@@ -481,6 +483,10 @@ export function createNpcSystem(rules: GameRules, world: NpcWorld): NpcSystem {
       }
     },
     npcOf: (entity) => byEntity.get(entity.id)?.npc,
+    servicesOf(entity) {
+      const npc = byEntity.get(entity.id)?.npc;
+      return Object.keys((npc && roleOf(npc)?.services) ?? {});
+    },
     entityOf(id) {
       for (const living of byEntity.values()) if (living.npc.id === id) return living.entity;
       return undefined;

@@ -8,4 +8,5 @@
   minimap: { range: 400, edge: true },
   worldMap: true,
   default: true,
+  mark: "!",
 }

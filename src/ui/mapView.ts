@@ -16,7 +16,8 @@ export const MAX_ZOOM = 1;
 const EMPTY = "#2a261e";
 
 /**
- * The map's tiles drawn into a canvas for a frame, north up (-z at the top), round or square - what
+ * The map's tiles drawn into a canvas for a frame, north up (+z at the top, +x to the right: the
+ * world is left-handed, so that is how it lies seen from above), round or square - what
  * the minimap and the world map both are (MAP.md, *One source, two views*). Asks the tile cache for
  * the tiles it shows and a ring round them, nearest first.
  */
@@ -92,9 +93,14 @@ export function createMapView(id: string, round: boolean): MapView {
           const bitmap = cache?.get(tx, tz);
           if (!bitmap) continue;
           const left = width / 2 + (tx * MAP_TILE_METRES - frame.centerX) * scale;
-          const top = height / 2 + (tz * MAP_TILE_METRES - frame.centerZ) * scale;
+          // A tile's rows run from its smallest z, which is at its bottom on screen: drawn upside down.
+          const bottom = height / 2 - (tz * MAP_TILE_METRES - frame.centerZ) * scale;
+          ctx.save();
+          ctx.translate(left, bottom);
+          ctx.scale(1, -1);
           // A hair over, so neighbouring tiles leave no seam between them when scaled.
-          ctx.drawImage(bitmap, left, top, tileCss + 0.5, tileCss + 0.5);
+          ctx.drawImage(bitmap, 0, 0, tileCss + 0.5, tileCss + 0.5);
+          ctx.restore();
         }
       }
       ctx.restore();
@@ -104,11 +110,11 @@ export function createMapView(id: string, round: boolean): MapView {
     },
     toScreen(x, z) {
       const scale = scaleOf(last.zoom);
-      return { x: width / 2 + (x - last.centerX) * scale, y: height / 2 + (z - last.centerZ) * scale };
+      return { x: width / 2 + (x - last.centerX) * scale, y: height / 2 - (z - last.centerZ) * scale };
     },
     toWorld(x, y) {
       const scale = scaleOf(last.zoom);
-      return { x: last.centerX + (x - width / 2) / scale, z: last.centerZ + (y - height / 2) / scale };
+      return { x: last.centerX + (x - width / 2) / scale, z: last.centerZ - (y - height / 2) / scale };
     },
     get width() {
       return width;

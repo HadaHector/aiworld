@@ -38,6 +38,8 @@ import type { SettlementLayout } from "../world/settlements/settlementLayout";
 
 /** Quest marks are worked out for NPCs this near a player. */
 const MARK_RANGE = 90;
+/** How far round a player the map's pins reach (MAP.md): the minimap's edge arrows go this far. */
+const MAP_PIN_RANGE = 400;
 
 /** Where a body is to be made: a point, or (with `start`) the start of that id, once it is placed. */
 type Arrival = { x: number; z: number; start?: string };
@@ -61,6 +63,9 @@ interface Connection {
   standingSent: boolean;
   /** The quest marks it was last told, as sent (QUESTS.md, *Markers*). */
   marks: string;
+  /** The map's pins it was last told, as sent, and the dimension whose zones it was told (MAP.md). */
+  pins: string;
+  zonesSent: string;
   /** Choosing a character (a Hello that selects, or after a logout), with none in the world. */
   selecting: boolean;
   /** A character being read from the store, to enter. */
@@ -1280,6 +1285,26 @@ export function createServer(options: ServerOptions): Server {
           connection.marks = sent;
           messages.push({ type: "markers", list });
         }
+        // The map's pins: the NPCs further out too, with their marks and services, and the home.
+        const npcs: [number, number, string, string[], string, string][] = [];
+        for (const npc of npcSystem.debug.active(entity.dimension)) {
+          if (Math.hypot(npc.x - entity.x, npc.z - entity.z) > MAP_PIN_RANGE) continue;
+          const mark = questSystem.markerFor(entity, npc) ?? "";
+          const services = npcSystem.servicesOf(npc);
+          if (mark || services.length > 0) npcs.push([Math.round(npc.x * 10) / 10, Math.round(npc.z * 10) / 10, mark, services, npc.name, npc.title ?? ""]);
+        }
+        const player = connection.player;
+        const home = player?.character?.travel.home ?? player?.quickHome;
+        const pins = { type: "mapPins" as const, npcs, home: home && home.dimension === entity.dimension ? ([home.x, home.z] as [number, number]) : null };
+        const pinsSent = JSON.stringify(pins);
+        if (pinsSent !== connection.pins) {
+          connection.pins = pinsSent;
+          messages.push(pins);
+        }
+        if (connection.zonesSent !== entity.dimension && creatureSystem) {
+          connection.zonesSent = entity.dimension;
+          messages.push({ type: "mapZones", dimension: entity.dimension, zones: creatureSystem.debug.zones(entity.dimension).map((z): [number, number, number] => [z.id, z.levels[0], z.levels[1]]) });
+        }
       }
       messages.push(snapshot);
       for (const message of messages) connection.end.send(message);
@@ -1289,7 +1314,7 @@ export function createServer(options: ServerOptions): Server {
 
   return {
     connect: (end) => {
-      connections.push({ end, player: null, replicator: createReplicator(rules), items: itemSystem && options.items ? createItemReplicator(options.items, itemSystem) : null, progressSent: false, standingSent: false, marks: "", selecting: false, entering: false });
+      connections.push({ end, player: null, replicator: createReplicator(rules), items: itemSystem && options.items ? createItemReplicator(options.items, itemSystem) : null, progressSent: false, standingSent: false, marks: "", pins: "", zonesSent: "", selecting: false, entering: false });
     },
     step,
     save: saveAll,

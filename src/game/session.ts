@@ -45,9 +45,12 @@ import { nextEnemy } from "./targeting";
 import { EVENT_KIND } from "../sim/skills/events";
 import { FLAG } from "../sim/skills/flags";
 import { loadIconSets } from "../ui/icons";
-import { loadMarkerKinds, type MapMarker } from "../map/markers";
+import { loadMarkerKinds, npcMarkers, type MapMarker } from "../map/markers";
 import { PLAYER_TEMPLATE } from "../sim/rules/gameRules";
 import { MAX_ZOOM } from "../ui/mapView";
+import { createWorldMap } from "../ui/worldMap";
+import { questColour } from "../sim/quests/quest";
+import { COLOURS } from "../ui/questLog";
 
 /** What lasts the whole page, that a session draws into and plays through (see FRONTEND.md). */
 export interface Page {
@@ -153,9 +156,13 @@ export async function startSession(page: Page, options: SessionOptions): Promise
   let pendingTransfer: Transfer | null = null;
   /** The quest marks over NPCs now, by entity. */
   const shownMarks = new Map<number, string>();
+  /** The NPCs and home the server last put on the map (MapPins), as markers. */
+  let pinMarkers: MapMarker[] = [];
+  /** Each zone's level band, by area id, in the dimension the server last said (MapZones). */
+  let zoneLevels = new Map<number, [number, number]>();
   /** The client's own layout, kept in the character's record by the server and never read by it
    *  (FRONTEND.md, *Saves*): the action bar's slots and the minimap's settings (MAP.md). */
-  const savedInterface: { actionBar?: unknown; minimap?: unknown } = {};
+  const savedInterface: { actionBar?: unknown; minimap?: unknown; worldMap?: unknown } = {};
   let interfaceSave: ReturnType<typeof setTimeout> | null = null;
   /** Sends it a moment after the last change, so a turn of the mouse wheel is one save. */
   function saveInterface(): void {
@@ -170,16 +177,28 @@ export async function startSession(page: Page, options: SessionOptions): Promise
     savedInterface.minimap = settings;
     saveInterface();
   };
+  // The world map (M, and the minimap's button): the same tiles and markers, larger (MAP.md).
+  const worldMap = createWorldMap();
+  minimap.onOpenMap = () => worldMap.open();
+  worldMap.onChoices = (choices) => {
+    savedInterface.worldMap = { markers: choices };
+    saveInterface();
+  };
+  worldMap.setDescribe((x, z) => {
+    const world = view?.world;
+    if (!world) return { text: "Map", colour: GOLD };
+    const area = world.sampleTerrain(x, z).primaryAreaId;
+    const name = world.areaNames.get(area) ?? "Uncharted";
+    const levels = zoneLevels.get(area);
+    if (!levels) return { text: name, colour: GOLD };
+    const band = levels[0] === levels[1] ? `${levels[0]}` : `${levels[0]}-${levels[1]}`;
+    return { text: `${name}, ${band}`, colour: COLOURS[questColour(gameRules.quests, levels[0], ownLevel())] };
+  });
   /** What is on the map now (MAP.md, *Where they come from*): the quest marks over NPCs, the tracked
    *  quests' areas, and the creatures the player can see. */
   function mapMarkers(): MapMarker[] {
-    const markers: MapMarker[] = [];
-    for (const [id, mark] of shownMarks) {
-      const npc = mirror.entities.get(id);
-      if (!npc) continue;
-      const kind = mark === "!" ? "questAvailable" : mark === "?" ? "questReady" : mark === "?grey" ? "questActive" : "questSoon";
-      markers.push({ kind, x: npc.x, z: npc.z, title: npc.title ? `${npc.name} <${npc.title}>` : npc.name });
-    }
+    const markers: MapMarker[] = [...pinMarkers];
+    for (const link of view?.content.dimension.links ?? []) markers.push({ kind: "link", x: link.at.x, z: link.at.z, title: `To ${link.to}` });
     for (const [id, active] of quests.active) {
       const def = quests.defs.get(id);
       if (!def || active.state !== "active" || !questLog.isTracked(id)) continue;
@@ -276,6 +295,15 @@ export async function startSession(page: Page, options: SessionOptions): Promise
         savedInterface.actionBar = kept.actionBar;
         savedInterface.minimap = kept.minimap;
         minimap.applySettings({ shown: true, zoom: MAX_ZOOM, markers: {}, ...kept.minimap });
+        const keptChoices = (kept as { worldMap?: { markers?: Record<string, boolean> } }).worldMap?.markers;
+        worldMap.choices = keptChoices && typeof keptChoices === "object" ? { ...keptChoices } : {};
+        savedInterface.worldMap = { markers: worldMap.choices };
+      } else if (message.type === "mapPins") {
+        pinMarkers = message.npcs.flatMap(([x, z, mark, services, name, title]) => npcMarkers(markerKinds, x, z, mark, services, title ? `${name} <${title}>` : name));
+        if (message.home) pinMarkers.push({ kind: "home", x: message.home[0], z: message.home[1], title: "Home" });
+        minimap.invalidate();
+      } else if (message.type === "mapZones") {
+        zoneLevels = new Map(message.zones.map(([area, low, high]) => [area, [low, high]]));
       } else if (message.type === "saved") {
         savedMark.show();
       } else if (message.type.startsWith("quest")) {
@@ -392,6 +420,7 @@ export async function startSession(page: Page, options: SessionOptions): Promise
     const old = view;
     view = null;
     minimap.setCache(null);
+    worldMap.setCache(null);
     entityMeshes?.dispose();
     feedback.setScene(null);
     floatingText?.dispose();
@@ -439,6 +468,7 @@ export async function startSession(page: Page, options: SessionOptions): Promise
     connection.provide(transfer.dimension, next.shared);
     view = next;
     minimap.setCache(next.mapTiles);
+    worldMap.setCache(next.mapTiles);
     const world = next.world;
     floatingText = createFloatingText(next.scene, mirror, gameRules, () => playerId);
     healthBars = createHealthBars(next.scene, mirror, gameRules, () => playerId);
@@ -525,6 +555,7 @@ export async function startSession(page: Page, options: SessionOptions): Promise
     minimap.setPlace(settlement?.name ?? zoneName, `${zoneName} (${here.primaryBiome.name})${weather ? ` · ${weather}` : ""}`);
     // The camera looks along -(cos alpha, sin alpha) across the ground, as the debug map draws it.
     minimap.update(focus.x, focus.z, character.mesh.rotation.y, -Math.cos(camera.alpha), -Math.sin(camera.alpha));
+    worldMap.update(focus.x, focus.z, character.mesh.rotation.y);
     positionPanel.update(character.mesh.position, camera, zoneName, here.primaryBiome.name);
     v.lastView.remember(character.mesh.position, camera);
     // Inside a building with music of its own, that; else the zone's.
@@ -780,6 +811,8 @@ export async function startSession(page: Page, options: SessionOptions): Promise
   dockWindow(questLog.element);
   dock(questLog.tracker, hud.info);
   minimap.setMarkers(markerKinds, mapMarkers);
+  // The world map also names the settlements.
+  worldMap.setMarkers(markerKinds, () => [...mapMarkers(), ...(view?.world.settlements ?? []).map((s): MapMarker => ({ kind: "settlement", x: s.x, z: s.z, title: s.name }))]);
   questLog.onTracking(() => minimap.invalidate());
   // The screens that open from keys, as a row of buttons too; the debug tools sit in the debug panel.
   const menuBar = createMenuBar([
@@ -787,6 +820,7 @@ export async function startSession(page: Page, options: SessionOptions): Promise
     { icon: "progress", label: "Progression", key: "P", toggle: () => progressPanel.toggle(), open: () => progressPanel.visible },
     { icon: "spells", label: "Spell book", key: "L", toggle: () => spellBook.toggle(), open: () => spellBook.visible },
     { icon: "quests", label: "Quest log", key: "J", toggle: () => questLog.toggle(), open: () => questLog.visible },
+    { icon: "map", label: "Map", key: "M", toggle: () => worldMap.toggle(), open: () => worldMap.visible },
     { icon: "book", label: "Rule book", key: "K", toggle: () => ruleBook.toggle(), open: () => ruleBook.visible },
     { icon: "options", label: "Options", key: "O", toggle: () => (hud.optionsVisible = !hud.optionsVisible), open: () => hud.optionsVisible },
     { icon: "debug", label: "Debug panel", key: "F2", toggle: () => (hud.debugVisible = !hud.debugVisible), open: () => hud.debugVisible, debug: true },
@@ -812,10 +846,10 @@ export async function startSession(page: Page, options: SessionOptions): Promise
   });
   dockWindow(npcWindow.element);
   dockWindow(spellBook.element);
-  // The debug panel's tools: what M, T and I open.
+  // The debug panel's tools: what Shift+M, T and I open.
   for (const [label, key, open] of [
     ["Inspector", "I", () => entityPanel.toggle()],
-    ["Debug map", "M", () => view?.debugMap.toggle()],
+    ["Debug map", "Shift+M", () => view?.debugMap.toggle()],
     ["Textures", "T", () => view?.textureBrowser.toggle()],
   ] as const) {
     const button = document.createElement("button");
@@ -1083,6 +1117,10 @@ export async function startSession(page: Page, options: SessionOptions): Promise
     /** The map (MAP.md): the minimap, and this dimension's tiles (`map.tiles.size` in memory). */
     map: {
       minimap,
+      /** Each zone's level band here, by area id, as the server said (MapZones). */
+      get zones() {
+        return zoneLevels;
+      },
       get tiles() {
         return view?.mapTiles;
       },
@@ -1243,8 +1281,10 @@ export async function startSession(page: Page, options: SessionOptions): Promise
 
   listenWindow("keydown", (e) => {
     if (!view || entering || menuOpen) return;
+    // M the world map; Shift+M the debug map, for teleporting and spawn points (MAP.md).
     if (e.key.toLowerCase() === "m") {
-      view.debugMap.toggle();
+      if (e.shiftKey) view.debugMap.toggle();
+      else worldMap.toggle();
     }
     if (e.key.toLowerCase() === "t") {
       view.textureBrowser.toggle();
@@ -1254,7 +1294,7 @@ export async function startSession(page: Page, options: SessionOptions): Promise
   /** Closes every open window; whether any was. */
   function closeWindows(): boolean {
     let closed = false;
-    for (const w of [inventory, spellBook, progressPanel, ruleBook, entityPanel, questLog]) {
+    for (const w of [inventory, spellBook, progressPanel, ruleBook, entityPanel, questLog, worldMap]) {
       if (!w.visible) continue;
       w.toggle();
       closed = true;
@@ -1420,6 +1460,7 @@ export async function startSession(page: Page, options: SessionOptions): Promise
     questLog.dispose();
     ruleBook.dispose();
     menuBar.dispose();
+    worldMap.dispose();
     feedback.dispose();
     delete (window as unknown as { __aiworld?: unknown }).__aiworld;
     pauseMenu.remove();

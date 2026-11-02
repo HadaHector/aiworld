@@ -6,7 +6,7 @@
   colour: "#e0412f",
   size: 6,
   priority: 20,
-  minimap: { range: 120, edge: false },
+  minimap: { range: 200, edge: false },
   worldMap: false,
   default: true,
 }

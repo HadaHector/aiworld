@@ -1,4 +1,5 @@
 import type { MapTileCache } from "../map/tileCache";
+import { MAP_METRES_PER_PIXEL } from "../map/tiles";
 import { placeMarkers, type MapMarker, type MarkerKind, type PlacedMarker } from "../map/markers";
 import { drawMarkers, markerAt } from "./mapMarkers";
 import { createMapView, MAX_ZOOM, MIN_ZOOM } from "./mapView";
@@ -154,7 +155,8 @@ export function createMinimap(): Minimap {
     placed = placeMarkers(source(), kinds, minimap.settings.markers, view.toScreen, { round: { cx: r, cy: r, r, player }, width: SIZE, height: SIZE });
     drawMarkers(ctx, placed, view.toScreen, () => (dirty = true));
     // Where the camera looks: a faint cone.
-    const look = Math.atan2(lookX, -lookZ);
+    // +z is up the screen: a direction (x, z) points at screen angle atan2(x, z), clockwise from up.
+    const look = Math.atan2(lookX, lookZ);
     ctx.translate(r, r);
     ctx.rotate(look);
     const cone = ctx.createRadialGradient(0, 0, 0, 0, 0, r * 0.55);
@@ -167,8 +169,8 @@ export function createMinimap(): Minimap {
     ctx.closePath();
     ctx.fill();
     ctx.rotate(-look);
-    // The player: an arrow the way the body faces (its +z turned by rotation.y).
-    ctx.rotate(Math.atan2(Math.sin(facing), -Math.cos(facing)));
+    // The player: an arrow the way the body faces - its +z turned by rotation.y, (sin, cos).
+    ctx.rotate(facing);
     ctx.beginPath();
     ctx.moveTo(0, -9);
     ctx.lineTo(6, 7);
@@ -197,7 +199,7 @@ export function createMinimap(): Minimap {
     update(x, z, facing, lookX, lookZ) {
       if (!minimap.settings.shown) return;
       const now = performance.now();
-      const scale = minimap.settings.zoom * 4;
+      const scale = minimap.settings.zoom / MAP_METRES_PER_PIXEL;
       const moved =
         dirty ||
         now - lastDraw > MARKERS_EVERY ||
