@@ -1,0 +1,11 @@
+// A quest the character will be able to take soon: a grey "!".
+{
+  name: "Quests soon",
+  glyph: "!",
+  colour: "#a8a8a8",
+  size: 16,
+  priority: 50,
+  minimap: { range: 200, edge: false },
+  worldMap: true,
+  default: true,
+}

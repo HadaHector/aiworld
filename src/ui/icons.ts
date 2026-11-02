@@ -65,6 +65,15 @@ export function loadIconSets(sources: readonly PackSource[], baseUrl: string = i
 /** Whether some loaded icon set has this icon. */
 export const hasIcon = (name: string): boolean => known.has(name);
 
+/** Where an icon is in its set's atlas, for drawing it into a canvas (the map's markers) - or null
+ *  for none. */
+export function iconCell(name: string): { url: string; column: number; row: number; columns: number; rows: number } | null {
+  const set = known.get(name);
+  if (!set) return null;
+  const [column, row] = set.cells.get(name)!;
+  return { url: set.url, column, row, columns: set.columns, rows: set.rows };
+}
+
 // --- placeholders ---
 
 const GLYPH_BY_KIND: Record<string, Glyph> = { weapon: "weapon", armour: "armour", clothing: "clothing", food: "food", material: "material", key: "key", book: "book", trinket: "trinket", quest: "quest", tool: "tool" };

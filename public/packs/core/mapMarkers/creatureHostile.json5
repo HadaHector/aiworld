@@ -1,0 +1,12 @@
+// A hostile creature the player can see: a red dot.
+{
+  name: "Hostile creatures",
+  shape: "dot",
+  glyph: "",
+  colour: "#e0412f",
+  size: 6,
+  priority: 20,
+  minimap: { range: 120, edge: false },
+  worldMap: false,
+  default: true,
+}

@@ -1,0 +1,11 @@
+// A quest the character can take here: a yellow "!" over its giver.
+{
+  name: "Quests to take",
+  glyph: "!",
+  colour: "#f2d64b",
+  size: 18,
+  priority: 90,
+  minimap: { range: 400, edge: true },
+  worldMap: true,
+  default: true,
+}

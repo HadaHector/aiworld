@@ -1,0 +1,12 @@
+// Where a tracked quest's objectives are: a soft gold circle, an arrow on the ring when it is off it.
+{
+  name: "Quest areas",
+  shape: "area",
+  glyph: "",
+  colour: "#f2d64b",
+  size: 10,
+  priority: 40,
+  minimap: { range: 600, edge: true },
+  worldMap: true,
+  default: true,
+}

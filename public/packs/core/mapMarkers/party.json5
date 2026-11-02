@@ -1,0 +1,12 @@
+// Another player in the party (later, with parties).
+{
+  name: "Party",
+  shape: "dot",
+  glyph: "",
+  colour: "#5fb0ff",
+  size: 8,
+  priority: 80,
+  minimap: { range: 400, edge: true },
+  worldMap: true,
+  default: true,
+}

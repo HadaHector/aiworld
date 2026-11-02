@@ -1,0 +1,12 @@
+// A settlement's name, on the world map.
+{
+  name: "Places",
+  shape: "label",
+  glyph: "",
+  colour: "#fcf0be",
+  size: 13,
+  priority: 10,
+  minimap: { range: 0, edge: false },
+  worldMap: true,
+  default: true,
+}

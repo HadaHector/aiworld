@@ -1,0 +1,11 @@
+// An NPC who sells (npcRoles' mapMarker).
+{
+  name: "Shops",
+  glyph: "◆",
+  colour: "#e8d9a8",
+  size: 14,
+  priority: 30,
+  minimap: { range: 200, edge: false },
+  worldMap: true,
+  default: false,
+}

@@ -1,0 +1,11 @@
+// An NPC who mends gear.
+{
+  name: "Mending",
+  glyph: "⚒",
+  colour: "#c8c8c8",
+  size: 14,
+  priority: 30,
+  minimap: { range: 200, edge: false },
+  worldMap: true,
+  default: false,
+}

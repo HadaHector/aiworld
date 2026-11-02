@@ -1,0 +1,11 @@
+// A way to another dimension (DIMENSIONS.md).
+{
+  name: "Ways elsewhere",
+  glyph: "◈",
+  colour: "#c890ff",
+  size: 15,
+  priority: 70,
+  minimap: { range: 400, edge: true },
+  worldMap: true,
+  default: false,
+}

@@ -1,5 +1,7 @@
 import type { MapTileCache } from "../map/tileCache";
-import { createMapView, MAX_ZOOM, MIN_ZOOM, type MapView } from "./mapView";
+import { placeMarkers, type MapMarker, type MarkerKind, type PlacedMarker } from "../map/markers";
+import { drawMarkers, markerAt } from "./mapMarkers";
+import { createMapView, MAX_ZOOM, MIN_ZOOM } from "./mapView";
 import { BRONZE, GOLD, QUIET_PANEL, TITLE_FONT } from "./theme";
 
 /** The ring's size, in CSS pixels. */
@@ -8,11 +10,15 @@ const SIZE = 180;
 const ZOOM_STEP = 1.15;
 /** Redraws no more often than this (ms), however fast the frames come. */
 const REDRAW_EVERY = 33;
+/** And at least this often (ms) while shown, for markers that move on their own - creatures. */
+const MARKERS_EVERY = 100;
 
 /** What the minimap remembers between sessions (kept with the character, see MAP.md). */
 export interface MinimapSettings {
   shown: boolean;
   zoom: number;
+  /** Marker kinds the player turned on or off, by id; the rest show by their kind's default. */
+  markers: Record<string, boolean>;
 }
 
 export interface Minimap {
@@ -25,13 +31,15 @@ export interface Minimap {
   /** Where the player is and faces (radians, as the body's rotation.y), and which way the camera
    *  looks across the ground. Redraws when anything shown moved. */
   update: (x: number, z: number, facing: number, lookX: number, lookZ: number) => void;
-  /** Draws over the tiles, before the player's arrow: markers (MAP.md, *Markers*). */
-  setOverlay: (draw: ((ctx: CanvasRenderingContext2D, view: MapView, radius: number) => void) | null) => void;
+  /** The marker kinds, and what gives the markers now - asked on every redraw (MAP.md, *Markers*). */
+  setMarkers: (kinds: ReadonlyMap<string, MarkerKind>, source: () => readonly MapMarker[]) => void;
   /** Asks for a redraw on the next update: markers changed. */
   invalidate: () => void;
   /** Called by the map button and a click on the map. */
   onOpenMap: (() => void) | null;
   settings: MinimapSettings;
+  /** Takes settings as kept - a character's, when it enters. */
+  applySettings: (settings: MinimapSettings) => void;
   /** Called when the player changes the settings. */
   onSettings: ((settings: MinimapSettings) => void) | null;
 }
@@ -98,7 +106,10 @@ export function createMinimap(): Minimap {
   plate.appendChild(fold);
   element.appendChild(plate);
 
-  let overlay: ((ctx: CanvasRenderingContext2D, view: MapView, radius: number) => void) | null = null;
+  let kinds: ReadonlyMap<string, MarkerKind> = new Map();
+  let source: () => readonly MapMarker[] = () => [];
+  let placed: PlacedMarker[] = [];
+  let player = { x: 0, z: 0 };
   let dirty = true;
   let lastDraw = 0;
   let drawn = { x: NaN, z: NaN, facing: NaN, lookX: NaN, lookZ: NaN };
@@ -124,6 +135,13 @@ export function createMinimap(): Minimap {
     zoomBy(e.deltaY < 0 ? ZOOM_STEP : 1 / ZOOM_STEP);
   }, { passive: false });
   view.canvas.addEventListener("click", () => minimap.onOpenMap?.());
+  // A marker's name under the pointer, as the canvas's tooltip.
+  view.canvas.addEventListener("mousemove", (e) => {
+    const rect = view.canvas.getBoundingClientRect();
+    const hit = markerAt(placed, e.clientX - rect.left, e.clientY - rect.top, view.toScreen);
+    const title = hit ? (hit.count > 1 ? `${hit.marker.title} (+${hit.count - 1})` : hit.marker.title || hit.kind.name) : "";
+    if (view.canvas.title !== title) view.canvas.title = title;
+  });
 
   function draw(x: number, z: number, facing: number, lookX: number, lookZ: number): void {
     const ctx = view.draw({ centerX: x, centerZ: z, zoom: minimap.settings.zoom });
@@ -132,7 +150,9 @@ export function createMinimap(): Minimap {
     ctx.beginPath();
     ctx.arc(r, r, r, 0, Math.PI * 2);
     ctx.clip();
-    overlay?.(ctx, view, r);
+    player = { x, z };
+    placed = placeMarkers(source(), kinds, minimap.settings.markers, view.toScreen, { round: { cx: r, cy: r, r, player }, width: SIZE, height: SIZE });
+    drawMarkers(ctx, placed, view.toScreen, () => (dirty = true));
     // Where the camera looks: a faint cone.
     const look = Math.atan2(lookX, -lookZ);
     ctx.translate(r, r);
@@ -180,6 +200,7 @@ export function createMinimap(): Minimap {
       const scale = minimap.settings.zoom * 4;
       const moved =
         dirty ||
+        now - lastDraw > MARKERS_EVERY ||
         Math.hypot(x - drawn.x, z - drawn.z) * scale > 0.5 ||
         Math.abs(facing - drawn.facing) > 0.02 ||
         Math.abs(Math.atan2(lookX, lookZ) - Math.atan2(drawn.lookX, drawn.lookZ)) > 0.02;
@@ -189,15 +210,20 @@ export function createMinimap(): Minimap {
       drawn = { x, z, facing, lookX, lookZ };
       draw(x, z, facing, lookX, lookZ);
     },
-    setOverlay(draw) {
-      overlay = draw;
+    setMarkers(nextKinds, nextSource) {
+      kinds = nextKinds;
+      source = nextSource;
       dirty = true;
     },
     invalidate() {
       dirty = true;
     },
     onOpenMap: null,
-    settings: { shown: true, zoom: MAX_ZOOM },
+    settings: { shown: true, zoom: MAX_ZOOM, markers: {} },
+    applySettings(settings) {
+      minimap.settings = { shown: settings.shown !== false, zoom: Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, Number(settings.zoom) || MAX_ZOOM)), markers: { ...settings.markers } };
+      applyShown();
+    },
     onSettings: null,
   };
   applyShown();

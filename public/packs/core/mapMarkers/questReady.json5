@@ -1,0 +1,11 @@
+// A quest ready to hand in here: a yellow "?".
+{
+  name: "Quests to hand in",
+  glyph: "?",
+  colour: "#f2d64b",
+  size: 18,
+  priority: 95,
+  minimap: { range: 400, edge: true },
+  worldMap: true,
+  default: true,
+}

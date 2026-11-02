@@ -17,6 +17,10 @@ export interface QuestLog {
   readonly tracker: HTMLElement;
   readonly visible: boolean;
   toggle: () => void;
+  /** Whether a quest is tracked - shown in the tracker and on the map (MAP.md). */
+  isTracked: (quest: string) => boolean;
+  /** Called when tracking changes. Returns what stops the calls. */
+  onTracking: (listener: () => void) => () => void;
   dispose: () => void;
 }
 
@@ -103,6 +107,7 @@ export function createQuestLog(options: QuestLogOptions): QuestLog {
   const tracker = el("div", `display: none; flex-direction: column; gap: 4px; max-width: 260px; padding: 6px 8px; margin-top: 6px; ${QUIET_PANEL}`);
   let selected = "";
   const untracked = new Set<string>();
+  const trackingListeners = new Set<() => void>();
   let visible = false;
 
   function drawLog(): void {
@@ -128,6 +133,7 @@ export function createQuestLog(options: QuestLogOptions): QuestLog {
     el("button", "padding: 3px 8px;", buttons, untracked.has(selected) ? "Track" : "Untrack").addEventListener("click", () => {
       if (untracked.has(selected)) untracked.delete(selected);
       else untracked.add(selected);
+      for (const listener of trackingListeners) listener();
       draw();
     });
     el("button", "padding: 3px 8px;", buttons, "Abandon").addEventListener("click", () => send({ type: "questAbandon", quest: selected }));
@@ -169,6 +175,11 @@ export function createQuestLog(options: QuestLogOptions): QuestLog {
       return visible;
     },
     toggle,
+    isTracked: (quest) => !untracked.has(quest),
+    onTracking(listener) {
+      trackingListeners.add(listener);
+      return () => trackingListeners.delete(listener);
+    },
     dispose() {
       unsubscribe();
       root.remove();

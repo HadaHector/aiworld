@@ -1,0 +1,11 @@
+// An NPC who trains.
+{
+  name: "Trainers",
+  glyph: "✦",
+  colour: "#a8c8f0",
+  size: 14,
+  priority: 30,
+  minimap: { range: 200, edge: false },
+  worldMap: true,
+  default: false,
+}

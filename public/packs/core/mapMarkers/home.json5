@@ -1,0 +1,11 @@
+// The character's home, where it comes back when it dies.
+{
+  name: "Home",
+  glyph: "⌂",
+  colour: "#7fe07f",
+  size: 15,
+  priority: 70,
+  minimap: { range: 400, edge: true },
+  worldMap: true,
+  default: false,
+}

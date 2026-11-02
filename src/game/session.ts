@@ -12,7 +12,7 @@ import { createEntityMeshes, type EntityMeshes } from "./entityMeshes";
 import { createEntityPanel } from "../debug/entityPanel";
 import { describeEntity } from "../sim/entityText";
 import { createDimensionView, type DimensionView, type ViewSettings } from "./dimensionView";
-import type { Minimap } from "../ui/minimap";
+import type { Minimap, MinimapSettings } from "../ui/minimap";
 import { describeMemory, memoryReport } from "../debug/memoryPanel";
 import type { PositionPanel, ViewSnapshot } from "../debug/positionPanel";
 import type { LoadingScreen } from "../ui/loadingScreen";
@@ -45,6 +45,9 @@ import { nextEnemy } from "./targeting";
 import { EVENT_KIND } from "../sim/skills/events";
 import { FLAG } from "../sim/skills/flags";
 import { loadIconSets } from "../ui/icons";
+import { loadMarkerKinds, type MapMarker } from "../map/markers";
+import { PLAYER_TEMPLATE } from "../sim/rules/gameRules";
+import { MAX_ZOOM } from "../ui/mapView";
 
 /** What lasts the whole page, that a session draws into and plays through (see FRONTEND.md). */
 export interface Page {
@@ -138,6 +141,7 @@ export async function startSession(page: Page, options: SessionOptions): Promise
   }
   /** Races, gear and outfits for everyone else's bodies, resolved once. */
   loadIconSets(packSet.sources);
+  const markerKinds = loadMarkerKinds(packSet.sources);
   const bodyKit = createBodyKit(packSet.sources);
 
   let playerId = -1;
@@ -149,6 +153,48 @@ export async function startSession(page: Page, options: SessionOptions): Promise
   let pendingTransfer: Transfer | null = null;
   /** The quest marks over NPCs now, by entity. */
   const shownMarks = new Map<number, string>();
+  /** The client's own layout, kept in the character's record by the server and never read by it
+   *  (FRONTEND.md, *Saves*): the action bar's slots and the minimap's settings (MAP.md). */
+  const savedInterface: { actionBar?: unknown; minimap?: unknown } = {};
+  let interfaceSave: ReturnType<typeof setTimeout> | null = null;
+  /** Sends it a moment after the last change, so a turn of the mouse wheel is one save. */
+  function saveInterface(): void {
+    if (quick) return;
+    if (interfaceSave) clearTimeout(interfaceSave);
+    interfaceSave = setTimeout(() => {
+      interfaceSave = null;
+      client.send({ type: "saveInterface", value: JSON.stringify(savedInterface) });
+    }, 1000);
+  }
+  minimap.onSettings = (settings) => {
+    savedInterface.minimap = settings;
+    saveInterface();
+  };
+  /** What is on the map now (MAP.md, *Where they come from*): the quest marks over NPCs, the tracked
+   *  quests' areas, and the creatures the player can see. */
+  function mapMarkers(): MapMarker[] {
+    const markers: MapMarker[] = [];
+    for (const [id, mark] of shownMarks) {
+      const npc = mirror.entities.get(id);
+      if (!npc) continue;
+      const kind = mark === "!" ? "questAvailable" : mark === "?" ? "questReady" : mark === "?grey" ? "questActive" : "questSoon";
+      markers.push({ kind, x: npc.x, z: npc.z, title: npc.title ? `${npc.name} <${npc.title}>` : npc.name });
+    }
+    for (const [id, active] of quests.active) {
+      const def = quests.defs.get(id);
+      if (!def || active.state !== "active" || !questLog.isTracked(id)) continue;
+      const title = renderText(def.text.title, gameRules.text);
+      for (const o of def.objectives) if ((o.kind === "gather" || o.kind === "reach") && o.area.dimension === currentDimension) markers.push({ kind: "questArea", x: o.area.x, z: o.area.z, radius: o.area.radius, title });
+      for (const w of def.where) if (w.dimension === currentDimension) markers.push({ kind: "questArea", x: w.x, z: w.z, radius: w.radius, title });
+    }
+    for (const entity of mirror.entities.values()) {
+      if (entity.id === playerId || entity.templateId === PLAYER_TEMPLATE) continue;
+      const hostility = entity.template?.hostility;
+      if ((hostility !== "hostile" && hostility !== "neutral") || (entity.flags & (1 << FLAG.dead)) !== 0) continue;
+      markers.push({ kind: hostility === "hostile" ? "creatureHostile" : "creatureNeutral", x: entity.x, z: entity.z, title: entity.name });
+    }
+    return markers;
+  }
   /** Quests on the debug map (M): the marked NPCs where they stand, the objectives' areas. */
   function drawQuestMap(): void {
     const marks: { x: number; z: number; radius: number; mark: string; colour: string; title: string }[] = [];
@@ -219,13 +265,17 @@ export async function startSession(page: Page, options: SessionOptions): Promise
         playerId = message.playerId;
         const look = message.look;
         Object.assign(playerLook, { race: look.race || "human", outfit: look.outfit || "scout", sex: look.sex || undefined, seed: look.seed, choices: look.choices });
-        // The action bar as the character left it (its record's `interface`).
+        // The action bar and the minimap as the character left them (its record's `interface`).
+        let kept: { actionBar?: unknown; minimap?: Partial<MinimapSettings> } = {};
         try {
-          const kept = message.interface ? (JSON.parse(message.interface) as { actionBar?: unknown }) : {};
+          kept = message.interface ? JSON.parse(message.interface) : {};
           if (kept.actionBar) actionBar.setLayout(JSON.stringify(kept.actionBar));
         } catch {
           // Not a layout: the default bar.
         }
+        savedInterface.actionBar = kept.actionBar;
+        savedInterface.minimap = kept.minimap;
+        minimap.applySettings({ shown: true, zoom: MAX_ZOOM, markers: {}, ...kept.minimap });
       } else if (message.type === "saved") {
         savedMark.show();
       } else if (message.type.startsWith("quest")) {
@@ -652,7 +702,12 @@ export async function startSession(page: Page, options: SessionOptions): Promise
     useItem: (bagSlot) => sendItem({ type: "itemUse", from: { container: 0, slot: bagSlot } }),
     teleport: (byKey) => aimTeleport(byKey),
     // A saved character's layout goes to its record; a quick one's stays in this browser.
-    onSave: quick ? undefined : (json) => client.send({ type: "saveInterface", value: JSON.stringify({ actionBar: JSON.parse(json) }) }),
+    onSave: quick
+      ? undefined
+      : (json) => {
+          savedInterface.actionBar = JSON.parse(json);
+          saveInterface();
+        },
   });
   const spellBook = createSpellBook({
     game: gameRules,
@@ -724,6 +779,8 @@ export async function startSession(page: Page, options: SessionOptions): Promise
   });
   dockWindow(questLog.element);
   dock(questLog.tracker, hud.info);
+  minimap.setMarkers(markerKinds, mapMarkers);
+  questLog.onTracking(() => minimap.invalidate());
   // The screens that open from keys, as a row of buttons too; the debug tools sit in the debug panel.
   const menuBar = createMenuBar([
     { icon: "bag", label: "Inventory", key: "B", toggle: () => inventory.toggle(), open: () => inventory.visible },

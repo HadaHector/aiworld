@@ -1,0 +1,12 @@
+// A neutral creature the player can see: a yellow dot.
+{
+  name: "Neutral creatures",
+  shape: "dot",
+  glyph: "",
+  colour: "#e8c838",
+  size: 6,
+  priority: 15,
+  minimap: { range: 120, edge: false },
+  worldMap: false,
+  default: true,
+}
