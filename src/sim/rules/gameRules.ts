@@ -8,6 +8,7 @@ import { GAME_FOLDERS, orderPacks, parseFile, type PackSource } from "../../worl
 import { hashString } from "../../world/content/dimensions";
 import type { ColorTuple } from "../../world/terrain/pipeline/pipelineTypes";
 import { compileFormula, type CompiledFormula } from "./formula";
+import { readWaterRules, type WaterRules } from "./waterRules";
 import { readCombatRules, readSkills, stringMap, type CombatRules, type SkillDef } from "./skillRules";
 
 /** Who a stat's or a resource's value is sent to (see ENTITIES.md, *Replication*). */
@@ -168,6 +169,8 @@ export interface GameRules {
   skillIndex: ReadonlyMap<string, number>;
   /** `rules/combat.json5`. */
   combat: CombatRules;
+  /** `rules/water.json5` (WATER.md). */
+  water: WaterRules;
   /** `factions/` and `rules/factions.json5` (NPCS.md, *Factions*). */
   factions: FactionRules;
   /** `npcRoles/`, `npcRelations/` and `rules/npcs.json5` (NPCS.md). */
@@ -297,6 +300,7 @@ export function resolveGameRules(packs: PackSource[]): GameRules {
 
   // --- combat rules and skills ---
   const combat = readCombatRules(folders.get("rules")!.get("combat"), stats, issues);
+  const water = readWaterRules(folders.get("rules")!.get("water"), issues);
   const { skills, skillIndex, templateRefs } = readSkills(entries("skills"), { stats, statIndex, kindIndex, resourceIndex }, combat, issues);
 
   // --- templates ---
@@ -325,7 +329,7 @@ export function resolveGameRules(packs: PackSource[]): GameRules {
   ].join("|");
   return {
     stats, statOrder, modifierKinds, applyOrder, resources, templates, rawTemplates, statIndex, kindIndex, resourceIndex, health: health!,
-    skills, skillIndex, combat, factions, npcs, commands, quests, text, hash: hashString(signature),
+    skills, skillIndex, combat, water, factions, npcs, commands, quests, text, hash: hashString(signature),
   };
 }
 

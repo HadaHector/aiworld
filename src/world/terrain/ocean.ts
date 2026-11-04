@@ -1,5 +1,5 @@
 import { Effect, MeshBuilder, ShaderMaterial, type Mesh, type Scene } from "@babylonjs/core";
-import { SEA_LEVEL } from "../cells/areaField";
+import { WATER_SURFACE } from "../water";
 import type { SunLighting } from "../lighting/sunLighting";
 import type { SkyDome } from "../sky/skyDome";
 import { LIT_SHADING_GLSL, LIT_SHADING_SAMPLERS, LIT_SHADING_UNIFORMS, createLitShading } from "../materials/litShading";
@@ -8,10 +8,8 @@ export interface OceanOptions {
   size: number;
 }
 
-// Nudged slightly below sea level so the ocean plane is never exactly coplanar with terrain that
-// happens to sit right at sea level (e.g. a shallow lake edge) - avoids z-fighting flicker. Land
-// at or above SEA_LEVEL still fully occludes the plane; only genuine dips below it show water.
-const OCEAN_SURFACE_OFFSET = 0.1;
+// The surface is WATER_SURFACE (world/water.ts), nudged slightly below sea level so the plane is never
+// coplanar with ground at sea level - no z-fighting flicker at a shallow edge.
 
 // How strongly the water's own colour covers the ground beneath it, once the water is at least
 // WATER_TINT_FULL_DEPTH deep. The tint isn't drawn by the water plane at all - it can't know how deep
@@ -201,7 +199,7 @@ export function createOceanPlane(scene: Scene, sunLighting: SunLighting, sky: Sk
   // waterline jitters against the shore whenever the camera moves. The waves are computed from
   // world position, so sliding the mesh under them doesn't move the pattern.
   const ocean = MeshBuilder.CreateGround("ocean", { width: options.size, height: options.size, subdivisions: OCEAN_SUBDIVISIONS }, scene);
-  ocean.position.y = SEA_LEVEL - OCEAN_SURFACE_OFFSET;
+  ocean.position.y = WATER_SURFACE;
   ocean.isPickable = false;
   ocean.applyFog = false;
 

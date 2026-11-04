@@ -9,6 +9,8 @@ import type { House } from "./settlements/settlementLayout";
 import type { BuildingGroup, Placed } from "./buildings/buildingCollision";
 import type { WorldContent } from "./content/worldContent";
 
+import { createWaterAt, type WaterSample } from "./water";
+
 /** The world's seed - also what the workbench previews with until told otherwise. */
 export const WORLD_SEED = 1338;
 
@@ -43,6 +45,8 @@ export interface WorldData extends ReturnType<typeof createTerrainSampler> {
   seed: number;
   content: WorldContent;
   heightAt: (worldX: number, worldZ: number) => number;
+  /** The water surface and depth at a point (WATER.md). */
+  waterAt: (worldX: number, worldZ: number) => WaterSample;
   /** Everything set down with a model, in the groups that come into the collision world together:
    *  each settlement, each compound, and the roads' fences, bridges and signs by cell. */
   buildingGroups: BuildingGroup[];
@@ -147,6 +151,7 @@ export function createWorldData(
     seed,
     content,
     heightAt: (worldX, worldZ) => sampleTerrain(worldX, worldZ).height,
+    waterAt: createWaterAt((worldX, worldZ) => sampleTerrain(worldX, worldZ).height),
     buildingGroups,
     labels,
     buildingAt,
