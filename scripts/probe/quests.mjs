@@ -245,6 +245,24 @@ await section("the test chain", async () => {
   check("the salve taken back", salveSlot() < 0);
   check("done once: not offered again", !(await talk(giverE)).quests.some((q) => q.id === "q:probe/1"));
 
+  // A quest that hands an item over on taking it (no objective for it); with a full bag it is refused whole.
+  const gift = quest(8, { giver, ender: maker, requires: { quests: [], level: 1 }, gives: ["sealedLetter"], objectives: [{ kind: "deliver", item: "sealedLetter", to: maker, line: t("Bring the letter") }] });
+  server.debug.quests.define([gift]);
+  const letter = items.typeIndex.get("sealedLetter");
+  const itemSystem = server.debug.items;
+  const holds = () => me.belongings.bag.filter((x) => x != null && itemSystem.ctx.store.get(x).type === letter).length;
+  await talk(giverE);
+  const filler = items.typeIndex.get("tunic");
+  while (me.belongings.bag.includes(null)) itemSystem.give(me, filler, 1);
+  await send({ type: "questAccept", npc: giverE.id, quest: "q:probe/8" });
+  check("a quest that gives an item with a full bag is refused", last("questRefused")?.reason === "bagFull" && !state(8) && holds() === 0, JSON.stringify(last("questRefused")));
+  const at8 = me.belongings.bag.findIndex((x) => x != null && itemSystem.ctx.store.get(x).type === filler);
+  await send({ type: "itemDrop", from: { container: 0, slot: at8 }, count: 0 });
+  await send({ type: "questAccept", npc: giverE.id, quest: "q:probe/8" });
+  check("...taken once there is room, the item handed over and no objective for it", state(8)?.state === "active" && holds() === 1 && state(8).counts.length === 1, JSON.stringify(state(8)));
+  await send({ type: "questAbandon", quest: "q:probe/8" });
+  check("abandoned: the item taken back", holds() === 0);
+
   // Abandoning and failing leave nothing behind.
   const timed = quest(7, { giver, ender: giver, requires: { quests: [], level: 1 }, within: 2, objectives: [{ kind: "receive", item: "sealedLetter", from: maker, line: t("Fetch the letter") }] });
   server.debug.quests.define([timed]);
@@ -303,7 +321,7 @@ await section("the generator", async () => {
       check(`${tag}: the intro begins with the reeve`, first?.role === "reeve", first?.role);
       check(`${tag}: ...as a chain, each after the one before`, intro.every((q, i) => i === 0 || q.requires.quests[0] === intro[i - 1].id), JSON.stringify(intro.map((q) => q.requires.quests)));
       const kinds = intro.slice(1, 7).flatMap((q) => q.objectives.map((o) => o.kind));
-      check(`${tag}: the test chain's parts in order`, kinds.join() === "talk,kill,loot,talk,gather,receive,use", kinds.join());
+      check(`${tag}: the test chain's parts in order (the salve is handed over, not an objective)`, kinds.join() === "talk,kill,loot,talk,gather,use", kinds.join());
       const letter = intro[7];
       const to = npcIds.get(letter?.ender);
       check(`${tag}: the road on to another settlement`, letter?.objectives.at(-1)?.kind === "deliver" && to && !to.id.startsWith(`npc:mainland/${start.settlement}/`), letter?.ender);
@@ -432,6 +450,12 @@ await section("the intro chain", async () => {
     await talkTo(q.giver);
     check(`${n + 1}: offered`, last("npcWindow")?.quests.some((x) => x.id === q.id && x.state === "offer"), JSON.stringify(last("npcWindow")?.quests));
     await send({ type: "questAccept", npc: giver.id, quest: q.id });
+    if (q.objectives[0]?.kind === "talk") {
+      // Where talking completes it, the mark over that NPC is yellow from the start, not grey.
+      const target = await goTo(q.objectives[0].npc);
+      await pump(16);
+      check(`${n + 1}: "?" (not grey) over the NPC it sends you to`, marks().some(([e, m]) => e === target.id && m === "?"), JSON.stringify(marks().filter(([e]) => e === target.id)));
+    }
     for (const [i, o] of q.objectives.entries()) {
       const at = () => state(q)?.counts[i] ?? (done(q) ? Infinity : 0);
       if (o.kind === "talk") await talkTo(o.npc);
@@ -440,7 +464,7 @@ await section("the intro chain", async () => {
       else if (o.kind === "kill") for (let k = 0; k < o.count; k++) await fight(o.creatures.kinds[0]);
       else if (o.kind === "loot") for (let k = 0; k < 30 && at() < o.count; k++) await fight(o.from.kinds[0]);
       else if (o.kind === "gather") {
-        await send({ type: "teleport", x: o.area.x, z: o.area.z }, 10);
+        await send({ type: "teleport", x: o.area.x, z: o.area.z }, 40);
         const objects = [...server.debug.dimensions.get("mainland").entities.values()].filter((e) => e.key.startsWith(`qo:${q.id}/${i}/`));
         for (const object of objects.slice(0, o.count)) {
           await send({ type: "teleport", x: object.x + 1, z: object.z }, 2);

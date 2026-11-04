@@ -66,6 +66,10 @@ type Rng = () => number;
 const pick = <T>(rng: Rng, list: readonly T[]): T => list[Math.floor(rng() * list.length) % list.length];
 const between = (rng: Rng, [lo, hi]: readonly [number, number]): number => lo + Math.floor(rng() * (hi - lo + 1));
 
+/** What lies about to gather is spread over an area this much wider than the place itself (and no wider than the cap),
+ *  so it is not picked up in passing on the road. */
+const GATHER_RADIUS_FACTOR = 4;
+const GATHER_RADIUS_MAX = 200;
 const GENERATOR_SALT = 31_337;
 
 export function generateQuests(input: GeneratorInput): QuestDef[] {
@@ -81,6 +85,8 @@ export function generateQuests(input: GeneratorInput): QuestDef[] {
   /** A quest's level: the middle of the zone's band, and for a quest about creatures, as they stand -
    *  the band's middle plus their kind's offset, so a quest is never far below what it sends you to fight. */
   const level = (beast: ContextCreature | null): number => Math.round((input.levels[0] + input.levels[1]) / 2) + (beast?.levelOffset ?? 0);
+  /** A quest that sends no one to creatures belongs to its ring, not to what lives there: the band's low end. */
+  const ringLevel = (): number => Math.max(1, input.levels[0]);
   const plural = (name: string): string => {
     const words = name.split(" ");
     const last = words[words.length - 1];
@@ -130,7 +136,7 @@ export function generateQuests(input: GeneratorInput): QuestDef[] {
     }
     const object = place ? (place.quest.objects.filter((o) => !plot.place?.objects || plot.place.objects.every((t) => o.tags.includes(t))) ?? [])[0] ?? place.quest.objects[0] : undefined;
     const placeName = place ? place.quest.text.replace("{name}", place.name) : "";
-    const lvl = level(beast);
+    const plotLevel = level(beast);
     // The arguments every text of the plot can use.
     const args: Record<string, string | number> = { settlement: site.name, zone: input.zone, giver: giver.name, giverGiven: giver.given, place: placeName, object: object?.name ?? "", objects: object ? plural(object.name) : "", creature: beast?.name ?? "", creatures: beast ? plural(beast.name) : "", other: other?.name ?? "" };
     for (const [name, person] of people) {
@@ -143,6 +149,7 @@ export function generateQuests(input: GeneratorInput): QuestDef[] {
     const made: QuestDef[] = [];
     plot.quests.forEach((pq, n) => {
       const objectives: Objective[] = [];
+      const gives: string[] = [];
       const motives: string[] = [];
       for (const ref of pq.parts) {
         const part = rules.quests.parts.get(ref.part)!;
@@ -164,10 +171,12 @@ export function generateQuests(input: GeneratorInput): QuestDef[] {
             objectives.push({ kind: "loot", from: filter, count, chance: part.chance, line: line({ count }) });
             break;
           case "gather":
-            objectives.push({ kind: "gather", object: object?.name ?? "", count, area, line: line({ count }) });
+            objectives.push({ kind: "gather", object: object?.name ?? "", count, area: { ...area, radius: Math.min(GATHER_RADIUS_MAX, area.radius * GATHER_RADIUS_FACTOR) }, line: line({ count }) });
             break;
           case "receive":
-            objectives.push({ kind: "receive", item, from: who?.id ?? giver.id, line: line({ npc: who?.name ?? giver.name, item: itemName(item) }) });
+            // From the quest's own giver the item is simply handed over with the quest.
+            if ((who ?? giver).id === people.get(pq.giver)!.id) gives.push(item);
+            else objectives.push({ kind: "receive", item, from: who?.id ?? giver.id, line: line({ npc: who?.name ?? giver.name, item: itemName(item) }) });
             break;
           case "use":
             objectives.push({ kind: "use", item, on: filter, below: part.below, count, line: line({ count, item: itemName(item) }) });
@@ -183,6 +192,8 @@ export function generateQuests(input: GeneratorInput): QuestDef[] {
       const offer = pq.offer.flatMap((group) => (group.length === 1 && group[0] === "$motive" ? motives : [pick(local, group)])).join(" ");
       const giverNpc = people.get(pq.giver)!;
       const ender = people.get(pq.ender)!;
+      const fights = objectives.some((o) => o.kind === "kill" || o.kind === "loot" || o.kind === "use");
+      const lvl = fights ? plotLevel : ringLevel();
       const xp = Math.round(q.xp.base + q.xp.perLevel * lvl);
       const previous = n === 0 ? after : made[n - 1].id;
       made.push({
@@ -193,6 +204,7 @@ export function generateQuests(input: GeneratorInput): QuestDef[] {
         chain: plot.quests.length > 1 ? { id: `${id(0)}#${plot.id}`, index: n + 1, of: plot.quests.length } : null,
         requires: { quests: previous ? [previous] : [], level: Math.max(1, lvl - 2) },
         objectives,
+        ...(gives.length > 0 ? { gives } : {}),
         ordered: true,
         text: { title: t(pq.title), offer: { text: offer, args }, progress: t(pq.progress.length > 0 ? pick(local, pq.progress) : "Well?"), done: t(pq.done.length > 0 ? pick(local, pq.done) : "My thanks.") },
         rewards: {

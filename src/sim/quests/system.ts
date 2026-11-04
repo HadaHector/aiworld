@@ -122,6 +122,18 @@ export function createQuestSystem(rules: GameRules, quests: QuestRules, world: Q
     return def.requires.quests.every((q) => part.done.has(q)) && world.level(player) >= def.requires.level;
   }
 
+  /** Whether talking to an NPC would move one of the quest's open objectives (so its mark is yellow from the start). */
+  function talkMoves(player: Entity, def: QuestDef, active: ActiveQuest, npc: string): boolean {
+    for (let index = 0; index < def.objectives.length; index++) {
+      if (!open(def, active, index)) continue;
+      const o = def.objectives[index];
+      if (o.kind === "talk" && o.npc === npc) return true;
+      if (o.kind === "receive" && o.from === npc) return true;
+      if (o.kind === "deliver" && o.to === npc && world.has(player, o.item)) return true;
+    }
+    return false;
+  }
+
   const near = (a: Entity, b: Entity, range: number): boolean => a.dimension === b.dimension && Math.hypot(a.x - b.x, a.z - b.z) <= range;
 
   /** The quest items a quest gave (receive) or asks to use: taken back when it ends - unless another
@@ -136,7 +148,7 @@ export function createQuestSystem(rules: GameRules, quests: QuestRules, world: Q
       if (!sameChain && !part?.active.has(other.id)) continue;
       for (const o of other.objectives) if (o.kind === "use" || o.kind === "deliver") wanted.add(o.item);
     }
-    return def.objectives.flatMap((o) => (o.kind === "receive" || o.kind === "use" ? [o.item] : [])).filter((item) => !wanted.has(item));
+    return [...(def.gives ?? []), ...def.objectives.flatMap((o) => (o.kind === "receive" || o.kind === "use" ? [o.item] : []))].filter((item) => !wanted.has(item));
   }
 
   /** XP for a quest at a character's level: full at or under its level, less as it outgrows it. */
@@ -234,7 +246,8 @@ export function createQuestSystem(rules: GameRules, quests: QuestRules, world: Q
       const level = world.level(player);
       for (const def of defs.values()) {
         const active = part.active.get(def.id);
-        if (active && def.ender === id) consider(active.state === "ready" ? "?" : "?grey");
+        if (active && (active.state === "ready" ? def.ender === id : talkMoves(player, def, active, id))) consider("?");
+        else if (active && def.ender === id) consider("?grey");
         else if (!active && def.giver === id && !part.done.has(def.id) && def.requires.quests.every((q) => part.done.has(q))) {
           if (level >= def.requires.level) consider("!");
           else if (level + 2 >= def.requires.level) consider("!grey");
@@ -273,7 +286,17 @@ export function createQuestSystem(rules: GameRules, quests: QuestRules, world: Q
       if (!near(player, npc, quests.talkRange)) return "range";
       if (!available(player, def)) return "notAvailable";
       if (part.active.size >= quests.maxActive) return "logFull";
-      const active: ActiveQuest = { id: def.id, counts: def.objectives.map(() => 0), state: "active", accepted: world.time() };
+      // What the giver hands over comes first: with no room for it the quest is not taken, and
+      // nothing is lost (what was already handed over is taken back).
+      const given: string[] = [];
+      for (const item of def.gives ?? []) {
+        if (world.give(player, item, 1) > 0) {
+          for (const g of given) world.take(player, g);
+          return "bagFull";
+        }
+        given.push(item);
+      }
+      const active: ActiveQuest = { id: def.id, counts: def.objectives.map(() => 0), state: def.objectives.length === 0 ? "ready" : "active", accepted: world.time() };
       part.active.set(def.id, active);
       send(player, def.id, active);
       // Its giver may be the one it first sends you to.
@@ -290,9 +313,18 @@ export function createQuestSystem(rules: GameRules, quests: QuestRules, world: Q
       if (active.state !== "ready") return "notReady";
       const chosen = def.rewards.choice.length > 0 ? def.rewards.choice[choice] : undefined;
       if (def.rewards.choice.length > 0 && chosen === undefined) return "choose";
-      for (const item of questItems(player, def)) world.take(player, item);
+      const taken = questItems(player, def).filter((item) => world.take(player, item));
       const items = [...(chosen ? [chosen] : []), ...def.rewards.items];
-      for (const item of items) if (world.give(player, item, 1) > 0) return "bagFull";
+      const given: string[] = [];
+      for (const item of items) {
+        if (world.give(player, item, 1) > 0) {
+          // No room for the reward: nothing changes - what was handed over is taken back, quest items returned.
+          for (const g of given) world.take(player, g);
+          for (const t of taken) world.give(player, t, 1);
+          return "bagFull";
+        }
+        given.push(item);
+      }
       part.active.delete(quest);
       part.done.add(quest);
       world.award(player, xpFor(def, world.level(player)));

@@ -17,6 +17,9 @@ export interface QuestDef {
   chain: { id: string; index: number; of: number } | null;
   requires: { quests: string[]; level: number };
   objectives: Objective[];
+  /** Item types the giver hands over when the quest is taken (QUESTS.md, *Items given*): a letter to
+   *  carry. Not an objective - it would be done the moment it was shown. Taken again when the quest ends. */
+  gives?: string[];
   /** One after another (each shows once the one before is done), or all at once. */
   ordered: boolean;
   text: { title: Text; offer: Text; progress: Text; done: Text };
