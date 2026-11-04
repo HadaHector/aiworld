@@ -4,7 +4,9 @@ import { needed, questColour, type ActiveQuest, type QuestDef, type QuestRules }
 import { formatMoney, type ItemRules, type ItemTypeDef } from "../sim/rules/itemRules";
 import type { QuestMirror } from "../game/questMirror";
 import { iconBox, itemIcon } from "./icons";
-import { BUTTON_CLASS, CLOSE_CLASS, DIM, GOLD, HEADING, PANEL, QUIET_PANEL, TEXT, TITLE_FONT, WINDOW_HEAD } from "./theme";
+import { drawItem, itemTooltip } from "./inventoryScreen";
+import type { GameRules } from "../sim/rules/gameRules";
+import { BUTTON_CLASS, CLOSE_CLASS, DIM, GOLD, HEADING, PANEL, QUIET_PANEL, SLOT, SLOT_CLASS, TEXT, TITLE_FONT, WINDOW_HEAD } from "./theme";
 
 /**
  * The quest log (L) and the tracker (QUESTS.md, *The quest log and tracker*): the quests taken, by
@@ -28,6 +30,7 @@ export interface QuestLogOptions {
   mirror: QuestMirror;
   rules: QuestRules;
   items: ItemRules;
+  game: GameRules;
   text: TextTable;
   send: (message: ClientMessage) => void;
   /** The character's level, for colours. */
@@ -61,7 +64,9 @@ export function objectiveLines(def: QuestDef, active: ActiveQuest | undefined, t
  * rewards - with the item choice as buttons when `choose` is given. What the NPC window and the log
  * both show.
  */
-export function renderQuest(parent: HTMLElement, def: QuestDef, active: ActiveQuest | undefined, options: { items: ItemRules; text: TextTable; rules: QuestRules; level: number; page: "offer" | "progress" | "done"; choose?: (index: number) => void; chosen?: number }): void {
+let choiceTip: HTMLElement | null = null;
+
+export function renderQuest(parent: HTMLElement, def: QuestDef, active: ActiveQuest | undefined, options: { game: GameRules; items: ItemRules; text: TextTable; rules: QuestRules; level: number; page: "offer" | "progress" | "done"; choose?: (index: number) => void; chosen?: number }): void {
   const colour = COLOURS[questColour(options.rules, def.level, options.level)];
   el("div", `font: 600 14px/1.3 ${TITLE_FONT}; color: ${colour}; margin-bottom: 4px;`, parent, `${renderText(def.text.title, options.text)}  [${def.level}]`);
   const words = options.page === "offer" ? def.text.offer : options.page === "done" ? def.text.done : def.text.progress;
@@ -82,13 +87,25 @@ export function renderQuest(parent: HTMLElement, def: QuestDef, active: ActiveQu
   };
   for (const id of r.items) rewardRow(options.items.types[options.items.typeIndex.get(id) ?? -1], id, `color: ${TEXT};`);
   if (r.choice.length > 0) {
-    el("div", `color: ${DIM}; font-size: 11px; margin-top: 3px;`, parent, "Choose one of:");
-    const row = el("div", "display: flex; flex-direction: column; gap: 3px;", parent);
+    el("div", `color: ${DIM}; font-size: 11px; margin-top: 3px;`, parent, options.choose ? "Choose one of:" : "Choose one of (when you hand it in):");
+    const row = el("div", "display: flex; gap: 6px; margin-top: 3px;", parent);
+    choiceTip ??= el("div", `position: fixed; z-index: 960; padding: 6px 8px; max-width: 240px; pointer-events: none; display: none; ${PANEL}`, document.body);
+    const tip = choiceTip;
+    tip.style.display = "none";
     r.choice.forEach((id, i) => {
-      const type = options.items.types[options.items.typeIndex.get(id) ?? -1];
-      const rarity = type ? options.items.rarities[type.rarity] : undefined;
-      const b = rewardRow(type, id, `text-align: left; padding: 2px 6px; color: ${rarity?.color ?? TEXT}; ${options.chosen === i ? `outline: 1px solid ${GOLD};` : ""}`, options.choose ? "button" : "div", row);
-      if (options.choose) b.addEventListener("click", () => options.choose!(i));
+      // Each reward is its icon, with the item's tooltip on hover (the same as the bag's).
+      const cell = el("div", `position: relative; width: 42px; height: 42px; ${options.choose ? "cursor: pointer;" : ""} ${SLOT}`, row);
+      cell.className = SLOT_CLASS;
+      drawItem(cell, options.items, { id: 0, type: id, roll: 0, count: 1, durability: options.items.types[options.items.typeIndex.get(id) ?? -1]?.durability ?? 0 });
+      if (options.chosen === i) cell.style.outline = `2px solid ${GOLD}`;
+      if (options.choose) cell.addEventListener("click", () => options.choose!(i));
+      cell.addEventListener("mousemove", (e) => {
+        tip.innerHTML = itemTooltip(options.game, options.items, { id: 0, type: id, roll: 0, count: 1, durability: 0 }, { unrolled: true });
+        tip.style.display = "";
+        tip.style.left = `${Math.max(8, Math.min(window.innerWidth - 250, e.clientX + 16))}px`;
+        tip.style.top = `${Math.max(8, Math.min(window.innerHeight - tip.offsetHeight - 8, e.clientY - 20))}px`;
+      });
+      cell.addEventListener("mouseleave", () => (tip.style.display = "none"));
     });
   }
 }
@@ -128,7 +145,7 @@ export function createQuestLog(options: QuestLogOptions): QuestLog {
     const def = mirror.defs.get(selected);
     const active = mirror.active.get(selected);
     if (!def || !active) return;
-    renderQuest(details, def, active, { items: options.items, text: options.text, rules: options.rules, level: options.level(), page: active.state === "ready" ? "done" : "offer" });
+    renderQuest(details, def, active, { game: options.game, items: options.items, text: options.text, rules: options.rules, level: options.level(), page: active.state === "ready" ? "done" : "offer" });
     const buttons = el("div", "display: flex; gap: 6px; margin-top: 8px;", details);
     el("button", "padding: 3px 8px;", buttons, untracked.has(selected) ? "Track" : "Untrack").addEventListener("click", () => {
       if (untracked.has(selected)) untracked.delete(selected);

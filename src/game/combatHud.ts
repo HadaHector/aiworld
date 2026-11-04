@@ -54,26 +54,27 @@ const NAME = `font: 600 13px/1.2 ${TITLE_FONT}; color: ${GOLD}; letter-spacing: 
 interface Frame {
   root: HTMLElement;
   name: HTMLElement;
+  level: HTMLElement;
   bars: HTMLElement;
   cast: HTMLElement;
   castFill: HTMLElement;
   castText: HTMLElement;
   auras: HTMLElement;
-  xp: HTMLElement;
-  xpFill: HTMLElement;
 }
 
 function makeFrame(parent: HTMLElement): Frame {
   const root = el("div", `width: 250px; padding: 7px 9px; display: none; box-sizing: border-box; ${PANEL}`, parent);
-  const name = el("div", `${NAME} margin-bottom: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;`, root);
+  const head = el("div", "display: flex; align-items: center; gap: 6px; margin-bottom: 5px;", root);
+  const name = el("div", `${NAME} flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;`, head);
+  // The level in a box of its own, so a long name never pushes it out of sight.
+  const level = el("div", `flex: none; min-width: 20px; box-sizing: border-box; padding: 1px 4px; text-align: center; font: 700 12px/1.2 ${TITLE_FONT}; color: ${GOLD}; background: #120f0a; border: 1px solid #8a6d3b; border-radius: 3px; box-shadow: 0 0 0 1px #000;`, head);
+  level.title = "Level";
   const bars = el("div", "", root);
   const cast = el("div", `${BAR_TRACK} height: 14px; margin-top: 5px; display: none;`, root);
   const castFill = el("div", barFill(BAR_COLOURS.cast), cast);
   const castText = el("div", `${BAR_TEXT} font-size: 10px; line-height: 14px;`, cast);
   const auras = el("div", "display: flex; flex-wrap: wrap; gap: 3px; margin-top: 5px;", root);
-  const xp = el("div", `${BAR_TRACK} height: 5px; margin-top: 4px; display: none;`, root);
-  const xpFill = el("div", `${barFill(BAR_COLOURS.xp)} transition: width 0.3s;`, xp);
-  return { root, name, bars, cast, castFill, castText, auras, xp, xpFill };
+  return { root, name, level, bars, cast, castFill, castText, auras };
 }
 
 export function createCombatHud(options: CombatHudOptions): CombatHud {
@@ -138,7 +139,11 @@ export function createCombatHud(options: CombatHudOptions): CombatHud {
     const hostile = target && entity.template?.hostility === "hostile";
     const neutral = target && entity.template?.hostility === "neutral" && entity.templateId !== PLAYER_TEMPLATE;
     frame.name.style.color = hostile ? "#ff8a7a" : neutral ? "#ffe27a" : GOLD;
-    text(frame.name, `${entity.name}${level !== undefined ? ` · level ${level}` : ""}${flags.length ? ` · ${flags.join(", ")}` : ""}`);
+    text(frame.name, `${entity.name}${flags.length ? ` · ${flags.join(", ")}` : ""}`);
+    frame.name.title = frame.name.textContent ?? "";
+    frame.level.style.display = level !== undefined ? "" : "none";
+    frame.level.style.color = frame.name.style.color;
+    text(frame.level, level !== undefined ? `${level}` : "");
     drawBars(frame, entity);
     // Cast bar.
     if (entity.cast) {
@@ -170,11 +175,8 @@ export function createCombatHud(options: CombatHudOptions): CombatHud {
       const own = mirror.entities.get(ownId());
       drawFrame(ownFrame, own, now, false);
       const experience = options.experience?.() ?? null;
-      ownFrame.xp.style.display = experience ? "block" : "none";
       if (experience) {
-        ownFrame.xpFill.style.width = `${Math.round(Math.min(1, experience.fraction) * 1000) / 10}%`;
-        ownFrame.xp.title = experience.label;
-        xpBarFill.style.width = ownFrame.xpFill.style.width;
+        xpBarFill.style.width = `${Math.round(Math.min(1, experience.fraction) * 1000) / 10}%`;
         text(xpBarText, experience.label);
         const width = `${Math.max(200, bar.offsetWidth)}px`;
         if (xpBar.style.width !== width) xpBar.style.width = width;

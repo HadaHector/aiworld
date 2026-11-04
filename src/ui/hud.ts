@@ -19,6 +19,8 @@ export interface Hud {
   readonly actions: HTMLElement;
   readonly log: HTMLElement;
   readonly menu: HTMLElement;
+  /** The left edge below the frames: the window of whoever the player talks to. */
+  readonly talk: HTMLElement;
   /** Windows the player opens: they line up from the right edge. */
   readonly windows: HTMLElement;
   /** The debug panel, by section: shown or hidden as one. */
@@ -72,6 +74,7 @@ export function createHud(): Hud {
   const log = region(`bottom: ${EDGE}px; left: ${EDGE}px;`);
   const menu = region(`bottom: ${EDGE}px; right: ${EDGE}px; align-items: flex-end;`);
   const windows = region(`right: ${EDGE}px; flex-direction: row-reverse; align-items: flex-start;`, 950);
+  const talk = region(`left: ${EDGE}px; flex-direction: column; align-items: flex-start;`, 950);
   const debugRoot = region(`left: ${EDGE}px; flex-direction: column; align-items: flex-start; overflow-y: auto; display: none; max-width: min(380px, 45vw);`, 920);
   const section = (parent: HTMLElement): HTMLElement => {
     const e = document.createElement("div");
@@ -154,6 +157,11 @@ export function createHud(): Hud {
       width -= oldest.offsetWidth + GAP;
       oldest.style.display = "none";
     }
+    // The talk window stands on the left below the frames (the debug panel moves over for it) and
+    // stops short of the right-hand windows and the tracker.
+    talk.style.top = `${frames.offsetHeight + EDGE + GAP}px`;
+    talk.style.left = `${EDGE + (debugVisible && playing ? debugRoot.offsetWidth + GAP : 0)}px`;
+    talk.style.height = `${Math.max(120, vh - frames.offsetHeight - 2 * EDGE - 2 * GAP - bottomRow)}px`;
     const debugTop = frames.offsetHeight + EDGE + GAP;
     debugRoot.style.top = `${debugTop}px`;
     debugRoot.style.maxHeight = `${Math.max(120, vh - debugTop - bottomRow - (logBeside ? 0 : log.offsetHeight + GAP))}px`;
@@ -171,7 +179,7 @@ export function createHud(): Hud {
   debugRoot.style.display = debugVisible ? "flex" : "none";
   let playing = true;
   const showRegions = (): void => {
-    for (const r of [frames, info, actions, log, menu]) r.style.visibility = playing ? "" : "hidden";
+    for (const r of [frames, info, actions, log, menu, talk]) r.style.visibility = playing ? "" : "hidden";
     debugRoot.style.display = debugVisible && playing ? "flex" : "none";
   };
 
@@ -182,6 +190,7 @@ export function createHud(): Hud {
     log,
     menu,
     windows,
+    talk,
     debug,
     options: { root: optionsRoot, sound, graphics },
     get debugVisible() {

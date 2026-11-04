@@ -391,7 +391,7 @@ export async function startSession(page: Page, options: SessionOptions): Promise
   const settings: ViewSettings = { drawDistance: DEFAULT_DRAW_DISTANCE, trees: true, grass: true, shadows: true, wireframe: false, timeOfDay: 12 };
 
   // Windows opening and closing, the action bar's drags (FEEDBACK.md).
-  queueMicrotask(() => feedback.watchScreens(hud.windows));
+  queueMicrotask(() => feedback.watchScreens(hud.windows, hud.talk));
   // Sounds, effects and hit feel for what happens (see FEEDBACK.md), from the combat events.
   const feedback = createGameFeedback({
     rules: feedbackRules,
@@ -805,6 +805,7 @@ export async function startSession(page: Page, options: SessionOptions): Promise
     mirror: quests,
     rules: gameRules.quests,
     items: itemRules,
+    game: gameRules,
     text: gameRules.text,
     send: (message) => client.send(message),
     level: ownLevel,
@@ -845,7 +846,10 @@ export async function startSession(page: Page, options: SessionOptions): Promise
       if (!inventory.visible) inventory.toggle();
     },
   });
-  dockWindow(npcWindow.element);
+  dock(npcWindow.element, hud.talk);
+  npcWindow.element.style.maxHeight = "100%";
+  npcWindow.element.style.overflowY = "auto";
+  npcWindow.element.style.boxSizing = "border-box";
   dockWindow(spellBook.element);
   // The debug panel's tools: what Shift+M, T and I open.
   for (const [label, key, open] of [

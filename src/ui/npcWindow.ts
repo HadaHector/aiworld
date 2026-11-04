@@ -72,7 +72,7 @@ function el(tag: string, css: string, parent?: HTMLElement, text?: string): HTML
 export function createNpcWindow(options: NpcWindowOptions): NpcWindow {
   const { items, belongings, send } = options;
   const money = (n: number): string => formatMoney(items.currencies[items.main], n);
-  const root = el("div", `width: 320px; padding: 8px 10px; display: none; ${PANEL}`);
+  const root = el("div", `width: 360px; padding: 8px 10px; display: none; ${PANEL} font-size: 14px;`);
   const head = el("div", WINDOW_HEAD, root);
   const heading = el("span", "", head);
   const close = el("button", "", head, "×");
@@ -120,7 +120,7 @@ export function createNpcWindow(options: NpcWindowOptions): NpcWindow {
     if (!def) return;
     const active = options.quests.active.get(id);
     const choose = state === "ready" && def.rewards.choice.length > 0 ? (i: number) => ((chosen = i), render()) : undefined;
-    renderQuest(body, def, active, { items, text: options.text, rules: options.questRules, level: options.level(), page: state === "offer" ? "offer" : state === "ready" ? "done" : "progress", choose, chosen });
+    renderQuest(body, def, active, { game: options.game, items, text: options.text, rules: options.questRules, level: options.level(), page: state === "offer" ? "offer" : state === "ready" ? "done" : "progress", choose, chosen });
     const row = el("div", "display: flex; gap: 6px; margin-top: 8px;", body);
     if (state === "offer") el("button", "padding: 3px 10px;", row, "Accept").addEventListener("click", () => send({ type: "questAccept", npc, quest: id }));
     if (state === "ready") {

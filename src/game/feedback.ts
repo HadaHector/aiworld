@@ -43,7 +43,7 @@ export interface GameFeedback {
   /** An item intent the player sends (take, drop, pick up, equip, use): its sound, at once. */
   itemIntent: (message: ClientMessage) => void;
   /** Listens to the screens: windows in `windows` opening and closing, and the action bar's drags. */
-  watchScreens: (windows: HTMLElement) => void;
+  watchScreens: (...windows: HTMLElement[]) => void;
   /** Each frame: steps the particles and puts the listener on the camera. */
   update: (camera: Camera | null) => void;
   /** The Effects volume, 0..1. */
@@ -331,7 +331,7 @@ export function createGameFeedback(options: GameFeedbackOptions): GameFeedback {
       cues.client(name, context, match);
     },
     itemIntent,
-    watchScreens(windows) {
+    watchScreens(...regions) {
       const ui = (name: string): void => {
         cues.client(name, self());
       };
@@ -340,11 +340,11 @@ export function createGameFeedback(options: GameFeedbackOptions): GameFeedback {
       // children, added at any time; their own style is what opens and closes them.
       const shown = new Map<Element, boolean>();
       const visible = (w: Element): boolean => (w as HTMLElement).style.display !== "none";
-      for (const w of windows.children) shown.set(w, visible(w));
+      for (const r of regions) for (const w of r.children) shown.set(w, visible(w));
       const observer = new MutationObserver((changes) => {
         for (const change of changes) {
           for (const w of change.type === "childList" ? [...change.addedNodes] : [change.target]) {
-            if (!(w instanceof HTMLElement) || w.parentElement !== windows) continue;
+            if (!(w instanceof HTMLElement) || !regions.includes(w.parentElement as HTMLElement)) continue;
             const now = visible(w);
             const was = shown.get(w);
             shown.set(w, now);
@@ -352,7 +352,7 @@ export function createGameFeedback(options: GameFeedbackOptions): GameFeedback {
           }
         }
       });
-      observer.observe(windows, { subtree: true, childList: true, attributes: true, attributeFilter: ["style"] });
+      for (const r of regions) observer.observe(r, { subtree: true, childList: true, attributes: true, attributeFilter: ["style"] });
       unwatch.push(() => observer.disconnect());
       const listening = new AbortController();
       unwatch.push(() => listening.abort());
