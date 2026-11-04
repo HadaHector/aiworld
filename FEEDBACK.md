@@ -643,9 +643,7 @@ Each leaves the game working: dev server, `npm run probe`, `npm run server`, `np
   capsule steps every 0.5 m plus half its height of ground covered. Units within 25 m of the player
   are heard. **The surface** (`src/game/footsteps.ts`): a building's floor is `wood`; else the ground
   material that wins there, asked of the world's material rules from five terrain samples as the
-  debug map asks them, kept per metre, through `surfaces` (patterns, first match wins). **Not done**:
-  water - whether a point is under water depends on the dimension's own sea, which the test world
-  does not draw, so neither `isLand` nor the height says; `footstep.water` waits for the world to.
+  debug map asks them, kept per metre, through `surfaces` (patterns, first match wins). Water is read from `world.waterAt` (WATER.md): up to 0.7 m deep `water`, deeper `waterDeep`; splash, underwater and gasp cues are in WATER.md, *As built*.
 - **Core content**: sounds for loot, items, coins, the target blip, a level-up fanfare (an
   old-school square-wave arpeggio), a discipline's jingle, learning and talents, and footsteps on
   dirt, grass, gravel, sand, snow, wood, mud, leaves and water - stone keeps the plain dirt step, which
@@ -683,8 +681,7 @@ Each leaves the game working: dev server, `npm run probe`, `npm run server`, `np
   with a bag's rustle under the pluck, and opening it louder. Checked in the game: the inventory
   and spell book opening and closing, a bronze sword taken off (`unequip.metal`), a slot put on the
   bar and dragged off, and the chest's loot with its window's sounds.
-- **Left for later**, beside *Not in this step*: water underfoot (the world has to say where its sea
-  is); recorded samples (the format and the stand-ins are ready, no sample set is chosen); creature
+- **Left for later**, beside *Not in this step*: recorded samples (the format and the stand-ins are ready, no sample set is chosen); creature
   voices beyond deaths; and the alpha particles' `light`, which day and night could set.
 
 ## Not in this step

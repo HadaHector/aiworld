@@ -230,7 +230,7 @@ vertical speed, swimming, and a swing trigger.
 - **Jump and fall** - a crouch on take-off, legs tucked while rising, reaching down while falling,
   a dip on landing.
 - **Swim** - a horizontal body, a breaststroke with the arms, a kick with the legs. Only on the
-  workbench for now: the simulation has no water state yet.
+  workbench at first; now played on the replicated water state (swimming or head under: WATER.md).
 - **Melee swing** - wind-up, strike and follow-through for the arm with the weapon, the spine
   twisting with it, played over whatever the legs do.
 - **Death** (added after the spike) - the knees give, the body tips back from the hips, faster as it

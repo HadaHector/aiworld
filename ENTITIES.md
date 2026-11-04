@@ -218,7 +218,8 @@ kind, changes or adds a file.
 |---|---|
 | `max` | A stat id, required. When the maximum changes the current value is kept, clamped to it (`onMaxChange: "keep"`); `"scale"` keeps the fraction instead |
 | `start` | Fraction of the maximum it starts at. Default 1 |
-| `regen` | `outOfCombat` and `inCombat` rates per second, numbers or formulas; default 0. The current value never leaves 0 to max |
+| `regen` | `outOfCombat` and `inCombat` rates per second, numbers or formulas; default 0. The current value never leaves 0 to max. `submerged` is a rate used instead of both while the entity's head is under water (breath: WATER.md) |
+| `hurtAtEmpty`, `harmName`, `hideWhenFull` | At 0, this share of max health is lost each second (the log names it `harmName`); the HUD bar is drawn only while it is not full. All three are the breath resource's |
 | `interval` | Regen comes in ticks this many seconds apart, as WoW's every-two-seconds ticks; each tick adds rate × interval. 0 (default): every step, by rate × dt |
 | `visible` | `all` (default) or `owner` |
 

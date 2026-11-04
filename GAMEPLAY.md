@@ -89,7 +89,7 @@ its own plan document when it is started, as zones and music did.
 | Progression | Many *disciplines*, each with its own level and progression. Combat level, class level, gathering and crafting are all disciplines; the game's rules say what each means. (Called "skills" until step 4, when that word went to abilities: see ABILITIES.md) |
 | Talents | Talent trees and talent choices must be possible (as modifiers on attributes skills read: ABILITIES.md) |
 | Death | The world keeps going and the player respawns at a location ("home"). Penalties are configurable: none, durability loss, corpse run, XP debt |
-| Movement | Walk, run, jump, swim, plus movement skills (dash, leap...) as abilities |
+| Movement | Walk, run, jump, swim (slower, free up and down, combat unlimited), plus movement skills (dash, leap...) as abilities. Swimming: [WATER.md](WATER.md) |
 | Mounts | Yes. Other vehicles maybe later |
 | Looks | Low-poly, built from parts, with procedural animation where it works. To be tried out and judged early |
 
@@ -107,7 +107,7 @@ its own plan document when it is started, as zones and music did.
   per zone.
 - **Spawning:** mobs and nodes respawn on timers (saved, see [World delta](#world-delta)), at a random spot within a range rather
   than at the exact same coordinates.
-- **Other dangers:** falling, drowning, maybe traps.
+- **Other dangers:** falling, maybe traps. Drowning is in: a `breath` resource that drains with the head under water and hurts at zero ([WATER.md](WATER.md)).
 - **Stealth:** possible, without a big system.
 - **Dungeons:** yes, procedural but fixed, so a place is the same when you come back. Raids are
   out of scope.

@@ -6,7 +6,7 @@ simulation does not know it is there: a character walks along the bottom, takes 
 splash, and nothing sounds or looks different underwater. This document is the plan, agreed with
 the user before the feature is built.
 
-**Status: roads and spawn done (see *Done first*); the water feature is planned, not built.**
+**Status: done** - see *As built* at the end. The plan above it is as approved.
 
 ## Decisions
 
@@ -105,3 +105,42 @@ Each step leaves the game working; each ends with a probe or a look in the runni
 Currents in rivers, fishing, boats, wet clothes and drying, swim and breath as discipline skills,
 rain and snow on the surface, underwater light shafts and caustics, creature breath and drowning,
 armour weight, water that is not at one level (a mountain lake above the sea).
+
+## As built
+
+- **The query.** `src/world/water.ts`: `createWaterAt(heightAt, surface)` and `WATER_SURFACE` (sea level
+  less 0.1, where the ocean plane sits). `world.waterAt(x, z)` on the world data, on the page's `World`
+  and so on the server's dimension. A dimension-specific level is not read yet (every dimension uses
+  the one). `scripts/probe/water.mjs` checks it over three worlds.
+- **Rules** are in `GameRules.water` (`src/sim/rules/waterRules.ts`, `rules/water.json5`): `swimSpeed`
+  0.6, `wadeDepth` 0.35, `swimDepth` 1.2, `headDepth` 1.7, `floatDepth` 1.35, `verticalSpeed` 3.5, and
+  the underwater `look`.
+- **Water state.** `entity.water` 0-3 (dry, wading, swimming, head under), worked out by the body each
+  step, replicated as `EntityMotion.water` (left out when 0). Protocol 15; the intent gains `rise`
+  (Space held) and `dive` (X held). Swimming is in `src/sim/playerBody.ts`: the body floats with its
+  feet `floatDepth` under the surface, rises and dives at `verticalSpeed`, moves at `swimSpeed` of
+  walking pace (any `speed` stat applies), and a jump pressed at the surface is a hop out over a bank.
+  Combat is not limited. Creatures' bodies swim too (kind `swims`) but are stopped at the shore.
+- **Breath.** `resources/breath.json5` + `stats/maxBreath.json5` (24 s + half of stamina). The
+  resource format gained `regen.submerged` (a rate used while the head is under), `hurtAtEmpty`
+  (a share of max health lost each second at 0, applied once a second through the new
+  `skills.hurt`, a combat `hit` event with no source and no skill), `harmName` (what the log calls
+  it: "Drowning") and `hideWhenFull` (the HUD bar). Characters and the test player have breath.
+- **Creatures** that cannot swim (`swims: false`, the default in species files) are put back at
+  the edge of deep water unless they are already in it (`src/sim/creatures/system.ts`).
+- **Feedback** (`src/game/feedback.ts`, `underwater.ts`): events `splashIn` and `splashOut` (a body
+  crossing into or out of swimming, any body in view), `underwaterOn` / `underwaterOff` (the camera
+  crossing the surface), `gasp` (surfacing with under half the breath); cues, sounds
+  (`splash.in`, `splash.out`, `underwater.on`, `underwater.off`, `gasp`, `footstep.waterDeep`) and
+  particles (`splash`, `splash.small`) in core. Footsteps read `waterAt`: under 0.1 m the ground's,
+  to 0.7 m `water`, deeper `waterDeep`. Under the surface the fog turns to the water's tint and
+  closes in (applied just before each camera renders, so the sky's own fog does not undo it), a
+  tinted wash lies over the screen, and the page's audio goes through a low-pass (`GameAudio.muffle`,
+  600 Hz) that opens again on surfacing.
+- **Checked.** `scripts/probe/swim.mjs` (a real server: floats, pace under 0.6 of walking, dives and
+  rises, climbs out, breath drains, drowning hurts, breath returns), in the page by diving in a
+  small world: the swim animation, the breath bar, the fog and the cues.
+- **Not done.** The music is not muffled underwater (only the effects and the page's output are, by
+  the shared low-pass: the music is under it too - it was not listened to). Other dimensions' own
+  water level. Nothing keeps a creature that is knocked into water from drowning (it has no
+  breath). The bank hop uses the ordinary jump, so a high bank may need the dive-and-rise step.
