@@ -1,0 +1,1 @@
+{ name: "Cloth Mantle", icon: "item-cloth-mantle", kind: "clothing", rarity: "common", slot: "shoulders", stats: { spirit: [0, 1], intellect: [0, 1] }, durability: 25, value: 10 }

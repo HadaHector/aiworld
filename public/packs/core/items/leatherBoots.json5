@@ -1,1 +1,1 @@
-{ name: "Leather Boots", kind: "armour", rarity: "common", slot: "feet", gear: ["boots"], stats: { armor: [8, 12], agility: [0, 1] }, durability: 35, value: 25 }
+{ name: "Leather Boots", icon: "item-leather-boots", kind: "armour", rarity: "common", slot: "feet", gear: ["boots"], stats: { armor: [8, 12], agility: [0, 1] }, durability: 35, value: 25 }

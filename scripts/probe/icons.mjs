@@ -16,7 +16,9 @@ const check = (what, ok, detail = "") => {
 
 const config = readConfigFromDisk("tiny");
 const { sources } = packSourcesFromDisk(config);
-const withPack = sources.some((s) => s.id === "icons-craftpix");
+// Both icon packs are optional: the names are only checked when both are there (the generated one is
+// built from picked icons, see ICONS.md).
+const withPack = ["icons-craftpix", "icons-generated"].every((id) => sources.some((s) => s.id === id));
 const coreOnly = sources.filter((s) => s.id === "core");
 
 // The world's own resolver ignores icons/ in a pack, with the pack or without it.
@@ -36,7 +38,7 @@ check("core assigns icons", asked.length > 30, `only ${asked.length}`);
 loadIconSets(withPack ? sources : [], "/");
 if (withPack) for (const [who, icon] of asked) check(`${who}: icon ${icon} is in the pack`, hasIcon(icon));
 loadIconSets(coreOnly, "/");
-for (const [who, icon] of asked) check(`${who}: with the pack gone, ${icon} is not found`, !hasIcon(icon));
+for (const [who, icon] of asked) check(`${who}: with the packs gone, ${icon} is not found`, !hasIcon(icon));
 
 // Placeholders: every skill and item type gets a glyph and a colour with no art at all.
 for (const s of game.skills) {
@@ -49,5 +51,5 @@ for (const t of items.types) {
 }
 check("a missing type has a placeholder", itemIcon(undefined, "#f0f").glyph === "misc");
 
-console.log(failures === 0 ? `icons: ok (${asked.length} icons asked for, pack ${withPack ? "present" : "absent"})` : `${failures} failures`);
+console.log(failures === 0 ? `icons: ok (${asked.length} icons asked for, packs ${withPack ? "present" : "incomplete, names not checked"})` : `${failures} failures`);
 process.exit(failures === 0 ? 0 : 1);

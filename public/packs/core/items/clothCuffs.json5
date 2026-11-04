@@ -1,0 +1,1 @@
+{ name: "Cloth Cuffs", icon: "item-cloth-cuffs", kind: "clothing", rarity: "common", slot: "wrists", stats: { spirit: [0, 1] }, durability: 25, value: 8 }

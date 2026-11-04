@@ -1,0 +1,1 @@
+{ name: "Crystal Amulet", icon: "item-crystal-amulet", kind: "trinket", rarity: "uncommon", slot: "neck", stats: { intellect: [1, 2], spirit: [0, 1] }, value: 45 }

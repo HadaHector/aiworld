@@ -1,0 +1,1 @@
+{ name: "Cloth Gloves", icon: "item-cloth-gloves", kind: "clothing", rarity: "common", slot: "hands", stats: { intellect: [0, 1] }, durability: 25, value: 8 }

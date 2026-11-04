@@ -89,6 +89,7 @@ All new, read by `src/sim/rules/itemRules.ts` (added to `GAME_FOLDERS`):
 |---|---|
 | `name` | Shown; a translatable template later (see *Names*) |
 | `kind` | `tool`, `weapon`, `armour`, `clothing`, `food`, `material`, `key`, `book`, `trinket`, `quest` - a free string the screens group by; the engine reads only `quest` |
+| `icon` | The name of its icon in an icon set (ICONS.md); none or an unknown name draws a placeholder by `kind`. On a template (or a part), `{axis}` in it is the part chosen: `item-sword-{material}-{form}` |
 | `rarity` | A tier in `rarities/`. Default: the lowest |
 | `slot` | An equipment slot it goes in; `slots: ["mainHand", "offHand"]` for one that fills both (a two-handed weapon) |
 | `gear` | Gear pieces it shows on the body while equipped in a slot marked `visible` |
@@ -502,3 +503,10 @@ Each leaves the game working: dev server, `npm run probe`, `npm run server`, `np
   looter with that origin - the Frost Nova tome only for a mage.
 - **Starting weapons** come from the class: an origin's `items: { start: [...] }` adds to the
   character's (warrior: bronze shortsword, priest: oak mace, mage: ash staff; generated classes by role).
+- **Starting kits** fill the other slots too, so every class begins with something in each: the plain
+  kit every character has (tunic, trousers, sandals, bread), then the class's - the warrior leather and
+  bronze (shield, cap, token, shoulders, cloak, gloves, bracers, belt, copper ring), the mage and the
+  priest one shared cloth set (hood, mantle, cloak, cuffs, gloves, rope belt, slippers) and their own
+  off hand, neck and ring. Whatever can be worn is worn when the character is made, in bag order, so
+  a second item for a slot the plain kit fills (the cloth slippers) takes it and the first goes to the bag.
+  The cloth and leather pieces have no `gear` yet, so they do not show on the body.

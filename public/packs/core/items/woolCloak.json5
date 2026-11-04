@@ -1,0 +1,1 @@
+{ name: "Wool Cloak", icon: "item-wool-cloak-brown", kind: "clothing", rarity: "common", slot: "back", stats: { armor: [1, 2], stamina: [0, 1] }, durability: 30, value: 12 }

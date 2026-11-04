@@ -1,1 +1,1 @@
-{ name: "Knight Legguards", kind: "armour", rarity: "uncommon", slot: "legs", gear: ["trousers", "legPlate"], stats: { armor: [45, 55], stamina: [2, 4] }, durability: 70, value: 150, level: 10 }
+{ name: "Knight Legguards", icon: "item-plate-legguards", kind: "armour", rarity: "uncommon", slot: "legs", gear: ["trousers", "legPlate"], stats: { armor: [45, 55], stamina: [2, 4] }, durability: 70, value: 150, level: 10 }

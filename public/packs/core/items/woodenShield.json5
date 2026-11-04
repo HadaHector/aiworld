@@ -1,0 +1,2 @@
+// A warrior's first shield: planks, an iron rim and a boss.
+{ name: "Wooden Shield", icon: "item-wooden-shield", kind: "armour", rarity: "common", slot: "offHand", stats: { armor: [8, 10], stamina: [0, 1] }, durability: 50, value: 20 }

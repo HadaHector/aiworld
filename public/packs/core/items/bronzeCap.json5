@@ -1,0 +1,1 @@
+{ name: "Bronze Cap", icon: "item-bronze-cap", kind: "armour", rarity: "common", slot: "head", stats: { armor: [6, 8] }, durability: 40, value: 18 }

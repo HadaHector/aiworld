@@ -1,0 +1,2 @@
+// A cloth hood: the first head piece of a mage or a priest.
+{ name: "Cloth Hood", icon: "item-cloth-hood", kind: "clothing", rarity: "common", slot: "head", stats: { spirit: [0, 1], intellect: [0, 1] }, durability: 25, value: 10 }

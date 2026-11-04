@@ -9,6 +9,7 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "icons": "node scripts/icons/build.mjs",
+    "icons:generated": "node scripts/icons/buildGenerated.mjs",
     "probe": "node --experimental-strip-types --import ./scripts/probe/hook.mjs",
     "server": "node --experimental-strip-types --no-warnings=ExperimentalWarning --import ./scripts/server/hook.mjs scripts/server/main.mjs"
   },

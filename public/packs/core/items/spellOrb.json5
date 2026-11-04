@@ -1,0 +1,2 @@
+// A mage's off hand: a focus to hold a spell in.
+{ name: "Spell Orb", icon: "item-spell-orb", kind: "trinket", rarity: "uncommon", slot: "offHand", stats: { intellect: [1, 2] }, value: 40 }

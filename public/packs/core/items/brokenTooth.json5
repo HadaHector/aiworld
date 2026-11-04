@@ -1,2 +1,2 @@
 // Junk: grey, sells for a copper or two.
-{ name: "Broken Tooth", kind: "material", rarity: "poor", stack: 20, value: 1 }
+{ name: "Broken Tooth", icon: "item-broken-tooth", kind: "material", rarity: "poor", stack: 20, value: 1 }

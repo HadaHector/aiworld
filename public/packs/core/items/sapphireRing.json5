@@ -1,0 +1,1 @@
+{ name: "Sapphire Ring", icon: "item-sapphire-ring", kind: "trinket", rarity: "uncommon", slot: "ring", stats: { intellect: [1, 2], stamina: [0, 1] }, value: 45 }

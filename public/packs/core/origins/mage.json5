@@ -14,5 +14,5 @@
     ],
   },
   trees: ["mageFire"],
-  items: { start: [{ item: "ashStaff" }] },
+  items: { start: [{ item: "ashStaff" }, { item: "spellOrb" }, { item: "crystalAmulet" }, { item: "sapphireRing" }, { item: "clothHood" }, { item: "clothMantle" }, { item: "clothCloak" }, { item: "clothCuffs" }, { item: "clothGloves" }, { item: "ropeBelt" }, { item: "clothSlippers" }] },
 }

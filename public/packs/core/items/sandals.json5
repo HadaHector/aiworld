@@ -1,1 +1,1 @@
-{ name: "Sandals", kind: "clothing", rarity: "common", slot: "feet", gear: ["sandals"], durability: 20, value: 5 }
+{ name: "Sandals", icon: "item-sandals", kind: "clothing", rarity: "common", slot: "feet", gear: ["sandals"], durability: 20, value: 5 }

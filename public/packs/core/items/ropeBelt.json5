@@ -1,0 +1,1 @@
+{ name: "Rope Belt", icon: "item-rope-belt", kind: "clothing", rarity: "common", slot: "waist", stats: { stamina: [0, 1] }, durability: 25, value: 6 }

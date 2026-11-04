@@ -1,0 +1,1 @@
+{ name: "Leather Gloves", icon: "item-leather-gloves", kind: "armour", rarity: "common", slot: "hands", stats: { armor: [3, 4] }, durability: 30, value: 12 }

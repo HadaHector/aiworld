@@ -681,6 +681,8 @@ function generateTypes(
       item.stats = stats;
       item.level = level;
       item.name = label;
+      // An icon may name its parts too: "item-sword-{material}-{form}".
+      if (typeof item.icon === "string") item.icon = axes.reduce((icon, a) => icon.split(`{${a.axis}}`).join(parts[a.axis]), item.icon);
       if (typeof item.value === "number") item.value = Math.round(item.value * budget);
       made.push({ id, obj: item, template: templateId, parts });
     }

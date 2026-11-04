@@ -1,0 +1,1 @@
+{ name: "Bronze Token", icon: "item-bronze-token", kind: "trinket", rarity: "common", slot: "neck", stats: { strength: [0, 1], stamina: [0, 1] }, value: 12 }

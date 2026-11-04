@@ -7,6 +7,7 @@
 import { mkdirSync, readdirSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { decodePng, encodePng } from "./png.mjs";
+import { area, fitInto, nearest } from "./image.mjs";
 import { readZip } from "./zip.mjs";
 import { SETS } from "./catalogue.mjs";
 
@@ -22,72 +23,6 @@ const COLUMNS = 16;
 /** Painted icons are fitted inside the cell less this much on every side. */
 const PAD = Math.round(SIZE / 16);
 
-/** Scales by a whole number, each pixel a square of pixels: pixel art stays crisp. */
-function nearest(img, scale) {
-  const data = new Uint8ClampedArray(img.width * scale * img.height * scale * 4);
-  const w = img.width * scale;
-  for (let y = 0; y < img.height * scale; y++) {
-    for (let x = 0; x < w; x++) {
-      const s = (Math.floor(y / scale) * img.width + Math.floor(x / scale)) * 4;
-      data.set(img.data.subarray(s, s + 4), (y * w + x) * 4);
-    }
-  }
-  return { width: w, height: img.height * scale, data };
-}
-
-/** Scales to a size by area averaging in premultiplied colour (a box filter, exact for the 8-9x
- *  reductions here, and free of the halos a plain average leaves at a transparent edge). */
-function area(img, width, height) {
-  const data = new Uint8ClampedArray(width * height * 4);
-  const sx = img.width / width;
-  const sy = img.height / height;
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
-      let r = 0, g = 0, b = 0, a = 0, weight = 0;
-      const x0 = x * sx, x1 = (x + 1) * sx, y0 = y * sy, y1 = (y + 1) * sy;
-      for (let j = Math.floor(y0); j < Math.min(img.height, Math.ceil(y1)); j++) {
-        const wy = Math.min(j + 1, y1) - Math.max(j, y0);
-        for (let i = Math.floor(x0); i < Math.min(img.width, Math.ceil(x1)); i++) {
-          const w = wy * (Math.min(i + 1, x1) - Math.max(i, x0));
-          const p = (j * img.width + i) * 4;
-          const alpha = img.data[p + 3] / 255;
-          r += img.data[p] * alpha * w;
-          g += img.data[p + 1] * alpha * w;
-          b += img.data[p + 2] * alpha * w;
-          a += alpha * w;
-          weight += w;
-        }
-      }
-      const o = (y * width + x) * 4;
-      if (a > 0) {
-        data[o] = r / a;
-        data[o + 1] = g / a;
-        data[o + 2] = b / a;
-      }
-      data[o + 3] = (a / weight) * 255;
-    }
-  }
-  return { width, height, data };
-}
-
-/** The part of an image that is not (nearly) transparent. */
-function bounds(img) {
-  let x0 = img.width, y0 = img.height, x1 = -1, y1 = -1;
-  for (let y = 0; y < img.height; y++) {
-    for (let x = 0; x < img.width; x++) {
-      if (img.data[(y * img.width + x) * 4 + 3] <= 8) continue;
-      x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y);
-    }
-  }
-  return x1 < 0 ? { x: 0, y: 0, width: img.width, height: img.height } : { x: x0, y: y0, width: x1 - x0 + 1, height: y1 - y0 + 1 };
-}
-
-function crop(img, { x, y, width, height }) {
-  const data = new Uint8ClampedArray(width * height * 4);
-  for (let j = 0; j < height; j++) data.set(img.data.subarray(((y + j) * img.width + x) * 4, ((y + j) * img.width + x + width) * 4), j * width * 4);
-  return { width, height, data };
-}
-
 /** One source picture as a SIZE x SIZE cell. */
 function cell(img, mode) {
   if (mode === "pixel") {
@@ -95,13 +30,7 @@ function cell(img, mode) {
     return nearest(img, SIZE / img.width);
   }
   if (mode === "tile") return area(img, SIZE, SIZE);
-  const part = crop(img, bounds(img));
-  const fit = (SIZE - 2 * PAD) / Math.max(part.width, part.height);
-  const small = area(part, Math.max(1, Math.round(part.width * fit)), Math.max(1, Math.round(part.height * fit)));
-  const out = { width: SIZE, height: SIZE, data: new Uint8ClampedArray(SIZE * SIZE * 4) };
-  const ox = Math.floor((SIZE - small.width) / 2), oy = Math.floor((SIZE - small.height) / 2);
-  for (let y = 0; y < small.height; y++) out.data.set(small.data.subarray(y * small.width * 4, (y + 1) * small.width * 4), ((oy + y) * SIZE + ox) * 4);
-  return out;
+  return fitInto(img, SIZE, PAD);
 }
 
 // --- read the zips ---

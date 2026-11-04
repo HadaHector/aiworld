@@ -1,0 +1,1 @@
+{ name: "Cloth Slippers", icon: "item-cloth-slippers", kind: "clothing", rarity: "common", slot: "feet", stats: { spirit: [0, 1] }, durability: 20, value: 8 }

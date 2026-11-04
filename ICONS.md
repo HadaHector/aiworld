@@ -20,6 +20,15 @@ brings an icon set, a definition names an icon, and the game works with none.
 - **One atlas per set, any size.** A set's cell size is only recorded in the build; the screens scale
   an icon to its box with CSS, so a different set (or size) needs no code change.
 
+## Where the icons come from
+
+- `icons-craftpix` (optional, `npm run icons`): the free Craftpix sets, used for skills and as a stopgap.
+- `icons-generated` (`npm run icons:generated`): the item icons, made with an image model in ComfyUI. The
+  tools live in `assets_work/comfyUI/` (git-ignored: `icons.json` is the list of icons with their prompts and
+  the shared style rules, `icongen.py` generates variations in resumable batches, `review.py` is the
+  page where you pick one of each). `buildGenerated.mjs` crops every picked cutout to its content and
+  fits it into the cell, so all of them fill the icon alike. It is a later pack than craftpix, so its names win.
+
 ## An icon set
 
 `icons/<id>.json5` in any pack:

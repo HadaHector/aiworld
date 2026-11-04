@@ -1,0 +1,2 @@
+// A priest's off hand.
+{ name: "Prayer Book", icon: "item-prayer-book", kind: "trinket", rarity: "uncommon", slot: "offHand", stats: { spirit: [1, 2] }, value: 40 }

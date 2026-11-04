@@ -1,2 +1,2 @@
 // A quest item: a parcel to carry to someone.
-{ name: "Wrapped Parcel", kind: "quest", rarity: "common", quest: true }
+{ name: "Wrapped Parcel", icon: "item-wrapped-parcel", kind: "quest", rarity: "common", quest: true }

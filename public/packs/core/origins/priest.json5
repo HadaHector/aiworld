@@ -14,5 +14,5 @@
     ],
   },
   trees: ["priestLight"],
-  items: { start: [{ item: "oakMace" }] },
+  items: { start: [{ item: "oakMace" }, { item: "prayerBook" }, { item: "sunPendant" }, { item: "goldRing" }, { item: "clothHood" }, { item: "clothMantle" }, { item: "clothCloak" }, { item: "clothCuffs" }, { item: "clothGloves" }, { item: "ropeBelt" }, { item: "clothSlippers" }] },
 }

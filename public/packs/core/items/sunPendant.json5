@@ -1,0 +1,1 @@
+{ name: "Sun Pendant", icon: "item-sun-pendant", kind: "trinket", rarity: "uncommon", slot: "neck", stats: { spirit: [1, 2], stamina: [0, 1] }, value: 45 }
