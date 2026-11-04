@@ -1,0 +1,8 @@
+// A command made of others (CHAT.md, *Commands*): `run` lists command lines, $1.. are its arguments.
+// Commands that code registers (give, tp, heal...) may have a file of their own too, to change how
+// they read - usage, summary, aliases, dev - without touching what they do.
+{
+  summary: "Fills every resource, brings you back, and teaches every skill.",
+  dev: true,
+  run: ["heal", "learn all"],
+}

@@ -98,6 +98,7 @@ export function connectLocal(world: LocalWorld): Connection {
     items: rules.items,
     creatures: rules.creatures,
     progression: rules.progression,
+    devCommands: true,
     loadDimension: (definition) => new Promise<DimensionWorld>((resolve) => built.set(definition.id, resolve)),
     saves: world.saves && { store: world.saves.store, world: world.saves.world, interval: world.saves.interval },
   });

@@ -10,7 +10,7 @@ import type { CombatEvent } from "./skills/events";
 export type { CombatEvent } from "./skills/events";
 
 /** Bumped whenever a message changes shape. */
-export const PROTOCOL_VERSION = 13;
+export const PROTOCOL_VERSION = 14;
 
 // --- Client to server ------------------------------------------------------------------------
 
@@ -312,7 +312,18 @@ export interface QuestObjectTake {
   entity: number; // u32
 }
 
+/**
+ * A line typed in the chat window (CHAT.md): on a channel, or a command - `channel: "command"`, the
+ * text without its slash. The server cleans it, limits its length and rate, and answers with ChatEvents.
+ */
+export interface ChatSend {
+  type: "chat";
+  channel: string;
+  text: string; // at most 256 characters
+}
+
 export type ClientMessage =
+  | ChatSend
   | QuestAccept
   | QuestComplete
   | QuestAbandon
@@ -478,6 +489,8 @@ export interface Welcome {
   /** A hash of the progression tables (PROGRESSION.md): generated disciplines and classes come from
    *  the seed too. 0 when the server runs no progression. */
   progression: number; // u32
+  /** Whether developer commands (/give, /tp...) work here (CHAT.md); the server checks it too. */
+  devCommands: boolean;
 }
 
 /** A character in the world, as the lists show it (FRONTEND.md, *A world's characters*). */
@@ -980,7 +993,29 @@ export interface ProgressEventState {
   source: string; // short string
 }
 
+/**
+ * A line in the chat window (CHAT.md): a player's words (`typed`, shown as written), or a template
+ * and its arguments that the reader's client translates and fills (QUESTS.md, *Text*). `from` 0 is the server.
+ */
+export interface ChatEvent {
+  type: "chatEvent";
+  channel: string; // "say", "system"; later "party", "whisper"
+  from: number; // u32
+  fromName: string;
+  text: string;
+  args: Readonly<Record<string, string | number>>;
+  typed: boolean;
+}
+
+/** The commands the server runs for this player, with usage - for /help and completion. Sent on joining. */
+export interface CommandList {
+  type: "commandList";
+  commands: { id: string; aliases: string[]; usage: string; summary: string; dev: boolean; args: { name: string; kind: string; optional: boolean; names?: string[]; extra?: string[] }[] }[];
+}
+
 export type ServerMessage =
+  | ChatEvent
+  | CommandList
   | Characters
   | Entered
   | Refused

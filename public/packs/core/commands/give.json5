@@ -1,0 +1,7 @@
+// How /give reads. What it does is in code (src/sim/chat/serverCommands.ts).
+{
+  usage: "<item> [count]",
+  summary: "Puts an item in your bag.",
+  aliases: ["item", "i"],
+  dev: true,
+}

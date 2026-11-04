@@ -1,7 +1,7 @@
 import { dimensionSeed, type DimensionDef } from "../world/content/dimensions";
 import { createDimension, type Dimension, type DimensionWorld } from "./dimension";
 import type { BodyInput } from "./playerBody";
-import { PROTOCOL_VERSION, cleanChoices, type ClientMessage, type EntityAppearance, type ServerMessage } from "./protocol";
+import { PROTOCOL_VERSION, cleanChoices, type ChatSend, type ClientMessage, type EntityAppearance, type ServerMessage } from "./protocol";
 import { createReplicator, type Replicator } from "./replication";
 import { addModifier, removeSource } from "./stats";
 import { restore } from "./resources";
@@ -44,6 +44,8 @@ const MAP_PIN_RANGE = 400;
 /** Where a body is to be made: a point, or (with `start`) the start of that id, once it is placed. */
 type Arrival = { x: number; z: number; start?: string };
 import type { SaveStore } from "../save/store";
+import { cleanChat, createRateLimit, parseArgs, splitWords } from "./chat/chat";
+import { createServerCommands, nameBook, type CommandHost } from "./chat/serverCommands";
 import { SAVE_VERSION, makeSaveId, nameProblem, tidyName, type CharacterRecord, type CharacterSummary, type WorldRecord } from "../save/records";
 
 /** Each step spends at most this long bringing in collision chunks per dimension (always at least one). */
@@ -70,6 +72,8 @@ interface Connection {
   selecting: boolean;
   /** A character being read from the store, to enter. */
   entering: boolean;
+  /** Whether it may send another chat line now (CHAT.md). */
+  chatRate: (now: number) => boolean;
 }
 
 /** A connected player: its entity, and what its client has said. */
@@ -133,6 +137,9 @@ export interface ServerOptions {
   /** Where the world and its characters are saved (FRONTEND.md, *Saves*); left out, only quick
    *  characters play and nothing is kept. */
   saves?: ServerSaves;
+  /** Whether developer commands (/give, /tp...) work (CHAT.md): off unless the host turns it on -
+   *  single player does, a dedicated server by its flag. Told to clients, and checked here. */
+  devCommands?: boolean;
 }
 
 export interface ServerSaves {
@@ -845,6 +852,7 @@ export function createServer(options: ServerOptions): Server {
     connection.player = joined;
     connection.selecting = false;
     connection.end.send({ type: "entered", playerId: entity.id, character: record.id, look: entity.look, interface: record.interface });
+    connection.end.send(commandList());
     sendQuestLog(connection, entity);
     transfer(connection, joined, to, arrival);
   }
@@ -891,6 +899,81 @@ export function createServer(options: ServerOptions): Server {
     return "";
   }
 
+  // --- Chat and commands (CHAT.md) ---------------------------------------------------------------
+
+  const devCommands = options.devCommands === true;
+  const commands = createServerCommands(rules.commands);
+  const sayRange = 30;
+  const commandHost: CommandHost = {
+    seed: options.seed >>> 0,
+    config: options.config,
+    packs: options.packs ?? [],
+    rules,
+    itemRules: options.items ?? null,
+    give: (entity, type, count) => itemSystem?.give(entity, type, count) ?? count,
+    progression,
+    skills,
+    creatures: creatureSystem,
+    dimension: (entity) => loaded.get(entity.dimension),
+    teleport(entity, x, z) {
+      if (!entity.body) return;
+      entity.body.teleport(x, z);
+      follow(entity);
+      loaded.get(entity.dimension)?.streamer.loadAround(x, z, pointsIn(entity.dimension));
+    },
+    say: (entity, text) => say(entity, text),
+  };
+
+  function tell(connection: Connection, text: string, args: Readonly<Record<string, string | number>> = {}): void {
+    connection.end.send({ type: "chatEvent", channel: "system", from: 0, fromName: "", text, args, typed: false });
+  }
+  /** A player's words to those in its dimension within hearing, itself included. */
+  function say(entity: Entity, text: string): void {
+    for (const c of connections) {
+      const other = c.player?.entity;
+      if (!other || other.dimension !== entity.dimension) continue;
+      if (other !== entity && Math.hypot(other.x - entity.x, other.z - entity.z) > sayRange) continue;
+      c.end.send({ type: "chatEvent", channel: "say", from: entity.id, fromName: entity.name, text, args: {}, typed: true });
+    }
+  }
+  function commandList(): ServerMessage {
+    return {
+      type: "commandList",
+      commands: commands.all().filter((c) => !c.dev || devCommands).map((c) => ({ id: c.id, aliases: c.aliases ?? [], usage: c.usage, summary: c.summary, dev: c.dev, args: c.args.map((a) => ({ name: a.name, kind: a.kind, optional: a.optional === true, names: a.names, extra: a.extra })) })),
+    };
+  }
+  /** Runs a command line (without its slash) as a player: checks, reads its arguments, runs it. */
+  function runCommand(connection: Connection, entity: Entity, text: string, depth: number): void {
+    const words = splitWords(text);
+    const def = commands.find(words[0] ?? "");
+    if (!def) return tell(connection, 'Unknown command "{name}". Type /help for the list.', { name: words[0] ?? "" });
+    if (def.dev && !devCommands) return tell(connection, "Developer commands are off on this server.");
+    if (!entity.body) return tell(connection, "You cannot do that now.");
+    if (depth > 4) return tell(connection, "That command calls itself too deeply.");
+    const parsed = parseArgs(def, words.slice(1), nameBook(commandHost, entity));
+    if (!parsed.ok) {
+      tell(connection, parsed.reason.text, parsed.reason.args);
+      return tell(connection, "Usage: /{name} {usage}", { name: def.id, usage: def.usage });
+    }
+    def.run({ entity, host: commandHost, exec: (line) => runCommand(connection, entity, line, depth + 1), reply: (reply, args) => tell(connection, reply, args) }, parsed.values);
+  }
+  function chatMessage(connection: Connection, player: Player, message: ChatSend): void {
+    const entity = player.entity;
+    const text = cleanChat(message.text);
+    if (!text) return;
+    const slow = (): boolean => !connection.chatRate(time) && (tell(connection, "You are talking too fast."), true);
+    if (message.channel === "command") {
+      // Only talking is rate limited; a command is its own effect.
+      if (splitWords(text)[0]?.toLowerCase() === "say" && slow()) return;
+      runCommand(connection, entity, text, 0);
+      return;
+    }
+    if (message.channel === "say" || message.channel === "") {
+      if (!slow()) say(entity, text);
+    }
+    else tell(connection, "There is no such channel.");
+  }
+
   function handle(connection: Connection, message: ClientMessage): void {
     const player = connection.player;
     const body = player?.entity.body;
@@ -906,7 +989,7 @@ export function createServer(options: ServerOptions): Server {
         if (player || connection.selecting || message.protocol !== PROTOCOL_VERSION) return;
         if (message.select) {
           connection.selecting = true;
-          connection.end.send({ type: "welcome", protocol: PROTOCOL_VERSION, playerId: 0, world: world?.name ?? "", saves: saves !== null, config: options.config, packs: options.packs ?? [], rules: rules.hash, items: options.items?.hash ?? 0, creatures: options.creatures?.hash ?? 0, seed: options.seed >>> 0, progression: options.progression?.hash ?? 0 });
+          connection.end.send({ type: "welcome", protocol: PROTOCOL_VERSION, playerId: 0, world: world?.name ?? "", saves: saves !== null, config: options.config, packs: options.packs ?? [], rules: rules.hash, items: options.items?.hash ?? 0, creatures: options.creatures?.hash ?? 0, seed: options.seed >>> 0, progression: options.progression?.hash ?? 0, devCommands });
           connection.end.send(characterList());
           return;
         }
@@ -925,8 +1008,9 @@ export function createServer(options: ServerOptions): Server {
         const joined: Player = { entity, arrival, arrived: false, input: { moveX: 0, moveZ: 0, run: false, jump: false }, ackSeq: 0, character: null, playing: 0 };
         players.set(entity.id, joined);
         connection.player = joined;
-        connection.end.send({ type: "welcome", protocol: PROTOCOL_VERSION, playerId: entity.id, world: world?.name ?? "", saves: saves !== null, config: options.config, packs: options.packs ?? [], rules: rules.hash, items: options.items?.hash ?? 0, creatures: options.creatures?.hash ?? 0, seed: options.seed >>> 0, progression: options.progression?.hash ?? 0 });
+        connection.end.send({ type: "welcome", protocol: PROTOCOL_VERSION, playerId: entity.id, world: world?.name ?? "", saves: saves !== null, config: options.config, packs: options.packs ?? [], rules: rules.hash, items: options.items?.hash ?? 0, creatures: options.creatures?.hash ?? 0, seed: options.seed >>> 0, progression: options.progression?.hash ?? 0, devCommands });
         transfer(connection, joined, first, arrival);
+        connection.end.send(commandList());
         sendQuestLog(connection, entity);
         return;
       }
@@ -1024,6 +1108,10 @@ export function createServer(options: ServerOptions): Server {
       }
       case "arrived": {
         if (player) player.arrived = true;
+        return;
+      }
+      case "chat": {
+        if (player) chatMessage(connection, player, message);
         return;
       }
       // Debug commands on entities (see ENTITIES.md): 0 is the sender's own player.
@@ -1315,7 +1403,7 @@ export function createServer(options: ServerOptions): Server {
 
   return {
     connect: (end) => {
-      connections.push({ end, player: null, replicator: createReplicator(rules), items: itemSystem && options.items ? createItemReplicator(options.items, itemSystem) : null, progressSent: false, standingSent: false, marks: "", pins: "", zonesSent: "", selecting: false, entering: false });
+      connections.push({ end, player: null, replicator: createReplicator(rules), items: itemSystem && options.items ? createItemReplicator(options.items, itemSystem) : null, progressSent: false, standingSent: false, marks: "", pins: "", zonesSent: "", selecting: false, entering: false, chatRate: createRateLimit() });
     },
     step,
     save: saveAll,

@@ -43,7 +43,7 @@ its own plan document when it is started, as zones and music did.
 | Single player | The same server, run inside the client (as in Minecraft) |
 | Hosting | Single player and co-op from the game itself; anyone can run a dedicated server, and it runs without a client (headless) |
 | Shared world | Mobs, gathering nodes and chests are shared between players |
-| Social | Parties, chat, direct trade, mail. Guilds and an auction house maybe later |
+| Social | Parties, chat (say and commands built, CHAT.md), direct trade, mail. Guilds and an auction house maybe later |
 | PvP | Opt-in (flag or duel), low priority |
 | Networking | Not yet. Client and server are kept apart behind a message boundary in one process; a real transport comes later |
 
@@ -202,6 +202,9 @@ The first chain the generator must be able to make, and the yardstick for its pa
 - **Text in English first,** but built for localisation. Generated text must therefore come from
   translatable templates, not strings put together in code.
 - **Keyboard and mouse first.**
+- **Chat window** (CHAT.md): Enter opens it; plain text is /say, `/command` runs a command - the
+  developer's (/give, /level, /tp...) only where the server allows them, the player's (/help, /say,
+  /world) always. The combat log is its combat channel. Parties and whispers are channels to come.
 - **Sound:** combat needs good sound effects: generated for now, samples later (FEEDBACK.md).
 
 ## Saved state

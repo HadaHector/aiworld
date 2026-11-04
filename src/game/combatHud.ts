@@ -1,10 +1,11 @@
 import type { EntityMirror, MirroredEntity } from "./entityMirror";
-import { BAR_COLOURS, BAR_TEXT, BAR_TRACK, BUTTON_CLASS, GOLD, PANEL, QUIET_PANEL, TITLE_FONT, barFill } from "../ui/theme";
+import { BAR_COLOURS, BAR_TEXT, BAR_TRACK, BUTTON_CLASS, GOLD, PANEL, TITLE_FONT, barFill } from "../ui/theme";
 import { PLAYER_TEMPLATE, type GameRules } from "../sim/rules/gameRules";
 import type { CombatEvent } from "../sim/protocol";
 import { describeEvent } from "../sim/skills/combatLog";
 import { EVENT_KIND } from "../sim/skills/events";
 import { FLAG, FLAG_NAMES } from "../sim/skills/flags";
+import { createChatWindow, type ChatWindow, type ChatWindowOptions } from "../ui/chatWindow";
 
 /**
  * The combat HUD of ABILITIES.md's test - minimal, until step 10's real screens: the own unit frame
@@ -19,6 +20,8 @@ export interface CombatHud {
   log: (events: readonly CombatEvent[]) => void;
   /** Adds a line of plain words to the log: a level gained, why something was refused. */
   say: (line: string) => void;
+  /** The chat window the log is part of (CHAT.md). */
+  readonly chat: ChatWindow;
   /** Where the action bar goes (ui/actionBar.ts): between the cast bar and the XP bar. */
   readonly barSlot: HTMLElement;
   dispose: () => void;
@@ -34,9 +37,10 @@ export interface CombatHudOptions {
   /** The own level's XP (PROGRESSION.md), as a share of the way to the next level, for a thin bar
    *  under the own frame - null to show none. */
   experience?: () => { label: string; fraction: number } | null;
+  /** The chat window's wiring (CHAT.md): what typing does. */
+  chat: Omit<ChatWindowOptions, "parent">;
 }
 
-const LOG_LINES = 14;
 const barColour = (id: string): string => BAR_COLOURS[id] ?? "#7a7a7a";
 
 function el(tag: string, css: string, parent?: HTMLElement): HTMLElement {
@@ -97,9 +101,8 @@ export function createCombatHud(options: CombatHudOptions): CombatHud {
   const xpBarFill = el("div", `${barFill(BAR_COLOURS.xp)} transition: width 0.3s;`, xpBar);
   const xpBarText = el("div", `${BAR_TEXT} font-size: 9px; line-height: 12px; font-weight: 600;`, xpBar);
 
-  // The combat log.
-  const logBox = el("div", `width: 100%; box-sizing: border-box; padding: 6px 8px; ${QUIET_PANEL} white-space: pre-wrap; overflow: hidden; color: #d8ceb6;`, regions.log);
-  const logLines: string[] = [];
+  // The combat log is the chat window's combat channel (CHAT.md).
+  const chat = createChatWindow({ ...options.chat, parent: regions.log });
 
   // Dead: a button to come back.
   const deadBox = el("div", `position: fixed; left: 50%; top: 35%; transform: translateX(-50%); padding: 14px 24px; z-index: 950; display: none; text-align: center; ${PANEL}`, document.body);
@@ -194,26 +197,21 @@ export function createCombatHud(options: CombatHudOptions): CombatHud {
       } else castBar.style.display = "none";
       deadBox.style.display = own && own.flags & (1 << FLAG.dead) ? "block" : "none";
     },
+    chat,
     log(events) {
       const nameOf = (id: number) => mirror.entities.get(id)?.name ?? `#${id}`;
       for (const event of events) {
         // Swings and visual effects are seen, not read.
         if (event.kind === EVENT_KIND.animation || event.kind === EVENT_KIND.effect) continue;
-        logLines.push(describeEvent(rules, event, nameOf));
+        chat.add("combat", describeEvent(rules, event, nameOf));
       }
-      if (logLines.length > LOG_LINES) logLines.splice(0, logLines.length - LOG_LINES);
-      text(logBox, logLines.join("\n") || "Combat log");
-      // A short log (the HUD caps its height on small screens) shows the newest lines.
-      logBox.scrollTop = logBox.scrollHeight;
     },
     say(line) {
-      logLines.push(line);
-      if (logLines.length > LOG_LINES) logLines.splice(0, logLines.length - LOG_LINES);
-      text(logBox, logLines.join("\n"));
-      logBox.scrollTop = logBox.scrollHeight;
+      chat.add("system", line);
     },
     dispose() {
-      for (const e of [ownFrame.root, targetFrame.root, castBar, bar, xpBar, logBox, deadBox]) e.remove();
+      chat.dispose();
+      for (const e of [ownFrame.root, targetFrame.root, castBar, bar, xpBar, deadBox]) e.remove();
     },
   };
 }

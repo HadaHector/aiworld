@@ -61,6 +61,8 @@ export interface ProgressionSystem {
   debugLevel(entity: Entity, discipline: number, level: number): void;
   /** Debug: every skill a character's origins and disciplines could ever teach it. */
   learnAll(entity: Entity): void;
+  /** Debug: teaches one skill outright. */
+  debugLearn(entity: Entity, skill: number): void;
   export(entity: Entity): SavedProgress | null;
   import(entity: Entity, saved: SavedProgress): string[];
 }
@@ -342,6 +344,11 @@ export function createProgressionSystem(game: GameRules, rules: ProgressionRules
       for (const index of part.origins.values()) for (const list of rules.origins[index].unlocks.values()) for (const u of list) if (u.skill >= 0) skills.add(u.skill);
       for (const tree of part.trees) for (const node of rules.trees[tree].nodes) if (node.skill >= 0) skills.add(node.skill);
       for (const skill of [...skills].sort((a, b) => a - b)) teach(ctx, entity, skill, "auto");
+      recount(ctx, entity);
+    },
+    debugLearn(entity, skill) {
+      if (!entity.progress) return;
+      teach(ctx, entity, skill, "auto");
       recount(ctx, entity);
     },
     export: (entity) => exportProgress(ctx, entity),

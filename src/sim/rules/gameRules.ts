@@ -1,6 +1,7 @@
 import { readQuestRules, type QuestRules } from "../quests/quest";
 import { readTextTable, type TextTable } from "../text";
 import { readNpcRules, type NpcRules } from "./npcRules";
+import { readCommandPacks, type CommandPackDef } from "../chat/commandPacks";
 import { FACTION_BY_HOSTILITY, PLAYERS_FACTION, factionDef, readFactionRules, standingBetween, type FactionRules } from "../factions";
 import { ContentError, isObject, joinPath, Reader, type ContentIssue, type RawObject } from "../../world/content/contentReader";
 import { GAME_FOLDERS, orderPacks, parseFile, type PackSource } from "../../world/content/resolveContent";
@@ -171,6 +172,8 @@ export interface GameRules {
   factions: FactionRules;
   /** `npcRoles/`, `npcRelations/` and `rules/npcs.json5` (NPCS.md). */
   npcs: NpcRules;
+  /** `commands/`: how chat commands read, and commands the packs make (CHAT.md). */
+  commands: readonly CommandPackDef[];
   /** `rules/quests.json5` (QUESTS.md). */
   quests: QuestRules;
   /** `text/`: translations of the packs' English, by language (QUESTS.md, *Text*). */
@@ -307,6 +310,7 @@ export function resolveGameRules(packs: PackSource[]): GameRules {
   const npcs = readNpcRules(folders.get("rules")!.get("npcs"), entries("npcRoles"), entries("npcRelations"), entries("barks"), new Set(templates.keys()), issues);
 
   const quests = readQuestRules(folders.get("rules")!.get("quests"), entries("questParts"), entries("questPlots"), issues);
+  const commands = readCommandPacks(entries("commands"), issues);
   const text = readTextTable(entries("text"), (file, message) => issues.push({ file, path: "", message }));
 
   if (issues.length > 0) throw new ContentError(issues);
@@ -321,7 +325,7 @@ export function resolveGameRules(packs: PackSource[]): GameRules {
   ].join("|");
   return {
     stats, statOrder, modifierKinds, applyOrder, resources, templates, rawTemplates, statIndex, kindIndex, resourceIndex, health: health!,
-    skills, skillIndex, combat, factions, npcs, quests, text, hash: hashString(signature),
+    skills, skillIndex, combat, factions, npcs, commands, quests, text, hash: hashString(signature),
   };
 }
 

@@ -30,6 +30,8 @@ import { GROUND_ITEM_TEMPLATE } from "../sim/items/itemSystem";
 import { appearanceOf, type PlayerLook } from "./playerBody";
 import { createBodyKit } from "./characterBody";
 import { createCombatHud } from "./combatHud";
+import { createChatCommands } from "./chatCommands";
+import type { CommandDef } from "../sim/chat/chat";
 import { createFloatingText, type FloatingText } from "./floatingText";
 import { createProgressMirror } from "./progressMirror";
 import { createProgressPanel } from "../ui/progressPanel";
@@ -349,6 +351,12 @@ export async function startSession(page: Page, options: SessionOptions): Promise
         standingTold = true;
         for (const [faction, value] of message.values) standing.set(faction, value);
         if (gained) feedback.client("standingChange", { source: playerId, target: playerId, skill: null, crit: false, periodic: false });
+      } else if (message.type === "chatEvent") {
+        const words = message.typed ? message.text : toWords(message.text, message.args);
+        combatHud.chat.add(message.channel === "say" ? "say" : "system", words, message.fromName);
+        if (message.channel === "say" && message.from !== playerId) feedback.client("uiClick", { source: playerId, target: playerId, skill: null, crit: false, periodic: false });
+      } else if (message.type === "commandList") {
+        serverCommands = message.commands.map((c) => ({ id: c.id, aliases: c.aliases, usage: c.usage, summary: c.summary, dev: c.dev, owner: "server", args: c.args.map((a) => ({ name: a.name, kind: a.kind as never, optional: a.optional, names: a.names as never, extra: a.extra })) }));
       } else if (message.type === "refused") {
         refusal = message.reason;
       } else if (message.type === "transfer") {
@@ -733,12 +741,52 @@ export async function startSession(page: Page, options: SessionOptions): Promise
     intentSeq = (intentSeq + 1) & 0xffff;
     client.send({ type: "cast", seq: intentSeq, skill, target: 0, x: NaN, z: NaN });
   }
+  // Chat and commands (CHAT.md): the window sends lines here; the client's own commands run here,
+  // the rest go to the server, whose answers come back as chatEvents.
+  let serverCommands: CommandDef[] = [];
+  const toWords = (text: string, args: Readonly<Record<string, string | number>> = {}): string => renderText({ text, args }, gameRules.text);
+  const chatCommands = createChatCommands({
+    system: (text, args) => combatHud.chat.add("system", toWords(text, args)),
+    plain: (line) => combatHud.chat.add("system", line),
+    clear: () => combatHud.chat.clear(),
+    send: (channel, text) => client.send({ type: "chat", channel, text }),
+    devCommands: () => serverCommands.some((c) => c.dev),
+    serverCommands: () => serverCommands,
+    translate: (text) => toWords(text),
+    setTime: (hour) => !!view && (view.world.setTimeOfDay(hour), true),
+    setWeather: (id) => !!view && (view.world.weather.force(id), true),
+    names(kind) {
+      switch (kind) {
+        case "item":
+          return itemRules.types.map((t) => ({ id: t.id, name: t.name }));
+        case "skill":
+          return gameRules.skills.map((s) => ({ id: s.id, name: s.name }));
+        case "creature":
+          return [...creatureRules.kinds.keys()].map((id) => ({ id, name: gameRules.templates.get(id)?.name ?? id }));
+        case "discipline":
+          return progressionRules.disciplines.map((d) => ({ id: d.id, name: d.name }));
+        case "zone":
+          return view ? [...view.world.areaNames.values()].map((name) => ({ id: name, name })) : [];
+        case "place":
+          return view ? view.world.settlements.map((s) => ({ id: s.name, name: s.name })) : [];
+        case "weather":
+          return view ? view.world.weather.weathers.map((w) => ({ id: w.id, name: w.name ?? w.id })) : [];
+        default:
+          return [];
+      }
+    },
+  });
   const combatHud = createCombatHud({
     rules: gameRules,
     mirror,
     ownId: () => playerId,
     onRespawn: () => command({ type: "respawn" }),
     regions: { frames: hud.frames, actions: hud.actions, log: hud.log },
+    chat: {
+      onSubmit: (line) => chatCommands.submit(line),
+      complete: (line) => chatCommands.complete(line),
+      canOpen: () => !!view && !entering && !menuOpen && !view.spectator.active,
+    },
     experience() {
       const level = progressionRules.config.level;
       const d = progressMirror.progress?.disciplines.find((x) => x.discipline === level);

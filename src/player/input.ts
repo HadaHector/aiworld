@@ -21,6 +21,14 @@ export function createInput() {
   };
   const onKeyUp = (e: KeyboardEvent) => pressed.delete(e.key.toLowerCase());
 
+  // A text field taking the keyboard (the chat input) takes the keys held with it.
+  const onFocusIn = (e: FocusEvent) => {
+    if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+      pressed.clear();
+      jumpAt = -Infinity;
+    }
+  };
+  window.addEventListener("focusin", onFocusIn);
   window.addEventListener("keydown", onKeyDown);
   window.addEventListener("keyup", onKeyUp);
 
@@ -49,6 +57,7 @@ export function createInput() {
   }
 
   function dispose() {
+    window.removeEventListener("focusin", onFocusIn);
     window.removeEventListener("keydown", onKeyDown);
     window.removeEventListener("keyup", onKeyUp);
   }

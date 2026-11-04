@@ -3,6 +3,7 @@
 //   npm run server                       run until stopped, a line a second
 //   npm run server -- --bot              with a player that walks in a circle
 //   npm run server -- --bot --ticks 300  stop after 300 steps (for scripted checks)
+//   npm run server -- --dev               developer chat commands (/give, /tp...) on; off by default (CHAT.md)
 //   npm run server -- --seed 1337        another world
 //   npm run server -- --config small     a world config from public/configs (see CONFIG.md)
 //   npm run server -- --bot --dimension isles   the bot starts in another dimension
@@ -105,6 +106,8 @@ const server = createServer({
   items,
   creatures,
   progression,
+  // Developer commands (CHAT.md) are off on a dedicated server unless it is run with --dev.
+  devCommands: flag("dev"),
   loadDimension(definition, dimensionSeed) {
     let at = performance.now();
     const content = definition.start ? startContent : loadContentFromDisk(configName, definition.id).content;

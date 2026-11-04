@@ -69,6 +69,8 @@ export interface CreatureSystem {
     spawn(dimension: string, kind: string, x: number, z: number, level?: number): Entity | undefined;
     /** Every creature in a dimension. */
     creatures(dimension: string): Entity[];
+    /** The ids of the kinds that can be made. */
+    kindIds(): string[];
   };
 }
 
@@ -326,6 +328,7 @@ export function createCreatureSystem(rules: GameRules, creatures: CreatureRules,
         }
         return entity;
       },
+      kindIds: () => [...creatures.kinds.keys()],
       creatures(dimension) {
         const state = states.get(dimension);
         if (!state) return [];

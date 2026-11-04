@@ -126,6 +126,7 @@ hash, `creatures`, to `welcome` (protocol 8): creatures are entities, so nothing
 Step 8 (PROGRESSION.md) added `origins` to `hello`, `progress` and `progressEvents` to the owner,
 the `levelUp` combat event, the progression hash in `welcome`, the intents `talentPick`,
 `talentReset` and `learn`, and `debugXp`, `debugLevel` and `debugLearnAll` (protocol 9);
+Chat (CHAT.md) added `chat`, `chatEvent` and `commandList` and `devCommands` in `welcome` (protocol 14);
 `src/sim/protocol.ts` is current.
 
 Client to server:
@@ -218,7 +219,7 @@ node --experimental-strip-types --import ./scripts/server/hook.mjs scripts/serve
 - It loads the packs, builds the world, and steps at 30 Hz, printing a line a second (players, tick
   time, collision chunks and shapes).
 - `--bot` adds a player that walks a circle, so a headless run exercises the body and the streamer;
-  `--ticks N` stops after N steps, for scripted checks; `--seed N` another world. No networking yet.
+  `--dev` turns the developer chat commands on (off by default on a dedicated server); `--ticks N` stops after N steps, for scripted checks; `--seed N` another world. No networking yet.
 - `src/sim` is type-checked with the rest of `src` (which has the DOM's types). A separate
   check without them was planned and left out: without Node's types either, it would need
   hand-written declarations for `performance` and `console`, and the guard already catches what
