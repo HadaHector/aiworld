@@ -61,6 +61,9 @@ export function createSurfaceProbe(world: World, rules: FeedbackRules): SurfaceP
     at(x, y, z) {
       // A floor under a roof: wood (a later pack can say stone by building, when buildings say).
       if (world.buildingAt(x, y + 0.5, z)) return "wood";
+      // Wet ground: a splash in the shallows, a slosh deeper in (WATER.md).
+      const wet = world.waterAt(x, z);
+      if (wet.depth > 0.1 && y < wet.surface + 0.3) return wet.depth > 0.7 ? "waterDeep" : "water";
       const key = `${Math.floor(x)},${Math.floor(z)}`;
       let surface = kept.get(key);
       if (surface === undefined) {

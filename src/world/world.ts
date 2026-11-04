@@ -6,6 +6,7 @@ import { createChunkBuildPool, type ChunkBuildPool } from "./terrain/chunkBuildP
 
 export { createChunkBuildPool };
 import type { TerrainSampler } from "./terrain/terrainSampler";
+import type { WaterSample } from "./water";
 import { createOceanPlane } from "./terrain/ocean";
 import { createMaterialLibrary, type MaterialLibrary } from "./materials/materialLibrary";
 import { createBushScatter, createRockScatter, createTreeCover, createTreeScatter } from "./foliage/treeScatter";
@@ -61,6 +62,8 @@ export interface World {
   settlementLayouts: SettlementLayout[];
   /** The building whose footprint (x, y, z) stands in, with a key unique to that one building. */
   buildingAt: (x: number, y: number, z: number) => { id: string; key: number } | undefined;
+  /** The water surface and depth at a point (WATER.md). */
+  waterAt: (x: number, z: number) => WaterSample;
   materialLibrary: MaterialLibrary;
   trees: TreeField;
   grass: GrassField;
@@ -348,6 +351,7 @@ export async function createWorld(
 
   return {
     buildingAt: data.buildingAt,
+    waterAt: data.waterAt,
     heightAt,
     groundAt,
     sampleTerrain,

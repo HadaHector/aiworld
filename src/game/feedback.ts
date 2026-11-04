@@ -15,6 +15,7 @@ import { createParticleSystem, type ParticleSystem } from "../particles/system";
 import { createParticleRenderer, type ParticleRenderer } from "../particles/render";
 import { whenAudio } from "../audio/context";
 import { createSfx, type Sfx, type Vec3 } from "../audio/sfx";
+import { createUnderwaterLook, type UnderwaterLook } from "./underwater";
 import { createCuePlayer, type Bone, type CueContext, type CuePlayer, type UnitTraits } from "../feedback/cues";
 import type { FeedbackRules } from "../feedback/rules";
 import type { GameRules } from "../sim/rules/gameRules";
@@ -92,6 +93,8 @@ const FOOTSTEP_REACH = 25;
 const AGGRO_AGAIN = 4;
 const DEAD = 1 << FLAG.dead;
 
+/** The page's sound as heard from under water: everything above this goes. */
+const MUFFLED_HZ = 600;
 const BABYLON_FORWARD = new Vector3(0, 0, 1);
 const scratch = new Vector3();
 
@@ -102,6 +105,10 @@ export function createGameFeedback(options: GameFeedbackOptions): GameFeedback {
   const { rules, game, items, kit, mirror } = options;
   const baseUrl = options.baseUrl ?? import.meta.env.BASE_URL;
   let sfx: Sfx | null = null;
+  /** The page's low-pass, closed while the camera is under water. */
+  let muffle: BiquadFilterNode | null = null;
+  /** Whether the camera is under water now. */
+  let underwater = false;
   let volume = options.volume;
   let disposed = false;
   /** What `watchScreens` started, for `dispose` to stop. */
@@ -111,6 +118,8 @@ export function createGameFeedback(options: GameFeedbackOptions): GameFeedback {
     sfx = createSfx(audio.ctx, audio.effects, rules, (sound, file) => `${baseUrl}packs/${sound.file.split("/")[0]}/${file}`);
     sfx.setVolume(volume);
     sfx.prewarm();
+    muffle = audio.muffle;
+    muffle.frequency.value = underwater ? MUFFLED_HZ : 22000;
   });
 
   // What a unit hits with and wears, worked out again only when what it shows changes.
@@ -176,6 +185,8 @@ export function createGameFeedback(options: GameFeedbackOptions): GameFeedback {
   const particles = createParticleSystem(rules);
   let renderer: ParticleRenderer | null = null;
   let surfaces: SurfaceProbe | null = null;
+  let worldNow: World | null = null;
+  let look: UnderwaterLook | null = null;
   let lastFrame = performance.now();
 
   // --- what the client sees happen ---
@@ -185,6 +196,26 @@ export function createGameFeedback(options: GameFeedbackOptions): GameFeedback {
   const footstep = (entity: MirroredEntity): void => {
     const surface = surfaces?.at(entity.x, entity.y, entity.z) ?? "dirt";
     cues.client("footstep", { source: entity.id, target: 0, skill: null, crit: false, periodic: false, values: { surface } });
+  };
+  /** Each body's water last frame: crossing from wading to swimming and back splashes (WATER.md). */
+  const waterSeen = new Map<number, number>();
+  const splash = (entity: MirroredEntity, event: "splashIn" | "splashOut"): void => {
+    cues.client(event, { source: entity.id, target: 0, skill: null, crit: false, periodic: false });
+  };
+  /** The camera crossing the surface: the look, the muffle, the cues - and a gasp for air if the breath ran low. */
+  const breathIndex = game.resourceIndex.get("breath");
+  const cameraWater = (eye: { x: number; y: number; z: number } | null): void => {
+    if (!worldNow || !eye) return;
+    const w = worldNow.waterAt(eye.x, eye.z);
+    const under = w.depth > 0 && eye.y < w.surface && !worldNow.buildingAt(eye.x, eye.y, eye.z);
+    if (under === underwater) return;
+    underwater = under;
+    look?.set(under);
+    muffle?.frequency.setTargetAtTime(under ? MUFFLED_HZ : 22000, muffle.context.currentTime, 0.05);
+    const me = options.player();
+    cues.client(under ? "underwaterOn" : "underwaterOff", { source: me, target: 0, skill: null, crit: false, periodic: false });
+    const breath = breathIndex === undefined ? undefined : mirror.entities.get(me)?.resources.get(breathIndex);
+    if (!under && breath && breath.max > 0 && breath.current < breath.max * 0.5) cues.client("gasp", { source: me, target: 0, skill: null, crit: false, periodic: false });
   };
   const stepAll = (): void => {
     const me = mirror.entities.get(options.player());
@@ -196,6 +227,10 @@ export function createGameFeedback(options: GameFeedbackOptions): GameFeedback {
         stepsSeen.delete(entity.id);
         continue;
       }
+      const swimming = entity.water >= 2 ? 1 : 0;
+      const wasSwimming = waterSeen.get(entity.id);
+      if (wasSwimming !== undefined && wasSwimming !== swimming) splash(entity, swimming ? "splashIn" : "splashOut");
+      waterSeen.set(entity.id, swimming);
       const steps = options.steps(entity.id);
       const seen = stepsSeen.get(entity.id);
       if (!seen) {
@@ -378,8 +413,15 @@ export function createGameFeedback(options: GameFeedbackOptions): GameFeedback {
       for (const handle of glints.values()) handle.stop();
       glints.clear();
       stepsSeen.clear();
+      waterSeen.clear();
       targets.clear();
+      look?.dispose();
+      look = null;
+      underwater = false;
+      muffle?.frequency.setTargetAtTime(22000, muffle.context.currentTime, 0.05);
+      worldNow = world ?? null;
       surfaces = world ? createSurfaceProbe(world, rules) : null;
+      if (scene && world) look = createUnderwaterLook(scene, game.water.look);
       if (scene) renderer = createParticleRenderer(scene, particles, rules);
     },
     update(camera) {
@@ -388,6 +430,7 @@ export function createGameFeedback(options: GameFeedbackOptions): GameFeedback {
       lastFrame = time;
       const eye = camera?.globalPosition ?? null;
       stepAll();
+      cameraWater(eye);
       glintAll();
       aggroAll();
       cues.update();

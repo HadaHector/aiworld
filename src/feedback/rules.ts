@@ -128,6 +128,8 @@ export type Phase = (typeof PHASES)[number];
 /** Events the client sees happen that are not combat events. */
 export const CLIENT_EVENTS = [
   "lootable", "lootOpen", "itemTake", "moneyTake", "itemDrop", "itemPickUp", "equip", "unequip", "use", "target", "footstep", "aggro",
+  // Water (WATER.md): a body going in or out, the camera under the surface, a hard breath.
+  "splashIn", "splashOut", "underwaterOn", "underwaterOff", "gasp",
   // The screens: a window opening or closing, a spell or item lifted, put on the action bar, cleared off it.
   "windowOpen", "windowClose", "barLift", "barPlace", "barClear",
   // Progression (PROGRESSION.md): the game's own client sends these; `levelUp` is a combat event too.

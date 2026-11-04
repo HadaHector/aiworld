@@ -1,0 +1,2 @@
+// A body coming out of the water.
+{ parts: [{ sound: "splash.out", at: "source", bone: "feet" }, { particles: "splash.small", at: "source", bone: "feet" }] }

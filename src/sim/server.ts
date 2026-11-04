@@ -426,6 +426,9 @@ export function createServer(options: ServerOptions): Server {
   const readStanding = (saved: Record<string, number> | undefined): Map<string, number> =>
     new Map(Object.entries(saved ?? {}).filter(([id, v]) => factionDef(rules.factions, id)?.reputation && Number.isFinite(v)).map(([id, v]) => [id, clampStanding(rules.factions, v)]));
 
+  /** Seconds each empty resource that hurts has been empty since its last hurt (entity id * 64 + resource). */
+  const emptyFor = new Map<number, number>();
+
   /** Each loaded dimension's starts, placed in its world (NPCS.md, *The starting site*). */
   const startsOf = new Map<string, ChosenStart[]>();
 
@@ -1348,7 +1351,16 @@ export function createServer(options: ServerOptions): Server {
         if (!block || entity.combat?.dead) continue;
         for (const index of block.has) {
           const share = rules.resources[index].hurtAtEmpty;
-          if (share > 0 && block.current[index] <= 0) skills.hurt(entity, block.max[rules.health] * share * deltaSeconds);
+          if (share <= 0 || block.current[index] > 0) {
+            emptyFor.delete(entity.id * 64 + index);
+            continue;
+          }
+          // Once a second, so the log and the numbers over its head are a line a second, not thirty.
+          const waited = (emptyFor.get(entity.id * 64 + index) ?? 0) + deltaSeconds;
+          if (waited >= 1) {
+            emptyFor.set(entity.id * 64 + index, waited - 1);
+            skills.hurt(entity, block.max[rules.health] * share, rules.resources[index].harmName);
+          } else emptyFor.set(entity.id * 64 + index, waited);
         }
       }
     }

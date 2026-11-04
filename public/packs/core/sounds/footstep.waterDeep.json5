@@ -1,0 +1,8 @@
+// A foot coming down in water up to the thigh: a low slosh.
+{
+  bus: "footsteps", near: 2, far: 22, maxVoices: 6, pitch: [-3, 1], volume: [0.8, 1], takes: 6,
+  layers: [
+    { synth: { noise: "white", filter: { type: "bandpass", hz: [900, 350], q: 0.9 }, env: { attack: 0.02, decay: 0.3 }, gain: 0.65 }, standIn: true },
+    { synth: { tone: "sine", hz: [200, 110], env: { attack: 0.005, decay: 0.12 }, gain: 0.2 }, standIn: true },
+  ],
+}

@@ -1,0 +1,8 @@
+// A hard breath in, on coming up short of air.
+{
+  bus: "combat", near: 4, far: 30, maxVoices: 2, pitch: [-2, 2], volume: [0.75, 0.9], takes: 3,
+  layers: [
+    { synth: { noise: "white", filter: { type: "bandpass", hz: [1400, 2600], q: 1.2 }, env: { attack: 0.12, decay: 0.35 }, gain: 0.5 }, standIn: true },
+    { synth: { tone: "triangle", hz: [380, 520], env: { attack: 0.1, decay: 0.3 }, gain: 0.12 }, standIn: true },
+  ],
+}

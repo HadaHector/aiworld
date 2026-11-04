@@ -1,0 +1,9 @@
+// A body going into water: a heavy splash and the burble after it.
+{
+  bus: "footsteps", near: 3, far: 40, maxVoices: 4, pitch: [-2, 2], volume: [0.85, 1], takes: 3,
+  layers: [
+    { synth: { noise: "white", filter: { type: "bandpass", hz: [1800, 500], q: 0.8 }, env: { attack: 0.01, decay: 0.55 }, gain: 0.75 }, standIn: true },
+    { synth: { tone: "sine", hz: [260, 90], env: { attack: 0.005, decay: 0.25 }, gain: 0.3 }, standIn: true },
+    { synth: { crackle: true, density: 120, click: 0.004, filter: { type: "bandpass", hz: 2500, q: 1 }, env: { attack: 0.1, decay: 0.5 }, gain: 0.25 }, standIn: true },
+  ],
+}

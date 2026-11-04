@@ -1,0 +1,7 @@
+// A body going into water: rings spreading on the surface and spray thrown up.
+{
+  emitters: [
+    { mesh: "ring", blend: "add", burst: 1, life: 0.9, size: [[0, 0.6], [1, 7]], colour: [[0, "#e8f6ffc0"], [1, "#a8d8f000"]] },
+    { sprite: "softDot", blend: "alpha", burst: 24, life: [0.5, 0.9], shape: { sphere: 0.3 }, speed: [2, 5], gravity: 9, drag: 0.5, size: [[0, 0.22], [1, 0.1]], colour: [[0, "#f0faffd0"], [1, "#c8e8f800"]] },
+  ],
+}

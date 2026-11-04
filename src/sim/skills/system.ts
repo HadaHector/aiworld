@@ -25,7 +25,7 @@ export interface SkillSystem {
   setTarget(entity: Entity, target: number): void;
   setAttacking(entity: Entity, on: boolean): void;
   /** Takes health from a unit with no caster and no skill - the world's own harm: drowning (WATER.md), and falls later. */
-  hurt(entity: Entity, amount: number): void;
+  hurt(entity: Entity, amount: number, cause?: string): void;
   /** Kills a unit outright (debug). */
   kill(entity: Entity): void;
   /** Back from the dead with full health. */
@@ -163,7 +163,7 @@ export function createSkillSystem(rules: GameRules, world: SkillWorld): SkillSys
       for (const spell of combat.spells.filter((s) => s.source === source)) if (spell.passive) endMagic(sys, spell.passive, "left");
       combat.spells = combat.spells.filter((s) => s.source !== source);
     },
-    hurt: (entity, amount) => hurt(sys, entity, amount),
+    hurt: (entity, amount, cause) => hurt(sys, entity, amount, cause),
     cast: (entity, skill, target, options) => requestCast(sys, entity, skill, target, options),
     stopCast: (entity) => stopCast(sys, entity),
     setTarget(entity, target) {

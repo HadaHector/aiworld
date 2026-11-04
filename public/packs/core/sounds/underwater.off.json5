@@ -1,0 +1,8 @@
+// Breaking the surface: water pouring off and air again.
+{
+  bus: "ambient", near: 100, far: 200, maxVoices: 2, pitch: 0, volume: [0.7, 0.8], takes: 2,
+  layers: [
+    { synth: { noise: "white", filter: { type: "bandpass", hz: [600, 2200], q: 0.8 }, env: { attack: 0.05, decay: 0.6 }, gain: 0.55 }, standIn: true },
+    { synth: { crackle: true, density: 80, click: 0.003, filter: { type: "highpass", hz: 2500 }, env: { attack: 0.05, decay: 0.5 }, gain: 0.2 }, standIn: true },
+  ],
+}

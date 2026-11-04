@@ -1,0 +1,2 @@
+// A body going into the water (WATER.md): the splash, with spray and rings on the surface.
+{ parts: [{ sound: "splash.in", at: "source", bone: "feet" }, { particles: "splash", at: "source", bone: "feet" }] }

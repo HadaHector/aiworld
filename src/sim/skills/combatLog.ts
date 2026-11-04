@@ -7,7 +7,8 @@ import { COMBAT_EVENT_KINDS, EVENT_FLAG, REASONS, type CombatEvent } from "./eve
  * templates (GAMEPLAY.md, *Interface*). `nameOf` gives a unit's name by id.
  */
 export function describeEvent(rules: GameRules, event: CombatEvent, nameOf: (id: number) => string): string {
-  const source = event.source ? nameOf(event.source) : "Something";
+  // No source and no skill: the world itself (drowning, WATER.md).
+  const source = event.source ? nameOf(event.source) : event.name || "Something";
   const target = event.target ? nameOf(event.target) : "";
   const skill = event.skill >= 0 ? rules.skills[event.skill]?.name ?? `skill ${event.skill}` : "";
   const by = skill ? `${source}'s ${skill}` : source;

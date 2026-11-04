@@ -1,0 +1,2 @@
+// The camera coming up.
+{ parts: [{ sound: "underwater.off" }] }

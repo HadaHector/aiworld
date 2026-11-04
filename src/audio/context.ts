@@ -10,6 +10,8 @@ export interface GameAudio {
   music: AudioNode;
   /** Where the sound effects play into. */
   effects: AudioNode;
+  /** Everything heard goes through this low-pass: wide open in air, closed under water (WATER.md). */
+  muffle: BiquadFilterNode;
 }
 
 /** Made at once; given out only once it runs. */
@@ -26,12 +28,16 @@ function make(): GameAudio {
   limiter.threshold.value = -3;
   limiter.knee.value = 6;
   limiter.ratio.value = 12;
-  limiter.connect(ctx.destination);
+  const muffle = ctx.createBiquadFilter();
+  muffle.type = "lowpass";
+  muffle.frequency.value = 22000;
+  limiter.connect(muffle);
+  muffle.connect(ctx.destination);
   const music = ctx.createGain();
   const effects = ctx.createGain();
   music.connect(limiter);
   effects.connect(limiter);
-  made = { ctx, music, effects };
+  made = { ctx, music, effects, muffle };
   // Running already, or as soon as the browser allows: then everyone waiting gets it.
   ctx.addEventListener("statechange", started);
   started();

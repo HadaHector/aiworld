@@ -9,6 +9,7 @@
   interval: 0,
   // At empty, an eighth of max health a second.
   hurtAtEmpty: 0.12,
+  harmName: "Drowning",
   // Shown only by the bar's own rule: while not full.
   visible: "owner",
   hideWhenFull: true,

@@ -1,0 +1,8 @@
+// The head going under: the world closes over, bubbles rushing up.
+{
+  bus: "ambient", near: 100, far: 200, maxVoices: 2, pitch: 0, volume: [0.7, 0.8], takes: 2,
+  layers: [
+    { synth: { noise: "white", filter: { type: "lowpass", hz: [900, 300] }, env: { attack: 0.02, decay: 0.7 }, gain: 0.6 }, standIn: true },
+    { synth: { crackle: true, density: 140, click: 0.006, filter: { type: "bandpass", hz: [900, 1800], q: 2 }, env: { attack: 0.05, decay: 0.8 }, gain: 0.3 }, standIn: true },
+  ],
+}

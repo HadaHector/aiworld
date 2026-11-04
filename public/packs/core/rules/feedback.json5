@@ -19,6 +19,12 @@
     learned: [{ cue: "learned" }],
     talentPicked: [{ cue: "talentPicked" }],
     // What the client sees happen itself.
+    // Water (WATER.md): a body going in or out, and the camera under the surface.
+    splashIn: [{ cue: "splashIn" }],
+    splashOut: [{ cue: "splashOut" }],
+    underwaterOn: [{ cue: "underwaterOn" }],
+    underwaterOff: [{ cue: "underwaterOff" }],
+    gasp: [{ cue: "gasp" }],
     lootable: [{ cue: "lootGlint" }],
     lootOpen: [{ cue: "lootOpen" }],
     itemTake: [{ rarity: ["rare", "epic", "legendary"], cue: "itemTakeRare" }, { cue: "itemTake" }],

@@ -1,0 +1,2 @@
+// The camera going under the surface: the sound closes over.
+{ parts: [{ sound: "underwater.on" }] }
