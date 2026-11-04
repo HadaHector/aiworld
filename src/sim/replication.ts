@@ -20,6 +20,7 @@ interface Known {
   z: number;
   facing: number;
   grounded: boolean;
+  water: number;
   /** What it was last told of the unit's combat (ABILITIES.md, *Messages*), as short signatures. */
   cast: string;
   auras: string;
@@ -87,6 +88,7 @@ export function createReplicator(rules: GameRules): Replicator {
       z: 0,
       facing: 0,
       grounded: false,
+      water: 0,
       cast: "",
       auras: "",
       flags: 0,
@@ -178,16 +180,17 @@ export function createReplicator(rules: GameRules): Replicator {
         k.modifierVersion = entity.stats.modifierVersion;
         modifiers = { type: "entityModifiers", id: entity.id, modifiers: entity.stats.modifiers.map(({ stat, kind, value, source }) => ({ stat, kind, value, source })) };
       }
-      const moved = !last || own || k.x !== entity.x || k.y !== entity.y || k.z !== entity.z || k.facing !== entity.facing || k.grounded !== entity.grounded;
-      if (moved && last) motion.push({ id: entity.id, x: entity.x, y: entity.y, z: entity.z, facing: entity.facing, grounded: entity.grounded });
+      const moved = !last || own || k.x !== entity.x || k.y !== entity.y || k.z !== entity.z || k.facing !== entity.facing || k.grounded !== entity.grounded || k.water !== entity.water;
+      if (moved && last) motion.push({ id: entity.id, x: entity.x, y: entity.y, z: entity.z, facing: entity.facing, grounded: entity.grounded, ...(entity.water ? { water: entity.water } : {}) });
       k.x = entity.x;
       k.y = entity.y;
       k.z = entity.z;
       k.facing = entity.facing;
       k.grounded = entity.grounded;
+      k.water = entity.water;
     }
     // The own player's motion goes in every snapshot, even on the step it spawns.
-    if (viewer && !motion.some((m) => m.id === viewer.id)) motion.push({ id: viewer.id, x: viewer.x, y: viewer.y, z: viewer.z, facing: viewer.facing, grounded: viewer.grounded });
+    if (viewer && !motion.some((m) => m.id === viewer.id)) motion.push({ id: viewer.id, x: viewer.x, y: viewer.y, z: viewer.z, facing: viewer.facing, grounded: viewer.grounded, ...(viewer.water ? { water: viewer.water } : {}) });
     out.push(...valueMessages);
     if (modifiers) out.push(modifiers);
     // Events the client may see: those whose source or target it has in view, and its own failed casts.

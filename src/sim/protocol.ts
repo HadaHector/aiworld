@@ -10,7 +10,7 @@ import type { CombatEvent } from "./skills/events";
 export type { CombatEvent } from "./skills/events";
 
 /** Bumped whenever a message changes shape. */
-export const PROTOCOL_VERSION = 14;
+export const PROTOCOL_VERSION = 15;
 
 // --- Client to server ------------------------------------------------------------------------
 
@@ -48,6 +48,9 @@ export interface Intent {
   moveZ: number; // f32
   run: boolean;
   jump: boolean;
+  /** Swimming up and down, held (WATER.md). */
+  rise?: boolean;
+  dive?: boolean;
 }
 
 /** Debug: puts the player on the ground at a point (the map, `goto`). */
@@ -721,6 +724,8 @@ export interface EntityMotion {
   /** Radians about y, 0 facing +z. */
   facing: number; // f32 (or u16, quantised)
   grounded: boolean;
+  /** How it stands in water: 0 dry, 1 wading, 2 swimming, 3 under (WATER.md); left out when dry. */
+  water?: number;
 }
 
 /** One stat's final value, by its index in the game rules. */

@@ -73,7 +73,7 @@ export interface CharacterBody extends Feelable {
   meshes: Mesh[];
   /** Moves the body to where the server says the entity is, and animates it - each frame. `dead`:
    *  it falls and lies (ABILITIES.md, *The death animation*). */
-  show: (state: Pick<EntityMotion, "x" | "y" | "z" | "facing" | "grounded"> & { dead?: boolean }) => void;
+  show: (state: Pick<EntityMotion, "x" | "y" | "z" | "facing" | "grounded"> & { water?: number } & { dead?: boolean }) => void;
   /** Plays a melee swing. */
   swing: () => void;
   /** Where one of its bones is in the world now, for effects and sounds on it (FEEDBACK.md): the
@@ -158,7 +158,7 @@ export async function createCharacterBody(scene: Scene, name: string, kit: BodyK
       wasDead = dead;
       // A hit pause stops the pose where it is; the body still goes where the entity is.
       if (now >= pausedUntil) {
-        const { pose, offset, step } = animator.update({ speed, grounded: state.grounded, verticalSpeed: rise, swimming: false, swing: swinging, flinch: flinching, dead, snap }, dt);
+        const { pose, offset, step } = animator.update({ speed, grounded: state.grounded, verticalSpeed: rise, swimming: (state.water ?? 0) >= 2, swing: swinging, flinch: flinching, dead, snap }, dt);
         swinging = false;
         flinching = undefined;
         if (step) steps++;

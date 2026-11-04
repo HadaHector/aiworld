@@ -62,5 +62,10 @@ export function createInput() {
     window.removeEventListener("keyup", onKeyUp);
   }
 
-  return { getMoveAxis, takeJump, running, dispose };
+  /** Space held: swimming up. */
+  const rising = (): boolean => pressed.has(" ");
+  /** X held: diving. */
+  const diving = (): boolean => pressed.has("x");
+
+  return { getMoveAxis, takeJump, running, rising, diving, dispose };
 }

@@ -35,6 +35,8 @@ export interface Entity {
   /** Radians about y, 0 facing +z. */
   facing: number;
   grounded: boolean;
+  /** How it stands in water: 0 dry, 1 wading, 2 swimming, 3 head under (WATER.md). */
+  water: number;
   /** Whether it is fighting - which regen rates apply. Worked out by the skill system each step from
    *  threat and hostile acts (see ABILITIES.md, *Threat*). */
   inCombat: boolean;
@@ -95,6 +97,7 @@ export function createEntity(rules: GameRules, template: TemplateDef, id: number
     z: place.z,
     facing: place.facing,
     grounded: true,
+    water: 0,
     inCombat: false,
   };
   if (template.hasStats) {

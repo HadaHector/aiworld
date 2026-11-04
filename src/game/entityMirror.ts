@@ -17,6 +17,8 @@ export interface MirroredEntity {
   z: number;
   facing: number;
   grounded: boolean;
+  /** How it stands in water: 0 dry, 1 wading, 2 swimming, 3 under (WATER.md). */
+  water: number;
   /** Stat values by index; only those the client may see are set. */
   stats: Map<number, number>;
   /** Resources by index: current and maximum. */
@@ -78,6 +80,7 @@ export function createEntityMirror(rules: GameRules): EntityMirror {
     entity.z = m.z;
     entity.facing = m.facing;
     entity.grounded = m.grounded;
+    entity.water = m.water ?? 0;
   };
   const remove = (id: number): void => {
     const gone = entities.get(id);
@@ -102,6 +105,7 @@ export function createEntityMirror(rules: GameRules): EntityMirror {
           z: message.z,
           facing: message.facing,
           grounded: true,
+          water: 0,
           stats: new Map(message.stats.map((s) => [s.stat, s.value])),
           resources: new Map(message.resources.map((r) => [r.resource, { current: r.current, max: r.max }])),
           modifiers: [],

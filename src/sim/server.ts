@@ -447,6 +447,7 @@ export function createServer(options: ServerOptions): Server {
         (world) => {
           if (slot.dropped) return;
           slot.dimension = createDimension(id, world);
+          slot.dimension.water = rules.water;
           startsOf.set(id, chooseStarts(world.world, definition, problem));
           placeEntities(slot.dimension, definition);
           creatureSystem?.load(slot.dimension, definition, startsOf.get(id)!);
@@ -708,6 +709,7 @@ export function createServer(options: ServerOptions): Server {
     entity.z = feet.z;
     entity.facing = entity.body.facing;
     entity.grounded = grounded;
+    entity.water = entity.body.water;
   }
 
   /** A debug command's target: the sender's own player for 0, else an entity in its dimension. */
@@ -1080,7 +1082,7 @@ export function createServer(options: ServerOptions): Server {
         if (!player) return;
         const length = Math.hypot(message.moveX, message.moveZ);
         const scale = length > 1 ? 1 / length : 1;
-        player.input = { moveX: message.moveX * scale, moveZ: message.moveZ * scale, run: message.run, jump: player.input.jump || message.jump };
+        player.input = { moveX: message.moveX * scale, moveZ: message.moveZ * scale, run: message.run, jump: player.input.jump || message.jump, rise: message.rise === true, dive: message.dive === true };
         player.ackSeq = message.seq;
         return;
       }

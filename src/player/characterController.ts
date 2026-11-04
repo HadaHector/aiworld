@@ -66,6 +66,8 @@ export function createCharacter(scene: Scene, start: { x: number; y: number; z: 
       moveZ: forward.z * axis.y + right.z * axis.x,
       run: input.running(),
       jump: input.takeJump(),
+      rise: input.rising(),
+      dive: input.diving(),
     };
   }
 
