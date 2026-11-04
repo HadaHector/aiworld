@@ -99,6 +99,8 @@ export function createChatWindow(options: ChatWindowOptions): ChatWindow {
   const root = el("div", `width: 100%; box-sizing: border-box; display: flex; flex-direction: column; ${QUIET_PANEL} transition: opacity 0.4s; color: #d8ceb6;`, options.parent);
   const grip = el("div", "height: 5px; flex: none; cursor: ns-resize; margin: -4px 0 1px; border-radius: 3px;", root);
   grip.title = "Drag to resize";
+  // The page's text is not selectable (ui/hud.ts); what was said here is, to copy.
+  root.dataset.selectable = "";
   const tabs = el("div", "display: flex; gap: 2px; flex: none; padding: 0 6px;", root);
   const area = el("div", `flex: none; overflow-y: auto; padding: 3px 8px 4px; white-space: pre-wrap; overflow-wrap: anywhere; height: ${load("chat.height", 120)}px; font: 11px/1.35 "Segoe UI", system-ui, sans-serif;`, root);
   const hint = el("div", `display: none; flex: none; padding: 2px 8px; color: ${DIM}; font-size: 10px; border-top: 1px solid rgba(122, 98, 53, 0.3);`, root);

@@ -59,7 +59,7 @@ export function createHud(): Hud {
   installTheme();
   // Regions take no clicks themselves - only what is in them does.
   const style = document.createElement("style");
-  style.textContent = ".hud-region { position: fixed; pointer-events: none; display: flex; gap: 8px; } .hud-region > * { pointer-events: auto; }";
+  style.textContent = ".hud-region { position: fixed; pointer-events: none; display: flex; gap: 8px; } .hud-region > * { pointer-events: auto; } body, body * { user-select: none; -webkit-user-select: none; } input, textarea, [data-selectable], [data-selectable] * { user-select: text; -webkit-user-select: text; }";
   document.head.appendChild(style);
   const region = (css: string, z = 900): HTMLElement => {
     const e = document.createElement("div");
