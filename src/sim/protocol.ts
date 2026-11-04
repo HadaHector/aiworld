@@ -903,6 +903,8 @@ export interface LootState {
 export interface ItemRefused {
   type: "itemRefused";
   reason: string;
+  /** The item type's id, for a refusal about one item (what it asks for is worked out from it). */
+  item?: string;
 }
 
 /** The item types an entity in view shows on its body (ITEMS.md, *Equipment*): in its spawn's step

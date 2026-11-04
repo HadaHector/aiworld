@@ -44,6 +44,8 @@ export interface ItemWorld {
   delta?: { get(key: string): number | undefined; set(key: string, until: number): void };
   /** The first item id to give: the saved world's next one, so ids stay unique from run to run. */
   firstItemId?: number;
+  /** The ids of the origins an entity has (a player's class, people...): what loot entries that name an origin check. */
+  originsOf?(entity: Entity): string[];
 }
 
 /**
@@ -114,7 +116,7 @@ export function createItemSystem(game: GameRules, items: ItemRules, world: ItemW
     if (looter?.stats) context.set(statValues(looter.stats), game.stats.length);
     loot.items = [];
     loot.money = new Array<number>(items.currencies.length).fill(0);
-    for (const drop of rollLoot(items, def.loot, context, random)) {
+    for (const drop of rollLoot(items, def.loot, context, random, new Set(looter ? (world.originsOf?.(looter) ?? []) : []))) {
       if ("currency" in drop) {
         loot.money[drop.currency] += drop.amount;
         continue;

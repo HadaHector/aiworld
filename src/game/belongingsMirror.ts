@@ -19,7 +19,7 @@ export interface BelongingsMirror {
   readonly bankOpen: boolean;
   readonly loot: OpenLoot | null;
   /** The last thing the server refused, and when (performance.now()). */
-  readonly refused: { reason: string; at: number } | null;
+  readonly refused: { reason: string; at: number; item?: string } | null;
   /** Takes one message; returns whether it was one of the mirror's. */
   apply: (message: ServerMessage) => boolean;
   clear: () => void;
@@ -32,7 +32,7 @@ export function createBelongingsMirror(): BelongingsMirror {
   let wallet: number[] = [];
   let bankOpen = false;
   let loot: OpenLoot | null = null;
-  let refused: { reason: string; at: number } | null = null;
+  let refused: { reason: string; at: number; item?: string } | null = null;
   const listeners = new Set<() => void>();
   const changed = (): true => {
     for (const listener of listeners) listener();
@@ -70,7 +70,7 @@ export function createBelongingsMirror(): BelongingsMirror {
           loot = message.entity ? { entity: message.entity, items: message.items, money: message.money } : null;
           return changed();
         case "itemRefused":
-          refused = { reason: message.reason, at: performance.now() };
+          refused = { reason: message.reason, at: performance.now(), item: message.item };
           return changed();
         default:
           return false;

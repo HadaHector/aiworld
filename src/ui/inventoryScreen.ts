@@ -2,7 +2,8 @@ import { ACTION_DRAG_TYPE, takenByBar } from "./actionBar";
 import { iconFace, iconHtml, itemIcon } from "./icons";
 import { BUTTON_CLASS, DIM, GOLD, HEADING, PANEL, SLOT, SLOT_CLASS, windowHead } from "./theme";
 import type { GameRules } from "../sim/rules/gameRules";
-import { formatMoney, itemStats, rollQuality, type ItemRules } from "../sim/rules/itemRules";
+import { formatMoney, itemStats, rollQuality, type ItemRules, type ItemTypeDef } from "../sim/rules/itemRules";
+import { requirementLines } from "../sim/rules/requirements";
 import type { ClientMessage, ItemState } from "../sim/protocol";
 import type { BelongingsMirror } from "../game/belongingsMirror";
 
@@ -48,11 +49,40 @@ const REFUSAL_TEXT: Record<string, string> = {
   nothing: "Nothing needs doing.",
 };
 
+/** What the server's refusal means, in words: for an item that asks too much, what it asks that the character lacks. */
+export function refusalText(game: GameRules, items: ItemRules, refused: { reason: string; item?: string }): string {
+  const type = refused.item === undefined ? undefined : items.types[items.typeIndex.get(refused.item) ?? -1];
+  if (refused.reason === "requires" && type) {
+    const missing = itemRequirements(game, type).filter((r) => !r.met).map((r) => r.text);
+    return `You cannot wear ${type.name} yet${missing.length > 0 ? `: it needs ${missing.join(" and ")}` : ""}.`;
+  }
+  return REFUSAL_TEXT[refused.reason] ?? refused.reason;
+}
+
 function el(tag: string, css: string, parent?: HTMLElement): HTMLElement {
   const e = document.createElement(tag);
   e.style.cssText = css;
   parent?.appendChild(e);
   return e;
+}
+
+/** What the game knows of the own character that a tooltip shows against an item's requirements (set by the session). */
+export interface TooltipContext {
+  /** A stat of the own character by its id, or undefined. */
+  stat: (id: string) => number | undefined;
+  /** For a book's skill id: who may read it, and whether the own character may now. Null for none. */
+  book: (skill: string) => { text: string; met: boolean } | null;
+}
+let tooltipContext: TooltipContext | null = null;
+export function setTooltipContext(context: TooltipContext | null): void {
+  tooltipContext = context;
+}
+
+/** What an item asks of whoever wears it, line by line, with whether the own character has it. */
+export function itemRequirements(game: GameRules, type: ItemTypeDef): { text: string; met: boolean }[] {
+  if (!type.requires) return [];
+  const names = Object.fromEntries(game.stats.map((s) => [s.id, s.name]));
+  return requirementLines(type.requires.source, { itemLevel: type.itemLevel }, (id) => tooltipContext?.stat(id), names);
 }
 
 /** An item's tooltip: its name in its rarity's colour, what it is, its rolled stats and how well
@@ -81,7 +111,13 @@ export function itemTooltip(game: GameRules, items: ItemRules, state: ItemState,
   if (quality !== null) lines.push(`<span style="color:#9c9">Roll: ${Math.round(quality * 100)}%</span>`);
   if (type.durability > 0) lines.push(`<span style="color:${state.durability === 0 ? "#e55" : "#ccc"}">Durability ${state.durability} / ${type.durability}${state.durability === 0 ? " - broken" : ""}</span>`);
   if (type.itemLevel > 1) lines.push(`<span style="color:#aaa">Item level ${type.itemLevel}</span>`);
-  if (type.use) lines.push(`<span style="color:#6c6">Use: ${type.use.skill}</span>`);
+  if (type.requires) for (const r of itemRequirements(game, type)) lines.push(`<span style="color:${r.met ? "#aaa" : "#ff6a5a"}">Requires ${r.text}</span>`);
+  if (type.use) {
+    const skill = game.skills[game.skillIndex.get(type.use.skill) ?? -1];
+    lines.push(`<span style="color:#6c6">Use: ${skill?.name ?? type.use.skill}</span>`);
+    const book = type.kind === "book" ? tooltipContext?.book(type.use.skill) : null;
+    if (book) lines.push(`<span style="color:${book.met ? "#aaa" : "#ff6a5a"}">Can be learned by: ${book.text}</span>`);
+  }
   if (type.equip) lines.push(`<span style="color:#6c6">Equip: ${type.equip.skill}</span>`);
   if (type.quest) lines.push(`<span style="color:#fd6">Quest item</span>`);
   if (price) lines.push(`<span style="color:#cb8">${price}</span>`);
@@ -242,7 +278,7 @@ export function createInventoryScreen({ game, items, mirror, send }: InventoryOp
     bankBox.style.display = mirror.bankOpen ? "" : "none";
     money.textContent = items.currencies.map((c) => `${c.name}: ${formatMoney(c, mirror.wallet[c.index] ?? 0)}`).join("   ");
     const refused = mirror.refused;
-    message.textContent = refused && performance.now() - refused.at < 4000 ? (REFUSAL_TEXT[refused.reason] ?? refused.reason) : "";
+    message.textContent = refused && performance.now() - refused.at < 4000 ? refusalText(game, items, refused) : "";
   }
   const offChange = mirror.onChange(() => {
     if (root.style.display !== "none") refresh();

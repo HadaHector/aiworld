@@ -46,3 +46,14 @@ export function handleItemMessage(system: ItemSystem, player: Entity, message: C
       return null;
   }
 }
+
+/** The type id of the item a refused equip or move was about - what a client words its reason with. */
+export function refusedItem(system: ItemSystem, player: Entity, message: ClientMessage): { item: string } | Record<string, never> {
+  if (message.type !== "itemEquip" && message.type !== "itemMove") return {};
+  const b = player.belongings;
+  const from = ref(message.from);
+  const list = b ? [b.bag, b.bank, b.equipment][from.container] : undefined;
+  const id = list?.[from.slot];
+  const item = id == null ? undefined : system.ctx.store.get(id);
+  return item ? { item: system.ctx.items.types[item.type].id } : {};
+}

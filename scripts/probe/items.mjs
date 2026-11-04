@@ -4,6 +4,7 @@
 import { ContentError } from "../../src/world/content/contentReader.ts";
 import { loadItemRulesFromDisk, loadRulesFromDisk, packSourcesFromDisk, readConfigFromDisk } from "../diskContent.mjs";
 import { formatMoney, itemStats, resolveItemRules, rollLoot, rollQuality } from "../../src/sim/rules/itemRules.ts";
+import { requirementLines } from "../../src/sim/rules/requirements.ts";
 import { mulberry32 } from "../../src/world/rng.ts";
 import { createEntity } from "../../src/sim/entity.ts";
 import { statValue } from "../../src/sim/stats.ts";
@@ -138,6 +139,10 @@ await section("loot", () => {
   }
   check("money every time", money === N, String(money));
   check("marks every time", marks === N, String(marks));
+  // A class's book drops only for that class (an entry's `origin`).
+  const tomeFor = (origins) => rollLoot(items, "chest", context, mulberry32(7), new Set(origins)).some((d) => "type" in d && items.types[d.type].id === "tomeOfFrostNova");
+  check("the mage's book drops for a mage", tomeFor(["mage"]));
+  check("...and not for a priest or for nobody", !tomeFor(["priest"]) && !tomeFor([]));
   // 2-3 rolls, mean 2.5; wolf pelts weigh 20 of 103.
   const pelts = counts.get("wolfPelt") ?? 0;
   const expected = N * 2.5 * (20 / 103);
@@ -251,6 +256,16 @@ await section("belongings", () => {
   check("a helm with a level requirement goes on at level 1", system.equip(p, B(bagIndex(p, "plateHelm"))) === "");
   const knight = { ...items.types[items.typeIndex.get("plateHelm")] };
   check("requires reads the wearer's level", knight.requires.run(Object.assign(new Float64Array(items.statCount + 1), { [stat("level")]: 0 })) === 0);
+
+  // What an item asks, line by line: an iron sword wants sword skill 10 as well as its level - a
+  // level-10 character with no sword skill lacks exactly that.
+  const iron = items.types[items.typeIndex.get("sword.iron.long.common")];
+  const names = Object.fromEntries(game.stats.map((st) => [st.id, st.name]));
+  const have = { level: 10, swordSkill: 0 };
+  const lines = requirementLines(iron.requires.source, { itemLevel: iron.itemLevel }, (id) => have[id], names);
+  check("an iron sword's requirements: the sword skill is the one missing", lines.length >= 1 && lines.filter((l) => !l.met).length === 1 && lines.find((l) => !l.met).text.includes("10"), JSON.stringify(lines));
+  have.swordSkill = 10;
+  check("...and none missing with it", requirementLines(iron.requires.source, { itemLevel: iron.itemLevel }, (id) => have[id], names).every((l) => l.met));
 
   // Durability: broken gives nothing, repair brings it back.
   const helm = worn(p, "head");

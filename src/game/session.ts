@@ -51,6 +51,10 @@ import { MAX_ZOOM } from "../ui/mapView";
 import { createWorldMap } from "../ui/worldMap";
 import { questColour } from "../sim/quests/quest";
 import { COLOURS } from "../ui/questLog";
+import { bookRequirement } from "../sim/progression/books";
+import { levelGains } from "../sim/progression/levelUp";
+import { REFUSALS } from "../ui/progressPanel";
+import { refusalText, setTooltipContext } from "../ui/inventoryScreen";
 
 /** What lasts the whole page, that a session draws into and plays through (see FRONTEND.md). */
 export interface Page {
@@ -651,6 +655,30 @@ export async function startSession(page: Page, options: SessionOptions): Promise
     feedback.itemIntent(message);
   };
   const inventory = createInventoryScreen({ game: gameRules, items: itemRules, mirror: belongings, send: sendItem });
+  // What tooltips hold an item's requirements and books against: the own character.
+  setTooltipContext({
+    stat: (id) => {
+      const index = gameRules.statIndex.get(id);
+      return index === undefined ? undefined : mirror.entities.get(playerId)?.stats.get(index);
+    },
+    book: (skillId) => {
+      const skill = gameRules.skillIndex.get(skillId);
+      const teaches = skill === undefined ? undefined : gameRules.skills[skill]?.states.flatMap((st) => [...st.enter, ...st.tick, ...st.exit]).find((a) => a.kind === "learn")?.data;
+      const target = (teaches as { skill?: number } | undefined)?.skill;
+      const text = target === undefined ? null : bookRequirement(progressionRules, target);
+      if (!text || target === undefined) return null;
+      const known = progressMirror.progress?.learned.some((l) => l.skill === target) || progressMirror.progress?.available.some((a) => a.skill === target && a.how === "item");
+      return { text, met: !!known };
+    },
+  });
+  // Why an item could not be moved or worn, in the log as well as in the bag.
+  let lastRefused: unknown = null;
+  belongings.onChange(() => {
+    const refused = belongings.refused;
+    if (!refused || refused === lastRefused) return;
+    lastRefused = refused;
+    combatHud.say(refusalText(gameRules, itemRules, refused));
+  });
   const lootWindow = createLootWindow({ game: gameRules, items: itemRules, mirror: belongings, send: sendItem });
   /** A window in the windows region: no taller than it, scrolling inside. */
   function dockWindow(element: HTMLElement): void {
@@ -769,7 +797,24 @@ export async function startSession(page: Page, options: SessionOptions): Promise
   });
   progressMirror.onEvents((events) => {
     const context = { source: playerId, target: playerId, skill: null, crit: false, periodic: false };
+    const skillName = (skill: number): string => gameRules.skills[skill]?.name ?? "a skill";
     for (const e of events) {
+      // In words in the log as well: why something was refused, and what a level gave.
+      if (e.kind === "refused") {
+        const who = e.source === "notYet" && e.skill >= 0 ? bookRequirement(progressionRules, e.skill) : null;
+        combatHud.say(who ? `You cannot learn ${skillName(e.skill)}: it is for ${who}.` : (REFUSALS[e.source] ?? `Refused: ${e.source}`));
+      }
+      if (e.kind === "levelUp" && progressionRules.disciplines[e.discipline]) {
+        const gains = levelGains(gameRules, progressionRules, progressMirror.progress?.origins ?? [], e.discipline, e.level);
+        const parts = [`${progressionRules.disciplines[e.discipline].name} ${e.level} reached.`];
+        if (gains.stats.length > 0) parts.push(gains.stats.map((g) => `${g.stat} ${g.amount > 0 ? "+" : ""}${g.amount}`).join(", ") + ".");
+        const learned = events.filter((x) => x.kind === "learned").map((x) => skillName(x.skill));
+        if (learned.length > 0) parts.push(`Learned: ${learned.join(", ")}.`);
+        const waiting = events.filter((x) => x.kind === "unlocked" && x.level === e.level && x.discipline === e.discipline).map((x) => `${skillName(x.skill)} (${x.source === "item" ? "a book" : x.source === "trainer" ? "a trainer" : x.source})`);
+        if (waiting.length > 0) parts.push(`Can now be learned from: ${waiting.join(", ")}.`);
+        if (gains.points > 0) parts.push(`${gains.points} talent point${gains.points === 1 ? "" : "s"} to spend.`);
+        combatHud.say(parts.join(" "));
+      }
       const discipline = progressionRules.disciplines[e.discipline];
       if (e.kind === "xp" && e.discipline === progressionRules.config.level) floatingText?.say(playerId, `+${Math.round(e.amount)} XP`, "#c9a8ff");
       if (e.kind === "levelUp" && discipline) {

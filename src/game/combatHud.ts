@@ -17,6 +17,8 @@ export interface CombatHud {
   update: (target: number) => void;
   /** Adds the events of a step to the log. */
   log: (events: readonly CombatEvent[]) => void;
+  /** Adds a line of plain words to the log: a level gained, why something was refused. */
+  say: (line: string) => void;
   /** Where the action bar goes (ui/actionBar.ts): between the cast bar and the XP bar. */
   readonly barSlot: HTMLElement;
   dispose: () => void;
@@ -202,6 +204,12 @@ export function createCombatHud(options: CombatHudOptions): CombatHud {
       if (logLines.length > LOG_LINES) logLines.splice(0, logLines.length - LOG_LINES);
       text(logBox, logLines.join("\n") || "Combat log");
       // A short log (the HUD caps its height on small screens) shows the newest lines.
+      logBox.scrollTop = logBox.scrollHeight;
+    },
+    say(line) {
+      logLines.push(line);
+      if (logLines.length > LOG_LINES) logLines.splice(0, logLines.length - LOG_LINES);
+      text(logBox, logLines.join("\n"));
       logBox.scrollTop = logBox.scrollHeight;
     },
     dispose() {

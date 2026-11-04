@@ -40,7 +40,7 @@ export interface ProgressPanelOptions {
 /** A small button's own spacing; its look is the theme's (every button here gets its class). */
 const BUTTON = "margin-left: 4px; padding: 2px 6px; font-size: 10px;";
 
-const REFUSALS: Record<string, string> = {
+export const REFUSALS: Record<string, string> = {
   known: "You already know that.",
   notYet: "You cannot learn that yet.",
   cannot: "That cannot be learned.",

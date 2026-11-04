@@ -104,6 +104,8 @@ export interface LootEntry {
   weight: number;
   /** A formula of `source.<stat>` and `looter.<stat>`: left out when 0. */
   when: CompiledFormula | null;
+  /** Origin ids (`mage`): left out unless the looter has one - a class's book drops only for that class. Null for any. */
+  origin: string[] | null;
   count: [number, number];
   what: LootWhat;
 }
@@ -713,7 +715,7 @@ function readLootTable(entry: Entry, reader: Reader, ctx: LootContext): LootTabl
   reader.onlyKeys(obj, "", ["rolls", "pick", "always"]);
   const read = (value: unknown, path: string): LootEntry => {
     const raw = reader.object(value, path);
-    reader.onlyKeys(raw, path, ["weight", "when", "count", "item", "table", "template", "rarity", "where", "money", "currency"]);
+    reader.onlyKeys(raw, path, ["weight", "when", "origin", "count", "item", "table", "template", "rarity", "where", "money", "currency"]);
     const named = ["item", "table", "template", "money"].filter((k) => raw[k] !== undefined);
     if (named.length > 1) reader.fail(path, `an entry is one of item, table, template or money, not ${named.join(" and ")}`);
     let what: LootWhat = { kind: "nothing" };
@@ -750,6 +752,7 @@ function readLootTable(entry: Entry, reader: Reader, ctx: LootContext): LootTabl
     return {
       weight: reader.optionalNumber(raw, "weight", path, 1, { min: 0 }),
       when: raw.when === undefined ? null : compileFormula(raw.when, `${path}.when`, reader, ctx.lootNames),
+      origin: raw.origin === undefined ? null : typeof raw.origin === "string" ? [raw.origin] : reader.stringList(raw, "origin", path),
       count: readCount(raw, "count", path, reader, 1),
       what,
     };
@@ -836,9 +839,9 @@ const MAX_LOOT_DEPTH = 16;
 /**
  * Rolls a loot table (see ITEMS.md, *Loot*): its `always` entries, then `rolls` picks by weight
  * among the `pick` entries whose `when` holds. `context` holds `source.<stat>` then `looter.<stat>`
- * (twice the stat count); `random` is the loot's own stream, so the same seed gives the same drop.
+ * (twice the stat count); `origins` are the looter's origin ids, for entries that name some; `random` is the loot's own stream, so the same seed gives the same drop.
  */
-export function rollLoot(rules: ItemRules, table: string, context: ArrayLike<number>, random: () => number, depth = 0): LootDrop[] {
+export function rollLoot(rules: ItemRules, table: string, context: ArrayLike<number>, random: () => number, origins: ReadonlySet<string> = new Set(), depth = 0): LootDrop[] {
   const def = rules.lootTables.get(table);
   if (!def || depth > MAX_LOOT_DEPTH) return [];
   const out: LootDrop[] = [];
@@ -852,14 +855,14 @@ export function rollLoot(rules: ItemRules, table: string, context: ArrayLike<num
     }
     const count = between(entry.count);
     if (what.kind === "table") {
-      for (let n = 0; n < count; n++) out.push(...rollLoot(rules, what.table, context, random, depth + 1));
+      for (let n = 0; n < count; n++) out.push(...rollLoot(rules, what.table, context, random, origins, depth + 1));
     } else if (what.kind === "item") {
       if (count > 0) out.push({ type: what.type, count });
     } else if (what.kind === "types" && what.types.length > 0) {
       if (count > 0) out.push({ type: what.types[Math.floor(random() * what.types.length)], count });
     }
   };
-  const holds = (entry: LootEntry): boolean => !entry.when || entry.when.run(context) !== 0;
+  const holds = (entry: LootEntry): boolean => (!entry.when || entry.when.run(context) !== 0) && (!entry.origin || entry.origin.some((o) => origins.has(o)));
   for (const entry of def.always) if (holds(entry)) give(entry);
   const choices = def.pick.filter((e) => e.weight > 0 && holds(e));
   const total = choices.reduce((sum, e) => sum + e.weight, 0);

@@ -14,7 +14,7 @@ import { Layers } from "../world/collision/shapes";
 import type { ItemRules } from "./rules/itemRules";
 import { createItemSystem, type ItemSystem } from "./items/itemSystem";
 import { createItemReplicator, type ItemReplicator } from "./items/itemReplication";
-import { handleItemMessage } from "./items/itemMessages";
+import { handleItemMessage, refusedItem } from "./items/itemMessages";
 import type { ItemHooks } from "./items/itemHooks";
 import type { CreatureRules } from "./rules/creatureRules";
 import { createCreatureSystem, type CreatureSystem, type KillRecord } from "./creatures/system";
@@ -329,6 +329,7 @@ export function createServer(options: ServerOptions): Server {
           },
           delta,
           firstItemId: world?.nextItemId,
+          originsOf: (entity) => (progression ? [...(entity.progress?.origins.values() ?? [])].map((i) => progression.rules.origins[i]?.id ?? "") : []),
         },
         progression ? progression.itemHooks(options.itemHooks ?? skills.items) : (options.itemHooks ?? skills.items),
       )
@@ -897,7 +898,7 @@ export function createServer(options: ServerOptions): Server {
     if (message.type.startsWith("item") || message.type.startsWith("loot") || message.type === "debugItem" || message.type === "debugWear") {
       if (!itemSystem || !player || !body) return;
       const why = handleItemMessage(itemSystem, player.entity, message);
-      if (why) connection.end.send({ type: "itemRefused", reason: why });
+      if (why) connection.end.send({ type: "itemRefused", reason: why, ...(why === "requires" ? refusedItem(itemSystem, player.entity, message) : {}) });
       return;
     }
     switch (message.type) {
