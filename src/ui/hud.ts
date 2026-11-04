@@ -144,10 +144,15 @@ export function createHud(): Hud {
     if (logBox) logBox.style.maxHeight = `${Math.round(vh * (logBeside ? 0.3 : 0.18))}px`;
     // Windows and the debug panel keep clear of the bottom row, the frames and each other.
     const bottomRow = Math.max(actions.offsetHeight, menu.offsetHeight, logBeside ? log.offsetHeight : 0) + EDGE + GAP;
-    const top = Math.max(info.offsetHeight, frames.offsetHeight) + EDGE + GAP;
+    // Windows stand to the left of the info column (minimap, zone, quest tracker), never under it, so
+    // they keep the whole height down to the bottom row.
+    const top = frames.offsetHeight + EDGE + GAP;
+    const infoWidth = info.offsetHeight > 0 ? info.offsetWidth + GAP : 0;
     windows.style.top = `${top}px`;
+    windows.style.right = `${EDGE + infoWidth}px`;
     windows.style.height = `${Math.max(120, vh - top - bottomRow)}px`;
-    const room = vw - 2 * EDGE - (debugVisible ? debugRoot.offsetWidth + GAP : 0);
+    const talkOpen = [...talk.children].some((c) => c instanceof HTMLElement && c.style.display !== "none");
+    const room = vw - 2 * EDGE - infoWidth - (talkOpen ? talk.offsetWidth + GAP : 0) - (debugVisible ? debugRoot.offsetWidth + GAP : 0);
     windows.style.maxWidth = `${Math.max(0, room)}px`;
     const open = [...windows.children].filter((c): c is HTMLElement => c instanceof HTMLElement && c.style.display !== "none");
     openOrder = [...openOrder.filter((w) => open.includes(w)), ...open.filter((w) => !openOrder.includes(w))];
