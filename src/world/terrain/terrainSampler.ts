@@ -238,11 +238,15 @@ export function createTerrainSampler(seed: number, content: WorldContent): Terra
     const feature = featureField?.apply(worldX, worldZ, landHeightNatural);
     const landHeight = feature ? feature.height : landHeightNatural;
 
-    // Roads are graded into the terrain rather than laid on top of it, so this is the last thing
-    // to touch the land height: a road cuts through a boundary hill and fills a dip, and it should
-    // win over both. It is deliberately above the ocean blend below, so a road can never raise the
-    // seabed - a road running into water simply disappears under it.
-    let gradedHeight = landHeight;
+    // The land blended into the seabed toward the coast. Roads are graded after this blend, from
+    // the ground as it then lies - the ground the roads were routed over and bridged against: a
+    // road cut through a coastal hill was pulled down by the blend after the cut, below the water
+    // (WATER.md, *Roads*). A road over the water is bridged (bridges.ts), which grades nothing.
+    const oceanNoise = oceanNoise2D(worldX * OCEAN_FLOOR_NOISE_FREQUENCY, worldZ * OCEAN_FLOOR_NOISE_FREQUENCY) * OCEAN_FLOOR_NOISE_SCALE;
+    const oceanFloorHeight = SEA_LEVEL + OCEAN_FLOOR_DEPTH + oceanNoise;
+    const landBlend = smoothstep(-1, 1, area.landmass);
+    const blendedHeight = lerp(oceanFloorHeight, landHeight, landBlend);
+    let height = blendedHeight;
     let roadGap = Infinity;
     let roadMiddle = 0;
     if (roadField) {
@@ -253,22 +257,18 @@ export function createTerrainSampler(seed: number, content: WorldContent): Terra
         // The shoulder is as wide as it has to be to get from the road's level back to the
         // ground's at ROAD_SIDE_SLOPE, so its gradient is the constant and its width follows.
         // A fixed width would be a wall wherever the cut or fill happened to be deep.
-        const drop = Math.abs(landHeight - road.height);
+        const drop = Math.abs(blendedHeight - road.height);
         const shoulder = Math.min(ROAD_SHOULDER_MAX, Math.max(ROAD_SHOULDER_MIN, drop / ROAD_SIDE_SLOPE));
         const blend = (1 - smoothstep(ROAD_HALF_WIDTH, ROAD_HALF_WIDTH + shoulder, road.distance)) * road.taper;
-        gradedHeight = lerp(landHeight, road.height, blend);
+        height = lerp(blendedHeight, road.height, blend);
         // Its cross-section on top: a crown, ditches, a track worn down into the ground.
         if (road.profile) {
-          gradedHeight += roadProfileOffset(road.profile, road.distance) * road.taper * road.profileWeight;
+          height += roadProfileOffset(road.profile, road.distance) * road.taper * road.profileWeight;
           roadMiddle = roadMiddleShare(road.profile, road.distance) * road.profileWeight;
         }
       }
     }
 
-    const oceanNoise = oceanNoise2D(worldX * OCEAN_FLOOR_NOISE_FREQUENCY, worldZ * OCEAN_FLOOR_NOISE_FREQUENCY) * OCEAN_FLOOR_NOISE_SCALE;
-    const oceanFloorHeight = SEA_LEVEL + OCEAN_FLOOR_DEPTH + oceanNoise;
-    const landBlend = smoothstep(-1, 1, area.landmass);
-    let height = lerp(oceanFloorHeight, gradedHeight, landBlend);
 
     // House plots and squares: brought to their own level, returning to the ground's over a margin
     // as wide as PAD_SIDE_SLOPE needs (like a road shoulder), and painted as trodden earth - the
