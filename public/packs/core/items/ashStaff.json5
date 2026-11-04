@@ -1,0 +1,2 @@
+// A mage's first weapon (the class's `items.start`): a walking staff of ash.
+{ name: "Ash Staff", icon: "weapon-sword-wooden", kind: "weapon", rarity: "common", slot: "mainHand", gear: ["staff"], stats: { weaponMin: [1, 2], weaponMax: [3, 4], intellect: [0, 1] }, durability: 45, value: 25 }

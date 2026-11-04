@@ -94,7 +94,7 @@ function face(self: Entity, other: Entity): void {
 }
 
 /** Into combat: where the pull started, and the group comes too. */
-function startCombat(world: BrainWorld, self: Entity, brain: Brain): void {
+function startCombat(world: BrainWorld, self: Entity, brain: Brain, pulling = true): void {
   brain.state = "combat";
   brain.pulledAt = { x: self.x, z: self.z };
   brain.closest = Infinity;
@@ -103,11 +103,14 @@ function startCombat(world: BrainWorld, self: Entity, brain: Brain): void {
   brain.fled = false;
   brain.goal = null;
   const foes = [...(self.combat?.threat?.keys() ?? [])];
-  for (const mate of world.groupOf(self)) {
+  // Only mates near the one pulled come (rules `social`), not a whole spread-out camp: a pull that
+  // starts at one of them brings its neighbours; the mates brought do not call their own.
+  for (const mate of pulling ? world.groupOf(self) : []) {
+    if (Math.hypot(mate.x - self.x, mate.z - self.z) > world.creatures.config.social) continue;
     const part = mate.creature!;
     if (part.brain.state === "combat" || part.brain.state === "evade" || part.brain.state === "flee") continue;
     for (const id of foes) addThreat(world.skills.sys, mate, world.entity(id), AGGRO_THREAT);
-    startCombat(world, mate, part.brain);
+    startCombat(world, mate, part.brain, false);
   }
 }
 

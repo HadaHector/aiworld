@@ -15,4 +15,5 @@
     ],
   },
   trees: ["warriorArms"],
+  items: { start: [{ item: "sword.bronze.short.common" }] },
 }

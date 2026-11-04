@@ -348,6 +348,9 @@ await section("server", async () => {
   check("a class's resources only", a.resources.has.includes(t.rules.resourceIndex.get("rage")) && !a.resources.has.includes(t.rules.resourceIndex.get("mana")));
   check("a class's kit only", a.combat.spells.some((s) => s.skill === t.rules.skillIndex.get("charge")) && !a.combat.spells.some((s) => s.skill === t.rules.skillIndex.get("fireball")));
   check("people's starting discipline", lvl(b, "mining") === 5);
+  // A class starts with its own weapon in hand (its origin's `items.start`).
+  const held = (e) => { const it = t.server.debug.items; const id = e.belongings.equipment[it.ctx.items.slotIndex.get("mainHand")]; return id == null ? "" : it.ctx.items.types[it.ctx.store.get(id).type].id; };
+  check("a warrior starts with a sword, a mage with a staff", held(a) === "sword.bronze.short.common" && held(b) === "ashStaff", `${held(a)} / ${held(b)}`);
 
   // A wolf both fought, killed: full XP to each (credit `all`), Classic's amount for a level-1 wolf.
   const S = t.server.debug.creatures.debug;
@@ -393,6 +396,10 @@ await section("server", async () => {
   setBase(dummy.stats, t.rules.statIndex.get("xpValue"), 1);
   dummy.resources.current[t.rules.health] = 1;
   dummy.combat.threat.set(b.id, { amount: 5, last: t.server.time });
+  // b is a mage, with a staff: a sword in hand for the sword skill below.
+  const itemsSys = t.server.debug.items;
+  itemsSys.give(b, itemsSys.ctx.items.typeIndex.get("sword.bronze.short.common"), 1);
+  itemsSys.equip(b, { container: 0, slot: b.belongings.bag.findIndex((id) => id != null && itemsSys.ctx.items.types[itemsSys.ctx.store.get(id).type].id === "sword.bronze.short.common") });
   const before = xp(b);
   t.clients[1].send({ type: "target", id: dummy.id });
   t.clients[1].send({ type: "attack", on: true });

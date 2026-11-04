@@ -229,7 +229,7 @@ const SOURCE_KEYS = ["on", "amount", "when", "rate", "credit", "tags", "notTags"
 const UNLOCK_KEYS = ["at", "from", "to", "every", "skill", "level", "how", "cost", "modifiers", "points", "resource", "disciplines", "knows"];
 const TREE_KEYS = ["name", "points", "discipline", "tiers", "nodes"];
 const NODE_KEYS = ["name", "tier", "ranks", "cost", "requires", "modifiers", "skill", "resource", "points"];
-export const ORIGIN_KEYS = ["slot", "name", "description", "look", "stats", "modifiers", "resources", "spells", "disciplines", "unlocks", "trees", "only", "never"];
+export const ORIGIN_KEYS = ["slot", "name", "description", "look", "stats", "modifiers", "resources", "spells", "disciplines", "unlocks", "trees", "only", "never", "items"];
 /** The highest level any discipline may have: levels are sent as u16. */
 const LEVEL_LIMIT = 1000;
 
@@ -385,6 +385,11 @@ function originTemplate(game: GameRules, id: string, player: RawObject, origins:
     });
     // An origin's modifiers sit under the template's source: the entity's standing modifiers.
     const own: RawObject = { stats, resources, spells, modifiers: list("modifiers") };
+    // What an origin starts with, in the bag, after what the template does (a class's weapon).
+    if (isObject(raw.items) && Array.isArray(raw.items.start)) {
+      const items = isObject(obj.items) ? obj.items : {};
+      own.items = { ...items, start: [...(Array.isArray(items.start) ? items.start : []), ...raw.items.start] };
+    }
     if (raw.look !== undefined) own.look = raw.look;
     obj = mergeTemplate(obj, own);
   }
@@ -713,7 +718,7 @@ function readOrigin(entry: Entry & { template: string }, index: number, ctx: Rea
     return [tree];
   });
   const raw: RawObject = {};
-  for (const key of ["look", "stats", "modifiers", "resources", "spells"]) if (obj[key] !== undefined) raw[key] = obj[key];
+  for (const key of ["look", "stats", "modifiers", "resources", "spells", "items"]) if (obj[key] !== undefined) raw[key] = obj[key];
   return {
     id: entry.id,
     index,

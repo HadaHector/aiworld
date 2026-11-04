@@ -318,6 +318,20 @@ await section("brain", async () => {
   t.server.debug.skills.apply(fireball, me, pack[0]);
   await t.pump(70);
   check("pulling one pulls its group", pack.length >= 2 && pack.every((e) => state(e) === "combat"), pack.map(state).join());
+
+  // A mate that stands further from the one pulled than group aggro carries (rules `social`) stays out of it.
+  const other = S.points("mainland", 0, 0, 1500).find((p) => !p.camp && p.members.length >= 2 && p.key !== near.key);
+  if (other) {
+    t.send({ type: "teleport", x: other.x + 60, z: other.z });
+    await t.pump(30);
+    const pair = t.creaturesNow().filter((e) => e.creature.point?.key === other.key && !e.combat.dead);
+    const aside = pair[pair.length - 1];
+    aside.x = pair[0].x + t.kinds.config.social + 8;
+    aside.z = pair[0].z;
+    t.server.debug.skills.apply(fireball, me, pair[0]);
+    await t.pump(70);
+    check("...but not one further off than `social`", pair.length >= 2 && state(pair[0]) === "combat" && state(aside) !== "combat", pair.map(state).join());
+  }
 });
 
 // --- the hunting bot: a client that finds, fights and loots creatures from messages alone ---

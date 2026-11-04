@@ -1,7 +1,7 @@
 // A bandit camp (see CREATURES.md, *Camps*): one group - pull one and the camp comes.
 {
   habitat: { meadow: 1, bluebellWood: 1, autumnWood: 1, sageHills: 1, maquis: 1, savanna: 1, heatherMoor: 1, redBush: 1, desert: 1 },
-  radius: 12,
+  radius: 22,       // wide enough that the members stand in twos and threes (`social` in rules/creatures.json5 is how far a pull carries)
   members: [
     { kind: "bandit.thug", count: [2, 3] },
     { kind: "bandit.hexer", count: [1, 2] },

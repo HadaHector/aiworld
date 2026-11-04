@@ -21,7 +21,7 @@ interface Entry {
 type Part = RawObject & { id: string };
 
 const DISCIPLINE_TEMPLATE_KEYS = ["axes", "only", "never", "name", "stat", "start", "cap", "next", "overflow", "rate", "xp", "unlocks", "visible", "group", "order", "vars"];
-const ORIGIN_TEMPLATE_KEYS = ["axes", "only", "never", "keep", "abilities", "tree", "unlocksOn", "slot", "name", "look", "stats", "modifiers", "resources", "spells", "disciplines", "unlocks", "trees"];
+const ORIGIN_TEMPLATE_KEYS = ["axes", "only", "never", "keep", "abilities", "tree", "unlocksOn", "slot", "name", "look", "stats", "modifiers", "resources", "spells", "disciplines", "unlocks", "trees", "items"];
 
 /**
  * Expands `disciplineTemplates/` and `originTemplates/` into disciplines, origins and their talent
@@ -178,7 +178,7 @@ function fill(value: unknown, parts: Record<string, Part>): unknown {
   return value;
 }
 
-const ORIGIN_FIELDS = ["look", "stats", "modifiers", "resources", "spells", "disciplines", "unlocks", "trees"];
+const ORIGIN_FIELDS = ["look", "stats", "modifiers", "resources", "spells", "disciplines", "unlocks", "trees", "items"];
 
 /** An origin from a template's own fields with each part's merged over them: stats add, lists add
  *  (a resource or a spell once), `look`, `disciplines` and `unlocks` merge. */
@@ -190,12 +190,14 @@ function makeOrigin(template: RawObject, parts: Record<string, Part>, reader: Re
   let look: RawObject = {};
   const disciplines: Record<string, number> = {};
   const unlocks: Record<string, unknown[]> = {};
+  const start: unknown[] = [];
   for (const layer of layers) {
     for (const k of Object.keys(layer)) {
       if (layer !== template && !["id", "name", ...ORIGIN_FIELDS].includes(k)) reader.fail(`axes`, `a part's "${k}" is not an origin field (expected one of: id, name, ${ORIGIN_FIELDS.join(", ")})`);
     }
     if (isObject(layer.stats)) for (const [k, v] of Object.entries(layer.stats)) stats[k] = (stats[k] ?? 0) + (typeof v === "number" ? v : 0);
     for (const k of Object.keys(lists)) if (Array.isArray(layer[k])) lists[k].push(...(layer[k] as unknown[]));
+    if (isObject(layer.items) && Array.isArray(layer.items.start)) start.push(...layer.items.start);
     if (isObject(layer.look)) look = { ...look, ...layer.look };
     if (isObject(layer.disciplines)) for (const [k, v] of Object.entries(layer.disciplines)) disciplines[k] = Math.max(disciplines[k] ?? 0, typeof v === "number" ? v : 0);
     if (isObject(layer.unlocks)) for (const [k, v] of Object.entries(layer.unlocks)) if (Array.isArray(v)) unlocks[k] = [...(unlocks[k] ?? []), ...v];
@@ -219,6 +221,7 @@ function makeOrigin(template: RawObject, parts: Record<string, Part>, reader: Re
     trees: once(lists.trees),
   });
   if (Object.keys(look).length > 0) own.look = look;
+  if (start.length > 0) own.items = { start };
   return fill(own, parts) as RawObject;
 }
 

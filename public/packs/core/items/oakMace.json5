@@ -1,0 +1,2 @@
+// A priest's first weapon (the class's `items.start`): a plain oak mace.
+{ name: "Oak Mace", icon: "weapon-mace-jade", kind: "weapon", rarity: "common", slot: "mainHand", gear: ["mace"], stats: { weaponMin: [2, 3], weaponMax: [4, 6], spirit: [0, 1] }, durability: 45, value: 25 }

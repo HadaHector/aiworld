@@ -94,6 +94,9 @@ export interface CreatureConfig {
   leash: number;
   /** Seconds a chase may make no progress before the creature evades. */
   stuck: number;
+  /** Group aggro (a pulled creature brings its group-mates) reaches only mates this near it, metres: a
+   *  spread-out camp can be pulled a member or two at a time. */
+  social: number;
   /** The aggro radius: a formula of `caster.*` (the creature) and `target.*` (the player). */
   aggro: CompiledFormula;
   /** The skill an evading creature is given (it ends it on arriving home). */
@@ -435,7 +438,7 @@ function readConfig(entry: Entry | undefined, game: GameRules, names: ReadonlyMa
   const obj = entry ? reader.object(entry.data, "") : {};
   reader.onlyKeys(obj, "", [
     "rosterSize", "campsPerZone", "spacing", "emptyChance", "campChance", "groups", "maxSlope", "safeRadius", "activeRadius", "releaseRadius",
-    "releaseAfter", "corpse", "leash", "stuck", "aggro", "evadeSkill", "levels", "never",
+    "releaseAfter", "corpse", "leash", "stuck", "social", "aggro", "evadeSkill", "levels", "never",
   ]);
   const range = (key: string, fallback: [number, number]): [number, number] =>
     obj[key] === undefined ? fallback : typeof obj[key] === "number" ? [obj[key] as number, obj[key] as number] : reader.range(obj, key, "", { allowEqual: true });
@@ -470,6 +473,7 @@ function readConfig(entry: Entry | undefined, game: GameRules, names: ReadonlyMa
     corpse: { time: reader.optionalNumber(corpse, "time", "corpse", 120, { min: 0 }), emptied: reader.optionalNumber(corpse, "emptied", "corpse", 30, { min: 0 }) },
     leash: reader.optionalNumber(obj, "leash", "", 60, { min: 1 }),
     stuck: reader.optionalNumber(obj, "stuck", "", 4, { min: 0.5 }),
+    social: reader.optionalNumber(obj, "social", "", 12, { min: 0 }),
     aggro: compileFormula(obj.aggro ?? { clamp: [{ add: [20, { sub: ["caster.level", "target.level"] }] }, 5, 45] }, "aggro", reader, names),
     evadeSkill: evadeSkill ?? 0,
     levels: {

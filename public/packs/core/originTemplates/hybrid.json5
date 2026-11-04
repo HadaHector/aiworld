@@ -9,8 +9,8 @@
   spells: [{ skill: "autoAttack" }],
   axes: {
     role: [
-      { id: "blade", name: "Blade", resources: ["rage"], spells: [{ skill: "heroicStrike" }], stats: { strength: 3 } },
-      { id: "warden", name: "Warden", resources: ["mana"], spells: [{ skill: "shield" }], stats: { stamina: 3 } },
+      { id: "blade", name: "Blade", items: { start: [{ item: "sword.bronze.short.common" }] }, resources: ["rage"], spells: [{ skill: "heroicStrike" }], stats: { strength: 3 } },
+      { id: "warden", name: "Warden", items: { start: [{ item: "oakMace" }] }, resources: ["mana"], spells: [{ skill: "shield" }], stats: { stamina: 3 } },
     ],
     school: [
       { id: "flame", name: "Flame", resources: ["mana"], spells: [{ skill: "fireball" }], stats: { intellect: 2 } },

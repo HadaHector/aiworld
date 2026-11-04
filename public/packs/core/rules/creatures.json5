@@ -14,6 +14,7 @@
   releaseAfter: 30,
   corpse: { time: 120, emptied: 30 },
   leash: 60,
+  social: 12,                      // group aggro reaches group-mates this near the one pulled: a camp spread wider than this is pulled in parts
   stuck: 4,
   // Classic: about 20 m, a metre more per level the creature is above the player, 5-45 m.
   aggro: { clamp: [{ add: [20, { sub: ["caster.level", "target.level"] }] }, 5, 45] },
