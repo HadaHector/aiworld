@@ -1,12 +1,12 @@
 import { Matrix, Vector3, type Scene } from "@babylonjs/core";
 import type { EntityMirror, MirroredEntity } from "./entityMirror";
 import { PLAYER_TEMPLATE, type GameRules } from "../sim/rules/gameRules";
-import { FLAG } from "../sim/skills/flags";
+import { ENEMY_RANGE, isAlive } from "./enemies";
 
 /**
- * Health bars floating over the units a player fights (CREATURES.md): every living hostile or
- * neutral unit in view near enough to matter, red for hostile and yellow for neutral as their names
- * on the target frame are, the selected one outlined, and a red glow round the bar of every unit
+ * Health bars floating over the units a player fights (CREATURES.md): every living hostile unit in
+ * view within Tab's range (enemies.ts), and a neutral one that is the target or has turned on the
+ * player; red for hostile and yellow for neutral as their names on the target frame are, the selected one outlined, and a red glow round the bar of every unit
  * attacking the player (the one it targets is the player). Drawn as DOM over the canvas, as the floating
  * combat numbers are, from the health the mirror has.
  */
@@ -16,8 +16,6 @@ export interface HealthBars {
   dispose: () => void;
 }
 
-/** Units farther than this have no bar. */
-const RANGE = 50;
 /** The bar's size in CSS pixels, and how far over a unit's head it floats. */
 const WIDTH = 64;
 const HEIGHT = 7;
@@ -53,12 +51,15 @@ export function createHealthBars(scene: Scene, mirror: EntityMirror, rules: Game
   }
 
   /** Whether a unit gets a bar: an enemy's - not a player's, a chest's or the dead's. */
-  function shows(entity: MirroredEntity, own: MirroredEntity | undefined): boolean {
+  function shows(entity: MirroredEntity, own: MirroredEntity | undefined, targetId: number): boolean {
     if (entity.id === ownId() || entity.templateId === PLAYER_TEMPLATE) return false;
     const hostility = entity.template?.hostility;
     if (hostility !== "hostile" && hostility !== "neutral") return false;
-    if ((entity.flags & (1 << FLAG.dead)) !== 0 || !entity.resources.has(rules.health)) return false;
-    return !own || Math.hypot(entity.x - own.x, entity.z - own.z) <= RANGE;
+    if (!isAlive(entity) || !entity.resources.has(rules.health)) return false;
+    // The range Tab uses (enemies.ts). A neutral unit is not Tab's: it has a bar only while it is
+    // the target or has turned on the player.
+    if (hostility === "neutral" && entity.id !== targetId && entity.target !== ownId()) return false;
+    return !own || Math.hypot(entity.x - own.x, entity.z - own.z) <= ENEMY_RANGE;
   }
 
   return {
@@ -73,7 +74,7 @@ export function createHealthBars(scene: Scene, mirror: EntityMirror, rules: Game
       const own = mirror.entities.get(ownId());
       const seen = new Set<number>();
       for (const entity of mirror.entities.values()) {
-        if (!camera || !shows(entity, own)) continue;
+        if (!camera || !shows(entity, own, targetId)) continue;
         at.set(entity.x, entity.y + (entity.template?.look.height ?? 1.8) + OVER_HEAD, entity.z);
         Vector3.ProjectToRef(at, Matrix.IdentityReadOnly, scene.getTransformMatrix(), camera.viewport.toGlobal(width, height), onScreen);
         if (onScreen.z < 0 || onScreen.z > 1) continue;
