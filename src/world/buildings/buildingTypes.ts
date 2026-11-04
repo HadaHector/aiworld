@@ -627,6 +627,11 @@ export interface BuildingPartDef {
   light: WindowLight | null;
 }
 
+/** The least a cellar is floor to ceiling, metres, whatever a building's `cellarHeight` says: the
+ *  player (1.8 m, at the 2x scale of everything else) and the camera over its head must fit
+ *  (INTERIORS.md, free ceiling heights). */
+export const MIN_CELLAR_HEIGHT = 3.4;
+
 export interface BuildingDef {
   id: string;
   name: string;

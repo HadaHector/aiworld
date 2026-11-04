@@ -476,3 +476,9 @@ Each leaves the game working: dev server, `npm run probe`, `npm run server`, `np
   loots them, the delta shows their times; bandits (with bodies), a spider and the neutral boar's
   yellow frame; the spawn points on the map. Headless in the full world: `--hunt` killed 12
   creatures in six and a half minutes (spiders, wolves, boars), looting most.
+
+## Playthrough fixes: pulling a camp in parts
+
+Group aggro reaches only group-mates within `social` metres (`rules/creatures.json5`, 12 by default) of
+the creature pulled; a mate brought in does not call its own neighbours. The bandit camp's radius is
+22 m, so its members stand in twos and threes and a player can pull one or two.

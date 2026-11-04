@@ -1,5 +1,6 @@
 import { createTerrainSampler } from "./terrain/terrainSampler";
 import { generateBuilding } from "./buildings/buildingGenerator";
+import { MIN_CELLAR_HEIGHT } from "./buildings/buildingTypes";
 import { generateProp } from "./props/propGenerator";
 import { settleWallRuns, wallStretches } from "./features/compound";
 import { planRoadFences } from "./roads/roadFences";
@@ -125,7 +126,10 @@ export function createWorldData(
       const dz = z - house.z;
       const along = dx * house.frontX + dz * house.frontZ;
       const across = -dx * house.frontZ + dz * house.frontX;
-      if (Math.abs(along) <= house.depth / 2 && Math.abs(across) <= house.width / 2 && y > house.y - 1 && y < house.y + 12) return { id: house.building.id, key };
+      // Its cellars count: the building reaches down as far as they are dug.
+      const spec = house.building.house;
+      const below = spec ? spec.cellars[1] * Math.max(MIN_CELLAR_HEIGHT, spec.cellarHeight[1]) + 1 : 1;
+      if (Math.abs(along) <= house.depth / 2 && Math.abs(across) <= house.width / 2 && y > house.y - below && y < house.y + 12) return { id: house.building.id, key };
     }
     return undefined;
   };

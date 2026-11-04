@@ -490,3 +490,15 @@ Each leaves the game working: dev server, `npm run probe`, `npm run server`, `np
   strongbox; equipping bracers, a helm and swords changes the stats and the body (a greatsword
   fades the off hand); bread eats; a dropped item lies as a box and E picks it up; tooltips show
   the rolled stats and the roll's quality.
+
+## Playthrough fixes
+
+- **Requirements are shown**: a type's `requires` formula is read clause by clause
+  (`sim/rules/requirements.ts`); the tooltip lists each as "Requires ...", red when the character
+  lacks it, and a refused equip says what is missing in the bag and the log. (A level 8 sword
+  that would not go on was an iron sword: it asks for sword skill 10 as well as the level.)
+- **Books** show who can read them ("Can be learned by: Mage, class level 3"); a refused reading
+  says so in the log. A loot entry may name an `origin` (`origin: "mage"`): it drops only for a
+  looter with that origin - the Frost Nova tome only for a mage.
+- **Starting weapons** come from the class: an origin's `items: { start: [...] }` adds to the
+  character's (warrior: bronze shortsword, priest: oak mace, mage: ash staff; generated classes by role).

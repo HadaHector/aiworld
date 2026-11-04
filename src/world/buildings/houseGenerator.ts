@@ -1,4 +1,5 @@
 import type { BuildingModel, HouseSpec, Level, Paint, StoreyKind, WallSide, ModelLight, WindowLight } from "./buildingTypes";
+import { MIN_CELLAR_HEIGHT } from "./buildingTypes";
 import { FOUNDATION_DEPTH, ModelBuilder, pick, roll, rollInt, type Vec3 } from "./buildingGeometry";
 import { buildPorch, planPorch } from "./porch";
 import { buildBeam, buildFraming, buildRoof, buildSupport, buildTerrace, buildWallPart, isDoor, LEAF_UV, partSpan, pickPart, planFraming, planRoof, type FramingCorner, type FramingWall, type PartExtent, type PartPaints, type WallSlot } from "./buildingParts";
@@ -120,7 +121,7 @@ export function buildHouse(spec: HouseSpec, rng: () => number, far = false, meas
   const inside = (i: number, j: number): boolean => blocks.some((k) => inRect(k, i, j));
   const cellars = rollInt(spec.cellars, rng);
   const upperHeight = spec.upperHeight ? roll(spec.upperHeight, rng) : wallHeight;
-  const cellarHeight = roll(spec.cellarHeight, rng);
+  const cellarHeight = Math.max(MIN_CELLAR_HEIGHT, roll(spec.cellarHeight, rng));
   const levels: Storey[] = [];
   for (let k = cellars; k >= 1; k--) {
     const top = plinth - (k - 1) * cellarHeight;

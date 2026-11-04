@@ -27,7 +27,7 @@
     cellars: [1, 1],
     wallHeight: [4.2, 4.6],
     upperHeight: [3.8, 4.2],
-    cellarHeight: [2.6, 3.0],
+    cellarHeight: [3.6, 4.0],
     plinth: [0.4, 0.6],
     plinthOutset: 0.6,
     jetty: { out: 0.6, walls: ["front"] },

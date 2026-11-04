@@ -127,3 +127,9 @@ nave) and the town hall (a hall over the arcade).
 - Per-cell style overrides.
 - Rooms that are not boxes.
 - Outside cellar doors.
+
+## Cellar height
+
+A cellar is never lower than `MIN_CELLAR_HEIGHT` (3.4 m, buildingTypes.ts) floor to ceiling, whatever
+a building's `cellarHeight` says; the inn digs 3.6-4.0. `buildingAt` reaches down as far as the
+cellars are dug, so the building's music (the inn's tavern) plays in its cellar too.

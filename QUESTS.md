@@ -631,3 +631,22 @@ After NPCS.md's five steps. Each leaves the game working: the dev server (`?play
 - More languages.
 - A player map that fills in, and the markers on it.
 - A dev page: the quest viewer (GAMEPLAY.md's *Later* list).
+
+## Playthrough fixes (first milestone)
+
+From the first full playthrough:
+
+- **Items given with a quest** are the quest's `gives` list, not an objective: a `receive` part from
+  the quest's own giver (the letter, the salve) no longer makes an objective that completes the
+  moment it is shown. Other `receive` parts (from a different NPC) stay objectives. Taking a quest
+  that gives with a full bag is refused whole (`bagFull`, "Your bag is full."): nothing is taken,
+  nothing lost. Handing in with no room for the reward is refused too, and the quest items that
+  were taken back are returned. A quest left with no objective is ready to hand in at once.
+- **Markers**: an in-progress quest whose open objective is finished by talking to an NPC (talk,
+  receive from them, deliver to them with the item held) shows the yellow `?` over that NPC from the
+  start; grey stays for quests that only end there.
+- **Quest level**: a quest that sends no one to fight (no kill, loot or use objective) has its
+  ring's lowest level (the zone band's start), not the middle of the band.
+- **Gathering** spreads over four times the place's radius (at most 200 m), so the objects are not
+  passed on the road.
+- **Reward choice** shows each item as an icon with the item tooltip.
