@@ -54,12 +54,12 @@ export function syncMaxima(block: ResourceBlock, stats: StatBlock): void {
 }
 
 /** One step of regen and decay for every resource, in or out of combat. */
-export function stepResourceBlock(block: ResourceBlock, stats: StatBlock, inCombat: boolean, deltaSeconds: number): void {
+export function stepResourceBlock(block: ResourceBlock, stats: StatBlock, inCombat: boolean, deltaSeconds: number, submerged = false): void {
   syncMaxima(block, stats);
   const values = statValues(stats);
   for (const index of block.has) {
     const def = block.rules.resources[index];
-    const rate = (inCombat ? def.regenInCombat : def.regenOutOfCombat).run(values);
+    const rate = (submerged && def.regenSubmerged ? def.regenSubmerged : inCombat ? def.regenInCombat : def.regenOutOfCombat).run(values);
     let change = 0;
     if (def.interval === 0) change = rate * deltaSeconds;
     else {

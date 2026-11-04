@@ -63,6 +63,10 @@ export interface ResourceDef {
   /** Per second, negative for decay - formulas of the entity's stats. */
   regenOutOfCombat: CompiledFormula;
   regenInCombat: CompiledFormula;
+  /** Per second while the head is under water, over either of the above (WATER.md): breath drains. Null: the usual. */
+  regenSubmerged: CompiledFormula | null;
+  /** At 0, this share of the entity's max health is lost each second (drowning); 0 for none. */
+  hurtAtEmpty: number;
   /** Seconds between regen ticks; 0 for every step. */
   interval: number;
   visible: Visibility;
@@ -276,12 +280,12 @@ export function resolveGameRules(packs: PackSource[]): GameRules {
   const resources: ResourceDef[] = resourceEntries.map((entry, index) => {
     const reader = new Reader(issues, entry.file);
     const obj = reader.object(entry.data, "");
-    reader.onlyKeys(obj, "", ["name", "max", "start", "onMaxChange", "regen", "interval", "visible"]);
+    reader.onlyKeys(obj, "", ["name", "max", "start", "onMaxChange", "regen", "interval", "visible", "hurtAtEmpty"]);
     const maxId = reader.string(obj, "max", "");
     const max = statIndex.get(maxId);
     if (maxId && max === undefined) reader.fail("max", `no stat "${maxId}" (known: ${[...statIndex.keys()].join(", ")})`);
     const regen = obj.regen === undefined ? {} : reader.object(obj.regen, "regen");
-    reader.onlyKeys(regen, "regen", ["outOfCombat", "inCombat"]);
+    reader.onlyKeys(regen, "regen", ["outOfCombat", "inCombat", "submerged"]);
     return {
       id: entry.id,
       index,
@@ -291,6 +295,8 @@ export function resolveGameRules(packs: PackSource[]): GameRules {
       onMaxChange: obj.onMaxChange === undefined ? "keep" : reader.oneOf(obj, "onMaxChange", "", ["keep", "scale"] as const),
       regenOutOfCombat: compileFormula(regen.outOfCombat ?? 0, "regen.outOfCombat", reader, statIndex),
       regenInCombat: compileFormula(regen.inCombat ?? 0, "regen.inCombat", reader, statIndex),
+      regenSubmerged: regen.submerged === undefined ? null : compileFormula(regen.submerged, "regen.submerged", reader, statIndex),
+      hurtAtEmpty: reader.optionalNumber(obj, "hurtAtEmpty", "", 0, { min: 0 }),
       interval: reader.optionalNumber(obj, "interval", "", 0, { min: 0 }),
       visible: obj.visible === undefined ? "all" : reader.oneOf(obj, "visible", "", VISIBILITIES),
     };

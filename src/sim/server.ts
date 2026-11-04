@@ -1340,7 +1340,18 @@ export function createServer(options: ServerOptions): Server {
       }
     }
     itemSystem?.step(loaded.values());
-    for (const dimension of loaded.values()) stepResources(dimension.entities.values(), deltaSeconds);
+    for (const dimension of loaded.values()) {
+      stepResources(dimension.entities.values(), deltaSeconds);
+      // A resource run out can hurt: breath at 0 is drowning (WATER.md).
+      for (const entity of dimension.entities.values()) {
+        const block = entity.resources;
+        if (!block || entity.combat?.dead) continue;
+        for (const index of block.has) {
+          const share = rules.resources[index].hurtAtEmpty;
+          if (share > 0 && block.current[index] <= 0) skills.hurt(entity, block.max[rules.health] * share * deltaSeconds);
+        }
+      }
+    }
     tick++;
     // What each client is told: the entities around its player, then where they have moved to.
     for (const connection of connections) {

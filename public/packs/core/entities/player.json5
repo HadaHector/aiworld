@@ -2,7 +2,7 @@
 // whole test kit. With progression, players are made from their origins over `character` instead.
 {
   extends: "character",
-  resources: ["health", "mana", "rage"],
+  resources: ["health", "mana", "rage", "breath"],
   // The test kit (see ABILITIES.md, *The test*): keys 1-9 cast the active ones in this order.
   spells: [
     { skill: "autoAttack" },

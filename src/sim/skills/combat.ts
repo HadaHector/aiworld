@@ -166,6 +166,20 @@ export function dealDamage(sys: Sys, magic: Magic, target: Entity, base: number,
   if (target.resources.current[health] <= 0 && target.template.mortal && !combat.dead) die(sys, target, source, skill);
 }
 
+/** Harm from the world itself: health down by `amount`, an event with no source and no skill (a
+ *  periodic hit), and death at 0. Absorbs, rolls and threat do not apply (WATER.md, drowning). */
+export function hurt(sys: Sys, target: Entity, amount: number): void {
+  const combat = target.combat;
+  if (!combat || combat.dead || !target.resources || amount <= 0) return;
+  if (hasFlag(combat.flags, FLAG.immune)) return;
+  const health = sys.rules.health;
+  const before = target.resources.current[health];
+  restore(target.resources, health, -amount);
+  const dealt = before - target.resources.current[health];
+  emit(sys, "hit", { source: 0, target: target.id, skill: -1, amount: dealt, flags: EVENT_FLAG.periodic, at: target });
+  if (target.resources.current[health] <= 0 && target.template.mortal) die(sys, target, undefined, null);
+}
+
 /** Healing from a magic's caster: rolled for a crit, never misses; threat split over every table
  *  the healed unit is on. */
 export function heal(sys: Sys, magic: Magic, target: Entity, base: number, options: HitOptions): void {

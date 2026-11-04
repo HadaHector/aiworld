@@ -112,7 +112,7 @@ export function createEntity(rules: GameRules, template: TemplateDef, id: number
 export function stepResources(entities: Iterable<Entity>, deltaSeconds: number): void {
   for (const entity of entities) {
     if (entity.combat?.dead) continue;
-    if (entity.stats && entity.resources) stepResourceBlock(entity.resources, entity.stats, entity.inCombat, deltaSeconds);
+    if (entity.stats && entity.resources) stepResourceBlock(entity.resources, entity.stats, entity.inCombat, deltaSeconds, entity.water >= 3);
   }
 }
 

@@ -5,7 +5,7 @@
   abstract: true,
   name: "Adventurer",
   stats: { level: 1, strength: 10, agility: 10, stamina: 12, intellect: 10, spirit: 8 },
-  resources: ["health"],
+  resources: ["health", "breath"],
   spells: [{ skill: "autoAttack" }],
   hostility: "friendly",
   faction: "players",

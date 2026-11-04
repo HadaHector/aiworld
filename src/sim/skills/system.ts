@@ -2,7 +2,7 @@ import type { Entity } from "../entity";
 import type { GameRules } from "../rules/gameRules";
 import "./runs";
 import { castingHooks, expireLockouts, faceUnit, fireQueued, interrupt, requestCast, stopCast, unitMoved, type CastOptions, type CastResult } from "./casting";
-import { die, revive } from "./combat";
+import { die, hurt, revive } from "./combat";
 import type { CombatEvent, Reason } from "./events";
 import { endMagic, signal, startMagic, stepMagic } from "./magic";
 import type { Magic, SkillWorld, Spell, Sys } from "./types";
@@ -24,6 +24,8 @@ export interface SkillSystem {
   stopCast(entity: Entity): void;
   setTarget(entity: Entity, target: number): void;
   setAttacking(entity: Entity, on: boolean): void;
+  /** Takes health from a unit with no caster and no skill - the world's own harm: drowning (WATER.md), and falls later. */
+  hurt(entity: Entity, amount: number): void;
   /** Kills a unit outright (debug). */
   kill(entity: Entity): void;
   /** Back from the dead with full health. */
@@ -161,6 +163,7 @@ export function createSkillSystem(rules: GameRules, world: SkillWorld): SkillSys
       for (const spell of combat.spells.filter((s) => s.source === source)) if (spell.passive) endMagic(sys, spell.passive, "left");
       combat.spells = combat.spells.filter((s) => s.source !== source);
     },
+    hurt: (entity, amount) => hurt(sys, entity, amount),
     cast: (entity, skill, target, options) => requestCast(sys, entity, skill, target, options),
     stopCast: (entity) => stopCast(sys, entity),
     setTarget(entity, target) {

@@ -1,0 +1,14 @@
+// Air in the lungs (WATER.md): drains while the head is under water, fills again in the open, and at
+// nothing hurts - a share of max health a second. Add it to a template's `resources` to have it.
+{
+  name: "Breath",
+  max: "maxBreath",
+  start: 1,
+  // Per second: 1 a second under water; about a fifth of the lungs a second in air.
+  regen: { outOfCombat: { mul: ["maxBreath", 0.25] }, inCombat: { mul: ["maxBreath", 0.25] }, submerged: -1 },
+  interval: 0,
+  // At empty, an eighth of max health a second.
+  hurtAtEmpty: 0.12,
+  // Shown only by the bar's own rule: while not full.
+  visible: "owner",
+}

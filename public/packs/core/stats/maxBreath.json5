@@ -1,0 +1,8 @@
+// How long a body holds its breath, in seconds under water (WATER.md); stamina adds a little.
+{
+  name: "Max breath",
+  formula: { add: [24, { mul: ["stamina", 0.5] }] },
+  min: 1,
+  round: "floor",
+  visible: "owner",
+}
