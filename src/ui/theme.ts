@@ -56,6 +56,7 @@ export const BAR_COLOURS: Record<string, string> = {
   mana: "#2f5fd0",
   rage: "#b8291f",
   energy: "#d8b020",
+  breath: "#4ab0d8",
   cast: "#d79a28",
   xp: "#7a48d0",
 };

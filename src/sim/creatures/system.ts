@@ -261,7 +261,18 @@ export function createCreatureSystem(rules: GameRules, creatures: CreatureRules,
         const input = part.input;
         const still = input.moveX === 0 && input.moveZ === 0 && !entity.body.pushed && entity.grounded;
         if (!still) {
+          const before = entity.body.motor.state.feet;
+          const there = { x: before.x, y: before.y, z: before.z };
           entity.body.step(deltaSeconds, input, speed);
+          // Land creatures stop at the shore: deep water is a wall (WATER.md), unless its kind swims.
+          const deep = state.dimension.water ? state.dimension.water.swimDepth - 0.3 : Infinity;
+          if (!part.kind.swims && !entity.body.pushed) {
+            const now = entity.body.motor.state.feet;
+            const w = state.dimension.world.waterAt(now.x, now.z);
+            const was = state.dimension.world.waterAt(there.x, there.z);
+            // Only entering is stopped: one already in (knocked in, say) may swim out.
+            if (w.surface - now.y > deep && w.depth > deep && !(was.surface - there.y > deep && was.depth > deep)) entity.body.teleportTo(there);
+          }
           const facing = entity.body.facing;
           follow(entity);
           entity.facing = facing;

@@ -45,6 +45,8 @@ export interface CreatureKind {
   keepRange: number;
   /** How far from home it wanders. */
   wander: number;
+  /** It may go into deep water (WATER.md); the rest stop at the shore. */
+  swims: boolean;
   /** This world's traits, by id. */
   traits: string[];
   template: TemplateDef;
@@ -139,7 +141,7 @@ const byId = (a: { id: string }, b: { id: string }): number => (a.id < b.id ? -1
 
 const SPECIES_KEYS = [
   "entity", "name", "family", "hostility", "faction", "stats", "perLevel", "modifiers", "spells", "tactics", "speed", "group", "habitat", "roster",
-  "levelOffset", "respawn", "aggro", "flee", "keepRange", "wander", "loot", "look", "variants", "traits",
+  "levelOffset", "respawn", "aggro", "flee", "keepRange", "wander", "loot", "look", "variants", "traits", "swims",
 ];
 const VARIANT_KEYS = ["id", "name", "habitat", "stats", "perLevel", "modifiers", "spells", "tactics", "look", "never", "levelOffset", "speed", "flee", "keepRange", "aggro"];
 const TRAIT_KEYS = ["name", "stats", "modifiers", "spells", "tactics", "speed"];
@@ -428,6 +430,7 @@ function makeKind(
     flee,
     keepRange: pick("keepRange", (obj, path) => reader.number(obj, "keepRange", path, { min: 0 }), 0),
     wander: reader.optionalNumber(species, "wander", "", 8, { min: 0 }),
+    swims: reader.boolean(species, "swims", "", false),
     traits: traits.map((t) => t.id),
     template,
   };

@@ -67,6 +67,8 @@ export interface ResourceDef {
   regenSubmerged: CompiledFormula | null;
   /** At 0, this share of the entity's max health is lost each second (drowning); 0 for none. */
   hurtAtEmpty: number;
+  /** Its bar is drawn only while it is not full (breath). */
+  hideWhenFull: boolean;
   /** Seconds between regen ticks; 0 for every step. */
   interval: number;
   visible: Visibility;
@@ -280,7 +282,7 @@ export function resolveGameRules(packs: PackSource[]): GameRules {
   const resources: ResourceDef[] = resourceEntries.map((entry, index) => {
     const reader = new Reader(issues, entry.file);
     const obj = reader.object(entry.data, "");
-    reader.onlyKeys(obj, "", ["name", "max", "start", "onMaxChange", "regen", "interval", "visible", "hurtAtEmpty"]);
+    reader.onlyKeys(obj, "", ["name", "max", "start", "onMaxChange", "regen", "interval", "visible", "hurtAtEmpty", "hideWhenFull"]);
     const maxId = reader.string(obj, "max", "");
     const max = statIndex.get(maxId);
     if (maxId && max === undefined) reader.fail("max", `no stat "${maxId}" (known: ${[...statIndex.keys()].join(", ")})`);
@@ -297,6 +299,7 @@ export function resolveGameRules(packs: PackSource[]): GameRules {
       regenInCombat: compileFormula(regen.inCombat ?? 0, "regen.inCombat", reader, statIndex),
       regenSubmerged: regen.submerged === undefined ? null : compileFormula(regen.submerged, "regen.submerged", reader, statIndex),
       hurtAtEmpty: reader.optionalNumber(obj, "hurtAtEmpty", "", 0, { min: 0 }),
+      hideWhenFull: reader.boolean(obj, "hideWhenFull", "", false),
       interval: reader.optionalNumber(obj, "interval", "", 0, { min: 0 }),
       visible: obj.visible === undefined ? "all" : reader.oneOf(obj, "visible", "", VISIBILITIES),
     };

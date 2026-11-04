@@ -11,4 +11,5 @@
   hurtAtEmpty: 0.12,
   // Shown only by the bar's own rule: while not full.
   visible: "owner",
+  hideWhenFull: true,
 }

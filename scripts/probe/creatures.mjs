@@ -243,7 +243,9 @@ await section("brain", async () => {
       const x = Math.sin(a) * r;
       const z = Math.cos(a) * r;
       const g = t.dim().world.sampleTerrain(x, z);
-      if (g.isLand && g.height > 1 && g.roadGap > 20 && pts.every((p) => Math.hypot(p.x - x, p.z - z) > 70)) spot = { x, z };
+      const far = t.dim().world.sampleTerrain(x + 90, z + 40);
+      // (The far point is where the leash test sends the player: dry, as the wolf is stopped at a shore.)
+      if (g.isLand && g.height > 1 && g.roadGap > 20 && far.height > 1 && pts.every((p) => Math.hypot(p.x - x, p.z - z) > 70)) spot = { x, z };
     }
   }
   check("an empty spot for the brain's tests", !!spot);

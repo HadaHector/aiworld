@@ -117,7 +117,7 @@ export function createCombatHud(options: CombatHudOptions): CombatHud {
     const rows: string[] = [];
     for (const [index, value] of entity.resources) {
       const def = rules.resources[index];
-      if (!def || value.max <= 0) continue;
+      if (!def || value.max <= 0 || (def.hideWhenFull && value.current >= value.max)) continue;
       rows.push(`${def.id}:${Math.round(value.current)}/${Math.round(value.max)}`);
     }
     const signature = rows.join("|");
@@ -126,7 +126,7 @@ export function createCombatHud(options: CombatHudOptions): CombatHud {
     frame.bars.innerHTML = "";
     for (const [index, value] of entity.resources) {
       const def = rules.resources[index];
-      if (!def || value.max <= 0) continue;
+      if (!def || value.max <= 0 || (def.hideWhenFull && value.current >= value.max)) continue;
       const row = el("div", `${BAR_TRACK} height: 15px; margin: 3px 0;`, frame.bars);
       el("div", `${barFill(barColour(def.id))} width: ${(100 * value.current) / value.max}%;`, row);
       el("div", `${BAR_TEXT} font-size: 10px; line-height: 15px;`, row).textContent = `${def.name} ${Math.round(value.current)} / ${Math.round(value.max)}`;
