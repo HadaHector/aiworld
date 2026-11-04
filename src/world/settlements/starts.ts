@@ -7,7 +7,17 @@ export interface StartWorld {
   settlements: readonly SettlementSite[];
   settlementLayouts: readonly SettlementLayout[];
   worldExtent: number;
+  /** For keeping a start on dry ground; left out (a test world), a start stays where its anchor puts it. */
+  sampleTerrain?: (x: number, z: number) => { height: number; riverGap: number };
+  buildingAt?: (x: number, y: number, z: number) => unknown;
 }
+
+/** Ground at least this high above the waterline is dry enough to start on. */
+const DRY_HEIGHT = 0.8;
+/** Clear of a river's centreline by this much. */
+const RIVER_CLEARANCE = 3;
+const SEARCH_STEP = 2;
+const SEARCH_RADIUS = 60;
 
 /** A start once the world is generated: where a new character appears, its first home, and the
  *  entities that stand there. */
@@ -41,6 +51,30 @@ function matches(rule: StartRule, site: SettlementSite, layout: SettlementLayout
   if (kept.has("biomes") && biomes && ("only" in biomes ? !biomes.only.includes(site.biome.id) : biomes.except.includes(site.biome.id))) return false;
   if (kept.has("centre") && rule.centre !== null && Math.hypot(site.x, site.z) > rule.centre * half) return false;
   return true;
+}
+
+/** Whether a person can stand at a point: above the water, off a river, outside any building. */
+function standable(world: StartWorld, x: number, z: number): boolean {
+  if (!world.sampleTerrain) return true;
+  const t = world.sampleTerrain(x, z);
+  if (!(t.height >= DRY_HEIGHT) || t.riverGap < RIVER_CLEARANCE) return false;
+  return !world.buildingAt?.(x, t.height + 0.5, z);
+}
+
+/** The point if it is standable, else the nearest standable one in rings around it (the ring
+ *  search is deterministic, so server and page agree); the point itself if nothing is. */
+function standingPoint(world: StartWorld, at: { x: number; z: number }): { x: number; z: number } {
+  if (standable(world, at.x, at.z)) return at;
+  for (let r = SEARCH_STEP; r <= SEARCH_RADIUS; r += SEARCH_STEP) {
+    const n = Math.max(8, Math.round((2 * Math.PI * r) / SEARCH_STEP));
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2;
+      const x = at.x + Math.cos(a) * r;
+      const z = at.z + Math.sin(a) * r;
+      if (standable(world, x, z)) return { x, z };
+    }
+  }
+  return at;
 }
 
 /** Where an anchor is in a settlement, or null when the settlement has no such thing. */
@@ -122,7 +156,8 @@ export function chooseStarts(world: StartWorld, definition: DimensionDef, warn: 
     if (def.rule && !picked) warn(`${definition.id}: no settlement for the start "${def.id}"; it is at the dimension's spawn`);
     else if (picked && picked.relaxed.length > 0) warn(`${definition.id}: the start "${def.id}" dropped ${picked.relaxed.join(", ")} to find a settlement (${picked.site.name})`);
     const layout = picked?.layout ?? null;
-    const arrive = spotPoint(def.arrive, layout, definition.spawn);
+    const arrive = standingPoint(world, spotPoint(def.arrive, layout, definition.spawn));
+    const home = standingPoint(world, spotPoint(def.home, layout, arrive));
     return {
       id: def.id,
       for: def.for,
@@ -130,7 +165,7 @@ export function chooseStarts(world: StartWorld, definition: DimensionDef, warn: 
       name: picked?.site.name ?? definition.name,
       ...arrive,
       facing: facingOf(def.facing, arrive, layout),
-      home: spotPoint(def.home, layout, arrive),
+      home,
       entities: def.entities.map((e) => {
         const at = spotPoint(e.spot, layout, arrive);
         return { template: e.template, ...at, facing: facingOf(e.facing, at, layout) };

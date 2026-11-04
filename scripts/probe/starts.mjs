@@ -66,6 +66,10 @@ for (const [config, seeds] of configs) {
       if (world.settlementLayouts.length > 0) check(`${tag}: a settlement chosen`, layout !== undefined, JSON.stringify(start));
       if (!layout) continue;
       check(`${tag}: arrives inside it`, Math.hypot(start.x - layout.x, start.z - layout.z) <= layout.radius, `${start.x},${start.z}`);
+      for (const [what, p] of [["arrives", start], ["home", start.home]]) {
+        const t = world.sampleTerrain(p.x, p.z);
+        check(`${tag}: ${what} on dry land`, t.height >= 0.8 && t.riverGap >= 3 && !world.buildingAt(p.x, t.height + 0.5, p.z), `height ${t.height.toFixed(2)} river ${t.riverGap.toFixed(1)}`);
+      }
       check(`${tag}: home inside it`, Math.hypot(start.home.x - layout.x, start.home.z - layout.z) <= layout.radius);
       check(`${tag}: what stands there is near`, start.entities.every((e) => Math.hypot(e.x - layout.x, e.z - layout.z) <= layout.radius + 10), JSON.stringify(start.entities));
       // What the rule asked, unless it said it dropped it.
