@@ -7,4 +7,6 @@
   stand: [{ at: "door" }],
   questGiver: 0.5,
   barks: "farmer",
+  // At its work while it stands at its place (animations/gather.json5).
+  idle: "gather",
 }

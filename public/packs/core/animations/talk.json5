@@ -2,12 +2,10 @@
 // forward and z out from the body; forearm x bends the elbow, shin -x the knee; spine, chest and
 // head x lean forward, y turn to the body's right. `drop` lowers the body by a share of its leg.
 // Talking: the hands making loose gestures in front of the body, the head nodding and turning a
-// little - an NPC giving a quest - held until it is stopped.
+// little - an NPC answering when talked to, /talk.
 {
   name: "Talk",
   group: "everyday",
-  loop: true,
-  loopFrom: 0.3,
   keys: [
     { at: 0, both: { upperArm: [6, 0, 3], forearm: [17, 0, 0], hand: [0, 0, 0] }, pose: { head: [0, 0, 0] } },
     { at: 0.3, pose: { upperArmR: [30, 0, 10], forearmR: [80, 0, 0], handR: [-10, 0, 0], upperArmL: [12, 0, 5], forearmL: [40, 0, 0], head: [3, 0, 0] } },

@@ -1,0 +1,6 @@
+// An emote (CHAT.md, *Commands*): plays the "sit" animation (animations/sit.json5) on you, for
+// everyone near to see - a command made of /emote.
+{
+  summary: "Sits down on the ground; walk to get up.",
+  run: ["emote sit"],
+}

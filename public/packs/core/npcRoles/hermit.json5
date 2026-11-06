@@ -6,4 +6,6 @@
   ages: ["adult", "old"],
   questGiver: 0.3,
   barks: "villager",
+  // At its work while it stands at its place (animations/sit.json5).
+  idle: "sit",
 }

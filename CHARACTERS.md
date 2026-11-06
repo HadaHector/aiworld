@@ -246,6 +246,16 @@ vertical speed, swimming, and a swing trigger.
   eats, mortal strike chops, bash bashes, kick kicks) and every cast plays `castLoop` until it is
   done, fails, stops or is broken. The workbench's *Play* menu has each clip, *Frame* holds one at a
   share of its length, and the *Gallery* view plays them all side by side.
+  Outside combat the server plays them through `skills.animate` (an `animation` event, seen by every
+  client near): picking up an item or a quest object bends to it (`gather`), opening loot kneels
+  (`kneel`, ended when the loot closes), an NPC talked to answers with its hands (`talk`), an NPC
+  role's `idle` names the work it does at its place (smith `hammer`; forester, quarryman and sexton
+  `work`; farmer `gather`; hermit `sit`), sent again every 6 s for players who come by, and
+  `/emote <name>` plays any clip on the player - `/wave`, `/cheer`, `/bow`, `/point`, `/sit`,
+  `/kneel` and `/talk` are pack commands made of it. Walking off ends a looping whole-body clip, so
+  a body gets up from sitting, kneeling or work by moving; a loop asked for again while it plays goes
+  on undisturbed. `sit` is on the ground (legs out, leaning back on the hands); `sitChair` is for
+  furniture.
 - **Death** (added after the spike) - the knees give, the body tips back from the hips, faster as it
   falls, bounces once and lies on its back, arms flung out, a knee raised, the head rolled aside;
   it eases out again when the body comes back to life. Driven by a `dead` input; the workbench's

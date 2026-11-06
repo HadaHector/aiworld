@@ -203,6 +203,18 @@ export function createServerCommands(packs: readonly CommandPackDef[] = []): Ret
   });
 
   add({
+    id: "emote",
+    usage: "<animation>",
+    summary: "Plays an animation on you for everyone near: /emote wave. /wave, /bow, /sit and the rest are made of it.",
+    aliases: ["e"],
+    dev: false,
+    args: [arg("animation", "word")],
+    run({ entity, host }, [name]) {
+      host.skills.animate(entity, String(name));
+    },
+  });
+
+  add({
     id: "kill",
     usage: "",
     summary: "Kills your target, or you if nothing is targeted.",

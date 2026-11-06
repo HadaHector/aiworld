@@ -120,8 +120,13 @@ export function createAnimator(skeleton: RaceSkeleton, clips: ReadonlyMap<string
       const step: AnimatedPose["step"] = input.grounded && !input.swimming && !input.dead && speed > 0.5 ? (crossed(0.25) ? "R" : crossed(0.75) ? "L" : undefined) : undefined;
       const play = input.play ?? (input.swing ? "swing" : undefined);
       const started = play ? clips.get(play) : undefined;
-      if (started) action = { clip: started, at: time, stoppedAt: -1 };
+      // A loop asked for again while it plays goes on as it was (an NPC at its work is told again now
+      // and then, for players who came by since).
+      const already = started?.loop && action?.clip === started && action.stoppedAt < 0;
+      if (started && !already) action = { clip: started, at: time, stoppedAt: -1 };
       if (input.stop && action?.clip.id === input.stop && action.stoppedAt < 0) action.stoppedAt = time;
+      // Walking off ends a whole-body loop: one gets up from sitting, kneeling or work by moving.
+      if (action?.clip.loop && action.clip.layer === "full" && action.stoppedAt < 0 && speed > 0.6) action.stoppedAt = time;
       // How far the action has the body: in, held, out at its end (or once stopped).
       let actionWeight = 0;
       let actionTime = 0;

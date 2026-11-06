@@ -1,0 +1,6 @@
+// An emote (CHAT.md, *Commands*): plays the "bow" animation (animations/bow.json5) on you, for
+// everyone near to see - a command made of /emote.
+{
+  summary: "Bows.",
+  run: ["emote bow"],
+}

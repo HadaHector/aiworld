@@ -1,0 +1,6 @@
+// An emote (CHAT.md, *Commands*): plays the "point" animation (animations/point.json5) on you, for
+// everyone near to see - a command made of /emote.
+{
+  summary: "Points ahead.",
+  run: ["emote point"],
+}

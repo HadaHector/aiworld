@@ -47,6 +47,9 @@ export interface NpcRoleDef {
   ages: Age[];
   /** Whether it lives where it works (an innkeeper at the inn), or in a house of its own. */
   livesAtWork: boolean;
+  /** The animation it works at while it stands at its place (animations/<id>.json5): a smith's
+   *  hammer, a forester's axe - or null to stand idle. */
+  idle: string | null;
 }
 
 export interface RelationSide {
@@ -162,7 +165,7 @@ function readWeights(reader: Reader, obj: RawObject, key: string, path: string, 
 function readRole(entry: Entry, issues: ContentIssue[]): NpcRoleDef {
   const reader = new Reader(issues, entry.file);
   const obj = reader.object(entry.data, "");
-  reader.onlyKeys(obj, "", ["title", "template", "outfit", "buildings", "count", "settlement", "perClass", "stand", "services", "questGiver", "barks", "patrol", "ages", "livesAtWork"]);
+  reader.onlyKeys(obj, "", ["title", "template", "outfit", "buildings", "count", "settlement", "perClass", "stand", "services", "questGiver", "barks", "patrol", "ages", "livesAtWork", "idle"]);
   const outfits = obj.outfit === undefined ? [] : typeof obj.outfit === "string" ? [obj.outfit] : reader.stringList(obj, "outfit", "");
   let settlement: NpcRoleDef["settlement"] = null;
   if (obj.settlement !== undefined) {
@@ -205,6 +208,7 @@ function readRole(entry: Entry, issues: ContentIssue[]): NpcRoleDef {
     patrol: obj.patrol === undefined ? null : reader.oneOf(obj, "patrol", "", ["gates", "street", "square"] as const),
     ages: readAges(reader, obj, "ages", ""),
     livesAtWork: reader.boolean(obj, "livesAtWork", "", false),
+    idle: reader.optionalString(obj, "idle", "") ?? null,
   };
 }
 

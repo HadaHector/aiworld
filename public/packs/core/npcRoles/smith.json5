@@ -8,4 +8,6 @@
   services: { vendor: "smith", repair: true },
   questGiver: 0.4,
   barks: "smith",
+  // At its work while it stands at its place (animations/hammer.json5).
+  idle: "hammer",
 }

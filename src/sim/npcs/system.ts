@@ -34,6 +34,8 @@ export interface NpcWorld {
   castMade?(dimension: string, settlement: { site: SettlementSite; layout: SettlementLayout }, cast: Cast, context: CastContext): void;
   /** Says a bark: its text as said, to the players near. */
   bark(npc: Entity, text: Text, to: readonly Entity[]): void;
+  /** Has an NPC play a named animation for the players near: its work, an answer when talked to. */
+  animate?(npc: Entity, name: string): void;
 }
 
 export interface NpcSystem {
@@ -88,6 +90,8 @@ interface Living {
   deadAt: number;
   lastBark: number;
   barked: Map<number, number>;
+  /** When its work animation was last sent: again now and then, for players who came by since. */
+  lastIdle: number;
 }
 
 interface Settlement {
@@ -111,6 +115,8 @@ const SPACING = 1.2;
 const BODY_ROOM = 0.6;
 /** How often settlements are looked at for players near, in seconds of world time. */
 const LOOK_EVERY = 0.5;
+/** How often an NPC at its work says so again (its animation, for players who came near since). */
+const IDLE_EVERY = 6;
 /** How long a dead NPC lies before it is taken away. */
 const CORPSE_TIME = 20;
 /** One NPC's barks are at least this far apart, whoever they are for. */
@@ -298,7 +304,7 @@ export function createNpcSystem(rules: GameRules, world: NpcWorld): NpcSystem {
       entity.body = state.dimension.createBody(spot.x, spot.z);
       entity.body.face(spot.facing);
     }
-    const living: Living = { npc, entity, spot, patrol, deadAt: 0, lastBark: -Infinity, barked: new Map() };
+    const living: Living = { npc, entity, spot, patrol, deadAt: 0, lastBark: -Infinity, barked: new Map(), lastIdle: -Infinity };
     settlement.living.set(npc.index, living);
     byEntity.set(entity.id, living);
   }
@@ -404,6 +410,12 @@ export function createNpcSystem(rules: GameRules, world: NpcWorld): NpcSystem {
         entity.grounded = grounded;
         entity.facing = entity.body.facing;
       }
+    }
+    // At its work while it stands at its place: a smith hammering, a forester chopping.
+    const idle = roleOf(living.npc)?.idle;
+    if (idle && world.animate && (!patrol || now < patrol.waitUntil) && now - living.lastIdle >= IDLE_EVERY) {
+      living.lastIdle = now;
+      world.animate(entity, idle);
     }
     // A bark for a player who comes by and has not heard one from it for a while.
     if (now - living.lastBark < BARK_GAP) return;

@@ -1,0 +1,6 @@
+// An emote (CHAT.md, *Commands*): plays the "kneel" animation (animations/kneel.json5) on you, for
+// everyone near to see - a command made of /emote.
+{
+  summary: "Kneels down; walk to get up.",
+  run: ["emote kneel"],
+}

@@ -2,7 +2,7 @@ import type { Entity } from "../entity";
 import type { GameRules } from "../rules/gameRules";
 import "./runs";
 import { castingHooks, expireLockouts, faceUnit, fireQueued, interrupt, requestCast, stopCast, unitMoved, type CastOptions, type CastResult } from "./casting";
-import { die, hurt, revive } from "./combat";
+import { die, emit, hurt, revive } from "./combat";
 import type { CombatEvent, Reason } from "./events";
 import { endMagic, signal, startMagic, stepMagic } from "./magic";
 import type { Magic, SkillWorld, Spell, Sys } from "./types";
@@ -28,6 +28,9 @@ export interface SkillSystem {
   hurt(entity: Entity, amount: number, cause?: string): void;
   /** Kills a unit outright (debug). */
   kill(entity: Entity): void;
+  /** Has a unit play a named animation (animations/<id>.json5, CHARACTERS.md) for the clients near
+   *  it: an emote, looting, a pick-up, an NPC at its work. */
+  animate(entity: Entity, name: string): void;
   /** Back from the dead with full health. */
   revive(entity: Entity): void;
   /** Starts a skill's magic on a host directly, as a `cast` action would (debug, the probe). */
@@ -184,6 +187,7 @@ export function createSkillSystem(rules: GameRules, world: SkillWorld): SkillSys
       die(sys, entity, undefined, null);
     },
     revive: (entity) => revive(sys, entity),
+    animate: (entity, name) => emit(sys, "animation", { source: entity.id, name, at: entity }),
     apply: (skill, caster, host, level = 1) => startMagic(sys, { skill: rules.skills[skill], caster, host, target: host, level }),
     interrupt: (entity, lockout) => interrupt(sys, entity, undefined, lockout),
     leave,

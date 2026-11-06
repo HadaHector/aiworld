@@ -386,6 +386,7 @@ export function createServer(options: ServerOptions): Server {
     delta,
     classes: (options.progression?.origins ?? []).filter((o) => o.slot === "class").map((o) => ({ id: o.id, name: o.name })),
     castMade: (dimension, { site, layout }, cast, context) => generateFor(dimension, site, layout, cast, context),
+    animate: (npc, name) => skills.animate(npc, name),
     bark: (npc, text, to) => {
       const hearers = new Set(to.map((e) => e.id));
       for (const connection of connections) if (connection.player && hearers.has(connection.player.entity.id)) connection.end.send({ type: "bark", npc: npc.id, text: text.text, args: text.args });
@@ -595,6 +596,7 @@ export function createServer(options: ServerOptions): Server {
     else if (message.type === "questObjectTake") {
       const object = here?.entities.get(message.entity >>> 0);
       why = object ? questSystem.takeObject(player.entity, object) : "notObject";
+      if (!why) skills.animate(player.entity, "gather");
     } else {
       npc = here?.entities.get(message.npc >>> 0);
       if (!npc) why = "range";
@@ -624,6 +626,8 @@ export function createServer(options: ServerOptions): Server {
     const home = player.character?.travel.home ?? player.quickHome;
     switch (message.type) {
       case "talk": {
+        // It answers with its hands (animations/talk.json5).
+        skills.animate(npc!, "talk");
         // Quests first: what talking to it does, then what it has for this character, defined for the client.
         questSystem.talked(player.entity, npc!);
         const quests = questSystem.questsAt(player.entity, npc!);
@@ -986,6 +990,9 @@ export function createServer(options: ServerOptions): Server {
     if (message.type.startsWith("item") || message.type.startsWith("loot") || message.type === "debugItem" || message.type === "debugWear") {
       if (!itemSystem || !player || !body) return;
       const why = handleItemMessage(itemSystem, player.entity, message);
+      // Bending for what it picks up, kneeling at what it loots (animations/, CHARACTERS.md).
+      if (why === "" && message.type === "itemPickUp") skills.animate(player.entity, "gather");
+      if (why === "" && message.type === "lootOpen") skills.animate(player.entity, "kneel");
       if (why) connection.end.send({ type: "itemRefused", reason: why, ...(why === "requires" ? refusedItem(itemSystem, player.entity, message) : {}) });
       return;
     }

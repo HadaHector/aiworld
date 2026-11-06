@@ -284,6 +284,8 @@ export async function startSession(page: Page, options: SessionOptions): Promise
       // What the own player wears goes on its body (ITEMS.md, *Equipment*).
       if (message.type === "entityGear" && message.id === playerId) view?.dress(gearOfItems(itemRules, message.gear));
       if (mirror.apply(message)) continue;
+      // The loot closing gets the player up from kneeling at it (the server knelt them when it opened).
+      if (message.type === "loot" && message.entity === 0) view?.character.stop("kneel");
       if (belongings.apply(message)) continue;
       if (progressMirror.apply(message)) continue;
       if (message.type === "welcome") {
