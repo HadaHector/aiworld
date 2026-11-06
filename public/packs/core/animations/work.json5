@@ -1,17 +1,18 @@
 // Turns in degrees, the same for both sides (see src/character/animationDef.ts): arms and legs x
 // forward and z out from the body; forearm x bends the elbow, shin -x the knee; spine, chest and
 // head x lean forward, y turn to the body's right. `drop` lowers the body by a share of its leg.
-// Chopping or mining: a two-handed tool swung up and down on the same spot, over and over, the
-// back bending into each stroke - held until it is stopped.
+// Chopping or mining: an axe or pick held in both hands together on the haft in front of the body -
+// the arms turned in so the hands meet - swung up overhead and down, over and over, the back bending
+// into each stroke. Held until it is stopped.
 {
   name: "Chop or mine",
   group: "everyday",
   layer: "full",
   loop: true,
   keys: [
-    { at: 0, drop: 0.04, both: { upperArm: [45, 0, -10], forearm: [20, 0, 0], thigh: [10, 0, 6], shin: [-18, 0, 0] }, pose: { spine: [24, 0, 0], head: [10, 0, 0] } },
-    { at: 0.5, ease: "out", drop: 0.02, both: { upperArm: [158, 0, 6], forearm: [70, 0, 0] }, pose: { spine: [-6, 0, 0], head: [-4, 0, 0] } },
-    { at: 0.72, ease: "in", drop: 0.06, both: { upperArm: [55, 0, -12], forearm: [10, 0, 0], thigh: [16, 0, 6], shin: [-28, 0, 0] }, pose: { spine: [30, 0, 0], head: [12, 0, 0] } },
-    { at: 1.2, drop: 0.04, both: { upperArm: [45, 0, -10], forearm: [20, 0, 0], thigh: [10, 0, 6], shin: [-18, 0, 0] }, pose: { spine: [24, 0, 0], head: [10, 0, 0] } },
+    { at: 0, drop: 0.04, both: { upperArm: [48, 0, -32], forearm: [28, 0, 0], hand: [10, 0, 0], thigh: [10, 0, 6], shin: [-18, 0, 0] }, pose: { spine: [24, 0, 0], head: [10, 0, 0] } },
+    { at: 0.5, ease: "out", drop: 0.02, both: { upperArm: [160, 0, -18], forearm: [62, 0, 0], hand: [-10, 0, 0] }, pose: { spine: [-6, 0, 0], head: [-4, 0, 0] } },
+    { at: 0.72, ease: "in", drop: 0.06, both: { upperArm: [58, 0, -34], forearm: [18, 0, 0], hand: [15, 0, 0], thigh: [16, 0, 6], shin: [-28, 0, 0] }, pose: { spine: [30, 0, 0], head: [12, 0, 0] } },
+    { at: 1.2, drop: 0.04, both: { upperArm: [48, 0, -32], forearm: [28, 0, 0], hand: [10, 0, 0], thigh: [10, 0, 6], shin: [-18, 0, 0] }, pose: { spine: [24, 0, 0], head: [10, 0, 0] } },
   ],
 }
