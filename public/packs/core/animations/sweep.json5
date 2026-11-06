@@ -1,0 +1,17 @@
+// Turns in degrees, the same for both sides (see src/character/animationDef.ts): arms and legs x
+// forward and z out from the body; forearm x bends the elbow, shin -x the knee; spine, chest and
+// head x lean forward, y turn to the body's right. `drop` lowers the body by a share of its leg.
+// A two-handed sweep: the weapon wound back on the right, swung level across to the left with
+// the whole trunk turning, and brought back.
+{
+  name: "Sweeping cut",
+  group: "weapon",
+  layer: "full",
+  keys: [
+    { at: 0, drop: 0, pose: { upperArmR: [15, 0, 5], upperArmL: [15, 0, 5], forearmR: [30, 0, 0], forearmL: [30, 0, 0], chest: [0, 0, 0], spine: [3, 0, 0], pelvis: [0, 0, 0] } },
+    { at: 0.32, ease: "out", drop: 0.05, pose: { upperArmR: [55, 0, 60], upperArmL: [75, 0, -35], forearmR: [55, 0, 0], forearmL: [45, 0, 0], chest: [0, 45, 0], spine: [5, 20, 0], pelvis: [0, 10, 0] } },
+    { at: 0.48, ease: "in", drop: 0.07, pose: { upperArmR: [80, 0, -30], upperArmL: [65, 0, 55], forearmR: [10, 0, 0], forearmL: [15, 0, 0], chest: [6, -45, 0], spine: [10, -22, 0], pelvis: [0, -12, 0] } },
+    { at: 0.6, drop: 0.06, pose: { upperArmR: [60, 0, -35], upperArmL: [50, 0, 60], forearmR: [20, 0, 0], forearmL: [20, 0, 0], chest: [6, -50, 0], spine: [8, -24, 0], pelvis: [0, -12, 0] } },
+    { at: 0.9, drop: 0, pose: { upperArmR: [15, 0, 5], upperArmL: [15, 0, 5], forearmR: [30, 0, 0], forearmL: [30, 0, 0], chest: [0, 0, 0], spine: [3, 0, 0], pelvis: [0, 0, 0] } },
+  ],
+}

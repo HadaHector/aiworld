@@ -133,7 +133,7 @@ export const GAME_FOLDERS = ["stats", "modifiers", "resources", "entities", "ski
 
 /** The folders characters' bodies are drawn from - races, gear, outfits (see CHARACTERS.md). Read by
  *  the client alone (src/character); the world's resolver passes over them too. */
-export const CHARACTER_FOLDERS = ["races", "gearMaterials", "gear", "outfits"] as const;
+export const CHARACTER_FOLDERS = ["races", "gearMaterials", "gear", "outfits", "animations"] as const;
 
 /** The folders icon sets are defined in (see ICONS.md) - read by the client's icon library, not by the world. */
 export const ICON_FOLDERS = ["icons"] as const;

@@ -1,0 +1,19 @@
+// Turns in degrees, the same for both sides (see src/character/animationDef.ts): arms and legs x
+// forward and z out from the body; forearm x bends the elbow, shin -x the knee; spine, chest and
+// head x lean forward, y turn to the body's right. `drop` lowers the body by a share of its leg.
+// Sitting on the ground: down onto the seat, knees up and apart, forearms resting on them, the
+// body breathing slowly - held until it is stopped.
+{
+  name: "Sit",
+  group: "everyday",
+  layer: "full",
+  loop: true,
+  loopFrom: 0.9,
+  keys: [
+    { at: 0, drop: 0, both: { thigh: [0, 0, 0], shin: [0, 0, 0], foot: [0, 0, 0], upperArm: [6, 0, 3], forearm: [17, 0, 0] }, pose: { spine: [3, 0, 0], chest: [0, 0, 0], head: [0, 0, 0] } },
+    { at: 0.5, drop: 0.5, both: { thigh: [80, 0, 12], shin: [-110, 0, 0], foot: [20, 0, 0], upperArm: [30, 0, 10], forearm: [40, 0, 0] }, pose: { spine: [20, 0, 0] } },
+    { at: 0.9, drop: 0.9, both: { thigh: [92, 0, 22], shin: [-112, 0, 0], foot: [15, 0, 0], upperArm: [52, 0, 8], forearm: [55, 0, 0] }, pose: { spine: [10, 0, 0], chest: [4, 0, 0], head: [-4, 0, 0] } },
+    { at: 2.4, drop: 0.9, pose: { chest: [1, 0, 0], head: [-6, 0, 0] } },
+    { at: 3.9, drop: 0.9, pose: { chest: [4, 0, 0], head: [-4, 0, 0] } },
+  ],
+}

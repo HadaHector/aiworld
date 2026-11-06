@@ -18,7 +18,7 @@
   states: {
     shielded: {
       length: 30,
-      enter: [{ do: "cast", skill: "weakenedSoul" }],
+      enter: [{ do: "animation", name: "empower" }, { do: "cast", skill: "weakenedSoul" }],
       hold: [{ do: "absorb", amount: { add: [40, { mul: ["caster.intellect", 2] }] } }],
       on: { absorbedOut: "end" },
     },

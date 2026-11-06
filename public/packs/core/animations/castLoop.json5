@@ -1,0 +1,17 @@
+// Turns in degrees, the same for both sides (see src/character/animationDef.ts): arms and legs x
+// forward and z out from the body; forearm x bends the elbow, shin -x the knee; spine, chest and
+// head x lean forward, y turn to the body's right. `drop` lowers the body by a share of its leg.
+// Casting: both hands brought together before the chest, cupping the spell, swaying gently while
+// it gathers - held until the cast is done.
+{
+  name: "Casting",
+  group: "magic",
+  loop: true,
+  loopFrom: 0.3,
+  keys: [
+    { at: 0, both: { upperArm: [6, 0, 3], forearm: [17, 0, 0], hand: [0, 0, 0] }, pose: { chest: [0, 0, 0], head: [0, 0, 0] } },
+    { at: 0.3, ease: "out", both: { upperArm: [52, 0, -14], forearm: [88, 0, 0], hand: [20, 0, 0] }, pose: { chest: [-3, 0, 0], head: [6, 0, 0] } },
+    { at: 0.9, both: { upperArm: [58, 0, -12], forearm: [80, 0, 0], hand: [25, 0, 0] }, pose: { chest: [-5, 0, 0], head: [8, 0, 0] } },
+    { at: 1.5, both: { upperArm: [52, 0, -14], forearm: [88, 0, 0], hand: [20, 0, 0] }, pose: { chest: [-3, 0, 0], head: [6, 0, 0] } },
+  ],
+}

@@ -1,0 +1,16 @@
+// Turns in degrees, the same for both sides (see src/character/animationDef.ts): arms and legs x
+// forward and z out from the body; forearm x bends the elbow, shin -x the knee; spine, chest and
+// head x lean forward, y turn to the body's right. `drop` lowers the body by a share of its leg.
+// A one-handed thrust: the blade drawn back to the hip, driven straight ahead with the right
+// shoulder behind it, and recovered.
+{
+  name: "Thrust",
+  group: "weapon",
+  keys: [
+    { at: 0, pose: { upperArmR: [6, 0, 3], forearmR: [17, 0, 0], chest: [0, 0, 0], spine: [3, 0, 0] } },
+    { at: 0.2, ease: "out", pose: { upperArmR: [-25, 0, 18], forearmR: [105, 0, 0], handR: [-15, 0, 0], chest: [0, 22, 0], spine: [-3, 8, 0] } },
+    { at: 0.3, ease: "in", pose: { upperArmR: [84, 0, 2], forearmR: [4, 0, 0], handR: [0, 0, 0], chest: [6, -24, 0], spine: [12, -10, 0] } },
+    { at: 0.42, pose: { upperArmR: [80, 0, 4], forearmR: [10, 0, 0], chest: [5, -18, 0], spine: [10, -8, 0] } },
+    { at: 0.6, pose: { upperArmR: [6, 0, 3], forearmR: [17, 0, 0], handR: [0, 0, 0], chest: [0, 0, 0], spine: [3, 0, 0] } },
+  ],
+}

@@ -1,0 +1,17 @@
+// Turns in degrees, the same for both sides (see src/character/animationDef.ts): arms and legs x
+// forward and z out from the body; forearm x bends the elbow, shin -x the knee; spine, chest and
+// head x lean forward, y turn to the body's right. `drop` lowers the body by a share of its leg.
+// Fists: up to guard, a left jab, a right cross with the shoulder turned into it, back to guard.
+{
+  name: "Jab and cross",
+  group: "weapon",
+  keys: [
+    { at: 0, both: { upperArm: [6, 0, 3], forearm: [17, 0, 0] }, pose: { chest: [0, 0, 0], spine: [3, 0, 0] } },
+    { at: 0.14, both: { upperArm: [48, 0, -4], forearm: [125, 0, 0] }, pose: { spine: [8, 0, 0] } },
+    { at: 0.24, ease: "out", pose: { upperArmL: [86, 0, -4], forearmL: [8, 0, 0], chest: [4, 14, 0] } },
+    { at: 0.34, pose: { upperArmL: [48, 0, -4], forearmL: [125, 0, 0], chest: [2, 0, 0] } },
+    { at: 0.46, ease: "out", pose: { upperArmR: [86, 0, -10], forearmR: [6, 0, 0], chest: [6, -30, 0], spine: [10, -10, 0] } },
+    { at: 0.58, pose: { upperArmR: [48, 0, -4], forearmR: [125, 0, 0], chest: [2, 0, 0], spine: [8, 0, 0] } },
+    { at: 0.85, both: { upperArm: [6, 0, 3], forearm: [17, 0, 0] }, pose: { chest: [0, 0, 0], spine: [3, 0, 0] } },
+  ],
+}

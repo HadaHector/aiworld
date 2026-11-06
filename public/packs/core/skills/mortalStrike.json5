@@ -13,7 +13,7 @@
   states: {
     strike: {
       enter: [
-        { do: "animation", name: "swing" },
+        { do: "animation", name: "overhead" },
         { do: "damage", group: "target", amount: { add: [{ mul: ["caster.weaponMax", 1.5] }, 20, { div: ["caster.strength", 3] }] } },
       ],
     },

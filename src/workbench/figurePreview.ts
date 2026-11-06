@@ -8,6 +8,7 @@ import { chooseAppearance } from "../character/paint";
 import type { BakedGearMaterial, GearMaterialDef } from "../character/gearMaterial";
 import type { GearDef } from "../character/gearDef";
 import { dressCharacter } from "../character/character";
+import type { AnimationClip } from "../character/animationDef";
 import type { StageOptions } from "./stage";
 
 export interface FigureOptions {
@@ -31,7 +32,12 @@ export interface FigureOptions {
   /** Slider positions to show instead of the seed's (0 low, 1 high). */
   sliders: Partial<Record<Slider, number>>;
   /** "still" holds `pose`; the others play (animation.ts). */
-  animation: keyof typeof ANIMATIONS;
+  animation: keyof typeof ANIMATIONS | `clip.${string}`;
+  /** The named animations a `clip.<id>` plays from (animations/<id>.json5). */
+  clips: ReadonlyMap<string, AnimationClip>;
+  /** A named animation held still this share of the way through (0-1), to look at a pose - or
+   *  null to play it. */
+  frame: number | null;
   /** How fast it moves while walking, jumping, swimming or swinging, metres a second. */
   speed: number;
   /** Moving on the spot, or round a circle on the ground. */
@@ -48,7 +54,6 @@ export const ANIMATIONS = {
   walk: { label: "Walk / run" },
   jump: { label: "Jumping" },
   swim: { label: "Swimming" },
-  swing: { label: "Swinging" },
   die: { label: "Dying" },
   flinch: { label: "Flinching" },
 } satisfies Record<string, { label: string }>;
@@ -101,29 +106,41 @@ export async function paintedBody(race: RaceDef, gear: Map<string, GearMaterialD
  * it is on the ground, how fast it rises or falls - with a jump every so often or a swing, on the
  * spot or round a circle over the ground.
  */
-function play(scene: Scene, character: CharacterMesh, race: RaceDef, options: FigureOptions, height: (x: number, z: number) => number, at = 0): void {
-  const animator = createAnimator(race.skeleton);
+function play(scene: Scene, character: CharacterMesh, race: RaceDef, options: FigureOptions, height: (x: number, z: number) => number, at = 0, atZ = 0): void {
+  const animator = createAnimator(race.skeleton, options.clips);
+  // A named animation: a one-shot again and again, a loop held a few seconds, stopped, and begun again.
+  const clip = options.animation.startsWith("clip.") ? options.clips.get(options.animation.slice(5)) : undefined;
+  let nextClip = 0.4;
+  let stopClipAt = -1;
+  // Held still: started, then stepped straight to the frame asked for, and not moved after.
+  if (clip && options.frame !== null) {
+    const still = { speed: 0, grounded: true, verticalSpeed: 0, swimming: false };
+    animator.update({ ...still, play: clip.id }, 0);
+    const { pose, offset } = animator.update(still, Math.min(clip.length - 1e-3, options.frame * clip.length));
+    character.setPose(pose, offset);
+    character.mesh.position.set(at, height(at, atZ), atZ);
+    return;
+  }
   const radius = 3;
   let angle = 0;
   let time = 0;
   let lift = 0;
   let rise = 0;
   let nextJump = 0.8;
-  let nextSwing = 0.5;
   let nextFlinch = 0.5;
   let blows = 0;
-  const moving = options.animation !== "idle" && options.animation !== "die" && options.animation !== "flinch";
+  const moving = options.animation !== "idle" && options.animation !== "die" && options.animation !== "flinch" && clip?.layer !== "full";
   const speed = moving ? options.speed : 0;
   scene.onBeforeRenderObservable.add(() => {
     const dt = Math.min(0.05, scene.getEngine().getDeltaTime() / 1000);
     time += dt;
     let x = at;
-    let z = 0;
+    let z = atZ;
     let facing = 0;
     if (options.path === "circle" && speed > 0) {
       angle += (speed * dt) / radius;
       x = at + radius * Math.cos(angle);
-      z = radius * Math.sin(angle);
+      z = atZ + radius * Math.sin(angle);
       facing = Math.atan2(-Math.sin(angle), Math.cos(angle));
     }
     // A jump as the game's body jumps (sim/playerBody.ts: 7.6 m/s up, 24 m/s² down).
@@ -139,10 +156,18 @@ function play(scene: Scene, character: CharacterMesh, race: RaceDef, options: Fi
         }
       }
     }
-    let swing = false;
-    if (options.animation === "swing" && time >= nextSwing) {
-      swing = true;
-      nextSwing = time + 1.3;
+    let playClip: string | undefined;
+    let stopClip: string | undefined;
+    if (clip && time >= nextClip) {
+      playClip = clip.id;
+      if (clip.loop) {
+        stopClipAt = time + clip.length + 2.5;
+        nextClip = stopClipAt + 1.2;
+      } else nextClip = time + clip.length + 0.9;
+    }
+    if (clip && stopClipAt >= 0 && time >= stopClipAt) {
+      stopClip = clip.id;
+      stopClipAt = -1;
     }
     // Flinching (FEEDBACK.md): a blow every 0.9 s, from the front, the +x side, behind and the -x
     // side in turn.
@@ -155,7 +180,7 @@ function play(scene: Scene, character: CharacterMesh, race: RaceDef, options: Fi
     const grounded = lift <= 0 && rise <= 0;
     // Dying: standing a moment and a half, dead for four seconds, then up again.
     const dead = options.animation === "die" && time % 5.5 > 1.5;
-    const { pose, offset } = animator.update({ speed: dead ? 0 : speed, grounded, verticalSpeed: rise, swimming: options.animation === "swim", swing, flinch, dead }, dt);
+    const { pose, offset } = animator.update({ speed: dead ? 0 : speed, grounded, verticalSpeed: rise, swimming: options.animation === "swim", play: playClip, stop: stopClip, flinch, dead }, dt);
     character.setPose(pose, offset);
     character.mesh.position.set(x, height(x, z) + lift, z);
     character.mesh.rotation.y = facing;
@@ -210,18 +235,18 @@ export const POSES = {
  * painted or in its skin's colour, in one of the still poses, with its bones and its lattice drawn
  * if asked.
  */
-export function figureFor(race: RaceDef, painted: PaintedBody, options: FigureOptions, at = 0): NonNullable<StageOptions["figure"]> {
+export function figureFor(race: RaceDef, painted: PaintedBody, options: FigureOptions, at = 0, atZ = 0): NonNullable<StageOptions["figure"]> {
   const { body, layout, pixels } = painted;
   const tall = Math.max(...body.positions.filter((_, i) => i % 3 === 1)) * painted.scale[1];
   const skin: BodySkin = layout && pixels ? { pixels, size: layout.size, uvs: layout.uvs, nearest: options.texture === "retro" } : { color: chooseAppearance(race, options.seed, options.sex ?? undefined).skin };
   return (scene, shadows, height) => {
-      const ground = height(at, 0);
+      const ground = height(at, atZ);
       const character = createCharacterMesh(scene, `race_${race.id}`, body, skin, painted.baked, painted.skin);
       character.mesh.scaling.set(...painted.scale);
-      character.mesh.position.set(at, ground, 0);
+      character.mesh.position.set(at, ground, atZ);
       character.setPose(POSES[options.pose].pose);
       for (const mesh of character.meshes) shadows.addShadowCaster(mesh, false);
-      if (options.animation !== "still") play(scene, character, painted.race, options, height, at);
+      if (options.animation !== "still") play(scene, character, painted.race, options, height, at, atZ);
       if (options.bones) {
         const viewer = new SkeletonViewer(character.skeleton, character.mesh, scene, true, 1, { displayMode: SkeletonViewer.DISPLAY_SPHERE_AND_SPURS });
         viewer.isEnabled = true;

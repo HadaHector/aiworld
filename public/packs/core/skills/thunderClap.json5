@@ -13,6 +13,7 @@
   states: {
     clap: {
       enter: [
+        { do: "animation", name: "castSlam" },
         { do: "damage", group: "hit", amount: { add: [10, { div: ["caster.strength", 4] }] } },
         { do: "cast", skill: "thunderClapSlow", group: "hit" },
       ],

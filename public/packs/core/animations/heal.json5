@@ -1,0 +1,16 @@
+// Turns in degrees, the same for both sides (see src/character/animationDef.ts): arms and legs x
+// forward and z out from the body; forearm x bends the elbow, shin -x the knee; spine, chest and
+// head x lean forward, y turn to the body's right. `drop` lowers the body by a share of its leg.
+// A blessing: both hands raised forward and up, palms to the sky, the head lifted, then lowered
+// toward the one being healed.
+{
+  name: "Heal",
+  group: "magic",
+  keys: [
+    { at: 0, both: { upperArm: [6, 0, 3], forearm: [17, 0, 0], hand: [0, 0, 0] }, pose: { head: [0, 0, 0], chest: [0, 0, 0] } },
+    { at: 0.5, ease: "out", both: { upperArm: [125, 0, 25], forearm: [12, 0, 0], hand: [-25, 0, 0] }, pose: { head: [-15, 0, 0], chest: [-6, 0, 0] } },
+    { at: 0.75, both: { upperArm: [128, 0, 28] } },
+    { at: 1.0, both: { upperArm: [78, 0, 12], forearm: [10, 0, 0], hand: [-10, 0, 0] }, pose: { head: [8, 0, 0], chest: [4, 0, 0] } },
+    { at: 1.4, both: { upperArm: [6, 0, 3], forearm: [17, 0, 0], hand: [0, 0, 0] }, pose: { head: [0, 0, 0], chest: [0, 0, 0] } },
+  ],
+}

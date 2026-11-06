@@ -1,0 +1,17 @@
+// Turns in degrees, the same for both sides (see src/character/animationDef.ts): arms and legs x
+// forward and z out from the body; forearm x bends the elbow, shin -x the knee; spine, chest and
+// head x lean forward, y turn to the body's right. `drop` lowers the body by a share of its leg.
+// A two-handed overhead chop: both hands raised behind the head, brought down hard in front with
+// the back bending and the knees giving, and followed through.
+{
+  name: "Overhead chop",
+  group: "weapon",
+  layer: "full",
+  keys: [
+    { at: 0, drop: 0, both: { upperArm: [15, 0, 0], forearm: [30, 0, 0], thigh: [2, 0, 0], shin: [-4, 0, 0] }, pose: { spine: [3, 0, 0], chest: [0, 0, 0], head: [5, 0, 0] } },
+    { at: 0.36, ease: "out", drop: 0.02, both: { upperArm: [168, 0, 8], forearm: [65, 0, 0] }, pose: { spine: [-10, 0, 0], chest: [-8, 0, 0], head: [-8, 0, 0] } },
+    { at: 0.5, ease: "in", drop: 0.1, both: { upperArm: [72, 0, -12], forearm: [8, 0, 0], thigh: [22, 0, 0], shin: [-38, 0, 0] }, pose: { spine: [26, 0, 0], chest: [14, 0, 0], head: [12, 0, 0] } },
+    { at: 0.62, drop: 0.1, both: { upperArm: [42, 0, -12], forearm: [14, 0, 0] }, pose: { spine: [30, 0, 0], chest: [14, 0, 0] } },
+    { at: 0.95, drop: 0, both: { upperArm: [15, 0, 0], forearm: [30, 0, 0], thigh: [2, 0, 0], shin: [-4, 0, 0] }, pose: { spine: [3, 0, 0], chest: [0, 0, 0], head: [5, 0, 0] } },
+  ],
+}

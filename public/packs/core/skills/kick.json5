@@ -12,6 +12,7 @@
   states: {
     kick: {
       enter: [
+        { do: "animation", name: "kick" },
         { do: "interrupt", group: "target", lockout: 4 },
         { do: "damage", group: "target", amount: 5 },
       ],

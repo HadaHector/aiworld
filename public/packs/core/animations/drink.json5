@@ -1,0 +1,15 @@
+// Turns in degrees, the same for both sides (see src/character/animationDef.ts): arms and legs x
+// forward and z out from the body; forearm x bends the elbow, shin -x the knee; spine, chest and
+// head x lean forward, y turn to the body's right. `drop` lowers the body by a share of its leg.
+// Drinking: a cup raised to the lips and tipped, the head going back with it, and lowered.
+{
+  name: "Drink",
+  group: "everyday",
+  keys: [
+    { at: 0, pose: { upperArmR: [6, 0, 3], forearmR: [17, 0, 0], handR: [0, 0, 0], head: [0, 0, 0], neck: [0, 0, 0] } },
+    { at: 0.4, pose: { upperArmR: [62, 0, -22], forearmR: [128, 0, 0], handR: [10, 0, 0], head: [4, 0, 0] } },
+    { at: 0.75, pose: { upperArmR: [80, 0, -20], forearmR: [125, 0, 0], handR: [-30, 0, 0], head: [-22, 0, 0], neck: [-8, 0, 0] } },
+    { at: 1.15, pose: { upperArmR: [80, 0, -20], forearmR: [125, 0, 0], handR: [-30, 0, 0], head: [-22, 0, 0], neck: [-8, 0, 0] } },
+    { at: 1.6, pose: { upperArmR: [6, 0, 3], forearmR: [17, 0, 0], handR: [0, 0, 0], head: [0, 0, 0], neck: [0, 0, 0] } },
+  ],
+}

@@ -1,0 +1,17 @@
+// Turns in degrees, the same for both sides (see src/character/animationDef.ts): arms and legs x
+// forward and z out from the body; forearm x bends the elbow, shin -x the knee; spine, chest and
+// head x lean forward, y turn to the body's right. `drop` lowers the body by a share of its leg.
+// Striking the ground: both fists raised high, then brought down together as the body drops into
+// a crouch - a thunderclap, a nova round the caster - and up again.
+{
+  name: "Ground slam",
+  group: "magic",
+  layer: "full",
+  keys: [
+    { at: 0, drop: 0, both: { upperArm: [6, 0, 3], forearm: [17, 0, 0], thigh: [0, 0, 0], shin: [0, 0, 0], foot: [0, 0, 0] }, pose: { spine: [3, 0, 0], head: [0, 0, 0] } },
+    { at: 0.35, ease: "out", drop: -0.02, both: { upperArm: [150, 0, 22], forearm: [65, 0, 0] }, pose: { spine: [-8, 0, 0], head: [-10, 0, 0] } },
+    { at: 0.52, ease: "in", drop: 0.38, both: { upperArm: [70, 0, -5], forearm: [8, 0, 0], thigh: [62, 0, 8], shin: [-95, 0, 0], foot: [30, 0, 0] }, pose: { spine: [42, 0, 0], head: [18, 0, 0] } },
+    { at: 0.75, drop: 0.38 },
+    { at: 1.05, drop: 0, both: { upperArm: [6, 0, 3], forearm: [17, 0, 0], thigh: [0, 0, 0], shin: [0, 0, 0], foot: [0, 0, 0] }, pose: { spine: [3, 0, 0], head: [0, 0, 0] } },
+  ],
+}

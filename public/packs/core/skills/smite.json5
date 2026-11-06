@@ -12,6 +12,6 @@
   start: "cast",
   states: {
     cast: { length: 1.5, bar: "cast", breakOnMove: true, interruptible: true, next: "hit" },
-    hit: { commit: true, enter: [{ do: "damage", group: "target", amount: { add: [18, { mul: ["random", 8] }, { mul: ["caster.intellect", 0.7] }] } }] },
+    hit: { commit: true, enter: [{ do: "animation", name: "castOverhead" }, { do: "damage", group: "target", amount: { add: [18, { mul: ["random", 8] }, { mul: ["caster.intellect", 0.7] }] } }] },
   },
 }

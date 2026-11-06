@@ -19,6 +19,9 @@ export interface Character {
   show: (state: EntityMotion, dead?: boolean) => void;
   /** Plays a melee swing: the server says when (an ability's `animation` action). */
   swing: () => void;
+  /** Plays a named animation (animations/<id>.json5), or ends a looping one. */
+  play: (name: string) => void;
+  stop: (name: string) => void;
   /** Draws the player with a body (game/playerBody.ts) instead of the capsule, which stays as the
    *  place the camera and the lights follow. */
   attachBody: (body: PlayerBody) => void;
@@ -84,6 +87,8 @@ export function createCharacter(scene: Scene, start: { x: number; y: number; z: 
     readIntent,
     show,
     swing: () => body?.swing(),
+    play: (name) => body?.play(name),
+    stop: (name) => body?.stop(name),
     feelable: () => body,
     steps: () => body?.steps() ?? -1,
     place(bone, out) {

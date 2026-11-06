@@ -1,0 +1,17 @@
+// Turns in degrees, the same for both sides (see src/character/animationDef.ts): arms and legs x
+// forward and z out from the body; forearm x bends the elbow, shin -x the knee; spine, chest and
+// head x lean forward, y turn to the body's right. `drop` lowers the body by a share of its leg.
+// A front kick: the right knee drawn up, the leg snapped out straight with the body leaning back
+// against it and the arms out for balance, drawn back and set down.
+{
+  name: "Kick",
+  group: "weapon",
+  layer: "full",
+  keys: [
+    { at: 0, pose: { thighR: [0, 0, 0], shinR: [0, 0, 0], footR: [0, 0, 0], thighL: [0, 0, 0], shinL: [0, 0, 0], spine: [3, 0, 0] }, both: { upperArm: [6, 0, 3], forearm: [17, 0, 0] } },
+    { at: 0.22, ease: "out", pose: { thighR: [88, 0, 0], shinR: [-105, 0, 0], footR: [-10, 0, 0], thighL: [4, 0, 0], shinL: [-12, 0, 0], spine: [6, 0, 0] }, both: { upperArm: [30, 0, 25], forearm: [70, 0, 0] } },
+    { at: 0.34, ease: "out", pose: { thighR: [85, 0, 0], shinR: [-6, 0, 0], footR: [-30, 0, 0], spine: [-12, 0, 0] }, both: { upperArm: [25, 0, 40], forearm: [45, 0, 0] } },
+    { at: 0.48, pose: { thighR: [80, 0, 0], shinR: [-100, 0, 0], footR: [-5, 0, 0], spine: [2, 0, 0] } },
+    { at: 0.75, pose: { thighR: [0, 0, 0], shinR: [0, 0, 0], footR: [0, 0, 0], thighL: [0, 0, 0], shinL: [0, 0, 0], spine: [3, 0, 0] }, both: { upperArm: [6, 0, 3], forearm: [17, 0, 0] } },
+  ],
+}

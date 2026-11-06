@@ -1,0 +1,18 @@
+// Turns in degrees, the same for both sides (see src/character/animationDef.ts): arms and legs x
+// forward and z out from the body; forearm x bends the elbow, shin -x the knee; spine, chest and
+// head x lean forward, y turn to the body's right. `drop` lowers the body by a share of its leg.
+// Smithing: short strokes of a hammer down onto an anvil at waist height, the left hand holding
+// the work - held until it is stopped.
+{
+  name: "Hammer",
+  group: "everyday",
+  loop: true,
+  loopFrom: 0.3,
+  keys: [
+    { at: 0, pose: { upperArmR: [6, 0, 3], forearmR: [17, 0, 0], upperArmL: [6, 0, 3], forearmL: [17, 0, 0], spine: [3, 0, 0], head: [0, 0, 0] } },
+    { at: 0.3, pose: { upperArmR: [42, 0, 12], forearmR: [40, 0, 0], upperArmL: [42, 0, -12], forearmL: [70, 0, 0], spine: [22, 0, 0], head: [16, 0, 0] } },
+    { at: 0.62, ease: "out", pose: { upperArmR: [70, 0, 15], forearmR: [115, 0, 0] } },
+    { at: 0.78, ease: "in", pose: { upperArmR: [42, 0, 12], forearmR: [40, 0, 0] } },
+    { at: 1.0, pose: { upperArmR: [42, 0, 12], forearmR: [40, 0, 0] } },
+  ],
+}

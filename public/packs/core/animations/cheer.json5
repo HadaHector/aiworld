@@ -1,0 +1,17 @@
+// Turns in degrees, the same for both sides (see src/character/animationDef.ts): arms and legs x
+// forward and z out from the body; forearm x bends the elbow, shin -x the knee; spine, chest and
+// head x lean forward, y turn to the body's right. `drop` lowers the body by a share of its leg.
+// Cheering: both arms thrown up, pumped twice, a small hop of the knees, and lowered.
+{
+  name: "Cheer",
+  group: "everyday",
+  layer: "full",
+  keys: [
+    { at: 0, drop: 0, both: { upperArm: [6, 0, 3], forearm: [17, 0, 0], thigh: [0, 0, 0], shin: [0, 0, 0] }, pose: { spine: [3, 0, 0], head: [0, 0, 0] } },
+    { at: 0.3, ease: "out", drop: -0.02, both: { upperArm: [165, 0, 25], forearm: [18, 0, 0] }, pose: { spine: [-8, 0, 0], head: [-12, 0, 0] } },
+    { at: 0.55, drop: 0.06, both: { upperArm: [150, 0, 30], forearm: [55, 0, 0], thigh: [14, 0, 0], shin: [-24, 0, 0] } },
+    { at: 0.8, drop: -0.02, both: { upperArm: [165, 0, 25], forearm: [18, 0, 0], thigh: [0, 0, 0], shin: [0, 0, 0] } },
+    { at: 1.05, drop: 0.06, both: { upperArm: [150, 0, 30], forearm: [55, 0, 0], thigh: [14, 0, 0], shin: [-24, 0, 0] } },
+    { at: 1.5, drop: 0, both: { upperArm: [6, 0, 3], forearm: [17, 0, 0], thigh: [0, 0, 0], shin: [0, 0, 0] }, pose: { spine: [3, 0, 0], head: [0, 0, 0] } },
+  ],
+}

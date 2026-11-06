@@ -1,0 +1,17 @@
+// Turns in degrees, the same for both sides (see src/character/animationDef.ts): arms and legs x
+// forward and z out from the body; forearm x bends the elbow, shin -x the knee; spine, chest and
+// head x lean forward, y turn to the body's right. `drop` lowers the body by a share of its leg.
+// Gathering strength: the arms flung down and out, the chest lifted and the head thrown back, then
+// the fists pulled in, the arms flexed - a shield, a battle cry, a buff on oneself.
+{
+  name: "Empower",
+  group: "magic",
+  layer: "full",
+  keys: [
+    { at: 0, drop: 0, both: { upperArm: [6, 0, 3], forearm: [17, 0, 0] }, pose: { chest: [0, 0, 0], spine: [3, 0, 0], head: [0, 0, 0] } },
+    { at: 0.35, ease: "out", drop: 0.04, both: { upperArm: [18, 0, 65], forearm: [8, 0, 0], thigh: [10, 0, 6], shin: [-16, 0, 0] }, pose: { chest: [-14, 0, 0], spine: [-6, 0, 0], head: [-16, 0, 0] } },
+    { at: 0.62, ease: "out", drop: 0.06, both: { upperArm: [30, 0, 48], forearm: [115, 0, 0] }, pose: { chest: [-4, 0, 0], spine: [6, 0, 0], head: [6, 0, 0] } },
+    { at: 0.8, drop: 0.06 },
+    { at: 1.1, drop: 0, both: { upperArm: [6, 0, 3], forearm: [17, 0, 0], thigh: [0, 0, 0], shin: [0, 0, 0] }, pose: { chest: [0, 0, 0], spine: [3, 0, 0], head: [0, 0, 0] } },
+  ],
+}

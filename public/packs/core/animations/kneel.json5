@@ -1,0 +1,18 @@
+// Turns in degrees, the same for both sides (see src/character/animationDef.ts): arms and legs x
+// forward and z out from the body; forearm x bends the elbow, shin -x the knee; spine, chest and
+// head x lean forward, y turn to the body's right. `drop` lowers the body by a share of its leg.
+// Kneeling to search: down on the right knee, the left foot planted, hands rummaging on the ground
+// in front - a body, a chest, a bush - held until it is stopped.
+{
+  name: "Kneel and search",
+  group: "everyday",
+  layer: "full",
+  loop: true,
+  loopFrom: 0.6,
+  keys: [
+    { at: 0, drop: 0, pose: { thighR: [0, 0, 0], shinR: [0, 0, 0], footR: [0, 0, 0], thighL: [0, 0, 0], shinL: [0, 0, 0], footL: [0, 0, 0], spine: [3, 0, 0], head: [0, 0, 0] }, both: { upperArm: [6, 0, 3], forearm: [17, 0, 0] } },
+    { at: 0.6, drop: 0.52, pose: { thighR: [-5, 0, 4], shinR: [-95, 0, 0], footR: [-35, 0, 0], thighL: [88, 0, 6], shinL: [-88, 0, 0], footL: [0, 0, 0], spine: [26, 0, 0], head: [14, 0, 0], upperArmR: [58, 0, -4], forearmR: [30, 0, 0], upperArmL: [48, 0, 8], forearmL: [40, 0, 0] } },
+    { at: 1.1, drop: 0.52, pose: { upperArmR: [48, 0, 10], forearmR: [18, 0, 0], upperArmL: [58, 0, -6], forearmL: [30, 0, 0], spine: [28, 0, 0], head: [16, 0, 0] } },
+    { at: 1.6, drop: 0.52, pose: { upperArmR: [58, 0, -4], forearmR: [30, 0, 0], upperArmL: [48, 0, 8], forearmL: [40, 0, 0], spine: [26, 0, 0], head: [14, 0, 0] } },
+  ],
+}

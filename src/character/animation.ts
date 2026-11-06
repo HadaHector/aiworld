@@ -1,5 +1,6 @@
 import type { Pose } from "./characterMesh";
 import type { RaceSkeleton } from "./raceDef";
+import { sampleClip, type AnimationClip } from "./animationDef";
 
 /**
  * What a body's animation is driven by, each frame - all of it what the client already knows of an
@@ -12,8 +13,13 @@ export interface MotionInput {
   /** Up the world, metres a second: rising after a jump, falling after it. */
   verticalSpeed: number;
   swimming: boolean;
-  /** Set on the frame a melee swing starts. */
+  /** Set on the frame a melee swing starts: the clip named "swing". */
   swing?: boolean;
+  /** Set on the frame a named animation (animations/<id>.json5) starts: it takes over from any other
+   *  playing. */
+  play?: string;
+  /** Set on the frame a looping animation should end (a cast that is done): it eases out. */
+  stop?: string;
   /** Set on the frame a blow lands (FEEDBACK.md, *Hit feel*): where it came from, in the body's own
    *  frame - `forward` +1 from in front, `side` +1 from the +x side - and how hard, 0-1. */
   flinch?: { forward: number; side: number; strength: number };
@@ -45,7 +51,9 @@ export interface Animator {
  */
 type Turn = [number, number, number];
 
-const SWING_TIME = 0.62;
+/** How long a named animation takes to ease in, and out at its end or when stopped. */
+const CLIP_IN = 0.1;
+const CLIP_OUT = 0.18;
 /** A flinch: a jerk away from the blow, at its furthest after this, gone after FLINCH_TIME. */
 const FLINCH_PEAK = 0.05;
 const FLINCH_TIME = 0.28;
@@ -64,21 +72,23 @@ const FLINCH_TIME = 0.28;
  *   balance; landing dips the body.
  * - **Swimming** lies the body along the water and strokes: arms forward, out and back, the legs
  *   kicking together.
- * - **A melee swing** - wind-up, strike, follow-through - is laid over the upper body whatever the
- *   legs are doing.
+ * - **Named animations** (animationDef.ts) - swings, thrusts, casts, eating, kneeling - are played
+ *   by name, one at a time, eased in and out: an "upper" one over whatever the legs are doing, a
+ *   "full" one with the body standing still under it; a looping one until it is stopped.
  * - **A flinch** - the spine, chest and head jerking away from a blow and coming back - is laid
  *   over everything but death.
  * - **Death**: the knees give, the body tips back and falls, bounces once and lies still - over
  *   whatever else it was doing, until it is alive again.
  */
-export function createAnimator(skeleton: RaceSkeleton): Animator {
+export function createAnimator(skeleton: RaceSkeleton, clips: ReadonlyMap<string, AnimationClip> = new Map()): Animator {
   const leg = skeleton.thigh + skeleton.shin;
   let time = 0;
   let phase = 0;
   let moving = 0;
   let air = 0;
   let swim = 0;
-  let swingAt = -1;
+  /** The named animation playing: since when, and since when it has been stopping (-1: it is not). */
+  let action: { clip: AnimationClip; at: number; stoppedAt: number } | null = null;
   let flinchAt = -1;
   let flinch = { forward: 0, side: 0, strength: 0 };
   let wasGrounded = true;
@@ -108,7 +118,32 @@ export function createAnimator(skeleton: RaceSkeleton): Animator {
       // other at 0.75.
       const crossed = (at: number): boolean => (lastPhase < at && phase >= at) || (phase < lastPhase && (lastPhase < at || phase >= at));
       const step: AnimatedPose["step"] = input.grounded && !input.swimming && !input.dead && speed > 0.5 ? (crossed(0.25) ? "R" : crossed(0.75) ? "L" : undefined) : undefined;
-      moving = ease(moving, input.grounded && speed > 0.3 ? 1 : 0, 8, dt);
+      const play = input.play ?? (input.swing ? "swing" : undefined);
+      const started = play ? clips.get(play) : undefined;
+      if (started) action = { clip: started, at: time, stoppedAt: -1 };
+      if (input.stop && action?.clip.id === input.stop && action.stoppedAt < 0) action.stoppedAt = time;
+      // How far the action has the body: in, held, out at its end (or once stopped).
+      let actionWeight = 0;
+      let actionTime = 0;
+      if (action) {
+        const t = time - action.at;
+        const { clip } = action;
+        const fadeIn = smooth(0, CLIP_IN, t);
+        if (clip.loop) {
+          const span = Math.max(1e-3, clip.length - clip.loopFrom);
+          actionTime = t < clip.length ? t : clip.loopFrom + ((t - clip.loopFrom) % span);
+          actionWeight = fadeIn * (action.stoppedAt < 0 ? 1 : 1 - smooth(0, CLIP_OUT, time - action.stoppedAt));
+        } else {
+          actionTime = Math.min(t, clip.length);
+          actionWeight = fadeIn * (1 - smooth(clip.length - CLIP_OUT, clip.length, t));
+        }
+        if ((clip.loop && action.stoppedAt >= 0 && time - action.stoppedAt >= CLIP_OUT) || (!clip.loop && t >= clip.length)) {
+          action = null;
+          actionWeight = 0;
+        }
+      }
+      const standing = action?.clip.layer === "full" && actionWeight > 0;
+      moving = ease(moving, input.grounded && speed > 0.3 && !standing ? 1 : 0, 8, dt);
       air = ease(air, input.grounded || input.swimming ? 0 : 1, 12, dt);
       swim = ease(swim, input.swimming ? 1 : 0, 4, dt);
       if (!input.grounded) airTime += dt;
@@ -116,7 +151,6 @@ export function createAnimator(skeleton: RaceSkeleton): Animator {
       if (input.grounded) airTime = 0;
       wasGrounded = input.grounded;
       landing = Math.max(0, landing - dt * 4);
-      if (input.swing) swingAt = time;
       if (input.flinch && !input.dead) {
         flinchAt = time;
         flinch = input.flinch;
@@ -148,10 +182,11 @@ export function createAnimator(skeleton: RaceSkeleton): Animator {
         offset = [offset[0], offset[1] - 0.09 * dip, offset[2]];
         pose = add(pose, legs({ thigh: [0.35 * dip, 0, 0], shin: [-0.7 * dip, 0, 0], foot: [0.3 * dip, 0, 0] }));
       }
-      const swingTime = swingAt < 0 ? -1 : time - swingAt;
-      if (swingTime >= 0 && swingTime < SWING_TIME) {
-        const envelope = smooth(0, 0.08, swingTime) * (1 - smooth(SWING_TIME - 0.15, SWING_TIME, swingTime));
-        pose = { ...pose, ...mix(pose, { ...pose, ...swing(swingTime / SWING_TIME) }, envelope) };
+      if (action && actionWeight > 0) {
+        // Only the bones it names; the rest go on as they were.
+        const sampled = sampleClip(action.clip, actionTime);
+        pose = { ...pose, ...mix(pose, { ...pose, ...sampled.pose }, actionWeight) };
+        offset = [offset[0], offset[1] - sampled.drop * leg * actionWeight, offset[2]];
       }
       const flinchTime = flinchAt < 0 ? -1 : time - flinchAt;
       if (flinchTime >= 0 && flinchTime < FLINCH_TIME) {
@@ -345,26 +380,6 @@ export function createAnimator(skeleton: RaceSkeleton): Animator {
       ...both("shin", [-0.1 - 1.7 * kick, 0, 0]),
       ...both("foot", [-0.6 + 0.4 * kick, 0, 0]),
     };
-  }
-
-  /** A one-handed slash with the +x arm at `p` (0-1): drawn back and up, cut across, carried
-   *  through, the chest turning into it. */
-  function swing(p: number): Pose {
-    const keys: [number, Turn, Turn, Turn, Turn][] = [
-      // at, upper arm, forearm, chest, spine
-      [0, [0.1, 0, 0.05], [0.3, 0, 0], [0, 0, 0], [0.05, 0, 0]],
-      [0.35, [1.9, 0.4, 0.9], [1.4, 0, 0], [0, -0.45, -0.05], [0.0, -0.2, 0]],
-      [0.55, [1.2, -0.3, -0.35], [0.25, 0, 0], [0.12, 0.55, 0.05], [0.15, 0.25, 0]],
-      [0.75, [0.7, -0.4, -0.25], [0.5, 0, 0], [0.1, 0.4, 0], [0.12, 0.2, 0]],
-      [1, [0.1, 0, 0.05], [0.3, 0, 0], [0, 0, 0], [0.05, 0, 0]],
-    ];
-    let i = 0;
-    while (i < keys.length - 2 && p > keys[i + 1][0]) i++;
-    const [t0, ua0, fa0, ch0, sp0] = keys[i];
-    const [t1, ua1, fa1, ch1, sp1] = keys[i + 1];
-    const k = smooth(0, 1, (p - t0) / (t1 - t0));
-    const at = (a: Turn, b: Turn): Turn => [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k];
-    return { upperArmR: at(ua0, ua1), forearmR: at(fa0, fa1), handR: [0, 0, 0], chest: at(ch0, ch1), spine: at(sp0, sp1) };
   }
 }
 

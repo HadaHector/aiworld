@@ -12,7 +12,7 @@
   states: {
     bash: {
       enter: [
-        { do: "animation", name: "swing" },
+        { do: "animation", name: "shieldBash" },
         { do: "damage", group: "target", amount: { add: ["caster.weaponMax", { div: ["caster.strength", 5] }] } },
         { do: "cast", skill: "sunder", group: "target" },
       ],

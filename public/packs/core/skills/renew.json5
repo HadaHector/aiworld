@@ -15,6 +15,7 @@
   stacking: { per: "caster" },   // a second Renew from the same caster starts it again
   states: {
     renewing: {
+      enter: [{ do: "animation", name: "heal" }],
       length: 15,
       period: 3,
       tick: [{ do: "heal", amount: { add: [8, { div: ["caster.spirit", 4] }] } }],

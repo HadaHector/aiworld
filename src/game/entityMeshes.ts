@@ -15,6 +15,9 @@ export interface EntityMeshes {
   entityOf: (mesh: unknown) => number | null;
   /** Plays a melee swing on an entity's body: the server says when. */
   swing: (id: number) => void;
+  /** Plays a named animation on an entity's body (animations/<id>.json5), or ends a looping one. */
+  play: (id: number, name: string) => void;
+  stop: (id: number, name: string) => void;
   /** How many steps an entity's body has taken, or -1 for one without a body (FEEDBACK.md). */
   steps: (id: number) => number;
   /** An entity's body, or its capsule, for flashes, flinches and pauses (FEEDBACK.md). */
@@ -211,6 +214,8 @@ export function createEntityMeshes(scene: Scene, mirror: EntityMirror, rules: Ga
     },
     entityOf: (mesh) => ids.get(mesh) ?? null,
     swing: (id) => drawn.get(id)?.body?.swing(),
+    play: (id, name) => drawn.get(id)?.body?.play(name),
+    stop: (id, name) => drawn.get(id)?.body?.stop(name),
     steps: (id) => drawn.get(id)?.body?.steps() ?? -1,
     feelable(id) {
       const entry = drawn.get(id);

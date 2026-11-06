@@ -1,0 +1,16 @@
+// Turns in degrees, the same for both sides (see src/character/animationDef.ts): arms and legs x
+// forward and z out from the body; forearm x bends the elbow, shin -x the knee; spine, chest and
+// head x lean forward, y turn to the body's right. `drop` lowers the body by a share of its leg.
+// A bolt loosed: the hands drawn back to the chest, then thrust out together at the target, the
+// body leaning into it.
+{
+  name: "Cast forward",
+  group: "magic",
+  keys: [
+    { at: 0, both: { upperArm: [52, 0, -14], forearm: [88, 0, 0], hand: [20, 0, 0] }, pose: { spine: [3, 0, 0], chest: [0, 0, 0] } },
+    { at: 0.12, both: { upperArm: [35, 0, -5], forearm: [120, 0, 0], hand: [-10, 0, 0] }, pose: { spine: [-4, 0, 0], chest: [-4, 0, 0] } },
+    { at: 0.24, ease: "out", both: { upperArm: [86, 0, -8], forearm: [2, 0, 0], hand: [-30, 0, 0] }, pose: { spine: [12, 0, 0], chest: [6, 0, 0] } },
+    { at: 0.4, both: { upperArm: [82, 0, -8], forearm: [8, 0, 0], hand: [-25, 0, 0] } },
+    { at: 0.7, both: { upperArm: [6, 0, 3], forearm: [17, 0, 0], hand: [0, 0, 0] }, pose: { spine: [3, 0, 0], chest: [0, 0, 0] } },
+  ],
+}

@@ -1,0 +1,16 @@
+// Turns in degrees, the same for both sides (see src/character/animationDef.ts): arms and legs x
+// forward and z out from the body; forearm x bends the elbow, shin -x the knee; spine, chest and
+// head x lean forward, y turn to the body's right. `drop` lowers the body by a share of its leg.
+// Two quick stabs, right then left - a pair of daggers, or a brawler's blows with a blade.
+{
+  name: "Flurry",
+  group: "weapon",
+  keys: [
+    { at: 0, both: { upperArm: [40, 0, 0], forearm: [85, 0, 0] }, pose: { chest: [4, 0, 0] } },
+    { at: 0.12, ease: "out", pose: { upperArmR: [82, 0, -4], forearmR: [6, 0, 0], chest: [6, -18, 0] } },
+    { at: 0.24, pose: { upperArmR: [40, 0, 0], forearmR: [85, 0, 0], chest: [4, 0, 0] } },
+    { at: 0.36, ease: "out", pose: { upperArmL: [82, 0, -4], forearmL: [6, 0, 0], chest: [6, 18, 0] } },
+    { at: 0.48, pose: { upperArmL: [40, 0, 0], forearmL: [85, 0, 0], chest: [4, 0, 0] } },
+    { at: 0.62, both: { upperArm: [6, 0, 3], forearm: [17, 0, 0] }, pose: { chest: [0, 0, 0] } },
+  ],
+}

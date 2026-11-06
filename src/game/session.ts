@@ -58,6 +58,9 @@ import { levelGains } from "../sim/progression/levelUp";
 import { REFUSALS } from "../ui/progressPanel";
 import { refusalText, setTooltipContext } from "../ui/inventoryScreen";
 
+/** The animation a body plays while it casts (animations/castLoop.json5). */
+const CAST_LOOP = "castLoop";
+
 /** What lasts the whole page, that a session draws into and plays through (see FRONTEND.md). */
 export interface Page {
   engine: Engine;
@@ -366,11 +369,16 @@ export async function startSession(page: Page, options: SessionOptions): Promise
         mirror.clear();
         belongings.clear();
       } else if (message.type === "combatEvents") {
-        // Swings are played on the body that swings; everything goes in the combat log.
+        // Animations are played on the body they are for: a skill's by name, and while a spell is
+        // cast the casting loop, until the cast is done, fails, stops or is broken. Everything goes
+        // in the combat log.
+        const play = (id: number, name: string): void => (id === playerId ? view?.character.play(name) : entityMeshes?.play(id, name));
+        const stop = (id: number, name: string): void => (id === playerId ? view?.character.stop(name) : entityMeshes?.stop(id, name));
         for (const event of message.events) {
-          if (event.kind !== EVENT_KIND.animation || event.name !== "swing") continue;
-          if (event.source === playerId) view?.character.swing();
-          else entityMeshes?.swing(event.source);
+          if (event.kind === EVENT_KIND.animation && event.name) play(event.source, event.name);
+          else if (event.kind === EVENT_KIND.castStart) play(event.source, CAST_LOOP);
+          else if (event.kind === EVENT_KIND.castDone || event.kind === EVENT_KIND.castFailed || event.kind === EVENT_KIND.castStopped) stop(event.source, CAST_LOOP);
+          else if (event.kind === EVENT_KIND.interrupted) stop(event.target, CAST_LOOP);
         }
         combatHud.log(message.events);
         floatingText?.add(message.events);

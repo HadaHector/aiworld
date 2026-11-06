@@ -12,7 +12,7 @@
   gcd: true,
   states: {
     cast: { length: 2, bar: "cast", breakOnMove: true, interruptible: true, next: "travel" },
-    travel: { commit: true, length: { travel: 20 }, next: "hit" },
+    travel: { commit: true, length: { travel: 20 }, next: "hit", enter: [{ do: "animation", name: "castForward" }] },
     hit: {
       enter: [{ do: "damage", group: "target", amount: { add: [6, { mul: ["random", 4] }, { mul: ["caster.intellect", 0.5] }] } }],
     },

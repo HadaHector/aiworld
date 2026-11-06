@@ -233,6 +233,19 @@ vertical speed, swimming, and a swing trigger.
   workbench at first; now played on the replicated water state (swimming or head under: WATER.md).
 - **Melee swing** - wind-up, strike and follow-through for the arm with the weapon, the spine
   twisting with it, played over whatever the legs do.
+- **Named animations** (added after the spike, `src/character/animationDef.ts`) - keyframed poses
+  in packs (`animations/<id>.json5`): turns in degrees on the joints, anatomical and the same for
+  both sides, a `drop` that lowers the body by a share of its leg so kneeling fits every race, an
+  "upper" layer over the walk or a "full" one that stands the body still, one-shot or looping from
+  `loopFrom`. Played by name, one at a time, eased in and out. 29 to start: weapons (slash, thrust,
+  overhead chop, sweeping cut, flurry, shield bash, block, bow shot, jab and cross, kick, dodge),
+  magic (casting loop, cast forward, cast overhead, ground slam, heal, empower) and everyday ones
+  (eat, drink, pick up, chop or mine, hammer, kneel and search, sit, wave, point, cheer, bow, talk).
+  In the game a skill's `animation` action plays its clip by name (fireball and hex bolt cast
+  forward, smite overhead, frost nova and thunder clap slam, renew heals, shield empowers, eating
+  eats, mortal strike chops, bash bashes, kick kicks) and every cast plays `castLoop` until it is
+  done, fails, stops or is broken. The workbench's *Play* menu has each clip, *Frame* holds one at a
+  share of its length, and the *Gallery* view plays them all side by side.
 - **Death** (added after the spike) - the knees give, the body tips back from the hips, faster as it
   falls, bounces once and lies on its back, arms flung out, a knee raised, the head rolled aside;
   it eases out again when the body comes back to life. Driven by a `dead` input; the workbench's

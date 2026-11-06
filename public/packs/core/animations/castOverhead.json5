@@ -1,0 +1,16 @@
+// Turns in degrees, the same for both sides (see src/character/animationDef.ts): arms and legs x
+// forward and z out from the body; forearm x bends the elbow, shin -x the knee; spine, chest and
+// head x lean forward, y turn to the body's right. `drop` lowers the body by a share of its leg.
+// Calling down: the right hand raised high, the head tipped back after it, then brought down to
+// point at the target - a smite, a bolt from the sky.
+{
+  name: "Cast overhead",
+  group: "magic",
+  keys: [
+    { at: 0, pose: { upperArmR: [6, 0, 3], forearmR: [17, 0, 0], handR: [0, 0, 0], head: [0, 0, 0], spine: [3, 0, 0] } },
+    { at: 0.4, ease: "out", pose: { upperArmR: [172, 0, 12], forearmR: [8, 0, 0], handR: [-20, 0, 0], head: [-18, 0, 0], spine: [-6, 0, 0] } },
+    { at: 0.5, pose: { upperArmR: [172, 0, 12], forearmR: [8, 0, 0] } },
+    { at: 0.62, ease: "in", pose: { upperArmR: [70, 0, 0], forearmR: [2, 0, 0], handR: [10, 0, 0], head: [8, 0, 0], spine: [14, 0, 0] } },
+    { at: 0.95, pose: { upperArmR: [6, 0, 3], forearmR: [17, 0, 0], handR: [0, 0, 0], head: [0, 0, 0], spine: [3, 0, 0] } },
+  ],
+}

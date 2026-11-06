@@ -1,0 +1,17 @@
+// Turns in degrees, the same for both sides (see src/character/animationDef.ts): arms and legs x
+// forward and z out from the body; forearm x bends the elbow, shin -x the knee; spine, chest and
+// head x lean forward, y turn to the body's right. `drop` lowers the body by a share of its leg.
+// Eating: the right hand brought to the mouth for a bite, lowered while chewing, and again.
+{
+  name: "Eat",
+  group: "everyday",
+  keys: [
+    { at: 0, pose: { upperArmR: [6, 0, 3], forearmR: [17, 0, 0], handR: [0, 0, 0], head: [0, 0, 0] } },
+    { at: 0.35, pose: { upperArmR: [48, 0, -28], forearmR: [140, 0, 0], handR: [25, 0, 0], head: [8, 0, 0] } },
+    { at: 0.55, pose: { upperArmR: [48, 0, -28], forearmR: [140, 0, 0] } },
+    { at: 0.85, pose: { upperArmR: [28, 0, -12], forearmR: [100, 0, 0], handR: [10, 0, 0], head: [2, 0, 0] } },
+    { at: 1.2, pose: { upperArmR: [48, 0, -28], forearmR: [140, 0, 0], handR: [25, 0, 0], head: [8, 0, 0] } },
+    { at: 1.4, pose: { upperArmR: [48, 0, -28], forearmR: [140, 0, 0] } },
+    { at: 1.8, pose: { upperArmR: [6, 0, 3], forearmR: [17, 0, 0], handR: [0, 0, 0], head: [0, 0, 0] } },
+  ],
+}

@@ -1,0 +1,14 @@
+// Turns in degrees, the same for both sides (see src/character/animationDef.ts): arms and legs x
+// forward and z out from the body; forearm x bends the elbow, shin -x the knee; spine, chest and
+// head x lean forward, y turn to the body's right. `drop` lowers the body by a share of its leg.
+// Pointing ahead: the right arm raised straight to something in front, held, lowered - "there".
+{
+  name: "Point",
+  group: "everyday",
+  keys: [
+    { at: 0, pose: { upperArmR: [6, 0, 3], forearmR: [17, 0, 0], handR: [0, 0, 0], head: [0, 0, 0] } },
+    { at: 0.3, ease: "out", pose: { upperArmR: [92, 0, 8], forearmR: [2, 0, 0], handR: [-8, 0, 0], head: [-3, 4, 0] } },
+    { at: 0.95, pose: { upperArmR: [90, 0, 8], forearmR: [4, 0, 0] } },
+    { at: 1.3, pose: { upperArmR: [6, 0, 3], forearmR: [17, 0, 0], handR: [0, 0, 0], head: [0, 0, 0] } },
+  ],
+}

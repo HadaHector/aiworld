@@ -1,0 +1,18 @@
+// Turns in degrees, the same for both sides (see src/character/animationDef.ts): arms and legs x
+// forward and z out from the body; forearm x bends the elbow, shin -x the knee; spine, chest and
+// head x lean forward, y turn to the body's right. `drop` lowers the body by a share of its leg.
+// Guarding: the shield arm raised across the chest, the weapon held ready, the knees a little
+// bent and the body rocking slightly - held until it is stopped.
+{
+  name: "Block",
+  group: "weapon",
+  layer: "full",
+  loop: true,
+  loopFrom: 0.25,
+  keys: [
+    { at: 0, drop: 0, pose: { upperArmL: [10, 0, 0], forearmL: [20, 0, 0], upperArmR: [6, 0, 3], forearmR: [17, 0, 0], spine: [3, 0, 0] }, both: { thigh: [2, 0, 0], shin: [-4, 0, 0] } },
+    { at: 0.25, ease: "out", drop: 0.06, pose: { upperArmL: [68, 0, -22], forearmL: [95, 0, 0], upperArmR: [35, 0, 15], forearmR: [70, 0, 0], spine: [8, 0, 0], head: [4, 0, 0] }, both: { thigh: [18, 0, 4], shin: [-30, 0, 0] } },
+    { at: 0.85, drop: 0.075, pose: { upperArmL: [72, 0, -22], spine: [10, 0, 0] }, both: { thigh: [22, 0, 4], shin: [-36, 0, 0] } },
+    { at: 1.45, drop: 0.06, pose: { upperArmL: [68, 0, -22], spine: [8, 0, 0] }, both: { thigh: [18, 0, 4], shin: [-30, 0, 0] } },
+  ],
+}

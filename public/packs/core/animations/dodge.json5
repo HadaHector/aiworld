@@ -1,0 +1,15 @@
+// Turns in degrees, the same for both sides (see src/character/animationDef.ts): arms and legs x
+// forward and z out from the body; forearm x bends the elbow, shin -x the knee; spine, chest and
+// head x lean forward, y turn to the body's right. `drop` lowers the body by a share of its leg.
+// A dodge: a quick crouch and lean to the left, the right leg pushing off, and back.
+{
+  name: "Dodge",
+  group: "weapon",
+  layer: "full",
+  keys: [
+    { at: 0, drop: 0, pose: { spine: [3, 0, 0], chest: [0, 0, 0], thighL: [0, 0, 0], thighR: [0, 0, 0], shinL: [0, 0, 0], shinR: [0, 0, 0], head: [0, 0, 0] }, both: { upperArm: [6, 0, 3], forearm: [17, 0, 0] } },
+    { at: 0.16, ease: "out", drop: 0.16, pose: { spine: [12, 0, 18], chest: [4, 0, 8], head: [0, 0, -14], thighL: [30, 0, 25], shinL: [-50, 0, 0], thighR: [10, 0, -6], shinR: [-20, 0, 0] }, both: { upperArm: [25, 0, 35], forearm: [50, 0, 0] } },
+    { at: 0.36, drop: 0.14, pose: { spine: [10, 0, 14], chest: [4, 0, 6], head: [0, 0, -10] } },
+    { at: 0.6, drop: 0, pose: { spine: [3, 0, 0], chest: [0, 0, 0], thighL: [0, 0, 0], thighR: [0, 0, 0], shinL: [0, 0, 0], shinR: [0, 0, 0], head: [0, 0, 0] }, both: { upperArm: [6, 0, 3], forearm: [17, 0, 0] } },
+  ],
+}

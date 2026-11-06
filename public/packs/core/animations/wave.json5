@@ -1,0 +1,17 @@
+// Turns in degrees, the same for both sides (see src/character/animationDef.ts): arms and legs x
+// forward and z out from the body; forearm x bends the elbow, shin -x the knee; spine, chest and
+// head x lean forward, y turn to the body's right. `drop` lowers the body by a share of its leg.
+// Waving: the right arm raised high, the forearm rocking side to side, and lowered.
+{
+  name: "Wave",
+  group: "everyday",
+  keys: [
+    { at: 0, pose: { upperArmR: [6, 0, 3], forearmR: [17, 0, 0], handR: [0, 0, 0], head: [0, 0, 0] } },
+    { at: 0.3, ease: "out", pose: { upperArmR: [140, 0, 40], forearmR: [50, 0, 0], head: [0, 8, 0] } },
+    { at: 0.55, pose: { upperArmR: [140, 0, 22], forearmR: [25, 0, 0] } },
+    { at: 0.8, pose: { upperArmR: [140, 0, 42], forearmR: [55, 0, 0] } },
+    { at: 1.05, pose: { upperArmR: [140, 0, 22], forearmR: [25, 0, 0] } },
+    { at: 1.3, pose: { upperArmR: [140, 0, 40], forearmR: [50, 0, 0] } },
+    { at: 1.7, pose: { upperArmR: [6, 0, 3], forearmR: [17, 0, 0], handR: [0, 0, 0], head: [0, 0, 0] } },
+  ],
+}

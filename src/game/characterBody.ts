@@ -9,6 +9,7 @@ import { sliceBreak } from "../character/workSlicer";
 import { dressCharacter } from "../character/character";
 import { createCharacterMesh, type CharacterMesh } from "../character/characterMesh";
 import { createAnimator, type Animator } from "../character/animation";
+import { resolveAnimations, type AnimationClip } from "../character/animationDef";
 import type { EntityMotion, LookChoices } from "../sim/protocol";
 
 /** Who a character is, as far as its body goes - a race, an outfit and its seed, by their ids. */
@@ -60,11 +61,13 @@ export interface BodyKit {
   gear: Map<string, GearDef>;
   outfits: Map<string, OutfitDef>;
   materials: Map<string, GearMaterialDef>;
+  /** The named animations bodies play (animations/<id>.json5). */
+  animations: Map<string, AnimationClip>;
 }
 
 export function createBodyKit(packs: PackSource[]): BodyKit {
   const gear = resolveGear(packs);
-  return { races: resolveRaces(packs), gear, outfits: resolveOutfits(packs, gear), materials: resolveGearMaterials(packs) };
+  return { races: resolveRaces(packs), gear, outfits: resolveOutfits(packs, gear), materials: resolveGearMaterials(packs), animations: resolveAnimations(packs) };
 }
 
 /** A character's body (CHARACTERS.md) drawn where the server has its entity, and animated from how
@@ -74,8 +77,12 @@ export interface CharacterBody extends Feelable {
   /** Moves the body to where the server says the entity is, and animates it - each frame. `dead`:
    *  it falls and lies (ABILITIES.md, *The death animation*). */
   show: (state: Pick<EntityMotion, "x" | "y" | "z" | "facing" | "grounded"> & { water?: number } & { dead?: boolean }) => void;
-  /** Plays a melee swing. */
+  /** Plays a melee swing: the animation named "swing". */
   swing: () => void;
+  /** Plays a named animation (animations/<id>.json5): a skill's, a cast's. */
+  play: (name: string) => void;
+  /** Ends a looping one, if it is the one playing. */
+  stop: (name: string) => void;
   /** Where one of its bones is in the world now, for effects and sounds on it (FEEDBACK.md): the
    *  hands, the weapon's tip, the head, the chest, the feet. */
   place: (bone: BodyPlace, out: Vector3) => void;
@@ -115,7 +122,7 @@ export async function createCharacterBody(scene: Scene, name: string, kit: BodyK
   // Its height and build: the one default body of its race, scaled (the gear meshes are its children).
   const [scaleX, scaleY, scaleZ] = dressed.scale;
   character.mesh.scaling.set(scaleX, scaleY, scaleZ);
-  const animator: Animator = createAnimator(dressed.race.skeleton);
+  const animator: Animator = createAnimator(dressed.race.skeleton, kit.animations);
   const boneIndex = new Map(character.skeleton.bones.map((b, i) => [b.name, i]));
   const index = (name: string): number => boneIndex.get(name) ?? 0;
 
@@ -123,7 +130,8 @@ export async function createCharacterBody(scene: Scene, name: string, kit: BodyK
   let speed = 0;
   let rise = 0;
   let facing: number | null = null;
-  let swinging = false;
+  let playing: string | undefined;
+  let stopping: string | undefined;
   let wasDead: boolean | null = null;
   // Hit feel (FEEDBACK.md): a flinch for the next frame, a pause until a time, a flash fading out.
   let flinching: { forward: number; side: number; strength: number } | undefined;
@@ -158,8 +166,9 @@ export async function createCharacterBody(scene: Scene, name: string, kit: BodyK
       wasDead = dead;
       // A hit pause stops the pose where it is; the body still goes where the entity is.
       if (now >= pausedUntil) {
-        const { pose, offset, step } = animator.update({ speed, grounded: state.grounded, verticalSpeed: rise, swimming: (state.water ?? 0) >= 2, swing: swinging, flinch: flinching, dead, snap }, dt);
-        swinging = false;
+        const { pose, offset, step } = animator.update({ speed, grounded: state.grounded, verticalSpeed: rise, swimming: (state.water ?? 0) >= 2, play: playing, stop: stopping, flinch: flinching, dead, snap }, dt);
+        playing = undefined;
+        stopping = undefined;
         flinching = undefined;
         if (step) steps++;
         character.setPose(pose, offset);
@@ -177,7 +186,13 @@ export async function createCharacterBody(scene: Scene, name: string, kit: BodyK
       character.mesh.rotation.y = facing;
     },
     swing() {
-      swinging = true;
+      playing = "swing";
+    },
+    play(name) {
+      playing = name;
+    },
+    stop(name) {
+      stopping = name;
     },
     flash(colour, seconds) {
       flashColour.set(colour[0], colour[1], colour[2]);

@@ -31,6 +31,7 @@ import { bakeBuildingTextures } from "../world/buildings/buildingMesh";
 import { resolveRaces, type RaceDef } from "../character/raceDef";
 import { bakeGearMaterial, resolveGearMaterials, type GearMaterialDef } from "../character/gearMaterial";
 import { resolveGear, resolveOutfits } from "../character/gearDef";
+import { resolveAnimations, type AnimationClip } from "../character/animationDef";
 import { ANIMATIONS, POSES, figureFor, paintedBody, type FigureOptions } from "./figurePreview";
 
 // ---------------------------------------------------------------------------------------------
@@ -137,6 +138,7 @@ const DEFAULT_OPTIONS: Options = {
   race: "",
   height: "",
   build: "",
+  frame: "",
   sex: "",
   animation: "idle",
   speed: "1.2",
@@ -543,6 +545,7 @@ function viewsFor(asset: Asset | null, content: WorldContent | null): ViewDef[] 
         { id: "model", label: "Model", mode: "3d" },
         { id: "placed", label: "On the ground", mode: "3d" },
         { id: "lineup", label: "Line-up", mode: "3d" },
+        { id: "gallery", label: "Gallery", mode: "3d" },
         { id: "atlas", label: "Atlas", mode: "2d" },
       ];
     case "gearMaterials":
@@ -624,7 +627,7 @@ function renderPreviewBar(): void {
   if (view.mode === "3d") {
     viewOptions.append(
       select("Light", "time", TIME_PRESETS.map(([name]) => [name, name]), () => stage?.setTime(timeHours())),
-      ...(view.id === "model" || view.id === "lineup" ? [] : [select("Sky", "sky", [["", content ? `Auto (${autoSkyBiome(content, current).name})` : "Auto"], ...(content?.biomes ?? []).map((biome): [string, string] => [biome.id, biome.name])], rebuild),
+      ...(view.id === "model" || view.id === "lineup" || view.id === "gallery" ? [] : [select("Sky", "sky", [["", content ? `Auto (${autoSkyBiome(content, current).name})` : "Auto"], ...(content?.biomes ?? []).map((biome): [string, string] => [biome.id, biome.name])], rebuild),
       select("Ground", "shape", [
         ["flat", "Flat"],
         ["hills", "Hills"],
@@ -644,7 +647,13 @@ function renderPreviewBar(): void {
     if (isCharacterFolder(current.folder)) {
       viewOptions.append(
         ...characterChoices(rebuild),
-        select("Play", "animation", Object.entries(ANIMATIONS).map(([id, entry]): [string, string] => [id, entry.label]), rebuild),
+        ...(view.id === "gallery"
+          ? []
+          : [select("Play", "animation", [...Object.entries(ANIMATIONS).map(([id, entry]): [string, string] => [id, entry.label]), ...characterLists.clips], rebuild)]),
+        // A named animation held still part of the way through, to look at its pose.
+        ...(view.id === "gallery" || options.animation.startsWith("clip.")
+          ? [select("Frame", "frame", [["", "Playing"], ["0.1", "10%"], ["0.25", "25%"], ["0.4", "40%"], ["0.5", "50%"], ["0.6", "60%"], ["0.75", "75%"], ["0.9", "90%"]], rebuild)]
+          : []),
         ...(options.animation === "still" ? [select("Pose", "pose", Object.entries(POSES).map(([id, entry]): [string, string] => [id, entry.label]), rebuild)] : []),
         ...(options.animation === "still" || options.animation === "idle" || options.animation === "die"
           ? []
@@ -932,7 +941,8 @@ function characterInputs(asset: Asset): { race: RaceDef; gear: Map<string, GearM
     const races = resolveRaces(packs);
     const gearDefs = resolveGear(packs);
     const outfits = resolveOutfits(packs, gearDefs);
-    characterLists = { races: [...races.values()].map((r) => [r.id, r.name]), outfits: [...outfits.values()].map((o) => [o.id, o.name]) };
+    const clips = resolveAnimations(packs);
+    characterLists = { races: [...races.values()].map((r) => [r.id, r.name]), outfits: [...outfits.values()].map((o) => [o.id, o.name]), clips: clipChoices(clips) };
     // A race shows the outfit chosen; gear and an outfit are shown worn by the race chosen.
     const race = asset.folder === "races" ? races.get(asset.id)! : races.get(options.race) ?? [...races.values()][0];
     const worn = asset.folder === "gear" ? [gearDefs.get(asset.id)!] : (outfits.get(asset.folder === "outfits" ? asset.id : options.outfit)?.gear ?? []).map((id) => gearDefs.get(id)!);
@@ -950,7 +960,9 @@ function characterInputs(asset: Asset): { race: RaceDef; gear: Map<string, GearM
         seed,
         sex: options.sex === "male" || options.sex === "female" ? options.sex : null,
         sliders: Object.fromEntries((["height", "build"] as const).filter((key) => options[key] !== "").map((key) => [key, Number(options[key])])),
-        animation: (options.animation in ANIMATIONS ? options.animation : "still") as FigureOptions["animation"],
+        animation: (options.animation in ANIMATIONS || (options.animation.startsWith("clip.") && clips.has(options.animation.slice(5))) ? options.animation : "still") as FigureOptions["animation"],
+        clips,
+        frame: options.frame === "" ? null : Number(options.frame),
         speed: Number.isFinite(Number(options.speed)) ? Number(options.speed) : 1.2,
         path: options.path === "circle" ? "circle" : "place",
       },
@@ -969,8 +981,18 @@ const SLIDER_MENUS: [string, string][] = [
   ["build", "Build"],
 ];
 
+/** The groups named animations come in, in the order the Play menu and the Gallery list them. */
+const GROUP_ORDER = ["weapon", "magic", "everyday"];
+
+/** The Play menu's entries for the named animations: "Weapon: Slash", by group then name. */
+function clipChoices(clips: ReadonlyMap<string, AnimationClip>): [string, string][] {
+  return [...clips.values()]
+    .sort((a, b) => GROUP_ORDER.indexOf(a.group) - GROUP_ORDER.indexOf(b.group) || a.name.localeCompare(b.name))
+    .map((clip) => [`clip.${clip.id}`, `${clip.group[0].toUpperCase()}${clip.group.slice(1)}: ${clip.name}`]);
+}
+
 /** The races and outfits the packs have, as the last character preview read them - for the menus. */
-let characterLists: { races: [string, string][]; outfits: [string, string][] } = { races: [], outfits: [] };
+let characterLists: { races: [string, string][]; outfits: [string, string][]; clips: [string, string][] } = { races: [], outfits: [], clips: [] };
 
 /** The menus a character preview adds: the outfit a race wears, or the race gear is worn by. */
 function characterChoices(rebuild: () => void): HTMLLabelElement[] {
@@ -978,7 +1000,7 @@ function characterChoices(rebuild: () => void): HTMLLabelElement[] {
   if (characterLists.races.length === 0) {
     try {
       const packs = sourcesWithEdit();
-      characterLists = { races: [...resolveRaces(packs).values()].map((r) => [r.id, r.name]), outfits: [...resolveOutfits(packs, resolveGear(packs)).values()].map((o) => [o.id, o.name]) };
+      characterLists = { races: [...resolveRaces(packs).values()].map((r) => [r.id, r.name]), outfits: [...resolveOutfits(packs, resolveGear(packs)).values()].map((o) => [o.id, o.name]), clips: clipChoices(resolveAnimations(packs)) };
     } catch {
       // The preview reports what does not read.
     }
@@ -1037,7 +1059,37 @@ async function preview3d(token: number, asset: Asset, view: ViewDef, content: Wo
     if (!inputs) return;
     setStatus("Painting");
     await nextPaint();
-    if (view.id === "lineup") {
+    if (view.id === "gallery") {
+      // Every named animation at once, on the race chosen, a row a group: weapons, magic, everyday.
+      const painted = await paintedBody(inputs.race, inputs.gear, seed, inputs.options);
+      if (token !== previewToken) return;
+      const order = [...inputs.options.clips.values()].sort((a, b) => GROUP_ORDER.indexOf(a.group) - GROUP_ORDER.indexOf(b.group) || a.name.localeCompare(b.name));
+      const columns = 6;
+      const across = 1.5;
+      const back = 2.3;
+      const rows = Math.ceil(order.length / columns);
+      const figures = order.map((clip, i) => {
+        const column = i % columns;
+        const row = Math.floor(i / columns);
+        return figureFor(inputs.race, painted, { ...inputs.options, animation: `clip.${clip.id}`, speed: 0 }, (column - (columns - 1) / 2) * across, -row * back);
+      });
+      figure = (scene, shadows, height) => {
+        let tallest = 0;
+        for (const f of figures) tallest = Math.max(tallest, f(scene, shadows, height).height);
+        return { width: across * columns, height: tallest + rows * 0.4 };
+      };
+      // Which is which: row by row from the front, left to right as the camera first looks.
+      summary = document.createElement("div");
+      const title = document.createElement("h3");
+      title.textContent = "Animations, front row first, left to right";
+      const table = document.createElement("table");
+      for (let r = 0; r < rows; r++) {
+        const row = table.insertRow();
+        row.insertCell().textContent = `${r + 1}`;
+        row.insertCell().textContent = order.slice(r * columns, (r + 1) * columns).map((clip) => clip.name).reverse().join(" · ");
+      }
+      summary.append(title, table);
+    } else if (view.id === "lineup") {
       // Every race side by side, shortest first, in the same outfit, pose and animation.
       const races = [...resolveRaces(sourcesWithEdit()).values()];
       const painted = await Promise.all(races.map((race) => paintedBody(race, inputs.gear, seed, inputs.options)));
@@ -1100,7 +1152,7 @@ async function preview3d(token: number, asset: Asset, view: ViewDef, content: Wo
     ground,
     grass,
     shape: options.shape as GroundShape,
-    bare: view.id === "model" || view.id === "lineup",
+    bare: view.id === "model" || view.id === "lineup" || view.id === "gallery",
     trees,
     buildings,
     buildingColliders: options.colliders === "on" && (asset.folder === "buildings" || asset.folder === "props" || asset.folder === "features"),

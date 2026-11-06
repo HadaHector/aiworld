@@ -1,0 +1,17 @@
+// Turns in degrees, the same for both sides (see src/character/animationDef.ts): arms and legs x
+// forward and z out from the body; forearm x bends the elbow, shin -x the knee; spine, chest and
+// head x lean forward, y turn to the body's right. `drop` lowers the body by a share of its leg.
+// A bow of greeting or thanks: the right hand to the chest, a deep bend from the waist, a pause,
+// and upright again.
+{
+  name: "Bow",
+  group: "everyday",
+  layer: "full",
+  keys: [
+    { at: 0, pose: { upperArmR: [6, 0, 3], forearmR: [17, 0, 0], spine: [3, 0, 0], chest: [0, 0, 0], head: [0, 0, 0] } },
+    { at: 0.3, pose: { upperArmR: [38, 0, -28], forearmR: [115, 0, 0] } },
+    { at: 0.75, pose: { spine: [36, 0, 0], chest: [10, 0, 0], head: [18, 0, 0] } },
+    { at: 1.15, pose: { spine: [36, 0, 0], chest: [10, 0, 0], head: [18, 0, 0] } },
+    { at: 1.6, pose: { upperArmR: [6, 0, 3], forearmR: [17, 0, 0], spine: [3, 0, 0], chest: [0, 0, 0], head: [0, 0, 0] } },
+  ],
+}

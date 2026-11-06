@@ -1,0 +1,16 @@
+// Turns in degrees, the same for both sides (see src/character/animationDef.ts): arms and legs x
+// forward and z out from the body; forearm x bends the elbow, shin -x the knee; spine, chest and
+// head x lean forward, y turn to the body's right. `drop` lowers the body by a share of its leg.
+// Picking something up: a squat with the back bent, the right hand reaching to the ground and
+// closing on it, the left on the knee, and up again - herbs, loot, a dropped coin.
+{
+  name: "Pick up",
+  group: "everyday",
+  layer: "full",
+  keys: [
+    { at: 0, drop: 0, both: { thigh: [0, 0, 0], shin: [0, 0, 0], foot: [0, 0, 0] }, pose: { spine: [3, 0, 0], head: [0, 0, 0], upperArmR: [6, 0, 3], forearmR: [17, 0, 0], handR: [0, 0, 0], upperArmL: [6, 0, 3], forearmL: [17, 0, 0] } },
+    { at: 0.5, drop: 0.42, both: { thigh: [100, 0, 10], shin: [-120, 0, 0], foot: [28, 0, 0] }, pose: { spine: [32, 0, 0], head: [10, 0, 0], upperArmR: [72, 0, 2], forearmR: [12, 0, 0], handR: [10, 0, 0], upperArmL: [45, 0, 8], forearmL: [55, 0, 0] } },
+    { at: 0.8, drop: 0.42, pose: { handR: [45, 0, 0], forearmR: [20, 0, 0] } },
+    { at: 1.4, drop: 0, both: { thigh: [0, 0, 0], shin: [0, 0, 0], foot: [0, 0, 0] }, pose: { spine: [3, 0, 0], head: [0, 0, 0], upperArmR: [6, 0, 3], forearmR: [17, 0, 0], handR: [0, 0, 0], upperArmL: [6, 0, 3], forearmL: [17, 0, 0] } },
+  ],
+}
