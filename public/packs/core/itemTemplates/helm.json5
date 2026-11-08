@@ -1,0 +1,22 @@
+// Helms from parts: a material times how well they are made times a rarity - 2 x 3 x 3 = 18 types,
+// less the worn ones above common. A reward template (rules/quests.json5).
+{
+  kind: "armour",
+  slot: "head",
+  name: "{make} {material}",
+  axes: {
+    material: [
+      { id: "leather", name: "Leather Cap", gear: ["helm"], tint: "#5a3a22", stats: { armor: [10, 14], intellect: [1, 2] }, durability: 35 },
+      { id: "iron", name: "Iron Helm", gear: ["helm"], tint: "#9aa0a8", stats: { armor: [26, 34], stamina: [1, 2] }, level: 5, budget: 1.2, durability: 60 },
+    ],
+    make: [
+      { id: "worn", name: "Worn", budget: 0.8 },
+      { id: "sturdy", name: "Sturdy" },
+      { id: "fine", name: "Fine", budget: 1.15 },
+    ],
+  },
+  rarities: ["common", "uncommon", "rare"],
+  never: [{ make: "worn", rarity: "uncommon" }, { make: "worn", rarity: "rare" }],
+  extra: { stamina: [1, 2], strength: [1, 2], agility: [1, 2], spirit: [1, 2], intellect: [1, 2] },
+  value: 30,
+}

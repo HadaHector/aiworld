@@ -1,11 +1,18 @@
 // Quests (QUESTS.md): how many a character holds, what they give, ground objects, level colours.
 {
   maxActive: 25,
-  // XP at the quest's level: base + perLevel x level; as the character outgrows it, less, down to
-  // greyShare at `grey` levels over.
-  xp: { base: 80, perLevel: 45, grey: 6, greyShare: 0.1 },
-  // Money (copper): base + perLevel x level.
-  money: { base: 10, perLevel: 8 },
+  // Rewards follow the task (QUESTS.md, *Rewards*). A quest's effort is counted in kill-equivalents:
+  // what each objective asks, and the walking it takes (out and back to the farthest place or
+  // person). XP is the effort times a kill's XP at the quest's level times `rate` (a quest pays
+  // more than the kills it asks for, which are paid as well); money is the effort times a few coppers.
+  // So a long walk pays, a hunt pays more than a word with the innkeeper, and a letter to the next
+  // village pays for the road. As the character outgrows a quest by `grey` levels it falls to
+  // `greyShare`.
+  effort: { kill: 1, loot: 0.8, gather: 0.25, talk: 0.4, use: 1.5, reach: 0.5, travel: 0.4, levelOffset: 0.1 },
+  xp: { base: 45, perLevel: 5, rate: 1.5, grey: 6, greyShare: 0.1 },
+  money: { base: 4, perLevel: 2 },
+  // A chain's last quest also pays this share of everything the rest of it paid.
+  finale: 0.3,
   // Standing with the giver's faction.
   standing: 250,
   // Ground objects for gathering: how many stand at once, how soon a taken one is back (seconds).
@@ -14,8 +21,13 @@
   talkRange: 6,
   // Level colours: red from 5 over, orange from 3 over, green from 3 under, grey from 6 under.
   colours: { red: 5, orange: 3, green: -3, grey: -6 },
-  // What a quest's item choice is drawn from (item templates).
-  rewardTemplates: ["sword", "chestpiece"],
+  // What a quest's item choice is drawn from (item templates): a choice of `rewardChoices`, all of
+  // one rarity and about one level, from the kinds (weapon, armour) used least so far in the world,
+  // so the quests of an area do not all give a sword. The rarity aimed for is a quest's, and a
+  // chain's last quest's, higher.
+  rewardTemplates: ["sword", "chestpiece", "boots", "helm"],
+  rewardChoices: 3,
+  rewardRarity: { quest: "uncommon", finale: "rare" },
   // Quests a settlement gets, by tier, after any intro; chains count by their quests.
   quota: { hamlet: [2, 3], village: [4, 6], town: [7, 10] },
   // Chains drawn from segments (QUESTS.md, *Segments*): at most this many quests, and how likely

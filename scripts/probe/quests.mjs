@@ -374,6 +374,9 @@ async function generatedWorld(config, seed, weights = true) {
 await section("the generator", async () => {
   /** The stories the intro drew across these worlds. */
   const seen = new Set();
+  /** Every quest's effort (its XP over a kill-equivalent's at its level) by kind of task, and every item choice. */
+  const efforts = { talk: [], gather: [], hunt: [], road: [] };
+  const choices = [];
   for (const [config, seeds] of [["tiny", 3], ["small", 3]]) {
     for (let s = 0; s < seeds; s++) {
       const seed = 4000 + s * 911;
@@ -403,6 +406,24 @@ await section("the generator", async () => {
       const to = npcIds.get(letter?.ender);
       check(`${tag}: the road on to another settlement`, letter?.objectives.at(-1)?.kind === "deliver" && to && !to.id.startsWith(`npc:mainland/${start.settlement}/`), letter?.ender);
       check(`${tag}: an item to choose at the story's end`, story.at(-1)?.rewards.choice.length >= 2, JSON.stringify(story.at(-1)?.rewards.choice));
+      for (const q of w.quests) {
+        const finale = q.chain && q.chain.index === q.chain.of;
+        const kinds = q.objectives.map((o) => o.kind);
+        const rate = (w.rules.quests.xp.base + w.rules.quests.xp.perLevel * q.level) * w.rules.quests.xp.rate;
+        const effort = q.rewards.xp / rate;
+        if (!finale) {
+          if (kinds.some((k) => k === "kill" || k === "loot" || k === "use")) efforts.hunt.push(effort);
+          else if (kinds.includes("deliver")) efforts.road.push(effort);
+          else if (kinds.includes("gather")) efforts.gather.push(effort);
+          else efforts.talk.push(effort);
+        }
+        if (q.rewards.choice.length > 0) choices.push({ quest: q, items: q.rewards.choice.map((id) => w.items.types[w.items.typeIndex.get(id)]), rarities: w.items.rarities });
+      }
+      // What the starting settlement's quests are worth against the level curve (40 n^2 + 210 n from level n).
+      const startXp = startQuests.reduce((sum, x) => sum + x.rewards.xp, 0);
+      let reached = 1;
+      for (let spent = 0; spent + 40 * reached * reached + 210 * reached <= startXp; reached++) spent += 40 * reached * reached + 210 * reached;
+      log(`${tag}: the start's ${startQuests.length} quests give ${startXp} XP (level ${reached} on their own), ${startQuests.reduce((sum, x) => sum + x.rewards.money, 0)} copper; the intro alone ${intro.reduce((sum, x) => sum + x.rewards.xp, 0)} XP`);
       let bad = 0;
       let huntQuests = 0;
       for (const q of w.quests) {
@@ -446,6 +467,24 @@ await section("the generator", async () => {
       log(`${tag}: ${w.quests.length} quests in ${w.casts.size} settlements, ${people.length} quest people (${[...new Set(people.map((p) => p.role))].join(", ")})`);
     }
   }
+  // Rewards follow the task.
+  const mean = (list) => list.reduce((a, b) => a + b, 0) / Math.max(1, list.length);
+  log(`effort in kill-equivalents (xp over a kill's at the quest's level): talk ${mean(efforts.talk).toFixed(1)} (${efforts.talk.length}), gather ${mean(efforts.gather).toFixed(1)} (${efforts.gather.length}), hunt ${mean(efforts.hunt).toFixed(1)} (${efforts.hunt.length}), a letter down the road ${mean(efforts.road).toFixed(1)} (${efforts.road.length})`);
+  check("a word pays less than a gathering", mean(efforts.talk) < mean(efforts.gather), `${mean(efforts.talk).toFixed(1)} vs ${mean(efforts.gather).toFixed(1)}`);
+  check("a gathering pays less than a hunt", mean(efforts.gather) < mean(efforts.hunt), `${mean(efforts.gather).toFixed(1)} vs ${mean(efforts.hunt).toFixed(1)}`);
+  check("a letter down the road pays for the walk", mean(efforts.road) > mean(efforts.talk) * 3, `${mean(efforts.road).toFixed(1)} vs ${mean(efforts.talk).toFixed(1)}`);
+  // Item choices.
+  const rules0 = (await generatedWorld("tiny", 1)).rules.quests;
+  check("every choice offers what the rules say", choices.every((c) => c.items.length === rules0.rewardChoices), String(choices.map((c) => c.items.length)));
+  check("...all of one rarity", choices.every((c) => new Set(c.items.map((x) => x.rarity)).size === 1));
+  check("...no item twice", choices.every((c) => new Set(c.items.map((x) => x.id)).size === c.items.length));
+  const rank = (c) => c.rarities[c.items[0].rarity].order;
+  check("a chain's last quest aims for the higher rarity", choices.every((c) => !(c.quest.chain && c.quest.chain.index === c.quest.chain.of) || c.rarities[c.items[0].rarity].id === rules0.rewardRarity.finale), JSON.stringify([...new Set(choices.map((c) => c.rarities[c.items[0].rarity].id))]));
+  const weapons = choices.flatMap((c) => c.items).filter((x) => x.kind === "weapon").length;
+  const all = choices.flatMap((c) => c.items).length;
+  log(`${choices.length} item choices of ${rules0.rewardChoices}: ${weapons} weapons, ${all - weapons} armour; templates ${JSON.stringify(Object.fromEntries([...new Set(choices.flatMap((c) => c.items.map((x) => x.template)))].map((t) => [t, choices.flatMap((c) => c.items).filter((x) => x.template === t).length])))}`);
+  check("weapons and armour are both offered through the worlds", weapons / all >= 0.3 && weapons / all <= 0.7, `${weapons}/${all}`);
+  check("no choice is all weapons", choices.every((c) => c.items.some((x) => x.kind !== "weapon")));
   log(`the intro drew ${seen.size} different stories in these worlds: ${[...seen].map((x) => x?.replace(/^affliction#/, "")).join("; ")}`);
   check("the worlds drew more than one story", seen.size >= 3, String(seen.size));
   // One offer as a reader sees it.

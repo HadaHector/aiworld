@@ -1,0 +1,23 @@
+// Boots from parts: a material times how well they are made times a rarity - 2 x 3 x 3 = 18 types,
+// less the worn ones above common. A reward template (rules/quests.json5), beside the sword and the
+// chestpiece: footwear for the quests' choices of one of three.
+{
+  kind: "armour",
+  slot: "feet",
+  name: "{make} {material}",
+  axes: {
+    material: [
+      { id: "leather", name: "Leather Boots", gear: ["boots"], stats: { armor: [8, 12], agility: [1, 2] }, durability: 35 },
+      { id: "ironshod", name: "Ironshod Boots", gear: ["boots"], tint: "#9aa0a8", stats: { armor: [20, 26], stamina: [1, 2] }, level: 5, budget: 1.2, durability: 55 },
+    ],
+    make: [
+      { id: "worn", name: "Worn", budget: 0.8 },
+      { id: "sturdy", name: "Sturdy" },
+      { id: "fine", name: "Fine", budget: 1.15 },
+    ],
+  },
+  rarities: ["common", "uncommon", "rare"],
+  never: [{ make: "worn", rarity: "uncommon" }, { make: "worn", rarity: "rare" }],
+  extra: { stamina: [1, 2], strength: [1, 2], agility: [1, 2], spirit: [1, 2] },
+  value: 25,
+}

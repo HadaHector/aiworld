@@ -85,10 +85,17 @@ export const kindMatches = (filter: KindFilter, kind: string): boolean => filter
 /** `rules/quests.json5` (QUESTS.md): numbers the quests run by. */
 export interface QuestRules {
   maxActive: number;
-  /** XP: `base + perLevel × level` at the quest's level, falling to `greyShare` as the character
-   *  outgrows it by `grey` levels. */
-  xp: { base: number; perLevel: number; grey: number; greyShare: number };
+  /** XP for one unit of effort (a kill-equivalent): `(base + perLevel × level) × rate` at the quest's
+   *  level, falling to `greyShare` as the character outgrows it by `grey` levels. */
+  xp: { base: number; perLevel: number; rate: number; grey: number; greyShare: number };
+  /** Money for one unit of effort: `base + perLevel × level`. */
   money: { base: number; perLevel: number };
+  /** Effort, in kill-equivalents (QUESTS.md, *Rewards*): per kill, per kill a drop takes, per object
+   *  gathered, per talk, per use, per place gone to, per 100 m walked, and the share a creature's level
+   *  offset adds to a kill. */
+  effort: { kill: number; loot: number; gather: number; talk: number; use: number; reach: number; travel: number; levelOffset: number };
+  /** A chain's last quest also pays this share of what the rest of it paid. */
+  finale: number;
   /** Standing with the giver's faction a quest gives. */
   standing: number;
   /** Ground objects for gathering: how many stand at once, and how soon a taken one is back. */
@@ -97,8 +104,12 @@ export interface QuestRules {
   talkRange: number;
   /** Level colours: how far over or under the character's level each starts. */
   colours: { red: number; orange: number; green: number; grey: number };
-  /** What a quest's item choice is drawn from: item templates by slot kind. */
+  /** What a quest's item choice is drawn from: item templates, balanced by kind (weapon, armour). */
   rewardTemplates: string[];
+  /** How many items a choice offers. */
+  rewardChoices: number;
+  /** The rarity a choice aims for (at most; the best every option has): a quest's, and a chain's last. */
+  rewardRarity: { quest: string; finale: string };
   /** Quests a settlement gets, by tier, chains counted by their quests. */
   quota: Record<string, [number, number]>;
   /** How far round a settlement its quests look for places, in metres. */
@@ -137,7 +148,7 @@ type Entry = { id: string; file: string; data: unknown };
 export function readQuestRules(entry: { file: string; data: unknown } | undefined, partEntries: readonly Entry[], segmentEntries: readonly Entry[], plotEntries: readonly Entry[], voiceEntries: readonly Entry[], issues: ContentIssue[]): QuestRules {
   const reader = new Reader(issues, entry?.file ?? "rules/quests.json5");
   const obj = entry ? reader.object(entry.data, "") : {};
-  reader.onlyKeys(obj, "", ["maxActive", "xp", "money", "standing", "objects", "talkRange", "colours", "rewardTemplates", "quota", "reach", "plurals", "fields", "whens", "chain", "weighting"]);
+  reader.onlyKeys(obj, "", ["maxActive", "xp", "money", "standing", "objects", "talkRange", "colours", "rewardTemplates", "rewardChoices", "rewardRarity", "effort", "finale", "quota", "reach", "plurals", "fields", "whens", "chain", "weighting"]);
   const parts = new Map(readQuestParts(partEntries, issues).map((p) => [p.id, p]));
   const segments = new Map(readQuestSegments(segmentEntries, parts, issues).map((s) => [s.id, s]));
   const voices = new Map<string, Line[]>();
@@ -196,15 +207,29 @@ export function readQuestRules(entry: { file: string; data: unknown } | undefine
   const money = obj.money === undefined ? {} : reader.object(obj.money, "money");
   const objects = obj.objects === undefined ? {} : reader.object(obj.objects, "objects");
   const colours = obj.colours === undefined ? {} : reader.object(obj.colours, "colours");
+  const effort = obj.effort === undefined ? {} : reader.object(obj.effort, "effort");
+  const rarity = obj.rewardRarity === undefined ? {} : reader.object(obj.rewardRarity, "rewardRarity");
   return {
     maxActive: reader.optionalNumber(obj, "maxActive", "", 25, { min: 1, integer: true }),
     xp: {
-      base: reader.optionalNumber(xp, "base", "xp", 80),
-      perLevel: reader.optionalNumber(xp, "perLevel", "xp", 40),
+      base: reader.optionalNumber(xp, "base", "xp", 45),
+      perLevel: reader.optionalNumber(xp, "perLevel", "xp", 5),
+      rate: reader.optionalNumber(xp, "rate", "xp", 1.5, { min: 0 }),
       grey: reader.optionalNumber(xp, "grey", "xp", 6, { min: 1 }),
       greyShare: reader.optionalNumber(xp, "greyShare", "xp", 0.1, { min: 0, max: 1 }),
     },
-    money: { base: reader.optionalNumber(money, "base", "money", 10), perLevel: reader.optionalNumber(money, "perLevel", "money", 8) },
+    money: { base: reader.optionalNumber(money, "base", "money", 4), perLevel: reader.optionalNumber(money, "perLevel", "money", 2) },
+    effort: {
+      kill: reader.optionalNumber(effort, "kill", "effort", 1, { min: 0 }),
+      loot: reader.optionalNumber(effort, "loot", "effort", 0.8, { min: 0 }),
+      gather: reader.optionalNumber(effort, "gather", "effort", 0.25, { min: 0 }),
+      talk: reader.optionalNumber(effort, "talk", "effort", 0.4, { min: 0 }),
+      use: reader.optionalNumber(effort, "use", "effort", 1.5, { min: 0 }),
+      reach: reader.optionalNumber(effort, "reach", "effort", 0.5, { min: 0 }),
+      travel: reader.optionalNumber(effort, "travel", "effort", 0.4, { min: 0 }),
+      levelOffset: reader.optionalNumber(effort, "levelOffset", "effort", 0.1, { min: 0 }),
+    },
+    finale: reader.optionalNumber(obj, "finale", "", 0.3, { min: 0 }),
     standing: reader.optionalNumber(obj, "standing", "", 250),
     objects: {
       count: reader.optionalNumber(objects, "count", "objects", 8, { min: 1, integer: true }),
@@ -219,6 +244,8 @@ export function readQuestRules(entry: { file: string; data: unknown } | undefine
       grey: reader.optionalNumber(colours, "grey", "colours", -6),
     },
     rewardTemplates: obj.rewardTemplates === undefined ? [] : reader.stringList(obj, "rewardTemplates", ""),
+    rewardChoices: reader.optionalNumber(obj, "rewardChoices", "", 3, { min: 1, integer: true }),
+    rewardRarity: { quest: reader.optionalString(rarity, "quest", "rewardRarity") ?? "uncommon", finale: reader.optionalString(rarity, "finale", "rewardRarity") ?? "rare" },
     quota,
     reach: reader.optionalNumber(obj, "reach", "", 1000, { min: 0 }),
     plurals,

@@ -269,6 +269,40 @@ export function generateQuests(input: GeneratorInput): QuestDef[] {
       args[`${name}Sex`] = person.sex;
     }
     const speaking = (who: CastNpc, tags: readonly string[]): LineContext => ({ mood: who.mood, role: who.role ?? "", sex: who.sex, age: who.age, place: place?.quest.tags ?? [], object: object?.tags ?? [], creature: beast ? [beast.family, ...beast.tags] : [], tags, tier: site.tier });
+    /** What a quest asks of the player, in kill-equivalents (QUESTS.md, *Rewards*): its objectives, and
+     *  the walking to the farthest place or person - out and back, but one way to the next settlement. */
+    const effortOf = (objectives: readonly Objective[]): number => {
+      const e = q.effort;
+      const person = (npcId: string): CastNpc | undefined => [...people.values()].find((p) => p.id === npcId);
+      const away = (npcId: string): { metres: number; oneWay: boolean } => {
+        if (other?.npc?.id === npcId) return { metres: other.distance, oneWay: true };
+        const spot = person(npcId)?.spot;
+        return { metres: spot ? Math.hypot(spot.x - layout.x, spot.z - layout.z) : 0, oneWay: false };
+      };
+      const hard = 1 + e.levelOffset * Math.max(0, beast?.levelOffset ?? 0);
+      let units = 0;
+      let metres = 0;
+      let oneWay = false;
+      const go = (to: { metres: number; oneWay: boolean }): void => {
+        if (to.metres > metres) {
+          metres = to.metres;
+          oneWay = to.oneWay;
+        }
+      };
+      for (const o of objectives) {
+        switch (o.kind) {
+          case "kill": units += o.count * e.kill * hard; break;
+          case "loot": units += (o.count / Math.max(0.05, o.chance)) * e.loot * hard; break;
+          case "use": units += o.count * e.use; break;
+          case "gather": units += o.count * e.gather; go({ metres: Math.hypot(o.area.x - layout.x, o.area.z - layout.z), oneWay: false }); break;
+          case "reach": units += e.reach; go({ metres: Math.hypot(o.area.x - layout.x, o.area.z - layout.z), oneWay: false }); break;
+          case "talk": units += e.talk; go(away(o.npc)); break;
+          case "receive": units += e.talk; go(away(o.from)); break;
+          case "deliver": units += e.talk; go(away(o.to)); break;
+        }
+      }
+      return Math.max(0.25, units + ((oneWay ? metres : metres * 2) / 100) * e.travel);
+    };
     const t = (text: string): Text => ({ text, args });
     const id = (n: number): string => `q:${input.castInput.dimension}/${site.id}/${quests.length + n}`;
     const made: QuestDef[] = [];
@@ -322,7 +356,8 @@ export function generateQuests(input: GeneratorInput): QuestDef[] {
       const answering = speaking(ender, pq.tags);
       const progress = tidy(pickLine(local, pq.progress, answering)) || "Well?";
       const done = tidy(pickLine(local, pq.done, answering)) || "My thanks.";
-      const xp = Math.round(q.xp.base + q.xp.perLevel * lvl);
+      const effort = effortOf(objectives);
+      const xp = Math.round(effort * (q.xp.base + q.xp.perLevel * lvl) * q.xp.rate);
       const previous = n === 0 ? after : made[n - 1].id;
       made.push({
         id: id(n),
@@ -330,14 +365,16 @@ export function generateQuests(input: GeneratorInput): QuestDef[] {
         giver: giverNpc.id,
         ender: ender.id,
         chain: plot.quests.length > 1 ? { id: `${id(0)}#${plot.id}`, index: n + 1, of: plot.quests.length } : null,
-        requires: { quests: previous ? [previous] : [], level: Math.max(1, lvl - 2) },
+        // Only the first quest of a chain asks a level, and not the intro's, which is for a character just made: the rest ask
+        // the one before, so a story is never stuck for want of XP.
+        requires: { quests: previous ? [previous] : [], level: n === 0 && !plot.intro ? Math.max(1, lvl - 2) : 1 },
         objectives,
         ordered: true,
         text: { title: t(title), offer: { text: offer, args }, progress: t(progress), done: t(done) },
         rewards: {
-          xp: n === plot.quests.length - 1 ? xp * 2 : xp,
-          money: Math.round(q.money.base + q.money.perLevel * lvl),
-          choice: pq.choice ? rewardChoice(local, lvl) : [],
+          xp,
+          money: Math.max(1, Math.round(effort * (q.money.base + q.money.perLevel * lvl))),
+          choice: pq.choice ? rewardChoice(local, lvl, plot.quests.length > 1 && n === plot.quests.length - 1) : [],
           items: [],
           standing: [{ faction: input.folk, amount: q.standing }],
         },
@@ -345,6 +382,13 @@ export function generateQuests(input: GeneratorInput): QuestDef[] {
         where: [],
       });
     });
+    // A chain's last quest also pays a share of what the rest of it paid.
+    if (made.length > 1) {
+      const rest = made.slice(0, -1);
+      const finale = made[made.length - 1].rewards;
+      finale.xp += Math.round(q.finale * rest.reduce((sum, m) => sum + m.rewards.xp, 0));
+      finale.money += Math.round(q.finale * rest.reduce((sum, m) => sum + m.rewards.money, 0));
+    }
     lines.set(giver.index, (lines.get(giver.index) ?? 0) + 1);
     usedPlots.add(plot.id);
     record(place, beast, object, made.flatMap((m) => m.objectives));
@@ -355,20 +399,50 @@ export function generateQuests(input: GeneratorInput): QuestDef[] {
     return input.items?.types[input.items.typeIndex.get(id) ?? -1]?.name ?? id;
   }
 
-  /** Two or three items from the reward templates near a quest's level, one of each kind where it can. */
-  function rewardChoice(local: Rng, lvl: number): string[] {
+  /**
+   * A choice of items for a quest's reward (QUESTS.md, *Rewards*): `rewardChoices` of them, balanced.
+   * Every option is of one rarity - the best that all the templates it draws on have, up to the one
+   * aimed for (a chain's last quest aims higher) - and about the quest's level, so none is simply
+   * better. The kinds (weapon, armour) go round: the one offered least so far in the world comes first
+   * and again, so the quests of an area do not all give a sword; within a kind, the template used
+   * least, and the type used least. No type twice in a choice.
+   */
+  function rewardChoice(local: Rng, lvl: number, finale: boolean): string[] {
     const items = input.items;
     if (!items) return [];
+    const aim = items.rarities.find((r) => r.id === (finale ? q.rewardRarity.finale : q.rewardRarity.quest))?.order ?? Infinity;
+    const used = (key: string): number => world.uses.get(key) ?? 0;
+    const bump = (key: string): void => void world.uses.set(key, used(key) + 1);
+    /** A template's types about the quest's level. */
+    const nearLevel = (template: string) => (items.generated.get(template) ?? []).map((i) => items.types[i]).filter((t) => t.itemLevel <= lvl + 2 && t.itemLevel >= lvl - 4);
+    const templates = q.rewardTemplates.map((id) => ({ id, types: nearLevel(id) })).filter((t) => t.types.length > 0);
+    if (templates.length === 0) return [];
+    // The rarity every template can offer, up to the one aimed for.
+    const best = Math.min(...templates.map((t) => Math.max(...t.types.map((x) => items.rarities[x.rarity].order).filter((o) => o <= aim), -Infinity)));
+    const rarity = Number.isFinite(best) ? best : Math.min(...templates.flatMap((t) => t.types.map((x) => items.rarities[x.rarity].order)));
+    // The level every option aims for: the lowest of the levels each template comes nearest the quest's
+    // at, so no option is a tier above another where the templates' tiers differ.
+    const nearest = (types: readonly { itemLevel: number }[], to: number): number => types.map((x) => x.itemLevel).sort((a, b) => Math.abs(a - to) - Math.abs(b - to) || a - b)[0];
+    const level = Math.min(...templates.map((t) => nearest(t.types, lvl)));
+    // Kinds, the least offered first; ties by the draw.
+    const kindOf = (id: string): string => items.types[items.generated.get(id)?.[0] ?? 0]?.kind ?? "";
+    const kinds = [...new Set(templates.map((t) => kindOf(t.id)))].sort((a, b) => used(`reward:kind:${a}`) - used(`reward:kind:${b}`) || local() - 0.5);
     const out: string[] = [];
-    for (const template of q.rewardTemplates) {
-      const fits = (items.generated.get(template) ?? []).map((i) => items.types[i]).filter((t) => t.itemLevel <= lvl + 2 && t.itemLevel >= lvl - 4 && items.rarities[t.rarity]?.id !== "common");
-      const pool = fits.length > 0 ? fits : (items.generated.get(template) ?? []).map((i) => items.types[i]).filter((t) => t.itemLevel <= lvl + 2);
-      if (pool.length > 0) out.push(pick(local, pool).id);
+    for (let i = 0; out.length < q.rewardChoices && i < q.rewardChoices * 3; i++) {
+      const kind = kinds[i % kinds.length];
+      const ofKind = templates.filter((t) => kindOf(t.id) === kind).sort((a, b) => used(`reward:template:${a.id}`) - used(`reward:template:${b.id}`) || local() - 0.5);
+      const template = ofKind[Math.floor(i / kinds.length) % ofKind.length];
+      // The types at that rarity nearest that level (the lower, if two are as near), then one the world has seen least of.
+      const atRarity = template.types.filter((x) => items.rarities[x.rarity].order === rarity && !out.includes(x.id));
+      if (atRarity.length === 0) continue;
+      const aimLevel = nearest(atRarity, level);
+      const pool = atRarity.filter((x) => x.itemLevel === aimLevel);
+      const type = pickBy(local, pool, (x) => 1 / (1 + used(`reward:type:${x.id}`)));
+      out.push(type.id);
+      bump(`reward:kind:${kind}`);
+      bump(`reward:template:${template.id}`);
+      bump(`reward:type:${type.id}`);
     }
-    // A third: another of the first template, a different one.
-    const first = items.generated.get(q.rewardTemplates[0] ?? "") ?? [];
-    const extra = first.map((i) => items.types[i]).filter((t) => t.itemLevel <= lvl + 2 && !out.includes(t.id));
-    if (extra.length > 0 && out.length < 3) out.push(pick(local, extra).id);
     return out;
   }
 

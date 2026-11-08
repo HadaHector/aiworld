@@ -503,14 +503,56 @@ or taken away as the line says).
 
 ## Rewards
 
+Rewards follow the task, and are fixed by the seed: a quest pays the same to everyone, so logging out
+rerolls nothing.
+
 | Reward | How |
 |---|---|
-| XP | `progression.award(entity, "quest", { quest })`: the existing hook. Core's adventure discipline gains a `quest` source with an amount formula of `quest.level` and the character's level (Classic's shape: a quest at level is worth several kills, less when grey) |
-| Money | A formula of `quest.level` in `rules/quests.json5` |
-| Item choice | Two or three items from item templates (ITEMS.md) at `quest.level`, chosen by slots the character's class can use (a weapon, an armour piece in its armour kind, a trinket); rolled from the seed, the quest and the character, so logging out does not reroll them |
-| Fixed item | A plot may name one instead |
-| Standing | With the giver's faction (NPCS.md, *Factions*), an amount per quest in rules |
+| XP | The quest's **effort** times a kill's XP at its level times `rate`, through `progression.award(entity, "quest", ...)`, falling to `greyShare` as the character outgrows it |
+| Money | The effort times `money.base + money.perLevel x level` |
+| Item choice | `rewardChoices` (3) items from the reward templates, **balanced** (below). Only a chain's last quest gives one today |
+| Fixed item | A plot may name one instead (not yet used) |
+| Standing | With the giver's faction (NPCS.md, *Factions*), a flat amount per quest in rules |
 | Unlocks | PROGRESSION.md's `how: "quest"`: a quest may teach an ability or open a discipline |
+
+### Effort
+
+A quest's effort is counted in **kill-equivalents**, from what its objectives ask and how far they
+take the player (`rules/quests.json5`'s `effort`):
+
+| Objective | Effort |
+|---|---|
+| kill | 1 each, a tenth more for each level a kind stands above the zone's middle |
+| loot | 0.8 for each kill a drop takes (the count over its chance) |
+| gather | 0.25 each |
+| talk, receive, deliver | 0.4 each |
+| use | 1.5 each |
+| reach | 0.5 |
+| **walking** | 0.4 per 100 m to the farthest place or person: out and back, but one way for a letter to the next settlement |
+
+So a word with the innkeeper is worth a fraction of a kill, a hunt pays more than the kills it asks
+for (which are paid as well), a gathering out at a far churchyard pays more than one at the fields,
+and a letter to the next village pays for the road. XP is the effort times `(45 + 5 x level) x 1.5`:
+the kill XP of PROGRESSION.md's adventure discipline, and a quest's rate over it.
+
+A chain's **last quest also pays a share** (`finale`, 0.3) of everything the rest of it paid, so a
+long story ends better than a short one.
+
+### Item choices
+
+- **One rarity, one tier.** Every option in a choice is of the same rarity: the best that all the
+  templates it draws on have, up to the one aimed for (`rewardRarity`: `uncommon` for a quest, `rare`
+  for a chain's last), so the end of a story is better than a single errand. The options are about
+  the quest's level: the lowest of the tiers each template comes nearest to it at, so none is a tier
+  above another where the templates' tiers differ (sword, chestpiece and boots all start at level 1).
+- **Kinds go round.** The kind (weapon, armour) offered least so far in the world comes first and
+  again; within a kind the template used least, and then the type used least. Over a world the
+  weapons and the armour are about even and no choice is all swords, however many quests give one.
+  A kind is the item type's `kind`, so a new template (rings, a shield) joins in by being listed in
+  `rewardTemplates`.
+- **No item twice in a choice.** All of this reads the same shared world state as the weighting
+  ([Weighting](#weighting)).
+- **Not yet class-aware**: a priest is still offered a sword.
 
 ## Saved
 
@@ -832,8 +874,20 @@ After NPCS.md's five steps. Each leaves the game working: the dev server (`?play
   settlement on average (360 m without), 6 pairs of them within 150 m of each other (12 without), and
   a greater share are at different places (90% against 81%).
 
+- **Rewards by effort.** XP and money follow the task (see [Rewards](#rewards)): effort in
+  kill-equivalents, a rate over a kill's XP, a share of the chain for its last quest. A chain's quests
+  after the first ask no level, and the intro's none at all (a character just made would be stuck
+  after one word with the innkeeper, which now pays 36 XP). Item choices are balanced (one rarity,
+  one tier, kinds going round), a chain's last quest aims one rarity higher, and there are two new
+  reward templates, boots and helm, and a rare chestpiece. **Measured** in six generated worlds: a
+  word pays 1.1 kill-equivalents on average, a gathering 2.4, a hunt 6.0 and a letter down the road
+  4.1; the starting settlement's 12-14 quests give 3300-4000 XP on their own (level 5), the intro
+  alone 1450-2430 (level 4 or so) - generous, and `xp.rate` is the number to turn down. Of 29 item
+  choices, 44 of 87 options are weapons.
+
 ## Later
 
+- Item choices a character's class can use (a priest is still offered a sword), and a trinket kind.
 - A death a character *meets*: an NPC the quest has killed is not there when the character comes
   back, or is found dead. That needs an NPC's state per character (hidden or dead for those on the
   quest) in a shared world, and a quest effect to set it.
