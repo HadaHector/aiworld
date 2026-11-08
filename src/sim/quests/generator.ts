@@ -68,6 +68,17 @@ const pick = <T>(rng: Rng, list: readonly T[]): T => list[Math.floor(rng() * lis
 const between = (rng: Rng, [lo, hi]: readonly [number, number]): number => lo + Math.floor(rng() * (hi - lo + 1));
 
 const GENERATOR_SALT = 31_337;
+const ORDER_SALT = 41_011;
+
+/**
+ * The order a dimension's settlements' quests are made in, all together as it loads (QUESTS.md,
+ * *The generator*): shuffled by the seed, so no settlement always gets the first pick of what the
+ * world has, and the same whatever order the settlements are listed in.
+ */
+export function questOrder(seed: number, dimension: string, siteIds: readonly number[]): number[] {
+  const key = (id: number): number => deriveSeed(seed, ORDER_SALT + hashString(dimension) * 17 + id);
+  return [...siteIds].sort((a, b) => key(a) - key(b) || a - b);
+}
 
 /** `[this|that|]`: one of the alternatives is said, one of them perhaps nothing. */
 const ALTERNATIVES = /\[([^\[\]|]*(?:\|[^\[\]|]*)+)\]/g;

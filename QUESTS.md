@@ -14,7 +14,7 @@ first milestone.
 
 | Question | Decision |
 |---|---|
-| Where quests are | **Anywhere.** The generator works for any settlement in the world, with what is around it. It runs lazily, when a settlement's cast is first needed. The starting village's intro chain is one use of it, not a special case in code |
+| Where quests are | **Anywhere.** The generator works for any settlement in the world, with what is around it. It runs for the whole world at once, when its dimension loads (see [The generator](#the-generator)): every settlement's cast and quests are made together, in a seed-shuffled order, before anyone is near. The starting village's intro chain is one use of it, not a special case in code |
 | Quest people | **Many NPCs exist only to fill a role in a quest**: the generator asks for a hermit at the ruin, a traveller on the road, and they are made to fit (see [Quest people](#quest-people)). *Read from the user's answer: "Mennyi mpc's árolni exit to fulfill roll in a quest". Correct this if it meant something else* |
 | Story | **From the NPCs' relations and from the surroundings.** A quest's motive comes from who the giver is and who they are tied to (the smith's missing apprentice, a feud between two farms), and from what is near: the churchyard over the hill, the quarry, the bandit camp, the river, the next village down the road. No deep generated history yet |
 | Co-op | **WoW-like.** Kill credit goes to everyone who took part in the kill; quest drops roll for every player who needs them; ground objects sparkle and can be taken only by players on the quest, each their own. Shared world, no competing over objectives |
@@ -630,7 +630,8 @@ After NPCS.md's five steps. Each leaves the game working: the dev server (`?play
 - **Step 9, the generator.** `src/sim/quests/generator.ts` (`generateQuests`), `src/sim/quests/plots.ts`
   (reading `questParts/` and `questPlots/`), the features' `quest` blocks, and quest people.
   - **When:** a settlement's quests are made the moment its cast is (the NPC system's `castMade`,
-    when a player first comes near), and defined with the quest system. Ids are
+    when a player first comes near), and defined with the quest system. *(Replaced: see "Global
+    generation" below.)* Ids are
     `q:<dimension>/<site>/<n>` in the order drawn. A character back in the world whose quests are
     made only then is sent them (`questDefs`).
   - **Context:** the cast (people out, with roles and relations), the zone's level band and roster
@@ -721,7 +722,27 @@ After NPCS.md's five steps. Each leaves the game working: the dev server (`?play
   arguments. **Checked:** the probe walks every possible chain without a world (38 at most 4 long),
   and over the generated worlds that no offer repeats, no text has an empty argument or stray markup.
 
+- **Global generation.** Quests are no longer made lazily. The NPC system makes every settlement's
+  cast as a dimension loads and hands them all to the server (`castsMade`), which makes every
+  settlement's quests in one pass, in `questOrder` (the settlements shuffled by the seed, so no
+  settlement always has the first pick and the order does not depend on how they are listed), and
+  defines them together. Why: it costs next to nothing (the full default world, 62 settlements, takes
+  81 ms for casts and quests together, against some 23 s to shape the world), and it lets a settlement
+  see what the others have used, which is what weighting by distance, reuse and crowding needs
+  ([Later](#later)). Also: the road-on pointer reads the other settlement's real cast, not a copy made
+  for it; a quest person out at a ruin stands there, and is met, before anyone has been near their
+  settlement; a character back in a dimension has its quests defined at once. A settlement's quests
+  are still a pure function of the seed and the packs; today they do not depend on the order, and
+  once weighting reads what earlier settlements used they will, in `questOrder`'s fixed one - and a
+  change to one plot's data can then reshuffle quests in settlements made after it, not only in its
+  own. **Checked:** every settlement of a world has quests before anyone is near, and the order is a
+  permutation that is the same however the settlements are listed and differs by seed.
+
 ## Later
+
+- Weight what quest, segment, place and creature to use by how far the place is, how many other
+  quests already use it (in this settlement and in the ones made before), and how many objectives
+  already lie in the area, with a penalty for crowding; constants in `rules/quests.json5`.
 
 - Repeatable and daily quests (`repeat`).
 - Escorts, defend-a-place and timed events as parts.

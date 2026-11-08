@@ -14,6 +14,7 @@ import { createWorldRecord } from "../../src/save/records.ts";
 import { addThreat } from "../../src/sim/skills/combat.ts";
 import { fillText } from "../../src/sim/text.ts";
 import { composeChain, themeFits } from "../../src/sim/quests/chains.ts";
+import { questOrder } from "../../src/sim/quests/generator.ts";
 
 let failures = 0;
 let checks = 0;
@@ -296,6 +297,16 @@ await section("segments", async () => {
   check("wanting creatures nobody is does not fit", composeChain("x", [{ ...get("foldTrouble"), creatures: { hostility: ["hostile"], family: null } }, { ...get("pelts"), roles: ["middle"], creatures: { hostility: ["friendly"], family: null } }]) === null);
 });
 
+// --- the order the world's quests are made in ---
+await section("quest order", () => {
+  const ids = Array.from({ length: 40 }, (_, i) => i);
+  const a = questOrder(1, "mainland", ids);
+  check("a permutation of the settlements", [...a].sort((x, y) => x - y).join() === ids.join());
+  check("the same however they are listed", questOrder(1, "mainland", [...ids].reverse()).join() === a.join());
+  check("shuffled, not in id order", a.join() !== ids.join());
+  check("different for another seed", questOrder(2, "mainland", ids).join() !== a.join());
+});
+
 // --- the generator: every settlement's quests, well formed, the same for the same seed ---
 /** A server on a config and seed, with one quick player at the start; its casts made on asking. */
 async function generatedWorld(config, seed) {
@@ -314,14 +325,14 @@ async function generatedWorld(config, seed) {
     server.step(1 / 30);
     for (const m of channel.client.receive()) if (m.type === "transfer") channel.client.send({ type: "arrived" });
   }
-  // Every settlement's cast, and with it its quests.
-  const casts = new Map(worldData.settlementLayouts.map((l) => [l.siteId, server.debug.npcs.debug.cast("mainland", l.siteId)]));
+  // Every settlement's quests exist as soon as the dimension has loaded, with no one near them.
   const quests = [];
   for (const l of worldData.settlementLayouts) for (let n = 0; ; n++) {
     const def = server.debug.quests.def(`q:mainland/${l.siteId}/${n}`);
     if (!def) break;
     quests.push(def);
   }
+  const casts = new Map(worldData.settlementLayouts.map((l) => [l.siteId, server.debug.npcs.debug.cast("mainland", l.siteId)]));
   return { server, rules, items, worldData, casts, quests, channel };
 }
 
@@ -332,6 +343,7 @@ await section("the generator", async () => {
       const tag = `${config} seed ${seed}`;
       const w = await generatedWorld(config, seed);
       const again = await generatedWorld(config, seed);
+      check(`${tag}: every settlement has quests before anyone is near`, w.worldData.settlementLayouts.every((l) => w.quests.some((q) => q.id.startsWith(`q:mainland/${l.siteId}/`))), `${w.quests.length} quests`);
       check(`${tag}: the same quests twice`, JSON.stringify(w.quests) === JSON.stringify(again.quests));
       const npcIds = new Map();
       for (const cast of w.casts.values()) for (const n of cast?.npcs ?? []) npcIds.set(n.id, n);

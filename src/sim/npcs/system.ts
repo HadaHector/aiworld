@@ -29,9 +29,10 @@ export interface NpcWorld {
   delta: WorldDelta;
   /** The world's classes, for class trainers. */
   classes: readonly { id: string; name: string }[];
-  /** A settlement's cast has just been made: its quests are generated now, and the quest people
-   *  they need added to it before anyone is placed (QUESTS.md, *The generator*). */
-  castMade?(dimension: string, settlement: { site: SettlementSite; layout: SettlementLayout }, cast: Cast, context: CastContext): void;
+  /** Every settlement's cast of a dimension has just been made, as it loads: its quests are
+   *  generated now, all of them in one go, and the quest people they need added to the casts before
+   *  anyone is placed (QUESTS.md, *The generator*). */
+  castsMade?(dimension: string, settlements: readonly { site: SettlementSite; layout: SettlementLayout; cast: Cast }[], context: CastContext): void;
   /** Says a bark: its text as said, to the players near. */
   bark(npc: Entity, text: Text, to: readonly Entity[]): void;
 }
@@ -304,17 +305,9 @@ export function createNpcSystem(rules: GameRules, world: NpcWorld): NpcSystem {
   }
 
   const spotsOf = new WeakMap<Settlement, Map<number, Spot>>();
-  /** A settlement's cast, made once - with its quests and quest people (QUESTS.md). */
-  function castOfSettlement(state: DimensionState, settlement: Settlement): Cast | null {
-    if (!settlement.cast) {
-      settlement.cast = castForSettlement(state.dimension.world, settlement.site.id, state.context);
-      if (settlement.cast) world.castMade?.(state.dimension.id, settlement, settlement.cast, state.context);
-    }
-    return settlement.cast;
-  }
-
   function fill(state: DimensionState, settlement: Settlement): void {
-    if (!castOfSettlement(state, settlement)) return;
+    // Its cast was made with the dimension, and its quest people added (QUESTS.md).
+    if (!settlement.cast) return;
     let spots = spotsOf.get(settlement);
     if (!spots) {
       spots = placeAll(state, settlement);
@@ -434,6 +427,10 @@ export function createNpcSystem(rules: GameRules, world: NpcWorld): NpcSystem {
         starts: new Set(starts.flatMap((s) => (s.settlement === null ? [] : [s.settlement]))),
       };
       states.set(dimension.id, { dimension, context, settlements, folkOf: (site) => `folk@${definition.id}/${site.areaId}` });
+      // Every cast now, all together: the quests are made from them as a whole (QUESTS.md, *The generator*).
+      for (const settlement of settlements) settlement.cast = castForSettlement(data, settlement.site.id, context);
+      const made = settlements.flatMap((s) => (s.cast ? [{ site: s.site, layout: s.layout, cast: s.cast }] : []));
+      world.castsMade?.(definition.id, made, context);
     },
     unload(id) {
       const state = states.get(id);
@@ -512,7 +509,7 @@ export function createNpcSystem(rules: GameRules, world: NpcWorld): NpcSystem {
         const state = states.get(dimension);
         const settlement = state?.settlements.find((s) => s.site.id === siteId);
         if (!state || !settlement) return null;
-        return castOfSettlement(state, settlement);
+        return settlement.cast;
       },
       active: (dimension) => (states.get(dimension)?.settlements ?? []).flatMap((s) => [...s.living.values()].map((l) => l.entity)),
     },
