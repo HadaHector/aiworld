@@ -317,6 +317,7 @@ await section("segments", async () => {
     const some = kinds.some((k) => (!need.family || need.family.includes(k.family)) && (!need.hostility || need.hostility.includes(k.template.hostility)) && (!need.tags || need.tags.every((t) => k.tags.includes(t))));
     check(`segment ${s.id}: a creature has what it asks (${JSON.stringify(need)})`, some);
   }
+  check("curseLifted shuts weapons out and wardCharm lists armour only", get0("curseLifted")?.quest.reward.not.includes("weapon") && get0("wardCharm")?.quest.reward.only.includes("armour"));
   check("pelts ask for furred creatures", get0("pelts")?.creatures?.tags?.includes("furred"));
   // A recipe or chain that breaks its own rules does not compose.
   const get = (id) => q.segments.get(id);
@@ -498,6 +499,10 @@ await section("the generator", async () => {
   log(`${choices.length} item choices of ${rules0.rewardChoices}: ${weapons} weapons, ${all - weapons} armour; templates ${JSON.stringify(Object.fromEntries([...new Set(choices.flatMap((c) => c.items.map((x) => x.template)))].map((t) => [t, choices.flatMap((c) => c.items).filter((x) => x.template === t).length])))}`);
   check("weapons and armour are both offered through the worlds", weapons / all >= 0.3 && weapons / all <= 0.7, `${weapons}/${all}`);
   check("no choice is all weapons", choices.every((c) => c.items.some((x) => x.kind !== "weapon")));
+  // A quest's reward filter is kept wherever it is drawn.
+  const filtered = choices.filter((c) => /(^|\+)(curseLifted|wardCharm)$/.test(c.quest.chain?.id.split("#").at(-1) ?? ""));
+  log(`${filtered.length} choices from a quest with a reward filter (curseLifted, wardCharm)`);
+  check("reward filters are kept", filtered.every((c) => c.items.every((x) => (c.quest.chain.id.endsWith("curseLifted") ? x.kind !== "weapon" : x.kind === "armour"))));
   log(`the intro drew ${seen.size} different stories in these worlds: ${[...seen].map((x) => x?.replace(/^affliction#/, "")).join("; ")}`);
   check("the worlds drew more than one story", seen.size >= 3, String(seen.size));
   // One offer as a reader sees it.
@@ -678,6 +683,8 @@ for (const introSeed of [2, 7, 8, 15]) await section(`the intro chain (seed ${in
   const level = me.progress.disciplines.get(adventure).level;
   check("a level or more gained", level > startLevel, `${startLevel} -> ${level}`);
   check("money earned", me.belongings.wallet[items.main] > 0, String(me.belongings.wallet[items.main]));
+  // A quest's reward filter is kept: the curse lifted by a hermit gives no weapon.
+  if (rewarding.chain.id.endsWith("curseLifted")) check("the curse's reward is no weapon (reward: not weapon)", rewarding.rewards.choice.every((id) => items.types[items.typeIndex.get(id)].kind !== "weapon"), rewarding.rewards.choice.join());
   const reward = items.typeIndex.get(rewarding.rewards.choice[0]);
   const slot = me.belongings.bag.findIndex((x) => x != null && server.debug.items.ctx.store.get(x).type === reward);
   check("the chosen reward in the bag", slot >= 0, rewarding.rewards.choice.join());

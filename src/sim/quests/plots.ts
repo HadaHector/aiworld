@@ -148,6 +148,9 @@ export interface PlotQuest {
   done: Pool;
   /** An item to choose for the reward. */
   choice: boolean;
+  /** What that item may be (QUESTS.md, *Item choices*): `only` lists the item kinds ("weapon", "armour")
+   *  or templates ("sword", "boots") it may be, `not` those it may not. Empty for anything. */
+  reward: { only: string[]; not: string[] };
   /** What the chain has when this quest is given (set when a plot is put together from segments). */
   tags: string[];
 }
@@ -250,7 +253,7 @@ function readPeople(reader: Reader, obj: RawObject): Record<string, PlotPerson> 
 
 function readPlotQuest(reader: Reader, value: unknown, at: string, parts: ReadonlyMap<string, QuestPartDef>, names: ReadonlySet<string>, resolve: boolean): PlotQuest {
   const q = reader.object(value, at);
-  reader.onlyKeys(q, at, ["giver", "ender", "parts", "title", "offer", "progress", "done", "choice"]);
+  reader.onlyKeys(q, at, ["giver", "ender", "parts", "title", "offer", "progress", "done", "choice", "reward"]);
   let giver: string | null = reader.optionalString(q, "giver", at) ?? null;
   let ender: string | null = reader.optionalString(q, "ender", at) ?? null;
   if (resolve) {
@@ -269,7 +272,10 @@ function readPlotQuest(reader: Reader, value: unknown, at: string, parts: Readon
     return { part, npc, item: reader.optionalString(raw, "item", pat) ?? null, line: reader.optionalString(raw, "line", pat) ?? null };
   });
   const offer = reader.array(q, "offer", at).map((group, j) => readPool(reader, group, `${at}.offer[${j}]`));
-  return { giver, ender, parts: questParts, title: poolAt(reader, q, "title", at), offer, progress: poolAt(reader, q, "progress", at), done: poolAt(reader, q, "done", at), choice: reader.boolean(q, "choice", at, false), tags: [] };
+  const rewardRaw = q.reward === undefined ? {} : reader.object(q.reward, `${at}.reward`);
+  reader.onlyKeys(rewardRaw, `${at}.reward`, ["only", "not"]);
+  const reward = { only: strings(reader, rewardRaw, "only", `${at}.reward`), not: strings(reader, rewardRaw, "not", `${at}.reward`) };
+  return { giver, ender, parts: questParts, title: poolAt(reader, q, "title", at), offer, progress: poolAt(reader, q, "progress", at), done: poolAt(reader, q, "done", at), choice: reader.boolean(q, "choice", at, false), reward, tags: [] };
 }
 
 export function readQuestParts(entries: readonly { id: string; file: string; data: unknown }[], issues: ContentIssue[]): QuestPartDef[] {

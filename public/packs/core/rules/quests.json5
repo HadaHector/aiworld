@@ -8,7 +8,7 @@
   // So a long walk pays, a hunt pays more than a word with the innkeeper, and a letter to the next
   // village pays for the road. As the character outgrows a quest by `grey` levels it falls to
   // `greyShare`.
-  effort: { kill: 1, loot: 0.8, gather: 0.25, talk: 0.4, use: 1.5, reach: 0.5, travel: 0.4, levelOffset: 0.1 },
+  effort: { kill: 1, loot: 0.8, gather: 0.7, talk: 0.4, use: 1.5, reach: 0.5, travel: 0.4, levelOffset: 0.1 },
   xp: { base: 45, perLevel: 5, rate: 1.5, grey: 6, greyShare: 0.1 },
   money: { base: 4, perLevel: 2 },
   // A chain's last quest also pays this share of everything the rest of it paid.

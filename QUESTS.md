@@ -525,7 +525,7 @@ take the player (`rules/quests.json5`'s `effort`):
 |---|---|
 | kill | 1 each, a tenth more for each level a kind stands above the zone's middle |
 | loot | 0.8 for each kill a drop takes (the count over its chance) |
-| gather | 0.25 each |
+| gather | 0.7 each |
 | talk, receive, deliver | 0.4 each |
 | use | 1.5 each |
 | reach | 0.5 |
@@ -557,7 +557,16 @@ long story ends better than a short one.
   `rewardTemplates`.
 - **No item twice in a choice.** All of this reads the same shared world state as the weighting
   ([Weighting](#weighting)).
-- **Not yet class-aware**: a priest is still offered a sword.
+- **Which kinds a quest may give** is the quest's own say - a filter in its data, not a roll per
+  character, so the reward is the same for everyone: `reward: { only: ["armour"] }` lists the item
+  kinds (`weapon`, `armour`) or templates (`sword`, `boots`) it may be, `reward: { not: ["weapon"] }`
+  those it may not. A hermit's curse-breaking gives no weapon; a traveller's ward gives armour only.
+  A quest with neither gives anything the templates make; the kinds still go round within what is
+  allowed. A template shut out is not in the choice at all, and where nothing is allowed at the quest's
+  level it gives consumables. This is how a quest is made for a kind of character: a priest's
+  errand `not: ["weapon"]`, a smith's `only: ["weapon", "armour"]`.
+- **Not class-aware per character**: the quest does not know who takes it, so a class-specific item
+  still needs the quest (or its giver's trade) to say so.
 
 ### Consumables, and no item at all
 
@@ -898,7 +907,8 @@ After NPCS.md's five steps. Each leaves the game working: the dev server (`?play
   word pays 1.1 kill-equivalents on average, a gathering 2.4, a hunt 6.0 and a letter down the road
   4.1; the starting settlement's 12-14 quests give 3300-4000 XP on their own (level 5), the intro
   alone 1450-2430 (level 4 or so) - generous, and `xp.rate` is the number to turn down. Of 29 item
-  choices, 44 of 87 options are weapons.
+  choices, 44 of 87 options are weapons. (Gathering was then 0.25 an object and averaged 2.4; at 0.7 it
+  averages 4.5, close to a hunt's 6.0, and the starting settlement gives 3400-4300 XP.)
 
 - **Reward items match the quest's level, and not every quest gives one.** Choices only offer items
   within `rewardLevel` of the quest's level (a mid-tier "Hardened" sword, level 4, joins bronze and

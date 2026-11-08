@@ -359,7 +359,7 @@ export function generateQuests(input: GeneratorInput): QuestDef[] {
       const effort = effortOf(objectives);
       const xp = Math.round(effort * (q.xp.base + q.xp.perLevel * lvl) * q.xp.rate);
       // An item to choose where the segment says, and the level allows; else perhaps consumables; else nothing.
-      const choice = pq.choice ? rewardChoice(local, lvl, plot.quests.length > 1 && n === plot.quests.length - 1) : [];
+      const choice = pq.choice ? rewardChoice(local, lvl, plot.quests.length > 1 && n === plot.quests.length - 1, pq.reward) : [];
       const consumables = choice.length === 0 && (pq.choice || local() < q.rewardConsumables.chance) ? consumablesFor(local, lvl, effort, pq.choice) : [];
       const previous = n === 0 ? after : made[n - 1].id;
       made.push({
@@ -421,7 +421,7 @@ export function generateQuests(input: GeneratorInput): QuestDef[] {
    * and again, so the quests of an area do not all give a sword; within a kind, the template used
    * least, and the type used least. No type twice in a choice.
    */
-  function rewardChoice(local: Rng, lvl: number, finale: boolean): string[] {
+  function rewardChoice(local: Rng, lvl: number, finale: boolean, allow: { only: string[]; not: string[] }): string[] {
     const items = input.items;
     if (!items) return [];
     const aim = items.rarities.find((r) => r.id === (finale ? q.rewardRarity.finale : q.rewardRarity.quest))?.order ?? Infinity;
@@ -429,7 +429,10 @@ export function generateQuests(input: GeneratorInput): QuestDef[] {
     const bump = (key: string): void => void world.uses.set(key, used(key) + 1);
     /** A template's types within the rules' reach of the quest's level: none above it by more, none below. */
     const nearLevel = (template: string) => (items.generated.get(template) ?? []).map((i) => items.types[i]).filter((t) => Math.abs(t.itemLevel - lvl) <= q.rewardLevel);
-    const templates = q.rewardTemplates.map((id) => ({ id, types: nearLevel(id) })).filter((t) => t.types.length > 0);
+    const kindOf = (id: string): string => items.types[items.generated.get(id)?.[0] ?? 0]?.kind ?? "";
+    // What the quest allows: its kinds or templates listed, and none of those it shuts out.
+    const allowed = (id: string): boolean => (allow.only.length === 0 || allow.only.includes(id) || allow.only.includes(kindOf(id))) && !allow.not.includes(id) && !allow.not.includes(kindOf(id));
+    const templates = q.rewardTemplates.filter(allowed).map((id) => ({ id, types: nearLevel(id) })).filter((t) => t.types.length > 0);
     if (templates.length === 0) return [];
     // The rarity every template can offer, up to the one aimed for.
     const best = Math.min(...templates.map((t) => Math.max(...t.types.map((x) => items.rarities[x.rarity].order).filter((o) => o <= aim), -Infinity)));
@@ -439,7 +442,6 @@ export function generateQuests(input: GeneratorInput): QuestDef[] {
     const nearest = (types: readonly { itemLevel: number }[], to: number): number => types.map((x) => x.itemLevel).sort((a, b) => Math.abs(a - to) - Math.abs(b - to) || a - b)[0];
     const level = nearest(templates.flatMap((t) => t.types), lvl);
     // Kinds, the least offered first; ties by the draw.
-    const kindOf = (id: string): string => items.types[items.generated.get(id)?.[0] ?? 0]?.kind ?? "";
     const kinds = [...new Set(templates.map((t) => kindOf(t.id)))].sort((a, b) => used(`reward:kind:${a}`) - used(`reward:kind:${b}`) || local() - 0.5);
     const out: string[] = [];
     for (let i = 0; out.length < q.rewardChoices && i < q.rewardChoices * 3; i++) {

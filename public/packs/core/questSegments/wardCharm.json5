@@ -20,5 +20,7 @@
     progress: ["Has the charm worked?", "$progress"],
     done: ["They've gone? All of them? Then {settlement} owes you a great deal.", "$thanks"],
     choice: true,
+    // From someone on the road: something to wear, not a weapon.
+    reward: { only: ["armour"] },
   },
 }

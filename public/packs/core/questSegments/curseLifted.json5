@@ -23,5 +23,7 @@
       { text: "The {creatures} are themselves again? Then it is over. {settlement} owes you more than it can pay - but take this, with our thanks.", when: { tags: ["signs:beasts"] }, weight: 3 },
     ],
     choice: true,
+    // A hermit or a sexton does not hand out swords (QUESTS.md, *Item choices*).
+    reward: { not: ["weapon"] },
   },
 }
