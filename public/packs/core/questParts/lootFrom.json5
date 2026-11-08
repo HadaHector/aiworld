@@ -4,5 +4,8 @@
   count: 1,
   chance: 0.6,
   line: "Tainted blood from a {creature}",
-  motive: ["Bring me a little of their blood, so I can see what ails them."],
+  motive: [
+    "Bring me a little of their blood, so I can see what ails them.",
+    "I need a sample from one of them - blood will do - to know what we are dealing with.",
+  ],
 }

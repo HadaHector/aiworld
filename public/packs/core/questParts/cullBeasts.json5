@@ -4,8 +4,13 @@
   count: [4, 6],
   line: "{creatures} slain",
   motive: [
-    "The {creatures} have grown bold - they took two lambs from the fold last week.",
+    "The {creatures} have grown bold [these days|of late].",
     "Nobody walks the road after dark any more, for the {creatures}.",
     "The {creatures} are thicker on the ground than anyone here remembers.",
+    "They took two lambs from the fold [last week|the night before last] - the {creatures}, I'd swear to it.",
+    { text: "The {creatures} have been prowling round the barn {when}.", when: { role: ["farmer"] }, weight: 3 },
+    { text: "Pilgrims won't come near the road for fear of the {creatures}.", when: { role: ["priest", "innkeeper"] }, weight: 3 },
+    { text: "Trade is thin enough without the {creatures} frightening off the carters.", when: { role: ["shopkeeper", "innkeeper", "reeve"] }, weight: 3 },
+    { text: "I'd deal with the {creatures} myself, but the forge won't mind itself.", when: { role: ["smith"] }, weight: 3 },
   ],
 }

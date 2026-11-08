@@ -28,8 +28,10 @@ first milestone.
   wolves it asks for are the zone's wolves, the stolen tools are a quest drop, and nothing in the
   world changes when it is done.
 - **Parts are data.** What a *kill* or a *gather* is, what it needs from the place, how its line in
-  the log reads: all in `questParts/`. Which parts make a quest, and in what order, is
-  `questPlots/`. The engine knows how to track a handful of objective kinds and nothing about wolves.
+  the log reads: all in `questParts/`. Which parts make a quest is a **segment**
+  (`questSegments/`); segments fit together into chains by tags (see [Segments](#segments)), and a
+  fixed order of them is a recipe in `questPlots/`. The engine knows how to track a handful of
+  objective kinds and nothing about wolves.
 - **Deterministic.** A settlement's quests are a pure function of the seed, the settlement and the
   packs, worked out with its cast. A quest's id is stable for the seed, so a character saves ids
   and counts, never the quest itself. A saved id the packs no longer make is dropped and reported,
@@ -200,10 +202,91 @@ quest: {
   only by such players, each their own. One taken comes back for others at once and for the taker
   after a short `respawn`. They are filled and released as spawn points are.
 
+## Segments
+
+`questSegments/<id>.json5`: one quest of a chain, and the tags that say where it fits. This is the
+Lego: a settlement's chains are not written out, they are put together from segments that can follow
+each other, so the same few dozen pieces make many stories. A plot (below) is the other way: a
+recipe naming segments in a fixed order, for what must always be the same, like the intro.
+
+```json5
+// questSegments/wardmaker.json5 - the predators are not the end of it: someone knows a charm
+{
+  weight: 1,
+  roles: ["middle"],                     // where it can stand: opener, middle, closer (a quest can be several)
+  theme: ["predators"],                  // what the chain is about; a segment follows only a chain of a shared theme (or none)
+  requires: ["problem:predators"],       // tags the chain must have by now
+  provides: ["met:contact", "knows:wards"],   // tags it adds
+  uses: ["beast"],                       // names that must already be bound: a person, beast, place, road
+  people: { contact: { roles: [], make: ["traveller"] } },   // people it brings in (the plot format)
+  quest: { ender: "contact", parts: [{ part: "talkTo", npc: "contact" }], title: ..., offer: [...], progress: ..., done: ... },
+}
+```
+
+- **Openers** also say who gives them (`giver`: roles). Their creatures, place and road needs are
+  the same as a plot's. A segment with no `giver` of its own is given by whoever ended the one
+  before; with no `ender`, by whoever gave it.
+- **Tags** are the story so far: `problem:predators`, `has:cure`, `delivered`. A segment that
+  `requires` one can only follow a segment that `provides` it, so the dependencies *are* the plot:
+  nothing hands you a cure before the herbs. **Names** are people and things by slot: `contact` is
+  whoever the chain sent you to, whichever segment brought them (a parcel's friend, a hermit at a
+  ruin, a traveller on the road), so `contactReply` ends any story that has one.
+- **Merging.** A chain's needs of the world are merged, so it is about one kind of creature and one
+  place throughout; a chain whose merged needs nothing in the settlement meets is not drawn there.
+- **Length.** `rules/quests.json5`'s `chain` gives the most segments one chain has (`max`, 4) and
+  how likely each next one is where the chain could end (`more`). A chain that dead-ends falls back
+  to where it last could have ended. A segment is a solo (`roles: ["opener", "closer"]`) when it
+  makes a whole quest on its own.
+- **Weight 0** keeps a segment out of free drawing; the intro's sickness chain (six segments) is
+  that, as it is longer than `max` and is named by a recipe instead.
+- **Checked** by the quests probe without any world: every opener reaches a closer, every segment
+  is on some chain, and segments that cannot go together do not compose.
+
+A plot can say `segments: ["a", "b", ...]` in place of `quests`; the loader puts them together once
+(and refuses a recipe that does not fit).
+
+## Voices
+
+The same quest should not read the same from everyone. Segments say what happens; **voices** say how
+the person giving it speaks. `questVoices/<id>.json5` is a bank of lines for one slot, and a quest's
+text asks for it with `"$name"`:
+
+```json5
+// questVoices/hook.json5
+{ slot: "hook", lines: [
+    { text: "You. Yes, you. Hear me out.", when: { mood: "gruff" }, weight: 2 },
+    { text: "Mind the sparks, and hear me out.", when: { role: "smith" }, weight: 3 },
+    { text: "", weight: 1.5 },                       // say nothing
+] }
+```
+
+Core's banks: `hook` (how they open), `promise` (what they offer), `progress` and `thanks`.
+
+- **Lines** are a string or `{ text, weight, when }`. `when` holds any of `mood`, `role`, `sex`,
+  `age` (of the speaker), `place` (tags of the quest's place), `creature` (its creature's family),
+  `tags` (what the chain has so far) and `tier`; each takes one value or a list, and all the keys
+  must match. Lines nobody's `when` fits fall back to the unconditioned ones.
+- **Any text can use them**, not only voices: an offer is a list of groups, a title, progress or done
+  is one group, and each group is a list of lines and `"$bank"`s from which **one is drawn**. `"$motive"`
+  is where the parts' motive sentences go. Parts' `motive` is a group too, so a cull can read
+  differently for a farmer, a priest and a smith.
+- **Alternatives** `[this|that|]` inside a line are drawn when the quest is made, one possibly nothing.
+- **Fresh before stale.** A sentence already used in a settlement's quests is passed over while
+  another fits, so the settlement's own quests do not repeat each other.
+- **Facts.** Besides the names, a text can say `{neighbour}` (another of the settlement's people, by
+  given name), `{when}` (from `rules/quests.json5`'s `whens`: "these three nights") and each person's
+  `{contactSex, select, male {him} female {her} other {them}}`.
+- **Stored as before**: the drawn English is the key and the arguments are the fill, so the client
+  does not know about any of this. (A translation therefore has the whole offer as one string; with
+  this many variants a language is better served by translating the pool than its output: a later
+  step.)
+
 ## Plots
 
-`questPlots/<id>.json5`: how parts are put together into a quest or a chain, with the slots the
-parts share (the same creature kind across two parts, the same NPC giving and ending).
+`questPlots/<id>.json5`: a **recipe** - how parts (or [segments](#segments)) are put together into a
+chain in a fixed order, with the slots the parts share (the same creature kind across two parts, the
+same NPC giving and ending). Most chains are now drawn from segments; plots are for what must be the
+same each time (the intro) or does not break into pieces.
 
 ```json5
 // questPlots/troubledFlock.json5 - a standalone: a farmer's beasts are taken
@@ -429,7 +512,9 @@ New client events in FEEDBACK.md's table, with cues and generated sounds in the 
 |---|---|
 | `questParts/` | Parts |
 | `features/`, `buildings/`, `camps/`, `settlements/`, `biomes/` | `quest`: tags, objects, people, spots and text for places (new) |
-| `questPlots/` | Plots and chains |
+| `questSegments/` | Segments: quests that fit into chains by tags |
+| `questPlots/` | Recipes: fixed chains, or fixed lists of segments |
+| `questVoices/` | Banks of lines for how people talk (hook, promise, progress, thanks) |
 | `questItemTemplates/` | Quest items and ground objects, by kind |
 | `text/en/quests.json5` | Every quest sentence |
 | `rules/quests.json5` | Quotas, reach, the log's size, level colours, reward formulas, standing amounts |
@@ -621,6 +706,20 @@ After NPCS.md's five steps. Each leaves the game working: the dev server (`?play
   - Talking to an NPC with one thing only to offer goes straight to it: a class trainer opens the
     progression panel at it, a banker alone the bag, one quest its page, a shop alone its shop page, with no Back button to a list of one. Only when it is newly talked to, not when the window
     is asked for again after an action.
+
+- **Segments and voices.** The plots' monolithic quests are cut into `questSegments/` that fit
+  together by tags, and the quests' words come from pools with `when` conditions and voice banks
+  (see [Segments](#segments), [Voices](#voices)). `src/sim/quests/chains.ts` composes and checks chains
+  (shared by the loader, which puts recipes together, and the generator, which draws chains);
+  `plots.ts` reads segments, voices and condition-bearing lines; `generator.ts` draws an opener by
+  weight like a plot and grows it segment by segment. Core: fifteen segments - the sickness chain's
+  six, and `foldTrouble` → `wardmaker` → `wardCharm` (predators), `silentKeeper` and `parcelErrand`
+  (each a solo or the start of a story) with `contactFavour` and `contactReply` (end any story that
+  brought a contact), `pelts`, `smallKindness` - and four voice banks. The old standalone plots
+  (troubled flock, pelts, gatherings, a hermit's word, a parcel for a friend) became segments;
+  `strangeSickness` is now a recipe. `{when}`, `{neighbour}` and each person's `{xSex}` are new
+  arguments. **Checked:** the probe walks every possible chain without a world (38 at most 4 long),
+  and over the generated worlds that no offer repeats, no text has an empty argument or stray markup.
 
 ## Later
 

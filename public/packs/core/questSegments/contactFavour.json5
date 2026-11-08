@@ -1,0 +1,22 @@
+// Whoever you met has a favour to ask: fetch what lies at a place near. Follows any segment that
+// brought a contact.
+{
+  weight: 1,
+  roles: ["middle", "closer"],
+  requires: ["met:contact"],
+  provides: ["helped:contact"],
+  uses: ["contact"],
+  place: { objects: [] },
+  quest: {
+    giver: "contact",
+    parts: ["gatherAt"],
+    title: ["{objects} for {contactGiven}", "A Favour for {contactGiven}", "Since You're Here"],
+    offer: [
+      ["Since you're here already, could I ask a favour of you?", "Now that you've come all this way - might I ask one more thing?", { text: "You've been a great help already. Might I ask one thing more?", when: { tags: ["delivered", "remote"] } }],
+      "$motive",
+      ["Bring them back and I won't forget it.", "I'd be [in your debt|glad of it], truly."],
+    ],
+    progress: ["Any luck with the {objects}?", "$progress"],
+    done: ["Just what I hoped for. Here, you've earned it.", "$thanks"],
+  },
+}

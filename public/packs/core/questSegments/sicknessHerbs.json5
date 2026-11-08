@@ -1,0 +1,21 @@
+// The test chain, part 4: pick up things on the ground.
+{
+  weight: 0,
+  roles: ["middle"],
+  theme: ["sickness"],
+  requires: ["knows:maker"],
+  provides: ["has:herbs"],
+  uses: ["maker", "place"],
+  quest: {
+    giver: "maker",
+    parts: ["gatherAt"],
+    title: ["What the Salve Needs", "{objects} for the Salve"],
+    offer: [
+      ["The salve wants {objects}, and plenty of them."],
+      "$motive",
+      ["Bring them here and I'll set to work."],
+    ],
+    progress: ["Got the {objects}?"],
+    done: ["Good, these will do nicely. Give me a moment."],
+  },
+}

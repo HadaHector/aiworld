@@ -1,6 +1,7 @@
 import { Reader, type ContentIssue } from "../../world/content/contentReader";
 import type { Text } from "../text";
-import { readQuestParts, readQuestPlots, type QuestPartDef, type QuestPlotDef } from "./plots";
+import { readQuestParts, readQuestPlots, readQuestSegments, readQuestVoices, poolsOf, type Line, type QuestPartDef, type QuestPlotDef, type QuestSegmentDef } from "./plots";
+import { composeChain } from "./chains";
 
 /**
  * A quest (QUESTS.md, *A quest*): who gives and ends it, what it asks, how it reads, what it gives.
@@ -106,18 +107,45 @@ export interface QuestRules {
   plurals: Record<string, string>;
   /** The settlement's own fields as a place: what lies about in them. */
   fields: { objects: { name: string; tags: string[] }[]; text: string };
+  /** Things that happened "when": the offers' `{when}`. */
+  whens: string[];
+  /** Chains drawn from segments: the most segments one has, and how likely each next one is. */
+  chain: { max: number; more: number };
   parts: ReadonlyMap<string, QuestPartDef>;
+  segments: ReadonlyMap<string, QuestSegmentDef>;
+  /** Voice banks by slot: lines any quest can draw on in how its giver talks. */
+  voices: ReadonlyMap<string, Line[]>;
   plots: QuestPlotDef[];
 }
 
 type Entry = { id: string; file: string; data: unknown };
 
-export function readQuestRules(entry: { file: string; data: unknown } | undefined, partEntries: readonly Entry[], plotEntries: readonly Entry[], issues: ContentIssue[]): QuestRules {
+export function readQuestRules(entry: { file: string; data: unknown } | undefined, partEntries: readonly Entry[], segmentEntries: readonly Entry[], plotEntries: readonly Entry[], voiceEntries: readonly Entry[], issues: ContentIssue[]): QuestRules {
   const reader = new Reader(issues, entry?.file ?? "rules/quests.json5");
   const obj = entry ? reader.object(entry.data, "") : {};
-  reader.onlyKeys(obj, "", ["maxActive", "xp", "money", "standing", "objects", "talkRange", "colours", "rewardTemplates", "quota", "reach", "plurals", "fields"]);
+  reader.onlyKeys(obj, "", ["maxActive", "xp", "money", "standing", "objects", "talkRange", "colours", "rewardTemplates", "quota", "reach", "plurals", "fields", "whens", "chain"]);
   const parts = new Map(readQuestParts(partEntries, issues).map((p) => [p.id, p]));
-  const plots = readQuestPlots(plotEntries, parts, issues);
+  const segments = new Map(readQuestSegments(segmentEntries, parts, issues).map((s) => [s.id, s]));
+  const voices = new Map<string, Line[]>();
+  for (const voice of readQuestVoices(voiceEntries, issues)) voices.set(voice.slot, [...(voices.get(voice.slot) ?? []), ...voice.lines]);
+  const plots = readQuestPlots(plotEntries, parts, segments, issues).map((plot) => {
+    if (!plot.segments) return plot;
+    // A recipe of segments is put together here, once, and drawn like any other plot.
+    const composed = composeChain(plot.id, plot.segments.map((id) => segments.get(id)).filter((s): s is QuestSegmentDef => !!s), { weight: plot.weight, intro: plot.intro });
+    if (!composed) {
+      issues.push({ file: `questPlots/${plot.id}.json5`, path: "segments", message: "these segments do not fit together: one needs a tag, a person or a place that nothing before it gives, or two want creatures that no creature is" });
+      return plot;
+    }
+    return { ...composed, giver: plot.giver.length > 0 ? plot.giver : composed.giver };
+  });
+  // Every voice bank a quest names is there.
+  const known = new Set(voices.keys());
+  const check = (where: string, pools: ReturnType<typeof poolsOf>) => {
+    for (const pool of pools) for (const bank of pool.banks) if (!known.has(bank)) issues.push({ file: where, path: "", message: `no voice bank "${bank}" (questVoices/ has: ${[...known].join(", ") || "none"})` });
+  };
+  for (const s of segments.values()) check(`questSegments/${s.id}.json5`, poolsOf(s.quest));
+  for (const p of plots) for (const q of p.quests) check(`questPlots/${p.id}.json5`, poolsOf(q));
+  for (const part of parts.values()) check(`questParts/${part.id}.json5`, [part.motive]);
   const quota: Record<string, [number, number]> = {};
   if (obj.quota !== undefined) {
     const raw = reader.object(obj.quota, "quota");
@@ -128,6 +156,8 @@ export function readQuestRules(entry: { file: string; data: unknown } | undefine
     const raw = reader.object(obj.plurals, "plurals");
     for (const word of Object.keys(raw)) plurals[word] = reader.string(raw, word, "plurals");
   }
+  const chainRaw = obj.chain === undefined ? {} : reader.object(obj.chain, "chain");
+  const whens = obj.whens === undefined ? [] : reader.stringList(obj, "whens", "");
   const fieldsRaw = obj.fields === undefined ? {} : reader.object(obj.fields, "fields");
   const fields = {
     objects: reader.optionalArray(fieldsRaw, "objects", "fields").map((v, i) => {
@@ -167,7 +197,11 @@ export function readQuestRules(entry: { file: string; data: unknown } | undefine
     reach: reader.optionalNumber(obj, "reach", "", 1000, { min: 0 }),
     plurals,
     fields,
+    whens,
+    chain: { max: reader.optionalNumber(chainRaw, "max", "chain", 4, { min: 1, integer: true }), more: reader.optionalNumber(chainRaw, "more", "chain", 0.5, { min: 0, max: 1 }) },
     parts,
+    segments,
+    voices,
     plots,
   };
 }

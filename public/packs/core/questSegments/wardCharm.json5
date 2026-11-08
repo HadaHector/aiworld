@@ -1,0 +1,24 @@
+// The charm itself: held up to a weakened beast, it drives the pack off. The predators' story ends.
+{
+  weight: 1,
+  roles: ["closer"],
+  theme: ["predators"],
+  requires: ["knows:wards"],
+  uses: ["contact", "beast"],
+  quest: {
+    giver: "contact",
+    ender: "giver",
+    parts: [{ part: "receiveCharm", npc: "contact" }, "wardBeast"],
+    title: ["The Warding Charm", "Driving Off the {creatures}", "A Ward Tried"],
+    offer: [
+      "$hook",
+      ["[Here -|Take this.] A warding charm."],
+      ["Hold it up to the {creature} and the rest will [follow it away|think better of this place].", "Hold it up to one of the {creatures} and it should [drive them all off|hold them back]."],
+      "$motive",
+      ["Then go back and tell {giverGiven} it's done."],
+    ],
+    progress: ["Has the charm worked?", "$progress"],
+    done: ["They've gone? All of them? Then {settlement} owes you a great deal.", "$thanks"],
+    choice: true,
+  },
+}

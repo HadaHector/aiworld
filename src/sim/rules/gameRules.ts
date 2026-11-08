@@ -306,7 +306,7 @@ export function resolveGameRules(packs: PackSource[]): GameRules {
 
   const npcs = readNpcRules(folders.get("rules")!.get("npcs"), entries("npcRoles"), entries("npcRelations"), entries("barks"), new Set(templates.keys()), issues);
 
-  const quests = readQuestRules(folders.get("rules")!.get("quests"), entries("questParts"), entries("questPlots"), issues);
+  const quests = readQuestRules(folders.get("rules")!.get("quests"), entries("questParts"), entries("questSegments"), entries("questPlots"), entries("questVoices"), issues);
   const text = readTextTable(entries("text"), (file, message) => issues.push({ file, path: "", message }));
 
   if (issues.length > 0) throw new ContentError(issues);

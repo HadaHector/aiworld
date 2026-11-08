@@ -1146,7 +1146,10 @@ See NPCS.md and QUESTS.md. Folders, read into the game rules:
   barks/<id>.json5          what a role's people say: lines by `when` and `moods`, `{call:brother}` for relatives
   vendorStocks/<id>.json5   what a vendor sells (in the item rules)
   questParts/<id>.json5     one objective: kind, sizes, item, log line, motive sentences
-  questPlots/<id>.json5     quests put together: givers, people, creatures, place, road, and each quest's text
+  questSegments/<id>.json5  one quest of a chain that fits with others by tags: roles (opener, middle, closer),
+                            `requires`/`provides` tags, `uses` names, `theme`; its own text
+  questPlots/<id>.json5     a recipe: quests written out, or `segments` in a fixed order (the intro's chain)
+  questVoices/<id>.json5    a bank of lines for how people talk: { slot: "hook", lines } by mood, trade, age
   text/<any>.json5          translations: { language, strings: { English: translation } }
   rules/npcs.json5, rules/factions.json5, rules/quests.json5
 ```

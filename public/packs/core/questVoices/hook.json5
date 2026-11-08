@@ -1,0 +1,35 @@
+// How a giver opens, before the matter itself. Drawn by who is speaking: their mood, trade, age.
+// `[a|b]` alternatives are drawn too, and a line already said in this settlement is passed over.
+{
+  slot: "hook",
+  lines: [
+    // Anyone.
+    { text: "You there - have you a moment?", weight: 1 },
+    { text: "Forgive me for stopping you.", weight: 1 },
+    { text: "Ah. Good. You look like someone who can walk a straight line.", weight: 0.6 },
+    { text: "[Pardon me|Excuse me], I [need|wanted] a word.", weight: 1 },
+    { text: "", weight: 1.5 },
+    // By mood.
+    { text: "Ha! Just the face I was hoping to see.", when: { mood: "cheerful" }, weight: 2 },
+    { text: "Well met, [traveller|friend]! Have you a moment to spare?", when: { mood: "cheerful" }, weight: 2 },
+    { text: "You. Yes, you. Hear me out.", when: { mood: "gruff" }, weight: 2 },
+    { text: "Don't wander off - I've a job that wants doing.", when: { mood: "gruff" }, weight: 2 },
+    { text: "I'll be brief. I've no patience for long talk.", when: { mood: "gruff" }, weight: 2 },
+    { text: "Oh, thank goodness - someone with two good legs.", when: { mood: "weary" }, weight: 2 },
+    { text: "I've not slept properly [these past few nights|in days].", when: { mood: "weary" }, weight: 2 },
+    { text: "Sit a moment, would you? ... No? Then listen as you stand.", when: { mood: "weary" }, weight: 1.5 },
+    { text: "Oh! I - yes. You'll do. Please, [listen|just listen].", when: { mood: "nervous" }, weight: 2 },
+    { text: "Keep your voice down, would you? It's something that's been troubling us.", when: { mood: "nervous" }, weight: 2 },
+    // By trade.
+    { text: "Peace be with you, [child|traveller]. I hoped you might help.", when: { role: "priest" }, weight: 3 },
+    { text: "Pull up a stool - or stand, if you must. I've something to ask.", when: { role: "innkeeper" }, weight: 3 },
+    { text: "Mind the sparks, and hear me out.", when: { role: "smith" }, weight: 3 },
+    { text: "Pardon the muck. I'd not trouble you if I had any choice.", when: { role: "farmer" }, weight: 3 },
+    { text: "A word, if you would - on behalf of {settlement}.", when: { role: "reeve" }, weight: 3 },
+    { text: "Not here to buy? No matter - I've a bigger favour to ask than any sale.", when: { role: "shopkeeper" }, weight: 3 },
+    { text: "Excuse me - you're the one who's been about the place, aren't you?", when: { role: "villager" }, weight: 2 },
+    // By age.
+    { text: "Come closer, will you? My ears aren't what they were.", when: { age: "old" }, weight: 2 },
+    { text: "Er - hello! You're an adventurer, aren't you? A proper one?", when: { age: "young" }, weight: 2 },
+  ],
+}

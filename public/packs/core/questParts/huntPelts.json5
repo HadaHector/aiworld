@@ -4,5 +4,12 @@
   count: [4, 6],
   chance: 0.6,
   line: "Good pelts of {creatures}",
-  motive: ["Winter will come, and the pelts of {creatures} keep a family warm.", "I've buyers for {creatures} pelts, if they're good ones."],
+  motive: [
+    "Winter will come, and the pelts of {creatures} keep a family warm.",
+    "I've buyers for {creatures} pelts, if they're good ones.",
+    "A carter passes through soon, and he pays well for {creatures} hides.",
+    { text: "Every cloak I sell is spoken for, and the {creatures} would make more.", when: { role: ["shopkeeper"] }, weight: 3 },
+    { text: "A smith needs leather as much as iron, and the {creatures} have the best of it.", when: { role: ["smith"] }, weight: 3 },
+    { text: "The inn's beds want new covers before the cold, and the {creatures} will do nicely.", when: { role: ["innkeeper"] }, weight: 3 },
+  ],
 }

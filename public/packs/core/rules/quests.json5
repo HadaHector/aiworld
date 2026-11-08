@@ -18,6 +18,11 @@
   rewardTemplates: ["sword", "chestpiece"],
   // Quests a settlement gets, by tier, after any intro; chains count by their quests.
   quota: { hamlet: [2, 3], village: [4, 6], town: [7, 10] },
+  // Chains drawn from segments (QUESTS.md, *Segments*): at most this many quests, and how likely
+  // each next segment is where the chain could end (0 = alone, 1 = always on).
+  chain: { max: 4, more: 0.55 },
+  // What `{when}` can be in a giver's words: something that has gone on a while.
+  whens: ["this past week", "for a fortnight now", "these three nights", "since the first frost", "ever since the last market day", "for a good while now"],
   // How far round a settlement its quests look for places, in metres.
   reach: 1000,
   // Plurals by a name's last word; any other takes an "s".

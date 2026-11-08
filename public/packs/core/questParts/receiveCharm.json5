@@ -1,0 +1,2 @@
+// Be given a warding charm.
+{ kind: "receive", item: "wardingCharm", line: "Take the warding charm from {npc}" }

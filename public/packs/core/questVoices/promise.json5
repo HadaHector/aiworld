@@ -1,0 +1,21 @@
+// How a giver closes: what they promise, or nothing at all.
+{
+  slot: "promise",
+  lines: [
+    { text: "I'll see you're paid for your trouble.", weight: 1 },
+    { text: "There'll be [coin|something] in it for you, I promise.", weight: 1 },
+    { text: "Do this and [I'm in your debt|{settlement} won't forget it].", weight: 1 },
+    { text: "I can't pay much, but I'll pay [fairly|what I can].", weight: 1 },
+    { text: "", weight: 2 },
+    { text: "Fair coin for fair work. That's all I offer.", when: { mood: "gruff" }, weight: 2.5 },
+    { text: "And there's a drink on me when you're back!", when: { mood: "cheerful" }, weight: 2.5 },
+    { text: "I'd be [ever so|more than I can say] grateful.", when: { mood: "weary" }, weight: 2.5 },
+    { text: "Please. I'll make it worth your while, I swear it.", when: { mood: "nervous" }, weight: 2.5 },
+    { text: "Your supper is on the house when it's done.", when: { role: "innkeeper" }, weight: 3 },
+    { text: "You'll have our thanks, and what the poor box can spare.", when: { role: "priest" }, weight: 3 },
+    { text: "I'll make it worth your while, and that's a smith's word.", when: { role: "smith" }, weight: 3 },
+    { text: "A good meal and a bit of coin, that I can promise.", when: { role: "farmer" }, weight: 3 },
+    { text: "{settlement} pays its debts.", when: { role: "reeve" }, weight: 3 },
+    { text: "I'll see you get a fair price from my shelves, after.", when: { role: "shopkeeper" }, weight: 3 },
+  ],
+}

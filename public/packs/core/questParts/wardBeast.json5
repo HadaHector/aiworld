@@ -1,0 +1,9 @@
+// Hold the charm up to one of the creatures, once it is weakened enough to let you near.
+{
+  kind: "use",
+  item: "wardingCharm",
+  count: 1,
+  below: 0.7,
+  line: "Ward off a weakened {creature}",
+  motive: ["Wear one down first, or it won't hold still for you.", "It must be wounded before the charm will take."],
+}

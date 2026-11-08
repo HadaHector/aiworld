@@ -1,0 +1,22 @@
+// The test chain, part 3: talk to another NPC.
+{
+  weight: 0,
+  roles: ["middle"],
+  theme: ["sickness"],
+  requires: ["has:sample"],
+  provides: ["knows:maker"],
+  uses: ["healer", "maker"],
+  quest: {
+    giver: "healer",
+    ender: "maker",
+    parts: [{ part: "talkTo", npc: "maker" }],
+    title: "A Cure, Perhaps",
+    offer: [
+      ["There may be a cure."],
+      ["{makerGiven} knows how to make the salve - ask them, and tell them I sent you."],
+      ["Be quick about it.", "Don't dawdle."],
+    ],
+    progress: ["Go to {makerGiven}."],
+    done: ["A salve against the sickness? It can be done, if you fetch me what it needs."],
+  },
+}

@@ -1,0 +1,17 @@
+// The test chain, part 5: get a quest item.
+{
+  weight: 0,
+  roles: ["middle"],
+  theme: ["sickness"],
+  requires: ["has:herbs"],
+  provides: ["has:cure"],
+  uses: ["maker"],
+  quest: {
+    giver: "maker",
+    parts: [{ part: "receiveCure", npc: "maker" }],
+    title: "The Salve",
+    offer: [["Here it is - still warm."], ["Careful with it; there's no more where that came from."]],
+    progress: ["Take the salve."],
+    done: ["Now it's to be tried."],
+  },
+}

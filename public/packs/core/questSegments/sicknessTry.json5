@@ -1,0 +1,22 @@
+// The test chain, part 6 and the end: use it on an enemy, back to the giver to finish.
+{
+  weight: 0,
+  roles: ["closer"],
+  theme: ["sickness"],
+  requires: ["has:cure"],
+  uses: ["maker", "beast"],
+  quest: {
+    giver: "maker",
+    ender: "giver",
+    parts: ["salveBeast"],
+    title: "The Cure Tried",
+    offer: [
+      ["Work the salve into one of the sick {creatures}."],
+      "$motive",
+      ["If it takes, go back to {giverGiven} and tell them so."],
+    ],
+    progress: ["Well? Did it work?"],
+    done: ["It worked? Then {settlement} owes you more than it can pay - but take this, with our thanks."],
+    choice: true,
+  },
+}

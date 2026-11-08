@@ -1,0 +1,25 @@
+// The predators are not the end of it: someone knows a charm against them.
+{
+  weight: 1,
+  roles: ["middle"],
+  theme: ["predators"],
+  requires: ["problem:predators"],
+  provides: ["met:contact", "knows:wards"],
+  uses: ["beast"],
+  people: {
+    contact: { roles: [], make: ["traveller"] },
+  },
+  quest: {
+    ender: "contact",
+    parts: [{ part: "talkTo", npc: "contact" }],
+    title: ["A Charm Against the {creatures}", "Ask {contactGiven}", "Wards"],
+    offer: [
+      "$hook",
+      ["Killing the {creatures} only buys a little time.", "There will always be more {creatures}, [culled or not|whatever we do]."],
+      ["{contactGiven} - {contactTitle} - [knows|sells] charms that keep such beasts away.", "{contactGiven} is [camped|staying] nearby, and knows wards against beasts."],
+      ["Go and ask for one, and tell {contactGiven} I sent you."],
+    ],
+    progress: ["Have you found {contactGiven} yet?", "$progress"],
+    done: ["{giverGiven} sent you? [Good|Then they're sensible]. A ward, is it? I have one that ought to serve."],
+  },
+}

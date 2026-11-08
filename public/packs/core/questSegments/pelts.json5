@@ -1,0 +1,21 @@
+// Hunt the creatures for their pelts.
+{
+  weight: 1.5,
+  roles: ["opener", "closer"],
+  theme: ["trade"],
+  provides: ["has:pelts"],
+  giver: ["shopkeeper", "smith", "innkeeper", "villager"],
+  creatures: { family: ["beast"] },
+  quest: {
+    parts: ["huntPelts"],
+    title: ["Pelts for {giverGiven}", "Good Hides", "Winter Stock"],
+    offer: [
+      "$hook",
+      ["I'll be straight with you: I need pelts.", "My stock of hides is nearly gone, and nobody has brought me a good one {when}."],
+      "$motive",
+      ["Bring me a few and I'll make it worth your while.", "Mind you bring only good ones - I know a poor hide when I see it."],
+    ],
+    progress: ["Pelts?", "$progress"],
+    done: ["Fine pelts, these. A fair price, as agreed.", "$thanks"],
+  },
+}

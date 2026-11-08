@@ -1,0 +1,30 @@
+// The test chain, part 1 (GAMEPLAY.md): the creatures sicken and the giver sends you to someone who
+// knows. Introduces the two people and the place the rest of the chain uses. A recipe's
+// (questPlots/strangeSickness.json5): too long for the chain rules to draw on its own, so weight 0.
+{
+  weight: 0,
+  roles: ["opener"],
+  theme: ["sickness"],
+  provides: ["problem:sickness"],
+  giver: ["reeve", "innkeeper", "priest"],
+  people: {
+    healer: { roles: ["priest", "innkeeper"], relation: ["friend", "sister", "brother", "wife", "husband"], make: ["hermit"] },
+    maker: { roles: ["shopkeeper", "farmer", "smith"], make: ["hermit"] },
+  },
+  creatures: { hostility: ["hostile", "neutral"], family: ["beast"] },
+  place: { objects: ["herb"] },
+  quest: {
+    ender: "healer",
+    parts: [{ part: "talkTo", npc: "healer" }],
+    title: "A Strange Sickness",
+    offer: [
+      ["There's something wrong with the {creatures} round {settlement}.", "Have you seen the {creatures} out there? Foaming, wild-eyed, wrong.", "The {creatures} round {settlement} are [not themselves|sick, or something worse]."],
+      ["Two of the herders came back bitten, and one of them is still abed.", "{neighbour} was bitten {when}, and the wound has gone black."],
+      ["{healerGiven} - {healerTitle} - knows more of sickness than anyone here.", "If anyone can say what ails them, it's {healerGiven}, the {healerTitle}."],
+      ["Go and ask what can be done."],
+      ["I'll see you're paid for your trouble.", "$promise"],
+    ],
+    progress: ["Have you spoken to {healerGiven}?", "$progress"],
+    done: ["{giverGiven} sent you about the {creatures}? Then it's worse than I feared."],
+  },
+}

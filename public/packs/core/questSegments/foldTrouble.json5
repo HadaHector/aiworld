@@ -1,0 +1,28 @@
+// Someone's animals are taken by creatures. Can stand alone, or open a story about the predators:
+// a charm against them (wardmaker, wardCharm).
+{
+  weight: 2,
+  roles: ["opener", "closer"],
+  theme: ["predators"],
+  provides: ["problem:predators"],
+  giver: ["farmer", "reeve", "villager"],
+  creatures: { hostility: ["hostile"] },
+  quest: {
+    parts: ["cullBeasts"],
+    title: ["{creatures} at the Fold", "Troubled Flocks", "Keep the {creatures} Back", "Something Out There"],
+    offer: [
+      "$hook",
+      "$motive",
+      [
+        "{neighbour} lost [a whole pen of hens|three sheep|a calf] to them.",
+        "I found [tracks|claw marks|tufts of fur] [by the gate|along the wall|by the water trough] this morning.",
+        { text: "{neighbour}'s dog won't go near the pasture any more.", weight: 1 },
+        "",
+      ],
+      ["Kill a few of them and the rest [will learn to keep away|will think twice].", "[Thin them out|Drive them off] before they get any bolder.", "Put a few of them down. [That's all I ask.|That should do it.]"],
+      "$promise",
+    ],
+    progress: ["Still hearing them at night.", "$progress"],
+    done: ["Quiet, last night. First time in a month.", "$thanks"],
+  },
+}

@@ -3,5 +3,11 @@
   kind: "gather",
   count: [4, 6],
   line: "{objects} from {place}",
-  motive: ["{objects} grow out at {place}, if you know where to look.", "You'll find {objects} at {place}."],
+  motive: [
+    "{objects} grow out at {place}, if you know where to look.",
+    "You'll find {objects} at {place}.",
+    "There were {objects} at {place} when I was last out that way.",
+    "If it's {objects} you want, try {place}.",
+    { text: "The old folk always said {place} was the place for {objects}.", when: { age: ["old"] }, weight: 3 },
+  ],
 }

@@ -13,6 +13,7 @@ import { createMemoryStore } from "../../src/save/memoryStore.ts";
 import { createWorldRecord } from "../../src/save/records.ts";
 import { addThreat } from "../../src/sim/skills/combat.ts";
 import { fillText } from "../../src/sim/text.ts";
+import { composeChain, themeFits } from "../../src/sim/quests/chains.ts";
 
 let failures = 0;
 let checks = 0;
@@ -256,6 +257,45 @@ await section("the test chain", async () => {
   check("abandoned: gone, and can be taken again", !state(7) && (await talk(giverE)).quests.some((q) => q.id === "q:probe/7" && q.state === "offer"));
 });
 
+// --- segments: the pieces fit together, whatever the world ---
+await section("segments", async () => {
+  const q = loadRulesFromDisk(CONFIG).quests;
+  const segments = [...q.segments.values()];
+  const max = q.chain.max;
+  check("there are segments of each role", ["opener", "middle", "closer"].every((r) => segments.some((s) => s.roles.includes(r))));
+  // Every chain the rules could draw, by walking from each opener, ignoring what a settlement has.
+  const reached = new Set();
+  const closing = new Map();
+  let chains = 0;
+  const walk = (chain) => {
+    const last = chain[chain.length - 1];
+    if (last.roles.includes("closer")) {
+      chains++;
+      for (const s of chain) reached.add(s.id);
+      closing.set(chain[0].id, (closing.get(chain[0].id) ?? 0) + 1);
+    }
+    if (chain.length >= max) return;
+    const final = chain.length + 1 >= max;
+    for (const s of segments) {
+      if (s.weight <= 0 || chain.includes(s) || !(s.roles.includes("closer") || (!final && s.roles.includes("middle"))) || !themeFits(chain, s)) continue;
+      if (composeChain("", [...chain, s])) walk([...chain, s]);
+    }
+  };
+  for (const s of segments) if (s.weight > 0 && s.roles.includes("opener")) walk([s]);
+  for (const s of segments) if (s.weight > 0 && s.roles.includes("opener")) check(`opener ${s.id} reaches a closer`, (closing.get(s.id) ?? 0) > 0);
+  for (const s of segments) if (s.weight > 0) check(`segment ${s.id} is on some chain`, reached.has(s.id));
+  log(`${segments.length} segments, ${chains} possible chains of at most ${max}`);
+  check("a good number of different chains", chains >= 15, String(chains));
+  // The recipes put together and drawn as they are written.
+  const sick = q.plots.find((p) => p.id === "strangeSickness");
+  check("the test chain is six quests of its recipe", sick?.quests.length === 6 && sick.intro, String(sick?.quests.length));
+  // A recipe or chain that breaks its own rules does not compose.
+  const get = (id) => q.segments.get(id);
+  check("a closer cannot start a chain that wants what it lacks", composeChain("x", [get("sicknessTry")]) === null);
+  check("segments out of order do not fit", composeChain("x", [get("sicknessAsk"), get("sicknessHerbs")]) === null);
+  check("wanting creatures nobody is does not fit", composeChain("x", [{ ...get("foldTrouble"), creatures: { hostility: ["hostile"], family: null } }, { ...get("pelts"), roles: ["middle"], creatures: { hostility: ["friendly"], family: null } }]) === null);
+});
+
 // --- the generator: every settlement's quests, well formed, the same for the same seed ---
 /** A server on a config and seed, with one quick player at the start; its casts made on asking. */
 async function generatedWorld(config, seed) {
@@ -322,13 +362,22 @@ await section("the generator", async () => {
           if ((o.kind === "gather" || o.kind === "reach") && Math.hypot(o.area.x - layout.x, o.area.z - layout.z) > w.rules.quests.reach + 200) problems.push(`${o.kind} too far`);
           if (fillText(o.line.text, o.line.args).includes("{")) problems.push(`line "${o.line.text}"`);
         }
-        for (const text of Object.values(q.text)) if (fillText(text.text, text.args).includes("{")) problems.push(`text "${text.text.slice(0, 40)}"`);
+        for (const text of Object.values(q.text)) {
+          if (fillText(text.text, text.args).includes("{")) problems.push(`text "${text.text.slice(0, 40)}"`);
+          // An argument that is there but empty makes a hole in a sentence.
+          for (const [, name] of text.text.matchAll(/\{(\w+)[,}]/g)) if (text.args[name] === "") problems.push(`empty {${name}} in "${text.text.slice(0, 40)}"`);
+          if (/ {2}|\[|\]|\|/.test(text.text)) problems.push(`stray markup in "${text.text.slice(0, 40)}"`);
+        }
         if (problems.length > 0) {
           bad++;
           if (bad <= 3) log(`  ${q.id}: ${problems.join(", ")}`);
         }
       }
       check(`${tag}: every quest well formed (${w.quests.length})`, bad === 0, `${bad} not`);
+      const offers = w.quests.map((x) => fillText(x.text.offer.text, x.text.offer.args));
+      check(`${tag}: no two offers the same`, new Set(offers).size === offers.length, `${offers.length - new Set(offers).size} repeated`);
+      const free = w.quests.filter((x) => x.chain && !x.id.startsWith(`q:mainland/${start.settlement}/`) && x.chain.index > 1);
+      log(`${tag}: ${free.length} later quests in chains drawn from segments, ${new Set(w.quests.map((x) => x.text.title.text)).size} different titles`);
       const people = [...w.casts.values()].flatMap((c) => c?.npcs ?? []).filter((n) => n.spot);
       log(`${tag}: ${w.quests.length} quests in ${w.casts.size} settlements, ${people.length} quest people (${[...new Set(people.map((p) => p.role))].join(", ")})`);
     }

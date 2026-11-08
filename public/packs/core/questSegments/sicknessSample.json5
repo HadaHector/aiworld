@@ -1,0 +1,21 @@
+// The test chain, part 2: kill and loot a sample.
+{
+  weight: 0,
+  roles: ["middle"],
+  theme: ["sickness"],
+  requires: ["problem:sickness"],
+  provides: ["has:sample"],
+  uses: ["healer", "beast"],
+  quest: {
+    giver: "healer",
+    parts: ["cullBeasts", "lootFrom"],
+    title: ["Thinning the Sick", "A Sample of the Sickness"],
+    offer: [
+      ["The sickness spreads from beast to beast.", "It passes from one beast to the next, [as these things do|and quickly]."],
+      ["I need a sample from one of them - blood will do - to know what we are dealing with.", "Bring me a little of their blood, so I can see what ails them."],
+      ["Thin them out before it reaches the flocks.", "Do it before it reaches the flocks."],
+    ],
+    progress: ["The sample - have you got it?"],
+    done: ["Yes... this is no common fever. I've seen its like once before."],
+  },
+}

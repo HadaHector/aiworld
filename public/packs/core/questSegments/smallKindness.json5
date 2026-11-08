@@ -1,0 +1,28 @@
+// Fetch what lies about at a place near.
+{
+  weight: 2,
+  roles: ["opener", "closer"],
+  theme: ["errand"],
+  giver: ["priest", "innkeeper", "shopkeeper", "farmer", "villager"],
+  place: { objects: [] },
+  quest: {
+    parts: ["gatherAt"],
+    title: ["{objects}", "A Small Kindness", "Fetching {objects}"],
+    offer: [
+      "$hook",
+      ["Could you do me a small kindness?", "I've a small thing to ask of you."],
+      "$motive",
+      [
+        { text: "I'd go myself, but my knees aren't what they were.", when: { age: ["old"] }, weight: 4 },
+        { text: "I'd go myself, but I can't leave the shop.", when: { role: ["shopkeeper"] }, weight: 4 },
+        { text: "I'd go myself, but the inn won't mind itself.", when: { role: ["innkeeper"] }, weight: 4 },
+        { text: "I'd go myself, but the animals won't feed themselves.", when: { role: ["farmer"] }, weight: 4 },
+        { text: "I'd go myself, but I have the evening service to prepare.", when: { role: ["priest"] }, weight: 4 },
+        "I'd go myself, but I can't be spared.",
+      ],
+      "$promise",
+    ],
+    progress: ["Any luck at {place}?", "$progress"],
+    done: ["Just what I needed. Bless you.", "$thanks"],
+  },
+}

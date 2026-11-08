@@ -1,0 +1,21 @@
+// Whoever you met sends a letter back to the one who sent you. Ends any story that brought a contact.
+{
+  weight: 1.5,
+  roles: ["closer"],
+  requires: ["met:contact"],
+  uses: ["contact"],
+  quest: {
+    giver: "contact",
+    ender: "giver",
+    parts: [{ part: "receiveLetter", npc: "contact" }, { part: "deliverLetter", npc: "giver" }],
+    title: ["A Reply for {giverGiven}", "Word Back to {settlement}", "An Answer"],
+    offer: [
+      ["I've written a few lines back to {giverGiven}.", { text: "I'd best answer {giverGiven}'s parcel properly.", when: { tags: ["delivered"] }, weight: 4 }, { text: "I've not much news from out here, but {giverGiven} should have what there is.", when: { tags: ["remote"] }, weight: 4 }, { text: "I've set it all down for {giverGiven}: the beasts, the charms, everything.", when: { tags: ["problem:predators"] }, weight: 4 }],
+      ["Would you carry it home for me?", "Take it back to {settlement}, would you? It's a long way for me."],
+      ["Mind you don't lose it.", ""],
+    ],
+    progress: ["Have you the letter for {giverGiven}?", "$progress"],
+    done: ["A letter from {contactGiven}! [Well, well|At last]. Here - and thank you.", "$thanks"],
+    choice: true,
+  },
+}
