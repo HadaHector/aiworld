@@ -23,10 +23,14 @@ export interface QuestWorld {
   playersIn(dimension: string): Entity[];
   spawn(dimension: string, template: string, x: number, z: number, key: string): Entity | undefined;
   despawn(entity: Entity): void;
-  /** Items: how many of a type did not fit; whether one was taken; whether it has one. */
-  give(entity: Entity, type: string, count: number): number;
-  take(entity: Entity, type: string): boolean;
-  has(entity: Entity, type: string): boolean;
+  /** Items: how many of a type did not fit; whether one was taken; whether it has one. A quest item
+   *  is its quest line's own - `bind` is the roll of its instance - so another quest's of the same
+   *  type is not it. */
+  give(entity: Entity, type: string, count: number, bind: number): number;
+  take(entity: Entity, type: string, bind: number): boolean;
+  has(entity: Entity, type: string, bind: number): boolean;
+  /** Takes from an entity every quest item (a type with `quest`) `keep` says no to; how many went. */
+  sweep(entity: Entity, keep: (type: string, bind: number) => boolean): number;
   /** The skill an item type's use casts, or "". */
   useSkill(type: string): string;
   pay(entity: Entity, money: number): void;
@@ -55,6 +59,12 @@ export interface QuestSystem {
   abandon(player: Entity, quest: string): string;
   /** A player takes a ground object. */
   takeObject(player: Entity, object: Entity): string;
+  /** Clears a character's bags of quest items no quest of theirs could use - from a quest dropped from
+   *  the packs, or kept from before items were bound to their quest line. Those of a quest line not yet
+   *  finished stay, even between two of its quests. */
+  sweep(player: Entity): number;
+  /** A player used an item (a type id, and the roll of the instance): the next cast of its skill counts for that. */
+  itemUsed(player: Entity, type: string, bind: number): void;
   kill(record: KillRecord): void;
   combatEvents(events: readonly CombatEvent[]): void;
   step(): void;
@@ -81,6 +91,8 @@ export function createQuestSystem(rules: GameRules, quests: QuestRules, world: Q
   const objectOf = new Map<number, { set: ObjectSet; index: number }>();
   const random = mulberry32(deriveSeed(hashString("quests"), 1));
   let nextLook = 0;
+  /** The item each player used last, for a `use` objective to count only its own quest's item. */
+  const lastUsed = new Map<number, { type: string; bind: number }>();
 
   const partOf = (entity: Entity): QuestPart | undefined => parts.get(entity.id);
 
@@ -124,19 +136,27 @@ export function createQuestSystem(rules: GameRules, quests: QuestRules, world: Q
 
   const near = (a: Entity, b: Entity, range: number): boolean => a.dimension === b.dimension && Math.hypot(a.x - b.x, a.z - b.z) <= range;
 
-  /** The quest items a quest gave (receive) or asks to use: taken back when it ends - unless another
-   *  quest the player has, or a later one of the same chain, asks for one (the next in a chain uses
-   *  the salve it was given). */
-  function questItems(player: Entity, def: QuestDef): string[] {
+  /**
+   * A quest item belongs to its quest line (QUESTS.md, *Quest items*): the roll of its instance is
+   * made from the chain's id - or the quest's own - so a letter for one errand is not the letter of
+   * another made from the same template, and delivering or using one counts only for its own.
+   */
+  const bindOf = (def: QuestDef): number => (hashString(def.chain?.id ?? def.id) >>> 0) || 1;
+
+  /** The types of the quest items a quest gave, asks to use or to deliver: taken back when it ends. When
+   *  it is handed in, a later quest of the same chain still to do keeps the ones it uses (the next in a
+   *  chain uses the salve it was given); abandoned, they all go - and are handed again if it is taken. */
+  function questItems(player: Entity, def: QuestDef, completing: boolean): string[] {
     const part = partOf(player);
     const wanted = new Set<string>();
-    for (const other of defs.values()) {
-      if (other === def || part?.done.has(other.id)) continue;
-      const sameChain = def.chain !== null && other.chain?.id === def.chain.id && other.chain.index > def.chain.index;
-      if (!sameChain && !part?.active.has(other.id)) continue;
-      for (const o of other.objectives) if (o.kind === "use" || o.kind === "deliver") wanted.add(o.item);
+    if (completing && def.chain) {
+      for (const other of defs.values()) {
+        if (part?.done.has(other.id) || other.chain?.id !== def.chain.id || other.chain.index <= def.chain.index) continue;
+        for (const o of other.objectives) if (o.kind === "use" || o.kind === "deliver") wanted.add(o.item);
+      }
     }
-    return def.objectives.flatMap((o) => (o.kind === "receive" || o.kind === "use" ? [o.item] : [])).filter((item) => !wanted.has(item));
+    const types = def.objectives.flatMap((o) => (o.kind === "receive" || o.kind === "use" || o.kind === "deliver" ? [o.item] : []));
+    return [...new Set(types)].filter((item) => !wanted.has(item));
   }
 
   /** XP for a quest at a character's level: full at or under its level, less as it outgrows it. */
@@ -253,11 +273,11 @@ export function createQuestSystem(rules: GameRules, quests: QuestRules, world: Q
             advance(player, def, active, index);
             moved = true;
           } else if (objective.kind === "receive" && objective.from === id) {
-            if (world.has(player, objective.item) || world.give(player, objective.item, 1) === 0) {
+            if (world.has(player, objective.item, bindOf(def)) || world.give(player, objective.item, 1, bindOf(def)) === 0) {
               advance(player, def, active, index);
               moved = true;
             }
-          } else if (objective.kind === "deliver" && objective.to === id && world.take(player, objective.item)) {
+          } else if (objective.kind === "deliver" && objective.to === id && world.take(player, objective.item, bindOf(def))) {
             advance(player, def, active, index);
             moved = true;
           }
@@ -276,6 +296,11 @@ export function createQuestSystem(rules: GameRules, quests: QuestRules, world: Q
       const active: ActiveQuest = { id: def.id, counts: def.objectives.map(() => 0), state: "active", accepted: world.time() };
       part.active.set(def.id, active);
       send(player, def.id, active);
+      // An item it asks you to use that it does not itself give is handed again if it was lost with an
+      // abandoned try of this quest (the salve of the last quest, taken with it).
+      for (const o of def.objectives) {
+        if (o.kind === "use" && !def.objectives.some((x) => x.kind === "receive" && x.item === o.item) && !world.has(player, o.item, bindOf(def))) world.give(player, o.item, 1, bindOf(def));
+      }
       // Its giver may be the one it first sends you to.
       this.talked(player, npc);
       return "";
@@ -290,9 +315,10 @@ export function createQuestSystem(rules: GameRules, quests: QuestRules, world: Q
       if (active.state !== "ready") return "notReady";
       const chosen = def.rewards.choice.length > 0 ? def.rewards.choice[choice] : undefined;
       if (def.rewards.choice.length > 0 && chosen === undefined) return "choose";
-      for (const item of questItems(player, def)) world.take(player, item);
+      for (const item of questItems(player, def, true)) world.take(player, item, bindOf(def));
       const items = [...(chosen ? [chosen] : []), ...def.rewards.items];
-      for (const item of items) if (world.give(player, item, 1) > 0) return "bagFull";
+      // A reward is an ordinary item (its roll made as any is), not a quest item.
+      for (const item of items) if (world.give(player, item, 1, 0) > 0) return "bagFull";
       part.active.delete(quest);
       part.done.add(quest);
       world.award(player, xpFor(def, world.level(player)));
@@ -306,7 +332,7 @@ export function createQuestSystem(rules: GameRules, quests: QuestRules, world: Q
       const part = partOf(player);
       if (!def || !part?.active.has(quest)) return "unknown";
       part.active.delete(quest);
-      for (const item of questItems(player, def)) world.take(player, item);
+      for (const item of questItems(player, def, false)) world.take(player, item, bindOf(def));
       send(player, quest, null, "removed");
       return "";
     },
@@ -324,6 +350,18 @@ export function createQuestSystem(rules: GameRules, quests: QuestRules, world: Q
       set.entities[index] = null;
       set.backAt[index] = world.time() + quests.objects.respawn;
       return "";
+    },
+    sweep(player) {
+      const part = partOf(player);
+      const wanted = new Set<string>();
+      for (const def of defs.values()) {
+        if (part?.done.has(def.id)) continue;
+        for (const o of def.objectives) if (o.kind === "receive" || o.kind === "use" || o.kind === "deliver") wanted.add(`${o.item}/${bindOf(def)}`);
+      }
+      return world.sweep(player, (type, bind) => wanted.has(`${type}/${bind}`));
+    },
+    itemUsed(player, type, bind) {
+      lastUsed.set(player.id, { type, bind });
     },
     kill(record) {
       for (const id of record.credit) {
@@ -345,6 +383,9 @@ export function createQuestSystem(rules: GameRules, quests: QuestRules, world: Q
         const skill = rules.skills[event.skill]?.id;
         for (const { def, active, objective, index } of [...openObjectives(player)]) {
           if (objective.kind !== "use" || world.useSkill(objective.item) !== skill) continue;
+          // Only the item that is this quest line's own counts, not a similar one from another.
+          const used = lastUsed.get(player.id);
+          if (!used || used.type !== objective.item || used.bind !== bindOf(def)) continue;
           const kind = target.creature?.kind.id;
           if (!kind || !kindMatches(objective.on, kind)) continue;
           const health = target.resources ? target.resources.current[rules.health] / Math.max(1, target.resources.max[rules.health]) : 1;
@@ -361,6 +402,7 @@ export function createQuestSystem(rules: GameRules, quests: QuestRules, world: Q
         const player = world.entity(id);
         if (!player) {
           parts.delete(id);
+          lastUsed.delete(id);
           continue;
         }
         for (const active of part.active.values()) {

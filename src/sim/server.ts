@@ -331,9 +331,22 @@ export function createServer(options: ServerOptions): Server {
           delta,
           firstItemId: world?.nextItemId,
         },
-        progression ? progression.itemHooks(options.itemHooks ?? skills.items) : (options.itemHooks ?? skills.items),
+        questAwareHooks(progression ? progression.itemHooks(options.itemHooks ?? skills.items) : (options.itemHooks ?? skills.items)),
       )
     : null;
+
+  /** Item hooks that also tell the quest system which item was used (and for which quest line), for a
+   *  `use` objective to count only its own (QUESTS.md, *Quest items*). */
+  function questAwareHooks(base: ItemHooks): ItemHooks {
+    return {
+      ...base,
+      use(user, item, skill) {
+        const went = base.use(user, item, skill);
+        if (went && options.items) questSystem.itemUsed(user, options.items.types[item.type].id, item.roll);
+        return went;
+      },
+    };
+  }
 
   /** The players standing in a dimension. */
   const playersIn = (id: string): Entity[] => [...players.values()].filter((p) => p.entity.dimension === id && p.entity.body).map((p) => p.entity);
@@ -483,23 +496,40 @@ export function createServer(options: ServerOptions): Server {
       skills.leave(entity, true);
       loaded.get(entity.dimension)?.entities.delete(entity.id);
     },
-    give: (entity, type, count) => {
+    // A quest item is its quest line's own: the roll of the instance (`bind`) is the line's. 0: any, or an ordinary item.
+    give: (entity, type, count, bind) => {
       const def = typeOf(type);
-      return def && itemSystem ? itemSystem.give(entity, def.index, count) : count;
+      return def && itemSystem ? itemSystem.give(entity, def.index, count, bind || undefined) : count;
     },
-    take: (entity, type) => {
+    take: (entity, type, bind) => {
       const def = typeOf(type);
       const b = entity.belongings;
       if (!def || !b || !itemSystem) return false;
-      const slot = b.bag.findIndex((id) => id != null && itemSystem.store.get(id)?.type === def.index);
+      const slot = b.bag.findIndex((id) => id != null && itemSystem.store.get(id)?.type === def.index && (!bind || itemSystem.store.get(id)?.roll === bind));
       if (slot < 0) return false;
       itemSystem.store.remove(b.bag[slot]!);
       b.bag[slot] = null;
       return true;
     },
-    has: (entity, type) => {
+    sweep: (entity, keep) => {
+      const b = entity.belongings;
+      if (!b || !itemSystem || !options.items) return 0;
+      let removed = 0;
+      for (const list of [b.bag, b.bank, b.equipment]) {
+        list.forEach((id, i) => {
+          const item = id == null ? undefined : itemSystem.store.get(id);
+          const type = item && options.items!.types[item.type];
+          if (!item || !type?.quest || keep(type.id, item.roll)) return;
+          itemSystem.store.remove(item.id);
+          list[i] = null;
+          removed++;
+        });
+      }
+      return removed;
+    },
+    has: (entity, type, bind) => {
       const def = typeOf(type);
-      return !!def && !!itemSystem && !!entity.belongings?.bag.some((id) => id != null && itemSystem.store.get(id)?.type === def.index);
+      return !!def && !!itemSystem && !!entity.belongings?.bag.some((id) => id != null && itemSystem.store.get(id)?.type === def.index && (!bind || itemSystem.store.get(id)?.roll === bind));
     },
     useSkill: (type) => typeOf(type)?.use?.skill ?? "",
     pay: (entity, money) => {
@@ -840,6 +870,8 @@ export function createServer(options: ServerOptions): Server {
     const skipped: string[] = [];
     if (record.progress && progression) skipped.push(...progression.import(entity, record.progress));
     if (record.belongings && itemSystem && entity.belongings) skipped.push(...importBelongings(itemSystem.ctx, entity, record.belongings));
+    // Quest items no quest of theirs could use (QUESTS.md, *Quest items*) are not kept.
+    questSystem.sweep(entity);
     if (entity.resources && !record.dead) {
       for (const [id, value] of Object.entries(record.resources)) {
         const index = rules.resourceIndex.get(id);

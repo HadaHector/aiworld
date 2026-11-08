@@ -217,8 +217,11 @@ export function unequipItem(ctx: ItemContext, entity: Entity, slot: number): Ref
 }
 
 /** Whether an entity holds an item of a type anywhere: its bag, bank or equipment. */
-export function holds(ctx: ItemContext, b: Belongings, type: number): boolean {
-  return [...b.bag, ...b.bank, ...b.equipment].some((id) => id != null && ctx.store.get(id)!.type === type);
+export function holds(ctx: ItemContext, b: Belongings, type: number, roll?: number): boolean {
+  return [...b.bag, ...b.bank, ...b.equipment].some((id) => {
+    const item = id == null ? undefined : ctx.store.get(id);
+    return !!item && item.type === type && (roll === undefined || item.roll === roll);
+  });
 }
 
 /**
@@ -230,7 +233,8 @@ export function receiveItem(ctx: ItemContext, entity: Entity, item: ItemInstance
   const b = entity.belongings;
   if (!b) return { left: item.count, why: "cannot" };
   const type = ctx.items.types[item.type];
-  if (type.quest && holds(ctx, b, item.type)) return { left: item.count, why: "unique" };
+  // A quest item is one to a quest line: its roll says which (QUESTS.md, *Quest items*).
+  if (type.quest && holds(ctx, b, item.type, item.roll)) return { left: item.count, why: "unique" };
   if (type.stack > 1) {
     for (const id of b.bag) {
       if (id == null || item.count === 0) continue;

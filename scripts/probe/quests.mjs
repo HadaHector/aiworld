@@ -13,6 +13,7 @@ import { createMemoryStore } from "../../src/save/memoryStore.ts";
 import { createWorldRecord } from "../../src/save/records.ts";
 import { addThreat } from "../../src/sim/skills/combat.ts";
 import { fillText } from "../../src/sim/text.ts";
+import { hashString } from "../../src/world/content/dimensions.ts";
 import { composeChain, themeFits } from "../../src/sim/quests/chains.ts";
 import { questOrder } from "../../src/sim/quests/generator.ts";
 
@@ -256,6 +257,83 @@ await section("the test chain", async () => {
   check("out of time: failed", state(7)?.state === "failed");
   await send({ type: "questAbandon", quest: "q:probe/7" });
   check("abandoned: gone, and can be taken again", !state(7) && (await talk(giverE)).quests.some((q) => q.id === "q:probe/7" && q.state === "offer"));
+
+  // --- quest items belong to their quest line (QUESTS.md, *Quest items*) ---
+  const bind = (chainId) => (hashString(chainId) >>> 0) || 1;
+  const letterType = items.typeIndex.get("sealedLetter");
+  const salveType = items.typeIndex.get("herbalSalve");
+  const stack = () => me.belongings.bag.map((x) => (x != null ? server.debug.items.ctx.store.get(x) : null)).filter(Boolean);
+  const letters = () => stack().filter((x) => x.type === letterType);
+  const salves = () => stack().filter((x) => x.type === salveType);
+  const errand = (n, to) => quest(n, { giver, ender: to, chain: { id: `q:errand${n}`, index: 1, of: 1 }, requires: { quests: [], level: 1 }, objectives: [{ kind: "receive", item: "sealedLetter", from: giver, line: t("Take the letter") }, { kind: "deliver", item: "sealedLetter", to, line: t("Deliver it") }] });
+  const cure = (n) => quest(n, { giver: maker, ender: maker, chain: { id: `q:cure${n}`, index: 1, of: 1 }, requires: { quests: [], level: 1 }, objectives: [{ kind: "receive", item: "herbalSalve", from: maker, line: t("Take the salve") }, { kind: "use", item: "herbalSalve", on: beasts, below: 1, count: 1, line: t("Salve a beast") }] });
+  server.debug.quests.define([errand(8, healer), errand(9, maker), cure(10), cure(11)]);
+
+  // Two errands with the same kind of letter: each has its own.
+  await talk(giverE);
+  await send({ type: "questAccept", npc: giverE.id, quest: "q:probe/8" });
+  await send({ type: "questAccept", npc: giverE.id, quest: "q:probe/9" });
+  check("two errands, two letters of one type held at once", letters().length === 2, String(letters().length));
+  check("...each made for its quest line", letters().map((x) => x.roll).sort().join() === [bind("q:errand8"), bind("q:errand9")].sort().join(), letters().map((x) => x.roll).join());
+  await talk(makerE);
+  check("the letter delivered is the one made for that errand", state(9)?.state === "ready" && state(8)?.counts[1] === 0, `${JSON.stringify(state(8))} ${JSON.stringify(state(9))}`);
+  check("...the other errand keeps its own", letters().length === 1 && letters()[0].roll === bind("q:errand8"), letters().map((x) => x.roll).join());
+  // Abandoning takes its item, and only its item.
+  await send({ type: "questAbandon", quest: "q:probe/8" });
+  check("abandoned: its letter is gone", letters().length === 0, String(letters().length));
+  await talk(makerE);
+  await send({ type: "questComplete", npc: makerE.id, quest: "q:probe/9", choice: 0 });
+  check("the other errand still handed in", done(9));
+  await talk(giverE);
+  await send({ type: "questAccept", npc: giverE.id, quest: "q:probe/8" });
+  check("taken again: handed the letter again", letters().length === 1 && letters()[0].roll === bind("q:errand8"));
+  await send({ type: "questAbandon", quest: "q:probe/8" });
+
+  // Two cures: only the salve of its own quest line counts when used.
+  await talk(makerE);
+  await send({ type: "questAccept", npc: makerE.id, quest: "q:probe/10" });
+  await send({ type: "questAccept", npc: makerE.id, quest: "q:probe/11" });
+  check("two cures, two salves", salves().length === 2 && new Set(salves().map((x) => x.roll)).size === 2, String(salves().length));
+  const slotOfSalve = (chainId) => me.belongings.bag.findIndex((x) => x != null && server.debug.items.ctx.store.get(x).type === salveType && server.debug.items.ctx.store.get(x).roll === bind(chainId));
+  const wounded = server.debug.creatures.debug.spawn("mainland", kind, me.x + 3, me.z, 1);
+  await send({ type: "target", id: wounded.id });
+  await send({ type: "itemUse", from: { container: 0, slot: slotOfSalve("q:cure11") } }, 70);
+  check("the salve of the second cure counts for the second", state(11)?.state === "ready", JSON.stringify(state(11)));
+  check("...and not for the first, which has a salve of its own", state(10)?.counts[1] === 0, JSON.stringify(state(10)));
+  await send({ type: "questAbandon", quest: "q:probe/10" });
+  check("abandoned: its salve is gone, the other's stays", salves().length === 1 && salves()[0].roll === bind("q:cure11"));
+  await talk(makerE);
+  await send({ type: "questComplete", npc: makerE.id, quest: "q:probe/11", choice: 0 });
+  check("handed in: the salve taken back", done(11) && salves().length === 0, String(salves().length));
+
+  // A salve lost with an abandoned try of the quest that uses it is handed again when it is taken again.
+  const parts = (n, chainId, index) => quest(n, { giver: maker, ender: maker, chain: { id: chainId, index, of: 2 }, requires: { quests: [], level: 1 }, objectives: index === 1 ? [{ kind: "receive", item: "herbalSalve", from: maker, line: t("Take the salve") }] : [{ kind: "use", item: "herbalSalve", on: beasts, below: 1, count: 1, line: t("Salve a beast") }] });
+  const first = parts(12, "q:line", 1);
+  const second = { ...parts(13, "q:line", 2), requires: { quests: ["q:probe/12"], level: 1 } };
+  server.debug.quests.define([first, second]);
+  await talk(makerE);
+  await send({ type: "questAccept", npc: makerE.id, quest: "q:probe/12" });
+  await send({ type: "questComplete", npc: makerE.id, quest: "q:probe/12", choice: 0 });
+  check("a chain's first quest done: its salve kept for the next", done(12) && salves().length === 1);
+  // A quest item no quest could use (one kept from before, or from a quest that is gone) goes when the
+  // character enters; one a quest line still to do could use stays, even between two of its quests.
+  server.debug.items.give(me, letterType, 1);
+  check("a letter of no quest line held (a leftover)", letters().length === 1 && letters()[0].roll !== bind("q:errand8"));
+  await send({ type: "logout", toMenu: false }, 10);
+  await send({ type: "enterWorld", character, dimension: "" }, 15);
+  me = server.debug.entity(id);
+  giverE = npcs.entityOf(giver);
+  healerE = npcs.entityOf(healer);
+  makerE = npcs.entityOf(maker);
+  check("entering: the leftover letter is gone", letters().length === 0, String(letters().length));
+  check("...and the salve kept between two quests of a line stays", salves().length === 1 && salves()[0].roll === bind("q:line"), String(salves().length));
+  await talk(makerE);
+  await send({ type: "questAccept", npc: makerE.id, quest: "q:probe/13" });
+  await send({ type: "questAbandon", quest: "q:probe/13" });
+  check("the next one abandoned: the salve goes with it", salves().length === 0, String(salves().length));
+  await send({ type: "questAccept", npc: makerE.id, quest: "q:probe/13" });
+  check("...and is handed again when it is taken again", salves().length === 1 && salves()[0].roll === bind("q:line"));
+  await send({ type: "questAbandon", quest: "q:probe/13" });
 });
 
 // --- segments: the pieces fit together, whatever the world ---

@@ -281,9 +281,10 @@ await section("belongings", () => {
   check("using bread", system.use(p, B(breadAt)) === "" && hookCalls[0] === "use eatBread" && bagItem(p, breadAt).count === before - 1);
   check("a sword is not used", system.use(p, B(bagIndex(p, "sword.bronze.great.common"))) === "cannot");
 
-  // Quest items: one only, never dropped.
-  system.give(p, items.typeIndex.get("rustyKey"), 1);
-  check("a second quest item is refused", system.give(p, items.typeIndex.get("rustyKey"), 1) === 1);
+  // Quest items: one to a quest line (its roll), never dropped.
+  system.give(p, items.typeIndex.get("rustyKey"), 1, 777);
+  check("a second quest item of the same quest line is refused", system.give(p, items.typeIndex.get("rustyKey"), 1, 777) === 1);
+  check("...one of another quest line is held beside it", system.give(p, items.typeIndex.get("rustyKey"), 1, 778) === 0);
   check("a quest item cannot be dropped", system.drop(p, B(bagIndex(p, "rustyKey")), 0) === "quest");
 
   // A full bag.

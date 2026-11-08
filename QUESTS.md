@@ -191,10 +191,22 @@ quest: {
 
 ### Quest items and ground objects
 
-- **Quest items** are item types made per quest from `questItemTemplates/` (a name pattern, an icon,
-  a look), with ITEMS.md's `quest: true`: not dropped, one held, taken away when the quest ends or
-  is abandoned. A `use` item carries a skill (ITEMS.md, *Abilities*) whose effect on the target is
-  what counts: a salve that calms, a snare that binds, a ward that drives off.
+- **Quest items** are item types with ITEMS.md's `quest: true` (a salve, a ward, a letter, a
+  parcel): never dropped, taken away when the quest ends or is abandoned. A `use` item carries a skill
+  (ITEMS.md, *Abilities*) whose effect on the target is what counts: a salve that calms, a snare that
+  binds, a ward that drives off.
+  **An item belongs to its quest line, not to its type.** The *roll* of the item instance - which a
+  quest item has no use for - is made from the line's id (the chain's, or the quest's own). A
+  character can hold a letter for each of two errands made from the same template, because they are
+  different items; a `deliver` takes the letter of its own errand and no other; a `use` counts only
+  the item of its own quest line (the item system tells the quest system which item was used); and
+  abandoning a quest takes exactly its items. So a similar quest from the same template never uses
+  another's item. Characters entering the world are swept of quest items no quest line of theirs
+  that is not finished could use.
+  Rules: when a quest is **handed in**, its items go, except those a later quest of the same chain
+  uses (the next in a chain uses the salve it was given). When it is **abandoned**, all go, and an item
+  it uses but does not give itself is **handed again** when it is taken again, so a chain is not
+  stuck for the want of it.
 - **Quest drops** are a loot-table entry added to the creature kinds a `loot` part names, rolled
   only for players with that objective unfinished, and shown only to them (WoW-like co-op).
 - **Ground objects** are a new entity template, `questObject`: a small thing with a sparkle, made at
@@ -916,6 +928,16 @@ After NPCS.md's five steps. Each leaves the game working: the dev server (`?play
   draught, `drinkDraught`). **Measured** over six worlds, 236 quests: 149 give no item, 58 give
   consumables, 29 a choice; the options' level minus the quest's is between -2 and +2 (mostly +1 and +2:
   the armour tiers are 1, 5 and 10).
+
+- **Quest items are the quest line's own.** An item's roll is the line's id (`bindOf` in
+  `system.ts`); `holds` is per type and roll, `give`/`take`/`has` take it, a `use` counts only for the
+  item used (`itemUsed`, from the item hook), abandoning takes exactly the quest's items, and
+  taking an abandoned use quest again hands the item again. **Checked** by the probe (10 of its 15
+  new checks fail without it): two errands with one kind of letter hold two letters, each delivered to
+  its own errand, abandoning one leaves the other; two cures use only their own salve; a salve is
+  kept between two quests of a line, goes with an abandoned try and is handed again; a leftover letter is
+  swept as a character enters. **Not done:** the item's name does not say whose it is ("Sealed Letter
+  for Thilsell"); the tooltip could name the quest from the roll.
 
 ## Later
 

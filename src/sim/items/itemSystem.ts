@@ -71,8 +71,9 @@ export interface ItemSystem {
   takeLoot(entity: Entity, slot: number): Refusal;
   closeLoot(entity: Entity): void;
   repair(entity: Entity, free?: boolean): Refusal;
-  /** Debug: makes `count` of a type in an entity's bag. Returns how many did not fit. */
-  give(entity: Entity, type: number, count: number): number;
+  /** Makes `count` of a type in an entity's bag, with this roll if one is given (a quest item's says which
+   *  quest line it is for). Returns how many did not fit. */
+  give(entity: Entity, type: number, count: number, roll?: number): number;
   /** Debug: wears an entity's gear as death or a hit would ("weapon" and "armour" always land). */
   wear(entity: Entity, what: "death" | "weapon" | "armour"): void;
   /** Whether an entity has loot to take, or a chest that would roll some when opened. */
@@ -324,9 +325,9 @@ export function createItemSystem(game: GameRules, items: ItemRules, world: ItemW
 
     repair: (entity, free = false) => after(entity, repairAll(ctx, entity, free)),
 
-    give(entity, type, count) {
+    give(entity, type, count, roll) {
       if (!entity.belongings || !items.types[type]) return count;
-      const left = giveItem(ctx, entity, type, count, roll32(anyRoll));
+      const left = giveItem(ctx, entity, type, count, roll === undefined ? roll32(anyRoll) : () => roll);
       updateGear(entity);
       return left;
     },
