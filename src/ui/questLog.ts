@@ -80,7 +80,12 @@ export function renderQuest(parent: HTMLElement, def: QuestDef, active: ActiveQu
     el("span", "", row, type?.name ?? id);
     return row;
   };
-  for (const id of r.items) rewardRow(options.items.types[options.items.typeIndex.get(id) ?? -1], id, `color: ${TEXT};`);
+  // Fixed items, the same kind together: "Bread x3".
+  for (const [id, count] of new Map(r.items.map((id) => [id, r.items.filter((x) => x === id).length] as const))) {
+    const type = options.items.types[options.items.typeIndex.get(id) ?? -1];
+    const row = rewardRow(type, id, `color: ${TEXT};`);
+    if (count > 1) el("span", `color: ${DIM};`, row, `x${count}`);
+  }
   if (r.choice.length > 0) {
     el("div", `color: ${DIM}; font-size: 11px; margin-top: 3px;`, parent, "Choose one of:");
     const row = el("div", "display: flex; flex-direction: column; gap: 3px;", parent);

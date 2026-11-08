@@ -1,0 +1,2 @@
+// A draught, drunk for health back over a few seconds: a consumable reward (rules/quests.json5).
+{ name: "Healing Draught", kind: "food", rarity: "uncommon", stack: 20, use: { skill: "drinkDraught", consume: true }, value: 14 }

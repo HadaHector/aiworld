@@ -1,0 +1,15 @@
+// Drinking a healing draught (an item use, see ITEMS.md, Abilities): more health than bread, sooner.
+{
+  name: "Drink Draught",
+  cues: { applied: "heal" },
+  target: "self",
+  hostOn: "target",
+  display: "buff",
+  states: {
+    drinking: {
+      length: 6,
+      period: 2,
+      tick: [{ do: "heal", amount: 35 }],
+    },
+  },
+}

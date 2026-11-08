@@ -377,6 +377,8 @@ await section("the generator", async () => {
   /** Every quest's effort (its XP over a kill-equivalent's at its level) by kind of task, and every item choice. */
   const efforts = { talk: [], gather: [], hunt: [], road: [] };
   const choices = [];
+  /** Every generated quest, for what the rewards do across them. */
+  const allQuests = [];
   for (const [config, seeds] of [["tiny", 3], ["small", 3]]) {
     for (let s = 0; s < seeds; s++) {
       const seed = 4000 + s * 911;
@@ -406,6 +408,7 @@ await section("the generator", async () => {
       const to = npcIds.get(letter?.ender);
       check(`${tag}: the road on to another settlement`, letter?.objectives.at(-1)?.kind === "deliver" && to && !to.id.startsWith(`npc:mainland/${start.settlement}/`), letter?.ender);
       check(`${tag}: an item to choose at the story's end`, story.at(-1)?.rewards.choice.length >= 2, JSON.stringify(story.at(-1)?.rewards.choice));
+      allQuests.push(...w.quests);
       for (const q of w.quests) {
         const finale = q.chain && q.chain.index === q.chain.of;
         const kinds = q.objectives.map((o) => o.kind);
@@ -478,6 +481,16 @@ await section("the generator", async () => {
   check("every choice offers what the rules say", choices.every((c) => c.items.length === rules0.rewardChoices), String(choices.map((c) => c.items.length)));
   check("...all of one rarity", choices.every((c) => new Set(c.items.map((x) => x.rarity)).size === 1));
   check("...no item twice", choices.every((c) => new Set(c.items.map((x) => x.id)).size === c.items.length));
+  // Items match the quest's level, and not every quest gives one.
+  check("every item offered is within the rules' reach of its quest's level", choices.every((c) => c.items.every((x) => Math.abs(x.itemLevel - c.quest.level) <= rules0.rewardLevel)), JSON.stringify(choices.filter((c) => c.items.some((x) => Math.abs(x.itemLevel - c.quest.level) > rules0.rewardLevel)).map((c) => [c.quest.level, c.items.map((x) => x.itemLevel)])));
+  log(`item level minus quest level over the options: ${JSON.stringify(Object.fromEntries([...new Set(choices.flatMap((c) => c.items.map((x) => x.itemLevel - c.quest.level)))].sort().map((d) => [d, choices.flatMap((c) => c.items).filter((x, i) => x.itemLevel - choices.flatMap((c2) => c2.items.map(() => c2.quest.level))[i] === d).length])))}`);
+  const fixed = allQuests.filter((x) => x.rewards.items.length > 0);
+  const none = allQuests.filter((x) => x.rewards.items.length === 0 && x.rewards.choice.length === 0);
+  check("a quest gives a choice or consumables, not both", allQuests.every((x) => x.rewards.items.length === 0 || x.rewards.choice.length === 0));
+  check("consumables are ones the rules list, at most `max`, and consumed on use", fixed.every((x) => new Set(x.rewards.items).size === 1 && x.rewards.items.length <= rules0.rewardConsumables.max && rules0.rewardConsumables.items.some((k) => k.item === x.rewards.items[0] && k.from <= x.level)));
+  log(`${allQuests.length} quests: ${none.length} give no item, ${fixed.length} give consumables (${[...new Set(fixed.map((x) => x.rewards.items[0]))].join(", ")}), ${allQuests.filter((x) => x.rewards.choice.length > 0).length} a choice`);
+  check("most quests give no item at all", none.length > allQuests.length / 2, `${none.length}/${allQuests.length}`);
+  check("some give consumables", fixed.length > 0);
   const rank = (c) => c.rarities[c.items[0].rarity].order;
   check("a chain's last quest aims for the higher rarity", choices.every((c) => !(c.quest.chain && c.quest.chain.index === c.quest.chain.of) || c.rarities[c.items[0].rarity].id === rules0.rewardRarity.finale), JSON.stringify([...new Set(choices.map((c) => c.rarities[c.items[0].rarity].id))]));
   const weapons = choices.flatMap((c) => c.items).filter((x) => x.kind === "weapon").length;

@@ -1,5 +1,6 @@
 // Swords from parts (see ITEMS.md, Generated item types): a metal times a form times a rarity, so
-// 2 x 3 x 3 = 18 types. The rarer tiers draw extra stats from the pool below, which ones by the seed.
+// 3 x 3 x 3 = 27 types. The metals' levels (1, 4, 8) leave a sword near every level a quest's reward
+// can be at (QUESTS.md, *Item choices*). The rarer tiers draw extra stats from the pool below, which ones by the seed.
 {
   kind: "weapon",
   slot: "mainHand",
@@ -8,6 +9,7 @@
   axes: {
     material: [
       { id: "bronze", name: "Bronze", tint: "#c89a5a", level: 1, budget: 1 },
+      { id: "hardened", name: "Hardened", tint: "#b98a4e", level: 4, budget: 1.25 },
       // Iron needs some skill with swords (PROGRESSION.md: a discipline's level is a stat items require).
       { id: "iron", name: "Iron", tint: "#d6dae0", level: 8, budget: 1.5, requires: { and: [{ ge: ["level", { sub: ["itemLevel", 8] }] }, { ge: ["swordSkill", 10] }] } },
     ],

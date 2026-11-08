@@ -110,6 +110,10 @@ export interface QuestRules {
   rewardChoices: number;
   /** The rarity a choice aims for (at most; the best every option has): a quest's, and a chain's last. */
   rewardRarity: { quest: string; finale: string };
+  /** How far an offered item's level may be from the quest's. */
+  rewardLevel: number;
+  /** Consumables some quests give instead of an item choice. */
+  rewardConsumables: { items: { item: string; from: number }[]; chance: number; minEffort: number; perEffort: number; max: number };
   /** Quests a settlement gets, by tier, chains counted by their quests. */
   quota: Record<string, [number, number]>;
   /** How far round a settlement its quests look for places, in metres. */
@@ -148,7 +152,7 @@ type Entry = { id: string; file: string; data: unknown };
 export function readQuestRules(entry: { file: string; data: unknown } | undefined, partEntries: readonly Entry[], segmentEntries: readonly Entry[], plotEntries: readonly Entry[], voiceEntries: readonly Entry[], issues: ContentIssue[]): QuestRules {
   const reader = new Reader(issues, entry?.file ?? "rules/quests.json5");
   const obj = entry ? reader.object(entry.data, "") : {};
-  reader.onlyKeys(obj, "", ["maxActive", "xp", "money", "standing", "objects", "talkRange", "colours", "rewardTemplates", "rewardChoices", "rewardRarity", "effort", "finale", "quota", "reach", "plurals", "fields", "whens", "chain", "weighting"]);
+  reader.onlyKeys(obj, "", ["maxActive", "xp", "money", "standing", "objects", "talkRange", "colours", "rewardTemplates", "rewardChoices", "rewardRarity", "rewardLevel", "rewardConsumables", "effort", "finale", "quota", "reach", "plurals", "fields", "whens", "chain", "weighting"]);
   const parts = new Map(readQuestParts(partEntries, issues).map((p) => [p.id, p]));
   const segments = new Map(readQuestSegments(segmentEntries, parts, issues).map((s) => [s.id, s]));
   const voices = new Map<string, Line[]>();
@@ -209,6 +213,18 @@ export function readQuestRules(entry: { file: string; data: unknown } | undefine
   const colours = obj.colours === undefined ? {} : reader.object(obj.colours, "colours");
   const effort = obj.effort === undefined ? {} : reader.object(obj.effort, "effort");
   const rarity = obj.rewardRarity === undefined ? {} : reader.object(obj.rewardRarity, "rewardRarity");
+  const consumablesRaw = obj.rewardConsumables === undefined ? {} : reader.object(obj.rewardConsumables, "rewardConsumables");
+  const consumables = {
+    items: reader.optionalArray(consumablesRaw, "items", "rewardConsumables").map((v, i) => {
+      const at = `rewardConsumables.items[${i}]`;
+      const o = reader.object(v, at);
+      return { item: reader.string(o, "item", at), from: reader.optionalNumber(o, "from", at, 1, { min: 1 }) };
+    }),
+    chance: reader.optionalNumber(consumablesRaw, "chance", "rewardConsumables", 0.4, { min: 0, max: 1 }),
+    minEffort: reader.optionalNumber(consumablesRaw, "minEffort", "rewardConsumables", 1.5, { min: 0 }),
+    perEffort: reader.optionalNumber(consumablesRaw, "perEffort", "rewardConsumables", 0.6, { min: 0 }),
+    max: reader.optionalNumber(consumablesRaw, "max", "rewardConsumables", 5, { min: 1, integer: true }),
+  };
   return {
     maxActive: reader.optionalNumber(obj, "maxActive", "", 25, { min: 1, integer: true }),
     xp: {
@@ -245,6 +261,8 @@ export function readQuestRules(entry: { file: string; data: unknown } | undefine
     },
     rewardTemplates: obj.rewardTemplates === undefined ? [] : reader.stringList(obj, "rewardTemplates", ""),
     rewardChoices: reader.optionalNumber(obj, "rewardChoices", "", 3, { min: 1, integer: true }),
+    rewardLevel: reader.optionalNumber(obj, "rewardLevel", "", 2, { min: 0 }),
+    rewardConsumables: consumables,
     rewardRarity: { quest: reader.optionalString(rarity, "quest", "rewardRarity") ?? "uncommon", finale: reader.optionalString(rarity, "finale", "rewardRarity") ?? "rare" },
     quota,
     reach: reader.optionalNumber(obj, "reach", "", 1000, { min: 0 }),

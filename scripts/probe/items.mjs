@@ -62,7 +62,7 @@ await section("rules", () => {
   check("money shown in denominations", formatMoney(items.currencies[items.main], 12345) === "1g 23s 45c", formatMoney(items.currencies[items.main], 12345));
   check("a plain currency shown as a number", formatMoney(items.currencies[items.currencyIndex.get("marks")], 7) === "7");
   check("zero money shown", formatMoney(items.currencies[items.main], 0) === "0c");
-  check("sword makes 18 types", items.generated.get("sword").length === 18, String(items.generated.get("sword")?.length));
+  check("sword makes 27 types", items.generated.get("sword").length === 27, String(items.generated.get("sword")?.length));
   check("chestpiece makes 21 types (never: worn uncommon or rare)", items.generated.get("chestpiece").length === 21, String(items.generated.get("chestpiece")?.length));
   const long = typeOf("sword.iron.long.common");
   check("a generated type's name from its parts", long?.name === "Iron Longsword", long?.name);

@@ -28,6 +28,19 @@
   rewardTemplates: ["sword", "chestpiece", "boots", "helm"],
   rewardChoices: 3,
   rewardRarity: { quest: "uncommon", finale: "rare" },
+  // An item's level is within this many of the quest's, or it is not offered: a level 4 quest does not
+  // give level 1 gear. Where nothing fits, the quest gives consumables instead.
+  rewardLevel: 2,
+  // Most quests give no item at all. Some give a few consumables (a fixed reward, not a choice): a
+  // quest of at least `minEffort` that gives no choice does with probability `chance`, `perEffort`
+  // of them for each effort, most `max`, of a kind available at its level (`from`).
+  rewardConsumables: {
+    items: [{ item: "bread", from: 1 }, { item: "healingDraught", from: 3 }],
+    chance: 0.4,
+    minEffort: 1.5,
+    perEffort: 0.6,
+    max: 5,
+  },
   // Quests a settlement gets, by tier, after any intro; chains count by their quests.
   quota: { hamlet: [2, 3], village: [4, 6], town: [7, 10] },
   // Chains drawn from segments (QUESTS.md, *Segments*): at most this many quests, and how likely

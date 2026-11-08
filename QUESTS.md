@@ -511,7 +511,8 @@ rerolls nothing.
 | XP | The quest's **effort** times a kill's XP at its level times `rate`, through `progression.award(entity, "quest", ...)`, falling to `greyShare` as the character outgrows it |
 | Money | The effort times `money.base + money.perLevel x level` |
 | Item choice | `rewardChoices` (3) items from the reward templates, **balanced** (below). Only a chain's last quest gives one today |
-| Fixed item | A plot may name one instead (not yet used) |
+| Consumables | Some of the other quests give a few: bread, a healing draught - a fixed reward, not a choice (below) |
+| Nothing | **Most quests give no item at all**: XP and money are the reward. That is the default; only a segment that says `choice: true` asks for an item |
 | Standing | With the giver's faction (NPCS.md, *Factions*), a flat amount per quest in rules |
 | Unlocks | PROGRESSION.md's `how: "quest"`: a quest may teach an ability or open a discipline |
 
@@ -540,11 +541,15 @@ long story ends better than a short one.
 
 ### Item choices
 
-- **One rarity, one tier.** Every option in a choice is of the same rarity: the best that all the
-  templates it draws on have, up to the one aimed for (`rewardRarity`: `uncommon` for a quest, `rare`
-  for a chain's last), so the end of a story is better than a single errand. The options are about
-  the quest's level: the lowest of the tiers each template comes nearest to it at, so none is a tier
-  above another where the templates' tiers differ (sword, chestpiece and boots all start at level 1).
+- **The items' level matches the quest's.** An item is only offered if its level is within
+  `rewardLevel` (2) of the quest's: a level 4 quest does not give level 1 gear. The options are of one
+  tier: the one nearest the quest's level that any template has, and each template's own nearest to
+  it. A template with nothing within reach is left out of that choice (a sword where the metals'
+  levels are 1, 4 and 8 and the quest is at 6), and the swords' metals are 1, 4 and 8 so one is near
+  every level up to the 8s.
+- **One rarity.** Every option in a choice is of the same rarity: the best that all the templates it
+  draws on have, up to the one aimed for (`rewardRarity`: `uncommon` for a quest, `rare` for a chain's
+  last), so the end of a story is better than a single errand.
 - **Kinds go round.** The kind (weapon, armour) offered least so far in the world comes first and
   again; within a kind the template used least, and then the type used least. Over a world the
   weapons and the armour are about even and no choice is all swords, however many quests give one.
@@ -553,6 +558,16 @@ long story ends better than a short one.
 - **No item twice in a choice.** All of this reads the same shared world state as the weighting
   ([Weighting](#weighting)).
 - **Not yet class-aware**: a priest is still offered a sword.
+
+### Consumables, and no item at all
+
+A quest that gives no choice has `choice: []` and `items: []`, and pays XP, money and standing: that
+is most of them. Some give a **fixed reward of consumables** instead (`rewardConsumables`): a quest
+of at least `minEffort` gives some with probability `chance` - `perEffort` of them for each unit of
+effort, most `max` - of a kind available at its level (bread from level 1, a healing draught from 3).
+The client shows them together ("Bread x3"), the quest system gives each on hand-in, and a bag too
+full to hold them refuses the hand-in like any item. Where a chain's last quest should give a choice
+and nothing fits its level, it gives consumables rather than nothing.
 
 ## Saved
 
@@ -884,6 +899,13 @@ After NPCS.md's five steps. Each leaves the game working: the dev server (`?play
   4.1; the starting settlement's 12-14 quests give 3300-4000 XP on their own (level 5), the intro
   alone 1450-2430 (level 4 or so) - generous, and `xp.rate` is the number to turn down. Of 29 item
   choices, 44 of 87 options are weapons.
+
+- **Reward items match the quest's level, and not every quest gives one.** Choices only offer items
+  within `rewardLevel` of the quest's level (a mid-tier "Hardened" sword, level 4, joins bronze and
+  iron so a weapon is near every level), and consumables are a fixed reward (bread, and a new healing
+  draught, `drinkDraught`). **Measured** over six worlds, 236 quests: 149 give no item, 58 give
+  consumables, 29 a choice; the options' level minus the quest's is between -2 and +2 (mostly +1 and +2:
+  the armour tiers are 1, 5 and 10).
 
 ## Later
 
