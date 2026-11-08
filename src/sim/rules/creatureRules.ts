@@ -24,6 +24,8 @@ export interface CreatureKind {
   species: string;
   variant: string;
   family: string;
+  /** What it is like, for quests and skills to ask for: "furred", "venomous". The species' and the variant's. */
+  tags: string[];
   /** What each level above 1 adds to a stat's base, flat. */
   perLevel: { stat: number; value: number }[];
   tactics: TacticDef[];
@@ -135,10 +137,10 @@ const ID_PATTERN = /^[A-Za-z0-9_-]+$/;
 const byId = (a: { id: string }, b: { id: string }): number => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
 
 const SPECIES_KEYS = [
-  "entity", "name", "family", "hostility", "faction", "stats", "perLevel", "modifiers", "spells", "tactics", "speed", "group", "habitat", "roster",
+  "entity", "name", "family", "tags", "hostility", "faction", "stats", "perLevel", "modifiers", "spells", "tactics", "speed", "group", "habitat", "roster",
   "levelOffset", "respawn", "aggro", "flee", "keepRange", "wander", "loot", "look", "variants", "traits",
 ];
-const VARIANT_KEYS = ["id", "name", "habitat", "stats", "perLevel", "modifiers", "spells", "tactics", "look", "never", "levelOffset", "speed", "flee", "keepRange", "aggro"];
+const VARIANT_KEYS = ["id", "name", "tags", "habitat", "stats", "perLevel", "modifiers", "spells", "tactics", "look", "never", "levelOffset", "speed", "flee", "keepRange", "aggro"];
 const TRAIT_KEYS = ["name", "stats", "modifiers", "spells", "tactics", "speed"];
 
 /**
@@ -410,6 +412,7 @@ function makeKind(
     species: speciesId,
     variant: variantId,
     family: reader.optionalString(species, "family", "") ?? "",
+    tags: [...new Set([...(species.tags === undefined ? [] : reader.stringList(species, "tags", "")), ...(variant && variant.tags !== undefined ? reader.stringList(variant, "tags", vpath) : [])])],
     perLevel: [...perLevel].filter(([stat]) => game.statIndex.has(stat)).map(([stat, value]) => ({ stat: game.statIndex.get(stat)!, value })),
     tactics: tactics.filter((t): t is TacticDef => t !== null),
     speed,

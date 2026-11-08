@@ -15,7 +15,9 @@ function mergeCreatures(a: CreatureNeed | null, b: CreatureNeed | null): Creatur
   if (!a || !b) return a ?? b;
   const hostility = meet(a.hostility, b.hostility);
   const family = meet(a.family, b.family);
-  return (hostility && hostility.length === 0) || (family && family.length === 0) ? false : { hostility, family };
+  // Tags are all asked for, so two needs ask for both sets.
+  const tags = a.tags === null && b.tags === null ? null : [...new Set([...(a.tags ?? []), ...(b.tags ?? [])])];
+  return (hostility && hostility.length === 0) || (family && family.length === 0) ? false : { hostility, family, tags };
 }
 
 /** Two place needs as one: a place that has all the tags and objects of each. */

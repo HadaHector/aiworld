@@ -231,6 +231,12 @@ recipe naming segments in a fixed order, for what must always be the same, like 
   nothing hands you a cure before the herbs. **Names** are people and things by slot: `contact` is
   whoever the chain sent you to, whichever segment brought them (a parcel's friend, a hermit at a
   ruin, a traveller on the road), so `contactReply` ends any story that has one.
+- **Creatures are asked for by what they are like**, not by name: `creatures: { hostility, family,
+  tags }`, where `tags` (all of them) come from the species' and variant's `tags` in
+  `creatures/*.json5` (CREATURES.md). Pelts ask for `furred`, a sickness for `mammal`; a quest's text
+  can follow what it got (`when: { creature: ["arachnid"] }` says it only of a spider: webbing across
+  the gate instead of tufts of fur). A settlement whose zone has no creature with the tags does not
+  get the quest at all, rather than a hunt for something that is not there.
 - **Merging.** A chain's needs of the world are merged, so it is about one kind of creature and one
   place throughout; a chain whose merged needs nothing in the settlement meets is not drawn there.
 - **Length.** `rules/quests.json5`'s `chain` gives the most segments one chain has (`max`, 4) and
@@ -784,6 +790,12 @@ After NPCS.md's five steps. Each leaves the game working: the dev server (`?play
   ender do not compose; it plays four different stories with the bot (the curse lifted, the
   culprit asked, a death on the way, the plain sickness) from the "!" to the item worn, and over
   the generated worlds that the story the intro drew is one the rules can make.
+
+- **Creature tags.** Species and variants have `tags`; a creature need asks for them. Core: wolf
+  `furred, mammal, predator`; boar `furred, mammal`; spider `arachnid, venomous`; bandit `armed`.
+  The pelts quest asks for `furred` (no more pelts of spiders) and the sickness for `mammal`.
+  **Checked:** every tag a segment asks for is one some creature has, and in generated worlds every
+  pelt, blood-sample and salve objective is on a creature with the right tag.
 
 ## Later
 

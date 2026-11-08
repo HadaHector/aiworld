@@ -27,6 +27,8 @@ export interface ContextCreature {
   levelOffset: number;
   hostility: string;
   family: string;
+  /** What it is like (CREATURES.md): "furred", "venomous". */
+  tags: readonly string[];
 }
 
 /** A place near the settlement that quests can use. */
@@ -133,7 +135,7 @@ export function generateQuests(input: GeneratorInput): QuestDef[] {
   const fieldsAt = gate ? { x: layout.x + (gate.x - layout.x) * 1.6, z: layout.z + (gate.z - layout.z) * 1.6 } : { x: layout.x + layout.radius * 1.5, z: layout.z };
   const places: ContextPlace[] = [...input.places, { name: site.name, ...fieldsAt, radius: 25, quest: { tags: ["fields", "open"], objects: q.fields.objects, people: [], text: q.fields.text } }];
 
-  const creatureFits = (need: CreatureNeed | null) => (c: ContextCreature): boolean => !need || ((!need.hostility || need.hostility.includes(c.hostility)) && (!need.family || need.family.includes(c.family)));
+  const creatureFits = (need: CreatureNeed | null) => (c: ContextCreature): boolean => !need || ((!need.hostility || need.hostility.includes(c.hostility)) && (!need.family || need.family.includes(c.family)) && (!need.tags || need.tags.every((t) => c.tags.includes(t))));
   /** An object of a place that a need allows: it has all the tags asked and none that are shut out. */
   const objectFits = (need: PlaceNeed) => (o: { tags: readonly string[] }): boolean => (need.objects ?? []).every((t) => o.tags.includes(t)) && !need.not.some((t) => o.tags.includes(t));
   const placeFits = (need: PlaceNeed | null) => (p: ContextPlace): boolean => !need || (need.tags.every((t) => p.quest.tags.includes(t)) && (need.objects === null || p.quest.objects.some(objectFits(need))));
@@ -211,7 +213,7 @@ export function generateQuests(input: GeneratorInput): QuestDef[] {
       args[`${name}Title`] = person.title;
       args[`${name}Sex`] = person.sex;
     }
-    const speaking = (who: CastNpc, tags: readonly string[]): LineContext => ({ mood: who.mood, role: who.role ?? "", sex: who.sex, age: who.age, place: place?.quest.tags ?? [], object: object?.tags ?? [], creature: beast ? [beast.family] : [], tags, tier: site.tier });
+    const speaking = (who: CastNpc, tags: readonly string[]): LineContext => ({ mood: who.mood, role: who.role ?? "", sex: who.sex, age: who.age, place: place?.quest.tags ?? [], object: object?.tags ?? [], creature: beast ? [beast.family, ...beast.tags] : [], tags, tier: site.tier });
     const t = (text: string): Text => ({ text, args });
     const id = (n: number): string => `q:${input.castInput.dimension}/${site.id}/${quests.length + n}`;
     const made: QuestDef[] = [];

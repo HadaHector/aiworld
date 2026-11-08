@@ -284,6 +284,7 @@ const kindsOf = (q, chain) => chain.flatMap((s) => s.quest.parts.map((p) => q.pa
 await section("segments", async () => {
   const q = loadRulesFromDisk(CONFIG).quests;
   const segments = [...q.segments.values()];
+  const get0 = (id) => q.segments.get(id);
   check("there are segments of each role", ["opener", "middle", "closer"].every((r) => segments.some((s) => s.roles.includes(r))));
   // The free chains.
   const free = chainsOf(q);
@@ -307,6 +308,16 @@ await section("segments", async () => {
     // GAMEPLAY.md's test chain is one of them: talk, kill and loot, talk, gather, receive, use, talk.
     check(`${plot.id}: the test chain is one of them`, variants.some((c) => kindsOf(q, c).join() === "talk,kill,loot,talk,gather,receive,use"));
   }
+  // Every tag a quest asks of creatures is one some creature of the pack has, with the family and
+  // hostility it asks alongside.
+  const kinds = [...loadCreatureRulesFromDisk(CONFIG, loadRulesFromDisk(CONFIG), SEED).kinds.values()];
+  for (const s of segments) {
+    const need = s.creatures;
+    if (!need) continue;
+    const some = kinds.some((k) => (!need.family || need.family.includes(k.family)) && (!need.hostility || need.hostility.includes(k.template.hostility)) && (!need.tags || need.tags.every((t) => k.tags.includes(t))));
+    check(`segment ${s.id}: a creature has what it asks (${JSON.stringify(need)})`, some);
+  }
+  check("pelts ask for furred creatures", get0("pelts")?.creatures?.tags?.includes("furred"));
   // A recipe or chain that breaks its own rules does not compose.
   const get = (id) => q.segments.get(id);
   check("a closer cannot start a chain that wants what it lacks", composeChain("x", [get("sicknessTry")]) === null);
@@ -355,7 +366,7 @@ async function generatedWorld(config, seed) {
     quests.push(def);
   }
   const casts = new Map(worldData.settlementLayouts.map((l) => [l.siteId, server.debug.npcs.debug.cast("mainland", l.siteId)]));
-  return { server, rules, items, worldData, casts, quests, channel };
+  return { server, rules, items, worldData, casts, quests, channel, creatures };
 }
 
 await section("the generator", async () => {
@@ -391,6 +402,7 @@ await section("the generator", async () => {
       check(`${tag}: the road on to another settlement`, letter?.objectives.at(-1)?.kind === "deliver" && to && !to.id.startsWith(`npc:mainland/${start.settlement}/`), letter?.ender);
       check(`${tag}: an item to choose at the story's end`, story.at(-1)?.rewards.choice.length >= 2, JSON.stringify(story.at(-1)?.rewards.choice));
       let bad = 0;
+      let huntQuests = 0;
       for (const q of w.quests) {
         const site = Number(q.id.split("/")[1]);
         const layout = w.worldData.settlementLayouts.find((l) => l.siteId === site);
@@ -403,6 +415,13 @@ await section("the generator", async () => {
           if ((o.kind === "kill" || o.kind === "loot" || o.kind === "use") && (o.kind === "loot" ? o.from : o.kind === "use" ? o.on : o.creatures).kinds.length === 0) problems.push(`${o.kind} creatures`);
           if ((o.kind === "gather" || o.kind === "reach") && Math.hypot(o.area.x - layout.x, o.area.z - layout.z) > w.rules.quests.reach + 200) problems.push(`${o.kind} too far`);
           if (fillText(o.line.text, o.line.args).includes("{")) problems.push(`line "${o.line.text}"`);
+          // What a quest asks you to hunt has what it asks: pelts of the furred, a sickness of mammals.
+          const wants = o.line.text.startsWith("Good pelts") ? "furred" : /^(Tainted blood|Salve a weakened)/.test(o.line.text) ? "mammal" : null;
+          const targets = o.kind === "loot" ? o.from.kinds : o.kind === "use" ? o.on.kinds : o.kind === "kill" ? o.creatures.kinds : [];
+          if (wants) {
+            huntQuests++;
+            if (!targets.every((id) => w.creatures.kinds.get(id)?.tags.includes(wants))) problems.push(`${wants} quest for ${targets.join()}`);
+          }
         }
         for (const text of Object.values(q.text)) {
           if (fillText(text.text, text.args).includes("{")) problems.push(`text "${text.text.slice(0, 40)}"`);
@@ -416,6 +435,7 @@ await section("the generator", async () => {
         }
       }
       check(`${tag}: every quest well formed (${w.quests.length})`, bad === 0, `${bad} not`);
+      log(`${tag}: ${huntQuests} pelt and sickness objectives, all on the right creatures`);
       const offers = w.quests.map((x) => fillText(x.text.offer.text, x.text.offer.args));
       check(`${tag}: no two offers the same`, new Set(offers).size === offers.length, `${offers.length - new Set(offers).size} repeated`);
       const free = w.quests.filter((x) => x.chain && !x.id.startsWith(`q:mainland/${start.settlement}/`) && x.chain.index > 1);

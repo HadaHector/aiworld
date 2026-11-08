@@ -551,7 +551,7 @@ export function createServer(options: ServerOptions): Server {
           layout,
           zone: data.areaNames.get(site.areaId) ?? "",
           levels: zone?.levels ?? [1, 3],
-          creatures: (zone?.roster ?? []).map((r) => ({ id: r.kind.id, name: r.kind.template.name, levelOffset: r.kind.levelOffset, hostility: r.kind.template.hostility, family: r.kind.family })),
+          creatures: (zone?.roster ?? []).map((r) => ({ id: r.kind.id, name: r.kind.template.name, levelOffset: r.kind.levelOffset, hostility: r.kind.template.hostility, family: r.kind.family, tags: r.kind.tags })),
           places,
           others,
           intro,

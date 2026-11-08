@@ -10,7 +10,8 @@
   people: {
     healer: { roles: ["priest", "innkeeper"], relation: ["friend", "sister", "brother", "wife", "husband"], make: ["hermit"] },
   },
-  creatures: { hostility: ["hostile", "neutral"], family: ["beast"] },
+  // A sickness is a mammal's: it foams, it bites, it passes from one to the next.
+  creatures: { hostility: ["hostile", "neutral"], family: ["beast"], tags: ["mammal"] },
   quest: {
     ender: "healer",
     parts: [{ part: "talkTo", npc: "healer" }],

@@ -15,7 +15,9 @@
       "$motive",
       [
         "{neighbour} lost [a whole pen of hens|three sheep|a calf] to them.",
-        "I found [tracks|claw marks|tufts of fur] [by the gate|along the wall|by the water trough] this morning.",
+        { text: "I found [tracks|claw marks|tufts of fur] [by the gate|along the wall|by the water trough] this morning.", when: { creature: ["furred"] }, weight: 3 },
+        { text: "There was webbing strung [across the gate|along the wall|over the water trough] this morning, thick as rope.", when: { creature: ["arachnid"] }, weight: 3 },
+        "I found something [by the gate|along the wall|by the water trough] this morning that I would rather not describe.",
         { text: "{neighbour}'s dog won't go near the pasture any more.", weight: 1 },
         "",
       ],

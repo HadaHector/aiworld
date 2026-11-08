@@ -5,7 +5,8 @@
   theme: ["trade"],
   provides: ["has:pelts"],
   giver: ["shopkeeper", "smith", "innkeeper", "villager"],
-  creatures: { family: ["beast"] },
+  // Only what has a pelt: if none of those live near, the quest is not given here.
+  creatures: { family: ["beast"], tags: ["furred"] },
   quest: {
     parts: ["huntPelts"],
     title: ["Pelts for {giverGiven}", "Good Hides", "Winter Stock"],

@@ -3,6 +3,7 @@
   entity: "beast",
   name: "{variant} Spider",
   family: "beast",
+  tags: ["arachnid", "venomous"],        // what it is like, for quests (QUESTS.md) to ask for
   hostility: "hostile",
   stats: { stamina: 3, strength: 7, agility: 14, armor: 30, weaponMin: 2, weaponMax: 4, weaponSpeed: 2.8 },
   perLevel: { stamina: 1.5, strength: 1.2, agility: 1.8, armor: 12, weaponMin: 1, weaponMax: 1.5 },

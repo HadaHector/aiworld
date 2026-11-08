@@ -55,6 +55,7 @@ Asked and answered before this plan was written:
   entity: "beast",                    // the entity template kinds are made on (stats, resources, look)
   name: "{variant} Wolf",             // filled from the variant's name (a translatable key later)
   family: "beast",                    // a free string: shown, and matched by skills' filters later
+  tags: ["furred", "mammal", "predator"],   // what it is like, for quests (QUESTS.md) to ask for; a variant's `tags` add to the species'. Free strings, like family
   hostility: "hostile",
   // Base stats at level 1, and what each level above adds (flat). `level` itself comes from the spawn.
   stats: { stamina: 8, strength: 9, agility: 12, armor: 40, weaponMin: 3, weaponMax: 6, weaponSpeed: 2 },

@@ -7,7 +7,7 @@
   forbids: ["cause:curse"],
   provides: ["has:sample", "cause:sickness"],
   uses: ["healer"],
-  creatures: { hostility: ["hostile", "neutral"], family: ["beast"] },
+  creatures: { hostility: ["hostile", "neutral"], family: ["beast"], tags: ["mammal"] },
   quest: {
     giver: "healer",
     parts: ["cullBeasts", "lootFrom"],

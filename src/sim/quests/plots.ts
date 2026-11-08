@@ -19,6 +19,8 @@ export type PartKind = (typeof PART_KINDS)[number];
 export interface CreatureNeed {
   hostility: string[] | null;
   family: string[] | null;
+  /** Tags a creature must have, all of them ("furred" for pelts). */
+  tags: string[] | null;
 }
 
 /** Which place will do: by its tags, or one that has objects to gather (with these tags). */
@@ -219,8 +221,8 @@ function readCreatureNeed(reader: Reader, obj: RawObject, key: string, path: str
   if (obj[key] === undefined) return null;
   const at = path ? `${path}.${key}` : key;
   const raw = reader.object(obj[key], at);
-  reader.onlyKeys(raw, at, ["hostility", "family"]);
-  return { hostility: raw.hostility === undefined ? null : reader.stringList(raw, "hostility", at), family: raw.family === undefined ? null : reader.stringList(raw, "family", at) };
+  reader.onlyKeys(raw, at, ["hostility", "family", "tags"]);
+  return { hostility: raw.hostility === undefined ? null : reader.stringList(raw, "hostility", at), family: raw.family === undefined ? null : reader.stringList(raw, "family", at), tags: raw.tags === undefined ? null : reader.stringList(raw, "tags", at) };
 }
 
 function readPlaceNeed(reader: Reader, obj: RawObject, key: string, path: string): PlaceNeed | null {
