@@ -31,7 +31,7 @@ import { clampStanding, factionDef, standingWith, tierOf } from "./factions";
 import { buy, buyPrice, sell } from "./items/shop";
 import { createNpcSystem, type NpcSystem } from "./npcs/system";
 import { createQuestSystem, type QuestSystem } from "./quests/system";
-import { generateQuests, questOrder } from "./quests/generator";
+import { createWorldQuestState, generateQuests, questOrder } from "./quests/generator";
 import type { Cast, CastContext } from "./npcs/cast";
 import type { QuestDef } from "./quests/quest";
 import type { SettlementSite } from "../world/settlements/settlementSites";
@@ -527,6 +527,9 @@ export function createServer(options: ServerOptions): Server {
     const reach = rules.quests.reach;
     const byId = new Map(settlements.map((s) => [s.site.id, s]));
     const defs: QuestDef[] = [];
+    // What the quests made so far have used - places, creatures, where the objectives lie - which
+    // the settlements after weigh by.
+    const world = createWorldQuestState();
     for (const id of questOrder(context.seed, dimension, settlements.map((s) => s.site.id))) {
       const { site, layout, cast } = byId.get(id)!;
       const zone = zones[site.areaId];
@@ -558,6 +561,7 @@ export function createServer(options: ServerOptions): Server {
           folk: `folk@${dimension}/${site.areaId}`,
           rules,
           items: options.items ?? null,
+          world,
         }),
       );
     }

@@ -404,6 +404,32 @@ cast. It leads out into ring 0's creatures and features, and its last quest send
 the road to the nearest ring-1 settlement, whose own quests are there when they arrive. The rest of
 the starting village's quota is ordinary standalones.
 
+## Weighting
+
+What the generator uses is not drawn evenly. Wherever it chooses a place, a creature kind, an object,
+a plot or the next segment of a chain, each candidate has a score, and the draw is by score:
+
+| Factor | Score | Why |
+|---|---|---|
+| **Distance** | `1 / (1 + (d / distance)^2)` - half as likely at `distance` metres (400) as at the door | The place a quest sends you should be a walk, not a trek |
+| **Reuse** | `1 / (1 + here x uses in this settlement + elsewhere x uses in the others)` for a place or object (`reuse`: 2 and 0.5), and for a creature kind (`kind`: 1 and 0.15, which a whole zone shares) | Two quests in one village should not send you to the same field for the same herb; neighbours may share, with a smaller penalty |
+| **Crowding** | `1 / (1 + each x objectives within radius of the place)` (0.7, 150 m) | Where a lot is already asked of the player, ask elsewhere. Gathering and going count at their place, hunting at the settlement |
+
+- **Plots and chains use the best they could.** A plot's or chain's fitness is the best place and the
+  best creature it could use, so one whose only place is far, used or crowded is drawn less, and one
+  that needs something the zone lacks (pelts, no furred creature) is not drawn at all. It multiplies
+  an opener's weight, a recipe's weight and each next segment's weight.
+- **Shared, in order.** The scores read a `WorldQuestState` that every settlement's generation adds
+  to, in `questOrder` - the seed-shuffled order, so no settlement always has the first pick. This is
+  why quests are made globally ([The generator](#the-generator)): a settlement can see what the
+  ones before it used. The result is still a pure function of the seed and the packs, but a change
+  to one plot's data can now reshuffle quests in settlements made after it, not only its own.
+- **Data.** `rules/quests.json5`'s `weighting`: `distance`, `reuse`, `kind`, `crowding`. A pack that
+  sets them to nothing (`reuse` and `crowding` to 0, `distance` huge) gets the old even draw.
+- **Not yet:** distance for creatures (the roster is the zone's; spawn points are not in the
+  generator's context), and a hard cap on objectives in an area - the weights only make a crowd
+  unlikely.
+
 ## Text
 
 The first translatable text in the game, so it brings the mechanism with it.
@@ -797,15 +823,21 @@ After NPCS.md's five steps. Each leaves the game working: the dev server (`?play
   **Checked:** every tag a segment asks for is one some creature has, and in generated worlds every
   pelt, blood-sample and salve objective is on a creature with the right tag.
 
+- **Weighting.** `src/sim/quests/generator.ts` scores places, objects and creature kinds by distance,
+  reuse and crowding (see [Weighting](#weighting)), picks by score, and weighs plots, openers and the
+  next segment of a chain by the best place and creature each could use. `WorldQuestState` (uses by
+  key, and where the objectives lie) is made by the server for each dimension and passed from
+  settlement to settlement in `questOrder`. **Checked:** the probe generates five `small` worlds
+  with the weights on and off: with them the gathering and going objectives lie 257 m from their
+  settlement on average (360 m without), 6 pairs of them within 150 m of each other (12 without), and
+  a greater share are at different places (90% against 81%).
+
 ## Later
 
 - A death a character *meets*: an NPC the quest has killed is not there when the character comes
   back, or is found dead. That needs an NPC's state per character (hidden or dead for those on the
   quest) in a shared world, and a quest effect to set it.
 
-- Weight what quest, segment, place and creature to use by how far the place is, how many other
-  quests already use it (in this settlement and in the ones made before), and how many objectives
-  already lie in the area, with a penalty for crowding; constants in `rules/quests.json5`.
 
 - Repeatable and daily quests (`repeat`).
 - Escorts, defend-a-place and timed events as parts.

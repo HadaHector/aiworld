@@ -48,6 +48,20 @@ export interface ContextSettlement {
   npc: CastNpc | null;
 }
 
+/**
+ * What the world's quests have used so far, shared by every settlement's generation as a dimension
+ * loads, in `questOrder`: how many quests use each place, object and creature kind, and where the
+ * objectives lie. What the generator weighs by (QUESTS.md, *Weighting*).
+ */
+export interface WorldQuestState {
+  /** Uses by key: "place:x,z", "object:x,z/name", "kind:zone/kind". */
+  uses: Map<string, number>;
+  /** Where each objective so far lies: a place for gathering and going, the settlement for hunting. */
+  anchors: { x: number; z: number }[];
+}
+
+export const createWorldQuestState = (): WorldQuestState => ({ uses: new Map(), anchors: [] });
+
 export interface GeneratorInput {
   cast: Cast;
   castInput: Pick<CastInput, "seed" | "dimension" | "site" | "layout" | "voices" | "rules">;
@@ -63,6 +77,8 @@ export interface GeneratorInput {
   folk: string;
   rules: GameRules;
   items: ItemRules | null;
+  /** What earlier settlements' quests have used; this one's are added as they are made. */
+  world: WorldQuestState;
 }
 
 type Rng = () => number;
@@ -140,6 +156,45 @@ export function generateQuests(input: GeneratorInput): QuestDef[] {
   const objectFits = (need: PlaceNeed) => (o: { tags: readonly string[] }): boolean => (need.objects ?? []).every((t) => o.tags.includes(t)) && !need.not.some((t) => o.tags.includes(t));
   const placeFits = (need: PlaceNeed | null) => (p: ContextPlace): boolean => !need || (need.tags.every((t) => p.quest.tags.includes(t)) && (need.objects === null || p.quest.objects.some(objectFits(need))));
 
+  // --- weights (QUESTS.md, *Weighting*) ---
+  const wt = q.weighting;
+  const world = input.world;
+  /** Uses in this settlement, by the same keys as the world's. */
+  const here = new Map<string, number>();
+  const placeKey = (p: { x: number; z: number }): string => `place:${Math.round(p.x)},${Math.round(p.z)}`;
+  const objectKey = (p: ContextPlace, name: string): string => `object:${Math.round(p.x)},${Math.round(p.z)}/${name}`;
+  const kindKey = (c: ContextCreature): string => `kind:${site.areaId}/${c.id}`;
+  const reuse = (key: string, k: { here: number; elsewhere: number }): number => {
+    const mine = here.get(key) ?? 0;
+    return 1 / (1 + k.here * mine + k.elsewhere * ((world.uses.get(key) ?? 0) - mine));
+  };
+  const crowded = (p: { x: number; z: number }): number => world.anchors.reduce((n, a) => n + (Math.hypot(a.x - p.x, a.z - p.z) <= wt.crowding.radius ? 1 : 0), 0);
+  /** How likely a place is: near, little used, and not crowded with objectives. */
+  const placeScore = (p: ContextPlace): number => (1 / (1 + (Math.hypot(p.x - site.x, p.z - site.z) / wt.distance) ** 2)) * reuse(placeKey(p), wt.reuse) * (1 / (1 + wt.crowding.each * crowded(p)));
+  const kindScore = (c: ContextCreature): number => reuse(kindKey(c), wt.kind);
+  /** One of a list by the score of each (evenly if all score nothing). */
+  function pickBy<T>(rng: Rng, list: readonly T[], score: (item: T) => number): T {
+    const weights = list.map(score);
+    const total = weights.reduce((sum, w) => sum + w, 0);
+    if (total <= 0) return pick(rng, list);
+    let roll = rng() * total;
+    return list.find((_, i) => (roll -= weights[i]) < 0) ?? list[list.length - 1];
+  }
+  /** Notes what a plot's quests used, for the ones drawn after (in this settlement and the world). */
+  function record(place: ContextPlace | null, beast: ContextCreature | null, object: { name: string } | undefined, objectives: readonly Objective[]): void {
+    const bump = (key: string): void => {
+      here.set(key, (here.get(key) ?? 0) + 1);
+      world.uses.set(key, (world.uses.get(key) ?? 0) + 1);
+    };
+    if (place) bump(placeKey(place));
+    if (place && object) bump(objectKey(place, object.name));
+    if (beast) bump(kindKey(beast));
+    for (const o of objectives) {
+      if (o.kind === "gather" || o.kind === "reach") world.anchors.push({ x: o.area.x, z: o.area.z });
+      else if (o.kind === "kill" || o.kind === "loot" || o.kind === "use") world.anchors.push({ x: layout.x, z: layout.z });
+    }
+  }
+
   /** One line of a pool, by weight, among those that fit the speaker and the quest - its own and its
    *  voice banks' - and fresh if any is. The line's `[a|b]` alternatives are drawn. "" if none fits. */
   function pickLine(local: Rng, pool: Pool, ctx: LineContext): string {
@@ -164,10 +219,10 @@ export function generateQuests(input: GeneratorInput): QuestDef[] {
     const giver = pick(local, givers);
     const creature = plot.creatures ? input.creatures.filter(creatureFits(plot.creatures)) : [];
     if (plot.creatures && creature.length === 0) return null;
-    const beast = creature.length > 0 ? pick(local, creature) : null;
+    const beast = creature.length > 0 ? pickBy(local, creature, kindScore) : null;
     const placeList = plot.place ? places.filter(placeFits(plot.place)) : [];
     if (plot.place && placeList.length === 0) return null;
-    const place = placeList.length > 0 ? pick(local, placeList) : null;
+    const place = placeList.length > 0 ? pickBy(local, placeList, placeScore) : null;
     const other = plot.road ? input.others.find((o) => o.npc) : undefined;
     if (plot.road && !other) return null;
     // Its people: the giver's relations first, then anyone of the roles, then someone made new.
@@ -198,7 +253,7 @@ export function generateQuests(input: GeneratorInput): QuestDef[] {
       people.set(name, person);
     }
     const objectsHere = place ? place.quest.objects.filter(plot.place ? objectFits(plot.place) : () => true) : [];
-    const object = place ? pick(local, objectsHere.length > 0 ? objectsHere : place.quest.objects) : undefined;
+    const object = place ? pickBy(local, objectsHere.length > 0 ? objectsHere : place.quest.objects, (o) => reuse(objectKey(place, o.name), wt.reuse)) : undefined;
     const placeName = place ? place.quest.text.replace("{name}", place.name) : "";
     const lvl = level(beast);
     // The arguments every text of the plot can use.
@@ -292,6 +347,7 @@ export function generateQuests(input: GeneratorInput): QuestDef[] {
     });
     lines.set(giver.index, (lines.get(giver.index) ?? 0) + 1);
     usedPlots.add(plot.id);
+    record(place, beast, object, made.flatMap((m) => m.objectives));
     return made;
   }
 
@@ -331,6 +387,21 @@ export function generateQuests(input: GeneratorInput): QuestDef[] {
     );
   }
 
+  /** How well a plot fits here, 0 if it cannot be made: the best place and the best creature it could
+   *  use, by the weights - so a plot whose only place is far, crowded or well used is drawn less. */
+  function fitness(plot: QuestPlotDef): number {
+    if (!feasible(plot)) return 0;
+    let f = 1;
+    if (plot.creatures) f *= Math.max(...input.creatures.filter(creatureFits(plot.creatures)).map(kindScore));
+    if (plot.place) f *= Math.max(...places.filter(placeFits(plot.place)).map(placeScore));
+    return f;
+  }
+
+  const fitnessOf = (list: readonly QuestSegmentDef[]): number => {
+    const plot = composeChain("", list);
+    return plot ? fitness(plot) : 0;
+  };
+
   /** How a chain is grown: its shortest and longest, how likely each next segment is once it could
    *  end, the generator's random numbers, and the themes it keeps to (none: any that chains may use). */
   interface ChainOptions {
@@ -348,19 +419,23 @@ export function generateQuests(input: GeneratorInput): QuestDef[] {
     const chain = [opener];
     let closed = opener.roles.includes("closer") ? 1 : 0;
     const allowed = (s: QuestSegmentDef): boolean => s.weight > 0 && (o.themes ? s.theme.some((t) => o.themes!.includes(t)) : s.free);
-    const fits = (list: readonly QuestSegmentDef[]): boolean => {
+    /** How well these segments fit here: 0 if they do not go together or cannot be made. */
+    const score = (list: readonly QuestSegmentDef[]): number => {
       const plot = composeChain("", list);
-      return !!plot && feasible(plot);
+      return plot ? fitness(plot) : 0;
     };
-    if (!fits(chain)) return null;
+    if (score(chain) <= 0) return null;
     for (;;) {
       if (chain.length >= o.max) break;
       if (closed === chain.length && chain.length >= o.min && o.rng() >= o.more) break;
       const final = chain.length + 1 >= o.max;
-      const next = segments.filter((s) => allowed(s) && !chain.includes(s) && (s.roles.includes("closer") || (!final && s.roles.includes("middle"))) && themeFits(chain, s) && fits([...chain, s]));
+      const next = segments
+        .filter((s) => allowed(s) && !chain.includes(s) && (s.roles.includes("closer") || (!final && s.roles.includes("middle"))) && themeFits(chain, s))
+        .map((s) => ({ s, weight: s.weight * score([...chain, s]) }))
+        .filter((c) => c.weight > 0);
       if (next.length === 0) break;
-      let roll = o.rng() * next.reduce((sum, s) => sum + s.weight, 0);
-      const chosen = next.find((s) => (roll -= s.weight) < 0) ?? next[0];
+      let roll = o.rng() * next.reduce((sum, c) => sum + c.weight, 0);
+      const chosen = (next.find((c) => (roll -= c.weight) < 0) ?? next[0]).s;
       chain.push(chosen);
       if (chosen.roles.includes("closer")) closed = chain.length;
       // A segment that cannot stand in the middle is where the chain ends.
@@ -379,8 +454,9 @@ export function generateQuests(input: GeneratorInput): QuestDef[] {
     const { themes, min, max, more } = plot.draw;
     const openers = segments.filter((s) => s.roles.includes("opener") && s.weight > 0 && s.theme.some((t) => themes.includes(t)));
     for (let attempt = 0; attempt < 12 && openers.length > 0; attempt++) {
-      let roll = local() * openers.reduce((sum, s) => sum + s.weight, 0);
-      const opener = openers.find((s) => (roll -= s.weight) < 0) ?? openers[0];
+      const weighted = openers.map((s) => ({ s, weight: s.weight * (fitnessOf([s]) || 0.0001) }));
+      let roll = local() * weighted.reduce((sum, c) => sum + c.weight, 0);
+      const opener = (weighted.find((c) => (roll -= c.weight) < 0) ?? weighted[0]).s;
       const chain = chainFrom(opener, { rng: local, min, max, more: more ?? q.chain.more, themes });
       if (chain) return { ...chain, id: `${plot.id}#${chain.id}`, weight: plot.weight, intro: plot.intro };
     }
@@ -403,9 +479,9 @@ export function generateQuests(input: GeneratorInput): QuestDef[] {
   type Option = { weight: number; plot?: QuestPlotDef; opener?: QuestSegmentDef };
   for (let tries = 0; quests.length < quota && tries < 40; tries++) {
     const open: Option[] = [
-      ...recipes.filter((p) => !usedPlots.has(p.id)).map((plot) => ({ weight: plot.weight, plot })),
-      ...segments.filter((s) => s.roles.includes("opener") && s.free && s.weight > 0 && !usedPlots.has(`segment:${s.id}`)).map((opener) => ({ weight: opener.weight, opener })),
-    ];
+      ...recipes.filter((p) => !usedPlots.has(p.id)).map((plot) => ({ weight: plot.weight * (plot.draw ? 1 : fitness(plot)), plot })),
+      ...segments.filter((s) => s.roles.includes("opener") && s.free && s.weight > 0 && !usedPlots.has(`segment:${s.id}`)).map((opener) => ({ weight: opener.weight * fitnessOf([opener]), opener })),
+    ].filter((o) => o.weight > 0);
     if (open.length === 0) break;
     let roll = rng() * open.reduce((sum, o) => sum + o.weight, 0);
     const option = open.find((o) => (roll -= o.weight) < 0) ?? open[0];

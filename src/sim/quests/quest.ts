@@ -109,6 +109,8 @@ export interface QuestRules {
   fields: { objects: { name: string; tags: string[] }[]; text: string };
   /** Things that happened "when": the offers' `{when}`. */
   whens: string[];
+  /** How the generator weighs what to use (QUESTS.md, *Weighting*). */
+  weighting: QuestWeighting;
   /** Chains drawn from segments: the most segments one has, and how likely each next one is. */
   chain: { max: number; more: number };
   parts: ReadonlyMap<string, QuestPartDef>;
@@ -118,12 +120,24 @@ export interface QuestRules {
   plots: QuestPlotDef[];
 }
 
+/** How the generator weighs a place, a creature kind or an object, and the plots and chains that need them. */
+export interface QuestWeighting {
+  /** Metres at which a place is half as likely as one at the door: 1 / (1 + (d / distance)^2). */
+  distance: number;
+  /** Each earlier quest using the same place or object: 1 / (1 + here x (in this settlement) + elsewhere x (in others)). */
+  reuse: { here: number; elsewhere: number };
+  /** The same for a creature kind, which a whole zone shares. */
+  kind: { here: number; elsewhere: number };
+  /** Each earlier objective within `radius` metres of a place: 1 / (1 + each x how many). */
+  crowding: { radius: number; each: number };
+}
+
 type Entry = { id: string; file: string; data: unknown };
 
 export function readQuestRules(entry: { file: string; data: unknown } | undefined, partEntries: readonly Entry[], segmentEntries: readonly Entry[], plotEntries: readonly Entry[], voiceEntries: readonly Entry[], issues: ContentIssue[]): QuestRules {
   const reader = new Reader(issues, entry?.file ?? "rules/quests.json5");
   const obj = entry ? reader.object(entry.data, "") : {};
-  reader.onlyKeys(obj, "", ["maxActive", "xp", "money", "standing", "objects", "talkRange", "colours", "rewardTemplates", "quota", "reach", "plurals", "fields", "whens", "chain"]);
+  reader.onlyKeys(obj, "", ["maxActive", "xp", "money", "standing", "objects", "talkRange", "colours", "rewardTemplates", "quota", "reach", "plurals", "fields", "whens", "chain", "weighting"]);
   const parts = new Map(readQuestParts(partEntries, issues).map((p) => [p.id, p]));
   const segments = new Map(readQuestSegments(segmentEntries, parts, issues).map((s) => [s.id, s]));
   const voices = new Map<string, Line[]>();
@@ -156,6 +170,18 @@ export function readQuestRules(entry: { file: string; data: unknown } | undefine
     const raw = reader.object(obj.plurals, "plurals");
     for (const word of Object.keys(raw)) plurals[word] = reader.string(raw, word, "plurals");
   }
+  const wRaw = obj.weighting === undefined ? {} : reader.object(obj.weighting, "weighting");
+  const pair = (key: string, fallback: [number, number]): { here: number; elsewhere: number } => {
+    const raw = wRaw[key] === undefined ? {} : reader.object(wRaw[key], `weighting.${key}`);
+    return { here: reader.optionalNumber(raw, "here", `weighting.${key}`, fallback[0], { min: 0 }), elsewhere: reader.optionalNumber(raw, "elsewhere", `weighting.${key}`, fallback[1], { min: 0 }) };
+  };
+  const crowdingRaw = wRaw.crowding === undefined ? {} : reader.object(wRaw.crowding, "weighting.crowding");
+  const weighting: QuestWeighting = {
+    distance: reader.optionalNumber(wRaw, "distance", "weighting", 400, { min: 1 }),
+    reuse: pair("reuse", [2, 0.5]),
+    kind: pair("kind", [1, 0.15]),
+    crowding: { radius: reader.optionalNumber(crowdingRaw, "radius", "weighting.crowding", 150, { min: 0 }), each: reader.optionalNumber(crowdingRaw, "each", "weighting.crowding", 0.7, { min: 0 }) },
+  };
   const chainRaw = obj.chain === undefined ? {} : reader.object(obj.chain, "chain");
   const whens = obj.whens === undefined ? [] : reader.stringList(obj, "whens", "");
   const fieldsRaw = obj.fields === undefined ? {} : reader.object(obj.fields, "fields");
@@ -198,6 +224,7 @@ export function readQuestRules(entry: { file: string; data: unknown } | undefine
     plurals,
     fields,
     whens,
+    weighting,
     chain: { max: reader.optionalNumber(chainRaw, "max", "chain", 4, { min: 1, integer: true }), more: reader.optionalNumber(chainRaw, "more", "chain", 0.5, { min: 0, max: 1 }) },
     parts,
     segments,

@@ -342,9 +342,11 @@ await section("quest order", () => {
 
 // --- the generator: every settlement's quests, well formed, the same for the same seed ---
 /** A server on a config and seed, with one quick player at the start; its casts made on asking. */
-async function generatedWorld(config, seed) {
+async function generatedWorld(config, seed, weights = true) {
   const { content, packs } = loadContentFromDisk(config);
   const rules = loadRulesFromDisk(config);
+  // Weighting off: every place, kind and object as likely as any other, wherever it is and however used.
+  if (!weights) rules.quests.weighting = { distance: 1e12, reuse: { here: 0, elsewhere: 0 }, kind: { here: 0, elsewhere: 0 }, crowding: { radius: 0, each: 0 } };
   const creatures = loadCreatureRulesFromDisk(config, rules, seed);
   const progression = loadProgressionRulesFromDisk(config, rules, seed);
   const items = loadItemRulesFromDisk(config, rules, seed);
@@ -451,6 +453,41 @@ await section("the generator", async () => {
   const [start] = w.server.debug.starts.get("mainland");
   const sick = w.quests.find((q) => q.id === `q:mainland/${start.settlement}/1`);
   if (sick) log(`\n${fillText(sick.text.title.text, sick.text.title.args)}\n${fillText(sick.text.offer.text, sick.text.offer.args)}\n`);
+});
+
+// --- weighting: nearer, less used, less crowded ---
+await section("weighting", async () => {
+  /** Where the world's gathering and going objectives lie, and how they spread. */
+  const spread = (w) => {
+    const spots = [];
+    for (const q of w.quests) {
+      const layout = w.worldData.settlementLayouts.find((l) => l.siteId === Number(q.id.split("/")[1]));
+      for (const o of q.objectives) if (o.kind === "gather" || o.kind === "reach") spots.push({ x: o.area.x, z: o.area.z, distance: Math.hypot(o.area.x - layout.x, o.area.z - layout.z), site: layout.siteId });
+    }
+    const radius = 150;
+    let near = 0;
+    for (let i = 0; i < spots.length; i++) for (let j = i + 1; j < spots.length; j++) if (Math.hypot(spots[i].x - spots[j].x, spots[i].z - spots[j].z) <= radius) near++;
+    const distinct = new Set(spots.map((p) => `${Math.round(p.x)},${Math.round(p.z)}`)).size;
+    // The most objectives in one 150 m circle round any of them.
+    const densest = Math.max(0, ...spots.map((a) => spots.filter((b) => Math.hypot(a.x - b.x, a.z - b.z) <= radius).length));
+    return { n: spots.length, distance: spots.reduce((sum, p) => sum + p.distance, 0) / Math.max(1, spots.length), near, distinct, densest };
+  };
+  const total = { on: { n: 0, d: 0, near: 0, distinct: 0, densest: 0 }, off: { n: 0, d: 0, near: 0, distinct: 0, densest: 0 } };
+  for (const [config, seed] of [["small", 4000], ["small", 4911], ["small", 5822], ["small", 7001], ["small", 8113]]) {
+    for (const [name, weights] of [["on", true], ["off", false]]) {
+      const m = spread(await generatedWorld(config, seed, weights));
+      const t = total[name];
+      t.n += m.n; t.d += m.distance * m.n; t.near += m.near; t.distinct += m.distinct; t.densest = Math.max(t.densest, m.densest);
+    }
+  }
+  const show = (t) => `${t.n} objectives, ${(t.d / t.n).toFixed(0)} m from their settlement on average, ${t.near} pairs within 150 m, ${t.distinct} different places, at most ${t.densest} in one circle`;
+  log(`weighting on : ${show(total.on)}`);
+  log(`weighting off: ${show(total.off)}`);
+  check("weighted: places nearer", total.on.d / total.on.n <= total.off.d / total.off.n, `${(total.on.d / total.on.n).toFixed(0)} vs ${(total.off.d / total.off.n).toFixed(0)}`);
+  check("weighted: fewer objectives crowded together", total.on.near <= total.off.near, `${total.on.near} vs ${total.off.near}`);
+  // Different places as a share of the objectives, since the two worlds have different numbers of them.
+  check("weighted: a greater share of different places", total.on.distinct / total.on.n >= total.off.distinct / total.off.n, `${((100 * total.on.distinct) / total.on.n).toFixed(0)}% vs ${((100 * total.off.distinct) / total.off.n).toFixed(0)}%`);
+  check("weighted: no circle more crowded", total.on.densest <= total.off.densest, `${total.on.densest} vs ${total.off.densest}`);
 });
 
 // --- the intro chain, played: a new character from the start to its gear, with a log out half way ---

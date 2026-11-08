@@ -21,6 +21,18 @@
   // Chains drawn from segments (QUESTS.md, *Segments*): at most this many quests, and how likely
   // each next segment is where the chain could end (0 = alone, 1 = always on).
   chain: { max: 4, more: 0.55 },
+  // How the generator weighs what to use (QUESTS.md, *Weighting*): the nearer a place is, the less it
+  // is used already, and the fewer objectives lie round it, the likelier it is. Each factor is
+  // 1 / (1 + something): `distance` is the metres at which a place is half as likely as one at the
+  // door (squared); `reuse` is per earlier quest using the same place or object, in this settlement
+  // (`here`) and in others (`elsewhere`); `kind` the same for a creature kind, which a whole zone
+  // shares; `crowding` per earlier objective within `radius` metres of the place.
+  weighting: {
+    distance: 400,
+    reuse: { here: 2, elsewhere: 0.5 },
+    kind: { here: 1, elsewhere: 0.15 },
+    crowding: { radius: 150, each: 0.7 },
+  },
   // What `{when}` can be in a giver's words: something that has gone on a while.
   whens: ["this past week", "for a fortnight now", "these three nights", "since the first frost", "ever since the last market day", "for a good while now"],
   // How far round a settlement its quests look for places, in metres.
