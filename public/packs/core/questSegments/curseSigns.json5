@@ -1,0 +1,33 @@
+// The investigation, the curse way: look where it began, among the graves if there are any near,
+// else out at the edge of the fields. What is found says it is no sickness.
+{
+  weight: 2,
+  roles: ["middle"],
+  theme: ["affliction"],
+  requires: ["problem:afflicted"],
+  forbids: ["cause:sickness"],
+  provides: ["has:signs", "cause:curse"],
+  uses: ["healer"],
+  place: { objects: ["evidence"] },
+  quest: {
+    giver: "healer",
+    parts: ["gatherEvidence"],
+    title: ["Where It Began", "Left Behind", "Something Left at {place}"],
+    offer: [
+      "$hook",
+      [
+        "I don't like this. A fever keeps to a house, or a herd. This keeps to {settlement}.",
+        { text: "Omens, and now this. A fever does not read the signs first.", when: { tags: ["signs:omens"] }, weight: 4 },
+        { text: "{neighbour} is not the only one. A fever does not choose its folk so carefully.", when: { tags: ["signs:person"] }, weight: 4 },
+        { text: "The beasts, the herders: a fever has no such taste.", when: { tags: ["signs:beasts"] }, weight: 4 },
+      ],
+      "$motive",
+      ["Don't touch anything bare-handed.", "Take care. Whatever was done there, it may not be finished."],
+    ],
+    progress: ["Anything at {place}?", "$progress"],
+    done: [
+      "Candle stubs, burnt black, and this clay charm cracked down the middle. This is no sickness. This is a curse, and someone laid it on purpose.",
+      "These were set out by a hand, not by chance. It is a curse we are fighting, not a fever, and I should have seen it sooner.",
+    ],
+  },
+}

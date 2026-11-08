@@ -25,6 +25,8 @@ export interface CreatureNeed {
 export interface PlaceNeed {
   tags: string[];
   objects: string[] | null;
+  /** Tags an object it offers must not have (the evidence left at a crime is not for gathering herbs). */
+  not: string[];
 }
 
 // --- lines: the text a quest is worded from ---
@@ -38,11 +40,13 @@ export interface LineCondition {
   sex?: string[];
   age?: string[];
   place?: string[];
+  /** Tags of the object a gather is about ("herb", "lost"). */
+  object?: string[];
   creature?: string[];
   tags?: string[];
   tier?: string[];
 }
-const CONDITION_KEYS = ["mood", "role", "sex", "age", "place", "creature", "tags", "tier"] as const;
+const CONDITION_KEYS = ["mood", "role", "sex", "age", "place", "object", "creature", "tags", "tier"] as const;
 
 /** A sentence to draw: its template, how likely, and when it can be said. An empty one is "say nothing". */
 export interface Line {
@@ -124,6 +128,9 @@ export interface PlotPerson {
   /** A role made new where nobody fits - a quest person (QUESTS.md, *Quest people*) - living at
    *  the plot's place, if the place has room for one of these. */
   make: string[];
+  /** Someone who is no longer there (a twist): one of the settlement's people who stay at home,
+   *  named in the text and never met, so no objective can be about them. */
+  gone: boolean;
 }
 
 export interface PlotQuest {
@@ -131,7 +138,7 @@ export interface PlotQuest {
    *  names neither takes up where the quest before left off. */
   giver: string | null;
   ender: string | null;
-  parts: { part: string; npc: string | null; item: string | null }[];
+  parts: { part: string; npc: string | null; item: string | null; /** Its log line in place of the part's. */ line: string | null }[];
   title: Pool;
   /** The offer, about five sentences: a pool for each, one line drawn from it. */
   offer: Pool[];
@@ -157,6 +164,10 @@ export interface QuestPlotDef {
   quests: PlotQuest[];
   /** Segments to put together in this order, in place of `quests`. */
   segments: string[] | null;
+  /** A chain drawn from the segments of these themes, between `min` and `max` quests (the intro's
+   *  story: a different one in each world), in place of `quests`. `more` is how likely each next
+   *  segment is once it could end; the rules' otherwise. */
+  draw: { themes: string[]; min: number; max: number; more: number | null } | null;
 }
 
 export const SEGMENT_ROLES = ["opener", "middle", "closer"] as const;
@@ -166,6 +177,8 @@ export type SegmentRole = (typeof SEGMENT_ROLES)[number];
 export interface QuestSegmentDef {
   id: string;
   weight: number;
+  /** Whether chains drawn on their own may use it. Not for a story only a plot's `draw` tells. */
+  free: boolean;
   /** Where it can stand: first in a chain, between, or last. A quest that is both opener and closer
    *  can stand alone. */
   roles: SegmentRole[];
@@ -173,6 +186,8 @@ export interface QuestSegmentDef {
   theme: string[];
   /** Tags the chain must already have. */
   requires: string[];
+  /** Tags the chain must not have: a branch that shuts out another. */
+  forbids: string[];
   /** Tags it adds. */
   provides: string[];
   /** Names it needs bound by now: a person of an earlier segment, `beast`, `place`, `road`. */
@@ -212,8 +227,10 @@ function readPlaceNeed(reader: Reader, obj: RawObject, key: string, path: string
   if (obj[key] === undefined) return null;
   const at = path ? `${path}.${key}` : key;
   const raw = reader.object(obj[key], at);
-  reader.onlyKeys(raw, at, ["tags", "objects"]);
-  return { tags: strings(reader, raw, "tags", at), objects: raw.objects === undefined ? null : strings(reader, raw, "objects", at) };
+  reader.onlyKeys(raw, at, ["tags", "objects", "not"]);
+  const not = strings(reader, raw, "not", at);
+  // Excluding some objects means asking for objects.
+  return { tags: strings(reader, raw, "tags", at), objects: raw.objects === undefined ? (not.length > 0 ? [] : null) : strings(reader, raw, "objects", at), not };
 }
 
 function readPeople(reader: Reader, obj: RawObject): Record<string, PlotPerson> {
@@ -223,8 +240,8 @@ function readPeople(reader: Reader, obj: RawObject): Record<string, PlotPerson> 
   for (const name of Object.keys(raw)) {
     const at = `people.${name}`;
     const p = reader.object(raw[name], at);
-    reader.onlyKeys(p, at, ["roles", "relation", "make"]);
-    people[name] = { roles: strings(reader, p, "roles", at), relation: p.relation === undefined ? null : strings(reader, p, "relation", at), make: strings(reader, p, "make", at) };
+    reader.onlyKeys(p, at, ["roles", "relation", "make", "gone"]);
+    people[name] = { roles: strings(reader, p, "roles", at), relation: p.relation === undefined ? null : strings(reader, p, "relation", at), make: strings(reader, p, "make", at), gone: reader.boolean(p, "gone", at, false) };
   }
   return people;
 }
@@ -242,12 +259,12 @@ function readPlotQuest(reader: Reader, value: unknown, at: string, parts: Readon
   const questParts = reader.array(q, "parts", at).map((p, j) => {
     const pat = `${at}.parts[${j}]`;
     const raw = typeof p === "string" ? { part: p } : reader.object(p, pat);
-    reader.onlyKeys(raw, pat, ["part", "npc", "item"]);
+    reader.onlyKeys(raw, pat, ["part", "npc", "item", "line"]);
     const part = reader.string(raw, "part", pat);
     if (!parts.has(part)) reader.fail(`${pat}.part`, `no quest part "${part}"`);
     const npc = reader.optionalString(raw, "npc", pat) ?? null;
     if (npc && !names.has(npc)) reader.fail(`${pat}.npc`, `no person "${npc}" here`);
-    return { part, npc, item: reader.optionalString(raw, "item", pat) ?? null };
+    return { part, npc, item: reader.optionalString(raw, "item", pat) ?? null, line: reader.optionalString(raw, "line", pat) ?? null };
   });
   const offer = reader.array(q, "offer", at).map((group, j) => readPool(reader, group, `${at}.offer[${j}]`));
   return { giver, ender, parts: questParts, title: poolAt(reader, q, "title", at), offer, progress: poolAt(reader, q, "progress", at), done: poolAt(reader, q, "done", at), choice: reader.boolean(q, "choice", at, false), tags: [] };
@@ -278,7 +295,7 @@ export function readQuestSegments(entries: readonly { id: string; file: string; 
   return entries.map((entry) => {
     const reader = new Reader(issues, entry.file);
     const obj = reader.object(entry.data, "");
-    reader.onlyKeys(obj, "", ["weight", "roles", "theme", "requires", "provides", "uses", "giver", "people", "creatures", "place", "road", "quest"]);
+    reader.onlyKeys(obj, "", ["weight", "free", "roles", "theme", "requires", "forbids", "provides", "uses", "giver", "people", "creatures", "place", "road", "quest"]);
     const people = readPeople(reader, obj);
     const uses = strings(reader, obj, "uses", "");
     const road = reader.boolean(obj, "road", "", false);
@@ -288,16 +305,19 @@ export function readQuestSegments(entries: readonly { id: string; file: string; 
       return ok;
     });
     if (roles.length === 0) reader.fail("roles", "a segment says where it can stand: opener, middle or closer");
-    // What its parts and people may be called: its own people, what it uses, the giver, and the road.
-    const names = new Set(["giver", ...Object.keys(people), ...uses, ...(road ? ["road"] : [])]);
+    // Who its quest can be about: its own people and what it uses, the giver, and the road. Not
+    // those who are gone: they are only spoken of.
+    const names = new Set(["giver", ...Object.keys(people).filter((n) => !people[n].gone), ...uses, ...(road ? ["road"] : [])]);
     const giver = strings(reader, obj, "giver", "");
     if (roles.includes("opener") && giver.length === 0) reader.fail("giver", "an opener says who can give it, by role");
     return {
       id: entry.id,
       weight: reader.optionalNumber(obj, "weight", "", 1, { min: 0 }),
+      free: reader.boolean(obj, "free", "", true),
       roles,
       theme: strings(reader, obj, "theme", ""),
       requires: strings(reader, obj, "requires", ""),
+      forbids: strings(reader, obj, "forbids", ""),
       provides: strings(reader, obj, "provides", ""),
       uses,
       giver,
@@ -314,13 +334,25 @@ export function readQuestPlots(entries: readonly { id: string; file: string; dat
   return entries.map((entry) => {
     const reader = new Reader(issues, entry.file);
     const obj = reader.object(entry.data, "");
-    reader.onlyKeys(obj, "", ["weight", "intro", "giver", "people", "creatures", "place", "road", "quests", "segments"]);
+    reader.onlyKeys(obj, "", ["weight", "intro", "giver", "people", "creatures", "place", "road", "quests", "segments", "draw"]);
     const people = readPeople(reader, obj);
-    const names = new Set(["giver", ...Object.keys(people), "road"]);
+    const names = new Set(["giver", ...Object.keys(people).filter((n) => !people[n].gone), "road"]);
     const list = obj.segments === undefined ? null : reader.stringList(obj, "segments", "");
     if (list) for (const id of list) if (!segments.has(id)) reader.fail("segments", `no quest segment "${id}"`);
-    if (list && obj.quests !== undefined) reader.fail("quests", "a plot has quests or segments, not both");
-    const quests = list ? [] : reader.array(obj, "quests", "").map((value, i) => readPlotQuest(reader, value, `quests[${i}]`, parts, names, true));
+    let draw: QuestPlotDef["draw"] = null;
+    if (obj.draw !== undefined) {
+      const raw = reader.object(obj.draw, "draw");
+      reader.onlyKeys(raw, "draw", ["themes", "min", "max", "more"]);
+      const themes = reader.stringList(raw, "themes", "draw");
+      for (const theme of themes) if (![...segments.values()].some((seg) => seg.theme.includes(theme))) reader.fail("draw.themes", `no quest segment has the theme "${theme}"`);
+      const min = reader.optionalNumber(raw, "min", "draw", 1, { min: 1, integer: true });
+      const max = reader.optionalNumber(raw, "max", "draw", 4, { min: 1, integer: true });
+      if (max < min) reader.fail("draw.max", "at least as many as min");
+      draw = { themes, min, max, more: raw.more === undefined ? null : reader.optionalNumber(raw, "more", "draw", 0.5, { min: 0, max: 1 }) };
+    }
+    if ((list || draw) && obj.quests !== undefined) reader.fail("quests", "a plot has quests, segments or a draw, only one");
+    if (list && draw) reader.fail("draw", "a plot has quests, segments or a draw, only one");
+    const quests = list || draw ? [] : reader.array(obj, "quests", "").map((value, i) => readPlotQuest(reader, value, `quests[${i}]`, parts, names, true));
     return {
       id: entry.id,
       weight: reader.optionalNumber(obj, "weight", "", 1, { min: 0 }),
@@ -332,6 +364,7 @@ export function readQuestPlots(entries: readonly { id: string; file: string; dat
       road: reader.boolean(obj, "road", "", false),
       quests,
       segments: list,
+      draw,
     };
   });
 }

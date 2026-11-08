@@ -4,10 +4,13 @@
   count: [4, 6],
   line: "{objects} from {place}",
   motive: [
-    "{objects} grow out at {place}, if you know where to look.",
+    { text: "{objects} grow out at {place}, if you know where to look.", when: { object: ["herb"] }, weight: 2 },
+    { text: "I've been picking {objects} at {place} for years.", when: { object: ["herb"] }, weight: 2 },
+    { text: "I lost {objects} out at {place}, and I'd like them back.", when: { object: ["lost"] }, weight: 3 },
+    { text: "Some {objects} must still be lying about at {place}.", when: { object: ["lost", "material", "offering"] }, weight: 2 },
     "You'll find {objects} at {place}.",
     "There were {objects} at {place} when I was last out that way.",
     "If it's {objects} you want, try {place}.",
-    { text: "The old folk always said {place} was the place for {objects}.", when: { age: ["old"] }, weight: 3 },
+    { text: "The old folk always swore by {place} for {objects}.", when: { age: ["old"] }, weight: 3 },
   ],
 }

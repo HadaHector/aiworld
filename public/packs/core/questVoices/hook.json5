@@ -22,7 +22,7 @@
     { text: "Keep your voice down, would you? It's something that's been troubling us.", when: { mood: "nervous" }, weight: 2 },
     // By trade.
     { text: "Peace be with you, [child|traveller]. I hoped you might help.", when: { role: "priest" }, weight: 3 },
-    { text: "Pull up a stool - or stand, if you must. I've something to ask.", when: { role: "innkeeper" }, weight: 3 },
+    { text: "Pull up a stool - or stand, if you must.", when: { role: "innkeeper" }, weight: 3 },
     { text: "Mind the sparks, and hear me out.", when: { role: "smith" }, weight: 3 },
     { text: "Pardon the muck. I'd not trouble you if I had any choice.", when: { role: "farmer" }, weight: 3 },
     { text: "A word, if you would - on behalf of {settlement}.", when: { role: "reeve" }, weight: 3 },

@@ -1,11 +1,12 @@
-// The test chain, part 4: pick up things on the ground.
+// The sickness way: pick up things on the ground for the salve.
 {
-  weight: 0,
+  weight: 1,
   roles: ["middle"],
-  theme: ["sickness"],
+  theme: ["affliction"],
   requires: ["knows:maker"],
   provides: ["has:herbs"],
-  uses: ["maker", "place"],
+  uses: ["maker"],
+  place: { objects: ["herb"] },
   quest: {
     giver: "maker",
     parts: ["gatherAt"],
@@ -13,7 +14,10 @@
     offer: [
       ["The salve wants {objects}, and plenty of them."],
       "$motive",
-      ["Bring them here and I'll set to work."],
+      [
+        { text: "It is as {goneGiven} always did it: nothing missed, nothing added.", when: { tags: ["twist:death"] }, weight: 4 },
+        "Bring them here and I'll set to work.",
+      ],
     ],
     progress: ["Got the {objects}?"],
     done: ["Good, these will do nicely. Give me a moment."],

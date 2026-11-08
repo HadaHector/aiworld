@@ -1,7 +1,0 @@
-// GAMEPLAY.md's test chain: the creatures sicken, a healer wants a sample, a maker a cure, and the
-// cure must be tried on one of them. Talk, kill and loot, talk, gather, receive, use, talk. A recipe
-// of segments (questSegments/sickness*.json5) in a fixed order, so the intro is always this chain.
-{
-  intro: true,
-  segments: ["sicknessAsk", "sicknessSample", "sicknessMaker", "sicknessHerbs", "sicknessSalve", "sicknessTry"],
-}

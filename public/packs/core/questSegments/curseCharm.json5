@@ -1,0 +1,21 @@
+// The curse way: a ward against it, to be held up to one of the afflicted.
+{
+  weight: 1,
+  roles: ["middle"],
+  theme: ["affliction"],
+  requires: ["knows:seer"],
+  forbids: ["has:charm"],
+  provides: ["has:charm"],
+  uses: ["seer"],
+  quest: {
+    giver: "seer",
+    parts: [{ part: "receiveCharm", npc: "seer" }],
+    title: ["The Charm", "A Blessing for the Ward"],
+    offer: [
+      ["Only a ward will turn it, and I have one.", "There is a ward, blessed at the old chapel, that can turn such work aside."],
+      ["Take it, and take care: it was not easy to come by."],
+    ],
+    progress: ["Take the charm."],
+    done: ["Now it must be tried on one of the afflicted."],
+  },
+}

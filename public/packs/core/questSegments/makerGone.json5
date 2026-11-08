@@ -1,0 +1,31 @@
+// A twist on the sickness way: the one who knew the cure is dead. You find out on arrival, from
+// whoever was taught by them - who becomes the maker. The dead one is only spoken of.
+{
+  weight: 1,
+  roles: ["middle"],
+  theme: ["affliction"],
+  requires: ["has:sample"],
+  forbids: ["knows:maker"],
+  provides: ["knows:maker", "twist:death"],
+  uses: ["healer"],
+  people: {
+    maker: { roles: ["shopkeeper", "farmer", "smith"], make: ["hermit"] },
+    gone: { gone: true },
+  },
+  quest: {
+    giver: "healer",
+    ender: "maker",
+    parts: [{ part: "talkTo", npc: "maker", line: "Go to {goneGiven}'s house" }],
+    title: ["A Cure, Perhaps", "Ask {goneGiven}"],
+    offer: [
+      ["There may be a cure."],
+      ["{goneGiven} knows how to make the salve - go to their house and ask, and tell them I sent you.", "{goneGiven} made the salve once, for a bad winter. Go and ask whether they remember how."],
+      ["Be quick about it.", "Don't dawdle."],
+    ],
+    progress: ["Go to {goneGiven}'s house."],
+    done: [
+      "You're too late to ask {goneGiven} anything. {goneSex, select, male {He} female {She} other {They}} died [a week ago|three days after the last market|in the night], and nobody thought to tell {healerGiven}. I'm {makerGiven}. I was taught the salve at {goneSex, select, male {his} female {her} other {their}} elbow, and I remember most of it. Sit; I'll tell you what we need.",
+      "{goneGiven}? Dead [a week since|these few days]. The house is shuttered. But I'm {makerGiven}, and I watched the salve being made more than once. If you'll fetch what it needs, I'll try.",
+    ],
+  },
+}

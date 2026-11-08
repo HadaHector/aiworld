@@ -76,7 +76,7 @@ coordinates or a rule, and an optional filter for who starts there.
         { template: "chest", at: { building: "inn", room: "guestRoom" } },
       ],
       // The intro chain's plots, in order (QUESTS.md, *The generator*).
-      intro: ["welcome", "strangeSickness", "roadOn"],
+      intro: ["welcome", "affliction", "roadOn"],
     },
   ],
   links: [ { id: "ferry", to: "isles", at: [120, 40], arrive: [0, 0] } ],

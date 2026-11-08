@@ -263,7 +263,7 @@ await section("in the world", async () => {
   check("the innkeeper stands inside the inn", Math.abs(local.a) < inn.depth / 2 + 6 && Math.abs(local.b) < inn.width / 2 + 6, JSON.stringify(local));
   const spots = active.map((e) => [e.x, e.z]);
   check("nobody stands on anyone", spots.every(([x, z], i) => spots.every(([x2, z2], j) => i === j || Math.hypot(x - x2, z - z2) >= 1.1)));
-  check("every one within the village", active.every((e) => Math.hypot(e.x - layout.x, e.z - layout.z) <= layout.radius + 15));
+  check("every resident within the village", active.filter((e) => !npcs.npcOf(e)?.spot).every((e) => Math.hypot(e.x - layout.x, e.z - layout.z) <= layout.radius + 15));
 
   // A bark for a player who comes by.
   const near = active.find((e) => npcs.npcOf(e)?.role !== "innkeeper") ?? innkeeper;

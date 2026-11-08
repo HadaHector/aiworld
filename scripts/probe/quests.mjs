@@ -259,42 +259,64 @@ await section("the test chain", async () => {
 });
 
 // --- segments: the pieces fit together, whatever the world ---
-await section("segments", async () => {
-  const q = loadRulesFromDisk(CONFIG).quests;
+/** Every chain the rules could make, by walking from each opener, ignoring what a settlement has:
+ *  of these themes (any free segments if none), between `min` and `max` segments. */
+function chainsOf(q, { themes = null, min = 1, max = q.chain.max } = {}) {
   const segments = [...q.segments.values()];
-  const max = q.chain.max;
-  check("there are segments of each role", ["opener", "middle", "closer"].every((r) => segments.some((s) => s.roles.includes(r))));
-  // Every chain the rules could draw, by walking from each opener, ignoring what a settlement has.
-  const reached = new Set();
-  const closing = new Map();
-  let chains = 0;
+  const allowed = (s) => s.weight > 0 && (themes ? s.theme.some((t) => themes.includes(t)) : s.free);
+  const found = [];
   const walk = (chain) => {
     const last = chain[chain.length - 1];
-    if (last.roles.includes("closer")) {
-      chains++;
-      for (const s of chain) reached.add(s.id);
-      closing.set(chain[0].id, (closing.get(chain[0].id) ?? 0) + 1);
-    }
-    if (chain.length >= max) return;
+    if (last.roles.includes("closer") && chain.length >= min) found.push(chain);
+    if (chain.length >= max || (chain.length > 1 && !last.roles.includes("middle"))) return;
     const final = chain.length + 1 >= max;
     for (const s of segments) {
-      if (s.weight <= 0 || chain.includes(s) || !(s.roles.includes("closer") || (!final && s.roles.includes("middle"))) || !themeFits(chain, s)) continue;
+      if (!allowed(s) || chain.includes(s) || !(s.roles.includes("closer") || (!final && s.roles.includes("middle"))) || !themeFits(chain, s)) continue;
       if (composeChain("", [...chain, s])) walk([...chain, s]);
     }
   };
-  for (const s of segments) if (s.weight > 0 && s.roles.includes("opener")) walk([s]);
-  for (const s of segments) if (s.weight > 0 && s.roles.includes("opener")) check(`opener ${s.id} reaches a closer`, (closing.get(s.id) ?? 0) > 0);
-  for (const s of segments) if (s.weight > 0) check(`segment ${s.id} is on some chain`, reached.has(s.id));
-  log(`${segments.length} segments, ${chains} possible chains of at most ${max}`);
-  check("a good number of different chains", chains >= 15, String(chains));
-  // The recipes put together and drawn as they are written.
-  const sick = q.plots.find((p) => p.id === "strangeSickness");
-  check("the test chain is six quests of its recipe", sick?.quests.length === 6 && sick.intro, String(sick?.quests.length));
+  for (const s of segments) if (allowed(s) && s.roles.includes("opener")) walk([s]);
+  return found;
+}
+/** The objective kinds a chain asks, in order. */
+const kindsOf = (q, chain) => chain.flatMap((s) => s.quest.parts.map((p) => q.parts.get(p.part).kind));
+
+await section("segments", async () => {
+  const q = loadRulesFromDisk(CONFIG).quests;
+  const segments = [...q.segments.values()];
+  check("there are segments of each role", ["opener", "middle", "closer"].every((r) => segments.some((s) => s.roles.includes(r))));
+  // The free chains.
+  const free = chainsOf(q);
+  const reached = new Set(free.flat().map((s) => s.id));
+  for (const s of segments) if (s.weight > 0 && s.free && s.roles.includes("opener")) check(`opener ${s.id} reaches a closer`, free.some((c) => c[0] === s));
+  for (const s of segments) if (s.weight > 0 && s.free && s.theme.every((t) => !q.plots.some((p) => p.draw?.themes.includes(t)))) check(`segment ${s.id} is on some free chain`, reached.has(s.id));
+  log(`${segments.length} segments, ${free.length} possible free chains of at most ${q.chain.max}`);
+  check("a good number of different free chains", free.length >= 15, String(free.length));
+  // The plots that draw a chain (the intro's story): every one it could be.
+  for (const plot of q.plots.filter((p) => p.draw)) {
+    const variants = chainsOf(q, plot.draw);
+    log(`${plot.id}: ${variants.length} possible stories of ${plot.draw.min} to ${plot.draw.max}`);
+    check(`${plot.id}: several stories`, variants.length >= 6, String(variants.length));
+    const used = new Set(variants.flat().map((s) => s.id));
+    for (const s of segments) if (s.theme.some((t) => plot.draw.themes.includes(t)) && s.weight > 0) check(`${plot.id}: ${s.id} is in some story`, used.has(s.id));
+    const startsOf = new Set(variants.map((c) => c[0].id));
+    check(`${plot.id}: more than one start`, startsOf.size >= 2, [...startsOf].join());
+    const endsOf = new Set(variants.map((c) => c.at(-1).id));
+    check(`${plot.id}: more than one ending`, endsOf.size >= 2, [...endsOf].join());
+    check(`${plot.id}: a twist is possible`, variants.some((c) => c.some((s) => s.provides.some((t) => t.startsWith("twist:")))));
+    // GAMEPLAY.md's test chain is one of them: talk, kill and loot, talk, gather, receive, use, talk.
+    check(`${plot.id}: the test chain is one of them`, variants.some((c) => kindsOf(q, c).join() === "talk,kill,loot,talk,gather,receive,use"));
+  }
   // A recipe or chain that breaks its own rules does not compose.
   const get = (id) => q.segments.get(id);
   check("a closer cannot start a chain that wants what it lacks", composeChain("x", [get("sicknessTry")]) === null);
   check("segments out of order do not fit", composeChain("x", [get("sicknessAsk"), get("sicknessHerbs")]) === null);
+  check("a curse does not follow a sickness", composeChain("x", [get("sicknessAsk"), get("sicknessSample"), get("curseSigns")]) === null);
+  check("the same help is not asked twice", composeChain("x", [get("sicknessAsk"), get("sicknessSample"), get("sicknessMaker"), get("makerGone")]) === null);
   check("wanting creatures nobody is does not fit", composeChain("x", [{ ...get("foldTrouble"), creatures: { hostility: ["hostile"], family: null } }, { ...get("pelts"), roles: ["middle"], creatures: { hostility: ["friendly"], family: null } }]) === null);
+  // Someone who is gone can be spoken of, never met.
+  const dead = { ...get("makerGone"), quest: { ...get("makerGone").quest, ender: "gone" } };
+  check("a quest cannot be ended by someone who is gone", composeChain("x", [get("sicknessAsk"), get("sicknessSample"), dead]) === null);
 });
 
 // --- the order the world's quests are made in ---
@@ -337,6 +359,8 @@ async function generatedWorld(config, seed) {
 }
 
 await section("the generator", async () => {
+  /** The stories the intro drew across these worlds. */
+  const seen = new Set();
   for (const [config, seeds] of [["tiny", 3], ["small", 3]]) {
     for (let s = 0; s < seeds; s++) {
       const seed = 4000 + s * 911;
@@ -349,17 +373,23 @@ await section("the generator", async () => {
       for (const cast of w.casts.values()) for (const n of cast?.npcs ?? []) npcIds.set(n.id, n);
       const [start] = w.server.debug.starts.get("mainland");
       const startQuests = w.quests.filter((q) => q.id.startsWith(`q:mainland/${start.settlement}/`));
-      check(`${tag}: the start has quests`, startQuests.length >= 8, String(startQuests.length));
-      const intro = startQuests.slice(0, 8);
+      // The intro is one chain: the welcome, a story drawn for this world, and the letter on.
+      let length = 1;
+      while (length < startQuests.length && startQuests[length].requires.quests[0] === startQuests[length - 1].id) length++;
+      const intro = startQuests.slice(0, length);
+      const story = intro.filter((q) => q.chain);
+      const plot = w.rules.quests.plots.find((p) => p.draw);
+      check(`${tag}: the start has an intro of ${length}, its story ${story.length}`, story.length >= plot.draw.min && story.length <= plot.draw.max, String(story.length));
       const first = npcIds.get(intro[0]?.giver);
       check(`${tag}: the intro begins with the reeve`, first?.role === "reeve", first?.role);
-      check(`${tag}: ...as a chain, each after the one before`, intro.every((q, i) => i === 0 || q.requires.quests[0] === intro[i - 1].id), JSON.stringify(intro.map((q) => q.requires.quests)));
-      const kinds = intro.slice(1, 7).flatMap((q) => q.objectives.map((o) => o.kind));
-      check(`${tag}: the test chain's parts in order`, kinds.join() === "talk,kill,loot,talk,gather,receive,use", kinds.join());
-      const letter = intro[7];
+      const kinds = story.flatMap((q) => q.objectives.map((o) => o.kind)).join();
+      const stories = chainsOf(w.rules.quests, plot.draw).map((c) => kindsOf(w.rules.quests, c).join());
+      check(`${tag}: its story is one the rules can make`, stories.includes(kinds), kinds);
+      seen.add(story[0]?.chain?.id.split("#").slice(1).join("#"));
+      const letter = intro.at(-1);
       const to = npcIds.get(letter?.ender);
       check(`${tag}: the road on to another settlement`, letter?.objectives.at(-1)?.kind === "deliver" && to && !to.id.startsWith(`npc:mainland/${start.settlement}/`), letter?.ender);
-      check(`${tag}: an item to choose at the chain's end`, intro[6]?.rewards.choice.length >= 2, JSON.stringify(intro[6]?.rewards.choice));
+      check(`${tag}: an item to choose at the story's end`, story.at(-1)?.rewards.choice.length >= 2, JSON.stringify(story.at(-1)?.rewards.choice));
       let bad = 0;
       for (const q of w.quests) {
         const site = Number(q.id.split("/")[1]);
@@ -394,6 +424,8 @@ await section("the generator", async () => {
       log(`${tag}: ${w.quests.length} quests in ${w.casts.size} settlements, ${people.length} quest people (${[...new Set(people.map((p) => p.role))].join(", ")})`);
     }
   }
+  log(`the intro drew ${seen.size} different stories in these worlds: ${[...seen].map((x) => x?.replace(/^affliction#/, "")).join("; ")}`);
+  check("the worlds drew more than one story", seen.size >= 3, String(seen.size));
   // One offer as a reader sees it.
   const w = await generatedWorld("small", 1338);
   const [start] = w.server.debug.starts.get("mainland");
@@ -402,9 +434,10 @@ await section("the generator", async () => {
 });
 
 // --- the intro chain, played: a new character from the start to its gear, with a log out half way ---
-await section("the intro chain", async () => {
+// One seed for each kind of story: the curse lifted, the culprit asked, a death on the way, the plain sickness.
+for (const introSeed of [2, 7, 8, 15]) await section(`the intro chain (seed ${introSeed})`, async () => {
   const config = "tiny";
-  const seed = 1338;
+  const seed = introSeed;
   const { content, packs } = loadContentFromDisk(config);
   const rules = loadRulesFromDisk(config);
   const creatures = loadCreatureRulesFromDisk(config, rules, seed);
@@ -445,8 +478,14 @@ await section("the intro chain", async () => {
   const [start] = server.debug.starts.get("mainland");
   check("the new character stands in the starting village", Math.hypot(me.x - start.x, me.z - start.z) < 3);
   const intro = [];
-  for (let n = 0; n < 8; n++) intro.push(server.debug.quests.def(`q:mainland/${start.settlement}/${n}`));
-  check("the intro is there", intro.every(Boolean), String(intro.filter(Boolean).length));
+  for (let n = 0; ; n++) {
+    const def = server.debug.quests.def(`q:mainland/${start.settlement}/${n}`);
+    if (!def || (n > 0 && def.requires.quests[0] !== intro[n - 1].id)) break;
+    intro.push(def);
+  }
+  check("the intro is there", intro.length >= 6, String(intro.length));
+  const half = Math.floor(intro.length / 2);
+  const rewarding = intro.find((q) => q.rewards.choice.length > 0);
   const marks = () => inbox.filter((m) => m.type === "markers").at(-1)?.list ?? [];
 
   /** The entity of an NPC id, its settlement filled first if it is not (the letter's end is elsewhere). */
@@ -519,24 +558,24 @@ await section("the intro chain", async () => {
     const ender = await talkTo(q.ender);
     await send({ type: "questComplete", npc: ender.id, quest: q.id, choice: 0 });
     check(`${n + 1}: "${fillText(q.text.title.text, q.text.title.args)}" handed in`, done(q), JSON.stringify(last("questRefused")));
-    if (n === 3) {
+    if (n === half - 1) {
       // Half way: log out and back in.
       await send({ type: "logout", toMenu: false }, 10);
       await send({ type: "enterWorld", character, dimension: "" }, 15);
       me = server.debug.entity(id);
-      check("back half way: the four done, kept", intro.slice(0, 4).every(done));
+      check(`back half way: the ${half} done, kept`, intro.slice(0, half).every(done));
     }
   }
   const level = me.progress.disciplines.get(adventure).level;
   check("a level or more gained", level > startLevel, `${startLevel} -> ${level}`);
   check("money earned", me.belongings.wallet[items.main] > 0, String(me.belongings.wallet[items.main]));
-  const reward = items.typeIndex.get(intro[6].rewards.choice[0]);
+  const reward = items.typeIndex.get(rewarding.rewards.choice[0]);
   const slot = me.belongings.bag.findIndex((x) => x != null && server.debug.items.ctx.store.get(x).type === reward);
-  check("the chosen reward in the bag", slot >= 0, intro[6].rewards.choice.join());
+  check("the chosen reward in the bag", slot >= 0, rewarding.rewards.choice.join());
   await send({ type: "itemEquip", from: { container: 0, slot } });
   check("...and worn", me.belongings.equipment.some((x) => x != null && server.debug.items.ctx.store.get(x).type === reward), JSON.stringify(last("itemRefused")));
   check("standing with the village's folk", [...me.standing.values()].some((v) => v > 3000), JSON.stringify([...me.standing]));
-  log(`the intro: level ${startLevel} -> ${level}, ${me.belongings.wallet[items.main]} copper, wearing ${items.types[reward].name}`);
+  log(`the intro (seed ${seed}, ${intro.filter((q) => q.chain).map((q) => q.objectives.map((o) => o.kind).join("+")).join(" / ")}): level ${startLevel} -> ${level}, ${me.belongings.wallet[items.main]} copper, wearing ${items.types[reward].name}`);
 });
 
 console.log(`${checks - failures}/${checks} checks passed`);

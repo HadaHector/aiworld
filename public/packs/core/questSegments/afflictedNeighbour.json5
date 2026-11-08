@@ -1,0 +1,31 @@
+// The intro story, a start: someone in the settlement is not themselves.
+{
+  weight: 1.5,
+  free: false,
+  roles: ["opener"],
+  theme: ["affliction"],
+  provides: ["problem:afflicted", "signs:person"],
+  giver: ["reeve", "innkeeper", "priest"],
+  people: {
+    healer: { roles: ["priest", "innkeeper"], relation: ["friend", "sister", "brother", "wife", "husband"], make: ["hermit"] },
+  },
+  quest: {
+    ender: "healer",
+    parts: [{ part: "talkTo", npc: "healer" }],
+    title: ["{neighbour} Is Not Well", "A Troubled House", "Something in the House"],
+    offer: [
+      "$hook",
+      ["{neighbour} hasn't been right {when}.", "It's {neighbour} I'm worried about."],
+      [
+        "Raving, and shouting at shadows. Last night {neighbour} wandered out in a nightshirt and had to be fetched back.",
+        "Won't eat, won't sleep, and swears the walls are watching.",
+        "Cold as ice one hour and burning the next, and the dog won't go near.",
+      ],
+      ["If anyone knows what to make of it, it's {healerGiven}, the {healerTitle}.", "{healerGiven} - {healerTitle} - has seen all manner of ailments. Perhaps this one too."],
+      ["Would you go and ask?"],
+      "$promise",
+    ],
+    progress: ["Have you spoken to {healerGiven} about {neighbour}?", "$progress"],
+    done: ["{giverGiven} sent you about {neighbour}? I feared as much. Sit down, and tell me everything."],
+  },
+}

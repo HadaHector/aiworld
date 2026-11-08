@@ -1,11 +1,15 @@
-// The test chain, part 3: talk to another NPC.
+// The sickness way: someone knows the cure.
 {
-  weight: 0,
+  weight: 2,
   roles: ["middle"],
-  theme: ["sickness"],
+  theme: ["affliction"],
   requires: ["has:sample"],
+  forbids: ["knows:maker"],
   provides: ["knows:maker"],
-  uses: ["healer", "maker"],
+  uses: ["healer"],
+  people: {
+    maker: { roles: ["shopkeeper", "farmer", "smith"], make: ["hermit"] },
+  },
   quest: {
     giver: "healer",
     ender: "maker",
@@ -13,7 +17,7 @@
     title: "A Cure, Perhaps",
     offer: [
       ["There may be a cure."],
-      ["{makerGiven} knows how to make the salve - ask them, and tell them I sent you."],
+      ["{makerGiven} knows how to make the salve - ask them, and tell them I sent you.", "{makerGiven} made the salve once, for a bad winter. Ask whether they remember how."],
       ["Be quick about it.", "Don't dawdle."],
     ],
     progress: ["Go to {makerGiven}."],

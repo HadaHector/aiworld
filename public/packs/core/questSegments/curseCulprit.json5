@@ -1,0 +1,30 @@
+// A different end to the curse way: find out who laid it, and ask them to their face. The story
+// ends with them.
+{
+  weight: 1,
+  roles: ["closer"],
+  theme: ["affliction"],
+  requires: ["knows:seer"],
+  forbids: ["has:charm"],
+  uses: ["seer"],
+  people: {
+    culprit: { roles: ["shopkeeper", "farmer", "smith", "villager"] },
+  },
+  quest: {
+    giver: "seer",
+    ender: "culprit",
+    parts: [{ part: "talkTo", npc: "culprit" }],
+    title: ["Who Laid It", "A Question for {culpritGiven}", "Wax and Ash"],
+    offer: [
+      ["The wax in those stubs is a kind only one hearth in {settlement} burns."],
+      ["It is {culpritGiven}'s. I do not say it was meant, but it was done.", "I would not accuse. But {culpritGiven} burns that wax, and has not been seen at the graves since."],
+      ["Go and ask, plainly. Do not threaten. Whatever it is, it ends with them."],
+    ],
+    progress: ["Have you asked {culpritGiven}?"],
+    done: [
+      "You know. Of course you know. It was a grievance, that was all - I never meant it to spread, I swear. Please, say nothing to the reeve. Take this, and let me undo what I can.",
+      "I sat up three nights over those candles, and every night something worse. I'd stop it if I knew how. Tell {seerGiven} I will make it right. Take this - it is all I have.",
+    ],
+    choice: true,
+  },
+}

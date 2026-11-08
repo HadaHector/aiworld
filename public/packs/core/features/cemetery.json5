@@ -82,6 +82,8 @@
       { name: "Gravebloom", tags: ["herb", "offering"] },
       { name: "Grave Moss", tags: ["herb"] },
       { name: "Fallen Candle", tags: ["offering"] },
+      { name: "Burnt Candle Stub", tags: ["evidence"] },
+      { name: "Cracked Clay Charm", tags: ["evidence"] },
     ],
     people: ["sexton", "hermit"],
     text: "the churchyard of {name}",

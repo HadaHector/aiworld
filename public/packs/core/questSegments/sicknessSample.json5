@@ -1,18 +1,25 @@
-// The test chain, part 2: kill and loot a sample.
+// The investigation, the sickness way: kill and loot a sample. Shuts out the curse.
 {
-  weight: 0,
+  weight: 3,
   roles: ["middle"],
-  theme: ["sickness"],
-  requires: ["problem:sickness"],
-  provides: ["has:sample"],
-  uses: ["healer", "beast"],
+  theme: ["affliction"],
+  requires: ["problem:afflicted"],
+  forbids: ["cause:curse"],
+  provides: ["has:sample", "cause:sickness"],
+  uses: ["healer"],
+  creatures: { hostility: ["hostile", "neutral"], family: ["beast"] },
   quest: {
     giver: "healer",
     parts: ["cullBeasts", "lootFrom"],
     title: ["Thinning the Sick", "A Sample of the Sickness"],
     offer: [
       ["The sickness spreads from beast to beast.", "It passes from one beast to the next, [as these things do|and quickly]."],
-      ["I need a sample from one of them - blood will do - to know what we are dealing with.", "Bring me a little of their blood, so I can see what ails them."],
+      [
+        { text: "Whatever the omens say, this smells of fever to me.", when: { tags: ["signs:omens"] }, weight: 4 },
+        { text: "{neighbour}'s ravings aside, it is the beasts that carry it.", when: { tags: ["signs:person"] }, weight: 4 },
+        "I need a sample from one of them - blood will do - to know what we are dealing with.",
+        "Bring me a little of their blood, so I can see what ails them.",
+      ],
       ["Thin them out before it reaches the flocks.", "Do it before it reaches the flocks."],
     ],
     progress: ["The sample - have you got it?"],

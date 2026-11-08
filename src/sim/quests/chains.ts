@@ -21,7 +21,7 @@ function mergeCreatures(a: CreatureNeed | null, b: CreatureNeed | null): Creatur
 /** Two place needs as one: a place that has all the tags and objects of each. */
 function mergePlaces(a: PlaceNeed | null, b: PlaceNeed | null): PlaceNeed | null {
   if (!a || !b) return a ?? b;
-  return { tags: [...new Set([...a.tags, ...b.tags])], objects: a.objects === null && b.objects === null ? null : [...new Set([...(a.objects ?? []), ...(b.objects ?? [])])] };
+  return { tags: [...new Set([...a.tags, ...b.tags])], objects: a.objects === null && b.objects === null ? null : [...new Set([...(a.objects ?? []), ...(b.objects ?? [])])], not: [...new Set([...a.not, ...b.not])] };
 }
 
 /** Whether a segment may follow a chain by theme: they share one, or either has none. */
@@ -54,12 +54,15 @@ export function composeChain(id: string, segments: readonly QuestSegmentDef[], e
     place = mergePlaces(place, seg.place);
     road ||= seg.road;
     const bound = new Set(["giver", ...Object.keys(people), ...(creatures ? ["beast"] : []), ...(place ? ["place"] : []), ...(road ? ["road"] : [])]);
-    if (!seg.uses.every((name) => bound.has(name)) || !seg.requires.every((tag) => tags.includes(tag))) return null;
+    if (!seg.uses.every((name) => bound.has(name)) || !seg.requires.every((tag) => tags.includes(tag)) || seg.forbids.some((tag) => tags.includes(tag))) return null;
     for (const tag of seg.provides) if (!tags.includes(tag)) tags.push(tag);
     const giver = seg.quest.giver ?? previous;
     const ender = seg.quest.ender ?? giver;
+    // Those who are gone are spoken of, never met: no quest is given, ended or done by them.
+    const gone = (name: string | null): boolean => name !== null && people[name]?.gone === true;
+    if (gone(giver) || gone(ender) || seg.quest.parts.some((part) => gone(part.npc))) return null;
     quests.push({ ...seg.quest, giver, ender, tags: [...tags] });
     previous = ender;
   }
-  return { id, weight: extra.weight ?? 1, intro: extra.intro ?? false, giver: segments[0].giver, people, creatures, place, road, quests, segments: null };
+  return { id, weight: extra.weight ?? 1, intro: extra.intro ?? false, giver: segments[0].giver, people, creatures, place, road, quests, segments: null, draw: null };
 }

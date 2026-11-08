@@ -4,7 +4,7 @@
   roles: ["opener", "closer"],
   theme: ["errand"],
   giver: ["priest", "innkeeper", "shopkeeper", "farmer", "villager"],
-  place: { objects: [] },
+  place: { not: ["evidence"] },
   quest: {
     parts: ["gatherAt"],
     title: ["{objects}", "A Small Kindness", "Fetching {objects}"],

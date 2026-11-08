@@ -6,7 +6,7 @@
   requires: ["met:contact"],
   provides: ["helped:contact"],
   uses: ["contact"],
-  place: { objects: [] },
+  place: { not: ["evidence"] },
   quest: {
     giver: "contact",
     parts: ["gatherAt"],

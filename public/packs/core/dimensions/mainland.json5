@@ -21,7 +21,7 @@
       arrive: { at: "square", facing: { building: "inn" } },
       // The intro chain's plots, in order (QUESTS.md, *The generator*): find the inn, the strange
       // sickness (GAMEPLAY.md's test chain), then a letter down the road to the next settlement.
-      intro: ["welcome", "strangeSickness", "roadOn"],
+      intro: ["welcome", "affliction", "roadOn"],
       // What stands there for a start: the dummy and the chest on the square. The innkeeper keeps
       // the bank, and class trainers teach (NPCS.md). Offsets in metres from the anchor.
       entities: [

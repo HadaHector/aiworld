@@ -1,0 +1,34 @@
+// The curse way: someone who keeps the graves can read what was left there.
+{
+  weight: 1,
+  roles: ["middle"],
+  theme: ["affliction"],
+  requires: ["has:signs"],
+  forbids: ["knows:seer"],
+  provides: ["knows:seer"],
+  uses: ["healer"],
+  people: {
+    seer: { roles: [], make: ["hermit", "sexton"] },
+  },
+  quest: {
+    giver: "healer",
+    ender: "seer",
+    parts: [{ part: "talkTo", npc: "seer" }],
+    title: [{ text: "What the Graves Know", when: { place: ["graves"] }, weight: 3 }, "Show {seerGiven}", "A Reading"],
+    offer: [
+      "$hook",
+      [
+        { text: "Whoever did this did it among the dead. The one who keeps them should know.", when: { place: ["graves"] }, weight: 4 },
+        { text: "Whoever did this did it at the edge of our own fields, in the dark. Someone out that way must have seen something.", when: { place: ["fields"] }, weight: 4 },
+        "Someone out at {place} sees more than the rest of us.",
+      ],
+      ["{seerGiven} - {seerTitle} - will know what these mean. Show {seerGiven} what you found, and say I sent you.", "{seerGiven}, the {seerTitle}, has read such work before. Show {seerGiven} what you found, and say I sent you."],
+      ["Don't go alone after dark."],
+    ],
+    progress: ["Go to {seerGiven}, out at {place}."],
+    done: [
+      "{healerGiven} sent you with these? Let me see... Burnt backwards, and the clay charm broken on purpose. Yes. I know this work.",
+      "Candle stubs and a broken charm. I've seen this once before, long ago. Sit down; this is not a short telling.",
+    ],
+  },
+}

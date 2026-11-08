@@ -32,6 +32,8 @@
     objects: [
       { name: "Feverfew", tags: ["herb"] },
       { name: "Strayed Lamb Bell", tags: ["lost"] },
+      { name: "Burnt Candle Stub", tags: ["evidence"] },
+      { name: "Cracked Clay Charm", tags: ["evidence"] },
     ],
     text: "the fields outside {name}",
   },

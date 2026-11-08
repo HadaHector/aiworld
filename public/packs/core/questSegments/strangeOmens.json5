@@ -1,0 +1,30 @@
+// The intro story, a start: signs and omens, and nobody knows what they mean.
+{
+  weight: 1,
+  free: false,
+  roles: ["opener"],
+  theme: ["affliction"],
+  provides: ["problem:afflicted", "signs:omens"],
+  giver: ["reeve", "innkeeper", "priest"],
+  people: {
+    healer: { roles: ["priest", "innkeeper"], relation: ["friend", "sister", "brother", "wife", "husband"], make: ["hermit"] },
+  },
+  quest: {
+    ender: "healer",
+    parts: [{ part: "talkTo", npc: "healer" }],
+    title: ["Omens", "Strange Signs", "A Bad Feeling in {settlement}"],
+    offer: [
+      "$hook",
+      [
+        "Have you noticed? The milk has turned in every pail along the lane, and the dogs howl at nothing.",
+        "Crows on every roof, and not one will leave. Three nights now the candles have guttered out by themselves.",
+        "Bread that won't rise, wells that taste of iron, and everyone dreaming the same dream.",
+      ],
+      ["It's been going on {when}, and nobody will say what they think it means.", "Folk are starting to whisper. I'd rather someone told them the truth, whatever it is."],
+      ["{healerGiven} - {healerTitle} - reads such signs better than I do.", "Tell {healerGiven}, the {healerTitle}, what you've seen, and ask what it means."],
+      "$promise",
+    ],
+    progress: ["Has {healerGiven} said what it means?", "$progress"],
+    done: ["Omens, is it? I'd hoped it was only talk. Sit down, and tell me what you've seen."],
+  },
+}

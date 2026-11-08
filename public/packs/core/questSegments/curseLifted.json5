@@ -1,0 +1,27 @@
+// The curse way's end: the ward held up to a beast, and the curse breaks. Back to the giver.
+{
+  weight: 1,
+  roles: ["closer"],
+  theme: ["affliction"],
+  requires: ["has:charm"],
+  uses: ["seer"],
+  creatures: { hostility: ["hostile", "neutral"], family: ["beast"] },
+  quest: {
+    giver: "seer",
+    ender: "giver",
+    parts: ["wardBeast"],
+    title: ["Breaking the Curse", "The Last Rite"],
+    offer: [
+      ["Hold the charm up to one of the cursed {creatures}."],
+      "$motive",
+      ["If it breaks, the rest will follow. Go back to {giverGiven} and tell them so."],
+    ],
+    progress: ["Has it broken?"],
+    done: [
+      { text: "The {creatures} are themselves again, and {neighbour} is eating? Then it is over. {settlement} owes you more than it can pay - but take this, with our thanks.", when: { tags: ["signs:person"] }, weight: 3 },
+      { text: "The {creatures} are themselves again, and the crows have left the roofs? Then it is over. {settlement} owes you more than it can pay - but take this, with our thanks.", when: { tags: ["signs:omens"] }, weight: 3 },
+      { text: "The {creatures} are themselves again? Then it is over. {settlement} owes you more than it can pay - but take this, with our thanks.", when: { tags: ["signs:beasts"] }, weight: 3 },
+    ],
+    choice: true,
+  },
+}

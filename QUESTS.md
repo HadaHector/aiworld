@@ -237,13 +237,47 @@ recipe naming segments in a fixed order, for what must always be the same, like 
   how likely each next one is where the chain could end (`more`). A chain that dead-ends falls back
   to where it last could have ended. A segment is a solo (`roles: ["opener", "closer"]`) when it
   makes a whole quest on its own.
-- **Weight 0** keeps a segment out of free drawing; the intro's sickness chain (six segments) is
-  that, as it is longer than `max` and is named by a recipe instead.
+- **`free: false`** keeps an opener out of free drawing: it belongs to a story only a plot's `draw`
+  tells (below). **`forbids`** are tags the chain must *not* have, the other half of `requires`: a
+  branch that shuts out another (a curse cannot follow a sickness; the same help is not asked twice).
+- **A segment that cannot stand in the middle** (`roles` without `middle`) ends the chain where it is.
 - **Checked** by the quests probe without any world: every opener reaches a closer, every segment
   is on some chain, and segments that cannot go together do not compose.
 
 A plot can say `segments: ["a", "b", ...]` in place of `quests`; the loader puts them together once
-(and refuses a recipe that does not fit).
+(and refuses a recipe that does not fit). Or `draw: { themes, min, max }`: a chain **drawn** for each
+world from the segments of those themes, between `min` and `max` quests - how the intro gets a
+different story each time. The chain rules above apply; one that comes out shorter than `min`, or
+that this settlement cannot fill, is tried again with another opener.
+
+### Stories: starts, forks, twists and endings
+
+The intro (`questPlots/affliction.json5`, `draw: { themes: ["affliction"], min: 4, max: 6 }`) is the
+example. Something is wrong in the settlement and a healer is asked; what comes of it is drawn:
+
+| | Choices |
+|---|---|
+| **Start** | the beasts fall sick · a neighbour raves · omens and bad signs |
+| **Fork** (the investigation) | a sample from the beasts (`cause:sickness`) · signs gathered where it began, at the graves or the fields' edge (`cause:curse`) - each `forbids` the other |
+| **Sickness** | ask the maker, *or find them dead* (the twist) and learn from who they taught · herbs · the salve · tried on a beast |
+| **Curse** | ask the sexton or hermit what the signs mean · a ward, tried on a beast; *or find who laid it* and ask them to their face |
+
+Twelve stories of four to six quests; the test chain (talk, kill and loot, talk, gather, receive, use,
+talk) is the plain sickness one, so GAMEPLAY.md's "must be one the generator can produce" holds. A
+line of text can follow the story it is in: `when: { tags: [...] }` says it only for a chain that
+has those tags, so the same quest closes differently after a death, and an omens start thanks you for
+the crows leaving the roofs, not a neighbour eating.
+
+- **Someone who is gone.** A segment's person can be `gone: true`: one of the settlement's people who
+  stay at home (a relative of the giver's first), named in the text and never met. A quest cannot be
+  given, ended or done by them (the loader refuses a chain that tries), and a part can say its own
+  log `line` ("Go to {goneGiven}'s house") when the talk objective is with someone else - the one
+  who tells you the news. The twist is in the words and the order, not in the world: nothing is
+  killed, and nobody standing in a settlement is ever a dead person. (A death a *met* NPC suffers,
+  so that you come back and they are not there, would need an NPC's state per character - a
+  system, not a segment: see [Later](#later).)
+- **A place need can shut objects out**: `place: { not: ["evidence"] }`, so a quest to pick herbs
+  never asks for the candle stubs left at a crime.
 
 ## Voices
 
@@ -263,7 +297,8 @@ text asks for it with `"$name"`:
 Core's banks: `hook` (how they open), `promise` (what they offer), `progress` and `thanks`.
 
 - **Lines** are a string or `{ text, weight, when }`. `when` holds any of `mood`, `role`, `sex`,
-  `age` (of the speaker), `place` (tags of the quest's place), `creature` (its creature's family),
+  `age` (of the speaker), `place` (tags of the quest's place), `object` (tags of what a gather
+  picks up: herbs grow, lost things lie about), `creature` (its creature's family),
   `tags` (what the chain has so far) and `tier`; each takes one value or a list, and all the keys
   must match. Lines nobody's `when` fits fall back to the unconditioned ones.
 - **Any text can use them**, not only voices: an offer is a list of groups, a title, progress or done
@@ -738,7 +773,23 @@ After NPCS.md's five steps. Each leaves the game working: the dev server (`?play
   own. **Checked:** every settlement of a world has quests before anyone is near, and the order is a
   permutation that is the same however the settlements are listed and differs by seed.
 
+- **Stories.** The intro is no longer one chain; it is drawn (see [Stories](#stories-starts-forks-twists-and-endings)):
+  `strangeSickness` became `affliction`, a `draw` plot, and its six segments became fourteen with
+  three starts, a fork between a sickness and a curse, a death twist and three endings. New in the
+  engine: `forbids`, `free`, `gone` people, a part's own `line`, `draw` plots, `place.not`,
+  `when.object`, and chains that end at a closer-only segment. The curse can happen at the
+  settlement's own fields as well as at a churchyard, so it does not depend on one being near.
+  **Checked:** the probe enumerates the stories (12) and asserts several starts, endings and a twist, that
+  the test chain is among them, and that segments in the wrong order or with someone gone as the
+  ender do not compose; it plays four different stories with the bot (the curse lifted, the
+  culprit asked, a death on the way, the plain sickness) from the "!" to the item worn, and over
+  the generated worlds that the story the intro drew is one the rules can make.
+
 ## Later
+
+- A death a character *meets*: an NPC the quest has killed is not there when the character comes
+  back, or is found dead. That needs an NPC's state per character (hidden or dead for those on the
+  quest) in a shared world, and a quest effect to set it.
 
 - Weight what quest, segment, place and creature to use by how far the place is, how many other
   quests already use it (in this settlement and in the ones made before), and how many objectives

@@ -92,6 +92,7 @@ interface LineContext {
   sex: string;
   age: string;
   place: readonly string[];
+  object: readonly string[];
   creature: readonly string[];
   tags: readonly string[];
   tier: string;
@@ -133,8 +134,9 @@ export function generateQuests(input: GeneratorInput): QuestDef[] {
   const places: ContextPlace[] = [...input.places, { name: site.name, ...fieldsAt, radius: 25, quest: { tags: ["fields", "open"], objects: q.fields.objects, people: [], text: q.fields.text } }];
 
   const creatureFits = (need: CreatureNeed | null) => (c: ContextCreature): boolean => !need || ((!need.hostility || need.hostility.includes(c.hostility)) && (!need.family || need.family.includes(c.family)));
-  const placeFits = (need: PlaceNeed | null) => (p: ContextPlace): boolean =>
-    !need || (need.tags.every((t) => p.quest.tags.includes(t)) && (need.objects === null || p.quest.objects.some((o) => need.objects!.every((t) => o.tags.includes(t)))));
+  /** An object of a place that a need allows: it has all the tags asked and none that are shut out. */
+  const objectFits = (need: PlaceNeed) => (o: { tags: readonly string[] }): boolean => (need.objects ?? []).every((t) => o.tags.includes(t)) && !need.not.some((t) => o.tags.includes(t));
+  const placeFits = (need: PlaceNeed | null) => (p: ContextPlace): boolean => !need || (need.tags.every((t) => p.quest.tags.includes(t)) && (need.objects === null || p.quest.objects.some(objectFits(need))));
 
   /** One line of a pool, by weight, among those that fit the speaker and the quest - its own and its
    *  voice banks' - and fresh if any is. The line's `[a|b]` alternatives are drawn. "" if none fits. */
@@ -171,6 +173,15 @@ export function generateQuests(input: GeneratorInput): QuestDef[] {
     if (other?.npc) people.set("road", other.npc);
     for (const [name, want] of Object.entries(plot.people)) {
       const taken = new Set([...people.values()].map((p) => p.index));
+      if (want.gone) {
+        // Someone who stays at home, spoken of and never met: a relative of the giver's if there is one.
+        const home = cast.npcs.filter((n) => !n.out && !taken.has(n.index));
+        const kin = giver.relations.map((r) => cast.npcs[r.to]).filter((n) => !n.out && !taken.has(n.index));
+        const gone = kin.length > 0 ? pick(local, kin) : home.length > 0 ? pick(local, home) : undefined;
+        if (!gone) return null;
+        people.set(name, gone);
+        continue;
+      }
       const related = want.relation ? giver.relations.filter((r) => want.relation!.includes(r.call)).map((r) => cast.npcs[r.to]).filter((n) => n.out && !taken.has(n.index) && (want.roles.length === 0 || (n.role !== null && want.roles.includes(n.role)))) : [];
       const anyone = out.filter((n) => !taken.has(n.index) && n.role !== null && want.roles.includes(n.role));
       let person = related[0] ?? (anyone.length > 0 ? pick(local, anyone) : undefined);
@@ -184,7 +195,7 @@ export function generateQuests(input: GeneratorInput): QuestDef[] {
       if (!person) return null;
       people.set(name, person);
     }
-    const objectsHere = place ? place.quest.objects.filter((o) => !plot.place?.objects || plot.place.objects.every((t) => o.tags.includes(t))) : [];
+    const objectsHere = place ? place.quest.objects.filter(plot.place ? objectFits(plot.place) : () => true) : [];
     const object = place ? pick(local, objectsHere.length > 0 ? objectsHere : place.quest.objects) : undefined;
     const placeName = place ? place.quest.text.replace("{name}", place.name) : "";
     const lvl = level(beast);
@@ -200,7 +211,7 @@ export function generateQuests(input: GeneratorInput): QuestDef[] {
       args[`${name}Title`] = person.title;
       args[`${name}Sex`] = person.sex;
     }
-    const speaking = (who: CastNpc, tags: readonly string[]): LineContext => ({ mood: who.mood, role: who.role ?? "", sex: who.sex, age: who.age, place: place?.quest.tags ?? [], creature: beast ? [beast.family] : [], tags, tier: site.tier });
+    const speaking = (who: CastNpc, tags: readonly string[]): LineContext => ({ mood: who.mood, role: who.role ?? "", sex: who.sex, age: who.age, place: place?.quest.tags ?? [], object: object?.tags ?? [], creature: beast ? [beast.family] : [], tags, tier: site.tier });
     const t = (text: string): Text => ({ text, args });
     const id = (n: number): string => `q:${input.castInput.dimension}/${site.id}/${quests.length + n}`;
     const made: QuestDef[] = [];
@@ -215,7 +226,7 @@ export function generateQuests(input: GeneratorInput): QuestDef[] {
         const count = between(local, part.count);
         const who = ref.npc ? people.get(ref.npc) : undefined;
         const item = ref.item ?? part.item ?? "";
-        const line = (extra: Record<string, string | number>): Text => ({ text: part.line, args: { ...args, ...extra } });
+        const line = (extra: Record<string, string | number>): Text => ({ text: ref.line ?? part.line, args: { ...args, ...extra } });
         const filter = beast ? { kinds: [beast.id], name: t("{creatures}") } : { kinds: [], name: t("") };
         const area = place ? { dimension: input.castInput.dimension, x: place.x, z: place.z, radius: place.radius } : { dimension: input.castInput.dimension, x: fieldsAt.x, z: fieldsAt.z, radius: 25 };
         const motive = pickLine(local, part.motive, asked);
@@ -303,10 +314,82 @@ export function generateQuests(input: GeneratorInput): QuestDef[] {
     return out;
   }
 
+  const segments = [...q.segments.values()];
+  const recipes = q.plots.filter((p) => !p.intro && p.weight > 0);
+
+  /** Whether the settlement could give a plot's needs at all: a giver, creatures, a place, a road,
+   *  someone who is gone. */
+  function feasible(plot: QuestPlotDef): boolean {
+    return (
+      out.some((n) => n.role !== null && plot.giver.includes(n.role) && (lines.get(n.index) ?? 0) < 2) &&
+      (!plot.creatures || input.creatures.some(creatureFits(plot.creatures))) &&
+      (!plot.place || places.some(placeFits(plot.place))) &&
+      (!plot.road || input.others.some((o) => o.npc)) &&
+      (!Object.values(plot.people).some((p) => p.gone) || cast.npcs.some((n) => !n.out))
+    );
+  }
+
+  /** How a chain is grown: its shortest and longest, how likely each next segment is once it could
+   *  end, the generator's random numbers, and the themes it keeps to (none: any that chains may use). */
+  interface ChainOptions {
+    rng: Rng;
+    min: number;
+    max: number;
+    more: number;
+    themes: readonly string[] | null;
+  }
+
+  /** A chain from an opener: segments that fit what it has so far are added by weight, each time
+   *  perhaps stopping where the chain could end, up to the most; a dead end falls back to the last
+   *  place it could have ended, if that is long enough. Null when it cannot be made here. */
+  function chainFrom(opener: QuestSegmentDef, o: ChainOptions): QuestPlotDef | null {
+    const chain = [opener];
+    let closed = opener.roles.includes("closer") ? 1 : 0;
+    const allowed = (s: QuestSegmentDef): boolean => s.weight > 0 && (o.themes ? s.theme.some((t) => o.themes!.includes(t)) : s.free);
+    const fits = (list: readonly QuestSegmentDef[]): boolean => {
+      const plot = composeChain("", list);
+      return !!plot && feasible(plot);
+    };
+    if (!fits(chain)) return null;
+    for (;;) {
+      if (chain.length >= o.max) break;
+      if (closed === chain.length && chain.length >= o.min && o.rng() >= o.more) break;
+      const final = chain.length + 1 >= o.max;
+      const next = segments.filter((s) => allowed(s) && !chain.includes(s) && (s.roles.includes("closer") || (!final && s.roles.includes("middle"))) && themeFits(chain, s) && fits([...chain, s]));
+      if (next.length === 0) break;
+      let roll = o.rng() * next.reduce((sum, s) => sum + s.weight, 0);
+      const chosen = next.find((s) => (roll -= s.weight) < 0) ?? next[0];
+      chain.push(chosen);
+      if (chosen.roles.includes("closer")) closed = chain.length;
+      // A segment that cannot stand in the middle is where the chain ends.
+      if (!chosen.roles.includes("middle")) break;
+    }
+    if (closed < o.min) return null;
+    const made = chain.slice(0, closed);
+    return composeChain(made.map((s) => s.id).join("+"), made);
+  }
+
+  /** A plot ready to draw: itself, or for a `draw` plot the chain drawn for it now - an opener of its
+   *  themes by weight, grown by the chain rules - or null when none fits here. */
+  function realise(plot: QuestPlotDef): QuestPlotDef | null {
+    if (!plot.draw) return plot;
+    const local = mulberry32(deriveSeed(rng() * 4294967296, hashString(plot.id) + 7));
+    const { themes, min, max, more } = plot.draw;
+    const openers = segments.filter((s) => s.roles.includes("opener") && s.weight > 0 && s.theme.some((t) => themes.includes(t)));
+    for (let attempt = 0; attempt < 12 && openers.length > 0; attempt++) {
+      let roll = local() * openers.reduce((sum, s) => sum + s.weight, 0);
+      const opener = openers.find((s) => (roll -= s.weight) < 0) ?? openers[0];
+      const chain = chainFrom(opener, { rng: local, min, max, more: more ?? q.chain.more, themes });
+      if (chain) return { ...chain, id: `${plot.id}#${chain.id}`, weight: plot.weight, intro: plot.intro };
+    }
+    return null;
+  }
+
   // The intro first, in order, each plot after the one before (NPCS.md's `intro`).
   let last: string | null = null;
   for (const id of input.intro) {
-    const plot = rules.quests.plots.find((p) => p.id === id);
+    const named = q.plots.find((p) => p.id === id);
+    const plot = named ? realise(named) : null;
     const made: QuestDef[] | null = plot ? draw(plot, last) : null;
     if (!made) continue;
     quests.push(...made);
@@ -315,57 +398,18 @@ export function generateQuests(input: GeneratorInput): QuestDef[] {
   // Then plots and chains by weight until the quota is met: a plot is a recipe, an opener starts a
   // chain of segments put together as they fit (QUESTS.md, *Segments*).
   const quota = between(rng, q.quota[site.tier] ?? [2, 4]) + quests.length;
-  const segments = [...q.segments.values()];
-  const recipes = q.plots.filter((p) => !p.intro && p.weight > 0);
   type Option = { weight: number; plot?: QuestPlotDef; opener?: QuestSegmentDef };
-
-  /** Whether the settlement could give a plot's needs at all: a giver, creatures, a place, a road. */
-  function feasible(plot: QuestPlotDef): boolean {
-    return (
-      out.some((n) => n.role !== null && plot.giver.includes(n.role) && (lines.get(n.index) ?? 0) < 2) &&
-      (!plot.creatures || input.creatures.some(creatureFits(plot.creatures))) &&
-      (!plot.place || places.some(placeFits(plot.place))) &&
-      (!plot.road || input.others.some((o) => o.npc))
-    );
-  }
-
-  /** A chain from an opener: segments that fit what it has so far are added by weight, each time
-   *  perhaps stopping where the chain could end, up to the rules' most; a dead end falls back to the
-   *  last place it could have ended. Null when even the opener alone does not fit here. */
-  function chainFrom(opener: QuestSegmentDef): QuestPlotDef | null {
-    const chain = [opener];
-    let closed = opener.roles.includes("closer") ? 1 : 0;
-    const idOf = (list: readonly QuestSegmentDef[]) => list.map((s) => s.id).join("+");
-    const fits = (list: readonly QuestSegmentDef[]): boolean => {
-      const plot = composeChain("", list);
-      return !!plot && feasible(plot);
-    };
-    if (!fits(chain)) return null;
-    for (;;) {
-      const last = closed === chain.length;
-      if (last && (chain.length >= q.chain.max || rng() >= q.chain.more)) break;
-      const final = chain.length + 1 >= q.chain.max;
-      const next = segments.filter((s) => s.weight > 0 && !chain.includes(s) && (s.roles.includes("closer") || (!final && s.roles.includes("middle"))) && themeFits(chain, s) && fits([...chain, s]));
-      if (next.length === 0) break;
-      let roll = rng() * next.reduce((sum, s) => sum + s.weight, 0);
-      const chosen = next.find((s) => (roll -= s.weight) < 0) ?? next[0];
-      chain.push(chosen);
-      if (chosen.roles.includes("closer")) closed = chain.length;
-    }
-    return closed > 0 ? composeChain(idOf(chain.slice(0, closed)), chain.slice(0, closed)) : null;
-  }
-
   for (let tries = 0; quests.length < quota && tries < 40; tries++) {
     const open: Option[] = [
       ...recipes.filter((p) => !usedPlots.has(p.id)).map((plot) => ({ weight: plot.weight, plot })),
-      ...segments.filter((s) => s.roles.includes("opener") && s.weight > 0 && !usedPlots.has(`segment:${s.id}`)).map((opener) => ({ weight: opener.weight, opener })),
+      ...segments.filter((s) => s.roles.includes("opener") && s.free && s.weight > 0 && !usedPlots.has(`segment:${s.id}`)).map((opener) => ({ weight: opener.weight, opener })),
     ];
     if (open.length === 0) break;
     let roll = rng() * open.reduce((sum, o) => sum + o.weight, 0);
     const option = open.find((o) => (roll -= o.weight) < 0) ?? open[0];
     if (option.plot) usedPlots.add(option.plot.id);
     else usedPlots.add(`segment:${option.opener!.id}`);
-    const plot = option.plot ?? chainFrom(option.opener!);
+    const plot = option.plot ? realise(option.plot) : chainFrom(option.opener!, { rng, min: 1, max: q.chain.max, more: q.chain.more, themes: null });
     const made = plot ? draw(plot, null) : null;
     if (made) quests.push(...made);
   }
