@@ -14,6 +14,8 @@ import { createWorldRecord } from "../../src/save/records.ts";
 import { addThreat } from "../../src/sim/skills/combat.ts";
 import { fillText } from "../../src/sim/text.ts";
 import { hashString } from "../../src/world/content/dimensions.ts";
+import { bindOf } from "../../src/sim/quests/quest.ts";
+import { createQuestItemLooks, lookedIcon } from "../../src/ui/questItemLook.ts";
 import { composeChain, themeFits } from "../../src/sim/quests/chains.ts";
 import { questOrder } from "../../src/sim/quests/generator.ts";
 
@@ -308,8 +310,9 @@ await section("the test chain", async () => {
 
   // A salve lost with an abandoned try of the quest that uses it is handed again when it is taken again.
   const parts = (n, chainId, index) => quest(n, { giver: maker, ender: maker, chain: { id: chainId, index, of: 2 }, requires: { quests: [], level: 1 }, objectives: index === 1 ? [{ kind: "receive", item: "herbalSalve", from: maker, line: t("Take the salve") }] : [{ kind: "use", item: "herbalSalve", on: beasts, below: 1, count: 1, line: t("Salve a beast") }] });
-  const first = parts(12, "q:line", 1);
-  const second = { ...parts(13, "q:line", 2), requires: { quests: ["q:probe/12"], level: 1 } };
+  const looked = { herbalSalve: { name: t("Maker's Salve"), icon: "herb-clover", tint: "" } };
+  const first = { ...parts(12, "q:line", 1), itemLooks: looked };
+  const second = { ...parts(13, "q:line", 2), requires: { quests: ["q:probe/12"], level: 1 }, itemLooks: looked };
   server.debug.quests.define([first, second]);
   await talk(makerE);
   await send({ type: "questAccept", npc: makerE.id, quest: "q:probe/12" });
@@ -326,6 +329,7 @@ await section("the test chain", async () => {
   healerE = npcs.entityOf(healer);
   makerE = npcs.entityOf(maker);
   check("entering: the leftover letter is gone", letters().length === 0, String(letters().length));
+  check("...and the client is told the quest of the salve it holds between two, to name it", inbox.some((m) => m.type === "questDefs" && m.defs.some((d) => d.id === "q:probe/12")));
   check("...and the salve kept between two quests of a line stays", salves().length === 1 && salves()[0].roll === bind("q:line"), String(salves().length));
   await talk(makerE);
   await send({ type: "questAccept", npc: makerE.id, quest: "q:probe/13" });
@@ -458,6 +462,9 @@ await section("the generator", async () => {
   const choices = [];
   /** Every generated quest, for what the rewards do across them. */
   const allQuests = [];
+  /** Every quest line's item look, and a quest that delivers something, to try the client's naming on. */
+  const itemLines = [];
+  let lookSample = null;
   for (const [config, seeds] of [["tiny", 3], ["small", 3]]) {
     for (let s = 0; s < seeds; s++) {
       const seed = 4000 + s * 911;
@@ -500,6 +507,36 @@ await section("the generator", async () => {
           else efforts.talk.push(effort);
         }
         if (q.rewards.choice.length > 0) choices.push({ quest: q, items: q.rewards.choice.map((id) => w.items.types[w.items.typeIndex.get(id)]), rarities: w.items.rarities });
+      }
+      // Quest items are named for their line and drawn from the rules' lists (QUESTS.md, *Quest items*).
+      {
+        const lists = w.rules.quests.itemLooks;
+        const lines = new Map();
+        let broken = 0;
+        for (const q of w.quests) {
+          const types = [...new Set(q.objectives.flatMap((o) => (o.kind === "receive" || o.kind === "use" || o.kind === "deliver" ? [o.item] : [])))];
+          for (const type of types) {
+            const look = q.itemLooks?.[type];
+            const shown = look ? fillText(look.name.text, look.name.args) : "";
+            const list = lists[type] ?? { icons: [], tints: [] };
+            if (!look || shown === "" || shown.includes("{") || /undefined| {2}/.test(shown)) broken++;
+            else if ((look.icon !== "" || list.icons.length > 0) && !list.icons.includes(look.icon)) broken++;
+            else if ((look.tint !== "" || list.tints.length > 0) && !list.tints.includes(look.tint)) broken++;
+            else {
+              const key = `${bindOf(q)}/${type}`;
+              if (lines.has(key) && JSON.stringify(lines.get(key)) !== JSON.stringify(look)) broken++;
+              lines.set(key, look);
+            }
+          }
+        }
+        check(`${tag}: every quest item named, drawn from the lists, and the same all along its line (${lines.size} lines)`, broken === 0, `${broken} not`);
+        for (const type of new Set([...lines.keys()].map((k) => k.split("/").pop()))) {
+          const looks = [...lines.entries()].filter(([k]) => k.endsWith(`/${type}`)).map(([, v]) => v);
+          const names = new Set(looks.map((v) => fillText(v.name.text, v.name.args)));
+          check(`${tag}: ${type}: lines have different names (${names.size} of ${looks.length})`, looks.length < 3 || names.size / looks.length >= 0.7, `${names.size}/${looks.length}`);
+        }
+        itemLines.push(...lines.entries());
+        if (!lookSample) lookSample = w.quests.find((q) => q.itemLooks && Object.keys(q.itemLooks).length > 0 && q.objectives.some((o) => o.kind === "deliver"));
       }
       // What the starting settlement's quests are worth against the level curve (40 n^2 + 210 n from level n).
       const startXp = startQuests.reduce((sum, x) => sum + x.rewards.xp, 0);
@@ -560,6 +597,21 @@ await section("the generator", async () => {
   check("every choice offers what the rules say", choices.every((c) => c.items.length === rules0.rewardChoices), String(choices.map((c) => c.items.length)));
   check("...all of one rarity", choices.every((c) => new Set(c.items.map((x) => x.rarity)).size === 1));
   check("...no item twice", choices.every((c) => new Set(c.items.map((x) => x.id)).size === c.items.length));
+  // The client names a quest item from the quest it was told of, by the item's roll.
+  if (lookSample) {
+    const defsMap = new Map([[lookSample.id, lookSample]]);
+    const looks = createQuestItemLooks(() => defsMap, () => null);
+    const type = Object.keys(lookSample.itemLooks)[0];
+    const found = looks.of({ type, roll: bindOf(lookSample) });
+    check("the client names a quest item by its roll", found?.name === fillText(lookSample.itemLooks[type].name.text, lookSample.itemLooks[type].name.args), JSON.stringify(found));
+    check("...and the quest it is for", found?.quest === fillText(lookSample.text.title.text, lookSample.text.title.args));
+    check("...not an item of another line, or another type", looks.of({ type, roll: bindOf(lookSample) + 1 }) === null && looks.of({ type: "wolfFang", roll: bindOf(lookSample) }) === null);
+    check("its icon and tint are laid over the placeholder", JSON.stringify(lookedIcon({ name: "", glyph: "quest", color: "#fff" }, { name: "x", icon: "herb-clover", tint: "#123456", quest: "q" })) === JSON.stringify({ name: "herb-clover", glyph: "quest", color: "#123456" }));
+  }
+  const iconsByType = new Map();
+  for (const [key, look] of itemLines) iconsByType.set(key.split("/").pop(), new Set([...(iconsByType.get(key.split("/").pop()) ?? []), look.icon || look.tint]));
+  log(`quest item looks by type over the worlds: ${[...iconsByType].map(([t, v]) => `${t} ${v.size} different`).join(", ")}`);
+  check("letters are not all the same picture", (iconsByType.get("sealedLetter")?.size ?? 0) >= 3, String(iconsByType.get("sealedLetter")?.size));
   // Items match the quest's level, and not every quest gives one.
   check("every item offered is within the rules' reach of its quest's level", choices.every((c) => c.items.every((x) => Math.abs(x.itemLevel - c.quest.level) <= rules0.rewardLevel)), JSON.stringify(choices.filter((c) => c.items.some((x) => Math.abs(x.itemLevel - c.quest.level) > rules0.rewardLevel)).map((c) => [c.quest.level, c.items.map((x) => x.itemLevel)])));
   log(`item level minus quest level over the options: ${JSON.stringify(Object.fromEntries([...new Set(choices.flatMap((c) => c.items.map((x) => x.itemLevel - c.quest.level)))].sort().map((d) => [d, choices.flatMap((c) => c.items).filter((x, i) => x.itemLevel - choices.flatMap((c2) => c2.items.map(() => c2.quest.level))[i] === d).length])))}`);

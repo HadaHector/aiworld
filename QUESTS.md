@@ -203,6 +203,18 @@ quest: {
   abandoning a quest takes exactly its items. So a similar quest from the same template never uses
   another's item. Characters entering the world are swept of quest items no quest line of theirs
   that is not finished could use.
+  **Each is named and drawn for its line.** A quest line's item is called after the person or place it
+  is about - "Letter for Lavora of Suthvyldael", "Reply for Rofiel", "Safell's Salve", "Ward of
+  Theaniel", "Package for Shizven" - from name patterns on the parts (`itemName`, drawn like any
+  line, with `{npcGiven}` the person it is delivered to or was given by, and a part reference can
+  override them: the road letter and a reply do), and drawn with an icon and a tint from lists in
+  `rules/quests.json5`'s `itemLooks` (one of each for the line, so two letters are not the same
+  picture). The generator puts them in the quest as `itemLooks`, the same in every quest of the line;
+  the client names an item it holds from the quest it was told of, by the item's roll (`ui/questItemLook.ts`),
+  in the bag, the tooltip (which also says which quest it is for) and the loot window, and a
+  character entering is sent the quests whose items it holds between two of a line. The art set core
+  installs has no paper or parcels, so letters and parcels differ by tint on the placeholder; the salve
+  has six icons and the charm one. Add icon names to a list when a set has them.
   Rules: when a quest is **handed in**, its items go, except those a later quest of the same chain
   uses (the next in a chain uses the salve it was given). When it is **abandoned**, all go, and an item
   it uses but does not give itself is **handed again** when it is taken again, so a chain is not
@@ -936,8 +948,11 @@ After NPCS.md's five steps. Each leaves the game working: the dev server (`?play
   new checks fail without it): two errands with one kind of letter hold two letters, each delivered to
   its own errand, abandoning one leaves the other; two cures use only their own salve; a salve is
   kept between two quests of a line, goes with an abandoned try and is handed again; a leftover letter is
-  swept as a character enters. **Not done:** the item's name does not say whose it is ("Sealed Letter
-  for Thilsell"); the tooltip could name the quest from the roll.
+  swept as a character enters. **Names and looks:** see the
+  paragraph above; **checked** by the probe: every quest item of every generated quest has a name that
+  fills, an icon and a tint from its lists, the same all along its line, with different names for
+  different lines (letters showed five different tints over six worlds, salves three icons), the client's
+  naming by roll on a real quest, and the held-between-quests definitions sent on entering.
 
 ## Later
 

@@ -7,7 +7,7 @@
   quests: [
     {
       ender: "road",
-      parts: [{ part: "receiveLetter", npc: "giver" }, { part: "deliverLetter", npc: "road" }],
+      parts: [{ part: "receiveLetter", npc: "giver" }, { part: "deliverLetter", npc: "road", itemName: ["Letter for {npcGiven} of {other}", "{giverGiven}'s Letter to {other}", "Letter from {settlement} to {other}"] }],
       title: "A Letter for {other}",
       offer: [
         ["You've done well by {settlement}."],

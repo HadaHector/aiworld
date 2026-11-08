@@ -7,7 +7,7 @@
   quest: {
     giver: "contact",
     ender: "giver",
-    parts: [{ part: "receiveLetter", npc: "contact" }, { part: "deliverLetter", npc: "giver" }],
+    parts: [{ part: "receiveLetter", npc: "contact" }, { part: "deliverLetter", npc: "giver", itemName: ["Reply for {npcGiven}", "{contactGiven}'s Reply", "Answer for {npcGiven}"] }],
     title: ["A Reply for {giverGiven}", "Word Back to {settlement}", "An Answer"],
     offer: [
       ["I've written a few lines back to {giverGiven}.", { text: "I'd best answer {giverGiven}'s parcel properly.", when: { tags: ["delivered"] }, weight: 4 }, { text: "I've not much news from out here, but {giverGiven} should have what there is.", when: { tags: ["remote"] }, weight: 4 }, { text: "I've set it all down for {giverGiven}: the beasts, the charms, everything.", when: { tags: ["problem:predators"] }, weight: 4 }],

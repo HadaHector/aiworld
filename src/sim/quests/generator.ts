@@ -7,7 +7,7 @@ import type { Text } from "../text";
 import type { GameRules } from "../rules/gameRules";
 import type { ItemRules } from "../rules/itemRules";
 import { addPerson, type Cast, type CastInput, type CastNpc } from "../npcs/cast";
-import type { Objective, QuestDef } from "./quest";
+import { bindOf, type ItemLook, type Objective, type QuestDef } from "./quest";
 import type { CreatureNeed, LineCondition, PlaceNeed, Pool, QuestPlotDef, QuestSegmentDef } from "./plots";
 import { composeChain, themeFits } from "./chains";
 
@@ -306,6 +306,30 @@ export function generateQuests(input: GeneratorInput): QuestDef[] {
     const t = (text: string): Text => ({ text, args });
     const id = (n: number): string => `q:${input.castInput.dimension}/${site.id}/${quests.length + n}`;
     const made: QuestDef[] = [];
+    // How this line's quest items are called and drawn (QUESTS.md, *Quest items*): named for the person or
+    // place they are about, with an icon and a tint drawn from the rules' lists - the same in every quest
+    // of the line, and not that of another line made from the same template. What a deliver or a use
+    // says comes first (the letter is for the one it is delivered to), then what a receive says.
+    const lineBind = bindOf({ id: id(0), chain: plot.quests.length > 1 ? { id: `${id(0)}#${plot.id}`, index: 1, of: plot.quests.length } : null });
+    const looks: Record<string, ItemLook> = {};
+    const named = plot.quests
+      .flatMap((pq) => pq.parts.map((ref) => ({ ref, part: rules.quests.parts.get(ref.part)! })))
+      .filter((c) => c.ref.item ?? c.part.item)
+      .sort((a, b) => Number(a.part.kind === "receive") - Number(b.part.kind === "receive"));
+    for (const { ref, part } of named) {
+      const type = (ref.item ?? part.item)!;
+      const pool = ref.itemName ?? part.itemName;
+      if (looks[type] || (pool.lines.length === 0 && pool.banks.length === 0)) continue;
+      const name = tidy(pickLine(local, pool, speaking(giver, [])));
+      if (!name) continue;
+      const who = ref.npc ? people.get(ref.npc) : undefined;
+      const lists = q.itemLooks[type];
+      looks[type] = {
+        name: { text: name, args: { ...args, npc: who?.name ?? "", npcGiven: who?.given ?? "", npcFamily: who?.family ?? "" } },
+        icon: lists && lists.icons.length > 0 ? lists.icons[lineBind % lists.icons.length] : "",
+        tint: lists && lists.tints.length > 0 ? lists.tints[(lineBind >>> 8) % lists.tints.length] : "",
+      };
+    }
     plot.quests.forEach((pq, n) => {
       const objectives: Objective[] = [];
       const motives: string[] = [];
@@ -383,6 +407,9 @@ export function generateQuests(input: GeneratorInput): QuestDef[] {
         },
         within: 0,
         where: [],
+        itemLooks: Object.fromEntries(
+          [...new Set(objectives.flatMap((o) => (o.kind === "receive" || o.kind === "use" || o.kind === "deliver" ? [o.item] : [])))].filter((type) => looks[type]).map((type) => [type, looks[type]]),
+        ),
       });
     });
     // A chain's last quest also pays a share of what the rest of it paid.

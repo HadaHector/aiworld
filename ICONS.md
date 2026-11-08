@@ -20,6 +20,9 @@ brings an icon set, a definition names an icon, and the game works with none.
 - **One atlas per set, any size.** A set's cell size is only recorded in the build; the screens scale
   an icon to its box with CSS, so a different set (or size) needs no code change.
 
+A quest item's icon is one of a list in the rules, chosen for each quest line (QUESTS.md, *Quest items*);
+its tint over the placeholder is another.
+
 ## An icon set
 
 `icons/<id>.json5` in any pack:

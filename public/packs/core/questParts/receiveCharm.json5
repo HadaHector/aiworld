@@ -1,2 +1,7 @@
-// Be given a warding charm.
-{ kind: "receive", item: "wardingCharm", line: "Take the warding charm from {npc}" }
+// Be given a warding charm. It is called after whoever gave it.
+{
+  kind: "receive",
+  item: "wardingCharm",
+  line: "Take the warding charm from {npc}",
+  itemName: ["{npcGiven}'s Charm", "Charm from {npcGiven}", "Ward of {npcGiven}"],
+}

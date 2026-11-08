@@ -25,6 +25,16 @@
   // one rarity and about one level, from the kinds (weapon, armour) used least so far in the world,
   // so the quests of an area do not all give a sword. The rarity aimed for is a quest's, and a
   // chain's last quest's, higher.
+  // How a quest line's items look (QUESTS.md, *Quest items*): its icon is one of `icons` and its tint one of
+  // `tints`, drawn for each line, so two letters are not the same picture. A list that is empty leaves
+  // the type's own. The set core installs has no paper or parcels, so letters and parcels vary in
+  // tint on the placeholder; add names to `icons` when a set has them.
+  itemLooks: {
+    sealedLetter: { icons: [], tints: ["#e8d9a8", "#d9c3a0", "#c9d6e8", "#e8c9c9", "#cfe3c6", "#dcc9e8"] },
+    wrappedParcel: { icons: [], tints: ["#b08a5c", "#9c7a50", "#a8946a", "#8e7e66", "#b89a78"] },
+    herbalSalve: { icons: ["potion-bowl-violet", "potion-dewdrop-green", "herb-clover", "herb-lilac", "herb-red-berries", "herb-bulb-red"], tints: [] },
+    wardingCharm: { icons: ["charm-jewel-red"], tints: [] },
+  },
   rewardTemplates: ["sword", "chestpiece", "boots", "helm"],
   rewardChoices: 3,
   rewardRarity: { quest: "uncommon", finale: "rare" },

@@ -2,6 +2,7 @@ import { Reader, type ContentIssue } from "../../world/content/contentReader";
 import type { Text } from "../text";
 import { readQuestParts, readQuestPlots, readQuestSegments, readQuestVoices, poolsOf, type Line, type QuestPartDef, type QuestPlotDef, type QuestSegmentDef } from "./plots";
 import { composeChain } from "./chains";
+import { hashString } from "../../world/content/dimensions";
 
 /**
  * A quest (QUESTS.md, *A quest*): who gives and ends it, what it asks, how it reads, what it gives.
@@ -26,7 +27,24 @@ export interface QuestDef {
   within: number;
   /** Where its objectives are, for the map: circles. */
   where: { dimension: string; x: number; z: number; radius: number }[];
+  /** How the quest items it hands over, asks for or has used look - by item type: "Letter for Thilsell". */
+  itemLooks?: Record<string, ItemLook>;
 }
+
+/** What one quest line's item is called and drawn as, in place of its type's (QUESTS.md, *Quest items*). */
+export interface ItemLook {
+  name: Text;
+  /** An icon name from the loaded sets, or "" for the type's own. */
+  icon: string;
+  /** "#rrggbb" for the placeholder, or "". */
+  tint: string;
+}
+
+/**
+ * The roll of a quest line's items: from the chain's id, or the quest's own, so a letter for one errand
+ * is not that of another made from the same template (QUESTS.md, *Quest items*). Never 0.
+ */
+export const bindOf = (def: Pick<QuestDef, "id" | "chain">): number => (hashString(def.chain?.id ?? def.id) >>> 0) || 1;
 
 /** Creatures an objective is about: kind ids, or species (the kind id's first part, `wolf`). */
 export interface KindFilter {
@@ -108,6 +126,8 @@ export interface QuestRules {
   rewardTemplates: string[];
   /** How many items a choice offers. */
   rewardChoices: number;
+  /** How a quest item's icon and tint are drawn from, by item type: lists, one chosen for each quest line. */
+  itemLooks: Record<string, { icons: string[]; tints: string[] }>;
   /** The rarity a choice aims for (at most; the best every option has): a quest's, and a chain's last. */
   rewardRarity: { quest: string; finale: string };
   /** How far an offered item's level may be from the quest's. */
@@ -152,7 +172,7 @@ type Entry = { id: string; file: string; data: unknown };
 export function readQuestRules(entry: { file: string; data: unknown } | undefined, partEntries: readonly Entry[], segmentEntries: readonly Entry[], plotEntries: readonly Entry[], voiceEntries: readonly Entry[], issues: ContentIssue[]): QuestRules {
   const reader = new Reader(issues, entry?.file ?? "rules/quests.json5");
   const obj = entry ? reader.object(entry.data, "") : {};
-  reader.onlyKeys(obj, "", ["maxActive", "xp", "money", "standing", "objects", "talkRange", "colours", "rewardTemplates", "rewardChoices", "rewardRarity", "rewardLevel", "rewardConsumables", "effort", "finale", "quota", "reach", "plurals", "fields", "whens", "chain", "weighting"]);
+  reader.onlyKeys(obj, "", ["maxActive", "xp", "money", "standing", "objects", "talkRange", "colours", "rewardTemplates", "rewardChoices", "itemLooks", "rewardRarity", "rewardLevel", "rewardConsumables", "effort", "finale", "quota", "reach", "plurals", "fields", "whens", "chain", "weighting"]);
   const parts = new Map(readQuestParts(partEntries, issues).map((p) => [p.id, p]));
   const segments = new Map(readQuestSegments(segmentEntries, parts, issues).map((s) => [s.id, s]));
   const voices = new Map<string, Line[]>();
@@ -213,6 +233,14 @@ export function readQuestRules(entry: { file: string; data: unknown } | undefine
   const colours = obj.colours === undefined ? {} : reader.object(obj.colours, "colours");
   const effort = obj.effort === undefined ? {} : reader.object(obj.effort, "effort");
   const rarity = obj.rewardRarity === undefined ? {} : reader.object(obj.rewardRarity, "rewardRarity");
+  const looksRaw = obj.itemLooks === undefined ? {} : reader.object(obj.itemLooks, "itemLooks");
+  const itemLooks: Record<string, { icons: string[]; tints: string[] }> = {};
+  for (const type of Object.keys(looksRaw)) {
+    const at = `itemLooks.${type}`;
+    const raw = reader.object(looksRaw[type], at);
+    reader.onlyKeys(raw, at, ["icons", "tints"]);
+    itemLooks[type] = { icons: raw.icons === undefined ? [] : reader.stringList(raw, "icons", at), tints: raw.tints === undefined ? [] : reader.stringList(raw, "tints", at) };
+  }
   const consumablesRaw = obj.rewardConsumables === undefined ? {} : reader.object(obj.rewardConsumables, "rewardConsumables");
   const consumables = {
     items: reader.optionalArray(consumablesRaw, "items", "rewardConsumables").map((v, i) => {
@@ -261,6 +289,7 @@ export function readQuestRules(entry: { file: string; data: unknown } | undefine
     },
     rewardTemplates: obj.rewardTemplates === undefined ? [] : reader.stringList(obj, "rewardTemplates", ""),
     rewardChoices: reader.optionalNumber(obj, "rewardChoices", "", 3, { min: 1, integer: true }),
+    itemLooks,
     rewardLevel: reader.optionalNumber(obj, "rewardLevel", "", 2, { min: 0 }),
     rewardConsumables: consumables,
     rewardRarity: { quest: reader.optionalString(rarity, "quest", "rewardRarity") ?? "uncommon", finale: reader.optionalString(rarity, "finale", "rewardRarity") ?? "rare" },

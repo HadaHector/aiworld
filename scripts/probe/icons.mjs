@@ -31,7 +31,7 @@ for (const [what, set] of [["all packs", sources], ["core alone", coreOnly]]) {
 // The rules carry the `icon` of each skill and item type; every name core asks for is in the pack.
 const game = loadRulesFromDisk("tiny");
 const items = loadItemRulesFromDisk("tiny", game, 1234);
-const asked = [...game.skills.map((s) => ["skill " + s.id, s.icon]), ...items.types.map((t) => ["item " + t.id, t.icon])].filter(([, icon]) => icon);
+const asked = [...game.skills.map((s) => ["skill " + s.id, s.icon]), ...items.types.map((t) => ["item " + t.id, t.icon]), ...Object.entries(game.quests.itemLooks).flatMap(([type, look]) => look.icons.map((icon) => ["quest item looks of " + type, icon]))].filter(([, icon]) => icon);
 check("core assigns icons", asked.length > 30, `only ${asked.length}`);
 loadIconSets(withPack ? sources : [], "/");
 if (withPack) for (const [who, icon] of asked) check(`${who}: icon ${icon} is in the pack`, hasIcon(icon));

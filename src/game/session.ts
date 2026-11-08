@@ -1,4 +1,5 @@
 import { createQuestMirror } from "./questMirror";
+import { createQuestItemLooks, setQuestItemLooks } from "../ui/questItemLook";
 import { createQuestLog } from "../ui/questLog";
 import { renderText } from "../sim/text";
 import { createNpcWindow } from "../ui/npcWindow";
@@ -233,6 +234,8 @@ export async function startSession(page: Page, options: SessionOptions): Promise
   }
   /** The character's quests, as the server last said (QUESTS.md). */
   const quests = createQuestMirror();
+  // Quest items are named for their quest line, from the quests this client has been told of.
+  setQuestItemLooks(createQuestItemLooks(() => quests.defs, () => gameRules.text));
   /** The own character's level, for quests' colours. */
   const ownLevel = (): number => {
     const own = mirror.entities.get(playerId);

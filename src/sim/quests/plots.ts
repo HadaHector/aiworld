@@ -118,6 +118,9 @@ export interface QuestPartDef {
   line: string;
   /** Sentences it can add to the offer: one is drawn. */
   motive: Pool;
+  /** What the quest item it hands over or asks for is called, drawn from, with `{npcGiven}` the person
+   *  it is about (the one it is delivered to, the one who gave it): "Letter for {npcGiven}". */
+  itemName: Pool;
 }
 
 // --- plots and segments ---
@@ -140,7 +143,7 @@ export interface PlotQuest {
    *  names neither takes up where the quest before left off. */
   giver: string | null;
   ender: string | null;
-  parts: { part: string; npc: string | null; item: string | null; /** Its log line in place of the part's. */ line: string | null }[];
+  parts: { part: string; npc: string | null; item: string | null; /** Its log line in place of the part's. */ line: string | null; /** Its item's names in place of the part's. */ itemName: Pool | null }[];
   title: Pool;
   /** The offer, about five sentences: a pool for each, one line drawn from it. */
   offer: Pool[];
@@ -264,12 +267,12 @@ function readPlotQuest(reader: Reader, value: unknown, at: string, parts: Readon
   const questParts = reader.array(q, "parts", at).map((p, j) => {
     const pat = `${at}.parts[${j}]`;
     const raw = typeof p === "string" ? { part: p } : reader.object(p, pat);
-    reader.onlyKeys(raw, pat, ["part", "npc", "item", "line"]);
+    reader.onlyKeys(raw, pat, ["part", "npc", "item", "line", "itemName"]);
     const part = reader.string(raw, "part", pat);
     if (!parts.has(part)) reader.fail(`${pat}.part`, `no quest part "${part}"`);
     const npc = reader.optionalString(raw, "npc", pat) ?? null;
     if (npc && !names.has(npc)) reader.fail(`${pat}.npc`, `no person "${npc}" here`);
-    return { part, npc, item: reader.optionalString(raw, "item", pat) ?? null, line: reader.optionalString(raw, "line", pat) ?? null };
+    return { part, npc, item: reader.optionalString(raw, "item", pat) ?? null, line: reader.optionalString(raw, "line", pat) ?? null, itemName: raw.itemName === undefined ? null : readPool(reader, raw.itemName, `${pat}.itemName`) };
   });
   const offer = reader.array(q, "offer", at).map((group, j) => readPool(reader, group, `${at}.offer[${j}]`));
   const rewardRaw = q.reward === undefined ? {} : reader.object(q.reward, `${at}.reward`);
@@ -282,7 +285,7 @@ export function readQuestParts(entries: readonly { id: string; file: string; dat
   return entries.map((entry) => {
     const reader = new Reader(issues, entry.file);
     const obj = reader.object(entry.data, "");
-    reader.onlyKeys(obj, "", ["kind", "count", "chance", "below", "item", "line", "motive"]);
+    reader.onlyKeys(obj, "", ["kind", "count", "chance", "below", "item", "line", "motive", "itemName"]);
     const kind = reader.oneOf(obj, "kind", "", PART_KINDS);
     const count: [number, number] = obj.count === undefined ? [1, 1] : typeof obj.count === "number" ? [obj.count, obj.count] : reader.range(obj, "count", "", { allowEqual: true });
     if ((kind === "receive" || kind === "use" || kind === "deliver") && obj.item === undefined) reader.fail("item", `a ${kind} part names its item`);
@@ -295,6 +298,7 @@ export function readQuestParts(entries: readonly { id: string; file: string; dat
       item: reader.optionalString(obj, "item", "") ?? null,
       line: reader.string(obj, "line", ""),
       motive: poolAt(reader, obj, "motive", ""),
+      itemName: poolAt(reader, obj, "itemName", ""),
     };
   });
 }

@@ -1,2 +1,7 @@
-// Be given the salve.
-{ kind: "receive", item: "herbalSalve", line: "Take the salve from {npc}" }
+// Be given the salve. It is called after whoever made it.
+{
+  kind: "receive",
+  item: "herbalSalve",
+  line: "Take the salve from {npc}",
+  itemName: ["{npcGiven}'s Salve", "Salve from {npcGiven}", "Salve of {npcGiven}"],
+}

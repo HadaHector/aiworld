@@ -1,2 +1,7 @@
-// Carry the parcel.
-{ kind: "deliver", item: "wrappedParcel", line: "Bring the parcel to {npc}" }
+// Carry the parcel. Its name, from the one it is for.
+{
+  kind: "deliver",
+  item: "wrappedParcel",
+  line: "Bring the parcel to {npc}",
+  itemName: ["Parcel for {npcGiven}", "Wrapped Parcel for {npcGiven}", "{npcGiven}'s Parcel", "Package for {npcGiven}"],
+}

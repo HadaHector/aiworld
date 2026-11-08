@@ -1,5 +1,6 @@
 import { ACTION_DRAG_TYPE, takenByBar } from "./actionBar";
 import { iconFace, iconHtml, itemIcon } from "./icons";
+import { lookedIcon, questItemLook } from "./questItemLook";
 import { BUTTON_CLASS, DIM, GOLD, HEADING, PANEL, SLOT, SLOT_CLASS, windowHead } from "./theme";
 import type { GameRules } from "../sim/rules/gameRules";
 import { formatMoney, itemStats, rollQuality, type ItemRules } from "../sim/rules/itemRules";
@@ -64,9 +65,11 @@ export function itemTooltip(game: GameRules, items: ItemRules, state: ItemState,
   if (index === undefined) return `<b>${state.type}</b><br><i>not in these packs</i>`;
   const type = items.types[index];
   const rarity = items.rarities[type.rarity];
-  const head = [`<b style="color:${rarity.color}">${type.name}</b>${state.count > 1 ? ` x${state.count}` : ""}`];
+  // A quest item is named for its quest line ("Letter for Thilsell"), and drawn with its own icon or tint.
+  const look = type.quest ? questItemLook(state) : null;
+  const head = [`<b style="color:${rarity.color}">${look?.name ?? type.name}</b>${state.count > 1 ? ` x${state.count}` : ""}`];
   head.push(`<span style="color:#aaa">${rarity.name} ${type.kind}${type.slots.length ? ` · ${type.slots.map((s) => items.slots[s].name).join(" or ")}` : ""}${type.fills.length ? " · two-handed" : ""}</span>`);
-  const lines = [`<div style="display:flex; gap:8px; align-items:center;">${iconHtml(itemIcon(type, rarity.color), 36)}<div>${head.join("<br>")}</div></div>`];
+  const lines = [`<div style="display:flex; gap:8px; align-items:center;">${iconHtml(lookedIcon(itemIcon(type, rarity.color), look), 36)}<div>${head.join("<br>")}</div></div>`];
   const values = itemStats(type, state.roll);
   type.stats.forEach((s, i) => {
     if (!unrolled && values[i] === 0) return;
@@ -83,7 +86,7 @@ export function itemTooltip(game: GameRules, items: ItemRules, state: ItemState,
   if (type.itemLevel > 1) lines.push(`<span style="color:#aaa">Item level ${type.itemLevel}</span>`);
   if (type.use) lines.push(`<span style="color:#6c6">Use: ${type.use.skill}</span>`);
   if (type.equip) lines.push(`<span style="color:#6c6">Equip: ${type.equip.skill}</span>`);
-  if (type.quest) lines.push(`<span style="color:#fd6">Quest item</span>`);
+  if (type.quest) lines.push(`<span style="color:#fd6">Quest item${look ? ` · ${look.quest}` : ""}</span>`);
   if (price) lines.push(`<span style="color:#cb8">${price}</span>`);
   else if (type.value > 0) lines.push(`<span style="color:#cb8">${formatMoney(items.currencies[items.main], type.value)}</span>`);
   return lines.join("<br>");
@@ -102,7 +105,7 @@ export function drawItem(cell: HTMLElement, items: ItemRules, state: ItemState |
   const color = type ? items.rarities[type.rarity].color : "#f0f";
   cell.style.borderColor = color;
   const face = el("div", `position:absolute; inset:3px; border-radius:3px; background:${color}22;`, cell);
-  iconFace(face, itemIcon(type, color));
+  iconFace(face, lookedIcon(itemIcon(type, color), type?.quest ? questItemLook(state) : null));
   if (type && type.durability > 0 && state.durability === 0) face.style.background = "#a0202066";
   if (state.count > 1) el("div", "position:absolute; right:3px; bottom:1px; font-size:11px; color:#fff; text-shadow:0 1px 1px #000;", cell).textContent = String(state.count);
 }

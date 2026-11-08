@@ -5,7 +5,7 @@ import type { GameRules } from "../rules/gameRules";
 import type { ServerMessage } from "../protocol";
 import { EVENT_KIND, type CombatEvent } from "../skills/events";
 import type { KillRecord } from "../creatures/system";
-import { kindMatches, needed, type ActiveQuest, type Objective, type QuestDef, type QuestPart, type QuestRules, type SavedQuests } from "./quest";
+import { bindOf, kindMatches, needed, type ActiveQuest, type Objective, type QuestDef, type QuestPart, type QuestRules, type SavedQuests } from "./quest";
 
 /**
  * Quests on the server (QUESTS.md, *Tracking*): defined quests, what each character has taken and
@@ -63,6 +63,8 @@ export interface QuestSystem {
    *  the packs, or kept from before items were bound to their quest line. Those of a quest line not yet
    *  finished stay, even between two of its quests. */
   sweep(player: Entity): number;
+  /** The quests whose items a player holds, one for each line: for the client to name them (QUESTS.md, *Quest items*). */
+  defsOfHeldItems(player: Entity): QuestDef[];
   /** A player used an item (a type id, and the roll of the instance): the next cast of its skill counts for that. */
   itemUsed(player: Entity, type: string, bind: number): void;
   kill(record: KillRecord): void;
@@ -135,13 +137,6 @@ export function createQuestSystem(rules: GameRules, quests: QuestRules, world: Q
   }
 
   const near = (a: Entity, b: Entity, range: number): boolean => a.dimension === b.dimension && Math.hypot(a.x - b.x, a.z - b.z) <= range;
-
-  /**
-   * A quest item belongs to its quest line (QUESTS.md, *Quest items*): the roll of its instance is
-   * made from the chain's id - or the quest's own - so a letter for one errand is not the letter of
-   * another made from the same template, and delivering or using one counts only for its own.
-   */
-  const bindOf = (def: QuestDef): number => (hashString(def.chain?.id ?? def.id) >>> 0) || 1;
 
   /** The types of the quest items a quest gave, asks to use or to deliver: taken back when it ends. When
    *  it is handed in, a later quest of the same chain still to do keeps the ones it uses (the next in a
@@ -359,6 +354,14 @@ export function createQuestSystem(rules: GameRules, quests: QuestRules, world: Q
         for (const o of def.objectives) if (o.kind === "receive" || o.kind === "use" || o.kind === "deliver") wanted.add(`${o.item}/${bindOf(def)}`);
       }
       return world.sweep(player, (type, bind) => wanted.has(`${type}/${bind}`));
+    },
+    defsOfHeldItems(player) {
+      const found = new Map<string, QuestDef>();
+      world.sweep(player, (type, bind) => {
+        for (const def of defs.values()) if (bindOf(def) === bind && def.itemLooks?.[type]) found.set(def.id, def);
+        return true;
+      });
+      return [...found.values()];
     },
     itemUsed(player, type, bind) {
       lastUsed.set(player.id, { type, bind });

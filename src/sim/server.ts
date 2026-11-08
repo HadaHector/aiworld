@@ -610,6 +610,8 @@ export function createServer(options: ServerOptions): Server {
   function sendQuestLog(connection: Connection, entity: Entity): void {
     const saved = questSystem.export(entity);
     const defs = saved.active.map((a) => questSystem.def(a.id)).filter((d): d is NonNullable<typeof d> => d !== undefined);
+    // ...and those whose items it holds between two quests of a line, to name them.
+    for (const held of questSystem.defsOfHeldItems(entity)) if (!defs.some((d) => d.id === held.id)) defs.push(held);
     if (defs.length > 0) connection.end.send({ type: "questDefs", defs });
     connection.end.send({ type: "questLog", active: saved.active, done: saved.done });
   }
