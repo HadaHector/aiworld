@@ -400,8 +400,10 @@ corpses; instancing with thin instances if skinning allows it; a lower detail fa
   `beastPaint.ts` (atlas and card texture), `beastAnim.ts` (gait baking, the animator),
   `beastMesh.ts` (Babylon mesh and skeleton, textures shared per scene), `beastMake.ts` and
   `beastBuild.worker.ts` (worker pool and cache); `src/game/beastBody.ts` (the game's body);
-  `beasts.html` and `src/beastsPage/main.ts` (the line-up, a page of its own rather than a workbench
-  tab, so the workbench's file stays the weapons session's); probes `beast.mjs` and `beastGaits.mjs`.
+  `beasts.html` and `src/beastsPage/main.ts` (the line-up page: every plan at several seeds);
+  `src/workbench/beastPreview.ts` (the workbench's **beasts** folder: Model - one or a herd of seeds -
+  On the ground, Every beast, and Atlas, with Variant, Play, Speed, Path, Atlas size and Bones menus;
+  editing a plan's json5 there rebuilds it); probes `beast.mjs` and `beastGaits.mjs`.
   Shared files touched, a few lines each: `resolveContent.ts` (the `beasts` folder), `gameRules.ts`
   (`look.beast`), `entityMeshes.ts` (a beast factory beside the humanoid one), `session.ts` (the kit),
   `vite.config.ts` (the page).

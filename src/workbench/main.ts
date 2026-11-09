@@ -33,6 +33,8 @@ import { bakeGearMaterial, resolveGearMaterials, type GearMaterialDef } from "..
 import { resolveGear, resolveOutfits } from "../character/gearDef";
 import { resolveAnimations, type AnimationClip } from "../character/animationDef";
 import { ANIMATIONS, POSES, figureFor, paintedBody, type FigureOptions } from "./figurePreview";
+import { BEAST_PLAYS, beastAtlasImage, beastFacts, beastFigure, beastSummary, makeBeastFor, readBeastPlans, together, type BeastPreviewOptions } from "./beastPreview";
+import type { BeastDef } from "../character/beast/beastDef";
 
 // ---------------------------------------------------------------------------------------------
 // Assets: every file of every pack, by "pack/folder/id".
@@ -49,15 +51,15 @@ interface Asset {
 }
 
 /** The folders with a preview, and what each asset kind can be looked at as. */
-type PreviewFolder = "materials" | "trees" | "bushes" | "rocks" | "grass" | "biomes" | "buildings" | "buildingParts" | "buildingMaterials" | "props" | "features" | "races" | "gearMaterials" | "gear" | "outfits";
-const PREVIEW_FOLDERS: PreviewFolder[] = ["materials", "trees", "bushes", "rocks", "grass", "biomes", "buildings", "buildingParts", "buildingMaterials", "props", "features", "races", "gearMaterials", "gear", "outfits"];
+type PreviewFolder = "materials" | "trees" | "bushes" | "rocks" | "grass" | "biomes" | "buildings" | "buildingParts" | "buildingMaterials" | "props" | "features" | "races" | "gearMaterials" | "gear" | "outfits" | "beasts";
+const PREVIEW_FOLDERS: PreviewFolder[] = ["materials", "trees", "bushes", "rocks", "grass", "biomes", "buildings", "buildingParts", "buildingMaterials", "props", "features", "races", "gearMaterials", "gear", "outfits", "beasts"];
 /** The folders whose preview is a character: a race's body, or gear worn by one. */
 const isCharacterFolder = (folder: string): boolean => folder === "races" || folder === "gear" || folder === "outfits";
 /** How many variants of a building the Variant menu steps through - a building has no fixed count,
  *  every seed is one. */
 const BUILDING_VARIANTS = 8;
 /** Everything else is listed after these, its JSON still checked by Preview. */
-const FOLDER_ORDER = ["materials", "trees", "bushes", "rocks", "grass", "biomes", "buildings", "buildingParts", "buildingMaterials", "props", "features", "races", "outfits", "gear", "gearMaterials", "layers", "borderHills", "settlements", "voices", "patches", ""];
+const FOLDER_ORDER = ["materials", "trees", "bushes", "rocks", "grass", "biomes", "buildings", "buildingParts", "buildingMaterials", "props", "features", "races", "outfits", "gear", "beasts", "gearMaterials", "layers", "borderHills", "settlements", "voices", "patches", ""];
 
 interface ViewDef {
   id: string;
@@ -141,6 +143,12 @@ const DEFAULT_OPTIONS: Options = {
   frame: "",
   sex: "",
   animation: "idle",
+  // A beast's views (BEASTS.md): its variant, what it plays, how many seeds, its atlas.
+  beastVariant: "",
+  beastPlay: "gait",
+  herd: "1",
+  beastAtlas: "256",
+  beastShow: "atlas",
   speed: "1.2",
   path: "place",
 };
@@ -548,6 +556,13 @@ function viewsFor(asset: Asset | null, content: WorldContent | null): ViewDef[] 
         { id: "gallery", label: "Gallery", mode: "3d" },
         { id: "atlas", label: "Atlas", mode: "2d" },
       ];
+    case "beasts":
+      return [
+        { id: "model", label: "Model", mode: "3d" },
+        { id: "placed", label: "On the ground", mode: "3d" },
+        { id: "lineup", label: "Every beast", mode: "3d" },
+        { id: "atlas", label: "Atlas", mode: "2d" },
+      ];
     case "gearMaterials":
       return [{ id: "texture", label: "Texture", mode: "2d" }];
     case "biomes":
@@ -670,6 +685,7 @@ function renderPreviewBar(): void {
         checkbox("Bones", "bones", rebuild),
       );
     }
+    if (current.folder === "beasts") viewOptions.append(...beastChoices(view, rebuild));
     // The level ground under a place's yard, buildings and props, outlined.
     if (current.folder === "features") viewOptions.append(checkbox("Pads", "pads", rebuild));
     if (current.folder === "buildings") {
@@ -732,6 +748,8 @@ function renderPreviewBar(): void {
       checkbox("Smallclothes", "smallclothes", rebuild),
       select("Detail", "detail", [["0.5", "Low"], ["1", "As drawn"], ["2", "High"]], rebuild),
     );
+  } else if (current.folder === "beasts") {
+    viewOptions.append(...beastChoices(view, rebuild));
 } else if (current.folder === "biomes") {
     viewOptions.append(
       select("Area", "roll", Array.from({ length: 8 }, (_, i): [string, string] => [String(i), `Roll ${i + 1}`]), rebuild),
@@ -1009,6 +1027,56 @@ function characterChoices(rebuild: () => void): HTMLLabelElement[] {
   return characterLists.races.length > 0 ? [select("Race", "race", characterLists.races, rebuild)] : [];
 }
 
+/** The beast plans as the last beast preview read them - for the menus. */
+let beastPlans: Map<string, BeastDef> | null = null;
+
+function beastPlansNow(): Map<string, BeastDef> {
+  beastPlans = readBeastPlans(sourcesWithEdit());
+  return beastPlans;
+}
+
+function beastOptions(): BeastPreviewOptions {
+  return {
+    variant: options.beastVariant,
+    seed,
+    play: options.beastPlay,
+    speed: Number.isFinite(Number(options.speed)) ? Number(options.speed) : 1.2,
+    path: options.path === "circle" ? "circle" : "place",
+    bones: options.bones === "on",
+    atlas: Number(options.beastAtlas) || 256,
+  };
+}
+
+/** A beast view's menus: its variant, what it plays and how fast, how many seeds, its atlas. */
+function beastChoices(view: ViewDef, rebuild: () => void): HTMLLabelElement[] {
+  let plans = beastPlans;
+  if (!plans) {
+    try {
+      plans = beastPlansNow();
+    } catch {
+      // The preview reports what does not read.
+    }
+  }
+  const def = current ? plans?.get(current.id) : undefined;
+  const variants: [string, string][] = [["", "Its own"], ...[...(view.id === "lineup" ? new Set([...(plans?.values() ?? [])].flatMap((d) => [...d.variants.keys()])) : (def?.variants.keys() ?? []))].map((v): [string, string] => [v, v])];
+  const clips = view.id === "lineup" ? new Set([...(plans?.values() ?? [])].flatMap((d) => [...d.clips.keys()])) : new Set(def?.clips.keys() ?? []);
+  const atlas = select("Atlas", "beastAtlas", [["256", "256 (as in the game)"], ["512", "512"], ["128", "128 (retro)"]], rebuild);
+  if (view.mode === "2d") return [select("Variant", "beastVariant", variants, rebuild), select("Show", "beastShow", [["atlas", "Body atlas"], ["cards", "Card texture"]], rebuild), atlas];
+  return [
+    select("Variant", "beastVariant", variants, rebuild),
+    select("Play", "beastPlay", [...BEAST_PLAYS, ...[...clips].map((clip): [string, string] => [`clip.${clip}`, `Clip: ${clip}`])], rebuild),
+    ...(options.beastPlay === "gait"
+      ? [
+          select("Speed", "speed", [["0", "Standing"], ["0.6", "0.6 m/s"], ["1.2", "1.2 m/s (walk)"], ["2.2", "2.2 m/s"], ["3", "3 m/s"], ["4.5", "4.5 m/s (trot)"], ["6", "6 m/s"], ["8", "8 m/s (gallop)"], ["11", "11 m/s"]], rebuild),
+          select("Path", "path", [["place", "On the spot"], ["circle", "Round a circle"]], rebuild),
+        ]
+      : []),
+    ...(view.id === "lineup" ? [] : [select("Seeds", "herd", [["1", "1"], ["3", "3"], ["4", "4"], ["6", "6"], ["8", "8"]], rebuild)]),
+    atlas,
+    checkbox("Bones", "bones", rebuild),
+  ];
+}
+
 async function preview3d(token: number, asset: Asset, view: ViewDef, content: WorldContent): Promise<void> {
   const lightBiome = content.biomes.find((biome) => biome.id === options.sky) ?? autoSkyBiome(content, asset);
   const grassOn = options.grass === "on";
@@ -1118,6 +1186,27 @@ async function preview3d(token: number, asset: Asset, view: ViewDef, content: Wo
       figure = figureFor(inputs.race, painted, inputs.options);
       summary = painted.summary;
     }
+  } else if (asset.folder === "beasts") {
+    ground = groundMaterial(content, asset);
+    if (grassOn) grass = ground.grass;
+    const plans = beastPlansNow();
+    const beastWith = beastOptions();
+    setStatus("Making");
+    await nextPaint();
+    const defs = view.id === "lineup" ? [...plans.values()] : [plans.get(asset.id)!];
+    const count = view.id === "lineup" ? 1 : Math.max(1, Number(options.herd) || 1);
+    // Side on to the camera, nose to tail in a line: a herd's seeds, or every plan.
+    const made = defs.flatMap((def) => Array.from({ length: count }, (_, i) => makeBeastFor(def, { ...beastWith, variant: def.variants.has(beastWith.variant) ? beastWith.variant : "" }, seed + i)));
+    if (token !== previewToken) return;
+    const lengths = made.map((m) => m.body.length * m.body.size + 0.6);
+    const total = lengths.reduce((sum, l) => sum + l, 0);
+    let x = -total / 2;
+    const figures = made.map((m, i) => {
+      x += lengths[i];
+      return beastFigure(m, beastWith, x - lengths[i] / 2, 0);
+    });
+    figure = together(figures, total);
+    summary = beastSummary(view.id === "lineup" ? made.map(beastFacts) : [beastFacts(made[0])]);
   } else if (asset.folder === "props") {
     ground = groundMaterial(content, asset);
     if (grassOn) grass = ground.grass;
@@ -1245,6 +1334,18 @@ async function previewBiome(token: number, asset: Asset, view: ViewDef, content:
 
 async function preview2d(token: number, asset: Asset, view: ViewDef, content: WorldContent): Promise<void> {
   if (asset.folder === "biomes") return previewBiome(token, asset, view, content);
+  if (asset.folder === "beasts") {
+    const def = beastPlansNow().get(asset.id)!;
+    const made = makeBeastFor(def, beastOptions());
+    if (token !== previewToken) return;
+    const show = options.beastShow === "cards" && made.painted.cards ? "cards" : "atlas";
+    showMode("2d");
+    textureView.show(beastAtlasImage(made, show), textureSubject === `${asset.key}|${view.id}|${show}`);
+    textureSubject = `${asset.key}|${view.id}|${show}`;
+    mapLegend.replaceChildren(beastSummary([beastFacts(made)]));
+    setStatus("");
+    return;
+  }
   const subject = `${asset.key}|${view.id}`;
   setStatus("Baking");
   await nextPaint();
