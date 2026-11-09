@@ -1,0 +1,96 @@
+// The giant ant's body plan (see BEASTS.md): six legs, one pair on each of the thorax's three
+// segments, a pinched waist, a big gaster, mandibles and long bent antennae. It runs in tripods: the
+// front and back legs of one side with the middle leg of the other. Lengths in metres at size 1.
+{
+  name: "Giant Ant",
+  size: [0.9, 1.15],
+  build: [0.92, 1.1],
+  verts: { trunk: 10, limb: 6 },
+  root: "meso",
+  trunk: [
+    { id: "head", role: "head", length: 0.28, slope: -6, rings: 4, round: 0.85,
+      up: [[0, 0.06], [0.5, 0.12], [1, 0.1]], down: [[0, 0.06], [0.5, 0.1], [1, 0.08]], side: [[0, 0.08], [0.5, 0.14], [1, 0.1]] },
+    { id: "neck", role: "neck", length: 0.06, slope: 0, rings: 1, round: 1,
+      up: [[0, 0.04], [1, 0.04]], down: [[0, 0.04], [1, 0.04]], side: [[0, 0.04], [1, 0.04]] },
+    { id: "pro", length: 0.18, slope: 12, rings: 2, round: 0.85,
+      up: [[0, 0.07], [0.5, 0.1], [1, 0.08]], down: [[0, 0.06], [0.5, 0.08], [1, 0.07]], side: [[0, 0.07], [0.5, 0.09], [1, 0.08]] },
+    { id: "meso", length: 0.16, slope: -4, rings: 2, round: 0.85,
+      up: [[0, 0.08], [1, 0.07]], down: [[0, 0.07], [1, 0.07]], side: [[0, 0.08], [1, 0.075]] },
+    { id: "meta", length: 0.14, slope: -12, rings: 2, round: 0.85,
+      up: [[0, 0.07], [1, 0.06]], down: [[0, 0.07], [1, 0.055]], side: [[0, 0.075], [1, 0.06]] },
+    { id: "petiole", length: 0.1, slope: -5, rings: 2, round: 1,
+      up: [[0, 0.035], [0.5, 0.07], [1, 0.035]], down: [[0, 0.035], [1, 0.035]], side: [[0, 0.035], [0.5, 0.045], [1, 0.035]] },
+    { id: "gaster", role: "tail", length: 0.55, slope: -22, rings: 6, round: 0.95,
+      up: [[0, 0.08], [0.4, 0.22], [1, 0.05]], down: [[0, 0.08], [0.45, 0.2], [1, 0.05]], side: [[0, 0.1], [0.45, 0.24], [1, 0.06]] },
+  ],
+  limbs: [
+    { id: "fore", on: "pro", at: 0.6, yaw: 42, out: 0.06, drop: 0.05,
+      segments: [
+        { length: 0.08, angle: 115, width: [[0, 0.04], [1, 0.035]], rings: 1 },
+        { length: 0.32, angle: 125, width: [[0, 0.036], [1, 0.03]], rings: 2 },
+        { length: 0.36, angle: 22, width: [[0, 0.028], [1, 0.022]], rings: 2 },
+        { length: 0.16, angle: 38, width: [[0, 0.018], [1, 0.01]], rings: 1 },
+      ] },
+    { id: "mid", on: "meso", at: 0.5, yaw: 92, out: 0.06, drop: 0.05,
+      segments: [
+        { length: 0.08, angle: 115, width: [[0, 0.04], [1, 0.035]], rings: 1 },
+        { length: 0.34, angle: 125, width: [[0, 0.036], [1, 0.03]], rings: 2 },
+        { length: 0.38, angle: 22, width: [[0, 0.028], [1, 0.022]], rings: 2 },
+        { length: 0.16, angle: 38, width: [[0, 0.018], [1, 0.01]], rings: 1 },
+      ] },
+    { id: "hind", on: "meta", at: 0.5, yaw: 138, out: 0.06, drop: 0.05,
+      segments: [
+        { length: 0.09, angle: 115, width: [[0, 0.04], [1, 0.035]], rings: 1 },
+        { length: 0.38, angle: 125, width: [[0, 0.036], [1, 0.03]], rings: 2 },
+        { length: 0.42, angle: 22, width: [[0, 0.028], [1, 0.022]], rings: 2 },
+        { length: 0.18, angle: 38, width: [[0, 0.018], [1, 0.01]], rings: 1 },
+      ] },
+  ],
+  parts: [
+    // Mandibles: broad blades curving in at the front of the head.
+    { id: "mandible", bone: "head", at: 0.05, around: 115, length: 0.17, radius: 0.04, flat: 0.45, direction: [0.35, -0.15, 1], curve: -0.15, mirror: true, colour: "mandible", scale: [0.85, 1.3], sink: 0.25 },
+    // Antennae: long, thin, bent back over the head.
+    { id: "antenna", bone: "head", at: 0.25, around: 28, length: 0.42, radius: 0.016, direction: [0.35, 0.85, 0.45], curve: -0.5, mirror: true, colour: "mandible", sink: 0.1 },
+  ],
+  cards: [],
+  paint: {
+    palette: {
+      coat: ["#5a2418", "#4a1e14", "#3a2016", "#6a2a1a"],
+      back: ["#2a120c"],
+      band: ["#c08a3a", "#a87030"],
+      belly: ["#2a1410"],
+      mandible: ["#1e120e"],
+      eye: ["#0c0c0c"],
+    },
+    mottle: 0.08,
+    layers: [
+      { kind: "back", colour: "back", amount: 0.5 },
+      { kind: "belly", colour: "belly", amount: 0.4 },
+      { kind: "stripes", colour: "band", amount: 0.7, size: 0.1, on: ["gaster"], chance: 0.5 },
+      { kind: "socks", colour: "back", amount: 0.7, size: 0.35 },
+    ],
+    eyes: { segment: "head", at: 0.5, around: 70, size: 0.045, colour: "eye" },
+  },
+  idle: { breathe: 0.6, tail: 0.4, head: 0.8 },
+  gaits: [
+    { id: "walk", pattern: "tripod", speed: 1.1, stride: 0.75, duty: 0.55, lift: 0.08, bob: 0.008 },
+    { id: "run", pattern: "tripod", speed: 4.5, stride: 1.45, duty: 0.45, lift: 0.12, bob: 0.014 },
+  ],
+  clips: {
+    bite: { length: 0.6, layer: "upper", keys: [
+      { t: 0, turns: {} },
+      { t: 0.35, turns: { pro: [-12, 0, 0], head: [-20, 0, 0] }, offset: [0, 0.03, -0.03] },
+      { t: 0.55, turns: { pro: [6, 0, 0], head: [22, 0, 0] }, offset: [0, -0.02, 0.1] },
+      { t: 1, turns: {} },
+    ] },
+    // The acid spray: the gaster curled forward under the body, the head raised.
+    spray: { length: 1.2, layer: "full", keys: [
+      { t: 0, turns: {} },
+      { t: 0.35, turns: { petiole: [60, 0, 0], gaster: [40, 0, 0], head: [-15, 0, 0], pro: [-10, 0, 0] }, offset: [0, 0.04, 0] },
+      { t: 0.75, turns: { petiole: [62, 0, 0], gaster: [44, 0, 0], head: [-15, 0, 0], pro: [-10, 0, 0] }, offset: [0, 0.04, 0] },
+      { t: 1, turns: {} },
+    ] },
+  },
+  actions: { swing: "bite", attack: "bite", acid: "spray" },
+  places: { mouth: "head", chest: "meso", tail: "gaster" },
+}

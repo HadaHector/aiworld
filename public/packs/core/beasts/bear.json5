@@ -1,0 +1,97 @@
+// The bear's body plan (see BEASTS.md): a mound - a hump of shoulder, a heavy head with a short
+// snout, thick legs ending in flat, plantigrade paws, a coat shaggy at the shoulders. Rears up to
+// swipe. Lengths in metres at size 1.
+{
+  name: "Bear",
+  size: [0.92, 1.12],
+  build: [0.94, 1.12],
+  verts: { trunk: 14, limb: 8 },
+  root: "shoulders",
+  trunk: [
+    { id: "head", role: "head", length: 0.42, slope: -14, rings: 6, round: 0.8,
+      up: [[0, 0.06], [0.32, 0.09], [0.6, 0.17], [0.85, 0.2], [1, 0.19]],
+      down: [[0, 0.05], [0.4, 0.075], [1, 0.16]],
+      side: [[0, 0.06], [0.32, 0.085], [0.6, 0.17], [1, 0.18]] },
+    { id: "neck", role: "neck", length: 0.26, slope: 12, rings: 2, round: 0.8,
+      up: [[0, 0.21], [1, 0.29]], down: [[0, 0.2], [1, 0.28]], side: [[0, 0.21], [1, 0.27]] },
+    { id: "shoulders", length: 0.55, slope: 4, rings: 4, round: 0.8,
+      up: [[0, 0.33], [0.3, 0.39], [1, 0.32]], down: [[0, 0.3], [1, 0.29]], side: [[0, 0.3], [0.5, 0.33], [1, 0.3]] },
+    { id: "belly", length: 0.48, slope: -2, rings: 3, round: 0.8,
+      up: [[0, 0.31], [1, 0.3]], down: [[0, 0.3], [0.5, 0.31], [1, 0.27]], side: [[0, 0.31], [1, 0.3]] },
+    { id: "rump", length: 0.3, slope: 18, rings: 3, round: 0.85,
+      up: [[0, 0.3], [1, 0.17]], down: [[0, 0.27], [1, 0.15]], side: [[0, 0.29], [1, 0.16]] },
+    { id: "tail", role: "tail", length: 0.08, slope: 25, rings: 1, round: 1,
+      up: [[0, 0.06], [1, 0.02]], down: [[0, 0.05], [1, 0.02]], side: [[0, 0.05], [1, 0.02]] },
+  ],
+  limbs: [
+    { id: "fore", on: "shoulders", at: 0.32, out: 0.17, drop: 0.12, splay: 4,
+      segments: [
+        { length: 0.38, angle: -6, width: [[0, 0.17], [0.6, 0.13], [1, 0.11]], depth: 1.2, rings: 2 },
+        { length: 0.36, angle: 3, width: [[0, 0.1], [1, 0.085]], depth: 1.1, rings: 2 },
+        { length: 0.22, angle: 78, width: [[0, 0.09], [0.5, 0.1], [1, 0.075]], depth: 0.5 },
+      ] },
+    { id: "hind", on: "rump", at: 0.35, out: 0.17, drop: 0.05, splay: 4,
+      segments: [
+        { length: 0.42, angle: 14, width: [[0, 0.18], [0.5, 0.15], [1, 0.11]], depth: 1.3, rings: 2 },
+        { length: 0.38, angle: -12, width: [[0, 0.1], [1, 0.08]], depth: 1.1, rings: 2 },
+        { length: 0.26, angle: 80, width: [[0, 0.085], [0.5, 0.1], [1, 0.075]], depth: 0.5 },
+      ] },
+  ],
+  parts: [
+    { id: "ear", bone: "head", at: 0.88, around: 48, length: 0.075, radius: 0.055, flat: 0.5, direction: [0.5, 1, -0.2], mirror: true, colour: "coat", sink: 0.2 },
+    // Claws at the front of each paw.
+    { id: "claw", bone: "foreR2", at: 0.92, around: 150, length: 0.07, radius: 0.016, direction: [0, -0.5, 1], curve: -0.5, mirror: true, colour: "claw", sink: 0.3 },
+    { id: "hindClaw", bone: "hindR2", at: 0.92, around: 150, length: 0.05, radius: 0.014, direction: [0, -0.5, 1], curve: -0.5, mirror: true, colour: "claw", sink: 0.3 },
+  ],
+  cards: [
+    // Shag on the hump and the neck, falling back and down.
+    { id: "shag", bone: "shoulders", from: 0, to: 0.7, around: 0, arc: 200, count: 90, length: [0.1, 0.16], width: [0.06, 0.09], lean: 0.7, droop: 0.25, mask: "strands", colour: "shag", traits: { old: 1.3 } },
+    { id: "mane", bone: "neck", from: 0, to: 1, around: 0, arc: 300, count: 50, length: [0.09, 0.14], width: [0.06, 0.09], lean: 0.65, droop: 0.2, mask: "strands", colour: "shag" },
+    { id: "cheeks", bone: "head", from: 0.75, to: 1, around: 90, arc: 70, count: 16, length: [0.06, 0.09], width: [0.05, 0.07], lean: 0.7, droop: 0.3, mask: "tuft", colour: "coat", mirror: true },
+  ],
+  paint: {
+    palette: {
+      coat: ["#5a3e2a", "#4e3626", "#6a4a32", "#3c2c22"],
+      shag: ["#6e5038", "#5e4430", "#7a5a40"],
+      back: ["#3a2a1e"],
+      belly: ["#4a3628"],
+      muzzle: ["#a08868", "#8e7656", "#b09a78"],
+      blaze: ["#d8c8a8", "#c8b494"],
+      claw: ["#2a2420"],
+      nose: ["#1a1614"],
+      eye: ["#2a1a10"],
+    },
+    mottle: 0.2,
+    layers: [
+      { kind: "back", colour: "back", amount: 0.4 },
+      { kind: "belly", colour: "belly", amount: 0.5 },
+      { kind: "mask", colour: "muzzle", amount: 0.9, size: 0.38 },
+      { kind: "socks", colour: "back", amount: 0.6, size: 0.35 },
+      { kind: "spots", colour: "blaze", amount: 0.7, size: 0.22, on: ["neck"], chance: 0.35 },
+      { kind: "scars", colour: "muzzle", amount: 1, size: 0.2, chance: 0.5 },
+    ],
+    eyes: { segment: "head", at: 0.66, around: 48, size: 0.018, colour: "eye" },
+  },
+  idle: { breathe: 1, tail: 0.3, head: 1 },
+  gaits: [
+    { id: "walk", pattern: "walk", speed: 1.0, stride: 1.0, duty: 0.68, lift: 0.08, bob: 0.015, wave: 0.05 },
+    { id: "lumber", pattern: "gallop", speed: 4.4, stride: 2.2, duty: 0.42, lift: 0.14, bob: 0.05, pitch: 0.06, wave: 0.03 },
+  ],
+  clips: {
+    swipe: { length: 1.0, layer: "full", keys: [
+      { t: 0, turns: {} },
+      { t: 0.35, turns: { shoulders: [-28, 0, 0], neck: [10, 0, 0], head: [8, 0, 0], "foreR*": [0, 0, 0], foreR0: [-75, 0, -20], foreR1: [-20, 0, 0], foreL0: [-40, 0, 10] }, offset: [0, 0.1, -0.1] },
+      { t: 0.55, turns: { shoulders: [-18, -12, 0], neck: [18, -10, 0], head: [10, -8, 0], foreR0: [-50, -30, 30], foreR1: [-10, 0, 0], foreL0: [-30, 0, 10] }, offset: [0, 0.05, 0.05] },
+      { t: 0.75, turns: { shoulders: [-6, -6, 0], foreR0: [-15, -10, 10] }, offset: [0, 0.02, 0.04] },
+      { t: 1, turns: {} },
+    ] },
+    bite: { length: 0.7, layer: "upper", keys: [
+      { t: 0, turns: {} },
+      { t: 0.35, turns: { neck: [-15, 0, 0], head: [-12, 0, 0] }, offset: [0, 0, -0.04] },
+      { t: 0.55, turns: { neck: [18, 0, 0], head: [12, 0, 0] }, offset: [0, -0.02, 0.12] },
+      { t: 1, turns: {} },
+    ] },
+  },
+  actions: { swing: "swipe", attack: "swipe", maul: "swipe" },
+  places: { mouth: "head", chest: "shoulders" },
+}

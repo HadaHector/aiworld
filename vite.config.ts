@@ -112,6 +112,7 @@ export default defineConfig({
         collision: fileURLToPath(new URL("./collision.html", import.meta.url)),
         music: fileURLToPath(new URL("./music.html", import.meta.url)),
         fx: fileURLToPath(new URL("./fx.html", import.meta.url)),
+        beasts: fileURLToPath(new URL("./beasts.html", import.meta.url)),
       },
     },
   },
