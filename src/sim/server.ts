@@ -330,6 +330,8 @@ export function createServer(options: ServerOptions): Server {
           },
           delta,
           firstItemId: world?.nextItemId,
+          // Items taken from loot into a bag: a quest's dropped item counts (QUESTS.md, *Quest items*).
+          gained: (entity, type, roll, count) => questSystem.itemGained(entity, options.items!.types[type].id, roll, count),
         },
         questAwareHooks(progression ? progression.itemHooks(options.itemHooks ?? skills.items) : (options.itemHooks ?? skills.items)),
       )
@@ -510,6 +512,11 @@ export function createServer(options: ServerOptions): Server {
       itemSystem.store.remove(b.bag[slot]!);
       b.bag[slot] = null;
       return true;
+    },
+    drop: (player, source, type, bind) => {
+      const def = typeOf(type);
+      const corpse = findEntity(source);
+      return !!def && !!corpse && !!itemSystem && itemSystem.dropFor(player, corpse, def.index, 1, bind);
     },
     sweep: (entity, keep) => {
       const b = entity.belongings;

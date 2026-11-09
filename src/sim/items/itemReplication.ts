@@ -57,7 +57,7 @@ export function createItemReplicator(items: ItemRules, system: ItemSystem): Item
         if (b.bankOpen !== bankOpen) out.push({ type: "bankReach", open: b.bankOpen });
         bankOpen = b.bankOpen;
         const source = b.lootOpen ? entityOf(b.lootOpen) : undefined;
-        const states = source?.loot ? source.loot.items.map((id) => itemState(items, store, id)) : [];
+        const states = source?.loot && viewer ? system.lootSeenBy(source, viewer).map((id) => itemState(items, store, id)) : [];
         const l = source?.loot ? `${source.id}|${states.map(sig).join()}|${source.loot.money.join()}` : "";
         if (l !== loot) out.push({ type: "loot", entity: source?.loot ? source.id : 0, items: states, money: source?.loot ? [...source.loot.money] : [] });
         loot = l;
@@ -73,7 +73,7 @@ export function createItemReplicator(items: ItemRules, system: ItemSystem): Item
           gear.set(id, g);
         }
         if (entity.loot) {
-          const can = system.lootable(entity);
+          const can = system.lootable(entity, viewer ?? undefined);
           if (lootable.get(id) !== can) out.push({ type: "entityLootable", id, lootable: can });
           lootable.set(id, can);
         }

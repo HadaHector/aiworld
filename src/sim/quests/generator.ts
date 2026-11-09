@@ -214,7 +214,7 @@ export function generateQuests(input: GeneratorInput): QuestDef[] {
     if (beast) bump(kindKey(beast));
     for (const o of objectives) {
       if (o.kind === "gather" || o.kind === "reach") world.anchors.push({ x: o.area.x, z: o.area.z });
-      else if (o.kind === "kill" || o.kind === "loot" || o.kind === "use") world.anchors.push({ x: layout.x, z: layout.z });
+      else if (o.kind === "kill" || o.kind === "loot" || o.kind === "drop" || o.kind === "use") world.anchors.push({ x: layout.x, z: layout.z });
     }
   }
 
@@ -315,7 +315,8 @@ export function generateQuests(input: GeneratorInput): QuestDef[] {
       for (const o of objectives) {
         switch (o.kind) {
           case "kill": units += o.count * e.kill * hard; break;
-          case "loot": units += (o.count / Math.max(0.05, o.chance)) * e.loot * hard; break;
+          case "loot":
+          case "drop": units += (o.count / Math.max(0.05, o.chance * q.dropChance)) * e.loot * hard; break;
           case "use": units += o.count * e.use; break;
           case "gather": units += o.count * e.gather; go({ metres: Math.hypot(o.area.x - layout.x, o.area.z - layout.z), oneWay: false }); break;
           case "reach": units += e.reach; go({ metres: Math.hypot(o.area.x - layout.x, o.area.z - layout.z), oneWay: false }); break;
@@ -390,6 +391,9 @@ export function generateQuests(input: GeneratorInput): QuestDef[] {
           case "loot":
             objectives.push({ kind: "loot", from: filter, count, chance: part.chance, line: line({ count }) });
             break;
+          case "drop":
+            objectives.push({ kind: "drop", item, from: filter, count, chance: ref.chance ?? part.chance, line: line({ count }) });
+            break;
           case "gather":
             objectives.push({ kind: "gather", object: object?.name ?? "", count, area, line: line({ count }) });
             break;
@@ -443,7 +447,7 @@ export function generateQuests(input: GeneratorInput): QuestDef[] {
         where: [],
         bind: lineBind,
         itemLooks: Object.fromEntries(
-          [...new Set(objectives.flatMap((o) => (o.kind === "receive" || o.kind === "use" || o.kind === "deliver" ? [o.item] : [])))].filter((type) => looks[type]).map((type) => [type, looks[type]]),
+          [...new Set(objectives.flatMap((o) => (o.kind === "receive" || o.kind === "use" || o.kind === "deliver" || o.kind === "drop" ? [o.item] : [])))].filter((type) => looks[type]).map((type) => [type, looks[type]]),
         ),
       });
     });

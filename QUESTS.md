@@ -65,7 +65,8 @@ interface Quest {
 type Objective =
   | { kind: "talk"; npc: string }
   | { kind: "kill"; creatures: KindFilter; count: number; area?: Area }
-  | { kind: "loot"; item: string; count: number; from: KindFilter; chance: number }   // a quest drop
+  | { kind: "drop"; item: string; count: number; from: KindFilter; chance: number }   // a quest item the creatures drop, counted as taken
+  | { kind: "loot"; count: number; from: KindFilter; chance: number }               // a quest drop only counted, no item (the simple form)
   | { kind: "gather"; object: string; count: number; area: Area }                      // quest objects on the ground
   | { kind: "receive"; item: string; from: string }                                    // an NPC hands it over on talk
   | { kind: "use"; item: string; on: KindFilter | { object: string }; count: number }  // use an item on something
@@ -228,8 +229,20 @@ quest: {
   uses (the next in a chain uses the salve it was given). When it is **abandoned**, all go, and an item
   it uses but does not give itself is **handed again** when it is taken again, so a chain is not
   stuck for the want of it.
-- **Quest drops** are a loot-table entry added to the creature kinds a `loot` part names, rolled
-  only for players with that objective unfinished, and shown only to them (WoW-like co-op).
+- **Quest drops** are quest items the creatures leave in their loot (the `drop` objective), only while
+  the quest is active, and for the players on it alone (WoW-like co-op). When a creature dies, each
+  player on its threat table who has the objective open - not finished, and the current one in an
+  ordered quest - rolls: `chance` (the part's, which a segment's use of the part can set for itself)
+  times the rules' `dropChance` (1 as written; 0.5 halves every drop, 0 stops them all). A success puts one
+  item in the corpse's loot **for that player only**: it is in their loot window after the shared
+  items, it makes the corpse glint for them and nobody else, and it is taken like any item (a full
+  bag leaves it on the corpse). It is the quest line's own item (the roll of its instance, so it is
+  not another quest's), it stacks on that line's stack and nowhere else, it cannot be dropped, and
+  the objective counts as it is taken; handing in or abandoning takes the stack. A creature with no
+  loot table of its own still leaves one, and the corpse lasts for its usual time and then its private
+  items go with it. The older `loot` objective, which only counts and leaves no item, is still there
+  for a quest that wants the simple form; core's blood sample and pelts are drops now (`questBlood`,
+  `questPelt`, named for the creature or the giver like any quest item).
 - **Ground objects** are a new entity template, `questObject`: a small thing with a sparkle, made at
   spots in the part's area while a player with the objective is near, takable (the interact key)
   only by such players, each their own. One taken comes back for others at once and for the taker
@@ -633,7 +646,7 @@ The server's quest system listens where the events already are:
 | Objective | From |
 |---|---|
 | `kill` | The creature system's kill records: every player on the victim's threat table at death (PROGRESSION.md's `all` credit) with the objective counts it |
-| `loot` | The loot system: quest drops rolled per eligible player, counted when taken from the corpse |
+| `drop` | The creature system's kill records: each credited player who needs it rolls, and a success puts the item in the corpse's loot for them; counted when it is taken (the item system tells the quest system). `loot` counts at the roll, leaving no item |
 | `gather` | Taking a `questObject` |
 | `use` | The item's skill's combat event (hit or applied) on a target matching the filter and condition |
 | `receive`, `deliver`, `talk` | The NPC window |
@@ -962,6 +975,17 @@ After NPCS.md's five steps. Each leaves the game working: the dev server (`?play
   fills, an icon and a tint from its lists, the same all along its line, with different names for
   different lines (letters showed five different tints over six worlds, salves three icons), the client's
   naming by roll on a real quest, and the held-between-quests definitions sent on entering.
+
+- **Dropped quest items.** The `drop` objective (see *Quest items*): the item system's `LootPart`
+  gains `private` (item ids by player), the loot window and the glint are per viewer
+  (`lootSeenBy`, `lootable(entity, viewer)`), `dropFor` leaves an item for one player, `ItemWorld.gained`
+  tells the quest system what was taken, quest items that stack merge only within a line (`receiveItem`),
+  and the quest system rolls on a kill. `dropChance` in `rules/quests.json5` and a part reference's
+  `chance` are the settings. **Checked:** the probe plays it with a second player on the threat table:
+  nothing drops without the quest, the player on it gets the item in their loot and the other does
+  not, it counts only when taken, two stack into one, it cannot be dropped, abandoning takes the stack
+  and taking it again starts from nothing, a chance of 0 and a rule factor of 0 drop nothing and a
+  chance of 1 drops on every kill; and the intro bot takes its blood sample from a corpse.
 
 ## Later
 

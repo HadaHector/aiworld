@@ -65,6 +65,8 @@ export type Objective =
   | { kind: "talk"; npc: string; line: Text }
   | { kind: "kill"; creatures: KindFilter; count: number; line: Text }
   | { kind: "loot"; from: KindFilter; count: number; chance: number; line: Text }
+  /** A quest item the creatures drop, in the loot of the corpse for the players on the quest alone; the objective counts what is taken. */
+  | { kind: "drop"; item: string; from: KindFilter; count: number; chance: number; line: Text }
   | { kind: "gather"; object: string; count: number; area: { dimension: string; x: number; z: number; radius: number }; line: Text }
   | { kind: "receive"; item: string; from: string; line: Text }
   | { kind: "use"; item: string; on: KindFilter; below: number; count: number; line: Text }
@@ -103,7 +105,7 @@ export interface SavedQuests {
 
 /** How many an objective needs. */
 export const needed = (objective: Objective): number =>
-  objective.kind === "kill" || objective.kind === "loot" || objective.kind === "gather" || objective.kind === "use" ? objective.count : 1;
+  objective.kind === "kill" || objective.kind === "loot" || objective.kind === "drop" || objective.kind === "gather" || objective.kind === "use" ? objective.count : 1;
 
 /** Whether a creature kind is one a filter means. */
 export const kindMatches = (filter: KindFilter, kind: string): boolean => filter.kinds.some((k) => k === kind || kind.split(".")[0] === k);
@@ -134,6 +136,8 @@ export interface QuestRules {
   rewardTemplates: string[];
   /** How many items a choice offers. */
   rewardChoices: number;
+  /** A factor on every quest drop's chance (a part's `chance`): 1 as written, 0.5 half as often, 0 never. */
+  dropChance: number;
   /** How a quest item's icon and tint are drawn from, by item type: lists, one chosen for each quest line. */
   itemLooks: Record<string, { icons: string[]; tints: string[] }>;
   /** The rarity a choice aims for (at most; the best every option has): a quest's, and a chain's last. */
@@ -180,7 +184,7 @@ type Entry = { id: string; file: string; data: unknown };
 export function readQuestRules(entry: { file: string; data: unknown } | undefined, partEntries: readonly Entry[], segmentEntries: readonly Entry[], plotEntries: readonly Entry[], voiceEntries: readonly Entry[], issues: ContentIssue[]): QuestRules {
   const reader = new Reader(issues, entry?.file ?? "rules/quests.json5");
   const obj = entry ? reader.object(entry.data, "") : {};
-  reader.onlyKeys(obj, "", ["maxActive", "xp", "money", "standing", "objects", "talkRange", "colours", "rewardTemplates", "rewardChoices", "itemLooks", "rewardRarity", "rewardLevel", "rewardConsumables", "effort", "finale", "quota", "reach", "plurals", "fields", "whens", "chain", "weighting"]);
+  reader.onlyKeys(obj, "", ["maxActive", "xp", "money", "standing", "objects", "talkRange", "colours", "rewardTemplates", "rewardChoices", "dropChance", "itemLooks", "rewardRarity", "rewardLevel", "rewardConsumables", "effort", "finale", "quota", "reach", "plurals", "fields", "whens", "chain", "weighting"]);
   const parts = new Map(readQuestParts(partEntries, issues).map((p) => [p.id, p]));
   const segments = new Map(readQuestSegments(segmentEntries, parts, issues).map((s) => [s.id, s]));
   const voices = new Map<string, Line[]>();
@@ -297,6 +301,7 @@ export function readQuestRules(entry: { file: string; data: unknown } | undefine
     },
     rewardTemplates: obj.rewardTemplates === undefined ? [] : reader.stringList(obj, "rewardTemplates", ""),
     rewardChoices: reader.optionalNumber(obj, "rewardChoices", "", 3, { min: 1, integer: true }),
+    dropChance: reader.optionalNumber(obj, "dropChance", "", 1, { min: 0 }),
     itemLooks,
     rewardLevel: reader.optionalNumber(obj, "rewardLevel", "", 2, { min: 0 }),
     rewardConsumables: consumables,

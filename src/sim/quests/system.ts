@@ -29,6 +29,8 @@ export interface QuestWorld {
   give(entity: Entity, type: string, count: number, bind: number): number;
   take(entity: Entity, type: string, bind: number): boolean;
   has(entity: Entity, type: string, bind: number): boolean;
+  /** Leaves a quest item (one of the type, with the quest line's roll) in a corpse's loot for one player alone. */
+  drop(player: Entity, source: number, type: string, bind: number): boolean;
   /** Takes from an entity every quest item (a type with `quest`) `keep` says no to; how many went. */
   sweep(entity: Entity, keep: (type: string, bind: number) => boolean): number;
   /** The skill an item type's use casts, or "". */
@@ -65,6 +67,8 @@ export interface QuestSystem {
   sweep(player: Entity): number;
   /** The quests whose items a player holds, one for each line: for the client to name them (QUESTS.md, *Quest items*). */
   defsOfHeldItems(player: Entity): QuestDef[];
+  /** A player took items into their bag from loot (a type id, the roll, how many): a quest's drop counts. */
+  itemGained(player: Entity, type: string, bind: number, count: number): void;
   /** A player used an item (a type id, and the roll of the instance): the next cast of its skill counts for that. */
   itemUsed(player: Entity, type: string, bind: number): void;
   kill(record: KillRecord): void;
@@ -150,7 +154,7 @@ export function createQuestSystem(rules: GameRules, quests: QuestRules, world: Q
         for (const o of other.objectives) if (o.kind === "use" || o.kind === "deliver") wanted.add(o.item);
       }
     }
-    const types = def.objectives.flatMap((o) => (o.kind === "receive" || o.kind === "use" || o.kind === "deliver" ? [o.item] : []));
+    const types = def.objectives.flatMap((o) => (o.kind === "receive" || o.kind === "use" || o.kind === "deliver" || o.kind === "drop" ? [o.item] : []));
     return [...new Set(types)].filter((item) => !wanted.has(item));
   }
 
@@ -351,7 +355,7 @@ export function createQuestSystem(rules: GameRules, quests: QuestRules, world: Q
       const wanted = new Set<string>();
       for (const def of defs.values()) {
         if (part?.done.has(def.id)) continue;
-        for (const o of def.objectives) if (o.kind === "receive" || o.kind === "use" || o.kind === "deliver") wanted.add(`${o.item}/${bindOf(def)}`);
+        for (const o of def.objectives) if (o.kind === "receive" || o.kind === "use" || o.kind === "deliver" || o.kind === "drop") wanted.add(`${o.item}/${bindOf(def)}`);
       }
       return world.sweep(player, (type, bind) => wanted.has(`${type}/${bind}`));
     },
@@ -362,6 +366,11 @@ export function createQuestSystem(rules: GameRules, quests: QuestRules, world: Q
         return true;
       });
       return [...found.values()];
+    },
+    itemGained(player, type, bind, count) {
+      for (const { def, active, objective, index } of [...openObjectives(player)]) {
+        if (objective.kind === "drop" && objective.item === type && bindOf(def) === bind) advance(player, def, active, index, count);
+      }
     },
     itemUsed(player, type, bind) {
       lastUsed.set(player.id, { type, bind });
@@ -374,6 +383,8 @@ export function createQuestSystem(rules: GameRules, quests: QuestRules, world: Q
           if (objective.kind === "kill" && kindMatches(objective.creatures, record.kind)) advance(player, def, active, index);
           // A quest drop, for each who needs it (counted, not carried: QUESTS.md, *As built*).
           else if (objective.kind === "loot" && kindMatches(objective.from, record.kind) && random() < objective.chance) advance(player, def, active, index);
+          // A dropped quest item: in the corpse's loot for this player alone, if the roll says so; it counts once taken.
+          else if (objective.kind === "drop" && kindMatches(objective.from, record.kind) && random() < Math.min(1, objective.chance * quests.dropChance)) world.drop(player, record.creature, objective.item, bindOf(def));
         }
       }
     },

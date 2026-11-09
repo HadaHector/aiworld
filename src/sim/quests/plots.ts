@@ -12,7 +12,7 @@ import { Reader, type ContentIssue, type RawObject } from "../../world/content/c
  *
  * Text is English templates (QUESTS.md, *Text*), filled from the quest's arguments.
  */
-export const PART_KINDS = ["talk", "kill", "loot", "gather", "receive", "use", "deliver", "reach"] as const;
+export const PART_KINDS = ["talk", "kill", "loot", "drop", "gather", "receive", "use", "deliver", "reach"] as const;
 export type PartKind = (typeof PART_KINDS)[number];
 
 /** Which of a zone's creatures will do. */
@@ -143,7 +143,7 @@ export interface PlotQuest {
    *  names neither takes up where the quest before left off. */
   giver: string | null;
   ender: string | null;
-  parts: { part: string; npc: string | null; item: string | null; /** Its log line in place of the part's. */ line: string | null; /** Its item's names in place of the part's. */ itemName: Pool | null }[];
+  parts: { part: string; npc: string | null; item: string | null; /** Its log line in place of the part's. */ line: string | null; /** Its item's names in place of the part's. */ itemName: Pool | null; /** A drop's chance, in place of the part's. */ chance: number | null }[];
   title: Pool;
   /** The offer, about five sentences: a pool for each, one line drawn from it. */
   offer: Pool[];
@@ -267,12 +267,12 @@ function readPlotQuest(reader: Reader, value: unknown, at: string, parts: Readon
   const questParts = reader.array(q, "parts", at).map((p, j) => {
     const pat = `${at}.parts[${j}]`;
     const raw = typeof p === "string" ? { part: p } : reader.object(p, pat);
-    reader.onlyKeys(raw, pat, ["part", "npc", "item", "line", "itemName"]);
+    reader.onlyKeys(raw, pat, ["part", "npc", "item", "line", "itemName", "chance"]);
     const part = reader.string(raw, "part", pat);
     if (!parts.has(part)) reader.fail(`${pat}.part`, `no quest part "${part}"`);
     const npc = reader.optionalString(raw, "npc", pat) ?? null;
     if (npc && !names.has(npc)) reader.fail(`${pat}.npc`, `no person "${npc}" here`);
-    return { part, npc, item: reader.optionalString(raw, "item", pat) ?? null, line: reader.optionalString(raw, "line", pat) ?? null, itemName: raw.itemName === undefined ? null : readPool(reader, raw.itemName, `${pat}.itemName`) };
+    return { part, npc, item: reader.optionalString(raw, "item", pat) ?? null, line: reader.optionalString(raw, "line", pat) ?? null, itemName: raw.itemName === undefined ? null : readPool(reader, raw.itemName, `${pat}.itemName`), chance: raw.chance === undefined ? null : reader.number(raw, "chance", pat, { min: 0, max: 1 }) };
   });
   const offer = reader.array(q, "offer", at).map((group, j) => readPool(reader, group, `${at}.offer[${j}]`));
   const rewardRaw = q.reward === undefined ? {} : reader.object(q.reward, `${at}.reward`);
@@ -288,7 +288,7 @@ export function readQuestParts(entries: readonly { id: string; file: string; dat
     reader.onlyKeys(obj, "", ["kind", "count", "chance", "below", "item", "line", "motive", "itemName"]);
     const kind = reader.oneOf(obj, "kind", "", PART_KINDS);
     const count: [number, number] = obj.count === undefined ? [1, 1] : typeof obj.count === "number" ? [obj.count, obj.count] : reader.range(obj, "count", "", { allowEqual: true });
-    if ((kind === "receive" || kind === "use" || kind === "deliver") && obj.item === undefined) reader.fail("item", `a ${kind} part names its item`);
+    if ((kind === "receive" || kind === "use" || kind === "deliver" || kind === "drop") && obj.item === undefined) reader.fail("item", `a ${kind} part names its item`);
     return {
       id: entry.id,
       kind,

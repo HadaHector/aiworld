@@ -1,9 +1,13 @@
-// Bring back something taken from the creatures: counted as it is taken, not carried.
+// Bring back something taken from the creatures: a quest item they drop, in their loot for those on the
+// quest alone, counted as it is taken. `chance` is how likely each creature is to have one (rules/quests.json5's
+// `dropChance` is a factor on every drop's).
 {
-  kind: "loot",
+  kind: "drop",
+  item: "questBlood",
   count: 1,
   chance: 0.6,
   line: "Tainted blood from a {creature}",
+  itemName: ["Tainted {creature} Blood", "{creature} Blood Sample", "Sample of {creature} Blood"],
   motive: [
     "Bring me a little of their blood, so I can see what ails them.",
     "I need a sample from one of them - blood will do - to know what we are dealing with.",

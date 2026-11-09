@@ -1,9 +1,11 @@
-// Hunt the creatures for what they give.
+// Hunt the creatures for what they give: a quest item they drop, in their loot for those on the quest alone.
 {
-  kind: "loot",
+  kind: "drop",
+  item: "questPelt",
   count: [4, 6],
   chance: 0.6,
   line: "Good pelts of {creatures}",
+  itemName: ["{creature} Pelt", "Good {creature} Pelt", "Pelt for {giverGiven}"],
   motive: [
     "Winter will come, and the pelts of {creatures} keep a family warm.",
     "I've buyers for {creatures} pelts, if they're good ones.",

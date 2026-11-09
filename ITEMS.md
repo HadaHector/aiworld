@@ -296,7 +296,9 @@ interface Belongings {
   with a roll from the same stream.
 - **Who can loot: anyone, first come.** A corpse or chest holds its loot as item ids; whoever is in
   `lootRange` can open it and take what is there; taking is first come, and everyone who has it open
-  sees an item go. Money taken is the taker's.
+  sees an item go. Money taken is the taker's. A corpse can also hold items for **one player alone**
+  (a quest's drops, QUESTS.md): they follow the shared items in that player's loot window, make the
+  corpse glint for them only, and are taken the same way; nobody else sees them.
 - **From entities**: a template's `loot: "<table>"`. When such an entity's health reaches 0 its
   table is rolled once and it becomes lootable. Death itself is step 4's and step 6's (ENTITIES.md):
   the items side only watches for health at 0. The training dummy does not die: it is rolled at 0,

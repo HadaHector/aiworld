@@ -233,13 +233,14 @@ export function receiveItem(ctx: ItemContext, entity: Entity, item: ItemInstance
   const b = entity.belongings;
   if (!b) return { left: item.count, why: "cannot" };
   const type = ctx.items.types[item.type];
-  // A quest item is one to a quest line: its roll says which (QUESTS.md, *Quest items*).
-  if (type.quest && holds(ctx, b, item.type, item.roll)) return { left: item.count, why: "unique" };
+  // A quest item is one to a quest line: its roll says which (QUESTS.md, *Quest items*). One that stacks (a
+  // quest's drops) goes on the stack of its own line, and never on another line's.
+  if (type.quest && type.stack <= 1 && holds(ctx, b, item.type, item.roll)) return { left: item.count, why: "unique" };
   if (type.stack > 1) {
     for (const id of b.bag) {
       if (id == null || item.count === 0) continue;
       const stack = ctx.store.get(id)!;
-      if (stack.type !== item.type || stack.id === item.id) continue;
+      if (stack.type !== item.type || stack.id === item.id || (type.quest && stack.roll !== item.roll)) continue;
       const n = Math.min(item.count, type.stack - stack.count);
       stack.count += n;
       item.count -= n;

@@ -338,6 +338,95 @@ await section("the test chain", async () => {
   await send({ type: "questAccept", npc: makerE.id, quest: "q:probe/13" });
   check("...and is handed again when it is taken again", salves().length === 1 && salves()[0].roll === bind("q:line"));
   await send({ type: "questAbandon", quest: "q:probe/13" });
+
+  // --- dropped quest items: only while the quest is active, only for those on it, a chance that can be set ---
+  const pelt = items.typeIndex.get("questPelt");
+  const peltsOf = (list) => list.map((id) => (id == null ? null : server.debug.items.ctx.store.get(id))).filter((x) => x && x.type === pelt);
+  // A second player, with a character of its own (the world saves, so there are no quick ones).
+  const others = createLocalChannel();
+  server.connect(others.server);
+  others.client.send({ type: "hello", protocol: PROTOCOL_VERSION, select: true, name: "", dimension: "" });
+  let otherId = 0;
+  let otherCharacter = "";
+  const pumpOthers = async (steps) => {
+    for (let i = 0; i < steps; i++) {
+      await pump(1);
+      for (const m of others.client.receive()) {
+        if (m.type === "entered") otherId = m.playerId;
+        if (m.type === "transfer") others.client.send({ type: "arrived" });
+        if (m.type === "characters") otherCharacter = m.list.find((c) => c.name === "Bystander")?.id ?? otherCharacter;
+      }
+    }
+  };
+  await pumpOthers(3);
+  others.client.send({ type: "characterCreate", name: "Bystander", origins: {}, look: { seed: 31, race: "human", outfit: "", sex: "" } });
+  await pumpOthers(3);
+  others.client.send({ type: "enterWorld", character: otherCharacter, dimension: "" });
+  await pumpOthers(15);
+  const bystander = server.debug.entity(otherId);
+  check("a second player is in the world", !!bystander && bystander !== me);
+  const dropLine = (n, chance) => quest(n, { giver, ender: giver, chain: { id: `q:drop${n}`, index: 1, of: 1 }, requires: { quests: [], level: 1 }, objectives: [{ kind: "drop", item: "questPelt", from: beasts, count: 2, chance, line: t("Pelts") }] });
+  server.debug.quests.define([dropLine(14, 1), dropLine(15, 0)]);
+  /** A creature killed with both players on its threat table: its corpse. */
+  const killedBy = async () => {
+    const corpse = server.debug.creatures.debug.spawn("mainland", kind, me.x + 2, me.z, 1);
+    addThreat(server.debug.skills.sys, corpse, me, 10);
+    addThreat(server.debug.skills.sys, corpse, bystander, 10);
+    server.debug.skills.kill(corpse);
+    await pump(2);
+    return corpse;
+  };
+  const seenBy = (corpse, who) => peltsOf(server.debug.items.lootSeenBy(corpse, who));
+  const heldPelts = () => stack().filter((x) => x.type === pelt);
+  await talk(giverE);
+  let corpse = await killedBy();
+  check("no quest, no drop: a kill before the quest leaves nothing for anyone", seenBy(corpse, me).length === 0 && seenBy(corpse, bystander).length === 0);
+  await send({ type: "questAccept", npc: giverE.id, quest: "q:probe/14" });
+  corpse = await killedBy();
+  check("on the quest: the kill leaves the item in the loot, for that player", seenBy(corpse, me).length === 1 && seenBy(corpse, me)[0].roll === bind("q:drop14"), String(seenBy(corpse, me).length));
+  check("...and not for the player who is not on it, though on the threat table", seenBy(corpse, bystander).length === 0);
+  check("it does not count until taken", state(14)?.counts[0] === 0, JSON.stringify(state(14)));
+  check("the corpse is lootable for the player on the quest", server.debug.items.lootable(corpse, me));
+  check("...and its window shows the item", server.debug.items.lootSeenBy(corpse, me).some((id) => id != null && server.debug.items.ctx.store.get(id).type === pelt));
+  await send({ type: "teleport", x: corpse.x + 1, z: corpse.z }, 3);
+  await send({ type: "lootOpen", entity: corpse.id });
+  check("the loot window is sent with the item for them", last("loot")?.entity === corpse.id && last("loot").items.some((x) => x && x.type === "questPelt"), JSON.stringify(last("loot")?.items?.map((x) => x?.type)));
+  await send({ type: "lootTake", slot: 0xffff });
+  check("taken: it counts, and is in the bag", state(14)?.counts[0] === 1 && heldPelts().length === 1 && heldPelts()[0].roll === bind("q:drop14"), JSON.stringify(state(14)));
+  await send({ type: "lootClose" });
+  // A second corpse: the item goes on the same stack.
+  corpse = await killedBy();
+  await send({ type: "teleport", x: corpse.x + 1, z: corpse.z }, 3);
+  await send({ type: "lootOpen", entity: corpse.id });
+  await send({ type: "lootTake", slot: 0xffff });
+  check("a second one stacks with the first (one stack of 2)", heldPelts().length === 1 && heldPelts()[0].count === 2, JSON.stringify(heldPelts().map((x) => x.count)));
+  check("the objective is done at its count", state(14)?.state === "ready");
+  await send({ type: "itemDrop", from: { container: 0, slot: me.belongings.bag.findIndex((x) => x != null && server.debug.items.ctx.store.get(x).type === pelt) }, count: 0 });
+  check("a dropped quest item cannot be dropped", heldPelts().length === 1);
+  await send({ type: "questAbandon", quest: "q:probe/14" });
+  check("abandoned: the whole stack goes", heldPelts().length === 0);
+  await talk(giverE);
+  await send({ type: "questAccept", npc: giverE.id, quest: "q:probe/14" });
+  check("taken again: it starts from nothing", state(14)?.counts[0] === 0 && heldPelts().length === 0);
+  await send({ type: "questAbandon", quest: "q:probe/14" });
+  // The chance is the part's, and a rule scales every one.
+  await send({ type: "questAccept", npc: giverE.id, quest: "q:probe/15" });
+  let none = 0;
+  for (let i = 0; i < 6; i++) none += seenBy(await killedBy(), me).length;
+  check("a chance of 0: nothing ever drops", none === 0, String(none));
+  await send({ type: "questAbandon", quest: "q:probe/15" });
+  await send({ type: "questAccept", npc: giverE.id, quest: "q:probe/14" });
+  rules.quests.dropChance = 0;
+  none = 0;
+  for (let i = 0; i < 6; i++) none += seenBy(await killedBy(), me).length;
+  check("the rules' drop chance at 0 stops a chance of 1", none === 0, String(none));
+  rules.quests.dropChance = 1;
+  let some = 0;
+  for (let i = 0; i < 6; i++) some += seenBy(await killedBy(), me).length;
+  check("...and at 1 every kill drops one (a chance of 1)", some === 6, String(some));
+  await send({ type: "questAbandon", quest: "q:probe/14" });
+  check("abandoned: nothing left in the bag", heldPelts().length === 0);
+
 });
 
 // --- segments: the pieces fit together, whatever the world ---
@@ -388,7 +477,7 @@ await section("segments", async () => {
     check(`${plot.id}: more than one ending`, endsOf.size >= 2, [...endsOf].join());
     check(`${plot.id}: a twist is possible`, variants.some((c) => c.some((s) => s.provides.some((t) => t.startsWith("twist:")))));
     // GAMEPLAY.md's test chain is one of them: talk, kill and loot, talk, gather, receive, use, talk.
-    check(`${plot.id}: the test chain is one of them`, variants.some((c) => kindsOf(q, c).join() === "talk,kill,loot,talk,gather,receive,use"));
+    check(`${plot.id}: the test chain is one of them`, variants.some((c) => kindsOf(q, c).join() === "talk,kill,drop,talk,gather,receive,use"));
   }
   // Every tag a quest asks of creatures is one some creature of the pack has, with the family and
   // hostility it asks alongside.
@@ -516,7 +605,7 @@ await section("the generator", async () => {
         const rate = (w.rules.quests.xp.base + w.rules.quests.xp.perLevel * q.level) * w.rules.quests.xp.rate;
         const effort = q.rewards.xp / rate;
         if (!finale) {
-          if (kinds.some((k) => k === "kill" || k === "loot" || k === "use")) efforts.hunt.push(effort);
+          if (kinds.some((k) => k === "kill" || k === "loot" || k === "drop" || k === "use")) efforts.hunt.push(effort);
           else if (kinds.includes("deliver")) efforts.road.push(effort);
           else if (kinds.includes("gather")) efforts.gather.push(effort);
           else efforts.talk.push(effort);
@@ -581,12 +670,12 @@ await section("the generator", async () => {
         for (const o of q.objectives) {
           if ((o.kind === "talk" && !npcIds.has(o.npc)) || (o.kind === "receive" && !npcIds.has(o.from)) || (o.kind === "deliver" && !npcIds.has(o.to))) problems.push(`${o.kind} npc`);
           if ((o.kind === "receive" || o.kind === "use" || o.kind === "deliver") && !w.items.typeIndex.has(o.item)) problems.push(`item ${o.item}`);
-          if ((o.kind === "kill" || o.kind === "loot" || o.kind === "use") && (o.kind === "loot" ? o.from : o.kind === "use" ? o.on : o.creatures).kinds.length === 0) problems.push(`${o.kind} creatures`);
+          if ((o.kind === "kill" || o.kind === "loot" || o.kind === "drop" || o.kind === "use") && (o.kind === "loot" || o.kind === "drop" ? o.from : o.kind === "use" ? o.on : o.creatures).kinds.length === 0) problems.push(`${o.kind} creatures`);
           if ((o.kind === "gather" || o.kind === "reach") && Math.hypot(o.area.x - layout.x, o.area.z - layout.z) > w.rules.quests.reach + 200) problems.push(`${o.kind} too far`);
           if (fillText(o.line.text, o.line.args).includes("{")) problems.push(`line "${o.line.text}"`);
           // What a quest asks you to hunt has what it asks: pelts of the furred, a sickness of mammals.
           const wants = o.line.text.startsWith("Good pelts") ? "furred" : /^(Tainted blood|Salve a weakened)/.test(o.line.text) ? "mammal" : null;
-          const targets = o.kind === "loot" ? o.from.kinds : o.kind === "use" ? o.on.kinds : o.kind === "kill" ? o.creatures.kinds : [];
+          const targets = o.kind === "loot" || o.kind === "drop" ? o.from.kinds : o.kind === "use" ? o.on.kinds : o.kind === "kill" ? o.creatures.kinds : [];
           if (wants) {
             huntQuests++;
             if (!targets.every((id) => w.creatures.kinds.get(id)?.tags.includes(wants))) problems.push(`${wants} quest for ${targets.join()}`);
@@ -722,7 +811,7 @@ await section("weighting", async () => {
 
 // --- the intro chain, played: a new character from the start to its gear, with a log out half way ---
 // One seed for each kind of story: the curse lifted, the culprit asked, a death on the way, the plain sickness.
-for (const introSeed of [2, 7, 8, 15]) await section(`the intro chain (seed ${introSeed})`, async () => {
+for (const introSeed of (process.env.INTRO_SEEDS ?? "2,7,8,15").split(",").map(Number)) await section(`the intro chain (seed ${introSeed})`, async () => {
   const config = "tiny";
   const seed = introSeed;
   const { content, packs } = loadContentFromDisk(config);
@@ -826,9 +915,21 @@ for (const introSeed of [2, 7, 8, 15]) await section(`the intro chain (seed ${in
       else if (o.kind === "deliver") await talkTo(o.to);
       else if (o.kind === "kill") for (let k = 0; k < o.count; k++) await fight(o.creatures.kinds[0]);
       else if (o.kind === "loot") for (let k = 0; k < 30 && at() < o.count; k++) await fight(o.from.kinds[0]);
+      // A dropped quest item: kill, open the corpse, take what it holds for this player.
+      else if (o.kind === "drop") {
+        for (let k = 0; k < 40 && at() < o.count; k++) {
+          const corpse = await fight(o.from.kinds[0]);
+          await send({ type: "lootOpen", entity: corpse.id });
+          await send({ type: "lootTake", slot: 0xffff });
+          await send({ type: "lootClose" });
+        }
+      }
       else if (o.kind === "gather") {
         await send({ type: "teleport", x: o.area.x, z: o.area.z }, 10);
-        const objects = [...server.debug.dimensions.get("mainland").entities.values()].filter((e) => e.key.startsWith(`qo:${q.id}/${i}/`));
+        const standing = () => [...server.debug.dimensions.get("mainland").entities.values()].filter((e) => e.key.startsWith(`qo:${q.id}/${i}/`));
+        // The objects are filled on the quest system's half-second look: wait for it.
+        for (let k = 0; k < 20 && standing().length === 0; k++) await pump(3);
+        const objects = standing();
         for (const object of objects.slice(0, o.count)) {
           await send({ type: "teleport", x: object.x + 1, z: object.z }, 2);
           await send({ type: "questObjectTake", entity: object.id });

@@ -44,6 +44,8 @@ export interface ItemWorld {
   delta?: { get(key: string): number | undefined; set(key: string, until: number): void };
   /** The first item id to give: the saved world's next one, so ids stay unique from run to run. */
   firstItemId?: number;
+  /** An entity took items into its bag from loot: `type` is the item type's index. (A quest's drop counts.) */
+  gained?(entity: Entity, type: number, roll: number, count: number): void;
 }
 
 /**
@@ -67,6 +69,10 @@ export interface ItemSystem {
   use(entity: Entity, from: SlotRef): Refusal;
   drop(entity: Entity, from: SlotRef, count: number): Refusal;
   pickUp(entity: Entity, target: number): Refusal;
+  /** A corpse's loot as one viewer sees it: the shared items, then those only they may take. */
+  lootSeenBy(source: Entity, viewer: Entity): (number | null)[];
+  /** Puts an item - a quest's drop - in a corpse's loot for one player alone, with this roll (the quest line's). */
+  dropFor(player: Entity, source: Entity, type: number, count: number, roll: number): boolean;
   openLoot(entity: Entity, target: number): Refusal;
   takeLoot(entity: Entity, slot: number): Refusal;
   closeLoot(entity: Entity): void;
@@ -77,7 +83,7 @@ export interface ItemSystem {
   /** Debug: wears an entity's gear as death or a hit would ("weapon" and "armour" always land). */
   wear(entity: Entity, what: "death" | "weapon" | "armour"): void;
   /** Whether an entity has loot to take, or a chest that would roll some when opened. */
-  lootable(entity: Entity): boolean;
+  lootable(entity: Entity, viewer?: Entity): boolean;
   /** Whether an entity holds loot that nobody has taken yet (a corpse not emptied). */
   hasLoot(entity: Entity): boolean;
   /** An entity is going: whatever its loot holds goes from the store with it. */
@@ -93,7 +99,14 @@ export function createItemSystem(game: GameRules, items: ItemRules, world: ItemW
   const roll32 = (random: () => number) => () => Math.floor(random() * 4294967296) >>> 0;
 
   const near = (a: Entity, b: Entity, range: number): boolean => a.dimension === b.dimension && Math.hypot(a.x - b.x, a.z - b.z) <= range;
-  const hasContents = (loot: LootPart): boolean => loot.items.some((id) => id != null) || loot.money.some((m) => m > 0);
+  const privateLeft = (loot: LootPart, player?: number): boolean => {
+    for (const [who, list] of loot.private ?? []) if ((player === undefined || who === player) && list.some((id) => id != null)) return true;
+    return false;
+  };
+  const hasContents = (loot: LootPart): boolean => loot.items.some((id) => id != null) || loot.money.some((m) => m > 0) || privateLeft(loot);
+  /** What a viewer can take: the shared loot and money, or what is private to them. */
+  const hasContentsFor = (loot: LootPart, viewer: Entity): boolean => loot.items.some((id) => id != null) || loot.money.some((m) => m > 0) || privateLeft(loot, viewer.id);
+  const seenBy = (source: Entity, viewer: Entity): (number | null)[] => [...source.loot!.items, ...(source.loot!.private?.get(viewer.id) ?? [])];
   const updateGear = (entity: Entity): void => {
     if (entity.belongings) entity.gear = wornGear(ctx, entity.belongings);
   };
@@ -158,14 +171,19 @@ export function createItemSystem(game: GameRules, items: ItemRules, world: ItemW
     }
   }
 
-  /** Takes one slot of a source's loot into an entity's bag, or as much of it as fits. */
+  /** Takes one slot of a source's loot - shared, or after those the one only this entity sees - into its bag, or as much of it as fits. */
   function takeSlot(entity: Entity, source: Entity, slot: number): Refusal {
     const loot = source.loot!;
-    const id = loot.items[slot];
-    if (id == null) return "empty";
+    const shared = loot.items.length;
+    const list = slot < shared ? loot.items : loot.private?.get(entity.id);
+    const at = slot < shared ? slot : slot - shared;
+    const id = list?.[at];
+    if (list == null || id == null) return "empty";
     const item = store.get(id)!;
+    const before = item.count;
     const { left, why } = receiveItem(ctx, entity, item);
-    if (left === 0) loot.items[slot] = null;
+    if (left === 0) list[at] = null;
+    if (before - left > 0) world.gained?.(entity, item.type, item.roll, before - left);
     return left === 0 ? "" : why;
   }
 
@@ -216,7 +234,9 @@ export function createItemSystem(game: GameRules, items: ItemRules, world: ItemW
           if (!loot) continue;
           if (loot.expires <= now) {
             for (const id of loot.items) if (id != null) store.remove(id);
+            for (const list of loot.private?.values() ?? []) for (const id of list) if (id != null) store.remove(id);
             loot.items = [];
+            loot.private?.clear();
             world.despawn(entity);
             continue;
           }
@@ -237,7 +257,7 @@ export function createItemSystem(game: GameRules, items: ItemRules, world: ItemW
           b.bankOpen = bankers.some((banker) => near(player, banker, items.config.bankRange));
           // Out of reach, gone, or emptied: the window closes.
           const source = b.lootOpen ? openSource(player) : undefined;
-          if (b.lootOpen && (!source || !hasContents(source.loot!))) b.lootOpen = 0;
+          if (b.lootOpen && (!source || !hasContentsFor(source.loot!, player))) b.lootOpen = 0;
         }
       }
     },
@@ -308,7 +328,7 @@ export function createItemSystem(game: GameRules, items: ItemRules, world: ItemW
       let why: Refusal = "";
       if (slot === TAKE_ALL) {
         takeMoney(entity, source);
-        source.loot!.items.forEach((_, i) => {
+        seenBy(source, entity).forEach((_, i) => {
           const r = takeSlot(entity, source, i);
           if (r && r !== "empty") why = r;
         });
@@ -349,12 +369,26 @@ export function createItemSystem(game: GameRules, items: ItemRules, world: ItemW
       const loot = entity.loot;
       if (!loot) return;
       for (const id of loot.items) if (id != null) store.remove(id);
+      for (const list of loot.private?.values() ?? []) for (const id of list) if (id != null) store.remove(id);
       loot.items = [];
+      loot.private?.clear();
     },
-    lootable(entity) {
+    lootSeenBy: (source, viewer) => (source.loot ? seenBy(source, viewer) : []),
+    dropFor(player, source, type, count, roll) {
+      const def = items.types[type];
+      if (!def || !player.belongings) return false;
+      // A creature with no loot table of its own still has a corpse to leave a quest's drop on.
+      source.loot ??= { items: [], money: new Array<number>(items.currencies.length).fill(0), rolled: true, armed: false, rolls: 0, respawnAt: 0, expires: Infinity };
+      const loot = (source.loot.private ??= new Map());
+      const list = loot.get(player.id) ?? [];
+      list.push(store.make(type, count, roll, def.durability).id);
+      loot.set(player.id, list);
+      return true;
+    },
+    lootable(entity, viewer) {
       const loot = entity.loot;
       if (!loot) return false;
-      if (hasContents(loot)) return true;
+      if (viewer ? hasContentsFor(loot, viewer) : hasContents(loot)) return true;
       const def = items.entities.get(entity.template.id);
       return !!def?.container && !loot.rolled && world.time() >= loot.respawnAt;
     },

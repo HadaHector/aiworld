@@ -75,6 +75,9 @@ export interface Belongings {
 export interface LootPart {
   /** Item ids; a taken one leaves a null so the others keep their places on screen. */
   items: (number | null)[];
+  /** What only one player sees and may take (a quest's drops, QUESTS.md), by that player's entity id: shown
+   *  after the shared items and taken the same way. */
+  private?: Map<number, (number | null)[]>;
   /** By currency index. */
   money: number[];
   /** Whether its table has been rolled into it since it was last emptied. */
