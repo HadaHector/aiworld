@@ -7,7 +7,7 @@ import type { Text } from "../text";
 import type { GameRules } from "../rules/gameRules";
 import type { ItemRules } from "../rules/itemRules";
 import { addPerson, type Cast, type CastInput, type CastNpc } from "../npcs/cast";
-import { lineHash, type ItemLook, type Objective, type QuestDef } from "./quest";
+import type { ItemLook, Objective, QuestDef } from "./quest";
 import { fillText } from "../text";
 import type { CreatureNeed, LineCondition, PlaceNeed, Pool, QuestPlotDef, QuestSegmentDef } from "./plots";
 import { composeChain, themeFits } from "./chains";
@@ -59,38 +59,31 @@ export interface WorldQuestState {
   uses: Map<string, number>;
   /** Where each objective so far lies: a place for gathering and going, the settlement for hunting. */
   anchors: { x: number; z: number }[];
-  /** The rolls quest lines have taken, so that no two share one (QUESTS.md, *Quest items*). */
-  binds: Set<number>;
-  /** The names quest items have taken, by "type/name", so that no two lines' items of a type share one. */
+  /** This dimension's number among the dimensions, for the rolls of quest lines' items (`bindFor`). */
+  dimension: number;
+  /** The names quest items have taken, by "type/name": a line tries another pattern than one in use. */
   itemNames: Set<string>;
 }
 
-/**
- * The roll for a new quest line's items: the hash of its id, or the next free one if another line of
- * the world has it. Taken for good, so no two lines of a world ever share one - the technical identity
- * of a quest item (QUESTS.md, *Quest items*). Never 0.
- */
-export function takeBind(world: WorldQuestState, lineId: string): number {
-  let bind = lineHash(lineId);
-  while (world.binds.has(bind)) bind = (bind + 1) >>> 0 || 1;
-  world.binds.add(bind);
-  return bind;
-}
+/** What a quest line's roll is made of: 6 bits of dimension, 16 of settlement, 10 of the line's index in it, with 1 added so it is not 0. */
+const BIND_DIMENSIONS = 1 << 6;
+const BIND_SITES = 1 << 16;
+const BIND_LINES = (1 << 10) - 1;
 
 /**
- * A quest item's name no other line's item of its type has: the one asked for if it is free, else
- * "... of <settlement>", else "... (2)", "(3)". `render` fills a template in; the template is returned.
+ * The roll of a quest line's items - their technical identity (QUESTS.md, *Quest items*) - made of
+ * where the line is: its dimension's number, its settlement, and the index of its first quest there
+ * (the `n` of `q:<dimension>/<site>/<n>`). No two lines can have the same, with nothing to look up,
+ * and it does not change when a quest elsewhere does. Never 0. Fails loudly if a number outgrows its bits.
  */
-export function takeItemName(world: WorldQuestState, type: string, template: string, render: (template: string) => string): string {
-  const taken = (t: string): boolean => world.itemNames.has(`${type}/${render(t)}`);
-  let name = template;
-  if (taken(name)) name = `${template} of {settlement}`;
-  for (let n = 2; taken(name); n++) name = `${name.replace(/ \(\d+\)$/, "")} (${n})`;
-  world.itemNames.add(`${type}/${render(name)}`);
-  return name;
+export function bindFor(dimension: number, site: number, index: number): number {
+  if (!(dimension >= 0 && dimension < BIND_DIMENSIONS && site >= 0 && site < BIND_SITES && index >= 0 && index < BIND_LINES)) {
+    throw new Error(`a quest line's items cannot be told apart: dimension ${dimension} (of ${BIND_DIMENSIONS}), settlement ${site} (of ${BIND_SITES}), quest ${index} (of ${BIND_LINES}) are too many`);
+  }
+  return ((dimension << 26) | (site << 10) | (index + 1)) >>> 0;
 }
 
-export const createWorldQuestState = (): WorldQuestState => ({ uses: new Map(), anchors: [], binds: new Set(), itemNames: new Set() });
+export const createWorldQuestState = (dimension = 0): WorldQuestState => ({ uses: new Map(), anchors: [], dimension, itemNames: new Set() });
 
 export interface GeneratorInput {
   cast: Cast;
@@ -340,9 +333,10 @@ export function generateQuests(input: GeneratorInput): QuestDef[] {
     // place they are about, with an icon and a tint drawn from the rules' lists - the same in every quest
     // of the line, and not that of another line made from the same template. What a deliver or a use
     // says comes first (the letter is for the one it is delivered to), then what a receive says.
-    const lineId = plot.quests.length > 1 ? `${id(0)}#${plot.id}` : id(0);
-    const lineBind = takeBind(world, lineId);
+    const lineBind = bindFor(world.dimension, site.id, quests.length);
     const looks: Record<string, ItemLook> = {};
+    // The roll follows where the line is, so its icon and tint are chosen by a scramble of it.
+    const spun = Math.imul(lineBind, 2654435761) >>> 0;
     const named = plot.quests
       .flatMap((pq) => pq.parts.map((ref) => ({ ref, part: rules.quests.parts.get(ref.part)! })))
       .filter((c) => c.ref.item ?? c.part.item)
@@ -353,7 +347,8 @@ export function generateQuests(input: GeneratorInput): QuestDef[] {
       if (looks[type] || (pool.lines.length === 0 && pool.banks.length === 0)) continue;
       const who = ref.npc ? people.get(ref.npc) : undefined;
       const nameArgs = { ...args, npc: who?.name ?? "", npcGiven: who?.given ?? "", npcFamily: who?.family ?? "" };
-      // A name no other line's item of the type has: another pattern if one is free, else it is made so.
+      // A name no other line's item of the type has, if another pattern is free; if not, the same name and the
+      // roll tells them apart (the tooltip says which quest it is for).
       const render = (text: string): string => fillText(text, nameArgs);
       let template = "";
       for (let attempt = 0; attempt < 8; attempt++) {
@@ -361,12 +356,12 @@ export function generateQuests(input: GeneratorInput): QuestDef[] {
         if (!template || !world.itemNames.has(`${type}/${render(template)}`)) break;
       }
       if (!template) continue;
-      template = takeItemName(world, type, template, render);
+      world.itemNames.add(`${type}/${render(template)}`);
       const lists = q.itemLooks[type];
       looks[type] = {
         name: { text: template, args: nameArgs },
-        icon: lists && lists.icons.length > 0 ? lists.icons[lineBind % lists.icons.length] : "",
-        tint: lists && lists.tints.length > 0 ? lists.tints[(lineBind >>> 8) % lists.tints.length] : "",
+        icon: lists && lists.icons.length > 0 ? lists.icons[(spun >>> 8) % lists.icons.length] : "",
+        tint: lists && lists.tints.length > 0 ? lists.tints[(spun >>> 16) % lists.tints.length] : "",
       };
     }
     plot.quests.forEach((pq, n) => {

@@ -559,7 +559,7 @@ export function createServer(options: ServerOptions): Server {
     const defs: QuestDef[] = [];
     // What the quests made so far have used - places, creatures, where the objectives lie - which
     // the settlements after weigh by.
-    const world = createWorldQuestState();
+    const world = createWorldQuestState([...definitions.keys()].sort().indexOf(dimension));
     for (const id of questOrder(context.seed, dimension, settlements.map((s) => s.site.id))) {
       const { site, layout, cast } = byId.get(id)!;
       const zone = zones[site.areaId];

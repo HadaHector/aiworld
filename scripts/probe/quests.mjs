@@ -14,10 +14,10 @@ import { createWorldRecord } from "../../src/save/records.ts";
 import { addThreat } from "../../src/sim/skills/combat.ts";
 import { fillText } from "../../src/sim/text.ts";
 import { hashString } from "../../src/world/content/dimensions.ts";
-import { bindOf, lineHash } from "../../src/sim/quests/quest.ts";
+import { bindOf } from "../../src/sim/quests/quest.ts";
 import { createQuestItemLooks, lookedIcon } from "../../src/ui/questItemLook.ts";
 import { composeChain, themeFits } from "../../src/sim/quests/chains.ts";
-import { createWorldQuestState, questOrder, takeBind, takeItemName } from "../../src/sim/quests/generator.ts";
+import { bindFor, questOrder } from "../../src/sim/quests/generator.ts";
 
 let failures = 0;
 let checks = 0;
@@ -408,33 +408,19 @@ await section("segments", async () => {
   check("a curse does not follow a sickness", composeChain("x", [get("sicknessAsk"), get("sicknessSample"), get("curseSigns")]) === null);
   check("the same help is not asked twice", composeChain("x", [get("sicknessAsk"), get("sicknessSample"), get("sicknessMaker"), get("makerGone")]) === null);
   check("wanting creatures nobody is does not fit", composeChain("x", [{ ...get("foldTrouble"), creatures: { hostility: ["hostile"], family: null } }, { ...get("pelts"), roles: ["middle"], creatures: { hostility: ["friendly"], family: null } }]) === null);
-  // Quest items' technical identity and names are unique within a world, by construction.
+  // A quest item's technical identity (its roll) is unique by construction: made of where the line is.
   {
-    const world = createWorldQuestState();
-    const first = takeBind(world, "q:mainland/1/0");
-    check("a line's roll is the hash of its id", first === lineHash("q:mainland/1/0"));
-    const forced = takeBind(world, "q:mainland/1/0");
-    check("a line that would share a roll takes the next free one", forced !== first && forced === ((first + 1) >>> 0 || 1), `${first} ${forced}`);
-    check("...and the one after", takeBind(world, "q:mainland/1/0") === ((first + 2) >>> 0 || 1));
-    const edge = createWorldQuestState();
-    edge.binds.add(lineHash("x"));
-    edge.binds.add(((lineHash("x") + 1) >>> 0) || 1);
-    check("rolls are never 0 and keep going past the end of the range", takeBind(createWorldQuestState(), "anything") !== 0);
-    const top = createWorldQuestState();
-    top.binds.add(4294967295);
-    for (let i = 0; i < 3; i++) check("a roll after the top is not 0", takeBind(top, `y${i}`) !== 0);
-    const names = createWorldQuestState();
-    const render = (t) => t.replace("{settlement}", "Faesell");
-    const a = takeItemName(names, "sealedLetter", "Letter for Tam", render);
-    const b = takeItemName(names, "sealedLetter", "Letter for Tam", render);
-    const c = takeItemName(names, "sealedLetter", "Letter for Tam", render);
-    const d = takeItemName(names, "sealedLetter", "Letter for Tam", render);
-    check("a free name is kept", a === "Letter for Tam");
-    check("a taken name gets its settlement", render(b) === "Letter for Tam of Faesell", render(b));
-    check("a name taken again is numbered", render(c) === "Letter for Tam of Faesell (2)" && render(d) === "Letter for Tam of Faesell (3)", `${render(c)} / ${render(d)}`);
-    check("names are per item type", takeItemName(names, "wrappedParcel", "Letter for Tam", render) === "Letter for Tam");
-    const distinct = new Set([a, b, c, d].map(render)).size;
-    check("every name made is different", distinct === 4, String(distinct));
+    const seen = new Map();
+    let clash = 0;
+    for (let d = 0; d < 3; d++) for (let site = 0; site < 40; site++) for (let n = 0; n < 30; n++) {
+      const bind = bindFor(d, site, n);
+      if (seen.has(bind) || bind === 0) clash++;
+      seen.set(bind, `${d}/${site}/${n}`);
+    }
+    check("rolls of lines of different places never clash, nor are 0 (3 dimensions, 40 settlements, 30 quests)", clash === 0, String(clash));
+    check("...the highest places fit", bindFor(63, 65535, 1022) > 0 && bindFor(63, 65535, 1022) <= 4294967295 && bindFor(0, 0, 0) === 1);
+    check("a line that would outgrow its bits fails loudly, not silently", ["dimension", "site", "index"].every((what, i) => { try { bindFor(i === 0 ? 64 : 0, i === 1 ? 65536 : 0, i === 2 ? 1023 : 0); return false; } catch { return true; } }));
+    check("the same place gives the same roll", bindFor(1, 7, 3) === bindFor(1, 7, 3) && bindFor(1, 7, 3) !== bindFor(1, 7, 4) && bindFor(1, 7, 3) !== bindFor(1, 8, 3) && bindFor(1, 7, 3) !== bindFor(2, 7, 3));
   }
   // Someone who is gone can be spoken of, never met.
   const dead = { ...get("makerGone"), quest: { ...get("makerGone").quest, ender: "gone" } };
@@ -568,10 +554,13 @@ await section("the generator", async () => {
           owners.set(bindOf(q), line);
         }
         check(`${tag}: no two quest lines share a roll (${owners.size} lines)`, shared === 0, `${shared} shared`);
+        const withItems = w.quests.filter((q) => q.itemLooks);
+        const dims = new Set(withItems.map((q) => q.bind >>> 26));
+        check(`${tag}: the roll says where its line is (one dimension, its settlement, its index)`, dims.size === 1 && withItems.every((q) => ((q.bind >>> 10) & 0xffff) === Number(q.id.split("/")[1]) && (q.bind & 0x3ff) - 1 === Number((q.chain ? q.chain.id.split("#")[0] : q.id).split("/")[2])), JSON.stringify([...dims]));
         for (const type of new Set([...lines.keys()].map((k) => k.split("/").pop()))) {
           const looks = [...lines.entries()].filter(([k]) => k.endsWith(`/${type}`)).map(([, v]) => v);
           const names = new Set(looks.map((v) => fillText(v.name.text, v.name.args)));
-          check(`${tag}: ${type}: every line's item has a name of its own (${names.size} of ${looks.length})`, names.size === looks.length, `${names.size}/${looks.length}`);
+          check(`${tag}: ${type}: lines mostly have different names (${names.size} of ${looks.length})`, looks.length < 3 || names.size / looks.length >= 0.7, `${names.size}/${looks.length}`);
         }
         itemLines.push(...lines.entries());
         if (!lookSample) lookSample = w.quests.find((q) => q.itemLooks && Object.keys(q.itemLooks).length > 0 && q.objectives.some((o) => o.kind === "deliver"));
@@ -680,7 +669,7 @@ await section("the generator", async () => {
   if (sick) log(`\n${fillText(sick.text.title.text, sick.text.title.args)}\n${fillText(sick.text.offer.text, sick.text.offer.args)}\n`);
 });
 
-// --- every name, even when the patterns give the same one ---
+// --- the same name, told apart by the roll ---
 await section("names that would clash", async () => {
   // Every letter called just "Letter": any two lines would share a name.
   const plain = { lines: [{ text: "Letter", weight: 1, when: null }], banks: [], motive: false };
@@ -688,16 +677,12 @@ await section("names that would clash", async () => {
     for (const part of rules.quests.parts.values()) if (part.item === "sealedLetter") part.itemName = plain;
     for (const owner of [...rules.quests.plots, ...rules.quests.segments.values()]) for (const quest of owner.quests ?? [owner.quest]) for (const ref of quest.parts) if (ref.itemName) ref.itemName = plain;
   });
-  const names = new Map();
-  for (const q of w.quests) {
-    const look = q.itemLooks?.sealedLetter;
-    if (look) names.set(q.chain?.id ?? q.id, fillText(look.name.text, look.name.args));
-  }
-  const shown = [...names.values()];
-  log(`${shown.length} letters all asked to be "Letter": ${shown.join(" | ")}`);
-  check("there are several letters to clash", shown.length >= 4, String(shown.length));
-  check("...and every one has a name of its own", new Set(shown).size === shown.length, shown.join("|"));
-  check("...made so by the settlement and then a number", shown.some((n) => / of /.test(n)) && shown.filter((n) => n === "Letter").length === 1);
+  const letters = new Map();
+  for (const q of w.quests) if (q.itemLooks?.sealedLetter) letters.set(q.chain?.id ?? q.id, { name: fillText(q.itemLooks.sealedLetter.name.text, q.itemLooks.sealedLetter.name.args), roll: bindOf(q) });
+  const all = [...letters.values()];
+  log(`${all.length} letters all called "Letter": rolls ${all.map((x) => x.roll).join(", ")}`);
+  check("there are several letters that share a name", all.length >= 4 && new Set(all.map((x) => x.name)).size === 1, String(all.length));
+  check("...and each has a roll of its own", new Set(all.map((x) => x.roll)).size === all.length);
 });
 
 // --- weighting: nearer, less used, less crowded ---

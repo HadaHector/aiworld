@@ -29,8 +29,8 @@ export interface QuestDef {
   where: { dimension: string; x: number; z: number; radius: number }[];
   /** How the quest items it hands over, asks for or has used look - by item type: "Letter for Thilsell". */
   itemLooks?: Record<string, ItemLook>;
-  /** The roll of its quest line's items, given by the generator so that no two lines of a world share
-   *  one (see `bindOf`); a quest made by hand has none, and takes the hash of its id. */
+  /** The roll of its quest line's items, made by the generator from where the line is, so that no two
+   *  lines share one (see `bindOf`); a quest made by hand has none, and takes the hash of its id. */
   bind?: number;
 }
 
@@ -44,9 +44,10 @@ export interface ItemLook {
 }
 
 /**
- * The roll of a quest line's items, so a letter for one errand is not that of another made from the same
- * template (QUESTS.md, *Quest items*): the quest's `bind` where the generator gave one - it makes
- * sure no two lines of a world have the same - else the hash of the chain's id or the quest's own. Never 0.
+ * The roll of a quest line's items - their technical identity, so a letter for one errand is not that of
+ * another made from the same template (QUESTS.md, *Quest items*): the quest's `bind` where the generator
+ * gave one - made of the line's place (dimension, settlement and index), so no two lines have the same -
+ * else, for a quest made by hand, the hash of the chain's id or the quest's own. Never 0.
  */
 export const bindOf = (def: Pick<QuestDef, "id" | "chain"> & { bind?: number }): number => def.bind ?? lineHash(def.chain?.id ?? def.id);
 
