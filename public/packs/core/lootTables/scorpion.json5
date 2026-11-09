@@ -1,0 +1,10 @@
+// What a giant scorpion drops.
+{
+  rolls: [1, 2],
+  pick: [
+    { weight: 40, item: "scorpionStinger" },
+    { weight: 40, item: "scorpionClaw", count: [1,2] },
+    { weight: 20 },
+  ],
+  always: [{ money: [2,7] }],
+}

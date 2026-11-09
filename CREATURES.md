@@ -408,7 +408,9 @@ Each leaves the game working: dev server, `npm run probe`, `npm run server`, `np
 
 - **Beast bodies** - a quadruped skeleton from curves, its gait and bite: the next step after this,
   as CHARACTERS.md's *Next steps* 6. *Since built* ([BEASTS.md](BEASTS.md)): a species' `look.beast`
-  names a body plan, and bears and giant ants joined the roster.
+  names a body plan, and bears and giant ants joined the roster - then stags (and reindeer), lynxes,
+  giant rats, crocodiles (and sand lizards), giant scorpions and giant beetles, each a species with
+  its variants, loot and habitats.
 - Call for help beyond a group, creatures fighting creatures, predators and prey.
 - Pathfinding: a creature that cannot reach its target evades.
 - Fear, charm and sleep; taming and pets.

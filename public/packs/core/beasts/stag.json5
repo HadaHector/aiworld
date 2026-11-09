@@ -1,0 +1,117 @@
+// The stag's body plan (see BEASTS.md): a deer on long thin legs ending in small hooves, a long neck
+// carried high, a narrow head, big ears set sideways, a scut of a tail, and antlers - a long beam
+// swept back with tines off it. Stylised: the antlers and ears a little big, so it reads from afar.
+// Lengths in metres at size 1.
+{
+  name: "Stag",
+  size: [0.92, 1.12],
+  build: [0.9, 1.08],
+  verts: { trunk: 12, limb: 6 },
+  root: "chest",
+  trunk: [
+    { id: "head", role: "head", length: 0.38, slope: -30, rings: 6, round: 0.75,
+      up: [[0, 0.03], [0.4, 0.05], [0.7, 0.085], [0.9, 0.1], [1, 0.085]],
+      down: [[0, 0.035], [0.45, 0.045], [0.8, 0.07], [1, 0.075]],
+      side: [[0, 0.03], [0.4, 0.045], [0.75, 0.085], [1, 0.075]] },
+    { id: "neck", role: "neck", length: 0.5, slope: 58, rings: 3, round: 0.8,
+      up: [[0, 0.075], [1, 0.12]], down: [[0, 0.08], [0.5, 0.1], [1, 0.17]], side: [[0, 0.07], [1, 0.12]] },
+    { id: "chest", length: 0.46, slope: 4, rings: 3, round: 0.75,
+      up: [[0, 0.15], [0.5, 0.16], [1, 0.15]], down: [[0, 0.2], [0.45, 0.22], [1, 0.19]], side: [[0, 0.14], [0.5, 0.16], [1, 0.15]] },
+    { id: "loin", length: 0.44, slope: -2, rings: 3, round: 0.75,
+      up: [[0, 0.15], [1, 0.15]], down: [[0, 0.19], [0.6, 0.15], [1, 0.13]], side: [[0, 0.15], [0.5, 0.15], [1, 0.14]] },
+    { id: "hip", length: 0.26, slope: 10, rings: 2, round: 0.75,
+      up: [[0, 0.15], [1, 0.11]], down: [[0, 0.13], [1, 0.08]], side: [[0, 0.14], [1, 0.09]] },
+    { id: "tail0", role: "tail", length: 0.13, slope: 40, rings: 2, round: 0.7,
+      up: [[0, 0.05], [1, 0.03]], down: [[0, 0.03], [1, 0.02]], side: [[0, 0.06], [1, 0.035]] },
+  ],
+  limbs: [
+    { id: "fore", on: "chest", at: 0.3, out: 0.09, drop: 0.08, splay: 2,
+      segments: [
+        { length: 0.3, angle: -10, width: [[0, 0.09], [0.6, 0.06], [1, 0.042]], depth: 1.3, rings: 2 },
+        { length: 0.36, angle: 3, width: [[0, 0.036], [1, 0.028]], depth: 1.15 },
+        { length: 0.24, angle: 14, width: [[0, 0.026], [1, 0.024]] },
+        { length: 0.07, angle: 55, width: [[0, 0.03], [1, 0.034]], depth: 1.1 },
+      ] },
+    { id: "hind", on: "hip", at: 0.35, out: 0.09, drop: 0.04, splay: 2,
+      segments: [
+        { length: 0.36, angle: 22, width: [[0, 0.11], [0.5, 0.085], [1, 0.05]], depth: 1.4, rings: 2 },
+        { length: 0.38, angle: -30, width: [[0, 0.042], [1, 0.028]], depth: 1.25 },
+        { length: 0.3, angle: 8, width: [[0, 0.026], [1, 0.024]] },
+        { length: 0.07, angle: 55, width: [[0, 0.03], [1, 0.034]], depth: 1.1 },
+      ] },
+  ],
+  parts: [
+    // Big ears set out sideways.
+    { id: "ear", bone: "head", at: 0.86, around: 62, length: 0.16, radius: 0.05, flat: 0.3, direction: [1, 0.55, -0.35], curve: -0.1, mirror: true, colour: "coat", scale: [0.9, 1.1], sink: 0.15 },
+    // Antlers: a long beam swept up and back, a brow tine forward, a tine off the middle and a
+    // crown at the top - all from the pedicle, so they read as one branching rack.
+    { id: "beam", bone: "head", at: 0.8, around: 30, length: 0.54, radius: 0.036, direction: [1, 0.85, -0.55], curve: 0.8, mirror: true, colour: "antler", scale: [0.85, 1.2], sink: 0.15, traits: { old: 1.3 } },
+    { id: "browTine", bone: "head", at: 0.78, around: 30, length: 0.22, radius: 0.022, direction: [0.45, 0.35, 1], curve: 0.6, mirror: true, colour: "antler", scale: [0.85, 1.2], sink: 0.1, traits: { old: 1.3 } },
+    { id: "midTine", bone: "head", at: 0.8, around: 33, length: 0.4, radius: 0.022, direction: [0.9, 1, 0.25], curve: 0.4, mirror: true, colour: "antler", scale: [0.85, 1.2], sink: 0.1, traits: { old: 1.3 } },
+    { id: "crown", bone: "head", at: 0.82, around: 36, length: 0.52, radius: 0.02, direction: [1.3, 1, -0.15], curve: 0.5, mirror: true, colour: "antler", chance: 0.7, scale: [0.85, 1.2], sink: 0.1, traits: { old: 1.4 } },
+  ],
+  cards: [
+    // A shaggy mane under the neck (a rutting stag's), and a tuft of a scut.
+    { id: "mane", bone: "neck", from: 0.25, to: 1, around: 180, arc: 150, count: 40, length: [0.08, 0.14], width: [0.05, 0.07], lean: 0.55, droop: 0.4, mask: "strands", colour: "mane", chance: 0.75, traits: { old: 1.3 } },
+    { id: "scut", bone: "tail0", from: 0, to: 1, around: 0, arc: 360, count: 14, length: [0.05, 0.08], width: [0.04, 0.06], lean: 0.8, droop: 0.1, mask: "strands", colour: "pale" },
+  ],
+  paint: {
+    palette: {
+      coat: ["#8a5a36", "#7e5232", "#94643c", "#76503a"],
+      back: ["#5a3a24", "#4e3420"],
+      belly: ["#d8c6a8", "#e0d0b4"],
+      mane: ["#7a5236", "#6e4a30"],
+      pale: ["#f0e8da"],
+      antler: ["#d8c8a8", "#c8b490", "#e0d4b8"],
+      spot: ["#e8dcc4"],
+      eye: ["#3a2214", "#4a2c18", "#2a1a10"],
+      nose: ["#1a1412"],
+    },
+    mottle: 0.12,
+    layers: [
+      { kind: "belly", colour: "belly", amount: 0.9 },
+      { kind: "back", colour: "back", amount: 0.6, on: ["neck", "chest", "loin", "hip"] },
+      { kind: "mask", colour: "belly", amount: 0.6, size: 0.25, chance: 0.6 },
+      { kind: "spots", colour: "spot", amount: 0.8, size: 0.05, on: ["loin", "hip"], chance: 0.3 },
+      { kind: "socks", colour: "back", amount: 0.5, size: 0.2, chance: 0.4 },
+      { kind: "scars", colour: "pale", amount: 0.5, size: 0.14, chance: 0.2 },
+    ],
+    eyes: { segment: "head", at: 0.66, around: 60, size: 0.03, colour: "eye", style: "detailed" },
+  },
+  idle: { breathe: 1, tail: 1.5, head: 1.2 },
+  gaits: [
+    { id: "walk", pattern: "walk", speed: 1.2, stride: 1.3, duty: 0.66, lift: 0.1, bob: 0.01, wave: 0.02 },
+    { id: "trot", pattern: "trot", speed: 3, stride: 1.8, duty: 0.48, lift: 0.14, bob: 0.02, wave: 0.02 },
+    { id: "bound", pattern: "gallop", speed: 6, stride: 3, duty: 0.32, lift: 0.2, bob: 0.06, pitch: 0.1, reach: 1.1 },
+  ],
+  clips: {
+    // Antlers down, then a lunge up into the target.
+    gore: { length: 0.9, layer: "full", keys: [
+      { t: 0, turns: {} },
+      { t: 0.35, turns: { neck: [38, 0, 0], head: [30, 0, 0], chest: [6, 0, 0], "fore*0": [12, 0, 0] }, offset: [0, -0.08, -0.08] },
+      { t: 0.6, turns: { neck: [14, 0, 0], head: [-10, 8, 0], chest: [-6, 0, 0] }, offset: [0, 0.04, 0.22] },
+      { t: 0.8, turns: { neck: [6, -10, 0], head: [0, -12, 8] }, offset: [0, 0, 0.1] },
+      { t: 1, turns: {} },
+    ] },
+    // Rearing to strike with the forehooves.
+    kick: { length: 1.0, layer: "full", keys: [
+      { t: 0, turns: {} },
+      { t: 0.4, turns: { chest: [-30, 0, 0], neck: [-10, 0, 0], "fore*0": [-60, 0, 0], "fore*1": [70, 0, 0] }, offset: [0, 0.2, -0.05] },
+      { t: 0.65, turns: { chest: [-8, 0, 0], "fore*0": [-20, 0, 0], "fore*1": [20, 0, 0] }, offset: [0, 0.04, 0.12] },
+      { t: 1, turns: {} },
+    ] },
+    bell: { length: 2.4, layer: "upper", keys: [
+      { t: 0, turns: {} },
+      { t: 0.25, turns: { neck: [-25, 0, 0], head: [-35, 0, 0] } },
+      { t: 0.8, turns: { neck: [-28, 0, 0], head: [-38, 0, 0] } },
+      { t: 1, turns: {} },
+    ] },
+  },
+  actions: { swing: "gore", attack: "gore" },
+  places: { mouth: "head", chest: "chest" },
+  variants: {
+    // A pale northern deer with heavier antlers' colour - creatures/stag.json5's reindeer.
+    reindeer: { palette: { coat: ["#a89a88", "#9a8c7a", "#b4a896"], back: ["#5a4e44"], belly: ["#ece6dc"], mane: ["#ece6dc", "#ddd6ca"], antler: ["#b8a888"] }, build: [1.0, 1.15] },
+    fallow: { palette: { coat: ["#a87444", "#b07c48"], spot: ["#f4ecdc"], back: ["#6a4426"] } },
+  },
+}

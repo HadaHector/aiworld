@@ -1,0 +1,10 @@
+// What a crocodile drops.
+{
+  rolls: [1, 2],
+  pick: [
+    { weight: 45, item: "crocodileHide" },
+    { weight: 35, item: "crocodileTooth", count: [1,3] },
+    { weight: 20 },
+  ],
+  always: [{ money: [3,9] }],
+}

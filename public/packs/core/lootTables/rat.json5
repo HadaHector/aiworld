@@ -1,0 +1,10 @@
+// What a giant rat drops.
+{
+  rolls: [1, 2],
+  pick: [
+    { weight: 45, item: "ratTail" },
+    { weight: 30, item: "ratTooth", count: [1,2] },
+    { weight: 25 },
+  ],
+  always: [{ money: [0,3] }],
+}

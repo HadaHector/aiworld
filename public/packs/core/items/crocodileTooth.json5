@@ -1,0 +1,1 @@
+{ name: "Crocodile Tooth", icon: "item-wolf-fang", kind: "material", rarity: "common", stack: 20, value: 9 }

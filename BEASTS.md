@@ -437,6 +437,17 @@ corpses; instancing with thin instances if skinning allows it; a lower detail fa
 - **Dying on its back**: a plan with `dies: "back"` (ant, spider, centipede) turns right over when
   it dies with no `death` clip, its back on the ground and its legs curled up over the belly;
   `"side"` (the default) rolls onto its side, as the mammals do.
+- **Twelve plans** (the user asked for twice as many): six more from pack data alone - a **stag**
+  (pillar legs, a long neck carried high, an antler rack of cones fanned from the pedicle; reindeer
+  and fallow palettes), a **lynx** (short blunt muzzle, ear tufts, cheek ruff, spots, bobtail; snow
+  and sand), a **giant rat** (whiskers, incisors, round naked ears, a long pink tail; plague and
+  bog), a **crocodile** (the sprawl: legs yawed out sideways before they come down, a flat toothed
+  snout, rows of scutes, a death-roll clip for `maul`; black, and a sand lizard), a **giant
+  scorpion** (eight legs, pincers that do not walk, a tail rising to the vertical with the sting
+  arched forward over the back; sand and black) and a **giant beetle** (a horned rhinoceros beetle
+  with a domed shell, tripod gait; emerald and bronze). The insects and arachnids die on their
+  backs. Each is a creature species with its loot table and items (borrowed icons) and habitats
+  filling the deserts, bayous, steppes and crags that had few beasts; the server loads 32 kinds.
 - **Places for cues**: chest is the root's middle, head the head bone, `weapon` the snout's tip,
   hands the front feet, feet the ground under it.
 - **Measured**: making a beast (build, paint, bake) 85-200 ms in a worker (Node, 256 atlas);

@@ -1,0 +1,10 @@
+// What a giant beetle drops.
+{
+  rolls: [1, 2],
+  pick: [
+    { weight: 50, item: "beetleShell", count: [1,2] },
+    { weight: 30, item: "beetleHorn" },
+    { weight: 20 },
+  ],
+  always: [{ money: [1,5] }],
+}

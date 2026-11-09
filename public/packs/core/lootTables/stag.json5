@@ -1,0 +1,10 @@
+// What a stag drops.
+{
+  rolls: [1, 2],
+  pick: [
+    { weight: 40, item: "deerHide" },
+    { weight: 30, item: "venison", count: [1,3] },
+    { weight: 30, item: "stagAntler" },
+  ],
+  always: [{ money: [2,6] }],
+}

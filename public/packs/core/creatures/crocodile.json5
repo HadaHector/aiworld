@@ -1,0 +1,26 @@
+// Crocodiles (see CREATURES.md, BEASTS.md): lying low in the bayous and the reeds, they lunge and
+// snap and drag what they catch into a roll. A sand lizard of the same build hunts the deserts.
+// Drawn by beasts/crocodile.json5.
+{
+  entity: "beast",
+  name: "{variant} Crocodile",
+  family: "beast",
+  hostility: "hostile",
+  stats: { stamina: 6, strength: 12, agility: 6, armor: 70, weaponMin: 3, weaponMax: 6, weaponSpeed: 3.4 },
+  perLevel: { stamina: 2.2, strength: 1.8, agility: 0.8, armor: 24, weaponMin: 1.4, weaponMax: 2 },
+  spells: [{ skill: "maul" }],
+  tactics: [{ skill: "maul", every: [14, 18] }],
+  speed: { walk: 0.16, run: 0.4 },
+  group: { size: [1, 2], spread: 6 },
+  habitat: { cypressBayou: 3, reedMarsh: 2, rainforest: 2, palmGrove: 2, desert: 1, saltFlat: 1, sandSea: 1 },
+  levelOffset: 2,
+  respawn: [300, 420],
+  loot: "crocodile",
+  look: { height: 0.6, radius: 0.8, color: [0.29, 0.32, 0.21], beast: "crocodile", feedback: { weapon: "fang", armor: "scale", family: "bear" } },
+  variants: [
+    { id: "marsh", name: "Marsh", habitat: ["reedMarsh", "rainforest", "palmGrove"] },
+    { id: "black", name: "Black", habitat: ["cypressBayou"], look: { color: [0.16, 0.17, 0.14], beast: "crocodile.black" }, stats: { stamina: 8 } },
+    { id: "sand", name: "Sand", habitat: ["desert", "saltFlat", "sandSea"], look: { color: [0.63, 0.54, 0.35], beast: "crocodile.sand" }, stats: { armor: 50 } },
+  ],
+  traits: { pick: [0, 1], pool: ["thickHide", "old"] },
+}

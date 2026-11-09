@@ -1,0 +1,26 @@
+// Lynxes (see CREATURES.md, BEASTS.md): solitary big cats of the taiga and the high crags, and a
+// sandy cousin in the dry hills - they stalk, pounce and rake, and the wounds bleed. Drawn by
+// beasts/lynx.json5.
+{
+  entity: "beast",
+  name: "{variant} Lynx",
+  family: "beast",
+  hostility: "hostile",
+  stats: { stamina: 3, strength: 9, agility: 14, armor: 20, weaponMin: 2, weaponMax: 5, weaponSpeed: 2.6 },
+  perLevel: { stamina: 1.4, strength: 1.5, agility: 1.8, armor: 9, weaponMin: 1.1, weaponMax: 1.7 },
+  spells: [{ skill: "rabidBite" }],
+  tactics: [{ skill: "rabidBite", every: [10, 14] }],
+  speed: { walk: 0.22, run: 0.5 },
+  group: { size: [1, 1], spread: 4 },
+  habitat: { snowyTaiga: 3, greenAlps: 2, windsweptFell: 2, icePeaks: 2, alpineMeadow: 1, autumnWood: 1, desertRange: 2, sageHills: 2, maquis: 1 },
+  levelOffset: 1,
+  respawn: [300, 420],
+  loot: "lynx",
+  look: { height: 1.0, radius: 0.5, color: [0.66, 0.56, 0.42], beast: "lynx", feedback: { weapon: "claw", armor: "fur", family: "wolf" } },
+  variants: [
+    { id: "forest", name: "Forest", habitat: ["greenAlps", "alpineMeadow", "autumnWood"] },
+    { id: "snow", name: "Snow", habitat: ["snowyTaiga", "windsweptFell", "icePeaks"], look: { color: [0.85, 0.84, 0.82], beast: "lynx.snow" }, stats: { armor: 30 } },
+    { id: "sand", name: "Sand", habitat: ["desertRange", "sageHills", "maquis"], look: { color: [0.75, 0.56, 0.37], beast: "lynx.sand" } },
+  ],
+  traits: { pick: [0, 1], pool: ["swift", "old", "rabid"] },
+}

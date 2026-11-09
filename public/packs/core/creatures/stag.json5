@@ -1,0 +1,24 @@
+// Stags (see CREATURES.md, BEASTS.md): deer of the woods and moors, neutral, and quick to run - but
+// cornered, they lower their antlers and charge. Drawn by beasts/stag.json5.
+{
+  entity: "beast",
+  name: "{variant} Stag",
+  family: "beast",
+  hostility: "neutral",
+  stats: { stamina: 4, strength: 9, agility: 12, armor: 25, weaponMin: 2, weaponMax: 5, weaponSpeed: 3 },
+  perLevel: { stamina: 1.6, strength: 1.4, agility: 1.4, armor: 10, weaponMin: 1.1, weaponMax: 1.7 },
+  spells: [{ skill: "gore" }],
+  tactics: [{ skill: "gore", every: [12, 16] }],
+  speed: { walk: 0.22, run: 0.5 },
+  group: { size: [1, 3], spread: 7 },
+  habitat: { meadow: 2, bluebellWood: 3, autumnWood: 3, heatherMoor: 3, greenAlps: 2, alpineMeadow: 2, snowyTaiga: 2, frostSteppe: 3, polarDesert: 2, frozenBog: 2 },
+  flee: { at: 0.3, time: 8 },
+  respawn: [240, 360],
+  loot: "stag",
+  look: { height: 1.6, radius: 0.55, color: [0.54, 0.35, 0.21], beast: "stag", feedback: { weapon: "horn", armor: "fur", family: "boar" } },
+  variants: [
+    { id: "red", name: "Red", habitat: ["meadow", "bluebellWood", "autumnWood", "heatherMoor", "greenAlps", "alpineMeadow"] },
+    { id: "reindeer", name: "Reindeer", habitat: ["snowyTaiga", "frostSteppe", "polarDesert", "frozenBog"], look: { color: [0.66, 0.6, 0.53], beast: "stag.reindeer" }, stats: { stamina: 5 } },
+  ],
+  traits: { pick: [0, 1], pool: ["swift", "old", "thickHide"] },
+}

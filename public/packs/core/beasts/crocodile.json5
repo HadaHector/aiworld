@@ -1,0 +1,131 @@
+// The crocodile's body plan (see BEASTS.md): a long flat snout lined with teeth, a low broad body
+// slung between four sprawling legs that reach out sideways before they come down, rows of bony
+// scutes along the back, and a long heavy tail flattened side to side. The sprawl is the generator's
+// other extreme from the deer's pillars. Lengths in metres at size 1.
+{
+  name: "Crocodile",
+  size: [0.9, 1.15],
+  build: [0.92, 1.12],
+  verts: { trunk: 12, limb: 6 },
+  root: "body",
+  trunk: [
+    { id: "head", role: "head", length: 0.6, slope: 0, rings: 7, round: 0.45,
+      up: [[0, 0.03], [0.3, 0.04], [0.7, 0.06], [0.88, 0.1], [1, 0.09]],
+      down: [[0, 0.025], [0.5, 0.035], [1, 0.06]],
+      side: [[0, 0.06], [0.15, 0.055], [0.5, 0.08], [0.85, 0.13], [1, 0.12]] },
+    { id: "neck", role: "neck", length: 0.2, slope: -2, rings: 2, round: 0.5,
+      up: [[0, 0.09], [1, 0.11]], down: [[0, 0.07], [1, 0.1]], side: [[0, 0.12], [1, 0.17]] },
+    { id: "body", length: 0.85, slope: 0, rings: 5, round: 0.5,
+      up: [[0, 0.11], [0.5, 0.13], [1, 0.11]], down: [[0, 0.1], [0.5, 0.12], [1, 0.1]], side: [[0, 0.18], [0.5, 0.24], [1, 0.19]] },
+    { id: "hip", length: 0.25, slope: 0, rings: 2, round: 0.55,
+      up: [[0, 0.11], [1, 0.1]], down: [[0, 0.1], [1, 0.08]], side: [[0, 0.18], [1, 0.13]] },
+    { id: "tail0", role: "tail", length: 0.4, slope: 2, rings: 3, round: 0.6,
+      up: [[0, 0.1], [1, 0.085]], down: [[0, 0.08], [1, 0.065]], side: [[0, 0.12], [1, 0.08]] },
+    { id: "tail1", role: "tail", length: 0.4, slope: 2, rings: 3, round: 0.6,
+      up: [[0, 0.085], [1, 0.07]], down: [[0, 0.065], [1, 0.05]], side: [[0, 0.08], [1, 0.05]] },
+    { id: "tail2", role: "tail", length: 0.38, slope: 0, rings: 3, round: 0.6,
+      up: [[0, 0.07], [1, 0.05]], down: [[0, 0.05], [1, 0.035]], side: [[0, 0.05], [1, 0.03]] },
+    { id: "tail3", role: "tail", length: 0.34, slope: -2, rings: 3, round: 0.6,
+      up: [[0, 0.05], [1, 0.012]], down: [[0, 0.035], [1, 0.01]], side: [[0, 0.03], [1, 0.006]] },
+  ],
+  limbs: [
+    // Out sideways from the shoulder, then down to a splayed foot.
+    { id: "fore", on: "body", at: 0.12, yaw: 70, out: 0.16, drop: 0.04,
+      segments: [
+        { length: 0.2, angle: 100, width: [[0, 0.075], [1, 0.05]], depth: 1.1, rings: 2 },
+        { length: 0.17, angle: 5, width: [[0, 0.05], [1, 0.04]], rings: 2 },
+        { length: 0.11, angle: 70, width: [[0, 0.045], [0.6, 0.06], [1, 0.04]], depth: 0.4 },
+      ] },
+    { id: "hind", on: "hip", at: 0.4, yaw: 112, out: 0.16, drop: 0.04,
+      segments: [
+        { length: 0.24, angle: 100, width: [[0, 0.09], [1, 0.055]], depth: 1.15, rings: 2 },
+        { length: 0.2, angle: 0, width: [[0, 0.055], [1, 0.045]], rings: 2 },
+        { length: 0.14, angle: 70, width: [[0, 0.05], [0.6, 0.07], [1, 0.045]], depth: 0.4 },
+      ] },
+  ],
+  parts: [
+    // Teeth along the jaw, the big fourth one showing outside the snout.
+    { id: "tooth", bone: "head", at: 0.08, around: 108, length: 0.04, radius: 0.008, direction: [0.3, -1, 0.1], mirror: true, colour: "tooth", sink: 0.2 },
+    { id: "tooth2", bone: "head", at: 0.28, around: 112, length: 0.055, radius: 0.01, direction: [0.35, -0.6, 0.1], mirror: true, colour: "tooth", sink: 0.2 },
+    { id: "tooth3", bone: "head", at: 0.48, around: 110, length: 0.045, radius: 0.009, direction: [0.3, -1, 0], mirror: true, colour: "tooth", sink: 0.2 },
+    { id: "tooth4", bone: "head", at: 0.66, around: 108, length: 0.04, radius: 0.008, direction: [0.3, -1, -0.1], mirror: true, colour: "tooth", sink: 0.2 },
+    // Brow ridges over the eyes.
+    { id: "brow", bone: "head", shape: "blade", at: 0.84, around: 30, length: 0.06, radius: 0.03, flat: 0.5, direction: [0.3, 1, -0.4], mirror: true, colour: "scute", sink: 0.3 },
+    // Scutes: two rows of bony ridges down the back and onto the tail, and a single crest further on.
+    { id: "scute0", bone: "neck", shape: "blade", at: 0.6, around: 14, length: 0.06, radius: 0.035, flat: 0.4, direction: [0, 1, -0.6], mirror: true, colour: "scute", sink: 0.3 },
+    { id: "scute1", bone: "body", shape: "blade", at: 0.1, around: 16, length: 0.065, radius: 0.04, flat: 0.4, direction: [0, 1, -0.6], mirror: true, colour: "scute", sink: 0.3, traits: { old: 1.3 } },
+    { id: "scute2", bone: "body", shape: "blade", at: 0.35, around: 16, length: 0.07, radius: 0.04, flat: 0.4, direction: [0, 1, -0.6], mirror: true, colour: "scute", sink: 0.3, traits: { old: 1.3 } },
+    { id: "scute3", bone: "body", shape: "blade", at: 0.6, around: 16, length: 0.07, radius: 0.04, flat: 0.4, direction: [0, 1, -0.6], mirror: true, colour: "scute", sink: 0.3, traits: { old: 1.3 } },
+    { id: "scute4", bone: "body", shape: "blade", at: 0.85, around: 16, length: 0.065, radius: 0.04, flat: 0.4, direction: [0, 1, -0.6], mirror: true, colour: "scute", sink: 0.3, traits: { old: 1.3 } },
+    { id: "scute5", bone: "hip", shape: "blade", at: 0.5, around: 18, length: 0.07, radius: 0.04, flat: 0.4, direction: [0, 1, -0.6], mirror: true, colour: "scute", sink: 0.3 },
+    { id: "scute6", bone: "tail0", shape: "blade", at: 0.3, around: 22, length: 0.07, radius: 0.04, flat: 0.4, direction: [0, 1, -0.6], mirror: true, colour: "scute", sink: 0.3 },
+    { id: "scute7", bone: "tail0", shape: "blade", at: 0.8, around: 24, length: 0.065, radius: 0.035, flat: 0.4, direction: [0, 1, -0.6], mirror: true, colour: "scute", sink: 0.3 },
+    { id: "crest1", bone: "tail1", shape: "blade", at: 0.3, around: 0, length: 0.06, radius: 0.035, flat: 0.4, direction: [0, 1, -0.6], colour: "scute", sink: 0.3 },
+    { id: "crest2", bone: "tail1", shape: "blade", at: 0.75, around: 0, length: 0.055, radius: 0.03, flat: 0.4, direction: [0, 1, -0.6], colour: "scute", sink: 0.3 },
+    { id: "crest3", bone: "tail2", shape: "blade", at: 0.3, around: 0, length: 0.05, radius: 0.028, flat: 0.4, direction: [0, 1, -0.6], colour: "scute", sink: 0.3 },
+    { id: "crest4", bone: "tail2", shape: "blade", at: 0.75, around: 0, length: 0.045, radius: 0.025, flat: 0.4, direction: [0, 1, -0.6], colour: "scute", sink: 0.3 },
+    { id: "crest5", bone: "tail3", shape: "blade", at: 0.3, around: 0, length: 0.035, radius: 0.02, flat: 0.4, direction: [0, 1, -0.6], colour: "scute", sink: 0.3 },
+    // Claws on the feet.
+    { id: "claw", bone: "foreR2", at: 0.85, around: 0, length: 0.04, radius: 0.012, direction: [0, -0.4, 1], mirror: true, colour: "tooth", sink: 0.2 },
+    { id: "hindClaw", bone: "hindR2", at: 0.85, around: 0, length: 0.045, radius: 0.013, direction: [0, -0.4, 1], mirror: true, colour: "tooth", sink: 0.2 },
+  ],
+  cards: [],
+  paint: {
+    palette: {
+      coat: ["#4a5236", "#424a30", "#525a3a", "#3e4630"],
+      back: ["#2e3422", "#343a26"],
+      belly: ["#c8c49a", "#bcb890", "#d0cca4"],
+      scute: ["#2a2e1e", "#363a28"],
+      band: ["#22281a"],
+      tooth: ["#e8e2c8"],
+      eye: ["#c8b030", "#b8a020", "#d0a030"],
+      nose: ["#22281a"],
+    },
+    mottle: 0.22,
+    layers: [
+      { kind: "belly", colour: "belly", amount: 0.95 },
+      { kind: "back", colour: "back", amount: 0.7 },
+      { kind: "bands", colour: "band", amount: 0.7, size: 0.18, on: ["tail0", "tail1", "tail2", "tail3"] },
+      { kind: "spots", colour: "band", amount: 0.6, size: 0.05, on: ["body", "hip", "neck"], chance: 0.6 },
+      { kind: "socks", colour: "back", amount: 0.5, size: 0.4 },
+      { kind: "scars", colour: "belly", amount: 0.5, size: 0.16, chance: 0.35 },
+    ],
+    eyes: { segment: "head", at: 0.86, around: 34, size: 0.022, colour: "eye", style: "detailed" },
+  },
+  idle: { breathe: 0.5, tail: 2.2, head: 0.4 },
+  gaits: [
+    { id: "walk", pattern: "trot", speed: 0.8, stride: 0.7, duty: 0.7, lift: 0.06, bob: 0.004, wave: 0.12 },
+    { id: "rush", pattern: "trot", speed: 3, stride: 1.2, duty: 0.5, lift: 0.08, bob: 0.01, wave: 0.14 },
+  ],
+  clips: {
+    // The snout lifts, then snaps sideways and down.
+    snap: { length: 0.7, layer: "full", keys: [
+      { t: 0, turns: {} },
+      { t: 0.35, turns: { head: [-22, 0, 0], neck: [-10, 0, 0], body: [-4, 0, 0], tail0: [0, 10, 0] }, offset: [0, 0.04, -0.06] },
+      { t: 0.55, turns: { head: [14, 12, 0], neck: [6, 10, 0], tail0: [0, -14, 0] }, offset: [0, 0, 0.16] },
+      { t: 0.75, turns: { head: [6, -10, 12], neck: [0, -8, 0] }, offset: [0, 0, 0.08] },
+      { t: 1, turns: {} },
+    ] },
+    // The death roll: the whole body twists over and back.
+    roll: { length: 1.4, layer: "full", keys: [
+      { t: 0, turns: {} },
+      { t: 0.25, turns: { body: [0, 0, 60], head: [10, 0, 20], tail0: [0, 20, 0] } },
+      { t: 0.55, turns: { body: [0, 0, 160], head: [0, 0, 20], tail0: [0, -20, 0] } },
+      { t: 0.8, turns: { body: [0, 0, 60], tail0: [0, 10, 0] } },
+      { t: 1, turns: {} },
+    ] },
+    gape: { length: 2.5, layer: "upper", keys: [
+      { t: 0, turns: {} },
+      { t: 0.2, turns: { head: [-24, 0, 0] } },
+      { t: 0.85, turns: { head: [-26, 0, 0] } },
+      { t: 1, turns: {} },
+    ] },
+  },
+  actions: { swing: "snap", attack: "snap", maul: "roll" },
+  places: { mouth: "head", chest: "body" },
+  variants: {
+    // A sandy monitor-like lizard of the deserts; a dark, near-black old swamp crocodile.
+    sand: { palette: { coat: ["#a08a5a", "#988252", "#ac9464"], back: ["#6a5a38"], scute: ["#5a4a2e"], band: ["#5a4a30"], belly: ["#e0d4b0"] }, size: [0.75, 0.95] },
+    black: { palette: { coat: ["#2a2c24", "#26281e"], back: ["#18190f"], scute: ["#121410"], band: ["#101208"], belly: ["#9a9478"] }, size: [1.05, 1.25] },
+  },
+}

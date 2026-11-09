@@ -1,0 +1,111 @@
+// The giant rat's body plan (see BEASTS.md): a pointed snout with whiskers and two great yellow
+// incisors, round naked ears, a hunched pear of a body on short legs, and a long bare tail as long
+// again as the body. It scurries and bounds. Lengths in metres at size 1.
+{
+  name: "Giant Rat",
+  size: [1.05, 1.3],
+  build: [0.9, 1.15],
+  verts: { trunk: 12, limb: 6 },
+  root: "chest",
+  trunk: [
+    { id: "head", role: "head", length: 0.24, slope: -14, rings: 6, round: 0.8,
+      up: [[0, 0.02], [0.35, 0.04], [0.7, 0.07], [1, 0.075]],
+      down: [[0, 0.02], [0.4, 0.035], [0.8, 0.055], [1, 0.06]],
+      side: [[0, 0.018], [0.35, 0.04], [0.75, 0.075], [1, 0.075]] },
+    { id: "neck", role: "neck", length: 0.08, slope: 10, rings: 1, round: 0.85,
+      up: [[0, 0.075], [1, 0.1]], down: [[0, 0.065], [1, 0.09]], side: [[0, 0.08], [1, 0.1]] },
+    { id: "chest", length: 0.22, slope: -8, rings: 3, round: 0.85,
+      up: [[0, 0.1], [1, 0.14]], down: [[0, 0.09], [1, 0.11]], side: [[0, 0.1], [1, 0.13]] },
+    { id: "belly", length: 0.26, slope: 0, rings: 3, round: 0.88,
+      up: [[0, 0.14], [0.5, 0.16], [1, 0.15]], down: [[0, 0.11], [0.5, 0.13], [1, 0.11]], side: [[0, 0.13], [0.5, 0.155], [1, 0.14]] },
+    { id: "hip", length: 0.16, slope: 22, rings: 2, round: 0.88,
+      up: [[0, 0.14], [1, 0.08]], down: [[0, 0.1], [1, 0.05]], side: [[0, 0.13], [1, 0.07]] },
+    { id: "tail0", role: "tail", length: 0.24, slope: 12, rings: 3, round: 1,
+      up: [[0, 0.04], [1, 0.03]], down: [[0, 0.04], [1, 0.03]], side: [[0, 0.04], [1, 0.03]] },
+    { id: "tail1", role: "tail", length: 0.24, slope: 0, rings: 3, round: 1,
+      up: [[0, 0.03], [1, 0.022]], down: [[0, 0.03], [1, 0.022]], side: [[0, 0.03], [1, 0.022]] },
+    { id: "tail2", role: "tail", length: 0.24, slope: -6, rings: 3, round: 1,
+      up: [[0, 0.022], [1, 0.014]], down: [[0, 0.022], [1, 0.014]], side: [[0, 0.022], [1, 0.014]] },
+    { id: "tail3", role: "tail", length: 0.22, slope: -10, rings: 3, round: 1,
+      up: [[0, 0.014], [1, 0.004]], down: [[0, 0.014], [1, 0.004]], side: [[0, 0.014], [1, 0.004]] },
+  ],
+  limbs: [
+    { id: "fore", on: "chest", at: 0.4, out: 0.07, drop: 0.05, splay: 6,
+      segments: [
+        { length: 0.11, angle: -24, width: [[0, 0.055], [1, 0.035]], depth: 1.2, rings: 2 },
+        { length: 0.11, angle: 10, width: [[0, 0.03], [1, 0.022]] },
+        { length: 0.06, angle: 80, width: [[0, 0.024], [0.5, 0.028], [1, 0.016]], depth: 0.5 },
+      ] },
+    { id: "hind", on: "hip", at: 0.3, out: 0.09, drop: 0.02, splay: 8,
+      segments: [
+        { length: 0.15, angle: 40, width: [[0, 0.08], [0.5, 0.06], [1, 0.035]], depth: 1.3, rings: 2 },
+        { length: 0.13, angle: -40, width: [[0, 0.03], [1, 0.022]] },
+        { length: 0.12, angle: 82, width: [[0, 0.024], [0.5, 0.03], [1, 0.018]], depth: 0.45 },
+      ] },
+  ],
+  parts: [
+    // Round, thin, naked ears.
+    { id: "ear", bone: "head", at: 0.88, around: 48, length: 0.095, radius: 0.068, flat: 0.25, direction: [0.6, 1, -0.3], curve: -0.3, mirror: true, colour: "skin", scale: [0.9, 1.2], sink: 0.1 },
+    // The incisors: two broad yellow blades at the front, pointing down.
+    { id: "tooth", bone: "head", shape: "blade", at: 0.03, around: 172, length: 0.06, radius: 0.012, flat: 0.5, direction: [0.05, -1, 0.15], mirror: true, colour: "tooth", scale: [0.9, 1.3], sink: 0.15, traits: { rabid: 1.3 } },
+    // Whiskers, fanned out either side of the snout.
+    { id: "whisker", bone: "head", at: 0.1, around: 80, length: 0.15, radius: 0.003, direction: [1, 0.15, 0.35], curve: 0.1, mirror: true, colour: "whisker", sink: 0 },
+    { id: "whiskerLow", bone: "head", at: 0.12, around: 95, length: 0.13, radius: 0.003, direction: [1, -0.2, 0.25], curve: 0.1, mirror: true, colour: "whisker", sink: 0 },
+  ],
+  cards: [
+    // Mangy, spiky fur along the hunched back.
+    { id: "mange", bone: "belly", from: 0, to: 1, around: 0, arc: 160, count: 34, length: [0.05, 0.09], width: [0.04, 0.06], lean: 0.75, droop: 0.05, mask: "strands", colour: "fur", traits: { rabid: 1.5, old: 1.2 } },
+    { id: "nape", bone: "chest", from: 0, to: 1, around: 0, arc: 140, count: 20, length: [0.05, 0.08], width: [0.04, 0.06], lean: 0.8, droop: 0, mask: "strands", colour: "fur", chance: 0.7 },
+  ],
+  paint: {
+    palette: {
+      coat: ["#6a5e52", "#5e544a", "#74685a", "#585048"],
+      fur: ["#4a4038", "#56493e"],
+      belly: ["#a89c8c", "#b4a898"],
+      skin: ["#c89c94", "#d0a8a0", "#b88a84"],
+      tail: ["#b8908a", "#a88480"],
+      tooth: ["#d8b850", "#c8a440"],
+      whisker: ["#e8e0d4"],
+      eye: ["#2a0808", "#140c0c", "#5a1010"],
+      nose: ["#c88a84"],
+    },
+    mottle: 0.2,
+    layers: [
+      { kind: "belly", colour: "belly", amount: 0.8 },
+      { kind: "back", colour: "fur", amount: 0.6, on: ["neck", "chest", "belly", "hip"] },
+      { kind: "back", colour: "tail", amount: 1, size: 2, on: ["tail0", "tail1", "tail2", "tail3"] },
+      { kind: "belly", colour: "tail", amount: 1, on: ["tail0", "tail1", "tail2", "tail3"] },
+      { kind: "socks", colour: "skin", amount: 0.8, size: 0.4 },
+      { kind: "scars", colour: "skin", amount: 0.7, size: 0.1, chance: 0.4 },
+    ],
+    eyes: { segment: "head", at: 0.68, around: 58, size: 0.022, colour: "eye", style: "detailed" },
+  },
+  idle: { breathe: 1.4, tail: 1.6, head: 1.6 },
+  gaits: [
+    { id: "scurry", pattern: "trot", speed: 1.0, stride: 0.45, duty: 0.55, lift: 0.05, bob: 0.008, wave: 0.02 },
+    { id: "bound", pattern: "bound", speed: 3.5, stride: 1.0, duty: 0.38, lift: 0.08, bob: 0.03, pitch: 0.1, reach: 1.1 },
+  ],
+  clips: {
+    bite: { length: 0.5, layer: "full", keys: [
+      { t: 0, turns: {} },
+      { t: 0.35, turns: { chest: [-14, 0, 0], neck: [-14, 0, 0], head: [-16, 0, 0] }, offset: [0, 0.04, -0.03] },
+      { t: 0.55, turns: { chest: [6, 0, 0], neck: [14, 0, 0], head: [16, 0, 0] }, offset: [0, -0.01, 0.1] },
+      { t: 1, turns: {} },
+    ] },
+    // Up on its haunches, sniffing.
+    sniff: { length: 2.2, layer: "full", keys: [
+      { t: 0, turns: {} },
+      { t: 0.3, turns: { belly: [-25, 0, 0], chest: [-20, 0, 0], head: [-10, 0, 0], "fore*0": [-30, 0, 0] }, offset: [0, 0.06, -0.06] },
+      { t: 0.5, turns: { belly: [-25, 0, 0], chest: [-20, 0, 0], head: [-14, 18, 0], "fore*0": [-30, 0, 0] }, offset: [0, 0.06, -0.06] },
+      { t: 0.75, turns: { belly: [-25, 0, 0], chest: [-20, 0, 0], head: [-14, -18, 0], "fore*0": [-30, 0, 0] }, offset: [0, 0.06, -0.06] },
+      { t: 1, turns: {} },
+    ] },
+  },
+  actions: { swing: "bite", attack: "bite" },
+  places: { mouth: "head", chest: "chest" },
+  variants: {
+    // A sickly black plague rat; a bog rat with a greenish, wet coat.
+    plague: { palette: { coat: ["#2e2a28", "#34302c", "#282422"], fur: ["#1e1a18"], belly: ["#5a524a"], eye: ["#d03020", "#e04a20"] } },
+    bog: { palette: { coat: ["#4e5440", "#46503a", "#5a5e46"], fur: ["#343a2a"], belly: ["#8a8a6a"], tail: ["#7a7a64"], skin: ["#9a9480"] } },
+  },
+}

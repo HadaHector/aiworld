@@ -1,0 +1,114 @@
+// The lynx's body plan (see BEASTS.md): a big cat - a round head with a short muzzle, tufted ears
+// and a cheek ruff, a short body on long legs ending in great soft paws, and a bobbed tail. It
+// stalks low and bounds. Stylised: paws, ears and eyes a little big. Lengths in metres at size 1.
+{
+  name: "Lynx",
+  size: [0.92, 1.12],
+  build: [0.92, 1.1],
+  verts: { trunk: 12, limb: 7 },
+  root: "chest",
+  trunk: [
+    { id: "head", role: "head", length: 0.2, slope: -4, rings: 6, round: 0.85,
+      up: [[0, 0.045], [0.25, 0.07], [0.55, 0.115], [0.85, 0.12], [1, 0.1]],
+      down: [[0, 0.05], [0.35, 0.065], [0.8, 0.085], [1, 0.08]],
+      side: [[0, 0.05], [0.25, 0.08], [0.55, 0.125], [1, 0.105]] },
+    { id: "neck", role: "neck", length: 0.2, slope: 25, rings: 2, round: 0.8,
+      up: [[0, 0.09], [1, 0.12]], down: [[0, 0.1], [1, 0.15]], side: [[0, 0.09], [1, 0.12]] },
+    { id: "chest", length: 0.36, slope: 2, rings: 3, round: 0.78,
+      up: [[0, 0.13], [0.5, 0.14], [1, 0.13]], down: [[0, 0.17], [0.45, 0.18], [1, 0.14]], side: [[0, 0.13], [0.5, 0.14], [1, 0.12]] },
+    { id: "loin", length: 0.32, slope: -4, rings: 3, round: 0.78,
+      up: [[0, 0.13], [1, 0.13]], down: [[0, 0.13], [0.6, 0.09], [1, 0.1]], side: [[0, 0.12], [0.5, 0.1], [1, 0.115]] },
+    { id: "hip", length: 0.2, slope: 8, rings: 2, round: 0.78,
+      up: [[0, 0.13], [1, 0.1]], down: [[0, 0.11], [1, 0.07]], side: [[0, 0.12], [1, 0.08]] },
+    { id: "tail0", role: "tail", length: 0.16, slope: 30, rings: 2, round: 0.9,
+      up: [[0, 0.05], [1, 0.045]], down: [[0, 0.045], [1, 0.045]], side: [[0, 0.05], [1, 0.045]] },
+    { id: "tail1", role: "tail", length: 0.1, slope: 45, rings: 2, round: 0.9,
+      up: [[0, 0.045], [0.6, 0.04], [1, 0.015]], down: [[0, 0.045], [0.6, 0.04], [1, 0.015]], side: [[0, 0.045], [0.6, 0.04], [1, 0.015]] },
+  ],
+  limbs: [
+    { id: "fore", on: "chest", at: 0.3, out: 0.09, drop: 0.07, splay: 3,
+      segments: [
+        { length: 0.26, angle: -16, width: [[0, 0.085], [0.6, 0.065], [1, 0.05]], depth: 1.25, rings: 2 },
+        { length: 0.27, angle: 4, width: [[0, 0.048], [1, 0.04]], depth: 1.1 },
+        { length: 0.08, angle: 24, width: [[0, 0.04], [1, 0.044]] },
+        { length: 0.12, angle: 84, width: [[0, 0.054], [0.5, 0.06], [1, 0.035]], depth: 0.55 },
+      ] },
+    { id: "hind", on: "hip", at: 0.35, out: 0.09, drop: 0.04, splay: 3,
+      segments: [
+        { length: 0.3, angle: 24, width: [[0, 0.1], [0.5, 0.08], [1, 0.05]], depth: 1.35, rings: 2 },
+        { length: 0.3, angle: -34, width: [[0, 0.048], [1, 0.036]], depth: 1.2 },
+        { length: 0.18, angle: 6, width: [[0, 0.036], [1, 0.04]] },
+        { length: 0.12, angle: 84, width: [[0, 0.05], [0.5, 0.058], [1, 0.035]], depth: 0.55 },
+      ] },
+  ],
+  parts: [
+    // Triangular ears, upright, each with a long black tuft at the tip.
+    { id: "ear", bone: "head", at: 0.84, around: 40, length: 0.1, radius: 0.045, flat: 0.35, direction: [0.3, 1, -0.1], curve: -0.1, mirror: true, colour: "coat", sink: 0.15 },
+    { id: "tuft", bone: "head", at: 0.86, around: 36, length: 0.17, radius: 0.008, direction: [0.25, 1, -0.05], curve: 0.1, mirror: true, colour: "tuft", scale: [0.85, 1.25], sink: 0.05 },
+    { id: "fang", bone: "head", at: 0.1, around: 160, length: 0.045, radius: 0.009, direction: [0.1, -1, 0.2], mirror: true, colour: "fang", sink: 0.1 },
+  ],
+  cards: [
+    // The cheek ruff, flaring back from under the ears, and a fuller coat on the chest.
+    { id: "ruff", bone: "head", from: 0.55, to: 1, around: 90, arc: 120, count: 40, length: [0.07, 0.12], width: [0.05, 0.07], lean: 0.75, droop: 0.3, mask: "strands", colour: "ruff", mirror: true },
+    { id: "bib", bone: "neck", from: 0.2, to: 1, around: 180, arc: 140, count: 26, length: [0.07, 0.11], width: [0.05, 0.07], lean: 0.6, droop: 0.35, mask: "strands", colour: "belly", traits: { old: 1.3 } },
+    { id: "bob", bone: "tail1", from: 0, to: 0.9, around: 0, arc: 360, count: 14, length: [0.05, 0.08], width: [0.04, 0.06], lean: 0.8, droop: 0.05, mask: "strands", colour: "tuft" },
+  ],
+  paint: {
+    palette: {
+      coat: ["#a88e6c", "#b09878", "#9c8464", "#b4a080"],
+      back: ["#7a6448", "#6e5a42"],
+      belly: ["#ece2d0", "#e4d8c4"],
+      ruff: ["#d8ccb6", "#cfc0a8"],
+      spot: ["#4a3a2a", "#3a2e22"],
+      tuft: ["#1e1a16"],
+      fang: ["#efe6d2"],
+      eye: ["#c8b040", "#b8a030", "#a8c048"],
+      nose: ["#3a2420"],
+    },
+    mottle: 0.14,
+    layers: [
+      { kind: "belly", colour: "belly", amount: 0.9 },
+      { kind: "back", colour: "back", amount: 0.5, on: ["neck", "chest", "loin", "hip"] },
+      { kind: "spots", colour: "spot", amount: 0.85, size: 0.045, on: ["chest", "loin", "hip", "fore", "hind"] },
+      { kind: "mask", colour: "belly", amount: 0.7, size: 0.3 },
+      { kind: "bands", colour: "spot", amount: 0.6, size: 0.12, on: ["tail1"] },
+      { kind: "scars", colour: "belly", amount: 0.5, size: 0.12, chance: 0.25 },
+    ],
+    eyes: { segment: "head", at: 0.62, around: 42, size: 0.03, colour: "eye", style: "detailed" },
+  },
+  idle: { breathe: 0.9, tail: 0.6, head: 1.2 },
+  gaits: [
+    { id: "walk", pattern: "walk", speed: 1.0, stride: 0.95, duty: 0.66, lift: 0.07, bob: 0.006, wave: 0.03 },
+    { id: "trot", pattern: "trot", speed: 2.6, stride: 1.35, duty: 0.5, lift: 0.1, bob: 0.015, wave: 0.03 },
+    { id: "bound", pattern: "bound", speed: 5.5, stride: 2.4, duty: 0.34, lift: 0.14, bob: 0.05, pitch: 0.12, reach: 1.1 },
+  ],
+  clips: {
+    // A crouch and a spring, forepaws up and raking.
+    pounce: { length: 0.9, layer: "full", keys: [
+      { t: 0, turns: {} },
+      { t: 0.35, turns: { chest: [10, 0, 0], neck: [-12, 0, 0], hip: [-6, 0, 0] }, offset: [0, -0.1, -0.06] },
+      { t: 0.6, turns: { chest: [-22, 0, 0], neck: [10, 0, 0], head: [10, 0, 0], "fore*0": [-55, 0, 0], "fore*1": [40, 0, 0] }, offset: [0, 0.14, 0.24] },
+      { t: 0.8, turns: { chest: [-6, 0, 0], "fore*0": [-20, 0, 0] }, offset: [0, 0.02, 0.12] },
+      { t: 1, turns: {} },
+    ] },
+    bite: { length: 0.6, layer: "upper", keys: [
+      { t: 0, turns: {} },
+      { t: 0.35, turns: { neck: [-18, 0, 0], head: [-14, 0, 0] }, offset: [0, 0.02, -0.04] },
+      { t: 0.55, turns: { neck: [20, 0, 0], head: [14, 0, 0], chest: [4, 0, 0] }, offset: [0, -0.02, 0.12] },
+      { t: 1, turns: {} },
+    ] },
+    hiss: { length: 1.2, layer: "full", keys: [
+      { t: 0, turns: {} },
+      { t: 0.3, turns: { neck: [-10, 0, 0], head: [-20, 0, 0], chest: [6, 0, 0] }, offset: [0, -0.06, 0] },
+      { t: 0.8, turns: { neck: [-10, 0, 0], head: [-22, 0, 0], chest: [6, 0, 0] }, offset: [0, -0.06, 0] },
+      { t: 1, turns: {} },
+    ] },
+  },
+  actions: { swing: "bite", attack: "bite" },
+  places: { mouth: "head", chest: "chest" },
+  variants: {
+    // A white, grey-spotted lynx of the snows; a sandy, unspotted caracal-like cat of the dry hills.
+    snow: { palette: { coat: ["#d8d6d2", "#cccac4", "#e2e0dc"], back: ["#a8a49c"], spot: ["#6a6660", "#5a5650"], ruff: ["#f0eeea"], belly: ["#f6f4f0"], eye: ["#8ab8c8", "#a0c8a0"] }, build: [0.95, 1.15] },
+    sand: { palette: { coat: ["#c09060", "#b88654", "#c8986a"], back: ["#a87a4a"], spot: ["#b88a5a"], ruff: ["#e0c8a0"], tuft: ["#141210"] } },
+  },
+}

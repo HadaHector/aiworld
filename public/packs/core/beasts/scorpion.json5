@@ -1,0 +1,102 @@
+// The giant scorpion's body plan (see BEASTS.md): a flat armoured carapace, eight legs, a pair of
+// great pincers held out in front, and a segmented tail rising behind into a stinger arched over
+// the back. It walks in alternating tetrapods, the tail swaying. Lengths in metres at size 1.
+{
+  name: "Giant Scorpion",
+  size: [0.9, 1.15],
+  build: [0.92, 1.1],
+  verts: { trunk: 10, limb: 6 },
+  root: "mesosoma",
+  trunk: [
+    { id: "head", role: "head", length: 0.34, slope: -2, rings: 4, round: 0.5,
+      up: [[0, 0.05], [0.4, 0.08], [1, 0.09]], down: [[0, 0.04], [1, 0.07]], side: [[0, 0.1], [0.5, 0.15], [1, 0.17]] },
+    { id: "mesosoma", length: 0.5, slope: 0, rings: 5, round: 0.55,
+      up: [[0, 0.09], [0.5, 0.1], [1, 0.08]], down: [[0, 0.07], [0.5, 0.08], [1, 0.06]], side: [[0, 0.17], [0.4, 0.19], [1, 0.12]] },
+    { id: "tail0", role: "tail", length: 0.16, slope: -30, rings: 2, round: 0.8,
+      up: [[0, 0.07], [0.5, 0.08], [1, 0.065]], down: [[0, 0.06], [1, 0.06]], side: [[0, 0.07], [0.5, 0.08], [1, 0.065]] },
+    { id: "tail1", role: "tail", length: 0.16, slope: -55, rings: 2, round: 0.8,
+      up: [[0, 0.065], [0.5, 0.075], [1, 0.06]], down: [[0, 0.06], [1, 0.055]], side: [[0, 0.065], [0.5, 0.075], [1, 0.06]] },
+    { id: "tail2", role: "tail", length: 0.16, slope: -75, rings: 2, round: 0.8,
+      up: [[0, 0.06], [0.5, 0.07], [1, 0.055]], down: [[0, 0.055], [1, 0.05]], side: [[0, 0.06], [0.5, 0.07], [1, 0.055]] },
+    { id: "tail3", role: "tail", length: 0.16, slope: -90, rings: 2, round: 0.8,
+      up: [[0, 0.055], [0.5, 0.065], [1, 0.05]], down: [[0, 0.05], [1, 0.05]], side: [[0, 0.055], [0.5, 0.065], [1, 0.05]] },
+    { id: "telson", role: "tail", length: 0.16, slope: -90, rings: 3, round: 0.9,
+      up: [[0, 0.05], [0.5, 0.08], [1, 0.03]], down: [[0, 0.05], [0.5, 0.075], [1, 0.03]], side: [[0, 0.05], [0.5, 0.075], [1, 0.03]] },
+  ],
+  limbs: [
+    { id: "leg", on: "mesosoma", count: 4, at: [0.05, 0.6], yaw: [55, 130], out: 0.13, drop: 0.02, scale: [0.95, 1.08],
+      segments: [
+        { length: 0.1, angle: 125, width: [[0, 0.045], [1, 0.04]], rings: 1 },
+        { length: 0.26, angle: 120, width: [[0, 0.04], [1, 0.034]], rings: 2 },
+        { length: 0.3, angle: 22, width: [[0, 0.032], [1, 0.024]], rings: 2 },
+        { length: 0.12, angle: 30, width: [[0, 0.022], [1, 0.01]], rings: 1 },
+      ] },
+    // The pincers: held out in front, not walked on.
+    { id: "pincer", on: "head", at: 0.15, yaw: 35, out: 0.1, drop: 0.02, walks: false,
+      segments: [
+        { length: 0.16, angle: 115, width: [[0, 0.045], [1, 0.04]], rings: 1 },
+        { length: 0.24, angle: 150, width: [[0, 0.042], [1, 0.05]], rings: 2 },
+        { length: 0.28, angle: 98, width: [[0, 0.07], [0.45, 0.12], [1, 0.05]], depth: 0.6, rings: 3 },
+      ] },
+  ],
+  parts: [
+    // The pincers' fingers: a fixed one and a movable one, curving to meet.
+    { id: "finger", bone: "pincerR2", shape: "blade", at: 0.95, around: 90, length: 0.22, radius: 0.04, flat: 0.5, direction: [-0.3, 0, 1], curve: -0.25, mirror: true, colour: "claw", scale: [0.9, 1.25], sink: 0.2, traits: { old: 1.2 } },
+    { id: "thumb", bone: "pincerR2", shape: "blade", at: 0.85, around: -90, length: 0.2, radius: 0.035, flat: 0.5, direction: [0.3, 0, 1], curve: -0.25, mirror: true, colour: "claw", scale: [0.9, 1.25], sink: 0.2, traits: { old: 1.2 } },
+    // The stinger, curving forward over the back.
+    { id: "sting", bone: "telson", at: 0.9, around: 180, length: 0.22, radius: 0.032, direction: [0, -0.45, 1], curve: -0.5, colour: "sting", scale: [0.9, 1.3], sink: 0.3, traits: { rabid: 1.3 } },
+    // Ridges on the carapace.
+    { id: "ridge", bone: "head", shape: "blade", at: 0.6, around: 12, length: 0.05, radius: 0.04, flat: 0.4, direction: [0, 1, -0.7], mirror: true, colour: "claw", sink: 0.4 },
+  ],
+  cards: [],
+  paint: {
+    palette: {
+      coat: ["#3a2a1c", "#32241a", "#42301e"],
+      back: ["#1e1610"],
+      band: ["#5a4028", "#6a4a2e"],
+      belly: ["#5a4a36"],
+      claw: ["#24180f", "#2e1e12"],
+      sting: ["#8a1a12", "#1a1210"],
+      eye: ["#0c0c0c"],
+    },
+    mottle: 0.12,
+    layers: [
+      { kind: "back", colour: "back", amount: 0.55 },
+      { kind: "belly", colour: "belly", amount: 0.6 },
+      { kind: "stripes", colour: "band", amount: 0.7, size: 0.07, on: ["mesosoma"] },
+      { kind: "bands", colour: "band", amount: 0.6, size: 0.1, on: ["leg"], chance: 0.6 },
+      { kind: "socks", colour: "back", amount: 0.6, size: 0.3 },
+    ],
+    eyes: { segment: "head", at: 0.42, around: 8, size: 0.02, colour: "eye", count: 1 },
+  },
+  dies: "back",
+  idle: { breathe: 0.4, tail: 0.8, head: 0.3 },
+  gaits: [
+    { id: "walk", pattern: "tetrapod", speed: 0.9, stride: 0.55, duty: 0.6, lift: 0.08, bob: 0.006 },
+    { id: "scuttle", pattern: "tetrapod", speed: 3.5, stride: 1.1, duty: 0.45, lift: 0.12, bob: 0.012 },
+  ],
+  clips: {
+    // The tail whips forward over the back to sting.
+    sting: { length: 0.8, layer: "full", keys: [
+      { t: 0, turns: {} },
+      { t: 0.35, turns: { tail0: [14, 0, 0], tail1: [14, 0, 0], tail2: [10, 0, 0], mesosoma: [-4, 0, 0] }, offset: [0, 0.02, -0.04] },
+      { t: 0.55, turns: { tail0: [-18, 0, 0], tail1: [-24, 0, 0], tail2: [-28, 0, 0], tail3: [-26, 0, 0], telson: [-20, 0, 0], mesosoma: [6, 0, 0] }, offset: [0, -0.02, 0.1] },
+      { t: 0.75, turns: { tail0: [-8, 0, 0], tail1: [-10, 0, 0], tail2: [-10, 0, 0] }, offset: [0, 0, 0.05] },
+      { t: 1, turns: {} },
+    ] },
+    // The pincers snap in together.
+    pinch: { length: 0.6, layer: "full", keys: [
+      { t: 0, turns: {} },
+      { t: 0.35, turns: { "pincer*0": [0, -20, 0], "pincer*1": [-25, 0, 0], head: [-6, 0, 0] }, offset: [0, 0.03, -0.03] },
+      { t: 0.55, turns: { "pincer*0": [0, 18, 0], "pincer*1": [15, 0, 0], head: [4, 0, 0] }, offset: [0, 0, 0.1] },
+      { t: 1, turns: {} },
+    ] },
+  },
+  actions: { swing: "pinch", attack: "pinch", venom: "sting" },
+  places: { mouth: "head", chest: "mesosoma" },
+  variants: {
+    // A pale yellow desert scorpion; a black one of the salt and the red bush.
+    sand: { palette: { coat: ["#b8984e", "#c0a058", "#a88a44"], back: ["#8a6e32"], band: ["#d8c080"], belly: ["#d0bc88"], claw: ["#7a5e2a"], sting: ["#5a2a12"] } },
+    black: { palette: { coat: ["#1c1a1a", "#222020"], back: ["#0e0c0c"], band: ["#3a3434"], belly: ["#2a2626"], claw: ["#121010"], sting: ["#a02018"] }, size: [1.0, 1.25] },
+  },
+}

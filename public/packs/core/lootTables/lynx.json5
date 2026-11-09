@@ -1,0 +1,10 @@
+// What a lynx drops.
+{
+  rolls: [1, 2],
+  pick: [
+    { weight: 55, item: "lynxPelt" },
+    { weight: 20, item: "bearClaw" },
+    { weight: 25 },
+  ],
+  always: [{ money: [2,7] }],
+}

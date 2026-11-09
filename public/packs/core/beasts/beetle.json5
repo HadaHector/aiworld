@@ -1,0 +1,108 @@
+// The giant beetle's body plan (see BEASTS.md): a horned head, a broad shield of a pronotum, a high
+// domed shell of wing cases with its seam down the middle, and six stout spiny legs walked in
+// tripods. A rhinoceros beetle the size of a pony. Lengths in metres at size 1.
+{
+  name: "Giant Beetle",
+  size: [0.9, 1.15],
+  build: [0.95, 1.12],
+  verts: { trunk: 14, limb: 6 },
+  root: "pronotum",
+  trunk: [
+    { id: "head", role: "head", length: 0.2, slope: 18, rings: 3, round: 0.7,
+      up: [[0, 0.05], [1, 0.09]], down: [[0, 0.04], [1, 0.07]], side: [[0, 0.07], [1, 0.11]] },
+    { id: "pronotum", length: 0.32, slope: -12, rings: 4, round: 0.75,
+      up: [[0, 0.1], [0.5, 0.2], [1, 0.22]], down: [[0, 0.08], [1, 0.1]], side: [[0, 0.13], [0.5, 0.21], [1, 0.22]] },
+    { id: "elytra", role: "tail", length: 0.8, slope: 6, rings: 8, round: 0.92,
+      up: [[0, 0.2], [0.3, 0.33], [0.65, 0.32], [0.9, 0.2], [1, 0.06]],
+      down: [[0, 0.1], [0.4, 0.13], [0.85, 0.1], [1, 0.05]],
+      side: [[0, 0.22], [0.35, 0.29], [0.7, 0.27], [0.92, 0.17], [1, 0.05]] },
+  ],
+  limbs: [
+    { id: "fore", on: "pronotum", at: 0.55, yaw: 45, out: 0.1, drop: 0.07,
+      segments: [
+        { length: 0.08, angle: 110, width: [[0, 0.055], [1, 0.05]], rings: 1 },
+        { length: 0.26, angle: 120, width: [[0, 0.05], [0.5, 0.055], [1, 0.042]], rings: 2 },
+        { length: 0.3, angle: 22, width: [[0, 0.04], [1, 0.034]], depth: 0.7, rings: 2 },
+        { length: 0.13, angle: 45, width: [[0, 0.022], [1, 0.012]], rings: 1 },
+      ] },
+    { id: "mid", on: "elytra", at: 0.1, yaw: 95, out: 0.06, drop: 0.12,
+      segments: [
+        { length: 0.08, angle: 110, width: [[0, 0.055], [1, 0.05]], rings: 1 },
+        { length: 0.28, angle: 120, width: [[0, 0.05], [0.5, 0.055], [1, 0.042]], rings: 2 },
+        { length: 0.32, angle: 22, width: [[0, 0.04], [1, 0.034]], depth: 0.7, rings: 2 },
+        { length: 0.13, angle: 45, width: [[0, 0.022], [1, 0.012]], rings: 1 },
+      ] },
+    { id: "hind", on: "elytra", at: 0.28, yaw: 140, out: 0.06, drop: 0.12,
+      segments: [
+        { length: 0.09, angle: 110, width: [[0, 0.055], [1, 0.05]], rings: 1 },
+        { length: 0.32, angle: 120, width: [[0, 0.05], [0.5, 0.055], [1, 0.042]], rings: 2 },
+        { length: 0.36, angle: 22, width: [[0, 0.04], [1, 0.034]], depth: 0.7, rings: 2 },
+        { length: 0.15, angle: 45, width: [[0, 0.022], [1, 0.012]], rings: 1 },
+      ] },
+  ],
+  parts: [
+    // The great horn off the head, curving up; a shorter one off the pronotum curving down to meet it.
+    { id: "horn", bone: "head", at: 0.15, around: 0, length: 0.42, radius: 0.05, direction: [0, 0.55, 1], curve: 0.55, colour: "horn", scale: [0.8, 1.3], sink: 0.3, traits: { old: 1.3 } },
+    { id: "thoraxHorn", bone: "pronotum", at: 0.7, around: 0, length: 0.3, radius: 0.045, direction: [0, 0.6, 1], curve: -0.3, colour: "horn", chance: 0.75, scale: [0.8, 1.3], sink: 0.3, traits: { old: 1.3 } },
+    // Short antennae, and spines on the fore shins.
+    { id: "antenna", bone: "head", at: 0.35, around: 75, length: 0.14, radius: 0.012, direction: [0.8, 0.2, 0.6], curve: -0.4, mirror: true, colour: "horn", sink: 0.1 },
+    { id: "spine", bone: "foreR2", at: 0.5, around: 180, length: 0.06, radius: 0.012, direction: [0, -0.5, 1], mirror: true, colour: "horn", sink: 0.2 },
+    { id: "spine2", bone: "midR2", at: 0.5, around: 180, length: 0.05, radius: 0.012, direction: [0, -0.5, -1], mirror: true, colour: "horn", sink: 0.2 },
+  ],
+  cards: [
+    // A fringe of bristles round the pronotum's rim.
+    { id: "bristle", bone: "pronotum", from: 0.1, to: 0.9, around: 90, arc: 40, count: 14, length: [0.04, 0.06], width: [0.03, 0.04], lean: 0.6, droop: 0.4, mask: "strands", colour: "hair", mirror: true, chance: 0.5 },
+  ],
+  paint: {
+    palette: {
+      coat: ["#4a2e1a", "#3e2616", "#55341e"],
+      back: ["#8a5430", "#7a4a2a"],
+      seam: ["#0e0a08"],
+      belly: ["#1a120c"],
+      band: ["#6a4a2a"],
+      horn: ["#1a120c", "#22160e"],
+      hair: ["#6a4a2a"],
+      eye: ["#0a0a0a"],
+    },
+    mottle: 0.06,
+    layers: [
+      // Glossy: lighter on top (the painted light does the rest), a dark seam down the wing cases.
+      { kind: "back", colour: "back", amount: 0.7, on: ["elytra", "pronotum"] },
+      { kind: "back", colour: "seam", amount: 1, size: 0.05, on: ["elytra"] },
+      { kind: "belly", colour: "belly", amount: 0.6 },
+      { kind: "stripes", colour: "band", amount: 0.4, size: 0.12, on: ["elytra"], chance: 0.3 },
+      { kind: "socks", colour: "belly", amount: 0.5, size: 0.3 },
+    ],
+    eyes: { segment: "head", at: 0.65, around: 70, size: 0.03, colour: "eye" },
+  },
+  dies: "back",
+  idle: { breathe: 0.3, tail: 0, head: 0.5 },
+  gaits: [
+    { id: "walk", pattern: "tripod", speed: 0.8, stride: 0.5, duty: 0.6, lift: 0.07, bob: 0.008 },
+    { id: "trundle", pattern: "tripod", speed: 2.6, stride: 0.9, duty: 0.5, lift: 0.1, bob: 0.015 },
+  ],
+  clips: {
+    // The horn dips under the target and heaves up.
+    gore: { length: 0.9, layer: "full", keys: [
+      { t: 0, turns: {} },
+      { t: 0.35, turns: { pronotum: [14, 0, 0], head: [16, 0, 0] }, offset: [0, -0.06, -0.04] },
+      { t: 0.6, turns: { pronotum: [-16, 0, 0], head: [-20, 0, 0], "fore*1": [-15, 0, 0] }, offset: [0, 0.08, 0.16] },
+      { t: 0.8, turns: { pronotum: [-6, 0, 0], head: [-8, 0, 0] }, offset: [0, 0.02, 0.08] },
+      { t: 1, turns: {} },
+    ] },
+    // The wing cases lift a little, a threat.
+    flare: { length: 1.6, layer: "full", keys: [
+      { t: 0, turns: {} },
+      { t: 0.3, turns: { elytra: [-10, 0, 0], pronotum: [-6, 0, 0] }, offset: [0, 0.05, 0] },
+      { t: 0.8, turns: { elytra: [-10, 0, 0], pronotum: [-6, 0, 0] }, offset: [0, 0.05, 0] },
+      { t: 1, turns: {} },
+    ] },
+  },
+  actions: { swing: "gore", attack: "gore" },
+  places: { mouth: "head", chest: "pronotum" },
+  variants: {
+    // An emerald jungle beetle; a ruddy bronze one of the dry scrub.
+    emerald: { palette: { coat: ["#1a4a2a", "#1e5430", "#164026"], back: ["#3a8a4a", "#2e7a40"], band: ["#6ab060"], horn: ["#0e2a16"], hair: ["#4a8a40"], belly: ["#0e2416"] } },
+    bronze: { palette: { coat: ["#6a3a1a", "#7a4420", "#5e3216"], back: ["#b06a2a", "#a05e26"], band: ["#d09040"], horn: ["#3a1e0c"] } },
+  },
+}

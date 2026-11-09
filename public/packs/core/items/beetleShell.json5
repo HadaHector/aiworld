@@ -1,0 +1,1 @@
+{ name: "Beetle Shell", icon: "creature-skull-horned", kind: "material", rarity: "common", stack: 10, value: 14 }
