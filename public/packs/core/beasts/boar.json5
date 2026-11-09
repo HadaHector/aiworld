@@ -68,7 +68,7 @@
       { kind: "socks", colour: "hoof", amount: 1, size: 0.12 },
       { kind: "scars", colour: "belly", amount: 0.8, size: 0.16, chance: 0.5 },
     ],
-    eyes: { segment: "head", at: 0.72, around: 62, size: 0.016, colour: "eye" },
+    eyes: { segment: "head", at: 0.72, around: 62, size: 0.021, colour: "eye", style: "detailed" },
   },
   idle: { breathe: 1.2, tail: 1.5, head: 0.7 },
   gaits: [

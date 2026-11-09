@@ -1086,7 +1086,7 @@ client draws that beast instead of the capsule ([BEASTS.md](../../BEASTS.md) has
   limbs: [{ id: "fore", on: "chest", at: 0.3, out: 0.1, drop: 0.08, segments: [{ length: 0.27, angle: -14, width: [[0, 0.085], [1, 0.045]] }, ...] }],
   parts: [{ id: "ear", bone: "head", at: 0.82, around: 38, length: 0.13, radius: 0.045, flat: 0.35, direction: [0.35, 1, -0.15], mirror: true }],
   cards: [{ id: "ruff", bone: "neck", count: 70, length: [0.1, 0.17], mask: "strands", colour: "ruff", chance: 0.7, traits: { rabid: 1.3 } }],
-  paint: { palette: { coat: ["#8a7a68"], belly: ["#d9cdb8"] }, layers: [{ kind: "belly", colour: "belly" }], eyes: { segment: "head", at: 0.58, around: 52, size: 0.022 } },
+  paint: { palette: { coat: ["#8a7a68"], belly: ["#d9cdb8"] }, layers: [{ kind: "belly", colour: "belly" }], eyes: { segment: "head", at: 0.58, around: 52, size: 0.028, style: "detailed" } },
   gaits: [{ id: "trot", pattern: "trot", speed: 2.8, stride: 1.55, duty: 0.5, lift: 0.1 }],
   clips: { bite: { length: 0.6, layer: "upper", keys: [{ t: 0.55, turns: { neck: [22, 0, 0] }, offset: [0, 0, 0.14] }] } },
   actions: { swing: "bite" }, variants: { frost: { palette: { coat: ["#d8dde2"] } } } }
@@ -1094,7 +1094,10 @@ client draws that beast instead of the capsule ([BEASTS.md](../../BEASTS.md) has
 
 Limb sets take any `count` of pairs (or `single`), so six legs, eight or twenty are data; a gait's
 `pattern` (`walk`, `trot`, `pace`, `bound`, `gallop`, `tripod`, `tetrapod`, `wave`, `metachronal`)
-sets which feet move together. `beasts.html` is the line-up to judge them in.
+sets which feet move together. Eyes `style: "detailed"` are eyeballs of their own (white, iris, pupil,
+shine, a socket round them) for the mammals; `"painted"` dots suit insects. `dies: "back"` turns an
+insect right over when it dies, legs curled up; `"side"` (the default) rolls it onto its side. The
+workbench's beasts folder, or `beasts.html`, is where to judge them.
 
 ## Gameplay: progression
 

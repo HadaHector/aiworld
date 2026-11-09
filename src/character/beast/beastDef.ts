@@ -29,6 +29,9 @@ export interface BeastDef {
   /** Clips the engine plays by purpose: `attack` for a plain swing, `death` for dying. */
   actions: Record<string, string>;
   idle: IdleDef;
+  /** How it lies dead when no `death` clip is named: rolled onto its `side` (a mammal), or onto its
+   *  `back` with its legs curled (an insect, a spider). */
+  dies: "side" | "back";
   /** Bones named by their use, for effects and sounds (FEEDBACK.md): `mouth`, `head`, `chest`, `tail`. */
   places: Record<string, string>;
   /** Named looks a creature kind can ask for (`look.beast: "wolf.frost"`): palette colours over the
@@ -157,7 +160,7 @@ export interface PaintDef {
   /** How far the coat varies, texel to texel (0 smooth). */
   mottle: number;
   layers: PaintLayer[];
-  eyes: { segment: string; at: number; around: number; size: number; colour: string; glow: boolean; count: number };
+  eyes: { segment: string; at: number; around: number; size: number; colour: string; glow: boolean; count: number; style: "painted" | "detailed" };
 }
 
 export interface PaintLayer {
@@ -224,7 +227,7 @@ export function resolveBeasts(packs: PackSource[]): Map<string, BeastDef> {
   return beasts;
 }
 
-const TOP_KEYS = ["name", "size", "build", "verts", "trunk", "root", "limbs", "parts", "cards", "paint", "gaits", "clips", "actions", "idle", "places", "variants"];
+const TOP_KEYS = ["name", "size", "build", "verts", "trunk", "root", "limbs", "parts", "cards", "paint", "gaits", "clips", "actions", "idle", "dies", "places", "variants"];
 
 export function readBeast(id: string, data: unknown, reader: Reader): BeastDef {
   const obj = reader.object(data, "");
@@ -278,6 +281,7 @@ export function readBeast(id: string, data: unknown, reader: Reader): BeastDef {
     clips,
     actions,
     idle: { breathe: reader.optionalNumber(idle, "breathe", "idle", 1), tail: reader.optionalNumber(idle, "tail", "idle", 1), head: reader.optionalNumber(idle, "head", "idle", 1) },
+    dies: obj.dies === undefined ? "side" : reader.oneOf(obj, "dies", "", ["side", "back"] as const),
     places,
     variants,
   };
@@ -443,7 +447,7 @@ function readPaint(obj: RawObject, reader: Reader, segments: Set<string>): Paint
     };
   });
   const eyes = obj.eyes === undefined ? {} : reader.object(obj.eyes, "paint.eyes");
-  reader.onlyKeys(eyes, "paint.eyes", ["segment", "at", "around", "size", "colour", "glow", "count"]);
+  reader.onlyKeys(eyes, "paint.eyes", ["segment", "at", "around", "size", "colour", "glow", "count", "style"]);
   const eyeSegment = reader.optionalString(eyes, "segment", "paint.eyes") ?? "";
   if (eyeSegment && !segments.has(eyeSegment)) reader.fail("paint.eyes.segment", `no trunk segment "${eyeSegment}"`);
   return {
@@ -458,6 +462,9 @@ function readPaint(obj: RawObject, reader: Reader, segments: Set<string>): Paint
       colour: reader.optionalString(eyes, "colour", "paint.eyes") ?? "eye",
       glow: reader.boolean(eyes, "glow", "paint.eyes", false),
       count: reader.optionalNumber(eyes, "count", "paint.eyes", 1, { min: 1, max: 8, integer: true }),
+      // "detailed": an eyeball of its own on the head - socket, white, iris, pupil and a shine - with
+      // texels to spare however coarse the body atlas; "painted": dots in the body atlas (insects).
+      style: eyes.style === undefined ? "painted" : reader.oneOf(eyes, "style", "paint.eyes", ["painted", "detailed"] as const),
     },
   };
 }

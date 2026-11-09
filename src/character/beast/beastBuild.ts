@@ -115,6 +115,9 @@ export interface BeastGeometry {
   places: Record<string, number>;
   /** Eye centres on the bind-pose body, for the painter. */
   eyes: Vec[];
+  /** Where the eyeballs of `detailed` eyes are painted (BEASTS.md): a square of its own, the eye seen
+   *  face on, forward to the right and up at the top; null for painted eyes. */
+  eyeRect: AtlasRect | null;
   /** Limb roots on the trunk, for the painter's shade under them. */
   roots: { at: Vec; radius: number }[];
 }
@@ -452,13 +455,18 @@ export function buildBeast(def: BeastDef, options: BeastOptions): BeastGeometry 
   const swatch = 8;
   let placed: AtlasRect[] = [];
   let swatches: Record<string, AtlasRect> = {};
+  const detailedEyes = def.paint.eyes.style === "detailed" && def.paint.eyes.size > 0;
+  const eyeTexels = Math.max(16, Math.round(atlasSize / 8));
+  let eyeRect: AtlasRect | null = null;
   for (let attempt = 0; attempt < 12; attempt++) {
     const items = tubeSpecs.map((t, i) => ({ i, w: Math.max(6, Math.ceil(t.round * density) + 1), h: Math.max(6, Math.ceil(t.long * density) + 1) }));
     for (let s = 0; s < swatchList.length; s++) items.push({ i: tubeSpecs.length + s, w: swatch, h: swatch * 2 });
+    if (detailedEyes) items.push({ i: tubeSpecs.length + swatchList.length, w: eyeTexels, h: eyeTexels });
     const packed = packRects(items, atlasSize, 2);
     if (packed) {
       placed = packed.slice(0, tubeSpecs.length);
       swatches = Object.fromEntries(swatchList.map((c, s) => [c, packed[tubeSpecs.length + s]]));
+      eyeRect = detailedEyes ? packed[tubeSpecs.length + swatchList.length] : null;
       break;
     }
     density *= 0.88;
@@ -613,6 +621,47 @@ export function buildBeast(def: BeastDef, options: BeastOptions): BeastGeometry 
   };
   for (const [place, bone] of Object.entries(def.places)) if (boneIndex.has(bone)) places[place] = boneIndex.get(bone)!;
 
+  /** A detailed eye: a low dome of an almond, longer than it is tall, laid on the head's surface and
+   *  sunk at its rim to follow the head's curve, mapped face on to the eye's square. */
+  const emitEye = (centre: Vec, normal: Vec, depth: number, bone: number, rect: AtlasRect): void => {
+    const size = eyeDef.size;
+    let up = sub(UP, scale(normal, dot(UP, normal)));
+    up = length(up) > 1e-3 ? normalize(up) : [0, 0, 1];
+    let forward = cross(up, normal);
+    if (forward[2] < 0) forward = scale(forward, -1);
+    const across = size * 1.35;
+    const tall = size * 1.05;
+    const dome = size * 0.28;
+    const rings = 3;
+    const columns = 14;
+    const inside = sub(centre, scale(normal, Math.max(depth, size) * 0.8));
+    const at = (a: number, b: number): number => {
+      const r2 = Math.min(1, a * a + b * b);
+      const tangent = add(scale(forward, a * across), scale(up, b * tall));
+      // Out by the dome, in by how far the head curves away under the rim.
+      const lift = dome * (1 - r2) - (r2 * across * across) / (2 * Math.max(depth, size * 2)) + size * 0.04;
+      const n = normalize(add(normal, scale(add(scale(forward, a), scale(up, b)), 0.7)));
+      return vertex(add(add(centre, tangent), scale(normal, lift)), n, uvOf(rect, 0.5 + 0.5 * a, 0.5 + 0.5 * b), [[bone, 1]]);
+    };
+    const middle = at(0, 0);
+    let previous: number[] = [];
+    for (let k = 1; k <= rings; k++) {
+      const row: number[] = [];
+      for (let j = 0; j <= columns; j++) {
+        const th = (2 * Math.PI * j) / columns;
+        row.push(at((Math.cos(th) * k) / rings, (Math.sin(th) * k) / rings));
+      }
+      for (let j = 0; j < columns; j++) {
+        if (k === 1) tri(middle, row[j], row[j + 1], inside);
+        else {
+          tri(previous[j], row[j], row[j + 1], inside);
+          tri(previous[j], row[j + 1], previous[j + 1], inside);
+        }
+      }
+      previous = row;
+    }
+  };
+
   // Eyes: on the eye segment's surface, a pair (or a cluster) either side.
   const eyes: Vec[] = [];
   const eyeDef = def.paint.eyes;
@@ -623,7 +672,9 @@ export function buildBeast(def: BeastDef, options: BeastOptions): BeastGeometry 
       const around = eyeDef.around - Math.floor(e / 2) * 14;
       for (const side of [-1, 1]) {
         const s = surfaceOf(segs[eyeSeg].id, Math.min(1, at), (side * around * Math.PI) / 180);
-        if (s) eyes.push(s.point);
+        if (!s) continue;
+        eyes.push(s.point);
+        if (eyeRect) emitEye(s.point, s.normal, s.depth, trunkBone[eyeSeg], eyeRect);
       }
     }
   }
@@ -652,6 +703,7 @@ export function buildBeast(def: BeastDef, options: BeastOptions): BeastGeometry 
     width: maxX * 2,
     places,
     eyes,
+    eyeRect,
     roots,
   };
 }

@@ -70,7 +70,7 @@
       { kind: "spots", colour: "blaze", amount: 0.7, size: 0.22, on: ["neck"], chance: 0.35 },
       { kind: "scars", colour: "muzzle", amount: 1, size: 0.2, chance: 0.5 },
     ],
-    eyes: { segment: "head", at: 0.66, around: 48, size: 0.018, colour: "eye" },
+    eyes: { segment: "head", at: 0.66, around: 48, size: 0.023, colour: "eye", style: "detailed" },
   },
   idle: { breathe: 1, tail: 0.3, head: 1 },
   gaits: [

@@ -317,6 +317,8 @@ const CLIP_IN = 0.1;
 const CLIP_OUT = 0.2;
 const FLINCH_TIME = 0.3;
 const DEATH_TIME = 1.1;
+/** On its back, how far each leg's first bone and the rest turn in their plane: curled over the belly. */
+const BACK_CURL: [number, number] = [-0.35, -0.45];
 
 export function createBeastAnimator(def: BeastDef, body: BeastGeometry, baked: BakedGaits, seed = 0): BeastAnimator {
   const bones = body.bones.length;
@@ -364,9 +366,24 @@ export function createBeastAnimator(def: BeastDef, body: BeastGeometry, baked: B
     return { turns, offset: [a.offset[0] + (b.offset[0] - a.offset[0]) * f, a.offset[1] + (b.offset[1] - a.offset[1]) * f, a.offset[2] + (b.offset[2] - a.offset[2]) * f] };
   };
 
-  /** The default death when a plan names none: rolled onto its side, the legs folding. */
+  // On its back: how far the trunk's top is over the root's pivot - turned over, that is how far
+  // the pivot has to come down for the back to lie on the ground.
+  const pivot = body.bones[0].head;
+  let backTop = 0;
+  const trunkTube = body.tubes[0];
+  const trunkVertices = trunkTube ? trunkTube.rings * (trunkTube.columns + 1) : 0;
+  for (let v = 0; v < trunkVertices; v++) backTop = Math.max(backTop, body.positions[v * 3 + 1] - pivot[1]);
+
+  /** The default death when a plan names none: rolled onto its side, the legs folding - or, for a
+   *  plan that `dies` on its back, turned right over, the legs curled up over the belly. */
   const defaultDeath = (k: number): { turns: Map<number, Quat>; offset: Vec } => {
     const turns = new Map<number, Quat>();
+    if (def.dies === "back") {
+      turns.set(0, axisAngle([0, 0, 1], deathSide * Math.PI * k));
+      for (const limb of body.limbs) limb.bones.forEach((bone, i) => turns.set(bone, axisAngle(limb.n, (i === 0 ? BACK_CURL[0] : BACK_CURL[1]) * k)));
+      for (const b of headBones) turns.set(b, axisAngle([1, 0, 0], 0.25 * k));
+      return { turns, offset: [0, -(pivot[1] - backTop) * k, 0] };
+    }
     turns.set(0, axisAngle([0, 0, 1], deathSide * 1.45 * k));
     for (const limb of body.limbs)
       limb.bones.forEach((bone, i) => {

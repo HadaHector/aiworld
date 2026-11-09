@@ -42,6 +42,8 @@
     layers: [{ kind: "belly", colour: "belly", amount: 0.6 }, { kind: "stripes", colour: "dark", amount: 0.7, size: 0.16 }, { kind: "socks", colour: "band", amount: 0.8, size: 0.4 }],
     eyes: { segment: "head", at: 0.5, around: 60, size: 0.02, colour: "dark" },
   },
+  // Dead, it lies on its back, legs curled over the belly.
+  dies: "back",
   idle: { breathe: 0.4, tail: 0.6, head: 0.6 },
   gaits: [
     { id: "crawl", pattern: "metachronal", speed: 0.8, stride: 0.35, duty: 0.6, lift: 0.06, wave: 0.03 },

@@ -427,6 +427,16 @@ corpses; instancing with thin instances if skinning allows it; a lower detail fa
   toward the kind's colour.
 - **Clips by skill**: `swing` plays the plan's `actions.swing`; gore, venom, web, maul and acid name
   clips (`{ do: "animation" }` added to those skills); a humanoid ignores names it lacks.
+- **Eyes** (the user's ask after the first line-up): `paint.eyes.style: "detailed"` (wolf, boar,
+  bear) gives each eye an eyeball of its own - a low almond dome on the head, sunk at its rim to the
+  head's curve, skinned to the head bone - mapped face on to a square of its own in the atlas (an
+  eighth of the atlas a side, 32 texels at 256), painted with the lid's dark rim, the white shaded
+  under the lids, a streaked iris darker at its edge, the pupil and a shine up and forward; the head
+  is darkened round it as a socket. Sizes went up about a quarter. `"painted"` (the default) keeps
+  dots in the body atlas, as the insects have.
+- **Dying on its back**: a plan with `dies: "back"` (ant, spider, centipede) turns right over when
+  it dies with no `death` clip, its back on the ground and its legs curled up over the belly;
+  `"side"` (the default) rolls onto its side, as the mammals do.
 - **Places for cues**: chest is the root's middle, head the head bone, `weapon` the snout's tip,
   hands the front feet, feet the ground under it.
 - **Measured**: making a beast (build, paint, bake) 85-200 ms in a worker (Node, 256 atlas);

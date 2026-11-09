@@ -1,7 +1,7 @@
 import { mulberry32, deriveSeed } from "../../world/rng";
 import type { ColorTuple } from "../../world/terrain/pipeline/pipelineTypes";
 import type { BeastDef, PaintLayer } from "./beastDef";
-import { hashId, type BeastGeometry, type BeastTube } from "./beastBuild";
+import { hashId, type AtlasRect, type BeastGeometry, type BeastTube } from "./beastBuild";
 import { length, sub, type Vec } from "../skeleton";
 
 /**
@@ -109,6 +109,7 @@ export function paintBeast(def: BeastDef, body: BeastGeometry, options: PaintOpt
     }
   }
   const eyeSize = def.paint.eyes.size;
+  const detailed = body.eyeRect !== null && body.eyeRect !== undefined;
   const headIndex = def.trunk.findIndex((s) => s.role === "head");
 
   const colourAt = (tube: BeastTube, p: Vec, n: Vec, ring: number, ringF: number): ColorTuple => {
@@ -131,8 +132,17 @@ export function paintBeast(def: BeastDef, body: BeastGeometry, options: PaintOpt
       const w = smooth(0.12, 0.04, t) * smooth(-0.6, 0.1, n[1] + n[2]);
       if (w > 0) c = mix(c, colours.nose, w);
     }
+    // Detailed eyes are eyeballs of their own (below): here only the socket they sit in, a soft
+    // darkening round each, deepest at the rim.
+    if (detailed && tube.kind === "trunk") {
+      for (const eye of body.eyes) {
+        const d = length(sub(p, eye));
+        const reach = eyeSize * 2.6;
+        if (d < reach) c = mix(c, colours.dark, 0.85 * smooth(reach, eyeSize * 1.1, d));
+      }
+    }
     // Eyes: an iris, a pupil, a glint; a darker ring round each.
-    if (eyeSize > 0 && tube.kind === "trunk") {
+    if (!detailed && eyeSize > 0 && tube.kind === "trunk") {
       for (const eye of body.eyes) {
         const d = length(sub(p, eye));
         if (d > eyeSize * 1.6) continue;
@@ -200,7 +210,61 @@ export function paintBeast(def: BeastDef, body: BeastGeometry, options: PaintOpt
         pixels[o + 3] = 255;
       }
   }
+  if (body.eyeRect) paintEye(pixels, size, body.eyeRect, colours[def.paint.eyes.colour] ?? colours.eye, colours.dark, def.paint.eyes.glow, noiseSeed);
   return { atlas: pixels, size, cards: paintCards(body, colours, noiseSeed), colours };
+}
+
+/**
+ * A detailed eye seen face on, forward to the right (+a), up at the top (+b), the almond its square's
+ * circle: the lid's dark rim, the white shaded under the upper lid, the iris darker at its edge and
+ * streaked, the pupil, and a shine up and forward with a small second one under it. Three by three
+ * samples a texel, so the circles stay round at 32 texels.
+ */
+function paintEye(pixels: Uint8Array, size: number, rect: AtlasRect, iris: ColorTuple, dark: ColorTuple, glow: boolean, seed: number): void {
+  const white: ColorTuple = [0.9, 0.87, 0.8];
+  const lid: ColorTuple = mix(dark, [0.02, 0.02, 0.02], 0.6);
+  const sample = (a: number, b: number): ColorTuple => {
+    const r = Math.hypot(a, b);
+    if (r > 0.9) return lid;
+    const ia = a - 0.06;
+    const ir = Math.hypot(ia, b);
+    let c: ColorTuple;
+    if (ir < 0.68) {
+      // Lighter toward the pupil, a dark limbal ring at the edge, faint streaks round it.
+      const streak = 0.9 + 0.2 * Math.sin(Math.atan2(b, ia) * 9 + (seed % 7));
+      const k = (1.15 - 0.45 * smooth(0.27, 0.68, ir)) * streak;
+      c = [clamp01(iris[0] * k), clamp01(iris[1] * k), clamp01(iris[2] * k)];
+      c = mix(c, lid, 0.7 * smooth(0.55, 0.68, ir));
+      if (ir < 0.32) c = [0.02, 0.02, 0.025];
+    } else c = white;
+    // The upper lid's shadow, a fainter one under the lower lid, and the rim darkening into the lid.
+    c = mix(c, lid, Math.min(1, 0.6 * smooth(0.1, 0.8, b) * smooth(0.4, 0.86, r) + 0.35 * smooth(-0.2, -0.8, b) * smooth(0.5, 0.86, r) + 0.75 * smooth(0.74, 0.88, r)));
+    if (glow) c = mix(c, [1, 0.85, 0.4], 0.35);
+    // The shine.
+    if (Math.hypot(a - 0.3, b - 0.32) < 0.18 || Math.hypot(a + 0.22, b + 0.3) < 0.06) c = [0.98, 0.98, 0.95];
+    return c;
+  };
+  for (let y = -2; y < rect.h + 2; y++)
+    for (let x = -2; x < rect.w + 2; x++) {
+      const px = rect.x + x;
+      const py = rect.y + y;
+      if (px < 0 || py < 0 || px >= size || py >= size) continue;
+      const total: ColorTuple = [0, 0, 0];
+      for (let sy = 0; sy < 3; sy++)
+        for (let sx = 0; sx < 3; sx++) {
+          const a = ((Math.min(rect.w - 1, Math.max(0, x)) + (sx - 1) / 3) / (rect.w - 1)) * 2 - 1;
+          const b = ((Math.min(rect.h - 1, Math.max(0, y)) + (sy - 1) / 3) / (rect.h - 1)) * 2 - 1;
+          const c = sample(a, b);
+          total[0] += c[0] / 9;
+          total[1] += c[1] / 9;
+          total[2] += c[2] / 9;
+        }
+      const o = (py * size + px) * 4;
+      pixels[o] = total[0] * 255;
+      pixels[o + 1] = total[1] * 255;
+      pixels[o + 2] = total[2] * 255;
+      pixels[o + 3] = 255;
+    }
 }
 
 function layerWeight(layer: PaintLayer, tube: BeastTube, p: Vec, n: Vec, whole: number, segment: BeastDef["trunk"][number] | null, ring: number, ringF: number, seed: number, scars: { a: Vec; b: Vec }[]): number {

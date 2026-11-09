@@ -71,6 +71,8 @@
     ],
     eyes: { segment: "head", at: 0.5, around: 70, size: 0.045, colour: "eye" },
   },
+  // Dead, it lies on its back, legs curled over the belly.
+  dies: "back",
   idle: { breathe: 0.6, tail: 0.4, head: 0.8 },
   gaits: [
     { id: "walk", pattern: "tripod", speed: 1.1, stride: 0.75, duty: 0.55, lift: 0.08, bob: 0.008 },
