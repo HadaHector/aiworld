@@ -5,7 +5,7 @@ non-humanoid bodies. Afterwards wolves, boars, spiders, bears and giant ants are
 procedural beasts instead of capsules - built from parts and numbers in packs, deterministic from the
 seed, in the spirit of the humanoids - and a new beast is pack data, not code.
 
-**Status: plan, awaiting approval. Nothing is built.**
+**Status: steps 1-6 built, waiting for the user's judgement in the line-up** (`beasts.html`); tuning per that, and the open points in [As built](#as-built), remain. Wolf, boar, bear, spider and giant ant are drawn in the game; a giant centipede shows a beast made of pack data alone.
 
 ## Decisions
 
@@ -386,9 +386,57 @@ as more plans; sit and sleep poses if not cheap; more fantastical add-ons (glowi
 extra heads, as traits adding parts); beasts that carry riders; feather cards (the card builder allows them); skinning
 corpses; instancing with thin instances if skinning allows it; a lower detail far away.
 
-## Open questions for the user
+## Answered
 
-1. **Bear and giant ant**: decided - both are added as new species (`bear.json5`, `ant.json5`) with
-   skills, loot and habitats in the core pack.
-2. **Leg IK**: decided - none at runtime; IK only bakes the gait keyframes.
-3. **Size ranges** in the table above: right as a start? (Tuned in the line-up anyway.)
+1. **Bear and giant ant**: both added as species (`creatures/bear.json5`, neutral, `maul`;
+   `creatures/ant.json5`, hostile, `acid`), with loot, items and habitats.
+2. **Leg IK**: none at run time; IK only bakes the gait keyframes (the user's call).
+3. **Size ranges**: the table above, to be tuned in the line-up.
+
+## As built
+
+- **Files**: `src/character/beast/` - `beastDef.ts` (plans, `variants`, `splitBeastLook`,
+  `withVariant`), `beastBuild.ts` (the body: trunk and limb tubes, parts, cards, atlas layout),
+  `beastPaint.ts` (atlas and card texture), `beastAnim.ts` (gait baking, the animator),
+  `beastMesh.ts` (Babylon mesh and skeleton, textures shared per scene), `beastMake.ts` and
+  `beastBuild.worker.ts` (worker pool and cache); `src/game/beastBody.ts` (the game's body);
+  `beasts.html` and `src/beastsPage/main.ts` (the line-up, a page of its own rather than a workbench
+  tab, so the workbench's file stays the weapons session's); probes `beast.mjs` and `beastGaits.mjs`.
+  Shared files touched, a few lines each: `resolveContent.ts` (the `beasts` folder), `gameRules.ts`
+  (`look.beast`), `entityMeshes.ts` (a beast factory beside the humanoid one), `session.ts` (the kit),
+  `vite.config.ts` (the page).
+- **No junction patches.** Limbs are tubes of their own rooted inside the trunk (their first ring
+  buried in it) rather than plugged into ports: simpler, any count, and at third-person distance the
+  join reads as a shoulder or a haunch. A limb's rings are carried down it by parallel transport, so
+  a paw bent forward stays untwisted.
+- **Poses** are a rotation per bone in the body's bind frame (quaternions), applied at the bone's
+  head after its parent's; `beastMesh.ts` turns them into Babylon's local rotations.
+- **Gait baking**: 32 samples a cycle per gait. Each walking foot's target is in the frame of the
+  trunk bone it hangs from as the bob, pitch and wave have moved it; a limb reaching out sideways is
+  yawed about the vertical for what its plane cannot reach, then solved in its plane (two bones
+  analytically, more by CCD whose pull toward the rest shape fades). The last bone of a leg of three
+  or more keeps its angle, curled in the swing. The phase advances by exactly the baked stride, so a
+  planted foot stays put: `beastGaits.mjs` measures under 2 cm of slide for every plan and gait.
+- **Patterns** from rank (front to back) and side: lateral-sequence walk, trot, pace, bound, a
+  rotary gallop, tripod, alternating tetrapods, a wave and a metachronal ripple.
+- **Variety**: a kind's individuals fold onto 6 seeds (`VARIETY` in `beastBody.ts`), so a camp shares
+  cached bodies; size, build, parts, cards and markings differ between them. Variants are palettes
+  in the plan (`wolf.frost`, `boar.dust`, `bear.cave`, `ant.fire`...); a variant the plan lacks tints
+  toward the kind's colour.
+- **Clips by skill**: `swing` plays the plan's `actions.swing`; gore, venom, web, maul and acid name
+  clips (`{ do: "animation" }` added to those skills); a humanoid ignores names it lacks.
+- **Places for cues**: chest is the root's middle, head the head bone, `weapon` the snout's tip,
+  hands the front feet, feet the ground under it.
+- **Measured**: making a beast (build, paint, bake) 85-200 ms in a worker (Node, 256 atlas);
+  animating 15-50 us a frame; 20 beasts of ten kinds spawned at once were all drawn 2.0 s later,
+  every one made in a worker, with two long tasks on the main thread (64 ms the longest, in a
+  hidden, throttled tab); rendering them added about 0.25 ms a beast a frame. Beyond 45 m a beast is
+  posed every other frame, beyond 110 m not at all.
+- **Checked in the game** (`?play&config=tiny`): every kind spawned and drawn, aggroing, biting,
+  webbing, spraying, dying onto its side and lying as a corpse with its loot glint; health bars at
+  the bodies' heights (the capsules were resized to the bodies). The creature probe passes (86
+  checks) and the server loads the 15 kinds.
+- **Not yet**: card sway (cards are skinned rigidly to their bone); ear flicks (ears are parts, with
+  no bone of their own); a jaw that opens (bites read by the lunge); sitting and sleeping; a legless
+  plan's body wave (a serpent needs gaits without feet); a lower detail far away; icons for the new
+  items (they borrow existing ones until icon generation, which needs the user's go-ahead).

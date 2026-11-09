@@ -1,0 +1,55 @@
+// A test of the generator's range (BEASTS.md, *Range of the generator*): a giant centipede made of
+// pack data alone - a head, ten body segments each with its own pair of legs, a tail - running in a
+// metachronal wave that ripples down its twenty legs. No species uses it yet.
+{
+  name: "Giant Centipede",
+  size: [0.9, 1.2],
+  verts: { trunk: 10, limb: 5 },
+  root: "s4",
+  trunk: [
+    { id: "head", role: "head", length: 0.16, slope: -4, rings: 3, up: [[0, 0.04], [1, 0.07]], down: [[0, 0.04], [1, 0.06]], side: [[0, 0.06], [1, 0.09]] },
+    { id: "s0", length: 0.16, rings: 2, up: [[0, 0.07], [0.5, 0.08], [1, 0.07]], down: [[0, 0.05], [1, 0.05]], side: [[0, 0.09], [0.5, 0.1], [1, 0.09]] },
+    { id: "s1", length: 0.16, rings: 2, up: [[0, 0.07], [0.5, 0.08], [1, 0.07]], down: [[0, 0.05], [1, 0.05]], side: [[0, 0.09], [0.5, 0.1], [1, 0.09]] },
+    { id: "s2", length: 0.16, rings: 2, up: [[0, 0.07], [0.5, 0.08], [1, 0.07]], down: [[0, 0.05], [1, 0.05]], side: [[0, 0.09], [0.5, 0.1], [1, 0.09]] },
+    { id: "s3", length: 0.16, rings: 2, up: [[0, 0.07], [0.5, 0.08], [1, 0.07]], down: [[0, 0.05], [1, 0.05]], side: [[0, 0.09], [0.5, 0.1], [1, 0.09]] },
+    { id: "s4", length: 0.16, rings: 2, up: [[0, 0.07], [0.5, 0.08], [1, 0.07]], down: [[0, 0.05], [1, 0.05]], side: [[0, 0.09], [0.5, 0.1], [1, 0.09]] },
+    { id: "s5", length: 0.16, rings: 2, up: [[0, 0.07], [0.5, 0.08], [1, 0.07]], down: [[0, 0.05], [1, 0.05]], side: [[0, 0.09], [0.5, 0.1], [1, 0.09]] },
+    { id: "s6", length: 0.16, rings: 2, up: [[0, 0.07], [0.5, 0.08], [1, 0.07]], down: [[0, 0.05], [1, 0.05]], side: [[0, 0.09], [0.5, 0.1], [1, 0.09]] },
+    { id: "s7", length: 0.16, rings: 2, up: [[0, 0.07], [0.5, 0.08], [1, 0.07]], down: [[0, 0.05], [1, 0.05]], side: [[0, 0.09], [0.5, 0.1], [1, 0.09]] },
+    { id: "s8", length: 0.16, rings: 2, up: [[0, 0.07], [0.5, 0.08], [1, 0.07]], down: [[0, 0.05], [1, 0.05]], side: [[0, 0.09], [0.5, 0.1], [1, 0.09]] },
+    { id: "s9", length: 0.16, rings: 2, up: [[0, 0.07], [0.5, 0.08], [1, 0.07]], down: [[0, 0.05], [1, 0.05]], side: [[0, 0.09], [0.5, 0.1], [1, 0.09]] },
+    { id: "tail", role: "tail", length: 0.14, slope: 10, rings: 2, up: [[0, 0.06], [1, 0.02]], down: [[0, 0.05], [1, 0.02]], side: [[0, 0.08], [1, 0.02]] },
+  ],
+  limbs: [
+    { id: "leg0x", on: "s0", at: 0.5, yaw: 70, out: 0.08, drop: 0.03, segments: [{ length: 0.14, angle: 120, width: [[0, 0.025], [1, 0.02]], rings: 1 }, { length: 0.2, angle: 25, width: [[0, 0.02], [1, 0.008]], rings: 1 }] },
+    { id: "leg1x", on: "s1", at: 0.5, yaw: 74, out: 0.08, drop: 0.03, segments: [{ length: 0.14, angle: 120, width: [[0, 0.025], [1, 0.02]], rings: 1 }, { length: 0.2, angle: 25, width: [[0, 0.02], [1, 0.008]], rings: 1 }] },
+    { id: "leg2x", on: "s2", at: 0.5, yaw: 78, out: 0.08, drop: 0.03, segments: [{ length: 0.14, angle: 120, width: [[0, 0.025], [1, 0.02]], rings: 1 }, { length: 0.2, angle: 25, width: [[0, 0.02], [1, 0.008]], rings: 1 }] },
+    { id: "leg3x", on: "s3", at: 0.5, yaw: 82, out: 0.08, drop: 0.03, segments: [{ length: 0.14, angle: 120, width: [[0, 0.025], [1, 0.02]], rings: 1 }, { length: 0.2, angle: 25, width: [[0, 0.02], [1, 0.008]], rings: 1 }] },
+    { id: "leg4x", on: "s4", at: 0.5, yaw: 86, out: 0.08, drop: 0.03, segments: [{ length: 0.14, angle: 120, width: [[0, 0.025], [1, 0.02]], rings: 1 }, { length: 0.2, angle: 25, width: [[0, 0.02], [1, 0.008]], rings: 1 }] },
+    { id: "leg5x", on: "s5", at: 0.5, yaw: 90, out: 0.08, drop: 0.03, segments: [{ length: 0.14, angle: 120, width: [[0, 0.025], [1, 0.02]], rings: 1 }, { length: 0.2, angle: 25, width: [[0, 0.02], [1, 0.008]], rings: 1 }] },
+    { id: "leg6x", on: "s6", at: 0.5, yaw: 94, out: 0.08, drop: 0.03, segments: [{ length: 0.14, angle: 120, width: [[0, 0.025], [1, 0.02]], rings: 1 }, { length: 0.2, angle: 25, width: [[0, 0.02], [1, 0.008]], rings: 1 }] },
+    { id: "leg7x", on: "s7", at: 0.5, yaw: 98, out: 0.08, drop: 0.03, segments: [{ length: 0.14, angle: 120, width: [[0, 0.025], [1, 0.02]], rings: 1 }, { length: 0.2, angle: 25, width: [[0, 0.02], [1, 0.008]], rings: 1 }] },
+    { id: "leg8x", on: "s8", at: 0.5, yaw: 102, out: 0.08, drop: 0.03, segments: [{ length: 0.14, angle: 120, width: [[0, 0.025], [1, 0.02]], rings: 1 }, { length: 0.2, angle: 25, width: [[0, 0.02], [1, 0.008]], rings: 1 }] },
+    { id: "leg9x", on: "s9", at: 0.5, yaw: 106, out: 0.08, drop: 0.03, segments: [{ length: 0.14, angle: 120, width: [[0, 0.025], [1, 0.02]], rings: 1 }, { length: 0.2, angle: 25, width: [[0, 0.02], [1, 0.008]], rings: 1 }] },
+  ],
+  parts: [
+    { id: "antenna", bone: "head", at: 0.2, around: 35, length: 0.3, radius: 0.012, direction: [0.5, 0.5, 0.8], curve: -0.4, mirror: true, colour: "dark", sink: 0.1 },
+    { id: "fang", bone: "head", at: 0.1, around: 130, length: 0.1, radius: 0.02, direction: [0.5, -0.3, 0.8], curve: -0.3, mirror: true, colour: "dark", sink: 0.2 },
+  ],
+  paint: {
+    palette: { coat: ["#6a3a1e", "#5a3018"], dark: ["#1e120c"], band: ["#c88a3a"], belly: ["#3a2214"] },
+    mottle: 0.1,
+    layers: [{ kind: "belly", colour: "belly", amount: 0.6 }, { kind: "stripes", colour: "dark", amount: 0.7, size: 0.16 }, { kind: "socks", colour: "band", amount: 0.8, size: 0.4 }],
+    eyes: { segment: "head", at: 0.5, around: 60, size: 0.02, colour: "dark" },
+  },
+  idle: { breathe: 0.4, tail: 0.6, head: 0.6 },
+  gaits: [
+    { id: "crawl", pattern: "metachronal", speed: 0.8, stride: 0.35, duty: 0.6, lift: 0.06, wave: 0.03 },
+    { id: "run", pattern: "metachronal", speed: 3.5, stride: 0.7, duty: 0.5, lift: 0.08, wave: 0.06 },
+  ],
+  clips: {
+    bite: { length: 0.5, layer: "upper", keys: [{ t: 0, turns: {} }, { t: 0.4, turns: { head: [-25, 0, 0], s0: [-15, 0, 0] }, offset: [0, 0.03, 0] }, { t: 0.6, turns: { head: [20, 0, 0] }, offset: [0, 0, 0.08] }, { t: 1, turns: {} }] },
+  },
+  actions: { swing: "bite" },
+  places: { mouth: "head", chest: "s2" },
+}

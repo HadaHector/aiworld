@@ -15,7 +15,7 @@ Asked and answered before this plan was written:
 
 | Question | Decision |
 |---|---|
-| Bodies | **Capsules in this step.** Upright, sized and tinted per kind. Beast bodies (a quadruped from the curves-along-bones approach) are their own later step. Humanoid creatures (bandits) use CHARACTERS.md's bodies, which already work for any template whose look names a race |
+| Bodies | **Capsules in this step.** Upright, sized and tinted per kind. Beast bodies (a quadruped from the curves-along-bones approach) are their own later step - since built: [BEASTS.md](BEASTS.md). Humanoid creatures (bandits) use CHARACTERS.md's bodies, which already work for any template whose look names a race |
 | Where kinds come from | **Species templates that generate kinds**, as `itemTemplates/` make item types: a species (wolf) with variants (timber, frost...) makes one kind per variant, and the world seed picks each kind's traits. Rosters per zone are rolled from the seed |
 | Density | **WoW Classic:** a group or camp every 60-120 m of wild ground, singles and pairs between. Respawn about 5 minutes for most, longer for camps; set per species |
 | Behaviour | **Group aggro** (pulling one member of a group or camp pulls all of it) and **fleeing at low health** for kinds that opt in. No call for help beyond the group, no creatures fighting creatures |
@@ -407,7 +407,8 @@ Each leaves the game working: dev server, `npm run probe`, `npm run server`, `np
 ## Not in this step
 
 - **Beast bodies** - a quadruped skeleton from curves, its gait and bite: the next step after this,
-  as CHARACTERS.md's *Next steps* 6.
+  as CHARACTERS.md's *Next steps* 6. *Since built* ([BEASTS.md](BEASTS.md)): a species' `look.beast`
+  names a body plan, and bears and giant ants joined the roster.
 - Call for help beyond a group, creatures fighting creatures, predators and prey.
 - Pathfinding: a creature that cannot reach its target evades.
 - Fear, charm and sleep; taming and pets.

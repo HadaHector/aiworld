@@ -1075,6 +1075,27 @@ false` (bandits) only comes in camps. `neutral` kinds fight only when attacked; 
 makes one run at low health; `keepRange` keeps a caster at a distance. `rules/creatures.json5`'s
 `never` turns species, kinds or traits off.
 
+A creature's `look.beast` names a body plan in `beasts/` - `"wolf"`, or `"wolf.frost"` for one of the
+plan's `variants` (its palette; a variant the plan lacks tints the coat toward `look.color`) - and the
+client draws that beast instead of the capsule ([BEASTS.md](../../BEASTS.md) has every field):
+
+```json5
+// beasts/wolf.json5 - a trunk of segments from snout to tail, limb sets on them, parts, cards, paint, gaits, clips
+{ name: "Wolf", size: [0.9, 1.1], root: "chest",
+  trunk: [{ id: "head", role: "head", length: 0.36, slope: -12, up: [[0, 0.035], [1, 0.1]], down: [[0, 0.03], [1, 0.085]], side: [[0, 0.03], [1, 0.095]] }, ...],
+  limbs: [{ id: "fore", on: "chest", at: 0.3, out: 0.1, drop: 0.08, segments: [{ length: 0.27, angle: -14, width: [[0, 0.085], [1, 0.045]] }, ...] }],
+  parts: [{ id: "ear", bone: "head", at: 0.82, around: 38, length: 0.13, radius: 0.045, flat: 0.35, direction: [0.35, 1, -0.15], mirror: true }],
+  cards: [{ id: "ruff", bone: "neck", count: 70, length: [0.1, 0.17], mask: "strands", colour: "ruff", chance: 0.7, traits: { rabid: 1.3 } }],
+  paint: { palette: { coat: ["#8a7a68"], belly: ["#d9cdb8"] }, layers: [{ kind: "belly", colour: "belly" }], eyes: { segment: "head", at: 0.58, around: 52, size: 0.022 } },
+  gaits: [{ id: "trot", pattern: "trot", speed: 2.8, stride: 1.55, duty: 0.5, lift: 0.1 }],
+  clips: { bite: { length: 0.6, layer: "upper", keys: [{ t: 0.55, turns: { neck: [22, 0, 0] }, offset: [0, 0, 0.14] }] } },
+  actions: { swing: "bite" }, variants: { frost: { palette: { coat: ["#d8dde2"] } } } }
+```
+
+Limb sets take any `count` of pairs (or `single`), so six legs, eight or twenty are data; a gait's
+`pattern` (`walk`, `trot`, `pace`, `bound`, `gallop`, `tripod`, `tetrapod`, `wave`, `metachronal`)
+sets which feet move together. `beasts.html` is the line-up to judge them in.
+
 ## Gameplay: progression
 
 Read by their own resolver (`src/sim/rules/progressionRules.ts`) once per server, with the world

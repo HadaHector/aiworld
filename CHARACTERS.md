@@ -559,8 +559,10 @@ In rough order of need; each belongs to the build-order step named, or is its ow
    that played it is gone. Still to come: casts and hits played by the ability system
    instead of a key; a swing per weapon kind (one-handed, two-handed, bow, staff); a take-off crouch
    once the server says a jump started; swimming once the simulation has water.
-6. **Creatures (build step 6).** Non-humanoid skeletons - quadrupeds, birds - from the same parts:
-   bones carrying curves, junction patches for their own branchings.
+6. **Creatures (build step 6).** *Done for walking beasts* ([BEASTS.md](BEASTS.md)): body plans in
+   `beasts/` - a trunk of segments and any number of limb sets, curves along every bone, a painted
+   atlas, alpha cards, gaits baked by IK - for wolves, boars, bears, spiders and giant ants. Birds and
+   serpents are still to come.
 7. **Known flaws to fix when they show:** a long skirt lets a striding thigh through; shells over
    the feet sink a centimetre into the ground; a dwarf's sword is a human's length and drags; a darker
    band under the armpit from some angles; the gait is tuned for 1.2-1.5 m/s walking and 3 m/s

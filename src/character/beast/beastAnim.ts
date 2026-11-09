@@ -170,8 +170,9 @@ function limbTurns(limb: BeastLimb, target: Vec, curl: number, previous: number[
   let x2 = dot(unyawed, limb.e2);
   const footAngle = limb.rest[n - 1] + curl;
   let angles: number[];
-  if (n >= 2) {
-    // The foot keeps its angle: solve the rest of the chain to its root.
+  if (n >= 3) {
+    // The foot keeps its angle: solve the rest of the chain to its root (a two-bone leg - a
+    // centipede's - has no foot to spare, and is solved whole).
     x1 -= Math.sin(footAngle) * limb.lengths[n - 1];
     x2 -= Math.cos(footAngle) * limb.lengths[n - 1];
     angles = [...solvePlanar(limb.lengths.slice(0, n - 1), limb.rest.slice(0, n - 1), [x1, x2], previous ? previous.slice(0, n - 1) : limb.rest.slice(0, n - 1)), footAngle];
