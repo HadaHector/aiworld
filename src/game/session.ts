@@ -29,6 +29,7 @@ import { createInventoryScreen, createLootWindow } from "../ui/inventoryScreen";
 import { GROUND_ITEM_TEMPLATE } from "../sim/items/itemSystem";
 import { appearanceOf, type PlayerLook } from "./playerBody";
 import { createBodyKit } from "./characterBody";
+import { createBeastKit } from "./beastBody";
 import { createCombatHud } from "./combatHud";
 import { createChatCommands } from "./chatCommands";
 import type { CommandDef } from "../sim/chat/chat";
@@ -155,6 +156,8 @@ export async function startSession(page: Page, options: SessionOptions): Promise
   loadIconSets(packSet.sources);
   const markerKinds = loadMarkerKinds(packSet.sources);
   const bodyKit = createBodyKit(packSet.sources);
+  /** Beast body plans (BEASTS.md), and each creature kind's traits this world. */
+  const beastKit = createBeastKit(packSet.sources, (id) => creatureRules.kinds.get(id)?.traits ?? []);
 
   let playerId = -1;
   let intentSeq = 0;
@@ -502,6 +505,7 @@ export async function startSession(page: Page, options: SessionOptions): Promise
       worldSeed: transfer.seed,
       onBody: (meshes) => meshes.forEach((mesh) => world.castShadow(mesh)),
       items: itemRules,
+      beasts: beastKit,
     });
     client.send({ type: "arrived" });
     // The server puts the body in once it has the dimension too - a moment, as its load resolves.

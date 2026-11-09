@@ -1,0 +1,1 @@
+{ name: "Acid Gland", icon: "item-venom-sac", kind: "material", rarity: "uncommon", stack: 10, value: 28 }

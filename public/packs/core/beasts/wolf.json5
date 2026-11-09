@@ -103,4 +103,9 @@
   },
   actions: { swing: "bite", attack: "bite" },
   places: { mouth: "head", chest: "chest" },
+  // Kinds' looks (creatures/wolf.json5 names "wolf.frost", "wolf.plains").
+  variants: {
+    frost: { palette: { coat: ["#d8dde2", "#c8ced6", "#e2e6ea"], back: ["#9aa4ae", "#8a96a2"], belly: ["#f2f4f6"], ruff: ["#eef1f4"], pale: ["#ffffff"], eye: ["#7ab8e0", "#9ad0f0"] } },
+    plains: { palette: { coat: ["#b0915e", "#a68650", "#bc9e6a"], back: ["#6e5634", "#7a6040"], belly: ["#e8dcc0"], ruff: ["#c8b080"] } },
+  },
 }

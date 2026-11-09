@@ -31,6 +31,16 @@ export interface BeastDef {
   idle: IdleDef;
   /** Bones named by their use, for effects and sounds (FEEDBACK.md): `mouth`, `head`, `chest`, `tail`. */
   places: Record<string, string>;
+  /** Named looks a creature kind can ask for (`look.beast: "wolf.frost"`): palette colours over the
+   *  plan's, and other size and build ranges. A kind naming a variant the plan lacks is tinted
+   *  toward its own colour instead. */
+  variants: Map<string, BeastVariant>;
+}
+
+export interface BeastVariant {
+  palette: Record<string, ColorTuple[]>;
+  size?: [number, number];
+  build?: [number, number];
 }
 
 /**
@@ -214,7 +224,7 @@ export function resolveBeasts(packs: PackSource[]): Map<string, BeastDef> {
   return beasts;
 }
 
-const TOP_KEYS = ["name", "size", "build", "verts", "trunk", "root", "limbs", "parts", "cards", "paint", "gaits", "clips", "actions", "idle", "places"];
+const TOP_KEYS = ["name", "size", "build", "verts", "trunk", "root", "limbs", "parts", "cards", "paint", "gaits", "clips", "actions", "idle", "places", "variants"];
 
 export function readBeast(id: string, data: unknown, reader: Reader): BeastDef {
   const obj = reader.object(data, "");
@@ -239,6 +249,17 @@ export function readBeast(id: string, data: unknown, reader: Reader): BeastDef {
   for (const [action, clip] of Object.entries(actions)) if (!clips.has(clip)) reader.fail(`actions.${action}`, `no clip "${clip}"`);
   const idle = obj.idle === undefined ? {} : reader.object(obj.idle, "idle");
   reader.onlyKeys(idle, "idle", ["breathe", "tail", "head"]);
+  const variants = new Map<string, BeastVariant>();
+  const rawVariants = obj.variants === undefined ? {} : reader.object(obj.variants, "variants");
+  for (const [name, raw] of Object.entries(rawVariants)) {
+    const path = `variants.${name}`;
+    const v = reader.object(raw, path);
+    reader.onlyKeys(v, path, ["palette", "size", "build"]);
+    const palette: Record<string, ColorTuple[]> = {};
+    const rawPalette = v.palette === undefined ? {} : reader.object(v.palette, `${path}.palette`);
+    for (const [colour, list] of Object.entries(rawPalette)) palette[colour] = (Array.isArray(list) ? list : [list]).map((c, i) => reader.colorValue(c, `${path}.palette.${colour}[${i}]`));
+    variants.set(name, { palette, size: v.size === undefined ? undefined : reader.range(v, "size", path, { allowEqual: true }), build: v.build === undefined ? undefined : reader.range(v, "build", path, { allowEqual: true }) });
+  }
   const places = stringRecord(obj.places, "places", reader);
   for (const [place, bone] of Object.entries(places)) if (!boneNames.has(bone)) reader.fail(`places.${place}`, `no bone "${bone}"`);
   return {
@@ -258,7 +279,21 @@ export function readBeast(id: string, data: unknown, reader: Reader): BeastDef {
     actions,
     idle: { breathe: reader.optionalNumber(idle, "breathe", "idle", 1), tail: reader.optionalNumber(idle, "tail", "idle", 1), head: reader.optionalNumber(idle, "head", "idle", 1) },
     places,
+    variants,
   };
+}
+
+/** A look's `beast` - "wolf" or "wolf.frost" - as a plan and a variant ("" for none). */
+export function splitBeastLook(look: string): { plan: string; variant: string } {
+  const dot = look.indexOf(".");
+  return dot < 0 ? { plan: look, variant: "" } : { plan: look.slice(0, dot), variant: look.slice(dot + 1) };
+}
+
+/** The plan as a variant has it: its palette over the plan's, its ranges for size and build. */
+export function withVariant(def: BeastDef, variant: string): BeastDef {
+  const v = def.variants.get(variant);
+  if (!v) return def;
+  return { ...def, size: v.size ?? def.size, build: v.build ?? def.build, paint: { ...def.paint, palette: { ...def.paint.palette, ...v.palette } } };
 }
 
 /** The bones a limb set makes, in order: `<id><pair>L<k>` and `R`, the pair left out when there is one. */

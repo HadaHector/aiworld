@@ -66,12 +66,10 @@ export function createBeastMesh(scene: Scene, name: string, body: BeastGeometry,
     return mesh;
   };
   const mesh = make(name, body.positions, body.normals, body.uvs, body.joints, body.weights, body.indices);
-  const textures: Texture[] = [];
+  const held: Uint8Array[] = [];
   const materials: Material[] = [];
-  const atlas = RawTexture.CreateRGBATexture(painted.atlas, painted.size, painted.size, scene, !options.nearest, false, options.nearest ? Texture.NEAREST_SAMPLINGMODE : Texture.TRILINEAR_SAMPLINGMODE);
-  atlas.wrapU = Texture.CLAMP_ADDRESSMODE;
-  atlas.wrapV = Texture.CLAMP_ADDRESSMODE;
-  textures.push(atlas);
+  const atlas = holdTexture(scene, painted.atlas, painted.size, painted.size, !!options.nearest);
+  held.push(painted.atlas);
   const material = new StandardMaterial(`${name}Material`, scene);
   material.diffuseTexture = atlas;
   material.specularColor = new Color3(0.04, 0.04, 0.04);
@@ -87,11 +85,9 @@ export function createBeastMesh(scene: Scene, name: string, body: BeastGeometry,
     const c = body.cards;
     const cards = make(`${name}Cards`, c.positions, c.normals, c.uvs, c.joints, c.weights, c.indices);
     cards.parent = mesh;
-    const texture = RawTexture.CreateRGBATexture(painted.cards.pixels, painted.cards.width, painted.cards.height, scene, true, false, Texture.TRILINEAR_SAMPLINGMODE);
+    const texture = holdTexture(scene, painted.cards.pixels, painted.cards.width, painted.cards.height, false);
     texture.hasAlpha = true;
-    texture.wrapU = Texture.CLAMP_ADDRESSMODE;
-    texture.wrapV = Texture.CLAMP_ADDRESSMODE;
-    textures.push(texture);
+    held.push(painted.cards.pixels);
     const cardMaterial = new StandardMaterial(`${name}CardMaterial`, scene);
     cardMaterial.diffuseTexture = texture;
     cardMaterial.useAlphaFromDiffuseTexture = true;
@@ -143,10 +139,36 @@ export function createBeastMesh(scene: Scene, name: string, body: BeastGeometry,
       b.getAbsolutePositionToRef(mesh, out);
     },
     dispose() {
-      for (const t of textures) t.dispose();
+      for (const pixels of held) releaseTexture(scene, pixels);
       for (const m of materials) m.dispose();
       for (const m of meshes) m.dispose();
       skeleton.dispose();
     },
   };
+}
+
+/** A painted texture, one per scene however many beasts share the making it came from: held by count,
+ *  disposed by the last to let go. */
+const textures = new WeakMap<Scene, Map<Uint8Array, { texture: RawTexture; holders: number }>>();
+
+function holdTexture(scene: Scene, pixels: Uint8Array, width: number, height: number, nearest: boolean): RawTexture {
+  let inScene = textures.get(scene);
+  if (!inScene) textures.set(scene, (inScene = new Map()));
+  let entry = inScene.get(pixels);
+  if (!entry) {
+    const texture = RawTexture.CreateRGBATexture(pixels, width, height, scene, !nearest, false, nearest ? Texture.NEAREST_SAMPLINGMODE : Texture.TRILINEAR_SAMPLINGMODE);
+    texture.wrapU = Texture.CLAMP_ADDRESSMODE;
+    texture.wrapV = Texture.CLAMP_ADDRESSMODE;
+    inScene.set(pixels, (entry = { texture, holders: 0 }));
+  }
+  entry.holders++;
+  return entry.texture;
+}
+
+function releaseTexture(scene: Scene, pixels: Uint8Array): void {
+  const inScene = textures.get(scene);
+  const entry = inScene?.get(pixels);
+  if (!entry || --entry.holders > 0) return;
+  entry.texture.dispose();
+  inScene!.delete(pixels);
 }

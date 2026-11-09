@@ -1,0 +1,20 @@
+// A bear's maul: a rearing swipe of a forepaw that tears a bleeding wound.
+{
+  name: "Maul",
+  icon: "spell-frost-claws",
+  type: "physical",
+  tags: ["melee"],
+  target: "enemy",
+  range: 5,
+  facing: true,
+  cooldown: 12,
+  states: {
+    swipe: {
+      enter: [
+        { do: "animation", name: "maul" },
+        { do: "damage", group: "target", amount: { add: ["caster.weaponMax", { mul: ["random", 4] }, { div: ["caster.strength", 5] }] } },
+        { do: "cast", skill: "bleed", group: "target", vars: { perTick: { add: [2, { mul: ["caster.level", 0.7] }] } } },
+      ],
+    },
+  },
+}

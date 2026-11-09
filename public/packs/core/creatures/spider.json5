@@ -17,11 +17,11 @@
   levelOffset: 1,
   respawn: [300, 420],
   loot: "spider",
-  look: { height: 1.1, radius: 0.75, color: [0.2, 0.18, 0.2], feedback: { weapon: "fang", armor: "chitin", family: "spider" } },
+  look: { height: 1.0, radius: 0.85, color: [0.2, 0.18, 0.2], beast: "spider", feedback: { weapon: "fang", armor: "chitin", family: "spider" } },
   variants: [
     { id: "giant", name: "Giant", habitat: ["meadow", "bluebellWood", "autumnWood", "reedMarsh"] },
-    { id: "jungle", name: "Jungle", habitat: ["rainforest", "cloudForest", "cypressBayou"], look: { color: [0.25, 0.4, 0.2] } },
-    { id: "sand", name: "Sand", habitat: ["desert", "redBush"], look: { color: [0.75, 0.55, 0.35] }, stats: { armor: 50 } },
+    { id: "jungle", name: "Jungle", habitat: ["rainforest", "cloudForest", "cypressBayou"], look: { color: [0.25, 0.4, 0.2], beast: "spider.jungle" } },
+    { id: "sand", name: "Sand", habitat: ["desert", "redBush"], look: { color: [0.75, 0.55, 0.35], beast: "spider.sand" }, stats: { armor: 50 } },
   ],
   traits: { pick: [0, 1], pool: ["swift", "old"] },
 }

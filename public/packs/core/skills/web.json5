@@ -9,7 +9,7 @@
   los: true,
   cooldown: 14,
   states: {
-    spit: { length: { travel: 25 }, next: "stick" },
+    spit: { enter: [{ do: "animation", name: "web" }], length: { travel: 25 }, next: "stick" },
     stick: { enter: [{ do: "cast", skill: "webbed", group: "target" }] },
   },
 }

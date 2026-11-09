@@ -1,0 +1,1 @@
+{ name: "Bear Pelt", icon: "item-boar-hide", kind: "material", rarity: "uncommon", stack: 10, value: 40 }

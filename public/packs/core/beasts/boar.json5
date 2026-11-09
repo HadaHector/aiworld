@@ -87,4 +87,8 @@
   },
   actions: { swing: "gore", attack: "gore", gore: "gore" },
   places: { mouth: "head", chest: "shoulders" },
+  variants: {
+    dust: { palette: { coat: ["#9e7c58", "#a8865e", "#94744e"], back: ["#5e4a34"], belly: ["#c0a480"], bristle: ["#4a3a2a"] } },
+    mire: { palette: { coat: ["#3e4234", "#363a2e", "#444838"], back: ["#22261e"], belly: ["#5a5c48"], bristle: ["#1c1e18"] }, size: [0.95, 1.2] },
+  },
 }

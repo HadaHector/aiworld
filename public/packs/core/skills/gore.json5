@@ -11,7 +11,7 @@
   cooldown: 12,
   states: {
     rush: {
-      enter: [{ do: "move", group: "caster", kind: "dash", speed: 22, toTarget: true }],
+      enter: [{ do: "animation", name: "gore" }, { do: "move", group: "caster", kind: "dash", speed: 22, toTarget: true }],
       length: { travel: 22 },
       next: "hit",
     },

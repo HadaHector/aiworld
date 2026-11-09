@@ -93,4 +93,7 @@
   },
   actions: { swing: "bite", attack: "bite", acid: "spray" },
   places: { mouth: "head", chest: "meso", tail: "gaster" },
+  variants: {
+    fire: { palette: { coat: ["#a83a14", "#b8461a", "#9a3010"], back: ["#5a1a08"], band: ["#f0c040", "#e8a030"], belly: ["#4a1408"] } },
+  },
 }

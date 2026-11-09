@@ -10,7 +10,7 @@
   cooldown: 6,
   states: {
     bite: {
-      enter: [{ do: "cast", skill: "poison", group: "target", vars: { perTick: { add: [3, { mul: ["caster.level", 0.9] }] } } }],
+      enter: [{ do: "animation", name: "venom" }, { do: "cast", skill: "poison", group: "target", vars: { perTick: { add: [3, { mul: ["caster.level", 0.9] }] } } }],
     },
   },
 }

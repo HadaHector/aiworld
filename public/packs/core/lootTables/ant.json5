@@ -1,0 +1,10 @@
+// What a giant ant drops.
+{
+  rolls: [1, 2],
+  pick: [
+    { weight: 50, item: "antChitin", count: [1, 2] },
+    { weight: 25, item: "acidGland" },
+    { weight: 25 },
+  ],
+  always: [{ money: [1, 6] }],
+}

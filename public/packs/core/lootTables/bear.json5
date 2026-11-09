@@ -1,0 +1,10 @@
+// What a bear drops.
+{
+  rolls: [1, 2],
+  pick: [
+    { weight: 45, item: "bearPelt" },
+    { weight: 30, item: "bearClaw", count: [1, 2] },
+    { weight: 25, item: "boarMeat", count: [1, 3] },
+  ],
+  always: [{ money: [3, 10] }],
+}

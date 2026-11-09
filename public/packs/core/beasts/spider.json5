@@ -89,4 +89,8 @@
   },
   actions: { swing: "bite", attack: "bite", venom: "bite", web: "spit" },
   places: { mouth: "head", chest: "thorax" },
+  variants: {
+    jungle: { palette: { coat: ["#2e3a22", "#34421e", "#28361c"], hair: ["#4a5a2a"], mark: ["#d8c030", "#e0a020", "#c84a20"], band: ["#6a7a2a", "#7a6a20"] } },
+    sand: { palette: { coat: ["#a8845a", "#b08e62", "#9c7a50"], hair: ["#c8a878"], mark: ["#5a3a20", "#3a2a1a"], band: ["#7a5a3a"], belly: ["#6a5038"] } },
+  },
 }

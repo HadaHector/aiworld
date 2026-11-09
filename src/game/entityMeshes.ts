@@ -7,6 +7,8 @@ import { createCharacterBody, type BodyKit, type BodyLook, type BodyPlace, type 
 import type { ItemRules } from "../sim/rules/itemRules";
 import { bodyDone } from "../character/bodyTiming";
 import { gearOfItems } from "./itemGear";
+import { createBeastBody, type BeastKit } from "./beastBody";
+import { splitBeastLook } from "../character/beast/beastDef";
 
 export interface EntityMeshes {
   /** Moves every drawn entity to where the mirror has it, and animates its body - each frame. */
@@ -38,6 +40,8 @@ export interface EntityBodies {
   onBody?: (meshes: Mesh[]) => void;
   /** Item types, so what an entity wears can be put on its body (ITEMS.md, *Equipment*). */
   items?: ItemRules;
+  /** Beast body plans (BEASTS.md): a template whose look names one is drawn as that beast. */
+  beasts?: BeastKit;
 }
 
 interface Drawn {
@@ -52,6 +56,8 @@ interface Drawn {
   wanted: BodyLook | null;
   built: string;
   building: boolean;
+  /** The beast plan its look names ("wolf.frost"), "" for none: drawn as a beast, not a humanoid. */
+  beast: string;
   /** How far a capsule has fallen over, 0 standing to 1 lying: a dead creature without a body. */
   fall: number;
   /** A capsule's hit feel (FEEDBACK.md): pushed away from a blow and back, flashing. A body has its own. */
@@ -119,7 +125,9 @@ export function createEntityMeshes(scene: Scene, mirror: EntityMirror, rules: Ga
     const sex = entity.look.sex || look.sex;
     const wanted: BodyLook | null = race ? { race, outfit: entity.look.outfit || look.outfit, sex: sex === "male" || sex === "female" ? sex : undefined, seed: entity.look.seed, choices: entity.look.choices } : null;
     if (race && !bodies.kit.races.has(race)) console.warn(`Entity #${entity.id} (${entity.templateId}) wants race "${race}", which these packs lack - a stand-in race is drawn.`);
-    const entry: Drawn = { capsule, body: null, gone: false, wanted, built: "", building: false, fall: (entity.flags & (1 << FLAG.dead)) !== 0 ? 1 : 0, push: null, flash: null };
+    const beast = look.beast && bodies.beasts?.plans.has(splitBeastLook(look.beast).plan) ? look.beast : "";
+    if (look.beast && !beast) console.warn(`Entity #${entity.id} (${entity.templateId}) wants beast "${look.beast}", which these packs lack - its capsule stays.`);
+    const entry: Drawn = { capsule, body: null, gone: false, wanted: beast ? null : wanted, built: "", building: false, beast, fall: (entity.flags & (1 << FLAG.dead)) !== 0 ? 1 : 0, push: null, flash: null };
     drawn.set(entity.id, entry);
     ids.set(capsule, entity.id);
     place(entity, entry);
@@ -127,6 +135,7 @@ export function createEntityMeshes(scene: Scene, mirror: EntityMirror, rules: Ga
 
   /** Builds (or builds again) an entity's body when what it should wear differs from what it has. */
   function dress(entity: MirroredEntity, entry: Drawn): void {
+    if (entry.beast) return dressBeast(entity, entry);
     if (!entry.wanted || entry.building) return;
     const gear = entity.gear && bodies.items ? gearOfItems(bodies.items, entity.gear) : undefined;
     const signature = gear ? gear.map((g) => `${g.piece}${g.tint}`).join() : `outfit:${entry.wanted.outfit}`;
@@ -149,6 +158,30 @@ export function createEntityMeshes(scene: Scene, mirror: EntityMirror, rules: Ga
         entry.building = false;
         entry.built = signature;
         console.error(`Entity #${entity.id}'s body could not be built - its capsule stays.`, error);
+      });
+  }
+
+  /** A beast's body (BEASTS.md): built once, from its template's plan and its own seed. */
+  function dressBeast(entity: MirroredEntity, entry: Drawn): void {
+    if (entry.building || entry.built || !bodies.beasts) return;
+    entry.building = true;
+    const asked = performance.now();
+    const look = entity.template?.look ?? fallback;
+    createBeastBody(scene, `entity${entity.id}Beast`, bodies.beasts, { beast: entry.beast, templateId: entity.templateId, seed: entity.look.seed, color: look.color })
+      .then((body) => {
+        entry.building = false;
+        entry.built = entry.beast;
+        bodyDone(performance.now() - asked);
+        if (entry.gone) return body.dispose();
+        entry.body = body;
+        entry.capsule.isVisible = false;
+        bodies.onBody?.(body.meshes);
+        place(entity, entry);
+      })
+      .catch((error) => {
+        entry.building = false;
+        entry.built = entry.beast;
+        console.error(`Entity #${entity.id}'s beast body could not be built - its capsule stays.`, error);
       });
   }
 

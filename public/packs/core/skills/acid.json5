@@ -1,0 +1,20 @@
+// A giant ant's acid, sprayed from its curled-under gaster: it burns over time.
+{
+  name: "Acid Spray",
+  icon: "item-venom-sac",
+  type: "physical",
+  tags: ["school.nature"],
+  target: "enemy",
+  range: 12,
+  los: true,
+  facing: true,
+  cooldown: 14,
+  states: {
+    spray: {
+      enter: [
+        { do: "animation", name: "acid" },
+        { do: "cast", skill: "poison", group: "target", vars: { perTick: { add: [2, { mul: ["caster.level", 0.8] }] } } },
+      ],
+    },
+  },
+}

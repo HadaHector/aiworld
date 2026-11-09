@@ -1,0 +1,1 @@
+{ name: "Ant Chitin", icon: "creature-skull-horned", kind: "material", rarity: "common", stack: 20, value: 10 }

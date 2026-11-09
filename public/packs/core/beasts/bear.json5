@@ -94,4 +94,7 @@
   },
   actions: { swing: "swipe", attack: "swipe", maul: "swipe" },
   places: { mouth: "head", chest: "shoulders" },
+  variants: {
+    cave: { palette: { coat: ["#2e2a28", "#262220", "#36302c"], shag: ["#4a423c", "#3e3632"], back: ["#1a1716"], belly: ["#2a2624"], muzzle: ["#8a8278", "#9a9288"] }, size: [1.0, 1.2] },
+  },
 }
