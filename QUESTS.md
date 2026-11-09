@@ -215,6 +215,14 @@ quest: {
   character entering is sent the quests whose items it holds between two of a line. The art set core
   installs has no paper or parcels, so letters and parcels differ by tint on the placeholder; the salve
   has six icons and the charm one. Add icon names to a list when a set has them.
+  **Unique, by construction.** *Technical identity:* a line's roll is the hash of its id, but the
+  generator keeps the rolls it has handed out in the world's shared state (`takeBind`) and gives a
+  line the next free one if the hash is taken, so no two quest lines of a dimension share a roll; it
+  is stored in the quest (`bind`). *Display name:* `takeItemName` gives a line's item of a type a name
+  no other line's has: the pattern asked for if free (another is tried first), else "... of <settlement>",
+  else "... (2)", "(3)". Both are decided in the seed's order, so the same packs and seed give the
+  same rolls and names. The guarantee is within a dimension (its quests are made together); between
+  dimensions only the hash, which includes the dimension in the id, stands between two rolls.
   Rules: when a quest is **handed in**, its items go, except those a later quest of the same chain
   uses (the next in a chain uses the salve it was given). When it is **abandoned**, all go, and an item
   it uses but does not give itself is **handed again** when it is taken again, so a chain is not

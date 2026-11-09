@@ -7,7 +7,8 @@ import type { Text } from "../text";
 import type { GameRules } from "../rules/gameRules";
 import type { ItemRules } from "../rules/itemRules";
 import { addPerson, type Cast, type CastInput, type CastNpc } from "../npcs/cast";
-import { bindOf, type ItemLook, type Objective, type QuestDef } from "./quest";
+import { lineHash, type ItemLook, type Objective, type QuestDef } from "./quest";
+import { fillText } from "../text";
 import type { CreatureNeed, LineCondition, PlaceNeed, Pool, QuestPlotDef, QuestSegmentDef } from "./plots";
 import { composeChain, themeFits } from "./chains";
 
@@ -58,9 +59,38 @@ export interface WorldQuestState {
   uses: Map<string, number>;
   /** Where each objective so far lies: a place for gathering and going, the settlement for hunting. */
   anchors: { x: number; z: number }[];
+  /** The rolls quest lines have taken, so that no two share one (QUESTS.md, *Quest items*). */
+  binds: Set<number>;
+  /** The names quest items have taken, by "type/name", so that no two lines' items of a type share one. */
+  itemNames: Set<string>;
 }
 
-export const createWorldQuestState = (): WorldQuestState => ({ uses: new Map(), anchors: [] });
+/**
+ * The roll for a new quest line's items: the hash of its id, or the next free one if another line of
+ * the world has it. Taken for good, so no two lines of a world ever share one - the technical identity
+ * of a quest item (QUESTS.md, *Quest items*). Never 0.
+ */
+export function takeBind(world: WorldQuestState, lineId: string): number {
+  let bind = lineHash(lineId);
+  while (world.binds.has(bind)) bind = (bind + 1) >>> 0 || 1;
+  world.binds.add(bind);
+  return bind;
+}
+
+/**
+ * A quest item's name no other line's item of its type has: the one asked for if it is free, else
+ * "... of <settlement>", else "... (2)", "(3)". `render` fills a template in; the template is returned.
+ */
+export function takeItemName(world: WorldQuestState, type: string, template: string, render: (template: string) => string): string {
+  const taken = (t: string): boolean => world.itemNames.has(`${type}/${render(t)}`);
+  let name = template;
+  if (taken(name)) name = `${template} of {settlement}`;
+  for (let n = 2; taken(name); n++) name = `${name.replace(/ \(\d+\)$/, "")} (${n})`;
+  world.itemNames.add(`${type}/${render(name)}`);
+  return name;
+}
+
+export const createWorldQuestState = (): WorldQuestState => ({ uses: new Map(), anchors: [], binds: new Set(), itemNames: new Set() });
 
 export interface GeneratorInput {
   cast: Cast;
@@ -310,7 +340,8 @@ export function generateQuests(input: GeneratorInput): QuestDef[] {
     // place they are about, with an icon and a tint drawn from the rules' lists - the same in every quest
     // of the line, and not that of another line made from the same template. What a deliver or a use
     // says comes first (the letter is for the one it is delivered to), then what a receive says.
-    const lineBind = bindOf({ id: id(0), chain: plot.quests.length > 1 ? { id: `${id(0)}#${plot.id}`, index: 1, of: plot.quests.length } : null });
+    const lineId = plot.quests.length > 1 ? `${id(0)}#${plot.id}` : id(0);
+    const lineBind = takeBind(world, lineId);
     const looks: Record<string, ItemLook> = {};
     const named = plot.quests
       .flatMap((pq) => pq.parts.map((ref) => ({ ref, part: rules.quests.parts.get(ref.part)! })))
@@ -320,12 +351,20 @@ export function generateQuests(input: GeneratorInput): QuestDef[] {
       const type = (ref.item ?? part.item)!;
       const pool = ref.itemName ?? part.itemName;
       if (looks[type] || (pool.lines.length === 0 && pool.banks.length === 0)) continue;
-      const name = tidy(pickLine(local, pool, speaking(giver, [])));
-      if (!name) continue;
       const who = ref.npc ? people.get(ref.npc) : undefined;
+      const nameArgs = { ...args, npc: who?.name ?? "", npcGiven: who?.given ?? "", npcFamily: who?.family ?? "" };
+      // A name no other line's item of the type has: another pattern if one is free, else it is made so.
+      const render = (text: string): string => fillText(text, nameArgs);
+      let template = "";
+      for (let attempt = 0; attempt < 8; attempt++) {
+        template = tidy(pickLine(local, pool, speaking(giver, [])));
+        if (!template || !world.itemNames.has(`${type}/${render(template)}`)) break;
+      }
+      if (!template) continue;
+      template = takeItemName(world, type, template, render);
       const lists = q.itemLooks[type];
       looks[type] = {
-        name: { text: name, args: { ...args, npc: who?.name ?? "", npcGiven: who?.given ?? "", npcFamily: who?.family ?? "" } },
+        name: { text: template, args: nameArgs },
         icon: lists && lists.icons.length > 0 ? lists.icons[lineBind % lists.icons.length] : "",
         tint: lists && lists.tints.length > 0 ? lists.tints[(lineBind >>> 8) % lists.tints.length] : "",
       };
@@ -407,6 +446,7 @@ export function generateQuests(input: GeneratorInput): QuestDef[] {
         },
         within: 0,
         where: [],
+        bind: lineBind,
         itemLooks: Object.fromEntries(
           [...new Set(objectives.flatMap((o) => (o.kind === "receive" || o.kind === "use" || o.kind === "deliver" ? [o.item] : [])))].filter((type) => looks[type]).map((type) => [type, looks[type]]),
         ),

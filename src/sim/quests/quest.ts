@@ -29,6 +29,9 @@ export interface QuestDef {
   where: { dimension: string; x: number; z: number; radius: number }[];
   /** How the quest items it hands over, asks for or has used look - by item type: "Letter for Thilsell". */
   itemLooks?: Record<string, ItemLook>;
+  /** The roll of its quest line's items, given by the generator so that no two lines of a world share
+   *  one (see `bindOf`); a quest made by hand has none, and takes the hash of its id. */
+  bind?: number;
 }
 
 /** What one quest line's item is called and drawn as, in place of its type's (QUESTS.md, *Quest items*). */
@@ -41,10 +44,14 @@ export interface ItemLook {
 }
 
 /**
- * The roll of a quest line's items: from the chain's id, or the quest's own, so a letter for one errand
- * is not that of another made from the same template (QUESTS.md, *Quest items*). Never 0.
+ * The roll of a quest line's items, so a letter for one errand is not that of another made from the same
+ * template (QUESTS.md, *Quest items*): the quest's `bind` where the generator gave one - it makes
+ * sure no two lines of a world have the same - else the hash of the chain's id or the quest's own. Never 0.
  */
-export const bindOf = (def: Pick<QuestDef, "id" | "chain">): number => (hashString(def.chain?.id ?? def.id) >>> 0) || 1;
+export const bindOf = (def: Pick<QuestDef, "id" | "chain"> & { bind?: number }): number => def.bind ?? lineHash(def.chain?.id ?? def.id);
+
+/** The first choice of a quest line's roll: the hash of its id. Never 0. */
+export const lineHash = (lineId: string): number => (hashString(lineId) >>> 0) || 1;
 
 /** Creatures an objective is about: kind ids, or species (the kind id's first part, `wolf`). */
 export interface KindFilter {
