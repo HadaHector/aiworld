@@ -75,6 +75,8 @@ export interface EmitterDef {
   inherit: number;
   /** Sprites lie flat on the ground (a decal under a unit) instead of facing the camera; `spin` turns them about the vertical. */
   flat: boolean;
+  /** A `local` particle stays at the middle of its life while its effect plays, then fades over the rest: one lasting decal. */
+  hold: boolean;
 }
 
 export interface ParticleEffectDef {
@@ -338,7 +340,7 @@ function readColourCurve(reader: Reader, obj: RawObject, key: string, path: stri
   return [[0, colourValue(reader, value, at)]];
 }
 
-const EMITTER_KEYS = ["sprite", "mesh", "blend", "rate", "burst", "delay", "duration", "life", "shape", "speed", "direction", "spread", "gravity", "drag", "size", "colour", "spin", "stretch", "local", "inherit", "flat"];
+const EMITTER_KEYS = ["sprite", "mesh", "blend", "rate", "burst", "delay", "duration", "life", "shape", "speed", "direction", "spread", "gravity", "drag", "size", "colour", "spin", "stretch", "local", "inherit", "flat", "hold"];
 
 function readEmitter(reader: Reader, value: unknown, path: string, loop: boolean, textureIndex: ReadonlyMap<string, number>): EmitterDef {
   const obj = reader.object(value, path);
@@ -395,6 +397,7 @@ function readEmitter(reader: Reader, value: unknown, path: string, loop: boolean
   }
   const delay = reader.optionalNumber(obj, "delay", path, 0, { min: 0, max: 10 });
   const lastBurst = Math.max(0, ...bursts.map((b) => b.at));
+  if (obj.hold === true && obj.local !== true) reader.fail(joinPath(path, "hold"), "needs `local: true` (it holds on to its effect's attachment)");
   return {
     sprite,
     mesh: obj.mesh === undefined ? null : reader.oneOf(obj, "mesh", path, MESH_SHAPES),
@@ -418,6 +421,7 @@ function readEmitter(reader: Reader, value: unknown, path: string, loop: boolean
     local: reader.boolean(obj, "local", path, false),
     inherit: reader.optionalNumber(obj, "inherit", path, 0, { min: 0, max: 1 }),
     flat: reader.boolean(obj, "flat", path, false),
+    hold: reader.boolean(obj, "hold", path, false),
   };
 }
 

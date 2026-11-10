@@ -1,10 +1,10 @@
 // Frost spread over the ground under a frozen unit, a flake in a pool of cold light (about 2.3 m
-// across for a person; the cue scales it). Loops.
+// across for a person; the cue scales it): held while the cue lasts, a low cone over the ground. Loops.
 {
   loop: true,
   emitters: [
-    { sprite: "softDot", flat: true, blend: "alpha", rate: 1.3, life: 1.8, local: true, size: 2.7, colour: [[0, "#bfe4ff00"], [0.2, "#bfe4ff50"], [0.8, "#bfe4ff50"], [1, "#bfe4ff00"]] },
-    { sprite: "snowflake", flat: true, blend: "alpha", rate: 1.3, life: 1.8, local: true, size: 2.3, colour: [[0, "#e8f6ff00"], [0.15, "#e8f6fff0"], [0.85, "#e8f6fff0"], [1, "#e8f6ff00"]] },
+    { sprite: "softDot", flat: true, hold: true, blend: "alpha", burst: 1, life: 1.2, local: true, size: 2.7, colour: [[0, "#bfe4ff00"], [0.2, "#bfe4ff50"], [0.5, "#bfe4ff50"], [1, "#bfe4ff00"]] },
+    { sprite: "snowflake", flat: true, hold: true, blend: "alpha", burst: 1, life: 1.2, local: true, size: 2.3, colour: [[0, "#e8f6ff00"], [0.2, "#e8f6fff0"], [0.5, "#e8f6fff0"], [1, "#e8f6ff00"]] },
     { sprite: "hardDot", blend: "add", rate: 5, life: [0.8, 1.2], local: true, shape: { box: [0.3, 0.8, 0.3] }, direction: [0, -1, 0], spread: 10, speed: [0.1, 0.3], size: [[0, 0.03], [0.4, 0.07], [1, 0.02]], colour: [[0, "#e0f0ff"], [1, "#80b0ff00"]] },
   ],
 }

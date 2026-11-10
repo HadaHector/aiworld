@@ -317,6 +317,12 @@ export function createParticleSystem(rules: FeedbackRules): ParticleSystem {
   const stepPool = (pool: Pool, dt: number): void => {
     for (let i = 0; i < pool.count; ) {
       pool.age[i] += dt;
+      // A held particle (a web under a unit) stands at the middle of its life - fully there - for as
+      // long as its effect plays, and fades out over the rest of its life once the effect stops.
+      if (emitters[pool.emitter[i]].hold) {
+        const held = pool.instance[i] >= 0 ? byId.get(pool.instance[i]) : undefined;
+        if (held && !held.stopped) pool.age[i] = Math.min(pool.age[i], pool.life[i] * 0.5);
+      }
       if (pool.age[i] >= pool.life[i]) {
         removeAt(pool, i);
         continue;

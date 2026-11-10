@@ -163,7 +163,16 @@ function drawOnly(mesh: Mesh, vertices: number, indices: number): void {
   mesh.isVisible = indices > 0;
 }
 
-export function createParticleRenderer(scene: Scene, system: ParticleSystem, rules: FeedbackRules, light: () => number = () => 1): ParticleRenderer {
+/** Decals drawn at once, at most; each is a grid of GRID x GRID cells draped over the ground. */
+const DECALS = 32;
+const GRID = 8;
+const DECAL_VERTS = (GRID + 1) * (GRID + 1);
+/** How high a decal's centre stands over its rim, as a share of its size: a low cone, so it clears grass and bumps. */
+const CONE = 0.14;
+/** Metres the decal's rim floats over the ground. */
+const LIFT = 0.04;
+
+export function createParticleRenderer(scene: Scene, system: ParticleSystem, rules: FeedbackRules, light: () => number = () => 1, ground: ((x: number, z: number) => number | null) | null = null): ParticleRenderer {
   if (!Effect.ShadersStore.particleSpriteVertexShader) {
     Effect.ShadersStore.particleSpriteVertexShader = SPRITE_VERTEX;
     Effect.ShadersStore.particleSpriteFragmentShader = SPRITE_FRAGMENT;
@@ -206,9 +215,34 @@ export function createParticleRenderer(scene: Scene, system: ParticleSystem, rul
     // Glows over smoke, so the smoke does not hide them.
     sprite.renderingGroupId = shape.renderingGroupId = 0;
     sprite.alphaIndex = shape.alphaIndex = blend === "add" ? 1001 : 1000;
+    // Flat sprites (decals) are a low-poly cone: a grid draped over the ground, the texture projected on it from above.
+    const decal = new Mesh(`particleDecals_${blend}`, scene);
+    decal.setVerticesData(VertexBuffer.PositionKind, new Float32Array(DECALS * DECAL_VERTS * 3), true);
+    decal.setVerticesData(VertexBuffer.UVKind, new Float32Array(DECALS * DECAL_VERTS * 2), true);
+    decal.setVerticesData(VertexBuffer.ColorKind, new Float32Array(DECALS * DECAL_VERTS * 4), true, 4);
+    const decalIndices = new Uint32Array(DECALS * GRID * GRID * 6);
+    for (let d = 0; d < DECALS; d++) {
+      for (let j = 0; j < GRID; j++) {
+        for (let i = 0; i < GRID; i++) {
+          const a = d * DECAL_VERTS + j * (GRID + 1) + i;
+          decalIndices.set([a, a + GRID + 1, a + 1, a + 1, a + GRID + 1, a + GRID + 2], (d * GRID * GRID + j * GRID + i) * 6);
+        }
+      }
+    }
+    decal.setIndices(decalIndices, DECALS * DECAL_VERTS, true);
+    decal.isPickable = false;
+    decal.alwaysSelectAsActiveMesh = true;
+    decal.doNotSyncBoundingInfo = true;
+    decal.material = sprite.material;
+    decal.renderingGroupId = 0;
+    decal.alphaIndex = blend === "add" ? 999 : 998;
     return {
       blend,
       sprite,
+      decal,
+      decalPositions: new Float32Array(DECALS * DECAL_VERTS * 3),
+      decalUvs: new Float32Array(DECALS * DECAL_VERTS * 2),
+      decalColors: new Float32Array(DECALS * DECAL_VERTS * 4),
       shape,
       positions: new Float32Array(spriteCap * 12),
       uvs: new Float32Array(spriteCap * 8),
@@ -232,7 +266,7 @@ export function createParticleRenderer(scene: Scene, system: ParticleSystem, rul
     let n = 0;
     for (let i = 0; i < pool.count; i++) {
       const e = system.emitters[pool.emitter[i]];
-      if (e.blend !== blend) continue;
+      if (e.blend !== blend || e.flat) continue;
       order[n] = i;
       depth[i] = (pool.x[i] - eye.x) ** 2 + (pool.y[i] - eye.y) ** 2 + (pool.z[i] - eye.z) ** 2;
       n++;
@@ -326,6 +360,57 @@ export function createParticleRenderer(scene: Scene, system: ParticleSystem, rul
     return n;
   };
 
+  /** Flat sprites: each a GRID x GRID grid turned by its rotation, standing where the ground is (or, with no ground, at
+   *  the particle's height) and raised toward its middle in a low cone; the texture is laid on it as seen from above. */
+  const writeDecals = (pool: ParticlePool, layer: (typeof layers)[number]): number => {
+    const { decalPositions: P, decalUvs: U, decalColors: C } = layer;
+    let n = 0;
+    for (let i = 0; i < pool.count && n < DECALS; i++) {
+      const e = system.emitters[pool.emitter[i]];
+      if (e.blend !== layer.blend || !e.flat) continue;
+      const half = pool.size[i] / 2;
+      const rect = atlas.rects[e.sprite]?.[pool.variant[i]] ?? atlas.rects[e.sprite]?.[0];
+      if (!rect || half <= 0) continue;
+      const cos = Math.cos(pool.rot[i]);
+      const sin = Math.sin(pool.rot[i]);
+      const x = pool.x[i], z = pool.z[i];
+      // Where the unit stands: the ground under the middle, so a rim over a slope does not float or sink into it.
+      const base = ground?.(x, z) ?? pool.y[i];
+      for (let j = 0; j <= GRID; j++) {
+        for (let k = 0; k <= GRID; k++) {
+          const u = (k / GRID) * 2 - 1;
+          const v = (j / GRID) * 2 - 1;
+          const lx = u * half;
+          const lz = v * half;
+          const wx = x + lx * cos - lz * sin;
+          const wz = z + lx * sin + lz * cos;
+          const r = Math.min(1, Math.hypot(u, v));
+          const h = (ground?.(wx, wz) ?? base) + LIFT + CONE * pool.size[i] * (1 - r);
+          const vi = n * DECAL_VERTS + j * (GRID + 1) + k;
+          P[vi * 3] = wx;
+          P[vi * 3 + 1] = h;
+          P[vi * 3 + 2] = wz;
+          // The atlas's first row is its top; the texture is rotated with the grid, so it is laid
+          // on the unrotated u, v.
+          U[vi * 2] = rect.u0 + ((u + 1) / 2) * (rect.u1 - rect.u0);
+          U[vi * 2 + 1] = rect.v0 + ((1 - v) / 2) * (rect.v1 - rect.v0);
+          C[vi * 4] = pool.r[i];
+          C[vi * 4 + 1] = pool.g[i];
+          C[vi * 4 + 2] = pool.b[i];
+          C[vi * 4 + 3] = pool.a[i];
+        }
+      }
+      n++;
+    }
+    if (n > 0) {
+      layer.decal.updateVerticesData(VertexBuffer.PositionKind, P, false, false);
+      layer.decal.updateVerticesData(VertexBuffer.UVKind, U, false, false);
+      layer.decal.updateVerticesData(VertexBuffer.ColorKind, C, false, false);
+    }
+    drawOnly(layer.decal, n * DECAL_VERTS, n * GRID * GRID * 6);
+    return n;
+  };
+
   const writeShapes = (pool: ParticlePool, layer: (typeof layers)[number]): number => {
     let v = 0;
     let drawn = 0;
@@ -411,7 +496,7 @@ export function createParticleRenderer(scene: Scene, system: ParticleSystem, rul
       for (const layer of layers) {
         (layer.sprite.material as ShaderMaterial).setFloat("light", layer.blend === "add" ? 1 : l);
         (layer.shape.material as ShaderMaterial).setFloat("light", layer.blend === "add" ? 1 : l);
-        sprites += writeSprites(system.sprites, layer, eye);
+        sprites += writeSprites(system.sprites, layer, eye) + writeDecals(system.sprites, layer);
         meshes += writeShapes(system.meshes, layer);
       }
       counts = { sprites, meshes };
@@ -422,6 +507,7 @@ export function createParticleRenderer(scene: Scene, system: ParticleSystem, rul
         layer.sprite.material?.dispose();
         layer.shape.material?.dispose();
         layer.sprite.dispose();
+        layer.decal.dispose();
         layer.shape.dispose();
       }
       texture.dispose();

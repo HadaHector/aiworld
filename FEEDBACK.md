@@ -289,7 +289,8 @@ replaces a sound by giving the same id, as with any pack file. Nothing that name
 | `gravity`, `drag` | Metres per second squared down (negative rises); a slowing factor |
 | `size`, `colour` | A number or a curve over the particle's life (`[[t, value], ...]`); colours with alpha (`#rrggbbaa` or `[r, g, b, a]`) |
 | `spin`, `stretch` | Rotation speed; stretching along the velocity (sparks, streaks) |
-| `flat` | Sprites lie flat on the ground (a decal under a unit, a web or a flake of frost), facing up instead of the camera; `spin` turns them about the vertical, and without it they keep one orientation |
+| `flat` | Sprites are decals: a low cone draped over the terrain, the texture projected from above (a web or a flake of frost under a unit); `spin` turns them about the vertical, and without it they keep one orientation |
+| `hold` | A `local` particle stays at the middle of its life while its effect plays and fades over the rest once it stops: one lasting decal or wrap instead of a stream of them |
 | `local` | Particles move with the attachment (a ring around a body) instead of staying where they were born (a trail) |
 | `inherit` | How much of the attachment's own motion particles take on |
 
@@ -692,10 +693,14 @@ Each leaves the game working: dev server, `npm run probe`, `npm run server`, `np
   is very small, not really noticeable - and should look like a web"). The pieces, all data, are
   reusable by any root, stun or fear:
   - **Textures** `web`, `webCorner`, `tangle` (new kinds, above), `snowflake` (a six-point `star`).
-  - **Ground decal** `webDecal` / `frozenDecal`: `flat` sprites about 2.4 m across under the unit, one
-    laid again before the last fades (a long-lived particle would outlast the cue), over a pale pool of
-    light so it reads from afar over any ground, scaled by `scale: "body"`.
-  - **Body wrap** `webWrap`: `tangle` wads over legs, trunk and arms, shifting, and loose strands.
+  - **Ground decal** `webDecal` / `frozenDecal`: `flat` sprites about 2.4 m across under the unit, over a
+    pale pool of light so it reads from afar, scaled by `scale: "body"`. They are `hold` particles: one
+    is laid, fades in, stays exactly as it is while the cue lasts and fades out when it stops (no
+    renewing, no shimmer). A flat sprite is drawn as a low-poly cone (8x8 grid, centre raised 14 % of
+    its size) with the texture projected on it from above, its vertices set to the terrain height
+    under each (`createParticleRenderer`'s `ground` callback; the game passes `world.sampleTerrain`),
+    so slopes and grass do not hide or float it. At most 32 at once.
+  - **Body wrap** `webWrap`: held `tangle` wads over legs, trunk and arms, laid once, and a few loose strands.
   - **The shot** `webShot`: a spinning ball of silk and a strand of specks paying back along the way to
     the spider (a `line` emitter toward the source); the `spit` sound gained a thread's whistle.
     `webStick` is the landing: a splat of strands, a wad blooming round the body, the web slapping

@@ -429,7 +429,7 @@ export function createGameFeedback(options: GameFeedbackOptions): GameFeedback {
       worldNow = world ?? null;
       surfaces = world ? createSurfaceProbe(world, rules) : null;
       if (scene && world) look = createUnderwaterLook(scene, game.water.look);
-      if (scene) renderer = createParticleRenderer(scene, particles, rules);
+      if (scene) renderer = createParticleRenderer(scene, particles, rules, undefined, world ? (x, z) => world.sampleTerrain(x, z).height : null);
     },
     update(camera) {
       const time = performance.now();
