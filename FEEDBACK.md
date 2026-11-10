@@ -705,14 +705,13 @@ Each leaves the game working: dev server, `npm run probe`, `npm run server`, `np
     the spider (a `line` emitter toward the source); the `spit` sound gained a thread's whistle.
     `webStick` is the landing: a splat of strands, a wad blooming round the body, the web slapping
     down under it (`webSplat`), a flash and flinch, and the text `Rooted`.
-  - **While rooted** (`webbed`, the aura): decal, wrap and `struggle`. A `screen` overlay (`webCorner`: a
+  - **While rooted** (`webbed`, the aura): decal and `struggle` (the `webWrap` effect exists but is not on the aura: the user wanted nothing on the body). A `screen` overlay (`webCorner`: a
     pale vignette with a web in each corner) was built and tried, then taken off the roots as more than
     wanted; the part and `src/feedback/screen.ts` stay for other cues (low health, a fear). The unit frames
     already show the buff and "rooted"; the buff has no icon yet (the icon sets have no web: a
     generated one waits for a go-ahead on GPU work).
-  - **Breaking free** (`faded: "webBreak"`): shreds, strands and the ground web flung out, with the
-    `webTear` sound; it plays however the aura ends. Skills have no rule yet for a root that breaks on
-    damage or when its caster dies, so only the duration (and a dispel) ends it.
+  - **Breaking free**: no special effect (not wanted: `webBreak` was built and removed). The aura just ends; skills have no rule yet for a root that breaks on
+    damage or when its caster dies.
   - **`frozen`** (Frost Nova's root) had no cues and now has the same set - `frozenOn`, `frozen`,
     `frozenBreak`: frost on the ground, the `Rooted` text, no struggle (held solid).
   - **Code**: `src/feedback/screen.ts` is the overlay layer (the game and `fx.html` both use it); the cue

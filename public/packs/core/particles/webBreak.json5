@@ -1,9 +1,0 @@
-// A web torn apart: shreds of silk flung out, strands snapping back, the ground web ripping loose.
-{
-  emitters: [
-    { sprite: "spark", blend: "alpha", burst: 30, life: [0.4, 0.8], speed: [2, 6], gravity: 4, drag: 2, stretch: 0.2, size: [[0, 0.18], [1, 0.07]], colour: [[0, "#ffffff"], [1, "#ffffff00"]], shape: { sphere: 0.4 } },
-    { mesh: "shard", blend: "alpha", burst: 10, life: [0.5, 0.9], speed: [2, 5], gravity: 6, drag: 1.5, spin: [-8, 8], size: [[0, 0.22], [1, 0.1]], colour: [[0, "#f4f4ecff"], [1, "#f4f4ec00"]], shape: { sphere: 0.4 } },
-    { sprite: "tangle", blend: "alpha", burst: 5, life: [0.6, 1], speed: [1.5, 3], gravity: 2, drag: 2, spin: [-3, 3], size: [[0, 0.9], [1, 1.3]], colour: [[0, "#ffffffe0"], [1, "#ffffff00"]], shape: { sphere: 0.3 } },
-    { sprite: "web", flat: true, blend: "alpha", burst: 1, life: 0.6, size: [[0, 2.4], [1, 3.2]], spin: [-1.5, 1.5], colour: [[0, "#fafaf6f0"], [1, "#fafaf600"]] },
-  ],
-}

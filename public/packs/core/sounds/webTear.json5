@@ -1,9 +1,0 @@
-// A web tearing: a ripping rasp of silk, a few threads snapping, a soft flop.
-{
-  near: 4, far: 35, maxVoices: 3, pitch: [-1.5, 1.5], volume: [0.8, 0.95], takes: 3,
-  layers: [
-    { synth: { noise: "white", filter: { type: "bandpass", hz: [4000, 1500], q: 1.5 }, env: { attack: 0.01, hold: 0.12, decay: 0.2 }, gain: 0.8, crush: { bits: 8, rate: 2 } }, standIn: true },
-    { synth: { crackle: true, density: 70, click: 0.003, filter: { type: "highpass", hz: 3000 }, env: { attack: 0.005, decay: 0.3 }, gain: 0.9 }, standIn: true },
-    { synth: { tone: "triangle", hz: [900, 300], env: { attack: 0.005, decay: 0.08 }, gain: 0.12, delay: 0.12 }, standIn: true },
-  ],
-}

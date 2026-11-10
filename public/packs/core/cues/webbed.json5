@@ -1,9 +1,8 @@
-// A unit stuck in web, until it breaks free: a web on the ground, silk wound round the body, the body
+// A unit stuck in web, until it breaks free: a web on the ground, the body
 // straining against it.
 {
   parts: [
     { particles: "webDecal", bone: "feet", scale: "body" },
-    { particles: "webWrap", bone: "chest", scale: "body" },
     { struggle: 0.55 },
   ],
 }
