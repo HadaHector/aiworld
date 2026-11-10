@@ -1,5 +1,5 @@
-// A frozen unit, held fast until it thaws: a flake of frost on the ground, motes of cold round the body
-//. Held solid: it does not struggle.
+// A frozen unit, held fast until it thaws: a flake of frost on the ground, motes of cold round the body.
+// Held solid: it does not struggle.
 {
   parts: [
     { particles: "frozenDecal", bone: "feet", scale: "body" },

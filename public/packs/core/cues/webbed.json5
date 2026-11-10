@@ -1,5 +1,5 @@
 // A unit stuck in web, until it breaks free: a web on the ground, silk wound round the body, the body
-// straining against it,.
+// straining against it.
 {
   parts: [
     { particles: "webDecal", bone: "feet", scale: "body" },
