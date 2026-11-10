@@ -1141,7 +1141,7 @@ then `hit`. [FEEDBACK.md](../../FEEDBACK.md) has every field.
 // particles/hit.metal.json5 - emitters of sprites (a particleTextures id) or meshes (shard, chip, ember, cube, leaf, ring)
 { emitters: [{ sprite: "spark", blend: "add", burst: 14, life: [0.15, 0.35], shape: { sphere: 0.08 }, speed: [4, 9], gravity: 8, stretch: 0.06,
   size: [[0, 0.16], [1, 0.06]], colour: [[0, "#fff6d0"], [0.4, "#ffc050"], [1, "#ff602000"]] }] }
-// particleTextures/rune.json5 - dot, spark, star, smoke, flame, ring, rune, slash
+// particleTextures/rune.json5 - dot, spark, star, smoke, flame, ring, rune, slash, web, tangle
 { kind: "rune", size: 64, variants: 6, strokes: [3, 5], ring: true, width: 0.07, glow: 0.25 }
 // cues/meleeHit.json5 - parts at the event's source or target, on a bone; shake and pause in the player's own fights only
 { parts: [{ sound: "hit.{weapon}.{armor}" }, { particles: "hit.{armor}" }, { flash: [1, 1, 1], time: 0.1 }, { flinch: 0.6, scale: "amount" },

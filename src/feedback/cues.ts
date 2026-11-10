@@ -36,6 +36,12 @@ export interface CueStage {
   feelable?: (unit: number) => Feelable | null;
   /** A unit's maximum health, for parts scaled by `amount`; 0 when not known. */
   maxHealth?: (unit: number) => number;
+  /** A unit's height in metres, for parts scaled by `body`; 1.8 when not known. */
+  height?: (unit: number) => number;
+  /** Words floating up over a unit (a `text` part). */
+  say?: (unit: number, label: string, colour: string) => void;
+  /** An overlay over the whole view, for the player's own cues (a `screen` part): stopped with the cue. */
+  screen?: (part: CuePart) => { stop: () => void } | null;
 }
 
 /** One play of a cue: who and what it is about. */
@@ -86,6 +92,8 @@ const COALESCE = 0.05;
 interface Playing {
   sounds: { handle: SoundHandle; part: CuePart }[];
   effects: EffectHandle[];
+  /** Overlays and timers (a struggle) that run until the cue stops. */
+  stoppers: (() => void)[];
   context: CueContext;
   stopped: boolean;
 }
@@ -135,6 +143,11 @@ export function createCuePlayer(
   /** A part's `scale`: its number, or for `amount` the hit's size against the struck unit's health -
    *  a tick is small, a blow taking a tenth of it full, a bigger one up to twice that. */
   const scaleOf = (part: CuePart, c: CueContext): number => {
+    if (part.scale === "body") {
+      const unit = part.at === "source" ? c.source : c.target;
+      const height = unit ? (stage.height?.(unit) ?? 1.8) : 1.8;
+      return Math.min(3, Math.max(0.5, height / 1.8));
+    }
     if (part.scale !== "amount") return part.scale;
     const max = c.target ? (stage.maxHealth?.(c.target) ?? 0) : 0;
     if (!max || c.amount === undefined) return 1;
@@ -166,6 +179,34 @@ export function createCuePlayer(
         if (!own) return;
         for (const u of [c.source, c.target]) if (u) stage.feelable?.(u)?.pause(part.strength);
         return;
+      case "struggle": {
+        // The unit heaves and jerks this way and that, every half second or so, until the cue stops:
+        // a flinch from a random side, harder at first (a body held fast, straining).
+        const body = unit ? stage.feelable?.(unit) : null;
+        if (!body) return;
+        const started = now();
+        const jerk = (): void => {
+          const a = Math.random() * Math.PI * 2;
+          const tire = Math.max(0.5, 1 - (now() - started) / 8);
+          body.flinch(Math.cos(a), Math.sin(a), Math.min(1, part.strength * scale * tire));
+        };
+        jerk();
+        const timer = window.setInterval(jerk, 480 + Math.random() * 120);
+        playing.stoppers.push(() => window.clearInterval(timer));
+        return;
+      }
+      case "screen": {
+        // Only ever the player's own: whatever is done to the player's own view.
+        if (!own || c.target !== stage.player()) return;
+        const screen = stage.screen?.(part);
+        if (screen) playing.stoppers.push(() => screen.stop());
+        return;
+      }
+      case "text": {
+        const hex = (v: number): string => Math.round(Math.max(0, Math.min(1, v)) * 255).toString(16).padStart(2, "0");
+        if (unit && own && part.ref) stage.say?.(unit, part.ref, `#${hex(part.colour[0])}${hex(part.colour[1])}${hex(part.colour[2])}`);
+        return;
+      }
     }
     if (part.kind === "sound") {
       const player = sfx();
@@ -207,7 +248,7 @@ export function createCuePlayer(
     const cue = rules.cues.get(cueId);
     if (!cue) return null;
     const own = isOwn(c);
-    const playing: Playing = { sounds: [], effects: [], context: c, stopped: false };
+    const playing: Playing = { sounds: [], effects: [], stoppers: [], context: c, stopped: false };
     for (const part of cue.parts) {
       if (!whenHolds(part, c, own)) continue;
       if (part.delay > 0) setTimeout(() => playPart(cue, part, c, own, playing), part.delay * 1000);
@@ -220,6 +261,8 @@ export function createCuePlayer(
         playing.stopped = true;
         for (const { handle } of playing.sounds) if (rules.sounds.get(handle.sound)?.loop) handle.stop(fade);
         for (const effect of playing.effects) effect.stop();
+        for (const stopper of playing.stoppers) stopper();
+        playing.stoppers.length = 0;
       },
     };
   };

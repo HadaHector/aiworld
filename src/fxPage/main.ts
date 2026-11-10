@@ -10,6 +10,7 @@ import type { RenderedSound } from "../audio/synth";
 import { createEngine } from "../core/engine";
 import { createCuePlayer, type Bone, type CuePlayer, type UnitTraits } from "../feedback/cues";
 import { createFeel } from "../feedback/feel";
+import { createScreenEffects } from "../feedback/screen";
 import { resolveFeedback, type FeedbackRules, type ParticleEffectDef, type SoundDef } from "../feedback/rules";
 import { createBodyKit, createCharacterBody, type CharacterBody } from "../game/characterBody";
 import { createParticleRenderer } from "../particles/render";
@@ -140,7 +141,10 @@ whenAudio((audio) => {
   status.textContent = "";
   // The sound's takes can show now - once the click that started the audio is over, so the button
   // it lands on is not replaced under it.
-  if (state.tab === "sounds") addEventListener("pointerup", () => setTimeout(renderDetail, 0), { once: true });
+  // (A microtask later: the audio may already be unlocked, and the callback run before `state` exists.)
+  queueMicrotask(() => {
+    if (state.tab === "sounds") addEventListener("pointerup", () => setTimeout(renderDetail, 0), { once: true });
+  });
 });
 volume.addEventListener("input", () => {
   sfx?.setVolume((Number(volume.value) / 100) ** 2);
@@ -159,18 +163,35 @@ $("stop").addEventListener("click", () => {
 
 /** Placeholders the cues panel fills: what the source hits with, what the target is made of. */
 const traits: Record<"source" | "target", UnitTraits> = { source: { weapon: "blade" }, target: { armor: "metal", family: "humanoid" } };
-const flags = { crit: false, periodic: false, own: true };
+const flags = { crit: false, periodic: false, own: true, victim: false };
+// The screen overlays (a root's web vignette) cover this page, so they show only when asked for: the
+// victim toggle makes the knight the player, which is what the game does for the player's own root.
+const screens = createScreenEffects(rules);
+const say = (_unit: number, label: string, colour: string): void => {
+  const el = document.createElement("div");
+  el.textContent = label;
+  el.style.cssText = `position: fixed; left: 50%; top: 38%; transform: translate(-50%, 0); z-index: 950; pointer-events: none; font: 700 22px system-ui, sans-serif; color: ${colour}; text-shadow: 0 0 3px #000, 0 1px 2px #000; transition: transform 1.2s ease-out, opacity 1.2s ease-in;`;
+  document.body.appendChild(el);
+  requestAnimationFrame(() => {
+    el.style.transform = "translate(-50%, -60px)";
+    el.style.opacity = "0";
+  });
+  window.setTimeout(() => el.remove(), 1300);
+};
 const cues: CuePlayer = createCuePlayer(
   rules,
   game,
   {
-    player: () => (flags.own ? SOURCE : 0),
+    player: () => (flags.own ? (flags.victim ? TARGET : SOURCE) : 0),
     target: () => 0,
     targetOf: () => 0,
     place,
     traits: (unit) => (unit === SOURCE ? traits.source : traits.target),
     feelable: (unit) => bodies.get(unit) ?? null,
     maxHealth: () => 100,
+    height: () => 1.8,
+    say,
+    screen: (part) => screens.show(part),
   },
   () => sfx,
   () => particles,
@@ -408,7 +429,7 @@ function fight(): void {
 function skillDetail(skill: SkillDef | undefined): void {
   if (!skill) return;
   const buttons = row(button("▶ Play", () => playSkill(skill)), button("⚔ Fight (auto-attacks)", fight), button("■ Stop", stopSkill));
-  for (const flag of ["crit", "own"] as const) {
+  for (const flag of ["crit", "own", "victim"] as const) {
     const b = button(flag, () => {
       flags[flag] = !flags[flag];
       b.className = flags[flag] ? "on" : "";
@@ -529,7 +550,7 @@ function cueDetail(id: string): void {
   const cue = rules.cues.get(id);
   if (!cue) return;
   const toggles = row(button("▶ Play", () => playCue(id)));
-  for (const flag of ["crit", "periodic", "own"] as const) {
+  for (const flag of ["crit", "periodic", "own", "victim"] as const) {
     const b = button(flag, () => {
       flags[flag] = !flags[flag];
       b.className = flags[flag] ? "on" : "";

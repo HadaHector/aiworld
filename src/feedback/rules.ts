@@ -73,6 +73,8 @@ export interface EmitterDef {
   stretch: number;
   local: boolean;
   inherit: number;
+  /** Sprites lie flat on the ground (a decal under a unit) instead of facing the camera; `spin` turns them about the vertical. */
+  flat: boolean;
 }
 
 export interface ParticleEffectDef {
@@ -82,7 +84,7 @@ export interface ParticleEffectDef {
   emitters: EmitterDef[];
 }
 
-export const CUE_PARTS = ["sound", "particles", "flash", "flinch", "shake", "pause"] as const;
+export const CUE_PARTS = ["sound", "particles", "flash", "flinch", "shake", "pause", "struggle", "screen", "text"] as const;
 export type CuePartKind = (typeof CUE_PARTS)[number];
 export const PLACES = ["source", "target", "point"] as const;
 export const BONES = ["chest", "head", "feet", "mainHand", "offHand", "hands", "weapon"] as const;
@@ -104,12 +106,13 @@ export interface CuePart {
   bone: (typeof BONES)[number];
   when: CueWhen;
   delay: number;
-  /** A factor, or `amount`: the hit's size against the target's maximum health. */
-  scale: number | "amount";
+  /** A factor, `amount` (the hit's size against the target's maximum health) or `body` (the unit's
+   *  height against a person's, 0.5 to 3: a decal sized to the one it is under). */
+  scale: number | "amount" | "body";
   /** `flash`: its colour and seconds. */
   colour: [number, number, number];
   time: number;
-  /** `flinch`, `shake`: 0..1. `pause`: seconds. */
+  /** `flinch`, `shake`, `struggle`: 0..1. `pause`: seconds. `screen`: how strong the overlay is, 0..1. */
   strength: number;
 }
 
@@ -335,7 +338,7 @@ function readColourCurve(reader: Reader, obj: RawObject, key: string, path: stri
   return [[0, colourValue(reader, value, at)]];
 }
 
-const EMITTER_KEYS = ["sprite", "mesh", "blend", "rate", "burst", "delay", "duration", "life", "shape", "speed", "direction", "spread", "gravity", "drag", "size", "colour", "spin", "stretch", "local", "inherit"];
+const EMITTER_KEYS = ["sprite", "mesh", "blend", "rate", "burst", "delay", "duration", "life", "shape", "speed", "direction", "spread", "gravity", "drag", "size", "colour", "spin", "stretch", "local", "inherit", "flat"];
 
 function readEmitter(reader: Reader, value: unknown, path: string, loop: boolean, textureIndex: ReadonlyMap<string, number>): EmitterDef {
   const obj = reader.object(value, path);
@@ -414,6 +417,7 @@ function readEmitter(reader: Reader, value: unknown, path: string, loop: boolean
     stretch: reader.optionalNumber(obj, "stretch", path, 0, { min: 0, max: 2 }),
     local: reader.boolean(obj, "local", path, false),
     inherit: reader.optionalNumber(obj, "inherit", path, 0, { min: 0, max: 1 }),
+    flat: reader.boolean(obj, "flat", path, false),
   };
 }
 
@@ -427,7 +431,7 @@ function readEffect(entry: Entry, issues: ContentIssue[], textureIndex: Readonly
   return { id: entry.id, file: entry.file, loop, emitters };
 }
 
-const PART_KEYS = [...CUE_PARTS, "at", "bone", "when", "delay", "scale", "time"];
+const PART_KEYS = [...CUE_PARTS, "at", "bone", "when", "delay", "scale", "time", "colour", "strength"];
 
 function readWhen(reader: Reader, value: unknown, path: string): CueWhen {
   if (value === undefined) return {};
@@ -457,7 +461,7 @@ function checkRef(reader: Reader, ref: string, path: string, exists: (id: string
   if (!exists(base)) reader.fail(path, `no ${what} "${base}"`);
 }
 
-function readCue(entry: Entry, issues: ContentIssue[], sounds: ReadonlyMap<string, unknown>, effects: ReadonlyMap<string, unknown>): CueDef {
+function readCue(entry: Entry, issues: ContentIssue[], sounds: ReadonlyMap<string, unknown>, effects: ReadonlyMap<string, unknown>, textureIndex: ReadonlyMap<string, number>): CueDef {
   const reader = new Reader(issues, entry.file);
   const obj = reader.object(entry.data, "");
   reader.onlyKeys(obj, "", ["parts", "table"]);
@@ -471,7 +475,23 @@ function readCue(entry: Entry, issues: ContentIssue[], sounds: ReadonlyMap<strin
     let ref = "";
     let colour: [number, number, number] = [1, 1, 1];
     let strength = 0;
-    if (kind === "sound" || kind === "particles") {
+    if (kind === "screen") {
+      // An overlay over the whole view while the cue lasts: a vignette, with a texture drawn in its corners.
+      ref = reader.string(raw, "screen", path);
+      if (ref && !textureIndex.has(ref)) reader.fail(joinPath(path, "screen"), `no particle texture "${ref}" (known: ${known(textureIndex.keys())})`);
+      if (raw.colour !== undefined) {
+        const [r, g, b] = colourValue(reader, raw.colour, joinPath(path, "colour"));
+        colour = [r, g, b];
+      }
+      strength = reader.optionalNumber(raw, "strength", path, 0.6, { min: 0, max: 1 });
+    } else if (kind === "text") {
+      // Words floating up over the unit, in the colour given.
+      ref = reader.string(raw, "text", path);
+      if (raw.colour !== undefined) {
+        const [r, g, b] = colourValue(reader, raw.colour, joinPath(path, "colour"));
+        colour = [r, g, b];
+      }
+    } else if (kind === "sound" || kind === "particles") {
       ref = reader.string(raw, kind, path);
       if (ref) checkRef(reader, ref, joinPath(path, kind), (id) => (kind === "sound" ? sounds : effects).has(id), kind === "sound" ? "sound" : "particle effect");
     } else if (kind === "flash") {
@@ -482,10 +502,10 @@ function readCue(entry: Entry, issues: ContentIssue[], sounds: ReadonlyMap<strin
     }
     // Camera parts belong to no place; the rest default to the event's target (the source for a swing).
     const at = raw.at === undefined ? "target" : reader.oneOf(raw, "at", path, PLACES);
-    if ((kind === "shake" || kind === "pause") && raw.at !== undefined) reader.fail(joinPath(path, "at"), `a ${kind} has no place`);
-    if ((kind === "flash" || kind === "flinch") && at === "point") reader.fail(joinPath(path, "at"), `a ${kind} needs a unit, not a point`);
+    if ((kind === "shake" || kind === "pause" || kind === "screen") && raw.at !== undefined) reader.fail(joinPath(path, "at"), `a ${kind} has no place`);
+    if ((kind === "flash" || kind === "flinch" || kind === "struggle" || kind === "text") && at === "point") reader.fail(joinPath(path, "at"), `a ${kind} needs a unit, not a point`);
     let scale: CuePart["scale"] = 1;
-    if (raw.scale === "amount") scale = "amount";
+    if (raw.scale === "amount" || raw.scale === "body") scale = raw.scale;
     else if (raw.scale !== undefined) scale = reader.number(raw, "scale", path, { min: 0, max: 10 });
     return {
       kind,
@@ -596,7 +616,7 @@ export function resolveFeedback(packs: PackSource[], game: GameRules): FeedbackR
 
   const sounds = new Map(sorted(folders.get("sounds")!).map((e) => [e.id, readSound(e, issues)]));
   const effects = new Map(sorted(folders.get("particles")!).map((e) => [e.id, readEffect(e, issues, textureIndex)]));
-  const cues = new Map(sorted(folders.get("cues")!).map((e) => [e.id, readCue(e, issues, sounds, effects)]));
+  const cues = new Map(sorted(folders.get("cues")!).map((e) => [e.id, readCue(e, issues, sounds, effects, textureIndex)]));
   const config = readConfig(configEntry, issues, cues);
 
   // Skills name cues by phase; the game rules let the field through unread.

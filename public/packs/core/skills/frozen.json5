@@ -2,6 +2,7 @@
 {
   name: "Frozen",
   icon: "spell-frost-spike",
+  cues: { applied: "frozenOn", aura: "frozen", faded: "frozenBreak" },
   tags: ["root", "school.frost"],
   display: "debuff",
   dispel: "magic",

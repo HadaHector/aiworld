@@ -430,6 +430,7 @@ export async function startSession(page: Page, options: SessionOptions): Promise
     volume: musicControl.effects,
     bodyPlace: (unit, bone, out) => (unit === playerId ? (view?.character.place(bone, out) ?? false) : (entityMeshes?.place(unit, bone, out) ?? false)),
     feelable: (unit) => (unit === playerId ? (view?.character.feelable() ?? null) : (entityMeshes?.feelable(unit) ?? null)),
+    say: (unit, label, colour) => floatingText?.say(unit, label, colour),
     shake: musicControl.shake,
     steps: (unit) => (unit === playerId ? (view?.character.steps() ?? -1) : (entityMeshes?.steps(unit) ?? -1)),
     belongings,

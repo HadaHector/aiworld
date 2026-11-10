@@ -1,0 +1,9 @@
+// A web torn apart (a root's `faded`, whether it ran out or was broken): shreds flung out, the ground
+// web ripping loose, a tearing sound.
+{
+  parts: [
+    { sound: "webTear" },
+    { particles: "webBreak", scale: "body" },
+    { flinch: 0.7 },
+  ],
+}

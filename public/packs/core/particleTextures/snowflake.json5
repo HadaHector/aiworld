@@ -1,0 +1,2 @@
+// A six-pointed flake lying under a frozen unit or in a screen's corner.
+{ kind: "star", size: 128, variants: 1, points: 6, power: 1.2, glow: 0.2 }

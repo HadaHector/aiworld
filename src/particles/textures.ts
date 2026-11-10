@@ -6,7 +6,7 @@
 import type { Reader } from "../world/content/contentReader";
 import { deriveSeed, mulberry32 } from "../world/rng";
 
-export const TEXTURE_KINDS = ["dot", "spark", "star", "smoke", "flame", "ring", "rune", "slash"] as const;
+export const TEXTURE_KINDS = ["dot", "spark", "star", "smoke", "flame", "ring", "rune", "slash", "web", "tangle"] as const;
 export type TextureKind = (typeof TEXTURE_KINDS)[number];
 
 export interface ParticleTextureDef {
@@ -23,9 +23,10 @@ export interface ParticleTextureDef {
   /** `ring`: its radius as a share of the half size. `slash`: the arc's sweep in degrees. */
   radius: number;
   sweep: number;
-  /** `star`: its points. */
+  /** `star`: its points. `web`: its spokes. */
   points: number;
-  /** `rune`: how many strokes, low to high; and whether a circle surrounds them. */
+  /** `rune`: how many strokes, low to high; and whether a circle surrounds them. `web`: how many
+   *  concentric strands; `tangle`: how many threads across. */
   strokes: [number, number];
   ring: boolean;
   /** A soft halo added around what is drawn, 0..1. */
@@ -118,7 +119,27 @@ export function drawParticleTexture(def: ParticleTextureDef, variant: number): T
   const lumps = valueNoise(rng, 5);
   const fine = valueNoise(rng, 11);
 
-  const segments = def.kind === "rune" ? runeStrokes(rng, def.strokes[0] + Math.floor(rng() * (def.strokes[1] - def.strokes[0] + 1))) : [];
+  const count = def.strokes[0] + Math.floor(rng() * (def.strokes[1] - def.strokes[0] + 1));
+  const segments = def.kind === "rune" ? runeStrokes(rng, count) : def.kind === "web" ? webStrands(rng, def.points, count, def.rough) : def.kind === "tangle" ? tangleThreads(rng, count) : [];
+
+  // The distance to the nearest thread, worked out only near each thread (a web has a hundred).
+  const near = new Float32Array(segments.length > 0 ? size * size : 0).fill(Infinity);
+  if (segments.length > 0) {
+    const reach = def.width * 11;
+    const toPx = (v: number): number => ((v + 1) / 2) * size;
+    for (const [ax, ay, bx, by] of segments) {
+      const x0 = Math.max(0, Math.floor(toPx(Math.min(ax, bx) - reach)));
+      const x1 = Math.min(size - 1, Math.ceil(toPx(Math.max(ax, bx) + reach)));
+      const y0 = Math.max(0, Math.floor(toPx(-Math.max(ay, by) - reach)));
+      const y1 = Math.min(size - 1, Math.ceil(toPx(-Math.min(ay, by) + reach)));
+      for (let py = y0; py <= y1; py++) {
+        for (let px = x0; px <= x1; px++) {
+          const d = segmentDistance(((px + 0.5) / size) * 2 - 1, 1 - ((py + 0.5) / size) * 2, ax, ay, bx, by);
+          if (d < near[py * size + px]) near[py * size + px] = d;
+        }
+      }
+    }
+  }
 
   for (let py = 0; py < size; py++) {
     for (let px = 0; px < size; px++) {
@@ -167,10 +188,20 @@ export function drawParticleTexture(def: ParticleTextureDef, variant: number): T
           break;
         }
         case "rune": {
-          let d = Infinity;
-          for (const s of segments) d = Math.min(d, segmentDistance(x, y, s[0], s[1], s[2], s[3]));
+          const d = near[py * size + px];
           a = smoothstep(def.width, def.width * 0.4, d);
           if (def.ring) a = Math.max(a, smoothstep(def.width, def.width * 0.4, Math.abs(r - 0.8)));
+          break;
+        }
+        case "web":
+        case "tangle": {
+          // Thin bright threads with a soft glow round them, so they show in daylight and in the dark.
+          const d = near[py * size + px];
+          const line = smoothstep(def.width, def.width * 0.25, d);
+          const halo = 0.3 * Math.exp(-Math.pow(d / (def.width * 3.5), 2));
+          // A bead of silk where the threads meet at the hub.
+          const hub = def.kind === "web" ? smoothstep(def.width * 2.5, def.width * 0.8, r) : 0;
+          a = Math.max(line, halo, hub * 0.9);
           break;
         }
         case "slash": {
@@ -194,6 +225,56 @@ export function drawParticleTexture(def: ParticleTextureDef, variant: number): T
     }
   }
   return { size, luminance, alpha };
+}
+
+/**
+ * An orb web's threads: `spokes` radial threads at slightly uneven angles and lengths from a hub a
+ * little off the middle, and `rings` spiral strands across them, each strand sagging inward between
+ * two spokes the way silk does, the last ones spaced closer. Coordinates run -1..1, y up.
+ */
+function webStrands(rng: () => number, spokes: number, rings: number, rough: number): [number, number, number, number][] {
+  const out: [number, number, number, number][] = [];
+  const hubX = (rng() - 0.5) * 0.08 * rough;
+  const hubY = (rng() - 0.5) * 0.08 * rough;
+  const angle0 = rng() * Math.PI * 2;
+  const ends: { cos: number; sin: number; reach: number }[] = [];
+  for (let k = 0; k < spokes; k++) {
+    const a = angle0 + ((k + (rng() - 0.5) * 0.5 * rough) / spokes) * Math.PI * 2;
+    const reach = 0.88 - rng() * 0.12 * rough;
+    ends.push({ cos: Math.cos(a), sin: Math.sin(a), reach });
+    out.push([hubX, hubY, hubX + Math.cos(a) * reach, hubY + Math.sin(a) * reach]);
+  }
+  for (let j = 1; j <= rings; j++) {
+    // Close together near the hub, wider apart outward.
+    const f = Math.pow(j / (rings + 0.35), 1.2);
+    for (let k = 0; k < spokes; k++) {
+      const a = ends[k];
+      const b = ends[(k + 1) % spokes];
+      const ra = f * a.reach * (1 + (rng() - 0.5) * 0.08 * rough);
+      const rb = f * b.reach * (1 + (rng() - 0.5) * 0.08 * rough);
+      const p: [number, number] = [hubX + a.cos * ra, hubY + a.sin * ra];
+      const q: [number, number] = [hubX + b.cos * rb, hubY + b.sin * rb];
+      // The strand sags toward the hub: one bend in the middle.
+      const sag = 0.82 + 0.06 * rng();
+      const mx = hubX + (p[0] - hubX + q[0] - hubX) / 2 * sag;
+      const my = hubY + (p[1] - hubY + q[1] - hubY) / 2 * sag;
+      out.push([p[0], p[1], mx, my], [mx, my, q[0], q[1]]);
+    }
+  }
+  return out;
+}
+
+/** A wad of silk threads: `count` straight threads across a circle, a few doubled up, to wrap a body in. */
+function tangleThreads(rng: () => number, count: number): [number, number, number, number][] {
+  const out: [number, number, number, number][] = [];
+  for (let k = 0; k < count; k++) {
+    const a = rng() * Math.PI * 2;
+    const b = a + Math.PI * (0.55 + rng() * 0.9);
+    const ra = 0.78 + rng() * 0.12;
+    const rb = 0.78 + rng() * 0.12;
+    out.push([Math.cos(a) * ra, Math.sin(a) * ra, Math.cos(b) * rb, Math.sin(b) * rb]);
+  }
+  return out;
 }
 
 /**

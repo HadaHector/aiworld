@@ -1,0 +1,6 @@
+// A web slapping down on the ground: it spreads from nothing to full size in an instant, then lets go.
+{
+  emitters: [
+    { sprite: "web", flat: true, blend: "alpha", burst: 1, life: 0.55, size: [[0, 0.5], [0.3, 2.6], [1, 2.4]], colour: [[0, "#fafaf6f0"], [0.6, "#fafaf6f0"], [1, "#fafaf600"]] },
+  ],
+}

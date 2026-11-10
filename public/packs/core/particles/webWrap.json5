@@ -1,0 +1,11 @@
+// Silk wound round a body: wads of threads over the legs, the trunk and the arms, shifting as it
+// struggles. Sizes are for a person; the cue scales them. Loops.
+{
+  loop: true,
+  emitters: [
+    { sprite: "tangle", blend: "alpha", rate: 6, life: 1.2, local: true, shape: { box: [0.14, 0.7, 0.14] }, spin: [-0.25, 0.25], size: [[0, 0.9], [1, 1]], colour: [[0, "#fafaf600"], [0.2, "#fafaf6e0"], [0.8, "#fafaf6d0"], [1, "#fafaf600"]] },
+    { sprite: "tangle", blend: "alpha", rate: 2, life: 1.2, local: true, shape: { box: [0.15, 0.3, 0.15] }, spin: [-0.3, 0.3], size: [[0, 0.5], [1, 0.55]], colour: [[0, "#fafaf600"], [0.2, "#ffffffc0"], [1, "#ffffff00"]] },
+    // Loose strands lifting off and drifting, so it looks alive.
+    { sprite: "spark", blend: "alpha", rate: 5, life: [0.5, 0.9], local: true, shape: { box: [0.25, 0.7, 0.25] }, speed: [0.05, 0.2], direction: [0, 1, 0], spread: 60, stretch: 0.5, size: [[0, 0.3], [1, 0.12]], colour: [[0, "#ffffffb0"], [1, "#ffffff00"]] },
+  ],
+}

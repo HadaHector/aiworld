@@ -1,0 +1,2 @@
+// A web for a screen's corner: fewer, heavier threads (it is drawn large), four of them differing.
+{ kind: "web", size: 256, variants: 1, points: 7, strokes: 5, width: 0.034, rough: 0.9, glow: 0 }

@@ -1,7 +1,8 @@
-// A web in flight (a projectile cue).
+// A web in flight (a projectile cue): a spurt as it leaves the spider, then a ball of silk with a
+// strand trailing back to it.
 {
   parts: [
     { sound: "spit", at: "source" },
-    { particles: "webShot", at: "source" },
+    { particles: "webShot" },
   ],
 }

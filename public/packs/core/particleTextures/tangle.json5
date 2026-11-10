@@ -1,0 +1,3 @@
+// A wad of silk threads criss-crossing a circle, for wrapping a body: four of them, so a wrap of
+// several never repeats one.
+{ kind: "tangle", size: 128, variants: 4, strokes: [10, 15], width: 0.03, glow: 0.05 }

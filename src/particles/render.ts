@@ -189,7 +189,8 @@ export function createParticleRenderer(scene: Scene, system: ParticleSystem, rul
     m.disableDepthWrite = true;
     m.backFaceCulling = false;
     // Drawn a little toward the camera, so a ring or chips lying on the ground do not flicker in it.
-    if (shape) m.zOffset = -2;
+    // A flat web decal does the same.
+    m.zOffset = -2;
     return m;
   };
 
@@ -246,7 +247,13 @@ export function createParticleRenderer(scene: Scene, system: ParticleSystem, rul
       // streak, along its velocity as the camera sees it, stretched by how fast it goes.
       let ax: number, ay: number, az: number, bx: number, by: number, bz: number;
       let along = half;
-      if (e.stretch > 0) {
+      if (e.flat) {
+        // Lying on the ground: across and along are in the ground's plane, turned by the rotation.
+        const c = Math.cos(pool.rot[i]);
+        const s = Math.sin(pool.rot[i]);
+        [ax, ay, az] = [c, 0, s];
+        [bx, by, bz] = [-s, 0, c];
+      } else if (e.stretch > 0) {
         const vx = pool.vx[i], vy = pool.vy[i], vz = pool.vz[i];
         const vf = vx * forward.x + vy * forward.y + vz * forward.z;
         let px = vx - forward.x * vf, py = vy - forward.y * vf, pz = vz - forward.z * vf;

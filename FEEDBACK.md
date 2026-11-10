@@ -87,6 +87,9 @@ A cue is what plays together for one moment of a fight:
 | `flinch` | 0-1: the unit's body jerks away from the source (*Hit feel*) |
 | `shake` | 0-1 of trauma added to the camera |
 | `pause` | Seconds the source's and the target's animations stop for (*Hit feel*) |
+| `struggle` | 0-1: while the cue lasts the unit heaves and jerks, a flinch from a random side every half second, tiring over a few seconds (a root). Works on bodies and capsules alike |
+| `screen` | A texture id (or `""`), with `colour` and `strength`: an overlay over the whole view while the cue lasts - a vignette with the texture drawn in the corners. Only for the player's own view (the target is the player) |
+| `text` | Words floating up over the unit, in `colour` (`"Rooted"`); own fights only |
 
 Every part may have:
 
@@ -98,7 +101,8 @@ Every part may have:
   (`dealt`: the player is the source; `taken`: the target). A part whose `when` fails is skipped.
 - **`delay`**: seconds after the cue starts (a death's thud lands when the body does).
 - **`scale`**: a number, or `amount` - grows with the hit's size relative to the target's maximum
-  health, so a big hit shakes more than a tick.
+  health, so a big hit shakes more than a tick - or `body`: the unit's height against a person's
+  (1.8 m), 0.5 to 3, so a decal or a wrap is sized to its victim.
 
 **Placeholders.** A sound or particle id may name the event's details in braces:
 `"hit.{weapon}.{armor}"`. It is resolved most specific first, dropping a part from the end each
@@ -285,6 +289,7 @@ replaces a sound by giving the same id, as with any pack file. Nothing that name
 | `gravity`, `drag` | Metres per second squared down (negative rises); a slowing factor |
 | `size`, `colour` | A number or a curve over the particle's life (`[[t, value], ...]`); colours with alpha (`#rrggbbaa` or `[r, g, b, a]`) |
 | `spin`, `stretch` | Rotation speed; stretching along the velocity (sparks, streaks) |
+| `flat` | Sprites lie flat on the ground (a decal under a unit, a web or a flake of frost), facing up instead of the camera; `spin` turns them about the vertical, and without it they keep one orientation |
 | `local` | Particles move with the attachment (a ring around a body) instead of staying where they were born (a trail) |
 | `inherit` | How much of the attachment's own motion particles take on |
 
@@ -296,7 +301,9 @@ colour curve):
 { kind: "rune", size: 64, variants: 6, strokes: [3, 5], ring: true, glow: 0.35 }
 ```
 
-Kinds: `dot` (a soft falloff, its power a parameter), `spark` (a streak), `star` (points, sharp or
+Kinds: `web` (an orb web: `points` uneven spokes and `strokes` sagging strands across them, thin bright
+threads with a soft halo) and `tangle` (`strokes` threads criss-crossing a circle, to wrap a body in)
+beside the rest: `dot` (a soft falloff, its power a parameter), `spark` (a streak), `star` (points, sharp or
 soft), `smoke` (a noise puff, seeded per variant), `flame` (a teardrop with noise), `ring` (radius,
 width, softness), `rune` (strokes snapped to a grid inside a circle, seeded per variant), `slash`
 (an arc for a swing trail). A particle picks among a texture's variants at random.
@@ -681,6 +688,37 @@ Each leaves the game working: dev server, `npm run probe`, `npm run server`, `np
   with a bag's rustle under the pluck, and opening it louder. Checked in the game: the inventory
   and spell book opening and closing, a bronze sword taken off (`unequip.metal`), a slot put on the
   bar and dragged off, and the chest's loot with its window's sounds.
+- **Crowd control: webs and frost** (playtest: "the spider put a web on me, I couldn't move - the effect
+  is very small, not really noticeable - and should look like a web"). The pieces, all data, are
+  reusable by any root, stun or fear:
+  - **Textures** `web`, `webCorner`, `tangle` (new kinds, above), `snowflake` (a six-point `star`).
+  - **Ground decal** `webDecal` / `frozenDecal`: `flat` sprites about 2.4 m across under the unit, one
+    laid again before the last fades (a long-lived particle would outlast the cue), over a pale pool of
+    light so it reads from afar over any ground, scaled by `scale: "body"`.
+  - **Body wrap** `webWrap`: `tangle` wads over legs, trunk and arms, shifting, and loose strands.
+  - **The shot** `webShot`: a spinning ball of silk and a strand of specks paying back along the way to
+    the spider (a `line` emitter toward the source); the `spit` sound gained a thread's whistle.
+    `webStick` is the landing: a splat of strands, a wad blooming round the body, the web slapping
+    down under it (`webSplat`), a flash and flinch, and the text `Rooted`.
+  - **While rooted** (`webbed`, the aura): decal, wrap, `struggle` and, for the player, `screen: "webCorner"` -
+    a pale vignette with a web in each corner, over everything, breathing slowly. The unit frames
+    already show the buff and "rooted"; the buff has no icon yet (the icon sets have no web: a
+    generated one waits for a go-ahead on GPU work).
+  - **Breaking free** (`faded: "webBreak"`): shreds, strands and the ground web flung out, with the
+    `webTear` sound; it plays however the aura ends. Skills have no rule yet for a root that breaks on
+    damage or when its caster dies, so only the duration (and a dispel) ends it.
+  - **`frozen`** (Frost Nova's root) had no cues and now has the same set - `frozenOn`, `frozen`,
+    `frozenBreak`: frost on the ground, blue flake vignette, the `Rooted` text, no struggle (held solid).
+  - **Code**: `src/feedback/screen.ts` is the overlay layer (the game and `fx.html` both use it); the cue
+    player takes `height`, `say` and `screen` from its stage; `flat` is in `render.ts`. The textures draw
+    near each thread only (a web is 70 ms to draw, not 280).
+  - **`fx.html`** gained a **victim** toggle (the knight is the player, so `when: { role: "taken" }` parts
+    and the screen overlay play) and floats `text` parts; fixed a start-up error when the audio was
+    already unlocked. Web and Frozen are in the Skills tab, their cues, effects and textures in the
+    others.
+  - **Checked** in the game (`?play&config=tiny`, Webbed applied through `__aiworld.entities.apply`): the
+    decal, the wrap, the vignette, `Rooted` and the frame's rooted state; on `fx.html`: the shot, the
+    landing, the aura and the break. Not seen in the game: a real spider casting it, and the break.
 - **Left for later**, beside *Not in this step*: recorded samples (the format and the stand-ins are ready, no sample set is chosen); creature
   voices beyond deaths; and the alpha particles' `light`, which day and night could set.
 
@@ -691,8 +729,9 @@ Each leaves the game working: dev server, `npm run probe`, `npm run server`, `np
 - Ambience (wind, birds, water, a busy town) and the music reacting to fights: the music's
   Director (MUSIC.md) and an ambience system later.
 - Creature voices beyond deaths (aggro growls, pain), NPC barks.
-- Lights flashing with effects (LIGHTS.md has the light budget), decals (scorch marks), screen
-  effects (vignette at low health, a red edge when hit): later, as cue parts.
+- Lights flashing with effects (LIGHTS.md has the light budget), scorch-mark decals that outlast their
+  cue, screen effects for low health or a red edge when hit: later, as cue parts (`screen` and `flat`
+  sprites exist now, for roots).
 - Weapon trails as ribbons; the swing trail is a sprite for now.
 - Spell animations on the body (casting poses): CHARACTERS.md's *Next steps* 5.
 - Occlusion of sounds by walls, reverb by place (inside a building versus outdoors).

@@ -1,0 +1,9 @@
+// Frost locking a unit in place.
+{
+  parts: [
+    { sound: "chill" },
+    { particles: "frost", scale: "body" },
+    { flash: [0.7, 0.9, 1], time: 0.3 },
+    { text: "Rooted", colour: "#bfe4ff" },
+  ],
+}

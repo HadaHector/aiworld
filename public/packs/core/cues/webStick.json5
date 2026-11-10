@@ -1,7 +1,11 @@
-// A web landing on its target.
+// A web landing on its target: a splat of strands at the body and a web slapping down under it.
 {
   parts: [
-    { sound: "stick", bone: "feet" },
-    { particles: "webStick", bone: "feet" },
+    { sound: "stick" },
+    { particles: "webStick", scale: "body" },
+    { particles: "webSplat", bone: "feet", scale: "body" },
+    { flash: [0.9, 0.95, 0.85], time: 0.25 },
+    { flinch: 0.5 },
+    { text: "Rooted", colour: "#f2f2e6" },
   ],
 }

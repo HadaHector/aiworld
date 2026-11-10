@@ -1,0 +1,3 @@
+// An orb web seen flat: eight uneven spokes from a hub, six sagging strands across them. Thin bright
+// threads with a soft halo, so it shows on green grass in daylight and in the dark alike.
+{ kind: "web", size: 256, variants: 1, points: 8, strokes: 6, width: 0.026, rough: 0.7, glow: 0.04 }

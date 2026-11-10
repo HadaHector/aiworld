@@ -1,0 +1,8 @@
+// A frozen unit, held fast until it thaws: a flake of frost on the ground, motes of cold round the body
+// and - for the player - a blue vignette of flakes in the corners. Held solid: it does not struggle.
+{
+  parts: [
+    { particles: "frozenDecal", bone: "feet", scale: "body" },
+    { screen: "snowflake", colour: "#a8d8ff", strength: 0.5, when: { role: "taken" } },
+  ],
+}

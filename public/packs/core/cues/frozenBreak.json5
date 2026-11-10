@@ -1,0 +1,7 @@
+// The ice letting go.
+{
+  parts: [
+    { sound: "shield.break" },
+    { particles: "frost", scale: "body" },
+  ],
+}

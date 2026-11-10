@@ -8,6 +8,7 @@
 
 import type { Camera } from "@babylonjs/core/Cameras/camera";
 import type { ArcRotateCamera } from "@babylonjs/core/Cameras/arcRotateCamera";
+import { createScreenEffects } from "../feedback/screen";
 import { createFeel, type Feel, type Feelable } from "../feedback/feel";
 import { Vector3 } from "@babylonjs/core/Maths/math.vector";
 import type { Scene } from "@babylonjs/core/scene";
@@ -79,6 +80,8 @@ export interface GameFeedbackOptions {
   bodyPlace: (unit: number, bone: Bone, out: Vector3) => boolean;
   /** A unit's drawn body or capsule, for hit feel. */
   feelable: (unit: number) => Feelable | null;
+  /** Words floating up over a unit (a cue's `text` part): the page's floating text. */
+  say?: (unit: number, label: string, colour: string) => void;
   /** The Screen shake setting to start with. */
   shake?: number;
   /** How many steps a unit's body has taken, or -1 for one without a body. */
@@ -173,7 +176,11 @@ export function createGameFeedback(options: GameFeedbackOptions): GameFeedback {
     },
     feelable: options.feelable,
     maxHealth: (unit) => mirror.entities.get(unit)?.resources.get(game.health)?.max ?? 0,
+    height: (unit) => mirror.entities.get(unit)?.template?.look.height ?? 1.8,
+    say: (unit, label, colour) => options.say?.(unit, label, colour),
+    screen: (part) => screens.show(part),
   }, () => sfx, () => particles, () => feel);
+  const screens = createScreenEffects(rules);
   const feel = createFeel();
   feel.setShake(options.shake ?? 1);
   // A unit gone from view takes what lasts on it (its cast, its auras) with it.
@@ -463,6 +470,7 @@ export function createGameFeedback(options: GameFeedbackOptions): GameFeedback {
     stats: () => ({ ...(renderer?.stats() ?? { sprites: 0, meshes: 0 }), effects: particles.effects() }),
     dispose() {
       disposed = true;
+      screens.dispose();
       stopWaiting();
       this.setScene(null);
       for (const stop of unwatch.splice(0)) stop();
