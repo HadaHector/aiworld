@@ -1,0 +1,35 @@
+// The buckler family (see weapons/sword.json5 for how parts are given), strapped to the left
+// forearm. A shield's axis is the way its face looks - out from the forearm's outer side - so a
+// disc is a short round part along it, its profile's width the diameter; its front runs toward the
+// hand. Oversized, as the world is. The item's tint colours the metal: "buckler.crude",
+// "buckler.standard", "buckler.ornate".
+{
+  name: "Buckler",
+  grip: "shield",
+  tiers: {
+    // A plain wooden disc.
+    crude: {
+      parts: [
+        { shape: "round", slot: "wood", from: 0.065, to: 0.095, profile: [[0, 0.42, 0.42], [0.7, 0.42, 0.42], [1, 0.39, 0.39]] },
+        { shape: "round", slot: "wood", from: 0.095, to: 0.12, profile: [[0, 0.1, 0.1], [1, 0.07, 0.07]] },
+      ],
+    },
+    // A metal disc with a domed boss.
+    standard: {
+      parts: [
+        { shape: "round", from: 0.065, to: 0.085, profile: [[0, 0.42, 0.42], [1, 0.4, 0.4]] },
+        { shape: "round", from: 0.085, to: 0.15, profile: [[0, 0.16, 0.16], [0.4, 0.14, 0.14], [0.8, 0.08, 0.08], [1, 0, 0]] },
+      ],
+    },
+    // Dished metal with a gilt rim, gilt studs, and a spike from a gilt boss.
+    ornate: {
+      parts: [
+        { shape: "round", slot: "trim", from: 0.06, to: 0.08, profile: [[0, 0.48, 0.48], [1, 0.48, 0.48]] },
+        { shape: "round", from: 0.065, to: 0.11, profile: [[0, 0.46, 0.46], [0.3, 0.44, 0.44], [1, 0.3, 0.3]] },
+        { shape: "round", slot: "trim", from: 0.088, to: 0.105, out: 0.19, copies: 8, profile: [[0, 0.035, 0.035], [1, 0, 0]] },
+        { shape: "round", slot: "trim", from: 0.105, to: 0.165, profile: [[0, 0.17, 0.17], [0.6, 0.14, 0.14], [1, 0.07, 0.07]] },
+        { shape: "round", from: 0.16, to: 0.27, profile: [[0, 0.065, 0.065], [1, 0, 0]] },
+      ],
+    },
+  },
+}

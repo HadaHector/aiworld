@@ -1051,7 +1051,10 @@ function addGear(kit: MeshKit, race: RaceDef, unit: GearUnit, body: BodyGeometry
     const b = bones[iBone];
     const along = normalize(sub(b.tail, b.head));
     const handFrame = frameFor(along, FORWARD);
-    const dir = normalize(add(scale(handFrame.front, 0.85), scale(along, def.grip === "bow" ? 0 : 0.5)));
+    // A shield's axis is the way its face looks: out from the forearm's outer side, its front toward
+    // the hand. Anything else is held in the fist.
+    const outward = normalize(sub([b.side, 0, 0], scale(along, b.side * along[0])));
+    const dir = def.grip === "shield" ? outward : normalize(add(scale(handFrame.front, 0.85), scale(along, def.grip === "bow" ? 0 : 0.5)));
     const grip = lerp(b.head, b.tail, 0.5);
     const frame = frameFor(dir, along);
     const deg = Math.PI / 180;
@@ -1065,7 +1068,7 @@ function addGear(kit: MeshKit, race: RaceDef, unit: GearUnit, body: BodyGeometry
         const spin = (part.spin + (360 * copy) / part.copies) * deg;
         const front = add(scale(frame.front, Math.cos(spin)), scale(frame.side, Math.sin(spin)));
         const across = add(scale(frame.side, Math.cos(spin)), scale(frame.front, -Math.sin(spin)));
-        const base = add(add(grip, scale(dir, part.from)), scale(front, part.out));
+        const base = add(add(add(grip, scale(dir, part.from)), scale(front, part.out)), scale(across, part.aside));
         const tilt = part.tilt * deg;
         const bend = part.bend * deg;
         const angle = (t: number): number => tilt + bend * t;
@@ -1079,7 +1082,8 @@ function addGear(kit: MeshKit, race: RaceDef, unit: GearUnit, body: BodyGeometry
             : add(base, add(scale(dir, (span * (Math.sin(angle(t)) - Math.sin(tilt))) / bend), scale(front, (span * (Math.cos(tilt) - Math.cos(angle(t)))) / bend)));
         // A bent part is cut finely enough to curve.
         const profile = straight ? part.profile : resampled(part.profile, Math.max(4, Math.ceil(Math.abs(part.bend) / 15)));
-        const section = sectionOf(part.shape);
+        // A wide round part (a shield's face) gets more sides, to read round.
+        const section = sectionOf(part.shape, Math.max(...part.profile.map((p) => p[1])) > 0.3 ? 16 : 10);
         const rings: { ring: Ring; t: number }[] = [];
         let startTip: Vec | null = null;
         let endTip: Vec | null = null;
@@ -1151,10 +1155,10 @@ function addGear(kit: MeshKit, race: RaceDef, unit: GearUnit, body: BodyGeometry
   }
 
   /** A part's cross-section, round from its front toward its side, at unit width and thickness. */
-  function sectionOf(shape: GearPiece["parts"][number]["shape"]): [number, number][] {
+  function sectionOf(shape: GearPiece["parts"][number]["shape"], roundSides: number): [number, number][] {
     if (shape === "box") return [[1, 1], [-1, 1], [-1, -1], [1, -1]];
     if (shape === "diamond") return [[1, 0], [0, 1], [-1, 0], [0, -1]];
-    const n = shape === "facet" ? 6 : 10;
+    const n = shape === "facet" ? 6 : roundSides;
     return Array.from({ length: n }, (_, k) => [Math.cos((2 * Math.PI * k) / n), Math.sin((2 * Math.PI * k) / n)]);
   }
 

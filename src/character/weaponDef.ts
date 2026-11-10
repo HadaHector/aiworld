@@ -33,8 +33,8 @@ export interface WeaponTier {
 export type WeaponGrip = "mainHand" | "twoHand" | "bow" | "shield" | "offHand";
 export const WEAPON_GRIPS: readonly WeaponGrip[] = ["mainHand", "twoHand", "bow", "shield", "offHand"];
 
-export type WeaponSlot = "metal" | "wood" | "grip" | "trim" | "dark" | "gem" | "cord";
-export const WEAPON_SLOTS: readonly WeaponSlot[] = ["metal", "wood", "grip", "trim", "dark", "gem", "cord"];
+export type WeaponSlot = "metal" | "wood" | "grip" | "trim" | "dark" | "gem" | "cord" | "paint";
+export const WEAPON_SLOTS: readonly WeaponSlot[] = ["metal", "wood", "grip", "trim", "dark", "gem", "cord", "paint"];
 
 /**
  * One part: a prism along the weapon's axis from `from` to `to` metres (0 is the middle of the
@@ -59,6 +59,8 @@ export interface WeaponPart {
   copies: number;
   bend: number;
   string: boolean;
+  /** Set off its axis sideways, across its front (a shield's planks, side by side). */
+  aside: number;
 }
 
 export const WEAPON_TIERS = ["crude", "standard", "ornate"] as const;
@@ -71,6 +73,7 @@ const DEFAULT_COLOURS: Record<WeaponSlot, { material: string; tint: ColorTuple }
   dark: { material: "plate", tint: [0.32, 0.33, 0.36] },
   gem: { material: "plate", tint: [0.25, 0.45, 0.85] },
   cord: { material: "linen", tint: [0.86, 0.82, 0.7] },
+  paint: { material: "leather", tint: [0.55, 0.13, 0.1] },
 };
 
 export function resolveWeapons(packs: PackSource[], issues: ContentIssue[]): Map<string, WeaponFamily> {
@@ -115,7 +118,7 @@ function readFamily(id: string, data: unknown, reader: Reader): WeaponFamily {
 }
 
 function readPart(obj: RawObject, path: string, reader: Reader): WeaponPart {
-  reader.onlyKeys(obj, path, ["shape", "from", "to", "profile", "slot", "spin", "out", "tilt", "copies", "bend", "string"]);
+  reader.onlyKeys(obj, path, ["shape", "from", "to", "profile", "slot", "spin", "out", "tilt", "copies", "bend", "string", "aside"]);
   const profile: [number, number, number][] = reader.array(obj, "profile", path).map((p, i) => {
     if (Array.isArray(p) && p.length === 3 && p.every((v) => typeof v === "number" && Number.isFinite(v) && v >= 0)) return p as [number, number, number];
     reader.fail(`${path}.profile[${i}]`, "expected [t, width, thickness], none below 0");
@@ -135,5 +138,6 @@ function readPart(obj: RawObject, path: string, reader: Reader): WeaponPart {
     copies: reader.optionalNumber(obj, "copies", path, 1, { min: 1, max: 12, integer: true }),
     bend: reader.optionalNumber(obj, "bend", path, 0, { min: -360, max: 360 }),
     string: reader.boolean(obj, "string", path, false),
+    aside: reader.optionalNumber(obj, "aside", path, 0, { min: -1, max: 1 }),
   };
 }

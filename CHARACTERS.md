@@ -187,11 +187,11 @@ leg plate, helm, sword over mail - about 3300).
 
 ## Weapons and shields
 
-**Status: steps 1-3 done** - the parts, the builder and the workbench's Weapons folder; the sword,
-mace, axe, dagger, wand, staff and bow in three tiers each (the wooden ones' tint colours their
-wood), and the bow's string drawn by its animation. No item uses them yet: the oak mace and ash
-staff are still drawn as long blades in wood colours, and the wooden shield has no model, until
-steps 4-5.
+**Status: steps 1-4 done** - the parts, the builder and the workbench's Weapons folder; the sword,
+mace, axe, dagger, wand, staff and bow, the buckler and the round shield, in three tiers each (the
+wooden ones' tint colours their wood); the bow's string drawn by its animation; the block and the
+shield bash turned to show the shield's face. No item uses them yet: the oak mace and ash staff are
+still drawn as long blades in wood colours, and the wooden shield has no model, until step 5.
 
 ### Decisions
 
@@ -227,7 +227,14 @@ grip, the blade's way positive):
 - **bend** - curves a part along its length by that many degrees toward its front: a bow's limbs, a
   recurve's tips, a staff's crook (a part leant 180° runs back down the axis, the lower limb).
 
-Still to come: a shield's dished face (step 4), a part shape of its own if the prisms cannot make it.
+- **aside** - sets a part off its axis sideways, across its front: a shield's plank seams.
+
+A shield (`grip: "shield"`) is strapped to the left forearm: its axis is the way its face looks, out
+from the forearm's outer side, its front toward the hand - so its face is a short, wide round part
+along the axis (a dished one narrowing outward), a rim a slightly wider one just behind it, a boss a
+dome, studs small cones in `copies` round it. Wide round parts get 16 sides instead of 10. In the
+block and the shield bash the upper arm turns in, laying the forearm across the chest so the face
+looks forward.
 
 ### A bow's string
 
