@@ -232,7 +232,11 @@ grip, the blade's way positive):
 A shield (`grip: "shield"`) is strapped to the left forearm: its axis is the way its face looks, out
 from the forearm's outer side, its front toward the hand - so its face is a short, wide round part
 along the axis (a dished one narrowing outward), a rim a slightly wider one just behind it, a boss a
-dome, studs small cones in `copies` round it. Wide round parts get 16 sides instead of 10. In the
+dome, studs small cones in `copies` round it. Wide round parts get 16 sides instead of 10. The back
+is seen as often as the face (a raised shield, from the camera behind): straps or a rope loop round
+the forearm (round parts leant 90°), battens across a round shield's planks, a leather pad and gilt
+buckles on the better tiers; a rim sits just in front of the face's back, so it shows as a ring from
+behind and does not cover the wood. In the
 block and the shield bash the upper arm turns in, laying the forearm across the chest so the face
 looks forward.
 

@@ -10,6 +10,9 @@
     // A plain wooden disc.
     crude: {
       parts: [
+        // The back: a rope loop for the arm, knotted to the board.
+        { shape: "round", slot: "cord", from: 0, to: 0.03, tilt: 90, out: -0.09, profile: [[0, 0.115, 0.105], [1, 0.115, 0.105]] },
+        { shape: "round", slot: "cord", from: 0, to: 0.03, tilt: 90, out: 0.06, profile: [[0, 0.115, 0.105], [1, 0.115, 0.105]] },
         { shape: "round", slot: "wood", from: 0.065, to: 0.095, profile: [[0, 0.42, 0.42], [0.7, 0.42, 0.42], [1, 0.39, 0.39]] },
         { shape: "round", slot: "wood", from: 0.095, to: 0.12, profile: [[0, 0.1, 0.1], [1, 0.07, 0.07]] },
       ],
@@ -17,6 +20,11 @@
     // A metal disc with a domed boss.
     standard: {
       parts: [
+        // The back: two leather straps round the forearm (a round part leant 90° runs along the arm).
+        { shape: "round", slot: "grip", from: 0, to: 0.035, tilt: 90, out: -0.09, profile: [[0, 0.12, 0.11], [1, 0.12, 0.11]] },
+        { shape: "round", slot: "grip", from: 0, to: 0.035, tilt: 90, out: 0.06, profile: [[0, 0.12, 0.11], [1, 0.12, 0.11]] },
+        // A leather pad behind the boss.
+        { shape: "round", slot: "grip", from: 0.052, to: 0.066, profile: [[0, 0.2, 0.2], [1, 0.22, 0.22]] },
         { shape: "round", from: 0.065, to: 0.085, profile: [[0, 0.42, 0.42], [1, 0.4, 0.4]] },
         { shape: "round", from: 0.085, to: 0.15, profile: [[0, 0.16, 0.16], [0.4, 0.14, 0.14], [0.8, 0.08, 0.08], [1, 0, 0]] },
       ],
@@ -24,7 +32,15 @@
     // Dished metal with a gilt rim, gilt studs, and a spike from a gilt boss.
     ornate: {
       parts: [
-        { shape: "round", slot: "trim", from: 0.06, to: 0.08, profile: [[0, 0.48, 0.48], [1, 0.48, 0.48]] },
+        // The back: two leather straps round the forearm (a round part leant 90° runs along the arm).
+        { shape: "round", slot: "grip", from: 0, to: 0.035, tilt: 90, out: -0.09, profile: [[0, 0.12, 0.11], [1, 0.12, 0.11]] },
+        { shape: "round", slot: "grip", from: 0, to: 0.035, tilt: 90, out: 0.06, profile: [[0, 0.12, 0.11], [1, 0.12, 0.11]] },
+        // Gilt buckles on the straps.
+        { shape: "box", slot: "trim", from: 0.048, to: 0.062, out: -0.09, profile: [[0, 0.05, 0.05], [1, 0.05, 0.05]] },
+        { shape: "box", slot: "trim", from: 0.048, to: 0.062, out: 0.06, profile: [[0, 0.05, 0.05], [1, 0.05, 0.05]] },
+        // A leather pad behind the boss.
+        { shape: "round", slot: "grip", from: 0.052, to: 0.066, profile: [[0, 0.2, 0.2], [1, 0.22, 0.22]] },
+        { shape: "round", slot: "trim", from: 0.068, to: 0.08, profile: [[0, 0.48, 0.48], [1, 0.48, 0.48]] },
         { shape: "round", from: 0.065, to: 0.11, profile: [[0, 0.46, 0.46], [0.3, 0.44, 0.44], [1, 0.3, 0.3]] },
         { shape: "round", slot: "trim", from: 0.088, to: 0.105, out: 0.19, copies: 8, profile: [[0, 0.035, 0.035], [1, 0, 0]] },
         { shape: "round", slot: "trim", from: 0.105, to: 0.165, profile: [[0, 0.17, 0.17], [0.6, 0.14, 0.14], [1, 0.07, 0.07]] },

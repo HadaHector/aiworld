@@ -10,6 +10,12 @@
     // Planks, no rim.
     crude: {
       parts: [
+        // The back: a rope loop for the arm, knotted to the board.
+        { shape: "round", slot: "cord", from: 0, to: 0.03, tilt: 90, out: -0.09, profile: [[0, 0.115, 0.105], [1, 0.115, 0.105]] },
+        { shape: "round", slot: "cord", from: 0, to: 0.03, tilt: 90, out: 0.06, profile: [[0, 0.115, 0.105], [1, 0.115, 0.105]] },
+        // Battens across the back holding the planks.
+        { shape: "box", slot: "dark", from: 0.05, to: 0.066, aside: -0.2, profile: [[0, 0.62, 0.06], [1, 0.62, 0.06]] },
+        { shape: "box", slot: "dark", from: 0.05, to: 0.066, aside: 0.2, profile: [[0, 0.62, 0.06], [1, 0.62, 0.06]] },
         { shape: "round", slot: "wood", from: 0.065, to: 0.09, profile: [[0, 0.8, 0.8], [1, 0.8, 0.8]] },
         { shape: "box", slot: "dark", from: 0.086, to: 0.094, aside: -0.1, profile: [[0, 0.74, 0.014], [1, 0.74, 0.014]] },
         { shape: "box", slot: "dark", from: 0.086, to: 0.094, aside: 0.1, profile: [[0, 0.74, 0.014], [1, 0.74, 0.014]] },
@@ -20,7 +26,13 @@
     // Planks with a metal rim round the edge and a domed metal boss.
     standard: {
       parts: [
-        { shape: "round", from: 0.062, to: 0.088, profile: [[0, 0.86, 0.86], [1, 0.86, 0.86]] },
+        // The back: two leather straps round the forearm (a round part leant 90° runs along the arm).
+        { shape: "round", slot: "grip", from: 0, to: 0.035, tilt: 90, out: -0.09, profile: [[0, 0.12, 0.11], [1, 0.12, 0.11]] },
+        { shape: "round", slot: "grip", from: 0, to: 0.035, tilt: 90, out: 0.06, profile: [[0, 0.12, 0.11], [1, 0.12, 0.11]] },
+        // Battens across the back holding the planks.
+        { shape: "box", slot: "dark", from: 0.05, to: 0.066, aside: -0.2, profile: [[0, 0.64, 0.06], [1, 0.64, 0.06]] },
+        { shape: "box", slot: "dark", from: 0.05, to: 0.066, aside: 0.2, profile: [[0, 0.64, 0.06], [1, 0.64, 0.06]] },
+        { shape: "round", from: 0.067, to: 0.088, profile: [[0, 0.86, 0.86], [1, 0.86, 0.86]] },
         { shape: "round", slot: "wood", from: 0.065, to: 0.09, profile: [[0, 0.8, 0.8], [1, 0.8, 0.8]] },
         { shape: "box", slot: "dark", from: 0.086, to: 0.094, aside: -0.1, profile: [[0, 0.74, 0.014], [1, 0.74, 0.014]] },
         { shape: "box", slot: "dark", from: 0.086, to: 0.094, aside: 0.1, profile: [[0, 0.74, 0.014], [1, 0.74, 0.014]] },
@@ -32,7 +44,16 @@
     // A painted field on the planks, a metal rim, a bigger gilt boss and studs round the edge.
     ornate: {
       parts: [
-        { shape: "round", from: 0.062, to: 0.088, profile: [[0, 0.88, 0.88], [1, 0.88, 0.88]] },
+        // The back: two leather straps round the forearm (a round part leant 90° runs along the arm).
+        { shape: "round", slot: "grip", from: 0, to: 0.035, tilt: 90, out: -0.09, profile: [[0, 0.12, 0.11], [1, 0.12, 0.11]] },
+        { shape: "round", slot: "grip", from: 0, to: 0.035, tilt: 90, out: 0.06, profile: [[0, 0.12, 0.11], [1, 0.12, 0.11]] },
+        // Gilt buckles on the straps.
+        { shape: "box", slot: "trim", from: 0.048, to: 0.062, out: -0.09, profile: [[0, 0.05, 0.05], [1, 0.05, 0.05]] },
+        { shape: "box", slot: "trim", from: 0.048, to: 0.062, out: 0.06, profile: [[0, 0.05, 0.05], [1, 0.05, 0.05]] },
+        // Battens across the back holding the planks.
+        { shape: "box", slot: "dark", from: 0.05, to: 0.066, aside: -0.2, profile: [[0, 0.64, 0.06], [1, 0.64, 0.06]] },
+        { shape: "box", slot: "dark", from: 0.05, to: 0.066, aside: 0.2, profile: [[0, 0.64, 0.06], [1, 0.64, 0.06]] },
+        { shape: "round", from: 0.067, to: 0.088, profile: [[0, 0.88, 0.88], [1, 0.88, 0.88]] },
         { shape: "round", slot: "wood", from: 0.065, to: 0.09, profile: [[0, 0.8, 0.8], [1, 0.8, 0.8]] },
         { shape: "round", slot: "paint", from: 0.088, to: 0.093, profile: [[0, 0.62, 0.62], [1, 0.62, 0.62]] },
         { shape: "round", from: 0.088, to: 0.106, out: 0.35, copies: 12, profile: [[0, 0.04, 0.04], [0.6, 0.03, 0.03], [1, 0, 0]] },
