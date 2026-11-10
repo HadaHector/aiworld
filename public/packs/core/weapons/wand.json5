@@ -1,0 +1,39 @@
+// The wand family (see weapons/sword.json5 for how parts are given): a short rod held at its foot.
+// The item's tint colours the wood (oak, ash, yew...), the metal fittings keep their own colour:
+// "wand.crude", "wand.standard", "wand.ornate".
+{
+  name: "Wand",
+  grip: "mainHand",
+  tinted: "wood",
+  tiers: {
+    // A twig, tapering, with a stub of a side shoot.
+    crude: {
+      parts: [
+        { shape: "round", slot: "wood", from: -0.09, to: 0.33, profile: [[0, 0.032, 0.032], [0.4, 0.028, 0.028], [1, 0.012, 0.012]] },
+        { shape: "round", slot: "wood", from: 0.14, to: 0.22, tilt: 28, profile: [[0, 0.016, 0.016], [1, 0.006, 0.006]] },
+        { shape: "round", slot: "wood", from: -0.1, to: -0.08, profile: [[0, 0.02, 0.02], [1, 0.034, 0.034]] },
+      ],
+    },
+    // A turned rod with a knob at its foot and a metal ferrule at its tip.
+    standard: {
+      parts: [
+        { shape: "round", slot: "wood", from: -0.08, to: 0.33, profile: [[0, 0.036, 0.036], [0.25, 0.03, 0.03], [1, 0.022, 0.022]] },
+        { shape: "round", slot: "wood", from: -0.125, to: -0.075, profile: [[0, 0, 0], [0.3, 0.045, 0.045], [0.7, 0.05, 0.05], [1, 0.036, 0.036]] },
+        { shape: "round", slot: "wood", from: 0.06, to: 0.08, profile: [[0, 0.036, 0.036], [0.5, 0.042, 0.042], [1, 0.034, 0.034]] },
+        { shape: "round", from: 0.32, to: 0.37, profile: [[0, 0.03, 0.03], [0.6, 0.034, 0.034], [1, 0.02, 0.02]] },
+        { shape: "round", from: 0.37, to: 0.39, profile: [[0, 0.02, 0.02], [1, 0, 0]] },
+      ],
+    },
+    // A rod banded in gilt, holding a gem in a gilt cup at its tip.
+    ornate: {
+      parts: [
+        { shape: "round", slot: "wood", from: -0.08, to: 0.32, profile: [[0, 0.036, 0.036], [0.25, 0.031, 0.031], [1, 0.025, 0.025]] },
+        { shape: "round", slot: "trim", from: -0.125, to: -0.075, profile: [[0, 0, 0], [0.3, 0.048, 0.048], [0.7, 0.052, 0.052], [1, 0.04, 0.04]] },
+        { shape: "round", slot: "trim", from: 0.04, to: 0.055, profile: [[0, 0.04, 0.04], [1, 0.04, 0.04]] },
+        { shape: "round", slot: "trim", from: 0.15, to: 0.165, profile: [[0, 0.036, 0.036], [1, 0.036, 0.036]] },
+        { shape: "round", slot: "trim", from: 0.31, to: 0.36, profile: [[0, 0.03, 0.03], [1, 0.058, 0.058]] },
+        { shape: "facet", slot: "gem", from: 0.345, to: 0.45, profile: [[0, 0.04, 0.04], [0.35, 0.064, 0.064], [1, 0, 0]] },
+      ],
+    },
+  },
+}

@@ -187,9 +187,10 @@ leg plate, helm, sword over mail - about 3300).
 
 ## Weapons and shields
 
-**Status: step 1 done** - the parts, the builder, the sword in three tiers and the workbench's
-Weapons folder. The oak mace and ash staff are still drawn as long blades in wood colours, and the
-wooden shield has no model, until steps 2-5.
+**Status: steps 1-2 done** - the parts, the builder and the workbench's Weapons folder; the sword,
+mace, axe, dagger and wand in three tiers each (the wand's tint colours its wood). No item uses them
+yet: the oak mace and ash staff are still drawn as long blades in wood colours, and the wooden
+shield has no model, until steps 3-5.
 
 ### Decisions
 

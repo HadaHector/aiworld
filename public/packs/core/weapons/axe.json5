@@ -1,0 +1,45 @@
+// The axe family (see weapons/sword.json5 for how parts are given). A wooden haft held near its
+// foot; the bit is a diamond part tilted 90° so it runs out from the haft, its edge-on width along
+// the haft and thinning to the edge. The item's tint colours the metal: "axe.crude", "axe.standard",
+// "axe.ornate".
+{
+  name: "Axe",
+  grip: "mainHand",
+  tiers: {
+    // A wedge of metal driven onto a stick.
+    crude: {
+      parts: [
+        { shape: "round", slot: "wood", from: -0.12, to: 0.58, profile: [[0, 0.04, 0.04], [0.5, 0.036, 0.036], [1, 0.034, 0.034]] },
+        { shape: "box", from: 0.46, to: 0.56, profile: [[0, 0.055, 0.052], [1, 0.055, 0.052]] },
+        { shape: "diamond", from: 0.51, to: 0.66, tilt: 90, profile: [[0, 0.08, 0.05], [1, 0.11, 0.01]] },
+      ],
+    },
+    // A curved, flaring bit with a socket and a poll behind, the haft bound where it is held.
+    standard: {
+      parts: [
+        { shape: "round", slot: "wood", from: -0.12, to: 0.6, profile: [[0, 0.042, 0.042], [0.5, 0.037, 0.037], [1, 0.035, 0.035]] },
+        { shape: "round", slot: "grip", from: -0.09, to: 0.09, profile: [[0, 0.05, 0.05], [1, 0.05, 0.05]] },
+        { shape: "box", from: 0.44, to: 0.58, profile: [[0, 0.062, 0.058], [1, 0.062, 0.058]] },
+        { shape: "diamond", from: 0.51, to: 0.72, tilt: 90, profile: [[0, 0.09, 0.054], [0.55, 0.13, 0.03], [1, 0.22, 0.008]] },
+        { shape: "box", from: 0.51, to: 0.57, spin: 180, tilt: 90, profile: [[0, 0.07, 0.056], [1, 0.06, 0.06]] },
+      ],
+    },
+    // A broad double bit with a spike on top, the haft banded in gilt and capped.
+    ornate: {
+      parts: [
+        { shape: "round", slot: "wood", from: -0.12, to: 0.56, profile: [[0, 0.042, 0.042], [0.5, 0.037, 0.037], [1, 0.035, 0.035]] },
+        { shape: "round", slot: "grip", from: -0.09, to: 0.09, profile: [[0, 0.05, 0.05], [1, 0.05, 0.05]] },
+        { shape: "round", slot: "trim", from: -0.16, to: -0.11, profile: [[0, 0, 0], [0.4, 0.06, 0.06], [1, 0.052, 0.052]] },
+        { shape: "round", slot: "trim", from: 0.09, to: 0.11, profile: [[0, 0.056, 0.056], [1, 0.056, 0.056]] },
+        { shape: "round", slot: "trim", from: 0.26, to: 0.28, profile: [[0, 0.052, 0.052], [1, 0.052, 0.052]] },
+        { shape: "round", slot: "trim", from: 0.41, to: 0.43, profile: [[0, 0.052, 0.052], [1, 0.052, 0.052]] },
+        { shape: "box", from: 0.44, to: 0.6, profile: [[0, 0.066, 0.062], [1, 0.066, 0.062]] },
+        { shape: "diamond", from: 0.52, to: 0.76, tilt: 90, profile: [[0, 0.1, 0.058], [0.5, 0.15, 0.032], [1, 0.27, 0.008]] },
+        { shape: "diamond", from: 0.52, to: 0.76, spin: 180, tilt: 90, profile: [[0, 0.1, 0.058], [0.5, 0.15, 0.032], [1, 0.27, 0.008]] },
+        // A gilt boss through the socket, showing on both faces.
+        { shape: "round", slot: "trim", from: 0.52, to: 0.6, spin: 90, tilt: 90, out: -0.04, profile: [[0, 0.045, 0.045], [1, 0.045, 0.045]] },
+        { shape: "round", from: 0.59, to: 0.76, profile: [[0, 0.045, 0.045], [1, 0, 0]] },
+      ],
+    },
+  },
+}
