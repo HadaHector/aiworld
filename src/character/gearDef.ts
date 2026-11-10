@@ -3,7 +3,7 @@ import { ContentError, Reader, type ContentIssue, type RawObject } from "../worl
 import type { ColorTuple } from "../world/terrain/pipeline/pipelineTypes";
 import { characterEntries } from "./raceDef";
 import { sided } from "./characterConsts";
-import { resolveWeapons, WEAPON_TIERS, type WeaponFamily, type WeaponPart } from "./weaponDef";
+import { resolveWeapons, WEAPON_TIERS, type WeaponFamily, type WeaponGrip, type WeaponPart } from "./weaponDef";
 
 export { sided };
 
@@ -205,6 +205,9 @@ export interface GearPiece extends GearSurface {
   /** A weapon's parts, each in its own colour - or null for the piece's own, which an item's tint
    *  replaces (the metal of a sword, the wood of a staff). */
   parts: (WeaponPart & { surface: GearSurface | null })[];
+  /** A weapon's: how it is held (weapons/<id>.json5), and a bow's string. */
+  grip: WeaponGrip | null;
+  cord: { width: number; surface: GearSurface } | null;
 }
 
 /** A named set of gear (outfits/<id>.json5), worn in order: later pieces paint over earlier ones. */
@@ -257,7 +260,9 @@ function weaponGear(family: WeaponFamily): GearDef[] {
         tint: own.tint,
         hilt: own,
         rim: darker(own.tint),
-        parts: family.tiers[tier].map((part) => ({ ...part, surface: part.slot === family.tinted ? null : family.colours[part.slot] })),
+        parts: family.tiers[tier].parts.map((part) => ({ ...part, surface: part.slot === family.tinted ? null : family.colours[part.slot] })),
+        grip: family.grip,
+        cord: family.tiers[tier].string ? { width: family.tiers[tier].string!.width, surface: family.colours.cord } : null,
       },
     ],
   }));
@@ -354,6 +359,8 @@ function readGear(id: string, data: unknown, reader: Reader): GearDef {
         hilt: hiltRaw ? surface(hiltRaw, `${path}.hilt`, reader) : base,
         rim: raw.rim === undefined ? darker(base.tint) : reader.color(raw, "rim", path),
         parts: [],
+        grip: null,
+        cord: null,
       };
     }),
     covers: list("covers").map(({ raw, path }) => {

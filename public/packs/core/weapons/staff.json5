@@ -1,0 +1,44 @@
+// The staff family (see weapons/sword.json5 for how parts are given): a long pole held a third of
+// the way up, its head at the positive end as every weapon's business end is - up when the arm is
+// raised to cast or strike. A hanging fist tips it head-down, so a staff is carried in the "Hold
+// staff" pose (animations/holdStaff.json5): the forearm forward, the fist thumb-up, the staff upright.
+// The item's tint colours the wood: "staff.crude", "staff.standard", "staff.ornate".
+{
+  name: "Staff",
+  grip: "mainHand",
+  tinted: "wood",
+  tiers: {
+    // A plain pole, its ends rounded off.
+    crude: {
+      parts: [
+        { shape: "round", slot: "wood", from: -0.74, to: 0.98, profile: [[0, 0.028, 0.028], [0.02, 0.04, 0.04], [0.5, 0.044, 0.044], [0.98, 0.046, 0.046], [1, 0.03, 0.03]] },
+      ],
+    },
+    // A knotted head, two dark bands under it, a metal shoe on its foot.
+    standard: {
+      parts: [
+        { shape: "round", slot: "wood", from: -0.72, to: 0.92, profile: [[0, 0.04, 0.04], [1, 0.046, 0.046]] },
+        { shape: "facet", slot: "wood", from: 0.88, to: 1.1, profile: [[0, 0.048, 0.048], [0.15, 0.07, 0.07], [0.45, 0.1, 0.1], [0.8, 0.075, 0.075], [1, 0, 0]] },
+        { shape: "round", slot: "dark", from: 0.8, to: 0.83, profile: [[0, 0.056, 0.056], [1, 0.056, 0.056]] },
+        { shape: "round", slot: "dark", from: 0.73, to: 0.76, profile: [[0, 0.054, 0.054], [1, 0.054, 0.054]] },
+        { shape: "round", slot: "grip", from: -0.09, to: 0.09, profile: [[0, 0.052, 0.052], [1, 0.052, 0.052]] },
+        { shape: "round", from: -0.78, to: -0.7, profile: [[0, 0, 0], [0.3, 0.046, 0.046], [1, 0.05, 0.05]] },
+      ],
+    },
+    // A carved crook curling over a crystal, gilt bands down the pole.
+    ornate: {
+      parts: [
+        { shape: "round", slot: "wood", from: -0.72, to: 0.86, profile: [[0, 0.04, 0.04], [1, 0.046, 0.046]] },
+        // The crook: on up from the pole's top and round, a circle all but closed.
+        { shape: "round", slot: "wood", from: 0.86, to: 1.4, bend: 300, profile: [[0, 0.046, 0.046], [0.85, 0.034, 0.034], [1, 0.03, 0.03]] },
+        // The crystal in its curl.
+        { shape: "facet", slot: "gem", from: 0.76, to: 0.96, out: 0.1, profile: [[0, 0, 0], [0.5, 0.1, 0.1], [1, 0, 0]] },
+        { shape: "round", slot: "trim", from: 0.8, to: 0.84, profile: [[0, 0.058, 0.058], [1, 0.058, 0.058]] },
+        { shape: "round", slot: "trim", from: 0.58, to: 0.6, profile: [[0, 0.054, 0.054], [1, 0.054, 0.054]] },
+        { shape: "round", slot: "trim", from: 0.34, to: 0.36, profile: [[0, 0.052, 0.052], [1, 0.052, 0.052]] },
+        { shape: "round", slot: "grip", from: -0.09, to: 0.09, profile: [[0, 0.052, 0.052], [1, 0.052, 0.052]] },
+        { shape: "round", slot: "trim", from: -0.78, to: -0.7, profile: [[0, 0, 0], [0.3, 0.046, 0.046], [1, 0.05, 0.05]] },
+      ],
+    },
+  },
+}

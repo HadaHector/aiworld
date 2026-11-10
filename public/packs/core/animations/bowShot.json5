@@ -2,15 +2,17 @@
 // forward and z out from the body; forearm x bends the elbow, shin -x the knee; spine, chest and
 // head x lean forward, y turn to the body's right. `drop` lowers the body by a share of its leg.
 // A bow shot: the bow arm raised straight ahead, the string drawn back to the cheek, held a
-// breath, loosed - the drawing hand flying back - and lowered.
+// breath, loosed - the drawing hand flying back - and lowered. `draw`: how far a held bow's string
+// follows the drawing hand - brought up with it, held at the cheek, snapping back on the loose.
 {
   name: "Bow shot",
   group: "weapon",
   keys: [
-    { at: 0, both: { upperArm: [6, 0, 3], forearm: [17, 0, 0] }, pose: { chest: [0, 0, 0], head: [0, 0, 0] } },
-    { at: 0.35, pose: { upperArmL: [88, 0, 0], forearmL: [2, 0, 0], upperArmR: [84, 0, -12], forearmR: [25, 0, 0], chest: [0, 12, 0], head: [0, -8, 0] } },
-    { at: 0.8, pose: { upperArmR: [82, 0, 12], forearmR: [150, 0, 0], chest: [-3, 18, 0], head: [0, -12, 0] } },
-    { at: 0.95, pose: { upperArmR: [82, 0, 12], forearmR: [150, 0, 0] } },
+    { at: 0, draw: 0, both: { upperArm: [6, 0, 3], forearm: [17, 0, 0] }, pose: { chest: [0, 0, 0], head: [0, 0, 0] } },
+    { at: 0.35, draw: 0.85, pose: { upperArmL: [88, 0, 0], forearmL: [2, 0, 0], upperArmR: [84, 0, -12], forearmR: [25, 0, 0], chest: [0, 12, 0], head: [0, -8, 0] } },
+    { at: 0.8, draw: 1, pose: { upperArmR: [82, 0, 12], forearmR: [150, 0, 0], chest: [-3, 18, 0], head: [0, -12, 0] } },
+    { at: 0.95, draw: 1, pose: { upperArmR: [82, 0, 12], forearmR: [150, 0, 0] } },
+    { at: 0.975, ease: "linear", draw: 0 },
     { at: 1.02, ease: "out", pose: { upperArmR: [70, 0, 40], forearmR: [75, 0, 0] } },
     { at: 1.45, both: { upperArm: [6, 0, 3], forearm: [17, 0, 0] }, pose: { chest: [0, 0, 0], head: [0, 0, 0] } },
   ],

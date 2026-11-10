@@ -1,0 +1,53 @@
+// The bow family (see weapons/sword.json5 for how parts are given), held upright in the left fist.
+// Its axis runs up the stave from the middle of the grip; its front is toward the target, so the
+// limbs bend back toward the archer (`bend` -, and the lower limb, leant 180° to run down, +) and
+// the string sits behind the grip. The string is tied to the far ends of the two parts marked
+// `string: true`; animations draw its middle back to the right hand (`draw`, animationDef.ts).
+// The item's tint colours the wood: "bow.crude", "bow.standard", "bow.ornate".
+{
+  name: "Bow",
+  grip: "bow",
+  tinted: "wood",
+  tiers: {
+    // A plain stave, thin limbs, no wrap.
+    crude: {
+      string: { width: 0.008 },
+      parts: [
+        { shape: "round", slot: "wood", from: -0.08, to: 0.08, profile: [[0, 0.036, 0.042], [0.5, 0.04, 0.046], [1, 0.036, 0.042]] },
+        { shape: "round", slot: "wood", from: 0.07, to: 0.6, bend: -34, string: true, profile: [[0, 0.03, 0.038], [1, 0.016, 0.02]] },
+        { shape: "round", slot: "wood", from: -0.07, to: 0.46, tilt: 180, bend: 34, string: true, profile: [[0, 0.03, 0.038], [1, 0.016, 0.02]] },
+      ],
+    },
+    // Thicker limbs, the grip wrapped in leather, dark horn nocks at the tips.
+    standard: {
+      string: { width: 0.009 },
+      parts: [
+        { shape: "round", slot: "wood", from: -0.09, to: 0.09, profile: [[0, 0.042, 0.05], [1, 0.042, 0.05]] },
+        { shape: "round", slot: "grip", from: -0.07, to: 0.07, profile: [[0, 0.05, 0.058], [1, 0.05, 0.058]] },
+        { shape: "round", slot: "wood", from: 0.08, to: 0.62, bend: -40, profile: [[0, 0.04, 0.052], [1, 0.02, 0.026]] },
+        { shape: "round", slot: "wood", from: -0.08, to: 0.46, tilt: 180, bend: 40, profile: [[0, 0.04, 0.052], [1, 0.02, 0.026]] },
+        // The nocks: short dark caps carrying on from the limbs' ends, where the string is tied.
+        { shape: "round", slot: "dark", from: 0.577, to: 0.615, out: -0.181, tilt: -40, string: true, profile: [[0, 0.022, 0.028], [1, 0.012, 0.014]] },
+        { shape: "round", slot: "dark", from: -0.577, to: -0.539, out: -0.181, tilt: -140, string: true, profile: [[0, 0.022, 0.028], [1, 0.012, 0.014]] },
+      ],
+    },
+    // Recurved: the tips flick forward again, gilt where the string is tied, the grip banded.
+    ornate: {
+      string: { width: 0.009 },
+      parts: [
+        { shape: "round", slot: "wood", from: -0.09, to: 0.09, profile: [[0, 0.044, 0.052], [1, 0.044, 0.052]] },
+        { shape: "round", slot: "grip", from: -0.065, to: 0.065, profile: [[0, 0.052, 0.06], [1, 0.052, 0.06]] },
+        { shape: "round", slot: "trim", from: -0.09, to: -0.07, profile: [[0, 0.058, 0.066], [1, 0.058, 0.066]] },
+        { shape: "round", slot: "trim", from: 0.07, to: 0.09, profile: [[0, 0.058, 0.066], [1, 0.058, 0.066]] },
+        { shape: "round", slot: "wood", from: 0.06, to: 0.54, bend: -45, profile: [[0, 0.042, 0.054], [1, 0.024, 0.03]] },
+        { shape: "round", slot: "wood", from: -0.06, to: 0.42, tilt: 180, bend: 45, profile: [[0, 0.042, 0.054], [1, 0.024, 0.03]] },
+        // The recurves, from the limbs' ends: turning forward again.
+        { shape: "round", slot: "wood", from: 0.492, to: 0.632, out: -0.179, tilt: -45, bend: 75, profile: [[0, 0.024, 0.03], [1, 0.016, 0.02]] },
+        { shape: "round", slot: "wood", from: -0.492, to: -0.352, out: -0.179, tilt: -135, bend: -75, profile: [[0, 0.024, 0.03], [1, 0.016, 0.02]] },
+        // Gilt caps on the tips, where the string is tied.
+        { shape: "round", slot: "trim", from: 0.621, to: 0.66, out: -0.196, tilt: 30, string: true, profile: [[0, 0.026, 0.03], [0.6, 0.03, 0.034], [1, 0, 0]] },
+        { shape: "round", slot: "trim", from: -0.621, to: -0.582, out: -0.196, tilt: 150, string: true, profile: [[0, 0.026, 0.03], [0.6, 0.03, 0.034], [1, 0, 0]] },
+      ],
+    },
+  },
+}

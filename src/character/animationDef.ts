@@ -2,6 +2,7 @@ import type { PackSource } from "../world/content/resolveContent";
 import { ContentError, Reader, type ContentIssue, type RawObject } from "../world/content/contentReader";
 import type { Pose } from "./characterMesh";
 import { characterEntries } from "./raceDef";
+import { STRING_BONE } from "./skeleton";
 
 /**
  * A named animation (animations/<id>.json5, see CHARACTERS.md, *Animation*): keyframes of turns on
@@ -17,7 +18,9 @@ import { characterEntries } from "./raceDef";
  *
  * A bone a key leaves out holds what the keys either side of it give it; a bone no key names is left
  * to the rest of the animation (walking legs under a swing). `drop` lowers the whole body by that
- * share of its leg's length (a kneel, a crouch), so it fits a dwarf and an elf alike.
+ * share of its leg's length (a kneel, a crouch), so it fits a dwarf and an elf alike. `draw` pulls
+ * a held bow's string toward the right hand: 0 at rest on the bow, 1 in the hand - it rides in the
+ * pose as the string bone's (skeleton.ts, STRING_BONE), and does nothing without a bow.
  */
 export interface AnimationClip {
   id: string;
@@ -59,7 +62,7 @@ function readClip(id: string, data: unknown, reader: Reader): AnimationClip {
   reader.array(obj, "keys", "").forEach((raw, i) => {
     const path = `keys[${i}]`;
     const key = reader.object(raw, path);
-    reader.onlyKeys(key, path, ["at", "ease", "drop", "pose", "both"]);
+    reader.onlyKeys(key, path, ["at", "ease", "drop", "draw", "pose", "both"]);
     const at = reader.number(key, "at", path, { min: 0, max: 30 });
     if (at <= last) reader.fail(`${path}.at`, "keys must come later and later");
     last = at;
@@ -71,6 +74,7 @@ function readClip(id: string, data: unknown, reader: Reader): AnimationClip {
       if (!track) tracks.set(bone, (track = []));
       track.push({ at, turn, ease });
     };
+    if (key.draw !== undefined) put(STRING_BONE, [reader.number(key, "draw", path, { min: 0, max: 1 }), 0, 0]);
     const turns = (value: unknown, where: string): [number, number, number] | null => {
       if (Array.isArray(value) && value.length === 3 && value.every((v) => typeof v === "number" && Number.isFinite(v))) {
         const [x, y, z] = value as number[];

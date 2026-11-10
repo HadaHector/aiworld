@@ -187,10 +187,11 @@ leg plate, helm, sword over mail - about 3300).
 
 ## Weapons and shields
 
-**Status: steps 1-2 done** - the parts, the builder and the workbench's Weapons folder; the sword,
-mace, axe, dagger and wand in three tiers each (the wand's tint colours its wood). No item uses them
-yet: the oak mace and ash staff are still drawn as long blades in wood colours, and the wooden
-shield has no model, until steps 3-5.
+**Status: steps 1-3 done** - the parts, the builder and the workbench's Weapons folder; the sword,
+mace, axe, dagger, wand, staff and bow in three tiers each (the wooden ones' tint colours their
+wood), and the bow's string drawn by its animation. No item uses them yet: the oak mace and ash
+staff are still drawn as long blades in wood colours, and the wooden shield has no model, until
+steps 4-5.
 
 ### Decisions
 
@@ -223,8 +224,25 @@ grip, the blade's way positive):
   fuller), `gem`. The item's tint replaces the `tinted` slot's, so a bronze and an iron sword share
   one model; the family file can set any slot's material and tint.
 
-Still to come with their families: a bow's limbs bent along a curve with a string, and a shield's
-dished face (step 3 and 4) - each a part shape of its own if the prisms cannot make them.
+- **bend** - curves a part along its length by that many degrees toward its front: a bow's limbs, a
+  recurve's tips, a staff's crook (a part leant 180° runs back down the axis, the lower limb).
+
+Still to come: a shield's dished face (step 4), a part shape of its own if the prisms cannot make it.
+
+### A bow's string
+
+A tier may have a `string`, tied to the far ends of the two parts marked `string: true`. Its middle,
+the nock, is skinned to a bone of its own, `string`, which every humanoid skeleton has lying on its
+left hand: it goes with the hand until an animation key's `draw` (0-1) pulls it toward the right
+hand's grip, so the bow shot brings the string up with the drawing hand, holds it at the cheek, and
+lets it snap back on the loose. The limbs do not flex. A bow stands straight through the fist, along
+the thumb: upright when aimed, carried level at the hip at rest.
+
+A hanging fist holds anything along its thumb, tipped forward and down: fine for a sword, but it
+would carry a staff head-down. So a staff's head is at its positive end like every weapon's business
+end (up when the arm is raised to cast or strike), and a staff is carried in the **Hold staff** pose
+(`animations/holdStaff.json5`: the forearm forward, the wrist bent, the staff upright) - which step 5
+plays while one is wielded.
 
 ### Tiers, by type
 

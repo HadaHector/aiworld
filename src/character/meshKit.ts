@@ -92,6 +92,8 @@ export interface MeshKit {
   region: number;
   layer: number;
   island: number;
+  /** Where a bow's string has its middle, in the bind pose (before the lattice), if a piece made one. */
+  nock: Vec | null;
   /** From here on rings are mapped into the island of that name, made if new. `down`: which way
    *  its `along` runs toward the bottom. Returns how far down it already reaches, in raw `along`
    *  (the end a continuing part - a skirt under a tunic's body - picks up from). */
@@ -173,6 +175,7 @@ export function createMeshKit(): MeshKit {
     region: 0,
     layer: -1,
     island: -1,
+    nock: null,
     beginIsland,
     endIsland,
     mapVertex,

@@ -36,6 +36,9 @@ export interface Skeleton {
  * chest to the top of the shoulders, the neck and head above. A foot's bone runs from the ankle to
  * the toe, so turning it turns the foot about the ankle.
  */
+/** The bone a bow's string follows (see buildSkeleton, characterMesh.ts). */
+export const STRING_BONE = "string";
+
 export function buildSkeleton(race: RaceDef): Skeleton {
   const s = race.skeleton;
   const bones: BoneDef[] = [];
@@ -65,6 +68,10 @@ export function buildSkeleton(race: RaceDef): Skeleton {
     add_(`forearm${suffix}`, `upperArm${suffix}`, elbow, wrist, side, "forearm");
     add_(`hand${suffix}`, `forearm${suffix}`, wrist, add(wrist, scale(arm, s.hand)), side, "hand");
   }
+  // A bow's string: a bone lying on the left hand, which only a bow's string follows. It goes
+  // with the hand until an animation draws it (`draw`), when it is pulled toward the right hand.
+  const handL = bones[bones.length - 1];
+  add_(STRING_BONE, "handL", handL.head, handL.tail, -1);
   for (const side of [1, -1]) {
     const suffix = side > 0 ? "R" : "L";
     const x = side * s.hipWidth;

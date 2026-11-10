@@ -2,7 +2,7 @@ import { createLattice, type Lattice } from "./lattice";
 import type { BoneShape, RaceDef } from "./raceDef";
 import { sided } from "./characterConsts";
 import type { GearSole, GearBuckle, GearCollar, GearCover, GearDef, GearPiece, GearShell, GearSkirt } from "./gearDef";
-import { add, buildSkeleton, cross, dot, footAxis, frameFor, length, lerp, normalize, scale, sub, type BoneDef, type Vec } from "./skeleton";
+import { add, buildSkeleton, cross, dot, footAxis, frameFor, length, lerp, normalize, scale, STRING_BONE, sub, type BoneDef, type Vec } from "./skeleton";
 import { placeIslands, type PieceTexture } from "./pieceTexture";
 import { cylinderOf, smoothNormals } from "./atlas";
 import { createMeshKit, evenShape, segmentDistance, type BodyRegion, type GearLayer, type IslandLoop, type MeshKit, type Ring } from "./meshKit";
@@ -16,6 +16,9 @@ export interface BodyGeometry {
   weights: number[];
   /** The bones, moved by the lattice as the body was. */
   bones: BoneDef[];
+  /** Where a held bow's string has its middle, in the bind pose: what the string bone draws back
+   *  (characterMesh.ts). Null with no bow. */
+  nock: Vec | null;
   /** The lattice the body was shaped by - null if it has none or it was left off. */
   lattice: Lattice | null;
   /** Points the race's bumps mark - a nipple at a pec's peak - for painting. */
@@ -322,7 +325,7 @@ export function buildBodyOnly(race: RaceDef, options: BodyOptions = {}): BodyGeo
 
   const { joints, weights } = skinKit(kit, finalBones);
 
-  return { positions: points.flat(), indices, joints, weights, bones: finalBones, lattice, marks, triangles: indices.length / 3, parts, regions: regionAxes, triangleRegions, layers, triangleLayers, gearUVs, pieceTextures: [], hiddenTriangles: [] };
+  return { positions: points.flat(), indices, joints, weights, bones: finalBones, nock: null, lattice, marks, triangles: indices.length / 3, parts, regions: regionAxes, triangleRegions, layers, triangleLayers, gearUVs, pieceTextures: [], hiddenTriangles: [] };
 }
 
 /** Arc length along an ellipse of semi-axes `a` (side) and `b` (front) from the front to the point
@@ -372,7 +375,8 @@ function skinKit(kit: MeshKit, finalBones: BoneDef[]): { joints: number[]; weigh
     }
     const candidates = new Set([...neighbours[homes[v]], ...extras[v]]);
     const scored = [...candidates]
-      .filter((b) => b > 0)
+      // A bow string's bone carries its string alone.
+      .filter((b) => b > 0 && finalBones[b].name !== STRING_BONE)
       .map((b) => {
         const d = segmentDistance(points[v], finalBones[b].head, finalBones[b].tail);
         return { b, w: (b === homes[v] ? 1.5 : 1) / (d ** 4 + 1e-7) };
@@ -409,6 +413,8 @@ export interface PieceGeometry {
   texture: PieceTexture | null;
   /** The body triangles it covers and takes the place of. */
   hidden: number[];
+  /** A bow's string's middle, in the bind pose. */
+  nock: Vec | null;
 }
 
 /** Builds one gear unit onto a race's body: it depends on the race's curves and the body's lattice
@@ -423,7 +429,8 @@ export function buildGearPiece(race: RaceDef, body: BodyGeometry, unit: GearUnit
   if (lattice) for (let i = 0; i < points.length; i++) if (!kit.placed.has(i)) points[i] = lattice.apply(points[i]);
   const { joints, weights } = skinKit(kit, body.bones);
   const texture = unit.kind === "gear" && unit.piece.texture && kit.islands.length > 0 ? placeIslands(unit.piece.texture, kit.islands, kit.cornerIsland, kit.cornerRound, kit.cornerAlong, kit.cornerCircumference, kit.gearUVs) : null;
-  return { positions: points.flat(), indices: kit.indices, joints, weights, triangles: kit.indices.length / 3, parts: kit.parts, layers: kit.layers, triangleLayers: kit.triangleLayers, gearUVs: kit.gearUVs, texture, hidden };
+  const nock = kit.nock && lattice ? lattice.apply(kit.nock) : kit.nock;
+  return { positions: points.flat(), indices: kit.indices, joints, weights, triangles: kit.indices.length / 3, parts: kit.parts, layers: kit.layers, triangleLayers: kit.triangleLayers, gearUVs: kit.gearUVs, texture, hidden, nock };
 }
 
 /** A body and its gear as one geometry: the pieces' triangles after the body's, their layers
@@ -440,7 +447,9 @@ export function joinGear(body: BodyGeometry, pieces: PieceGeometry[]): BodyGeome
   const pieceTextures = body.pieceTextures.slice();
   const hiddenTriangles = body.hiddenTriangles.slice();
   const parts = { ...body.parts };
+  let nock = body.nock;
   for (const piece of pieces) {
+    if (piece.nock) nock = piece.nock;
     const offset = positions.length / 3;
     const textureAt = pieceTextures.length;
     if (piece.texture) pieceTextures.push(piece.texture);
@@ -463,7 +472,7 @@ export function joinGear(body: BodyGeometry, pieces: PieceGeometry[]): BodyGeome
     for (const v of piece.gearUVs) gearUVs.push(v);
     for (const [name, count] of Object.entries(piece.parts)) parts[name] = (parts[name] ?? 0) + count;
   }
-  return { ...body, positions, indices, joints, weights, triangles: indices.length / 3, parts, triangleRegions, layers, triangleLayers, gearUVs, pieceTextures, hiddenTriangles };
+  return { ...body, nock, positions, indices, joints, weights, triangles: indices.length / 3, parts, triangleRegions, layers, triangleLayers, gearUVs, pieceTextures, hiddenTriangles };
 }
 
 /** A race's body with its gear on: the body, then each piece built apart, joined. */
@@ -993,8 +1002,7 @@ function addGear(kit: MeshKit, race: RaceDef, unit: GearUnit, body: BodyGeometry
       const clavicle = skeleton.index(`clavicle${suffix}`);
       fixAll(start, def.bone === "upperArm" && clavicle >= 0 ? [[iBone, 0.65], [clavicle, 0.35]] : [[iBone, 1]]);
     } else if (def.kind === "weapon") {
-      buildWeapon(def, iBone);
-      fixAll(start, [[iBone, 1]]);
+      buildWeapon(def, iBone, start);
     } else {
       // A sword held in the fist: its blade out past the thumb, leaning toward the fingers.
       const along = normalize(sub(b.tail, b.head));
@@ -1034,35 +1042,48 @@ function addGear(kit: MeshKit, race: RaceDef, unit: GearUnit, body: BodyGeometry
 
   /**
    * A weapon from its parts (weapons/<id>.json5, CHARACTERS.md, *Weapons and shields*), held in
-   * the fist as the sword blade is: its axis out past the thumb, leaning toward the fingers, 0 at the
-   * middle of the grip; a blade's flat across the fist (its edge leading a swing).
+   * the fist as the sword blade is: its axis out past the thumb, leaning toward the fingers (a bow
+   * stands straighter), 0 at the middle of the grip; a blade's flat across the fist (its edge leading
+   * a swing), so a bow's string is behind it, toward the archer. Weighted to the hand - but a bow's
+   * string has its middle on the string bone, which an animation draws back.
    */
-  function buildWeapon(def: GearPiece, iBone: number): void {
+  function buildWeapon(def: GearPiece, iBone: number, start: number): void {
     const b = bones[iBone];
     const along = normalize(sub(b.tail, b.head));
     const handFrame = frameFor(along, FORWARD);
-    const dir = normalize(add(scale(handFrame.front, 0.85), scale(along, 0.5)));
+    const dir = normalize(add(scale(handFrame.front, 0.85), scale(along, def.grip === "bow" ? 0 : 0.5)));
     const grip = lerp(b.head, b.tail, 0.5);
     const frame = frameFor(dir, along);
     const deg = Math.PI / 180;
+    /** Where the string is tied: the far ends of the parts marked for it. */
+    const tied: Vec[] = [];
     for (const part of def.parts) {
       kit.layer = layerOf(part.surface ?? def, part.shape !== "round");
       for (let copy = 0; copy < part.copies; copy++) {
-        // Its own frame: turned round the weapon's axis, set off it, leant out from it.
+        // Its own frame: turned round the weapon's axis, set off it, leant out from it - and, bent,
+        // turning on toward its front as it goes.
         const spin = (part.spin + (360 * copy) / part.copies) * deg;
         const front = add(scale(frame.front, Math.cos(spin)), scale(frame.side, Math.sin(spin)));
         const across = add(scale(frame.side, Math.cos(spin)), scale(frame.front, -Math.sin(spin)));
         const base = add(add(grip, scale(dir, part.from)), scale(front, part.out));
         const tilt = part.tilt * deg;
-        const axis = add(scale(dir, Math.cos(tilt)), scale(front, Math.sin(tilt)));
-        const partFront = add(scale(front, Math.cos(tilt)), scale(dir, -Math.sin(tilt)));
+        const bend = part.bend * deg;
+        const angle = (t: number): number => tilt + bend * t;
+        const axisAt = (t: number): Vec => add(scale(dir, Math.cos(angle(t))), scale(front, Math.sin(angle(t))));
+        const frontAt = (t: number): Vec => add(scale(front, Math.cos(angle(t))), scale(dir, -Math.sin(angle(t))));
         const span = part.to - part.from;
-        const centre = (t: number): Vec => add(base, scale(axis, span * t));
+        const straight = Math.abs(bend) < 1e-6;
+        const centre = (t: number): Vec =>
+          straight
+            ? add(base, scale(axisAt(0), span * t))
+            : add(base, add(scale(dir, (span * (Math.sin(angle(t)) - Math.sin(tilt))) / bend), scale(front, (span * (Math.cos(tilt) - Math.cos(angle(t)))) / bend)));
+        // A bent part is cut finely enough to curve.
+        const profile = straight ? part.profile : resampled(part.profile, Math.max(4, Math.ceil(Math.abs(part.bend) / 15)));
         const section = sectionOf(part.shape);
-        const rings: Ring[] = [];
+        const rings: { ring: Ring; t: number }[] = [];
         let startTip: Vec | null = null;
         let endTip: Vec | null = null;
-        part.profile.forEach(([t, width, thickness], i) => {
+        profile.forEach(([t, width, thickness], i) => {
           const c = centre(t);
           if (width <= 1e-4 && thickness <= 1e-4) {
             // A point: the part closes there.
@@ -1070,19 +1091,63 @@ function addGear(kit: MeshKit, race: RaceDef, unit: GearUnit, body: BodyGeometry
             else endTip = c;
             return;
           }
-          const verts = section.map(([x, y]) => kit.vertex(add(c, add(scale(partFront, (x * width) / 2), scale(across, (y * thickness) / 2))), iBone));
+          const f = frontAt(t);
+          const verts = section.map(([x, y]) => kit.vertex(add(c, add(scale(f, (x * width) / 2), scale(across, (y * thickness) / 2))), iBone));
           const r: Ring = { verts, center: c };
           mapRing(r, span * t);
-          rings.push(r);
+          rings.push({ ring: r, t });
         });
+        if (part.string) tied.push(centre(1));
         if (rings.length === 0) continue;
-        for (let k = 0; k + 1 < rings.length; k++) zip(rings[k].verts, rings[k + 1].verts, axis, partFront);
-        const first = rings[0];
-        const last = rings[rings.length - 1];
+        for (let k = 0; k + 1 < rings.length; k++) {
+          const middle = (rings[k].t + rings[k + 1].t) / 2;
+          zip(rings[k].ring.verts, rings[k + 1].ring.verts, axisAt(middle), frontAt(middle));
+        }
+        const first = rings[0].ring;
+        const last = rings[rings.length - 1].ring;
         capRing(first, startTip ?? first.center, iBone, 0, true);
         capRing(last, endTip ?? last.center, iBone, span);
       }
     }
+    fixAll(start, [[iBone, 1]]);
+    if (!def.cord || tied.length < 2) return;
+    // The string: from one tie to its middle, the nock, and on to the other - its middle on the
+    // string bone, its ends on the hand.
+    const iString = skeleton.index(STRING_BONE);
+    const nock = lerp(tied[0], tied[1], 0.5);
+    kit.nock = nock;
+    kit.layer = layerOf(def.cord.surface);
+    const cordStart = points.length;
+    const r = def.cord.width / 2;
+    for (const [from, to] of [[tied[0], nock], [nock, tied[1]]] as [Vec, Vec][]) {
+      const axis = normalize(sub(to, from));
+      const f = frameFor(axis, dir);
+      const ringAt = (c: Vec): Ring => ({ verts: [0, 1, 2, 3, 4, 5].map((k) => kit.vertex(add(c, add(scale(f.front, r * Math.cos((k * Math.PI) / 3)), scale(f.side, r * Math.sin((k * Math.PI) / 3)))), iBone)), center: c });
+      const a = ringAt(from);
+      const z = ringAt(to);
+      mapRing(a, 0);
+      mapRing(z, length(sub(to, from)));
+      zip(a.verts, z.verts, axis, f.front);
+      capRing(a, from, iBone, 0, true);
+      capRing(z, to, iBone, length(sub(to, from)));
+    }
+    for (let v = cordStart; v < points.length; v++) kit.fixed.set(v, length(sub(points[v], nock)) < r * 3 && iString >= 0 ? [[iString, 1]] : [[iBone, 1]]);
+  }
+
+  /** A profile cut into `n` even steps, its widths and thicknesses read off between its points. */
+  function resampled(profile: [number, number, number][], n: number): [number, number, number][] {
+    const at = (t: number): [number, number, number] => {
+      for (let i = 0; i + 1 < profile.length; i++) {
+        const [t0, w0, h0] = profile[i];
+        const [t1, w1, h1] = profile[i + 1];
+        if (t <= t1 || i + 2 === profile.length) {
+          const k = Math.min(1, Math.max(0, (t - t0) / Math.max(1e-6, t1 - t0)));
+          return [t, w0 + (w1 - w0) * k, h0 + (h1 - h0) * k];
+        }
+      }
+      return [t, profile[0][1], profile[0][2]];
+    };
+    return Array.from({ length: n + 1 }, (_, i) => at(i / n));
   }
 
   /** A part's cross-section, round from its front toward its side, at unit width and thickness. */

@@ -1,7 +1,7 @@
 import { Bone, Color3, Material, Matrix, Mesh, Quaternion, RawTexture, Skeleton, StandardMaterial, Texture, Vector3, VertexData, type Scene } from "@babylonjs/core";
 import type { BodyGeometry } from "./bodyMesh";
 import { smoothNormals } from "./atlas";
-import { cross, frameFor, normalize, sub, type BoneDef, type Vec } from "./skeleton";
+import { cross, frameFor, length, normalize, STRING_BONE, sub, type BoneDef, type Vec } from "./skeleton";
 import type { BakedGearMaterial } from "./gearMaterial";
 import { timed } from "./bodyTiming";
 import { TEXTURE_RESOLUTION } from "../world/materials/textureGen";
@@ -156,6 +156,13 @@ export function createCharacterMesh(scene: Scene, name: string, body: BodyGeomet
     meshes.push(part);
   });
 
+  // A bow's string: its bone lies on the left hand, and the pose's `string` entry (a clip's `draw`,
+  // animationDef.ts) pulls it from where the string's middle rests toward the right hand's grip.
+  const iString = body.bones.findIndex((b) => b.name === STRING_BONE);
+  const iHandR = body.bones.findIndex((b) => b.name === "handR");
+  const iHandL = iString >= 0 ? body.bones[iString].parent : -1;
+  const nockInHand = body.nock && iString >= 0 && iHandL >= 0 ? Vector3.TransformCoordinates(new Vector3(...body.nock), Matrix.Invert(absolute[iHandL])) : null;
+  const gripR = iHandR >= 0 ? new Vector3(0, length(sub(body.bones[iHandR].tail, body.bones[iHandR].head)) * 0.5, 0) : null;
   const turn = new Quaternion();
   return {
     mesh,
@@ -164,7 +171,7 @@ export function createCharacterMesh(scene: Scene, name: string, body: BodyGeomet
     setPose(pose, offset) {
       if (babylonBones[0]) babylonBones[0].setPosition(offset ? restPositions[0].add(new Vector3(...offset)) : restPositions[0]);
       body.bones.forEach((def, i) => {
-        const angles = pose[def.name];
+        const angles = i === iString ? undefined : pose[def.name];
         if (angles) {
           Quaternion.FromEulerAnglesToRef(angles[0], angles[1], angles[2], turn);
           babylonBones[i].setRotationQuaternion(rests[i].multiply(turn));
@@ -172,6 +179,17 @@ export function createCharacterMesh(scene: Scene, name: string, body: BodyGeomet
           babylonBones[i].setRotationQuaternion(rests[i]);
         }
       });
+      if (iString >= 0) {
+        const draw = Math.min(1, Math.max(0, pose[STRING_BONE]?.[0] ?? 0));
+        if (draw > 0 && nockInHand && gripR) {
+          skeleton.computeAbsoluteMatrices(true);
+          const hand = Vector3.TransformCoordinates(gripR, babylonBones[iHandR].getAbsoluteMatrix());
+          const inLeft = Vector3.TransformCoordinates(hand, Matrix.Invert(babylonBones[iHandL].getAbsoluteMatrix()));
+          babylonBones[iString].setPosition(restPositions[iString].add(inLeft.subtract(nockInHand).scale(draw)));
+        } else {
+          babylonBones[iString].setPosition(restPositions[iString]);
+        }
+      }
     },
     dispose() {
       for (const texture of textures) texture.dispose();
