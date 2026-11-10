@@ -1,10 +1,9 @@
 // A unit stuck in web, until it breaks free: a web on the ground, silk wound round the body, the body
-// straining against it, and - for the player - a vignette of webs closing in from the corners.
+// straining against it,.
 {
   parts: [
     { particles: "webDecal", bone: "feet", scale: "body" },
     { particles: "webWrap", bone: "chest", scale: "body" },
     { struggle: 0.55 },
-    { screen: "webCorner", colour: "#eef0e8", strength: 0.6, when: { role: "taken" } },
   ],
 }
