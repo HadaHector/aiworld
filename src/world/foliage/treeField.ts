@@ -173,6 +173,9 @@ export async function createTreeField(
       ...(model.stump ? [{ key: speciesKey(def.id, variant, false, true), model: model.stump, bush }] : []),
     ]);
   });
+  // Uploaded now. Emptied rather than left to go out of scope: closures made below share this
+  // scope and would keep its 1024² bakes - a quarter of a gigabyte in the full world - alive with it.
+  bakedBark.clear();
   // Row 0 changes nothing; then every area's every rule's shades, one row each. A tree names its row
   // in its instance colour's alpha.
   const tintRows: TreeShade[] = [{ leaves: IDENTITY, bark: IDENTITY, stone: IDENTITY, snow: 0 }];

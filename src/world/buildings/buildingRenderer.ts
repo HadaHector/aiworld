@@ -4,9 +4,17 @@ import { createLightBakePool } from "../lighting/lightBakePool";
 import type { ModelLight } from "./buildingTypes";
 // Placing buildings - their collision, floors and cellars - is the simulation's too, and lives where
 // it can reach it without Babylon.
-import { createPlacedBuildings, placedAxes, type BuildingGroup, type ModelledGroup, type Placed, type PlacedBuildings, type TerrainCut } from "./buildingCollision";
+import { createPlacedBuildings, placedAxes, shapeOf, type BuildingGroup, type ModelledGroup, type Placed, type PlacedBuildings, type TerrainCut } from "./buildingCollision";
 
 type House = Placed;
+
+/** A near mesh's vertices, as its lights are baked from them (see LIGHTS.md). */
+interface LightBakeGeometry {
+  positions: Float32Array;
+  normals: Float32Array;
+  indices: Uint32Array;
+  layers: Float32Array;
+}
 
 /**
  * Where a house's model goes: turned to face its street and stood on its plot. The model's front
@@ -60,7 +68,7 @@ export function createBuildingRenderer(
 ): BuildingRenderer {
   /** Each house's meshes - and its lights, placed as its near mesh is, until they are baked (see
    *  LIGHTS.md): asked for the first time its near model is shown. */
-  const meshes: { near: Mesh; far: Mesh; x: number; z: number; reach: number; lights: ModelLight[] | null }[] = [];
+  const meshes: { near: Mesh; far: Mesh; x: number; z: number; reach: number; lights: ModelLight[] | null; bake: LightBakeGeometry | null }[] = [];
   const lightBakes = createLightBakePool();
   /** Every house's lights in the world's own space, for what moves among them (the player). */
   const worldLights: { x: number; z: number; reach: number; lights: ModelLight[] }[] = [];
@@ -71,14 +79,22 @@ export function createBuildingRenderer(
     const houses: ModelledGroup["houses"] = [];
     group.houses.forEach((house, n) => {
       let lights: ModelLight[] | null = null;
+      let bake: LightBakeGeometry | null = null;
       const build = (far: boolean): { mesh: Mesh; reach: number } => {
         const model = house.model(far);
-        if (!far) houses.push({ house, model });
+        if (!far) houses.push({ house, model: shapeOf(model) });
         const geometry = emptyGeometry();
         const place = placeHouse(house, house.x, house.z);
         appendModel(geometry, model, material.layerOf, place);
         if (!far && model.lights?.length) {
           lights = model.lights.map((light) => ({ ...light, position: place(...light.position, false), facing: light.facing && place(...light.facing, true) }));
+          // What its lights are baked from, kept until they are: the mesh keeps no CPU copy.
+          bake = {
+            positions: Float32Array.from(geometry.positions),
+            normals: Float32Array.from(geometry.normals),
+            indices: Uint32Array.from(geometry.indices),
+            layers: Float32Array.from(geometry.layers),
+          };
         }
         const reach = Math.hypot(model.halfWidth, model.halfDepth);
         const mesh = createBuildingMesh(scene, `${group.key}:${n}${far ? ":far" : ""}`, geometry, material);
@@ -90,7 +106,7 @@ export function createBuildingRenderer(
       };
       const near = build(false);
       const far = build(true);
-      meshes.push({ near: near.mesh, far: far.mesh, x: house.x, z: house.z, reach: near.reach, lights });
+      meshes.push({ near: near.mesh, far: far.mesh, x: house.x, z: house.z, reach: near.reach, lights, bake });
       const placed = lights as ModelLight[] | null;
       if (placed) worldLights.push({ x: house.x, z: house.z, reach: near.reach, lights: placed.map((light) => ({ ...light, position: [light.position[0] + house.x, light.position[1], light.position[2] + house.z] })) });
     });
@@ -130,14 +146,12 @@ export function createBuildingRenderer(
    *  they come back - the nearest house first. */
   function bakeLights(entry: (typeof meshes)[number]): void {
     const lights = entry.lights!;
+    const geometry = entry.bake!;
     entry.lights = null;
+    entry.bake = null;
     const mesh = entry.near;
-    const data = (kind: string): Float32Array => Float32Array.from(mesh.getVerticesData(kind) ?? []);
     const request = {
-      positions: data("position"),
-      normals: data("normal"),
-      indices: Uint32Array.from(mesh.getIndices() ?? []),
-      layers: data("layer"),
+      ...geometry,
       casts: material.castsByLayer,
       lights,
     };

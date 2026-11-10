@@ -11,7 +11,8 @@ const PREVIEW_SIZE_PX = 96; // downscaled from the full TEXTURE_RESOLUTION bake,
 
 /** A small dev-tool overlay listing every deduplicated generated material, showing its baked color
  *  (Milestone 10) and normal-map (Milestone 12) textures side by side. Built once, lazily, on
- *  first open - reads directly from MaterialLibrary's already-baked pixel buffers, no re-render. */
+ *  first open - each texture baked again, one at a time (the texture cache usually has it): the
+ *  library keeps no CPU copy of what it uploaded. */
 export function createTextureBrowser(materialLibrary: MaterialLibrary): TextureBrowser {
   const overlay = document.createElement("div");
   overlay.style.cssText = `
@@ -59,7 +60,7 @@ export function createTextureBrowser(materialLibrary: MaterialLibrary): TextureB
   }
 
   let built = false;
-  function buildGrid(): void {
+  async function buildGrid(): Promise<void> {
     if (built) return;
     built = true;
 
@@ -73,12 +74,17 @@ export function createTextureBrowser(materialLibrary: MaterialLibrary): TextureB
 
       const swatches = document.createElement("div");
       swatches.style.cssText = "display: flex; gap: 6px;";
-      swatches.appendChild(renderSwatch(tex.colorPixels, "color"));
-      swatches.appendChild(renderSwatch(tex.normalPixels, "normal"));
 
       card.appendChild(name);
       card.appendChild(swatches);
       grid.appendChild(card);
+    }
+    const cards = [...grid.children];
+    for (const [i, tex] of materialLibrary.listMaterialTextures().entries()) {
+      const { colorPixels, normalPixels } = await tex.bake();
+      const swatches = cards[i].lastElementChild!;
+      swatches.appendChild(renderSwatch(colorPixels, "color"));
+      swatches.appendChild(renderSwatch(normalPixels, "normal"));
     }
   }
 
@@ -86,7 +92,7 @@ export function createTextureBrowser(materialLibrary: MaterialLibrary): TextureB
   function setVisible(next: boolean): void {
     visible = next;
     overlay.style.display = visible ? "block" : "none";
-    if (visible) buildGrid();
+    if (visible) void buildGrid();
   }
 
   function toggle(): void {

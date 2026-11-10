@@ -211,7 +211,10 @@ export async function createWorld(
   await phase(`Baking ${content.buildingMaterials.length} building materials`);
   const buildingTextures = await bakeBuildingTextures(seed, content.buildingMaterials);
   const buildingMaterial = createBuildingMaterial(scene, materialLibrary.litShading, buildingTextures);
-  const mapColors = { buildings: Object.fromEntries(content.buildingMaterials.map((m, i) => [m.id, buildingTextures.averageColors[i]])), trees: trees.mapColors };
+  // Only the colours taken out: a closure naming `buildingTextures` would keep its 1024² bakes (200 MB
+  // in the full world) alive as long as anything made in this function is.
+  const buildingColors = buildingTextures.averageColors;
+  const mapColors = { buildings: Object.fromEntries(content.buildingMaterials.map((m, i) => [m.id, buildingColors[i]])), trees: trees.mapColors };
   await phase(`Building the buildings of ${settlementLayouts.length} settlements and ${compoundLayouts.length} compounds`);
   const buildings = createBuildingRenderer(
     scene,

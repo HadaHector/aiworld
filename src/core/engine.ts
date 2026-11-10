@@ -1,7 +1,10 @@
 import { Engine, Scene, Color4, Color3 } from "@babylonjs/core";
 
 export function createEngine(canvas: HTMLCanvasElement): Engine {
-  return new Engine(canvas, true, { preserveDrawingBuffer: true, stencil: true });
+  // doNotHandleContextLost: otherwise Babylon keeps a CPU copy of every raw texture it uploads, to
+  // upload again should the GPU context be lost - over a gigabyte of baked atlases in the full world,
+  // which on top of everything else ran the page out of heap. A lost context now needs a reload.
+  return new Engine(canvas, true, { preserveDrawingBuffer: true, stencil: true, doNotHandleContextLost: true });
 }
 
 export function createScene(engine: Engine): Scene {

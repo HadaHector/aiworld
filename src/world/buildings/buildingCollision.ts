@@ -43,12 +43,20 @@ export interface BuildingGroup {
   houses: Placed[];
 }
 
+/** What collision needs of a model: its bounds, rooms and colliders - not its geometry, which for
+ *  every building in the full world is far too much to keep once drawn. */
+export type BuildingShape = Pick<BuildingModel, "halfWidth" | "halfDepth" | "interior" | "colliders">;
+
+export function shapeOf({ halfWidth, halfDepth, interior, colliders }: BuildingModel): BuildingShape {
+  return { halfWidth, halfDepth, interior, colliders };
+}
+
 /** A group with each thing's near model already made - what the collision is built from. */
 export interface ModelledGroup {
   key: string;
   x: number;
   z: number;
-  houses: { house: Placed; model: BuildingModel }[];
+  houses: { house: Placed; model: BuildingShape }[];
 }
 
 /**
@@ -70,7 +78,7 @@ export function placedAxes(item: { frontX: number; frontZ: number; up?: [number,
 
 /** Each group's near models, made now - for a caller with no drawn models to take them from. */
 export function modelGroups(groups: readonly BuildingGroup[]): ModelledGroup[] {
-  return groups.map((group) => ({ key: group.key, x: group.x, z: group.z, houses: group.houses.map((house) => ({ house, model: house.model(false) })) }));
+  return groups.map((group) => ({ key: group.key, x: group.x, z: group.z, houses: group.houses.map((house) => ({ house, model: shapeOf(house.model(false)) })) }));
 }
 
 export interface PlacedBuildings {

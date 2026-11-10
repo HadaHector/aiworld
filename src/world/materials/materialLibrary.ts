@@ -71,9 +71,9 @@ export interface MaterialLibrary {
   /** A biome's own base material's swatch, with no overlay layers evaluated - what the debug
    *  map's coarse World view shows, since resolving overlays isn't worth it at that zoom level. */
   getBiomeBaseColor: (biome: BiomeDefinition) => Color3;
-  /** Every deduplicated material's baked color+roughness and normal-map pixels (RGBA,
-   *  TEXTURE_RESOLUTION² each), for the texture browser dev tool - views into the same buffers
-   *  uploaded to the GPU, not a fresh render. */
+  /** Every material's baked color+roughness and normal-map pixels (RGBA, TEXTURE_RESOLUTION² each),
+   *  for the texture browser dev tool - baked again on demand (from the texture cache, usually):
+   *  the library keeps no CPU copy of what it uploaded. */
   listMaterialTextures: () => MaterialTexturePreview[];
   /** Stops the terrain fragment shader from sampling the shadow map at all - the companion half of
    *  SunLighting.setShadowsEnabled, which stops the map being rendered into in the first place. */
@@ -98,8 +98,7 @@ export interface MaterialLibrary {
 export interface MaterialTexturePreview {
   id: string;
   name: string;
-  colorPixels: Uint8Array;
-  normalPixels: Uint8Array;
+  bake: () => Promise<{ colorPixels: Uint8Array; normalPixels: Uint8Array }>;
 }
 
 // The shininess a material's roughness (0 smooth - 1 matte) maps into, geometrically - so the
@@ -601,7 +600,7 @@ export async function createMaterialLibrary(
 ): Promise<MaterialLibrary> {
   const blender = createMaterialBlender(seed, content, areaBiomes);
   const { materialDefs, defaultIndex, buildMaterialBlend, resolveMaterialIndex } = blender;
-  const { terrainMaterial, floatingMaterial, litShading, averageColors, textures, layerOf } = await createTerrainMaterial(scene, seed, materialDefs, sunLighting, onProgress);
+  const { terrainMaterial, floatingMaterial, litShading, averageColors } = await createTerrainMaterial(scene, seed, materialDefs, sunLighting, onProgress);
   const materialColors: Color3[] = averageColors.map(([r, g, b]) => new Color3(r, g, b));
 
   function getMaterialColor(materialIndex: number): Color3 {
@@ -612,13 +611,16 @@ export async function createMaterialLibrary(
     return getMaterialColor(blender.biomeBaseIndex(biome));
   }
 
-  const layerSize = TEXTURE_RESOLUTION * TEXTURE_RESOLUTION * 4;
-  // The texture as baked - a material that borrows another's shows that one, unadjusted.
-  const texturePreviews: MaterialTexturePreview[] = materialDefs.map((def, i) => ({
+  // The texture as baked - a material that borrows another's shows that one, unadjusted. Its
+  // pixels are not kept once uploaded (several hundred MB for the full world), so a preview bakes
+  // its one texture again, which the texture cache usually answers.
+  const texturePreviews: MaterialTexturePreview[] = materialDefs.map((def) => ({
     id: def.id,
     name: def.textureId === def.id ? def.name : `${def.name} (${def.textureId}'s texture)`,
-    colorPixels: textures.colorBuffer.subarray(layerOf[i] * layerSize, (layerOf[i] + 1) * layerSize),
-    normalPixels: textures.normalBuffer.subarray(layerOf[i] * layerSize, (layerOf[i] + 1) * layerSize),
+    bake: async () => {
+      const { colorBuffer, normalBuffer } = await bakeTerrainTextures(seed, [def]);
+      return { colorPixels: colorBuffer, normalPixels: normalBuffer };
+    },
   }));
 
   function listMaterialTextures(): MaterialTexturePreview[] {

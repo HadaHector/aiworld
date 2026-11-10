@@ -324,15 +324,18 @@ export function appendModel(
 export function createBuildingMesh(scene: Scene, name: string, geometry: BuildingGeometry, material: BuildingMaterial, lightmap?: Lightmap): Mesh {
   const mesh = new Mesh(name, scene);
   const data = new VertexData();
-  data.positions = geometry.positions;
-  data.normals = geometry.normals;
-  data.uvs = geometry.uvs;
-  data.colors = geometry.colors;
-  data.indices = geometry.indices;
+  data.positions = new Float32Array(geometry.positions);
+  data.normals = new Float32Array(geometry.normals);
+  data.uvs = new Float32Array(geometry.uvs);
+  data.colors = new Float32Array(geometry.colors);
+  data.indices = new Uint32Array(geometry.indices);
   data.applyToMesh(mesh);
-  mesh.setVerticesData("btangent", geometry.tangents, false, 3);
-  mesh.setVerticesData("layer", geometry.layers, false, 1);
-  mesh.setVerticesData("lightUv", geometry.lightUvs, false, 2);
+  mesh.setVerticesData("btangent", new Float32Array(geometry.tangents), false, 3);
+  mesh.setVerticesData("layer", new Float32Array(geometry.layers), false, 1);
+  mesh.setVerticesData("lightUv", new Float32Array(geometry.lightUvs), false, 2);
+  // Drawn from the GPU's copy alone: nothing picks, collides with or reads back a building's mesh,
+  // and Babylon's CPU copy of every building's vertices was most of the full world's heap.
+  mesh.geometry?.clearCachedData();
   if (lightmap) applyLightmap(scene, mesh, { width: lightmap.width, height: lightmap.height, half: halfTexels(lightmap.texels) });
   mesh.material = material.material;
   mesh.isPickable = false;
