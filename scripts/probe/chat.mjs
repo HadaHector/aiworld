@@ -138,7 +138,7 @@ async function run(w, p, line, channel) {
   check("give: the bag grew", bagCount() === n0 + 1, `${n0} -> ${bagCount()}`);
   check("give: bad item", (await run(w, a, "give zzzzzz"))[0]?.includes("There is no item"));
   check("give: usage shown", (await run(w, a, "give"))[1]?.startsWith("Usage: /give"));
-  check("give: bad count", (await run(w, a, "give oak x"))[0]?.includes("whole number"));
+  check("give: bad count", (await run(w, a, "give rusty x"))[0]?.includes("whole number"));
 
   await run(w, a, "level 7");
   check("level: set", level() === 7, String(level()));

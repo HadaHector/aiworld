@@ -1,7 +1,13 @@
-// What a smith sells (NPCS.md, *The vendor's shop*): swords and chestpieces of the first levels.
+// What a smith sells (NPCS.md, *The vendor's shop*): metal weapons, shields and chestpieces of the
+// first levels.
 {
   items: [
     { template: "sword", levels: [1, 10] },
+    { template: "mace", levels: [1, 10] },
+    { template: "axe", levels: [1, 10] },
+    { template: "dagger", levels: [1, 10] },
+    { template: "buckler", levels: [1, 10] },
+    { template: "roundShield", levels: [1, 10] },
     { template: "chestpiece", levels: [1, 10] },
     { item: "leatherBracers" },
     { item: "plateGauntlets" },

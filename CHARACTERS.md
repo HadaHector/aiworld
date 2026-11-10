@@ -187,11 +187,12 @@ leg plate, helm, sword over mail - about 3300).
 
 ## Weapons and shields
 
-**Status: steps 1-4 done** - the parts, the builder and the workbench's Weapons folder; the sword,
-mace, axe, dagger, wand, staff and bow, the buckler and the round shield, in three tiers each (the
-wooden ones' tint colours their wood); the bow's string drawn by its animation; the block and the
-shield bash turned to show the shield's face. No item uses them yet: the oak mace and ash staff are
-still drawn as long blades in wood colours, and the wooden shield has no model, until step 5.
+**Status: done.** Seven weapon families and two shields, in three tiers each, built from parts in
+the workbench's Weapons folder; the bow's string drawn by its animation; every weapon and shield an
+item template with a `make` axis (ITEMS.md), the starting kits, loot, the smith's stock and quest
+rewards using them; the placeholder gear (`sword`, `mace`, `staff` blades) gone. In game a weapon
+plays its family's animations - a dagger thrusts, a bow shoots, a wand casts, a staff sweeps and is
+carried upright - and a shield is raised by the block and the bash.
 
 ### Decisions
 
@@ -279,10 +280,13 @@ Each family says how it is held and what it plays, so packs choose it all:
 - **Grip**: `mainHand` (in the right fist), `twoHand` (in the right fist, the left hand on the haft in
   its two-handed animations), `bow` (upright in the left fist), `shield` (on the left forearm, face
   out), `offHand` (a wand or dagger in the left fist).
-- **Animations** by action: a family maps the actions a skill names to clips, so an attack's
-  `swing` plays the slash for a sword, the thrust or flurry for a dagger, the overhead chop for a
-  two-handed axe, the bow shot for a bow, cast forward for a wand. A shield adds block and the shield
-  bash.
+- **Animations** by action: a family's `animations` maps an action to the clip it plays instead
+  (`swing: "thrust"` for a dagger, `"bowShot"` for a bow, `"castForward"` for a wand, `"sweep"` for a
+  staff), and `hold` names a looping clip held under everything while it is wielded (`holdStaff`).
+  A body takes them from what it wears, the main hand's first (`characterBody.ts`); the animator plays
+  a hold under named animations and the walk (`MotionInput.hold`). A shield is raised by the block and
+  the shield bash, which skills name. Not done: a two-handed grip (the left hand on a staff or a great
+  sword's grip), and a great sword drawn longer than a one-handed one - its form shares the model.
 
 ### Items
 

@@ -117,7 +117,7 @@ All new, read by `src/sim/rules/itemRules.ts` (added to `GAME_FOLDERS`):
 {
   kind: "weapon",
   slot: "mainHand",
-  gear: ["sword"],
+  gear: ["sword.standard"],         // a model: weapons/sword.json5 in a tier (CHARACTERS.md)
   name: "{material} {form}",          // filled from the axes' names
   axes: {
     material: [
@@ -154,6 +154,34 @@ All new, read by `src/sim/rules/itemRules.ts` (added to `GAME_FOLDERS`):
 - **Names** come from the template's `name` with `{axis}` filled by each part's `name`. For
   localisation the name becomes a key and the parts' names keys too, so a translation can reorder
   them; nothing is joined in code outside that.
+
+### Weapons and shields: a `make` axis
+
+Weapons and shields are drawn from weapon families (`weapons/<id>.json5`, CHARACTERS.md, *Weapons and
+shields*), each in three models by craft - `sword.crude`, `sword.standard`, `sword.ornate` - which
+items name as gear like any piece. Their templates have a `make` axis whose parts set that gear, beside
+the material axis whose `tint` colours the model's metal (or, for wooden families, its wood):
+
+```json5
+make: [
+  { id: "crude", name: "Crude ", gear: ["sword.crude"], budget: 0.85 },
+  { id: "standard", name: "", gear: ["sword.standard"] },
+  { id: "ornate", name: "Ornate ", gear: ["sword.ornate"], budget: 1.2, level: 5 },
+],
+never: [{ make: "crude", rarity: "rare" }, { make: "ornate", rarity: "common" }],
+```
+
+with `name: "{make}{material} {form}"` - "Crude Bronze Shortsword", "Iron Longsword", "Ornate Iron
+Greatsword". The core pack's templates: `sword` (bronze/iron × short/long/great × make, 42 types),
+`mace`, `axe`, `dagger` (bronze/iron), `staff`, `bow`, `wand` (ash/oak; the bow fills the off hand),
+`buckler` (bronze/iron) and `roundShield` (ash/oak), 14 each. A type's id has its make before its
+rarity: `sword.bronze.short.crude.common` (the warrior's first). The fixed starting items keep their
+ids and name a model: the Oak Mace is `mace.crude`, the Ash Staff `staff.crude` tinted ash, the Wooden
+Shield `roundShield.standard`. Swords drop from bandits, dummies and chests; bandits also drop crude
+bronze daggers and axes, the chest bucklers, bows and wands; the smith sells swords, maces, axes,
+daggers, bucklers and round shields; a quest's reward is drawn from every weapon template and the
+chestpiece. New templates use the icons there are (an axe, a dagger, a mace, a staff, a shield, an
+arrow for bows, an orb for wands) until icons of their own are made.
 
 ## Rarities, slots and currencies
 
@@ -502,7 +530,8 @@ Each leaves the game working: dev server, `npm run probe`, `npm run server`, `np
   says so in the log. A loot entry may name an `origin` (`origin: "mage"`): it drops only for a
   looter with that origin - the Frost Nova tome only for a mage.
 - **Starting weapons** come from the class: an origin's `items: { start: [...] }` adds to the
-  character's (warrior: bronze shortsword, priest: oak mace, mage: ash staff; generated classes by role).
+  character's (warrior: a crude bronze shortsword, priest: oak mace, mage: ash staff; generated
+  classes by role), each drawn as its weapon family's model.
 - **Starting kits** fill the other slots too, so every class begins with something in each: the plain
   kit every character has (tunic, trousers, sandals, bread), then the class's - the warrior leather and
   bronze (shield, cap, token, shoulders, cloak, gloves, bracers, belt, copper ring), the mage and the

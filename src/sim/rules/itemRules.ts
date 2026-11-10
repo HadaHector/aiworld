@@ -221,6 +221,8 @@ export function resolveItemRules(packs: PackSource[], game: GameRules, seed: num
       if (parts.length !== 2) continue;
       const id = parts[1].replace(/\.json5$/, "");
       if (parts[0] === "gear") gearIds.add(id);
+      // A weapon family is gear in each of its tiers (src/character/weaponDef.ts, WEAPON_TIERS).
+      if (parts[0] === "weapons") for (const tier of ["crude", "standard", "ornate"]) gearIds.add(`${id}.${tier}`);
       if (!folders.has(parts[0]) || (parts[0] === "rules" && id !== "items")) continue;
       const file = `${pack.id}/${path}`;
       if (!ID_PATTERN.test(id)) {

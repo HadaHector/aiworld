@@ -7,6 +7,8 @@
   name: "Staff",
   grip: "mainHand",
   tinted: "wood",
+  // Swung level with both hands; carried upright.
+  animations: { swing: "sweep", hold: "holdStaff" },
   tiers: {
     // A plain pole, its ends rounded off.
     crude: {

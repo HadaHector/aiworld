@@ -5,6 +5,9 @@
     { weight: 35, item: "bread", count: [1, 2] },
     { weight: 20, table: "starterGear" },
     { weight: 15, template: "sword", rarity: ["common", "uncommon"], where: { material: "bronze" } },
+    // A bandit's knife or hatchet, roughly made.
+    { weight: 6, template: "dagger", rarity: ["common", "uncommon"], where: { material: "bronze", make: "crude" } },
+    { weight: 5, template: "axe", rarity: ["common", "uncommon"], where: { material: "bronze", make: "crude" } },
     { weight: 30 },
   ],
   always: [{ money: [10, 40] }],

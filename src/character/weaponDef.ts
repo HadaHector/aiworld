@@ -19,6 +19,9 @@ export interface WeaponFamily {
    *  ash staff. */
   tinted: WeaponSlot;
   tiers: Record<string, WeaponTier>;
+  /** What it plays in place of an action's animation: `swing` -> "thrust" for a dagger; and `hold`,
+   *  a looping clip held under everything while it is wielded (a staff carried upright). */
+  animations: Record<string, string>;
 }
 
 /** A tier: its parts, and a bow's string - tied to the far ends of the two parts marked `string`,
@@ -84,7 +87,12 @@ export function resolveWeapons(packs: PackSource[], issues: ContentIssue[]): Map
 
 function readFamily(id: string, data: unknown, reader: Reader): WeaponFamily {
   const obj = reader.object(data, "");
-  reader.onlyKeys(obj, "", ["name", "grip", "tinted", "colours", "tiers"]);
+  reader.onlyKeys(obj, "", ["name", "grip", "tinted", "colours", "tiers", "animations"]);
+  const animations: Record<string, string> = {};
+  if (obj.animations !== undefined) {
+    const raw = reader.object(obj.animations, "animations");
+    for (const key of Object.keys(raw)) animations[key] = reader.string(raw, key, "animations");
+  }
   const rawColours: RawObject = obj.colours === undefined ? {} : reader.object(obj.colours, "colours");
   reader.onlyKeys(rawColours, "colours", WEAPON_SLOTS);
   const colours = { ...DEFAULT_COLOURS };
@@ -114,7 +122,7 @@ function readFamily(id: string, data: unknown, reader: Reader): WeaponFamily {
     }
     tiers[tier] = { parts, string };
   }
-  return { id, name: reader.optionalString(obj, "name", "") ?? id, grip: obj.grip === undefined ? "mainHand" : reader.oneOf(obj, "grip", "", WEAPON_GRIPS), tinted: obj.tinted === undefined ? "metal" : reader.oneOf(obj, "tinted", "", WEAPON_SLOTS), colours, tiers };
+  return { id, name: reader.optionalString(obj, "name", "") ?? id, grip: obj.grip === undefined ? "mainHand" : reader.oneOf(obj, "grip", "", WEAPON_GRIPS), tinted: obj.tinted === undefined ? "metal" : reader.oneOf(obj, "tinted", "", WEAPON_SLOTS), colours, tiers, animations };
 }
 
 function readPart(obj: RawObject, path: string, reader: Reader): WeaponPart {

@@ -1,6 +1,0 @@
-// A walking staff of ash in the right hand: long and thin (the weapon piece there is, a blade, in wood).
-{
-  name: "Ash staff",
-  slot: "mainHand",
-  pieces: [{ kind: "blade", bone: "hand", sides: "R", length: 1.45, width: 0.045, material: "leather", tint: "#8a6a40", hilt: { material: "leather", tint: "#4a3220" } }],
-}

@@ -1,2 +1,3 @@
-// A priest's first weapon (the class's `items.start`): a plain oak mace.
-{ name: "Oak Mace", icon: "item-oak-mace", kind: "weapon", rarity: "common", slot: "mainHand", gear: ["mace"], stats: { weaponMin: [2, 3], weaponMax: [4, 6], spirit: [0, 1] }, durability: 45, value: 25 }
+// A priest's first weapon (the class's `items.start`): a plain oak club with a band round its head -
+// the crude mace (weapons/mace.json5).
+{ name: "Oak Mace", icon: "item-oak-mace", kind: "weapon", rarity: "common", slot: "mainHand", gear: ["mace.crude"], stats: { weaponMin: [2, 3], weaponMax: [4, 6], spirit: [0, 1] }, durability: 45, value: 25 }

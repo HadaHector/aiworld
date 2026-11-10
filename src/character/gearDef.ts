@@ -27,6 +27,8 @@ export interface GearDef {
   /** The piece's own texture, cut like the real thing (CHARACTERS.md, *Pieces and islands*); the
    *  shells and skirts that name an island are drawn in it, the rest tile their materials. */
   texture: PieceTextureDef | null;
+  /** A weapon's animations in place of an action's, and the clip it is held in (weaponDef.ts). */
+  animations: Record<string, string>;
 }
 
 /**
@@ -244,6 +246,7 @@ function weaponGear(family: WeaponFamily): GearDef[] {
     collars: [],
     soles: [],
     texture: null,
+    animations: family.animations,
     pieces: [
       {
         kind: "weapon",
@@ -404,6 +407,7 @@ function readGear(id: string, data: unknown, reader: Reader): GearDef {
       };
     }),
     texture: raw_texture(obj, reader),
+    animations: {},
   };
 }
 

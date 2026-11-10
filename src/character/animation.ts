@@ -20,6 +20,9 @@ export interface MotionInput {
   play?: string;
   /** Set on the frame a looping animation should end (a cast that is done): it eases out. */
   stop?: string;
+  /** A looping animation held under everything else for as long as it is given: how a wielded staff
+   *  is carried. Named animations play over it; walking legs go on under it. */
+  hold?: string;
   /** Set on the frame a blow lands (FEEDBACK.md, *Hit feel*): where it came from, in the body's own
    *  frame - `forward` +1 from in front, `side` +1 from the +x side - and how hard, 0-1. */
   flinch?: { forward: number; side: number; strength: number };
@@ -98,6 +101,9 @@ export function createAnimator(skeleton: RaceSkeleton, clips: ReadonlyMap<string
   /** Seconds since death, or -1 while alive; and how far the body is given over to it. */
   let deadFor = -1;
   let death = 0;
+  /** The clip held under everything (input.hold), and how far it has the body. */
+  let held: AnimationClip | null = null;
+  let holdWeight = 0;
 
   const ease = (current: number, target: number, rate: number, dt: number): number => current + (target - current) * Math.min(1, rate * dt);
 
@@ -186,6 +192,17 @@ export function createAnimator(skeleton: RaceSkeleton, clips: ReadonlyMap<string
       if (dip > 0) {
         offset = [offset[0], offset[1] - 0.09 * dip, offset[2]];
         pose = add(pose, legs({ thigh: [0.35 * dip, 0, 0], shin: [-0.7 * dip, 0, 0], foot: [0.3 * dip, 0, 0] }));
+      }
+      // The held clip: eased in and out as it is given or not, under any action.
+      const holding = input.hold ? clips.get(input.hold) ?? null : null;
+      if (holding) held = holding;
+      holdWeight = ease(holdWeight, holding ? 1 : 0, 6, dt);
+      if (held && holdWeight > 0.001) {
+        const span = Math.max(1e-3, held.length - held.loopFrom);
+        const t = held.loop ? held.loopFrom + (time % span) : Math.min(time, held.length);
+        pose = { ...pose, ...mix(pose, { ...pose, ...sampleClip(held, t).pose }, holdWeight) };
+      } else if (!holding) {
+        held = null;
       }
       if (action && actionWeight > 0) {
         // Only the bones it names; the rest go on as they were.

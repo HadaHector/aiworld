@@ -123,6 +123,10 @@ export async function createCharacterBody(scene: Scene, name: string, kit: BodyK
   const [scaleX, scaleY, scaleZ] = dressed.scale;
   character.mesh.scaling.set(scaleX, scaleY, scaleZ);
   const animator: Animator = createAnimator(dressed.race.skeleton, kit.animations);
+  // What its weapons play in place of an action's animation, the main hand's first (weapons/, CHARACTERS.md).
+  const actions: Record<string, string> = {};
+  for (const piece of [...gearOf(kit, look)].reverse()) Object.assign(actions, piece.animations);
+  const asWielded = (name: string): string => actions[name] ?? name;
   const boneIndex = new Map(character.skeleton.bones.map((b, i) => [b.name, i]));
   const index = (name: string): number => boneIndex.get(name) ?? 0;
 
@@ -166,7 +170,7 @@ export async function createCharacterBody(scene: Scene, name: string, kit: BodyK
       wasDead = dead;
       // A hit pause stops the pose where it is; the body still goes where the entity is.
       if (now >= pausedUntil) {
-        const { pose, offset, step } = animator.update({ speed, grounded: state.grounded, verticalSpeed: rise, swimming: (state.water ?? 0) >= 2, play: playing, stop: stopping, flinch: flinching, dead, snap }, dt);
+        const { pose, offset, step } = animator.update({ speed, grounded: state.grounded, verticalSpeed: rise, swimming: (state.water ?? 0) >= 2, play: playing, stop: stopping, flinch: flinching, dead, snap, hold: actions.hold }, dt);
         playing = undefined;
         stopping = undefined;
         flinching = undefined;
@@ -186,13 +190,13 @@ export async function createCharacterBody(scene: Scene, name: string, kit: BodyK
       character.mesh.rotation.y = facing;
     },
     swing() {
-      playing = "swing";
+      playing = asWielded("swing");
     },
     play(name) {
-      playing = name;
+      playing = asWielded(name);
     },
     stop(name) {
-      stopping = name;
+      stopping = asWielded(name);
     },
     flash(colour, seconds) {
       flashColour.set(colour[0], colour[1], colour[2]);

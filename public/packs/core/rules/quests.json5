@@ -15,7 +15,7 @@
   // Level colours: red from 5 over, orange from 3 over, green from 3 under, grey from 6 under.
   colours: { red: 5, orange: 3, green: -3, grey: -6 },
   // What a quest's item choice is drawn from (item templates).
-  rewardTemplates: ["sword", "chestpiece"],
+  rewardTemplates: ["sword", "mace", "axe", "dagger", "staff", "bow", "wand", "buckler", "roundShield", "chestpiece"],
   // Quests a settlement gets, by tier, after any intro; chains count by their quests.
   quota: { hamlet: [2, 3], village: [4, 6], town: [7, 10] },
   // How far round a settlement its quests look for places, in metres.

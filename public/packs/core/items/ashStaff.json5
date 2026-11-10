@@ -1,2 +1,3 @@
-// A mage's first weapon (the class's `items.start`): a walking staff of ash.
-{ name: "Ash Staff", icon: "item-ash-staff", kind: "weapon", rarity: "common", slot: "mainHand", gear: ["staff"], stats: { weaponMin: [1, 2], weaponMax: [3, 4], intellect: [0, 1] }, durability: 45, value: 25 }
+// A mage's first weapon (the class's `items.start`): a walking staff of ash - the crude staff
+// (weapons/staff.json5), leaving the off hand for an orb.
+{ name: "Ash Staff", icon: "item-ash-staff", kind: "weapon", rarity: "common", slot: "mainHand", gear: ["staff.crude"], tint: "#8a6a40", stats: { weaponMin: [1, 2], weaponMax: [3, 4], intellect: [0, 1] }, durability: 45, value: 25 }

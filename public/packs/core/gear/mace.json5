@@ -1,7 +1,0 @@
-// A short oak mace in the right hand: a stout haft with a heavier head, drawn as one blade-shaped
-// piece in wood colours (a blade is the weapon piece there is).
-{
-  name: "Oak mace",
-  slot: "mainHand",
-  pieces: [{ kind: "blade", bone: "hand", sides: "R", length: 0.62, width: 0.1, material: "leather", tint: "#7a5430", hilt: { material: "leather", tint: "#3a2618" } }],
-}

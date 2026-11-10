@@ -63,17 +63,17 @@ await section("rules", () => {
   check("money shown in denominations", formatMoney(items.currencies[items.main], 12345) === "1g 23s 45c", formatMoney(items.currencies[items.main], 12345));
   check("a plain currency shown as a number", formatMoney(items.currencies[items.currencyIndex.get("marks")], 7) === "7");
   check("zero money shown", formatMoney(items.currencies[items.main], 0) === "0c");
-  check("sword makes 18 types", items.generated.get("sword").length === 18, String(items.generated.get("sword")?.length));
+  check("sword makes 42 types (never: crude rare, ornate common)", items.generated.get("sword").length === 42, String(items.generated.get("sword")?.length));
   check("chestpiece makes 15 types (never: worn uncommon)", items.generated.get("chestpiece").length === 15, String(items.generated.get("chestpiece")?.length));
-  const long = typeOf("sword.iron.long.common");
+  const long = typeOf("sword.iron.long.standard.common");
   check("a generated type's name from its parts", long?.name === "Iron Longsword", long?.name);
   check("a generated type's item level from its parts", long?.itemLevel === 8);
-  check("a part's field overrides (the greatsword fills the off hand)", typeOf("sword.bronze.great.common").fills.join() === String(items.slotIndex.get("offHand")));
-  check("the weapon speed is left unscaled", typeOf("sword.iron.great.rare").stats.find((s) => s.stat === stat("weaponSpeed"))?.min === 1.2);
-  const plain = typeOf("sword.bronze.long.common").stats.find((s) => s.stat === stat("strength"));
-  const iron = typeOf("sword.iron.long.common").stats.find((s) => s.stat === stat("strength"));
+  check("a part's field overrides (the greatsword fills the off hand)", typeOf("sword.bronze.great.standard.common").fills.join() === String(items.slotIndex.get("offHand")));
+  check("the weapon speed is left unscaled", typeOf("sword.iron.great.standard.rare").stats.find((s) => s.stat === stat("weaponSpeed"))?.min === 1.2);
+  const plain = typeOf("sword.bronze.long.standard.common").stats.find((s) => s.stat === stat("strength"));
+  const iron = typeOf("sword.iron.long.standard.common").stats.find((s) => s.stat === stat("strength"));
   check("a material's budget scales stats", plain.max < iron.max, `${plain.max} vs ${iron.max}`);
-  check("a rare type has two extra stats", typeOf("sword.bronze.long.rare").stats.length === typeOf("sword.bronze.long.common").stats.length + 2);
+  check("a rare type has two extra stats", typeOf("sword.bronze.great.standard.rare").stats.length === typeOf("sword.bronze.great.standard.common").stats.length + 2);
   // The same seed, the same catalogue; another seed, other extra stats somewhere.
   const again = loadItemRulesFromDisk(CONFIG, game, 1234);
   const sig = (r) => r.types.map((t) => `${t.id}:${t.stats.map((s) => `${s.stat}/${s.min}/${s.max}`).join(",")}`).join("|");
@@ -97,7 +97,7 @@ await section("rules", () => {
 
 // --- rolls ---
 await section("rolls", () => {
-  const sword = typeOf("sword.iron.long.rare");
+  const sword = typeOf("sword.iron.long.standard.rare");
   let lowSeen = false;
   let highSeen = false;
   let inRange = true;
@@ -143,9 +143,9 @@ await section("loot", () => {
   const tomeFor = (origins) => rollLoot(items, "chest", context, mulberry32(7), new Set(origins)).some((d) => "type" in d && items.types[d.type].id === "tomeOfFrostNova");
   check("the mage's book drops for a mage", tomeFor(["mage"]));
   check("...and not for a priest or for nobody", !tomeFor(["priest"]) && !tomeFor([]));
-  // 2-3 rolls, mean 2.5; wolf pelts weigh 20 of 103.
+  // 2-3 rolls, mean 2.5; wolf pelts weigh 20 of 120.
   const pelts = counts.get("wolfPelt") ?? 0;
-  const expected = N * 2.5 * (20 / 103);
+  const expected = N * 2.5 * (20 / 120);
   check("weights hold over 10,000 rolls", Math.abs(pelts - expected) / expected < 0.05, `${pelts} vs ${expected.toFixed(0)}`);
   // Nesting and conditions: the dummy's table gives starter gear through a nested table, and the key
   // only to a looter under level 5.
@@ -229,26 +229,26 @@ await section("belongings", () => {
   // Equipment: modifiers on, off, the look.
   const strengthBefore = statOf(p, "strength");
   const minBefore = statOf(p, "weaponMin");
-  system.give(p, items.typeIndex.get("sword.bronze.long.uncommon"), 1);
-  const swordAt = bagIndex(p, "sword.bronze.long.uncommon");
+  system.give(p, items.typeIndex.get("sword.bronze.long.standard.uncommon"), 1);
+  const swordAt = bagIndex(p, "sword.bronze.long.standard.uncommon");
   const sword = bagItem(p, swordAt);
   const values = itemStats(items.types[sword.type], sword.roll);
   const swordStrength = values[items.types[sword.type].stats.findIndex((s) => s.stat === stat("strength"))] ?? 0;
-  check("equipping", system.equip(p, B(swordAt)) === "" && typeIdOf(worn(p, "mainHand")) === "sword.bronze.long.uncommon");
+  check("equipping", system.equip(p, B(swordAt)) === "" && typeIdOf(worn(p, "mainHand")) === "sword.bronze.long.standard.uncommon");
   check("the sword's strength is on the wearer", statOf(p, "strength") === strengthBefore + swordStrength, `${statOf(p, "strength")} vs ${strengthBefore}+${swordStrength}`);
   check("its weapon damage too", statOf(p, "weaponMin") > minBefore);
   check("under the slot's source", p.stats.modifiers.some((m) => m.source === "item:mainHand" && m.stat === stat("weaponMin")));
-  check("the body shows the sword", p.gear.includes("sword.bronze.long.uncommon"));
-  check("unequipping", system.unequip(p, slot("mainHand")) === "" && statOf(p, "strength") === strengthBefore && statOf(p, "weaponMin") === minBefore && !p.gear.includes("sword.bronze.long.uncommon"));
+  check("the body shows the sword", p.gear.includes("sword.bronze.long.standard.uncommon"));
+  check("unequipping", system.unequip(p, slot("mainHand")) === "" && statOf(p, "strength") === strengthBefore && statOf(p, "weaponMin") === minBefore && !p.gear.includes("sword.bronze.long.standard.uncommon"));
   check("no item:mainHand modifiers left", !p.stats.modifiers.some((m) => m.source === "item:mainHand"));
   check("a stack cannot be worn", system.equip(p, B(bagIndex(p, "bread"))) === "slot");
 
   // A two-handed sword fills the off hand; something in the off hand takes it off.
-  system.give(p, items.typeIndex.get("sword.bronze.great.common"), 1);
-  check("a greatsword goes on", system.equip(p, B(bagIndex(p, "sword.bronze.great.common"))) === "");
+  system.give(p, items.typeIndex.get("sword.bronze.great.standard.common"), 1);
+  check("a greatsword goes on", system.equip(p, B(bagIndex(p, "sword.bronze.great.standard.common"))) === "");
   check("bread cannot go in the off hand", system.move(p, B(bagIndex(p, "bread")), E("offHand"), 0) === "slot");
   // Equip the long sword back into the main hand: the greatsword swaps into its bag slot.
-  check("a one-hander swaps the two-hander out", system.equip(p, B(bagIndex(p, "sword.bronze.long.uncommon"))) === "" && typeIdOf(worn(p, "mainHand")) === "sword.bronze.long.uncommon" && bagIndex(p, "sword.bronze.great.common") >= 0);
+  check("a one-hander swaps the two-hander out", system.equip(p, B(bagIndex(p, "sword.bronze.long.standard.uncommon"))) === "" && typeIdOf(worn(p, "mainHand")) === "sword.bronze.long.standard.uncommon" && bagIndex(p, "sword.bronze.great.standard.common") >= 0);
 
   // Requires: an iron greatsword wants level 0 (itemLevel 8 - 8), a level-1 player passes; push it.
   system.give(p, items.typeIndex.get("plateHelm"), 1);
@@ -258,7 +258,7 @@ await section("belongings", () => {
 
   // What an item asks, line by line: an iron sword wants sword skill 10 as well as its level - a
   // level-10 character with no sword skill lacks exactly that.
-  const iron = items.types[items.typeIndex.get("sword.iron.long.common")];
+  const iron = items.types[items.typeIndex.get("sword.iron.long.standard.common")];
   const names = Object.fromEntries(game.stats.map((st) => [st.id, st.name]));
   const have = { level: 10, swordSkill: 0 };
   const lines = requirementLines(iron.requires.source, { itemLevel: iron.itemLevel }, (id) => have[id], names);
@@ -293,7 +293,7 @@ await section("belongings", () => {
   const breadAt = bagIndex(p, "bread");
   const before = bagItem(p, breadAt).count;
   check("using bread", system.use(p, B(breadAt)) === "" && hookCalls[0] === "use eatBread" && bagItem(p, breadAt).count === before - 1);
-  check("a sword is not used", system.use(p, B(bagIndex(p, "sword.bronze.great.common"))) === "cannot");
+  check("a sword is not used", system.use(p, B(bagIndex(p, "sword.bronze.great.standard.common"))) === "cannot");
 
   // Quest items: one only, never dropped.
   system.give(p, items.typeIndex.get("rustyKey"), 1);
@@ -455,14 +455,14 @@ await section("boundary", async () => {
   check("and it is gone for a", inA.some((m) => m.type === "entityDespawn" && m.id === ground.id));
 
   // Equipping changes the look for the other client.
-  await send(a, { type: "debugItem", item: "sword.bronze.long.uncommon", count: 1 });
-  const swordAt = server.debug.entity(a.id).belongings.bag.findIndex((id) => id != null && rulesHere.types[server.debug.items.store.get(id).type].id === "sword.bronze.long.uncommon");
+  await send(a, { type: "debugItem", item: "sword.bronze.long.standard.uncommon", count: 1 });
+  const swordAt = server.debug.entity(a.id).belongings.bag.findIndex((id) => id != null && rulesHere.types[server.debug.items.store.get(id).type].id === "sword.bronze.long.standard.uncommon");
   take(a);
   take(b);
   await send(a, { type: "itemEquip", from: { container: BAG, slot: swordAt } });
   inA = take(a);
   inB = take(b);
-  check("b sees a's new sword", inB.some((m) => m.type === "entityGear" && m.id === a.id && m.gear.includes("sword.bronze.long.uncommon")));
+  check("b sees a's new sword", inB.some((m) => m.type === "entityGear" && m.id === a.id && m.gear.includes("sword.bronze.long.standard.uncommon")));
   check("a gets the sword's modifiers", inA.some((m) => m.type === "entityModifiers" && m.modifiers.some((x) => x.source === "item:mainHand")));
   await send(a, { type: "itemMove", from: { container: BAG, slot: 19 }, to: { container: EQUIPMENT, slot: 0 }, count: 0 });
   check("a bad move is refused with a reason", take(a).some((m) => m.type === "itemRefused" && m.reason === "empty"));

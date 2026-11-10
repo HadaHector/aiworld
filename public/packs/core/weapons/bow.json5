@@ -8,6 +8,8 @@
   name: "Bow",
   grip: "bow",
   tinted: "wood",
+  // An attack is a shot.
+  animations: { swing: "bowShot" },
   tiers: {
     // A plain stave, thin limbs, no wrap.
     crude: {

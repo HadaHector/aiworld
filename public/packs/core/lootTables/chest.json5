@@ -11,6 +11,9 @@
     { weight: 8, item: "plateTassets" },
     { weight: 12, template: "sword", rarity: ["uncommon", "rare"] },
     { weight: 8, template: "chestpiece", where: { material: "plate" } },
+    { weight: 6, template: "buckler", rarity: ["uncommon", "rare"] },
+    { weight: 6, template: "bow", rarity: ["uncommon", "rare"] },
+    { weight: 5, template: "wand", rarity: ["uncommon", "rare"] },
   ],
   always: [
     { money: [100, 500] },

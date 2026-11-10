@@ -15,5 +15,5 @@
     ],
   },
   trees: ["warriorArms"],
-  items: { start: [{ item: "sword.bronze.short.common" }, { item: "woodenShield" }, { item: "bronzeCap" }, { item: "bronzeToken" }, { item: "leatherShoulders" }, { item: "woolCloak" }, { item: "leatherGloves" }, { item: "leatherBracers" }, { item: "leatherBelt" }, { item: "copperRing" }] },
+  items: { start: [{ item: "sword.bronze.short.crude.common" }, { item: "woodenShield" }, { item: "bronzeCap" }, { item: "bronzeToken" }, { item: "leatherShoulders" }, { item: "woolCloak" }, { item: "leatherGloves" }, { item: "leatherBracers" }, { item: "leatherBelt" }, { item: "copperRing" }] },
 }

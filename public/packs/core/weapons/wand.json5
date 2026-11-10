@@ -5,6 +5,8 @@
   name: "Wand",
   grip: "mainHand",
   tinted: "wood",
+  // An attack is a bolt loosed from it.
+  animations: { swing: "castForward" },
   tiers: {
     // A twig, tapering, with a stub of a side shoot.
     crude: {

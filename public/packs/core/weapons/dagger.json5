@@ -3,6 +3,8 @@
 {
   name: "Dagger",
   grip: "mainHand",
+  // Stabbed, not slashed.
+  animations: { swing: "thrust" },
   tiers: {
     // A short leaf blade straight out of a wrapped grip, no guard.
     crude: {
