@@ -30,7 +30,8 @@ import { isWholeHousePart } from "../world/buildings/buildingParts";
 import { bakeBuildingTextures } from "../world/buildings/buildingMesh";
 import { resolveRaces, type RaceDef } from "../character/raceDef";
 import { bakeGearMaterial, resolveGearMaterials, type GearMaterialDef } from "../character/gearMaterial";
-import { resolveGear, resolveOutfits } from "../character/gearDef";
+import { resolveGear, resolveOutfits, type GearDef } from "../character/gearDef";
+import { resolveWeapons, WEAPON_TIERS } from "../character/weaponDef";
 import { resolveAnimations, type AnimationClip } from "../character/animationDef";
 import { ANIMATIONS, POSES, figureFor, paintedBody, type FigureOptions } from "./figurePreview";
 import { BEAST_PLAYS, beastAtlasImage, beastFacts, beastFigure, beastSummary, makeBeastFor, readBeastPlans, together, type BeastPreviewOptions } from "./beastPreview";
@@ -51,15 +52,15 @@ interface Asset {
 }
 
 /** The folders with a preview, and what each asset kind can be looked at as. */
-type PreviewFolder = "materials" | "trees" | "bushes" | "rocks" | "grass" | "biomes" | "buildings" | "buildingParts" | "buildingMaterials" | "props" | "features" | "races" | "gearMaterials" | "gear" | "outfits" | "beasts";
-const PREVIEW_FOLDERS: PreviewFolder[] = ["materials", "trees", "bushes", "rocks", "grass", "biomes", "buildings", "buildingParts", "buildingMaterials", "props", "features", "races", "gearMaterials", "gear", "outfits", "beasts"];
+type PreviewFolder = "materials" | "trees" | "bushes" | "rocks" | "grass" | "biomes" | "buildings" | "buildingParts" | "buildingMaterials" | "props" | "features" | "races" | "gearMaterials" | "gear" | "outfits" | "beasts" | "weapons";
+const PREVIEW_FOLDERS: PreviewFolder[] = ["materials", "trees", "bushes", "rocks", "grass", "biomes", "buildings", "buildingParts", "buildingMaterials", "props", "features", "races", "gearMaterials", "gear", "outfits", "beasts", "weapons"];
 /** The folders whose preview is a character: a race's body, or gear worn by one. */
-const isCharacterFolder = (folder: string): boolean => folder === "races" || folder === "gear" || folder === "outfits";
+const isCharacterFolder = (folder: string): boolean => folder === "races" || folder === "gear" || folder === "outfits" || folder === "weapons";
 /** How many variants of a building the Variant menu steps through - a building has no fixed count,
  *  every seed is one. */
 const BUILDING_VARIANTS = 8;
 /** Everything else is listed after these, its JSON still checked by Preview. */
-const FOLDER_ORDER = ["materials", "trees", "bushes", "rocks", "grass", "biomes", "buildings", "buildingParts", "buildingMaterials", "props", "features", "races", "outfits", "gear", "beasts", "gearMaterials", "layers", "borderHills", "settlements", "voices", "patches", ""];
+const FOLDER_ORDER = ["materials", "trees", "bushes", "rocks", "grass", "biomes", "buildings", "buildingParts", "buildingMaterials", "props", "features", "races", "outfits", "gear", "beasts", "weapons", "gearMaterials", "layers", "borderHills", "settlements", "voices", "patches", ""];
 
 interface ViewDef {
   id: string;
@@ -138,6 +139,8 @@ const DEFAULT_OPTIONS: Options = {
   uvs: "off",
   outfit: "",
   race: "",
+  // The Weapons views: the tint the item gives a weapon's metal (or wood).
+  tint: "#d6dae0",
   height: "",
   build: "",
   frame: "",
@@ -556,6 +559,11 @@ function viewsFor(asset: Asset | null, content: WorldContent | null): ViewDef[] 
         { id: "gallery", label: "Gallery", mode: "3d" },
         { id: "atlas", label: "Atlas", mode: "2d" },
       ];
+    case "weapons":
+      return [
+        { id: "tiers", label: "Tiers", mode: "3d" },
+        { id: "armoury", label: "Every weapon", mode: "3d" },
+      ];
     case "beasts":
       return [
         { id: "model", label: "Model", mode: "3d" },
@@ -642,17 +650,17 @@ function renderPreviewBar(): void {
   if (view.mode === "3d") {
     viewOptions.append(
       select("Light", "time", TIME_PRESETS.map(([name]) => [name, name]), () => stage?.setTime(timeHours())),
-      ...(view.id === "model" || view.id === "lineup" || view.id === "gallery" ? [] : [select("Sky", "sky", [["", content ? `Auto (${autoSkyBiome(content, current).name})` : "Auto"], ...(content?.biomes ?? []).map((biome): [string, string] => [biome.id, biome.name])], rebuild),
+      ...(view.id === "model" || view.id === "lineup" || view.id === "gallery" || view.id === "tiers" || view.id === "armoury" ? [] : [select("Sky", "sky", [["", content ? `Auto (${autoSkyBiome(content, current).name})` : "Auto"], ...(content?.biomes ?? []).map((biome): [string, string] => [biome.id, biome.name])], rebuild),
       select("Ground", "shape", [
         ["flat", "Flat"],
         ["hills", "Hills"],
         ["steep", "Steep"],
       ], rebuild)]),
     );
-    if (current.folder !== "materials" && content && view.id !== "model" && view.id !== "lineup") {
+    if (current.folder !== "materials" && content && view.id !== "model" && view.id !== "lineup" && view.id !== "tiers" && view.id !== "armoury") {
       viewOptions.append(select("On", "ground", groundChoices(content, current), rebuild));
     }
-    if (view.id !== "model" && view.id !== "lineup") viewOptions.append(checkbox("Grass", "grass", rebuild));
+    if (view.id !== "model" && view.id !== "lineup" && view.id !== "tiers" && view.id !== "armoury") viewOptions.append(checkbox("Grass", "grass", rebuild));
     viewOptions.append(
       checkbox("Wireframe", "wire", () => {
         if (stage) stage.scene.forceWireframe = options.wire === "on";
@@ -1009,6 +1017,24 @@ function clipChoices(clips: ReadonlyMap<string, AnimationClip>): [string, string
     .map((clip) => [`clip.${clip.id}`, `${clip.group[0].toUpperCase()}${clip.group.slice(1)}: ${clip.name}`]);
 }
 
+/** The tints the Weapons views offer, as item templates give them: metals, then woods. */
+const WEAPON_TINTS: [string, string][] = [
+  ["#c89a5a", "Bronze"],
+  ["#d6dae0", "Iron"],
+  ["#b9c6d8", "Steel"],
+  ["#8a6a40", "Ash"],
+  ["#6b4a2a", "Oak"],
+];
+
+/** A weapon tier's gear as an item of that tint wears it: the tint on its own colour's parts. */
+function weaponWorn(gear: Map<string, GearDef>, id: string): GearDef | null {
+  const def = gear.get(id);
+  const match = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(options.tint);
+  if (!def || !match) return def ?? null;
+  const tint: [number, number, number] = [parseInt(match[1], 16) / 255, parseInt(match[2], 16) / 255, parseInt(match[3], 16) / 255];
+  return { ...def, pieces: def.pieces.map((piece) => ({ ...piece, tint })) };
+}
+
 /** The races and outfits the packs have, as the last character preview read them - for the menus. */
 let characterLists: { races: [string, string][]; outfits: [string, string][]; clips: [string, string][] } = { races: [], outfits: [], clips: [] };
 
@@ -1024,6 +1050,13 @@ function characterChoices(rebuild: () => void): HTMLLabelElement[] {
     }
   }
   if (current.folder === "races") return [select("Outfit", "outfit", [["", "None"], ...characterLists.outfits], rebuild)];
+  if (current.folder === "weapons") {
+    return [
+      select("Tint", "tint", WEAPON_TINTS, rebuild),
+      ...(characterLists.races.length > 0 ? [select("Race", "race", characterLists.races, rebuild)] : []),
+      select("Outfit", "outfit", [["", "None"], ...characterLists.outfits], rebuild),
+    ];
+  }
   return characterLists.races.length > 0 ? [select("Race", "race", characterLists.races, rebuild)] : [];
 }
 
@@ -1157,6 +1190,34 @@ async function preview3d(token: number, asset: Asset, view: ViewDef, content: Wo
         row.insertCell().textContent = order.slice(r * columns, (r + 1) * columns).map((clip) => clip.name).reverse().join(" · ");
       }
       summary.append(title, table);
+    } else if (asset.folder === "weapons") {
+      // A family's three tiers side by side, crude to ornate - or every family, a row each.
+      const gearDefs = resolveGear(sourcesWithEdit());
+      const families = view.id === "armoury" ? [...resolveWeapons(sourcesWithEdit(), []).keys()].sort() : [asset.id];
+      const across = 1.1;
+      const back = 1.6;
+      const held = families.flatMap((family, row) => WEAPON_TIERS.map((tier, column) => ({ family, tier, row, column, weapon: weaponWorn(gearDefs, `${family}.${tier}`) })));
+      const painted = await Promise.all(held.map((entry) => paintedBody(inputs.race, inputs.gear, seed, { ...inputs.options, gear: [...inputs.options.gear, ...(entry.weapon ? [entry.weapon] : [])] })));
+      if (token !== previewToken) return;
+      // Left to right as the camera first looks: crude, standard, ornate.
+      const figures = held.map((entry, i) => figureFor(inputs.race, painted[i], inputs.options, (1 - entry.column) * across, -entry.row * back));
+      figure = (scene, shadows, height) => {
+        let tallest = 0;
+        for (const f of figures) tallest = Math.max(tallest, f(scene, shadows, height).height);
+        return { width: across * WEAPON_TIERS.length, height: tallest + families.length * 0.3 };
+      };
+      summary = document.createElement("div");
+      const table = document.createElement("table");
+      for (const [row, family] of families.entries()) {
+        const line = table.insertRow();
+        line.insertCell().textContent = `${row + 1}`;
+        line.insertCell().textContent = family;
+        line.insertCell().textContent = WEAPON_TIERS.map((tier) => {
+          const i = held.findIndex((entry) => entry.family === family && entry.tier === tier);
+          return `${tier} ${painted[i].body.triangles} triangles`;
+        }).join(" · ");
+      }
+      summary.append(table);
     } else if (view.id === "lineup") {
       // Every race side by side, shortest first, in the same outfit, pose and animation.
       const races = [...resolveRaces(sourcesWithEdit()).values()];
@@ -1241,7 +1302,7 @@ async function preview3d(token: number, asset: Asset, view: ViewDef, content: Wo
     ground,
     grass,
     shape: options.shape as GroundShape,
-    bare: view.id === "model" || view.id === "lineup" || view.id === "gallery",
+    bare: view.id === "model" || view.id === "lineup" || view.id === "gallery" || view.id === "tiers" || view.id === "armoury",
     trees,
     buildings,
     buildingColliders: options.colliders === "on" && (asset.folder === "buildings" || asset.folder === "props" || asset.folder === "features"),

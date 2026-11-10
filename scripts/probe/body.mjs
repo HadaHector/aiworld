@@ -13,7 +13,8 @@ const packs = packSourcesFromDisk(readConfigFromDisk()).sources;
 const races = resolveRaces(packs);
 const gear = resolveGear(packs);
 const outfits = resolveOutfits(packs, gear);
-const dressings = [["bare", []], ...[...outfits.values()].map((o) => [o.id, o.gear.map((id) => gear.get(id))])];
+// And each weapon tier (weapons/<family>.json5, gear "<family>.<tier>") held alone.
+const dressings = [["bare", []], ...[...outfits.values()].map((o) => [o.id, o.gear.map((id) => gear.get(id))]), ...[...gear.keys()].filter((id) => id.includes(".")).map((id) => [id, [gear.get(id)]])];
 
 for (const base of races.values()) for (const sex of SEXES) for (const [dressing, worn] of dressings) {
   if (only && base.id !== only) continue;

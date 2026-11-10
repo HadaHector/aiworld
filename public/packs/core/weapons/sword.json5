@@ -1,0 +1,49 @@
+// The sword family (src/character/weaponDef.ts, CHARACTERS.md, *Weapons and shields*): parts laid
+// along the weapon's axis in metres, 0 at the middle of the grip and the blade's way positive.
+// profile: [t along the part, width across the blade's flat, thickness through it]; 0, 0 is a point.
+// Details are oversized, as the rest of the world is, so the tier reads from the camera. Each tier
+// is gear of its own for items to name: "sword.crude", "sword.standard", "sword.ornate"; the item's
+// tint colours the `metal` parts (bronze, iron, steel).
+{
+  name: "Sword",
+  grip: "mainHand",
+  tiers: {
+    // A plain blade, a bar guard of the same metal, a wrapped grip and no pommel - a smith's first.
+    crude: {
+      parts: [
+        { shape: "round", slot: "grip", from: -0.085, to: 0.07, profile: [[0, 0.036, 0.036], [0.5, 0.039, 0.039], [1, 0.036, 0.036]] },
+        { shape: "round", slot: "dark", from: -0.105, to: -0.085, profile: [[0, 0.02, 0.02], [1, 0.04, 0.04]] },
+        { shape: "box", from: 0.07, to: 0.1, profile: [[0, 0.15, 0.036], [1, 0.15, 0.036]] },
+        { shape: "diamond", from: 0.1, to: 0.86, profile: [[0, 0.07, 0.02], [0.85, 0.062, 0.018], [1, 0, 0]] },
+      ],
+    },
+    // A fuller down the blade, a wider guard and a round pommel.
+    standard: {
+      parts: [
+        { shape: "round", slot: "grip", from: -0.085, to: 0.07, profile: [[0, 0.034, 0.034], [0.5, 0.038, 0.038], [1, 0.034, 0.034]] },
+        { shape: "round", from: -0.15, to: -0.08, profile: [[0, 0, 0], [0.2, 0.05, 0.05], [0.55, 0.075, 0.075], [0.9, 0.045, 0.045], [1, 0.03, 0.03]] },
+        { shape: "box", from: 0.07, to: 0.105, profile: [[0, 0.24, 0.042], [1, 0.22, 0.042]] },
+        { shape: "diamond", from: 0.105, to: 0.94, profile: [[0, 0.082, 0.022], [0.82, 0.07, 0.019], [1, 0, 0]] },
+        { shape: "box", slot: "dark", from: 0.12, to: 0.66, profile: [[0, 0.02, 0.026], [0.92, 0.02, 0.024], [1, 0, 0]] },
+      ],
+    },
+    // A broad blade, quillons flaring toward it, a banded grip and a jewel in a gilt pommel.
+    ornate: {
+      parts: [
+        { shape: "round", slot: "grip", from: -0.085, to: 0.07, profile: [[0, 0.034, 0.034], [0.5, 0.037, 0.037], [1, 0.034, 0.034]] },
+        { shape: "round", slot: "trim", from: -0.06, to: -0.043, profile: [[0, 0.046, 0.046], [1, 0.046, 0.046]] },
+        { shape: "round", slot: "trim", from: -0.008, to: 0.009, profile: [[0, 0.046, 0.046], [1, 0.046, 0.046]] },
+        { shape: "round", slot: "trim", from: 0.044, to: 0.061, profile: [[0, 0.046, 0.046], [1, 0.046, 0.046]] },
+        { shape: "round", slot: "trim", from: -0.145, to: -0.08, profile: [[0, 0.07, 0.07], [0.6, 0.08, 0.08], [1, 0.04, 0.04]] },
+        { shape: "facet", slot: "gem", from: -0.2, to: -0.125, profile: [[0, 0, 0], [0.5, 0.07, 0.07], [1, 0.04, 0.04]] },
+        { shape: "box", slot: "trim", from: 0.065, to: 0.115, profile: [[0, 0.1, 0.05], [1, 0.12, 0.05]] },
+        { shape: "round", slot: "trim", from: 0.085, to: 0.25, spin: 0, tilt: 72, profile: [[0, 0.04, 0.04], [0.75, 0.03, 0.03], [0.88, 0.05, 0.05], [1, 0, 0]] },
+        { shape: "round", slot: "trim", from: 0.085, to: 0.25, spin: 180, tilt: 72, profile: [[0, 0.04, 0.04], [0.75, 0.03, 0.03], [0.88, 0.05, 0.05], [1, 0, 0]] },
+        // A jewel through the middle of the guard, showing on both faces.
+        { shape: "facet", slot: "gem", from: 0.09, to: 0.16, out: -0.035, spin: 90, tilt: 90, profile: [[0, 0.03, 0.03], [0.5, 0.046, 0.046], [1, 0.03, 0.03]] },
+        { shape: "diamond", from: 0.115, to: 1.0, profile: [[0, 0.11, 0.024], [0.12, 0.096, 0.022], [0.8, 0.086, 0.02], [1, 0, 0]] },
+        { shape: "box", slot: "dark", from: 0.13, to: 0.7, profile: [[0, 0.024, 0.028], [0.92, 0.024, 0.026], [1, 0, 0]] },
+      ],
+    },
+  },
+}

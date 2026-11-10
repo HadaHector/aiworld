@@ -3,6 +3,7 @@ import { ContentError, Reader, type ContentIssue, type RawObject } from "../worl
 import type { ColorTuple } from "../world/terrain/pipeline/pipelineTypes";
 import { characterEntries } from "./raceDef";
 import { sided } from "./characterConsts";
+import { resolveWeapons, WEAPON_TIERS, type WeaponFamily, type WeaponPart } from "./weaponDef";
 
 export { sided };
 
@@ -183,12 +184,13 @@ export interface GearSkirt extends GearSurface {
 }
 
 /**
- * A rigid piece on one bone: a `dome` (a pauldron, `layers` lames stepping down the arm) or a
- * `blade` (a sword in the hand, its hilt in `hilt`'s material). Offsets are in metres from the
- * bone's head in the character's space, their x mirrored for the -x side; `sides` says which.
+ * A rigid piece on one bone: a `dome` (a pauldron, `layers` lames stepping down the arm), a
+ * `blade` (a sword in the hand, its hilt in `hilt`'s material) or a `weapon` built from a weapon
+ * family's `parts` (weapons/<id>.json5). Offsets are in metres from the bone's head in the
+ * character's space, their x mirrored for the -x side; `sides` says which.
  */
 export interface GearPiece extends GearSurface {
-  kind: "dome" | "blade";
+  kind: "dome" | "blade" | "weapon";
   bone: string;
   sides: ("R" | "L" | "")[];
   at: [number, number, number];
@@ -200,6 +202,9 @@ export interface GearPiece extends GearSurface {
   width: number;
   hilt: GearSurface;
   rim: ColorTuple;
+  /** A weapon's parts, each in its own colour - or null for the piece's own, which an item's tint
+   *  replaces (the metal of a sword, the wood of a staff). */
+  parts: (WeaponPart & { surface: GearSurface | null })[];
 }
 
 /** A named set of gear (outfits/<id>.json5), worn in order: later pieces paint over earlier ones. */
@@ -216,8 +221,46 @@ export function resolveGear(packs: PackSource[]): Map<string, GearDef> {
   const issues: ContentIssue[] = [];
   const gear = new Map<string, GearDef>();
   for (const [id, entry] of characterEntries(packs, "gear", issues)) gear.set(id, readGear(id, entry.data, new Reader(issues, entry.file)));
+  for (const family of resolveWeapons(packs, issues).values()) for (const def of weaponGear(family)) gear.set(def.id, def);
   if (issues.length > 0) throw new ContentError(issues);
   return gear;
+}
+
+/** A weapon family's tiers as gear: `<family>.<tier>`, a weapon piece on the hand that holds it. */
+function weaponGear(family: WeaponFamily): GearDef[] {
+  const left = family.grip === "bow" || family.grip === "shield" || family.grip === "offHand";
+  const own = family.colours[family.tinted];
+  return WEAPON_TIERS.map((tier) => ({
+    id: `${family.id}.${tier}`,
+    name: `${family.name} (${tier})`,
+    slot: left ? "offHand" : "mainHand",
+    paint: [],
+    shells: [],
+    skirts: [],
+    covers: [],
+    collars: [],
+    soles: [],
+    texture: null,
+    pieces: [
+      {
+        kind: "weapon",
+        bone: family.grip === "shield" ? "forearm" : "hand",
+        sides: [left ? "L" : "R"],
+        at: [0, 0, 0],
+        axis: [0, 1, 0],
+        radius: 0.1,
+        height: 0.06,
+        layers: 1,
+        length: 0,
+        width: 0,
+        material: own.material,
+        tint: own.tint,
+        hilt: own,
+        rim: darker(own.tint),
+        parts: family.tiers[tier].map((part) => ({ ...part, surface: part.slot === family.tinted ? null : family.colours[part.slot] })),
+      },
+    ],
+  }));
 }
 
 export function resolveOutfits(packs: PackSource[], gear: Map<string, GearDef>): Map<string, OutfitDef> {
@@ -310,6 +353,7 @@ function readGear(id: string, data: unknown, reader: Reader): GearDef {
         width: reader.optionalNumber(raw, "width", path, 0.06, { min: 0.005, max: 1 }),
         hilt: hiltRaw ? surface(hiltRaw, `${path}.hilt`, reader) : base,
         rim: raw.rim === undefined ? darker(base.tint) : reader.color(raw, "rim", path),
+        parts: [],
       };
     }),
     covers: list("covers").map(({ raw, path }) => {

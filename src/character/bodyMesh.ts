@@ -992,6 +992,9 @@ function addGear(kit: MeshKit, race: RaceDef, unit: GearUnit, body: BodyGeometry
       }
       const clavicle = skeleton.index(`clavicle${suffix}`);
       fixAll(start, def.bone === "upperArm" && clavicle >= 0 ? [[iBone, 0.65], [clavicle, 0.35]] : [[iBone, 1]]);
+    } else if (def.kind === "weapon") {
+      buildWeapon(def, iBone);
+      fixAll(start, [[iBone, 1]]);
     } else {
       // A sword held in the fist: its blade out past the thumb, leaning toward the fingers.
       const along = normalize(sub(b.tail, b.head));
@@ -1027,6 +1030,67 @@ function addGear(kit: MeshKit, race: RaceDef, unit: GearUnit, body: BodyGeometry
       fixAll(start, [[iBone, 1]]);
     }
     kit.layer = -1;
+  }
+
+  /**
+   * A weapon from its parts (weapons/<id>.json5, CHARACTERS.md, *Weapons and shields*), held in
+   * the fist as the sword blade is: its axis out past the thumb, leaning toward the fingers, 0 at the
+   * middle of the grip; a blade's flat across the fist (its edge leading a swing).
+   */
+  function buildWeapon(def: GearPiece, iBone: number): void {
+    const b = bones[iBone];
+    const along = normalize(sub(b.tail, b.head));
+    const handFrame = frameFor(along, FORWARD);
+    const dir = normalize(add(scale(handFrame.front, 0.85), scale(along, 0.5)));
+    const grip = lerp(b.head, b.tail, 0.5);
+    const frame = frameFor(dir, along);
+    const deg = Math.PI / 180;
+    for (const part of def.parts) {
+      kit.layer = layerOf(part.surface ?? def, part.shape !== "round");
+      for (let copy = 0; copy < part.copies; copy++) {
+        // Its own frame: turned round the weapon's axis, set off it, leant out from it.
+        const spin = (part.spin + (360 * copy) / part.copies) * deg;
+        const front = add(scale(frame.front, Math.cos(spin)), scale(frame.side, Math.sin(spin)));
+        const across = add(scale(frame.side, Math.cos(spin)), scale(frame.front, -Math.sin(spin)));
+        const base = add(add(grip, scale(dir, part.from)), scale(front, part.out));
+        const tilt = part.tilt * deg;
+        const axis = add(scale(dir, Math.cos(tilt)), scale(front, Math.sin(tilt)));
+        const partFront = add(scale(front, Math.cos(tilt)), scale(dir, -Math.sin(tilt)));
+        const span = part.to - part.from;
+        const centre = (t: number): Vec => add(base, scale(axis, span * t));
+        const section = sectionOf(part.shape);
+        const rings: Ring[] = [];
+        let startTip: Vec | null = null;
+        let endTip: Vec | null = null;
+        part.profile.forEach(([t, width, thickness], i) => {
+          const c = centre(t);
+          if (width <= 1e-4 && thickness <= 1e-4) {
+            // A point: the part closes there.
+            if (i === 0) startTip = c;
+            else endTip = c;
+            return;
+          }
+          const verts = section.map(([x, y]) => kit.vertex(add(c, add(scale(partFront, (x * width) / 2), scale(across, (y * thickness) / 2))), iBone));
+          const r: Ring = { verts, center: c };
+          mapRing(r, span * t);
+          rings.push(r);
+        });
+        if (rings.length === 0) continue;
+        for (let k = 0; k + 1 < rings.length; k++) zip(rings[k].verts, rings[k + 1].verts, axis, partFront);
+        const first = rings[0];
+        const last = rings[rings.length - 1];
+        capRing(first, startTip ?? first.center, iBone, 0, true);
+        capRing(last, endTip ?? last.center, iBone, span);
+      }
+    }
+  }
+
+  /** A part's cross-section, round from its front toward its side, at unit width and thickness. */
+  function sectionOf(shape: GearPiece["parts"][number]["shape"]): [number, number][] {
+    if (shape === "box") return [[1, 1], [-1, 1], [-1, -1], [1, -1]];
+    if (shape === "diamond") return [[1, 0], [0, 1], [-1, 0], [0, -1]];
+    const n = shape === "facet" ? 6 : 10;
+    return Array.from({ length: n }, (_, k) => [Math.cos((2 * Math.PI * k) / n), Math.sin((2 * Math.PI * k) / n)]);
   }
 
   /** The body's smooth normals, made when a cover first needs them. */

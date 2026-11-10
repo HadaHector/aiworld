@@ -185,6 +185,100 @@ painted robe with a skirt, belt, sandals - about 1500 triangles), a scout (mail,
 boots, bracers - about 2200) and a knight (breastplate, tassets, three-lame pauldrons, gauntlets,
 leg plate, helm, sword over mail - about 3300).
 
+## Weapons and shields
+
+**Status: step 1 done** - the parts, the builder, the sword in three tiers and the workbench's
+Weapons folder. The oak mace and ash staff are still drawn as long blades in wood colours, and the
+wooden shield has no model, until steps 2-5.
+
+### Decisions
+
+| Question | Decision |
+|---|---|
+| Types | Sword, mace, axe, dagger, staff, bow, wand; a buckler and a round shield |
+| Tiers | Three by craft, whatever the material: **crude**, **standard**, **ornate**. The material (bronze, iron, oak, ash...) stays the item's tint, as now |
+| How built | From parts and numbers, as bodies are: one family file per type, its tiers as sets of numbers and extra parts. No hand-made models |
+| Readable | Oversized as the rest of the world is: guards, pommels, heads and bosses bigger than life, so the type and tier read from the third-person camera |
+
+### Parts
+
+A family is a file, `weapons/<id>.json5` (`src/character/weaponDef.ts`): its `grip`, the slot an
+item's tint colours (`tinted`, `metal` unless said), its slot colours, and three `tiers`, each a list
+of parts. Every tier is gear of its own, `<id>.<tier>` - `sword.standard` - a `weapon` piece on the
+hand that holds it, which items name as they name any gear. The engine knows parts, never a weapon by
+name.
+
+A part is a prism laid along the weapon's axis, `from` and `to` in metres (0 at the middle of the
+grip, the blade's way positive):
+
+- **shape** - its cross-section: `round` (a grip, a haft, a knob, a band), `box` (a guard, a fuller),
+  `diamond` (a blade, an axe's bit), `facet` (a gem, a faceted pommel).
+- **profile** - points `[t, width, thickness]` along it: width across the blade's flat, thickness
+  through it; a `0, 0` end closes in a point (a blade's tip, a spike).
+- **spin**, **out**, **tilt**, **copies** - turned round the axis, set off it, leant out from it, and
+  repeated evenly round it: a quillon is a round part tilted 72°, a mace's flanges are one fin in
+  six copies, an axe's bit a diamond set out to one side.
+- **slot** - its colour: `metal`, `wood`, `grip` (leather), `trim` (gilt), `dark` (blackened, a
+  fuller), `gem`. The item's tint replaces the `tinted` slot's, so a bronze and an iron sword share
+  one model; the family file can set any slot's material and tint.
+
+Still to come with their families: a bow's limbs bent along a curve with a string, and a shield's
+dished face (step 3 and 4) - each a part shape of its own if the prisms cannot make them.
+
+### Tiers, by type
+
+| Type | Crude | Standard | Ornate |
+|---|---|---|---|
+| Sword | Plain blade, a bar guard, a wrapped grip, no pommel | Fuller line, a wider guard, a round pommel | Flared guard, a banded grip, a gem pommel, a broad blade |
+| Mace | Wooden club with a metal band | Metal ball on a haft | Flanged head, banded haft, spiked crown |
+| Axe | Wedge bit on a stick | Curved bit, a bound haft | Bearded double bit, metal-banded haft, spike on top |
+| Dagger | Short leaf blade, no guard | Small guard, a pommel | Curved guard, a long thin blade, a gem pommel |
+| Staff | A plain pole | A knotted head and bands | A carved crook holding a crystal |
+| Bow | Thin plain limbs | Thicker limbs with grip wrap | Recurved tips, trim at the limb tips |
+| Wand | A twig | A turned rod with a ferrule | A banded rod with a gem tip |
+| Buckler | Plain wooden disc | Metal disc with a boss | Metal, dished, with a rim and a spiked boss |
+| Round shield | Planks, no rim | Planks, a metal rim and a boss | Painted face, a rim, a bigger boss, studs round the edge |
+
+Two-handed forms (the great sword, a great axe) are the one-handed family with longer numbers - a
+form axis on the item template, as the sword template has now.
+
+### Holding them, and which animation
+
+Each family says how it is held and what it plays, so packs choose it all:
+
+- **Grip**: `mainHand` (in the right fist), `twoHand` (in the right fist, the left hand on the haft in
+  its two-handed animations), `bow` (upright in the left fist), `shield` (on the left forearm, face
+  out), `offHand` (a wand or dagger in the left fist).
+- **Animations** by action: a family maps the actions a skill names to clips, so an attack's
+  `swing` plays the slash for a sword, the thrust or flurry for a dagger, the overhead chop for a
+  two-handed axe, the bow shot for a bow, cast forward for a wand. A shield adds block and the shield
+  bash.
+
+### Items
+
+The item templates gain a `tier` axis (crude, standard, ornate) whose part names the model, e.g.
+`gear: ["sword.standard"]`, beside the material axis that tints it. New templates for the mace, axe,
+dagger, staff, bow and wand; the sword template gets the tier axis. The core pack's weapons -
+starting kits, loot, shop stock - and the wooden shield point at the new models, and the oak mace
+and ash staff placeholders go.
+
+### Workbench
+
+The **Weapons** folder: a family's **Tiers** view holds crude, standard and ornate side by side
+(left to right), and **Every weapon** holds every family a row; a Tint menu (bronze, iron, steel,
+ash, oak), the race and outfit, and the Play menu so each can be seen swung. The body probe builds
+every tier too. Checked from the front, the side and above in the poses that matter (idle,
+walk, the slash, the overhead chop, the bow draw, the block) for weapons cutting into the body.
+
+### Build steps
+
+1. The parts and the weapon builder; the sword in three tiers; the Weapons line-up.
+2. Mace, axe, dagger, wand.
+3. Staff and bow (the bow in the left hand, its draw).
+4. Buckler and round shield on the forearm; block and shield bash.
+5. Grip and animation per family in the game; item templates and the core pack's weapons; the
+   placeholders gone; ITEMS.md.
+
 ## Texture: a painted atlas
 
 Each character has one texture atlas (512² to start). Every loop chain, patch, shell and piece is
