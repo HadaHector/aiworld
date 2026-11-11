@@ -7,7 +7,7 @@
 import { ContentError } from "../../src/world/content/contentReader.ts";
 import { loadContentFromDisk, packSourcesFromDisk, readConfigFromDisk } from "../diskContent.mjs";
 import { resolveDungeons } from "../../src/world/dungeons/dungeonDefs.ts";
-import { generateLayout, graphDistances, placedPaths, placedShapes, placedSockets } from "../../src/world/dungeons/layout.ts";
+import { frameToWorld, generateLayout, graphDistances, placedPaths, placedShapes, placedSockets } from "../../src/world/dungeons/layout.ts";
 import { checkPaths } from "../../src/world/dungeons/clearance.ts";
 import { createWorldData, WORLD_SEED } from "../../src/world/worldData.ts";
 import { createCharacterMotor, createCollisionWorld, vec3 } from "../../src/world/collision/index.ts";
@@ -83,15 +83,17 @@ console.log(`sites: ${crypts} cemetery crypts, ${sites.length - crypts} slopes`)
 // --- A thousand layouts ---------------------------------------------------------------------
 const style = dungeons.styles.get("crypt");
 const sizes = Object.keys(style.sizes);
-const stats = { ms: 0, worst: 0, attempts: 0, minimal: 0, parts: 0, rooms: 0, locks: 0, loops: 0, divesFirst: 0, depth: 0, leastRock: Infinity };
+const stats = { ms: 0, worst: 0, attempts: 0, minimal: 0, parts: 0, rooms: 0, locks: 0, loops: 0, divesFirst: 0, depth: 0, leastRock: Infinity, looped: { lair: [0, 0], dungeon: [0, 0] }, roundLoop: 0 };
 const layouts = [];
-/** The least rock over a box, sampled every metre (twice as fine as the generator looks), under buildings halved. */
-function rockOver(b) {
+/** The least rock over a part's box in the layout's frame, every 0.5 m (finer than the generator's
+ *  closest look), under buildings halved. */
+function rockOver(frame, b) {
   let least = Infinity;
-  for (let x = Math.floor(b.min.x); x <= Math.ceil(b.max.x); x++) {
-    for (let z = Math.floor(b.min.z); z <= Math.ceil(b.max.z); z++) {
-      const rock = world.heightAt(x, z) - b.max.y;
-      least = Math.min(least, ground.builtAt(x, z) ? rock / 2 : rock);
+  for (let fx = b.min.x; fx <= b.max.x + 1e-9; fx += 0.5) {
+    for (let fz = b.min.z; fz <= b.max.z + 1e-9; fz += 0.5) {
+      const w = frameToWorld(frame, fx, fz);
+      const rock = world.heightAt(w.x, w.z) - b.max.y;
+      least = Math.min(least, ground.builtAt(w.x, w.z) ? rock / 2 : rock);
     }
   }
   return least;
@@ -117,6 +119,8 @@ for (let n = 0; n < COUNT; n++) {
   stats.rooms += layout.parts.filter((p) => p.role === "room" || p.role === "boss").length;
   if (layout.lock >= 0) stats.locks++;
   stats.loops += layout.joins.filter((j) => j.loop).length;
+  stats.looped[size][0]++;
+  if (layout.joins.some((j) => j.loop)) stats.looped[size][1]++;
   if (n < 50) layouts.push(layout);
   const where = `layout ${n} (${site.kind}, ${size}, seed ${seed})`;
 
@@ -124,7 +128,7 @@ for (let n = 0; n < COUNT; n++) {
   for (let i = 1; i < layout.parts.length; i++) {
     const p = layout.parts[i];
     if (p.role === "cap") continue;
-    const rock = rockOver(p.bounds);
+    const rock = rockOver(layout.frame, p.box);
     stats.leastRock = Math.min(stats.leastRock, rock);
     check(`${where}: ${p.part.id} under its cover`, rock > style.cover - 0.5, `${rock.toFixed(2)} m of rock over it`);
     check(`${where}: ${p.part.id} deep enough`, p.bounds.min.y >= site.y - style.deepest - 1e-6);
@@ -132,7 +136,7 @@ for (let n = 0; n < COUNT; n++) {
   // No two parts overlapping (joined ones touch at their sockets).
   for (let i = 0; i < layout.parts.length; i++) {
     for (let j = i + 1; j < layout.parts.length; j++) {
-      const a = layout.parts[i].bounds, b = layout.parts[j].bounds;
+      const a = layout.parts[i].box, b = layout.parts[j].box;
       const joined = layout.joins.some((k) => (k.a === i && k.b === j) || (k.a === j && k.b === i));
       const s = 0.06;
       const overlap = a.min.x < b.max.x - s && a.max.x > b.min.x + s && a.min.y < b.max.y - s && a.max.y > b.min.y + s && a.min.z < b.max.z - s && a.max.z > b.min.z + s;
@@ -165,6 +169,13 @@ for (let n = 0; n < COUNT; n++) {
     check(`${where}: the boss behind the lock`, without[layout.boss] === Infinity);
     check(`${where}: the key this side of it`, without[layout.key] < Infinity && layout.parts[layout.key].role === "room");
   }
+  // Each loop a real one: without its closing join, its two ends are still joined - the long way round.
+  layout.joins.forEach((j, k) => {
+    if (!j.loop) return;
+    const round = graphDistances(layout.parts.length, layout.joins.filter((_, i) => i !== k), j.a)[j.b];
+    check(`${where}: loop ${k} closes a way round`, round < Infinity && round >= dungeons.rules.loopSpan, `${round} joins round`);
+    stats.roundLoop = Math.max(stats.roundLoop, round);
+  });
   // Diving first: the first part after the entrance goes down, or the entrance left it deep enough.
   const first = layout.parts.find((p) => p.parent === 0);
   if (first && first.part.sockets.some((s) => s.at.y < first.part.sockets[first.entry].at.y - 1)) stats.divesFirst++;
@@ -173,7 +184,7 @@ for (let n = 0; n < COUNT; n++) {
 const ok = COUNT - stats.minimal;
 console.log(`layouts: ${COUNT} in ${stats.ms.toFixed(0)} ms (${(stats.ms / COUNT).toFixed(2)} ms each, the slowest ${stats.worst.toFixed(1)} ms with the terrain's heights sampled), ` +
   `${stats.minimal} minimal, ${(stats.attempts / COUNT).toFixed(2)} retries each`);
-console.log(`  ${(stats.parts / COUNT).toFixed(1)} parts and ${(stats.rooms / COUNT).toFixed(1)} rooms each, ${stats.locks} locked, ${stats.loops} loops; ` +
+console.log(`  ${(stats.parts / COUNT).toFixed(1)} parts and ${(stats.rooms / COUNT).toFixed(1)} rooms each, ${stats.locks} locked, ${stats.loops} loops (in ${stats.looped.lair[1]} of ${stats.looped.lair[0]} lairs and ${stats.looped.dungeon[1]} of ${stats.looped.dungeon[0]} dungeons, the longest ${stats.roundLoop} joins round); ` +
   `${stats.divesFirst} start with a way down; the deepest room ${(stats.depth / ok).toFixed(1)} m down on average; the least rock over any part ${stats.leastRock.toFixed(2)} m (cover ${style.cover})`);
 
 // The same seed, the same layout.

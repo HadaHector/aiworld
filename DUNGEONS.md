@@ -338,30 +338,43 @@ it is built.
    from only when nothing else is open), pick a part with a compatible socket by weight among
    those allowed at this stage (descents weighted up while the cover is thin, [Under the
    ground](#under-the-ground)), line its socket up with the open one, and keep it if its bounds
-   overlap no placed part and its top lies `cover` under the ground everywhere over it. Each
+   overlap no placed part and its top lies `cover` under the ground everywhere over it (both
+   measured on its box in the layout's own frame - the entrance's, turned to its door - where
+   every part is square to the axes; a box square to the world round a part turned 37° is half as
+   big again, and refused most of what fits). Each
    option is tried once, up to `triesPerSocket`, then the socket is capped. At a dead end with
    nothing else open, the corridor or stair just laid is taken back and something else tried
    where it began (up to 40 times an attempt). The ground comes in as a `heightAt(x, z)` and a
    `builtAt(x, z)`, so the generator stays pure.
-3. Loops: two open sockets meeting face to face are joined as they are, up to the style's count.
-   With the crypt's kit that is rare - no loops in a thousand layouts. **Next (the user's call):
-   loops made on purpose**, since a layout that circles back is easy to get lost in, and that is
-   fun - bridging two nearby open ends with a corridor, a stair or a turn sized to fit, and
-   steering growth back toward an earlier part, rather than waiting for ends to meet by chance.
+3. Loops, made on purpose (the user's call: a layout that circles back is easy to get lost in, and
+   that is fun). Every pair of open ends at most `loopReach` (60 m) apart and at least `loopSpan`
+   (4) joins apart along the layout is a candidate, the longest way round first. Between the two,
+   routes on the layout's square grid: straight on, one turn, a dog-leg or a U - with a run out of
+   either end and a turn first (0, 12 or 24 m), so ends facing away from each other meet too; any
+   change of height spread over the straights as flights with landings. The shortest sixteen are
+   tried; each is laid piece by piece - corridors and flights the generator sizes to fit (built
+   as the kit's corridors and stairs are: floor, walls, vault, 6 m clear), and the style's corner
+   (`cryptCorner`, turning either way) - and taken back whole if any piece will not fit, until one
+   does. The style's `loops` range is rolled; an attempt short of its least (1) is retried, the
+   first that passes kept if none reaches it. The style declares how: `connector: { socket, corner,
+   width, height, wall, rise, tread }`.
 4. The boss room: on the leaf room furthest from the entrance (by the graph), in its place, or at
    the furthest open end - straight on, or past a corridor or a stair laid first when it will not
    fit there; a lock on the join into it, its key in the furthest other room.
 5. Close every open socket with a cap. A cap may sit in a neighbour's wall (solid in solid); it
    never reaches into anyone's way through.
 6. Check: every room reachable from the entrance, the boss behind its lock and the key this side
-   of it, at least the size's least rooms, the boss placed, every part under its cover. Failing
+   of it, at least the size's least rooms, the boss placed, every part under its cover - looked at
+   again twice as finely (every metre), so a dip narrower than the sampling, a stream's bed, is
+   never missed. Failing
    that, start again from a seed derived from the last; after `attempts` (8), the minimal layout
    (the entrance, a room if one fits, caps).
 
-Measured (the probe, a thousand layouts on the real terrain): 1.25 retries a layout, 8.6% minimal
-(on hillsides that cannot hold one - see [Under the ground](#under-the-ground)), 28 parts and
-6.5 rooms each, the deepest room 36 m down on average; 56 ms a layout, nearly all of it sampling
-the real terrain's height (2 ms on made-up ground).
+Measured (the probe, a thousand layouts on the real terrain, with loops): 1.85 retries a layout,
+0.6% minimal, 40 parts and 7.7 rooms each, the deepest room 37 m down on average; 858 loops - in
+51% of lairs and 89% of dungeons, the longest 36 joins round; 220 ms a layout (the slowest 0.87 s),
+nearly all of it sampling the real terrain's height (5-10 ms on made-up ground). Before the
+frame's boxes and loops: 8.6% minimal, no loops, 56 ms.
 
 The layout is a graph - parts as nodes, joined sockets as edges - and that graph is reused by
 everything inside: navigation, the map, quest spots.
@@ -491,6 +504,10 @@ Each leaves the game working: dev server with `?play`, `npm run probe`, `npm run
    (cover, overlaps, joins, sockets closed, reachable, boss, lock and key, the same from the same
    seed, 6 m everywhere in fifty assembled ones), eleven walked from the door to the boss on the
    character motor. Numbers under [The generator](#the-generator).
+   *Then loops*: routed between far-apart ends with corridors, corners and flights sized to fit;
+   parts kept apart by their boxes in the layout's frame. A thousand layouts again: 850,904 checks
+   good, each loop a real way round of at least four joins; loops in half the lairs and nine
+   dungeons in ten; 0.6% minimal.
 3. **The crypt.** Its parts built (ModelBuilder recipes and materials, colliders, transition
    pieces, caps), torches as fixtures, the lightmap bake per part; as a space of its own entered by
    a debug command; walked end to end.

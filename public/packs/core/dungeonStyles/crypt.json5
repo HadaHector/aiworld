@@ -7,9 +7,12 @@
     lair: { rooms: [2, 4], entry: "seamless" },
     dungeon: { rooms: [8, 14], entry: "space" },
   },
-  // The chance a part's further ways on are grown rather than walled up; loops closed per layout.
+  // The chance a part's further ways on are grown rather than walled up.
   branching: 0.4,
-  loops: [0, 2],
+  // Loops made per layout: two loose ends far apart along the way, joined by corridors, corners
+  // and a stair sized to fit - so the way circles back and is easy to get lost in.
+  loops: [1, 3],
+  connector: { socket: "crypt", corner: { tags: ["corner"] }, width: 6, height: 6, wall: 1, rise: 0.25, tread: 0.75 },
   boss: { tags: ["boss"] },
   keys: { locks: [0, 1] },
   // Rock over the top of every part but the entrance, and how far under the entrance it may go.

@@ -1,0 +1,18 @@
+// A corner: a corridor turning a quarter, either way (in by one opening, out by the other). Loops
+// are routed through it.
+{
+  tags: ["crypt", "corner"],
+  weight: 1,
+  sockets: [
+    { at: [0, 0, 0], facing: 180, type: "crypt", size: [6, 6] },
+    { at: [4, 0, 4], facing: 90, type: "crypt", size: [6, 6] },
+  ],
+  colliders: [
+    { box: [-4, -1, 0, 4, 0, 8] },   // floor
+    { box: [-4, 6, 0, 4, 7, 8] },    // vault
+    { box: [-4, -1, 0, -3, 7, 8] },  // the outside of the turn
+    { box: [-4, -1, 7, 4, 7, 8] },
+    { box: [3, -1, 0, 4, 7, 1] },    // the post on the inside
+  ],
+  paths: [[[0, 0, 0], [0, 0, 4], [4, 0, 4]]],
+}

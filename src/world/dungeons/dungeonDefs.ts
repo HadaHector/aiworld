@@ -26,8 +26,38 @@ export interface DungeonRules {
   thinCover: number;
   /** How much likelier a part that goes down is while diving. */
   diveWeight: number;
-  /** How far two open sockets may be from each other and still be joined straight (a loop). */
+  /** How far apart two open ends may be, straight, to be joined into a loop. */
   loopReach: number;
+  /** How many joins apart, along the layout, two ends must be for joining them to make a loop
+   *  worth getting lost in. */
+  loopSpan: number;
+}
+
+/** A corner part entered by one socket and left by the other: how far in it turns, and which way. */
+export interface CornerTurn {
+  part: DungeonPartDef;
+  entry: number;
+  exit: number;
+  /** From the way in to where it turns, and from there to the way out, metres. */
+  reachIn: number;
+  reachOut: number;
+  /** 1 a right turn (facing +90°), -1 a left. */
+  turn: 1 | -1;
+}
+
+/**
+ * How the generator joins two open ends into a loop (DUNGEONS.md, *The generator*): corridors and
+ * flights of stairs it sizes to fit, made like the kit's, and the style's corners to turn with.
+ */
+export interface ConnectorDef {
+  socket: string;
+  width: number;
+  height: number;
+  wall: number;
+  rise: number;
+  /** The shortest tread a flight may have: its run for a drop is at least drop / rise * tread. */
+  tread: number;
+  corners: CornerTurn[];
 }
 
 export interface SocketDef {
@@ -80,6 +110,8 @@ export interface DungeonStyleDef {
   caps: DungeonPartDef[];
   /** Locks on the way to the boss, each with its key in another room. */
   locks: [number, number];
+  /** How loops are made; null for a style without. */
+  connector: ConnectorDef | null;
 }
 
 export interface DungeonContent {
@@ -139,7 +171,7 @@ export function resolveDungeons(packs: readonly PackSource[]): DungeonContent {
 function readRules(entry: Entry | undefined, issues: ContentIssue[]): DungeonRules {
   const reader = new Reader(issues, entry?.file ?? "rules/dungeons.json5");
   const obj = entry ? reader.object(entry.data, "") : {};
-  reader.onlyKeys(obj, "", ["minClear", "joins", "attempts", "triesPerSocket", "sample", "around", "thinCover", "diveWeight", "loopReach"]);
+  reader.onlyKeys(obj, "", ["minClear", "joins", "attempts", "triesPerSocket", "sample", "around", "thinCover", "diveWeight", "loopReach", "loopSpan"]);
   const minClear = obj.minClear === undefined ? ([6, 6] as [number, number]) : pair(reader, obj, "minClear", "");
   const joins = reader.optionalArray(obj, "joins", "").map((value, i): [string, string] => {
     if (Array.isArray(value) && value.length === 2 && value.every((v) => typeof v === "string")) return [value[0], value[1]];
@@ -155,7 +187,8 @@ function readRules(entry: Entry | undefined, issues: ContentIssue[]): DungeonRul
     around: reader.optionalNumber(obj, "around", "", 2, { min: 0 }),
     thinCover: reader.optionalNumber(obj, "thinCover", "", 10, { min: 0 }),
     diveWeight: reader.optionalNumber(obj, "diveWeight", "", 4, { min: 1 }),
-    loopReach: reader.optionalNumber(obj, "loopReach", "", 0.1, { min: 0 }),
+    loopReach: reader.optionalNumber(obj, "loopReach", "", 60, { min: 0 }),
+    loopSpan: reader.optionalNumber(obj, "loopSpan", "", 4, { min: 1, integer: true }),
   };
 }
 
@@ -309,7 +342,7 @@ export function shapesBounds(shapes: readonly ShapeDesc[]): Aabb {
   return { min, max };
 }
 
-const STYLE_KEYS = ["name", "builder", "sizes", "branching", "loops", "boss", "keys", "cover", "deepest", "parts", "entrance", "caps"];
+const STYLE_KEYS = ["name", "builder", "sizes", "branching", "loops", "boss", "keys", "cover", "deepest", "parts", "entrance", "caps", "connector"];
 
 function readStyle(entry: Entry, allParts: Map<string, DungeonPartDef>, rules: DungeonRules, issues: ContentIssue[]): DungeonStyleDef {
   const reader = new Reader(issues, entry.file);
@@ -362,7 +395,9 @@ function readStyle(entry: Entry, allParts: Map<string, DungeonPartDef>, rules: D
     bosses,
     caps,
     locks: keys.locks === undefined ? [0, 0] : reader.range(keys, "locks", "keys", { allowEqual: true }),
+    connector: obj.connector === undefined ? null : readConnector(reader, reader.object(obj.connector, "connector"), all, rules),
   };
+  if (style.loops[1] > 0 && !style.connector) reader.fail("loops", "a style with loops needs a `connector` to make them with");
   // Able to start, grow, end and close.
   const where = allTags.length ? ` with the tags ${allTags.join(", ")}` : "";
   if (entrances.length === 0) reader.fail("entrance", `no part${where} is an entrance`);
@@ -375,4 +410,46 @@ function readStyle(entry: Entry, allParts: Map<string, DungeonPartDef>, rules: D
   }
   for (const e of entrances) if (!e.sockets.some((s) => s.type === "surface")) reader.fail("entrance", `the entrance "${e.id}" has no "surface" socket to stand at the mouth`);
   return style;
+}
+
+function readConnector(reader: Reader, raw: RawObject, all: readonly DungeonPartDef[], rules: DungeonRules): ConnectorDef {
+  const at = "connector";
+  reader.onlyKeys(raw, at, ["socket", "corner", "width", "height", "wall", "rise", "tread"]);
+  const cornerRaw = raw.corner === undefined ? { tags: ["corner"] } : reader.object(raw.corner, `${at}.corner`);
+  reader.onlyKeys(cornerRaw, `${at}.corner`, ["tags"]);
+  const tags = cornerRaw.tags === undefined ? [] : reader.stringList(cornerRaw, "tags", `${at}.corner`);
+  const socket = reader.string(raw, "socket", at);
+  const width = reader.optionalNumber(raw, "width", at, rules.minClear[0], { min: rules.minClear[0] });
+  const height = reader.optionalNumber(raw, "height", at, rules.minClear[1], { min: rules.minClear[1] });
+  // Each corner, entered either way: where its turn is, from its sockets alone.
+  const corners: CornerTurn[] = [];
+  for (const part of all.filter((p) => tags.every((t) => p.tags.includes(t)))) {
+    if (part.sockets.length !== 2) { reader.fail(`${at}.corner`, `the corner "${part.id}" needs two sockets, has ${part.sockets.length}`); continue; }
+    for (const entry of [0, 1]) {
+      const exit = 1 - entry;
+      const s = part.sockets[entry], x = part.sockets[exit];
+      const inF = (s.facing + 180) * (Math.PI / 180), outF = x.facing * (Math.PI / 180);
+      const h = [Math.sin(inF), Math.cos(inF)], h2 = [Math.sin(outF), Math.cos(outF)];
+      const d = [x.at.x - s.at.x, x.at.z - s.at.z];
+      const reachIn = d[0] * h[0] + d[1] * h[1], reachOut = d[0] * h2[0] + d[1] * h2[1];
+      const across = Math.abs(h[0] * h2[0] + h[1] * h2[1]);
+      const left = d[0] - h[0] * reachIn - h2[0] * reachOut, leftZ = d[1] - h[1] * reachIn - h2[1] * reachOut;
+      if (across > 1e-6 || Math.hypot(left, leftZ) > 1e-6 || Math.abs(x.at.y - s.at.y) > 1e-6 || reachIn < 0 || reachOut < 0) {
+        reader.fail(`${at}.corner`, `"${part.id}" is not a level quarter turn between its two sockets`);
+        break;
+      }
+      const turn = ((((x.facing - (s.facing + 180)) % 360) + 360) % 360) === 90 ? 1 : -1;
+      corners.push({ part, entry, exit, reachIn, reachOut, turn });
+    }
+  }
+  if (!corners.some((c) => c.turn === 1) || !corners.some((c) => c.turn === -1)) reader.fail(`${at}.corner`, `no part${tags.length ? ` with the tags ${tags.join(", ")}` : ""} turns both ways, so loops could not be routed`);
+  return {
+    socket,
+    width,
+    height,
+    wall: reader.optionalNumber(raw, "wall", at, 1, { min: 0.1 }),
+    rise: reader.optionalNumber(raw, "rise", at, 0.25, { min: 0.05 }),
+    tread: reader.optionalNumber(raw, "tread", at, 0.75, { min: 0.1 }),
+    corners,
+  };
 }

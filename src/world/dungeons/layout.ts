@@ -3,8 +3,8 @@
 // sockets joining them out. Every part but the entrance lies the style's cover under the ground.
 import { deriveSeed, mulberry32 } from "../rng";
 import { quatFromEuler, quatMul, vec3, type Aabb, type Quat, type ShapeDesc, type Vec3 } from "../collision/index";
-import { socketsJoin, type DungeonContent, type DungeonPartDef, type DungeonStyleDef, type SocketDef } from "./dungeonDefs";
-import type { Polyline } from "./kitShapes";
+import { shapesBounds, socketsJoin, type ConnectorDef, type CornerTurn, type DungeonContent, type DungeonPartDef, type DungeonStyleDef, type SocketDef } from "./dungeonDefs";
+import { boxShape, stairGeometry, type Polyline } from "./kitShapes";
 
 /** What the generator knows of the world above: the ground's height, and whether a building stands there. */
 export interface DungeonGround {
@@ -27,7 +27,11 @@ export interface PlacedPart {
   y: number;
   z: number;
   yaw: number;
+  /** What it takes up, as a box in the world (round it, when it is turned) ... */
   bounds: Aabb;
+  /** ... and as a box in the layout's own frame, where it is square to the axes: exact. Parts are
+   *  kept apart, and the ground over them sampled, by this one. */
+  box: Aabb;
   /** Which of its sockets it was joined by (-1: the entrance), and to which part. */
   entry: number;
   parent: number;
@@ -58,6 +62,27 @@ export interface DungeonLayout {
   key: number;
   /** Why each failed attempt failed. */
   failures: string[];
+  /** The layout's own frame: the entrance's site, turned to its door's facing - every part square to it. */
+  frame: DungeonFrame;
+}
+
+/** A frame square to a layout's parts: (fx, fz) in it is world (x, z) + fx and fz turned by `yaw`. */
+export interface DungeonFrame {
+  x: number;
+  z: number;
+  yaw: number;
+}
+
+/** A frame point in the world. */
+export function frameToWorld(f: DungeonFrame, fx: number, fz: number): { x: number; z: number } {
+  const c = Math.cos(f.yaw), s = Math.sin(f.yaw);
+  return { x: f.x + fx * c + fz * s, z: f.z - fx * s + fz * c };
+}
+
+/** A world point in a frame. */
+export function worldToFrame(f: DungeonFrame, x: number, z: number): { fx: number; fz: number } {
+  const c = Math.cos(f.yaw), s = Math.sin(f.yaw), dx = x - f.x, dz = z - f.z;
+  return { fx: dx * c - dz * s, fz: dx * s + dz * c };
 }
 
 interface WorldSocket {
@@ -86,27 +111,34 @@ function socketOf(placed: PlacedPart[], part: number, socket: number): WorldSock
 
 const normalDegrees = (d: number): number => ((d % 360) + 360) % 360;
 
-function boundsOf(part: DungeonPartDef, x: number, y: number, z: number, yaw: number): Aabb {
-  const probe: PlacedPart = { part, x, y, z, yaw, bounds: part.bounds, entry: -1, parent: -1, role: "way" };
-  const min = vec3(Infinity, Infinity, Infinity), max = vec3(-Infinity, -Infinity, -Infinity);
+/** A placed part's bounds in the world and in the layout's frame. */
+function boundsOf(part: DungeonPartDef, x: number, y: number, z: number, yaw: number, frame: DungeonFrame): { bounds: Aabb; box: Aabb } {
+  const probe = { part, x, y, z, yaw } as PlacedPart;
+  const bounds = { min: vec3(Infinity, Infinity, Infinity), max: vec3(-Infinity, -Infinity, -Infinity) };
+  const box = { min: vec3(Infinity, Infinity, Infinity), max: vec3(-Infinity, -Infinity, -Infinity) };
+  const take = (b: Aabb, px: number, py: number, pz: number): void => {
+    b.min.x = Math.min(b.min.x, px); b.min.y = Math.min(b.min.y, py); b.min.z = Math.min(b.min.z, pz);
+    b.max.x = Math.max(b.max.x, px); b.max.y = Math.max(b.max.y, py); b.max.z = Math.max(b.max.z, pz);
+  };
   const b = part.bounds;
   for (const lx of [b.min.x, b.max.x]) for (const ly of [b.min.y, b.max.y]) for (const lz of [b.min.z, b.max.z]) {
     const p = toWorld(probe, vec3(lx, ly, lz));
-    min.x = Math.min(min.x, p.x); min.y = Math.min(min.y, p.y); min.z = Math.min(min.z, p.z);
-    max.x = Math.max(max.x, p.x); max.y = Math.max(max.y, p.y); max.z = Math.max(max.z, p.z);
+    take(bounds, p.x, p.y, p.z);
+    const f = worldToFrame(frame, p.x, p.z);
+    take(box, f.fx, p.y, f.fz);
   }
-  return { min, max };
+  return { bounds, box };
 }
 
 /** Puts `part` so its socket `entry` meets the open socket `to`, facing it. */
-function placeAt(part: DungeonPartDef, entry: number, to: WorldSocket): Omit<PlacedPart, "parent" | "role"> {
+function placeAt(part: DungeonPartDef, entry: number, to: WorldSocket, frame: DungeonFrame): Omit<PlacedPart, "parent" | "role"> {
   const s = part.sockets[entry];
   const yaw = normalDegrees(to.facing + 180 - s.facing) * DEG;
   const c = Math.cos(yaw), sn = Math.sin(yaw);
   const x = to.at.x - (s.at.x * c + s.at.z * sn);
   const y = to.at.y - s.at.y;
   const z = to.at.z - (-s.at.x * sn + s.at.z * c);
-  return { part, x, y, z, yaw, bounds: boundsOf(part, x, y, z, yaw), entry };
+  return { part, x, y, z, yaw, ...boundsOf(part, x, y, z, yaw, frame), entry };
 }
 
 /** Whether two boxes overlap by more than a sliver (parts touch where they join). */
@@ -127,11 +159,17 @@ export function generateLayout(content: DungeonContent, styleId: string, size: s
   const failures: string[] = [];
   // Mixed first, so small neighbouring seeds' attempts never share a seed.
   const root = deriveSeed(deriveSeed(seed, 0x6d2b79f5), seed);
+  // The first that passes and has the style's least loops; failing that, the first that passes.
+  let fallback: DungeonLayout | null = null;
   for (let attempt = 0; attempt < content.rules.attempts; attempt++) {
     const result = attemptLayout(content, style, size, deriveSeed(root, attempt + 1), site, ground, heights, false);
     if (typeof result === "string") { failures.push(result); continue; }
-    return { ...result, seed, attempt, failures };
+    const layout = { ...result, seed, attempt, failures: [...failures] };
+    if (result.joins.filter((j) => j.loop).length >= style.loops[0]) return layout;
+    failures.push(`only ${result.joins.filter((j) => j.loop).length} loops of the ${style.loops[0]} wanted`);
+    fallback ??= layout;
   }
+  if (fallback) return fallback;
   const minimal = attemptLayout(content, style, size, deriveSeed(root, 0), site, ground, heights, true);
   if (typeof minimal === "string") throw new Error(`not even the minimal ${styleId} layout fits here: ${minimal}`);
   return { ...minimal, seed, attempt: content.rules.attempts, minimal: true, failures };
@@ -141,41 +179,53 @@ type Attempt = Omit<DungeonLayout, "seed" | "attempt" | "failures">;
 
 function attemptLayout(content: DungeonContent, style: DungeonStyleDef, size: string, seed: number, site: DungeonSite, ground: DungeonGround, heights: Map<string, { h: number; built: boolean }>, minimal: boolean): Attempt | string {
   const rules = content.rules;
+  const frame: DungeonFrame = { x: site.x, z: site.z, yaw: site.facing * DEG };
   const random = mulberry32(seed);
   const roll = ([lo, hi]: [number, number]): number => lo + Math.floor(random() * (hi - lo + 1));
   const targetRooms = minimal ? 1 : roll(style.sizes[size].rooms);
   const placed: PlacedPart[] = [];
   const joins: Join[] = [];
 
-  /** The ground at a point of the sampling grid, cached across attempts. */
-  const groundAt = (gx: number, gz: number): { h: number; built: boolean } => {
-    const key = `${gx},${gz}`;
+  /** The ground at a point of the fine grid (half the sampling's spacing), cached across attempts. */
+  const fine = rules.sample / 2;
+  const groundAt = (fx: number, fz: number): { h: number; built: boolean } => {
+    const key = `${fx},${fz}`;
     let g = heights.get(key);
     if (!g) {
-      const x = gx * rules.sample, z = gz * rules.sample;
+      const x = fx * fine, z = fz * fine;
       g = { h: ground.heightAt(x, z), built: ground.builtAt(x, z) };
       heights.set(key, g);
     }
     return g;
   };
-  /** The least rock over a box (negative: it shows), under buildings counting half. */
-  const coverOver = (b: Aabb): number => {
+  /**
+   * The least rock over a box (negative: it shows), under buildings counting half: sampled at the
+   * rules' spacing while choosing parts, and twice as finely over a finished layout, so a dip
+   * narrower than the spacing (a stream's bed) is never missed.
+   */
+  const coverOver = (box: Aabb, finely = false): number => {
     let least = Infinity;
-    const s = rules.sample;
-    for (let gx = Math.floor((b.min.x - rules.around) / s); gx <= Math.ceil((b.max.x + rules.around) / s); gx++) {
-      for (let gz = Math.floor((b.min.z - rules.around) / s); gz <= Math.ceil((b.max.z + rules.around) / s); gz++) {
-        const g = groundAt(gx, gz);
+    // Over the part's box in the layout's frame (exact, however the layout is turned), each point
+    // read from the nearest point of the world's fine grid.
+    const step = finely ? fine : rules.sample;
+    const x0 = box.min.x - rules.around, x1 = box.max.x + rules.around, z0 = box.min.z - rules.around, z1 = box.max.z + rules.around;
+    const nx = Math.ceil((x1 - x0) / step), nz = Math.ceil((z1 - z0) / step);
+    for (let i = 0; i <= nx; i++) {
+      for (let k = 0; k <= nz; k++) {
+        const w = frameToWorld(frame, Math.min(x1, x0 + i * step), Math.min(z1, z0 + k * step));
+        const g = groundAt(Math.round(w.x / fine), Math.round(w.z / fine));
+        const b = box;
         const rock = g.h - b.max.y;
         least = Math.min(least, g.built ? rock / 2 : rock);
       }
     }
     return least;
   };
-  const coverAt = (x: number, z: number): number => groundAt(Math.round(x / rules.sample), Math.round(z / rules.sample)).h;
+  const coverAt = (x: number, z: number): number => groundAt(Math.round(x / fine) & ~1, Math.round(z / fine) & ~1).h;
 
   /** Whether a part may stand where it was put: clear of every other part, deep enough. */
   const fits = (b: Aabb, except: readonly number[]): string | null => {
-    for (let i = 0; i < placed.length; i++) if (!except.includes(i) && overlaps(b, placed[i].bounds)) return "overlap";
+    for (let i = 0; i < placed.length; i++) if (!except.includes(i) && overlaps(b, placed[i].box)) return "overlap";
     if (b.min.y < site.y - style.deepest) return "too deep";
     if (coverOver(b) < style.cover) return "too near the surface";
     return null;
@@ -187,7 +237,7 @@ function attemptLayout(content: DungeonContent, style: DungeonStyleDef, size: st
   if (!entrancePart) return "no entrance";
   const mouth = entrancePart.sockets.findIndex((s) => s.type === "surface");
   const surface: WorldSocket = { part: -1, socket: -1, at: vec3(site.x, site.y, site.z), facing: normalDegrees(site.facing + 180), def: entrancePart.sockets[mouth] };
-  placed.push({ ...placeAt(entrancePart, mouth, surface), entry: mouth, parent: -1, role: "entrance" });
+  placed.push({ ...placeAt(entrancePart, mouth, surface, frame), entry: mouth, parent: -1, role: "entrance" });
 
   /** Ends to grow from; ends set aside by the branching roll, grown from only if the others run
    *  out; ends nothing would fit at. All three are capped at the close. */
@@ -236,8 +286,8 @@ function attemptLayout(content: DungeonContent, style: DungeonStyleDef, size: st
     for (let t = 0; t < rules.triesPerSocket && options.length > 0; t++) {
       const option = pickWeighted(options, (o) => o.weight, random)!;
       options.splice(options.indexOf(option), 1);
-      const put = placeAt(option.part, option.entry, at);
-      const problem = fits(put.bounds, [at.part, ...except]);
+      const put = placeAt(option.part, option.entry, at, frame);
+      const problem = fits(put.box, [at.part, ...except]);
       if (problem) { why = problem; continue; }
       placed.push({ ...put, parent: at.part, role: role(option.part) });
       const index = placed.length - 1;
@@ -245,6 +295,36 @@ function attemptLayout(content: DungeonContent, style: DungeonStyleDef, size: st
       return index;
     }
     return why;
+  };
+
+  /** Joins two open ends with a routed way of connector pieces, trying the shortest routes in turn. */
+  const bridge = (c: ConnectorDef, a: WorldSocket, b: WorldSocket): boolean => {
+    for (const plan of routesBetween(c, a, b, random)) if (lay(c, plan, a, b)) return true;
+    return false;
+  };
+  /** Lays a route's pieces from `a`; takes them all back if any will not fit. */
+  const lay = (c: ConnectorDef, plan: RouteStep[], a: WorldSocket, b: WorldSocket): boolean => {
+    const placedBefore = placed.length, joinsBefore = joins.length;
+    const undo = (): false => { placed.length = placedBefore; joins.length = joinsBefore; return false; };
+    let at = a;
+    const pieces = plan.filter((step) => step.kind === "corner" || step.length > 1e-3 || step.dy !== 0);
+    for (let k = 0; k < pieces.length; k++) {
+      const step = pieces[k];
+      const part = step.kind === "corner" ? step.corner.part : connectorPart(c, step.length, step.dy);
+      const entry = step.kind === "corner" ? step.corner.entry : 0;
+      const exit = step.kind === "corner" ? step.corner.exit : 1;
+      const put = placeAt(part, entry, at, frame);
+      if (fits(put.box, k === pieces.length - 1 ? [at.part, b.part] : [at.part])) return undo();
+      placed.push({ ...put, parent: at.part, role: "way" });
+      const index = placed.length - 1;
+      joins.push({ a: at.part, socketA: at.socket, b: index, socketB: entry, loop: false });
+      at = socketOf(placed, index, exit);
+    }
+    // Where it came out: at the other end, face to face.
+    const gap = Math.hypot(at.at.x - b.at.x, at.at.y - b.at.y, at.at.z - b.at.z);
+    if (gap > 0.01 || Math.abs(normalDegrees(at.facing - b.facing) - 180) > 0.01) return undo();
+    joins.push({ a: at.part, socketA: at.socket, b: b.part, socketB: b.socket, loop: true });
+    return true;
   };
 
   // 2. Grow, breadth first, until there are rooms enough.
@@ -279,19 +359,39 @@ function attemptLayout(content: DungeonContent, style: DungeonStyleDef, size: st
   // The rolled count is what it grows toward; the size's least is what it must reach.
   if (rooms < style.sizes[size].rooms[0] && !minimal) return `grew only ${rooms} of ${targetRooms} rooms (${placed.length} parts${placed.length >= maxParts ? ", the most allowed" : ""})`;
 
-  // 3. Loops: two open sockets meeting face to face, joined as they are.
-  const loopsWanted = minimal ? 0 : roll(style.loops);
+  // 3. Loops, made on purpose: two open ends far apart along the layout but near in the ground,
+  // joined by a route of corridors, corners and a flight sized to fit - so a way circles back, and
+  // the dungeon is easy to get lost in.
+  const connector = style.connector;
+  const loopsWanted = minimal || !connector ? 0 : roll(style.loops);
   let loops = 0;
-  const ends = [...open, ...spare, ...toCap];
-  for (let i = 0; i < ends.length && loops < loopsWanted; i++) {
-    for (let j = i + 1; j < ends.length && loops < loopsWanted; j++) {
-      const a = ends[i], b = ends[j];
-      if (a.part === b.part || !socketsJoin(rules, a.def.type, b.def.type)) continue;
-      if (Math.abs(normalDegrees(a.facing - b.facing) - 180) > 0.5) continue;
-      if (Math.hypot(a.at.x - b.at.x, a.at.y - b.at.y, a.at.z - b.at.z) > rules.loopReach) continue;
-      joins.push({ a: a.part, socketA: a.socket, b: b.part, socketB: b.socket, loop: true });
+  if (connector && loopsWanted > 0) {
+    const ends = [...open, ...spare, ...toCap].filter((s) => socketsJoin(rules, s.def.type, connector.socket));
+    const spans = new Map<number, number[]>();
+    const spanOf = (a: number, b: number): number => {
+      if (!spans.has(a)) spans.set(a, graphDistances(placed.length, joins, a));
+      return spans.get(a)![b];
+    };
+    const pairs: { a: WorldSocket; b: WorldSocket; span: number; apart: number }[] = [];
+    for (let i = 0; i < ends.length; i++) {
+      for (let j = i + 1; j < ends.length; j++) {
+        const a = ends[i], b = ends[j];
+        if (a.part === b.part) continue;
+        const apart = Math.hypot(a.at.x - b.at.x, a.at.z - b.at.z);
+        const span = spanOf(a.part, b.part);
+        if (apart <= rules.loopReach && span >= rules.loopSpan) pairs.push({ a, b, span, apart });
+      }
+    }
+    // The longest way round first; of those, the nearest.
+    pairs.sort((x, y) => y.span - x.span || x.apart - y.apart);
+    const used = new Set<WorldSocket>();
+    for (const { a, b } of pairs) {
+      if (loops >= loopsWanted) break;
+      if (used.has(a) || used.has(b)) continue;
+      if (!bridge(connector, a, b)) continue;
       loops++;
       for (const s of [a, b]) {
+        used.add(s);
         for (const list of [open, spare, toCap]) { const k = list.indexOf(s); if (k >= 0) list.splice(k, 1); }
       }
     }
@@ -368,7 +468,7 @@ function attemptLayout(content: DungeonContent, style: DungeonStyleDef, size: st
     const options = style.caps.flatMap((part) => part.sockets.map((c, entry) => ({ part, entry, c })).filter(({ c }) => socketsJoin(rules, c.type, s.def.type)));
     const option = pickWeighted(options, (o) => o.part.weight, random);
     if (!option) return `nothing caps a "${s.def.type}" socket`;
-    placed.push({ ...placeAt(option.part, option.entry, s), parent: s.part, role: "cap" });
+    placed.push({ ...placeAt(option.part, option.entry, s, frame), parent: s.part, role: "cap" });
     joins.push({ a: s.part, socketA: s.socket, b: placed.length - 1, socketB: option.entry, loop: false });
   }
 
@@ -376,9 +476,9 @@ function attemptLayout(content: DungeonContent, style: DungeonStyleDef, size: st
   const reach = graphDistances(placed.length, joins, 0);
   if (reach.some((d) => d === Infinity)) return "a part cannot be reached";
   for (let i = 1; i < placed.length; i++) {
-    if (placed[i].role !== "cap" && coverOver(placed[i].bounds) < style.cover - 1e-6) return `${placed[i].part.id} too near the surface`;
+    if (placed[i].role !== "cap" && coverOver(placed[i].box, true) < style.cover - 1e-6) return `${placed[i].part.id} too near the surface, between the samples`;
   }
-  return { style: style.id, size, minimal, parts: placed, joins, boss, lock, key };
+  return { style: style.id, size, minimal, parts: placed, joins, boss, lock, key, frame };
 }
 
 /** Steps from `from` to every part, over the joins. */
@@ -426,4 +526,171 @@ export function placedPaths(p: PlacedPart): Polyline[] {
 /** A placed part's sockets, in the world. */
 export function placedSockets(layout: DungeonLayout, index: number): WorldSocket[] {
   return layout.parts[index].part.sockets.map((_, i) => socketOf(layout.parts, index, i));
+}
+
+// --- Loops: routes between two open ends, and the pieces sized to fit them -------------------
+
+type RouteStep = { kind: "way"; length: number; dy: number } | { kind: "corner"; corner: CornerTurn };
+type Dir = [number, number];
+
+/** How long a straight run out of an end may be before it turns, to find a way round. */
+const STUBS = [0, 12, 24];
+/** Routes tried between two ends, shortest first, before giving them up. */
+const ROUTES_TRIED = 16;
+
+/**
+ * The ways from open end `a` to open end `b` in straights and quarter turns, on the layout's own
+ * square grid, shortest first. At the heart of each, one of: straight on (facing each other in
+ * line), one turn (facing across), a dog-leg (facing each other off line) or a U (facing the same
+ * way); before it, a run out of `a` and a turn, and after it a turn and a run into `b`, either or
+ * both - so ends facing away from each other still meet. Any change of height becomes flights of
+ * stairs in the straights.
+ */
+export function routesBetween(c: ConnectorDef, a: WorldSocket, b: WorldSocket, random: () => number): RouteStep[][] {
+  const dir = (facing: number): Dir => [Math.sin(facing * DEG), Math.cos(facing * DEG)];
+  const right = (h: Dir): Dir => [h[1], -h[0]];
+  const turned = (h: Dir, turn: 1 | -1): Dir => (turn === 1 ? right(h) : [-h[1], h[0]]);
+  const pick = (turn: 1 | -1): CornerTurn | null => {
+    const options = c.corners.filter((k) => k.turn === turn);
+    return options.length ? options[Math.floor(random() * options.length)] : null;
+  };
+  type End = { x: number; z: number; out: Dir; steps: RouteStep[] };
+  // a's ends: as it is, or run out and turned. Travel leaves along `out`.
+  const fromA: End[] = [{ x: a.at.x, z: a.at.z, out: dir(a.facing), steps: [] }];
+  // b's ends: as it is, or reached by a turn and a run in. Travel arrives along -`out`.
+  const intoB: End[] = [{ x: b.at.x, z: b.at.z, out: dir(b.facing), steps: [] }];
+  for (const stub of STUBS) {
+    for (const turn of [1, -1] as const) {
+      const ca = pick(turn);
+      if (ca) {
+        const u = dir(a.facing), u1 = turned(u, turn), along = stub + ca.reachIn;
+        fromA.push({ x: a.at.x + u[0] * along + u1[0] * ca.reachOut, z: a.at.z + u[1] * along + u1[1] * ca.reachOut, out: u1, steps: [{ kind: "way", length: stub, dy: 0 }, { kind: "corner", corner: ca }] });
+      }
+      const cb = pick(turn);
+      if (cb) {
+        // Arriving at b along h2 = -v, after turning `turn` from h1.
+        const v = dir(b.facing), h2: Dir = [-v[0], -v[1]], h1 = turned(h2, (-turn) as 1 | -1);
+        const back = stub + cb.reachOut;
+        intoB.push({ x: b.at.x - h2[0] * back - h1[0] * cb.reachIn, z: b.at.z - h2[1] * back - h1[1] * cb.reachIn, out: [-h1[0], -h1[1]], steps: [{ kind: "corner", corner: cb }, { kind: "way", length: stub, dy: 0 }] });
+      }
+    }
+  }
+  const routes: { steps: RouteStep[]; length: number }[] = [];
+  for (const s of fromA) {
+    for (const e of intoB) {
+      for (const core of coreRoutes(s, e, pick)) {
+        // Fresh copies: the ends' steps are shared between routes, and heights are set per route.
+        const steps = [...s.steps, ...core, ...e.steps].map((step) => ({ ...step }));
+        if (!placeHeight(c, steps, b.at.y - a.at.y)) continue;
+        const length = steps.reduce((sum, step) => sum + (step.kind === "way" ? step.length : step.corner.reachIn + step.corner.reachOut), 0);
+        routes.push({ steps, length });
+      }
+    }
+  }
+  return routes.sort((x, y) => x.length - y.length).slice(0, ROUTES_TRIED).map((r) => r.steps);
+}
+
+/** A U's legs may run this much further than they must, to hold flights of stairs. */
+const U_LONGER = [0, 12, 24, 40];
+
+/** Zero, one or two turns between two ends - a U in a few lengths; none if there is no room. */
+function coreRoutes(a: { x: number; z: number; out: Dir }, b: { x: number; z: number; out: Dir }, pick: (turn: 1 | -1) => CornerTurn | null): RouteStep[][] {
+  const u = a.out, v = b.out;
+  const rel: Dir = [b.x - a.x, b.z - a.z];
+  const dot = u[0] * v[0] + u[1] * v[1];
+  const f = rel[0] * u[0] + rel[1] * u[1];
+  const o: Dir = [rel[0] - u[0] * f, rel[1] - u[1] * f];
+  const ol = Math.hypot(o[0], o[1]);
+  const l: Dir = ol > 1e-6 ? [o[0] / ol, o[1] / ol] : [0, 0];
+  const turnOf = (h: Dir, h2: Dir): 1 | -1 => (Math.abs(h2[0] - h[1]) < 1e-6 && Math.abs(h2[1] + h[0]) < 1e-6 ? 1 : -1);
+  const way = (length: number): RouteStep => ({ kind: "way", length, dy: 0 });
+  let options: RouteStep[][];
+  if (dot < -0.999) {
+    if (ol < 0.01) {
+      options = [[way(f)]];
+    } else {
+      const c1 = pick(turnOf(u, l)), c2 = pick(turnOf(l, u));
+      if (!c1 || !c2) return [];
+      const t = (f + c1.reachIn - c2.reachOut) / 2;
+      options = [[way(t - c1.reachIn), { kind: "corner", corner: c1 }, way(ol - c1.reachOut - c2.reachIn), { kind: "corner", corner: c2 }, way(f - t - c2.reachOut)]];
+    }
+  } else if (Math.abs(dot) < 0.001) {
+    const c1 = pick(turnOf(u, [-v[0], -v[1]]));
+    if (!c1) return [];
+    options = [[way(f - c1.reachIn), { kind: "corner", corner: c1 }, way(-(o[0] * v[0] + o[1] * v[1]) - c1.reachOut)]];
+  } else if (dot > 0.999) {
+    if (ol < 0.01) return [];
+    const c1 = pick(turnOf(u, l)), c2 = pick(turnOf(l, [-u[0], -u[1]]));
+    if (!c1 || !c2) return [];
+    options = U_LONGER.map((longer) => {
+      const t = Math.max(c1.reachIn, f + c2.reachOut) + 2 + longer;
+      return [way(t - c1.reachIn), { kind: "corner", corner: c1 }, way(ol - c1.reachOut - c2.reachIn), { kind: "corner", corner: c2 }, way(t - f - c2.reachOut)];
+    });
+  } else {
+    return [];
+  }
+  return options.filter((steps) => steps.every((s) => s.kind !== "way" || s.length >= -1e-6)).map((steps) => steps.map((s) => (s.kind === "way" ? { ...s, length: Math.max(0, s.length) } : s)));
+}
+
+/**
+ * Spreads a change of height over a route's straights as flights (a 3 m landing either end of
+ * each), the longest taking most. False if they cannot hold it.
+ */
+function placeHeight(c: ConnectorDef, steps: RouteStep[], dy: number): boolean {
+  if (Math.abs(dy) < 1e-6) return true;
+  const total = Math.round(Math.abs(dy) / c.rise);
+  if (Math.abs(total * c.rise - Math.abs(dy)) > 1e-6) return false;
+  const ways = steps.filter((s): s is Extract<RouteStep, { kind: "way" }> => s.kind === "way");
+  const holds = (length: number): number => (length >= 6 + c.tread ? Math.floor((length - 6) / c.tread + 1e-9) : 0);
+  if (ways.reduce((sum, s) => sum + holds(s.length), 0) < total) return false;
+  let left = total;
+  for (const s of [...ways].sort((x, y) => y.length - x.length)) {
+    const k = Math.min(holds(s.length), left);
+    s.dy = Math.sign(dy) * k * c.rise;
+    left -= k;
+  }
+  return true;
+}
+
+const connectorParts = new WeakMap<ConnectorDef, Map<string, DungeonPartDef>>();
+
+/**
+ * A straight piece of way `length` long, going `dy` up (or down) - a corridor, or a flight between
+ * two 3 m landings - built as the kit's corridors and stairs are: floor, walls, vault, 6 m clear.
+ */
+export function connectorPart(c: ConnectorDef, length: number, dy: number): DungeonPartDef {
+  let cache = connectorParts.get(c);
+  if (!cache) connectorParts.set(c, (cache = new Map()));
+  const key = `${length.toFixed(3)}:${dy.toFixed(3)}`;
+  const known = cache.get(key);
+  if (known) return known;
+  const w = c.width / 2, o = w + c.wall, h = c.height;
+  const shapes: ShapeDesc[] = [];
+  const paths: Polyline[] = [];
+  if (dy === 0) {
+    shapes.push(boxShape(-o, -1, 0, o, 0, length), boxShape(-o, -1, 0, -w, h + 1, length), boxShape(w, -1, 0, o, h + 1, length), boxShape(-o, h, 0, o, h + 1, length));
+    paths.push([vec3(0, 0, 0), vec3(0, 0, length)]);
+  } else {
+    const low = Math.min(0, dy), high = Math.max(0, dy);
+    const flight = stairGeometry({ from: vec3(0, 0, 3), to: vec3(0, dy, length - 3), width: c.width, rise: c.rise, ceiling: h, walls: false });
+    shapes.push(boxShape(-w, -1, 0, w, 0, 3), boxShape(-w, dy - 1, length - 3, w, dy, length), ...flight.shapes);
+    shapes.push(boxShape(-o, h, 0, o, h + 1, 3), boxShape(-o, dy + h, length - 3, o, dy + h + 1, length));
+    shapes.push(boxShape(-o, low - 2, 0, -w, high + h + c.rise + 1, length), boxShape(w, low - 2, 0, o, high + h + c.rise + 1, length));
+    paths.push([vec3(0, 0, 0), vec3(0, 0, 3)], ...flight.paths, [vec3(0, dy, length - 3), vec3(0, dy, length)]);
+  }
+  const socket = (at: Vec3, facing: number): SocketDef => ({ at, facing, type: c.socket, size: [c.width, c.height] });
+  const part: DungeonPartDef = {
+    id: `connector:${key}`,
+    tags: ["connector"],
+    weight: 0,
+    stage: [0, 1],
+    bounds: shapesBounds(shapes),
+    sockets: [socket(vec3(0, 0, 0), 180), socket(vec3(0, dy, length), 0)],
+    shapes,
+    paths,
+    spots: {},
+    room: false,
+  };
+  cache.set(key, part);
+  return part;
 }

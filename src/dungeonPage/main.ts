@@ -25,7 +25,7 @@ const ROLES: Record<PlacedPart["role"], { label: string; fill: string }> = {
 };
 element("legend").innerHTML =
   Object.values(ROLES).map((r) => `<div><i style="background:${r.fill}"></i>${r.label}</div>`).join("") +
-  `<div><i style="background:#e0c050"></i>Key (in its room)</div><div><i style="background:#e05050"></i>Locked way</div><div><i style="background:#5f9e5f"></i>Ground (side view)</div>`;
+  `<div><i style="background:#7fa87f"></i>Loop (made to fit)</div><div><i style="background:#e0c050"></i>Key (in its room)</div><div><i style="background:#e05050"></i>Locked way</div><div><i style="background:#5f9e5f"></i>Ground (side view)</div>`;
 
 const params = new URLSearchParams(location.search);
 let content: DungeonContent | null = null;
@@ -83,7 +83,7 @@ function drawLayout(canvas: HTMLCanvasElement, layout: DungeonLayout, ground: Te
     const p = parts[i];
     const corners = footprint(p);
     g.globalAlpha = depthShade(p.bounds.max.y) * (p.role === "cap" ? 1 : 0.85);
-    g.fillStyle = ROLES[p.role].fill;
+    g.fillStyle = p.part.tags.includes("connector") ? "#7fa87f" : ROLES[p.role].fill;
     g.beginPath();
     corners.forEach((c, k) => (k === 0 ? g.moveTo(px(c.x), pz(c.z)) : g.lineTo(px(c.x), pz(c.z))));
     g.closePath();
@@ -170,12 +170,13 @@ function render(): void {
     }
     const ms = performance.now() - t0;
     const rooms = layout.parts.filter((p) => p.role === "room" || p.role === "boss").length;
+    const loops = layout.joins.filter((j) => j.loop).length;
     const depth = testSite(ground).y - Math.min(...layout.parts.map((p) => p.bounds.min.y + 1));
     const walk = new URLSearchParams({ preset: "dungeon", style: style.id, size: sizeSelect.value, seed: String(seed), ground: ground.id });
     const title = document.createElement("div");
     title.className = "title";
     title.innerHTML =
-      `<b>seed ${seed}</b><span>${rooms} rooms, ${layout.parts.length} parts, ${depth.toFixed(0)} m down` +
+      `<b>seed ${seed}</b><span>${rooms} rooms, ${loops} loop${loops === 1 ? "" : "s"}, ${layout.parts.length} parts, ${depth.toFixed(0)} m down` +
       `${layout.minimal ? ", <b>minimal</b>" : ""}${layout.attempt > 0 && !layout.minimal ? `, try ${layout.attempt + 1}` : ""}, ${ms.toFixed(1)} ms</span>` +
       `<a href="collision.html?${walk}" target="_blank">Walk it</a>`;
     if (layout.failures.length > 0) title.title = layout.failures.join("\n");

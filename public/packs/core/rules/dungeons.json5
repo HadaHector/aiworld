@@ -15,6 +15,8 @@
   // times likelier and none going up is used: a layout dives first, then spreads.
   thinCover: 20,
   diveWeight: 4,
-  // Two open ends this close, face to face, are joined as they are - a loop.
-  loopReach: 0.1,
+  // Loops: two open ends at most this far apart (metres, straight) and at least this many joins
+  // apart along the layout are joined by a routed way - the longer the way round, the better.
+  loopReach: 60,
+  loopSpan: 4,
 }
