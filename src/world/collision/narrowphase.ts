@@ -1,6 +1,6 @@
 import { gjkDistance, support, type PointSet } from "./gjk";
-import { heightfieldTriangles } from "./raycast";
-import { boxCorners, type Box, type Convex, type Heightfield, type Shape } from "./shapes";
+import { heightfieldTriangles, heightfieldUndersides } from "./raycast";
+import { behindMesh, boxCorners, inHeightfield, meshTriangle, type Box, type Convex, type Heightfield, type Shape, type TriangleMesh } from "./shapes";
 import { aabbOfPoints, cross, dot, length, lengthSq, madd, normalize, scale, sub, vec3, type Aabb, type Vec3 } from "./vec";
 
 /** What asks - a character, a probe: a sphere, or a capsule from `a` to `b`. */
@@ -25,7 +25,7 @@ export function queryBounds(q: QueryShape, pad = 0): Aabb {
 }
 
 /** A shape as a hull of points and a radius around it - its core. */
-function shapeCore(shape: Exclude<Shape, Heightfield>): { points: PointSet; radius: number } {
+function shapeCore(shape: Exclude<Shape, Heightfield | TriangleMesh>): { points: PointSet; radius: number } {
   switch (shape.kind) {
     case "sphere":
       return { points: [shape.center], radius: shape.radius };
@@ -96,8 +96,8 @@ function satPenetration(core: PointSet, poly: Polytope): { normal: Vec3; depth: 
   return best;
 }
 
-/** A query shape against any shape but a heightfield. */
-export function separate(q: QueryShape, shape: Exclude<Shape, Heightfield>): Separation {
+/** A query shape against any shape but those made of triangles (heightfields and meshes). */
+export function separate(q: QueryShape, shape: Exclude<Shape, Heightfield | TriangleMesh>): Separation {
   const qCore = queryCore(q);
   const core = shapeCore(shape);
   const g = gjkDistance(qCore, core.points);
@@ -121,9 +121,10 @@ export function separate(q: QueryShape, shape: Exclude<Shape, Heightfield>): Sep
 }
 
 /**
- * A query shape against one triangle of the ground, which is solid below it only: what is under
- * the ground is pushed up through the triangle's face, never down. `underGround` says whether a
- * point is below the ground as a whole - lacking it, below the triangle's face.
+ * A query shape against one triangle of a solid's surface (the ground, a cave's rock), the solid
+ * behind its face only: what is in the solid is pushed out through the triangle's face, never back.
+ * `underGround` says whether a point is in the solid as a whole - lacking it, behind the triangle's
+ * face and straight under it.
  */
 export function separateTriangle(q: QueryShape, tri: readonly [Vec3, Vec3, Vec3], underGround?: (p: Vec3) => boolean): Separation {
   const qCore = queryCore(q);
@@ -151,17 +152,41 @@ function insideTriangle(p: Vec3, [a, b, c]: readonly [Vec3, Vec3, Vec3]): boolea
   return inFrom(a, b) > margin && inFrom(b, c) > margin && inFrom(c, a) > margin;
 }
 
-/** Each triangle of a heightfield whose cell's ground overlaps a box (holes left out). */
+/**
+ * Each triangle of a heightfield whose cell's ground overlaps a box (holes left out) - and, for a
+ * slab of ground, the underside's under a cell the box reaches below the top of.
+ */
 export function forEachFieldTriangle(field: Heightfield, box: Aabb, visit: (tri: [Vec3, Vec3, Vec3]) => void): void {
   const cells = field.columns - 1;
   const c0 = Math.max(0, Math.floor((box.min.x - field.originX) / field.cell));
   const c1 = Math.min(cells - 1, Math.floor((box.max.x - field.originX) / field.cell));
   const r0 = Math.max(0, Math.floor((box.min.z - field.originZ) / field.cell));
   const r1 = Math.min(field.rows - 2, Math.floor((box.max.z - field.originZ) / field.cell));
+  const slab = field.depth !== Infinity;
   for (let row = r0; row <= r1; row++) {
     for (let col = c0; col <= c1; col++) {
       if (field.holes && field.holes[row * cells + col]) continue;
-      for (const tri of heightfieldTriangles(field, col, row)) visit(tri);
+      if (!slab) {
+        for (const tri of heightfieldTriangles(field, col, row)) visit(tri);
+        continue;
+      }
+      const h = field.heights, i = row * field.columns + col;
+      const low = Math.min(h[i], h[i + 1], h[i + field.columns], h[i + field.columns + 1]);
+      const high = Math.max(h[i], h[i + 1], h[i + field.columns], h[i + field.columns + 1]);
+      // All of the box under the slab: its underside is nearer than its top, which can be left out.
+      if (box.max.y >= low - field.depth) for (const tri of heightfieldTriangles(field, col, row)) visit(tri);
+      if (box.min.y < high - field.depth) for (const tri of heightfieldUndersides(field, col, row)) visit(tri);
     }
   }
+}
+
+/** Each triangle of a mesh whose bounds overlap a box. */
+export function forEachMeshTriangle(mesh: TriangleMesh, box: Aabb, visit: (tri: [Vec3, Vec3, Vec3]) => void): void {
+  mesh.tree.query(box, (t) => visit(meshTriangle(mesh, t)));
+}
+
+/** Whether a point is in a shape made of triangles, for `separateTriangle`. */
+export function solidTest(shape: Heightfield | TriangleMesh): (p: Vec3) => boolean {
+  if (shape.kind === "heightfield") return (p) => inHeightfield(shape, p);
+  return shape.inside ?? ((p) => behindMesh(shape, p));
 }

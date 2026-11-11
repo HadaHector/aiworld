@@ -27,14 +27,25 @@ only; which content makes which colliders is a step of its own, after it.
 | `capsule` | segment a-b, radius |
 | `box` | centre, half-extents, any rotation |
 | `convex` | points, and the face planes of their hull |
-| `heightfield` | origin, cell size, a grid of heights, optional holes |
+| `heightfield` | origin, cell size, a grid of heights, optional holes, optional depth |
+| `mesh` | triangles facing the open side, an optional inside test |
 
 - A heightfield's cell is two triangles, split along the diagonal from its (col, row) corner to its
   (col + 1, row + 1) one. **Ground is solid only through its top**: whatever is under it is pushed
   up, but its outer edges and the sides of its holes are open - a cellar dug through it needs walls
   of its own.
+- **A heightfield's depth** makes it a slab, solid only that far under its surface and open below,
+  so a cave under the ground is not in it (DUNGEONS.md). Lacking one it is solid all the way down,
+  as the game's ground still is. A slab is entered from below as well: its underside is the same
+  triangles, `depth` lower, facing down.
+- **A mesh** is a one-sided surface - a cave's rock, meshed from its distance field - each triangle
+  facing the open side, the solid behind. Whatever is in the solid is pushed out through the face it
+  is behind, as with the ground. Whether a point is in the solid comes from the mesh's own test (a
+  cave passes its sampled field), or else from the faces: the first face straight above the point,
+  seen from behind, means inside - right for any surface closed above. Its triangles are in a
+  bounding-box tree of their own; a query visits only those it touches (a cave: about 25 a step).
 
-- Everything but the heightfield is convex and answers one question - its furthest point in a
+- Everything but the heightfield and the mesh is convex and answers one question - its furthest point in a
   direction - which is all the general tests need.
 - Concave things are several shapes. An optional `group` names what they belong to (a house), so a
   ray can say what it hit as well as which piece.
@@ -95,7 +106,8 @@ A page of its own (`collision.html`) to try all of it:
 - spawn spheres, capsules, boxes and random convex hulls ahead of the character, any size and
   rotation, solid or blocking sight only; shift-click one to delete it, or clear them all;
 - preset scenes: a stair, a low-ceilinged corridor, a ramp too steep, a pile of tilted shapes, a
-  wedge of two walls, a gap too narrow;
+  wedge of two walls, a gap too narrow; and underground, under a slab of ground 3 m deep, a cave of
+  two chambers and a tunnel down (a `mesh`) and a crypt corridor of boxes with a stair down;
 - colliders drawn as wireframes, contacts and their normals coloured ground / wall / ceiling;
 - click to cast a ray and see its hit and normal; a line of sight to a marker;
 - the capsule's size on sliders;

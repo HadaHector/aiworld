@@ -101,6 +101,7 @@ const solidMaterial = material("solid", new Color3(0.72, 0.7, 0.64));
 const spawnedMaterial = material("spawned", new Color3(0.55, 0.68, 0.85));
 const sightMaterial = material("sightOnly", new Color3(0.45, 0.8, 0.5), 0.45);
 const groundMaterial = material("ground", new Color3(0.42, 0.5, 0.36));
+const rockMaterial = material("rock", new Color3(0.55, 0.5, 0.45));
 const colliderMaterial = material("collider", new Color3(1, 0.55, 0.15), 0.3);
 
 function meshFor(shape: Shape): Mesh {
@@ -146,9 +147,23 @@ function meshFor(shape: Shape): Mesh {
       mesh = customMesh(name, points, triangles);
       break;
     }
+    case "mesh": {
+      // Smooth, not flat: a cave's rock is a curved surface. Babylon winds the other way round.
+      mesh = new Mesh(name, scene);
+      const data = new VertexData();
+      data.positions = shape.positions;
+      const indices = new Uint32Array(shape.indices.length);
+      for (let i = 0; i < indices.length; i += 3) { indices[i] = shape.indices[i]; indices[i + 1] = shape.indices[i + 2]; indices[i + 2] = shape.indices[i + 1]; }
+      data.indices = indices;
+      const normals: number[] = [];
+      VertexData.ComputeNormals(data.positions, data.indices, normals);
+      data.normals = normals;
+      data.applyToMesh(mesh);
+      break;
+    }
   }
   mesh.material =
-    shape.kind === "heightfield" ? groundMaterial : shape.group === TREE_GROUP ? colliderMaterial : !(shape.layers & Layers.solid) ? sightMaterial : spawned.has(shape.id) ? spawnedMaterial : solidMaterial;
+    shape.kind === "mesh" ? rockMaterial : shape.kind === "heightfield" ? groundMaterial : shape.group === TREE_GROUP ? colliderMaterial : !(shape.layers & Layers.solid) ? sightMaterial : spawned.has(shape.id) ? spawnedMaterial : solidMaterial;
   // Outlines on the flat-sided ones; round ones would only show their tessellation.
   if (shape.kind === "box" || (shape.kind === "convex" && shape.group !== TREE_GROUP)) {
     mesh.enableEdgesRendering(0.95);

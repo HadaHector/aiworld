@@ -1,8 +1,8 @@
 import { buildAabbTree, type AabbTree } from "./aabbTree";
-import { forEachFieldTriangle, queryBounds, separate, separateTriangle, type QueryShape, type Separation } from "./narrowphase";
+import { forEachFieldTriangle, forEachMeshTriangle, queryBounds, separate, separateTriangle, solidTest, type QueryShape, type Separation } from "./narrowphase";
 import { rayShape } from "./raycast";
 import { collisionStats } from "./stats";
-import { createShape, DEFAULT_LAYERS, heightfieldHeight, type Shape, type ShapeDesc } from "./shapes";
+import { createShape, DEFAULT_LAYERS, type Heightfield, type Shape, type ShapeDesc, type TriangleMesh } from "./shapes";
 import { aabbOverlaps, aabbUnion, add, dot, emptyAabb, inverseDirection, length, madd, rayAabb, scale, type Aabb, type Vec3 } from "./vec";
 
 /** Where a ray first met something. */
@@ -87,6 +87,11 @@ export interface CollisionWorld {
   sweep(query: QueryShape, delta: Vec3, mask?: number): SweepHit | null;
   /** How a query shape stands to each shape near it (within `pad`), heightfields as triangles. */
   forEachSeparation(query: QueryShape, pad: number, mask: number, visit: (shape: Shape, separation: Separation) => void): void;
+}
+
+function forEachTriangle(shape: Heightfield | TriangleMesh, box: Aabb, visit: (tri: [Vec3, Vec3, Vec3]) => void): void {
+  if (shape.kind === "heightfield") forEachFieldTriangle(shape, box, visit);
+  else forEachMeshTriangle(shape, box, visit);
 }
 
 export function translateQuery(q: QueryShape, by: Vec3): QueryShape {
@@ -207,17 +212,13 @@ export function createCollisionWorld(): CollisionWorld {
   function forEachSeparation(query: QueryShape, pad: number, mask: number, visit: (shape: Shape, separation: Separation) => void): void {
     const box = queryBounds(query, pad);
     forEachShapeInBounds(box, mask, (s) => {
-      if (s.kind === "heightfield") {
-        const under = (p: Vec3): boolean => {
-          const h = heightfieldHeight(s, p.x, p.z);
-          return h !== null && p.y < h;
-        };
-        forEachFieldTriangle(s, box, (tri) => {
+      if (s.kind === "heightfield" || s.kind === "mesh") {
+        const solid = solidTest(s);
+        forEachTriangle(s, box, (tri) => {
           collisionStats.pairs++;
-          visit(s, separateTriangle(query, tri, under));
+          visit(s, separateTriangle(query, tri, solid));
         });
-      }
-      else {
+      } else {
         collisionStats.pairs++;
         visit(s, separate(query, s));
       }
@@ -278,12 +279,9 @@ export function createCollisionWorld(): CollisionWorld {
     };
 
     forEachShapeInBounds(box, mask, (s) => {
-      if (s.kind === "heightfield") {
-        const under = (p: Vec3): boolean => {
-          const h = heightfieldHeight(s, p.x, p.z);
-          return h !== null && p.y < h;
-        };
-        forEachFieldTriangle(s, box, (tri) => advance(s, (q) => separateTriangle(q, tri, under)));
+      if (s.kind === "heightfield" || s.kind === "mesh") {
+        const solid = solidTest(s);
+        forEachTriangle(s, box, (tri) => advance(s, (q) => separateTriangle(q, tri, solid)));
       } else {
         advance(s, (q) => separate(q, s));
       }

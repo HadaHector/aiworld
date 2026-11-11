@@ -6,7 +6,12 @@ import {
   createCharacterMotor,
 } from "../../src/world/collision/index.ts";
 import { PRESETS } from "../../src/collisionSandbox/presets.ts";
-import { heightfieldTriangles } from "../../src/world/collision/raycast.ts";
+import { heightfieldTriangles, heightfieldUndersides } from "../../src/world/collision/raycast.ts";
+import { CAVE_END, CAVE_START, caveScene, CRYPT } from "../../src/collisionSandbox/caveScene.ts";
+import { fieldAt } from "../../src/world/dungeons/surfaceNets.ts";
+
+/** How far into a cave's rock a point is (about: the field is a distance only roughly), negative in the open. */
+const sampledRock = (field, p) => fieldAt(field, p.x, p.y, p.z, -10);
 import { takeCollisionStats } from "../../src/world/collision/stats.ts";
 
 const rng = mulberry32(7);
@@ -46,7 +51,10 @@ function randomField() {
   const columns = 12, rows = 10;
   const heights = Array.from({ length: columns * rows }, () => rand(-3, 0));
   const holes = new Uint8Array((columns - 1) * (rows - 1)).map(() => (rng() < 0.1 ? 1 : 0));
-  return { kind: "heightfield", originX: -6, originZ: -5, cell: 1, columns, rows, heights, holes, split: rng() < 0.5 ? "diagonal" : "centre" };
+  const field = { kind: "heightfield", originX: -6, originZ: -5, cell: 1, columns, rows, heights, holes, split: rng() < 0.5 ? "diagonal" : "centre" };
+  // Half of them a slab of ground, open below, as over a cave.
+  if (rng() < 0.5) field.depth = rand(1, 3);
+  return field;
 }
 
 // --- Each shape's ray test, against marching along the ray and asking "inside yet?" ---------
@@ -213,25 +221,31 @@ const moved = (q, d) => (q.kind === "sphere" ? { ...q, center: madd(q.center, d,
 }
 
 // --- Against the ground ----------------------------------------------------------------------
-{
+for (const depth of [undefined, 2]) {
   const world = createCollisionWorld();
   const field = randomField();
   field.holes = undefined;
+  field.depth = depth;
+  // A slab no rougher than real ground under it would be: under 1.2 m from one metre to the next.
+  if (depth !== undefined) field.heights = field.heights.map((h) => h * 0.4);
   world.addBatch([field]);
   const shape = world.shape(1);
   const groundGap = (p) => {
     let best = Infinity;
     for (let row = 0; row < field.rows - 1; row++) for (let col = 0; col < field.columns - 1; col++) {
-      for (const [a, b, c] of heightfieldTriangles(shape, col, row)) best = Math.min(best, len3(sub3(p, closestOnTriangle(p, a, b, c))));
+      const tris = [...heightfieldTriangles(shape, col, row), ...(shape.depth !== Infinity ? heightfieldUndersides(shape, col, row) : [])];
+      for (const [a, b, c] of tris) best = Math.min(best, len3(sub3(p, closestOnTriangle(p, a, b, c))));
     }
-    const h = heightfieldHeight(shape, p.x, p.z);
-    return h !== null && p.y < h ? -best : best;
+    return containsPoint(shape, p) ? -best : best;
   };
   let ins = 0;
   for (let n = 0; n < 600; n++) {
     let q = randomQuery(1);
-    q = moved(q, vec3(rand(-3, 3), rand(-2.5, 0.5), rand(-3, 3)));
+    q = moved(q, vec3(rand(-3, 3), rand(shape.depth !== Infinity ? -4 : -2.5, 0.5), rand(-3, 3)));
     const samples = samplesOf(q, 40);
+    // Clear of the field's edges, past which there is no ground to be in - a way out sideways.
+    const edge = q.radius + 1.5;
+    if (samples.some((p) => p.x < field.originX + edge || p.z < field.originZ + edge || p.x > field.originX + field.columns - 1 - edge || p.z > field.originZ + field.rows - 1 - edge)) continue;
     const reference = Math.min(...samples.map(groundGap)) - q.radius;
     const contacts = world.overlap(q);
     if (reference > 2e-3) { check(contacts.length === 0, `ground: contact when ${reference} clear`); continue; }
@@ -252,7 +266,63 @@ const moved = (q, d) => (q.kind === "sphere" ? { ...q, center: madd(q.center, d,
     const after = Math.min(...samplesOf(out, 40).map(groundGap)) - q.radius;
     check(after > -2e-3, `ground: still in by ${-after} after pushing out ${rounds} times, contacts left ${world.overlap(out).length}`);
   }
-  console.log(`ground: 600 queries, ${ins} in the ground`);
+  console.log(`ground${shape.depth !== Infinity ? ` (a slab ${shape.depth.toFixed(2)} deep)` : ""}: 600 queries, ${ins} in the ground`);
+}
+
+// --- A mesh of a convex hull's faces, against the hull itself --------------------------------
+/** A convex shape's hull as a mesh: the same solid, as triangles - with its inside test, or none. */
+function meshOfHull(convex, withInside) {
+  const positions = convex.points.flatMap((p) => [p.x, p.y, p.z]);
+  return { kind: "mesh", positions, indices: convex.triangles, inside: withInside ? (p) => containsPoint(convex, p) : undefined };
+}
+{
+  let rays = 0, rayHits = 0, points = 0, apart = 0, overlapping = 0;
+  for (let n = 0; n < 600; n++) {
+    const convex = createShape({ kind: "convex", points: Array.from({ length: 5 + Math.floor(rng() * 14) }, () => randVec(1.5)) }, 1);
+    const withInside = n % 2 === 0;
+    const world = createCollisionWorld();
+    world.addBatch([meshOfHull(convex, withInside)]);
+    const mesh = world.shape(1);
+    // Inside: the faces alone say the same as the hull's planes.
+    for (let i = 0; i < 10; i++) {
+      const p = randVec(2);
+      points++;
+      check(containsPoint(mesh, p) === containsPoint(convex, p), `mesh${withInside ? "" : " (faces only)"}: inside ${containsPoint(mesh, p)} vs hull ${containsPoint(convex, p)}`);
+    }
+    // Rays: the same first hit, and none from inside.
+    for (let i = 0; i < 6; i++) {
+      const origin = randVec(4);
+      const dir = i % 2 ? randDir() : normalize(madd(randVec(0.5), origin, -1));
+      const a = rayShape(mesh, origin, dir, 10), b = rayShape(convex, origin, dir, 10);
+      rays++;
+      if (b) rayHits++;
+      check((a === null) === (b === null) && (!a || Math.abs(a.t - b.t) < 1e-6), `mesh ray: ${a?.t} vs hull ${b?.t}`);
+      check(world.raycastAny(origin, dir, 10) === (b !== null), "mesh: world raycastAny disagrees");
+    }
+    // Separation: the nearest gap as the hull's; in it, pushed out clear.
+    for (let i = 0; i < 6; i++) {
+      const q = randomQuery(2.5);
+      const ref = separate(q, convex);
+      if (ref.distance > 1e-3) {
+        apart++;
+        const got = world.nearest(q, 10);
+        check(got !== null && Math.abs(got.distance - ref.distance) < 1e-6, `mesh gap ${got?.distance} vs hull ${ref.distance}`);
+        check(world.overlap(q).length === 0, "mesh: contact when apart");
+      } else if (ref.distance < -1e-3) {
+        overlapping++;
+        check(world.overlap(q).length > 0, `mesh: no contact when in by ${-ref.distance}`);
+        let out = q;
+        for (let r = 0; r < 20; r++) {
+          const cs = world.overlap(out);
+          if (cs.length === 0) break;
+          const deepest = cs.reduce((x, y) => (y.depth > x.depth ? y : x));
+          out = moved(out, madd(vec3(), deepest.normal, deepest.depth + 1e-4));
+        }
+        check(separate(out, convex).distance > -2e-3, `mesh: still in by ${-separate(out, convex).distance} after pushing out`);
+      }
+    }
+  }
+  console.log(`mesh vs hull: 600 meshes, ${points} points, ${rays} rays (${rayHits} hit), ${apart} apart, ${overlapping} overlapping`);
 }
 
 // --- Sweeps: never through anything, stopping right at the first touch -----------------------
@@ -262,7 +332,11 @@ const moved = (q, d) => (q.kind === "sphere" ? { ...q, center: madd(q.center, d,
   field.originX = -12; field.originZ = -10; field.cell = 2; field.heights = field.heights.map((h) => h - 6);
   // Ground is only solid through its top: a hole's sides are open, walled - if at all - by other shapes.
   field.holes = undefined;
-  world.addBatch([field, ...Array.from({ length: 60 }, () => randomDesc(8))]);
+  const meshes = Array.from({ length: 12 }, (_, i) => {
+    const center = randVec(8);
+    return meshOfHull(createShape({ kind: "convex", points: Array.from({ length: 6 + Math.floor(rng() * 10) }, () => madd(center, randVec(1.5), 1)) }, 1), i % 2 === 0);
+  });
+  world.addBatch([field, ...Array.from({ length: 60 }, () => randomDesc(8)), ...meshes]);
   let hits = 0, clear = 0, inside = 0;
   let worstKind = "";
   const gapOf = (q) => {
@@ -370,6 +444,56 @@ const moved = (q, d) => (q.kind === "sphere" ? { ...q, center: madd(q.center, d,
 
   w = walk("hills", 5);
   report("hills", w.deepest < 1e-3 && w.grounded > 0.95, `grounded ${(w.grounded * 100).toFixed(0)}%, deepest ${w.deepest.toExponential(1)}`);
+
+  // Underground (DUNGEONS.md): a crypt corridor of boxes and a cave's mesh, both under a slab of ground.
+  w = walk("crypt", 10);
+  report("crypt", Math.abs(w.end.y - CRYPT.bottom) < 0.05 && w.end.x > CRYPT.end - 1 && w.maxY < CRYPT.top + 0.05 && w.deepest < 1e-3,
+    `down the stair to y ${w.end.y.toFixed(3)} at x ${w.end.x.toFixed(2)}, never above ${w.maxY.toFixed(3)}, grounded ${(w.grounded * 100).toFixed(0)}%`);
+  for (const faces of [false, true]) {
+    const scene = caveScene();
+    const world = createCollisionWorld();
+    world.addBatch(faces ? scene.shapes.map((s) => (s.kind === "mesh" ? { ...s, inside: undefined } : s)) : scene.shapes);
+    const motor = createCharacterMotor(world, {}, CAVE_START);
+    motor.teleport(CAVE_START);
+    // Toward the second chamber's floor, steering at it each step.
+    let deepest = 0, inMesh = 0, grounded = 0, maxY = -Infinity, frames = 0, ms = 0;
+    takeCollisionStats();
+    for (; frames < 20 * 60; frames++) {
+      const f = motor.state.feet;
+      const dx = CAVE_END.x - f.x, dz = CAVE_END.z - f.z, l = Math.hypot(dx, dz);
+      if (l < 1) break;
+      const t0 = performance.now();
+      motor.update(1 / 60, { move: vec3((dx / l) * SPEED, 0, (dz / l) * SPEED), jump: false });
+      ms += performance.now() - t0;
+      if (motor.state.grounded) grounded++;
+      maxY = Math.max(maxY, motor.state.feet.y);
+      // In the mesh, and in the rock by the field itself - which the mesh follows to within a voxel.
+      const c = motor.capsule();
+      for (const contact of world.overlap(c)) inMesh = Math.max(inMesh, contact.depth);
+      for (let i = 0; i <= 8; i++) {
+        const p = madd(c.a, vec3(c.b.x - c.a.x, c.b.y - c.a.y, c.b.z - c.a.z), i / 8);
+        const d = sampledRock(scene.field, p) + c.radius;
+        if (d > deepest) deepest = d;
+      }
+    }
+    const pairs = takeCollisionStats().pairs;
+    const f = motor.state.feet;
+    const there = Math.hypot(CAVE_END.x - f.x, CAVE_END.z - f.z) < 1;
+    report(faces ? "cave,faces" : "cave", there && maxY < -15 && inMesh < 1e-3 && deepest < scene.field.cell / 2,
+      `${there ? "reached" : "did not reach"} the second chamber (${f.x.toFixed(1)}, ${f.y.toFixed(1)}, ${f.z.toFixed(1)}) in ${(frames / 60).toFixed(1)} s, grounded ${((grounded / frames) * 100).toFixed(0)}%, ` +
+      `deepest in the mesh ${inMesh.toExponential(1)}, in the field ${deepest.toFixed(3)} m, ${(ms / frames).toFixed(3)} ms and ${Math.round(pairs / frames)} pairs a step`);
+  }
+  console.log(`  (the cave: ${caveScene().ms.toFixed(0)} ms to sample and mesh, ${caveScene().shapes[1].indices.length / 3} triangles)`);
+  // Under the slab's depth the ground has no hold; within it, it pushes up as ever.
+  {
+    const world = createCollisionWorld();
+    world.addBatch([{ ...PRESETS.find((p) => p.id === "hills").shapes[0], depth: 3 }]);
+    const deep = world.overlap({ kind: "sphere", center: vec3(0, -10, 0), radius: 0.4 }).length;
+    const shallow = world.overlap({ kind: "sphere", center: vec3(0, -1, 0), radius: 0.4 }).length;
+    const up = world.raycast(vec3(0, -10, 0), vec3(0, 1, 0), 20);
+    report("slab", deep === 0 && shallow > 0 && up !== null && up.normal.y < -0.8,
+      `${deep} contacts 10 m down, ${shallow} 1 m down, a ray up meets its underside at y ${up ? (-10 + up.distance).toFixed(2) : "-"}`);
+  }
 
   // Put down inside a box: pushed out.
   {

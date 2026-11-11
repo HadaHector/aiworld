@@ -1,3 +1,4 @@
+import { buildAabbTree, type AabbTree } from "./aabbTree";
 import { convexHull, hullOfTriangles, type Plane } from "./hull";
 import { aabbOfPoints, add, dot, IDENTITY, length, madd, rotate, sub, vec3, type Aabb, type Quat, type Vec3 } from "./vec";
 
@@ -86,11 +87,34 @@ export interface HeightfieldDesc extends DescBase {
   /** One per cell ((columns - 1) * (rows - 1)), 1 where the cell is a hole. */
   holes?: Uint8Array;
   split?: HeightfieldSplit;
+  /**
+   * How far under its surface the ground is solid - a slab, open below, so a cave under it is not
+   * in the ground. Lacking it, all the way down: everything under the ground is in it.
+   */
+  depth?: number;
+}
+
+/**
+ * Triangles as a one-sided surface: each faces (counter-clockwise seen from) the open side, and
+ * what lies behind it is solid - a cave's rock. Anything behind a face is pushed out through it.
+ */
+export interface MeshDesc extends DescBase {
+  kind: "mesh";
+  /** x, y, z of each vertex. */
+  positions: Float32Array | number[];
+  /** Three vertex indices a triangle. */
+  indices: Uint32Array | number[];
+  /**
+   * Whether a point is in the solid - say a cave's distance field. Lacking it, the faces say: a
+   * point is in when the first face straight above it is one it sees from behind (`behindMesh`),
+   * right for any surface closed above, as a cave's is.
+   */
+  inside?: (p: Vec3) => boolean;
 }
 
 export type HeightfieldSplit = "diagonal" | "centre";
 
-export type ShapeDesc = SphereDesc | CapsuleDesc | BoxDesc | ConvexDesc | HeightfieldDesc;
+export type ShapeDesc = SphereDesc | CapsuleDesc | BoxDesc | ConvexDesc | HeightfieldDesc | MeshDesc;
 
 // ---------------------------------------------------------------------------------------------
 // What the world keeps: the description, worked out for queries.
@@ -141,9 +165,21 @@ export interface Heightfield extends ShapeBase {
   heights: Float32Array;
   holes: Uint8Array | null;
   split: HeightfieldSplit;
+  /** Infinity: solid all the way down. */
+  depth: number;
 }
 
-export type Shape = Sphere | Capsule | Box | Convex | Heightfield;
+export interface TriangleMesh extends ShapeBase {
+  kind: "mesh";
+  positions: Float32Array;
+  /** The triangles kept (none without area), three indices each. */
+  indices: Uint32Array;
+  /** Over the triangles, numbered by their place in `indices` (triangle t at 3t). */
+  tree: AabbTree;
+  inside: ((p: Vec3) => boolean) | null;
+}
+
+export type Shape = Sphere | Capsule | Box | Convex | Heightfield | TriangleMesh;
 
 export function createShape(desc: ShapeDesc, id: number): Shape {
   const base = { id, layers: desc.layers ?? DEFAULT_LAYERS, group: desc.group ?? -1 };
@@ -166,8 +202,10 @@ export function createShape(desc: ShapeDesc, id: number): Shape {
     case "heightfield": {
       const heights = Float32Array.from(desc.heights);
       if (heights.length !== desc.columns * desc.rows) throw new Error("A heightfield needs columns * rows heights");
-      let high = -Infinity;
-      for (const h of heights) high = Math.max(high, h);
+      const depth = desc.depth ?? Infinity;
+      if (!(depth > 0)) throw new Error("A heightfield's depth must be above 0");
+      let high = -Infinity, low = Infinity;
+      for (const h of heights) { high = Math.max(high, h); low = Math.min(low, h); }
       return {
         ...base,
         kind: "heightfield",
@@ -179,14 +217,54 @@ export function createShape(desc: ShapeDesc, id: number): Shape {
         heights,
         holes: desc.holes ?? null,
         split: desc.split ?? "diagonal",
+        depth,
         bounds: {
-          // All the way down: everything under the ground is in it.
-          min: vec3(desc.originX, -Infinity, desc.originZ),
+          // Down to its depth - all the way, lacking one.
+          min: vec3(desc.originX, low - depth, desc.originZ),
           max: vec3(desc.originX + (desc.columns - 1) * desc.cell, high, desc.originZ + (desc.rows - 1) * desc.cell),
         },
       };
     }
+    case "mesh":
+      return createTriangleMesh(desc, base);
   }
+}
+
+function createTriangleMesh(desc: MeshDesc, base: { id: number; layers: number; group: number }): TriangleMesh {
+  const positions = Float32Array.from(desc.positions);
+  const all = desc.indices;
+  if (all.length % 3 !== 0) throw new Error("A mesh needs three indices a triangle");
+  const kept: number[] = [];
+  const boxes: Aabb[] = [];
+  for (let t = 0; t < all.length; t += 3) {
+    const a = all[t] * 3, b = all[t + 1] * 3, c = all[t + 2] * 3;
+    if (Math.max(a, b, c) + 2 >= positions.length) throw new Error("A mesh's index is past its positions");
+    const e1x = positions[b] - positions[a], e1y = positions[b + 1] - positions[a + 1], e1z = positions[b + 2] - positions[a + 2];
+    const e2x = positions[c] - positions[a], e2y = positions[c + 1] - positions[a + 1], e2z = positions[c + 2] - positions[a + 2];
+    const nx = e1y * e2z - e1z * e2y, ny = e1z * e2x - e1x * e2z, nz = e1x * e2y - e1y * e2x;
+    // No area: no face to be behind, nothing to push out through.
+    if (nx * nx + ny * ny + nz * nz < 1e-18) continue;
+    kept.push(all[t], all[t + 1], all[t + 2]);
+    boxes.push({
+      min: vec3(Math.min(positions[a], positions[b], positions[c]), Math.min(positions[a + 1], positions[b + 1], positions[c + 1]), Math.min(positions[a + 2], positions[b + 2], positions[c + 2])),
+      max: vec3(Math.max(positions[a], positions[b], positions[c]), Math.max(positions[a + 1], positions[b + 1], positions[c + 1]), Math.max(positions[a + 2], positions[b + 2], positions[c + 2])),
+    });
+  }
+  const tree = buildAabbTree(boxes);
+  return { ...base, kind: "mesh", positions, indices: Uint32Array.from(kept), tree, inside: desc.inside ?? null, bounds: boxes.length > 0 ? tree.bounds : aabbOfPoints([]) };
+}
+
+/** A mesh's triangle `t` (its place in the tree), as three points. */
+export function meshTriangle(mesh: TriangleMesh, t: number): [Vec3, Vec3, Vec3] {
+  const p = mesh.positions, i = mesh.indices;
+  const a = i[3 * t] * 3, b = i[3 * t + 1] * 3, c = i[3 * t + 2] * 3;
+  return [vec3(p[a], p[a + 1], p[a + 2]), vec3(p[b], p[b + 1], p[b + 2]), vec3(p[c], p[c + 1], p[c + 2])];
+}
+
+/** Whether a point is in a heightfield's ground: under its surface, above its depth. */
+export function inHeightfield(field: Heightfield, p: Vec3): boolean {
+  const h = heightfieldHeight(field, p.x, p.z);
+  return h !== null && p.y < h && p.y > h - field.depth;
 }
 
 export function boxCorners(box: Box): Vec3[] {
@@ -268,9 +346,33 @@ export function containsPoint(shape: Shape, p: Vec3): boolean {
     }
     case "convex":
       return shape.planes.every((plane) => dot(plane.normal, p) < plane.d);
-    case "heightfield": {
-      const h = heightfieldHeight(shape, p.x, p.z);
-      return h !== null && p.y < h;
-    }
+    case "heightfield":
+      return inHeightfield(shape, p);
+    case "mesh":
+      return shape.inside ? shape.inside(p) : behindMesh(shape, p);
   }
+}
+
+/**
+ * Whether a point is behind a mesh's surface, lacking a test of its own: the first face straight
+ * above it, whichever way it faces, is one it sees from behind. Right for any surface closed above.
+ */
+export function behindMesh(mesh: TriangleMesh, p: Vec3): boolean {
+  let nearest = Infinity, behind = false;
+  const column = { min: vec3(p.x, p.y, p.z), max: vec3(p.x, Math.max(p.y, mesh.bounds.max.y), p.z) };
+  mesh.tree.query(column, (t) => {
+    const [a, b, c] = meshTriangle(mesh, t);
+    // Where the vertical line through p crosses the triangle, if it does: barycentrics in x and z.
+    const d = (b.x - a.x) * (c.z - a.z) - (c.x - a.x) * (b.z - a.z);
+    if (Math.abs(d) < 1e-15) return;
+    const u = ((p.x - a.x) * (c.z - a.z) - (c.x - a.x) * (p.z - a.z)) / d;
+    const v = ((b.x - a.x) * (p.z - a.z) - (p.x - a.x) * (b.z - a.z)) / d;
+    if (u < 0 || v < 0 || u + v > 1) return;
+    const y = a.y + u * (b.y - a.y) + v * (c.y - a.y);
+    if (y < p.y || y >= nearest) return;
+    nearest = y;
+    // The normal's y is -d (cross of the edges, x-z part), so d < 0 faces up: p is under its back.
+    behind = d < 0;
+  });
+  return behind;
 }

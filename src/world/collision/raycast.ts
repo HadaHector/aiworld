@@ -1,4 +1,4 @@
-import { dirFromBoxFrame, dirToBoxFrame, heightfieldHeight, toBoxFrame, type Box, type Capsule, type Convex, type Heightfield, type Shape, type Sphere } from "./shapes";
+import { containsPoint, dirFromBoxFrame, dirToBoxFrame, inHeightfield, meshTriangle, toBoxFrame, type Box, type Capsule, type Convex, type Heightfield, type Shape, type Sphere, type TriangleMesh } from "./shapes";
 import { cross, dot, inverseDirection, madd, normalize, rayAabb, scale, sub, vec3, type Vec3 } from "./vec";
 
 /** Where a ray meets a shape: how far along it, and the surface's normal there, facing the ray. */
@@ -24,7 +24,27 @@ export function rayShape(shape: Shape, origin: Vec3, dir: Vec3, maxT: number): R
       return rayConvex(shape, origin, dir, maxT);
     case "heightfield":
       return rayHeightfield(shape, origin, dir, maxT);
+    case "mesh":
+      return rayMesh(shape, origin, dir, maxT);
   }
+}
+
+/**
+ * The first face a ray comes to from the front. Faces met from behind are passed through, so a
+ * ray from in the rock gets out, and one from the open sees the rock's surface - as the ground's.
+ */
+function rayMesh(mesh: TriangleMesh, origin: Vec3, dir: Vec3, maxT: number): RayContact | null {
+  // Starting in the solid: no hit, as for every other shape.
+  if (containsPoint(mesh, origin)) return null;
+  let best: RayContact | null = null;
+  mesh.tree.raycast(origin, inverseDirection(dir), maxT, (t, reach) => {
+    const [p0, p1, p2] = meshTriangle(mesh, t);
+    const hit = rayTriangle(p0, p1, p2, origin, dir, reach);
+    if (!hit) return reach;
+    best = hit;
+    return hit.t;
+  });
+  return best;
 }
 
 function raySphereAt(center: Vec3, radius: number, origin: Vec3, dir: Vec3, maxT: number): number | null {
@@ -164,11 +184,17 @@ export function heightfieldTriangles(field: Heightfield, col: number, row: numbe
   return [[p00, p11, p10], [p00, p01, p11]];
 }
 
+/** The underside of a heightfield cell, `depth` under its triangles, facing down. */
+export function heightfieldUndersides(field: Heightfield, col: number, row: number): [Vec3, Vec3, Vec3][] {
+  const down = (p: Vec3): Vec3 => vec3(p.x, p.y - field.depth, p.z);
+  return heightfieldTriangles(field, col, row).map(([a, b, c]) => [down(a), down(c), down(b)]);
+}
+
 /** Walks the cells under the ray in order, and tests each cell's triangles. */
 function rayHeightfield(field: Heightfield, origin: Vec3, dir: Vec3, maxT: number): RayContact | null {
-  // Starting under the ground: no hit.
-  const under = heightfieldHeight(field, origin.x, origin.z);
-  if (under !== null && origin.y < under) return null;
+  // Starting in the ground: no hit.
+  if (inHeightfield(field, origin)) return null;
+  const slab = field.depth !== Infinity;
   const tStart = rayAabb(origin, inverseDirection(dir), field.bounds, maxT);
   if (tStart === Infinity) return null;
   const start = madd(origin, dir, tStart);
@@ -192,6 +218,13 @@ function rayHeightfield(field: Heightfield, origin: Vec3, dir: Vec3, maxT: numbe
       for (const [p0, p1, p2] of heightfieldTriangles(field, col, row)) {
         const hit = rayTriangle(p0, p1, p2, origin, dir, best ? best.t : maxT);
         if (hit) best = hit;
+      }
+      // A slab of ground is entered from below too.
+      if (slab && dir.y > 0) {
+        for (const [p0, p1, p2] of heightfieldUndersides(field, col, row)) {
+          const hit = rayTriangle(p0, p1, p2, origin, dir, best ? best.t : maxT);
+          if (hit) best = hit;
+        }
       }
       if (best) return best;
     }

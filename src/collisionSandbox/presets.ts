@@ -1,5 +1,6 @@
 // The collision sandbox's ready-made scenes - plain data, so the probe walks the same ones.
 import { quatFromEuler, vec3, type ShapeDesc, type Vec3 } from "../world/collision/index";
+import { CAVE_START, caveScene, CRYPT, cryptScene } from "./caveScene";
 
 export interface Preset {
   id: string;
@@ -129,5 +130,20 @@ export const PRESETS: Preset[] = [
     shapes: [ground(1)],
     spawn: vec3(0, 0.2, 0),
     heading: vec3(0.8, 0, 0.6),
+  },
+  {
+    id: "cave",
+    label: "A cave under the ground",
+    // Meshed from its distance field the first time it is asked for, not on loading the page.
+    get shapes() { return caveScene().shapes; },
+    spawn: CAVE_START,
+    heading: east,
+  },
+  {
+    id: "crypt",
+    label: "A crypt corridor, a stair down",
+    get shapes() { return cryptScene(); },
+    spawn: vec3(0, CRYPT.top, 0),
+    heading: east,
   },
 ];
