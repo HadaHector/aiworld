@@ -1,0 +1,19 @@
+// A straight stair down: 24 steps of 0.25 m, 6 m down over 18 m, a landing at each end.
+{
+  tags: ["crypt", "stair", "descent"],
+  weight: 2,
+  sockets: [
+    { at: [0, 0, 0], facing: 180, type: "crypt", size: [6, 6] },
+    { at: [0, -6, 24], facing: 0, type: "crypt", size: [6, 6] },
+  ],
+  colliders: [
+    { box: [-3, -1, 0, 3, 0, 3] },
+    { stair: { from: [0, 0, 3], to: [0, -6, 21], width: 6, ceiling: 6 } },
+    { box: [-3, -7, 21, 3, -6, 24] },
+    { box: [-4, -8, 0, -3, 7, 24] },
+    { box: [3, -8, 0, 4, 7, 24] },
+    { box: [-4, 6, 0, 4, 7, 3] },
+    { box: [-4, 0, 21, 4, 1, 24] },
+  ],
+  paths: [[[0, 0, 0], [0, 0, 3]], [[0, -6, 21], [0, -6, 24]]],
+}

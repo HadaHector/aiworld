@@ -78,6 +78,10 @@ packs/<pack>/
   icons/<id>.json5        interface: an icon set - an atlas picture and each icon's cell; items and skills name icons (ICONS.md)
   rules/frontend.json5    front end: the title, the world behind the main menu and its camera, the
                           character stage, the menu's music, autosave and name rules (FRONTEND.md)
+  dungeonStyles/<id>.json5  dungeons: a style - its sizes, branching, cover, its parts by tag (DUNGEONS.md)
+  dungeonParts/<id>.json5   dungeons: a piece of a layout - sockets, colliders (boxes, stairs, spirals),
+                          walk lines measured 6 m wide and high at load, spots for what fills it
+  rules/dungeons.json5    dungeons: the least way through, which sockets join, how hard the generator tries
 ```
 
 A definition's **id is its file name**: `materials/peat.json5` defines the material `peat`, and

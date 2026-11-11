@@ -1,0 +1,6 @@
+// A way on walled up.
+{
+  tags: ["crypt", "cap"],
+  sockets: [{ at: [0, 0, 0], facing: 180, type: "crypt", size: [6, 6] }],
+  colliders: [{ box: [-4, -1, 0, 4, 7, 1] }],
+}

@@ -105,10 +105,15 @@ What it settles:
 - **Details stay at the world's scale**: a step 0.25 m high (a crypt stair 6 m wide), a burial
   niche 2.5 m, a stalactite up to 4 m, so the spaces read as huge rather than as a small place
   scaled up.
-- **Checked, not hoped for.** Sockets carry a size (width and height, both at least 6); a part's
-  author states its clearance; the layout check casts rays across every join and tunnel and fails
-  the layout (and so retries) where anything is under the minimum. The rules hold the minimum
-  (`rules/dungeons.json5`: `minClear: [6, 6]`), so a game can change it.
+- **Checked, not hoped for.** Sockets carry a size (width and height, both at least 6). Every
+  part's walk lines are measured by rays on its own colliders when the packs load - a floor
+  underfoot, and the width and height every 1.5 m and at each socket - and a part under the minimum
+  stops loading, saying where. Parts join only face to face at sockets, so an assembled layout is
+  as clear as its parts; the probe measures fifty assembled layouts with every part's colliders in
+  place to show it. The rules hold the minimum (`rules/dungeons.json5`: `minClear: [6, 6]`), so a
+  game can change it.
+- **Headroom on stairs**: each step's vault is one step higher than its floor plus 6 m, so even at
+  a step's edge, under the next one down's vault, there are 6 m.
 - **Floors' slopes** stay under the motor's steepest ground (52°), and tunnels under about 25°, so
   they are walked, not climbed.
 
@@ -128,24 +133,32 @@ built for that, not patched after.
   feature's ground, the cover needed doubles, so no cellar floor ever opens into a cave.
 - **Parts that go down.** Every style has parts whose job is to descend, so the layout can dive
   first and spread once it is deep:
-  - crypt: a straight stair (6 m wide, 0.25 m steps, 6 m down over 12 m), a turning stair (two
-    flights and a landing, its drop inside its own footprint), a spiral stair round a pillar
-    (16 m across, about 6 m down a turn), a shaft with a stair down its walls;
+  - crypt (built): a straight stair (6 m wide, 24 steps of 0.25 m, 6 m down over 18 m), a turning
+    stair (two flights and a landing, 6 m down inside its own footprint, out beside where it went
+    in), a spiral stair round a pillar (20 m across, a turn and a half, 11.5 m down - about 7.7 m a
+    turn, the least that leaves a vault and a floor between laps), and the entrance, the same
+    spiral two and a half turns and 19.5 m deep;
   - cave: a sloping tunnel (up to 25°), a curving descent (a tunnel bent along an arc or a helix,
     8-15 m down over a quarter to three quarters of a turn), a chamber on terraces, a rubble ramp
     down a drop.
   A part's sockets carry their heights, so each part knows its `drop` from the socket it was
   entered by; curved and spiral ones drop the most for the least ground, which is what thin cover
   needs.
-- **Diving first.** Where the cover over an open socket is thin (under `cover` plus 10 m), parts
-  that drop are rolled four times as often and parts that rise not at all; once deep, the style's
-  own weights apply. Sockets facing into the hill (where the ground rises ahead) are grown first,
-  since going in gains cover for free.
+- **Diving first.** Where the cover over an open socket is thin (under `cover` plus `thinCover`,
+  20 m), parts that drop are rolled four times as often and parts that rise not at all; once deep,
+  the style's own weights apply. Sockets facing into the hill (where the ground rises ahead) are
+  grown first, since going in gains cover for free.
 - **Spaces too.** A large dungeon behind a loading screen has no terrain drawn over it, but its
   layout is checked against the ground over its entrance all the same, so its map lines up with
   the world and it could later be made seamless.
-- **Proved in the probe**: generated on the real terrain at real entrance spots, every part under
-  its cover, zero exceptions across a thousand seeds.
+- **Where an entrance can go.** Under a ridge, or with a valley a little way in, there is no room
+  for a dungeon: the generator falls back to its minimal layout. So an entrance is sited where the
+  hill keeps rising behind the door (the probe takes hillsides that rise 5 m within 20 m and 12 m
+  within 40 m), and step 5's sitings generate the layout and pass over a site whose layout is the
+  minimal one.
+- **Proved in the probe** (`scripts/probe/dungeons.mjs`): a thousand layouts on the real terrain,
+  at the cemeteries' crypts and at 400 hillsides, every part under its cover measured at twice the
+  generator's sampling (the least rock over any part 7.8 m, never showing), zero exceptions.
 
 ## Materials
 
@@ -278,8 +291,11 @@ it is built.
     { noise: { scale: 0.35, amount: 0.6 } },
     { stalactites: { count: [4, 10] } },
   ],
-  // kit builder instead: a recipe for ModelBuilder and its boxes, as buildings and props have
-  // model: { ... }, colliders: [ ... ],
+  // kit builder instead: its colliders and walk lines (built, step 2), a ModelBuilder recipe (step 3)
+  // colliders: [{ box: [x0, y0, z0, x1, y1, z1] }, { stair: { from, to, width, ceiling } },
+  //             { spiral: { centre, top, inner, outer, start, turns, drop, ceiling } }],
+  // paths: [[[x, y, z], ...]],      // the lines the floor is walked along, measured at load
+  // room: true,                      // counts toward the style's rooms (else a way between them)
   spots: {                            // anchors for what fills it, as features have
     spawns: [[0, 0, 0], [4, 0, -3]], chest: [[-6, 0, 5]], light: [[6, 4, -6]],
     quest: [[2, 0, 4]], boss: [[0, 0, 0]],
@@ -317,20 +333,35 @@ it is built.
 `src/world/dungeons/layout.ts`, pure and deterministic:
 
 1. Place the entrance part at the owner's spot.
-2. Grow: take an open socket (breadth first, with the style's branching as the chance of leaving
-   a second one open), roll a part with a compatible socket by weight among those allowed at this
-   stage (descents weighted up while the cover is thin, [Under the ground](#under-the-ground)),
-   line its socket up with the open one, and keep it if its bounds overlap no placed part and its
-   top lies `cover` under the ground everywhere over it. Up to a few tries a socket, then cap it.
-   The ground comes in as a `heightAt(x, z)` and a `builtAt(x, z)`, so the generator stays pure.
-3. Loops: join pairs of open sockets that face each other within reach with a corridor or tunnel
-   part, up to the style's count.
-4. Special rooms: the boss part on the leaf furthest from the entrance (by the graph), a lock on
-   the edge into its branch and the key in another leaf's room.
-5. Close every open socket with a cap.
-6. Check: every room reachable from the entrance without the key except past its lock, the room
-   count in range, the boss placed, every part under its cover. Failing that, start again from `deriveSeed(seed, attempt)`; after
-   eight attempts, the minimal layout.
+2. Grow toward a room count rolled in the size's range: take an open socket (breadth first; a
+   part's further sockets kept open by the style's branching, else set aside as spare and grown
+   from only when nothing else is open), pick a part with a compatible socket by weight among
+   those allowed at this stage (descents weighted up while the cover is thin, [Under the
+   ground](#under-the-ground)), line its socket up with the open one, and keep it if its bounds
+   overlap no placed part and its top lies `cover` under the ground everywhere over it. Each
+   option is tried once, up to `triesPerSocket`, then the socket is capped. At a dead end with
+   nothing else open, the corridor or stair just laid is taken back and something else tried
+   where it began (up to 40 times an attempt). The ground comes in as a `heightAt(x, z)` and a
+   `builtAt(x, z)`, so the generator stays pure.
+3. Loops: two open sockets meeting face to face are joined as they are, up to the style's count.
+   With the crypt's kit that is rare - no loops in a thousand layouts. **Next (the user's call):
+   loops made on purpose**, since a layout that circles back is easy to get lost in, and that is
+   fun - bridging two nearby open ends with a corridor, a stair or a turn sized to fit, and
+   steering growth back toward an earlier part, rather than waiting for ends to meet by chance.
+4. The boss room: on the leaf room furthest from the entrance (by the graph), in its place, or at
+   the furthest open end - straight on, or past a corridor or a stair laid first when it will not
+   fit there; a lock on the join into it, its key in the furthest other room.
+5. Close every open socket with a cap. A cap may sit in a neighbour's wall (solid in solid); it
+   never reaches into anyone's way through.
+6. Check: every room reachable from the entrance, the boss behind its lock and the key this side
+   of it, at least the size's least rooms, the boss placed, every part under its cover. Failing
+   that, start again from a seed derived from the last; after `attempts` (8), the minimal layout
+   (the entrance, a room if one fits, caps).
+
+Measured (the probe, a thousand layouts on the real terrain): 1.25 retries a layout, 8.6% minimal
+(on hillsides that cannot hold one - see [Under the ground](#under-the-ground)), 28 parts and
+6.5 rooms each, the deepest room 36 m down on average; 56 ms a layout, nearly all of it sampling
+the real terrain's height (2 ms on made-up ground).
 
 The layout is a graph - parts as nodes, joined sockets as edges - and that graph is reused by
 everything inside: navigation, the map, quest spots.
@@ -424,11 +455,16 @@ the style.
 
 ## Dev pages
 
-- **Workbench, dungeon styles**: a line-up of generated layouts for one style (a few seeds and both
-  sizes) as plans from above, the graph drawn over them, and one in 3D to fly through.
-- **Workbench, dungeon parts**: one part on its own, its sockets drawn as arrows with their types,
-  its spots, its colliders.
-- **The collision sandbox** gains a cave and a crypt corridor to walk.
+- **`dungeons.html`** (built, step 2): a line-up of generated layouts for one style, size and seed
+  range, under made-up ground (flat, a hillside, below a ridge, a valley behind), each as a plan
+  from above - darker deeper, the graph, the lock and the key's room drawn over it - and a side
+  view along the way in with the ground's line and the cover's line over it. "Walk it" opens one in
+  the collision sandbox.
+- **Workbench, dungeon parts** (later): one part on its own, its sockets drawn as arrows with their
+  types, its spots, its colliders.
+- **The collision sandbox** gains a cave and a crypt corridor to walk (step 1), and a generated
+  dungeon (`?preset=dungeon&style=crypt&size=lair&seed=3&ground=hill`), its entrance in a pit in
+  the ground.
 - **In the game**: `/dungeon` (CHAT.md) to go to the nearest entrance, `__aiworld.dungeon` with
   the layout and timings.
 
@@ -448,7 +484,13 @@ Each leaves the game working: dev server with `?play`, `npm run probe`, `npm run
    generator, the crypt's parts as plain boxes, its stairs (straight, turning, spiral); the
    clearance check (6 m everywhere) and the cover check (nothing near the surface), diving first;
    the workbench line-up with the ground's line drawn over a side view; a probe that generates a
-   thousand seeds on the real terrain and checks every rule.
+   thousand seeds on the real terrain and checks every rule. *Done*: `src/world/dungeons/`
+   (`dungeonDefs.ts`, `kitShapes.ts`, `clearance.ts`, `layout.ts`), the crypt style and its nine
+   parts in the core pack, `dungeons.html`, the sandbox's dungeon scene, and
+   `scripts/probe/dungeons.mjs`: a thousand layouts on the real terrain, all 424,738 checks good
+   (cover, overlaps, joins, sockets closed, reachable, boss, lock and key, the same from the same
+   seed, 6 m everywhere in fifty assembled ones), eleven walked from the door to the boss on the
+   character motor. Numbers under [The generator](#the-generator).
 3. **The crypt.** Its parts built (ModelBuilder recipes and materials, colliders, transition
    pieces, caps), torches as fixtures, the lightmap bake per part; as a space of its own entered by
    a debug command; walked end to end.

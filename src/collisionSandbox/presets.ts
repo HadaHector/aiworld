@@ -12,6 +12,8 @@ export interface Preset {
   heading: Vec3;
   /** Plant a row of every generated tree kind from the content packs, trunk and roots solid. */
   grove?: boolean;
+  /** Generate a dungeon from the packs (the URL's style, size, seed and ground; see dungeons.html). */
+  dungeon?: boolean;
 }
 
 const GROUND_SIZE = 64;
@@ -145,5 +147,14 @@ export const PRESETS: Preset[] = [
     get shapes() { return cryptScene(); },
     spawn: vec3(0, CRYPT.top, 0),
     heading: east,
+  },
+  {
+    id: "dungeon",
+    label: "A generated dungeon",
+    // Laid out from the packs once they load, under made-up ground, the door at the origin.
+    shapes: [],
+    spawn: vec3(0, 0, -4),
+    heading: vec3(0, 0, 1),
+    dungeon: true,
   },
 ];

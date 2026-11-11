@@ -1,0 +1,12 @@
+// A spiral stair round a pillar: a turn and a half, 11.5 m down, in 20 m by 20 m.
+{
+  tags: ["crypt", "stair", "descent"],
+  weight: 2,
+  sockets: [
+    { at: [0, 0, 0], facing: 180, type: "crypt", size: [6, 6] },
+    { at: [0, -11.5, 20], facing: 0, type: "crypt", size: [6, 6] },
+  ],
+  colliders: [
+    { spiral: { centre: [0, 10], top: 0, inner: 3, outer: 9, wall: 1, start: 180, turns: 1.5, drop: 11.5, ceiling: 6 } },
+  ],
+}

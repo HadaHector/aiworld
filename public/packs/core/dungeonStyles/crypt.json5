@@ -1,0 +1,21 @@
+// A crypt: corridors, burial halls and tombs under a churchyard, stairs and spirals down between
+// them, built from kit parts (DUNGEONS.md).
+{
+  name: "Crypt",
+  builder: "kit",
+  sizes: {
+    lair: { rooms: [2, 4], entry: "seamless" },
+    dungeon: { rooms: [8, 14], entry: "space" },
+  },
+  // The chance a part's further ways on are grown rather than walled up; loops closed per layout.
+  branching: 0.4,
+  loops: [0, 2],
+  boss: { tags: ["boss"] },
+  keys: { locks: [0, 1] },
+  // Rock over the top of every part but the entrance, and how far under the entrance it may go.
+  cover: 8,
+  deepest: 60,
+  parts: { tags: ["crypt"] },
+  entrance: { tags: ["entrance"] },
+  caps: { tags: ["cap"] },
+}

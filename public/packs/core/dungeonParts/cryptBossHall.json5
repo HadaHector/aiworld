@@ -1,0 +1,16 @@
+// The great hall at the bottom: 28 m square, 12 m to the vault, one way in.
+{
+  tags: ["crypt", "hall", "boss"],
+  room: true,
+  sockets: [{ at: [0, 0, 0], facing: 180, type: "crypt", size: [6, 6] }],
+  colliders: [
+    { box: [-15, -1, 0, 15, 0, 30] },
+    { box: [-15, 12, 0, 15, 13, 30] },
+    { box: [-15, -1, 0, -3, 13, 1] }, { box: [3, -1, 0, 15, 13, 1] }, { box: [-3, 6, 0, 3, 13, 1] },
+    { box: [-15, -1, 29, 15, 13, 30] },
+    { box: [-15, -1, 0, -14, 13, 30] },
+    { box: [14, -1, 0, 15, 13, 30] },
+  ],
+  paths: [[[0, 0, 0], [0, 0, 15]]],
+  spots: { boss: [[0, 0, 18]], chest: [[0, 0, 26]], light: [[-12, 6, 4], [12, 6, 4], [-12, 6, 26], [12, 6, 26]] },
+}

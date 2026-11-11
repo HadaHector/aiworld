@@ -1,0 +1,20 @@
+// How dungeons are laid out (DUNGEONS.md): the smallest way through, which sockets join, and how
+// hard the generator tries.
+{
+  // Nothing walked through is narrower or lower than this, width and height, metres.
+  minClear: [6, 6],
+  // Socket types that join besides each type with itself, either way round.
+  joins: [],
+  // Layouts tried before the minimal one; parts tried at an open end before it is capped.
+  attempts: 8,
+  triesPerSocket: 12,
+  // The ground over a part is sampled this far apart, and this far round it.
+  sample: 2,
+  around: 2,
+  // With less rock than the style's cover plus this over an open end, parts going down are four
+  // times likelier and none going up is used: a layout dives first, then spreads.
+  thinCover: 20,
+  diveWeight: 4,
+  // Two open ends this close, face to face, are joined as they are - a loop.
+  loopReach: 0.1,
+}

@@ -1,0 +1,17 @@
+// A crypt corridor, 6 m wide and high inside, 12 m long.
+{
+  tags: ["crypt", "corridor"],
+  weight: 3,
+  sockets: [
+    { at: [0, 0, 0], facing: 180, type: "crypt", size: [6, 6] },
+    { at: [0, 0, 12], facing: 0, type: "crypt", size: [6, 6] },
+  ],
+  colliders: [
+    { box: [-4, -1, 0, 4, 0, 12] },   // floor
+    { box: [-4, -1, 0, -3, 7, 12] },  // walls
+    { box: [3, -1, 0, 4, 7, 12] },
+    { box: [-4, 6, 0, 4, 7, 12] },    // vault
+  ],
+  paths: [[[0, 0, 0], [0, 0, 12]]],
+  spots: { light: [[-2.5, 4, 6]] },
+}

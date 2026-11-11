@@ -34,6 +34,10 @@ import { PRESETS, type Preset } from "./presets";
 import { loadContent } from "../world/content/loadContent";
 import type { WorldContent } from "../world/content/worldContent";
 import { generateConifer, generateTree } from "../world/foliage/treeGenerator";
+import { fetchPackSources } from "../world/content/loadContent";
+import { resolveDungeons } from "../world/dungeons/dungeonDefs";
+import { generateLayout, placedShapes } from "../world/dungeons/layout";
+import { asDungeonGround, groundShape, testGround, testSite } from "../world/dungeons/testGrounds";
 
 const element = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
 const canvas = element<HTMLCanvasElement>("renderCanvas");
@@ -77,6 +81,7 @@ function writeUrl(): void {
   next.set("jump", String(feel.jumpSpeed));
   next.set("speed", String(feel.speed));
   next.set("camera", [camera.alpha, camera.beta, camera.radius].map((n) => n.toFixed(3)).join(","));
+  if (preset.dungeon) for (const [key, value] of Object.entries(dungeonParams)) next.set(key, String(value));
   history.replaceState(null, "", `${location.pathname}?${next}`);
 }
 
@@ -214,8 +219,48 @@ function loadPreset(next: Preset): void {
   addShapes(world.batchShapes(presetBatch).map((shape) => shape.id));
   clearGrove();
   if (next.grove) void plantGrove();
+  clearDungeon();
+  if (next.dungeon) void buildDungeon();
   teleport(next.spawn);
   writeUrl();
+}
+
+// ---------------------------------------------------------------------------------------------
+// A generated dungeon (DUNGEONS.md): laid out from the packs under made-up ground, its colliders
+// all solid, the ground a slab 3 m deep with a pit cut for the entrance.
+
+const dungeonParams = {
+  style: params.get("style") ?? "crypt",
+  size: params.get("size") ?? "lair",
+  seed: Number(params.get("seed") ?? 1),
+  ground: params.get("ground") ?? "flat",
+};
+let dungeonBatch = -1;
+let dungeonToken = 0;
+
+function clearDungeon(): void {
+  dungeonToken++;
+  if (dungeonBatch >= 0) {
+    for (const shape of world.batchShapes(dungeonBatch)) dropMesh(shape.id);
+    world.removeBatch(dungeonBatch);
+    dungeonBatch = -1;
+  }
+}
+
+async function buildDungeon(): Promise<void> {
+  const token = dungeonToken;
+  const content = resolveDungeons(await fetchPackSources());
+  if (token !== dungeonToken) return;
+  const ground = testGround(dungeonParams.ground);
+  const layout = generateLayout(content, dungeonParams.style, dungeonParams.size, dungeonParams.seed, testSite(ground), asDungeonGround(ground));
+  let extent = 0;
+  for (const p of layout.parts) extent = Math.max(extent, Math.abs(p.bounds.min.x), Math.abs(p.bounds.max.x), Math.abs(p.bounds.min.z), Math.abs(p.bounds.max.z));
+  const mouth = layout.parts[0].bounds;
+  const open = (x: number, z: number): boolean => x > mouth.min.x - 1 && x < mouth.max.x + 1 && z > mouth.min.z - 1 && z < mouth.max.z + 1;
+  dungeonBatch = world.addBatch([groundShape(ground, 0, 0, Math.ceil((extent + 30) / 4) * 8, 4, 3, open), ...layout.parts.flatMap(placedShapes)]);
+  addShapes(world.batchShapes(dungeonBatch).map((s) => s.id));
+  // Outside the door, on the ground.
+  teleport(vec3(0, ground.heightAt(0, -4) + 0.1, -4));
 }
 
 // ---------------------------------------------------------------------------------------------

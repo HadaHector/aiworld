@@ -1,0 +1,18 @@
+// A tomb: a dead end 12 m square, 8 m to the vault.
+{
+  tags: ["crypt", "tomb"],
+  room: true,
+  weight: 2,
+  stage: [0.2, 1],
+  sockets: [{ at: [0, 0, 0], facing: 180, type: "crypt", size: [6, 6] }],
+  colliders: [
+    { box: [-7, -1, 0, 7, 0, 14] },
+    { box: [-7, 8, 0, 7, 9, 14] },
+    { box: [-7, -1, 0, -3, 9, 1] }, { box: [3, -1, 0, 7, 9, 1] }, { box: [-3, 6, 0, 3, 9, 1] },
+    { box: [-7, -1, 13, 7, 9, 14] },
+    { box: [-7, -1, 0, -6, 9, 14] },
+    { box: [6, -1, 0, 7, 9, 14] },
+  ],
+  paths: [[[0, 0, 0], [0, 0, 7]]],
+  spots: { spawns: [[0, 0, 7]], chest: [[0, 0, 11]], light: [[-5, 5, 7]], quest: [[3, 0, 9]] },
+}

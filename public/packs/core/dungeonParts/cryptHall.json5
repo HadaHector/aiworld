@@ -1,0 +1,32 @@
+// A burial hall, 18 m square and 9 m to the vault, a way through each wall.
+{
+  tags: ["crypt", "hall"],
+  room: true,
+  weight: 3,
+  sockets: [
+    { at: [0, 0, 0], facing: 180, type: "crypt", size: [6, 6] },
+    { at: [0, 0, 20], facing: 0, type: "crypt", size: [6, 6] },
+    { at: [-10, 0, 10], facing: 270, type: "crypt", size: [6, 6] },
+    { at: [10, 0, 10], facing: 90, type: "crypt", size: [6, 6] },
+  ],
+  colliders: [
+    { box: [-10, -1, 0, 10, 0, 20] },   // floor
+    { box: [-10, 9, 0, 10, 10, 20] },   // vault
+    // South and north walls, each with its doorway and the lintel over it.
+    { box: [-10, -1, 0, -3, 10, 1] }, { box: [3, -1, 0, 10, 10, 1] }, { box: [-3, 6, 0, 3, 10, 1] },
+    { box: [-10, -1, 19, -3, 10, 20] }, { box: [3, -1, 19, 10, 10, 20] }, { box: [-3, 6, 19, 3, 10, 20] },
+    // West and east.
+    { box: [-10, -1, 0, -9, 10, 7] }, { box: [-10, -1, 13, -9, 10, 20] }, { box: [-10, 6, 7, -9, 10, 13] },
+    { box: [9, -1, 0, 10, 10, 7] }, { box: [9, -1, 13, 10, 10, 20] }, { box: [9, 6, 7, 10, 10, 13] },
+  ],
+  paths: [
+    [[0, 0, 0], [0, 0, 10], [0, 0, 20]],
+    [[-10, 0, 10], [0, 0, 10], [10, 0, 10]],
+  ],
+  spots: {
+    spawns: [[-5, 0, 6], [5, 0, 14]],
+    chest: [[-7, 0, 17]],
+    light: [[-8, 5, 2], [8, 5, 18]],
+    quest: [[6, 0, 5]],
+  },
+}
