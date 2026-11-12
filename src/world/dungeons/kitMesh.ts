@@ -302,14 +302,24 @@ const COVER = 0.01;
  * wall behind a stair - as convex pieces, and only the pieces with open space in front kept. With
  * `all`, kept seen or not (a cap, seen only from the part it closes).
  */
-function partFaces(solids: readonly Solid[], all = false, own: readonly number[] = solids.map((_, i) => i)): Face[] {
+function partFaces(solids: readonly Solid[], all = false, own: readonly number[] = solids.map((_, i) => i), whole: ReadonlySet<number> = new Set()): Face[] {
   const faces: Face[] = [];
+  const kept: Face[] = [];
   for (const i of own) {
+    // Drawn whole: every side as it is, seen or not (a spiral's pillar, a column the height of it).
+    if (whole.has(i)) {
+      for (const side of solids[i].sides) if (Math.abs(side.n[1]) < 0.5) kept.push({ n: side.n, corners: side.corners, solid: i });
+      continue;
+    }
     for (const side of solids[i].sides) {
-      faces.push(...cutFace({ n: side.n, corners: side.corners, solid: i }, solids.filter((_, j) => j !== i), [COVER]));
+      // Cut where another solid covers it - and where an earlier solid's face lies on it, so two
+      // faces in one place (a landing's floor and the piece running on from it) never flicker.
+      const face: Face = { n: side.n, corners: side.corners, solid: i };
+      const earlier = cutFace(face, solids.filter((_, j) => j < i), [COVER, -COVER]);
+      faces.push(...earlier.flatMap((f) => cutFace(f, solids.filter((_, j) => j > i), [COVER])));
     }
   }
-  return all ? faces : faces.filter((f) => seen(solids, f));
+  return [...kept, ...(all ? faces : faces.filter((f) => seen(solids, f)))];
 }
 
 /**
@@ -412,6 +422,8 @@ interface SolidKind {
   roof: boolean;
   /** A step's tread's height. */
   top: number;
+  /** Wall all over, whatever its shape (a railing). */
+  plain?: boolean;
 }
 
 function solidKinds(count: number, faces: readonly Face[]): SolidKind[] {
@@ -435,6 +447,7 @@ function solidKinds(count: number, faces: readonly Face[]): SolidKind[] {
  * else wall - so a wall cut into pieces round a flight of stairs stays wall.
  */
 function paintFor(f: Face, kind: SolidKind, look: DungeonStyleDef["look"]): DungeonPaint {
+  if (kind.plain) return look.wall;
   if (f.n[1] > 0.5) return kind.tread ? look.steps : look.floor;
   if (f.n[1] < -0.5) return look.ceiling;
   if (kind.tread) return look.steps;
@@ -457,8 +470,11 @@ function partShape(part: DungeonPartDef): { solids: Solid[]; faces: Face[]; kind
     const solids = solidsOf([...part.shapes, ...part.visuals]);
     // A part with no way through (a cap) is seen only from the part it closes: its faces lying in
     // a socket's plane, facing out through it.
-    const faces = part.paths.length > 0 ? partFaces(solids) : socketFaces(solids, part);
-    shapesOfPart.set(part, (known = { solids, faces, kinds: solidKinds(solids.length, faces) }));
+    const faces = part.paths.length > 0 ? partFaces(solids, false, solids.map((_, i) => i), new Set(part.whole)) : socketFaces(solids, part);
+    const kinds = solidKinds(solids.length, faces);
+    // Wall all over, though narrow on top: no step.
+    for (const i of part.plain) kinds[i] = { tread: false, floor: false, roof: false, top: -Infinity, plain: true };
+    shapesOfPart.set(part, (known = { solids, faces, kinds }));
   }
   return known;
 }

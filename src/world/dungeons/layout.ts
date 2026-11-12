@@ -508,8 +508,8 @@ function attemptLayout(content: DungeonContent, style: DungeonStyleDef, size: st
   for (let i = 1; i < placed.length; i++) {
     if (placed[i].role !== "cap" && coverOver(placed[i].box, true) < style.cover - 1e-6) return `${placed[i].part.id} too near the surface, between the samples`;
   }
-  // 8. A doorway across every join and cap, and at the mouth (DUNGEONS.md, *Doorways*) - rolled on
-  // their own, so a style's doorways never change the layout itself. None at a cap opens.
+  // 8. A doorway across every join, and at the mouth (DUNGEONS.md, *Doorways*) - rolled on their
+  // own, so a style's doorways never change the layout itself.
   const doorRandom = mulberry32(deriveSeed(seed, 0xd00a));
   const setDoorway = (s: WorldSocket, capped: boolean): number => {
     const options = style.doorways.filter((d) => socketsJoin(rules, d.sockets[0].type, s.def.type) && !(capped && d.doorway === "door"));
@@ -518,7 +518,8 @@ function attemptLayout(content: DungeonContent, style: DungeonStyleDef, size: st
     placed.push({ ...placeAt(option, 0, s, frame), parent: s.part, role: "doorway" });
     return placed.length - 1;
   };
-  for (const j of joins) j.doorway = setDoorway(socketOf(placed, j.a, j.socketA), placed[j.b].role === "cap");
+  // (Not at a cap: the wall closes the way, and a frame round it could reach into a neighbour's.)
+  for (const j of joins) if (placed[j.b].role !== "cap") j.doorway = setDoorway(socketOf(placed, j.a, j.socketA), false);
   placed[0].part.sockets.forEach((socket, i) => {
     if (socket.type === "surface") setDoorway(socketOf(placed, 0, i), false);
   });
@@ -746,6 +747,8 @@ export function connectorPart(c: ConnectorDef, length: number, dy: number): Dung
     rounds: [],
     doorway: null,
     visuals: [],
+    whole: [],
+    plain: [],
   };
   cache.set(key, part);
   return part;

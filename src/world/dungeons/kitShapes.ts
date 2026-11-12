@@ -9,6 +9,10 @@ export type Polyline = Vec3[];
 export interface KitGeometry {
   shapes: ShapeDesc[];
   paths: Polyline[];
+  /** Which of `shapes` are drawn whole, uncut by the others (a spiral's pillar). */
+  whole?: number[];
+  /** Which are wall all over, whatever their shape (a railing - not a step for being narrow). */
+  plain?: number[];
 }
 
 /** A box between two corners. */
@@ -64,6 +68,12 @@ export function stairGeometry(s: StairSpec): KitGeometry {
   return { shapes, paths: [path] };
 }
 
+/** How far into the pillar the steps and vaults reach: inside its flats (12 sides: cos 15 deg). */
+const IN_PILLAR = 0.95;
+
+/** How far each landing runs on past its doorway before its railing or end wall, degrees. */
+const LANDING_ON = 12;
+
 /** A railing's height over the floor: a stop to walking off, not to jumping. */
 const RAILING = 1.1;
 
@@ -93,6 +103,8 @@ export interface SpiralSpec {
  * too close for the vault over one and the floor of the next.
  */
 export function spiralGeometry(s: SpiralSpec): KitGeometry {
+  const geometryWhole: number[] = [];
+  const geometryPlain: number[] = [];
   const deg = Math.PI / 180;
   const flat = s.flat * deg;
   const a0 = s.start * deg - flat;
@@ -138,31 +150,51 @@ export function spiralGeometry(s: SpiralSpec): KitGeometry {
   for (let i = 0; i < count; i++) {
     const b0 = angleOf(i), b1 = angleOf(i + 1);
     const top = heightOf(i);
-    const vault = b1 <= a0 + 2 * Math.PI + 1e-9 ? cap : top + s.rise + s.ceiling;
+    // Any step reaching back into the first turn: the one straddling its end too, or the ceiling
+    // over the railing would have a gap.
+    const vault = b0 < a0 + 2 * Math.PI - 1e-9 ? cap : top + s.rise + s.ceiling;
     // Under the outer wall too, so a door through it has a floor.
-    shapes.push(sector(b0, b1, s.inner * 0.98, s.outer + s.wall, top - 1, top));
-    shapes.push(sector(b0, b1, s.inner * 0.98, s.outer + s.wall, vault, vault + 1));
+    shapes.push(sector(b0, b1, s.inner * IN_PILLAR, s.outer + s.wall, top - 1, top));
+    shapes.push(sector(b0, b1, s.inner * IN_PILLAR, s.outer + s.wall, vault, vault + 1));
     const c = (b0 + b1) / 2;
     const atDoor = Math.abs(c - doorStart) < door || Math.abs(c - doorEnd) < door;
     // The wall's inside a chord touching the outer radius at its middle, never inside it.
-    if (!atDoor) shapes.push(sector(b0, b1, s.outer / Math.cos((b1 - b0) / 2), s.outer + s.wall, top - 1, vault + 1));
+    // Raised to the top's vault, but under a doorway (a turn round from it): only up to its own vault,
+    // so it never stands in the doorway above it.
+    const turnsAway = (x: number): number => Math.abs(((((x - doorStart) % (2 * Math.PI)) + 3 * Math.PI) % (2 * Math.PI)) - Math.PI);
+    const wallTop = vault === cap && Math.min(turnsAway(b0), turnsAway(c), turnsAway(b1)) < door ? top + s.rise + s.ceiling + 1 : vault + 1;
+    if (!atDoor) shapes.push(sector(b0, b1, s.outer / Math.cos((b1 - b0) / 2), s.outer + s.wall, top - 1, wallTop));
     path.push(point(c, mid, top));
   }
-  // Where the top landing stops short of the stairwell: a stone railing across its end, just past
-  // the doorway, low enough to jump over and drop to the stair below.
+  // Each landing runs on past its doorway by LANDING_ON - far enough that the way in, straight to
+  // the middle of the stair, keeps its full width (at half the width, a door's half-width off its
+  // line is 30 degrees round) - and stops at a railing over the stairwell at the top, a wall at the
+  // bottom.
   const step = span / count;
-  shapes.push(sector(a0 - Math.min(step, 0.6 / mid), a0, s.inner * 0.98, s.outer + s.wall, s.top - 0.5, s.top + RAILING));
-  // Where the bottom landing stops, just past its doorway: a wall across, up under the lap above.
-  const end = a0 + span;
-  const over = Math.floor((end - 2 * Math.PI - a0) / step);
-  const wallTop = over >= 0 ? heightOf(over) - 1 + 0.05 : s.top - s.drop + s.rise + s.ceiling + 1;
-  shapes.push(sector(end, end + Math.min(step, 1 / mid), s.inner * 0.98, s.outer + s.wall, s.top - s.drop - 1, wallTop));
+  const on = LANDING_ON * deg;
+  const railAt = a0 - on;
+  shapes.push(sector(railAt, a0, s.inner * IN_PILLAR, s.outer + s.wall, s.top - 1, s.top));
+  shapes.push(sector(railAt - Math.min(step, 0.6 / mid), railAt, s.inner * IN_PILLAR, s.outer + s.wall, s.top - 0.5, s.top + RAILING));
+  geometryPlain.push(shapes.length - 1);
+  const end = a0 + span, bottom = s.top - s.drop, bottomVault = bottom + s.rise + s.ceiling;
+  // Roofed by the lap over it (more than a vault's height up: the laps are that far apart), or by a
+  // vault of its own where there is none.
+  const wallAt = end + on;
+  const over = Math.floor((wallAt - 2 * Math.PI - a0) / step);
+  const wallTop = over >= 0 ? heightOf(over) - 1 + 0.05 : bottomVault + 1;
+  shapes.push(sector(end, end + on, s.inner * IN_PILLAR, s.outer + s.wall, bottom - 1, bottom));
+  if (over < 0) shapes.push(sector(end, end + on, s.inner * IN_PILLAR, s.outer + s.wall, bottomVault, bottomVault + 1));
+  shapes.push(sector(end, end + on, s.outer, s.outer + s.wall, bottom - 1, wallTop));
+  shapes.push(sector(wallAt, wallAt + Math.min(step, 1 / mid), s.inner * IN_PILLAR, s.outer + s.wall, bottom - 1, wallTop));
   path.push(point(doorEnd, mid, s.top - s.drop), point(doorEnd, s.outer + s.wall, s.top - s.drop));
   // The pillar: a twelve-sided prism inside the inner radius, so no flat of it narrows the way.
   const low = s.top - s.drop - 1, high = s.top + s.rise + s.ceiling + 1;
   const ring = Array.from({ length: 12 }, (_, k) => (k * Math.PI) / 6);
   shapes.push({ kind: "convex", points: [...ring.map((a) => point(a, s.inner, low)), ...ring.map((a) => point(a, s.inner, high))] });
-  return { shapes, paths: [path] };
+  // The pillar is drawn whole, a round column from bottom to top (what of it is behind the steps
+  // does not matter).
+  geometryWhole.push(shapes.length - 1);
+  return { shapes, paths: [path], whole: geometryWhole, plain: geometryPlain };
 }
 
 export const DOORWAY_KINDS = ["frame", "arch", "door"] as const;

@@ -91,6 +91,10 @@ export interface DungeonPartDef {
   doorway: DoorwayKind | null;
   /** What is drawn but not in the way - a doorway's leaves standing open. */
   visuals: ShapeDesc[];
+  /** Which of `shapes` are drawn whole, uncut by the rest: a spiral's pillar. */
+  whole: number[];
+  /** Which are wall all over, whatever their shape: a railing. */
+  plain: number[];
 }
 
 export interface DungeonSize {
@@ -269,6 +273,8 @@ function readPart(entry: Entry, rules: DungeonRules, issues: ContentIssue[]): Du
   const paths: Polyline[] = [];
   const rounds: [number, number][] = [];
   const visuals: ShapeDesc[] = [];
+  const whole: number[] = [];
+  const plain: number[] = [];
   let doorway: DoorwayKind | null = null;
   if (obj.doorway !== undefined) {
     // A doorway: its shapes from its kind and its socket's size.
@@ -331,6 +337,8 @@ function readPart(entry: Entry, rules: DungeonRules, issues: ContentIssue[]): Du
           ceiling: reader.number(s, "ceiling", at, { min: 1 }),
           flat: reader.optionalNumber(s, "flat", at, 20, { min: 0 }),
         });
+        whole.push(...(geometry.whole ?? []).map((i) => i + shapes.length));
+        plain.push(...(geometry.plain ?? []).map((i) => i + shapes.length));
         shapes.push(...geometry.shapes);
         paths.push(...geometry.paths);
         rounds.push(centre);
@@ -376,6 +384,8 @@ function readPart(entry: Entry, rules: DungeonRules, issues: ContentIssue[]): Du
     rounds,
     doorway,
     visuals,
+    whole,
+    plain,
   };
   // Every way through it, on its own colliders: floor under the walk lines, and 6 m wide and high.
   const before = issues.length;

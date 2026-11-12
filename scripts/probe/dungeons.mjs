@@ -196,7 +196,8 @@ for (let n = 0; n < COUNT; n++) {
   check(`${where}: everything reachable`, d.every((x, i) => x < Infinity || layout.parts[i].role === "doorway"));
   // A doorway across every join and cap, and at the mouth.
   const doorways = layout.parts.filter((p) => p.role === "doorway").length;
-  check(`${where}: a doorway across every join`, layout.joins.every((k) => k.doorway > 0 && layout.parts[k.doorway].role === "doorway") && doorways === layout.joins.length + 1, `${doorways} doorways, ${layout.joins.length} joins`);
+  const open = layout.joins.filter((k) => layout.parts[k.b].role !== "cap");
+  check(`${where}: a doorway across every join`, open.every((k) => k.doorway > 0 && layout.parts[k.doorway].role === "doorway") && doorways === open.length + 1, `${doorways} doorways, ${open.length} joins`);
   if (!layout.minimal) check(`${where}: a boss`, layout.boss > 0 && layout.parts[layout.boss].role === "boss");
   if (layout.lock >= 0) {
     const without = graphDistances(layout.parts.length, layout.joins.filter((_, i) => i !== layout.lock), 0);
