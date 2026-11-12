@@ -4,7 +4,7 @@
 import { ContentError, Reader, type ContentIssue, type RawObject } from "../content/contentReader";
 import { DUNGEON_FOLDERS, orderPacks, parseFile, type PackSource } from "../content/resolveContent";
 import { vec3, type Aabb, type ShapeDesc, type Vec3 } from "../collision/index";
-import { boxShape, doorwayGeometry, DOORWAY_KINDS, spiralGeometry, stairGeometry, type DoorwaySpec, type Polyline } from "./kitShapes";
+import { boxShape, doorwayGeometry, DOORWAY_KINDS, spiralGeometry, stairGeometry, type DoorwaySpec, type Polyline, type Voussoir } from "./kitShapes";
 import { checkPaths } from "./clearance";
 
 const ID_PATTERN = /^[A-Za-z0-9_-]+$/;
@@ -101,6 +101,8 @@ export interface DungeonPartDef {
   whole: number[];
   /** Which are wall all over, whatever their shape: a railing. */
   plain: number[];
+  /** A doorway's arch stones, each textured as one block. */
+  voussoirs: Voussoir[];
 }
 
 export interface DungeonSize {
@@ -287,6 +289,7 @@ function readPart(entry: Entry, rules: DungeonRules, issues: ContentIssue[]): Du
   const visuals: ShapeDesc[] = [];
   const whole: number[] = [];
   const plain: number[] = [];
+  const voussoirs: Voussoir[] = [];
   let doorway: DoorwaySpec | null = null;
   if (obj.doorway !== undefined) {
     // A doorway: its shapes from its kind and its socket's size.
@@ -309,6 +312,7 @@ function readPart(entry: Entry, rules: DungeonRules, issues: ContentIssue[]): Du
       rise: reader.optionalNumber(raw, "rise", "doorway", 1.5, { min: 0.1 }),
     };
     const geometry = doorwayGeometry(doorway);
+    voussoirs.push(...geometry.voussoirs.map((v) => ({ ...v, shape: v.shape + shapes.length })));
     shapes.push(...geometry.shapes);
     visuals.push(...geometry.visuals);
     paths.push(...geometry.paths);
@@ -403,6 +407,7 @@ function readPart(entry: Entry, rules: DungeonRules, issues: ContentIssue[]): Du
     visuals,
     whole,
     plain,
+    voussoirs,
   };
   // Every way through it, on its own colliders: floor under the walk lines, and 6 m wide and high.
   const before = issues.length;

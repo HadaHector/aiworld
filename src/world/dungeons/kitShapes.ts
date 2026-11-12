@@ -200,11 +200,12 @@ export function spiralGeometry(s: SpiralSpec): KitGeometry {
 export const DOORWAY_KINDS = ["frame", "arch", "door"] as const;
 
 /** How far a doorway's stop stands in from its opening, how far either side of its socket's plane it
- *  reaches, and how far its keystone rises over the ring. Doorways may be narrower than the
+ *  reaches, and how far its keystone rises over the ring and stands forward of it. Doorways may be narrower than the
  *  rules' least way through by the stop (DUNGEONS.md, *Doorways*). */
 const INSET = 0.3;
 const STOP = 0.25;
 const KEYSTONE = 0.4;
+const KEYSTONE_FORWARD = 0.15;
 /** A threshold's height, and how far it reaches either side of the socket's plane. */
 const THRESHOLD = [0.15, 0.35] as const;
 export type DoorwayKind = (typeof DOORWAY_KINDS)[number];
@@ -236,8 +237,21 @@ export interface DoorwaySpec {
  * and a threshold across it;
  * for a door, its two leaves standing open into +z (drawn, not in the way: `visuals`).
  */
-export function doorwayGeometry(d: DoorwaySpec): { shapes: ShapeDesc[]; visuals: ShapeDesc[]; paths: Polyline[] } {
+/** One stone of an arch: which shape it is, the ring it is part of (round (0, cy), from radius r0 to
+ *  r1, angles a0 to a1) and its course counted from the springing - so it is textured as one block. */
+export interface Voussoir {
+  shape: number;
+  cy: number;
+  r0: number;
+  r1: number;
+  a0: number;
+  a1: number;
+  course: number;
+}
+
+export function doorwayGeometry(d: DoorwaySpec): { shapes: ShapeDesc[]; visuals: ShapeDesc[]; paths: Polyline[]; voussoirs: Voussoir[] } {
   const w = d.width / 2, h = d.height, t = d.jamb;
+  const voussoirs: Voussoir[] = [];
   // The sill, and on it a threshold across the opening at the stop - low enough to step over.
   const shapes: ShapeDesc[] = [boxShape(-w, -1, -d.back, w, 0, d.front), boxShape(-w, 0, -THRESHOLD[1], w, THRESHOLD[0], THRESHOLD[1])];
   /** A piece between two angles of a ring round (0, cy), from radius r0 to r1, z0 to z1 - plus any extra points. */
@@ -261,13 +275,20 @@ export function doorwayGeometry(d: DoorwaySpec): { shapes: ShapeDesc[]; visuals:
       const a0 = from + ((to - from) * i) / pieces, a1 = from + ((to - from) * (i + 1)) / pieces;
       // The first and last reach down over their jamb's outer corner, so the ring sits on it whole.
       const extra: [number, number][] = i === 0 ? [[w + t, spring]] : i === pieces - 1 ? [[-w - t, spring]] : [];
-      const proud = i === key ? KEYSTONE : 0;
-      shapes.push(ringPiece(cy, a0, a1, r, r + t + proud, -d.backOver, d.frontOver, extra));
+      // The keystone rises over the ring, and stands forward of it - but not on a side whose lintel
+      // is kept short (a spiral's: its next lap passes over).
+      const keystone = i === key;
+      const rise = keystone ? KEYSTONE : 0;
+      const back = d.backOver + (keystone && d.backOver >= d.back ? KEYSTONE_FORWARD : 0);
+      const front = d.frontOver + (keystone && d.frontOver >= d.front ? KEYSTONE_FORWARD : 0);
+      voussoirs.push({ shape: shapes.length, cy, r0: r, r1: r + t + rise, a0, a1, course: Math.min(i, pieces - 1 - i) });
+      shapes.push(ringPiece(cy, a0, a1, r, r + t + rise, -back, front, extra));
     }
     // The inset: a stop round the opening at its middle, following the arch.
     shapes.push(boxShape(-w, 0, -STOP, -w + INSET, spring, STOP), boxShape(w - INSET, 0, -STOP, w, spring, STOP));
     for (let i = 0; i < pieces; i++) {
       const a0 = from + ((to - from) * i) / pieces, a1 = from + ((to - from) * (i + 1)) / pieces;
+      voussoirs.push({ shape: shapes.length, cy, r0: r - INSET, r1: r, a0, a1, course: Math.min(i, pieces - 1 - i) });
       shapes.push(ringPiece(cy, a0, a1, r - INSET, r, -STOP, STOP));
     }
   } else {
@@ -287,5 +308,5 @@ export function doorwayGeometry(d: DoorwaySpec): { shapes: ShapeDesc[]; visuals:
     const leaf = 0.15;
     visuals.push(boxShape(-w + INSET, 0.05, STOP, -w + INSET + leaf, h - INSET - 0.05, STOP + w - INSET), boxShape(w - INSET - leaf, 0.05, STOP, w - INSET, h - INSET - 0.05, STOP + w - INSET));
   }
-  return { shapes, visuals, paths: [[vec3(0, 0, -d.back), vec3(0, 0, d.front)]] };
+  return { shapes, visuals, paths: [[vec3(0, 0, -d.back), vec3(0, 0, d.front)]], voussoirs };
 }

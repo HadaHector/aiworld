@@ -588,6 +588,47 @@ function stairOf(f: Face, kind: SolidKind, solids: readonly Solid[], look: Dunge
   return { paint: look.riser, uvs: c.map((p): [number, number] => [dot(p, tangent), (p[1] - low) / (high - low)]), tangent };
 }
 
+/** The frame stone's blocks (`doorStone`: two across a 3 m repeat, four courses up it). */
+const BLOCK: [number, number] = [1.5, 0.75];
+
+/**
+ * A doorway's stone laid by its own shape, in its frame (the opening's middle, on the floor): the
+ * jambs, sill and lintel in courses from the floor and blocks from the opening's edge, so joints
+ * fall on their edges; each arch stone (voussoir) one whole block - across it from the ring's inside
+ * out, along it round the ring - on its face and underneath, alternate courses staggered.
+ */
+function doorwayStone(f: Face, part: DungeonPartDef): { uvs: [number, number][]; tangent: V } | null {
+  const c = f.corners;
+  const v = part.voussoirs.find((x) => x.shape === f.solid);
+  if (v) {
+    const centre: V = [0, 0, 0];
+    for (const p of c) for (let k = 0; k < 3; k++) centre[k] += p[k] / c.length;
+    const phi = Math.atan2(centre[1] - v.cy, centre[0]);
+    const radial: V = [Math.cos(phi), Math.sin(phi), 0];
+    const round: V = [-Math.sin(phi), Math.cos(phi), 0];
+    const facing = Math.abs(f.n[2]) > 0.7;
+    if (!facing && Math.abs(dot(f.n, radial)) < 0.7) return null;
+    // Across the block: out from the ring on its face, through the doorway underneath.
+    const tangent: V = facing ? radial : [0, 0, 1];
+    const forward = dot(cross(f.n, tangent), round) > 0;
+    const u0 = (v.course % 2) * (BLOCK[0] / 2);
+    const uvs = c.map((p): [number, number] => {
+      const a = Math.atan2(p[1] - v.cy, p[0]);
+      const along = Math.min(1, Math.max(0, (a - v.a0) / (v.a1 - v.a0)));
+      const across = facing ? (Math.hypot(p[0], p[1] - v.cy) - v.r0) / (v.r1 - v.r0) : (p[2] + BLOCK[0]) / (2 * BLOCK[0]);
+      return [u0 + across * BLOCK[0], (v.course + (forward ? along : 1 - along)) * BLOCK[1]];
+    });
+    return { uvs, tangent };
+  }
+  if (Math.abs(f.n[1]) > 0.5) {
+    const tangent: V = [1, 0, 0];
+    const up = cross(f.n, tangent);
+    return { uvs: c.map((p): [number, number] => [p[0], dot(p, up)]), tangent };
+  }
+  const tangent = horizontal(f.n);
+  return { uvs: c.map((p): [number, number] => [dot(p, tangent), p[1]]), tangent };
+}
+
 /** Along a wall, level - turned so that n x it points up, as the shader's frame wants v. */
 function horizontal(n: V): V {
   const t = norm([-n[2], 0, n[0]]);
@@ -650,6 +691,12 @@ export function buildPartModel(layout: DungeonLayout, index: number, style: Dung
   for (const f of faces) {
     const door = placed.role === "doorway" ? (f.solid >= placed.part.shapes.length ? style.look.door : style.look.frame) : null;
     const paint = asPaint(door ?? paintFor(f, kinds[f.solid], style.look));
+    // A doorway's stone laid by its own shape (its leaves, drawn only, as any face).
+    const stone = placed.role === "doorway" && f.solid < placed.part.shapes.length ? doorwayStone(f, placed.part) : null;
+    if (stone) {
+      b.raw(f.corners.map(point), f.corners.map(() => turn(f.n)), f.corners.map(() => turn(stone.tangent)), stone.uvs, paint);
+      continue;
+    }
     const stair = placed.role === "doorway" ? null : stairOf(f, kinds[f.solid], solids, style.look);
     if (stair) {
       b.raw(f.corners.map(point), f.corners.map(() => turn(f.n)), f.corners.map(() => turn(stair.tangent)), stair.uvs, asPaint(stair.paint));

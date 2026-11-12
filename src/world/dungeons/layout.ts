@@ -714,7 +714,7 @@ export function doorwayPart(def: DungeonPartDef, behind: Pick<SocketDef, "reach"
   if (known) return known;
   const doorway = { ...def.doorway, back: behind.reach, front: beyond.reach, backOver: behind.reachOver, frontOver: beyond.reachOver };
   const geometry = doorwayGeometry(doorway);
-  const part: DungeonPartDef = { ...def, doorway, shapes: geometry.shapes, visuals: geometry.visuals, paths: geometry.paths, bounds: shapesBounds(geometry.shapes) };
+  const part: DungeonPartDef = { ...def, doorway, shapes: geometry.shapes, visuals: geometry.visuals, paths: geometry.paths, voussoirs: geometry.voussoirs, bounds: shapesBounds(geometry.shapes) };
   cache.set(key, part);
   return part;
 }
@@ -771,6 +771,7 @@ export function connectorPart(c: ConnectorDef, length: number, dy: number): Dung
     visuals: [],
     whole: [],
     plain: [],
+    voussoirs: [],
   };
   cache.set(key, part);
   return part;
