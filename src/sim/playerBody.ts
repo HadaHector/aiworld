@@ -60,6 +60,9 @@ export function createPlayerBody(
   start: { x: number; z: number },
   /** Water: where it is and how a body meets it - left out, there is none. */
   water?: { at: (x: number, z: number) => WaterSample; rules: () => WaterRules | null },
+  /** Whether the feet are in a space under the ground (a dungeon - DUNGEONS.md): there the ground
+   *  above and its water are not underfoot, and the body walks the collision as it is. */
+  underground?: (x: number, y: number, z: number) => boolean,
 ): PlayerBody {
   const motor = createCharacterMotor(collision.world, {}, { x: start.x, y: heightAt(start.x, start.z), z: start.z });
   let facing = 0;
@@ -88,7 +91,8 @@ export function createPlayerBody(
     // Where the feet were: the motor moves the same object in an update.
     const y0 = feet.y;
     hop = Math.max(0, hop - deltaSeconds);
-    const here = rules && water ? water.at(feet.x, feet.z) : null;
+    const below = underground?.(feet.x, feet.y, feet.z) ?? false;
+    const here = rules && water && !below ? water.at(feet.x, feet.z) : null;
     const swimming = here !== null && rules !== null && hop === 0 && here.surface - y0 > rules.swimDepth && (here.depth >= rules.swimDepth || waterState >= WATER_SWIMMING);
     if (swimming && here && rules && collision.hasGroundAt(feet.x, feet.z)) {
       // Swimming: it floats, rise swims up, dive swims down, and pace is a share of walking's.
@@ -113,7 +117,7 @@ export function createPlayerBody(
         motor.state.velocity = { x: moveX * scale, y: 0, z: moveZ * scale };
         motor.state.grounded = y <= floor + 0.05;
       }
-    } else if (!collision.hasGroundAt(feet.x, feet.z)) {
+    } else if (!below && !collision.hasGroundAt(feet.x, feet.z)) {
       // No collision here yet: stand on the terrain itself until it comes.
       // (Afloat, it floats there too.)
       const scale = swimming && rules ? Math.min(1, (WALK_SPEED * speedScale * rules.swimSpeed) / Math.max(1e-6, Math.hypot(moveX, moveZ))) : 1;
@@ -127,11 +131,11 @@ export function createPlayerBody(
       // floor counts as the ground there.
       const at = motor.state.feet;
       const ground = groundAt(at.x, at.z, at.y + 0.5);
-      if (at.y < ground - 1) motor.teleport({ x: at.x, y: ground, z: at.z });
+      if (!below && at.y < ground - 1) motor.teleport({ x: at.x, y: ground, z: at.z });
     }
     if (moveX * moveX + moveZ * moveZ > 0) facing = Math.atan2(moveX, moveZ);
     waterState = WATER_DRY;
-    if (rules && water) {
+    if (rules && water && !below) {
       const now = motor.state.feet;
       const sample = water.at(now.x, now.z);
       const deep = sample.surface - now.y;

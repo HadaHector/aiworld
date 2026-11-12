@@ -24,6 +24,12 @@ export interface WorldCollision {
   readonly shapeCount: number;
 }
 
+/**
+ * How deep the ground is solid under its surface (COLLISION.md, *The ground's depth*): a slab, open
+ * below, so a dungeon lying under it (DUNGEONS.md, its parts at least their style's cover under the
+ * surface) is not inside the ground and pushed up through it.
+ */
+export const GROUND_DEPTH = 3;
 /** How deep the pieces of ground left round a cellar's hole reach under the surface. */
 const PATCH_DEPTH = 1;
 
@@ -132,7 +138,7 @@ export function createWorldCollision(
         }
       }
     }
-    shapes.unshift({ kind: "heightfield", originX, originZ, cell, columns: size, rows: size, heights, split: "centre", holes });
+    shapes.unshift({ kind: "heightfield", originX, originZ, cell, columns: size, rows: size, heights, split: "centre", holes, depth: GROUND_DEPTH });
     return shapes;
   }
 

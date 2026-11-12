@@ -142,6 +142,27 @@ export function spiralGeometry(s: SpiralSpec): KitGeometry {
     path.push(point(c, mid, top));
   }
   path.push(point(doorEnd, mid, s.top - s.drop), point(doorEnd, s.outer + s.wall, s.top - s.drop));
+  // Each door framed square to its socket: jambs either side reaching out to the socket's plane, a
+  // sill and a lintel - so a part joined there meets a flat wall, and no gap opens between its wall
+  // and the spiral's round one either side of the doorway.
+  const half = (s.outer - s.inner) / 2;
+  const within = Math.sqrt(s.outer * s.outer - half * half);
+  const plane = s.outer + s.wall;
+  const jamb = half + 3.5;
+  for (const [angle, floor] of [[doorStart, s.top], [doorEnd, s.top - s.drop]] as const) {
+    const rotation = quatFromEuler(angle);
+    const vault = floor + s.rise + s.ceiling;
+    const piece = (t0: number, t1: number, y0: number, y1: number): ShapeDesc => {
+      const tc = (t0 + t1) / 2, rc = (within + plane) / 2;
+      return {
+        kind: "box",
+        center: vec3(s.centre[0] + tc * Math.cos(angle) + rc * Math.sin(angle), (y0 + y1) / 2, s.centre[1] - tc * Math.sin(angle) + rc * Math.cos(angle)),
+        half: vec3((t1 - t0) / 2, (y1 - y0) / 2, (plane - within) / 2),
+        rotation,
+      };
+    };
+    shapes.push(piece(-jamb, -half, floor - 1, vault + 1), piece(half, jamb, floor - 1, vault + 1), piece(-half, half, floor - 1, floor), piece(-half, half, vault, vault + 1));
+  }
   // The pillar: a twelve-sided prism inside the inner radius, so no flat of it narrows the way.
   const low = s.top - s.drop - 1, high = s.top + s.rise + s.ceiling + 1;
   const ring = Array.from({ length: 12 }, (_, k) => (k * Math.PI) / 6);

@@ -35,8 +35,9 @@ only; which content makes which colliders is a step of its own, after it.
   up, but its outer edges and the sides of its holes are open - a cellar dug through it needs walls
   of its own.
 - **A heightfield's depth** makes it a slab, solid only that far under its surface and open below,
-  so a cave under the ground is not in it (DUNGEONS.md). Lacking one it is solid all the way down,
-  as the game's ground still is. A slab is entered from below as well: its underside is the same
+  so a cave under the ground is not in it (DUNGEONS.md). Lacking one it is solid all the way down.
+  The game's ground is 3 m deep (`GROUND_DEPTH`, `worldCollision.ts`); a body in a dungeon is not
+  put back on the ground over it, nor in the water over it (`playerBody.ts`'s `underground`). A slab is entered from below as well: its underside is the same
   triangles, `depth` lower, facing down.
 - **A mesh** is a one-sided surface - a cave's rock, meshed from its distance field - each triangle
   facing the open side, the solid behind. Whatever is in the solid is pushed out through the face it
