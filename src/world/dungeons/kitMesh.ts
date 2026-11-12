@@ -43,7 +43,7 @@ const EPS = 1e-4;
 /** How far in front of a face its points are tested for open space. */
 const FRONT = 0.05;
 /** A tread narrower than this, or a riser lower than this, is a step. */
-const STEP_WIDTH = 1.6;
+const STEP_WIDTH = 2.5;
 const RISER = 0.6;
 /** How high over the floor below a torch's flame burns, at the least. */
 const FLAME_HEIGHT = 3.8;
@@ -165,15 +165,19 @@ function column(s: Solid, x: number, z: number): [number, number] | null {
 /** Open space in the part: in none of its solids, with one of them over it and one under it. */
 function open(solids: readonly Solid[], p: V): boolean {
   if (solids.some((s) => inside(s, p))) return false;
-  let over = false, under = false;
+  let over = Infinity, under = -Infinity;
   for (const s of solids) {
     const c = column(s, p[0], p[2]);
     if (!c) continue;
-    if (c[0] >= p[1] - EPS) over = true;
-    if (c[1] <= p[1] + EPS) under = true;
+    if (c[0] >= p[1] - EPS) over = Math.min(over, c[0]);
+    if (c[1] <= p[1] + EPS) under = Math.max(under, c[1]);
   }
-  return over && under;
+  // A slit between two solids - the rock between a spiral's laps - is not open: nothing goes there.
+  return over < Infinity && under > -Infinity && over - under >= MIN_OPEN;
 }
+
+/** The least height of open space: anything lower is a gap in the rock, never seen. */
+const MIN_OPEN = 1;
 
 /** The top of the highest solid under a point, or null. */
 function floorUnder(solids: readonly Solid[], p: V): number | null {
@@ -505,8 +509,12 @@ function roundOf(part: DungeonPartDef, f: Face): { uvs: [number, number][]; tang
  */
 function stairOf(f: Face, kind: SolidKind, solids: readonly Solid[], look: DungeonStyleDef["look"]): { paint: DungeonPaint; uvs: [number, number][]; tangent: V } | null {
   if (!kind.tread) return null;
-  const c = f.corners;
+  let c = f.corners;
   if (f.n[1] > 0.5) {
+    // The step's whole top, not the piece of it left between the pillar and the wall: every piece
+    // of one tread is laid from the same nosing.
+    const piece = f.corners;
+    c = solids[f.solid].sides.find((side) => side.n[1] > 0.5)?.corners ?? piece;
     // The nosing: the edge with open space past it and the floor there lowest under it.
     const y = Math.max(...c.map((p) => p[1]));
     let front = -1, deepest = 0.1;
@@ -531,7 +539,7 @@ function stairOf(f: Face, kind: SolidKind, solids: readonly Solid[], look: Dunge
       }
     }
     // Nowhere it drops away: a landing among the steps (a spiral's level ends) - floor.
-    if (front < 0) return { paint: look.floor, uvs: c.map((p): [number, number] => [p[0], -p[2]]), tangent: [1, 0, 0] };
+    if (front < 0) return { paint: look.floor, uvs: piece.map((p): [number, number] => [p[0], -p[2]]), tangent: [1, 0, 0] };
     const a = c[front];
     const into = inward(front);
     // The back: the edge facing the nosing most squarely.
@@ -546,7 +554,7 @@ function stairOf(f: Face, kind: SolidKind, solids: readonly Solid[], look: Dunge
     // Along the nosing, turned so its u x v climbs into the step (the shader's tangent frame).
     let tangent = norm(sub(c[(front + 1) % c.length], a));
     if (dot(cross(f.n, tangent), into) < 0) tangent = [-tangent[0], -tangent[1], -tangent[2]];
-    const uvs = c.map((p): [number, number] => {
+    const uvs = piece.map((p): [number, number] => {
       const fromFront = dot(sub(p, a), into), fromBack = dot(sub(p, b0), backInto);
       return [dot(p, tangent), fromFront / Math.max(1e-6, fromFront + fromBack)];
     });
