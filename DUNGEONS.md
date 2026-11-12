@@ -440,11 +440,17 @@ the opening), and two faces in one plane flicker. So the meeting is a part of it
 - **A doorway part** (`dungeonParts/`, a `doorway` block in place of colliders): `kind` - `frame`
   (jambs, a sill, a lintel), `arch` (the lintel's underside rising `rise` over the middle, seen where
   the room beyond is taller than the way in) or `door` (a frame and two leaves standing open into
-  the part beyond, drawn but not in the way) - with `depth` (1 m each side of the plane: walls are
-  1 m thick), `jamb` (2 m out from the opening), `lintel`. Its opening is its socket's size, so it
-  never narrows the way.
-- **Set by the generator** across every join and every cap (a frame round the bricked-up way - never
-  an open door onto a wall), and at the entrance's mouth; the style's `doorways` say which, by weight.
+  the part beyond, drawn but not in the way) - with `jamb` (2 m out from the opening), `lintel`. Its
+  opening is its socket's size, so it never narrows the way.
+- **As thick as where it stands**: each socket says how far a doorway may reach into its part -
+  `reach` (1 m by default, the walls' depth: corridors, stairs, corners), 1.5 m into a hall, a tomb
+  or the boss hall (so the frame stands half a metre proud of the wall) and into a spiral (covering
+  its round wall where it curves away from the opening, as far as its walkway allows) - and
+  `reachOver`, how far its lintel or arch may (a spiral's 1 m: the next lap passes close over the
+  door). Set down, a doorway is built for the two sockets it stands between.
+- **Set by the generator** across every join, and at the entrance's mouth - not at a cap, whose
+  wall closes the way (a frame round it could reach into a neighbour's opening); the style's
+  `doorways` say which, by weight.
 - **Thick and overlapping**: it reaches into both parts, covering where their walls meet. Drawn, a
   part gives way to its doorways - its faces cut where a doorway lies in front of them, or where a
   doorway's face lies on its own - and a doorway is cut and seen against both parts it stands

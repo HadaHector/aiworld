@@ -4,7 +4,7 @@
   room: true,
   weight: 2,
   stage: [0.2, 1],
-  sockets: [{ at: [0, 0, 0], facing: 180, type: "crypt", size: [6, 6] }],
+  sockets: [{ at: [0, 0, 0], facing: 180, type: "crypt", size: [6, 6], reach: 1.5 }],
   colliders: [
     { box: [-7, -1, 0, 7, 0, 14] },
     { box: [-7, 8, 0, 7, 9, 14] },

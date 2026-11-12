@@ -2,7 +2,7 @@
 {
   tags: ["crypt", "hall", "boss"],
   room: true,
-  sockets: [{ at: [0, 0, 0], facing: 180, type: "crypt", size: [6, 6] }],
+  sockets: [{ at: [0, 0, 0], facing: 180, type: "crypt", size: [6, 6], reach: 1.5 }],
   colliders: [
     { box: [-15, -1, 0, 15, 0, 30] },
     { box: [-15, 12, 0, 15, 13, 30] },

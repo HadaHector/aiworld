@@ -205,9 +205,15 @@ export interface DoorwaySpec {
   /** The way through it: its socket's width and height. */
   width: number;
   height: number;
-  /** How far it reaches either side of the socket's plane, how far each jamb reaches out from the
-   *  opening, how deep the lintel and the sill are; an arch's rise over the opening. */
-  depth: number;
+  /** How far it reaches into the part behind its socket (-z) and the part in front (+z) - each
+   *  part's socket says how far it may (`reach`) - how far each jamb reaches out from the opening,
+   *  how deep the lintel is; an arch's rise over the opening. */
+  back: number;
+  front: number;
+  /** How far its lintel (or arch) reaches into each: no further than the walls, where something passes
+   *  over the doorway close above (a spiral's next lap). */
+  backOver: number;
+  frontOver: number;
   jamb: number;
   lintel: number;
   rise: number;
@@ -223,9 +229,9 @@ export function doorwayGeometry(d: DoorwaySpec): { shapes: ShapeDesc[]; visuals:
   const w = d.width / 2, h = d.height;
   const top = h + (d.kind === "arch" ? d.rise : 0) + d.lintel;
   const shapes: ShapeDesc[] = [
-    boxShape(-w - d.jamb, -1, -d.depth, -w, top, d.depth),
-    boxShape(w, -1, -d.depth, w + d.jamb, top, d.depth),
-    boxShape(-w, -1, -d.depth, w, 0, d.depth),
+    boxShape(-w - d.jamb, -1, -d.back, -w, top, d.front),
+    boxShape(w, -1, -d.back, w + d.jamb, top, d.front),
+    boxShape(-w, -1, -d.back, w, 0, d.front),
   ];
   if (d.kind === "arch") {
     // A segmental arch springing at the opening's height: its underside a circle's arc through the
@@ -236,17 +242,17 @@ export function doorwayGeometry(d: DoorwaySpec): { shapes: ShapeDesc[]; visuals:
       const x0 = -w + (2 * w * i) / pieces, x1 = -w + (2 * w * (i + 1)) / pieces;
       const y = (x: number): number => cy + Math.sqrt(Math.max(0, r * r - x * x));
       const points: Vec3[] = [];
-      for (const z of [-d.depth, d.depth]) points.push(vec3(x0, y(x0), z), vec3(x1, y(x1), z), vec3(x0, top, z), vec3(x1, top, z));
+      for (const z of [-d.backOver, d.frontOver]) points.push(vec3(x0, y(x0), z), vec3(x1, y(x1), z), vec3(x0, top, z), vec3(x1, top, z));
       shapes.push({ kind: "convex", points });
     }
   } else {
-    shapes.push(boxShape(-w, h, -d.depth, w, top, d.depth));
+    shapes.push(boxShape(-w, h, -d.backOver, w, top, d.frontOver));
   }
   const visuals: ShapeDesc[] = [];
   if (d.kind === "door") {
     // Two leaves swung wide, back along the walls of the part beyond.
     const t = 0.15;
-    visuals.push(boxShape(-w, 0.05, d.depth, -w + t, h - 0.1, d.depth + w), boxShape(w - t, 0.05, d.depth, w, h - 0.1, d.depth + w));
+    visuals.push(boxShape(-w, 0.05, d.front, -w + t, h - 0.1, d.front + w), boxShape(w - t, 0.05, d.front, w, h - 0.1, d.front + w));
   }
-  return { shapes, visuals, paths: [[vec3(0, 0, -d.depth), vec3(0, 0, d.depth)]] };
+  return { shapes, visuals, paths: [[vec3(0, 0, -d.back), vec3(0, 0, d.front)]] };
 }

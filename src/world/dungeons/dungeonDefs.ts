@@ -4,7 +4,7 @@
 import { ContentError, Reader, type ContentIssue, type RawObject } from "../content/contentReader";
 import { DUNGEON_FOLDERS, orderPacks, parseFile, type PackSource } from "../content/resolveContent";
 import { vec3, type Aabb, type ShapeDesc, type Vec3 } from "../collision/index";
-import { boxShape, doorwayGeometry, DOORWAY_KINDS, spiralGeometry, stairGeometry, type DoorwayKind, type Polyline } from "./kitShapes";
+import { boxShape, doorwayGeometry, DOORWAY_KINDS, spiralGeometry, stairGeometry, type DoorwaySpec, type Polyline } from "./kitShapes";
 import { checkPaths } from "./clearance";
 
 const ID_PATTERN = /^[A-Za-z0-9_-]+$/;
@@ -67,6 +67,11 @@ export interface SocketDef {
   type: string;
   /** The way through's width and height. */
   size: [number, number];
+  /** How far a doorway set across it may reach into this part (its walls' depth, or more where it
+   *  may stand proud of them - a hall's - or must cover a curve - a spiral's). */
+  reach: number;
+  /** How far its lintel may: less where something passes close over the doorway (a spiral's next lap). */
+  reachOver: number;
 }
 
 export interface DungeonPartDef {
@@ -87,8 +92,9 @@ export interface DungeonPartDef {
   room: boolean;
   /** Centres (x, z) its round walls and pillars turn about - a spiral's - so their textures run round them. */
   rounds: [number, number][];
-  /** A doorway, set across every join and cap (DUNGEONS.md, *Doorways*): which kind; null for any other part. */
-  doorway: DoorwayKind | null;
+  /** A doorway, set across every join (DUNGEONS.md, *Doorways*): how it is built - its depth
+   *  either side the joined sockets' `reach` - or null for any other part. */
+  doorway: DoorwaySpec | null;
   /** What is drawn but not in the way - a doorway's leaves standing open. */
   visuals: ShapeDesc[];
   /** Which of `shapes` are drawn whole, uncut by the rest: a spiral's pillar. */
@@ -248,6 +254,12 @@ function pair(reader: Reader, obj: RawObject, key: string, path: string): [numbe
   return [1, 1];
 }
 
+/** A socket's `reach` (1 m, the walls' depth, if not given) and `reachOver` (its reach, if not). */
+function reaches(reader: Reader, raw: RawObject, path: string): { reach: number; reachOver: number } {
+  const reach = reader.optionalNumber(raw, "reach", path, 1, { min: 0.1 });
+  return { reach, reachOver: reader.optionalNumber(raw, "reachOver", path, reach, { min: 0.1 }) };
+}
+
 function vector(reader: Reader, value: unknown, path: string): Vec3 {
   if (Array.isArray(value) && value.length === 3 && value.every((v) => typeof v === "number" && Number.isFinite(v))) return vec3(value[0], value[1], value[2]);
   reader.fail(path, "expected [x, y, z]");
@@ -263,10 +275,10 @@ function readPart(entry: Entry, rules: DungeonRules, issues: ContentIssue[]): Du
   const sockets = reader.array(obj, "sockets", "").map((value, i): SocketDef => {
     const path = `sockets[${i}]`;
     const raw = reader.object(value, path);
-    reader.onlyKeys(raw, path, ["at", "facing", "type", "size"]);
+    reader.onlyKeys(raw, path, ["at", "facing", "type", "size", "reach", "reachOver"]);
     const size = pair(reader, raw, "size", path);
     if (size[0] < rules.minClear[0] - 1e-6 || size[1] < rules.minClear[1] - 1e-6) reader.fail(`${path}.size`, `under the rules' minimum way through, ${rules.minClear.join(" x ")}`);
-    return { at: vector(reader, raw.at, `${path}.at`), facing: reader.number(raw, "facing", path), type: reader.string(raw, "type", path), size };
+    return { at: vector(reader, raw.at, `${path}.at`), facing: reader.number(raw, "facing", path), type: reader.string(raw, "type", path), size, ...reaches(reader, raw, path) };
   });
   if (sockets.length === 0) reader.fail("sockets", "a part needs at least one socket to be joined by");
   const shapes: ShapeDesc[] = [];
@@ -275,23 +287,28 @@ function readPart(entry: Entry, rules: DungeonRules, issues: ContentIssue[]): Du
   const visuals: ShapeDesc[] = [];
   const whole: number[] = [];
   const plain: number[] = [];
-  let doorway: DoorwayKind | null = null;
+  let doorway: DoorwaySpec | null = null;
   if (obj.doorway !== undefined) {
     // A doorway: its shapes from its kind and its socket's size.
     const raw = reader.object(obj.doorway, "doorway");
-    reader.onlyKeys(raw, "doorway", ["kind", "depth", "jamb", "lintel", "rise"]);
-    doorway = reader.oneOf(raw, "kind", "doorway", DOORWAY_KINDS);
+    reader.onlyKeys(raw, "doorway", ["kind", "jamb", "lintel", "rise"]);
     if (sockets.length !== 1) reader.fail("sockets", "a doorway has one socket, in the plane it stands across");
     const size = sockets[0]?.size ?? rules.minClear;
-    const geometry = doorwayGeometry({
-      kind: doorway,
+    // Set down, it is built again for the two sockets it stands between (layout.ts, doorwayPart);
+    // on its own, 1 m either side.
+    doorway = {
+      kind: reader.oneOf(raw, "kind", "doorway", DOORWAY_KINDS),
       width: size[0],
       height: size[1],
-      depth: reader.optionalNumber(raw, "depth", "doorway", 1, { min: 0.1 }),
+      back: 1,
+      front: 1,
+      backOver: 1,
+      frontOver: 1,
       jamb: reader.optionalNumber(raw, "jamb", "doorway", 2, { min: 0.1 }),
       lintel: reader.optionalNumber(raw, "lintel", "doorway", 1.5, { min: 0.1 }),
       rise: reader.optionalNumber(raw, "rise", "doorway", 1.5, { min: 0.1 }),
-    });
+    };
+    const geometry = doorwayGeometry(doorway);
     shapes.push(...geometry.shapes);
     visuals.push(...geometry.visuals);
     paths.push(...geometry.paths);

@@ -4,10 +4,10 @@
   room: true,
   weight: 3,
   sockets: [
-    { at: [0, 0, 0], facing: 180, type: "crypt", size: [6, 6] },
-    { at: [0, 0, 20], facing: 0, type: "crypt", size: [6, 6] },
-    { at: [-10, 0, 10], facing: 270, type: "crypt", size: [6, 6] },
-    { at: [10, 0, 10], facing: 90, type: "crypt", size: [6, 6] },
+    { at: [0, 0, 0], facing: 180, type: "crypt", size: [6, 6], reach: 1.5 },
+    { at: [0, 0, 20], facing: 0, type: "crypt", size: [6, 6], reach: 1.5 },
+    { at: [-10, 0, 10], facing: 270, type: "crypt", size: [6, 6], reach: 1.5 },
+    { at: [10, 0, 10], facing: 90, type: "crypt", size: [6, 6], reach: 1.5 },
   ],
   colliders: [
     { box: [-10, -1, 0, 10, 0, 20] },   // floor

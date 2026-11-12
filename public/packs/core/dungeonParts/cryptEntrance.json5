@@ -3,8 +3,8 @@
 {
   tags: ["crypt", "entrance"],
   sockets: [
-    { at: [0, 0, 0], facing: 180, type: "surface", size: [6, 6] },
-    { at: [0, -19.5, 20], facing: 0, type: "crypt", size: [6, 6] },
+    { at: [0, 0, 0], facing: 180, type: "surface", size: [6, 6], reach: 1.5, reachOver: 1 },
+    { at: [0, -19.5, 20], facing: 0, type: "crypt", size: [6, 6], reach: 1.5, reachOver: 1 },
   ],
   colliders: [
     { spiral: { centre: [0, 10], top: 0, inner: 3, outer: 9, wall: 1, start: 180, turns: 2.5, drop: 19.5, ceiling: 6 } },
