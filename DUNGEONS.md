@@ -170,6 +170,13 @@ in metres, as buildings are - flagstones on the floor, ashlar or brick on the wa
 or stone vault overhead, worn steps. A transition part (a crypt doorway broken into a cave) carries
 both: rough masonry on its crypt side and rubble spilling into the cave's floor.
 
+**Stairs** have materials of their own (built): `stairTread` on a step's top and `stairRiser` on
+its front, both bevelled where they meet - a pale, rounded nosing, a shadow under it on the riser.
+Each is laid by the step itself: in metres along the step, but exactly once from the nosing (the
+edge the step drops away from) to its back, and from the riser's foot to its top - so the bevel is
+on the edge whatever the step's size. A spiral's wedge-shaped steps stretch it a little toward the
+pillar; its level landings are floor. The style names them (`look.tread`, `look.riser`).
+
 **The field (cave)** has no UVs and no faces of its own:
 
 - **No unwrap: triplanar.** Textures are laid in world space from three sides and blended by the

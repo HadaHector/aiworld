@@ -138,6 +138,9 @@ export interface KitLook {
   wall: DungeonPaint;
   ceiling: DungeonPaint;
   steps: DungeonPaint;
+  /** A step's top and its front face, laid by the step (from the nosing back, from the foot up). */
+  tread: DungeonPaint;
+  riser: DungeonPaint;
   /** A doorway's stone, and its leaves. */
   frame: DungeonPaint;
   door: DungeonPaint;
@@ -423,11 +426,12 @@ function paintOf(reader: Reader, look: RawObject, key: string, fallback: Dungeon
 }
 
 function readLook(reader: Reader, raw: RawObject): KitLook {
-  reader.onlyKeys(raw, "look", ["floor", "wall", "ceiling", "steps", "frame", "door"]);
+  reader.onlyKeys(raw, "look", ["floor", "wall", "ceiling", "steps", "tread", "riser", "frame", "door"]);
   const stone: DungeonPaint = { material: "stoneBricks", tint: [1, 1, 1] };
   const floor = paintOf(reader, raw, "floor", stone);
   const wall = paintOf(reader, raw, "wall", stone);
-  return { floor, wall, ceiling: paintOf(reader, raw, "ceiling", stone), steps: paintOf(reader, raw, "steps", floor), frame: paintOf(reader, raw, "frame", wall), door: paintOf(reader, raw, "door", { material: "doorBoards", tint: [1, 1, 1] }) };
+  const steps = paintOf(reader, raw, "steps", floor);
+  return { floor, wall, ceiling: paintOf(reader, raw, "ceiling", stone), steps, tread: paintOf(reader, raw, "tread", steps), riser: paintOf(reader, raw, "riser", steps), frame: paintOf(reader, raw, "frame", wall), door: paintOf(reader, raw, "door", { material: "doorBoards", tint: [1, 1, 1] }) };
 }
 
 function readLight(reader: Reader, raw: RawObject): DungeonLight {

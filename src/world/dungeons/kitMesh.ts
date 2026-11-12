@@ -406,15 +406,20 @@ interface SolidKind {
   floor: boolean;
   /** A vault: seen from under it. */
   roof: boolean;
+  /** A step's tread's height. */
+  top: number;
 }
 
 function solidKinds(count: number, faces: readonly Face[]): SolidKind[] {
-  const kinds = Array.from({ length: count }, (): SolidKind => ({ tread: false, floor: false, roof: false }));
+  const kinds = Array.from({ length: count }, (): SolidKind => ({ tread: false, floor: false, roof: false, top: -Infinity }));
   for (const f of faces) {
     const k = kinds[f.solid];
     if (f.n[1] > 0.5) {
       k.floor = true;
-      if (leastWidth(f) < STEP_WIDTH) k.tread = true;
+      if (leastWidth(f) < STEP_WIDTH) {
+        k.tread = true;
+        k.top = Math.max(k.top, ...f.corners.map((c) => c[1]));
+      }
     } else if (f.n[1] < -0.5) k.roof = true;
   }
   return kinds;
@@ -491,6 +496,80 @@ function roundOf(part: DungeonPartDef, f: Face): { uvs: [number, number][]; tang
   return null;
 }
 
+/**
+ * A step's tread or riser laid by the step (DUNGEONS.md, *Materials*): the tread from its nosing -
+ * the edge it drops away from - (v 0) to its back (v 1), the riser from its foot (v 0) to the
+ * tread (v 1); both in metres along the step. So the materials' bevels lie on the nosing whatever
+ * the step's size; a spiral's wedge-shaped steps stretch them a little toward the pillar. Null for
+ * any other face.
+ */
+function stairOf(f: Face, kind: SolidKind, solids: readonly Solid[], look: DungeonStyleDef["look"]): { paint: DungeonPaint; uvs: [number, number][]; tangent: V } | null {
+  if (!kind.tread) return null;
+  const c = f.corners;
+  if (f.n[1] > 0.5) {
+    // The nosing: the edge with open space past it and the floor there lowest under it.
+    const y = Math.max(...c.map((p) => p[1]));
+    let front = -1, deepest = 0.1;
+    const inward = (i: number): V => {
+      const a = c[i], b = c[(i + 1) % c.length];
+      const along = norm(sub(b, a));
+      let into = cross(f.n, along);
+      const centre: V = [0, 0, 0];
+      for (const p of c) for (let k = 0; k < 3; k++) centre[k] += p[k] / c.length;
+      if (dot(sub(centre, a), into) < 0) into = [-into[0], -into[1], -into[2]];
+      return into;
+    };
+    for (let i = 0; i < c.length; i++) {
+      const a = c[i], b = c[(i + 1) % c.length];
+      const into = inward(i);
+      const past: V = [(a[0] + b[0]) / 2 - into[0] * 0.1, y + 0.05, (a[2] + b[2]) / 2 - into[2] * 0.1];
+      if (solids.some((s) => inside(s, past))) continue;
+      const floor = floorUnder(solids, past);
+      if (floor !== null && y - floor > deepest) {
+        deepest = y - floor;
+        front = i;
+      }
+    }
+    // Nowhere it drops away: a landing among the steps (a spiral's level ends) - floor.
+    if (front < 0) return { paint: look.floor, uvs: c.map((p): [number, number] => [p[0], -p[2]]), tangent: [1, 0, 0] };
+    const a = c[front];
+    const into = inward(front);
+    // The back: the edge facing the nosing most squarely.
+    let back = -1, facing = 1;
+    for (let i = 0; i < c.length; i++) {
+      if (i === front) continue;
+      const d = dot(inward(i), into);
+      if (d < facing) { facing = d; back = i; }
+    }
+    const b0 = c[back];
+    const backInto = inward(back);
+    // Along the nosing, turned so its u x v climbs into the step (the shader's tangent frame).
+    let tangent = norm(sub(c[(front + 1) % c.length], a));
+    if (dot(cross(f.n, tangent), into) < 0) tangent = [-tangent[0], -tangent[1], -tangent[2]];
+    const uvs = c.map((p): [number, number] => {
+      const fromFront = dot(sub(p, a), into), fromBack = dot(sub(p, b0), backInto);
+      return [dot(p, tangent), fromFront / Math.max(1e-6, fromFront + fromBack)];
+    });
+    return { paint: look.tread, uvs, tangent };
+  }
+  if (Math.abs(f.n[1]) > 0.1) return null;
+  let low = Infinity, high = -Infinity;
+  for (const p of c) {
+    low = Math.min(low, p[1]);
+    high = Math.max(high, p[1]);
+  }
+  // A riser: up to its step's tread. (What lies under a step is its underside: the vault's.)
+  if (Math.abs(high - kind.top) > 0.05 || high - low < 1e-3) return { paint: look.ceiling, uvs: c.map((p) => [dot(p, horizontal(f.n)), p[1]]), tangent: horizontal(f.n) };
+  const tangent = horizontal(f.n);
+  return { paint: look.riser, uvs: c.map((p): [number, number] => [dot(p, tangent), (p[1] - low) / (high - low)]), tangent };
+}
+
+/** Along a wall, level - turned so that n x it points up, as the shader's frame wants v. */
+function horizontal(n: V): V {
+  const t = norm([-n[2], 0, n[0]]);
+  return cross(n, t)[1] >= 0 ? t : [-t[0], -t[1], -t[2]];
+}
+
 /** Whether two boxes meet, or nearly. */
 const boxesMeet = (a: PlacedPart["box"], b: PlacedPart["box"]): boolean =>
   a.min.x < b.max.x + 0.2 && a.max.x > b.min.x - 0.2 && a.min.y < b.max.y + 0.2 && a.max.y > b.min.y - 0.2 && a.min.z < b.max.z + 0.2 && a.max.z > b.min.z - 0.2;
@@ -547,6 +626,11 @@ export function buildPartModel(layout: DungeonLayout, index: number, style: Dung
   for (const f of faces) {
     const door = placed.role === "doorway" ? (f.solid >= placed.part.shapes.length ? style.look.door : style.look.frame) : null;
     const paint = asPaint(door ?? paintFor(f, kinds[f.solid], style.look));
+    const stair = placed.role === "doorway" ? null : stairOf(f, kinds[f.solid], solids, style.look);
+    if (stair) {
+      b.raw(f.corners.map(point), f.corners.map(() => turn(f.n)), f.corners.map(() => turn(stair.tangent)), stair.uvs, asPaint(stair.paint));
+      continue;
+    }
     const round = roundOf(placed.part, f);
     if (round) b.raw(f.corners.map(point), f.corners.map(() => turn(f.n)), f.corners.map(() => turn(round.tangent)), round.uvs, paint);
     else b.face(f.corners.map(point), turn(f.n), paint);

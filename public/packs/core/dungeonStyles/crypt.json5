@@ -28,6 +28,9 @@
     wall: { material: "stoneBricks", tint: [0.82, 0.78, 0.72] },
     ceiling: { material: "rubbleStone", tint: [0.55, 0.52, 0.5] },
     steps: { material: "dressedStone", tint: [0.72, 0.7, 0.66] },
+    // A step's own top and front, their nosing bevelled, laid by the step.
+    tread: { material: "stairTread" },
+    riser: { material: "stairRiser" },
     frame: { material: "dressedStone", tint: [0.78, 0.76, 0.72] },
     door: { material: "doorBoards", tint: [0.7, 0.62, 0.52] },
   },

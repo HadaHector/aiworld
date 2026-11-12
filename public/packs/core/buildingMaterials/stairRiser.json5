@@ -1,0 +1,88 @@
+// A stair's riser: the step's front face, dressed stone in the same slabs as its tread - its top
+// rounded over into the tread's nosing, its foot darkened where dust gathers on the step below.
+// Laid by the step itself (DUNGEONS.md, *Materials*): metres across, but once exactly from its foot
+// (v 0) to its top (v 1), so the bevel is on the edge however high the riser is.
+{
+  name: "Stair Riser",
+  // 3 m across a repeat (two slabs), and the whole riser's height once.
+  size: [3, 1],
+  shine: 0.08,
+  texture: {
+    bumpStrength: 7,
+    pipeline: {
+      noises: [
+        // Two slabs across a repeat, one deep: u and v are where in its slab a point is.
+        { name: "slabs", type: "bricks", tileCycles: [2, 1], stagger: 0, amplitude: 1, mode: "edge" },
+        { name: "grain", type: "fbm", octaves: 3, tileCycles: 60, amplitude: 1, persistence: 0.55, lacunarity: 2 },
+        { name: "wear", type: "fbm", octaves: 3, tileCycles: 6, amplitude: 1, persistence: 0.5, lacunarity: 2 },
+        { name: "chips", type: "worley", tileCycles: 30, amplitude: 1, mode: "f1" },
+      ],
+      steps: [
+        { output: "across", op: "sample", noise: "slabs", mode: "v" },
+        { output: "slabId", op: "sample", noise: "slabs", mode: "cell" },
+        { output: "slabU", op: "sample", noise: "slabs", mode: "u" },
+        { output: "grainRaw", op: "sample", noise: "grain" },
+        { output: "wearRaw", op: "sample", noise: "wear" },
+        { output: "chipRaw", op: "sample", noise: "chips" },
+
+        // The joint between two slabs, along the step.
+        { output: "toJointA", op: "scale", input: "slabU", factor: 1 },
+        { output: "uBack", op: "invert", input: "slabU" },
+        { output: "toJoint", op: "min", a: "toJointA", b: "uBack" },
+        { output: "joint", op: "mask", input: "toJoint", at: 0.01, off: 0.025 },
+
+        // The top rounded over into the nosing (its last 30%), the foot a little sunk.
+        { output: "topFlip", op: "invert", input: "across" },
+        { output: "noseRaw", op: "remap", input: "topFlip", inMin: 0, inMax: 0.3, outMin: 0, outMax: 1 },
+        { output: "noseClamped", op: "clamp", input: "noseRaw", min: 0, max: 1 },
+        { output: "nose", op: "power", input: "noseClamped", exponent: 0.45 },
+        { output: "footRaw", op: "remap", input: "across", inMin: 0, inMax: 0.12, outMin: 0, outMax: 1 },
+        { output: "foot", op: "clamp", input: "footRaw", min: 0, max: 1 },
+        { output: "bevel", op: "min", a: "nose", b: "foot" },
+        // Darker toward its foot.
+        { output: "dust", op: "remap", input: "across", inMin: 0, inMax: 0.5, outMin: 0.72, outMax: 1 },
+        { output: "dustClamped", op: "clamp", input: "dust", min: 0.72, max: 1 },
+
+        // Each slab its own grey; paler where feet wore it, the nosing palest of all.
+        {
+          output: "tone",
+          op: "colorRamp",
+          input: "slabId",
+          stops: [
+            { at: 0.0, color: [0.56, 0.54, 0.5] },
+            { at: 0.35, color: [0.62, 0.6, 0.55] },
+            { at: 0.7, color: [0.58, 0.55, 0.5] },
+            { at: 1.0, color: [0.66, 0.63, 0.58] },
+          ],
+        },
+        { output: "shadeRaw", op: "add", a: "wearRaw", b: "grainRaw" },
+        { output: "shade", op: "remap", input: "shadeRaw", inMin: -1, inMax: 1, outMin: 0.85, outMax: 1.08 },
+        { output: "worn0", op: "multiply", a: "tone", b: "shade" },
+        { output: "worn", op: "multiply", a: "worn0", b: "dustClamped" },
+        // Palest at its very top - the nosing's round catching the light - and a shadow just under it.
+        { output: "edgeRaw", op: "remap", input: "topFlip", inMin: 0, inMax: 0.15, outMin: 1.25, outMax: 1 },
+        { output: "edgeClamped", op: "clamp", input: "edgeRaw", min: 1, max: 1.25 },
+        { output: "bandAt", op: "remap", input: "topFlip", inMin: 0.14, inMax: 0.38, outMin: -1, outMax: 1 },
+        { output: "bandDistance", op: "abs", input: "bandAt" },
+        { output: "underRaw", op: "remap", input: "bandDistance", inMin: 0, inMax: 1, outMin: 0.72, outMax: 1 },
+        { output: "under", op: "clamp", input: "underRaw", min: 0.72, max: 1 },
+        { output: "lit0", op: "multiply", a: "worn", b: "edgeClamped" },
+        { output: "lit", op: "multiply", a: "lit0", b: "under" },
+        { output: "chipDent", op: "mask", input: "chipRaw", at: 0.0, off: 0.1 },
+        { output: "chipColor", op: "color", value: [0.42, 0.4, 0.37] },
+        { output: "chipped", op: "mix", a: "lit", b: "chipColor", t: "chipDent" },
+        { output: "jointColor", op: "color", value: [0.28, 0.27, 0.25] },
+        { output: "diffuse", op: "mix", a: "chipped", b: "jointColor", t: "joint" },
+        { output: "roughness", op: "constant", value: 0.78 },
+
+        { output: "jointDepth", op: "scale", input: "joint", factor: -0.15 },
+        { output: "chipDepth", op: "scale", input: "chipDent", factor: -0.05 },
+        { output: "grainBump", op: "scale", input: "grainRaw", factor: 0.015 },
+        { output: "h1", op: "add", a: "bevel", b: "jointDepth" },
+        { output: "h2", op: "add", a: "h1", b: "chipDepth" },
+        { output: "height", op: "add", a: "h2", b: "grainBump" },
+      ],
+      outputs: { diffuse: "diffuse", roughness: "roughness", height: "height" },
+    },
+  },
+}
