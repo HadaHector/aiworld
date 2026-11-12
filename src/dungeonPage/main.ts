@@ -22,6 +22,7 @@ const ROLES: Record<PlacedPart["role"], { label: string; fill: string }> = {
   way: { label: "Corridor, stair", fill: "#7d8a96" },
   boss: { label: "Boss room", fill: "#c75f5f" },
   cap: { label: "Walled up", fill: "#4a525c" },
+  doorway: { label: "Doorway", fill: "#b8b0a0" },
 };
 element("legend").innerHTML =
   Object.values(ROLES).map((r) => `<div><i style="background:${r.fill}"></i>${r.label}</div>`).join("") +

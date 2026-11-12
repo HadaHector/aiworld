@@ -14,6 +14,7 @@ import { restore } from "../resources";
 import { createRegistry, type ArgKind, type ArgSpec, type ArgValue, type CommandDef, type NameBook } from "./chat";
 import type { TextArgs } from "../text";
 import type { CommandPackDef } from "./commandPacks";
+import type { PlacedDungeon } from "../dungeons";
 
 export interface ServerCommand extends CommandDef {
   owner: "server";
@@ -37,6 +38,12 @@ export interface CommandHost {
   teleport: (entity: Entity, x: number, z: number) => void;
   /** Says a line to those who hear a player at this point. */
   say: (entity: Entity, text: string) => void;
+  /** The dungeon styles there are, and their sizes (DUNGEONS.md). */
+  dungeonStyles: () => { id: string; sizes: string[] }[];
+  /** Opens a dungeon at the site nearest the entity and puts it inside; null where none can open. */
+  enterDungeon: (entity: Entity, style: string, size: string, seed?: number) => { dungeon: PlacedDungeon; kind: string } | null;
+  /** Takes it out of the dungeon it was put in, onto the ground before the door; false if in none. */
+  leaveDungeon: (entity: Entity) => boolean;
 }
 
 export interface CommandContext {
@@ -275,6 +282,39 @@ export function createServerCommands(packs: readonly CommandPackDef[] = []): Ret
       }
       host.teleport(entity, x, z);
       reply("Taken to {where}.", { where: label });
+    },
+  });
+
+  add({
+    id: "dungeon",
+    usage: "[size] [seed] [style] | leave",
+    summary: "Opens a dungeon at the nearest crypt or hillside and takes you to the foot of its entrance; leave takes you back out.",
+    dev: true,
+    args: [arg("size", "word", true), arg("seed", "int", true), arg("style", "word", true)],
+    run({ entity, host, reply }, [sizeArg, seedArg, styleArg]) {
+      if (sizeArg === "leave") {
+        if (!host.leaveDungeon(entity)) reply("You are not in a dungeon.");
+        return;
+      }
+      const styles = host.dungeonStyles();
+      if (styles.length === 0) return reply("There are no dungeons here.");
+      const style = styles.find((s) => s.id === (typeof styleArg === "string" ? styleArg : styles[0].id));
+      if (!style) return reply('There is no dungeon style "{name}": {names}.', { name: String(styleArg), names: styles.map((s) => s.id).join(", ") });
+      const size = typeof sizeArg === "string" ? sizeArg : style.sizes.includes("dungeon") ? "dungeon" : style.sizes[0];
+      if (!style.sizes.includes(size)) return reply('A {style} has no size "{size}": {sizes}.', { style: style.id, size, sizes: style.sizes.join(", ") });
+      const opened = host.enterDungeon(entity, style.id, size, typeof seedArg === "number" ? seedArg >>> 0 : undefined);
+      if (!opened) return reply("There is nowhere near here for a dungeon to open.");
+      const { dungeon } = opened;
+      reply("Into a {style} {size} (seed {seed}) under the {kind} at {x}, {z}: {parts} parts, {rooms} rooms. /dungeon leave takes you out.", {
+        style: style.id,
+        size,
+        seed: dungeon.seed,
+        kind: opened.kind,
+        x: Math.round(dungeon.site.x),
+        z: Math.round(dungeon.site.z),
+        parts: dungeon.layout.parts.length,
+        rooms: dungeon.layout.parts.filter((p) => p.role === "room" || p.role === "boss").length,
+      });
     },
   });
 

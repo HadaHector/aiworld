@@ -16,4 +16,6 @@
     { box: [-4, 0, 21, 4, 1, 24] },
   ],
   paths: [[[0, 0, 0], [0, 0, 3]], [[0, -6, 21], [0, -6, 24]]],
+  // A torch on the wall halfway down the flight.
+  spots: { light: [[-2.6, 1, 12]] },
 }

@@ -1,0 +1,8 @@
+// A crypt doorway with its two oak leaves standing open into the part beyond. Never at a walled-up
+// way (a door opening onto a wall).
+{
+  tags: ["crypt", "doorway"],
+  weight: 1,
+  sockets: [{ at: [0, 0, 0], facing: 180, type: "crypt", size: [6, 6] }],
+  doorway: { kind: "door" },
+}

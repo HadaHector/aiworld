@@ -52,6 +52,9 @@ const SHADOW_BIAS_TEXELS = 3;
 // of the cycle practical without actually waiting on this.
 export const DEFAULT_DAY_NIGHT_CYCLE_MINUTES = 240;
 
+/** How fast the daylight fades going underground, and comes back coming out (a share per second). */
+const UNDERGROUND_FADE = 1.2;
+
 const DEG2RAD = Math.PI / 180;
 
 export interface SunLighting {
@@ -97,6 +100,11 @@ export interface SunLighting {
    *  scaled - an overcast day loses its sun, and with it its shadows, and is lit from the whole sky
    *  instead. Applied from the next updateDayNight on. */
   setWeather: (sun: number, ambient: number) => void;
+  /** Underground (DUNGEONS.md, *Light*): the sun, moon and sky fade out over a second or so - or at
+   *  once, `now` - leaving only `ambient` (the light everywhere, as a colour); null fades them back. */
+  setUnderground: (ambient: [number, number, number] | null, now?: boolean) => void;
+  /** How far underground the light is, 0 (out) to 1 (in), as it fades. */
+  readonly underground: number;
 }
 
 /**
@@ -290,6 +298,10 @@ export function createSunLighting(scene: Scene): SunLighting {
   let lastAreaWeights: AreaWeight[] = [];
   let weatherSun = 1;
   let weatherAmbient = 1;
+  /** Underground: how far faded in (0-1), toward which, and the light left there. */
+  let under = 0;
+  let underTarget = 0;
+  const underAmbient: [number, number, number] = [0, 0, 0];
 
   // Scratch accumulators for applyTimeOfDay's blend - module-lifetime, not per-call, since this
   // runs every frame and a fresh Color3 per field per frame is pure garbage-collector pressure for
@@ -388,6 +400,16 @@ export function createSunLighting(scene: Scene): SunLighting {
     ambientColor.b = lerp(blendAmbientNight.b, blendAmbientDay.b, dayness);
     ambientIntensity = lerp(ambientNightIntensity, ambientDayIntensity, dayness) * weatherAmbient;
 
+    // Underground, the sky's light gives way to the dungeon's own, the sun's and moon's to none.
+    if (under > 0) {
+      intensity *= 1 - under;
+      const strength = ambientIntensity + (1 - ambientIntensity) * under;
+      ambientColor.r = (ambientColor.r * ambientIntensity * (1 - under) + underAmbient[0] * under) / strength;
+      ambientColor.g = (ambientColor.g * ambientIntensity * (1 - under) + underAmbient[1] * under) / strength;
+      ambientColor.b = (ambientColor.b * ambientIntensity * (1 - under) + underAmbient[2] * under) / strength;
+      ambientIntensity = strength;
+    }
+
     ambient.diffuse.copyFrom(ambientColor);
     ambient.intensity = ambientIntensity;
     ambientColor.scaleToRef(0.55, ambient.groundColor);
@@ -402,6 +424,7 @@ export function createSunLighting(scene: Scene): SunLighting {
   function updateDayNight(deltaSeconds: number, areaWeights: AreaWeight[]): void {
     const cycleSeconds = DEFAULT_DAY_NIGHT_CYCLE_MINUTES * 60;
     timeHours = (timeHours + (deltaSeconds / cycleSeconds) * 24) % 24;
+    under = underTarget > under ? Math.min(underTarget, under + deltaSeconds * UNDERGROUND_FADE) : Math.max(underTarget, under - deltaSeconds * UNDERGROUND_FADE);
     applyTimeOfDay(areaWeights);
   }
 
@@ -420,6 +443,15 @@ export function createSunLighting(scene: Scene): SunLighting {
   function setWeather(sun: number, ambient: number): void {
     weatherSun = sun;
     weatherAmbient = ambient;
+  }
+
+  function setUnderground(light: [number, number, number] | null, now = false): void {
+    underTarget = light ? 1 : 0;
+    if (light) underAmbient.splice(0, 3, ...light);
+    if (now) {
+      under = underTarget;
+      applyTimeOfDay(lastAreaWeights);
+    }
   }
 
   return {
@@ -441,5 +473,9 @@ export function createSunLighting(scene: Scene): SunLighting {
     setTimeHours,
     getTimeHours,
     setWeather,
+    setUnderground,
+    get underground() {
+      return under;
+    },
   };
 }

@@ -1,3 +1,4 @@
+import { resolveDungeons, type DungeonContent } from "../world/dungeons/dungeonDefs";
 import { createServer, type Server } from "../sim/server";
 import { createLocalChannel, type ClientEnd } from "../sim/channel";
 import type { DimensionWorld } from "../sim/dimension";
@@ -25,6 +26,8 @@ export interface WorldRules {
   creatures: CreatureRules;
   progression: ProgressionRules;
   feedback: FeedbackRules;
+  /** Dungeon styles and parts (DUNGEONS.md): the server opens them, the page draws them. */
+  dungeons: DungeonContent;
 }
 
 /**
@@ -50,7 +53,8 @@ export function resolveWorldRules(sources: readonly PackSource[], config: WorldC
   checkProgressionItems(progression, items);
   // Sounds, particle effects and cues (see FEEDBACK.md), checked against the skills and the looks.
   const feedback = resolveFeedback(packSet.sources, game);
-  return { packSet, startContent, game, items, creatures, progression, feedback };
+  const dungeons = resolveDungeons(packSet.sources);
+  return { packSet, startContent, game, items, creatures, progression, feedback, dungeons };
 }
 
 /**
@@ -98,6 +102,7 @@ export function connectLocal(world: LocalWorld): Connection {
     items: rules.items,
     creatures: rules.creatures,
     progression: rules.progression,
+    dungeons: rules.dungeons,
     devCommands: true,
     loadDimension: (definition) => new Promise<DimensionWorld>((resolve) => built.set(definition.id, resolve)),
     saves: world.saves && { store: world.saves.store, world: world.saves.world, interval: world.saves.interval },

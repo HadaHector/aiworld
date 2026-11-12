@@ -7,7 +7,7 @@
 import { ContentError } from "../../src/world/content/contentReader.ts";
 import { loadContentFromDisk, packSourcesFromDisk, readConfigFromDisk } from "../diskContent.mjs";
 import { resolveDungeons } from "../../src/world/dungeons/dungeonDefs.ts";
-import { frameToWorld, generateLayout, graphDistances, placedPaths, placedShapes, placedSockets } from "../../src/world/dungeons/layout.ts";
+import { frameToWorld, worldToFrame, generateLayout, graphDistances, placedPaths, placedShapes, placedSockets } from "../../src/world/dungeons/layout.ts";
 import { checkPaths } from "../../src/world/dungeons/clearance.ts";
 import { createWorldData, WORLD_SEED } from "../../src/world/worldData.ts";
 import { createCharacterMotor, createCollisionWorld, vec3 } from "../../src/world/collision/index.ts";
@@ -127,7 +127,7 @@ for (let n = 0; n < COUNT; n++) {
   // Under its cover everywhere, measured finer than the generator does; never showing at all.
   for (let i = 1; i < layout.parts.length; i++) {
     const p = layout.parts[i];
-    if (p.role === "cap") continue;
+    if (p.role === "cap" || p.role === "doorway") continue;
     const rock = rockOver(layout.frame, p.box);
     stats.leastRock = Math.min(stats.leastRock, rock);
     check(`${where}: ${p.part.id} under its cover`, rock > style.cover - 0.5, `${rock.toFixed(2)} m of rock over it`);
@@ -142,7 +142,8 @@ for (let n = 0; n < COUNT; n++) {
       const overlap = a.min.x < b.max.x - s && a.max.x > b.min.x + s && a.min.y < b.max.y - s && a.max.y > b.min.y + s && a.min.z < b.max.z - s && a.max.z > b.min.z + s;
       // (A cap may sit in a neighbour's wall, where a way on ran into it: solid in solid. The
       // assembled check below shows it never reaches into anyone's way through.)
-      const cap = layout.parts[i].role === "cap" || layout.parts[j].role === "cap";
+      // (A doorway reaches into both parts it stands between, on purpose.)
+      const cap = ["cap", "doorway"].includes(layout.parts[i].role) || ["cap", "doorway"].includes(layout.parts[j].role);
       if (!joined && !cap) check(`${where}: ${layout.parts[i].part.id} and ${layout.parts[j].part.id} apart`, !overlap);
     }
   }
@@ -155,14 +156,47 @@ for (let n = 0; n < COUNT; n++) {
   }
   // Every socket joined: nothing left open.
   for (let i = 0; i < layout.parts.length; i++) {
+    if (layout.parts[i].role === "doorway") continue;
     layout.parts[i].part.sockets.forEach((s, si) => {
       if (s.type === "surface") return;
       check(`${where}: ${layout.parts[i].part.id} socket ${si} closed`, layout.joins.some((k) => (k.a === i && k.socketA === si) || (k.b === i && k.socketB === si)));
     });
   }
+  // Along a way (no room, no branching between), stairs never turn back: walked from each part
+  // that changes height, out of its other socket, past level pieces, the next that changes height
+  // goes the same way.
+  {
+    const way = (i) => layout.parts[i].role !== "room" && layout.parts[i].role !== "boss" && layout.parts[i].role !== "cap" && layout.parts[i].role !== "doorway" && layout.parts[i].part.sockets.length === 2;
+    const partner = (i, si) => {
+      const k = layout.joins.find((j) => (j.a === i && j.socketA === si) || (j.b === i && j.socketB === si));
+      return k ? (k.a === i ? [k.b, k.socketB] : [k.a, k.socketA]) : null;
+    };
+    for (let i = 0; i < layout.parts.length; i++) {
+      if (!way(i)) continue;
+      const sk = layout.parts[i].part.sockets;
+      for (const out of [0, 1]) {
+        const dy = sk[out].at.y - sk[1 - out].at.y;
+        if (Math.abs(dy) < 0.1) continue;
+        let next = partner(i, out), steps = 0;
+        while (next && way(next[0]) && steps++ < 200) {
+          const [j, inn] = next;
+          const s2 = layout.parts[j].part.sockets;
+          const dy2 = s2[1 - inn].at.y - s2[inn].at.y;
+          if (Math.abs(dy2) > 0.1) {
+            check(`${where}: ${layout.parts[i].part.id} and ${layout.parts[j].part.id} go one way`, Math.sign(dy2) === Math.sign(dy));
+            break;
+          }
+          next = partner(j, 1 - inn);
+        }
+      }
+    }
+  }
   // Reachable, the boss there, the lock between the entrance and the boss, the key on this side of it.
   const d = graphDistances(layout.parts.length, layout.joins, 0);
-  check(`${where}: everything reachable`, d.every((x) => x < Infinity));
+  check(`${where}: everything reachable`, d.every((x, i) => x < Infinity || layout.parts[i].role === "doorway"));
+  // A doorway across every join and cap, and at the mouth.
+  const doorways = layout.parts.filter((p) => p.role === "doorway").length;
+  check(`${where}: a doorway across every join`, layout.joins.every((k) => k.doorway > 0 && layout.parts[k.doorway].role === "doorway") && doorways === layout.joins.length + 1, `${doorways} doorways, ${layout.joins.length} joins`);
   if (!layout.minimal) check(`${where}: a boss`, layout.boss > 0 && layout.parts[layout.boss].role === "boss");
   if (layout.lock >= 0) {
     const without = graphDistances(layout.parts.length, layout.joins.filter((_, i) => i !== layout.lock), 0);
@@ -201,7 +235,9 @@ for (const [n, layout] of layouts.entries()) {
   const shapes = layout.parts.flatMap(placedShapes);
   const cw = createCollisionWorld();
   cw.addBatch(shapes);
-  const paths = layout.parts.flatMap(placedPaths);
+  // (A doorway across a walled-up way is not walked through: its line runs into the wall.)
+  const walledUp = new Set(layout.joins.filter((k) => layout.parts[k.b].role === "cap").map((k) => k.doorway));
+  const paths = layout.parts.flatMap((p, i) => (walledUp.has(i) ? [] : placedPaths(p)));
   const sockets = layout.joins.map((k) => placedSockets(layout, k.a)[k.socketA]).filter((s, i) => layout.parts[layout.joins[i].b].role !== "cap");
   const problems = checkPaths([], paths, dungeons.rules.minClear, sockets, cw);
   measured += paths.length;
@@ -210,17 +246,34 @@ for (const [n, layout] of layouts.entries()) {
 console.log(`assembled: ${layouts.length} layouts, ${measured} walk lines measured in place with every part's colliders, ${(performance.now() - t0).toFixed(0)} ms`);
 
 /** The walk lines as a graph: points joined along each line, and where lines meet (within 1.6 m, level). */
-function route(layout, from, to) {
+function route(layout, from, to, cw) {
   const points = [], edges = [];
-  for (const line of layout.parts.flatMap(placedPaths)) {
+  // (Not through a doorway across a walled-up way: its line runs into the wall.)
+  const walledUp = new Set(layout.joins.filter((k) => layout.parts[k.b].role === "cap").map((k) => k.doorway));
+  // Lines of two parts meet only where the parts are joined (or one is the doorway between them).
+  const joined = new Set();
+  const link = (x, y) => { joined.add(`${x}:${y}`); joined.add(`${y}:${x}`); };
+  for (const k of layout.joins) {
+    link(k.a, k.b);
+    if (k.doorway >= 0) { link(k.a, k.doorway); link(k.b, k.doorway); }
+  }
+  const owner = [];
+  for (const [part, line] of layout.parts.flatMap((p, i) => (walledUp.has(i) ? [] : placedPaths(p).map((l) => [i, l])))) {
     line.forEach((p, i) => {
+      owner.push(part);
       points.push(p);
       if (i > 0) edges.push([points.length - 2, points.length - 1]);
     });
   }
   for (let i = 0; i < points.length; i++) for (let j = i + 1; j < points.length; j++) {
     const a = points[i], b = points[j];
-    if (Math.hypot(a.x - b.x, a.z - b.z) < 1.6 && Math.abs(a.y - b.y) < 0.6) edges.push([i, j]);
+    if (Math.hypot(a.x - b.x, a.z - b.z) >= 1.6 || Math.abs(a.y - b.y) >= 0.6) continue;
+    if (owner[i] !== owner[j] && !joined.has(`${owner[i]}:${owner[j]}`)) continue;
+    // Only where nothing stands between them - not through a wall.
+    const d = vec3(b.x - a.x, b.y - a.y, b.z - a.z), l = Math.hypot(d.x, d.y, d.z);
+    // (From half a metre back to half a metre past: a line's end can lie on a wall's face.)
+    if (l > 1e-6 && cw.raycastAny(vec3(a.x - (d.x / l) * 0.5, a.y + 1, a.z - (d.z / l) * 0.5), vec3(d.x / l, d.y / l, d.z / l), l + 1)) continue;
+    edges.push([i, j]);
   }
   const near = (q) => points.reduce((best, p, i) => (Math.hypot(p.x - q.x, p.y - q.y, p.z - q.z) < Math.hypot(points[best].x - q.x, points[best].y - q.y, points[best].z - q.z) ? i : best), 0);
   const start = near(from), goal = near(to);
@@ -250,7 +303,7 @@ for (const [n, layout] of layouts.slice(0, 12).entries()) {
   const boss = layout.parts[layout.boss];
   const spot = boss.part.spots.boss?.[0] ?? boss.part.paths[0].at(-1);
   const goal = vec3(boss.x + spot.x * Math.cos(boss.yaw) + spot.z * Math.sin(boss.yaw), boss.y + spot.y, boss.z - spot.x * Math.sin(boss.yaw) + spot.z * Math.cos(boss.yaw));
-  const way = route(layout, door.at, goal);
+  const way = route(layout, door.at, goal, cw);
   check(`layout ${n}: a way along the walk lines from the door to the boss`, way !== null);
   if (!way) continue;
   const start = way[0];
@@ -270,8 +323,20 @@ for (const [n, layout] of layouts.slice(0, 12).entries()) {
   const end = way.at(-1);
   const there = next >= way.length && Math.hypot(f.x - end.x, f.z - end.z) < 1.5 && Math.abs(f.y - end.y) < 0.5 && Math.hypot(end.x - goal.x, end.z - goal.z) < 4;
   if (there) walked++;
+  // Where it stopped: the part it stands in, and the waypoint it was making for.
+  const stuckIn = layout.parts.map((p) => p).filter((p) => { const { fx, fz } = worldToFrame(layout.frame, f.x, f.z); const b = p.box; return fx >= b.min.x && fx <= b.max.x && fz >= b.min.z && fz <= b.max.z && f.y >= b.min.y - 1 && f.y <= b.max.y; }).map((p) => `${p.part.id}/${p.role}`).join(" ");
+  const aim = way[Math.min(next, way.length - 1)];
+  const blockers = there ? "" : layout.parts.flatMap((p, k) => {
+    const pw = createCollisionWorld();
+    pw.addBatch(placedShapes(p));
+    const dx = aim.x - f.x, dz = aim.z - f.z, l = Math.hypot(dx, dz) || 1;
+    return [0.3, 1, 2].flatMap((h) => {
+      const hit = pw.raycast(vec3(f.x, f.y + h, f.z), vec3(dx / l, 0, dz / l), 3);
+      return hit ? [`${k}:${p.part.id}/${p.role} at ${hit.distance.toFixed(2)} (h ${h})`] : [];
+    });
+  }).join(", ");
   check(`layout ${n}: walked from the door to the boss`, there && deepest < 1e-3,
-    `got to waypoint ${next} of ${way.length} at (${f.x.toFixed(1)}, ${f.y.toFixed(1)}, ${f.z.toFixed(1)}), goal y ${goal.y.toFixed(1)}, deepest ${deepest.toExponential(1)}`);
+    `got to waypoint ${next} of ${way.length} at (${f.x.toFixed(1)}, ${f.y.toFixed(1)}, ${f.z.toFixed(1)}), goal y ${goal.y.toFixed(1)}, deepest ${deepest.toExponential(1)}, in ${stuckIn}, making for (${aim.x.toFixed(1)}, ${aim.y.toFixed(1)}, ${aim.z.toFixed(1)}); in the way: ${blockers}`);
 }
 console.log(`walked: ${walked} layouts from the door to the boss on the character motor, ${(steps / 60).toFixed(0)} s of walking in ${(performance.now() - t0).toFixed(0)} ms`);
 

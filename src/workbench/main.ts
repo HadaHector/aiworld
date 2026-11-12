@@ -1,3 +1,8 @@
+import { generateLayout } from "../world/dungeons/layout";
+import { asDungeonGround, testGround, testSite } from "../world/dungeons/testGrounds";
+import { ModelBuilder } from "../world/buildings/buildingGeometry";
+import { resolveDungeons } from "../world/dungeons/dungeonDefs";
+import { buildPartModel } from "../world/dungeons/kitMesh";
 import { Engine } from "@babylonjs/core";
 import { configNameFromUrl, fetchPackSources, fetchWorldConfig } from "../world/content/loadContent";
 import { DEFAULT_CONFIG, type WorldConfig } from "../world/content/worldConfig";
@@ -52,15 +57,15 @@ interface Asset {
 }
 
 /** The folders with a preview, and what each asset kind can be looked at as. */
-type PreviewFolder = "materials" | "trees" | "bushes" | "rocks" | "grass" | "biomes" | "buildings" | "buildingParts" | "buildingMaterials" | "props" | "features" | "races" | "gearMaterials" | "gear" | "outfits" | "beasts" | "weapons";
-const PREVIEW_FOLDERS: PreviewFolder[] = ["materials", "trees", "bushes", "rocks", "grass", "biomes", "buildings", "buildingParts", "buildingMaterials", "props", "features", "races", "gearMaterials", "gear", "outfits", "beasts", "weapons"];
+type PreviewFolder = "materials" | "trees" | "bushes" | "rocks" | "grass" | "biomes" | "buildings" | "buildingParts" | "buildingMaterials" | "props" | "features" | "races" | "gearMaterials" | "gear" | "outfits" | "beasts" | "weapons" | "dungeonParts" | "dungeonStyles";
+const PREVIEW_FOLDERS: PreviewFolder[] = ["materials", "trees", "bushes", "rocks", "grass", "biomes", "buildings", "buildingParts", "buildingMaterials", "props", "features", "races", "gearMaterials", "gear", "outfits", "beasts", "weapons", "dungeonParts", "dungeonStyles"];
 /** The folders whose preview is a character: a race's body, or gear worn by one. */
 const isCharacterFolder = (folder: string): boolean => folder === "races" || folder === "gear" || folder === "outfits" || folder === "weapons";
 /** How many variants of a building the Variant menu steps through - a building has no fixed count,
  *  every seed is one. */
 const BUILDING_VARIANTS = 8;
 /** Everything else is listed after these, its JSON still checked by Preview. */
-const FOLDER_ORDER = ["materials", "trees", "bushes", "rocks", "grass", "biomes", "buildings", "buildingParts", "buildingMaterials", "props", "features", "races", "outfits", "gear", "beasts", "weapons", "gearMaterials", "layers", "borderHills", "settlements", "voices", "patches", ""];
+const FOLDER_ORDER = ["materials", "trees", "bushes", "rocks", "grass", "biomes", "buildings", "buildingParts", "buildingMaterials", "props", "features", "races", "outfits", "gear", "beasts", "weapons", "gearMaterials", "dungeonParts", "dungeonStyles", "layers", "borderHills", "settlements", "voices", "patches", ""];
 
 interface ViewDef {
   id: string;
@@ -99,12 +104,16 @@ const TIME_PRESETS: [string, number][] = [
   ["Afternoon", 15.5],
   ["Evening", 17.3],
   ["Night", 0],
+  // No sun, moon or sky: only a dungeon style's own dim light everywhere, and its torches.
+  ["Underground", -1],
 ];
 
 type Options = Record<string, string>;
 
 const DEFAULT_OPTIONS: Options = {
   time: "Noon",
+  // A dungeon style's size, as the workbench generates one.
+  dsize: "lair",
   sky: "",
   shape: "hills",
   grass: "on",
@@ -547,6 +556,10 @@ function viewsFor(asset: Asset | null, content: WorldContent | null): ViewDef[] 
       ];
     case "buildingMaterials":
       return [{ id: "texture", label: "Texture", mode: "2d" }];
+    case "dungeonParts":
+      return [{ id: "model", label: "Model", mode: "3d" }];
+    case "dungeonStyles":
+      return [{ id: "model", label: "A dungeon", mode: "3d" }];
     case "features":
       return [{ id: "placed", label: "On the ground", mode: "3d" }];
     case "races":
@@ -667,6 +680,7 @@ function renderPreviewBar(): void {
       }),
     );
     if (current.folder === "props" || current.folder === "features") viewOptions.append(checkbox("Colliders", "colliders", rebuild));
+    if (current.folder === "dungeonStyles") viewOptions.append(select("Size", "dsize", [["lair", "Lair"], ["dungeon", "Dungeon"]], rebuild));
     if (isCharacterFolder(current.folder)) {
       viewOptions.append(
         ...characterChoices(rebuild),
@@ -1120,6 +1134,8 @@ async function preview3d(token: number, asset: Asset, view: ViewDef, content: Wo
   let site: Parameters<typeof createStage>[2]["site"];
   let figure: Parameters<typeof createStage>[2]["figure"];
   let summary: HTMLElement | null = null;
+  /** A dungeon part's style's light everywhere, for the Underground light. */
+  let dungeonAmbient: [number, number, number] | undefined;
 
   if (asset.folder === "materials") {
     ground = content.materials.find((material) => material.id === asset.id)!;
@@ -1268,6 +1284,49 @@ async function preview3d(token: number, asset: Asset, view: ViewDef, content: Wo
     });
     figure = together(figures, total);
     summary = beastSummary(view.id === "lineup" ? made.map(beastFacts) : [beastFacts(made[0])]);
+  } else if (asset.folder === "dungeonParts") {
+    // One part on its own, as a dungeon draws it: its faces, its torches lit (DUNGEONS.md).
+    ground = groundMaterial(content, asset);
+    const dungeons = resolveDungeons(sourcesWithEdit());
+    const part = dungeons.parts.get(asset.id)!;
+    const style = [...dungeons.styles.values()].find((st) => [st.parts, st.entrances, st.bosses, st.caps, st.doorways].some((list) => list.includes(part))) ?? [...dungeons.styles.values()][0];
+    const frame = { x: 0, z: 0, yaw: 0 };
+    const layout = { style: style.id, size: "", seed, attempt: 0, minimal: false, parts: [{ part, x: 0, y: 0, z: 0, yaw: 0, bounds: part.bounds, box: part.bounds, entry: -1, parent: -1, role: "room" as const }], joins: [], boss: -1, lock: -1, key: -1, failures: [], frame };
+    // Every light spot lit, not the style's share of them: each torch is seen where it hangs.
+    buildings = [buildPartModel(layout, 0, { ...style, light: { ...style.light, lit: 1 } }, content.props.find((prop) => prop.id === style.light.fixture)).model];
+    dungeonAmbient = style.light.ambient;
+    if (buildings[0].indices.length === 0) {
+      setStatus(`${part.id} has no faces to draw: nothing of it is seen from inside`);
+      return;
+    }
+    summary = document.createElement("div");
+    const facts = document.createElement("p");
+    facts.textContent = `${part.id}: ${part.shapes.length} colliders, ${part.sockets.length} sockets, ${buildings[0].indices.length / 3} triangles, ${buildings[0].lights?.length ?? 0} torches (style ${style.id}, ${Math.round(style.light.lit * 100)}% of light spots lit in a dungeon; all of them here). Light: Underground shows it as a dungeon does; walls facing away from the camera are not drawn, so it can be seen into from outside.`;
+    summary.append(facts);
+  } else if (asset.folder === "dungeonStyles") {
+    // A whole dungeon of the style, generated under a made-up hill from the seed, every part drawn
+    // and lit as in the game - in one model, its light baked here at once (a few seconds).
+    ground = groundMaterial(content, asset);
+    const dungeons = resolveDungeons(sourcesWithEdit());
+    const style = dungeons.styles.get(asset.id)!;
+    const size = style.sizes[options.dsize] ? options.dsize : Object.keys(style.sizes)[0];
+    const hill = testGround("hill");
+    setStatus("Laying out the dungeon");
+    await nextPaint();
+    const layout = generateLayout(dungeons, style.id, size, seed, testSite(hill), asDungeonGround(hill));
+    const fixture = content.props.find((prop) => prop.id === style.light.fixture);
+    const whole = new ModelBuilder();
+    // Built in the layout's frame: the entrance's door at the origin, the dungeon running in along
+    // -z, standing on the grid - seen from above, its vaults' tops are not drawn, so it is a plan.
+    const lowest = Math.min(...layout.parts.map((p) => p.box.min.y));
+    for (let i = 0; i < layout.parts.length; i++) whole.append(buildPartModel(layout, i, style, fixture).model, 0, -lowest, 0, 0, 1);
+    buildings = [whole.finish({ x: 0, z: 0 })];
+    dungeonAmbient = style.light.ambient;
+    summary = document.createElement("div");
+    const facts = document.createElement("p");
+    const rooms = layout.parts.filter((p) => p.role === "room" || p.role === "boss").length;
+    facts.textContent = `${style.name}, ${size}, seed ${seed}: ${layout.parts.length} parts (${rooms} rooms, ${layout.parts.filter((p) => p.role === "doorway").length} doorways), ${layout.joins.filter((j) => j.loop).length} loops, ${buildings[0].indices.length / 3} triangles, ${buildings[0].lights?.length ?? 0} torches${layout.minimal ? " - the minimal layout" : ""}. It stands on the grid, the entrance at the origin; change the seed for another.`;
+    summary.append(facts);
   } else if (asset.folder === "props") {
     ground = groundMaterial(content, asset);
     if (grassOn) grass = ground.grass;
@@ -1310,6 +1369,7 @@ async function preview3d(token: number, asset: Asset, view: ViewDef, content: Wo
     figure,
     footprints: options.marks === "on" && asset.folder === "buildings",
     timeHours: timeHours(),
+    underground: dungeonAmbient,
     lightBiome,
     view: keepView,
     onProgress: (phase) => {

@@ -1,0 +1,15 @@
+// A wall torch: an iron bracket on the wall, a shaft leaning out from it, its head burning - what
+// lights a crypt's corridors and halls (DUNGEONS.md, *Light*).
+{
+  name: "Wall Torch",
+  type: "wallTorch",
+  // The light it gives (see LIGHTS.md). An open fire, warm and far-reaching - a crypt's spaces are big.
+  light: { color: [1.0, 0.6, 0.3], intensity: 1.6, radius: 18, size: 0.3 },
+  mount: { kind: "wall", height: [3.2, 3.6] },
+  parts: {
+    iron: { material: "iron", tints: [[0.8, 0.8, 0.8]] },
+    wood: { material: "timber", tints: [[0.7, 0.6, 0.5]] },
+    pitch: { tints: [[0.12, 0.1, 0.08]] },
+    flame: { material: "flame", tints: [[1, 1, 1]] },
+  },
+}

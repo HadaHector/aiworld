@@ -260,7 +260,10 @@ export interface StageOptions {
     pads?: Pad[];
     far: boolean;
   };
+  /** The hour - or under 0, underground (DUNGEONS.md, *Light*): no sun or sky, only `underground`
+   *  (a dungeon style's light everywhere) and what is baked. */
   timeHours: number;
+  underground?: [number, number, number];
   /** Whose sky and light: a biome's day-night settings. */
   lightBiome: BiomeDefinition;
   /** The camera to start from, or undefined to frame the stage. */
@@ -382,6 +385,8 @@ export async function createStage(engine: Engine, canvas: HTMLCanvasElement, opt
     // setTimeHours then only moves the clock.
     sunLighting.updateDayNight(0, areaWeights);
     sunLighting.setTimeHours(options.timeHours);
+    const underground = options.underground ?? [0.022, 0.024, 0.03];
+    if (options.timeHours < 0) sunLighting.setUnderground(underground, true);
     if (options.bare) {
       scene.clearColor = new Color4(0.16, 0.18, 0.21, 1);
       scene.fogMode = Scene.FOGMODE_NONE;
@@ -546,7 +551,10 @@ export async function createStage(engine: Engine, canvas: HTMLCanvasElement, opt
     return {
       scene,
       camera,
-      setTime: (hours) => sunLighting.setTimeHours(hours),
+      setTime: (hours) => {
+        sunLighting.setUnderground(hours < 0 ? underground : null, true);
+        sunLighting.setTimeHours(hours);
+      },
       getView: () => ({ alpha: camera.alpha, beta: camera.beta, radius: camera.radius, target: [camera.target.x, camera.target.y, camera.target.z] }),
       dispose: () => scene.dispose(),
     };

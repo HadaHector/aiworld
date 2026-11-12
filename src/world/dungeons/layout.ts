@@ -35,7 +35,7 @@ export interface PlacedPart {
   /** Which of its sockets it was joined by (-1: the entrance), and to which part. */
   entry: number;
   parent: number;
-  role: "entrance" | "room" | "way" | "boss" | "cap";
+  role: "entrance" | "room" | "way" | "boss" | "cap" | "doorway";
 }
 
 export interface Join {
@@ -45,6 +45,8 @@ export interface Join {
   socketB: number;
   /** Grown from a to b, or a loop closing two open ends. */
   loop: boolean;
+  /** The doorway set across it (a part's index), or -1. */
+  doorway: number;
 }
 
 export interface DungeonLayout {
@@ -260,11 +262,32 @@ function attemptLayout(content: DungeonContent, style: DungeonStyleDef, size: st
   /** Options taken back from an end, as led nowhere: by "part:socket", the "partId:entry"s. */
   const refused = new Map<string, Set<string>>();
   let backtracks = 0;
+  /**
+   * Which way the way an open end is on has been going (DUNGEONS.md, *The generator*): back through
+   * the parts with one way in and one out (corridors, stairs, corners, the entrance's stair), the
+   * first that changes height - 1 up, -1 down - or 0 from a room, or a part where ways branch.
+   * Along one way, a stair never turns back on the last: up, down, up again makes no sense.
+   */
+  const trendAt = (at: WorldSocket): number => {
+    let index = at.part, exit = at.socket;
+    while (index >= 0) {
+      const p = placed[index];
+      if (p.role === "room" || p.role === "boss" || p.part.sockets.length > 2) return 0;
+      const dy = p.part.sockets[exit].at.y - p.part.sockets[p.entry].at.y;
+      if (Math.abs(dy) > 0.1) return Math.sign(dy);
+      const from = joins.find((j) => j.b === index && !j.loop);
+      if (!from) return 0;
+      index = from.a;
+      exit = from.socketA;
+    }
+    return 0;
+  };
   /** Picks and places a part at an open socket, or returns why none fit. */
   const grow = (at: WorldSocket, pool: readonly DungeonPartDef[], role: (p: DungeonPartDef) => PlacedPart["role"], except: number[]): number | string => {
     const headroom = coverAt(at.at.x, at.at.z) - (at.at.y + at.def.size[1]);
     const diving = headroom < style.cover + rules.thinCover;
     const stage = rooms / Math.max(1, targetRooms);
+    const trend = trendAt(at);
     const options: { part: DungeonPartDef; entry: number; weight: number }[] = [];
     for (const part of pool) {
       if (stage < part.stage[0] - 1e-9 || stage > part.stage[1] + 1e-9) continue;
@@ -274,6 +297,8 @@ function attemptLayout(content: DungeonContent, style: DungeonStyleDef, size: st
         const drop = Math.min(0, ...part.sockets.filter((_, i) => i !== entry).map((o) => o.at.y - s.at.y));
         let weight = part.weight / part.sockets.length;
         if (refused.get(`${at.part}:${at.socket}`)?.has(`${part.id}:${entry}`)) return;
+        // A way on keeps going the way the way before it went.
+        if (!part.room && part.sockets.length === 2 && ((trend > 0 && drop < -0.1) || (trend < 0 && rise > 0.1))) return;
         if (diving) {
           if (rise > 0.5) return;
           if (drop < -1) weight *= rules.diveWeight;
@@ -291,7 +316,7 @@ function attemptLayout(content: DungeonContent, style: DungeonStyleDef, size: st
       if (problem) { why = problem; continue; }
       placed.push({ ...put, parent: at.part, role: role(option.part) });
       const index = placed.length - 1;
-      joins.push({ a: at.part, socketA: at.socket, b: index, socketB: option.entry, loop: false });
+      joins.push({ a: at.part, socketA: at.socket, b: index, socketB: option.entry, loop: false, doorway: -1 });
       return index;
     }
     return why;
@@ -299,6 +324,11 @@ function attemptLayout(content: DungeonContent, style: DungeonStyleDef, size: st
 
   /** Joins two open ends with a routed way of connector pieces, trying the shortest routes in turn. */
   const bridge = (c: ConnectorDef, a: WorldSocket, b: WorldSocket): boolean => {
+    // Out of a's way and into b's the way each was going (b's walked backwards).
+    // Walked from a to b, b's way is walked backwards: it goes -trendAt(b).
+    const dy = b.at.y - a.at.y, ta = trendAt(a), tb = -trendAt(b);
+    if (ta !== 0 && tb !== 0 && ta !== tb) return false;
+    if (Math.abs(dy) > 0.1 && (Math.sign(dy) === -ta || Math.sign(dy) === -tb)) return false;
     for (const plan of routesBetween(c, a, b, random)) if (lay(c, plan, a, b)) return true;
     return false;
   };
@@ -317,13 +347,13 @@ function attemptLayout(content: DungeonContent, style: DungeonStyleDef, size: st
       if (fits(put.box, k === pieces.length - 1 ? [at.part, b.part] : [at.part])) return undo();
       placed.push({ ...put, parent: at.part, role: "way" });
       const index = placed.length - 1;
-      joins.push({ a: at.part, socketA: at.socket, b: index, socketB: entry, loop: false });
+      joins.push({ a: at.part, socketA: at.socket, b: index, socketB: entry, loop: false, doorway: -1 });
       at = socketOf(placed, index, exit);
     }
     // Where it came out: at the other end, face to face.
     const gap = Math.hypot(at.at.x - b.at.x, at.at.y - b.at.y, at.at.z - b.at.z);
     if (gap > 0.01 || Math.abs(normalDegrees(at.facing - b.facing) - 180) > 0.01) return undo();
-    joins.push({ a: at.part, socketA: at.socket, b: b.part, socketB: b.socket, loop: true });
+    joins.push({ a: at.part, socketA: at.socket, b: b.part, socketB: b.socket, loop: true, doorway: -1 });
     return true;
   };
 
@@ -469,7 +499,7 @@ function attemptLayout(content: DungeonContent, style: DungeonStyleDef, size: st
     const option = pickWeighted(options, (o) => o.part.weight, random);
     if (!option) return `nothing caps a "${s.def.type}" socket`;
     placed.push({ ...placeAt(option.part, option.entry, s, frame), parent: s.part, role: "cap" });
-    joins.push({ a: s.part, socketA: s.socket, b: placed.length - 1, socketB: option.entry, loop: false });
+    joins.push({ a: s.part, socketA: s.socket, b: placed.length - 1, socketB: option.entry, loop: false, doorway: -1 });
   }
 
   // 7. Check: everything reachable, every part deep enough.
@@ -478,6 +508,20 @@ function attemptLayout(content: DungeonContent, style: DungeonStyleDef, size: st
   for (let i = 1; i < placed.length; i++) {
     if (placed[i].role !== "cap" && coverOver(placed[i].box, true) < style.cover - 1e-6) return `${placed[i].part.id} too near the surface, between the samples`;
   }
+  // 8. A doorway across every join and cap, and at the mouth (DUNGEONS.md, *Doorways*) - rolled on
+  // their own, so a style's doorways never change the layout itself. None at a cap opens.
+  const doorRandom = mulberry32(deriveSeed(seed, 0xd00a));
+  const setDoorway = (s: WorldSocket, capped: boolean): number => {
+    const options = style.doorways.filter((d) => socketsJoin(rules, d.sockets[0].type, s.def.type) && !(capped && d.doorway === "door"));
+    const option = pickWeighted(options, (d) => d.weight, doorRandom);
+    if (!option) return -1;
+    placed.push({ ...placeAt(option, 0, s, frame), parent: s.part, role: "doorway" });
+    return placed.length - 1;
+  };
+  for (const j of joins) j.doorway = setDoorway(socketOf(placed, j.a, j.socketA), placed[j.b].role === "cap");
+  placed[0].part.sockets.forEach((socket, i) => {
+    if (socket.type === "surface") setDoorway(socketOf(placed, 0, i), false);
+  });
   return { style: style.id, size, minimal, parts: placed, joins, boss, lock, key, frame };
 }
 
@@ -678,6 +722,15 @@ export function connectorPart(c: ConnectorDef, length: number, dy: number): Dung
     shapes.push(boxShape(-o, low - 2, 0, -w, high + h + c.rise + 1, length), boxShape(w, low - 2, 0, o, high + h + c.rise + 1, length));
     paths.push([vec3(0, 0, 0), vec3(0, 0, 3)], ...flight.paths, [vec3(0, dy, length - 3), vec3(0, dy, length)]);
   }
+  // Torches along it, a wall at a time, about every 14 m (none in a short piece).
+  const light: Vec3[] = [];
+  const torches = Math.floor(length / 14);
+  for (let i = 0; i < torches; i++) {
+    const t = (i + 0.5) / torches;
+    const along = length * t;
+    const floor = dy === 0 || along <= 3 ? 0 : along >= length - 3 ? dy : (dy * (along - 3)) / (length - 6);
+    light.push(vec3(i % 2 ? w - 0.4 : 0.4 - w, floor + 4, along));
+  }
   const socket = (at: Vec3, facing: number): SocketDef => ({ at, facing, type: c.socket, size: [c.width, c.height] });
   const part: DungeonPartDef = {
     id: `connector:${key}`,
@@ -688,8 +741,11 @@ export function connectorPart(c: ConnectorDef, length: number, dy: number): Dung
     sockets: [socket(vec3(0, 0, 0), 180), socket(vec3(0, dy, length), 0)],
     shapes,
     paths,
-    spots: {},
+    spots: light.length ? { light } : {},
     room: false,
+    rounds: [],
+    doorway: null,
+    visuals: [],
   };
   cache.set(key, part);
   return part;

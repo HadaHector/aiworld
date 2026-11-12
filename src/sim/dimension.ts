@@ -8,6 +8,7 @@ import { createPlayerBody, type PlayerBody } from "./playerBody";
 import type { WaterRules } from "./rules/waterRules";
 import type { Entity } from "./entity";
 import { createTrunkField, type TrunkField } from "./trunks";
+import type { DimensionDungeons } from "./dungeons";
 
 /**
  * What a host hands the server for one dimension: its world as generated from its seed and its
@@ -35,6 +36,8 @@ export interface Dimension {
   createBody: (x: number, z: number) => PlayerBody;
   /** How bodies meet water here (WATER.md): the server sets it from the game rules. */
   water: WaterRules | null;
+  /** The dungeons opened in it (DUNGEONS.md) - the server sets it when it has dungeon content. */
+  dungeons: DimensionDungeons | null;
   /** What is stood on at a point: the floor of a building there, or the ground. */
   groundAt: (x: number, z: number) => number;
   /** Every entity in it, by id: the ones it places, those made in it since, and the players in it
@@ -62,7 +65,9 @@ export function createDimension(id: string, { world, treeHulls, buildingModels }
     buildings,
     trunks: createTrunkField(world, hulls, scatterTrees),
     water: null,
-    createBody: (x, z) => createPlayerBody(collision, world.heightAt, groundAt, { x, z }, { at: world.waterAt, rules: () => dimension.water }),
+    dungeons: null,
+    createBody: (x, z) =>
+      createPlayerBody(collision, world.heightAt, groundAt, { x, z }, { at: world.waterAt, rules: () => dimension.water }, (bx, by, bz) => dimension.dungeons?.at(bx, by, bz) !== undefined),
     groundAt: (x, z) => groundAt(x, z, world.heightAt(x, z) + 0.5),
     entities: new Map(),
   };

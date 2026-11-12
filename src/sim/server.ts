@@ -46,6 +46,9 @@ type Arrival = { x: number; z: number; start?: string };
 import type { SaveStore } from "../save/store";
 import { cleanChat, createRateLimit, parseArgs, splitWords } from "./chat/chat";
 import { createServerCommands, nameBook, type CommandHost } from "./chat/serverCommands";
+import { createDimensionDungeons, dungeonSiteNear, type PlacedDungeon } from "./dungeons";
+import type { DungeonContent } from "../world/dungeons/dungeonDefs";
+import { deriveSeed } from "../world/rng";
 import { SAVE_VERSION, makeSaveId, nameProblem, tidyName, type CharacterRecord, type CharacterSummary, type WorldRecord } from "../save/records";
 
 /** Each step spends at most this long bringing in collision chunks per dimension (always at least one). */
@@ -121,6 +124,8 @@ export interface ServerOptions {
    * build of it, so nothing is generated twice.
    */
   loadDimension: (definition: DimensionDef, seed: number) => DimensionWorld | Promise<DimensionWorld>;
+  /** Dungeon styles and parts (DUNGEONS.md); left out, no dungeon opens. */
+  dungeons?: DungeonContent;
   /** Called when a load fails; the players waiting for it stay waiting. */
   onLoadError?: (definition: DimensionDef, error: unknown) => void;
   /** Item types, slots, currencies and loot (see ITEMS.md); left out, nobody has items. */
@@ -452,6 +457,7 @@ export function createServer(options: ServerOptions): Server {
           if (slot.dropped) return;
           slot.dimension = createDimension(id, world);
           slot.dimension.water = rules.water;
+          if (options.dungeons) slot.dimension.dungeons = createDimensionDungeons(world.world, slot.dimension.collision.world, options.dungeons);
           startsOf.set(id, chooseStarts(world.world, definition, problem));
           placeEntities(slot.dimension, definition);
           creatureSystem?.load(slot.dimension, definition, startsOf.get(id)!);
@@ -931,7 +937,47 @@ export function createServer(options: ServerOptions): Server {
       loaded.get(entity.dimension)?.streamer.loadAround(x, z, pointsIn(entity.dimension));
     },
     say: (entity, text) => say(entity, text),
+    dungeonStyles: () => [...(options.dungeons?.styles.values() ?? [])].map((style) => ({ id: style.id, sizes: Object.keys(style.sizes) })),
+    enterDungeon(entity, style, size, seed) {
+      const dimension = loaded.get(entity.dimension);
+      if (!dimension?.dungeons || !entity.body) return null;
+      const feet = entity.body.motor.state.feet;
+      const site = dungeonSiteNear(dimension.world, feet.x, feet.z);
+      if (!site) return null;
+      // One dungeon a site, a style and a size, unless a seed is asked for.
+      const key = `${dimension.id}/dungeon/${Math.round(site.x)},${Math.round(site.z)}/${style}/${size}`;
+      const rolled = seed ?? deriveSeed(options.seed >>> 0, Math.round(site.x) * 7349 + Math.round(site.z) * 31);
+      const dungeon = dimension.dungeons.open(seed === undefined ? key : `${key}/${rolled}`, style, size, rolled, site);
+      enterDungeonAt(entity, dungeon);
+      return { dungeon, kind: site.kind };
+    },
+    leaveDungeon(entity) {
+      const dimension = loaded.get(entity.dimension);
+      const id = inDungeon.get(entity.id);
+      const dungeon = id ? dimension?.dungeons?.placed.get(id) : undefined;
+      if (!dimension || !dungeon || !entity.body) return false;
+      inDungeon.delete(entity.id);
+      entity.body.teleport(dungeon.exit.x, dungeon.exit.z);
+      follow(entity);
+      dimension.streamer.loadAround(dungeon.exit.x, dungeon.exit.z, pointsIn(entity.dimension));
+      connectionOf(entity)?.end.send({ type: "dungeon", id: "", style: "", size: "", seed: 0, x: 0, y: 0, z: 0, facing: 0, entry: "" });
+      return true;
+    },
   };
+
+  /** Which dungeon each player was last sent into, by entity id. */
+  const inDungeon = new Map<number, string>();
+  /** Puts a player at the foot of a dungeon's entrance, and tells its client what to draw. */
+  function enterDungeonAt(entity: Entity, dungeon: PlacedDungeon): void {
+    if (!entity.body) return;
+    const { arrival, site } = dungeon;
+    entity.body.teleportTo(arrival);
+    entity.body.face(arrival.facing);
+    follow(entity);
+    loaded.get(entity.dimension)?.streamer.loadAround(arrival.x, arrival.z, pointsIn(entity.dimension));
+    inDungeon.set(entity.id, dungeon.id);
+    connectionOf(entity)?.end.send({ type: "dungeon", id: dungeon.id, style: dungeon.style, size: dungeon.size, seed: dungeon.seed, x: site.x, y: site.y, z: site.z, facing: site.facing, entry: dungeon.entry });
+  }
 
   function tell(connection: Connection, text: string, args: Readonly<Record<string, string | number>> = {}): void {
     connection.end.send({ type: "chatEvent", channel: "system", from: 0, fromName: "", text, args, typed: false });

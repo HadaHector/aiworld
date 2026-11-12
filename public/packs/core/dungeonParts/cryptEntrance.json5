@@ -9,4 +9,6 @@
   colliders: [
     { spiral: { centre: [0, 10], top: 0, inner: 3, outer: 9, wall: 1, start: 180, turns: 2.5, drop: 19.5, ceiling: 6 } },
   ],
+  // Torches on the outer wall every half turn, about 4 m over the stair.
+  spots: { light: [[-4.3, 0.75, 17.45], [4.3, -3.15, 2.55], [-4.3, -7.05, 17.45], [4.3, -10.95, 2.55], [-4.3, -14.85, 17.45]] },
 }

@@ -64,6 +64,9 @@ export function stairGeometry(s: StairSpec): KitGeometry {
   return { shapes, paths: [path] };
 }
 
+/** A railing's height over the floor: a stop to walking off, not to jumping. */
+const RAILING = 1.1;
+
 export interface SpiralSpec {
   /** Its axis, in x and z; `top` the floor's height where it starts. */
   centre: [number, number];
@@ -129,43 +132,89 @@ export function spiralGeometry(s: SpiralSpec): KitGeometry {
   const mid = (s.inner + s.outer) / 2;
   // In through the door straight, out through the other the same way.
   path.push(point(doorStart, s.outer + s.wall, s.top), point(doorStart, mid, s.top));
+  // The first turn has no lap over it: its vault is the top landing's, all the way round - a
+  // stairwell open from the top landing down to where the second lap passes under it.
+  const cap = s.top + s.rise + s.ceiling;
   for (let i = 0; i < count; i++) {
     const b0 = angleOf(i), b1 = angleOf(i + 1);
     const top = heightOf(i);
+    const vault = b1 <= a0 + 2 * Math.PI + 1e-9 ? cap : top + s.rise + s.ceiling;
     // Under the outer wall too, so a door through it has a floor.
     shapes.push(sector(b0, b1, s.inner * 0.98, s.outer + s.wall, top - 1, top));
-    shapes.push(sector(b0, b1, s.inner * 0.98, s.outer + s.wall, top + s.rise + s.ceiling, top + s.rise + s.ceiling + 1));
+    shapes.push(sector(b0, b1, s.inner * 0.98, s.outer + s.wall, vault, vault + 1));
     const c = (b0 + b1) / 2;
     const atDoor = Math.abs(c - doorStart) < door || Math.abs(c - doorEnd) < door;
     // The wall's inside a chord touching the outer radius at its middle, never inside it.
-    if (!atDoor) shapes.push(sector(b0, b1, s.outer / Math.cos((b1 - b0) / 2), s.outer + s.wall, top - 1, top + s.rise + s.ceiling + 1));
+    if (!atDoor) shapes.push(sector(b0, b1, s.outer / Math.cos((b1 - b0) / 2), s.outer + s.wall, top - 1, vault + 1));
     path.push(point(c, mid, top));
   }
+  // Where the top landing stops short of the stairwell: a stone railing across its end, just past
+  // the doorway, low enough to jump over and drop to the stair below.
+  const step = span / count;
+  shapes.push(sector(a0 - Math.min(step, 0.6 / mid), a0, s.inner * 0.98, s.outer + s.wall, s.top - 0.5, s.top + RAILING));
+  // Where the bottom landing stops, just past its doorway: a wall across, up under the lap above.
+  const end = a0 + span;
+  const over = Math.floor((end - 2 * Math.PI - a0) / step);
+  const wallTop = over >= 0 ? heightOf(over) - 1 + 0.05 : s.top - s.drop + s.rise + s.ceiling + 1;
+  shapes.push(sector(end, end + Math.min(step, 1 / mid), s.inner * 0.98, s.outer + s.wall, s.top - s.drop - 1, wallTop));
   path.push(point(doorEnd, mid, s.top - s.drop), point(doorEnd, s.outer + s.wall, s.top - s.drop));
-  // Each door framed square to its socket: jambs either side reaching out to the socket's plane, a
-  // sill and a lintel - so a part joined there meets a flat wall, and no gap opens between its wall
-  // and the spiral's round one either side of the doorway.
-  const half = (s.outer - s.inner) / 2;
-  const within = Math.sqrt(s.outer * s.outer - half * half);
-  const plane = s.outer + s.wall;
-  const jamb = half + 3.5;
-  for (const [angle, floor] of [[doorStart, s.top], [doorEnd, s.top - s.drop]] as const) {
-    const rotation = quatFromEuler(angle);
-    const vault = floor + s.rise + s.ceiling;
-    const piece = (t0: number, t1: number, y0: number, y1: number): ShapeDesc => {
-      const tc = (t0 + t1) / 2, rc = (within + plane) / 2;
-      return {
-        kind: "box",
-        center: vec3(s.centre[0] + tc * Math.cos(angle) + rc * Math.sin(angle), (y0 + y1) / 2, s.centre[1] - tc * Math.sin(angle) + rc * Math.cos(angle)),
-        half: vec3((t1 - t0) / 2, (y1 - y0) / 2, (plane - within) / 2),
-        rotation,
-      };
-    };
-    shapes.push(piece(-jamb, -half, floor - 1, vault + 1), piece(half, jamb, floor - 1, vault + 1), piece(-half, half, floor - 1, floor), piece(-half, half, vault, vault + 1));
-  }
   // The pillar: a twelve-sided prism inside the inner radius, so no flat of it narrows the way.
   const low = s.top - s.drop - 1, high = s.top + s.rise + s.ceiling + 1;
   const ring = Array.from({ length: 12 }, (_, k) => (k * Math.PI) / 6);
   shapes.push({ kind: "convex", points: [...ring.map((a) => point(a, s.inner, low)), ...ring.map((a) => point(a, s.inner, high))] });
   return { shapes, paths: [path] };
+}
+
+export const DOORWAY_KINDS = ["frame", "arch", "door"] as const;
+export type DoorwayKind = (typeof DOORWAY_KINDS)[number];
+
+export interface DoorwaySpec {
+  kind: DoorwayKind;
+  /** The way through it: its socket's width and height. */
+  width: number;
+  height: number;
+  /** How far it reaches either side of the socket's plane, how far each jamb reaches out from the
+   *  opening, how deep the lintel and the sill are; an arch's rise over the opening. */
+  depth: number;
+  jamb: number;
+  lintel: number;
+  rise: number;
+}
+
+/**
+ * A doorway across a socket's plane (z 0), the way through it along z (DUNGEONS.md, *Doorways*):
+ * jambs, a sill and a lintel thick enough to reach into both parts it joins - so it covers where
+ * their walls meet, whatever their shapes - and, for an arch, the lintel's underside rising in a
+ * curve; for a door, its two leaves standing open into +z (drawn, not in the way: `visuals`).
+ */
+export function doorwayGeometry(d: DoorwaySpec): { shapes: ShapeDesc[]; visuals: ShapeDesc[]; paths: Polyline[] } {
+  const w = d.width / 2, h = d.height;
+  const top = h + (d.kind === "arch" ? d.rise : 0) + d.lintel;
+  const shapes: ShapeDesc[] = [
+    boxShape(-w - d.jamb, -1, -d.depth, -w, top, d.depth),
+    boxShape(w, -1, -d.depth, w + d.jamb, top, d.depth),
+    boxShape(-w, -1, -d.depth, w, 0, d.depth),
+  ];
+  if (d.kind === "arch") {
+    // A segmental arch springing at the opening's height: its underside a circle's arc through the
+    // jambs' tops and `rise` over the middle, in pieces each solid up to the top.
+    const r = (w * w + d.rise * d.rise) / (2 * d.rise), cy = h + d.rise - r;
+    const pieces = 8;
+    for (let i = 0; i < pieces; i++) {
+      const x0 = -w + (2 * w * i) / pieces, x1 = -w + (2 * w * (i + 1)) / pieces;
+      const y = (x: number): number => cy + Math.sqrt(Math.max(0, r * r - x * x));
+      const points: Vec3[] = [];
+      for (const z of [-d.depth, d.depth]) points.push(vec3(x0, y(x0), z), vec3(x1, y(x1), z), vec3(x0, top, z), vec3(x1, top, z));
+      shapes.push({ kind: "convex", points });
+    }
+  } else {
+    shapes.push(boxShape(-w, h, -d.depth, w, top, d.depth));
+  }
+  const visuals: ShapeDesc[] = [];
+  if (d.kind === "door") {
+    // Two leaves swung wide, back along the walls of the part beyond.
+    const t = 0.15;
+    visuals.push(boxShape(-w, 0.05, d.depth, -w + t, h - 0.1, d.depth + w), boxShape(w - t, 0.05, d.depth, w, h - 0.1, d.depth + w));
+  }
+  return { shapes, visuals, paths: [[vec3(0, 0, -d.depth), vec3(0, 0, d.depth)]] };
 }

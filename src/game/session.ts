@@ -1,3 +1,5 @@
+import { createDungeonPresence, type DungeonPresence } from "./dungeonPresence";
+import type { DungeonMessage } from "../sim/protocol";
 import { createQuestMirror } from "./questMirror";
 import { createQuestLog } from "../ui/questLog";
 import { renderText } from "../sim/text";
@@ -164,6 +166,8 @@ export async function startSession(page: Page, options: SessionOptions): Promise
 
   /** The dimension being drawn - null while travelling, between one and the next. */
   let view: DimensionView | null = null;
+  /** The dungeon the player is in, drawn in the view (DUNGEONS.md). */
+  let dungeon: DungeonPresence | null = null;
   /** A Transfer not acted on yet: the next frame starts building where it leads. */
   let pendingTransfer: Transfer | null = null;
   /** The quest marks over NPCs now, by entity. */
@@ -367,6 +371,8 @@ export async function startSession(page: Page, options: SessionOptions): Promise
         serverCommands = message.commands.map((c) => ({ id: c.id, aliases: c.aliases, usage: c.usage, summary: c.summary, dev: c.dev, owner: "server", args: c.args.map((a) => ({ name: a.name, kind: a.kind as never, optional: a.optional, names: a.names as never, extra: a.extra })) }));
       } else if (message.type === "refused") {
         refusal = message.reason;
+      } else if (message.type === "dungeon") {
+        void showDungeon(message);
       } else if (message.type === "transfer") {
         pendingTransfer = message;
         me = null;
@@ -396,6 +402,30 @@ export async function startSession(page: Page, options: SessionOptions): Promise
         }
       }
     }
+  }
+  /**
+   * Draws the dungeon the server put the player in, or drops it (DUNGEONS.md): one entered as a space
+   * of its own behind the loading screen until its torches are baked, a seamless one as it is walked.
+   */
+  async function showDungeon(message: DungeonMessage): Promise<void> {
+    const v = view;
+    if (!v || !dungeon) return;
+    const screen = message.entry === "space";
+    if (screen) {
+      entering = true;
+      loadingScreen.show();
+    }
+    try {
+      await dungeon.receive(message, (phase, done, total) => screen && loadingScreen.update(phase, done, total));
+    } catch (error) {
+      console.error("The dungeon could not be drawn.", error);
+    }
+    if (!screen || view !== v) return;
+    loadingScreen.update("Compiling shaders and drawing the first frame", 0, 0);
+    await nextPaint();
+    v.scene.render();
+    loadingScreen.hide();
+    entering = false;
   }
   /** Sends a command and has the server take it at once, so a teleport is done when this returns -
    *  what the console's `goto` and the map's clicks always had. */
@@ -446,6 +476,8 @@ export async function startSession(page: Page, options: SessionOptions): Promise
     settings.timeOfDay = view.world.getTimeOfDay();
     const old = view;
     view = null;
+    dungeon?.dispose();
+    dungeon = null;
     minimap.setCache(null);
     worldMap.setCache(null);
     entityMeshes?.dispose();
@@ -494,6 +526,7 @@ export async function startSession(page: Page, options: SessionOptions): Promise
     });
     connection.provide(transfer.dimension, next.shared);
     view = next;
+    dungeon = createDungeonPresence(next, connection.rules.dungeons);
     minimap.setCache(next.mapTiles);
     worldMap.setCache(next.mapTiles);
     const world = next.world;
@@ -572,6 +605,8 @@ export async function startSession(page: Page, options: SessionOptions): Promise
       v.collisionPanel.addPlayerMs(performance.now() - started);
       v.cameraCollision.update(deltaSeconds);
     }
+    const body = character.mesh.position;
+    dungeon?.update(body.x, body.y, body.z);
     const focus = spectator.active ? spectator.camera.position : character.mesh.position;
     world.updateChunks(focus.x, focus.z);
     v.debugMap.updateMarker(focus.x, focus.z, camera.alpha);
@@ -1254,6 +1289,10 @@ export async function startSession(page: Page, options: SessionOptions): Promise
     },
     /** The simulation running in this page - `server.debug` has its dimensions and players. */
     server,
+    /** The dungeon drawn now (DUNGEONS.md): its layout and meshes, and the timings logged as it was built. */
+    get dungeon() {
+      return dungeon?.current ?? null;
+    },
     /** Entities, stats and resources (see ENTITIES.md): what this page was told, the server's own
      *  account, and the inspector's debug commands. `entity` 0 (the default) is the own player. */
     entities: {

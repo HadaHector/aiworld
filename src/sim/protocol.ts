@@ -1018,7 +1018,27 @@ export interface CommandList {
   commands: { id: string; aliases: string[]; usage: string; summary: string; dev: boolean; args: { name: string; kind: string; optional: boolean; names?: string[]; extra?: string[] }[] }[];
 }
 
+/**
+ * The player is now in a dungeon (DUNGEONS.md), or out of the last one (`id` ""): what it is, so the
+ * client lays out the same layout from the same inputs and draws it - behind the loading screen for
+ * a dungeon entered as a space of its own (`entry`), as it walks in for a seamless one.
+ */
+export interface DungeonMessage {
+  type: "dungeon";
+  id: string;
+  style: string;
+  size: string;
+  seed: number; // u32
+  /** Its entrance's site: the mouth's foot and which way the door faces, degrees. */
+  x: number; // f64
+  y: number; // f64
+  z: number; // f64
+  facing: number; // f64
+  entry: string; // "seamless", "space", or "" out of it
+}
+
 export type ServerMessage =
+  | DungeonMessage
   | ChatEvent
   | CommandList
   | Characters

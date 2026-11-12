@@ -542,6 +542,39 @@ export const sconce: PropGenerator = {
   },
 };
 
+/** A wall torch: an iron plate on the wall, an arm out to a collar, and through it a shaft leaning
+ *  out from the wall, its pitch-soaked head burning. Built from y 0 (the shaft's foot) up; set up
+ *  the wall where it hangs. Its back (-z) is on the wall. */
+export const wallTorch: PropGenerator = {
+  doc: "A torch in an iron bracket on the wall, burning.",
+  params: {
+    length: { kind: "range", default: [1.1, 1.3], min: 0.3, doc: "its shaft" },
+    lean: { kind: "range", default: [0.25, 0.35], min: 0, doc: "how far its top leans out from the wall, a share of its length" },
+  },
+  parts: ["iron", "wood", "pitch", "flame"],
+  build(ctx) {
+    const iron = ctx.paint("iron");
+    const length = ctx.range("length");
+    const lean = ctx.range("lean");
+    const back = -0.35;
+    const foot: Vec3 = [0, 0, back + 0.2];
+    const up = Math.sqrt(Math.max(0.01, 1 - lean * lean));
+    const dir: Vec3 = [0, up, lean];
+    const at = (t: number): Vec3 => [foot[0] + dir[0] * t, foot[1] + dir[1] * t, foot[2] + dir[2] * t];
+    const tip = at(length);
+    const collar = at(length * 0.45);
+    // The plate, and the arm from it to the collar round the shaft.
+    slab(ctx, [0, collar[1], back + 0.03], [0.15, 0.4, 0.03], iron);
+    ctx.shape.beam(ORIGIN, [0, collar[1] - 0.05, back + 0.05], collar, 0.08, 0.08, iron);
+    ctx.shape.cylinder(between(ORIGIN, at(length * 0.45 - 0.07), at(length * 0.45 + 0.07), [0, 0, 1]), 0.14, 0.1, iron, { ends: iron, sides: 8 });
+    // The shaft, and its head wrapped and burning.
+    ctx.shape.cylinder(between(ORIGIN, foot, at(length - 0.3), [0, 0, 1]), length - 0.3, [0.05, 0.07], ctx.paint("wood"), { ends: ctx.paint("wood"), sides: 6 });
+    ctx.shape.cylinder(between(ORIGIN, at(length - 0.32), tip, [0, 0, 1]), 0.32, [0.1, 0.13], ctx.paint("pitch"), { ends: ctx.paint("pitch"), sides: 7 });
+    flame(ctx, [tip[0], tip[1] - 0.02, tip[2]], 0.17, 0.75);
+    ctx.light([tip[0], tip[1] + 0.35, tip[2]]);
+  },
+};
+
 /** A banner: a cloth hanging from a pole, a fringe at its foot - flat against the wall. Built from y
  *  0 up; set up the wall where it hangs. Its back (-z) is on the wall. */
 export const banner: PropGenerator = {

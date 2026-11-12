@@ -1,0 +1,8 @@
+// A crypt doorway: a square frame of dressed stone - jambs, a sill and a lintel - set across where
+// two parts meet, reaching into both (DUNGEONS.md, *Doorways*).
+{
+  tags: ["crypt", "doorway"],
+  weight: 3,
+  sockets: [{ at: [0, 0, 0], facing: 180, type: "crypt", size: [6, 6] }],
+  doorway: { kind: "frame" },
+}

@@ -21,7 +21,8 @@
 //                                               plays a saved character, "Bot", made if it is not there yet
 // A dimension is generated when the first player heads for it and dropped when the last one leaves,
 // so with no bot the server holds no world at all.
-import { loadContentFromDisk, loadCreatureRulesFromDisk, loadItemRulesFromDisk, loadProgressionRulesFromDisk, loadRulesFromDisk } from "../diskContent.mjs";
+import { loadContentFromDisk, loadCreatureRulesFromDisk, loadItemRulesFromDisk, loadProgressionRulesFromDisk, loadRulesFromDisk, packSourcesFromDisk, readConfigFromDisk } from "../diskContent.mjs";
+import { resolveDungeons } from "../../src/world/dungeons/dungeonDefs.ts";
 import { checkProgressionItems } from "../../src/sim/rules/progressionRules.ts";
 import { checkSkillRefs } from "../../src/sim/rules/skillRules.ts";
 import { formatMoney } from "../../src/sim/rules/itemRules.ts";
@@ -87,6 +88,11 @@ checkSkillRefs(rules, items.abilityRefs);
 checkProgressionItems(progression, items);
 console.log(`item rules: ${items.types.length} item types (${[...items.generated.values()].reduce((n, t) => n + t.length, 0)} generated), ${items.slots.length} equipment slots, ${items.lootTables.size} loot tables (${ms(started)})`);
 
+// Dungeon styles and parts (DUNGEONS.md): opened where they are entered.
+started = performance.now();
+const dungeons = resolveDungeons(packSourcesFromDisk(readConfigFromDisk(configName)).sources);
+console.log(`dungeons: ${dungeons.styles.size} styles, ${dungeons.parts.size} parts (${ms(started)})`);
+
 let world = savedWorld;
 if (store && !world) {
   world = createWorldRecord({ id: worldId, name: worldId, seed, config: configName, packs, hashes: { rules: rules.hash, items: items.hash, creatures: creatures.hash, progression: progression.hash } });
@@ -106,6 +112,7 @@ const server = createServer({
   items,
   creatures,
   progression,
+  dungeons,
   // Developer commands (CHAT.md) are off on a dedicated server unless it is run with --dev.
   devCommands: flag("dev"),
   loadDimension(definition, dimensionSeed) {

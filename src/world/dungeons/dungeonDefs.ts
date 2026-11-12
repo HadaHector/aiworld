@@ -4,7 +4,7 @@
 import { ContentError, Reader, type ContentIssue, type RawObject } from "../content/contentReader";
 import { DUNGEON_FOLDERS, orderPacks, parseFile, type PackSource } from "../content/resolveContent";
 import { vec3, type Aabb, type ShapeDesc, type Vec3 } from "../collision/index";
-import { boxShape, spiralGeometry, stairGeometry, type Polyline } from "./kitShapes";
+import { boxShape, doorwayGeometry, DOORWAY_KINDS, spiralGeometry, stairGeometry, type DoorwayKind, type Polyline } from "./kitShapes";
 import { checkPaths } from "./clearance";
 
 const ID_PATTERN = /^[A-Za-z0-9_-]+$/;
@@ -85,6 +85,12 @@ export interface DungeonPartDef {
   spots: Record<string, Vec3[]>;
   /** Counts toward the style's rooms (a hall, a tomb) rather than joining them (a corridor, a stair). */
   room: boolean;
+  /** Centres (x, z) its round walls and pillars turn about - a spiral's - so their textures run round them. */
+  rounds: [number, number][];
+  /** A doorway, set across every join and cap (DUNGEONS.md, *Doorways*): which kind; null for any other part. */
+  doorway: DoorwayKind | null;
+  /** What is drawn but not in the way - a doorway's leaves standing open. */
+  visuals: ShapeDesc[];
 }
 
 export interface DungeonSize {
@@ -112,6 +118,37 @@ export interface DungeonStyleDef {
   locks: [number, number];
   /** How loops are made; null for a style without. */
   connector: ConnectorDef | null;
+  /** What a kit's faces are made of, by what they are to the way through (DUNGEONS.md, *Materials*). */
+  look: KitLook;
+  /** The doorways set across its joins and caps; none, and parts meet bare. */
+  doorways: DungeonPartDef[];
+  /** How it is lit (DUNGEONS.md, *Light*). */
+  light: DungeonLight;
+}
+
+/** A face's building material (by id; null for plain colour) and the tint its colour is multiplied by. */
+export interface DungeonPaint {
+  material: string | null;
+  tint: [number, number, number];
+}
+
+/** A kit's materials: the floor walked on, the walls, the vault overhead, and stairs' treads and risers. */
+export interface KitLook {
+  floor: DungeonPaint;
+  wall: DungeonPaint;
+  ceiling: DungeonPaint;
+  steps: DungeonPaint;
+  /** A doorway's stone, and its leaves. */
+  frame: DungeonPaint;
+  door: DungeonPaint;
+}
+
+export interface DungeonLight {
+  /** The light everywhere, lit or not, so unlit rock is a dark shape rather than a hole. */
+  ambient: [number, number, number];
+  /** The prop standing at a part's `light` spots (a wall torch), and the share of spots that have one. */
+  fixture: string;
+  lit: number;
 }
 
 export interface DungeonContent {
@@ -210,7 +247,7 @@ function vector(reader: Reader, value: unknown, path: string): Vec3 {
   return vec3();
 }
 
-const PART_KEYS = ["tags", "weight", "stage", "bounds", "sockets", "colliders", "paths", "spots", "room"];
+const PART_KEYS = ["tags", "weight", "stage", "bounds", "sockets", "colliders", "paths", "spots", "room", "doorway"];
 
 function readPart(entry: Entry, rules: DungeonRules, issues: ContentIssue[]): DungeonPartDef | null {
   const reader = new Reader(issues, entry.file);
@@ -227,7 +264,30 @@ function readPart(entry: Entry, rules: DungeonRules, issues: ContentIssue[]): Du
   if (sockets.length === 0) reader.fail("sockets", "a part needs at least one socket to be joined by");
   const shapes: ShapeDesc[] = [];
   const paths: Polyline[] = [];
-  reader.array(obj, "colliders", "").forEach((value, i) => {
+  const rounds: [number, number][] = [];
+  const visuals: ShapeDesc[] = [];
+  let doorway: DoorwayKind | null = null;
+  if (obj.doorway !== undefined) {
+    // A doorway: its shapes from its kind and its socket's size.
+    const raw = reader.object(obj.doorway, "doorway");
+    reader.onlyKeys(raw, "doorway", ["kind", "depth", "jamb", "lintel", "rise"]);
+    doorway = reader.oneOf(raw, "kind", "doorway", DOORWAY_KINDS);
+    if (sockets.length !== 1) reader.fail("sockets", "a doorway has one socket, in the plane it stands across");
+    const size = sockets[0]?.size ?? rules.minClear;
+    const geometry = doorwayGeometry({
+      kind: doorway,
+      width: size[0],
+      height: size[1],
+      depth: reader.optionalNumber(raw, "depth", "doorway", 1, { min: 0.1 }),
+      jamb: reader.optionalNumber(raw, "jamb", "doorway", 2, { min: 0.1 }),
+      lintel: reader.optionalNumber(raw, "lintel", "doorway", 1.5, { min: 0.1 }),
+      rise: reader.optionalNumber(raw, "rise", "doorway", 1.5, { min: 0.1 }),
+    });
+    shapes.push(...geometry.shapes);
+    visuals.push(...geometry.visuals);
+    paths.push(...geometry.paths);
+  }
+  reader.optionalArray(obj, "colliders", "").forEach((value, i) => {
     const path = `colliders[${i}]`;
     const raw = reader.object(value, path);
     const keys = Object.keys(raw);
@@ -270,6 +330,7 @@ function readPart(entry: Entry, rules: DungeonRules, issues: ContentIssue[]): Du
         });
         shapes.push(...geometry.shapes);
         paths.push(...geometry.paths);
+        rounds.push(centre);
       } else {
         reader.fail(path, `unknown collider "${keys[0]}" (expected box, stair or spiral)`);
       }
@@ -309,6 +370,9 @@ function readPart(entry: Entry, rules: DungeonRules, issues: ContentIssue[]): Du
     paths,
     spots,
     room: reader.boolean(obj, "room", "", false),
+    rounds,
+    doorway,
+    visuals,
   };
   // Every way through it, on its own colliders: floor under the walk lines, and 6 m wide and high.
   const before = issues.length;
@@ -342,7 +406,38 @@ export function shapesBounds(shapes: readonly ShapeDesc[]): Aabb {
   return { min, max };
 }
 
-const STYLE_KEYS = ["name", "builder", "sizes", "branching", "loops", "boss", "keys", "cover", "deepest", "parts", "entrance", "caps", "connector"];
+const STYLE_KEYS = ["name", "builder", "sizes", "branching", "loops", "boss", "keys", "cover", "deepest", "parts", "entrance", "caps", "connector", "look", "light", "doorways"];
+
+function colour(reader: Reader, value: unknown, path: string, fallback: [number, number, number]): [number, number, number] {
+  if (value === undefined) return fallback;
+  if (Array.isArray(value) && value.length === 3 && value.every((v) => typeof v === "number" && v >= 0)) return [value[0], value[1], value[2]];
+  reader.fail(path, "expected [r, g, b], each 0 or more");
+  return fallback;
+}
+
+function paintOf(reader: Reader, look: RawObject, key: string, fallback: DungeonPaint): DungeonPaint {
+  if (look[key] === undefined) return fallback;
+  const raw = reader.object(look[key], `look.${key}`);
+  reader.onlyKeys(raw, `look.${key}`, ["material", "tint"]);
+  return { material: raw.material === null ? null : (reader.optionalString(raw, "material", `look.${key}`) ?? fallback.material), tint: colour(reader, raw.tint, `look.${key}.tint`, [1, 1, 1]) };
+}
+
+function readLook(reader: Reader, raw: RawObject): KitLook {
+  reader.onlyKeys(raw, "look", ["floor", "wall", "ceiling", "steps", "frame", "door"]);
+  const stone: DungeonPaint = { material: "stoneBricks", tint: [1, 1, 1] };
+  const floor = paintOf(reader, raw, "floor", stone);
+  const wall = paintOf(reader, raw, "wall", stone);
+  return { floor, wall, ceiling: paintOf(reader, raw, "ceiling", stone), steps: paintOf(reader, raw, "steps", floor), frame: paintOf(reader, raw, "frame", wall), door: paintOf(reader, raw, "door", { material: "doorBoards", tint: [1, 1, 1] }) };
+}
+
+function readLight(reader: Reader, raw: RawObject): DungeonLight {
+  reader.onlyKeys(raw, "light", ["ambient", "fixture", "lit"]);
+  return {
+    ambient: colour(reader, raw.ambient, "light.ambient", [0.02, 0.02, 0.025]),
+    fixture: reader.optionalString(raw, "fixture", "light") ?? "wallTorch",
+    lit: reader.optionalNumber(raw, "lit", "light", 1, { min: 0, max: 1 }),
+  };
+}
 
 function readStyle(entry: Entry, allParts: Map<string, DungeonPartDef>, rules: DungeonRules, issues: ContentIssue[]): DungeonStyleDef {
   const reader = new Reader(issues, entry.file);
@@ -377,7 +472,8 @@ function readStyle(entry: Entry, allParts: Map<string, DungeonPartDef>, rules: D
   reader.onlyKeys(bossRaw, "boss", ["tags"]);
   const bossTags = bossRaw.tags === undefined ? [] : reader.stringList(bossRaw, "tags", "boss");
   const bosses = all.filter((p) => bossTags.every((t) => p.tags.includes(t)));
-  const special = new Set([...entrances, ...caps, ...bosses]);
+  const doorways = obj.doorways === undefined ? [] : inStyle("doorways", "doorway");
+  const special = new Set([...entrances, ...caps, ...bosses, ...all.filter((p) => p.doorway)]);
   const parts = all.filter((p) => !special.has(p));
   const keys = obj.keys === undefined ? {} : reader.object(obj.keys, "keys");
   reader.onlyKeys(keys, "keys", ["locks"]);
@@ -396,6 +492,9 @@ function readStyle(entry: Entry, allParts: Map<string, DungeonPartDef>, rules: D
     caps,
     locks: keys.locks === undefined ? [0, 0] : reader.range(keys, "locks", "keys", { allowEqual: true }),
     connector: obj.connector === undefined ? null : readConnector(reader, reader.object(obj.connector, "connector"), all, rules),
+    look: readLook(reader, obj.look === undefined ? {} : reader.object(obj.look, "look")),
+    doorways,
+    light: readLight(reader, obj.light === undefined ? {} : reader.object(obj.light, "light")),
   };
   if (style.loops[1] > 0 && !style.connector) reader.fail("loops", "a style with loops needs a `connector` to make them with");
   // Able to start, grow, end and close.

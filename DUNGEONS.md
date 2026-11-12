@@ -346,6 +346,11 @@ it is built.
    nothing else open, the corridor or stair just laid is taken back and something else tried
    where it began (up to 40 times an attempt). The ground comes in as a `heightAt(x, z)` and a
    `builtAt(x, z)`, so the generator stays pure.
+   **One way, one direction**: along a way - parts with one way in and one out, the entrance's
+   stair among them, with no room or branching between - stairs never turn back. Walking back from
+   an open end, the first part that changes height says which way the way is going, and a part that
+   would go the other way is not tried there (up, down, up again on one corridor makes no sense). A
+   room, or a part where ways branch, frees it. Loops keep to it at both their ends.
 3. Loops, made on purpose (the user's call: a layout that circles back is easy to get lost in, and
    that is fun). Every pair of open ends at most `loopReach` (60 m) apart and at least `loopSpan`
    (4) joins apart along the layout is a candidate, the longest way round first. Between the two,
@@ -361,7 +366,9 @@ it is built.
 4. The boss room: on the leaf room furthest from the entrance (by the graph), in its place, or at
    the furthest open end - straight on, or past a corridor or a stair laid first when it will not
    fit there; a lock on the join into it, its key in the furthest other room.
-5. Close every open socket with a cap. A cap may sit in a neighbour's wall (solid in solid); it
+5. Close every open socket with a cap.
+   Then a **doorway** across every join and cap, and at the mouth ([Doorways](#doorways)), rolled
+   on their own so they never change the layout. A cap may sit in a neighbour's wall (solid in solid); it
    never reaches into anyone's way through.
 6. Check: every room reachable from the entrance, the boss behind its lock and the key this side
    of it, at least the size's least rooms, the boss placed, every part under its cover - looked at
@@ -416,6 +423,25 @@ A heightfield gains `depth` (default infinite, as now): solid only from its surf
 it, open below. The game's terrain sets about 3 m, so a cave more than 3 m down is not pushed up
 through the surface, and the cellar slabs keep working. The style's `cover` (8 m) keeps every part
 well below that.
+
+## Doorways
+
+Where two parts meet, neither part's own geometry is trusted to meet the other's: their walls are
+different shapes (a spiral's round wall against a corridor's flat one leaves gaps either side of
+the opening), and two faces in one plane flicker. So the meeting is a part of its own:
+
+- **A doorway part** (`dungeonParts/`, a `doorway` block in place of colliders): `kind` - `frame`
+  (jambs, a sill, a lintel), `arch` (the lintel's underside rising `rise` over the middle, seen where
+  the room beyond is taller than the way in) or `door` (a frame and two leaves standing open into
+  the part beyond, drawn but not in the way) - with `depth` (1 m each side of the plane: walls are
+  1 m thick), `jamb` (2 m out from the opening), `lintel`. Its opening is its socket's size, so it
+  never narrows the way.
+- **Set by the generator** across every join and every cap (a frame round the bricked-up way - never
+  an open door onto a wall), and at the entrance's mouth; the style's `doorways` say which, by weight.
+- **Thick and overlapping**: it reaches into both parts, covering where their walls meet. Drawn, a
+  part gives way to its doorways - its faces cut where a doorway lies in front of them, or where a
+  doorway's face lies on its own - and a doorway is cut and seen against both parts it stands
+  between. Nothing z-fights, nothing is left open.
 
 ## Seamless and separate
 
@@ -511,6 +537,22 @@ Each leaves the game working: dev server with `?play`, `npm run probe`, `npm run
 3. **The crypt.** Its parts built (ModelBuilder recipes and materials, colliders, transition
    pieces, caps), torches as fixtures, the lightmap bake per part; as a space of its own entered by
    a debug command; walked end to end.
+   *So far*: `kitMesh.ts` draws a part from its own colliders - every side of every solid cut as
+   convex pieces wherever another solid lies just in front of it, only pieces with open space in
+   front kept (a pillar through four laps of a spiral is seen only between them), painted by what
+   its solid is (a step's every face dressed stone, a floor's top flagstones, a vault's underside
+   rubble, anything else coursed stone), round walls and pillars textured round them. Wall torches
+   (`props/wallTorch.json5`) at the parts' light spots, 80% lit; each part's light baked in the
+   light-bake workers (a crypt: about 1 M texels, 4-9 s across two workers, cached). The spiral:
+   its first turn's vault raised to the top landing's - an open stairwell, a railing to jump over
+   where the landing stops - and a wall past the bottom landing. Doorways ([Doorways](#doorways)).
+   Underground the sun and sky fade out (`World.setUnderground`), rain stops, fog goes dark; the
+   torches light the player. The game's ground is 3 m deep. `/dungeon [size] [seed] [style]` opens
+   one at the nearest crypt or hillside and puts the player at the foot of its entrance; `/dungeon
+   leave`. Workbench: `dungeonParts` (one part, lit) and `dungeonStyles` (a whole generated
+   dungeon, as a cutaway plan), with an Underground light. Open: the server keeps a dungeon in its
+   dimension's own collision world (not one of its own); the client draws it in the same scene,
+   the world above not drawn over it only because rock is in the way.
 4. **The cave.** The field builder: shapes (the helix descent among them), the worker, chunks, the mesh collider; the cave
    materials (triplanar, layer weights per vertex, floor to wall to ceiling); fungi as fixtures and
    the per-part, per-vertex bake; the crypt-to-cave transition part; as a space first.

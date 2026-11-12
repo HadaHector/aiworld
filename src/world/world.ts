@@ -13,7 +13,8 @@ import { createBushScatter, createRockScatter, createTreeCover, createTreeScatte
 import { createTreeField, type TreeField } from "./foliage/treeField";
 import { createGrassField, type GrassField } from "./foliage/grassField";
 import { createBuildingRenderer } from "./buildings/buildingRenderer";
-import { bakeBuildingTextures, createBuildingMaterial } from "./buildings/buildingMesh";
+import { bakeBuildingTextures, createBuildingMaterial, type BuildingMaterial } from "./buildings/buildingMesh";
+import type { ModelLight } from "./buildings/buildingTypes";
 import type { SettlementLayout } from "./settlements/settlementLayout";
 import { createSunLighting, DEFAULT_DAY_NIGHT_CYCLE_MINUTES } from "./lighting/sunLighting";
 import { createPlayerLights, type PlayerLights } from "./lighting/playerLights";
@@ -102,6 +103,16 @@ export interface World {
   lightMover: (mesh: Mesh) => PlayerLights;
   /** Has a mesh cast the sun's shadow - the player's body (game/playerBody.ts). */
   castShadow: (mesh: Mesh) => void;
+  /** The shader houses are drawn with, over the building materials - what a dungeon's parts are
+   *  drawn with too (DUNGEONS.md, *Building it*). */
+  buildingMaterial: BuildingMaterial;
+  /**
+   * Underground (DUNGEONS.md, *Light*): the sun, moon and sky fade out - at once, with `now` - and
+   * only `ambient` is left, the rain and snow stop, the fog closes in dark; null brings the day back.
+   */
+  setUnderground: (ambient: [number, number, number] | null, now?: boolean) => void;
+  /** More lights that light the player as the houses' do - a dungeon's torches (world space); none, null. */
+  setExtraLights: (lights: readonly ModelLight[] | null) => void;
   /** Stops what lives outside the scene - the chunk build and light bake workers, chunks still
    *  coming. The meshes, materials and textures go with `scene.dispose()`, after this. */
   dispose: () => void;
@@ -121,6 +132,8 @@ const CHUNK_LOD_LEVELS: ChunkLodLevel[] = [
 const UNLOAD_HYSTERESIS = CHUNK_SIZE; // unload radius = load radius + this, a 1-chunk buffer band
 
 export const DEFAULT_DRAW_DISTANCE = 800;
+/** Where the fog starts and ends underground, metres. */
+const UNDERGROUND_FOG = [15, 160];
 export const MIN_DRAW_DISTANCE = 100;
 export const MAX_DRAW_DISTANCE = 2000;
 
@@ -347,10 +360,29 @@ export async function createWorld(
     fallLight.r = Math.min(1.1, fallLight.r + sunLighting.color.r * sunLighting.intensity * 0.5);
     fallLight.g = Math.min(1.1, fallLight.g + sunLighting.color.g * sunLighting.intensity * 0.5);
     fallLight.b = Math.min(1.1, fallLight.b + sunLighting.color.b * sunLighting.intensity * 0.5);
-    precipitation.update(weatherNow.rain, weatherNow.snow, fallLight);
+    const open = 1 - sunLighting.underground;
+    precipitation.update(weatherNow.rain * open, weatherNow.snow * open, fallLight);
     ocean.setRain(weatherNow.rain);
   };
-  const updateAtmosphere = (areaWeights: AreaWeight[]) => sky.update(areaWeights, drawDistance, sunLighting.getTimeHours(), sunLighting.direction, weatherNow);
+  const updateAtmosphere = (areaWeights: AreaWeight[]) => {
+    sky.update(areaWeights, drawDistance, sunLighting.getTimeHours(), sunLighting.direction, weatherNow);
+    // Underground the far end of a hall fades into the dark, not into the sky's haze.
+    const under = sunLighting.underground;
+    if (under > 0) {
+      scene.fogColor.scaleInPlace(1 - under);
+      scene.fogStart += (UNDERGROUND_FOG[0] - scene.fogStart) * under;
+      scene.fogEnd += (UNDERGROUND_FOG[1] - scene.fogEnd) * under;
+    }
+  };
+  let extraLights: readonly ModelLight[] = [];
+  const lightsNear = (x: number, y: number, z: number): ModelLight[] => {
+    const found = buildings.lightsNear(x, y, z);
+    for (const light of extraLights) {
+      const [lx, ly, lz] = light.position;
+      if (Math.hypot(lx - x, ly - y, lz - z) < light.radius) found.push(light);
+    }
+    return found;
+  };
 
   return {
     buildingAt: data.buildingAt,
@@ -383,8 +415,13 @@ export async function createWorld(
     weather,
     setTimeOfDay: sunLighting.setTimeHours,
     getTimeOfDay: sunLighting.getTimeHours,
-    lightMover: (mesh) => createPlayerLights(scene, mesh, buildings.lightsNear, collision.world, sunLighting),
+    lightMover: (mesh) => createPlayerLights(scene, mesh, lightsNear, collision.world, sunLighting),
     castShadow: (mesh) => sunLighting.shadowGenerator.addShadowCaster(mesh, false),
+    buildingMaterial,
+    setUnderground: sunLighting.setUnderground,
+    setExtraLights: (lights) => {
+      extraLights = lights ?? [];
+    },
     dispose() {
       chunkManager.dispose();
       buildPool?.dispose();

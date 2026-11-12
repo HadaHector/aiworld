@@ -1,0 +1,7 @@
+// The frame round the crypt's mouth, where its stair comes up to the churchyard.
+{
+  tags: ["crypt", "doorway"],
+  weight: 1,
+  sockets: [{ at: [0, 0, 0], facing: 180, type: "surface", size: [6, 6] }],
+  doorway: { kind: "frame" },
+}

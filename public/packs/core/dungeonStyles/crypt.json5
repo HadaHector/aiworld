@@ -21,4 +21,19 @@
   parts: { tags: ["crypt"] },
   entrance: { tags: ["entrance"] },
   caps: { tags: ["cap"] },
+  // What its faces are made of (DUNGEONS.md, *Materials*): flagstones underfoot, coursed stone up
+  // the walls, a rubble vault overhead gone dark with soot, dressed stone for the stairs.
+  look: {
+    floor: { material: "flagstones" },
+    wall: { material: "stoneBricks", tint: [0.82, 0.78, 0.72] },
+    ceiling: { material: "rubbleStone", tint: [0.55, 0.52, 0.5] },
+    steps: { material: "dressedStone", tint: [0.72, 0.7, 0.66] },
+    frame: { material: "dressedStone", tint: [0.78, 0.76, 0.72] },
+    door: { material: "doorBoards", tint: [0.7, 0.62, 0.52] },
+  },
+  // Set across every join and cap, and at the mouth (DUNGEONS.md, *Doorways*).
+  doorways: { tags: ["doorway"] },
+  // How it is lit (DUNGEONS.md, *Light*): torches at most of the parts' light spots, and a little
+  // cold light everywhere so an unlit corner is a dark shape, not a hole.
+  light: { ambient: [0.022, 0.024, 0.03], fixture: "wallTorch", lit: 0.8 },
 }

@@ -1,0 +1,8 @@
+// A crypt doorway under a low arch: the lintel's underside rising a metre and a half over the
+// middle - seen where the room beyond is taller than the way in.
+{
+  tags: ["crypt", "doorway"],
+  weight: 2,
+  sockets: [{ at: [0, 0, 0], facing: 180, type: "crypt", size: [6, 6] }],
+  doorway: { kind: "arch", rise: 1.5 },
+}

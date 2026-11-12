@@ -218,12 +218,20 @@ export function resolveContent(packs: PackSource[], config: WorldConfig = DEFAUL
   const entries = new Map<ContentFolder, Map<string, Entry>>(CONTENT_FOLDERS.map((folder) => [folder, new Map()]));
   const defaultsLayers: { file: string; data: unknown }[] = [];
   const patches: { file: string; data: unknown }[] = [];
+  const dungeonUses: unknown[] = [];
 
   for (const pack of ordered) {
     for (const { path, text } of pack.files) {
       if (path === "pack.json5") continue;
       const file = `${pack.id}/${path}`;
       const parts = path.split("/");
+      // Dungeon styles name building materials and props (their look, their torches): what they
+      // name is kept by a config's whitelist as if a kept definition named it.
+      if (parts.length === 2 && parts[0] === "dungeonStyles") {
+        const data = parseFile(file, text, issues);
+        if (data !== undefined) dungeonUses.push(data);
+        continue;
+      }
       // Gameplay content: read by the game rules' own resolver (src/sim/rules/gameRules.ts).
       if (parts.length === 2 && ([...GAME_FOLDERS, ...CHARACTER_FOLDERS, ...FEEDBACK_FOLDERS, ...ICON_FOLDERS, ...MAP_FOLDERS, ...DUNGEON_FOLDERS] as readonly string[]).includes(parts[0])) continue;
       const data = parseFile(file, text, issues);
@@ -317,7 +325,7 @@ export function resolveContent(packs: PackSource[], config: WorldConfig = DEFAUL
     const chosen = dimensionBiomes(current, available);
     if (chosen.length !== allBiomeIds.length) only.biomes = chosen;
   }
-  if (Object.keys(only).length > 0) pruneEntries(entries, { ...config, only }, [defaultsRaw, CODE_DEFAULT_IDS], issues);
+  if (Object.keys(only).length > 0) pruneEntries(entries, { ...config, only }, [defaultsRaw, CODE_DEFAULT_IDS, dungeonUses], issues);
 
   // --- read every definition, in id order ---
   function readAll<T>(folder: ContentFolder, read: (entry: Entry, obj: RawObject, reader: Reader) => T): T[] {
