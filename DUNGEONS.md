@@ -438,10 +438,15 @@ different shapes (a spiral's round wall against a corridor's flat one leaves gap
 the opening), and two faces in one plane flicker. So the meeting is a part of its own:
 
 - **A doorway part** (`dungeonParts/`, a `doorway` block in place of colliders): `kind` - `frame`
-  (jambs, a sill, a lintel), `arch` (the lintel's underside rising `rise` over the middle, seen where
-  the room beyond is taller than the way in) or `door` (a frame and two leaves standing open into
-  the part beyond, drawn but not in the way) - with `jamb` (2 m out from the opening), `lintel`. Its
-  opening is its socket's size, so it never narrows the way.
+  (jambs, a sill, a lintel), `arch` (straight jambs to the springing, `rise` under the opening's
+  top, then a ring of voussoirs over it, a keystone at the crown rising over the rest) or `door` (a
+  frame and two leaves standing open into the part beyond, drawn but not in the way) - with `jamb`
+  (1.5 m: the band's width), `lintel`. Every kind has a stop round the opening at its middle, inset
+  0.3 m - the doorway's depth showing - and a threshold across it, 0.15 m high, stepped over. Its
+  stone is the style's `look.frame` (`doorStone`: big blocks, chamfered joints, paler than the walls).
+- **The one exception to 6 m**: a doorway's opening is its socket's size less its stop (5.4 m), and
+  an arch narrows over its springing. The probe measures everything else at 6 m and passes over the
+  doorways.
 - **As thick as where it stands**: each socket says how far a doorway may reach into its part -
   `reach` (1 m by default, the walls' depth: corridors, stairs, corners), 1.5 m into a hall, a tomb
   or the boss hall (so the frame stands half a metre proud of the wall) and into a spiral (covering

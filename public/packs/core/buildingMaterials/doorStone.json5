@@ -1,0 +1,62 @@
+// Door stone: the big dressed blocks a doorway is framed in - paler and warmer than the walls round
+// it, each block chamfered at its edges so the joints read as deep grooves (DUNGEONS.md, *Doorways*).
+{
+  name: "Door Stone",
+  // Metres one repeat covers: 2 blocks across and 4 courses up, so each is 1.5 m x 0.75 m.
+  size: 3,
+  shine: 0.05,
+  texture: {
+    bumpStrength: 3.2,
+    pipeline: {
+      noises: [
+        { name: "stones", type: "bricks", tileCycles: [2, 4], stagger: 0.5, amplitude: 1, mode: "edge" },
+        { name: "grain", type: "fbm", octaves: 3, tileCycles: 60, amplitude: 1, persistence: 0.55, lacunarity: 2 },
+        { name: "mottle", type: "fbm", octaves: 2, tileCycles: 8, amplitude: 1, persistence: 0.5, lacunarity: 2 },
+        { name: "chips", type: "worley", tileCycles: 40, amplitude: 1, mode: "f1" },
+      ],
+      steps: [
+        { output: "joint", op: "sample", noise: "stones" },
+        { output: "stoneId", op: "sample", noise: "stones", mode: "cell" },
+        { output: "grainRaw", op: "sample", noise: "grain" },
+        { output: "mottleRaw", op: "sample", noise: "mottle" },
+        { output: "chipRaw", op: "sample", noise: "chips" },
+
+        // The mortar: a joint of its own width, frayed by the grain so no edge is ruled.
+        { output: "fray", op: "scale", input: "grainRaw", factor: 0.02 },
+        { output: "jointFrayed", op: "add", a: "joint", b: "fray" },
+        { output: "mortar", op: "mask", input: "jointFrayed", at: 0.02, off: 0.06 },
+
+        // Each stone its own grey, mottled and grainy.
+        {
+          output: "stoneTone",
+          op: "colorRamp",
+          input: "stoneId",
+          stops: [
+            { at: 0.0, color: [0.66, 0.62, 0.55] },
+            { at: 0.3, color: [0.72, 0.68, 0.6] },
+            { at: 0.55, color: [0.69, 0.64, 0.56] },
+            { at: 0.8, color: [0.75, 0.71, 0.64] },
+            { at: 1.0, color: [0.63, 0.6, 0.55] },
+          ],
+        },
+        { output: "shadeRaw", op: "add", a: "mottleRaw", b: "grainRaw" },
+        { output: "shade", op: "remap", input: "shadeRaw", inMin: -1, inMax: 1, outMin: 0.82, outMax: 1.12 },
+        { output: "stone", op: "multiply", a: "stoneTone", b: "shade" },
+        { output: "mortarColor", op: "color", value: [0.36, 0.34, 0.31] },
+        { output: "diffuse", op: "mix", a: "stone", b: "mortarColor", t: "mortar" },
+        { output: "roughness", op: "constant", value: 0.88 },
+
+        // Height: each face rounded off towards its joints, pitted with chips, the mortar sunk.
+        { output: "bevelRaw", op: "remap", input: "joint", inMin: 0.01, inMax: 0.09, outMin: 0, outMax: 1 },
+        { output: "bevel", op: "clamp", input: "bevelRaw", min: 0, max: 1 },
+        { output: "bevelRound", op: "power", input: "bevel", exponent: 1 },
+        { output: "chipDent", op: "mask", input: "chipRaw", at: 0.0, off: 0.12 },
+        { output: "chipDepth", op: "scale", input: "chipDent", factor: -0.15 },
+        { output: "grainBump", op: "scale", input: "grainRaw", factor: 0.06 },
+        { output: "faceHeight", op: "add", a: "bevelRound", b: "chipDepth" },
+        { output: "height", op: "add", a: "faceHeight", b: "grainBump" },
+      ],
+      outputs: { diffuse: "diffuse", roughness: "roughness", height: "height" },
+    },
+  },
+}

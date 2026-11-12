@@ -198,6 +198,15 @@ export function spiralGeometry(s: SpiralSpec): KitGeometry {
 }
 
 export const DOORWAY_KINDS = ["frame", "arch", "door"] as const;
+
+/** How far a doorway's stop stands in from its opening, how far either side of its socket's plane it
+ *  reaches, and how far its keystone rises over the ring. Doorways may be narrower than the
+ *  rules' least way through by the stop (DUNGEONS.md, *Doorways*). */
+const INSET = 0.3;
+const STOP = 0.25;
+const KEYSTONE = 0.4;
+/** A threshold's height, and how far it reaches either side of the socket's plane. */
+const THRESHOLD = [0.15, 0.35] as const;
 export type DoorwayKind = (typeof DOORWAY_KINDS)[number];
 
 export interface DoorwaySpec {
@@ -221,38 +230,62 @@ export interface DoorwaySpec {
 
 /**
  * A doorway across a socket's plane (z 0), the way through it along z (DUNGEONS.md, *Doorways*):
- * jambs, a sill and a lintel thick enough to reach into both parts it joins - so it covers where
- * their walls meet, whatever their shapes - and, for an arch, the lintel's underside rising in a
- * curve; for a door, its two leaves standing open into +z (drawn, not in the way: `visuals`).
+ * jambs and a sill thick enough to reach into both parts it joins - so it covers where their walls
+ * meet, whatever their shapes - and over the opening a lintel, or for an arch a ring of voussoirs
+ * on the jambs with a keystone at its crown; a stop round the opening at its middle, inset from it,
+ * and a threshold across it;
+ * for a door, its two leaves standing open into +z (drawn, not in the way: `visuals`).
  */
 export function doorwayGeometry(d: DoorwaySpec): { shapes: ShapeDesc[]; visuals: ShapeDesc[]; paths: Polyline[] } {
-  const w = d.width / 2, h = d.height;
-  const top = h + (d.kind === "arch" ? d.rise : 0) + d.lintel;
-  const shapes: ShapeDesc[] = [
-    boxShape(-w - d.jamb, -1, -d.back, -w, top, d.front),
-    boxShape(w, -1, -d.back, w + d.jamb, top, d.front),
-    boxShape(-w, -1, -d.back, w, 0, d.front),
-  ];
+  const w = d.width / 2, h = d.height, t = d.jamb;
+  // The sill, and on it a threshold across the opening at the stop - low enough to step over.
+  const shapes: ShapeDesc[] = [boxShape(-w, -1, -d.back, w, 0, d.front), boxShape(-w, 0, -THRESHOLD[1], w, THRESHOLD[0], THRESHOLD[1])];
+  /** A piece between two angles of a ring round (0, cy), from radius r0 to r1, z0 to z1 - plus any extra points. */
+  const ringPiece = (cy: number, a0: number, a1: number, r0: number, r1: number, z0: number, z1: number, extra: [number, number][] = []): ShapeDesc => {
+    const points: Vec3[] = [];
+    for (const z of [z0, z1]) {
+      for (const a of [a0, a1]) for (const r of [r0, r1]) points.push(vec3(Math.cos(a) * r, cy + Math.sin(a) * r, z));
+      for (const [x, y] of extra) points.push(vec3(x, y, z));
+    }
+    return { kind: "convex", points };
+  };
   if (d.kind === "arch") {
-    // A segmental arch springing at the opening's height: its underside a circle's arc through the
-    // jambs' tops and `rise` over the middle, in pieces each solid up to the top.
-    const r = (w * w + d.rise * d.rise) / (2 * d.rise), cy = h + d.rise - r;
-    const pieces = 8;
+    // Straight jambs to the springing, then a ring of voussoirs over the opening - its crown at the
+    // opening's height, `rise` over the springing - a keystone at the top standing proud of the rest.
+    const spring = h - d.rise;
+    const r = (w * w + d.rise * d.rise) / (2 * d.rise), cy = h - r;
+    const from = Math.atan2(spring - cy, w), to = Math.PI - from;
+    shapes.push(boxShape(-w - t, -1, -d.back, -w, spring, d.front), boxShape(w, -1, -d.back, w + t, spring, d.front));
+    const pieces = 9, key = Math.floor(pieces / 2);
     for (let i = 0; i < pieces; i++) {
-      const x0 = -w + (2 * w * i) / pieces, x1 = -w + (2 * w * (i + 1)) / pieces;
-      const y = (x: number): number => cy + Math.sqrt(Math.max(0, r * r - x * x));
-      const points: Vec3[] = [];
-      for (const z of [-d.backOver, d.frontOver]) points.push(vec3(x0, y(x0), z), vec3(x1, y(x1), z), vec3(x0, top, z), vec3(x1, top, z));
-      shapes.push({ kind: "convex", points });
+      const a0 = from + ((to - from) * i) / pieces, a1 = from + ((to - from) * (i + 1)) / pieces;
+      // The first and last reach down over their jamb's outer corner, so the ring sits on it whole.
+      const extra: [number, number][] = i === 0 ? [[w + t, spring]] : i === pieces - 1 ? [[-w - t, spring]] : [];
+      const proud = i === key ? KEYSTONE : 0;
+      shapes.push(ringPiece(cy, a0, a1, r, r + t + proud, -d.backOver, d.frontOver, extra));
+    }
+    // The inset: a stop round the opening at its middle, following the arch.
+    shapes.push(boxShape(-w, 0, -STOP, -w + INSET, spring, STOP), boxShape(w - INSET, 0, -STOP, w, spring, STOP));
+    for (let i = 0; i < pieces; i++) {
+      const a0 = from + ((to - from) * i) / pieces, a1 = from + ((to - from) * (i + 1)) / pieces;
+      shapes.push(ringPiece(cy, a0, a1, r - INSET, r, -STOP, STOP));
     }
   } else {
-    shapes.push(boxShape(-w, h, -d.backOver, w, top, d.frontOver));
+    shapes.push(
+      boxShape(-w - t, -1, -d.back, -w, h + d.lintel, d.front),
+      boxShape(w, -1, -d.back, w + t, h + d.lintel, d.front),
+      boxShape(-w, h, -d.backOver, w, h + d.lintel, d.frontOver),
+      // The inset: a stop round the opening at its middle.
+      boxShape(-w, 0, -STOP, -w + INSET, h, STOP),
+      boxShape(w - INSET, 0, -STOP, w, h, STOP),
+      boxShape(-w, h - INSET, -STOP, w, h, STOP),
+    );
   }
   const visuals: ShapeDesc[] = [];
   if (d.kind === "door") {
     // Two leaves swung wide, back along the walls of the part beyond.
-    const t = 0.15;
-    visuals.push(boxShape(-w, 0.05, d.front, -w + t, h - 0.1, d.front + w), boxShape(w - t, 0.05, d.front, w, h - 0.1, d.front + w));
+    const leaf = 0.15;
+    visuals.push(boxShape(-w + INSET, 0.05, STOP, -w + INSET + leaf, h - INSET - 0.05, STOP + w - INSET), boxShape(w - INSET - leaf, 0.05, STOP, w - INSET, h - INSET - 0.05, STOP + w - INSET));
   }
   return { shapes, visuals, paths: [[vec3(0, 0, -d.back), vec3(0, 0, d.front)]] };
 }

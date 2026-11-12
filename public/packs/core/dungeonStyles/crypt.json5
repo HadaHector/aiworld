@@ -31,7 +31,7 @@
     // A step's own top and front, their nosing bevelled, laid by the step.
     tread: { material: "stairTread" },
     riser: { material: "stairRiser" },
-    frame: { material: "dressedStone", tint: [0.78, 0.76, 0.72] },
+    frame: { material: "doorStone" },
     door: { material: "doorBoards", tint: [0.7, 0.62, 0.52] },
   },
   // Set across every join and cap, and at the mouth (DUNGEONS.md, *Doorways*).

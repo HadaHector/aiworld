@@ -304,7 +304,7 @@ function readPart(entry: Entry, rules: DungeonRules, issues: ContentIssue[]): Du
       front: 1,
       backOver: 1,
       frontOver: 1,
-      jamb: reader.optionalNumber(raw, "jamb", "doorway", 2, { min: 0.1 }),
+      jamb: reader.optionalNumber(raw, "jamb", "doorway", 1.5, { min: 0.1 }),
       lintel: reader.optionalNumber(raw, "lintel", "doorway", 1.5, { min: 0.1 }),
       rise: reader.optionalNumber(raw, "rise", "doorway", 1.5, { min: 0.1 }),
     };
@@ -408,7 +408,8 @@ function readPart(entry: Entry, rules: DungeonRules, issues: ContentIssue[]): Du
   const before = issues.length;
   if (shapes.length > 0 && issues.length === before) {
     // (A cap has no way through: nothing to measure, its sockets closed.)
-    if (paths.length > 0) for (const problem of checkPaths(shapes, paths, rules.minClear, sockets)) reader.fail("paths", problem);
+    // (A doorway may be narrower by its stop: the one exception to the rules' least way through.)
+    if (paths.length > 0 && !doorway) for (const problem of checkPaths(shapes, paths, rules.minClear, sockets)) reader.fail("paths", problem);
   }
   return part;
 }

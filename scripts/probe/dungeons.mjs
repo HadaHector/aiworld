@@ -240,7 +240,13 @@ for (const [n, layout] of layouts.entries()) {
   const walledUp = new Set(layout.joins.filter((k) => layout.parts[k.b].role === "cap").map((k) => k.doorway));
   const paths = layout.parts.flatMap((p, i) => (walledUp.has(i) ? [] : placedPaths(p)));
   const sockets = layout.joins.map((k) => placedSockets(layout, k.a)[k.socketA]).filter((s, i) => layout.parts[layout.joins[i].b].role !== "cap");
-  const problems = checkPaths([], paths, dungeons.rules.minClear, sockets, cw);
+  // (In a doorway the way may be narrower by its stop: the one exception.)
+  const doors = layout.parts.filter((p) => p.role === "doorway").map((p) => p.box);
+  const inDoorway = (at) => {
+    const { fx, fz } = worldToFrame(layout.frame, at.x, at.z);
+    return doors.some((b) => fx >= b.min.x - 0.6 && fx <= b.max.x + 0.6 && fz >= b.min.z - 0.6 && fz <= b.max.z + 0.6 && at.y >= b.min.y - 1 && at.y <= b.max.y);
+  };
+  const problems = checkPaths([], paths, dungeons.rules.minClear, sockets, cw, inDoorway);
   measured += paths.length;
   check(`layout ${n} assembled: 6 m wide and high everywhere`, problems.length === 0, problems.slice(0, 3).join("; "));
 }

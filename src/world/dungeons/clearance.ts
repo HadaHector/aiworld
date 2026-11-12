@@ -56,13 +56,16 @@ export function samplePath(line: Polyline): { at: Vec3; along: Vec3 }[] {
 
 /**
  * What is wrong with the way through a set of colliders along their walk lines, and at their
- * sockets: no floor, or under the minimum. Empty when it is all clear.
+ * sockets: no floor, or under the minimum - but where `exempt` says (a doorway). Empty when it is all
+ * clear.
  */
-export function checkPaths(shapes: readonly ShapeDesc[], paths: readonly Polyline[], minClear: [number, number], sockets: readonly { at: Vec3; facing: number }[] = [], world?: CollisionWorld): string[] {
+export function checkPaths(shapes: readonly ShapeDesc[], paths: readonly Polyline[], minClear: [number, number], sockets: readonly { at: Vec3; facing: number }[] = [], world?: CollisionWorld, exempt?: (at: Vec3) => boolean): string[] {
   const w = world ?? createCollisionWorld();
   if (!world) w.addBatch(shapes);
   const problems: string[] = [];
   const say = (where: string, s: ClearanceSample): void => {
+    // Where the way may be narrower: in a doorway (DUNGEONS.md, *Doorways*).
+    if (exempt?.(s.at)) return;
     const p = `(${s.at.x.toFixed(1)}, ${s.at.y.toFixed(1)}, ${s.at.z.toFixed(1)})`;
     if (!s.floor) problems.push(`${where} ${p}: no floor underfoot`);
     else if (s.width < minClear[0] - SLACK) problems.push(`${where} ${p}: only ${s.width.toFixed(2)} m wide, under ${minClear[0]}`);
