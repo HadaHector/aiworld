@@ -269,12 +269,23 @@ export function doorwayGeometry(d: DoorwaySpec): { shapes: ShapeDesc[]; visuals:
     const spring = h - d.rise;
     const r = (w * w + d.rise * d.rise) / (2 * d.rise), cy = h - r;
     const from = Math.atan2(spring - cy, w), to = Math.PI - from;
-    shapes.push(boxShape(-w - t, -1, -d.back, -w, spring, d.front), boxShape(w, -1, -d.back, w + t, spring, d.front));
+    // Each jamb's top a skewback: cut on the slope of the arch's first stone, from the opening's edge
+    // at the springing out to where the ring's outside meets the jamb's - so the ring sits on it
+    // whole and every stone of it is a whole block.
+    const outer = r + t;
+    const onRing: [number, number] = [Math.cos(from) * outer, cy + Math.sin(from) * outer];
+    const atSide = cy + Math.sqrt(Math.max(0, outer * outer - (w + t) * (w + t)));
+    for (const side of [1, -1]) {
+      const points: Vec3[] = [];
+      for (const z of [-d.back, d.front]) {
+        for (const [x, y] of [[w, -1], [w + t, -1], [w + t, Math.max(spring, atSide)], [onRing[0], onRing[1]], [w, spring]] as [number, number][]) points.push(vec3(side * x, y, z));
+      }
+      shapes.push({ kind: "convex", points });
+    }
     const pieces = 9, key = Math.floor(pieces / 2);
     for (let i = 0; i < pieces; i++) {
       const a0 = from + ((to - from) * i) / pieces, a1 = from + ((to - from) * (i + 1)) / pieces;
-      // The first and last reach down over their jamb's outer corner, so the ring sits on it whole.
-      const extra: [number, number][] = i === 0 ? [[w + t, spring]] : i === pieces - 1 ? [[-w - t, spring]] : [];
+      const extra: [number, number][] = [];
       // The keystone rises over the ring, and stands forward of it - but not on a side whose lintel
       // is kept short (a spiral's: its next lap passes over).
       const keystone = i === key;
