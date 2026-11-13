@@ -33,3 +33,5 @@ saves/
 
 # local work folder for graphics
 assets_work
+# Renders of `npm run shot` (SHOTS.md)
+shots/

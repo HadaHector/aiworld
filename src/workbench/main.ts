@@ -41,6 +41,7 @@ import { resolveAnimations, type AnimationClip } from "../character/animationDef
 import { ANIMATIONS, POSES, figureFor, paintedBody, type FigureOptions } from "./figurePreview";
 import { BEAST_PLAYS, beastAtlasImage, beastFacts, beastFigure, beastSummary, makeBeastFor, readBeastPlans, together, type BeastPreviewOptions } from "./beastPreview";
 import type { BeastDef } from "../character/beast/beastDef";
+import { installShot, setShotNames, shotMode } from "./shot";
 
 // ---------------------------------------------------------------------------------------------
 // Assets: every file of every pack, by "pack/folder/id".
@@ -286,6 +287,8 @@ engine.runRenderLoop(() => {
     return lastFeature;
   },
   preview: () => runPreview(),
+  // `?shot` (SHOTS.md): views and filmstrips of the stage, time held still - `npm run shot`.
+  ...(shotMode ? installShot({ engine, canvas: stageCanvas, stage: () => stage, status: () => stageStatus.textContent ?? "", folder: () => current?.folder ?? "" }) : {}),
 };
 
 // ---------------------------------------------------------------------------------------------
@@ -1217,6 +1220,7 @@ async function preview3d(token: number, asset: Asset, view: ViewDef, content: Wo
       if (token !== previewToken) return;
       // Left to right as the camera first looks: crude, standard, ornate.
       const figures = held.map((entry, i) => figureFor(inputs.race, painted[i], inputs.options, (1 - entry.column) * across, -entry.row * back));
+      setShotNames(held.map((entry) => `${entry.family} ${entry.tier}`));
       figure = (scene, shadows, height) => {
         let tallest = 0;
         for (const f of figures) tallest = Math.max(tallest, f(scene, shadows, height).height);
@@ -1283,6 +1287,7 @@ async function preview3d(token: number, asset: Asset, view: ViewDef, content: Wo
       return beastFigure(m, beastWith, x - lengths[i] / 2, 0);
     });
     figure = together(figures, total);
+    setShotNames(made.map((_, i) => `${defs[Math.floor(i / count)].id} ${seed + (i % count)}`));
     summary = beastSummary(view.id === "lineup" ? made.map(beastFacts) : [beastFacts(made[0])]);
   } else if (asset.folder === "dungeonParts") {
     // One part on its own, as a dungeon draws it: its faces, its torches lit (DUNGEONS.md).
