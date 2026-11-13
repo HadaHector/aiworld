@@ -8,6 +8,11 @@ reloads the page by itself.
 
 Files are [JSON5](https://json5.org): JSON plus comments, trailing commas and unquoted keys.
 
+To check a generated model without a browser - after changing a weapon, beast, prop or dungeon part -
+run `npm run shot -- <folder>/<id>` (for example `npm run shot -- weapons/sword`): a labelled PNG of it
+from fixed views in `shots/`, debug looks (`mode=backface,id,uv,overdraw,silhouette`), animation
+filmstrips (`t=0:1/12`) and a text report of mesh faults. See [SHOTS.md](../../SHOTS.md).
+
 To look at one asset on its own, open the **workbench** (`/workbench.html` on the dev server): pick
 a material, tree, bush or grass, edit its JSON and preview it - on a patch of ground under the
 game's own sun and sky, or as its baked textures. A biome is shown as maps of one area of it, alone
