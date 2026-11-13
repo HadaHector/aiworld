@@ -11,7 +11,8 @@ import { launchChrome } from "./cdp.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const args = process.argv.slice(2);
-const positional = args.filter((a) => !a.includes("="));
+const flags = new Set(["again"]);
+const positional = args.filter((a) => !a.includes("=") && !flags.has(a));
 const named = Object.fromEntries(args.filter((a) => a.includes("=")).map((a) => [a.slice(0, a.indexOf("=")), a.slice(a.indexOf("=") + 1)]));
 if (positional.length !== 1) {
   console.log("usage: npm run shot -- <asset, e.g. core/weapons/sword or weapons/sword> [view=front,side] [t=0:1:0.1] [mode=backface] ...");
@@ -83,6 +84,15 @@ try {
   }
   const title = `${asset}  seed ${named.seed ?? "default"}${named.mode ? `  mode ${named.mode}` : ""}${named.play ? `  play ${named.play}` : ""}`;
   const url = await chrome.eval(`__workbench.shoot(${JSON.stringify({ views, times, modes, width, height, title })})`);
+  console.log(await chrome.eval("__workbench.report()"));
+  // Same seed, same mesh: built again, hashed again.
+  if (args.includes("again")) {
+    const first = (await chrome.eval("__workbench.report()")).match(/hash (\w+)/)?.[1];
+    await chrome.eval("__workbench.preview()");
+    for (let i = 0; i < 600 && !(await chrome.eval("__workbench.shotReady()")); i++) await new Promise((r) => setTimeout(r, 300));
+    const second = (await chrome.eval("__workbench.report()")).match(/hash (\w+)/)?.[1];
+    console.log(`${first === second ? " " : "!"} built twice: hash ${first} then ${second}${first === second ? " - the same" : " - NOT the same"}`);
+  }
   mkdirSync(dirname(out), { recursive: true });
   writeFileSync(out, Buffer.from(url.slice(url.indexOf(",") + 1), "base64"));
   console.log(`${out}  (${((Date.now() - started) / 1000).toFixed(1)} s)`);

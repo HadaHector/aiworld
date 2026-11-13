@@ -3,9 +3,11 @@
 // from the console: `await __workbench.shoot({ views: ["front", "side"] })` returns a PNG data URL.
 // Only with `?shot` in the URL: the render loop stops and time stands still until a shot steps it.
 
-import { Color3, Matrix, MeshBuilder, StandardMaterial, Vector3, type AbstractMesh, type Engine, type Scene } from "@babylonjs/core";
+import { Color3, Matrix, MeshBuilder, StandardMaterial, Vector3, type AbstractMesh, type Engine, type Mesh, type Scene } from "@babylonjs/core";
 import type { Stage } from "./stage";
 import { DEBUG_MODES, setDebugMode } from "./debugMaterial";
+import { checkMesh, floatingPieces, hashArrays } from "./meshChecks";
+import { keepBuildingCpuCopies } from "../world/buildings/buildingMesh";
 
 /** Named views: the camera's angles round the model (Babylon's arc camera: alpha round the y axis,
  *  0 on +x, pi/2 on +z; beta down from straight above). Models face +z, as the stage frames them. */
@@ -36,6 +38,8 @@ export interface ShotSpec {
   width?: number;
   height?: number;
   title?: string;
+  /** Pictures only: no labels, no reference figure - for measuring. */
+  bare?: boolean;
 }
 
 interface ShotHost {
@@ -66,6 +70,8 @@ export function installShot(host: ShotHost): Record<string, unknown> {
   let clockStage: Stage | null = null;
   host.engine.getDeltaTime = () => delta;
   host.engine.stopRenderLoop();
+  // The report reads meshes back; buildings drop their CPU copy otherwise.
+  keepBuildingCpuCopies(true);
 
   const stepTo = (stage: Stage, seconds: number): void => {
     if (clockStage !== stage) {
@@ -108,7 +114,7 @@ export function installShot(host: ShotHost): Record<string, unknown> {
     const cellW = Math.floor(width / best.cols);
     const cellH = Math.floor((height - titleH) / best.rows);
 
-    const reference = addReference(scene, host.folder());
+    const reference = spec.bare ? null : addReference(scene, host.folder());
     // A mesh whose shader is still compiling is left out of a frame.
     await scene.whenReadyAsync();
     const camera = stage.camera;
@@ -149,6 +155,7 @@ export function installShot(host: ShotHost): Record<string, unknown> {
         const x = (i % best.cols) * cellW;
         const y = titleH + Math.floor(i / best.cols) * cellH;
         g.drawImage(host.canvas, x, y, cellW, cellH);
+        if (spec.bare) continue;
         g.strokeStyle = "#2a2f37";
         g.strokeRect(x + 0.5, y + 0.5, cellW - 1, cellH - 1);
         const mode = modes.length > 1 || cell.mode !== "lit" ? `  ${cell.mode}` : "";
@@ -177,12 +184,133 @@ export function installShot(host: ShotHost): Record<string, unknown> {
     return out.toDataURL("image/png");
   };
 
+  /** The text report (SHOTS.md): each figure's size and budget, each mesh's checks, the look's value. */
+  const report = async (): Promise<string> => {
+    const stage = host.stage();
+    if (!stage) throw new Error("No 3D stage on screen");
+    const subject = subjectMeshes(stage.scene);
+    const lines: string[] = [];
+    const flag = (bad: boolean, text: string): void => {
+      lines.push(`${bad ? "!" : " "} ${text}`);
+    };
+    const roots = [...rootsOf(subject).entries()];
+    const checked = new Map<unknown, ReturnType<typeof checkMesh>>();
+    const materials = new Set<unknown>();
+    let triangles = 0;
+    const hashed: ArrayLike<number>[] = [];
+    roots.forEach(([root, meshes], r) => {
+      const box = boundsOf(meshes)!;
+      const size = box.max.subtract(box.min);
+      const name = names[r] ?? root.name;
+      const tris = meshes.reduce((sum, m) => sum + m.getTotalIndices() / 3, 0);
+      lines.push(`${name}: ${size.x.toFixed(2)} x ${size.y.toFixed(2)} x ${size.z.toFixed(2)} m (w h d), ${tris} triangles, ${meshes.length} meshes`);
+      // Pieces of the figure that touch nothing else of it: every mesh posed as drawn, in world space.
+      const world = posedTogether(meshes);
+      const floating = floatingPieces(world.positions, world.indices);
+      for (const piece of floating.slice(0, 5)) flag(true, `  a piece of ${piece.triangles} tris floats ${piece.gap.toFixed(3)} m clear of the rest, at ${piece.at.map((v) => v.toFixed(2)).join(", ")}`);
+      if (floating.length > 5) flag(true, `  ...and ${floating.length - 5} more floating pieces`);
+      for (const mesh of meshes) {
+        materials.add(mesh.material);
+        const geometry = (mesh as unknown as { geometry?: unknown }).geometry ?? mesh;
+        if (checked.has(geometry)) continue;
+        const positions = mesh.getVerticesData("position");
+        const indices = mesh.getIndices();
+        if (!positions || !indices) continue;
+        hashed.push(positions, indices);
+        triangles += indices.length / 3;
+        const facts = checkMesh(positions, indices, mesh.getVerticesData("normal"));
+        checked.set(geometry, facts);
+        const layers = mesh.getVerticesData("layer");
+        const parts = layers ? `, ${new Set(Array.from(layers)).size} layers` : "";
+        lines.push(`  ${mesh.name}: ${facts.triangles} tris, ${facts.vertices} verts, ${facts.pieces} pieces${parts}`);
+        if (facts.degenerate) flag(true, `    ${facts.degenerate} degenerate triangles`);
+        if (facts.duplicates) flag(true, `    ${facts.duplicates} duplicate triangles (drawn twice)`);
+        if (facts.coplanar) flag(true, `    ${facts.coplanar} triangles overlap another in the same plane, same facing (z-fighting)`);
+        if (facts.flipped) flag(true, `    ${facts.flipped} triangles wound against their normals`);
+        if (facts.nonManifold) flag(true, `    ${facts.nonManifold} edges shared by 3+ triangles`);
+        if (facts.openEdges) lines.push(`      ${facts.openEdges} open edges (holes, or the rims of sheets and cut walls)`);
+      }
+    });
+    lines.push(`total: ${triangles} triangles in ${checked.size} distinct meshes, ${materials.size} materials; hash ${hashArrays(hashed)}`);
+
+    // The value: mean brightness of the lit model where its silhouette is, seen from the front.
+    const size = 200;
+    const url = await shoot({ views: ["front"], modes: ["lit", "silhouette"], width: size, height: size * 2 + 28, bare: true });
+    const image = new Image();
+    image.src = url;
+    await image.decode();
+    const canvas = document.createElement("canvas");
+    canvas.width = image.width;
+    canvas.height = image.height;
+    const g = canvas.getContext("2d")!;
+    g.drawImage(image, 0, 0);
+    const lit = g.getImageData(0, 28, size, size).data;
+    const mask = g.getImageData(0, 28 + size, size, size).data;
+    let sum = 0;
+    let count = 0;
+    for (let i = 0; i < mask.length; i += 4) {
+      if (mask[i] < 240 || mask[i + 1] < 240) continue;
+      sum += (0.2126 * lit[i] + 0.7152 * lit[i + 1] + 0.0722 * lit[i + 2]) / 255;
+      count++;
+    }
+    const value = count ? sum / count : 0;
+    flag(value < 0.15 || value > 0.85, `value (front, lit): ${value.toFixed(2)} mean over ${count} px${value < 0.15 ? " - near black" : value > 0.85 ? " - blown out" : ""}`);
+    return lines.join(String.fromCharCode(10));
+  };
+
   return {
     shoot,
+    report,
     /** A preview is up and done: what a shot waits for. */
     shotReady: () => !!host.stage() && host.status() === "",
     views: SHOT_VIEWS,
   };
+}
+
+/** Meshes as drawn - skinned ones posed - in world space, as one set of buffers. */
+function posedTogether(meshes: AbstractMesh[]): { positions: Float32Array; indices: Uint32Array } {
+  const positions: number[] = [];
+  const indices: number[] = [];
+  const v = new Vector3();
+  for (const mesh of meshes) {
+    const raw = mesh.getVerticesData("position");
+    const own = mesh.getIndices();
+    if (!raw || !own) continue;
+    const skinned = mesh.skeleton ? skin(mesh as Mesh, raw) : raw;
+    const matrix = mesh.computeWorldMatrix(true);
+    const base = positions.length / 3;
+    for (let i = 0; i < skinned.length; i += 3) {
+      Vector3.TransformCoordinatesFromFloatsToRef(skinned[i], skinned[i + 1], skinned[i + 2], matrix, v);
+      positions.push(v.x, v.y, v.z);
+    }
+    for (let i = 0; i < own.length; i++) indices.push(base + own[i]);
+  }
+  return { positions: Float32Array.from(positions), indices: Uint32Array.from(indices) };
+}
+
+/** A skinned mesh's points as posed: each a weighted sum of its bones' matrices (four influences). */
+function skin(mesh: Mesh, raw: ArrayLike<number>): Float32Array {
+  const bones = mesh.skeleton!.getTransformMatrices(mesh);
+  const which = mesh.getVerticesData("matricesIndices");
+  const weights = mesh.getVerticesData("matricesWeights");
+  const out = Float32Array.from(raw);
+  if (!which || !weights) return out;
+  for (let v = 0; v < raw.length / 3; v++) {
+    const x = raw[v * 3], y = raw[v * 3 + 1], z = raw[v * 3 + 2];
+    let ox = 0, oy = 0, oz = 0;
+    for (let k = 0; k < 4; k++) {
+      const w = weights[v * 4 + k];
+      if (!w) continue;
+      const m = which[v * 4 + k] * 16;
+      ox += w * (x * bones[m] + y * bones[m + 4] + z * bones[m + 8] + bones[m + 12]);
+      oy += w * (x * bones[m + 1] + y * bones[m + 5] + z * bones[m + 9] + bones[m + 13]);
+      oz += w * (x * bones[m + 2] + y * bones[m + 6] + z * bones[m + 10] + bones[m + 14]);
+    }
+    out[v * 3] = ox;
+    out[v * 3 + 1] = oy;
+    out[v * 3 + 2] = oz;
+  }
+  return out;
 }
 
 /** A plain 1.8 m figure beside things that have no body to give their scale. */
