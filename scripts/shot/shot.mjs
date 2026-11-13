@@ -37,12 +37,13 @@ const times = parseTimes(named.t);
 if (times.some((t) => !Number.isFinite(t))) throw new Error(`Bad t=${named.t}`);
 const views = (named.view ?? "").split(",").filter(Boolean);
 const [width, height] = (named.size ?? "1600x1000").split("x").map(Number);
-const out = resolve(root, named.out ?? `shots/${asset.replaceAll("/", "_")}${named.mode ? `_${named.mode}` : ""}.png`);
+const out = resolve(root, named.out ?? `shots/${asset.replaceAll("/", "_")}${named.mode ? `_${named.mode.replaceAll(",", "-")}` : ""}.png`);
 
 // The workbench's own URL: its view (tab) and options.
 // Grass off unless asked for: it hides where a thing meets the ground.
 const page = new URLSearchParams({ asset, shot: "1", grass: "off" });
-const reserved = new Set(["view", "t", "size", "out", "tab", "play"]);
+const reserved = new Set(["view", "t", "size", "out", "tab", "play", "mode"]);
+const modes = (named.mode ?? "").split(",").filter(Boolean);
 if (named.tab) page.set("view", named.tab);
 if (named.play) {
   page.set("animation", named.play);
@@ -81,7 +82,7 @@ try {
     readyFor = ready ? readyFor + 1 : 0;
   }
   const title = `${asset}  seed ${named.seed ?? "default"}${named.mode ? `  mode ${named.mode}` : ""}${named.play ? `  play ${named.play}` : ""}`;
-  const url = await chrome.eval(`__workbench.shoot(${JSON.stringify({ views, times, width, height, title })})`);
+  const url = await chrome.eval(`__workbench.shoot(${JSON.stringify({ views, times, modes, width, height, title })})`);
   mkdirSync(dirname(out), { recursive: true });
   writeFileSync(out, Buffer.from(url.slice(url.indexOf(",") + 1), "base64"));
   console.log(`${out}  (${((Date.now() - started) / 1000).toFixed(1)} s)`);

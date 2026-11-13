@@ -41,7 +41,8 @@ import { resolveAnimations, type AnimationClip } from "../character/animationDef
 import { ANIMATIONS, POSES, figureFor, paintedBody, type FigureOptions } from "./figurePreview";
 import { BEAST_PLAYS, beastAtlasImage, beastFacts, beastFigure, beastSummary, makeBeastFor, readBeastPlans, together, type BeastPreviewOptions } from "./beastPreview";
 import type { BeastDef } from "../character/beast/beastDef";
-import { installShot, setShotNames, shotMode } from "./shot";
+import { installShot, isSubject, setShotNames, shotMode } from "./shot";
+import { DEBUG_MODES, setDebugMode } from "./debugMaterial";
 
 // ---------------------------------------------------------------------------------------------
 // Assets: every file of every pack, by "pack/folder/id".
@@ -122,6 +123,8 @@ const DEFAULT_OPTIONS: Options = {
   variant: "0",
   lod: "near",
   wire: "off",
+  // A look for checking a model (debugMaterial.ts, SHOTS.md): backface, id, uv, ...
+  mode: "lit",
   channel: "color",
   tiles: "2",
   // A biome's maps: which area's roll, how much of it and how finely, and per view what to show.
@@ -288,7 +291,7 @@ engine.runRenderLoop(() => {
   },
   preview: () => runPreview(),
   // `?shot` (SHOTS.md): views and filmstrips of the stage, time held still - `npm run shot`.
-  ...(shotMode ? installShot({ engine, canvas: stageCanvas, stage: () => stage, status: () => stageStatus.textContent ?? "", folder: () => current?.folder ?? "" }) : {}),
+  ...(shotMode ? installShot({ engine, canvas: stageCanvas, stage: () => stage, status: () => stageStatus.textContent ?? "", folder: () => current?.folder ?? "", mode: () => options.mode }) : {}),
 };
 
 // ---------------------------------------------------------------------------------------------
@@ -680,6 +683,9 @@ function renderPreviewBar(): void {
     viewOptions.append(
       checkbox("Wireframe", "wire", () => {
         if (stage) stage.scene.forceWireframe = options.wire === "on";
+      }),
+      select("Mode", "mode", DEBUG_MODES.map((m): [string, string] => [m, m[0].toUpperCase() + m.slice(1)]), () => {
+        if (stage) setDebugMode(stage.scene, options.mode, isSubject);
       }),
     );
     if (current.folder === "props" || current.folder === "features") viewOptions.append(checkbox("Colliders", "colliders", rebuild));
@@ -1388,6 +1394,7 @@ async function preview3d(token: number, asset: Asset, view: ViewDef, content: Wo
   stage?.dispose();
   stage = built;
   built.scene.forceWireframe = options.wire === "on";
+  setDebugMode(built.scene, options.mode, isSubject);
   stageSubject = subject;
   urlCamera = undefined;
   // The URL follows the camera - written once it settles, not on every frame of a drag.

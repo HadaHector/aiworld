@@ -5,6 +5,7 @@
 
 import { Color3, Matrix, MeshBuilder, StandardMaterial, Vector3, type AbstractMesh, type Engine, type Scene } from "@babylonjs/core";
 import type { Stage } from "./stage";
+import { DEBUG_MODES, setDebugMode } from "./debugMaterial";
 
 /** Named views: the camera's angles round the model (Babylon's arc camera: alpha round the y axis,
  *  0 on +x, pi/2 on +z; beta down from straight above). Models face +z, as the stage frames them. */
@@ -30,6 +31,8 @@ export interface ShotSpec {
   views?: string[];
   /** Seconds since the preview was built - one, or several for a filmstrip of the first view. */
   times?: number[];
+  /** Looks (debugMaterial.ts), a row each - "lit" is the game's own. */
+  modes?: string[];
   width?: number;
   height?: number;
   title?: string;
@@ -42,6 +45,8 @@ interface ShotHost {
   /** The status line: empty once a preview is up. */
   status: () => string;
   folder: () => string;
+  /** The look the page shows by hand, put back after a shot. */
+  mode: () => string;
 }
 
 /** Names for the subject's figures in the order they were made (each a root mesh), set by a preview
@@ -84,13 +89,18 @@ export function installShot(host: ShotHost): Record<string, unknown> {
     for (const v of views) if (!VIEWS[v]) throw new Error(`No view "${v}" - one of ${SHOT_VIEWS.join(", ")}`);
     const times = spec.times?.length ? spec.times : [0];
     const film = times.length > 1;
-    const cells = film ? times.map((t) => ({ view: views[0], t })) : views.map((view) => ({ view, t: times[0] }));
+    const modes = spec.modes?.length ? spec.modes : [host.mode()];
+    for (const m of modes) if (!(DEBUG_MODES as readonly string[]).includes(m)) throw new Error(`No mode "${m}" - one of ${DEBUG_MODES.join(", ")}`);
+    const row = film ? times.map((t) => ({ view: views[0], t })) : views.map((view) => ({ view, t: times[0] }));
+    const cells = modes.flatMap((mode) => row.map((cell) => ({ ...cell, mode })));
     const width = spec.width ?? 1600;
     const height = spec.height ?? 1000;
     const titleH = 28;
     // Cells as near square as the image allows.
     let best = { cols: 1, rows: 1, size: 0 };
-    for (let cols = 1; cols <= cells.length; cols++) {
+    // Several looks: a row each.
+    if (modes.length > 1) best = { cols: row.length, rows: modes.length, size: 1 };
+    else for (let cols = 1; cols <= cells.length; cols++) {
       const rows = Math.ceil(cells.length / cols);
       const size = Math.min(width / cols, (height - titleH) / rows / 0.75);
       if (size > best.size) best = { cols, rows, size };
@@ -120,7 +130,13 @@ export function installShot(host: ShotHost): Record<string, unknown> {
     g.fillText(spec.title ?? "", 10, titleH / 2);
 
     try {
+      let look = "";
       for (const [i, cell] of cells.entries()) {
+        if (cell.mode !== look) {
+          look = cell.mode;
+          setDebugMode(scene, look, isLooked);
+          await scene.whenReadyAsync();
+        }
         stepTo(stage, cell.t);
         const subject = subjectMeshes(scene);
         const box = boundsOf(reference ? [...subject, reference] : subject);
@@ -135,10 +151,20 @@ export function installShot(host: ShotHost): Record<string, unknown> {
         g.drawImage(host.canvas, x, y, cellW, cellH);
         g.strokeStyle = "#2a2f37";
         g.strokeRect(x + 0.5, y + 0.5, cellW - 1, cellH - 1);
-        label(g, film ? `${cell.view}  t=${cell.t.toFixed(2)} s` : cell.view, x + 8, y + 14, "#ffd479");
+        const mode = modes.length > 1 || cell.mode !== "lit" ? `  ${cell.mode}` : "";
+        label(g, (film ? `${cell.view}  t=${cell.t.toFixed(2)} s` : cell.view) + mode, x + 8, y + 14, "#ffd479");
         if (!film || i === 0) labelFigures(g, stage, subject, x, y, cellW, cellH);
+        // The shape at icon size, as an inventory slot shows it.
+        if (cell.mode === "silhouette") {
+          const icon = 64;
+          const side = Math.min(cellW, cellH);
+          g.fillStyle = "#000";
+          g.fillRect(x + cellW - icon - 9, y + cellH - icon - 9, icon + 2, icon + 2);
+          g.drawImage(host.canvas, (cellW - side) / 2, (cellH - side) / 2, side, side, x + cellW - icon - 8, y + cellH - icon - 8, icon, icon);
+        }
       }
     } finally {
+      setDebugMode(scene, host.mode(), isLooked);
       reference?.dispose();
       camera.fov = savedFov;
       camera.alpha = saved.alpha;
@@ -172,8 +198,16 @@ function addReference(scene: Scene, folder: string): AbstractMesh | null {
   return figure;
 }
 
+/** Whether a mesh is the thing looked at, not the stage round it. */
+export function isSubject(mesh: AbstractMesh): boolean {
+  return mesh.getClassName() !== "LinesMesh" && !NOT_SUBJECT.test(mesh.name);
+}
+
+/** What a look (debugMaterial.ts) is put on: the subject, and the reference figure beside it. */
+const isLooked = (mesh: AbstractMesh): boolean => isSubject(mesh) || mesh.name === "shotFigure";
+
 function subjectMeshes(scene: Scene): AbstractMesh[] {
-  return scene.meshes.filter((mesh) => mesh.isEnabled() && mesh.isVisible && mesh.getTotalVertices() > 0 && mesh.getClassName() !== "LinesMesh" && !NOT_SUBJECT.test(mesh.name));
+  return scene.meshes.filter((mesh) => mesh.isEnabled() && mesh.isVisible && mesh.getTotalVertices() > 0 && isSubject(mesh));
 }
 
 function boundsOf(meshes: AbstractMesh[]): { min: Vector3; max: Vector3 } | null {
