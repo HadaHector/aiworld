@@ -1,5 +1,6 @@
 import { Vector3, type Engine } from "@babylonjs/core";
-import { createDimensionView, type DimensionView, type ViewSettings } from "../game/dimensionView";
+import { createDimensionView, DEFAULT_FOV, type DimensionView, type ViewSettings } from "../game/dimensionView";
+import { DEFAULT_AMBIENT_OCCLUSION } from "../world/lighting/ambientOcclusion";
 import { createBodyKit, createCharacterBody, type BodyKit, type BodyLook, type CharacterBody } from "../game/characterBody";
 import { DEFAULT_DRAW_DISTANCE } from "../world/world";
 import type { PackSet } from "../world/content/loadContent";
@@ -51,7 +52,7 @@ export async function createShowcase(options: {
   const { engine, canvas, rules } = options;
   const content = options.packSet.resolve(rules.dimension || null);
   const [cx, cz] = rules.camera.around;
-  const settings: ViewSettings = { drawDistance: DEFAULT_DRAW_DISTANCE, trees: true, grass: true, shadows: true, wireframe: false, timeOfDay: rules.hour };
+  const settings: ViewSettings = { drawDistance: DEFAULT_DRAW_DISTANCE, trees: true, grass: true, shadows: true, wireframe: false, ambientOcclusion: { ...DEFAULT_AMBIENT_OCCLUSION }, fov: DEFAULT_FOV, timeOfDay: rules.hour };
   const view = await createDimensionView({
     engine,
     canvas,

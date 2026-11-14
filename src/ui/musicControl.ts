@@ -17,10 +17,19 @@ const MUSIC_KEY = "aiworld.music.volume";
 const EFFECTS_KEY = "aiworld.effects.volume";
 const SHAKE_KEY = "aiworld.effects.shake";
 
-const toVolume = (p: number): number => (p / 100) ** 2;
+/** True under browser automation or with `?mute` in the address: the music starts muted. */
+function testRun(): boolean {
+  try {
+    return navigator.webdriver === true || new URLSearchParams(location.search).has("mute");
+  } catch {
+    return false;
+  }
+}
+
+const toVolume =(p: number): number => (p / 100) ** 2;
 
 /** A name that mutes on a click and a slider, its setting kept under `key`. */
-function volumeSlider(symbol: string, title: string, key: string, fallback: number, onVolume: (volume: number) => void): { elements: HTMLElement[]; volume: number } {
+function volumeSlider(symbol: string, title: string, key: string, fallback: number, onVolume: (volume: number) => void, quiet = false): { elements: HTMLElement[]; volume: number } {
   let percent = fallback;
   try {
     const kept = Number(localStorage.getItem(key));
@@ -28,6 +37,9 @@ function volumeSlider(symbol: string, title: string, key: string, fallback: numb
   } catch {
     // No storage: the default.
   }
+  // Quiet (an automated test run): starts muted without touching the kept setting; a click on the name unmutes.
+  const restore = percent || fallback;
+  if (quiet) percent = 0;
   const label = document.createElement("span");
   label.textContent = symbol;
   label.style.cssText = "cursor: pointer; white-space: nowrap;";
@@ -50,7 +62,8 @@ function volumeSlider(symbol: string, title: string, key: string, fallback: numb
       // No storage: kept for this visit.
     }
   };
-  let beforeMute = percent || fallback;
+  slider.value = String(percent);
+  let beforeMute = restore;
   slider.addEventListener("input", () => set(Number(slider.value)));
   label.addEventListener("click", () => {
     if (percent > 0) {
@@ -76,7 +89,7 @@ export function createMusicControl(onVolume: (volume: number) => void, onEffects
   const music = volumeSlider("Music", "Music", MUSIC_KEY, 60, (v) => {
     control.volume = v;
     onVolume(v);
-  });
+  }, testRun());
   const status = document.createElement("span");
   status.style.cssText = "color: #aab; min-width: 60px; font-size: 10px;";
   const effects = volumeSlider("Effects", "Effects", EFFECTS_KEY, 70, (v) => {

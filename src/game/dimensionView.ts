@@ -25,6 +25,10 @@ import { dock } from "../ui/hud";
 import { createCollisionPanel, type CollisionPanel } from "../debug/collisionPanel";
 import { createMemoryPanel } from "../debug/memoryPanel";
 import type { PlayerLights } from "../world/lighting/playerLights";
+import { AO_RADIUS_RANGE, AO_STRENGTH_RANGE, createAmbientOcclusion, type AmbientOcclusionSettings } from "../world/lighting/ambientOcclusion";
+
+/** The camera's vertical field of view, in degrees, before the player sets their own. */
+export const DEFAULT_FOV = 90;
 
 /** What the settings panel sets that outlasts a dimension: the next one starts with them. */
 export interface ViewSettings {
@@ -33,6 +37,9 @@ export interface ViewSettings {
   grass: boolean;
   shadows: boolean;
   wireframe: boolean;
+  ambientOcclusion: AmbientOcclusionSettings;
+  /** The camera's vertical field of view, in degrees. */
+  fov: number;
   /** The hour, so travelling does not jump the clock. */
   timeOfDay: number;
 }
@@ -200,6 +207,11 @@ export async function createDimensionView(options: DimensionViewOptions): Promis
   world.setShadowsEnabled(settings.shadows);
   world.setWireframe(settings.wireframe);
   world.setTimeOfDay(settings.timeOfDay);
+  const setFov = (degrees: number): void => {
+    camera.fov = spectator.camera.fov = (degrees * Math.PI) / 180;
+  };
+  setFov(settings.fov);
+  const ambientOcclusion = createAmbientOcclusion(scene, [camera, spectator.camera], settings.ambientOcclusion);
 
   // Keyed by the seed and everything the packs say, so a change to either never shows an old tile.
   const mapTiles = createMapTileCache(`${seed}-${hashString(JSON.stringify(content)).toString(36)}`, content.dimension.id, world.buildMapTile);
@@ -217,6 +229,31 @@ export async function createDimensionView(options: DimensionViewOptions): Promis
       { label: "Trees", initial: settings.trees, onChange: (on) => world.trees.setVisible((settings.trees = on)) },
       { label: "Grass", initial: settings.grass, onChange: (on) => world.grass.setVisible((settings.grass = on)) },
       { label: "Shadows", initial: settings.shadows, onChange: (on) => world.setShadowsEnabled((settings.shadows = on)) },
+      { label: "Ambient occlusion", initial: settings.ambientOcclusion.enabled, onChange: (on) => ambientOcclusion.setEnabled((settings.ambientOcclusion.enabled = on)) },
+    ],
+    sliders: [
+      {
+        label: "Field of view",
+        min: 30,
+        max: 110,
+        step: 1,
+        initial: settings.fov,
+        format: (value) => `${value}°`,
+        onChange: (value) => setFov((settings.fov = value)),
+      },
+      {
+        label: "AO strength",
+        ...AO_STRENGTH_RANGE,
+        initial: settings.ambientOcclusion.strength,
+        onChange: (value) => ambientOcclusion.setStrength((settings.ambientOcclusion.strength = value)),
+      },
+      {
+        label: "AO radius",
+        ...AO_RADIUS_RANGE,
+        initial: settings.ambientOcclusion.radius,
+        format: (value) => `${value} m`,
+        onChange: (value) => ambientOcclusion.setRadius((settings.ambientOcclusion.radius = value)),
+      },
     ],
   });
   dock(graphicsPanel.element, options.hud.graphics);
@@ -311,6 +348,7 @@ export async function createDimensionView(options: DimensionViewOptions): Promis
       mapTiles.dispose();
       settingsPanel.dispose();
       graphicsPanel.dispose();
+      ambientOcclusion.dispose();
       placeLabels.dispose();
       textureBrowser.dispose();
       statsPanel.dispose();

@@ -167,3 +167,9 @@ So rooms need space:
 ### Open areas
 
 Sometimes I design an open area on purpose. In that case, try to divide it gently into parts with carefully placed set pieces, so there is cover and the gameplay is more interesting.
+
+For scale: a hall of 28 m x 28 m (about 800 square metres), such as a boss hall, is not an open area. About 2000 square metres is a good starting point for an open area.
+
+### Cross-visibility without galleries
+
+Not every place needs galleries. In a crypt, for example, connecting rooms directly, without doors or corridors between them, can create the cross-visibility effect.

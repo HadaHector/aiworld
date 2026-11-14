@@ -13,7 +13,8 @@ import { createEntityMirror } from "./entityMirror";
 import { createEntityMeshes, type EntityMeshes } from "./entityMeshes";
 import { createEntityPanel } from "../debug/entityPanel";
 import { describeEntity } from "../sim/entityText";
-import { createDimensionView, type DimensionView, type ViewSettings } from "./dimensionView";
+import { createDimensionView, DEFAULT_FOV, type DimensionView, type ViewSettings } from "./dimensionView";
+import { DEFAULT_AMBIENT_OCCLUSION } from "../world/lighting/ambientOcclusion";
 import type { Minimap, MinimapSettings } from "../ui/minimap";
 import { describeMemory, memoryReport } from "../debug/memoryPanel";
 import type { PositionPanel, ViewSnapshot } from "../debug/positionPanel";
@@ -443,7 +444,7 @@ export async function startSession(page: Page, options: SessionOptions): Promise
   }
 
   // What the settings panel sets, kept from one dimension to the next.
-  const settings: ViewSettings = { drawDistance: DEFAULT_DRAW_DISTANCE, trees: true, grass: true, shadows: true, wireframe: false, timeOfDay: 12 };
+  const settings: ViewSettings = { drawDistance: DEFAULT_DRAW_DISTANCE, trees: true, grass: true, shadows: true, wireframe: false, ambientOcclusion: { ...DEFAULT_AMBIENT_OCCLUSION }, fov: DEFAULT_FOV, timeOfDay: 12 };
 
   // Windows opening and closing, the action bar's drags (FEEDBACK.md).
   queueMicrotask(() => feedback.watchScreens(hud.windows, hud.talk));
