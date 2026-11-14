@@ -29,7 +29,7 @@ export interface TrimSurroundings {
 
 /** A trim piece: which band it is, and its corners - a convex prism, eight points or more. */
 export interface TrimPiece {
-  kind: "plinth" | "cornice";
+  kind: "plinth" | "cornice" | "rib" | "pilaster";
   points: V3[];
 }
 
@@ -44,6 +44,8 @@ export interface WallTrims {
   minRun?: number;
   /** How far a face's foot or head may lie from the floor or ceiling and still meet it. */
   tolerance?: number;
+  /** Ribs across flat ceilings, pilasters under them (see `ribs`) - for a builder that has spans. */
+  ribs?: RibSpec;
 }
 
 const dot = (a: V3, b: V3): number => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
@@ -120,6 +122,70 @@ export function wallTrims(faces: readonly WallFace[], around: TrimSurroundings, 
       if (head && ceiling !== null && ceiling !== undefined && Math.abs(ceiling - high) < tolerance) {
         const c = spec.cornice;
         pieces.push({ kind: "cornice", points: bandPrism(head[0], head[1], f.n, high - Math.min(c.height, (high - low) / 3), high, c.proud, c.proud) });
+      }
+    }
+  }
+  return pieces;
+}
+
+/** A flat ceiling over a floor, square to the builder's own axes: x0-x1 by z0-z1, its underside at `y`. */
+export interface CeilingSpan {
+  x0: number;
+  z0: number;
+  x1: number;
+  z1: number;
+  y: number;
+  floor: number;
+}
+
+export interface RibSpec {
+  /** About how far apart the ribs stand along a span; each rib this wide and hanging this deep. */
+  spacing: number;
+  width: number;
+  depth: number;
+  /** Where a rib meets a wall, a pilaster carrying it down to the floor - this wide and proud. */
+  pilaster?: { width: number; proud: number };
+  /** A span narrower than this, either way, gets none. */
+  minSpan?: number;
+}
+
+/**
+ * Ribs across flat ceilings (GEOMETRY.md, 6.1: subdividing a surface along its run): across each
+ * span's shorter side, evenly along its longer, none at its ends (where walls are) - and under each
+ * end of a rib, where `solidAt` finds a wall (not an opening), a pilaster down to the floor.
+ */
+export function ribs(spans: readonly CeilingSpan[], solidAt: (p: V3) => boolean, spec: RibSpec): TrimPiece[] {
+  const pieces: TrimPiece[] = [];
+  const minSpan = spec.minSpan ?? 4;
+  const box = (x0: number, y0: number, z0: number, x1: number, y1: number, z1: number): V3[] => {
+    const plan: [number, number][] = [[x0, z0], [x1, z0], [x1, z1], [x0, z1]];
+    return [...plan.map(([x, z]): V3 => [x, y0, z]), ...plan.map(([x, z]): V3 => [x, y1, z])];
+  };
+  for (const s of spans) {
+    const dx = s.x1 - s.x0, dz = s.z1 - s.z0;
+    if (Math.min(dx, dz) < minSpan) continue;
+    // Along the longer side: ribs run across it.
+    const alongX = dx > dz;
+    const length = alongX ? dx : dz;
+    const count = Math.max(1, Math.round(length / spec.spacing));
+    const w = spec.width / 2;
+    for (let i = 1; i < count; i++) {
+      const at = (alongX ? s.x0 : s.z0) + (length * i) / count;
+      pieces.push({ kind: "rib", points: alongX ? box(at - w, s.y - spec.depth, s.z0, at + w, s.y, s.z1) : box(s.x0, s.y - spec.depth, at - w, s.x1, s.y, at + w) });
+      if (!spec.pilaster) continue;
+      const pw = spec.pilaster.width / 2, proud = spec.pilaster.proud;
+      const mid = (s.floor + s.y) / 2;
+      // Each end of the rib: a wall just past it, and the pilaster stands against it.
+      for (const side of [-1, 1]) {
+        if (alongX) {
+          const z = side < 0 ? s.z0 : s.z1;
+          if (!solidAt([at, mid, z - side * -0.3])) continue;
+          pieces.push({ kind: "pilaster", points: box(at - pw, s.floor, side < 0 ? z - 0.1 : z - proud, at + pw, s.y, side < 0 ? z + proud : z + 0.1) });
+        } else {
+          const x = side < 0 ? s.x0 : s.x1;
+          if (!solidAt([x - side * -0.3, mid, at])) continue;
+          pieces.push({ kind: "pilaster", points: box(side < 0 ? x - 0.1 : x - proud, s.floor, at - pw, side < 0 ? x + proud : x + 0.1, s.y, at + pw) });
+        }
       }
     }
   }

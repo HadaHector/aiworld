@@ -37,7 +37,12 @@
   },
   // Bands along the walls (DUNGEONS.md, *Trims*): a plinth a course high at their feet, a cornice
   // standing well out at their heads, where the vault springs.
-  trims: { plinth: { height: 0.75, proud: 0.15 }, cornice: { height: 0.75, proud: 0.3 } },
+  // Ribs across the flat vaults about every 7 m, each on a pilaster where it meets a wall.
+  trims: {
+    plinth: { height: 0.75, proud: 0.15 },
+    cornice: { height: 0.75, proud: 0.3 },
+    ribs: { spacing: 7, width: 0.9, depth: 0.5, pilaster: { width: 0.9, proud: 0.35 } },
+  },
   // Set across every join and cap, and at the mouth (DUNGEONS.md, *Doorways*).
   doorways: { tags: ["doorway"] },
   // How it is lit (DUNGEONS.md, *Light*): torches at most of the parts' light spots, and a little

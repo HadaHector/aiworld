@@ -1,7 +1,7 @@
 // Dungeon styles and parts from the packs (DUNGEONS.md): `dungeonStyles/`, `dungeonParts/` and
 // `rules/dungeons.json5`, read and checked - every part's walk lines 6 m wide and high on its own
 // colliders, every style able to start, grow and close.
-import type { TrimProfile, WallTrims } from "../architecture/trims";
+import type { RibSpec, TrimProfile, WallTrims } from "../architecture/trims";
 import { ContentError, Reader, type ContentIssue, type RawObject } from "../content/contentReader";
 import { DUNGEON_FOLDERS, orderPacks, parseFile, type PackSource } from "../content/resolveContent";
 import { vec3, type Aabb, type ShapeDesc, type Vec3 } from "../collision/index";
@@ -505,14 +505,27 @@ function readLook(reader: Reader, raw: RawObject): KitLook {
 }
 
 function readTrims(reader: Reader, raw: RawObject): WallTrims {
-  reader.onlyKeys(raw, "trims", ["plinth", "cornice"]);
+  reader.onlyKeys(raw, "trims", ["plinth", "cornice", "ribs"]);
   const band = (key: string): TrimProfile | undefined => {
     if (raw[key] === undefined) return undefined;
     const b = reader.object(raw[key], `trims.${key}`);
     reader.onlyKeys(b, `trims.${key}`, ["height", "proud"]);
     return { height: reader.number(b, "height", `trims.${key}`, { min: 0.05 }), proud: reader.number(b, "proud", `trims.${key}`, { min: 0.01 }) };
   };
-  return { plinth: band("plinth"), cornice: band("cornice") };
+  let ribs: RibSpec | undefined;
+  if (raw.ribs !== undefined) {
+    const r = reader.object(raw.ribs, "trims.ribs");
+    reader.onlyKeys(r, "trims.ribs", ["spacing", "width", "depth", "pilaster"]);
+    const p = r.pilaster === undefined ? undefined : reader.object(r.pilaster, "trims.ribs.pilaster");
+    if (p) reader.onlyKeys(p, "trims.ribs.pilaster", ["width", "proud"]);
+    ribs = {
+      spacing: reader.number(r, "spacing", "trims.ribs", { min: 1 }),
+      width: reader.number(r, "width", "trims.ribs", { min: 0.05 }),
+      depth: reader.number(r, "depth", "trims.ribs", { min: 0.05 }),
+      pilaster: p ? { width: reader.number(p, "width", "trims.ribs.pilaster", { min: 0.05 }), proud: reader.number(p, "proud", "trims.ribs.pilaster", { min: 0.01 }) } : undefined,
+    };
+  }
+  return { plinth: band("plinth"), cornice: band("cornice"), ribs };
 }
 
 function readLight(reader: Reader, raw: RawObject): DungeonLight {

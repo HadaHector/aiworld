@@ -3,7 +3,7 @@
 // solids covers it, dropped where it faces into the rock, and painted by what it is to the way
 // through: floor, wall, vault, step. Torches stand at its light spots. Pure: no engine, so it can
 // run anywhere the layout does.
-import { wallTrims, type WallFace, type WallTrims } from "../architecture/trims";
+import { ribs, wallTrims, type CeilingSpan, type WallFace, type WallTrims } from "../architecture/trims";
 import { convexHull, rotate, type ShapeDesc } from "../collision/index";
 import { ModelBuilder } from "../buildings/buildingGeometry";
 import type { BuildingModel, ModelLight, Paint } from "../buildings/buildingTypes";
@@ -488,7 +488,7 @@ const trimmedParts = new WeakMap<DungeonPartDef, Map<WallTrims, { solids: Solid[
  */
 function trimmedShape(part: DungeonPartDef, trims: WallTrims): { solids: Solid[]; faces: Face[]; kinds: SolidKind[] } {
   const plain = partShape(part);
-  if (part.doorway || part.paths.length === 0 || (!trims.plinth && !trims.cornice)) return plain;
+  if (part.doorway || part.paths.length === 0 || (!trims.plinth && !trims.cornice && !trims.ribs)) return plain;
   let byStyle = trimmedParts.get(part);
   if (!byStyle) trimmedParts.set(part, (byStyle = new Map()));
   const known = byStyle.get(trims);
@@ -498,6 +498,25 @@ function trimmedShape(part: DungeonPartDef, trims: WallTrims): { solids: Solid[]
   // The walls: upright faces of solids that are wall (not a step, a railing, a pillar drawn whole).
   const walls: WallFace[] = plain.faces.filter((f) => Math.abs(f.n[1]) < 0.1 && !kinds[f.solid].tread && !kinds[f.solid].plain && !whole.has(f.solid));
   const pieces = wallTrims(walls, { floorUnder: (p) => floorUnder(solids, p), ceilingOver: (p) => ceilingOver(solids, p) }, trims);
+  if (trims.ribs) {
+    // The flat ceilings: each box seen from under it, as far as it is seen.
+    const spans: CeilingSpan[] = [];
+    solids.forEach((s, i) => {
+      if (!s.box) return;
+      const under = plain.faces.filter((f) => f.solid === i && f.n[1] < -0.9);
+      if (under.length === 0) return;
+      let x0 = Infinity, z0 = Infinity, x1 = -Infinity, z1 = -Infinity;
+      for (const f of under) for (const c of f.corners) {
+        x0 = Math.min(x0, c[0]); x1 = Math.max(x1, c[0]);
+        z0 = Math.min(z0, c[2]); z1 = Math.max(z1, c[2]);
+      }
+      const y = s.box.min[1];
+      const floor = floorUnder(solids, [(x0 + x1) / 2, y - 0.1, (z0 + z1) / 2]);
+      if (floor === null || y - floor < 4) return;
+      spans.push({ x0, z0, x1, z1, y, floor });
+    });
+    pieces.push(...ribs(spans, (p) => solids.some((s) => inside(s, p)), trims.ribs));
+  }
   const all = [...solids, ...pieces.map((t) => hullSolid(t.points))];
   const faces = partFaces(all, false, all.map((_, i) => i), whole);
   const kindsAll = solidKinds(all.length, faces);
