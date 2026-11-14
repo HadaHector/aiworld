@@ -1,20 +1,21 @@
 // A rotunda: a round crossing 45 m across and 14 m to the vault where four galleries meet, a ring
 // of eight round pillars 12.5 m out from its middle setting off the floor within them - the ways
-// through pass between them.
+// through pass between them. Each way in is a short straight tunnel, from the doorway to the round
+// wall's inside, so the wall curving away leaves no gap beside the opening.
 {
   tags: ["crypt", "junction", "large"],
   weight: 1,
   stage: [0.1, 1],
   sockets: [
     { at: [0, 0, 0], facing: 180, type: "cryptLarge", size: [10, 8], reach: 1.5 },
-    { at: [0, 0, 47], facing: 0, type: "cryptLarge", size: [10, 8], reach: 1.5 },
-    { at: [-23.5, 0, 23.5], facing: 270, type: "cryptLarge", size: [10, 8], reach: 1.5 },
-    { at: [23.5, 0, 23.5], facing: 90, type: "cryptLarge", size: [10, 8], reach: 1.5 },
+    { at: [0, 0, 52], facing: 0, type: "cryptLarge", size: [10, 8], reach: 1.5 },
+    { at: [-26, 0, 26], facing: 270, type: "cryptLarge", size: [10, 8], reach: 1.5 },
+    { at: [26, 0, 26], facing: 90, type: "cryptLarge", size: [10, 8], reach: 1.5 },
   ],
   colliders: [
     {
       rotunda: {
-        centre: [0, 23.5],
+        centre: [0, 26],
         radius: 22.5,
         height: 14,
         doors: [
@@ -27,14 +28,20 @@
         pillars: { facings: [30, 60, 120, 150, 210, 240, 300, 330], ring: 12.5, radius: 1.5 },
       },
     },
+    // The four ways in: tunnels from each doorway in to the round wall's inside (4 m: where a 10 m
+    // opening meets a 22.5 m radius) - floor, walls (plain: no step for being thin), vault.
+    { box: [-6, -1, 0, 6, 0, 4] }, { box: [-6, -1, 0, -5, 9, 4], plain: true }, { box: [5, -1, 0, 6, 9, 4], plain: true }, { box: [-6, 8, 0, 6, 9, 4] },
+    { box: [-6, -1, 48, 6, 0, 52] }, { box: [-6, -1, 48, -5, 9, 52], plain: true }, { box: [5, -1, 48, 6, 9, 52], plain: true }, { box: [-6, 8, 48, 6, 9, 52] },
+    { box: [-26, -1, 20, -22, 0, 32] }, { box: [-26, -1, 20, -22, 9, 21], plain: true }, { box: [-26, -1, 31, -22, 9, 32], plain: true }, { box: [-26, 8, 20, -22, 9, 32] },
+    { box: [22, -1, 20, 26, 0, 32] }, { box: [22, -1, 20, 26, 9, 21], plain: true }, { box: [22, -1, 31, 26, 9, 32], plain: true }, { box: [22, 8, 20, 26, 9, 32] },
   ],
   paths: [
-    [[0, 0, 0], [0, 0, 23.5], [0, 0, 47]],
-    [[-23.5, 0, 23.5], [0, 0, 23.5], [23.5, 0, 23.5]],
+    [[0, 0, 0], [0, 0, 26], [0, 0, 52]],
+    [[-26, 0, 26], [0, 0, 26], [26, 0, 26]],
   ],
   spots: {
-    spawns: [[0, 0, 23.5], [-8, 0, 15], [8, 0, 32], [-16, 0, 35]],
-    light: [[-15.5, 7, 8], [15.5, 7, 8], [-15.5, 7, 39], [15.5, 7, 39]],
-    quest: [[5, 0, 18]],
+    spawns: [[0, 0, 26], [-8, 0, 17.5], [8, 0, 34.5], [-16, 0, 37.5]],
+    light: [[-15.5, 7, 10.5], [15.5, 7, 10.5], [-15.5, 7, 41.5], [15.5, 7, 41.5]],
+    quest: [[5, 0, 20.5]],
   },
 }
