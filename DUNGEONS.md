@@ -603,7 +603,8 @@ Each leaves the game working: dev server with `?play`, `npm run probe`, `npm run
 
 Later, each its own step: traps, levers, secret rooms and simple puzzles; more styles (mine, ruin
 cellars, sewer, lair of a beast); per-party copies of large dungeons; dungeons in the headless
-server's own worker.
+server's own worker; the torches' and candles' flames as particles (src/particles) in place of the
+crossed slivers the props draw now.
 
 ## Done means
 
