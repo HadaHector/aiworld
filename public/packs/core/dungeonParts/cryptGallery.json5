@@ -1,0 +1,18 @@
+// A gallery: the crypt's large way, 10 m wide and 8 m high inside, 16 m long - its main ways run
+// in these, its narrow corridors off them (DUNGEONS.md, *Two sizes of way*).
+{
+  tags: ["crypt", "corridor", "large"],
+  weight: 3,
+  sockets: [
+    { at: [0, 0, 0], facing: 180, type: "cryptLarge", size: [10, 8] },
+    { at: [0, 0, 16], facing: 0, type: "cryptLarge", size: [10, 8] },
+  ],
+  colliders: [
+    { box: [-6, -1, 0, 6, 0, 16] },   // floor
+    { box: [-6, -1, 0, -5, 9, 16] },  // walls
+    { box: [5, -1, 0, 6, 9, 16] },
+    { box: [-6, 8, 0, 6, 9, 16] },    // vault
+  ],
+  paths: [[[0, 0, 0], [0, 0, 16]]],
+  spots: { light: [[-4.4, 5, 8], [4.4, 5, 8]], spawns: [[0, 0, 8]] },
+}

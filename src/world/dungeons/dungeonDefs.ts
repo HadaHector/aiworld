@@ -320,8 +320,11 @@ function readPart(entry: Entry, rules: DungeonRules, issues: ContentIssue[]): Du
   reader.optionalArray(obj, "colliders", "").forEach((value, i) => {
     const path = `colliders[${i}]`;
     const raw = reader.object(value, path);
-    const keys = Object.keys(raw);
+    // `plain`: wall all over, whatever its shape - a railing, narrow on top, is no step.
+    const keys = Object.keys(raw).filter((k) => k !== "plain");
     if (keys.length !== 1) { reader.fail(path, "expected one of { box }, { stair }, { spiral }"); return; }
+    if (raw.plain !== undefined && raw.box === undefined) reader.fail(`${path}.plain`, "only a box can be plain");
+    if (raw.box !== undefined && reader.boolean(raw, "plain", path, false)) plain.push(shapes.length);
     try {
       if (raw.box !== undefined) {
         const b = raw.box;

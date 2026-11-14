@@ -1,0 +1,24 @@
+// Where four galleries cross: 14 m square inside its corner piers, 8 m high, a large way out of
+// every side.
+{
+  tags: ["crypt", "junction", "large"],
+  weight: 2,
+  sockets: [
+    { at: [0, 0, 0], facing: 180, type: "cryptLarge", size: [10, 8] },
+    { at: [0, 0, 14], facing: 0, type: "cryptLarge", size: [10, 8] },
+    { at: [-7, 0, 7], facing: 270, type: "cryptLarge", size: [10, 8] },
+    { at: [7, 0, 7], facing: 90, type: "cryptLarge", size: [10, 8] },
+  ],
+  colliders: [
+    { box: [-7, -1, 0, 7, 0, 14] },   // floor
+    { box: [-7, 8, 0, 7, 9, 14] },    // vault
+    // The corner piers between the four ways.
+    { box: [-7, -1, 0, -5, 9, 2] }, { box: [5, -1, 0, 7, 9, 2] },
+    { box: [-7, -1, 12, -5, 9, 14] }, { box: [5, -1, 12, 7, 9, 14] },
+  ],
+  paths: [
+    [[0, 0, 0], [0, 0, 7], [0, 0, 14]],
+    [[-7, 0, 7], [0, 0, 7], [7, 0, 7]],
+  ],
+  spots: { light: [[-4.5, 5, 2.6], [4.5, 5, 11.4]], spawns: [[0, 0, 7]] },
+}

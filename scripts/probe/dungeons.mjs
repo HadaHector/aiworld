@@ -191,6 +191,12 @@ for (let n = 0; n < COUNT; n++) {
       }
     }
   }
+  // Every route ends in a room: no way (corridor, stair, junction) is reached by its way in alone.
+  layout.parts.forEach((p, i) => {
+    if (p.role !== "way") return;
+    const leads = layout.joins.filter((k) => (k.a === i || k.b === i) && layout.parts[k.a === i ? k.b : k.a].role !== "cap").length;
+    check(`${where}: ${p.part.id} leads on`, leads >= 2, `${leads} way through`);
+  });
   // Reachable, the boss there, the lock between the entrance and the boss, the key on this side of it.
   const d = graphDistances(layout.parts.length, layout.joins, 0);
   check(`${where}: everything reachable`, d.every((x, i) => x < Infinity || layout.parts[i].role === "doorway"));
@@ -242,13 +248,30 @@ for (const [n, layout] of layouts.entries()) {
   const sockets = layout.joins.map((k) => placedSockets(layout, k.a)[k.socketA]).filter((s, i) => layout.parts[layout.joins[i].b].role !== "cap");
   // (In a doorway the way may be narrower by its stop: the one exception.)
   const doors = layout.parts.filter((p) => p.role === "doorway").map((p) => p.box);
+  // (Nor up against a walled-up opening: its cap stands in it, a wall's depth in.)
+  const walled = layout.joins.filter((k) => layout.parts[k.b].role === "cap").map((k) => placedSockets(layout, k.a)[k.socketA].at);
   const inDoorway = (at) => {
+    if (walled.some((w) => Math.hypot(w.x - at.x, w.z - at.z) < 1.2 && Math.abs(w.y - at.y) < 1)) return true;
     const { fx, fz } = worldToFrame(layout.frame, at.x, at.z);
     return doors.some((b) => fx >= b.min.x - 0.6 && fx <= b.max.x + 0.6 && fz >= b.min.z - 0.6 && fz <= b.max.z + 0.6 && at.y >= b.min.y - 1 && at.y <= b.max.y);
   };
   const problems = checkPaths([], paths, dungeons.rules.minClear, sockets, cw, inDoorway);
   measured += paths.length;
-  check(`layout ${n} assembled: 6 m wide and high everywhere`, problems.length === 0, problems.slice(0, 3).join("; "));
+  // Where it is too narrow, which parts stand within 3.2 m across the way (the culprit among them).
+  let near = "";
+  if (problems.length > 0) {
+    const m = /\((-?[\d.]+), (-?[\d.]+), (-?[\d.]+)\)/.exec(problems[0]);
+    if (m) {
+      const at = vec3(Number(m[1]), Number(m[2]), Number(m[3]));
+      near = layout.parts.flatMap((p, i) => {
+        const pw = createCollisionWorld();
+        pw.addBatch(placedShapes(p));
+        const hits = [0, 1, 2, 3, 4, 5, 6, 7].some((k) => { const a = (k * Math.PI) / 4; return pw.raycast(vec3(at.x, at.y + 1, at.z), vec3(Math.sin(a), 0, Math.cos(a)), 3.2); }) || pw.raycast(vec3(at.x, at.y + 0.3, at.z), vec3(0, 1, 0), 6);
+        return hits ? [`${i}:${p.part.id}/${p.role}`] : [];
+      }).join(" ");
+    }
+  }
+  check(`layout ${n} assembled: 6 m wide and high everywhere`, problems.length === 0, problems.slice(0, 3).join("; ") + (near ? `; near ${near}` : ""));
 }
 console.log(`assembled: ${layouts.length} layouts, ${measured} walk lines measured in place with every part's colliders, ${(performance.now() - t0).toFixed(0)} ms`);
 

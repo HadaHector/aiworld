@@ -493,22 +493,91 @@ function attemptLayout(content: DungeonContent, style: DungeonStyleDef, size: st
     key = best;
   }
 
-  // 6. Close every open socket.
-  for (const s of [...open, ...spare, ...toCap]) {
+  // 6. Every route ends in a room (DUNGEONS.md, *The generator*): a way - a corridor, a stair, a
+  // junction - that only its own way in reaches is given a room at one of its open ends, where
+  // one fits.
+  const ending = [...open, ...spare, ...toCap];
+  const roomParts = style.parts.filter((p) => p.room);
+  const leadsOn = (i: number): number => joins.filter((j) => (j.a === i || j.b === i) && placed[j.a === i ? j.b : j.a].role !== "cap").length;
+  for (let k = 0; k < ending.length; k++) {
+    const s = ending[k];
+    if (placed[s.part].role !== "way" || leadsOn(s.part) > 1) continue;
+    const made = grow(s, roomParts, () => "room", []);
+    if (typeof made === "string") continue;
+    rooms++;
+    ending.splice(k--, 1);
+    const before = open.length;
+    openSocketsOf(made, true);
+    ending.push(...open.splice(before));
+  }
+
+  // 7. Close every open socket.
+  const cap = (s: WorldSocket): string | null => {
     const options = style.caps.flatMap((part) => part.sockets.map((c, entry) => ({ part, entry, c })).filter(({ c }) => socketsJoin(rules, c.type, s.def.type)));
     const option = pickWeighted(options, (o) => o.part.weight, random);
     if (!option) return `nothing caps a "${s.def.type}" socket`;
     placed.push({ ...placeAt(option.part, option.entry, s, frame), parent: s.part, role: "cap" });
     joins.push({ a: s.part, socketA: s.socket, b: placed.length - 1, socketB: option.entry, loop: false, doorway: -1 });
+    return null;
+  };
+  for (const s of ending) {
+    const problem = cap(s);
+    if (problem) return problem;
   }
 
-  // 7. Check: everything reachable, every part deep enough.
+  // 8. A way still leading nowhere is taken back - and the way before it, if that leads nowhere
+  // then - and where it was joined, walled up.
+  const removed = new Set<number>();
+  const live = (i: number): boolean => !removed.has(i);
+  for (let again = true; again; ) {
+    again = false;
+    for (let i = 1; i < placed.length; i++) {
+      if (!live(i) || placed[i].role !== "way") continue;
+      const ways = joins.filter((j) => (j.a === i || j.b === i) && live(j.a) && live(j.b));
+      const real = ways.filter((j) => placed[j.a === i ? j.b : j.a].role !== "cap");
+      if (real.length > 1) continue;
+      removed.add(i);
+      for (const j of ways) if (j !== real[0]) removed.add(j.a === i ? j.b : j.a);
+      const back = real[0];
+      if (back) {
+        const [part, socket] = back.a === i ? [back.b, back.socketB] : [back.a, back.socketA];
+        if (back.loop || part === boss) return "a way into the boss's hall or a loop leads nowhere";
+        const problem = cap(socketOf(placed, part, socket));
+        if (problem) return problem;
+      }
+      again = true;
+    }
+  }
+  if (removed.size > 0) {
+    // The parts kept, renumbered; the joins between them.
+    const index = new Map<number, number>();
+    const kept = placed.filter((_, i) => live(i));
+    placed.forEach((_, i) => live(i) && index.set(i, index.size));
+    const lockJoin = lock >= 0 ? joins[lock] : null;
+    const keptJoins = joins.filter((j) => live(j.a) && live(j.b));
+    if (lockJoin && !keptJoins.includes(lockJoin)) return "the lock's way was taken back";
+    if (key >= 0 && !live(key)) return "the key's room was taken back";
+    for (const j of keptJoins) {
+      j.a = index.get(j.a)!;
+      j.b = index.get(j.b)!;
+    }
+    for (const p of kept) if (p.parent >= 0) p.parent = index.get(p.parent) ?? -1;
+    placed.length = 0;
+    placed.push(...kept);
+    joins.length = 0;
+    joins.push(...keptJoins);
+    if (lockJoin) lock = joins.indexOf(lockJoin);
+    if (key >= 0) key = index.get(key)!;
+    if (boss >= 0) boss = index.get(boss)!;
+  }
+
+  // 9. Check: everything reachable, every part deep enough.
   const reach = graphDistances(placed.length, joins, 0);
   if (reach.some((d) => d === Infinity)) return "a part cannot be reached";
   for (let i = 1; i < placed.length; i++) {
     if (placed[i].role !== "cap" && coverOver(placed[i].box, true) < style.cover - 1e-6) return `${placed[i].part.id} too near the surface, between the samples`;
   }
-  // 8. A doorway across every join, and at the mouth (DUNGEONS.md, *Doorways*) - rolled on their
+  // 10. A doorway across every join, and at the mouth (DUNGEONS.md, *Doorways*) - rolled on their
   // own, so a style's doorways never change the layout itself.
   const doorRandom = mulberry32(deriveSeed(seed, 0xd00a));
   /** A doorway across socket `s`, reaching its `reach` into its part and `front` into the one beyond. */

@@ -487,7 +487,9 @@ function socketFaces(solids: readonly Solid[], part: DungeonPartDef): Face[] {
       const a = (socket.facing * Math.PI) / 180;
       const out: V = [Math.sin(a), 0, Math.cos(a)];
       const at: V = [socket.at.x, socket.at.y, socket.at.z];
-      return dot(f.n, out) > 0.99 && f.corners.every((c) => Math.abs(dot(sub(c, at), out)) < 1e-3);
+      // Facing out through it, in its plane or out to a wall's depth in front of it (a cap stands in
+      // the opening it closes).
+      return dot(f.n, out) > 0.99 && f.corners.every((c) => dot(sub(c, at), out) > -1e-3 && dot(sub(c, at), out) < 1.5);
     }),
   );
 }

@@ -2,5 +2,6 @@
 {
   tags: ["crypt", "cap"],
   sockets: [{ at: [0, 0, 0], facing: 180, type: "crypt", size: [6, 6] }],
-  colliders: [{ box: [-4, -1, 0, 4, 7, 1] }],
+  // Inside the opening (toward the part it closes, -z), within its wall: never out where a neighbour may be.
+  colliders: [{ box: [-4, -1, -1, 4, 7, 0] }],
 }

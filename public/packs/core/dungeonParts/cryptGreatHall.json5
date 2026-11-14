@@ -1,0 +1,35 @@
+// A great hall: 24 m by 30 m inside and 12 m to the vault, a gallery in and out at its ends and a
+// narrow corridor off each side - where the large ways and the small ones meet.
+{
+  tags: ["crypt", "hall", "large"],
+  room: true,
+  weight: 2,
+  stage: [0.1, 1],
+  sockets: [
+    { at: [0, 0, 0], facing: 180, type: "cryptLarge", size: [10, 8], reach: 1.5 },
+    { at: [0, 0, 32], facing: 0, type: "cryptLarge", size: [10, 8], reach: 1.5 },
+    { at: [-13, 0, 10], facing: 270, type: "crypt", size: [6, 6], reach: 1.5 },
+    { at: [13, 0, 22], facing: 90, type: "crypt", size: [6, 6], reach: 1.5 },
+  ],
+  colliders: [
+    { box: [-13, -1, 0, 13, 0, 32] },   // floor
+    { box: [-13, 12, 0, 13, 13, 32] },  // vault
+    // South and north walls, each with its gallery's opening and the lintel over it.
+    { box: [-13, -1, 0, -5, 13, 1] }, { box: [5, -1, 0, 13, 13, 1] }, { box: [-5, 8, 0, 5, 13, 1] },
+    { box: [-13, -1, 31, -5, 13, 32] }, { box: [5, -1, 31, 13, 13, 32] }, { box: [-5, 8, 31, 5, 13, 32] },
+    // West and east, each with a corridor's opening.
+    { box: [-13, -1, 0, -12, 13, 7] }, { box: [-13, -1, 13, -12, 13, 32] }, { box: [-13, 6, 7, -12, 13, 13] },
+    { box: [12, -1, 0, 13, 13, 19] }, { box: [12, -1, 25, 13, 13, 32] }, { box: [12, 6, 19, 13, 13, 25] },
+  ],
+  paths: [
+    [[0, 0, 0], [0, 0, 10], [0, 0, 22], [0, 0, 32]],
+    [[-13, 0, 10], [0, 0, 10]],
+    [[0, 0, 22], [13, 0, 22]],
+  ],
+  spots: {
+    spawns: [[-6, 0, 8], [6, 0, 16], [-5, 0, 25]],
+    chest: [[-10, 0, 29]],
+    light: [[-11, 7, 3], [11, 7, 3], [-11, 7, 29], [11, 7, 29], [-11.4, 7, 20], [11.4, 7, 12]],
+    quest: [[8, 0, 27]],
+  },
+}

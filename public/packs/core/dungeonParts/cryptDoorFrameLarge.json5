@@ -1,0 +1,7 @@
+// A gallery's doorway: a square frame of door stone, as the small one but 10 m wide and 8 m high.
+{
+  tags: ["crypt", "doorway"],
+  weight: 3,
+  sockets: [{ at: [0, 0, 0], facing: 180, type: "cryptLarge", size: [10, 8] }],
+  doorway: { kind: "frame", jamb: 2, lintel: 1.5 },
+}

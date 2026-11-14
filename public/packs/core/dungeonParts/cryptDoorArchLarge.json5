@@ -1,0 +1,7 @@
+// A gallery's doorway under an arch: straight jambs to 5.5 m, the arch rising 2.5 m over them.
+{
+  tags: ["crypt", "doorway"],
+  weight: 2,
+  sockets: [{ at: [0, 0, 0], facing: 180, type: "cryptLarge", size: [10, 8] }],
+  doorway: { kind: "arch", rise: 2.5, jamb: 2 },
+}

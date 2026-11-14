@@ -1,0 +1,21 @@
+// A grand stair down a gallery: 10 m wide, 24 steps of 0.25 m, 6 m down over 18 m between two
+// landings.
+{
+  tags: ["crypt", "stair", "descent", "large"],
+  weight: 2,
+  sockets: [
+    { at: [0, 0, 0], facing: 180, type: "cryptLarge", size: [10, 8] },
+    { at: [0, -6, 24], facing: 0, type: "cryptLarge", size: [10, 8] },
+  ],
+  colliders: [
+    { box: [-5, -1, 0, 5, 0, 3] },
+    { stair: { from: [0, 0, 3], to: [0, -6, 21], width: 10, ceiling: 8 } },
+    { box: [-5, -7, 21, 5, -6, 24] },
+    { box: [-6, -8, 0, -5, 9, 24] },
+    { box: [5, -8, 0, 6, 9, 24] },
+    { box: [-6, 8, 0, 6, 9, 3] },
+    { box: [-6, 2, 21, 6, 3, 24] },
+  ],
+  paths: [[[0, 0, 0], [0, 0, 3]], [[0, -6, 21], [0, -6, 24]]],
+  spots: { light: [[-4.4, 1, 12], [4.4, -2, 16]] },
+}
