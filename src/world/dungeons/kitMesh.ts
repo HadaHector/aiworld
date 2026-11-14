@@ -5,6 +5,7 @@
 // run anywhere the layout does.
 import { arcosolia, loculi, type DentSurroundings, type Niche } from "../architecture/dents";
 import { TOMB_SIZE, type TombDef } from "./tombs";
+import { ledgers } from "../architecture/fill";
 import { copings, ribs, wallTrims, type TrimPiece, type CeilingSpan, type StairEdge, type WallFace, type WallTrims } from "../architecture/trims";
 import { convexHull, rotate, type ShapeDesc } from "../collision/index";
 import { ModelBuilder } from "../buildings/buildingGeometry";
@@ -501,7 +502,7 @@ const trimmedParts = new WeakMap<DungeonPartDef, Map<WallTrims, { solids: Solid[
  */
 export function trimmedShape(part: DungeonPartDef, trims: WallTrims): { solids: Solid[]; faces: Face[]; kinds: SolidKind[] } {
   const plain = partShape(part);
-  if (part.doorway || part.paths.length === 0 || (!trims.plinth && !trims.cornice && !trims.ribs && !trims.coping && !trims.loculi && !part.tombs?.length)) return plain;
+  if (part.doorway || part.paths.length === 0 || (!trims.plinth && !trims.cornice && !trims.ribs && !trims.coping && !trims.loculi && !trims.ledgers && !part.tombs?.length)) return plain;
   let byStyle = trimmedParts.get(part);
   if (!byStyle) trimmedParts.set(part, (byStyle = new Map()));
   const known = byStyle.get(trims);
@@ -650,6 +651,33 @@ export function trimmedShape(part: DungeonPartDef, trims: WallTrims): { solids: 
       faces.push({ n: front.n, corners: front.corners, solid: all.length });
       all.push(slab);
       kindsAll.push({ tread: false, floor: false, roof: false, top: -Infinity, trim: true, niche: true });
+    }
+  }
+  // Ledger stones in a room's floors (src/world/architecture/fill.ts), clear of what stands on
+  // them - its walls, its trims and niches' frames, its tombs: drawn only, a few centimetres proud,
+  // every side but the underside (they stand in the floor).
+  if (trims.ledgers && part.room) {
+    const floors = plain.faces.filter((f) => f.n[1] > 0.99 && !kinds[f.solid].plain && !whole.has(f.solid));
+    const standing = all.slice(solids.length).map((s) => ({ lo: s.lo, hi: s.hi }));
+    const tombBoxes = (part.tombs ?? []).map((t) => {
+      const [len, wid, high] = TOMB_SIZE;
+      const hx = (t.yaw === 90 ? len : wid) / 2 + 0.1, hz = (t.yaw === 90 ? wid : len) / 2 + 0.1;
+      return { lo: [t.at.x - hx, t.at.y, t.at.z - hz] as V, hi: [t.at.x + hx, t.at.y + high, t.at.z + hz] as V };
+    });
+    const overlaps = (b: { lo: V; hi: V }, lo: V, hi: V) => b.hi[0] > lo[0] && b.lo[0] < hi[0] && b.hi[1] > lo[1] && b.lo[1] < hi[1] && b.hi[2] > lo[2] && b.lo[2] < hi[2];
+    const b = part.bounds;
+    const slabs = ledgers(floors, { x0: b.min.x, z0: b.min.z, x1: b.max.x, z1: b.max.z }, {
+      blocked: (lo, hi) => built.some((s) => overlaps(s, lo, hi)) || standing.some((s) => overlaps(s, lo, hi)) || tombBoxes.some((s) => overlaps(s, lo, hi)),
+      random: (p) => {
+        const h = Math.sin(p[0] * 12.9898 + p[1] * 78.233 + p[2] * 37.719) * 43758.5453;
+        return h - Math.floor(h);
+      },
+    }, trims.ledgers);
+    for (const points of slabs) {
+      const solid = hullSolid(points);
+      for (const side of solid.sides) if (side.n[1] > -0.9) faces.push({ n: side.n, corners: side.corners, solid: all.length });
+      all.push(solid);
+      kindsAll.push({ tread: false, floor: false, roof: false, top: -Infinity, trim: true, tomb: true });
     }
   }
   // Its tombs, drawn as they are, every side but their undersides: they stand on the floor, and a

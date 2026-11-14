@@ -1,6 +1,7 @@
 // Dungeon styles and parts from the packs (DUNGEONS.md): `dungeonStyles/`, `dungeonParts/` and
 // `rules/dungeons.json5`, read and checked - every part's walk lines 6 m wide and high on its own
 // colliders, every style able to start, grow and close.
+import type { LedgerSpec } from "../architecture/fill";
 import type { ArcosoliaSpec, LoculiSpec } from "../architecture/dents";
 import type { CopingSpec, RibSpec, TrimProfile, WallTrims } from "../architecture/trims";
 import { ContentError, Reader, type ContentIssue, type RawObject } from "../content/contentReader";
@@ -528,7 +529,7 @@ function readLook(reader: Reader, raw: RawObject): KitLook {
 }
 
 function readTrims(reader: Reader, raw: RawObject): WallTrims {
-  reader.onlyKeys(raw, "trims", ["plinth", "cornice", "ribs", "coping", "loculi", "arcosolia"]);
+  reader.onlyKeys(raw, "trims", ["plinth", "cornice", "ribs", "coping", "loculi", "arcosolia", "ledgers"]);
   const band = (key: string): TrimProfile | undefined => {
     if (raw[key] === undefined) return undefined;
     const b = reader.object(raw[key], `trims.${key}`);
@@ -596,7 +597,21 @@ function readTrims(reader: Reader, raw: RawObject): WallTrims {
       tomb: tb ? { height: reader.number(tb, "height", `${at}.tomb`, { min: 0.1 }), inset: reader.number(tb, "inset", `${at}.tomb`, { min: 0 }), lid: reader.number(tb, "lid", `${at}.tomb`, { min: 0.02 }), lidOut: reader.number(tb, "lidOut", `${at}.tomb`, { min: 0 }) } : undefined,
     };
   }
-  return { plinth: band("plinth"), cornice: band("cornice"), ribs, coping, loculi, arcosolia };
+  let ledgers: LedgerSpec | undefined;
+  if (raw.ledgers !== undefined) {
+    const at = "trims.ledgers";
+    const l = reader.object(raw.ledgers, at);
+    reader.onlyKeys(l, at, ["length", "width", "gap", "fill", "margin", "proud"]);
+    ledgers = {
+      length: reader.number(l, "length", at, { min: 0.3 }),
+      width: reader.number(l, "width", at, { min: 0.3 }),
+      gap: reader.number(l, "gap", at, { min: 0 }),
+      fill: reader.optionalNumber(l, "fill", at, 0.4, { min: 0, max: 1 }),
+      margin: reader.optionalNumber(l, "margin", at, 1, { min: 0 }),
+      proud: reader.optionalNumber(l, "proud", at, 0.04, { min: 0.005 }),
+    };
+  }
+  return { plinth: band("plinth"), cornice: band("cornice"), ribs, coping, loculi, arcosolia, ledgers };
 }
 
 function readLight(reader: Reader, raw: RawObject): DungeonLight {
