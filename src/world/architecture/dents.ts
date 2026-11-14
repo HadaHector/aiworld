@@ -51,6 +51,29 @@ export interface Niche {
   slab: V3[] | null;
   frame: { points: V3[]; grain: V3 }[];
   contents?: V3[][];
+  /** A breach (see `breaches`): its inside the wall's core, and the blocks fallen out of it lying
+   *  heaped at its foot (convex chunks). */
+  breach?: boolean;
+  fallen?: V3[][];
+}
+
+/** A course of a wall's stone, as its texture lays it (twice life size): a breach steps by it. */
+const COURSE = 0.6;
+
+export interface BreachSpec {
+  /** The share of the walls it could be in that have one; at most this many a part. */
+  share: number;
+  count: number;
+  /** Its size (each rolled between), how deep it goes into the wall, and its foot over the floor. */
+  width: [number, number];
+  height: [number, number];
+  depth: number;
+  above: number;
+  /** Kept this far from the face's ends and from the head of the wall. */
+  margin: number;
+  /** How many blocks lie fallen at its foot, and how big each is (rolled between). */
+  stones: [number, number];
+  size: [number, number];
 }
 
 export interface ArcosoliaSpec {
@@ -68,6 +91,89 @@ export interface ArcosoliaSpec {
   /** The tomb chest lying in it: this high, this far in from the opening's sides; its lid this
    *  thick, reaching this far out of the wall. */
   tomb?: { height: number; inset: number; lid: number; lidOut: number };
+}
+
+/**
+ * Breaches: where blocks have come away from a wall - a shallow ragged hollow in it, the wall's core
+ * showing, and the blocks lying heaped at its foot, widest at the wall and thinning across the
+ * floor. On faces standing on the floor and long and high enough, `share` of them (at most `count`),
+ * wherever the hollow lies inside the face with wall behind it and nothing is in the way of it or
+ * of its heap (`blocked` asked of the hollow, `heapBlocked` of the floor its heap lies on).
+ */
+export function breaches(faces: readonly WallFace[], around: DentSurroundings, spec: BreachSpec, heapBlocked: (lo: V3, hi: V3) => boolean): Niche[] {
+  const out: Niche[] = [];
+  let placed = 0;
+  for (const f of faces) {
+    if (placed >= spec.count) break;
+    if (Math.abs(f.n[1]) > 0.1) continue;
+    const p = facePlane(f);
+    const mid0 = (p.u0 + p.u1) / 2;
+    if (around.random(p.at(mid0, p.low + 0.5, 0.3)) >= spec.share) continue;
+    // Its own rolls, from where it is.
+    let seed = Math.floor(around.random(p.at(mid0, p.low + 1, 0.7)) * 2 ** 31) | 1;
+    const roll = (): number => {
+      seed = (seed * 48271) % 2147483647;
+      return seed / 2147483647;
+    };
+    const between = ([a, b]: [number, number]): number => a + (b - a) * roll();
+    const w = between(spec.width), h = between(spec.height);
+    if (p.u1 - p.u0 < w + 2 * spec.margin) continue;
+    const floor = around.floorUnder(p.at(mid0, p.low + 0.05, 0.05));
+    if (floor === null || Math.abs(floor - p.low) > 0.1) continue;
+    const y0 = floor + spec.above;
+    if (y0 + h > p.high - spec.margin) continue;
+    const mid = p.u0 + spec.margin + w / 2 + roll() * (p.u1 - p.u0 - 2 * spec.margin - w);
+    // The hollow: course by course, whole blocks gone - widest and deepest in its middle courses,
+    // each course's run and depth its own - so its edge steps as the coursing does.
+    const rows = Math.max(2, Math.round(h / COURSE));
+    const course = h / rows;
+    const runs: { a0: number; a1: number; y0: number; y1: number; deep: number }[] = [];
+    for (let k = 0; k < rows; k++) {
+      const shape = Math.sin((Math.PI * (k + 0.5)) / rows) ** 0.7;
+      const half = (w / 2) * (0.45 + 0.55 * shape) * (0.85 + 0.25 * roll());
+      const centre = Math.min(mid + w / 2 - half, Math.max(mid - w / 2 + half, mid + (roll() - 0.5) * 0.3 * w));
+      runs.push({ a0: centre - half, a1: centre + half, y0: y0 + k * course, y1: y0 + (k + 1) * course, deep: spec.depth * (0.55 + 0.45 * shape) * (0.8 + 0.25 * roll()) });
+    }
+    if (!runs.every((r) => [[r.a0, r.y0], [r.a1, r.y0], [r.a1, r.y1], [r.a0, r.y1]].every(([a, y]) => insideOutline(p.outline, a, y)))) continue;
+    if (!runs.every((r) => [[r.a0, r.y0], [r.a1, r.y1], [(r.a0 + r.a1) / 2, (r.y0 + r.y1) / 2]].every(([a, y]) => around.solidAt(p.at(a, y, -r.deep - 0.15))))) continue;
+    const reach = 1.8;
+    const box = (pts: V3[], y0b: number, y1b: number): [V3, V3] => [[Math.min(...pts.map((q) => q[0])), y0b, Math.min(...pts.map((q) => q[2]))], [Math.max(...pts.map((q) => q[0])), y1b, Math.max(...pts.map((q) => q[2]))]];
+    const hollow = box([p.at(mid - w / 2, y0), p.at(mid + w / 2, y0), p.at(mid - w / 2, y0, -spec.depth), p.at(mid + w / 2, y0, -spec.depth)], y0, y0 + h);
+    if (around.blocked(...hollow)) continue;
+    const heap = box([p.at(mid - w * 0.75, floor), p.at(mid + w * 0.75, floor), p.at(mid - w * 0.75, floor, reach), p.at(mid + w * 0.75, floor, reach)], floor, floor + 1);
+    if (heapBlocked(...heap)) continue;
+    // The heap: blocks out from the wall's foot, the biggest nearest it, piled where it is highest.
+    const fallen: V3[][] = [];
+    const count = Math.round(between(spec.stones));
+    for (let k = 0; k < count; k++) {
+      const du = (roll() + roll() - 1) * w * 0.7;
+      const dv = 0.2 + Math.abs(roll() + roll() - 1) * reach;
+      const near = Math.max(0, 1 - dv / reach);
+      const s = spec.size[0] + (spec.size[1] - spec.size[0]) * (0.35 + 0.65 * near) * (0.6 + 0.4 * roll());
+      const pile = 0.9 * Math.max(0, 1 - (du / (w * 0.75)) ** 2 - (dv / reach) ** 2);
+      const half: V3 = [s * (0.45 + 0.25 * roll()), s * (0.25 + 0.15 * roll()), s * (0.35 + 0.2 * roll())];
+      const v = Math.max(dv, half[2] + 0.18);
+      const centre = p.at(mid + du, floor + Math.max(half[1] * 0.8, pile - half[1]), v);
+      // Turned about the upright and tipped a little, each corner knocked about.
+      const yaw = roll() * Math.PI, tip = (roll() - 0.5) * 0.6, lean = (roll() - 0.5) * 0.6;
+      const piece: V3[] = [];
+      for (const sx of [-1, 1]) for (const sy of [-1, 1]) for (const sz of [-1, 1]) {
+        let x = sx * half[0] * (0.75 + 0.25 * roll()), y = sy * half[1] * (0.75 + 0.25 * roll()), z = sz * half[2] * (0.75 + 0.25 * roll());
+        [y, z] = [y * Math.cos(tip) - z * Math.sin(tip), y * Math.sin(tip) + z * Math.cos(tip)];
+        [x, y] = [x * Math.cos(lean) - y * Math.sin(lean), x * Math.sin(lean) + y * Math.cos(lean)];
+        [x, z] = [x * Math.cos(yaw) - z * Math.sin(yaw), x * Math.sin(yaw) + z * Math.cos(yaw)];
+        piece.push([centre[0] + x, Math.max(floor - 0.05, centre[1] + y), centre[2] + z]);
+      }
+      fallen.push(piece);
+    }
+    // Each course a hollow of its own, the heap with the lowest.
+    runs.forEach((r, k) => {
+      const points = [0, -r.deep].flatMap((o) => [p.at(r.a0, r.y0, o), p.at(r.a1, r.y0, o), p.at(r.a1, r.y1, o), p.at(r.a0, r.y1, o)]);
+      out.push({ points, n: f.n, slab: null, frame: [], breach: true, fallen: k === 0 ? fallen : undefined });
+    });
+    placed++;
+  }
+  return out;
 }
 
 /** A wall face worked in its own plane: along the wall (u), up (y), and back to the world. */

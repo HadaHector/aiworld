@@ -3,7 +3,7 @@
 // solids covers it, dropped where it faces into the rock, and painted by what it is to the way
 // through: floor, wall, vault, step. Torches stand at its light spots. Pure: no engine, so it can
 // run anywhere the layout does.
-import { arcosolia, loculi, type DentSurroundings, type Niche } from "../architecture/dents";
+import { arcosolia, loculi, type DentSurroundings, type Niche, breaches } from "../architecture/dents";
 import { BENCH_SIZE, TOMB_SIZE, ledgerCorners, type BenchDef, type LedgerDef, type TombDef } from "./tombs";
 import { copings, ribs, wallTrims, type TrimPiece, type CeilingSpan, type StairEdge, type WallFace, type WallTrims } from "../architecture/trims";
 import { convexHull, rotate, type ShapeDesc } from "../collision/index";
@@ -36,6 +36,8 @@ interface Face {
   solid: number;
   /** The inside of a dent cut into it (a niche): drawn as wall, whatever way it faces. */
   dent?: boolean;
+  /** A breach's inside: the wall's core. */
+  breach?: boolean;
 }
 
 /** One part drawn: its model and the lights at its fixtures, in the layout's frame (y the world's). */
@@ -568,7 +570,7 @@ export function trimmedShape(part: DungeonPartDef, trims: WallTrims): { solids: 
   // out of the walls' faces once those are known, their insides drawn in the style's niche paint,
   // the sealed ones' slabs drawn in their openings (drawn only: the walls collide whole).
   let niches: Niche[] = [];
-  if (trims.loculi || trims.arcosolia) {
+  if (trims.loculi || trims.arcosolia || trims.breaches) {
     const lights = part.spots.light ?? [];
     const near = (lo: V, hi: V, p: V, across: number, up: number): boolean =>
       p[0] > lo[0] - across && p[0] < hi[0] + across && p[2] > lo[2] - across && p[2] < hi[2] + across && p[1] > lo[1] - up && p[1] < hi[1] + up;
@@ -601,7 +603,26 @@ export function trimmedShape(part: DungeonPartDef, trims: WallTrims): { solids: 
     // loculus down into it (those over it stand clear).
     const benchBoxes = (part.benches ?? []).map((b) => benchBox(b));
     const overBench = (lo: V, hi: V, all: boolean) => benchBoxes.some((b) => b.hi[0] > lo[0] - 0.3 && b.lo[0] < hi[0] + 0.3 && b.hi[2] > lo[2] - 0.3 && b.lo[2] < hi[2] + 0.3 && (all || lo[1] < b.hi[1]));
-    const aroundGreat: DentSurroundings = { ...around, blocked: (lo, hi) => around.blocked(lo, hi) || overBench(lo, hi, true) };
+    // Breaches first: where they are, the rest keep clear - and they keep clear of the benches, the
+    // tombs, the ledger stones and the ways through (their heaps lie on the floor).
+    const standing = [...(part.tombs ?? []).map((t) => tombBox(t)), ...(part.ledgers ?? []).map((l) => ({ lo: [l.at.x - 1.7, l.at.y, l.at.z - 1.7] as V, hi: [l.at.x + 1.7, l.at.y + 0.5, l.at.z + 1.7] as V }))];
+    const ways = part.paths.flatMap((line) => line.slice(1).map((q, i): [V, V] => [[line[i].x, line[i].y, line[i].z], [q.x, q.y, q.z]]));
+    const nearWay = (lo: V, hi: V): boolean => ways.some(([a, b]) => {
+      // The way's nearest to the box, in plan, at the box's height.
+      if (Math.max(a[1], b[1]) < lo[1] - 1 || Math.min(a[1], b[1]) > hi[1] + 1) return false;
+      for (let k = 0; k <= 10; k++) {
+        const x = a[0] + ((b[0] - a[0]) * k) / 10, z = a[2] + ((b[2] - a[2]) * k) / 10;
+        if (x > lo[0] - 1.2 && x < hi[0] + 1.2 && z > lo[2] - 1.2 && z < hi[2] + 1.2) return true;
+      }
+      return false;
+    });
+    const overlaps = (lo: V, hi: V, b: { lo: V; hi: V }) => b.hi[0] > lo[0] - 0.3 && b.lo[0] < hi[0] + 0.3 && b.hi[2] > lo[2] - 0.3 && b.lo[2] < hi[2] + 0.3 && b.hi[1] > lo[1] - 0.3 && b.lo[1] < hi[1] + 0.3;
+    const fallenWalls = trims.breaches
+      ? breaches(walls, around, part.room ? trims.breaches : { ...trims.breaches, count: Math.min(1, trims.breaches.count) }, (lo, hi) => overBench(lo, hi, true) || nearWay(lo, hi) || standing.some((b) => overlaps(lo, hi, b)))
+      : [];
+    const breachBoxes = fallenWalls.map((n) => hullSolid(n.points));
+    const offBreach = (lo: V, hi: V) => breachBoxes.some((b) => overlaps(lo, hi, { lo: b.lo, hi: b.hi }));
+    const aroundGreat: DentSurroundings = { ...around, blocked: (lo, hi) => around.blocked(lo, hi) || overBench(lo, hi, true) || offBreach(lo, hi) };
     // The arcosolia first, as centrepieces; the loculi round them, kept clear of them.
     // A room gets its share; a way (a corridor) one at most, on a short wall - an alcove's back.
     const great = !trims.arcosolia
@@ -611,9 +632,9 @@ export function trimmedShape(part: DungeonPartDef, trims: WallTrims): { solids: 
         : arcosolia(walls.filter((f) => wallRun(f) <= ALCOVE_WALL), aroundGreat, { ...trims.arcosolia, count: Math.min(1, trims.arcosolia.count) });
     const greatBoxes = great.map((n) => hullSolid([...n.points, ...n.frame.flatMap((b) => b.points)]));
     const small = trims.loculi
-      ? loculi(walls, { ...around, blocked: (lo, hi) => around.blocked(lo, hi) || overBench(lo, hi, false) || greatBoxes.some((b) => b.hi[0] > lo[0] - 0.3 && b.lo[0] < hi[0] + 0.3 && b.hi[1] > lo[1] - 0.3 && b.lo[1] < hi[1] + 0.3 && b.hi[2] > lo[2] - 0.3 && b.lo[2] < hi[2] + 0.3) }, trims.loculi)
+      ? loculi(walls, { ...around, blocked: (lo, hi) => around.blocked(lo, hi) || overBench(lo, hi, false) || offBreach(lo, hi) || greatBoxes.some((b) => b.hi[0] > lo[0] - 0.3 && b.lo[0] < hi[0] + 0.3 && b.hi[1] > lo[1] - 0.3 && b.lo[1] < hi[1] + 0.3 && b.hi[2] > lo[2] - 0.3 && b.lo[2] < hi[2] + 0.3) }, trims.loculi)
       : [];
-    niches = [...great, ...small];
+    niches = [...great, ...small, ...fallenWalls];
   }
   const all = [...solids, ...pieces.map((t) => hullSolid(t.points))];
   let faces = partFaces(all, false, all.map((_, i) => i), whole);
@@ -656,7 +677,19 @@ function drawNiches(niches: readonly Niche[], cut: Face[], all: Solid[], kindsAl
       const c = side.corners.reduce((m, p): V => [m[0] + p[0] / side.corners.length, m[1] + p[1] / side.corners.length, m[2] + p[2] / side.corners.length], [0, 0, 0]);
       const owner = all.findIndex((s) => inside(s, [c[0] + side.n[0] * 0.1, c[1] + side.n[1] * 0.1, c[2] + side.n[2] * 0.1]));
       if (owner < 0) continue;
-      faces.push({ n: [-side.n[0], -side.n[1], -side.n[2]], corners: side.corners, solid: owner, dent: true });
+      // Less where it opens into another hollow (a breach's courses, one over the next).
+      const others = voids.filter((o) => o !== v);
+      const inner: Face = { n: [-side.n[0], -side.n[1], -side.n[2]], corners: side.corners, solid: owner, dent: true, breach: niches[voids.indexOf(v)].breach };
+      faces.push(...(others.length > 0 ? cutFace(inner, others, [-COVER]) : [inner]));
+    }
+  }
+  // A breach's fallen blocks, drawn but for their undersides, in the wall's own stone.
+  for (const niche of niches) {
+    for (const piece of niche.fallen ?? []) {
+      const solid = hullSolid(piece);
+      for (const side of solid.sides) if (side.n[1] > -0.9) faces.push({ n: side.n, corners: side.corners, solid: all.length });
+      all.push(solid);
+      kindsAll.push({ tread: false, floor: false, roof: false, top: -Infinity });
     }
   }
   // Each frame's bars drawn as they are, uncut (they only stand in front of the wall): the face,
@@ -798,6 +831,13 @@ const BENCH_BEVEL = 0.05;
 const BENCH_BLOCK = 0.6;
 const BENCH_BLOCK_IN = 0.35;
 const BENCH_BLOCK_BACK = 0.12;
+
+/** A tomb's box in the room's frame. */
+function tombBox(t: TombDef): { lo: V; hi: V } {
+  const [len, wid, high] = TOMB_SIZE;
+  const hx = (t.yaw === 90 ? len : wid) / 2 + 0.2, hz = (t.yaw === 90 ? wid : len) / 2 + 0.2;
+  return { lo: [t.at.x - hx, t.at.y, t.at.z - hz], hi: [t.at.x + hx, t.at.y + high, t.at.z + hz] };
+}
 
 /** A bench's box in the room's frame. */
 function benchBox(b: BenchDef): { lo: V; hi: V } {
@@ -1170,7 +1210,7 @@ export function buildPartModel(layout: DungeonLayout, index: number, style: Dung
     }
     // A niche's inside: the wall's stone, laid as the wall's is.
     if (f.dent) {
-      b.face(f.corners.map(point), turn(f.n), asPaint(style.look.niche));
+      b.face(f.corners.map(point), turn(f.n), asPaint(f.breach ? style.look.breach : style.look.niche));
       continue;
     }
     const round = roundOf(placed.part, f);
@@ -1266,7 +1306,7 @@ function candleSites(part: DungeonPartDef): { at: V; front: V; share: number }[]
 function urnSites(part: DungeonPartDef, niches: readonly Niche[]): { at: V; front: V; room?: number }[] {
   const sites: { at: V; front: V; room?: number }[] = [];
   for (const n of niches) {
-    if (n.slab || n.contents?.length) continue;
+    if (n.slab || n.contents?.length || n.breach) continue;
     const ys = n.points.map((q) => q[1]);
     const y0 = Math.min(...ys), y1 = Math.max(...ys);
     const mid = n.points.reduce((m, q): V => [m[0] + q[0] / n.points.length, 0, m[2] + q[2] / n.points.length], [0, 0, 0]);

@@ -1,7 +1,7 @@
 // Dungeon styles and parts from the packs (DUNGEONS.md): `dungeonStyles/`, `dungeonParts/` and
 // `rules/dungeons.json5`, read and checked - every part's walk lines 6 m wide and high on its own
 // colliders, every style able to start, grow and close.
-import type { ArcosoliaSpec, LoculiSpec } from "../architecture/dents";
+import type { ArcosoliaSpec, BreachSpec, LoculiSpec } from "../architecture/dents";
 import type { CopingSpec, RibSpec, TrimProfile, WallTrims } from "../architecture/trims";
 import { ContentError, Reader, type ContentIssue, type RawObject } from "../content/contentReader";
 import { DUNGEON_FOLDERS, orderPacks, parseFile, type PackSource } from "../content/resolveContent";
@@ -189,6 +189,8 @@ export interface KitLook {
   iron: DungeonPaint;
   /** What is seen of the dark past a gate. */
   dark: DungeonPaint;
+  /** A wall's core, where its facing blocks have fallen out (a breach). */
+  breach: DungeonPaint;
 }
 
 export interface DungeonLight {
@@ -552,16 +554,16 @@ function readEnding(reader: Reader, obj: RawObject): "tomb" | "gate" | undefined
 }
 
 function readLook(reader: Reader, raw: RawObject): KitLook {
-  reader.onlyKeys(raw, "look", ["floor", "wall", "ceiling", "steps", "tread", "riser", "frame", "door", "trim", "niche", "tomb", "iron", "dark"]);
+  reader.onlyKeys(raw, "look", ["floor", "wall", "ceiling", "steps", "tread", "riser", "frame", "door", "trim", "niche", "tomb", "iron", "dark", "breach"]);
   const stone: DungeonPaint = { material: "stoneBricks", tint: [1, 1, 1] };
   const floor = paintOf(reader, raw, "floor", stone);
   const wall = paintOf(reader, raw, "wall", stone);
   const steps = paintOf(reader, raw, "steps", floor);
-  return { floor, wall, ceiling: paintOf(reader, raw, "ceiling", stone), steps, tread: paintOf(reader, raw, "tread", steps), riser: paintOf(reader, raw, "riser", steps), frame: paintOf(reader, raw, "frame", wall), trim: paintOf(reader, raw, "trim", paintOf(reader, raw, "frame", wall)), niche: paintOf(reader, raw, "niche", wall), tomb: paintOf(reader, raw, "tomb", paintOf(reader, raw, "trim", paintOf(reader, raw, "frame", wall))), door: paintOf(reader, raw, "door", { material: "doorBoards", tint: [1, 1, 1] }), iron: paintOf(reader, raw, "iron", { material: "iron", tint: [1, 1, 1] }), dark: paintOf(reader, raw, "dark", { material: "rubbleStone", tint: [0.04, 0.04, 0.045] }) };
+  return { floor, wall, ceiling: paintOf(reader, raw, "ceiling", stone), steps, tread: paintOf(reader, raw, "tread", steps), riser: paintOf(reader, raw, "riser", steps), frame: paintOf(reader, raw, "frame", wall), trim: paintOf(reader, raw, "trim", paintOf(reader, raw, "frame", wall)), niche: paintOf(reader, raw, "niche", wall), tomb: paintOf(reader, raw, "tomb", paintOf(reader, raw, "trim", paintOf(reader, raw, "frame", wall))), door: paintOf(reader, raw, "door", { material: "doorBoards", tint: [1, 1, 1] }), iron: paintOf(reader, raw, "iron", { material: "iron", tint: [1, 1, 1] }), dark: paintOf(reader, raw, "dark", { material: "rubbleStone", tint: [0.04, 0.04, 0.045] }), breach: paintOf(reader, raw, "breach", { material: "rubbleStone", tint: [0.55, 0.52, 0.48] }) };
 }
 
 function readTrims(reader: Reader, raw: RawObject): WallTrims {
-  reader.onlyKeys(raw, "trims", ["plinth", "cornice", "ribs", "coping", "loculi", "arcosolia"]);
+  reader.onlyKeys(raw, "trims", ["plinth", "cornice", "ribs", "coping", "loculi", "arcosolia", "breaches"]);
   const band = (key: string): TrimProfile | undefined => {
     if (raw[key] === undefined) return undefined;
     const b = reader.object(raw[key], `trims.${key}`);
@@ -629,7 +631,24 @@ function readTrims(reader: Reader, raw: RawObject): WallTrims {
       tomb: tb ? { height: reader.number(tb, "height", `${at}.tomb`, { min: 0.1 }), inset: reader.number(tb, "inset", `${at}.tomb`, { min: 0 }), lid: reader.number(tb, "lid", `${at}.tomb`, { min: 0.02 }), lidOut: reader.number(tb, "lidOut", `${at}.tomb`, { min: 0 }) } : undefined,
     };
   }
-  return { plinth: band("plinth"), cornice: band("cornice"), ribs, coping, loculi, arcosolia };
+  let breaches: BreachSpec | undefined;
+  if (raw.breaches !== undefined) {
+    const at = "trims.breaches";
+    const b = reader.object(raw.breaches, at);
+    reader.onlyKeys(b, at, ["share", "count", "width", "height", "depth", "above", "margin", "stones", "size"]);
+    breaches = {
+      share: reader.optionalNumber(b, "share", at, 0.2, { min: 0, max: 1 }),
+      count: reader.optionalNumber(b, "count", at, 2, { min: 0, integer: true }),
+      width: reader.range(b, "width", at, { allowEqual: true }),
+      height: reader.range(b, "height", at, { allowEqual: true }),
+      depth: reader.number(b, "depth", at, { min: 0.05 }),
+      above: reader.optionalNumber(b, "above", at, 1, { min: 0 }),
+      margin: reader.optionalNumber(b, "margin", at, 0.8, { min: 0 }),
+      stones: reader.range(b, "stones", at, { allowEqual: true }),
+      size: reader.range(b, "size", at, { allowEqual: true }),
+    };
+  }
+  return { plinth: band("plinth"), cornice: band("cornice"), ribs, coping, loculi, arcosolia, breaches };
 }
 
 /** A prop set at some share of the places it may go: `{ prop, share }`. */
