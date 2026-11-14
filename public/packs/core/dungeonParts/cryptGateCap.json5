@@ -1,0 +1,10 @@
+// A way on closed by an iron gate: bars across the opening, the dark past them - a way that goes
+// on, out of reach.
+{
+  tags: ["crypt", "cap"],
+  weight: 0.5,
+  ending: "gate",
+  sockets: [{ at: [0, 0, 0], facing: 180, type: "crypt", size: [6, 6] }],
+  // Inside the opening (toward the part it closes, -z), within its wall: never out where a neighbour may be.
+  colliders: [{ box: [-4, -1, -1, 4, 7, 0] }],
+}

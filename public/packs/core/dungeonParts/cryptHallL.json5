@@ -7,6 +7,7 @@
   weight: 2,
   stage: [0.1, 1],
   tombs: 4,                          // standing free on the floor, clear of the ways
+  ledgers: 0.3,                     // a share of the rows of ledger stones in its floor
   sockets: [
     { at: [0, 0, 0], facing: 180, type: "cryptLarge", size: [10, 8], reach: 1.5 },
     { at: [42, 0, 34], facing: 90, type: "crypt", size: [6, 6], reach: 1.5 },

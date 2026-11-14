@@ -1,0 +1,9 @@
+// A gallery closed by an iron gate, the dark past it.
+{
+  tags: ["crypt", "cap"],
+  weight: 0.5,
+  ending: "gate",
+  sockets: [{ at: [0, 0, 0], facing: 180, type: "cryptLarge", size: [10, 8] }],
+  // Inside the opening (toward the part it closes, -z), within its wall: never out where a neighbour may be.
+  colliders: [{ box: [-6, -1, -1, 6, 9, 0] }],
+}

@@ -1,0 +1,10 @@
+// A way on ending in a wall tomb: the walled-up way's face holding an arcosolium - a round-arched
+// niche with a tomb chest in it, as the halls' end walls do.
+{
+  tags: ["crypt", "cap"],
+  weight: 0.5,
+  ending: "tomb",
+  sockets: [{ at: [0, 0, 0], facing: 180, type: "crypt", size: [6, 6] }],
+  // Inside the opening (toward the part it closes, -z), within its wall: never out where a neighbour may be.
+  colliders: [{ box: [-4, -1, -1, 4, 7, 0] }],
+}

@@ -4,8 +4,7 @@
 // through: floor, wall, vault, step. Torches stand at its light spots. Pure: no engine, so it can
 // run anywhere the layout does.
 import { arcosolia, loculi, type DentSurroundings, type Niche } from "../architecture/dents";
-import { TOMB_SIZE, type TombDef } from "./tombs";
-import { ledgers } from "../architecture/fill";
+import { TOMB_SIZE, ledgerCorners, type LedgerDef, type TombDef } from "./tombs";
 import { copings, ribs, wallTrims, type TrimPiece, type CeilingSpan, type StairEdge, type WallFace, type WallTrims } from "../architecture/trims";
 import { convexHull, rotate, type ShapeDesc } from "../collision/index";
 import { ModelBuilder } from "../buildings/buildingGeometry";
@@ -446,6 +445,9 @@ interface SolidKind {
   niche?: boolean;
   /** Part of a tomb: drawn in the style's tomb paint. */
   tomb?: boolean;
+  /** Ironwork (a gate's bars), and the dark past a gate: drawn in the style's iron and dark. */
+  iron?: boolean;
+  dark?: boolean;
   /** A trim's stone direction, where it slopes (a stair's band), and where its courses start. */
   grain?: V;
   uvOrigin?: V;
@@ -472,6 +474,8 @@ function solidKinds(count: number, faces: readonly Face[]): SolidKind[] {
  * else wall - so a wall cut into pieces round a flight of stairs stays wall.
  */
 function paintFor(f: Face, kind: SolidKind, look: DungeonStyleDef["look"]): DungeonPaint {
+  if (kind.iron) return look.iron;
+  if (kind.dark) return look.dark;
   if (kind.niche) return look.niche;
   if (kind.tomb) return look.tomb;
   if (kind.trim) return look.trim;
@@ -502,7 +506,8 @@ const trimmedParts = new WeakMap<DungeonPartDef, Map<WallTrims, { solids: Solid[
  */
 export function trimmedShape(part: DungeonPartDef, trims: WallTrims): { solids: Solid[]; faces: Face[]; kinds: SolidKind[] } {
   const plain = partShape(part);
-  if (part.doorway || part.paths.length === 0 || (!trims.plinth && !trims.cornice && !trims.ribs && !trims.coping && !trims.loculi && !trims.ledgers && !part.tombs?.length)) return plain;
+  if (part.ending) return endingShape(part, trims, plain);
+  if (part.doorway || part.paths.length === 0 || (!trims.plinth && !trims.cornice && !trims.ribs && !trims.coping && !trims.loculi && !part.tombs?.length && !part.ledgers?.length)) return plain;
   let byStyle = trimmedParts.get(part);
   if (!byStyle) trimmedParts.set(part, (byStyle = new Map()));
   const known = byStyle.get(trims);
@@ -608,81 +613,10 @@ export function trimmedShape(part: DungeonPartDef, trims: WallTrims): { solids: 
   const all = [...solids, ...pieces.map((t) => hullSolid(t.points))];
   let faces = partFaces(all, false, all.map((_, i) => i), whole);
   const kindsAll = solidKinds(all.length, faces);
-  if (niches.length > 0) {
-    const voids = niches.map((n) => hullSolid(n.points));
-    faces = faces.flatMap((f) => cutFace(f, voids, [-COVER]));
-    for (const v of voids) {
-      for (const side of v.sides) {
-        // Each side but the opening, facing into the niche, as a side of the wall it is cut into.
-        const c = side.corners.reduce((m, p): V => [m[0] + p[0] / side.corners.length, m[1] + p[1] / side.corners.length, m[2] + p[2] / side.corners.length], [0, 0, 0]);
-        const owner = all.findIndex((s) => inside(s, [c[0] + side.n[0] * 0.1, c[1] + side.n[1] * 0.1, c[2] + side.n[2] * 0.1]));
-        if (owner < 0) continue;
-        faces.push({ n: [-side.n[0], -side.n[1], -side.n[2]], corners: side.corners, solid: owner, dent: true });
-      }
-    }
-    // Each frame's bars drawn as they are, uncut (they only stand in front of the wall): the face,
-    // the bevel down into the opening and the outer side - not the back in the wall, nor the mitres
-    // where the bars meet.
-    for (const niche of niches) {
-      for (const bar of niche.frame) {
-        const solid = hullSolid(bar.points);
-        for (const side of solid.sides) {
-          if (Math.abs(dot(side.n, bar.grain)) > 0.3 || dot(side.n, niche.n) < -0.9) continue;
-          faces.push({ n: side.n, corners: side.corners, solid: all.length });
-        }
-        all.push(solid);
-        kindsAll.push({ tread: false, floor: false, roof: false, top: -Infinity, trim: true, niche: true, grain: bar.grain });
-      }
-    }
-    // What stands in a niche (a tomb chest): drawn whole but for its back, in the trims' stone.
-    for (const niche of niches) {
-      for (const piece of niche.contents ?? []) {
-        const solid = hullSolid(piece);
-        for (const side of solid.sides) if (dot(side.n, niche.n) > -0.9 && side.n[1] > -0.9) faces.push({ n: side.n, corners: side.corners, solid: all.length });
-        all.push(solid);
-        kindsAll.push({ tread: false, floor: false, roof: false, top: -Infinity, trim: true, tomb: true });
-      }
-    }
-    for (const niche of niches) {
-      if (!niche.slab) continue;
-      const slab = hullSolid(niche.slab);
-      const front = slab.sides.find((s) => dot(s.n, niche.n) > 0.99);
-      if (!front) continue;
-      faces.push({ n: front.n, corners: front.corners, solid: all.length });
-      all.push(slab);
-      kindsAll.push({ tread: false, floor: false, roof: false, top: -Infinity, trim: true, niche: true });
-    }
-  }
-  // Ledger stones in a room's floors (src/world/architecture/fill.ts), clear of what stands on
-  // them - its walls, its trims and niches' frames, its tombs: drawn only, a few centimetres proud,
-  // every side but the underside (they stand in the floor).
-  if (trims.ledgers && part.room) {
-    const floors = plain.faces.filter((f) => f.n[1] > 0.99 && !kinds[f.solid].plain && !whole.has(f.solid));
-    const standing = all.slice(solids.length).map((s) => ({ lo: s.lo, hi: s.hi }));
-    const tombBoxes = (part.tombs ?? []).map((t) => {
-      const [len, wid, high] = TOMB_SIZE;
-      const hx = (t.yaw === 90 ? len : wid) / 2 + 0.1, hz = (t.yaw === 90 ? wid : len) / 2 + 0.1;
-      return { lo: [t.at.x - hx, t.at.y, t.at.z - hz] as V, hi: [t.at.x + hx, t.at.y + high, t.at.z + hz] as V };
-    });
-    const overlaps = (b: { lo: V; hi: V }, lo: V, hi: V) => b.hi[0] > lo[0] && b.lo[0] < hi[0] && b.hi[1] > lo[1] && b.lo[1] < hi[1] && b.hi[2] > lo[2] && b.lo[2] < hi[2];
-    const b = part.bounds;
-    const slabs = ledgers(floors, { x0: b.min.x, z0: b.min.z, x1: b.max.x, z1: b.max.z }, {
-      blocked: (lo, hi) => built.some((s) => overlaps(s, lo, hi)) || standing.some((s) => overlaps(s, lo, hi)) || tombBoxes.some((s) => overlaps(s, lo, hi)),
-      random: (p) => {
-        const h = Math.sin(p[0] * 12.9898 + p[1] * 78.233 + p[2] * 37.719) * 43758.5453;
-        return h - Math.floor(h);
-      },
-    }, trims.ledgers);
-    for (const points of slabs) {
-      const solid = hullSolid(points);
-      for (const side of solid.sides) if (side.n[1] > -0.9) faces.push({ n: side.n, corners: side.corners, solid: all.length });
-      all.push(solid);
-      kindsAll.push({ tread: false, floor: false, roof: false, top: -Infinity, trim: true, tomb: true });
-    }
-  }
+  if (niches.length > 0) faces = drawNiches(niches, faces, all, kindsAll);
   // Its tombs, drawn as they are, every side but their undersides: they stand on the floor, and a
   // lid's overhang over its chest is no gap in the rock.
-  for (const piece of (part.tombs ?? []).flatMap(tombPieces)) {
+  for (const piece of [...(part.tombs ?? []).flatMap(tombPieces), ...(part.ledgers ?? []).map(ledgerPiece)]) {
     const solid = hullSolid(piece.points);
     for (const side of solid.sides) if (side.n[1] > -0.9) faces.push({ n: side.n, corners: side.corners, solid: all.length });
     all.push(solid);
@@ -693,6 +627,59 @@ export function trimmedShape(part: DungeonPartDef, trims: WallTrims): { solids: 
   const shape = { solids: all, faces, kinds: kindsAll };
   byStyle.set(trims, shape);
   return shape;
+}
+
+/**
+ * Niches (src/world/architecture/dents.ts) into a part's faces: cut out of the faces they open in,
+ * their insides drawn as the sides of the wall they are cut into (in the style's niche paint), each
+ * frame's bars, what lies in them and the sealed ones' slabs drawn as they are - added to `all` and
+ * `kindsAll`. The faces as cut, with all that.
+ */
+function drawNiches(niches: readonly Niche[], cut: Face[], all: Solid[], kindsAll: SolidKind[]): Face[] {
+  const voids = niches.map((n) => hullSolid(n.points));
+  const faces = cut.flatMap((f) => cutFace(f, voids, [-COVER]));
+  for (const v of voids) {
+    for (const side of v.sides) {
+      // Each side but the opening, facing into the niche, as a side of the wall it is cut into.
+      const c = side.corners.reduce((m, p): V => [m[0] + p[0] / side.corners.length, m[1] + p[1] / side.corners.length, m[2] + p[2] / side.corners.length], [0, 0, 0]);
+      const owner = all.findIndex((s) => inside(s, [c[0] + side.n[0] * 0.1, c[1] + side.n[1] * 0.1, c[2] + side.n[2] * 0.1]));
+      if (owner < 0) continue;
+      faces.push({ n: [-side.n[0], -side.n[1], -side.n[2]], corners: side.corners, solid: owner, dent: true });
+    }
+  }
+  // Each frame's bars drawn as they are, uncut (they only stand in front of the wall): the face,
+  // the bevel down into the opening and the outer side - not the back in the wall, nor the mitres
+  // where the bars meet.
+  for (const niche of niches) {
+    for (const bar of niche.frame) {
+      const solid = hullSolid(bar.points);
+      for (const side of solid.sides) {
+        if (Math.abs(dot(side.n, bar.grain)) > 0.3 || dot(side.n, niche.n) < -0.9) continue;
+        faces.push({ n: side.n, corners: side.corners, solid: all.length });
+      }
+      all.push(solid);
+      kindsAll.push({ tread: false, floor: false, roof: false, top: -Infinity, trim: true, niche: true, grain: bar.grain });
+    }
+  }
+  // What stands in a niche (a tomb chest): drawn whole but for its back, in the trims' stone.
+  for (const niche of niches) {
+    for (const piece of niche.contents ?? []) {
+      const solid = hullSolid(piece);
+      for (const side of solid.sides) if (dot(side.n, niche.n) > -0.9 && side.n[1] > -0.9) faces.push({ n: side.n, corners: side.corners, solid: all.length });
+      all.push(solid);
+      kindsAll.push({ tread: false, floor: false, roof: false, top: -Infinity, trim: true, tomb: true });
+    }
+  }
+  for (const niche of niches) {
+    if (!niche.slab) continue;
+    const slab = hullSolid(niche.slab);
+    const front = slab.sides.find((s) => dot(s.n, niche.n) > 0.99);
+    if (!front) continue;
+    faces.push({ n: front.n, corners: front.corners, solid: all.length });
+    all.push(slab);
+    kindsAll.push({ tread: false, floor: false, roof: false, top: -Infinity, trim: true, niche: true });
+  }
+  return faces;
 }
 
 /**
@@ -718,6 +705,89 @@ function tombPieces(t: TombDef): TrimPiece[] {
     { kind: "tomb", points: [...box(len + 0.1, wid + 0.16, gableAt, gableAt + 0.01).slice(0, 4), ...ridge] },
   ];
 }
+
+/** A gate's bars: this thick, this far apart, and its rails this high over the sill, standing this far in from the cap's face. */
+const GATE_BAR = 0.1;
+const GATE_SPACING = 0.5;
+const GATE_RAILS = [0.4, 2.6, 4.8];
+const GATE_IN = 0.15;
+
+/**
+ * A cap that ends a way in something other than a plain wall (its `ending`), in its own frame:
+ * - a wall tomb: the style's arcosolium (its frame, its chest) cut into the cap's face, centred in the
+ *   opening it closes;
+ * - a gate: iron bars standing across the opening, and past them the cap's wall drawn back to the
+ *   socket's plane, its face, sides, floor and top in the dark - a way on into the dark, closed.
+ * Its collider is its box all the same: nothing passes.
+ */
+function endingShape(part: DungeonPartDef, trims: WallTrims, plain: { solids: Solid[]; faces: Face[]; kinds: SolidKind[] }): { solids: Solid[]; faces: Face[]; kinds: SolidKind[] } {
+  let byStyle = trimmedParts.get(part);
+  if (!byStyle) trimmedParts.set(part, (byStyle = new Map()));
+  const known = byStyle.get(trims);
+  if (known) return known;
+  const socket = part.sockets[0];
+  const a = (socket.facing * Math.PI) / 180;
+  const out: V = [Math.sin(a), 0, Math.cos(a)];
+  const t: V = [-out[2], 0, out[0]];
+  const [w, h] = socket.size;
+  const y0 = socket.at.y;
+  /** A point across the opening (u from its middle), up from its floor, `o` out from the socket's plane. */
+  const at = (u: number, y: number, o: number): V => [socket.at.x + t[0] * u + out[0] * o, y0 + y, socket.at.z + t[2] * u + out[2] * o];
+  // The cap's face: how far out of the socket's plane it stands.
+  const face = plain.faces.find((f) => dot(f.n, out) > 0.99);
+  const depth = face ? dot(sub(face.corners[0], [socket.at.x, socket.at.y, socket.at.z]), out) : 1;
+  const all = [...plain.solids];
+  const kinds = [...plain.kinds];
+  let faces = [...plain.faces];
+  if (part.ending === "tomb" && trims.arcosolia) {
+    // The opening it closes as a wall of its own, the arcosolium centred in it.
+    const wall: WallFace = { n: out, corners: [at(-w / 2, 0, depth), at(w / 2, 0, depth), at(w / 2, h, depth), at(-w / 2, h, depth)] };
+    const niches = arcosolia([wall], {
+      floorUnder: () => y0,
+      solidAt: (p) => plain.solids.some((s) => inside(s, p)),
+      blocked: () => false,
+      random: () => 0,
+    }, { ...trims.arcosolia, count: 1, margin: Math.min(trims.arcosolia.margin, 0.1) });
+    faces = drawNiches(niches, faces, all, kinds);
+  } else if (part.ending === "gate") {
+    // The dark: the face drawn back to the socket's plane - the inside of the cap's box, a hair in
+    // from the opening's sides, floor and top, all but its open front.
+    const e = 0.01;
+    faces = faces.filter((f) => dot(f.n, out) <= 0.99);
+    const recess = hullSolid([0, depth].flatMap((d) => [at(-w / 2 + e, e, d), at(w / 2 - e, e, d), at(w / 2 - e, h - e, d), at(-w / 2 + e, h - e, d)]));
+    for (const side of recess.sides) if (dot(side.n, out) < 0.99) faces.push({ n: [-side.n[0], -side.n[1], -side.n[2]], corners: side.corners, solid: all.length });
+    all.push(recess);
+    kinds.push({ tread: false, floor: false, roof: false, top: -Infinity, dark: true });
+    // The bars: uprights across the opening, rails across them; each drawn but for its ends.
+    const o = depth - GATE_IN, r = GATE_BAR / 2;
+    const bar = (u0: number, u1: number, v0: number, v1: number) => {
+      const solid = hullSolid([o - r, o + r].flatMap((d) => [at(u0, v0, d), at(u1, v0, d), at(u1, v1, d), at(u0, v1, d)]));
+      const long: V = v1 - v0 > u1 - u0 ? [0, 1, 0] : t;
+      for (const side of solid.sides) if (Math.abs(dot(side.n, long)) < 0.5) faces.push({ n: side.n, corners: side.corners, solid: all.length });
+      all.push(solid);
+      kinds.push({ tread: false, floor: false, roof: false, top: -Infinity, iron: true });
+    };
+    const count = Math.floor(w / GATE_SPACING);
+    for (let i = 1; i < count; i++) {
+      const u = -w / 2 + (i * w) / count;
+      bar(u - r, u + r, 0, h);
+    }
+    for (const y of GATE_RAILS) if (y + GATE_BAR < h) bar(-w / 2, w / 2, y, y + GATE_BAR);
+  }
+  const shape = { solids: all, faces, kinds };
+  byStyle.set(trims, shape);
+  return shape;
+}
+
+/** A ledger stone drawn: a slab a step high, its top edge chamfered all round. */
+function ledgerPiece(t: LedgerDef): TrimPiece {
+  const high = t.high;
+  const ring = (y: number, inset: number): V[] => ledgerCorners(t, inset).map(([x, z]): V => [x, t.at.y + y, z]);
+  return { kind: "tomb", points: [...ring(-0.02, 0), ...ring(high - LEDGER_BEVEL, 0), ...ring(high, LEDGER_BEVEL)] };
+}
+
+/** The chamfer round a ledger stone's top. */
+const LEDGER_BEVEL = 0.08;
 
 /** A way's wall no longer than this may hold an arcosolium (an alcove's back, not a corridor's side). */
 const ALCOVE_WALL = 8;

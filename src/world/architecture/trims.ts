@@ -5,7 +5,6 @@
 // back solid pieces (convex prisms) to build or draw as it builds its own - a dungeon part adds them
 // to its solids, a house could lay them into its model.
 
-import type { LedgerSpec } from "./fill";
 import type { ArcosoliaSpec, LoculiSpec } from "./dents";
 
 export type V3 = [number, number, number];
@@ -68,8 +67,6 @@ export interface WallTrims {
   /** Great arched niches with a tomb chest in each, centred on end walls and alcoves (see
    *  `arcosolia` in ./dents) - laid out before the loculi, which keep clear of them. */
   arcosolia?: ArcosoliaSpec;
-  /** Ledger stones let into the rooms' floors (see `ledgers` in ./fill) - fill, laid out with them. */
-  ledgers?: LedgerSpec;
 }
 
 export interface CopingSpec {

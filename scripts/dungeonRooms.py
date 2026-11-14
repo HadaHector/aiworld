@@ -153,6 +153,7 @@ def write(name, comment, tags, part, room, weight, outline, rects, height, openi
         lines.append(f"  stage: [{fmt(stage[0])}, {fmt(stage[1])}],")
     if tombs:
         lines.append(f"  tombs: {tombs},                          // standing free on the floor, clear of the ways")
+        lines.append(f"  ledgers: 0.3,                     // a share of the rows of ledger stones in its floor")
     lines.append("  sockets: [")
     for s in sockets:
         lines.append(f"    {{ at: [{', '.join(fmt(v) for v in s['at'])}], facing: {s['facing']}, type: \"{s['type']}\", size: [{fmt(s['size'][0])}, {fmt(s['size'][1])}], reach: {fmt(s['reach'])} }},")

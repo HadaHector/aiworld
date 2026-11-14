@@ -6,6 +6,7 @@
   tags: ["crypt", "hall", "large", "descent"],
   room: true,
   tombs: 2,                          // standing free on the floor, clear of the ways
+  ledgers: 0.3,                     // a share of the rows of ledger stones in its floor
   weight: 2,
   stage: [0.1, 1],
   sockets: [

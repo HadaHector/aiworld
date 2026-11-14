@@ -1,7 +1,6 @@
 // Dungeon styles and parts from the packs (DUNGEONS.md): `dungeonStyles/`, `dungeonParts/` and
 // `rules/dungeons.json5`, read and checked - every part's walk lines 6 m wide and high on its own
 // colliders, every style able to start, grow and close.
-import type { LedgerSpec } from "../architecture/fill";
 import type { ArcosoliaSpec, LoculiSpec } from "../architecture/dents";
 import type { CopingSpec, RibSpec, TrimProfile, WallTrims } from "../architecture/trims";
 import { ContentError, Reader, type ContentIssue, type RawObject } from "../content/contentReader";
@@ -9,7 +8,7 @@ import { DUNGEON_FOLDERS, orderPacks, parseFile, type PackSource } from "../cont
 import { vec3, type Aabb, type ShapeDesc, type Vec3 } from "../collision/index";
 import { boxShape, doorwayGeometry, DOORWAY_KINDS, rotundaGeometry, spiralGeometry, stairGeometry, type DoorwaySpec, type Polyline, type Voussoir } from "./kitShapes";
 import { checkPaths } from "./clearance";
-import { placeTombs, tombShape, type TombDef } from "./tombs";
+import { ledgerShape, placeLedgers, placeTombs, tombShape, type LedgerDef, type TombDef } from "./tombs";
 
 const ID_PATTERN = /^[A-Za-z0-9_-]+$/;
 
@@ -97,6 +96,9 @@ export interface DungeonPartDef {
   spots: Record<string, Vec3[]>;
   /** Counts toward the style's rooms (a hall, a tomb) rather than joining them (a corridor, a stair). */
   room: boolean;
+  /** A cap's face, other than a plain wall: a wall tomb (the style's arcosolium in it) or an iron gate
+   *  with the dark past it. */
+  ending?: "tomb" | "gate";
   /** Centres (x, z) its round walls and pillars turn about - a spiral's - so their textures run round them. */
   rounds: [number, number][];
   /** A doorway, set across every join (DUNGEONS.md, *Doorways*): how it is built - its depth
@@ -113,7 +115,9 @@ export interface DungeonPartDef {
   /** Tombs standing free on its floor (./tombs.ts): each a collider at the end of `shapes`, drawn by
    *  the style as a carved chest rather than as the box it collides as. */
   tombs?: TombDef[];
-  /** How many of `shapes` are drawn as they are (the rest - its tombs - are not); all when unset. */
+  /** Ledger stones let into its floor (./tombs.ts): colliders after its tombs, drawn bevelled. */
+  ledgers?: LedgerDef[];
+  /** How many of `shapes` are drawn as they are (the rest - its tombs and ledgers - are not); all when unset. */
   drawn?: number;
 }
 
@@ -177,6 +181,10 @@ export interface KitLook {
   /** A tomb, standing free or lying in an arcosolium: each piece of it one stone, no joints. */
   tomb: DungeonPaint;
   door: DungeonPaint;
+  /** Ironwork: a gate's bars. */
+  iron: DungeonPaint;
+  /** What is seen of the dark past a gate. */
+  dark: DungeonPaint;
 }
 
 export interface DungeonLight {
@@ -289,7 +297,7 @@ function vector(reader: Reader, value: unknown, path: string): Vec3 {
   return vec3();
 }
 
-const PART_KEYS = ["tags", "weight", "stage", "apart", "tombs", "bounds", "sockets", "colliders", "paths", "spots", "room", "doorway"];
+const PART_KEYS = ["tags", "weight", "stage", "apart", "tombs", "ledgers", "ending", "bounds", "sockets", "colliders", "paths", "spots", "room", "doorway"];
 
 function readPart(entry: Entry, rules: DungeonRules, issues: ContentIssue[]): DungeonPartDef | null {
   const reader = new Reader(issues, entry.file);
@@ -449,6 +457,9 @@ function readPart(entry: Entry, rules: DungeonRules, issues: ContentIssue[]): Du
   const drawn = shapes.length;
   const tombs = placeTombs(shapes, paths, spots, reader.optionalNumber(obj, "tombs", "", 0, { min: 0 }));
   shapes.push(...tombs.map(tombShape));
+  // Ledger stones in rows on its floor, round its tombs: a step high, so colliders too.
+  const ledgers = placeLedgers(shapes, spots, sockets.map((s) => s.at), reader.optionalNumber(obj, "ledgers", "", 0, { min: 0, max: 1 }));
+  shapes.push(...ledgers.map(ledgerShape));
   const part: DungeonPartDef = {
     id: entry.id,
     tags,
@@ -461,6 +472,7 @@ function readPart(entry: Entry, rules: DungeonRules, issues: ContentIssue[]): Du
     paths,
     spots,
     room: reader.boolean(obj, "room", "", false),
+    ending: readEnding(reader, obj),
     rounds,
     doorway,
     visuals,
@@ -468,6 +480,7 @@ function readPart(entry: Entry, rules: DungeonRules, issues: ContentIssue[]): Du
     plain,
     voussoirs,
     tombs,
+    ledgers,
     drawn,
   };
   // Every way through it, on its own colliders: floor under the walk lines, and 6 m wide and high.
@@ -519,17 +532,25 @@ function paintOf(reader: Reader, look: RawObject, key: string, fallback: Dungeon
   return { material: raw.material === null ? null : (reader.optionalString(raw, "material", `look.${key}`) ?? fallback.material), tint: colour(reader, raw.tint, `look.${key}.tint`, [1, 1, 1]) };
 }
 
+/** A cap's `ending`: "tomb" or "gate", or none (a plain wall). */
+function readEnding(reader: Reader, obj: RawObject): "tomb" | "gate" | undefined {
+  const value = reader.optionalString(obj, "ending", "");
+  if (value === undefined || value === "tomb" || value === "gate") return value;
+  reader.fail("ending", `expected "tomb" or "gate", got "${value}"`);
+  return undefined;
+}
+
 function readLook(reader: Reader, raw: RawObject): KitLook {
-  reader.onlyKeys(raw, "look", ["floor", "wall", "ceiling", "steps", "tread", "riser", "frame", "door", "trim", "niche", "tomb"]);
+  reader.onlyKeys(raw, "look", ["floor", "wall", "ceiling", "steps", "tread", "riser", "frame", "door", "trim", "niche", "tomb", "iron", "dark"]);
   const stone: DungeonPaint = { material: "stoneBricks", tint: [1, 1, 1] };
   const floor = paintOf(reader, raw, "floor", stone);
   const wall = paintOf(reader, raw, "wall", stone);
   const steps = paintOf(reader, raw, "steps", floor);
-  return { floor, wall, ceiling: paintOf(reader, raw, "ceiling", stone), steps, tread: paintOf(reader, raw, "tread", steps), riser: paintOf(reader, raw, "riser", steps), frame: paintOf(reader, raw, "frame", wall), trim: paintOf(reader, raw, "trim", paintOf(reader, raw, "frame", wall)), niche: paintOf(reader, raw, "niche", wall), tomb: paintOf(reader, raw, "tomb", paintOf(reader, raw, "trim", paintOf(reader, raw, "frame", wall))), door: paintOf(reader, raw, "door", { material: "doorBoards", tint: [1, 1, 1] }) };
+  return { floor, wall, ceiling: paintOf(reader, raw, "ceiling", stone), steps, tread: paintOf(reader, raw, "tread", steps), riser: paintOf(reader, raw, "riser", steps), frame: paintOf(reader, raw, "frame", wall), trim: paintOf(reader, raw, "trim", paintOf(reader, raw, "frame", wall)), niche: paintOf(reader, raw, "niche", wall), tomb: paintOf(reader, raw, "tomb", paintOf(reader, raw, "trim", paintOf(reader, raw, "frame", wall))), door: paintOf(reader, raw, "door", { material: "doorBoards", tint: [1, 1, 1] }), iron: paintOf(reader, raw, "iron", { material: "iron", tint: [1, 1, 1] }), dark: paintOf(reader, raw, "dark", { material: "rubbleStone", tint: [0.04, 0.04, 0.045] }) };
 }
 
 function readTrims(reader: Reader, raw: RawObject): WallTrims {
-  reader.onlyKeys(raw, "trims", ["plinth", "cornice", "ribs", "coping", "loculi", "arcosolia", "ledgers"]);
+  reader.onlyKeys(raw, "trims", ["plinth", "cornice", "ribs", "coping", "loculi", "arcosolia"]);
   const band = (key: string): TrimProfile | undefined => {
     if (raw[key] === undefined) return undefined;
     const b = reader.object(raw[key], `trims.${key}`);
@@ -597,21 +618,7 @@ function readTrims(reader: Reader, raw: RawObject): WallTrims {
       tomb: tb ? { height: reader.number(tb, "height", `${at}.tomb`, { min: 0.1 }), inset: reader.number(tb, "inset", `${at}.tomb`, { min: 0 }), lid: reader.number(tb, "lid", `${at}.tomb`, { min: 0.02 }), lidOut: reader.number(tb, "lidOut", `${at}.tomb`, { min: 0 }) } : undefined,
     };
   }
-  let ledgers: LedgerSpec | undefined;
-  if (raw.ledgers !== undefined) {
-    const at = "trims.ledgers";
-    const l = reader.object(raw.ledgers, at);
-    reader.onlyKeys(l, at, ["length", "width", "gap", "fill", "margin", "proud"]);
-    ledgers = {
-      length: reader.number(l, "length", at, { min: 0.3 }),
-      width: reader.number(l, "width", at, { min: 0.3 }),
-      gap: reader.number(l, "gap", at, { min: 0 }),
-      fill: reader.optionalNumber(l, "fill", at, 0.4, { min: 0, max: 1 }),
-      margin: reader.optionalNumber(l, "margin", at, 1, { min: 0 }),
-      proud: reader.optionalNumber(l, "proud", at, 0.04, { min: 0.005 }),
-    };
-  }
-  return { plinth: band("plinth"), cornice: band("cornice"), ribs, coping, loculi, arcosolia, ledgers };
+  return { plinth: band("plinth"), cornice: band("cornice"), ribs, coping, loculi, arcosolia };
 }
 
 function readLight(reader: Reader, raw: RawObject): DungeonLight {
