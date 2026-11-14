@@ -88,8 +88,18 @@ export function wallTrims(faces: readonly WallFace[], around: TrimSurroundings, 
   const minHeight = spec.minHeight ?? 1.5;
   const minRun = spec.minRun ?? 1.5;
   const stepRun = spec.stepRun ?? 4;
-  /** Each band found, with its ends and height, before the short lone ones are dropped. */
-  const found: { piece: TrimPiece; ends: [V3, V3]; y: number }[] = [];
+  /** Each band found - its kind, its ends along the wall, its face's facing, the height it meets the
+   *  floor or ceiling at, its bottom and top - before pieces of one wall are joined and short ones dropped. */
+  interface Band {
+    kind: "plinth" | "cornice";
+    ends: [V3, V3];
+    n: V3;
+    y: number;
+    y0: number;
+    y1: number;
+    proud: number;
+  }
+  const found: Band[] = [];
   for (const f of faces) {
     if (Math.abs(f.n[1]) > 0.1) continue;
     let low = Infinity, high = -Infinity;
@@ -108,7 +118,7 @@ export function wallTrims(faces: readonly WallFace[], around: TrimSurroundings, 
         if (dot(c, t) < dot(lo, t)) lo = c;
         if (dot(c, t) > dot(hi, t)) hi = c;
       }
-      return dot(hi, t) - dot(lo, t) >= minRun ? [lo, hi] : null;
+      return dot(hi, t) - dot(lo, t) > 1e-3 ? [lo, hi] : null;
     };
     const front = (c: V3, y: number): V3 => [c[0] + f.n[0] * 0.05, y, c[2] + f.n[2] * 0.05];
     if (spec.plinth) {
@@ -117,7 +127,7 @@ export function wallTrims(faces: readonly WallFace[], around: TrimSurroundings, 
       const floor = mid && around.floorUnder(front(mid, low + 0.05));
       if (foot && floor !== null && floor !== undefined && Math.abs(floor - low) < tolerance) {
         const p = spec.plinth;
-        found.push({ piece: { kind: "plinth", points: bandPrism(foot[0], foot[1], f.n, low, low + Math.min(p.height, (high - low) / 3), p.proud, p.proud) }, ends: foot, y: low });
+        found.push({ kind: "plinth", ends: foot, n: f.n, y: low, y0: low, y1: low + Math.min(p.height, (high - low) / 3), proud: p.proud });
       }
     }
     if (spec.cornice) {
@@ -126,10 +136,37 @@ export function wallTrims(faces: readonly WallFace[], around: TrimSurroundings, 
       const ceiling = mid && around.ceilingOver(front(mid, high - 0.05));
       if (head && ceiling !== null && ceiling !== undefined && Math.abs(ceiling - high) < tolerance) {
         const c = spec.cornice;
-        found.push({ piece: { kind: "cornice", points: bandPrism(head[0], head[1], f.n, high - Math.min(c.height, (high - low) / 3), high, c.proud, c.proud) }, ends: head, y: high });
+        found.push({ kind: "cornice", ends: head, n: f.n, y: high, y0: high - Math.min(c.height, (high - low) / 3), y1: high, proud: c.proud });
       }
     }
   }
+  // One wall built of several solids (a wall's end flush with the next wall's face) is several faces
+  // in a line: their bands joined into one, so a short piece at a corner is not dropped as too short.
+  const length = (b: Band): number => Math.hypot(b.ends[1][0] - b.ends[0][0], b.ends[1][2] - b.ends[0][2]);
+  for (let merged = true; merged; ) {
+    merged = false;
+    for (let i = 0; i < found.length && !merged; i++) {
+      for (let j = i + 1; j < found.length && !merged; j++) {
+        const a = found[i], b = found[j];
+        if (a.kind !== b.kind || Math.abs(a.y0 - b.y0) > 0.01 || Math.abs(a.y1 - b.y1) > 0.01 || dot(a.n, b.n) < 0.999) continue;
+        if (Math.abs(dot(a.ends[0], a.n) - dot(b.ends[0], a.n)) > 0.01) continue;
+        if (!a.ends.some((e) => b.ends.some((g) => Math.hypot(e[0] - g[0], e[2] - g[2]) < 0.05))) continue;
+        const t = along(a.n);
+        const all = [...a.ends, ...b.ends];
+        let lo = all[0], hi = all[0];
+        for (const c of all) {
+          if (dot(c, t) < dot(lo, t)) lo = c;
+          if (dot(c, t) > dot(hi, t)) hi = c;
+        }
+        found[i] = { ...a, ends: [lo, hi] };
+        found.splice(j, 1);
+        merged = true;
+      }
+    }
+  }
+  const long = found.filter((b) => length(b) >= minRun);
+  found.length = 0;
+  found.push(...long);
   // Bands of a kind at one height meeting end to end are one run (a round wall's facets); a run
   // shorter than stepRun - a stair's step, each at its own height - gets none (a stair's own trim is
   // something else).
@@ -138,13 +175,15 @@ export function wallTrims(faces: readonly WallFace[], around: TrimSurroundings, 
   found.forEach((a, i) => {
     for (let j = 0; j < i; j++) {
       const b = found[j];
-      if (a.piece.kind !== b.piece.kind || Math.abs(a.y - b.y) > 0.05) continue;
+      if (a.kind !== b.kind || Math.abs(a.y - b.y) > 0.05) continue;
       if (a.ends.some((e) => b.ends.some((g) => Math.hypot(e[0] - g[0], e[2] - g[2]) < 0.3))) group[root(i)] = root(j);
     }
   });
   const run = new Map<number, number>();
-  found.forEach((a, i) => run.set(root(i), (run.get(root(i)) ?? 0) + Math.hypot(a.ends[1][0] - a.ends[0][0], a.ends[1][2] - a.ends[0][2])));
-  return found.filter((_, i) => run.get(root(i))! >= stepRun).map((a) => a.piece);
+  found.forEach((a, i) => run.set(root(i), (run.get(root(i)) ?? 0) + length(a)));
+  return found
+    .filter((_, i) => run.get(root(i))! >= stepRun)
+    .map((b): TrimPiece => ({ kind: b.kind, points: bandPrism(b.ends[0], b.ends[1], b.n, b.y0, b.y1, b.proud, b.proud) }));
 }
 
 /** A flat ceiling over a floor, square to the builder's own axes: x0-x1 by z0-z1, its underside at `y`. */
