@@ -266,22 +266,28 @@ export function stairBands(edges: readonly StairEdge[], kind: "plinth" | "cornic
         pieces.push({ kind, points: bandPrism(e.a, e.b, e.n, y0, y1, profile.proud, profile.proud) });
         continue;
       }
-      // A flight's end (no step above, or none below): a block over where its band meets the level
-      // one beyond, the joint between them hidden - once a step, at the step's own end.
+      // A flight's end step (no step above, or none below): a block over the whole step and on past
+      // it, where the flight's band meets the level one beyond - the joint hidden, no short piece of
+      // band beside it. Once a step (its edge may be in pieces).
       const top = above.length === 0, foot = below.length === 0;
-      for (const [isEnd, side] of [[top, up], [foot, -up]] as [boolean, number][]) {
-        if (!isEnd || !same.length || i !== same[0]) continue;
-        const tEnd = side > 0 ? t1 : t0;
-        const endPoint = same.flatMap((j) => [edges[j].a, edges[j].b]).reduce((p, q) => (Math.abs(dot(q, t) - tEnd) < Math.abs(dot(p, t) - tEnd) ? q : p));
+      if (top || foot) {
+        if (i !== same[0]) continue;
+        const side = top ? up : -up;
+        const tEnd = side > 0 ? t1 : t0, tFar = side > 0 ? t0 : t1;
+        const corners = same.flatMap((j) => [edges[j].a, edges[j].b]);
+        const at = (tv: number) => corners.reduce((p, q) => (Math.abs(dot(q, t) - tv) < Math.abs(dot(p, t) - tv) ? q : p));
+        const past = 0.5, out = profile.proud + 0.1, back = Math.min(0.1, profile.proud);
         const h = y + (rise * side) / 2;
-        const half = 0.5, out = profile.proud + 0.1, back = Math.min(0.1, profile.proud);
-        const [lo, hi] = kind === "plinth" ? [h - rise - 0.3, h + rise + profile.height + 0.35] : [h - rise - profile.height - 0.35, h + rise + 0.3];
+        const [lo, hi] = kind === "plinth" ? [h - 2 * rise - 0.3, h + rise + profile.height + 0.35] : [h - rise - profile.height - 0.35, h + 2 * rise + 0.3];
         const pts: V3[] = [];
-        for (const dt of [-half, half]) for (const k of [-back, out]) {
-          const x = endPoint[0] + t[0] * dt + e.n[0] * k, z = endPoint[2] + t[2] * dt + e.n[2] * k;
-          pts.push([x, lo, z], [x, hi, z]);
+        for (const [c, dt] of [[at(tFar), -side * 0.05], [at(tEnd), side * past]] as [V3, number][]) {
+          for (const k of [-back, out]) {
+            const x = c[0] + t[0] * dt + e.n[0] * k, z = c[2] + t[2] * dt + e.n[2] * k;
+            pts.push([x, lo, z], [x, hi, z]);
+          }
         }
         pieces.push({ kind: "block", points: pts });
+        continue;
       }
       /** The pitch line's height at a point along the wall: through the step's middle, rising a step a step. */
       const line = (p: number) => y + (rise * up * (p - (t0 + t1) / 2)) / (t1 - t0);
