@@ -450,6 +450,8 @@ interface SolidKind {
   /** Ironwork (a gate's bars), and the dark past a gate: drawn in the style's iron and dark. */
   iron?: boolean;
   dark?: boolean;
+  /** A breach's heap: the wall's core's rubble. */
+  breach?: boolean;
   /** A trim's stone direction, where it slopes (a stair's band), and where its courses start. */
   grain?: V;
   uvOrigin?: V;
@@ -478,6 +480,7 @@ function solidKinds(count: number, faces: readonly Face[]): SolidKind[] {
 function paintFor(f: Face, kind: SolidKind, look: DungeonStyleDef["look"]): DungeonPaint {
   if (kind.iron) return look.iron;
   if (kind.dark) return look.dark;
+  if (kind.breach) return look.breach;
   if (kind.niche) return look.niche;
   if (kind.tomb) return look.tomb;
   if (kind.trim) return look.trim;
@@ -683,13 +686,13 @@ function drawNiches(niches: readonly Niche[], cut: Face[], all: Solid[], kindsAl
       faces.push(...(others.length > 0 ? cutFace(inner, others, [-COVER]) : [inner]));
     }
   }
-  // A breach's fallen blocks, drawn but for their undersides, in the wall's own stone.
+  // A breach's heap of rubble, drawn but for its underside, in the wall's core's rubble.
   for (const niche of niches) {
     for (const piece of niche.fallen ?? []) {
       const solid = hullSolid(piece);
       for (const side of solid.sides) if (side.n[1] > -0.9) faces.push({ n: side.n, corners: side.corners, solid: all.length });
       all.push(solid);
-      kindsAll.push({ tread: false, floor: false, roof: false, top: -Infinity });
+      kindsAll.push({ tread: false, floor: false, roof: false, top: -Infinity, breach: true });
     }
   }
   // Each frame's bars drawn as they are, uncut (they only stand in front of the wall): the face,

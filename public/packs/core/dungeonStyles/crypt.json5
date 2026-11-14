@@ -57,9 +57,10 @@
     },
     // In the rooms, an arcosolium or two: a round-arched niche 4 m wide on the plinth, a tomb chest
     // lying in it - the centrepiece of an end wall or an alcove.
-    // Breaches: where blocks have fallen out of a wall - a ragged hollow half a metre deep, the
-    // rubble core showing, the blocks heaped at its foot. In about one wall in six, two a part at most.
-    breaches: { share: 0.16, count: 2, width: [2.2, 3.6], height: [1.6, 2.8], depth: 0.5, above: 1.0, margin: 0.8, stones: [9, 15], size: [0.3, 0.9] },
+    // Breaches: where blocks have fallen out of a wall - a hollow half a metre deep stepped course
+    // by course, the rubble core showing, a heap of rubble at its foot. In about one wall in six,
+    // two a part at most.
+    breaches: { share: 0.16, count: 2, width: [2.2, 3.6], height: [1.6, 2.8], depth: 0.5, above: 1.0, margin: 0.8, heap: 0.6 },
     arcosolia: {
       width: 4, rise: 1.6, depth: 0.8, above: 0.75, margin: 0.5, count: 2,
       frame: { width: 0.35, proud: 0.18, bevel: 0.14 },

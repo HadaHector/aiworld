@@ -51,8 +51,8 @@ export interface Niche {
   slab: V3[] | null;
   frame: { points: V3[]; grain: V3 }[];
   contents?: V3[][];
-  /** A breach (see `breaches`): its inside the wall's core, and the blocks fallen out of it lying
-   *  heaped at its foot (convex chunks). */
+  /** A breach (see `breaches`): its inside the wall's core, and the heap of rubble at its foot (a
+   *  convex hull). */
   breach?: boolean;
   fallen?: V3[][];
 }
@@ -71,9 +71,8 @@ export interface BreachSpec {
   above: number;
   /** Kept this far from the face's ends and from the head of the wall. */
   margin: number;
-  /** How many blocks lie fallen at its foot, and how big each is (rolled between). */
-  stones: [number, number];
-  size: [number, number];
+  /** How high the heap of rubble at its foot stands. */
+  heap: number;
 }
 
 export interface ArcosoliaSpec {
@@ -98,7 +97,7 @@ export interface ArcosoliaSpec {
  * showing, and the blocks lying heaped at its foot, widest at the wall and thinning across the
  * floor. On faces standing on the floor and long and high enough, `share` of them (at most `count`),
  * wherever the hollow lies inside the face with wall behind it and nothing is in the way of it or
- * of its heap (`blocked` asked of the hollow, `heapBlocked` of the floor its heap lies on).
+ * of the heap of rubble at its foot (`blocked` asked of the hollow, `heapBlocked` of the floor its heap lies on).
  */
 export function breaches(faces: readonly WallFace[], around: DentSurroundings, spec: BreachSpec, heapBlocked: (lo: V3, hi: V3) => boolean): Niche[] {
   const out: Niche[] = [];
@@ -136,36 +135,28 @@ export function breaches(faces: readonly WallFace[], around: DentSurroundings, s
     }
     if (!runs.every((r) => [[r.a0, r.y0], [r.a1, r.y0], [r.a1, r.y1], [r.a0, r.y1]].every(([a, y]) => insideOutline(p.outline, a, y)))) continue;
     if (!runs.every((r) => [[r.a0, r.y0], [r.a1, r.y1], [(r.a0 + r.a1) / 2, (r.y0 + r.y1) / 2]].every(([a, y]) => around.solidAt(p.at(a, y, -r.deep - 0.15))))) continue;
-    const reach = 1.8;
+    const reach = 1.4;
     const box = (pts: V3[], y0b: number, y1b: number): [V3, V3] => [[Math.min(...pts.map((q) => q[0])), y0b, Math.min(...pts.map((q) => q[2]))], [Math.max(...pts.map((q) => q[0])), y1b, Math.max(...pts.map((q) => q[2]))]];
     const hollow = box([p.at(mid - w / 2, y0), p.at(mid + w / 2, y0), p.at(mid - w / 2, y0, -spec.depth), p.at(mid + w / 2, y0, -spec.depth)], y0, y0 + h);
     if (around.blocked(...hollow)) continue;
-    const heap = box([p.at(mid - w * 0.75, floor), p.at(mid + w * 0.75, floor), p.at(mid - w * 0.75, floor, reach), p.at(mid + w * 0.75, floor, reach)], floor, floor + 1);
-    if (heapBlocked(...heap)) continue;
-    // The heap: blocks out from the wall's foot, the biggest nearest it, piled where it is highest.
-    const fallen: V3[][] = [];
-    const count = Math.round(between(spec.stones));
-    for (let k = 0; k < count; k++) {
-      const du = (roll() + roll() - 1) * w * 0.7;
-      const dv = 0.2 + Math.abs(roll() + roll() - 1) * reach;
-      const near = Math.max(0, 1 - dv / reach);
-      const s = spec.size[0] + (spec.size[1] - spec.size[0]) * (0.35 + 0.65 * near) * (0.6 + 0.4 * roll());
-      const pile = 0.9 * Math.max(0, 1 - (du / (w * 0.75)) ** 2 - (dv / reach) ** 2);
-      const half: V3 = [s * (0.45 + 0.25 * roll()), s * (0.25 + 0.15 * roll()), s * (0.35 + 0.2 * roll())];
-      const v = Math.max(dv, half[2] + 0.18);
-      const centre = p.at(mid + du, floor + Math.max(half[1] * 0.8, pile - half[1]), v);
-      // Turned about the upright and tipped a little, each corner knocked about.
-      const yaw = roll() * Math.PI, tip = (roll() - 0.5) * 0.6, lean = (roll() - 0.5) * 0.6;
-      const piece: V3[] = [];
-      for (const sx of [-1, 1]) for (const sy of [-1, 1]) for (const sz of [-1, 1]) {
-        let x = sx * half[0] * (0.75 + 0.25 * roll()), y = sy * half[1] * (0.75 + 0.25 * roll()), z = sz * half[2] * (0.75 + 0.25 * roll());
-        [y, z] = [y * Math.cos(tip) - z * Math.sin(tip), y * Math.sin(tip) + z * Math.cos(tip)];
-        [x, y] = [x * Math.cos(lean) - y * Math.sin(lean), x * Math.sin(lean) + y * Math.cos(lean)];
-        [x, z] = [x * Math.cos(yaw) - z * Math.sin(yaw), x * Math.sin(yaw) + z * Math.cos(yaw)];
-        piece.push([centre[0] + x, Math.max(floor - 0.05, centre[1] + y), centre[2] + z]);
+    const floorBox = box([p.at(mid - w * 0.75, floor), p.at(mid + w * 0.75, floor), p.at(mid - w * 0.75, floor, reach), p.at(mid + w * 0.75, floor, reach)], floor, floor + 1);
+    if (heapBlocked(...floorBox)) continue;
+    // The heap: a low mound of rubble against the wall's foot under it - as wide as the hollow, as
+    // high as a course or so, falling away across the floor; rings of points, each knocked about,
+    // drawn as their hull (lumpy enough with the rubble's texture on it).
+    const along = w * (0.45 + 0.1 * roll()), outward = 0.8 + 0.5 * roll(), high = spec.heap * (0.8 + 0.4 * roll());
+    const mound: V3[] = [];
+    const rings: [number, number][] = [[1, 0], [0.75, 0.5], [0.4, 0.85], [0.12, 1]];
+    for (const [r, up] of rings) {
+      for (let i = 0; i <= 8; i++) {
+        const a = (i / 8) * Math.PI;
+        const jitter = 0.85 + 0.25 * roll();
+        const u = mid + Math.cos(a) * along * r * jitter;
+        const v = Math.sin(a) * outward * r * jitter;
+        mound.push(p.at(u, floor - 0.03 + up * high * (0.9 + 0.2 * roll()), v));
       }
-      fallen.push(piece);
     }
+    const fallen = [mound];
     // Each course a hollow of its own, the heap with the lowest.
     runs.forEach((r, k) => {
       const points = [0, -r.deep].flatMap((o) => [p.at(r.a0, r.y0, o), p.at(r.a1, r.y0, o), p.at(r.a1, r.y1, o), p.at(r.a0, r.y1, o)]);
