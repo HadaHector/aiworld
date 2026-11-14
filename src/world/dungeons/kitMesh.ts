@@ -440,6 +440,8 @@ interface SolidKind {
   plain?: boolean;
   /** A trim (a plinth, a cornice): drawn in the style's trim. */
   trim?: boolean;
+  /** Part of a niche (its frame, its slab): drawn in the style's niche paint. */
+  niche?: boolean;
   /** A trim's stone direction, where it slopes (a stair's band), and where its courses start. */
   grain?: V;
   uvOrigin?: V;
@@ -466,6 +468,7 @@ function solidKinds(count: number, faces: readonly Face[]): SolidKind[] {
  * else wall - so a wall cut into pieces round a flight of stairs stays wall.
  */
 function paintFor(f: Face, kind: SolidKind, look: DungeonStyleDef["look"]): DungeonPaint {
+  if (kind.niche) return look.niche;
   if (kind.trim) return look.trim;
   if (kind.plain) return look.wall;
   if (f.n[1] > 0.5) return kind.tread ? look.steps : look.floor;
@@ -611,7 +614,7 @@ export function trimmedShape(part: DungeonPartDef, trims: WallTrims): { solids: 
           faces.push({ n: side.n, corners: side.corners, solid: all.length });
         }
         all.push(solid);
-        kindsAll.push({ tread: false, floor: false, roof: false, top: -Infinity, trim: true, grain: bar.grain });
+        kindsAll.push({ tread: false, floor: false, roof: false, top: -Infinity, trim: true, niche: true, grain: bar.grain });
       }
     }
     for (const niche of niches) {
@@ -621,7 +624,7 @@ export function trimmedShape(part: DungeonPartDef, trims: WallTrims): { solids: 
       if (!front) continue;
       faces.push({ n: front.n, corners: front.corners, solid: all.length });
       all.push(slab);
-      kindsAll.push({ tread: false, floor: false, roof: false, top: -Infinity, trim: true });
+      kindsAll.push({ tread: false, floor: false, roof: false, top: -Infinity, trim: true, niche: true });
     }
   }
   for (const i of part.plain) kindsAll[i] = { ...kindsAll[i], tread: false, plain: true };

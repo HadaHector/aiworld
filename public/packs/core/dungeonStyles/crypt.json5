@@ -34,7 +34,7 @@
     frame: { material: "doorStone" },
     door: { material: "doorBoards", tint: [0.7, 0.62, 0.52] },
     trim: { material: "doorStone", tint: [0.9, 0.88, 0.84] },
-    // Inside a loculus: a pale render, so the niches read against the stone round them.
+    // The loculi - their frames, slabs and insides: a pale render, so they read against the stone.
     niche: { material: "plaster", tint: [0.78, 0.73, 0.65] },
   },
   // Bands along the walls (DUNGEONS.md, *Trims*): a plinth a course high at their feet, a cornice

@@ -165,7 +165,7 @@ export interface KitLook {
   frame: DungeonPaint;
   /** The trims' (plinths, cornices, a niche's frame). */
   trim: DungeonPaint;
-  /** Inside a niche cut into a wall. */
+  /** A niche cut into a wall: its inside, its frame, its slab. */
   niche: DungeonPaint;
   door: DungeonPaint;
 }
