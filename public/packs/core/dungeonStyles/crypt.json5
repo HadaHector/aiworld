@@ -67,5 +67,7 @@
   doorways: { tags: ["doorway"] },
   // How it is lit (DUNGEONS.md, *Light*): torches at most of the parts' light spots, and a little
   // cold light everywhere so an unlit corner is a dark shape, not a hole.
-  light: { ambient: [0.022, 0.024, 0.03], fixture: "wallTorch", lit: 0.8 },
+  // Candles left burning on the benches, on the ledger stones and at the tombs' heads: this share
+  // of those places has some (fewer on the ledger stones).
+  light: { ambient: [0.022, 0.024, 0.03], fixture: "wallTorch", lit: 0.8, candles: { prop: "candles", share: 0.4 } },
 }

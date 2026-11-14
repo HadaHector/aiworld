@@ -33,6 +33,7 @@ export function createDungeonMeshes(
   material: BuildingMaterial,
   near: () => { x: number; y: number; z: number },
   onBaked?: (done: number, total: number) => void,
+  props?: (id: string) => PropDef | undefined,
 ): DungeonMeshes {
   const started = performance.now();
   const root = new Mesh(`dungeon:${layout.style}:${layout.seed}`, scene);
@@ -41,7 +42,7 @@ export function createDungeonMeshes(
   root.rotation.y = layout.frame.yaw;
   root.computeWorldMatrix(true);
   root.freezeWorldMatrix();
-  const models = layout.parts.map((_, i) => buildPartModel(layout, i, style, fixture));
+  const models = layout.parts.map((_, i) => buildPartModel(layout, i, style, fixture, props));
   const all = models.flatMap((m) => m.lights);
   const pool = createLightBakePool();
   const meshes: Mesh[] = [];

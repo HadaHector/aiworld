@@ -4,7 +4,7 @@
 // through: floor, wall, vault, step. Torches stand at its light spots. Pure: no engine, so it can
 // run anywhere the layout does.
 import { arcosolia, loculi, type DentSurroundings, type Niche } from "../architecture/dents";
-import { TOMB_SIZE, ledgerCorners, type LedgerDef, type TombDef } from "./tombs";
+import { BENCH_SIZE, TOMB_SIZE, ledgerCorners, type BenchDef, type LedgerDef, type TombDef } from "./tombs";
 import { copings, ribs, wallTrims, type TrimPiece, type CeilingSpan, type StairEdge, type WallFace, type WallTrims } from "../architecture/trims";
 import { convexHull, rotate, type ShapeDesc } from "../collision/index";
 import { ModelBuilder } from "../buildings/buildingGeometry";
@@ -507,7 +507,7 @@ const trimmedParts = new WeakMap<DungeonPartDef, Map<WallTrims, { solids: Solid[
 export function trimmedShape(part: DungeonPartDef, trims: WallTrims): { solids: Solid[]; faces: Face[]; kinds: SolidKind[] } {
   const plain = partShape(part);
   if (part.ending) return endingShape(part, trims, plain);
-  if (part.doorway || part.paths.length === 0 || (!trims.plinth && !trims.cornice && !trims.ribs && !trims.coping && !trims.loculi && !part.tombs?.length && !part.ledgers?.length)) return plain;
+  if (part.doorway || part.paths.length === 0 || (!trims.plinth && !trims.cornice && !trims.ribs && !trims.coping && !trims.loculi && !part.tombs?.length && !part.benches?.length && !part.ledgers?.length)) return plain;
   let byStyle = trimmedParts.get(part);
   if (!byStyle) trimmedParts.set(part, (byStyle = new Map()));
   const known = byStyle.get(trims);
@@ -597,16 +597,21 @@ export function trimmedShape(part: DungeonPartDef, trims: WallTrims): { solids: 
         return h - Math.floor(h);
       },
     };
+    // A bench before a wall: no arcosolium over it (its chest would stand behind the seat), and no
+    // loculus down into it (those over it stand clear).
+    const benchBoxes = (part.benches ?? []).map((b) => benchBox(b));
+    const overBench = (lo: V, hi: V, all: boolean) => benchBoxes.some((b) => b.hi[0] > lo[0] - 0.3 && b.lo[0] < hi[0] + 0.3 && b.hi[2] > lo[2] - 0.3 && b.lo[2] < hi[2] + 0.3 && (all || lo[1] < b.hi[1]));
+    const aroundGreat: DentSurroundings = { ...around, blocked: (lo, hi) => around.blocked(lo, hi) || overBench(lo, hi, true) };
     // The arcosolia first, as centrepieces; the loculi round them, kept clear of them.
     // A room gets its share; a way (a corridor) one at most, on a short wall - an alcove's back.
     const great = !trims.arcosolia
       ? []
       : part.room
-        ? arcosolia(walls, around, trims.arcosolia)
-        : arcosolia(walls.filter((f) => wallRun(f) <= ALCOVE_WALL), around, { ...trims.arcosolia, count: Math.min(1, trims.arcosolia.count) });
+        ? arcosolia(walls, aroundGreat, trims.arcosolia)
+        : arcosolia(walls.filter((f) => wallRun(f) <= ALCOVE_WALL), aroundGreat, { ...trims.arcosolia, count: Math.min(1, trims.arcosolia.count) });
     const greatBoxes = great.map((n) => hullSolid([...n.points, ...n.frame.flatMap((b) => b.points)]));
     const small = trims.loculi
-      ? loculi(walls, { ...around, blocked: (lo, hi) => around.blocked(lo, hi) || greatBoxes.some((b) => b.hi[0] > lo[0] - 0.3 && b.lo[0] < hi[0] + 0.3 && b.hi[1] > lo[1] - 0.3 && b.lo[1] < hi[1] + 0.3 && b.hi[2] > lo[2] - 0.3 && b.lo[2] < hi[2] + 0.3) }, trims.loculi)
+      ? loculi(walls, { ...around, blocked: (lo, hi) => around.blocked(lo, hi) || overBench(lo, hi, false) || greatBoxes.some((b) => b.hi[0] > lo[0] - 0.3 && b.lo[0] < hi[0] + 0.3 && b.hi[1] > lo[1] - 0.3 && b.lo[1] < hi[1] + 0.3 && b.hi[2] > lo[2] - 0.3 && b.lo[2] < hi[2] + 0.3) }, trims.loculi)
       : [];
     niches = [...great, ...small];
   }
@@ -616,9 +621,16 @@ export function trimmedShape(part: DungeonPartDef, trims: WallTrims): { solids: 
   if (niches.length > 0) faces = drawNiches(niches, faces, all, kindsAll);
   // Its tombs, drawn as they are, every side but their undersides: they stand on the floor, and a
   // lid's overhang over its chest is no gap in the rock.
-  for (const piece of [...(part.tombs ?? []).flatMap(tombPieces), ...(part.ledgers ?? []).map(ledgerPiece)]) {
+  // Its benches the same, but for their backs against the wall; a seat's underside shows.
+  const benchParts = (part.benches ?? []).flatMap((b) => benchPieces(b).map((piece) => ({ piece, back: b.out, under: piece.under })));
+  const drawnParts = [...[...(part.tombs ?? []).flatMap(tombPieces), ...(part.ledgers ?? []).map(ledgerPiece)].map((piece) => ({ piece, back: null, under: false })), ...benchParts];
+  for (const { piece, back, under } of drawnParts) {
     const solid = hullSolid(piece.points);
-    for (const side of solid.sides) if (side.n[1] > -0.9) faces.push({ n: side.n, corners: side.corners, solid: all.length });
+    for (const side of solid.sides) {
+      if (side.n[1] <= -0.9 && !under) continue;
+      if (back && side.n[0] * back[0] + side.n[2] * back[1] < -0.99) continue;
+      faces.push({ n: side.n, corners: side.corners, solid: all.length });
+    }
     all.push(solid);
     kindsAll.push({ tread: false, floor: false, roof: false, top: -Infinity, trim: true, tomb: true });
   }
@@ -777,6 +789,43 @@ function endingShape(part: DungeonPartDef, trims: WallTrims, plain: { solids: So
   const shape = { solids: all, faces, kinds };
   byStyle.set(trims, shape);
   return shape;
+}
+
+/** A bench's seat: this thick, its front and ends chamfered on top by this; the blocks under it this
+ *  wide, this far in from its ends and set back this far from its front. */
+const BENCH_SEAT = 0.18;
+const BENCH_BEVEL = 0.05;
+const BENCH_BLOCK = 0.6;
+const BENCH_BLOCK_IN = 0.35;
+const BENCH_BLOCK_BACK = 0.12;
+
+/** A bench's box in the room's frame. */
+function benchBox(b: BenchDef): { lo: V; hi: V } {
+  const [len, deep, high] = BENCH_SIZE;
+  const alongZ = b.out[0] !== 0;
+  const hx = (alongZ ? deep : len) / 2, hz = (alongZ ? len : deep) / 2;
+  return { lo: [b.at.x - hx, b.at.y, b.at.z - hz], hi: [b.at.x + hx, b.at.y + high, b.at.z + hz] };
+}
+
+/**
+ * A stone bench drawn: a seat slab, its top's front and ends chamfered, on two blocks set in from its
+ * ends and back from its front - each one stone, in the tombs' stone.
+ */
+function benchPieces(b: BenchDef): (TrimPiece & { under: boolean })[] {
+  const [len, deep, high] = BENCH_SIZE;
+  const o = b.out, t = [-o[1], o[0]];
+  /** A point `u` along the wall from the bench's middle, `v` out of the wall from its back, `y` up. */
+  const p = (u: number, v: number, y: number): V => [b.at.x + t[0] * u + o[0] * (v - deep / 2), b.at.y + y, b.at.z + t[1] * u + o[1] * (v - deep / 2)];
+  const rect = (u: number, v0: number, v1: number, y: number): V[] => [p(-u, v0, y), p(u, v0, y), p(u, v1, y), p(-u, v1, y)];
+  const seat0 = high - BENCH_SEAT, l = len / 2, e = BENCH_BEVEL;
+  const seat = [...rect(l, 0, deep, seat0), ...rect(l, 0, deep, high - e), ...rect(l - e, 0, deep - e, high)];
+  const block = (u0: number, u1: number): V[] => [-0.02, seat0 + 0.01].flatMap((y) => [p(u0, 0, y), p(u1, 0, y), p(u1, deep - BENCH_BLOCK_BACK, y), p(u0, deep - BENCH_BLOCK_BACK, y)]);
+  const a = l - BENCH_BLOCK_IN;
+  return [
+    { kind: "tomb", points: seat, under: true },
+    { kind: "tomb", points: block(-a, -a + BENCH_BLOCK), under: false },
+    { kind: "tomb", points: block(a - BENCH_BLOCK, a), under: false },
+  ];
 }
 
 /** A ledger stone drawn: a slab a step high, its top edge chamfered all round. */
@@ -1069,7 +1118,7 @@ const asPaint = (p: DungeonPaint): Paint => ({ material: p.material, tint: p.tin
  * spots the style lights (its `lit` share), hung on the nearest wall with its flame at least
  * FLAME_HEIGHT over the floor.
  */
-export function buildPartModel(layout: DungeonLayout, index: number, style: DungeonStyleDef, fixture: PropDef | undefined): PartModel {
+export function buildPartModel(layout: DungeonLayout, index: number, style: DungeonStyleDef, fixture: PropDef | undefined, props?: (id: string) => PropDef | undefined): PartModel {
   const placed = layout.parts[index];
   const shape = trimmedShape(placed.part, style.trims);
   const { solids, kinds } = shape;
@@ -1153,8 +1202,44 @@ export function buildPartModel(layout: DungeonLayout, index: number, style: Dung
     const front = turn(out);
     b.append(model, p[0], p[1], p[2], front[0], front[2]);
   });
+  // Candles: on its benches' seats toward their ends, on its ledger stones, on the floor at its tombs' heads.
+  const candles = style.light.candles && props?.(style.light.candles.prop);
+  if (candles && style.light.candles) {
+    const share = style.light.candles.share;
+    candleSites(placed.part).forEach((site, i) => {
+      if (random() >= share * site.share) return;
+      const model = generateProp(candles, deriveSeed(layout.seed, index * 977 + i), i);
+      const p = point(site.at);
+      const front = turn(site.front);
+      b.append(model, p[0], p[1], p[2], front[0], front[2]);
+    });
+  }
   const model = b.finish({ x: 0, z: 0 });
   return { model, lights: model.lights ?? [] };
+}
+
+/** Where candles may stand in a part, in its own frame: the place, which way they face, and how
+ *  likely they are there against the style's share. */
+function candleSites(part: DungeonPartDef): { at: V; front: V; share: number }[] {
+  const sites: { at: V; front: V; share: number }[] = [];
+  const [len, , high] = BENCH_SIZE;
+  for (const b of part.benches ?? []) {
+    const front: V = [b.out[0], 0, b.out[1]];
+    const t: V = [-b.out[1], 0, b.out[0]];
+    // Toward either end of the seat, a little nearer the wall than its front.
+    for (const s of [-1, 1]) {
+      const u = s * (len / 2 - 0.7), v = -0.05;
+      sites.push({ at: [b.at.x + t[0] * u + front[0] * v, b.at.y + high, b.at.z + t[2] * u + front[2] * v], front, share: 1 });
+    }
+  }
+  for (const t of part.tombs ?? []) {
+    // On the floor past its head: the end toward the part's middle-most side, either is as good.
+    const along: V = t.yaw === 90 ? [1, 0, 0] : [0, 0, 1];
+    const reach = TOMB_SIZE[0] / 2 + 0.75;
+    sites.push({ at: [t.at.x + along[0] * reach, t.at.y, t.at.z + along[2] * reach], front: along, share: 1 });
+  }
+  for (const l of part.ledgers ?? []) sites.push({ at: [l.at.x, l.at.y + l.high, l.at.z], front: [Math.sin(l.turn), 0, Math.cos(l.turn)], share: 0.25 });
+  return sites;
 }
 
 /** How far a point is from the wall facing it along -`out` (the wall's outward normal). */

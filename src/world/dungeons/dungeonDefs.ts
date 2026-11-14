@@ -8,7 +8,7 @@ import { DUNGEON_FOLDERS, orderPacks, parseFile, type PackSource } from "../cont
 import { vec3, type Aabb, type ShapeDesc, type Vec3 } from "../collision/index";
 import { boxShape, doorwayGeometry, DOORWAY_KINDS, rotundaGeometry, spiralGeometry, stairGeometry, type DoorwaySpec, type Polyline, type Voussoir } from "./kitShapes";
 import { checkPaths } from "./clearance";
-import { ledgerShape, placeLedgers, placeTombs, tombShape, type LedgerDef, type TombDef } from "./tombs";
+import { benchShape, ledgerShape, placeBenches, placeLedgers, placeTombs, tombShape, type BenchDef, type LedgerDef, type TombDef } from "./tombs";
 
 const ID_PATTERN = /^[A-Za-z0-9_-]+$/;
 
@@ -115,9 +115,11 @@ export interface DungeonPartDef {
   /** Tombs standing free on its floor (./tombs.ts): each a collider at the end of `shapes`, drawn by
    *  the style as a carved chest rather than as the box it collides as. */
   tombs?: TombDef[];
-  /** Ledger stones let into its floor (./tombs.ts): colliders after its tombs, drawn bevelled. */
+  /** Stone benches against its walls (./tombs.ts): colliders after its tombs, drawn as a seat on two blocks. */
+  benches?: BenchDef[];
+  /** Ledger stones let into its floor (./tombs.ts): colliders after its benches, drawn bevelled. */
   ledgers?: LedgerDef[];
-  /** How many of `shapes` are drawn as they are (the rest - its tombs and ledgers - are not); all when unset. */
+  /** How many of `shapes` are drawn as they are (the rest - its tombs, benches and ledgers - are not); all when unset. */
   drawn?: number;
 }
 
@@ -193,6 +195,9 @@ export interface DungeonLight {
   /** The prop standing at a part's `light` spots (a wall torch), and the share of spots that have one. */
   fixture: string;
   lit: number;
+  /** Candles (a prop, a cluster of them) left on its benches, on its ledger stones and at its tombs'
+   *  heads: the share of each such place that has some. */
+  candles?: { prop: string; share: number };
 }
 
 export interface DungeonContent {
@@ -297,7 +302,7 @@ function vector(reader: Reader, value: unknown, path: string): Vec3 {
   return vec3();
 }
 
-const PART_KEYS = ["tags", "weight", "stage", "apart", "tombs", "ledgers", "ending", "bounds", "sockets", "colliders", "paths", "spots", "room", "doorway"];
+const PART_KEYS = ["tags", "weight", "stage", "apart", "tombs", "benches", "ledgers", "ending", "bounds", "sockets", "colliders", "paths", "spots", "room", "doorway"];
 
 function readPart(entry: Entry, rules: DungeonRules, issues: ContentIssue[]): DungeonPartDef | null {
   const reader = new Reader(issues, entry.file);
@@ -457,6 +462,9 @@ function readPart(entry: Entry, rules: DungeonRules, issues: ContentIssue[]): Du
   const drawn = shapes.length;
   const tombs = placeTombs(shapes, paths, spots, reader.optionalNumber(obj, "tombs", "", 0, { min: 0 }));
   shapes.push(...tombs.map(tombShape));
+  // Stone benches with their backs to its walls, clear of the ways and its tombs.
+  const benches = placeBenches(shapes, paths, spots, sockets, reader.optionalNumber(obj, "benches", "", 0, { min: 0 }));
+  shapes.push(...benches.map(benchShape));
   // Ledger stones in rows on its floor, round its tombs: a step high, so colliders too.
   const ledgers = placeLedgers(shapes, spots, sockets.map((s) => s.at), reader.optionalNumber(obj, "ledgers", "", 0, { min: 0, max: 1 }));
   shapes.push(...ledgers.map(ledgerShape));
@@ -480,6 +488,7 @@ function readPart(entry: Entry, rules: DungeonRules, issues: ContentIssue[]): Du
     plain,
     voussoirs,
     tombs,
+    benches,
     ledgers,
     drawn,
   };
@@ -622,8 +631,15 @@ function readTrims(reader: Reader, raw: RawObject): WallTrims {
 }
 
 function readLight(reader: Reader, raw: RawObject): DungeonLight {
-  reader.onlyKeys(raw, "light", ["ambient", "fixture", "lit"]);
+  reader.onlyKeys(raw, "light", ["ambient", "fixture", "lit", "candles"]);
+  let candles: DungeonLight["candles"];
+  if (raw.candles !== undefined) {
+    const c = reader.object(raw.candles, "light.candles");
+    reader.onlyKeys(c, "light.candles", ["prop", "share"]);
+    candles = { prop: reader.optionalString(c, "prop", "light.candles") ?? "candles", share: reader.optionalNumber(c, "share", "light.candles", 0.4, { min: 0, max: 1 }) };
+  }
   return {
+    candles,
     ambient: colour(reader, raw.ambient, "light.ambient", [0.02, 0.02, 0.025]),
     fixture: reader.optionalString(raw, "fixture", "light") ?? "wallTorch",
     lit: reader.optionalNumber(raw, "lit", "light", 1, { min: 0, max: 1 }),

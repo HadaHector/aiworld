@@ -219,3 +219,134 @@ function hash(x: number, z: number, salt: number): number {
   const h = Math.sin(x * 12.9898 + z * 37.719 + salt * 78.233) * 43758.5453;
   return h - Math.floor(h);
 }
+
+/** A stone bench's size: long, deep (out of the wall), high (its seat's top, a plinth's height). */
+export const BENCH_SIZE: [number, number, number] = [4, 0.9, 0.75];
+/** Kept this far from anything else standing on the floor, past its ends and in front of it; this far
+ *  from a walk line; and this far past a doorway's opening. */
+const BENCH_CLEAR = 1.5;
+const BENCH_CLEAR_OF_WAYS = 1.5;
+const BENCH_CLEAR_OF_DOORS = 2;
+
+/** A stone bench against a wall: its floor's middle, and which way it faces out of the wall (along x or z). */
+export interface BenchDef {
+  at: Vec3;
+  out: [number, number];
+}
+
+/** A bench's plan in the room's frame: its middle, and its half reach along x and z. */
+function benchPlan(b: BenchDef): { x: number; z: number; hx: number; hz: number } {
+  const [len, deep] = BENCH_SIZE;
+  const alongZ = b.out[0] !== 0;
+  return { x: b.at.x, z: b.at.z, hx: (alongZ ? deep : len) / 2, hz: (alongZ ? len : deep) / 2 };
+}
+
+/**
+ * Up to `count` stone benches for a part, each with its back to a wall: along every stretch of wall
+ * that rises from a floor and runs on long enough, the free stretches of it - floor under the whole
+ * bench, the wall behind all of it, nothing else standing near it (a corner, a pillar, a tomb), clear
+ * of the ways through, of the doorways (`doors`, its sockets) and of the spots on its floor - each
+ * holding a bench in its middle, the longest stretches first. Only its boxes count.
+ */
+export function placeBenches(shapes: readonly ShapeDesc[], paths: readonly Polyline[], spots: Record<string, Vec3[]>, doors: readonly { at: Vec3; size: [number, number] }[], count: number): BenchDef[] {
+  if (count <= 0) return [];
+  const boxes: Box[] = [];
+  for (const s of shapes) {
+    if (s.kind !== "box" || s.rotation) continue;
+    boxes.push({ min: [s.center.x - s.half.x, s.center.y - s.half.y, s.center.z - s.half.z], max: [s.center.x + s.half.x, s.center.y + s.half.y, s.center.z + s.half.z] });
+  }
+  if (boxes.length === 0) return [];
+  const [len, deep] = BENCH_SIZE;
+  const inBox = (b: Box, x: number, y: number, z: number) => x > b.min[0] && x < b.max[0] && y > b.min[1] && y < b.max[1] && z > b.min[2] && z < b.max[2];
+  const solid = (x: number, y: number, z: number) => boxes.some((b) => inBox(b, x, y, z));
+  /** The floor under (x, z) with headroom over it, the lowest such. */
+  const floorAt = (x: number, z: number): number | null => {
+    const tops = boxes.filter((b) => x > b.min[0] && x < b.max[0] && z > b.min[2] && z < b.max[2]).map((b) => b.max[1]).sort((p, q) => p - q);
+    for (const y of tops) if (!solid(x, y + 0.1, z) && !solid(x, y + 2.5, z)) return y;
+    return null;
+  };
+  const ways: [Vec3, Vec3][] = paths.flatMap((line) => line.slice(1).map((q, i): [Vec3, Vec3] => [line[i], q]));
+  const toWay = (p: Vec3): number => Math.min(Infinity, ...ways.map(([a, b]) => distanceToSegment(p, a, b)));
+  const floorSpots = Object.entries(spots).filter(([key]) => key !== "light").flatMap(([, list]) => list);
+  // The walls' planes: every upright side of every box, those in one plane together.
+  const planes = new Map<string, { axis: 0 | 2; at: number; sign: number; lo: number; hi: number }>();
+  for (const b of boxes) {
+    for (const axis of [0, 2] as const) {
+      const other = axis === 0 ? 2 : 0;
+      for (const sign of [-1, 1]) {
+        const at = sign < 0 ? b.min[axis] : b.max[axis];
+        const key = `${axis}:${sign}:${at.toFixed(3)}`;
+        const known = planes.get(key);
+        if (known) { known.lo = Math.min(known.lo, b.min[other]); known.hi = Math.max(known.hi, b.max[other]); }
+        else planes.set(key, { axis, at, sign, lo: b.min[other], hi: b.max[other] });
+      }
+    }
+  }
+  type Candidate = { bench: BenchDef; free: number };
+  const candidates: Candidate[] = [];
+  const STEP = 0.25;
+  for (const plane of planes.values()) {
+    if (plane.hi - plane.lo < len) continue;
+    /** A point `u` along the wall, `v` out of it. */
+    const at = (u: number, v: number): [number, number] => (plane.axis === 0 ? [plane.at + plane.sign * v, u] : [u, plane.at + plane.sign * v]);
+    const out: [number, number] = plane.axis === 0 ? [plane.sign, 0] : [0, plane.sign];
+    // Each free stretch: where its bench may stand from first to last; the bench in its very middle
+    // (so a pair either side of a room's middle stands even), or the nearest that fits.
+    let run: { u: number; bench: BenchDef }[] = [];
+    const close = () => {
+      if (run.length > 0) candidates.push({ bench: fits((run[0].u + run[run.length - 1].u) / 2) ?? run[Math.floor(run.length / 2)].bench, free: run.length * STEP });
+      run = [];
+    };
+    for (let u = plane.lo + len / 2; u <= plane.hi - len / 2 + 1e-6; u += STEP) {
+      const bench = fits(u);
+      if (bench) run.push({ u, bench });
+      else close();
+    }
+    close();
+
+    function fits(u: number): BenchDef | null {
+      const [x, z] = at(u, deep / 2);
+      const y = floorAt(x, z);
+      if (y === null) return null;
+      // The whole bench on that floor, and the wall behind all of it, from the floor up.
+      for (const [du, dv] of [[-1, 0.02], [1, 0.02], [-1, deep - 0.02], [1, deep - 0.02]]) {
+        const [cx, cz] = at(u + du * (len / 2 - 0.02), dv);
+        if (floorAt(cx, cz) !== y) return null;
+      }
+      for (let k = 0; k <= 8; k++) {
+        const [wx, wz] = at(u - len / 2 + 0.05 + (k * (len - 0.1)) / 8, -0.05);
+        if (!solid(wx, y + 0.4, wz) || !solid(wx, y + 2.5, wz)) return null;
+      }
+      // Nothing standing beside it or in front of it.
+      const g = BENCH_CLEAR;
+      const [ax, az] = at(u - len / 2 - g, 0.01), [bx, bz] = at(u + len / 2 + g, deep + g);
+      const lo = [Math.min(ax, bx), Math.min(az, bz)], hi = [Math.max(ax, bx), Math.max(az, bz)];
+      if (boxes.some((b) => b.max[0] > lo[0] && b.min[0] < hi[0] && b.max[2] > lo[1] && b.min[2] < hi[1] && b.max[1] > y + 0.05 && b.min[1] < y + 2)) return null;
+      // Off the ways, the doorways and the spots.
+      const edge: Vec3[] = [];
+      for (let k = 0; k <= 8; k++) for (const v of [0, deep]) { const [ex, ez] = at(u - len / 2 + (k * len) / 8, v); edge.push(vec3(ex, y, ez)); }
+      if (edge.some((q) => toWay(q) < BENCH_CLEAR_OF_WAYS)) return null;
+      if (doors.some((d) => Math.abs(d.at.y - y) < 2 && edge.some((q) => Math.hypot(q.x - d.at.x, q.z - d.at.z) < d.size[0] / 2 + BENCH_CLEAR_OF_DOORS))) return null;
+      if (floorSpots.some((sp) => Math.abs(sp.y - y) < 2 && sp.x > lo[0] && sp.x < hi[0] && sp.z > lo[1] && sp.z < hi[1])) return null;
+      return { at: vec3(x, y, z), out };
+    }
+  }
+  // The longest free stretches first, each bench clear of those chosen.
+  candidates.sort((a, b) => b.free - a.free);
+  const chosen: BenchDef[] = [];
+  for (const { bench } of candidates) {
+    if (chosen.length >= count) break;
+    const p = benchPlan(bench);
+    const g = BENCH_CLEAR;
+    if (chosen.some((c) => { const q = benchPlan(c); return Math.abs(c.at.y - bench.at.y) < 2 && Math.abs(q.x - p.x) < q.hx + p.hx + g && Math.abs(q.z - p.z) < q.hz + p.hz + g; })) continue;
+    chosen.push(bench);
+  }
+  return chosen;
+}
+
+/** A bench's collider: a box from its floor to its seat's top, its back against the wall. */
+export function benchShape(b: BenchDef): ShapeDesc {
+  const p = benchPlan(b);
+  const high = BENCH_SIZE[2];
+  return { kind: "box", center: vec3(p.x, b.at.y + high / 2, p.z), half: vec3(p.hx, high / 2, p.hz) };
+}

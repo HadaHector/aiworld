@@ -1304,7 +1304,7 @@ async function preview3d(token: number, asset: Asset, view: ViewDef, content: Wo
     const frame = { x: 0, z: 0, yaw: 0 };
     const layout = { style: style.id, size: "", seed, attempt: 0, minimal: false, parts: [{ part, x: 0, y: 0, z: 0, yaw: 0, bounds: part.bounds, box: part.bounds, entry: -1, parent: -1, role: "room" as const }], joins: [], boss: -1, lock: -1, key: -1, failures: [], frame };
     // Every light spot lit, not the style's share of them: each torch is seen where it hangs.
-    buildings = [buildPartModel(layout, 0, { ...style, light: { ...style.light, lit: 1 } }, content.props.find((prop) => prop.id === style.light.fixture)).model];
+    buildings = [buildPartModel(layout, 0, { ...style, light: { ...style.light, lit: 1 } }, content.props.find((prop) => prop.id === style.light.fixture), (id) => content.props.find((prop) => prop.id === id)).model];
     dungeonAmbient = style.light.ambient;
     if (buildings[0].indices.length === 0) {
       setStatus(`${part.id} has no faces to draw: nothing of it is seen from inside`);
@@ -1330,7 +1330,7 @@ async function preview3d(token: number, asset: Asset, view: ViewDef, content: Wo
     // Built in the layout's frame: the entrance's door at the origin, the dungeon running in along
     // -z, standing on the grid - seen from above, its vaults' tops are not drawn, so it is a plan.
     const lowest = Math.min(...layout.parts.map((p) => p.box.min.y));
-    for (let i = 0; i < layout.parts.length; i++) whole.append(buildPartModel(layout, i, style, fixture).model, 0, -lowest, 0, 0, 1);
+    for (let i = 0; i < layout.parts.length; i++) whole.append(buildPartModel(layout, i, style, fixture, (id) => content.props.find((prop) => prop.id === id)).model, 0, -lowest, 0, 0, 1);
     buildings = [whole.finish({ x: 0, z: 0 })];
     dungeonAmbient = style.light.ambient;
     summary = document.createElement("div");

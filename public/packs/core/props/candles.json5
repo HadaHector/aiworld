@@ -1,0 +1,13 @@
+// Candles left standing together where they burnt down: a puddle of old wax, candles of all heights
+// in it - most still burning, some long gone out. Set on a crypt's benches, its ledger stones and at
+// its tombs' heads (DUNGEONS.md, *Light*).
+{
+  name: "Candles",
+  type: "candles",
+  // The light it gives (see LIGHTS.md): a few candles together - warm, near, soft.
+  light: { color: [1.0, 0.72, 0.42], intensity: 0.7, radius: 6, size: 0.25 },
+  parts: {
+    wax: { tints: [[0.92, 0.88, 0.76], [0.86, 0.8, 0.66], [0.8, 0.74, 0.62]] },
+    flame: { material: "flame", tints: [[1, 1, 1]] },
+  },
+}

@@ -522,6 +522,56 @@ export const altar: PropGenerator = {
   },
 };
 
+/** Candles left standing together where they burnt down: a puddle of old wax, and in it candles of
+ *  all heights, each with a drip of wax down its side - burning, or all long gone out. One light for
+ *  the lot, over the tallest. */
+export const candles: PropGenerator = {
+  doc: "A cluster of candles in a puddle of wax, burning or burnt out.",
+  params: {
+    count: { kind: "count", default: [3, 7], min: 1, doc: "how many candles" },
+    spread: { kind: "range", default: [0.2, 0.3], min: 0.05, doc: "how far from its middle they stand" },
+    height: { kind: "range", default: [0.12, 0.6], min: 0.02, doc: "each candle's height, rolled for each" },
+    radius: { kind: "range", default: [0.05, 0.09], min: 0.01, doc: "each candle's thickness, rolled for each" },
+    lit: { kind: "chance", default: 0.75, doc: "how likely they are burning" },
+  },
+  parts: ["wax", "flame"],
+  build(ctx) {
+    const wax = ctx.paint("wax");
+    const n = ctx.count("count");
+    const spread = ctx.range("spread");
+    const [h0, h1] = ctx.bounds("height");
+    const [r0, r1] = ctx.bounds("radius");
+    const lit = ctx.chance("lit");
+    // The puddle: a low, uneven round of wax.
+    ctx.shape.lathe(moved(ORIGIN, [0, 0, 0]), [[spread + 0.1, 0], [spread + 0.06, 0.025], [spread * 0.5, 0.035], [0.001, 0.04]], wax, { sides: 9 });
+    // The candles: each where it does not stand in another, the tallest toward the middle.
+    const placed: { x: number; z: number; r: number; h: number }[] = [];
+    for (let k = 0; placed.length < n && k < n * 12; k++) {
+      const a = ctx.rng() * Math.PI * 2, d = Math.sqrt(ctx.rng()) * spread;
+      const x = Math.cos(a) * d, z = Math.sin(a) * d;
+      const r = r0 + (r1 - r0) * ctx.rng();
+      if (placed.some((c) => Math.hypot(c.x - x, c.z - z) < c.r + r + 0.02)) continue;
+      const h = h0 + (h1 - h0) * ctx.rng() * (1 - (0.6 * d) / spread);
+      placed.push({ x, z, r, h });
+    }
+    let top: Vec3 | null = null;
+    for (const c of placed) {
+      // Melted at its top, a little wider at its foot where the wax ran down.
+      ctx.shape.lathe(moved(ORIGIN, [c.x, 0.03, c.z]), [[c.r * 1.35, 0], [c.r * 1.05, 0.04], [c.r, c.h - 0.03], [c.r * 0.8, c.h]], wax, { top: wax, sides: 6 });
+      if (ctx.far) continue;
+      // A drip down one side.
+      const da = ctx.rng() * Math.PI * 2;
+      const dl = c.h * (0.3 + 0.4 * ctx.rng());
+      ctx.shape.beam(ORIGIN, [c.x + Math.cos(da) * c.r, 0.03 + c.h - 0.02, c.z + Math.sin(da) * c.r], [c.x + Math.cos(da) * (c.r + 0.01), 0.03 + c.h - dl, c.z + Math.sin(da) * (c.r + 0.01)], 0.035, 0.03, wax, { taper: [0.5, 1] });
+      if (!lit) continue;
+      const at: Vec3 = [c.x, 0.03 + c.h + 0.01, c.z];
+      flame(ctx, at, c.r * 1.2, c.r * 3.5);
+      if (!top || at[1] > top[1]) top = at;
+    }
+    if (top) ctx.light([0, top[1] + 0.15, 0]);
+  },
+};
+
 /** A sconce: an iron plate on the wall, an arm out from it, a dish and a candle burning on it. Built
  *  standing on y 0; set up the wall where it hangs. Its back (-z) is on the wall. */
 export const sconce: PropGenerator = {

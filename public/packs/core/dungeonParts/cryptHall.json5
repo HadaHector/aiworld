@@ -3,6 +3,7 @@
   tags: ["crypt", "hall"],
   room: true,
   tombs: 2,                          // standing free on the floor, clear of the ways
+  benches: 2,                        // stone benches with their backs to the walls
   ledgers: 0.3,                     // a share of the rows of ledger stones in its floor
   weight: 3,
   sockets: [

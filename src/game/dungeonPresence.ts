@@ -60,7 +60,7 @@ export function createDungeonPresence(view: DimensionView, content: DungeonConte
       const fixture = view.content.props.find((p) => p.id === style.light.fixture);
       if (!fixture) console.warn(`The dungeon style "${style.id}" names a fixture "${style.light.fixture}" that no pack has: it is unlit.`);
       const near = (): { x: number; y: number; z: number } => view.character.mesh.position;
-      const meshes = createDungeonMeshes(scene, layout, style, fixture, world.buildingMaterial, near, (done, total) => onProgress("Lighting the torches", done, total));
+      const meshes = createDungeonMeshes(scene, layout, style, fixture, world.buildingMaterial, near, (done, total) => onProgress("Lighting the torches", done, total), (id) => view.content.props.find((p) => p.id === id));
       world.setExtraLights(meshes.lights);
       current = { id: message.id, layout, meshes, batch, ambient: style.light.ambient, inside: true };
       // In already: the day gone at once rather than fading.
