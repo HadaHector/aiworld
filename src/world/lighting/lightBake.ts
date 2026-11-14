@@ -20,8 +20,9 @@ export interface BakeModel {
 
 /** Texels a metre: a texel 25 cm, fine enough for the oversized world. */
 export const LIGHTMAP_DENSITY = 4;
-/** Texels round each patch, baked from its face's edge, so filtering never reads its neighbour. */
-const GUTTER = 1;
+/** Texels round each patch, repeating its edge. None: a face's corners lie on its edge texels'
+ *  middles, so (bilinear, no mipmaps) filtering never reads past them into a neighbour. */
+const GUTTER = 0;
 /** How far off its face a texel's ray starts, so it does not hit the face it starts from. */
 const LIFT = 0.02;
 /** Points across a light's source (a unit ball, scaled by its size) rays are cast to: the first
@@ -111,22 +112,30 @@ export function bakeLightmap(model: BakeModel, lights: ModelLight[], occludes: (
   const point: number[] = [0, 0, 0];
   for (const face of faces) {
     if (face.lights.length === 0) continue;
-    const w = Math.max(1, Math.ceil(face.size[0] * LIGHTMAP_DENSITY)) + GUTTER * 2;
-    const h = Math.max(1, Math.ceil(face.size[1] * LIGHTMAP_DENSITY)) + GUTTER * 2;
+    // Its texels' middles lie on a grid from edge to edge of it, the first and last on its edges -
+    // so filtered between them its light runs right to its edges, and meets its neighbour's there
+    // (a pot's facets, light blended round it, not a shade apiece). The gutter repeats the edge.
+    const [nu, nv] = patchTexels(face);
+    const w = nu + GUTTER * 2;
+    const h = nv + GUTTER * 2;
+    const [su, sv] = patchStep(face);
     const patch = new Float32Array(w * h * 4);
     for (let j = 0; j < h; j++) {
       for (let i = 0; i < w; i++) {
-        // The texel's middle on the face - or, in the gutter or past a slanted edge, the nearest
-        // point of the face to it.
-        const [u, v] = nearestIn(face.flat, face.min[0] + (i - GUTTER + 0.5) / LIGHTMAP_DENSITY, face.min[1] + (j - GUTTER + 0.5) / LIGHTMAP_DENSITY, face.inward);
+        // The texel's point on the face - or, past a slanted edge, the nearest point of the face to it.
+        const gi = Math.min(nu - 1, Math.max(0, i - GUTTER)), gj = Math.min(nv - 1, Math.max(0, j - GUTTER));
+        const [u, v] = nearestIn(face.flat, face.min[0] + gi * su, face.min[1] + gj * sv, face.inward);
         for (let k = 0; k < 3; k++) point[k] = face.origin[k] + face.u[k] * u + face.v[k] * v + face.n[k] * LIFT;
+        // Which way it is shaded: its corners' normals blended across it, so a round thing (a pot,
+        // a pillar) takes its light smoothly round, not a shade per facet. Its shadows are its plane's.
+        const sn = shadingNormal(face, model.normals, u, v);
         let r = 0, g = 0, b = 0, sky = 0;
         for (const light of face.lights) {
           const [lx, ly, lz] = light.position;
           const dx = lx - point[0], dy = ly - point[1], dz = lz - point[2];
           const distance = Math.hypot(dx, dy, dz);
           if (distance >= light.radius) continue;
-          const facing = (dx * face.n[0] + dy * face.n[1] + dz * face.n[2]) / Math.max(distance, 1e-4);
+          const facing = (dx * sn[0] + dy * sn[1] + dz * sn[2]) / Math.max(distance, 1e-4);
           if (facing <= 0) continue;
           // A light that shines one way (a window) shines most straight ahead, nothing back.
           const ahead = light.facing ? -(dx * light.facing[0] + dy * light.facing[1] + dz * light.facing[2]) / Math.max(distance, 1e-4) : 1;
@@ -213,8 +222,9 @@ export function bakeLightmap(model: BakeModel, lights: ModelLight[], occludes: (
         uvs[v * 2 + 1] = (face.y + 0.5) / height;
       } else {
         const [u, w] = face.flat[c];
-        uvs[v * 2] = (face.x + GUTTER + (u - face.min[0]) * LIGHTMAP_DENSITY) / width;
-        uvs[v * 2 + 1] = (face.y + GUTTER + (w - face.min[1]) * LIGHTMAP_DENSITY) / height;
+        const [su, sv] = patchStep(face);
+        uvs[v * 2] = (face.x + GUTTER + 0.5 + (su > 0 ? (u - face.min[0]) / su : 0)) / width;
+        uvs[v * 2 + 1] = (face.y + GUTTER + 0.5 + (sv > 0 ? (w - face.min[1]) / sv : 0)) / height;
       }
     }
   }
@@ -306,6 +316,53 @@ function faceOf(P: ArrayLike<number>, N: ArrayLike<number>, first: number, count
   for (const p of corners) for (let i = 0; i < 3; i++) centre[i] += p[i] / count;
   const reach = Math.max(...corners.map((p) => Math.hypot(p[0] - centre[0], p[1] - centre[1], p[2] - centre[2])));
   return { first, count, origin, n, u, v, flat, min, size, inward: signed >= 0 ? 1 : -1, centre, reach, area, lights: [], patch: null, even: false, x: 0, y: 0, w: 0, h: 0 };
+}
+
+/** How many texels a face's patch has across and up (gutter aside): one more than its size in
+ *  texels, at least two, so its first and last lie on its edges. */
+function patchTexels(face: Face): [number, number] {
+  return [Math.max(2, Math.ceil(face.size[0] * LIGHTMAP_DENSITY) + 1), Math.max(2, Math.ceil(face.size[1] * LIGHTMAP_DENSITY) + 1)];
+}
+
+/** How far apart a face's texels lie on it, across and up. */
+function patchStep(face: Face): [number, number] {
+  const [nu, nv] = patchTexels(face);
+  return [face.size[0] / (nu - 1), face.size[1] / (nv - 1)];
+}
+
+/**
+ * The normal a face is shaded by at (u, v) in its plane: its corners' normals (the model's, smooth
+ * where it is round) blended over the triangle of its fan the point lies in - its plane's own where
+ * they lean far from it (a corner shared with a face round an edge) or are missing.
+ */
+function shadingNormal(face: Face, N: ArrayLike<number>, u: number, v: number): number[] {
+  const f = face.flat;
+  let best = -Infinity;
+  let at = [0, 1, 2];
+  let weights = [1, 0, 0];
+  for (let c = 1; c + 1 < face.count; c++) {
+    const [ax, ay] = f[0], [bx, by] = f[c], [cx, cy] = f[c + 1];
+    const d = (by - cy) * (ax - cx) + (cx - bx) * (ay - cy);
+    if (Math.abs(d) < 1e-12) continue;
+    const w0 = ((by - cy) * (u - cx) + (cx - bx) * (v - cy)) / d;
+    const w1 = ((cy - ay) * (u - cx) + (ax - cx) * (v - cy)) / d;
+    const w2 = 1 - w0 - w1;
+    const worst = Math.min(w0, w1, w2);
+    if (worst > best) {
+      best = worst;
+      at = [0, c, c + 1];
+      weights = [w0, w1, w2].map((w) => Math.max(0, w));
+    }
+  }
+  const n = [0, 0, 0];
+  for (let i = 0; i < 3; i++) {
+    const k = (face.first + at[i]) * 3;
+    for (let j = 0; j < 3; j++) n[j] += (N[k + j] ?? 0) * weights[i];
+  }
+  const length = Math.hypot(n[0], n[1], n[2]);
+  if (length < 1e-6) return face.n;
+  for (let j = 0; j < 3; j++) n[j] /= length;
+  return n[0] * face.n[0] + n[1] * face.n[1] + n[2] * face.n[2] < 0.3 ? face.n : n;
 }
 
 /** The point of a convex polygon (in 2D) nearest (u, v): itself if it is inside. */
