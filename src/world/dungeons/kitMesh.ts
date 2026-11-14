@@ -437,8 +437,9 @@ interface SolidKind {
   plain?: boolean;
   /** A trim (a plinth, a cornice): drawn in the style's trim. */
   trim?: boolean;
-  /** A trim's stone direction, where it slopes (a stair's band). */
+  /** A trim's stone direction, where it slopes (a stair's band), and where its courses start. */
   grain?: V;
+  uvOrigin?: V;
 }
 
 function solidKinds(count: number, faces: readonly Face[]): SolidKind[] {
@@ -532,7 +533,7 @@ export function trimmedShape(part: DungeonPartDef, trims: WallTrims): { solids: 
   const faces = partFaces(all, false, all.map((_, i) => i), whole);
   const kindsAll = solidKinds(all.length, faces);
   for (const i of part.plain) kindsAll[i] = { ...kindsAll[i], tread: false, plain: true };
-  for (let i = solids.length; i < all.length; i++) kindsAll[i] = { tread: false, floor: false, roof: false, top: -Infinity, trim: true, grain: pieces[i - solids.length].grain };
+  for (let i = solids.length; i < all.length; i++) kindsAll[i] = { tread: false, floor: false, roof: false, top: -Infinity, trim: true, grain: pieces[i - solids.length].grain, uvOrigin: pieces[i - solids.length].uvOrigin };
   const shape = { solids: all, faces, kinds: kindsAll };
   byStyle.set(trims, shape);
   return shape;
@@ -839,7 +840,8 @@ export function buildPartModel(layout: DungeonLayout, index: number, style: Dung
       const g = sub(grain, [f.n[0] * dot(grain, f.n), f.n[1] * dot(grain, f.n), f.n[2] * dot(grain, f.n)]);
       if (Math.hypot(g[0], g[1], g[2]) > 0.3) {
         const tangent = norm(g), up = cross(f.n, tangent);
-        b.raw(f.corners.map(point), f.corners.map(() => turn(f.n)), f.corners.map(() => turn(tangent)), f.corners.map((p): [number, number] => [dot(p, tangent), dot(p, up)]), paint);
+        const o = kinds[f.solid].uvOrigin ?? [0, 0, 0];
+        b.raw(f.corners.map(point), f.corners.map(() => turn(f.n)), f.corners.map(() => turn(tangent)), f.corners.map((p): [number, number] => [dot(sub(p, o), tangent), dot(sub(p, o), up)]), paint);
         continue;
       }
     }

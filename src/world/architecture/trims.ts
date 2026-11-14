@@ -37,6 +37,8 @@ export interface TrimPiece {
   points: V3[];
   /** Which way its stone runs, where that is not level along the wall (a stair's band, sloping). */
   grain?: V3;
+  /** Where its stone's courses start: a joint on the point, so pieces meeting there meet joint to joint. */
+  uvOrigin?: V3;
 }
 
 export interface WallTrims {
@@ -245,11 +247,9 @@ export function stairBands(edges: readonly StairEdge[], kind: "plinth" | "cornic
     const steps = heights.slice(1).map((h, k) => h - heights[k]).sort((p, q) => p - q);
     const rise = steps[Math.floor(steps.length / 2)];
     const at = (i: number) => Math.round(edges[i].a[1] * 100) / 100;
-    for (const i of members) {
-      const e = edges[i], y = at(i);
-      const t = along(e.n);
-      // The whole step along this wall (its edge may be in pieces), and which way is up the flight:
-      // towards the step above, or away from the one below.
+    /** A step along this wall: its edges (maybe in pieces), their extent along the wall, which way is
+     *  up the flight (towards the step above, away from the one below; 0 where neither is). */
+    const stepOf = (y: number, t: V3) => {
       const same = members.filter((j) => at(j) === y);
       const ts = same.flatMap((j) => [dot(edges[j].a, t), dot(edges[j].b, t)]);
       const t0 = Math.min(...ts), t1 = Math.max(...ts);
@@ -259,6 +259,32 @@ export function stairBands(edges: readonly StairEdge[], kind: "plinth" | "cornic
       let up = 0;
       if (above.length) up = mid(above[0]) > (t0 + t1) / 2 ? 1 : -1;
       else if (below.length) up = mid(below[0]) > (t0 + t1) / 2 ? -1 : 1;
+      const corners = same.flatMap((j) => [edges[j].a, edges[j].b]);
+      const point = (tv: number) => corners.reduce((p, q) => (Math.abs(dot(q, t) - tv) < Math.abs(dot(p, t) - tv) ? q : p));
+      return { same, t0, t1, up, top: above.length === 0, foot: below.length === 0, point };
+    };
+    /**
+     * A flight's end step: where its block ends towards the flight, and the band's edge there - its
+     * top (a plinth's) or bottom (a cornice's), the pitch line half a step from the step's middle -
+     * so the block's courses and the band's meet joint to joint there.
+     */
+    const joint = (y: number, t: V3, top: boolean) => {
+      const st = stepOf(y, t);
+      const side = top ? st.up : -st.up;
+      const tFar = side > 0 ? st.t0 : st.t1, tEnd = side > 0 ? st.t1 : st.t0;
+      const lineFar = top ? y - rise / 2 : y + rise / 2;
+      const edge = kind === "plinth" ? lineFar + rise / 2 + profile.height : lineFar - rise / 2 - profile.height;
+      return { st, side, tFar, tEnd, edge, at: st.point(tFar) };
+    };
+    const yTop = heights[heights.length - 1];
+    const tFlight = along(edges[members[0]].n);
+    const topJoint = joint(yTop, tFlight, true);
+    /** Where the flight's band's courses start: on its edge where it meets the top block. */
+    const origin: V3 = [topJoint.at[0], topJoint.edge, topJoint.at[2]];
+    for (const i of members) {
+      const e = edges[i], y = at(i);
+      const t = along(e.n);
+      const { same, t0, t1, up, top, foot } = stepOf(y, t);
       if (t1 - t0 < 1e-3) continue;
       if (up === 0) {
         // Level, between steps of the same height (a vault kept level over a spiral's first lap).
@@ -268,25 +294,21 @@ export function stairBands(edges: readonly StairEdge[], kind: "plinth" | "cornic
       }
       // A flight's end step (no step above, or none below): a block over the whole step and on past
       // it, where the flight's band meets the level one beyond - the joint hidden, no short piece of
-      // band beside it. Once a step (its edge may be in pieces).
-      const top = above.length === 0, foot = below.length === 0;
+      // band beside it. A course taller than the band where they meet, its courses laid from there.
+      // Once a step (its edge may be in pieces).
       if (top || foot) {
         if (i !== same[0]) continue;
-        const side = top ? up : -up;
-        const tEnd = side > 0 ? t1 : t0, tFar = side > 0 ? t0 : t1;
-        const corners = same.flatMap((j) => [edges[j].a, edges[j].b]);
-        const at = (tv: number) => corners.reduce((p, q) => (Math.abs(dot(q, t) - tv) < Math.abs(dot(p, t) - tv) ? q : p));
+        const j = joint(y, t, top);
         const past = 0.5, out = profile.proud + 0.1, back = Math.min(0.1, profile.proud);
-        const h = y + (rise * side) / 2;
-        const [lo, hi] = kind === "plinth" ? [h - 2 * rise - 0.3, h + rise + profile.height + 0.35] : [h - rise - profile.height - 0.35, h + 2 * rise + 0.3];
+        const [lo, hi] = kind === "plinth" ? [j.edge - profile.height - 2 * rise - 0.3, j.edge + profile.height] : [j.edge - profile.height, j.edge + profile.height + 2 * rise + 0.3];
         const pts: V3[] = [];
-        for (const [c, dt] of [[at(tFar), 0], [at(tEnd), side * past]] as [V3, number][]) {
+        for (const [c, dt] of [[j.at, 0], [j.st.point(j.tEnd), j.side * past]] as [V3, number][]) {
           for (const k of [-back, out]) {
             const x = c[0] + t[0] * dt + e.n[0] * k, z = c[2] + t[2] * dt + e.n[2] * k;
             pts.push([x, lo, z], [x, hi, z]);
           }
         }
-        pieces.push({ kind: "block", points: pts });
+        pieces.push({ kind: "block", points: pts, grain: t, uvOrigin: [j.at[0], kind === "plinth" ? hi : lo, j.at[2]] });
         continue;
       }
       /** The pitch line's height at a point along the wall: through the step's middle, rising a step a step. */
@@ -307,7 +329,7 @@ export function stairBands(edges: readonly StairEdge[], kind: "plinth" | "cornic
       // Its stone along the slope: across the plan along the wall, climbing a step a step.
       const k = (rise * up) / (t1 - t0);
       const l = Math.hypot(1, k);
-      pieces.push({ kind, points: pts, grain: [t[0] / l, k / l, t[2] / l] });
+      pieces.push({ kind, points: pts, grain: [t[0] / l, k / l, t[2] / l], uvOrigin: origin });
     }
   }
   return pieces;
