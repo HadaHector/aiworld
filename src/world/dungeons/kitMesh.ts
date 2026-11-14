@@ -486,7 +486,7 @@ const trimmedParts = new WeakMap<DungeonPartDef, Map<WallTrims, { solids: Solid[
  * the rest as any solid is: a wall gives way to the plinth in front of it, two bands meeting at a
  * corner never flicker. Not for doorways or caps: a doorway is a trim itself.
  */
-function trimmedShape(part: DungeonPartDef, trims: WallTrims): { solids: Solid[]; faces: Face[]; kinds: SolidKind[] } {
+export function trimmedShape(part: DungeonPartDef, trims: WallTrims): { solids: Solid[]; faces: Face[]; kinds: SolidKind[] } {
   const plain = partShape(part);
   if (part.doorway || part.paths.length === 0 || (!trims.plinth && !trims.cornice && !trims.ribs)) return plain;
   let byStyle = trimmedParts.get(part);
@@ -497,7 +497,10 @@ function trimmedShape(part: DungeonPartDef, trims: WallTrims): { solids: Solid[]
   const whole = new Set(part.whole);
   // The walls: upright faces of solids that are wall (not a step, a railing, a pillar drawn whole).
   const walls: WallFace[] = plain.faces.filter((f) => Math.abs(f.n[1]) < 0.1 && !kinds[f.solid].tread && !kinds[f.solid].plain && !whole.has(f.solid));
-  const pieces = wallTrims(walls, { floorUnder: (p) => floorUnder(solids, p), ceilingOver: (p) => ceilingOver(solids, p) }, trims);
+  // What stands and hangs round the walls, less what is wall all over (a railing, a tunnel's
+  // walls): a band never sits on one of those.
+  const built = solids.filter((_, i) => !kinds[i].plain && !whole.has(i));
+  const pieces = wallTrims(walls, { floorUnder: (p) => floorUnder(built, p), ceilingOver: (p) => ceilingOver(built, p) }, trims);
   if (trims.ribs) {
     // The flat ceilings: each box seen from under it, as far as it is seen.
     const spans: CeilingSpan[] = [];
@@ -515,7 +518,12 @@ function trimmedShape(part: DungeonPartDef, trims: WallTrims): { solids: Solid[]
       if (floor === null || y - floor < 4) return;
       spans.push({ x0, z0, x1, z1, y, floor });
     });
-    pieces.push(...ribs(spans, (p) => solids.some((s) => inside(s, p)), trims.ribs));
+    // Piers standing free in a span (a box from floor to vault, off the walls): ribs run over them.
+    const pierSolids = solids.filter((s) => s.box && spans.some((sp) => s.box!.min[1] <= sp.floor && s.box!.max[1] >= sp.y && s.box!.min[0] > sp.x0 + 0.5 && s.box!.max[0] < sp.x1 - 0.5 && s.box!.min[2] > sp.z0 + 0.5 && s.box!.max[2] < sp.z1 - 0.5));
+    const piers = pierSolids.map((s): [number, number, number] => [(s.box!.min[0] + s.box!.max[0]) / 2, 0, (s.box!.min[2] + s.box!.max[2]) / 2]);
+    // Walls are what a rib ends on: the piers it passes over are not.
+    const walls = solids.filter((s) => !pierSolids.includes(s));
+    pieces.push(...ribs(spans, { solidAt: (p) => walls.some((s) => inside(s, p)), floorUnder: (p) => floorUnder(built, p) }, trims.ribs, piers));
   }
   const all = [...solids, ...pieces.map((t) => hullSolid(t.points))];
   const faces = partFaces(all, false, all.map((_, i) => i), whole);

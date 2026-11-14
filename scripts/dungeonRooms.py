@@ -29,10 +29,24 @@ def build(outline, rects, height, openings, open_edges=(), pillars=()):
     area = sum(outline[i][0] * outline[(i + 1) % n][1] - outline[(i + 1) % n][0] * outline[i][1] for i in range(n)) / 2
     boxes = []
     sockets = []
+    # Floor and vault over each rectangle, out under and over the walls - but not past an open edge
+    # (a corridor's end), where the next part's own floor and vault are.
+    def open_side(axis, at, lo, hi):
+        for i in open_edges:
+            (ax, az), (bx, bz) = outline[i], outline[(i + 1) % n]
+            if axis == "z" and az == bz == at and min(ax, bx) <= lo + 1e-6 and max(ax, bx) >= hi - 1e-6:
+                return True
+            if axis == "x" and ax == bx == at and min(az, bz) <= lo + 1e-6 and max(az, bz) >= hi - 1e-6:
+                return True
+        return False
     for r in rects:
         x0, z0, x1, z1 = r
-        boxes.append([x0 - 1, -1, z0 - 1, x1 + 1, 0, z1 + 1])
-        boxes.append([x0 - 1, height, z0 - 1, x1 + 1, height + 1, z1 + 1])
+        ex0 = 0 if open_side("x", x0, z0, z1) else 1
+        ex1 = 0 if open_side("x", x1, z0, z1) else 1
+        ez0 = 0 if open_side("z", z0, x0, x1) else 1
+        ez1 = 0 if open_side("z", z1, x0, x1) else 1
+        boxes.append([x0 - ex0, -1, z0 - ez0, x1 + ex1, 0, z1 + ez1])
+        boxes.append([x0 - ex0, height, z0 - ez0, x1 + ex1, height + 1, z1 + ez1])
     for i in range(n):
         if i in open_edges:
             continue

@@ -392,7 +392,10 @@ export function rotundaGeometry(r: RotundaSpec): KitGeometry {
       plain.push(shapes.length);
       shapes.push(prism([[s * w, circle(w)], [s * (w + side), circle(w + side)], [s * (w + side), far], [s * w, far]], r.floor - 1, r.floor + d.height + 1));
     }
-    shapes.push(prism([[-w - side, r.radius], [w + side, r.radius], [w + side, far], [-w - side, far]], r.floor + d.height, r.floor + d.height + 1));
+    // From just behind the round wall's face (its chords reach out to radius / cos of half a piece),
+    // so it never cuts that face into a sliver ending under it.
+    const behind = r.radius / Math.cos(Math.PI / pieces) + 0.01;
+    shapes.push(prism([[-w - side, behind], [w + side, behind], [w + side, far], [-w - side, far]], r.floor + d.height, r.floor + d.height + 1));
   }
   const ring = Array.from({ length: 12 }, (_, k) => (k * Math.PI) / 6);
   for (const f of r.pillars.facings) {
