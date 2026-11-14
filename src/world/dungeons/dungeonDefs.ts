@@ -163,8 +163,10 @@ export interface KitLook {
   riser: DungeonPaint;
   /** A doorway's stone, and its leaves. */
   frame: DungeonPaint;
-  /** The trims' (plinths, cornices). */
+  /** The trims' (plinths, cornices, a niche's frame). */
   trim: DungeonPaint;
+  /** Inside a niche cut into a wall. */
+  niche: DungeonPaint;
   door: DungeonPaint;
 }
 
@@ -503,12 +505,12 @@ function paintOf(reader: Reader, look: RawObject, key: string, fallback: Dungeon
 }
 
 function readLook(reader: Reader, raw: RawObject): KitLook {
-  reader.onlyKeys(raw, "look", ["floor", "wall", "ceiling", "steps", "tread", "riser", "frame", "door", "trim"]);
+  reader.onlyKeys(raw, "look", ["floor", "wall", "ceiling", "steps", "tread", "riser", "frame", "door", "trim", "niche"]);
   const stone: DungeonPaint = { material: "stoneBricks", tint: [1, 1, 1] };
   const floor = paintOf(reader, raw, "floor", stone);
   const wall = paintOf(reader, raw, "wall", stone);
   const steps = paintOf(reader, raw, "steps", floor);
-  return { floor, wall, ceiling: paintOf(reader, raw, "ceiling", stone), steps, tread: paintOf(reader, raw, "tread", steps), riser: paintOf(reader, raw, "riser", steps), frame: paintOf(reader, raw, "frame", wall), trim: paintOf(reader, raw, "trim", paintOf(reader, raw, "frame", wall)), door: paintOf(reader, raw, "door", { material: "doorBoards", tint: [1, 1, 1] }) };
+  return { floor, wall, ceiling: paintOf(reader, raw, "ceiling", stone), steps, tread: paintOf(reader, raw, "tread", steps), riser: paintOf(reader, raw, "riser", steps), frame: paintOf(reader, raw, "frame", wall), trim: paintOf(reader, raw, "trim", paintOf(reader, raw, "frame", wall)), niche: paintOf(reader, raw, "niche", wall), door: paintOf(reader, raw, "door", { material: "doorBoards", tint: [1, 1, 1] }) };
 }
 
 function readTrims(reader: Reader, raw: RawObject): WallTrims {
@@ -542,7 +544,9 @@ function readTrims(reader: Reader, raw: RawObject): WallTrims {
   if (raw.loculi !== undefined) {
     const l = reader.object(raw.loculi, "trims.loculi");
     const at = "trims.loculi";
-    reader.onlyKeys(l, at, ["width", "height", "depth", "gap", "rowGap", "above", "rows", "tallRows", "tallWall", "margin", "sealed"]);
+    reader.onlyKeys(l, at, ["width", "height", "depth", "gap", "rowGap", "above", "rows", "tallRows", "tallWall", "margin", "sealed", "frame"]);
+    const fr = l.frame === undefined ? undefined : reader.object(l.frame, `${at}.frame`);
+    if (fr) reader.onlyKeys(fr, `${at}.frame`, ["width", "proud", "bevel"]);
     loculi = {
       width: reader.number(l, "width", at, { min: 0.3 }),
       height: reader.number(l, "height", at, { min: 0.3 }),
@@ -555,6 +559,7 @@ function readTrims(reader: Reader, raw: RawObject): WallTrims {
       tallWall: l.tallWall === undefined ? undefined : reader.number(l, "tallWall", at, { min: 1 }),
       margin: reader.optionalNumber(l, "margin", at, 0.5, { min: 0 }),
       sealed: reader.optionalNumber(l, "sealed", at, 0.4, { min: 0, max: 1 }),
+      frame: fr ? { width: reader.number(fr, "width", `${at}.frame`, { min: 0.02 }), proud: reader.number(fr, "proud", `${at}.frame`, { min: 0.01 }), bevel: reader.number(fr, "bevel", `${at}.frame`, { min: 0 }) } : undefined,
     };
   }
   return { plinth: band("plinth"), cornice: band("cornice"), ribs, coping, loculi };

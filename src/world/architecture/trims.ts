@@ -35,7 +35,7 @@ export interface TrimSurroundings {
 
 /** A trim piece: which band it is, and its corners - a convex prism, eight points or more. */
 export interface TrimPiece {
-  kind: "plinth" | "cornice" | "rib" | "pilaster" | "block" | "coping";
+  kind: "plinth" | "cornice" | "rib" | "pilaster" | "block" | "coping" | "frame";
   points: V3[];
   /** Which way its stone runs, where that is not level along the wall (a stair's band, sloping). */
   grain?: V3;
