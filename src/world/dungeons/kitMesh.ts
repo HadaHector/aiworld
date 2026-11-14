@@ -11,6 +11,7 @@ import { ModelBuilder } from "../buildings/buildingGeometry";
 import type { BuildingModel, ModelLight, Paint } from "../buildings/buildingTypes";
 import { generateProp } from "../props/propGenerator";
 import type { PropDef } from "../props/propTypes";
+import { cornerWebs, nicheWebs, type WebTriangle } from "./cobwebs";
 import { deriveSeed, mulberry32 } from "../rng";
 import type { DungeonPaint, DungeonPartDef, DungeonStyleDef } from "./dungeonDefs";
 import { worldToFrame, type DungeonFrame, type DungeonLayout, type PlacedPart } from "./layout";
@@ -42,6 +43,8 @@ interface Face {
 export interface PartModel {
   model: BuildingModel;
   lights: ModelLight[];
+  /** Its cobwebs' corners in threes, in the layout's frame (./cobwebs.ts): drawn on their own. */
+  webs: number[];
 }
 
 const EPS = 1e-4;
@@ -496,7 +499,7 @@ function paintFor(f: Face, kind: SolidKind, look: DungeonStyleDef["look"]): Dung
 /** Each part's solids and seen faces, in its own frame - worked out once however often it is placed. */
 const shapesOfPart = new WeakMap<DungeonPartDef, { solids: Solid[]; faces: Face[]; kinds: SolidKind[] }>();
 /** Each part's look with a style's trims, by the style. */
-const trimmedParts = new WeakMap<DungeonPartDef, Map<WallTrims, { solids: Solid[]; faces: Face[]; kinds: SolidKind[]; niches?: Niche[] }>>();
+const trimmedParts = new WeakMap<DungeonPartDef, Map<WallTrims, { solids: Solid[]; faces: Face[]; kinds: SolidKind[]; niches?: Niche[]; webs?: WebTriangle[] }>>();
 
 /**
  * A part as a style draws it: its solids and faces, and its trims (src/world/architecture/trims.ts)
@@ -504,7 +507,7 @@ const trimmedParts = new WeakMap<DungeonPartDef, Map<WallTrims, { solids: Solid[
  * the rest as any solid is: a wall gives way to the plinth in front of it, two bands meeting at a
  * corner never flicker. Not for doorways or caps: a doorway is a trim itself.
  */
-export function trimmedShape(part: DungeonPartDef, trims: WallTrims): { solids: Solid[]; faces: Face[]; kinds: SolidKind[]; niches?: Niche[] } {
+export function trimmedShape(part: DungeonPartDef, trims: WallTrims): { solids: Solid[]; faces: Face[]; kinds: SolidKind[]; niches?: Niche[]; webs?: WebTriangle[] } {
   const plain = partShape(part);
   if (part.ending) return endingShape(part, trims, plain);
   if (part.doorway || part.paths.length === 0 || (!trims.plinth && !trims.cornice && !trims.ribs && !trims.coping && !trims.loculi && !part.tombs?.length && !part.benches?.length && !part.ledgers?.length)) return plain;
@@ -636,7 +639,9 @@ export function trimmedShape(part: DungeonPartDef, trims: WallTrims): { solids: 
   }
   for (const i of part.plain) kindsAll[i] = { ...kindsAll[i], tread: false, plain: true };
   for (let i = solids.length; i < solids.length + pieces.length; i++) kindsAll[i] = { tread: false, floor: false, roof: false, top: -Infinity, trim: true, grain: pieces[i - solids.length].grain, uvOrigin: pieces[i - solids.length].uvOrigin };
-  const shape = { solids: all, faces, kinds: kindsAll, niches };
+  // Where cobwebs may hang: the inside corners under the cornice, the open niches.
+  const webs = [...cornerWebs(walls, (p) => !built.some((s) => inside(s, p)), trims.cornice?.height ?? 0), ...nicheWebs(niches)];
+  const shape = { solids: all, faces, kinds: kindsAll, niches, webs };
   byStyle.set(trims, shape);
   return shape;
 }
@@ -1233,8 +1238,14 @@ export function buildPartModel(layout: DungeonLayout, index: number, style: Dung
       b.append(model, p[0], p[1], p[2], front[0], front[2]);
     });
   }
+  // Cobwebs: the style's share of the places, in the layout's frame.
+  const webs: number[] = [];
+  if (style.cobwebs) {
+    const webRandom = mulberry32(deriveSeed(layout.seed, index * 4441 + 3));
+    for (const web of shape.webs ?? []) if (webRandom() < style.cobwebs.share) for (const corner of web) webs.push(...point(corner));
+  }
   const model = b.finish({ x: 0, z: 0 });
-  return { model, lights: model.lights ?? [] };
+  return { model, lights: model.lights ?? [], webs };
 }
 
 /** Where candles may stand in a part, in its own frame: the place, which way they face, and how

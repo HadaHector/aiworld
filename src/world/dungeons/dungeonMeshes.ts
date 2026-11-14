@@ -8,6 +8,7 @@ import type { PropDef } from "../props/propTypes";
 import { createLightBakePool } from "../lighting/lightBakePool";
 import type { DungeonStyleDef } from "./dungeonDefs";
 import { buildPartModel, lightsReaching } from "./kitMesh";
+import { createCobwebMesh } from "./cobwebs";
 import { frameToWorld, type DungeonLayout } from "./layout";
 
 export interface DungeonMeshes {
@@ -90,6 +91,15 @@ export function createDungeonMeshes(
       }),
     );
   });
+  // The cobwebs, all parts' in one mesh, lit by the fixtures near them.
+  const webs = style.cobwebs ? models.flatMap((m) => m.webs) : [];
+  if (style.cobwebs && webs.length > 0) {
+    const mesh = createCobwebMesh(scene, `dungeonWebs:${layout.style}:${layout.seed}`, webs, all, style.light.ambient, style.cobwebs.texture);
+    mesh.parent = root;
+    mesh.computeWorldMatrix(true);
+    mesh.freezeWorldMatrix();
+    meshes.push(mesh);
+  }
   const buildMs = performance.now() - started;
   const baked = Promise.all(bakes).then(() => ({ ms: performance.now() - started, cached }));
   // The torches in the world, for what moves about in their light.

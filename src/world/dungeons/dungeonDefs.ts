@@ -8,6 +8,7 @@ import { DUNGEON_FOLDERS, orderPacks, parseFile, type PackSource } from "../cont
 import { vec3, type Aabb, type ShapeDesc, type Vec3 } from "../collision/index";
 import { boxShape, doorwayGeometry, DOORWAY_KINDS, rotundaGeometry, spiralGeometry, stairGeometry, type DoorwaySpec, type Polyline, type Voussoir } from "./kitShapes";
 import { checkPaths } from "./clearance";
+import { readParticleTexture, type ParticleTextureDef } from "../../particles/textures";
 import { benchShape, ledgerShape, placeBenches, placeLedgers, placeTombs, tombShape, type BenchDef, type LedgerDef, type TombDef } from "./tombs";
 
 const ID_PATTERN = /^[A-Za-z0-9_-]+$/;
@@ -159,6 +160,10 @@ export interface DungeonStyleDef {
   light: DungeonLight;
   /** Urns (a prop) set in its open loculi and on its benches: the share of each such place that has one. */
   urns?: { prop: string; share: number };
+  /** Cobwebs (./cobwebs.ts) across its rooms' inside corners and its open niches: the web texture
+   *  (a particle texture, by id in the packs' particleTextures) and the share of each such place
+   *  that has one. */
+  cobwebs?: { texture: ParticleTextureDef; share: number };
 }
 
 /** A face's building material (by id; null for plain colour) and the tint its colour is multiplied by. */
@@ -219,7 +224,8 @@ const byId = (a: { id: string }, b: { id: string }): number => (a.id < b.id ? -1
 /** Every dungeon style and part in the packs, checked. Throws a ContentError listing every problem. */
 export function resolveDungeons(packs: readonly PackSource[]): DungeonContent {
   const issues: ContentIssue[] = [];
-  const folders = new Map<string, Map<string, Entry>>([...DUNGEON_FOLDERS].map((f) => [f, new Map()]));
+  // (The particle textures too: a style's cobwebs name one.)
+  const folders = new Map<string, Map<string, Entry>>([...DUNGEON_FOLDERS, "particleTextures"].map((f) => [f, new Map()]));
   let rulesEntry: Entry | undefined;
   for (const pack of orderPacks([...packs], issues)) {
     for (const { path, text } of pack.files) {
@@ -251,7 +257,8 @@ export function resolveDungeons(packs: readonly PackSource[]): DungeonContent {
     if (part) parts.set(part.id, part);
   }
   const styles = new Map<string, DungeonStyleDef>();
-  for (const entry of entries("dungeonStyles")) styles.set(entry.id, readStyle(entry, parts, rules, issues));
+  const textures = folders.get("particleTextures")!;
+  for (const entry of entries("dungeonStyles")) styles.set(entry.id, readStyle(entry, parts, rules, issues, textures));
   if (issues.length > 0) throw new ContentError(issues);
   return { rules, parts, styles };
 }
@@ -527,7 +534,7 @@ export function shapesBounds(shapes: readonly ShapeDesc[]): Aabb {
   return { min, max };
 }
 
-const STYLE_KEYS = ["name", "builder", "sizes", "branching", "loops", "boss", "keys", "cover", "deepest", "parts", "entrance", "caps", "connector", "look", "light", "urns", "doorways", "trims"];
+const STYLE_KEYS = ["name", "builder", "sizes", "branching", "loops", "boss", "keys", "cover", "deepest", "parts", "entrance", "caps", "connector", "look", "light", "urns", "cobwebs", "doorways", "trims"];
 
 function colour(reader: Reader, value: unknown, path: string, fallback: [number, number, number]): [number, number, number] {
   if (value === undefined) return fallback;
@@ -632,6 +639,19 @@ function readTrims(reader: Reader, raw: RawObject): WallTrims {
   return { plinth: band("plinth"), cornice: band("cornice"), ribs, coping, loculi, arcosolia };
 }
 
+/** A style's `cobwebs`: `{ texture, share }`, the texture one of the packs' particle textures. */
+function readCobwebs(reader: Reader, raw: RawObject, textures: Map<string, Entry>, issues: ContentIssue[]): { texture: ParticleTextureDef; share: number } | undefined {
+  reader.onlyKeys(raw, "cobwebs", ["texture", "share"]);
+  const id = reader.optionalString(raw, "texture", "cobwebs") ?? "webCorner";
+  const share = reader.optionalNumber(raw, "share", "cobwebs", 0.5, { min: 0, max: 1 });
+  const entry = textures.get(id);
+  if (!entry) {
+    reader.fail("cobwebs.texture", `no particle texture "${id}" in the packs' particleTextures`);
+    return undefined;
+  }
+  return { texture: readParticleTexture(id, new Reader(issues, entry.file), entry.data), share };
+}
+
 /** A prop set at some share of the places it may go: `{ prop, share }`. */
 function readPropShare(reader: Reader, raw: RawObject, path: string, prop: string): { prop: string; share: number } {
   reader.onlyKeys(raw, path, ["prop", "share"]);
@@ -649,7 +669,7 @@ function readLight(reader: Reader, raw: RawObject): DungeonLight {
   };
 }
 
-function readStyle(entry: Entry, allParts: Map<string, DungeonPartDef>, rules: DungeonRules, issues: ContentIssue[]): DungeonStyleDef {
+function readStyle(entry: Entry, allParts: Map<string, DungeonPartDef>, rules: DungeonRules, issues: ContentIssue[], textures: Map<string, Entry>): DungeonStyleDef {
   const reader = new Reader(issues, entry.file);
   const obj = reader.object(entry.data, "");
   reader.onlyKeys(obj, "", STYLE_KEYS);
@@ -707,6 +727,7 @@ function readStyle(entry: Entry, allParts: Map<string, DungeonPartDef>, rules: D
     trims: readTrims(reader, obj.trims === undefined ? {} : reader.object(obj.trims, "trims")),
     light: readLight(reader, obj.light === undefined ? {} : reader.object(obj.light, "light")),
     urns: obj.urns === undefined ? undefined : readPropShare(reader, reader.object(obj.urns, "urns"), "urns", "urn"),
+    cobwebs: obj.cobwebs === undefined ? undefined : readCobwebs(reader, reader.object(obj.cobwebs, "cobwebs"), textures, issues),
   };
   if (style.loops[1] > 0 && !style.connector) reader.fail("loops", "a style with loops needs a `connector` to make them with");
   // Able to start, grow, end and close.

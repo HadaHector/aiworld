@@ -72,4 +72,7 @@
   light: { ambient: [0.022, 0.024, 0.03], fixture: "wallTorch", lit: 0.8, candles: { prop: "candles", share: 0.4 } },
   // Urns in the open loculi (the ashes of those not laid whole) and on the benches between the candles.
   urns: { prop: "urn", share: 0.35 },
+  // Cobwebs across the rooms' inside corners under the cornice and the open loculi's upper corners:
+  // the spider's web (particleTextures/webCorner), in half the places they could hang.
+  cobwebs: { texture: "webCorner", share: 0.5 },
 }

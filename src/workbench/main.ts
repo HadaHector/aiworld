@@ -3,6 +3,7 @@ import { asDungeonGround, testGround, testSite } from "../world/dungeons/testGro
 import { ModelBuilder } from "../world/buildings/buildingGeometry";
 import { resolveDungeons } from "../world/dungeons/dungeonDefs";
 import { buildPartModel } from "../world/dungeons/kitMesh";
+import { createCobwebMesh } from "../world/dungeons/cobwebs";
 import { Engine } from "@babylonjs/core";
 import { configNameFromUrl, fetchPackSources, fetchWorldConfig } from "../world/content/loadContent";
 import { DEFAULT_CONFIG, type WorldConfig } from "../world/content/worldConfig";
@@ -1145,6 +1146,8 @@ async function preview3d(token: number, asset: Asset, view: ViewDef, content: Wo
   let summary: HTMLElement | null = null;
   /** A dungeon part's style's light everywhere, for the Underground light. */
   let dungeonAmbient: [number, number, number] | undefined;
+  /** A dungeon part's cobwebs, drawn on their own over it once the stage is up. */
+  let dungeonWebs: ((scene: Parameters<typeof createCobwebMesh>[0]) => void) | undefined;
 
   if (asset.folder === "materials") {
     ground = content.materials.find((material) => material.id === asset.id)!;
@@ -1304,7 +1307,12 @@ async function preview3d(token: number, asset: Asset, view: ViewDef, content: Wo
     const frame = { x: 0, z: 0, yaw: 0 };
     const layout = { style: style.id, size: "", seed, attempt: 0, minimal: false, parts: [{ part, x: 0, y: 0, z: 0, yaw: 0, bounds: part.bounds, box: part.bounds, entry: -1, parent: -1, role: "room" as const }], joins: [], boss: -1, lock: -1, key: -1, failures: [], frame };
     // Every light spot lit, not the style's share of them: each torch is seen where it hangs.
-    buildings = [buildPartModel(layout, 0, { ...style, light: { ...style.light, lit: 1 } }, content.props.find((prop) => prop.id === style.light.fixture), (id) => content.props.find((prop) => prop.id === id)).model];
+    const partModel = buildPartModel(layout, 0, { ...style, light: { ...style.light, lit: 1 } }, content.props.find((prop) => prop.id === style.light.fixture), (id) => content.props.find((prop) => prop.id === id));
+    buildings = [partModel.model];
+    if (style.cobwebs && partModel.webs.length > 0) {
+      const { texture } = style.cobwebs;
+      dungeonWebs = (scene) => createCobwebMesh(scene, `webs:${part.id}`, partModel.webs, partModel.lights, style.light.ambient, texture);
+    }
     dungeonAmbient = style.light.ambient;
     if (buildings[0].indices.length === 0) {
       setStatus(`${part.id} has no faces to draw: nothing of it is seen from inside`);
@@ -1393,6 +1401,7 @@ async function preview3d(token: number, asset: Asset, view: ViewDef, content: Wo
   }
   stage?.dispose();
   stage = built;
+  dungeonWebs?.(built.scene);
   built.scene.forceWireframe = options.wire === "on";
   setDebugMode(built.scene, options.mode, isSubject);
   stageSubject = subject;
