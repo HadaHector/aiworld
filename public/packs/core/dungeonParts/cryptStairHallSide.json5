@@ -16,7 +16,7 @@
   colliders: [
     { box: [-14, -7, 0, 14, 0, 12] },   // the terrace, solid down to the floor below
     { box: [-14, -7, 12, 14, -6, 52] }, // the floor below
-    { stair: { from: [0, 0, 12], to: [0, -6, 30], width: 10 } },
+    { stair: { from: [0, 0, 12], to: [0, -6, 30], width: 10, railings: true } },
     { box: [-14, 10, 0, 14, 11, 52] },  // vault
     // Railings along the terrace's edge either side of the stair.
     { box: [-13, 0, 11.4, -5, 1.1, 12], plain: true },

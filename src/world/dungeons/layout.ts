@@ -289,8 +289,11 @@ function attemptLayout(content: DungeonContent, style: DungeonStyleDef, size: st
     const stage = rooms / Math.max(1, targetRooms);
     const trend = trendAt(at);
     const options: { part: DungeonPartDef; entry: number; weight: number }[] = [];
+    const before = placed[at.part].part;
     for (const part of pool) {
       if (stage < part.stage[0] - 1e-9 || stage > part.stage[1] + 1e-9) continue;
+      // Kept apart from the part it would join (either one's say).
+      if (part.apart.some((t) => before.tags.includes(t)) || before.apart.some((t) => part.tags.includes(t))) continue;
       part.sockets.forEach((s, entry) => {
         if (s.type === "surface" || !socketsJoin(rules, s.type, at.def.type)) return;
         const rise = Math.max(0, ...part.sockets.filter((_, i) => i !== entry).map((o) => o.at.y - s.at.y));
@@ -829,6 +832,7 @@ export function connectorPart(c: ConnectorDef, length: number, dy: number): Dung
     tags: ["connector"],
     weight: 0,
     stage: [0, 1],
+    apart: [],
     bounds: shapesBounds(shapes),
     sockets: [socket(vec3(0, 0, 0), 180), socket(vec3(0, dy, length), 0)],
     shapes,

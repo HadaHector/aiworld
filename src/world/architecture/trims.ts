@@ -5,6 +5,8 @@
 // back solid pieces (convex prisms) to build or draw as it builds its own - a dungeon part adds them
 // to its solids, a house could lay them into its model.
 
+import type { LoculiSpec } from "./dents";
+
 export type V3 = [number, number, number];
 
 /** A flat wall face: its corners (a convex polygon, standing upright) and which way it faces. */
@@ -33,7 +35,7 @@ export interface TrimSurroundings {
 
 /** A trim piece: which band it is, and its corners - a convex prism, eight points or more. */
 export interface TrimPiece {
-  kind: "plinth" | "cornice" | "rib" | "pilaster" | "block";
+  kind: "plinth" | "cornice" | "rib" | "pilaster" | "block" | "coping";
   points: V3[];
   /** Which way its stone runs, where that is not level along the wall (a stair's band, sloping). */
   grain?: V3;
@@ -57,6 +59,87 @@ export interface WallTrims {
   stepRun?: number;
   /** Ribs across flat ceilings, pilasters under them (see `ribs`) - for a builder that has spans. */
   ribs?: RibSpec;
+  /** A stone laid on top of a railing or parapet, wider than it (see `copings`). */
+  coping?: CopingSpec;
+  /** Burial niches cut low into the walls (see `loculi` in ./dents) - a dent, not a trim, but laid
+   *  out with them, between the pilasters. */
+  loculi?: LoculiSpec;
+}
+
+export interface CopingSpec {
+  /** How thick the stone is, and how far it reaches out past the railing's sides. */
+  height: number;
+  overhang: number;
+}
+
+/**
+ * Copings (GEOMETRY.md, 7: a band where a wall ends at the top): on each railing's top - its corners,
+ * a flat convex outline at one height - a stone as thick as `height`, reaching `overhang` out past
+ * every side, so the railing reads as built and not as a slab.
+ */
+export function copings(tops: readonly V3[][], spec: CopingSpec): TrimPiece[] {
+  const pieces: TrimPiece[] = [];
+  for (const top of tops) {
+    if (top.length < 3) continue;
+    // The top's plane (it may slope, a railing down a flight): its height over any point of the plan.
+    const [a, b, c] = [top[0], top.find((p) => Math.hypot(p[0] - top[0][0], p[2] - top[0][2]) > 1e-3)!, top.reduce((best, p) => {
+      const area = (q: V3) => Math.abs((top[1][0] - top[0][0]) * (q[2] - top[0][2]) - (q[0] - top[0][0]) * (top[1][2] - top[0][2]));
+      return area(p) > area(best) ? p : best;
+    })];
+    const u: V3 = [b[0] - a[0], b[1] - a[1], b[2] - a[2]], v: V3 = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
+    const nrm: V3 = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
+    if (Math.abs(nrm[1]) < 1e-6) continue;
+    const heightAt = (x: number, z: number): number => a[1] - (nrm[0] * (x - a[0]) + nrm[2] * (z - a[2])) / nrm[1];
+    // The outline round the corners (a hull, counter-clockwise seen from above), each side moved out.
+    const plan = hull2(top.map((c): [number, number] => [c[0], c[2]]));
+    if (plan.length < 3) continue;
+    const n = plan.length;
+    const out: [number, number][] = [];
+    for (let i = 0; i < n; i++) {
+      const p = plan[(i + n - 1) % n], q = plan[i], r = plan[(i + 1) % n];
+      // The outward normals of the two sides meeting at q, and the corner where the moved sides meet.
+      const n1 = outward(p, q), n2 = outward(q, r);
+      const bis: [number, number] = [n1[0] + n2[0], n1[1] + n2[1]];
+      const k = spec.overhang / Math.max(0.2, 1 + n1[0] * n2[0] + n1[1] * n2[1]);
+      out.push([q[0] + bis[0] * k, q[1] + bis[1] * k]);
+    }
+    // Its stone along its longest side, up the slope with it.
+    let long = 0, grain: V3 = [1, 0, 0];
+    for (let i = 0; i < n; i++) {
+      const [p, q] = [out[i], out[(i + 1) % n]];
+      const l = Math.hypot(q[0] - p[0], q[1] - p[1]);
+      if (l <= long) continue;
+      long = l;
+      const dy = heightAt(q[0], q[1]) - heightAt(p[0], p[1]);
+      const m = Math.hypot(l, dy);
+      grain = [(q[0] - p[0]) / m, dy / m, (q[1] - p[1]) / m];
+    }
+    pieces.push({ kind: "coping", grain, points: [...out.map(([x, z]): V3 => [x, heightAt(x, z) - 0.02, z]), ...out.map(([x, z]): V3 => [x, heightAt(x, z) + spec.height, z])] });
+  }
+  return pieces;
+}
+
+/** A side's outward normal, for an outline running counter-clockwise seen from above (x right, z up the page). */
+function outward(a: [number, number], b: [number, number]): [number, number] {
+  const dx = b[0] - a[0], dz = b[1] - a[1], l = Math.hypot(dx, dz) || 1;
+  return [dz / l, -dx / l];
+}
+
+/** The convex hull of points in the plan, counter-clockwise (x, z), close points merged. */
+function hull2(points: [number, number][]): [number, number][] {
+  const ps = [...points].sort((a, b) => a[0] - b[0] || a[1] - b[1]).filter((p, i, all) => i === 0 || Math.hypot(p[0] - all[i - 1][0], p[1] - all[i - 1][1]) > 1e-4);
+  if (ps.length < 3) return ps;
+  const cross = (o: [number, number], a: [number, number], b: [number, number]) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+  const lower: [number, number][] = [], upper: [number, number][] = [];
+  for (const p of ps) {
+    while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], p) <= 1e-9) lower.pop();
+    lower.push(p);
+  }
+  for (const p of [...ps].reverse()) {
+    while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], p) <= 1e-9) upper.pop();
+    upper.push(p);
+  }
+  return [...lower.slice(0, -1), ...upper.slice(0, -1)];
 }
 
 const dot = (a: V3, b: V3): number => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];

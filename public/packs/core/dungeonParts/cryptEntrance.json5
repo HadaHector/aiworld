@@ -1,7 +1,7 @@
 // The way down from the churchyard: a spiral stair two and a half turns deep, 19.5 m, so the first
 // hall below lies well under the ground. Its door is the crypt building's.
 {
-  tags: ["crypt", "entrance"],
+  tags: ["crypt", "entrance", "spiral"],
   sockets: [
     { at: [0, 0, 0], facing: 180, type: "surface", size: [6, 6], reach: 1.5, reachOver: 1 },
     { at: [0, -19.5, 20], facing: 0, type: "crypt", size: [6, 6], reach: 1.5, reachOver: 1 },

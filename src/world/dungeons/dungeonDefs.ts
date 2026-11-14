@@ -1,7 +1,8 @@
 // Dungeon styles and parts from the packs (DUNGEONS.md): `dungeonStyles/`, `dungeonParts/` and
 // `rules/dungeons.json5`, read and checked - every part's walk lines 6 m wide and high on its own
 // colliders, every style able to start, grow and close.
-import type { RibSpec, TrimProfile, WallTrims } from "../architecture/trims";
+import type { LoculiSpec } from "../architecture/dents";
+import type { CopingSpec, RibSpec, TrimProfile, WallTrims } from "../architecture/trims";
 import { ContentError, Reader, type ContentIssue, type RawObject } from "../content/contentReader";
 import { DUNGEON_FOLDERS, orderPacks, parseFile, type PackSource } from "../content/resolveContent";
 import { vec3, type Aabb, type ShapeDesc, type Vec3 } from "../collision/index";
@@ -81,6 +82,9 @@ export interface DungeonPartDef {
   weight: number;
   /** Where in the dungeon it may go, as a share of the rooms placed: 0 the mouth, 1 the last. */
   stage: [number, number];
+  /** Never joined straight onto a part with any of these tags, nor one onto it (a spiral stair
+   *  straight after the spiral way down). */
+  apart: string[];
   /** What it takes up, in its own frame (from its colliders, unless given). */
   bounds: Aabb;
   sockets: SocketDef[];
@@ -274,7 +278,7 @@ function vector(reader: Reader, value: unknown, path: string): Vec3 {
   return vec3();
 }
 
-const PART_KEYS = ["tags", "weight", "stage", "bounds", "sockets", "colliders", "paths", "spots", "room", "doorway"];
+const PART_KEYS = ["tags", "weight", "stage", "apart", "bounds", "sockets", "colliders", "paths", "spots", "room", "doorway"];
 
 function readPart(entry: Entry, rules: DungeonRules, issues: ContentIssue[]): DungeonPartDef | null {
   const reader = new Reader(issues, entry.file);
@@ -338,7 +342,7 @@ function readPart(entry: Entry, rules: DungeonRules, issues: ContentIssue[]): Du
         shapes.push(boxShape(b[0], b[1], b[2], b[3], b[4], b[5]));
       } else if (raw.stair !== undefined) {
         const s = reader.object(raw.stair, `${path}.stair`);
-        reader.onlyKeys(s, `${path}.stair`, ["from", "to", "width", "rise", "ceiling", "walls"]);
+        reader.onlyKeys(s, `${path}.stair`, ["from", "to", "width", "rise", "ceiling", "walls", "railings"]);
         const geometry = stairGeometry({
           from: vector(reader, s.from, `${path}.stair.from`),
           to: vector(reader, s.to, `${path}.stair.to`),
@@ -346,7 +350,9 @@ function readPart(entry: Entry, rules: DungeonRules, issues: ContentIssue[]): Du
           rise: reader.optionalNumber(s, "rise", `${path}.stair`, 0.25, { min: 0.05 }),
           ceiling: reader.optionalNumber(s, "ceiling", `${path}.stair`, 0, { min: 0 }),
           walls: reader.boolean(s, "walls", `${path}.stair`, false),
+          railings: reader.boolean(s, "railings", `${path}.stair`, false),
         });
+        plain.push(...(geometry.plain ?? []).map((i) => i + shapes.length));
         shapes.push(...geometry.shapes);
         paths.push(...geometry.paths);
       } else if (raw.spiral !== undefined) {
@@ -433,6 +439,7 @@ function readPart(entry: Entry, rules: DungeonRules, issues: ContentIssue[]): Du
     tags,
     weight: reader.optionalNumber(obj, "weight", "", 1, { min: 0 }),
     stage: obj.stage === undefined ? [0, 1] : reader.range(obj, "stage", "", { allowEqual: true }),
+    apart: obj.apart === undefined ? [] : reader.stringList(obj, "apart", ""),
     bounds,
     sockets,
     shapes,
@@ -505,7 +512,7 @@ function readLook(reader: Reader, raw: RawObject): KitLook {
 }
 
 function readTrims(reader: Reader, raw: RawObject): WallTrims {
-  reader.onlyKeys(raw, "trims", ["plinth", "cornice", "ribs"]);
+  reader.onlyKeys(raw, "trims", ["plinth", "cornice", "ribs", "coping", "loculi"]);
   const band = (key: string): TrimProfile | undefined => {
     if (raw[key] === undefined) return undefined;
     const b = reader.object(raw[key], `trims.${key}`);
@@ -525,7 +532,32 @@ function readTrims(reader: Reader, raw: RawObject): WallTrims {
       pilaster: p ? { width: reader.number(p, "width", "trims.ribs.pilaster", { min: 0.05 }), proud: reader.number(p, "proud", "trims.ribs.pilaster", { min: 0.01 }) } : undefined,
     };
   }
-  return { plinth: band("plinth"), cornice: band("cornice"), ribs };
+  let coping: CopingSpec | undefined;
+  if (raw.coping !== undefined) {
+    const c = reader.object(raw.coping, "trims.coping");
+    reader.onlyKeys(c, "trims.coping", ["height", "overhang"]);
+    coping = { height: reader.number(c, "height", "trims.coping", { min: 0.05 }), overhang: reader.number(c, "overhang", "trims.coping", { min: 0 }) };
+  }
+  let loculi: LoculiSpec | undefined;
+  if (raw.loculi !== undefined) {
+    const l = reader.object(raw.loculi, "trims.loculi");
+    const at = "trims.loculi";
+    reader.onlyKeys(l, at, ["width", "height", "depth", "gap", "rowGap", "above", "rows", "tallRows", "tallWall", "margin", "sealed"]);
+    loculi = {
+      width: reader.number(l, "width", at, { min: 0.3 }),
+      height: reader.number(l, "height", at, { min: 0.3 }),
+      depth: reader.number(l, "depth", at, { min: 0.1 }),
+      gap: reader.number(l, "gap", at, { min: 0.1 }),
+      rowGap: reader.number(l, "rowGap", at, { min: 0.1 }),
+      above: reader.number(l, "above", at, { min: 0 }),
+      rows: reader.number(l, "rows", at, { min: 1 }),
+      tallRows: l.tallRows === undefined ? undefined : reader.number(l, "tallRows", at, { min: 1 }),
+      tallWall: l.tallWall === undefined ? undefined : reader.number(l, "tallWall", at, { min: 1 }),
+      margin: reader.optionalNumber(l, "margin", at, 0.5, { min: 0 }),
+      sealed: reader.optionalNumber(l, "sealed", at, 0.4, { min: 0, max: 1 }),
+    };
+  }
+  return { plinth: band("plinth"), cornice: band("cornice"), ribs, coping, loculi };
 }
 
 function readLight(reader: Reader, raw: RawObject): DungeonLight {

@@ -284,6 +284,7 @@ it is built.
   tags: ["cave", "chamber"],
   weight: 3,
   stage: [0, 1],                     // where in the dungeon it may go: 0 the mouth, 1 the deepest
+  apart: ["spiral"],                 // never joined straight onto a part with any of these tags (optional)
   bounds: [[-18, -1, -16], [18, 20, 16]], // what it takes up, for the generator's overlap test
   // On the floor by the wall, so a tunnel's floor meets this one flush. Size: width and height of
   // the way through, never under the rules' minimum (6 x 6).

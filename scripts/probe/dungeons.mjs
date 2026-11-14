@@ -191,6 +191,11 @@ for (let n = 0; n < COUNT; n++) {
       }
     }
   }
+  // Parts kept apart (their `apart` tags) never joined straight onto each other.
+  for (const k of layout.joins) {
+    const a = layout.parts[k.a].part, b = layout.parts[k.b].part;
+    check(`${where}: ${a.id} and ${b.id} kept apart`, !a.apart.some((t) => b.tags.includes(t)) && !b.apart.some((t) => a.tags.includes(t)));
+  }
   // Every route ends in a room: no way (corridor, stair, junction) is reached by its way in alone.
   layout.parts.forEach((p, i) => {
     if (p.role !== "way") return;

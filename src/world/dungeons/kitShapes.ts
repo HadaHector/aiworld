@@ -35,7 +35,12 @@ export interface StairSpec {
   ceiling: number;
   /** Walls one metre thick down both sides, from under the lower end to over the higher's vault. */
   walls: boolean;
+  /** Railings down both sides, on the flight's edges (a flight standing free in a hall). */
+  railings?: boolean;
 }
+
+/** A railing's thickness. */
+const RAILING_WIDTH = 0.6;
 
 /** A straight flight: a box a step, down to a metre under its lower end, and a vault over each. */
 export function stairGeometry(s: StairSpec): KitGeometry {
@@ -57,6 +62,24 @@ export function stairGeometry(s: StairSpec): KitGeometry {
     if (s.ceiling > 0) shapes.push({ kind: "box", center: vec3(cx, top + s.rise + s.ceiling + 0.5, cz), half: vec3(s.width / 2 + (s.walls ? 1 : 0), 0.5, tread / 2 + 0.01), rotation });
     path.push(vec3(cx, top, cz));
   }
+  const plain: number[] = [];
+  if (s.railings) {
+    // Each a slab sloping with the flight, its top a railing's height over the line of the steps'
+    // fronts, its foot sunk into them: across the flight, from its edge in by a railing's thickness.
+    const ux = dx / run, uz = dz / run, ax = uz, az = -ux;
+    for (const side of [-1, 1]) {
+      const corners: Vec3[] = [];
+      for (const [along, y] of [[0, s.from.y], [run, s.to.y]] as [number, number][]) {
+        // Its outer side a hand past the steps' ends, so their sides do not show through it.
+        for (const across of [s.width / 2 - RAILING_WIDTH, s.width / 2 + 0.05]) {
+          const x = s.from.x + ux * along + ax * across * side, z = s.from.z + uz * along + az * across * side;
+          corners.push(vec3(x, y - 1, z), vec3(x, y + RAILING, z));
+        }
+      }
+      plain.push(shapes.length);
+      shapes.push({ kind: "convex", points: corners });
+    }
+  }
   if (s.walls) {
     const high = Math.max(s.from.y, s.to.y) + s.rise + s.ceiling + 1;
     for (const side of [-1, 1]) {
@@ -65,7 +88,7 @@ export function stairGeometry(s: StairSpec): KitGeometry {
       shapes.push({ kind: "box", center: vec3((s.from.x + s.to.x) / 2 + ox, (high + base) / 2, (s.from.z + s.to.z) / 2 + oz), half: vec3(0.5, (high - base) / 2, run / 2), rotation });
     }
   }
-  return { shapes, paths: [path] };
+  return { shapes, paths: [path], plain };
 }
 
 /** How far into the pillar the steps and vaults reach: inside its flats (12 sides: cos 15 deg). */

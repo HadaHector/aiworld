@@ -3,7 +3,8 @@
 // solids covers it, dropped where it faces into the rock, and painted by what it is to the way
 // through: floor, wall, vault, step. Torches stand at its light spots. Pure: no engine, so it can
 // run anywhere the layout does.
-import { ribs, wallTrims, type CeilingSpan, type StairEdge, type WallFace, type WallTrims } from "../architecture/trims";
+import { loculi } from "../architecture/dents";
+import { copings, ribs, wallTrims, type CeilingSpan, type StairEdge, type WallFace, type WallTrims } from "../architecture/trims";
 import { convexHull, rotate, type ShapeDesc } from "../collision/index";
 import { ModelBuilder } from "../buildings/buildingGeometry";
 import type { BuildingModel, ModelLight, Paint } from "../buildings/buildingTypes";
@@ -32,6 +33,8 @@ interface Face {
   corners: V[];
   /** Which solid it is a side of. */
   solid: number;
+  /** The inside of a dent cut into it (a niche): drawn as wall, whatever way it faces. */
+  dent?: boolean;
 }
 
 /** One part drawn: its model and the lights at its fixtures, in the layout's frame (y the world's). */
@@ -365,7 +368,7 @@ function cutFace(face: Face, cutters: readonly Solid[], offsets: readonly number
     }
   }
   if (pieces.length === 1 && pieces[0] === first) return [face];
-  return pieces.map((piece) => ({ n, corners: piece.map(to3), solid: face.solid }));
+  return pieces.map((piece) => ({ ...face, n, corners: piece.map(to3) }));
 }
 
 /** A solid moved: its points by `point`, its directions by `turn` (a rotation). */
@@ -491,7 +494,7 @@ const trimmedParts = new WeakMap<DungeonPartDef, Map<WallTrims, { solids: Solid[
  */
 export function trimmedShape(part: DungeonPartDef, trims: WallTrims): { solids: Solid[]; faces: Face[]; kinds: SolidKind[] } {
   const plain = partShape(part);
-  if (part.doorway || part.paths.length === 0 || (!trims.plinth && !trims.cornice && !trims.ribs)) return plain;
+  if (part.doorway || part.paths.length === 0 || (!trims.plinth && !trims.cornice && !trims.ribs && !trims.coping && !trims.loculi)) return plain;
   let byStyle = trimmedParts.get(part);
   if (!byStyle) trimmedParts.set(part, (byStyle = new Map()));
   const known = byStyle.get(trims);
@@ -529,11 +532,81 @@ export function trimmedShape(part: DungeonPartDef, trims: WallTrims): { solids: 
     const walls = solids.filter((s) => !pierSolids.includes(s));
     pieces.push(...ribs(spans, { solidAt: (p) => walls.some((s) => inside(s, p)), floorUnder: (p) => floorUnder(built, p) }, trims.ribs, piers));
   }
+  if (trims.coping) {
+    // The railings' tops: the solids that are wall all over and low (not a tunnel's walls, whose
+    // tops show over its mouth), each at its top as far as it is seen.
+    const tops: [number, number, number][][] = [];
+    for (const i of part.plain) {
+      // Its top: the faces it shows upward lying in the plane of its highest (it may slope).
+      const up = plain.faces.filter((f) => f.solid === i && f.n[1] > 0.7);
+      if (up.length === 0) continue;
+      const highest = up.reduce((p, q) => (Math.max(...q.corners.map((c) => c[1])) > Math.max(...p.corners.map((c) => c[1])) ? q : p));
+      const d = dot(highest.n, highest.corners[0]);
+      const level = up.filter((f) => dot(f.n, highest.n) > 0.999 && f.corners.every((c) => Math.abs(dot(highest.n, c) - d) < 1e-3));
+      // Low, foot to top, under its top's middle (a sloping railing reaches far down overall).
+      const mid = highest.corners.reduce((m, c) => [m[0] + c[0] / highest.corners.length, 0, m[2] + c[2] / highest.corners.length], [0, 0, 0]);
+      const col = column(solids[i], mid[0], mid[2]);
+      if (!col || col[1] - col[0] > RAILING_MAX) continue;
+      tops.push(level.flatMap((f) => f.corners.map((c): [number, number, number] => [c[0], c[1], c[2]])));
+    }
+    pieces.push(...copings(tops, trims.coping));
+  }
   const all = [...solids, ...pieces.map((t) => hullSolid(t.points))];
-  const faces = partFaces(all, false, all.map((_, i) => i), whole);
+  let faces = partFaces(all, false, all.map((_, i) => i), whole);
   const kindsAll = solidKinds(all.length, faces);
+  // Loculi (src/world/architecture/dents.ts): cut out of the walls' faces, their insides drawn as
+  // the wall's, the sealed ones' slabs drawn in their openings (drawn only: the walls collide whole).
+  if (trims.loculi) {
+    const lights = part.spots.light ?? [];
+    const near = (lo: V, hi: V, p: V, across: number, up: number): boolean =>
+      p[0] > lo[0] - across && p[0] < hi[0] + across && p[2] > lo[2] - across && p[2] < hi[2] + across && p[1] > lo[1] - up && p[1] < hi[1] + up;
+    const trimBoxes = pieces.map((t) => hullSolid(t.points));
+    const niches = loculi(walls, {
+      floorUnder: (p) => floorUnder(built, p),
+      solidAt: (p) => built.some((s) => inside(s, p)),
+      blocked: (lo, hi) =>
+        trimBoxes.some((b) => b.hi[0] > lo[0] - 0.3 && b.lo[0] < hi[0] + 0.3 && b.hi[1] > lo[1] - 0.3 && b.lo[1] < hi[1] + 0.3 && b.hi[2] > lo[2] - 0.3 && b.lo[2] < hi[2] + 0.3) ||
+        // A torch's spot (it is hung on the wall nearest it), a doorway's frame round a socket.
+        lights.some((l) => near(lo, hi, [l.x, l.y, l.z], 1.2, 1.5)) ||
+        part.sockets.some((s) => {
+          // In the socket's own frame: the doorway reaches about its depth either side of the
+          // socket's plane, and a jamb's width past its opening across.
+          const a = (s.facing * Math.PI) / 180, fx = Math.sin(a), fz = Math.cos(a);
+          if (hi[1] < s.at.y - 0.5 || lo[1] > s.at.y + s.size[1] + DOORWAY_REACH) return false;
+          const corners: V[] = [[lo[0], 0, lo[2]], [hi[0], 0, lo[2]], [hi[0], 0, hi[2]], [lo[0], 0, hi[2]]];
+          const fwd = corners.map((c) => (c[0] - s.at.x) * fx + (c[2] - s.at.z) * fz);
+          const across = corners.map((c) => (c[0] - s.at.x) * fz - (c[2] - s.at.z) * fx);
+          const half = s.size[0] / 2 + DOORWAY_REACH;
+          return Math.min(...fwd) < DOORWAY_REACH && Math.max(...fwd) > -DOORWAY_REACH && Math.min(...across) < half && Math.max(...across) > -half;
+        }),
+      random: (p) => {
+        const h = Math.sin(p[0] * 12.9898 + p[1] * 78.233 + p[2] * 37.719) * 43758.5453;
+        return h - Math.floor(h);
+      },
+    }, trims.loculi);
+    const voids = niches.map((n) => hullSolid(n.points));
+    faces = faces.flatMap((f) => cutFace(f, voids, [-COVER]));
+    for (const v of voids) {
+      for (const side of v.sides) {
+        // Each side but the opening, facing into the niche, as a side of the wall it is cut into.
+        const c = side.corners.reduce((m, p): V => [m[0] + p[0] / side.corners.length, m[1] + p[1] / side.corners.length, m[2] + p[2] / side.corners.length], [0, 0, 0]);
+        const owner = all.findIndex((s) => inside(s, [c[0] + side.n[0] * 0.1, c[1] + side.n[1] * 0.1, c[2] + side.n[2] * 0.1]));
+        if (owner < 0) continue;
+        faces.push({ n: [-side.n[0], -side.n[1], -side.n[2]], corners: side.corners, solid: owner, dent: true });
+      }
+    }
+    for (const niche of niches) {
+      if (!niche.slab) continue;
+      const slab = hullSolid(niche.slab);
+      const front = slab.sides.find((s) => dot(s.n, niche.n) > 0.99);
+      if (!front) continue;
+      faces.push({ n: front.n, corners: front.corners, solid: all.length });
+      all.push(slab);
+      kindsAll.push({ tread: false, floor: false, roof: false, top: -Infinity, trim: true });
+    }
+  }
   for (const i of part.plain) kindsAll[i] = { ...kindsAll[i], tread: false, plain: true };
-  for (let i = solids.length; i < all.length; i++) kindsAll[i] = { tread: false, floor: false, roof: false, top: -Infinity, trim: true, grain: pieces[i - solids.length].grain, uvOrigin: pieces[i - solids.length].uvOrigin };
+  for (let i = solids.length; i < solids.length + pieces.length; i++) kindsAll[i] = { tread: false, floor: false, roof: false, top: -Infinity, trim: true, grain: pieces[i - solids.length].grain, uvOrigin: pieces[i - solids.length].uvOrigin };
   const shape = { solids: all, faces, kinds: kindsAll };
   byStyle.set(trims, shape);
   return shape;
@@ -544,6 +617,12 @@ export function trimmedShape(part: DungeonPartDef, trims: WallTrims): { solids: 
  * (a hand over the tread), and each edge of the vault over a step with a wall just past it (a hand
  * under the vault) - the wall facing back over the step.
  */
+/** How far round a socket a doorway's frame may reach (its depth, its jambs): no niche there. */
+const DOORWAY_REACH = 1.5;
+
+/** A railing is no taller than this, all told, foot to top: wall all over that is taller is a wall. */
+const RAILING_MAX = 2.5;
+
 /** A step's tread is smaller than this, square metres: a floor seen in narrow pieces is not one. */
 const STEP_AREA = 15;
 
@@ -850,6 +929,11 @@ export function buildPartModel(layout: DungeonLayout, index: number, style: Dung
     const stair = placed.role === "doorway" ? null : stairOf(f, kinds[f.solid], solids, style.look);
     if (stair) {
       b.raw(f.corners.map(point), f.corners.map(() => turn(f.n)), f.corners.map(() => turn(stair.tangent)), stair.uvs, asPaint(stair.paint));
+      continue;
+    }
+    // A niche's inside: the wall's stone, laid as the wall's is.
+    if (f.dent) {
+      b.face(f.corners.map(point), turn(f.n), asPaint(style.look.wall));
       continue;
     }
     const round = roundOf(placed.part, f);

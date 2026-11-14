@@ -42,6 +42,11 @@
     plinth: { height: 0.75, proud: 0.15 },
     cornice: { height: 0.75, proud: 0.3 },
     ribs: { spacing: 7, width: 0.9, depth: 0.5, pilaster: { width: 0.9, proud: 0.35 } },
+    // A stone on every railing, a hand wider than it each side.
+    coping: { height: 0.3, overhang: 0.15 },
+    // Burial niches low on the walls, twice life size: two rows (three on a hall's tall walls), some
+    // sealed with a slab.
+    loculi: { width: 2.4, height: 0.9, depth: 0.8, gap: 0.6, rowGap: 0.45, above: 1.1, rows: 2, tallRows: 3, tallWall: 9, margin: 0.5, sealed: 0.4 },
   },
   // Set across every join and cap, and at the mouth (DUNGEONS.md, *Doorways*).
   doorways: { tags: ["doorway"] },
