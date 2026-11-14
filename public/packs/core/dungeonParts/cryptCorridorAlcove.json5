@@ -1,0 +1,31 @@
+// A crypt corridor, 6 m wide and high, 16 m long, an alcove 6 m wide and 4 m deep off its side -
+// room for a chest, a tomb or something waiting.
+// Written by scripts/dungeonRooms.py from its outline - change it there.
+{
+  tags: ["crypt", "corridor"],
+  weight: 2,
+  sockets: [
+    { at: [0, 0, 0], facing: 180, type: "crypt", size: [6, 6], reach: 1 },
+    { at: [0, 0, 16], facing: 0, type: "crypt", size: [6, 6], reach: 1 },
+  ],
+  colliders: [
+    { box: [-4, -1, -1, 4, 0, 17] },
+    { box: [-4, 6, -1, 4, 7, 17] },
+    { box: [2, -1, 4, 8, 0, 12] },
+    { box: [2, 6, 4, 8, 7, 12] },
+    { box: [3, -1, 0, 4, 7, 5] },
+    { box: [3, -1, 4, 8, 7, 5] },
+    { box: [7, -1, 4, 8, 7, 12] },
+    { box: [3, -1, 11, 8, 7, 12] },
+    { box: [3, -1, 11, 4, 7, 16] },
+    { box: [-4, -1, 0, -3, 7, 16] },
+  ],
+  paths: [
+    [[0, 0, 0], [0, 0, 16]],
+  ],
+  spots: {
+    light: [[6.4, 3.3, 8], [-2.4, 3.3, 8], [-2.4, 3.5, 8]],
+    spawns: [[5, 0, 8]],
+    chest: [[5.5, 0, 8]],
+  },
+}

@@ -1,0 +1,44 @@
+// A pillared hall: 24 m square, 10 m to the vault, four piers round its middle - the room seen
+// across between them, cover among them. A way off every side.
+// Written by scripts/dungeonRooms.py from its outline - change it there.
+{
+  tags: ["crypt", "hall"],
+  room: true,
+  weight: 2,
+  sockets: [
+    { at: [0, 0, 0], facing: 180, type: "crypt", size: [6, 6], reach: 1.5 },
+    { at: [13, 0, 13], facing: 90, type: "crypt", size: [6, 6], reach: 1.5 },
+    { at: [0, 0, 26], facing: 0, type: "crypt", size: [6, 6], reach: 1.5 },
+    { at: [-13, 0, 13], facing: 270, type: "crypt", size: [6, 6], reach: 1.5 },
+  ],
+  colliders: [
+    { box: [-13, -1, 0, 13, 0, 26] },
+    { box: [-13, 10, 0, 13, 11, 26] },
+    { box: [-13, -1, 0, -3, 11, 1] },
+    { box: [3, -1, 0, 13, 11, 1] },
+    { box: [-3, 6, 0, 3, 11, 1] },
+    { box: [12, -1, 0, 13, 11, 10] },
+    { box: [12, -1, 16, 13, 11, 26] },
+    { box: [12, 6, 10, 13, 11, 16] },
+    { box: [3, -1, 25, 13, 11, 26] },
+    { box: [-13, -1, 25, -3, 11, 26] },
+    { box: [-3, 6, 25, 3, 11, 26] },
+    { box: [-13, -1, 16, -12, 11, 26] },
+    { box: [-13, -1, 0, -12, 11, 10] },
+    { box: [-13, 6, 10, -12, 11, 16] },
+    { box: [-7, -1, 6, -5, 11, 8] },
+    { box: [5, -1, 6, 7, 11, 8] },
+    { box: [-7, -1, 18, -5, 11, 20] },
+    { box: [5, -1, 18, 7, 11, 20] },
+  ],
+  paths: [
+    [[0, 0, 0], [0, 0, 13], [0, 0, 26]],
+    [[-13, 0, 13], [0, 0, 13], [13, 0, 13]],
+  ],
+  spots: {
+    light: [[-6, 5, 1.6], [6, 5, 1.6], [11.4, 5, 7], [11.4, 5, 19], [6, 5, 24.4], [-6, 5, 24.4], [-11.4, 5, 19], [-11.4, 5, 7]],
+    spawns: [[-8, 0, 4], [8, 0, 22], [-9, 0, 20]],
+    chest: [[10, 0, 4]],
+    quest: [[-10, 0, 23]],
+  },
+}

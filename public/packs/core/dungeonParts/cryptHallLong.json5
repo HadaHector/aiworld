@@ -1,0 +1,41 @@
+// A long burial hall: 12 m by 36 m inside, 9 m to the vault, a way in and out at its ends
+// and a corridor off each side.
+// Written by scripts/dungeonRooms.py from its outline - change it there.
+{
+  tags: ["crypt", "hall"],
+  room: true,
+  weight: 2,
+  sockets: [
+    { at: [0, 0, 0], facing: 180, type: "crypt", size: [6, 6], reach: 1.5 },
+    { at: [7, 0, 26], facing: 90, type: "crypt", size: [6, 6], reach: 1.5 },
+    { at: [0, 0, 38], facing: 0, type: "crypt", size: [6, 6], reach: 1.5 },
+    { at: [-7, 0, 12], facing: 270, type: "crypt", size: [6, 6], reach: 1.5 },
+  ],
+  colliders: [
+    { box: [-7, -1, 0, 7, 0, 38] },
+    { box: [-7, 9, 0, 7, 10, 38] },
+    { box: [-7, -1, 0, -3, 10, 1] },
+    { box: [3, -1, 0, 7, 10, 1] },
+    { box: [-3, 6, 0, 3, 10, 1] },
+    { box: [6, -1, 0, 7, 10, 23] },
+    { box: [6, -1, 29, 7, 10, 38] },
+    { box: [6, 6, 23, 7, 10, 29] },
+    { box: [3, -1, 37, 7, 10, 38] },
+    { box: [-7, -1, 37, -3, 10, 38] },
+    { box: [-3, 6, 37, 3, 10, 38] },
+    { box: [-7, -1, 15, -6, 10, 38] },
+    { box: [-7, -1, 0, -6, 10, 9] },
+    { box: [-7, 6, 9, -6, 10, 15] },
+  ],
+  paths: [
+    [[0, 0, 0], [0, 0, 12], [0, 0, 26], [0, 0, 38]],
+    [[-7, 0, 12], [0, 0, 12]],
+    [[0, 0, 26], [7, 0, 26]],
+  ],
+  spots: {
+    light: [[5.4, 4.95, 7], [5.4, 4.95, 19], [5.4, 4.95, 31], [-5.4, 4.95, 31], [-5.4, 4.95, 19], [-5.4, 4.95, 7]],
+    spawns: [[0, 0, 8], [-2, 0, 20], [2, 0, 32]],
+    chest: [[-4, 0, 35]],
+    quest: [[4, 0, 18]],
+  },
+}
