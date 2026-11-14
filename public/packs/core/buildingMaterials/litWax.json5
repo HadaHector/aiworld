@@ -1,0 +1,24 @@
+// A burning candle's wax: lit through by its flame - a fake of light scattered under its skin, not
+// the real thing - so it glows warm and pale even where no light falls on it. Smooth, a soft sheen,
+// a faint mottle. A burnt-out candle's wax is plain (no material).
+{
+  name: "Lit Wax",
+  size: 0.5,
+  shine: 0.3,
+  glow: 0.55,
+  texture: {
+    bumpStrength: 0.1,
+    pipeline: {
+      noises: [{ name: "mottle", type: "fbm", octaves: 2, tileCycles: 3, amplitude: 1, persistence: 0.5, lacunarity: 2 }],
+      steps: [
+        { output: "mottleRaw", op: "sample", noise: "mottle" },
+        { output: "shade", op: "remap", input: "mottleRaw", inMin: -1, inMax: 1, outMin: 0.9, outMax: 1.04 },
+        { output: "base", op: "color", value: [1.0, 0.84, 0.58] },
+        { output: "diffuse", op: "multiply", a: "base", b: "shade" },
+        { output: "roughness", op: "constant", value: 0.6 },
+        { output: "height", op: "scale", input: "mottleRaw", factor: 0.1 },
+      ],
+      outputs: { diffuse: "diffuse", roughness: "roughness", height: "height" },
+    },
+  },
+}

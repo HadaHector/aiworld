@@ -8,6 +8,9 @@
   light: { color: [1.0, 0.72, 0.42], intensity: 0.7, radius: 6, size: 0.25 },
   parts: {
     wax: { tints: [[0.92, 0.88, 0.76], [0.86, 0.8, 0.66], [0.8, 0.74, 0.62]] },
+    // Burning: the wax lit through by its flames (its material glows a little, faking the light
+    // under its skin).
+    litWax: { material: "litWax", tints: [[1, 1, 1], [0.96, 0.92, 0.84]] },
     flame: { material: "flame", tints: [[1, 1, 1]] },
   },
 }

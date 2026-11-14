@@ -1,0 +1,10 @@
+// A burial urn: a turned pot of fired clay, round, tall or wide-mouthed, lidded, open or broken. Set
+// in a crypt's open loculi and on its benches (DUNGEONS.md, *What fills it*).
+{
+  name: "Urn",
+  type: "urn",
+  parts: {
+    body: { tints: [[0.52, 0.32, 0.22], [0.46, 0.36, 0.28], [0.4, 0.38, 0.34], [0.58, 0.44, 0.32]] },
+    band: { tints: [[0.3, 0.2, 0.14], [0.22, 0.2, 0.18]] },
+  },
+}

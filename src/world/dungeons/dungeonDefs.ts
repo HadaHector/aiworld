@@ -157,6 +157,8 @@ export interface DungeonStyleDef {
   trims: WallTrims;
   /** How it is lit (DUNGEONS.md, *Light*). */
   light: DungeonLight;
+  /** Urns (a prop) set in its open loculi and on its benches: the share of each such place that has one. */
+  urns?: { prop: string; share: number };
 }
 
 /** A face's building material (by id; null for plain colour) and the tint its colour is multiplied by. */
@@ -525,7 +527,7 @@ export function shapesBounds(shapes: readonly ShapeDesc[]): Aabb {
   return { min, max };
 }
 
-const STYLE_KEYS = ["name", "builder", "sizes", "branching", "loops", "boss", "keys", "cover", "deepest", "parts", "entrance", "caps", "connector", "look", "light", "doorways", "trims"];
+const STYLE_KEYS = ["name", "builder", "sizes", "branching", "loops", "boss", "keys", "cover", "deepest", "parts", "entrance", "caps", "connector", "look", "light", "urns", "doorways", "trims"];
 
 function colour(reader: Reader, value: unknown, path: string, fallback: [number, number, number]): [number, number, number] {
   if (value === undefined) return fallback;
@@ -630,14 +632,15 @@ function readTrims(reader: Reader, raw: RawObject): WallTrims {
   return { plinth: band("plinth"), cornice: band("cornice"), ribs, coping, loculi, arcosolia };
 }
 
+/** A prop set at some share of the places it may go: `{ prop, share }`. */
+function readPropShare(reader: Reader, raw: RawObject, path: string, prop: string): { prop: string; share: number } {
+  reader.onlyKeys(raw, path, ["prop", "share"]);
+  return { prop: reader.optionalString(raw, "prop", path) ?? prop, share: reader.optionalNumber(raw, "share", path, 0.4, { min: 0, max: 1 }) };
+}
+
 function readLight(reader: Reader, raw: RawObject): DungeonLight {
   reader.onlyKeys(raw, "light", ["ambient", "fixture", "lit", "candles"]);
-  let candles: DungeonLight["candles"];
-  if (raw.candles !== undefined) {
-    const c = reader.object(raw.candles, "light.candles");
-    reader.onlyKeys(c, "light.candles", ["prop", "share"]);
-    candles = { prop: reader.optionalString(c, "prop", "light.candles") ?? "candles", share: reader.optionalNumber(c, "share", "light.candles", 0.4, { min: 0, max: 1 }) };
-  }
+  const candles = raw.candles === undefined ? undefined : readPropShare(reader, reader.object(raw.candles, "light.candles"), "light.candles", "candles");
   return {
     candles,
     ambient: colour(reader, raw.ambient, "light.ambient", [0.02, 0.02, 0.025]),
@@ -703,6 +706,7 @@ function readStyle(entry: Entry, allParts: Map<string, DungeonPartDef>, rules: D
     doorways,
     trims: readTrims(reader, obj.trims === undefined ? {} : reader.object(obj.trims, "trims")),
     light: readLight(reader, obj.light === undefined ? {} : reader.object(obj.light, "light")),
+    urns: obj.urns === undefined ? undefined : readPropShare(reader, reader.object(obj.urns, "urns"), "urns", "urn"),
   };
   if (style.loops[1] > 0 && !style.connector) reader.fail("loops", "a style with loops needs a `connector` to make them with");
   // Able to start, grow, end and close.

@@ -10,6 +10,68 @@ import { emblem, EMBLEMS, type Emblem } from "../emblems";
  * little out of true as old ones are.
  */
 
+/**
+ * A burial urn: a turned pot - a foot, a body swelling to its shoulder, a neck and a lip - of one of
+ * a few shapes (round, tall, wide-mouthed), with a lid and its knob, or open; or broken, its top
+ * gone at the shoulder in a jagged rim and a shard or two of it lying by it.
+ */
+export const urn: PropGenerator = {
+  doc: "A burial urn: round, tall or wide-mouthed, lidded, open or broken.",
+  params: {
+    height: { kind: "range", default: [0.45, 0.75], min: 0.1, doc: "to its lip (the lid's knob stands over it)" },
+    width: { kind: "range", default: [0.5, 0.75], min: 0.1, doc: "its body's widest, a share of its height" },
+    shape: { kind: "choice", options: ["round", "tall", "wide"], default: ["round", "tall", "wide"], doc: "its outline (one picked)" },
+    lid: { kind: "chance", default: 0.5, doc: "how likely it has its lid" },
+    broken: { kind: "chance", default: 0.2, doc: "how likely it is broken" },
+  },
+  parts: ["body", "band"],
+  build(ctx) {
+    const h = ctx.range("height");
+    const r = (ctx.range("width") * h) / 2;
+    const kind = ctx.choice("shape");
+    const body = ctx.paint("body");
+    // The outline as shares of its widest and of its height, from the foot up.
+    const shapes: Record<string, [number, number][]> = {
+      round: [[0.5, 0], [0.55, 0.06], [0.85, 0.2], [1, 0.45], [0.9, 0.68], [0.55, 0.82], [0.5, 0.92], [0.62, 1]],
+      tall: [[0.55, 0], [0.6, 0.05], [0.8, 0.15], [1, 0.5], [0.85, 0.75], [0.45, 0.86], [0.42, 0.94], [0.55, 1]],
+      wide: [[0.55, 0], [0.6, 0.06], [0.95, 0.25], [1, 0.45], [0.92, 0.7], [0.78, 0.86], [0.85, 1]],
+    };
+    const outline = (shapes[kind] ?? shapes.round).map(([w, y]): [number, number] => [w * r, y * h]);
+    const sides = ctx.far ? 7 : 11;
+    if (ctx.chance("broken")) {
+      // Broken at its shoulder: its body up to there, open, its rim cut in teeth.
+      const cut = 0.62 * h;
+      const below = outline.filter(([, y]) => y < cut);
+      const rimR = r * 0.97;
+      ctx.shape.lathe(ORIGIN, [...below, [rimR, cut]], body, { bottom: body, sides });
+      if (ctx.far) return;
+      // The teeth: a few shards standing up from the rim, round it.
+      const teeth = 3 + Math.floor(ctx.rng() * 3);
+      for (let i = 0; i < teeth; i++) {
+        const a = ((i + ctx.rng() * 0.5) / teeth) * Math.PI * 2;
+        const up = 0.04 + ctx.rng() * 0.1;
+        const f = turned(moved(ORIGIN, [Math.cos(a) * rimR, cut, Math.sin(a) * rimR]), "y", -a);
+        ctx.shape.box(moved(f, [0, up / 2, 0]), [0.015, up / 2, 0.05 + ctx.rng() * 0.04], body);
+      }
+      // A shard or two by it.
+      for (let i = 0; i < 2; i++) {
+        const a = ctx.rng() * Math.PI * 2, d = r + 0.12 + ctx.rng() * 0.15;
+        const f = turned(turned(moved(ORIGIN, [Math.cos(a) * d, 0.015, Math.sin(a) * d]), "y", ctx.rng() * Math.PI), "x", 0.2);
+        ctx.shape.box(f, [0.07 + ctx.rng() * 0.05, 0.012, 0.05 + ctx.rng() * 0.03], body);
+      }
+      return;
+    }
+    const lid = ctx.chance("lid");
+    const lip = outline[outline.length - 1][0];
+    ctx.shape.lathe(ORIGIN, outline, body, { bottom: body, top: lid ? undefined : ctx.paint("band"), sides });
+    if (ctx.far) return;
+    // A band round its shoulder, a little proud.
+    const [sr, sy] = outline[3];
+    ctx.shape.lathe(ORIGIN, [[sr + 0.008, sy - 0.03], [sr + 0.015, sy], [sr + 0.008, sy + 0.03]], ctx.paint("band"), { sides });
+    if (lid) ctx.shape.lathe(moved(ORIGIN, [0, h, 0]), [[lip * 1.05, 0], [lip * 1.02, 0.03], [lip * 0.6, 0.08], [0.04, 0.1], [0.05, 0.15], [0.001, 0.17]], body, { bottom: body, sides });
+  },
+};
+
 /** How far a marker is sunk into the ground. */
 const SINK = 0.25;
 

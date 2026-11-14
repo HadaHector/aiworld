@@ -496,7 +496,7 @@ function paintFor(f: Face, kind: SolidKind, look: DungeonStyleDef["look"]): Dung
 /** Each part's solids and seen faces, in its own frame - worked out once however often it is placed. */
 const shapesOfPart = new WeakMap<DungeonPartDef, { solids: Solid[]; faces: Face[]; kinds: SolidKind[] }>();
 /** Each part's look with a style's trims, by the style. */
-const trimmedParts = new WeakMap<DungeonPartDef, Map<WallTrims, { solids: Solid[]; faces: Face[]; kinds: SolidKind[] }>>();
+const trimmedParts = new WeakMap<DungeonPartDef, Map<WallTrims, { solids: Solid[]; faces: Face[]; kinds: SolidKind[]; niches?: Niche[] }>>();
 
 /**
  * A part as a style draws it: its solids and faces, and its trims (src/world/architecture/trims.ts)
@@ -504,7 +504,7 @@ const trimmedParts = new WeakMap<DungeonPartDef, Map<WallTrims, { solids: Solid[
  * the rest as any solid is: a wall gives way to the plinth in front of it, two bands meeting at a
  * corner never flicker. Not for doorways or caps: a doorway is a trim itself.
  */
-export function trimmedShape(part: DungeonPartDef, trims: WallTrims): { solids: Solid[]; faces: Face[]; kinds: SolidKind[] } {
+export function trimmedShape(part: DungeonPartDef, trims: WallTrims): { solids: Solid[]; faces: Face[]; kinds: SolidKind[]; niches?: Niche[] } {
   const plain = partShape(part);
   if (part.ending) return endingShape(part, trims, plain);
   if (part.doorway || part.paths.length === 0 || (!trims.plinth && !trims.cornice && !trims.ribs && !trims.coping && !trims.loculi && !part.tombs?.length && !part.benches?.length && !part.ledgers?.length)) return plain;
@@ -636,7 +636,7 @@ export function trimmedShape(part: DungeonPartDef, trims: WallTrims): { solids: 
   }
   for (const i of part.plain) kindsAll[i] = { ...kindsAll[i], tread: false, plain: true };
   for (let i = solids.length; i < solids.length + pieces.length; i++) kindsAll[i] = { tread: false, floor: false, roof: false, top: -Infinity, trim: true, grain: pieces[i - solids.length].grain, uvOrigin: pieces[i - solids.length].uvOrigin };
-  const shape = { solids: all, faces, kinds: kindsAll };
+  const shape = { solids: all, faces, kinds: kindsAll, niches };
   byStyle.set(trims, shape);
   return shape;
 }
@@ -1214,6 +1214,25 @@ export function buildPartModel(layout: DungeonLayout, index: number, style: Dung
       b.append(model, p[0], p[1], p[2], front[0], front[2]);
     });
   }
+  // Urns: in its open loculi, on its benches' middles.
+  const urn = style.urns && props?.(style.urns.prop);
+  if (urn && style.urns) {
+    const share = style.urns.share;
+    const urnRandom = mulberry32(deriveSeed(layout.seed, index * 6131 + 7));
+    urnSites(placed.part, shape.niches ?? []).forEach((site, i) => {
+      if (urnRandom() >= share) return;
+      const model = generateProp(urn, deriveSeed(layout.seed, index * 1153 + i), i);
+      // One that will not fit (a niche's height) is left out.
+      if (model.positions.length > 0 && site.room !== undefined) {
+        let top = -Infinity;
+        for (let k = 1; k < model.positions.length; k += 3) top = Math.max(top, model.positions[k]);
+        if (top > site.room) return;
+      }
+      const p = point(site.at);
+      const front = turn(site.front);
+      b.append(model, p[0], p[1], p[2], front[0], front[2]);
+    });
+  }
   const model = b.finish({ x: 0, z: 0 });
   return { model, lights: model.lights ?? [] };
 }
@@ -1239,6 +1258,22 @@ function candleSites(part: DungeonPartDef): { at: V; front: V; share: number }[]
     sites.push({ at: [t.at.x + along[0] * reach, t.at.y, t.at.z + along[2] * reach], front: along, share: 1 });
   }
   for (const l of part.ledgers ?? []) sites.push({ at: [l.at.x, l.at.y + l.high, l.at.z], front: [Math.sin(l.turn), 0, Math.cos(l.turn)], share: 0.25 });
+  return sites;
+}
+
+/** Where urns may stand in a part, in its own frame: in each open loculus (on its floor, in its
+ *  middle - `room` the height it has), and in the middle of each bench's seat. */
+function urnSites(part: DungeonPartDef, niches: readonly Niche[]): { at: V; front: V; room?: number }[] {
+  const sites: { at: V; front: V; room?: number }[] = [];
+  for (const n of niches) {
+    if (n.slab || n.contents?.length) continue;
+    const ys = n.points.map((q) => q[1]);
+    const y0 = Math.min(...ys), y1 = Math.max(...ys);
+    const mid = n.points.reduce((m, q): V => [m[0] + q[0] / n.points.length, 0, m[2] + q[2] / n.points.length], [0, 0, 0]);
+    sites.push({ at: [mid[0], y0, mid[2]], front: [n.n[0], 0, n.n[2]], room: y1 - y0 - 0.05 });
+  }
+  const high = BENCH_SIZE[2];
+  for (const b of part.benches ?? []) sites.push({ at: [b.at.x - b.out[0] * 0.05, b.at.y + high, b.at.z - b.out[1] * 0.05], front: [b.out[0], 0, b.out[1]] });
   return sites;
 }
 
