@@ -280,7 +280,7 @@ export function stairBands(edges: readonly StairEdge[], kind: "plinth" | "cornic
         const h = y + (rise * side) / 2;
         const [lo, hi] = kind === "plinth" ? [h - 2 * rise - 0.3, h + rise + profile.height + 0.35] : [h - rise - profile.height - 0.35, h + 2 * rise + 0.3];
         const pts: V3[] = [];
-        for (const [c, dt] of [[at(tFar), -side * 0.05], [at(tEnd), side * past]] as [V3, number][]) {
+        for (const [c, dt] of [[at(tFar), 0], [at(tEnd), side * past]] as [V3, number][]) {
           for (const k of [-back, out]) {
             const x = c[0] + t[0] * dt + e.n[0] * k, z = c[2] + t[2] * dt + e.n[2] * k;
             pts.push([x, lo, z], [x, hi, z]);
