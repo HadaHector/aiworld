@@ -83,7 +83,7 @@ export function bandPrism(a: V3, b: V3, n: V3, y0: number, y1: number, proud: nu
  * close round it; a builder that cuts overlapping solids against each other (as a dungeon part does)
  * keeps them from flickering where they overlap.
  */
-export function wallTrims(faces: readonly WallFace[], around: TrimSurroundings, spec: WallTrims): TrimPiece[] {
+export function wallTrims(faces: readonly WallFace[], around: TrimSurroundings, spec: WallTrims, stairs?: StairEdges): TrimPiece[] {
   const tolerance = spec.tolerance ?? 0.1;
   const minHeight = spec.minHeight ?? 1.5;
   const minRun = spec.minRun ?? 1.5;
@@ -181,9 +181,102 @@ export function wallTrims(faces: readonly WallFace[], around: TrimSurroundings, 
   });
   const run = new Map<number, number>();
   found.forEach((a, i) => run.set(root(i), (run.get(root(i)) ?? 0) + length(a)));
-  return found
-    .filter((_, i) => run.get(root(i))! >= stepRun)
-    .map((b): TrimPiece => ({ kind: b.kind, points: bandPrism(b.ends[0], b.ends[1], b.n, b.y0, b.y1, b.proud, b.proud) }));
+  const kept = found.filter((_, i) => run.get(root(i))! >= stepRun);
+  const pieces = kept.map((b): TrimPiece => ({ kind: b.kind, points: bandPrism(b.ends[0], b.ends[1], b.n, b.y0, b.y1, b.proud, b.proud) }));
+  if (stairs) {
+    /** Whether a level band already runs along this edge (a vault kept level over a stair's first lap). */
+    const banded = (kind: Band["kind"], e: StairEdge): boolean => {
+      const m: V3 = [(e.a[0] + e.b[0]) / 2, e.a[1], (e.a[2] + e.b[2]) / 2];
+      return kept.some((b) => b.kind === kind && Math.abs(b.y - m[1]) < 0.05 && distanceToSegment(m, b.ends[0], b.ends[1]) < 0.5);
+    };
+    if (spec.plinth) pieces.push(...stairBands(stairs.treads.filter((e) => !banded("plinth", e)), "plinth", spec.plinth));
+    if (spec.cornice) pieces.push(...stairBands(stairs.vaults.filter((e) => !banded("cornice", e)), "cornice", spec.cornice));
+  }
+  return pieces;
+}
+
+/** How far a point is from a segment, across the plan. */
+function distanceToSegment(p: V3, a: V3, b: V3): number {
+  const dx = b[0] - a[0], dz = b[2] - a[2];
+  const l = dx * dx + dz * dz || 1;
+  const k = Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[2] - a[2]) * dz) / l));
+  return Math.hypot(p[0] - a[0] - dx * k, p[2] - a[2] - dz * k);
+}
+
+/** An edge of a stair's step where it meets a wall: along the wall at the step's height (`a`, `b`),
+ *  the wall facing `n`. A tread's edge for the plinth; the vault's over the step for the cornice. */
+export interface StairEdge {
+  a: V3;
+  b: V3;
+  n: V3;
+}
+
+export interface StairEdges {
+  treads: StairEdge[];
+  vaults: StairEdge[];
+}
+
+/**
+ * A stair's plinth or cornice (GEOMETRY.md, 7: a band runs on along the border it follows - up a
+ * flight too): no band a step, but one sloping with the flight along its pitch line, as a stair's
+ * stringer does. Edges meeting end to end a step apart are one flight; along it the band's line runs
+ * through the middle of each step, its foot (a plinth's) or head (a cornice's) sunk into the steps
+ * or the vault, so a step shows at least the band's height of it. Only a flight of three steps or more.
+ */
+export function stairBands(edges: readonly StairEdge[], kind: "plinth" | "cornice", profile: TrimProfile): TrimPiece[] {
+  const pieces: TrimPiece[] = [];
+  const near = (p: V3, q: V3): boolean => Math.hypot(p[0] - q[0], p[2] - q[2]) < 0.3;
+  const group = edges.map((_, i) => i);
+  const root = (i: number): number => (group[i] === i ? i : (group[i] = root(group[i])));
+  edges.forEach((e, i) => {
+    for (let j = 0; j < i; j++) {
+      const f = edges[j];
+      if (dot(e.n, f.n) < 0.5 || Math.abs(e.a[1] - f.a[1]) > 0.6) continue;
+      if ([e.a, e.b].some((p) => near(p, f.a) || near(p, f.b))) group[root(i)] = root(j);
+    }
+  });
+  const flights = new Map<number, number[]>();
+  edges.forEach((_, i) => flights.set(root(i), [...(flights.get(root(i)) ?? []), i]));
+  for (const members of flights.values()) {
+    const heights = [...new Set(members.map((i) => Math.round(edges[i].a[1] * 100) / 100))].sort((p, q) => p - q);
+    if (heights.length < 3) continue;
+    const steps = heights.slice(1).map((h, k) => h - heights[k]).sort((p, q) => p - q);
+    const rise = steps[Math.floor(steps.length / 2)];
+    const at = (i: number) => Math.round(edges[i].a[1] * 100) / 100;
+    for (const i of members) {
+      const e = edges[i], y = at(i);
+      const t = along(e.n);
+      // The whole step along this wall (its edge may be in pieces), and which way is up the flight:
+      // towards the step above, or away from the one below.
+      const same = members.filter((j) => at(j) === y);
+      const ts = same.flatMap((j) => [dot(edges[j].a, t), dot(edges[j].b, t)]);
+      const t0 = Math.min(...ts), t1 = Math.max(...ts);
+      const mid = (j: number) => (dot(edges[j].a, t) + dot(edges[j].b, t)) / 2;
+      const above = members.filter((j) => Math.abs(at(j) - y - rise) < 0.02);
+      const below = members.filter((j) => Math.abs(y - at(j) - rise) < 0.02);
+      let up = 0;
+      if (above.length) up = mid(above[0]) > (t0 + t1) / 2 ? 1 : -1;
+      else if (below.length) up = mid(below[0]) > (t0 + t1) / 2 ? -1 : 1;
+      if (up === 0 || t1 - t0 < 1e-3) continue;
+      /** The pitch line's height at a point along the wall: through the step's middle, rising a step a step. */
+      const line = (p: number) => y + (rise * up * (p - (t0 + t1) / 2)) / (t1 - t0);
+      const ends: [V3, V3] = dot(e.a, t) <= dot(e.b, t) ? [e.a, e.b] : [e.b, e.a];
+      const extend = profile.proud;
+      const back = Math.min(0.1, profile.proud);
+      const pts: V3[] = [];
+      for (const [p, dir] of [[ends[0], -1], [ends[1], 1]] as [V3, number][]) {
+        const q: V3 = [p[0] + t[0] * extend * dir, 0, p[2] + t[2] * extend * dir];
+        const h = line(dot(q, t));
+        const [lo, hi] = kind === "plinth" ? [h - rise, h + rise / 2 + profile.height] : [h - rise / 2 - profile.height, h + rise];
+        for (const k of [-back, profile.proud]) {
+          const x = q[0] + e.n[0] * k, z = q[2] + e.n[2] * k;
+          pts.push([x, lo, z], [x, hi, z]);
+        }
+      }
+      pieces.push({ kind, points: pts });
+    }
+  }
+  return pieces;
 }
 
 /** A flat ceiling over a floor, square to the builder's own axes: x0-x1 by z0-z1, its underside at `y`. */

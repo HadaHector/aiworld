@@ -3,7 +3,7 @@
 // solids covers it, dropped where it faces into the rock, and painted by what it is to the way
 // through: floor, wall, vault, step. Torches stand at its light spots. Pure: no engine, so it can
 // run anywhere the layout does.
-import { ribs, wallTrims, type CeilingSpan, type WallFace, type WallTrims } from "../architecture/trims";
+import { ribs, wallTrims, type CeilingSpan, type StairEdge, type WallFace, type WallTrims } from "../architecture/trims";
 import { convexHull, rotate, type ShapeDesc } from "../collision/index";
 import { ModelBuilder } from "../buildings/buildingGeometry";
 import type { BuildingModel, ModelLight, Paint } from "../buildings/buildingTypes";
@@ -500,7 +500,7 @@ export function trimmedShape(part: DungeonPartDef, trims: WallTrims): { solids: 
   // What stands and hangs round the walls, less what is wall all over (a railing, a tunnel's
   // walls): a band never sits on one of those.
   const built = solids.filter((_, i) => !kinds[i].plain && !whole.has(i));
-  const pieces = wallTrims(walls, { floorUnder: (p) => floorUnder(built, p), ceilingOver: (p) => ceilingOver(built, p) }, trims);
+  const pieces = wallTrims(walls, { floorUnder: (p) => floorUnder(built, p), ceilingOver: (p) => ceilingOver(built, p) }, trims, stairEdges(plain.faces, solids, kinds, built));
   if (trims.ribs) {
     // The flat ceilings: each box seen from under it, as far as it is seen.
     const spans: CeilingSpan[] = [];
@@ -533,6 +533,39 @@ export function trimmedShape(part: DungeonPartDef, trims: WallTrims): { solids: 
   const shape = { solids: all, faces, kinds: kindsAll };
   byStyle.set(trims, shape);
   return shape;
+}
+
+/**
+ * Where a part's stairs meet its walls, for their trims: each tread's edge with a wall just past it
+ * (a hand over the tread), and each edge of the vault over a step with a wall just past it (a hand
+ * under the vault) - the wall facing back over the step.
+ */
+function stairEdges(faces: readonly Face[], solids: readonly Solid[], kinds: readonly SolidKind[], built: readonly Solid[]): { treads: StairEdge[]; vaults: StairEdge[] } {
+  const treads: StairEdge[] = [], vaults: StairEdge[] = [];
+  const steps = solids.filter((_, i) => kinds[i].tread);
+  if (steps.length === 0) return { treads, vaults };
+  const walls = built.filter((s) => !steps.includes(s));
+  const wallAt = (p: V): boolean => walls.some((s) => inside(s, p));
+  for (const f of faces) {
+    const k = kinds[f.solid];
+    const up = f.n[1] > 0.9 && k.tread;
+    let c: V = [0, 0, 0];
+    for (const p of f.corners) c = [c[0] + p[0] / f.corners.length, c[1] + p[1] / f.corners.length, c[2] + p[2] / f.corners.length];
+    const down = f.n[1] < -0.9 && k.roof && !k.tread && floorUnder(steps, [c[0], c[1] - 0.1, c[2]]) !== null;
+    if (!up && !down) continue;
+    for (let i = 0; i < f.corners.length; i++) {
+      const a = f.corners[i], b = f.corners[(i + 1) % f.corners.length];
+      const l = Math.hypot(b[0] - a[0], b[2] - a[2]);
+      if (l < 0.05) continue;
+      // Out across this edge, away from the face's middle.
+      let o: V = [(b[2] - a[2]) / l, 0, -(b[0] - a[0]) / l];
+      const m: V = [(a[0] + b[0]) / 2, a[1], (a[2] + b[2]) / 2];
+      if ((m[0] - c[0]) * o[0] + (m[2] - c[2]) * o[2] < 0) o = [-o[0], 0, -o[2]];
+      if (!wallAt([m[0] + o[0] * 0.3, m[1] + (up ? 0.5 : -0.5), m[2] + o[2] * 0.3])) continue;
+      (up ? treads : vaults).push({ a, b, n: [-o[0], 0, -o[2]] });
+    }
+  }
+  return { treads, vaults };
 }
 
 function partShape(part: DungeonPartDef): { solids: Solid[]; faces: Face[]; kinds: SolidKind[] } {
