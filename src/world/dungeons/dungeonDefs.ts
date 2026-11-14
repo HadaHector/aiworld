@@ -374,8 +374,8 @@ function readPart(entry: Entry, rules: DungeonRules, issues: ContentIssue[]): Du
         const centre = Array.isArray(s.centre) && s.centre.length === 2 && s.centre.every((v) => typeof v === "number") ? (s.centre as [number, number]) : (reader.fail(`${at}.centre`, "expected [x, z]"), [0, 0] as [number, number]);
         const doors = reader.array(s, "doors", at).map((value, k) => {
           const d = reader.object(value, `${at}.doors[${k}]`);
-          reader.onlyKeys(d, `${at}.doors[${k}]`, ["facing", "width", "height"]);
-          return { facing: reader.number(d, "facing", `${at}.doors[${k}]`), width: reader.number(d, "width", `${at}.doors[${k}]`, { min: 1 }), height: reader.number(d, "height", `${at}.doors[${k}]`, { min: 1 }) };
+          reader.onlyKeys(d, `${at}.doors[${k}]`, ["facing", "width", "height", "tunnel"]);
+          return { facing: reader.number(d, "facing", `${at}.doors[${k}]`), width: reader.number(d, "width", `${at}.doors[${k}]`, { min: 1 }), height: reader.number(d, "height", `${at}.doors[${k}]`, { min: 1 }), tunnel: reader.optionalNumber(d, "tunnel", `${at}.doors[${k}]`, 0, { min: 0 }) };
         });
         const p = s.pillars === undefined ? null : reader.object(s.pillars, `${at}.pillars`);
         if (p) reader.onlyKeys(p, `${at}.pillars`, ["facings", "ring", "radius"]);
@@ -390,6 +390,7 @@ function readPart(entry: Entry, rules: DungeonRules, issues: ContentIssue[]): Du
           pillars: { facings, ring: p ? reader.number(p, "ring", `${at}.pillars`, { min: 0 }) : 0, radius: p ? reader.number(p, "radius", `${at}.pillars`, { min: 0.1 }) : 1 },
         });
         whole.push(...(geometry.whole ?? []).map((i) => i + shapes.length));
+        plain.push(...(geometry.plain ?? []).map((i) => i + shapes.length));
         shapes.push(...geometry.shapes);
         rounds.push(centre);
         for (const f of facings) rounds.push([centre[0] + Math.sin((f * Math.PI) / 180) * (p ? Number(p.ring) : 0), centre[1] + Math.cos((f * Math.PI) / 180) * (p ? Number(p.ring) : 0)]);

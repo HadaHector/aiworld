@@ -330,8 +330,9 @@ export interface RotundaSpec {
   wall: number;
   /** Clear height inside, to its vault. */
   height: number;
-  /** Its doorways: facing out (degrees, 0 = +z), each as wide and high as its socket. */
-  doors: { facing: number; width: number; height: number }[];
+  /** Its doorways: facing out (degrees, 0 = +z), each as wide and high as its socket - and how long
+   *  a straight tunnel runs out from the round wall to it, its socket at the tunnel's end. */
+  doors: { facing: number; width: number; height: number; tunnel: number }[];
   /** Round pillars: at these facings, this far out from the middle, this thick. */
   pillars: { facings: number[]; ring: number; radius: number };
 }
@@ -375,6 +376,24 @@ export function rotundaGeometry(r: RotundaSpec): KitGeometry {
     if (!door) shapes.push(wedge(a0, a1, inner, outer, r.floor - 1, top + 1));
     else if (r.floor + door.height < top) shapes.push(wedge(a0, a1, inner, outer, r.floor + door.height, top + 1));
   }
+  // Each way in a straight tunnel from the round wall out to its doorway: its walls 3 m thick, from
+  // the wall's inside curve (so no gap opens where the wall curves away from the opening) out to the
+  // doorway; a floor and a vault from the circle out.
+  const plain: number[] = [];
+  const side = 3;
+  for (const d of r.doors) {
+    if (d.tunnel <= 0) continue;
+    const f = d.facing * deg, w = d.width / 2, far = r.radius + d.tunnel;
+    const at = (u: number, v: number, y: number): Vec3 => vec3(cx + v * Math.sin(f) + u * Math.cos(f), y, cz + v * Math.cos(f) - u * Math.sin(f));
+    const prism = (corners: [number, number][], y0: number, y1: number): ShapeDesc => ({ kind: "convex", points: [...corners.map(([u, v]) => at(u, v, y0)), ...corners.map(([u, v]) => at(u, v, y1))] });
+    const circle = (u: number): number => Math.sqrt(Math.max(0, r.radius * r.radius - u * u));
+    shapes.push(prism([[-w - side, r.radius - 1], [w + side, r.radius - 1], [w + side, far], [-w - side, far]], r.floor - 1, r.floor));
+    for (const s of [1, -1]) {
+      plain.push(shapes.length);
+      shapes.push(prism([[s * w, circle(w)], [s * (w + side), circle(w + side)], [s * (w + side), far], [s * w, far]], r.floor - 1, r.floor + d.height + 1));
+    }
+    shapes.push(prism([[-w - side, r.radius], [w + side, r.radius], [w + side, far], [-w - side, far]], r.floor + d.height, r.floor + d.height + 1));
+  }
   const ring = Array.from({ length: 12 }, (_, k) => (k * Math.PI) / 6);
   for (const f of r.pillars.facings) {
     const px = cx + r.pillars.ring * Math.sin(f * deg), pz = cz + r.pillars.ring * Math.cos(f * deg);
@@ -382,5 +401,5 @@ export function rotundaGeometry(r: RotundaSpec): KitGeometry {
     whole.push(shapes.length);
     shapes.push({ kind: "convex", points: [...ring.map((a) => at(a, r.floor - 1)), ...ring.map((a) => at(a, top + 1))] });
   }
-  return { shapes, paths: [], whole };
+  return { shapes, paths: [], whole, plain };
 }
