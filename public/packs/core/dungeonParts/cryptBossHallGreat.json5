@@ -1,0 +1,35 @@
+// A great boss hall: 40 m by 44 m inside, 16 m to the vault - twice the plain boss hall's floor -
+// in from a gallery, four piers well out from its middle: room to fight, cover at its edges.
+// Written by scripts/dungeonRooms.py from its outline - change it there.
+{
+  tags: ["crypt", "hall", "boss", "large"],
+  room: true,
+  weight: 1,
+  sockets: [
+    { at: [0, 0, 0], facing: 180, type: "cryptLarge", size: [10, 8], reach: 1.5 },
+  ],
+  colliders: [
+    { box: [-21, -1, 0, 21, 0, 46] },
+    { box: [-21, 16, 0, 21, 17, 46] },
+    { box: [-21, -1, 0, -5, 17, 1] },
+    { box: [5, -1, 0, 21, 17, 1] },
+    { box: [-5, 8, 0, 5, 17, 1] },
+    { box: [20, -1, 0, 21, 17, 46] },
+    { box: [-21, -1, 45, 21, 17, 46] },
+    { box: [-21, -1, 0, -20, 17, 46] },
+    { box: [-14, -1, 10, -11, 17, 13] },
+    { box: [11, -1, 10, 14, 17, 13] },
+    { box: [-14, -1, 33, -11, 17, 36] },
+    { box: [11, -1, 33, 14, 17, 36] },
+  ],
+  paths: [
+    [[0, 0, 0], [0, 0, 23]],
+  ],
+  spots: {
+    light: [[-13.333, 5, 1.6], [13.333, 5, 1.6], [19.4, 5, 8.333], [19.4, 5, 23], [19.4, 5, 37.667], [13.333, 5, 44.4], [0, 5, 44.4], [-13.333, 5, 44.4], [-19.4, 5, 37.667], [-19.4, 5, 23], [-19.4, 5, 8.333]],
+    spawns: [[-8, 0, 8], [8, 0, 8]],
+    chest: [[0, 0, 41]],
+    quest: [[-16, 0, 40]],
+    boss: [[0, 0, 26]],
+  },
+}

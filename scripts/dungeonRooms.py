@@ -117,7 +117,7 @@ def light_spots(outline, openings, height, every=12):
     return spots
 
 
-def write(name, comment, tags, part, room, weight, outline, rects, height, openings, paths, stage=None, open_edges=(), pillars=(), spawns=(), chest=None, quest=None, extra_light=()):
+def write(name, comment, tags, part, room, weight, outline, rects, height, openings, paths, stage=None, open_edges=(), pillars=(), spawns=(), chest=None, quest=None, extra_light=(), extra_boss=()):
     boxes, sockets = build(outline, rects, height, openings, open_edges, pillars)
     spots = {"light": light_spots(outline, openings, height) + list(extra_light)}
     if spawns:
@@ -126,6 +126,8 @@ def write(name, comment, tags, part, room, weight, outline, rects, height, openi
         spots["chest"] = [chest]
     if quest:
         spots["quest"] = [quest]
+    if extra_boss:
+        spots["boss"] = list(extra_boss)
     lines = [f"// {line}" for line in comment.split("\n")]
     lines.append("// Written by scripts/dungeonRooms.py from its outline - change it there.")
     lines.append("{")
@@ -160,48 +162,65 @@ def op(edge, at, size, reach=1.5):
     return {"edge": edge, "at": at, "size": size, "reach": reach}
 
 
-# --- Halls -----------------------------------------------------------------------------------------
+# --- Halls ---------------------------------------------------------------------------------------
+# Each with a gallery's way (large) as well as corridors' (small): where the two sizes of way meet.
 
-# A long hall: 12 m by 36 m, 9 m to the vault - in and out at its ends, a corridor off each side.
-write("cryptHallLong", "A long burial hall: 12 m by 36 m inside, 9 m to the vault, a way in and out at its ends\nand a corridor off each side.",
-      ["crypt", "hall"], "cryptHallLong", True, 2,
-      [(-6, 1), (6, 1), (6, 37), (-6, 37)], [(-6, 1, 6, 37)], 9,
-      [op(0, 6, SMALL), op(2, 6, SMALL), op(3, 25, SMALL), op(1, 25, SMALL)],
-      [[[0, 0, 0], [0, 0, 12], [0, 0, 26], [0, 0, 38]], [[-7, 0, 12], [0, 0, 12]], [[0, 0, 26], [7, 0, 26]]],
-      spawns=[[0, 0, 8], [-2, 0, 20], [2, 0, 32]], chest=[-4, 0, 35], quest=[4, 0, 18])
+# A long hall: 20 m by 56 m, 11 m to the vault - in from a gallery at one end, a corridor on out of
+# the other and off each side.
+write("cryptHallLong", "A long burial hall: 20 m by 56 m inside, 11 m to the vault - in from a gallery at one end,\na corridor on out of the other and off each side.",
+      ["crypt", "hall", "large"], "cryptHallLong", True, 2,
+      [(-10, 1), (10, 1), (10, 57), (-10, 57)], [(-10, 1, 10, 57)], 11,
+      [op(0, 10, LARGE), op(2, 10, SMALL), op(3, 37, SMALL), op(1, 39, SMALL)],
+      [[[0, 0, 0], [0, 0, 20], [0, 0, 40], [0, 0, 58]], [[-11, 0, 20], [0, 0, 20]], [[0, 0, 40], [11, 0, 40]]],
+      stage=[0.1, 1], spawns=[[0, 0, 12], [-4, 0, 30], [4, 0, 48]], chest=[-7, 0, 54], quest=[7, 0, 28])
 
-# An L: an arm 14 m wide and 28 m long, its end turning 20 m east - round the corner from the door.
-write("cryptHallL", "A hall round a corner: an arm 14 m wide and 28 m long, its far end turning 20 m to the\nside - what is in it is out of sight of the door. 9 m to the vault.",
-      ["crypt", "hall"], "cryptHallL", True, 2,
-      [(-7, 1), (7, 1), (7, 15), (27, 15), (27, 29), (-7, 29)], [(-7, 1, 7, 29), (7, 15, 27, 29)], 9,
-      [op(0, 7, SMALL), op(3, 7, SMALL), op(4, 27, SMALL), op(5, 7, SMALL)],
-      [[[0, 0, 0], [0, 0, 22], [28, 0, 22]], [[0, 0, 22], [0, 0, 30]], [[-8, 0, 22], [0, 0, 22]]],
-      spawns=[[0, 0, 10], [18, 0, 22], [-3, 0, 25]], chest=[24, 0, 27], quest=[-4, 0, 4])
+# An L: an arm 22 m wide and 44 m long, its end turning 30 m to the side - round the corner from the
+# door.
+write("cryptHallL", "A hall round a corner: an arm 22 m wide and 44 m long, its far end turning 30 m to the side -\nwhat is in it is out of sight of the door. In from a gallery; 11 m to the vault.",
+      ["crypt", "hall", "large"], "cryptHallL", True, 2,
+      [(-11, 1), (11, 1), (11, 23), (41, 23), (41, 45), (-11, 45)], [(-11, 1, 11, 45), (11, 23, 41, 45)], 11,
+      [op(0, 11, LARGE), op(3, 11, SMALL), op(4, 41, SMALL), op(5, 11, SMALL)],
+      [[[0, 0, 0], [0, 0, 34], [42, 0, 34]], [[0, 0, 34], [0, 0, 46]], [[-12, 0, 34], [0, 0, 34]]],
+      stage=[0.1, 1], spawns=[[0, 0, 14], [28, 0, 34], [-5, 0, 40]], chest=[37, 0, 42], quest=[-7, 0, 5])
 
-# A fat T: a stem 14 m wide in from a gallery, a crossbar 34 m by 16 m - ways off both ends and on.
-write("cryptHallT", "A hall in a fat T: a stem 14 m wide in from a gallery, the crossbar 34 m by 16 m beyond -\ncorridors off both its ends, a gallery on out of its far side. 11 m to the vault.",
+# A fat T: a stem 20 m wide in from a gallery, a crossbar 52 m by 26 m - corridors off both ends,
+# a gallery on out of its far side.
+write("cryptHallT", "A hall in a fat T: a stem 20 m wide in from a gallery, the crossbar 52 m by 26 m beyond -\ncorridors off both its ends, a gallery on out of its far side. 12 m to the vault.",
       ["crypt", "hall", "large"], "cryptHallT", True, 2,
-      [(-7, 1), (7, 1), (7, 15), (17, 15), (17, 31), (-17, 31), (-17, 15), (-7, 15)], [(-7, 1, 7, 15), (-17, 15, 17, 31)], 11,
-      [op(0, 7, LARGE), op(3, 8, SMALL), op(4, 17, LARGE), op(5, 8, SMALL)],
-      [[[0, 0, 0], [0, 0, 23], [0, 0, 32]], [[-18, 0, 23], [0, 0, 23], [18, 0, 23]]],
-      stage=[0.1, 1], spawns=[[0, 0, 8], [-11, 0, 23], [11, 0, 23]], chest=[-15, 0, 29], quest=[14, 0, 17])
+      [(-10, 1), (10, 1), (10, 19), (26, 19), (26, 45), (-26, 45), (-26, 19), (-10, 19)], [(-10, 1, 10, 19), (-26, 19, 26, 45)], 12,
+      [op(0, 10, LARGE), op(3, 13, SMALL), op(4, 26, LARGE), op(5, 13, SMALL)],
+      [[[0, 0, 0], [0, 0, 32], [0, 0, 46]], [[-27, 0, 32], [0, 0, 32], [27, 0, 32]]],
+      stage=[0.1, 1], spawns=[[0, 0, 10], [-17, 0, 32], [17, 0, 32]], chest=[-23, 0, 42], quest=[22, 0, 22])
 
-# A small hall: 12 m square, 8 m high, the way out to one side - the way turns in it.
-write("cryptHallSmall", "A small hall: 12 m square, 8 m to the vault, the way on out of its side - the way turns\nin it.",
-      ["crypt", "hall"], "cryptHallSmall", True, 2,
-      [(-6, 1), (6, 1), (6, 13), (-6, 13)], [(-6, 1, 6, 13)], 8,
-      [op(0, 6, SMALL), op(1, 6, SMALL)],
-      [[[0, 0, 0], [0, 0, 7], [7, 0, 7]]],
-      spawns=[[-2, 0, 9]], chest=[-4, 0, 11])
+# A smaller hall: 20 m square, 9 m high, a corridor in, a corridor and a gallery out of its sides.
+write("cryptHallSmall", "A smaller hall: 20 m square, 9 m to the vault - a corridor in, a corridor out of one side and\na gallery out of the other: the way turns in it.",
+      ["crypt", "hall", "large"], "cryptHallSmall", True, 2,
+      [(-10, 1), (10, 1), (10, 21), (-10, 21)], [(-10, 1, 10, 21)], 9,
+      [op(0, 10, SMALL), op(1, 10, SMALL), op(3, 10, LARGE)],
+      [[[0, 0, 0], [0, 0, 11], [11, 0, 11]], [[-11, 0, 11], [0, 0, 11]]],
+      spawns=[[-3, 0, 15], [4, 0, 6]], chest=[-7, 0, 18])
 
-# A pillared hall: 24 m by 24 m, 10 m high, four piers round its middle - seen across between them.
-write("cryptHallPillars", "A pillared hall: 24 m square, 10 m to the vault, four piers round its middle - the room seen\nacross between them, cover among them. A way off every side.",
-      ["crypt", "hall"], "cryptHallPillars", True, 2,
-      [(-12, 1), (12, 1), (12, 25), (-12, 25)], [(-12, 1, 12, 25)], 10,
-      [op(0, 12, SMALL), op(1, 12, SMALL), op(2, 12, SMALL), op(3, 12, SMALL)],
-      [[[0, 0, 0], [0, 0, 13], [0, 0, 26]], [[-13, 0, 13], [0, 0, 13], [13, 0, 13]]],
-      pillars=[(-7, 6, -5, 8), (5, 6, 7, 8), (-7, 18, -5, 20), (5, 18, 7, 20)],
-      spawns=[[-8, 0, 4], [8, 0, 22], [-9, 0, 20]], chest=[10, 0, 4], quest=[-10, 0, 23])
+# A pillared hall: 36 m square, 12 m high, four piers round its middle - seen across between them.
+write("cryptHallPillars", "A pillared hall: 36 m square, 12 m to the vault, four piers round its middle - the room seen\nacross between them, cover among them. In from a gallery, a corridor off every other side.",
+      ["crypt", "hall", "large"], "cryptHallPillars", True, 2,
+      [(-18, 1), (18, 1), (18, 37), (-18, 37)], [(-18, 1, 18, 37)], 12,
+      [op(0, 18, LARGE), op(1, 18, SMALL), op(2, 18, SMALL), op(3, 18, SMALL)],
+      [[[0, 0, 0], [0, 0, 19], [0, 0, 38]], [[-19, 0, 19], [0, 0, 19], [19, 0, 19]]],
+      stage=[0.1, 1], pillars=[(-10.5, 8.5, -7.5, 11.5), (7.5, 8.5, 10.5, 11.5), (-10.5, 26.5, -7.5, 29.5), (7.5, 26.5, 10.5, 29.5)],
+      spawns=[[-12, 0, 6], [12, 0, 32], [-13, 0, 28], [0, 0, 19]], chest=[15, 0, 4], quest=[-15, 0, 34])
+
+# --- The boss ------------------------------------------------------------------------------------
+
+# A great boss hall: twice the plain one's floor - 40 m by 44 m, 16 m to the vault - in from a
+# gallery, four piers well out from its middle: room to fight, cover at its edges.
+write("cryptBossHallGreat", "A great boss hall: 40 m by 44 m inside, 16 m to the vault - twice the plain boss hall's floor -\nin from a gallery, four piers well out from its middle: room to fight, cover at its edges.",
+      ["crypt", "hall", "boss", "large"], "cryptBossHallGreat", True, 1,
+      [(-20, 1), (20, 1), (20, 45), (-20, 45)], [(-20, 1, 20, 45)], 16,
+      [op(0, 20, LARGE)],
+      [[[0, 0, 0], [0, 0, 23]]],
+      pillars=[(-14, 10, -11, 13), (11, 10, 14, 13), (-14, 33, -11, 36), (11, 33, 14, 36)],
+      spawns=[[-8, 0, 8], [8, 0, 8]], chest=[0, 0, 41], quest=[-16, 0, 40],
+      extra_boss=[[0, 0, 26]])
 
 # --- Ways with alcoves -----------------------------------------------------------------------------
 

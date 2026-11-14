@@ -1,32 +1,36 @@
-// A small hall: 12 m square, 8 m to the vault, the way on out of its side - the way turns
-// in it.
+// A smaller hall: 20 m square, 9 m to the vault - a corridor in, a corridor out of one side and
+// a gallery out of the other: the way turns in it.
 // Written by scripts/dungeonRooms.py from its outline - change it there.
 {
-  tags: ["crypt", "hall"],
+  tags: ["crypt", "hall", "large"],
   room: true,
   weight: 2,
   sockets: [
     { at: [0, 0, 0], facing: 180, type: "crypt", size: [6, 6], reach: 1.5 },
-    { at: [7, 0, 7], facing: 90, type: "crypt", size: [6, 6], reach: 1.5 },
+    { at: [11, 0, 11], facing: 90, type: "crypt", size: [6, 6], reach: 1.5 },
+    { at: [-11, 0, 11], facing: 270, type: "cryptLarge", size: [10, 8], reach: 1.5 },
   ],
   colliders: [
-    { box: [-7, -1, 0, 7, 0, 14] },
-    { box: [-7, 8, 0, 7, 9, 14] },
-    { box: [-7, -1, 0, -3, 9, 1] },
-    { box: [3, -1, 0, 7, 9, 1] },
-    { box: [-3, 6, 0, 3, 9, 1] },
-    { box: [6, -1, 0, 7, 9, 4] },
-    { box: [6, -1, 10, 7, 9, 14] },
-    { box: [6, 6, 4, 7, 9, 10] },
-    { box: [-7, -1, 13, 7, 9, 14] },
-    { box: [-7, -1, 0, -6, 9, 14] },
+    { box: [-11, -1, 0, 11, 0, 22] },
+    { box: [-11, 9, 0, 11, 10, 22] },
+    { box: [-11, -1, 0, -3, 10, 1] },
+    { box: [3, -1, 0, 11, 10, 1] },
+    { box: [-3, 6, 0, 3, 10, 1] },
+    { box: [10, -1, 0, 11, 10, 8] },
+    { box: [10, -1, 14, 11, 10, 22] },
+    { box: [10, 6, 8, 11, 10, 14] },
+    { box: [-11, -1, 21, 11, 10, 22] },
+    { box: [-11, -1, 16, -10, 10, 22] },
+    { box: [-11, -1, 0, -10, 10, 6] },
+    { box: [-11, 8, 6, -10, 10, 16] },
   ],
   paths: [
-    [[0, 0, 0], [0, 0, 7], [7, 0, 7]],
+    [[0, 0, 0], [0, 0, 11], [11, 0, 11]],
+    [[-11, 0, 11], [0, 0, 11]],
   ],
   spots: {
-    light: [[0, 4.4, 12.4], [-5.4, 4.4, 7]],
-    spawns: [[-2, 0, 9]],
-    chest: [[-4, 0, 11]],
+    light: [[0, 4.95, 20.4]],
+    spawns: [[-3, 0, 15], [4, 0, 6]],
+    chest: [[-7, 0, 18]],
   },
 }
