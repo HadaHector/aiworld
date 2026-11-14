@@ -53,6 +53,13 @@
       width: 2.4, height: 0.9, depth: 0.8, gap: 0.44, rowGap: 0.44, above: 0.98, rows: 3, tallRows: 4, tallWall: 9, margin: 0.5, sealed: 0.4,
       frame: { width: 0.22, proud: 0.14, bevel: 0.1 },
     },
+    // In the rooms, an arcosolium or two: a round-arched niche 4 m wide on the plinth, a tomb chest
+    // lying in it - the centrepiece of an end wall or an alcove.
+    arcosolia: {
+      width: 4, rise: 1.6, depth: 0.8, above: 0.75, margin: 0.5, count: 2,
+      frame: { width: 0.35, proud: 0.18, bevel: 0.14 },
+      tomb: { height: 1.0, inset: 0.35, lid: 0.18, lidOut: 0.12 },
+    },
   },
   // Set across every join and cap, and at the mouth (DUNGEONS.md, *Doorways*).
   doorways: { tags: ["doorway"] },

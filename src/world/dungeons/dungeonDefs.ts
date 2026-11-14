@@ -1,7 +1,7 @@
 // Dungeon styles and parts from the packs (DUNGEONS.md): `dungeonStyles/`, `dungeonParts/` and
 // `rules/dungeons.json5`, read and checked - every part's walk lines 6 m wide and high on its own
 // colliders, every style able to start, grow and close.
-import type { LoculiSpec } from "../architecture/dents";
+import type { ArcosoliaSpec, LoculiSpec } from "../architecture/dents";
 import type { CopingSpec, RibSpec, TrimProfile, WallTrims } from "../architecture/trims";
 import { ContentError, Reader, type ContentIssue, type RawObject } from "../content/contentReader";
 import { DUNGEON_FOLDERS, orderPacks, parseFile, type PackSource } from "../content/resolveContent";
@@ -514,7 +514,7 @@ function readLook(reader: Reader, raw: RawObject): KitLook {
 }
 
 function readTrims(reader: Reader, raw: RawObject): WallTrims {
-  reader.onlyKeys(raw, "trims", ["plinth", "cornice", "ribs", "coping", "loculi"]);
+  reader.onlyKeys(raw, "trims", ["plinth", "cornice", "ribs", "coping", "loculi", "arcosolia"]);
   const band = (key: string): TrimProfile | undefined => {
     if (raw[key] === undefined) return undefined;
     const b = reader.object(raw[key], `trims.${key}`);
@@ -562,7 +562,27 @@ function readTrims(reader: Reader, raw: RawObject): WallTrims {
       frame: fr ? { width: reader.number(fr, "width", `${at}.frame`, { min: 0.02 }), proud: reader.number(fr, "proud", `${at}.frame`, { min: 0.01 }), bevel: reader.number(fr, "bevel", `${at}.frame`, { min: 0 }) } : undefined,
     };
   }
-  return { plinth: band("plinth"), cornice: band("cornice"), ribs, coping, loculi };
+  let arcosolia: ArcosoliaSpec | undefined;
+  if (raw.arcosolia !== undefined) {
+    const at = "trims.arcosolia";
+    const l = reader.object(raw.arcosolia, at);
+    reader.onlyKeys(l, at, ["width", "rise", "depth", "above", "margin", "count", "frame", "tomb"]);
+    const fr = l.frame === undefined ? undefined : reader.object(l.frame, `${at}.frame`);
+    if (fr) reader.onlyKeys(fr, `${at}.frame`, ["width", "proud", "bevel"]);
+    const tb = l.tomb === undefined ? undefined : reader.object(l.tomb, `${at}.tomb`);
+    if (tb) reader.onlyKeys(tb, `${at}.tomb`, ["height", "inset", "lid", "lidOut"]);
+    arcosolia = {
+      width: reader.number(l, "width", at, { min: 1 }),
+      rise: reader.number(l, "rise", at, { min: 0 }),
+      depth: reader.number(l, "depth", at, { min: 0.1 }),
+      above: reader.number(l, "above", at, { min: 0 }),
+      margin: reader.optionalNumber(l, "margin", at, 0.5, { min: 0 }),
+      count: reader.optionalNumber(l, "count", at, 2, { min: 0 }),
+      frame: fr ? { width: reader.number(fr, "width", `${at}.frame`, { min: 0.02 }), proud: reader.number(fr, "proud", `${at}.frame`, { min: 0.01 }), bevel: reader.number(fr, "bevel", `${at}.frame`, { min: 0 }) } : undefined,
+      tomb: tb ? { height: reader.number(tb, "height", `${at}.tomb`, { min: 0.1 }), inset: reader.number(tb, "inset", `${at}.tomb`, { min: 0 }), lid: reader.number(tb, "lid", `${at}.tomb`, { min: 0.02 }), lidOut: reader.number(tb, "lidOut", `${at}.tomb`, { min: 0 }) } : undefined,
+    };
+  }
+  return { plinth: band("plinth"), cornice: band("cornice"), ribs, coping, loculi, arcosolia };
 }
 
 function readLight(reader: Reader, raw: RawObject): DungeonLight {

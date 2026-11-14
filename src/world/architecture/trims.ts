@@ -5,7 +5,7 @@
 // back solid pieces (convex prisms) to build or draw as it builds its own - a dungeon part adds them
 // to its solids, a house could lay them into its model.
 
-import type { LoculiSpec } from "./dents";
+import type { ArcosoliaSpec, LoculiSpec } from "./dents";
 
 export type V3 = [number, number, number];
 
@@ -64,6 +64,9 @@ export interface WallTrims {
   /** Burial niches cut low into the walls (see `loculi` in ./dents) - a dent, not a trim, but laid
    *  out with them, between the pilasters. */
   loculi?: LoculiSpec;
+  /** Great arched niches with a tomb chest in each, centred on end walls and alcoves (see
+   *  `arcosolia` in ./dents) - laid out before the loculi, which keep clear of them. */
+  arcosolia?: ArcosoliaSpec;
 }
 
 export interface CopingSpec {

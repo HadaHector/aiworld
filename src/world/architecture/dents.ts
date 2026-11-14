@@ -1,6 +1,6 @@
 // Dents (GEOMETRY.md, section 8, step 2: details that put a dent in the surface, built before the
 // fill): niches cut into a wall - loculi, the shelf-like burial niches of a crypt, in rows low on its
-// walls. Pure geometry like the trims beside it: a builder hands in its wall faces and what it knows
+// walls, and arcosolia, the great arched niches a tomb chest lies in. Pure geometry like the trims beside it: a builder hands in its wall faces and what it knows
 // round them, and gets back the boxes to cut out of its walls and the slabs that seal some of them,
 // to build as it builds its own.
 
@@ -42,13 +42,132 @@ export interface DentSurroundings {
   random(p: V3): number;
 }
 
-/** A niche: its box (eight corners) to cut out, the face it opens in (facing `n`), its slab if
- *  sealed, and its frame's four bars (each a convex prism, with the way its stone runs). */
+/** A niche: its hollow (a convex prism's corners) to cut out, the face it opens in (facing `n`), its
+ *  slab if sealed, its frame's bars (each a convex prism, with the way its stone runs), and what
+ *  stands in it (an arcosolium's tomb chest: convex prisms). */
 export interface Niche {
   points: V3[];
   n: V3;
   slab: V3[] | null;
   frame: { points: V3[]; grain: V3 }[];
+  contents?: V3[][];
+}
+
+export interface ArcosoliaSpec {
+  /** The opening: this wide, its sides this high from the sill to where the round arch springs. */
+  width: number;
+  rise: number;
+  depth: number;
+  /** The sill over the floor (on the plinth). */
+  above: number;
+  /** Kept this far from the face's ends and the head of the wall; at most this many a part. */
+  margin: number;
+  count: number;
+  /** As a loculus's frame. */
+  frame?: { width: number; proud: number; bevel: number };
+  /** The tomb chest lying in it: this high, this far in from the opening's sides; its lid this
+   *  thick, reaching this far out of the wall. */
+  tomb?: { height: number; inset: number; lid: number; lidOut: number };
+}
+
+/** A wall face worked in its own plane: along the wall (u), up (y), and back to the world. */
+function facePlane(f: WallFace) {
+  const t = along(f.n);
+  const u = (p: V3): number => p[0] * t[0] + p[2] * t[2];
+  const outline = f.corners.map((c): [number, number] => [u(c), c[1]]);
+  const low = Math.min(...outline.map((p) => p[1])), high = Math.max(...outline.map((p) => p[1]));
+  const u0 = Math.min(...outline.map((p) => p[0])), u1 = Math.max(...outline.map((p) => p[0]));
+  const plane = f.corners[0][0] * f.n[0] + f.corners[0][2] * f.n[2];
+  /** A point on the face at (along, up), `out` in front of it (negative: into the wall). */
+  const at = (a: number, y: number, out = 0): V3 => [f.n[0] * plane + t[0] * a + f.n[0] * out, y, f.n[2] * plane + t[2] * a + f.n[2] * out];
+  return { t, outline, low, high, u0, u1, at };
+}
+
+/**
+ * A frame round a convex opening (its outline in the face's plane, counter-clockwise: along, up):
+ * a bar along each side, mitred where they meet - its back a little into the wall, its face standing
+ * `proud` out, its inner edge bevelled down to the opening's. Given a sill, none along it and
+ * none below it: the frame stands on it.
+ */
+function frameRound(opening: readonly [number, number][], at: (a: number, y: number, out?: number) => V3, frame: { width: number; proud: number; bevel: number }, sill?: number): Niche["frame"] {
+  const n = opening.length;
+  /** The outline moved out by d, each corner where its two moved sides meet. */
+  const offset = (d: number): [number, number][] =>
+    opening.map((q, i) => {
+      const p = opening[(i + n - 1) % n], r = opening[(i + 1) % n];
+      const side = (a: [number, number], b: [number, number]): [number, number] => {
+        const dx = b[0] - a[0], dy = b[1] - a[1], l = Math.hypot(dx, dy) || 1;
+        return [dy / l, -dx / l];
+      };
+      const n1 = side(p, q), n2 = side(q, r);
+      const k = d / Math.max(0.2, 1 + n1[0] * n2[0] + n1[1] * n2[1]);
+      // Standing on a sill: nothing below it.
+      return [q[0] + (n1[0] + n2[0]) * k, Math.max(sill ?? -Infinity, q[1] + (n1[1] + n2[1]) * k)];
+    });
+  const outer = offset(frame.width), bevel = offset(frame.bevel);
+  const bars: Niche["frame"] = [];
+  for (let k = 0; k < n; k++) {
+    const j = (k + 1) % n;
+    if (sill !== undefined && opening[k][1] <= sill + 1e-6 && opening[j][1] <= sill + 1e-6) continue;
+    const points = [at(...opening[k], -0.05), at(...opening[j], -0.05), at(...outer[k], -0.05), at(...outer[j], -0.05), at(...outer[k], frame.proud), at(...outer[j], frame.proud), at(...bevel[k], frame.proud), at(...bevel[j], frame.proud)];
+    const from = at(...opening[k]), to = at(...opening[j]);
+    const d = [to[0] - from[0], to[1] - from[1], to[2] - from[2]], l = Math.hypot(d[0], d[1], d[2]) || 1;
+    bars.push({ points, grain: [d[0] / l, d[1] / l, d[2] / l] });
+  }
+  return bars;
+}
+
+/**
+ * Arcosolia: a great niche with a round arch, a tomb chest lying in it, centred on a wall face that
+ * stands on the floor - the centrepiece of an end wall, or of an alcove. The narrowest faces it fits
+ * first (a hall's end walls before its sides), at most `count`, never two on one wall.
+ */
+export function arcosolia(faces: readonly WallFace[], around: DentSurroundings, spec: ArcosoliaSpec): Niche[] {
+  const niches: Niche[] = [];
+  const fw = spec.frame?.width ?? 0;
+  const candidates = faces
+    .filter((f) => Math.abs(f.n[1]) < 0.1)
+    .map((f) => ({ f, p: facePlane(f) }))
+    .filter(({ p }) => p.u1 - p.u0 >= spec.width + 2 * (fw + spec.margin))
+    .sort((a, b) => a.p.u1 - a.p.u0 - (b.p.u1 - b.p.u0));
+  const used: { n: V3; d: number }[] = [];
+  for (const { f, p } of candidates) {
+    if (niches.length >= spec.count) break;
+    const d = f.corners[0][0] * f.n[0] + f.corners[0][2] * f.n[2];
+    if (used.some((w) => w.n[0] * f.n[0] + w.n[2] * f.n[2] > 0.99 && Math.abs(w.d - d) < 0.1)) continue;
+    const floor = around.floorUnder(p.at((p.u0 + p.u1) / 2, p.low + 0.05, 0.05));
+    if (floor === null || Math.abs(floor - p.low) > 0.1) continue;
+    const mid = (p.u0 + p.u1) / 2, r = spec.width / 2;
+    const a0 = mid - r, a1 = mid + r, y0 = p.low + spec.above, spring = y0 + spec.rise, apex = spring + r;
+    if (apex + fw > p.high - spec.margin) continue;
+    // The opening: its sill, its sides, the round arch over them (counter-clockwise).
+    const arch = 12;
+    const opening: [number, number][] = [[a0, y0], [a1, y0]];
+    for (let i = 0; i <= arch; i++) opening.push([mid + r * Math.cos((Math.PI * i) / arch), spring + r * Math.sin((Math.PI * i) / arch)]);
+    const m = spec.margin + fw;
+    if (![[a0 - m, y0], [a1 + m, y0], [a1 + m, apex + m], [a0 - m, apex + m]].every(([a, y]) => insideOutline(p.outline, a, y))) continue;
+    const back = -(spec.depth + 0.15);
+    if (![[a0, y0], [a1, y0], [a1, spring], [a0, spring], [mid, apex], [mid, y0 + 1]].every(([a, y]) => around.solidAt(p.at(a, y, back)))) continue;
+    const room = [p.at(a0 - fw, y0), p.at(a1 + fw, y0), p.at(a0 - fw, y0, -spec.depth), p.at(a1 + fw, y0, -spec.depth)];
+    const lo: V3 = [Math.min(...room.map((q) => q[0])), y0, Math.min(...room.map((q) => q[2]))];
+    const hi: V3 = [Math.max(...room.map((q) => q[0])), apex + fw, Math.max(...room.map((q) => q[2]))];
+    if (around.blocked(lo, hi)) continue;
+    const points = [0, -spec.depth].flatMap((out) => opening.map(([a, y]) => p.at(a, y, out)));
+    const frame = spec.frame ? frameRound(opening, p.at, spec.frame, y0) : [];
+    // The tomb chest: a box from the back of the niche to just behind the wall's face, its lid over
+    // it a little wider and standing out of the wall.
+    const contents: V3[][] = [];
+    if (spec.tomb) {
+      const { height, inset, lid, lidOut } = spec.tomb;
+      const box = (b0: number, b1: number, h0: number, h1: number, back: number, front: number): V3[] =>
+        [back, front].flatMap((out) => [[b0, h0], [b1, h0], [b1, h1], [b0, h1]].map(([a, y]) => p.at(a, y, out)));
+      contents.push(box(a0 + inset, a1 - inset, y0 - 0.02, y0 + height, -spec.depth + 0.02, -0.04));
+      contents.push(box(a0 + inset - 0.1, a1 - inset + 0.1, y0 + height, y0 + height + lid, -spec.depth + 0.02, lidOut));
+    }
+    niches.push({ points, n: f.n, slab: null, frame, contents });
+    used.push({ n: f.n, d });
+  }
+  return niches;
 }
 
 /**

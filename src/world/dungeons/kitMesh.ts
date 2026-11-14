@@ -3,7 +3,7 @@
 // solids covers it, dropped where it faces into the rock, and painted by what it is to the way
 // through: floor, wall, vault, step. Torches stand at its light spots. Pure: no engine, so it can
 // run anywhere the layout does.
-import { loculi, type Niche } from "../architecture/dents";
+import { arcosolia, loculi, type DentSurroundings, type Niche } from "../architecture/dents";
 import { copings, ribs, wallTrims, type CeilingSpan, type StairEdge, type WallFace, type WallTrims } from "../architecture/trims";
 import { convexHull, rotate, type ShapeDesc } from "../collision/index";
 import { ModelBuilder } from "../buildings/buildingGeometry";
@@ -558,12 +558,12 @@ export function trimmedShape(part: DungeonPartDef, trims: WallTrims): { solids: 
   // out of the walls' faces once those are known, their insides drawn in the style's niche paint,
   // the sealed ones' slabs drawn in their openings (drawn only: the walls collide whole).
   let niches: Niche[] = [];
-  if (trims.loculi) {
+  if (trims.loculi || trims.arcosolia) {
     const lights = part.spots.light ?? [];
     const near = (lo: V, hi: V, p: V, across: number, up: number): boolean =>
       p[0] > lo[0] - across && p[0] < hi[0] + across && p[2] > lo[2] - across && p[2] < hi[2] + across && p[1] > lo[1] - up && p[1] < hi[1] + up;
     const trimBoxes = pieces.map((t) => hullSolid(t.points));
-    niches = loculi(walls, {
+    const around: DentSurroundings = {
       floorUnder: (p) => floorUnder(built, p),
       solidAt: (p) => built.some((s) => inside(s, p)),
       blocked: (lo, hi) =>
@@ -586,7 +586,19 @@ export function trimmedShape(part: DungeonPartDef, trims: WallTrims): { solids: 
         const h = Math.sin(p[0] * 12.9898 + p[1] * 78.233 + p[2] * 37.719) * 43758.5453;
         return h - Math.floor(h);
       },
-    }, trims.loculi);
+    };
+    // The arcosolia first, as centrepieces; the loculi round them, kept clear of them.
+    // A room gets its share; a way (a corridor) one at most, on a short wall - an alcove's back.
+    const great = !trims.arcosolia
+      ? []
+      : part.room
+        ? arcosolia(walls, around, trims.arcosolia)
+        : arcosolia(walls.filter((f) => wallRun(f) <= ALCOVE_WALL), around, { ...trims.arcosolia, count: Math.min(1, trims.arcosolia.count) });
+    const greatBoxes = great.map((n) => hullSolid([...n.points, ...n.frame.flatMap((b) => b.points)]));
+    const small = trims.loculi
+      ? loculi(walls, { ...around, blocked: (lo, hi) => around.blocked(lo, hi) || greatBoxes.some((b) => b.hi[0] > lo[0] - 0.3 && b.lo[0] < hi[0] + 0.3 && b.hi[1] > lo[1] - 0.3 && b.lo[1] < hi[1] + 0.3 && b.hi[2] > lo[2] - 0.3 && b.lo[2] < hi[2] + 0.3) }, trims.loculi)
+      : [];
+    niches = [...great, ...small];
   }
   const all = [...solids, ...pieces.map((t) => hullSolid(t.points))];
   let faces = partFaces(all, false, all.map((_, i) => i), whole);
@@ -617,6 +629,15 @@ export function trimmedShape(part: DungeonPartDef, trims: WallTrims): { solids: 
         kindsAll.push({ tread: false, floor: false, roof: false, top: -Infinity, trim: true, niche: true, grain: bar.grain });
       }
     }
+    // What stands in a niche (a tomb chest): drawn whole but for its back, in the trims' stone.
+    for (const niche of niches) {
+      for (const piece of niche.contents ?? []) {
+        const solid = hullSolid(piece);
+        for (const side of solid.sides) if (dot(side.n, niche.n) > -0.9 && side.n[1] > -0.9) faces.push({ n: side.n, corners: side.corners, solid: all.length });
+        all.push(solid);
+        kindsAll.push({ tread: false, floor: false, roof: false, top: -Infinity, trim: true });
+      }
+    }
     for (const niche of niches) {
       if (!niche.slab) continue;
       const slab = hullSolid(niche.slab);
@@ -632,6 +653,16 @@ export function trimmedShape(part: DungeonPartDef, trims: WallTrims): { solids: 
   const shape = { solids: all, faces, kinds: kindsAll };
   byStyle.set(trims, shape);
   return shape;
+}
+
+/** A way's wall no longer than this may hold an arcosolium (an alcove's back, not a corridor's side). */
+const ALCOVE_WALL = 8;
+
+/** A wall face's run along the plan. */
+function wallRun(f: { n: V; corners: V[] }): number {
+  const t: V = [-f.n[2], 0, f.n[0]];
+  const us = f.corners.map((c) => c[0] * t[0] + c[2] * t[2]);
+  return Math.max(...us) - Math.min(...us);
 }
 
 /** How far round a socket a doorway's frame may reach (its depth, its jambs): no niche there. */
