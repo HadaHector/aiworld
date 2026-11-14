@@ -3,6 +3,7 @@
 // solids covers it, dropped where it faces into the rock, and painted by what it is to the way
 // through: floor, wall, vault, step. Torches stand at its light spots. Pure: no engine, so it can
 // run anywhere the layout does.
+import { wallTrims, type WallFace, type WallTrims } from "../architecture/trims";
 import { convexHull, rotate, type ShapeDesc } from "../collision/index";
 import { ModelBuilder } from "../buildings/buildingGeometry";
 import type { BuildingModel, ModelLight, Paint } from "../buildings/buildingTypes";
@@ -178,6 +179,16 @@ function open(solids: readonly Solid[], p: V): boolean {
 
 /** The least height of open space: anything lower is a gap in the rock, never seen. */
 const MIN_OPEN = 1;
+
+/** The underside of the lowest solid over a point, or null. */
+function ceilingOver(solids: readonly Solid[], p: V): number | null {
+  let best: number | null = null;
+  for (const s of solids) {
+    const c = column(s, p[0], p[2]);
+    if (c && c[0] >= p[1] - EPS && (best === null || c[0] < best)) best = c[0];
+  }
+  return best;
+}
 
 /** The top of the highest solid under a point, or null. */
 function floorUnder(solids: readonly Solid[], p: V): number | null {
@@ -424,6 +435,8 @@ interface SolidKind {
   top: number;
   /** Wall all over, whatever its shape (a railing). */
   plain?: boolean;
+  /** A trim (a plinth, a cornice): drawn in the style's trim. */
+  trim?: boolean;
 }
 
 function solidKinds(count: number, faces: readonly Face[]): SolidKind[] {
@@ -447,6 +460,7 @@ function solidKinds(count: number, faces: readonly Face[]): SolidKind[] {
  * else wall - so a wall cut into pieces round a flight of stairs stays wall.
  */
 function paintFor(f: Face, kind: SolidKind, look: DungeonStyleDef["look"]): DungeonPaint {
+  if (kind.trim) return look.trim;
   if (kind.plain) return look.wall;
   if (f.n[1] > 0.5) return kind.tread ? look.steps : look.floor;
   if (f.n[1] < -0.5) return look.ceiling;
@@ -463,6 +477,37 @@ function paintFor(f: Face, kind: SolidKind, look: DungeonStyleDef["look"]): Dung
 
 /** Each part's solids and seen faces, in its own frame - worked out once however often it is placed. */
 const shapesOfPart = new WeakMap<DungeonPartDef, { solids: Solid[]; faces: Face[]; kinds: SolidKind[] }>();
+/** Each part's look with a style's trims, by the style. */
+const trimmedParts = new WeakMap<DungeonPartDef, Map<WallTrims, { solids: Solid[]; faces: Face[]; kinds: SolidKind[] }>>();
+
+/**
+ * A part as a style draws it: its solids and faces, and its trims (src/world/architecture/trims.ts)
+ * - plinths at the feet of its walls, cornices at their heads - as solids of their own, cut against
+ * the rest as any solid is: a wall gives way to the plinth in front of it, two bands meeting at a
+ * corner never flicker. Not for doorways or caps: a doorway is a trim itself.
+ */
+function trimmedShape(part: DungeonPartDef, trims: WallTrims): { solids: Solid[]; faces: Face[]; kinds: SolidKind[] } {
+  const plain = partShape(part);
+  if (part.doorway || part.paths.length === 0 || (!trims.plinth && !trims.cornice)) return plain;
+  let byStyle = trimmedParts.get(part);
+  if (!byStyle) trimmedParts.set(part, (byStyle = new Map()));
+  const known = byStyle.get(trims);
+  if (known) return known;
+  const { solids, kinds } = plain;
+  const whole = new Set(part.whole);
+  // The walls: upright faces of solids that are wall (not a step, a railing, a pillar drawn whole).
+  const walls: WallFace[] = plain.faces.filter((f) => Math.abs(f.n[1]) < 0.1 && !kinds[f.solid].tread && !kinds[f.solid].plain && !whole.has(f.solid));
+  const pieces = wallTrims(walls, { floorUnder: (p) => floorUnder(solids, p), ceilingOver: (p) => ceilingOver(solids, p) }, trims);
+  const all = [...solids, ...pieces.map((t) => hullSolid(t.points))];
+  const faces = partFaces(all, false, all.map((_, i) => i), whole);
+  const kindsAll = solidKinds(all.length, faces);
+  for (const i of part.plain) kindsAll[i] = { ...kindsAll[i], tread: false, plain: true };
+  for (let i = solids.length; i < all.length; i++) kindsAll[i] = { tread: false, floor: false, roof: false, top: -Infinity, trim: true };
+  const shape = { solids: all, faces, kinds: kindsAll };
+  byStyle.set(trims, shape);
+  return shape;
+}
+
 function partShape(part: DungeonPartDef): { solids: Solid[]; faces: Face[]; kinds: SolidKind[] } {
   let known = shapesOfPart.get(part);
   if (!known) {
@@ -667,7 +712,7 @@ const asPaint = (p: DungeonPaint): Paint => ({ material: p.material, tint: p.tin
  */
 export function buildPartModel(layout: DungeonLayout, index: number, style: DungeonStyleDef, fixture: PropDef | undefined): PartModel {
   const placed = layout.parts[index];
-  const shape = partShape(placed.part);
+  const shape = trimmedShape(placed.part, style.trims);
   const { solids, kinds } = shape;
   let faces = shape.faces;
   const { point, turn, back, unturn } = partToFrame(placed, layout.frame);

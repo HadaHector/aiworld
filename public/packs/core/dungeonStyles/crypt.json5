@@ -33,7 +33,11 @@
     riser: { material: "stairRiser" },
     frame: { material: "doorStone" },
     door: { material: "doorBoards", tint: [0.7, 0.62, 0.52] },
+    trim: { material: "doorStone", tint: [0.9, 0.88, 0.84] },
   },
+  // Bands along the walls (DUNGEONS.md, *Trims*): a plinth a course high at their feet, a cornice
+  // standing well out at their heads, where the vault springs.
+  trims: { plinth: { height: 0.75, proud: 0.15 }, cornice: { height: 0.75, proud: 0.3 } },
   // Set across every join and cap, and at the mouth (DUNGEONS.md, *Doorways*).
   doorways: { tags: ["doorway"] },
   // How it is lit (DUNGEONS.md, *Light*): torches at most of the parts' light spots, and a little

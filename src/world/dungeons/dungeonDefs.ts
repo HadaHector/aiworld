@@ -1,6 +1,7 @@
 // Dungeon styles and parts from the packs (DUNGEONS.md): `dungeonStyles/`, `dungeonParts/` and
 // `rules/dungeons.json5`, read and checked - every part's walk lines 6 m wide and high on its own
 // colliders, every style able to start, grow and close.
+import type { TrimProfile, WallTrims } from "../architecture/trims";
 import { ContentError, Reader, type ContentIssue, type RawObject } from "../content/contentReader";
 import { DUNGEON_FOLDERS, orderPacks, parseFile, type PackSource } from "../content/resolveContent";
 import { vec3, type Aabb, type ShapeDesc, type Vec3 } from "../collision/index";
@@ -134,6 +135,9 @@ export interface DungeonStyleDef {
   look: KitLook;
   /** The doorways set across its joins and caps; none, and parts meet bare. */
   doorways: DungeonPartDef[];
+  /** The bands along its walls (src/world/architecture/trims.ts): a plinth at their feet, a cornice
+   *  at their heads - none where not given. */
+  trims: WallTrims;
   /** How it is lit (DUNGEONS.md, *Light*). */
   light: DungeonLight;
 }
@@ -155,6 +159,8 @@ export interface KitLook {
   riser: DungeonPaint;
   /** A doorway's stone, and its leaves. */
   frame: DungeonPaint;
+  /** The trims' (plinths, cornices). */
+  trim: DungeonPaint;
   door: DungeonPaint;
 }
 
@@ -473,7 +479,7 @@ export function shapesBounds(shapes: readonly ShapeDesc[]): Aabb {
   return { min, max };
 }
 
-const STYLE_KEYS = ["name", "builder", "sizes", "branching", "loops", "boss", "keys", "cover", "deepest", "parts", "entrance", "caps", "connector", "look", "light", "doorways"];
+const STYLE_KEYS = ["name", "builder", "sizes", "branching", "loops", "boss", "keys", "cover", "deepest", "parts", "entrance", "caps", "connector", "look", "light", "doorways", "trims"];
 
 function colour(reader: Reader, value: unknown, path: string, fallback: [number, number, number]): [number, number, number] {
   if (value === undefined) return fallback;
@@ -490,12 +496,23 @@ function paintOf(reader: Reader, look: RawObject, key: string, fallback: Dungeon
 }
 
 function readLook(reader: Reader, raw: RawObject): KitLook {
-  reader.onlyKeys(raw, "look", ["floor", "wall", "ceiling", "steps", "tread", "riser", "frame", "door"]);
+  reader.onlyKeys(raw, "look", ["floor", "wall", "ceiling", "steps", "tread", "riser", "frame", "door", "trim"]);
   const stone: DungeonPaint = { material: "stoneBricks", tint: [1, 1, 1] };
   const floor = paintOf(reader, raw, "floor", stone);
   const wall = paintOf(reader, raw, "wall", stone);
   const steps = paintOf(reader, raw, "steps", floor);
-  return { floor, wall, ceiling: paintOf(reader, raw, "ceiling", stone), steps, tread: paintOf(reader, raw, "tread", steps), riser: paintOf(reader, raw, "riser", steps), frame: paintOf(reader, raw, "frame", wall), door: paintOf(reader, raw, "door", { material: "doorBoards", tint: [1, 1, 1] }) };
+  return { floor, wall, ceiling: paintOf(reader, raw, "ceiling", stone), steps, tread: paintOf(reader, raw, "tread", steps), riser: paintOf(reader, raw, "riser", steps), frame: paintOf(reader, raw, "frame", wall), trim: paintOf(reader, raw, "trim", paintOf(reader, raw, "frame", wall)), door: paintOf(reader, raw, "door", { material: "doorBoards", tint: [1, 1, 1] }) };
+}
+
+function readTrims(reader: Reader, raw: RawObject): WallTrims {
+  reader.onlyKeys(raw, "trims", ["plinth", "cornice"]);
+  const band = (key: string): TrimProfile | undefined => {
+    if (raw[key] === undefined) return undefined;
+    const b = reader.object(raw[key], `trims.${key}`);
+    reader.onlyKeys(b, `trims.${key}`, ["height", "proud"]);
+    return { height: reader.number(b, "height", `trims.${key}`, { min: 0.05 }), proud: reader.number(b, "proud", `trims.${key}`, { min: 0.01 }) };
+  };
+  return { plinth: band("plinth"), cornice: band("cornice") };
 }
 
 function readLight(reader: Reader, raw: RawObject): DungeonLight {
@@ -562,6 +579,7 @@ function readStyle(entry: Entry, allParts: Map<string, DungeonPartDef>, rules: D
     connector: obj.connector === undefined ? null : readConnector(reader, reader.object(obj.connector, "connector"), all, rules),
     look: readLook(reader, obj.look === undefined ? {} : reader.object(obj.look, "look")),
     doorways,
+    trims: readTrims(reader, obj.trims === undefined ? {} : reader.object(obj.trims, "trims")),
     light: readLight(reader, obj.light === undefined ? {} : reader.object(obj.light, "light")),
   };
   if (style.loops[1] > 0 && !style.connector) reader.fail("loops", "a style with loops needs a `connector` to make them with");
