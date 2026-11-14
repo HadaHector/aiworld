@@ -3,7 +3,7 @@
 // solids covers it, dropped where it faces into the rock, and painted by what it is to the way
 // through: floor, wall, vault, step. Torches stand at its light spots. Pure: no engine, so it can
 // run anywhere the layout does.
-import { arcosolia, loculi, type DentSurroundings, type Niche, breaches } from "../architecture/dents";
+import { arcosolia, loculi, type DentSurroundings, type Niche, breaches, vaultFalls } from "../architecture/dents";
 import { BENCH_SIZE, TOMB_SIZE, ledgerCorners, type BenchDef, type LedgerDef, type TombDef } from "./tombs";
 import { copings, ribs, wallTrims, type TrimPiece, type CeilingSpan, type StairEdge, type WallFace, type WallTrims } from "../architecture/trims";
 import { convexHull, rotate, type ShapeDesc } from "../collision/index";
@@ -526,9 +526,9 @@ export function trimmedShape(part: DungeonPartDef, trims: WallTrims): { solids: 
   const built = solids.filter((_, i) => !kinds[i].plain && !whole.has(i));
   const stairs = stairEdges(plain.faces, solids, kinds, built);
   const pieces = wallTrims(walls, { floorUnder: (p) => floorUnder(built, p), ceilingOver: (p) => ceilingOver(built, p), stair: stairs.on }, trims, stairs);
-  if (trims.ribs) {
-    // The flat ceilings: each box seen from under it, as far as it is seen.
-    const spans: CeilingSpan[] = [];
+  // The flat ceilings: each box seen from under it, as far as it is seen.
+  const spans: CeilingSpan[] = [];
+  if (trims.ribs || trims.breaches?.vaults) {
     solids.forEach((s, i) => {
       if (!s.box) return;
       const under = plain.faces.filter((f) => f.solid === i && f.n[1] < -0.9);
@@ -543,6 +543,8 @@ export function trimmedShape(part: DungeonPartDef, trims: WallTrims): { solids: 
       if (floor === null || y - floor < 4) return;
       spans.push({ x0, z0, x1, z1, y, floor });
     });
+  }
+  if (trims.ribs) {
     // Piers standing free in a span (a box from floor to vault, off the walls): ribs run over them.
     const pierSolids = solids.filter((s) => s.box && spans.some((sp) => s.box!.min[1] <= sp.floor && s.box!.max[1] >= sp.y && s.box!.min[0] > sp.x0 + 0.5 && s.box!.max[0] < sp.x1 - 0.5 && s.box!.min[2] > sp.z0 + 0.5 && s.box!.max[2] < sp.z1 - 0.5));
     const piers = pierSolids.map((s): [number, number, number] => [(s.box!.min[0] + s.box!.max[0]) / 2, 0, (s.box!.min[2] + s.box!.max[2]) / 2]);
@@ -623,6 +625,9 @@ export function trimmedShape(part: DungeonPartDef, trims: WallTrims): { solids: 
     const fallenWalls = trims.breaches
       ? breaches(walls, around, part.room ? trims.breaches : { ...trims.breaches, count: Math.min(1, trims.breaches.count) }, (lo, hi) => overBench(lo, hi, true) || nearWay(lo, hi) || standing.some((b) => overlaps(lo, hi, b)))
       : [];
+    // Where the vault has come down (in a room's flat vaults): the heap under it kept off the ways, the
+    // benches and the tombs - not the ledger stones, which it may lie over.
+    if (trims.breaches?.vaults && part.room) fallenWalls.push(...vaultFalls(spans, around, trims.breaches.vaults, (lo, hi) => overBench(lo, hi, true) || nearWay(lo, hi) || (part.tombs ?? []).some((t) => overlaps(lo, hi, tombBox(t)))));
     const breachBoxes = fallenWalls.map((n) => hullSolid(n.points));
     const offBreach = (lo: V, hi: V) => breachBoxes.some((b) => overlaps(lo, hi, { lo: b.lo, hi: b.hi }));
     const aroundGreat: DentSurroundings = { ...around, blocked: (lo, hi) => around.blocked(lo, hi) || overBench(lo, hi, true) || offBreach(lo, hi) };

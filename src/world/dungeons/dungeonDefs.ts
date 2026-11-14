@@ -635,7 +635,9 @@ function readTrims(reader: Reader, raw: RawObject): WallTrims {
   if (raw.breaches !== undefined) {
     const at = "trims.breaches";
     const b = reader.object(raw.breaches, at);
-    reader.onlyKeys(b, at, ["share", "count", "width", "height", "depth", "above", "margin", "heap"]);
+    reader.onlyKeys(b, at, ["share", "count", "width", "height", "depth", "above", "margin", "heap", "vaults"]);
+    const v = b.vaults === undefined ? undefined : reader.object(b.vaults, `${at}.vaults`);
+    if (v) reader.onlyKeys(v, `${at}.vaults`, ["share", "size", "heap"]);
     breaches = {
       share: reader.optionalNumber(b, "share", at, 0.2, { min: 0, max: 1 }),
       count: reader.optionalNumber(b, "count", at, 2, { min: 0, integer: true }),
@@ -645,6 +647,7 @@ function readTrims(reader: Reader, raw: RawObject): WallTrims {
       above: reader.optionalNumber(b, "above", at, 1, { min: 0 }),
       margin: reader.optionalNumber(b, "margin", at, 0.8, { min: 0 }),
       heap: reader.optionalNumber(b, "heap", at, 0.6, { min: 0.05 }),
+      vaults: v ? { share: reader.optionalNumber(v, "share", `${at}.vaults`, 0.25, { min: 0, max: 1 }), size: reader.range(v, "size", `${at}.vaults`, { allowEqual: true }), heap: reader.optionalNumber(v, "heap", `${at}.vaults`, 0.9, { min: 0.05 }) } : undefined,
     };
   }
   return { plinth: band("plinth"), cornice: band("cornice"), ribs, coping, loculi, arcosolia, breaches };

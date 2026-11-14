@@ -73,6 +73,9 @@ export interface BreachSpec {
   margin: number;
   /** How high the heap of rubble at its foot stands. */
   heap: number;
+  /** Where the vault has come down: the share of flat vaults with a hole, its size across (rolled
+   *  between), and how high the heap under it stands. */
+  vaults?: { share: number; size: [number, number]; heap: number };
 }
 
 export interface ArcosoliaSpec {
@@ -163,6 +166,71 @@ export function breaches(faces: readonly WallFace[], around: DentSurroundings, s
       out.push({ points, n: f.n, slab: null, frame: [], breach: true, fallen: k === 0 ? fallen : undefined });
     });
     placed++;
+  }
+  return out;
+}
+
+/**
+ * Where a vault has come down: a hole stepped up into a flat vault, course by course smaller as it
+ * goes up (stones gone from the underside, then from the course over it), the core showing; and on
+ * the floor under it a heap of what fell, rubble in a round mound. At most one a span, in `share`
+ * of them, away from their edges, wherever it lies in the vault's stone, nothing is in the way of
+ * the hole (`blocked`) and the floor under it is clear (`heapBlocked`).
+ */
+export function vaultFalls(spans: readonly { x0: number; z0: number; x1: number; z1: number; y: number; floor: number }[], around: DentSurroundings, spec: NonNullable<BreachSpec["vaults"]>, heapBlocked: (lo: V3, hi: V3) => boolean): Niche[] {
+  const out: Niche[] = [];
+  for (const sp of spans) {
+    const cx = (sp.x0 + sp.x1) / 2, cz = (sp.z0 + sp.z1) / 2;
+    if (around.random([cx, sp.y, cz]) >= spec.share) continue;
+    let seed = Math.floor(around.random([cx + 0.37, sp.y + 1, cz - 0.71]) * 2 ** 31) | 1;
+    const roll = (): number => {
+      seed = (seed * 48271) % 2147483647;
+      return seed / 2147483647;
+    };
+    const size = spec.size[0] + (spec.size[1] - spec.size[0]) * roll();
+    const margin = size / 2 + 1.5;
+    if (sp.x1 - sp.x0 < 2 * margin || sp.z1 - sp.z0 < 2 * margin) continue;
+    // A few tries for a place in the span the hole and its heap fit.
+    for (let attempt = 0; attempt < 6; attempt++) {
+      const x = sp.x0 + margin + roll() * (sp.x1 - sp.x0 - 2 * margin), z = sp.z0 + margin + roll() * (sp.z1 - sp.z0 - 2 * margin);
+      // The hole: two or three courses up, each a little smaller and off the last.
+      const courses = 2;
+      const boxes: [V3, V3][] = [];
+      let hx = size / 2, hz = (size / 2) * (0.7 + 0.5 * roll()), ox = 0, oz = 0, y = sp.y;
+      for (let k = 0; k < courses; k++) {
+        const deep = 0.3 + 0.1 * roll();
+        boxes.push([[x + ox - hx, y, z + oz - hz], [x + ox + hx, y + deep, z + oz + hz]]);
+        y += deep;
+        hx *= 0.55 + 0.25 * roll();
+        hz *= 0.55 + 0.25 * roll();
+        ox += (roll() - 0.5) * hx * 0.6;
+        oz += (roll() - 0.5) * hz * 0.6;
+      }
+      // In the vault's stone: every corner of each course's top, a little over it, solid.
+      if (!boxes.every(([lo, hi]) => [[lo[0], lo[2]], [hi[0], lo[2]], [hi[0], hi[2]], [lo[0], hi[2]]].every(([px, pz]) => around.solidAt([px, hi[1] + 0.1, pz])))) continue;
+      if (around.blocked([x - size / 2, sp.y - 0.6, z - size / 2], [x + size / 2, sp.y + 0.1, z + size / 2])) continue;
+      const floor = around.floorUnder([x, sp.y - 0.1, z]);
+      if (floor === null || Math.abs(floor - sp.floor) > 0.1) continue;
+      const r = size * (0.5 + 0.15 * roll());
+      if (heapBlocked([x - r, floor, z - r], [x + r, floor + 1, z + r])) continue;
+      // The heap: a round mound, highest a little off its middle.
+      const high = spec.heap * (0.8 + 0.4 * roll());
+      const mound: V3[] = [];
+      for (const [ring, up] of [[1, 0], [0.7, 0.5], [0.35, 0.85], [0.1, 1]] as [number, number][]) {
+        for (let i = 0; i < 12; i++) {
+          const a = (i / 12) * Math.PI * 2;
+          const j = 0.8 + 0.3 * roll();
+          mound.push([x + Math.cos(a) * r * ring * j + (1 - ring) * 0.2, floor - 0.03 + up * high * (0.9 + 0.2 * roll()), z + Math.sin(a) * r * ring * j]);
+        }
+      }
+      // Each course a hollow of its own (opening down), the heap with the first.
+      boxes.forEach(([lo, hi], k) => {
+        const points: V3[] = [];
+        for (const py of [lo[1] - 0.01, hi[1]]) points.push([lo[0], py, lo[2]], [hi[0], py, lo[2]], [hi[0], py, hi[2]], [lo[0], py, hi[2]]);
+        out.push({ points, n: [0, -1, 0], slab: null, frame: [], breach: true, fallen: k === 0 ? [mound] : undefined });
+      });
+      break;
+    }
   }
   return out;
 }
