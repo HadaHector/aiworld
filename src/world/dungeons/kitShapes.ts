@@ -321,3 +321,66 @@ export function doorwayGeometry(d: DoorwaySpec): { shapes: ShapeDesc[]; visuals:
   }
   return { shapes, visuals, paths: [[vec3(0, 0, -d.back), vec3(0, 0, d.front)]], voussoirs };
 }
+
+export interface RotundaSpec {
+  /** Its middle (x, z), the floor's height there, its radius inside and its wall's thickness. */
+  centre: [number, number];
+  floor: number;
+  radius: number;
+  wall: number;
+  /** Clear height inside, to its vault. */
+  height: number;
+  /** Its doorways: facing out (degrees, 0 = +z), each as wide and high as its socket. */
+  doors: { facing: number; width: number; height: number }[];
+  /** Round pillars: at these facings, this far out from the middle, this thick. */
+  pillars: { facings: number[]; ring: number; radius: number };
+}
+
+/**
+ * A round room (DUNGEONS.md, *A part*): its floor and vault in wedges from its middle, its wall a
+ * ring of pieces whose insides are chords touching the radius at their middles - open where a door
+ * is, a lintel over it - and round pillars, each a twelve-sided prism, drawn whole.
+ */
+export function rotundaGeometry(r: RotundaSpec): KitGeometry {
+  const deg = Math.PI / 180;
+  const pieces = 48;
+  const [cx, cz] = r.centre;
+  const point = (a: number, rad: number, y: number): Vec3 => vec3(cx + rad * Math.sin(a), y, cz + rad * Math.cos(a));
+  const wedge = (a0: number, a1: number, r0: number, r1: number, y0: number, y1: number): ShapeDesc => {
+    const mid = (a0 + a1) / 2, half = (a1 - a0) / 2;
+    const points: Vec3[] = [];
+    for (const y of [y0, y1]) {
+      if (r0 > 0) points.push(point(a0, r0, y), point(a1, r0, y));
+      else points.push(vec3(cx, y, cz));
+      points.push(point(a0, r1, y), point(mid, r1 / Math.cos(half), y), point(a1, r1, y));
+    }
+    return { kind: "convex", points };
+  };
+  const shapes: ShapeDesc[] = [];
+  const whole: number[] = [];
+  const outer = r.radius + r.wall;
+  const top = r.floor + r.height;
+  for (let i = 0; i < pieces; i++) {
+    // Turned half a piece, so the ways through (on the axes) cross wedges' middles, not their seams.
+    const a0 = ((i + 0.5) / pieces) * 2 * Math.PI, a1 = ((i + 1.5) / pieces) * 2 * Math.PI;
+    shapes.push(wedge(a0, a1, 0, outer, r.floor - 1, r.floor));
+    shapes.push(wedge(a0, a1, 0, outer, top, top + 1));
+    // The wall, but where a door is: there only a lintel over it.
+    const mid = (a0 + a1) / 2;
+    const door = r.doors.find((d) => {
+      const away = Math.abs(((((mid - d.facing * deg) % (2 * Math.PI)) + 3 * Math.PI) % (2 * Math.PI)) - Math.PI);
+      return away < Math.asin(Math.min(1, d.width / 2 / r.radius)) + (a1 - a0) / 2;
+    });
+    const inner = r.radius / Math.cos((a1 - a0) / 2);
+    if (!door) shapes.push(wedge(a0, a1, inner, outer, r.floor - 1, top + 1));
+    else if (r.floor + door.height < top) shapes.push(wedge(a0, a1, inner, outer, r.floor + door.height, top + 1));
+  }
+  const ring = Array.from({ length: 12 }, (_, k) => (k * Math.PI) / 6);
+  for (const f of r.pillars.facings) {
+    const px = cx + r.pillars.ring * Math.sin(f * deg), pz = cz + r.pillars.ring * Math.cos(f * deg);
+    const at = (a: number, y: number): Vec3 => vec3(px + r.pillars.radius * Math.sin(a), y, pz + r.pillars.radius * Math.cos(a));
+    whole.push(shapes.length);
+    shapes.push({ kind: "convex", points: [...ring.map((a) => at(a, r.floor - 1)), ...ring.map((a) => at(a, top + 1))] });
+  }
+  return { shapes, paths: [], whole };
+}

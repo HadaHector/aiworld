@@ -431,6 +431,23 @@ it, open below. The game's terrain sets about 3 m, so a cave more than 3 m down 
 through the surface, and the cellar slabs keep working. The style's `cover` (8 m) keeps every part
 well below that.
 
+## The crypt's parts
+
+Two sizes of way: `crypt` (corridors, 6 m wide and high) and `cryptLarge` (galleries, 10 m wide, 8 m
+high). Ways of one size join only their own; rooms with both kinds of opening are where they meet.
+
+- **Ways**: corridor, corridor with an alcove, corner, stair, turning stair, spiral, the entrance's
+  spiral; gallery, gallery with alcoves, grand stair; junctions - crossing, tee, and the rotunda (a
+  round crossing 45 m across, a ring of pillars round its middle). Never the end of a route.
+- **Rooms**: the 18 m hall and the tomb (corridors only); the long hall, the L, the fat T, the smaller
+  hall, the pillared hall (written from their outlines by `scripts/dungeonRooms.py`), the great hall
+  and two halls of two storeys - a terrace, a stair 10 m wide down to the floor 6 m below with 21 m
+  of floor at its foot, one entered along the stair and one from the side - all with both kinds of
+  way.
+- **Bosses**: the boss hall (28 m square, a corridor in) and the great boss hall (40 by 44 m, 16 m
+  high, a gallery in, four piers well out from its middle).
+- **Caps** (one a size) stand inside the opening they close.
+
 ## Doorways
 
 Where two parts meet, neither part's own geometry is trusted to meet the other's: their walls are

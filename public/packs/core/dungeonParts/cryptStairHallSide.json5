@@ -1,7 +1,7 @@
 // A hall of two storeys entered from the side: in from a gallery onto the end of a terrace 12 m
 // deep, the stair 10 m wide going down across the way in to the floor 6 m below - so the stair runs
-// square to the way that brought you, not on along it. A corridor off the terrace's far end; a
-// gallery on from the floor below and a corridor off its side.
+// square to the way that brought you, not on along it - and 21 m of floor at its foot. A corridor
+// off the terrace's far end; a gallery on from the floor below and a corridor off its side.
 {
   tags: ["crypt", "hall", "large", "descent"],
   room: true,
@@ -10,36 +10,36 @@
   sockets: [
     { at: [-14, 0, 6.5], facing: 270, type: "cryptLarge", size: [10, 8], reach: 1.5 },
     { at: [14, 0, 6.5], facing: 90, type: "crypt", size: [6, 6], reach: 1.5 },
-    { at: [0, -6, 40], facing: 0, type: "cryptLarge", size: [10, 8], reach: 1.5 },
-    { at: [14, -6, 34], facing: 90, type: "crypt", size: [6, 6], reach: 1.5 },
+    { at: [0, -6, 52], facing: 0, type: "cryptLarge", size: [10, 8], reach: 1.5 },
+    { at: [14, -6, 44], facing: 90, type: "crypt", size: [6, 6], reach: 1.5 },
   ],
   colliders: [
     { box: [-14, -7, 0, 14, 0, 12] },   // the terrace, solid down to the floor below
-    { box: [-14, -7, 12, 14, -6, 40] }, // the floor below
+    { box: [-14, -7, 12, 14, -6, 52] }, // the floor below
     { stair: { from: [0, 0, 12], to: [0, -6, 30], width: 10 } },
-    { box: [-14, 10, 0, 14, 11, 40] },  // vault
+    { box: [-14, 10, 0, 14, 11, 52] },  // vault
     // Railings along the terrace's edge either side of the stair.
     { box: [-13, 0, 11.4, -5, 1.1, 12], plain: true },
     { box: [5, 0, 11.4, 13, 1.1, 12], plain: true },
     // South and north walls; the gallery's opening off the floor below in the north.
     { box: [-14, -7, 0, 14, 11, 1] },
-    { box: [-14, -7, 39, -5, 11, 40] }, { box: [5, -7, 39, 14, 11, 40] }, { box: [-5, 2, 39, 5, 11, 40] },
+    { box: [-14, -7, 51, -5, 11, 52] }, { box: [5, -7, 51, 14, 11, 52] }, { box: [-5, 2, 51, 5, 11, 52] },
     // West: the gallery's opening onto the terrace.
-    { box: [-14, -7, 0, -13, 11, 1.5] }, { box: [-14, 8, 1.5, -13, 11, 11.5] }, { box: [-14, -7, 11.5, -13, 11, 40] },
+    { box: [-14, -7, 0, -13, 11, 1.5] }, { box: [-14, 8, 1.5, -13, 11, 11.5] }, { box: [-14, -7, 11.5, -13, 11, 52] },
     // East: a corridor's opening off the terrace, and one off the floor below.
-    { box: [13, -7, 0, 14, 11, 3.5] }, { box: [13, 6, 3.5, 14, 11, 9.5] }, { box: [13, -7, 9.5, 14, 11, 31] },
-    { box: [13, 0, 31, 14, 11, 37] }, { box: [13, -7, 37, 14, 11, 40] },
+    { box: [13, -7, 0, 14, 11, 3.5] }, { box: [13, 6, 3.5, 14, 11, 9.5] }, { box: [13, -7, 9.5, 14, 11, 41] },
+    { box: [13, 0, 41, 14, 11, 47] }, { box: [13, -7, 47, 14, 11, 52] },
   ],
   paths: [
     [[-14, 0, 6.5], [0, 0, 6.5], [14, 0, 6.5]],
     [[0, 0, 6.5], [0, 0, 12]],
-    [[0, -6, 30], [0, -6, 34], [0, -6, 40]],
-    [[0, -6, 34], [14, -6, 34]],
+    [[0, -6, 30], [0, -6, 44], [0, -6, 52]],
+    [[0, -6, 44], [14, -6, 44]],
   ],
   spots: {
-    spawns: [[-9, -6, 22], [9, -6, 26], [0, -6, 36]],
-    chest: [[-11, -6, 37]],
-    light: [[-6, 4, 1.6], [6, 4, 1.6], [-12.4, -1, 20], [12.4, -1, 24], [-6, -1, 38.4], [6, -1, 38.4]],
+    spawns: [[-9, -6, 22], [9, -6, 26], [0, -6, 38], [-6, -6, 47]],
+    chest: [[-11, -6, 49]],
+    light: [[-6, 4, 1.6], [6, 4, 1.6], [-12.4, -1, 20], [12.4, -1, 24], [-12.4, -1, 38], [-6, -1, 50.4], [6, -1, 50.4]],
     quest: [[10, -6, 16]],
   },
 }

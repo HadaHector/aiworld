@@ -267,7 +267,10 @@ for (const [n, layout] of layouts.entries()) {
         const pw = createCollisionWorld();
         pw.addBatch(placedShapes(p));
         const hits = [0, 1, 2, 3, 4, 5, 6, 7].some((k) => { const a = (k * Math.PI) / 4; return pw.raycast(vec3(at.x, at.y + 1, at.z), vec3(Math.sin(a), 0, Math.cos(a)), 3.2); }) || pw.raycast(vec3(at.x, at.y + 0.3, at.z), vec3(0, 1, 0), 6);
-        return hits ? [`${i}:${p.part.id}/${p.role}`] : [];
+        const { fx, fz } = worldToFrame(layout.frame, at.x, at.z);
+        const b = p.box;
+        const inside = fx >= b.min.x - 1 && fx <= b.max.x + 1 && fz >= b.min.z - 1 && fz <= b.max.z + 1 && at.y >= b.min.y - 1 && at.y <= b.max.y + 1;
+        return hits || inside ? [`${i}:${p.part.id}/${p.role}${inside ? "(in)" : ""}`] : [];
       }).join(" ");
     }
   }

@@ -4,7 +4,7 @@
 import { ContentError, Reader, type ContentIssue, type RawObject } from "../content/contentReader";
 import { DUNGEON_FOLDERS, orderPacks, parseFile, type PackSource } from "../content/resolveContent";
 import { vec3, type Aabb, type ShapeDesc, type Vec3 } from "../collision/index";
-import { boxShape, doorwayGeometry, DOORWAY_KINDS, spiralGeometry, stairGeometry, type DoorwaySpec, type Polyline, type Voussoir } from "./kitShapes";
+import { boxShape, doorwayGeometry, DOORWAY_KINDS, rotundaGeometry, spiralGeometry, stairGeometry, type DoorwaySpec, type Polyline, type Voussoir } from "./kitShapes";
 import { checkPaths } from "./clearance";
 
 const ID_PATTERN = /^[A-Za-z0-9_-]+$/;
@@ -322,7 +322,7 @@ function readPart(entry: Entry, rules: DungeonRules, issues: ContentIssue[]): Du
     const raw = reader.object(value, path);
     // `plain`: wall all over, whatever its shape - a railing, narrow on top, is no step.
     const keys = Object.keys(raw).filter((k) => k !== "plain");
-    if (keys.length !== 1) { reader.fail(path, "expected one of { box }, { stair }, { spiral }"); return; }
+    if (keys.length !== 1) { reader.fail(path, "expected one of { box }, { stair }, { spiral }, { rotunda }"); return; }
     if (raw.plain !== undefined && raw.box === undefined) reader.fail(`${path}.plain`, "only a box can be plain");
     if (raw.box !== undefined && reader.boolean(raw, "plain", path, false)) plain.push(shapes.length);
     try {
@@ -366,8 +366,35 @@ function readPart(entry: Entry, rules: DungeonRules, issues: ContentIssue[]): Du
         shapes.push(...geometry.shapes);
         paths.push(...geometry.paths);
         rounds.push(centre);
+      } else if (raw.rotunda !== undefined) {
+        // A round room: its floor, vault, wall with its doorways, and round pillars.
+        const s = reader.object(raw.rotunda, `${path}.rotunda`);
+        const at = `${path}.rotunda`;
+        reader.onlyKeys(s, at, ["centre", "floor", "radius", "wall", "height", "doors", "pillars"]);
+        const centre = Array.isArray(s.centre) && s.centre.length === 2 && s.centre.every((v) => typeof v === "number") ? (s.centre as [number, number]) : (reader.fail(`${at}.centre`, "expected [x, z]"), [0, 0] as [number, number]);
+        const doors = reader.array(s, "doors", at).map((value, k) => {
+          const d = reader.object(value, `${at}.doors[${k}]`);
+          reader.onlyKeys(d, `${at}.doors[${k}]`, ["facing", "width", "height"]);
+          return { facing: reader.number(d, "facing", `${at}.doors[${k}]`), width: reader.number(d, "width", `${at}.doors[${k}]`, { min: 1 }), height: reader.number(d, "height", `${at}.doors[${k}]`, { min: 1 }) };
+        });
+        const p = s.pillars === undefined ? null : reader.object(s.pillars, `${at}.pillars`);
+        if (p) reader.onlyKeys(p, `${at}.pillars`, ["facings", "ring", "radius"]);
+        const facings = p && Array.isArray(p.facings) ? p.facings.filter((v): v is number => typeof v === "number") : [];
+        const geometry = rotundaGeometry({
+          centre,
+          floor: reader.optionalNumber(s, "floor", at, 0),
+          radius: reader.number(s, "radius", at, { min: 3 }),
+          wall: reader.optionalNumber(s, "wall", at, 1, { min: 0.1 }),
+          height: reader.number(s, "height", at, { min: 2 }),
+          doors,
+          pillars: { facings, ring: p ? reader.number(p, "ring", `${at}.pillars`, { min: 0 }) : 0, radius: p ? reader.number(p, "radius", `${at}.pillars`, { min: 0.1 }) : 1 },
+        });
+        whole.push(...(geometry.whole ?? []).map((i) => i + shapes.length));
+        shapes.push(...geometry.shapes);
+        rounds.push(centre);
+        for (const f of facings) rounds.push([centre[0] + Math.sin((f * Math.PI) / 180) * (p ? Number(p.ring) : 0), centre[1] + Math.cos((f * Math.PI) / 180) * (p ? Number(p.ring) : 0)]);
       } else {
-        reader.fail(path, `unknown collider "${keys[0]}" (expected box, stair or spiral)`);
+        reader.fail(path, `unknown collider "${keys[0]}" (expected box, stair, spiral or rotunda)`);
       }
     } catch (error) {
       reader.fail(path, (error as Error).message);
