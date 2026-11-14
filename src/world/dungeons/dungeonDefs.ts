@@ -8,6 +8,7 @@ import { DUNGEON_FOLDERS, orderPacks, parseFile, type PackSource } from "../cont
 import { vec3, type Aabb, type ShapeDesc, type Vec3 } from "../collision/index";
 import { boxShape, doorwayGeometry, DOORWAY_KINDS, rotundaGeometry, spiralGeometry, stairGeometry, type DoorwaySpec, type Polyline, type Voussoir } from "./kitShapes";
 import { checkPaths } from "./clearance";
+import { placeTombs, tombShape, type TombDef } from "./tombs";
 
 const ID_PATTERN = /^[A-Za-z0-9_-]+$/;
 
@@ -108,6 +109,11 @@ export interface DungeonPartDef {
   plain: number[];
   /** A doorway's arch stones, each textured as one block. */
   voussoirs: Voussoir[];
+  /** Tombs standing free on its floor (./tombs.ts): each a collider at the end of `shapes`, drawn by
+   *  the style as a carved chest rather than as the box it collides as. */
+  tombs?: TombDef[];
+  /** How many of `shapes` are drawn as they are (the rest - its tombs - are not); all when unset. */
+  drawn?: number;
 }
 
 export interface DungeonSize {
@@ -280,7 +286,7 @@ function vector(reader: Reader, value: unknown, path: string): Vec3 {
   return vec3();
 }
 
-const PART_KEYS = ["tags", "weight", "stage", "apart", "bounds", "sockets", "colliders", "paths", "spots", "room", "doorway"];
+const PART_KEYS = ["tags", "weight", "stage", "apart", "tombs", "bounds", "sockets", "colliders", "paths", "spots", "room", "doorway"];
 
 function readPart(entry: Entry, rules: DungeonRules, issues: ContentIssue[]): DungeonPartDef | null {
   const reader = new Reader(issues, entry.file);
@@ -436,6 +442,10 @@ function readPart(entry: Entry, rules: DungeonRules, issues: ContentIssue[]): Du
     bounds = shapesBounds(shapes);
   }
   const tags = obj.tags === undefined ? [] : reader.stringList(obj, "tags", "");
+  // Tombs on its floor, as many as asked for and fit, clear of its ways - colliders like the rest.
+  const drawn = shapes.length;
+  const tombs = placeTombs(shapes, paths, spots, reader.optionalNumber(obj, "tombs", "", 0, { min: 0 }));
+  shapes.push(...tombs.map(tombShape));
   const part: DungeonPartDef = {
     id: entry.id,
     tags,
@@ -454,6 +464,8 @@ function readPart(entry: Entry, rules: DungeonRules, issues: ContentIssue[]): Du
     whole,
     plain,
     voussoirs,
+    tombs,
+    drawn,
   };
   // Every way through it, on its own colliders: floor under the walk lines, and 6 m wide and high.
   const before = issues.length;

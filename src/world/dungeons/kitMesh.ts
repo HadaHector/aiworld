@@ -4,7 +4,8 @@
 // through: floor, wall, vault, step. Torches stand at its light spots. Pure: no engine, so it can
 // run anywhere the layout does.
 import { arcosolia, loculi, type DentSurroundings, type Niche } from "../architecture/dents";
-import { copings, ribs, wallTrims, type CeilingSpan, type StairEdge, type WallFace, type WallTrims } from "../architecture/trims";
+import { TOMB_SIZE, type TombDef } from "./tombs";
+import { copings, ribs, wallTrims, type TrimPiece, type CeilingSpan, type StairEdge, type WallFace, type WallTrims } from "../architecture/trims";
 import { convexHull, rotate, type ShapeDesc } from "../collision/index";
 import { ModelBuilder } from "../buildings/buildingGeometry";
 import type { BuildingModel, ModelLight, Paint } from "../buildings/buildingTypes";
@@ -497,7 +498,7 @@ const trimmedParts = new WeakMap<DungeonPartDef, Map<WallTrims, { solids: Solid[
  */
 export function trimmedShape(part: DungeonPartDef, trims: WallTrims): { solids: Solid[]; faces: Face[]; kinds: SolidKind[] } {
   const plain = partShape(part);
-  if (part.doorway || part.paths.length === 0 || (!trims.plinth && !trims.cornice && !trims.ribs && !trims.coping && !trims.loculi)) return plain;
+  if (part.doorway || part.paths.length === 0 || (!trims.plinth && !trims.cornice && !trims.ribs && !trims.coping && !trims.loculi && !part.tombs?.length)) return plain;
   let byStyle = trimmedParts.get(part);
   if (!byStyle) trimmedParts.set(part, (byStyle = new Map()));
   const known = byStyle.get(trims);
@@ -648,11 +649,43 @@ export function trimmedShape(part: DungeonPartDef, trims: WallTrims): { solids: 
       kindsAll.push({ tread: false, floor: false, roof: false, top: -Infinity, trim: true, niche: true });
     }
   }
+  // Its tombs, drawn as they are, every side but their undersides: they stand on the floor, and a
+  // lid's overhang over its chest is no gap in the rock.
+  for (const piece of (part.tombs ?? []).flatMap(tombPieces)) {
+    const solid = hullSolid(piece.points);
+    for (const side of solid.sides) if (side.n[1] > -0.9) faces.push({ n: side.n, corners: side.corners, solid: all.length });
+    all.push(solid);
+    kindsAll.push({ tread: false, floor: false, roof: false, top: -Infinity, trim: true });
+  }
   for (const i of part.plain) kindsAll[i] = { ...kindsAll[i], tread: false, plain: true };
   for (let i = solids.length; i < solids.length + pieces.length; i++) kindsAll[i] = { tread: false, floor: false, roof: false, top: -Infinity, trim: true, grain: pieces[i - solids.length].grain, uvOrigin: pieces[i - solids.length].uvOrigin };
   const shape = { solids: all, faces, kinds: kindsAll };
   byStyle.set(trims, shape);
   return shape;
+}
+
+/**
+ * A tomb drawn: a base a little wider than it, the chest, a lid standing out over the chest's
+ * sides, and a low gabled top along its length - each a convex piece, in the trims' stone.
+ */
+function tombPieces(t: TombDef): TrimPiece[] {
+  const [len, wid, high] = TOMB_SIZE;
+  const along = t.yaw === 90;
+  /** A box from the tomb's middle: l along its length, w across, between two heights. */
+  const box = (l: number, w: number, y0: number, y1: number): V[] => {
+    const hx = (along ? l : w) / 2, hz = (along ? w : l) / 2;
+    const plan: [number, number][] = [[-hx, -hz], [hx, -hz], [hx, hz], [-hx, hz]];
+    return [y0, y1].flatMap((y) => plan.map(([x, z]): V => [t.at.x + x, t.at.y + y, t.at.z + z]));
+  };
+  const lidAt = high - 0.42, gableAt = high - 0.22;
+  // The gable: the lid's top rising to a ridge along the length.
+  const ridge: V[] = [-1, 1].map((s): V => (along ? [t.at.x + s * (len / 2 + 0.05), t.at.y + high, t.at.z] : [t.at.x, t.at.y + high, t.at.z + s * (len / 2 + 0.05)]));
+  return [
+    { kind: "tomb", points: box(len + 0.2, wid + 0.2, -0.02, 0.25) },
+    { kind: "tomb", points: box(len, wid, 0.25, lidAt) },
+    { kind: "tomb", points: box(len + 0.1, wid + 0.16, lidAt, gableAt) },
+    { kind: "tomb", points: [...box(len + 0.1, wid + 0.16, gableAt, gableAt + 0.01).slice(0, 4), ...ridge] },
+  ];
 }
 
 /** A way's wall no longer than this may hold an arcosolium (an alcove's back, not a corridor's side). */
@@ -736,7 +769,8 @@ function partShape(part: DungeonPartDef): { solids: Solid[]; faces: Face[]; kind
   let known = shapesOfPart.get(part);
   if (!known) {
     // Its colliders, then what is only drawn (a doorway's open leaves).
-    const solids = solidsOf([...part.shapes, ...part.visuals]);
+    // (Its tombs collide as boxes but are drawn carved, with its trims: not here.)
+    const solids = solidsOf([...part.shapes.slice(0, part.drawn ?? part.shapes.length), ...part.visuals]);
     // A part with no way through (a cap) is seen only from the part it closes: its faces lying in
     // a socket's plane, facing out through it.
     const faces = part.paths.length > 0 ? partFaces(solids, false, solids.map((_, i) => i), new Set(part.whole)) : socketFaces(solids, part);

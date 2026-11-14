@@ -2,6 +2,7 @@
 {
   tags: ["crypt", "tomb"],
   room: true,
+  tombs: 1,                          // standing free on the floor, clear of the ways
   weight: 2,
   stage: [0.2, 1],
   sockets: [{ at: [0, 0, 0], facing: 180, type: "crypt", size: [6, 6], reach: 1.5 }],

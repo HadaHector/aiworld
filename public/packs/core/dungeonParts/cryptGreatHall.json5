@@ -3,6 +3,7 @@
 {
   tags: ["crypt", "hall", "large"],
   room: true,
+  tombs: 2,                          // standing free on the floor, clear of the ways
   weight: 2,
   stage: [0.1, 1],
   sockets: [

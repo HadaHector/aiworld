@@ -5,6 +5,7 @@
   tags: ["crypt", "hall", "boss", "large"],
   room: true,
   weight: 1,
+  tombs: 2,                          // standing free on the floor, clear of the ways
   sockets: [
     { at: [0, 0, 0], facing: 180, type: "cryptLarge", size: [10, 8], reach: 1.5 },
   ],
