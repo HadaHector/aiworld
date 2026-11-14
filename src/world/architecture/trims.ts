@@ -277,14 +277,17 @@ export function stairBands(edges: readonly StairEdge[], kind: "plinth" | "cornic
       return { st, side, tFar, tEnd, edge, at: st.point(tFar) };
     };
     const yTop = heights[heights.length - 1];
-    const tFlight = along(edges[members[0]].n);
-    const topJoint = joint(yTop, tFlight, true);
-    /** Where the flight's band's courses start: on its edge where it meets the top block. */
-    const origin: V3 = [topJoint.at[0], topJoint.edge, topJoint.at[2]];
+    /** How far down the band's edge it is from where it meets the top block to a step's upper end:
+     *  each step between along its own slope - so its stone runs on round a turning flight. */
+    const slope = (h: number): number => {
+      const st = stepOf(h, along(edges[members.find((j) => at(j) === h)!].n));
+      return Math.hypot(st.t1 - st.t0, rise);
+    };
+    const fromTop = (y: number): number => heights.filter((h) => h > y + 0.01 && h < yTop - 0.01).reduce((sum, h) => sum + slope(h), 0);
     for (const i of members) {
       const e = edges[i], y = at(i);
       const t = along(e.n);
-      const { same, t0, t1, up, top, foot } = stepOf(y, t);
+      const { same, t0, t1, up, top, foot, point } = stepOf(y, t);
       if (t1 - t0 < 1e-3) continue;
       if (up === 0) {
         // Level, between steps of the same height (a vault kept level over a spiral's first lap).
@@ -329,7 +332,14 @@ export function stairBands(edges: readonly StairEdge[], kind: "plinth" | "cornic
       // Its stone along the slope: across the plan along the wall, climbing a step a step.
       const k = (rise * up) / (t1 - t0);
       const l = Math.hypot(1, k);
-      pieces.push({ kind, points: pts, grain: [t[0] / l, k / l, t[2] / l], uvOrigin: origin });
+      // Its courses laid from where the band meets the top block, measured down along the band:
+      // the point its stone starts at, back up the slope from this step's upper end.
+      const down: V3 = up > 0 ? [-t[0] / l, -k / l, -t[2] / l] : [t[0] / l, k / l, t[2] / l];
+      const upper = point(up > 0 ? t1 : t0);
+      const edgeAt = kind === "plinth" ? y + rise + profile.height : y - profile.height;
+      const s0 = fromTop(y);
+      const uvOrigin: V3 = [upper[0] - down[0] * s0, edgeAt - down[1] * s0, upper[2] - down[2] * s0];
+      pieces.push({ kind, points: pts, grain: down, uvOrigin });
     }
   }
   return pieces;

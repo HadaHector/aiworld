@@ -146,7 +146,7 @@ function hullSolid(points: V[]): Solid {
   return { planes, box: null, sides, lo, hi };
 }
 
-const inside = (s: Solid, p: V): boolean =>
+export const inside = (s: Solid, p: V): boolean =>
   p[0] > s.lo[0] && p[0] < s.hi[0] && p[1] > s.lo[1] && p[1] < s.hi[1] && p[2] > s.lo[2] && p[2] < s.hi[2] && s.planes.every((pl) => dot(pl.n, p) < pl.d - EPS);
 
 /** The heights a vertical line through (x, z) is inside a solid between, or null. */
@@ -547,11 +547,11 @@ export function trimmedShape(part: DungeonPartDef, trims: WallTrims): { solids: 
 /** A step's tread is smaller than this, square metres: a floor seen in narrow pieces is not one. */
 const STEP_AREA = 15;
 
-function stairEdges(faces: readonly Face[], solids: readonly Solid[], kinds: readonly SolidKind[], built: readonly Solid[]): { treads: StairEdge[]; vaults: StairEdge[]; on: (p: V, kind: "plinth" | "cornice") => boolean } {
+export function stairEdges(faces: readonly Face[], solids: readonly Solid[], kinds: readonly SolidKind[], built: readonly Solid[]): { treads: StairEdge[]; vaults: StairEdge[]; on: (p: V, kind: "plinth" | "cornice") => boolean } {
   const treads: StairEdge[] = [], vaults: StairEdge[] = [];
   // The steps: solids with a narrow tread, small all told - not a floor whose top is seen only in
   // narrow pieces; and the vaults over them as small (the vault over each step, not a hall's).
-  const topArea = new Map<number, number>();
+  const topArea = new Map<number, number>(), underArea = new Map<number, number>();
   for (const f of faces) {
     if (Math.abs(f.n[1]) < 0.9) continue;
     let area = 0;
@@ -559,7 +559,8 @@ function stairEdges(faces: readonly Face[], solids: readonly Solid[], kinds: rea
       const [o, p, q] = [f.corners[0], f.corners[i], f.corners[i + 1]];
       area += Math.abs((p[0] - o[0]) * (q[2] - o[2]) - (q[0] - o[0]) * (p[2] - o[2])) / 2;
     }
-    topArea.set(f.solid, (topArea.get(f.solid) ?? 0) + area);
+    const sum = f.n[1] > 0 ? topArea : underArea;
+    sum.set(f.solid, (sum.get(f.solid) ?? 0) + area);
   }
   const steps = solids.filter((_, i) => kinds[i].tread && (topArea.get(i) ?? 0) < STEP_AREA);
   const stepVaults = new Set<Solid>();
@@ -573,14 +574,15 @@ function stairEdges(faces: readonly Face[], solids: readonly Solid[], kinds: rea
     return vault !== null && vault === ceilingOver(built, p);
   };
   if (steps.length === 0) return { treads, vaults, on };
-  const walls = built.filter((s) => !steps.includes(s));
-  const wallAt = (p: V): boolean => walls.some((s) => inside(s, p));
+  // A wall: anything built but the step itself - a step a turn higher (a landing's end over the
+  // lap below) is the wall there too; the next step is never a hand higher.
+  const wallAt = (p: V, own: Solid): boolean => built.some((s) => s !== own && inside(s, p));
   for (const f of faces) {
     const k = kinds[f.solid];
     const up = f.n[1] > 0.9 && k.tread && steps.includes(solids[f.solid]);
     let c: V = [0, 0, 0];
     for (const p of f.corners) c = [c[0] + p[0] / f.corners.length, c[1] + p[1] / f.corners.length, c[2] + p[2] / f.corners.length];
-    const down = f.n[1] < -0.9 && k.roof && !k.tread && (topArea.get(f.solid) ?? 0) < STEP_AREA && floorUnder(steps, [c[0], c[1] - 0.1, c[2]]) !== null;
+    const down = f.n[1] < -0.9 && k.roof && !k.tread && (underArea.get(f.solid) ?? 0) < STEP_AREA && floorUnder(steps, [c[0], c[1] - 0.1, c[2]]) !== null;
     if (!up && !down) continue;
     if (down) stepVaults.add(solids[f.solid]);
     for (let i = 0; i < f.corners.length; i++) {
@@ -591,7 +593,7 @@ function stairEdges(faces: readonly Face[], solids: readonly Solid[], kinds: rea
       let o: V = [(b[2] - a[2]) / l, 0, -(b[0] - a[0]) / l];
       const m: V = [(a[0] + b[0]) / 2, a[1], (a[2] + b[2]) / 2];
       if ((m[0] - c[0]) * o[0] + (m[2] - c[2]) * o[2] < 0) o = [-o[0], 0, -o[2]];
-      if (!wallAt([m[0] + o[0] * 0.3, m[1] + (up ? 0.5 : -0.5), m[2] + o[2] * 0.3])) continue;
+      if (!wallAt([m[0] + o[0] * 0.3, m[1] + (up ? 0.5 : -0.5), m[2] + o[2] * 0.3], solids[f.solid])) continue;
       (up ? treads : vaults).push({ a, b, n: [-o[0], 0, -o[2]] });
     }
   }
