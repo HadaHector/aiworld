@@ -443,6 +443,8 @@ interface SolidKind {
   trim?: boolean;
   /** Part of a niche (its frame, its slab): drawn in the style's niche paint. */
   niche?: boolean;
+  /** Part of a tomb: drawn in the style's tomb paint. */
+  tomb?: boolean;
   /** A trim's stone direction, where it slopes (a stair's band), and where its courses start. */
   grain?: V;
   uvOrigin?: V;
@@ -470,6 +472,7 @@ function solidKinds(count: number, faces: readonly Face[]): SolidKind[] {
  */
 function paintFor(f: Face, kind: SolidKind, look: DungeonStyleDef["look"]): DungeonPaint {
   if (kind.niche) return look.niche;
+  if (kind.tomb) return look.tomb;
   if (kind.trim) return look.trim;
   if (kind.plain) return look.wall;
   if (f.n[1] > 0.5) return kind.tread ? look.steps : look.floor;
@@ -636,7 +639,7 @@ export function trimmedShape(part: DungeonPartDef, trims: WallTrims): { solids: 
         const solid = hullSolid(piece);
         for (const side of solid.sides) if (dot(side.n, niche.n) > -0.9 && side.n[1] > -0.9) faces.push({ n: side.n, corners: side.corners, solid: all.length });
         all.push(solid);
-        kindsAll.push({ tread: false, floor: false, roof: false, top: -Infinity, trim: true });
+        kindsAll.push({ tread: false, floor: false, roof: false, top: -Infinity, trim: true, tomb: true });
       }
     }
     for (const niche of niches) {
@@ -655,7 +658,7 @@ export function trimmedShape(part: DungeonPartDef, trims: WallTrims): { solids: 
     const solid = hullSolid(piece.points);
     for (const side of solid.sides) if (side.n[1] > -0.9) faces.push({ n: side.n, corners: side.corners, solid: all.length });
     all.push(solid);
-    kindsAll.push({ tread: false, floor: false, roof: false, top: -Infinity, trim: true });
+    kindsAll.push({ tread: false, floor: false, roof: false, top: -Infinity, trim: true, tomb: true });
   }
   for (const i of part.plain) kindsAll[i] = { ...kindsAll[i], tread: false, plain: true };
   for (let i = solids.length; i < solids.length + pieces.length; i++) kindsAll[i] = { tread: false, floor: false, roof: false, top: -Infinity, trim: true, grain: pieces[i - solids.length].grain, uvOrigin: pieces[i - solids.length].uvOrigin };

@@ -173,6 +173,8 @@ export interface KitLook {
   trim: DungeonPaint;
   /** A niche cut into a wall: its inside, its frame, its slab. */
   niche: DungeonPaint;
+  /** A tomb, standing free or lying in an arcosolium: each piece of it one stone, no joints. */
+  tomb: DungeonPaint;
   door: DungeonPaint;
 }
 
@@ -517,12 +519,12 @@ function paintOf(reader: Reader, look: RawObject, key: string, fallback: Dungeon
 }
 
 function readLook(reader: Reader, raw: RawObject): KitLook {
-  reader.onlyKeys(raw, "look", ["floor", "wall", "ceiling", "steps", "tread", "riser", "frame", "door", "trim", "niche"]);
+  reader.onlyKeys(raw, "look", ["floor", "wall", "ceiling", "steps", "tread", "riser", "frame", "door", "trim", "niche", "tomb"]);
   const stone: DungeonPaint = { material: "stoneBricks", tint: [1, 1, 1] };
   const floor = paintOf(reader, raw, "floor", stone);
   const wall = paintOf(reader, raw, "wall", stone);
   const steps = paintOf(reader, raw, "steps", floor);
-  return { floor, wall, ceiling: paintOf(reader, raw, "ceiling", stone), steps, tread: paintOf(reader, raw, "tread", steps), riser: paintOf(reader, raw, "riser", steps), frame: paintOf(reader, raw, "frame", wall), trim: paintOf(reader, raw, "trim", paintOf(reader, raw, "frame", wall)), niche: paintOf(reader, raw, "niche", wall), door: paintOf(reader, raw, "door", { material: "doorBoards", tint: [1, 1, 1] }) };
+  return { floor, wall, ceiling: paintOf(reader, raw, "ceiling", stone), steps, tread: paintOf(reader, raw, "tread", steps), riser: paintOf(reader, raw, "riser", steps), frame: paintOf(reader, raw, "frame", wall), trim: paintOf(reader, raw, "trim", paintOf(reader, raw, "frame", wall)), niche: paintOf(reader, raw, "niche", wall), tomb: paintOf(reader, raw, "tomb", paintOf(reader, raw, "trim", paintOf(reader, raw, "frame", wall))), door: paintOf(reader, raw, "door", { material: "doorBoards", tint: [1, 1, 1] }) };
 }
 
 function readTrims(reader: Reader, raw: RawObject): WallTrims {
