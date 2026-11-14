@@ -437,6 +437,8 @@ interface SolidKind {
   plain?: boolean;
   /** A trim (a plinth, a cornice): drawn in the style's trim. */
   trim?: boolean;
+  /** A trim's stone direction, where it slopes (a stair's band). */
+  grain?: V;
 }
 
 function solidKinds(count: number, faces: readonly Face[]): SolidKind[] {
@@ -500,7 +502,8 @@ export function trimmedShape(part: DungeonPartDef, trims: WallTrims): { solids: 
   // What stands and hangs round the walls, less what is wall all over (a railing, a tunnel's
   // walls): a band never sits on one of those.
   const built = solids.filter((_, i) => !kinds[i].plain && !whole.has(i));
-  const pieces = wallTrims(walls, { floorUnder: (p) => floorUnder(built, p), ceilingOver: (p) => ceilingOver(built, p) }, trims, stairEdges(plain.faces, solids, kinds, built));
+  const stairs = stairEdges(plain.faces, solids, kinds, built);
+  const pieces = wallTrims(walls, { floorUnder: (p) => floorUnder(built, p), ceilingOver: (p) => ceilingOver(built, p), stair: stairs.on }, trims, stairs);
   if (trims.ribs) {
     // The flat ceilings: each box seen from under it, as far as it is seen.
     const spans: CeilingSpan[] = [];
@@ -529,7 +532,7 @@ export function trimmedShape(part: DungeonPartDef, trims: WallTrims): { solids: 
   const faces = partFaces(all, false, all.map((_, i) => i), whole);
   const kindsAll = solidKinds(all.length, faces);
   for (const i of part.plain) kindsAll[i] = { ...kindsAll[i], tread: false, plain: true };
-  for (let i = solids.length; i < all.length; i++) kindsAll[i] = { tread: false, floor: false, roof: false, top: -Infinity, trim: true };
+  for (let i = solids.length; i < all.length; i++) kindsAll[i] = { tread: false, floor: false, roof: false, top: -Infinity, trim: true, grain: pieces[i - solids.length].grain };
   const shape = { solids: all, faces, kinds: kindsAll };
   byStyle.set(trims, shape);
   return shape;
@@ -540,19 +543,45 @@ export function trimmedShape(part: DungeonPartDef, trims: WallTrims): { solids: 
  * (a hand over the tread), and each edge of the vault over a step with a wall just past it (a hand
  * under the vault) - the wall facing back over the step.
  */
-function stairEdges(faces: readonly Face[], solids: readonly Solid[], kinds: readonly SolidKind[], built: readonly Solid[]): { treads: StairEdge[]; vaults: StairEdge[] } {
+/** A step's tread is smaller than this, square metres: a floor seen in narrow pieces is not one. */
+const STEP_AREA = 15;
+
+function stairEdges(faces: readonly Face[], solids: readonly Solid[], kinds: readonly SolidKind[], built: readonly Solid[]): { treads: StairEdge[]; vaults: StairEdge[]; on: (p: V, kind: "plinth" | "cornice") => boolean } {
   const treads: StairEdge[] = [], vaults: StairEdge[] = [];
-  const steps = solids.filter((_, i) => kinds[i].tread);
-  if (steps.length === 0) return { treads, vaults };
+  // The steps: solids with a narrow tread, small all told - not a floor whose top is seen only in
+  // narrow pieces; and the vaults over them as small (the vault over each step, not a hall's).
+  const topArea = new Map<number, number>();
+  for (const f of faces) {
+    if (Math.abs(f.n[1]) < 0.9) continue;
+    let area = 0;
+    for (let i = 1; i + 1 < f.corners.length; i++) {
+      const [o, p, q] = [f.corners[0], f.corners[i], f.corners[i + 1]];
+      area += Math.abs((p[0] - o[0]) * (q[2] - o[2]) - (q[0] - o[0]) * (p[2] - o[2])) / 2;
+    }
+    topArea.set(f.solid, (topArea.get(f.solid) ?? 0) + area);
+  }
+  const steps = solids.filter((_, i) => kinds[i].tread && (topArea.get(i) ?? 0) < STEP_AREA);
+  const stepVaults = new Set<Solid>();
+  /** Whether the floor under p is a step's, or the vault over it one over a step. */
+  const on = (p: V, kind: "plinth" | "cornice"): boolean => {
+    if (kind === "plinth") {
+      const step = floorUnder(steps, p);
+      return step !== null && step === floorUnder(built, p);
+    }
+    const vault = ceilingOver([...stepVaults], p);
+    return vault !== null && vault === ceilingOver(built, p);
+  };
+  if (steps.length === 0) return { treads, vaults, on };
   const walls = built.filter((s) => !steps.includes(s));
   const wallAt = (p: V): boolean => walls.some((s) => inside(s, p));
   for (const f of faces) {
     const k = kinds[f.solid];
-    const up = f.n[1] > 0.9 && k.tread;
+    const up = f.n[1] > 0.9 && k.tread && steps.includes(solids[f.solid]);
     let c: V = [0, 0, 0];
     for (const p of f.corners) c = [c[0] + p[0] / f.corners.length, c[1] + p[1] / f.corners.length, c[2] + p[2] / f.corners.length];
-    const down = f.n[1] < -0.9 && k.roof && !k.tread && floorUnder(steps, [c[0], c[1] - 0.1, c[2]]) !== null;
+    const down = f.n[1] < -0.9 && k.roof && !k.tread && (topArea.get(f.solid) ?? 0) < STEP_AREA && floorUnder(steps, [c[0], c[1] - 0.1, c[2]]) !== null;
     if (!up && !down) continue;
+    if (down) stepVaults.add(solids[f.solid]);
     for (let i = 0; i < f.corners.length; i++) {
       const a = f.corners[i], b = f.corners[(i + 1) % f.corners.length];
       const l = Math.hypot(b[0] - a[0], b[2] - a[2]);
@@ -565,7 +594,7 @@ function stairEdges(faces: readonly Face[], solids: readonly Solid[], kinds: rea
       (up ? treads : vaults).push({ a, b, n: [-o[0], 0, -o[2]] });
     }
   }
-  return { treads, vaults };
+  return { treads, vaults, on };
 }
 
 function partShape(part: DungeonPartDef): { solids: Solid[]; faces: Face[]; kinds: SolidKind[] } {
@@ -803,6 +832,16 @@ export function buildPartModel(layout: DungeonLayout, index: number, style: Dung
     if (stone) {
       b.raw(f.corners.map(point), f.corners.map(() => turn(f.n)), f.corners.map(() => turn(stone.tangent)), stone.uvs, paint);
       continue;
+    }
+    // A trim's stone along its grain, where it slopes (a stair's band).
+    const grain = kinds[f.solid].grain;
+    if (grain) {
+      const g = sub(grain, [f.n[0] * dot(grain, f.n), f.n[1] * dot(grain, f.n), f.n[2] * dot(grain, f.n)]);
+      if (Math.hypot(g[0], g[1], g[2]) > 0.3) {
+        const tangent = norm(g), up = cross(f.n, tangent);
+        b.raw(f.corners.map(point), f.corners.map(() => turn(f.n)), f.corners.map(() => turn(tangent)), f.corners.map((p): [number, number] => [dot(p, tangent), dot(p, up)]), paint);
+        continue;
+      }
     }
     const stair = placed.role === "doorway" ? null : stairOf(f, kinds[f.solid], solids, style.look);
     if (stair) {

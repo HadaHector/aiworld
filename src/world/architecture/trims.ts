@@ -25,12 +25,18 @@ export interface TrimSurroundings {
   floorUnder(p: V3): number | null;
   /** The underside of the ceiling or vault over a point, or null where there is none. */
   ceilingOver(p: V3): number | null;
+  /** Whether the floor under a point (for a plinth) or the vault over it (for a cornice) is a
+   *  stair's step: no level band there - the stair's own runs along it (see `stairBands`). A builder
+   *  without it gets no band on a run shorter than `stepRun` instead. */
+  stair?(p: V3, kind: "plinth" | "cornice"): boolean;
 }
 
 /** A trim piece: which band it is, and its corners - a convex prism, eight points or more. */
 export interface TrimPiece {
-  kind: "plinth" | "cornice" | "rib" | "pilaster";
+  kind: "plinth" | "cornice" | "rib" | "pilaster" | "block";
   points: V3[];
+  /** Which way its stone runs, where that is not level along the wall (a stair's band, sloping). */
+  grain?: V3;
 }
 
 export interface WallTrims {
@@ -170,37 +176,33 @@ export function wallTrims(faces: readonly WallFace[], around: TrimSurroundings, 
   // Bands of a kind at one height meeting end to end are one run (a round wall's facets); a run
   // shorter than stepRun - a stair's step, each at its own height - gets none (a stair's own trim is
   // something else).
-  const group = found.map((_, i) => i);
-  const root = (i: number): number => (group[i] === i ? i : (group[i] = root(group[i])));
-  found.forEach((a, i) => {
-    for (let j = 0; j < i; j++) {
-      const b = found[j];
-      if (a.kind !== b.kind || Math.abs(a.y - b.y) > 0.05) continue;
-      if (a.ends.some((e) => b.ends.some((g) => Math.hypot(e[0] - g[0], e[2] - g[2]) < 0.3))) group[root(i)] = root(j);
-    }
-  });
-  const run = new Map<number, number>();
-  found.forEach((a, i) => run.set(root(i), (run.get(root(i)) ?? 0) + length(a)));
-  const kept = found.filter((_, i) => run.get(root(i))! >= stepRun);
+  let kept: Band[];
+  if (around.stair) {
+    // Told where the stairs are: every band but those on a step (a landing's, however short, kept).
+    kept = found.filter((b) => {
+      const m: V3 = [(b.ends[0][0] + b.ends[1][0]) / 2 + b.n[0] * 0.05, b.kind === "plinth" ? b.y + 0.05 : b.y - 0.05, (b.ends[0][2] + b.ends[1][2]) / 2 + b.n[2] * 0.05];
+      return !around.stair!(m, b.kind);
+    });
+  } else {
+    const group = found.map((_, i) => i);
+    const root = (i: number): number => (group[i] === i ? i : (group[i] = root(group[i])));
+    found.forEach((a, i) => {
+      for (let j = 0; j < i; j++) {
+        const b = found[j];
+        if (a.kind !== b.kind || Math.abs(a.y - b.y) > 0.05) continue;
+        if (a.ends.some((e) => b.ends.some((g) => Math.hypot(e[0] - g[0], e[2] - g[2]) < 0.3))) group[root(i)] = root(j);
+      }
+    });
+    const run = new Map<number, number>();
+    found.forEach((a, i) => run.set(root(i), (run.get(root(i)) ?? 0) + length(a)));
+    kept = found.filter((_, i) => run.get(root(i))! >= stepRun);
+  }
   const pieces = kept.map((b): TrimPiece => ({ kind: b.kind, points: bandPrism(b.ends[0], b.ends[1], b.n, b.y0, b.y1, b.proud, b.proud) }));
   if (stairs) {
-    /** Whether a level band already runs along this edge (a vault kept level over a stair's first lap). */
-    const banded = (kind: Band["kind"], e: StairEdge): boolean => {
-      const m: V3 = [(e.a[0] + e.b[0]) / 2, e.a[1], (e.a[2] + e.b[2]) / 2];
-      return kept.some((b) => b.kind === kind && Math.abs(b.y - m[1]) < 0.05 && distanceToSegment(m, b.ends[0], b.ends[1]) < 0.5);
-    };
-    if (spec.plinth) pieces.push(...stairBands(stairs.treads.filter((e) => !banded("plinth", e)), "plinth", spec.plinth));
-    if (spec.cornice) pieces.push(...stairBands(stairs.vaults.filter((e) => !banded("cornice", e)), "cornice", spec.cornice));
+    if (spec.plinth) pieces.push(...stairBands(stairs.treads, "plinth", spec.plinth));
+    if (spec.cornice) pieces.push(...stairBands(stairs.vaults, "cornice", spec.cornice));
   }
   return pieces;
-}
-
-/** How far a point is from a segment, across the plan. */
-function distanceToSegment(p: V3, a: V3, b: V3): number {
-  const dx = b[0] - a[0], dz = b[2] - a[2];
-  const l = dx * dx + dz * dz || 1;
-  const k = Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[2] - a[2]) * dz) / l));
-  return Math.hypot(p[0] - a[0] - dx * k, p[2] - a[2] - dz * k);
 }
 
 /** An edge of a stair's step where it meets a wall: along the wall at the step's height (`a`, `b`),
@@ -257,7 +259,30 @@ export function stairBands(edges: readonly StairEdge[], kind: "plinth" | "cornic
       let up = 0;
       if (above.length) up = mid(above[0]) > (t0 + t1) / 2 ? 1 : -1;
       else if (below.length) up = mid(below[0]) > (t0 + t1) / 2 ? -1 : 1;
-      if (up === 0 || t1 - t0 < 1e-3) continue;
+      if (t1 - t0 < 1e-3) continue;
+      if (up === 0) {
+        // Level, between steps of the same height (a vault kept level over a spiral's first lap).
+        const [y0, y1] = kind === "plinth" ? [y, y + profile.height] : [y - profile.height, y];
+        pieces.push({ kind, points: bandPrism(e.a, e.b, e.n, y0, y1, profile.proud, profile.proud) });
+        continue;
+      }
+      // A flight's end (no step above, or none below): a block over where its band meets the level
+      // one beyond, the joint between them hidden - once a step, at the step's own end.
+      const top = above.length === 0, foot = below.length === 0;
+      for (const [isEnd, side] of [[top, up], [foot, -up]] as [boolean, number][]) {
+        if (!isEnd || !same.length || i !== same[0]) continue;
+        const tEnd = side > 0 ? t1 : t0;
+        const endPoint = same.flatMap((j) => [edges[j].a, edges[j].b]).reduce((p, q) => (Math.abs(dot(q, t) - tEnd) < Math.abs(dot(p, t) - tEnd) ? q : p));
+        const h = y + (rise * side) / 2;
+        const half = 0.5, out = profile.proud + 0.1, back = Math.min(0.1, profile.proud);
+        const [lo, hi] = kind === "plinth" ? [h - rise - 0.3, h + rise + profile.height + 0.35] : [h - rise - profile.height - 0.35, h + rise + 0.3];
+        const pts: V3[] = [];
+        for (const dt of [-half, half]) for (const k of [-back, out]) {
+          const x = endPoint[0] + t[0] * dt + e.n[0] * k, z = endPoint[2] + t[2] * dt + e.n[2] * k;
+          pts.push([x, lo, z], [x, hi, z]);
+        }
+        pieces.push({ kind: "block", points: pts });
+      }
       /** The pitch line's height at a point along the wall: through the step's middle, rising a step a step. */
       const line = (p: number) => y + (rise * up * (p - (t0 + t1) / 2)) / (t1 - t0);
       const ends: [V3, V3] = dot(e.a, t) <= dot(e.b, t) ? [e.a, e.b] : [e.b, e.a];
@@ -273,7 +298,10 @@ export function stairBands(edges: readonly StairEdge[], kind: "plinth" | "cornic
           pts.push([x, lo, z], [x, hi, z]);
         }
       }
-      pieces.push({ kind, points: pts });
+      // Its stone along the slope: across the plan along the wall, climbing a step a step.
+      const k = (rise * up) / (t1 - t0);
+      const l = Math.hypot(1, k);
+      pieces.push({ kind, points: pts, grain: [t[0] / l, k / l, t[2] / l] });
     }
   }
   return pieces;
