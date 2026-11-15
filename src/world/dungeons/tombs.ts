@@ -233,8 +233,14 @@ export function placeLedgers(shapes: readonly ShapeDesc[], spots: Record<string,
 }
 
 /** A ledger stone's collider: a box from its floor to its top, turned as it lies. */
+/**
+ * What a ledger stone collides as: the stone with its top's edges sloped off at 45 degrees, as wide
+ * as it is high - so a body walks up onto it at any slant, never stalling against a square edge a
+ * step high (it is drawn square, with its own small bevel).
+ */
 export function ledgerShape(t: LedgerDef): ShapeDesc {
-  return { kind: "box", center: vec3(t.at.x, t.at.y + t.high / 2, t.at.z), half: vec3(t.half[0], t.high / 2, t.half[1]), rotation: quatFromEuler(t.turn) };
+  const ring = (y: number, inset: number): Vec3[] => ledgerCorners(t, inset).map(([x, z]) => vec3(x, t.at.y + y, z));
+  return { kind: "convex", points: [...ring(-0.02, 0), ...ring(t.high, Math.min(t.high, Math.min(...t.half) - 0.05))] };
 }
 
 /** A number in [0, 1) for a place, the same every time. */
