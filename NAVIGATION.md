@@ -265,15 +265,16 @@ later than the rest. 1-3 are the plan; without them nothing changes for the play
 - Probe: `scripts/probe/navigation.mjs [layouts]` (200 by default, about a minute): crypts on flat
   ground; a way from the arrival to every room (1437/1437) and from every spawn spot to the arrival
   (4514/4514), the ends' shortcuts walkable, none to a point in the rock over the boss (200/200),
-  the same way twice, the motor walking door to boss (19/20). Then on a `tiny` server: a wolf 34 m
+  the same way twice, the motor walking door to boss (20/20 since de0d5b0). Then on a `tiny` server: a wolf 34 m
   off behind a crypt wall plans round it and reaches the player; the player put in the rock, it
   evades as unreachable. 1465/1465 checks.
 - Cost: a search 0.68 ms and 28 rays on average (rays about 24 µs each), the slowest 17.5 ms. There
   is no queue yet: a plan runs when the brain asks. At the budget's 1 ms a tick, the rare slow one is
   a hitch to watch for when crypts are filled with creatures.
-- Found, not fixed (crypt geometry, for the dungeons work): in a stair hall a ledger stone stands
-  0.29 m proud of the floor across the walk line by its side doorway, and the motor met on the
-  slant wedges on its edge (layout 9 of the probe; noted, not failed).
+- Found and fixed by the dungeons work (de0d5b0): a ledger stone standing 0.29 m proud of a stair
+  hall's floor across its walk line wedged the motor met on the slant; ledgers now collide with
+  their top edges sloped at 45 degrees, and the motor walks 20/20 door to boss. A stall is still
+  printed as a note, not failed: the share is checked.
 
 ## Decisions
 
