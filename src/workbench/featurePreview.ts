@@ -67,7 +67,7 @@ export function buildFeaturePreview(
   const through = rng() * Math.PI;
   const site = { ...planned, x: 0, z: 0, height: baseHeight(0, 0), roadAngles: roadside ? [through, through + Math.PI] : [] };
   // Out past its clearing, where the wood stands as thick as it grows, and a margin of that.
-  const size = Math.ceil((Math.max(site.radius, site.yardRadius + kind.clearing[1]) + WOOD_MARGIN) * 2 / 10) * 10;
+  const size = Math.ceil((Math.max(site.radius, site.yardReach + kind.clearing[1]) + WOOD_MARGIN) * 2 / 10) * 10;
   const half = size / 2;
 
   // The ground as a sampler for the world's layout code: dry land everywhere, at the patch's
@@ -167,8 +167,8 @@ export function buildFeaturePreview(
         featureGap: inReach ? gap : Infinity,
         featureDepth: 0,
         featureClear: inReach ? 1 - smoothstep(inner, outer, gap) : 0,
-        featureStumps: inReach && gap > site.radius - site.yardRadius ? kind.stumps : 0,
-        featureStumpAge: inReach ? 1 - smoothstep(site.radius - site.yardRadius, outer, gap) : 0,
+        featureStumps: inReach && gap > site.radius - site.yardReach ? kind.stumps : 0,
+        featureStumpAge: inReach ? 1 - smoothstep(site.radius - site.yardReach, outer, gap) : 0,
         padGap: levelled?.edge ?? Infinity,
         spill: 0,
         spillMaterial: -1,
@@ -207,12 +207,12 @@ export function buildFeaturePreview(
       const g = Math.hypot(gx, gz);
       return { height: sample.height, surfaceHeight: surface, slope: g / Math.sqrt(1 + g * g), sample };
     };
-    const full = site.radius - site.yardRadius + outer;
+    const full = site.radius - site.yardReach + outer;
     if (!Number.isFinite(offset.off)) offset = { x: 0, z: 0, off: 0 };
     for (const tree of createTreeScatter(seed, content)(offset.x - half, offset.z - half, offset.x + half, offset.z + half, probe)) {
       tree.x -= offset.x;
       tree.z -= offset.z;
-      (Math.hypot(tree.x, tree.z) < site.yardRadius + full + NEAR_WOOD ? trees : farTrees).push(tree);
+      (Math.hypot(tree.x, tree.z) < site.yardReach + full + NEAR_WOOD ? trees : farTrees).push(tree);
     }
   }
   return { size, heightAt, placed, lines, pads: padList, yards: layout.yard.level > 0 ? [{ x: layout.yard.x, z: layout.yard.z, radius: layout.yard.level }] : [], trees, farTrees, biome, layout };

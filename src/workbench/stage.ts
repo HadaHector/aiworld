@@ -21,6 +21,7 @@ import type { ConvexDesc } from "../world/collision/shapes";
 import { NO_WEATHER } from "../world/weather/weatherTypes";
 import type { BuildingModel } from "../world/buildings/buildingTypes";
 import { DEFAULT_PAD_BLEND, type Pad } from "../world/settlements/padField";
+import { offsetPolygon } from "../world/features/yardShape";
 import { placedAxes } from "../world/buildings/buildingCollision";
 import { appendModel, bakeBuildingTextures, bakeModelLight, createBuildingMaterial, createBuildingMesh, emptyGeometry, type BuildingMaterial } from "../world/buildings/buildingMesh";
 
@@ -100,6 +101,10 @@ function placedPieces(model: BuildingModel, at: { x: number; y: number; z: numbe
 function drawPads(scene: Scene, pads: Pad[], height: (x: number, z: number) => number): void {
   const outline = (pad: Pad, grow: number, onGround: boolean): Vector3[] => {
     const at = (x: number, z: number): Vector3 => new Vector3(x, (onGround ? height(x, z) : pad.y) + 0.12, z);
+    if (pad.polygon) {
+      const corners = grow > 0 ? offsetPolygon(pad.polygon, grow) : pad.polygon;
+      return [...corners, corners[0]].map((p) => at(p.x, p.z));
+    }
     if (pad.radius > 0) {
       return Array.from({ length: 65 }, (_, k) => {
         const a = (k / 64) * Math.PI * 2;

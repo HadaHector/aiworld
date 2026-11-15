@@ -1,5 +1,7 @@
 import type { House, SettlementLayout } from "./settlementLayout";
 import type { CompoundLayout } from "../features/compound";
+import { polygonGap } from "../features/yardShape";
+import type { CellPoint } from "../cells/cellGrid";
 import { PAD_BLEND_MAX, PAD_BLEND_MIN, PAD_PAINT_OFFSET, PAD_SIDE_SLOPE } from "./settlementConfig";
 
 /** Ground that has to be level: a house footprint (a rectangle) or a square or a yard (a circle). */
@@ -21,6 +23,9 @@ export interface Pad {
   /** Not painted as a road: levelled only - a compound's, whose own ground layer paints it (see
    *  FeatureKindDef.ground). */
   unpainted?: boolean;
+  /** A polygon of level ground (a polygon yard's - see yardShape.ts), its corners in the world: the
+   *  pad is inside it, and `radius` reaches round it from (x, z). */
+  polygon?: CellPoint[];
 }
 
 /**
@@ -88,6 +93,7 @@ function bucketKey(gx: number, gz: number): number {
 function gapTo(pad: Pad, x: number, z: number): number {
   const dx = x - pad.x;
   const dz = z - pad.z;
+  if (pad.polygon) return polygonGap(pad.polygon, x, z);
   if (pad.radius > 0) return Math.max(0, Math.hypot(dx, dz) - pad.radius);
   const along = Math.abs(dx * pad.ux + dz * pad.uz) - pad.hw;
   const across = Math.abs(-dx * pad.uz + dz * pad.ux) - pad.hd;
@@ -122,7 +128,7 @@ export function propPads(layouts: CompoundLayout[]): Pad[] {
 export function compoundPads(layouts: CompoundLayout[]): Pad[] {
   return layouts.flatMap(({ yard, buildings, padBlend }) => [
     // A roadside one has no yard of its own.
-    ...(yard.level > 0 ? [{ x: yard.x, z: yard.z, y: yard.y, ux: 1, uz: 0, hw: 0, hd: 0, radius: yard.level, blend: padBlend, unpainted: true }] : []),
+    ...(yard.level > 0 ? [{ x: yard.x, z: yard.z, y: yard.y, ux: 1, uz: 0, hw: 0, hd: 0, radius: yard.level, blend: padBlend, unpainted: true, polygon: yard.levelOutline }] : []),
     // A roadside one's buildings each have a path up to the door, which would otherwise keep its own
     // grade across the pad's front: they hold their level beside it - standing back far enough from
     // the road not to reach it.

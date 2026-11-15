@@ -57,6 +57,7 @@ import {
   TRAIL_DESTINATIONS,
   type CompoundBuildingSpec,
   type CompoundSpec,
+  type YardPolygonSpec,
   type CompoundTrailSpec,
   type FeatureChance,
   type FeatureKindDef,
@@ -64,6 +65,7 @@ import {
   type QuarrySpec,
   type QuestPlaceDef,
 } from "../features/featureTypes";
+import { MAX_YARD_ARC } from "../features/yardShape";
 import {
   BUILDING_GENERATORS,
   BUILDING_PART_GENERATORS,
@@ -1685,7 +1687,19 @@ function readCompound(compound: RawObject, reader: Reader, buildings: Map<string
   const site = reader.object(compound.site, "compound.site");
   reader.onlyKeys(site, "compound.site", ["grade", "cover", "nearWater", "fromSettlements"]);
   const yard = reader.object(compound.yard, "compound.yard");
-  reader.onlyKeys(yard, "compound.yard", ["radius", "width"]);
+  reader.onlyKeys(yard, "compound.yard", ["radius", "width", "shape", "points", "weights"]);
+  const yardShape = yard.shape === undefined ? "circle" : reader.oneOf(yard, "shape", "compound.yard", ["circle", "polygon"] as const);
+  let polygon: YardPolygonSpec | null = null;
+  if (yardShape === "polygon") {
+    // A polygon of 4-6 corners, its arcs weighted 4-8 unless said otherwise: balanced, convex, its middle inside.
+    const points = yard.points === undefined ? ([4, 6] as [number, number]) : reader.range(yard, "points", "compound.yard", { allowEqual: true });
+    const weights = yard.weights === undefined ? ([4, 8] as [number, number]) : reader.range(yard, "weights", "compound.yard", { allowEqual: true });
+    if (!Number.isInteger(points[0]) || !Number.isInteger(points[1]) || points[0] < 3 || points[1] > 12) reader.fail("compound.yard.points", `expected whole numbers from 3 to 12, got [${points[0]}, ${points[1]}]`);
+    else if (weights[0] <= 0) reader.fail("compound.yard.weights", "are more than 0");
+    else if (weights[1] / (weights[1] + (points[0] - 1) * weights[0]) > MAX_YARD_ARC) reader.fail("compound.yard.weights", `could roll an arc of more than ${Math.round(MAX_YARD_ARC * 360)} degrees of its circle - a lopsided yard (narrow the weights, or use more points)`);
+    polygon = { points, weights };
+  } else if (yard.points !== undefined || yard.weights !== undefined) reader.fail("compound.yard", "`points` and `weights` are for `shape: \"polygon\"`");
+  if (polygon && compound.arrangement !== "ring") reader.fail("compound.yard.shape", "a polygon yard is for a `ring` compound");
   const cover = reader.range(site, "cover", "compound.site", { allowEqual: true });
   if (cover[0] < 0 || cover[1] > 1) reader.fail("compound.site.cover", `expected a range within 0-1, got [${cover[0]}, ${cover[1]}]`);
   const trails = reader.optionalArray(compound, "trails", "compound").map((raw, i): CompoundTrailSpec => {
@@ -1726,7 +1740,7 @@ function readCompound(compound: RawObject, reader: Reader, buildings: Map<string
       nearWater: site.nearWater === undefined ? null : reader.number(site, "nearWater", "compound.site", { min: 0 }),
       fromSettlements: site.fromSettlements === undefined ? null : reader.number(site, "fromSettlements", "compound.site", { min: 0 }),
     },
-    yard: { radius: reader.range(yard, "radius", "compound.yard", { allowEqual: true }), width: yard.width === undefined ? null : reader.range(yard, "width", "compound.yard", { allowEqual: true }) },
+    yard: { radius: reader.range(yard, "radius", "compound.yard", { allowEqual: true }), width: yard.width === undefined ? null : reader.range(yard, "width", "compound.yard", { allowEqual: true }), polygon },
     pads,
     arrangement: reader.oneOf(compound, "arrangement", "compound", COMPOUND_ARRANGEMENTS),
     trails,
@@ -1802,10 +1816,17 @@ function readBoundary(raw: unknown, reader: Reader, props: Map<string, PropDef>)
   const path = "compound.boundary";
   const obj = reader.object(raw, path);
   reader.onlyKeys(obj, path, ["wall", "openings"]);
-  const wallId = reader.string(obj, "wall", path);
-  const wall = props.get(wallId);
-  if (!wall) reader.fail(`${path}.wall`, `no prop "${wallId}" (known: ${[...props.keys()].join(", ") || "none"})`);
-  else if (!isLineProp(wall)) reader.fail(`${path}.wall`, `"${wallId}" is not laid along a line (its generator "${wall.generator}" has no line - a wall or a fence has)`);
+  // One prop, or a list of them to roll between: a fold's wall may be drystone or rails.
+  const rawWall = obj.wall;
+  const wallIds = Array.isArray(rawWall) ? rawWall.map((id, i) => reader.string({ wall: id }, "wall", `${path}.wall[${i}]`)) : [reader.string(obj, "wall", path)];
+  if (wallIds.length === 0) reader.fail(`${path}.wall`, "names a prop, or a list of them");
+  const walls: PropDef[] = [];
+  for (const wallId of wallIds) {
+    const wall = props.get(wallId);
+    if (!wall) reader.fail(`${path}.wall`, `no prop "${wallId}" (known: ${[...props.keys()].join(", ") || "none"})`);
+    else if (!isLineProp(wall)) reader.fail(`${path}.wall`, `"${wallId}" is not laid along a line (its generator "${wall.generator}" has no line - a wall or a fence has)`);
+    else walls.push(wall);
+  }
   const openings = reader.optionalArray(obj, "openings", path).flatMap((rawOpening, i): BoundaryOpeningSpec[] => {
     const at = `${path}.openings[${i}]`;
     const entry = reader.object(rawOpening, at);
@@ -1835,7 +1856,7 @@ function readBoundary(raw: unknown, reader: Reader, props: Map<string, PropDef>)
     if (where !== "anywhere" && entry.count !== undefined) reader.fail(`${at}.count`, "only an opening `anywhere` takes a count - one at a road or a trail is one to each");
     return [{ at: where, kind, gate, width, count, chance: reader.optionalNumber(entry, "chance", at, 1, { min: 0, max: 1 }) }];
   });
-  return wall && isLineProp(wall) ? { wall, openings } : null;
+  return walls.length > 0 && walls.length === wallIds.length ? { walls, openings } : null;
 }
 
 /** A propGroups/ file - see PropGroupDef: its members, each a prop at a place in the group or on an

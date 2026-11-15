@@ -156,8 +156,18 @@ export interface GravesSpec {
 /** A compound's boundary: a line prop (a wall, a fence - see PropGenerator.line) round it, between
  *  its buildings' sides - each building standing in it as part of it - broken by its openings. */
 export interface CompoundBoundarySpec {
-  wall: PropDef;
+  /** The line props it may be made of (a `wall` naming one, or a list of them): one is rolled for
+   *  each compound, all round it. */
+  walls: PropDef[];
   openings: BoundaryOpeningSpec[];
+}
+
+/** A `ring` compound's yard as a polygon, not a round (`yard: { shape: "polygon", points, weights }`):
+ *  `points` corners (a whole number, rolled in the range) on the yard's circle, the arcs between
+ *  them in proportion to as many weights rolled in `weights` - see yardShape.ts. */
+export interface YardPolygonSpec {
+  points: [number, number];
+  weights: [number, number];
 }
 
 /**
@@ -174,7 +184,7 @@ export interface CompoundSpec {
   site: { grade: [number, number]; cover: [number, number]; nearWater: number | null; fromSettlements: number | null };
   /** The yard: a level round of trodden ground, this radius - or, `rows`, half its length, `width`
    *  across (null for the others). */
-  yard: { radius: [number, number]; width: [number, number] | null };
+  yard: { radius: [number, number]; width: [number, number] | null; polygon: YardPolygonSpec | null };
   /** How the level ground under its yard, buildings and props blends back to the ground round it -
    *  see PadBlend: `slope` the steepest its banks stand, `blend` how narrow and wide they may get -
    *  and `spill`, the ground under and round each of them painted (trodden earth), or none. */

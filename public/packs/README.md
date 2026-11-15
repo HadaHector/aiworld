@@ -940,6 +940,16 @@ already - as far from those as it can be, so they spread - and one that fits now
 What it takes up is its footprint: the rectangle its members fill, turned as it is set down.
 The ground under each is levelled to it.
 
+A `ring` compound's yard is a round by default. `yard: { shape: "polygon", points: [4, 6], weights: [4, 8],
+radius }` makes it a polygon instead, rolled per site: `points` corners (a whole number in the range) on a
+circle round its middle, the arcs between them in proportion to as many weights rolled in `weights` (both
+optional, those values the defaults - so the shape is balanced, never a sliver: no arc may roll past 150
+degrees of the circle, which the reader checks), from a random start angle, and scaled so its area is that
+of a round of `radius`. Each building stands against an edge of the rim (the yard moved out by 5 m), its
+front parallel to the edge; the wall, the pads, the ground paint (`featureGap`) and the props at `yard`
+and `yardEdge` follow the polygon. The sheepfold is the first (`core/features/sheepfold.json5`); the
+others stay round.
+
 A `rows` compound (a churchyard) lays its yard out long: `yard: { radius, width }` - `radius` half
 its length - a building at its `head` and one at its `foot` (a building's `place`; `side` ones
 stand outside its far long side), a path down its middle between their doors, its road's lane in
@@ -950,7 +960,7 @@ its foot), by weight - so the oldest graves lie by the chapel. A group's front i
 Its boundary runs round the yard, through its head and foot buildings.
 
 A compound may have a `boundary` - a wall or a fence round it: `{ wall, openings }`, `wall` a line
-prop (below) and `openings` where it is broken, each `{ at, gate | gap | breach, count, chance }`:
+prop (below) - or a list of them, one rolled for each compound, `wall: ["drystoneWall", "railFence"]` - and `openings` where it is broken, each `{ at, gate | gap | breach, count, chance }`:
 `at` is `road` (across each lane, where a road comes in), `trail` (where each trail leaves) or
 `anywhere` (`count` of it, rolled, each where the whole of it is wall, spread out); in it stands a
 `gate` (a prop - its width the gap's), nothing (`gap: [min, max]` metres) or the wall fallen

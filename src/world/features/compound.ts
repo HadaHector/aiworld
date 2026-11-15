@@ -18,6 +18,7 @@ import type { PropDef, Spill } from "../props/propTypes";
 import { generateLine, type LineEnd, type LineRun } from "../props/propGenerator";
 import type { BuildingModel } from "../buildings/buildingTypes";
 import type { Vec3 } from "../buildings/buildingGeometry";
+import { convexHull, offsetPolygon, perimeter, pointAt, polygonGap, rayHit, reachOf, rollYardUnit, scaled, translated } from "./yardShape";
 
 /**
  * A compound (see FEATURES.md): a yard with buildings round it, entrances where its roads arrive and
@@ -49,6 +50,11 @@ export interface CompoundSite {
   /** The ground at its centre. */
   height: number;
   yardRadius: number;
+  /** A polygon yard's corners round its middle (`yard.shape: "polygon"`, see yardShape.ts) - its
+   *  area that of a round of `yardRadius` - or null for a round one. */
+  yardPolygon: CellPoint[] | null;
+  /** How far the yard reaches from its middle: `yardRadius`, or a polygon's furthest corner. */
+  yardReach: number;
   /** A `rows` one's yard's width (its yardRadius half its length); 0 for the others. */
   yardWidth: number;
   /** The circle it stands within: its gates are on it, and other roads keep out of it. */
@@ -76,8 +82,10 @@ export interface CompoundLayout {
   x: number;
   z: number;
   /** The yard: a round of `radius` at `y` - and the ground levelled with it out to `level`, under
-   *  the buildings' fronts, corners and all, so each is come up to on the level. */
-  yard: { x: number; z: number; y: number; radius: number; level: number };
+   *  the buildings' fronts, corners and all, so each is come up to on the level. A polygon yard
+   *  (see CompoundSite.yardPolygon) has `outline` too - its corners - and a polygon of level ground,
+   *  `levelOutline`, in place of the round: `radius` and `level` then reach to their furthest corners. */
+  yard: { x: number; z: number; y: number; radius: number; level: number; outline?: CellPoint[]; levelOutline?: CellPoint[] };
   entrances: CompoundEntrance[];
   /** In from each gate to the yard's rim - narrow road lines, graded from the road's level to the
    *  yard's. */
@@ -198,11 +206,47 @@ export function planCompound(
     const reach = (place: CompoundPlace): number => Math.max(0, ...buildings.filter((b) => b.place === place).map((b) => Math.max(b.depth, b.width) + ROWS_END_GAP));
     const along = yardRadius + Math.max(reach("head"), reach("foot"));
     const across = yardWidth / 2 + ROWS_WALL_SET_BACK + reach("side");
-    return { yardRadius, yardWidth, radius: Math.hypot(along, across) + RING_MARGIN, buildings, trails, seed: Math.floor(rng() * 0x7fffffff) };
+    return { yardRadius, yardPolygon: null, yardReach: yardRadius, yardWidth, radius: Math.hypot(along, across) + RING_MARGIN, buildings, trails, seed: Math.floor(rng() * 0x7fffffff) };
   }
 
   // A road running through takes the rim twice, as two gates would.
   const entrances = (spec.arrangement === "roadside" ? 2 : (kind.road?.links[1] ?? 0)) + trails.length;
+  // A polygon yard: its corners rolled once on the unit circle, scaled to the yard's radius as it grows.
+  const unit = spec.yard.polygon ? rollYardUnit(spec.yard.polygon.points, spec.yard.polygon.weights, rng) : null;
+  if (unit) {
+    // Its rim (the yard moved out by SETBACK) is what the buildings and entrances share, in metres.
+    const rimLength = (): number => perimeter(offsetPolygon(scaled(unit, yardRadius), SETBACK));
+    const needsMetres = (): number => entrances * 2 * LANE_CLEARANCE + buildings.reduce((sum, b) => sum + b.width + BUILDING_GAP, 0);
+    const maxPolygonYard = spec.yard.radius[1] * YARD_MAX_GROWTH;
+    while (needsMetres() > rimLength() * RIM_FILL) {
+      if (yardRadius < maxPolygonYard) {
+        yardRadius = Math.min(maxPolygonYard, yardRadius + 1);
+        continue;
+      }
+      const optional = buildings.map((b) => !b.required).lastIndexOf(true);
+      if (optional < 0) break;
+      buildings.splice(optional, 1);
+    }
+    const yardPolygon = scaled(unit, yardRadius);
+    const rim = offsetPolygon(yardPolygon, SETBACK);
+    // The furthest of the buildings' corners: each stands on an edge of the rim, its middle
+    // somewhere along it and its width reaching half past, out to its depth.
+    let furthest = reachOf(rim);
+    for (let i = 0; i < rim.length; i++) {
+      const a = rim[i];
+      const b = rim[(i + 1) % rim.length];
+      const length = Math.hypot(b.x - a.x, b.z - a.z) || 1;
+      const dx = (b.x - a.x) / length;
+      const dz = (b.z - a.z) / length;
+      const out = a.x * dz - a.z * dx;
+      const along = [a.x * dx + a.z * dz, b.x * dx + b.z * dz];
+      for (const building of buildings) {
+        const edge = Math.max(Math.abs(along[0]), Math.abs(along[1])) + building.width / 2;
+        furthest = Math.max(furthest, Math.hypot(Math.abs(out) + building.depth, edge));
+      }
+    }
+    return { yardRadius, yardPolygon, yardReach: reachOf(yardPolygon), yardWidth: 0, radius: furthest + RING_MARGIN, buildings, trails, seed: Math.floor(rng() * 0x7fffffff) };
+  }
   const needed = (): number => {
     const r = yardRadius + SETBACK;
     let angle = entrances * 2 * halfAngle(LANE_CLEARANCE * 2, r);
@@ -223,6 +267,8 @@ export function planCompound(
   const furthest = Math.max(yardRadius + SETBACK, ...buildings.map((b) => Math.hypot(yardRadius + SETBACK + b.depth, b.width / 2)));
   return {
     yardRadius,
+    yardPolygon: null,
+    yardReach: yardRadius,
     yardWidth: 0,
     radius: furthest + RING_MARGIN,
     buildings,
@@ -301,19 +347,22 @@ export function evaluateCompound(
 
 /** Distance past a compound's yard, 0 inside it. */
 export function compoundGap(site: CompoundSite, x: number, z: number): number {
+  if (site.yardPolygon) return polygonGap(site.yardPolygon, x - site.x, z - site.z);
   return Math.max(0, Math.hypot(x - site.x, z - site.z) - site.yardRadius);
 }
 
 /** The arcs of the rim already taken - by entrances and by buildings - as [centre, half-width]. */
 type Arc = [number, number];
 
-function angleBetween(a: number, b: number): number {
-  const d = Math.abs(a - b) % (Math.PI * 2);
-  return d > Math.PI ? Math.PI * 2 - d : d;
+/** The way round between two places on a loop of length `period` (a circle's angle, or a polygon's
+ *  perimeter in metres). */
+function angleBetween(a: number, b: number, period = Math.PI * 2): number {
+  const d = Math.abs(a - b) % period;
+  return d > period / 2 ? period - d : d;
 }
 
-function overlaps(arcs: Arc[], centre: number, half: number): boolean {
-  return arcs.some(([c, h]) => angleBetween(c, centre) < h + half);
+function overlaps(arcs: Arc[], centre: number, half: number, period = Math.PI * 2): boolean {
+  return arcs.some(([c, h]) => angleBetween(c, centre, period) < h + half);
 }
 
 /** How far a point is from a polyline. */
@@ -355,6 +404,7 @@ export function layoutCompound(
 ): CompoundLayout {
   if (site.roadAngles.length > 0) return layoutRoadside(featureId, kind, site, roadLines, sampleTerrain, worldSeed);
   if (kind.compound!.arrangement === "rows") return layoutRows(featureId, kind, site, gates, roadLines, sampleTerrain, worldSeed);
+  if (site.yardPolygon) return layoutPolygonRing(featureId, kind, site, gates, roadLines, sampleTerrain, worldSeed);
   const rng = mulberry32(deriveSeed(site.seed, COMPOUND_LAYOUT_SALT));
   const { x, z, yardRadius } = site;
   const rim = yardRadius + SETBACK;
@@ -486,6 +536,175 @@ export function layoutCompound(
   return { featureId, kindId: kind.id, x, z, yard: { x, z, y, radius: yardRadius, level }, entrances, lanes, trails, buildings, dropped, droppedRequired, props, droppedProps, padBlend: { slope: kind.compound!.pads.slope, min: kind.compound!.pads.blend[0], max: kind.compound!.pads.blend[1] }, padSpill: kind.compound!.pads.spill, walls: boundary.walls };
 }
 
+/** A building keeps this far from a lane's middle - a polygon yard's buildings are found by where
+ *  they stand, not only by the stretch of rim they take. */
+const LANE_BUILDING_CLEARANCE = 4;
+
+/**
+ * A `ring` compound whose yard is a polygon (`yard.shape: "polygon"`, yardShape.ts): laid out as the
+ * round one is - lanes in from the gates, its buildings round the rim, trails out, boundary, props -
+ * but round the polygon. Each building stands against an edge of the rim (the yard moved out by
+ * SETBACK), its front parallel to the edge, facing in. Where along the rim is measured in metres
+ * round it, not by angle, and a building must clear the others as footprints too, for two on
+ * neighbouring edges may meet at the corner between them.
+ */
+function layoutPolygonRing(
+  featureId: number,
+  kind: FeatureKindDef,
+  site: CompoundSite,
+  gates: SettlementGate[],
+  roadLines: RoadLine[],
+  sampleTerrain: TerrainSampler,
+  worldSeed: number,
+): CompoundLayout {
+  const rng = mulberry32(deriveSeed(site.seed, COMPOUND_LAYOUT_SALT));
+  const { x, z, yardRadius } = site;
+  const yardRel = site.yardPolygon!;
+  const rimRel = offsetPolygon(yardRel, SETBACK);
+  const gateRel = offsetPolygon(yardRel, SETBACK + GATE_SET_BACK);
+  const total = perimeter(rimRel);
+
+  // The yard's level: the ground's mean over it.
+  let sum = sampleTerrain(x, z).height;
+  for (let k = 0; k < 8; k++) {
+    const a = (k / 8) * Math.PI * 2;
+    sum += sampleTerrain(x + Math.cos(a) * yardRadius * 0.7, z + Math.sin(a) * yardRadius * 0.7).height;
+  }
+  const y = sum / 9;
+  const rimPoint = (angle: number, r: number): CellPoint => ({ x: x + Math.cos(angle) * r, z: z + Math.sin(angle) * r });
+
+  // The gates' lanes, in to the yard's edge. `taken` is metres round the rim.
+  const taken: Arc[] = [];
+  const entrances: CompoundEntrance[] = [];
+  const lanes: RoadLine[] = [];
+  for (const gate of gates) {
+    const angle = Math.atan2(gate.z - z, gate.x - x);
+    entrances.push({ kind: "road", angle });
+    taken.push([rayHit(rimRel, angle).s, LANE_CLEARANCE]);
+    const inner = rimPoint(angle, rayHit(yardRel, angle).distance);
+    lanes.push({ points: [{ x: gate.x, z: gate.z }, inner], heights: [gate.roadHeight ?? sampleTerrain(gate.x, gate.z).height, y], widthScale: LANE_WIDTH, taperEnds: false });
+  }
+
+  // Buildings against the rim's edges.
+  const buildings: House[] = [];
+  let dropped = 0;
+  let droppedRequired = 0;
+  const floor = y + HOUSE_FLOOR_ABOVE_STREET;
+  const start = rng() * total;
+  const boxOf = (house: House): Box => ({ x: house.x, z: house.z, ax: house.frontZ, az: -house.frontX, hw: house.width / 2, hd: house.depth / 2 });
+  for (const building of site.buildings) {
+    const half = (building.width + BUILDING_GAP) / 2;
+    let best: { s: number; cost: number } | null = null;
+    let bestAny: { s: number; cost: number } | null = null;
+    for (let step = 0; step < RING_STEPS; step++) {
+      const s = start + (step / RING_STEPS) * total;
+      if (overlaps(taken, s, half, total)) continue;
+      const edge = pointAt(rimRel, s);
+      // Out from the yard (w) and along the edge (u).
+      const wx = edge.nx;
+      const wz = edge.nz;
+      const cx = x + edge.x + wx * (building.depth / 2);
+      const cz = z + edge.z + wz * (building.depth / 2);
+      const box: Box = { x: cx, z: cz, ax: -wz, az: wx, hw: building.width / 2, hd: building.depth / 2 };
+      // At a corner two buildings on neighbouring edges may reach into each other.
+      if (buildings.some((other) => boxGap(boxOf(other), box) < BUILDING_GAP) || lanes.some((lane) => lineToBox(lane.points, box) < LANE_BUILDING_CLEARANCE)) continue;
+      let worst = 0;
+      let totalOff = 0;
+      let dry = true;
+      for (const [a, b] of [[-1, -1], [1, -1], [1, 1], [-1, 1], [0, -1], [0, 1], [-1, 0], [1, 0], [0, 0]]) {
+        const sample = sampleTerrain(cx - wz * (building.width / 2) * a + wx * (building.depth / 2) * b, cz + wx * (building.width / 2) * a + wz * (building.depth / 2) * b);
+        if (!sample.isLand || sample.lakeFactor > MAX_LAKE_FACTOR) dry = false;
+        const off = Math.abs(sample.height - floor);
+        worst = Math.max(worst, off);
+        totalOff += off;
+      }
+      if (!dry) continue;
+      const cost = totalOff / 9 + rng() * 0.3;
+      if (!bestAny || cost < bestAny.cost) bestAny = { s, cost };
+      if (worst <= HOUSE_MAX_CUT_FILL && (!best || cost < best.cost)) best = { s, cost };
+    }
+    const chosen = best ?? (building.required ? bestAny : null);
+    if (!chosen) {
+      dropped++;
+      if (building.required) droppedRequired++;
+      continue;
+    }
+    taken.push([chosen.s, half]);
+    const edge = pointAt(rimRel, chosen.s);
+    buildings.push({
+      x: x + edge.x + edge.nx * (building.depth / 2),
+      z: z + edge.z + edge.nz * (building.depth / 2),
+      y: floor,
+      // Its front to the yard, square to its edge.
+      frontX: -edge.nx,
+      frontZ: -edge.nz,
+      width: building.width,
+      depth: building.depth,
+      building: building.building,
+      variant: building.variant,
+    });
+  }
+
+  // The yard's level ground: the yard moved out under the buildings' fronts - a wide one's corners
+  // reaching past the rim's corners - so each is come up to on the level.
+  const levelPoints = offsetPolygon(yardRel, SETBACK + LEVEL_UNDER_FRONTS);
+  for (const house of buildings) {
+    const front = { x: house.x + house.frontX * (house.depth / 2) - x, z: house.z + house.frontZ * (house.depth / 2) - z };
+    const ux = -house.frontZ;
+    const uz = house.frontX;
+    for (const side of [-1, 1]) levelPoints.push({ x: front.x + ux * side * (house.width / 2 + LEVEL_UNDER_FRONTS) - house.frontX * LEVEL_UNDER_FRONTS, z: front.z + uz * side * (house.width / 2 + LEVEL_UNDER_FRONTS) - house.frontZ * LEVEL_UNDER_FRONTS });
+  }
+  const levelRel = convexHull(levelPoints);
+
+  // Then the trails, out through the rim the gates and the buildings leave.
+  const trails: RoadLine[] = [];
+  const reach = site.radius + Math.max(0, ...site.trails.map((t) => t.length)) + TRAIL_ROAD_CLEARANCE;
+  const nearbyRoads = roadLines.filter((line) => distanceToLine(line.points, x, z) < reach);
+  const roadClearance = (p: CellPoint): number => Math.min(Infinity, ...nearbyRoads.map((line) => distanceToLine(line.points, p.x, p.z)));
+  for (const trail of site.trails) {
+    const bend = (rng() - 0.5) * 0.6;
+    const pathFor = (angle: number): CellPoint[] => {
+      const steps = Math.max(2, Math.ceil(trail.length / 10));
+      const from = rayHit(yardRel, angle).distance;
+      return Array.from({ length: steps + 1 }, (_, k) => {
+        const t = k / steps;
+        return rimPoint(angle + bend * t * t, from + trail.length * t);
+      });
+    };
+    let best: { angle: number; path: CellPoint[]; clear: boolean; spread: number; clearance: number } | null = null;
+    for (let k = 0; k < TRAIL_DIRECTIONS; k++) {
+      const angle = (k / TRAIL_DIRECTIONS) * Math.PI * 2;
+      const s = rayHit(rimRel, angle).s;
+      if (overlaps(taken, s, LANE_CLEARANCE, total)) continue;
+      const path = pathFor(angle);
+      if (buildings.some((house) => lineToBox(path, boxOf(house)) < 2)) continue;
+      const clearance = Math.min(...path.map(roadClearance));
+      const spread = taken.length === 0 ? total / 2 : Math.min(...taken.map(([c]) => angleBetween(c, s, total)));
+      const candidate = { angle, path, clear: clearance >= TRAIL_ROAD_CLEARANCE, spread, clearance };
+      if (!best || (candidate.clear && !best.clear) || (candidate.clear === best.clear && (candidate.clear ? candidate.spread > best.spread : candidate.clearance > best.clearance))) best = candidate;
+    }
+    if (!best) continue;
+    const end = best.path.findIndex((p) => roadClearance(p) < TRAIL_ROAD_CLEARANCE);
+    const points = end < 0 ? best.path : best.path.slice(0, end);
+    if (points.length < 2 || Math.hypot(points[points.length - 1].x - x, points[points.length - 1].z - z) < site.radius + TRAIL_MIN_LENGTH) continue;
+    entrances.push({ kind: "trail", angle: best.angle });
+    taken.push([rayHit(rimRel, best.angle).s, LANE_CLEARANCE]);
+    const heights = points.map((p, k) => (k === 0 ? y : sampleTerrain(p.x, p.z).height));
+    trails.push({ points, heights, widthScale: TRAIL_WIDTH, taperEnds: false });
+  }
+
+  const boundary = kind.compound!.boundary ? layoutBoundary(kind.compound!.boundary, worldSeed, rng, buildings, lanes, trails, sampleTerrain, translated(gateRel, x, z)) : { walls: [], gates: [] };
+  const { props, droppedProps } = placeProps(kind.compound!, site, worldSeed, rng, buildings, lanes, trails, nearbyRoads, sampleTerrain, { x, z, yardRadius: site.yardReach, rim: reachOf(rimRel), shape: { yard: yardRel, rim: rimRel, gate: gateRel } }, boundary);
+  return {
+    featureId, kindId: kind.id, x, z,
+    yard: { x, z, y, radius: site.yardReach, level: reachOf(levelRel), outline: translated(yardRel, x, z), levelOutline: translated(levelRel, x, z) },
+    entrances, lanes, trails, buildings, dropped, droppedRequired, props, droppedProps,
+    padBlend: { slope: kind.compound!.pads.slope, min: kind.compound!.pads.blend[0], max: kind.compound!.pads.blend[1] },
+    padSpill: kind.compound!.pads.spill,
+    walls: boundary.walls,
+  };
+}
+
 /** A boundary is followed this finely - for where buildings and openings break it. */
 const BOUNDARY_STEP = 0.25;
 /** A boundary keeps this clear of a building's footprint (eaves and all - so its end stands under
@@ -596,6 +815,8 @@ function layoutBoundary(
   outlinePoints: CellPoint[],
   anywhereAllowed: ((p: CellPoint) => boolean) | null = null,
 ): { walls: WallRun[]; gates: PlacedProp[] } {
+  // Of several walls it may be made of, one for the whole boundary (no roll when there is but one).
+  const wallProp = spec.walls.length > 1 ? spec.walls[Math.floor(rng() * spec.walls.length)] : spec.walls[0];
   const outline = outlineOf(outlinePoints);
   const steps = Math.max(16, Math.ceil(outline.length / BOUNDARY_STEP));
   const step = outline.length / steps;
@@ -722,7 +943,7 @@ function layoutBoundary(
     while (i + length < steps && kindOf((start + i + length) % steps) === kind && (kind !== "breach" || at[(start + i + length) % steps] === at[first])) length++;
     if (kind !== "stop") {
       walls.push({
-        prop: spec.wall,
+        prop: wallProp,
         variant: Math.floor(rng() * WALL_VARIANT_SPACE),
         points: pointsFor(first, closed ? steps : length),
         heights: [],
@@ -1156,7 +1377,7 @@ function placeProps(
   trails: RoadLine[],
   roads: RoadLine[],
   sampleTerrain: TerrainSampler,
-  at: { x: number; z: number; yardRadius: number; rim: number },
+  at: { x: number; z: number; yardRadius: number; rim: number; shape?: { yard: CellPoint[]; rim: CellPoint[]; gate: CellPoint[] } },
   boundary: { walls: WallRun[]; gates: PlacedProp[] } = { walls: [], gates: [] },
 ): { props: PlacedProp[]; droppedProps: string[] } {
   // The boundary's gates are down already, and its wall in the way.
@@ -1191,8 +1412,9 @@ function placeProps(
   };
   // A gate stands across its lane: only the other ways are kept clear of it.
   // One set before a building's front stands on its apron, off the path to its door.
-  const fits = (box: Box, limit: number | null, onTrail: RoadLine | null, acrossLane: RoadLine | null = null, onApron = false): boolean => {
-    if (limit !== null && corners(box).some((p) => Math.hypot(p.x - at.x, p.z - at.z) > limit)) return false;
+  const fits = (box: Box, limit: number | CellPoint[] | null, onTrail: RoadLine | null, acrossLane: RoadLine | null = null, onApron = false): boolean => {
+    // Within a round of this radius, or - a polygon yard - inside that polygon.
+    if (limit !== null && corners(box).some((p) => (typeof limit === "number" ? Math.hypot(p.x - at.x, p.z - at.z) > limit : polygonGap(limit, p.x - at.x, p.z - at.z) > 0))) return false;
     if (!acrossLane && paths.some((path) => lineToBox(path, box) < YARD_PATH_CLEARANCE)) return false;
     if (houseBoxes.some((house) => boxGap(house, box) < PROP_GAP) || (!onApron && aprons.some((apron) => boxGap(apron, box) < 0))) return false;
     if (lanes.some((line) => line !== acrossLane && lineToBox(line.points, box) < PROP_LANE_CLEARANCE)) return false;
@@ -1217,7 +1439,7 @@ function placeProps(
       const r = arranged.reach;
       /** Candidates: where, which way it faces, the trail it lies by, and how far from the middle it
        *  may reach (null: no matter). */
-      const candidates: { x: number; z: number; fx: number; fz: number; trail: RoadLine | null; limit: number | null; lane?: RoadLine; way?: WayOut; front?: boolean }[] = [];
+      const candidates: { x: number; z: number; fx: number; fz: number; trail: RoadLine | null; limit: number | CellPoint[] | null; lane?: RoadLine; way?: WayOut; front?: boolean }[] = [];
       /** Where its footprint lies, set down as a candidate says. */
       const boxAt = (c: (typeof candidates)[number]): Box => {
         const length = Math.hypot(c.fx, c.fz) || 1;
@@ -1252,7 +1474,7 @@ function placeProps(
           for (let s = 0; s < steps; s++) {
             const angle = start + (s / steps) * Math.PI * 2;
             const turn = rng() * Math.PI * 2;
-            candidates.push({ x: at.x + Math.cos(angle) * radius, z: at.z + Math.sin(angle) * radius, fx: Math.sin(turn), fz: Math.cos(turn), trail: null, limit: at.yardRadius });
+            candidates.push({ x: at.x + Math.cos(angle) * radius, z: at.z + Math.sin(angle) * radius, fx: Math.sin(turn), fz: Math.cos(turn), trail: null, limit: at.shape ? at.shape.yard : at.yardRadius });
           }
         }
       } else if (entry.at === "yardEdge") {
@@ -1260,10 +1482,15 @@ function placeProps(
         const start = rng() * Math.PI * 2;
         for (let s = 0; s < PROP_RIM_STEPS; s++) {
           const angle = start + (s / PROP_RIM_STEPS) * Math.PI * 2;
-          for (const radius of [at.rim + r + 0.5, at.rim + r + 3, at.yardRadius - r - 0.5]) {
+          // (A polygon's rim and yard are further or nearer the middle by the way the ray meets
+          // them, and it faces in square to its edge.)
+          const rimHit = at.shape ? rayHit(at.shape.rim, angle) : null;
+          const yardHit = at.shape ? rayHit(at.shape.yard, angle) : null;
+          const facing = yardHit ? Math.atan2(yardHit.nz, yardHit.nx) : angle;
+          for (const radius of [(rimHit ? rimHit.distance : at.rim) + r + 0.5, (rimHit ? rimHit.distance : at.rim) + r + 3, (yardHit ? yardHit.distance : at.yardRadius) - r - 0.5]) {
             if (radius <= r) continue;
             const turn = (rng() - 0.5) * 0.6;
-            candidates.push({ x: at.x + Math.cos(angle) * radius, z: at.z + Math.sin(angle) * radius, fx: -Math.cos(angle + turn), fz: -Math.sin(angle + turn), trail: null, limit: site.radius });
+            candidates.push({ x: at.x + Math.cos(angle) * radius, z: at.z + Math.sin(angle) * radius, fx: -Math.cos(facing + turn), fz: -Math.sin(facing + turn), trail: null, limit: site.radius });
           }
         }
       } else if (entry.at === "byBuilding") {
@@ -1302,8 +1529,10 @@ function placeProps(
         for (const lane of shuffled(open, rng)) {
           const outer = lane.points[0];
           const angle = Math.atan2(outer.z - at.z, outer.x - at.x);
-          const radius = at.rim + GATE_SET_BACK;
-          candidates.push({ x: at.x + Math.cos(angle) * radius, z: at.z + Math.sin(angle) * radius, fx: Math.cos(angle), fz: Math.sin(angle), trail: null, limit: null, lane });
+          // Square to the wall where it crosses the lane.
+          const hit = at.shape ? rayHit(at.shape.gate, angle) : null;
+          const radius = hit ? hit.distance : at.rim + GATE_SET_BACK;
+          candidates.push({ x: at.x + Math.cos(angle) * radius, z: at.z + Math.sin(angle) * radius, fx: hit ? hit.nx : Math.cos(angle), fz: hit ? hit.nz : Math.sin(angle), trail: null, limit: null, lane });
         }
       } else if (entry.at === "road") {
         // Out along a road not signed yet, beside it - either side - its +x towards the road, so a

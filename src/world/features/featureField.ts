@@ -53,7 +53,7 @@ export function createFeatureField(features: FeatureSite[]): FeatureField {
     // and buildings are levelled the same way, after the roads; here it only clears its ground.
     const { quarry, compound } = feature;
     if (!quarry && !compound) continue;
-    const extent = (quarry ? Math.hypot(quarry.halfLength, quarry.halfWidth) : compound!.yardRadius) + reachOf(feature);
+    const extent = (quarry ? Math.hypot(quarry.halfLength, quarry.halfWidth) : compound!.yardReach) + reachOf(feature);
     const gxMin = Math.floor((feature.x - extent) / BUCKET_SIZE);
     const gxMax = Math.floor((feature.x + extent) / BUCKET_SIZE);
     const gzMin = Math.floor((feature.z - extent) / BUCKET_SIZE);
@@ -89,8 +89,8 @@ export function createFeatureField(features: FeatureSite[]): FeatureField {
     const [inner, outer] = nearest.kind.clearing;
     const clear = Math.max(1 - smoothstep(inner, outer, nearestGap), smoothstep(CLEAR_DEPTH[0], CLEAR_DEPTH[1], depth));
     const site = nearest.compound;
-    const stumps = site && nearestGap > site.radius - site.yardRadius ? nearest.kind.stumps : 0;
-    const stumpAge = site ? 1 - smoothstep(site.radius - site.yardRadius, outer, nearestGap) : 0;
+    const stumps = site && nearestGap > site.radius - site.yardReach ? nearest.kind.stumps : 0;
+    const stumpAge = site ? 1 - smoothstep(site.radius - site.yardReach, outer, nearestGap) : 0;
     return { height, kind: nearest.kindIndex, gap: nearestGap, depth, clear, stumps, stumpAge };
   }
 

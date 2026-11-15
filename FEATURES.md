@@ -405,7 +405,7 @@ walked over). It runs round any closed outline - a circle round a `ring`, a rect
   type: "compound",
   compound: {
     site: { grade: [0, 0.12], cover: [0.5, 1], nearWater: 120 },  // gentle, in thick wood, near a river if it can be
-    yard: { shape: "round", radius: [14, 22] },
+    yard: { radius: [14, 22] },  // or { shape: "polygon", points: [4, 6], radius: [8, 12] }: see Yard shape
     arrangement: "ring",
     entrances: [
       { kind: "trail", to: "clearing", length: [40, 90], chance: 0.8 },  // the skid trail; road entrances come from `road.links`
@@ -443,6 +443,36 @@ Before the roads, as a position and a radius only. It works like `evaluateQuarry
   thin wood scores low, and in open ground it is not placed at all.
 - **Radius:** reserved from the yard's largest roll plus the ring of buildings, so the roads keep
   out of it.
+
+#### Yard shape: round or polygon
+
+A `ring` compound's yard is a round, unless its kind says `yard: { shape: "polygon", points: [4, 6],
+weights: [4, 8] }` (yardShape.ts) - a perfect circle is not how a fold or a camp is laid out.
+
+- **Corners.** 4-6 of them (rolled) on the yard's circle, in order round it. The arcs between them
+  are in proportion to as many weights rolled between 4 and 8, from a random start angle. The
+  biggest arc is at most twice the smallest, so the shape is always convex with its middle inside,
+  and no arc can pass 150 degrees (the reader refuses weights that could).
+- **Size.** Scaled so its area is a round's of the same radius. The circle round it that the roads
+  keep out of (and siting judges) grows to the furthest corner and the buildings on the edges.
+- **Buildings.** Each against an edge of the rim (the yard moved out by SETBACK, its corners mitred),
+  its front square to the edge, facing in. Where along the rim is metres round it, not an angle; a
+  building must also clear the others as footprints, for two on neighbouring edges can meet at the
+  corner between them, and clear the lanes.
+- **Entrances.** A road's gate (on the circle) is a ray in to the yard's middle: its lane ends where
+  the ray meets the yard's edge; a trail starts there and goes out the same way.
+- **Boundary.** Round the yard moved out by SETBACK + 3 (a gate's set-back), its corners mitred;
+  its gates stand square to the wall where a lane crosses it.
+- **Ground.** The yard's pad is a polygon (the yard moved out under the buildings' fronts, joined
+  out to their corners: the convex hull), and `featureGap` is the distance to the yard's polygon,
+  so the `ground` paint and the clearing follow the shape.
+- **Props.** `yard` anchors keep inside the polygon; `yardEdge` ones go round it, facing in square
+  to the edge it is on; a `gate` stands across its lane, square to the wall.
+
+Probe: `scripts/probe/yardShape.mjs [kind] [seeds]` lays a polygon-yard kind out over many
+seeds, variants and two grounds (flat, sloped) and checks the shape (convex, balanced), the buildings
+(5 m from the yard, clear of each other and the lanes, on their pads, none dropped), the yard level,
+the props and the wall. The sheepfold is the first kind.
 
 #### Layout
 
