@@ -683,8 +683,13 @@ Props get the same model and colliders views as buildings.
 base material, its trees): sited in the middle of a patch, one or two roads coming in from the
 patch's edge to gates at rolled angles - standing in for the road network - and laid out by the
 world's own code, its yard and pads levelled into the patch, its buildings and props where the
-layout put them, its roads, lanes, trail and trodden yard drawn on the ground, and the wood thinning
-in to its clearing. Variants reroll it; Detail, Colliders and the Ground shape work as for buildings
+layout put them, its ground painted as the world paints it, and the wood thinning in to its
+clearing. The ground is the world's own: the patch is built by `buildChunkGeometry` over a terrain
+sampler that gives the feature's `featureGap`, the roads' `roadGap` (lanes, trail and the roads in) and
+the spill under its props and buildings, and blended by the world's `createMaterialBlender` - the
+biome's base ground (or the one chosen), the road layer, the kind's own `ground` weight graph and the
+spills - so a change to its `weight` or its `pads.spill` shows. The biome's own patches of other
+ground (its material layers) and its tree-cover rules are left out. Variants reroll it; Detail, Colliders and the Ground shape work as for buildings
 (src/workbench/featurePreview.ts), and `Pads` outlines its pads. A settlement or a quarry has no
 preview yet. Since: a compound's `pads` set how wide its banks are; overlapping pads blend smoothly
 (each pulls the ground by its nearness, not the nearest alone - that made a crack where wide banks

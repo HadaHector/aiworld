@@ -1176,14 +1176,14 @@ async function preview3d(token: number, asset: Asset, view: ViewDef, content: Wo
     const far = options.lod === "far";
     setStatus("Laying it out");
     await nextPaint();
-    const built = buildFeaturePreview(kind, content, seed, variant, far, heightFunction(options.shape as GroundShape));
+    const built = buildFeaturePreview(kind, content, seed, variant, far, heightFunction(options.shape as GroundShape), ground.id);
     lastFeature = built;
     if (!built) {
       showMode("none");
       setStatus(`No preview for a ${kind.type} yet - only compounds. The JSON checks out.`);
       return;
     }
-    site = { size: built.size, heightAt: built.heightAt, placed: built.placed, lines: built.lines, yards: built.yards, trees: built.trees, farTrees: built.farTrees, far, pads: options.pads === "on" ? built.pads : undefined };
+    site = { size: built.size, heightAt: built.heightAt, placed: built.placed, ground: built.ground, trees: built.trees, farTrees: built.farTrees, far, pads: options.pads === "on" ? built.pads : undefined };
   } else if (isCharacterFolder(asset.folder)) {
     ground = groundMaterial(content, asset);
     if (grassOn) grass = ground.grass;
@@ -1386,7 +1386,7 @@ async function preview3d(token: number, asset: Asset, view: ViewDef, content: Wo
         placed.push({ x: middle + member.x, y, z: member.z, frontX: member.frontX, frontZ: member.frontZ, model: generateProp(member.prop, seed, member.variant, far) });
       }
     }
-    site = { size: Math.max(8, span * 1.1), heightAt: () => 0, placed, lines: [], yards: [], trees: [], farTrees: [], far };
+    site = { size: Math.max(8, span * 1.1), heightAt: () => 0, placed, trees: [], farTrees: [], far };
     summary = document.createElement("div");
     const facts = document.createElement("p");
     facts.textContent = `${group.name}: ${rolls.map((a) => a.members.length).join(", ")} of its ${group.members.length} members stand, one roll each (its front toward you). Change the variant or the seed to roll it again.`;

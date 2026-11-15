@@ -3,6 +3,9 @@ import type { FeatureKindDef } from "../world/features/featureTypes";
 import type { BuildingModel } from "../world/buildings/buildingTypes";
 import type { BiomeDefinition } from "../world/biomes/biomeTypes";
 import type { TerrainSample, TerrainSampler } from "../world/terrain/terrainSampler";
+import { createMaterialBlender, type MaterialBlender } from "../world/materials/materialBlend";
+import { createSpillField, spillMaterials } from "../world/features/spill";
+import type { BiomeDefinition as Biome } from "../world/biomes/biomeTypes";
 import type { RoadLine } from "../world/roads/roadField";
 import type { SettlementGate } from "../world/settlements/gates";
 import { createTreeCover, createTreeScatter, type TreeGround, type TreePlacement } from "../world/foliage/treeScatter";
@@ -30,14 +33,16 @@ export interface FeaturePreview {
   lines: { points: { x: number; z: number }[]; width: number; kind: "road" | "lane" | "trail" }[];
   /** Its pads - the level ground under its yard, buildings and props - for drawing. */
   pads: Pad[];
-  /** Its yard, trodden out to its level ground's edge. */
-  yards: { x: number; z: number; radius: number }[];
   /** The wood round it: near the clearing in full, further out as the world draws distant trees. */
   trees: TreePlacement[];
   farTrees: TreePlacement[];
   /** The biome it grows in - its light, its trees. */
   biome: BiomeDefinition | null;
   layout: CompoundLayout;
+  /** Its ground as the world paints it: the blender over the base ground, the road and the
+   *  feature's own ground (and the spills under its props and buildings), and the terrain sampler
+   *  that gives it - the patch's height, the feature's gap, the roads, the spill - at any point. */
+  ground: { materialBlender: MaterialBlender; sampleTerrain: TerrainSampler };
 }
 
 /** A road's half-width on the ground, at widthScale 1. */
@@ -58,6 +63,8 @@ export function buildFeaturePreview(
   variant: number,
   far: boolean,
   baseHeight: (x: number, z: number) => number,
+  /** The material its biome's ground is made of, or null for the biome's own. */
+  groundId: string | null = null,
 ): FeaturePreview | null {
   if (!kind.compound) return null;
   const rng = mulberry32(deriveSeed(seed, 0x5eed + variant));
@@ -126,54 +133,66 @@ export function buildFeaturePreview(
   const biome = content.biomes.find((b) => b.features.some((chance) => chance.featureId === kind.id)) ?? null;
   const trees: TreePlacement[] = [];
   const farTrees: TreePlacement[] = [];
+  const kindIndex = content.featureKinds.indexOf(kind);
+  const [inner, outer] = kind.clearing;
+  const distanceToLine = (points: { x: number; z: number }[], x: number, z: number): number => {
+    let best = Infinity;
+    for (let i = 0; i + 1 < points.length; i++) {
+      const a = points[i];
+      const b = points[i + 1];
+      const dx = b.x - a.x;
+      const dz = b.z - a.z;
+      const t = Math.max(0, Math.min(1, ((x - a.x) * dx + (z - a.z) * dz) / (dx * dx + dz * dz || 1)));
+      best = Math.min(best, Math.hypot(x - a.x - t * dx, z - a.z - t * dz));
+    }
+    return best;
+  };
+  // The ground as the world paints it (see `ground` in FeaturePreview): the biome's own base - or the
+  // one chosen - with no patches of its own layers on it, the road, the feature's ground and the
+  // spills, through the world's own material blender.
+  const groundBiome: Biome = { ...(biome ?? content.biomes.find((b) => b.id === "meadow") ?? content.biomes[0]), materialLayers: [] };
+  if (groundId && content.materials.some((m) => m.id === groundId)) groundBiome.baseMaterialId = groundId;
+  const groundContent = { ...content, biomes: [groundBiome], universalLayers: [], featureKinds: [kind] };
+  const materialBlender = createMaterialBlender(seed, groundContent, [groundBiome]);
+  const spillField = createSpillField([layout], spillMaterials(groundContent));
+  /** A point of the patch as the terrain sampler gives it; `forGround` for the ground's blender
+   *  (the trimmed biome, the one feature, the spill), else for the tree scatter's rules. */
+  const sampleAt = (x: number, z: number, forGround = false): TerrainSample => {
+    const natural = baseHeight(x, z);
+    const levelled = pads?.level(x, z, natural, 1) ?? null;
+    // Its clearing, as featureField gives it.
+    const gap = compoundGap(site, x, z);
+    const inReach = gap < outer;
+    const own = forGround ? groundBiome : (biome ?? groundBiome);
+    const spill = forGround ? spillField.at(x, z) : null;
+    return {
+      height: levelled?.height ?? natural,
+      primaryAreaId: 0,
+      primaryBiome: own,
+      secondaryBiome: own,
+      biomeBlend: 0,
+      areaWeights: [{ areaId: 0, biome: own, weight: 1 }],
+      isLand: true,
+      landmass: 1,
+      lakeFactor: 0,
+      isRiverEdge: false,
+      areaBorderGap: Infinity,
+      riverGap: Infinity,
+      // In each line's own widths (a path half a road's width keeps trees half as far).
+      roadGap: Math.min(Infinity, ...lines.map((line) => distanceToLine(line.points, x, z) / (line.width / (ROAD_HALF * 2)))),
+      roadMiddle: 0,
+      featureKind: inReach ? (forGround ? 0 : kindIndex) : -1,
+      featureGap: inReach ? gap : Infinity,
+      featureDepth: 0,
+      featureClear: inReach ? 1 - smoothstep(inner, outer, gap) : 0,
+      featureStumps: inReach && gap > site.radius - site.yardReach ? kind.stumps : 0,
+      featureStumpAge: inReach ? 1 - smoothstep(site.radius - site.yardReach, outer, gap) : 0,
+      padGap: levelled?.edge ?? Infinity,
+      spill: spill ? spill.weight : 0,
+      spillMaterial: spill ? spill.material : -1,
+    } as TerrainSample;
+  };
   if (biome) {
-    const kindIndex = content.featureKinds.indexOf(kind);
-    const [inner, outer] = kind.clearing;
-    const areaWeights = [{ areaId: 0, biome, weight: 1 }];
-    const distanceToLine = (points: { x: number; z: number }[], x: number, z: number): number => {
-      let best = Infinity;
-      for (let i = 0; i + 1 < points.length; i++) {
-        const a = points[i];
-        const b = points[i + 1];
-        const dx = b.x - a.x;
-        const dz = b.z - a.z;
-        const t = Math.max(0, Math.min(1, ((x - a.x) * dx + (z - a.z) * dz) / (dx * dx + dz * dz || 1)));
-        best = Math.min(best, Math.hypot(x - a.x - t * dx, z - a.z - t * dz));
-      }
-      return best;
-    };
-    const sampleAt = (x: number, z: number): TerrainSample => {
-      const natural = baseHeight(x, z);
-      const levelled = pads?.level(x, z, natural, 1) ?? null;
-      // Its clearing, as featureField gives it.
-      const gap = compoundGap(site, x, z);
-      const inReach = gap < outer;
-      return {
-        height: levelled?.height ?? natural,
-        primaryAreaId: 0,
-        primaryBiome: biome,
-        secondaryBiome: biome,
-        biomeBlend: 0,
-        areaWeights,
-        isLand: true,
-        landmass: 1,
-        lakeFactor: 0,
-        isRiverEdge: false,
-        areaBorderGap: Infinity,
-        riverGap: Infinity,
-        // In each line's own widths (a path half a road's width keeps trees half as far).
-        roadGap: Math.min(Infinity, ...lines.map((line) => distanceToLine(line.points, x, z) / (line.width / (ROAD_HALF * 2)))),
-        featureKind: inReach ? kindIndex : -1,
-        featureGap: inReach ? gap : Infinity,
-        featureDepth: 0,
-        featureClear: inReach ? 1 - smoothstep(inner, outer, gap) : 0,
-        featureStumps: inReach && gap > site.radius - site.yardReach ? kind.stumps : 0,
-        featureStumpAge: inReach ? 1 - smoothstep(site.radius - site.yardReach, outer, gap) : 0,
-        padGap: levelled?.edge ?? Infinity,
-        spill: 0,
-        spillMaterial: -1,
-      } as TerrainSample;
-    };
     // The patch's ground lies near sea level, where the zones' shore rule thins every wood: the
     // scatter decides as if inland, by INLAND metres higher, and plants on the ground as it is.
     // Its woods' noises vary across the world: the patch is grown where the world's wood is as thick
@@ -215,5 +234,5 @@ export function buildFeaturePreview(
       (Math.hypot(tree.x, tree.z) < site.yardReach + full + NEAR_WOOD ? trees : farTrees).push(tree);
     }
   }
-  return { size, heightAt, placed, lines, pads: padList, yards: layout.yard.level > 0 ? [{ x: layout.yard.x, z: layout.yard.z, radius: layout.yard.level }] : [], trees, farTrees, biome, layout };
+  return { size, heightAt, placed, lines, pads: padList, trees, farTrees, biome, layout, ground: { materialBlender, sampleTerrain: (x, z) => sampleAt(x, z, true) } };
 }

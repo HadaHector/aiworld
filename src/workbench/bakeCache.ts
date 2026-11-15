@@ -3,7 +3,7 @@ import { surfaceTexture, type TreeKindDef } from "../world/foliage/foliageConfig
 import type { BakedBark } from "../world/foliage/treeModels";
 import { bakeLeafAtlas } from "../world/foliage/treeModels";
 import { bakeBarks } from "../world/foliage/treeField";
-import { bakeTerrainTextures, type TerrainTextures } from "../world/materials/materialLibrary";
+import { bakeTerrainTextures, terrainTextureLayers, type TerrainTextures } from "../world/materials/materialLibrary";
 
 /**
  * Every bake the workbench has made, keyed by exactly what it was baked from - the definition's
@@ -58,6 +58,28 @@ function groundKey(def: MaterialDef, seed: number): string {
 /** A material's texture, baked as the terrain shader takes it (one layer), not yet recoloured. */
 export function bakedGround(def: MaterialDef, seed: number): Promise<TerrainTextures> {
   return remembered(grounds, groundKey(def, seed), () => bakeTerrainTextures(seed, [def]));
+}
+
+/** The textures of a list of materials as the terrain shader takes them (one layer per distinct
+ *  texture, see terrainTextureLayers) - each texture from bakedGround, so a texture baked for one
+ *  preview is not baked again for the next. */
+export async function bakedTerrain(defs: MaterialDef[], seed: number): Promise<TerrainTextures> {
+  const { layers } = terrainTextureLayers(defs);
+  const parts = await Promise.all(layers.map((layer) => bakedGround(defs.find((def) => def.textureId === layer.id)!, seed)));
+  const colorBuffer = new Uint8Array(parts.reduce((sum, part) => sum + part.colorBuffer.length, 0));
+  const normalBuffer = new Uint8Array(parts.reduce((sum, part) => sum + part.normalBuffer.length, 0));
+  let at = 0;
+  for (const part of parts) {
+    colorBuffer.set(part.colorBuffer, at);
+    normalBuffer.set(part.normalBuffer, at);
+    at += part.colorBuffer.length;
+  }
+  return { colorBuffer, normalBuffer, layerAverages: parts.map((part) => part.layerAverages[0]) };
+}
+
+/** Whether every one of `defs` would come from the cache (see isGroundBaked). */
+export function isTerrainBaked(defs: MaterialDef[], seed: number): boolean {
+  return defs.every((def) => isGroundBaked(def, seed));
 }
 
 /** Whether bakedGround would answer from the cache - so the status can say "baking" only when it is. */

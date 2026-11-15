@@ -12,9 +12,12 @@ import { applyTerrainCuts, createTerrainMaterial, type TerrainCut, type TerrainM
 import { WALL } from "../world/buildings/interiorGeometry";
 import { createLitShading, type LitShading } from "../world/materials/litShading";
 import type { BakedBark } from "../world/foliage/treeModels";
-import { bakedAtlas, bakedBark, bakedGround, isGroundBaked } from "./bakeCache";
+import { bakedAtlas, bakedBark, bakedGround, bakedTerrain, isGroundBaked, isTerrainBaked } from "./bakeCache";
 import { createGrassField } from "../world/foliage/grassField";
-import { scatterGrass } from "../world/foliage/grassScatter";
+import { scatterGrass, type ChunkGrass } from "../world/foliage/grassScatter";
+import { buildChunkGeometry } from "../world/terrain/chunkGeometry";
+import type { MaterialBlender } from "../world/materials/materialBlend";
+import type { TerrainSampler } from "../world/terrain/terrainSampler";
 import { createTreeField } from "../world/foliage/treeField";
 import { convexHull } from "../world/collision/hull";
 import type { ConvexDesc } from "../world/collision/shapes";
@@ -131,72 +134,6 @@ function drawPads(scene: Scene, pads: Pad[], height: (x: number, z: number) => n
   }
 }
 
-/** Roads, lanes and trails as strips laid on the ground - each its own shade of trodden earth. */
-function drawLines(
-  scene: Scene,
-  lines: { points: { x: number; z: number }[]; width: number; kind: "road" | "lane" | "trail" }[],
-  yards: { x: number; z: number; radius: number }[],
-  height: (x: number, z: number) => number,
-): void {
-  const colors = { road: new Color3(0.42, 0.36, 0.28), lane: new Color3(0.5, 0.43, 0.33), trail: new Color3(0.36, 0.3, 0.22), yard: new Color3(0.46, 0.4, 0.31) };
-  /** Laid on the ground: a hair over it, and drawn as if nearer than it, so it never sinks into it. */
-  const onGround = (name: string, color: Color3): StandardMaterial => {
-    const material = new StandardMaterial(name, scene);
-    material.diffuseColor = color;
-    material.specularColor = new Color3(0, 0, 0);
-    material.zOffset = -4;
-    return material;
-  };
-  yards.forEach((yard, n) => {
-    // Rings out from its middle, each following the ground.
-    const rings: Vector3[][] = [];
-    const segments = 64;
-    for (let r = 0; r <= yard.radius + 1e-6; r += Math.min(1.5, yard.radius)) {
-      rings.push(Array.from({ length: segments + 1 }, (_, k) => {
-        const a = (k / segments) * Math.PI * 2;
-        const x = yard.x + Math.cos(a) * r;
-        const z = yard.z + Math.sin(a) * r;
-        return new Vector3(x, height(x, z) + 0.05, z);
-      }));
-    }
-    const disc = MeshBuilder.CreateRibbon(`yard_${n}`, { pathArray: rings, sideOrientation: Mesh.DOUBLESIDE }, scene);
-    disc.material = onGround(`yard_${n}`, colors.yard);
-    disc.isPickable = false;
-  });
-  lines.forEach((line, n) => {
-    const left: Vector3[] = [];
-    const right: Vector3[] = [];
-    for (let i = 0; i + 1 < line.points.length; i++) {
-      const a = line.points[i];
-      const b = line.points[i + 1];
-      const length = Math.hypot(b.x - a.x, b.z - a.z);
-      const steps = Math.max(1, Math.ceil(length));
-      const sx = (-(b.z - a.z) / length) * (line.width / 2);
-      const sz = ((b.x - a.x) / length) * (line.width / 2);
-      for (let s = i === 0 ? 0 : 1; s <= steps; s++) {
-        const x = a.x + ((b.x - a.x) * s) / steps;
-        const z = a.z + ((b.z - a.z) * s) / steps;
-        left.push(new Vector3(x + sx, height(x + sx, z + sz) + 0.06, z + sz));
-        right.push(new Vector3(x - sx, height(x - sx, z - sz) + 0.06, z - sz));
-      }
-    }
-    if (left.length < 2) return;
-    // Across it too, a metre apart, so it follows the ground across a wide road as well as along it.
-    const across = Math.max(1, Math.ceil(line.width));
-    const paths = Array.from({ length: across + 1 }, (_, k) =>
-      left.map((l, i) => {
-        const r = right[i];
-        const x = l.x + ((r.x - l.x) * k) / across;
-        const z = l.z + ((r.z - l.z) * k) / across;
-        return new Vector3(x, height(x, z) + 0.06, z);
-      }),
-    );
-    const ribbon = MeshBuilder.CreateRibbon(`line_${n}`, { pathArray: paths, sideOrientation: Mesh.DOUBLESIDE }, scene);
-    ribbon.material = onGround(`line_${n}`, colors[line.kind]);
-    ribbon.isPickable = false;
-  });
-}
-
 /** A building's collision shapes, as convex pieces, stood at (x, y, 0). */
 function buildingPieces(model: BuildingModel, x: number, y: number): ConvexDesc[] {
   const pieces: ConvexDesc[] = [];
@@ -255,9 +192,9 @@ export interface StageOptions {
     size: number;
     heightAt: (x: number, z: number) => number;
     placed: { x: number; y: number; z: number; frontX: number; frontZ: number; up?: [number, number, number]; model: BuildingModel }[];
-    lines: { points: { x: number; z: number }[]; width: number; kind: "road" | "lane" | "trail" }[];
-    /** Trodden rounds: a yard, out to its level ground's edge. */
-    yards: { x: number; z: number; radius: number }[];
+    /** Its ground as the world paints it - the material blender and the terrain sampler it is
+     *  blended from (see FeaturePreview.ground): drawn through the world's own chunk builder. */
+    ground?: { materialBlender: MaterialBlender; sampleTerrain: TerrainSampler };
     trees: TreePlacement[];
     /** Trees drawn as the world draws distant ones. */
     farTrees: TreePlacement[];
@@ -326,6 +263,51 @@ function buildGrid(scene: Scene, half: number): void {
 }
 
 /** A square of ground, one material everywhere, with its normals from the height function. */
+/** A place whose ground is the world's own blend (see StageOptions.site.ground). */
+type PlaceSite = NonNullable<StageOptions["site"]> & { ground: NonNullable<NonNullable<StageOptions["site"]>["ground"]> };
+
+/**
+ * A place's ground (a feature's patch) as the world builds a chunk of it - the world's own
+ * buildChunkGeometry over the place's terrain sampler and material blender, so the paint is the
+ * world's: the biome's base, the road under its lanes and trails, the feature's own ground by its
+ * weight graph, the spills; the grass scattered over that blend. No trees (the preview has its own).
+ */
+function buildPlaceGround(
+  scene: Scene,
+  site: PlaceSite,
+  groundColors: [number, number, number][],
+  content: WorldContent,
+  seed: number,
+  withGrass: boolean,
+): { mesh: Mesh; grass: ChunkGrass | null } {
+  // A metre a square, as the other previews' patch.
+  const subdivisions = Math.round(site.size);
+  const geometry = buildChunkGeometry(
+    { size: site.size, subdivisions, detailSubdivisions: subdivisions, originX: 0, originZ: 0 },
+    {
+      sampleTerrain: site.ground.sampleTerrain,
+      materialBlender: site.ground.materialBlender,
+      seed,
+      groundColors,
+      scatterTrees: () => [],
+      scatterBushes: () => [],
+      scatterRocks: () => [],
+      treeCover: () => 0,
+      grassKinds: withGrass ? content.grassKinds : [],
+    },
+  );
+  const mesh = new Mesh("groundPatch", scene);
+  const data = new VertexData();
+  data.positions = geometry.positions;
+  data.normals = geometry.normals;
+  data.indices = geometry.indices;
+  data.applyToMesh(mesh);
+  mesh.setVerticesData("matIndices", geometry.matIndices, false, 4);
+  mesh.setVerticesData("matWeights", geometry.matWeights, false, 4);
+  mesh.isPickable = false;
+  return { mesh, grass: geometry.grass };
+}
+
 function buildGroundPatch(scene: Scene, height: (x: number, z: number) => number, size = PATCH_SIZE): Mesh {
   // A metre a square, whatever the patch's size.
   const subdivisions = Math.round((size / PATCH_SIZE) * PATCH_SUBDIVISIONS);
@@ -407,12 +389,21 @@ export async function createStage(engine: Engine, canvas: HTMLCanvasElement, opt
     if (options.bare) {
       litShading = createLitShading(scene, sunLighting);
     } else {
-      options.onProgress?.(isGroundBaked(ground, seed) ? "Laying the ground" : "Baking the ground texture");
-      terrain = await createTerrainMaterial(scene, seed, [ground], sunLighting, undefined, await bakedGround(ground, seed));
+      if (site?.ground) {
+        // A place's ground is blended as the world blends it: the biome's base, the road, the feature's
+        // own ground and the spills, each baked once and kept (bakedTerrain).
+        const defs = site.ground.materialBlender.materialDefs;
+        options.onProgress?.(isTerrainBaked(defs, seed) ? "Laying the ground" : "Baking the ground textures");
+        terrain = await createTerrainMaterial(scene, seed, defs, sunLighting, undefined, await bakedTerrain(defs, seed));
+      } else {
+        options.onProgress?.(isGroundBaked(ground, seed) ? "Laying the ground" : "Baking the ground texture");
+        terrain = await createTerrainMaterial(scene, seed, [ground], sunLighting, undefined, await bakedGround(ground, seed));
+      }
       litShading = terrain.litShading;
     }
 
     // The trees first, since the camera frames them: the field is what knows how big they are.
+    let placeGrass: ChunkGrass | null = null;
     let field: TreeField | null = null;
     let framing: { width: number; height: number; placed?: number[] } = { width: 0, height: 1 };
     if (options.trees) {
@@ -470,7 +461,6 @@ export async function createStage(engine: Engine, canvas: HTMLCanvasElement, opt
         for (const mesh of scene.meshes) if (mesh.name.startsWith("building_")) mesh.setEnabled(false);
         drawColliders(scene, site.placed.flatMap((item) => placedPieces(item.model, item)), 0.55);
       }
-      drawLines(scene, site.lines, site.yards, height);
       if (site.pads) drawPads(scene, site.pads, height);
       framing = { width: site.size * 0.75, height: 10 };
     }
@@ -522,13 +512,19 @@ export async function createStage(engine: Engine, canvas: HTMLCanvasElement, opt
       camera.upperBetaLimit = Math.PI - 0.05;
       buildGrid(scene, Math.max(10, Math.ceil((framing.width / 2 + 4) / 5) * 5));
     } else if (terrain) {
-      const patch = buildGroundPatch(scene, height, patchSize);
+      const built = site?.ground ? buildPlaceGround(scene, site as PlaceSite, terrain.averageColors, content, seed, options.grass.length > 0) : null;
+      placeGrass = built?.grass ?? null;
+      const patch = built ? built.mesh : buildGroundPatch(scene, height, patchSize);
       patch.material = terrain.terrainMaterial;
       // The ground taken out over the buildings' cellars, as in the world.
       applyTerrainCuts([terrain.terrainMaterial], cellarCuts(options.buildings ?? [], framing.placed ?? []));
     }
 
-    if (options.grass.length > 0 && terrain) {
+    if (placeGrass && options.grass.length > 0 && terrain) {
+      // A place's grass was scattered with its ground, over the blend (see buildPlaceGround).
+      options.onProgress?.("Growing grass");
+      createGrassField(scene, seed, litShading, content.grassKinds).setChunk("patch", placeGrass, 0, 0, patchSize);
+    } else if (options.grass.length > 0 && terrain && !site?.ground) {
       options.onProgress?.("Growing grass");
       const grass = createGrassField(scene, seed, litShading, content.grassKinds);
       const subdivisions = Math.round((patchSize / PATCH_SIZE) * PATCH_SUBDIVISIONS);
