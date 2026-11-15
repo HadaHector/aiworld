@@ -107,6 +107,21 @@ export function mouthSite(world: WorldData, b: { building: { mouth: { depth: num
   return { x, y: world.heightAt(x, z), z, facing: (Math.atan2(b.frontX, b.frontZ) * 180) / Math.PI };
 }
 
+/** The nearest mausoleum's site within `reach` of a point (a dungeon whose mouth is there), or null. */
+export function mouthNear(world: WorldData, x: number, z: number, reach: number): DungeonSite | null {
+  let best: DungeonSite | null = null;
+  let bestDistance = reach;
+  for (const layout of world.compoundLayouts) {
+    for (const b of layout.buildings) {
+      const site = mouthSite(world, b);
+      if (!site) continue;
+      const d = Math.hypot(site.x - x, site.z - z);
+      if (d < bestDistance) [best, bestDistance] = [site, d];
+    }
+  }
+  return best;
+}
+
 /**
  * Where a dungeon could open near a point (step 5 sites them for real): the nearest cemetery's crypt
  * within `reach`, its door its facing; else the nearest hillside the probe would take - rising 5 m

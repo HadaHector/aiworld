@@ -62,9 +62,11 @@ export function createDungeonPresence(view: DimensionView, content: DungeonConte
       const near = (): { x: number; y: number; z: number } => view.character.mesh.position;
       const meshes = createDungeonMeshes(scene, layout, style, fixture, world.buildingMaterial, near, (done, total) => onProgress("Lighting the torches", done, total), (id) => view.content.props.find((p) => p.id === id));
       world.setExtraLights(meshes.lights);
-      current = { id: message.id, layout, meshes, batch, ambient: style.light.ambient, inside: true };
-      // In already: the day gone at once rather than fading.
-      world.setUnderground(style.light.ambient, true);
+      // In it already (put at its foot), the day gone at once; else (near its mouth) as it is walked into.
+      const at = view.character.mesh.position;
+      const now = inside(layout, siteY, at.x, at.y, at.z);
+      current = { id: message.id, layout, meshes, batch, ambient: style.light.ambient, inside: now };
+      if (now) world.setUnderground(style.light.ambient, true);
       const baked = await meshes.baked;
       console.info(`dungeon ${message.id}: ${layout.parts.length} parts, ${meshes.stats.triangles} triangles built in ${meshes.stats.buildMs.toFixed(0)} ms, lit in ${baked.ms.toFixed(0)} ms (${baked.cached} parts from the cache)`);
     },

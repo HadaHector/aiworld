@@ -5,7 +5,7 @@
   builder: "kit",
   sizes: {
     lair: { rooms: [2, 4], entry: "seamless" },
-    dungeon: { rooms: [8, 14], entry: "space" },
+    dungeon: { rooms: [8, 14], entry: "seamless" },
   },
   // The chance a part's further ways on are grown rather than walled up.
   branching: 0.4,

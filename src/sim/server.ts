@@ -46,10 +46,15 @@ type Arrival = { x: number; z: number; start?: string };
 import type { SaveStore } from "../save/store";
 import { cleanChat, createRateLimit, parseArgs, splitWords } from "./chat/chat";
 import { createServerCommands, nameBook, type CommandHost } from "./chat/serverCommands";
-import { createDimensionDungeons, dungeonSiteNear, type PlacedDungeon } from "./dungeons";
+import { createDimensionDungeons, dungeonSiteNear, mouthNear, type PlacedDungeon } from "./dungeons";
 import type { DungeonContent } from "../world/dungeons/dungeonDefs";
 import { deriveSeed } from "../world/rng";
 import { SAVE_VERSION, makeSaveId, nameProblem, tidyName, type CharacterRecord, type CharacterSummary, type WorldRecord } from "../save/records";
+
+/** How near a mausoleum a player comes before the dungeon under it is laid out and drawn, and how far
+ *  off it is let go again (DUNGEONS.md, *Seamless*). */
+const MOUTH_OPEN = 300;
+const MOUTH_CLOSE = 400;
 
 /** Each step spends at most this long bringing in collision chunks per dimension (always at least one). */
 const CHUNK_BUDGET_MS = 2;
@@ -967,6 +972,39 @@ export function createServer(options: ServerOptions): Server {
 
   /** Which dungeon each player was last sent into, by entity id. */
   const inDungeon = new Map<number, string>();
+  /** Those of them sent because the player came near its mouth (not by /dungeon). */
+  const nearMouth = new Set<number>();
+  /** How long since the players were last looked over for mouths near them. */
+  let sinceMouths = 0;
+  /**
+   * The dungeons under the mausoleums near each player (DUNGEONS.md, *Seamless*): laid out and in the
+   * way from MOUTH_OPEN off, and its client told to draw it; let go past MOUTH_CLOSE, unless it is
+   * in it. One a player - the nearest.
+   */
+  function nearMouths(): void {
+    for (const player of players.values()) {
+      const entity = player.entity;
+      const dimension = loaded.get(entity.dimension);
+      if (!entity.body || !dimension?.dungeons) continue;
+      const feet = entity.body.motor.state.feet;
+      const site = mouthNear(dimension.world, feet.x, feet.z, MOUTH_OPEN);
+      const current = inDungeon.get(entity.id);
+      if (site) {
+        const key = `${dimension.id}/dungeon/${Math.round(site.x)},${Math.round(site.z)}/crypt/dungeon`;
+        if (current === key) continue;
+        if (current && !nearMouth.has(entity.id)) continue;
+        const seed = deriveSeed(options.seed >>> 0, Math.round(site.x) * 7349 + Math.round(site.z) * 31);
+        const dungeon = dimension.dungeons.open(key, "crypt", "dungeon", seed, site);
+        inDungeon.set(entity.id, dungeon.id);
+        nearMouth.add(entity.id);
+        connectionOf(entity)?.end.send({ type: "dungeon", id: dungeon.id, style: dungeon.style, size: dungeon.size, seed: dungeon.seed, x: site.x, y: site.y, z: site.z, facing: site.facing, entry: dungeon.entry });
+      } else if (current && nearMouth.has(entity.id) && !mouthNear(dimension.world, feet.x, feet.z, MOUTH_CLOSE) && !dimension.dungeons.at(feet.x, feet.y, feet.z)) {
+        inDungeon.delete(entity.id);
+        nearMouth.delete(entity.id);
+        connectionOf(entity)?.end.send({ type: "dungeon", id: "", style: "", size: "", seed: 0, x: 0, y: 0, z: 0, facing: 0, entry: "" });
+      }
+    }
+  }
   /** Puts a player at the foot of a dungeon's entrance, and tells its client what to draw. */
   function enterDungeonAt(entity: Entity, dungeon: PlacedDungeon): void {
     if (!entity.body) return;
@@ -976,6 +1014,7 @@ export function createServer(options: ServerOptions): Server {
     follow(entity);
     loaded.get(entity.dimension)?.streamer.loadAround(arrival.x, arrival.z, pointsIn(entity.dimension));
     inDungeon.set(entity.id, dungeon.id);
+    nearMouth.delete(entity.id);
     connectionOf(entity)?.end.send({ type: "dungeon", id: dungeon.id, style: dungeon.style, size: dungeon.size, seed: dungeon.seed, x: site.x, y: site.y, z: site.z, facing: site.facing, entry: dungeon.entry });
   }
 
@@ -1343,6 +1382,11 @@ export function createServer(options: ServerOptions): Server {
       }
     }
     for (const [id, dimension] of loaded) dimension.streamer.update(pointsIn(id), CHUNK_BUDGET_MS);
+    sinceMouths += deltaSeconds;
+    if (sinceMouths >= 1) {
+      sinceMouths = 0;
+      nearMouths();
+    }
     time += deltaSeconds;
     for (const player of players.values()) {
       const entity = player.entity;
