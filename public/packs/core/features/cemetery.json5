@@ -17,6 +17,9 @@
     arrangement: "rows",
     buildings: [
       { building: "chapel", count: [1, 1], required: true, place: "head" },
+      // At its foot a mausoleum over a crypt's way down (DUNGEONS.md) - or where there is none, a
+      // small crypt nobody goes into. (One building to an end: the larger first.)
+      { building: "mausoleum", count: [1, 1], chance: 0.5, place: "foot" },
       { building: "crypt", count: [1, 1], chance: 0.8, place: "foot" },
     ],
     // Down either side of the middle path, 3.7 m apart along it and 3.5 m across, three slots in

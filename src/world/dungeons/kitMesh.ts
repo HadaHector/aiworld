@@ -1706,7 +1706,7 @@ const OUT_CORNICE: [number, number] = [0.6, 0.35];
  * A part's outside (GEOMETRY.md, 8 - bottom to top): its walls' outer faces from under the ground to
  * the eaves, less a door where each of its surface sockets is; a plinth round their foot and a
  * cornice round their head, both broken at the doors; a triangle of wall at each gable end; a roof of
- * two slopes along its longer side, out past the walls at its eaves and verges, and its soffits under
+ * two slopes along its ridge, out past the walls at its eaves and verges, and its soffits under
  * them. The doors' own frames are the doorways set in them.
  */
 function exteriorModel(part: DungeonPartDef, look: DungeonStyleDef["look"], point: (p: V) => V, turn: (d: V) => V): BuildingModel {
@@ -1735,7 +1735,7 @@ function exteriorModel(part: DungeonPartDef, look: DungeonStyleDef["look"], poin
     { n: [-1, 0, 0], at: (t, y) => [x0, y, t], t0: z0, t1: z1 },
     { n: [1, 0, 0], at: (t, y) => [x1, y, t], t0: z0, t1: z1 },
   ];
-  const alongX = x1 - x0 >= z1 - z0;
+  const alongX = e.ridge === "x";
   for (const s of sides) {
     // Its doors: the surface sockets on it.
     const doors = part.sockets
@@ -1777,7 +1777,7 @@ function exteriorModel(part: DungeonPartDef, look: DungeonStyleDef["look"], poin
     for (const [ta, tb] of runs) if (tb - ta > 0.05) band(...box(ta, tb, e.foot, OUT_PLINTH[0], OUT_PLINTH[1]), s.n, trim);
     band(...box(s.t0 - OUT_CORNICE[1], s.t1 + OUT_CORNICE[1], e.eave - OUT_CORNICE[0], e.eave, OUT_CORNICE[1]), s.n, trim, true);
   }
-  // The roof: along its longer side. (a: along the ridge, c: across it, from c0 to c1.)
+  // The roof: its ridge along x or z. (a: along the ridge, c: across it, from c0 to c1.)
   const [a0, a1, c0, c1] = alongX ? [x0, x1, z0, z1] : [z0, z1, x0, x1];
   const P = (a: number, c: number, y: number): V => (alongX ? [a, y, c] : [c, y, a]);
   const mid = (c0 + c1) / 2, half = (c1 - c0) / 2, ridge = e.eave + e.roof;

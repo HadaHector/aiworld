@@ -12,7 +12,7 @@ import type { TextureDef } from "../materials/textureGen";
  * little in common - so a building names one (its `type`), and gives it its own block of settings
  * under the generator's name. Every generator produces the same thing: a BuildingModel.
  */
-export const BUILDING_GENERATORS = ["boxes", "house"] as const;
+export const BUILDING_GENERATORS = ["boxes", "house", "mouth"] as const;
 export type BuildingGenerator = (typeof BUILDING_GENERATORS)[number];
 
 export type Rgb = [number, number, number];
@@ -52,6 +52,23 @@ export interface BuildingMaterialDef {
 export interface Paint {
   material: string | null;
   tint: Rgb;
+}
+
+/**
+ * A dungeon's mouth (DUNGEONS.md, *A crypt's mouth*): the footprint, door and walls of a house the
+ * dungeon draws itself - its entrance part's outside and inside. Nothing is drawn here: what a
+ * feature needs to place it, walls that keep the body out before the dungeon is there, and the
+ * ground taken out under it.
+ */
+export interface MouthSpec {
+  /** Along its front, back from it, and its walls' height. */
+  width: number;
+  depth: number;
+  height: number;
+  /** Its door: how far along its front from its middle (+x), and how wide. */
+  door: [number, number];
+  /** Its walls' thickness. */
+  wall: number;
 }
 
 /** The placeholder generator: a main box, and a few smaller boxes against its sides. Each range is
@@ -638,6 +655,7 @@ export interface BuildingDef {
   generator: BuildingGenerator;
   boxes: BoxesSpec | null;
   house: HouseSpec | null;
+  mouth: MouthSpec | null;
   /** The ground round it painted with a material of its own, or none (see props' Spill). */
   spill: Spill | null;
 }
@@ -675,6 +693,8 @@ export interface BuildingModel {
   interior?: { layout: InteriorLayout; levels: ShellLevel[]; X0: number; Z0: number; tile: number; exits: { i: number; j: number; k: number; dir: "px" | "nx" | "pz" | "nz"; along: number }[]; furnished?: FurnishResult };
   /** What it puts in the way (see buildingColliders.ts) - built with the near model only. */
   colliders?: BuildingCollision;
+  /** Where the ground is taken out under it, in its own space (x0, z0, x1, z1) - a dungeon's mouth. */
+  holes?: [number, number, number, number][];
   /** The lights it gives (see LIGHTS.md) - built with the near model only. */
   lights?: ModelLight[];
 }

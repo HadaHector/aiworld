@@ -142,6 +142,8 @@ export interface ExteriorDef {
   foot: number;
   eave: number;
   roof: number;
+  /** Which way its ridge runs: along x or z (its gables at the other two sides). */
+  ridge: "x" | "z";
 }
 
 export interface BarrelDef {
@@ -569,13 +571,13 @@ function readPart(entry: Entry, rules: DungeonRules, issues: ContentIssue[]): Du
 function readExterior(reader: Reader, obj: RawObject): ExteriorDef | undefined {
   if (obj.exterior === undefined) return undefined;
   const e = reader.object(obj.exterior, "exterior");
-  reader.onlyKeys(e, "exterior", ["walls", "foot", "eave", "roof"]);
+  reader.onlyKeys(e, "exterior", ["walls", "foot", "eave", "roof", "ridge"]);
   const w = e.walls;
   if (!Array.isArray(w) || w.length !== 4 || !w.every((v) => typeof v === "number") || w[2] <= w[0] || w[3] <= w[1]) {
     reader.fail("exterior.walls", "expected [x0, z0, x1, z1], x1 > x0 and z1 > z0");
     return undefined;
   }
-  return { walls: w as [number, number, number, number], foot: reader.optionalNumber(e, "foot", "exterior", -1), eave: reader.number(e, "eave", "exterior"), roof: reader.number(e, "roof", "exterior", { min: 0.5 }) };
+  return { walls: w as [number, number, number, number], foot: reader.optionalNumber(e, "foot", "exterior", -1), eave: reader.number(e, "eave", "exterior"), roof: reader.number(e, "roof", "exterior", { min: 0.5 }), ridge: e.ridge === undefined ? (w[2] - w[0] >= w[3] - w[1] ? "x" : "z") : reader.oneOf(e, "ridge", "exterior", ["x", "z"] as const) };
 }
 
 /** A part's altar, if it has one (see `DungeonPartDef.altar`). */

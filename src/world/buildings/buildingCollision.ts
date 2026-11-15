@@ -45,10 +45,10 @@ export interface BuildingGroup {
 
 /** What collision needs of a model: its bounds, rooms and colliders - not its geometry, which for
  *  every building in the full world is far too much to keep once drawn. */
-export type BuildingShape = Pick<BuildingModel, "halfWidth" | "halfDepth" | "interior" | "colliders">;
+export type BuildingShape = Pick<BuildingModel, "halfWidth" | "halfDepth" | "interior" | "colliders" | "holes">;
 
-export function shapeOf({ halfWidth, halfDepth, interior, colliders }: BuildingModel): BuildingShape {
-  return { halfWidth, halfDepth, interior, colliders };
+export function shapeOf({ halfWidth, halfDepth, interior, colliders, holes }: BuildingModel): BuildingShape {
+  return { halfWidth, halfDepth, interior, colliders, holes };
 }
 
 /** A group with each thing's near model already made - what the collision is built from. */
@@ -90,8 +90,11 @@ export interface PlacedBuildings {
    * takes those further off out of it - `add` and `remove` are the world's (see worldCollision.ts).
    */
   updateCollision: (points: readonly { x: number; z: number }[], add: (key: string, shapes: ShapeDesc[]) => void, remove: (key: string) => void) => void;
-  /** The ground taken out over every cellar with rooms - for the ground's collision. */
+  /** The ground taken out over every cellar with rooms, and under every dungeon's mouth - for the
+   *  ground's collision. */
   readonly cellarCuts: readonly TerrainCut[];
+  /** Every house with the ground taken out under it but no rooms (a dungeon's mouth). */
+  readonly holed: readonly { house: Placed; reach: number; cuts: TerrainCut[] }[];
   /** Every house with rooms: where it stands, how far it reaches, and the ground over its cellars. */
   readonly enterable: readonly Enterable[];
 }
@@ -152,8 +155,20 @@ function placedShapes({ house, colliders }: PlacedCollision, group: number): Sha
   return shapes;
 }
 
+/** A house's holes (BuildingModel.holes) in world space. */
+function holesOf(house: Placed, holes: readonly [number, number, number, number][]): TerrainCut[] {
+  const rx = house.frontZ;
+  const rz = -house.frontX;
+  return holes.map(([x0, z0, x1, z1]): TerrainCut => {
+    const cx = (x0 + x1) / 2;
+    const cz = (z0 + z1) / 2;
+    return { x: house.x + rx * cx + house.frontX * cz, z: house.z + rz * cx + house.frontZ * cz, ux: rx, uz: rz, halfWidth: (x1 - x0) / 2, halfDepth: (z1 - z0) / 2 };
+  });
+}
+
 export function createPlacedBuildings(groups: readonly ModelledGroup[]): PlacedBuildings {
   const enterable: Enterable[] = [];
+  const holed: { house: Placed; reach: number; cuts: TerrainCut[] }[] = [];
   /** Each group's houses' collision, from their near models. */
   const collisions: { key: string; x: number; z: number; radius: number; houses: PlacedCollision[] }[] = [];
   const inCollision = new Set<string>();
@@ -164,6 +179,7 @@ export function createPlacedBuildings(groups: readonly ModelledGroup[]): PlacedB
     for (const { house, model } of group.houses) {
       const reach = Math.hypot(model.halfWidth, model.halfDepth);
       if (model.interior) enterable.push(enterableOf(house, model.interior, reach));
+      else if (model.holes?.length) holed.push({ house, reach, cuts: holesOf(house, model.holes) });
       if (model.colliders) houses.push({ house, colliders: model.colliders });
       radius = Math.max(radius, Math.hypot(house.x - group.x, house.z - group.z) + reach);
     }
@@ -184,7 +200,8 @@ export function createPlacedBuildings(groups: readonly ModelledGroup[]): PlacedB
         }
       }
     },
-    cellarCuts: enterable.flatMap((entry) => entry.cuts),
+    cellarCuts: [...enterable.flatMap((entry) => entry.cuts), ...holed.flatMap((entry) => entry.cuts)],
+    holed,
     enterable,
     floorAt(x, z, feet) {
       let best: number | null = null;

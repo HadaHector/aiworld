@@ -1,5 +1,5 @@
 import { deriveSeed, mulberry32 } from "../rng";
-import type { BoxesSpec, BuildingDef, BuildingModel, Rgb } from "./buildingTypes";
+import type { BoxesSpec, BuildingDef, BuildingModel, MouthSpec, Rgb } from "./buildingTypes";
 import { FOUNDATION_DEPTH, ModelBuilder, pick, plain, roll } from "./buildingGeometry";
 import { ColliderBuilder } from "./buildingColliders";
 import { buildHouse } from "./houseGenerator";
@@ -59,6 +59,28 @@ function buildBoxes(spec: BoxesSpec, rng: () => number): BuildingModel {
   return model;
 }
 
+/** A dungeon's mouth (see MouthSpec): nothing drawn - its walls in the way, its door left open in
+ *  its front (+z), the ground under it taken out. */
+function buildMouth(spec: MouthSpec): BuildingModel {
+  const b = new ModelBuilder();
+  const colliders = new ColliderBuilder();
+  const hw = spec.width / 2, hd = spec.depth / 2, t = spec.wall, h = spec.height;
+  const [at, w] = spec.door;
+  colliders.box(-hw, -FOUNDATION_DEPTH, -hd, -hw + t, h, hd);
+  colliders.box(hw - t, -FOUNDATION_DEPTH, -hd, hw, h, hd);
+  colliders.box(-hw, -FOUNDATION_DEPTH, -hd, hw, h, -hd + t);
+  colliders.box(-hw, -FOUNDATION_DEPTH, hd - t, at - w / 2, h, hd);
+  colliders.box(at + w / 2, -FOUNDATION_DEPTH, hd - t, hw, h, hd);
+  const model = b.finish({ x: at, z: hd });
+  // (Nothing drawn: still as big as its walls, for a feature fitting it to a plot.)
+  model.halfWidth = hw;
+  model.halfDepth = hd;
+  model.height = h;
+  model.colliders = colliders.finish();
+  model.holes = [[-hw + t, -hd + t, hw - t, hd - t]];
+  return model;
+}
+
 /**
  * Builds one variant of a building. The same building, seed and variant always give the same
  * model, wherever it is asked for - the workbench and the world agree. `far` builds it to be seen
@@ -87,5 +109,7 @@ function generate(def: BuildingDef, seed: number, variant: number, far: boolean,
       return buildBoxes(def.boxes!, rng);
     case "house":
       return buildHouse(def.house!, rng, far, measure);
+    case "mouth":
+      return buildMouth(def.mouth!);
   }
 }

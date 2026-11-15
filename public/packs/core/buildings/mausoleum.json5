@@ -1,0 +1,9 @@
+// A mausoleum over a crypt's way down (DUNGEONS.md, *A crypt's mouth*): the churchyard places it
+// at its foot, its door to the yard; the dungeon draws it - its walls, roof and way down are the crypt
+// entrance part's (dungeonParts/cryptEntrance.json5), whose footprint and door this matches: 30 m
+// along its front, 16 m deep, its door 6 m wide 11 m along its front from its middle.
+{
+  name: "Mausoleum",
+  type: "mouth",
+  mouth: { width: 30, depth: 16, height: 9, door: [11, 6], wall: 1 },
+}

@@ -97,6 +97,16 @@ export function createDimensionDungeons(world: WorldData, collision: CollisionWo
   };
 }
 
+/** A placed building that is a dungeon's mouth (a churchyard's mausoleum): where its door is, on
+ *  the ground, and which way it faces - the dungeon's site. Null for any other building. */
+export function mouthSite(world: WorldData, b: { building: { mouth: { depth: number; door: [number, number] } | null }; x: number; z: number; frontX: number; frontZ: number }): DungeonSite | null {
+  const m = b.building.mouth;
+  if (!m) return null;
+  // Its +x is (frontZ, -frontX) to its front.
+  const x = b.x + b.frontZ * m.door[0] + b.frontX * (m.depth / 2), z = b.z - b.frontX * m.door[0] + b.frontZ * (m.depth / 2);
+  return { x, y: world.heightAt(x, z), z, facing: (Math.atan2(b.frontX, b.frontZ) * 180) / Math.PI };
+}
+
 /**
  * Where a dungeon could open near a point (step 5 sites them for real): the nearest cemetery's crypt
  * within `reach`, its door its facing; else the nearest hillside the probe would take - rising 5 m
@@ -108,11 +118,12 @@ export function dungeonSiteNear(world: WorldData, x: number, z: number, reach = 
   let bestDistance = reach;
   for (const layout of world.compoundLayouts) {
     for (const b of layout.buildings) {
-      if (b.building.id !== "crypt") continue;
-      const d = Math.hypot(b.x - x, b.z - z);
+      const site = mouthSite(world, b);
+      if (!site) continue;
+      const d = Math.hypot(site.x - x, site.z - z);
       if (d >= bestDistance) continue;
       bestDistance = d;
-      best = { kind: "crypt", x: b.x, y: world.heightAt(b.x, b.z), z: b.z, facing: (Math.atan2(b.frontX, b.frontZ) * 180) / Math.PI };
+      best = { kind: "crypt", ...site };
     }
   }
   if (best) return best;

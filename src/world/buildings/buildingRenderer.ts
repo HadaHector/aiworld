@@ -113,7 +113,7 @@ export function createBuildingRenderer(
     modelled.push({ key: group.key, x: group.x, z: group.z, houses });
   }
   const placedBuildings = createPlacedBuildings(modelled);
-  const { enterable } = placedBuildings;
+  const { enterable, holed } = placedBuildings;
 
   let drawDistance = initialDrawDistance;
   let lastCuts = "";
@@ -122,7 +122,7 @@ export function createBuildingRenderer(
     if (!camera) return;
     const { x, z } = camera.position;
     // The ground taken out over the nearest cellars.
-    const cuts = enterable
+    const cuts = [...enterable, ...holed]
       .map((entry) => ({ entry, distance: Math.hypot(entry.house.x - x, entry.house.z - z) - entry.reach }))
       .filter(({ entry, distance }) => entry.cuts.length > 0 && distance < CUT_DISTANCE)
       .sort((p, q) => p.distance - q.distance)

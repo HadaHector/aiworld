@@ -52,13 +52,16 @@ const ground = {
   builtAt: (x, z) => world.buildingAt(x, world.heightAt(x, z) + 0.5, z) !== undefined,
 };
 
-// Sites: every cemetery's crypt, its door its facing; then slopes over the land, facing downhill
+// Sites: every churchyard's mausoleum, its door its facing; then slopes over the land, facing downhill
 // (the dungeon going in uphill, under the rise).
 const sites = [];
 for (const layout of world.compoundLayouts) {
   for (const b of layout.buildings) {
-    if (b.building.id !== "crypt") continue;
-    sites.push({ kind: "crypt", x: b.x, y: world.heightAt(b.x, b.z), z: b.z, facing: (Math.atan2(b.frontX, b.frontZ) * 180) / Math.PI });
+    // A mausoleum: the dungeon's door is its door.
+    const m = b.building.mouth;
+    if (!m) continue;
+    const x = b.x + b.frontZ * m.door[0] + b.frontX * (m.depth / 2), z = b.z - b.frontX * m.door[0] + b.frontZ * (m.depth / 2);
+    sites.push({ kind: "crypt", x, y: world.heightAt(x, z), z, facing: (Math.atan2(b.frontX, b.frontZ) * 180) / Math.PI });
   }
 }
 const crypts = sites.length;

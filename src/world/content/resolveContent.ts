@@ -995,6 +995,19 @@ function readBuilding(id: string, obj: RawObject, reader: Reader, partById: Map<
       tops: colors("tops"),
     };
   }
+  let mouth: BuildingDef["mouth"] = null;
+  if (generator === "mouth") {
+    reader.onlyKeys(block, generator, ["width", "depth", "height", "door", "wall"]);
+    const door = block.door;
+    const doorPair: [number, number] = Array.isArray(door) && door.length === 2 && door.every((v) => typeof v === "number") ? [door[0], door[1]] : (reader.fail(`${generator}.door`, "expected [along its front from its middle, width]"), [0, 2]);
+    mouth = {
+      width: reader.number(block, "width", generator, { min: 1 }),
+      depth: reader.number(block, "depth", generator, { min: 1 }),
+      height: reader.number(block, "height", generator, { min: 1 }),
+      door: doorPair,
+      wall: reader.optionalNumber(block, "wall", generator, 1, { min: 0.1 }),
+    };
+  }
   let house: BuildingDef["house"] = null;
   if (generator === "house") {
     const path = "house";
@@ -1298,7 +1311,7 @@ function readBuilding(id: string, obj: RawObject, reader: Reader, partById: Map<
       litWindows: reader.optionalNumber(block, "litWindows", path, 0, { min: 0, max: 1 }),
     };
   }
-  return { id, name: reader.string(obj, "name", ""), generator, boxes, house, spill: readSpill(obj, reader) };
+  return { id, name: reader.string(obj, "name", ""), generator, boxes, house, mouth, spill: readSpill(obj, reader) };
 }
 
 /** A buildingParts/ file - see BuildingPartDef. Named by `type` like a building, its settings under

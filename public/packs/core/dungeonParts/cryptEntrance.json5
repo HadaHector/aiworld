@@ -7,8 +7,9 @@
 {
   tags: ["crypt", "entrance"],
   // The mausoleum's outside, in daylight: its walls from under the ground to the eaves, a tiled roof
-  // along its length; its door where the surface socket is.
-  exterior: { walls: [-4, 0, 26, 16], foot: -1, eave: 9, roof: 7 },
+  // its ridge from front to back - its front a gable end; its door where the surface socket is.
+  // (The churchyard places it as the building `mausoleum`: the same footprint and door.)
+  exterior: { walls: [-4, 0, 26, 16], foot: -1, eave: 9, roof: 10, ridge: "z" },
   sockets: [
     { at: [0, 0, 0], facing: 180, type: "surface", size: [6, 6], reach: 1.5, reachOver: 1 },
     { at: [-13, -19, 17], facing: 0, type: "crypt", size: [6, 6], reach: 1.5, reachOver: 1 },
