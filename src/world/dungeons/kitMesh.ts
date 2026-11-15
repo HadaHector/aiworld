@@ -4,8 +4,9 @@
 // through: floor, wall, vault, step. Torches stand at its light spots. Pure: no engine, so it can
 // run anywhere the layout does.
 import { arcosolia, loculi, type DentSurroundings, type Niche, breaches, vaultFalls } from "../architecture/dents";
-import { BENCH_SIZE, TOMB_SIZE, ledgerCorners, type BenchDef, type LedgerDef, type TombDef } from "./tombs";
-import { copings, ribs, wallTrims, type TrimPiece, type CeilingSpan, type StairEdge, type WallFace, type WallTrims } from "../architecture/trims";
+import { BENCH_SIZE, TOMB_SIZE, altarBox, ledgerCorners, type BenchDef, type LedgerDef, type TombDef } from "./tombs";
+import { copings, ribs, wallTrims, type RibSpec, type TrimPiece, type CeilingSpan, type StairEdge, type WallFace, type WallTrims } from "../architecture/trims";
+import { barrelArch, barrelProfile, type BarrelProfile } from "../architecture/vaults";
 import { convexHull, rotate, type ShapeDesc } from "../collision/index";
 import { ModelBuilder } from "../buildings/buildingGeometry";
 import type { BuildingModel, ModelLight, Paint } from "../buildings/buildingTypes";
@@ -121,6 +122,17 @@ function boxSides(min: V, max: V): { n: V; corners: V[] }[] {
     }
   }
   return sides;
+}
+
+/** A solid box square to the part, from its least corner to its greatest. */
+function boxSolid(min: V, max: V): Solid {
+  const planes = [0, 1, 2].flatMap((k) => {
+    const n: V = [0, 0, 0], m: V = [0, 0, 0];
+    n[k] = 1;
+    m[k] = -1;
+    return [{ n, d: max[k] }, { n: m, d: -min[k] }];
+  });
+  return { planes, box: { min, max }, sides: boxSides(min, max), lo: min, hi: max };
 }
 
 /** A convex solid from its corners: its planes, and each flat side as a polygon. */
@@ -452,6 +464,9 @@ interface SolidKind {
   dark?: boolean;
   /** A breach's heap: the wall's core's rubble. */
   breach?: boolean;
+  /** Of a barrel vault (see `barrelShape`): a facet of its stone, drawn as the vault; or a facet of
+   *  an arch under it (a rib). Either shaded smooth round the barrel, its texture laid round it. */
+  arch?: "vault" | "rib";
   /** A trim's stone direction, where it slopes (a stair's band), and where its courses start. */
   grain?: V;
   uvOrigin?: V;
@@ -481,6 +496,7 @@ function paintFor(f: Face, kind: SolidKind, look: DungeonStyleDef["look"]): Dung
   if (kind.iron) return look.iron;
   if (kind.dark) return look.dark;
   if (kind.breach) return look.breach;
+  if (kind.arch === "vault") return look.ceiling;
   if (kind.niche) return look.niche;
   if (kind.tomb) return look.tomb;
   if (kind.trim) return look.trim;
@@ -501,7 +517,20 @@ function paintFor(f: Face, kind: SolidKind, look: DungeonStyleDef["look"]): Dung
 /** Each part's solids and seen faces, in its own frame - worked out once however often it is placed. */
 const shapesOfPart = new WeakMap<DungeonPartDef, { solids: Solid[]; faces: Face[]; kinds: SolidKind[] }>();
 /** Each part's look with a style's trims, by the style. */
-const trimmedParts = new WeakMap<DungeonPartDef, Map<WallTrims, { solids: Solid[]; faces: Face[]; kinds: SolidKind[]; niches?: Niche[] }>>();
+const trimmedParts = new WeakMap<DungeonPartDef, Map<WallTrims, PartShape>>();
+/** The same, drawn with its barrel vault. */
+const trimmedBarrels = new WeakMap<DungeonPartDef, Map<WallTrims, PartShape>>();
+
+/** A part as drawn: its solids, faces and what each solid is - its niches, its barrel if it has one drawn. */
+interface PartShape {
+  solids: Solid[];
+  faces: Face[];
+  kinds: SolidKind[];
+  niches?: Niche[];
+  barrel?: Barrel;
+  /** Where a chandelier may hang (a large room's): a point on its vault's underside, and the floor under it. */
+  hangs?: { at: V; floor: number }[];
+}
 
 /**
  * A part as a style draws it: its solids and faces, and its trims (src/world/architecture/trims.ts)
@@ -509,23 +538,39 @@ const trimmedParts = new WeakMap<DungeonPartDef, Map<WallTrims, { solids: Solid[
  * the rest as any solid is: a wall gives way to the plinth in front of it, two bands meeting at a
  * corner never flicker. Not for doorways or caps: a doorway is a trim itself.
  */
-export function trimmedShape(part: DungeonPartDef, trims: WallTrims): { solids: Solid[]; faces: Face[]; kinds: SolidKind[]; niches?: Niche[] } {
-  const plain = partShape(part);
+export function trimmedShape(part: DungeonPartDef, trims: WallTrims, withBarrel = false): PartShape {
+  const plain: PartShape = withBarrel && part.barrel ? barrelShape(part) : partShape(part);
+  const barrel = plain.barrel;
   if (part.ending) return endingShape(part, trims, plain);
   if (part.doorway || part.paths.length === 0 || (!trims.plinth && !trims.cornice && !trims.ribs && !trims.coping && !trims.loculi && !part.tombs?.length && !part.benches?.length && !part.ledgers?.length)) return plain;
-  let byStyle = trimmedParts.get(part);
-  if (!byStyle) trimmedParts.set(part, (byStyle = new Map()));
+  const cache = barrel ? trimmedBarrels : trimmedParts;
+  let byStyle = cache.get(part);
+  if (!byStyle) cache.set(part, (byStyle = new Map()));
   const known = byStyle.get(trims);
   if (known) return known;
   const { solids, kinds } = plain;
   const whole = new Set(part.whole);
   // The walls: upright faces of solids that are wall (not a step, a railing, a pillar drawn whole).
-  const walls: WallFace[] = plain.faces.filter((f) => Math.abs(f.n[1]) < 0.1 && !kinds[f.solid].tread && !kinds[f.solid].plain && !whole.has(f.solid));
+  // Under a barrel, only as high as it springs: its end walls' lunettes over that are no wall to
+  // trim or cut into.
+  const upright = plain.faces.filter((f) => Math.abs(f.n[1]) < 0.1 && !kinds[f.solid].tread && !kinds[f.solid].plain && !kinds[f.solid].arch && !whole.has(f.solid));
+  const walls: WallFace[] = barrel ? upright.flatMap((f) => underSpring(f, barrel)) : upright;
   // What stands and hangs round the walls, less what is wall all over (a railing, a tunnel's
   // walls): a band never sits on one of those.
   const built = solids.filter((_, i) => !kinds[i].plain && !whole.has(i));
   const stairs = stairEdges(plain.faces, solids, kinds, built);
-  const pieces = wallTrims(walls, { floorUnder: (p) => floorUnder(built, p), ceilingOver: (p) => ceilingOver(built, p), stair: stairs.on }, trims, stairs);
+  // Under a barrel its walls' heads are where it springs: the cornice runs round there.
+  const headOver = (p: V): number | null => (barrel && underBarrel(barrel, p) ? barrel.spring : ceilingOver(built, p));
+  const pieces = wallTrims(walls, { floorUnder: (p) => floorUnder(built, p), ceilingOver: headOver, stair: stairs.on }, trims, stairs);
+  // Arches under a barrel, following it round, each on its pilasters.
+  const arches = new Set<TrimPiece>();
+  if (barrel && trims.ribs) {
+    for (const piece of barrelRibs(barrel, trims.ribs, (p) => built.some((so) => inside(so, p)), (p) => floorUnder(built, p))) {
+      // (A beam over an opening is laid along its grain: not round the barrel.)
+      if (piece.kind === "rib" && !piece.grain) arches.add(piece);
+      pieces.push(piece);
+    }
+  }
   // The flat ceilings: each box seen from under it, as far as it is seen.
   const spans: CeilingSpan[] = [];
   if (trims.ribs || trims.breaches?.vaults) {
@@ -606,11 +651,13 @@ export function trimmedShape(part: DungeonPartDef, trims: WallTrims): { solids: 
     };
     // A bench before a wall: no arcosolium over it (its chest would stand behind the seat), and no
     // loculus down into it (those over it stand clear).
-    const benchBoxes = (part.benches ?? []).map((b) => benchBox(b));
+    // (An altar the same: nothing cut into the wall behind it but what is over it.)
+    const altarAt = part.altar ? altarBox(part.altar) : null;
+    const benchBoxes = [...(part.benches ?? []).map((b) => benchBox(b)), ...(altarAt ? [{ lo: altarAt.min as V, hi: altarAt.max as V }] : [])];
     const overBench = (lo: V, hi: V, all: boolean) => benchBoxes.some((b) => b.hi[0] > lo[0] - 0.3 && b.lo[0] < hi[0] + 0.3 && b.hi[2] > lo[2] - 0.3 && b.lo[2] < hi[2] + 0.3 && (all || lo[1] < b.hi[1]));
     // Breaches first: where they are, the rest keep clear - and they keep clear of the benches, the
     // tombs, the ledger stones and the ways through (their heaps lie on the floor).
-    const standing = [...(part.tombs ?? []).map((t) => tombBox(t)), ...(part.ledgers ?? []).map((l) => ({ lo: [l.at.x - 1.7, l.at.y, l.at.z - 1.7] as V, hi: [l.at.x + 1.7, l.at.y + 0.5, l.at.z + 1.7] as V }))];
+    const standing = [...(altarAt ? [{ lo: altarAt.min as V, hi: altarAt.max as V }] : []), ...(part.tombs ?? []).map((t) => tombBox(t)), ...(part.ledgers ?? []).map((l) => ({ lo: [l.at.x - 1.7, l.at.y, l.at.z - 1.7] as V, hi: [l.at.x + 1.7, l.at.y + 0.5, l.at.z + 1.7] as V }))];
     const ways = part.paths.flatMap((line) => line.slice(1).map((q, i): [V, V] => [[line[i].x, line[i].y, line[i].z], [q.x, q.y, q.z]]));
     const nearWay = (lo: V, hi: V): boolean => ways.some(([a, b]) => {
       // The way's nearest to the box, in plan, at the box's height.
@@ -646,6 +693,7 @@ export function trimmedShape(part: DungeonPartDef, trims: WallTrims): { solids: 
   }
   const all = [...solids, ...pieces.map((t) => hullSolid(t.points))];
   let faces = partFaces(all, false, all.map((_, i) => i), whole);
+  if (barrel) faces = faces.filter((f) => kinds[f.solid]?.arch !== "vault" || underside(f, barrel));
   const kindsAll = solidKinds(all.length, faces);
   if (niches.length > 0) faces = drawNiches(niches, faces, all, kindsAll);
   // Its tombs, drawn as they are, every side but their undersides: they stand on the floor, and a
@@ -664,8 +712,11 @@ export function trimmedShape(part: DungeonPartDef, trims: WallTrims): { solids: 
     kindsAll.push({ tread: false, floor: false, roof: false, top: -Infinity, trim: true, tomb: true });
   }
   for (const i of part.plain) kindsAll[i] = { ...kindsAll[i], tread: false, plain: true };
-  for (let i = solids.length; i < solids.length + pieces.length; i++) kindsAll[i] = { tread: false, floor: false, roof: false, top: -Infinity, trim: true, grain: pieces[i - solids.length].grain, uvOrigin: pieces[i - solids.length].uvOrigin };
-  const shape = { solids: all, faces, kinds: kindsAll, niches };
+  kinds.forEach((k, i) => {
+    if (k.arch) kindsAll[i] = { ...kindsAll[i], arch: k.arch };
+  });
+  for (let i = solids.length; i < solids.length + pieces.length; i++) kindsAll[i] = { tread: false, floor: false, roof: false, top: -Infinity, trim: true, grain: pieces[i - solids.length].grain, uvOrigin: pieces[i - solids.length].uvOrigin, arch: arches.has(pieces[i - solids.length]) ? "rib" : undefined };
+  const shape: PartShape = { solids: all, faces, kinds: kindsAll, niches, barrel, hangs: part.room && part.tags.includes("large") ? hangPoints(all, barrel, spans) : undefined };
   byStyle.set(trims, shape);
   return shape;
 }
@@ -960,7 +1011,318 @@ export function stairEdges(faces: readonly Face[], solids: readonly Solid[], kin
       (up ? treads : vaults).push({ a, b, n: [-o[0], 0, -o[2]] });
     }
   }
+  // A flight's sloping soffit (one vault over all its steps, not one a step): its edge along each
+  // wall, step by step - over each tread's edge, at the soffit's height over its middle - so its
+  // cornice slopes with it as the steps' plinth does.
+  const soffits = new Set<Solid>();
+  for (const f of faces) {
+    if (f.n[1] > -0.5 || f.n[1] < -0.999 || !kinds[f.solid].roof || kinds[f.solid].tread || kinds[f.solid].arch) continue;
+    const c = f.corners.reduce((m, p): V => [m[0] + p[0] / f.corners.length, m[1] + p[1] / f.corners.length, m[2] + p[2] / f.corners.length], [0, 0, 0]);
+    if (floorUnder(steps, [c[0], c[1] - 0.1, c[2]]) !== null) soffits.add(solids[f.solid]);
+  }
+  if (soffits.size > 0) {
+    const over = [...soffits];
+    for (const t of [...treads]) {
+      const m: V = [(t.a[0] + t.b[0]) / 2 + t.n[0] * 0.2, t.a[1] + 0.1, (t.a[2] + t.b[2]) / 2 + t.n[2] * 0.2];
+      const h = ceilingOver(over, m);
+      if (h === null || h !== ceilingOver(built, m)) continue;
+      vaults.push({ a: [t.a[0], h, t.a[2]], b: [t.b[0], h, t.b[2]], n: t.n });
+    }
+    for (const so of over) stepVaults.add(so);
+  }
   return { treads, vaults, on };
+}
+
+/** A part's barrel vault as drawn (see `DungeonPartDef.barrel`), in its own frame. */
+interface Barrel {
+  profile: BarrelProfile;
+  /** Along its axis and across it (its inside), where it springs, the top of its stone. */
+  a0: number;
+  a1: number;
+  s0: number;
+  s1: number;
+  mid: number;
+  spring: number;
+  top: number;
+  alongX: boolean;
+  /** A point from (along, across, up). */
+  point(a: number, s: number, y: number): V;
+}
+
+/** Whether a point lies over a barrel's floor, under where it springs. */
+function underBarrel(b: Barrel, p: V): boolean {
+  const a = b.alongX ? p[0] : p[2], s = b.alongX ? p[2] : p[0];
+  return a > b.a0 - 0.2 && a < b.a1 + 0.2 && s > b.s0 - 0.2 && s < b.s1 + 0.2 && p[1] < b.spring + 0.01;
+}
+
+/** A wall face round a barrel, cut off where the barrel springs (none of it, all over that). */
+function underSpring<F extends { n: V; corners: V[] }>(f: F, b: Barrel): F[] {
+  const near = f.corners.every((c) => {
+    const a = b.alongX ? c[0] : c[2], s = b.alongX ? c[2] : c[0];
+    return a > b.a0 - 1.05 && a < b.a1 + 1.05 && s > b.s0 - 1.05 && s < b.s1 + 1.05;
+  });
+  if (!near || f.corners.every((c) => c[1] <= b.spring + 1e-6)) return [f];
+  // The polygon kept under the springing line.
+  const kept: V[] = [];
+  const c = f.corners;
+  for (let i = 0; i < c.length; i++) {
+    const p = c[i], q = c[(i + 1) % c.length];
+    const pin = p[1] <= b.spring + 1e-6, qin = q[1] <= b.spring + 1e-6;
+    if (pin) kept.push(p);
+    if (pin !== qin) {
+      const t = (b.spring - p[1]) / (q[1] - p[1]);
+      kept.push([p[0] + (q[0] - p[0]) * t, b.spring, p[2] + (q[2] - p[2]) * t]);
+    }
+  }
+  const unique = kept.filter((k, i) => Math.hypot(...sub(k, kept[(i + 1) % kept.length])) > 1e-4);
+  return unique.length >= 3 ? [{ ...f, corners: unique }] : [];
+}
+
+/**
+ * Where chandeliers may hang in a large room: along the middle of each vault (a barrel's crown, a
+ * flat vault's long middle line), about every HANG_EVERY - each moved a little along to where it
+ * hangs from the vault itself, not a rib, with open room under it (no pier) and the vault at least
+ * HANG_HIGH over the floor.
+ */
+function hangPoints(solids: readonly Solid[], barrel: Barrel | undefined, spans: readonly CeilingSpan[]): { at: V; floor: number }[] {
+  const lines: { from: V; to: V; y: number }[] = [];
+  if (barrel) lines.push({ from: barrel.point(barrel.a0, barrel.mid, 0), to: barrel.point(barrel.a1, barrel.mid, 0), y: barrel.spring + barrel.profile.rise });
+  else {
+    for (const sp of spans) {
+      const alongX = sp.x1 - sp.x0 >= sp.z1 - sp.z0;
+      const mx = (sp.x0 + sp.x1) / 2, mz = (sp.z0 + sp.z1) / 2;
+      lines.push(alongX ? { from: [sp.x0, 0, mz], to: [sp.x1, 0, mz], y: sp.y } : { from: [mx, 0, sp.z0], to: [mx, 0, sp.z1], y: sp.y });
+    }
+  }
+  const out: { at: V; floor: number }[] = [];
+  for (const { from, to, y } of lines) {
+    const len = Math.hypot(to[0] - from[0], to[2] - from[2]);
+    const count = Math.max(1, Math.round(len / HANG_EVERY));
+    const dir: V = [(to[0] - from[0]) / len, 0, (to[2] - from[2]) / len];
+    for (let i = 0; i < count; i++) {
+      const want = (len * (i + 0.5)) / count;
+      for (const off of [0, 1.5, -1.5, 3, -3]) {
+        const t = want + off;
+        if (t < 3 || t > len - 3) continue;
+        const x = from[0] + dir[0] * t, z = from[2] + dir[2] * t;
+        const floor = floorUnder(solids, [x, y - 0.1, z]);
+        if (floor === null || y - floor < HANG_HIGH) continue;
+        const ceiling = ceilingOver(solids, [x, floor + 1, z]);
+        if (ceiling === null || Math.abs(ceiling - y) > 0.05 || !open(solids, [x, floor + 1, z])) continue;
+        out.push({ at: [x, y, z], floor });
+        break;
+      }
+    }
+  }
+  return out;
+}
+
+/** About how far apart chandeliers hang along a vault, and how high it must be over the floor for one. */
+const HANG_EVERY = 16;
+const HANG_HIGH = 9;
+/** How high over the floor its ring must hang, at the least. */
+const RING_LOW = 5;
+
+/** Whether a face of a barrel's facet is its underside (the vault seen), not an upright side. */
+function underside(f: Face, b: Barrel): boolean {
+  return f.n[1] < -0.05 && Math.abs(b.alongX ? f.n[2] : f.n[0]) < 0.9999;
+}
+
+/** Each part's look with its barrel vault, worked out once. */
+const barrelShapes = new WeakMap<DungeonPartDef, PartShape>();
+
+/**
+ * A part drawn with its barrel vault (GEOMETRY.md, 10: the ceiling) in place of its flat one: its
+ * flat vault lifted out of the way over the barrel's stone; the walls round it, and the lintels in
+ * them, carried up to the top of that stone; and the stone itself, a solid for each facet of the
+ * barrel's section - from its underside up to the top, the length of the vault and into the walls
+ * at its ends (only its underside drawn: where facets meet, a hair of their upright sides would
+ * show). Where an end is open (a way's end, the next part on past it), a wall over the
+ * springing closes it: the end's lunette. Its colliders are its flat vault's still: none of it is
+ * in reach.
+ */
+function barrelShape(part: DungeonPartDef): PartShape {
+  const known = barrelShapes.get(part);
+  if (known) return known;
+  const def = part.barrel!;
+  const base = partShape(part);
+  const [x0, z0, x1, z1] = def.over;
+  const alongX = def.along === "x";
+  const [a0, a1, s0, s1] = alongX ? [x0, x1, z0, z1] : [z0, z1, x0, x1];
+  const mid = (s0 + s1) / 2;
+  const spring = def.spring, top = spring + def.rise + 1;
+  const point = (a: number, s: number, y: number): V => (alongX ? [a, y, s] : [s, y, a]);
+  const profile = barrelProfile((s1 - s0) / 2, def.rise);
+  const barrel: Barrel = { profile, a0, a1, s0, s1, mid, spring, top, alongX, point };
+  const cx = (x0 + x1) / 2, cz = (z0 + z1) / 2;
+  const solids = base.solids.map((so) => {
+    if (!so.box) return so;
+    const min: V = [...so.box.min], max: V = [...so.box.max];
+    const overInside = min[0] < x1 - 0.01 && max[0] > x0 + 0.01 && min[2] < z1 - 0.01 && max[2] > z0 + 0.01;
+    if (Math.abs(min[1] - spring) < 1e-3 && overInside) {
+      // Its flat vault: lifted over the barrel's stone, out of sight.
+      if (min[0] <= cx && max[0] >= cx && min[2] <= cz && max[2] >= cz) return boxSolid([min[0], top, min[2]], [max[0], top + 0.5, max[2]]);
+      // Another's (an alcove's) reaching in under the barrel's edge: cut back to it.
+      const ox = Math.min(max[0], x1) - Math.max(min[0], x0), oz = Math.min(max[2], z1) - Math.max(min[2], z0);
+      if (ox < oz) {
+        if (min[0] < x0) max[0] = x0;
+        else min[0] = x1;
+      } else if (min[2] < z0) max[2] = z0;
+      else min[2] = z1;
+      return boxSolid(min, max);
+    }
+    // A wall round it (or a lintel in one) up to its flat vault's top: up to the barrel's.
+    // (Its own walls: lying wholly within a wall's thickness round it - not an alcove's off it.)
+    const near = min[0] >= x0 - 1.01 && max[0] <= x1 + 1.01 && min[2] >= z0 - 1.01 && max[2] <= z1 + 1.01;
+    const standingIn = min[0] > x0 + 0.01 && max[0] < x1 - 0.01 && min[2] > z0 + 0.01 && max[2] < z1 - 0.01;
+    if (Math.abs(max[1] - (spring + 1)) < 1e-3 && min[1] < spring - 1e-3 && near && !standingIn) return boxSolid(min, [max[0], top, max[2]]);
+    return so;
+  });
+  // Its ends: into the wall where there is one, else a lunette's wall closing it over the springing.
+  const walled = (a: number): boolean => base.solids.some((so) => inside(so, point(a, mid, spring - 0.5)));
+  const end0 = walled(a0 - 0.5), end1 = walled(a1 + 0.5);
+  const from = end0 ? a0 - 1 : a0, to = end1 ? a1 + 1 : a1;
+  const added: Solid[] = [];
+  const pts = profile.points;
+  for (let k = 0; k + 1 < pts.length; k++) {
+    const [sa, ya] = pts[k], [sb, yb] = pts[k + 1];
+    const ring: [number, number][] = [[mid + sa, spring + ya], [mid + sb, spring + yb], [mid + sb, top], [mid + sa, top]];
+    added.push(hullSolid([...ring.map(([s, y]) => point(from, s, y)), ...ring.map(([s, y]) => point(to, s, y))]));
+  }
+  const vaults = added.length;
+  const lunette = (b0: number, b1: number): Solid => {
+    const p = point(b0, s0 - 1, spring), q = point(b1, s1 + 1, top);
+    return boxSolid([Math.min(p[0], q[0]), spring, Math.min(p[2], q[2])], [Math.max(p[0], q[0]), top, Math.max(p[2], q[2])]);
+  };
+  // Over its sides, a wall's thickness out, stone up to its top: where a side opens under it (an
+  // alcove's flat vault there), nothing open over that vault.
+  for (const [lo, hi] of [[s0 - 1, s0], [s1, s1 + 1]]) {
+    const p = point(from, lo, spring), q = point(to, hi, top);
+    added.push(boxSolid([Math.min(p[0], q[0]), spring, Math.min(p[2], q[2])], [Math.max(p[0], q[0]), top, Math.max(p[2], q[2])]));
+  }
+  if (!end0) added.push(lunette(a0, a0 + 1));
+  if (!end1) added.push(lunette(a1 - 1, a1));
+  const all = [...solids, ...added];
+  const facets = new Set(added.slice(0, vaults));
+  const faces = partFaces(all, false, all.map((_, i) => i), new Set(part.whole)).filter((f) => !facets.has(all[f.solid]) || underside(f, barrel));
+  const kinds = solidKinds(all.length, faces);
+  for (const i of part.plain) kinds[i] = { tread: false, floor: false, roof: false, top: -Infinity, plain: true };
+  for (let i = 0; i < vaults; i++) kinds[solids.length + i] = { ...kinds[solids.length + i], tread: false, floor: false, arch: "vault" };
+  const shape: PartShape = { solids: all, faces, kinds, barrel };
+  barrelShapes.set(part, shape);
+  return shape;
+}
+
+/**
+ * Arches under a barrel, about every `spacing` along it (GEOMETRY.md, 6.1): each following its
+ * section round, standing on a pilaster at both ends - moved along a little, up to half the
+ * spacing, to where both pilasters have wall behind them from the floor to the springing (framing
+ * an opening, never standing in one).
+ */
+function barrelRibs(b: Barrel, spec: RibSpec, solidAt: (p: V) => boolean, floorAt: (p: V) => number | null): TrimPiece[] {
+  if (b.s1 - b.s0 < (spec.minSpan ?? 4)) return [];
+  const w = spec.width, pw = (spec.pilaster?.width ?? spec.width) / 2, proud = spec.pilaster?.proud ?? 0;
+  const box = (aLo: number, aHi: number, sLo: number, sHi: number, yLo: number, yHi: number): V[] => {
+    const plan: [number, number][] = [[aLo, sLo], [aHi, sLo], [aHi, sHi], [aLo, sHi]];
+    return [...plan.map(([a, s]) => b.point(a, s, yLo)), ...plan.map(([a, s]) => b.point(a, s, yHi))];
+  };
+  /** A pilaster against the wall at one side (-1 at s0, 1 at s1), at `a`: wall behind it all the way up, or null. */
+  const pilaster = (a: number, side: number): V[] | null => {
+    const wall = side < 0 ? b.s0 : b.s1;
+    const floor = floorAt(b.point(a, wall - side * 0.2, b.spring - 0.1));
+    if (floor === null) return null;
+    for (let h = floor + 0.5; h < b.spring - 0.2; h += 1) {
+      for (const off of [-pw + 0.05, 0, pw - 0.05]) if (!solidAt(b.point(a + off, wall + side * 0.3, h))) return null;
+    }
+    const [lo, hi] = side > 0 ? [wall - proud, wall + 0.1] : [wall - 0.1, wall + proud];
+    return box(a - pw, a + pw, lo, hi, floor, b.spring);
+  };
+  const ribAt = (a: number): TrimPiece[] | null => {
+    const out: TrimPiece[] = [];
+    if (spec.pilaster) {
+      const p0 = pilaster(a, -1), p1 = pilaster(a, 1);
+      if (!p0 || !p1) return null;
+      out.push({ kind: "pilaster", points: p0 }, { kind: "pilaster", points: p1 });
+    }
+    const arch = barrelArch(b.profile, (along, s, y): V => b.point(along, b.mid + s, b.spring + y), a, w, spec.depth);
+    return [...arch.map((points): TrimPiece => ({ kind: "rib", points })), ...out];
+  };
+  const pieces: TrimPiece[] = [];
+  const len = b.a1 - b.a0;
+  const count = Math.round(len / spec.spacing);
+  for (let i = 1; i < count; i++) {
+    const want = b.a0 + (len * i) / count;
+    let rib: TrimPiece[] | null = null;
+    for (let k = 0; k * 0.25 <= spec.spacing / 2 && !rib; k++) {
+      for (const a of k === 0 ? [want] : [want - k * 0.25, want + k * 0.25]) {
+        if (a - pw < b.a0 + 0.5 || a + pw > b.a1 - 0.5) continue;
+        rib = ribAt(a);
+        if (rib) break;
+      }
+    }
+    if (rib) pieces.push(...rib);
+  }
+  // Where a side opens under the springing (an alcove off it, its flat vault there), a beam across
+  // the opening under the springing, flush with the wall's line and back over the alcove: the barrel
+  // stands on it, the flat vault meets it.
+  for (const side of [-1, 1]) {
+    const wall = side < 0 ? b.s0 : b.s1;
+    const opening = (a: number): boolean => !solidAt(b.point(a, wall + side * 0.3, b.spring - 0.3));
+    let start: number | null = null;
+    for (let a = b.a0 + 0.125; a <= b.a1; a += 0.25) {
+      const isOpen = a < b.a1 - 0.125 && opening(a);
+      if (isOpen && start === null) start = a - 0.125;
+      if (!isOpen && start !== null) {
+        const end = a - 0.125;
+        if (end - start > 1) pieces.push({ kind: "rib", grain: b.point(1, 0, 0).map((v, i) => v - b.point(0, 0, 0)[i]) as V, points: box(start - 0.3, end + 0.3, Math.min(wall, wall + side * w), Math.max(wall, wall + side * w), b.spring - spec.depth, b.spring) });
+        start = null;
+      }
+    }
+  }
+  return pieces;
+}
+
+/**
+ * A face of a barrel vault or an arch under it (along its section, not an arch's side), shaded
+ * smooth round the barrel and its texture laid round it without a seam: the vault's along its axis
+ * and round, an arch's round and across. Null for any other face.
+ */
+function archOf(b: Barrel, f: Face, kind: "vault" | "rib"): { normals: V[]; tangents: V[]; uvs: [number, number][] } | null {
+  const up: V = [0, 1, 0], across: V = b.alongX ? [0, 0, 1] : [1, 0, 0], axis: V = b.alongX ? [1, 0, 0] : [0, 0, 1];
+  const local = (p: V): [number, number, number] => [dot(p, axis), dot(p, across) - b.mid, p[1] - b.spring];
+  const smooth = (p: V): V => {
+    const [, s, y] = local(p);
+    const [ns, ny] = b.profile.normalAt(s, y);
+    return norm([across[0] * ns + up[0] * ny, across[1] * ns + up[1] * ny, across[2] * ns + up[2] * ny]);
+  };
+  const c = f.corners.reduce((m, p): V => [m[0] + p[0] / f.corners.length, m[1] + p[1] / f.corners.length, m[2] + p[2] / f.corners.length], [0, 0, 0]);
+  /** Round the arc at a point, the way its length runs on (from +s over to -s). */
+  const roundDir = (p: V): V => {
+    const [, s, y] = local(p);
+    const [ns, ny] = b.profile.normalAt(s, y);
+    return norm([across[0] * ny - up[0] * ns, across[1] * ny - up[1] * ns, across[2] * ny - up[2] * ns]);
+  };
+  // An arch's side (facing along the vault): flat, its stone laid round the arc and down from the vault.
+  if (kind === "rib" && Math.abs(dot(f.n, axis)) > 0.9) {
+    return {
+      normals: f.corners.map(() => f.n),
+      tangents: f.corners.map(roundDir),
+      uvs: f.corners.map((p): [number, number] => {
+        const [, s, y] = local(p);
+        return [b.profile.lengthAt(s, y), b.profile.depthAt(s, y)];
+      }),
+    };
+  }
+  if (dot(smooth(c), f.n) < 0.8) return null;
+  const normals = f.corners.map(smooth);
+  const uvs = f.corners.map((p): [number, number] => {
+    const [a, s, y] = local(p);
+    const round = b.profile.lengthAt(s, y);
+    return kind === "vault" ? [a, round] : [round, a];
+  });
+  // Round it, the way its length runs on (from +s over to -s).
+  const tangents = kind === "vault" ? f.corners.map(() => axis) : f.corners.map(roundDir);
+  return { normals, tangents, uvs };
 }
 
 function partShape(part: DungeonPartDef): { solids: Solid[]; faces: Face[]; kinds: SolidKind[] } {
@@ -1168,7 +1530,9 @@ const asPaint = (p: DungeonPaint): Paint => ({ material: p.material, tint: p.tin
  */
 export function buildPartModel(layout: DungeonLayout, index: number, style: DungeonStyleDef, fixture: PropDef | undefined, props?: (id: string) => PropDef | undefined): PartModel {
   const placed = layout.parts[index];
-  const shape = trimmedShape(placed.part, style.trims);
+  // A barrel vault in the style's share of the parts that may have one.
+  const barrel = !!placed.part.barrel && placed.role !== "doorway" && mulberry32(deriveSeed(layout.seed, index * 4099 + 29))() < style.barrels;
+  const shape = trimmedShape(placed.part, style.trims, barrel);
   const { solids, kinds } = shape;
   let faces = shape.faces;
   const { point, turn, back, unturn } = partToFrame(placed, layout.frame);
@@ -1210,6 +1574,12 @@ export function buildPartModel(layout: DungeonLayout, index: number, style: Dung
         b.raw(f.corners.map(point), f.corners.map(() => turn(f.n)), f.corners.map(() => turn(tangent)), f.corners.map((p): [number, number] => [dot(sub(p, o), tangent), dot(sub(p, o), up)]), paint);
         continue;
       }
+    }
+    // A barrel's facets and its arches', smooth round it.
+    const arch = shape.barrel && kinds[f.solid].arch ? archOf(shape.barrel, f, kinds[f.solid].arch!) : null;
+    if (arch) {
+      b.raw(f.corners.map(point), arch.normals.map(turn), arch.tangents.map(turn), arch.uvs, paint);
+      continue;
     }
     const stair = placed.role === "doorway" ? null : stairOf(f, kinds[f.solid], solids, style.look);
     if (stair) {
@@ -1278,6 +1648,38 @@ export function buildPartModel(layout: DungeonLayout, index: number, style: Dung
       }
       const p = point(site.at);
       const front = turn(site.front);
+      b.append(model, p[0], p[1], p[2], front[0], front[2]);
+    });
+  }
+  // Its altar (a boss room's), its back on the wall, facing out.
+  const altarProp = placed.part.altar && style.altar ? props?.(style.altar) : undefined;
+  if (altarProp && placed.part.altar) {
+    const a = placed.part.altar;
+    const model = generateProp(altarProp, deriveSeed(layout.seed, index * 613 + 5), 0);
+    // Its back: the furthest its model reaches behind its middle.
+    let back = 0;
+    for (let k = 2; k < model.positions.length; k += 3) back = Math.max(back, -model.positions[k]);
+    const r = (a.facing * Math.PI) / 180;
+    const out: V = [Math.sin(r), 0, Math.cos(r)];
+    const p = point([a.at.x + out[0] * (back + 0.02), a.at.y, a.at.z + out[2] * (back + 0.02)]);
+    const front = turn(out);
+    b.append(model, p[0], p[1], p[2], front[0], front[2]);
+  }
+  // Chandeliers from its vaults: each hung by its chain's top, its ring high enough over the floor.
+  const chandelier = style.chandeliers && props?.(style.chandeliers.prop);
+  if (chandelier && style.chandeliers) {
+    const share = style.chandeliers.share;
+    const hangRandom = mulberry32(deriveSeed(layout.seed, index * 7477 + 3));
+    (shape.hangs ?? []).forEach((hang, i) => {
+      if (hangRandom() >= share) return;
+      const model = generateProp(chandelier, deriveSeed(layout.seed, index * 2311 + i), i);
+      let top = -Infinity;
+      for (let k = 1; k < model.positions.length; k += 3) top = Math.max(top, model.positions[k]);
+      if (!Number.isFinite(top)) return;
+      const y = hang.at[1] - top + 0.05;
+      if (y - hang.floor < RING_LOW) return;
+      const p = point([hang.at[0], y, hang.at[2]]);
+      const front = turn([0, 0, 1]);
       b.append(model, p[0], p[1], p[2], front[0], front[2]);
     });
   }

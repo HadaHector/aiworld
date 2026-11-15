@@ -5,6 +5,10 @@
   tombs: 2,                          // standing free on the floor, clear of the ways
   ledgers: 0.3,                     // a share of the rows of ledger stones in its floor
   sockets: [{ at: [0, 0, 0], facing: 180, type: "crypt", size: [6, 6], reach: 1.5 }],
+  // A barrel vault it may be drawn with instead (the style's share of the time): a basket-handle arch 8 m over its flat one.
+  barrel: { over: [-14, 1, 14, 29], along: "z", spring: 12, rise: 8 },
+  // An altar against the far wall, facing the way in (the style's altar prop).
+  altar: { at: [0, 0, 29], facing: 180 },
   colliders: [
     { box: [-15, -1, 0, 15, 0, 30] },
     { box: [-15, 12, 0, 15, 13, 30] },

@@ -8,7 +8,7 @@ import { DUNGEON_FOLDERS, orderPacks, parseFile, type PackSource } from "../cont
 import { vec3, type Aabb, type ShapeDesc, type Vec3 } from "../collision/index";
 import { boxShape, doorwayGeometry, DOORWAY_KINDS, rotundaGeometry, spiralGeometry, stairGeometry, type DoorwaySpec, type Polyline, type Voussoir } from "./kitShapes";
 import { checkPaths } from "./clearance";
-import { benchShape, ledgerShape, placeBenches, placeLedgers, placeTombs, tombShape, type BenchDef, type LedgerDef, type TombDef } from "./tombs";
+import { altarBox, altarShape, benchShape, ledgerShape, placeBenches, placeLedgers, placeTombs, tombShape, type AltarDef, type BenchDef, type LedgerDef, type TombDef } from "./tombs";
 
 const ID_PATTERN = /^[A-Za-z0-9_-]+$/;
 
@@ -121,6 +121,21 @@ export interface DungeonPartDef {
   ledgers?: LedgerDef[];
   /** How many of `shapes` are drawn as they are (the rest - its tombs, benches and ledgers - are not); all when unset. */
   drawn?: number;
+  /** A barrel vault it may be drawn with instead of its flat one (kitMesh.ts), the style's share of
+   *  the time: over `over` (x0, z0, x1, z1 - the room's inside), its axis along x or z, springing
+   *  where the flat vault's underside is, rising `rise` over that. Drawn only: it collides with its
+   *  flat vault. Its bounds reach over it. */
+  barrel?: BarrelDef;
+  /** An altar against a wall (a boss room's): a collider after its own, before its tombs (which
+   *  keep clear of it), drawn as the style's altar prop. */
+  altar?: AltarDef;
+}
+
+export interface BarrelDef {
+  over: [number, number, number, number];
+  along: "x" | "z";
+  spring: number;
+  rise: number;
 }
 
 export interface DungeonSize {
@@ -159,6 +174,12 @@ export interface DungeonStyleDef {
   light: DungeonLight;
   /** Urns (a prop) set in its open loculi and on its benches: the share of each such place that has one. */
   urns?: { prop: string; share: number };
+  /** The prop drawn at a part's altar. */
+  altar?: string;
+  /** Chandeliers (a prop) hung from the vaults of its large rooms: the share of the places for one that have one. */
+  chandeliers?: { prop: string; share: number };
+  /** The share of the parts that may have a barrel vault (`DungeonPartDef.barrel`) drawn with it. */
+  barrels: number;
 }
 
 /** A face's building material (by id; null for plain colour) and the tint its colour is multiplied by. */
@@ -306,7 +327,7 @@ function vector(reader: Reader, value: unknown, path: string): Vec3 {
   return vec3();
 }
 
-const PART_KEYS = ["tags", "weight", "stage", "apart", "tombs", "benches", "ledgers", "ending", "bounds", "sockets", "colliders", "paths", "spots", "room", "doorway"];
+const PART_KEYS = ["tags", "weight", "stage", "apart", "tombs", "benches", "ledgers", "ending", "bounds", "sockets", "colliders", "paths", "spots", "room", "doorway", "barrel", "altar"];
 
 function readPart(entry: Entry, rules: DungeonRules, issues: ContentIssue[]): DungeonPartDef | null {
   const reader = new Reader(issues, entry.file);
@@ -461,16 +482,30 @@ function readPart(entry: Entry, rules: DungeonRules, issues: ContentIssue[]): Du
   } else {
     bounds = shapesBounds(shapes);
   }
+  const barrel = readBarrel(reader, obj);
+  // Room over its vault for a barrel, and its vault's stone over that.
+  if (barrel) bounds = { min: bounds.min, max: vec3(bounds.max.x, Math.max(bounds.max.y, barrel.spring + barrel.rise + 1), bounds.max.z) };
   const tags = obj.tags === undefined ? [] : reader.stringList(obj, "tags", "");
   // Tombs on its floor, as many as asked for and fit, clear of its ways - colliders like the rest.
   const drawn = shapes.length;
+  // Its altar first: its tombs and benches keep clear of it.
+  const altar = readAltar(reader, obj);
+  if (altar) shapes.push(altarShape(altar));
   const tombs = placeTombs(shapes, paths, spots, reader.optionalNumber(obj, "tombs", "", 0, { min: 0 }));
   shapes.push(...tombs.map(tombShape));
   // Stone benches with their backs to its walls, clear of the ways and its tombs.
   const benches = placeBenches(shapes, paths, spots, sockets, reader.optionalNumber(obj, "benches", "", 0, { min: 0 }));
   shapes.push(...benches.map(benchShape));
   // Ledger stones in rows on its floor, round its tombs: a step high, so colliders too.
-  const ledgers = placeLedgers(shapes, spots, sockets.map((s) => s.at), reader.optionalNumber(obj, "ledgers", "", 0, { min: 0, max: 1 }));
+  // (Laid without the altar - its top is no floor - and none under it.)
+  const altarAt = altar ? altarBox(altar) : null;
+  const ledgers = placeLedgers(altar ? shapes.filter((_, i) => i !== drawn) : shapes, spots, sockets.map((s) => s.at), reader.optionalNumber(obj, "ledgers", "", 0, { min: 0, max: 1 })).filter(
+    (l) => {
+      if (!altarAt) return true;
+      const r = Math.hypot(l.half[0], l.half[1]) + 0.3;
+      return l.at.x + r < altarAt.min[0] || l.at.x - r > altarAt.max[0] || l.at.z + r < altarAt.min[2] || l.at.z - r > altarAt.max[2];
+    },
+  );
   shapes.push(...ledgers.map(ledgerShape));
   const part: DungeonPartDef = {
     id: entry.id,
@@ -495,6 +530,8 @@ function readPart(entry: Entry, rules: DungeonRules, issues: ContentIssue[]): Du
     benches,
     ledgers,
     drawn,
+    barrel,
+    altar,
   };
   // Every way through it, on its own colliders: floor under the walk lines, and 6 m wide and high.
   const before = issues.length;
@@ -504,6 +541,37 @@ function readPart(entry: Entry, rules: DungeonRules, issues: ContentIssue[]): Du
     if (paths.length > 0 && !doorway) for (const problem of checkPaths(shapes, paths, rules.minClear, sockets)) reader.fail("paths", problem);
   }
   return part;
+}
+
+/** A part's altar, if it has one (see `DungeonPartDef.altar`). */
+function readAltar(reader: Reader, obj: RawObject): AltarDef | undefined {
+  if (obj.altar === undefined) return undefined;
+  const a = reader.object(obj.altar, "altar");
+  reader.onlyKeys(a, "altar", ["at", "facing"]);
+  const facing = reader.number(a, "facing", "altar");
+  if (![0, 90, 180, 270].includes(facing)) reader.fail("altar.facing", "expected 0, 90, 180 or 270");
+  return { at: vector(reader, a.at, "altar.at"), facing };
+}
+
+/** A part's barrel vault, if it has one (see `DungeonPartDef.barrel`). */
+function readBarrel(reader: Reader, obj: RawObject): BarrelDef | undefined {
+  if (obj.barrel === undefined) return undefined;
+  const b = reader.object(obj.barrel, "barrel");
+  reader.onlyKeys(b, "barrel", ["over", "along", "spring", "rise"]);
+  const over = b.over;
+  if (!Array.isArray(over) || over.length !== 4 || !over.every((v) => typeof v === "number") || over[2] <= over[0] || over[3] <= over[1]) {
+    reader.fail("barrel.over", "expected [x0, z0, x1, z1], x1 > x0 and z1 > z0");
+    return undefined;
+  }
+  const along = b.along;
+  if (along !== "x" && along !== "z") {
+    reader.fail("barrel.along", 'expected "x" or "z"');
+    return undefined;
+  }
+  const across = along === "x" ? over[3] - over[1] : over[2] - over[0];
+  const rise = reader.number(b, "rise", "barrel", { min: 0.5 });
+  if (rise > across / 2 + 1e-6) reader.fail("barrel.rise", `at most half its width across (${across / 2})`);
+  return { over: over as [number, number, number, number], along, spring: reader.number(b, "spring", "barrel"), rise };
 }
 
 /** The box round a set of shapes, in their own frame. */
@@ -529,7 +597,7 @@ export function shapesBounds(shapes: readonly ShapeDesc[]): Aabb {
   return { min, max };
 }
 
-const STYLE_KEYS = ["name", "builder", "sizes", "branching", "loops", "boss", "keys", "cover", "deepest", "parts", "entrance", "caps", "connector", "look", "light", "urns", "doorways", "trims"];
+const STYLE_KEYS = ["name", "builder", "sizes", "branching", "loops", "boss", "keys", "cover", "deepest", "parts", "entrance", "caps", "connector", "look", "light", "urns", "chandeliers", "altar", "barrels", "doorways", "trims"];
 
 function colour(reader: Reader, value: unknown, path: string, fallback: [number, number, number]): [number, number, number] {
   if (value === undefined) return fallback;
@@ -728,6 +796,9 @@ function readStyle(entry: Entry, allParts: Map<string, DungeonPartDef>, rules: D
     trims: readTrims(reader, obj.trims === undefined ? {} : reader.object(obj.trims, "trims")),
     light: readLight(reader, obj.light === undefined ? {} : reader.object(obj.light, "light")),
     urns: obj.urns === undefined ? undefined : readPropShare(reader, reader.object(obj.urns, "urns"), "urns", "urn"),
+    barrels: reader.optionalNumber(obj, "barrels", "", 0, { min: 0, max: 1 }),
+    altar: reader.optionalString(obj, "altar", ""),
+    chandeliers: obj.chandeliers === undefined ? undefined : readPropShare(reader, reader.object(obj.chandeliers, "chandeliers"), "chandeliers", "chandelier"),
   };
   if (style.loops[1] > 0 && !style.connector) reader.fail("loops", "a style with loops needs a `connector` to make them with");
   // Able to start, grow, end and close.

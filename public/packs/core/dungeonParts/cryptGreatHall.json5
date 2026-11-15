@@ -13,6 +13,8 @@
     { at: [-13, 0, 10], facing: 270, type: "crypt", size: [6, 6], reach: 1.5 },
     { at: [13, 0, 22], facing: 90, type: "crypt", size: [6, 6], reach: 1.5 },
   ],
+  // A barrel vault it may be drawn with instead (the style's share of the time): a basket-handle arch 7 m over its flat one.
+  barrel: { over: [-12, 1, 12, 31], along: "z", spring: 12, rise: 7 },
   colliders: [
     { box: [-13, -1, 0, 13, 0, 32] },   // floor
     { box: [-13, 12, 0, 13, 13, 32] },  // vault

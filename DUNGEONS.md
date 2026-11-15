@@ -12,7 +12,8 @@ Asked and answered before the plan was written.
 
 | Question | Decision |
 |---|---|
-| How one gets in | **Mixed by size.** Small caves and crypts are seamless: walked down into from the terrain, under it, no loading screen. Large dungeons are a space of their own, entered through a short loading screen, like a dimension |
+| How one gets in | **Seamless, every size** (the user's call, 2026-11-15, replacing *mixed by size*): walked down into from the terrain, under it, no loading screen; parts streamed by the player's distance. The style keeps the switch to a space of its own (a loading screen, like a dimension) for some later style that needs it |
+| A crypt's mouth | **A long mausoleum** (2026-11-15): about 10 m by 18 m at the game's doubled scale - a 6 m way cannot go down under a small one - its door, a short landing, and a steeper flight (0.25 m on 0.5 m) down its length and under its back wall into the rock, the spiral below it starting under cover. Its walls hide where the terrain is cut |
 | How big | **Varies by kind**, set by the style: a lair of 4-8 rooms (5-10 minutes), a dungeon of 15-30 rooms on 1-3 floors (30-45 minutes) |
 | Styles first | **A natural cave and a crypt** |
 | Gameplay first | No preference given. Proposed: a boss and a key for a locked door first; traps, levers and secret rooms in a later step |
@@ -589,6 +590,19 @@ Each leaves the game working: dev server with `?play`, `npm run probe`, `npm run
    dungeon, as a cutaway plan), with an Underground light. Open: the server keeps a dungeon in its
    dimension's own collision world (not one of its own); the client draws it in the same scene,
    the world above not drawn over it only because rock is in the way.
+   *Set dressing* (the user judging each in the workbench; GEOMETRY.md's method): trims (plinth,
+   cornice, ribs on pilasters, copings), loculi and arcosolia, tombs, stone benches and ledger
+   stones (colliders, placed when a part is read); candles (lit wax glowing) on benches, ledgers and
+   at tombs' heads, urns in open loculi and on benches; breaches in the walls and fallen vaults,
+   each with a heap of rubble under it. *Vaults*: a part with a `barrel` (rooms, corridors,
+   galleries; not those with piers, nor the L and T halls) is drawn in the style's `barrels` share
+   with a barrel vault springing at its flat vault's height - a half circle where it rises half its
+   width, else a basket-handle arch (`src/world/architecture/vaults.ts`) - its arches following it
+   round onto pilasters, a beam over an alcove opening under it; drawn only, it collides as its flat
+   vault, and its bounds reach over it. A straight flight's vault is one sloping slab, its cornice
+   sloping with it. Large rooms hang chandeliers on chains from their vaults' middles; the boss
+   halls have an altar against the far wall (a collider; tombs, niches and heaps keep clear of it).
+   Not yet: carved symbols, roots; none of this walked in a whole dungeon in the game.
 4. **The cave.** The field builder: shapes (the helix descent among them), the worker, chunks, the mesh collider; the cave
    materials (triplanar, layer weights per vertex, floor to wall to ceiling); fungi as fixtures and
    the per-part, per-vertex bake; the crypt-to-cave transition part; as a space first.

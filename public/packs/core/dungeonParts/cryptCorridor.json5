@@ -6,6 +6,8 @@
     { at: [0, 0, 0], facing: 180, type: "crypt", size: [6, 6] },
     { at: [0, 0, 12], facing: 0, type: "crypt", size: [6, 6] },
   ],
+  // A barrel vault it may be drawn with instead (the style's share of the time): a half circle 3 m over its flat one.
+  barrel: { over: [-3, 0, 3, 12], along: "z", spring: 6, rise: 3 },
   colliders: [
     { box: [-4, -1, 0, 4, 0, 12] },   // floor
     { box: [-4, -1, 0, -3, 7, 12] },  // walls

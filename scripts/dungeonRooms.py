@@ -131,7 +131,7 @@ def light_spots(outline, openings, height, every=12):
     return spots
 
 
-def write(name, comment, tags, part, room, weight, outline, rects, height, openings, paths, stage=None, open_edges=(), pillars=(), spawns=(), chest=None, quest=None, extra_light=(), extra_boss=(), tombs=0, benches=0):
+def write(name, comment, tags, part, room, weight, outline, rects, height, openings, paths, stage=None, open_edges=(), pillars=(), spawns=(), chest=None, quest=None, extra_light=(), extra_boss=(), tombs=0, benches=0, barrel=None, altar=None):
     boxes, sockets = build(outline, rects, height, openings, open_edges, pillars)
     spots = {"light": light_spots(outline, openings, height) + list(extra_light)}
     if spawns:
@@ -156,6 +156,15 @@ def write(name, comment, tags, part, room, weight, outline, rects, height, openi
         if benches:
             lines.append(f"  benches: {benches},                        // stone benches with their backs to the walls")
         lines.append(f"  ledgers: 0.3,                     // a share of the rows of ledger stones in its floor")
+    if altar:
+        # (x, z, facing): an altar against the wall there, facing out of it into the room.
+        lines.append(f"  // An altar against the far wall, facing the way in (the style's altar prop).")
+        lines.append(f"  altar: {{ at: [{fmt(altar[0])}, 0, {fmt(altar[1])}], facing: {altar[2]} }},")
+    if barrel:
+        # (rect, axis, rise): a barrel vault it may be drawn with, springing where its flat vault is.
+        (bx0, bz0, bx1, bz1), along, rise = barrel
+        lines.append(f"  // A barrel vault it may be drawn with instead (the style's share of the time), {fmt(rise)} m over its flat one.")
+        lines.append(f"  barrel: {{ over: [{fmt(bx0)}, {fmt(bz0)}, {fmt(bx1)}, {fmt(bz1)}], along: \"{along}\", spring: {fmt(height)}, rise: {fmt(rise)} }},")
     lines.append("  sockets: [")
     for s in sockets:
         lines.append(f"    {{ at: [{', '.join(fmt(v) for v in s['at'])}], facing: {s['facing']}, type: \"{s['type']}\", size: [{fmt(s['size'][0])}, {fmt(s['size'][1])}], reach: {fmt(s['reach'])} }},")
@@ -191,7 +200,8 @@ write("cryptHallLong", "A long burial hall: 20 m by 56 m inside, 11 m to the vau
       [(-10, 1), (10, 1), (10, 57), (-10, 57)], [(-10, 1, 10, 57)], 11,
       [op(0, 10, LARGE), op(2, 10, SMALL), op(3, 37, SMALL), op(1, 39, SMALL)],
       [[[0, 0, 0], [0, 0, 20], [0, 0, 40], [0, 0, 58]], [[-11, 0, 20], [0, 0, 20]], [[0, 0, 40], [11, 0, 40]]],
-      stage=[0.1, 1], spawns=[[0, 0, 12], [-4, 0, 30], [4, 0, 48]], chest=[-7, 0, 54], quest=[7, 0, 28], tombs=4, benches=4)
+      stage=[0.1, 1], spawns=[[0, 0, 12], [-4, 0, 30], [4, 0, 48]], chest=[-7, 0, 54], quest=[7, 0, 28], tombs=4, benches=4,
+      barrel=((-10, 1, 10, 57), "z", 6))
 
 # An L: an arm 22 m wide and 44 m long, its end turning 30 m to the side - round the corner from the
 # door.
@@ -217,7 +227,8 @@ write("cryptHallSmall", "A smaller hall: 20 m square, 9 m to the vault - a corri
       [(-10, 1), (10, 1), (10, 21), (-10, 21)], [(-10, 1, 10, 21)], 9,
       [op(0, 10, SMALL), op(1, 10, SMALL), op(3, 10, LARGE)],
       [[[0, 0, 0], [0, 0, 11], [11, 0, 11]], [[-11, 0, 11], [0, 0, 11]]],
-      spawns=[[-3, 0, 15], [4, 0, 6]], chest=[-7, 0, 18], tombs=2, benches=2)
+      spawns=[[-3, 0, 15], [4, 0, 6]], chest=[-7, 0, 18], tombs=2, benches=2,
+      barrel=((-10, 1, 10, 21), "z", 6))
 
 # A pillared hall: 36 m square, 12 m high, four piers round its middle - seen across between them.
 write("cryptHallPillars", "A pillared hall: 36 m square, 12 m to the vault, four piers round its middle - the room seen\nacross between them, cover among them. In from a gallery, a corridor off every other side.",
@@ -239,7 +250,7 @@ write("cryptBossHallGreat", "A great boss hall: 40 m by 44 m inside, 16 m to the
       [[[0, 0, 0], [0, 0, 23]]],
       pillars=[(-14, 10, -11, 13), (11, 10, 14, 13), (-14, 33, -11, 36), (11, 33, 14, 36)],
       spawns=[[-8, 0, 8], [8, 0, 8]], chest=[0, 0, 41], quest=[-16, 0, 40],
-      extra_boss=[[0, 0, 26]], tombs=2)
+      extra_boss=[[0, 0, 26]], tombs=2, altar=(0, 45, 180))
 
 # --- Ways with alcoves -----------------------------------------------------------------------------
 
@@ -250,7 +261,8 @@ write("cryptCorridorAlcove", "A crypt corridor, 6 m wide and high, 16 m long, an
       [(-3, 0), (3, 0), (3, 5), (7, 5), (7, 11), (3, 11), (3, 16), (-3, 16)], [(-3, 0, 3, 16), (3, 5, 7, 11)], 6,
       [op(0, 3, SMALL, 1), op(6, 3, SMALL, 1)],
       [[[0, 0, 0], [0, 0, 16]]], open_edges=(0, 6),
-      spawns=[[5, 0, 8]], chest=[5.5, 0, 8], extra_light=[[-2.4, 3.5, 8]])
+      spawns=[[5, 0, 8]], chest=[5.5, 0, 8], extra_light=[[-2.4, 3.5, 8]],
+      barrel=((-3, 0, 3, 16), "z", 3))
 
 # A gallery 20 m long with an alcove off each side.
 write("cryptGalleryAlcoves", "A gallery 20 m long, 10 m wide and 8 m high, an alcove 8 m wide and 4 m deep off each side.",
@@ -259,5 +271,6 @@ write("cryptGalleryAlcoves", "A gallery 20 m long, 10 m wide and 8 m high, an al
       [(-5, 0, 5, 20), (5, 6, 9, 14), (-9, 6, -5, 14)], 8,
       [op(0, 5, LARGE, 1), op(6, 5, LARGE, 1)],
       [[[0, 0, 0], [0, 0, 20]]], open_edges=(0, 6),
-      spawns=[[7, 0, 10], [-7, 0, 10]], chest=[-7.5, 0, 10])
+      spawns=[[7, 0, 10], [-7, 0, 10]], chest=[-7.5, 0, 10],
+      barrel=((-5, 0, 5, 20), "z", 4))
 print("written")

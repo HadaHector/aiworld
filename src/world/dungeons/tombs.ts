@@ -90,6 +90,29 @@ export function placeTombs(shapes: readonly ShapeDesc[], paths: readonly Polylin
 }
 
 /** A tomb's collider: a box from its floor to the top of its lid. */
+/** An altar's room (the style's altar prop drawn in it): across it, high, and deep from the wall. */
+export const ALTAR_SIZE: [number, number, number] = [3.8, 2.2, 2.0];
+
+/** An altar against a wall: `at` on the wall's face at the floor, facing out of it (0, 90, 180 or 270 degrees). */
+export interface AltarDef {
+  at: Vec3;
+  facing: number;
+}
+
+/** The box an altar collides as: its back on the wall, its middle on `at`. */
+export function altarBox(a: AltarDef): { min: [number, number, number]; max: [number, number, number] } {
+  const [wid, high, deep] = ALTAR_SIZE;
+  const r = (a.facing * Math.PI) / 180, fx = Math.round(Math.sin(r)), fz = Math.round(Math.cos(r));
+  const cx = a.at.x + (fx * deep) / 2, cz = a.at.z + (fz * deep) / 2;
+  const hx = fx !== 0 ? deep / 2 : wid / 2, hz = fx !== 0 ? wid / 2 : deep / 2;
+  return { min: [cx - hx, a.at.y, cz - hz], max: [cx + hx, a.at.y + high, cz + hz] };
+}
+
+export function altarShape(a: AltarDef): ShapeDesc {
+  const { min, max } = altarBox(a);
+  return { kind: "box", center: vec3((min[0] + max[0]) / 2, (min[1] + max[1]) / 2, (min[2] + max[2]) / 2), half: vec3((max[0] - min[0]) / 2, (max[1] - min[1]) / 2, (max[2] - min[2]) / 2) };
+}
+
 export function tombShape(t: TombDef): ShapeDesc {
   const [len, wid, high] = TOMB_SIZE;
   const hx = (t.yaw === 90 ? len : wid) / 2, hz = (t.yaw === 90 ? wid : len) / 2;

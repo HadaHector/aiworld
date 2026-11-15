@@ -31,7 +31,8 @@ export interface StairSpec {
   width: number;
   /** Each step's height. */
   rise: number;
-  /** Clear height over each step, its vault one metre thick; 0 for none. */
+  /** Clear height over each step, its vault one metre thick - one sloping slab over the flight, its
+   *  underside on the line through the steps' middles that high over them; 0 for none. */
   ceiling: number;
   /** Walls one metre thick down both sides, from under the lower end to over the higher's vault. */
   walls: boolean;
@@ -42,7 +43,7 @@ export interface StairSpec {
 /** A railing's thickness. */
 const RAILING_WIDTH = 0.6;
 
-/** A straight flight: a box a step, down to a metre under its lower end, and a vault over each. */
+/** A straight flight: a box a step, down to a metre under its lower end, and a vault sloping over them. */
 export function stairGeometry(s: StairSpec): KitGeometry {
   const dx = s.to.x - s.from.x, dz = s.to.z - s.from.z, run = Math.hypot(dx, dz);
   const drop = s.to.y - s.from.y;
@@ -59,8 +60,24 @@ export function stairGeometry(s: StairSpec): KitGeometry {
     const along = (i + 0.5) * tread;
     const cx = s.from.x + (dx / run) * along, cz = s.from.z + (dz / run) * along;
     shapes.push({ kind: "box", center: vec3(cx, (top + base) / 2, cz), half: vec3(s.width / 2, (top - base) / 2, tread / 2 + 0.01), rotation });
-    if (s.ceiling > 0) shapes.push({ kind: "box", center: vec3(cx, top + s.rise + s.ceiling + 0.5, cz), half: vec3(s.width / 2 + (s.walls ? 1 : 0), 0.5, tread / 2 + 0.01), rotation });
     path.push(vec3(cx, top, cz));
+  }
+  if (s.ceiling > 0) {
+    // Its underside on the line through the steps' middles, `ceiling` over them and a step more
+    // (as a vault over each step was): a flat sloping soffit, not a stair of vaults.
+    const ux = dx / run, uz = dz / run, ax = uz, az = -ux;
+    const first = drop < 0 ? s.from.y : s.from.y + drop / steps, last = drop < 0 ? s.from.y + (drop * (steps - 1)) / steps : s.to.y;
+    const slope = steps > 1 ? (last - first) / (run - tread) : 0;
+    const half = s.width / 2 + (s.walls ? 1 : 0);
+    const corners: Vec3[] = [];
+    for (const along of [-0.01, run + 0.01]) {
+      const y = first + slope * (along - tread / 2) + s.rise + s.ceiling;
+      for (const across of [-half, half]) {
+        const x = s.from.x + ux * along + ax * across, z = s.from.z + uz * along + az * across;
+        corners.push(vec3(x, y, z), vec3(x, y + 1, z));
+      }
+    }
+    shapes.push({ kind: "convex", points: corners });
   }
   const plain: number[] = [];
   if (s.railings) {

@@ -324,6 +324,9 @@ function writeUrl(): void {
     if (value !== DEFAULT_OPTIONS[key]) params.set(key, value);
   }
   if (cameraParam) params.set("cam", cameraParam);
+  // A dungeon part's vault as asked for (see the part's preview), kept over a reload.
+  const vault = new URLSearchParams(location.search).get("vault");
+  if (vault) params.set("vault", vault);
   history.replaceState(null, "", `${location.pathname}?${params.toString()}`);
 }
 
@@ -1303,8 +1306,11 @@ async function preview3d(token: number, asset: Asset, view: ViewDef, content: Wo
     const style = [...dungeons.styles.values()].find((st) => [st.parts, st.entrances, st.bosses, st.caps, st.doorways].some((list) => list.includes(part))) ?? [...dungeons.styles.values()][0];
     const frame = { x: 0, z: 0, yaw: 0 };
     const layout = { style: style.id, size: "", seed, attempt: 0, minimal: false, parts: [{ part, x: 0, y: 0, z: 0, yaw: 0, bounds: part.bounds, box: part.bounds, entry: -1, parent: -1, role: "room" as const }], joins: [], boss: -1, lock: -1, key: -1, failures: [], frame };
-    // Every light spot lit, not the style's share of them: each torch is seen where it hangs.
-    buildings = [buildPartModel(layout, 0, { ...style, light: { ...style.light, lit: 1 } }, content.props.find((prop) => prop.id === style.light.fixture), (id) => content.props.find((prop) => prop.id === id)).model];
+    // Every light spot lit, not the style's share of them: each torch is seen where it hangs. Its
+    // barrel vault, if it may have one, as the seed rolls it - or `vault=barrel` / `vault=flat`.
+    const vault = new URLSearchParams(location.search).get("vault");
+    const barrels = vault === "barrel" ? 1 : vault === "flat" ? 0 : style.barrels;
+    buildings = [buildPartModel(layout, 0, { ...style, barrels, light: { ...style.light, lit: 1 } }, content.props.find((prop) => prop.id === style.light.fixture), (id) => content.props.find((prop) => prop.id === id)).model];
     dungeonAmbient = style.light.ambient;
     if (buildings[0].indices.length === 0) {
       setStatus(`${part.id} has no faces to draw: nothing of it is seen from inside`);

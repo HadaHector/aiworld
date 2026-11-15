@@ -573,6 +573,89 @@ export const candles: PropGenerator = {
   },
 };
 
+/**
+ * A chain's link, low: a six-sided ring - pointed at its ends, straight down its sides - a bar
+ * square in section; 24 quads, 48 triangles. Its middle at (0, y, 0), its length up, lying across x
+ * (or z, `turned`).
+ */
+function chainLink(ctx: PropContext, y: number, turned: boolean, length: number, width: number, bar: number, paint: Paint): void {
+  const across: Vec3 = turned ? [0, 0, 1] : [1, 0, 0], facing: Vec3 = turned ? [1, 0, 0] : [0, 0, 1];
+  const ring = (hw: number, hl: number, shoulder: number): [number, number][] => [[0, hl], [hw, shoulder], [hw, -shoulder], [0, -hl], [-hw, -shoulder], [-hw, shoulder]];
+  const hw = width / 2, hl = length / 2;
+  const outer = ring(hw, hl, hl - hw * 0.9);
+  const inner = ring(hw - bar, hl - bar * 1.4, hl - hw * 0.9 - bar * 0.3);
+  const at = ([u, v]: [number, number], d: number): Vec3 => [across[0] * u + facing[0] * d, y + v, across[2] * u + facing[2] * d];
+  const face = (corners: Vec3[], n: Vec3): void => {
+    const [a, b, c] = corners;
+    const e1: Vec3 = [b[0] - a[0], b[1] - a[1], b[2] - a[2]], e2: Vec3 = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
+    const w: Vec3 = [e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]];
+    const l = Math.hypot(n[0], n[1], n[2]) || 1;
+    ctx.shape.b.face(w[0] * n[0] + w[1] * n[1] + w[2] * n[2] < 0 ? [...corners].reverse() : corners, [n[0] / l, n[1] / l, n[2] / l], paint);
+  };
+  const d = bar / 2;
+  for (let i = 0; i < 6; i++) {
+    const j = (i + 1) % 6;
+    // Its faces front and back.
+    for (const side of [-1, 1]) face([at(outer[i], d * side), at(outer[j], d * side), at(inner[j], d * side), at(inner[i], d * side)], [facing[0] * side, 0, facing[2] * side]);
+    // Out round it, and in round its hole: square to each side.
+    for (const [pts, out] of [[outer, 1], [inner, -1]] as [[number, number][], number][]) {
+      const [u0, v0] = pts[i], [u1, v1] = pts[j];
+      const nu = -(v1 - v0) * out, nv = (u1 - u0) * out;
+      // (Outward for a ring running clockwise in (u, v).)
+      face([at(pts[i], d), at(pts[j], d), at(pts[j], -d), at(pts[i], -d)], [across[0] * nu, nv, across[2] * nu]);
+    }
+  }
+}
+
+/** A chandelier: an iron ring hung on four rods from a chain, candles standing round its top, one
+ *  light for them all. Built from the ring (y 0) up: the chain's top, its highest point, is where it
+ *  hangs from - a builder sets that against the vault. The chain kept low: each link two bars,
+ *  each turned a quarter round from the last. */
+export const chandelier: PropGenerator = {
+  doc: "An iron ring of candles hung on a chain.",
+  params: {
+    radius: { kind: "range", default: [0.9, 1.3], min: 0.2, doc: "the ring's radius" },
+    candles: { kind: "count", default: [6, 10], min: 1, doc: "candles round the ring" },
+    chain: { kind: "range", default: [2.5, 5], min: 0.3, doc: "the chain's length, over the rods" },
+    link: { kind: "range", default: [0.28, 0.32], min: 0.05, doc: "a link's length (oversized, to read from the floor)" },
+    lit: { kind: "chance", default: 0.85, doc: "how likely its candles are burning" },
+  },
+  parts: ["iron", "wax", "litWax", "flame"],
+  build(ctx) {
+    const iron = ctx.paint("iron");
+    const lit = ctx.chance("lit");
+    const wax = ctx.paint(lit ? "litWax" : "wax");
+    const r = ctx.range("radius");
+    // The ring: bars round it, and spokes in to a boss at its middle.
+    const sides = 12;
+    const at = (k: number, rr: number, y: number): Vec3 => [Math.cos((k / sides) * Math.PI * 2) * rr, y, Math.sin((k / sides) * Math.PI * 2) * rr];
+    for (let k = 0; k < sides; k++) ctx.shape.beam(ORIGIN, at(k, r, 0), at(k + 1, r, 0), 0.07, 0.06, iron);
+    for (let k = 0; k < sides; k += 3) ctx.shape.beam(ORIGIN, [0, -0.05, 0], at(k, r - 0.03, 0), 0.04, 0.04, iron);
+    ctx.shape.lathe(moved(ORIGIN, [0, -0.25, 0]), [[0.001, 0], [0.09, 0.1], [0.07, 0.2], [0.03, 0.25]], iron, { sides: 6 });
+    // Four rods up from the ring to a ring the chain hangs from.
+    const gather = r * 1.1;
+    for (let k = 0; k < sides; k += 3) ctx.shape.beam(ORIGIN, at(k + 1.5, r, 0.02), [0, gather, 0], 0.025, 0.025, iron);
+    // The chain: links up from there, each through the last, turned a quarter round from it.
+    const length = ctx.range("chain");
+    const link = ctx.range("link");
+    const bar = link * 0.13;
+    const pitch = link - 2.2 * bar;
+    const links = Math.max(1, Math.round(length / pitch));
+    for (let i = 0; i < links; i++) chainLink(ctx, gather - bar + link / 2 + i * pitch, i % 2 === 1, link, link * 0.55, bar, iron);
+    // The candles round its top, each in a little dish on the ring.
+    const n = ctx.count("candles");
+    for (let i = 0; i < n; i++) {
+      const a = ((i + 0.5) / n) * Math.PI * 2;
+      const base: Vec3 = [Math.cos(a) * r, 0.03, Math.sin(a) * r];
+      ctx.shape.lathe(moved(ORIGIN, base), [[0.04, 0], [0.1, 0.03], [0.11, 0.05]], iron, { bottom: iron, sides: 6 });
+      const h = 0.25 + 0.2 * ctx.rng();
+      ctx.shape.cylinder(between(ORIGIN, [base[0], 0.08, base[2]], [base[0], 0.08 + h, base[2]], [0, 0, 1]), h, 0.045, wax, { ends: wax, caps: "end", sides: 6 });
+      if (lit) flame(ctx, [base[0], 0.08 + h + 0.02, base[2]], 0.06, 0.2);
+    }
+    if (lit) ctx.light([0, 0.5, 0]);
+  },
+};
+
 /** A sconce: an iron plate on the wall, an arm out from it, a dish and a candle burning on it. Built
  *  standing on y 0; set up the wall where it hangs. Its back (-z) is on the wall. */
 export const sconce: PropGenerator = {

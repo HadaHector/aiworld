@@ -9,6 +9,8 @@
   tombs: 4,                          // standing free on the floor, clear of the ways
   benches: 4,                        // stone benches with their backs to the walls
   ledgers: 0.3,                     // a share of the rows of ledger stones in its floor
+  // A barrel vault it may be drawn with instead (the style's share of the time), 6 m over its flat one.
+  barrel: { over: [-10, 1, 10, 57], along: "z", spring: 11, rise: 6 },
   sockets: [
     { at: [0, 0, 0], facing: 180, type: "cryptLarge", size: [10, 8], reach: 1.5 },
     { at: [11, 0, 40], facing: 90, type: "crypt", size: [6, 6], reach: 1.5 },

@@ -4,6 +4,8 @@
 {
   tags: ["crypt", "corridor"],
   weight: 2,
+  // A barrel vault it may be drawn with instead (the style's share of the time), 3 m over its flat one.
+  barrel: { over: [-3, 0, 3, 16], along: "z", spring: 6, rise: 3 },
   sockets: [
     { at: [0, 0, 0], facing: 180, type: "crypt", size: [6, 6], reach: 1 },
     { at: [0, 0, 16], facing: 0, type: "crypt", size: [6, 6], reach: 1 },

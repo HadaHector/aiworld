@@ -7,6 +7,8 @@
     { at: [0, 0, 0], facing: 180, type: "cryptLarge", size: [10, 8] },
     { at: [0, 0, 16], facing: 0, type: "cryptLarge", size: [10, 8] },
   ],
+  // A barrel vault it may be drawn with instead (the style's share of the time): a basket-handle arch 4 m over its flat one.
+  barrel: { over: [-5, 0, 5, 16], along: "z", spring: 8, rise: 4 },
   colliders: [
     { box: [-6, -1, 0, 6, 0, 16] },   // floor
     { box: [-6, -1, 0, -5, 9, 16] },  // walls

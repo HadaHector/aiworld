@@ -6,7 +6,7 @@ import { drystoneWall, railFence } from "./walls";
 import { fingerArm, fingerpost } from "./signs";
 import { pierBridge } from "./bridges";
 import { gravePost, headstone, lychgate, tomb, urn } from "./graves";
-import { altar, armchair, banner, bed, bench, cabinet, candles, chair, chest, counter, fireplace, lantern, rack, sack, sconce, stool, stove, table, wallTorch } from "./furniture";
+import { altar, armchair, banner, bed, bench, cabinet, candles, chair, chandelier, chest, counter, fireplace, lantern, rack, sack, sconce, stool, stove, table, wallTorch } from "./furniture";
 
 /** Every prop generator, by the name a prop's `type` gives. A new one is a file of its own here,
  *  and a line in this table - its settings are read from its own `params`. */
@@ -47,6 +47,7 @@ export const PROP_GENERATORS: Record<string, PropGenerator> = {
   lantern,
   altar,
   candles,
+  chandelier,
   urn,
   sconce,
   wallTorch,

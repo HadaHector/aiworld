@@ -78,4 +78,10 @@
   light: { ambient: [0.022, 0.024, 0.03], fixture: "wallTorch", lit: 0.8, candles: { prop: "candles", share: 0.4 } },
   // Urns in the open loculi (the ashes of those not laid whole) and on the benches between the candles.
   urns: { prop: "urn", share: 0.35 },
+  // Chandeliers hung on chains from the large rooms' vaults, along their middles: most places for one have one.
+  chandeliers: { prop: "chandelier", share: 0.7 },
+  // In a boss room, an altar against its far wall.
+  altar: "altar",
+  // Half the parts that may have one are drawn with a barrel vault rather than a flat one.
+  barrels: 0.5,
 }

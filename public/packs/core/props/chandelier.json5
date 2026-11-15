@@ -1,0 +1,13 @@
+// A chandelier: an iron ring of candles hung on a chain from a hall's vault (DUNGEONS.md, *Light*).
+{
+  name: "Chandelier",
+  type: "chandelier",
+  // The light it gives (see LIGHTS.md): a ring of candles high up - warm, wide, soft.
+  light: { color: [1.0, 0.74, 0.46], intensity: 1.4, radius: 16, size: 0.6 },
+  parts: {
+    iron: { material: "iron", tints: [[0.75, 0.75, 0.75]] },
+    wax: { tints: [[0.92, 0.88, 0.76], [0.86, 0.8, 0.66]] },
+    litWax: { material: "litWax", tints: [[1, 1, 1], [0.96, 0.92, 0.84]] },
+    flame: { material: "flame", tints: [[1, 1, 1]] },
+  },
+}
