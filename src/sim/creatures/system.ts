@@ -3,6 +3,7 @@ import type { ChosenStart } from "../../world/settlements/starts";
 import { hashString } from "../../world/content/dimensions";
 import { DEFAULT_MOTOR } from "../../world/collision/index";
 import { deriveSeed, mulberry32 } from "../../world/rng";
+import { straightNav, type NavQuery } from "../../world/nav/navQuery";
 import type { Dimension } from "../dimension";
 import { entityStat, type Entity } from "../entity";
 import type { GameRules } from "../rules/gameRules";
@@ -45,6 +46,8 @@ export interface CreatureWorld {
   /** Whether a corpse still holds loot nobody has taken. */
   hasLoot(entity: Entity): boolean;
   delta: WorldDelta;
+  /** How creatures find their way (NAVIGATION.md); straight lines when left out. */
+  nav?: NavQuery;
 }
 
 export interface CreatureSystem {
@@ -206,6 +209,7 @@ export function createCreatureSystem(rules: GameRules, creatures: CreatureRules,
       playersIn: world.playersIn,
       lineOfSight: world.lineOfSight,
       open: state.field.open,
+      nav: world.nav ?? straightNav,
       random: (creature) => (streams.get(creature) ?? Math.random)(),
       groupOf(creature) {
         const point = creature.creature?.point;

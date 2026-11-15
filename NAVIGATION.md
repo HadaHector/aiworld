@@ -1,7 +1,7 @@
 # Navigation
 
 How creatures find their way: round houses, fences and trees on the surface, and through crypts and
-caves under it. **Status: plan, waiting for approval.** Nothing is built.
+caves under it. **Status: step 1 done** (the follower, [As built](#as-built)); steps 2-7 to come.
 
 ## Today
 
@@ -202,7 +202,7 @@ Small fixes to one part's grid are checked on that part alone, not the full prob
 
 ## Steps
 
-1. **The follower.** `Brain.path`, `steer`, plan and re-plan triggers, the `unreachable` evade, the
+1. **The follower** (done). `Brain.path`, `steer`, plan and re-plan triggers, the `unreachable` evade, the
    path line in debug - with a `NavQuery` that only answers "straight". Behaviour unchanged; the
    seam is in.
 2. **Dungeons.** The layout graph search, walk lines, room grids per part definition. The biggest
@@ -217,6 +217,31 @@ Small fixes to one part's grid are checked on that part alone, not the full prob
 
 **Cut order**, last first: 5, then 4's separation; 6 waits for caves; 7 is needed but may come
 later than the rest. 1-3 are the plan; without them nothing changes for the player.
+
+## As built
+
+**Step 1, the follower** (2026-11-15):
+
+- `src/world/nav/navQuery.ts`: the `NavQuery` interface and `straightNav`, which answers every way
+  as straight - what the server uses until step 2. `createServer({ nav })` and the creature
+  system's `CreatureWorld.nav` take a real one.
+- `brain.ts`: `steer` in place of `toward` for wandering, evading home and chasing. It walks straight
+  while `straight` says so; it plans when `straight` says not, or when it has got no nearer (by
+  0.25 m) to what it heads for for 1 s; at most one plan every 0.5 s, 4 000 nodes each (constants
+  for now, to the rules when the searches are real). A way goes stale when the goal moves off its
+  end by more than a third of what is left of it (2 m at least). Waypoints are passed within 0.75 m.
+  The way is dropped on every change of state. Fleeing still runs straight (step 3 picks reachable
+  spots).
+- No way: a chaser evades with `why: "unreachable"` at once; a wanderer stands; an evader runs
+  straight home, and the 20 s teleport home still catches it.
+- `Brain.path`, `next`, `nextPlan`, `aimBest`, `aimAt`; the inspector's creature line says
+  `straight` or `following 2/5`.
+- Debug: `__aiworld.creatures.showPaths()` draws each creature's way ahead as a cyan line
+  (`src/game/navDebug.ts`); `showPaths(false)` stops. `/nav` waits for step 3's tiles.
+- Probe: `creatures.mjs` gains a *navigation* section with a made-up nav: a chaser plans a detour,
+  passes its waypoint and reaches its target, plans at most twice a second, and with no way evades
+  as unreachable sooner than `stuck`. 90/93 checks pass; the three that fail (`social`, and the
+  hunting bot's kill and loot) fail the same on the tree without this step.
 
 ## Decisions
 

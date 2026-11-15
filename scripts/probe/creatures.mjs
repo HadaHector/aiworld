@@ -149,7 +149,7 @@ await section("zones and points", () => {
 
 // --- a real tiny server, one client ---
 const { content: tinyContent, packs: tinyPacks } = loadContentFromDisk(CONFIG);
-function startServer() {
+function startServer(extra = {}) {
   const rules = loadRulesFromDisk(CONFIG);
   const kinds = loadCreatureRulesFromDisk(CONFIG, rules, WORLD_SEED);
   kinds.config.groups = WITH_GROUPS;
@@ -164,6 +164,7 @@ function startServer() {
     items: loadItemRulesFromDisk(CONFIG, rules, WORLD_SEED),
     onKill: (k) => kills.push(k),
     loadDimension: () => ({ world: createWorldData(WORLD_SEED, tinyContent) }),
+    ...extra,
   });
   const channel = createLocalChannel();
   server.connect(channel.server);
@@ -334,6 +335,66 @@ await section("brain", async () => {
     await t.pump(70);
     check("...but not one further off than `social`", pair.length >= 2 && state(pair[0]) === "combat" && state(aside) !== "combat", pair.map(state).join());
   }
+});
+
+// --- following a way (NAVIGATION.md, step 1): a made-up nav that says the way is not straight ---
+await section("navigation", async () => {
+  // `mode`: "detour" - every plan goes by a point off to the side; "none" - no way anywhere.
+  // Only the plans for the one wolf chasing the player count; the world's other creatures plan too.
+  const nav = { mode: "detour", side: null, plans: 0, target: null };
+  const query = {
+    straight: () => nav.mode === "straight",
+    reachable: () => nav.mode !== "none",
+    path(_dimension, from, to) {
+      const ours = nav.target && Math.hypot(to.x - nav.target.x, to.z - nav.target.z) < 1;
+      if (!ours) return [to];
+      nav.plans++;
+      if (nav.mode === "none") return null;
+      if (nav.mode === "straight") return [to];
+      // 12 m off the line's middle, to its left.
+      const dx = to.x - from.x, dz = to.z - from.z, d = Math.hypot(dx, dz) || 1;
+      nav.side = { x: (from.x + to.x) / 2 - (dz / d) * 12, y: to.y, z: (from.z + to.z) / 2 + (dx / d) * 12 };
+      return [nav.side, { x: to.x, y: to.y, z: to.z }];
+    },
+  };
+  const t = startServer({ nav: query });
+  await t.pump(20);
+  const S = t.server.debug.creatures.debug;
+  const pts = S.points("mainland", 0, 0, 1500);
+  let spot = null;
+  for (let r = 300; r < 1400 && !spot; r += 37) {
+    for (let a = 0; a < 12 && !spot; a++) {
+      const x = Math.sin(a) * r, z = Math.cos(a) * r;
+      const g = t.dim().world.sampleTerrain(x, z);
+      if (g.isLand && g.height > 1 && g.roadGap > 20 && pts.every((p) => Math.hypot(p.x - x, p.z - z) > 70)) spot = { x, z };
+    }
+  }
+  check("an empty spot for navigation's tests", !!spot);
+  if (!spot) return;
+  t.send({ type: "teleport", x: spot.x, z: spot.z });
+  await t.pump(30);
+  const me = t.me();
+  nav.target = me;
+  const wolf = S.spawn("mainland", "wolf.timber", spot.x + 10, spot.z, 1);
+  let followed = false, nearSide = Infinity;
+  const started = t.server.time;
+  for (let i = 0; i < 300; i++) {
+    await t.pump(1);
+    if (wolf.creature.brain.path.length > 1) followed = true;
+    if (nav.side) nearSide = Math.min(nearSide, Math.hypot(wolf.x - nav.side.x, wolf.z - nav.side.z));
+  }
+  check("not straight: a chaser plans a way and follows it", followed && wolf.creature.brain.state === "combat", wolf.creature.brain.state);
+  check("...by its waypoints", nearSide < 2, nearSide.toFixed(1));
+  check("...and still reaches its target", Math.hypot(wolf.x - me.x, wolf.z - me.z) < 3.5, Math.hypot(wolf.x - me.x, wolf.z - me.z).toFixed(1));
+  check("plans are few (at most two a second)", nav.plans >= 1 && nav.plans <= Math.ceil((t.server.time - started) * 2) + 1, String(nav.plans));
+
+  // No way there: it evades at once, not after `stuck`.
+  nav.mode = "none";
+  t.send({ type: "teleport", x: spot.x - 20, z: spot.z });
+  const sent = t.server.time;
+  for (let i = 0; i < 90 && wolf.creature.brain.state !== "evade"; i++) await t.pump(1);
+  check("no way there: it evades as unreachable", wolf.creature.brain.why === "unreachable", `${wolf.creature.brain.state} ${wolf.creature.brain.why}`);
+  check("...sooner than `stuck`", t.server.time - sent < t.kinds.config.stuck, (t.server.time - sent).toFixed(2));
 });
 
 // --- the hunting bot: a client that finds, fights and loots creatures from messages alone ---

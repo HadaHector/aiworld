@@ -61,6 +61,7 @@ import { bookRequirement } from "../sim/progression/books";
 import { levelGains } from "../sim/progression/levelUp";
 import { REFUSALS } from "../ui/progressPanel";
 import { refusalText, setTooltipContext } from "../ui/inventoryScreen";
+import { createNavDebug, type NavDebug } from "./navDebug";
 
 /** The animation a body plays while it casts (animations/castLoop.json5). */
 const CAST_LOOP = "castLoop";
@@ -167,6 +168,8 @@ export async function startSession(page: Page, options: SessionOptions): Promise
 
   /** The dimension being drawn - null while travelling, between one and the next. */
   let view: DimensionView | null = null;
+  /** Creatures' ways drawn, while asked for (`__aiworld.creatures.showPaths`). */
+  let navDebug: NavDebug | null = null;
   /** The dungeon the player is in, drawn in the view (DUNGEONS.md). */
   let dungeon: DungeonPresence | null = null;
   /** A Transfer not acted on yet: the next frame starts building where it leads. */
@@ -1348,6 +1351,12 @@ export async function startSession(page: Page, options: SessionOptions): Promise
         const points = radius > 0 ? creaturePoints(radius) : null;
         view?.debugMap.setSpawnPoints(points);
         return points?.length ?? 0;
+      },
+      /** Draws the ways creatures follow (NAVIGATION.md, *Debug*); `showPaths(false)` stops. */
+      showPaths(on = true) {
+        navDebug?.dispose();
+        navDebug = on && view ? createNavDebug(view.scene, () => server.debug.creatures?.debug.creatures(currentDimension) ?? []) : null;
+        return navDebug !== null;
       },
       /** Makes a creature of a kind 6 m in front of the player, at a level (the zone's lowest if left out). */
       spawn(kind: string, level?: number) {

@@ -8,6 +8,8 @@ import { canMove, FLAG, hasFlag } from "../skills/flags";
 import { gap, hiddenFrom, isAlive, standingOf } from "../skills/unit";
 import { statValues } from "../stats";
 import { restore } from "../resources";
+import type { NavQuery } from "../../world/nav/navQuery";
+import type { Vec3 } from "../../world/collision/vec";
 import type { Brain, CreaturePart } from "./creature";
 
 /** What the brain reads of the world around it. */
@@ -26,6 +28,8 @@ export interface BrainWorld {
   open(x: number, z: number): boolean;
   /** A number from 0 to 1, from the creature's own stream. */
   random(creature: Entity): number;
+  /** How it finds its way (NAVIGATION.md). */
+  nav: NavQuery;
 }
 
 /** How close a melee creature closes on its target: the gap between capsules it stops at. */
@@ -40,9 +44,87 @@ const FLEE_PACE = 0.5;
 /** Threat a creature puts its aggro, or a pulled group-mate's foes, on its table with. */
 const AGGRO_THREAT = 1;
 
+/** Within this of a waypoint, it is passed and the next one is headed for. */
+const WAYPOINT = 0.75;
+/** Getting no nearer to what it heads for for this long, a creature plans (NAVIGATION.md). */
+const NO_NEARER = 1;
+/** Nearer by less than this is not nearer. */
+const NEARER = 0.25;
+/** Seconds between plans, at most. */
+const PLAN_EVERY = 0.5;
+/** Search nodes a plan may take. */
+const PLAN_NODES = 4000;
+
 export function createBrain(now: number): Brain {
-  return { state: "idle", why: "", until: now + 1, goal: null, pulledAt: { x: 0, z: 0 }, lastPos: { x: 0, z: 0 }, closest: Infinity, lastProgress: now, tactics: [], nextLook: now, nextTactic: now, fled: false };
+  return { state: "idle", why: "", until: now + 1, goal: null, pulledAt: { x: 0, z: 0 }, lastPos: { x: 0, z: 0 }, closest: Infinity, lastProgress: now, tactics: [], nextLook: now, nextTactic: now, fled: false, path: [], next: 0, nextPlan: now, aimBest: Infinity, aimAt: now };
 }
+
+/** Forgets the way it was following: a new goal, or none. */
+function dropPath(brain: Brain, now: number): void {
+  brain.path = [];
+  brain.next = 0;
+  brain.aimBest = Infinity;
+  brain.aimAt = now;
+}
+
+/** How far is left along the way it follows, from where it stands. */
+function pathLeft(self: Entity, brain: Brain): number {
+  let left = 0;
+  let x = self.x, z = self.z;
+  for (let i = brain.next; i < brain.path.length; i++) {
+    const p = brain.path[i];
+    left += Math.hypot(p.x - x, p.z - z);
+    x = p.x;
+    z = p.z;
+  }
+  return left;
+}
+
+/**
+ * The input that takes a creature toward a goal at a share of its pace (NAVIGATION.md, *Following a
+ * path*): straight while the way is straight, along a planned way when it is not, or when walking
+ * straight has got it no nearer for NO_NEARER. "unreachable" when a plan finds no way there.
+ */
+function steer(world: BrainWorld, self: Entity, brain: Brain, goal: Vec3, share: number, run: boolean): CreaturePart["input"] | "unreachable" {
+  const { now, nav } = world;
+  const here = { x: self.x, y: self.y, z: self.z };
+  // The goal moved off from the end of the way: that way is stale.
+  if (brain.path.length > 0) {
+    const end = brain.path[brain.path.length - 1];
+    if (Math.hypot(goal.x - end.x, goal.z - end.z) > Math.max(2, pathLeft(self, brain) / 3)) dropPath(brain, now);
+  }
+  // Waypoints passed.
+  while (brain.next < brain.path.length && Math.hypot(brain.path[brain.next].x - self.x, brain.path[brain.next].z - self.z) < WAYPOINT) {
+    brain.next++;
+    brain.aimBest = Infinity;
+    brain.aimAt = now;
+  }
+  if (brain.path.length > 0 && brain.next >= brain.path.length) dropPath(brain, now);
+  const aim = brain.path.length > 0 ? brain.path[brain.next] : goal;
+  const d = Math.hypot(aim.x - self.x, aim.z - self.z);
+  if (d < brain.aimBest - NEARER) {
+    brain.aimBest = d;
+    brain.aimAt = now;
+  }
+  const blocked = brain.path.length === 0 && !nav.straight(self.dimension, here, goal);
+  if (now >= brain.nextPlan && (blocked || now - brain.aimAt > NO_NEARER)) {
+    brain.nextPlan = now + PLAN_EVERY;
+    const way = nav.path(self.dimension, here, goal, PLAN_NODES);
+    if (!way) {
+      dropPath(brain, now);
+      return "unreachable";
+    }
+    brain.path = way;
+    brain.next = 0;
+    brain.aimBest = Infinity;
+    brain.aimAt = now;
+    return steer(world, self, brain, goal, share, run);
+  }
+  return toward(self, aim.x, aim.z, share, run);
+}
+
+/** A goal on the ground at (x, z): its height is the creature's own until goals carry one. */
+const at = (self: Entity, p: { x: number; z: number }): Vec3 => ({ x: p.x, y: self.y, z: p.z });
 
 /** A creature's stats and another's into the scope tactics' `when` and the aggro formula read. */
 function scopeFor(world: BrainWorld, self: Entity, other: Entity | undefined, distance: number): Float64Array {
@@ -102,6 +184,7 @@ function startCombat(world: BrainWorld, self: Entity, brain: Brain, pulling = tr
   brain.lastPos = { x: self.x, z: self.z };
   brain.fled = false;
   brain.goal = null;
+  dropPath(brain, world.now);
   const foes = [...(self.combat?.threat?.keys() ?? [])];
   // Only mates near the one pulled come (rules `social`), not a whole spread-out camp: a pull that
   // starts at one of them brings its neighbours; the mates brought do not call their own.
@@ -120,6 +203,7 @@ function evade(world: BrainWorld, self: Entity, brain: Brain, why: string): void
   brain.state = "evade";
   brain.why = why;
   brain.goal = { ...part.home };
+  dropPath(brain, world.now);
   world.skills.stopCast(self);
   world.skills.setAttacking(self, false);
   world.skills.setTarget(self, 0);
@@ -137,6 +221,7 @@ function arriveHome(world: BrainWorld, self: Entity, brain: Brain): void {
   brain.state = "idle";
   brain.until = world.now + 2;
   brain.goal = null;
+  dropPath(brain, world.now);
 }
 
 /**
@@ -188,6 +273,7 @@ export function stepBrain(world: BrainWorld, self: Entity): void {
             brain.state = "wander";
             brain.goal = { x, z };
             brain.until = now + 20;
+            dropPath(brain, now);
             break;
           }
         }
@@ -196,13 +282,16 @@ export function stepBrain(world: BrainWorld, self: Entity): void {
       }
       // Wandering: walk on till there, or give up after a while (a wall in the way).
       const goal = brain.goal!;
-      if (Math.hypot(goal.x - self.x, goal.z - self.z) < ARRIVED || now > brain.until) {
+      const input = Math.hypot(goal.x - self.x, goal.z - self.z) < ARRIVED || now > brain.until ? "arrived" : steer(world, self, brain, at(self, goal), kind.speed.walk, false);
+      if (typeof input === "string") {
+        // There, out of time, or no way there: stand a while.
         brain.state = "idle";
         brain.goal = null;
         brain.until = now + 3 + world.random(self) * 6;
+        dropPath(brain, now);
         return;
       }
-      part.input = toward(self, goal.x, goal.z, kind.speed.walk, false);
+      part.input = input;
       return;
     }
 
@@ -213,7 +302,9 @@ export function stepBrain(world: BrainWorld, self: Entity): void {
         arriveHome(world, self, brain);
         return;
       }
-      part.input = toward(self, goal.x, goal.z, 1, true);
+      // No way home found: straight, and the teleport below catches it.
+      const input = steer(world, self, brain, at(self, goal), 1, true);
+      part.input = input === "unreachable" ? toward(self, goal.x, goal.z, 1, true) : input;
       // Somewhere it cannot get back from: put it home.
       if (now - brain.lastProgress > 20) {
         self.body?.teleport(goal.x, goal.z);
@@ -254,6 +345,7 @@ export function stepBrain(world: BrainWorld, self: Entity): void {
         brain.fled = true;
         brain.state = "flee";
         brain.until = now + kind.flee.time;
+        dropPath(brain, now);
         world.skills.stopCast(self);
         return;
       }
@@ -262,7 +354,13 @@ export function stepBrain(world: BrainWorld, self: Entity): void {
       const reach = kind.keepRange > 0 ? kind.keepRange : MELEE_GAP;
       const casting = combat.casting !== null;
       if (distance > reach && !casting && canMove(combat.flags)) {
-        part.input = toward(self, target.x, target.z, kind.speed.run, true);
+        const input = steer(world, self, brain, { x: target.x, y: target.y, z: target.z }, kind.speed.run, true);
+        if (input === "unreachable") {
+          evade(world, self, brain, "unreachable");
+          brain.lastProgress = now;
+          return;
+        }
+        part.input = input;
         // Progress is getting closer, or at least covering ground: a target that ran off is still
         // being chased, a creature pressed against a wall is not.
         const ran = Math.hypot(self.x - brain.lastPos.x, self.z - brain.lastPos.z) > 1;

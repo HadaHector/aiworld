@@ -1,3 +1,4 @@
+import type { Vec3 } from "../../world/collision/vec";
 import type { BodyInput } from "../playerBody";
 import type { CreatureKind } from "../rules/creatureRules";
 import type { SpawnMember, SpawnPoint } from "./spawnPoints";
@@ -27,6 +28,16 @@ export interface Brain {
   nextTactic: number;
   /** Whether it has fled this pull already. */
   fled: boolean;
+  /** The way it is following (NAVIGATION.md): waypoints, the last one where the plan was made to,
+   *  and the next to reach. Empty when it walks straight. */
+  path: Vec3[];
+  next: number;
+  /** When it may next plan: at most one plan every PLAN_EVERY. */
+  nextPlan: number;
+  /** The nearest it has got to what it heads for (the next waypoint, or its goal), and when -
+   *  getting no nearer for a while makes it plan. */
+  aimBest: number;
+  aimAt: number;
 }
 
 /** The creature part of an entity: its kind, where it belongs, and its brain. */

@@ -18,6 +18,7 @@ import { handleItemMessage, refusedItem } from "./items/itemMessages";
 import type { ItemHooks } from "./items/itemHooks";
 import type { CreatureRules } from "./rules/creatureRules";
 import { createCreatureSystem, type CreatureSystem, type KillRecord } from "./creatures/system";
+import type { NavQuery } from "../world/nav/navQuery";
 import { createWorldDelta, type WorldDelta } from "./creatures/worldDelta";
 import type { ProgressionRules } from "./rules/progressionRules";
 import { createProgressionSystem, type ProgressionSystem } from "./progression/system";
@@ -141,6 +142,8 @@ export interface ServerOptions {
   creatures?: CreatureRules;
   /** Called for every creature killed - what progression turns into XP (CREATURES.md, *Kills and XP*). */
   onKill?: (kill: KillRecord) => void;
+  /** How creatures find their way (NAVIGATION.md); left out, straight lines. */
+  nav?: NavQuery;
   /** Disciplines, origins and talents (see PROGRESSION.md); left out, players are made from the
    *  `player` template and nobody gains XP. */
   progression?: ProgressionRules;
@@ -377,6 +380,7 @@ export function createServer(options: ServerOptions): Server {
         lineOfSight: (dimension, from, to) => skills.sys.world.lineOfSight(dimension, from, to),
         hasLoot: (entity) => itemSystem?.hasLoot(entity) ?? false,
         delta,
+        nav: options.nav,
       })
     : null;
 

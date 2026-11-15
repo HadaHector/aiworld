@@ -17,7 +17,9 @@ export function describeEntity(rules: GameRules, entity: Entity): string[] {
     const { brain } = creature;
     const home = Math.hypot(entity.x - creature.home.x, entity.z - creature.home.z);
     const pulled = brain.state === "combat" || brain.state === "flee" ? ` · ${number(Math.hypot(entity.x - brain.pulledAt.x, entity.z - brain.pulledAt.z))} m from the pull` : "";
-    lines.push(`  creature ${creature.kind.id} level ${creature.level}${creature.kind.traits.length ? ` (${creature.kind.traits.join(", ")})` : ""} · ${creature.point ? `point ${creature.point.key}` : "loose"} · ${brain.state}${brain.state === "evade" && brain.why ? ` (${brain.why})` : ""} · ${number(home)} m from home${pulled}`);
+    // How it finds its way (NAVIGATION.md): straight, or along a planned way.
+    const way = brain.path.length > 0 ? `following ${brain.next + 1}/${brain.path.length}` : "straight";
+    lines.push(`  creature ${creature.kind.id} level ${creature.level}${creature.kind.traits.length ? ` (${creature.kind.traits.join(", ")})` : ""} · ${creature.point ? `point ${creature.point.key}` : "loose"} · ${brain.state}${brain.state === "evade" && brain.why ? ` (${brain.why})` : ""} · ${way} · ${number(home)} m from home${pulled}`);
   }
   const { stats, resources } = entity;
   if (!stats || !resources) return lines;
