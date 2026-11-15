@@ -1623,6 +1623,11 @@ export function buildPartModel(layout: DungeonLayout, index: number, style: Dung
     // facing out of the wall; its flame at the spot's height.
     const out = norm([wall.n[0], 0, wall.n[2]]);
     const away = wallDistance(solids, at, out) - 0.35;
+    // Only on a wall that runs on past it either side - not an opening's reveal (a wall's thickness
+    // across), a torch sticking out into the doorway.
+    const side: V = [-out[2], 0, out[0]];
+    const back: V = [at[0] - out[0] * (away + 0.6), at[1], at[2] - out[2] * (away + 0.6)];
+    if (![-1, 1].every((k) => solids.some((s) => inside(s, [back[0] + side[0] * k * 0.6, back[1], back[2] + side[2] * k * 0.6])))) return;
     const p = point([at[0] - out[0] * away, at[1] - flame[1], at[2] - out[2] * away]);
     const front = turn(out);
     b.append(model, p[0], p[1], p[2], front[0], front[2]);
