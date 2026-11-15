@@ -27,6 +27,8 @@ import { sampleBiomeArea, type BiomeArea } from "./biomeArea";
 import { heightView, layerView, materialsView, plantsView, type Rgb } from "./biomeViews";
 import { generateBuilding } from "../world/buildings/buildingGenerator";
 import { generateProp } from "../world/props/propGenerator";
+import { arrangeGroup } from "../world/props/propGroups";
+import { deriveSeed, mulberry32 } from "../world/rng";
 import { buildFeaturePreview } from "./featurePreview";
 import { cutModel } from "./cutModel";
 import type { BuildingModel } from "../world/buildings/buildingTypes";
@@ -59,15 +61,15 @@ interface Asset {
 }
 
 /** The folders with a preview, and what each asset kind can be looked at as. */
-type PreviewFolder = "materials" | "trees" | "bushes" | "rocks" | "grass" | "biomes" | "buildings" | "buildingParts" | "buildingMaterials" | "props" | "features" | "races" | "gearMaterials" | "gear" | "outfits" | "beasts" | "weapons" | "dungeonParts" | "dungeonStyles";
-const PREVIEW_FOLDERS: PreviewFolder[] = ["materials", "trees", "bushes", "rocks", "grass", "biomes", "buildings", "buildingParts", "buildingMaterials", "props", "features", "races", "gearMaterials", "gear", "outfits", "beasts", "weapons", "dungeonParts", "dungeonStyles"];
+type PreviewFolder = "materials" | "trees" | "bushes" | "rocks" | "grass" | "biomes" | "buildings" | "buildingParts" | "buildingMaterials" | "props" | "propGroups" | "features" | "races" | "gearMaterials" | "gear" | "outfits" | "beasts" | "weapons" | "dungeonParts" | "dungeonStyles";
+const PREVIEW_FOLDERS: PreviewFolder[] = ["materials", "trees", "bushes", "rocks", "grass", "biomes", "buildings", "buildingParts", "buildingMaterials", "props", "propGroups", "features", "races", "gearMaterials", "gear", "outfits", "beasts", "weapons", "dungeonParts", "dungeonStyles"];
 /** The folders whose preview is a character: a race's body, or gear worn by one. */
 const isCharacterFolder = (folder: string): boolean => folder === "races" || folder === "gear" || folder === "outfits" || folder === "weapons";
 /** How many variants of a building the Variant menu steps through - a building has no fixed count,
  *  every seed is one. */
 const BUILDING_VARIANTS = 8;
 /** Everything else is listed after these, its JSON still checked by Preview. */
-const FOLDER_ORDER = ["materials", "trees", "bushes", "rocks", "grass", "biomes", "buildings", "buildingParts", "buildingMaterials", "props", "features", "races", "outfits", "gear", "beasts", "weapons", "gearMaterials", "dungeonParts", "dungeonStyles", "layers", "borderHills", "settlements", "voices", "patches", ""];
+const FOLDER_ORDER = ["materials", "trees", "bushes", "rocks", "grass", "biomes", "buildings", "buildingParts", "buildingMaterials", "props", "propGroups", "features", "races", "outfits", "gear", "beasts", "weapons", "gearMaterials", "dungeonParts", "dungeonStyles", "layers", "borderHills", "settlements", "voices", "patches", ""];
 
 interface ViewDef {
   id: string;
@@ -559,6 +561,7 @@ function viewsFor(asset: Asset | null, content: WorldContent | null): ViewDef[] 
     case "buildings":
     case "buildingParts":
     case "props":
+    case "propGroups":
       return [
         { id: "placed", label: "On the ground", mode: "3d" },
         { id: "model", label: "Model", mode: "3d" },
@@ -739,8 +742,8 @@ function renderPreviewBar(): void {
         ["side", "Side section"],
       ], rebuild));
     }
-    if ((current.folder === "trees" || current.folder === "bushes" || current.folder === "rocks" || current.folder === "buildings" || current.folder === "props" || current.folder === "features") && content) {
-      const generated = current.folder === "buildings" || current.folder === "props" || current.folder === "features";
+    if ((current.folder === "trees" || current.folder === "bushes" || current.folder === "rocks" || current.folder === "buildings" || current.folder === "props" || current.folder === "propGroups" || current.folder === "features") && content) {
+      const generated = current.folder === "buildings" || current.folder === "props" || current.folder === "propGroups" || current.folder === "features";
       const def = generated ? undefined : kindOf(content, current);
       const variants = generated ? BUILDING_VARIANTS : def ? variantCount(def) : 1;
       const variantMenu = select("Variant", "variant", [...Array.from({ length: variants }, (_, i): [string, string] => [String(i), String(i + 1)]), ["all", "All"]], rebuild);
@@ -1359,6 +1362,35 @@ async function preview3d(token: number, asset: Asset, view: ViewDef, content: Wo
     const def = content.props.find((prop) => prop.id === asset.id)!;
     const chosen = options.variant === "all" ? Array.from({ length: BUILDING_VARIANTS }, (_, i) => i) : [Math.min(BUILDING_VARIANTS - 1, Number(options.variant) || 0)];
     buildings = chosen.map((variant) => generateProp(def, seed, variant, options.lod === "far"));
+  } else if (asset.folder === "propGroups") {
+    // A group as a compound sets it down: each variant a fresh roll of its members' chances, turns
+    // and models, standing on level ground; "All" lays them out in a row.
+    ground = groundMaterial(content, asset);
+    if (grassOn) grass = ground.grass;
+    const group = content.propGroups.find((g) => g.id === asset.id)!;
+    const chosen = options.variant === "all" ? Array.from({ length: BUILDING_VARIANTS }, (_, i) => i) : [Math.min(BUILDING_VARIANTS - 1, Number(options.variant) || 0)];
+    const far = options.lod === "far";
+    const rolls = chosen.map((variant) => arrangeGroup(group, seed, mulberry32(deriveSeed(seed, 0x6a0d + variant))));
+    const gap = 1.5;
+    const span = rolls.reduce((sum, a) => sum + Math.max(2, a.reach * 2) + gap, 0);
+    let cursor = -span / 2;
+    const placed: NonNullable<typeof site>["placed"] = [];
+    for (const arranged of rolls) {
+      const width = Math.max(2, arranged.reach * 2);
+      const middle = cursor + width / 2;
+      cursor += width + gap;
+      const heights = new Map<object, number>();
+      for (const member of arranged.members) {
+        const y = member.on ? (heights.get(member.on) ?? 0) + member.lift : 0;
+        heights.set(member, y);
+        placed.push({ x: middle + member.x, y, z: member.z, frontX: member.frontX, frontZ: member.frontZ, model: generateProp(member.prop, seed, member.variant, far) });
+      }
+    }
+    site = { size: Math.max(8, span * 1.1), heightAt: () => 0, placed, lines: [], yards: [], trees: [], farTrees: [], far };
+    summary = document.createElement("div");
+    const facts = document.createElement("p");
+    facts.textContent = `${group.name}: ${rolls.map((a) => a.members.length).join(", ")} of its ${group.members.length} members stand, one roll each (its front toward you). Change the variant or the seed to roll it again.`;
+    summary.append(facts);
   } else if (asset.folder === "buildingParts") {
     ground = groundMaterial(content, asset);
     if (grassOn) grass = ground.grass;
