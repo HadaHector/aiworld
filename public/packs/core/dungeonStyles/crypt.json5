@@ -38,6 +38,9 @@
     niche: { material: "plaster", tint: [0.78, 0.73, 0.65] },
     // A tomb: its base, chest and lid each cut from one stone - no joints.
     tomb: { material: "dressedStone", tint: [0.86, 0.83, 0.78] },
+    // The mausoleum over its mouth, outside: rubble walls, a steep roof of grey tiles.
+    outside: { material: "rubbleStone", tint: [0.9, 0.9, 0.88] },
+    roof: { material: "roofTiles", tint: [0.55, 0.56, 0.58] },
   },
   // Bands along the walls (DUNGEONS.md, *Trims*): a plinth a course high at their feet, a cornice
   // standing well out at their heads, where the vault springs.

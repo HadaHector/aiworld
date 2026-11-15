@@ -57,6 +57,18 @@ export function createDungeonMeshes(
   };
   const reached = layout.parts.map((p) => lightsReaching(p, all));
   const total = reached.filter((r) => r.length > 0).length;
+  // A part's outside (an entrance's house): in sunlight with the world, not baked.
+  models.forEach(({ exterior }, i) => {
+    if (!exterior || exterior.indices.length === 0) return;
+    const geometry = emptyGeometry();
+    appendModel(geometry, exterior, material.layerOf, (x, y, z) => [x, y, z]);
+    triangles += geometry.indices.length / 3;
+    const mesh = createBuildingMesh(scene, `dungeonOutside:${i}:${layout.parts[i].part.id}`, geometry, material);
+    mesh.parent = root;
+    mesh.computeWorldMatrix(true);
+    mesh.freezeWorldMatrix();
+    meshes.push(mesh);
+  });
   models.forEach(({ model }, i) => {
     if (model.indices.length === 0) return;
     const geometry = emptyGeometry();

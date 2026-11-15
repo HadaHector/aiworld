@@ -6,6 +6,9 @@
 // where the dungeon is drawn and the world not. The mausoleum's walls stand over x -4..26, z 0..16.
 {
   tags: ["crypt", "entrance"],
+  // The mausoleum's outside, in daylight: its walls from under the ground to the eaves, a tiled roof
+  // along its length; its door where the surface socket is.
+  exterior: { walls: [-4, 0, 26, 16], foot: -1, eave: 9, roof: 7 },
   sockets: [
     { at: [0, 0, 0], facing: 180, type: "surface", size: [6, 6], reach: 1.5, reachOver: 1 },
     { at: [-13, -19, 17], facing: 0, type: "crypt", size: [6, 6], reach: 1.5, reachOver: 1 },

@@ -1310,7 +1310,16 @@ async function preview3d(token: number, asset: Asset, view: ViewDef, content: Wo
     // barrel vault, if it may have one, as the seed rolls it - or `vault=barrel` / `vault=flat`.
     const vault = new URLSearchParams(location.search).get("vault");
     const barrels = vault === "barrel" ? 1 : vault === "flat" ? 0 : style.barrels;
-    buildings = [buildPartModel(layout, 0, { ...style, barrels, light: { ...style.light, lit: 1 } }, content.props.find((prop) => prop.id === style.light.fixture), (id) => content.props.find((prop) => prop.id === id)).model];
+    const built = buildPartModel(layout, 0, { ...style, barrels, light: { ...style.light, lit: 1 } }, content.props.find((prop) => prop.id === style.light.fixture), (id) => content.props.find((prop) => prop.id === id));
+    // Its outside too, where it has one (an entrance's house), in the same place.
+    let shown = built.model;
+    if (built.exterior) {
+      const merged = new ModelBuilder();
+      merged.append(built.model, 0, 0, 0, 0, 1);
+      merged.append(built.exterior, 0, 0, 0, 0, 1);
+      shown = merged.finish({ x: 0, z: 0 });
+    }
+    buildings = [shown];
     dungeonAmbient = style.light.ambient;
     if (buildings[0].indices.length === 0) {
       setStatus(`${part.id} has no faces to draw: nothing of it is seen from inside`);

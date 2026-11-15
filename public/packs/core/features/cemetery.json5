@@ -10,8 +10,8 @@
     // Gentle ground, open or thinly wooded, well out of any settlement.
     site: { grade: [0, 0.12], cover: [0, 0.7], fromSettlements: 400 },
     // Its yard: `radius` half its length (chapel to crypt), `width` across - near square, the
-    // graves' ground.
-    yard: { radius: [14, 24], width: [30, 50] },
+    // graves' ground. Big enough for the crypt's mausoleum across its foot (DUNGEONS.md).
+    yard: { radius: [28, 48], width: [60, 100] },
     // Its buildings' pads blend back gently; the ground under and round them trodden to earth.
     pads: { slope: 0.25, blend: [1.5, 8], spill: { material: "track", reach: 2 } },
     arrangement: "rows",
@@ -24,6 +24,8 @@
     graves: {
       spacing: [3.7, 3.5],
       fill: 0.75,
+      // Kept well in from its wall and its end buildings: grass between.
+      margin: 5,
       markers: [
         { prop: "ledgerSlab", from: 0, to: 0.35, weight: 2 },
         { prop: "tableTomb", from: 0, to: 0.3, weight: 0.6 },

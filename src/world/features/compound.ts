@@ -881,8 +881,8 @@ function layoutRows(featureId: number, kind: FeatureKindDef, site: CompoundSite,
     for (const side of [-1, 1]) {
       for (let row = 0; ; row++) {
         const b = side * (GRAVE_PATH_CLEARANCE + across / 2 + row * across);
-        if (Math.abs(b) + across / 2 > halfWidth) break;
-        for (let a = halfLength - along / 2; a >= -halfLength + along / 2; a -= along) {
+        if (Math.abs(b) + across / 2 > halfWidth - graves.margin) break;
+        for (let a = halfLength - graves.margin - along / 2; a >= -halfLength + graves.margin + along / 2; a -= along) {
           if (side > 0 && Math.abs(a) < GRAVE_WAY_IN_CLEARANCE + along / 2) continue;
           if (rng() >= graves.fill) continue;
           // Which marker: one whose stretch of the yard holds it, by weight.

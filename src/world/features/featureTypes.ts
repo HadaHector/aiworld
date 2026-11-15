@@ -148,6 +148,8 @@ export interface BoundaryOpeningSpec {
 export interface GravesSpec {
   spacing: [number, number];
   fill: number;
+  /** How far the graves keep in from the yard's sides and ends (its wall, its end buildings). */
+  margin: number;
   markers: { placed: CompoundPropSpec["placed"]; from: number; to: number; weight: number }[];
 }
 

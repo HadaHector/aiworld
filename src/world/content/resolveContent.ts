@@ -1755,7 +1755,7 @@ function readCompound(compound: RawObject, reader: Reader, buildings: Map<string
 function readGraves(raw: unknown, reader: Reader, props: Map<string, PropDef>, groups: Map<string, PropGroupDef>): GravesSpec {
   const path = "compound.graves";
   const obj = reader.object(raw, path);
-  reader.onlyKeys(obj, path, ["spacing", "fill", "markers"]);
+  reader.onlyKeys(obj, path, ["spacing", "fill", "margin", "markers"]);
   // [along, across] - a pair, not a range.
   const raw2 = obj.spacing;
   let spacing: [number, number] = [2.8, 1.7];
@@ -1781,7 +1781,7 @@ function readGraves(raw: unknown, reader: Reader, props: Map<string, PropDef>, g
     if (to < from) reader.fail(`${at}.to`, "is down the yard from `from` (0 its head, 1 its foot)");
     return placed ? [{ placed, from, to, weight: reader.optionalNumber(entry, "weight", at, 1, { min: 0 }) }] : [];
   });
-  return { spacing, fill: reader.optionalNumber(obj, "fill", path, 0.8, { min: 0, max: 1 }), markers };
+  return { spacing, fill: reader.optionalNumber(obj, "fill", path, 0.8, { min: 0, max: 1 }), margin: reader.optionalNumber(obj, "margin", path, 0, { min: 0 }), markers };
 }
 
 /** A compound's `boundary`: its wall (a line prop) and its openings - see CompoundBoundarySpec. */

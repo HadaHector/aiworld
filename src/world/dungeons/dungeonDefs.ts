@@ -129,6 +129,19 @@ export interface DungeonPartDef {
   /** An altar against a wall (a boss room's): a collider after its own, before its tombs (which
    *  keep clear of it), drawn as the style's altar prop. */
   altar?: AltarDef;
+  /** Its outside, where it stands on the surface (an entrance's house - a crypt's mausoleum): drawn
+   *  in sunlight with the world, not baked. */
+  exterior?: ExteriorDef;
+}
+
+/** A part's outside (kitMesh.ts, `exteriorModel`): its walls round `walls` (x0, z0, x1, z1) from `foot`
+ *  (under the ground) to the eaves at `eave`, a gabled roof rising `roof` over them along its longer
+ *  side; its doors where its surface sockets are. */
+export interface ExteriorDef {
+  walls: [number, number, number, number];
+  foot: number;
+  eave: number;
+  roof: number;
 }
 
 export interface BarrelDef {
@@ -212,6 +225,9 @@ export interface KitLook {
   dark: DungeonPaint;
   /** A wall's core, where its facing blocks have fallen out (a breach). */
   breach: DungeonPaint;
+  /** A part's outside (an entrance's house): its walls, and its roof. */
+  outside: DungeonPaint;
+  roof: DungeonPaint;
 }
 
 export interface DungeonLight {
@@ -327,7 +343,7 @@ function vector(reader: Reader, value: unknown, path: string): Vec3 {
   return vec3();
 }
 
-const PART_KEYS = ["tags", "weight", "stage", "apart", "tombs", "benches", "ledgers", "ending", "bounds", "sockets", "colliders", "paths", "spots", "room", "doorway", "barrel", "altar"];
+const PART_KEYS = ["tags", "weight", "stage", "apart", "tombs", "benches", "ledgers", "ending", "bounds", "sockets", "colliders", "paths", "spots", "room", "doorway", "barrel", "altar", "exterior"];
 
 function readPart(entry: Entry, rules: DungeonRules, issues: ContentIssue[]): DungeonPartDef | null {
   const reader = new Reader(issues, entry.file);
@@ -537,6 +553,7 @@ function readPart(entry: Entry, rules: DungeonRules, issues: ContentIssue[]): Du
     drawn,
     barrel,
     altar,
+    exterior: readExterior(reader, obj),
   };
   // Every way through it, on its own colliders: floor under the walk lines, and 6 m wide and high.
   const before = issues.length;
@@ -546,6 +563,19 @@ function readPart(entry: Entry, rules: DungeonRules, issues: ContentIssue[]): Du
     if (paths.length > 0 && !doorway) for (const problem of checkPaths(shapes, paths, rules.minClear, sockets)) reader.fail("paths", problem);
   }
   return part;
+}
+
+/** A part's outside, if it has one (see `DungeonPartDef.exterior`). */
+function readExterior(reader: Reader, obj: RawObject): ExteriorDef | undefined {
+  if (obj.exterior === undefined) return undefined;
+  const e = reader.object(obj.exterior, "exterior");
+  reader.onlyKeys(e, "exterior", ["walls", "foot", "eave", "roof"]);
+  const w = e.walls;
+  if (!Array.isArray(w) || w.length !== 4 || !w.every((v) => typeof v === "number") || w[2] <= w[0] || w[3] <= w[1]) {
+    reader.fail("exterior.walls", "expected [x0, z0, x1, z1], x1 > x0 and z1 > z0");
+    return undefined;
+  }
+  return { walls: w as [number, number, number, number], foot: reader.optionalNumber(e, "foot", "exterior", -1), eave: reader.number(e, "eave", "exterior"), roof: reader.number(e, "roof", "exterior", { min: 0.5 }) };
 }
 
 /** A part's altar, if it has one (see `DungeonPartDef.altar`). */
@@ -627,12 +657,12 @@ function readEnding(reader: Reader, obj: RawObject): "tomb" | "gate" | undefined
 }
 
 function readLook(reader: Reader, raw: RawObject): KitLook {
-  reader.onlyKeys(raw, "look", ["floor", "wall", "ceiling", "steps", "tread", "riser", "frame", "door", "trim", "niche", "tomb", "iron", "dark", "breach"]);
+  reader.onlyKeys(raw, "look", ["floor", "wall", "ceiling", "steps", "tread", "riser", "frame", "door", "trim", "niche", "tomb", "iron", "dark", "breach", "outside", "roof"]);
   const stone: DungeonPaint = { material: "stoneBricks", tint: [1, 1, 1] };
   const floor = paintOf(reader, raw, "floor", stone);
   const wall = paintOf(reader, raw, "wall", stone);
   const steps = paintOf(reader, raw, "steps", floor);
-  return { floor, wall, ceiling: paintOf(reader, raw, "ceiling", stone), steps, tread: paintOf(reader, raw, "tread", steps), riser: paintOf(reader, raw, "riser", steps), frame: paintOf(reader, raw, "frame", wall), trim: paintOf(reader, raw, "trim", paintOf(reader, raw, "frame", wall)), niche: paintOf(reader, raw, "niche", wall), tomb: paintOf(reader, raw, "tomb", paintOf(reader, raw, "trim", paintOf(reader, raw, "frame", wall))), door: paintOf(reader, raw, "door", { material: "doorBoards", tint: [1, 1, 1] }), iron: paintOf(reader, raw, "iron", { material: "iron", tint: [1, 1, 1] }), dark: paintOf(reader, raw, "dark", { material: "rubbleStone", tint: [0.04, 0.04, 0.045] }), breach: paintOf(reader, raw, "breach", { material: "rubbleStone", tint: [0.55, 0.52, 0.48] }) };
+  return { floor, wall, ceiling: paintOf(reader, raw, "ceiling", stone), steps, tread: paintOf(reader, raw, "tread", steps), riser: paintOf(reader, raw, "riser", steps), frame: paintOf(reader, raw, "frame", wall), trim: paintOf(reader, raw, "trim", paintOf(reader, raw, "frame", wall)), niche: paintOf(reader, raw, "niche", wall), tomb: paintOf(reader, raw, "tomb", paintOf(reader, raw, "trim", paintOf(reader, raw, "frame", wall))), door: paintOf(reader, raw, "door", { material: "doorBoards", tint: [1, 1, 1] }), iron: paintOf(reader, raw, "iron", { material: "iron", tint: [1, 1, 1] }), dark: paintOf(reader, raw, "dark", { material: "rubbleStone", tint: [0.04, 0.04, 0.045] }), breach: paintOf(reader, raw, "breach", { material: "rubbleStone", tint: [0.55, 0.52, 0.48] }), outside: paintOf(reader, raw, "outside", wall), roof: paintOf(reader, raw, "roof", { material: "roofTiles", tint: [1, 1, 1] }) };
 }
 
 function readTrims(reader: Reader, raw: RawObject): WallTrims {

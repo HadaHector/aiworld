@@ -45,6 +45,8 @@ interface Face {
 export interface PartModel {
   model: BuildingModel;
   lights: ModelLight[];
+  /** Its outside (an entrance's house), drawn in sunlight with the world - not baked. */
+  exterior?: BuildingModel;
 }
 
 const EPS = 1e-4;
@@ -1689,7 +1691,125 @@ export function buildPartModel(layout: DungeonLayout, index: number, style: Dung
     });
   }
   const model = b.finish({ x: 0, z: 0 });
-  return { model, lights: model.lights ?? [] };
+  return { model, lights: model.lights ?? [], exterior: placed.part.exterior ? exteriorModel(placed.part, style.look, point, turn) : undefined };
+}
+
+/** How far its eaves reach out past its walls, its verges past its gable ends; its roof's thickness. */
+const EAVES = 0.7;
+const VERGE = 0.5;
+const ROOF_THICK = 0.35;
+/** Its plinth and cornice: how high, how far out. */
+const OUT_PLINTH: [number, number] = [0.9, 0.3];
+const OUT_CORNICE: [number, number] = [0.6, 0.35];
+
+/**
+ * A part's outside (GEOMETRY.md, 8 - bottom to top): its walls' outer faces from under the ground to
+ * the eaves, less a door where each of its surface sockets is; a plinth round their foot and a
+ * cornice round their head, both broken at the doors; a triangle of wall at each gable end; a roof of
+ * two slopes along its longer side, out past the walls at its eaves and verges, and its soffits under
+ * them. The doors' own frames are the doorways set in them.
+ */
+function exteriorModel(part: DungeonPartDef, look: DungeonStyleDef["look"], point: (p: V) => V, turn: (d: V) => V): BuildingModel {
+  const e = part.exterior!;
+  const [x0, z0, x1, z1] = e.walls;
+  const b = new ModelBuilder();
+  const wall = asPaint(look.outside), roof = asPaint(look.roof), trim = asPaint(look.trim);
+  /** A flat polygon facing `n`, its corners turned to face it. */
+  const face = (corners: V[], n: V, paint: Paint): void => {
+    const [a, c, d] = corners;
+    const w = cross(sub(c, a), sub(d, a));
+    b.face((dot(w, n) < 0 ? [...corners].reverse() : corners).map(point), turn(norm(n)), paint);
+  };
+  /** A box's faces but its back (against the wall, `n` the wall's outward normal) and its underside. */
+  const band = (lo: V, hi: V, n: V, paint: Paint, under = false): void => {
+    for (const side of boxSides(lo, hi)) {
+      if (dot(side.n, n) < -0.5) continue;
+      if (side.n[1] < -0.5 && !under) continue;
+      face(side.corners, side.n, paint);
+    }
+  };
+  // Each wall: along it from one end to the other (outward normal n), its doors cut out.
+  const sides: { n: V; at: (t: number, y: number) => V; t0: number; t1: number }[] = [
+    { n: [0, 0, -1], at: (t, y) => [t, y, z0], t0: x0, t1: x1 },
+    { n: [0, 0, 1], at: (t, y) => [t, y, z1], t0: x0, t1: x1 },
+    { n: [-1, 0, 0], at: (t, y) => [x0, y, t], t0: z0, t1: z1 },
+    { n: [1, 0, 0], at: (t, y) => [x1, y, t], t0: z0, t1: z1 },
+  ];
+  const alongX = x1 - x0 >= z1 - z0;
+  for (const s of sides) {
+    // Its doors: the surface sockets on it.
+    const doors = part.sockets
+      .filter((k) => k.type === "surface")
+      .flatMap((k) => {
+        const a = (k.facing * Math.PI) / 180;
+        if (Math.abs(Math.sin(a) - s.n[0]) > 0.01 || Math.abs(Math.cos(a) - s.n[2]) > 0.01) return [];
+        const t = s.n[0] !== 0 ? k.at.z : k.at.x;
+        return [{ t0: t - k.size[0] / 2, t1: t + k.size[0] / 2, y0: k.at.y, y1: k.at.y + k.size[1] }];
+      })
+      .sort((p, q) => p.t0 - q.t0);
+    // The wall, in upright strips between its doors, and over each door.
+    let t = s.t0;
+    const strip = (ta: number, tb: number, ya: number, yb: number): void => {
+      if (tb - ta > 1e-3 && yb - ya > 1e-3) face([s.at(ta, ya), s.at(tb, ya), s.at(tb, yb), s.at(ta, yb)], s.n, wall);
+    };
+    for (const d of doors) {
+      strip(t, d.t0, e.foot, e.eave);
+      strip(d.t0, d.t1, d.y1, e.eave);
+      t = d.t1;
+    }
+    strip(t, s.t1, e.foot, e.eave);
+    // The plinth and cornice along it, out from it, broken at its doors; round its corners.
+    const runs: [number, number][] = [];
+    let r = s.t0 - OUT_PLINTH[1];
+    for (const d of doors) {
+      runs.push([r, d.t0]);
+      r = d.t1;
+    }
+    runs.push([r, s.t1 + OUT_PLINTH[1]]);
+    const out = (t: number, y: number, k: number): V => {
+      const p = s.at(t, y);
+      return [p[0] + s.n[0] * k, y, p[2] + s.n[2] * k];
+    };
+    const box = (ta: number, tb: number, ya: number, yb: number, k: number): [V, V] => {
+      const p = out(ta, ya, -0.05), q = out(tb, yb, k);
+      return [[Math.min(p[0], q[0]), ya, Math.min(p[2], q[2])], [Math.max(p[0], q[0]), yb, Math.max(p[2], q[2])]];
+    };
+    for (const [ta, tb] of runs) if (tb - ta > 0.05) band(...box(ta, tb, e.foot, OUT_PLINTH[0], OUT_PLINTH[1]), s.n, trim);
+    band(...box(s.t0 - OUT_CORNICE[1], s.t1 + OUT_CORNICE[1], e.eave - OUT_CORNICE[0], e.eave, OUT_CORNICE[1]), s.n, trim, true);
+  }
+  // The roof: along its longer side. (a: along the ridge, c: across it, from c0 to c1.)
+  const [a0, a1, c0, c1] = alongX ? [x0, x1, z0, z1] : [z0, z1, x0, x1];
+  const P = (a: number, c: number, y: number): V => (alongX ? [a, y, c] : [c, y, a]);
+  const mid = (c0 + c1) / 2, half = (c1 - c0) / 2, ridge = e.eave + e.roof;
+  const pitch = e.roof / half;
+  // The gable ends: a triangle of wall over each end, from the eaves to the ridge.
+  for (const [a, sign] of [[a0, -1], [a1, 1]] as [number, number][]) {
+    const n: V = alongX ? [sign, 0, 0] : [0, 0, sign];
+    face([P(a, c0, e.eave), P(a, c1, e.eave), P(a, mid, ridge)], n, wall);
+  }
+  // Each slope: from the eaves (out past the wall, lower by the pitch) up to the ridge; its top
+  // (the roof), its underside out past the walls (the soffit), its edge at the eaves, its verges.
+  const lowY = e.eave - EAVES * pitch;
+  for (const side of [-1, 1]) {
+    const cEdge = side < 0 ? c0 - EAVES : c1 + EAVES, cWall = side < 0 ? c0 : c1;
+    const normal = norm(alongX ? [0, 1, side * pitch] : [side * pitch, 1, 0]);
+    const lift = ROOF_THICK / normal[1];
+    const A0 = a0 - VERGE, A1 = a1 + VERGE;
+    face([P(A0, cEdge, lowY + lift), P(A1, cEdge, lowY + lift), P(A1, mid, ridge + lift), P(A0, mid, ridge + lift)], normal, roof);
+    // Its soffit: under the eaves, out to the wall; and under the verges, out to the gable.
+    const down: V = [-normal[0], -normal[1], -normal[2]];
+    face([P(A0, cEdge, lowY), P(A1, cEdge, lowY), P(A1, cWall, e.eave), P(A0, cWall, e.eave)], down, roof);
+    for (const [aIn, aOut] of [[a0, A0], [a1, A1]]) face([P(aOut, cWall, e.eave), P(aIn, cWall, e.eave), P(aIn, mid, ridge), P(aOut, mid, ridge)], down, roof);
+    // The eaves' edge.
+    const edgeN: V = alongX ? [0, 0, side] : [side, 0, 0];
+    face([P(A0, cEdge, lowY), P(A1, cEdge, lowY), P(A1, cEdge, lowY + lift), P(A0, cEdge, lowY + lift)], edgeN, roof);
+    // The verges' edges.
+    for (const [aOut, sign] of [[A0, -1], [A1, 1]] as [number, number][]) {
+      const vn: V = alongX ? [sign, 0, 0] : [0, 0, sign];
+      face([P(aOut, cEdge, lowY), P(aOut, mid, ridge), P(aOut, mid, ridge + lift), P(aOut, cEdge, lowY + lift)], vn, roof);
+    }
+  }
+  return b.finish({ x: 0, z: 0 });
 }
 
 /** Where candles may stand in a part, in its own frame: the place, which way they face, and how
