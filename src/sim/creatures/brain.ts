@@ -106,8 +106,8 @@ function steer(world: BrainWorld, self: Entity, brain: Brain, goal: Vec3, share:
     brain.aimBest = d;
     brain.aimAt = now;
   }
-  const blocked = brain.path.length === 0 && !nav.straight(self.dimension, here, goal);
-  if (now >= brain.nextPlan && (blocked || now - brain.aimAt > NO_NEARER)) {
+  // Looked at once a PLAN_EVERY at most: in a dungeon `straight` is a few rays.
+  if (now >= brain.nextPlan && ((brain.path.length === 0 && !nav.straight(self.dimension, here, goal)) || now - brain.aimAt > NO_NEARER)) {
     brain.nextPlan = now + PLAN_EVERY;
     const way = nav.path(self.dimension, here, goal, PLAN_NODES);
     if (!way) {
@@ -120,11 +120,12 @@ function steer(world: BrainWorld, self: Entity, brain: Brain, goal: Vec3, share:
     brain.aimAt = now;
     return steer(world, self, brain, goal, share, run);
   }
+  if (now >= brain.nextPlan && brain.path.length === 0) brain.nextPlan = now + PLAN_EVERY;
   return toward(self, aim.x, aim.z, share, run);
 }
 
-/** A goal on the ground at (x, z): its height is the creature's own until goals carry one. */
-const at = (self: Entity, p: { x: number; z: number }): Vec3 => ({ x: p.x, y: self.y, z: p.z });
+/** A goal on the ground at (x, z), at its own height if it has one (home), else the creature's. */
+const at = (self: Entity, p: { x: number; y?: number; z: number }): Vec3 => ({ x: p.x, y: p.y ?? self.y, z: p.z });
 
 /** A creature's stats and another's into the scope tactics' `when` and the aggro formula read. */
 function scopeFor(world: BrainWorld, self: Entity, other: Entity | undefined, distance: number): Float64Array {

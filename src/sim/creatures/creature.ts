@@ -13,7 +13,7 @@ export interface Brain {
   /** When the current idle, wander or flee ends. */
   until: number;
   /** Where it is walking to, wandering or going home. */
-  goal: { x: number; z: number } | null;
+  goal: { x: number; y?: number; z: number } | null;
   /** Where the pull started: what the leash measures from. */
   pulledAt: { x: number; z: number };
   /** The nearest it has got to its target this chase, and when - for giving up when stuck. */
@@ -50,7 +50,7 @@ export interface CreaturePart {
   group: string;
   level: number;
   /** Where it stands, wanders about and evades back to. */
-  home: { x: number; z: number };
+  home: { x: number; y?: number; z: number };
   wander: number;
   brain: Brain;
   /** What its brain asks of its body this step. */

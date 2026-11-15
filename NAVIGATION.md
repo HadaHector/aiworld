@@ -1,7 +1,7 @@
 # Navigation
 
 How creatures find their way: round houses, fences and trees on the surface, and through crypts and
-caves under it. **Status: step 1 done** (the follower, [As built](#as-built)); steps 2-7 to come.
+caves under it. **Status: steps 1-2 done** (the follower, and ways through crypts: [As built](#as-built)); steps 3-7 to come.
 
 ## Today
 
@@ -89,16 +89,18 @@ grid's own `straight` test, so it is a few waypoints, not one per metre.
 A dungeon already is a graph: parts as nodes, joined sockets as edges, and every kit part has walk
 lines measured at load. So:
 
-- **Between parts**: A* on the layout graph (tens of nodes: free), socket to socket, costed by the
-  walk lines' lengths.
+- **One graph of walk lines** (as built: finer than the part graph, and enough on its own): every
+  placed part's walk lines, cut into 3 m pieces, each line's ends joined to the nearest point of any
+  other line within 1.2 m, and lines crossing at a shared point joined there. A stair's flight meets
+  its landings, a doorway's short line meets both parts', a hall's two lines meet in its middle.
+  Spirals and stairs stacked over each other are no problem, since the graph is in 3D. A* over it.
 - **Along a way** (corridor, stair, spiral, connector): follow its walk line. Ways are 6 m wide and
-  clear by DUNGEONS.md's own check; nothing to avoid but other bodies. Spirals and stairs stacked
-  over each other are no problem, since the graph is in 3D.
-- **In a room** (`room: true`: halls, tombs, the rotunda, the boss halls): a small grid in the
-  part's own frame, built once per part **definition** at pack load from its colliders (rays down
-  every metre, up to two floors a cell for the two-storey halls) and cached with the content hash.
-  A placed room reuses its part's grid through its transform, so a dungeon costs nothing to build
-  beyond its layout.
+  clear by DUNGEONS.md's own check; nothing to avoid but other bodies.
+- **Off the lines** (a spawn spot by a wall, a player in a hall's corner): rays through the dungeon's
+  colliders, which are in the dimension's collision world whenever the dungeon is open - at the
+  knees either side and the chest, and a floor under the way every 2 m. A body walks straight onto
+  the nearest nodes they allow, and off them to its goal. *Planned as room grids per part
+  definition; not needed: the rays found a way to every room and from every spawn spot.*
 - **Caves** (the field builder) have no per-part colliders, but their shapes are analytic: a
   tunnel's centre line and a chamber's floor give walk lines and a room's disc. Done with the cave
   step of DUNGEONS.md, not before.
@@ -198,15 +200,15 @@ At Classic density a player has some 20-60 creatures active round them; most sta
 - **Deterministic**: the same query twice, and on a fresh server, gives the same waypoints.
 - **Budget**: no tick over its 1 ms; a hundred chasers in a village.
 
-Small fixes to one part's grid are checked on that part alone, not the full probe.
+A small fix to one part's ways is checked on that part alone, not the full probe.
 
 ## Steps
 
 1. **The follower** (done). `Brain.path`, `steer`, plan and re-plan triggers, the `unreachable` evade, the
    path line in debug - with a `NavQuery` that only answers "straight". Behaviour unchanged; the
    seam is in.
-2. **Dungeons.** The layout graph search, walk lines, room grids per part definition. The biggest
-   win: this is where straight lines fail most. Crypt probe cases.
+2. **Dungeons** (done). The walk lines' graph, rays off it, crypt probe cases. The biggest win:
+   this is where straight lines fail most.
 3. **The surface.** Lazy tiles, A*, string-pulling, regions; `reachable` for wander and flee spots.
    House, fence, water cases.
 4. **Steering.** Look-ahead round trunks, separation in a group.
@@ -242,6 +244,36 @@ later than the rest. 1-3 are the plan; without them nothing changes for the play
   passes its waypoint and reaches its target, plans at most twice a second, and with no way evades
   as unreachable sooner than `stuck`. 90/93 checks pass; the three that fail (`social`, and the
   hunting bot's kill and loot) fail the same on the tree without this step.
+
+**Step 2, dungeons** (2026-11-15):
+
+- `src/world/nav/dungeonNav.ts`: `buildDungeonGraph(layout)` (the walk lines' graph, above; 5.5 ms
+  and about 600 nodes for a crypt), `walkableStraight(world, a, b)` (the rays), `shortcut` (the same,
+  and never across a doorway on the slant: a sill crossed so can wedge a body - only walk lines go
+  through a doorway, square to it), `dungeonPath(graph, world, from, to, budget)`.
+- A way: straight when the ends are under 30 m apart and a shortcut joins them; else each end onto
+  the graph (the nearest nodes by distance, height counting four times; up to 24 tried, those
+  within 3 m of one that failed passed over, two kept), A* with ties to the lower node, the nodes on
+  straight runs dropped, and the ends pulled taut over their first and last four points. The middle
+  keeps to the lines and their bends: rays cost, and a corridor's middle is a fine way to walk it.
+- `src/sim/nav.ts`: the server's `NavQuery` - a dungeon's graph made on first use per placed dungeon;
+  on the surface straight (until step 3). A way between a dungeon and anywhere outside it is none, so
+  a creature outside chasing a player down into a crypt evades as unreachable (open question 1's
+  proposal, not yet answered).
+- The brain looks at `straight` once a plan slot (0.5 s) at most - in a dungeon it is rays. Homes
+  carry their height, so the way home ends on the right floor.
+- Probe: `scripts/probe/navigation.mjs [layouts]` (200 by default, about a minute): crypts on flat
+  ground; a way from the arrival to every room (1437/1437) and from every spawn spot to the arrival
+  (4514/4514), the ends' shortcuts walkable, none to a point in the rock over the boss (200/200),
+  the same way twice, the motor walking door to boss (19/20). Then on a `tiny` server: a wolf 34 m
+  off behind a crypt wall plans round it and reaches the player; the player put in the rock, it
+  evades as unreachable. 1465/1465 checks.
+- Cost: a search 0.68 ms and 28 rays on average (rays about 24 µs each), the slowest 17.5 ms. There
+  is no queue yet: a plan runs when the brain asks. At the budget's 1 ms a tick, the rare slow one is
+  a hitch to watch for when crypts are filled with creatures.
+- Found, not fixed (crypt geometry, for the dungeons work): in a stair hall a ledger stone stands
+  0.29 m proud of the floor across the walk line by its side doorway, and the motor met on the
+  slant wedges on its edge (layout 9 of the probe; noted, not failed).
 
 ## Decisions
 

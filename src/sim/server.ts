@@ -19,6 +19,7 @@ import type { ItemHooks } from "./items/itemHooks";
 import type { CreatureRules } from "./rules/creatureRules";
 import { createCreatureSystem, type CreatureSystem, type KillRecord } from "./creatures/system";
 import type { NavQuery } from "../world/nav/navQuery";
+import { createServerNav } from "./nav";
 import { createWorldDelta, type WorldDelta } from "./creatures/worldDelta";
 import type { ProgressionRules } from "./rules/progressionRules";
 import { createProgressionSystem, type ProgressionSystem } from "./progression/system";
@@ -380,7 +381,7 @@ export function createServer(options: ServerOptions): Server {
         lineOfSight: (dimension, from, to) => skills.sys.world.lineOfSight(dimension, from, to),
         hasLoot: (entity) => itemSystem?.hasLoot(entity) ?? false,
         delta,
-        nav: options.nav,
+        nav: options.nav ?? createServerNav((id) => loaded.get(id)),
       })
     : null;
 
