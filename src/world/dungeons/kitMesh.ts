@@ -53,6 +53,8 @@ const FRONT = 0.05;
 /** A tread narrower than this, or a riser lower than this, is a step. */
 const STEP_WIDTH = 2.5;
 const RISER = 0.6;
+/** A step's rise, as the kit's stairs are built: steps a rise apart in height are next to each other. */
+const STEP_RISE = 0.25;
 /** How high over the floor below a torch's flame burns, at the least. */
 const FLAME_HEIGHT = 3.8;
 /** How far from a light spot a wall may be for a torch to hang on it. */
@@ -1390,6 +1392,9 @@ function roundOf(part: DungeonPartDef, f: Face): { uvs: [number, number][]; tang
  */
 function stairOf(f: Face, kind: SolidKind, solids: readonly Solid[], look: DungeonStyleDef["look"]): { paint: DungeonPaint; uvs: [number, number][]; tangent: V } | null {
   if (!kind.tread) return null;
+  // Every other step (by its height, a rise apart) laid half a metre further along, so the steps'
+  // stone does not line up joint over joint down a flight.
+  const shift = Math.round(kind.top / STEP_RISE) & 1 ? 0.5 : 0;
   let c = f.corners;
   if (f.n[1] > 0.5) {
     // The step's whole top, not the piece of it left between the pillar and the wall: every piece
@@ -1437,7 +1442,7 @@ function stairOf(f: Face, kind: SolidKind, solids: readonly Solid[], look: Dunge
     if (dot(cross(f.n, tangent), into) < 0) tangent = [-tangent[0], -tangent[1], -tangent[2]];
     const uvs = piece.map((p): [number, number] => {
       const fromFront = dot(sub(p, a), into), fromBack = dot(sub(p, b0), backInto);
-      return [dot(p, tangent), fromFront / Math.max(1e-6, fromFront + fromBack)];
+      return [dot(p, tangent) + shift, fromFront / Math.max(1e-6, fromFront + fromBack)];
     });
     return { paint: look.tread, uvs, tangent };
   }
@@ -1450,7 +1455,7 @@ function stairOf(f: Face, kind: SolidKind, solids: readonly Solid[], look: Dunge
   // A riser: up to its step's tread. (What lies under a step is its underside: the vault's.)
   if (Math.abs(high - kind.top) > 0.05 || high - low < 1e-3) return { paint: look.ceiling, uvs: c.map((p) => [dot(p, horizontal(f.n)), p[1]]), tangent: horizontal(f.n) };
   const tangent = horizontal(f.n);
-  return { paint: look.riser, uvs: c.map((p): [number, number] => [dot(p, tangent), (p[1] - low) / (high - low)]), tangent };
+  return { paint: look.riser, uvs: c.map((p): [number, number] => [dot(p, tangent) + shift, (p[1] - low) / (high - low)]), tangent };
 }
 
 /** The frame stone's blocks (`doorStone`: two across a 3 m repeat, four courses up it). */

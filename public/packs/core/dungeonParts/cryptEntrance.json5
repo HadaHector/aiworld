@@ -1,14 +1,47 @@
-// The way down from the churchyard: a spiral stair two and a half turns deep, 19.5 m, so the first
-// hall below lies well under the ground. Its door is the crypt building's.
+// The way down from the churchyard (DUNGEONS.md, *A crypt's mouth*): the mausoleum's door opens onto a
+// vestibule 7 m wide running along its front, down a steep flight to its right end; the way turns
+// round the end of a spine wall, and a second flight runs back along its rear, down past its left wall
+// to a landing 19 m under the door - its way on out of its back, into the hill. Nothing past the turn
+// is seen from the door, nor the door from the second flight: the camera stepping onto that flight is
+// where the dungeon is drawn and the world not. The mausoleum's walls stand over x -4..26, z 0..16.
 {
-  tags: ["crypt", "entrance", "spiral"],
+  tags: ["crypt", "entrance"],
   sockets: [
     { at: [0, 0, 0], facing: 180, type: "surface", size: [6, 6], reach: 1.5, reachOver: 1 },
-    { at: [0, -19.5, 20], facing: 0, type: "crypt", size: [6, 6], reach: 1.5, reachOver: 1 },
+    { at: [-13, -19, 17], facing: 0, type: "crypt", size: [6, 6], reach: 1.5, reachOver: 1 },
   ],
   colliders: [
-    { spiral: { centre: [0, 10], top: 0, inner: 3, outer: 9, wall: 1, start: 180, turns: 2.5, drop: 19.5, ceiling: 6 } },
+    // In at the door: a level stretch, then the vestibule's flight down along the front to the turn -
+    // 7 m wide, so the door's frame reaching in from the front wall leaves it 6 m.
+    { box: [-3, -1, 0, 7, 0, 8] },
+    { stair: { from: [7, 0, 4.5], to: [19, -6, 4.5], width: 7, rise: 0.25 } },
+    // The turn, round the spine's end.
+    { box: [19, -7, 1, 25, -6, 15] },
+    // The second flight, walled and vaulted, back along the rear and out past the left wall.
+    { stair: { from: [19, -6, 12], to: [-7, -19, 12], width: 6, rise: 0.25, ceiling: 6, walls: true } },
+    // The landing at its foot, a metre deeper than the flight (the frame in its way out reaches in),
+    // its way on out of its back at its far end, into the hill.
+    { box: [-18, -20, 8, -7, -19, 17] },
+    { box: [-18, -13, 8, -7, -12, 17] },
+    { box: [-18, -20, 8, -17, -12, 17] },
+    { box: [-18, -20, 8, -7, -12, 9] },
+    { box: [-10, -20, 16, -7, -12, 17] },
+    // The mausoleum: its walls, the spine between the two legs, its vault.
+    { box: [-4, -10.5, 0, -3, 9, 16] },
+    { box: [25, -7, 0, 26, 9, 16] },
+    { box: [-4, -7, 15, 26, 9, 16] },
+    { box: [-4, -7, 8, 19, 9, 9] },
+    { box: [-4, 8, 0, 26, 9, 16] },
+    // Its front: the door 6 m wide and high, and the wall along the vestibule.
+    { box: [-3, 6, 0, 3, 9, 1] },
+    { box: [3, -7, 0, 25, 9, 1] },
+    // Over the second flight's mouth, down to its vault; the space over its vault filled.
+    { box: [18.5, 0, 9, 19, 9, 15] },
+    { convex: [[-3, -10.3, 9], [-3, -10.3, 15], [18.5, 0.4, 9], [18.5, 0.4, 15], [-3, 8.5, 9], [-3, 8.5, 15], [18.5, 8.5, 9], [18.5, 8.5, 15]] },
   ],
-  // Torches on the outer wall every half turn, about 4 m over the stair.
-  spots: { light: [[-4.3, 0.75, 17.45], [4.3, -3.15, 2.55], [-4.3, -7.05, 17.45], [4.3, -10.95, 2.55], [-4.3, -14.85, 17.45]] },
+  paths: [
+    [[0, 0, 0], [0, 0, 4.5], [7, 0, 4.5], [19, -6, 4.5], [22, -6, 4.5], [22, -6, 12], [19, -6, 12], [-7, -19, 12], [-13, -19, 12], [-13, -19, 17]],
+  ],
+  // Torches along the vestibule, at the turn, along the second flight and on the landing.
+  spots: { light: [[0, 2.5, 7.4], [10, 2.5, 1.6], [16, -0.5, 7.4], [24.4, -2, 8], [12, -5.5, 14.4], [2, -10.5, 9.6], [-16.4, -15, 12]] },
 }

@@ -381,7 +381,7 @@ function readPart(entry: Entry, rules: DungeonRules, issues: ContentIssue[]): Du
     const raw = reader.object(value, path);
     // `plain`: wall all over, whatever its shape - a railing, narrow on top, is no step.
     const keys = Object.keys(raw).filter((k) => k !== "plain");
-    if (keys.length !== 1) { reader.fail(path, "expected one of { box }, { stair }, { spiral }, { rotunda }"); return; }
+    if (keys.length !== 1) { reader.fail(path, "expected one of { box }, { convex }, { stair }, { spiral }, { rotunda }"); return; }
     if (raw.plain !== undefined && raw.box === undefined) reader.fail(`${path}.plain`, "only a box can be plain");
     if (raw.box !== undefined && reader.boolean(raw, "plain", path, false)) plain.push(shapes.length);
     try {
@@ -389,6 +389,11 @@ function readPart(entry: Entry, rules: DungeonRules, issues: ContentIssue[]): Du
         const b = raw.box;
         if (!Array.isArray(b) || b.length !== 6 || !b.every((v) => typeof v === "number")) { reader.fail(`${path}.box`, "expected [x0, y0, z0, x1, y1, z1]"); return; }
         shapes.push(boxShape(b[0], b[1], b[2], b[3], b[4], b[5]));
+      } else if (raw.convex !== undefined) {
+        // Any convex solid, from its corners (a wedge filling the space over a sloping vault).
+        const pts = raw.convex;
+        if (!Array.isArray(pts) || pts.length < 4) { reader.fail(`${path}.convex`, "expected four or more [x, y, z] corners"); return; }
+        shapes.push({ kind: "convex", points: pts.map((q, k) => vector(reader, q, `${path}.convex[${k}]`)) });
       } else if (raw.stair !== undefined) {
         const s = reader.object(raw.stair, `${path}.stair`);
         reader.onlyKeys(s, `${path}.stair`, ["from", "to", "width", "rise", "ceiling", "walls", "railings"]);
@@ -456,7 +461,7 @@ function readPart(entry: Entry, rules: DungeonRules, issues: ContentIssue[]): Du
         rounds.push(centre);
         for (const f of facings) rounds.push([centre[0] + Math.sin((f * Math.PI) / 180) * (p ? Number(p.ring) : 0), centre[1] + Math.cos((f * Math.PI) / 180) * (p ? Number(p.ring) : 0)]);
       } else {
-        reader.fail(path, `unknown collider "${keys[0]}" (expected box, stair, spiral or rotunda)`);
+        reader.fail(path, `unknown collider "${keys[0]}" (expected box, convex, stair, spiral or rotunda)`);
       }
     } catch (error) {
       reader.fail(path, (error as Error).message);

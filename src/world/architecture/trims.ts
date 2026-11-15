@@ -535,7 +535,8 @@ export function ribs(spans: readonly CeilingSpan[], around: RibSurroundings, spe
     /** The rib at `a`, with its pilasters, if it reaches walls at both ends. */
     const ribAt = (a: number): TrimPiece[] | null => {
       const end0 = wallAt(a, -1), end1 = wallAt(a, 1);
-      if (end0 === null || end1 === null) return null;
+      // (None where its middle is in a wall - a span round a wall's end, an L about a spine.)
+      if (end0 === null || end1 === null || end1 - end0 < 1) return null;
       const out: TrimPiece[] = [{ kind: "rib", points: alongX ? box(a - w, y - spec.depth, end0, a + w, y, end1) : box(end0, y - spec.depth, a - w, end1, y, a + w) }];
       if (spec.pilaster) {
         const p0 = pilaster(a, end0, -1), p1 = pilaster(a, end1, 1);
@@ -577,6 +578,7 @@ export function ribs(spans: readonly CeilingSpan[], around: RibSurroundings, spe
       if (isFixed) {
         // Over a pier: as it is, its pilasters where there is wall.
         const end0 = wallAt(a, -1) ?? b0, end1 = wallAt(a, 1) ?? b1;
+        if (end1 - end0 < 1) continue;
         pieces.push({ kind: "rib", points: alongX ? box(a - w, y - spec.depth, end0, a + w, y, end1) : box(end0, y - spec.depth, a - w, end1, y, a + w) });
         if (spec.pilaster) {
           const p0 = pilaster(a, end0, -1), p1 = pilaster(a, end1, 1);
