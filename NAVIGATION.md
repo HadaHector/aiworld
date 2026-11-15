@@ -77,8 +77,8 @@ Heights go with the cell, so a step between neighbours over the motor's step hei
 terrace wall or a cellar's edge stops a path as it stops a body.
 
 **Bridges**: one walkable layer per cell, the highest; the river under a bridge is water, so a land
-creature loses nothing. **Interiors and their stairs**: creatures stay out of houses (open question
-1); a house is its footprint.
+creature loses nothing. **Houses** are their footprint on the surface's tiles, with a way in at
+each outer door; inside, they are a graph of their own ([Houses](#houses)).
 
 The search is A* on 8 neighbours within a window round the two ends (the leash's 60 m, and a
 margin), capped at a node budget (4 000 by default, in the rules). The path is pulled taut by the
@@ -104,6 +104,22 @@ lines measured at load. So:
   step of DUNGEONS.md, not before.
 
 Space dungeons (their own dimension) use the same graph; nothing differs.
+
+### Houses
+
+Needed (the user's call, 2026-11-15), built after the rest. A house with rooms is the same shape of
+problem as a dungeon, only smaller, and its interior layout (`interiorLayout.ts`) already holds the
+graph: `rooms` as nodes, `InnerDoor`s (only the `open` ones) and `Stair`s as edges, the outer doors
+as the ways onto the surface's tiles.
+
+- **In a room**: a grid of 0.5 m cells per floor, from the built interior's floors
+  (`interiorFloorAt`) and its furniture's colliders, made when the house's collision comes in and
+  dropped with it. Rooms are small: a few hundred cells.
+- **Doors and stairs**: a waypoint either side of each, and the stair's line between.
+- **Who fits**: a doorway narrower than a kind's body is not an edge for it - a boar may follow
+  through a farmhouse door, a giant spider may not. The width is read from the door, the body's
+  radius from the kind.
+- A path that ends in a house plans on the tiles to its door, then on the house's graph.
 
 ## Following a path
 
@@ -196,21 +212,25 @@ Small fixes to one part's grid are checked on that part alone, not the full prob
 4. **Steering.** Look-ahead round trunks, separation in a group.
 5. **Surround slots** round a melee target.
 6. **Caves.** Walk lines from field parts' shapes - with DUNGEONS.md's cave step.
+7. **Houses.** The interior graph, room grids, doors by body width; probe cases for a chase from
+   the street to an upstairs room and for a kind too big for the door.
 
-**Cut order**, last first: 5, then 4's separation, then 6 waits for caves. 1-3 are the plan; without
-them nothing changes for the player.
+**Cut order**, last first: 5, then 4's separation; 6 waits for caves; 7 is needed but may come
+later than the rest. 1-3 are the plan; without them nothing changes for the player.
+
+## Decisions
+
+| Question | Decision |
+|---|---|
+| Creatures in houses | **Needed** (the user, 2026-11-15); may come after the rest - step 7 |
+| Fliers | **None planned**: every creature walks or swims |
 
 ## Open questions
 
-1. **Houses**: may creatures go into houses with rooms (a bandit in a farmhouse, a wolf through an
-   open door)? Proposed: no, a house is a wall; interiors need doors and stairs in the nav and give
-   players an easy escape to argue about.
-2. **The dungeon's mouth**: may a surface creature chase a player down into a seamless crypt, and a
+1. **The dungeon's mouth**: may a surface creature chase a player down into a seamless crypt, and a
    crypt's creature chase them out? Proposed: no - each side's creatures leash at the mouth (a crypt's
    creatures are its own, and the switch of drawing at the second flight would show them popping).
-3. **Detours and the leash**: should the leash measure along the path walked rather than as the crow
+2. **Detours and the leash**: should the leash measure along the path walked rather than as the crow
    flies? Proposed: as now; a creature drawn round a long wall gives up sooner, which reads fine.
-4. **Pressing on a wall**: should a creature that has no path stand and growl (Classic's "evade"
+3. **Pressing on a wall**: should a creature that has no path stand and growl (Classic's "evade"
    look) or run home at once? Proposed: evade at once, as now, only without the 4 s of pushing.
-5. **Swimmers and fliers**: swimmers get the water cells; is there a flier anywhere in the plan? If
-   so it needs no nav at all (straight, with a height), but say so before step 3.
