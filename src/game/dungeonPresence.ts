@@ -37,7 +37,7 @@ export function createDungeonPresence(view: DimensionView, content: DungeonConte
     const { fx, fz } = worldToFrame(layout.frame, x, z);
     return layout.parts.some((p) => {
       const b = p.box;
-      if (p.role === "entrance" && y > siteY - 4) return false;
+      if (p.role === "entrance" && !p.part.exterior && y > siteY - 4) return false;
       return fx >= b.min.x - 0.5 && fx <= b.max.x + 0.5 && fz >= b.min.z - 0.5 && fz <= b.max.z + 0.5 && y >= b.min.y - 0.5 && y <= b.max.y + 0.5;
     });
   }

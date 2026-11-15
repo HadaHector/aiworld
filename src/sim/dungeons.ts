@@ -77,11 +77,12 @@ export function createDimensionDungeons(world: WorldData, collision: CollisionWo
       for (const dungeon of placed.values()) {
         const { frame } = dungeon.layout;
         const { fx, fz } = worldToFrame(frame, x, z);
-        // The entrance's top reaches the surface: from a little under it, the dungeon's.
+        // The entrance's top reaches the surface: from a little under it, the dungeon's - all of it,
+        // where it has a house over it (a mausoleum: the ground under it taken out).
         for (const p of dungeon.layout.parts) {
           const b = p.box;
           if (fx >= b.min.x - 0.5 && fx <= b.max.x + 0.5 && fz >= b.min.z - 0.5 && fz <= b.max.z + 0.5 && y >= b.min.y - 0.5 && y <= b.max.y + 0.5) {
-            if (p.role === "entrance" && y > dungeon.site.y - 4) continue;
+            if (p.role === "entrance" && !p.part.exterior && y > dungeon.site.y - 4) continue;
             return dungeon;
           }
         }
