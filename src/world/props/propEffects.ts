@@ -83,7 +83,7 @@ export function createPropEffects(particles: ParticleSystem, known?: (effect: st
         }
         continue;
       }
-      const handle = particles.spawn(id, () => flame.at, { size: flame.size, still: true });
+      const handle = particles.spawn(id, () => flame.at, { size: flame.size, still: true, warm: 2.5 });
       if (handle) handles.push(handle);
     }
     flame.handles = handles;

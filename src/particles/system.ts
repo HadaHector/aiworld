@@ -25,6 +25,9 @@ export interface SpawnOptions {
   own?: boolean;
   /** The attachment never moves (a torch on a wall): its velocity is not worked out, nothing copied each frame. */
   still?: boolean;
+  /** A looping effect starts as if it had burned for this many seconds already (particles of every age), so
+   *  a flame is not an empty start that fills up - and many of them do not pulse together. */
+  warm?: number;
 }
 
 export interface EffectHandle {
@@ -227,9 +230,11 @@ export function createParticleSystem(rules: FeedbackRules): ParticleSystem {
     return best;
   };
 
-  const emit = (inst: Instance, index: number, origin: Vec3): void => {
+  const emit = (inst: Instance, index: number, origin: Vec3, age = 0): void => {
     const e = emitters[index];
     const pool = e.mesh ? meshes : sprites;
+    const life = range(e.life);
+    if (age >= life) return;
     const i = slot(pool, inst.own);
     if (i < 0) return;
     // Where it starts, around the origin, and which way it goes: within `spread` of its direction,
@@ -277,8 +282,8 @@ export function createParticleSystem(rules: FeedbackRules): ParticleSystem {
     pool.vx[i] = vx;
     pool.vy[i] = vy;
     pool.vz[i] = vz;
-    pool.life[i] = range(e.life);
-    pool.age[i] = 0;
+    pool.life[i] = life;
+    pool.age[i] = age;
     pool.spin[i] = e.upright ? 0 : range(e.spin);
     // A mesh or a ground decal that does not spin keeps its own orientation (a ring lies flat); anything else
     // starts turned at random.
@@ -303,7 +308,18 @@ export function createParticleSystem(rules: FeedbackRules): ParticleSystem {
     pool.x[i] = origin.x + ox;
     pool.y[i] = origin.y + oy;
     pool.z[i] = origin.z + oz;
-    shade(pool, i, 0);
+    // A particle born in the past has moved on since (not counting gravity and drag).
+    if (age > 0) {
+      pool.x[i] += vx * age;
+      pool.y[i] += vy * age;
+      pool.z[i] += vz * age;
+      if (e.local) {
+        pool.ox[i] += vx * age;
+        pool.oy[i] += vy * age;
+        pool.oz[i] += vz * age;
+      }
+    }
+    shade(pool, i, age / life);
   };
 
   /** Its size and colour at the share of its life it has lived. */
@@ -380,7 +396,7 @@ export function createParticleSystem(rules: FeedbackRules): ParticleSystem {
         own: options.own ?? false,
         still: options.still ?? false,
         time: 0,
-        owed: indices.map(() => 0),
+        owed: indices.map(() => Math.random()),
         fired: indices.map(() => 0),
         stopped: false,
         dead: false,
@@ -396,6 +412,14 @@ export function createParticleSystem(rules: FeedbackRules): ParticleSystem {
       instances.push(inst);
       // Bursts at 0 go out at once, so a hit's sparks are there this frame.
       advance(inst, 0);
+      if (options.warm && inst.now) {
+        inst.emitters.forEach((index) => {
+          const e = emitters[index];
+          if (e.rate <= 0 || e.delay > 0 || e.duration !== Infinity) return;
+          const n = Math.round(e.rate * inst.count * options.warm!);
+          for (let p = 0; p < n; p++) emit(inst, index, inst.now!, Math.random() * options.warm!);
+        });
+      }
       return {
         get alive() {
           return !inst.dead;

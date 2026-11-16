@@ -6,7 +6,7 @@
 import type { Reader } from "../world/content/contentReader";
 import { deriveSeed, mulberry32 } from "../world/rng";
 
-export const TEXTURE_KINDS = ["dot", "spark", "star", "smoke", "flame", "ring", "rune", "slash", "web", "tangle"] as const;
+export const TEXTURE_KINDS = ["dot", "spark", "star", "smoke", "flame", "fire", "ring", "rune", "slash", "web", "tangle"] as const;
 export type TextureKind = (typeof TEXTURE_KINDS)[number];
 
 export interface ParticleTextureDef {
@@ -180,6 +180,18 @@ export function drawParticleTexture(def: ParticleTextureDef, variant: number): T
           const across = Math.abs(x + wobble * v) / Math.max(0.001, halfWidth);
           a = smoothstep(1, 0.4, across) * smoothstep(0, 0.12, v) * smoothstep(1, 0.75, v);
           lum = 0.75 + 0.25 * smoothstep(1, 0, across);
+          break;
+        }
+        case "fire": {
+          // A hearth fire's tongue: ragged, streaked, hot and bright in its heart low down, darker and
+          // thinner toward a torn tip. `rough` is how ragged.
+          const v = (y + 1) / 2;
+          const envelope = 0.52 * Math.pow(Math.max(0, 1 - Math.pow(v, 1.5)), 0.7) * smoothstep(0, 0.12, v);
+          const tear = (lumps((x + 1) / 2, v * 1.7) - 0.5) * def.rough * 1.3 + (fine((x + 1) / 2 * 0.9, v * 3.1) - 0.5) * def.rough * 0.8;
+          const d = 1 - Math.abs(x + tear * 0.35 * v) / Math.max(0.001, envelope) + tear * v * 0.6;
+          a = smoothstep(0, 0.4, d) * smoothstep(1, 0.82, v) * smoothstep(0, 0.06, v);
+          const streak = 0.82 + 0.3 * fine((x + 1) / 2 * 2.2, v * 0.6);
+          lum = Math.min(1, (0.4 + 0.65 * smoothstep(0.05, 0.95, d) * (1 - v * 0.55)) * streak);
           break;
         }
         case "ring": {

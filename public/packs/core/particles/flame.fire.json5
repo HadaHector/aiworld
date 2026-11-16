@@ -1,9 +1,14 @@
-// A hearth fire's tongue (PROP_EFFECTS.md): authored for a flame a metre tall; a fireplace lays three.
-// Broader and livelier than a torch's, a bed of glow under it. Loops.
+// A hearth fire (PROP_EFFECTS.md): authored for a flame a metre tall; a fireplace lays three. Not a candle's
+// teardrop: ragged, streaked tongues (the `fireTongue` texture) of every age and size licking up off the logs,
+// a few small hot ones low in the bed, and a wide glow under it all. Loops.
 {
   loop: true,
   emitters: [
-    { sprite: "flame", upright: true, blend: "add", rate: 6.7, life: [1.2, 2.4], shape: { box: [0.18, 0.02, 0.12] }, direction: [0, 1, 0], spread: 16, speed: [0.08, 0.22], size: [[0, 0.4], [0.4, 0.35], [1, 0.08]], colour: [[0, "#ffeaa0"], [0.5, "#ffb040"], [1, "#f0701000"]] },
-    { sprite: "softDot", blend: "add", rate: 4, life: [0.9, 1.4], shape: "point", speed: [0, 0], size: [[0, 0.7], [1, 0.85]], colour: [[0, "#ff782020"], [0.5, "#ff782030"], [1, "#ff782000"]] },
+    // The bed's glow, slow and wide.
+    { sprite: "softDot", blend: "add", rate: 3, life: [1, 2.4], shape: { box: [0.2, 0.01, 0.12] }, speed: [0, 0.03], size: [[0, 0.7], [1, 0.9]], colour: [[0, "#ff601020"], [0.5, "#ff701830"], [1, "#ff601000"]] },
+    // The tongues: lives from a flicker to two seconds, so they never beat together.
+    { sprite: "fireTongue", upright: true, blend: "add", rate: 9, life: [0.45, 1.9], shape: { box: [0.2, 0.02, 0.1] }, direction: [0, 1, 0], spread: 12, speed: [0.1, 0.45], size: [[0, 0.3], [0.3, 0.55], [1, 0.18]], colour: [[0, "#ffe08a"], [0.5, "#ff9a30"], [1, "#d0501000"]] },
+    // Small hot ones low in the bed.
+    { sprite: "fireTongue", upright: true, blend: "add", rate: 4, life: [0.3, 1.1], shape: { box: [0.16, 0.01, 0.08] }, direction: [0, 1, 0], spread: 8, speed: [0.03, 0.15], size: [[0, 0.22], [0.4, 0.3], [1, 0.08]], colour: [[0, "#fff4c8"], [1, "#ffb04000"]] },
   ],
 }

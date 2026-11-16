@@ -1,0 +1,2 @@
+// A hearth fire's tongues, six ragged ones, streaked and hot in the heart (PROP_EFFECTS.md).
+{ kind: "fire", size: 128, variants: 6, rough: 0.8 }
