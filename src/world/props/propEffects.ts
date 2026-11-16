@@ -43,6 +43,12 @@ interface Group {
   shown: (() => boolean) | null;
 }
 
+/** A model's flames in the world's space, and whether it is drawn near (all of them stand still). */
+export interface EffectGroup {
+  effects: ModelEffect[];
+  shown: () => boolean;
+}
+
 export interface PropEffects {
   /** Sets down a model's effects, each placed by `place` (model space to the world's); `shown`
    *  tells whether the model is drawn near. Returns a function that takes them away again. */

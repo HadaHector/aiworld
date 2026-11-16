@@ -1,0 +1,9 @@
+// A hearth fire's tongue (PROP_EFFECTS.md): authored for a flame a metre tall; a fireplace lays three.
+// Broader and livelier than a torch's, a bed of glow under it. Loops.
+{
+  loop: true,
+  emitters: [
+    { sprite: "flame", blend: "add", rate: 20, life: [0.4, 0.8], shape: { box: [0.18, 0.02, 0.12] }, direction: [0, 1, 0], spread: 16, speed: [0.5, 1.3], size: [[0, 0.8], [0.4, 0.7], [1, 0.15]], colour: [[0, "#fff0b0"], [0.3, "#ff9a28"], [1, "#b02a0000"]] },
+    { sprite: "softDot", blend: "add", rate: 4, life: [0.9, 1.4], shape: "point", speed: [0, 0], size: [[0, 1.4], [1, 1.7]], colour: [[0, "#ff782020"], [0.5, "#ff782030"], [1, "#ff782000"]] },
+  ],
+}

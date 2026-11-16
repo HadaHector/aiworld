@@ -530,7 +530,7 @@ export async function startSession(page: Page, options: SessionOptions): Promise
     });
     connection.provide(transfer.dimension, next.shared);
     view = next;
-    dungeon = createDungeonPresence(next, connection.rules.dungeons);
+    dungeon = createDungeonPresence(next, connection.rules.dungeons, feedback.flames);
     minimap.setCache(next.mapTiles);
     worldMap.setCache(next.mapTiles);
     const world = next.world;

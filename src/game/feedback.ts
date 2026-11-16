@@ -13,6 +13,7 @@ import { createFeel, type Feel, type Feelable } from "../feedback/feel";
 import { Vector3 } from "@babylonjs/core/Maths/math.vector";
 import type { Scene } from "@babylonjs/core/scene";
 import { createParticleSystem, type ParticleSystem } from "../particles/system";
+import { createPropEffects, type PropEffects } from "../world/props/propEffects";
 import { createParticleRenderer, type ParticleRenderer } from "../particles/render";
 import { whenAudio } from "../audio/context";
 import { createSfx, type Sfx, type Vec3 } from "../audio/sfx";
@@ -57,6 +58,8 @@ export interface GameFeedback {
   sfx: () => Sfx | null;
   cues: CuePlayer;
   particles: ParticleSystem;
+  /** The flames on props (PROP_EFFECTS.md): the world's, and a dungeon's once it is drawn. */
+  flames: PropEffects;
   /** Particles drawn last frame. */
   stats: () => { sprites: number; meshes: number; effects: number };
   /** Stops every sound and effect and lets go of the screens and the audio - when a game ends. */
@@ -190,6 +193,7 @@ export function createGameFeedback(options: GameFeedbackOptions): GameFeedback {
   });
 
   const particles = createParticleSystem(rules);
+  const flames = createPropEffects(particles, (id) => rules.effects.has(id));
   let renderer: ParticleRenderer | null = null;
   let surfaces: SurfaceProbe | null = null;
   let worldNow: World | null = null;
@@ -416,6 +420,8 @@ export function createGameFeedback(options: GameFeedbackOptions): GameFeedback {
       renderer?.dispose();
       renderer = null;
       particles.clear();
+      flames.clear();
+      if (world) for (const group of world.effectGroups) flames.add(group.effects, (x, y, z) => ({ x, y, z }), group.shown);
       cues.stopAll();
       for (const handle of glints.values()) handle.stop();
       glints.clear();
@@ -441,6 +447,7 @@ export function createGameFeedback(options: GameFeedbackOptions): GameFeedback {
       glintAll();
       aggroAll();
       cues.update();
+      if (eye) flames.update(eye, dt);
       particles.update(dt, eye);
       renderer?.update();
       // The shake moves what the camera looks at across the screen, leaving its orbit alone.
@@ -467,6 +474,7 @@ export function createGameFeedback(options: GameFeedbackOptions): GameFeedback {
     sfx: () => sfx,
     cues,
     particles,
+    flames,
     stats: () => ({ ...(renderer?.stats() ?? { sprites: 0, meshes: 0 }), effects: particles.effects() }),
     dispose() {
       disposed = true;

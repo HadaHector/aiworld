@@ -225,3 +225,15 @@ split (one cap only). Steps 1-2 alone give the visible result.
   halo run on Medium and High. Geometry flames are always there.
 - Not answered, so I go with the proposals: chunky bold flames; a faint smoke wisp on torches (High);
   chimney plume later if wanted; no real lights added.
+
+## Status
+
+- Step 1 (done): `effects` on a prop, `ctx.mount` laid in `flame()`, `BuildingModel.effects` carried
+  with the house, `propEffects.ts` (distance/cap by quality), `flame.torch` + `smoke.torch`, run in the
+  workbench (`workbench/propFx.ts`).
+- Step 2 (done): the game. `World.effectGroups` (each house's flames, shown while its near mesh is),
+  the manager in `game/feedback.ts` (`feedback.flames`), a dungeon's flames added by
+  `dungeonPresence`. Torch, candles, sconce, altar, chandelier (`flame.candle`), fireplace and stove
+  (`flame.fire`, `embers`). The placeholder flame mesh is gone - a prop that names no effect burns
+  unseen, and beyond the cutoff distance a flame is not drawn at all.
+- Quality is still fixed at High; the options-window setting, the measurements and sound are next.

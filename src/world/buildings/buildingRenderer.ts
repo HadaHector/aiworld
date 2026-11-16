@@ -1,7 +1,8 @@
 import type { Mesh, CascadedShadowGenerator, Scene } from "@babylonjs/core";
 import { appendModel, applyLightmap, createBuildingMesh, emptyGeometry, type BuildingMaterial } from "./buildingMesh";
 import { createLightBakePool } from "../lighting/lightBakePool";
-import type { ModelLight } from "./buildingTypes";
+import type { ModelEffect, ModelLight } from "./buildingTypes";
+import type { EffectGroup } from "../props/propEffects";
 // Placing buildings - their collision, floors and cellars - is the simulation's too, and lives where
 // it can reach it without Babylon.
 import { createPlacedBuildings, placedAxes, shapeOf, type BuildingGroup, type ModelledGroup, type Placed, type PlacedBuildings, type TerrainCut } from "./buildingCollision";
@@ -37,6 +38,8 @@ export interface BuildingRenderer extends PlacedBuildings {
   setDrawDistance: (distance: number) => void;
   /** The houses' own lights (see LIGHTS.md) whose reach a point is in, in the world's space. */
   lightsNear: (x: number, y: number, z: number) => ModelLight[];
+  /** Every house's flames (PROP_EFFECTS.md), in the world's space. */
+  readonly effectGroups: readonly EffectGroup[];
   /** Every group with its near models - what a server in the same page takes rather than making
    *  them again (see SIMULATION.md). */
   readonly models: readonly ModelledGroup[];
@@ -72,6 +75,8 @@ export function createBuildingRenderer(
   const lightBakes = createLightBakePool();
   /** Every house's lights in the world's own space, for what moves among them (the player). */
   const worldLights: { x: number; z: number; reach: number; lights: ModelLight[] }[] = [];
+  /** Every house's flames in the world's space, and whether its near mesh is drawn (PROP_EFFECTS.md). */
+  const effectGroups: EffectGroup[] = [];
   /** Each group's near models, which its collision, floors and cellars are made from. */
   const modelled: ModelledGroup[] = [];
   for (const group of groups) {
@@ -80,12 +85,14 @@ export function createBuildingRenderer(
     group.houses.forEach((house, n) => {
       let lights: ModelLight[] | null = null;
       let bake: LightBakeGeometry | null = null;
+      let nearEffects: ModelEffect[] = [];
       const build = (far: boolean): { mesh: Mesh; reach: number } => {
         const model = house.model(far);
         if (!far) houses.push({ house, model: shapeOf(model) });
         const geometry = emptyGeometry();
         const place = placeHouse(house, house.x, house.z);
         appendModel(geometry, model, material.layerOf, place);
+        if (!far && model.effects?.length) nearEffects = model.effects.map((e) => ({ ...e, position: place(...e.position, false) }));
         if (!far && model.lights?.length) {
           lights = model.lights.map((light) => ({ ...light, position: place(...light.position, false), facing: light.facing && place(...light.facing, true) }));
           // What its lights are baked from, kept until they are: the mesh keeps no CPU copy.
@@ -107,6 +114,7 @@ export function createBuildingRenderer(
       const near = build(false);
       const far = build(true);
       meshes.push({ near: near.mesh, far: far.mesh, x: house.x, z: house.z, reach: near.reach, lights, bake });
+      if (nearEffects.length > 0) effectGroups.push({ effects: nearEffects.map((e) => ({ ...e, position: [e.position[0] + house.x, e.position[1], e.position[2] + house.z] })), shown: () => near.mesh.isEnabled() });
       const placed = lights as ModelLight[] | null;
       if (placed) worldLights.push({ x: house.x, z: house.z, reach: near.reach, lights: placed.map((light) => ({ ...light, position: [light.position[0] + house.x, light.position[1], light.position[2] + house.z] })) });
     });
@@ -170,6 +178,7 @@ export function createBuildingRenderer(
   return {
     ...placedBuildings,
     models: modelled,
+    effectGroups,
     dispose: () => lightBakes.dispose(),
     setDrawDistance(distance) {
       drawDistance = distance;

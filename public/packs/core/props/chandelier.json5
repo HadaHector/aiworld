@@ -4,6 +4,8 @@
   type: "chandelier",
   // The light it gives (see LIGHTS.md): a ring of candles high up - warm, wide, soft.
   light: { color: [1.0, 0.74, 0.46], intensity: 1.4, radius: 16, size: 0.6 },
+  // Its flames (PROP_EFFECTS.md).
+  effects: [{ effect: "flame.candle", scale: 1.6 }],
   parts: {
     iron: { material: "iron", tints: [[0.75, 0.75, 0.75]] },
     wax: { tints: [[0.92, 0.88, 0.76], [0.86, 0.8, 0.66]] },

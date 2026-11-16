@@ -33,16 +33,11 @@ function candle(ctx: PropContext, base: Vec3, radius: number, height: number): v
   ctx.light([base[0], base[1] + height + 0.02 + radius * 1.6, base[2]]);
 }
 
-/** A tongue of flame standing at `base`: two crossed, tapering slivers - the second turned an eighth
- *  round, not a quarter, or its four sides would lie on the first's. */
+/** A flame burning at `base`, `radius` wide and `height` tall: no geometry - the prop's `effects`
+ *  put particles on this mount (see PROP_EFFECTS.md); a prop that names none burns unseen. */
 function flame(ctx: PropContext, base: Vec3, radius: number, height: number): void {
   if (ctx.far) return;
   ctx.mount("flame", [base[0], base[1] + height * 0.3, base[2]], radius, height);
-  const paint = ctx.paint("flame");
-  for (const turn of [0, Math.PI / 4]) {
-    const f = turned(moved(ORIGIN, base), "y", turn);
-    ctx.shape.lathe(f, [[radius * 0.6, 0], [radius, height * 0.3], [radius * 0.5, height * 0.75], [0.001, height]], paint, { sides: 4 });
-  }
 }
 
 /** A table: a slab of a top on four posts and an apron under it - or on two trestles and a

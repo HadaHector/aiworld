@@ -6,6 +6,8 @@
   type: "candles",
   // The light it gives (see LIGHTS.md): a few candles together - warm, near, soft.
   light: { color: [1.0, 0.72, 0.42], intensity: 0.7, radius: 6, size: 0.25 },
+  // Its flames (PROP_EFFECTS.md).
+  effects: [{ effect: "flame.candle", scale: 1.6 }],
   parts: {
     wax: { tints: [[0.92, 0.88, 0.76], [0.86, 0.8, 0.66], [0.8, 0.74, 0.62]] },
     // Burning: the wax lit through by its flames (its material glows a little, faking the light

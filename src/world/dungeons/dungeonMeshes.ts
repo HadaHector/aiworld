@@ -3,7 +3,7 @@
 // that reach into it, against its own faces, which close it in but for its doorways.
 import { Mesh, Vector3, type Scene } from "@babylonjs/core";
 import { appendModel, applyLightmap, createBuildingMesh, emptyGeometry, type BuildingMaterial } from "../buildings/buildingMesh";
-import type { ModelLight } from "../buildings/buildingTypes";
+import type { ModelEffect, ModelLight } from "../buildings/buildingTypes";
 import type { PropDef } from "../props/propTypes";
 import { createLightBakePool } from "../lighting/lightBakePool";
 import type { DungeonStyleDef } from "./dungeonDefs";
@@ -14,6 +14,8 @@ export interface DungeonMeshes {
   readonly meshes: Mesh[];
   /** Its torches' lights in the world, to light the player by (World.setExtraLights). */
   readonly lights: ModelLight[];
+  /** Its torches' and candles' flames in the world (PROP_EFFECTS.md). */
+  readonly effects: ModelEffect[];
   /** Resolves once every part's light is baked and laid on it. */
   readonly baked: Promise<{ ms: number; cached: number }>;
   /** What it took: parts, triangles, the time to build them. */
@@ -109,9 +111,16 @@ export function createDungeonMeshes(
     const w = frameToWorld(layout.frame, light.position[0], light.position[2]);
     return { ...light, position: [w.x, light.position[1], w.z] };
   });
+  const effects = models.flatMap(({ model }) =>
+    (model.effects ?? []).map((e): ModelEffect => {
+      const w = frameToWorld(layout.frame, e.position[0], e.position[2]);
+      return { ...e, position: [w.x, e.position[1], w.z] };
+    }),
+  );
   return {
     meshes,
     lights,
+    effects,
     baked,
     stats: { parts: layout.parts.length, triangles, buildMs },
     dispose() {

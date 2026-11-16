@@ -4,6 +4,8 @@
   type: "stove",
   // The light it gives (see LIGHTS.md). The fire behind its door's slot.
   light: { color: [1.0, 0.55, 0.28], intensity: 0.8, radius: 6, size: 0.3 },
+  // Its flames (PROP_EFFECTS.md).
+  effects: [{ effect: "flame.fire", extra: ["embers"], scale: 0.8 }],
   parts: {
     iron: { material: "iron", tints: [[1, 1, 1]] },
     flame: { material: "flame", tints: [[1, 1, 1]] },

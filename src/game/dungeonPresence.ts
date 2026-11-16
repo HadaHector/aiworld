@@ -8,6 +8,7 @@ import type { DungeonContent } from "../world/dungeons/dungeonDefs";
 import { generateLayout, placedShapes, worldToFrame, type DungeonLayout } from "../world/dungeons/layout";
 import { createDungeonMeshes, type DungeonMeshes } from "../world/dungeons/dungeonMeshes";
 import type { DimensionView } from "./dimensionView";
+import type { PropEffects } from "../world/props/propEffects";
 
 export interface DungeonPresence {
   /** The server's word on the dungeon the player is in: builds it - resolving once it is baked -
@@ -20,8 +21,9 @@ export interface DungeonPresence {
   dispose: () => void;
 }
 
-export function createDungeonPresence(view: DimensionView, content: DungeonContent): DungeonPresence {
+export function createDungeonPresence(view: DimensionView, content: DungeonContent, flames?: PropEffects): DungeonPresence {
   const { world, scene } = view;
+  let removeFlames: (() => void) | null = null;
   let current: { id: string; layout: DungeonLayout; meshes: DungeonMeshes; batch: number; ambient: [number, number, number]; inside: boolean } | null = null;
 
   function drop(): void {
@@ -29,6 +31,8 @@ export function createDungeonPresence(view: DimensionView, content: DungeonConte
     current.meshes.dispose();
     world.collision.world.removeBatch(current.batch);
     world.setExtraLights(null);
+    removeFlames?.();
+    removeFlames = null;
     world.setUnderground(null, true);
     current = null;
   }
@@ -62,6 +66,7 @@ export function createDungeonPresence(view: DimensionView, content: DungeonConte
       const near = (): { x: number; y: number; z: number } => view.character.mesh.position;
       const meshes = createDungeonMeshes(scene, layout, style, fixture, world.buildingMaterial, near, (done, total) => onProgress("Lighting the torches", done, total), (id) => view.content.props.find((p) => p.id === id));
       world.setExtraLights(meshes.lights);
+      removeFlames = flames?.add(meshes.effects, (x, y, z) => ({ x, y, z })) ?? null;
       // In it already (put at its foot), the day gone at once; else (near its mouth) as it is walked into.
       const at = view.character.mesh.position;
       const now = inside(layout, siteY, at.x, at.y, at.z);

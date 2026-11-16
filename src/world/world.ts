@@ -13,6 +13,7 @@ import { createBushScatter, createRockScatter, createTreeCover, createTreeScatte
 import { createTreeField, type TreeField } from "./foliage/treeField";
 import { createGrassField, type GrassField } from "./foliage/grassField";
 import { createBuildingRenderer } from "./buildings/buildingRenderer";
+import type { EffectGroup } from "./props/propEffects";
 import { bakeBuildingTextures, createBuildingMaterial, type BuildingMaterial } from "./buildings/buildingMesh";
 import type { ModelLight } from "./buildings/buildingTypes";
 import type { SettlementLayout } from "./settlements/settlementLayout";
@@ -113,6 +114,8 @@ export interface World {
   setUnderground: (ambient: [number, number, number] | null, now?: boolean) => void;
   /** More lights that light the player as the houses' do - a dungeon's torches (world space); none, null. */
   setExtraLights: (lights: readonly ModelLight[] | null) => void;
+  /** Every house's flames, for the prop effects (PROP_EFFECTS.md). */
+  effectGroups: readonly EffectGroup[];
   /** Stops what lives outside the scene - the chunk build and light bake workers, chunks still
    *  coming. The meshes, materials and textures go with `scene.dispose()`, after this. */
   dispose: () => void;
@@ -422,6 +425,7 @@ export async function createWorld(
     setExtraLights: (lights) => {
       extraLights = lights ?? [];
     },
+    effectGroups: buildings.effectGroups,
     dispose() {
       chunkManager.dispose();
       buildPool?.dispose();
