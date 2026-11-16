@@ -296,6 +296,27 @@ console.log(`ways to rooms ${found}/${rooms}, from spawn spots ${offFound}/${off
     console.log(`surface: a wolf ${Math.hypot(back.x - front.x, back.z - front.z).toFixed(0)} m off behind a house: planned ${planned}, got within ${closest.toFixed(1)} m${evaded ? `, evaded (${evaded})` : ""}`);
     check("surface: the wolf goes round the house to the player", planned && closest < 3.5, `closest ${closest.toFixed(1)} m${evaded ? `, evaded (${evaded})` : ""}`);
     server.debug.skills.kill(wolf);
+    // A ranged creature behind the house, in range but out of sight: it comes round till it sees the player.
+    const hexer = S.spawn("mainland", "bandit.hexer", back.x, back.z, 1);
+    await pump(3);
+    const sight = (a) => server.debug.skills.sys.world.lineOfSight("mainland", a, me);
+    check("ranged: the hexer starts out of sight", !sight(hexer));
+    server.debug.skills.apply(rules.skillIndex.get("burn"), me, hexer);
+    let saw = -1, still = 0, why = "", px = hexer.x, pz = hexer.z;
+    for (let i = 0; i < 30 * 20; i++) {
+      await pump(1);
+      server.debug.skills.revive(me);
+      if (hexer.creature.brain.state === "evade") { why = hexer.creature.brain.why; break; }
+      if (saw < 0 && sight(hexer)) saw = i;
+      if (saw >= 0 && Math.hypot(hexer.x - px, hexer.z - pz) < 0.01) still++;
+      [px, pz] = [hexer.x, hexer.z];
+      if (saw >= 0 && i - saw > 60) break;
+    }
+    const left = Math.hypot(hexer.x - me.x, hexer.z - me.z);
+    console.log(`ranged: a hexer behind the house: saw the player after ${(saw / 30).toFixed(1)} s, ${left.toFixed(1)} m off, standing ${still} of the next ticks${why ? `, evaded (${why})` : ""}`);
+    check("ranged: the hexer comes round till it sees the player", saw >= 0 && !why, why);
+    check("ranged: and stops at range, not at the player", left > 4, `${left.toFixed(1)} m`);
+    server.debug.skills.kill(hexer);
   }
 
   // A pack pulled together does not merge into one body (NAVIGATION.md, *Local steering*): how near

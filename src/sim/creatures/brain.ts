@@ -416,7 +416,10 @@ export function stepBrain(world: BrainWorld, self: Entity): void {
       world.skills.setAttacking(self, true);
       const reach = kind.keepRange > 0 ? kind.keepRange : MELEE_GAP;
       const casting = combat.casting !== null;
-      if (distance > reach && !casting && canMove(combat.flags)) {
+      // A ranged creature in range but out of sight of its foe closes in until it sees it: the way
+      // there comes round the corner, so the first spot with a line of sight stops it.
+      const blind = kind.keepRange > 0 && distance <= reach && !world.lineOfSight(self.dimension, self, target);
+      if ((distance > reach || blind) && !casting && canMove(combat.flags)) {
         const input = steer(world, self, brain, { x: target.x, y: target.y, z: target.z }, kind.speed.run, true);
         if (input === "unreachable") {
           evade(world, self, brain, "unreachable");
