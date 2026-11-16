@@ -68,7 +68,6 @@ that list.
       extra: ["smoke.torch", "embers"],    // only at high quality
       scale: 1,                            // on top of the mount's own size
       offset: [0, 0, 0],                   // metres, in the mount's frame
-      when: "always",                      // "always" | "night" | "storm-out" ... see 4
       sound: "fireCrackle",                // optional, see 4
     },
   ],
@@ -130,7 +129,7 @@ system):
   the reverse. Measured, not guessed (see 5).
 - **Memory.** No new textures or buffers (the atlas is shared and the pools preallocated); per mount a
   small record; handles only for running effects. No geometry, no per-instance material.
-- **Quality setting** in the options window's graphics section: *Flames: Off / Low / High* -
+- **Quality setting** in the options window's graphics section: *Flames: Low / Medium / High* (no Off; see Decisions) -
   distance, cap, and whether `extra` (smoke, embers) and the halo run. Off still leaves the geometry
   flame. Stored with the other view settings.
 - **Light: the fake.** Real lights are already budgeted (baked + three on the player), so effects add
@@ -197,7 +196,7 @@ system):
 3. **The fireplace and stove**, and smoke; `flame.fire`; chimney smoke if you want it (below).
 4. **Quality option** in the graphics options, and the stress measurements written up.
 5. **Sound** (fire crackle, nearest few).
-6. **Time of day, rain and wind, the shared flicker** with the lightmap.
+6. (dropped: time of day, weather, flicker - see Decisions)
 
 If it grows: cut 6, then 5, then smoke/embers (keeping flames), then the quality option's Off/Low
 split (one cap only). Steps 1-2 alone give the visible result.
@@ -213,21 +212,16 @@ split (one cap only). Steps 1-2 alone give the visible result.
 - New files are mine alone: `propEffects.ts`, `particles/flame*.json5`, `smoke*.json5`, `embers.json5`,
   this doc.
 
-## Open questions (your call)
+## Decisions (the owner's, 2026-11-16)
 
-1. **Flame style.** The world is oversized (details ~2x life): chunky, bold tongues that read from
-   30 m - or finer and more realistic? I propose chunky, a few big licks, strong colour change
-   (white core, orange, red fade).
-2. **Smoke.** Torches: a faint dark wisp on High only? Fireplaces: smoke in the room, or only a
-   **chimney plume** over the roof, seen from the street (needs a `chimney` mount on the house
-   generator, and costs one more effect per lit house in range)? I propose a thin wisp for torches,
-   and the chimney plume for step 3 if you like it.
-3. **Lights.** Agree that effects add **no real lights** - baked light plus the halo sprite plus the
-   shared flicker later?
-4. **Always lit?** Indoor and dungeon fires always burning, outdoor ones only at night (once the
-   outdoor lights can follow)? Or everything always, simplest?
-5. **Sound.** Fire crackle wanted at all, and how loud near a hearth?
-6. **Flicker of the flame geometry and baked light** (a shared time function in the shader) is
-   LIGHTS.md territory and touches the building shader - include it in step 6, or leave it to that
-   work?
-7. **Quality names**: *Flames: Off / Low / High* in the graphics options, fine?
+- Effects are **always on**, whatever the time of day (and weather): no `when`, no night/occupied
+  switching, no rain or wind scaling. Step 6 is dropped.
+- **Sound only for large fires** (fireplace, stove, campfire, brazier): `sound` is set on those
+  props' `effects`, never on torches, candles or sconces.
+- **No light flicker**; the lightmap and the flame material are left as they are. No shared
+  `fireFlicker`.
+- **Quality has no Off**: *Flames: Low / Medium / High*. It changes the **cutoff distance** (20 / 30 /
+  45 m) and with it the cap on running effects (16 / 32 / 48); `extra` effects (smoke, embers) and the
+  halo run on Medium and High. Geometry flames are always there.
+- Not answered, so I go with the proposals: chunky bold flames; a faint smoke wisp on torches (High);
+  chimney plume later if wanted; no real lights added.
