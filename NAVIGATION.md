@@ -1,7 +1,7 @@
 # Navigation
 
 How creatures find their way: round houses, fences and trees on the surface, and through crypts and
-caves under it. **Status: steps 1-4 done** (the follower, ways through crypts and over the surface, a pack kept apart: [As built](#as-built)); steps 5-7 to come.
+caves under it. **Status: steps 1-4 and 7 done** (the follower, ways through crypts, over the surface and into houses, a pack kept apart: [As built](#as-built)); step 5 cut; step 6 waits for caves.
 
 ## Today
 
@@ -116,11 +116,14 @@ as the ways onto the surface's tiles.
 
 - **In a room**: a grid of 0.5 m cells per floor, from the built interior's floors
   (`interiorFloorAt`) and its furniture's colliders, made when the house's collision comes in and
-  dropped with it. Rooms are small: a few hundred cells.
+  dropped with it. Rooms are small: a few hundred cells. *As built: coarser and enough - the
+  interior's own tiles (about 3 m), a node on each where a body fits beside the furniture.*
 - **Doors and stairs**: a waypoint either side of each, and the stair's line between.
 - **Who fits**: a doorway narrower than a kind's body is not an edge for it - a boar may follow
   through a farmhouse door, a giant spider may not. The width is read from the door, the body's
-  radius from the kind.
+  radius from the kind. *Not built: every creature's body is the same capsule (0.4 m round) until
+  beasts have bodies of their own sizes (BEASTS.md); then a door's width (inner doors 1.4 m)
+  against the kind's radius.*
 - A path that ends in a house plans on the tiles to its door, then on the house's graph.
 
 ## Following a path
@@ -215,13 +218,13 @@ A small fix to one part's ways is checked on that part alone, not the full probe
 3. **The surface** (done). Lazy tiles, A*, pulled taut; `reachable` for wander spots, flee spots
    it can run to. House, fence, water cases.
 4. **Steering** (done). A pack's members step apart round their foe.
-5. **Surround slots** round a melee target. *Likely not needed: step 4's step aside already stands
-   a pack round its foe a body apart; slots would only spread them evenly round it.*
+5. **Surround slots** round a melee target. *Cut (the user, 2026-11-16): step 4's step aside
+   already stands a pack round its foe a body apart.*
 6. **Caves.** Walk lines from field parts' shapes - with DUNGEONS.md's cave step.
-7. **Houses.** The interior graph, room grids, doors by body width; probe cases for a chase from
-   the street to an upstairs room and for a kind too big for the door.
+7. **Houses** (done). The interior's tiles as a graph, in at its doors; a chase from the street to
+   an upstairs room. Doors by body width wait for bodies of their own sizes.
 
-**Cut order**, last first: 5, then 4's separation; 6 waits for caves; 7 is needed but may come
+**Cut order**, last first: 5 (cut), then 4's separation; 6 waits for caves; 7 is needed but may come
 later than the rest. 1-3 are the plan; without them nothing changes for the player.
 
 ## As built
@@ -280,6 +283,28 @@ later than the rest. 1-3 are the plan; without them nothing changes for the play
   their top edges sloped at 45 degrees, and the motor walks 20/20 door to boss. A stall is still
   printed as a note, not failed: the share is checked.
 
+**Step 7, houses** (2026-11-16):
+
+- `src/world/nav/houseNav.ts`: `buildHouseGraph(enterable, world, groundAt, whole)` - a node on
+  each floored tile of each room (a gallery's too, not a stair's nor one open to the level under
+  it), at its floor's height: its middle, or the first of eight spots round it a body fits on
+  beside the furniture (the surface's capsule test against the house's colliders); a tile wholly
+  furnished is left out. Edges: a room's tiles side by side, open inner doors, a stair's tiles from
+  the tile before its foot to the one it arrives on, and each door out to a point a tile and a half
+  before it on the ground. `houseNodeAt` (the tile a point is on), `housePath` (A*, pulled taut a
+  few points at a time by the rays of `walkableStraight`).
+- Measured on the first try: a node only at a tile's middle left a taproom's tables and benches
+  cutting the graph into ten pieces; with the spots round it, one (and one tile under a bed).
+- `src/sim/nav.ts`: houses with rooms bucketed by where they stand; a point is in a house when it
+  is on one of its tiles. A way that begins or ends in one goes out (or in) by the door that makes
+  it shortest as the crow flies, over the surface's tiles between; within one house, its graph.
+  Straight: within one house on one level by rays; between a house and anywhere else never - a way
+  goes by a door. A graph made before the house's collision was in (furniture not looked at) is
+  made again once it is.
+- Probe (`navigation.mjs`): an inn on the `tiny` server; the tile upstairs found from its point, a
+  way from the street to it, none straight; the player upstairs, a wolf in the street goes in, up
+  the stairs and to it. 1489/1489 checks.
+
 **Step 4, steering** (2026-11-16):
 
 - `brain.ts`: `stepAside` - a creature in reach of its foe (not casting, free to move) with a group
@@ -331,6 +356,7 @@ later than the rest. 1-3 are the plan; without them nothing changes for the play
 | Question | Decision |
 |---|---|
 | Creatures in houses | **Needed** (the user, 2026-11-15); may come after the rest - step 7 |
+| Surround slots | **Cut** (the user, 2026-11-16): stepping aside is enough |
 | Fliers | **None planned**: every creature walks or swims |
 | The dungeon's mouth | **Each side stays put** (the user, 2026-11-16): a surface creature does not follow a player down into a crypt, nor a crypt's creature out of it; a way between them is none, so the chaser evades as unreachable |
 

@@ -337,6 +337,53 @@ console.log(`ways to rooms ${found}/${rooms}, from spawn spots ${offFound}/${off
     }
   }
 
+  // Houses (NAVIGATION.md step 7): a wolf in the street chases the player up to a room upstairs.
+  {
+    const { buildHouseGraph, houseNodeAt } = await import("../../src/world/nav/houseNav.ts");
+    const upstairs = dim.buildings.enterable.find((e) => e.interior.layout.stairs.some((s) => s.level === 0) && e.interior.exits.length > 0 && e.interior.layout.rooms.some((r) => r.base >= 1));
+    check("houses: a house with rooms upstairs", !!upstairs);
+    if (upstairs) {
+      const { house } = upstairs;
+      me.body.teleportTo(onGround(house.x + house.frontX * 14, house.z + house.frontZ * 14));
+      server.debug.dimensions.get("mainland").streamer.loadAround(house.x, house.z, [house]);
+      await pump(3);
+      const g = buildHouseGraph(upstairs, dim.collision.world, dim.world.heightAt, true);
+      const floor1 = upstairs.interior.levels.find((l) => l.index === 1).floor;
+      // A standable tile upstairs, and the street before the door.
+      const room = [...g.nodeOf.entries()].find(([key]) => /^-?\d+,-?\d+,1$/.test(key));
+      check("houses: a standable tile upstairs", !!room);
+      const street = g.points[g.exits[0]];
+      const front = { x: street.x + (street.x - house.x) * 0.6, y: 0, z: street.z + (street.z - house.z) * 0.6 };
+      front.y = dim.world.heightAt(front.x, front.z);
+      if (room) {
+        const up = g.points[room[1]];
+        check("houses: the tile upstairs is found from its point", houseNodeAt(g, up) === room[1]);
+        check("houses: a way from the street to the room upstairs", !!nav.path("mainland", front, up, BUDGET, walker));
+        check("houses: not straight from the street to upstairs", !nav.straight("mainland", front, up, walker));
+        me.body.teleportTo(up);
+        await pump(5);
+        check("houses: the player stands upstairs", Math.abs(me.y - (house.y + floor1)) < 0.6, `${me.y.toFixed(2)} against ${(house.y + floor1).toFixed(2)}`);
+        const S = server.debug.creatures.debug;
+        const wolf = S.spawn("mainland", "wolf.timber", front.x, front.z, 1);
+        await pump(3);
+        server.debug.skills.apply(rules.skillIndex.get("burn"), me, wolf);
+        let planned = false, closest = Infinity, evaded = "", up1 = false;
+        for (let i = 0; i < 30 * 40; i++) {
+          await pump(1);
+          server.debug.skills.revive(me);
+          if (wolf.creature.brain.path.length > 1) planned = true;
+          if (wolf.y > house.y + floor1 - 0.5) up1 = true;
+          if (wolf.creature.brain.state === "evade") { evaded = wolf.creature.brain.why; break; }
+          closest = Math.min(closest, Math.hypot(wolf.x - me.x, wolf.z - me.z) + Math.abs(wolf.y - me.y));
+          if (closest < 3.5) break;
+        }
+        console.log(`houses: a wolf in the street, the player upstairs: planned ${planned}, went upstairs ${up1}, got within ${closest.toFixed(1)} m${evaded ? `, evaded (${evaded})` : ""}; the house's graph ${g.points.length} nodes, ${g.exits.length} doors out`);
+        check("houses: the wolf goes in and up the stairs to the player", planned && up1 && closest < 3.5, `closest ${closest.toFixed(1)} m${evaded ? `, evaded (${evaded})` : ""}`);
+        server.debug.skills.kill(wolf);
+      }
+    }
+  }
+
   // Deep water near the start: dry ground either side of it, a walker's way never through it, a
   // swimmer's straight across.
   let river = null;
