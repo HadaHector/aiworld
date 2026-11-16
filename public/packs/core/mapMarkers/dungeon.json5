@@ -1,0 +1,11 @@
+// A dungeon's entrance (DUNGEONS.md): a churchyard's mausoleum, the crypt under it.
+{
+  name: "Dungeons",
+  glyph: "☠",
+  colour: "#c8b4f0",
+  size: 15,
+  priority: 60,
+  minimap: { range: 400, edge: true },
+  worldMap: true,
+  default: true,
+}

@@ -11,6 +11,7 @@ import type { ProgressionSystem } from "../progression/system";
 import type { SkillSystem } from "../skills/system";
 import type { CreatureSystem } from "../creatures/system";
 import { restore } from "../resources";
+import { FLAG, lowerFlag, raiseFlag } from "../skills/flags";
 import { createRegistry, type ArgKind, type ArgSpec, type ArgValue, type CommandDef, type NameBook } from "./chat";
 import type { TextArgs } from "../text";
 import type { CommandPackDef } from "./commandPacks";
@@ -53,6 +54,9 @@ export interface CommandContext {
   exec: (line: string) => void;
   reply: (text: string, args?: TextArgs) => void;
 }
+
+/** Who has /god on: immune to every hit (the flag held once, by the command, beside any a skill holds). */
+const gods = new WeakSet<Entity>();
 
 const arg = (name: string, kind: ArgKind, optional = false, names?: ArgKind[], extra?: string[]): ArgSpec => ({ name, kind, optional, names, extra });
 
@@ -206,6 +210,26 @@ export function createServerCommands(packs: readonly CommandPackDef[] = []): Ret
       if (entity.combat?.dead) host.skills.revive(entity);
       if (entity.resources) for (let i = 0; i < host.rules.resources.length; i++) restore(entity.resources, i, 1e9);
       reply("You are restored.");
+    },
+  });
+
+  add({
+    id: "god",
+    usage: "",
+    summary: "Toggles god mode: nothing hurts you (every hit misses as immune). /god again turns it off.",
+    dev: true,
+    args: [],
+    run({ entity, reply }) {
+      const flags = entity.combat?.flags;
+      if (!flags) return reply("Nothing can hurt you here anyway.");
+      if (gods.has(entity)) {
+        gods.delete(entity);
+        lowerFlag(flags, FLAG.immune);
+        return reply("God mode off.");
+      }
+      if (!raiseFlag(flags, FLAG.immune)) return reply("Something keeps you from being immune.");
+      gods.add(entity);
+      reply("God mode on: nothing hurts you. /god again turns it off.");
     },
   });
 

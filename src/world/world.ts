@@ -17,6 +17,7 @@ import { FLAME_DISTANCE, type EffectGroup } from "./props/propEffects";
 import { bakeBuildingTextures, createBuildingMaterial, type BuildingMaterial } from "./buildings/buildingMesh";
 import type { ModelLight } from "./buildings/buildingTypes";
 import type { SettlementLayout } from "./settlements/settlementLayout";
+import type { CompoundLayout } from "./features/compound";
 import { createSunLighting, DEFAULT_DAY_NIGHT_CYCLE_MINUTES } from "./lighting/sunLighting";
 import { AROUND_REACH, createPlayerLights, type PlayerLights } from "./lighting/playerLights";
 import { createSkyDome } from "./sky/skyDome";
@@ -62,6 +63,8 @@ export interface World {
   roads: RoadNetwork;
   /** Streets, squares and houses per settlement - see settlements/settlementLayout.ts. */
   settlementLayouts: SettlementLayout[];
+  /** The compounds' yards and buildings (a churchyard's mausoleum among them) - features/compound.ts. */
+  compoundLayouts: CompoundLayout[];
   /** The building whose footprint (x, y, z) stands in, with a key unique to that one building. */
   buildingAt: (x: number, y: number, z: number) => { id: string; key: number } | undefined;
   /** The water surface and depth at a point (WATER.md). */
@@ -404,6 +407,7 @@ export async function createWorld(
     features,
     labels: data.labels,
     roads,
+    compoundLayouts,
     settlementLayouts,
     materialLibrary,
     trees,

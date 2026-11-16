@@ -52,6 +52,7 @@ import { EVENT_KIND } from "../sim/skills/events";
 import { FLAG } from "../sim/skills/flags";
 import { loadIconSets } from "../ui/icons";
 import { loadMarkerKinds, npcMarkers, type MapMarker } from "../map/markers";
+import { mouthSite } from "../sim/dungeons";
 import { PLAYER_TEMPLATE } from "../sim/rules/gameRules";
 import { MAX_ZOOM } from "../ui/mapView";
 import { createWorldMap } from "../ui/worldMap";
@@ -216,10 +217,26 @@ export async function startSession(page: Page, options: SessionOptions): Promise
     const band = levels[0] === levels[1] ? `${levels[0]}` : `${levels[0]}-${levels[1]}`;
     return { text: `${name}, ${band}`, colour: COLOURS[questColour(gameRules.quests, levels[0], ownLevel())] };
   });
+  /** The dungeons' entrances (DUNGEONS.md): each mausoleum's door - worked out once per dimension. */
+  let mouths: { world: unknown; markers: MapMarker[] } | null = null;
+  function dungeonMarkers(): MapMarker[] {
+    const world = view?.world;
+    if (!world) return [];
+    if (mouths?.world !== world) {
+      const markers = world.compoundLayouts.flatMap((layout) =>
+        layout.buildings.flatMap((b): MapMarker[] => {
+          const site = mouthSite(world, b);
+          return site ? [{ kind: "dungeon", x: site.x, z: site.z, title: "Crypt" }] : [];
+        }),
+      );
+      mouths = { world, markers };
+    }
+    return mouths.markers;
+  }
   /** What is on the map now (MAP.md, *Where they come from*): the quest marks over NPCs, the tracked
    *  quests' areas, and the creatures the player can see. */
   function mapMarkers(): MapMarker[] {
-    const markers: MapMarker[] = [...pinMarkers];
+    const markers: MapMarker[] = [...pinMarkers, ...dungeonMarkers()];
     for (const link of view?.content.dimension.links ?? []) markers.push({ kind: "link", x: link.at.x, z: link.at.z, title: `To ${link.to}` });
     for (const [id, active] of quests.active) {
       const def = quests.defs.get(id);

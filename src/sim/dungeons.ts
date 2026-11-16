@@ -100,7 +100,7 @@ export function createDimensionDungeons(world: WorldData, collision: CollisionWo
 
 /** A placed building that is a dungeon's mouth (a churchyard's mausoleum): where its door is, on
  *  the ground, and which way it faces - the dungeon's site. Null for any other building. */
-export function mouthSite(world: WorldData, b: { building: { mouth: { depth: number; door: [number, number] } | null }; x: number; z: number; frontX: number; frontZ: number }): DungeonSite | null {
+export function mouthSite(world: Pick<WorldData, "heightAt">, b: { building: { mouth: { depth: number; door: [number, number] } | null }; x: number; z: number; frontX: number; frontZ: number }): DungeonSite | null {
   const m = b.building.mouth;
   if (!m) return null;
   // Its +x is (frontZ, -frontX) to its front.
