@@ -279,10 +279,10 @@ export function createParticleSystem(rules: FeedbackRules): ParticleSystem {
     pool.vz[i] = vz;
     pool.life[i] = range(e.life);
     pool.age[i] = 0;
-    pool.spin[i] = range(e.spin);
+    pool.spin[i] = e.upright ? 0 : range(e.spin);
     // A mesh or a ground decal that does not spin keeps its own orientation (a ring lies flat); anything else
     // starts turned at random.
-    pool.rot[i] = (e.mesh || e.flat) && e.spin[0] === 0 && e.spin[1] === 0 ? 0 : Math.random() * Math.PI * 2;
+    pool.rot[i] = e.upright ? 0 : (e.mesh || e.flat) && e.spin[0] === 0 && e.spin[1] === 0 ? 0 : Math.random() * Math.PI * 2;
     pool.sizeScale[i] = inst.size;
     pool.emitter[i] = index;
     pool.own[i] = inst.own ? 1 : 0;

@@ -77,6 +77,8 @@ export interface EmitterDef {
   flat: boolean;
   /** A `local` particle stays at the middle of its life while its effect plays, then fades over the rest: one lasting decal. */
   hold: boolean;
+  /** Sprites keep their up toward the screen's up - a flame's tongue - never turned at random. */
+  upright: boolean;
 }
 
 export interface ParticleEffectDef {
@@ -340,7 +342,7 @@ function readColourCurve(reader: Reader, obj: RawObject, key: string, path: stri
   return [[0, colourValue(reader, value, at)]];
 }
 
-const EMITTER_KEYS = ["sprite", "mesh", "blend", "rate", "burst", "delay", "duration", "life", "shape", "speed", "direction", "spread", "gravity", "drag", "size", "colour", "spin", "stretch", "local", "inherit", "flat", "hold"];
+const EMITTER_KEYS = ["sprite", "mesh", "blend", "rate", "burst", "delay", "duration", "life", "shape", "speed", "direction", "spread", "gravity", "drag", "size", "colour", "spin", "stretch", "local", "inherit", "flat", "hold", "upright"];
 
 function readEmitter(reader: Reader, value: unknown, path: string, loop: boolean, textureIndex: ReadonlyMap<string, number>): EmitterDef {
   const obj = reader.object(value, path);
@@ -422,6 +424,7 @@ function readEmitter(reader: Reader, value: unknown, path: string, loop: boolean
     inherit: reader.optionalNumber(obj, "inherit", path, 0, { min: 0, max: 1 }),
     flat: reader.boolean(obj, "flat", path, false),
     hold: reader.boolean(obj, "hold", path, false),
+    upright: reader.boolean(obj, "upright", path, false),
   };
 }
 
