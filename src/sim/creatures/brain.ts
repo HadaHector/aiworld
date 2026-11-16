@@ -124,6 +124,39 @@ function steer(world: BrainWorld, self: Entity, brain: Brain, goal: Vec3, share:
   return toward(self, aim.x, aim.z, share, run);
 }
 
+/** Group mates nearer than this, both in reach of one foe, are on each other: one steps aside. */
+const OVERLAP = 1.1;
+/** At this share of its walk. */
+const ASIDE_PACE = 0.6;
+
+/**
+ * A creature in reach of its foe with a group mate on top of it (NAVIGATION.md, *Local steering*):
+ * a step round the foe, away from the mate - sideways, so it stays in reach - or null when none is
+ * that near. The lower id of two stays, so they do not both step the same way.
+ */
+function stepAside(world: BrainWorld, self: Entity, foe: Entity, walk: number): CreaturePart["input"] | null {
+  let px = 0, pz = 0;
+  for (const mate of world.groupOf(self)) {
+    if (mate.id > self.id) continue;
+    const dx = self.x - mate.x, dz = self.z - mate.z;
+    const d = Math.hypot(dx, dz);
+    if (d >= OVERLAP) continue;
+    const [ux, uz] = d > 1e-3 ? [dx / d, dz / d] : [1, 0];
+    px += ux * (1 - d / OVERLAP);
+    pz += uz * (1 - d / OVERLAP);
+  }
+  if (px === 0 && pz === 0) return null;
+  // Round the foe: the push less its part toward or away from the foe.
+  const rx = self.x - foe.x, rz = self.z - foe.z, r = Math.hypot(rx, rz) || 1;
+  const along = (px * rx + pz * rz) / r;
+  let tx = px - (along * rx) / r, tz = pz - (along * rz) / r;
+  // Straight in line with the mate and the foe: round to its left.
+  if (Math.hypot(tx, tz) < 1e-3) [tx, tz] = [-rz / r, rx / r];
+  const l = Math.hypot(tx, tz);
+  return { moveX: (tx / l) * walk * ASIDE_PACE, moveZ: (tz / l) * walk * ASIDE_PACE, run: false, jump: false };
+}
+
+
 /** Who the nav is asked about for a creature: whether it swims. */
 const agentOf = (self: Entity): NavAgent => ({ swims: self.creature!.kind.swims });
 
@@ -406,7 +439,10 @@ export function stepBrain(world: BrainWorld, self: Entity): void {
       } else {
         brain.closest = distance;
         brain.lastProgress = now;
-        if (!hasFlag(combat.flags, FLAG.stunned)) face(self, target);
+        // In reach on a group mate's body: a step aside round the foe; else face it.
+        const aside = !casting && canMove(combat.flags) ? stepAside(world, self, target, kind.speed.walk) : null;
+        if (aside) part.input = aside;
+        else if (!hasFlag(combat.flags, FLAG.stunned)) face(self, target);
       }
 
       // Tactics: the first ready one whose `when` holds goes.

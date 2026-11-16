@@ -163,7 +163,13 @@ console.log(`ways to rooms ${found}/${rooms}, from spawn spots ${offFound}/${off
   const rules = loadRulesFromDisk(CONFIG);
   const server = createServer({
     seed: WORLD_SEED, config: CONFIG, packs, dimensions: tiny.dimensions, rules,
-    creatures: loadCreatureRulesFromDisk(CONFIG, rules, WORLD_SEED), items: loadItemRulesFromDisk(CONFIG, rules, WORLD_SEED),
+    creatures: (() => {
+      const kinds = loadCreatureRulesFromDisk(CONFIG, rules, WORLD_SEED);
+      // The core pack puts creatures down alone for now: groups on, to test a pack (as creatures.mjs).
+      kinds.config.groups = { single: 0.6, pair: 0.28, group: 0.12 };
+      return kinds;
+    })(),
+    items: loadItemRulesFromDisk(CONFIG, rules, WORLD_SEED),
     dungeons: resolveDungeons(packSourcesFromDisk(readConfigFromDisk(CONFIG)).sources),
     loadDimension: () => ({ world: createWorldData(WORLD_SEED, tiny) }),
   });
@@ -290,6 +296,45 @@ console.log(`ways to rooms ${found}/${rooms}, from spawn spots ${offFound}/${off
     console.log(`surface: a wolf ${Math.hypot(back.x - front.x, back.z - front.z).toFixed(0)} m off behind a house: planned ${planned}, got within ${closest.toFixed(1)} m${evaded ? `, evaded (${evaded})` : ""}`);
     check("surface: the wolf goes round the house to the player", planned && closest < 3.5, `closest ${closest.toFixed(1)} m${evaded ? `, evaded (${evaded})` : ""}`);
     server.debug.skills.kill(wolf);
+  }
+
+  // A pack pulled together does not merge into one body (NAVIGATION.md, *Local steering*): how near
+  // two of its members come while both are running, and once they stand round the player.
+  {
+    const S = server.debug.creatures.debug;
+    const point = S.points("mainland", 0, 0, 1500).find((p) => !p.camp && p.members.length >= 2);
+    check("steering: a pack to pull", !!point);
+    if (point) {
+      const stand = onGround(point.x + 35, point.z);
+      me.body.teleportTo(stand);
+      server.debug.dimensions.get("mainland").streamer.loadAround(stand.x, stand.z, [stand]);
+      server.debug.skills.revive(me);
+      await pump(30);
+      const pack = server.debug.creatures.debug.creatures("mainland").filter((e) => e.creature.point?.key === point.key && !e.combat.dead);
+      server.debug.skills.apply(rules.skillIndex.get("burn"), me, pack[0]);
+      let nearest = Infinity, running = 0;
+      for (let i = 0; i < 30 * 12; i++) {
+        await pump(1);
+        const moving = pack.filter((e) => !e.combat.dead && (e.creature.input.moveX !== 0 || e.creature.input.moveZ !== 0) && Math.hypot(e.x - me.x, e.z - me.z) > 4);
+        for (let a = 0; a < moving.length; a++) for (let b = a + 1; b < moving.length; b++) {
+          running++;
+          nearest = Math.min(nearest, Math.hypot(moving[a].x - moving[b].x, moving[a].z - moving[b].z));
+        }
+        server.debug.skills.revive(me);
+      }
+      console.log(`steering: a pack of ${pack.length} running at the player: its members came within ${nearest.toFixed(2)} m of each other (${running} pairs looked at)`);
+      // ...and once at the player, standing round it.
+      let standing = Infinity;
+      for (let i = 0; i < 30 * 4; i++) {
+        await pump(1);
+        server.debug.skills.revive(me);
+      }
+      const alive = pack.filter((e) => !e.combat.dead);
+      for (let a = 0; a < alive.length; a++) for (let b = a + 1; b < alive.length; b++) standing = Math.min(standing, Math.hypot(alive[a].x - alive[b].x, alive[a].z - alive[b].z));
+      console.log(`steering: ...standing round the player, the nearest two ${standing.toFixed(2)} m apart; ${alive.map((e) => Math.hypot(e.x - me.x, e.z - me.z).toFixed(1)).join(", ")} m from it`);
+      check("steering: a pack stands round the player a body apart, all in reach", alive.length >= 2 && standing > 0.8 && alive.every((e) => Math.hypot(e.x - me.x, e.z - me.z) < 3.5), `${standing.toFixed(2)} m`);
+      check("steering: a pack's members keep a body apart while running", running > 0 && nearest > 0.8, `${nearest.toFixed(2)} m, ${running} pairs`);
+    }
   }
 
   // Deep water near the start: dry ground either side of it, a walker's way never through it, a

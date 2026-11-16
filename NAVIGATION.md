@@ -1,7 +1,7 @@
 # Navigation
 
 How creatures find their way: round houses, fences and trees on the surface, and through crypts and
-caves under it. **Status: steps 1-3 done** (the follower, ways through crypts, ways over the surface: [As built](#as-built)); steps 4-7 to come.
+caves under it. **Status: steps 1-4 done** (the follower, ways through crypts and over the surface, a pack kept apart: [As built](#as-built)); steps 5-7 to come.
 
 ## Today
 
@@ -153,12 +153,15 @@ interface Brain {
 
 ## Local steering
 
-Kept small: three things, all in `steer`, none planned.
+Kept small: three things, all in `steer`, none planned. *As built (step 4), one was enough:*
 
 - **Trees and props in the open**: a short look-ahead (2 m) with `trunks.clear`; if blocked, steer
-  to the side with room. Cheap, and stops most "rubbing on a trunk" without a plan.
+  to the side with room. *Not built: since step 3 the straight test is over cells a trunk shuts, so
+  a creature never walks straight into one - it plans round it.*
 - **Other creatures**: a separation push from members of its own group within 1.5 m, so a pack does
-  not merge into one capsule.
+  not merge into one capsule. *As built: not while running - measured, a pack running at a player
+  never comes within 1.3 m, push or none - but where it does merge, standing round its foe (0.58 m
+  apart, bodies 0.8 wide): one in reach with a mate on it steps aside round the foe.*
 - **Round a melee target**: each chaser takes a slot round its target (a ring at melee reach, a
   slot per attacker by entity id), so a pack surrounds rather than queues. Optional, cut first.
 
@@ -211,8 +214,9 @@ A small fix to one part's ways is checked on that part alone, not the full probe
    this is where straight lines fail most.
 3. **The surface** (done). Lazy tiles, A*, pulled taut; `reachable` for wander spots, flee spots
    it can run to. House, fence, water cases.
-4. **Steering.** Look-ahead round trunks, separation in a group.
-5. **Surround slots** round a melee target.
+4. **Steering** (done). A pack's members step apart round their foe.
+5. **Surround slots** round a melee target. *Likely not needed: step 4's step aside already stands
+   a pack round its foe a body apart; slots would only spread them evenly round it.*
 6. **Caves.** Walk lines from field parts' shapes - with DUNGEONS.md's cave step.
 7. **Houses.** The interior graph, room grids, doors by body width; probe cases for a chase from
    the street to an upstairs room and for a kind too big for the door.
@@ -275,6 +279,18 @@ later than the rest. 1-3 are the plan; without them nothing changes for the play
   hall's floor across its walk line wedged the motor met on the slant; ledgers now collide with
   their top edges sloped at 45 degrees, and the motor walks 20/20 door to boss. A stall is still
   printed as a note, not failed: the share is checked.
+
+**Step 4, steering** (2026-11-16):
+
+- `brain.ts`: `stepAside` - a creature in reach of its foe (not casting, free to move) with a group
+  mate nearer than 1.1 m steps round the foe away from it at 0.6 of its walk: the push off the mate
+  with its part toward or away from the foe taken out, so it stays in reach; in line with both, to
+  its left. Of two, the lower id stays and the other steps, so they do not both step the same way.
+  Otherwise it faces its foe as before.
+- No look-ahead round trunks, and no push while running: see *Local steering*, measured.
+- Probe (`navigation.mjs`): a pack of three pulled on the `tiny` server (groups turned on there, as
+  in `creatures.mjs`), running at the player at least 1.31 m apart, then standing round it 1.10 m
+  apart (0.58 m before), all within 2.3 m of it. 1482/1482 checks.
 
 **Step 3, the surface** (2026-11-16):
 
