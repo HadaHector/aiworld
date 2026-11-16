@@ -18,7 +18,7 @@ import { bakeBuildingTextures, createBuildingMaterial, type BuildingMaterial } f
 import type { ModelLight } from "./buildings/buildingTypes";
 import type { SettlementLayout } from "./settlements/settlementLayout";
 import { createSunLighting, DEFAULT_DAY_NIGHT_CYCLE_MINUTES } from "./lighting/sunLighting";
-import { createPlayerLights, type PlayerLights } from "./lighting/playerLights";
+import { AROUND_REACH, createPlayerLights, type PlayerLights } from "./lighting/playerLights";
 import { createSkyDome } from "./sky/skyDome";
 import { createWeatherSystem, type WeatherSystem } from "./weather/weatherSystem";
 import { NO_WEATHER, type WeatherBlend } from "./weather/weatherTypes";
@@ -384,7 +384,7 @@ export async function createWorld(
     const found = buildings.lightsNear(x, y, z);
     for (const light of extraLights) {
       const [lx, ly, lz] = light.position;
-      if (Math.hypot(lx - x, ly - y, lz - z) < light.radius) found.push(light);
+      if (Math.hypot(lx - x, ly - y, lz - z) < light.radius + AROUND_REACH) found.push(light);
     }
     return found;
   };

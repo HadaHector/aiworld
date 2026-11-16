@@ -10,6 +10,13 @@ const COUNT = 3;
 const FADE = 6;
 /** A ray to the player starts this far out of the light, clear of whatever holds it. */
 const CLEAR_OF_SOURCE = 0.3;
+/** How many of the lights the player sees light the bodies round it (creatures, other players). */
+const AROUND = 4;
+/** How far past its own reach from the player a light is still one of those. */
+export const AROUND_REACH = 12;
+/** Babylon's point light fades straight to nothing at its range; at this share of the bake's radius
+ *  it is half as strong a third of the way out, as the bake's is (lightBake.ts, falloff). */
+const AROUND_RANGE = 0.6;
 
 export interface PlayerLights {
   /** Lights `mesh` (whose middle is at its position) by the houses' lights nearest it - each frame. */
@@ -47,6 +54,18 @@ export function createPlayerLights(
   });
   /** How much of each light the player sees, eased: 1 in plain view, 0 behind a wall. */
   const seen = new Map<ModelLight, number>();
+  // The bodies round the player - creatures, other players - lit by the few lights the player sees,
+  // each by its own distance from them (Babylon's fall-off, per pixel): any StandardMaterial but the
+  // player's own, which has the pool above. A torch the player cannot see lights nothing; a body
+  // behind the wall from one the player can is lit through it - seldom seen from where the player is.
+  const around = Array.from({ length: AROUND }, (_, i) => {
+    const light = new PointLight(`aroundLight${i}`, Vector3.Zero(), scene);
+    light.excludedMeshes = [mesh];
+    light.specular = Color3.Black();
+    light.falloffType = Light.FALLOFF_STANDARD;
+    light.intensity = 0;
+    return light;
+  });
   const daylight = new Color3();
 
   function update(deltaSeconds: number): void {
@@ -59,20 +78,38 @@ export function createPlayerLights(
 
     const near = lightsNear(p.x, p.y, p.z);
     const lit: { light: ModelLight; strength: number }[] = [];
-    for (const light of near) {
+    const shown: { light: ModelLight; distance: number; strength: number }[] = [];
+    // The nearest few, past their reach too (for the bodies round the player).
+    const nearest = near
+      .map((light) => ({ light, distance: Math.hypot(p.x - light.position[0], p.y - light.position[1], p.z - light.position[2]) }))
+      .filter((one) => one.distance < one.light.radius + AROUND_REACH)
+      .sort((a, b) => a.distance - b.distance)
+      .slice(0, AROUND * 2);
+    for (const { light, distance } of nearest) {
       const [lx, ly, lz] = light.position;
       const dx = p.x - lx, dy = p.y - ly, dz = p.z - lz;
-      const distance = Math.hypot(dx, dy, dz);
       let strength = falloff(light, distance);
       if (light.facing) strength *= Math.max(0, (dx * light.facing[0] + dy * light.facing[1] + dz * light.facing[2]) / Math.max(distance, 1e-4));
-      if (strength <= 0) continue;
       const reach = distance - CLEAR_OF_SOURCE - 0.4;
       const blocked = reach > 0 && collision.raycastAny({ x: lx + (dx / distance) * CLEAR_OF_SOURCE, y: ly + (dy / distance) * CLEAR_OF_SOURCE, z: lz + (dz / distance) * CLEAR_OF_SOURCE }, { x: dx, y: dy, z: dz }, reach);
       const was = seen.get(light) ?? (blocked ? 0 : 1);
       const now = blocked ? Math.max(0, was - FADE * deltaSeconds) : Math.min(1, was + FADE * deltaSeconds);
       seen.set(light, now);
-      if (now > 0) lit.push({ light, strength: strength * now });
+      if (now <= 0) continue;
+      if (strength > 0) lit.push({ light, strength: strength * now });
+      if (!light.sky) shown.push({ light, distance, strength: light.intensity * now });
     }
+    around.forEach((point, i) => {
+      const one = shown[i];
+      if (!one) {
+        point.intensity = 0;
+        return;
+      }
+      point.position.set(...one.light.position);
+      point.range = one.light.radius * AROUND_RANGE;
+      point.intensity = one.strength;
+      point.diffuse.set(...one.light.color);
+    });
     // Forget the lights left behind.
     if (seen.size > near.length * 2 + 16) for (const light of seen.keys()) if (!near.includes(light)) seen.delete(light);
 
@@ -94,7 +131,8 @@ export function createPlayerLights(
   return {
     update,
     include(other) {
-      for (const light of pool) light.includedOnlyMeshes = [...light.includedOnlyMeshes, other];
+      for (const light of pool) light.includedOnlyMeshes = [...light.includedOnlyMeshes.filter((m) => !m.isDisposed()), other];
+      for (const light of around) light.excludedMeshes = [...light.excludedMeshes.filter((m) => !m.isDisposed()), other];
     },
   };
 }
