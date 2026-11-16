@@ -1,6 +1,6 @@
 // How creatures find their way on the server (NAVIGATION.md): through a dungeon by its walk lines'
 // graph, on the surface straight (until the surface's tiles, step 3). A way between a dungeon and
-// anywhere outside it is none: each side's creatures stay on their side (open question 1).
+// anywhere outside it is none: each side's creatures stay on their side (the user's call, NAVIGATION.md *Decisions*).
 import type { Vec3 } from "../world/collision/vec";
 import type { NavQuery } from "../world/nav/navQuery";
 import { buildDungeonGraph, dungeonPath, shortcut, type DungeonGraph } from "../world/nav/dungeonNav";

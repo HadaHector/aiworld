@@ -258,8 +258,8 @@ later than the rest. 1-3 are the plan; without them nothing changes for the play
   keeps to the lines and their bends: rays cost, and a corridor's middle is a fine way to walk it.
 - `src/sim/nav.ts`: the server's `NavQuery` - a dungeon's graph made on first use per placed dungeon;
   on the surface straight (until step 3). A way between a dungeon and anywhere outside it is none, so
-  a creature outside chasing a player down into a crypt evades as unreachable (open question 1's
-  proposal, not yet answered).
+  a creature outside chasing a player down into a crypt evades as unreachable (the user's call:
+  each side stays put).
 - The brain looks at `straight` once a plan slot (0.5 s) at most - in a dungeon it is rays. Homes
   carry their height, so the way home ends on the right floor.
 - Probe: `scripts/probe/navigation.mjs [layouts]` (200 by default, about a minute): crypts on flat
@@ -282,13 +282,11 @@ later than the rest. 1-3 are the plan; without them nothing changes for the play
 |---|---|
 | Creatures in houses | **Needed** (the user, 2026-11-15); may come after the rest - step 7 |
 | Fliers | **None planned**: every creature walks or swims |
+| The dungeon's mouth | **Each side stays put** (the user, 2026-11-16): a surface creature does not follow a player down into a crypt, nor a crypt's creature out of it; a way between them is none, so the chaser evades as unreachable |
 
 ## Open questions
 
-1. **The dungeon's mouth**: may a surface creature chase a player down into a seamless crypt, and a
-   crypt's creature chase them out? Proposed: no - each side's creatures leash at the mouth (a crypt's
-   creatures are its own, and the switch of drawing at the second flight would show them popping).
-2. **Detours and the leash**: should the leash measure along the path walked rather than as the crow
+1. **Detours and the leash**: should the leash measure along the path walked rather than as the crow
    flies? Proposed: as now; a creature drawn round a long wall gives up sooner, which reads fine.
-3. **Pressing on a wall**: should a creature that has no path stand and growl (Classic's "evade"
+2. **Pressing on a wall**: should a creature that has no path stand and growl (Classic's "evade"
    look) or run home at once? Proposed: evade at once, as now, only without the 4 s of pushing.
