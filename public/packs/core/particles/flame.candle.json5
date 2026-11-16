@@ -3,7 +3,7 @@
 {
   loop: true,
   emitters: [
-    { sprite: "flame", upright: true, blend: "add", rate: 7, life: [0.25, 0.45], shape: "point", direction: [0, 1, 0], spread: 6, speed: [0.1, 0.35], size: [[0, 0.7], [0.5, 0.55], [1, 0.1]], colour: [[0, "#fff4cc"], [0.35, "#ffb040"], [1, "#c0300000"]] },
-    { sprite: "softDot", blend: "add", rate: 2, life: [0.8, 1.2], shape: "point", speed: [0, 0], size: [[0, 2.2], [1, 2.4]], colour: [[0, "#ffa04022"], [0.5, "#ffa04030"], [1, "#ffa04000"]] },
+    { sprite: "flame", upright: true, blend: "add", rate: 2.4, life: [0.75, 1.35], shape: "point", direction: [0, 1, 0], spread: 6, speed: [0.02, 0.06], size: [[0, 0.35], [0.5, 0.28], [1, 0.05]], colour: [[0, "#fff0c0"], [0.5, "#ffc860"], [1, "#f0a03000"]] },
+    { sprite: "softDot", blend: "add", rate: 2, life: [0.8, 1.2], shape: "point", speed: [0, 0], size: [[0, 1.1], [1, 1.2]], colour: [[0, "#ffa04022"], [0.5, "#ffa04030"], [1, "#ffa04000"]] },
   ],
 }

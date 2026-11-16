@@ -2,6 +2,6 @@
 {
   loop: true,
   emitters: [
-    { sprite: "smoke", blend: "alpha", rate: 2.5, life: [1.5, 2.2], shape: { sphere: 0.1 }, direction: [0, 1, 0], spread: 15, speed: [0.4, 0.7], gravity: -0.5, drag: 0.5, spin: [-0.8, 0.8], size: [[0, 0.25], [1, 0.9]], colour: [[0, "#3a342c50"], [0.3, "#2e2a2438"], [1, "#2a282400"]] },
+    { sprite: "smoke", blend: "alpha", rate: 2.5, life: [1.5, 2.2], shape: { sphere: 0.1 }, direction: [0, 1, 0], spread: 15, speed: [0.4, 0.7], gravity: -0.5, drag: 0.5, spin: [-0.8, 0.8], size: [[0, 0.12], [1, 0.45]], colour: [[0, "#3a342c50"], [0.3, "#2e2a2438"], [1, "#2a282400"]] },
   ],
 }
