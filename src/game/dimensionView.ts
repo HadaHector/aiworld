@@ -26,6 +26,7 @@ import { createCollisionPanel, type CollisionPanel } from "../debug/collisionPan
 import { createMemoryPanel } from "../debug/memoryPanel";
 import type { PlayerLights } from "../world/lighting/playerLights";
 import { AO_RADIUS_RANGE, AO_STRENGTH_RANGE, createAmbientOcclusion, type AmbientOcclusionSettings } from "../world/lighting/ambientOcclusion";
+import { FLAME_DISTANCE } from "../world/props/propEffects";
 
 /** The camera's vertical field of view, in degrees, before the player sets their own. */
 export const DEFAULT_FOV = 90;
@@ -232,6 +233,15 @@ export async function createDimensionView(options: DimensionViewOptions): Promis
       { label: "Ambient occlusion", initial: settings.ambientOcclusion.enabled, onChange: (on) => ambientOcclusion.setEnabled((settings.ambientOcclusion.enabled = on)) },
     ],
     sliders: [
+      {
+        label: "Flame distance",
+        min: FLAME_DISTANCE.min,
+        max: FLAME_DISTANCE.max,
+        step: 5,
+        initial: world.flameSettings.distance,
+        format: (value) => `${value} m`,
+        onChange: (value) => (world.flameSettings.distance = value),
+      },
       {
         label: "Field of view",
         min: 30,

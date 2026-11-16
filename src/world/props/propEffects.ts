@@ -7,21 +7,18 @@
 import type { ModelEffect } from "../buildings/buildingTypes";
 import type { ParticleSystem, EffectHandle, Vec3 } from "../../particles/system";
 
-export type FlameQuality = "low" | "medium" | "high";
-export const FLAME_QUALITIES: readonly FlameQuality[] = ["low", "medium", "high"];
+/** How far from the camera flames run (metres): the player's setting, and the most that run at once. */
+export const FLAME_DISTANCE = { min: 10, max: 80, default: 45 };
+const FLAME_CAP = 64;
+/** A large fire is heard from this far, from at most this many places, each at least this far from the next. */
+const SOUND_DISTANCE = 14;
+const SOUND_VOICES = 3;
+const SOUND_SPACING = 4;
 
-/** What a quality means: how far from the camera a flame runs, how many run at once, and whether the
- *  `extra` effects (smoke, embers) run. There is no off - the geometry flame is always there. */
-export interface FlameQualitySpec {
-  distance: number;
-  cap: number;
-  extras: boolean;
+/** What plays a flame's sound: `play` places a looping sound; null if it cannot (audio not started). */
+export interface FlameSounds {
+  play: (sound: string, at: Vec3) => { stop: (fade?: number) => void } | null;
 }
-export const FLAME_QUALITY: Record<FlameQuality, FlameQualitySpec> = {
-  low: { distance: 20, cap: 16, extras: false },
-  medium: { distance: 30, cap: 32, extras: true },
-  high: { distance: 45, cap: 48, extras: true },
-};
 
 /** One flame in the world: where it is, and the handles of the effects running on it now. */
 interface Flame {
@@ -29,6 +26,8 @@ interface Flame {
   effect: string;
   extra: string[];
   size: number;
+  sound: string | null;
+  voice: { stop: (fade?: number) => void } | null;
   handles: EffectHandle[] | null;
   group: Group;
 }
@@ -53,7 +52,8 @@ export interface PropEffects {
   /** Sets down a model's effects, each placed by `place` (model space to the world's); `shown`
    *  tells whether the model is drawn near. Returns a function that takes them away again. */
   add: (effects: readonly ModelEffect[], place: (x: number, y: number, z: number) => Vec3, shown?: () => boolean) => () => void;
-  setQuality: (quality: FlameQuality) => void;
+  /** How far from the camera flames run, metres. */
+  setDistance: (metres: number) => void;
   /** Starts the nearest flames and stops the rest: call every frame, before the particles' update. */
   update: (camera: Vec3, dt: number) => void;
   /** Flames running now, and how many exist. */
@@ -64,9 +64,9 @@ export interface PropEffects {
 /** How often the nearest flames are chosen again, in seconds. */
 const CHOOSE_EVERY = 0.25;
 
-export function createPropEffects(particles: ParticleSystem, known?: (effect: string) => boolean): PropEffects {
+export function createPropEffects(particles: ParticleSystem, known?: (effect: string) => boolean, sounds?: FlameSounds): PropEffects {
   const groups = new Set<Group>();
-  let spec = FLAME_QUALITY.high;
+  let distance = FLAME_DISTANCE.default;
   let sinceChosen = Infinity;
   let running = 0;
   let total = 0;
@@ -74,7 +74,7 @@ export function createPropEffects(particles: ParticleSystem, known?: (effect: st
 
   const start = (flame: Flame): void => {
     const handles: EffectHandle[] = [];
-    const ids = spec.extras ? [flame.effect, ...flame.extra] : [flame.effect];
+    const ids = [flame.effect, ...flame.extra];
     for (const id of ids) {
       if (known && !known(id)) {
         if (!unknown.has(id)) {
@@ -89,6 +89,8 @@ export function createPropEffects(particles: ParticleSystem, known?: (effect: st
     flame.handles = handles;
   };
   const stop = (flame: Flame): void => {
+    flame.voice?.stop(0.5);
+    flame.voice = null;
     if (!flame.handles) return;
     for (const handle of flame.handles) handle.stop();
     flame.handles = null;
@@ -103,7 +105,7 @@ export function createPropEffects(particles: ParticleSystem, known?: (effect: st
       const group: Group = { x: 0, z: 0, reach: 0, flames, shown: shown ?? null };
       for (const e of effects) {
         const at = place(...e.position);
-        flames.push({ at, effect: e.effect, extra: e.extra, size: e.size, handles: null, group });
+        flames.push({ at, effect: e.effect, extra: e.extra, size: e.size, sound: e.sound ?? null, voice: null, handles: null, group });
       }
       if (flames.length === 0) return () => undefined;
       group.x = flames.reduce((s, f) => s + f.at.x, 0) / flames.length;
@@ -117,10 +119,10 @@ export function createPropEffects(particles: ParticleSystem, known?: (effect: st
         if (groups.delete(group)) total -= flames.length;
       };
     },
-    setQuality(q) {
-      spec = FLAME_QUALITY[q];
-      // Running ones start again with what the new quality has.
-      for (const group of groups) stopGroup(group);
+    setDistance(metres) {
+      const next = Math.min(FLAME_DISTANCE.max, Math.max(FLAME_DISTANCE.min, metres));
+      if (next === distance) return;
+      distance = next;
       sinceChosen = Infinity;
     },
     update(camera, dt) {
@@ -129,7 +131,7 @@ export function createPropEffects(particles: ParticleSystem, known?: (effect: st
       sinceChosen = 0;
       const candidates: { flame: Flame; d: number }[] = [];
       for (const group of groups) {
-        const near = (!group.shown || group.shown()) && Math.hypot(group.x - camera.x, group.z - camera.z) - group.reach <= spec.distance + 2;
+        const near = (!group.shown || group.shown()) && Math.hypot(group.x - camera.x, group.z - camera.z) - group.reach <= distance + 2;
         if (!near) {
           stopGroup(group);
           continue;
@@ -137,18 +139,30 @@ export function createPropEffects(particles: ParticleSystem, known?: (effect: st
         for (const flame of group.flames) {
           const d = Math.hypot(flame.at.x - camera.x, flame.at.y - camera.y, flame.at.z - camera.z);
           // A little past the distance a running one stays, so it does not flicker on and off at the edge.
-          if (d <= spec.distance + (flame.handles ? 3 : 0)) candidates.push({ flame, d });
+          if (d <= distance + (flame.handles ? 3 : 0)) candidates.push({ flame, d });
           else stop(flame);
         }
       }
       candidates.sort((a, b) => a.d - b.d);
       running = 0;
-      candidates.forEach(({ flame }, i) => {
-        if (i < spec.cap) {
+      const heard: Flame[] = [];
+      candidates.forEach(({ flame, d }, i) => {
+        if (i < FLAME_CAP) {
           if (!flame.handles) start(flame);
           running++;
+          // The nearest large fires, one voice to a hearth however many tongues it has.
+          if (sounds && flame.sound && d <= SOUND_DISTANCE && heard.length < SOUND_VOICES && heard.every((h) => Math.hypot(h.at.x - flame.at.x, h.at.z - flame.at.z) > SOUND_SPACING)) heard.push(flame);
         } else stop(flame);
       });
+      if (sounds) {
+        for (const { flame } of candidates) {
+          if (flame.voice && !heard.includes(flame)) {
+            flame.voice.stop(0.8);
+            flame.voice = null;
+          }
+        }
+        for (const flame of heard) if (!flame.voice) flame.voice = sounds.play(flame.sound!, flame.at);
+      }
     },
     stats: () => ({ running, total }),
     clear() {

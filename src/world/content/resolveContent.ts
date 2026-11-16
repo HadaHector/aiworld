@@ -839,13 +839,14 @@ function readPropEffects(obj: RawObject, reader: Reader): PropEffect[] {
   return reader.optionalArray(obj, "effects", "").map((raw, i) => {
     const path = `effects[${i}]`;
     const e = reader.object(raw, path);
-    reader.onlyKeys(e, path, ["mount", "effect", "extra", "scale", "offset"]);
+    reader.onlyKeys(e, path, ["mount", "effect", "extra", "sound", "scale", "offset"]);
     const offset = e.offset === undefined ? [0, 0, 0] : reader.array(e, "offset", path);
     if (offset.length !== 3 || offset.some((v) => typeof v !== "number")) reader.fail(`${path}.offset`, "expected [x, y, z] in metres");
     return {
       mount: e.mount === undefined ? "flame" : reader.string(e, "mount", path),
       effect: reader.string(e, "effect", path),
       extra: e.extra === undefined ? [] : reader.array(e, "extra", path).map((v) => String(v)),
+      sound: e.sound === undefined ? null : reader.string(e, "sound", path),
       scale: reader.optionalNumber(e, "scale", path, 1, { min: 0.01 }),
       offset: offset as [number, number, number],
     };

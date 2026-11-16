@@ -193,7 +193,10 @@ export function createGameFeedback(options: GameFeedbackOptions): GameFeedback {
   });
 
   const particles = createParticleSystem(rules);
-  const flames = createPropEffects(particles, (id) => rules.effects.has(id));
+  const flames = createPropEffects(particles, (id) => rules.effects.has(id), {
+    // A large fire's sound, heard from the few nearest: not before the audio has started.
+    play: (sound, at) => sfx?.play(sound, { at }) ?? null,
+  });
   let renderer: ParticleRenderer | null = null;
   let surfaces: SurfaceProbe | null = null;
   let worldNow: World | null = null;
@@ -447,6 +450,7 @@ export function createGameFeedback(options: GameFeedbackOptions): GameFeedback {
       glintAll();
       aggroAll();
       cues.update();
+      if (worldNow) flames.setDistance(worldNow.flameSettings.distance);
       if (eye) flames.update(eye, dt);
       particles.update(dt, eye);
       renderer?.update();

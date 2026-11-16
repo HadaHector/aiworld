@@ -237,3 +237,7 @@ split (one cap only). Steps 1-2 alone give the visible result.
   (`flame.fire`, `embers`). The placeholder flame mesh is gone - a prop that names no effect burns
   unseen, and beyond the cutoff distance a flame is not drawn at all.
 - Quality is still fixed at High; the options-window setting, the measurements and sound are next.
+- Distance option and sound (done): the options window has a *Flame distance* slider (10-80 m, default 45) - the
+  only thing it changes; there are no presets, all effects and extras always run (up to 64 flames). A fire's
+  `sound` (fireplace, stove: `sounds/fireCrackle`) plays from the three nearest hearths within 14 m, one voice
+  to a hearth. Not persisted between sessions yet. Cost was judged negligible, so no stress measurement was made.

@@ -68,6 +68,8 @@ export interface PropEffect {
   mount: string;
   effect: string;
   extra: string[];
+  /** A looping sound a large fire makes (heard only from the few nearest). */
+  sound: string | null;
   scale: number;
   offset: [number, number, number];
 }

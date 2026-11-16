@@ -711,6 +711,8 @@ export interface ModelEffect {
   effect: string;
   extra: string[];
   size: number;
+  /** A looping sound (a pack's sounds/) the flame makes, for the few nearest - or none. */
+  sound?: string;
 }
 
 /**

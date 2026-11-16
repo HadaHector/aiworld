@@ -129,7 +129,7 @@ function generate(def: PropDef, seed: number, variant: number, far: boolean, mea
     mount(name, at, _radius, height) {
       if (far || measure) return;
       for (const e of def.effects) {
-        if (e.mount === name) b.effects.push({ position: [at[0] + e.offset[0], at[1] + e.offset[1], at[2] + e.offset[2]], effect: e.effect, extra: e.extra, size: height * e.scale });
+        if (e.mount === name) b.effects.push({ position: [at[0] + e.offset[0], at[1] + e.offset[1], at[2] + e.offset[2]], effect: e.effect, extra: e.extra, size: height * e.scale, ...(e.sound ? { sound: e.sound } : {}) });
       }
     },
   };

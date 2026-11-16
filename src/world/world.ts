@@ -13,7 +13,7 @@ import { createBushScatter, createRockScatter, createTreeCover, createTreeScatte
 import { createTreeField, type TreeField } from "./foliage/treeField";
 import { createGrassField, type GrassField } from "./foliage/grassField";
 import { createBuildingRenderer } from "./buildings/buildingRenderer";
-import type { EffectGroup } from "./props/propEffects";
+import { FLAME_DISTANCE, type EffectGroup } from "./props/propEffects";
 import { bakeBuildingTextures, createBuildingMaterial, type BuildingMaterial } from "./buildings/buildingMesh";
 import type { ModelLight } from "./buildings/buildingTypes";
 import type { SettlementLayout } from "./settlements/settlementLayout";
@@ -116,6 +116,8 @@ export interface World {
   setExtraLights: (lights: readonly ModelLight[] | null) => void;
   /** Every house's flames, for the prop effects (PROP_EFFECTS.md). */
   effectGroups: readonly EffectGroup[];
+  /** The player's setting for how far from the camera flames run (metres); the prop effects read it. */
+  flameSettings: { distance: number };
   /** Stops what lives outside the scene - the chunk build and light bake workers, chunks still
    *  coming. The meshes, materials and textures go with `scene.dispose()`, after this. */
   dispose: () => void;
@@ -426,6 +428,7 @@ export async function createWorld(
       extraLights = lights ?? [];
     },
     effectGroups: buildings.effectGroups,
+    flameSettings: { distance: FLAME_DISTANCE.default },
     dispose() {
       chunkManager.dispose();
       buildPool?.dispose();

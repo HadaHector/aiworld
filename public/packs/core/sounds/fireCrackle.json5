@@ -1,0 +1,9 @@
+// A hearth or stove fire (PROP_EFFECTS.md): a low roar of flame under snaps and pops. Loops; heard only close,
+// and only from the few nearest large fires.
+{
+  near: 1.5, far: 14, maxVoices: 3, volume: [0.4, 0.45], takes: 2, loop: 3,
+  layers: [
+    { synth: { noise: "brown", filter: { type: "lowpass", hz: 600 }, env: { attack: 0.4 }, gain: 1.1, tremolo: { rate: 3, depth: 0.35 } }, standIn: true },
+    { synth: { crackle: true, density: 9, click: 0.006, filter: { type: "highpass", hz: 1200 }, env: { attack: 0.3 }, gain: 0.6 }, standIn: true },
+  ],
+}
