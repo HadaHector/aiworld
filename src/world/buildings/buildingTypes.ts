@@ -697,6 +697,20 @@ export interface BuildingModel {
   holes?: [number, number, number, number][];
   /** The lights it gives (see LIGHTS.md) - built with the near model only. */
   lights?: ModelLight[];
+  /** The particle effects its props' flames carry (see PROP_EFFECTS.md) - built with the near model only. */
+  effects?: ModelEffect[];
+}
+
+/**
+ * An effect set on a model, in the model's own space: a looping particle effect (`particles/`) and
+ * the extras that run at higher quality, at a place a prop's generator named. `size` is how big it
+ * is: the effects are authored for a flame a metre tall.
+ */
+export interface ModelEffect {
+  position: [number, number, number];
+  effect: string;
+  extra: string[];
+  size: number;
 }
 
 /**

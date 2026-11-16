@@ -27,6 +27,7 @@ import { sampleBiomeArea, type BiomeArea } from "./biomeArea";
 import { heightView, layerView, materialsView, plantsView, type Rgb } from "./biomeViews";
 import { generateBuilding } from "../world/buildings/buildingGenerator";
 import { generateProp } from "../world/props/propGenerator";
+import { runPropEffects } from "./propFx";
 import { arrangeGroup } from "../world/props/propGroups";
 import { deriveSeed, mulberry32 } from "../world/rng";
 import { buildFeaturePreview } from "./featurePreview";
@@ -1428,6 +1429,7 @@ async function preview3d(token: number, asset: Asset, view: ViewDef, content: Wo
     footprints: options.marks === "on" && asset.folder === "buildings",
     timeHours: timeHours(),
     underground: dungeonAmbient,
+    effects: (stageScene, placed) => runPropEffects(sourcesWithEdit(), stageScene, placed),
     lightBiome,
     view: keepView,
     onProgress: (phase) => {

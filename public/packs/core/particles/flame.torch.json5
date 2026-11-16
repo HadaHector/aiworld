@@ -1,0 +1,10 @@
+// A torch's flame (PROP_EFFECTS.md): authored for a flame a metre tall - a prop scales it to its own -
+// tongues licking up, a hot core, and a wide faint halo that fakes the glow. Loops.
+{
+  loop: true,
+  emitters: [
+    { sprite: "flame", blend: "add", rate: 16, life: [0.35, 0.6], shape: { sphere: 0.1 }, direction: [0, 1, 0], spread: 14, speed: [0.5, 1.1], size: [[0, 0.7], [0.4, 0.6], [1, 0.12]], colour: [[0, "#fff2c0"], [0.3, "#ffa030"], [1, "#c0300000"]] },
+    { sprite: "softDot", blend: "add", rate: 6, life: [0.3, 0.5], shape: { sphere: 0.06 }, direction: [0, 1, 0], spread: 10, speed: [0.2, 0.5], size: [[0, 0.45], [1, 0.12]], colour: [[0, "#ffe9a0b0"], [1, "#ff902000"]] },
+    { sprite: "softDot", blend: "add", rate: 3, life: [0.8, 1.2], shape: "point", speed: [0, 0], size: [[0, 1.6], [1, 1.9]], colour: [[0, "#ff802022"], [0.5, "#ff802030"], [1, "#ff802000"]] },
+  ],
+}

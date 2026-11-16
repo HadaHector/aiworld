@@ -5,6 +5,8 @@
   type: "wallTorch",
   // The light it gives (see LIGHTS.md). An open fire, warm and far-reaching - a crypt's spaces are big.
   light: { color: [1.0, 0.6, 0.3], intensity: 1.6, radius: 18, size: 0.3 },
+  // The flame and its smoke (PROP_EFFECTS.md); the smoke only from medium quality up.
+  effects: [{ effect: "flame.torch", extra: ["smoke.torch"] }],
   mount: { kind: "wall", height: [3.2, 3.6] },
   parts: {
     iron: { material: "iron", tints: [[0.8, 0.8, 0.8]] },

@@ -23,6 +23,8 @@ export interface SpawnOptions {
   size?: number;
   /** The player's own fight: its particles outlast others' when the budget runs out. */
   own?: boolean;
+  /** The attachment never moves (a torch on a wall): its velocity is not worked out, nothing copied each frame. */
+  still?: boolean;
 }
 
 export interface EffectHandle {
@@ -86,6 +88,7 @@ interface Instance {
   count: number;
   size: number;
   own: boolean;
+  still: boolean;
   time: number;
   /** Fractions of a particle owed by each emitter's rate. */
   owed: number[];
@@ -375,6 +378,7 @@ export function createParticleSystem(rules: FeedbackRules): ParticleSystem {
         count: options.count ?? 1,
         size: options.size ?? 1,
         own: options.own ?? false,
+        still: options.still ?? false,
         time: 0,
         owed: indices.map(() => 0),
         fired: indices.map(() => 0),
@@ -442,7 +446,7 @@ export function createParticleSystem(rules: FeedbackRules): ParticleSystem {
     if (!where) {
       // What it was on has gone: it stops where it was.
       inst.stopped = true;
-    } else {
+    } else if (!inst.still) {
       if (dt > 0 && inst.now) {
         inst.vx = (where.x - inst.now.x) / dt;
         inst.vy = (where.y - inst.now.y) / dt;

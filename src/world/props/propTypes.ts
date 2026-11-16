@@ -52,9 +52,24 @@ export interface PropDef {
   mount: Mount;
   /** The light it gives, or none (see LIGHTS.md) - where, its generator says. */
   light: PropLight | null;
+  /** The particle effects its flames carry, by the mount points its generator lays (see PROP_EFFECTS.md). */
+  effects: PropEffect[];
   /** What it says to a player standing by it, or nothing: `place` - the name of the place it is set
    *  down for (a wayside sign, its inn's name). */
   label: PropLabel | null;
+}
+
+/**
+ * An effect a prop's flame carries: at the generator's mount point `mount`, the looping particle
+ * effect `effect` (a pack's particles/ folder), and at higher quality the `extra` ones (smoke,
+ * embers); `scale` on top of the flame's own size, `offset` (metres, model space) from the point.
+ */
+export interface PropEffect {
+  mount: string;
+  effect: string;
+  extra: string[];
+  scale: number;
+  offset: [number, number, number];
 }
 
 export const PROP_LABELS = ["place"] as const;

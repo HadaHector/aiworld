@@ -1,4 +1,4 @@
-import type { BuildingModel, ModelLight, Paint, Rgb } from "./buildingTypes";
+import type { BuildingModel, ModelEffect, ModelLight, Paint, Rgb } from "./buildingTypes";
 
 /** How far below its floor a building reaches, so it never stands on air at the edge of its plot. */
 export const FOUNDATION_DEPTH = 1.2;
@@ -36,6 +36,7 @@ export class ModelBuilder {
   materials: string[] = [];
   indices: number[] = [];
   lights: ModelLight[] = [];
+  effects: ModelEffect[] = [];
   minX = Infinity;
   maxX = -Infinity;
   minZ = Infinity;
@@ -226,6 +227,7 @@ export class ModelBuilder {
     if (this.measure) return;
     for (const index of model.indices) this.indices.push(base + index);
     for (const light of model.lights ?? []) this.lights.push({ ...light, position: place(...light.position) });
+    for (const effect of model.effects ?? []) this.effects.push({ ...effect, position: place(...effect.position) });
   }
 
   finish(door: { x: number; z: number }, tiles?: BuildingModel["tiles"]): BuildingModel {
@@ -244,6 +246,7 @@ export class ModelBuilder {
       height: this.maxY,
       tiles,
       ...(this.lights.length ? { lights: this.lights } : {}),
+      ...(this.effects.length ? { effects: this.effects } : {}),
     };
   }
 }

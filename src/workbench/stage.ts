@@ -206,11 +206,20 @@ export interface StageOptions {
    *  (a dungeon style's light everywhere) and what is baked. */
   timeHours: number;
   underground?: [number, number, number];
+  /** Called once what is on the stage stands, with where each model's effects are in the world's
+   *  space (PROP_EFFECTS.md): runs them, and returns what stops them. */
+  effects?: (scene: Scene, placed: StagePlaced[]) => () => void;
   /** Whose sky and light: a biome's day-night settings. */
   lightBiome: BiomeDefinition;
   /** The camera to start from, or undefined to frame the stage. */
   view?: CameraView;
   onProgress?: (phase: string) => void;
+}
+
+/** A model on the stage, and how its own space maps to the stage's. */
+export interface StagePlaced {
+  model: BuildingModel;
+  place: (x: number, y: number, z: number) => { x: number; y: number; z: number };
 }
 
 export interface Stage {
@@ -406,6 +415,7 @@ export async function createStage(engine: Engine, canvas: HTMLCanvasElement, opt
     let placeGrass: ChunkGrass | null = null;
     let field: TreeField | null = null;
     let framing: { width: number; height: number; placed?: number[] } = { width: 0, height: 1 };
+    const stagePlaced: StagePlaced[] = [];
     if (options.trees) {
       options.onProgress?.("Growing trees");
       const kinds = options.trees.kinds;
@@ -447,6 +457,8 @@ export async function createStage(engine: Engine, canvas: HTMLCanvasElement, opt
       const buildingMaterial = createBuildingMaterial(scene, litShading, await bakeBuildingTextures(seed, content.buildingMaterials));
       options.onProgress?.("Raising the buildings and setting the props down");
       site.placed.forEach((item, i) => {
+        const axes = placedAxes(item);
+        stagePlaced.push({ model: item.model, place: (px, py, pz) => ({ x: item.x + axes.x.x * px + axes.y.x * py + axes.z.x * pz, y: item.y + axes.x.y * px + axes.y.y * py + axes.z.y * pz, z: item.z + axes.x.z * px + axes.y.z * py + axes.z.z * pz }) });
         // Its front (+z) turned to (frontX, frontZ), its +x to (frontZ, -frontX), tipped to its up -
         // as in the world.
         const a = placedAxes(item);
@@ -470,6 +482,10 @@ export async function createStage(engine: Engine, canvas: HTMLCanvasElement, opt
       const buildingMaterial = createBuildingMaterial(scene, litShading, await bakeBuildingTextures(seed, content.buildingMaterials));
       options.onProgress?.("Raising buildings");
       framing = layOutBuildings(scene, options.buildings, height, buildingMaterial, sunLighting.shadowGenerator, options.footprints === true);
+      options.buildings.forEach((model, i) => {
+        const x = framing.placed![i];
+        stagePlaced.push({ model, place: (px, py, pz) => ({ x: x + px, y: height(x, 0) + py, z: pz }) });
+      });
       if (options.buildingColliders) {
         // In the buildings' place: what they put in the way would hide behind their own walls.
         for (const mesh of scene.meshes) if (mesh.name.startsWith("building_")) mesh.setEnabled(false);
@@ -549,6 +565,7 @@ export async function createStage(engine: Engine, canvas: HTMLCanvasElement, opt
     }
 
     await scene.whenReadyAsync();
+    const stopEffects = options.effects?.(scene, stagePlaced);
     return {
       scene,
       camera,
@@ -557,7 +574,10 @@ export async function createStage(engine: Engine, canvas: HTMLCanvasElement, opt
         sunLighting.setTimeHours(hours);
       },
       getView: () => ({ alpha: camera.alpha, beta: camera.beta, radius: camera.radius, target: [camera.target.x, camera.target.y, camera.target.z] }),
-      dispose: () => scene.dispose(),
+      dispose: () => {
+        stopEffects?.();
+        scene.dispose();
+      },
     };
   } catch (error) {
     scene.dispose();

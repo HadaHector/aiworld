@@ -28,6 +28,9 @@ export interface PropContext {
   /** The prop's light (its `light`), burning at `at` - nothing if it gives none, or in the far
    *  model. */
   light(at: Vec3): void;
+  /** A mount point named `name` - where a flame burns, `radius` and `height` metres - for the
+   *  prop's `effects` that name it (see PROP_EFFECTS.md); nothing in the far model. */
+  mount(name: string, at: Vec3, radius: number, height: number): void;
 }
 
 /**
@@ -122,6 +125,12 @@ function generate(def: PropDef, seed: number, variant: number, far: boolean, mea
     bounds: (name) => s[name] as [number, number],
     light(at) {
       if (def.light && !far && !measure) b.lights.push({ position: at, ...def.light, sky: false, facing: null });
+    },
+    mount(name, at, _radius, height) {
+      if (far || measure) return;
+      for (const e of def.effects) {
+        if (e.mount === name) b.effects.push({ position: [at[0] + e.offset[0], at[1] + e.offset[1], at[2] + e.offset[2]], effect: e.effect, extra: e.extra, size: height * e.scale });
+      }
     },
   };
   if (run) generator.line!(ctx, run);

@@ -36,7 +36,7 @@ import { deriveSeed, mulberry32 } from "../rng";
 import { AREA_ROLL_SALT } from "../cells/config";
 import type { WorldContent } from "./worldContent";
 import { ALL_DIMENSIONS, checkDimensions, dimensionBiomes, dimensionShape, IMPLICIT_DIMENSION, readDimension, type DimensionDef } from "./dimensions";
-import type { GroupMember, Mount, PropDef, PropLight, PropGroupDef, PropPaint, PropSettings, Spill } from "../props/propTypes";
+import type { GroupMember, Mount, PropDef, PropEffect, PropLight, PropGroupDef, PropPaint, PropSettings, Spill } from "../props/propTypes";
 import { PROP_GENERATORS } from "../props/generators/index";
 import { isLineProp } from "../props/propGenerator";
 import type { TextureDef } from "../materials/textureGen";
@@ -834,6 +834,24 @@ function readWindowLight(obj: RawObject, reader: Reader): WindowLight | null {
   return { intensity: reader.number(light, "intensity", "light", { min: 0 }), radius: reader.number(light, "radius", "light", { min: 0.5 }) };
 }
 
+/** A prop's `effects: [{ mount, effect, extra, scale, offset }]` - the particle effects its flames carry. */
+function readPropEffects(obj: RawObject, reader: Reader): PropEffect[] {
+  return reader.optionalArray(obj, "effects", "").map((raw, i) => {
+    const path = `effects[${i}]`;
+    const e = reader.object(raw, path);
+    reader.onlyKeys(e, path, ["mount", "effect", "extra", "scale", "offset"]);
+    const offset = e.offset === undefined ? [0, 0, 0] : reader.array(e, "offset", path);
+    if (offset.length !== 3 || offset.some((v) => typeof v !== "number")) reader.fail(`${path}.offset`, "expected [x, y, z] in metres");
+    return {
+      mount: e.mount === undefined ? "flame" : reader.string(e, "mount", path),
+      effect: reader.string(e, "effect", path),
+      extra: e.extra === undefined ? [] : reader.array(e, "extra", path).map((v) => String(v)),
+      scale: reader.optionalNumber(e, "scale", path, 1, { min: 0.01 }),
+      offset: offset as [number, number, number],
+    };
+  });
+}
+
 /** A prop's `mount: { kind, height }` - how a room sets it down; on the floor if none. */
 function readMount(obj: RawObject, reader: Reader): Mount {
   if (obj.mount === undefined) return { kind: "floor", height: [0, 0] };
@@ -855,7 +873,7 @@ function readSpill(obj: RawObject, reader: Reader): Spill | null {
 function readProp(id: string, obj: RawObject, reader: Reader): PropDef {
   const names = Object.keys(PROP_GENERATORS);
   const type = reader.oneOf(obj, "type", "", names);
-  reader.onlyKeys(obj, "", ["name", "type", type, "parts", "collide", "ground", "spill", "mount", "light", "label"]);
+  reader.onlyKeys(obj, "", ["name", "type", type, "parts", "collide", "ground", "spill", "mount", "light", "effects", "label"]);
   const generator = PROP_GENERATORS[type];
   const settings: PropSettings = {};
   if (generator) {
@@ -908,7 +926,7 @@ function readProp(id: string, obj: RawObject, reader: Reader): PropDef {
     if (tints.length === 0) reader.fail(`${at}.tints`, "needs at least one colour");
     parts[part] = { material: raw.material === undefined || raw.material === null ? null : reader.string(raw, "material", at), tints: tints.length > 0 ? tints : [[1, 1, 1]] };
   }
-  return { id, name: reader.string(obj, "name", ""), generator: type, settings, parts, collide: obj.collide === undefined ? true : obj.collide === true, ground: obj.ground === undefined ? "level" : reader.oneOf(obj, "ground", "", ["level", "slope", "plumb"] as const), spill: readSpill(obj, reader), mount: readMount(obj, reader), light: readLight(obj, reader), label: obj.label === undefined ? null : reader.oneOf(obj, "label", "", PROP_LABELS) };
+  return { id, name: reader.string(obj, "name", ""), generator: type, settings, parts, collide: obj.collide === undefined ? true : obj.collide === true, ground: obj.ground === undefined ? "level" : reader.oneOf(obj, "ground", "", ["level", "slope", "plumb"] as const), spill: readSpill(obj, reader), mount: readMount(obj, reader), light: readLight(obj, reader), effects: readPropEffects(obj, reader), label: obj.label === undefined ? null : reader.oneOf(obj, "label", "", PROP_LABELS) };
 }
 
 /** A rooms/ file - see RoomTypeDef. */

@@ -37,6 +37,7 @@ function candle(ctx: PropContext, base: Vec3, radius: number, height: number): v
  *  round, not a quarter, or its four sides would lie on the first's. */
 function flame(ctx: PropContext, base: Vec3, radius: number, height: number): void {
   if (ctx.far) return;
+  ctx.mount("flame", [base[0], base[1] + height * 0.3, base[2]], radius, height);
   const paint = ctx.paint("flame");
   for (const turn of [0, Math.PI / 4]) {
     const f = turned(moved(ORIGIN, base), "y", turn);
