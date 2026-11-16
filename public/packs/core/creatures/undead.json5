@@ -1,0 +1,22 @@
+// The restless dead (see CREATURES.md): the crypts' own - risen corpses in what they were buried in,
+// only found in crypts (DUNGEONS.md, *What fills it*). On the humanoid bodies, pale as old bone,
+// until the undead have bodies of their own.
+{
+  entity: "humanoid",
+  name: "Restless {variant}",
+  family: "humanoid",
+  hostility: "hostile",
+  faction: "monsters",
+  roster: false,
+  stats: { stamina: 5, strength: 9, agility: 6, intellect: 4, armor: 30, weaponMin: 3, weaponMax: 6, weaponSpeed: 3.2 },
+  perLevel: { stamina: 1.6, strength: 1.5, agility: 0.8, intellect: 0.5, armor: 14, weaponMin: 1.2, weaponMax: 1.8 },
+  speed: { walk: 0.16, run: 0.34 },
+  group: { size: [2, 3], spread: 5 },
+  habitat: {},
+  respawn: [480, 600],
+  loot: "bandit",
+  variants: [
+    { id: "dead", name: "Dead", look: { outfit: "villager", color: [0.78, 0.76, 0.68] }, spells: [{ skill: "bash" }], tactics: [{ skill: "bash", every: [10, 14] }] },
+    { id: "knight", name: "Knight", look: { outfit: "knight", color: [0.7, 0.7, 0.66] }, stats: { stamina: 7, armor: 70 }, spells: [{ skill: "bash" }], tactics: [{ skill: "bash", every: [8, 12] }] },
+  ],
+}

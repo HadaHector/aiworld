@@ -146,6 +146,19 @@ export interface ExteriorDef {
   ridge: "x" | "z";
 }
 
+/**
+ * A style's creatures: its `groups` (each a list of species or kind ids - the undead, grave robbers,
+ * spiders), `pick` of which each dungeon holds; a group at each of its parts' `spawns` spots, a level
+ * higher every `deeper` parts in from the entrance; at its boss's spot the strongest of them, `boss`
+ * levels up.
+ */
+export interface DungeonCreatures {
+  groups: { id: string; kinds: string[]; weight: number }[];
+  pick: number;
+  deeper: number;
+  boss: number;
+}
+
 export interface BarrelDef {
   over: [number, number, number, number];
   along: "x" | "z";
@@ -193,6 +206,8 @@ export interface DungeonStyleDef {
   altar?: string;
   /** Chandeliers (a prop) hung from the vaults of its large rooms: the share of the places for one that have one. */
   chandeliers?: { prop: string; share: number };
+  /** What lives in it (DUNGEONS.md, *What fills it*): see DungeonCreatures. */
+  creatures?: DungeonCreatures;
   /** The share of the parts that may have a barrel vault (`DungeonPartDef.barrel`) drawn with it. */
   barrels: number;
 }
@@ -567,6 +582,23 @@ function readPart(entry: Entry, rules: DungeonRules, issues: ContentIssue[]): Du
   return part;
 }
 
+/** A style's creatures (see DungeonCreatures). */
+function readCreatures(reader: Reader, raw: RawObject): DungeonCreatures {
+  reader.onlyKeys(raw, "creatures", ["groups", "pick", "deeper", "boss"]);
+  const groups = reader.array(raw, "groups", "creatures").map((value, i) => {
+    const at = `creatures.groups[${i}]`;
+    const g = reader.object(value, at);
+    reader.onlyKeys(g, at, ["id", "kinds", "weight"]);
+    return { id: reader.string(g, "id", at), kinds: reader.stringList(g, "kinds", at), weight: reader.optionalNumber(g, "weight", at, 1, { min: 0 }) };
+  });
+  return {
+    groups,
+    pick: reader.optionalNumber(raw, "pick", "creatures", groups.length, { min: 1 }),
+    deeper: reader.optionalNumber(raw, "deeper", "creatures", 8, { min: 1 }),
+    boss: reader.optionalNumber(raw, "boss", "creatures", 2, { min: 0 }),
+  };
+}
+
 /** A part's outside, if it has one (see `DungeonPartDef.exterior`). */
 function readExterior(reader: Reader, obj: RawObject): ExteriorDef | undefined {
   if (obj.exterior === undefined) return undefined;
@@ -634,7 +666,7 @@ export function shapesBounds(shapes: readonly ShapeDesc[]): Aabb {
   return { min, max };
 }
 
-const STYLE_KEYS = ["name", "builder", "sizes", "branching", "loops", "boss", "keys", "cover", "deepest", "parts", "entrance", "caps", "connector", "look", "light", "urns", "chandeliers", "altar", "barrels", "doorways", "trims"];
+const STYLE_KEYS = ["name", "builder", "sizes", "branching", "loops", "boss", "keys", "cover", "deepest", "parts", "entrance", "caps", "connector", "look", "light", "urns", "chandeliers", "altar", "creatures", "barrels", "doorways", "trims"];
 
 function colour(reader: Reader, value: unknown, path: string, fallback: [number, number, number]): [number, number, number] {
   if (value === undefined) return fallback;
@@ -835,6 +867,7 @@ function readStyle(entry: Entry, allParts: Map<string, DungeonPartDef>, rules: D
     urns: obj.urns === undefined ? undefined : readPropShare(reader, reader.object(obj.urns, "urns"), "urns", "urn"),
     barrels: reader.optionalNumber(obj, "barrels", "", 0, { min: 0, max: 1 }),
     altar: reader.optionalString(obj, "altar", ""),
+    creatures: obj.creatures === undefined ? undefined : readCreatures(reader, reader.object(obj.creatures, "creatures")),
     chandeliers: obj.chandeliers === undefined ? undefined : readPropShare(reader, reader.object(obj.chandeliers, "chandeliers"), "chandeliers", "chandelier"),
   };
   if (style.loops[1] > 0 && !style.connector) reader.fail("loops", "a style with loops needs a `connector` to make them with");

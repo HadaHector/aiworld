@@ -3,6 +3,7 @@ import { asDungeonGround, testGround, testSite } from "../world/dungeons/testGro
 import { ModelBuilder } from "../world/buildings/buildingGeometry";
 import { resolveDungeons } from "../world/dungeons/dungeonDefs";
 import { buildPartModel } from "../world/dungeons/kitMesh";
+import { addSpotLabels, SPOT_KINDS, type SpotLabel } from "./spotLabels";
 import { Engine } from "@babylonjs/core";
 import { configNameFromUrl, fetchPackSources, fetchWorldConfig } from "../world/content/loadContent";
 import { DEFAULT_CONFIG, type WorldConfig } from "../world/content/worldConfig";
@@ -266,6 +267,8 @@ let seed = WORLD_SEED;
 let lastContent: WorldContent | null = null;
 
 let stage: Stage | null = null;
+/** Labels over the spots of the dungeon part being shown (its spawns, boss, chest, quest), or none. */
+let spotLabels: SpotLabel[] = [];
 /** What the stage on screen shows - the camera is kept while this stays the same. */
 let stageSubject = "";
 /** What the texture on screen shows - the zoom is kept while this stays the same. */
@@ -1324,6 +1327,8 @@ async function preview3d(token: number, asset: Asset, view: ViewDef, content: Wo
       shown = merged.finish({ x: 0, z: 0 });
     }
     buildings = [shown];
+    // Its spots labelled: where its creatures, its boss, its chest and its quest objects stand.
+    spotLabels = Object.entries(SPOT_KINDS).flatMap(([key, kind]) => (part.spots[key] ?? []).map((p, i): SpotLabel => ({ at: [p.x, p.y, p.z], text: (part.spots[key]?.length ?? 0) > 1 ? `${kind.text} ${i + 1}` : kind.text, color: kind.color })));
     dungeonAmbient = style.light.ambient;
     if (buildings[0].indices.length === 0) {
       setStatus(`${part.id} has no faces to draw: nothing of it is seen from inside`);
@@ -1442,6 +1447,8 @@ async function preview3d(token: number, asset: Asset, view: ViewDef, content: Wo
   }
   stage?.dispose();
   stage = built;
+  if (spotLabels.length > 0) addSpotLabels(built.scene, spotLabels);
+  spotLabels = [];
   built.scene.forceWireframe = options.wire === "on";
   setDebugMode(built.scene, options.mode, isSubject);
   stageSubject = subject;

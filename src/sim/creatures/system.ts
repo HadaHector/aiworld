@@ -61,6 +61,10 @@ export interface CreatureSystem {
   step(deltaSeconds: number): void;
   /** Kills since the last drain. */
   drainKills(): KillRecord[];
+  /** Spawn points of an owner's own (a dungeon's), filled as the field's are; null takes them away. */
+  setPoints(dimension: string, owner: string, points: SpawnPoint[] | null): void;
+  /** A dimension's zone at a point. */
+  zoneAt(dimension: string, x: number, z: number): Zone | undefined;
   readonly debug: {
     /** A dimension's zones. */
     zones(dimension: string): readonly Zone[];
@@ -90,6 +94,8 @@ interface DimensionState {
   definition: DimensionDef;
   zones: Zone[];
   field: SpawnPointField;
+  /** Points of its own beside the field's, by owner - a dungeon's (see dungeonSpawns.ts). */
+  extra: Map<string, SpawnPoint[]>;
   active: Map<string, Active>;
   /** Creatures made by debug, belonging to no point. */
   loose: Set<Entity>;
@@ -97,6 +103,8 @@ interface DimensionState {
   looseNear: Map<Entity, number>;
 }
 
+/** How far over or under a player a dungeon's point may be and still fill. */
+const DUNGEON_REACH = 25;
 /** Seconds between the spawner's looks round: points filling and releasing need not be every step. */
 const SPAWN_EVERY = 0.5;
 /** Seconds between drops of passed delta entries. */
@@ -116,7 +124,7 @@ export function createCreatureSystem(rules: GameRules, creatures: CreatureRules,
   const levelStat = rules.statIndex.get("level");
 
   /** Makes a creature of a kind at a level, standing on the ground, with a brain. */
-  function make(state: DimensionState, kind: CreatureKind, level: number, x: number, z: number, key: string, point: SpawnPoint | null, member: SpawnMember | null): Entity | undefined {
+  function make(state: DimensionState, kind: CreatureKind, level: number, x: number, z: number, key: string, point: SpawnPoint | null, member: SpawnMember | null, y?: number): Entity | undefined {
     const random = mulberry32(deriveSeed(world.seed, hashString(`${key}#${comebacks.get(key) ?? 0}`)));
     const entity = world.spawn(state.dimension.id, kind.id, x, z, random() * Math.PI * 2, key || undefined);
     if (!entity) return undefined;
@@ -134,6 +142,8 @@ export function createCreatureSystem(rules: GameRules, creatures: CreatureRules,
     }
     if (member?.name) entity.name = member.name;
     entity.body = state.dimension.createBody(x, z);
+    // On a dungeon's floor, not the ground over it.
+    if (y !== undefined) entity.body.teleportTo({ x, y: y + 0.05, z });
     entity.body.face(entity.facing);
     follow(entity);
     const part: CreaturePart = {
@@ -169,8 +179,9 @@ export function createCreatureSystem(rules: GameRules, creatures: CreatureRules,
   function makeMember(state: DimensionState, active: Active, index: number): void {
     const member = active.point.members[index];
     const back = comebacks.get(member.key) ?? 0;
-    const at = back === 0 ? { x: member.homeX, z: member.homeZ } : respawnSpot(active.point, member, back, state.field.open);
-    active.members[index] = make(state, member.kind, member.level, at.x, at.z, member.key, active.point, member) ?? null;
+    // (One on a dungeon's floor comes back where it stood: the field's ground is not its.)
+    const at = back === 0 || member.homeY !== undefined ? { x: member.homeX, z: member.homeZ } : respawnSpot(active.point, member, back, state.field.open);
+    active.members[index] = make(state, member.kind, member.level, at.x, at.z, member.key, active.point, member, member.homeY) ?? null;
   }
 
   /** Whether a creature is busy with a fight - not to be dropped from under it. */
@@ -227,6 +238,13 @@ export function createCreatureSystem(rules: GameRules, creatures: CreatureRules,
       for (const player of players) {
         for (const point of state.field.near(player.x, player.z, config.activeRadius)) {
           if (!state.active.has(point.key)) state.active.set(point.key, { point, members: point.members.map(() => null), lastNear: now });
+        }
+        // A dungeon's points: by distance through the rock too, its floors one over another.
+        for (const points of state.extra.values()) {
+          for (const point of points) {
+            if (state.active.has(point.key) || Math.hypot(player.x - point.x, player.z - point.z) > config.activeRadius || Math.abs(player.y - (point.y ?? player.y)) > DUNGEON_REACH) continue;
+            state.active.set(point.key, { point, members: point.members.map(() => null), lastNear: now });
+          }
         }
       }
       for (const [key, active] of state.active) {
@@ -309,7 +327,7 @@ export function createCreatureSystem(rules: GameRules, creatures: CreatureRules,
       const atStarts = starts.flatMap((s) => [s, s.home, ...s.entities]);
       const keepOut = [definition.spawn, ...definition.links.map((l) => l.at), ...definition.entities.map((e) => e.at), ...atStarts];
       const field = createSpawnPointField(dimension.id, dimension.world, creatures, zones, keepOut, (x, z) => dimension.trunks.clear(x, z, ROOM));
-      states.set(dimension.id, { dimension, definition, zones, field, active: new Map(), loose: new Set(), looseNear: new Map() });
+      states.set(dimension.id, { dimension, definition, zones, field, extra: new Map(), active: new Map(), loose: new Set(), looseNear: new Map() });
     },
     unload(id) {
       states.delete(id);
@@ -325,6 +343,16 @@ export function createCreatureSystem(rules: GameRules, creatures: CreatureRules,
       for (const state of states.values()) stepDimension(state, deltaSeconds, now, look);
     },
     drainKills: () => kills.splice(0, kills.length),
+    setPoints(dimension, owner, points) {
+      const state = states.get(dimension);
+      if (!state) return;
+      if (points) state.extra.set(owner, points);
+      else state.extra.delete(owner);
+    },
+    zoneAt(dimension, x, z) {
+      const state = states.get(dimension);
+      return state?.zones[state.dimension.world.sampleTerrain(x, z).primaryAreaId];
+    },
     debug: {
       zones: (dimension) => states.get(dimension)?.zones ?? [],
       zoneAt(dimension, x, z) {

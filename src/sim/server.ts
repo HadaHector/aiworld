@@ -49,6 +49,7 @@ import type { SaveStore } from "../save/store";
 import { cleanChat, createRateLimit, parseArgs, splitWords } from "./chat/chat";
 import { createServerCommands, nameBook, type CommandHost } from "./chat/serverCommands";
 import { createDimensionDungeons, dungeonSiteNear, mouthNear, type PlacedDungeon } from "./dungeons";
+import { dungeonSpawnPoints } from "./creatures/dungeonSpawns";
 import type { DungeonContent } from "../world/dungeons/dungeonDefs";
 import { deriveSeed } from "../world/rng";
 import { SAVE_VERSION, makeSaveId, nameProblem, tidyName, type CharacterRecord, type CharacterSummary, type WorldRecord } from "../save/records";
@@ -961,6 +962,7 @@ export function createServer(options: ServerOptions): Server {
       const key = `${dimension.id}/dungeon/${Math.round(site.x)},${Math.round(site.z)}/${style}/${size}`;
       const rolled = seed ?? deriveSeed(options.seed >>> 0, Math.round(site.x) * 7349 + Math.round(site.z) * 31);
       const dungeon = dimension.dungeons.open(seed === undefined ? key : `${key}/${rolled}`, style, size, rolled, site);
+      peopleDungeon(dimension.id, dungeon);
       enterDungeonAt(entity, dungeon);
       return { dungeon, kind: site.kind };
     },
@@ -977,6 +979,14 @@ export function createServer(options: ServerOptions): Server {
       return true;
     },
   };
+
+  /** A dungeon just opened: its spawn points to the creature system (DUNGEONS.md, *What fills it*). */
+  function peopleDungeon(dimension: string, dungeon: PlacedDungeon): void {
+    const style = options.dungeons?.styles.get(dungeon.style);
+    if (!creatureSystem || !options.creatures || !style?.creatures) return;
+    const zone = creatureSystem.zoneAt(dimension, dungeon.site.x, dungeon.site.z);
+    creatureSystem.setPoints(dimension, dungeon.id, dungeonSpawnPoints(dungeon.id, dungeon.layout, style.creatures, options.creatures, zone));
+  }
 
   /** Which dungeon each player was last sent into, by entity id. */
   const inDungeon = new Map<number, string>();
@@ -1003,6 +1013,7 @@ export function createServer(options: ServerOptions): Server {
         if (current && !nearMouth.has(entity.id)) continue;
         const seed = deriveSeed(options.seed >>> 0, Math.round(site.x) * 7349 + Math.round(site.z) * 31);
         const dungeon = dimension.dungeons.open(key, "crypt", "dungeon", seed, site);
+        peopleDungeon(dimension.id, dungeon);
         inDungeon.set(entity.id, dungeon.id);
         nearMouth.add(entity.id);
         connectionOf(entity)?.end.send({ type: "dungeon", id: dungeon.id, style: dungeon.style, size: dungeon.size, seed: dungeon.seed, x: site.x, y: site.y, z: site.z, facing: site.facing, entry: dungeon.entry });

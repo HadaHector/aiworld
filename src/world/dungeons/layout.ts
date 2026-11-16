@@ -641,6 +641,11 @@ export function placedPaths(p: PlacedPart): Polyline[] {
   return p.part.paths.map((line) => line.map((q) => toWorld(p, q)));
 }
 
+/** A placed part's spots of a kind (`spawns`, `boss`, `chest`...), in the world. */
+export function placedSpots(p: PlacedPart, kind: string): Vec3[] {
+  return (p.part.spots[kind] ?? []).map((q) => toWorld(p, q));
+}
+
 /** A placed part's sockets, in the world. */
 export function placedSockets(layout: DungeonLayout, index: number): WorldSocket[] {
   return layout.parts[index].part.sockets.map((_, i) => socketOf(layout.parts, index, i));

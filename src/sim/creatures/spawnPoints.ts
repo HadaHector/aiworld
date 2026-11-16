@@ -13,8 +13,9 @@ export interface SpawnMember {
   level: number;
   /** Its own name over its kind's (a camp's captain), or "". */
   name: string;
-  /** Where it stands and wanders about. */
+  /** Where it stands and wanders about - and on what floor, in a dungeon (else on the ground). */
   homeX: number;
+  homeY?: number;
   homeZ: number;
   /** How far from the point it may come back, and wander from its home. */
   spread: number;
@@ -27,6 +28,8 @@ export interface SpawnPoint {
   /** `<dimension>/s/<i>,<j>` - stable for a seed, whatever else changes. */
   key: string;
   x: number;
+  /** Its floor's height, in a dungeon; else it is on the ground. */
+  y?: number;
   z: number;
   zone: number;
   /** The camp it is, or null for a lone creature, a pair or a group. */

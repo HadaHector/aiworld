@@ -611,6 +611,13 @@ Each leaves the game working: dev server with `?play`, `npm run probe`, `npm run
    out of both.
 6. **Inside.** Spawn points, the graph steering, the boss, chests and loot tables, one locked door
    and its key, the world delta.
+   *So far*: spawn points (`src/sim/creatures/dungeonSpawns.ts`) at the parts' `spawns` spots, given to
+   the creature system when a dungeon opens: the style's `creatures` - for the crypt the restless
+   dead, grave robbers and spiders, two of the three in each crypt (the user's call) - a group a
+   spot, at the zone's level over the mouth and a level up every 8 parts in; at the boss's spot the
+   strongest of them, named, 2 levels up. Bodies are put on the spot's floor; creatures find their
+   way by NAVIGATION.md's dungeon graph. The undead are humanoids tinted bone-pale until they have
+   bodies of their own. The workbench labels a part's spots (spawns, boss, chest, quest).
 7. **Around it.** Dungeons' quest blocks and a plot that uses one, the map's floors, music and
    ambience, the player's own light, daylight through the mouth.
 8. **Wrap up.** COLLISION.md, GAMEPLAY.md, MAP.md, the packs README; as built.
