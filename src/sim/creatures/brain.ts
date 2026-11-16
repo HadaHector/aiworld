@@ -8,7 +8,7 @@ import { canMove, FLAG, hasFlag } from "../skills/flags";
 import { gap, hiddenFrom, isAlive, standingOf } from "../skills/unit";
 import { statValues } from "../stats";
 import { restore } from "../resources";
-import type { NavQuery } from "../../world/nav/navQuery";
+import type { NavAgent, NavQuery } from "../../world/nav/navQuery";
 import type { Vec3 } from "../../world/collision/vec";
 import type { Brain, CreaturePart } from "./creature";
 
@@ -107,9 +107,9 @@ function steer(world: BrainWorld, self: Entity, brain: Brain, goal: Vec3, share:
     brain.aimAt = now;
   }
   // Looked at once a PLAN_EVERY at most: in a dungeon `straight` is a few rays.
-  if (now >= brain.nextPlan && ((brain.path.length === 0 && !nav.straight(self.dimension, here, goal)) || now - brain.aimAt > NO_NEARER)) {
+  if (now >= brain.nextPlan && ((brain.path.length === 0 && !nav.straight(self.dimension, here, goal, agentOf(self))) || now - brain.aimAt > NO_NEARER)) {
     brain.nextPlan = now + PLAN_EVERY;
-    const way = nav.path(self.dimension, here, goal, PLAN_NODES);
+    const way = nav.path(self.dimension, here, goal, PLAN_NODES, agentOf(self));
     if (!way) {
       dropPath(brain, now);
       return "unreachable";
@@ -122,6 +122,28 @@ function steer(world: BrainWorld, self: Entity, brain: Brain, goal: Vec3, share:
   }
   if (now >= brain.nextPlan && brain.path.length === 0) brain.nextPlan = now + PLAN_EVERY;
   return toward(self, aim.x, aim.z, share, run);
+}
+
+/** Who the nav is asked about for a creature: whether it swims. */
+const agentOf = (self: Entity): NavAgent => ({ swims: self.creature!.kind.swims });
+
+/** How far ahead a fleeing creature looks for somewhere to run, the turns off straight away from its
+ *  foe it tries (radians, nearest first), and how often it looks again. */
+const FLEE_REACH = 12;
+const FLEE_TURNS = [0, 0.5, -0.5, 1, -1, 1.6, -1.6];
+const FLEE_LOOK = 1;
+
+/** Somewhere away from its foe a fleeing creature can run straight to: straight away if it can,
+ *  else turned off it as little as will do, else straight away all the same. */
+function fleeSpot(world: BrainWorld, self: Entity, foe: Entity): { x: number; y: number; z: number } {
+  const away = Math.atan2(self.x - foe.x, self.z - foe.z);
+  const here = { x: self.x, y: self.y, z: self.z };
+  const at = (turn: number) => ({ x: self.x + Math.sin(away + turn) * FLEE_REACH, y: self.y, z: self.z + Math.cos(away + turn) * FLEE_REACH });
+  for (const turn of FLEE_TURNS) {
+    const spot = at(turn);
+    if (world.nav.straight(self.dimension, here, spot, agentOf(self))) return spot;
+  }
+  return at(0);
 }
 
 /** A goal on the ground at (x, z), at its own height if it has one (home), else the creature's. */
@@ -270,7 +292,8 @@ export function stepBrain(world: BrainWorld, self: Entity): void {
             const r = part.wander * Math.sqrt(world.random(self));
             const x = part.home.x + Math.sin(angle) * r;
             const z = part.home.z + Math.cos(angle) * r;
-            if (!world.open(x, z)) continue;
+            // Somewhere it may stand, and can walk to from here.
+            if (!world.open(x, z) || !world.nav.reachable(self.dimension, { x: self.x, y: self.y, z: self.z }, { x, y: self.y, z }, agentOf(self))) continue;
             brain.state = "wander";
             brain.goal = { x, z };
             brain.until = now + 20;
@@ -337,7 +360,12 @@ export function stepBrain(world: BrainWorld, self: Entity): void {
         else {
           world.skills.setAttacking(self, false);
           // At half its pace: a fleeing creature can be caught, as in Classic.
-          part.input = toward(self, self.x * 2 - target.x, self.z * 2 - target.z, kind.speed.run * FLEE_PACE, true);
+          // Away from its foe, to a spot it can run straight to - looked for again every so often.
+          if (!brain.goal || now >= brain.nextPlan || Math.hypot(brain.goal.x - self.x, brain.goal.z - self.z) < ARRIVED) {
+            brain.goal = fleeSpot(world, self, target);
+            brain.nextPlan = now + FLEE_LOOK;
+          }
+          part.input = toward(self, brain.goal.x, brain.goal.z, kind.speed.run * FLEE_PACE, true);
           return;
         }
       }
@@ -346,6 +374,7 @@ export function stepBrain(world: BrainWorld, self: Entity): void {
         brain.fled = true;
         brain.state = "flee";
         brain.until = now + kind.flee.time;
+        brain.goal = null;
         dropPath(brain, now);
         world.skills.stopCast(self);
         return;

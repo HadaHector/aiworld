@@ -1,7 +1,7 @@
 # Navigation
 
 How creatures find their way: round houses, fences and trees on the surface, and through crypts and
-caves under it. **Status: steps 1-2 done** (the follower, and ways through crypts: [As built](#as-built)); steps 3-7 to come.
+caves under it. **Status: steps 1-3 done** (the follower, ways through crypts, ways over the surface: [As built](#as-built)); steps 4-7 to come.
 
 ## Today
 
@@ -68,10 +68,10 @@ flags byte). A cell is walkable when:
 - its slope is under the motor's steepest ground (52°), from `world.heightAt` at its corners;
 - its water is not deep, unless the creature swims (a flag in the cell, read per kind) -
   the same test as `system.ts`;
-- `trunks.clear(x, z, radius)` - trees and building footprints, already cheap and collision-free;
-- no fence, wall or camp prop stands in it (from the roads' fence segments and the placed
-  buildings' colliders, rasterised into the tile when it is made; to check in step 3 what the trunk
-  field already covers).
+- nothing solid stands in it. *As built*: not the trunk field (it knows trees and house footprints
+  but not fences, walls or props) but the collision world itself, which holds them all: each solid
+  shape in the tile, the cells under it tested with a body's capsule from its step height to its
+  head. A trunk, a wall, a fence shuts a cell; a kerb or a root under the step height does not.
 
 Heights go with the cell, so a step between neighbours over the motor's step height is a wall: a
 terrace wall or a cellar's edge stops a path as it stops a body.
@@ -209,8 +209,8 @@ A small fix to one part's ways is checked on that part alone, not the full probe
    seam is in.
 2. **Dungeons** (done). The walk lines' graph, rays off it, crypt probe cases. The biggest win:
    this is where straight lines fail most.
-3. **The surface.** Lazy tiles, A*, string-pulling, regions; `reachable` for wander and flee spots.
-   House, fence, water cases.
+3. **The surface** (done). Lazy tiles, A*, pulled taut; `reachable` for wander spots, flee spots
+   it can run to. House, fence, water cases.
 4. **Steering.** Look-ahead round trunks, separation in a group.
 5. **Surround slots** round a melee target.
 6. **Caves.** Walk lines from field parts' shapes - with DUNGEONS.md's cave step.
@@ -275,6 +275,40 @@ later than the rest. 1-3 are the plan; without them nothing changes for the play
   hall's floor across its walk line wedged the motor met on the slant; ledgers now collide with
   their top edges sloped at 45 degrees, and the motor walks 20/20 door to boss. A stall is still
   printed as a note, not failed: the share is checked.
+
+**Step 3, the surface** (2026-11-16):
+
+- `src/world/nav/surfaceNav.ts`: `createSurfaceNav(source)` - tiles of 32 x 32 one-metre cells,
+  made on first use and the 256 last used kept. Each cell: its height and two flags, *shut* and
+  *deep*. Ground and water are sampled every 2 m and read between (a sample costs microseconds,
+  and per cell they were most of a tile's making: 10 ms a tile, now about 2). Over deep water a
+  ray down finds a bridge's deck, and the cell is the deck; else it is deep, at the water's
+  surface (where a swimmer is). Solid shapes over the tile (`forEachShapeInBounds`), each cell under
+  one tested with a capsule 0.45 m round from 0.75 m (the step) to 2 m over the cell. A tile made
+  before the collision round it is in is used but not kept.
+- A* on 8 neighbours, no corner cut past a shut cell, a climb between cells no steeper than the
+  motor's 52 degrees, in a window round the two ends (24 m of margin, 192 m across at most); an end
+  in a shut cell moves up to 2 m to an open one, and an end more than 2.5 m off its cell's height
+  (on a roof) has no way. Pulled taut forward, leg by leg, with the same straight test.
+- `src/world/nav/heap.ts`: the min-heap both searches share, ties to the lower node.
+- `NavQuery` takes an `agent` (`{ swims }`): a walker's cells exclude deep water, a swimmer's do not.
+- The brain: a wander spot must be `reachable` (straight, or a way within 4 000 nodes); a fleeing
+  creature runs to a spot 12 m off it can run straight to - straight away from its foe if it can,
+  else turned off that by as little as will do (up to 90 degrees either way), looked for again each
+  second.
+- `src/sim/nav.ts`: the surface's tiles per dimension (the dimension's terrain height and water,
+  its collision world, deep as the creatures' shore test). `server.debug.nav` is the server's nav.
+- Debug: `__aiworld.creatures.showNav(radius)` marks the shut cells round the player with red
+  crosses and the deep ones with blue, drawn over everything (`showNav(0)` clears them); checked in
+  the page, at a village's houses. `/nav` waits: the chat commands' file has another session's
+  edits in it.
+- Probe (`navigation.mjs`): on made-up ground, a fence's cells shut and a kerb's open, no straight
+  way through the fence and a way round its end; on the `tiny` server, a wolf 25 m behind a house
+  goes round it to the player; deep water 45 m across, a swimmer's way straight over, a walker's
+  round it or over a bridge, never through. 1479/1479 checks. The tiny world has no road fences
+  or compound walls to test on; they are buildings in the collision, as houses are.
+- Cost: a tile about 2 ms to make (once), a search about 0.4 ms once its tiles are made. Still no
+  queue or budget per tick: a plan runs when the brain asks.
 
 ## Decisions
 

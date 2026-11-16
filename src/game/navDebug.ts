@@ -52,3 +52,25 @@ export function createNavDebug(scene: Scene, creatures: () => readonly Entity[])
   }
   return { dispose };
 }
+
+const SHUT_COLOR = new Color4(1, 0.25, 0.2, 1);
+const DEEP_COLOR = new Color4(0.25, 0.5, 1, 1);
+
+/** The surface's nav cells round a point (NAVIGATION.md, *Debug*): a red cross on each shut cell, a
+ *  blue one on each deep one, at its height. Drawn once, as they are when asked. */
+export function createNavCells(scene: Scene, cells: readonly { x: number; y: number; z: number; shut: boolean }[]): NavDebug {
+  const lines: Vector3[][] = [];
+  const colors: Color4[][] = [];
+  for (const c of cells) {
+    const y = c.y + 0.15, color = c.shut ? SHUT_COLOR : DEEP_COLOR;
+    lines.push([new Vector3(c.x - 0.35, y, c.z - 0.35), new Vector3(c.x + 0.35, y, c.z + 0.35)], [new Vector3(c.x - 0.35, y, c.z + 0.35), new Vector3(c.x + 0.35, y, c.z - 0.35)]);
+    colors.push([color, color], [color, color]);
+  }
+  const mesh = lines.length > 0 ? MeshBuilder.CreateLineSystem("navCells", { lines, colors }, scene) : null;
+  if (mesh) {
+    mesh.isPickable = false;
+    // Over everything: a shut cell lies at a wall's foot, under its plinth.
+    mesh.renderingGroupId = 1;
+  }
+  return { dispose: () => mesh?.dispose() };
+}

@@ -129,6 +129,27 @@ check("searches are quick (mean under 2 ms, none over 20 ms)", searchMs / search
 console.log(`${built} layouts: graph ${(buildMs / built).toFixed(1)} ms and ${Math.round(nodes / built)} nodes each; ${searches} searches, mean ${(searchMs / searches).toFixed(2)} ms and ${Math.round(rays / searches)} rays (${((searchMs * 1000) / Math.max(1, rays)).toFixed(1)} µs a ray), slowest ${slowest.toFixed(1)} ms`);
 console.log(`ways to rooms ${found}/${rooms}, from spawn spots ${offFound}/${offLine}, none into the rock ${unreachableOk}, walked by the motor ${walked}/${tried}`);
 
+// --- The surface's cells on made-up ground: a fence is a wall, a kerb under the step height is not
+{
+  const { createSurfaceNav } = await import("../../src/world/nav/surfaceNav.ts");
+  const { boxShape } = await import("../../src/world/dungeons/kitShapes.ts");
+  const world = createCollisionWorld();
+  // A fence 40 m long, 0.2 m thick, 1.2 m high, along z = 16 from x = 4 to 44; a kerb 0.5 m high across x = 60.
+  world.addBatch([boxShape(4, 0, 15.9, 44, 1.2, 16.1), boxShape(59.9, 0, 0, 60.1, 0.5, 32)]);
+  const surface = createSurfaceNav({ world, groundAt: () => 0, waterAt: () => ({ surface: -10, depth: 0 }), deep: 1.2, loaded: () => true });
+  check("made-up: cells on a fence are shut", surface.cell(20.5, 16.5).shut || surface.cell(20.5, 15.5).shut);
+  check("made-up: cells off a fence are open", !surface.cell(20.5, 18.5).shut && !surface.cell(20.5, 13.5).shut);
+  check("made-up: cells on a kerb under the step height are open", !surface.cell(60.5, 10.5).shut);
+  const a = { x: 20, y: 0, z: 10 }, b = { x: 20, y: 0, z: 22 };
+  check("made-up: not straight through a fence", !surface.straight(a, b));
+  const way = surface.path(a, b, BUDGET);
+  const round = way && way.some((w) => w.x < 4 || w.x > 44);
+  let ok = !!way, at = a;
+  for (const w of way ?? []) { if (!surface.straight(at, w)) ok = false; at = w; }
+  check("made-up: the way goes round the fence's end, every leg straight", ok && round, way ? way.map((w) => `${w.x.toFixed(1)},${w.z.toFixed(1)}`).join(" ") : "none");
+  check("made-up: straight over the kerb", surface.straight({ x: 55, y: 0, z: 10 }, { x: 65, y: 0, z: 10 }));
+}
+
 // --- On a server: a wolf in a crypt chases a player into another room, round its walls ---------
 {
   const { loadContentFromDisk, loadCreatureRulesFromDisk, loadItemRulesFromDisk, loadRulesFromDisk } = await import("../diskContent.mjs");
@@ -202,6 +223,108 @@ console.log(`ways to rooms ${found}/${rooms}, from spawn spots ${offFound}/${off
     for (let i = 0; i < 60 && !why; i++) { await pump(1); if (wolf.creature.brain.state === "evade") why = wolf.creature.brain.why; }
     check("server: a target it cannot reach makes it evade as unreachable", why === "unreachable", why || wolf.creature.brain.state);
   }
+
+  // --- The surface: round a house, round a river (and across it for a swimmer) ----------------
+  const { createServerNav } = await import("../../src/sim/nav.ts");
+  const nav = createServerNav((d) => server.debug.dimensions.get(d));
+  const walker = { swims: false }, swimmer = { swims: true };
+  const legsOk = (from, way, agent) => {
+    let at = from;
+    for (const w of way) {
+      if (!nav.straight("mainland", at, w, agent)) return false;
+      at = w;
+    }
+    return true;
+  };
+  let surfaceMs = 0, surfaceSearches = 0, surfaceSlowest = 0;
+  const timed = (from, to, agent) => {
+    const t0 = performance.now();
+    const way = nav.path("mainland", from, to, BUDGET, agent);
+    const ms = performance.now() - t0;
+    surfaceMs += ms;
+    surfaceSearches++;
+    surfaceSlowest = Math.max(surfaceSlowest, ms);
+    return way;
+  };
+  const onGround = (x, z) => ({ x, y: dim.groundAt(x, z), z });
+
+  // A house with open ground before and behind it: the player before it, a wolf behind.
+  const houses = dim.world.settlementLayouts.flatMap((l) => l.houses);
+  let house = null, front = null, back = null;
+  for (const h of houses) {
+    const reach = h.depth / 2 + 7;
+    const f = { x: h.x + h.frontX * reach, z: h.z + h.frontZ * reach }, b = { x: h.x - h.frontX * reach, z: h.z - h.frontZ * reach };
+    me.body.teleportTo(onGround(f.x, f.z));
+    server.debug.dimensions.get("mainland").streamer.loadAround(f.x, f.z, [f]);
+    const F = onGround(f.x, f.z), B = onGround(b.x, b.z);
+    if (nav.straight("mainland", F, B, walker)) continue;
+    const s = nav.surface("mainland");
+    if (s.cell(F.x, F.z).shut || s.cell(B.x, B.z).shut || s.cell(F.x, F.z).deep || s.cell(B.x, B.z).deep) continue;
+    const way = timed(B, F, walker);
+    if (!way) continue;
+    [house, front, back] = [h, F, B];
+    break;
+  }
+  check("surface: a house with a way round it", !!house);
+  if (house) {
+    const s = nav.surface("mainland");
+    check("surface: the cells under the house's middle are shut", s.cell(house.x, house.z).shut);
+    const way = timed(back, front, walker);
+    check("surface: every leg of the way round the house walkable", legsOk(back, way, walker));
+    check("surface: the same way twice", JSON.stringify(way) === JSON.stringify(nav.path("mainland", back, front, BUDGET, walker)));
+    // On the server: a wolf behind the house chases the player before it.
+    me.body.teleportTo(front);
+    await pump(10);
+    const S = server.debug.creatures.debug;
+    const wolf = S.spawn("mainland", "wolf.timber", back.x, back.z, 1);
+    await pump(3);
+    server.debug.skills.apply(rules.skillIndex.get("burn"), me, wolf);
+    let planned = false, closest = Infinity, evaded = "";
+    for (let i = 0; i < 30 * 30; i++) {
+      await pump(1);
+      if (wolf.creature.brain.path.length > 1) planned = true;
+      if (wolf.creature.brain.state === "evade") { evaded = wolf.creature.brain.why; break; }
+      closest = Math.min(closest, Math.hypot(wolf.x - me.x, wolf.z - me.z));
+      if (closest < 3.5) break;
+    }
+    console.log(`surface: a wolf ${Math.hypot(back.x - front.x, back.z - front.z).toFixed(0)} m off behind a house: planned ${planned}, got within ${closest.toFixed(1)} m${evaded ? `, evaded (${evaded})` : ""}`);
+    check("surface: the wolf goes round the house to the player", planned && closest < 3.5, `closest ${closest.toFixed(1)} m${evaded ? `, evaded (${evaded})` : ""}`);
+    server.debug.skills.kill(wolf);
+  }
+
+  // Deep water near the start: dry ground either side of it, a walker's way never through it, a
+  // swimmer's straight across.
+  let river = null;
+  for (let r = 40; r < 1200 && !river; r += 23) {
+    for (let k = 0; k < 16 && !river; k++) {
+      const x = Math.sin(k) * r, z = Math.cos(k) * r;
+      const w = dim.world.waterAt(x, z);
+      if (w.depth < 2.5) continue;
+      for (const [ux, uz] of [[1, 0], [0, 1]]) {
+        const side = (sign) => {
+          for (let d = 1; d < 30; d++) {
+            const px = x + ux * d * sign, pz = z + uz * d * sign;
+            if (dim.world.waterAt(px, pz).depth <= 0) return { x: px + ux * 2 * sign, z: pz + uz * 2 * sign };
+          }
+          return null;
+        };
+        const a = side(-1), b = side(1);
+        if (a && b && !river) river = { a, b };
+      }
+    }
+  }
+  check("surface: deep water with dry ground either side", !!river);
+  if (river) {
+    me.body.teleportTo(onGround(river.a.x, river.a.z));
+    server.debug.dimensions.get("mainland").streamer.loadAround(river.a.x, river.a.z, [river.a]);
+    const A = onGround(river.a.x, river.a.z), B = onGround(river.b.x, river.b.z);
+    const swim = timed(A, B, swimmer);
+    check("surface: a swimmer's way across the water", !!swim && legsOk(A, swim, swimmer));
+    const walk = timed(A, B, walker);
+    check("surface: a walker's way round (or over a bridge), never through deep water", walk === null || legsOk(A, walk, walker), walk ? `${walk.length} waypoints` : "");
+    console.log(`surface: water ${Math.hypot(A.x - B.x, A.z - B.z).toFixed(0)} m across: a swimmer's way ${swim?.length ?? "none"} legs, a walker's ${walk ? `${walk.length} legs` : "none within the window"}`);
+  }
+  console.log(`surface: ${surfaceSearches} searches, mean ${(surfaceMs / Math.max(1, surfaceSearches)).toFixed(2)} ms, slowest ${surfaceSlowest.toFixed(1)} ms; ${nav.surface("mainland").tileCount} tiles kept, ${nav.surface("mainland").made.tiles} made in ${nav.surface("mainland").made.ms.toFixed(0)} ms`);
 }
 
 console.log(`${checks - failures}/${checks} checks passed`);

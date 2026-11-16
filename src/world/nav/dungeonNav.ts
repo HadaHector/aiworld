@@ -7,6 +7,7 @@
 import type { CollisionWorld } from "../collision/collisionWorld";
 import type { Aabb, Vec3 } from "../collision/vec";
 import { placedPaths, type DungeonLayout, type PlacedPart } from "../dungeons/layout";
+import { createNodeHeap } from "./heap";
 
 /** A line's end within this of another line (and this near in height) is joined to it. */
 const JOIN_REACH = 1.2;
@@ -237,49 +238,18 @@ export function dungeonPath(g: DungeonGraph, world: CollisionWorld, from: Vec3, 
   const closed = new Uint8Array(n);
   const finish = new Map(goals.map((goal) => [goal.node, goal.cost]));
   const h = (i: number): number => Math.hypot(g.points[i * 3] - to.x, g.points[i * 3 + 1] - to.y, g.points[i * 3 + 2] - to.z);
-  // A binary heap of [f, node], ties to the lower node.
-  const heap: number[] = [];
-  const less = (i: number, j: number): boolean => heap[i * 2] < heap[j * 2] || (heap[i * 2] === heap[j * 2] && heap[i * 2 + 1] < heap[j * 2 + 1]);
-  const swap = (i: number, j: number): void => {
-    [heap[i * 2], heap[j * 2]] = [heap[j * 2], heap[i * 2]];
-    [heap[i * 2 + 1], heap[j * 2 + 1]] = [heap[j * 2 + 1], heap[i * 2 + 1]];
-  };
-  const push = (f: number, node: number): void => {
-    heap.push(f, node);
-    for (let i = heap.length / 2 - 1; i > 0; ) {
-      const p = (i - 1) >> 1;
-      if (!less(i, p)) break;
-      swap(i, p);
-      i = p;
-    }
-  };
-  const pop = (): number => {
-    const node = heap[1];
-    const last = heap.length / 2 - 1;
-    swap(0, last);
-    heap.length -= 2;
-    for (let i = 0; ; ) {
-      const l = i * 2 + 1, r = l + 1;
-      let m = i;
-      if (l < last && less(l, m)) m = l;
-      if (r < last && less(r, m)) m = r;
-      if (m === i) break;
-      swap(i, m);
-      i = m;
-    }
-    return node;
-  };
+  const heap = createNodeHeap();
   for (const s of starts) {
     if (s.cost < cost[s.node]) {
       cost[s.node] = s.cost;
-      push(s.cost + h(s.node), s.node);
+      heap.push(s.cost + h(s.node), s.node);
     }
   }
   let best = -1, bestTotal = Infinity, expanded = 0;
-  while (heap.length > 0 && expanded < budget) {
-    const f = heap[0];
+  while (heap.size > 0 && expanded < budget) {
+    const f = heap.peek();
     if (f >= bestTotal) break;
-    const i = pop();
+    const i = heap.pop();
     if (closed[i]) continue;
     closed[i] = 1;
     expanded++;
@@ -290,7 +260,7 @@ export function dungeonPath(g: DungeonGraph, world: CollisionWorld, from: Vec3, 
       if (closed[j] || next >= cost[j]) continue;
       cost[j] = next;
       prev[j] = i;
-      push(next + h(j), j);
+      heap.push(next + h(j), j);
     }
   }
   if (best < 0) return null;

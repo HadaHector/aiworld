@@ -61,7 +61,7 @@ import { bookRequirement } from "../sim/progression/books";
 import { levelGains } from "../sim/progression/levelUp";
 import { REFUSALS } from "../ui/progressPanel";
 import { refusalText, setTooltipContext } from "../ui/inventoryScreen";
-import { createNavDebug, type NavDebug } from "./navDebug";
+import { createNavCells, createNavDebug, type NavDebug } from "./navDebug";
 
 /** The animation a body plays while it casts (animations/castLoop.json5). */
 const CAST_LOOP = "castLoop";
@@ -170,6 +170,8 @@ export async function startSession(page: Page, options: SessionOptions): Promise
   let view: DimensionView | null = null;
   /** Creatures' ways drawn, while asked for (`__aiworld.creatures.showPaths`). */
   let navDebug: NavDebug | null = null;
+  /** The surface's nav cells marked, while asked for (`__aiworld.creatures.showNav`). */
+  let navCells: NavDebug | null = null;
   /** The dungeon the player is in, drawn in the view (DUNGEONS.md). */
   let dungeon: DungeonPresence | null = null;
   /** A Transfer not acted on yet: the next frame starts building where it leads. */
@@ -1357,6 +1359,24 @@ export async function startSession(page: Page, options: SessionOptions): Promise
         navDebug?.dispose();
         navDebug = on && view ? createNavDebug(view.scene, () => server.debug.creatures?.debug.creatures(currentDimension) ?? []) : null;
         return navDebug !== null;
+      },
+      /** Marks the surface's nav cells within `radius` of the player (NAVIGATION.md, *Debug*): red where
+       *  shut, blue where deep; `showNav(0)` clears them. The number marked. */
+      showNav(radius = 24) {
+        navCells?.dispose();
+        navCells = null;
+        const own = mirror.entities.get(playerId);
+        const surface = server.debug.nav.surface?.(currentDimension);
+        if (radius <= 0 || !own || !surface || !view) return 0;
+        const cells: { x: number; y: number; z: number; shut: boolean }[] = [];
+        for (let z = Math.floor(own.z - radius); z <= own.z + radius; z++) {
+          for (let x = Math.floor(own.x - radius); x <= own.x + radius; x++) {
+            const c = surface.cell(x + 0.5, z + 0.5);
+            if (c.shut || c.deep) cells.push({ x: x + 0.5, y: c.height, z: z + 0.5, shut: c.shut });
+          }
+        }
+        navCells = createNavCells(view.scene, cells);
+        return cells.length;
       },
       /** Makes a creature of a kind 6 m in front of the player, at a level (the zone's lowest if left out). */
       spawn(kind: string, level?: number) {

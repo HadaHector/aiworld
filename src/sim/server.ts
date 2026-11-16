@@ -19,7 +19,7 @@ import type { ItemHooks } from "./items/itemHooks";
 import type { CreatureRules } from "./rules/creatureRules";
 import { createCreatureSystem, type CreatureSystem, type KillRecord } from "./creatures/system";
 import type { NavQuery } from "../world/nav/navQuery";
-import { createServerNav } from "./nav";
+import { createServerNav, type ServerNav } from "./nav";
 import { createWorldDelta, type WorldDelta } from "./creatures/worldDelta";
 import type { ProgressionRules } from "./rules/progressionRules";
 import { createProgressionSystem, type ProgressionSystem } from "./progression/system";
@@ -201,6 +201,8 @@ export interface Server {
     readonly npcs: NpcSystem;
     /** Quests (QUESTS.md). */
     readonly quests: QuestSystem;
+    /** How creatures find their way (NAVIGATION.md); `surface` only on the server's own. */
+    readonly nav: NavQuery & Partial<Pick<ServerNav, "surface">>;
   };
   /** The server's clock: seconds stepped since it started - or since the saved world began. */
   readonly time: number;
@@ -359,6 +361,7 @@ export function createServer(options: ServerOptions): Server {
   /** The players standing in a dimension. */
   const playersIn = (id: string): Entity[] => [...players.values()].filter((p) => p.entity.dimension === id && p.entity.body).map((p) => p.entity);
 
+  const nav: NavQuery & Partial<Pick<ServerNav, "surface">> = options.nav ?? createServerNav((id) => loaded.get(id));
   const creatureSystem: CreatureSystem | null = options.creatures
     ? createCreatureSystem(rules, options.creatures, skills, {
         seed: options.seed,
@@ -381,7 +384,7 @@ export function createServer(options: ServerOptions): Server {
         lineOfSight: (dimension, from, to) => skills.sys.world.lineOfSight(dimension, from, to),
         hasLoot: (entity) => itemSystem?.hasLoot(entity) ?? false,
         delta,
-        nav: options.nav ?? createServerNav((id) => loaded.get(id)),
+        nav,
       })
     : null;
 
@@ -1555,6 +1558,7 @@ export function createServer(options: ServerOptions): Server {
       starts: startsOf,
       npcs: npcSystem,
       quests: questSystem,
+      nav,
     },
   };
 }
