@@ -282,12 +282,30 @@ function attemptLayout(content: DungeonContent, style: DungeonStyleDef, size: st
     }
     return 0;
   };
+  /** How many parts along the way an open end is on change height (stairs), back to a room or a
+   *  part where ways branch - the entrance's own flights not counted. */
+  const stairsAt = (at: WorldSocket): number => {
+    let index = at.part, exit = at.socket, n = 0;
+    while (index > 0) {
+      const p = placed[index];
+      if (p.role === "room" || p.role === "boss" || p.part.sockets.length > 2) break;
+      if (Math.abs(p.part.sockets[exit].at.y - p.part.sockets[p.entry].at.y) > 0.1) n++;
+      const from = joins.find((j) => j.b === index && !j.loop);
+      if (!from) break;
+      index = from.a;
+      exit = from.socketA;
+    }
+    return n;
+  };
   /** Picks and places a part at an open socket, or returns why none fit. */
   const grow = (at: WorldSocket, pool: readonly DungeonPartDef[], role: (p: DungeonPartDef) => PlacedPart["role"], except: number[]): number | string => {
     const headroom = coverAt(at.at.x, at.at.z) - (at.at.y + at.def.size[1]);
     const diving = headroom < style.cover + rules.thinCover;
     const stage = rooms / Math.max(1, targetRooms);
     const trend = trendAt(at);
+    const stairs = stairsAt(at);
+    // How far down it is already, as a share of how deep it may go: the deeper, the less it goes on down.
+    const depth = Math.min(1, Math.max(0, (site.y - at.at.y) / style.deepest));
     const options: { part: DungeonPartDef; entry: number; weight: number }[] = [];
     const before = placed[at.part].part;
     for (const part of pool) {
@@ -305,7 +323,10 @@ function attemptLayout(content: DungeonContent, style: DungeonStyleDef, size: st
         if (diving) {
           if (rise > 0.5) return;
           if (drop < -1) weight *= rules.diveWeight;
-        }
+        } else if (drop < -0.5 && !minimal) weight *= Math.max(0.1, 1 - depth);
+        // Not flight after flight along one way (diving too: a way can go on flat a while first), and
+        // down less the deeper it is - but the minimal layout takes whatever fits.
+        if (!part.room && !minimal && (rise > 0.5 || drop < -0.5)) weight *= rules.stairRun ** stairs;
         options.push({ part, entry, weight });
       });
     }

@@ -17,7 +17,7 @@
   keys: { locks: [0, 1] },
   // Rock over the top of every part but the entrance, and how far under the entrance it may go.
   cover: 8,
-  deepest: 60,
+  deepest: 45,
   parts: { tags: ["crypt"] },
   entrance: { tags: ["entrance"] },
   caps: { tags: ["cap"] },

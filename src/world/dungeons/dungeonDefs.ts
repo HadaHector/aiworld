@@ -29,6 +29,9 @@ export interface DungeonRules {
   thinCover: number;
   /** How much likelier a part that goes down is while diving. */
   diveWeight: number;
+  /** How likely a stair is next to another along one way, for each already on it (not diving):
+   *  a crypt goes down a flight, then along, not down flight after flight. */
+  stairRun: number;
   /** How far apart two open ends may be, straight, to be joined into a loop. */
   loopReach: number;
   /** How many joins apart, along the layout, two ends must be for joining them to make a loop
@@ -315,7 +318,7 @@ export function resolveDungeons(packs: readonly PackSource[]): DungeonContent {
 function readRules(entry: Entry | undefined, issues: ContentIssue[]): DungeonRules {
   const reader = new Reader(issues, entry?.file ?? "rules/dungeons.json5");
   const obj = entry ? reader.object(entry.data, "") : {};
-  reader.onlyKeys(obj, "", ["minClear", "joins", "attempts", "triesPerSocket", "sample", "around", "thinCover", "diveWeight", "loopReach", "loopSpan"]);
+  reader.onlyKeys(obj, "", ["minClear", "joins", "attempts", "triesPerSocket", "sample", "around", "thinCover", "diveWeight", "stairRun", "loopReach", "loopSpan"]);
   const minClear = obj.minClear === undefined ? ([6, 6] as [number, number]) : pair(reader, obj, "minClear", "");
   const joins = reader.optionalArray(obj, "joins", "").map((value, i): [string, string] => {
     if (Array.isArray(value) && value.length === 2 && value.every((v) => typeof v === "string")) return [value[0], value[1]];
@@ -331,6 +334,7 @@ function readRules(entry: Entry | undefined, issues: ContentIssue[]): DungeonRul
     around: reader.optionalNumber(obj, "around", "", 2, { min: 0 }),
     thinCover: reader.optionalNumber(obj, "thinCover", "", 10, { min: 0 }),
     diveWeight: reader.optionalNumber(obj, "diveWeight", "", 4, { min: 1 }),
+    stairRun: reader.optionalNumber(obj, "stairRun", "", 0.25, { min: 0, max: 1 }),
     loopReach: reader.optionalNumber(obj, "loopReach", "", 60, { min: 0 }),
     loopSpan: reader.optionalNumber(obj, "loopSpan", "", 4, { min: 1, integer: true }),
   };
