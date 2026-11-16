@@ -1,0 +1,3 @@
+// A fire as an animation (PROP_EFFECTS.md): sixteen frames of one loop, a broad base and tongues that lick up
+// and fall, the noise tearing them rising frame by frame. An emitter with `animate: 14` plays it.
+{ kind: "blaze", size: 128, variants: 16, rough: 0.8 }

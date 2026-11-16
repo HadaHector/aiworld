@@ -107,7 +107,7 @@ interface Instance {
   vz: number;
 }
 
-function createPool(capacity: number): ParticlePool & { life: Float32Array; age: Float32Array; spin: Float32Array; sizeScale: Float32Array; instance: Int32Array; ox: Float32Array; oy: Float32Array; oz: Float32Array; own: Uint8Array } {
+function createPool(capacity: number): ParticlePool & { life: Float32Array; age: Float32Array; spin: Float32Array; sizeScale: Float32Array; base: Uint8Array; instance: Int32Array; ox: Float32Array; oy: Float32Array; oz: Float32Array; own: Uint8Array } {
   const f = (): Float32Array => new Float32Array(capacity);
   return {
     capacity,
@@ -117,7 +117,7 @@ function createPool(capacity: number): ParticlePool & { life: Float32Array; age:
     rot: f(), ax: f(), ay: f(), az: f(),
     emitter: new Uint16Array(capacity),
     variant: new Uint8Array(capacity),
-    life: f(), age: f(), spin: f(), sizeScale: f(),
+    life: f(), age: f(), spin: f(), sizeScale: f(), base: new Uint8Array(capacity),
     // A local particle's instance (it moves with the attachment) and its place relative to it; -1 for a free one.
     instance: new Int32Array(capacity).fill(-1),
     ox: f(), oy: f(), oz: f(),
@@ -209,6 +209,7 @@ export function createParticleSystem(rules: FeedbackRules): ParticleSystem {
     for (const key of ["x", "y", "z", "vx", "vy", "vz", "size", "r", "g", "b", "a", "rot", "ax", "ay", "az", "life", "age", "spin", "sizeScale", "ox", "oy", "oz"] as const) pool[key][i] = pool[key][last];
     pool.emitter[i] = pool.emitter[last];
     pool.variant[i] = pool.variant[last];
+    pool.base[i] = pool.base[last];
     pool.instance[i] = pool.instance[last];
     pool.own[i] = pool.own[last];
   };
@@ -293,6 +294,7 @@ export function createParticleSystem(rules: FeedbackRules): ParticleSystem {
     pool.own[i] = inst.own ? 1 : 0;
     const texture = e.sprite >= 0 ? rules.textures[e.sprite] : null;
     pool.variant[i] = texture ? Math.floor(Math.random() * texture.variants) : 0;
+    pool.base[i] = pool.variant[i];
     if (e.mesh) {
       inCone(0, 1, 0, 180, dir);
       pool.ax[i] = dir[0];
@@ -371,6 +373,8 @@ export function createParticleSystem(rules: FeedbackRules): ParticleSystem {
         pool.z[i] += pool.vz[i] * dt;
       }
       shade(pool, i, pool.age[i] / pool.life[i]);
+      // An animated sprite shows the frame its age has reached, from the one it began at.
+      if (e.animate > 0) pool.variant[i] = (pool.base[i] + Math.floor(pool.age[i] * e.animate)) % rules.textures[e.sprite].variants;
       i++;
     }
   };

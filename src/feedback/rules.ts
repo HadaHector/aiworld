@@ -79,6 +79,8 @@ export interface EmitterDef {
   hold: boolean;
   /** Sprites keep their up toward the screen's up - a flame's tongue - never turned at random. */
   upright: boolean;
+  /** Frames a second: the sprite's variants are the frames of an animation (a `blaze`), played over the particle's life from a random frame; 0 shows one still variant. */
+  animate: number;
 }
 
 export interface ParticleEffectDef {
@@ -342,7 +344,7 @@ function readColourCurve(reader: Reader, obj: RawObject, key: string, path: stri
   return [[0, colourValue(reader, value, at)]];
 }
 
-const EMITTER_KEYS = ["sprite", "mesh", "blend", "rate", "burst", "delay", "duration", "life", "shape", "speed", "direction", "spread", "gravity", "drag", "size", "colour", "spin", "stretch", "local", "inherit", "flat", "hold", "upright"];
+const EMITTER_KEYS = ["sprite", "mesh", "blend", "rate", "burst", "delay", "duration", "life", "shape", "speed", "direction", "spread", "gravity", "drag", "size", "colour", "spin", "stretch", "local", "inherit", "flat", "hold", "upright", "animate"];
 
 function readEmitter(reader: Reader, value: unknown, path: string, loop: boolean, textureIndex: ReadonlyMap<string, number>): EmitterDef {
   const obj = reader.object(value, path);
@@ -425,6 +427,7 @@ function readEmitter(reader: Reader, value: unknown, path: string, loop: boolean
     flat: reader.boolean(obj, "flat", path, false),
     hold: reader.boolean(obj, "hold", path, false),
     upright: reader.boolean(obj, "upright", path, false),
+    animate: reader.optionalNumber(obj, "animate", path, 0, { min: 0, max: 60 }),
   };
 }
 

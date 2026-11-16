@@ -1,14 +1,17 @@
-// A hearth fire (PROP_EFFECTS.md): authored for a flame a metre tall; a fireplace lays three. Not a candle's
-// teardrop: ragged, streaked tongues (the `fireTongue` texture) of every age and size licking up off the logs,
-// a few small hot ones low in the bed, and a wide glow under it all. Loops.
+// A hearth fire (PROP_EFFECTS.md): authored for a flame a metre tall; a fireplace lays three. Each is an
+// animated sprite - the `blaze` flipbook, 16 frames played at 14 a second from a random frame - twice: a wide
+// red-orange one and a smaller yellow one over it, whose overlap is the hot heart. A few ragged tongues lick
+// above, a glow lies under it all. Particles of every length of life, so they never beat together. Loops.
 {
   loop: true,
   emitters: [
     // The bed's glow, slow and wide.
     { sprite: "softDot", blend: "add", rate: 3, life: [1, 2.4], shape: { box: [0.2, 0.01, 0.12] }, speed: [0, 0.03], size: [[0, 0.7], [1, 0.9]], colour: [[0, "#ff601020"], [0.5, "#ff701830"], [1, "#ff601000"]] },
-    // The tongues: lives from a flicker to two seconds, so they never beat together.
-    { sprite: "fireTongue", upright: true, blend: "add", rate: 9, life: [0.45, 1.9], shape: { box: [0.2, 0.02, 0.1] }, direction: [0, 1, 0], spread: 12, speed: [0.1, 0.45], size: [[0, 0.3], [0.3, 0.55], [1, 0.18]], colour: [[0, "#ffe08a"], [0.5, "#ff9a30"], [1, "#d0501000"]] },
-    // Small hot ones low in the bed.
-    { sprite: "fireTongue", upright: true, blend: "add", rate: 4, life: [0.3, 1.1], shape: { box: [0.16, 0.01, 0.08] }, direction: [0, 1, 0], spread: 8, speed: [0.03, 0.15], size: [[0, 0.22], [0.4, 0.3], [1, 0.08]], colour: [[0, "#fff4c8"], [1, "#ffb04000"]] },
+    // The body of the fire.
+    { sprite: "blaze", animate: 14, upright: true, blend: "add", rate: 1.6, life: [1.1, 2.4], shape: { box: [0.1, 0.01, 0.06] }, direction: [0, 1, 0], spread: 5, speed: [0.02, 0.08], size: [[0, 0.6], [0.5, 0.8], [1, 0.65]], colour: [[0, "#ff5a1000"], [0.2, "#ff6a18d0"], [0.8, "#ff7a20b0"], [1, "#d0401000"]] },
+    // The yellow heart.
+    { sprite: "blaze", animate: 14, upright: true, blend: "add", rate: 1.4, life: [1, 2.2], shape: { box: [0.08, 0.01, 0.05] }, direction: [0, 1, 0], spread: 4, speed: [0.02, 0.06], size: [[0, 0.38], [0.5, 0.5], [1, 0.4]], colour: [[0, "#ffd04000"], [0.2, "#ffd860d0"], [0.8, "#ffe080b0"], [1, "#ffa03000"]] },
+    // Tongues above.
+    { sprite: "fireTongue", upright: true, blend: "add", rate: 3, life: [0.4, 1.5], shape: { box: [0.18, 0.02, 0.08] }, direction: [0, 1, 0], spread: 10, speed: [0.15, 0.5], size: [[0, 0.2], [0.3, 0.38], [1, 0.12]], colour: [[0, "#ffd070"], [0.5, "#ff9a30"], [1, "#d0501000"]] },
   ],
 }

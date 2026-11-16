@@ -6,7 +6,7 @@
 import type { Reader } from "../world/content/contentReader";
 import { deriveSeed, mulberry32 } from "../world/rng";
 
-export const TEXTURE_KINDS = ["dot", "spark", "star", "smoke", "flame", "fire", "ring", "rune", "slash", "web", "tangle"] as const;
+export const TEXTURE_KINDS = ["dot", "spark", "star", "smoke", "flame", "fire", "blaze", "ring", "rune", "slash", "web", "tangle"] as const;
 export type TextureKind = (typeof TEXTURE_KINDS)[number];
 
 export interface ParticleTextureDef {
@@ -54,7 +54,7 @@ export function readParticleTexture(id: string, reader: Reader, value: unknown):
     id,
     kind: reader.oneOf(obj, "kind", "", TEXTURE_KINDS),
     size,
-    variants: reader.optionalNumber(obj, "variants", "", 1, { min: 1, max: 16, integer: true }),
+    variants: reader.optionalNumber(obj, "variants", "", 1, { min: 1, max: 32, integer: true }),
     power: reader.optionalNumber(obj, "power", "", 2, { min: 0.2, max: 16 }),
     width: reader.optionalNumber(obj, "width", "", 0.08, { min: 0.01, max: 0.5 }),
     radius: reader.optionalNumber(obj, "radius", "", 0.7, { min: 0.05, max: 1 }),
@@ -113,7 +113,8 @@ function segmentDistance(px: number, py: number, ax: number, ay: number, bx: num
  */
 export function drawParticleTexture(def: ParticleTextureDef, variant: number): TexturePixels {
   const size = def.size;
-  const rng = mulberry32(deriveSeed(hashId(def.id), variant));
+  // A blaze's variants are the frames of one animation: the same noise, moved on.
+  const rng = mulberry32(deriveSeed(hashId(def.id), def.kind === "blaze" ? 0 : variant));
   const luminance = new Float32Array(size * size).fill(1);
   const alpha = new Float32Array(size * size);
   const lumps = valueNoise(rng, 5);
@@ -192,6 +193,22 @@ export function drawParticleTexture(def: ParticleTextureDef, variant: number): T
           a = smoothstep(0, 0.4, d) * smoothstep(1, 0.82, v) * smoothstep(0, 0.06, v);
           const streak = 0.82 + 0.3 * fine((x + 1) / 2 * 2.2, v * 0.6);
           lum = Math.min(1, (0.4 + 0.65 * smoothstep(0.05, 0.95, d) * (1 - v * 0.55)) * streak);
+          break;
+        }
+        case "blaze": {
+          // A whole fire, one frame of a loop: a broad base and tongues that lick up, the noise that
+          // tears them rising frame by frame (periodic, so the last frame runs into the first).
+          const s = variant / def.variants;
+          const v = (y + 1) / 2;
+          const xn = (x + 1) / 2;
+          const sway = (lumps(xn, v * 0.8 - s) - 0.5) * 0.9 * def.rough * v + (fine(xn * 1.3, v * 1.6 - s * 2) - 0.5) * 0.5 * def.rough * v;
+          // How high each part of the fire reaches: its tongues, rising and falling through the loop.
+          const reach = 0.5 + 0.45 * lumps(xn * 1.1 + 0.3, s) + 0.2 * (fine(xn * 1.6, s * 2) - 0.5);
+          const base = 0.56 * Math.pow(Math.max(0, 1 - Math.pow(v / Math.max(0.2, reach), 1.6)), 0.55) * smoothstep(0, 0.07, v);
+          const d = 1 - Math.abs(x + sway) / Math.max(0.001, base);
+          a = smoothstep(0, 0.35, d) * smoothstep(0, 0.05, v) * smoothstep(1, 0.88, v);
+          const streak = 0.8 + 0.35 * fine(xn * 2.2, v * 0.7 - s);
+          lum = Math.min(1, (0.3 + 0.8 * smoothstep(0.05, 0.9, d) * (1 - v * 0.6)) * streak);
           break;
         }
         case "ring": {
