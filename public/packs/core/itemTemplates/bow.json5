@@ -2,7 +2,7 @@
 // A material (its tint) times how well it is made (its model, weapons/bow.json5) times a rarity.
 {
   kind: "weapon",
-  icon: "spell-nature-arrow",
+  icon: "item-bow-{material}",
   slot: "mainHand",
   fills: ["offHand"],
   name: "{make}{material} Bow",

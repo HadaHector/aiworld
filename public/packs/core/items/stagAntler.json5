@@ -1,1 +1,1 @@
-{ name: "Stag Antler", icon: "creature-skull-horned", kind: "material", rarity: "uncommon", stack: 10, value: 22 }
+{ name: "Stag Antler", icon: "item-stag-antler", kind: "material", rarity: "uncommon", stack: 10, value: 22 }

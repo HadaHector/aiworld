@@ -2,7 +2,7 @@
 // A material (its tint) times how well it is made (its model, weapons/roundShield.json5) times a rarity.
 {
   kind: "armour",
-  icon: "item-wooden-shield",
+  icon: "item-round-shield-{material}",
   slot: "offHand",
   name: "{make}{material} Round Shield",
   axes: {

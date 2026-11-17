@@ -2,7 +2,7 @@
 // A material (its tint) times how well it is made (its model, weapons/dagger.json5) times a rarity.
 {
   kind: "weapon",
-  icon: "weapon-dagger-plain",
+  icon: "item-dagger-{material}",
   slot: "mainHand",
   name: "{make}{material} Dagger",
   axes: {
