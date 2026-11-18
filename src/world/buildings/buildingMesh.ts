@@ -75,10 +75,26 @@ uniform vec3 lamps[${MAX_BUILDING_MATERIALS}];
 // the daylight its windows let in - lit by the sky as it is now. Off for a mesh with none.
 uniform sampler2D lightmap;
 uniform float lightmapOn;
+// Where it fades out (metres from the camera: begins, gone) - a prop as small as it is drawn near
+// (see PROP_RENDERING.md); (0, 0) for a mesh that never fades.
+uniform vec2 fadeRange;
 
 out vec4 outColor;
 
+// A 4x4 ordered dither: each pixel's threshold, 0-1, so a fade drops an even pattern of them.
+float dither4(vec2 p) {
+  ivec2 i = ivec2(mod(p, 4.0));
+  const float m[16] = float[16](0.0, 8.0, 2.0, 10.0, 12.0, 4.0, 14.0, 6.0, 3.0, 11.0, 1.0, 9.0, 15.0, 7.0, 13.0, 5.0);
+  return (m[i.x + i.y * 4] + 0.5) / 16.0;
+}
+
 void main() {
+  // Faded out with distance: dropped pixel by pixel, before anything is sampled. Opaque - nothing
+  // blends, nothing is sorted.
+  if (fadeRange.y > 0.0) {
+    float fade = clamp((length(vPositionFromCamera) - fadeRange.x) / max(fadeRange.y - fadeRange.x, 0.001), 0.0, 1.0);
+    if (fade > 0.0 && dither4(gl_FragCoord.xy) < fade) discard;
+  }
   // Sheets seen from both sides face the viewer. Judged by the normal, not by which way the
   // triangle happens to be wound: a face's normal is the truth about which way it looks.
   vec3 viewDir = normalize(cameraPosition - vWorldPosition);
@@ -205,7 +221,7 @@ export function createBuildingMaterial(scene: Scene, litShading: LitShading, tex
 
   const material = new ShaderMaterial("texturedBuilding", scene, "texturedBuilding", {
     attributes: ["position", "normal", "btangent", "uv", "layer", "color", "lightUv"],
-    uniforms: ["world", "view", "projection", "sizes", "shines", "glows", "daylights", "lamps", "lightmapOn", ...LIT_SHADING_UNIFORMS],
+    uniforms: ["world", "view", "projection", "sizes", "shines", "glows", "daylights", "lamps", "lightmapOn", "fadeRange", ...LIT_SHADING_UNIFORMS],
     samplers: ["colorArray", "normalArray", "lightmap", ...LIT_SHADING_SAMPLERS],
   });
   material.setTexture("colorArray", colorArray);
@@ -241,9 +257,12 @@ export function createBuildingMaterial(scene: Scene, litShading: LitShading, tex
   material.onBindObservable.add((mesh) => {
     const effect = material.getEffect();
     if (!effect) return;
-    const own = (mesh.metadata as { lightmap?: MeshLightmap } | null)?.lightmap;
+    const metadata = mesh.metadata as { lightmap?: MeshLightmap; fade?: [number, number] } | null;
+    const own = metadata?.lightmap;
     effect.setFloat("lightmapOn", own ? 1 : 0);
     effect.setTexture("lightmap", own?.texture ?? none);
+    const fade = metadata?.fade;
+    effect.setFloat2("fadeRange", fade ? fade[0] : 0, fade ? fade[1] : 0);
   });
   const glowing = new Set(materials.filter((def) => def.glow > 0).map((def) => def.id));
   return { material, layerOf: new Map(materials.map((def, i) => [def.id, i])), casts: (id) => id === null || !glowing.has(id), castsByLayer: materials.map((def) => !glowing.has(def.id)) };
@@ -288,6 +307,12 @@ export function applyLightmap(scene: Scene, mesh: Mesh, baked: { width: number; 
   const own: MeshLightmap = { texture };
   mesh.metadata = { ...(mesh.metadata ?? {}), lightmap: own };
   if (!previous) mesh.onDisposeObservable.add(() => (mesh.metadata as { lightmap?: MeshLightmap } | null)?.lightmap?.texture.dispose());
+}
+
+/** Has a mesh drawn with the building shader fade out from `start` to `end` metres from the camera
+ *  (dithered, see PROP_RENDERING.md) - or never, with `null`. */
+export function setMeshFade(mesh: Mesh, fade: { start: number; end: number } | null): void {
+  mesh.metadata = { ...(mesh.metadata ?? {}), fade: fade ? [fade.start, fade.end] : undefined };
 }
 
 /**

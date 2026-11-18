@@ -102,7 +102,8 @@ export function createWorldData(
       z: layout.z,
       houses: [
         ...layout.buildings.map(houseModel),
-        ...layout.props.map((prop) => ({ ...prop, model: (far: boolean) => generateProp(prop.prop, seed, prop.variant, far) })),
+        // Drawn as far as their size says - but a place's sign, there to be found, as far as a house.
+        ...layout.props.map((prop) => ({ ...prop, model: (far: boolean) => generateProp(prop.prop, seed, prop.variant, far), bySize: prop.prop.label === null })),
         ...layout.walls.flatMap((run) => wallStretches(run, seed)),
       ],
     })),

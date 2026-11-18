@@ -1,5 +1,5 @@
 import type { Mesh, CascadedShadowGenerator, Scene } from "@babylonjs/core";
-import { appendModel, applyLightmap, createBuildingMesh, emptyGeometry, type BuildingMaterial } from "./buildingMesh";
+import { appendModel, applyLightmap, createBuildingMesh, emptyGeometry, setMeshFade, type BuildingMaterial } from "./buildingMesh";
 import { createLightBakePool } from "../lighting/lightBakePool";
 import type { ModelEffect, ModelLight } from "./buildingTypes";
 import type { EffectGroup } from "../props/propEffects";
@@ -54,6 +54,30 @@ const CUT_DISTANCE = 160;
  *  out (see generateBuilding's `far`). */
 const FAR_DETAIL_DISTANCE = 220;
 
+/** A prop drawn by its size (PROP_RENDERING.md) is drawn out to this many times its size (its reach
+ *  or its height, metres) - at the default draw distance; the player's draw distance scales it, as
+ *  the graphics quality. A candle goes in a few tens of metres, a cart or a gallows far later. */
+const DISTANCE_PER_SIZE = 80;
+/** The draw distance DISTANCE_PER_SIZE is at (world.ts's DEFAULT_DRAW_DISTANCE). */
+const REFERENCE_DRAW_DISTANCE = 800;
+/** Nothing drawn by its size goes nearer than this. */
+const MIN_SIZE_CULL = 24;
+/** A prop fades out over this share of how far it is drawn - at least FADE_MIN metres. */
+const FADE_SHARE = 0.25;
+const FADE_MIN = 4;
+
+/** How far something is drawn: as far as its size says (scaled by the draw distance, never past
+ *  it) - or, with no size, to the draw distance. */
+function cullDistance(size: number | null, drawDistance: number): number {
+  if (size === null) return drawDistance;
+  return Math.min(drawDistance, Math.max(MIN_SIZE_CULL, DISTANCE_PER_SIZE * size * (drawDistance / REFERENCE_DRAW_DISTANCE)));
+}
+
+/** The fade before a prop's cull distance. */
+function fadeOf(cull: number): { start: number; end: number } {
+  return { start: cull - Math.max(FADE_MIN, cull * FADE_SHARE), end: cull };
+}
+
 /**
  * Draws the buildings of every settlement and compound - and a compound's props - each its own mesh, shown while it is within
  * the draw distance - in full near, and with its small details left out from FAR_DETAIL_DISTANCE on.
@@ -71,7 +95,22 @@ export function createBuildingRenderer(
 ): BuildingRenderer {
   /** Each house's meshes - and its lights, placed as its near mesh is, until they are baked (see
    *  LIGHTS.md): asked for the first time its near model is shown. */
-  const meshes: { near: Mesh; far: Mesh; x: number; z: number; reach: number; lights: ModelLight[] | null; bake: LightBakeGeometry | null }[] = [];
+  const meshes: {
+    near: Mesh;
+    /** Its far mesh - made when first wanted, for a prop drawn by its size (most never are). */
+    far: Mesh | null;
+    makeFar: () => Mesh;
+    x: number;
+    z: number;
+    reach: number;
+    /** How big it is (metres: its reach or its height), for one drawn by its size - or null, drawn
+     *  to the draw distance. */
+    size: number | null;
+    /** How far it is drawn, from its edge - the draw distance, or nearer for a prop by its size. */
+    cull: number;
+    lights: ModelLight[] | null;
+    bake: LightBakeGeometry | null;
+  }[] = [];
   const lightBakes = createLightBakePool();
   /** Every house's lights in the world's own space, for what moves among them (the player). */
   const worldLights: { x: number; z: number; reach: number; lights: ModelLight[] }[] = [];
@@ -86,8 +125,10 @@ export function createBuildingRenderer(
       let lights: ModelLight[] | null = null;
       let bake: LightBakeGeometry | null = null;
       let nearEffects: ModelEffect[] = [];
-      const build = (far: boolean): { mesh: Mesh; reach: number } => {
+      const build = (far: boolean): { mesh: Mesh; reach: number; height: number } => {
         const model = house.model(far);
+        let height = 0;
+        for (let i = 1; i < model.positions.length; i += 3) height = Math.max(height, model.positions[i]);
         if (!far) houses.push({ house, model: shapeOf(model) });
         const geometry = emptyGeometry();
         const place = placeHouse(house, house.x, house.z);
@@ -109,11 +150,14 @@ export function createBuildingRenderer(
         mesh.freezeWorldMatrix();
         shadowGenerator.addShadowCaster(mesh, false);
         mesh.setEnabled(false);
-        return { mesh, reach };
+        return { mesh, reach, height };
       };
       const near = build(false);
-      const far = build(true);
-      meshes.push({ near: near.mesh, far: far.mesh, x: house.x, z: house.z, reach: near.reach, lights, bake });
+      const size = house.bySize ? Math.max(near.reach, near.height) : null;
+      const cull = cullDistance(size, initialDrawDistance);
+      const makeFar = (): Mesh => build(true).mesh;
+      if (size !== null) setMeshFade(near.mesh, fadeOf(cull));
+      meshes.push({ near: near.mesh, far: size === null ? makeFar() : null, makeFar, x: house.x, z: house.z, reach: near.reach, size, cull, lights, bake });
       if (nearEffects.length > 0) effectGroups.push({ effects: nearEffects.map((e) => ({ ...e, position: [e.position[0] + house.x, e.position[1], e.position[2] + house.z] })), shown: () => near.mesh.isEnabled() });
       const placed = lights as ModelLight[] | null;
       if (placed) worldLights.push({ x: house.x, z: house.z, reach: near.reach, lights: placed.map((light) => ({ ...light, position: [light.position[0] + house.x, light.position[1], light.position[2] + house.z] })) });
@@ -142,10 +186,14 @@ export function createBuildingRenderer(
     }
     for (const entry of meshes) {
       const distance = Math.hypot(entry.x - x, entry.z - z) - entry.reach;
-      const shown = distance <= drawDistance;
+      const shown = distance <= entry.cull;
       const near = distance <= FAR_DETAIL_DISTANCE;
       entry.near.setEnabled(shown && near);
-      entry.far.setEnabled(shown && !near);
+      if (shown && !near && !entry.far) {
+        entry.far = entry.makeFar();
+        if (entry.size !== null) setMeshFade(entry.far, fadeOf(entry.cull));
+      }
+      entry.far?.setEnabled(shown && !near);
       if (shown && near && entry.lights) bakeLights(entry);
     }
   });
@@ -182,6 +230,12 @@ export function createBuildingRenderer(
     dispose: () => lightBakes.dispose(),
     setDrawDistance(distance) {
       drawDistance = distance;
+      for (const entry of meshes) {
+        entry.cull = cullDistance(entry.size, drawDistance);
+        if (entry.size === null) continue;
+        setMeshFade(entry.near, fadeOf(entry.cull));
+        if (entry.far) setMeshFade(entry.far, fadeOf(entry.cull));
+      }
     },
     lightsNear(x, y, z) {
       const found: ModelLight[] = [];
