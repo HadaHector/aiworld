@@ -1,0 +1,15 @@
+// A hunter's gallows. Look, from the concept: two heavy posts about 3 m high, each forking at the top
+// (two arms front and back) to cradle a squared-off crossbar that runs 40 cm past each post; a deer
+// hung head-down by its hind legs on two ropes, its nose a metre or so off the ground, antlers
+// splayed; bare earth and a few stones at the feet. Dark weathered timber. The deer is plain
+// tapered limbs - it reads from its outline, not its anatomy.
+{
+  name: "Game gallows",
+  type: "gameGallows",
+  parts: {
+    wood: { material: "roundLog", tints: [[1.15, 1.05, 0.95], [1.0, 0.95, 0.9]] },
+    rope: { material: "cloth", tints: [[0.8, 0.7, 0.5]] },
+    hide: { material: "hide", tints: [[1, 1, 1], [0.85, 0.8, 0.75]] },
+    bone: { material: "antler", tints: [[1, 1, 1]] },
+  },
+}

@@ -1,0 +1,18 @@
+// Dried herbs hung head down from a nail in a wall - lavender, sage and yarrow in one bunch, tied with
+// twine. In life about 0.3 m long; here half as long again again (GEOMETRY.md's exaggeration).
+// Look (concept): a narrow tied neck under a twine loop on an iron nail; below it the bunch fans out -
+// purple lavender spikes one side, broad grey-green sage leaves in the middle, cream yarrow heads and fine
+// green foliage the other; dry, dull colours, nothing glossy.
+{
+  name: "Herb bundle",
+  type: "herbBundle",
+  mount: { kind: "wall", height: 0 },
+  collide: false,
+  parts: {
+    nail: { material: "iron", tints: [[1, 1, 1]] },
+    lavender: { material: "driedLavender", tints: [[1, 1, 1]] },
+    sage: { material: "driedSage", tints: [[1, 1, 1]] },
+    yarrow: { material: "driedYarrow", tints: [[1, 1, 1]] },
+    twine: { material: "cloth", tints: [[0.85, 0.72, 0.5]] },
+  },
+}

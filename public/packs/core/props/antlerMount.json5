@@ -1,0 +1,14 @@
+// Antlers on a plaque, for a wall (the lodge's trophy). Look, from the concept: a tall rough-hewn oak plaque
+// about 0.5 m wide and 0.8 m high, dark, with nails; on it the skull and muzzle (a deer's furred face) and
+// two antlers sweeping out and up to about 1.1 m across and 0.8 m above the head - dark, ridged
+// beams thick at the burr, a forward brow tine, and four or five cream-tipped tines. Hung high.
+{
+  name: "Antlers",
+  type: "antlerMount",
+  mount: { kind: "wall", height: 0 },
+  parts: {
+    board: { material: "timber", tints: [[1.0, 0.85, 0.7], [0.9, 0.76, 0.62]] },
+    fur: { material: "hide", tints: [[0.8, 0.7, 0.6]] },
+    bone: { material: "antler", tints: [[1, 1, 1], [0.9, 0.88, 0.85]] },
+  },
+}

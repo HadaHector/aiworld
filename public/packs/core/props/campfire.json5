@@ -1,0 +1,18 @@
+// A campfire ring. Look, from the concept: about ten rounded fieldstones, each as big as a man's
+// torso is wide, set in a ring about 2 m across with gaps, on trampled earth; inside it a bed of
+// grey ash glowing red, three or four split logs laid across each other, burning at the ends. Grey-brown stones, pale logs
+// blackening. Light and flame come from the prop's effects.
+{
+  name: "Campfire",
+  type: "campfire",
+  // Its flames walk through no one: a ring of stones low enough to step over.
+  collide: false,
+  // The light it gives (see LIGHTS.md). A fire in the open: warm and wide.
+  light: { color: [1.0, 0.58, 0.28], intensity: 1.6, radius: 12, size: 0.7 },
+  effects: [{ effect: "flame.fire", extra: ["embers"], sound: "fireCrackle", scale: 0.9 }],
+  parts: {
+    stone: { material: "smoothStone", tints: [[1, 1, 1], [0.92, 0.9, 0.88]] },
+    ash: { material: "smoothStone", tints: [[0.28, 0.27, 0.27]] },
+    logs: { material: "roundLog", tints: [[0.55, 0.44, 0.36], [0.45, 0.36, 0.3]] },
+  },
+}

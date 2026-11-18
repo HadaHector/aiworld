@@ -327,6 +327,100 @@ export class Shaper {
   }
 
   /**
+   * A tube along a path: `path` its points (in f), each with its own `radius` - an antler's beam, a
+   * limb, a root, a rope, a horn. The path is smoothed through its points (a Catmull-Rom curve, so it
+   * passes through every one; `smooth` extra points per segment, default 3, none in a far model) and the
+   * radius runs between them linearly. Its rings are carried along the curve without twisting, the
+   * side shaded smooth, its texture wrapped round it (u round it in metres, v along it, as a log's), the
+   * ends closed with `ends` where given (an end whose radius is nearly nothing - a tine's tip - needs
+   * no cap and gets none). Returns the curve it was built along, `points` and their `radii`, so a branch
+   * can start from it. `sides` round it (default by its widest radius), `collide` puts it in the way.
+   */
+  tube(
+    f: Frame,
+    path: { at: Vec3; radius: number }[],
+    side: Paint,
+    options: ShapeOptions & { sides?: number; smooth?: number; ends?: Paint | null; caps?: "both" | "start" | "end" | "none" } = {},
+  ): { points: Vec3[]; radii: number[] } {
+    const curve: Vec3[] = [];
+    const radii: number[] = [];
+    const subdivisions = this.far ? 1 : Math.max(1, (options.smooth ?? 3) + 1);
+    const last = path.length - 1;
+    for (let i = 0; i < last; i++) {
+      const p0 = path[Math.max(0, i - 1)].at;
+      const p1 = path[i].at;
+      const p2 = path[i + 1].at;
+      const p3 = path[Math.min(last, i + 2)].at;
+      for (let s = 0; s < subdivisions; s++) {
+        const t = s / subdivisions;
+        const t2 = t * t;
+        const t3 = t2 * t;
+        const point = [0, 1, 2].map((k) => 0.5 * (2 * p1[k] + (-p0[k] + p2[k]) * t + (2 * p0[k] - 5 * p1[k] + 4 * p2[k] - p3[k]) * t2 + (-p0[k] + 3 * p1[k] - 3 * p2[k] + p3[k]) * t3)) as Vec3;
+        curve.push(at(f, point));
+        radii.push(path[i].radius + (path[i + 1].radius - path[i].radius) * t);
+      }
+    }
+    if (last >= 0) {
+      curve.push(at(f, path[last].at));
+      radii.push(path[last].radius);
+    }
+    const n = curve.length;
+    if (n < 2) return { points: curve, radii };
+    const widest = Math.max(...radii);
+    const sides = options.sides ?? this.sidesFor(widest);
+    // The way along the curve at each point, and a frame carried along it (parallel transport).
+    const tangents: Vec3[] = curve.map((_, i) => normalize(sub(curve[Math.min(n - 1, i + 1)], curve[Math.max(0, i - 1)])));
+    const normals: Vec3[] = [];
+    let across: Vec3 = Math.abs(tangents[0][1]) < 0.9 ? [0, 1, 0] : [1, 0, 0];
+    normals.push(normalize(sub(across, scale(tangents[0], dot(across, tangents[0])))));
+    for (let i = 1; i < n; i++) {
+      const prev = normals[i - 1];
+      normals.push(normalize(sub(prev, scale(tangents[i], dot(prev, tangents[i])))));
+    }
+    const binormals: Vec3[] = normals.map((nm, i) => cross(tangents[i], nm));
+    const ring = (i: number): Vec3[] =>
+      Array.from({ length: sides }, (_, k) => {
+        const a = (k / sides) * Math.PI * 2;
+        return add(curve[i], add(scale(normals[i], Math.cos(a) * radii[i]), scale(binormals[i], Math.sin(a) * radii[i])));
+      });
+    const outward = (i: number, k: number): Vec3 => {
+      const a = ((k % sides) / sides) * Math.PI * 2;
+      return normalize(add(scale(normals[i], Math.cos(a)), scale(binormals[i], Math.sin(a))));
+    };
+    const rings = Array.from({ length: n }, (_, i) => ring(i));
+    let along = 0;
+    for (let i = 0; i < n - 1; i++) {
+      const step = length(sub(curve[i + 1], curve[i]));
+      const girth0 = radii[i] * Math.PI * 2;
+      const girth1 = radii[i + 1] * Math.PI * 2;
+      for (let k = 0; k < sides; k++) {
+        const m = (k + 1) % sides;
+        const tan = (i2: number, k2: number): Vec3 => {
+          const a = ((k2 % sides) / sides) * Math.PI * 2;
+          return add(scale(normals[i2], -Math.sin(a)), scale(binormals[i2], Math.cos(a)));
+        };
+        this.b.raw(
+          [rings[i][k], rings[i][m], rings[i + 1][m], rings[i + 1][k]],
+          [outward(i, k), outward(i, k + 1), outward(i + 1, k + 1), outward(i + 1, k)],
+          [tan(i, k), tan(i, k + 1), tan(i + 1, k + 1), tan(i + 1, k)],
+          [[(k / sides) * girth0, along], [((k + 1) / sides) * girth0, along], [((k + 1) / sides) * girth1, along + step], [(k / sides) * girth1, along + step]],
+          side,
+        );
+      }
+      along += step;
+    }
+    const caps = options.caps ?? "both";
+    const closing = options.ends;
+    if (closing) {
+      // An end with next to no radius (a pointed tip) is left open: a cap of it would be all degenerate.
+      if ((caps === "both" || caps === "start") && radii[0] > 0.004) this.b.face([...rings[0]].reverse(), scale(tangents[0], -1), closing, normals[0], curve[0]);
+      if ((caps === "both" || caps === "end") && radii[n - 1] > 0.004) this.b.face(rings[n - 1], tangents[n - 1], closing, normals[n - 1], curve[n - 1]);
+    }
+    if (options.collide) this.solid(rings.flat());
+    return { points: curve, radii };
+  }
+
+  /**
    * A turned shape round the frame's y: `profile` its outline, [radius, height] from the bottom up -
    * a barrel's bulge, a bucket, a pot. Smooth-shaded, painted `side`; `top` and `bottom` close its
    * ends where given. Its texture's u runs round it and its v up it - or, `turned`, the other way

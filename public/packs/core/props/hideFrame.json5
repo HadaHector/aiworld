@@ -1,0 +1,14 @@
+// A hide-drying frame (the lodge's, the trapper's). Look, from the concept: two rough debarked poles stood
+// in the ground, uneven (one 10-30 cm shorter), a crossbar lashed across their tops and running past
+// them, a thinner bar low down; a deer hide - tan, ragged-edged, legs flared - laced into the frame
+// with a dozen cords from its rim to the bars and posts, hanging a little off the plane. Size, read
+// against the man: posts 2.3-2.7 m, 1.8-2.2 m apart, hide 1.1-1.4 m. Pale weathered wood, light rope.
+{
+  name: "Hide frame",
+  type: "hideFrame",
+  parts: {
+    wood: { material: "roundLog", tints: [[1.2, 1.1, 1.0], [1.05, 1.0, 0.95]] },
+    cord: { material: "cloth", tints: [[0.85, 0.75, 0.55]] },
+    hide: { material: "hide", tints: [[1, 1, 1], [0.85, 0.8, 0.75], [1.1, 1.05, 1]] },
+  },
+}

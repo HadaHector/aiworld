@@ -1,0 +1,39 @@
+// A hide: short fur on skin, tan to red-brown, in soft patches, paler along the belly's grain, the hairs
+// lying along its v (a hide hung on a frame, a hung deer's flank). Dull, never shiny.
+{
+  name: "Hide",
+  size: [0.9, 1.2],
+  shine: 0,
+  texture: {
+    bumpStrength: 0.9,
+    pipeline: {
+      noises: [
+        { name: "patches", type: "fbm", octaves: 3, tileCycles: 3, amplitude: 1, persistence: 0.55, lacunarity: 2 },
+        { name: "hair", type: "fbm", octaves: 3, tileCycles: 60, amplitude: 1, persistence: 0.6, lacunarity: 2, stretch: [1, 6] },
+        { name: "spots", type: "worley", tileCycles: 12, amplitude: 1, mode: "cell", stretch: [1, 1] },
+      ],
+      steps: [
+        { output: "patchRaw", op: "sample", noise: "patches" },
+        { output: "hairRaw", op: "sample", noise: "hair" },
+        { output: "spotRaw", op: "sample", noise: "spots", mode: "cell" },
+        {
+          output: "base",
+          op: "colorRamp",
+          input: "patchRaw",
+          stops: [
+            { at: -1, color: [0.55, 0.38, 0.24] },
+            { at: 0, color: [0.66, 0.5, 0.33] },
+            { at: 1, color: [0.78, 0.64, 0.46] },
+          ],
+        },
+        { output: "hairShade", op: "remap", input: "hairRaw", inMin: -1, inMax: 1, outMin: 0.82, outMax: 1.14 },
+        { output: "spotShade", op: "remap", input: "spotRaw", inMin: 0, inMax: 1, outMin: 0.94, outMax: 1.04 },
+        { output: "furred", op: "multiply", a: "base", b: "hairShade" },
+        { output: "diffuse", op: "multiply", a: "furred", b: "spotShade" },
+        { output: "roughness", op: "constant", value: 1 },
+        { output: "height", op: "scale", input: "hairRaw", factor: 0.25 },
+      ],
+      outputs: { diffuse: "diffuse", roughness: "roughness", height: "height" },
+    },
+  },
+}

@@ -1,0 +1,69 @@
+// A hunting lodge: one big log lodge with a smokehouse and, now and then, an open shed round a small
+// bare yard at a wood's edge - a campfire ring, a gallows with game hung from it, hides on frames,
+// firewood against the walls, a hound kennel, a light rail fence with a gap where the path comes in.
+// Made concept-first (CONCEPTS.md, LODGE.md): the logging camp's compound with a lodge in place of its
+// equal ring of buildings, a rough polygon yard (the sheepfold's), and hardly any felling.
+{
+  name: "Hunting lodge",
+  type: "compound",
+  compound: {
+    site: { grade: [0, 0.2], cover: [0.4, 0.85], nearWater: 400 },
+    // A small, rough clearing, not a circle.
+    yard: { shape: "polygon", points: [4, 6], radius: [8, 11] },
+    pads: { slope: 0.6, blend: [1.5, 10] },
+    arrangement: "ring",
+    trails: [],
+    // The lodge always, a smokehouse (a tool shed's walls) usually, an open shed by chance.
+    buildings: [
+      { building: "huntingLodge", count: [1, 1], required: true },
+      { building: "toolShed", count: [1, 1], chance: 0.8 },
+      { building: "stable", count: [1, 1], chance: 0.4 },
+    ],
+    boundary: {
+      wall: "railFence",
+      openings: [
+        { at: "road", gate: "fieldGate" },
+        { at: "anywhere", gate: "wicketGate", count: [0, 1], chance: 0.4 },
+        { at: "anywhere", breach: [2.2, 3], count: [0, 1] },
+      ],
+    },
+    props: [
+      { prop: "campfire", count: [1, 1], at: "yard" },
+      { prop: "gameGallows", count: [1, 1], at: "yard", chance: 0.85 },
+      { prop: "choppingBlock", count: [1, 1], at: "yard" },
+      { prop: "hideFrame", count: [1, 2], at: "yardEdge" },
+      { prop: "houndKennel", count: [1, 1], at: "byBuilding", building: "huntingLodge", chance: 0.85 },
+      { prop: "firewoodStack", count: [1, 2], at: "byBuilding", building: "huntingLodge" },
+      { prop: "firewoodStack", count: [1, 1], at: "byBuilding", chance: 0.5 },
+      { group: "storePile", count: [0, 1], at: "byBuilding" },
+    ],
+  },
+  // A little cleared round it, hardly any stumps: it hunts the wood, it does not fell it.
+  clearing: [20, 30],
+  stumps: 0.2,
+  ground: {
+    material: "track",
+    weight: {
+      noises: [{ name: "yardEdge", type: "fbm", octaves: 2, frequency: 0.08, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
+      steps: [
+        { output: "gapRaw", op: "input", name: "featureGap" },
+        { output: "edgeRaw", op: "sample", noise: "yardEdge" },
+        { output: "edge", op: "scale", input: "edgeRaw", factor: 2 },
+        { output: "gap", op: "add", a: "gapRaw", b: "edge" },
+        { output: "raw", op: "remap", input: "gap", inMin: 10, inMax: 5, outMin: 0, outMax: 1 },
+        { output: "result", op: "clamp", input: "raw", min: 0, max: 1 },
+      ],
+    },
+  },
+  // About a hamlet's worth in the road network: one road, two at the most, to a settlement by preference.
+  road: { importance: 1, links: [1, 2], wants: ["settlement"], maxLength: 2500 },
+  quest: {
+    tags: ["hunt", "wood", "remote"],
+    objects: [
+      { name: "Antler Sheddings", tags: ["material", "hunt"] },
+      { name: "Dried Herbs", tags: ["material", "herb"] },
+    ],
+    people: ["forester"],
+    text: "{name}",
+  },
+}

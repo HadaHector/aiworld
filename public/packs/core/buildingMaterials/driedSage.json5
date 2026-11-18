@@ -1,0 +1,45 @@
+// Dried sage: broad, soft, grey-green leaves with a pale midrib and a net of veins, a fine nap - a hung
+// bunch's middle. Its v runs along the leaf.
+{
+  name: "Dried Sage",
+  size: [0.3, 0.5],
+  shine: 0,
+  texture: {
+    bumpStrength: 1.4,
+    pipeline: {
+      noises: [
+        { name: "leaves", type: "worley", tileCycles: 5, amplitude: 1, mode: "edge", stretch: [1, 2.2] },
+        { name: "veins", type: "ridged", octaves: 3, tileCycles: 14, amplitude: 1, persistence: 0.5, lacunarity: 2, stretch: [2, 1] },
+        { name: "tone", type: "fbm", octaves: 2, tileCycles: 4, amplitude: 1, persistence: 0.5, lacunarity: 2 },
+        { name: "nap", type: "fbm", octaves: 2, tileCycles: 120, amplitude: 1, persistence: 0.5, lacunarity: 2 },
+      ],
+      steps: [
+        { output: "edge", op: "sample", noise: "leaves" },
+        { output: "veinRaw", op: "sample", noise: "veins" },
+        { output: "toneRaw", op: "sample", noise: "tone" },
+        { output: "napRaw", op: "sample", noise: "nap" },
+        {
+          output: "leaf",
+          op: "colorRamp",
+          input: "toneRaw",
+          stops: [
+            { at: -1, color: [0.44, 0.5, 0.4] },
+            { at: 0, color: [0.56, 0.62, 0.5] },
+            { at: 1, color: [0.66, 0.68, 0.56] },
+          ],
+        },
+        { output: "napShade", op: "remap", input: "napRaw", inMin: -1, inMax: 1, outMin: 0.93, outMax: 1.07 },
+        { output: "vein", op: "mask", input: "veinRaw", at: 1.1, off: 1.3 },
+        { output: "veinColor", op: "color", value: [0.76, 0.76, 0.64] },
+        { output: "gap", op: "mask", input: "edge", at: 0.02, off: 0.09 },
+        { output: "shadow", op: "color", value: [0.26, 0.3, 0.22] },
+        { output: "shaded", op: "multiply", a: "leaf", b: "napShade" },
+        { output: "veined", op: "mix", a: "shaded", b: "veinColor", t: "vein" },
+        { output: "diffuse", op: "mix", a: "veined", b: "shadow", t: "gap" },
+        { output: "roughness", op: "constant", value: 1 },
+        { output: "height", op: "add", a: "edge", b: "vein" },
+      ],
+      outputs: { diffuse: "diffuse", roughness: "roughness", height: "height" },
+    },
+  },
+}

@@ -1,0 +1,40 @@
+// Dried yarrow: flat-topped clusters of tiny cream flower heads over fine, feathery green-brown foliage
+// (grass/yarrow.json5's plant, dried). Its v runs down the stem.
+{
+  name: "Dried Yarrow",
+  size: [0.3, 0.5],
+  shine: 0,
+  texture: {
+    bumpStrength: 1.6,
+    pipeline: {
+      noises: [
+        { name: "heads", type: "worley", tileCycles: 26, amplitude: 1, mode: "edge" },
+        { name: "clusters", type: "fbm", octaves: 2, tileCycles: 4, amplitude: 1, persistence: 0.55, lacunarity: 2 },
+        { name: "foliage", type: "fbm", octaves: 3, tileCycles: 40, amplitude: 1, persistence: 0.6, lacunarity: 2, stretch: [1, 5] },
+      ],
+      steps: [
+        { output: "headEdge", op: "sample", noise: "heads" },
+        { output: "clusterRaw", op: "sample", noise: "clusters" },
+        { output: "foliageRaw", op: "sample", noise: "foliage" },
+        {
+          output: "leaf",
+          op: "colorRamp",
+          input: "foliageRaw",
+          stops: [
+            { at: -1, color: [0.34, 0.38, 0.24] },
+            { at: 0, color: [0.46, 0.5, 0.32] },
+            { at: 1, color: [0.6, 0.58, 0.4] },
+          ],
+        },
+        { output: "head", op: "mask", input: "headEdge", at: 0.03, off: 0.22 },
+        { output: "inCluster", op: "mask", input: "clusterRaw", at: -0.2, off: 0.2 },
+        { output: "flowers", op: "multiply", a: "head", b: "inCluster" },
+        { output: "cream", op: "color", value: [0.88, 0.84, 0.66] },
+        { output: "diffuse", op: "mix", a: "leaf", b: "cream", t: "flowers" },
+        { output: "roughness", op: "constant", value: 1 },
+        { output: "height", op: "add", a: "flowers", b: "foliageRaw" },
+      ],
+      outputs: { diffuse: "diffuse", roughness: "roughness", height: "height" },
+    },
+  },
+}

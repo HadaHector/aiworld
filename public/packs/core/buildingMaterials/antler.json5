@@ -1,0 +1,41 @@
+// Antler: ridged along its length, dark red-brown and rough, the ridges' crests worn cream where the
+// tines are handled; a pale bone-white cut face under a pale tip. Its v runs along the antler (a tube's).
+{
+  name: "Antler",
+  size: [0.35, 0.9],
+  shine: 0.05,
+  texture: {
+    bumpStrength: 2.6,
+    pipeline: {
+      noises: [
+        { name: "ridges", type: "ridged", octaves: 2, tileCycles: 7, amplitude: 1, persistence: 0.5, lacunarity: 2, stretch: [1, 9] },
+        { name: "pits", type: "fbm", octaves: 3, tileCycles: 24, amplitude: 1, persistence: 0.55, lacunarity: 2, stretch: [1, 4] },
+        { name: "tone", type: "fbm", octaves: 2, tileCycles: 3, amplitude: 1, persistence: 0.5, lacunarity: 2 },
+      ],
+      steps: [
+        { output: "crest", op: "sample", noise: "ridges" },
+        { output: "pitRaw", op: "sample", noise: "pits" },
+        { output: "toneRaw", op: "sample", noise: "tone" },
+        {
+          output: "bone",
+          op: "colorRamp",
+          input: "toneRaw",
+          stops: [
+            { at: -1, color: [0.3, 0.2, 0.14] },
+            { at: 0, color: [0.4, 0.28, 0.2] },
+            { at: 1, color: [0.52, 0.4, 0.3] },
+          ],
+        },
+        { output: "wear", op: "mask", input: "crest", at: 1.05, off: 1.25 },
+        { output: "wornColor", op: "color", value: [0.82, 0.74, 0.6] },
+        { output: "pitShade", op: "remap", input: "pitRaw", inMin: -1, inMax: 1, outMin: 0.8, outMax: 1.12 },
+        { output: "shaded", op: "multiply", a: "bone", b: "pitShade" },
+        { output: "diffuse", op: "mix", a: "shaded", b: "wornColor", t: "wear" },
+        { output: "roughness", op: "constant", value: 0.8 },
+        { output: "pitBump", op: "scale", input: "pitRaw", factor: 0.12 },
+        { output: "height", op: "add", a: "crest", b: "pitBump" },
+      ],
+      outputs: { diffuse: "diffuse", roughness: "roughness", height: "height" },
+    },
+  },
+}

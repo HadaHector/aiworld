@@ -1,0 +1,14 @@
+// A rick of chopped firewood - not the long logs of a log stack. Look, from the concept: split billets
+// about 40-50 cm long laid with their ends to the front in neat rows, about 2 m long and 1.2 m high
+// (chest-high on a man), a few with bark still on among the pale, freshly split wood, and a stake each
+// end to hold it. Pale cream wood with brown bark; the cut faces are the look.
+{
+  name: "Firewood stack",
+  type: "firewoodStack",
+  parts: {
+    bark: { material: "bark", tints: [[1, 1, 1], [0.9, 0.86, 0.82]] },
+    split: { material: "roundLog", tints: [[1.7, 1.55, 1.3], [1.55, 1.4, 1.2]] },
+    end: { material: "endGrain", tints: [[1.7, 1.55, 1.35]] },
+    stake: { material: "timber", tints: [[0.8, 0.72, 0.64]] },
+  },
+}

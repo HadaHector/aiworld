@@ -4,6 +4,7 @@ import { barrel, choppingBlock, crate, gate, grindstone, sawbuck } from "./woodw
 import { heap, signpost, trough, well } from "./yard";
 import { drystoneWall, railFence } from "./walls";
 import { fingerArm, fingerpost } from "./signs";
+import { antlerMount, campfire, firewoodStack, gameGallows, herbBundle, hideFrame, houndKennel } from "./lodge";
 import { pierBridge } from "./bridges";
 import { gravePost, headstone, lychgate, tomb, urn } from "./graves";
 import { altar, armchair, banner, bed, bench, cabinet, candles, chair, chandelier, chest, counter, fireplace, lantern, rack, sack, sconce, stool, stove, table, wallTorch } from "./furniture";
@@ -53,4 +54,11 @@ export const PROP_GENERATORS: Record<string, PropGenerator> = {
   wallTorch,
   banner,
   rack,
+  hideFrame,
+  gameGallows,
+  houndKennel,
+  firewoodStack,
+  campfire,
+  antlerMount,
+  herbBundle,
 };

@@ -1,0 +1,16 @@
+// A hound kennel. Look, from the concept: a low shelter for a pack, about 2.4 m wide, 1.6 m deep and as
+// high as a man's chest at the eaves, of round logs notched at the corners (their ends showing), open along the
+// whole front, a shingle gable over it overhanging every side, a bed of straw on a board floor, a
+// post at one side with an iron chain on it. Dark logs, dark grey shingles.
+{
+  name: "Hound kennel",
+  type: "houndKennel",
+  parts: {
+    logs: { material: "roundLog", tints: [[1.05, 1.0, 0.95], [0.95, 0.9, 0.85]] },
+    roof: { material: "woodShingles", tints: [[1.1, 1.05, 1.0], [0.95, 0.95, 0.95]] },
+    floor: { material: "deckBoards", tints: [[0.7, 0.65, 0.6]] },
+    straw: { material: "cloth", tints: [[1.0, 0.85, 0.45], [0.95, 0.8, 0.4]] },
+    iron: { material: "iron", tints: [[1, 1, 1]] },
+    gable: { material: "planks", tints: [[0.6, 0.55, 0.5]] },
+  },
+}

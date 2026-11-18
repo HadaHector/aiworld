@@ -1,0 +1,49 @@
+// Dried lavender, for a hung bunch of herbs: grey-green stems running along v, spikes of tiny dull
+// purple flowers crowding in patches. Its flower colours are grass/lavender.json5's, dried.
+{
+  name: "Dried Lavender",
+  size: [0.3, 0.5],
+  shine: 0,
+  texture: {
+    bumpStrength: 1.2,
+    pipeline: {
+      noises: [
+        { name: "stems", type: "fbm", octaves: 2, tileCycles: 26, amplitude: 1, persistence: 0.5, lacunarity: 2, stretch: [1, 10] },
+        { name: "florets", type: "worley", tileCycles: 22, amplitude: 1, mode: "cell", stretch: [1, 2.5] },
+        { name: "patch", type: "fbm", octaves: 2, tileCycles: 3, amplitude: 1, persistence: 0.5, lacunarity: 2 },
+      ],
+      steps: [
+        { output: "stemRaw", op: "sample", noise: "stems" },
+        { output: "floretId", op: "sample", noise: "florets", mode: "cell" },
+        { output: "floretEdge", op: "sample", noise: "florets" },
+        { output: "patchRaw", op: "sample", noise: "patch" },
+        {
+          output: "stemColor",
+          op: "colorRamp",
+          input: "stemRaw",
+          stops: [
+            { at: -1, color: [0.38, 0.4, 0.3] },
+            { at: 1, color: [0.6, 0.6, 0.46] },
+          ],
+        },
+        {
+          output: "floretColor",
+          op: "colorRamp",
+          input: "floretId",
+          stops: [
+            { at: 0, color: [0.42, 0.34, 0.6] },
+            { at: 0.5, color: [0.52, 0.42, 0.68] },
+            { at: 1, color: [0.36, 0.3, 0.54] },
+          ],
+        },
+        { output: "floret", op: "mask", input: "patchRaw", at: -0.4, off: 0.1 },
+        { output: "bud", op: "mask", input: "floretEdge", at: 0.02, off: 0.28 },
+        { output: "flowerShare", op: "multiply", a: "floret", b: "bud" },
+        { output: "diffuse", op: "mix", a: "stemColor", b: "floretColor", t: "flowerShare" },
+        { output: "roughness", op: "constant", value: 1 },
+        { output: "height", op: "add", a: "bud", b: "stemRaw" },
+      ],
+      outputs: { diffuse: "diffuse", roughness: "roughness", height: "height" },
+    },
+  },
+}
