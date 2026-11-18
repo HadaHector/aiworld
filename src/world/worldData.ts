@@ -66,6 +66,8 @@ export function createWorldData(
 
   // The roads' fences where the ground falls away beside them, set on the ground, drawn in cells.
   const propById = new Map(content.props.map((prop) => [prop.id, prop]));
+  // A wall's, a fence's or a bridge's stretch: drawn by the props' shader, its model its own.
+  const asProp = <T extends object>(stretch: T): T & { propKey: null } => ({ ...stretch, propKey: null });
   const roadFences = planRoadFences(roads.stretches, sampleTerrain, propById, seed);
   settleWallRuns(roadFences, sampleTerrain);
   // And fingerposts at their junctions, an arm down each road saying where it leads.
@@ -83,15 +85,15 @@ export function createWorldData(
     return cell.houses;
   };
   for (const run of roadFences) {
-    fenceCell(run.points[0].x, run.points[0].z).push(...wallStretches(run, seed));
+    fenceCell(run.points[0].x, run.points[0].z).push(...wallStretches(run, seed).map(asProp));
   }
   // The bridges: each a line prop along its deck, its piers down under the water.
   for (const bridge of bridges) {
     const run = { prop: bridge.prop, variant: bridge.variant, points: bridge.points, heights: bridge.heights, ends: ["free", "free"] as ["free", "free"], breach: false, width: bridge.width, base: BRIDGE_PIER_FOOT };
-    fenceCell(bridge.points[0].x, bridge.points[0].z).push(...wallStretches(run, seed));
+    fenceCell(bridge.points[0].x, bridge.points[0].z).push(...wallStretches(run, seed).map(asProp));
   }
   for (const prop of roadSigns.props) {
-    fenceCell(prop.x, prop.z).push({ ...prop, model: (far: boolean) => generateProp(prop.prop, seed, prop.variant, far) });
+    fenceCell(prop.x, prop.z).push({ ...prop, model: (far: boolean) => generateProp(prop.prop, seed, prop.variant, far), propKey: `${prop.prop.id}:${prop.variant}` });
   }
   const houseModel = (house: House): Placed => ({ ...house, model: (far: boolean) => generateBuilding(house.building, seed, house.variant, far) });
   const buildingGroups: BuildingGroup[] = [
@@ -103,8 +105,8 @@ export function createWorldData(
       houses: [
         ...layout.buildings.map(houseModel),
         // Drawn as far as their size says - but a place's sign, there to be found, as far as a house.
-        ...layout.props.map((prop) => ({ ...prop, model: (far: boolean) => generateProp(prop.prop, seed, prop.variant, far), bySize: prop.prop.label === null })),
-        ...layout.walls.flatMap((run) => wallStretches(run, seed)),
+        ...layout.props.map((prop) => ({ ...prop, model: (far: boolean) => generateProp(prop.prop, seed, prop.variant, far), bySize: prop.prop.label === null, propKey: `${prop.prop.id}:${prop.variant}` })),
+        ...layout.walls.flatMap((run) => wallStretches(run, seed).map(asProp)),
       ],
     })),
     ...fenceCells.values(),

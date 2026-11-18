@@ -1,5 +1,5 @@
 import { VOICE_NAME_TOKENS, type FeatureNaming } from "../naming/nameGenerator";
-import { PROP_LABELS } from "../props/propTypes";
+import { DEFAULT_PROP_VARIANTS, PROP_LABELS } from "../props/propTypes";
 import JSON5 from "json5";
 import { DEFAULT_CONFIG, ROOT_KINDS, type WorldConfig } from "./worldConfig";
 import type { BiomeDayNight, BiomeDefinition, BorderType, BoundaryHillStyle, TreeTintPart, TreeTintRuleDef } from "../biomes/biomeTypes";
@@ -874,7 +874,7 @@ function readSpill(obj: RawObject, reader: Reader): Spill | null {
 function readProp(id: string, obj: RawObject, reader: Reader): PropDef {
   const names = Object.keys(PROP_GENERATORS);
   const type = reader.oneOf(obj, "type", "", names);
-  reader.onlyKeys(obj, "", ["name", "type", type, "parts", "collide", "ground", "spill", "mount", "light", "effects", "label"]);
+  reader.onlyKeys(obj, "", ["name", "type", type, "parts", "collide", "ground", "spill", "mount", "light", "effects", "label", "variants"]);
   const generator = PROP_GENERATORS[type];
   const settings: PropSettings = {};
   if (generator) {
@@ -927,7 +927,7 @@ function readProp(id: string, obj: RawObject, reader: Reader): PropDef {
     if (tints.length === 0) reader.fail(`${at}.tints`, "needs at least one colour");
     parts[part] = { material: raw.material === undefined || raw.material === null ? null : reader.string(raw, "material", at), tints: tints.length > 0 ? tints : [[1, 1, 1]] };
   }
-  return { id, name: reader.string(obj, "name", ""), generator: type, settings, parts, collide: obj.collide === undefined ? true : obj.collide === true, ground: obj.ground === undefined ? "level" : reader.oneOf(obj, "ground", "", ["level", "slope", "plumb"] as const), spill: readSpill(obj, reader), mount: readMount(obj, reader), light: readLight(obj, reader), effects: readPropEffects(obj, reader), label: obj.label === undefined ? null : reader.oneOf(obj, "label", "", PROP_LABELS) };
+  return { id, name: reader.string(obj, "name", ""), generator: type, settings, parts, collide: obj.collide === undefined ? true : obj.collide === true, ground: obj.ground === undefined ? "level" : reader.oneOf(obj, "ground", "", ["level", "slope", "plumb"] as const), spill: readSpill(obj, reader), mount: readMount(obj, reader), light: readLight(obj, reader), effects: readPropEffects(obj, reader), label: obj.label === undefined ? null : reader.oneOf(obj, "label", "", PROP_LABELS), variants: obj.variants === undefined ? DEFAULT_PROP_VARIANTS : reader.number(obj, "variants", "", { min: 1, max: 1 << 20, integer: true }) };
 }
 
 /** A rooms/ file - see RoomTypeDef. */

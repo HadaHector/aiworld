@@ -1,6 +1,7 @@
-import type { Mesh, CascadedShadowGenerator, Scene } from "@babylonjs/core";
+import type { AbstractMesh, CascadedShadowGenerator, Mesh, Scene } from "@babylonjs/core";
 import { appendModel, applyLightmap, createBuildingMesh, emptyGeometry, setMeshFade, type BuildingMaterial } from "./buildingMesh";
 import { createLightBakePool } from "../lighting/lightBakePool";
+import { createPropMaterials, createPropMesh, type PropGeometryCache } from "../props/propMesh";
 import type { ModelEffect, ModelLight } from "./buildingTypes";
 import type { EffectGroup } from "../props/propEffects";
 // Placing buildings - their collision, floors and cellars - is the simulation's too, and lives where
@@ -96,10 +97,10 @@ export function createBuildingRenderer(
   /** Each house's meshes - and its lights, placed as its near mesh is, until they are baked (see
    *  LIGHTS.md): asked for the first time its near model is shown. */
   const meshes: {
-    near: Mesh;
+    near: AbstractMesh;
     /** Its far mesh - made when first wanted, for a prop drawn by its size (most never are). */
-    far: Mesh | null;
-    makeFar: () => Mesh;
+    far: AbstractMesh | null;
+    makeFar: () => AbstractMesh;
     x: number;
     z: number;
     reach: number;
@@ -112,6 +113,9 @@ export function createBuildingRenderer(
     bake: LightBakeGeometry | null;
   }[] = [];
   const lightBakes = createLightBakePool();
+  /** The props' own materials, and each prop's geometry once by its key (see props/propMesh.ts). */
+  const propMaterials = createPropMaterials(scene, material);
+  const propGeometry: PropGeometryCache = new Map();
   /** Every house's lights in the world's own space, for what moves among them (the player). */
   const worldLights: { x: number; z: number; reach: number; lights: ModelLight[] }[] = [];
   /** Every house's flames in the world's space, and whether its near mesh is drawn (PROP_EFFECTS.md). */
@@ -125,15 +129,25 @@ export function createBuildingRenderer(
       let lights: ModelLight[] | null = null;
       let bake: LightBakeGeometry | null = null;
       let nearEffects: ModelEffect[] = [];
-      const build = (far: boolean): { mesh: Mesh; reach: number; height: number } => {
+      const build = (far: boolean): { mesh: AbstractMesh; reach: number; height: number } => {
         const model = house.model(far);
         let height = 0;
         for (let i = 1; i < model.positions.length; i += 3) height = Math.max(height, model.positions[i]);
         if (!far) houses.push({ house, model: shapeOf(model) });
-        const geometry = emptyGeometry();
         const place = placeHouse(house, house.x, house.z);
-        appendModel(geometry, model, material.layerOf, place);
         if (!far && model.effects?.length) nearEffects = model.effects.map((e) => ({ ...e, position: place(...e.position, false) }));
+        const reach = Math.hypot(model.halfWidth, model.halfDepth);
+        const name = `${group.key}:${n}${far ? ":far" : ""}`;
+        // A prop by the props' own shader (PROP_RENDERING.md) - but one with lights of its own keeps
+        // the buildings' for its lightmap, till the props' shader has its lightmapped kind (step 3).
+        if (house.propKey !== undefined && !model.lights?.length) {
+          const mesh = createPropMesh(scene, name, model, house, propMaterials, house.propKey === null ? null : `${house.propKey}${house.bySize ? ":bySize" : ""}${far ? ":far" : ""}`, propGeometry);
+          shadowGenerator.addShadowCaster(mesh, false);
+          mesh.setEnabled(false);
+          return { mesh, reach, height };
+        }
+        const geometry = emptyGeometry();
+        appendModel(geometry, model, material.layerOf, place);
         if (!far && model.lights?.length) {
           lights = model.lights.map((light) => ({ ...light, position: place(...light.position, false), facing: light.facing && place(...light.facing, true) }));
           // What its lights are baked from, kept until they are: the mesh keeps no CPU copy.
@@ -144,8 +158,7 @@ export function createBuildingRenderer(
             layers: Float32Array.from(geometry.layers),
           };
         }
-        const reach = Math.hypot(model.halfWidth, model.halfDepth);
-        const mesh = createBuildingMesh(scene, `${group.key}:${n}${far ? ":far" : ""}`, geometry, material);
+        const mesh = createBuildingMesh(scene, name, geometry, material);
         mesh.position.set(house.x, 0, house.z);
         mesh.freezeWorldMatrix();
         shadowGenerator.addShadowCaster(mesh, false);
@@ -155,7 +168,7 @@ export function createBuildingRenderer(
       const near = build(false);
       const size = house.bySize ? Math.max(near.reach, near.height) : null;
       const cull = cullDistance(size, initialDrawDistance);
-      const makeFar = (): Mesh => build(true).mesh;
+      const makeFar = (): AbstractMesh => build(true).mesh;
       if (size !== null) setMeshFade(near.mesh, fadeOf(cull));
       meshes.push({ near: near.mesh, far: size === null ? makeFar() : null, makeFar, x: house.x, z: house.z, reach: near.reach, size, cull, lights, bake });
       if (nearEffects.length > 0) effectGroups.push({ effects: nearEffects.map((e) => ({ ...e, position: [e.position[0] + house.x, e.position[1], e.position[2] + house.z] })), shown: () => near.mesh.isEnabled() });
@@ -205,7 +218,8 @@ export function createBuildingRenderer(
     const geometry = entry.bake!;
     entry.lights = null;
     entry.bake = null;
-    const mesh = entry.near;
+    // One with lights is always drawn by the buildings' shader - a mesh of its own, not an instance.
+    const mesh = entry.near as Mesh;
     const request = {
       ...geometry,
       casts: material.castsByLayer,

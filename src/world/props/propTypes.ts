@@ -57,7 +57,14 @@ export interface PropDef {
   /** What it says to a player standing by it, or nothing: `place` - the name of the place it is set
    *  down for (a wayside sign, its inn's name). */
   label: PropLabel | null;
+  /** How many different ones of it there are (its variants, each rolled once from its settings): every
+   *  one set down is one of these - so the same ones repeat, share a model and are drawn as instances
+   *  of it (PROP_RENDERING.md). More is more variety, fewer is cheaper. */
+  variants: number;
 }
+
+/** How many variants a prop has when its file does not say. */
+export const DEFAULT_PROP_VARIANTS = 6;
 
 /**
  * An effect a prop's flame carries: at the generator's mount point `mount`, the looping particle

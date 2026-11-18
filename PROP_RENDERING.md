@@ -1,7 +1,7 @@
 # Prop rendering
 
 The plan for drawing props apart from buildings: their own shaders and materials, and each prop
-culled and faded by its size. **Agreed. Step 1 built (see its status); steps 2-4 not started.**
+culled and faded by its size. **Agreed. Steps 1 and 2 built (see their status); steps 3-4 not started.**
 
 ## 1. Why
 
@@ -75,10 +75,31 @@ leave a faint darkening on the ground until it is switched off.
   the count down; measure it (open question 5).
 - Instances of the same prop and variant may later share one mesh and be drawn instanced - not
   needed to begin with.
-- A material both use (timber, iron) is baked into both sets - a little memory twice, nothing
-  shared to break.
-- Outdoor props, walls, fences, fingerposts and bridges move to it. Their colliders, effects, map
-  colours and spills are untouched (none of them read the mesh).
+
+**Status: built.** `props/propMesh.ts`: the props' shader (the building
+shader's lighting, one material's uniforms instead of the arrays, the fade, `#ifdef LIGHTMAP` ready
+for step 3, and Babylon's instance matrices under `#ifdef INSTANCES`), one `ShaderMaterial` per
+building material a prop uses (made when first used) plus a plain colour's, and a `MultiMaterial`
+per set of them. A prop's mesh is its model in its own space, faces sorted into a sub-mesh per
+material, placed by a frozen, decomposed world matrix (`placedAxes`) - so the same `propKey` (prop
+and variant) is an instance of one mesh (below). `Placed.propKey`
+marks what is drawn so: a compound's props and fingerposts by key, wall, fence and bridge stretches
+with `null` (their own). A prop with lights keeps the building shader (its lightmap) until step 3.
+For now each material reads its texture from a layer of the buildings' arrays - nothing baked twice;
+textures of their own come with step 4. In the small world: 524 prop meshes, 15 prop materials,
+1.6 sub-meshes (draws) a prop on average - at one compound 23 props drawn in 48 draws.
+Not yet: the workbench and the shots still draw props with the building shader.
+
+**Instanced.** A prop has a few variants (`variants` in its file, default 6 -
+`DEFAULT_PROP_VARIANTS`; it was one out of 2^20, so no two props were alike): each placed one is
+one of them, rolled as before. Every prop of a key is an `InstancedMesh` of one hidden source mesh
+(`prop:<id>:<variant>[:bySize][:far]`), so all of a key that are shown are one draw per material.
+The fade is set on the source (`setMeshFade` follows an instance to it) - one size, one fade for
+all. Walls, fences and bridges (their own shape each) stay meshes of their own. In the small world:
+371 props from 77 meshes; at a graveyard 294 props shown in 49 draws, where one mesh each would be
+376. The instances are in the shadow casters' list and Babylon's shadow pass draws them the way the
+main pass does, but their shadows were not seen by eye (overcast). Fewer variants changes how big
+the props measure, so where they are set down moves (a new layout, the same rules).
 
 ### Step 3 - furniture and fixtures as meshes of their own, lightmapped
 
@@ -108,6 +129,8 @@ leave a faint darkening on the ground until it is switched off.
    flag saying which set bakes them.
 5. Measure first: how many props are drawn at once in a village and a compound now, so step 1's
    saving and the per-material draws are numbers, not guesses.
+6. ~~How many variants a prop has~~ **Decided: a few** - `variants`, default 6. Each placed copy
+   still differs by its turn and tilt; a per-instance tint (an instance colour) could come later.
 
 ## 5. What else it touches
 

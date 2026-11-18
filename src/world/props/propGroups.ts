@@ -2,8 +2,6 @@ import { roll } from "../buildings/buildingGeometry";
 import { measureProp } from "./propGenerator";
 import type { PropDef, PropGroupDef } from "./propTypes";
 
-/** A prop variant is drawn from this many, as a building's is. */
-const PROP_VARIANT_SPACE = 1 << 20;
 
 /**
  * A prop set down somewhere, in a layout's own space: where it stands (x, z), which way it faces
@@ -68,7 +66,7 @@ function boxOf(members: PlacedProp[]): Arranged["box"] {
 /** One prop set down on its own, as a group of one. Its box is symmetric about its middle - or,
  *  `exact`, just what it reaches each way: a fireplace's box reaching further forward than back. */
 export function arrangeProp(prop: PropDef, seed: number, rng: () => number, exact = false): Arranged {
-  const variant = Math.floor(rng() * PROP_VARIANT_SPACE);
+  const variant = Math.floor(rng() * prop.variants);
   const size = measureProp(prop, seed, variant);
   const reach = Math.hypot(size.halfWidth, size.halfDepth);
   const [x0, x1, z0, z1] = size.bounds;
@@ -89,7 +87,7 @@ export function arrangeGroup(group: PropGroupDef, seed: number, rng: () => numbe
       placed.push(null);
       continue;
     }
-    const variant = Math.floor(rng() * PROP_VARIANT_SPACE);
+    const variant = Math.floor(rng() * member.prop.variants);
     const size = measureProp(member.prop, seed, variant);
     const turn = (roll(member.turn, rng) * Math.PI) / 180;
     const x = base ? base.x + member.at[0] : member.at[0];

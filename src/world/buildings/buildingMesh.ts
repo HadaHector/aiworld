@@ -1,4 +1,4 @@
-import { Constants, Effect, Material, Mesh, RawTexture, RawTexture2DArray, ShaderMaterial, Texture, VertexData, type Scene } from "@babylonjs/core";
+import { Constants, Effect, InstancedMesh, Material, Mesh, type AbstractMesh, RawTexture, RawTexture2DArray, ShaderMaterial, Texture, VertexData, type Scene } from "@babylonjs/core";
 import { LIT_SHADING_GLSL, LIT_SHADING_SAMPLERS, LIT_SHADING_UNIFORMS, type LitShading } from "../materials/litShading";
 import { TEXTURE_RESOLUTION } from "../materials/textureGen";
 import { bakeMaterialTextures } from "../materials/textureBakePool";
@@ -7,6 +7,16 @@ import { bakeLightmap, halfTexels, type Lightmap } from "../lighting/lightBake";
 
 /** How many building materials one shader can draw - the size of its per-material uniform arrays. */
 export const MAX_BUILDING_MATERIALS = 32;
+
+/** A 4x4 ordered dither: each pixel's threshold, 0-1, so a fade drops an even pattern of them - for
+ *  a fragment shader's `fadeRange` (see PROP_RENDERING.md). */
+export const DITHER_GLSL = `
+float dither4(vec2 p) {
+  ivec2 i = ivec2(mod(p, 4.0));
+  const float m[16] = float[16](0.0, 8.0, 2.0, 10.0, 12.0, 4.0, 14.0, 6.0, 3.0, 11.0, 1.0, 9.0, 15.0, 7.0, 13.0, 5.0);
+  return (m[i.x + i.y * 4] + 0.5) / 16.0;
+}
+`;
 
 const VERTEX_SHADER = `#version 300 es
 precision highp float;
@@ -80,13 +90,7 @@ uniform float lightmapOn;
 uniform vec2 fadeRange;
 
 out vec4 outColor;
-
-// A 4x4 ordered dither: each pixel's threshold, 0-1, so a fade drops an even pattern of them.
-float dither4(vec2 p) {
-  ivec2 i = ivec2(mod(p, 4.0));
-  const float m[16] = float[16](0.0, 8.0, 2.0, 10.0, 12.0, 4.0, 14.0, 6.0, 3.0, 11.0, 1.0, 9.0, 15.0, 7.0, 13.0, 5.0);
-  return (m[i.x + i.y * 4] + 0.5) / 16.0;
-}
+${DITHER_GLSL}
 
 void main() {
   // Faded out with distance: dropped pixel by pixel, before anything is sampled. Opaque - nothing
@@ -191,6 +195,12 @@ export interface BuildingMaterial {
    *  does not: the light comes from inside it. And the same by layer. */
   casts: (material: string | null) => boolean;
   castsByLayer: boolean[];
+  /** What the props' materials are made from (see props/propMesh.ts) until they have textures of
+   *  their own: the same arrays, the same definitions, the same shared lighting. */
+  colorArray: RawTexture2DArray;
+  normalArray: RawTexture2DArray;
+  definitions: BuildingMaterialDef[];
+  litShading: LitShading;
 }
 
 /** A model's own lights baked into a lightmap (see lighting/lightBake.ts), or none if it has none. */
@@ -265,7 +275,16 @@ export function createBuildingMaterial(scene: Scene, litShading: LitShading, tex
     effect.setFloat2("fadeRange", fade ? fade[0] : 0, fade ? fade[1] : 0);
   });
   const glowing = new Set(materials.filter((def) => def.glow > 0).map((def) => def.id));
-  return { material, layerOf: new Map(materials.map((def, i) => [def.id, i])), casts: (id) => id === null || !glowing.has(id), castsByLayer: materials.map((def) => !glowing.has(def.id)) };
+  return {
+    material,
+    layerOf: new Map(materials.map((def, i) => [def.id, i])),
+    casts: (id) => id === null || !glowing.has(id),
+    castsByLayer: materials.map((def) => !glowing.has(def.id)),
+    colorArray,
+    normalArray,
+    definitions: materials,
+    litShading,
+  };
 }
 
 /** Geometry in the form the building shader draws: what BuildingModel holds, with each vertex's
@@ -309,10 +328,12 @@ export function applyLightmap(scene: Scene, mesh: Mesh, baked: { width: number; 
   if (!previous) mesh.onDisposeObservable.add(() => (mesh.metadata as { lightmap?: MeshLightmap } | null)?.lightmap?.texture.dispose());
 }
 
-/** Has a mesh drawn with the building shader fade out from `start` to `end` metres from the camera
- *  (dithered, see PROP_RENDERING.md) - or never, with `null`. */
-export function setMeshFade(mesh: Mesh, fade: { start: number; end: number } | null): void {
-  mesh.metadata = { ...(mesh.metadata ?? {}), fade: fade ? [fade.start, fade.end] : undefined };
+/** Has a mesh drawn with the building or props' shader fade out from `start` to `end` metres from
+ *  the camera (dithered, see PROP_RENDERING.md) - or never, with `null`. An instance fades as its
+ *  source does: the fade is set on that, for all of them (they are the same, so the same size). */
+export function setMeshFade(mesh: AbstractMesh, fade: { start: number; end: number } | null): void {
+  const target = mesh instanceof InstancedMesh ? mesh.sourceMesh : mesh;
+  target.metadata = { ...(target.metadata ?? {}), fade: fade ? [fade.start, fade.end] : undefined };
 }
 
 /**
