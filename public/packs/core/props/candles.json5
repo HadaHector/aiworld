@@ -13,6 +13,7 @@
     // Burning: the wax lit through by its flames (its material glows a little, faking the light
     // under its skin).
     litWax: { material: "litWax", tints: [[1, 1, 1], [0.96, 0.92, 0.84]] },
+    wick: { tints: [[0.05, 0.045, 0.04]] },
     flame: { material: "flame", tints: [[1, 1, 1]] },
   },
 }

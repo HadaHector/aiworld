@@ -1,0 +1,54 @@
+// Charred wood: a log burnt black - the bark's furrows opened into a crazed pattern of cracks (alligatored
+// char, in squares), the ridges between them dull black-brown, ash grey on their tops and a dull red-brown
+// glow deep in the cracks. Used for a fireplace's logs, burning or burnt out.
+// Its v runs along the log.
+{
+  name: "Charred Wood",
+  size: [0.8, 1.6],
+  shine: 0.04,
+  texture: {
+    bumpStrength: 2.6,
+    pipeline: {
+      noises: [
+        // The cracks: a ridged noise drawn out along the log, crossed by a second at right angles, which
+        // breaks the char into blocks.
+        { name: "along", type: "ridged", octaves: 2, tileCycles: 7, amplitude: 1, persistence: 0.5, lacunarity: 2.2, stretch: [1, 4] },
+        { name: "across", type: "ridged", octaves: 2, tileCycles: 9, amplitude: 1, persistence: 0.5, lacunarity: 2.2, stretch: [4, 1] },
+        { name: "ash", type: "fbm", octaves: 3, tileCycles: 8, amplitude: 1, persistence: 0.55, lacunarity: 2.2 },
+        { name: "tone", type: "fbm", octaves: 2, tileCycles: 3, amplitude: 1, persistence: 0.5, lacunarity: 2 },
+      ],
+      steps: [
+        { output: "alongRaw", op: "sample", noise: "along" },
+        { output: "acrossRaw", op: "sample", noise: "across" },
+        { output: "ashRaw", op: "sample", noise: "ash" },
+        { output: "toneRaw", op: "sample", noise: "tone" },
+        { output: "crackA", op: "mask", input: "alongRaw", at: 1.2, off: 1.02 },
+        { output: "crackB", op: "mask", input: "acrossRaw", at: 1.22, off: 1.04 },
+        { output: "crack", op: "add", a: "crackA", b: "crackB" },
+        { output: "blockRound", op: "invert", input: "alongRaw" },
+        {
+          output: "char",
+          op: "colorRamp",
+          input: "toneRaw",
+          stops: [
+            { at: -1, color: [0.05, 0.045, 0.04] },
+            { at: 0, color: [0.09, 0.08, 0.07] },
+            { at: 1, color: [0.14, 0.125, 0.11] },
+          ],
+        },
+        // Ash greying the high spots.
+        { output: "ashMask", op: "mask", input: "ashRaw", at: 0.35, off: 0.05 },
+        { output: "ashColor", op: "color", value: [0.34, 0.32, 0.3] },
+        { output: "charAshy", op: "mix", a: "char", b: "ashColor", t: "ashMask" },
+        // A dull ember red-brown glow in the deepest cracks.
+        { output: "crackColor", op: "color", value: [0.17, 0.06, 0.035] },
+        { output: "diffuse", op: "mix", a: "charAshy", b: "crackColor", t: "crack" },
+        { output: "roughness", op: "constant", value: 0.9 },
+        { output: "blockBump", op: "scale", input: "blockRound", factor: 0.5 },
+        { output: "ashBump", op: "scale", input: "ashRaw", factor: 0.1 },
+        { output: "height", op: "add", a: "blockBump", b: "ashBump" },
+      ],
+      outputs: { diffuse: "diffuse", roughness: "roughness", height: "height" },
+    },
+  },
+}

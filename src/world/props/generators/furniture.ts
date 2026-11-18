@@ -25,10 +25,19 @@ function post(ctx: PropContext, x: number, z: number, y0: number, y1: number, th
   slab(ctx, [x, (y0 + y1) / 2, z], [thick / 2, (y1 - y0) / 2, thick / 2], paint, { bottom: y0 > 0, collide, taper, bevel: thick * 0.12 });
 }
 
+/** A candle's wick: a short black three-sided stub standing out of the wax at `top`. */
+function wick(ctx: PropContext, top: Vec3, radius: number): void {
+  if (ctx.far) return;
+  const length = 0.06;
+  const black = ctx.paint("wick");
+  ctx.shape.cylinder(between(ORIGIN, [top[0], top[1] - 0.01, top[2]], [top[0], top[1] + length, top[2]], [0, 0, 1]), length + 0.01, Math.max(0.008, radius * 0.2), black, { ends: black, sides: 3 });
+}
+
 /** A candle with its flame, standing at `base`. */
 function candle(ctx: PropContext, base: Vec3, radius: number, height: number): void {
   const { shape } = ctx;
   shape.cylinder(between(ORIGIN, base, [base[0], base[1] + height, base[2]], [0, 0, 1]), height, radius, ctx.paint("wax"), { ends: ctx.paint("wax"), caps: "end", sides: 6 });
+  wick(ctx, [base[0], base[1] + height, base[2]], radius);
   flame(ctx, [base[0], base[1] + height + 0.02, base[2]], radius * 1.3, radius * 4);
   ctx.light([base[0], base[1] + height + 0.02 + radius * 1.6, base[2]]);
 }
@@ -407,19 +416,21 @@ export const fireplace: PropGenerator = {
     const mantelBack = d - 0.36;
     const mantelFront = d + 0.52;
     slab(ctx, [0, openTop + lintel + 0.08 + PROUD, (mantelBack + mantelFront) / 2], [w + 0.3, 0.08, (mantelFront - mantelBack) / 2], ctx.paint("mantel"), { bevel: 0.03 });
-    if (!ctx.chance("fire")) return;
-    // Two or three logs on the hearth, crossed, and flames up from them.
+    const lit = ctx.chance("fire");
+    // Two or three charred logs on the hearth, crossed - a fire's, burning or burnt out.
     const logs = 2 + Math.floor(rng() * 2);
     for (let n = 0; n < logs; n++) {
       const yaw = (rng() - 0.5) * 0.8 + (n % 2 === 0 ? 0 : Math.PI / 2) * 0.4;
       const len = opening * 1.4;
-      const r = 0.13 + rng() * 0.05;
+      const r = 0.09 + rng() * 0.035;
       const y = 0.16 + r + n * 0.12;
       const from: Vec3 = [-Math.cos(yaw) * len / 2, y, -d * 0.2 - Math.sin(yaw) * len / 2];
       const to: Vec3 = [Math.cos(yaw) * len / 2, y, -d * 0.2 + Math.sin(yaw) * len / 2];
       ctx.shape.cylinder(between(ORIGIN, from, to), len, r, ctx.paint("logs"), { ends: ctx.paint("end"), sides: 6 });
     }
-    for (let n = 0; n < 3; n++) flame(ctx, [(n - 1) * opening * 0.35, 0.35, -d * 0.2], 0.22, 0.7 + rng() * 0.4);
+    if (!lit) return;
+    // Flames up from them.
+    for (let n = 0; n < 3; n++) flame(ctx, [(n - 1) * opening * 0.35, 0.3, -d * 0.2], 0.22, 0.7 + rng() * 0.4);
     // Its light from over the fire, a little forward so the opening's cheeks do not hide it - and
     // high enough to reach out across the floor, not graze it.
     ctx.light([0, Math.min(1.1, openTop - 0.4), d * 0.3]);
@@ -495,7 +506,7 @@ export const altar: PropGenerator = {
     height: { kind: "range", default: [1.8, 2.0], min: 0.5, doc: "its top's height" },
     candles: { kind: "count", default: [2, 2], min: 0, doc: "candles on it" },
   },
-  parts: ["stone", "cloth", "iron", "wax", "flame"],
+  parts: ["stone", "cloth", "iron", "wax", "wick", "flame"],
   build(ctx) {
     const w = ctx.range("width") / 2;
     const d = ctx.range("depth") / 2;
@@ -530,7 +541,7 @@ export const candles: PropGenerator = {
     radius: { kind: "range", default: [0.05, 0.09], min: 0.01, doc: "each candle's thickness, rolled for each" },
     lit: { kind: "chance", default: 0.75, doc: "how likely they are burning" },
   },
-  parts: ["wax", "litWax", "flame"],
+  parts: ["wax", "litWax", "wick", "flame"],
   build(ctx) {
     const lit = ctx.chance("lit");
     // Burning, its wax glows with the flames in it (litWax); gone out, it is plain.
@@ -556,6 +567,7 @@ export const candles: PropGenerator = {
       // Melted at its top, a little wider at its foot where the wax ran down.
       ctx.shape.lathe(moved(ORIGIN, [c.x, 0.03, c.z]), [[c.r * 1.35, 0], [c.r * 1.05, 0.04], [c.r, c.h - 0.03], [c.r * 0.8, c.h]], wax, { top: wax, sides: 6 });
       if (ctx.far) continue;
+      wick(ctx, [c.x, 0.03 + c.h, c.z], c.r);
       // A drip down one side.
       const da = ctx.rng() * Math.PI * 2;
       const dl = c.h * (0.3 + 0.4 * ctx.rng());
@@ -616,7 +628,7 @@ export const chandelier: PropGenerator = {
     link: { kind: "range", default: [0.28, 0.32], min: 0.05, doc: "a link's length (oversized, to read from the floor)" },
     lit: { kind: "chance", default: 0.85, doc: "how likely its candles are burning" },
   },
-  parts: ["iron", "wax", "litWax", "flame"],
+  parts: ["iron", "wax", "litWax", "wick", "flame"],
   build(ctx) {
     const iron = ctx.paint("iron");
     const lit = ctx.chance("lit");
@@ -660,7 +672,7 @@ export const sconce: PropGenerator = {
     reach: { kind: "range", default: [0.45, 0.6], min: 0.1, doc: "how far its arm reaches out" },
     candle: { kind: "range", default: [0.35, 0.5], min: 0.1, doc: "its candle's height" },
   },
-  parts: ["iron", "wax", "flame"],
+  parts: ["iron", "wax", "wick", "flame"],
   build(ctx) {
     const reach = ctx.range("reach");
     const iron = ctx.paint("iron");
