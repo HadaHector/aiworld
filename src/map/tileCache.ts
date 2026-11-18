@@ -22,6 +22,9 @@ export interface MapTileCache {
   want: (view: string, tiles: readonly { tx: number; tz: number }[]) => void;
   /** Called whenever a tile becomes ready. Returns what stops the calls. */
   onTile: (listener: () => void) => () => void;
+  /** Forgets every tile, in memory and stored, so the views make them again - for when the map's
+   *  drawing has changed since they were kept. */
+  clear: () => Promise<void>;
   /** Tiles in memory, for the Memory panel. */
   readonly size: number;
   dispose: () => void;
@@ -34,6 +37,8 @@ export function createMapTileCache(world: string, dimension: string, build: (tx:
   const listeners = new Set<() => void>();
   let disposed = false;
   let writes = 0;
+  /** Bumped by clear(): a tile that was being made before it is stale and is not kept. */
+  let generation = 0;
   const key = (tx: number, tz: number): string => mapTileKey(world, dimension, tx, tz);
 
   function keep(k: string, bitmap: ImageBitmap): void {
@@ -56,14 +61,21 @@ export function createMapTileCache(world: string, dimension: string, build: (tx:
   }
 
   async function fetchTile(tile: { tx: number; tz: number; key: string }): Promise<void> {
+    const started = generation;
     const stored = await readStored(tile.key).catch(() => null);
+    if (started !== generation) return;
     if (stored) {
-      keep(tile.key, await createImageBitmap(stored));
+      const bitmap = await createImageBitmap(stored);
+      if (started === generation) keep(tile.key, bitmap);
+      else bitmap.close();
       return;
     }
     const pixels = await build(tile.tx, tile.tz);
+    if (started !== generation) return;
     const image = new ImageData(new Uint8ClampedArray(pixels.buffer as ArrayBuffer, pixels.byteOffset, pixels.length), MAP_TILE_PIXELS, MAP_TILE_PIXELS);
-    keep(tile.key, await createImageBitmap(image));
+    const bitmap = await createImageBitmap(image);
+    if (started !== generation) return bitmap.close();
+    keep(tile.key, bitmap);
     void store(tile.key, image);
   }
 
@@ -121,6 +133,14 @@ export function createMapTileCache(world: string, dimension: string, build: (tx:
       listeners.add(listener);
       return () => listeners.delete(listener);
     },
+    async clear() {
+      generation++;
+      for (const bitmap of memory.values()) bitmap.close();
+      memory.clear();
+      await clearStored().catch(() => undefined);
+      for (const listener of listeners) listener();
+      pump();
+    },
     get size() {
       return memory.size;
     },
@@ -171,6 +191,13 @@ async function readStored(key: string): Promise<Blob | null> {
 async function writeStored(key: string, blob: Blob): Promise<void> {
   const transaction = (await open()).transaction(STORE, "readwrite");
   transaction.objectStore(STORE).put({ blob, time: Date.now() }, key);
+  await done(transaction);
+}
+
+/** Drops every stored tile, of every world. */
+async function clearStored(): Promise<void> {
+  const transaction = (await open()).transaction(STORE, "readwrite");
+  transaction.objectStore(STORE).clear();
   await done(transaction);
 }
 

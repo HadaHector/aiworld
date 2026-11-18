@@ -826,6 +826,7 @@ export async function startSession(page: Page, options: SessionOptions): Promise
     devCommands: () => serverCommands.some((c) => c.dev),
     serverCommands: () => serverCommands,
     translate: (text) => toWords(text),
+    clearMapTiles: () => view?.mapTiles.clear() ?? Promise.resolve(),
     setTime: (hour) => !!view && (view.world.setTimeOfDay(hour), true),
     setWeather: (id) => !!view && (view.world.weather.force(id), true),
     names(kind) {
