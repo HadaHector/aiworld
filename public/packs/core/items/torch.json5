@@ -1,0 +1,2 @@
+// A torch for dark places; nothing burns it yet.
+{ name: "Torch", icon: "item-torch", kind: "tool", rarity: "common", stack: 5, value: 3 }

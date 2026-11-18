@@ -1,0 +1,2 @@
+// Cooked food: health back over a while, better than bread (skills/eatRoastMeat.json5).
+{ name: "Roast Meat", icon: "item-roast-meat", kind: "food", rarity: "common", stack: 20, use: { skill: "eatRoastMeat", consume: true }, value: 6 }

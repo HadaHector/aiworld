@@ -1,0 +1,2 @@
+// A consumable: a little mana over a few seconds (skills/drinkWater.json5).
+{ name: "Waterskin", icon: "item-waterskin", kind: "food", rarity: "common", stack: 5, use: { skill: "drinkWater", consume: true }, value: 5 }

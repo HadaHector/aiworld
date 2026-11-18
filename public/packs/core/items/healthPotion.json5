@@ -1,0 +1,2 @@
+// A consumable: a burst of health at once (skills/drinkHealthPotion.json5).
+{ name: "Health Potion", icon: "item-potion-health", kind: "food", rarity: "common", stack: 10, use: { skill: "drinkHealthPotion", consume: true }, value: 18 }

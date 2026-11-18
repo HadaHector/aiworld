@@ -1,0 +1,16 @@
+// Drinking from a waterskin: a little mana over a few seconds.
+{
+  name: "Drink Water",
+  cues: { applied: "eat" },
+  target: "self",
+  hostOn: "target",
+  display: "buff",
+  states: {
+    drinking: {
+      enter: [{ do: "animation", name: "eat" }],
+      length: 9,
+      period: 3,
+      tick: [{ do: "resource", group: "host", resource: "mana", amount: 12 }],
+    },
+  },
+}

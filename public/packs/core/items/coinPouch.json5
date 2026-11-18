@@ -1,0 +1,2 @@
+// A pouch of coins found on bandits and in chests: sold for its worth.
+{ name: "Coin Pouch", icon: "item-coin-pouch", kind: "misc", rarity: "common", stack: 10, value: 30 }
