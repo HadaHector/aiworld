@@ -1,7 +1,7 @@
 # Prop rendering
 
 The plan for drawing props apart from buildings: their own shaders and materials, and each prop
-culled and faded by its size. **Agreed. Steps 1 and 2 built (see their status); steps 3-4 not started.**
+culled and faded by its size. **Agreed. Steps 1-4 built (see each one's status); the open questions left are at the end.**
 
 ## 1. Why
 
@@ -112,10 +112,34 @@ the props measure, so where they are set down moves (a new layout, the same rule
 - Colliders stay where they are (the house's, from the same pieces).
 - Its cost: one more draw call a furnished house near the camera.
 
+**Status: built.** `ModelBuilder.appendFurniture` lays a piece apart, as the model's `furniture`
+(its lights and effects still the model's): a house's furniture (`houseGenerator.ts`) and a dungeon
+part's fixtures (`kitMesh.ts`). `props/modelMeshes.ts` splits any model for drawing (`splitModel`):
+its main part to the building shader, its furniture and any face of a props-only material to the
+props' shader - all of a prop with lights to the props' (one mesh of its own, not an instance). The
+parts are baked as one (`bakeRequestOf`, each vertex its material's bake layer, so a props-only
+flame still lets its light through) and the result laid back on each (`layLightmap`: the first mesh
+takes the lightmap, the rest share its texture - `shareLightmap`). The props' shader has its lit
+kind (`#define LIGHTMAP`, `lightmapOn` till baked). Used by the world's renderer, the dungeons
+(`dungeonMeshes.ts`) and the workbench and its shots (`drawModelNow`, baked there and then).
+Checked: the chapel's furniture at night is lit by its candles through the shared lightmap (taking
+its lightmap off darkens the view), the inn's furniture draws, and the shots of an inn, a candle and
+a crypt hall come out as a building mesh and a `:props` mesh. Not checked: a crypt in the game (the
+dungeon renderer's path) - the shot of a crypt part goes through the workbench's.
+
 ### Step 4 - the building array for buildings
 
 - Materials only props use leave `buildingMaterials/` for the prop set; the building array keeps
   what walls, roofs, floors and dungeons are made of. The lodge's six land here.
+
+**Status: built.** A building material says `propsOnly: true` (and may say `textureSize`, 64-1024)
+when only props are made of it. It is baked with the rest (same workers, same cache) but is not a
+layer of the buildings' array: it gets a texture of its own, shrunk to its size
+(`createBuildingMaterial`, `ownTextures`), which the props' materials bind. The cap counts only the
+array. Marked so in core: charredWood, dung, graveEarth, litWax (256 px), drystone - each used by
+props alone, in the packs and in the code. The array went from 31 layers to 26. A building or room
+made of a props-only material would draw it plain. For the lodge: mark its six (smoothStone, hide,
+antler, driedLavender, driedSage, driedYarrow - all only on its props) `propsOnly: true`, and it fits.
 
 ## 4. Open questions
 
@@ -125,8 +149,8 @@ the props measure, so where they are set down moves (a new layout, the same rule
    in the building shader; `lodge-concepts` stays parked until step 4 frees the building array.
 3. The fade's numbers: `k`, the floor and ceiling, how long the fade - first values in step 1's
    status; to be tuned by eye in the game.
-4. Where prop materials live: their own folder (`propMaterials/`), or `buildingMaterials/` with a
-   flag saying which set bakes them.
+4. ~~Where prop materials live~~ **Built as a flag**: `propsOnly` in `buildingMaterials/` (no files
+   moved). A folder of their own is still possible if the flag is easy to forget.
 5. Measure first: how many props are drawn at once in a village and a compound now, so step 1's
    saving and the per-material draws are numbers, not guesses.
 6. ~~How many variants a prop has~~ **Decided: a few** - `variants`, default 6. Each placed copy

@@ -786,7 +786,7 @@ function readFeatureChances(obj: RawObject, reader: Reader): FeatureChance[] {
 
 /** A buildingMaterials/ file - see BuildingMaterialDef. */
 function readBuildingMaterial(id: string, obj: RawObject, reader: Reader): BuildingMaterialDef {
-  reader.onlyKeys(obj, "", ["name", "texture", "size", "shine", "glow", "daylight", "inside", "lit", "lamp"]);
+  reader.onlyKeys(obj, "", ["name", "texture", "size", "shine", "glow", "daylight", "inside", "lit", "lamp", "propsOnly", "textureSize"]);
   const size = obj.size;
   let repeat: [number, number] = [1, 1];
   if (typeof size === "number" && size > 0) repeat = [size, size];
@@ -803,7 +803,17 @@ function readBuildingMaterial(id: string, obj: RawObject, reader: Reader): Build
     inside: obj.inside === undefined || obj.inside === null ? null : reader.string(obj, "inside", ""),
     lit: obj.lit === undefined || obj.lit === null ? null : reader.string(obj, "lit", ""),
     lamp: obj.lamp === undefined || obj.lamp === null ? null : reader.color(obj, "lamp", ""),
+    propsOnly: obj.propsOnly === true,
+    textureSize: readTextureSize(obj, reader),
   };
+}
+
+/** A props-only material's `textureSize`: a power of two, 64-1024 (1024, the bake's own, if unsaid). */
+function readTextureSize(obj: RawObject, reader: Reader): number {
+  if (obj.textureSize === undefined) return 1024;
+  const size = reader.number(obj, "textureSize", "", { min: 64, max: 1024, integer: true });
+  if ((size & (size - 1)) !== 0) reader.fail("textureSize", "expected a power of two: 64, 128, 256, 512 or 1024");
+  return size;
 }
 
 /** A buildings/ file - see BuildingDef. Its generator is named by `type` (`generator` already means

@@ -3,7 +3,7 @@ import { LIT_SHADING_GLSL, LIT_SHADING_SAMPLERS, LIT_SHADING_UNIFORMS, type LitS
 import { TEXTURE_RESOLUTION } from "../materials/textureGen";
 import { bakeMaterialTextures } from "../materials/textureBakePool";
 import type { BuildingMaterialDef, BuildingModel } from "./buildingTypes";
-import { bakeLightmap, halfTexels, type Lightmap } from "../lighting/lightBake";
+import { halfTexels, type Lightmap } from "../lighting/lightBake";
 
 /** How many building materials one shader can draw - the size of its per-material uniform arrays. */
 export const MAX_BUILDING_MATERIALS = 32;
@@ -162,8 +162,9 @@ void main() {
 }
 `;
 
-/** The building materials, baked: colour+roughness and normal+height, one layer each, in the order
- *  of the definitions given. */
+/** The building materials, baked: colour+roughness and normal+height, one layer each - those in the
+ *  buildings' array first, then those only props are made of (`propsOnly`), each group in the order
+ *  of the definitions given; `materials` in that order. */
 export interface BuildingTextures {
   materials: BuildingMaterialDef[];
   colorBuffer: Uint8Array;
@@ -173,7 +174,8 @@ export interface BuildingTextures {
 }
 
 /** Bakes building materials' textures - through the same baker, cache and workers as the ground's. */
-export async function bakeBuildingTextures(seed: number, materials: BuildingMaterialDef[]): Promise<BuildingTextures> {
+export async function bakeBuildingTextures(seed: number, given: BuildingMaterialDef[]): Promise<BuildingTextures> {
+  const materials = [...given.filter((def) => !def.propsOnly), ...given.filter((def) => def.propsOnly)];
   const layerBytes = TEXTURE_RESOLUTION * TEXTURE_RESOLUTION * 4;
   const colorBuffer = new Uint8Array(layerBytes * Math.max(1, materials.length));
   const normalBuffer = new Uint8Array(layerBytes * Math.max(1, materials.length));
@@ -192,20 +194,21 @@ export interface BuildingMaterial {
   material: ShaderMaterial;
   layerOf: Map<string, number>;
   /** Whether a building material casts shadow from a house's own lights - a flame or a lit pane
-   *  does not: the light comes from inside it. And the same by layer. */
+   *  does not: the light comes from inside it. And the same by bake layer. */
   casts: (material: string | null) => boolean;
   castsByLayer: boolean[];
-  /** What the props' materials are made from (see props/propMesh.ts) until they have textures of
-   *  their own: the same arrays, the same definitions, the same shared lighting. */
+  /** Every material's layer for the light bake (bakeLayerOf): the array's layers, then one more for
+   *  each material only props are made of - so a candle's flame, not in the array, still lets its
+   *  light through. castsByLayer covers them all. */
+  bakeLayerOf: Map<string, number>;
+  /** What the props' materials are made from (see props/propMesh.ts): the array, for one in it; a
+   *  texture of its own (a one-layer array, at its textureSize) for one only props are made of. */
   colorArray: RawTexture2DArray;
   normalArray: RawTexture2DArray;
+  ownTextures: Map<string, { color: RawTexture2DArray; normal: RawTexture2DArray }>;
+  /** Every building material, in the array or not. */
   definitions: BuildingMaterialDef[];
   litShading: LitShading;
-}
-
-/** A model's own lights baked into a lightmap (see lighting/lightBake.ts), or none if it has none. */
-export function bakeModelLight(model: BuildingModel, material: BuildingMaterial): Lightmap | undefined {
-  return model.lights?.length ? bakeLightmap(model, model.lights, material.casts) : undefined;
 }
 
 /**
@@ -216,11 +219,14 @@ export function bakeModelLight(model: BuildingModel, material: BuildingMaterial)
 export function createBuildingMaterial(scene: Scene, litShading: LitShading, textures: BuildingTextures): BuildingMaterial {
   Effect.ShadersStore["texturedBuildingVertexShader"] = VERTEX_SHADER;
   Effect.ShadersStore["texturedBuildingFragmentShader"] = FRAGMENT_SHADER;
-  const { materials } = textures;
-  if (materials.length > MAX_BUILDING_MATERIALS) throw new Error(`${materials.length} building materials; at most ${MAX_BUILDING_MATERIALS} fit`);
+  const all = textures.materials;
+  // The array holds the buildings' materials; those only props are made of come after, apart.
+  const materials = all.filter((def) => !def.propsOnly);
+  if (materials.length > MAX_BUILDING_MATERIALS) throw new Error(`${materials.length} building materials (not counting the ${all.length - materials.length} only props are made of); at most ${MAX_BUILDING_MATERIALS} fit`);
   const layers = Math.max(1, materials.length);
-  const colorArray = RawTexture2DArray.CreateRGBATexture(textures.colorBuffer, TEXTURE_RESOLUTION, TEXTURE_RESOLUTION, layers, scene, true, false);
-  const normalArray = RawTexture2DArray.CreateRGBATexture(textures.normalBuffer, TEXTURE_RESOLUTION, TEXTURE_RESOLUTION, layers, scene, true, false);
+  const layerBytes = TEXTURE_RESOLUTION * TEXTURE_RESOLUTION * 4;
+  const colorArray = RawTexture2DArray.CreateRGBATexture(textures.colorBuffer.subarray(0, layers * layerBytes), TEXTURE_RESOLUTION, TEXTURE_RESOLUTION, layers, scene, true, false);
+  const normalArray = RawTexture2DArray.CreateRGBATexture(textures.normalBuffer.subarray(0, layers * layerBytes), TEXTURE_RESOLUTION, TEXTURE_RESOLUTION, layers, scene, true, false);
   colorArray.name = "buildingColors";
   normalArray.name = "buildingNormals";
   for (const texture of [colorArray, normalArray]) {
@@ -274,17 +280,69 @@ export function createBuildingMaterial(scene: Scene, litShading: LitShading, tex
     const fade = metadata?.fade;
     effect.setFloat2("fadeRange", fade ? fade[0] : 0, fade ? fade[1] : 0);
   });
-  const glowing = new Set(materials.filter((def) => def.glow > 0).map((def) => def.id));
+  // Each material only props are made of: its own texture, shrunk to its size.
+  const ownTextures = new Map<string, { color: RawTexture2DArray; normal: RawTexture2DArray }>();
+  all.forEach((def, i) => {
+    if (!def.propsOnly) return;
+    const at = i * layerBytes;
+    const size = def.textureSize;
+    const make = (buffer: Uint8Array, normal: boolean, name: string): RawTexture2DArray => {
+      const texels = shrinkTexels(buffer.subarray(at, at + layerBytes), TEXTURE_RESOLUTION, size, normal);
+      const texture = RawTexture2DArray.CreateRGBATexture(texels, size, size, 1, scene, true, false);
+      texture.name = name;
+      texture.wrapU = Texture.WRAP_ADDRESSMODE;
+      texture.wrapV = Texture.WRAP_ADDRESSMODE;
+      texture.anisotropicFilteringLevel = 8;
+      return texture;
+    };
+    ownTextures.set(def.id, { color: make(textures.colorBuffer, false, `propColors:${def.id}`), normal: make(textures.normalBuffer, true, `propNormals:${def.id}`) });
+  });
+  const glowing = new Set(all.filter((def) => def.glow > 0).map((def) => def.id));
+  const bakeOrder = [...materials, ...all.filter((def) => def.propsOnly)];
   return {
     material,
     layerOf: new Map(materials.map((def, i) => [def.id, i])),
     casts: (id) => id === null || !glowing.has(id),
-    castsByLayer: materials.map((def) => !glowing.has(def.id)),
+    castsByLayer: bakeOrder.map((def) => !glowing.has(def.id)),
+    bakeLayerOf: new Map(bakeOrder.map((def, i) => [def.id, i])),
     colorArray,
     normalArray,
-    definitions: materials,
+    ownTextures,
+    definitions: all,
     litShading,
   };
+}
+
+/** A square RGBA tile shrunk from `from` to `to` pixels a side by averaging - a normal map's
+ *  normals (xyz) set back to unit length, its height (alpha) averaged. Tileable stays tileable. */
+function shrinkTexels(texels: Uint8Array, from: number, to: number, normal: boolean): Uint8Array {
+  if (to >= from) return texels.slice();
+  const step = from / to;
+  const out = new Uint8Array(to * to * 4);
+  for (let y = 0; y < to; y++) {
+    for (let x = 0; x < to; x++) {
+      const sum = [0, 0, 0, 0];
+      for (let dy = 0; dy < step; dy++) {
+        const row = (y * step + dy) * from;
+        for (let dx = 0; dx < step; dx++) {
+          const i = (row + x * step + dx) * 4;
+          sum[0] += texels[i];
+          sum[1] += texels[i + 1];
+          sum[2] += texels[i + 2];
+          sum[3] += texels[i + 3];
+        }
+      }
+      const n = step * step;
+      const o = (y * to + x) * 4;
+      if (normal) {
+        const v = [sum[0] / n / 127.5 - 1, sum[1] / n / 127.5 - 1, sum[2] / n / 127.5 - 1];
+        const length = Math.hypot(v[0], v[1], v[2]) || 1;
+        for (let c = 0; c < 3; c++) out[o + c] = Math.round((v[c] / length + 1) * 127.5);
+      } else for (let c = 0; c < 3; c++) out[o + c] = Math.round(sum[c] / n);
+      out[o + 3] = Math.round(sum[3] / n);
+    }
+  }
+  return out;
 }
 
 /** Geometry in the form the building shader draws: what BuildingModel holds, with each vertex's
@@ -326,6 +384,15 @@ export function applyLightmap(scene: Scene, mesh: Mesh, baked: { width: number; 
   const own: MeshLightmap = { texture };
   mesh.metadata = { ...(mesh.metadata ?? {}), lightmap: own };
   if (!previous) mesh.onDisposeObservable.add(() => (mesh.metadata as { lightmap?: MeshLightmap } | null)?.lightmap?.texture.dispose());
+}
+
+/** The lightmap `from` has laid on another mesh baked with it (a house's furniture), `uvs` its
+ *  vertices' places on it - the same texture, freed with `from`. */
+export function shareLightmap(from: Mesh, to: Mesh, uvs: Float32Array): void {
+  const own = (from.metadata as { lightmap?: MeshLightmap } | null)?.lightmap;
+  if (!own) return;
+  to.setVerticesData("lightUv", uvs, false, 2);
+  to.metadata = { ...(to.metadata ?? {}), lightmap: own };
 }
 
 /** Has a mesh drawn with the building or props' shader fade out from `start` to `end` metres from
@@ -370,6 +437,9 @@ export function appendModel(
 let keepCpuCopies = false;
 export function keepBuildingCpuCopies(keep: boolean): void {
   keepCpuCopies = keep;
+}
+export function keepsBuildingCpuCopies(): boolean {
+  return keepCpuCopies;
 }
 
 /** A mesh of building geometry, drawn with `material` - lit by its own baked lights, where it has a

@@ -4,6 +4,9 @@
 // Its v runs along the log.
 {
   name: "Charred Wood",
+  // Only props are made of it: a texture of its own, not a layer of the buildings' array
+  // (PROP_RENDERING.md).
+  propsOnly: true,
   size: [0.8, 1.6],
   shine: 0.04,
   texture: {

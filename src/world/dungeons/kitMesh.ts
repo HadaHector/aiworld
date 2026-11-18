@@ -1630,7 +1630,7 @@ export function buildPartModel(layout: DungeonLayout, index: number, style: Dung
     if (![-1, 1].every((k) => solids.some((s) => inside(s, [back[0] + side[0] * k * 0.6, back[1], back[2] + side[2] * k * 0.6])))) return;
     const p = point([at[0] - out[0] * away, at[1] - flame[1], at[2] - out[2] * away]);
     const front = turn(out);
-    b.append(model, p[0], p[1], p[2], front[0], front[2]);
+    b.appendFurniture(model, p[0], p[1], p[2], front[0], front[2]);
   });
   // Candles: on its benches' seats toward their ends, on its ledger stones, on the floor at its tombs' heads.
   const candles = style.light.candles && props?.(style.light.candles.prop);
@@ -1641,7 +1641,7 @@ export function buildPartModel(layout: DungeonLayout, index: number, style: Dung
       const model = generateProp(candles, deriveSeed(layout.seed, index * 977 + i), i);
       const p = point(site.at);
       const front = turn(site.front);
-      b.append(model, p[0], p[1], p[2], front[0], front[2]);
+      b.appendFurniture(model, p[0], p[1], p[2], front[0], front[2]);
     });
   }
   // Urns: in its open loculi, on its benches' middles.
@@ -1660,7 +1660,7 @@ export function buildPartModel(layout: DungeonLayout, index: number, style: Dung
       }
       const p = point(site.at);
       const front = turn(site.front);
-      b.append(model, p[0], p[1], p[2], front[0], front[2]);
+      b.appendFurniture(model, p[0], p[1], p[2], front[0], front[2]);
     });
   }
   // Its altar (a boss room's), its back on the wall, facing out.
@@ -1675,7 +1675,7 @@ export function buildPartModel(layout: DungeonLayout, index: number, style: Dung
     const out: V = [Math.sin(r), 0, Math.cos(r)];
     const p = point([a.at.x + out[0] * (back + 0.02), a.at.y, a.at.z + out[2] * (back + 0.02)]);
     const front = turn(out);
-    b.append(model, p[0], p[1], p[2], front[0], front[2]);
+    b.appendFurniture(model, p[0], p[1], p[2], front[0], front[2]);
   }
   // Chandeliers from its vaults: each hung by its chain's top, its ring high enough over the floor.
   const chandelier = style.chandeliers && props?.(style.chandeliers.prop);
@@ -1692,7 +1692,7 @@ export function buildPartModel(layout: DungeonLayout, index: number, style: Dung
       if (y - hang.floor < RING_LOW) return;
       const p = point([hang.at[0], y, hang.at[2]]);
       const front = turn([0, 0, 1]);
-      b.append(model, p[0], p[1], p[2], front[0], front[2]);
+      b.appendFurniture(model, p[0], p[1], p[2], front[0], front[2]);
     });
   }
   const model = b.finish({ x: 0, z: 0 });

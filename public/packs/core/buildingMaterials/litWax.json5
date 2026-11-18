@@ -3,6 +3,10 @@
 // a faint mottle. A burnt-out candle's wax is plain (no material).
 {
   name: "Lit Wax",
+  // Only props are made of it: a texture of its own, not a layer of the buildings' array
+  // (PROP_RENDERING.md).
+  propsOnly: true,
+  textureSize: 256,
   size: 0.5,
   shine: 0.3,
   glow: 0.55,

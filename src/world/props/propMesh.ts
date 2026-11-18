@@ -1,15 +1,15 @@
-import { Effect, Material, Matrix, Mesh, MultiMaterial, type AbstractMesh, ShaderMaterial, SubMesh, Vector2, Vector3, VertexData, type Scene } from "@babylonjs/core";
+import { Effect, Material, Matrix, Mesh, MultiMaterial, RawTexture, type AbstractMesh, ShaderMaterial, SubMesh, Vector2, Vector3, VertexData, type Scene } from "@babylonjs/core";
 import { LIT_SHADING_GLSL, LIT_SHADING_SAMPLERS, LIT_SHADING_UNIFORMS } from "../materials/litShading";
-import { DITHER_GLSL, type BuildingMaterial } from "../buildings/buildingMesh";
+import { DITHER_GLSL, keepsBuildingCpuCopies, type BuildingMaterial } from "../buildings/buildingMesh";
 import { placedAxes } from "../buildings/buildingCollision";
 import type { BuildingModel } from "../buildings/buildingTypes";
 
 /*
  * Props' own shader and materials (PROP_RENDERING.md, step 2): a prop is drawn apart from the
  * buildings - one material per building material it uses, its parts of each one sub-mesh - so a
- * prop's material is bound alone rather than held in the buildings' array. For now each material
- * still reads its texture from the buildings' arrays (a layer of them: nothing baked twice); step 4
- * gives the materials only props use textures of their own.
+ * prop's material is bound alone rather than held in the buildings' array. A material only props are
+ * made of (`propsOnly`) has a texture of its own; any other reads its layer of the buildings' array
+ * (nothing baked twice).
  *
  * Instanced: a prop's mesh is its model as it was made, in its own space, placed by its world matrix -
  * so every prop of the same prop and variant (a prop has a few, its `variants`) is an instance of one
@@ -80,7 +80,9 @@ in vec3 vWorldPosition;
 in vec3 vPositionFromCamera;
 #ifdef LIGHTMAP
 in vec2 vLightUv;
+// Its model's own lights, baked with the model it stands in (see LIGHTS.md) - off till they are.
 uniform sampler2D lightmap;
+uniform float lightmapOn;
 #endif
 
 // The material: its texture (a layer of an array - negative for a plain colour), metres to a repeat,
@@ -135,8 +137,10 @@ void main() {
   vec3 daylightColor = ambientColor * ambientIntensity + lightColor * lightIntensity * 0.5;
   vec3 own = vec3(0.0);
 #ifdef LIGHTMAP
-  vec4 baked = texture(lightmap, vLightUv);
-  own = baked.rgb + baked.a * daylightColor;
+  if (lightmapOn > 0.5) {
+    vec4 baked = texture(lightmap, vLightUv);
+    own = baked.rgb + baked.a * daylightColor;
+  }
 #endif
   vec3 lit = albedo * (diffuse * lightColor * shadow + ambientColor * ambientIntensity + own)
     + vec3(specular) * lightColor * lightIntensity * shadow
@@ -152,61 +156,87 @@ void main() {
 `;
 
 /** The props' materials: one per building material, made when a prop first uses it, and a plain
- *  colour's for parts with none; and each set of them a prop uses together, as one MultiMaterial. */
+ *  colour's for parts with none - each in two kinds, lit only by the world, or also by a lightmap
+ *  of its own (`lit`: furniture, a prop with lights); and each set of them a prop uses together, as
+ *  one MultiMaterial. */
 export interface PropMaterials {
   /** The material a prop's parts of `id` are drawn with (null: plain colour). */
-  material: (id: string | null) => ShaderMaterial;
+  material: (id: string | null, lit: boolean) => ShaderMaterial;
   /** The materials of a prop's sub-meshes, in their order. */
-  multi: (ids: readonly (string | null)[]) => MultiMaterial;
+  multi: (ids: readonly (string | null)[], lit: boolean) => MultiMaterial;
 }
 
-export function createPropMaterials(scene: Scene, building: BuildingMaterial): PropMaterials {
+/** One set of props' materials for each set of building materials (they share its textures). */
+const propMaterialsOf = new WeakMap<BuildingMaterial, PropMaterials>();
+
+/** The props' materials over `building`'s textures - made once for it, shared by all that draw props. */
+export function propMaterialsFor(scene: Scene, building: BuildingMaterial): PropMaterials {
+  let made = propMaterialsOf.get(building);
+  if (!made) propMaterialsOf.set(building, (made = createPropMaterials(scene, building)));
+  return made;
+}
+
+function createPropMaterials(scene: Scene, building: BuildingMaterial): PropMaterials {
   Effect.ShadersStore["propVertexShader"] = VERTEX_SHADER;
   Effect.ShadersStore["propFragmentShader"] = FRAGMENT_SHADER;
-  const byId = new Map(building.definitions.map((def, i) => [def.id, { def, layer: i }]));
+  const defOf = new Map(building.definitions.map((def) => [def.id, def]));
   const materials = new Map<string, ShaderMaterial>();
   const multis = new Map<string, MultiMaterial>();
+  const noLightmap = RawTexture.CreateRGBATexture(new Uint8Array(4), 1, 1, scene, false);
+  noLightmap.name = "noLightmap";
 
-  function material(id: string | null): ShaderMaterial {
-    const key = id ?? "";
+  function material(id: string | null, lit: boolean): ShaderMaterial {
+    const key = `${id ?? ""}${lit ? ":lit" : ""}`;
     const known = materials.get(key);
     if (known) return known;
-    const found = id === null ? undefined : byId.get(id);
-    const shader = new ShaderMaterial(`prop:${id ?? "plain"}`, scene, "prop", {
-      attributes: ["position", "normal", "btangent", "uv", "color"],
-      uniforms: ["world", "view", "projection", "layer", "size", "shine", "glow", "daylight", "lamp", "fadeRange", ...LIT_SHADING_UNIFORMS],
-      samplers: ["colorArray", "normalArray", ...LIT_SHADING_SAMPLERS],
+    const def = id === null ? undefined : defOf.get(id);
+    // Its texture: its own, for one only props are made of; else its layer of the buildings' array.
+    const own = id === null ? undefined : building.ownTextures.get(id);
+    const arrayLayer = id === null ? undefined : building.layerOf.get(id);
+    const layer = own ? 0 : (arrayLayer ?? -1);
+    const shader = new ShaderMaterial(`prop:${id ?? "plain"}${lit ? ":lit" : ""}`, scene, "prop", {
+      attributes: ["position", "normal", "btangent", "uv", "color", ...(lit ? ["lightUv"] : [])],
+      uniforms: ["world", "view", "projection", "layer", "size", "shine", "glow", "daylight", "lamp", "fadeRange", ...(lit ? ["lightmapOn"] : []), ...LIT_SHADING_UNIFORMS],
+      samplers: ["colorArray", "normalArray", ...(lit ? ["lightmap"] : []), ...LIT_SHADING_SAMPLERS],
+      defines: lit ? ["LIGHTMAP"] : [],
     });
-    shader.setTexture("colorArray", building.colorArray);
-    shader.setTexture("normalArray", building.normalArray);
+    shader.setTexture("colorArray", own?.color ?? building.colorArray);
+    shader.setTexture("normalArray", own?.normal ?? building.normalArray);
     // An unknown id draws as a plain colour, as the building shader draws one (layer -1).
-    shader.setFloat("layer", found ? found.layer : -1);
-    shader.setVector2("size", new Vector2(found?.def.size[0] ?? 1, found?.def.size[1] ?? 1));
-    shader.setFloat("shine", found?.def.shine ?? 0);
-    shader.setFloat("glow", found?.def.glow ?? 0);
-    shader.setFloat("daylight", found?.def.daylight ?? 0);
-    const lamp = found?.def.lamp ?? [0, 0, 0];
+    shader.setFloat("layer", layer);
+    shader.setVector2("size", new Vector2(def?.size[0] ?? 1, def?.size[1] ?? 1));
+    shader.setFloat("shine", def?.shine ?? 0);
+    shader.setFloat("glow", def?.glow ?? 0);
+    shader.setFloat("daylight", def?.daylight ?? 0);
+    const lamp = def?.lamp ?? [0, 0, 0];
     shader.setVector3("lamp", new Vector3(lamp[0], lamp[1], lamp[2]));
     shader.backFaceCulling = true;
     shader.sideOrientation = Material.ClockWiseSideOrientation;
     building.litShading.register(shader);
-    // Each mesh's fade, bound as it is drawn (see setMeshFade).
+    if (lit) shader.setTexture("lightmap", noLightmap);
+    // Each mesh's fade (see setMeshFade) and, lit, its lightmap (see applyLightmap), bound as it is drawn.
     shader.onBindObservable.add((mesh) => {
       const effect = shader.getEffect();
       if (!effect) return;
-      const fade = (mesh.metadata as { fade?: [number, number] } | null)?.fade;
+      const metadata = mesh.metadata as { fade?: [number, number]; lightmap?: { texture: RawTexture } } | null;
+      const fade = metadata?.fade;
       effect.setFloat2("fadeRange", fade ? fade[0] : 0, fade ? fade[1] : 0);
+      if (lit) {
+        const map = metadata?.lightmap;
+        effect.setFloat("lightmapOn", map ? 1 : 0);
+        effect.setTexture("lightmap", map?.texture ?? noLightmap);
+      }
     });
     materials.set(key, shader);
     return shader;
   }
 
-  function multi(ids: readonly (string | null)[]): MultiMaterial {
-    const key = ids.map((id) => id ?? "").join("|");
+  function multi(ids: readonly (string | null)[], lit: boolean): MultiMaterial {
+    const key = `${ids.map((id) => id ?? "").join("|")}${lit ? ":lit" : ""}`;
     const known = multis.get(key);
     if (known) return known;
     const made = new MultiMaterial(`props:${key}`, scene);
-    made.subMaterials = ids.map(material);
+    made.subMaterials = ids.map((id) => material(id, lit));
     multis.set(key, made);
     return made;
   }
@@ -233,13 +263,15 @@ export function createPropMesh(
   materials: PropMaterials,
   key: string | null,
   cache: PropGeometryCache,
+  lit = false,
 ): AbstractMesh {
   let mesh: AbstractMesh;
-  if (key === null) mesh = buildPropGeometry(scene, name, model, materials);
+  // One lit by its own lightmap is never shared: the lightmap is laid on its own vertices.
+  if (key === null || lit) mesh = buildPropGeometry(scene, name, model, materials, lit);
   else {
     let source = cache.get(key);
     if (!source || source.isDisposed()) {
-      source = buildPropGeometry(scene, `prop:${key}`, model, materials);
+      source = buildPropGeometry(scene, `prop:${key}`, model, materials, false);
       // Never drawn itself - only its instances are.
       source.isVisible = false;
       source.isPickable = false;
@@ -255,7 +287,7 @@ export function createPropMesh(
   return mesh;
 }
 
-function buildPropGeometry(scene: Scene, name: string, model: BuildingModel, materials: PropMaterials): Mesh {
+function buildPropGeometry(scene: Scene, name: string, model: BuildingModel, materials: PropMaterials, lit: boolean): Mesh {
   // The faces by what they are made of: a face is its first corner's material.
   const bySlot = new Map<number, number[]>();
   const I = model.indices;
@@ -285,12 +317,15 @@ function buildPropGeometry(scene: Scene, name: string, model: BuildingModel, mat
   data.indices = indices;
   data.applyToMesh(mesh);
   mesh.setVerticesData("btangent", new Float32Array(model.tangents), false, 3);
+  // Where on its lightmap each vertex is - nowhere till its light is baked (see applyLightmap).
+  if (lit) mesh.setVerticesData("lightUv", new Float32Array((model.positions.length / 3) * 2), false, 2);
 
   const vertices = model.positions.length / 3;
   mesh.subMeshes = [];
   ranges.forEach((range, i) => new SubMesh(i, 0, vertices, range.start, range.count, mesh));
-  mesh.material = materials.multi(slots.map((slot) => (slot < 0 ? null : model.materials[slot])));
-  // Drawn from the GPU's copy alone, as a building is - its sub-meshes' bounds taken first.
-  mesh.geometry?.clearCachedData();
+  mesh.material = materials.multi(slots.map((slot) => (slot < 0 ? null : model.materials[slot])), lit);
+  // Drawn from the GPU's copy alone, as a building is - its sub-meshes' bounds taken first (the
+  // workbench's shots keep it, to read back).
+  if (!keepsBuildingCpuCopies()) mesh.geometry?.clearCachedData();
   return mesh;
 }
