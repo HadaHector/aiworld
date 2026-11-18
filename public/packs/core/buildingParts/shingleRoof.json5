@@ -7,7 +7,7 @@
     // The shape at its free ends, one picked per house - and its pitch, in degrees: steep, to
     // shed the rain off the wood.
     shapes: ["gable", "hip"],
-    pitch: [44, 54],
+    pitch: [35, 45],
     // It reaches this far past the walls every way, and is this thick.
     overhang: 0.6,
     thickness: 0.3,
