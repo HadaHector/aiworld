@@ -14,6 +14,8 @@ export interface RoadStretch extends RoadLine {
   heights: number[];
   /** Set once every route is laid - see RoadGraph.classify. */
   widthScale: number;
+  /** Its width at each point as a share of widthScale - see RoadLine.widths. */
+  widths?: number[];
   roadClass: RoadClassId;
   /** The routes (RoadLink ids) that run along it, and their summed weight - what makes it grand. */
   routes: Set<number>;

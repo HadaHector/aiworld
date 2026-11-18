@@ -56,17 +56,18 @@ export function planRoadFences(stretches: RoadStretch[], sampleTerrain: TerrainS
     const total = lengths[lengths.length - 1];
     if (total < 2 * FENCE_END_SKIP + FENCE_MIN_LENGTH) continue;
     /** Where it is `s` metres along, which way it runs there, and its surface's height. */
-    const along = (s: number): { x: number; z: number; dx: number; dz: number; h: number } => {
+    const along = (s: number): { x: number; z: number; dx: number; dz: number; h: number; w: number } => {
       let i = 1;
       while (i < lengths.length - 1 && lengths[i] < s) i++;
       const a = points[i - 1];
       const b = points[i];
       const l = Math.max(1e-6, lengths[i] - lengths[i - 1]);
       const t = Math.max(0, Math.min(1, (s - lengths[i - 1]) / l));
-      return { x: a.x + (b.x - a.x) * t, z: a.z + (b.z - a.z) * t, dx: (b.x - a.x) / l, dz: (b.z - a.z) / l, h: heights[i - 1] + (heights[i] - heights[i - 1]) * t };
+      return { x: a.x + (b.x - a.x) * t, z: a.z + (b.z - a.z) * t, dx: (b.x - a.x) / l, dz: (b.z - a.z) / l, h: heights[i - 1] + (heights[i] - heights[i - 1]) * t, w: stretch.widths ? stretch.widths[i - 1] + (stretch.widths[i] - stretch.widths[i - 1]) * t : 1 };
     };
-    const verge = ROAD_HALF_WIDTH * stretch.widthScale;
-    const fenceAt = (ROAD_HALF_WIDTH - FENCE_IN_FROM_EDGE) * stretch.widthScale;
+    // Both as wide as the road is at `s`: it narrows up steep hillsides, where most fences stand.
+    const verge = (s: number): number => ROAD_HALF_WIDTH * stretch.widthScale * along(s).w;
+    const fenceAt = (s: number): number => (ROAD_HALF_WIDTH - FENCE_IN_FROM_EDGE) * stretch.widthScale * along(s).w;
     /** The ground `out` metres from the road's middle on a side (+1 left, -1 right) at `s`. */
     const groundAt = (s: number, side: number, out: number): { h: number; road: number } => {
       const p = along(s);
@@ -74,18 +75,18 @@ export function planRoadFences(stretches: RoadStretch[], sampleTerrain: TerrainS
     };
     /** Whether the road stands high over the ground far out on a side - the cheap look. */
     const high = (s: number, side: number): boolean => {
-      const far = groundAt(s, side, verge + FENCE_FAR);
+      const far = groundAt(s, side, verge(s) + FENCE_FAR);
       return far.road - far.h >= FENCE_DROP;
     };
     /** Whether a side falls away like a cliff at `s` - the close look. */
     const drops = (s: number, side: number): boolean => {
-      const near = groundAt(s, side, verge + FENCE_NEAR);
-      const far = groundAt(s, side, verge + FENCE_FAR);
+      const near = groundAt(s, side, verge(s) + FENCE_NEAR);
+      const far = groundAt(s, side, verge(s) + FENCE_FAR);
       return far.road - far.h >= FENCE_DROP && (near.h - far.h) / (FENCE_FAR - FENCE_NEAR) >= FENCE_STEEPNESS;
     };
     const clear = (s: number, side: number): boolean => {
       const p = along(s);
-      const at = sampleTerrain(p.x - p.dz * side * fenceAt, p.z + p.dx * side * fenceAt);
+      const at = sampleTerrain(p.x - p.dz * side * fenceAt(s), p.z + p.dx * side * fenceAt(s));
       return at.riverGap > FENCE_RIVER_CLEARANCE && at.padGap > FENCE_PAD_CLEARANCE && at.featureGap > FENCE_PAD_CLEARANCE;
     };
     for (const side of [1, -1]) {
@@ -107,8 +108,9 @@ export function planRoadFences(stretches: RoadStretch[], sampleTerrain: TerrainS
         const line: CellPoint[] = [];
         const n = Math.max(1, Math.ceil((s1 - s0) / FENCE_STEP));
         for (let k = 0; k <= n; k++) {
-          const p = along(s0 + ((s1 - s0) * k) / n);
-          line.push({ x: p.x - p.dz * side * fenceAt, z: p.z + p.dx * side * fenceAt });
+          const s = s0 + ((s1 - s0) * k) / n;
+          const p = along(s);
+          line.push({ x: p.x - p.dz * side * fenceAt(s), z: p.z + p.dx * side * fenceAt(s) });
         }
         // Its zone's fence, where it starts.
         const biome = sampleTerrain(line[0].x, line[0].z).primaryBiome;
