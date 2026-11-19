@@ -1,9 +1,11 @@
-import { TEXTURE_RESOLUTION, writeProceduralTexturePixels, type TextureDef } from "./textureGen";
+import { TEXTURE_RESOLUTION, writeProceduralTexturePixels, type TextureDef, type TextureLayout } from "./textureGen";
 import type { BakeRequest, BakeResponse } from "./textureBake.worker";
 
 export interface BakeJob {
   id: string;
   texture: TextureDef;
+  /** How its channels are laid out (see TextureLayout) - `ground` if unsaid. */
+  layout?: TextureLayout;
 }
 
 export interface BakeResult {
@@ -29,7 +31,7 @@ function bakeSerially(jobs: BakeJob[], seed: number, colorBuffer: Uint8Array, no
   const averageColors: [number, number, number][] = [];
 
   for (let i = 0; i < jobs.length; i++) {
-    writeProceduralTexturePixels(colorBuffer, normalBuffer, i, seed, jobs[i].id, jobs[i].texture);
+    writeProceduralTexturePixels(colorBuffer, normalBuffer, i, seed, jobs[i].id, jobs[i].texture, jobs[i].layout);
 
     const layerOffset = i * pixelCount * 4;
     let r = 0;
@@ -122,6 +124,7 @@ export async function bakeMaterialTextures(
           seed,
           materialId: jobs[layerIndex].id,
           texture: jobs[layerIndex].texture,
+          layout: jobs[layerIndex].layout ?? "ground",
         };
         worker.postMessage(request);
       };

@@ -18,6 +18,17 @@ float dither4(vec2 p) {
 }
 `;
 
+/** Reads a building or prop material's normal texture, laid out as a surface (see textureGen.ts's
+ *  TextureLayout): its bump, and its roughness in blue. */
+export const SURFACE_GLSL = `
+// A surface texture (PROP_RENDERING.md: the "surface" layout): the normal's x and y in red and
+// green, z rebuilt from them; roughness in blue; height in alpha.
+vec3 surfaceBump(vec4 surface) {
+  vec2 xy = surface.xy * 2.0 - 1.0;
+  return vec3(xy, sqrt(max(0.0, 1.0 - dot(xy, xy))));
+}
+`;
+
 const VERTEX_SHADER = `#version 300 es
 precision highp float;
 
@@ -91,6 +102,7 @@ uniform vec2 fadeRange;
 
 out vec4 outColor;
 ${DITHER_GLSL}
+${SURFACE_GLSL}
 
 void main() {
   // Faded out with distance: dropped pixel by pixel, before anything is sampled. Opaque - nothing
@@ -114,14 +126,15 @@ void main() {
   if (vLayer >= 0) {
     vec3 at = vec3(vUV / sizes[vLayer], float(vLayer));
     vec4 texel = texture(colorArray, at);
+    vec4 surface = texture(normalArray, at);
     albedo *= texel.rgb;
-    roughness = texel.a;
+    roughness = surface.b;
     shine = shines[vLayer];
     glow = glows[vLayer];
     through = daylights[vLayer];
     lamp = lamps[vLayer];
     // The texture's own bumps: its u along the face's tangent, its v along normal x tangent.
-    vec3 bump = texture(normalArray, at).xyz * 2.0 - 1.0;
+    vec3 bump = surfaceBump(surface);
     vec3 t = normalize(vTangent - n * dot(vTangent, n));
     vec3 b = cross(n, t) * side;
     surfaceNormal = normalize(t * bump.x + b * bump.y + n * bump.z);
@@ -180,7 +193,7 @@ export async function bakeBuildingTextures(seed: number, given: BuildingMaterial
   const colorBuffer = new Uint8Array(layerBytes * Math.max(1, materials.length));
   const normalBuffer = new Uint8Array(layerBytes * Math.max(1, materials.length));
   const { averageColors } = await bakeMaterialTextures(
-    materials.map((def) => ({ id: `building-${def.id}`, texture: def.texture })),
+    materials.map((def) => ({ id: `building-${def.id}`, texture: def.texture, layout: "surface" as const })),
     seed,
     colorBuffer,
     normalBuffer,
@@ -313,8 +326,9 @@ export function createBuildingMaterial(scene: Scene, litShading: LitShading, tex
   };
 }
 
-/** A square RGBA tile shrunk from `from` to `to` pixels a side by averaging - a normal map's
- *  normals (xyz) set back to unit length, its height (alpha) averaged. Tileable stays tileable. */
+/** A square RGBA tile shrunk from `from` to `to` pixels a side by averaging - a surface normal
+ *  texture's normals (x, y in red and green, z rebuilt) averaged and set back to unit length, its
+ *  roughness (blue) and height (alpha) averaged. Tileable stays tileable. */
 function shrinkTexels(texels: Uint8Array, from: number, to: number, normal: boolean): Uint8Array {
   if (to >= from) return texels.slice();
   const step = from / to;
@@ -322,6 +336,7 @@ function shrinkTexels(texels: Uint8Array, from: number, to: number, normal: bool
   for (let y = 0; y < to; y++) {
     for (let x = 0; x < to; x++) {
       const sum = [0, 0, 0, 0];
+      const vector = [0, 0, 0];
       for (let dy = 0; dy < step; dy++) {
         const row = (y * step + dy) * from;
         for (let dx = 0; dx < step; dx++) {
@@ -330,14 +345,22 @@ function shrinkTexels(texels: Uint8Array, from: number, to: number, normal: bool
           sum[1] += texels[i + 1];
           sum[2] += texels[i + 2];
           sum[3] += texels[i + 3];
+          if (normal) {
+            const nx = texels[i] / 127.5 - 1;
+            const ny = texels[i + 1] / 127.5 - 1;
+            vector[0] += nx;
+            vector[1] += ny;
+            vector[2] += Math.sqrt(Math.max(0, 1 - nx * nx - ny * ny));
+          }
         }
       }
       const n = step * step;
       const o = (y * to + x) * 4;
       if (normal) {
-        const v = [sum[0] / n / 127.5 - 1, sum[1] / n / 127.5 - 1, sum[2] / n / 127.5 - 1];
-        const length = Math.hypot(v[0], v[1], v[2]) || 1;
-        for (let c = 0; c < 3; c++) out[o + c] = Math.round((v[c] / length + 1) * 127.5);
+        const length = Math.hypot(vector[0], vector[1], vector[2]) || 1;
+        out[o] = Math.round((vector[0] / length + 1) * 127.5);
+        out[o + 1] = Math.round((vector[1] / length + 1) * 127.5);
+        out[o + 2] = Math.round(sum[2] / n);
       } else for (let c = 0; c < 3; c++) out[o + c] = Math.round(sum[c] / n);
       out[o + 3] = Math.round(sum[3] / n);
     }

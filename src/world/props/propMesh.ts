@@ -1,6 +1,6 @@
 import { Effect, Material, Matrix, Mesh, MultiMaterial, RawTexture, type AbstractMesh, ShaderMaterial, SubMesh, Vector2, Vector3, VertexData, type Scene } from "@babylonjs/core";
 import { LIT_SHADING_GLSL, LIT_SHADING_SAMPLERS, LIT_SHADING_UNIFORMS } from "../materials/litShading";
-import { DITHER_GLSL, keepsBuildingCpuCopies, type BuildingMaterial } from "../buildings/buildingMesh";
+import { DITHER_GLSL, SURFACE_GLSL, keepsBuildingCpuCopies, type BuildingMaterial } from "../buildings/buildingMesh";
 import { placedAxes } from "../buildings/buildingCollision";
 import type { BuildingModel } from "../buildings/buildingTypes";
 
@@ -101,6 +101,7 @@ uniform vec2 fadeRange;
 
 out vec4 outColor;
 ${DITHER_GLSL}
+${SURFACE_GLSL}
 
 void main() {
   if (fadeRange.y > 0.0) {
@@ -116,9 +117,10 @@ void main() {
   if (layer >= 0.0) {
     vec3 at = vec3(vUV / size, layer);
     vec4 texel = texture(colorArray, at);
+    vec4 surface = texture(normalArray, at);
     albedo *= texel.rgb;
-    roughness = texel.a;
-    vec3 bump = texture(normalArray, at).xyz * 2.0 - 1.0;
+    roughness = surface.b;
+    vec3 bump = surfaceBump(surface);
     vec3 t = normalize(vTangent - n * dot(vTangent, n));
     vec3 b = cross(n, t) * side;
     surfaceNormal = normalize(t * bump.x + b * bump.y + n * bump.z);

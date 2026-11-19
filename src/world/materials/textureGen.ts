@@ -60,7 +60,19 @@ const BUMP_REFERENCE_RESOLUTION = 256;
  * periodic over the tile (see tilePeriod below), so pixel RESOLUTION genuinely *is* pixel 0 - which
  * is what lets this run on a plain RESOLUTION² grid instead of the padded one it needed before.
  */
-export function writeProceduralTexturePixels(colorBuffer: Uint8Array, normalBuffer: Uint8Array, layerIndex: number, seed: number, materialId: string, texture: TextureDef): void {
+/**
+ * How a bake lays its channels out:
+ *
+ * - `ground` (the terrain's materials, bark, gear): colour with roughness in alpha; normal (xyz)
+ *   with height in alpha - what the terrain's height blend reads.
+ * - `surface` (building and prop materials - PROP_RENDERING.md): colour with its `mask` in alpha
+ *   (1 where it has none - a cut-out's holes are 0); the normal's x and y in red and green (z is
+ *   rebuilt: sqrt(1 - x² - y²)), roughness in blue, height in alpha. Both textures four meaningful
+ *   channels, so each can become one four-channel compressed texture (BC7) later.
+ */
+export type TextureLayout = "ground" | "surface";
+
+export function writeProceduralTexturePixels(colorBuffer: Uint8Array, normalBuffer: Uint8Array, layerIndex: number, seed: number, materialId: string, texture: TextureDef, layout: TextureLayout = "ground"): void {
   // tilePeriod is what makes the bake seamless: every noise becomes exactly periodic over one
   // texture tile, so the wrap is just another interior pixel boundary. Without it the wrap is a
   // hard discontinuity in both color and normals, and because TEXTURE_WORLD_TILE_SIZE divides
@@ -79,6 +91,13 @@ export function writeProceduralTexturePixels(colorBuffer: Uint8Array, normalBuff
   if (height !== undefined && height.type !== "scalar") {
     throw new Error(`Material "${materialId}" texture pipeline's "height" output must be a scalar`);
   }
+  // A surface's cut-out: 1 solid, 0 a hole - only a surface bake keeps it.
+  const mask = compiled.output("mask");
+  if (mask !== undefined && mask.type !== "scalar") {
+    throw new Error(`Material "${materialId}" texture pipeline's "mask" output must be a scalar`);
+  }
+  const surface = layout === "surface";
+  const roughnesses = surface ? new Uint8Array(TEXTURE_RESOLUTION * TEXTURE_RESOLUTION) : null;
 
   const { slots, run } = compiled;
   const pixelCount = TEXTURE_RESOLUTION * TEXTURE_RESOLUTION;
@@ -93,7 +112,11 @@ export function writeProceduralTexturePixels(colorBuffer: Uint8Array, normalBuff
       colorBuffer[pixelIndex] = clamp01(slots[diffuse.offset]) * 255;
       colorBuffer[pixelIndex + 1] = clamp01(slots[diffuse.offset + 1]) * 255;
       colorBuffer[pixelIndex + 2] = clamp01(slots[diffuse.offset + 2]) * 255;
-      colorBuffer[pixelIndex + 3] = clamp01(roughness === undefined ? DEFAULT_ROUGHNESS : slots[roughness.offset]) * 255;
+      const rough = clamp01(roughness === undefined ? DEFAULT_ROUGHNESS : slots[roughness.offset]) * 255;
+      if (roughnesses) {
+        roughnesses[y * TEXTURE_RESOLUTION + x] = rough;
+        colorBuffer[pixelIndex + 3] = clamp01(mask === undefined ? 1 : slots[mask.offset]) * 255;
+      } else colorBuffer[pixelIndex + 3] = rough;
 
       heights[y * TEXTURE_RESOLUTION + x] = height === undefined ? 0 : slots[height.offset];
     }
@@ -115,7 +138,8 @@ export function writeProceduralTexturePixels(colorBuffer: Uint8Array, normalBuff
       const pixelIndex = layerOffset + (y * TEXTURE_RESOLUTION + x) * 4;
       normalBuffer[pixelIndex] = (nx * invLen * 0.5 + 0.5) * 255;
       normalBuffer[pixelIndex + 1] = (ny * invLen * 0.5 + 0.5) * 255;
-      normalBuffer[pixelIndex + 2] = (nz * invLen * 0.5 + 0.5) * 255;
+      // A surface's blue is its roughness: z is rebuilt from x and y where it is drawn.
+      normalBuffer[pixelIndex + 2] = roughnesses ? roughnesses[y * TEXTURE_RESOLUTION + x] : (nz * invLen * 0.5 + 0.5) * 255;
       normalBuffer[pixelIndex + 3] = clamp01(centerHeight + shift) * 255;
     }
   }

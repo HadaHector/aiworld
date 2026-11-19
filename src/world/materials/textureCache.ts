@@ -122,12 +122,14 @@ async function evict(db: IDBDatabase): Promise<void> {
 
 /** One key per texture, or null when this browser cannot hash (crypto.subtle needs a secure
  *  context - localhost counts). */
-export async function textureKeys(seed: number, textures: { id: string; texture: TextureDef }[]): Promise<string[] | null> {
+export async function textureKeys(seed: number, textures: { id: string; texture: TextureDef; layout?: string }[]): Promise<string[] | null> {
   if (!globalThis.crypto?.subtle) return null;
   const encoder = new TextEncoder();
   return Promise.all(
-    textures.map(async ({ id, texture }) => {
-      const digest = await crypto.subtle.digest("SHA-256", encoder.encode(`${codeHash}\n${seed}\n${id}\n${JSON.stringify(texture)}`));
+    textures.map(async ({ id, texture, layout }) => {
+      // A surface bake's layout is in its key, so it never meets a ground bake of the same texture.
+      const laid = layout && layout !== "ground" ? `\n${layout}` : "";
+      const digest = await crypto.subtle.digest("SHA-256", encoder.encode(`${codeHash}\n${seed}\n${id}\n${JSON.stringify(texture)}${laid}`));
       return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
     }),
   );

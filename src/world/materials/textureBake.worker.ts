@@ -1,4 +1,4 @@
-import { TEXTURE_RESOLUTION, writeProceduralTexturePixels, type TextureDef } from "./textureGen";
+import { TEXTURE_RESOLUTION, writeProceduralTexturePixels, type TextureDef, type TextureLayout } from "./textureGen";
 
 /**
  * Bakes one material's textures off the main thread. Each material is fully independent - its
@@ -12,6 +12,7 @@ export interface BakeRequest {
   seed: number;
   materialId: string;
   texture: TextureDef;
+  layout: TextureLayout;
 }
 
 export interface BakeResponse {
@@ -24,7 +25,7 @@ export interface BakeResponse {
 }
 
 self.onmessage = (event: MessageEvent<BakeRequest>): void => {
-  const { jobId, layerIndex, seed, materialId, texture } = event.data;
+  const { jobId, layerIndex, seed, materialId, texture, layout } = event.data;
 
   const pixelCount = TEXTURE_RESOLUTION * TEXTURE_RESOLUTION;
   const color = new Uint8Array(pixelCount * 4);
@@ -32,7 +33,7 @@ self.onmessage = (event: MessageEvent<BakeRequest>): void => {
 
   // layerIndex 0: these buffers hold exactly one material, and get copied into the shared atlas
   // slice by the pool on the main thread.
-  writeProceduralTexturePixels(color, normal, 0, seed, materialId, texture);
+  writeProceduralTexturePixels(color, normal, 0, seed, materialId, texture, layout);
 
   let r = 0;
   let g = 0;

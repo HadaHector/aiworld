@@ -1,7 +1,7 @@
 # Prop rendering
 
 The plan for drawing props apart from buildings: their own shaders and materials, and each prop
-culled and faded by its size. **Agreed. Steps 1-4 built (see each one's status); the open questions left are at the end.**
+culled and faded by its size. **Agreed. Steps 1-4 built (see each one's status); step 5 is a plan, parked until needed. The open questions left are at the end.**
 
 ## 1. Why
 
@@ -124,8 +124,8 @@ kind (`#define LIGHTMAP`, `lightmapOn` till baked). Used by the world's renderer
 (`dungeonMeshes.ts`) and the workbench and its shots (`drawModelNow`, baked there and then).
 Checked: the chapel's furniture at night is lit by its candles through the shared lightmap (taking
 its lightmap off darkens the view), the inn's furniture draws, and the shots of an inn, a candle and
-a crypt hall come out as a building mesh and a `:props` mesh. Not checked: a crypt in the game (the
-dungeon renderer's path) - the shot of a crypt part goes through the workbench's.
+a crypt hall come out as a building mesh and a `:props` mesh. A crypt in the game (the dungeon
+renderer's path) checked by the user.
 
 ### Step 4 - the building array for buildings
 
@@ -140,6 +140,74 @@ array. Marked so in core: charredWood, dung, graveEarth, litWax (256 px), drysto
 props alone, in the packs and in the code. The array went from 31 layers to 26. A building or room
 made of a props-only material would draw it plain. For the lodge: mark its six (smoothStone, hide,
 antler, driedLavender, driedSage, driedYarrow - all only on its props) `propsOnly: true`, and it fits.
+
+### Step 5 - more than one array of building materials
+
+The array is still one, capped at 32 and loaded whole. Over time a world may want more building
+materials than fit (a desert's sandstone, a northern town's turf, a dwarf hold's carved stone) - each
+building drawing from an array of the materials it needs.
+
+**It is redirection, not a move of data.** A building's mesh does not store its textures, only each
+vertex's layer number, worked out when the mesh is made (`appendModel` with `layerOf`). Nothing in the
+packs names a layer. So several arrays mean: several building materials (the same shader, each with
+its own pair of arrays and its own uniforms), and each mesh made with the `layerOf` of the one it is
+drawn with. Every house, wall stretch and dungeon part is already a mesh of its own, so nothing
+merged has to be split. What changes is code, not content:
+
+- **5a - bake only what the world uses.** Today each dimension's world bakes every building material
+  in the pack, used there or not. Build the models first, gather the materials their main parts use
+  (and the dungeon styles' of that dimension), bake only those. The cap becomes per world, not per
+  pack: small, and the most likely to be enough for a long time. Saves memory too.
+- **5b - several arrays in one world, chosen per building.** Group the materials into arrays of up
+  to 32 (by hand - a `palette` named on buildings, dungeon styles or zones - or packed automatically
+  from what each building uses); each mesh picks the array that holds all its materials. Costs: a
+  material in two arrays is baked into both (about 10 MB each time); a shader switch between arrays
+  (meshes can be sorted by material); the props' materials bind the first array that holds theirs;
+  the light bake's `castsByLayer` is per array.
+- **5c - arrays loaded and unloaded with the zones** the player is near. Only then does memory stop
+  growing with the number of materials. The most work: arrays made and freed while playing, meshes
+  made against an array that must be loaded first.
+
+Recommended order: 5a when the array next gets near 32 (it is at 26), 5b if one world needs more than
+32, 5c only if memory demands it.
+
+Two more ways, should it come to that: **several arrays bound to the one building shader** (WebGL2
+binds at least 16 textures at once; the shader picks an array per material by a branch, since GLSL
+ES 3.00 cannot index samplers by a variable) - a simpler 5b; and **virtual texturing** (a small
+lookup texture pointing into a cache of texture pages, streamed as needed) - the nearest thing to
+bindless textures, which neither WebGL2 nor WebGPU has. The 32 itself is the uniform arrays' and the
+memory's limit, not the GPU's: an array may hold 256 layers or more.
+
+**Decided: parked.** The one array stays as it is (26 of 32 used); step 5 is for when it is needed.
+
+### Step 6 - one texture layout for building and prop materials, ready for cut-outs
+
+Every building and prop material is baked in the **surface** layout (textureGen.ts's
+`TextureLayout`), the ground's materials, bark and gear staying in the **ground** one:
+
+| texture | red | green | blue | alpha |
+|---|---|---|---|---|
+| colour (surface) | colour | colour | colour | mask (1 solid, 0 a hole; a recipe's `mask` output, 1 if none) |
+| normal (surface) | normal x | normal y | roughness | height |
+| colour (ground) | colour | colour | colour | roughness |
+| normal (ground) | normal x | normal y | normal z | height (the terrain's height blend) |
+
+The building and props' shaders rebuild the normal's z (`sqrt(1 - x² - y²)`, `SURFACE_GLSL`) and read
+roughness from blue. Height stays in alpha, unused for now (kept for a relief effect later). Both
+textures have four meaningful channels, so when textures are compressed (none are yet - every texture
+is baked and uploaded as raw RGBA) each becomes one four-channel BC7 texture (1 byte a pixel, a
+quarter of today), with no change of layout. A surface bake's layout is in its texture-cache key.
+
+**Status: built.** Shots of the inn and the candles before and after: the same brightness (0.28,
+0.81), differences only along the roof tiles' edge bevels (z rebuilt rather than stored). The
+workbench's texture view reads both layouts and shows a building material's mask. Changing the baker
+changes its code hash, so every texture is baked again once, on each browser's next load.
+
+**Next, not built - cut-outs** (a banner, a hide, hanging herbs): a material flag (`cutout`), a cut-out
+kind of the props' material (`#define CUTOUT`: discard by the mask, the threshold raised with the mip
+level as the leaves do, both sides drawn), its sun shadow cut out too (a `getAlphaTestTexture` as the
+trees' leaf material does, or a shadow depth wrapper), and cut-out faces letting baked light through.
+The building shader gets no `discard`: only materials that ask for it pay for it.
 
 ## 4. Open questions
 

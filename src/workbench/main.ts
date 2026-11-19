@@ -14,7 +14,7 @@ import type { WorldContent } from "../world/content/worldContent";
 import type { MaterialDef, GrassSpec } from "../world/materials/materialTypes";
 import type { TreeKindDef } from "../world/foliage/foliageConfig";
 import type { BiomeDefinition } from "../world/biomes/biomeTypes";
-import { TEXTURE_RESOLUTION } from "../world/materials/textureGen";
+import { TEXTURE_RESOLUTION, type TextureLayout } from "../world/materials/textureGen";
 import { applyColorMatrix, materialMatrix, type ColorMatrix } from "../world/materials/colorAdjust";
 import { bakedAtlas, bakedBark, bakedGround } from "./bakeCache";
 import { pieceImage, skinImage, type AtlasParts } from "./pieceTextureView";
@@ -830,6 +830,8 @@ function renderPreviewBar(): void {
               ["roughness", "Roughness"],
               ["height", "Height"],
               ["normal", "Normal"],
+              // A building material's cut-out (its colour's alpha, as a surface - see TextureLayout).
+              ...(current?.folder === "buildingMaterials" ? ([["mask", "Mask"]] as [string, string][]) : []),
             ],
         rebuild,
       ),
@@ -1608,7 +1610,7 @@ async function preview2d(token: number, asset: Asset, view: ViewDef, content: Wo
       normal = bark.normal;
       if (def.shape.model === "boulder") matrix = def.shape.stone.adjust;
     }
-    image = surfaceImage(color, normal, TEXTURE_RESOLUTION, options.channel, Number(options.tiles) || 1, matrix);
+    image = surfaceImage(color, normal, TEXTURE_RESOLUTION, options.channel, Number(options.tiles) || 1, matrix, asset.folder === "buildingMaterials" ? "surface" : "ground");
   } else if (view.id === "leaves") {
     const atlas = bakedAtlas(kindOf(content, asset)!, seed)!;
     image = atlasImage(atlas, FOLIAGE_TEXTURE_SIZE, options.channel);
@@ -1629,10 +1631,14 @@ async function preview2d(token: number, asset: Asset, view: ViewDef, content: Wo
   setStatus("");
 }
 
-/** A baked surface (colour with roughness in alpha, normal with height in alpha) as one channel -
- *  its colour through `matrix`, the material's colour adjustment, as the terrain shader draws it. */
-function surfaceImage(color: Uint8Array, normal: Uint8Array, size: number, channel: string, tiles: number, matrix?: ColorMatrix): TextureImage {
+/** A baked texture pair as one channel - its colour through `matrix`, the material's colour
+ *  adjustment, as the terrain shader draws it. Laid out as `layout` says (see TextureLayout): a
+ *  ground's roughness in its colour's alpha and its normal in xyz; a surface's mask in its colour's
+ *  alpha, its normal's x and y in red and green (z rebuilt) and its roughness in blue. */
+function surfaceImage(color: Uint8Array, normal: Uint8Array, size: number, channel: string, tiles: number, matrix?: ColorMatrix, layout: TextureLayout = "ground"): TextureImage {
   const pixels = new Uint8Array(size * size * 4);
+  const surface = layout === "surface";
+  const roughnessAt = (o: number): number => (surface ? normal[o + 2] : color[o + 3]);
   const drawn = (o: number): [number, number, number] => {
     const rgb: [number, number, number] = [color[o] / 255, color[o + 1] / 255, color[o + 2] / 255];
     return matrix ? applyColorMatrix(matrix, rgb) : rgb;
@@ -1644,9 +1650,15 @@ function surfaceImage(color: Uint8Array, normal: Uint8Array, size: number, chann
       pixels[o] = Math.min(255, r * 255);
       pixels[o + 1] = Math.min(255, g * 255);
       pixels[o + 2] = Math.min(255, b * 255);
-    } else if (channel === "roughness" || channel === "height") {
-      const value = channel === "roughness" ? color[o + 3] : normal[o + 3];
+    } else if (channel === "roughness" || channel === "height" || channel === "mask") {
+      const value = channel === "roughness" ? roughnessAt(o) : channel === "mask" ? color[o + 3] : normal[o + 3];
       pixels[o] = pixels[o + 1] = pixels[o + 2] = value;
+    } else if (channel === "normal" && surface) {
+      const x = normal[o] / 127.5 - 1;
+      const y = normal[o + 1] / 127.5 - 1;
+      pixels[o] = normal[o];
+      pixels[o + 1] = normal[o + 1];
+      pixels[o + 2] = (Math.sqrt(Math.max(0, 1 - x * x - y * y)) * 0.5 + 0.5) * 255;
     } else {
       const source = channel === "normal" ? normal : color;
       pixels[o] = source[o];
@@ -1665,7 +1677,7 @@ function surfaceImage(color: Uint8Array, normal: Uint8Array, size: number, chann
     describe: (x, y) => {
       const o = at(x, y);
       const [r, g, b] = drawn(o);
-      return `rgb ${r.toFixed(2)} ${g.toFixed(2)} ${b.toFixed(2)}  roughness ${unit(color[o + 3])}  height ${unit(normal[o + 3])}`;
+      return `rgb ${r.toFixed(2)} ${g.toFixed(2)} ${b.toFixed(2)}  roughness ${unit(roughnessAt(o))}  height ${unit(normal[o + 3])}${surface ? `  mask ${unit(color[o + 3])}` : ""}`;
     },
   };
 }
