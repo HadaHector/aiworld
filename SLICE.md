@@ -1,0 +1,245 @@
+# The vertical slice
+
+The plan for the next goal: **one starting zone, the autumn wood, finished like a small game.** A
+single-player session of about two hours, for the user only (no onboarding, no public demo polish).
+**Status: plan, waiting for the user's approval. Nothing here is built.**
+
+Sizes: **S** under a day for one session, **M** about a day, **L** several days or several
+sessions. "Parallel" means it can run as its own session without touching another task's files.
+The state of the code was checked on 2026-11-19; where a doc and the code disagree, the code is
+what is written here.
+
+## 1. What "done" means
+
+You make a new character in the menu, drop onto the square of a wood village, and play for two
+hours without hitting a wall, a bug you have to work round, or a stretch with nothing to do. At the
+end you stand somewhere worth standing, a few levels up, with gear you earned.
+
+### The two hours
+
+| When | What happens | Level |
+|---|---|---|
+| 0:00-0:10 | **Arrival.** The square of the start village, the inn, the class trainer, the dummy and the chest. First fight with the dummy, first skills learned. | 1 |
+| 0:10-0:35 | **The intro chain** (`welcome`, `affliction`, `roadOn`, already built): the sickness in the village, herbs and wolf pelts from the wood around it, the salve; then a letter carried down the road to the second settlement. First real fights (wolves, boars), first loot, first gear from a quest. | 1-4 |
+| 0:35-1:05 | **The wood opens.** The second settlement is the hub: shops, a trainer, a board of quests. The coaching inn on the road (rest, vendor, rumours), the logging camp (wolves are killing loggers), the hunting lodge (pelts, a bear). Three or four side quests run side by side; the player picks. | 4-7 |
+| 1:05-1:30 | **The old camp.** The abandoned logging camp is the wood's mystery: a chain of four quests that ends in the crypt-kit mine or the crypt. Spiders, grave robbers, the dead. | 7-8 |
+| 1:30-1:50 | **The big fights.** The churchyard crypt (a real dungeon: stair down, loops, a locked door, a boss hall). The motte and bailey: the bandit chief, in the open with adds. One of the two is the quest chain's end, the other optional. | 8-10 |
+| 1:50-2:00 | **The grove.** The druid grove on a rise: a vista over the whole wood, a quiet reward (a skill book or a trinket), music changes. The end of the slice. | 10 |
+
+At the end the player owns: level 10 (about 21,000 XP: see section 3f), a full set of green or blue
+gear for their class from quests and the two bosses, about 6-8 learned skills and 3-4 talent
+points spent, a bag of consumables, some money, and a log of about 14 finished quests.
+
+### The quality bar, per category
+
+| Category | The bar |
+|---|---|
+| Graphics tech | 60 fps at the default draw distance on the user's GPU in the village, the deepest wood, the crypt and the motte. The page does not grow past the budget in a two-hour soak (no crash, no stutter spikes). Nothing visibly wrong when looked at from the places the player actually stands: no ocean in a crypt, no rain in the inn, no flat grey props. |
+| World generation | The zone is one piece of land with all eight features on it, roads between them, readable as an autumn wood from any hill (colour, falling leaves, smoke from the places people live in). The same seed always gives the same zone. |
+| Gameplay elements | Every window the slice needs works and is not annoying: trainer, vendor, inventory, quest log, map. Death sends you home with a small cost. Saving and loading in the middle of a quest, or in a dungeon, brings you back where you were. Sound is never silent. |
+| Enemies and quests | The wood has its own enemies, each with a body and one thing that makes it different to fight. At least 12 quests (intro 3 included), no two the same shape back to back, two bosses with their own tactics. |
+| Items and skills | Every level band brings a visible upgrade; every class has something new to press every one or two levels; no useless drops that look broken (no icon, no stats). |
+| Balance | A bot playing the route reaches the end in about two hours of play time, level 10 plus or minus one, dying no more than a few times. The user's own run agrees. |
+
+## 2. The eight features
+
+### What can roll in the autumn wood today
+
+`autumnWood.json5` lists, as **weights** (not chances), per cell: settlement 0.8, coaching inn 0.5,
+logging camp 0.6, hunting lodge 0.4, churchyard 0.3, nothing 0.8. A zone is 10 cells
+(`CELLS_PER_AREA`), about 2.5 km2 at `CELL_SPACING` 500, and **each cell rolls one feature on its
+own**. So nothing is guaranteed: a seed may give three villages and no crypt. Placement can also
+fail (a camp wants gentle ground deep in a wood) and leave its cell empty.
+
+| Feature | Built? | State |
+|---|---|---|
+| Settlement (farm village, market town) | yes | Many houses, inn, chapel, smithy, NPC cast and generated quests. The start is chosen among them. |
+| Coaching inn (roadside compound) | yes, first pass | On a road, stables. What is left is in designers/coaching-inn.md. |
+| Logging camp | yes | Bunkhouse, saw shed, cookhouse, stable, tool shed, skid trail, stumps. |
+| Hunting lodge | yes, revived | Props-only materials, tube-built antlers and deer, smokehouse. Its "not done / to judge" list is in LODGE.md. |
+| Churchyard with crypt | yes | Chapel, graves, wall; mausoleums whose way down opens a generated crypt (seamless, creatures, lit). |
+| Sheepfold | built, but in **no biome list** | A moor and fell kind; leave it out of the wood. |
+| Abandoned camp, motte, grove, charcoal burners, sawmill, alchemist, shrine, tower | **no** | See below. There is no condition (decay) system in the code at all. |
+
+### The proposed eight
+
+Chosen by fun per cost from FEATURES.md and by what makes the wood read as itself. Five exist; three
+are new. The zone has ten cells: nine are used (two of them settlements), one is left empty on
+purpose, so the wood has somewhere to be only wood.
+
+| # | Feature | Cost (FEATURES.md) | Why | What it gives the two hours |
+|---|---|---|---|---|
+| 1 | **Start village + a second settlement** (farm village, market town) | exists | The home and the hub. The roadOn letter needs a second settlement to go to. | Arrival, the intro chain, the first hub, trainer, shops, bank. |
+| 2 | **Logging camp** | exists | The wood's own industry; stumps and log piles say "wood" at once. | A quest hub (loggers, wolves, a missing foreman), a fight, a vendor of tools and bread. |
+| 3 | **Hunting lodge** | exists | Needs a hunter and a reason: the wood's game. | Pelt and hunting quests, the bear, a vendor of leather, a forester NPC. |
+| 4 | **Coaching inn** | exists | The road made real; a stop between hubs. | Rest, set home, rumours (a quest start for the old camp), a vendor of food and potions. |
+| 5 | **Churchyard and crypt** | exists | A real dungeon is the slice's biggest set piece, and it is the one already built. | Dungeon 1: the stair, loops, a locked door, the boss. Chests. The best loot of the middle. |
+| 6 | **Abandoned logging camp** | 3 (fun 5) | The same camp given up: roofs sagging, the yard greening, no fire. It is the wood's signature story place, and reuses the camp's buildings and props. | The mystery chain, a hostile place (spiders, bandits or the dead), a small dungeon mouth or a mini-boss, a reward. |
+| 7 | **Motte and bailey** | 2 (fun 4) | A bandit stronghold on a mound with a ditch and a palisade: the open-air boss fight, and a place you see from afar. | Boss 2 (the bandit chief) with adds, a bandit camp quest, a rescue or recovery quest, good loot. Shares the mound stamp with charcoal burners. |
+| 8 | **Druid grove** | 2 (fun 4) | A ring of huge old trees round a stone: autumn's quiet, a counterpoint to the fights. Trees are the thing the zone is known by. | The vista, a rare herb or a book, the end of the slice, optional guardian. Needs a new "ancient" tree kind. |
+
+**Cheap fillers, not counted:** wayside shrines (cost 1, no new piece: a cairn with a small heal or a
+set-home) along the roads; a watchtower on a hill (cost 1) if the zone feels short of vistas. **First
+cuts if time runs short:** charcoal burners, sawmill, alchemist, watchtower. The sawmill needs
+waterside placement and a turning wheel; the alchemist needs coloured smoke: neither is cheap
+enough for what it adds.
+
+**An open decision, in section 6:** the **second dungeon**. See task E6.
+
+## 3. Tasks by category
+
+IDs are used in the dependencies. "Par." is whether the task can run as its own session in parallel.
+
+### (a) Graphics tech
+
+| ID | Task | Size | Needs | Par. |
+|---|---|---|---|---|
+| G1 | **World / dungeon drawing switch.** Stopgap first (S): turn the ocean plane off while `sunLighting.underground` is on (ocean.ts and world.ts have no underground handling at all; the sky and fog fade, the ocean does not). Then the real switch (M): underground, skip drawing the terrain chunks, trees, grass, buildings, and the sun shadow pass; restore them on the way out. It is also a frame-time and memory win in the dungeons. | S + M | - | yes |
+| G2 | **Performance and memory budget.** Set targets (60 fps, a page heap ceiling, GPU memory), build a soak: a bot or camera path through the village, the deep wood, the crypt and the motte for 30 / 60 / 120 minutes, logging heap and frame time. Fix what it shows (page-memory traps, shadow casters past the shadow's reach, the tree buffer rebuild: see BACKLOG.md). The slice world is one biome, so it loads far less than the full 25-biome world. | M | W1 | yes |
+| G3 | **Texture compression** (TEXTURES.md, a plan only: nothing compressed today; the buildings' array alone is ~280 MB of GPU memory). Only if G2 shows memory is the limit. | L | G2 | yes, conditional |
+| G4 | **Autumn look.** Falling leaves as an air particle layer (the particle system in `src/particles` exists), smoke from the chimneys of lived-in houses and the camps' fires (PROP_EFFECTS has flames; smoke is `smoke.torch` only), the weather set for the zone (fair, cloudy, drizzle, mist, rain: all exist), golden-hour tuning. Wind in trees exists. | M | - | yes |
+| G5 | **Prop look pass per feature.** Props-only materials exist (PROP_RENDERING steps 1-4 and 6 built; step 5 parked). Each new or revived feature gets a look pass in the workbench, the way the lodge did (LODGE.md's open list). Part of each feature's own task (W3-W5), listed here so it is not forgotten. | S each | the feature | with the feature |
+| G6 | **Ambient occlusion decision.** SSAO2 is in the game with a toggle and sliders (default on); its frame cost has never been measured on the real GPU. Measure, pick the default. Baked vertex AO for dungeon parts and buildings stays a stretch. | S | - | yes |
+| G7 | **Rain and snow inside buildings** (BACKLOG.md): it rains through the inn's ceiling. Cheapest fix: fade the fall out while the camera is in an enterable house. | S | - | yes |
+| G8 | **Lights.** Windows' daylight and lamps exist in the baker; check that the village at dusk and the camp's fire read in the game (not only the workbench). Night is "decoration", so one pass, no more. | S | - | yes |
+
+### (b) World generation
+
+| ID | Task | Size | Needs | Par. |
+|---|---|---|---|---|
+| W1 | **The slice world.** A new dimension (`dimensions/autumnVale.json5`) or config with only `autumnWood`, one zone, a start rule that picks the farm village, mountains round it (`borderType: "mountain"` already). Menu entry that goes to it (see P5). Confirm one zone is one walkable piece of land (the BACKLOG "cells cut off by cliffs" artefact would be fatal inside the one zone). | S-M | - | yes |
+| W2 | **The seed.** Because the odds are weights, no seed promises the eight features. The cheap answer for a single-player slice: **scan seeds** with a probe that scores each one (all eight present, village and hamlet within reach by road, the crypt not far from the start, enough relief for the grove and the motte, no hole in the roads), then **pin the best**. A guaranteed-features rule in the biome (a "once" flag per entry) only if no seed scores. | S (scan) / M (rule) | W3-W5 | yes |
+| W3 | **Abandoned logging camp.** A first condition system, scoped small: a compound option `condition: abandoned` that swaps its buildings for worn versions (a missing roof section, a fallen wall, no fire or lamp), greens the yard, grows birch and rowan back over the felling, rots the logs. Condition is a general piece (FEATURES.md piece 2) but the cost estimate there is for the camp's own kind only. | M | - | yes |
+| W4 | **Motte and bailey.** The terrain stamp "mound" (and a ditch) is new and shared with the charcoal burners; a palisade (line prop: exists as the rail fence's relative), a wooden keep with an interior and a stair (the house generator does this), the bailey yard (polygon yards exist for compound rings, commit 01b3535), a gate toward the road, a camp of tents. | L | - | yes |
+| W5 | **Druid grove.** A new ancient tree kind (huge, gnarled, the zone's trees generator has a wide range), a ring layout of them (needs "round and tall shapes" in a small form: placing N trees on a circle is only data), a standing stone prop, a clearing and a little ground paint. | M | - | yes |
+| W6 | **Roads and wayside shrines.** The road network exists with bridges. Check the eight sites are linked by roads (BACKLOG: some sites unreachable), add the shrines as a cheap line of props. Fingerposts exist. | S | W2 | no |
+| W7 | **Settlement variety.** The wood only rolls `farmVillage` and `marketTown`. Enough for a start village and a hub; look pass only (orchards, a drystone wall?). The settlement probe should show two distinguishable places. | S | W2 | yes |
+| W8 | **Biome odds.** After the seed is pinned: leave the biome odds as they are (the game still has this biome in the full world), and put the slice's list in the dimension or config. The sheepfold stays out of the wood. | S | W1 | no |
+| W9 | **Zone size.** Decided already: `CELL_SPACING` 500, about 2.5 km2 a zone, 10 cells (commit 42c36a8, the user's call). Do not change it. About 1.6 km across: a few minutes from the start to the far side. Fits nine places and a hill or two. | - | - | - |
+
+### (c) Gameplay elements
+
+| ID | Task | Size | Needs | Par. |
+|---|---|---|---|---|
+| P1 | **Camera and controls.** Both mouse buttons turn the camera, no inertia (done). Fix the **inn camera clipping**: reported, not reproduced in this check, so first a repro spot from the user, then the camera's collision against house walls. Nothing else new (no gamepad). | S | repro | yes |
+| P2 | **Trainer window.** Today *Train* opens the general progression panel at that trainer (npcWindow.ts, `train`). A trainer's own list: skills available now, their cost, which are locked by level, one click to learn. | M | I2 | yes |
+| P3 | **Vendors.** Buying, selling and repairing exist (vendorStocks: smith, general, inn). Slice work: a stock per place (lodge: leather and arrows, camp: tools, inn: food and potions, hub: gear of the level band) and prices that fit B2. | S | B2 | yes |
+| P4 | **Death.** Respawn at home exists (set at the inn). Check that death in a crypt returns the player outside, that durability loss reads clearly, that nothing is lost for good. | S | - | yes |
+| P5 | **Front end.** New-game flow into the slice: the menu, character creation, a saved slot. Menu world already exists. A "Finish" summary window at the end (optional, S). | S | W1 | yes |
+| P6 | **Saving.** The save works (world delta, quests, belongings?). Check the cases that will happen in two hours: log out in the crypt, in the middle of a quest, with a cleared boss, reload at the one-hour point. | S | - | yes |
+| P7 | **Sound.** There are cues (76) and sounds (104), and music per zone (the autumn wood plays the generic `forest` style). Missing: any **ambience** (wind, birds, leaf rustle, rain on leaves, crypt drips, the lodge's fire is there); the ambient bus exists, the ambience system does not. Also a music pass for the crypt and the boss. | M | - | yes |
+| P8 | **Map.** Done (minimap, world map, markers for dungeon, inn, shop, trainer, quests). Slice work: a marker for each feature if one is missing. | S | W3-W5 | no |
+
+### (d) Enemies and quests
+
+| ID | Task | Size | Needs | Par. |
+|---|---|---|---|---|
+| E1 | **The wood's roster.** Wolf, boar, bear, spider, lynx, stag, bandit all list `autumnWood` as habitat, and wolf, boar, bear, spider, lynx, stag have beast bodies (BEASTS.md steps 1-6). The `groups` rule says single-only ("no packs for now"), though the pack behaviour is built (a741e7b): turn on wolf packs. Undead in the crypt are humanoids tinted bone-pale, no body of their own (a skeleton body is a cut candidate). | S | - | yes |
+| E2 | **Behaviour and bosses.** Each kind one trick: wolves pack and flee when hurt, boars charge, the bear hits hard and slow, spiders web, bandits have a caster and a bruiser. Two bosses with their own tactics: the crypt's named elite (the generator already makes one 2 levels up) and the bandit chief with adds. | M | - | yes |
+| E3 | **The intro chain.** Built and probed (`quests.mjs`): `welcome`, `affliction`, `roadOn`. Check that it fits the first 35 minutes (time it with B3) and ends with the letter delivered in the hub. | S | B3 | after B3 |
+| E4 | **Quest variety.** Today: 3 plots, 23 segments, 15 parts. The slice needs about 9 more quests tied to its places, not all "kill 8 X". Plots: *the missing foreman* (camp), *wolves at the sawpit* (camp), *a bear for the lodge*, *the grey pilgrim* (churchyard, reach and a key), *what happened at the old camp* (a chain of four, ends in dungeon or boss), *the chief's tithe* (motte), *herbs for the grove*, *a message for the inn*, *the lost shipment* (pickup and use). Each uses existing part kinds as far as possible; new parts only for the shapes the list needs. | L (split in 3 sessions of M: camp and lodge, the old camp chain, crypt, motte and grove) | W3-W5 | yes, after its place exists |
+| E5 | **NPC life.** Roles exist (15: forester, quarryman, guard, hermit, innkeeper...). Place them at the features: logger and foreman at the camp, hunter at the lodge, a druid, a bandit chief. A guard that patrols; idle poses by role (chopping, sitting, sweeping) if the animation set has them. | M | W3-W5 | yes |
+| E6 | **Dungeons.** The crypt is built and walked (stair, loops, creatures, lights, boss spawn, chests); DUNGEONS.md step 7 is not: quest blocks, map floors, music, the player's own light, daylight through the mouth. For **dungeon 2** there are three options: (i) the **cave** (DUNGEONS.md step 4: not started, there is no cave style in the packs, only `crypt.json5`; the L option, needs an approach decided with the user); (ii) a **second style from the crypt's own kit**, an old mine under the abandoned camp (timbers, rubble, a shaft: M, reuses the parts system); (iii) **only the crypt** plus the motte's keep as an interior fight. Recommended: (ii). | M (step 7) + L (cave) or M (mine) | W3 for (ii) | step 7 yes |
+| E7 | **Bandit camp.** The camp kind exists (`camps/banditCamp.json5`, a creature camp with no place). It becomes the motte's garrison and a small camp on the road. | S | W4 | with W4 |
+
+### (e) Items and skills
+
+| ID | Task | Size | Needs | Par. |
+|---|---|---|---|---|
+| I1 | **Gear tiers.** 77 items; weapons in three tiers per family; armour in cloth, leather, bronze and plate pieces. Lay out four steps over the 10 levels: starter, common (levels 2-5, quest and creature loot), good (5-8, the crypt's chests and the old camp), best (8-10, the two bosses). Loot tables per creature and per boss (tables exist for each beast, bandit, chest; the crypt, the bosses and the motte need their own). | M | B2 | yes |
+| I2 | **Skills per class.** Three classes (warrior, mage, priest), one talent tree each (arms, fire, light), 48 skills in the pack (many of them creatures'). Schedule what each class learns by level 10 from its trainer: about 7 each, a new one every one or two levels, one at level 1 and one that feels like a prize at 5 and 8. | M | - | yes |
+| I3 | **Crafting.** Nothing new. The disciplines that exist are cooking, herbalism, mining; the slice uses cooking at a fire (roast meat, bread), herb gathering (the sickness quest), and bandages. No smithing, no alchemy. | - | - | - |
+| I4 | **Icons.** Four items have no icon: torch, bandage, iron ingot, spell scroll (generated, waiting for the user's pick in `assets_work/comfyUI/review.py`). New items made for the slice (boss gear, the grove's reward, crypt trinkets) also need icons. **Generation uses ComfyUI and the GPU: never started without asking.** | S + user | user | yes |
+| I5 | **Consumables and use items.** Health and mana potions, bread, roast meat, bandage, salve exist. Check that a potion is a real answer to a hard fight at levels 6-10 and that the tooltip says it. | S | B2 | yes |
+
+### (f) Balance
+
+| ID | Task | Size | Needs | Par. |
+|---|---|---|---|---|
+| B1 | **Levels over the two hours.** Today XP to next level is `40*own^2 + 210*own` (250 for level 2, 5,130 for level 10). **Level 10 costs about 20,850 XP in all.** A kill at your level is about 100 XP, so kills alone would be about 200 of them; quests have to carry about half. Targets: level 4 at 0:35, 7 at 1:05, 8 at 1:30, 10 at 2:00 (see open question 2). | S | - | yes |
+| B2 | **Level bands inside one zone.** Creature levels come from a zone's ring: ring 0 is levels 1-4 (`levels: { start: [1, 4], step: 3, width: 3 }` in rules/creatures.json5) and the whole slice is *one* zone, so every wolf would be level 1-4 and the boss too. Needs: levels by **distance from the start** (a gradient across the zone) and the dungeons' own +1 per 8 parts, set per dimension. | M | W1 | yes |
+| B3 | **A slice bot and a tuning loop.** The server runs headless (`npm run server -- --bot`); `quests.mjs` plays the intro chain; `creatures.mjs` has a hunting bot. Extend into a route bot: do the intro, then the quests in a fixed order, fight, loot, buy the right gear, enter the crypt. Reports per 10 minutes: level, XP, money, kills, deaths, gear. The server steps without a renderer, so a run should not need real time (to be confirmed by the first bot run). | L | E3, W1 | yes |
+| B4 | **Money.** One currency. Targets: the first 30 minutes buy a potion stock and a weapon; the end of the slice buys one armour piece of the best tier, not all. Vendor prices, quest rewards and loot values set from one table. | S | B3 | after B3 |
+| B5 | **Difficulty.** Aggro range clamp and the "level difference" shape are Classic's. Set: a same-level fight costs about a third of health, an elite one half the potions, a boss is a real fight but not a wall. Deaths per run no more than a few. | M | B3 | after B3 |
+
+## 4. Known gaps, checked
+
+| Gap | What was found | Where it sits |
+|---|---|---|
+| **Ocean plane inside crypts** | Confirmed. `ocean.ts` has no mention of the underground; `world.ts` fades the sky, fog and rain underground but the plane follows the camera at sea level and is drawn. A crypt goes down up to 45 m, the wood's lowland is 9-15 m high, so a crypt in a flat wood reaches below the water plane. | G1 (stopgap first) |
+| **Creatures probe, 3 failures** | `npm run probe -- scripts/probe/creatures.mjs` on today's master: **90 of 93 pass**. Failing: the bot kills no creature in 90 s (the bot is "hunting" a wolf and a boar 124 and 140 m away; it does not reach them), the loot check that depends on it, and "no one further off than `social`" (a group pull reaches creatures from further than 12 m). **They are new**: the same probe passes 93 of 93 at 6a588bb, 2f0da06 (surface navigation) and a741e7b (packs stand apart). So the break came with one of the later commits: 08a3ce6 (creatures follow into houses), e432ac4 (crypts peopled) or 55b6b54 (ranged creatures close in), or a merge since. Not narrowed further. | E1, B3 |
+| **Trainer window** | *Train* opens the progression panel; there is no trainer's own window. | P2 |
+| **Quest variety** | 3 plots and 23 segments. Playable chain, thin variety. | E4 |
+| **Ambient sound in rain** | Confirmed missing: no ambience sounds or system, the `ambient` bus exists unused. No rain sound at all. | P7 |
+| **Inn camera clipping** | Not reproduced here; needs a spot from the user. | P1 |
+| **Icons for four items** | The items exist (torch, bandage, iron ingot, spell scroll); the icons are generated and waiting for the pick in `assets_work/comfyUI/review.py`. | I4 |
+| **Cave dungeon** | Confirmed not started: DUNGEONS.md steps 4-5 for the cave; the pack has only the `crypt` style and 36 crypt parts. GEOMETRY.md does not mention caves; the approach has to be asked (the prior brief said so). | E6 |
+| **Abandoned camp condition** | Confirmed: no condition or decay system anywhere in `src/world`. | W3 |
+| **Sheepfold not in a biome list** | Confirmed: `features/sheepfold.json5` is in no biome. It is a moor and fell kind and is not part of the slice. | W8 (nothing to do) |
+
+Also found while checking: the **full world takes about 4.8 GB of JS heap** when travelling
+(DIMENSIONS.md note). The slice world is one biome and one zone, which is the answer, but G2 must
+measure it.
+
+## 5. Order and cut list
+
+### What first, what together
+
+1. **W1** (the world exists and loads) and **G1 stopgap** (ocean off): the first morning. Everything
+   else wants a place to stand.
+2. In parallel at once, none needing anything else: **W3, W4, W5** (the three new features, one
+   session each), **G4** (autumn look), **P7** (ambience), **E2** (behaviour and bosses), **I2**
+   (skills), **E6 step 7** (dungeon surroundings), **G6**, **G7**, **G8**.
+3. **W2** (the seed scan) after the three features land; **B2** right after W1.
+4. **E4** (quests) one session per place as it appears, and **E5** with it.
+5. **B3** (the bot) as soon as W1 and the intro exist; it then runs every few days to tune.
+6. **I1, I5, P3, B4, B5** follow the bot's numbers.
+7. **G2** (soak) and **P6** (saving) in the last stretch, when the world is as heavy as it will be.
+
+Tasks touching shared files, so not two at once: W3 and W4 both edit `compound.ts` and the feature
+pack; E4 plots all add to `questSegments/` and `questPlots/`; I1 and I2 both edit `items/` and
+`skills/`.
+
+### Milestones, each with a thing you can see
+
+| # | Milestone | You can see |
+|---|---|---|
+| M1 | **The vale** (W1, G1 stopgap, B2 first cut, P5) | Menu, New game, the character drops on the village square of a wood with nothing but autumnWood on the map (M), mountains round; wolves are low level near the start and higher at the far side. Teleport to a crypt: no ocean. |
+| M2 | **The first half hour** (G4, P7 first cut, E1, E2 first cut, E3, P2) | A new character plays the intro chain to the end: falling leaves, wolves in packs with bodies, wind and birds, a trainer window that teaches, and the letter delivered in the hub at about level 4. |
+| M3 | **The wood has places** (W3, W5, W2 seed pinned, E4 first two sessions, E5, P3, W6) | The map shows all eight features. The camp, lodge, inn and the old camp each give a quest or two; the quest log has six open; the vendors sell different things. |
+| M4 | **Down into the crypt** (E6 step 7, I1, quest for it) | The churchyard's quest leads down; a locked door and a key; the boss with its own tactics; a chest with good gear. |
+| M5 | **The motte and the grove** (W4, E7, E2 bosses, dungeon 2 per the decision, E4 rest) | The bandit chief with adds on the mound; the grove's vista and its reward; the log shows about 14 finished quests. |
+| M6 | **Two hours** (B3, B4, B5, G2, P6, I4, P4, I5) | A bot run ends at about level 10 in about two hours of game time; a soak shows a flat page heap; a saved game from an hour in continues right; your own run, start to end. |
+
+### If time runs short, cut in this order
+
+1. The cave dungeon (E6 option i); take the mine or the crypt alone.
+2. Texture compression (G3), unless the soak shows memory is the problem.
+3. Charcoal burners, sawmill, alchemist, watchtower (never in the eight).
+4. A skeleton body for the undead (the tinted humanoid stays).
+5. The grove's guardian boss (the grove stays, it is the end).
+6. Dedicated autumn music (the forest style stays), the crypt's own music last.
+7. The end-of-slice summary window (P5).
+8. Baked vertex AO, the world drawing switch's second half (G1 M: the stopgap stays).
+
+Never cut: the intro chain, the two bosses, the crypt, saving, the soak.
+
+## 6. Open questions for the user
+
+1. **A pinned seed or a guaranteed layout?** Scan seeds and pin the best one (cheap; the slice is for
+   you only), or make the biome promise its features on every seed (a real rule, but more work and
+   not needed for one player). Recommended: pin.
+2. **What level at the end?** The plan says 10 (about 21,000 XP). Lower (8) makes the curve gentler
+   and needs less content; higher needs more quests and bosses.
+3. **The second dungeon.** The cave (large, and the approach is yours to decide), a mine made from the
+   crypt's kit under the abandoned camp (medium, recommended), or only the crypt?
+4. **The three new features.** Abandoned camp, motte and bailey, druid grove: right three? Charcoal
+   burners or a watchtower could swap in for cheap.
+5. **Which class to tune first.** Warrior first (arms tree, shields, simplest numbers), then mage and
+   priest checked by the bot; or all three at once?
+6. **Level gradient.** Levels from the start outward across the one zone (my proposal), or the
+   three-ring idea (three adjacent autumn wood zones, rings 0-2, which the code already does, but
+   it is three zones, not one)?
+7. **Undead bodies.** Tinted humanoids are fine for the slice, or a real skeleton?
+8. **Icons.** When may the generator run for the new items, and when do you want to pick the four
+   waiting icons in review.py?
