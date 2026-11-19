@@ -1,0 +1,3 @@
+// A quest item: a pelt from a creature. Dropped by the creatures to those on the quest alone, and stacking
+// within its quest line (QUESTS.md, *Quest items*).
+{ name: "Pelt", kind: "quest", rarity: "common", quest: true, stack: 10 }

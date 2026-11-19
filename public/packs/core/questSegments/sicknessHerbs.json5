@@ -1,0 +1,25 @@
+// The sickness way: pick up things on the ground for the salve.
+{
+  weight: 1,
+  roles: ["middle"],
+  theme: ["affliction"],
+  requires: ["knows:maker"],
+  provides: ["has:herbs"],
+  uses: ["maker"],
+  place: { objects: ["herb"] },
+  quest: {
+    giver: "maker",
+    parts: ["gatherAt"],
+    title: ["What the Salve Needs", "{objects} for the Salve"],
+    offer: [
+      ["The salve wants {objects}, and plenty of them."],
+      "$motive",
+      [
+        { text: "It is as {goneGiven} always did it: nothing missed, nothing added.", when: { tags: ["twist:death"] }, weight: 4 },
+        "Bring them here and I'll set to work.",
+      ],
+    ],
+    progress: ["Got the {objects}?"],
+    done: ["Good, these will do nicely. Give me a moment."],
+  },
+}

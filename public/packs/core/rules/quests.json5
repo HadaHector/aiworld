@@ -1,11 +1,18 @@
 // Quests (QUESTS.md): how many a character holds, what they give, ground objects, level colours.
 {
   maxActive: 25,
-  // XP at the quest's level: base + perLevel x level; as the character outgrows it, less, down to
-  // greyShare at `grey` levels over.
-  xp: { base: 80, perLevel: 45, grey: 6, greyShare: 0.1 },
-  // Money (copper): base + perLevel x level.
-  money: { base: 10, perLevel: 8 },
+  // Rewards follow the task (QUESTS.md, *Rewards*). A quest's effort is counted in kill-equivalents:
+  // what each objective asks, and the walking it takes (out and back to the farthest place or
+  // person). XP is the effort times a kill's XP at the quest's level times `rate` (a quest pays
+  // more than the kills it asks for, which are paid as well); money is the effort times a few coppers.
+  // So a long walk pays, a hunt pays more than a word with the innkeeper, and a letter to the next
+  // village pays for the road. As the character outgrows a quest by `grey` levels it falls to
+  // `greyShare`.
+  effort: { kill: 1, loot: 0.8, gather: 0.7, talk: 0.4, use: 1.5, reach: 0.5, travel: 0.4, levelOffset: 0.1 },
+  xp: { base: 45, perLevel: 5, rate: 1.5, grey: 6, greyShare: 0.1 },
+  money: { base: 4, perLevel: 2 },
+  // A chain's last quest also pays this share of everything the rest of it paid.
+  finale: 0.3,
   // Standing with the giver's faction.
   standing: 250,
   // Ground objects for gathering: how many stand at once, how soon a taken one is back (seconds).
@@ -14,10 +21,60 @@
   talkRange: 6,
   // Level colours: red from 5 over, orange from 3 over, green from 3 under, grey from 6 under.
   colours: { red: 5, orange: 3, green: -3, grey: -6 },
-  // What a quest's item choice is drawn from (item templates).
-  rewardTemplates: ["sword", "mace", "axe", "dagger", "staff", "bow", "wand", "buckler", "roundShield", "chestpiece"],
+  // What a quest's item choice is drawn from (item templates): a choice of `rewardChoices`, all of
+  // one rarity and about one level, from the kinds (weapon, armour) used least so far in the world,
+  // so the quests of an area do not all give a sword. The rarity aimed for is a quest's, and a
+  // chain's last quest's, higher.
+  // How a quest line's items look (QUESTS.md, *Quest items*): its icon is one of `icons` and its tint one of
+  // `tints`, drawn for each line, so two letters are not the same picture. A list that is empty leaves
+  // the type's own. The set core installs has no paper or parcels, so letters and parcels vary in
+  // tint on the placeholder; add names to `icons` when a set has them.
+  // How likely a creature is to drop a quest's item is the part's `chance` (a segment's use of the part can
+  // say its own); this is a factor on all of them: 1 as written, 0.5 half as often, 0 never.
+  dropChance: 1,
+  itemLooks: {
+    questBlood: { icons: ["potion-bowl-blood"], tints: [] },
+    questPelt: { icons: [], tints: ["#8a6a4a", "#9c7a50", "#7e6a58", "#a8946a", "#6e5a48"] },
+    sealedLetter: { icons: [], tints: ["#e8d9a8", "#d9c3a0", "#c9d6e8", "#e8c9c9", "#cfe3c6", "#dcc9e8"] },
+    wrappedParcel: { icons: [], tints: ["#b08a5c", "#9c7a50", "#a8946a", "#8e7e66", "#b89a78"] },
+    herbalSalve: { icons: ["potion-bowl-violet", "potion-dewdrop-green", "herb-clover", "herb-lilac", "herb-red-berries", "herb-bulb-red"], tints: [] },
+    wardingCharm: { icons: ["charm-jewel-red"], tints: [] },
+  },
+  rewardTemplates: ["sword", "mace", "axe", "dagger", "staff", "bow", "wand", "buckler", "roundShield", "chestpiece", "boots", "helm"],
+  rewardChoices: 3,
+  rewardRarity: { quest: "uncommon", finale: "rare" },
+  // An item's level is within this many of the quest's, or it is not offered: a level 4 quest does not
+  // give level 1 gear. Where nothing fits, the quest gives consumables instead.
+  rewardLevel: 2,
+  // Most quests give no item at all. Some give a few consumables (a fixed reward, not a choice): a
+  // quest of at least `minEffort` that gives no choice does with probability `chance`, `perEffort`
+  // of them for each effort, most `max`, of a kind available at its level (`from`).
+  rewardConsumables: {
+    items: [{ item: "bread", from: 1 }, { item: "healingDraught", from: 3 }],
+    chance: 0.4,
+    minEffort: 1.5,
+    perEffort: 0.6,
+    max: 5,
+  },
   // Quests a settlement gets, by tier, after any intro; chains count by their quests.
   quota: { hamlet: [2, 3], village: [4, 6], town: [7, 10] },
+  // Chains drawn from segments (QUESTS.md, *Segments*): at most this many quests, and how likely
+  // each next segment is where the chain could end (0 = alone, 1 = always on).
+  chain: { max: 4, more: 0.55 },
+  // How the generator weighs what to use (QUESTS.md, *Weighting*): the nearer a place is, the less it
+  // is used already, and the fewer objectives lie round it, the likelier it is. Each factor is
+  // 1 / (1 + something): `distance` is the metres at which a place is half as likely as one at the
+  // door (squared); `reuse` is per earlier quest using the same place or object, in this settlement
+  // (`here`) and in others (`elsewhere`); `kind` the same for a creature kind, which a whole zone
+  // shares; `crowding` per earlier objective within `radius` metres of the place.
+  weighting: {
+    distance: 400,
+    reuse: { here: 2, elsewhere: 0.5 },
+    kind: { here: 1, elsewhere: 0.15 },
+    crowding: { radius: 150, each: 0.7 },
+  },
+  // What `{when}` can be in a giver's words: something that has gone on a while.
+  whens: ["this past week", "for a fortnight now", "these three nights", "since the first frost", "ever since the last market day", "for a good while now"],
   // How far round a settlement its quests look for places, in metres.
   reach: 1000,
   // Plurals by a name's last word; any other takes an "s".
@@ -27,6 +84,8 @@
     objects: [
       { name: "Feverfew", tags: ["herb"] },
       { name: "Strayed Lamb Bell", tags: ["lost"] },
+      { name: "Burnt Candle Stub", tags: ["evidence"] },
+      { name: "Cracked Clay Charm", tags: ["evidence"] },
     ],
     text: "the fields outside {name}",
   },

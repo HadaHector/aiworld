@@ -1,0 +1,16 @@
+// What a giver says when the job is handed in.
+{
+  slot: "thanks",
+  lines: [
+    { text: "[Well done|Good work]. Here, as promised.", weight: 1 },
+    { text: "I knew I could count on you.", weight: 1 },
+    { text: "That's [a weight|a load] off my mind. Take this.", weight: 1 },
+    { text: "Hm. Not bad. Here's your pay.", when: { mood: "gruff" }, weight: 2.5 },
+    { text: "Wonderful! I knew it! Here, take it, with my thanks.", when: { mood: "cheerful" }, weight: 2.5 },
+    { text: "Bless you. I can sleep again.", when: { mood: "weary" }, weight: 2.5 },
+    { text: "Oh, thank heavens. Here - take it, please.", when: { mood: "nervous" }, weight: 2.5 },
+    { text: "May you be blessed for this.", when: { role: "priest" }, weight: 3 },
+    { text: "Your first drink is on me, next time you're in.", when: { role: "innkeeper" }, weight: 3 },
+    { text: "{settlement} owes you for this.", when: { role: "reeve" }, weight: 3 },
+  ],
+}

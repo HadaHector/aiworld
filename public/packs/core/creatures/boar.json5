@@ -3,6 +3,7 @@
   entity: "beast",
   name: "{variant} Boar",
   family: "beast",
+  tags: ["furred", "mammal"],        // what it is like, for quests (QUESTS.md) to ask for
   hostility: "neutral",
   stats: { stamina: 4, strength: 10, agility: 6, armor: 40, weaponMin: 2, weaponMax: 5, weaponSpeed: 3.2 },
   perLevel: { stamina: 1.8, strength: 1.5, agility: 1, armor: 15, weaponMin: 1.2, weaponMax: 1.8 },

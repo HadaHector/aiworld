@@ -3,6 +3,7 @@
   entity: "humanoid",
   name: "Bandit {variant}",
   family: "humanoid",
+  tags: ["armed"],        // what it is like, for quests (QUESTS.md) to ask for
   hostility: "hostile",
   faction: "bandits",                 // NPCS.md, *Factions*: hostile to players and the folk
   roster: false,

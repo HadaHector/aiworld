@@ -1,5 +1,5 @@
 // Body armour from parts: a material (which sets the gear and the piece) times how well it is made
-// times a rarity - 3 x 3 x 2 = 18 types, none of them a worn uncommon.
+// times a rarity - 3 x 3 x 3 = 27 types, none of them a worn uncommon or rare.
 {
   kind: "armour",
   slot: "chest",
@@ -16,8 +16,8 @@
       { id: "fine", name: "Fine", budget: 1.15 },
     ],
   },
-  rarities: ["common", "uncommon"],
-  never: [{ make: "worn", rarity: "uncommon" }],
+  rarities: ["common", "uncommon", "rare"],
+  never: [{ make: "worn", rarity: "uncommon" }, { make: "worn", rarity: "rare" }],
   extra: { stamina: [1, 2], strength: [1, 2], agility: [1, 2], spirit: [1, 2] },
   value: 35,
 }

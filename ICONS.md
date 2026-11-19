@@ -29,6 +29,9 @@ brings an icon set, a definition names an icon, and the game works with none.
   page where you pick one of each). `buildGenerated.mjs` crops every picked cutout to its content and
   fits it into the cell, so all of them fill the icon alike. It is a later pack than craftpix, so its names win.
 
+A quest item's icon is one of a list in the rules, chosen for each quest line (QUESTS.md, *Quest items*);
+its tint over the placeholder is another.
+
 ## An icon set
 
 `icons/<id>.json5` in any pack:

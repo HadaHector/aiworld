@@ -4,6 +4,7 @@
   entity: "beast",
   name: "{variant} Wolf",
   family: "beast",
+  tags: ["furred", "mammal", "predator"],        // what it is like, for quests (QUESTS.md) to ask for
   hostility: "hostile",
   stats: { stamina: 3, strength: 8, agility: 12, armor: 20, weaponMin: 2, weaponMax: 4, weaponSpeed: 3 },
   perLevel: { stamina: 1.5, strength: 1.5, agility: 1.5, armor: 10, weaponMin: 1.1, weaponMax: 1.6 },

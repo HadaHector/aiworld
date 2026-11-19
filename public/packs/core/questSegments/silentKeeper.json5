@@ -1,0 +1,30 @@
+// Someone lives out at a remote place, and the giver has heard nothing from them. Can stand alone;
+// it also gives you a contact out there for the segments that follow (contactFavour, contactReply).
+{
+  weight: 1,
+  roles: ["opener", "closer"],
+  theme: ["remote"],
+  provides: ["met:contact", "remote"],
+  giver: ["reeve", "priest", "innkeeper"],
+  place: { tags: ["remote"] },
+  people: {
+    contact: { roles: [], make: ["sexton", "hermit", "quarryman", "forester", "traveller"] },
+  },
+  quest: {
+    ender: "contact",
+    parts: [{ part: "visitPlace" }, { part: "talkTo", npc: "contact" }],
+    title: ["Word from {place}", "Nobody Has Heard from {contactGiven}", "A Long Silence"],
+    offer: [
+      "$hook",
+      ["Nobody has heard from {contactGiven} out at {place} [in a while|{when}].", "Not a word from {place} {when}."],
+      ["That's not like {contactSex, select, male {him} female {her} other {them}}.", "{contactGiven} is [usually the first to send word|never one to stay quiet]."],
+      ["Would you go and see {contactSex, select, male {he's} female {she's} other {they're}} well?", "Go out to {place} and [see how {contactGiven} fares|look in on {contactGiven}]."],
+    ],
+    progress: ["Any word of {contactGiven}?", "$progress"],
+    done: [
+      "{giverGiven} was worried about me? Ha! Tell them I'm well enough. Here - take this for the walk.",
+      "Oh, {giverGiven} sent you? [No need to fuss|Kind of them]. I've been busy, that's all. Here, for the walk.",
+      { text: "Quiet? It's a quiet sort of place. But I'm glad of the company. Take this.", when: { place: ["graves"] }, weight: 3 },
+    ],
+  },
+}

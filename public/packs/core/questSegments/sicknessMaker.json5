@@ -1,0 +1,26 @@
+// The sickness way: someone knows the cure.
+{
+  weight: 2,
+  roles: ["middle"],
+  theme: ["affliction"],
+  requires: ["has:sample"],
+  forbids: ["knows:maker"],
+  provides: ["knows:maker"],
+  uses: ["healer"],
+  people: {
+    maker: { roles: ["shopkeeper", "farmer", "smith"], make: ["hermit"] },
+  },
+  quest: {
+    giver: "healer",
+    ender: "maker",
+    parts: [{ part: "talkTo", npc: "maker" }],
+    title: "A Cure, Perhaps",
+    offer: [
+      ["There may be a cure."],
+      ["{makerGiven} knows how to make the salve - ask them, and tell them I sent you.", "{makerGiven} made the salve once, for a bad winter. Ask whether they remember how."],
+      ["Be quick about it.", "Don't dawdle."],
+    ],
+    progress: ["Go to {makerGiven}."],
+    done: ["A salve against the sickness? It can be done, if you fetch me what it needs."],
+  },
+}

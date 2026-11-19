@@ -1,0 +1,29 @@
+// The intro story, a start: the creatures sicken, and the giver sends you to someone who knows.
+// Only the intro's draw uses it (`free: false`); the story is questPlots/affliction.json5.
+{
+  weight: 2,
+  free: false,
+  roles: ["opener"],
+  theme: ["affliction"],
+  provides: ["problem:afflicted", "signs:beasts"],
+  giver: ["reeve", "innkeeper", "priest"],
+  people: {
+    healer: { roles: ["priest", "innkeeper"], relation: ["friend", "sister", "brother", "wife", "husband"], make: ["hermit"] },
+  },
+  // A sickness is a mammal's: it foams, it bites, it passes from one to the next.
+  creatures: { hostility: ["hostile", "neutral"], family: ["beast"], tags: ["mammal"] },
+  quest: {
+    ender: "healer",
+    parts: [{ part: "talkTo", npc: "healer" }],
+    title: ["A Strange Sickness", "The {creatures} Are Not Themselves", "Something Wrong Round {settlement}"],
+    offer: [
+      ["There's something wrong with the {creatures} round {settlement}.", "Have you seen the {creatures} out there? Foaming, wild-eyed, wrong.", "The {creatures} round {settlement} are [not themselves|sick, or something worse]."],
+      ["Two of the herders came back bitten, and one of them is still abed.", "{neighbour} was bitten {when}, and the wound has gone black."],
+      ["{healerGiven} - {healerTitle} - knows more of such things than anyone here.", "If anyone can say what ails them, it's {healerGiven}, the {healerTitle}."],
+      ["Go and ask what can be done."],
+      "$promise",
+    ],
+    progress: ["Have you spoken to {healerGiven}?", "$progress"],
+    done: ["{giverGiven} sent you about the {creatures}? Then it's worse than I feared."],
+  },
+}

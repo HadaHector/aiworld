@@ -5,5 +5,5 @@
   count: 1,
   below: 0.7,
   line: "Salve a weakened {creature}",
-  motive: ["Wear one down first, or it won't hold still for you."],
+  motive: ["Wear one down first, or it won't hold still for you.", "Wound one first - it won't stand for the salve otherwise."],
 }

@@ -1,0 +1,14 @@
+// The intro's story (GAMEPLAY.md's test chain, and others like it): something is wrong in the
+// settlement, and a healer is asked. It is drawn anew for each world from the segments of the
+// "affliction" theme - questSegments/ - so the start, the middle and the end differ:
+//
+//   start     the beasts fall sick | a neighbour raves | omens and bad signs
+//   middle    a sample from the beasts (a sickness) | signs gathered at the graves (a curse)
+//   sickness  ask the maker (or find them dead), herbs, the salve, tried on a beast
+//   curse     ask the sexton, a ward, tried on a beast | or find who laid it, and ask them
+//
+// The test chain - talk, kill and loot, talk, gather, receive, use, talk - is the sickness one.
+{
+  intro: true,
+  draw: { themes: ["affliction"], min: 4, max: 6 },
+}

@@ -1,0 +1,20 @@
+// The sickness way: be given the salve.
+{
+  weight: 1,
+  roles: ["middle"],
+  theme: ["affliction"],
+  requires: ["has:herbs"],
+  provides: ["has:cure"],
+  uses: ["maker"],
+  quest: {
+    giver: "maker",
+    parts: [{ part: "receiveCure", npc: "maker" }],
+    title: "The Salve",
+    offer: [
+      ["Here it is - still warm.", { text: "Here it is, made as {goneGiven} made it. I hope I remembered right.", when: { tags: ["twist:death"] }, weight: 4 }],
+      ["Careful with it; there's no more where that came from."],
+    ],
+    progress: ["Take the salve."],
+    done: ["Now it's to be tried."],
+  },
+}

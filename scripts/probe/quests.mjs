@@ -13,6 +13,11 @@ import { createMemoryStore } from "../../src/save/memoryStore.ts";
 import { createWorldRecord } from "../../src/save/records.ts";
 import { addThreat } from "../../src/sim/skills/combat.ts";
 import { fillText } from "../../src/sim/text.ts";
+import { hashString } from "../../src/world/content/dimensions.ts";
+import { bindOf } from "../../src/sim/quests/quest.ts";
+import { createQuestItemLooks, lookedIcon } from "../../src/ui/questItemLook.ts";
+import { composeChain, themeFits } from "../../src/sim/quests/chains.ts";
+import { bindFor, questOrder } from "../../src/sim/quests/generator.ts";
 
 let failures = 0;
 let checks = 0;
@@ -246,7 +251,7 @@ await section("the test chain", async () => {
   check("done once: not offered again", !(await talk(giverE)).quests.some((q) => q.id === "q:probe/1"));
 
   // A quest that hands an item over on taking it (no objective for it); with a full bag it is refused whole.
-  const gift = quest(8, { giver, ender: maker, requires: { quests: [], level: 1 }, gives: ["sealedLetter"], objectives: [{ kind: "deliver", item: "sealedLetter", to: maker, line: t("Bring the letter") }] });
+  const gift = quest(20, { giver, ender: maker, requires: { quests: [], level: 1 }, gives: ["sealedLetter"], objectives: [{ kind: "deliver", item: "sealedLetter", to: maker, line: t("Bring the letter") }] });
   server.debug.quests.define([gift]);
   const letter = items.typeIndex.get("sealedLetter");
   const itemSystem = server.debug.items;
@@ -254,14 +259,19 @@ await section("the test chain", async () => {
   await talk(giverE);
   const filler = items.typeIndex.get("tunic");
   while (me.belongings.bag.includes(null)) itemSystem.give(me, filler, 1);
-  await send({ type: "questAccept", npc: giverE.id, quest: "q:probe/8" });
-  check("a quest that gives an item with a full bag is refused", last("questRefused")?.reason === "bagFull" && !state(8) && holds() === 0, JSON.stringify(last("questRefused")));
+  await send({ type: "questAccept", npc: giverE.id, quest: "q:probe/20" });
+  check("a quest that gives an item with a full bag is refused", last("questRefused")?.reason === "bagFull" && !state(20) && holds() === 0, JSON.stringify(last("questRefused")));
   const at8 = me.belongings.bag.findIndex((x) => x != null && itemSystem.ctx.store.get(x).type === filler);
   await send({ type: "itemDrop", from: { container: 0, slot: at8 }, count: 0 });
-  await send({ type: "questAccept", npc: giverE.id, quest: "q:probe/8" });
-  check("...taken once there is room, the item handed over and no objective for it", state(8)?.state === "active" && holds() === 1 && state(8).counts.length === 1, JSON.stringify(state(8)));
-  await send({ type: "questAbandon", quest: "q:probe/8" });
+  await send({ type: "questAccept", npc: giverE.id, quest: "q:probe/20" });
+  check("...taken once there is room, the item handed over and no objective for it", state(20)?.state === "active" && holds() === 1 && state(20).counts.length === 1, JSON.stringify(state(20)));
+  await send({ type: "questAbandon", quest: "q:probe/20" });
   check("abandoned: the item taken back", holds() === 0);
+  // The filler goes, so the bag has room for what the next tests hand over.
+  for (let slot = 0; slot < me.belongings.bag.length; slot++) {
+    const held = me.belongings.bag[slot];
+    if (held != null && itemSystem.ctx.store.get(held).type === filler) await send({ type: "itemDrop", from: { container: 0, slot }, count: 0 });
+  }
 
   // Abandoning and failing leave nothing behind.
   const timed = quest(7, { giver, ender: giver, requires: { quests: [], level: 1 }, within: 2, objectives: [{ kind: "receive", item: "sealedLetter", from: maker, line: t("Fetch the letter") }] });
@@ -272,13 +282,281 @@ await section("the test chain", async () => {
   check("out of time: failed", state(7)?.state === "failed");
   await send({ type: "questAbandon", quest: "q:probe/7" });
   check("abandoned: gone, and can be taken again", !state(7) && (await talk(giverE)).quests.some((q) => q.id === "q:probe/7" && q.state === "offer"));
+
+  // --- quest items belong to their quest line (QUESTS.md, *Quest items*) ---
+  const bind = (chainId) => (hashString(chainId) >>> 0) || 1;
+  const letterType = items.typeIndex.get("sealedLetter");
+  const salveType = items.typeIndex.get("herbalSalve");
+  const stack = () => me.belongings.bag.map((x) => (x != null ? server.debug.items.ctx.store.get(x) : null)).filter(Boolean);
+  const letters = () => stack().filter((x) => x.type === letterType);
+  const salves = () => stack().filter((x) => x.type === salveType);
+  const errand = (n, to) => quest(n, { giver, ender: to, chain: { id: `q:errand${n}`, index: 1, of: 1 }, requires: { quests: [], level: 1 }, objectives: [{ kind: "receive", item: "sealedLetter", from: giver, line: t("Take the letter") }, { kind: "deliver", item: "sealedLetter", to, line: t("Deliver it") }] });
+  const cure = (n) => quest(n, { giver: maker, ender: maker, chain: { id: `q:cure${n}`, index: 1, of: 1 }, requires: { quests: [], level: 1 }, objectives: [{ kind: "receive", item: "herbalSalve", from: maker, line: t("Take the salve") }, { kind: "use", item: "herbalSalve", on: beasts, below: 1, count: 1, line: t("Salve a beast") }] });
+  server.debug.quests.define([errand(8, healer), errand(9, maker), cure(10), cure(11)]);
+
+  // Two errands with the same kind of letter: each has its own.
+  await talk(giverE);
+  await send({ type: "questAccept", npc: giverE.id, quest: "q:probe/8" });
+  await send({ type: "questAccept", npc: giverE.id, quest: "q:probe/9" });
+  check("two errands, two letters of one type held at once", letters().length === 2, String(letters().length));
+  check("...each made for its quest line", letters().map((x) => x.roll).sort().join() === [bind("q:errand8"), bind("q:errand9")].sort().join(), letters().map((x) => x.roll).join());
+  await talk(makerE);
+  check("the letter delivered is the one made for that errand", state(9)?.state === "ready" && state(8)?.counts[1] === 0, `${JSON.stringify(state(8))} ${JSON.stringify(state(9))}`);
+  check("...the other errand keeps its own", letters().length === 1 && letters()[0].roll === bind("q:errand8"), letters().map((x) => x.roll).join());
+  // Abandoning takes its item, and only its item.
+  await send({ type: "questAbandon", quest: "q:probe/8" });
+  check("abandoned: its letter is gone", letters().length === 0, String(letters().length));
+  await talk(makerE);
+  await send({ type: "questComplete", npc: makerE.id, quest: "q:probe/9", choice: 0 });
+  check("the other errand still handed in", done(9));
+  await talk(giverE);
+  await send({ type: "questAccept", npc: giverE.id, quest: "q:probe/8" });
+  check("taken again: handed the letter again", letters().length === 1 && letters()[0].roll === bind("q:errand8"));
+  await send({ type: "questAbandon", quest: "q:probe/8" });
+
+  // Two cures: only the salve of its own quest line counts when used.
+  await talk(makerE);
+  await send({ type: "questAccept", npc: makerE.id, quest: "q:probe/10" });
+  await send({ type: "questAccept", npc: makerE.id, quest: "q:probe/11" });
+  check("two cures, two salves", salves().length === 2 && new Set(salves().map((x) => x.roll)).size === 2, String(salves().length));
+  const slotOfSalve = (chainId) => me.belongings.bag.findIndex((x) => x != null && server.debug.items.ctx.store.get(x).type === salveType && server.debug.items.ctx.store.get(x).roll === bind(chainId));
+  const wounded = server.debug.creatures.debug.spawn("mainland", kind, me.x + 3, me.z, 1);
+  await send({ type: "target", id: wounded.id });
+  await send({ type: "itemUse", from: { container: 0, slot: slotOfSalve("q:cure11") } }, 70);
+  check("the salve of the second cure counts for the second", state(11)?.state === "ready", JSON.stringify(state(11)));
+  check("...and not for the first, which has a salve of its own", state(10)?.counts[1] === 0, JSON.stringify(state(10)));
+  await send({ type: "questAbandon", quest: "q:probe/10" });
+  check("abandoned: its salve is gone, the other's stays", salves().length === 1 && salves()[0].roll === bind("q:cure11"));
+  await talk(makerE);
+  await send({ type: "questComplete", npc: makerE.id, quest: "q:probe/11", choice: 0 });
+  check("handed in: the salve taken back", done(11) && salves().length === 0, String(salves().length));
+
+  // A salve lost with an abandoned try of the quest that uses it is handed again when it is taken again.
+  const parts = (n, chainId, index) => quest(n, { giver: maker, ender: maker, chain: { id: chainId, index, of: 2 }, requires: { quests: [], level: 1 }, objectives: index === 1 ? [{ kind: "receive", item: "herbalSalve", from: maker, line: t("Take the salve") }] : [{ kind: "use", item: "herbalSalve", on: beasts, below: 1, count: 1, line: t("Salve a beast") }] });
+  const looked = { herbalSalve: { name: t("Maker's Salve"), icon: "herb-clover", tint: "" } };
+  const first = { ...parts(12, "q:line", 1), itemLooks: looked };
+  const second = { ...parts(13, "q:line", 2), requires: { quests: ["q:probe/12"], level: 1 }, itemLooks: looked };
+  server.debug.quests.define([first, second]);
+  await talk(makerE);
+  await send({ type: "questAccept", npc: makerE.id, quest: "q:probe/12" });
+  await send({ type: "questComplete", npc: makerE.id, quest: "q:probe/12", choice: 0 });
+  check("a chain's first quest done: its salve kept for the next", done(12) && salves().length === 1);
+  // A quest item no quest could use (one kept from before, or from a quest that is gone) goes when the
+  // character enters; one a quest line still to do could use stays, even between two of its quests.
+  server.debug.items.give(me, letterType, 1);
+  check("a letter of no quest line held (a leftover)", letters().length === 1 && letters()[0].roll !== bind("q:errand8"));
+  await send({ type: "logout", toMenu: false }, 10);
+  await send({ type: "enterWorld", character, dimension: "" }, 15);
+  me = server.debug.entity(id);
+  giverE = npcs.entityOf(giver);
+  healerE = npcs.entityOf(healer);
+  makerE = npcs.entityOf(maker);
+  check("entering: the leftover letter is gone", letters().length === 0, String(letters().length));
+  check("...and the client is told the quest of the salve it holds between two, to name it", inbox.some((m) => m.type === "questDefs" && m.defs.some((d) => d.id === "q:probe/12")));
+  check("...and the salve kept between two quests of a line stays", salves().length === 1 && salves()[0].roll === bind("q:line"), String(salves().length));
+  await talk(makerE);
+  await send({ type: "questAccept", npc: makerE.id, quest: "q:probe/13" });
+  await send({ type: "questAbandon", quest: "q:probe/13" });
+  check("the next one abandoned: the salve goes with it", salves().length === 0, String(salves().length));
+  await send({ type: "questAccept", npc: makerE.id, quest: "q:probe/13" });
+  check("...and is handed again when it is taken again", salves().length === 1 && salves()[0].roll === bind("q:line"));
+  await send({ type: "questAbandon", quest: "q:probe/13" });
+
+  // --- dropped quest items: only while the quest is active, only for those on it, a chance that can be set ---
+  const pelt = items.typeIndex.get("questPelt");
+  const peltsOf = (list) => list.map((id) => (id == null ? null : server.debug.items.ctx.store.get(id))).filter((x) => x && x.type === pelt);
+  // A second player, with a character of its own (the world saves, so there are no quick ones).
+  const others = createLocalChannel();
+  server.connect(others.server);
+  others.client.send({ type: "hello", protocol: PROTOCOL_VERSION, select: true, name: "", dimension: "" });
+  let otherId = 0;
+  let otherCharacter = "";
+  const pumpOthers = async (steps) => {
+    for (let i = 0; i < steps; i++) {
+      await pump(1);
+      for (const m of others.client.receive()) {
+        if (m.type === "entered") otherId = m.playerId;
+        if (m.type === "transfer") others.client.send({ type: "arrived" });
+        if (m.type === "characters") otherCharacter = m.list.find((c) => c.name === "Bystander")?.id ?? otherCharacter;
+      }
+    }
+  };
+  await pumpOthers(3);
+  others.client.send({ type: "characterCreate", name: "Bystander", origins: {}, look: { seed: 31, race: "human", outfit: "", sex: "" } });
+  await pumpOthers(3);
+  others.client.send({ type: "enterWorld", character: otherCharacter, dimension: "" });
+  await pumpOthers(15);
+  const bystander = server.debug.entity(otherId);
+  check("a second player is in the world", !!bystander && bystander !== me);
+  const dropLine = (n, chance) => quest(n, { giver, ender: giver, chain: { id: `q:drop${n}`, index: 1, of: 1 }, requires: { quests: [], level: 1 }, objectives: [{ kind: "drop", item: "questPelt", from: beasts, count: 2, chance, line: t("Pelts") }] });
+  server.debug.quests.define([dropLine(14, 1), dropLine(15, 0)]);
+  /** A creature killed with both players on its threat table: its corpse. */
+  const killedBy = async () => {
+    const corpse = server.debug.creatures.debug.spawn("mainland", kind, me.x + 2, me.z, 1);
+    addThreat(server.debug.skills.sys, corpse, me, 10);
+    addThreat(server.debug.skills.sys, corpse, bystander, 10);
+    server.debug.skills.kill(corpse);
+    await pump(2);
+    return corpse;
+  };
+  const seenBy = (corpse, who) => peltsOf(server.debug.items.lootSeenBy(corpse, who));
+  const heldPelts = () => stack().filter((x) => x.type === pelt);
+  await talk(giverE);
+  let corpse = await killedBy();
+  check("no quest, no drop: a kill before the quest leaves nothing for anyone", seenBy(corpse, me).length === 0 && seenBy(corpse, bystander).length === 0);
+  await send({ type: "questAccept", npc: giverE.id, quest: "q:probe/14" });
+  corpse = await killedBy();
+  check("on the quest: the kill leaves the item in the loot, for that player", seenBy(corpse, me).length === 1 && seenBy(corpse, me)[0].roll === bind("q:drop14"), String(seenBy(corpse, me).length));
+  check("...and not for the player who is not on it, though on the threat table", seenBy(corpse, bystander).length === 0);
+  check("it does not count until taken", state(14)?.counts[0] === 0, JSON.stringify(state(14)));
+  check("the corpse is lootable for the player on the quest", server.debug.items.lootable(corpse, me));
+  check("...and its window shows the item", server.debug.items.lootSeenBy(corpse, me).some((id) => id != null && server.debug.items.ctx.store.get(id).type === pelt));
+  await send({ type: "teleport", x: corpse.x + 1, z: corpse.z }, 3);
+  await send({ type: "lootOpen", entity: corpse.id });
+  check("the loot window is sent with the item for them", last("loot")?.entity === corpse.id && last("loot").items.some((x) => x && x.type === "questPelt"), JSON.stringify(last("loot")?.items?.map((x) => x?.type)));
+  await send({ type: "lootTake", slot: 0xffff });
+  check("taken: it counts, and is in the bag", state(14)?.counts[0] === 1 && heldPelts().length === 1 && heldPelts()[0].roll === bind("q:drop14"), JSON.stringify(state(14)));
+  await send({ type: "lootClose" });
+  // A second corpse: the item goes on the same stack.
+  corpse = await killedBy();
+  await send({ type: "teleport", x: corpse.x + 1, z: corpse.z }, 3);
+  await send({ type: "lootOpen", entity: corpse.id });
+  await send({ type: "lootTake", slot: 0xffff });
+  check("a second one stacks with the first (one stack of 2)", heldPelts().length === 1 && heldPelts()[0].count === 2, JSON.stringify(heldPelts().map((x) => x.count)));
+  check("the objective is done at its count", state(14)?.state === "ready");
+  await send({ type: "itemDrop", from: { container: 0, slot: me.belongings.bag.findIndex((x) => x != null && server.debug.items.ctx.store.get(x).type === pelt) }, count: 0 });
+  check("a dropped quest item cannot be dropped", heldPelts().length === 1);
+  await send({ type: "questAbandon", quest: "q:probe/14" });
+  check("abandoned: the whole stack goes", heldPelts().length === 0);
+  await talk(giverE);
+  await send({ type: "questAccept", npc: giverE.id, quest: "q:probe/14" });
+  check("taken again: it starts from nothing", state(14)?.counts[0] === 0 && heldPelts().length === 0);
+  await send({ type: "questAbandon", quest: "q:probe/14" });
+  // The chance is the part's, and a rule scales every one.
+  await send({ type: "questAccept", npc: giverE.id, quest: "q:probe/15" });
+  let none = 0;
+  for (let i = 0; i < 6; i++) none += seenBy(await killedBy(), me).length;
+  check("a chance of 0: nothing ever drops", none === 0, String(none));
+  await send({ type: "questAbandon", quest: "q:probe/15" });
+  await send({ type: "questAccept", npc: giverE.id, quest: "q:probe/14" });
+  rules.quests.dropChance = 0;
+  none = 0;
+  for (let i = 0; i < 6; i++) none += seenBy(await killedBy(), me).length;
+  check("the rules' drop chance at 0 stops a chance of 1", none === 0, String(none));
+  rules.quests.dropChance = 1;
+  let some = 0;
+  for (let i = 0; i < 6; i++) some += seenBy(await killedBy(), me).length;
+  check("...and at 1 every kill drops one (a chance of 1)", some === 6, String(some));
+  await send({ type: "questAbandon", quest: "q:probe/14" });
+  check("abandoned: nothing left in the bag", heldPelts().length === 0);
+
+});
+
+// --- segments: the pieces fit together, whatever the world ---
+/** Every chain the rules could make, by walking from each opener, ignoring what a settlement has:
+ *  of these themes (any free segments if none), between `min` and `max` segments. */
+function chainsOf(q, { themes = null, min = 1, max = q.chain.max } = {}) {
+  const segments = [...q.segments.values()];
+  const allowed = (s) => s.weight > 0 && (themes ? s.theme.some((t) => themes.includes(t)) : s.free);
+  const found = [];
+  const walk = (chain) => {
+    const last = chain[chain.length - 1];
+    if (last.roles.includes("closer") && chain.length >= min) found.push(chain);
+    if (chain.length >= max || (chain.length > 1 && !last.roles.includes("middle"))) return;
+    const final = chain.length + 1 >= max;
+    for (const s of segments) {
+      if (!allowed(s) || chain.includes(s) || !(s.roles.includes("closer") || (!final && s.roles.includes("middle"))) || !themeFits(chain, s)) continue;
+      if (composeChain("", [...chain, s])) walk([...chain, s]);
+    }
+  };
+  for (const s of segments) if (allowed(s) && s.roles.includes("opener")) walk([s]);
+  return found;
+}
+/** The objective kinds a chain asks, in order. */
+const kindsOf = (q, chain) => chain.flatMap((s) => s.quest.parts.map((p) => q.parts.get(p.part).kind));
+
+await section("segments", async () => {
+  const q = loadRulesFromDisk(CONFIG).quests;
+  const segments = [...q.segments.values()];
+  const get0 = (id) => q.segments.get(id);
+  check("there are segments of each role", ["opener", "middle", "closer"].every((r) => segments.some((s) => s.roles.includes(r))));
+  // The free chains.
+  const free = chainsOf(q);
+  const reached = new Set(free.flat().map((s) => s.id));
+  for (const s of segments) if (s.weight > 0 && s.free && s.roles.includes("opener")) check(`opener ${s.id} reaches a closer`, free.some((c) => c[0] === s));
+  for (const s of segments) if (s.weight > 0 && s.free && s.theme.every((t) => !q.plots.some((p) => p.draw?.themes.includes(t)))) check(`segment ${s.id} is on some free chain`, reached.has(s.id));
+  log(`${segments.length} segments, ${free.length} possible free chains of at most ${q.chain.max}`);
+  check("a good number of different free chains", free.length >= 15, String(free.length));
+  // The plots that draw a chain (the intro's story): every one it could be.
+  for (const plot of q.plots.filter((p) => p.draw)) {
+    const variants = chainsOf(q, plot.draw);
+    log(`${plot.id}: ${variants.length} possible stories of ${plot.draw.min} to ${plot.draw.max}`);
+    check(`${plot.id}: several stories`, variants.length >= 6, String(variants.length));
+    const used = new Set(variants.flat().map((s) => s.id));
+    for (const s of segments) if (s.theme.some((t) => plot.draw.themes.includes(t)) && s.weight > 0) check(`${plot.id}: ${s.id} is in some story`, used.has(s.id));
+    const startsOf = new Set(variants.map((c) => c[0].id));
+    check(`${plot.id}: more than one start`, startsOf.size >= 2, [...startsOf].join());
+    const endsOf = new Set(variants.map((c) => c.at(-1).id));
+    check(`${plot.id}: more than one ending`, endsOf.size >= 2, [...endsOf].join());
+    check(`${plot.id}: a twist is possible`, variants.some((c) => c.some((s) => s.provides.some((t) => t.startsWith("twist:")))));
+    // GAMEPLAY.md's test chain is one of them: talk, kill and loot, talk, gather, receive, use, talk.
+    check(`${plot.id}: the test chain is one of them`, variants.some((c) => kindsOf(q, c).join() === "talk,kill,drop,talk,gather,receive,use"));
+  }
+  // Every tag a quest asks of creatures is one some creature of the pack has, with the family and
+  // hostility it asks alongside.
+  const kinds = [...loadCreatureRulesFromDisk(CONFIG, loadRulesFromDisk(CONFIG), SEED).kinds.values()];
+  for (const s of segments) {
+    const need = s.creatures;
+    if (!need) continue;
+    const some = kinds.some((k) => (!need.family || need.family.includes(k.family)) && (!need.hostility || need.hostility.includes(k.template.hostility)) && (!need.tags || need.tags.every((t) => k.tags.includes(t))));
+    check(`segment ${s.id}: a creature has what it asks (${JSON.stringify(need)})`, some);
+  }
+  check("curseLifted shuts weapons out and wardCharm lists armour only", get0("curseLifted")?.quest.reward.not.includes("weapon") && get0("wardCharm")?.quest.reward.only.includes("armour"));
+  check("pelts ask for furred creatures", get0("pelts")?.creatures?.tags?.includes("furred"));
+  // A recipe or chain that breaks its own rules does not compose.
+  const get = (id) => q.segments.get(id);
+  check("a closer cannot start a chain that wants what it lacks", composeChain("x", [get("sicknessTry")]) === null);
+  check("segments out of order do not fit", composeChain("x", [get("sicknessAsk"), get("sicknessHerbs")]) === null);
+  check("a curse does not follow a sickness", composeChain("x", [get("sicknessAsk"), get("sicknessSample"), get("curseSigns")]) === null);
+  check("the same help is not asked twice", composeChain("x", [get("sicknessAsk"), get("sicknessSample"), get("sicknessMaker"), get("makerGone")]) === null);
+  check("wanting creatures nobody is does not fit", composeChain("x", [{ ...get("foldTrouble"), creatures: { hostility: ["hostile"], family: null } }, { ...get("pelts"), roles: ["middle"], creatures: { hostility: ["friendly"], family: null } }]) === null);
+  // A quest item's technical identity (its roll) is unique by construction: made of where the line is.
+  {
+    const seen = new Map();
+    let clash = 0;
+    for (let d = 0; d < 3; d++) for (let site = 0; site < 40; site++) for (let n = 0; n < 30; n++) {
+      const bind = bindFor(d, site, n);
+      if (seen.has(bind) || bind === 0) clash++;
+      seen.set(bind, `${d}/${site}/${n}`);
+    }
+    check("rolls of lines of different places never clash, nor are 0 (3 dimensions, 40 settlements, 30 quests)", clash === 0, String(clash));
+    check("...the highest places fit", bindFor(63, 65535, 1022) > 0 && bindFor(63, 65535, 1022) <= 4294967295 && bindFor(0, 0, 0) === 1);
+    check("a line that would outgrow its bits fails loudly, not silently", ["dimension", "site", "index"].every((what, i) => { try { bindFor(i === 0 ? 64 : 0, i === 1 ? 65536 : 0, i === 2 ? 1023 : 0); return false; } catch { return true; } }));
+    check("the same place gives the same roll", bindFor(1, 7, 3) === bindFor(1, 7, 3) && bindFor(1, 7, 3) !== bindFor(1, 7, 4) && bindFor(1, 7, 3) !== bindFor(1, 8, 3) && bindFor(1, 7, 3) !== bindFor(2, 7, 3));
+  }
+  // Someone who is gone can be spoken of, never met.
+  const dead = { ...get("makerGone"), quest: { ...get("makerGone").quest, ender: "gone" } };
+  check("a quest cannot be ended by someone who is gone", composeChain("x", [get("sicknessAsk"), get("sicknessSample"), dead]) === null);
+});
+
+// --- the order the world's quests are made in ---
+await section("quest order", () => {
+  const ids = Array.from({ length: 40 }, (_, i) => i);
+  const a = questOrder(1, "mainland", ids);
+  check("a permutation of the settlements", [...a].sort((x, y) => x - y).join() === ids.join());
+  check("the same however they are listed", questOrder(1, "mainland", [...ids].reverse()).join() === a.join());
+  check("shuffled, not in id order", a.join() !== ids.join());
+  check("different for another seed", questOrder(2, "mainland", ids).join() !== a.join());
 });
 
 // --- the generator: every settlement's quests, well formed, the same for the same seed ---
 /** A server on a config and seed, with one quick player at the start; its casts made on asking. */
-async function generatedWorld(config, seed) {
+async function generatedWorld(config, seed, weights = true, tweak = null) {
   const { content, packs } = loadContentFromDisk(config);
   const rules = loadRulesFromDisk(config);
+  tweak?.(rules);
+  // Weighting off: every place, kind and object as likely as any other, wherever it is and however used.
+  if (!weights) rules.quests.weighting = { distance: 1e12, reuse: { here: 0, elsewhere: 0 }, kind: { here: 0, elsewhere: 0 }, crowding: { radius: 0, each: 0 } };
   const creatures = loadCreatureRulesFromDisk(config, rules, seed);
   const progression = loadProgressionRulesFromDisk(config, rules, seed);
   const items = loadItemRulesFromDisk(config, rules, seed);
@@ -292,41 +570,122 @@ async function generatedWorld(config, seed) {
     server.step(1 / 30);
     for (const m of channel.client.receive()) if (m.type === "transfer") channel.client.send({ type: "arrived" });
   }
-  // Every settlement's cast, and with it its quests.
-  const casts = new Map(worldData.settlementLayouts.map((l) => [l.siteId, server.debug.npcs.debug.cast("mainland", l.siteId)]));
+  // Every settlement's quests exist as soon as the dimension has loaded, with no one near them.
   const quests = [];
   for (const l of worldData.settlementLayouts) for (let n = 0; ; n++) {
     const def = server.debug.quests.def(`q:mainland/${l.siteId}/${n}`);
     if (!def) break;
     quests.push(def);
   }
-  return { server, rules, items, worldData, casts, quests, channel };
+  const casts = new Map(worldData.settlementLayouts.map((l) => [l.siteId, server.debug.npcs.debug.cast("mainland", l.siteId)]));
+  return { server, rules, items, worldData, casts, quests, channel, creatures };
 }
 
 await section("the generator", async () => {
+  /** The stories the intro drew across these worlds. */
+  const seen = new Set();
+  /** Every quest's effort (its XP over a kill-equivalent's at its level) by kind of task, and every item choice. */
+  const efforts = { talk: [], gather: [], hunt: [], road: [] };
+  const choices = [];
+  /** Every generated quest, for what the rewards do across them. */
+  const allQuests = [];
+  /** Every quest line's item look, and a quest that delivers something, to try the client's naming on. */
+  const itemLines = [];
+  let lookSample = null;
   for (const [config, seeds] of [["tiny", 3], ["small", 3]]) {
     for (let s = 0; s < seeds; s++) {
       const seed = 4000 + s * 911;
       const tag = `${config} seed ${seed}`;
       const w = await generatedWorld(config, seed);
       const again = await generatedWorld(config, seed);
+      check(`${tag}: every settlement has quests before anyone is near`, w.worldData.settlementLayouts.every((l) => w.quests.some((q) => q.id.startsWith(`q:mainland/${l.siteId}/`))), `${w.quests.length} quests`);
       check(`${tag}: the same quests twice`, JSON.stringify(w.quests) === JSON.stringify(again.quests));
       const npcIds = new Map();
       for (const cast of w.casts.values()) for (const n of cast?.npcs ?? []) npcIds.set(n.id, n);
       const [start] = w.server.debug.starts.get("mainland");
       const startQuests = w.quests.filter((q) => q.id.startsWith(`q:mainland/${start.settlement}/`));
-      check(`${tag}: the start has quests`, startQuests.length >= 8, String(startQuests.length));
-      const intro = startQuests.slice(0, 8);
+      // The intro is one chain: the welcome, a story drawn for this world, and the letter on.
+      let length = 1;
+      while (length < startQuests.length && startQuests[length].requires.quests[0] === startQuests[length - 1].id) length++;
+      const intro = startQuests.slice(0, length);
+      const story = intro.filter((q) => q.chain);
+      const plot = w.rules.quests.plots.find((p) => p.draw);
+      check(`${tag}: the start has an intro of ${length}, its story ${story.length}`, story.length >= plot.draw.min && story.length <= plot.draw.max, String(story.length));
       const first = npcIds.get(intro[0]?.giver);
       check(`${tag}: the intro begins with the reeve`, first?.role === "reeve", first?.role);
-      check(`${tag}: ...as a chain, each after the one before`, intro.every((q, i) => i === 0 || q.requires.quests[0] === intro[i - 1].id), JSON.stringify(intro.map((q) => q.requires.quests)));
-      const kinds = intro.slice(1, 7).flatMap((q) => q.objectives.map((o) => o.kind));
-      check(`${tag}: the test chain's parts in order (the salve is handed over, not an objective)`, kinds.join() === "talk,kill,loot,talk,gather,use", kinds.join());
-      const letter = intro[7];
+      // A part that hands an item over from the quest's own giver is no objective, so "receive" is left out of both.
+      const bare = (list) => list.filter((k) => k !== "receive").join();
+      const kinds = bare(story.flatMap((q) => q.objectives.map((o) => o.kind)));
+      const stories = chainsOf(w.rules.quests, plot.draw).map((c) => bare(kindsOf(w.rules.quests, c)));
+      check(`${tag}: its story is one the rules can make`, stories.includes(kinds), kinds);
+      seen.add(story[0]?.chain?.id.split("#").slice(1).join("#"));
+      const letter = intro.at(-1);
       const to = npcIds.get(letter?.ender);
       check(`${tag}: the road on to another settlement`, letter?.objectives.at(-1)?.kind === "deliver" && to && !to.id.startsWith(`npc:mainland/${start.settlement}/`), letter?.ender);
-      check(`${tag}: an item to choose at the chain's end`, intro[6]?.rewards.choice.length >= 2, JSON.stringify(intro[6]?.rewards.choice));
+      check(`${tag}: an item to choose at the story's end`, story.at(-1)?.rewards.choice.length >= 2, JSON.stringify(story.at(-1)?.rewards.choice));
+      allQuests.push(...w.quests);
+      for (const q of w.quests) {
+        const finale = q.chain && q.chain.index === q.chain.of;
+        const kinds = q.objectives.map((o) => o.kind);
+        const rate = (w.rules.quests.xp.base + w.rules.quests.xp.perLevel * q.level) * w.rules.quests.xp.rate;
+        const effort = q.rewards.xp / rate;
+        if (!finale) {
+          if (kinds.some((k) => k === "kill" || k === "loot" || k === "drop" || k === "use")) efforts.hunt.push(effort);
+          else if (kinds.includes("deliver")) efforts.road.push(effort);
+          else if (kinds.includes("gather")) efforts.gather.push(effort);
+          else efforts.talk.push(effort);
+        }
+        if (q.rewards.choice.length > 0) choices.push({ quest: q, items: q.rewards.choice.map((id) => w.items.types[w.items.typeIndex.get(id)]), rarities: w.items.rarities });
+      }
+      // Quest items are named for their line and drawn from the rules' lists (QUESTS.md, *Quest items*).
+      {
+        const lists = w.rules.quests.itemLooks;
+        const lines = new Map();
+        let broken = 0;
+        for (const q of w.quests) {
+          const types = [...new Set(q.objectives.flatMap((o) => (o.kind === "receive" || o.kind === "use" || o.kind === "deliver" ? [o.item] : [])))];
+          for (const type of types) {
+            const look = q.itemLooks?.[type];
+            const shown = look ? fillText(look.name.text, look.name.args) : "";
+            const list = lists[type] ?? { icons: [], tints: [] };
+            if (!look || shown === "" || shown.includes("{") || /undefined| {2}/.test(shown)) broken++;
+            else if ((look.icon !== "" || list.icons.length > 0) && !list.icons.includes(look.icon)) broken++;
+            else if ((look.tint !== "" || list.tints.length > 0) && !list.tints.includes(look.tint)) broken++;
+            else {
+              const key = `${bindOf(q)}/${type}`;
+              if (lines.has(key) && JSON.stringify(lines.get(key)) !== JSON.stringify(look)) broken++;
+              lines.set(key, look);
+            }
+          }
+        }
+        check(`${tag}: every quest item named, drawn from the lists, and the same all along its line (${lines.size} lines)`, broken === 0, `${broken} not`);
+        // No two quest lines have the same roll (their items' technical identity).
+        const owners = new Map();
+        let shared = 0;
+        for (const q of w.quests) {
+          const line = q.chain?.id ?? q.id;
+          if (owners.has(bindOf(q)) && owners.get(bindOf(q)) !== line) shared++;
+          owners.set(bindOf(q), line);
+        }
+        check(`${tag}: no two quest lines share a roll (${owners.size} lines)`, shared === 0, `${shared} shared`);
+        const withItems = w.quests.filter((q) => q.itemLooks);
+        const dims = new Set(withItems.map((q) => q.bind >>> 26));
+        check(`${tag}: the roll says where its line is (one dimension, its settlement, its index)`, dims.size === 1 && withItems.every((q) => ((q.bind >>> 10) & 0xffff) === Number(q.id.split("/")[1]) && (q.bind & 0x3ff) - 1 === Number((q.chain ? q.chain.id.split("#")[0] : q.id).split("/")[2])), JSON.stringify([...dims]));
+        for (const type of new Set([...lines.keys()].map((k) => k.split("/").pop()))) {
+          const looks = [...lines.entries()].filter(([k]) => k.endsWith(`/${type}`)).map(([, v]) => v);
+          const names = new Set(looks.map((v) => fillText(v.name.text, v.name.args)));
+          check(`${tag}: ${type}: lines mostly have different names (${names.size} of ${looks.length})`, looks.length < 3 || names.size / looks.length >= 0.7, `${names.size}/${looks.length}`);
+        }
+        itemLines.push(...lines.entries());
+        if (!lookSample) lookSample = w.quests.find((q) => q.itemLooks && Object.keys(q.itemLooks).length > 0 && q.objectives.some((o) => o.kind === "deliver"));
+      }
+      // What the starting settlement's quests are worth against the level curve (40 n^2 + 210 n from level n).
+      const startXp = startQuests.reduce((sum, x) => sum + x.rewards.xp, 0);
+      let reached = 1;
+      for (let spent = 0; spent + 40 * reached * reached + 210 * reached <= startXp; reached++) spent += 40 * reached * reached + 210 * reached;
+      log(`${tag}: the start's ${startQuests.length} quests give ${startXp} XP (level ${reached} on their own), ${startQuests.reduce((sum, x) => sum + x.rewards.money, 0)} copper; the intro alone ${intro.reduce((sum, x) => sum + x.rewards.xp, 0)} XP`);
       let bad = 0;
+      let huntQuests = 0;
       for (const q of w.quests) {
         const site = Number(q.id.split("/")[1]);
         const layout = w.worldData.settlementLayouts.find((l) => l.siteId === site);
@@ -336,21 +695,87 @@ await section("the generator", async () => {
         for (const o of q.objectives) {
           if ((o.kind === "talk" && !npcIds.has(o.npc)) || (o.kind === "receive" && !npcIds.has(o.from)) || (o.kind === "deliver" && !npcIds.has(o.to))) problems.push(`${o.kind} npc`);
           if ((o.kind === "receive" || o.kind === "use" || o.kind === "deliver") && !w.items.typeIndex.has(o.item)) problems.push(`item ${o.item}`);
-          if ((o.kind === "kill" || o.kind === "loot" || o.kind === "use") && (o.kind === "loot" ? o.from : o.kind === "use" ? o.on : o.creatures).kinds.length === 0) problems.push(`${o.kind} creatures`);
+          if ((o.kind === "kill" || o.kind === "loot" || o.kind === "drop" || o.kind === "use") && (o.kind === "loot" || o.kind === "drop" ? o.from : o.kind === "use" ? o.on : o.creatures).kinds.length === 0) problems.push(`${o.kind} creatures`);
           if ((o.kind === "gather" || o.kind === "reach") && Math.hypot(o.area.x - layout.x, o.area.z - layout.z) > w.rules.quests.reach + 200) problems.push(`${o.kind} too far`);
           if (fillText(o.line.text, o.line.args).includes("{")) problems.push(`line "${o.line.text}"`);
+          // What a quest asks you to hunt has what it asks: pelts of the furred, a sickness of mammals.
+          const wants = o.line.text.startsWith("Good pelts") ? "furred" : /^(Tainted blood|Salve a weakened)/.test(o.line.text) ? "mammal" : null;
+          const targets = o.kind === "loot" || o.kind === "drop" ? o.from.kinds : o.kind === "use" ? o.on.kinds : o.kind === "kill" ? o.creatures.kinds : [];
+          if (wants) {
+            huntQuests++;
+            if (!targets.every((id) => w.creatures.kinds.get(id)?.tags.includes(wants))) problems.push(`${wants} quest for ${targets.join()}`);
+          }
         }
-        for (const text of Object.values(q.text)) if (fillText(text.text, text.args).includes("{")) problems.push(`text "${text.text.slice(0, 40)}"`);
+        for (const text of Object.values(q.text)) {
+          if (fillText(text.text, text.args).includes("{")) problems.push(`text "${text.text.slice(0, 40)}"`);
+          // An argument that is there but empty makes a hole in a sentence.
+          for (const [, name] of text.text.matchAll(/\{(\w+)[,}]/g)) if (text.args[name] === "") problems.push(`empty {${name}} in "${text.text.slice(0, 40)}"`);
+          if (/ {2}|\[|\]|\|/.test(text.text)) problems.push(`stray markup in "${text.text.slice(0, 40)}"`);
+        }
         if (problems.length > 0) {
           bad++;
           if (bad <= 3) log(`  ${q.id}: ${problems.join(", ")}`);
         }
       }
       check(`${tag}: every quest well formed (${w.quests.length})`, bad === 0, `${bad} not`);
+      log(`${tag}: ${huntQuests} pelt and sickness objectives, all on the right creatures`);
+      const offers = w.quests.map((x) => fillText(x.text.offer.text, x.text.offer.args));
+      check(`${tag}: no two offers the same`, new Set(offers).size === offers.length, `${offers.length - new Set(offers).size} repeated`);
+      const free = w.quests.filter((x) => x.chain && !x.id.startsWith(`q:mainland/${start.settlement}/`) && x.chain.index > 1);
+      log(`${tag}: ${free.length} later quests in chains drawn from segments, ${new Set(w.quests.map((x) => x.text.title.text)).size} different titles`);
       const people = [...w.casts.values()].flatMap((c) => c?.npcs ?? []).filter((n) => n.spot);
       log(`${tag}: ${w.quests.length} quests in ${w.casts.size} settlements, ${people.length} quest people (${[...new Set(people.map((p) => p.role))].join(", ")})`);
     }
   }
+  // Rewards follow the task.
+  const mean = (list) => list.reduce((a, b) => a + b, 0) / Math.max(1, list.length);
+  log(`effort in kill-equivalents (xp over a kill's at the quest's level): talk ${mean(efforts.talk).toFixed(1)} (${efforts.talk.length}), gather ${mean(efforts.gather).toFixed(1)} (${efforts.gather.length}), hunt ${mean(efforts.hunt).toFixed(1)} (${efforts.hunt.length}), a letter down the road ${mean(efforts.road).toFixed(1)} (${efforts.road.length})`);
+  check("a word pays less than a gathering", mean(efforts.talk) < mean(efforts.gather), `${mean(efforts.talk).toFixed(1)} vs ${mean(efforts.gather).toFixed(1)}`);
+  check("a gathering pays less than a hunt", mean(efforts.gather) < mean(efforts.hunt), `${mean(efforts.gather).toFixed(1)} vs ${mean(efforts.hunt).toFixed(1)}`);
+  check("a letter down the road pays for the walk", mean(efforts.road) > mean(efforts.talk) * 2, `${mean(efforts.road).toFixed(1)} vs ${mean(efforts.talk).toFixed(1)}`);
+  // Item choices.
+  const rules0 = (await generatedWorld("tiny", 1)).rules.quests;
+  check("every choice offers what the rules say", choices.every((c) => c.items.length === rules0.rewardChoices), String(choices.map((c) => c.items.length)));
+  check("...all of one rarity", choices.every((c) => new Set(c.items.map((x) => x.rarity)).size === 1));
+  check("...no item twice", choices.every((c) => new Set(c.items.map((x) => x.id)).size === c.items.length));
+  // The client names a quest item from the quest it was told of, by the item's roll.
+  if (lookSample) {
+    const defsMap = new Map([[lookSample.id, lookSample]]);
+    const looks = createQuestItemLooks(() => defsMap, () => null);
+    const type = Object.keys(lookSample.itemLooks)[0];
+    const found = looks.of({ type, roll: bindOf(lookSample) });
+    check("the client names a quest item by its roll", found?.name === fillText(lookSample.itemLooks[type].name.text, lookSample.itemLooks[type].name.args), JSON.stringify(found));
+    check("...and the quest it is for", found?.quest === fillText(lookSample.text.title.text, lookSample.text.title.args));
+    check("...not an item of another line, or another type", looks.of({ type, roll: bindOf(lookSample) + 1 }) === null && looks.of({ type: "wolfFang", roll: bindOf(lookSample) }) === null);
+    check("its icon and tint are laid over the placeholder", JSON.stringify(lookedIcon({ name: "", glyph: "quest", color: "#fff" }, { name: "x", icon: "herb-clover", tint: "#123456", quest: "q" })) === JSON.stringify({ name: "herb-clover", glyph: "quest", color: "#123456" }));
+  }
+  const iconsByType = new Map();
+  for (const [key, look] of itemLines) iconsByType.set(key.split("/").pop(), new Set([...(iconsByType.get(key.split("/").pop()) ?? []), look.icon || look.tint]));
+  log(`quest item looks by type over the worlds: ${[...iconsByType].map(([t, v]) => `${t} ${v.size} different`).join(", ")}`);
+  check("letters are not all the same picture", (iconsByType.get("sealedLetter")?.size ?? 0) >= 3, String(iconsByType.get("sealedLetter")?.size));
+  // Items match the quest's level, and not every quest gives one.
+  check("every item offered is within the rules' reach of its quest's level", choices.every((c) => c.items.every((x) => Math.abs(x.itemLevel - c.quest.level) <= rules0.rewardLevel)), JSON.stringify(choices.filter((c) => c.items.some((x) => Math.abs(x.itemLevel - c.quest.level) > rules0.rewardLevel)).map((c) => [c.quest.level, c.items.map((x) => x.itemLevel)])));
+  log(`item level minus quest level over the options: ${JSON.stringify(Object.fromEntries([...new Set(choices.flatMap((c) => c.items.map((x) => x.itemLevel - c.quest.level)))].sort().map((d) => [d, choices.flatMap((c) => c.items).filter((x, i) => x.itemLevel - choices.flatMap((c2) => c2.items.map(() => c2.quest.level))[i] === d).length])))}`);
+  const fixed = allQuests.filter((x) => x.rewards.items.length > 0);
+  const none = allQuests.filter((x) => x.rewards.items.length === 0 && x.rewards.choice.length === 0);
+  check("a quest gives a choice or consumables, not both", allQuests.every((x) => x.rewards.items.length === 0 || x.rewards.choice.length === 0));
+  check("consumables are ones the rules list, at most `max`, and consumed on use", fixed.every((x) => new Set(x.rewards.items).size === 1 && x.rewards.items.length <= rules0.rewardConsumables.max && rules0.rewardConsumables.items.some((k) => k.item === x.rewards.items[0] && k.from <= x.level)));
+  log(`${allQuests.length} quests: ${none.length} give no item, ${fixed.length} give consumables (${[...new Set(fixed.map((x) => x.rewards.items[0]))].join(", ")}), ${allQuests.filter((x) => x.rewards.choice.length > 0).length} a choice`);
+  check("most quests give no item at all", none.length > allQuests.length / 2, `${none.length}/${allQuests.length}`);
+  check("some give consumables", fixed.length > 0);
+  const rank = (c) => c.rarities[c.items[0].rarity].order;
+  check("a chain's last quest aims for the higher rarity", choices.every((c) => !(c.quest.chain && c.quest.chain.index === c.quest.chain.of) || c.rarities[c.items[0].rarity].id === rules0.rewardRarity.finale), JSON.stringify([...new Set(choices.map((c) => c.rarities[c.items[0].rarity].id))]));
+  const weapons = choices.flatMap((c) => c.items).filter((x) => x.kind === "weapon").length;
+  const all = choices.flatMap((c) => c.items).length;
+  log(`${choices.length} item choices of ${rules0.rewardChoices}: ${weapons} weapons, ${all - weapons} armour; templates ${JSON.stringify(Object.fromEntries([...new Set(choices.flatMap((c) => c.items.map((x) => x.template)))].map((t) => [t, choices.flatMap((c) => c.items).filter((x) => x.template === t).length])))}`);
+  check("weapons and armour are both offered through the worlds", weapons / all >= 0.3 && weapons / all <= 0.7, `${weapons}/${all}`);
+  check("no choice is all weapons", choices.every((c) => c.items.some((x) => x.kind !== "weapon")));
+  // A quest's reward filter is kept wherever it is drawn.
+  const filtered = choices.filter((c) => /(^|\+)(curseLifted|wardCharm)$/.test(c.quest.chain?.id.split("#").at(-1) ?? ""));
+  log(`${filtered.length} choices from a quest with a reward filter (curseLifted, wardCharm)`);
+  check("reward filters are kept", filtered.every((c) => c.items.every((x) => (c.quest.chain.id.endsWith("curseLifted") ? x.kind !== "weapon" : x.kind === "armour"))));
+  log(`the intro drew ${seen.size} different stories in these worlds: ${[...seen].map((x) => x?.replace(/^affliction#/, "")).join("; ")}`);
+  check("the worlds drew more than one story", seen.size >= 3, String(seen.size));
   // One offer as a reader sees it.
   const w = await generatedWorld("small", 1338);
   const [start] = w.server.debug.starts.get("mainland");
@@ -358,10 +783,62 @@ await section("the generator", async () => {
   if (sick) log(`\n${fillText(sick.text.title.text, sick.text.title.args)}\n${fillText(sick.text.offer.text, sick.text.offer.args)}\n`);
 });
 
+// --- the same name, told apart by the roll ---
+await section("names that would clash", async () => {
+  // Every letter called just "Letter": any two lines would share a name.
+  const plain = { lines: [{ text: "Letter", weight: 1, when: null }], banks: [], motive: false };
+  const w = await generatedWorld("small", 4911, true, (rules) => {
+    for (const part of rules.quests.parts.values()) if (part.item === "sealedLetter") part.itemName = plain;
+    for (const owner of [...rules.quests.plots, ...rules.quests.segments.values()]) for (const quest of owner.quests ?? [owner.quest]) for (const ref of quest.parts) if (ref.itemName) ref.itemName = plain;
+  });
+  const letters = new Map();
+  for (const q of w.quests) if (q.itemLooks?.sealedLetter) letters.set(q.chain?.id ?? q.id, { name: fillText(q.itemLooks.sealedLetter.name.text, q.itemLooks.sealedLetter.name.args), roll: bindOf(q) });
+  const all = [...letters.values()];
+  log(`${all.length} letters all called "Letter": rolls ${all.map((x) => x.roll).join(", ")}`);
+  check("there are several letters that share a name", all.length >= 4 && new Set(all.map((x) => x.name)).size === 1, String(all.length));
+  check("...and each has a roll of its own", new Set(all.map((x) => x.roll)).size === all.length);
+});
+
+// --- weighting: nearer, less used, less crowded ---
+await section("weighting", async () => {
+  /** Where the world's gathering and going objectives lie, and how they spread. */
+  const spread = (w) => {
+    const spots = [];
+    for (const q of w.quests) {
+      const layout = w.worldData.settlementLayouts.find((l) => l.siteId === Number(q.id.split("/")[1]));
+      for (const o of q.objectives) if (o.kind === "gather" || o.kind === "reach") spots.push({ x: o.area.x, z: o.area.z, distance: Math.hypot(o.area.x - layout.x, o.area.z - layout.z), site: layout.siteId });
+    }
+    const radius = 150;
+    let near = 0;
+    for (let i = 0; i < spots.length; i++) for (let j = i + 1; j < spots.length; j++) if (Math.hypot(spots[i].x - spots[j].x, spots[i].z - spots[j].z) <= radius) near++;
+    const distinct = new Set(spots.map((p) => `${Math.round(p.x)},${Math.round(p.z)}`)).size;
+    // The most objectives in one 150 m circle round any of them.
+    const densest = Math.max(0, ...spots.map((a) => spots.filter((b) => Math.hypot(a.x - b.x, a.z - b.z) <= radius).length));
+    return { n: spots.length, distance: spots.reduce((sum, p) => sum + p.distance, 0) / Math.max(1, spots.length), near, distinct, densest };
+  };
+  const total = { on: { n: 0, d: 0, near: 0, distinct: 0, densest: 0 }, off: { n: 0, d: 0, near: 0, distinct: 0, densest: 0 } };
+  for (const [config, seed] of [["small", 4000], ["small", 4911], ["small", 5822], ["small", 7001], ["small", 8113]]) {
+    for (const [name, weights] of [["on", true], ["off", false]]) {
+      const m = spread(await generatedWorld(config, seed, weights));
+      const t = total[name];
+      t.n += m.n; t.d += m.distance * m.n; t.near += m.near; t.distinct += m.distinct; t.densest = Math.max(t.densest, m.densest);
+    }
+  }
+  const show = (t) => `${t.n} objectives, ${(t.d / t.n).toFixed(0)} m from their settlement on average, ${t.near} pairs within 150 m, ${t.distinct} different places, at most ${t.densest} in one circle`;
+  log(`weighting on : ${show(total.on)}`);
+  log(`weighting off: ${show(total.off)}`);
+  check("weighted: places nearer", total.on.d / total.on.n <= total.off.d / total.off.n, `${(total.on.d / total.on.n).toFixed(0)} vs ${(total.off.d / total.off.n).toFixed(0)}`);
+  check("weighted: fewer objectives crowded together", total.on.near <= total.off.near, `${total.on.near} vs ${total.off.near}`);
+  // Different places as a share of the objectives, since the two worlds have different numbers of them.
+  check("weighted: a greater share of different places", total.on.distinct / total.on.n >= total.off.distinct / total.off.n, `${((100 * total.on.distinct) / total.on.n).toFixed(0)}% vs ${((100 * total.off.distinct) / total.off.n).toFixed(0)}%`);
+  check("weighted: no circle more crowded", total.on.densest <= total.off.densest, `${total.on.densest} vs ${total.off.densest}`);
+});
+
 // --- the intro chain, played: a new character from the start to its gear, with a log out half way ---
-await section("the intro chain", async () => {
+// One seed for each kind of story: the curse lifted, the culprit asked, a death on the way, the plain sickness.
+for (const introSeed of (process.env.INTRO_SEEDS ?? "2,7,8,15").split(",").map(Number)) await section(`the intro chain (seed ${introSeed})`, async () => {
   const config = "tiny";
-  const seed = 1338;
+  const seed = introSeed;
   const { content, packs } = loadContentFromDisk(config);
   const rules = loadRulesFromDisk(config);
   const creatures = loadCreatureRulesFromDisk(config, rules, seed);
@@ -402,8 +879,14 @@ await section("the intro chain", async () => {
   const [start] = server.debug.starts.get("mainland");
   check("the new character stands in the starting village", Math.hypot(me.x - start.x, me.z - start.z) < 3);
   const intro = [];
-  for (let n = 0; n < 8; n++) intro.push(server.debug.quests.def(`q:mainland/${start.settlement}/${n}`));
-  check("the intro is there", intro.every(Boolean), String(intro.filter(Boolean).length));
+  for (let n = 0; ; n++) {
+    const def = server.debug.quests.def(`q:mainland/${start.settlement}/${n}`);
+    if (!def || (n > 0 && def.requires.quests[0] !== intro[n - 1].id)) break;
+    intro.push(def);
+  }
+  check("the intro is there", intro.length >= 6, String(intro.length));
+  const half = Math.floor(intro.length / 2);
+  const rewarding = intro.find((q) => q.rewards.choice.length > 0);
   const marks = () => inbox.filter((m) => m.type === "markers").at(-1)?.list ?? [];
 
   /** The entity of an NPC id, its settlement filled first if it is not (the letter's end is elsewhere). */
@@ -463,9 +946,21 @@ await section("the intro chain", async () => {
       else if (o.kind === "deliver") await talkTo(o.to);
       else if (o.kind === "kill") for (let k = 0; k < o.count; k++) await fight(o.creatures.kinds[0]);
       else if (o.kind === "loot") for (let k = 0; k < 30 && at() < o.count; k++) await fight(o.from.kinds[0]);
+      // A dropped quest item: kill, open the corpse, take what it holds for this player.
+      else if (o.kind === "drop") {
+        for (let k = 0; k < 40 && at() < o.count; k++) {
+          const corpse = await fight(o.from.kinds[0]);
+          await send({ type: "lootOpen", entity: corpse.id });
+          await send({ type: "lootTake", slot: 0xffff });
+          await send({ type: "lootClose" });
+        }
+      }
       else if (o.kind === "gather") {
-        await send({ type: "teleport", x: o.area.x, z: o.area.z }, 40);
-        const objects = [...server.debug.dimensions.get("mainland").entities.values()].filter((e) => e.key.startsWith(`qo:${q.id}/${i}/`));
+        await send({ type: "teleport", x: o.area.x, z: o.area.z }, 10);
+        const standing = () => [...server.debug.dimensions.get("mainland").entities.values()].filter((e) => e.key.startsWith(`qo:${q.id}/${i}/`));
+        // The objects are filled on the quest system's half-second look: wait for it.
+        for (let k = 0; k < 20 && standing().length === 0; k++) await pump(3);
+        const objects = standing();
         for (const object of objects.slice(0, o.count)) {
           await send({ type: "teleport", x: object.x + 1, z: object.z }, 2);
           await send({ type: "questObjectTake", entity: object.id });
@@ -482,24 +977,26 @@ await section("the intro chain", async () => {
     const ender = await talkTo(q.ender);
     await send({ type: "questComplete", npc: ender.id, quest: q.id, choice: 0 });
     check(`${n + 1}: "${fillText(q.text.title.text, q.text.title.args)}" handed in`, done(q), JSON.stringify(last("questRefused")));
-    if (n === 3) {
+    if (n === half - 1) {
       // Half way: log out and back in.
       await send({ type: "logout", toMenu: false }, 10);
       await send({ type: "enterWorld", character, dimension: "" }, 15);
       me = server.debug.entity(id);
-      check("back half way: the four done, kept", intro.slice(0, 4).every(done));
+      check(`back half way: the ${half} done, kept`, intro.slice(0, half).every(done));
     }
   }
   const level = me.progress.disciplines.get(adventure).level;
   check("a level or more gained", level > startLevel, `${startLevel} -> ${level}`);
   check("money earned", me.belongings.wallet[items.main] > 0, String(me.belongings.wallet[items.main]));
-  const reward = items.typeIndex.get(intro[6].rewards.choice[0]);
+  // A quest's reward filter is kept: the curse lifted by a hermit gives no weapon.
+  if (rewarding.chain.id.endsWith("curseLifted")) check("the curse's reward is no weapon (reward: not weapon)", rewarding.rewards.choice.every((id) => items.types[items.typeIndex.get(id)].kind !== "weapon"), rewarding.rewards.choice.join());
+  const reward = items.typeIndex.get(rewarding.rewards.choice[0]);
   const slot = me.belongings.bag.findIndex((x) => x != null && server.debug.items.ctx.store.get(x).type === reward);
-  check("the chosen reward in the bag", slot >= 0, intro[6].rewards.choice.join());
+  check("the chosen reward in the bag", slot >= 0, rewarding.rewards.choice.join());
   await send({ type: "itemEquip", from: { container: 0, slot } });
   check("...and worn", me.belongings.equipment.some((x) => x != null && server.debug.items.ctx.store.get(x).type === reward), JSON.stringify(last("itemRefused")));
   check("standing with the village's folk", [...me.standing.values()].some((v) => v > 3000), JSON.stringify([...me.standing]));
-  log(`the intro: level ${startLevel} -> ${level}, ${me.belongings.wallet[items.main]} copper, wearing ${items.types[reward].name}`);
+  log(`the intro (seed ${seed}, ${intro.filter((q) => q.chain).map((q) => q.objectives.map((o) => o.kind).join("+")).join(" / ")}): level ${startLevel} -> ${level}, ${me.belongings.wallet[items.main]} copper, wearing ${items.types[reward].name}`);
 });
 
 console.log(`${checks - failures}/${checks} checks passed`);

@@ -7,8 +7,10 @@ import type { Text } from "../text";
 import type { GameRules } from "../rules/gameRules";
 import type { ItemRules } from "../rules/itemRules";
 import { addPerson, type Cast, type CastInput, type CastNpc } from "../npcs/cast";
-import type { Objective, QuestDef } from "./quest";
-import type { CreatureNeed, PlaceNeed, QuestPlotDef } from "./plots";
+import type { ItemLook, Objective, QuestDef } from "./quest";
+import { fillText } from "../text";
+import type { CreatureNeed, LineCondition, PlaceNeed, Pool, QuestPlotDef, QuestSegmentDef } from "./plots";
+import { composeChain, themeFits } from "./chains";
 
 /**
  * The quest generator (QUESTS.md, *The generator*): a settlement's quests, put together from the
@@ -26,6 +28,8 @@ export interface ContextCreature {
   levelOffset: number;
   hostility: string;
   family: string;
+  /** What it is like (CREATURES.md): "furred", "venomous". */
+  tags: readonly string[];
 }
 
 /** A place near the settlement that quests can use. */
@@ -45,6 +49,42 @@ export interface ContextSettlement {
   npc: CastNpc | null;
 }
 
+/**
+ * What the world's quests have used so far, shared by every settlement's generation as a dimension
+ * loads, in `questOrder`: how many quests use each place, object and creature kind, and where the
+ * objectives lie. What the generator weighs by (QUESTS.md, *Weighting*).
+ */
+export interface WorldQuestState {
+  /** Uses by key: "place:x,z", "object:x,z/name", "kind:zone/kind". */
+  uses: Map<string, number>;
+  /** Where each objective so far lies: a place for gathering and going, the settlement for hunting. */
+  anchors: { x: number; z: number }[];
+  /** This dimension's number among the dimensions, for the rolls of quest lines' items (`bindFor`). */
+  dimension: number;
+  /** The names quest items have taken, by "type/name": a line tries another pattern than one in use. */
+  itemNames: Set<string>;
+}
+
+/** What a quest line's roll is made of: 6 bits of dimension, 16 of settlement, 10 of the line's index in it, with 1 added so it is not 0. */
+const BIND_DIMENSIONS = 1 << 6;
+const BIND_SITES = 1 << 16;
+const BIND_LINES = (1 << 10) - 1;
+
+/**
+ * The roll of a quest line's items - their technical identity (QUESTS.md, *Quest items*) - made of
+ * where the line is: its dimension's number, its settlement, and the index of its first quest there
+ * (the `n` of `q:<dimension>/<site>/<n>`). No two lines can have the same, with nothing to look up,
+ * and it does not change when a quest elsewhere does. Never 0. Fails loudly if a number outgrows its bits.
+ */
+export function bindFor(dimension: number, site: number, index: number): number {
+  if (!(dimension >= 0 && dimension < BIND_DIMENSIONS && site >= 0 && site < BIND_SITES && index >= 0 && index < BIND_LINES)) {
+    throw new Error(`a quest line's items cannot be told apart: dimension ${dimension} (of ${BIND_DIMENSIONS}), settlement ${site} (of ${BIND_SITES}), quest ${index} (of ${BIND_LINES}) are too many`);
+  }
+  return ((dimension << 26) | (site << 10) | (index + 1)) >>> 0;
+}
+
+export const createWorldQuestState = (dimension = 0): WorldQuestState => ({ uses: new Map(), anchors: [], dimension, itemNames: new Set() });
+
 export interface GeneratorInput {
   cast: Cast;
   castInput: Pick<CastInput, "seed" | "dimension" | "site" | "layout" | "voices" | "rules">;
@@ -60,6 +100,8 @@ export interface GeneratorInput {
   folk: string;
   rules: GameRules;
   items: ItemRules | null;
+  /** What earlier settlements' quests have used; this one's are added as they are made. */
+  world: WorldQuestState;
 }
 
 type Rng = () => number;
@@ -71,6 +113,45 @@ const between = (rng: Rng, [lo, hi]: readonly [number, number]): number => lo + 
 const GATHER_RADIUS_FACTOR = 4;
 const GATHER_RADIUS_MAX = 200;
 const GENERATOR_SALT = 31_337;
+const ORDER_SALT = 41_011;
+
+/**
+ * The order a dimension's settlements' quests are made in, all together as it loads (QUESTS.md,
+ * *The generator*): shuffled by the seed, so no settlement always gets the first pick of what the
+ * world has, and the same whatever order the settlements are listed in.
+ */
+export function questOrder(seed: number, dimension: string, siteIds: readonly number[]): number[] {
+  const key = (id: number): number => deriveSeed(seed, ORDER_SALT + hashString(dimension) * 17 + id);
+  return [...siteIds].sort((a, b) => key(a) - key(b) || a - b);
+}
+
+/** `[this|that|]`: one of the alternatives is said, one of them perhaps nothing. */
+const ALTERNATIVES = /\[([^\[\]|]*(?:\|[^\[\]|]*)+)\]/g;
+const vary = (rng: Rng, text: string): string => text.replace(ALTERNATIVES, (_, inner: string) => pick(rng, inner.split("|")));
+const tidy = (text: string): string => text.replace(/ {2,}/g, " ").replace(/ ([.,!?;:])/g, "$1").trim();
+
+/** Who is speaking, and what the quest is about: what a line's `when` is held against. */
+interface LineContext {
+  mood: string;
+  role: string;
+  sex: string;
+  age: string;
+  place: readonly string[];
+  object: readonly string[];
+  creature: readonly string[];
+  tags: readonly string[];
+  tier: string;
+}
+
+function matches(when: LineCondition | null, ctx: LineContext): boolean {
+  if (!when) return true;
+  for (const key of Object.keys(when) as (keyof LineCondition)[]) {
+    const want = when[key]!;
+    const have = ctx[key];
+    if (!want.some((w) => (typeof have === "string" ? have === w : have.includes(w)))) return false;
+  }
+  return true;
+}
 
 export function generateQuests(input: GeneratorInput): QuestDef[] {
   const { cast, rules, site, layout } = input;
@@ -82,6 +163,8 @@ export function generateQuests(input: GeneratorInput): QuestDef[] {
   /** How many quest lines each NPC gives: no more than two each. */
   const lines = new Map<number, number>();
   const usedPlots = new Set<string>();
+  /** Sentences already said in this settlement's quests: a line is drawn fresh where one is left. */
+  const usedLines = new Set<string>();
   /** A quest's level: the middle of the zone's band, and for a quest about creatures, as they stand -
    *  the band's middle plus their kind's offset, so a quest is never far below what it sends you to fight. */
   const level = (beast: ContextCreature | null): number => Math.round((input.levels[0] + input.levels[1]) / 2) + (beast?.levelOffset ?? 0);
@@ -97,9 +180,64 @@ export function generateQuests(input: GeneratorInput): QuestDef[] {
   const fieldsAt = gate ? { x: layout.x + (gate.x - layout.x) * 1.6, z: layout.z + (gate.z - layout.z) * 1.6 } : { x: layout.x + layout.radius * 1.5, z: layout.z };
   const places: ContextPlace[] = [...input.places, { name: site.name, ...fieldsAt, radius: 25, quest: { tags: ["fields", "open"], objects: q.fields.objects, people: [], text: q.fields.text } }];
 
-  const creatureFits = (need: CreatureNeed | null) => (c: ContextCreature): boolean => !need || ((!need.hostility || need.hostility.includes(c.hostility)) && (!need.family || need.family.includes(c.family)));
-  const placeFits = (need: PlaceNeed | null) => (p: ContextPlace): boolean =>
-    !need || (need.tags.every((t) => p.quest.tags.includes(t)) && (need.objects === null || p.quest.objects.some((o) => need.objects!.every((t) => o.tags.includes(t)))));
+  const creatureFits = (need: CreatureNeed | null) => (c: ContextCreature): boolean => !need || ((!need.hostility || need.hostility.includes(c.hostility)) && (!need.family || need.family.includes(c.family)) && (!need.tags || need.tags.every((t) => c.tags.includes(t))));
+  /** An object of a place that a need allows: it has all the tags asked and none that are shut out. */
+  const objectFits = (need: PlaceNeed) => (o: { tags: readonly string[] }): boolean => (need.objects ?? []).every((t) => o.tags.includes(t)) && !need.not.some((t) => o.tags.includes(t));
+  const placeFits = (need: PlaceNeed | null) => (p: ContextPlace): boolean => !need || (need.tags.every((t) => p.quest.tags.includes(t)) && (need.objects === null || p.quest.objects.some(objectFits(need))));
+
+  // --- weights (QUESTS.md, *Weighting*) ---
+  const wt = q.weighting;
+  const world = input.world;
+  /** Uses in this settlement, by the same keys as the world's. */
+  const here = new Map<string, number>();
+  const placeKey = (p: { x: number; z: number }): string => `place:${Math.round(p.x)},${Math.round(p.z)}`;
+  const objectKey = (p: ContextPlace, name: string): string => `object:${Math.round(p.x)},${Math.round(p.z)}/${name}`;
+  const kindKey = (c: ContextCreature): string => `kind:${site.areaId}/${c.id}`;
+  const reuse = (key: string, k: { here: number; elsewhere: number }): number => {
+    const mine = here.get(key) ?? 0;
+    return 1 / (1 + k.here * mine + k.elsewhere * ((world.uses.get(key) ?? 0) - mine));
+  };
+  const crowded = (p: { x: number; z: number }): number => world.anchors.reduce((n, a) => n + (Math.hypot(a.x - p.x, a.z - p.z) <= wt.crowding.radius ? 1 : 0), 0);
+  /** How likely a place is: near, little used, and not crowded with objectives. */
+  const placeScore = (p: ContextPlace): number => (1 / (1 + (Math.hypot(p.x - site.x, p.z - site.z) / wt.distance) ** 2)) * reuse(placeKey(p), wt.reuse) * (1 / (1 + wt.crowding.each * crowded(p)));
+  const kindScore = (c: ContextCreature): number => reuse(kindKey(c), wt.kind);
+  /** One of a list by the score of each (evenly if all score nothing). */
+  function pickBy<T>(rng: Rng, list: readonly T[], score: (item: T) => number): T {
+    const weights = list.map(score);
+    const total = weights.reduce((sum, w) => sum + w, 0);
+    if (total <= 0) return pick(rng, list);
+    let roll = rng() * total;
+    return list.find((_, i) => (roll -= weights[i]) < 0) ?? list[list.length - 1];
+  }
+  /** Notes what a plot's quests used, for the ones drawn after (in this settlement and the world). */
+  function record(place: ContextPlace | null, beast: ContextCreature | null, object: { name: string } | undefined, objectives: readonly Objective[]): void {
+    const bump = (key: string): void => {
+      here.set(key, (here.get(key) ?? 0) + 1);
+      world.uses.set(key, (world.uses.get(key) ?? 0) + 1);
+    };
+    if (place) bump(placeKey(place));
+    if (place && object) bump(objectKey(place, object.name));
+    if (beast) bump(kindKey(beast));
+    for (const o of objectives) {
+      if (o.kind === "gather" || o.kind === "reach") world.anchors.push({ x: o.area.x, z: o.area.z });
+      else if (o.kind === "kill" || o.kind === "loot" || o.kind === "drop" || o.kind === "use") world.anchors.push({ x: layout.x, z: layout.z });
+    }
+  }
+
+  /** One line of a pool, by weight, among those that fit the speaker and the quest - its own and its
+   *  voice banks' - and fresh if any is. The line's `[a|b]` alternatives are drawn. "" if none fits. */
+  function pickLine(local: Rng, pool: Pool, ctx: LineContext): string {
+    const all = [...pool.lines, ...pool.banks.flatMap((bank) => q.voices.get(bank) ?? [])];
+    let fits = all.filter((l) => matches(l.when, ctx));
+    if (fits.length === 0) fits = all.filter((l) => !l.when);
+    const fresh = fits.filter((l) => l.text === "" || !usedLines.has(l.text));
+    const from = fresh.length > 0 ? fresh : fits;
+    if (from.length === 0) return "";
+    let roll = local() * from.reduce((sum, l) => sum + l.weight, 0);
+    const line = from.find((l) => (roll -= l.weight) < 0) ?? from[0];
+    usedLines.add(line.text);
+    return vary(local, line.text);
+  }
 
   /** One plot drawn into quests, or null when the settlement cannot fill it. */
   function draw(plot: QuestPlotDef, after: string | null): QuestDef[] | null {
@@ -110,10 +248,10 @@ export function generateQuests(input: GeneratorInput): QuestDef[] {
     const giver = pick(local, givers);
     const creature = plot.creatures ? input.creatures.filter(creatureFits(plot.creatures)) : [];
     if (plot.creatures && creature.length === 0) return null;
-    const beast = creature.length > 0 ? pick(local, creature) : null;
+    const beast = creature.length > 0 ? pickBy(local, creature, kindScore) : null;
     const placeList = plot.place ? places.filter(placeFits(plot.place)) : [];
     if (plot.place && placeList.length === 0) return null;
-    const place = placeList.length > 0 ? pick(local, placeList) : null;
+    const place = placeList.length > 0 ? pickBy(local, placeList, placeScore) : null;
     const other = plot.road ? input.others.find((o) => o.npc) : undefined;
     if (plot.road && !other) return null;
     // Its people: the giver's relations first, then anyone of the roles, then someone made new.
@@ -121,6 +259,15 @@ export function generateQuests(input: GeneratorInput): QuestDef[] {
     if (other?.npc) people.set("road", other.npc);
     for (const [name, want] of Object.entries(plot.people)) {
       const taken = new Set([...people.values()].map((p) => p.index));
+      if (want.gone) {
+        // Someone who stays at home, spoken of and never met: a relative of the giver's if there is one.
+        const home = cast.npcs.filter((n) => !n.out && !taken.has(n.index));
+        const kin = giver.relations.map((r) => cast.npcs[r.to]).filter((n) => !n.out && !taken.has(n.index));
+        const gone = kin.length > 0 ? pick(local, kin) : home.length > 0 ? pick(local, home) : undefined;
+        if (!gone) return null;
+        people.set(name, gone);
+        continue;
+      }
       const related = want.relation ? giver.relations.filter((r) => want.relation!.includes(r.call)).map((r) => cast.npcs[r.to]).filter((n) => n.out && !taken.has(n.index) && (want.roles.length === 0 || (n.role !== null && want.roles.includes(n.role)))) : [];
       const anyone = out.filter((n) => !taken.has(n.index) && n.role !== null && want.roles.includes(n.role));
       let person = related[0] ?? (anyone.length > 0 ? pick(local, anyone) : undefined);
@@ -134,32 +281,113 @@ export function generateQuests(input: GeneratorInput): QuestDef[] {
       if (!person) return null;
       people.set(name, person);
     }
-    const object = place ? (place.quest.objects.filter((o) => !plot.place?.objects || plot.place.objects.every((t) => o.tags.includes(t))) ?? [])[0] ?? place.quest.objects[0] : undefined;
+    const objectsHere = place ? place.quest.objects.filter(plot.place ? objectFits(plot.place) : () => true) : [];
+    const object = place ? pickBy(local, objectsHere.length > 0 ? objectsHere : place.quest.objects, (o) => reuse(objectKey(place, o.name), wt.reuse)) : undefined;
     const placeName = place ? place.quest.text.replace("{name}", place.name) : "";
     const plotLevel = level(beast);
     // The arguments every text of the plot can use.
-    const args: Record<string, string | number> = { settlement: site.name, zone: input.zone, giver: giver.name, giverGiven: giver.given, place: placeName, object: object?.name ?? "", objects: object ? plural(object.name) : "", creature: beast?.name ?? "", creatures: beast ? plural(beast.name) : "", other: other?.name ?? "" };
+    // Someone else in the settlement the giver might speak of, and when it happened.
+    const involved = new Set([...people.values()].map((p) => p.index));
+    const neighbours = out.filter((n) => !involved.has(n.index));
+    const neighbour = neighbours.length > 0 ? pick(local, neighbours) : undefined;
+    const args: Record<string, string | number> = { settlement: site.name, zone: input.zone, giver: giver.name, giverGiven: giver.given, place: placeName, object: object?.name ?? "", objects: object ? plural(object.name) : "", creature: beast?.name ?? "", creatures: beast ? plural(beast.name) : "", other: other?.name ?? "", neighbour: neighbour?.given ?? "a neighbour", neighbourFamily: neighbour?.family ?? "the neighbours", when: q.whens.length > 0 ? pick(local, q.whens) : "lately" };
     for (const [name, person] of people) {
       args[name] = person.name;
       args[`${name}Given`] = person.given;
       args[`${name}Title`] = person.title;
+      args[`${name}Sex`] = person.sex;
     }
+    const speaking = (who: CastNpc, tags: readonly string[]): LineContext => ({ mood: who.mood, role: who.role ?? "", sex: who.sex, age: who.age, place: place?.quest.tags ?? [], object: object?.tags ?? [], creature: beast ? [beast.family, ...beast.tags] : [], tags, tier: site.tier });
+    /** What a quest asks of the player, in kill-equivalents (QUESTS.md, *Rewards*): its objectives, and
+     *  the walking to the farthest place or person - out and back, but one way to the next settlement. */
+    const effortOf = (objectives: readonly Objective[]): number => {
+      const e = q.effort;
+      const person = (npcId: string): CastNpc | undefined => [...people.values()].find((p) => p.id === npcId);
+      const away = (npcId: string): { metres: number; oneWay: boolean } => {
+        if (other?.npc?.id === npcId) return { metres: other.distance, oneWay: true };
+        const spot = person(npcId)?.spot;
+        return { metres: spot ? Math.hypot(spot.x - layout.x, spot.z - layout.z) : 0, oneWay: false };
+      };
+      const hard = 1 + e.levelOffset * Math.max(0, beast?.levelOffset ?? 0);
+      let units = 0;
+      let metres = 0;
+      let oneWay = false;
+      const go = (to: { metres: number; oneWay: boolean }): void => {
+        if (to.metres > metres) {
+          metres = to.metres;
+          oneWay = to.oneWay;
+        }
+      };
+      for (const o of objectives) {
+        switch (o.kind) {
+          case "kill": units += o.count * e.kill * hard; break;
+          case "loot":
+          case "drop": units += (o.count / Math.max(0.05, o.chance * q.dropChance)) * e.loot * hard; break;
+          case "use": units += o.count * e.use; break;
+          case "gather": units += o.count * e.gather; go({ metres: Math.hypot(o.area.x - layout.x, o.area.z - layout.z), oneWay: false }); break;
+          case "reach": units += e.reach; go({ metres: Math.hypot(o.area.x - layout.x, o.area.z - layout.z), oneWay: false }); break;
+          case "talk": units += e.talk; go(away(o.npc)); break;
+          case "receive": units += e.talk; go(away(o.from)); break;
+          case "deliver": units += e.talk; go(away(o.to)); break;
+        }
+      }
+      return Math.max(0.25, units + ((oneWay ? metres : metres * 2) / 100) * e.travel);
+    };
     const t = (text: string): Text => ({ text, args });
     const id = (n: number): string => `q:${input.castInput.dimension}/${site.id}/${quests.length + n}`;
     const made: QuestDef[] = [];
+    // How this line's quest items are called and drawn (QUESTS.md, *Quest items*): named for the person or
+    // place they are about, with an icon and a tint drawn from the rules' lists - the same in every quest
+    // of the line, and not that of another line made from the same template. What a deliver or a use
+    // says comes first (the letter is for the one it is delivered to), then what a receive says.
+    const lineBind = bindFor(world.dimension, site.id, quests.length);
+    const looks: Record<string, ItemLook> = {};
+    // The roll follows where the line is, so its icon and tint are chosen by a scramble of it.
+    const spun = Math.imul(lineBind, 2654435761) >>> 0;
+    const named = plot.quests
+      .flatMap((pq) => pq.parts.map((ref) => ({ ref, part: rules.quests.parts.get(ref.part)! })))
+      .filter((c) => c.ref.item ?? c.part.item)
+      .sort((a, b) => Number(a.part.kind === "receive") - Number(b.part.kind === "receive"));
+    for (const { ref, part } of named) {
+      const type = (ref.item ?? part.item)!;
+      const pool = ref.itemName ?? part.itemName;
+      if (looks[type] || (pool.lines.length === 0 && pool.banks.length === 0)) continue;
+      const who = ref.npc ? people.get(ref.npc) : undefined;
+      const nameArgs = { ...args, npc: who?.name ?? "", npcGiven: who?.given ?? "", npcFamily: who?.family ?? "" };
+      // A name no other line's item of the type has, if another pattern is free; if not, the same name and the
+      // roll tells them apart (the tooltip says which quest it is for).
+      const render = (text: string): string => fillText(text, nameArgs);
+      let template = "";
+      for (let attempt = 0; attempt < 8; attempt++) {
+        template = tidy(pickLine(local, pool, speaking(giver, [])));
+        if (!template || !world.itemNames.has(`${type}/${render(template)}`)) break;
+      }
+      if (!template) continue;
+      world.itemNames.add(`${type}/${render(template)}`);
+      const lists = q.itemLooks[type];
+      looks[type] = {
+        name: { text: template, args: nameArgs },
+        icon: lists && lists.icons.length > 0 ? lists.icons[(spun >>> 8) % lists.icons.length] : "",
+        tint: lists && lists.tints.length > 0 ? lists.tints[(spun >>> 16) % lists.tints.length] : "",
+      };
+    }
     plot.quests.forEach((pq, n) => {
       const objectives: Objective[] = [];
       const gives: string[] = [];
       const motives: string[] = [];
+      const giverNpc = people.get(pq.giver!)!;
+      const ender = people.get(pq.ender!)!;
+      const asked = speaking(giverNpc, pq.tags);
       for (const ref of pq.parts) {
         const part = rules.quests.parts.get(ref.part)!;
         const count = between(local, part.count);
         const who = ref.npc ? people.get(ref.npc) : undefined;
         const item = ref.item ?? part.item ?? "";
-        const line = (extra: Record<string, string | number>): Text => ({ text: part.line, args: { ...args, ...extra } });
+        const line = (extra: Record<string, string | number>): Text => ({ text: ref.line ?? part.line, args: { ...args, ...extra } });
         const filter = beast ? { kinds: [beast.id], name: t("{creatures}") } : { kinds: [], name: t("") };
         const area = place ? { dimension: input.castInput.dimension, x: place.x, z: place.z, radius: place.radius } : { dimension: input.castInput.dimension, x: fieldsAt.x, z: fieldsAt.z, radius: 25 };
-        if (part.motive.length > 0) motives.push(pick(local, part.motive));
+        const motive = pickLine(local, part.motive, asked);
+        if (motive) motives.push(motive);
         switch (part.kind) {
           case "talk":
             objectives.push({ kind: "talk", npc: who?.id ?? giver.id, line: line({ npc: who?.name ?? giver.name }) });
@@ -170,12 +398,15 @@ export function generateQuests(input: GeneratorInput): QuestDef[] {
           case "loot":
             objectives.push({ kind: "loot", from: filter, count, chance: part.chance, line: line({ count }) });
             break;
+          case "drop":
+            objectives.push({ kind: "drop", item, from: filter, count, chance: ref.chance ?? part.chance, line: line({ count }) });
+            break;
           case "gather":
             objectives.push({ kind: "gather", object: object?.name ?? "", count, area: { ...area, radius: Math.min(GATHER_RADIUS_MAX, area.radius * GATHER_RADIUS_FACTOR) }, line: line({ count }) });
             break;
           case "receive":
             // From the quest's own giver the item is simply handed over with the quest.
-            if ((who ?? giver).id === people.get(pq.giver)!.id) gives.push(item);
+            if ((who ?? giver).id === people.get(pq.giver!)!.id) gives.push(item);
             else objectives.push({ kind: "receive", item, from: who?.id ?? giver.id, line: line({ npc: who?.name ?? giver.name, item: itemName(item) }) });
             break;
           case "use":
@@ -189,12 +420,20 @@ export function generateQuests(input: GeneratorInput): QuestDef[] {
             break;
         }
       }
-      const offer = pq.offer.flatMap((group) => (group.length === 1 && group[0] === "$motive" ? motives : [pick(local, group)])).join(" ");
-      const giverNpc = people.get(pq.giver)!;
-      const ender = people.get(pq.ender)!;
       const fights = objectives.some((o) => o.kind === "kill" || o.kind === "loot" || o.kind === "use");
       const lvl = fights ? plotLevel : ringLevel();
-      const xp = Math.round(q.xp.base + q.xp.perLevel * lvl);
+      // The offer: a line from each group, the parts' motives where the plot says, in the giver's voice.
+      const sentences = pq.offer.flatMap((group) => (group.motive ? motives : [pickLine(local, group, asked)]));
+      const offer = tidy(sentences.filter((sentence) => sentence !== "").join(" "));
+      const title = tidy(pickLine(local, pq.title, asked)) || "A Task";
+      const answering = speaking(ender, pq.tags);
+      const progress = tidy(pickLine(local, pq.progress, answering)) || "Well?";
+      const done = tidy(pickLine(local, pq.done, answering)) || "My thanks.";
+      const effort = effortOf(objectives);
+      const xp = Math.round(effort * (q.xp.base + q.xp.perLevel * lvl) * q.xp.rate);
+      // An item to choose where the segment says, and the level allows; else perhaps consumables; else nothing.
+      const choice = pq.choice ? rewardChoice(local, lvl, plot.quests.length > 1 && n === plot.quests.length - 1, pq.reward) : [];
+      const consumables = choice.length === 0 && (pq.choice || local() < q.rewardConsumables.chance) ? consumablesFor(local, lvl, effort, pq.choice) : [];
       const previous = n === 0 ? after : made[n - 1].id;
       made.push({
         id: id(n),
@@ -202,24 +441,38 @@ export function generateQuests(input: GeneratorInput): QuestDef[] {
         giver: giverNpc.id,
         ender: ender.id,
         chain: plot.quests.length > 1 ? { id: `${id(0)}#${plot.id}`, index: n + 1, of: plot.quests.length } : null,
-        requires: { quests: previous ? [previous] : [], level: Math.max(1, lvl - 2) },
+        // Only the first quest of a chain asks a level, and not the intro's, which is for a character just made: the rest ask
+        // the one before, so a story is never stuck for want of XP.
+        requires: { quests: previous ? [previous] : [], level: n === 0 && !plot.intro ? Math.max(1, lvl - 2) : 1 },
         objectives,
         ...(gives.length > 0 ? { gives } : {}),
         ordered: true,
-        text: { title: t(pq.title), offer: { text: offer, args }, progress: t(pq.progress.length > 0 ? pick(local, pq.progress) : "Well?"), done: t(pq.done.length > 0 ? pick(local, pq.done) : "My thanks.") },
+        text: { title: t(title), offer: { text: offer, args }, progress: t(progress), done: t(done) },
         rewards: {
-          xp: n === plot.quests.length - 1 ? xp * 2 : xp,
-          money: Math.round(q.money.base + q.money.perLevel * lvl),
-          choice: pq.choice ? rewardChoice(local, lvl) : [],
-          items: [],
+          xp,
+          money: Math.max(1, Math.round(effort * (q.money.base + q.money.perLevel * lvl))),
+          choice,
+          items: consumables,
           standing: [{ faction: input.folk, amount: q.standing }],
         },
         within: 0,
         where: [],
+        bind: lineBind,
+        itemLooks: Object.fromEntries(
+          [...new Set(objectives.flatMap((o) => (o.kind === "receive" || o.kind === "use" || o.kind === "deliver" || o.kind === "drop" ? [o.item] : [])))].filter((type) => looks[type]).map((type) => [type, looks[type]]),
+        ),
       });
     });
+    // A chain's last quest also pays a share of what the rest of it paid.
+    if (made.length > 1) {
+      const rest = made.slice(0, -1);
+      const finale = made[made.length - 1].rewards;
+      finale.xp += Math.round(q.finale * rest.reduce((sum, m) => sum + m.rewards.xp, 0));
+      finale.money += Math.round(q.finale * rest.reduce((sum, m) => sum + m.rewards.money, 0));
+    }
     lines.set(giver.index, (lines.get(giver.index) ?? 0) + 1);
     usedPlots.add(plot.id);
+    record(place, beast, object, made.flatMap((m) => m.objectives));
     return made;
   }
 
@@ -227,42 +480,183 @@ export function generateQuests(input: GeneratorInput): QuestDef[] {
     return input.items?.types[input.items.typeIndex.get(id) ?? -1]?.name ?? id;
   }
 
-  /** Two or three items from the reward templates near a quest's level, one of each kind where it can. */
-  function rewardChoice(local: Rng, lvl: number): string[] {
+  /** A few consumables as a fixed reward - of a kind available at the quest's level, as many as its
+   *  effort asks - or none: for a quest too small to give any, unless it should give something. */
+  function consumablesFor(local: Rng, lvl: number, effort: number, owed: boolean): string[] {
+    const c = q.rewardConsumables;
+    const kinds = c.items.filter((x) => x.from <= lvl && input.items?.typeIndex.has(x.item));
+    if (kinds.length === 0 || (effort < c.minEffort && !owed)) return [];
+    const count = Math.max(1, Math.min(c.max, Math.round(effort * c.perEffort)));
+    const kind = pick(local, kinds);
+    return Array.from({ length: count }, () => kind.item);
+  }
+
+  /**
+   * A choice of items for a quest's reward (QUESTS.md, *Rewards*): `rewardChoices` of them, balanced.
+   * Every option is of one rarity - the best that all the templates it draws on have, up to the one
+   * aimed for (a chain's last quest aims higher) - and about the quest's level, so none is simply
+   * better. The kinds (weapon, armour) go round: the one offered least so far in the world comes first
+   * and again, so the quests of an area do not all give a sword; within a kind, the template used
+   * least, and the type used least. No type twice in a choice.
+   */
+  function rewardChoice(local: Rng, lvl: number, finale: boolean, allow: { only: string[]; not: string[] }): string[] {
     const items = input.items;
     if (!items) return [];
+    const aim = items.rarities.find((r) => r.id === (finale ? q.rewardRarity.finale : q.rewardRarity.quest))?.order ?? Infinity;
+    const used = (key: string): number => world.uses.get(key) ?? 0;
+    const bump = (key: string): void => void world.uses.set(key, used(key) + 1);
+    /** A template's types within the rules' reach of the quest's level: none above it by more, none below. */
+    const nearLevel = (template: string) => (items.generated.get(template) ?? []).map((i) => items.types[i]).filter((t) => Math.abs(t.itemLevel - lvl) <= q.rewardLevel);
+    const kindOf = (id: string): string => items.types[items.generated.get(id)?.[0] ?? 0]?.kind ?? "";
+    // What the quest allows: its kinds or templates listed, and none of those it shuts out.
+    const allowed = (id: string): boolean => (allow.only.length === 0 || allow.only.includes(id) || allow.only.includes(kindOf(id))) && !allow.not.includes(id) && !allow.not.includes(kindOf(id));
+    const templates = q.rewardTemplates.filter(allowed).map((id) => ({ id, types: nearLevel(id) })).filter((t) => t.types.length > 0);
+    if (templates.length === 0) return [];
+    // The rarity every template can offer, up to the one aimed for.
+    const best = Math.min(...templates.map((t) => Math.max(...t.types.map((x) => items.rarities[x.rarity].order).filter((o) => o <= aim), -Infinity)));
+    const rarity = Number.isFinite(best) ? best : Math.min(...templates.flatMap((t) => t.types.map((x) => items.rarities[x.rarity].order)));
+    // The level the options aim for: the one nearest the quest's that a template has, and each option
+    // is of its template's tier nearest that, so they are of about one tier and all of about the quest's level.
+    const nearest = (types: readonly { itemLevel: number }[], to: number): number => types.map((x) => x.itemLevel).sort((a, b) => Math.abs(a - to) - Math.abs(b - to) || a - b)[0];
+    const level = nearest(templates.flatMap((t) => t.types), lvl);
+    // Kinds, the least offered first; ties by the draw.
+    const kinds = [...new Set(templates.map((t) => kindOf(t.id)))].sort((a, b) => used(`reward:kind:${a}`) - used(`reward:kind:${b}`) || local() - 0.5);
     const out: string[] = [];
-    for (const template of q.rewardTemplates) {
-      const fits = (items.generated.get(template) ?? []).map((i) => items.types[i]).filter((t) => t.itemLevel <= lvl + 2 && t.itemLevel >= lvl - 4 && items.rarities[t.rarity]?.id !== "common");
-      const pool = fits.length > 0 ? fits : (items.generated.get(template) ?? []).map((i) => items.types[i]).filter((t) => t.itemLevel <= lvl + 2);
-      if (pool.length > 0) out.push(pick(local, pool).id);
+    for (let i = 0; out.length < q.rewardChoices && i < q.rewardChoices * 3; i++) {
+      const kind = kinds[i % kinds.length];
+      const ofKind = templates.filter((t) => kindOf(t.id) === kind).sort((a, b) => used(`reward:template:${a.id}`) - used(`reward:template:${b.id}`) || local() - 0.5);
+      const template = ofKind[Math.floor(i / kinds.length) % ofKind.length];
+      // The types at that rarity nearest that level (the lower, if two are as near), then one the world has seen least of.
+      const atRarity = template.types.filter((x) => items.rarities[x.rarity].order === rarity && !out.includes(x.id));
+      if (atRarity.length === 0) continue;
+      const aimLevel = nearest(atRarity, level);
+      const pool = atRarity.filter((x) => x.itemLevel === aimLevel);
+      const type = pickBy(local, pool, (x) => 1 / (1 + used(`reward:type:${x.id}`)));
+      out.push(type.id);
+      bump(`reward:kind:${kind}`);
+      bump(`reward:template:${template.id}`);
+      bump(`reward:type:${type.id}`);
     }
-    // A third: another of the first template, a different one.
-    const first = items.generated.get(q.rewardTemplates[0] ?? "") ?? [];
-    const extra = first.map((i) => items.types[i]).filter((t) => t.itemLevel <= lvl + 2 && !out.includes(t.id));
-    if (extra.length > 0 && out.length < 3) out.push(pick(local, extra).id);
     return out;
+  }
+
+  const segments = [...q.segments.values()];
+  const recipes = q.plots.filter((p) => !p.intro && p.weight > 0);
+
+  /** Whether the settlement could give a plot's needs at all: a giver, creatures, a place, a road,
+   *  someone who is gone. */
+  function feasible(plot: QuestPlotDef): boolean {
+    return (
+      out.some((n) => n.role !== null && plot.giver.includes(n.role) && (lines.get(n.index) ?? 0) < 2) &&
+      (!plot.creatures || input.creatures.some(creatureFits(plot.creatures))) &&
+      (!plot.place || places.some(placeFits(plot.place))) &&
+      (!plot.road || input.others.some((o) => o.npc)) &&
+      (!Object.values(plot.people).some((p) => p.gone) || cast.npcs.some((n) => !n.out))
+    );
+  }
+
+  /** How well a plot fits here, 0 if it cannot be made: the best place and the best creature it could
+   *  use, by the weights - so a plot whose only place is far, crowded or well used is drawn less. */
+  function fitness(plot: QuestPlotDef): number {
+    if (!feasible(plot)) return 0;
+    let f = 1;
+    if (plot.creatures) f *= Math.max(...input.creatures.filter(creatureFits(plot.creatures)).map(kindScore));
+    if (plot.place) f *= Math.max(...places.filter(placeFits(plot.place)).map(placeScore));
+    return f;
+  }
+
+  const fitnessOf = (list: readonly QuestSegmentDef[]): number => {
+    const plot = composeChain("", list);
+    return plot ? fitness(plot) : 0;
+  };
+
+  /** How a chain is grown: its shortest and longest, how likely each next segment is once it could
+   *  end, the generator's random numbers, and the themes it keeps to (none: any that chains may use). */
+  interface ChainOptions {
+    rng: Rng;
+    min: number;
+    max: number;
+    more: number;
+    themes: readonly string[] | null;
+  }
+
+  /** A chain from an opener: segments that fit what it has so far are added by weight, each time
+   *  perhaps stopping where the chain could end, up to the most; a dead end falls back to the last
+   *  place it could have ended, if that is long enough. Null when it cannot be made here. */
+  function chainFrom(opener: QuestSegmentDef, o: ChainOptions): QuestPlotDef | null {
+    const chain = [opener];
+    let closed = opener.roles.includes("closer") ? 1 : 0;
+    const allowed = (s: QuestSegmentDef): boolean => s.weight > 0 && (o.themes ? s.theme.some((t) => o.themes!.includes(t)) : s.free);
+    /** How well these segments fit here: 0 if they do not go together or cannot be made. */
+    const score = (list: readonly QuestSegmentDef[]): number => {
+      const plot = composeChain("", list);
+      return plot ? fitness(plot) : 0;
+    };
+    if (score(chain) <= 0) return null;
+    for (;;) {
+      if (chain.length >= o.max) break;
+      if (closed === chain.length && chain.length >= o.min && o.rng() >= o.more) break;
+      const final = chain.length + 1 >= o.max;
+      const next = segments
+        .filter((s) => allowed(s) && !chain.includes(s) && (s.roles.includes("closer") || (!final && s.roles.includes("middle"))) && themeFits(chain, s))
+        .map((s) => ({ s, weight: s.weight * score([...chain, s]) }))
+        .filter((c) => c.weight > 0);
+      if (next.length === 0) break;
+      let roll = o.rng() * next.reduce((sum, c) => sum + c.weight, 0);
+      const chosen = (next.find((c) => (roll -= c.weight) < 0) ?? next[0]).s;
+      chain.push(chosen);
+      if (chosen.roles.includes("closer")) closed = chain.length;
+      // A segment that cannot stand in the middle is where the chain ends.
+      if (!chosen.roles.includes("middle")) break;
+    }
+    if (closed < o.min) return null;
+    const made = chain.slice(0, closed);
+    return composeChain(made.map((s) => s.id).join("+"), made);
+  }
+
+  /** A plot ready to draw: itself, or for a `draw` plot the chain drawn for it now - an opener of its
+   *  themes by weight, grown by the chain rules - or null when none fits here. */
+  function realise(plot: QuestPlotDef): QuestPlotDef | null {
+    if (!plot.draw) return plot;
+    const local = mulberry32(deriveSeed(rng() * 4294967296, hashString(plot.id) + 7));
+    const { themes, min, max, more } = plot.draw;
+    const openers = segments.filter((s) => s.roles.includes("opener") && s.weight > 0 && s.theme.some((t) => themes.includes(t)));
+    for (let attempt = 0; attempt < 12 && openers.length > 0; attempt++) {
+      const weighted = openers.map((s) => ({ s, weight: s.weight * (fitnessOf([s]) || 0.0001) }));
+      let roll = local() * weighted.reduce((sum, c) => sum + c.weight, 0);
+      const opener = (weighted.find((c) => (roll -= c.weight) < 0) ?? weighted[0]).s;
+      const chain = chainFrom(opener, { rng: local, min, max, more: more ?? q.chain.more, themes });
+      if (chain) return { ...chain, id: `${plot.id}#${chain.id}`, weight: plot.weight, intro: plot.intro };
+    }
+    return null;
   }
 
   // The intro first, in order, each plot after the one before (NPCS.md's `intro`).
   let last: string | null = null;
   for (const id of input.intro) {
-    const plot = rules.quests.plots.find((p) => p.id === id);
+    const named = q.plots.find((p) => p.id === id);
+    const plot = named ? realise(named) : null;
     const made: QuestDef[] | null = plot ? draw(plot, last) : null;
     if (!made) continue;
     quests.push(...made);
     last = made[made.length - 1].id;
   }
-  // Then plots by weight until the quota is met: standalones and chains of the settlement's own.
+  // Then plots and chains by weight until the quota is met: a plot is a recipe, an opener starts a
+  // chain of segments put together as they fit (QUESTS.md, *Segments*).
   const quota = between(rng, q.quota[site.tier] ?? [2, 4]) + quests.length;
-  const pool = rules.quests.plots.filter((p) => !p.intro && p.weight > 0);
+  type Option = { weight: number; plot?: QuestPlotDef; opener?: QuestSegmentDef };
   for (let tries = 0; quests.length < quota && tries < 40; tries++) {
-    const open = pool.filter((p) => !usedPlots.has(p.id));
+    const open: Option[] = [
+      ...recipes.filter((p) => !usedPlots.has(p.id)).map((plot) => ({ weight: plot.weight * (plot.draw ? 1 : fitness(plot)), plot })),
+      ...segments.filter((s) => s.roles.includes("opener") && s.free && s.weight > 0 && !usedPlots.has(`segment:${s.id}`)).map((opener) => ({ weight: opener.weight * fitnessOf([opener]), opener })),
+    ].filter((o) => o.weight > 0);
     if (open.length === 0) break;
-    let roll = rng() * open.reduce((sum, p) => sum + p.weight, 0);
-    const plot = open.find((p) => (roll -= p.weight) < 0) ?? open[0];
-    const made = draw(plot, null);
-    usedPlots.add(plot.id);
+    let roll = rng() * open.reduce((sum, o) => sum + o.weight, 0);
+    const option = open.find((o) => (roll -= o.weight) < 0) ?? open[0];
+    if (option.plot) usedPlots.add(option.plot.id);
+    else usedPlots.add(`segment:${option.opener!.id}`);
+    const plot = option.plot ? realise(option.plot) : chainFrom(option.opener!, { rng, min: 1, max: q.chain.max, more: q.chain.more, themes: null });
+    const made = plot ? draw(plot, null) : null;
     if (made) quests.push(...made);
   }
   return quests;

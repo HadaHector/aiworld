@@ -63,8 +63,8 @@ await section("rules", () => {
   check("money shown in denominations", formatMoney(items.currencies[items.main], 12345) === "1g 23s 45c", formatMoney(items.currencies[items.main], 12345));
   check("a plain currency shown as a number", formatMoney(items.currencies[items.currencyIndex.get("marks")], 7) === "7");
   check("zero money shown", formatMoney(items.currencies[items.main], 0) === "0c");
-  check("sword makes 42 types (never: crude rare, ornate common)", items.generated.get("sword").length === 42, String(items.generated.get("sword")?.length));
-  check("chestpiece makes 15 types (never: worn uncommon)", items.generated.get("chestpiece").length === 15, String(items.generated.get("chestpiece")?.length));
+  check("sword makes 63 types (3 metals x 3 forms x 3 makes x 3 rarities, never: crude rare, ornate common)", items.generated.get("sword").length === 63, String(items.generated.get("sword")?.length));
+  check("chestpiece makes 21 types (never: worn uncommon or rare)", items.generated.get("chestpiece").length === 21, String(items.generated.get("chestpiece")?.length));
   const long = typeOf("sword.iron.long.standard.common");
   check("a generated type's name from its parts", long?.name === "Iron Longsword", long?.name);
   check("a generated type's item level from its parts", long?.itemLevel === 8);
@@ -295,9 +295,10 @@ await section("belongings", () => {
   check("using bread", system.use(p, B(breadAt)) === "" && hookCalls[0] === "use eatBread" && bagItem(p, breadAt).count === before - 1);
   check("a sword is not used", system.use(p, B(bagIndex(p, "sword.bronze.great.standard.common"))) === "cannot");
 
-  // Quest items: one only, never dropped.
-  system.give(p, items.typeIndex.get("rustyKey"), 1);
-  check("a second quest item is refused", system.give(p, items.typeIndex.get("rustyKey"), 1) === 1);
+  // Quest items: one to a quest line (its roll), never dropped.
+  system.give(p, items.typeIndex.get("rustyKey"), 1, 777);
+  check("a second quest item of the same quest line is refused", system.give(p, items.typeIndex.get("rustyKey"), 1, 777) === 1);
+  check("...one of another quest line is held beside it", system.give(p, items.typeIndex.get("rustyKey"), 1, 778) === 0);
   check("a quest item cannot be dropped", system.drop(p, B(bagIndex(p, "rustyKey")), 0) === "quest");
 
   // A full bag.

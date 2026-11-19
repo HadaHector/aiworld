@@ -1,0 +1,10 @@
+// Look among the graves, or wherever something was done, for what was left behind.
+{
+  kind: "gather",
+  count: [3, 5],
+  line: "{objects} from {place}",
+  motive: [
+    "Look about {place} for {objects}, or anything that has no business being there.",
+    "Somebody has been at {place}. Bring me any {objects} you find.",
+  ],
+}

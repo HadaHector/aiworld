@@ -33,8 +33,9 @@ import { clampStanding, factionDef, standingWith, tierOf } from "./factions";
 import { buy, buyPrice, sell } from "./items/shop";
 import { createNpcSystem, type NpcSystem } from "./npcs/system";
 import { createQuestSystem, type QuestSystem } from "./quests/system";
-import { generateQuests } from "./quests/generator";
-import { castForSettlement, type Cast, type CastContext } from "./npcs/cast";
+import { createWorldQuestState, generateQuests, questOrder } from "./quests/generator";
+import type { Cast, CastContext } from "./npcs/cast";
+import type { QuestDef } from "./quests/quest";
 import type { SettlementSite } from "../world/settlements/settlementSites";
 import type { SettlementLayout } from "../world/settlements/settlementLayout";
 
@@ -354,10 +355,25 @@ export function createServer(options: ServerOptions): Server {
           delta,
           firstItemId: world?.nextItemId,
           originsOf: (entity) => (progression ? [...(entity.progress?.origins.values() ?? [])].map((i) => progression.rules.origins[i]?.id ?? "") : []),
+          // Items taken from loot into a bag: a quest's dropped item counts (QUESTS.md, *Quest items*).
+          gained: (entity, type, roll, count) => questSystem.itemGained(entity, options.items!.types[type].id, roll, count),
         },
-        progression ? progression.itemHooks(options.itemHooks ?? skills.items) : (options.itemHooks ?? skills.items),
+        questAwareHooks(progression ? progression.itemHooks(options.itemHooks ?? skills.items) : (options.itemHooks ?? skills.items)),
       )
     : null;
+
+  /** Item hooks that also tell the quest system which item was used (and for which quest line), for a
+   *  `use` objective to count only its own (QUESTS.md, *Quest items*). */
+  function questAwareHooks(base: ItemHooks): ItemHooks {
+    return {
+      ...base,
+      use(user, item, skill) {
+        const went = base.use(user, item, skill);
+        if (went && options.items) questSystem.itemUsed(user, options.items.types[item.type].id, item.roll);
+        return went;
+      },
+    };
+  }
 
   /** The players standing in a dimension. */
   const playersIn = (id: string): Entity[] => [...players.values()].filter((p) => p.entity.dimension === id && p.entity.body).map((p) => p.entity);
@@ -404,8 +420,8 @@ export function createServer(options: ServerOptions): Server {
     playersIn,
     delta,
     classes: (options.progression?.origins ?? []).filter((o) => o.slot === "class").map((o) => ({ id: o.id, name: o.name })),
-    castMade: (dimension, { site, layout }, cast, context) => generateFor(dimension, site, layout, cast, context),
     animate: (npc, name) => skills.animate(npc, name),
+    castsMade: (dimension, settlements, context) => generateAll(dimension, settlements, context),
     bark: (npc, text, to) => {
       const hearers = new Set(to.map((e) => e.id));
       for (const connection of connections) if (connection.player && hearers.has(connection.player.entity.id)) connection.end.send({ type: "bark", npc: npc.id, text: text.text, args: text.args });
@@ -515,23 +531,45 @@ export function createServer(options: ServerOptions): Server {
       skills.leave(entity, true);
       loaded.get(entity.dimension)?.entities.delete(entity.id);
     },
-    give: (entity, type, count) => {
+    // A quest item is its quest line's own: the roll of the instance (`bind`) is the line's. 0: any, or an ordinary item.
+    give: (entity, type, count, bind) => {
       const def = typeOf(type);
-      return def && itemSystem ? itemSystem.give(entity, def.index, count) : count;
+      return def && itemSystem ? itemSystem.give(entity, def.index, count, bind || undefined) : count;
     },
-    take: (entity, type) => {
+    take: (entity, type, bind) => {
       const def = typeOf(type);
       const b = entity.belongings;
       if (!def || !b || !itemSystem) return false;
-      const slot = b.bag.findIndex((id) => id != null && itemSystem.store.get(id)?.type === def.index);
+      const slot = b.bag.findIndex((id) => id != null && itemSystem.store.get(id)?.type === def.index && (!bind || itemSystem.store.get(id)?.roll === bind));
       if (slot < 0) return false;
       itemSystem.store.remove(b.bag[slot]!);
       b.bag[slot] = null;
       return true;
     },
-    has: (entity, type) => {
+    drop: (player, source, type, bind) => {
       const def = typeOf(type);
-      return !!def && !!itemSystem && !!entity.belongings?.bag.some((id) => id != null && itemSystem.store.get(id)?.type === def.index);
+      const corpse = findEntity(source);
+      return !!def && !!corpse && !!itemSystem && itemSystem.dropFor(player, corpse, def.index, 1, bind);
+    },
+    sweep: (entity, keep) => {
+      const b = entity.belongings;
+      if (!b || !itemSystem || !options.items) return 0;
+      let removed = 0;
+      for (const list of [b.bag, b.bank, b.equipment]) {
+        list.forEach((id, i) => {
+          const item = id == null ? undefined : itemSystem.store.get(id);
+          const type = item && options.items!.types[item.type];
+          if (!item || !type?.quest || keep(type.id, item.roll)) return;
+          itemSystem.store.remove(item.id);
+          list[i] = null;
+          removed++;
+        });
+      }
+      return removed;
+    },
+    has: (entity, type, bind) => {
+      const def = typeOf(type);
+      return !!def && !!itemSystem && !!entity.belongings?.bag.some((id) => id != null && itemSystem.store.get(id)?.type === def.index && (!bind || itemSystem.store.get(id)?.roll === bind));
     },
     useSkill: (type) => typeOf(type)?.use?.skill ?? "",
     pay: (entity, money) => {
@@ -544,52 +582,61 @@ export function createServer(options: ServerOptions): Server {
   });
 
   /**
-   * A settlement's quests (QUESTS.md, *The generator*): what is around it - its zone's level and
-   * creatures, the places near it with a `quest` block, the settlements down the road and their
-   * reeves - and, for a starting settlement, its start's intro. Defined with the quest system.
+   * A dimension's quests (QUESTS.md, *The generator*), all of them as it loads, in the seed's order
+   * (`questOrder`): for each settlement what is around it - its zone's level and creatures, the
+   * places near it with a `quest` block, the settlements down the road and their reeves - and, for a
+   * starting settlement, its start's intro. The quest people they need are added to the casts, and the
+   * quests defined with the quest system.
    */
-  function generateFor(dimension: string, site: SettlementSite, layout: SettlementLayout, cast: Cast, context: CastContext): void {
+  function generateAll(dimension: string, settlements: readonly { site: SettlementSite; layout: SettlementLayout; cast: Cast }[], context: CastContext): void {
     const loadedDim = loaded.get(dimension) ?? slots.get(dimension)?.dimension;
     const definition = definitions.get(dimension);
     if (!loadedDim || !definition) return;
     const data = loadedDim.world;
     const zones = creatureSystem?.debug.zones(dimension) ?? [];
-    const zone = zones[site.areaId];
     const reach = rules.quests.reach;
-    const places = data.features
-      .filter((f) => f.kind.quest && !f.settlement && Math.hypot(f.x - site.x, f.z - site.z) <= reach)
-      .map((f) => ({ name: f.name ?? f.kind.name, x: f.x, z: f.z, radius: Math.max(12, f.footprint * 0.6), quest: f.kind.quest! }));
-    // Down the road: the settlements nearest first, the next ring's before the same ring's.
-    const ring = zone?.ring ?? 0;
-    const others = data.settlementLayouts
-      .filter((l) => l.siteId !== site.id)
-      .map((l) => ({ l, distance: Math.hypot(l.x - site.x, l.z - site.z), ring: zones[data.settlements.find((s) => s.id === l.siteId)?.areaId ?? -1]?.ring ?? 0 }))
-      .sort((a, b) => Number(b.ring > ring) - Number(a.ring > ring) || a.distance - b.distance)
-      .slice(0, 3)
-      .map(({ l, distance }) => {
-        const otherCast = castForSettlement(data, l.siteId, context);
-        const npc = otherCast?.npcs.find((n) => n.role === "reeve") ?? otherCast?.npcs.find((n) => n.out) ?? null;
-        return { name: data.settlements.find((s) => s.id === l.siteId)?.name ?? "", distance, npc };
-      });
-    const start = (startsOf.get(dimension) ?? []).find((s) => s.settlement === site.id);
-    const intro = start ? (definition.starts.find((s) => s.id === start.id)?.intro ?? []) : [];
-    const defs = generateQuests({
-      cast,
-      castInput: { seed: context.seed, dimension, site, layout, voices: context.voices, rules: rules.npcs },
-      site,
-      layout,
-      zone: data.areaNames.get(site.areaId) ?? "",
-      levels: zone?.levels ?? [1, 3],
-      creatures: (zone?.roster ?? []).map((r) => ({ id: r.kind.id, name: r.kind.template.name, levelOffset: r.kind.levelOffset, hostility: r.kind.template.hostility, family: r.kind.family })),
-      places,
-      others,
-      intro,
-      folk: `folk@${dimension}/${site.areaId}`,
-      rules,
-      items: options.items ?? null,
-    });
+    const byId = new Map(settlements.map((s) => [s.site.id, s]));
+    const defs: QuestDef[] = [];
+    // What the quests made so far have used - places, creatures, where the objectives lie - which
+    // the settlements after weigh by.
+    const world = createWorldQuestState([...definitions.keys()].sort().indexOf(dimension));
+    for (const id of questOrder(context.seed, dimension, settlements.map((s) => s.site.id))) {
+      const { site, layout, cast } = byId.get(id)!;
+      const zone = zones[site.areaId];
+      const places = data.features
+        .filter((f) => f.kind.quest && !f.settlement && Math.hypot(f.x - site.x, f.z - site.z) <= reach)
+        .map((f) => ({ name: f.name ?? f.kind.name, x: f.x, z: f.z, radius: Math.max(12, f.footprint * 0.6), quest: f.kind.quest! }));
+      // Down the road: the settlements nearest first, the next ring's before the same ring's.
+      const ring = zone?.ring ?? 0;
+      const others = settlements
+        .filter((o) => o.site.id !== site.id)
+        .map((o) => ({ o, distance: Math.hypot(o.layout.x - site.x, o.layout.z - site.z), ring: zones[o.site.areaId]?.ring ?? 0 }))
+        .sort((a, b) => Number(b.ring > ring) - Number(a.ring > ring) || a.distance - b.distance)
+        .slice(0, 3)
+        .map(({ o, distance }) => ({ name: o.site.name, distance, npc: o.cast.npcs.find((n) => n.role === "reeve") ?? o.cast.npcs.find((n) => n.out) ?? null }));
+      const start = (startsOf.get(dimension) ?? []).find((s) => s.settlement === site.id);
+      const intro = start ? (definition.starts.find((s) => s.id === start.id)?.intro ?? []) : [];
+      defs.push(
+        ...generateQuests({
+          cast,
+          castInput: { seed: context.seed, dimension, site, layout, voices: context.voices, rules: rules.npcs },
+          site,
+          layout,
+          zone: data.areaNames.get(site.areaId) ?? "",
+          levels: zone?.levels ?? [1, 3],
+          creatures: (zone?.roster ?? []).map((r) => ({ id: r.kind.id, name: r.kind.template.name, levelOffset: r.kind.levelOffset, hostility: r.kind.template.hostility, family: r.kind.family, tags: r.kind.tags })),
+          places,
+          others,
+          intro,
+          folk: `folk@${dimension}/${site.areaId}`,
+          rules,
+          items: options.items ?? null,
+          world,
+        }),
+      );
+    }
     questSystem.define(defs);
-    // A character back in the world holds quests made only now: its client is told them whole.
+    // A character already in the world holds quests made only now: its client is told them whole.
     const ids = new Set(defs.map((d) => d.id));
     for (const connection of connections) {
       const entity = connection.player?.entity;
@@ -603,6 +650,8 @@ export function createServer(options: ServerOptions): Server {
   function sendQuestLog(connection: Connection, entity: Entity): void {
     const saved = questSystem.export(entity);
     const defs = saved.active.map((a) => questSystem.def(a.id)).filter((d): d is NonNullable<typeof d> => d !== undefined);
+    // ...and those whose items it holds between two quests of a line, to name them.
+    for (const held of questSystem.defsOfHeldItems(entity)) if (!defs.some((d) => d.id === held.id)) defs.push(held);
     if (defs.length > 0) connection.end.send({ type: "questDefs", defs });
     connection.end.send({ type: "questLog", active: saved.active, done: saved.done });
   }
@@ -867,6 +916,8 @@ export function createServer(options: ServerOptions): Server {
     const skipped: string[] = [];
     if (record.progress && progression) skipped.push(...progression.import(entity, record.progress));
     if (record.belongings && itemSystem && entity.belongings) skipped.push(...importBelongings(itemSystem.ctx, entity, record.belongings));
+    // Quest items no quest of theirs could use (QUESTS.md, *Quest items*) are not kept.
+    questSystem.sweep(entity);
     if (entity.resources && !record.dead) {
       for (const [id, value] of Object.entries(record.resources)) {
         const index = rules.resourceIndex.get(id);

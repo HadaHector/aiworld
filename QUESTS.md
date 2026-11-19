@@ -14,7 +14,7 @@ first milestone.
 
 | Question | Decision |
 |---|---|
-| Where quests are | **Anywhere.** The generator works for any settlement in the world, with what is around it. It runs lazily, when a settlement's cast is first needed. The starting village's intro chain is one use of it, not a special case in code |
+| Where quests are | **Anywhere.** The generator works for any settlement in the world, with what is around it. It runs for the whole world at once, when its dimension loads (see [The generator](#the-generator)): every settlement's cast and quests are made together, in a seed-shuffled order, before anyone is near. The starting village's intro chain is one use of it, not a special case in code |
 | Quest people | **Many NPCs exist only to fill a role in a quest**: the generator asks for a hermit at the ruin, a traveller on the road, and they are made to fit (see [Quest people](#quest-people)). *Read from the user's answer: "Mennyi mpc's árolni exit to fulfill roll in a quest". Correct this if it meant something else* |
 | Story | **From the NPCs' relations and from the surroundings.** A quest's motive comes from who the giver is and who they are tied to (the smith's missing apprentice, a feud between two farms), and from what is near: the churchyard over the hill, the quarry, the bandit camp, the river, the next village down the road. No deep generated history yet |
 | Co-op | **WoW-like.** Kill credit goes to everyone who took part in the kill; quest drops roll for every player who needs them; ground objects sparkle and can be taken only by players on the quest, each their own. Shared world, no competing over objectives |
@@ -28,8 +28,10 @@ first milestone.
   wolves it asks for are the zone's wolves, the stolen tools are a quest drop, and nothing in the
   world changes when it is done.
 - **Parts are data.** What a *kill* or a *gather* is, what it needs from the place, how its line in
-  the log reads: all in `questParts/`. Which parts make a quest, and in what order, is
-  `questPlots/`. The engine knows how to track a handful of objective kinds and nothing about wolves.
+  the log reads: all in `questParts/`. Which parts make a quest is a **segment**
+  (`questSegments/`); segments fit together into chains by tags (see [Segments](#segments)), and a
+  fixed order of them is a recipe in `questPlots/`. The engine knows how to track a handful of
+  objective kinds and nothing about wolves.
 - **Deterministic.** A settlement's quests are a pure function of the seed, the settlement and the
   packs, worked out with its cast. A quest's id is stable for the seed, so a character saves ids
   and counts, never the quest itself. A saved id the packs no longer make is dropped and reported,
@@ -63,7 +65,8 @@ interface Quest {
 type Objective =
   | { kind: "talk"; npc: string }
   | { kind: "kill"; creatures: KindFilter; count: number; area?: Area }
-  | { kind: "loot"; item: string; count: number; from: KindFilter; chance: number }   // a quest drop
+  | { kind: "drop"; item: string; count: number; from: KindFilter; chance: number }   // a quest item the creatures drop, counted as taken
+  | { kind: "loot"; count: number; from: KindFilter; chance: number }               // a quest drop only counted, no item (the simple form)
   | { kind: "gather"; object: string; count: number; area: Area }                      // quest objects on the ground
   | { kind: "receive"; item: string; from: string }                                    // an NPC hands it over on talk
   | { kind: "use"; item: string; on: KindFilter | { object: string }; count: number }  // use an item on something
@@ -189,21 +192,188 @@ quest: {
 
 ### Quest items and ground objects
 
-- **Quest items** are item types made per quest from `questItemTemplates/` (a name pattern, an icon,
-  a look), with ITEMS.md's `quest: true`: not dropped, one held, taken away when the quest ends or
-  is abandoned. A `use` item carries a skill (ITEMS.md, *Abilities*) whose effect on the target is
-  what counts: a salve that calms, a snare that binds, a ward that drives off.
-- **Quest drops** are a loot-table entry added to the creature kinds a `loot` part names, rolled
-  only for players with that objective unfinished, and shown only to them (WoW-like co-op).
+- **Quest items** are item types with ITEMS.md's `quest: true` (a salve, a ward, a letter, a
+  parcel): never dropped, taken away when the quest ends or is abandoned. A `use` item carries a skill
+  (ITEMS.md, *Abilities*) whose effect on the target is what counts: a salve that calms, a snare that
+  binds, a ward that drives off.
+  **An item belongs to its quest line, not to its type.** The *roll* of the item instance - which a
+  quest item has no use for - is made from the line's id (the chain's, or the quest's own). A
+  character can hold a letter for each of two errands made from the same template, because they are
+  different items; a `deliver` takes the letter of its own errand and no other; a `use` counts only
+  the item of its own quest line (the item system tells the quest system which item was used); and
+  abandoning a quest takes exactly its items. So a similar quest from the same template never uses
+  another's item. Characters entering the world are swept of quest items no quest line of theirs
+  that is not finished could use.
+  **Each is named and drawn for its line.** A quest line's item is called after the person or place it
+  is about - "Letter for Lavora of Suthvyldael", "Reply for Rofiel", "Safell's Salve", "Ward of
+  Theaniel", "Package for Shizven" - from name patterns on the parts (`itemName`, drawn like any
+  line, with `{npcGiven}` the person it is delivered to or was given by, and a part reference can
+  override them: the road letter and a reply do), and drawn with an icon and a tint from lists in
+  `rules/quests.json5`'s `itemLooks` (one of each for the line, so two letters are not the same
+  picture). The generator puts them in the quest as `itemLooks`, the same in every quest of the line;
+  the client names an item it holds from the quest it was told of, by the item's roll (`ui/questItemLook.ts`),
+  in the bag, the tooltip (which also says which quest it is for) and the loot window, and a
+  character entering is sent the quests whose items it holds between two of a line. The art set core
+  installs has no paper or parcels, so letters and parcels differ by tint on the placeholder; the salve
+  has six icons and the charm one. Add icon names to a list when a set has them.
+  **Unique, by construction.** *Technical identity:* a line's roll is made of where the line is - its
+  dimension's number (6 bits), its settlement (16) and the index of its first quest there (10), the
+  `n` of `q:<dimension>/<site>/<n>` (`bindFor`) - and stored in the quest as `bind`. No two lines can
+  have the same, with nothing to look up; it does not change when a quest elsewhere does; and
+  generating fails loudly if a number outgrows its bits (more than 63 dimensions, 65 535
+  settlements or 1 022 quest lines in one) rather than quietly clashing. (A quest made by hand has no
+  `bind` and takes the hash of its id.) *Display name:* chosen from the patterns, preferring one no
+  other line's item of the type has; if all are taken, two lines share a name and the roll tells them
+  apart - the tooltip says which quest each is for. An icon and tint are picked by a scramble of the roll.
+  Rules: when a quest is **handed in**, its items go, except those a later quest of the same chain
+  uses (the next in a chain uses the salve it was given). When it is **abandoned**, all go, and an item
+  it uses but does not give itself is **handed again** when it is taken again, so a chain is not
+  stuck for the want of it.
+- **Quest drops** are quest items the creatures leave in their loot (the `drop` objective), only while
+  the quest is active, and for the players on it alone (WoW-like co-op). When a creature dies, each
+  player on its threat table who has the objective open - not finished, and the current one in an
+  ordered quest - rolls: `chance` (the part's, which a segment's use of the part can set for itself)
+  times the rules' `dropChance` (1 as written; 0.5 halves every drop, 0 stops them all). A success puts one
+  item in the corpse's loot **for that player only**: it is in their loot window after the shared
+  items, it makes the corpse glint for them and nobody else, and it is taken like any item (a full
+  bag leaves it on the corpse). It is the quest line's own item (the roll of its instance, so it is
+  not another quest's), it stacks on that line's stack and nowhere else, it cannot be dropped, and
+  the objective counts as it is taken; handing in or abandoning takes the stack. A creature with no
+  loot table of its own still leaves one, and the corpse lasts for its usual time and then its private
+  items go with it. The older `loot` objective, which only counts and leaves no item, is still there
+  for a quest that wants the simple form; core's blood sample and pelts are drops now (`questBlood`,
+  `questPelt`, named for the creature or the giver like any quest item).
 - **Ground objects** are a new entity template, `questObject`: a small thing with a sparkle, made at
   spots in the part's area while a player with the objective is near, takable (the interact key)
   only by such players, each their own. One taken comes back for others at once and for the taker
   after a short `respawn`. They are filled and released as spawn points are.
 
+## Segments
+
+`questSegments/<id>.json5`: one quest of a chain, and the tags that say where it fits. This is the
+Lego: a settlement's chains are not written out, they are put together from segments that can follow
+each other, so the same few dozen pieces make many stories. A plot (below) is the other way: a
+recipe naming segments in a fixed order, for what must always be the same, like the intro.
+
+```json5
+// questSegments/wardmaker.json5 - the predators are not the end of it: someone knows a charm
+{
+  weight: 1,
+  roles: ["middle"],                     // where it can stand: opener, middle, closer (a quest can be several)
+  theme: ["predators"],                  // what the chain is about; a segment follows only a chain of a shared theme (or none)
+  requires: ["problem:predators"],       // tags the chain must have by now
+  provides: ["met:contact", "knows:wards"],   // tags it adds
+  uses: ["beast"],                       // names that must already be bound: a person, beast, place, road
+  people: { contact: { roles: [], make: ["traveller"] } },   // people it brings in (the plot format)
+  quest: { ender: "contact", parts: [{ part: "talkTo", npc: "contact" }], title: ..., offer: [...], progress: ..., done: ... },
+}
+```
+
+- **Openers** also say who gives them (`giver`: roles). Their creatures, place and road needs are
+  the same as a plot's. A segment with no `giver` of its own is given by whoever ended the one
+  before; with no `ender`, by whoever gave it.
+- **Tags** are the story so far: `problem:predators`, `has:cure`, `delivered`. A segment that
+  `requires` one can only follow a segment that `provides` it, so the dependencies *are* the plot:
+  nothing hands you a cure before the herbs. **Names** are people and things by slot: `contact` is
+  whoever the chain sent you to, whichever segment brought them (a parcel's friend, a hermit at a
+  ruin, a traveller on the road), so `contactReply` ends any story that has one.
+- **Creatures are asked for by what they are like**, not by name: `creatures: { hostility, family,
+  tags }`, where `tags` (all of them) come from the species' and variant's `tags` in
+  `creatures/*.json5` (CREATURES.md). Pelts ask for `furred`, a sickness for `mammal`; a quest's text
+  can follow what it got (`when: { creature: ["arachnid"] }` says it only of a spider: webbing across
+  the gate instead of tufts of fur). A settlement whose zone has no creature with the tags does not
+  get the quest at all, rather than a hunt for something that is not there.
+- **Merging.** A chain's needs of the world are merged, so it is about one kind of creature and one
+  place throughout; a chain whose merged needs nothing in the settlement meets is not drawn there.
+- **Length.** `rules/quests.json5`'s `chain` gives the most segments one chain has (`max`, 4) and
+  how likely each next one is where the chain could end (`more`). A chain that dead-ends falls back
+  to where it last could have ended. A segment is a solo (`roles: ["opener", "closer"]`) when it
+  makes a whole quest on its own.
+- **`free: false`** keeps an opener out of free drawing: it belongs to a story only a plot's `draw`
+  tells (below). **`forbids`** are tags the chain must *not* have, the other half of `requires`: a
+  branch that shuts out another (a curse cannot follow a sickness; the same help is not asked twice).
+- **A segment that cannot stand in the middle** (`roles` without `middle`) ends the chain where it is.
+- **Checked** by the quests probe without any world: every opener reaches a closer, every segment
+  is on some chain, and segments that cannot go together do not compose.
+
+A plot can say `segments: ["a", "b", ...]` in place of `quests`; the loader puts them together once
+(and refuses a recipe that does not fit). Or `draw: { themes, min, max }`: a chain **drawn** for each
+world from the segments of those themes, between `min` and `max` quests - how the intro gets a
+different story each time. The chain rules above apply; one that comes out shorter than `min`, or
+that this settlement cannot fill, is tried again with another opener.
+
+### Stories: starts, forks, twists and endings
+
+The intro (`questPlots/affliction.json5`, `draw: { themes: ["affliction"], min: 4, max: 6 }`) is the
+example. Something is wrong in the settlement and a healer is asked; what comes of it is drawn:
+
+| | Choices |
+|---|---|
+| **Start** | the beasts fall sick · a neighbour raves · omens and bad signs |
+| **Fork** (the investigation) | a sample from the beasts (`cause:sickness`) · signs gathered where it began, at the graves or the fields' edge (`cause:curse`) - each `forbids` the other |
+| **Sickness** | ask the maker, *or find them dead* (the twist) and learn from who they taught · herbs · the salve · tried on a beast |
+| **Curse** | ask the sexton or hermit what the signs mean · a ward, tried on a beast; *or find who laid it* and ask them to their face |
+
+Twelve stories of four to six quests; the test chain (talk, kill and loot, talk, gather, receive, use,
+talk) is the plain sickness one, so GAMEPLAY.md's "must be one the generator can produce" holds. A
+line of text can follow the story it is in: `when: { tags: [...] }` says it only for a chain that
+has those tags, so the same quest closes differently after a death, and an omens start thanks you for
+the crows leaving the roofs, not a neighbour eating.
+
+- **Someone who is gone.** A segment's person can be `gone: true`: one of the settlement's people who
+  stay at home (a relative of the giver's first), named in the text and never met. A quest cannot be
+  given, ended or done by them (the loader refuses a chain that tries), and a part can say its own
+  log `line` ("Go to {goneGiven}'s house") when the talk objective is with someone else - the one
+  who tells you the news. The twist is in the words and the order, not in the world: nothing is
+  killed, and nobody standing in a settlement is ever a dead person. (A death a *met* NPC suffers,
+  so that you come back and they are not there, would need an NPC's state per character - a
+  system, not a segment: see [Later](#later).)
+- **A place need can shut objects out**: `place: { not: ["evidence"] }`, so a quest to pick herbs
+  never asks for the candle stubs left at a crime.
+
+## Voices
+
+The same quest should not read the same from everyone. Segments say what happens; **voices** say how
+the person giving it speaks. `questVoices/<id>.json5` is a bank of lines for one slot, and a quest's
+text asks for it with `"$name"`:
+
+```json5
+// questVoices/hook.json5
+{ slot: "hook", lines: [
+    { text: "You. Yes, you. Hear me out.", when: { mood: "gruff" }, weight: 2 },
+    { text: "Mind the sparks, and hear me out.", when: { role: "smith" }, weight: 3 },
+    { text: "", weight: 1.5 },                       // say nothing
+] }
+```
+
+Core's banks: `hook` (how they open), `promise` (what they offer), `progress` and `thanks`.
+
+- **Lines** are a string or `{ text, weight, when }`. `when` holds any of `mood`, `role`, `sex`,
+  `age` (of the speaker), `place` (tags of the quest's place), `object` (tags of what a gather
+  picks up: herbs grow, lost things lie about), `creature` (its creature's family),
+  `tags` (what the chain has so far) and `tier`; each takes one value or a list, and all the keys
+  must match. Lines nobody's `when` fits fall back to the unconditioned ones.
+- **Any text can use them**, not only voices: an offer is a list of groups, a title, progress or done
+  is one group, and each group is a list of lines and `"$bank"`s from which **one is drawn**. `"$motive"`
+  is where the parts' motive sentences go. Parts' `motive` is a group too, so a cull can read
+  differently for a farmer, a priest and a smith.
+- **Alternatives** `[this|that|]` inside a line are drawn when the quest is made, one possibly nothing.
+- **Fresh before stale.** A sentence already used in a settlement's quests is passed over while
+  another fits, so the settlement's own quests do not repeat each other.
+- **Facts.** Besides the names, a text can say `{neighbour}` (another of the settlement's people, by
+  given name), `{when}` (from `rules/quests.json5`'s `whens`: "these three nights") and each person's
+  `{contactSex, select, male {him} female {her} other {them}}`.
+- **Stored as before**: the drawn English is the key and the arguments are the fill, so the client
+  does not know about any of this. (A translation therefore has the whole offer as one string; with
+  this many variants a language is better served by translating the pool than its output: a later
+  step.)
+
 ## Plots
 
-`questPlots/<id>.json5`: how parts are put together into a quest or a chain, with the slots the
-parts share (the same creature kind across two parts, the same NPC giving and ending).
+`questPlots/<id>.json5`: a **recipe** - how parts (or [segments](#segments)) are put together into a
+chain in a fixed order, with the slots the parts share (the same creature kind across two parts, the
+same NPC giving and ending). Most chains are now drawn from segments; plots are for what must be the
+same each time (the intro) or does not break into pieces.
 
 ```json5
 // questPlots/troubledFlock.json5 - a standalone: a farmer's beasts are taken
@@ -280,6 +450,32 @@ cast. It leads out into ring 0's creatures and features, and its last quest send
 the road to the nearest ring-1 settlement, whose own quests are there when they arrive. The rest of
 the starting village's quota is ordinary standalones.
 
+## Weighting
+
+What the generator uses is not drawn evenly. Wherever it chooses a place, a creature kind, an object,
+a plot or the next segment of a chain, each candidate has a score, and the draw is by score:
+
+| Factor | Score | Why |
+|---|---|---|
+| **Distance** | `1 / (1 + (d / distance)^2)` - half as likely at `distance` metres (400) as at the door | The place a quest sends you should be a walk, not a trek |
+| **Reuse** | `1 / (1 + here x uses in this settlement + elsewhere x uses in the others)` for a place or object (`reuse`: 2 and 0.5), and for a creature kind (`kind`: 1 and 0.15, which a whole zone shares) | Two quests in one village should not send you to the same field for the same herb; neighbours may share, with a smaller penalty |
+| **Crowding** | `1 / (1 + each x objectives within radius of the place)` (0.7, 150 m) | Where a lot is already asked of the player, ask elsewhere. Gathering and going count at their place, hunting at the settlement |
+
+- **Plots and chains use the best they could.** A plot's or chain's fitness is the best place and the
+  best creature it could use, so one whose only place is far, used or crowded is drawn less, and one
+  that needs something the zone lacks (pelts, no furred creature) is not drawn at all. It multiplies
+  an opener's weight, a recipe's weight and each next segment's weight.
+- **Shared, in order.** The scores read a `WorldQuestState` that every settlement's generation adds
+  to, in `questOrder` - the seed-shuffled order, so no settlement always has the first pick. This is
+  why quests are made globally ([The generator](#the-generator)): a settlement can see what the
+  ones before it used. The result is still a pure function of the seed and the packs, but a change
+  to one plot's data can now reshuffle quests in settlements made after it, not only its own.
+- **Data.** `rules/quests.json5`'s `weighting`: `distance`, `reuse`, `kind`, `crowding`. A pack that
+  sets them to nothing (`reuse` and `crowding` to 0, `distance` huge) gets the old even draw.
+- **Not yet:** distance for creatures (the roster is the zone's; spawn points are not in the
+  generator's context), and a hard cap on objectives in an area - the weights only make a crowd
+  unlikely.
+
 ## Text
 
 The first translatable text in the game, so it brings the mechanism with it.
@@ -353,14 +549,80 @@ or taken away as the line says).
 
 ## Rewards
 
+Rewards follow the task, and are fixed by the seed: a quest pays the same to everyone, so logging out
+rerolls nothing.
+
 | Reward | How |
 |---|---|
-| XP | `progression.award(entity, "quest", { quest })`: the existing hook. Core's adventure discipline gains a `quest` source with an amount formula of `quest.level` and the character's level (Classic's shape: a quest at level is worth several kills, less when grey) |
-| Money | A formula of `quest.level` in `rules/quests.json5` |
-| Item choice | Two or three items from item templates (ITEMS.md) at `quest.level`, chosen by slots the character's class can use (a weapon, an armour piece in its armour kind, a trinket); rolled from the seed, the quest and the character, so logging out does not reroll them |
-| Fixed item | A plot may name one instead |
-| Standing | With the giver's faction (NPCS.md, *Factions*), an amount per quest in rules |
+| XP | The quest's **effort** times a kill's XP at its level times `rate`, through `progression.award(entity, "quest", ...)`, falling to `greyShare` as the character outgrows it |
+| Money | The effort times `money.base + money.perLevel x level` |
+| Item choice | `rewardChoices` (3) items from the reward templates, **balanced** (below). Only a chain's last quest gives one today |
+| Consumables | Some of the other quests give a few: bread, a healing draught - a fixed reward, not a choice (below) |
+| Nothing | **Most quests give no item at all**: XP and money are the reward. That is the default; only a segment that says `choice: true` asks for an item |
+| Standing | With the giver's faction (NPCS.md, *Factions*), a flat amount per quest in rules |
 | Unlocks | PROGRESSION.md's `how: "quest"`: a quest may teach an ability or open a discipline |
+
+### Effort
+
+A quest's effort is counted in **kill-equivalents**, from what its objectives ask and how far they
+take the player (`rules/quests.json5`'s `effort`):
+
+| Objective | Effort |
+|---|---|
+| kill | 1 each, a tenth more for each level a kind stands above the zone's middle |
+| loot | 0.8 for each kill a drop takes (the count over its chance) |
+| gather | 0.7 each |
+| talk, receive, deliver | 0.4 each |
+| use | 1.5 each |
+| reach | 0.5 |
+| **walking** | 0.4 per 100 m to the farthest place or person: out and back, but one way for a letter to the next settlement |
+
+So a word with the innkeeper is worth a fraction of a kill, a hunt pays more than the kills it asks
+for (which are paid as well), a gathering out at a far churchyard pays more than one at the fields,
+and a letter to the next village pays for the road. XP is the effort times `(45 + 5 x level) x 1.5`:
+the kill XP of PROGRESSION.md's adventure discipline, and a quest's rate over it.
+
+A chain's **last quest also pays a share** (`finale`, 0.3) of everything the rest of it paid, so a
+long story ends better than a short one.
+
+### Item choices
+
+- **The items' level matches the quest's.** An item is only offered if its level is within
+  `rewardLevel` (2) of the quest's: a level 4 quest does not give level 1 gear. The options are of one
+  tier: the one nearest the quest's level that any template has, and each template's own nearest to
+  it. A template with nothing within reach is left out of that choice (a sword where the metals'
+  levels are 1, 4 and 8 and the quest is at 6), and the swords' metals are 1, 4 and 8 so one is near
+  every level up to the 8s.
+- **One rarity.** Every option in a choice is of the same rarity: the best that all the templates it
+  draws on have, up to the one aimed for (`rewardRarity`: `uncommon` for a quest, `rare` for a chain's
+  last), so the end of a story is better than a single errand.
+- **Kinds go round.** The kind (weapon, armour) offered least so far in the world comes first and
+  again; within a kind the template used least, and then the type used least. Over a world the
+  weapons and the armour are about even and no choice is all swords, however many quests give one.
+  A kind is the item type's `kind`, so a new template (rings, a shield) joins in by being listed in
+  `rewardTemplates`.
+- **No item twice in a choice.** All of this reads the same shared world state as the weighting
+  ([Weighting](#weighting)).
+- **Which kinds a quest may give** is the quest's own say - a filter in its data, not a roll per
+  character, so the reward is the same for everyone: `reward: { only: ["armour"] }` lists the item
+  kinds (`weapon`, `armour`) or templates (`sword`, `boots`) it may be, `reward: { not: ["weapon"] }`
+  those it may not. A hermit's curse-breaking gives no weapon; a traveller's ward gives armour only.
+  A quest with neither gives anything the templates make; the kinds still go round within what is
+  allowed. A template shut out is not in the choice at all, and where nothing is allowed at the quest's
+  level it gives consumables. This is how a quest is made for a kind of character: a priest's
+  errand `not: ["weapon"]`, a smith's `only: ["weapon", "armour"]`.
+- **Not class-aware per character**: the quest does not know who takes it, so a class-specific item
+  still needs the quest (or its giver's trade) to say so.
+
+### Consumables, and no item at all
+
+A quest that gives no choice has `choice: []` and `items: []`, and pays XP, money and standing: that
+is most of them. Some give a **fixed reward of consumables** instead (`rewardConsumables`): a quest
+of at least `minEffort` gives some with probability `chance` - `perEffort` of them for each unit of
+effort, most `max` - of a kind available at its level (bread from level 1, a healing draught from 3).
+The client shows them together ("Bread x3"), the quest system gives each on hand-in, and a bag too
+full to hold them refuses the hand-in like any item. Where a chain's last quest should give a choice
+and nothing fits its level, it gives consumables rather than nothing.
 
 ## Saved
 
@@ -384,7 +646,7 @@ The server's quest system listens where the events already are:
 | Objective | From |
 |---|---|
 | `kill` | The creature system's kill records: every player on the victim's threat table at death (PROGRESSION.md's `all` credit) with the objective counts it |
-| `loot` | The loot system: quest drops rolled per eligible player, counted when taken from the corpse |
+| `drop` | The creature system's kill records: each credited player who needs it rolls, and a success puts the item in the corpse's loot for them; counted when it is taken (the item system tells the quest system). `loot` counts at the roll, leaving no item |
 | `gather` | Taking a `questObject` |
 | `use` | The item's skill's combat event (hit or applied) on a target matching the filter and condition |
 | `receive`, `deliver`, `talk` | The NPC window |
@@ -429,7 +691,9 @@ New client events in FEEDBACK.md's table, with cues and generated sounds in the 
 |---|---|
 | `questParts/` | Parts |
 | `features/`, `buildings/`, `camps/`, `settlements/`, `biomes/` | `quest`: tags, objects, people, spots and text for places (new) |
-| `questPlots/` | Plots and chains |
+| `questSegments/` | Segments: quests that fit into chains by tags |
+| `questPlots/` | Recipes: fixed chains, or fixed lists of segments |
+| `questVoices/` | Banks of lines for how people talk (hook, promise, progress, thanks) |
 | `questItemTemplates/` | Quest items and ground objects, by kind |
 | `text/en/quests.json5` | Every quest sentence |
 | `rules/quests.json5` | Quotas, reach, the log's size, level colours, reward formulas, standing amounts |
@@ -545,7 +809,8 @@ After NPCS.md's five steps. Each leaves the game working: the dev server (`?play
 - **Step 9, the generator.** `src/sim/quests/generator.ts` (`generateQuests`), `src/sim/quests/plots.ts`
   (reading `questParts/` and `questPlots/`), the features' `quest` blocks, and quest people.
   - **When:** a settlement's quests are made the moment its cast is (the NPC system's `castMade`,
-    when a player first comes near), and defined with the quest system. Ids are
+    when a player first comes near), and defined with the quest system. *(Replaced: see "Global
+    generation" below.)* Ids are
     `q:<dimension>/<site>/<n>` in the order drawn. A character back in the world whose quests are
     made only then is sent them (`questDefs`).
   - **Context:** the cast (people out, with roles and relations), the zone's level band and roster
@@ -622,7 +887,113 @@ After NPCS.md's five steps. Each leaves the game working: the dev server (`?play
     progression panel at it, a banker alone the bag, one quest its page, a shop alone its shop page, with no Back button to a list of one. Only when it is newly talked to, not when the window
     is asked for again after an action.
 
+- **Segments and voices.** The plots' monolithic quests are cut into `questSegments/` that fit
+  together by tags, and the quests' words come from pools with `when` conditions and voice banks
+  (see [Segments](#segments), [Voices](#voices)). `src/sim/quests/chains.ts` composes and checks chains
+  (shared by the loader, which puts recipes together, and the generator, which draws chains);
+  `plots.ts` reads segments, voices and condition-bearing lines; `generator.ts` draws an opener by
+  weight like a plot and grows it segment by segment. Core: fifteen segments - the sickness chain's
+  six, and `foldTrouble` → `wardmaker` → `wardCharm` (predators), `silentKeeper` and `parcelErrand`
+  (each a solo or the start of a story) with `contactFavour` and `contactReply` (end any story that
+  brought a contact), `pelts`, `smallKindness` - and four voice banks. The old standalone plots
+  (troubled flock, pelts, gatherings, a hermit's word, a parcel for a friend) became segments;
+  `strangeSickness` is now a recipe. `{when}`, `{neighbour}` and each person's `{xSex}` are new
+  arguments. **Checked:** the probe walks every possible chain without a world (38 at most 4 long),
+  and over the generated worlds that no offer repeats, no text has an empty argument or stray markup.
+
+- **Global generation.** Quests are no longer made lazily. The NPC system makes every settlement's
+  cast as a dimension loads and hands them all to the server (`castsMade`), which makes every
+  settlement's quests in one pass, in `questOrder` (the settlements shuffled by the seed, so no
+  settlement always has the first pick and the order does not depend on how they are listed), and
+  defines them together. Why: it costs next to nothing (the full default world, 62 settlements, takes
+  81 ms for casts and quests together, against some 23 s to shape the world), and it lets a settlement
+  see what the others have used, which is what weighting by distance, reuse and crowding needs
+  ([Later](#later)). Also: the road-on pointer reads the other settlement's real cast, not a copy made
+  for it; a quest person out at a ruin stands there, and is met, before anyone has been near their
+  settlement; a character back in a dimension has its quests defined at once. A settlement's quests
+  are still a pure function of the seed and the packs; today they do not depend on the order, and
+  once weighting reads what earlier settlements used they will, in `questOrder`'s fixed one - and a
+  change to one plot's data can then reshuffle quests in settlements made after it, not only in its
+  own. **Checked:** every settlement of a world has quests before anyone is near, and the order is a
+  permutation that is the same however the settlements are listed and differs by seed.
+
+- **Stories.** The intro is no longer one chain; it is drawn (see [Stories](#stories-starts-forks-twists-and-endings)):
+  `strangeSickness` became `affliction`, a `draw` plot, and its six segments became fourteen with
+  three starts, a fork between a sickness and a curse, a death twist and three endings. New in the
+  engine: `forbids`, `free`, `gone` people, a part's own `line`, `draw` plots, `place.not`,
+  `when.object`, and chains that end at a closer-only segment. The curse can happen at the
+  settlement's own fields as well as at a churchyard, so it does not depend on one being near.
+  **Checked:** the probe enumerates the stories (12) and asserts several starts, endings and a twist, that
+  the test chain is among them, and that segments in the wrong order or with someone gone as the
+  ender do not compose; it plays four different stories with the bot (the curse lifted, the
+  culprit asked, a death on the way, the plain sickness) from the "!" to the item worn, and over
+  the generated worlds that the story the intro drew is one the rules can make.
+
+- **Creature tags.** Species and variants have `tags`; a creature need asks for them. Core: wolf
+  `furred, mammal, predator`; boar `furred, mammal`; spider `arachnid, venomous`; bandit `armed`.
+  The pelts quest asks for `furred` (no more pelts of spiders) and the sickness for `mammal`.
+  **Checked:** every tag a segment asks for is one some creature has, and in generated worlds every
+  pelt, blood-sample and salve objective is on a creature with the right tag.
+
+- **Weighting.** `src/sim/quests/generator.ts` scores places, objects and creature kinds by distance,
+  reuse and crowding (see [Weighting](#weighting)), picks by score, and weighs plots, openers and the
+  next segment of a chain by the best place and creature each could use. `WorldQuestState` (uses by
+  key, and where the objectives lie) is made by the server for each dimension and passed from
+  settlement to settlement in `questOrder`. **Checked:** the probe generates five `small` worlds
+  with the weights on and off: with them the gathering and going objectives lie 257 m from their
+  settlement on average (360 m without), 6 pairs of them within 150 m of each other (12 without), and
+  a greater share are at different places (90% against 81%).
+
+- **Rewards by effort.** XP and money follow the task (see [Rewards](#rewards)): effort in
+  kill-equivalents, a rate over a kill's XP, a share of the chain for its last quest. A chain's quests
+  after the first ask no level, and the intro's none at all (a character just made would be stuck
+  after one word with the innkeeper, which now pays 36 XP). Item choices are balanced (one rarity,
+  one tier, kinds going round), a chain's last quest aims one rarity higher, and there are two new
+  reward templates, boots and helm, and a rare chestpiece. **Measured** in six generated worlds: a
+  word pays 1.1 kill-equivalents on average, a gathering 2.4, a hunt 6.0 and a letter down the road
+  4.1; the starting settlement's 12-14 quests give 3300-4000 XP on their own (level 5), the intro
+  alone 1450-2430 (level 4 or so) - generous, and `xp.rate` is the number to turn down. Of 29 item
+  choices, 44 of 87 options are weapons. (Gathering was then 0.25 an object and averaged 2.4; at 0.7 it
+  averages 4.5, close to a hunt's 6.0, and the starting settlement gives 3400-4300 XP.)
+
+- **Reward items match the quest's level, and not every quest gives one.** Choices only offer items
+  within `rewardLevel` of the quest's level (a mid-tier "Hardened" sword, level 4, joins bronze and
+  iron so a weapon is near every level), and consumables are a fixed reward (bread, and a new healing
+  draught, `drinkDraught`). **Measured** over six worlds, 236 quests: 149 give no item, 58 give
+  consumables, 29 a choice; the options' level minus the quest's is between -2 and +2 (mostly +1 and +2:
+  the armour tiers are 1, 5 and 10).
+
+- **Quest items are the quest line's own.** An item's roll is the line's id (`bindOf` in
+  `system.ts`); `holds` is per type and roll, `give`/`take`/`has` take it, a `use` counts only for the
+  item used (`itemUsed`, from the item hook), abandoning takes exactly the quest's items, and
+  taking an abandoned use quest again hands the item again. **Checked** by the probe (10 of its 15
+  new checks fail without it): two errands with one kind of letter hold two letters, each delivered to
+  its own errand, abandoning one leaves the other; two cures use only their own salve; a salve is
+  kept between two quests of a line, goes with an abandoned try and is handed again; a leftover letter is
+  swept as a character enters. **Names and looks:** see the
+  paragraph above; **checked** by the probe: every quest item of every generated quest has a name that
+  fills, an icon and a tint from its lists, the same all along its line, with different names for
+  different lines (letters showed five different tints over six worlds, salves three icons), the client's
+  naming by roll on a real quest, and the held-between-quests definitions sent on entering.
+
+- **Dropped quest items.** The `drop` objective (see *Quest items*): the item system's `LootPart`
+  gains `private` (item ids by player), the loot window and the glint are per viewer
+  (`lootSeenBy`, `lootable(entity, viewer)`), `dropFor` leaves an item for one player, `ItemWorld.gained`
+  tells the quest system what was taken, quest items that stack merge only within a line (`receiveItem`),
+  and the quest system rolls on a kill. `dropChance` in `rules/quests.json5` and a part reference's
+  `chance` are the settings. **Checked:** the probe plays it with a second player on the threat table:
+  nothing drops without the quest, the player on it gets the item in their loot and the other does
+  not, it counts only when taken, two stack into one, it cannot be dropped, abandoning takes the stack
+  and taking it again starts from nothing, a chance of 0 and a rule factor of 0 drop nothing and a
+  chance of 1 drops on every kill; and the intro bot takes its blood sample from a corpse.
+
 ## Later
+
+- Item choices a character's class can use (a priest is still offered a sword), and a trinket kind.
+- A death a character *meets*: an NPC the quest has killed is not there when the character comes
+  back, or is found dead. That needs an NPC's state per character (hidden or dead for those on the
+  quest) in a shared world, and a quest effect to set it.
+
 
 - Repeatable and daily quests (`repeat`).
 - Escorts, defend-a-place and timed events as parts.

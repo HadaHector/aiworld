@@ -1,2 +1,7 @@
-// Carry the letter.
-{ kind: "deliver", item: "sealedLetter", line: "Bring the letter to {npc}" }
+// Carry the letter. Its name, from the one it is for.
+{
+  kind: "deliver",
+  item: "sealedLetter",
+  line: "Bring the letter to {npc}",
+  itemName: ["Letter for {npcGiven}", "Sealed Letter for {npcGiven}", "{npcGiven}'s Letter", "Letter to {npcGiven}"],
+}

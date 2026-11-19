@@ -1,0 +1,25 @@
+// Carry a parcel to someone the giver is close to. Can stand alone; the one it is carried to is a
+// contact for the segments that follow (contactFavour, contactReply).
+{
+  weight: 1.5,
+  roles: ["opener", "closer"],
+  theme: ["errand"],
+  provides: ["met:contact", "delivered"],
+  giver: ["shopkeeper", "innkeeper", "farmer", "villager", "smith"],
+  people: {
+    contact: { roles: [], relation: ["friend", "sister", "brother", "mother", "father", "sweetheart"] },
+  },
+  quest: {
+    ender: "contact",
+    parts: [{ part: "receiveParcel", npc: "giver" }, { part: "deliverParcel", npc: "contact" }],
+    title: ["A Parcel for {contactGiven}", "Carry This to {contactGiven}", "Something for {contactGiven}"],
+    offer: [
+      "$hook",
+      ["Would you take this to {contactGiven} for me?", "I've a parcel that wants carrying to {contactGiven}."],
+      ["It's nothing much - but it matters to me that it gets there.", "It's only small, but I'd not trust it to the carter."],
+      ["Tell {contactGiven} it's from me.", "{contactGiven} will know what to do with it."],
+    ],
+    progress: ["Did {contactGiven} get it?", "$progress"],
+    done: ["From {giverGiven}? Oh... thank you. Here, for your trouble.", "A parcel from {giverGiven}! [How kind|About time]. Here, take this for the walk."],
+  },
+}

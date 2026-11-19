@@ -1,0 +1,14 @@
+// What a giver says to someone who comes back with the job not done.
+{
+  slot: "progress",
+  lines: [
+    { text: "Well? Any news?", weight: 1 },
+    { text: "Back already? Is it done?", weight: 1 },
+    { text: "Still at it? Don't let me keep you.", weight: 1 },
+    { text: "Have you done what I asked?", weight: 1 },
+    { text: "Don't come back till it's done.", when: { mood: "gruff" }, weight: 2.5 },
+    { text: "How goes it? Nothing too terrible, I hope!", when: { mood: "cheerful" }, weight: 2.5 },
+    { text: "Is it done? Please say it's done.", when: { mood: "nervous" }, weight: 2.5 },
+    { text: "Mm? Oh... not yet, then.", when: { mood: "weary" }, weight: 2.5 },
+  ],
+}
