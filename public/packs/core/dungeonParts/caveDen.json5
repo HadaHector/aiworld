@@ -1,0 +1,9 @@
+// A low side chamber off a tunnel, a dead end: someone's den.
+{
+  tags: ["cave", "chamber", "den"],
+  weight: 1,
+  room: true,
+  sockets: [{ at: [0, 0, 0], facing: 180, type: "tunnel", size: [9, 8] }],
+  field: [{ chamber: { at: [0, 0, 13], radius: [11, 10], height: 10 } }],
+  spots: { spawns: [[2, 0, 13]], light: [[0, 0, 13], [4, 0, 18]], chest: [[-5, 0, 17]] },
+}

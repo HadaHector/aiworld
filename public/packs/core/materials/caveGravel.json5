@@ -1,0 +1,86 @@
+// Cave gravel: a cave's floor (DUNGEONS.md, *Materials*) - stones washed down and broken off the
+// walls, sunk in dark damp silt; built as the gravel is (a rounded dome round each worley point,
+// sized and shaded by its own value), but darker, the stones fewer and set apart in the silt, which
+// has dried paler in patches and lies wet and dark in others.
+{
+  name: "Cave Gravel",
+  texture: {
+    bumpStrength: 2.6,
+    pipeline: {
+      noises: [
+        { name: "stones", type: "worley", tileCycles: 18, amplitude: 1, mode: "f1" },
+        { name: "chips", type: "worley", tileCycles: 70, amplitude: 1, mode: "f1" },
+        { name: "warpX", type: "fbm", octaves: 2, tileCycles: 12, amplitude: 1, persistence: 0.5, lacunarity: 2 },
+        { name: "warpY", type: "fbm", octaves: 2, tileCycles: 12, amplitude: 1, persistence: 0.5, lacunarity: 2 },
+        { name: "speckle", type: "fbm", octaves: 2, tileCycles: 90, amplitude: 1, persistence: 0.5, lacunarity: 2 },
+        { name: "wet", type: "fbm", octaves: 3, tileCycles: 3, amplitude: 1, persistence: 0.5, lacunarity: 2 },
+        { name: "silt", type: "fbm", octaves: 3, tileCycles: 24, amplitude: 1, persistence: 0.5, lacunarity: 2 },
+      ],
+      steps: [
+        { output: "wx", op: "sample", noise: "warpX" },
+        { output: "wy", op: "sample", noise: "warpY" },
+        { output: "shiftX", op: "scale", input: "wx", factor: 2.5 },
+        { output: "shiftY", op: "scale", input: "wy", factor: 2.5 },
+
+        // Stones in sizes, a good part of each cell silt.
+        { output: "stoneDist", op: "sample", noise: "stones", offset: ["shiftX", "shiftY"] },
+        { output: "stoneId", op: "sample", noise: "stones", mode: "cell", offset: ["shiftX", "shiftY"] },
+        { output: "stoneShrink", op: "scale", input: "stoneId", factor: 0.45 },
+        { output: "stoneReach", op: "add", a: "stoneDist", b: "stoneShrink" },
+        { output: "stoneEdge", op: "mask", input: "stoneReach", at: 0.12, off: 0.42 },
+        { output: "stoneDome", op: "power", input: "stoneEdge", exponent: 0.6 },
+        // Chips lying lower, sparser.
+        { output: "chipDist", op: "sample", noise: "chips", offset: ["shiftX", "shiftY"] },
+        { output: "chipId", op: "sample", noise: "chips", mode: "cell", offset: ["shiftX", "shiftY"] },
+        { output: "chipShrink", op: "scale", input: "chipId", factor: 0.3 },
+        { output: "chipReach", op: "add", a: "chipDist", b: "chipShrink" },
+        { output: "chipEdge", op: "mask", input: "chipReach", at: 0.05, off: 0.36 },
+        { output: "chipDome", op: "power", input: "chipEdge", exponent: 0.6 },
+        { output: "chip", op: "scale", input: "chipDome", factor: 0.45 },
+        { output: "stone", op: "max", a: "stoneDome", b: "chip" },
+
+        {
+          output: "stoneTone",
+          op: "colorRamp",
+          input: "stoneId",
+          stops: [
+            { at: 0.0, color: [0.46, 0.46, 0.45] },
+            { at: 0.3, color: [0.58, 0.56, 0.52] },
+            { at: 0.55, color: [0.5, 0.47, 0.43] },
+            { at: 0.8, color: [0.66, 0.64, 0.6] },
+            { at: 1.0, color: [0.52, 0.52, 0.53] },
+          ],
+        },
+        { output: "rimShade", op: "remap", input: "stone", inMin: 0, inMax: 1, outMin: 0.7, outMax: 1.1 },
+        { output: "speckleRaw", op: "sample", noise: "speckle" },
+        { output: "fleck", op: "remap", input: "speckleRaw", inMin: -1, inMax: 1, outMin: 0.85, outMax: 1.1 },
+        { output: "shade", op: "multiply", a: "rimShade", b: "fleck" },
+        { output: "shadedStone", op: "multiply", a: "stoneTone", b: "shade" },
+
+        // The silt: dark brown-grey, dried paler in patches, wet and darker in others.
+        { output: "siltRaw", op: "sample", noise: "silt" },
+        { output: "siltShade", op: "remap", input: "siltRaw", inMin: -1, inMax: 1, outMin: 0.88, outMax: 1.08 },
+        { output: "siltDry", op: "color", value: [0.36, 0.33, 0.29] },
+        { output: "siltWet", op: "color", value: [0.21, 0.2, 0.18] },
+        { output: "wetRaw", op: "sample", noise: "wet" },
+        { output: "wetMask", op: "mask", input: "wetRaw", at: 0.35, off: 0.3 },
+        { output: "siltTone", op: "mix", a: "siltDry", b: "siltWet", t: "wetMask" },
+        { output: "silt", op: "multiply", a: "siltTone", b: "siltShade" },
+        { output: "cover", op: "mask", input: "stone", at: 0.1, off: 0.03 },
+        { output: "diffuse", op: "mix", a: "silt", b: "shadedStone", t: "cover" },
+
+        // Wet silt glossy, dry silt and the stones matte.
+        { output: "roughDry", op: "constant", value: 0.88 },
+        { output: "roughWet", op: "constant", value: 0.45 },
+        { output: "siltRough", op: "mix", a: "roughDry", b: "roughWet", t: "wetMask" },
+        { output: "roughStone", op: "constant", value: 0.75 },
+        { output: "roughness", op: "mix", a: "siltRough", b: "roughStone", t: "cover" },
+
+        { output: "stoneRelief", op: "scale", input: "stone", factor: 0.85 },
+        { output: "siltRelief", op: "scale", input: "siltShade", factor: 0.1 },
+        { output: "height", op: "add", a: "stoneRelief", b: "siltRelief" },
+      ],
+      outputs: { diffuse: "diffuse", roughness: "roughness", height: "height" },
+    },
+  },
+}

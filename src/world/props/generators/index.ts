@@ -8,6 +8,7 @@ import { antlerMount, campfire, firewoodStack, gameGallows, herbBundle, hideFram
 import { pierBridge } from "./bridges";
 import { gravePost, headstone, lychgate, tomb, urn } from "./graves";
 import { altar, armchair, banner, bed, bench, cabinet, candles, chair, chandelier, chest, counter, fireplace, lantern, rack, sack, sconce, stool, stove, table, wallTorch } from "./furniture";
+import { crystals } from "./crystals";
 
 /** Every prop generator, by the name a prop's `type` gives. A new one is a file of its own here,
  *  and a line in this table - its settings are read from its own `params`. */
@@ -48,6 +49,7 @@ export const PROP_GENERATORS: Record<string, PropGenerator> = {
   lantern,
   altar,
   candles,
+  crystals,
   chandelier,
   urn,
   sconce,

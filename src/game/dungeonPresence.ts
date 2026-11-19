@@ -7,6 +7,8 @@ import type { DungeonMessage } from "../sim/protocol";
 import type { DungeonContent } from "../world/dungeons/dungeonDefs";
 import { generateLayout, placedShapes, worldToFrame, type DungeonLayout } from "../world/dungeons/layout";
 import { createDungeonMeshes, type DungeonMeshes } from "../world/dungeons/dungeonMeshes";
+import { buildCave, caveColliders } from "../world/dungeons/caveField";
+import { createCaveMeshes } from "../world/dungeons/caveMeshes";
 import type { DimensionView } from "./dimensionView";
 import type { PropEffects } from "../world/props/propEffects";
 
@@ -60,11 +62,27 @@ export function createDungeonPresence(view: DimensionView, content: DungeonConte
       // The ground as the server's is: the same world, so the same layout.
       const ground = { heightAt: world.heightAt, builtAt: (x: number, z: number) => world.buildingAt(x, world.heightAt(x, z) + 0.5, z) !== undefined };
       const layout = generateLayout(content, message.style, message.size, message.seed, site, ground);
-      const batch = world.collision.world.addBatch(layout.parts.flatMap(placedShapes));
-      const fixture = view.content.props.find((p) => p.id === style.light.fixture);
-      if (!fixture) console.warn(`The dungeon style "${style.id}" names a fixture "${style.light.fixture}" that no pack has: it is unlit.`);
-      const near = (): { x: number; y: number; z: number } => view.character.mesh.position;
-      const meshes = createDungeonMeshes(scene, layout, style, fixture, world.buildingMaterial, near, (done, total) => onProgress("Lighting the torches", done, total), (id) => view.content.props.find((p) => p.id === id));
+      let meshes: DungeonMeshes, batch: number;
+      if (style.builder === "field") {
+        // A cave: its rock meshed as a whole, drawn and collided with as that.
+        onProgress(`Shaping the ${style.name.toLowerCase()}`, 0, 0);
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        const cave = buildCave(layout, style);
+        batch = world.collision.world.addBatch(caveColliders(cave));
+        meshes = await createCaveMeshes(scene, layout, style, cave, {
+          seed: view.seed,
+          materials: view.content.materials,
+          lit: world.materialLibrary.litShading,
+          props: (id) => view.content.props.find((p) => p.id === id),
+          building: world.buildingMaterial,
+        });
+      } else {
+        batch = world.collision.world.addBatch(layout.parts.flatMap(placedShapes));
+        const fixture = view.content.props.find((p) => p.id === style.light.fixture);
+        if (!fixture) console.warn(`The dungeon style "${style.id}" names a fixture "${style.light.fixture}" that no pack has: it is unlit.`);
+        const near = (): { x: number; y: number; z: number } => view.character.mesh.position;
+        meshes = createDungeonMeshes(scene, layout, style, fixture, world.buildingMaterial, near, (done, total) => onProgress("Lighting the torches", done, total), (id) => view.content.props.find((p) => p.id === id));
+      }
       world.setExtraLights(meshes.lights);
       removeFlames = flames?.add(meshes.effects, (x, y, z) => ({ x, y, z })) ?? null;
       // In it already (put at its foot), the day gone at once; else (near its mouth) as it is walked into.

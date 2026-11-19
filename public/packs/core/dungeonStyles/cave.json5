@@ -1,0 +1,52 @@
+// A natural cave: chambers and winding tunnels in the rock, shaped as a whole in a distance field
+// (DUNGEONS.md, *The cave*), roughened by noise and meshed; its joins blend by themselves.
+{
+  name: "Cave",
+  builder: "field",
+  // The rock's roughness: a broad swell and a finer grain, under 0.8 m together.
+  noise: [
+    { scale: 0.18, amount: 0.5 },
+    { scale: 0.6, amount: 0.25 },
+  ],
+  voxel: 0.75,
+  sizes: {
+    lair: { rooms: [3, 5], entry: "seamless" },
+    dungeon: { rooms: [8, 12], entry: "seamless" },
+  },
+  branching: 0.4,
+  boss: { tags: ["boss"] },
+  cover: 8,
+  deepest: 50,
+  parts: { tags: ["cave"] },
+  entrance: { tags: ["entrance"] },
+  caps: { tags: ["cap"] },
+  // What its rock is (DUNGEONS.md, *Materials*): gravel in damp silt underfoot, bedded limestone up
+  // the walls, flowstone overhead - each laid this many metres a repeat.
+  rock: {
+    floor: { material: "caveGravel", size: 6 },
+    wall: { material: "caveRock", size: 12 },
+    ceiling: { material: "flowstone", size: 10 },
+  },
+  // How it is lit (DUNGEONS.md, *Light*): at every one of its parts' light spots (a tunnel's one, a
+  // chamber's two to five), crystals grown at the foot of a wall, or a campfire or torch left by
+  // whoever lives here; and a dim cold light everywhere, so its rock is always seen.
+  light: {
+    ambient: [0.26, 0.27, 0.31],
+    fixture: "wallTorch",
+    lit: 1,
+    fixtures: [
+      { prop: "crystals", weight: 2, place: "foot" },
+      { prop: "campfire", weight: 1, place: "floor" },
+      { prop: "wallTorch", weight: 1, place: "wall" },
+    ],
+  },
+  creatures: {
+    groups: [
+      { id: "spiders", kinds: ["spider"] },
+      { id: "robbers", kinds: ["bandit"] },
+    ],
+    pick: 2,
+    deeper: 8,
+    boss: 2,
+  },
+}

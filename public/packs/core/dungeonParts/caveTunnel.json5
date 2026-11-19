@@ -1,0 +1,11 @@
+// A cave tunnel, 24 m, winding a little.
+{
+  tags: ["cave", "tunnel"],
+  weight: 3,
+  sockets: [
+    { at: [0, 0, 0], facing: 180, type: "tunnel", size: [9, 8] },
+    { at: [0, 0, 24], facing: 0, type: "tunnel", size: [9, 8] },
+  ],
+  field: [{ tunnel: { points: [[0, 0, 0], [1.5, 0, 8], [-1.5, 0, 16], [0, 0, 24]], width: 9, height: 8 } }],
+  spots: { spawns: [[0, 0, 12]], light: [[0, 0, 12]] },
+}

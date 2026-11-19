@@ -1,0 +1,6 @@
+// A cave tunnel's dead end, rounded off.
+{
+  tags: ["cave", "cap"],
+  sockets: [{ at: [0, 0, 0], facing: 180, type: "tunnel", size: [9, 8] }],
+  field: [],
+}

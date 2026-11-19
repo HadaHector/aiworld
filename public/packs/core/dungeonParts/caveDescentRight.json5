@@ -1,0 +1,19 @@
+// A cave tunnel curving a quarter right as it goes down 8 m.
+{
+  tags: ["cave", "tunnel", "descent"],
+  weight: 1,
+  sockets: [
+    { at: [0, 0, 0], facing: 180, type: "tunnel", size: [9, 8] },
+    { at: [22, -8, 22], facing: 90, type: "tunnel", size: [9, 8] },
+  ],
+  field: [
+    {
+      tunnel: {
+        points: [[0, 0, 0], [0, 0, 4], [2, -3, 13], [9, -6, 20], [18, -8, 22], [22, -8, 22]],
+        width: 9,
+        height: 8,
+      },
+    },
+  ],
+  spots: { light: [[9, -6, 20]] },
+}

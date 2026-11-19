@@ -1,0 +1,16 @@
+// A long cave chamber, two domes run together, 46 m end to end.
+{
+  tags: ["cave", "chamber"],
+  weight: 2,
+  room: true,
+  sockets: [
+    { at: [0, 0, -10], facing: 180, type: "tunnel", size: [9, 8] },
+    { at: [0, 0, 36], facing: 0, type: "tunnel", size: [9, 8] },
+    { at: [12, 0, 26], facing: 90, type: "tunnel", size: [9, 8] },
+  ],
+  field: [
+    { chamber: { at: [0, 0, 4], radius: [11, 13], height: 12 } },
+    { chamber: { at: [0, 0, 24], radius: [12, 12], height: 15 } },
+  ],
+  spots: { spawns: [[3, 0, 4], [-3, 0, 24]], light: [[0, 0, 4], [0, 0, 14], [0, 0, 26]] },
+}

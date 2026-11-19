@@ -1,0 +1,19 @@
+// A cave tunnel turning a quarter left.
+{
+  tags: ["cave", "tunnel", "bend"],
+  weight: 2,
+  sockets: [
+    { at: [0, 0, 0], facing: 180, type: "tunnel", size: [9, 8] },
+    { at: [-18, 0, 18], facing: 270, type: "tunnel", size: [9, 8] },
+  ],
+  field: [
+    {
+      tunnel: {
+        points: [[0, 0, 0], [0, 0, 6], [-3, 0, 13], [-10, 0, 17], [-18, 0, 18]],
+        width: 9,
+        height: 8,
+      },
+    },
+  ],
+  spots: { light: [[-4, 0, 14]] },
+}

@@ -1,0 +1,19 @@
+// A cave tunnel sloping down 8 m over 28 m (under 25 degrees).
+{
+  tags: ["cave", "tunnel", "descent"],
+  weight: 2,
+  sockets: [
+    { at: [0, 0, 0], facing: 180, type: "tunnel", size: [9, 8] },
+    { at: [0, -8, 28], facing: 0, type: "tunnel", size: [9, 8] },
+  ],
+  field: [
+    {
+      tunnel: {
+        points: [[0, 0, 0], [0, 0, 4], [-1, -4, 14], [0, -8, 24], [0, -8, 28]],
+        width: 9,
+        height: 8,
+      },
+    },
+  ],
+  spots: { light: [[-1, -4, 14]] },
+}

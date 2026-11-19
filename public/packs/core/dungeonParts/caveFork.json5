@@ -1,0 +1,15 @@
+// Where a cave tunnel forks: on ahead to either side.
+{
+  tags: ["cave", "tunnel", "fork"],
+  weight: 1.5,
+  sockets: [
+    { at: [0, 0, 0], facing: 180, type: "tunnel", size: [9, 8] },
+    { at: [-16, 0, 16], facing: 270, type: "tunnel", size: [9, 8] },
+    { at: [16, 0, 16], facing: 90, type: "tunnel", size: [9, 8] },
+  ],
+  field: [
+    { tunnel: { points: [[0, 0, 0], [0, 0, 15]], width: 9, height: 8 } },
+    { tunnel: { points: [[-16, 0, 16], [0, 0, 15], [16, 0, 16]], width: 9, height: 8 } },
+  ],
+  spots: { spawns: [[0, 0, 14]], light: [[0, 0, 15]] },
+}

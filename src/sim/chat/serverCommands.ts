@@ -311,16 +311,22 @@ export function createServerCommands(packs: readonly CommandPackDef[] = []): Ret
 
   add({
     id: "dungeon",
-    usage: "[size] [seed] [style] | leave",
-    summary: "Opens a dungeon at the nearest crypt or hillside and takes you to the foot of its entrance; leave takes you back out.",
+    usage: "[style] [size] [seed] | leave",
+    summary: "Opens a dungeon at the nearest crypt or hillside (a cave: a hillside) and takes you to the foot of its entrance; leave takes you back out. In any order: /dungeon cave lair 12.",
     dev: true,
-    args: [arg("size", "word", true), arg("seed", "int", true), arg("style", "word", true)],
-    run({ entity, host, reply }, [sizeArg, seedArg, styleArg]) {
-      if (sizeArg === "leave") {
+    args: [arg("style", "word", true), arg("size", "word", true), arg("seed", "word", true)],
+    run({ entity, host, reply }, words) {
+      if (words[0] === "leave") {
         if (!host.leaveDungeon(entity)) reply("You are not in a dungeon.");
         return;
       }
       const styles = host.dungeonStyles();
+      // Its words in any order: a style's id, a number (the seed), and the rest the size.
+      const given = words.filter((w): w is string => typeof w === "string");
+      const styleArg = given.find((w) => styles.some((s) => s.id === w));
+      const seedWord = given.find((w) => /^\d+$/.test(w));
+      const seedArg = seedWord === undefined ? undefined : Number(seedWord);
+      const sizeArg = given.find((w) => w !== styleArg && w !== seedWord);
       if (styles.length === 0) return reply("There are no dungeons here.");
       const style = styles.find((s) => s.id === (typeof styleArg === "string" ? styleArg : styles[0].id));
       if (!style) return reply('There is no dungeon style "{name}": {names}.', { name: String(styleArg), names: styles.map((s) => s.id).join(", ") });

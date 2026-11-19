@@ -186,6 +186,10 @@ export interface StageOptions {
   /** Something of the page's own to stand in the middle, built once the light is up so it can cast
    *  shadows - a character (src/character). Says how wide and tall it is, for framing. */
   figure?: (scene: Scene, shadows: { addShadowCaster: (mesh: Mesh, includeDescendants?: boolean) => void }, height: (x: number, z: number) => number) => { width: number; height: number };
+  /** Something of the page's own drawn with the world's shaders - a cave (DUNGEONS.md): handed the
+   *  light every world shader shares and the buildings' material (props are drawn over it). Says how
+   *  wide and tall it is, for framing. */
+  drawn?: (scene: Scene, world: { lit: LitShading; building: BuildingMaterial }) => Promise<{ width: number; height: number }>;
   /** A whole place instead - a feature laid out (see featurePreview.ts): its own ground, levelled,
    *  its buildings and props standing where it put them, turned as it turned them, its roads and
    *  trails drawn on the ground, and the trees round it. */
@@ -494,6 +498,11 @@ export async function createStage(engine: Engine, canvas: HTMLCanvasElement, opt
     }
 
     if (options.figure) framing = options.figure(scene, sunLighting.shadowGenerator, height);
+    if (options.drawn) {
+      options.onProgress?.("Baking building materials");
+      const building = createBuildingMaterial(scene, litShading, await bakeBuildingTextures(seed, content.buildingMaterials));
+      framing = await options.drawn(scene, { lit: litShading, building });
+    }
 
     // Far enough back for the whole row and the tallest top to fit the view, whichever way the
     // canvas is shaped. Babylon's fov is the vertical one.
@@ -504,10 +513,10 @@ export async function createStage(engine: Engine, canvas: HTMLCanvasElement, opt
     const view = options.view ?? {
       // The row runs along x: looked at nearly face on, so none of it hides behind the rest.
       // Buildings face +z, so they are looked at from the front and a little to the side.
-      alpha: site ? Math.PI / 2 - 0.6 : options.buildings || options.figure ? Math.PI / 2 - 0.5 : options.trees ? -Math.PI / 2 + 0.15 : -Math.PI / 2 + 0.5,
+      alpha: site ? Math.PI / 2 - 0.6 : options.buildings || options.figure || options.drawn ? Math.PI / 2 - 0.5 : options.trees ? -Math.PI / 2 + 0.15 : -Math.PI / 2 + 0.5,
       beta: site ? 0.85 : options.figure ? 1.35 : options.buildings ? 1.2 : options.trees ? 1.45 : 1.15,
-      radius: site ? site.size * 0.5 : options.trees || options.buildings || options.figure ? Math.max(options.figure ? 2 : 4, fitWidth, fitHeight) * 1.15 : 22,
-      target: [0, height(0, 0) + (site ? 0 : options.trees || options.buildings || options.figure ? framing.height * 0.45 : 0.5), 0] as [number, number, number],
+      radius: site ? site.size * 0.5 : options.trees || options.buildings || options.figure || options.drawn ? Math.max(options.figure ? 2 : 4, fitWidth, fitHeight) * 1.15 : 22,
+      target: [0, height(0, 0) + (site ? 0 : options.trees || options.buildings || options.figure || options.drawn ? framing.height * 0.45 : 0.5), 0] as [number, number, number],
     };
     const camera = new ArcRotateCamera("workbenchCamera", view.alpha, view.beta, view.radius, new Vector3(...view.target), scene);
     camera.lowerRadiusLimit = 1.5;

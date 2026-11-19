@@ -1,0 +1,15 @@
+// A cave's way in: a tunnel sloping down into the hill, 6 m down over 26 m.
+{
+  tags: ["cave", "entrance"],
+  sockets: [
+    { at: [0, 0, 0], facing: 180, type: "surface", size: [9, 8] },
+    { at: [0, -20, 42], facing: 0, type: "tunnel", size: [9, 8] },
+  ],
+  field: [
+    {
+      tunnel: { points: [[0, -14, 16], [0, -15, 22], [0, -18, 32], [0, -20, 42]], width: 9, height: 8 },
+    },
+  ],
+  paths: [[[0, -20, 42], [0, -18, 32], [0, -15, 22], [0, -14.2, 18]]],
+  spots: { light: [[3, -14, 21]] },
+}

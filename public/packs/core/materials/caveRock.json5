@@ -1,0 +1,70 @@
+// Cave rock: a cave's walls (DUNGEONS.md, *Materials*) - limestone worn by water, cool grey and
+// darker than the rock out in the light, bedded in layers that run level across the walls (laid
+// from the side, a texture's v is up the wall: the bedding is stretched along u), cracked, with
+// pale lime crusts in the hollows where water has seeped.
+//
+// Built as the red sandstone is: its height broad swells, folded cracks and the bedding; its
+// colour from the height, the crusts where it is low.
+{
+  name: "Cave Rock",
+  texture: {
+    bumpStrength: 4,
+    pipeline: {
+      noises: [
+        { name: "cracks", type: "fbm", octaves: 4, tileCycles: 4, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+        { name: "swell", type: "fbm", octaves: 3, tileCycles: 2, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+        { name: "beds", type: "fbm", octaves: 3, tileCycles: 5, stretch: [6, 1], amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+        { name: "mottle", type: "fbm", octaves: 3, tileCycles: 7, amplitude: 1, persistence: 0.55, lacunarity: 2.0 },
+        { name: "grain", type: "fbm", octaves: 2, tileCycles: 40, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+      ],
+      steps: [
+        { output: "crackRaw", op: "sample", noise: "cracks" },
+        { output: "crackUnit", op: "mask", input: "crackRaw", at: 1, off: -1 },
+        { output: "crackDoubled", op: "scale", input: "crackUnit", factor: 2 },
+        { output: "crackCentred", op: "offset", input: "crackDoubled", amount: -1 },
+        { output: "crackFolded", op: "abs", input: "crackCentred" },
+        { output: "crack", op: "power", input: "crackFolded", exponent: 0.7 },
+        { output: "bedRaw", op: "sample", noise: "beds" },
+        { output: "bedFolded", op: "abs", input: "bedRaw" },
+        { output: "bed", op: "mask", input: "bedFolded", at: 0.45, off: 0 },
+        { output: "swellRaw", op: "sample", noise: "swell" },
+        { output: "swell", op: "mask", input: "swellRaw", at: 0.9, off: -0.9 },
+        { output: "grainRaw", op: "sample", noise: "grain" },
+        { output: "grainUnit", op: "mask", input: "grainRaw", at: 1, off: -1 },
+        { output: "crackPart", op: "scale", input: "crack", factor: 0.35 },
+        { output: "bedPart", op: "scale", input: "bed", factor: 0.3 },
+        { output: "swellPart", op: "scale", input: "swell", factor: 0.35 },
+        { output: "grainPart", op: "scale", input: "grainUnit", factor: 0.06 },
+        { output: "body", op: "add", a: "crackPart", b: "swellPart" },
+        { output: "bedded", op: "add", a: "body", b: "bedPart" },
+        { output: "height", op: "add", a: "bedded", b: "grainPart" },
+
+        // Cool greys by height: near black in the cracks, a blue-grey over most, paler on the tops.
+        {
+          output: "byHeight",
+          op: "colorRamp",
+          input: "height",
+          stops: [
+            { at: 0.0, color: [0.12, 0.12, 0.13] },
+            { at: 0.25, color: [0.27, 0.27, 0.28] },
+            { at: 0.6, color: [0.39, 0.39, 0.38] },
+            { at: 1.0, color: [0.52, 0.51, 0.48] },
+          ],
+        },
+        // Lime crust, pale and warm, in the low places.
+        { output: "crustMask", op: "mask", input: "height", at: 0.16, off: 0.3 },
+        { output: "crustAmount", op: "scale", input: "crustMask", factor: 0.45 },
+        { output: "crust", op: "color", value: [0.58, 0.55, 0.47] },
+        { output: "crusted", op: "mix", a: "byHeight", b: "crust", t: "crustAmount" },
+        { output: "mottleRaw", op: "sample", noise: "mottle" },
+        { output: "mottleShade", op: "remap", input: "mottleRaw", inMin: -1, inMax: 1, outMin: 0.82, outMax: 1.1 },
+        { output: "diffuse", op: "multiply", a: "crusted", b: "mottleShade" },
+        // Damp: glossier than the rock outside, the crusts matte.
+        { output: "roughRock", op: "constant", value: 0.6 },
+        { output: "roughCrust", op: "constant", value: 0.9 },
+        { output: "roughness", op: "mix", a: "roughRock", b: "roughCrust", t: "crustMask" },
+      ],
+      outputs: { diffuse: "diffuse", roughness: "roughness", height: "height" },
+    },
+  },
+}

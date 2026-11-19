@@ -1,0 +1,13 @@
+// A cluster of crystals grown from a cave's rock (DUNGEONS.md, *Light*): blue-white prisms, the
+// tallest higher than a man, lighting the chamber cold and steady - no flame, no flicker.
+{
+  name: "Crystals",
+  type: "crystals",
+  // Big enough to walk round, not through.
+  collide: false,
+  light: { color: [0.55, 0.7, 1.0], intensity: 2.1, radius: 18, size: 0.8 },
+  parts: {
+    crystal: { material: "crystal", tints: [[1, 1, 1], [0.9, 0.85, 1.0], [0.85, 1.0, 1.0]] },
+    root: { material: "rubbleStone", tints: [[0.45, 0.45, 0.47]] },
+  },
+}

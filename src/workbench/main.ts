@@ -4,6 +4,7 @@ import { ModelBuilder } from "../world/buildings/buildingGeometry";
 import { resolveDungeons } from "../world/dungeons/dungeonDefs";
 import { buildPartModel } from "../world/dungeons/kitMesh";
 import { addSpotLabels, SPOT_KINDS, type SpotLabel } from "./spotLabels";
+import { caveDrawn, caveOffset } from "./cavePreview";
 import { Engine } from "@babylonjs/core";
 import { configNameFromUrl, fetchPackSources, fetchWorldConfig } from "../world/content/loadContent";
 import { DEFAULT_CONFIG, type WorldConfig } from "../world/content/worldConfig";
@@ -1154,6 +1155,7 @@ async function preview3d(token: number, asset: Asset, view: ViewDef, content: Wo
   let buildings: Parameters<typeof createStage>[2]["buildings"];
   let site: Parameters<typeof createStage>[2]["site"];
   let figure: Parameters<typeof createStage>[2]["figure"];
+  let drawn: Parameters<typeof createStage>[2]["drawn"];
   let summary: HTMLElement | null = null;
   /** A dungeon part's style's light everywhere, for the Underground light. */
   let dungeonAmbient: [number, number, number] | undefined;
@@ -1315,31 +1317,43 @@ async function preview3d(token: number, asset: Asset, view: ViewDef, content: Wo
     const style = [...dungeons.styles.values()].find((st) => [st.parts, st.entrances, st.bosses, st.caps, st.doorways].some((list) => list.includes(part))) ?? [...dungeons.styles.values()][0];
     const frame = { x: 0, z: 0, yaw: 0 };
     const layout = { style: style.id, size: "", seed, attempt: 0, minimal: false, parts: [{ part, x: 0, y: 0, z: 0, yaw: 0, bounds: part.bounds, box: part.bounds, entry: -1, parent: -1, role: "room" as const }], joins: [], boss: -1, lock: -1, key: -1, failures: [], frame };
-    // Every light spot lit, not the style's share of them: each torch is seen where it hangs. Its
-    // barrel vault, if it may have one, as the seed rolls it - or `vault=barrel` / `vault=flat`.
-    const vault = new URLSearchParams(location.search).get("vault");
-    const barrels = vault === "barrel" ? 1 : vault === "flat" ? 0 : style.barrels;
-    const built = buildPartModel(layout, 0, { ...style, barrels, light: { ...style.light, lit: 1 } }, content.props.find((prop) => prop.id === style.light.fixture), (id) => content.props.find((prop) => prop.id === id));
-    // Its outside too, where it has one (an entrance's house), in the same place.
-    let shown = built.model;
-    if (built.exterior) {
-      const merged = new ModelBuilder();
-      merged.append(built.model, 0, 0, 0, 0, 1);
-      merged.append(built.exterior, 0, 0, 0, 0, 1);
-      shown = merged.finish({ x: 0, z: 0 });
+    if (style.builder === "field") {
+      // A cave's part: its rock meshed on its own (its ways open past its sockets), every light spot lit.
+      const facts = document.createElement("p");
+      facts.textContent = `${part.id}: ${part.field?.length ?? 0} shapes, ${part.sockets.length} sockets, ${part.paths.length} walk lines (style ${style.id}, ${Math.round(style.light.lit * 100)}% of light spots lit in a cave; all of them here).`;
+      drawn = caveDrawn(layout, { ...style, light: { ...style.light, lit: 1 } }, content, seed, (more) => (facts.textContent += ` ${more}.`));
+      const { by } = caveOffset(layout);
+      spotLabels = Object.entries(SPOT_KINDS).flatMap(([key, kind]) => (part.spots[key] ?? []).map((p, i): SpotLabel => ({ at: [p.x + by[0], p.y + by[1], p.z + by[2]], text: (part.spots[key]?.length ?? 0) > 1 ? `${kind.text} ${i + 1}` : kind.text, color: kind.color })));
+      dungeonAmbient = style.light.ambient;
+      summary = document.createElement("div");
+      summary.append(facts);
+    } else {
+      // Every light spot lit, not the style's share of them: each torch is seen where it hangs. Its
+      // barrel vault, if it may have one, as the seed rolls it - or `vault=barrel` / `vault=flat`.
+      const vault = new URLSearchParams(location.search).get("vault");
+      const barrels = vault === "barrel" ? 1 : vault === "flat" ? 0 : style.barrels;
+      const built = buildPartModel(layout, 0, { ...style, barrels, light: { ...style.light, lit: 1 } }, content.props.find((prop) => prop.id === style.light.fixture), (id) => content.props.find((prop) => prop.id === id));
+      // Its outside too, where it has one (an entrance's house), in the same place.
+      let shown = built.model;
+      if (built.exterior) {
+        const merged = new ModelBuilder();
+        merged.append(built.model, 0, 0, 0, 0, 1);
+        merged.append(built.exterior, 0, 0, 0, 0, 1);
+        shown = merged.finish({ x: 0, z: 0 });
+      }
+      buildings = [shown];
+      // Its spots labelled: where its creatures, its boss, its chest and its quest objects stand.
+      spotLabels = Object.entries(SPOT_KINDS).flatMap(([key, kind]) => (part.spots[key] ?? []).map((p, i): SpotLabel => ({ at: [p.x, p.y, p.z], text: (part.spots[key]?.length ?? 0) > 1 ? `${kind.text} ${i + 1}` : kind.text, color: kind.color })));
+      dungeonAmbient = style.light.ambient;
+      if (buildings[0].indices.length === 0) {
+        setStatus(`${part.id} has no faces to draw: nothing of it is seen from inside`);
+        return;
+      }
+      summary = document.createElement("div");
+      const facts = document.createElement("p");
+      facts.textContent = `${part.id}: ${part.shapes.length} colliders, ${part.sockets.length} sockets, ${buildings[0].indices.length / 3} triangles, ${buildings[0].lights?.length ?? 0} torches (style ${style.id}, ${Math.round(style.light.lit * 100)}% of light spots lit in a dungeon; all of them here). Light: Underground shows it as a dungeon does; walls facing away from the camera are not drawn, so it can be seen into from outside.`;
+      summary.append(facts);
     }
-    buildings = [shown];
-    // Its spots labelled: where its creatures, its boss, its chest and its quest objects stand.
-    spotLabels = Object.entries(SPOT_KINDS).flatMap(([key, kind]) => (part.spots[key] ?? []).map((p, i): SpotLabel => ({ at: [p.x, p.y, p.z], text: (part.spots[key]?.length ?? 0) > 1 ? `${kind.text} ${i + 1}` : kind.text, color: kind.color })));
-    dungeonAmbient = style.light.ambient;
-    if (buildings[0].indices.length === 0) {
-      setStatus(`${part.id} has no faces to draw: nothing of it is seen from inside`);
-      return;
-    }
-    summary = document.createElement("div");
-    const facts = document.createElement("p");
-    facts.textContent = `${part.id}: ${part.shapes.length} colliders, ${part.sockets.length} sockets, ${buildings[0].indices.length / 3} triangles, ${buildings[0].lights?.length ?? 0} torches (style ${style.id}, ${Math.round(style.light.lit * 100)}% of light spots lit in a dungeon; all of them here). Light: Underground shows it as a dungeon does; walls facing away from the camera are not drawn, so it can be seen into from outside.`;
-    summary.append(facts);
   } else if (asset.folder === "dungeonStyles") {
     // A whole dungeon of the style, generated under a made-up hill from the seed, every part drawn
     // and lit as in the game - in one model, its light baked here at once (a few seconds).
@@ -1351,19 +1365,30 @@ async function preview3d(token: number, asset: Asset, view: ViewDef, content: Wo
     setStatus("Laying out the dungeon");
     await nextPaint();
     const layout = generateLayout(dungeons, style.id, size, seed, testSite(hill), asDungeonGround(hill));
-    const fixture = content.props.find((prop) => prop.id === style.light.fixture);
-    const whole = new ModelBuilder();
-    // Built in the layout's frame: the entrance's door at the origin, the dungeon running in along
-    // -z, standing on the grid - seen from above, its vaults' tops are not drawn, so it is a plan.
-    const lowest = Math.min(...layout.parts.map((p) => p.box.min.y));
-    for (let i = 0; i < layout.parts.length; i++) whole.append(buildPartModel(layout, i, style, fixture, (id) => content.props.find((prop) => prop.id === id)).model, 0, -lowest, 0, 0, 1);
-    buildings = [whole.finish({ x: 0, z: 0 })];
-    dungeonAmbient = style.light.ambient;
-    summary = document.createElement("div");
-    const facts = document.createElement("p");
-    const rooms = layout.parts.filter((p) => p.role === "room" || p.role === "boss").length;
-    facts.textContent = `${style.name}, ${size}, seed ${seed}: ${layout.parts.length} parts (${rooms} rooms, ${layout.parts.filter((p) => p.role === "doorway").length} doorways), ${layout.joins.filter((j) => j.loop).length} loops, ${buildings[0].indices.length / 3} triangles, ${buildings[0].lights?.length ?? 0} torches${layout.minimal ? " - the minimal layout" : ""}. It stands on the grid, the entrance at the origin; change the seed for another.`;
-    summary.append(facts);
+    if (style.builder === "field") {
+      // A whole cave: its rock as the game builds it, standing on the grid, seen into from outside.
+      const rooms = layout.parts.filter((p) => p.role === "room" || p.role === "boss").length;
+      const facts = document.createElement("p");
+      facts.textContent = `${style.name}, ${size}, seed ${seed}: ${layout.parts.length} parts (${rooms} rooms)${layout.minimal ? " - the minimal layout" : ""}. Change the seed for another.`;
+      drawn = caveDrawn(layout, style, content, seed, (more) => (facts.textContent += ` ${more}.`));
+      dungeonAmbient = style.light.ambient;
+      summary = document.createElement("div");
+      summary.append(facts);
+    } else {
+      const fixture = content.props.find((prop) => prop.id === style.light.fixture);
+      const whole = new ModelBuilder();
+      // Built in the layout's frame: the entrance's door at the origin, the dungeon running in along
+      // -z, standing on the grid - seen from above, its vaults' tops are not drawn, so it is a plan.
+      const lowest = Math.min(...layout.parts.map((p) => p.box.min.y));
+      for (let i = 0; i < layout.parts.length; i++) whole.append(buildPartModel(layout, i, style, fixture, (id) => content.props.find((prop) => prop.id === id)).model, 0, -lowest, 0, 0, 1);
+      buildings = [whole.finish({ x: 0, z: 0 })];
+      dungeonAmbient = style.light.ambient;
+      summary = document.createElement("div");
+      const facts = document.createElement("p");
+      const rooms = layout.parts.filter((p) => p.role === "room" || p.role === "boss").length;
+      facts.textContent = `${style.name}, ${size}, seed ${seed}: ${layout.parts.length} parts (${rooms} rooms, ${layout.parts.filter((p) => p.role === "doorway").length} doorways), ${layout.joins.filter((j) => j.loop).length} loops, ${buildings[0].indices.length / 3} triangles, ${buildings[0].lights?.length ?? 0} torches${layout.minimal ? " - the minimal layout" : ""}. It stands on the grid, the entrance at the origin; change the seed for another.`;
+      summary.append(facts);
+    }
   } else if (asset.folder === "props") {
     ground = groundMaterial(content, asset);
     if (grassOn) grass = ground.grass;
@@ -1433,6 +1458,7 @@ async function preview3d(token: number, asset: Asset, view: ViewDef, content: Wo
     buildingColliders: options.colliders === "on" && (asset.folder === "buildings" || asset.folder === "props" || asset.folder === "features"),
     site,
     figure,
+    drawn,
     footprints: options.marks === "on" && asset.folder === "buildings",
     timeHours: timeHours(),
     underground: dungeonAmbient,

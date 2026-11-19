@@ -1,0 +1,80 @@
+// Flowstone: a cave's roof (DUNGEONS.md, *Materials*) - calcite laid down by dripping water over
+// the rock, a smooth pale crust in rippled rims and lobes, creamy where it is thick and the grey
+// rock showing through where it is thin, stained rust and dark where the water runs.
+//
+// Its height: broad lobes (billow) with rims rippling round them (a sin of the lobes' own height,
+// so the ripples follow their outlines, as rimstone's do), and the rock under it where it is thin.
+{
+  name: "Flowstone",
+  texture: {
+    bumpStrength: 3.2,
+    pipeline: {
+      noises: [
+        { name: "lobes", type: "billow", octaves: 3, tileCycles: 3, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+        { name: "thick", type: "fbm", octaves: 3, tileCycles: 2, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+        { name: "stain", type: "fbm", octaves: 3, tileCycles: 5, stretch: [1, 5], amplitude: 1, persistence: 0.55, lacunarity: 2.0 },
+        { name: "rock", type: "fbm", octaves: 4, tileCycles: 6, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+        { name: "grain", type: "fbm", octaves: 2, tileCycles: 50, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+      ],
+      steps: [
+        { output: "lobeRaw", op: "sample", noise: "lobes" },
+        { output: "lobe", op: "mask", input: "lobeRaw", at: 1, off: -1 },
+        // Rims: ripples round the lobes, fine and shallow.
+        { output: "rimWave", op: "sin", input: "lobe", cycles: 5 },
+        { output: "rimUnit", op: "remap", input: "rimWave", inMin: -1, inMax: 1, outMin: 0, outMax: 1 },
+        { output: "rim", op: "power", input: "rimUnit", exponent: 6 },
+        // Where the crust is thick, and where the rock shows through.
+        { output: "thickRaw", op: "sample", noise: "thick" },
+        { output: "thickMask", op: "mask", input: "thickRaw", at: -0.25, off: -0.7 },
+        { output: "rockRaw", op: "sample", noise: "rock" },
+        { output: "rockUnit", op: "mask", input: "rockRaw", at: 1, off: -1 },
+        { output: "grainRaw", op: "sample", noise: "grain" },
+        { output: "grainUnit", op: "mask", input: "grainRaw", at: 1, off: -1 },
+
+        { output: "lobePart", op: "scale", input: "lobe", factor: 0.6 },
+        { output: "rimPart", op: "scale", input: "rim", factor: 0.06 },
+        { output: "crustHeight", op: "add", a: "lobePart", b: "rimPart" },
+        { output: "rockPart", op: "scale", input: "rockUnit", factor: 0.6 },
+        { output: "shaped", op: "mix", a: "rockPart", b: "crustHeight", t: "thickMask" },
+        { output: "grainPart", op: "scale", input: "grainUnit", factor: 0.04 },
+        { output: "height", op: "add", a: "shaped", b: "grainPart" },
+
+        // Cream over the lobes, a little darker in the rims' troughs; grey rock where it is thin.
+        {
+          output: "crustTone",
+          op: "colorRamp",
+          input: "lobe",
+          stops: [
+            { at: 0.0, color: [0.5, 0.46, 0.38] },
+            { at: 0.4, color: [0.68, 0.63, 0.53] },
+            { at: 1.0, color: [0.82, 0.77, 0.66] },
+          ],
+        },
+        { output: "rimShade", op: "remap", input: "rim", inMin: 0, inMax: 1, outMin: 0.96, outMax: 1.03 },
+        { output: "crust", op: "multiply", a: "crustTone", b: "rimShade" },
+        {
+          output: "rockTone",
+          op: "colorRamp",
+          input: "rockUnit",
+          stops: [
+            { at: 0.0, color: [0.16, 0.16, 0.17] },
+            { at: 0.5, color: [0.3, 0.3, 0.3] },
+            { at: 1.0, color: [0.42, 0.41, 0.39] },
+          ],
+        },
+        { output: "base", op: "mix", a: "rockTone", b: "crust", t: "thickMask" },
+        // Rust and dark streaks where the water runs.
+        { output: "stainRaw", op: "sample", noise: "stain" },
+        { output: "stainMask", op: "mask", input: "stainRaw", at: 0.55, off: 0.25 },
+        { output: "stainAmount", op: "scale", input: "stainMask", factor: 0.25 },
+        { output: "stainColor", op: "color", value: [0.36, 0.24, 0.15] },
+        { output: "diffuse", op: "mix", a: "base", b: "stainColor", t: "stainAmount" },
+        // Wet calcite shines; the rock less.
+        { output: "roughCrust", op: "constant", value: 0.35 },
+        { output: "roughRock", op: "constant", value: 0.7 },
+        { output: "roughness", op: "mix", a: "roughRock", b: "roughCrust", t: "thickMask" },
+      ],
+      outputs: { diffuse: "diffuse", roughness: "roughness", height: "height" },
+    },
+  },
+}

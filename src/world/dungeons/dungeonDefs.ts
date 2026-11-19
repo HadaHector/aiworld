@@ -8,6 +8,7 @@ import { DUNGEON_FOLDERS, orderPacks, parseFile, type PackSource } from "../cont
 import { vec3, type Aabb, type ShapeDesc, type Vec3 } from "../collision/index";
 import { boxShape, doorwayGeometry, DOORWAY_KINDS, rotundaGeometry, spiralGeometry, stairGeometry, type DoorwaySpec, type Polyline, type Voussoir } from "./kitShapes";
 import { checkPaths } from "./clearance";
+import { chunkFieldAt, fieldOf, fieldPartBounds, meshField, partShapes, type FieldNoise, type FieldShape } from "./caveField";
 import { altarBox, altarShape, benchShape, ledgerShape, placeBenches, placeLedgers, placeTombs, tombShape, type AltarDef, type BenchDef, type LedgerDef, type TombDef } from "./tombs";
 
 const ID_PATTERN = /^[A-Za-z0-9_-]+$/;
@@ -95,6 +96,9 @@ export interface DungeonPartDef {
   /** Kit builder: its colliders and the lines its floor is walked along, in its own frame. */
   shapes: ShapeDesc[];
   paths: Polyline[];
+  /** Field builder (caveField.ts): its chambers and tunnels in the cave's distance field - no
+   *  colliders of its own (the whole cave's rock is meshed as one), its walk lines from its shapes. */
+  field?: FieldShape[];
   /** Anchors for what fills it (DUNGEONS.md, *What fills it*). */
   spots: Record<string, Vec3[]>;
   /** Counts toward the style's rooms (a hall, a tomb) rather than joining them (a corridor, a stair). */
@@ -177,7 +181,13 @@ export interface DungeonSize {
 export interface DungeonStyleDef {
   id: string;
   name: string;
-  builder: "kit";
+  /** `kit`: built parts (a crypt); `field`: shapes in a distance field, meshed (a cave). */
+  builder: "kit" | "field";
+  /** Field builder: the rock's roughness, and the cell it is sampled at. */
+  noise: FieldNoise[];
+  voxel: number;
+  /** Field builder: what its rock is drawn with (caveMaterial.ts). */
+  rock: CaveLook;
   sizes: Record<string, DungeonSize>;
   /** The chance a part's further sockets are left open to grow from, rather than capped. */
   branching: number;
@@ -213,6 +223,20 @@ export interface DungeonStyleDef {
   creatures?: DungeonCreatures;
   /** The share of the parts that may have a barrel vault (`DungeonPartDef.barrel`) drawn with it. */
   barrels: number;
+}
+
+/** A cave's materials (ground materials, `materials/`): the floor walked on, the walls, the rock
+ *  overhead - each laid `size` metres a repeat, its colour times `tint`. */
+export interface CaveLook {
+  floor: CaveLayer;
+  wall: CaveLayer;
+  ceiling: CaveLayer;
+}
+
+export interface CaveLayer {
+  material: string;
+  size: number;
+  tint: [number, number, number];
 }
 
 /** A face's building material (by id; null for plain colour) and the tint its colour is multiplied by. */
@@ -256,6 +280,9 @@ export interface DungeonLight {
   /** The prop standing at a part's `light` spots (a wall torch), and the share of spots that have one. */
   fixture: string;
   lit: number;
+  /** Several fixtures instead (a cave's), one rolled by weight at each lit spot: set on the floor at
+   *  it, at the foot of the nearest wall, or on that wall (caveFixtures.ts). */
+  fixtures?: { prop: string; weight: number; place: "floor" | "foot" | "wall" }[];
   /** Candles (a prop, a cluster of them) left on its benches, on its ledger stones and at its tombs'
    *  heads: the share of each such place that has some. */
   candles?: { prop: string; share: number };
@@ -364,7 +391,7 @@ function vector(reader: Reader, value: unknown, path: string): Vec3 {
   return vec3();
 }
 
-const PART_KEYS = ["tags", "weight", "stage", "apart", "tombs", "benches", "ledgers", "ending", "bounds", "sockets", "colliders", "paths", "spots", "room", "doorway", "barrel", "altar", "exterior"];
+const PART_KEYS = ["tags", "weight", "stage", "apart", "tombs", "benches", "ledgers", "ending", "bounds", "sockets", "colliders", "field", "paths", "spots", "room", "doorway", "barrel", "altar", "exterior"];
 
 function readPart(entry: Entry, rules: DungeonRules, issues: ContentIssue[]): DungeonPartDef | null {
   const reader = new Reader(issues, entry.file);
@@ -508,6 +535,10 @@ function readPart(entry: Entry, rules: DungeonRules, issues: ContentIssue[]): Du
     if (!Array.isArray(line) || line.length < 2) { reader.fail(`paths[${i}]`, "expected a list of two or more [x, y, z] points"); return; }
     paths.push(line.map((p, k) => vector(reader, p, `paths[${i}][${k}]`)));
   });
+  const field = obj.field === undefined ? undefined : readField(reader, obj);
+  // A field part's walk lines, unless given: along its tunnels, and in from each socket to the
+  // nearest chamber's middle or tunnel.
+  if (field && paths.length === 0) paths.push(...fieldPaths(field, sockets));
   const spots: Record<string, Vec3[]> = {};
   if (obj.spots !== undefined) {
     const raw = reader.object(obj.spots, "spots");
@@ -521,6 +552,8 @@ function readPart(entry: Entry, rules: DungeonRules, issues: ContentIssue[]): Du
     const b = obj.bounds;
     if (Array.isArray(b) && b.length === 2) bounds = { min: vector(reader, b[0], "bounds[0]"), max: vector(reader, b[1], "bounds[1]") };
     else { reader.fail("bounds", "expected [[x0, y0, z0], [x1, y1, z1]]"); bounds = { min: vec3(), max: vec3() }; }
+  } else if (field) {
+    bounds = fieldPartBounds({ field, sockets }, FIELD_GROW);
   } else {
     bounds = shapesBounds(shapes);
   }
@@ -559,6 +592,7 @@ function readPart(entry: Entry, rules: DungeonRules, issues: ContentIssue[]): Du
     sockets,
     shapes,
     paths,
+    field,
     spots,
     room: reader.boolean(obj, "room", "", false),
     ending: readEnding(reader, obj),
@@ -582,6 +616,15 @@ function readPart(entry: Entry, rules: DungeonRules, issues: ContentIssue[]): Du
     // (A cap has no way through: nothing to measure, its sockets closed.)
     // (A doorway may be narrower by its stop: the one exception to the rules' least way through.)
     if (paths.length > 0 && !doorway) for (const problem of checkPaths(shapes, paths, rules.minClear, sockets)) reader.fail("paths", problem);
+  }
+  // A field part's, on its own rock meshed - smooth, so wider and higher than the least by what a
+  // style's noise may take off its walls.
+  if (field && paths.length > 0 && issues.length === before) {
+    const rock = fieldOf(partShapes({ field, sockets }), []);
+    const mesh = meshField(rock, FIELD_CHECK_CELL);
+    const meshes: ShapeDesc[] = mesh.chunks.map((c) => ({ kind: "mesh", positions: c.positions, indices: c.indices, inside: (p: Vec3) => chunkFieldAt(c, p.x, p.y, p.z) > 0 }));
+    const least: [number, number] = [rules.minClear[0] + 2 * FIELD_NOISE_MOST, rules.minClear[1] + FIELD_NOISE_MOST];
+    for (const problem of checkPaths(meshes, paths, least, sockets.filter((s) => s.type !== "surface"))) reader.fail("paths", `${problem} (a cave's way is measured smooth, ${least.join(" x ")} m: room for its walls' roughness)`);
   }
   return part;
 }
@@ -670,7 +713,7 @@ export function shapesBounds(shapes: readonly ShapeDesc[]): Aabb {
   return { min, max };
 }
 
-const STYLE_KEYS = ["name", "builder", "sizes", "branching", "loops", "boss", "keys", "cover", "deepest", "parts", "entrance", "caps", "connector", "look", "light", "urns", "chandeliers", "altar", "creatures", "barrels", "doorways", "trims"];
+const STYLE_KEYS = ["name", "builder", "noise", "voxel", "rock", "sizes", "branching", "loops", "boss", "keys", "cover", "deepest", "parts", "entrance", "caps", "connector", "look", "light", "urns", "chandeliers", "altar", "creatures", "barrels", "doorways", "trims"];
 
 function colour(reader: Reader, value: unknown, path: string, fallback: [number, number, number]): [number, number, number] {
   if (value === undefined) return fallback;
@@ -800,11 +843,71 @@ function readPropShare(reader: Reader, raw: RawObject, path: string, prop: strin
   return { prop: reader.optionalString(raw, "prop", path) ?? prop, share: reader.optionalNumber(raw, "share", path, 0.4, { min: 0, max: 1 }) };
 }
 
+/** How far a field part's bounds reach past its shapes: the most a style's noise may move its rock, and some. */
+const FIELD_GROW = 1.5;
+/** The most a style's noise may move a cave's walls (its octaves' amounts together). */
+export const FIELD_NOISE_MOST = 0.8;
+/** The cell a field part is meshed at to measure its way through, at load. */
+const FIELD_CHECK_CELL = 0.75;
+
+/** A field part's `field`: `{ chamber: { at, radius: [x, z], height } }` and `{ tunnel: { points, width, height } }`. */
+function readField(reader: Reader, obj: RawObject): FieldShape[] {
+  return reader.array(obj, "field", "").flatMap((value, i): FieldShape[] => {
+    const path = `field[${i}]`;
+    const raw = reader.object(value, path);
+    const keys = Object.keys(raw);
+    if (keys.length !== 1) { reader.fail(path, "expected one of chamber or tunnel"); return []; }
+    const inner = reader.object(raw[keys[0]], `${path}.${keys[0]}`);
+    const at = `${path}.${keys[0]}`;
+    if (keys[0] === "chamber") {
+      reader.onlyKeys(inner, at, ["at", "radius", "height"]);
+      return [{ kind: "chamber", at: vector(reader, inner.at, `${at}.at`), radius: pair(reader, inner, "radius", at), height: reader.number(inner, "height", at, { min: 1 }) }];
+    }
+    if (keys[0] === "tunnel") {
+      reader.onlyKeys(inner, at, ["points", "width", "height"]);
+      const points = reader.array(inner, "points", at).map((p, k) => vector(reader, p, `${at}.points[${k}]`));
+      if (points.length < 2) reader.fail(`${at}.points`, "a tunnel needs two or more points");
+      return [{ kind: "tunnel", points, width: reader.number(inner, "width", at, { min: 1 }), height: reader.number(inner, "height", at, { min: 1 }) }];
+    }
+    reader.fail(path, `unknown field shape "${keys[0]}" (expected chamber or tunnel)`);
+    return [];
+  });
+}
+
+/** A field part's walk lines: along each tunnel, and from each socket (not at a tunnel's end) in to
+ *  the nearest chamber's middle, or the nearest point of a tunnel's line. */
+function fieldPaths(field: readonly FieldShape[], sockets: readonly SocketDef[]): Polyline[] {
+  const lines: Polyline[] = field.flatMap((s) => (s.kind === "tunnel" ? [s.points.map((p) => vec3(p.x, p.y, p.z))] : []));
+  const ends = lines.flatMap((l) => [l[0], l[l.length - 1]]);
+  for (const s of sockets) {
+    if (s.type === "surface" || ends.some((e) => Math.hypot(e.x - s.at.x, e.y - s.at.y, e.z - s.at.z) < 0.5)) continue;
+    let best: Vec3 | null = null, bestD = Infinity;
+    for (const shape of field) {
+      const candidates = shape.kind === "chamber" ? [shape.at] : shape.points;
+      for (const c of candidates) {
+        const d = Math.hypot(c.x - s.at.x, c.z - s.at.z) + Math.abs(c.y - s.at.y) * 4;
+        if (d < bestD) [best, bestD] = [c, d];
+      }
+    }
+    if (best) lines.push([vec3(s.at.x, s.at.y, s.at.z), vec3(best.x, best.y, best.z)]);
+  }
+  return lines;
+}
+
 function readLight(reader: Reader, raw: RawObject): DungeonLight {
-  reader.onlyKeys(raw, "light", ["ambient", "fixture", "lit", "candles"]);
+  reader.onlyKeys(raw, "light", ["ambient", "fixture", "fixtures", "lit", "candles"]);
+  const fixtures = raw.fixtures === undefined
+    ? undefined
+    : reader.array(raw, "fixtures", "light").map((value, i) => {
+        const at = `light.fixtures[${i}]`;
+        const f = reader.object(value, at);
+        reader.onlyKeys(f, at, ["prop", "weight", "place"]);
+        return { prop: reader.string(f, "prop", at), weight: reader.optionalNumber(f, "weight", at, 1, { min: 0 }), place: reader.oneOf(f, "place", at, ["floor", "foot", "wall"] as const) };
+      });
   const candles = raw.candles === undefined ? undefined : readPropShare(reader, reader.object(raw.candles, "light.candles"), "light.candles", "candles");
   return {
     candles,
+    fixtures,
     ambient: colour(reader, raw.ambient, "light.ambient", [0.02, 0.02, 0.025]),
     fixture: reader.optionalString(raw, "fixture", "light") ?? "wallTorch",
     lit: reader.optionalNumber(raw, "lit", "light", 1, { min: 0, max: 1 }),
@@ -852,7 +955,10 @@ function readStyle(entry: Entry, allParts: Map<string, DungeonPartDef>, rules: D
   const style: DungeonStyleDef = {
     id: entry.id,
     name: reader.optionalString(obj, "name", "") ?? entry.id,
-    builder: reader.oneOf(obj, "builder", "", ["kit"] as const),
+    builder: reader.oneOf(obj, "builder", "", ["kit", "field"] as const),
+    noise: readNoise(reader, obj),
+    voxel: reader.optionalNumber(obj, "voxel", "", 0.75, { min: 0.25, max: 2 }),
+    rock: readCaveLook(reader, obj.rock === undefined ? {} : reader.object(obj.rock, "rock")),
     sizes,
     branching: reader.optionalNumber(obj, "branching", "", 0.35, { min: 0, max: 1 }),
     loops: obj.loops === undefined ? [0, 0] : reader.range(obj, "loops", "", { allowEqual: true }),
@@ -887,6 +993,33 @@ function readStyle(entry: Entry, allParts: Map<string, DungeonPartDef>, rules: D
   }
   for (const e of entrances) if (!e.sockets.some((s) => s.type === "surface")) reader.fail("entrance", `the entrance "${e.id}" has no "surface" socket to stand at the mouth`);
   return style;
+}
+
+/** A field style's `rock`: its floor, wall and ceiling materials. */
+function readCaveLook(reader: Reader, raw: RawObject): CaveLook {
+  reader.onlyKeys(raw, "rock", ["floor", "wall", "ceiling"]);
+  const layer = (key: "floor" | "wall" | "ceiling", material: string): CaveLayer => {
+    if (raw[key] === undefined) return { material, size: 12, tint: [1, 1, 1] };
+    const r = reader.object(raw[key], `rock.${key}`);
+    reader.onlyKeys(r, `rock.${key}`, ["material", "size", "tint"]);
+    return {
+      material: reader.optionalString(r, "material", `rock.${key}`) ?? material,
+      size: reader.optionalNumber(r, "size", `rock.${key}`, 12, { min: 0.5 }),
+      tint: colour(reader, r.tint, `rock.${key}.tint`, [1, 1, 1]),
+    };
+  };
+  return { floor: layer("floor", "caveGravel"), wall: layer("wall", "caveRock"), ceiling: layer("ceiling", "flowstone") };
+}
+
+/** A field style's `noise`: octaves `{ scale, amount }`, their amounts together no more than FIELD_NOISE_MOST. */
+function readNoise(reader: Reader, obj: RawObject): FieldNoise[] {
+  const noise = reader.optionalArray(obj, "noise", "").map((value, i) => {
+    const raw = reader.object(value, `noise[${i}]`);
+    reader.onlyKeys(raw, `noise[${i}]`, ["scale", "amount"]);
+    return { scale: reader.number(raw, "scale", `noise[${i}]`, { min: 0.01 }), amount: reader.number(raw, "amount", `noise[${i}]`, { min: 0 }) };
+  });
+  if (noise.reduce((s, n) => s + n.amount, 0) > FIELD_NOISE_MOST + 1e-9) reader.fail("noise", `its amounts together may be no more than ${FIELD_NOISE_MOST} m: the parts' ways are measured with that much room`);
+  return noise;
 }
 
 function readConnector(reader: Reader, raw: RawObject, all: readonly DungeonPartDef[], rules: DungeonRules): ConnectorDef {

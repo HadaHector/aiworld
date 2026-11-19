@@ -6,6 +6,7 @@ import type { WorldData } from "../world/worldData";
 import type { CollisionWorld } from "../world/collision/index";
 import type { DungeonContent } from "../world/dungeons/dungeonDefs";
 import { generateLayout, placedPaths, placedShapes, worldToFrame, type DungeonLayout, type DungeonSite } from "../world/dungeons/layout";
+import { buildCave, caveColliders } from "../world/dungeons/caveField";
 
 /** A dungeon placed in a dimension. */
 export interface PlacedDungeon {
@@ -52,7 +53,8 @@ export function createDimensionDungeons(world: WorldData, collision: CollisionWo
       const sizeDef = def.sizes[size];
       if (!sizeDef) throw new Error(`the dungeon style "${style}" has no size "${size}"`);
       const layout = generateLayout(content, style, size, seed, site, ground);
-      const batch = collision.addBatch(layout.parts.flatMap(placedShapes));
+      // A kit's parts' own colliders; a field's rock meshed as a whole (caveField.ts).
+      const batch = collision.addBatch(def.builder === "field" ? caveColliders(buildCave(layout, def)) : layout.parts.flatMap(placedShapes));
       // The foot of the entrance's stair: its walk line's last point inside, looking on out.
       const line = placedPaths(layout.parts[0])[0];
       const foot = line[line.length - 2], door = line[line.length - 1];
@@ -129,10 +131,11 @@ export function mouthNear(world: WorldData, x: number, z: number, reach: number)
  * within 20 m and 12 m within 40 m behind the door - facing down the slope, the dungeon running in
  * under the rise.
  */
-export function dungeonSiteNear(world: WorldData, x: number, z: number, reach = 1500): (DungeonSite & { kind: "crypt" | "slope" }) | null {
+export function dungeonSiteNear(world: WorldData, x: number, z: number, reach = 1500, crypts = true): (DungeonSite & { kind: "crypt" | "slope" }) | null {
   let best: (DungeonSite & { kind: "crypt" | "slope" }) | null = null;
   let bestDistance = reach;
-  for (const layout of world.compoundLayouts) {
+  // (A cave opens on a hillside only: `crypts` false.)
+  for (const layout of crypts ? world.compoundLayouts : []) {
     for (const b of layout.buildings) {
       const site = mouthSite(world, b);
       if (!site) continue;

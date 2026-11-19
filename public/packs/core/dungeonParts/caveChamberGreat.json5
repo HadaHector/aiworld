@@ -1,0 +1,19 @@
+// A great cave chamber, 40 by 34 m at the floor and 20 m high.
+{
+  tags: ["cave", "chamber", "great"],
+  weight: 1.5,
+  room: true,
+  stage: [0.2, 1],
+  sockets: [
+    { at: [0, 0, -17], facing: 180, type: "tunnel", size: [9, 8] },
+    { at: [20, 0, 0], facing: 90, type: "tunnel", size: [9, 8] },
+    { at: [-20, 0, 0], facing: 270, type: "tunnel", size: [9, 8] },
+    { at: [0, 0, 17], facing: 0, type: "tunnel", size: [9, 8] },
+  ],
+  field: [{ chamber: { at: [0, 0, 0], radius: [20, 17], height: 20 } }],
+  spots: {
+    spawns: [[7, 0, 4], [-8, 0, -3], [0, 0, 9]],
+    light: [[0, 0, 0], [-11, 0, 6], [11, 0, -6], [6, 0, 10]],
+    chest: [[12, 0, -7]],
+  },
+}

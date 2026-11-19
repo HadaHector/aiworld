@@ -1,0 +1,13 @@
+// The boss's lair: the cave's greatest chamber, 44 by 40 m and 22 m high, one way in.
+{
+  tags: ["cave", "boss"],
+  room: true,
+  sockets: [{ at: [0, 0, 0], facing: 180, type: "tunnel", size: [9, 8] }],
+  field: [{ chamber: { at: [0, 0, 21], radius: [22, 20], height: 22 } }],
+  spots: {
+    boss: [[0, 0, 28]],
+    spawns: [[-8, 0, 14], [8, 0, 14]],
+    light: [[0, 0, 21], [-12, 0, 26], [12, 0, 26], [-10, 0, 10], [10, 0, 10]],
+    chest: [[0, 0, 36]],
+  },
+}
