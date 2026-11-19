@@ -1,0 +1,2 @@
+// A gathering material: fresh healing herbs.
+{ name: "Herb Bundle", icon: "item-herb-bundle", kind: "material", rarity: "common", stack: 20, value: 4 }

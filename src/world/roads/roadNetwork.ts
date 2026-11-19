@@ -8,7 +8,7 @@ import { angleBetween, chooseGate, type SettlementGate } from "../settlements/ga
 import { GATE_PASS_SNAP, STREET_JOIN_BLEND } from "../settlements/settlementConfig";
 import { collectPlaces, roadClassFor, wanted, type Place } from "./places";
 import { simplify, removeLoops } from "../polyline";
-import { straighten, roundCorners, snapToNetwork, createSnapIndex, wobble } from "./roadShaping";
+import { straighten, roundCorners, snapToNetwork, createSnapIndex, wobble, steepWidths, type ChordTest } from "./roadShaping";
 import { createBaseNoise2D } from "../terrain/noise";
 import { deriveSeed } from "../rng";
 import { createRoadPathfinder, nodePoint } from "./roadPathfinder";
@@ -467,6 +467,7 @@ export function generateRoadNetwork(
 
   const { hubs, leaves, all } = planLinks(places);
   const pathfinder = createRoadPathfinder(sampleTerrain);
+  const groundHeight = (x: number, z: number): number => sampleTerrain(x, z).height;
   const roadNodes = new Set<number>();
   const nodeUses = new Map<number, number>();
   // Geometry of the roads already built, so a new one can be pulled onto a stretch it shares with
@@ -596,7 +597,7 @@ export function generateRoadNetwork(
     endGate: SettlementGate | null,
     startShared: boolean,
     endShared: boolean,
-    chordIsClear: (a: CellPoint, b: CellPoint) => boolean,
+    chordIsClear: ChordTest,
   ): void {
     const n = path.length;
     const shared = (i: number): boolean => {
@@ -690,7 +691,7 @@ export function generateRoadNetwork(
     weight: number,
     startGate: SettlementGate | null,
     endGate: SettlementGate | null,
-    chordIsClear: (a: CellPoint, b: CellPoint) => boolean,
+    chordIsClear: ChordTest,
   ): CellPoint[][] {
     const run = path.slice(first, last + 1);
     const startJunction = junctions.get(first);
@@ -702,8 +703,10 @@ export function generateRoadNetwork(
     // head-on into the gate. Its ends stay where they are.
     const body = run.slice(startGate ? 1 : 0, endGate ? run.length - 1 : run.length);
     const straightened = body.length >= 3 ? straighten(body, chordIsClear, pathfinder.riverLengthAlong) : body;
+    // Simplified before rounding, not after: a small arc's points lie closer to their own chord than
+    // ROAD_SIMPLIFY_TOLERANCE, so simplifying the rounded line put the sharp corner straight back.
     const line = removeLoops(
-      simplify(roundCorners([...(startGate ? [run[0]] : []), ...straightened, ...(endGate ? [run[run.length - 1]] : [])], chordIsClear), ROAD_SIMPLIFY_TOLERANCE),
+      roundCorners(simplify([...(startGate ? [run[0]] : []), ...straightened, ...(endGate ? [run[run.length - 1]] : [])], ROAD_SIMPLIFY_TOLERANCE), chordIsClear, groundHeight),
     );
     if (line.length < 2 || polylineLength(line) < LAY_MIN_RUN) return [];
 
@@ -869,8 +872,8 @@ export function generateRoadNetwork(
     // otherwise a shortcut could cut a corner through the zone next door, undoing the containment
     // the off-zone penalty bought.
     for (const key of nodes) zones.add(pathfinder.zoneOfNode(key));
-    const chordIsClear = (a: CellPoint, b: CellPoint): boolean =>
-      clearOfInteriors(a, b, interiors) && pathfinder.chordIsClear(a, b, zones);
+    const chordIsClear: ChordTest = (a, b, graded) =>
+      clearOfInteriors(a, b, interiors) && pathfinder.chordIsClear(a, b, zones, graded);
 
     // Straightened between the approach points only - a shortcut must not skip the straight run in
     // to a gate - then the gates go on the ends, and rounding turns the corner at each approach
@@ -878,7 +881,7 @@ export function generateRoadNetwork(
     const straightened = [from, ...straighten(raw, chordIsClear, pathfinder.riverLengthAlong), to];
     // removeLoops after rounding: a hairpin tight enough that its arc crosses the line is rare but
     // real - measured at 6 across the network - and it is the same fix rivers already use.
-    const snapped = snapToNetwork(roundCorners(straightened, chordIsClear), snapIndex, ROAD_SNAP_SAMPLE);
+    const snapped = snapToNetwork(roundCorners(straightened, chordIsClear, groundHeight), snapIndex, ROAD_SNAP_SAMPLE);
     // Loops removed AFTER simplification, not before: dropping points can itself cross a line over
     // itself, so the check has to see the line that will actually be drawn.
     const base = removeLoops(simplify(snapped, ROAD_SIMPLIFY_TOLERANCE));
@@ -1065,9 +1068,9 @@ export function generateRoadNetwork(
     // Onto the road itself, not the lattice node beside it.
     raw[raw.length - 1] = snapIndex.snap(targetPoint) ?? targetPoint;
     for (const key of nodes) zones.add(pathfinder.zoneOfNode(key));
-    const chordIsClear = (a: CellPoint, b: CellPoint): boolean => clearOfInteriors(a, b, avoid) && pathfinder.chordIsClear(a, b, zones);
+    const chordIsClear: ChordTest = (a, b, graded) => clearOfInteriors(a, b, avoid) && pathfinder.chordIsClear(a, b, zones, graded);
     const start = { x: entrance.x, z: entrance.z };
-    const shaped = snapToNetwork(roundCorners([start, ...straighten(raw, chordIsClear, pathfinder.riverLengthAlong)], chordIsClear), snapIndex, ROAD_SNAP_SAMPLE);
+    const shaped = snapToNetwork(roundCorners([start, ...straighten(raw, chordIsClear, pathfinder.riverLengthAlong)], chordIsClear, groundHeight), snapIndex, ROAD_SNAP_SAMPLE);
     const base = removeLoops(simplify(shaped, ROAD_SIMPLIFY_TOLERANCE));
     if (base.length < 2) {
       spursFailed++;
@@ -1118,6 +1121,8 @@ export function generateRoadNetwork(
     const roadClass = roadClassFor(stretch.traffic);
     stretch.roadClass = roadClass.id;
     stretch.widthScale = roadClass.width;
+    // Narrower up a steep hillside.
+    stretch.widths = steepWidths(stretch.points, groundHeight);
   }
 
   return {

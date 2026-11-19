@@ -1,6 +1,8 @@
-import type { Mesh, CascadedShadowGenerator, Scene } from "@babylonjs/core";
-import { appendModel, applyLightmap, createBuildingMesh, emptyGeometry, type BuildingMaterial } from "./buildingMesh";
+import type { AbstractMesh, CascadedShadowGenerator, Mesh, Scene } from "@babylonjs/core";
+import { appendModel, createBuildingMesh, emptyGeometry, setMeshFade, type BuildingMaterial } from "./buildingMesh";
 import { createLightBakePool } from "../lighting/lightBakePool";
+import { createPropMesh, propMaterialsFor, type PropGeometryCache } from "../props/propMesh";
+import { bakeRequestOf, layLightmap, splitModel, type PartsBake } from "../props/modelMeshes";
 import type { ModelEffect, ModelLight } from "./buildingTypes";
 import type { EffectGroup } from "../props/propEffects";
 // Placing buildings - their collision, floors and cellars - is the simulation's too, and lives where
@@ -9,12 +11,10 @@ import { createPlacedBuildings, placedAxes, shapeOf, type BuildingGroup, type Mo
 
 type House = Placed;
 
-/** A near mesh's vertices, as its lights are baked from them (see LIGHTS.md). */
-interface LightBakeGeometry {
-  positions: Float32Array;
-  normals: Float32Array;
-  indices: Uint32Array;
-  layers: Float32Array;
+/** A near model's vertices, as its lights are baked from them (see LIGHTS.md) - its parts', and the
+ *  meshes each part's share of the lightmap goes to (the building's, then its furniture's). */
+interface LightBakeGeometry extends PartsBake {
+  meshes: Mesh[];
 }
 
 /**
@@ -54,6 +54,30 @@ const CUT_DISTANCE = 160;
  *  out (see generateBuilding's `far`). */
 const FAR_DETAIL_DISTANCE = 220;
 
+/** A prop drawn by its size (PROP_RENDERING.md) is drawn out to this many times its size (its reach
+ *  or its height, metres) - at the default draw distance; the player's draw distance scales it, as
+ *  the graphics quality. A candle goes in a few tens of metres, a cart or a gallows far later. */
+const DISTANCE_PER_SIZE = 80;
+/** The draw distance DISTANCE_PER_SIZE is at (world.ts's DEFAULT_DRAW_DISTANCE). */
+const REFERENCE_DRAW_DISTANCE = 800;
+/** Nothing drawn by its size goes nearer than this. */
+const MIN_SIZE_CULL = 24;
+/** A prop fades out over this share of how far it is drawn - at least FADE_MIN metres. */
+const FADE_SHARE = 0.25;
+const FADE_MIN = 4;
+
+/** How far something is drawn: as far as its size says (scaled by the draw distance, never past
+ *  it) - or, with no size, to the draw distance. */
+function cullDistance(size: number | null, drawDistance: number): number {
+  if (size === null) return drawDistance;
+  return Math.min(drawDistance, Math.max(MIN_SIZE_CULL, DISTANCE_PER_SIZE * size * (drawDistance / REFERENCE_DRAW_DISTANCE)));
+}
+
+/** The fade before a prop's cull distance. */
+function fadeOf(cull: number): { start: number; end: number } {
+  return { start: cull - Math.max(FADE_MIN, cull * FADE_SHARE), end: cull };
+}
+
 /**
  * Draws the buildings of every settlement and compound - and a compound's props - each its own mesh, shown while it is within
  * the draw distance - in full near, and with its small details left out from FAR_DETAIL_DISTANCE on.
@@ -71,8 +95,27 @@ export function createBuildingRenderer(
 ): BuildingRenderer {
   /** Each house's meshes - and its lights, placed as its near mesh is, until they are baked (see
    *  LIGHTS.md): asked for the first time its near model is shown. */
-  const meshes: { near: Mesh; far: Mesh; x: number; z: number; reach: number; lights: ModelLight[] | null; bake: LightBakeGeometry | null }[] = [];
+  const meshes: {
+    /** Its near meshes: the building shader's and the props' (its furniture), or one of them. */
+    near: AbstractMesh[];
+    /** Its far meshes - made when first wanted, for a prop drawn by its size (most never are). */
+    far: AbstractMesh[] | null;
+    makeFar: () => AbstractMesh[];
+    x: number;
+    z: number;
+    reach: number;
+    /** How big it is (metres: its reach or its height), for one drawn by its size - or null, drawn
+     *  to the draw distance. */
+    size: number | null;
+    /** How far it is drawn, from its edge - the draw distance, or nearer for a prop by its size. */
+    cull: number;
+    lights: ModelLight[] | null;
+    bake: LightBakeGeometry | null;
+  }[] = [];
   const lightBakes = createLightBakePool();
+  /** The props' own materials, and each prop's geometry once by its key (see props/propMesh.ts). */
+  const propMaterials = propMaterialsFor(scene, material);
+  const propGeometry: PropGeometryCache = new Map();
   /** Every house's lights in the world's own space, for what moves among them (the player). */
   const worldLights: { x: number; z: number; reach: number; lights: ModelLight[] }[] = [];
   /** Every house's flames in the world's space, and whether its near mesh is drawn (PROP_EFFECTS.md). */
@@ -86,35 +129,55 @@ export function createBuildingRenderer(
       let lights: ModelLight[] | null = null;
       let bake: LightBakeGeometry | null = null;
       let nearEffects: ModelEffect[] = [];
-      const build = (far: boolean): { mesh: Mesh; reach: number } => {
+      const build = (far: boolean): { meshes: AbstractMesh[]; reach: number; height: number } => {
         const model = house.model(far);
+        let height = 0;
+        for (let i = 1; i < model.positions.length; i += 3) height = Math.max(height, model.positions[i]);
         if (!far) houses.push({ house, model: shapeOf(model) });
-        const geometry = emptyGeometry();
         const place = placeHouse(house, house.x, house.z);
-        appendModel(geometry, model, material.layerOf, place);
         if (!far && model.effects?.length) nearEffects = model.effects.map((e) => ({ ...e, position: place(...e.position, false) }));
-        if (!far && model.lights?.length) {
-          lights = model.lights.map((light) => ({ ...light, position: place(...light.position, false), facing: light.facing && place(...light.facing, true) }));
-          // What its lights are baked from, kept until they are: the mesh keeps no CPU copy.
-          bake = {
-            positions: Float32Array.from(geometry.positions),
-            normals: Float32Array.from(geometry.normals),
-            indices: Uint32Array.from(geometry.indices),
-            layers: Float32Array.from(geometry.layers),
-          };
-        }
         const reach = Math.hypot(model.halfWidth, model.halfDepth);
-        const mesh = createBuildingMesh(scene, `${group.key}:${n}${far ? ":far" : ""}`, geometry, material);
-        mesh.position.set(house.x, 0, house.z);
-        mesh.freezeWorldMatrix();
-        shadowGenerator.addShadowCaster(mesh, false);
-        mesh.setEnabled(false);
-        return { mesh, reach };
+        const name = `${group.key}:${n}${far ? ":far" : ""}`;
+        const lit = !far && !!model.lights?.length;
+        const shown = (mesh: AbstractMesh): AbstractMesh => {
+          shadowGenerator.addShadowCaster(mesh, false);
+          mesh.setEnabled(false);
+          return mesh;
+        };
+        // A prop by the props' own shader (PROP_RENDERING.md), an instance of its key's mesh - one
+        // with lights of its own a mesh of its own, for its lightmap (below).
+        if (house.propKey !== undefined && !lit) {
+          const mesh = createPropMesh(scene, name, model, house, propMaterials, house.propKey === null ? null : `${house.propKey}${house.bySize ? ":bySize" : ""}${far ? ":far" : ""}`, propGeometry);
+          return { meshes: [shown(mesh)], reach, height };
+        }
+        // A building (or a prop with lights): its main part by the building shader, its furniture and
+        // any face only props are made of by the props' - one lightmap for both.
+        const parts = splitModel(model, material, house.propKey !== undefined);
+        const built: Mesh[] = [];
+        if (parts.main) {
+          const geometry = emptyGeometry();
+          appendModel(geometry, parts.main, material.layerOf, place);
+          const mesh = createBuildingMesh(scene, name, geometry, material);
+          mesh.position.set(house.x, 0, house.z);
+          mesh.freezeWorldMatrix();
+          built.push(mesh);
+        }
+        if (parts.props) built.push(createPropMesh(scene, `${name}:props`, parts.props, house, propMaterials, null, propGeometry, lit) as Mesh);
+        if (lit) {
+          lights = model.lights!.map((light) => ({ ...light, position: place(...light.position, false), facing: light.facing && place(...light.facing, true) }));
+          // What its lights are baked from, kept until they are: the meshes keep no CPU copy.
+          bake = { ...bakeRequestOf([parts.main, parts.props].filter((p) => p !== null), place, material), meshes: built };
+        }
+        return { meshes: built.map(shown), reach, height };
       };
       const near = build(false);
-      const far = build(true);
-      meshes.push({ near: near.mesh, far: far.mesh, x: house.x, z: house.z, reach: near.reach, lights, bake });
-      if (nearEffects.length > 0) effectGroups.push({ effects: nearEffects.map((e) => ({ ...e, position: [e.position[0] + house.x, e.position[1], e.position[2] + house.z] })), shown: () => near.mesh.isEnabled() });
+      const size = house.bySize ? Math.max(near.reach, near.height) : null;
+      const cull = cullDistance(size, initialDrawDistance);
+      const makeFar = (): AbstractMesh[] => build(true).meshes;
+      if (size !== null) for (const mesh of near.meshes) setMeshFade(mesh, fadeOf(cull));
+      meshes.push({ near: near.meshes, far: size === null ? makeFar() : null, makeFar, x: house.x, z: house.z, reach: near.reach, size, cull, lights, bake });
+      const first = near.meshes[0];
+      if (nearEffects.length > 0 && first) effectGroups.push({ effects: nearEffects.map((e) => ({ ...e, position: [e.position[0] + house.x, e.position[1], e.position[2] + house.z] })), shown: () => first.isEnabled() });
       const placed = lights as ModelLight[] | null;
       if (placed) worldLights.push({ x: house.x, z: house.z, reach: near.reach, lights: placed.map((light) => ({ ...light, position: [light.position[0] + house.x, light.position[1], light.position[2] + house.z] })) });
     });
@@ -142,10 +205,14 @@ export function createBuildingRenderer(
     }
     for (const entry of meshes) {
       const distance = Math.hypot(entry.x - x, entry.z - z) - entry.reach;
-      const shown = distance <= drawDistance;
+      const shown = distance <= entry.cull;
       const near = distance <= FAR_DETAIL_DISTANCE;
-      entry.near.setEnabled(shown && near);
-      entry.far.setEnabled(shown && !near);
+      for (const mesh of entry.near) mesh.setEnabled(shown && near);
+      if (shown && !near && !entry.far) {
+        entry.far = entry.makeFar();
+        if (entry.size !== null) for (const mesh of entry.far) setMeshFade(mesh, fadeOf(entry.cull));
+      }
+      if (entry.far) for (const mesh of entry.far) mesh.setEnabled(shown && !near);
       if (shown && near && entry.lights) bakeLights(entry);
     }
   });
@@ -154,24 +221,17 @@ export function createBuildingRenderer(
    *  they come back - the nearest house first. */
   function bakeLights(entry: (typeof meshes)[number]): void {
     const lights = entry.lights!;
-    const geometry = entry.bake!;
+    const { meshes: lit, counts, positions, normals, indices, layers } = entry.bake!;
     entry.lights = null;
     entry.bake = null;
-    const mesh = entry.near;
-    const request = {
-      ...geometry,
-      casts: material.castsByLayer,
-      lights,
-    };
+    const request = { positions, normals, indices, layers, casts: material.castsByLayer, lights };
     const priority = (): number => {
       const camera = scene.activeCamera;
       return camera ? Math.hypot(entry.x - camera.position.x, entry.z - camera.position.z) : 0;
     };
     lightBakes
       .bake(request, priority)
-      .then((baked) => {
-        if (!mesh.isDisposed()) applyLightmap(scene, mesh, baked);
-      })
+      .then((baked) => layLightmap(scene, lit, counts, baked))
       .catch((error: unknown) => console.warn("A house's lights failed to bake:", error));
   }
 
@@ -182,6 +242,11 @@ export function createBuildingRenderer(
     dispose: () => lightBakes.dispose(),
     setDrawDistance(distance) {
       drawDistance = distance;
+      for (const entry of meshes) {
+        entry.cull = cullDistance(entry.size, drawDistance);
+        if (entry.size === null) continue;
+        for (const mesh of [...entry.near, ...(entry.far ?? [])]) setMeshFade(mesh, fadeOf(entry.cull));
+      }
     },
     lightsNear(x, y, z) {
       const found: ModelLight[] = [];

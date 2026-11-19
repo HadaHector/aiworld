@@ -1,0 +1,2 @@
+// A consumable: health back over a few seconds (skills/useBandage.json5).
+{ name: "Bandage", icon: "item-bandage", kind: "food", rarity: "common", stack: 20, use: { skill: "useBandage", consume: true }, value: 4 }

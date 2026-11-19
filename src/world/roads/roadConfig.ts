@@ -257,6 +257,31 @@ export const ROAD_SNAP_SAMPLE = 12;
 
 export const ROAD_CORNER_RADIUS = 45;
 export const ROAD_CORNER_SEGMENTS = 6;
+// A corner whose arc at the full radius is not buildable (steep ground) is tried again at these
+// shares of it, down to ROAD_CORNER_MIN_RADIUS, and failing all of those gets an arc of
+// ROAD_CORNER_FREE_RADIUS unchecked: its middle strays at most half that from the corner, inside
+// ROAD_HALF_WIDTH, so it stands on ground the road levels anyway. No corner is left sharp.
+export const ROAD_CORNER_RADIUS_SHARES = [1, 0.7, 0.5, 0.35, 0.25];
+export const ROAD_CORNER_MIN_RADIUS = 6;
+export const ROAD_CORNER_FREE_RADIUS = 14;
+// A corner whose legs meet at less than this (radians) is a switchback (see roadShaping.ts's
+// `switchback`): the road swings out round it, its legs held this far apart, centreline to
+// centreline - tried at each in turn until one is buildable. 28 leaves 12 units of ground between
+// two 16-unit roads. It leaves a leg at most this share of the leg's length from the corner, so two
+// switchbacks at the ends of one leg cannot meet.
+export const ROAD_SWITCHBACK_ANGLE = Math.PI / 2;
+export const ROAD_SWITCHBACK_APART = [28, 22];
+export const ROAD_SWITCHBACK_REACH_SHARE = 0.45;
+export const ROAD_SWITCHBACK_SEGMENTS = 6;
+
+// A road narrows where it climbs a steep hillside - a mountain road is not as wide as one across a
+// meadow, and a narrower one needs less cutting and less room to turn. Down to ROAD_STEEP_WIDTH of
+// its width as the ground's slope goes from ..._FROM to ..._TO, averaged over ..._SMOOTH metres
+// either way along it so it narrows and widens gradually. A switchback's spacing narrows with it.
+export const ROAD_STEEP_NARROW_FROM = 0.25;
+export const ROAD_STEEP_NARROW_TO = 0.6;
+export const ROAD_STEEP_WIDTH = 0.5;
+export const ROAD_STEEP_WIDTH_SMOOTH = 25;
 export const ROAD_SIMPLIFY_TOLERANCE = 1.5;
 
 // A small sideways wander on the straight parts, so a road reads as trodden rather than surveyed.

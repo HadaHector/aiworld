@@ -37,6 +37,8 @@ export class ModelBuilder {
   indices: number[] = [];
   lights: ModelLight[] = [];
   effects: ModelEffect[] = [];
+  /** Its furniture, laid apart (see appendFurniture) - made with the first piece. */
+  furniture: ModelBuilder | null = null;
   minX = Infinity;
   maxX = -Infinity;
   minZ = Infinity;
@@ -230,6 +232,26 @@ export class ModelBuilder {
     for (const effect of model.effects ?? []) this.effects.push({ ...effect, position: place(...effect.position) });
   }
 
+  /**
+   * A piece of furniture laid into this model, as append lays one - but kept apart, as its
+   * `furniture` (PROP_RENDERING.md, step 3): drawn by the props' shader, baked with it. Its lights
+   * and effects are this model's, as an appended one's are.
+   */
+  appendFurniture(model: BuildingModel, x: number, y: number, z: number, frontX: number, frontZ: number): void {
+    const apart = (this.furniture ??= new ModelBuilder(this.measure));
+    apart.append(model, x, y, z, frontX, frontZ);
+    this.minX = Math.min(this.minX, apart.minX);
+    this.maxX = Math.max(this.maxX, apart.maxX);
+    this.minZ = Math.min(this.minZ, apart.minZ);
+    this.maxZ = Math.max(this.maxZ, apart.maxZ);
+    this.maxY = Math.max(this.maxY, apart.maxY);
+    // Its lights and effects are the model's: the furniture keeps only its geometry.
+    this.lights.push(...apart.lights);
+    this.effects.push(...apart.effects);
+    apart.lights = [];
+    apart.effects = [];
+  }
+
   finish(door: { x: number; z: number }, tiles?: BuildingModel["tiles"]): BuildingModel {
     return {
       positions: this.positions,
@@ -247,6 +269,7 @@ export class ModelBuilder {
       tiles,
       ...(this.lights.length ? { lights: this.lights } : {}),
       ...(this.effects.length ? { effects: this.effects } : {}),
+      ...(this.furniture && this.furniture.indices.length ? { furniture: this.furniture.finish(door) } : {}),
     };
   }
 }

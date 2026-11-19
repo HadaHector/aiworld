@@ -45,6 +45,13 @@ export interface BuildingMaterialDef {
   /** The colour it glows as the day fails, as if a lamp burned behind it - itself by day, the lamp's
    *  by night - or none. */
   lamp: Rgb | null;
+  /** Only props are made of it (PROP_RENDERING.md, step 4): it is not one of the buildings' array of
+   *  textures, but a texture of its own, drawn by the props' shader - so it costs the buildings
+   *  nothing. A building or room made of it would draw it plain. */
+  propsOnly: boolean;
+  /** For one only props are made of: its texture's side in pixels (a power of two, 64-1024) - a
+   *  candle's wax needs far less than a barn's boards. */
+  textureSize: number;
 }
 
 /** How one face of a building is drawn: a building material (by id - null for plain colour), and a
@@ -699,6 +706,10 @@ export interface BuildingModel {
   lights?: ModelLight[];
   /** The particle effects its props' flames carry (see PROP_EFFECTS.md) - built with the near model only. */
   effects?: ModelEffect[];
+  /** Its furniture - the props laid into it (a house's, a dungeon part's fixtures) - in its own space,
+   *  apart from it: drawn by the props' shader, its light baked with it (PROP_RENDERING.md, step 3).
+   *  Its lights and effects are the model's. Built with the near model only. */
+  furniture?: BuildingModel;
 }
 
 /**

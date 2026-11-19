@@ -1,0 +1,16 @@
+// Eating roast meat: a lot of health back over a while; better than bread.
+{
+  name: "Eat Roast Meat",
+  cues: { applied: "eat" },
+  target: "self",
+  hostOn: "target",
+  display: "buff",
+  states: {
+    eating: {
+      enter: [{ do: "animation", name: "eat" }],
+      length: 12,
+      period: 3,
+      tick: [{ do: "heal", amount: 22 }],
+    },
+  },
+}

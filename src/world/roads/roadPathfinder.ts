@@ -23,6 +23,10 @@ import {
  *  sampled along its own length. */
 const FINE_LATTICE = ROAD_GRID / 4;
 const FINE_STEP = ROAD_GRID / 2;
+// Half a step is judged from one sample of ground that is itself only roughly placed. An ordinary
+// link holds it to the same limit as a whole step; a rescue or access link - there because nothing
+// better was found, and an indirect road beats none - may cross a ridge this much steeper.
+const ROAD_RESCUE_MIDDLE_GRADE = ROAD_MAX_GRADE * 1.5;
 
 const KEY_OFFSET = 1 << 15;
 const KEY_STRIDE = 1 << 16;
@@ -155,7 +159,7 @@ export interface RoadPathfinder {
    * is the point - a straightened line is validated exactly as strictly as the line it replaces,
    * unlike a smoothing pass, which moves the road onto ground nobody ever looked at.
    */
-  chordIsClear(from: CellPoint, to: CellPoint, zones: Set<number>): boolean;
+  chordIsClear(from: CellPoint, to: CellPoint, zones: Set<number>, graded?: boolean): boolean;
   /** How much of a straight run lies inside a river channel. Straightening uses it to refuse a
    *  chord that would spend longer in the water than the path it replaces. */
   riverLengthAlong(from: CellPoint, to: CellPoint): number;
@@ -206,9 +210,15 @@ export function createRoadPathfinder(sampleTerrain: TerrainSampler): RoadPathfin
    * Inside a river channel the grade limit is suspended entirely: banks are cut at exactly
    * ROAD_MAX_GRADE, so enforcing it would make every river in the world impassable.
    */
-  function stepCost(from: GroundNode, to: GroundNode, distance: number, zones: Set<number>, roadFactor: number): number {
-    const grade = Math.abs(to.height - from.height) / distance;
-    if (!to.inRiver && grade > ROAD_MAX_GRADE) return Infinity;
+  function stepCost(from: GroundNode, to: GroundNode, distance: number, zones: Set<number>, roadFactor: number, middle: GroundNode, middleLimit: number): number {
+    // The ground half way along the step too: nodes are ROAD_GRID apart, and a ridge narrower than
+    // that (a boundary hill's, say) can stand between two nodes at the same height and never be
+    // seen from either - the road then climbs it and drops down the other side as steeply as it
+    // likes (seen at seed 1430684961, 998,368 to 1050,315: 25 units up and 33 down in 30).
+    const ends = Math.abs(to.height - from.height) / distance;
+    const halves = Math.max(Math.abs(middle.height - from.height), Math.abs(to.height - middle.height)) / (distance / 2);
+    const grade = middle.inRiver ? ends : Math.max(ends, halves);
+    if (!to.inRiver && (ends > ROAD_MAX_GRADE || halves > middleLimit)) return Infinity;
 
     const excess = Math.max(0, grade - ROAD_EASY_GRADE);
     let multiplier = 1 + ROAD_GRADE_WEIGHT * (excess / ROAD_EASY_GRADE) ** 2;
@@ -294,7 +304,32 @@ export function createRoadPathfinder(sampleTerrain: TerrainSampler): RoadPathfin
     return inside;
   }
 
-  function chordIsClear(from: CellPoint, to: CellPoint, zones: Set<number>): boolean {
+  /**
+   * A short chord - a piece of a rounded corner's arc - judged on the ground itself, point by point.
+   * The lattice cells it touches are bigger than it is and include neighbours it never goes near,
+   * and the fine cache gives every point in a 13-unit cell the height of whichever was asked first,
+   * so on a hillside either one calls an arc a cliff and leaves the corner sharp.
+   */
+  function shortChordIsClear(from: CellPoint, to: CellPoint, zones: Set<number>, graded: boolean): boolean {
+    const length = Math.hypot(to.x - from.x, to.z - from.z);
+    const steps = Math.max(1, Math.ceil(length / 3));
+    let previous: { height: number; inRiver: boolean } | null = null;
+    for (let i = 0; i <= steps; i++) {
+      const u = i / steps;
+      const sample = sampleTerrain(from.x + (to.x - from.x) * u, from.z + (to.z - from.z) * u);
+      const inRiver = sample.riverGap < ROAD_RIVER_CORRIDOR;
+      if (!sample.isLand || sample.lakeFactor > ROAD_MAX_LAKE_FACTOR || (sample.height < ROAD_MIN_HEIGHT && !inRiver)) return false;
+      if ((i === 0 || i === steps) && !zones.has(sample.primaryAreaId)) return false;
+      if (!graded && previous && !inRiver && !previous.inRiver && Math.abs(sample.height - previous.height) / (length / steps) > ROAD_MAX_GRADE) return false;
+      previous = { height: sample.height, inRiver };
+    }
+    return true;
+  }
+
+  function chordIsClear(from: CellPoint, to: CellPoint, zones: Set<number>, graded = false): boolean {
+    // A graded run (a switchback) is judged on everything but its slope - the caller judges that
+    // over the whole run - and only short pieces of one are ever asked about.
+    if (graded || Math.hypot(to.x - from.x, to.z - from.z) < FINE_STEP) return shortChordIsClear(from, to, zones, graded);
     const cells = cellsAlong(from, to);
     let previous: GroundNode | null = null;
     let previousPoint: CellPoint | null = null;
@@ -327,6 +362,7 @@ export function createRoadPathfinder(sampleTerrain: TerrainSampler): RoadPathfin
     // The search is confined to an ellipse with the endpoints as foci: any node whose detour via
     // it exceeds the budget cannot be on an acceptable route, so it is never expanded. This is
     // what bounds the search, far more than the expansion cap below.
+    const middleLimit = detourFactor === undefined ? ROAD_MAX_GRADE : ROAD_RESCUE_MIDDLE_GRADE;
     const detourBudget = straight * (detourFactor ?? ROAD_MAX_DETOUR_FACTOR);
 
     const cameFrom = new Map<number, number>();
@@ -374,7 +410,9 @@ export function createRoadPathfinder(sampleTerrain: TerrainSampler): RoadPathfin
         // Both ends, not the destination alone - see ROAD_REUSE_DISCOUNT.
         const onRoad = roadNodes.has(current) && roadNodes.has(nextKey);
         const alongside = !onRoad && besideRoad(current, roadNodes) && besideRoad(nextKey, roadNodes);
-        const step = stepCost(fromGround, toGround, distance, zones, onRoad ? ROAD_REUSE_DISCOUNT : alongside ? ROAD_ALONGSIDE_PENALTY : 1);
+        const from = nodePoint(current);
+        const middle = fineGroundAt((from.x + next.x) / 2, (from.z + next.z) / 2);
+        const step = stepCost(fromGround, toGround, distance, zones, onRoad ? ROAD_REUSE_DISCOUNT : alongside ? ROAD_ALONGSIDE_PENALTY : 1, middle, middleLimit);
         if (!Number.isFinite(step)) continue;
 
         const candidate = costSoFar + step;

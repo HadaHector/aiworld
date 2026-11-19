@@ -1,0 +1,15 @@
+// Drinking a health potion (an item use, see ITEMS.md, Abilities): a burst of health at once.
+{
+  name: "Drink Health Potion",
+  cues: { applied: "eat" },
+  target: "self",
+  hostOn: "target",
+  cooldown: 30,
+  display: "buff",
+  states: {
+    drinking: {
+      enter: [{ do: "animation", name: "eat" }, { do: "heal", amount: 70 }],
+      length: 1,
+    },
+  },
+}

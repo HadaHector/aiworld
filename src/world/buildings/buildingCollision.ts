@@ -32,6 +32,13 @@ export interface Placed {
   /** Which way its up points, where it is tilted - lying on a slope - rather than standing upright. */
   up?: [number, number, number];
   model(far: boolean): BuildingModel;
+  /** Drawn only as far as its size says, fading out before it goes - a prop (PROP_RENDERING.md) -
+   *  rather than out to the draw distance, as a house is. */
+  bySize?: boolean;
+  /** Drawn by the props' own shader (PROP_RENDERING.md) - a prop, a wall, a fence, a bridge - not
+   *  the buildings', where given: what it is (its prop and variant) - everything with the same key
+   *  has the same model and may share its geometry - or null, made for its own place (a wall run). */
+  propKey?: string | null;
 }
 
 /** Things set down that come into the collision world together - a settlement's houses, a

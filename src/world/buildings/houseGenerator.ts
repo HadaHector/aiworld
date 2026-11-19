@@ -1071,14 +1071,15 @@ export function buildHouse(spec: HouseSpec, rng: () => number, far = false, meas
       return null;
     };
     buildInterior({ b, colliders: colliders ?? undefined, layout: interior, levels: levels.map(({ kind, index, floor, top }) => ({ kind, index, floor, top })), X, Z, tile, inside: (i, j, k) => (k < 0 ? inside(i, j) : enclosed(i, j, k)), exits, windows, roofOver });
-    // And their furniture (see furnish.ts), each piece laid into the house's own model - from a
+    // And their furniture (see furnish.ts), each piece laid into the house's model, apart (its
+    // `furniture`, drawn by the props' shader: PROP_RENDERING.md) - from a
     // seed of the layout's own, so the house's rolls are untouched.
     if (!measure) {
       const furnishSeed = layoutSeed(interior, tile);
       furnished = furnishInterior({ layout: interior, levels: levels.map(({ kind, index, floor, top }) => ({ kind, index, floor, top })), X, Z, tile, exits, windows, chimneys, roofOver, seed: furnishSeed, rng: mulberry32(furnishSeed) });
       for (const piece of furnished.pieces) {
         const model = generateProp(piece.prop, furnishSeed, piece.variant);
-        b.append(model, piece.x, piece.y, piece.z, piece.frontX, piece.frontZ);
+        b.appendFurniture(model, piece.x, piece.y, piece.z, piece.frontX, piece.frontZ);
         if (colliders && model.colliders) colliders.append(model.colliders, piece.x, piece.y, piece.z, piece.frontX, piece.frontZ);
       }
     }

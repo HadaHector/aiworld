@@ -115,6 +115,7 @@ interface CommandDef {
 |---|---|---|---|
 | `/help [command]` | client | no | Lists commands with usage; with a name, its usage and summary |
 | `/clear` | client | no | Empties the shown channels |
+| `/clearmap` | client | no | Forgets the map's kept tiles (memory and IndexedDB), so the minimap and world map are drawn again - after the map's drawing or the world's generation changed |
 | `/say <text>` | server | no | Same as plain text |
 | `/world` | client + server | no | Seed, config, packs, dimension, world size, zone, biome, weather, settlement, creature level band at the player |
 | `/give <item> [count]` | server | yes | Item to the bag (uses `debugItem` logic) |

@@ -21,6 +21,16 @@ export function createThirdPersonCamera(scene: Scene, canvas: HTMLCanvasElement,
   camera.panningSensibility = 0; // disable panning, orbit only
 
   camera.attachControl(canvas, true);
+  // Both mouse buttons turn the camera (a click without a drag still targets or interacts -
+  // game/session.ts). Babylon's input map has the left button turn it and the right pan, which is off
+  // here, so the right button is set to turn too.
+  camera.movement.input.setInteraction("pointer", { button: 2 }, "rotate");
+  // No inertia: the camera stops the moment the mouse does, instead of coasting on (Babylon's default
+  // is 0.9 for turning and zooming).
+  camera.inertia = 0;
+  camera.movement.rotationInertia = 0;
+  camera.movement.zoomInertia = 0;
+  camera.movement.panInertia = 0;
 
   return camera;
 }

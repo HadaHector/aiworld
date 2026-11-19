@@ -3,6 +3,9 @@
 // Greyer and more lichened than rubbleStone, as stone out in the weather is.
 {
   name: "Drystone",
+  // Only props are made of it: a texture of its own, not a layer of the buildings' array
+  // (PROP_RENDERING.md).
+  propsOnly: true,
   // Metres one repeat covers: ten courses up it, each some 0.4 m tall and its stones near a metre
   // long - twice life size, so they read from afar, and still a few courses to a wall's height.
   size: 4,

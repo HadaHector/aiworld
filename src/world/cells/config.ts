@@ -1,7 +1,6 @@
-// 1 world unit = 1 meter (the character capsule is 1.8 units tall). CELL_SPACING is chosen so
-// that CELLS_PER_AREA * CELL_SPACING^2 ~= 10 km^2 per zone, which combined with the full game's
-// 20-30 zones lands a world in the "hundreds of km^2" target range.
-export const CELL_SPACING = 1000; // world units, nominal pre-relaxation point spacing
+// 1 world unit = 1 meter (the character capsule is 1.8 units tall). CELL_SPACING sets how big a zone
+// is: CELLS_PER_AREA * CELL_SPACING^2 ~= 2.5 km^2 per zone at 500 (10 km^2 at the original 1000).
+export const CELL_SPACING = 500; // world units, nominal pre-relaxation point spacing (was 1000; halved so zones read smaller)
 export const LLOYD_RELAX_ITERATIONS = 1;
 export const CELL_BOUNDS_MARGIN = CELL_SPACING * 2;
 

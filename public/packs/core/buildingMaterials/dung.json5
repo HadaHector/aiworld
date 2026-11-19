@@ -3,6 +3,9 @@
 // the sawdust earth's splinters are.
 {
   name: "Dung",
+  // Only props are made of it: a texture of its own, not a layer of the buildings' array
+  // (PROP_RENDERING.md).
+  propsOnly: true,
   // Metres one repeat covers: straws some 15-35 cm long, twice life size.
   size: 3,
   shine: 0.12,

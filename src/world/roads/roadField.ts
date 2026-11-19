@@ -8,6 +8,9 @@ export interface RoadLine {
   /** How wide this line is next to a countryside road (1): its level ground, painted surface and
    *  verge all scale with it. Streets are narrower. */
   widthScale?: number;
+  /** A share of that width at each point, where it changes along the line - narrower where a road
+   *  climbs a steep hillside (roadShaping.ts's steepWidths). All 1 if left out. */
+  widths?: number[];
   /** False for a line that joins another at its ends (a road at a gate, a street at a junction),
    *  whose grading must not fade out there. */
   taperEnds?: boolean;
@@ -56,8 +59,9 @@ interface Segment {
   a0: number;
   a1: number;
   total: number;
-  /** 1 / widthScale: multiplies true distance into countryside-road units. */
-  inverseWidth: number;
+  /** widthScale at the segment's two ends: true distance over it is in countryside-road units. */
+  w0: number;
+  w1: number;
   taperEnds: boolean;
   profile: RoadProfile | null;
   /** Wholly on a bridge. */
@@ -134,7 +138,8 @@ export function createRoadField(links: RoadLine[], searchRadius: number, endTape
         a0: travelled,
         a1: travelled + lengths[i],
         total,
-        inverseWidth: 1 / (link.widthScale ?? 1),
+        w0: (link.widthScale ?? 1) * (link.widths?.[i] ?? 1),
+        w1: (link.widthScale ?? 1) * (link.widths?.[i + 1] ?? 1),
         taperEnds: link.taperEnds ?? true,
         profile: link.roadClass ? (ROAD_CLASSES.find((c) => c.id === link.roadClass)?.profile ?? null) : null,
         bridged: (link.bridges ?? []).some(([s0, s1]) => travelled >= s0 - 1e-3 && travelled + lengths[i] <= s1 + 1e-3),
@@ -176,7 +181,8 @@ export function createRoadField(links: RoadLine[], searchRadius: number, endTape
       const oz = pz - u * segment.dz;
       // Nearest in scaled units, so a wide road beside a narrow street still owns the ground its
       // own width covers.
-      const distSq = (ox * ox + oz * oz) * segment.inverseWidth * segment.inverseWidth;
+      const width = segment.w0 + (segment.w1 - segment.w0) * u;
+      const distSq = (ox * ox + oz * oz) / (width * width);
       if (distSq < bestDistSq) {
         bestDistSq = distSq;
         best = segment;

@@ -1,0 +1,70 @@
+
+{
+  name: "Sheep fold",
+  type: "compound",
+  compound: {
+
+    site: { grade: [0, 0.2], cover: [0.5, 0.9], nearWater: 300 },
+
+    yard: { shape: "polygon", points: [4, 6], radius: [8, 12] },
+
+    pads: { slope: 0.1, blend: [1.5, 10] },
+
+    arrangement: "ring",
+
+    trails: [],
+
+    buildings: [
+      { building: "sheepfoldCottage", count: [1, 2], required: true },
+      { building: "barn", count: [1, 1], chance: 0.8 },
+    ],
+
+    boundary: {
+      wall: ["drystoneWall", "railFence"],
+      openings: [
+        { at: "road", gate: "fieldGate" },
+        { at: "anywhere", gate: "wicketGate", count: [0, 1], chance: 0.5 },
+        { at: "anywhere", breach: [2.2, 3], count: [0, 2] },
+      ],
+    },
+    // Its props, set down where they fit, each kind in turn: in the yard, decks of logs waiting to be hauled, logs dragged in and lying about, and
+    // the saw spot; log stacks round its edge; a wood corner by the cookhouse (or any building), a
+    // grindstone for the axes by the tool shed, oats and a trough for the oxen by the stable, store
+    // piles by the buildings; and felled logs along the skid trail.
+    props: [
+      { prop: "logStack", count: [1, 2], at: "yardEdge", chance: 0.7 },
+      { prop: "woodTrough", count: [2, 4], at: "yardEdge" },
+      { group: "storePile", count: [1, 2], at: "byBuilding" },
+      { group: "fodderPile", count: [1, 2], at: "byBuilding" },
+    ],
+  },
+
+  clearing: [20, 30],
+
+  ground: {
+    material: "track",
+    weight: {
+      noises: [{ name: "yardEdge", type: "fbm", octaves: 2, frequency: 0.08, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
+      steps: [
+        { output: "gapRaw", op: "input", name: "featureGap" },
+        { output: "edgeRaw", op: "sample", noise: "yardEdge" },
+        { output: "edge", op: "scale", input: "edgeRaw", factor: 2 },
+        { output: "gap", op: "add", a: "gapRaw", b: "edge" },
+        { output: "raw", op: "remap", input: "gap", inMin: 10, inMax: 5, outMin: 0, outMax: 1 },
+        { output: "result", op: "clamp", input: "raw", min: 0, max: 1 },
+      ],
+    },
+  },
+  // Its place in the road network (see settlement.json5): about a hamlet's worth, one road at the
+  // least and two at most, to a settlement by preference.
+  road: { importance: 1, links: [1, 2], wants: ["settlement"], maxLength: 2500 },
+  // What the logging camp can be in a quest (QUESTS.md, *Places*): timber, the woods, hard work.
+  quest: {
+    tags: ["work", "husbandry", "remote"],
+    objects: [
+
+    ],
+    people: ["shepard"],
+    text: "{name}",
+  },
+}

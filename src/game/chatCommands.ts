@@ -27,6 +27,8 @@ export interface ChatCommandHost {
   setTime: (hour: number) => boolean;
   /** Holds every zone at one weather, or lets go (null); false when there is no such weather. */
   setWeather: (id: string | null) => boolean;
+  /** Forgets the map's kept tiles so they are drawn again. */
+  clearMapTiles: () => Promise<void>;
   /** Translates a template of the packs' (usage and summary lines). */
   translate: (text: string) => string;
 }
@@ -64,6 +66,13 @@ export function createChatCommands(host: ChatCommandHost): {
     },
   });
   add({ id: "clear", usage: "", summary: "Empties the chat window.", args: [], run: () => host.clear() });
+  add({
+    id: "clearmap",
+    usage: "",
+    summary: "Forgets the map's kept tiles, so the minimap and world map are drawn again.",
+    args: [],
+    run: () => void host.clearMapTiles().then(() => host.system("The map's tiles are cleared; they are being drawn again.")),
+  });
   add({
     id: "time",
     usage: "<hour 0-24>",

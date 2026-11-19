@@ -1,0 +1,15 @@
+// Drinking a mana potion: mana back at once.
+{
+  name: "Drink Mana Potion",
+  cues: { applied: "eat" },
+  target: "self",
+  hostOn: "target",
+  cooldown: 30,
+  display: "buff",
+  states: {
+    drinking: {
+      enter: [{ do: "animation", name: "eat" }, { do: "resource", group: "host", resource: "mana", amount: 60 }],
+      length: 1,
+    },
+  },
+}

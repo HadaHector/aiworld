@@ -1,0 +1,2 @@
+// A crafting material: a smelted bar of iron.
+{ name: "Iron Ingot", icon: "item-iron-ingot", kind: "material", rarity: "common", stack: 20, value: 12 }

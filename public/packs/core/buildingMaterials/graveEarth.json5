@@ -2,6 +2,9 @@
 // greener where it has had longer. For grave mounds and dug earth.
 {
   name: "Grave Earth",
+  // Only props are made of it: a texture of its own, not a layer of the buildings' array
+  // (PROP_RENDERING.md).
+  propsOnly: true,
   // Metres one repeat covers: crumbs and tufts twice life size.
   size: 3,
   shine: 0.05,

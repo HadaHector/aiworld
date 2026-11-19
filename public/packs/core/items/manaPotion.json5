@@ -1,0 +1,2 @@
+// A consumable: mana back at once (skills/drinkManaPotion.json5).
+{ name: "Mana Potion", icon: "item-potion-mana", kind: "food", rarity: "common", stack: 10, use: { skill: "drinkManaPotion", consume: true }, value: 18 }

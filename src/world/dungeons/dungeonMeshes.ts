@@ -1,8 +1,12 @@
-// A kit dungeon drawn (DUNGEONS.md, *Building it*): a mesh per part in the building shader, each
-// part's light baked on its own in the light-bake workers - its own torches and its neighbours'
-// that reach into it, against its own faces, which close it in but for its doorways.
+// A kit dungeon drawn (DUNGEONS.md, *Building it*): a mesh per part in the building shader - and its
+// fixtures (candles, urns, the altar) in the props' shader (PROP_RENDERING.md, step 3) - each part's
+// light baked on its own in the light-bake workers, fixtures and all - its own torches and its
+// neighbours' that reach into it, against its own faces, which close it in but for its doorways.
 import { Mesh, Vector3, type Scene } from "@babylonjs/core";
-import { appendModel, applyLightmap, createBuildingMesh, emptyGeometry, type BuildingMaterial } from "../buildings/buildingMesh";
+import { appendModel, createBuildingMesh, emptyGeometry, type BuildingMaterial } from "../buildings/buildingMesh";
+import type { BuildingModel } from "../buildings/buildingTypes";
+import { createPropMesh, propMaterialsFor } from "../props/propMesh";
+import { bakeRequestOf, layLightmap, splitModel } from "../props/modelMeshes";
 import type { ModelEffect, ModelLight } from "../buildings/buildingTypes";
 import type { PropDef } from "../props/propTypes";
 import { createLightBakePool } from "../lighting/lightBakePool";
@@ -59,38 +63,47 @@ export function createDungeonMeshes(
   };
   const reached = layout.parts.map((p) => lightsReaching(p, all));
   const total = reached.filter((r) => r.length > 0).length;
+  const propMaterials = propMaterialsFor(scene, material);
+  const geometryCache = new Map();
+  const same = (x: number, y: number, z: number): [number, number, number] => [x, y, z];
+  /** A part's meshes under the root: its main part by the building shader, its fixtures (and any
+   *  face only props are made of) by the props' - `lit` by a lightmap to come. */
+  const partMeshes = (name: string, model: BuildingModel, lit: boolean): { meshes: Mesh[]; parts: BuildingModel[] } => {
+    const { main, props } = splitModel(model, material);
+    const meshes: Mesh[] = [];
+    if (main) {
+      const geometry = emptyGeometry();
+      appendModel(geometry, main, material.layerOf, same);
+      triangles += geometry.indices.length / 3;
+      meshes.push(createBuildingMesh(scene, name, geometry, material));
+    }
+    if (props) {
+      triangles += props.indices.length / 3;
+      const mesh = createPropMesh(scene, `${name}:props`, props, { x: 0, y: 0, z: 0, frontX: 0, frontZ: 1 }, propMaterials, null, geometryCache, lit) as Mesh;
+      mesh.unfreezeWorldMatrix();
+      meshes.push(mesh);
+    }
+    for (const mesh of meshes) {
+      mesh.parent = root;
+      mesh.computeWorldMatrix(true);
+      mesh.freezeWorldMatrix();
+    }
+    return { meshes, parts: [main, props].filter((p): p is BuildingModel => p !== null) };
+  };
   // A part's outside (an entrance's house): in sunlight with the world, not baked.
   models.forEach(({ exterior }, i) => {
     if (!exterior || exterior.indices.length === 0) return;
-    const geometry = emptyGeometry();
-    appendModel(geometry, exterior, material.layerOf, (x, y, z) => [x, y, z]);
-    triangles += geometry.indices.length / 3;
-    const mesh = createBuildingMesh(scene, `dungeonOutside:${i}:${layout.parts[i].part.id}`, geometry, material);
-    mesh.parent = root;
-    mesh.computeWorldMatrix(true);
-    mesh.freezeWorldMatrix();
-    meshes.push(mesh);
+    meshes.push(...partMeshes(`dungeonOutside:${i}:${layout.parts[i].part.id}`, exterior, false).meshes);
   });
   models.forEach(({ model }, i) => {
-    if (model.indices.length === 0) return;
-    const geometry = emptyGeometry();
-    appendModel(geometry, model, material.layerOf, (x, y, z) => [x, y, z]);
-    triangles += geometry.indices.length / 3;
-    // What the bake takes, copied before the mesh lets go of its CPU copy.
-    const request = {
-      positions: new Float32Array(geometry.positions),
-      normals: new Float32Array(geometry.normals),
-      indices: new Uint32Array(geometry.indices),
-      layers: new Float32Array(geometry.layers),
-      casts: material.castsByLayer,
-      lights: reached[i],
-    };
-    const mesh = createBuildingMesh(scene, `dungeonPart:${i}:${layout.parts[i].part.id}`, geometry, material);
-    mesh.parent = root;
-    mesh.computeWorldMatrix(true);
-    mesh.freezeWorldMatrix();
-    meshes.push(mesh);
-    if (reached[i].length === 0) return;
+    if (model.indices.length === 0 && !model.furniture) return;
+    const lit = reached[i].length > 0;
+    const part = partMeshes(`dungeonPart:${i}:${layout.parts[i].part.id}`, model, lit);
+    meshes.push(...part.meshes);
+    if (!lit) return;
+    // What the bake takes: the part and its fixtures, as one.
+    const { counts, ...geometry } = bakeRequestOf(part.parts, (x, y, z) => [x, y, z], material);
+    const request = { ...geometry, casts: material.castsByLayer, lights: reached[i] };
     const centre = centreOf(i);
     const priority = (): number => {
       const p = near();
@@ -98,7 +111,7 @@ export function createDungeonMeshes(
     };
     bakes.push(
       pool.bake(request, priority).then((baked) => {
-        if (!mesh.isDisposed()) applyLightmap(scene, mesh, baked);
+        layLightmap(scene, part.meshes, counts, baked);
         if (baked.cached) cached++;
         onBaked?.(++done, total);
       }),

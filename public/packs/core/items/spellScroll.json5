@@ -1,0 +1,2 @@
+// A scroll of magic: kept for teaching spells later; sold for now.
+{ name: "Spell Scroll", icon: "item-spell-scroll", kind: "book", rarity: "uncommon", stack: 5, value: 25 }

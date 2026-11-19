@@ -26,7 +26,8 @@ import type { BuildingModel } from "../world/buildings/buildingTypes";
 import { DEFAULT_PAD_BLEND, type Pad } from "../world/settlements/padField";
 import { offsetPolygon } from "../world/features/yardShape";
 import { placedAxes } from "../world/buildings/buildingCollision";
-import { appendModel, bakeBuildingTextures, bakeModelLight, createBuildingMaterial, createBuildingMesh, emptyGeometry, type BuildingMaterial } from "../world/buildings/buildingMesh";
+import { bakeBuildingTextures, createBuildingMaterial, type BuildingMaterial } from "../world/buildings/buildingMesh";
+import { drawModelNow } from "../world/props/modelMeshes";
 
 /**
  * Collision pieces drawn over what they stand for: each a see-through orange hull with its edges -
@@ -462,12 +463,10 @@ export async function createStage(engine: Engine, canvas: HTMLCanvasElement, opt
         // Its front (+z) turned to (frontX, frontZ), its +x to (frontZ, -frontX), tipped to its up -
         // as in the world.
         const a = placedAxes(item);
-        const geometry = emptyGeometry();
-        const lightmap = bakeModelLight(item.model, buildingMaterial);
-        appendModel(geometry, item.model, buildingMaterial.layerOf, (px, py, pz) => [a.x.x * px + a.y.x * py + a.z.x * pz, a.x.y * px + a.y.y * py + a.z.y * pz, a.x.z * px + a.y.z * py + a.z.z * pz], lightmap?.uvs);
-        const mesh = createBuildingMesh(scene, `building_${i}`, geometry, buildingMaterial, lightmap);
-        mesh.position.set(item.x, item.y, item.z);
-        sunLighting.shadowGenerator.addShadowCaster(mesh, false);
+        // Its main part by the building shader, its furniture (and faces only props are made of) by the
+        // props' - as in the world (PROP_RENDERING.md).
+        const drawn = drawModelNow(scene, `building_${i}`, item.model, buildingMaterial, item, (px, py, pz) => [a.x.x * px + a.y.x * py + a.z.x * pz, a.x.y * px + a.y.y * py + a.z.y * pz, a.x.z * px + a.y.z * py + a.z.z * pz]);
+        for (const mesh of drawn) sunLighting.shadowGenerator.addShadowCaster(mesh, false);
       });
       if (options.buildingColliders) {
         for (const mesh of scene.meshes) if (mesh.name.startsWith("building_")) mesh.setEnabled(false);
@@ -606,13 +605,9 @@ function layOutBuildings(
   models.forEach((model, i) => {
     x += model.halfWidth;
     placed.push(x);
-    const geometry = emptyGeometry();
-    const lightmap = bakeModelLight(model, material);
-    appendModel(geometry, model, material.layerOf, (px, py, pz) => [px, py, pz], lightmap?.uvs);
-    const mesh = createBuildingMesh(scene, `building_${i}`, geometry, material, lightmap);
     const y = height(x, 0);
-    mesh.position.set(x, y, 0);
-    shadowGenerator.addShadowCaster(mesh, false);
+    const drawn = drawModelNow(scene, `building_${i}`, model, material, { x, y, z: 0, frontX: 0, frontZ: 1 }, (px, py, pz) => [px, py, pz]);
+    for (const mesh of drawn) shadowGenerator.addShadowCaster(mesh, false);
     if (marks) {
       const w = model.halfWidth;
       const d = model.halfDepth;

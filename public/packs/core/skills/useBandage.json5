@@ -1,0 +1,16 @@
+// Binding a wound with a bandage: health back over a few seconds.
+{
+  name: "Use Bandage",
+  cues: { applied: "eat" },
+  target: "self",
+  hostOn: "target",
+  display: "buff",
+  states: {
+    bandaging: {
+      enter: [{ do: "animation", name: "eat" }],
+      length: 8,
+      period: 2,
+      tick: [{ do: "heal", amount: 8 }],
+    },
+  },
+}
