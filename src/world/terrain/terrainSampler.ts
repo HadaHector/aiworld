@@ -26,6 +26,8 @@ import {
   ROAD_GRADE_END_TAPER,
 } from "../roads/roadConfig";
 import type { BiomeDefinition } from "../biomes/biomeTypes";
+import { caveMouthClearance, siteCaveMouths, type CaveMouthSite } from "../dungeons/caveMouths";
+import { ROAD_HALF_WIDTH as MOUTH_PAINT_EDGE } from "../roads/roadConfig";
 import type { WorldContent } from "../content/worldContent";
 import { createBaseNoise2D } from "./noise";
 import { compilePipeline, type CompiledPipeline } from "./pipeline/pipelineCompiler";
@@ -101,6 +103,8 @@ export interface TerrainWorld {
   areaBiomes: BiomeDefinition[];
   /** Which areas touch each area, by area id (see cells/areaField.ts). */
   areaNeighbours: Map<number, number[]>;
+  /** Where natural caves open on steep hillsides - see dungeons/caveMouths.ts. */
+  caveMouths: CaveMouthSite[];
 }
 
 const OCEAN_FLOOR_DEPTH = -14;
@@ -198,6 +202,8 @@ export function createTerrainSampler(seed: number, content: WorldContent): Terra
   let featureField: FeatureField | null = null;
   // Bound with the pads: the ground the compounds' props and buildings spill over.
   let spillField: SpillField | null = null;
+  // Bound last: the caves' mouths, sited on the finished ground, kept bare of trees and grass.
+  let mouthClear: ((x: number, z: number) => number) | null = null;
 
   const NO_SPILL = { spill: 0, spillMaterial: -1 };
   function spillAt(x: number, z: number): { spill: number; spillMaterial: number } {
@@ -290,6 +296,18 @@ export function createTerrainSampler(seed: number, content: WorldContent): Terra
         // A pad's own ground is paved all over.
         if (levelled.gap + PAD_PAINT_OFFSET < ROAD_HALF_WIDTH) roadMiddle = 0;
         padGap = levelled.edge;
+      }
+    }
+    // A cave's mouth: its slip and the ground round it bare - trodden earth, no trees or grass (its
+    // ground is taken out over the slip, and its boulders stand round it).
+    if (mouthClear) {
+      const gap = mouthClear(worldX, worldZ);
+      if (gap < Infinity) {
+        padGap = Math.min(padGap, gap);
+        if (gap + MOUTH_PAINT_EDGE < roadGap) {
+          roadGap = gap + MOUTH_PAINT_EDGE;
+          if (gap < 0) roadMiddle = 0;
+        }
       }
     }
 
@@ -394,6 +412,9 @@ export function createTerrainSampler(seed: number, content: WorldContent): Terra
   padField = createPadField([...propPads(compoundLayouts), ...settlementPads(settlementLayouts), ...compoundPads(compoundLayouts)]);
   settleOnGround(compoundLayouts, sampleTerrain);
   spillField = createSpillField(compoundLayouts, spillMaterials(content));
+  // Last, the caves' mouths: found on the ground as everything else has left it.
+  const caveMouths = timed("Finding cave mouths", () => siteCaveMouths(seed, worldExtent, sampleTerrain, settlements));
+  mouthClear = caveMouthClearance(caveMouths);
 
-  return { sampleTerrain, worldExtent, areaBounds, areaNames, settlements, features, roads, settlementLayouts, compoundLayouts, bridges, areaBiomes, areaNeighbours };
+  return { sampleTerrain, worldExtent, areaBounds, areaNames, settlements, features, roads, settlementLayouts, compoundLayouts, bridges, areaBiomes, areaNeighbours, caveMouths };
 }

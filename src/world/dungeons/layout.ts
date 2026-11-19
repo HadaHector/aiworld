@@ -18,6 +18,8 @@ export interface DungeonSite {
   y: number;
   z: number;
   facing: number;
+  /** Its ground cut for a mouth (a cave's on a steep hillside - caveMouths.ts): an entrance with one. */
+  mouth?: boolean;
 }
 
 export interface PlacedPart {
@@ -235,7 +237,10 @@ function attemptLayout(content: DungeonContent, style: DungeonStyleDef, size: st
 
   // 1. The entrance, its `surface` socket at the site.
   const entrances = style.entrances.filter((p) => p.sockets.some((s) => s.type === "surface"));
-  const entrancePart = pickWeighted(entrances, (p) => p.weight, random);
+  // A site with a mouth cut for it (a cave's on a steep hillside) takes an entrance with one; any
+  // other, one without.
+  const fitting = entrances.filter((p) => !!p.mouth === !!site.mouth);
+  const entrancePart = pickWeighted(fitting.length > 0 ? fitting : entrances, (p) => p.weight, random);
   if (!entrancePart) return "no entrance";
   const mouth = entrancePart.sockets.findIndex((s) => s.type === "surface");
   const surface: WorldSocket = { part: -1, socket: -1, at: vec3(site.x, site.y, site.z), facing: normalDegrees(site.facing + 180), def: entrancePart.sockets[mouth] };

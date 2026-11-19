@@ -1,0 +1,187 @@
+// Cave mouths (DUNGEONS.md, *Entrances*): where a natural cave opens in the world - found, not made,
+// on a hillside steep enough that a slip cut into it at its foot has a high back wall: the ground
+// taken out over the slip (a hole, as a mausoleum's - buildings/buildingCollision.ts), a flat rock
+// floor at its foot and big round boulders round its sides and in a ring at its back framing the
+// way in (the cave's entrance part draws those - dungeonParts/caveMouth.json5, whose `mouth` must
+// be this size). Sited from the finished ground, after everything else, keeping clear of it; the
+// ground's height is not changed, only its trees and grass kept off the slip and its boulders.
+import type { BuildingModel } from "../buildings/buildingTypes";
+import type { BuildingGroup, Placed } from "../buildings/buildingCollision";
+import { ModelBuilder } from "../buildings/buildingGeometry";
+import type { TerrainSample } from "../terrain/terrainSampler";
+import { deriveSeed, mulberry32 } from "../rng";
+import { SEA_LEVEL } from "../cells/areaField";
+
+/** The slip and how a site is chosen. */
+export const CAVE_MOUTH = {
+  /** The slip: across the slope, and back into it from its foot (metres). */
+  width: 22,
+  length: 20,
+  /** How far the ground at its back must stand over its floor (its back wall), and at most. */
+  rise: [10, 30] as [number, number],
+  /** The hill must still rise past the slip: this much more over this far on. */
+  behind: 24,
+  behindRise: 3,
+  /** Across its foot the ground may be this far off level: its floor is laid at the highest, never
+   *  under the ground it opens onto, at worst a step down out of it. */
+  footLevel: 1,
+  /** The hill over the way in and the cave's first rooms, past the slip: this high over the floor at
+   *  each of these distances on (8 m of rock over a chamber 14-20 m tall that starts 14 m under the
+   *  floor), and to either side of the way at the furthest. */
+  deepAt: [40, 70, 100],
+  deepRise: 18,
+  deepSide: 30,
+  /** One cave a cell of this size at most, this share of them; points tried in each. */
+  cell: 640,
+  odds: 0.6,
+  tries: 36,
+  /** Its floor this far over the sea at least. */
+  aboveSea: 3,
+  /** Kept this far from a settlement's middle, a feature, a road (its gap), water. */
+  settlementClear: 320,
+  featureClear: 60,
+  roadClear: 40,
+  waterClear: 40,
+  /** Trees and grass kept off the slip and this far round it (the boulders stand on its edges). */
+  clearing: 7,
+};
+
+export interface CaveMouthSite {
+  id: number;
+  /** The middle of the slip's foot, at its floor's level; which way the mouth faces (out of the
+   *  hill, downhill), in degrees - a dungeon's site (layout.ts, DungeonSite). */
+  x: number;
+  y: number;
+  z: number;
+  facing: number;
+  /** Uphill, along the slip. */
+  ux: number;
+  uz: number;
+}
+
+type Sampler = (x: number, z: number) => TerrainSample;
+
+/** A site's slip, judged at a foot point: its floor, its facing and how good it is - or null. */
+function judge(sample: Sampler, x: number, z: number): { y: number; ux: number; uz: number; score: number } | null {
+  const c = CAVE_MOUTH;
+  const s = sample(x, z);
+  if (s.height < SEA_LEVEL + c.aboveSea || !s.isLand || s.lakeFactor > 0.01 || s.riverGap < c.waterClear || s.roadGap < c.roadClear || s.featureGap < c.featureClear || Number.isFinite(s.padGap)) return null;
+  const h = (px: number, pz: number): number => sample(px, pz).height;
+  const gx = h(x + 8, z) - h(x - 8, z), gz = h(x, z + 8) - h(x, z - 8);
+  const g = Math.hypot(gx, gz);
+  if (g / 16 < 0.3) return null;
+  const ux = gx / g, uz = gz / g;
+  const sx = -uz, sz = ux;
+  const hw = c.width / 2;
+  // Its foot, across: level enough, its floor at the highest of it.
+  const foot = [-1, -0.5, 0, 0.5, 1].map((k) => (k === 0 ? s.height : h(x + sx * hw * k, z + sz * hw * k)));
+  if (Math.max(...foot) - Math.min(...foot) > c.footLevel) return null;
+  const floor = Math.max(...foot) + 0.05;
+  if (floor < SEA_LEVEL + c.aboveSea) return null;
+  const bx = x + ux * c.length, bz = z + uz * c.length;
+  const back = h(bx, bz);
+  const rise = back - floor;
+  if (rise < c.rise[0] || rise > c.rise[1]) return null;
+  // Its back corners about as high: the slope runs up the slip, not across it.
+  if (h(bx - sx * hw, bz - sz * hw) - floor < c.rise[0] * 0.7 || h(bx + sx * hw, bz + sz * hw) - floor < c.rise[0] * 0.7) return null;
+  // Still rising behind: rock over the way in, and over where the cave goes on from it.
+  if (h(x + ux * (c.length + c.behind), z + uz * (c.length + c.behind)) < back + c.behindRise) return null;
+  for (const d of c.deepAt) if (h(x + ux * (c.length + d), z + uz * (c.length + d)) < floor + c.deepRise) return null;
+  const far = c.length + c.deepAt[c.deepAt.length - 1];
+  for (const k of [-1, 1]) if (h(x + ux * far + sx * k * c.deepSide, z + uz * far + sz * k * c.deepSide) < floor + c.deepRise) return null;
+  // Its ground and the boulders' dry and clear.
+  for (const [px, pz] of [[bx, bz], [x - sx * hw, z - sz * hw], [x + sx * hw, z + sz * hw]]) {
+    const q = sample(px, pz);
+    if (!q.isLand || q.lakeFactor > 0.01 || q.roadGap < c.roadClear || Number.isFinite(q.padGap)) return null;
+  }
+  // Best where the back wall is high for its length but not a cliff: about 0.8 of a rise to a run.
+  const score = -Math.abs(rise / c.length - 0.8);
+  return { y: floor, ux, uz, score };
+}
+
+/** Every cave mouth in the world: at most one a cell, where a cell rolled one and has the ground. */
+export function siteCaveMouths(seed: number, worldExtent: number, sample: Sampler, settlements: readonly { x: number; z: number }[]): CaveMouthSite[] {
+  const c = CAVE_MOUTH;
+  const out: CaveMouthSite[] = [];
+  const n = Math.ceil(worldExtent / c.cell);
+  for (let gx = -n; gx < n; gx++) {
+    for (let gz = -n; gz < n; gz++) {
+      const random = mulberry32(deriveSeed(seed, 0x6ca7e + (gx + 4096) * 8191 + (gz + 4096)));
+      if (random() >= c.odds) continue;
+      let best: (CaveMouthSite & { score: number }) | null = null;
+      for (let t = 0; t < c.tries; t++) {
+        // Inside the cell, a margin off its edges so two never stand close.
+        const x = (gx + 0.12 + random() * 0.76) * c.cell, z = (gz + 0.12 + random() * 0.76) * c.cell;
+        if (Math.abs(x) > worldExtent * 0.95 || Math.abs(z) > worldExtent * 0.95) continue;
+        if (settlements.some((s) => Math.hypot(s.x - x, s.z - z) < c.settlementClear)) continue;
+        const j = judge(sample, x, z);
+        if (!j || (best && best.score >= j.score)) continue;
+        best = { id: 0, x, y: j.y, z, facing: (Math.atan2(-j.ux, -j.uz) * 180) / Math.PI, ux: j.ux, uz: j.uz, score: j.score };
+      }
+      if (best) {
+        const { score: _score, ...site } = best;
+        out.push({ ...site, id: out.length });
+      }
+    }
+  }
+  return out;
+}
+
+/** How far a point is outside a mouth's slip, along it and across it (0 inside). */
+function slipGap(m: CaveMouthSite, x: number, z: number): number {
+  const c = CAVE_MOUTH;
+  const dx = x - m.x, dz = z - m.z;
+  const along = dx * m.ux + dz * m.uz;
+  const across = Math.abs(-dx * m.uz + dz * m.ux);
+  const a = Math.max(0, -along, along - c.length);
+  const b = Math.max(0, across - c.width / 2);
+  return Math.hypot(a, b);
+}
+
+/** How far a point is from the nearest mouth's slip less its clearing - negative on it, for the
+ *  ground's pad gap (trees and grass keep off) - or Infinity with none near. */
+export function caveMouthClearance(mouths: readonly CaveMouthSite[]): (x: number, z: number) => number {
+  const CELL = 64;
+  const grid = new Map<string, CaveMouthSite[]>();
+  const reach = Math.hypot(CAVE_MOUTH.width, CAVE_MOUTH.length) + CAVE_MOUTH.clearing + 4;
+  for (const m of mouths) {
+    const cx = m.x + m.ux * (CAVE_MOUTH.length / 2), cz = m.z + m.uz * (CAVE_MOUTH.length / 2);
+    for (let gx = Math.floor((cx - reach) / CELL); gx <= Math.floor((cx + reach) / CELL); gx++) {
+      for (let gz = Math.floor((cz - reach) / CELL); gz <= Math.floor((cz + reach) / CELL); gz++) {
+        const key = `${gx},${gz}`;
+        const list = grid.get(key);
+        if (list) list.push(m);
+        else grid.set(key, [m]);
+      }
+    }
+  }
+  return (x, z) => {
+    const near = grid.get(`${Math.floor(x / CELL)},${Math.floor(z / CELL)}`);
+    if (!near) return Infinity;
+    let best = Infinity;
+    for (const m of near) best = Math.min(best, slipGap(m, x, z) - CAVE_MOUTH.clearing);
+    return best;
+  };
+}
+
+/** The ground taken out over a mouth's slip: a "house" with nothing to draw and nothing in the way,
+ *  only a hole, set over the slip's middle, its front out of the hill. */
+function holeModel(): BuildingModel {
+  const c = CAVE_MOUTH;
+  const model = new ModelBuilder().finish({ x: 0, z: c.length / 2 });
+  model.halfWidth = c.width / 2;
+  model.halfDepth = c.length / 2;
+  model.height = 0;
+  model.holes = [[-c.width / 2, -c.length / 2, c.width / 2, c.length / 2]];
+  return model;
+}
+
+/** The mouths' holes in the ground, a group each (so their cuts come and go with them). */
+export function caveMouthGroups(mouths: readonly CaveMouthSite[]): BuildingGroup[] {
+  const model = holeModel();
+  return mouths.map((m) => {
+    const x = m.x + m.ux * (CAVE_MOUTH.length / 2), z = m.z + m.uz * (CAVE_MOUTH.length / 2);
+    const house: Placed = { x, y: m.y, z, frontX: -m.ux, frontZ: -m.uz, model: () => model };
+    return { key: `caveMouth:${m.id}`, x, z, houses: [house] };
+  });
+}

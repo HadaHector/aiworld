@@ -57,7 +57,7 @@ export function createDungeonPresence(view: DimensionView, content: DungeonConte
       const style = content.styles.get(message.style);
       if (!style) throw new Error(`no dungeon style "${message.style}"`);
       onProgress(`Laying out the ${style.name.toLowerCase()}`, 0, 0);
-      const site = { x: message.x, y: message.y, z: message.z, facing: message.facing };
+      const site = { x: message.x, y: message.y, z: message.z, facing: message.facing, mouth: message.mouth };
       siteY = message.y;
       // The ground as the server's is: the same world, so the same layout.
       const ground = { heightAt: world.heightAt, builtAt: (x: number, z: number) => world.buildingAt(x, world.heightAt(x, z) + 0.5, z) !== undefined };
@@ -67,7 +67,7 @@ export function createDungeonPresence(view: DimensionView, content: DungeonConte
         // A cave: its rock meshed as a whole, drawn and collided with as that.
         onProgress(`Shaping the ${style.name.toLowerCase()}`, 0, 0);
         await new Promise((resolve) => setTimeout(resolve, 0));
-        const cave = buildCave(layout, style);
+        const cave = buildCave(layout, style, ground);
         batch = world.collision.world.addBatch(caveColliders(cave));
         meshes = await createCaveMeshes(scene, layout, style, cave, {
           seed: view.seed,

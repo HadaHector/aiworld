@@ -7,6 +7,7 @@ import type { Aabb, Vec3 } from "../collision/vec";
 import type { ShapeDesc } from "../collision/index";
 import type { DungeonPartDef, DungeonStyleDef, SocketDef } from "./dungeonDefs";
 import type { DungeonLayout, PlacedPart } from "./layout";
+import { deriveSeed, mulberry32 } from "../rng";
 
 /** A chamber: a dome on a flat floor, `radius` across (x, z) at the floor, `height` over it at the middle. */
 export interface ChamberShape {
@@ -71,6 +72,7 @@ const smoothMin = (a: number, b: number, k: number): number => {
   const h = Math.max(k - Math.abs(a - b), 0) / k;
   return Math.min(a, b) - h * h * k * 0.25;
 };
+const smoothMax = (a: number, b: number, k: number): number => -smoothMin(-a, -b, k);
 
 // --- Shapes ---------------------------------------------------------------------------------
 
@@ -224,12 +226,134 @@ function placedFieldShapes(p: PlacedPart): FieldShape[] {
 export interface CaveField {
   /** Positive in the rock. */
   rock: (x: number, y: number, z: number) => number;
-  /** Where there is any open space at all: the shapes' boxes. */
+  /** Where there is any open space at all: the shapes' boxes (and a mouth's ground). */
   boxes: Aabb[];
+  /** Whether a triangle with every corner here is left out: a mouth's copy of the world's own ground
+   *  round it (the world draws and collides with that itself). */
+  drop?: (x: number, y: number, z: number) => boolean;
 }
 
-/** The rock round a set of shapes, roughened by `noise`. Shapes found by a grid of 16 m cells. */
-export function fieldOf(shapes: readonly FieldShape[], noise: readonly FieldNoise[]): CaveField {
+/** The ground a mouth is cut into (the world's, or the workbench's made-up slope). */
+export interface FieldGround {
+  heightAt: (x: number, z: number) => number;
+}
+
+/** A mouth in the field (DUNGEONS.md, *Entrances*): the slip's air, open to the sky, its floor flat
+ *  rock; the air over the ground round it; the big boulders on the slip's edges and round the way in. */
+interface MouthField {
+  /** Where its slip and boulders are; and further, past any chunk sampled round them, where the air
+   *  over the ground is open (else the rock's default would close it at the region's edge). */
+  region: Aabb;
+  outer: Aabb;
+  /** A point's place in the mouth's frame (x across, z back into the hill from the slip's foot, y
+   *  over its floor). */
+  local: (x: number, y: number, z: number) => [number, number, number];
+  width: number;
+  length: number;
+  ground: (x: number, z: number) => number;
+  boulders: { c: Vec3; r: [number, number, number]; box: Aabb }[];
+}
+
+/** How much a boulder's surface is roughened, as a share of the walls'; how softly boulders run into
+ *  one another and the floor. */
+const BOULDER_ROUGH = 0.6;
+const BOULDER_BLEND = 1.4;
+/** The way in through the ring: half its width and its height (a tunnel 9 by 8, and a little). */
+const OPENING: [number, number] = [5, 8.6];
+/** How far past a mouth's region the air over the ground reaches: more than a chunk and its border. */
+const OUTER_GROW = 26;
+/** How far the slip's floor, a slab of rock, reaches out past its foot, and how steeply it falls
+ *  there (rise over run) to meet the slope. */
+const SLAB_LIP = 4;
+const SLAB_RAMP = 0.6;
+
+/** The signed distance to a box (negative inside). */
+function boxDistance(px: number, py: number, pz: number, c: [number, number, number], h: [number, number, number]): number {
+  const qx = Math.abs(px - c[0]) - h[0], qy = Math.abs(py - c[1]) - h[1], qz = Math.abs(pz - c[2]) - h[2];
+  return Math.hypot(Math.max(qx, 0), Math.max(qy, 0), Math.max(qz, 0)) + Math.min(Math.max(qx, qy, qz), 0);
+}
+
+/** A placed mouth part's mouth: its boulders set against the ground (their stacks reach over the
+ *  slip's cut edges, every opening in the ground covered), in the world. */
+function placedMouth(p: PlacedPart, ground: FieldGround, seed: number): MouthField | null {
+  const m = p.part.mouth;
+  if (!m) return null;
+  const c = Math.cos(p.yaw), s = Math.sin(p.yaw);
+  const world = (lx: number, ly: number, lz: number): Vec3 => ({ x: p.x + lx * c + lz * s, y: p.y + ly, z: p.z - lx * s + lz * c });
+  const local = (x: number, y: number, z: number): [number, number, number] => {
+    const dx = x - p.x, dz = z - p.z;
+    return [dx * c - dz * s, y - p.y, dx * s + dz * c];
+  };
+  const heights = new Map<string, number>();
+  const groundAt = (x: number, z: number): number => {
+    const key = `${x},${z}`;
+    let h = heights.get(key);
+    if (h === undefined) heights.set(key, (h = ground.heightAt(x, z)));
+    return h;
+  };
+  /** The ground over the floor at a point of the mouth's frame. */
+  const edge = (lx: number, lz: number): number => {
+    const w = world(lx, 0, lz);
+    return groundAt(w.x, w.z) - p.y;
+  };
+  const random = mulberry32(deriveSeed(seed, 0xb01de5));
+  const size = (): number => 3.2 + random() * 1.6;
+  const placed: { at: [number, number, number]; r: number }[] = [];
+  const hw = m.width / 2;
+  // In the ring's arch - the way in - for a boulder of radius r there.
+  const inArch = (x: number, y: number, r: number): boolean => (x / (OPENING[0] + r * 1.15 + 0.6)) ** 2 + (y / (OPENING[1] + r * 0.95 + 0.4)) ** 2 < 1;
+  /** A column of boulders standing on the floor at (x, z), up over the ground there by a margin. */
+  const column = (x: number, z: number, top: number, keepOut: boolean): void => {
+    let y = 0;
+    for (let k = 0; k < 12; k++) {
+      const r = size();
+      const at: [number, number, number] = [x + (random() - 0.5) * 0.8, y + r * 0.45, z + (random() - 0.5) * 0.8];
+      y = at[1] + r * 0.6;
+      if (!(keepOut && inArch(at[0], at[1], r))) placed.push({ at, r });
+      if (at[1] + r * 0.75 > top) break;
+    }
+  };
+  // Its sides: a column at every few metres along each cut edge, up over the ground there.
+  for (const side of [-1, 1]) {
+    for (let z = 1.2; z < m.length + 1; z += 4) {
+      const top = Math.max(edge(side * hw, z), edge(side * (hw + 2), z)) + 0.9;
+      column(side * (hw - 0.6), z, top, false);
+    }
+  }
+  // Its back wall, under the ground over it - not in the way in.
+  for (let x = -hw + 1; x <= hw - 1 + 1e-6; x += 4.2) {
+    const top = Math.max(edge(x, m.length), edge(x, m.length + 2)) + 0.9;
+    column(x, m.length - 0.8, top, true);
+  }
+  // The ring round the way in: each boulder clear of the opening by its own size.
+  for (let k = 0; k <= 6; k++) {
+    const t = (k / 6) * Math.PI;
+    const r = size();
+    const a = OPENING[0] + r * 1.1 + 0.8, b = OPENING[1] + r * 0.85 + 0.6;
+    placed.push({ at: [Math.cos(t) * a, Math.max(r * 0.45, Math.sin(t) * b), m.length - 1.6 + (random() - 0.5) * 0.6], r });
+  }
+  const boulders = placed.map(({ at, r }) => {
+    const rr: [number, number, number] = [r, r * 0.82, r * (0.9 + random() * 0.2)];
+    const w = world(...at);
+    const reach = r + 1.5;
+    return { c: w, r: rr, box: { min: { x: w.x - reach, y: w.y - reach, z: w.z - reach }, max: { x: w.x + reach, y: w.y + reach, z: w.z + reach } } };
+  });
+  // Where the mouth has a say: the slip, its boulders and the ground round them.
+  let top = 0;
+  for (const b of placed) top = Math.max(top, b.at[1] + b.r);
+  const corners: Vec3[] = [];
+  for (const lx of [-hw - 8, hw + 8]) for (const lz of [-6, m.length + 8]) for (const ly of [-3, top + 4]) corners.push(world(lx, ly, lz));
+  const region = {
+    min: { x: Math.min(...corners.map((q) => q.x)), y: Math.min(...corners.map((q) => q.y)), z: Math.min(...corners.map((q) => q.z)) },
+    max: { x: Math.max(...corners.map((q) => q.x)), y: Math.max(...corners.map((q) => q.y)), z: Math.max(...corners.map((q) => q.z)) },
+  };
+  const g = OUTER_GROW;
+  const outer = { min: { x: region.min.x - g, y: region.min.y - g, z: region.min.z - g }, max: { x: region.max.x + g, y: region.max.y + g, z: region.max.z + g } };
+  return { region, outer, local, width: m.width, length: m.length, ground: groundAt, boulders };
+}
+
+/** The rock round a set of shapes, roughened by `noise`, opened by any mouths. Shapes found by a grid of 16 m cells. */
+export function fieldOf(shapes: readonly FieldShape[], noise: readonly FieldNoise[], mouths: readonly MouthField[] = []): CaveField {
   const compiled = shapes.map(compile);
   const CELL = 16;
   const grid = new Map<string, number[]>();
@@ -246,11 +370,40 @@ export function fieldOf(shapes: readonly FieldShape[], noise: readonly FieldNois
     }
   });
   const out: [number, number] = [0, 0];
-  const rock = (x: number, y: number, z: number): number => {
-    const near = grid.get(`${Math.floor(x / CELL)},${Math.floor(y / CELL)},${Math.floor(z / CELL)}`);
-    if (!near) return ROCK;
+  const roughAt = (x: number, y: number, z: number): number => {
     let rough = 0;
     for (const n of noise) rough += valueNoise(x * n.scale + 17.3, y * n.scale, z * n.scale - 5.1) * n.amount;
+    return rough;
+  };
+  const inBox = (b: Aabb, x: number, y: number, z: number): boolean => x >= b.min.x && x <= b.max.x && y >= b.min.y && y <= b.max.y && z >= b.min.z && z <= b.max.z;
+  /** A mouth's say at a point, over the cave's own: open in its slip and over the ground, rock in its boulders. */
+  const mouthed = (d: number, x: number, y: number, z: number, rough: number): number => {
+    for (const m of mouths) {
+      if (!inBox(m.outer, x, y, z)) continue;
+      const [lx, ly, lz] = m.local(x, y, z);
+      // The air over the ground - but never under the slip's floor, wherever the ground in front lies
+      // lower than it: the floor is a slab of rock, running out past its foot as a ramp down onto the
+      // slope, so it is walked onto, not climbed.
+      const slab = lz < 0 ? lz * SLAB_RAMP : 0;
+      const underSlip = ly < slab && lx > -m.width / 2 && lx < m.width / 2 && lz > -SLAB_LIP && lz < m.length;
+      d = Math.min(d, underSlip ? Math.max(m.ground(x, z) - y, slab - ly) : m.ground(x, z) - y);
+      if (!inBox(m.region, x, y, z)) continue;
+      // The slip's air: its floor flat, open to the sky.
+      d = Math.min(d, boxDistance(lx, ly, lz, [0, 60, m.length / 2], [m.width / 2, 60, m.length / 2]));
+      for (const b of m.boulders) {
+        if (!inBox(b.box, x, y, z)) continue;
+        const qx = (x - b.c.x) / b.r[0], qy = (y - b.c.y) / b.r[1], qz = (z - b.c.z) / b.r[2];
+        const inside = (1 - Math.hypot(qx, qy, qz)) * Math.min(b.r[0], b.r[1], b.r[2]) + rough * BOULDER_ROUGH;
+        d = smoothMax(d, inside, BOULDER_BLEND);
+      }
+    }
+    return d;
+  };
+  const inMouth = (x: number, y: number, z: number): boolean => mouths.some((m) => inBox(m.outer, x, y, z));
+  const rock = (x: number, y: number, z: number): number => {
+    const near = grid.get(`${Math.floor(x / CELL)},${Math.floor(y / CELL)},${Math.floor(z / CELL)}`);
+    if (!near) return mouths.length > 0 && inMouth(x, y, z) ? mouthed(ROCK, x, y, z, roughAt(x, y, z)) : ROCK;
+    const rough = roughAt(x, y, z);
     let d = ROCK;
     // The shape that opens the point most, and its floor: the walls blend, the floors do not -
     // blending two shapes' floors would sink it where they meet.
@@ -266,14 +419,29 @@ export function fieldOf(shapes: readonly FieldShape[], noise: readonly FieldNois
       d = d === ROCK ? Math.min(d, e) : smoothMin(d, e, BLEND);
       if (e < most) [most, floor] = [e, under];
     }
-    return Math.max(d, floor);
+    const cave = Math.max(d, floor);
+    return mouths.length > 0 ? mouthed(cave, x, y, z, rough) : cave;
   };
-  return { rock, boxes: compiled.map((c) => c.box) };
+  // A triangle on the world's own ground, outside the slip (the world draws and collides with that).
+  const drop =
+    mouths.length === 0
+      ? undefined
+      : (x: number, y: number, z: number): boolean => {
+          for (const m of mouths) {
+            if (!inBox(m.outer, x, y, z)) continue;
+            const [lx, , lz] = m.local(x, y, z);
+            const inSlip = lx > -m.width / 2 - 0.05 && lx < m.width / 2 + 0.05 && lz > -SLAB_LIP - 0.05 && lz < m.length + 0.05;
+            if (!inSlip && Math.abs(m.ground(x, z) - y) < 0.7) return true;
+          }
+          return false;
+        };
+  return { rock, boxes: [...compiled.map((c) => c.box), ...mouths.map((m) => m.region)], drop };
 }
 
-/** A whole cave's field: every placed field part's shapes. */
-export function layoutField(layout: DungeonLayout, noise: readonly FieldNoise[]): CaveField {
-  return fieldOf(layout.parts.flatMap(placedFieldShapes), noise);
+/** A whole cave's field: every placed field part's shapes - and a mouth's, against `ground`. */
+export function layoutField(layout: DungeonLayout, noise: readonly FieldNoise[], ground?: FieldGround): CaveField {
+  const mouths = ground ? layout.parts.flatMap((p, i) => placedMouth(p, ground, deriveSeed(layout.seed, i)) ?? []) : [];
+  return fieldOf(layout.parts.flatMap(placedFieldShapes), noise, mouths);
 }
 
 // --- Chunks ---------------------------------------------------------------------------------
@@ -401,8 +569,16 @@ function meshChunk(field: CaveField, cx: number, cy: number, cz: number, cell: n
       else indices.push(ids[0], ids[2], ids[1], ids[0], ids[3], ids[2]);
     }
   }
-  if (indices.length === 0) return null;
-  return { origin, cell, n, values, positions: new Float32Array(positions), normals: new Float32Array(normals), indices: new Uint32Array(indices) };
+  // Left out: a mouth's copy of the world's ground (every corner on it).
+  let kept = indices;
+  if (field.drop) {
+    const off = new Uint8Array(positions.length / 3);
+    for (let v = 0; v < off.length; v++) off[v] = field.drop(positions[v * 3], positions[v * 3 + 1], positions[v * 3 + 2]) ? 1 : 0;
+    kept = [];
+    for (let t = 0; t < indices.length; t += 3) if (!(off[indices[t]] && off[indices[t + 1]] && off[indices[t + 2]])) kept.push(indices[t], indices[t + 1], indices[t + 2]);
+  }
+  if (kept.length === 0) return null;
+  return { origin, cell, n, values, positions: new Float32Array(positions), normals: new Float32Array(normals), indices: new Uint32Array(kept) };
 }
 
 /** The field in a chunk at a point, trilinear; `outside` its grid (open, by default: a chunk's
@@ -426,7 +602,7 @@ export function caveColliders(mesh: CaveMesh): ShapeDesc[] {
 }
 
 /** A field style's layout's rock, sampled and meshed (the same on the server and the page). */
-export function buildCave(layout: DungeonLayout, style: Pick<DungeonStyleDef, "noise" | "voxel">): CaveMesh {
-  const field = layoutField(layout, style.noise);
+export function buildCave(layout: DungeonLayout, style: Pick<DungeonStyleDef, "noise" | "voxel">, ground?: FieldGround): CaveMesh {
+  const field = layoutField(layout, style.noise, ground);
   return { ...meshField(field, style.voxel), field };
 }

@@ -9,6 +9,7 @@ import { vec3, type Aabb, type ShapeDesc, type Vec3 } from "../collision/index";
 import { boxShape, doorwayGeometry, DOORWAY_KINDS, rotundaGeometry, spiralGeometry, stairGeometry, type DoorwaySpec, type Polyline, type Voussoir } from "./kitShapes";
 import { checkPaths } from "./clearance";
 import { chunkFieldAt, fieldOf, fieldPartBounds, meshField, partShapes, type FieldNoise, type FieldShape } from "./caveField";
+import { CAVE_MOUTH } from "./caveMouths";
 import { altarBox, altarShape, benchShape, ledgerShape, placeBenches, placeLedgers, placeTombs, tombShape, type AltarDef, type BenchDef, type LedgerDef, type TombDef } from "./tombs";
 
 const ID_PATTERN = /^[A-Za-z0-9_-]+$/;
@@ -99,6 +100,10 @@ export interface DungeonPartDef {
   /** Field builder (caveField.ts): its chambers and tunnels in the cave's distance field - no
    *  colliders of its own (the whole cave's rock is meshed as one), its walk lines from its shapes. */
   field?: FieldShape[];
+  /** A field entrance's mouth on a steep hillside (caveField.ts, dungeons/caveMouths.ts): the slip
+   *  cut into the hill from its surface socket (`width` across, `length` back into it), a flat rock
+   *  floor and big boulders round it - their sizes as the world sites mouths with. */
+  mouth?: { width: number; length: number };
   /** Anchors for what fills it (DUNGEONS.md, *What fills it*). */
   spots: Record<string, Vec3[]>;
   /** Counts toward the style's rooms (a hall, a tomb) rather than joining them (a corridor, a stair). */
@@ -391,7 +396,7 @@ function vector(reader: Reader, value: unknown, path: string): Vec3 {
   return vec3();
 }
 
-const PART_KEYS = ["tags", "weight", "stage", "apart", "tombs", "benches", "ledgers", "ending", "bounds", "sockets", "colliders", "field", "paths", "spots", "room", "doorway", "barrel", "altar", "exterior"];
+const PART_KEYS = ["tags", "weight", "stage", "apart", "tombs", "benches", "ledgers", "ending", "bounds", "sockets", "colliders", "field", "mouth", "paths", "spots", "room", "doorway", "barrel", "altar", "exterior"];
 
 function readPart(entry: Entry, rules: DungeonRules, issues: ContentIssue[]): DungeonPartDef | null {
   const reader = new Reader(issues, entry.file);
@@ -536,6 +541,13 @@ function readPart(entry: Entry, rules: DungeonRules, issues: ContentIssue[]): Du
     paths.push(line.map((p, k) => vector(reader, p, `paths[${i}][${k}]`)));
   });
   const field = obj.field === undefined ? undefined : readField(reader, obj);
+  let mouth: { width: number; length: number } | undefined;
+  if (obj.mouth !== undefined) {
+    const m = reader.object(obj.mouth, "mouth");
+    reader.onlyKeys(m, "mouth", ["width", "length"]);
+    mouth = { width: reader.number(m, "width", "mouth", { min: 1 }), length: reader.number(m, "length", "mouth", { min: 1 }) };
+    if (mouth.width !== CAVE_MOUTH.width || mouth.length !== CAVE_MOUTH.length) reader.fail("mouth", `the world sites cave mouths ${CAVE_MOUTH.width} m across and ${CAVE_MOUTH.length} m long (dungeons/caveMouths.ts): a mouth must be that size`);
+  }
   // A field part's walk lines, unless given: along its tunnels, and in from each socket to the
   // nearest chamber's middle or tunnel.
   if (field && paths.length === 0) paths.push(...fieldPaths(field, sockets));
@@ -554,6 +566,13 @@ function readPart(entry: Entry, rules: DungeonRules, issues: ContentIssue[]): Du
     else { reader.fail("bounds", "expected [[x0, y0, z0], [x1, y1, z1]]"); bounds = { min: vec3(), max: vec3() }; }
   } else if (field) {
     bounds = fieldPartBounds({ field, sockets }, FIELD_GROW);
+    // A mouth's slip and its boulders, up to the ground over its back wall.
+    if (mouth) {
+      bounds = {
+        min: vec3(Math.min(bounds.min.x, -mouth.width / 2 - 6), Math.min(bounds.min.y, -2), Math.min(bounds.min.z, -2)),
+        max: vec3(Math.max(bounds.max.x, mouth.width / 2 + 6), Math.max(bounds.max.y, CAVE_MOUTH.rise[1] + 6), Math.max(bounds.max.z, mouth.length + 4)),
+      };
+    }
   } else {
     bounds = shapesBounds(shapes);
   }
@@ -593,6 +612,7 @@ function readPart(entry: Entry, rules: DungeonRules, issues: ContentIssue[]): Du
     shapes,
     paths,
     field,
+    mouth,
     spots,
     room: reader.boolean(obj, "room", "", false),
     ending: readEnding(reader, obj),
@@ -624,7 +644,9 @@ function readPart(entry: Entry, rules: DungeonRules, issues: ContentIssue[]): Du
     const mesh = meshField(rock, FIELD_CHECK_CELL);
     const meshes: ShapeDesc[] = mesh.chunks.map((c) => ({ kind: "mesh", positions: c.positions, indices: c.indices, inside: (p: Vec3) => chunkFieldAt(c, p.x, p.y, p.z) > 0 }));
     const least: [number, number] = [rules.minClear[0] + 2 * FIELD_NOISE_MOST, rules.minClear[1] + FIELD_NOISE_MOST];
-    for (const problem of checkPaths(meshes, paths, least, sockets.filter((s) => s.type !== "surface"))) reader.fail("paths", `${problem} (a cave's way is measured smooth, ${least.join(" x ")} m: room for its walls' roughness)`);
+    // (A mouth's slip is only open against the ground it is cut into: measured past its ring.)
+    const measured = mouth ? paths.map((line) => clipPolyline(line, mouth!.length + 2)).filter((line) => line.length >= 2) : paths;
+    for (const problem of checkPaths(meshes, measured, least, sockets.filter((s) => s.type !== "surface"))) reader.fail("paths", `${problem} (a cave's way is measured smooth, ${least.join(" x ")} m: room for its walls' roughness)`);
   }
   return part;
 }
@@ -872,6 +894,21 @@ function readField(reader: Reader, obj: RawObject): FieldShape[] {
     reader.fail(path, `unknown field shape "${keys[0]}" (expected chamber or tunnel)`);
     return [];
   });
+}
+
+/** A walk line's part from `z` on (in its part's frame), cut where it crosses. */
+function clipPolyline(line: Polyline, z: number): Polyline {
+  const out: Polyline = [];
+  for (let i = 0; i < line.length; i++) {
+    const p = line[i];
+    if (p.z >= z) out.push(p);
+    const q = line[i + 1];
+    if (q && (p.z - z) * (q.z - z) < 0) {
+      const t = (z - p.z) / (q.z - p.z);
+      out.push(vec3(p.x + (q.x - p.x) * t, p.y + (q.y - p.y) * t, z));
+    }
+  }
+  return out;
 }
 
 /** A field part's walk lines: along each tunnel, and from each socket (not at a tunnel's end) in to

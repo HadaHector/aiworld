@@ -1034,6 +1034,8 @@ export interface DungeonMessage {
   y: number; // f64
   z: number; // f64
   facing: number; // f64
+  /** Its site has a mouth cut for it (a cave's on a steep hillside), so its entrance has one. */
+  mouth?: boolean;
   entry: string; // "seamless", "space", or "" out of it
 }
 

@@ -10,6 +10,7 @@ import type { BuildingGroup, Placed } from "./buildings/buildingCollision";
 import type { WorldContent } from "./content/worldContent";
 
 import { createWaterAt, type WaterSample } from "./water";
+import { caveMouthGroups } from "./dungeons/caveMouths";
 
 /** The world's seed - also what the workbench previews with until told otherwise. */
 export const WORLD_SEED = 1338;
@@ -110,6 +111,8 @@ export function createWorldData(
       ],
     })),
     ...fenceCells.values(),
+    // The ground taken out over each cave's mouth (dungeons/caveMouths.ts).
+    ...caveMouthGroups(terrain.caveMouths),
   ];
 
   // Every building of every settlement and compound, bucketed by where it stands, for buildingAt.

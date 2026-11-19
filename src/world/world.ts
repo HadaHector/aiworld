@@ -18,6 +18,7 @@ import { bakeBuildingTextures, createBuildingMaterial, type BuildingMaterial } f
 import type { ModelLight } from "./buildings/buildingTypes";
 import type { SettlementLayout } from "./settlements/settlementLayout";
 import type { CompoundLayout } from "./features/compound";
+import type { CaveMouthSite } from "./dungeons/caveMouths";
 import { createSunLighting, DEFAULT_DAY_NIGHT_CYCLE_MINUTES } from "./lighting/sunLighting";
 import { AROUND_REACH, createPlayerLights, type PlayerLights } from "./lighting/playerLights";
 import { createSkyDome } from "./sky/skyDome";
@@ -65,6 +66,8 @@ export interface World {
   settlementLayouts: SettlementLayout[];
   /** The compounds' yards and buildings (a churchyard's mausoleum among them) - features/compound.ts. */
   compoundLayouts: CompoundLayout[];
+  /** Where caves open on steep hillsides - dungeons/caveMouths.ts. */
+  caveMouths: CaveMouthSite[];
   /** The building whose footprint (x, y, z) stands in, with a key unique to that one building. */
   buildingAt: (x: number, y: number, z: number) => { id: string; key: number } | undefined;
   /** The water surface and depth at a point (WATER.md). */
@@ -409,6 +412,7 @@ export async function createWorld(
     labels: data.labels,
     roads,
     compoundLayouts,
+    caveMouths: data.caveMouths,
     settlementLayouts,
     materialLibrary,
     trees,

@@ -66,6 +66,19 @@ write("caveEntrance", "A cave's way in: a tunnel sloping down into the hill, 6 m
     "spots": {"light": [[3, -14, 21]]},
 })
 
+# The way in on a steep hillside (dungeons/caveMouths.ts): a slip 22 m across cut 20 m back into
+# the hill from the surface socket at its foot, a flat rock floor, big boulders along its sides and
+# in a ring at its back round the way in - the field draws them all against the ground. The tunnel
+# goes in level from the ring under the hill, then down. A body arrives just inside, looking out.
+write("caveMouth", "A cave's way in on a steep hillside: a slip cut into the hill, ringed with boulders, the tunnel in level then down.", {
+    "tags": ["cave", "entrance"],
+    "mouth": {"width": 22, "length": 20},
+    "sockets": [sock([0, 0, 0], 180, "surface"), sock([0, -14, 68], 0)],
+    "field": [tunnel([[0, 0, 17], [0, 0, 32], [0, -12, 60], [0, -14, 68]])],
+    "paths": [[[0, -14, 68], [0, -12, 60], [0, 0, 32], [0, 0, 24], [0, 0, 12]]],
+    "spots": {"light": [[0, 0, 30]]},
+})
+
 write("caveTunnel", "A cave tunnel, 24 m, winding a little.", {
     "tags": ["cave", "tunnel"],
     "weight": 3,

@@ -224,12 +224,15 @@ export async function startSession(page: Page, options: SessionOptions): Promise
     const world = view?.world;
     if (!world) return [];
     if (mouths?.world !== world) {
-      const markers = world.compoundLayouts.flatMap((layout) =>
-        layout.buildings.flatMap((b): MapMarker[] => {
-          const site = mouthSite(world, b);
-          return site ? [{ kind: "dungeon", x: site.x, z: site.z, title: "Crypt" }] : [];
-        }),
-      );
+      const markers = [
+        ...world.compoundLayouts.flatMap((layout) =>
+          layout.buildings.flatMap((b): MapMarker[] => {
+            const site = mouthSite(world, b);
+            return site ? [{ kind: "dungeon", x: site.x, z: site.z, title: "Crypt" }] : [];
+          }),
+        ),
+        ...world.caveMouths.map((m): MapMarker => ({ kind: "dungeon", x: m.x, z: m.z, title: "Cave" })),
+      ];
       mouths = { world, markers };
     }
     return mouths.markers;

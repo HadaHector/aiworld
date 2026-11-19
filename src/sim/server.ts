@@ -1060,15 +1060,15 @@ export function createServer(options: ServerOptions): Server {
       const site = mouthNear(dimension.world, feet.x, feet.z, MOUTH_OPEN);
       const current = inDungeon.get(entity.id);
       if (site) {
-        const key = `${dimension.id}/dungeon/${Math.round(site.x)},${Math.round(site.z)}/crypt/dungeon`;
+        const key = `${dimension.id}/dungeon/${Math.round(site.x)},${Math.round(site.z)}/${site.style}/dungeon`;
         if (current === key) continue;
         if (current && !nearMouth.has(entity.id)) continue;
         const seed = deriveSeed(options.seed >>> 0, Math.round(site.x) * 7349 + Math.round(site.z) * 31);
-        const dungeon = dimension.dungeons.open(key, "crypt", "dungeon", seed, site);
+        const dungeon = dimension.dungeons.open(key, site.style, "dungeon", seed, site);
         peopleDungeon(dimension.id, dungeon);
         inDungeon.set(entity.id, dungeon.id);
         nearMouth.add(entity.id);
-        connectionOf(entity)?.end.send({ type: "dungeon", id: dungeon.id, style: dungeon.style, size: dungeon.size, seed: dungeon.seed, x: site.x, y: site.y, z: site.z, facing: site.facing, entry: dungeon.entry });
+        connectionOf(entity)?.end.send({ type: "dungeon", id: dungeon.id, style: dungeon.style, size: dungeon.size, seed: dungeon.seed, x: site.x, y: site.y, z: site.z, facing: site.facing, mouth: site.mouth ?? false, entry: dungeon.entry });
       } else if (current && nearMouth.has(entity.id) && !mouthNear(dimension.world, feet.x, feet.z, MOUTH_CLOSE) && !dimension.dungeons.at(feet.x, feet.y, feet.z)) {
         inDungeon.delete(entity.id);
         nearMouth.delete(entity.id);
@@ -1086,7 +1086,7 @@ export function createServer(options: ServerOptions): Server {
     loaded.get(entity.dimension)?.streamer.loadAround(arrival.x, arrival.z, pointsIn(entity.dimension));
     inDungeon.set(entity.id, dungeon.id);
     nearMouth.delete(entity.id);
-    connectionOf(entity)?.end.send({ type: "dungeon", id: dungeon.id, style: dungeon.style, size: dungeon.size, seed: dungeon.seed, x: site.x, y: site.y, z: site.z, facing: site.facing, entry: dungeon.entry });
+    connectionOf(entity)?.end.send({ type: "dungeon", id: dungeon.id, style: dungeon.style, size: dungeon.size, seed: dungeon.seed, x: site.x, y: site.y, z: site.z, facing: site.facing, mouth: site.mouth ?? false, entry: dungeon.entry });
   }
 
   function tell(connection: Connection, text: string, args: Readonly<Record<string, string | number>> = {}): void {

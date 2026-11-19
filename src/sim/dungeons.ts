@@ -7,6 +7,7 @@ import type { CollisionWorld } from "../world/collision/index";
 import type { DungeonContent } from "../world/dungeons/dungeonDefs";
 import { generateLayout, placedPaths, placedShapes, worldToFrame, type DungeonLayout, type DungeonSite } from "../world/dungeons/layout";
 import { buildCave, caveColliders } from "../world/dungeons/caveField";
+import type { CaveMouthSite } from "../world/dungeons/caveMouths";
 
 /** A dungeon placed in a dimension. */
 export interface PlacedDungeon {
@@ -54,7 +55,7 @@ export function createDimensionDungeons(world: WorldData, collision: CollisionWo
       if (!sizeDef) throw new Error(`the dungeon style "${style}" has no size "${size}"`);
       const layout = generateLayout(content, style, size, seed, site, ground);
       // A kit's parts' own colliders; a field's rock meshed as a whole (caveField.ts).
-      const batch = collision.addBatch(def.builder === "field" ? caveColliders(buildCave(layout, def)) : layout.parts.flatMap(placedShapes));
+      const batch = collision.addBatch(def.builder === "field" ? caveColliders(buildCave(layout, def, ground)) : layout.parts.flatMap(placedShapes));
       // The foot of the entrance's stair: its walk line's last point inside, looking on out.
       const line = placedPaths(layout.parts[0])[0];
       const foot = line[line.length - 2], door = line[line.length - 1];
@@ -84,7 +85,8 @@ export function createDimensionDungeons(world: WorldData, collision: CollisionWo
         for (const p of dungeon.layout.parts) {
           const b = p.box;
           if (fx >= b.min.x - 0.5 && fx <= b.max.x + 0.5 && fz >= b.min.z - 0.5 && fz <= b.max.z + 0.5 && y >= b.min.y - 0.5 && y <= b.max.y + 0.5) {
-            if (p.role === "entrance" && !p.part.exterior && y > dungeon.site.y - 4) continue;
+            // (A mouth's slip too: its ground is cut away, the body stands on the cave's own floor.)
+            if (p.role === "entrance" && !p.part.exterior && !p.part.mouth && y > dungeon.site.y - 4) continue;
             return dungeon;
           }
         }
@@ -110,18 +112,31 @@ export function mouthSite(world: Pick<WorldData, "heightAt">, b: { building: { m
   return { x, y: world.heightAt(x, z), z, facing: (Math.atan2(b.frontX, b.frontZ) * 180) / Math.PI };
 }
 
-/** The nearest mausoleum's site within `reach` of a point (a dungeon whose mouth is there), or null. */
-export function mouthNear(world: WorldData, x: number, z: number, reach: number): DungeonSite | null {
-  let best: DungeonSite | null = null;
+/** A dungeon's mouth in the world: where it opens, and the style of what lies under it. */
+export type Mouth = DungeonSite & { style: string; kind: "crypt" | "cave" };
+
+/** A cave mouth's site (dungeons/caveMouths.ts): the middle of its slip's foot, at its floor. */
+export function caveMouthSite(m: CaveMouthSite): Mouth {
+  return { x: m.x, y: m.y, z: m.z, facing: m.facing, mouth: true, style: "cave", kind: "cave" };
+}
+
+/** The nearest dungeon mouth within `reach` of a point - a mausoleum's crypt, a hillside's cave - or
+ *  null; only of one style, if `style` is given. */
+export function mouthNear(world: WorldData, x: number, z: number, reach: number, style?: string): Mouth | null {
+  let best: Mouth | null = null;
   let bestDistance = reach;
+  const take = (site: Mouth): void => {
+    if (style !== undefined && site.style !== style) return;
+    const d = Math.hypot(site.x - x, site.z - z);
+    if (d < bestDistance) [best, bestDistance] = [site, d];
+  };
   for (const layout of world.compoundLayouts) {
     for (const b of layout.buildings) {
       const site = mouthSite(world, b);
-      if (!site) continue;
-      const d = Math.hypot(site.x - x, site.z - z);
-      if (d < bestDistance) [best, bestDistance] = [site, d];
+      if (site) take({ ...site, style: "crypt", kind: "crypt" });
     }
   }
+  for (const m of world.caveMouths) take(caveMouthSite(m));
   return best;
 }
 
@@ -131,10 +146,14 @@ export function mouthNear(world: WorldData, x: number, z: number, reach: number)
  * within 20 m and 12 m within 40 m behind the door - facing down the slope, the dungeon running in
  * under the rise.
  */
-export function dungeonSiteNear(world: WorldData, x: number, z: number, reach = 1500, crypts = true): (DungeonSite & { kind: "crypt" | "slope" }) | null {
-  let best: (DungeonSite & { kind: "crypt" | "slope" }) | null = null;
+export function dungeonSiteNear(world: WorldData, x: number, z: number, reach = 1500, crypts = true): (DungeonSite & { kind: "crypt" | "cave" | "slope" }) | null {
+  // A cave: at the nearest cave mouth, else on a hillside.
+  if (!crypts) {
+    const mouth = mouthNear(world, x, z, reach, "cave");
+    if (mouth) return { ...mouth, kind: "cave" };
+  }
+  let best: (DungeonSite & { kind: "crypt" | "cave" | "slope" }) | null = null;
   let bestDistance = reach;
-  // (A cave opens on a hillside only: `crypts` false.)
   for (const layout of crypts ? world.compoundLayouts : []) {
     for (const b of layout.buildings) {
       const site = mouthSite(world, b);

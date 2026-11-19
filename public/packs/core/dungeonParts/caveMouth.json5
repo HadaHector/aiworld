@@ -1,0 +1,16 @@
+// A cave's way in on a steep hillside: a slip cut into the hill, ringed with boulders, the tunnel in level then down.
+{
+  tags: ["cave", "entrance"],
+  mouth: { width: 22, length: 20 },
+  sockets: [
+    { at: [0, 0, 0], facing: 180, type: "surface", size: [9, 8] },
+    { at: [0, -14, 68], facing: 0, type: "tunnel", size: [9, 8] },
+  ],
+  field: [
+    {
+      tunnel: { points: [[0, 0, 17], [0, 0, 32], [0, -12, 60], [0, -14, 68]], width: 9, height: 8 },
+    },
+  ],
+  paths: [[[0, -14, 68], [0, -12, 60], [0, 0, 32], [0, 0, 24], [0, 0, 12]]],
+  spots: { light: [[0, 0, 30]] },
+}
