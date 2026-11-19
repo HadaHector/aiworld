@@ -215,10 +215,10 @@ export interface BuildingMaterial {
    *  light through. castsByLayer covers them all. */
   bakeLayerOf: Map<string, number>;
   /** What the props' materials are made from (see props/propMesh.ts): the array, for one in it; a
-   *  texture of its own (a one-layer array, at its textureSize) for one only props are made of. */
+   *  plain texture of its own, at its textureSize, for one only props are made of. */
   colorArray: RawTexture2DArray;
   normalArray: RawTexture2DArray;
-  ownTextures: Map<string, { color: RawTexture2DArray; normal: RawTexture2DArray }>;
+  ownTextures: Map<string, { color: RawTexture; normal: RawTexture }>;
   /** Every building material, in the array or not. */
   definitions: BuildingMaterialDef[];
   litShading: LitShading;
@@ -293,24 +293,29 @@ export function createBuildingMaterial(scene: Scene, litShading: LitShading, tex
     const fade = metadata?.fade;
     effect.setFloat2("fadeRange", fade ? fade[0] : 0, fade ? fade[1] : 0);
   });
-  // Each material only props are made of: its own texture, shrunk to its size.
-  const ownTextures = new Map<string, { color: RawTexture2DArray; normal: RawTexture2DArray }>();
+  // Each material only props are made of: a plain texture of its own (no array), shrunk to its size.
+  const ownTextures = new Map<string, { color: RawTexture; normal: RawTexture }>();
   all.forEach((def, i) => {
     if (!def.propsOnly) return;
     const at = i * layerBytes;
     const size = def.textureSize;
-    const make = (buffer: Uint8Array, normal: boolean, name: string): RawTexture2DArray => {
+    const make = (buffer: Uint8Array, normal: boolean, name: string): RawTexture => {
       const texels = shrinkTexels(buffer.subarray(at, at + layerBytes), TEXTURE_RESOLUTION, size, normal);
-      const texture = RawTexture2DArray.CreateRGBATexture(texels, size, size, 1, scene, true, false);
+      const texture = RawTexture.CreateRGBATexture(texels, size, size, scene, true, false, Texture.TRILINEAR_SAMPLINGMODE);
       texture.name = name;
       texture.wrapU = Texture.WRAP_ADDRESSMODE;
       texture.wrapV = Texture.WRAP_ADDRESSMODE;
       texture.anisotropicFilteringLevel = 8;
+      // Its repeat, for what reads it through its texture matrix (the sun's shadow pass, cutting a
+      // cut-out's holes) - the props' shader works its repeat out itself.
+      texture.uScale = 1 / def.size[0];
+      texture.vScale = 1 / def.size[1];
       return texture;
     };
     ownTextures.set(def.id, { color: make(textures.colorBuffer, false, `propColors:${def.id}`), normal: make(textures.normalBuffer, true, `propNormals:${def.id}`) });
   });
-  const glowing = new Set(all.filter((def) => def.glow > 0).map((def) => def.id));
+  // What lets a house's own light through: a flame (its light is from inside it), a cut-out (holes).
+  const glowing = new Set(all.filter((def) => def.glow > 0 || def.cutout).map((def) => def.id));
   const bakeOrder = [...materials, ...all.filter((def) => def.propsOnly)];
   return {
     material,

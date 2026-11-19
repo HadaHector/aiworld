@@ -786,7 +786,7 @@ function readFeatureChances(obj: RawObject, reader: Reader): FeatureChance[] {
 
 /** A buildingMaterials/ file - see BuildingMaterialDef. */
 function readBuildingMaterial(id: string, obj: RawObject, reader: Reader): BuildingMaterialDef {
-  reader.onlyKeys(obj, "", ["name", "texture", "size", "shine", "glow", "daylight", "inside", "lit", "lamp", "propsOnly", "textureSize"]);
+  reader.onlyKeys(obj, "", ["name", "texture", "size", "shine", "glow", "daylight", "inside", "lit", "lamp", "propsOnly", "textureSize", "cutout"]);
   const size = obj.size;
   let repeat: [number, number] = [1, 1];
   if (typeof size === "number" && size > 0) repeat = [size, size];
@@ -803,7 +803,9 @@ function readBuildingMaterial(id: string, obj: RawObject, reader: Reader): Build
     inside: obj.inside === undefined || obj.inside === null ? null : reader.string(obj, "inside", ""),
     lit: obj.lit === undefined || obj.lit === null ? null : reader.string(obj, "lit", ""),
     lamp: obj.lamp === undefined || obj.lamp === null ? null : reader.color(obj, "lamp", ""),
-    propsOnly: obj.propsOnly === true,
+    // A cut-out is drawn by the props' shader alone: only props are made of it.
+    propsOnly: obj.propsOnly === true || obj.cutout === true,
+    cutout: obj.cutout === true,
     textureSize: readTextureSize(obj, reader),
   };
 }

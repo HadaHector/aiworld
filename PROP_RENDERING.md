@@ -203,11 +203,23 @@ quarter of today), with no change of layout. A surface bake's layout is in its t
 workbench's texture view reads both layouts and shows a building material's mask. Changing the baker
 changes its code hash, so every texture is baked again once, on each browser's next load.
 
-**Next, not built - cut-outs** (a banner, a hide, hanging herbs): a material flag (`cutout`), a cut-out
-kind of the props' material (`#define CUTOUT`: discard by the mask, the threshold raised with the mip
-level as the leaves do, both sides drawn), its sun shadow cut out too (a `getAlphaTestTexture` as the
-trees' leaf material does, or a shadow depth wrapper), and cut-out faces letting baked light through.
-The building shader gets no `discard`: only materials that ask for it pay for it.
+**Cut-outs: built.** A material says `cutout: true` (which makes it `propsOnly`) and its recipe a
+`mask` output (0 a hole). Its props' material is the cut-out kind (`#define CUTOUT`): discarded by
+the mask, the threshold eased with the mip level as the leaves' is, both sides drawn (lit as the side
+seen). Its sun shadow is cut by the same mask: the material hands Babylon's shadow pass its own colour
+texture (`getAlphaTestTexture`, as the trees' leaf material does), whose `uScale`/`vScale` carry the
+repeat. Cut-out faces let a house's baked light through, as flames do. The building shader has no
+`discard`: only materials that ask for it pay for it.
+
+The props-only materials' own textures are plain 2D textures (`OWN_TEXTURE` in the props' shader),
+not one-layer arrays; a material a prop shares with the buildings still reads its layer of the array.
+
+Checked with a throwaway mask on the hide (`hideFrame`, put back after): holes drawn from both sides
+in shots, and in the workbench the scene brighter with the shadow cut (88.3) than solid (87.7). No
+material is a cut-out yet: a hide's ragged rim, a banner's fringe, a bunch of herbs are each a
+material of their own to design.
+
+Compressing the textures is planned in TEXTURES.md.
 
 ## 4. Open questions
 

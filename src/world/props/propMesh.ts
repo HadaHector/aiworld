@@ -1,4 +1,4 @@
-import { Effect, Material, Matrix, Mesh, MultiMaterial, RawTexture, type AbstractMesh, ShaderMaterial, SubMesh, Vector2, Vector3, VertexData, type Scene } from "@babylonjs/core";
+import { Effect, Material, Matrix, Mesh, MultiMaterial, RawTexture, type AbstractMesh, type BaseTexture, ShaderMaterial, SubMesh, Vector2, Vector3, VertexData, type Scene } from "@babylonjs/core";
 import { LIT_SHADING_GLSL, LIT_SHADING_SAMPLERS, LIT_SHADING_UNIFORMS } from "../materials/litShading";
 import { DITHER_GLSL, SURFACE_GLSL, keepsBuildingCpuCopies, type BuildingMaterial } from "../buildings/buildingMesh";
 import { placedAxes } from "../buildings/buildingCollision";
@@ -85,11 +85,17 @@ uniform sampler2D lightmap;
 uniform float lightmapOn;
 #endif
 
-// The material: its texture (a layer of an array - negative for a plain colour), metres to a repeat,
-// how much it shines, how far it gives its own light, how far the daylight shows through it, and the
-// lamp behind it (black for none) - as a building material's.
+// The material: its texture - its own (OWN_TEXTURE: one only props are made of), else a layer of the
+// buildings' array (negative for a plain colour) - metres to a repeat, how much it shines, how far it
+// gives its own light, how far the daylight shows through it, and the lamp behind it (black for
+// none) - as a building material's.
+#ifdef OWN_TEXTURE
+uniform sampler2D colorTexture;
+uniform sampler2D normalTexture;
+#else
 uniform sampler2DArray colorArray;
 uniform sampler2DArray normalArray;
+#endif
 uniform float layer;
 uniform vec2 size;
 uniform float shine;
@@ -103,11 +109,37 @@ out vec4 outColor;
 ${DITHER_GLSL}
 ${SURFACE_GLSL}
 
+vec4 colorAt(vec2 uv) {
+#ifdef OWN_TEXTURE
+  return texture(colorTexture, uv);
+#else
+  return texture(colorArray, vec3(uv, layer));
+#endif
+}
+
+vec4 surfaceAt(vec2 uv) {
+#ifdef OWN_TEXTURE
+  return texture(normalTexture, uv);
+#else
+  return texture(normalArray, vec3(uv, layer));
+#endif
+}
+
 void main() {
   if (fadeRange.y > 0.0) {
     float fade = clamp((length(vPositionFromCamera) - fadeRange.x) / max(fadeRange.y - fadeRange.x, 0.001), 0.0, 1.0);
     if (fade > 0.0 && dither4(gl_FragCoord.xy) < fade) discard;
   }
+#if defined(CUTOUT) && defined(OWN_TEXTURE)
+  // Cut out by its mask (the colour's alpha). Mipmapping averages a hole's edge away with distance,
+  // so the threshold eases with the mip level - as the leaves' does - or a fringe thins to nothing.
+  {
+    vec2 uv = vUV / size;
+    vec2 texel = uv * vec2(textureSize(colorTexture, 0));
+    float lod = max(0.0, 0.5 * log2(max(dot(dFdx(texel), dFdx(texel)), dot(dFdy(texel), dFdy(texel)))));
+    if (texture(colorTexture, uv).a * (1.0 + 0.3 * lod) < 0.5) discard;
+  }
+#endif
   vec3 viewDir = normalize(cameraPosition - vWorldPosition);
   float side = dot(vNormal, viewDir) < 0.0 ? -1.0 : 1.0;
   vec3 n = normalize(vNormal) * side;
@@ -115,9 +147,9 @@ void main() {
   float roughness = 0.85;
   vec3 surfaceNormal = n;
   if (layer >= 0.0) {
-    vec3 at = vec3(vUV / size, layer);
-    vec4 texel = texture(colorArray, at);
-    vec4 surface = texture(normalArray, at);
+    vec2 at = vUV / size;
+    vec4 texel = colorAt(at);
+    vec4 surface = surfaceAt(at);
     albedo *= texel.rgb;
     roughness = surface.b;
     vec3 bump = surfaceBump(surface);
@@ -156,6 +188,19 @@ void main() {
   outColor = vec4(applyFog(lit, length(vPositionFromCamera)), 1.0);
 }
 `;
+
+/**
+ * A cut-out's material: its holes cut out of its sun shadow too. Babylon's shadow pass alpha-tests
+ * with whatever texture a material hands it here, which a plain ShaderMaterial never does (the trees'
+ * leaf material does the same).
+ */
+class CutoutMaterial extends ShaderMaterial {
+  alphaTexture: BaseTexture | null = null;
+
+  override getAlphaTestTexture(): BaseTexture | null {
+    return this.alphaTexture;
+  }
+}
 
 /** The props' materials: one per building material, made when a prop first uses it, and a plain
  *  colour's for parts with none - each in two kinds, lit only by the world, or also by a lightmap
@@ -196,14 +241,26 @@ function createPropMaterials(scene: Scene, building: BuildingMaterial): PropMate
     const own = id === null ? undefined : building.ownTextures.get(id);
     const arrayLayer = id === null ? undefined : building.layerOf.get(id);
     const layer = own ? 0 : (arrayLayer ?? -1);
-    const shader = new ShaderMaterial(`prop:${id ?? "plain"}${lit ? ":lit" : ""}`, scene, "prop", {
+    const cutout = !!own && !!def?.cutout;
+    const options = {
       attributes: ["position", "normal", "btangent", "uv", "color", ...(lit ? ["lightUv"] : [])],
       uniforms: ["world", "view", "projection", "layer", "size", "shine", "glow", "daylight", "lamp", "fadeRange", ...(lit ? ["lightmapOn"] : []), ...LIT_SHADING_UNIFORMS],
-      samplers: ["colorArray", "normalArray", ...(lit ? ["lightmap"] : []), ...LIT_SHADING_SAMPLERS],
-      defines: lit ? ["LIGHTMAP"] : [],
-    });
-    shader.setTexture("colorArray", own?.color ?? building.colorArray);
-    shader.setTexture("normalArray", own?.normal ?? building.normalArray);
+      samplers: [...(own ? ["colorTexture", "normalTexture"] : ["colorArray", "normalArray"]), ...(lit ? ["lightmap"] : []), ...LIT_SHADING_SAMPLERS],
+      defines: [...(lit ? ["LIGHTMAP"] : []), ...(own ? ["OWN_TEXTURE"] : []), ...(cutout ? ["CUTOUT"] : [])],
+      needAlphaTesting: cutout,
+    };
+    const name = `prop:${id ?? "plain"}${lit ? ":lit" : ""}`;
+    const shader = cutout ? new CutoutMaterial(name, scene, "prop", options) : new ShaderMaterial(name, scene, "prop", options);
+    if (own) {
+      shader.setTexture("colorTexture", own.color);
+      shader.setTexture("normalTexture", own.normal);
+    } else {
+      shader.setTexture("colorArray", building.colorArray);
+      shader.setTexture("normalArray", building.normalArray);
+    }
+    // A cut-out's sun shadow is cut by the same mask: Babylon's shadow pass alpha-tests with this
+    // texture, through its texture matrix (its repeat).
+    if (shader instanceof CutoutMaterial) shader.alphaTexture = own!.color;
     // An unknown id draws as a plain colour, as the building shader draws one (layer -1).
     shader.setFloat("layer", layer);
     shader.setVector2("size", new Vector2(def?.size[0] ?? 1, def?.size[1] ?? 1));
@@ -212,7 +269,8 @@ function createPropMaterials(scene: Scene, building: BuildingMaterial): PropMate
     shader.setFloat("daylight", def?.daylight ?? 0);
     const lamp = def?.lamp ?? [0, 0, 0];
     shader.setVector3("lamp", new Vector3(lamp[0], lamp[1], lamp[2]));
-    shader.backFaceCulling = true;
+    // A cut-out is a sheet seen from both sides (lit as the side it is seen from - see `side`).
+    shader.backFaceCulling = !cutout;
     shader.sideOrientation = Material.ClockWiseSideOrientation;
     building.litShading.register(shader);
     if (lit) shader.setTexture("lightmap", noLightmap);

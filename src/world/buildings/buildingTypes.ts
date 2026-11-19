@@ -52,6 +52,10 @@ export interface BuildingMaterialDef {
   /** For one only props are made of: its texture's side in pixels (a power of two, 64-1024) - a
    *  candle's wax needs far less than a barn's boards. */
   textureSize: number;
+  /** Cut out by its texture's mask (its recipe's `mask` output: 0 a hole) - a banner's fringe, a
+   *  hide's ragged rim, a bundle of herbs - drawn from both sides, its sun shadow cut out the same,
+   *  and letting baked light through. Only props are made of one (it is `propsOnly`). */
+  cutout: boolean;
 }
 
 /** How one face of a building is drawn: a building material (by id - null for plain colour), and a
