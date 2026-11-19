@@ -2,6 +2,9 @@
 // lying along its v (a hide hung on a frame, a hung deer's flank). Dull, never shiny.
 {
   name: "Hide",
+  // Only props are made of it: a texture of its own, not a layer of the buildings' array (PROP_RENDERING.md).
+  propsOnly: true,
+  textureSize: 512,
   size: [0.9, 1.2],
   shine: 0,
   texture: {

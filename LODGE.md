@@ -61,3 +61,17 @@ decoration exists in the engine (trophies and herbs outside the wall need a new 
 prop); the smokehouse is a tool shed and the open shed a stable; the camp's saw-dust/spill and sounds are not
 used. Probe (`compounds.local.mjs`, seeds 1338, 7, 42): lodges placed in all three biomes, one "yard not level
 by 0.70 m" on a steep site (seed 42, snowy taiga); the 1338 faults are a logging camp's, not the lodge's.
+
+## Revived (after PROP_RENDERING.md steps 1-4)
+
+Merged onto master. The six new materials are `propsOnly: true` (textures of their own, 512 px stone, hide
+and antler, 256 px herbs) so they no longer count against the buildings' 32. New in the toolbox: `Shaper.tube`
+(a tube along a smoothed path, a radius per point), used by the antlers and the hung deer; the campfire's
+stones are smooth domes of the new `smoothStone` (rock, no mortar), not the brick-like rubble. Herbs are three
+materials (lavender purple, sage grey-green, yarrow cream) read from the grass plants' colours.
+
+Seen (`npm run shot`): antlers read as antlers, the deer as a hung deer, the herbs as three kinds, the campfire
+as smooth stones round a fire. Probe (compounds, seeds 1338 and 42): lodges placed in all three biomes; one
+"yard not level, 0.57 m off" on a steep site, the 1338 fault is a logging camp's. The feature shot's camera is
+now framed very wide (the zones are half as wide): look at it in the workbench for a close view.
+Still rough: the deer's head, the antlers' skull (a ribbed cylinder), the herbs' bunch shape.

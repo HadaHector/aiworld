@@ -2,6 +2,9 @@
 // (grass/yarrow.json5's plant, dried). Its v runs down the stem.
 {
   name: "Dried Yarrow",
+  // Only props are made of it: a texture of its own, not a layer of the buildings' array (PROP_RENDERING.md).
+  propsOnly: true,
+  textureSize: 256,
   size: [0.3, 0.5],
   shine: 0,
   texture: {
@@ -26,10 +29,10 @@
             { at: 1, color: [0.6, 0.58, 0.4] },
           ],
         },
-        { output: "head", op: "mask", input: "headEdge", at: 0.03, off: 0.22 },
-        { output: "inCluster", op: "mask", input: "clusterRaw", at: -0.2, off: 0.2 },
-        { output: "flowers", op: "multiply", a: "head", b: "inCluster" },
-        { output: "cream", op: "color", value: [0.88, 0.84, 0.66] },
+        { output: "head", op: "mask", input: "headEdge", at: 0.0, off: 0.5 },
+        { output: "inCluster", op: "mask", input: "clusterRaw", at: -0.7, off: -0.1 },
+        { output: "flowers", op: "scale", input: "head", factor: 1 },
+        { output: "cream", op: "color", value: [0.95, 0.9, 0.72] },
         { output: "diffuse", op: "mix", a: "leaf", b: "cream", t: "flowers" },
         { output: "roughness", op: "constant", value: 1 },
         { output: "height", op: "add", a: "flowers", b: "foliageRaw" },

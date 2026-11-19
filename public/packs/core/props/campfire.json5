@@ -11,7 +11,7 @@
   light: { color: [1.0, 0.58, 0.28], intensity: 1.6, radius: 12, size: 0.7 },
   effects: [{ effect: "flame.fire", extra: ["embers"], sound: "fireCrackle", scale: 0.9 }],
   parts: {
-    stone: { material: "smoothStone", tints: [[1, 1, 1], [0.92, 0.9, 0.88]] },
+    stone: { material: "smoothStone", tints: [[0.72, 0.7, 0.68], [0.65, 0.63, 0.6]] },
     ash: { material: "smoothStone", tints: [[0.28, 0.27, 0.27]] },
     logs: { material: "roundLog", tints: [[0.55, 0.44, 0.36], [0.45, 0.36, 0.3]] },
   },

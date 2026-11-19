@@ -3,6 +3,9 @@
 // Texture's cells are each a whole stone (so a stone's colour is its own), 1 m or so, twice life size.
 {
   name: "Smooth Stone",
+  // Only props are made of it: a texture of its own, not a layer of the buildings' array (PROP_RENDERING.md).
+  propsOnly: true,
+  textureSize: 512,
   size: 3,
   shine: 0.12,
   texture: {
@@ -33,7 +36,7 @@
           ],
         },
         { output: "shade", op: "remap", input: "mottleRaw", inMin: -1, inMax: 1, outMin: 0.82, outMax: 1.1 },
-        { output: "vein", op: "mask", input: "veinRaw", at: 1.2, off: 1.05 },
+        { output: "vein", op: "mask", input: "veinRaw", at: 1.4, off: 1.25 },
         { output: "veinColor", op: "color", value: [0.78, 0.76, 0.72] },
         { output: "shaded", op: "multiply", a: "tone", b: "shade" },
         { output: "veined", op: "mix", a: "shaded", b: "veinColor", t: "vein" },

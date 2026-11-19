@@ -119,3 +119,10 @@ Each image ~1 min at n=1. The three are Flux "man + plain background" prompts; t
   (deer, antlers, herbs) are first approximations and need the user's eye.
 - Concept sizes read against the man were used as the starting numbers and held up (kennel 2.4 m, gallows 3 m).
 - Time: about 40 min of GPU in total (12 + 6 + 2 + 2 + 3 + 4 images), most of it in the feature concepts.
+
+## Revival notes
+
+- Materials from the concept's colours, made for the props (smooth stone, hide, antler, three herbs), changed the
+  look more than any geometry fix did. The tube tool made organic props (antlers, deer) possible in one pass.
+- A mask op's direction is not obvious: a floret mask I gated by a noise never showed (no purple); using the cell
+  mask directly worked. Test a material's colours alone first.

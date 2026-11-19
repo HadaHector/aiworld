@@ -271,8 +271,8 @@ export const campfire: PropGenerator = {
       const rx = 0.26 + rng() * 0.1;
       const hy = 0.2 + rng() * 0.08;
       const jag = () => 0.9 + rng() * 0.2;
-      const profile: [number, number][] = [[rx * 0.55 * jag(), 0], [rx * jag(), hy * 0.25], [rx * 1.05 * jag(), hy * 0.55], [rx * 0.8 * jag(), hy * 0.88], [rx * 0.4 * jag(), hy * 1.05], [0.02, hy * 1.08]];
-      shape.lathe(turned(moved(ORIGIN, [Math.cos(a) * R, -0.03, Math.sin(a) * R]), "y", rng() * Math.PI), profile, stone, { sides: 9, top: stone, collide: true });
+      const profile: [number, number][] = [[rx * 0.7 * jag(), 0], [rx * 0.97 * jag(), hy * 0.18], [rx * 1.05 * jag(), hy * 0.45], [rx * 0.97 * jag(), hy * 0.7], [rx * 0.72 * jag(), hy * 0.92], [rx * 0.38 * jag(), hy * 1.05], [0.02, hy * 1.08]];
+      shape.lathe(turned(moved(ORIGIN, [Math.cos(a) * R, -0.03, Math.sin(a) * R]), "y", rng() * Math.PI), profile, stone, { sides: 14, top: stone, collide: true });
     }
     shape.lathe(ORIGIN, [[R - 0.1, 0.02], [R * 0.7, 0.07], [0.2, 0.09], [0, 0.09]], ctx.paint("ash"));
     const logs = ctx.paint("logs");
@@ -369,7 +369,7 @@ export const herbBundle: PropGenerator = {
     shape.beam(ORIGIN, [0, top - 0.03, 0.13], [0, tie, 0.1], 0.025, 0.025, ctx.paint("twine"));
     for (let k = 0; k < n; k++) {
       // Each kind fans out to its own side, the first leaning left, the last right.
-      const lean = n === 1 ? 0 : (k / (n - 1) - 0.5) * 0.9;
+      const lean = n === 1 ? 0 : (k / (n - 1) - 0.5) * 1.3;
       const l = len * (0.85 + rng() * 0.25);
       const frame = turned(moved(ORIGIN, [0, tie, 0.1]), "z", lean);
       // Narrow at the tie, flaring to the heads: a turned shape, its foot l below the tie.
