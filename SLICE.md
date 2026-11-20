@@ -162,6 +162,91 @@ IDs are used in the dependencies. "Par." is whether the task can run as its own 
 | B4 | **Money.** One currency. Targets: the first 30 minutes buy a potion stock and a weapon; the end of the slice buys one armour piece of the best tier, not all. Vendor prices, quest rewards and loot values set from one table. | S | B3 | after B3 |
 | B5 | **Difficulty.** Aggro range clamp and the "level difference" shape are Classic's. Set: a same-level fight costs about a third of health, an elite one half the potions, a boss is a real fight but not a wall. Deaths per run no more than a few. | M | B3 | after B3 |
 
+### The combat and balance step (being detailed with the user, 2026-11-20)
+
+**What the user says is wrong.** Level 1 plays fine. What is missing is a well-built skill set over
+levels 1-10, balanced between classes (ranged against melee, and defence), and above all **the
+fights**: enemies' stats, skills and how they use them (the spider webs the moment it targets you),
+their AI and where they stand. Levelling is "not that bad" next to the fights. Loot, raw gold, sell
+prices and shop prices need attention too.
+
+**What the code does today** (checked):
+- Every number is typed by hand in many files: a wolf's stats and per-level growth in `creatures/`,
+  damage formulas inside each skill (`heroicStrike`: weapon max + 12 + strength/5), item `value`s in
+  `items/` and `itemTemplates/`, money drops in `lootTables/` (a wolf drops 1-6 coins). Nothing
+  relates them, so nothing can be tuned as a whole.
+- Defence is armour only: `rules/combat.json5` has Classic's `armor / (armor + 400 + 85*level)`;
+  spells ignore armour; no block, dodge, parry or resistances. Hit chance falls 1% per level of gap.
+- Creature "tactics" are `{ skill, every: [min, max], when }`. The first use is **immediate**
+  (the timer starts at zero in `brain.ts`), so a spider's web (`every 16-20, when distance > 4`)
+  fires as soon as it aggros. Tactics have no opening delay, no "only after X seconds in combat",
+  and no limit on crowd control.
+- Classes: warrior (melee, rage), mage (ranged caster), priest (healer, smite); a bow weapon exists
+  but no ranged physical class. One talent tree each.
+
+**The proposal: a balancing step.** The user sets **target curves** in one JSON file
+(`rules/balance.json5`) and the pack is made to match them. Two layers:
+
+1. **Derive** (cheap, exact): kinds and items stop carrying raw numbers and carry a **role** and a
+   few multipliers instead; the resolver computes the numbers from the curves, the way
+   `resolveCreatureRules` already adds generated kinds. Covers:
+   - creature health, damage, armour at each level, from `ttk` (time to kill) and `ttd` (time to die)
+     for a role (normal, elite, boss, glass caster, brute, swarm): *health(L) = ttk x player dps(L)*,
+     *damage per hit = player health(L) / (hits to die) *;
+   - money per kill, per quest and per chest as a curve of level and role;
+   - an item's stat budget per level, slot and rarity, and its price from the budget;
+   - vendor buy price (multiple of the budget), sell rate (a share of it), repair, potions priced
+     in "minutes of income".
+2. **Fit and check** (measured, since skills are formulas): a headless duel tool runs each class's
+   rotation against a dummy of known armour and level in the server (no renderer), and reports the
+   real dps, time to kill and health lost per fight against the curves. Class skills are authored
+   as relative *power shares*, and the tool writes the one scale per class and level band that makes
+   the real dps meet the curve (or only reports, as the user prefers).
+
+The user's example curves: **dps, time to kill, hp scale, gold scale**; more as needed. Proposed
+set for the slice, each a table by level 1-10 (a formula beyond), editable by hand:
+
+| Curve | Meaning | Starting guess (to be tuned) |
+|---|---|---|
+| Player health | a character's health at level L | 60 at 1, about +25 a level |
+| Player dps | by role: melee, ranged physical, caster, healer-hybrid | melee and ranged equal at same gear; caster a bit more burst, less sustain |
+| Time to kill | a same-level normal enemy; an elite; a boss | 10 s; 30 s; 120 s alone, longer than the elite as adds join |
+| Time to die | an undamaged player, taking a same-level normal enemy's full output | 35 s normal, 12 s elite, 25 s boss with adds |
+| Fight cost | the share of health a same-level normal fight takes | about a third, so two fights then rest or a potion |
+| XP | kills to the next level, and the quest share | from PROGRESSION; kills about 55%, quests 45% |
+| Gold | money per hour at level L, split kills / quests / chests | tied to the price curves below |
+| Price | a potion = minutes of income; a level-band weapon = hours of income | potion about 4 min, a good weapon about 40 min |
+| Sell rate | share of the buy price a vendor pays | 25% |
+| Item power | stat budget by level, slot and rarity | green +15% over common, blue +35% |
+| Drops | items an hour by rarity; one upgrade expected per level | |
+
+**Enemy design rules** (to fix the web problem and its kin):
+- Every tactic gets an **opening delay** (`after`: seconds in combat before its first use) and a
+  rule that crowd control (root, stun, slow) is never the first thing and not twice in a row, with a
+  short immunity after it ends.
+- Roles say what a creature does: a **brute** (wolf, boar: melee, one trick), a **skirmisher**
+  (stays at range, kites), a **caster** (bandit mage, undead), a **swarm** (many weak), an
+  **elite** and a **boss** (a script of phases). Placement says where: packs on roads' edges are a
+  safe place, elites near a landmark, a boss in its room.
+- Spawn placement respects levels: the gradient across the zone (task B2) and no elite on the
+  first road.
+
+**The class design pass** (task I2 grows): each class gets a role, a resource, a ten-level skill
+ladder (one new thing on most levels), and defence tools. Classes today: warrior, mage, priest;
+the slice should add **one ranged physical class** (a ranger with the bow) so ranged and melee are
+both covered without the mage, unless the user prefers otherwise.
+
+**New and changed tasks** (these join the tables above):
+
+| ID | Task | Size | Needs | Par. |
+|---|---|---|---|---|
+| B6 | **`rules/balance.json5` and the derive step**: the curve format, a resolver that reads it, creatures and items moved from raw numbers to roles and multipliers, loot money from the curve, prices from the budget. | L | curve list agreed | yes |
+| B7 | **Duel and fit tool**: headless fights, a rotation policy per class, dps / TTK / health lost report against the curves, optional auto-scale. Replaces much of B3's tuning. | M | B6 | yes |
+| B8 | **Defence**: decide the model (armour only, plus block for shields, dodge, resistances for spells), put it in `rules/combat.json5` and the curves. | M | decision | yes |
+| E8 | **Creature AI pass**: tactic opening delay and CC rules, roles, a skirmisher that kites, a caster that keeps range, placement rules for elites and packs. Fixes the spider's instant web. | M | B6 | yes |
+| I2 | **Skills per class** (replaces the earlier I2): a role, a resource and a ten-level ladder per class, plus the ranger; each skill a power share. | L (a session per class) | B6, B8 | per class |
+| I1 | **Loot, gold and prices** (grows): item budgets, drop tables per creature and boss, gold curve, vendor buy/sell and repair, from the curves. | M | B6 | yes |
+
 ## 4. Known gaps, checked
 
 | Gap | What was found | Where it sits |
