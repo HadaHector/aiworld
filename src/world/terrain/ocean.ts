@@ -232,6 +232,9 @@ export function createOceanPlane(scene: Scene, sunLighting: SunLighting, sky: Sk
       ocean.position.x = scene.activeCamera.position.x;
       ocean.position.z = scene.activeCamera.position.z;
     }
+    // Underground there is no sea (G1 stopgap): off as soon as the daylight starts to fade, so the
+    // plane never shows through a crypt's or cave's walls. The real drawing switch is in world.ts later.
+    ocean.setEnabled(sunLighting.underground < 0.01);
     material.setFloat("time", time);
     material.setColor3("skyHorizon", sky.horizon);
     material.setColor3("skyZenith", sky.zenith);
