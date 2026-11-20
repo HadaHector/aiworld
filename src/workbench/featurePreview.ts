@@ -1,3 +1,4 @@
+import { WATER_SURFACE } from "../world/water";
 import type { WorldContent } from "../world/content/worldContent";
 import type { FeatureKindDef } from "../world/features/featureTypes";
 import type { BuildingModel } from "../world/buildings/buildingTypes";
@@ -190,6 +191,7 @@ export function buildFeaturePreview(
       padGap: levelled?.edge ?? Infinity,
       spill: spill ? spill.weight : 0,
       spillMaterial: spill ? spill.material : -1,
+      waterSurface: WATER_SURFACE,
     } as TerrainSample;
   };
   if (biome) {

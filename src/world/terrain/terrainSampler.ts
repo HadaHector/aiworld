@@ -33,6 +33,8 @@ import { createBaseNoise2D } from "./noise";
 import { compilePipeline, type CompiledPipeline } from "./pipeline/pipelineCompiler";
 import { createBoundaryHillEvaluator } from "./boundaryHills/boundaryHillsEvaluator";
 import { createRiverEvaluator } from "./rivers/riverEvaluator";
+import { buildRiverProfiles, riverProfileAt, type RiverProfile, type RiverWaterSample } from "./rivers/riverLevels";
+import { WATER_SURFACE, createFlatWaters, type FlatWaters } from "../water";
 import { RIVER_HILL_SUPPRESSION_INNER, RIVER_HILL_SUPPRESSION_OUTER } from "./rivers/riverConfig";
 
 export interface TerrainSample {
@@ -80,6 +82,10 @@ export interface TerrainSample {
    *  spillMaterials it is (-1 for none) - see features/spill.ts. */
   spill: number;
   spillMaterial: number;
+  /** The surface of the water that stands over this point: the river's own where the point lies in its
+   *  valley (WATER.md, water at its own level), else the sea's, WATER_SURFACE. The point is under water
+   *  when its height is below this. */
+  waterSurface: number;
 }
 
 export type TerrainSampler = (worldX: number, worldZ: number) => TerrainSample;
@@ -105,6 +111,10 @@ export interface TerrainWorld {
   areaNeighbours: Map<number, number[]>;
   /** Where natural caves open on steep hillsides - see dungeons/caveMouths.ts. */
   caveMouths: CaveMouthSite[];
+  /** Each river's water at its own level, mouth first - empty unless the world asks for `riverLevels`. */
+  riverProfiles: RiverProfile[];
+  /** The flat bodies of water (ponds, pools) features add as they are placed - see water.ts. */
+  waters: FlatWaters;
 }
 
 const OCEAN_FLOOR_DEPTH = -14;
@@ -182,12 +192,26 @@ export function createZoneHeight(seed: number): (worldX: number, worldZ: number,
 
 /** Composes the land's shape + biome zoning + height noise into one queryable per-position sample. */
 export function createTerrainSampler(seed: number, content: WorldContent): TerrainWorld {
-  const { sampleArea, worldExtent, areaBounds, areaNames, landCellSites, nameGenerator, areaBiomes, areaNeighbours } =
+  const { sampleArea, riverField, worldExtent, areaBounds, areaNames, landCellSites, nameGenerator, areaBiomes, areaNeighbours } =
     createAreaSampler(seed, content);
   const oceanNoise2D = createBaseNoise2D(deriveSeed(seed, OCEAN_SALT));
   const zoneHeight = createZoneHeight(seed);
   const evaluateBoundaryHill = createBoundaryHillEvaluator(seed, content.boundaryHillStyles);
   const carveRiver = createRiverEvaluator(seed);
+
+  // Water at its own level (riverLevels.ts): each river's surface runs from the ground it rises on down
+  // to the sea. Worked out from the ground as the river finds it - before its own cut, after the coast
+  // and the lakes - so it needs none of the river's own answers. Off, every river is legacy, as ever.
+  const oceanFloorAt = (x: number, z: number): number => SEA_LEVEL + OCEAN_FLOOR_DEPTH + oceanNoise2D(x * OCEAN_FLOOR_NOISE_FREQUENCY, z * OCEAN_FLOOR_NOISE_FREQUENCY) * OCEAN_FLOOR_NOISE_SCALE;
+  const groundBeforeRiver = (x: number, z: number): number => {
+    const area = sampleArea(x, z);
+    const hillFade = smoothstep(RIVER_HILL_SUPPRESSION_INNER, RIVER_HILL_SUPPRESSION_OUTER, area.riverGap);
+    const land = zoneHeight(x, z, area.areaWeights) + evaluateBoundaryHill(area.boundaryHillStyle, area.areaBorderGap, x, z) * hillFade;
+    return lerp(oceanFloorAt(x, z), lerp(land, LAKE_TARGET_HEIGHT, area.lakeFactor), smoothstep(-1, 1, area.landmass));
+  };
+  const riverProfiles: RiverProfile[] = content.world.riverLevels ? timed("Levelling rivers", () => buildRiverProfiles(riverField.polylines, groundBeforeRiver, WATER_SURFACE, seed)) : [];
+  const waters = createFlatWaters();
+  const riverWater: RiverWaterSample = { level: 0, depth: 0, reach: 0 };
 
   // Bound after the fact, because roads are routed over the terrain as it is before any of them
   // exist and then the terrain is brought to them - survey the land, then build the road. Until
@@ -237,9 +261,30 @@ export function createTerrainSampler(seed: number, content: WorldContent): Terra
     // neither carries the surrounding terrain's own shape into the water. River before lake means a
     // river's valley gets smoothly swallowed as it approaches the lake it feeds - reading correctly
     // as the river disappearing into the lake, not a competing dip on top of it.
-    const landHeightRivered = carveRiver(
-      area.isRiverEdge, area.riverTaper, area.riverGap, worldX, worldZ, landHeightUncarved,
-    );
+    // At their own level every river segment in reach clips the ground on its own and the lowest wins:
+    // a min of continuous carves is continuous, where the nearest segment's bed alone would step
+    // wherever two stretches' levels differ (the inside of a bend, a tributary beside its trunk). The
+    // water over the point is the nearest segment's, where the point is in its reach: in a steep
+    // stretch the reach of one upstream would otherwise lift the water over the ground.
+    let waterSurface = WATER_SURFACE;
+    let landHeightRivered: number;
+    if (riverProfiles.length > 0) {
+      landHeightRivered = landHeightUncarved;
+      let reached = -Infinity;
+      let nearest = Infinity;
+      const noise = carveRiver.edgeNoise(worldX, worldZ);
+      riverField.querySegments(worldX, worldZ, (distance, taper, river) => {
+        const water = riverProfileAt(riverProfiles[river], taper, riverWater);
+        if (distance < nearest) {
+          nearest = distance;
+          reached = distance < water.reach ? water.level : -Infinity;
+        }
+        landHeightRivered = Math.min(landHeightRivered, carveRiver(true, taper, distance, worldX, worldZ, landHeightUncarved, water, noise));
+      });
+      if (reached > waterSurface) waterSurface = reached;
+    } else {
+      landHeightRivered = carveRiver(area.isRiverEdge, area.riverTaper, area.riverGap, worldX, worldZ, landHeightUncarved);
+    }
     const landHeightNatural = lerp(landHeightRivered, LAKE_TARGET_HEIGHT, area.lakeFactor);
     const feature = featureField?.apply(worldX, worldZ, landHeightNatural);
     const landHeight = feature ? feature.height : landHeightNatural;
@@ -248,8 +293,7 @@ export function createTerrainSampler(seed: number, content: WorldContent): Terra
     // the ground as it then lies - the ground the roads were routed over and bridged against: a
     // road cut through a coastal hill was pulled down by the blend after the cut, below the water
     // (WATER.md, *Roads*). A road over the water is bridged (bridges.ts), which grades nothing.
-    const oceanNoise = oceanNoise2D(worldX * OCEAN_FLOOR_NOISE_FREQUENCY, worldZ * OCEAN_FLOOR_NOISE_FREQUENCY) * OCEAN_FLOOR_NOISE_SCALE;
-    const oceanFloorHeight = SEA_LEVEL + OCEAN_FLOOR_DEPTH + oceanNoise;
+    const oceanFloorHeight = oceanFloorAt(worldX, worldZ);
     const landBlend = smoothstep(-1, 1, area.landmass);
     const blendedHeight = lerp(oceanFloorHeight, landHeight, landBlend);
     let height = blendedHeight;
@@ -334,6 +378,7 @@ export function createTerrainSampler(seed: number, content: WorldContent): Terra
       featureStumpAge: feature ? feature.stumpAge : 0,
       padGap,
       ...spillAt(worldX, worldZ),
+      waterSurface,
     };
   }
 
@@ -416,5 +461,5 @@ export function createTerrainSampler(seed: number, content: WorldContent): Terra
   const caveMouths = timed("Finding cave mouths", () => siteCaveMouths(seed, worldExtent, sampleTerrain, settlements));
   mouthClear = caveMouthClearance(caveMouths);
 
-  return { sampleTerrain, worldExtent, areaBounds, areaNames, settlements, features, roads, settlementLayouts, compoundLayouts, bridges, areaBiomes, areaNeighbours, caveMouths };
+  return { sampleTerrain, worldExtent, areaBounds, areaNames, settlements, features, roads, settlementLayouts, compoundLayouts, bridges, areaBiomes, areaNeighbours, caveMouths, riverProfiles, waters };
 }

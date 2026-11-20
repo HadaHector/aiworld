@@ -71,7 +71,7 @@ export interface World {
   /** The building whose footprint (x, y, z) stands in, with a key unique to that one building. */
   buildingAt: (x: number, y: number, z: number) => { id: string; key: number } | undefined;
   /** The water surface and depth at a point (WATER.md). */
-  waterAt: (x: number, z: number) => WaterSample;
+  waterAt: (x: number, z: number, y?: number) => WaterSample;
   materialLibrary: MaterialLibrary;
   trees: TreeField;
   grass: GrassField;

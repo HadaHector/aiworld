@@ -23,7 +23,14 @@ export type RiverEvaluator = (
   worldX: number,
   worldZ: number,
   landHeight: number,
+  /** The river's own water here (riverLevels.ts), or none: the bed is then the legacy one, sunk below the sea. */
+  water?: { level: number; depth: number },
+  /** The edge noise at this point, when the caller carves many segments at one point (edgeNoise). */
+  noise?: number,
 ) => number;
+
+/** The river edge's own noise at a point, -1..1: the same for every river and segment there. */
+export type RiverEdgeNoise = (worldX: number, worldZ: number) => number;
 
 /**
  * Clips the terrain down to a valley profile: a flat bed at an absolute height, and a bank that
@@ -40,21 +47,19 @@ export type RiverEvaluator = (
  * the same operation written two ways; it is spelled as a depth here because the fade below has to
  * act on the depth rather than on the height.
  */
-export function createRiverEvaluator(seed: number): RiverEvaluator {
+export function createRiverEvaluator(seed: number): RiverEvaluator & { edgeNoise: RiverEdgeNoise } {
   // Dedicated, independent from every other border-jitter noise in the codebase (coastNoise2D,
   // boundary hills' edgeNoise2D, the lake-shore jitter) - the river channel's edge wobbles on its own.
   const edgeNoise2D = createBaseNoise2D(deriveSeed(seed, RIVER_EDGE_NOISE_SALT));
 
-  return function carveRiver(isRiverEdge, riverTaper, riverGap, worldX, worldZ, landHeight) {
+  const edgeNoise: RiverEdgeNoise = (worldX, worldZ) => edgeNoise2D(worldX * RIVER_EDGE_NOISE_FREQUENCY, worldZ * RIVER_EDGE_NOISE_FREQUENCY);
+  const carveRiver: RiverEvaluator = (isRiverEdge, riverTaper, riverGap, worldX, worldZ, landHeight, water, noise) => {
     if (!isRiverEdge) return landHeight;
 
     const bedHalfWidth = lerp(RIVER_BED_HALF_WIDTH_MOUTH, RIVER_BED_HALF_WIDTH_SOURCE, riverTaper);
-    const bedHeight = lerp(RIVER_BED_HEIGHT_MOUTH, RIVER_BED_HEIGHT_SOURCE, riverTaper);
+    const bedHeight = water ? water.level - water.depth : lerp(RIVER_BED_HEIGHT_MOUTH, RIVER_BED_HEIGHT_SOURCE, riverTaper);
 
-    const jitter =
-      edgeNoise2D(worldX * RIVER_EDGE_NOISE_FREQUENCY, worldZ * RIVER_EDGE_NOISE_FREQUENCY) *
-      bedHalfWidth *
-      RIVER_EDGE_NOISE_AMPLITUDE_RATIO;
+    const jitter = (noise ?? edgeNoise(worldX, worldZ)) * bedHalfWidth * RIVER_EDGE_NOISE_AMPLITUDE_RATIO;
     // Jitter can push a point past the centerline; the bed is flat there anyway, and a negative
     // distance would make the bank start climbing again on the wrong side of it.
     const distance = Math.max(0, riverGap + jitter);
@@ -74,4 +79,5 @@ export function createRiverEvaluator(seed: number): RiverEvaluator {
 
     return landHeight - depth * fade;
   };
+  return Object.assign(carveRiver, { edgeNoise });
 }

@@ -2,6 +2,13 @@ import type { CellPoint } from "../cells/cellGrid";
 import type { TerrainSampler } from "../terrain/terrainSampler";
 import type { PropDef } from "../props/propTypes";
 import { SEA_LEVEL } from "../cells/areaField";
+import { WATER_SURFACE } from "../water";
+
+/** The level a point's water is measured from: SEA_LEVEL for the sea (where the thresholds below were
+ *  always read); for a river at its own level, FORD_DEPTH under its surface, so a road wades water
+ *  shallower than that (a ford) and is bridged over anything deeper. */
+const FORD_DEPTH = 0.3;
+const waterLine = (waterSurface: number): number => (waterSurface > WATER_SURFACE ? waterSurface - FORD_DEPTH - WET_HEIGHT : SEA_LEVEL);
 import type { RoadStretch } from "./roadGraph";
 
 /**
@@ -25,11 +32,13 @@ export interface Bridge {
   variant: number;
 }
 
-/** Ground under this is under the water - a road on it is bridged. */
-const WET_HEIGHT = SEA_LEVEL + 0.3;
+/** Ground under this, over the water's surface, is under the water - a road on it is bridged. Each
+ *  point's own surface: the sea's, or a river's at its own level (TerrainSample.waterSurface). A ford
+ *  (water shallower than this) is waded, not bridged. */
+const WET_HEIGHT = 0.3;
 /** A bridge reaches out to ground this high above the water - firm bank - at most BRIDGE_REACH past
  *  the water on either side. */
-const BANK_HEIGHT = SEA_LEVEL + 1.5;
+const BANK_HEIGHT = 1.5;
 const BRIDGE_REACH = 30;
 /** Its deck stands at least this high over the water mid-span, and humps at least this much over the
  *  line between its ends - then HUMP_SCALE times that, but never more than BRIDGE_MAX_HUMP_GRADE of
@@ -67,29 +76,42 @@ export function planBridges(stretches: RoadStretch[], sampleTerrain: TerrainSamp
       const t = Math.max(0, Math.min(1, (s - lengths[i - 1]) / Math.max(1e-6, lengths[i] - lengths[i - 1])));
       return { x: a.x + (b.x - a.x) * t, z: a.z + (b.z - a.z) * t, h: stretch.heights[i - 1] + (stretch.heights[i] - stretch.heights[i - 1]) * t };
     };
+    // The ground as how high it stands over the water there.
+    const above = (s: number): number => {
+      const p = at(s);
+      const sample = sampleTerrain(p.x, p.z);
+      return sample.height - waterLine(sample.waterSurface);
+    };
     const ground = (s: number): number => {
       const p = at(s);
       return sampleTerrain(p.x, p.z).height;
+    };
+    const surfaceAt = (s: number): number => {
+      const p = at(s);
+      return waterLine(sampleTerrain(p.x, p.z).waterSurface);
     };
     // Its wet stretches, joined where close.
     const wet: [number, number][] = [];
     for (let s = 0; s <= total; s += BRIDGE_SCAN) {
       // Only where the road dips low - it runs down to the water where it crosses one.
-      if (at(s).h > BANK_HEIGHT + 2 || ground(s) >= WET_HEIGHT) continue;
+      if (at(s).h - surfaceAt(s) > BANK_HEIGHT + 2 || above(s) >= WET_HEIGHT) continue;
       const last = wet[wet.length - 1];
       if (last && s - last[1] <= BRIDGE_JOIN) last[1] = s;
       else wet.push([s, s]);
     }
     if (wet.length === 0) return;
-    const spans: { s0: number; s1: number; h0: number; h1: number }[] = [];
+    const spans: { s0: number; s1: number; h0: number; h1: number; surface: number }[] = [];
     for (const [w0, w1] of wet) {
       // Out to firm bank either side - or as far as it may reach.
+      // The water it spans: the highest surface along its wet stretch.
+      let surface = -Infinity;
+      for (let s = w0; s <= w1; s += BRIDGE_SCAN) surface = Math.max(surface, surfaceAt(s));
       let s0 = w0;
-      while (s0 > 0 && w0 - s0 < BRIDGE_REACH && ground(s0) < BANK_HEIGHT) s0 = Math.max(0, s0 - BRIDGE_SCAN);
+      while (s0 > 0 && w0 - s0 < BRIDGE_REACH && ground(s0) < surface + BANK_HEIGHT) s0 = Math.max(0, s0 - BRIDGE_SCAN);
       let s1 = w1;
-      while (s1 < total && s1 - w1 < BRIDGE_REACH && ground(s1) < BANK_HEIGHT) s1 = Math.min(total, s1 + BRIDGE_SCAN);
+      while (s1 < total && s1 - w1 < BRIDGE_REACH && ground(s1) < surface + BANK_HEIGHT) s1 = Math.min(total, s1 + BRIDGE_SCAN);
       // Each end level with the bank - or with the road there, where it stands higher.
-      spans.push({ s0, s1, h0: Math.max(ground(s0), at(s0).h, BANK_HEIGHT), h1: Math.max(ground(s1), at(s1).h, BANK_HEIGHT) });
+      spans.push({ s0, s1, h0: Math.max(ground(s0), at(s0).h, surface + BANK_HEIGHT), h1: Math.max(ground(s1), at(s1).h, surface + BANK_HEIGHT), surface });
     }
     // The stretch rebuilt: its points before each bridge, the bridge's deck, its points after - and
     // the road either side brought up to the deck.
@@ -97,7 +119,7 @@ export function planBridges(stretches: RoadStretch[], sampleTerrain: TerrainSamp
       const t = (s - span.s0) / Math.max(1e-6, span.s1 - span.s0);
       const line = span.h0 + (span.h1 - span.h0) * t;
       const mid = (span.h0 + span.h1) / 2;
-      const hump = Math.min(HUMP_SCALE * Math.max(BRIDGE_MIN_HUMP, SEA_LEVEL + BRIDGE_CLEARANCE - mid), (span.s1 - span.s0) * BRIDGE_MAX_HUMP_GRADE);
+      const hump = Math.min(HUMP_SCALE * Math.max(BRIDGE_MIN_HUMP, span.surface + BRIDGE_CLEARANCE - mid), (span.s1 - span.s0) * BRIDGE_MAX_HUMP_GRADE);
       return line + hump * (1 - Math.abs(2 * t - 1) ** HUMP_POWER);
     };
     const points: CellPoint[] = [];
