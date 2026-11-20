@@ -61,10 +61,10 @@ fail (a camp wants gentle ground deep in a wood) and leave its cell empty.
 | Sheepfold | built, but in **no biome list** | A moor and fell kind; leave it out of the wood. |
 | Abandoned camp, motte, grove, charcoal burners, sawmill, alchemist, shrine, tower | **no** | See below. There is no condition (decay) system in the code at all. |
 
-### The proposed eight
+### The proposed ten (first eight, then two added with the user)
 
 Chosen by fun per cost from FEATURES.md and by what makes the wood read as itself. Five exist; three
-are new. The zone has ten cells: nine are used (two of them settlements), one is left empty on
+are new, and the last two (the roadside bandit camp, the watermill) were added in the world generation talk. The zone has ten cells: nine are used (two of them settlements), one is left empty on
 purpose, so the wood has somewhere to be only wood.
 
 | # | Feature | Cost (FEATURES.md) | Why | What it gives the two hours |
@@ -77,6 +77,8 @@ purpose, so the wood has somewhere to be only wood.
 | 6 | **Abandoned logging camp** | 3 (fun 5) | The same camp given up: roofs sagging, the yard greening, no fire. It is the wood's signature story place, and reuses the camp's buildings and props. | The mystery chain, a hostile place (spiders, bandits or the dead), a small dungeon mouth or a mini-boss, a reward. |
 | 7 | **Motte and bailey** | 2 (fun 4) | A bandit stronghold on a mound with a ditch and a palisade: the open-air boss fight, and a place you see from afar. | Boss 2 (the bandit chief) with adds, a bandit camp quest, a rescue or recovery quest, good loot. Shares the mound stamp with charcoal burners. |
 | 8 | **Druid grove** | 2 (fun 4) | A ring of huge old trees round a stone: autumn's quiet, a counterpoint to the fights. Trees are the thing the zone is known by. | The vista, a rare herb or a book, the end of the slice, optional guardian. Needs a new "ancient" tree kind. |
+| 9 | **Roadside bandit camp** | S | The first human fight, before the motte's garrison: tents, a fire, a chest, a lookout, on the road. The `banditCamp` creature camp already exists with no place. | A combat quest, bandit loot, the road made dangerous. Task E7. |
+| 10 | **Watermill with a mill pond** | S-M | The autumn wood is on its FEATURES.md list. Needs the new river and pond water (W10). **The animated-part test**: a turning wheel is FEATURES.md piece 9 ("turning wheels and sails"), built for nothing yet, so the mill shows whether a prop can move (a part that rotates on an axis, driven by the water's flow, still when the wheel is stopped by a quest). | A miller NPC, "the lost shipment" place, a pool to swim in, a vendor of flour and bread. |
 
 **Cheap fillers, not counted:** wayside shrines (cost 1, no new piece: a cairn with a small heal or a
 set-home) along the roads; a watchtower on a hill (cost 1) if the zone feels short of vistas. **First
@@ -135,6 +137,7 @@ IDs are used in the dependencies. "Par." is whether the task can run as its own 
 | W10 | **Water at its own level.** Today every sea, lake, pond and river is a hollow of the ground filled to the one sea level (`water.ts`, `WATER_SURFACE`, one ocean plane, the terrain shader tints by depth against it), so a river can only run at sea level and a mountain lake cannot exist. Make **water bodies with their own surface**: *lakes and ponds* (a flat plane at their own height), *rivers* (a surface ribbon that follows the river's centreline and steps down with the bed, so a river runs down a valley and meets the sea), the *ocean* as it is, and *a pool in a cave* (a flat plane inside a cave part). `waterAt(x, z)` returns the surface of the body at that point, so swimming, breath, creature avoidance and sound keep working (WATER.md, "left for later" already names a lake above the sea). Drawing: the water shader's reflection and glint on each body; the shore tint moves from the global sea level to the body's. To check: the river carving in `terrain/rivers` and `cells/river*.ts` already knows each river's depth, which is the likely source of the surface. | L | - | yes |
 | W11 | **Rivers in the slice zone.** The world draws 3-5 rivers a continent and BACKLOG.md wants them per zone, by biome. The slice needs a river through the zone, at least one bridge on a road, a ford or two, and ideally a branching tributary, so most walks meet water. Shares the river code with W10. | M | W10 | with W10 |
 | W12 | **Wood-specific tweaks (the user's list, to grow).** A running list of small world fixes the user will give while looking at the wood: kept here as one task with a checklist, to be sorted into sessions. | S each | - | yes |
+| W13 | **Watermill with a mill pond, and its turning wheel.** The building (a mill house over a race, a pond behind a small weir) is a compound and props. **The new piece is the animated part**: a prop part that turns about an axis (FEATURES.md piece 9, "turning wheels and sails"; today props only have flames and smoke as effects), driven by a speed, stopped when the wheel is stopped, culled at distance. Built as a general "moving part" so a windmill's sails or a well's winch can use it later. Needs the pond and the river from W10 and W11. | M-L | W10, W11 | yes |
 
 ### (c) Gameplay elements
 
