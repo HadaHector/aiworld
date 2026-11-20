@@ -1,0 +1,23 @@
+// A cave tunnel's dead end sweeping up into a leaning chimney some 30 m high, narrowing to a point.
+{
+  tags: ["cave", "cap"],
+  weight: 1,
+  sockets: [{ at: [0, 0, 0], facing: 180, type: "tunnel", size: [9, 8] }],
+  field: [
+    { tunnel: { points: [[0, 0, 0], [0, 0, 5]], width: 9, height: 8 } },
+    {
+      tube: {
+        points: [
+          [0, 4.5, 3, 4.5],
+          [0, 5, 9, 5],
+          [0, 7.5, 13.5, 5.5],
+          [0, 12, 16.5, 5.5],
+          [0, 18, 18, 4.8],
+          [0, 24, 18.5, 3.8],
+          [0, 29, 18, 2.4],
+          [0, 33, 17, 0.6],
+        ],
+      },
+    },
+  ],
+}

@@ -1,0 +1,17 @@
+// A tall cavern, 26 m high: in on a ledge 10 m up, the way on at its foot - a jump down, no way back up.
+{
+  tags: ["cave", "chamber"],
+  weight: 1.5,
+  room: true,
+  entries: [1],
+  sockets: [
+    { at: [0, 0, 0], facing: 180, type: "tunnel", size: [9, 8] },
+    { at: [0, 10, 26], facing: 0, type: "tunnel", size: [9, 8] },
+  ],
+  field: [
+    { chamber: { at: [0, 0, 13], radius: [13, 13], height: 26 } },
+    { block: { min: [-8, -2, 19], max: [8, 10, 32] } },
+  ],
+  paths: [[[0, 10, 26], [0, 10, 20.5]], [[0, 0, 15], [0, 0, 0]]],
+  spots: { spawns: [[4, 0, 8], [-5, 0, 5]], light: [[0, 0, 9], [5, 10, 23]], chest: [[-4, 10, 23]] },
+}

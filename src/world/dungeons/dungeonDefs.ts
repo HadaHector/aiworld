@@ -8,7 +8,7 @@ import { DUNGEON_FOLDERS, orderPacks, parseFile, type PackSource } from "../cont
 import { vec3, type Aabb, type ShapeDesc, type Vec3 } from "../collision/index";
 import { boxShape, doorwayGeometry, DOORWAY_KINDS, rotundaGeometry, spiralGeometry, stairGeometry, type DoorwaySpec, type Polyline, type Voussoir } from "./kitShapes";
 import { checkPaths } from "./clearance";
-import { chunkFieldAt, fieldOf, fieldPartBounds, meshField, partShapes, type FieldNoise, type FieldShape } from "./caveField";
+import { chunkFieldAt, fieldOf, fieldPartBounds, meshField, NOISE_BIAS, partShapes, type FieldNoise, type FieldShape, type FieldVary } from "./caveField";
 import { CAVE_MOUTH } from "./caveMouths";
 import { altarBox, altarShape, benchShape, ledgerShape, placeBenches, placeLedgers, placeTombs, tombShape, type AltarDef, type BenchDef, type LedgerDef, type TombDef } from "./tombs";
 
@@ -31,6 +31,8 @@ export interface DungeonRules {
   thinCover: number;
   /** How much likelier a part that goes down is while diving. */
   diveWeight: number;
+  /** How a field cave's shapes vary along themselves (caveField.ts, FieldVary). */
+  field: FieldVary;
   /** How likely a stair is next to another along one way, for each already on it (not diving):
    *  a crypt goes down a flight, then along, not down flight after flight. */
   stairRun: number;
@@ -100,6 +102,9 @@ export interface DungeonPartDef {
   /** Field builder (caveField.ts): its chambers and tunnels in the cave's distance field - no
    *  colliders of its own (the whole cave's rock is meshed as one), its walk lines from its shapes. */
   field?: FieldShape[];
+  /** Which of its sockets it may be entered by (joined to the way it is grown from), by index - all,
+   *  if unset. A cavern whose way on is a drop off a ledge is entered only at the ledge. */
+  entries?: number[];
   /** A field entrance's mouth on a steep hillside (caveField.ts, dungeons/caveMouths.ts): the slip
    *  cut into the hill from its surface socket (`width` across, `length` back into it), a flat rock
    *  floor and big boulders round it - their sizes as the world sites mouths with. */
@@ -193,6 +198,8 @@ export interface DungeonStyleDef {
   voxel: number;
   /** Field builder: what its rock is drawn with (caveMaterial.ts). */
   rock: CaveLook;
+  /** Field builder: how its shapes vary (the rules' `field`). */
+  vary: FieldVary;
   sizes: Record<string, DungeonSize>;
   /** The chance a part's further sockets are left open to grow from, rather than capped. */
   branching: number;
@@ -236,6 +243,8 @@ export interface CaveLook {
   floor: CaveLayer;
   wall: CaveLayer;
   ceiling: CaveLayer;
+  /** The floor in its dips (gravel washed down into them), mixed in by how deep a dip is. */
+  low: CaveLayer;
 }
 
 export interface CaveLayer {
@@ -350,7 +359,7 @@ export function resolveDungeons(packs: readonly PackSource[]): DungeonContent {
 function readRules(entry: Entry | undefined, issues: ContentIssue[]): DungeonRules {
   const reader = new Reader(issues, entry?.file ?? "rules/dungeons.json5");
   const obj = entry ? reader.object(entry.data, "") : {};
-  reader.onlyKeys(obj, "", ["minClear", "joins", "attempts", "triesPerSocket", "sample", "around", "thinCover", "diveWeight", "stairRun", "loopReach", "loopSpan"]);
+  reader.onlyKeys(obj, "", ["minClear", "joins", "attempts", "triesPerSocket", "sample", "around", "thinCover", "diveWeight", "stairRun", "field", "loopReach", "loopSpan"]);
   const minClear = obj.minClear === undefined ? ([6, 6] as [number, number]) : pair(reader, obj, "minClear", "");
   const joins = reader.optionalArray(obj, "joins", "").map((value, i): [string, string] => {
     if (Array.isArray(value) && value.length === 2 && value.every((v) => typeof v === "string")) return [value[0], value[1]];
@@ -367,6 +376,7 @@ function readRules(entry: Entry | undefined, issues: ContentIssue[]): DungeonRul
     thinCover: reader.optionalNumber(obj, "thinCover", "", 10, { min: 0 }),
     diveWeight: reader.optionalNumber(obj, "diveWeight", "", 4, { min: 1 }),
     stairRun: reader.optionalNumber(obj, "stairRun", "", 0.25, { min: 0, max: 1 }),
+    field: readFieldVary(reader, obj),
     loopReach: reader.optionalNumber(obj, "loopReach", "", 60, { min: 0 }),
     loopSpan: reader.optionalNumber(obj, "loopSpan", "", 4, { min: 1, integer: true }),
   };
@@ -396,7 +406,7 @@ function vector(reader: Reader, value: unknown, path: string): Vec3 {
   return vec3();
 }
 
-const PART_KEYS = ["tags", "weight", "stage", "apart", "tombs", "benches", "ledgers", "ending", "bounds", "sockets", "colliders", "field", "mouth", "paths", "spots", "room", "doorway", "barrel", "altar", "exterior"];
+const PART_KEYS = ["tags", "weight", "stage", "apart", "tombs", "benches", "ledgers", "ending", "bounds", "sockets", "colliders", "field", "mouth", "entries", "paths", "spots", "room", "doorway", "barrel", "altar", "exterior"];
 
 function readPart(entry: Entry, rules: DungeonRules, issues: ContentIssue[]): DungeonPartDef | null {
   const reader = new Reader(issues, entry.file);
@@ -565,7 +575,7 @@ function readPart(entry: Entry, rules: DungeonRules, issues: ContentIssue[]): Du
     if (Array.isArray(b) && b.length === 2) bounds = { min: vector(reader, b[0], "bounds[0]"), max: vector(reader, b[1], "bounds[1]") };
     else { reader.fail("bounds", "expected [[x0, y0, z0], [x1, y1, z1]]"); bounds = { min: vec3(), max: vec3() }; }
   } else if (field) {
-    bounds = fieldPartBounds({ field, sockets }, FIELD_GROW);
+    bounds = fieldPartBounds({ field, sockets }, FIELD_GROW, rules.field);
     // A mouth's slip and its boulders, up to the ground over its back wall.
     if (mouth) {
       bounds = {
@@ -613,6 +623,7 @@ function readPart(entry: Entry, rules: DungeonRules, issues: ContentIssue[]): Du
     paths,
     field,
     mouth,
+    entries: obj.entries === undefined ? undefined : reader.array(obj, "entries", "").map((v, i) => (typeof v === "number" && Number.isInteger(v) && v >= 0 && v < sockets.length ? v : (reader.fail(`entries[${i}]`, "expected a socket's index"), 0))),
     spots,
     room: reader.boolean(obj, "room", "", false),
     ending: readEnding(reader, obj),
@@ -878,20 +889,40 @@ function readField(reader: Reader, obj: RawObject): FieldShape[] {
     const path = `field[${i}]`;
     const raw = reader.object(value, path);
     const keys = Object.keys(raw);
-    if (keys.length !== 1) { reader.fail(path, "expected one of chamber or tunnel"); return []; }
+    const kinds = "chamber, tunnel, shaft, tube, pillar or block";
+    if (keys.length !== 1) { reader.fail(path, `expected one of ${kinds}`); return []; }
     const inner = reader.object(raw[keys[0]], `${path}.${keys[0]}`);
     const at = `${path}.${keys[0]}`;
+    const low = (): number | undefined => (inner.low === undefined ? undefined : reader.number(inner, "low", at));
     if (keys[0] === "chamber") {
-      reader.onlyKeys(inner, at, ["at", "radius", "height"]);
-      return [{ kind: "chamber", at: vector(reader, inner.at, `${at}.at`), radius: pair(reader, inner, "radius", at), height: reader.number(inner, "height", at, { min: 1 }) }];
+      reader.onlyKeys(inner, at, ["at", "radius", "height", "low"]);
+      return [{ kind: "chamber", at: vector(reader, inner.at, `${at}.at`), radius: pair(reader, inner, "radius", at), height: reader.number(inner, "height", at, { min: 1 }), low: low() }];
     }
     if (keys[0] === "tunnel") {
-      reader.onlyKeys(inner, at, ["points", "width", "height"]);
+      reader.onlyKeys(inner, at, ["points", "width", "height", "low"]);
       const points = reader.array(inner, "points", at).map((p, k) => vector(reader, p, `${at}.points[${k}]`));
       if (points.length < 2) reader.fail(`${at}.points`, "a tunnel needs two or more points");
-      return [{ kind: "tunnel", points, width: reader.number(inner, "width", at, { min: 1 }), height: reader.number(inner, "height", at, { min: 1 }) }];
+      return [{ kind: "tunnel", points, width: reader.number(inner, "width", at, { min: 1 }), height: reader.number(inner, "height", at, { min: 1 }), low: low() }];
     }
-    reader.fail(path, `unknown field shape "${keys[0]}" (expected chamber or tunnel)`);
+    if (keys[0] === "shaft" || keys[0] === "pillar") {
+      reader.onlyKeys(inner, at, ["at", "radius", "height"]);
+      return [{ kind: keys[0], at: vector(reader, inner.at, `${at}.at`), radius: reader.number(inner, "radius", at, { min: 0.5 }), height: reader.number(inner, "height", at, { min: 1 }) }];
+    }
+    if (keys[0] === "tube") {
+      reader.onlyKeys(inner, at, ["points"]);
+      const points = reader.array(inner, "points", at).map((p, k): [number, number, number, number] => {
+        if (Array.isArray(p) && p.length === 4 && p.every((v) => typeof v === "number")) return [p[0], p[1], p[2], p[3]];
+        reader.fail(`${at}.points[${k}]`, "expected [x, y, z, radius]");
+        return [0, 0, 0, 1];
+      });
+      if (points.length < 2) reader.fail(`${at}.points`, "a tube needs two or more points");
+      return [{ kind: "tube", points }];
+    }
+    if (keys[0] === "block") {
+      reader.onlyKeys(inner, at, ["min", "max"]);
+      return [{ kind: "block", min: vector(reader, inner.min, `${at}.min`), max: vector(reader, inner.max, `${at}.max`) }];
+    }
+    reader.fail(path, `unknown field shape "${keys[0]}" (expected ${kinds})`);
     return [];
   });
 }
@@ -920,7 +951,7 @@ function fieldPaths(field: readonly FieldShape[], sockets: readonly SocketDef[])
     if (s.type === "surface" || ends.some((e) => Math.hypot(e.x - s.at.x, e.y - s.at.y, e.z - s.at.z) < 0.5)) continue;
     let best: Vec3 | null = null, bestD = Infinity;
     for (const shape of field) {
-      const candidates = shape.kind === "chamber" ? [shape.at] : shape.points;
+      const candidates = shape.kind === "chamber" || shape.kind === "shaft" ? [shape.at] : shape.kind === "tunnel" ? shape.points : [];
       for (const c of candidates) {
         const d = Math.hypot(c.x - s.at.x, c.z - s.at.z) + Math.abs(c.y - s.at.y) * 4;
         if (d < bestD) [best, bestD] = [c, d];
@@ -996,6 +1027,7 @@ function readStyle(entry: Entry, allParts: Map<string, DungeonPartDef>, rules: D
     noise: readNoise(reader, obj),
     voxel: reader.optionalNumber(obj, "voxel", "", 0.75, { min: 0.25, max: 2 }),
     rock: readCaveLook(reader, obj.rock === undefined ? {} : reader.object(obj.rock, "rock")),
+    vary: rules.field,
     sizes,
     branching: reader.optionalNumber(obj, "branching", "", 0.35, { min: 0, max: 1 }),
     loops: obj.loops === undefined ? [0, 0] : reader.range(obj, "loops", "", { allowEqual: true }),
@@ -1034,8 +1066,8 @@ function readStyle(entry: Entry, allParts: Map<string, DungeonPartDef>, rules: D
 
 /** A field style's `rock`: its floor, wall and ceiling materials. */
 function readCaveLook(reader: Reader, raw: RawObject): CaveLook {
-  reader.onlyKeys(raw, "rock", ["floor", "wall", "ceiling"]);
-  const layer = (key: "floor" | "wall" | "ceiling", material: string): CaveLayer => {
+  reader.onlyKeys(raw, "rock", ["floor", "wall", "ceiling", "low"]);
+  const layer = (key: "floor" | "wall" | "ceiling" | "low", material: string): CaveLayer => {
     if (raw[key] === undefined) return { material, size: 12, tint: [1, 1, 1] };
     const r = reader.object(raw[key], `rock.${key}`);
     reader.onlyKeys(r, `rock.${key}`, ["material", "size", "tint"]);
@@ -1045,7 +1077,23 @@ function readCaveLook(reader: Reader, raw: RawObject): CaveLook {
       tint: colour(reader, r.tint, `rock.${key}.tint`, [1, 1, 1]),
     };
   };
-  return { floor: layer("floor", "caveGravel"), wall: layer("wall", "caveRock"), ceiling: layer("ceiling", "flowstone") };
+  return { floor: layer("floor", "caveFloor"), wall: layer("wall", "caveRock"), ceiling: layer("ceiling", "flowstone"), low: layer("low", "caveGravel") };
+}
+
+/** The rules' `field`: how a field cave's shapes vary (FieldVary). */
+function readFieldVary(reader: Reader, obj: RawObject): FieldVary {
+  const raw = obj.field === undefined ? {} : reader.object(obj.field, "field");
+  reader.onlyKeys(raw, "field", ["width", "height", "lumps", "floor", "floorScale", "rooms"]);
+  const floor = raw.floor === undefined ? [0, 0] : reader.array(raw, "floor", "field");
+  if (floor.length !== 2 || floor.some((v) => typeof v !== "number" || v < 0)) reader.fail("field.floor", "expected [dip, rise], metres, both 0 or more");
+  return {
+    width: reader.optionalNumber(raw, "width", "field", 0, { min: 0, max: 1 }),
+    height: reader.optionalNumber(raw, "height", "field", 0, { min: 0, max: 2 }),
+    lumps: reader.optionalNumber(raw, "lumps", "field", 0, { min: 0 }),
+    floor: [Number(floor[0]) || 0, Number(floor[1]) || 0],
+    floorScale: reader.optionalNumber(raw, "floorScale", "field", 0.05, { min: 0.005 }),
+    rooms: reader.optionalNumber(raw, "rooms", "field", 0, { min: 0, max: 0.5 }),
+  };
 }
 
 /** A field style's `noise`: octaves `{ scale, amount }`, their amounts together no more than FIELD_NOISE_MOST. */
@@ -1055,7 +1103,8 @@ function readNoise(reader: Reader, obj: RawObject): FieldNoise[] {
     reader.onlyKeys(raw, `noise[${i}]`, ["scale", "amount"]);
     return { scale: reader.number(raw, "scale", `noise[${i}]`, { min: 0.01 }), amount: reader.number(raw, "amount", `noise[${i}]`, { min: 0 }) };
   });
-  if (noise.reduce((s, n) => s + n.amount, 0) > FIELD_NOISE_MOST + 1e-9) reader.fail("noise", `its amounts together may be no more than ${FIELD_NOISE_MOST} m: the parts' ways are measured with that much room`);
+  // Biased to open: it closes the rock by at most NOISE_BIAS of its amounts.
+  if (noise.reduce((s, n) => s + n.amount, 0) * (1 - NOISE_BIAS) > FIELD_NOISE_MOST + 1e-9) reader.fail("noise", `its amounts together may be no more than ${(FIELD_NOISE_MOST / (1 - NOISE_BIAS)).toFixed(1)} m: it closes the rock by half as much at most, and the parts' ways are measured with ${FIELD_NOISE_MOST} m of room`);
   return noise;
 }
 

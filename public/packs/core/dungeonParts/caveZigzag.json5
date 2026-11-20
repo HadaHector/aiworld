@@ -1,0 +1,33 @@
+// A cave tunnel zig-zagging 8 m down into a dip and back up again, 32 m, gravel in the dip - and a way off to the side from the bottom of the dip: a junction on two levels.
+{
+  tags: ["cave", "tunnel", "fork"],
+  weight: 2,
+  sockets: [
+    { at: [0, 0, 0], facing: 180, type: "tunnel", size: [9, 8] },
+    { at: [0, 0, 32], facing: 0, type: "tunnel", size: [9, 8] },
+    { at: [-16, -8, 17], facing: 270, type: "tunnel", size: [9, 8] },
+  ],
+  field: [
+    {
+      tunnel: {
+        points: [
+          [0, 0, 0],
+          [0, 0, 3],
+          [3, -2.5, 8],
+          [-3, -6.5, 13.5],
+          [-1, -8, 16.5],
+          [1.5, -7.8, 18.5],
+          [3.5, -5.5, 22],
+          [-2, -2.2, 26],
+          [0, 0, 29],
+          [0, 0, 32],
+        ],
+        width: 13,
+        height: 8.5,
+        low: -4.5,
+      },
+    },
+    { tunnel: { points: [[-7, -8, 17.5], [-11, -8, 17.5], [-16, -8, 17]], width: 9, height: 8 } },
+  ],
+  spots: { spawns: [[0, -8, 17]], light: [[-3, -6.5, 13.5]] },
+}

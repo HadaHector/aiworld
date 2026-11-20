@@ -1,0 +1,75 @@
+// Cave floor: a cave's floor (DUNGEONS.md, *Materials*) - the same limestone as its walls, worn
+// underfoot: broad low swells of grey stone, dark cracks running through it as the walls' do, a
+// little dry silt only in its deepest hollows - and nothing small and sharp (no pebbles, no flecks),
+// so it does not show its repeat. The walls' stone without their bedding.
+//
+// Its height: two broad swells, the cracks cut into them, a faint grain; its colour from the height
+// as the walls' is - near black in the cracks, grey over most, paler on the worn rises - shaded by a
+// slow mottle, silt in the lowest places.
+{
+  name: "Cave Floor",
+  texture: {
+    bumpStrength: 3,
+    pipeline: {
+      noises: [
+        { name: "swell", type: "fbm", octaves: 3, tileCycles: 2, amplitude: 1, persistence: 0.45, lacunarity: 2.0 },
+        { name: "ripple", type: "fbm", octaves: 2, tileCycles: 5, amplitude: 1, persistence: 0.45, lacunarity: 2.0 },
+        { name: "mottle", type: "fbm", octaves: 3, tileCycles: 3, amplitude: 1, persistence: 0.55, lacunarity: 2.0 },
+        { name: "grain", type: "fbm", octaves: 2, tileCycles: 28, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+        { name: "cracks", type: "fbm", octaves: 4, tileCycles: 3, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
+      ],
+      steps: [
+        { output: "swellRaw", op: "sample", noise: "swell" },
+        { output: "swell", op: "mask", input: "swellRaw", at: 0.9, off: -0.9 },
+        { output: "rippleRaw", op: "sample", noise: "ripple" },
+        { output: "ripple", op: "mask", input: "rippleRaw", at: 0.9, off: -0.9 },
+        { output: "grainRaw", op: "sample", noise: "grain" },
+        { output: "grainUnit", op: "mask", input: "grainRaw", at: 1, off: -1 },
+        // The cracks, as the walls': the fbm folded about its middle - deep and dark along the fold.
+        { output: "crackRaw", op: "sample", noise: "cracks" },
+        { output: "crackUnit", op: "mask", input: "crackRaw", at: 1, off: -1 },
+        { output: "crackDoubled", op: "scale", input: "crackUnit", factor: 2 },
+        { output: "crackCentred", op: "offset", input: "crackDoubled", amount: -1 },
+        { output: "crackFolded", op: "abs", input: "crackCentred" },
+        { output: "crack", op: "power", input: "crackFolded", exponent: 0.6 },
+        { output: "swellPart", op: "scale", input: "swell", factor: 0.4 },
+        { output: "ripplePart", op: "scale", input: "ripple", factor: 0.15 },
+        { output: "crackPart", op: "scale", input: "crack", factor: 0.38 },
+        { output: "grainPart", op: "scale", input: "grainUnit", factor: 0.07 },
+        { output: "body", op: "add", a: "swellPart", b: "ripplePart" },
+        { output: "cracked", op: "add", a: "body", b: "crackPart" },
+        { output: "rock", op: "add", a: "cracked", b: "grainPart" },
+
+        // Silt only in the lowest hollows, a little proud of the stone round it.
+        { output: "siltMask", op: "mask", input: "rock", at: 0.12, off: 0.24 },
+        { output: "siltFill", op: "scale", input: "siltMask", factor: 0.05 },
+        { output: "height", op: "add", a: "rock", b: "siltFill" },
+
+        // Stone greys by height, as the walls': near black in the cracks, grey over most, paler on
+        // the rises worn by feet.
+        {
+          output: "stone",
+          op: "colorRamp",
+          input: "rock",
+          stops: [
+            { at: 0.0, color: [0.11, 0.11, 0.12] },
+            { at: 0.22, color: [0.24, 0.24, 0.25] },
+            { at: 0.55, color: [0.34, 0.34, 0.33] },
+            { at: 1.0, color: [0.45, 0.44, 0.41] },
+          ],
+        },
+        { output: "silt", op: "color", value: [0.36, 0.34, 0.3] },
+        { output: "siltAmount", op: "scale", input: "siltMask", factor: 0.7 },
+        { output: "ground", op: "mix", a: "stone", b: "silt", t: "siltAmount" },
+        // A slow, dark mottle, as the walls have: stained stone in patches a few metres across.
+        { output: "mottleRaw", op: "sample", noise: "mottle" },
+        { output: "mottleShade", op: "remap", input: "mottleRaw", inMin: -1, inMax: 1, outMin: 0.78, outMax: 1.1 },
+        { output: "diffuse", op: "multiply", a: "ground", b: "mottleShade" },
+        { output: "roughStone", op: "constant", value: 0.62 },
+        { output: "roughSilt", op: "constant", value: 0.92 },
+        { output: "roughness", op: "mix", a: "roughStone", b: "roughSilt", t: "siltMask" },
+      ],
+      outputs: { diffuse: "diffuse", roughness: "roughness", height: "height" },
+    },
+  },
+}

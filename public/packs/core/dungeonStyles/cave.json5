@@ -3,12 +3,15 @@
 {
   name: "Cave",
   builder: "field",
-  // The rock's roughness: a broad swell and a finer grain, under 0.8 m together.
+  // The rock's roughness: a broad swell, a lumpier middle and a fine grain - biased to open the rock,
+  // so it closes it by at most half their amounts together (0.8 m).
   noise: [
-    { scale: 0.18, amount: 0.5 },
-    { scale: 0.6, amount: 0.25 },
+    { scale: 0.11, amount: 0.9 },
+    { scale: 0.28, amount: 0.5 },
+    { scale: 0.7, amount: 0.2 },
   ],
-  voxel: 0.75,
+  // The cell it is sampled and meshed at: coarse - rock reads as rock without small facets.
+  voxel: 1.25,
   sizes: {
     lair: { rooms: [3, 5], entry: "seamless" },
     dungeon: { rooms: [8, 12], entry: "seamless" },
@@ -20,12 +23,14 @@
   parts: { tags: ["cave"] },
   entrance: { tags: ["entrance"] },
   caps: { tags: ["cap"] },
-  // What its rock is (DUNGEONS.md, *Materials*): gravel in damp silt underfoot, bedded limestone up
+  // What its rock is (DUNGEONS.md, *Materials*): worn stone and settled silt underfoot, bedded limestone up
   // the walls, flowstone overhead - each laid this many metres a repeat.
   rock: {
-    floor: { material: "caveGravel", size: 6 },
+    floor: { material: "caveFloor", size: 16 },
     wall: { material: "caveRock", size: 12 },
     ceiling: { material: "flowstone", size: 10 },
+    // In the floor's dips, the gravel and silt washed down into them - by how deep a dip is.
+    low: { material: "caveGravel", size: 8 },
   },
   // How it is lit (DUNGEONS.md, *Light*): at every one of its parts' light spots (a tunnel's one, a
   // chamber's two to five), crystals grown at the foot of a wall, or a campfire or torch left by

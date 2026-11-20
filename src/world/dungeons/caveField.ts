@@ -9,32 +9,119 @@ import type { DungeonPartDef, DungeonStyleDef, SocketDef } from "./dungeonDefs";
 import type { DungeonLayout, PlacedPart } from "./layout";
 import { deriveSeed, mulberry32 } from "../rng";
 
-/** A chamber: a dome on a flat floor, `radius` across (x, z) at the floor, `height` over it at the middle. */
+/** A chamber: a dome on a flat floor, `radius` across (x, z) at the floor, `height` over it at the
+ *  middle. `low`: where its floor lies under this height, gravel (the style's low floor) settles. */
 export interface ChamberShape {
   kind: "chamber";
   at: Vec3;
   radius: [number, number];
   height: number;
+  low?: number;
 }
 
-/** A tunnel along floor-level `points`, `width` across at the floor and `height` high at its middle. */
+/** A tunnel along floor-level `points`, `width` across at the floor and `height` high at its middle;
+ *  `low` as a chamber's. */
 export interface TunnelShape {
   kind: "tunnel";
   points: Vec3[];
   width: number;
   height: number;
+  low?: number;
+  /** Where it ends square instead of rounded: past each plane (through `at`, facing `out`, level) it
+   *  is rock. A socket's reach into the part beyond ends so, flat and short - a rounded end at the
+   *  socket's height would bite into a slope rising from it. */
+  cut?: { at: Vec3; out: Vec3; end: "start" | "end" }[];
 }
 
-export type FieldShape = ChamberShape | TunnelShape;
+/** A shaft: open straight up from a flat floor at `at`, `radius` round, `height` high, its top rounded off. */
+export interface ShaftShape {
+  kind: "shaft";
+  at: Vec3;
+  radius: number;
+  height: number;
+}
 
-/** The rock's roughness: octaves of value noise, each `scale` (per metre) and `amount` (metres). */
+/** A tube: open round a curved line, each of its `points` with a radius of its own (`[x, y, z, r]`) -
+ *  no floor of its own, its bottom the curve itself: a chimney sweeping up out of a tunnel's end,
+ *  narrowing to a point. */
+export interface TubeShape {
+  kind: "tube";
+  points: [number, number, number, number][];
+}
+
+/** A pillar of rock: standing from under `at` straight up through whatever is open there, `radius` round. */
+export interface PillarShape {
+  kind: "pillar";
+  at: Vec3;
+  radius: number;
+  height: number;
+}
+
+/** A block of rock (a ledge, a shelf): solid from `min` to `max`, its edges rounded and roughened. */
+export interface BlockShape {
+  kind: "block";
+  min: Vec3;
+  max: Vec3;
+}
+
+export type FieldShape = ChamberShape | TunnelShape | ShaftShape | TubeShape | PillarShape | BlockShape;
+
+/** Whether a shape is rock (closes what others open) rather than open space. */
+export const isSolid = (s: FieldShape): s is PillarShape | BlockShape => s.kind === "pillar" || s.kind === "block";
+
+/** The rock's roughness: octaves of value noise, each `scale` (per metre) and `amount` (metres).
+ *  Biased to open the rock: it closes it by at most half its amounts, and opens it by up to one and
+ *  a half - rough walls that never make the way narrower than it is measured. */
 export interface FieldNoise {
   scale: number;
   amount: number;
 }
 
+/** How far the noise is biased to open the rock (a share of its amounts). */
+export const NOISE_BIAS = 0.5;
+
+/**
+ * How a field cave's shapes vary along themselves (`rules/dungeons.json5`, `field`), so nothing is
+ * as even as a thing built: each only ever grows from its own size - `width` and `height` the most
+ * it widens and rises, as shares, `lumps` how far (metres) its walls bulge out - so the way through
+ * is never narrower than measured; and its floor dips by up to `floor[0]` and rises by up to
+ * `floor[1]` (metres), in swells `floorScale` per metre, level again near every socket.
+ */
+export interface FieldVary {
+  width: number;
+  height: number;
+  lumps: number;
+  floor: [number, number];
+  floorScale: number;
+  /** A chamber's floor as ground: rises and hollows a room across - lobes from its walls, a ridge
+   *  through it - falling by up to this share of its radius and rising by most of that, in slopes
+   *  that are walked (level again near its ways in). */
+  rooms: number;
+}
+
+export const NO_VARY: FieldVary = { width: 0, height: 0, lumps: 0, floor: [0, 0], floorScale: 0.05, rooms: 0 };
+
+/** A chamber's ground rises by this share of how far it falls. */
+const ROOM_RISE = 0.7;
+
+/** A chamber floor's ground at a point, -1 to 1: swells some 25 m across, and smaller ones on them. */
+function roomGround(x: number, z: number): number {
+  const v = valueNoise(x / 26 + 41.3, 7.5, z / 26 - 12.9) * 0.6 + valueNoise(x / 12 - 5.2, 9.5, z / 12 + 3.3) * 0.3 + valueNoise(x / 6 + 8.8, 11.5, z / 6 - 2.4) * 0.1;
+  // (Value noise gathers round its middle: spread out, so the swells reach their full height.)
+  return Math.max(-1, Math.min(1, v * 1.7));
+}
+
+/** A floor stays level this near a socket, and swells freely from this far. */
+const FLAT_NEAR = 3;
+const FLAT_FAR = 8;
+
+/** Noise between 0 and 1, from a seed of its own (so each kind of variation is its own pattern). */
+const noise01 = (x: number, y: number, z: number, seed: number): number => (valueNoise(x + seed * 31.7, y - seed * 17.3, z + seed * 7.1) + 1) / 2;
+
 /** How far past a socket its stub reaches into the part beyond, and in from it into its own. */
-const STUB_OUT = 3;
+const STUB_OUT = 1.5;
+/** How far a reach past a socket runs on under its cut, so its rounded end is never seen. */
+const PAST_CUT = 6;
 const STUB_IN = 6;
 /** How softly shapes blend into each other, metres. */
 const BLEND = 2.5;
@@ -92,9 +179,11 @@ export function partShapes(part: Pick<DungeonPartDef, "field" | "sockets">, out 
     if (out <= 0) continue;
     const t = shapes[i] as TunnelShape;
     const f = (s.facing * Math.PI) / 180;
-    const past = { x: s.at.x + Math.sin(f) * out, y: s.at.y, z: s.at.z + Math.cos(f) * out };
+    const ox = Math.sin(f), oz = Math.cos(f);
+    const past = { x: s.at.x + ox * (out + PAST_CUT), y: s.at.y, z: s.at.z + oz * (out + PAST_CUT) };
     const atStart = Math.hypot(t.points[0].x - s.at.x, t.points[0].y - s.at.y, t.points[0].z - s.at.z) < 0.5;
-    shapes[i] = { ...t, points: atStart ? [past, ...t.points] : [...t.points, past] };
+    const cut = { at: { x: s.at.x + ox * out, y: s.at.y, z: s.at.z + oz * out }, out: { x: ox, y: 0, z: oz }, end: atStart ? ("start" as const) : ("end" as const) };
+    shapes[i] = { ...t, points: atStart ? [past, ...t.points] : [...t.points, past], cut: [...(t.cut ?? []), cut] };
   }
   return shapes;
 }
@@ -107,10 +196,12 @@ function stubOf(s: SocketDef, out: number): TunnelShape {
     kind: "tunnel",
     points: [
       { x: s.at.x - ox * STUB_IN, y: s.at.y, z: s.at.z - oz * STUB_IN },
-      { x: s.at.x + ox * out, y: s.at.y, z: s.at.z + oz * out },
+      { x: s.at.x + ox * (out + PAST_CUT), y: s.at.y, z: s.at.z + oz * (out + PAST_CUT) },
     ],
     width: s.size[0],
     height: s.size[1],
+    // Square where it reaches past the socket (none at all, out 0: a part's own bounds).
+    cut: [{ at: { x: s.at.x + ox * out, y: s.at.y, z: s.at.z + oz * out }, out: { x: ox, y: 0, z: oz }, end: "end" }],
   };
 }
 
@@ -118,8 +209,8 @@ function stubOf(s: SocketDef, out: number): TunnelShape {
  * A field part's bounds: round its shapes and stubs, grown by `grow`, but never past a socket's
  * plane (the part beyond starts there; what bulges over it blends into that part's stub).
  */
-export function fieldPartBounds(part: Pick<DungeonPartDef, "field" | "sockets">, grow: number): Aabb {
-  const b = fieldBounds(partShapes(part, 0), grow);
+export function fieldPartBounds(part: Pick<DungeonPartDef, "field" | "sockets">, grow: number, vary: FieldVary = NO_VARY): Aabb {
+  const b = fieldBounds(partShapes(part, 0), grow, vary);
   for (const s of part.sockets) {
     const f = (s.facing * Math.PI) / 180;
     const ox = Math.round(Math.sin(f)), oz = Math.round(Math.cos(f));
@@ -131,8 +222,19 @@ export function fieldPartBounds(part: Pick<DungeonPartDef, "field" | "sockets">,
   return b;
 }
 
-/** The shapes' bounds, grown by the noise's reach. */
-export function fieldBounds(shapes: readonly FieldShape[], grow: number): Aabb {
+/** The shapes' bounds, grown by the noise's reach - and as wide and high as `vary` may make them. */
+export function fieldBounds(shapes: readonly FieldShape[], grow: number, vary: FieldVary = NO_VARY): Aabb {
+  if (vary !== NO_VARY) {
+    const w = 1 + vary.width, h = 1 + vary.height;
+    // (A chamber's ground goes down under its floor: its bounds with it.)
+    shapes = shapes.map((s): FieldShape => {
+      if (s.kind === "tunnel") return { ...s, width: s.width * w, height: s.height * h };
+      if (s.kind !== "chamber") return s;
+      const fall = vary.rooms * Math.min(s.radius[0], s.radius[1]) + vary.floor[0];
+      return { ...s, at: { ...s.at, y: s.at.y - fall }, radius: [s.radius[0] * w, s.radius[1] * w], height: s.height * h + fall };
+    });
+    grow += vary.lumps + vary.floor[1];
+  }
   const min = { x: Infinity, y: Infinity, z: Infinity }, max = { x: -Infinity, y: -Infinity, z: -Infinity };
   const take = (x: number, y: number, z: number): void => {
     min.x = Math.min(min.x, x); min.y = Math.min(min.y, y); min.z = Math.min(min.z, z);
@@ -142,6 +244,17 @@ export function fieldBounds(shapes: readonly FieldShape[], grow: number): Aabb {
     if (s.kind === "chamber") {
       take(s.at.x - s.radius[0] * 1.1, s.at.y - 1, s.at.z - s.radius[1] * 1.1);
       take(s.at.x + s.radius[0] * 1.1, s.at.y + s.height, s.at.z + s.radius[1] * 1.1);
+    } else if (s.kind === "shaft" || s.kind === "pillar") {
+      take(s.at.x - s.radius, s.at.y - 1, s.at.z - s.radius);
+      take(s.at.x + s.radius, s.at.y + s.height, s.at.z + s.radius);
+    } else if (s.kind === "block") {
+      take(s.min.x, s.min.y, s.min.z);
+      take(s.max.x, s.max.y, s.max.z);
+    } else if (s.kind === "tube") {
+      for (const [x, y, z, r] of s.points) {
+        take(x - r, y - r, z - r);
+        take(x + r, y + r, z + r);
+      }
     } else {
       const r = s.width * 0.55;
       for (const p of s.points) {
@@ -156,11 +269,85 @@ export function fieldBounds(shapes: readonly FieldShape[], grow: number): Aabb {
 /** A compiled shape: its distance (positive in the rock) and its floor's height at a point. */
 interface Compiled {
   box: Aabb;
-  /** The open space's distance, before noise: [walls and vault, floor]. */
+  /** How far its floor falls as ground (a chamber's), metres; 0 for a way through. */
+  ground: number;
+  /** The open space's distance, before noise: [walls and vault, floor] - for a solid, [how far
+   *  inside it (positive), unused]. */
   eval: (x: number, y: number, z: number, out: [number, number]) => void;
+  /** It is rock, closing what the open shapes open. */
+  solid: boolean;
+  /** Its floor's low height (gravel under it), if it has one. */
+  low?: number;
 }
 
-function compile(shape: FieldShape): Compiled {
+function compile(shape: FieldShape, vary: FieldVary): Compiled {
+  if (shape.kind === "tube") {
+    const pts = shape.points;
+    return {
+      box: fieldBounds([shape], BLEND + 1),
+      ground: 0,
+      solid: false,
+      eval(x, y, z, out) {
+        // Round each piece of its line, its radius running from one point's to the next.
+        let d = Infinity;
+        for (let i = 0; i + 1 < pts.length; i++) {
+          const [ax, ay, az, ar] = pts[i], [bx, by, bz, br] = pts[i + 1];
+          const dx = bx - ax, dy = by - ay, dz = bz - az;
+          const l2 = dx * dx + dy * dy + dz * dz;
+          const t = l2 > 0 ? Math.max(0, Math.min(1, ((x - ax) * dx + (y - ay) * dy + (z - az) * dz) / l2)) : 0;
+          d = Math.min(d, Math.hypot(x - ax - dx * t, y - ay - dy * t, z - az - dz * t) - (ar + (br - ar) * t));
+        }
+        out[0] = d;
+        // No floor of its own: its bottom is its own curve.
+        out[1] = -ROCK;
+      },
+    };
+  }
+  if (shape.kind === "shaft") {
+    const { at, radius, height } = shape;
+    const top = at.y + height - radius;
+    return {
+      box: fieldBounds([shape], BLEND + 1),
+      ground: 0,
+      solid: false,
+      eval(x, y, z, out) {
+        // A capsule up from the floor: round, its top a dome.
+        const across = Math.hypot(x - at.x, z - at.z);
+        const above = Math.max(0, y - top);
+        out[0] = Math.hypot(across, above) - radius;
+        out[1] = at.y - y;
+      },
+    };
+  }
+  if (shape.kind === "pillar") {
+    const { at, radius, height } = shape;
+    return {
+      box: fieldBounds([shape], BLEND + 1),
+      ground: 0,
+      solid: true,
+      eval(x, y, z, out) {
+        // Thicker at its foot and its head, as a column of flowstone is.
+        const t = Math.max(0, Math.min(1, (y - at.y) / height));
+        const r = radius * (1 + 0.35 * (1 - Math.sin(t * Math.PI)));
+        out[0] = Math.min(r - Math.hypot(x - at.x, z - at.z), y - (at.y - 2), at.y + height - y);
+        out[1] = 0;
+      },
+    };
+  }
+  if (shape.kind === "block") {
+    const { min, max } = shape;
+    const c: [number, number, number] = [(min.x + max.x) / 2, (min.y + max.y) / 2, (min.z + max.z) / 2];
+    const h: [number, number, number] = [(max.x - min.x) / 2, (max.y - min.y) / 2, (max.z - min.z) / 2];
+    return {
+      box: fieldBounds([shape], BLEND + 1),
+      ground: 0,
+      solid: true,
+      eval(x, y, z, out) {
+        out[0] = -boxDistance(x, y, z, c, h);
+        out[1] = 0;
+      },
+    };
+  }
   if (shape.kind === "chamber") {
     const { at, radius, height } = shape;
     // An ellipsoid whose middle is a little over the floor, cut off by the floor: almost as wide at
@@ -172,23 +359,33 @@ function compile(shape: FieldShape): Compiled {
     const rx = radius[0] * k, rz = radius[1] * k;
     const least = Math.min(rx, ry, rz);
     return {
-      box: fieldBounds([shape], BLEND + 1),
+      box: fieldBounds([shape], BLEND + 1, vary),
+      ground: vary.rooms * Math.min(radius[0], radius[1]),
+      solid: false,
+      low: shape.low,
       eval(x, y, z, out) {
-        const qx = (x - at.x) / rx, qy = (y - cy) / ry, qz = (z - at.z) / rz;
-        out[0] = (Math.hypot(qx, qy, qz) - 1) * least;
+        // Wider here, higher there - in swells across the chamber, the vault the wildest.
+        const w = 1 + vary.width * noise01(x * 0.05, y * 0.03, z * 0.05, 1);
+        const h = 1 + vary.height * noise01(x * 0.04, 0, z * 0.04, 2);
+        const qx = (x - at.x) / (rx * w), qy = (y - cy) / (ry * h), qz = (z - at.z) / (rz * w);
+        out[0] = (Math.hypot(qx, qy, qz) - 1) * least - vary.lumps * noise01(x * 0.09, y * 0.09, z * 0.09, 3);
         out[1] = at.y - y;
       },
     };
   }
   const { points, width, height } = shape;
+  const cuts = shape.cut ?? [];
   const ry = height * (1 - DOME_DROP);
   const rh = (width / 2) / Math.sqrt(1 - (DOME_DROP / (1 - DOME_DROP)) ** 2);
   const least = Math.min(rh, ry);
   return {
-    box: fieldBounds([shape], BLEND + 1),
+    box: fieldBounds([shape], BLEND + 1, vary),
+    ground: 0,
+    solid: false,
+    low: shape.low,
     eval(x, y, z, out) {
       // The nearest point of the floor line, across (x, z); its floor's height there.
-      let best = Infinity, floor = 0, across = 0;
+      let best = Infinity, floor = 0, across = 0, piece = 0;
       for (let i = 0; i + 1 < points.length; i++) {
         const a = points[i], b = points[i + 1];
         const dx = b.x - a.x, dz = b.z - a.z;
@@ -200,10 +397,19 @@ function compile(shape: FieldShape): Compiled {
           best = d;
           across = d;
           floor = a.y + (b.y - a.y) * t;
+          piece = i;
         }
       }
-      const qh = across / rh, qy = (y - floor - height * DOME_DROP) / ry;
-      out[0] = (Math.hypot(qh, qy) - 1) * least;
+      // Wider and higher along it in swells; its roof the wildest.
+      const w = 1 + vary.width * noise01(x * 0.06, 0, z * 0.06, 4);
+      const h = 1 + vary.height * noise01(x * 0.05, 0, z * 0.05, 5);
+      const qh = across / (rh * w), qy = (y - floor - height * DOME_DROP) / (ry * h);
+      out[0] = (Math.hypot(qh, qy) - 1) * least - vary.lumps * noise01(x * 0.11, y * 0.11, z * 0.11, 6);
+      // Square past a socket: only along the piece reaching past it.
+      for (const c of cuts) {
+        if ((c.end === "start" && piece !== 0) || (c.end === "end" && piece !== points.length - 2)) continue;
+        out[0] = Math.max(out[0], (x - c.at.x) * c.out.x + (z - c.at.z) * c.out.z);
+      }
       out[1] = floor - y;
     },
   };
@@ -214,10 +420,19 @@ function placedFieldShapes(p: PlacedPart): FieldShape[] {
   const c = Math.cos(p.yaw), s = Math.sin(p.yaw);
   const at = (q: Vec3): Vec3 => ({ x: p.x + q.x * c + q.z * s, y: p.y + q.y, z: p.z - q.x * s + q.z * c });
   return partShapes(p.part).map((shape): FieldShape => {
-    if (shape.kind === "tunnel") return { ...shape, points: shape.points.map(at) };
+    const low = (l: number | undefined): number | undefined => (l === undefined ? undefined : l + p.y);
+    const turn = (v: Vec3): Vec3 => ({ x: v.x * c + v.z * s, y: v.y, z: -v.x * s + v.z * c });
+    if (shape.kind === "tunnel") return { ...shape, points: shape.points.map(at), low: low(shape.low), cut: shape.cut?.map((k) => ({ ...k, at: at(k.at), out: turn(k.out) })) };
+    if (shape.kind === "shaft" || shape.kind === "pillar") return { ...shape, at: at(shape.at) };
+    if (shape.kind === "tube") return { kind: "tube", points: shape.points.map(([x, y, z, r]) => { const w = at({ x, y, z }); return [w.x, w.y, w.z, r]; }) };
+    if (shape.kind === "block") {
+      // Turned only by quarter turns: still a box, its corners moved.
+      const a = at(shape.min), b = at(shape.max);
+      return { kind: "block", min: { x: Math.min(a.x, b.x), y: a.y, z: Math.min(a.z, b.z) }, max: { x: Math.max(a.x, b.x), y: b.y, z: Math.max(a.z, b.z) } };
+    }
     // A chamber's radii turn with it only by quarter turns, as parts are placed.
     const quarter = Math.round(p.yaw / (Math.PI / 2)) % 2 !== 0;
-    return { ...shape, at: at(shape.at), radius: quarter ? [shape.radius[1], shape.radius[0]] : shape.radius };
+    return { ...shape, at: at(shape.at), radius: quarter ? [shape.radius[1], shape.radius[0]] : shape.radius, low: low(shape.low) };
   });
 }
 
@@ -231,6 +446,10 @@ export interface CaveField {
   /** Whether a triangle with every corner here is left out: a mouth's copy of the world's own ground
    *  round it (the world draws and collides with that itself). */
   drop?: (x: number, y: number, z: number) => boolean;
+  /** How far its floor is raised (negative: in a dip) at a point - its swells and a chamber's ground. */
+  floorLift?: (x: number, y: number, z: number) => number;
+  /** How much of a floor point is the style's low floor (gravel), 0 to 1. */
+  lowAt?: (x: number, y: number, z: number) => number;
 }
 
 /** The ground a mouth is cut into (the world's, or the workbench's made-up slope). */
@@ -260,6 +479,11 @@ const BOULDER_ROUGH = 0.6;
 const BOULDER_BLEND = 1.4;
 /** The way in through the ring: half its width and its height (a tunnel 9 by 8, and a little). */
 const OPENING: [number, number] = [5, 8.6];
+/** How softly rock standing in the open (a pillar, a ledge) runs into what is round it. */
+const SOLID_BLEND = 0.8;
+/** A floor's low material comes in from this far down in a dip, and is all there is from this far. */
+const LOW_FROM = 0.2;
+const LOW_FULL = 1.6;
 /** How far past a mouth's region the air over the ground reaches: more than a chunk and its border. */
 const OUTER_GROW = 26;
 /** How far the slip's floor, a slab of rock, reaches out past its foot, and how steeply it falls
@@ -353,8 +577,40 @@ function placedMouth(p: PlacedPart, ground: FieldGround, seed: number): MouthFie
 }
 
 /** The rock round a set of shapes, roughened by `noise`, opened by any mouths. Shapes found by a grid of 16 m cells. */
-export function fieldOf(shapes: readonly FieldShape[], noise: readonly FieldNoise[], mouths: readonly MouthField[] = []): CaveField {
-  const compiled = shapes.map(compile);
+export function fieldOf(shapes: readonly FieldShape[], noise: readonly FieldNoise[], mouths: readonly MouthField[] = [], vary: FieldVary = NO_VARY, flats: readonly Vec3[] = []): CaveField {
+  const compiled = shapes.map((s) => compile(s, vary));
+  // Where floors stay level: at the sockets (and a mouth's ring), on a grid of their own.
+  const FLAT_CELL = 16;
+  const flatGrid = new Map<string, Vec3[]>();
+  for (const f of flats) {
+    for (let gx = Math.floor((f.x - FLAT_FAR) / FLAT_CELL); gx <= Math.floor((f.x + FLAT_FAR) / FLAT_CELL); gx++) {
+      for (let gz = Math.floor((f.z - FLAT_FAR) / FLAT_CELL); gz <= Math.floor((f.z + FLAT_FAR) / FLAT_CELL); gz++) {
+        const key = `${gx},${gz}`;
+        const list = flatGrid.get(key);
+        if (list) list.push(f);
+        else flatGrid.set(key, [f]);
+      }
+    }
+  }
+  const reliefOn = vary.floor[0] > 0 || vary.floor[1] > 0;
+  /** How far the floor dips (negative) or rises at a point: swells, level near a socket; and how much
+   *  of a chamber's ground there is (its fade near a socket). */
+  let fadeHere = 0;
+  const relief = (x: number, y: number, z: number): number => {
+    let near = FLAT_FAR;
+    for (const f of flatGrid.get(`${Math.floor(x / FLAT_CELL)},${Math.floor(z / FLAT_CELL)}`) ?? []) {
+      if (Math.abs(f.y - y) > 12) continue;
+      near = Math.min(near, Math.hypot(f.x - x, f.z - z));
+    }
+    const t = Math.max(0, Math.min(1, (near - FLAT_NEAR) / (FLAT_FAR - FLAT_NEAR)));
+    const fade = t * t * (3 - 2 * t);
+    fadeHere = fade;
+    if (fade <= 0) return 0;
+    const s = vary.floorScale;
+    const v = valueNoise(x * s + 3.3, 0.5, z * s - 8.1) * 0.75 + valueNoise(x * s * 2.7 - 1.1, 2.5, z * s * 2.7 + 4.4) * 0.25;
+    return fade * (v < 0 ? v * vary.floor[0] : v * vary.floor[1]);
+  };
+  const bias = noise.reduce((sum, n) => sum + n.amount, 0) * NOISE_BIAS;
   const CELL = 16;
   const grid = new Map<string, number[]>();
   compiled.forEach((c, i) => {
@@ -371,7 +627,7 @@ export function fieldOf(shapes: readonly FieldShape[], noise: readonly FieldNois
   });
   const out: [number, number] = [0, 0];
   const roughAt = (x: number, y: number, z: number): number => {
-    let rough = 0;
+    let rough = -bias;
     for (const n of noise) rough += valueNoise(x * n.scale + 17.3, y * n.scale, z * n.scale - 5.1) * n.amount;
     return rough;
   };
@@ -400,10 +656,31 @@ export function fieldOf(shapes: readonly FieldShape[], noise: readonly FieldNois
     return d;
   };
   const inMouth = (x: number, y: number, z: number): boolean => mouths.some((m) => inBox(m.outer, x, y, z));
+  /** How far the floor is raised (negative: lowered) at a point by its swells and a chamber's ground. */
+  const floorRaise = (x: number, y: number, z: number, near: readonly number[]): number => {
+    fadeHere = 0;
+    const lift = reliefOn ? relief(x, y, z) : 0;
+    // A chamber's ground, where one is here: every shape's floor in a chamber follows it - the ways
+    // into it too (a socket's stub), or each would lie flat across it, a tongue with a crease round it.
+    let ground = 0;
+    if (fadeHere > 0) {
+      for (const i of near) {
+        const c = compiled[i];
+        if (c.ground > ground && inBox(c.box, x, y, z)) ground = c.ground;
+      }
+    }
+    if (ground > 0) {
+      const room = roomGround(x, z);
+      ground = fadeHere * ground * (room < 0 ? room : room * ROOM_RISE);
+    }
+    return lift + ground;
+  };
+  const nearAt = (x: number, y: number, z: number): number[] | undefined => grid.get(`${Math.floor(x / CELL)},${Math.floor(y / CELL)},${Math.floor(z / CELL)}`);
   const rock = (x: number, y: number, z: number): number => {
-    const near = grid.get(`${Math.floor(x / CELL)},${Math.floor(y / CELL)},${Math.floor(z / CELL)}`);
+    const near = nearAt(x, y, z);
     if (!near) return mouths.length > 0 && inMouth(x, y, z) ? mouthed(ROCK, x, y, z, roughAt(x, y, z)) : ROCK;
     const rough = roughAt(x, y, z);
+    const raise = floorRaise(x, y, z, near);
     let d = ROCK;
     // The shape that opens the point most, and its floor: the walls blend, the floors do not -
     // blending two shapes' floors would sink it where they meet.
@@ -411,15 +688,22 @@ export function fieldOf(shapes: readonly FieldShape[], noise: readonly FieldNois
     for (const i of near) {
       const c = compiled[i];
       const b = c.box;
-      if (x < b.min.x || x > b.max.x || y < b.min.y || y > b.max.y || z < b.min.z || z > b.max.z) continue;
+      if (c.solid || x < b.min.x || x > b.max.x || y < b.min.y || y > b.max.y || z < b.min.z || z > b.max.z) continue;
       c.eval(x, y, z, out);
-      // Walls and vault rough; the floor nearly flat.
-      const under = out[1] + rough * FLOOR_ROUGH;
+      // Walls and vault rough; the floor nearly flat but for its swells.
+      const under = out[1] + raise + rough * FLOOR_ROUGH;
       const e = Math.max(out[0] + rough, under);
       d = d === ROCK ? Math.min(d, e) : smoothMin(d, e, BLEND);
       if (e < most) [most, floor] = [e, under];
     }
-    const cave = Math.max(d, floor);
+    let cave = Math.max(d, floor);
+    // Rock standing in what is open: pillars, ledges - rough as the walls, run softly into the floor.
+    for (const i of near) {
+      const c = compiled[i];
+      if (!c.solid || !inBox(c.box, x, y, z)) continue;
+      c.eval(x, y, z, out);
+      cave = smoothMax(cave, out[0] + rough * 0.6, SOLID_BLEND);
+    }
     return mouths.length > 0 ? mouthed(cave, x, y, z, rough) : cave;
   };
   // A triangle on the world's own ground, outside the slip (the world draws and collides with that).
@@ -435,13 +719,47 @@ export function fieldOf(shapes: readonly FieldShape[], noise: readonly FieldNois
           }
           return false;
         };
-  return { rock, boxes: [...compiled.map((c) => c.box), ...mouths.map((m) => m.region)], drop };
+  const floorLift = (x: number, y: number, z: number): number => {
+    const near = nearAt(x, y, z);
+    return near ? floorRaise(x, y, z, near) : 0;
+  };
+  /** How much of a floor point is the low floor (gravel), 0 to 1: by how deep in a dip of its swells
+   *  it lies, or how far under a shape's own `low` height (a pool of gravel in a hollow). */
+  const lowAt = (x: number, y: number, z: number): number => {
+    const near = nearAt(x, y, z);
+    if (!near) return 0;
+    const raise = floorRaise(x, y, z, near);
+    let best = Math.max(0, Math.min(1, (-raise - LOW_FROM) / (LOW_FULL - LOW_FROM)));
+    let most = Infinity;
+    let shapeLow = 0;
+    for (const i of near) {
+      const c = compiled[i];
+      if (c.solid || !inBox(c.box, x, y, z)) continue;
+      c.eval(x, y, z, out);
+      const e = Math.max(out[0], out[1]);
+      if (e >= most) continue;
+      most = e;
+      // (Its floor is at y + out[1].)
+      shapeLow = c.low === undefined ? 0 : Math.max(0, Math.min(1, (c.low - (y + out[1] + raise) - LOW_FROM) / (LOW_FULL - LOW_FROM)));
+    }
+    best = Math.max(best, shapeLow);
+    return best;
+  };
+  return { rock, boxes: [...compiled.map((c) => c.box), ...mouths.map((m) => m.region)], drop, floorLift, lowAt };
 }
 
 /** A whole cave's field: every placed field part's shapes - and a mouth's, against `ground`. */
-export function layoutField(layout: DungeonLayout, noise: readonly FieldNoise[], ground?: FieldGround): CaveField {
+export function layoutField(layout: DungeonLayout, noise: readonly FieldNoise[], ground?: FieldGround, vary: FieldVary = NO_VARY): CaveField {
   const mouths = ground ? layout.parts.flatMap((p, i) => placedMouth(p, ground, deriveSeed(layout.seed, i)) ?? []) : [];
-  return fieldOf(layout.parts.flatMap(placedFieldShapes), noise, mouths);
+  // Floors level at every socket, and where a mouth's slip meets its tunnel.
+  const flats: Vec3[] = [];
+  for (const p of layout.parts) {
+    const c = Math.cos(p.yaw), s = Math.sin(p.yaw);
+    const at = (q: Vec3): Vec3 => ({ x: p.x + q.x * c + q.z * s, y: p.y + q.y, z: p.z - q.x * s + q.z * c });
+    for (const so of p.part.sockets) flats.push(at(so.at));
+    if (p.part.mouth) flats.push(at({ x: 0, y: 0, z: p.part.mouth.length }), at({ x: 0, y: 0, z: p.part.mouth.length - 6 }));
+  }
+  return fieldOf(layout.parts.flatMap(placedFieldShapes), noise, mouths, vary, flats);
 }
 
 // --- Chunks ---------------------------------------------------------------------------------
@@ -602,7 +920,7 @@ export function caveColliders(mesh: CaveMesh): ShapeDesc[] {
 }
 
 /** A field style's layout's rock, sampled and meshed (the same on the server and the page). */
-export function buildCave(layout: DungeonLayout, style: Pick<DungeonStyleDef, "noise" | "voxel">, ground?: FieldGround): CaveMesh {
-  const field = layoutField(layout, style.noise, ground);
+export function buildCave(layout: DungeonLayout, style: Pick<DungeonStyleDef, "noise" | "voxel" | "vary">, ground?: FieldGround): CaveMesh {
+  const field = layoutField(layout, style.noise, ground, style.vary);
   return { ...meshField(field, style.voxel), field };
 }

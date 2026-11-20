@@ -43,7 +43,8 @@ export async function createCaveMeshes(scene: Scene, layout: DungeonLayout, styl
     plain.maxSimultaneousLights = 6;
   }
   // Its fixtures, set against its rock, and their light baked into it.
-  const fixtures = caveFixtures(layout, style, cave.field ?? layoutField(layout, style.noise), drawing.props);
+  const field = cave.field ?? layoutField(layout, style.noise);
+  const fixtures = caveFixtures(layout, style, field, drawing.props);
   const baked = bakeCaveLight(cave, fixtures.lights);
   const meshes: Mesh[] = [];
   let triangles = 0;
@@ -57,11 +58,13 @@ export async function createCaveMeshes(scene: Scene, layout: DungeonLayout, styl
     const count = chunk.positions.length / 3;
     const lit = new Float32Array(count * 4);
     const given = baked.light[i];
+    const P = chunk.positions;
     for (let v = 0; v < count; v++) {
       lit[v * 4] = given[v * 3];
       lit[v * 4 + 1] = given[v * 3 + 1];
       lit[v * 4 + 2] = given[v * 3 + 2];
-      lit[v * 4 + 3] = 1;
+      // How much of it is the floor's low material (gravel in its dips and hollows).
+      lit[v * 4 + 3] = field?.lowAt?.(P[v * 3], P[v * 3 + 1], P[v * 3 + 2]) ?? 0;
     }
     mesh.setVerticesData("light", lit, false, 4);
     mesh.material = shaded?.material ?? plain;

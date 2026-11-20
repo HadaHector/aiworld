@@ -25,6 +25,9 @@ export interface PlacedDungeon {
   exit: { x: number; z: number };
   /** Its colliders' batch in the dimension's collision world. */
   batch: number;
+  /** A cave's floor under (or over) a point: its rock's surface found from the point up and down -
+   *  where a body set at a spot stands, whatever the floor's swells did there. Kit dungeons: none. */
+  floorAt?: (x: number, y: number, z: number) => number;
 }
 
 export interface DimensionDungeons {
@@ -55,7 +58,18 @@ export function createDimensionDungeons(world: WorldData, collision: CollisionWo
       if (!sizeDef) throw new Error(`the dungeon style "${style}" has no size "${size}"`);
       const layout = generateLayout(content, style, size, seed, site, ground);
       // A kit's parts' own colliders; a field's rock meshed as a whole (caveField.ts).
-      const batch = collision.addBatch(def.builder === "field" ? caveColliders(buildCave(layout, def, ground)) : layout.parts.flatMap(placedShapes));
+      const cave = def.builder === "field" ? buildCave(layout, def, ground) : null;
+      const batch = collision.addBatch(cave ? caveColliders(cave) : layout.parts.flatMap(placedShapes));
+      const field = cave?.field;
+      const floorAt = field
+        ? (x: number, y: number, z: number): number => {
+            let at = y + 3;
+            // Up out of a rise that buries the point, then down to the floor.
+            for (let k = 0; k < 60 && field.rock(x, at, z) > 0; k++) at += 0.25;
+            for (let k = 0; k < 120 && field.rock(x, at - 0.25, z) <= 0; k++) at -= 0.25;
+            return at;
+          }
+        : undefined;
       // The foot of the entrance's stair: its walk line's last point inside, looking on out.
       const line = placedPaths(layout.parts[0])[0];
       const foot = line[line.length - 2], door = line[line.length - 1];
@@ -69,9 +83,11 @@ export function createDimensionDungeons(world: WorldData, collision: CollisionWo
         site,
         entry: sizeDef.entry,
         layout,
-        arrival: { x: foot.x, y: foot.y, z: foot.z, facing },
+        // (On a cave's floor as it is there, its swells and bowls.)
+        arrival: { x: foot.x, y: floorAt ? floorAt(foot.x, foot.y, foot.z) + 0.3 : foot.y, z: foot.z, facing },
         exit: { x: site.x + Math.sin(out) * 4, z: site.z + Math.cos(out) * 4 },
         batch,
+        floorAt,
       };
       placed.set(id, dungeon);
       return dungeon;

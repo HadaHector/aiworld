@@ -5,6 +5,7 @@ roughness never takes it under 6 m; sockets sit on the floor at a part's edge, f
     python scripts/caveParts.py
 """
 import json
+import math
 import os
 
 OUT = os.path.join(os.path.dirname(__file__), "..", "public", "packs", "core", "dungeonParts")
@@ -169,7 +170,89 @@ write("caveLair", "The boss's lair: the cave's greatest chamber, 44 by 40 m and 
 # A tunnel's end: its stub alone, rounded off.
 write("caveCap", "A cave tunnel's dead end, rounded off.", {
     "tags": ["cave", "cap"],
+    "weight": 2,
     "sockets": [sock([0, 0, 0], 180)],
     "field": [],
+})
+
+# A dead end under a chimney: the tunnel's floor sweeps up into it, curving round and up, leaning
+# on away from the way in and narrowing to a point some 30 m over it (where the rock over it allows:
+# else another cap).
+write("caveShaftCap", "A cave tunnel's dead end sweeping up into a leaning chimney some 30 m high, narrowing to a point.", {
+    "tags": ["cave", "cap"],
+    "weight": 1,
+    "sockets": [sock([0, 0, 0], 180)],
+    "field": [
+        tunnel([[0, 0, 0], [0, 0, 5]]),
+        {"tube": {"points": [[0, 4.5, 3, 4.5], [0, 5, 9, 5], [0, 7.5, 13.5, 5.5], [0, 12, 16.5, 5.5], [0, 18, 18, 4.8], [0, 24, 18.5, 3.8], [0, 29, 18, 2.4], [0, 33, 17, 0.6]]}},
+    ],
+})
+
+# A dead end going down a little into a hollow, gravel washed down into its bottom.
+def low(shape, level):
+    shape[next(iter(shape))]["low"] = level
+    return shape
+
+# The gravel cap's hollow takes its gravel under 0.8 m below its way in.
+write("caveGravelCap", "A cave tunnel's dead end, down a little into a hollow filled with gravel.", {
+    "tags": ["cave", "cap"],
+    "weight": 1,
+    "sockets": [sock([0, 0, 0], 180)],
+    "field": [low(tunnel([[0, 0, 0], [0, 0, 4], [0, -2.5, 10], [0, -3.5, 15]], 11, 8.5), -0.8)],
+})
+
+# A C-shaped way down: a wide, low room curling half round a thick pillar of rock, falling 8 m as it
+# goes, coming back down past it and out to the side (straight back the way it came, whatever grew
+# on would run into what it came from).
+arc = []
+for k in range(0, 7):
+    t = math.pi - k * math.pi / 6
+    arc.append([round(10 + 10 * math.cos(t), 2), round(-8 * k / 6, 2), round(4 + 10 * math.sin(t), 2)])
+write("caveCurl", "A C-shaped way down: a wide room curling half round a thick rock pillar, 8 m down, out to the side.", {
+    "tags": ["cave", "tunnel", "descent"],
+    "weight": 1.5,
+    "sockets": [sock([0, 0, 0], 180), sock([30, -8, -1], 90)],
+    "field": [tunnel([[0, 0, 0]] + arc + [[21, -8, 0], [25, -8, -1], [30, -8, -1]], 14, 12), {"pillar": {"at": [10, -12, 4], "radius": 3.5, "height": 34}}],
+    "spots": {"spawns": [[10, -4, 13]], "light": [[3, -1, 11]]},
+})
+
+# A longer tunnel zig-zagging down into a dip 8 m deep and back up, gravel in its bottom - and a way
+# off to the side, level, from the bottom of the dip: a junction on two levels.
+write("caveZigzag", "A cave tunnel zig-zagging 8 m down into a dip and back up again, 32 m, gravel in the dip - and a way off to the side from the bottom of the dip: a junction on two levels.", {
+    "tags": ["cave", "tunnel", "fork"],
+    "weight": 2,
+    "sockets": [sock([0, 0, 0], 180), sock([0, 0, 32], 0), sock([-16, -8, 17], 270)],
+    "field": [low(tunnel([[0, 0, 0], [0, 0, 3], [3, -2.5, 8], [-3, -6.5, 13.5], [-1, -8, 16.5], [1.5, -7.8, 18.5], [3.5, -5.5, 22], [-2, -2.2, 26], [0, 0, 29], [0, 0, 32]], 13, 8.5), -4.5), tunnel([[-7, -8, 17.5], [-11, -8, 17.5], [-16, -8, 17]])],
+    "spots": {"spawns": [[0, -8, 17]], "light": [[-3, -6.5, 13.5]]},
+})
+
+# A long meander: 60 m, bending one way and then further the other in plan, sagging 8 m in a smooth
+# dip along its middle, gravel at the bottom of it - straight and level where it joins.
+meander = [[0, 0, 0], [0, 0, 4]]
+for k in range(1, 13):
+    z = 4 + k * 52 / 13
+    u = (z - 4) / 52
+    # A small bend one way over its first half, a deeper one the other way over its second.
+    meander.append([round(math.sin(2 * math.pi * u) * (4 if u < 0.5 else 7.5), 2), round(-8 * math.sin(u * math.pi) ** 2, 2), round(z, 2)])
+meander += [[0, 0, 56], [0, 0, 60]]
+write("caveMeander", "A long cave tunnel, 60 m, bending one way and then further the other, sagging 8 m along its middle, gravel at the bottom.", {
+    "tags": ["cave", "tunnel"],
+    "weight": 1.5,
+    "sockets": [sock([0, 0, 0], 180), sock([0, 0, 60], 0)],
+    "field": [low(tunnel(meander, 10, 8.5), -5)],
+    "spots": {"spawns": [[meander[7][0], meander[7][1], meander[7][2]]], "light": [[meander[4][0], meander[4][1], meander[4][2]], [meander[10][0], meander[10][1], meander[10][2]]]},
+})
+
+# A tall cavern entered on a ledge 10 m up: the way on is down off it, at its foot - jumped down,
+# never climbed, so it is only ever entered at the ledge.
+write("caveCavern", "A tall cavern, 26 m high: in on a ledge 10 m up, the way on at its foot - a jump down, no way back up.", {
+    "tags": ["cave", "chamber"],
+    "weight": 1.5,
+    "room": True,
+    "entries": [1],
+    "sockets": [sock([0, 0, 0], 180), sock([0, 10, 26], 0)],
+    "field": [chamber([0, 0, 13], [13, 13], 26), {"block": {"min": [-8, -2, 19], "max": [8, 10, 32]}}],
+    "paths": [[[0, 10, 26], [0, 10, 20.5]], [[0, 0, 15], [0, 0, 0]]],
+    "spots": {"spawns": [[4, 0, 8], [-5, 0, 5]], "light": [[0, 0, 9], [5, 10, 23]], "chest": [[-4, 10, 23]]},
 })
 print("written")

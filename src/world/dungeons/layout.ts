@@ -318,6 +318,8 @@ function attemptLayout(content: DungeonContent, style: DungeonStyleDef, size: st
       // Kept apart from the part it would join (either one's say).
       if (part.apart.some((t) => before.tags.includes(t)) || before.apart.some((t) => part.tags.includes(t))) continue;
       part.sockets.forEach((s, entry) => {
+        // (Only by the sockets it may be entered by: a ledge's drop is gone down, never up.)
+        if (part.entries && !part.entries.includes(entry)) return;
         if (s.type === "surface" || !socketsJoin(rules, s.type, at.def.type)) return;
         const rise = Math.max(0, ...part.sockets.filter((_, i) => i !== entry).map((o) => o.at.y - s.at.y));
         const drop = Math.min(0, ...part.sockets.filter((_, i) => i !== entry).map((o) => o.at.y - s.at.y));
@@ -543,8 +545,25 @@ function attemptLayout(content: DungeonContent, style: DungeonStyleDef, size: st
   // 7. Close every open socket.
   const cap = (s: WorldSocket): string | null => {
     const options = style.caps.flatMap((part) => part.sockets.map((c, entry) => ({ part, entry, c })).filter(({ c }) => socketsJoin(rules, c.type, s.def.type)));
-    const option = pickWeighted(options, (o) => o.part.weight, random);
-    if (!option) return `nothing caps a "${s.def.type}" socket`;
+    if (options.length === 0) return `nothing caps a "${s.def.type}" socket`;
+    // A field style's caps are open space (a dead end, a chimney): each tried by weight, the first
+    // that fits clear of the rest and under its cover kept; none fitting, none - the way's own rock
+    // closes it just past its socket. A kit's (a wall) always goes in.
+    let option = pickWeighted(options, (o) => o.part.weight, random)!;
+    if (style.builder === "field") {
+      const left = [...options];
+      let put: ReturnType<typeof placeAt> | null = null;
+      while (left.length > 0) {
+        const tried = pickWeighted(left, (o) => o.part.weight, random)!;
+        left.splice(left.indexOf(tried), 1);
+        const at = placeAt(tried.part, tried.entry, s, frame);
+        if (!fits(at.box, [s.part])) {
+          [option, put] = [tried, at];
+          break;
+        }
+      }
+      if (!put) return null;
+    }
     placed.push({ ...placeAt(option.part, option.entry, s, frame), parent: s.part, role: "cap" });
     joins.push({ a: s.part, socketA: s.socket, b: placed.length - 1, socketB: option.entry, loop: false, doorway: -1 });
     return null;

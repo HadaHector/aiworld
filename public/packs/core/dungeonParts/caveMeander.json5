@@ -1,0 +1,37 @@
+// A long cave tunnel, 60 m, bending one way and then further the other, sagging 8 m along its middle, gravel at the bottom.
+{
+  tags: ["cave", "tunnel"],
+  weight: 1.5,
+  sockets: [
+    { at: [0, 0, 0], facing: 180, type: "tunnel", size: [9, 8] },
+    { at: [0, 0, 60], facing: 0, type: "tunnel", size: [9, 8] },
+  ],
+  field: [
+    {
+      tunnel: {
+        points: [
+          [0, 0, 0],
+          [0, 0, 4],
+          [1.86, -0.46, 8],
+          [3.29, -1.73, 12],
+          [3.97, -3.52, 16],
+          [3.74, -5.42, 20],
+          [2.65, -6.99, 24],
+          [0.96, -7.88, 28],
+          [-1.79, -7.88, 32],
+          [-4.97, -6.99, 36],
+          [-7.01, -5.42, 40],
+          [-7.45, -3.52, 44],
+          [-6.17, -1.73, 48],
+          [-3.49, -0.46, 52],
+          [0, 0, 56],
+          [0, 0, 60],
+        ],
+        width: 10,
+        height: 8.5,
+        low: -5,
+      },
+    },
+  ],
+  spots: { spawns: [[0.96, -7.88, 28]], light: [[3.97, -3.52, 16], [-7.01, -5.42, 40]] },
+}

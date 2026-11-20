@@ -12,7 +12,7 @@ import { LIT_SHADING_GLSL, LIT_SHADING_SAMPLERS, LIT_SHADING_UNIFORMS, type LitS
 import type { CaveLook } from "./dungeonDefs";
 
 /** The three a cave is drawn with, in this order in its texture arrays. */
-const SLOTS = ["floor", "wall", "ceiling"] as const;
+const SLOTS = ["floor", "wall", "ceiling", "low"] as const;
 
 const VERTEX = `#version 300 es
 precision highp float;
@@ -25,12 +25,15 @@ uniform mat4 projection;
 out vec3 vWorldPosition;
 out vec3 vNormal;
 out vec3 vLight;
+// How far down in a dip of its floor a vertex lies, 0 (not) to 1 (deep): the floor's low material.
+out float vLow;
 out vec3 vPositionFromCamera;
 void main() {
   vec4 p = world * vec4(position, 1.0);
   vWorldPosition = p.xyz;
   vNormal = normalize(mat3(world) * normal);
   vLight = light.rgb;
+  vLow = light.a;
   vec4 v = view * p;
   vPositionFromCamera = v.xyz;
   gl_Position = projection * v;
@@ -48,9 +51,12 @@ uniform vec3 tileScale;
 uniform vec3 tint0;
 uniform vec3 tint1;
 uniform vec3 tint2;
+uniform vec3 tint3;
+uniform float lowScale;
 in vec3 vWorldPosition;
 in vec3 vNormal;
 in vec3 vLight;
+in float vLow;
 in vec3 vPositionFromCamera;
 out vec4 fragColor;
 
@@ -106,6 +112,15 @@ void main() {
   vec3 b0 = n, b1 = n, b2 = n;
   float h0 = 0.0, h1 = 0.0, h2 = 0.0;
   if (floorW > 0.001) triplanar(0.0, tileScale.x, p, n, w, c0, b0, h0);
+  // In the floor's dips its low material (silt settled there), raggedly by the two's heights.
+  if (floorW > 0.001 && vLow > 0.01) {
+    vec4 c3; vec3 b3; float h3;
+    triplanar(3.0, lowScale, p, n, w, c3, b3, h3);
+    float low = smoothstep(0.0, 1.0, vLow + (h3 - h0) * 0.6 * vLow * (1.0 - vLow) * 4.0);
+    c0 = vec4(mix(c0.rgb * tint0, c3.rgb * tint3, low) / max(tint0, vec3(1e-3)), mix(c0.a, c3.a, low));
+    b0 = normalize(mix(b0, b3, low));
+    h0 = mix(h0, h3, low);
+  }
   if (wallW > 0.001) triplanar(1.0, tileScale.y, p, n, w, c1, b1, h1);
   if (ceilW > 0.001) triplanar(2.0, tileScale.z, p, n, w, c2, b2, h2);
   // Heights decide where two meet: the one standing proud wins first.
@@ -157,12 +172,13 @@ export async function createCaveMaterial(scene: Scene, seed: number, look: CaveL
   Effect.ShadersStore["caveRockFragmentShader"] = FRAGMENT;
   const material = new ShaderMaterial("caveRock", scene, "caveRock", {
     attributes: ["position", "normal", "light"],
-    uniforms: ["world", "view", "projection", "tileScale", "tint0", "tint1", "tint2", ...LIT_SHADING_UNIFORMS],
+    uniforms: ["world", "view", "projection", "tileScale", "lowScale", "tint0", "tint1", "tint2", "tint3", ...LIT_SHADING_UNIFORMS],
     samplers: ["colorArray", "normalArray", ...LIT_SHADING_SAMPLERS],
   });
   material.setTexture("colorArray", color);
   material.setTexture("normalArray", normal);
   material.setVector3("tileScale", new Vector3(1 / look.floor.size, 1 / look.wall.size, 1 / look.ceiling.size));
+  material.setFloat("lowScale", 1 / look.low.size);
   SLOTS.forEach((slot, i) => material.setColor3(`tint${i}`, new Color3(...look[slot].tint)));
   // Wound counter-clockwise from the open side in the right-handed sense: clockwise to Babylon.
   material.sideOrientation = Material.ClockWiseSideOrientation;

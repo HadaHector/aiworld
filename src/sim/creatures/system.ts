@@ -103,6 +103,8 @@ interface DimensionState {
   looseNear: Map<Entity, number>;
 }
 
+/** How far over a dungeon's spawn spot a body is put, to drop onto its floor. */
+const DROP_ONTO_FLOOR = 0.4;
 /** How far over or under a player a dungeon's point may be and still fill. */
 const DUNGEON_REACH = 25;
 /** Seconds between the spawner's looks round: points filling and releasing need not be every step. */
@@ -142,8 +144,9 @@ export function createCreatureSystem(rules: GameRules, creatures: CreatureRules,
     }
     if (member?.name) entity.name = member.name;
     entity.body = state.dimension.createBody(x, z);
-    // On a dungeon's floor, not the ground over it.
-    if (y !== undefined) entity.body.teleportTo({ x, y: y + 0.05, z });
+    // On a dungeon's floor, not the ground over it: dropped onto it from a little over its spot (a
+    // cave's floor rises and dips by up to a metre round it).
+    if (y !== undefined) entity.body.teleportTo({ x, y: y + DROP_ONTO_FLOOR, z });
     entity.body.face(entity.facing);
     follow(entity);
     const part: CreaturePart = {

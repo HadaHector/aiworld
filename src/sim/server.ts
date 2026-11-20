@@ -1037,7 +1037,17 @@ export function createServer(options: ServerOptions): Server {
     const style = options.dungeons?.styles.get(dungeon.style);
     if (!creatureSystem || !options.creatures || !style?.creatures) return;
     const zone = creatureSystem.zoneAt(dimension, dungeon.site.x, dungeon.site.z);
-    creatureSystem.setPoints(dimension, dungeon.id, dungeonSpawnPoints(dungeon.id, dungeon.layout, style.creatures, options.creatures, zone));
+    const points = dungeonSpawnPoints(dungeon.id, dungeon.layout, style.creatures, options.creatures, zone);
+    // A cave's floor swells and dips: each on its floor as it is where it stands.
+    const floor = dungeon.floorAt;
+    if (floor) {
+      for (const point of points) {
+        if (point.y === undefined) continue;
+        for (const m of point.members) if (m.homeY !== undefined) m.homeY = floor(m.homeX, m.homeY, m.homeZ);
+        point.y = floor(point.x, point.y, point.z);
+      }
+    }
+    creatureSystem.setPoints(dimension, dungeon.id, points);
   }
 
   /** Which dungeon each player was last sent into, by entity id. */

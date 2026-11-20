@@ -1,0 +1,16 @@
+// A cave tunnel's dead end, down a little into a hollow filled with gravel.
+{
+  tags: ["cave", "cap"],
+  weight: 1,
+  sockets: [{ at: [0, 0, 0], facing: 180, type: "tunnel", size: [9, 8] }],
+  field: [
+    {
+      tunnel: {
+        points: [[0, 0, 0], [0, 0, 4], [0, -2.5, 10], [0, -3.5, 15]],
+        width: 11,
+        height: 8.5,
+        low: -0.8,
+      },
+    },
+  ],
+}

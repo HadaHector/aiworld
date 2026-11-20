@@ -19,4 +19,12 @@
   // apart along the layout are joined by a routed way - the longer the way round, the better.
   loopReach: 60,
   loopSpan: 4,
+  // How a cave's shapes vary along themselves (caveField.ts), so nothing is as even as a thing built.
+  // Each only grows from its own size - wider by up to this share, higher by up to this share (the
+  // vault the wildest), its walls bulging out by up to this many metres - so the way through is
+  // never narrower than measured. Its floor dips by up to the first and rises by up to the second,
+  // metres, in swells this many to a metre, level again near every socket. A chamber's floor is
+  // ground as well: rises and hollows a room across - lobes from its walls, a ridge through it -
+  // falling by up to this share of its radius and rising by most of that, in walked slopes.
+  field: { width: 0.3, height: 0.6, lumps: 2.5, floor: [3, 1.2], floorScale: 0.06, rooms: 0.2 },
 }
