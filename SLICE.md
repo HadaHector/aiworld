@@ -147,10 +147,64 @@ IDs are used in the dependencies. "Par." is whether the task can run as its own 
 | ID | Task | Size | Needs | Par. |
 |---|---|---|---|---|
 | I1 | **Gear tiers.** 77 items; weapons in three tiers per family; armour in cloth, leather, bronze and plate pieces. Lay out four steps over the 10 levels: starter, common (levels 2-5, quest and creature loot), good (5-8, the crypt's chests and the old camp), best (8-10, the two bosses). Loot tables per creature and per boss (tables exist for each beast, bandit, chest; the crypt, the bosses and the motte need their own). | M | B2 | yes |
-| I2 | **Skills per class.** Three classes (warrior, mage, priest), one talent tree each (arms, fire, light), 48 skills in the pack (many of them creatures'). Schedule what each class learns by level 10 from its trainer: about 7 each, a new one every one or two levels, one at level 1 and one that feels like a prize at 5 and 8. | M | - | yes |
+| I2 | **Skills per class.** *Superseded, see I6 and the later I2 row below.* Talents are out of the slice. | - | - | - |
 | I3 | **Crafting.** Nothing new. The disciplines that exist are cooking, herbalism, mining; the slice uses cooking at a fire (roast meat, bread), herb gathering (the sickness quest), and bandages. No smithing, no alchemy. | - | - | - |
 | I4 | **Icons.** Four items have no icon: torch, bandage, iron ingot, spell scroll (generated, waiting for the user's pick in `assets_work/comfyUI/review.py`). New items made for the slice (boss gear, the grove's reward, crypt trinkets) also need icons. **Generation uses ComfyUI and the GPU: never started without asking.** | S + user | user | yes |
 | I5 | **Consumables and use items.** Health and mana potions, bread, roast meat, bandage, salve exist. Check that a potion is a real answer to a hard fight at levels 6-10 and that the tooltip says it. | S | B2 | yes |
+
+#### Items and skills: decided with the user (2026-11-20)
+
+Rule of thumb from the user: **describe things with tweakable constants, curves, ratios and tags.**
+Talents stay **out of the slice** (the trees and points stay in the engine, unused).
+
+**Skills from templates, classes from ratios.**
+- A **skill count curve** by level says how many skills a character should know (the skill
+  complexity); it is a curve like any other, in `rules/balance.json5`.
+- A bank of **skill templates**, each tagged: *kind* (damage, heal, shield, crowd control, buff,
+  debuff, mobility, resource, summon), *level range* it fits, *cooldown category* (spammer, short,
+  long, ultimate), *active or passive*, plus distance (melee, ranged, self) and the school.
+- A **class template** is a set of **ratios of tags at key levels** (every 10 levels in the engine,
+  so levels 1 and 10 for the slice; later 20, 30...): for example at level 10 a warrior is 40% damage,
+  20% crowd control, 20% mobility, 20% defence, with two long cooldowns, one passive. The generator
+  picks templates matching the ratios, scales each by its power share (see balance), and so a class
+  falls out of numbers. Authored classes (warrior, mage, priest, ranger) are just hand-picked results of
+  the same description, which is what keeps the system customisable.
+- Needs templates for skills where today each skill is a file; the existing 48 skills become the first
+  members of the bank, tagged by hand.
+
+**Level-up stats.** Each level gives stat points. A **game config** chooses whether the points are
+**spent by the player** or **distributed automatically** by the class's weights (the slice can default to
+one, the system supports both). The amount per level is a curve.
+
+**Items, kept simple.** For every **item type and slot** (each armour type and slot, each weapon type):
+**6 items** over levels 1-10:
+1. 1 starting item
+2. 1 upgrade sold in a shop
+3. 1 upgrade from a quest
+4. 3 from loot (a drop or a chest)
+
+Stat bonuses on rare items are expected and nothing more complex (no sets, procs or crafting).
+Because that is a lot of items (about 10 slots x 3 armour types plus about 8 weapon types, so
+about 230 items by a rough count), they are **generated from item templates and the curves** (budget by
+level, slot, rarity), not typed. The existing 12 templates and 77 items are the start.
+
+**Loot from creatures.** Each creature kind has **1-2 trash items** (sell value only, a wolf's fang) and
+**1-2 valuable ones**, one of which can be rare; plus a global **slim chance** of a piece of rare
+equipment. The dropped item's level is **close to the creature's level**. All of it ratios and curves:
+the trash and valuable shares, the rare chance, the level spread.
+
+**Healing.** **Out-of-combat regeneration exists but is small**, as a constant (a share of maximum health
+per second, delayed after combat) so food, potions, bandages and healer skills stay worth using. The
+tuning target: regen alone takes several minutes to refill, food and potions are the fast route.
+
+**Changed tasks:**
+
+| ID | Task | Size | Needs | Par. |
+|---|---|---|---|---|
+| I6 | **Skill template bank**: tags, level range, cooldown category, active or passive; tag the existing skills; a class template format (tag ratios at key levels) and the generator that picks and scales; the skill-count curve. | L | B6 | yes |
+| I7 | **Level-up stats**: stat points per level (curve), config `manual` or `auto` (class weights), the UI for manual. | M | B6 | yes |
+| I8 | **Item generation**: the 6-per-type layout, templates and curves make the items, a pack file only marks the roles (start, shop, quest, loot); also the creature loot ratios and the level-matched drop. | L | B6 | yes |
+| I9 | **Regeneration**: out-of-combat health and resource regen as constants in `rules/`, with the delay. | S | - | yes |
 
 ### (f) Balance
 
@@ -274,8 +328,8 @@ axis and how it deals with distance (closes, holds, kites).
 | B8 | **Defence**: the full model, as switchable parts (armour, block, dodge, parry, spell resistance, absorbs, crowd-control avoidance) in `rules/combat.json5`, each with its effective-health multiplier for the curves. | M | B6 | yes |
 | B9 | **Stress-test characters**: the ranger plus odd builds (tank, glass cannon, kiter, solo healer, summoner, stealth burst) as data, run through B7 to prove the curves place them. | M | B7 | with I2 |
 | E8 | **Creature AI pass**: tactic opening delay and CC rules, roles, a skirmisher that kites, a caster that keeps range, placement rules for elites and packs. Fixes the spider's instant web. | M | B6 | yes |
-| I2 | **Skills per class** (replaces the earlier I2): a role, a resource and a ten-level ladder per class, plus the ranger; each skill a power share. | L (a session per class) | B6, B8 | per class |
-| I1 | **Loot, gold and prices** (grows): item budgets, drop tables per creature and boss, gold curve, vendor buy/sell and repair, from the curves. | M | B6 | yes |
+| I2 | **Skills per class** (replaces the earlier I2): a class template per class (tag ratios at level 1 and 10) and the ranger, built on the skill bank (I6); each skill a power share. | M per class | I6, B8 | per class |
+| I1 | **Loot, gold and prices** (grows): item budgets, drop tables per creature and boss, gold curve, vendor buy/sell and repair, from the curves; the item layout itself is I8. | M | B6, I8 | yes |
 
 ## 4. Known gaps, checked
 
