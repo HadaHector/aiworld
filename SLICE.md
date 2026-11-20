@@ -64,8 +64,7 @@ fail (a camp wants gentle ground deep in a wood) and leave its cell empty.
 ### The proposed ten (first eight, then two added with the user)
 
 Chosen by fun per cost from FEATURES.md and by what makes the wood read as itself. Five exist; three
-are new, and the last two (the roadside bandit camp, the watermill) were added in the world generation talk. The zone has ten cells: nine are used (two of them settlements), one is left empty on
-purpose, so the wood has somewhere to be only wood.
+are new, and the last two (the roadside bandit camp, the watermill) were added in the world generation talk. The zone has ten cells and **none is left empty** (see "The cells problem" below).
 
 | # | Feature | Cost (FEATURES.md) | Why | What it gives the two hours |
 |---|---|---|---|---|
@@ -81,13 +80,15 @@ purpose, so the wood has somewhere to be only wood.
 | 10 | **Watermill with a mill pond** | S-M | The autumn wood is on its FEATURES.md list. Needs the new river and pond water (W10). **The animated-part test**: a turning wheel is FEATURES.md piece 9 ("turning wheels and sails"), built for nothing yet, so the mill shows whether a prop can move (a part that rotates on an axis, driven by the water's flow, still when the wheel is stopped by a quest). | A miller NPC, "the lost shipment" place, a pool to swim in, a vendor of flour and bread. |
 | 11 | **Cave mouth with its surroundings** (a lair's entrance as a feature of its own) | M | The cave is not only a hole: outside it, a place. Small buildings (a hut, a lean-to, a shed or two), props (crates, a cart, a fire, bones, a drying rack, a signpost), and the enemies who live there, so the way in is a small fight and a story before the dark. DUNGEONS.md step 7 ("Around it") covers quest blocks, floors on the map, music, the player's light and daylight through the mouth, but not an entrance yard, so it is new work; the features system (`features/*.json5`, compounds, camps) is the way to build it. Works for any lair entrance, the crypt's churchyard included; the cave version is the new one. | The approach fight, a vendor or a quest giver outside, a reason to go in. |
 
-**Not all of these have to be in the slice** (decided with the user). The eleven are candidates,
-sorted by how much the two hours lean on them. **Core** (the slice is thin without them): 1 the villages,
-2 the logging camp, 5 the churchyard and crypt, 11 a cave mouth with its surroundings, 9 the roadside
-bandit camp, 7 the motte (the second fight and a landmark). **Wanted** (add if time allows): 6 the
-abandoned camp (the mystery chain), 4 the inn, 3 the lodge, 10 the watermill (the water and moving-part
-test). **Optional**: 8 the druid grove. Which features carry the quests, and which two or three are cut,
-is for the user to say: see open question 10. The task list marks each feature task with its tier.
+**All eleven are in the slice** (decided with the user: "we need to show off a little", and no empty
+cells). Not all of the *current* features had to be; these are the ones chosen. The tiers stay only as
+the order of cutting if time runs short (section 5): the grove goes first, then the inn, the lodge and
+the watermill; the core stays: the villages, the logging camp, the churchyard and crypt, the cave mouth,
+the roadside bandit camp and the motte, with the abandoned camp's mystery chain beside them.
+
+**The cells problem.** The zone has **10 cells** (`CELL_SPACING` 500, the user's own call, task W9) and
+each cell rolls one feature. The eleven features are **two settlements and ten other sites: twelve
+places for ten cells**. Task W14 solves it.
 
 **Cheap fillers, not counted:** wayside shrines (cost 1, no new piece: a cairn with a small heal or a
 set-home) along the roads; a watchtower on a hill (cost 1) if the zone feels short of vistas. **First
@@ -147,6 +148,7 @@ IDs are used in the dependencies. "Par." is whether the task can run as its own 
 | W11 | **Rivers in the slice zone.** The world draws 3-5 rivers a continent and BACKLOG.md wants them per zone, by biome. The slice needs a river through the zone, at least one bridge on a road, a ford or two, and ideally a branching tributary, so most walks meet water. Shares the river code with W10. | M | W10 | with W10 |
 | W12 | **Wood-specific tweaks (the user's list, to grow).** A running list of small world fixes the user will give while looking at the wood: kept here as one task with a checklist, to be sorted into sessions. | S each | - | yes |
 | W13 | **Watermill with a mill pond, and its turning wheel.** The building (a mill house over a race, a pond behind a small weir) is a compound and props. **The new piece is the animated part**: a prop part that turns about an axis (FEATURES.md piece 9, "turning wheels and sails"; today props only have flames and smoke as effects), driven by a speed, stopped when the wheel is stopped, culled at distance. Built as a general "moving part" so a windmill's sails or a well's winch can use it later. Needs the pond and the river from W10 and W11. | M-L | W10, W11 | yes |
+| W14 | **A cell plan: twelve places in ten cells.** The odds are weights, and one cell rolls one feature, so even a scanned seed (W2) cannot be trusted to hold them all. Proposal: the slice dimension carries an **authored plan**, a list of which feature goes in which cell (by distance from the start, which is also the level gradient of B2), so the world is arranged, not rolled; features still choose their own ground inside the cell. Two places share a cell with another: the **roadside bandit camp** (by definition on a road, so with a settlement, the inn or the mill) and the **cave mouth** (it may sit with the churchyard, or the old camp). The inn and the mill can also use the road and the river rather than a cell of their own. Replaces most of W2's seed scan (the seed is then only the look of the land). | M | W1, W3-W5, W10, W13 | after them |
 
 ### (c) Gameplay elements
 
@@ -478,6 +480,9 @@ Never cut: the intro chain, the two bosses, the crypt, saving, the soak.
 9. **Which places are the 2-3 lairs?** Decided: small caves or crypts, few rooms, a strong boss, no
    phases. Open: which ones. My guess: the churchyard crypt at the small size, a cave, and the old
    camp's mine or the motte's cellar. This also answers question 3 (the second dungeon): small.
-10. **Which features are in?** Not all of the eleven candidates have to be in the slice. The tiers in
-    section 2 are my guess (core: villages, logging camp, crypt, cave mouth, roadside bandit camp, motte).
-    Which would you move, add or cut? The motte and the watermill are the biggest.
+10. **Which features are in?** Decided: all eleven, no empty cells. The tiers in section 2 are only the
+    cut order.
+11. **Twelve places, ten cells (W14).** Proposed: an authored cell plan in the slice dimension (which
+    feature in which cell), with the roadside bandit camp and the cave mouth sharing cells. Or: keep the
+    ten-cell zone as the user's call stands but allow two features in some cells, or make the zone a few
+    cells bigger (W9 says do not, so that needs the user).
