@@ -86,6 +86,20 @@ enough for what it adds.
 
 **An open decision, in section 6:** the **second dungeon**. See task E6.
 
+**Feature candidates raised in the world generation talk (2026-11-20; the user asked for help choosing):**
+
+| Candidate | Cost | Why for the slice |
+|---|---|---|
+| **Roadside bandit camp** (the `banditCamp` creature camp already exists, with no place) | S | The user wants bandits: a small camp on the road is the first human fight, before the motte's garrison. Tents, a fire, a chest, a lookout. Task E7. |
+| **Watermill with a mill pond** | S-M | FEATURES.md lists it for the autumn wood. Needs the new river and pond water (W10), and shows it off: a wheel, a race, a pool. A quest place ("the lost shipment"). |
+| **Toll bridge or ford with a hut** | S | A road crossing a river is a natural meeting and ambush place, and the river is the new work. |
+| **Cave pool** | S | The cave lair with its own still pool underground (W10's third kind of water). |
+| **Wayside shrines, a ruined watchtower** | 1 | Already cheap fillers. |
+
+My recommendation: the eight stay, **add the roadside bandit camp and the watermill** (the first
+because the user asked for bandits, the second because it earns the water work); the toll bridge is
+free if a road meets a river; the cave pool comes with the cave lair.
+
 ## 3. Tasks by category
 
 IDs are used in the dependencies. "Par." is whether the task can run as its own session in parallel.
@@ -118,6 +132,9 @@ IDs are used in the dependencies. "Par." is whether the task can run as its own 
 | W7 | **Settlement variety.** The wood only rolls `farmVillage` and `marketTown`. Enough for a start village and a hub; look pass only (orchards, a drystone wall?). The settlement probe should show two distinguishable places. | S | W2 | yes |
 | W8 | **Biome odds.** After the seed is pinned: leave the biome odds as they are (the game still has this biome in the full world), and put the slice's list in the dimension or config. The sheepfold stays out of the wood. | S | W1 | no |
 | W9 | **Zone size.** Decided already: `CELL_SPACING` 500, about 2.5 km2 a zone, 10 cells (commit 42c36a8, the user's call). Do not change it. About 1.6 km across: a few minutes from the start to the far side. Fits nine places and a hill or two. | - | - | - |
+| W10 | **Water at its own level.** Today every sea, lake, pond and river is a hollow of the ground filled to the one sea level (`water.ts`, `WATER_SURFACE`, one ocean plane, the terrain shader tints by depth against it), so a river can only run at sea level and a mountain lake cannot exist. Make **water bodies with their own surface**: *lakes and ponds* (a flat plane at their own height), *rivers* (a surface ribbon that follows the river's centreline and steps down with the bed, so a river runs down a valley and meets the sea), the *ocean* as it is, and *a pool in a cave* (a flat plane inside a cave part). `waterAt(x, z)` returns the surface of the body at that point, so swimming, breath, creature avoidance and sound keep working (WATER.md, "left for later" already names a lake above the sea). Drawing: the water shader's reflection and glint on each body; the shore tint moves from the global sea level to the body's. To check: the river carving in `terrain/rivers` and `cells/river*.ts` already knows each river's depth, which is the likely source of the surface. | L | - | yes |
+| W11 | **Rivers in the slice zone.** The world draws 3-5 rivers a continent and BACKLOG.md wants them per zone, by biome. The slice needs a river through the zone, at least one bridge on a road, a ford or two, and ideally a branching tributary, so most walks meet water. Shares the river code with W10. | M | W10 | with W10 |
+| W12 | **Wood-specific tweaks (the user's list, to grow).** A running list of small world fixes the user will give while looking at the wood: kept here as one task with a checklist, to be sorted into sessions. | S each | - | yes |
 
 ### (c) Gameplay elements
 
