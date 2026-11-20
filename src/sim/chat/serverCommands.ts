@@ -11,7 +11,10 @@ import type { ProgressionSystem } from "../progression/system";
 import type { SkillSystem } from "../skills/system";
 import type { CreatureSystem } from "../creatures/system";
 import { restore } from "../resources";
-import { FLAG, lowerFlag, raiseFlag } from "../skills/flags";
+import { FLAG, immunityOf, lowerFlag, raiseFlag } from "../skills/flags";
+
+/** The control effects /god keeps off you. */
+const GOD_IMMUNITIES = [FLAG.stunned, FLAG.rooted, FLAG.silenced, FLAG.pacified, FLAG.disarmed];
 import { createRegistry, type ArgKind, type ArgSpec, type ArgValue, type CommandDef, type NameBook } from "./chat";
 import type { TextArgs } from "../text";
 import type { CommandPackDef } from "./commandPacks";
@@ -216,7 +219,7 @@ export function createServerCommands(packs: readonly CommandPackDef[] = []): Ret
   add({
     id: "god",
     usage: "",
-    summary: "Toggles god mode: nothing hurts you (every hit misses as immune). /god again turns it off.",
+    summary: "Toggles god mode: nothing hurts you, and no stun, root, silence, pacify or disarm holds you. /god again turns it off.",
     dev: true,
     args: [],
     run({ entity, reply }) {
@@ -225,11 +228,26 @@ export function createServerCommands(packs: readonly CommandPackDef[] = []): Ret
       if (gods.has(entity)) {
         gods.delete(entity);
         lowerFlag(flags, FLAG.immune);
+        for (const f of GOD_IMMUNITIES) lowerFlag(flags, immunityOf(f));
         return reply("God mode off.");
       }
       if (!raiseFlag(flags, FLAG.immune)) return reply("Something keeps you from being immune.");
+      // Immune to the control effects too; any already on are cleared by their own end, not here.
+      for (const f of GOD_IMMUNITIES) raiseFlag(flags, immunityOf(f));
       gods.add(entity);
-      reply("God mode on: nothing hurts you. /god again turns it off.");
+      reply("God mode on: nothing hurts or holds you. /god again turns it off.");
+    },
+  });
+
+  add({
+    id: "ai",
+    usage: "",
+    summary: "Toggles every creature's brain: off, they stand still and attack nothing. /ai again turns them back on.",
+    dev: true,
+    args: [],
+    run({ host, reply }) {
+      if (!host.creatures) return reply("There are no creatures here.");
+      reply(host.creatures.setAi() ? "Creatures think again." : "Creatures are switched off.");
     },
   });
 

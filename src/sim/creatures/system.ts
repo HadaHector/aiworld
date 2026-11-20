@@ -61,6 +61,8 @@ export interface CreatureSystem {
   step(deltaSeconds: number): void;
   /** Kills since the last drain. */
   drainKills(): KillRecord[];
+  /** Turns every brain off (creatures stand still and do nothing) or back on; the switch's state after. */
+  setAi(on?: boolean): boolean;
   /** Spawn points of an owner's own (a dungeon's), filled as the field's are; null takes them away. */
   setPoints(dimension: string, owner: string, points: SpawnPoint[] | null): void;
   /** A dimension's zone at a point. */
@@ -117,6 +119,8 @@ const ROOM = DEFAULT_MOTOR.radius + 0.3;
 export function createCreatureSystem(rules: GameRules, creatures: CreatureRules, skills: SkillSystem, world: CreatureWorld): CreatureSystem {
   const { config } = creatures;
   const states = new Map<string, DimensionState>();
+  /** Developer switch (/ai): when set, no brain is stepped - creatures stand where they are. */
+  let aiOff = false;
   const kills: KillRecord[] = [];
   const streams = new WeakMap<Entity, () => number>();
   /** How many times each member has come back - part of where it comes back. */
@@ -268,6 +272,7 @@ export function createCreatureSystem(rules: GameRules, creatures: CreatureRules,
     }
 
     const think = brainWorld(state, now);
+    const thinking = !aiOff;
     const each = (entity: Entity): boolean => {
       // Gone from under it (despawned by debug): forget it.
       if (state.dimension.entities.get(entity.id) !== entity) return false;
@@ -280,7 +285,11 @@ export function createCreatureSystem(rules: GameRules, creatures: CreatureRules,
         }
         return true;
       }
-      stepBrain(think, entity);
+      if (thinking) stepBrain(think, entity);
+      else {
+        part.input.moveX = 0;
+        part.input.moveZ = 0;
+      }
       if (entity.body) {
         const { x, y, z } = entity;
         const speed = entityStat(rules, entity, "speed", 1);
@@ -346,6 +355,10 @@ export function createCreatureSystem(rules: GameRules, creatures: CreatureRules,
       for (const state of states.values()) stepDimension(state, deltaSeconds, now, look);
     },
     drainKills: () => kills.splice(0, kills.length),
+    setAi(on) {
+      aiOff = on === undefined ? !aiOff : !on;
+      return !aiOff;
+    },
     setPoints(dimension, owner, points) {
       const state = states.get(dimension);
       if (!state) return;
