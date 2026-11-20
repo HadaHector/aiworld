@@ -18,5 +18,5 @@
   rarities: ["common", "uncommon", "rare"],
   never: [{ make: "worn", rarity: "uncommon" }, { make: "worn", rarity: "rare" }],
   extra: { stamina: [1, 2], strength: [1, 2], agility: [1, 2], spirit: [1, 2], intellect: [1, 2] },
-  value: 30,
+  value: "balance",   // from the curves (rules/balance.json5): the level, slot and rarity set it
 }

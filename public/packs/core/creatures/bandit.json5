@@ -5,16 +5,17 @@
   family: "humanoid",
   tags: ["armed"],        // what it is like, for quests (QUESTS.md) to ask for
   hostility: "hostile",
+  role: "brute",
   faction: "bandits",                 // NPCS.md, *Factions*: hostile to players and the folk
   roster: false,
-  stats: { stamina: 4, strength: 9, agility: 9, intellect: 8, armor: 40, weaponMin: 3, weaponMax: 6, weaponSpeed: 3 },
-  perLevel: { stamina: 1.5, strength: 1.5, agility: 1, intellect: 1.5, armor: 15, weaponMin: 1.2, weaponMax: 1.8 },
+  stats: { strength: 9, agility: 9, intellect: 8, weaponSpeed: 3 },
+  perLevel: { strength: 1.5, agility: 1, intellect: 1.5 },
   speed: { walk: 0.22, run: 0.42 },
   habitat: { meadow: 1, bluebellWood: 1, autumnWood: 1, sageHills: 1, maquis: 1, savanna: 1, heatherMoor: 1, redBush: 1, desert: 1 },
   respawn: [480, 600],
   loot: "bandit",
   variants: [
     { id: "thug", name: "Thug", look: { outfit: "scout" }, spells: [{ skill: "bash" }], tactics: [{ skill: "bash", every: [10, 14] }] },
-    { id: "hexer", name: "Hexer", look: { outfit: "apprentice", color: [0.4, 0.3, 0.55] }, stats: { intellect: 14, stamina: 3, armor: 15 }, spells: [{ skill: "hexBolt" }], tactics: [{ skill: "hexBolt", every: [4, 6] }], keepRange: 20 },
+    { id: "hexer", name: "Hexer", look: { outfit: "apprentice", color: [0.4, 0.3, 0.55] }, role: "caster", scale: { armour: 0.4 }, stats: { intellect: 14 }, spells: [{ skill: "hexBolt" }], tactics: [{ skill: "hexBolt", every: [4, 6] }], keepRange: 20 },
   ],
 }

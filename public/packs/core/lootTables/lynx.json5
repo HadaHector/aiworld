@@ -6,5 +6,5 @@
     { weight: 20, item: "bearClaw" },
     { weight: 25 },
   ],
-  always: [{ money: [2,7] }],
+  always: [{ money: [0.5, 1.6], scale: "brute" }],   // a share of a brute kill's money at its level (rules/balance.json5)
 }

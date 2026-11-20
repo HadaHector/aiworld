@@ -71,10 +71,10 @@ await section("rules", () => {
   check("the base template's spells come first", game.skills[timber.template.spells[0].skill].id === "autoAttack");
   const frost = creatures.kinds.get("wolf.frost");
   check("a variant adds its spells", frost.template.spells.some((s) => game.skills[s.skill].id === "frostBite"));
-  check("a variant sets its stats over the species'", frost.template.stats.find((s) => s.stat === game.statIndex.get("armor")).value === 35);
+  check("a variant's scale multiplies the species' (balance role and offsets, rules/balance.json5)", frost.balance?.role === "brute" && Math.abs(frost.balance.scale.armour - 0.75 * 1.75) < 1e-9, JSON.stringify(frost.balance));
   check("a variant's colour", frost.template.look.color[0] > 0.8);
   check("the loot table reaches the template", timber.template.items?.loot === "wolf");
-  check("per level growth", timber.perLevel.some((p) => p.stat === game.statIndex.get("stamina") && p.value === 1.5));
+  check("per level growth", timber.perLevel.some((p) => p.stat === game.statIndex.get("strength") && p.value === 1.5));
   check("a camp-only species is not rostered", creatures.kinds.get("bandit.thug").roster === false);
   check("the hexer keeps its range", creatures.kinds.get("bandit.hexer").keepRange === 20);
   check("boars flee", creatures.kinds.get("boar.bristle").flee?.at === 0.2);

@@ -10,5 +10,5 @@
     { weight: 5, template: "axe", rarity: ["common", "uncommon"], where: { material: "bronze", make: "crude" } },
     { weight: 30 },
   ],
-  always: [{ money: [10, 40] }],
+  always: [{ money: [0.6, 1.8], scale: "brute" }],   // a share of a brute kill's money at its level (rules/balance.json5)
 }

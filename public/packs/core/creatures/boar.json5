@@ -5,8 +5,9 @@
   family: "beast",
   tags: ["furred", "mammal"],        // what it is like, for quests (QUESTS.md) to ask for
   hostility: "neutral",
-  stats: { stamina: 4, strength: 10, agility: 6, armor: 40, weaponMin: 2, weaponMax: 5, weaponSpeed: 3.2 },
-  perLevel: { stamina: 1.8, strength: 1.5, agility: 1, armor: 15, weaponMin: 1.2, weaponMax: 1.8 },
+  role: "brute", scale: { armour: 1 },
+  stats: { strength: 10, agility: 6, weaponSpeed: 3.2 },
+  perLevel: { strength: 1.5, agility: 1 },
   spells: [{ skill: "gore" }],
   tactics: [{ skill: "gore", every: [14, 18] }],
   speed: { walk: 0.2, run: 0.4 },
@@ -19,7 +20,7 @@
   variants: [
     { id: "bristle", name: "Bristleback", habitat: ["meadow", "bluebellWood", "autumnWood"] },
     { id: "dust", name: "Dust", habitat: ["savanna", "sageHills", "redBush", "maquis"], look: { color: [0.62, 0.48, 0.34], beast: "boar.dust" } },
-    { id: "mire", name: "Mire", habitat: ["reedMarsh", "rainforest", "cloudForest"], look: { color: [0.25, 0.27, 0.2], beast: "boar.mire" }, stats: { stamina: 6 } },
+    { id: "mire", name: "Mire", habitat: ["reedMarsh", "rainforest", "cloudForest"], look: { color: [0.25, 0.27, 0.2], beast: "boar.mire" }, scale: { health: 1.3 } },
   ],
   traits: { pick: [0, 1], pool: ["thickHide", "old"] },
 }

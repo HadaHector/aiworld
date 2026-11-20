@@ -4,6 +4,7 @@ import { hashString } from "../../world/content/dimensions";
 import { deriveSeed, mulberry32 } from "../../world/rng";
 import { compileFormula, type CompiledFormula } from "./formula";
 import { makeTemplate, mergeTemplate, type GameRules, type TemplateDef } from "./gameRules";
+import { readBalanceRules, readCreatureBalance, type BalanceRules, type CreatureBalance } from "./balanceRules";
 
 /** A skill the brain uses (see CREATURES.md, *The brain*). */
 export interface TacticDef {
@@ -51,6 +52,8 @@ export interface CreatureKind {
   swims: boolean;
   /** This world's traits, by id. */
   traits: string[];
+  /** Its role and offsets over the balance curves (rules/balance.json5): its stats at a level come from them. Null: from `perLevel`. */
+  balance: CreatureBalance | null;
   template: TemplateDef;
 }
 
@@ -127,6 +130,8 @@ export interface CreatureRules {
   speciesKinds: ReadonlyMap<string, readonly CreatureKind[]>;
   camps: readonly CampDef[];
   config: CreatureConfig;
+  /** The packs' balance curves, null if they have none. */
+  balance: BalanceRules | null;
   /** The scope `when` and `aggro` formulas read: caster stats, target stats, then the extras. */
   scope: { stats: number; casterHealth: number; targetHealth: number; distance: number; size: number };
   hash: number;
@@ -143,9 +148,9 @@ const byId = (a: { id: string }, b: { id: string }): number => (a.id < b.id ? -1
 
 const SPECIES_KEYS = [
   "entity", "name", "family", "tags", "hostility", "faction", "stats", "perLevel", "modifiers", "spells", "tactics", "speed", "group", "habitat", "roster",
-  "levelOffset", "respawn", "aggro", "flee", "keepRange", "wander", "loot", "look", "variants", "traits", "swims",
+  "levelOffset", "respawn", "aggro", "flee", "keepRange", "wander", "loot", "look", "variants", "traits", "swims", "role", "scale",
 ];
-const VARIANT_KEYS = ["id", "name", "tags", "habitat", "stats", "perLevel", "modifiers", "spells", "tactics", "look", "never", "levelOffset", "speed", "flee", "keepRange", "aggro"];
+const VARIANT_KEYS = ["id", "name", "tags", "habitat", "stats", "perLevel", "modifiers", "spells", "tactics", "look", "never", "levelOffset", "speed", "flee", "keepRange", "aggro", "role", "scale"];
 const TRAIT_KEYS = ["name", "stats", "modifiers", "spells", "tactics", "speed"];
 
 /**
@@ -188,6 +193,7 @@ export function resolveCreatureRules(packs: PackSource[], game: GameRules, seed:
   names.set("target.healthPct", scope.targetHealth);
   names.set("distance", scope.distance);
 
+  const balance = readBalanceRules(packs);
   const config = readConfig(folders.get("rules")!.get("creatures"), game, names, issues);
   const never = new Set(config.never);
 
@@ -237,7 +243,7 @@ export function resolveCreatureRules(packs: PackSource[], game: GameRules, seed:
       const chosen: string[] = [];
       for (let k = 0; k < count; k++) chosen.push(candidates.splice(Math.floor(random() * candidates.length), 1)[0]);
       chosen.sort();
-      const kind = makeKind(id, entry.id, variantId, species, variant, vpath, chosen.map((t) => ({ id: t, ...traits.get(t)! })), base.obj, reader, game, biomes, names);
+      const kind = makeKind(id, entry.id, variantId, species, variant, vpath, chosen.map((t) => ({ id: t, ...traits.get(t)! })), base.obj, reader, game, biomes, names, balance);
       if (kind) {
         kinds.set(id, kind);
         made.push(kind);
@@ -283,7 +289,7 @@ export function resolveCreatureRules(packs: PackSource[], game: GameRules, seed:
   const kindList = [...kinds.values()].sort(byId);
   for (const kind of kindList) game.templates.set(kind.id, kind.template);
   const signature = [kindList.map((k) => `${k.id}:${k.traits.join("+")}`).join(","), camps.map((c) => c.id).join(",")].join("|");
-  return { kinds, kindList, speciesKinds, camps, config, scope, hash: hashString(signature) };
+  return { kinds, kindList, speciesKinds, camps, config, balance, scope, hash: hashString(signature) };
 }
 
 /** Where a species, a variant or a camp lives: `{ biome: weight }`, or a list of biomes (weight 1). */
@@ -321,6 +327,7 @@ function makeKind(
   game: GameRules,
   biomes: ReadonlySet<string>,
   names: ReadonlyMap<string, number>,
+  balance: BalanceRules | null,
 ): CreatureKind | null {
   const parts: { obj: RawObject; reader: Reader; path: string }[] = [
     { obj: species, reader, path: "" },
@@ -435,6 +442,7 @@ function makeKind(
     wander: reader.optionalNumber(species, "wander", "", 8, { min: 0 }),
     swims: reader.boolean(species, "swims", "", false),
     traits: traits.map((t) => t.id),
+    balance: readCreatureBalance(species, variant, reader, vpath, balance),
     template,
   };
 }

@@ -141,6 +141,8 @@ export function createCreatureSystem(rules: GameRules, creatures: CreatureRules,
         const base = kind.template.stats.find((s) => s.stat === stat)?.value ?? rules.stats[stat].default;
         setBase(entity.stats, stat, base + value * (level - 1));
       }
+      // A kind with a role gets its health, damage and armour from the balance curves (rules/balance.json5), over those.
+      if (kind.balance && creatures.balance) creatures.balance.applyCreature(entity.stats, rules, kind.balance, level);
       if (entity.resources) {
         syncMaxima(entity.resources, entity.stats);
         for (const r of entity.resources.has) restore(entity.resources, r, rules.resources[r].start * entity.resources.max[r] - entity.resources.current[r]);

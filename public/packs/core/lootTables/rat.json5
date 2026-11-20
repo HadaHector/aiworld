@@ -6,5 +6,5 @@
     { weight: 30, item: "ratTooth", count: [1,2] },
     { weight: 25 },
   ],
-  always: [{ money: [0,3] }],
+  always: [{ money: [0.2, 1.4], scale: "swarm" }],   // a share of a swarm kill's money at its level (rules/balance.json5)
 }

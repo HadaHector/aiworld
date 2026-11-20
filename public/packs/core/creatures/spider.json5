@@ -5,8 +5,9 @@
   family: "beast",
   tags: ["arachnid", "venomous"],        // what it is like, for quests (QUESTS.md) to ask for
   hostility: "hostile",
-  stats: { stamina: 3, strength: 7, agility: 14, armor: 30, weaponMin: 2, weaponMax: 4, weaponSpeed: 2.8 },
-  perLevel: { stamina: 1.5, strength: 1.2, agility: 1.8, armor: 12, weaponMin: 1, weaponMax: 1.5 },
+  role: "skirmisher", scale: { armour: 0.5 },
+  stats: { strength: 7, agility: 14, weaponSpeed: 2.8 },
+  perLevel: { strength: 1.2, agility: 1.8 },
   spells: [{ skill: "venom" }, { skill: "web" }],
   tactics: [
     { skill: "web", every: [16, 20], when: { gt: ["distance", 4] } },
@@ -22,7 +23,7 @@
   variants: [
     { id: "giant", name: "Giant", habitat: ["meadow", "bluebellWood", "autumnWood", "reedMarsh"] },
     { id: "jungle", name: "Jungle", habitat: ["rainforest", "cloudForest", "cypressBayou"], look: { color: [0.25, 0.4, 0.2], beast: "spider.jungle" } },
-    { id: "sand", name: "Sand", habitat: ["desert", "redBush"], look: { color: [0.75, 0.55, 0.35], beast: "spider.sand" }, stats: { armor: 50 } },
+    { id: "sand", name: "Sand", habitat: ["desert", "redBush"], look: { color: [0.75, 0.55, 0.35], beast: "spider.sand" }, scale: { armour: 1.6 } },
   ],
   traits: { pick: [0, 1], pool: ["swift", "old"] },
 }

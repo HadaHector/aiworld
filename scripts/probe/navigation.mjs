@@ -333,6 +333,9 @@ console.log(`ways to rooms ${found}/${rooms}, from spawn spots ${offFound}/${off
       await pump(30);
       const pack = server.debug.creatures.debug.creatures("mainland").filter((e) => e.creature.point?.key === point.key && !e.combat.dead);
       server.debug.skills.apply(rules.skillIndex.get("burn"), me, pack[0]);
+      // The player is topped up as well as revived: three wolves hit at the balance curves (rules/balance.json5), and a dead player ends the chase.
+      const hi = rules.resourceIndex.get("health");
+      const keepAlive = () => { server.debug.skills.revive(me); me.resources.current[hi] = me.resources.max[hi]; };
       let nearest = Infinity, running = 0;
       for (let i = 0; i < 30 * 12; i++) {
         await pump(1);
@@ -341,14 +344,14 @@ console.log(`ways to rooms ${found}/${rooms}, from spawn spots ${offFound}/${off
           running++;
           nearest = Math.min(nearest, Math.hypot(moving[a].x - moving[b].x, moving[a].z - moving[b].z));
         }
-        server.debug.skills.revive(me);
+        keepAlive();
       }
       console.log(`steering: a pack of ${pack.length} running at the player: its members came within ${nearest.toFixed(2)} m of each other (${running} pairs looked at)`);
       // ...and once at the player, standing round it.
       let standing = Infinity;
       for (let i = 0; i < 30 * 4; i++) {
         await pump(1);
-        server.debug.skills.revive(me);
+        keepAlive();
       }
       const alive = pack.filter((e) => !e.combat.dead);
       for (let a = 0; a < alive.length; a++) for (let b = a + 1; b < alive.length; b++) standing = Math.min(standing, Math.hypot(alive[a].x - alive[b].x, alive[a].z - alive[b].z));

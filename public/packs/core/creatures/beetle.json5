@@ -5,8 +5,9 @@
   name: "{variant} Beetle",
   family: "beast",
   hostility: "neutral",
-  stats: { stamina: 5, strength: 10, agility: 5, armor: 90, weaponMin: 2, weaponMax: 5, weaponSpeed: 3.4 },
-  perLevel: { stamina: 2, strength: 1.5, agility: 0.7, armor: 30, weaponMin: 1.2, weaponMax: 1.8 },
+  role: "brute", scale: { armour: 1.75 },
+  stats: { strength: 10, agility: 5, weaponSpeed: 3.4 },
+  perLevel: { strength: 1.5, agility: 0.7 },
   spells: [{ skill: "gore" }],
   tactics: [{ skill: "gore", every: [14, 18] }],
   speed: { walk: 0.16, run: 0.34 },
@@ -18,7 +19,7 @@
   variants: [
     { id: "horned", name: "Horned", habitat: ["meadow", "maquis", "savanna"] },
     { id: "emerald", name: "Emerald", habitat: ["rainforest", "cloudForest", "palmGrove"], look: { color: [0.12, 0.33, 0.18], beast: "beetle.emerald" } },
-    { id: "bronze", name: "Bronze", habitat: ["redBush", "maquis"], look: { color: [0.48, 0.27, 0.12], beast: "beetle.bronze" }, stats: { armor: 110 } },
+    { id: "bronze", name: "Bronze", habitat: ["redBush", "maquis"], look: { color: [0.48, 0.27, 0.12], beast: "beetle.bronze" }, scale: { armour: 1.2 } },
   ],
   traits: { pick: [0, 1], pool: ["thickHide", "old"] },
 }

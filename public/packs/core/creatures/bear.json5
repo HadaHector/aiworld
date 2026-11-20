@@ -5,8 +5,9 @@
   name: "{variant} Bear",
   family: "beast",
   hostility: "neutral",
-  stats: { stamina: 6, strength: 12, agility: 6, armor: 60, weaponMin: 3, weaponMax: 6, weaponSpeed: 3.4 },
-  perLevel: { stamina: 2.4, strength: 1.8, agility: 0.8, armor: 22, weaponMin: 1.4, weaponMax: 2.1 },
+  role: "brute", scale: { health: 1.3, damage: 1.2, armour: 1.25 },
+  stats: { strength: 12, agility: 6, weaponSpeed: 3.4 },
+  perLevel: { strength: 1.8, agility: 0.8 },
   spells: [{ skill: "maul" }],
   tactics: [{ skill: "maul", every: [12, 16] }],
   speed: { walk: 0.18, run: 0.42 },
@@ -18,7 +19,7 @@
   look: { height: 1.4, radius: 0.75, color: [0.36, 0.25, 0.17], beast: "bear", feedback: { weapon: "claw", armor: "fur", family: "bear" } },
   variants: [
     { id: "brown", name: "Brown", habitat: ["meadow", "bluebellWood", "autumnWood", "greenAlps", "alpineMeadow", "cloudForest"] },
-    { id: "cave", name: "Cave", habitat: ["snowyTaiga", "windsweptFell", "alpineMeadow"], look: { color: [0.22, 0.2, 0.19], beast: "bear.cave" }, stats: { stamina: 8 } },
+    { id: "cave", name: "Cave", habitat: ["snowyTaiga", "windsweptFell", "alpineMeadow"], look: { color: [0.22, 0.2, 0.19], beast: "bear.cave" }, scale: { health: 1.3 } },
   ],
   traits: { pick: [0, 1], pool: ["thickHide", "old"] },
 }

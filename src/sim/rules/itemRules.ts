@@ -1,3 +1,4 @@
+import { readBalanceRules, type BalanceRules } from "./balanceRules";
 import { ContentError, isObject, joinPath, Reader, type ContentIssue, type RawObject } from "../../world/content/contentReader";
 import { formatIssue } from "../../world/content/contentReader";
 import { ITEM_FOLDERS, orderPacks, parseFile, type PackSource } from "../../world/content/resolveContent";
@@ -97,7 +98,7 @@ export type LootWhat =
   | { kind: "item"; type: number }
   | { kind: "table"; table: string }
   | { kind: "types"; types: number[] }
-  | { kind: "money"; currency: number; amount: [number, number] }
+  | { kind: "money"; currency: number; amount: [number, number]; scale: string | null }
   | { kind: "nothing" };
 
 export interface LootEntry {
@@ -183,6 +184,10 @@ export interface ItemRules {
   /** `vendorStocks/`, by id. */
   stocks: ReadonlyMap<string, VendorStock>;
   config: ItemConfig;
+  /** The packs' balance curves (rules/balance.json5), null if they have none: loot money and `value: "balance"` prices come from them. */
+  balance: BalanceRules | null;
+  /** The `level` stat's index: a loot table's money scales with its source's level. */
+  levelStat: number;
   /** Every skill items name, where - the skill rules check them (`checkSkillRefs`). */
   abilityRefs: { file: string; path: string; id: string }[];
   /** For `requires` and loot conditions: how many stats there are. */
@@ -213,6 +218,7 @@ const known = (keys: Iterable<string>): string => [...keys].join(", ");
  */
 export function resolveItemRules(packs: PackSource[], game: GameRules, seed: number): ItemRules {
   const issues: ContentIssue[] = [];
+  const balance = readBalanceRules(packs);
   const folders = new Map<string, Map<string, Entry>>([...ITEM_FOLDERS, "rules"].map((folder) => [folder, new Map()]));
   const gearIds = new Set<string>();
   for (const pack of orderPacks(packs, issues)) {
@@ -295,7 +301,7 @@ export function resolveItemRules(packs: PackSource[], game: GameRules, seed: num
   // --- types: authored, then generated ---
   const statNames = new Map(game.stats.map((s) => [s.id, s.index]));
   const requireNames = new Map([...statNames, ["itemLevel", game.stats.length]]);
-  const context: TypeContext = { game, rarityIndex, slotIndex, gearIds, requireNames, abilityRefs: [] };
+  const context: TypeContext = { game, rarityIndex, slotIndex, gearIds, requireNames, abilityRefs: [], balance, rarityBudgets: rarities.map((r) => r.budget) };
   const raw: { id: string; obj: RawObject; reader: Reader; template: string; parts: Record<string, string> }[] = [];
   for (const entry of entries("items")) {
     const reader = new Reader(issues, entry.file);
@@ -303,7 +309,7 @@ export function resolveItemRules(packs: PackSource[], game: GameRules, seed: num
   }
   for (const entry of entries("itemTemplates")) {
     const reader = new Reader(issues, entry.file);
-    for (const made of generateTypes(entry.id, reader.object(entry.data, ""), reader, rarities, seed, config.maxGenerated)) raw.push({ ...made, reader });
+    for (const made of generateTypes(entry.id, reader.object(entry.data, ""), reader, rarities, seed, config.maxGenerated, balance)) raw.push({ ...made, reader });
   }
   raw.sort(byId);
   const types: ItemTypeDef[] = [];
@@ -328,7 +334,7 @@ export function resolveItemRules(packs: PackSource[], game: GameRules, seed: num
   const lootEntries = entries("lootTables");
   const tableIds = new Set(lootEntries.map((e) => e.id));
   const lootTables = new Map<string, LootTableDef>();
-  const lootContext: LootContext = { typeIndex, types, generated, rarityIndex, currencyIndex, main: mains[0]?.index ?? 0, tableIds, lootNames };
+  const lootContext: LootContext = { typeIndex, types, generated, rarityIndex, currencyIndex, main: mains[0]?.index ?? 0, tableIds, lootNames, balance };
   for (const entry of lootEntries) lootTables.set(entry.id, readLootTable(entry, new Reader(issues, entry.file), lootContext));
   checkLootCycles(lootTables, lootEntries, issues);
 
@@ -368,6 +374,8 @@ export function resolveItemRules(packs: PackSource[], game: GameRules, seed: num
     config,
     abilityRefs: context.abilityRefs,
     statCount: game.stats.length,
+    balance,
+    levelStat: game.statIndex.get("level") ?? 0,
     seed: seed >>> 0,
     hash: hashString(signature),
   };
@@ -451,11 +459,25 @@ function readConfig(entry: Entry | undefined, issues: ContentIssue[]): ItemConfi
 
 interface TypeContext {
   game: GameRules;
+  balance: BalanceRules | null;
+  /** Each rarity's budget multiplier, by rarity index. */
+  rarityBudgets: number[];
   rarityIndex: ReadonlyMap<string, number>;
   slotIndex: ReadonlyMap<string, number>;
   gearIds: ReadonlySet<string>;
   requireNames: ReadonlyMap<string, number>;
   abilityRefs: { file: string; path: string; id: string }[];
+}
+
+/** An item's value: a number, or "balance" - from the curves (rules/balance.json5) by its level, first slot and rarity. */
+function priceOf(obj: RawObject, reader: Reader, ctx: TypeContext, slots: number[], rarity: number): number {
+  if (obj.value !== "balance") return reader.optionalNumber(obj, "value", "", 0, { min: 0, integer: true });
+  if (!ctx.balance) {
+    reader.fail("value", "`value: \"balance\"` needs the packs' rules/balance.json5");
+    return 0;
+  }
+  const slot = slots.length > 0 ? [...ctx.slotIndex].find(([, i]) => i === slots[0])?.[0] : "";
+  return ctx.balance.itemPrice(reader.optionalNumber(obj, "level", "", 1, { integer: true }), slot ?? "", ctx.rarityBudgets[rarity] ?? 1);
 }
 
 /** A stat's amount as written: a number, or a [min, max] range (min may equal max). */
@@ -558,7 +580,7 @@ function readType(id: string, index: number, obj: RawObject, reader: Reader, ctx
     quest: reader.boolean(obj, "quest", "", false) || kind === "quest",
     use: use ? { skill: String(use.skill ?? ""), consume: reader.boolean(use, "consume", "use", true) } : null,
     equip: equip ? { skill: String(equip.skill ?? "") } : null,
-    value: reader.optionalNumber(obj, "value", "", 0, { min: 0, integer: true }),
+    value: priceOf(obj, reader, ctx, slots, rarity ?? 0),
     itemLevel: reader.optionalNumber(obj, "level", "", 1, { integer: true }),
     icon: reader.optionalString(obj, "icon", "") ?? "",
     template,
@@ -583,6 +605,7 @@ function generateTypes(
   rarities: readonly RarityDef[],
   seed: number,
   maxGenerated: number,
+  balance: BalanceRules | null,
 ): { id: string; obj: RawObject; template: string; parts: Record<string, string> }[] {
   reader.onlyKeys(obj, "", [...ITEM_KEYS, ...TEMPLATE_ONLY_KEYS]);
   const name = reader.string(obj, "name", "");
@@ -685,7 +708,13 @@ function generateTypes(
       item.name = label;
       // An icon may name its parts too: "item-sword-{material}-{form}".
       if (typeof item.icon === "string") item.icon = axes.reduce((icon, a) => icon.split(`{${a.axis}}`).join(parts[a.axis]), item.icon);
-      if (typeof item.value === "number") item.value = Math.round(item.value * budget);
+      if (item.value === "balance") {
+        // From the curves, by the item's level, its slot and its rarity alone: a material's budget is
+        // the level's own step up, and the income curve already carries it.
+        const slotId = Array.isArray(item.slot) ? String(item.slot[0]) : String(item.slot ?? "");
+        if (balance) item.value = balance.itemPrice(level, slotId, tier.budget);
+        else reader.fail("value", "`value: \"balance\"` needs the packs' rules/balance.json5");
+      } else if (typeof item.value === "number") item.value = Math.round(item.value * budget);
       made.push({ id, obj: item, template: templateId, parts });
     }
   };
@@ -702,6 +731,7 @@ interface LootContext {
   main: number;
   tableIds: ReadonlySet<string>;
   lootNames: ReadonlyMap<string, number>;
+  balance: BalanceRules | null;
 }
 
 /** A count as written: a whole number or a [min, max] range of them. */
@@ -719,7 +749,7 @@ function readLootTable(entry: Entry, reader: Reader, ctx: LootContext): LootTabl
   reader.onlyKeys(obj, "", ["rolls", "pick", "always"]);
   const read = (value: unknown, path: string): LootEntry => {
     const raw = reader.object(value, path);
-    reader.onlyKeys(raw, path, ["weight", "when", "origin", "count", "item", "table", "template", "rarity", "where", "money", "currency"]);
+    reader.onlyKeys(raw, path, ["weight", "when", "origin", "count", "item", "table", "template", "rarity", "where", "money", "currency", "scale"]);
     const named = ["item", "table", "template", "money"].filter((k) => raw[k] !== undefined);
     if (named.length > 1) reader.fail(path, `an entry is one of item, table, template or money, not ${named.join(" and ")}`);
     let what: LootWhat = { kind: "nothing" };
@@ -746,12 +776,15 @@ function readLootTable(entry: Entry, reader: Reader, ctx: LootContext): LootTabl
       if (made && typesOf.length === 0) reader.fail(path, `template "${template}" makes no type with that rarity and those parts`);
       what = { kind: "types", types: typesOf };
     } else if (raw.money !== undefined) {
-      const amount = readCount(raw, "money", path, reader, 0);
+      const amount = raw.scale !== undefined ? readAmount(raw.money, `${path}.money`, reader) : readCount(raw, "money", path, reader, 0);
       const id = reader.optionalString(raw, "currency", path);
       const currency = id === undefined ? ctx.main : ctx.currencyIndex.get(id);
       if (currency === undefined) reader.fail(`${path}.currency`, `no currency "${id}" (known: ${known(ctx.currencyIndex.keys())})`);
-      what = { kind: "money", currency: currency ?? ctx.main, amount };
+      const scale = reader.optionalString(raw, "scale", path);
+      if (scale !== undefined && !ctx.balance?.roles.has(scale)) reader.fail(`${path}.scale`, `no balance role "${scale}" (the money is that many times a kill's of the role, at its source's level)`);
+      what = { kind: "money", currency: currency ?? ctx.main, amount, scale: scale ?? null };
     }
+    if (what.kind !== "money" && raw.scale !== undefined) reader.fail(`${path}.scale`, "`scale` goes with `money`");
     if (what.kind !== "types" && (raw.rarity !== undefined || raw.where !== undefined)) reader.fail(path, "`rarity` and `where` go with `template`");
     return {
       weight: reader.optionalNumber(raw, "weight", path, 1, { min: 0 }),
@@ -853,7 +886,13 @@ export function rollLoot(rules: ItemRules, table: string, context: ArrayLike<num
   const give = (entry: LootEntry): void => {
     const what = entry.what;
     if (what.kind === "money") {
-      const amount = between(what.amount);
+      let amount: number;
+      if (what.scale && rules.balance) {
+        // A share of what a kill of that role at the source's level is worth, with the entry's spread.
+        const level = Number(context[rules.levelStat] ?? 1) || 1;
+        const share = what.amount[0] + random() * (what.amount[1] - what.amount[0]);
+        amount = Math.max(share > 0 ? 1 : 0, Math.round(share * rules.balance.moneyPerKill(what.scale, level)));
+      } else amount = between(what.amount);
       if (amount > 0) out.push({ currency: what.currency, amount });
       return;
     }
