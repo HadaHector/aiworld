@@ -32,8 +32,8 @@ function landRadius(cellCount: number): number {
 }
 
 /** How wide a world of `areaCount` zones is. */
-export function worldExtentFor(areaCount: number): number {
-  return 2 * landRadius(areaCount * CELLS_PER_AREA);
+export function worldExtentFor(areaCount: number, cellsPerArea: number = CELLS_PER_AREA): number {
+  return 2 * landRadius(areaCount * cellsPerArea);
 }
 
 /**
@@ -43,7 +43,7 @@ export function worldExtentFor(areaCount: number): number {
  */
 export function planWorld(seed: number, shape: WorldShape): WorldLayout {
   const areaCount = randomIntInRange(mulberry32(deriveSeed(seed, AREA_COUNT_SALT)), shape.areas);
-  const cellCount = areaCount * CELLS_PER_AREA;
+  const cellCount = areaCount * shape.cellsPerArea;
   const radius = landRadius(cellCount);
   const worldExtent = 2 * radius;
   if (worldExtent > WORLD_EXTENT_WARNING) {

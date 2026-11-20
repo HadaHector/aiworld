@@ -4,7 +4,7 @@ The plan for the next goal: **one starting zone, the autumn wood, finished like 
 single-player session of about two hours, for the user only (no onboarding, no public demo polish), made
 to show the framework off.
 
-**Status: the plan is ready (the user, 2026-11-20). Nothing here is built.** Section 8 divides it into
+**Status: the plan is ready (the user, 2026-11-20). Built so far: W1 and W9 (the vale: `dimensions/autumnVale.json5`, `public/configs/vale.json5`, `cellsPerArea`; see DIMENSIONS.md, *Cells per zone, and the vale*).** Section 8 divides it into
 sessions. Last tidied 2026-11-20.
 
 Sizes: **S** under a day for one session, **M** about a day, **L** several days or several

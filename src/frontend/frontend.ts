@@ -23,6 +23,7 @@ import type { EntityAppearance, LookChoices } from "../sim/protocol";
 const SIZES = [
   { config: "tiny", name: "Tiny", note: "1 zone - ready in seconds" },
   { config: "small", name: "Small", note: "4 zones - ready in about 20 s" },
+  { config: "vale", name: "The Autumn Vale", note: "the slice: one autumn wood, 14 cells - ready in about 20 s" },
   { config: "default", name: "Full", note: "29 zones - about a minute to load, and much memory" },
 ];
 

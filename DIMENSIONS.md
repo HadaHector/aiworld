@@ -103,6 +103,23 @@ same before and after.
   worlds' extents. Nothing in the world is placed at `at` yet; the debug map marks it.
 - `dimensions` is a root kind (see CONFIG.md): a config's `only.dimensions` picks among them.
 
+### Cells per zone, and the vale
+
+A dimension's `world` also takes `cellsPerArea` (a whole number, 1-60; the default is
+`CELLS_PER_AREA`, 10, so the full world is unchanged). The world's size is `areas x cellsPerArea`
+cells (`planWorld`, `worldExtentFor(areas, cellsPerArea)`); a config's `world` may set it too.
+
+The first user is the **autumn vale** (`dimensions/autumnVale.json5`, SLICE.md W1 and W9): one zone of
+the autumn wood only, 14 cells (about 3.5 km2 of land, 1.9 km across), one river, and its own start rule
+(the farm village with an inn and a chapel; no "near the middle" condition, the zone is the world). It is
+not the start dimension of the full game: the config `public/configs/vale.json5` keeps just it
+(`only.dimensions`), so it is the start there. Reach it with *New world > The Autumn Vale* in the menu,
+`?play&config=vale`, or `?dimension=autumnVale` in the full game. `npm run probe -- scripts/probe/vale.mjs [seeds]`
+checks the shape (one zone, 14 cells, one start, the start on land of its own) over several seeds.
+Left for later sessions: the seed (W2), the shore hills (W15, the island has no mountains yet), the
+authored cell plan (W14: today a cell still rolls its feature, so a seed has 1-2 settlements), and the
+level bands by cell (B2).
+
 ### Content per dimension
 
 Each dimension has its own `WorldContent`, resolved from the same packs:

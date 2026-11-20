@@ -1,0 +1,28 @@
+// The autumn vale: the vertical slice's world (SLICE.md, W1 and W9). One zone of the autumn wood,
+// 14 cells, an island-valley a little under 2 km across. Only a config that keeps just this
+// dimension (public/configs/vale.json5) makes it the start; with the full game it is one more
+// dimension to travel to (`?dimension=autumnVale`).
+{
+  name: "The Autumn Vale",
+  world: { areas: [1, 1], cellsPerArea: 14, rivers: [1, 1], riverLength: [4, 5] },
+  biomes: { only: ["autumnWood"] },
+  // New characters start in the farm village the seed picks (an inn and a chapel by preference), as on
+  // the mainland; the zone is the whole world, so no "near the middle" rule.
+  starts: [
+    {
+      id: "common",
+      rule: {
+        tiers: ["village"],
+        buildings: ["inn", "chapel"],
+        biomes: { only: ["autumnWood"] },
+        prefer: { centre: 0.5, score: 0.5 },
+      },
+      arrive: { at: "square", facing: { building: "inn" } },
+      intro: ["welcome", "affliction", "roadOn"],
+      entities: [
+        { template: "trainingDummy", at: "square", offset: [7, 4], facing: 225 },
+        { template: "chest", at: "square", offset: [-6, 5], facing: 160 },
+      ],
+    },
+  ],
+}
