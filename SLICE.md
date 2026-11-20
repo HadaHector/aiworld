@@ -135,7 +135,7 @@ IDs are used in the dependencies. "Par." is whether the task can run as its own 
 | ID | Task | Size | Needs | Par. |
 |---|---|---|---|---|
 | E1 | **The wood's roster.** Wolf, boar, bear, spider, lynx, stag, bandit all list `autumnWood` as habitat, and wolf, boar, bear, spider, lynx, stag have beast bodies (BEASTS.md steps 1-6). The `groups` rule says single-only ("no packs for now"); **it stays that way in the slice (decided): no packs in the starting area.** Undead in the crypt are humanoids tinted bone-pale, no body of their own (a skeleton body is a cut candidate). | S | - | yes |
-| E2 | **Behaviour and bosses.** Each kind one trick: wolves flee when hurt, boars charge, the bear hits hard and slow, spiders web (after a delay), bandits have a caster and a bruiser. Rare named elites tied to features (see the decisions below). **No boss phases outside a lair**; the slice has 2-3 lairs (the crypt, plus two of: the old camp's mine, the motte's keep, a cave). Whether a lair boss gets phases is decided with each lair (default: no, just a stronger tactic set). | M | - | yes |
+| E2 | **Behaviour and bosses.** Each kind one trick: wolves flee when hurt, boars charge, the bear hits hard and slow, spiders web (after a delay), bandits have a caster and a bruiser. Rare named elites tied to features (see the decisions below). **No boss phases** (decided): a boss is a stronger elite with a tactic set. The slice has 2-3 lairs; lairs are not dungeons (see open question 9). | M | - | yes |
 | E3 | **The intro chain.** Built and probed (`quests.mjs`): `welcome`, `affliction`, `roadOn`. Check that it fits the first 35 minutes (time it with B3) and ends with the letter delivered in the hub. | S | B3 | after B3 |
 | E4 | **Quest variety.** Today: 3 plots, 23 segments, 15 parts. The slice needs about 9 more quests tied to its places, not all "kill 8 X". Plots: *the missing foreman* (camp), *wolves at the sawpit* (camp), *a bear for the lodge*, *the grey pilgrim* (churchyard, reach and a key), *what happened at the old camp* (a chain of four, ends in dungeon or boss), *the chief's tithe* (motte), *herbs for the grove*, *a message for the inn*, *the lost shipment* (pickup and use). Each uses existing part kinds as far as possible; new parts only for the shapes the list needs. | L (split in 3 sessions of M: camp and lodge, the old camp chain, crypt, motte and grove) | W3-W5 | yes, after its place exists |
 | E5 | **NPC life.** Roles exist (15: forester, quarryman, guard, hermit, innkeeper...). Place them at the features: logger and foreman at the camp, hunter at the lodge, a druid, a bandit chief. A guard that patrols; idle poses by role (chopping, sitting, sweeping) if the animation set has them. | M | W3-W5 | yes |
@@ -205,8 +205,9 @@ tuning target: regen alone takes several minutes to refill, food and potions are
   (a level 1 wolf bites, a later one has a second trick), tactic opening delay and crowd-control rules
   (see the combat step). Encounter curves (density by distance, elite share, aggro radius, leash)
   rather than hand placement.
-- **No boss phases outside lairs.** A **lair** is a dungeon-like place; the slice has **2-3** of them.
-  Elsewhere a "boss" is a stronger elite with a tactic set.
+- **No boss phases, anywhere in the slice.** A boss is a stronger elite with a tactic set, like any
+  other creature. The slice has **2-3 lairs**; a lair is **not a dungeon** (what a lair is here, and
+  whether it is the DUNGEONS.md size of that name, is to be settled with the user: see open question 9).
 - **Rare named enemies are tied to features**, placed where the feature says: the cave or crypt boss,
   the bandit camp's chief, the motte's captain. Their count is the number of such features. Each has the
   unique loot (1-2 trash, 1-2 valuable, one possibly rare).
@@ -442,3 +443,6 @@ Never cut: the intro chain, the two bosses, the crypt, saving, the soak.
 7. **Undead bodies.** Tinted humanoids are fine for the slice, or a real skeleton?
 8. **Icons.** When may the generator run for the new items, and when do you want to pick the four
    waiting icons in review.py?
+9. **Lairs.** You said the slice has about 2-3 lairs and that a lair is not a dungeon. What is a lair
+   here: a small den of enemies in the open (a bear den, a wolf lair), a camp, or a feature of its own?
+   Which of the planned places are lairs, and is the crypt one?
