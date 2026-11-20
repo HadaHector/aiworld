@@ -134,8 +134,8 @@ IDs are used in the dependencies. "Par." is whether the task can run as its own 
 
 | ID | Task | Size | Needs | Par. |
 |---|---|---|---|---|
-| E1 | **The wood's roster.** Wolf, boar, bear, spider, lynx, stag, bandit all list `autumnWood` as habitat, and wolf, boar, bear, spider, lynx, stag have beast bodies (BEASTS.md steps 1-6). The `groups` rule says single-only ("no packs for now"), though the pack behaviour is built (a741e7b): turn on wolf packs. Undead in the crypt are humanoids tinted bone-pale, no body of their own (a skeleton body is a cut candidate). | S | - | yes |
-| E2 | **Behaviour and bosses.** Each kind one trick: wolves pack and flee when hurt, boars charge, the bear hits hard and slow, spiders web, bandits have a caster and a bruiser. Two bosses with their own tactics: the crypt's named elite (the generator already makes one 2 levels up) and the bandit chief with adds. | M | - | yes |
+| E1 | **The wood's roster.** Wolf, boar, bear, spider, lynx, stag, bandit all list `autumnWood` as habitat, and wolf, boar, bear, spider, lynx, stag have beast bodies (BEASTS.md steps 1-6). The `groups` rule says single-only ("no packs for now"); **it stays that way in the slice (decided): no packs in the starting area.** Undead in the crypt are humanoids tinted bone-pale, no body of their own (a skeleton body is a cut candidate). | S | - | yes |
+| E2 | **Behaviour and bosses.** Each kind one trick: wolves flee when hurt, boars charge, the bear hits hard and slow, spiders web (after a delay), bandits have a caster and a bruiser. Rare named elites tied to features (see the decisions below). **No boss phases outside a lair**; the slice has 2-3 lairs (the crypt, plus two of: the old camp's mine, the motte's keep, a cave). Whether a lair boss gets phases is decided with each lair (default: no, just a stronger tactic set). | M | - | yes |
 | E3 | **The intro chain.** Built and probed (`quests.mjs`): `welcome`, `affliction`, `roadOn`. Check that it fits the first 35 minutes (time it with B3) and ends with the letter delivered in the hub. | S | B3 | after B3 |
 | E4 | **Quest variety.** Today: 3 plots, 23 segments, 15 parts. The slice needs about 9 more quests tied to its places, not all "kill 8 X". Plots: *the missing foreman* (camp), *wolves at the sawpit* (camp), *a bear for the lodge*, *the grey pilgrim* (churchyard, reach and a key), *what happened at the old camp* (a chain of four, ends in dungeon or boss), *the chief's tithe* (motte), *herbs for the grove*, *a message for the inn*, *the lost shipment* (pickup and use). Each uses existing part kinds as far as possible; new parts only for the shapes the list needs. | L (split in 3 sessions of M: camp and lodge, the old camp chain, crypt, motte and grove) | W3-W5 | yes, after its place exists |
 | E5 | **NPC life.** Roles exist (15: forester, quarryman, guard, hermit, innkeeper...). Place them at the features: logger and foreman at the camp, hunter at the lodge, a druid, a bandit chief. A guard that patrols; idle poses by role (chopping, sitting, sweeping) if the animation set has them. | M | W3-W5 | yes |
@@ -197,10 +197,40 @@ the trash and valuable shares, the rare chance, the level spread.
 per second, delayed after combat) so food, potions, bandages and healer skills stay worth using. The
 tuning target: regen alone takes several minutes to refill, food and potions are the fast route.
 
-**Changed tasks:**
+#### Enemies and quests: decided with the user (2026-11-20)
+
+- **Levels by cell**, from distance to the start (task B2).
+- **No packs** in the starting area (the `groups` rule stays single-only).
+- **Creature roles and tactics from templates and ratios**, with a creature complexity curve by level
+  (a level 1 wolf bites, a later one has a second trick), tactic opening delay and crowd-control rules
+  (see the combat step). Encounter curves (density by distance, elite share, aggro radius, leash)
+  rather than hand placement.
+- **No boss phases outside lairs.** A **lair** is a dungeon-like place; the slice has **2-3** of them.
+  Elsewhere a "boss" is a stronger elite with a tactic set.
+- **Rare named enemies are tied to features**, placed where the feature says: the cave or crypt boss,
+  the bandit camp's chief, the motte's captain. Their count is the number of such features. Each has the
+  unique loot (1-2 trash, 1-2 valuable, one possibly rare).
+- **Quest density is a constant** (quests available near you), not a curve.
+- **Quest effort varies by level with a min-max pair of curves**: simple, small quests at the start
+  (kill 4), bigger ones later (kill 12). A drawn quest's effort lands between the two curves. XP and
+  money follow effort as they do now (QUESTS.md, *Rewards*), their total set by the balance curves.
+- **Quest kind mix** by ratio, as in the proposal (about 35% kill, 20% gather, 20% talk and deliver,
+  15% reach, 10% use), kept near by the generator.
+- **Quest items on ordinary quests too**, not only chain ends: a plain quest can pay an item, a modest
+  one (common, level about the quest's), so a level 8 piece is still an upgrade over a level 3 one
+  without needing rarity. The pool is the "quest" role of the 6-per-type layout (I8); the choice is
+  one to three pieces for slots the character lacks.
+- **Quest plot templates come after the places.** New plots need the new features (abandoned camp,
+  motte, grove, lodge) to exist, so each feature task (W3-W5) ends with its plot templates, then E4
+  draws on them.
+- **No escort quests.**
+
+**Changed tasks (enemies, quests, items and skills):**
 
 | ID | Task | Size | Needs | Par. |
 |---|---|---|---|---|
+| E9 | **Encounter curves and rare spawns**: density, elite share, aggro and leash as curves in `rules/`; rare named spawns placed by features with their loot. | M | B2, B6, W3-W5 | yes |
+| E10 | **Quest effort curves and item rewards**: min and max effort by level, kill counts that vary, the kind-mix ratio, an item reward on plain quests from the quest pool. | M | B6, I8 | yes |
 | I6 | **Skill template bank**: tags, level range, cooldown category, active or passive; tag the existing skills; a class template format (tag ratios at key levels) and the generator that picks and scales; the skill-count curve. | L | B6 | yes |
 | I7 | **Level-up stats**: stat points per level (curve), config `manual` or `auto` (class weights), the UI for manual. | M | B6 | yes |
 | I8 | **Item generation**: the 6-per-type layout, templates and curves make the items, a pack file only marks the roles (start, shop, quest, loot); also the creature loot ratios and the level-matched drop. | L | B6 | yes |
@@ -211,7 +241,7 @@ tuning target: regen alone takes several minutes to refill, food and potions are
 | ID | Task | Size | Needs | Par. |
 |---|---|---|---|---|
 | B1 | **Levels over the two hours.** Today XP to next level is `40*own^2 + 210*own` (250 for level 2, 5,130 for level 10). **Level 10 costs about 20,850 XP in all.** A kill at your level is about 100 XP, so kills alone would be about 200 of them; quests have to carry about half. Targets: level 4 at 0:35, 7 at 1:05, 8 at 1:30, 10 at 2:00 (see open question 2). | S | - | yes |
-| B2 | **Level bands inside one zone.** Creature levels come from a zone's ring: ring 0 is levels 1-4 (`levels: { start: [1, 4], step: 3, width: 3 }` in rules/creatures.json5) and the whole slice is *one* zone, so every wolf would be level 1-4 and the boss too. Needs: levels by **distance from the start** (a gradient across the zone) and the dungeons' own +1 per 8 parts, set per dimension. | M | W1 | yes |
+| B2 | **Level bands inside one zone.** Creature levels come from a zone's ring: ring 0 is levels 1-4 (`levels: { start: [1, 4], step: 3, width: 3 }` in rules/creatures.json5) and the whole slice is *one* zone, so every wolf would be level 1-4 and the boss too. Needs: levels by **distance from the start** (a gradient across the zone) and the dungeons' own +1 per 8 parts, set per dimension. **Decided with the user: use the world's cells**: a zone is about 10 cells, each cell takes its level from its distance to the start by a curve (a creature's level = its cell's level plus a small spread), the same way rings do today. To confirm in code: where the ring becomes a level in `resolveCreatureRules`, and that a creature knows its cell. | M | W1 | yes |
 | B3 | **A slice bot and a tuning loop.** The server runs headless (`npm run server -- --bot`); `quests.mjs` plays the intro chain; `creatures.mjs` has a hunting bot. Extend into a route bot: do the intro, then the quests in a fixed order, fight, loot, buy the right gear, enter the crypt. Reports per 10 minutes: level, XP, money, kills, deaths, gear. The server steps without a renderer, so a run should not need real time (to be confirmed by the first bot run). | L | E3, W1 | yes |
 | B4 | **Money.** One currency. Targets: the first 30 minutes buy a potion stock and a weapon; the end of the slice buys one armour piece of the best tier, not all. Vendor prices, quest rewards and loot values set from one table. | S | B3 | after B3 |
 | B5 | **Difficulty.** Aggro range clamp and the "level difference" shape are Classic's. Set: a same-level fight costs about a third of health, an elite one half the potions, a boss is a real fight but not a wall. Deaths per run no more than a few. | M | B3 | after B3 |
