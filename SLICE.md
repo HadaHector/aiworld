@@ -203,6 +203,34 @@ prices and shop prices need attention too.
    as relative *power shares*, and the tool writes the one scale per class and level band that makes
    the real dps meet the curve (or only reports, as the user prefers).
 
+**Decided with the user (2026-11-20):**
+- **Derive, but keep differences.** The curves give a *baseline* for a role and level. A creature, item
+  or skill can still carry its own offsets and multipliers on top (a tough wolf, a fast sword), so the
+  baseline is where it starts, not a cage. Raw stats stay allowed where a thing is meant to differ.
+- **Fitting matters most for combat**: player stats, items, passives and active skills. Creatures,
+  loot and prices are mostly derived; skills and gear are derived *and then measured*.
+- **A tank / glass-cannon axis per class.** Every class and build is placed on one axis. The idea:
+  at equal level and gear the product *damage x effective health* is the same (the "power budget"), and
+  the axis says how it splits: a tank has high effective health and low damage, a glass cannon the
+  reverse. The curves set the budget, each class sets its position (a number, say 0 = tank, 1 = glass
+  cannon), and the fit tool checks both halves. Healers and supporters get the same axis plus a
+  "throughput" term, so a priest's healing counts as effective health for the group.
+- **Full defence complexity.** This is a customisable system, not one game, so the defence model is
+  made of switchable parts in `rules/combat.json5`: armour, block (shields), dodge, parry, per-school
+  spell resistance, damage absorption, plus avoidance against crowd control. Each part is expressed
+  as an *effective health multiplier* in the curves, so a pack can turn any of them off and the
+  balance still holds.
+- **Add the ranger, and use it as the stress test.** Beyond warrior, mage and priest the slice
+  builds a ranger (bow, range, kiting), and the duel tool is checked against deliberately odd builds:
+  a pure tank, a glass cannon, a kiter, a healer alone, a pet or summon class, a stealth burst class.
+  If the curves cannot place them all, the system is wrong, not the build.
+- **The duel tool is a timeline, not a simulation of the world.** No geometry, no graphics, no real
+  entities. Time runs in small steps (or an event queue); the only space it tracks is the **distance
+  between the two fighters**, plus movement speeds, so a ranged attack, a cast time, a kite or an
+  approaching melee enemy comes out of the numbers. It reads the *real* skill, tactic and stat
+  definitions (the same decision code as the creature brain, shared, not copied), so what it measures is
+  what the game does. See task B7.
+
 The user's example curves: **dps, time to kill, hp scale, gold scale**; more as needed. Proposed
 set for the slice, each a table by level 1-10 (a formula beyond), editable by hand:
 
@@ -233,16 +261,18 @@ set for the slice, each a table by level 1-10 (a formula beyond), editable by ha
 
 **The class design pass** (task I2 grows): each class gets a role, a resource, a ten-level skill
 ladder (one new thing on most levels), and defence tools. Classes today: warrior, mage, priest;
-the slice should add **one ranged physical class** (a ranger with the bow) so ranged and melee are
-both covered without the mage, unless the user prefers otherwise.
+the slice adds **one ranged physical class** (a ranger with the bow), decided with the user, so ranged
+and melee are both covered without the mage. Each class states its position on the tank / glass-cannon
+axis and how it deals with distance (closes, holds, kites).
 
 **New and changed tasks** (these join the tables above):
 
 | ID | Task | Size | Needs | Par. |
 |---|---|---|---|---|
 | B6 | **`rules/balance.json5` and the derive step**: the curve format, a resolver that reads it, creatures and items moved from raw numbers to roles and multipliers, loot money from the curve, prices from the budget. | L | curve list agreed | yes |
-| B7 | **Duel and fit tool**: headless fights, a rotation policy per class, dps / TTK / health lost report against the curves, optional auto-scale. Replaces much of B3's tuning. | M | B6 | yes |
-| B8 | **Defence**: decide the model (armour only, plus block for shields, dodge, resistances for spells), put it in `rules/combat.json5` and the curves. | M | decision | yes |
+| B7 | **Timeline duel and fit tool**: a pure function, no world, no entities: two sides, a clock, the distance between them, movement speeds. Uses the real skill, stat and tactic definitions (the brain's decision code made callable without a creature). A rotation policy per class (priority list, kite or stand), reports dps, time to kill, health lost, resource use, time out of range, against the curves and the tank / glass-cannon position; optional auto-scale per class and level band. Checked: combat lives in `src/sim/skills` (`dealDamage`, `heal`, casting, magic) and works on `Entity` plus a `Sys`, with no renderer, so the cheapest route is to run the real skill system on bare entities with a fake clock and a one-number distance, rather than a second copy of the rules. Movement and range checks are the part that needs a stand-in. Replaces much of B3's tuning. | L | B6 | yes |
+| B8 | **Defence**: the full model, as switchable parts (armour, block, dodge, parry, spell resistance, absorbs, crowd-control avoidance) in `rules/combat.json5`, each with its effective-health multiplier for the curves. | M | B6 | yes |
+| B9 | **Stress-test characters**: the ranger plus odd builds (tank, glass cannon, kiter, solo healer, summoner, stealth burst) as data, run through B7 to prove the curves place them. | M | B7 | with I2 |
 | E8 | **Creature AI pass**: tactic opening delay and CC rules, roles, a skirmisher that kites, a caster that keeps range, placement rules for elites and packs. Fixes the spider's instant web. | M | B6 | yes |
 | I2 | **Skills per class** (replaces the earlier I2): a role, a resource and a ten-level ladder per class, plus the ranger; each skill a power share. | L (a session per class) | B6, B8 | per class |
 | I1 | **Loot, gold and prices** (grows): item budgets, drop tables per creature and boss, gold curve, vendor buy/sell and repair, from the curves. | M | B6 | yes |
