@@ -28,7 +28,7 @@ gaps, the order with milestones and cuts, and the open questions.
 | Skills | A **skill count curve**; a bank of **tagged skill templates**; a class is **ratios of tags at key levels**. **Talents are out** of the slice. |
 | Level-up | Stat points per level; **manual or automatic is a game config**. Out-of-combat **regeneration**, small. |
 | Items | Simple: **6 per item type and slot** (1 start, 1 shop, 1 quest, 3 loot), generated from templates and curves. Creature loot: 1-2 trash, 1-2 valuable (one maybe rare), a slim chance of rare gear; item level near the creature's. |
-| Enemies | **Levels by cell** (distance from the start). **No packs** in the starting area. Roles and tactics from templates; tactic opening delay and crowd-control rules. **No boss phases anywhere**; a boss is a strong elite. **Lairs are small caves or crypts** with a boss. Rare named enemies **tied to features**. |
+| Enemies | **Levels by cell** (distance from the start). **No packs** in the starting area. Roles and tactics from templates; tactic opening delay and crowd-control rules. **No boss phases anywhere**; a boss is a strong elite. **Lairs are small caves or crypts** with a boss. Rare named enemies **tied to features**. **New kinds of enemies and animals**, many dictated by the features (3c). |
 | Quests | Constant density. **Min-max effort curves by level** (kill 4 early, kill 12 later). Kind mix by ratio. **Item rewards on plain quests** too (modest). No escort quests. |
 | Graphics | **Texture compression wanted** (not conditional). An options menu of **sliders** for the slow constants (no presets). **Dynamic lights on terrain**: a spell can light it. |
 | World | **Water at its own level** (lakes, rivers, cave pools). **Eleven features, all in.** **14 cells**, no empty ones, an authored cell plan. **Shore hills** (mountains along the coast with a bay or two). |
@@ -81,7 +81,7 @@ placement leaves its cell empty. The slice does not roll: see W14 (an authored c
 | Logging camp | yes | Bunkhouse, saw shed, cookhouse, stable, tool shed, skid trail, stumps. |
 | Hunting lodge | yes, revived | Props-only materials, tube-built antlers and deer, smokehouse. Its "not done" list is in LODGE.md. |
 | Churchyard with crypt | yes | Chapel, graves, wall; mausoleums whose way down opens a generated crypt (seamless, creatures, lit). |
-| Sheepfold | built, in **no biome list** | A moor and fell kind; left out of the wood. |
+| Sheepfold | built, in **no biome list**, and **no sheep exist** | A moor and fell kind. A fold without sheep is odd: the sheep are new kinds (E11), and whether the fold itself joins the wood is open question 11. |
 | Abandoned camp, motte, grove, watermill, cave mouth feature, roadside bandit camp | **no** | See below. There is no condition (decay) system in the code at all. |
 
 ### The eleven
@@ -241,6 +241,34 @@ Rare named enemies add unique loot.
   rooms, seamless entry) is the model, not the 15-30 room dungeon.
 - **Rare named enemies are tied to features**, placed where the feature says (the cave's boss, the
   roadside camp's captain, the motte's chief). Their count is the number of such features.
+- **New kinds, and features that dictate who lives there** (decided with the user: the plan had nothing
+  on new kinds; enemies are partly dictated by the features). Today there are 13 species (ant, bandit,
+  bear, beetle, crocodile, lynx, rat, scorpion, spider, stag, undead, wolf, boar; several are not
+  woodland) and **no livestock**: a sheepfold has no sheep. A feature declares the creatures of its place
+  (its residents, as a camp or as spawn points) beside the terrain's habitat lists, so a place comes
+  with its own life. CREATURES.md has camps (one group, members, a leader at the centre) but no link from
+  a feature to its creatures, and a camp is only its members until a compound places props round it:
+  to be built (E12).
+
+  | Place | Residents (existing, **new**) | Role |
+  |---|---|---|
+  | Sheepfold (if in) | **sheep** (flock, neutral, flee, wool), a **farm dog**, a shepherd NPC; wolves at the edges | livestock, brute |
+  | Villages, farms | **chickens**, a **dog** (ambient, no loot, no fight) | ambient |
+  | Logging camp | loggers (NPC), wolves, **timber beetles** (a swarm, if the beetle body fits) | brute, swarm |
+  | Hunting lodge | stag, boar, the bear; a hunter NPC | brute |
+  | Roadside bandit camp | bandit thugs and hexers (exist), a **bandit archer** (ranged, kites) | brute, caster, skirmisher |
+  | Abandoned camp | spiders, rats, the **hollow logger** (an undead variant of the logger) | skirmisher, swarm, brute |
+  | Churchyard crypt (lair) | restless dead, grave robbers (exist), spiders | brute, caster |
+  | Cave mouth and cave (lair) | **bats** (swarm), a **cave spider** (a variant), bandits at the mouth, a cave boss (a **cave bear** or a named elite) | swarm, skirmisher, elite |
+  | Motte and bailey | bandit thugs, hexers, archers, **war dogs**, the chief (named elite) | all roles |
+  | Druid grove | a **grove guardian** (an ancient tree-warden, a rare named elite; optional) | elite |
+  | River and mill | **fish and frogs** (ambient), otters (ambient) | ambient |
+  | The open wood | wolf, boar, bear, lynx, stag, **fox and hare** (skittish ambient) | brute, skirmisher |
+
+  Every **role** gets at least two kinds, so the AI pass (E8) and the duel tool have cases of each. New
+  bodies are the cost: sheep, dog, bats and the tree-warden need bodies (the beast pipeline of
+  BEASTS.md, a quadruped base for sheep, dog and fox); the rest are variants of bodies that exist. The
+  exact list and which bodies are worth it is for the user to say (question 10).
 
 ### 3d. Quests
 
@@ -319,7 +347,9 @@ IDs are used in the dependencies. Where two tasks touch the same files they are 
 
 | ID | Task | Size | Needs | Par. |
 |---|---|---|---|---|
-| E1 | **The wood's roster.** Wolf, boar, bear, spider, lynx, stag and bandit all list `autumnWood`; the first six have beast bodies (BEASTS.md steps 1-6). Packs stay off. Undead in the lairs are humanoids tinted bone-pale (a skeleton body is a cut candidate). | S | - | yes |
+| E1 | **The wood's roster.** Wolf, boar, bear, spider, lynx, stag and bandit all list `autumnWood` (new kinds: E11); the first six have beast bodies (BEASTS.md steps 1-6). Packs stay off. Undead in the lairs are humanoids tinted bone-pale (a skeleton body is a cut candidate). | S | - | yes |
+| E11 | **New kinds.** Livestock (sheep, a farm dog, chickens), bandit archer and war dog, hollow logger, bats and cave spider, cave bear or cave boss, grove guardian, ambient critters (fox, hare, fish, frogs), as in 3c. Each: species file with traits and variants, a role, a body (variant or new beast body), a loot table, its icons and sounds. Ambient ones have no fight and no loot; livestock is neutral and flees. In sessions by group: livestock and ambient; bandit variants; the dead, the cave and the grove. | L (3 sessions of M) | B6, E8, bodies | yes |
+| E12 | **Features declare their creatures.** A `creatures` entry in a feature (a camp or spawn points with kinds, counts, levels, a leader) placed with the feature's own ground and props, beside the terrain's habitat; cleared camps stay cleared (the world delta). Needed for the sheepfold's flock, the cave mouth's residents, the roadside and motte camps, the grove's guardian. To confirm in code how camps are placed today and what a feature may carry. | M | E1 | yes |
 | E2 | **One trick per kind, and bosses.** Wolves flee when hurt, boars charge, the bear hits hard and slow, spiders web (after a delay), bandits have a caster and a bruiser. A boss per lair and at the motte: a strong elite with a tactic set, **no phases**. | M | E8 | yes |
 | E3 | **The intro chain.** Built and probed (`quests.mjs`): `welcome`, `affliction`, `roadOn`. Check that it fits the first 35 minutes (time it with B3) and ends with the letter delivered in the hub. | S | B3 | after B3 |
 | E4 | **New quests.** Today: 3 plots, 23 segments, 15 parts. The slice needs about 11 more quests tied to its places, not all "kill 8 X". Plots: *the missing foreman*, *wolves at the sawpit* (camp), *a bear for the lodge*, *the grey pilgrim* (churchyard, a key), *what happened at the old camp* (a chain of four), *the chief's tithe* (motte), *herbs for the grove*, *a message for the inn*, *the lost shipment* (mill, pickup and use), *the roadside toll* (bandit camp), *the hermit under the hill* (cave mouth). Existing part kinds as far as possible; new parts only for the shapes needed. Plots come after their place (each feature task ends with its plot templates). | L (3 sessions of M: camp and lodge, old camp chain, lairs/motte/grove/mill) | places | yes, after its place |
@@ -371,7 +401,7 @@ IDs are used in the dependencies. Where two tasks touch the same files they are 
 | **Icons for four items** | Generated, waiting for the pick in `assets_work/comfyUI/review.py`. | I4 |
 | **Cave dungeon** | **Corrected 2026-11-20.** The first draft said not started. A parallel session has since built a `cave` style and about 22 cave parts (`public/packs/core/dungeonParts/cave*.json5`, `dungeonStyles/cave.json5`; commits 97e5697 natural cave from field parts, 80a48ce cave mouths on steep hillsides, 6ec8d43 rougher caves). DUNGEONS.md's *as built* does not say so yet, and the packs have no cave-mouth *feature* (no `features/` entry) and no biome places one. Not checked by me: walking it, its boss, chests, spawns, the seamless entry. | E6, W16 |
 | **Abandoned camp condition** | No condition or decay system anywhere in `src/world`. | W3 |
-| **Sheepfold not in a biome list** | `features/sheepfold.json5` is in no biome; a moor kind, not part of the slice. | W8 |
+| **Sheepfold not in a biome list, and no sheep** | `features/sheepfold.json5` is in no biome, and no livestock species exists (the 13 species are ant, bandit, bear, beetle, crocodile, lynx, rat, scorpion, spider, stag, undead, wolf, boar). | W8, E11, question 11 |
 | **One sea level** | Every water body is a hollow filled to sea level; no river or lake above the sea. | W10 |
 | **Boundary hills need a second area** | One area has no border to a neighbour, so none of its hills rise. | W15 |
 | **`CELLS_PER_AREA` is global** | One constant, used by the world layout for every zone. | W9 |
@@ -445,3 +475,5 @@ section 0.
 8. **The inn camera clipping.** A spot where it reproduces, please.
 9. **The curve values.** The table in 3a is a set of guesses; the numbers (time to kill, time to die,
    prices, sell rate) are yours to overwrite.
+10. **Which new kinds, and which bodies?** The list in 3c is my proposal. Which would you cut or add? Sheep, the dog and bats need new bodies; the rest are variants.
+11. **The sheepfold in the wood?** It is built, and with sheep it would be a pastoral place beside the hub (a shepherd, wolves at the edge, a quest). It would take one of the two plain cells (13 places in 14 cells) or be dropped. Recommended: yes, if the sheep are made anyway.
