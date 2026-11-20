@@ -4,8 +4,8 @@ The plan for the next goal: **one starting zone, the autumn wood, finished like 
 single-player session of about two hours, for the user only (no onboarding, no public demo polish), made
 to show the framework off.
 
-**Status: a working draft, being detailed with the user. Not final until the user says it is ready.
-Nothing here is built.** Last tidied 2026-11-20.
+**Status: the plan is ready (the user, 2026-11-20). Nothing here is built.** Section 8 divides it into
+sessions. Last tidied 2026-11-20.
 
 Sizes: **S** under a day for one session, **M** about a day, **L** several days or several
 sessions. "Par." means the task can run as its own session without touching another task's files.
@@ -15,7 +15,7 @@ code is what is written here.
 **How to read it.** Section 1 says what "done" is. Section 2 lists the places. Section 3 is the
 *method*: the game is described with curves, ratios and tags, and that is how balance, skills, items,
 enemies and quests are built. Section 4 is the task list by category. Sections 5-7 are the known
-gaps, the order with milestones and cuts, and the open questions.
+gaps, the order with milestones and cuts, and the open questions. Section 8 is the division into sessions.
 
 ## 0. Decided with the user (2026-11-20)
 
@@ -481,3 +481,123 @@ the new kinds) are in section 0 and 3c.
 9. **The curve values.** The table in 3a is a set of guesses; the numbers (time to kill, time to die,
    prices, sell rate) are yours to overwrite.
 10. **The giant.** A scaled-up humanoid as the grove's rare elite: does it also appear elsewhere (the motte, a cave)? How tall, and with what weapon?
+11. **Icons per type or per item?** About 230 generated items cannot each have a picked icon: an icon per item type and slot (about 40) with the tier shown by a border or tint, or something else? (Section 8, GPU windows.)
+
+## 8. Sessions: how the work is divided
+
+The plan is ready (the user, 2026-11-20). This section says how to cut it into sessions, what runs at
+the same time, and what waits for the user or the GPU. **No session is started by this document**; each
+wave is started when the user says so.
+
+### Rules for every session
+
+- **One session, one lane.** A session owns a set of files; two sessions never own the same file (the
+  conflict list is at the end of this section). Sessions that write code each get **their own worktree
+  and branch**, rebased on master before they are merged.
+- **The brief** names: the task IDs here, the docs to read first (the ones the task cites), the files it
+  owns, what "done" is (a probe or bot run that passes, and the "you can see this" of its milestone), and
+  that it commits only its own files and updates the doc of the feature as built.
+- **Cap at about six sessions at a time**, so the user can follow and merges stay easy. Start the
+  critical path first (B6), then fill free slots from the next list.
+- **Nothing starts on the GPU without the user.** See "GPU windows".
+
+### GPU windows (the slow things that wait for the user)
+
+ComfyUI and the real GPU are used by concept images, icons and the measurements, and the user may be
+gaming, so these run in **windows the user opens**. Sessions do the preparation with no GPU, so a window
+is one command and a review.
+
+| Work | Prepared without GPU | In the window | Then |
+|---|---|---|---|
+| **Concept images** (CONCEPTS.md: about a minute an image, three per subject) for the new features and kinds: abandoned camp, motte, grove, watermill, cave mouth yard, roadside camp, sheepfold; the giant, sheep, bats, cave bear, undead variants | A prompt file per subject (the lodge's concepts are the model); **done before the feature's geometry starts**, so W3, W4, W5, W13, W16 wait for their images | One batch run of about 12 subjects (about 40 images, about 40 minutes) | The user glances at the sheets; the feature session reads the notes |
+| **Icons**: the four waiting (torch, bandage, iron ingot, spell scroll) and the new items | A list of what needs an icon, from the item layout (I8); the review sheet (`review.py`) | One run per batch; the four waiting icons can be picked **now** with no generation | The user picks in `review.py` |
+| **Measurements**: G6 ambient occlusion cost, the G2 soak, the G3 texture gain, G9/G10 frame costs | The probe or bot, written | The run itself, on the real GPU | Numbers into the doc |
+
+**A decision to make before the icon batch:** about 230 generated items cannot each have a picked icon.
+Proposal: an icon per item *type and slot* (about 40), with the tier shown by a border or tint colour from
+the curve, so the batch is about 40 images, not 230. (Open question 11.)
+
+### The waves
+
+A wave starts when its predecessors' sessions are merged, or earlier where the "needs" in section 4 say a
+task does not depend on it.
+
+**Wave 1: start at once (nothing needs anything else).** The first six are the priority; the others fill
+slots as they free.
+
+| # | Session | Tasks | Owns (files) | Notes |
+|---|---|---|---|---|
+| 1 | **Balance core** (critical path) | B6 (with B1's targets) | `rules/balance.json5`, the resolver, creature and item resolve | Needs the curve list agreed with the user at the start: the table in 3a is the start. Everything numeric waits for it. |
+| 2 | **The slice world** | W1, W9, then B2 | `dimensions/`, `cells/config.ts`, `worldLayout.ts`, the level resolve (B2 touches `resolveCreatureRules`, so after session 1's resolver lands) | Menu entry and the first look at the vale. |
+| 3 | **Shore hills** | W15 | `terrain/boundaryHills/`, `areaField.ts`, the biome's data | Touches `areaField.ts`; session 2 does not. |
+| 4 | **Water** | G1 stopgap first, then W10, then W11 | `water.ts`, `terrain/ocean.ts`, `terrain/rivers/`, `cells/river*.ts`, the water shader | The stopgap (ocean off underground) is its first hour; the real G1 switch waits. |
+| 5 | **Creature brain rules** | E8's first half: tactic opening delay, crowd-control rules, immunity; the spider fix | `sim/creatures/brain.ts`, `rules/creatures.json5` | Needs no curves. The roles half waits for B6 (Wave 2). |
+| 6 | **Abandoned camp** | W3 (needs its concept images) | `compound.ts`, the features pack, condition code | First of the **feature lane** (W3, then W16, then W4: they share `compound.ts`). |
+| 7 | **Ambience and sound** | P7 | `src/audio`, `sounds/`, `music/` | Wind, birds, rain, drips, water; lair music. |
+| 8 | **Autumn look** | G4 | `src/particles`, `weather/`, the biome's look | Leaves, smoke from chimneys, golden hour. |
+| 9 | **Grove** | W5 (needs concepts) | `foliage/`, trees kinds, the grove feature | Own lane; later the watermill (W13) joins it. |
+| 10 | **Cave check** | E6: walk the cave style built by the parallel session; the lairs' boss, chests, spawns; step 7 for both lairs | `dungeons/`, `dungeonParts`, `dungeonStyles/` | Reports what is missing for the cave lair. |
+| 11 | **Regeneration** | I9 | `rules/`, resources | A small one, early. |
+| 12 | **Small visual checks** | G7 (rain in the inn), G8 (lights check) | `weather/`, `lighting/` | G6 waits for a GPU window. |
+| 13 | **Concept and icon preparation** | The prompt files and the review sheet (no GPU) | `assets_work/comfyUI/` | So the first GPU window can run. |
+
+**Wave 2: after the curves (B6) lands.**
+
+| # | Session | Tasks | Owns | Notes |
+|---|---|---|---|---|
+| 14 | **Defence** | B8 | `rules/combat.json5`, `sim/skills/combat.ts` | Parts first (armour stays the default). |
+| 15 | **Duel tool** | B7 | `scripts/`, a new `sim/duel` | Starts when B8's parts are in, or beside it reading them. |
+| 16 | **Skill bank** | I6, then I7 (level-up stats) and P9 | `skills/`, `rules/`, the progression UI | The generator and the tags. |
+| 17 | **Item generation** | I8, then I1 (loot, gold, prices) | `items/`, `itemTemplates/`, `lootTables/`, `vendorStocks/` | One session: the layout and the loot are the same files. |
+| 18 | **Creature roles** | E8's second half, E9 (encounter curves), E12 (features declare creatures) | `creatures/`, `camps/`, the spawn code | After session 5. |
+| 19 | **Quest curves** | E10 | `rules/quests.json5`, quest generation | After 17 for the reward pool. |
+| 20 | **Lights on terrain** | G10 | `lighting/`, `litShading`, skill effects (a `light` field) | Parallel with all of the above; touches shaders only. |
+| 21 | **The real drawing switch** | G1 (M) | `world.ts`, the draw loops | After the water session (it edits `world.ts` and the ocean). |
+
+**Wave 3: places, kinds, classes, quests.**
+
+| # | Session | Tasks | Owns | Notes |
+|---|---|---|---|---|
+| 22 | **Cave mouth yard** | W16 | `compound.ts`, features pack | After W3 in the feature lane. |
+| 23 | **Motte and bailey** | W4, E7 (the garrison) | `compound.ts`, terrain stamp "mound" | After W16; the largest feature. |
+| 24 | **Watermill** | W13 | props, a new moving part | After the water session and W11. |
+| 25 | **Roadside camp and sheepfold** | E7 (roadside), W8, the sheepfold's entry | `camps/`, `features/sheepfold.json5` | With E12 from session 18. |
+| 26-28 | **New kinds**, three sessions | E11: (a) sheep and the flock; (b) bandit archer, war dog, the undead variants; (c) bats, cave spider, cave bear, the giant | `creatures/`, bodies | One at a time per `creatures/` unless on worktrees; bodies need their concept images. |
+| 29-32 | **Classes**, one session each | I2: warrior, mage, priest, ranger (+ B9's stress builds) | `origins/`, `skills/<class>` | After 14, 15, 16; the ranger last and used as the stress test. |
+| 33-35 | **Quests**, three sessions | E4: (a) camp and lodge; (b) the old camp chain; (c) the lairs, motte, grove and mill | `questPlots/`, `questSegments/`, text | One at a time (shared files), each right after its place. |
+| 36 | **NPC life** | E5 | `npcs/`, roles | With the quests. |
+| 37 | **The cell plan** | W14, then W2 (the seed), W6 (roads, shrines), W7 | the slice dimension, roads | After every place exists. |
+
+**Wave 4: finish.**
+
+| # | Session | Tasks | Notes |
+|---|---|---|---|
+| 38 | **Options menu** | G9 | Its constants hunt touches many files, so it runs when few others are open. |
+| 39 | **Texture compression** | G3 | Touches the materials and baking; runs alone in the render lane, after the feature looks settle. |
+| 40 | **Trainer, vendors, front end** | P2, P3, P5 | After the skills, items and world are in. |
+| 41 | **Bot and tuning** | B3, E3, B4, B5 | The route bot, then rounds of tuning with the duel tool. |
+| 42 | **Soak, saving, death** | G2, P6, P4, I5, P1 (with a repro spot from the user) | Last, when the world is as heavy as it will be; GPU window for G2. |
+| 43 | **The final run** | The user's own run, fixes from it | The milestone M7. |
+
+### What can run at once, in short
+
+- **Day one:** sessions 1-6 (and 7-13 as slots free). The world, the curves, the water, the shore hills,
+  the spider fix and the first feature are all independent.
+- **Always parallel with anything:** sound (7), autumn look (8), lights on terrain (20), regeneration
+  (11), concept and icon preparation (13), the cave check (10).
+- **One lane, in order:** the three features sharing `compound.ts` (W3, then W16, then W4); the quests
+  (E4 a, b, c); the new kinds if on one tree.
+- **Waiting on the user, not on code:** the curve list (before 1), concept batches (before the features),
+  icon picks, the GPU measurements, the inn clipping spot, the open questions in section 7.
+
+### Where two sessions would touch the same file (do not overlap)
+
+| Files | Sessions |
+|---|---|
+| `compound.ts` and the features pack | W3, W16, W4 (and the roadside camp, sheepfold) |
+| `rules/` and the resolver | B6, E8, I6, I7, E10 (after B6 lands they work on separate files in it) |
+| `items/`, `skills/`, `lootTables/` | I8/I1, I6, I2 (four classes), E11's loot |
+| `questPlots/`, `questSegments/` | E4 a, b, c |
+| `world.ts`, `terrain/ocean.ts` | the water stopgap and W10, then G1 |
+| `creatures/` and bodies | E11 a, b, c, E12 |
+| materials and baking | G3, G5 looks, G10's shader edits |
