@@ -56,7 +56,7 @@ const PLAN_EVERY = 0.5;
 const PLAN_NODES = 4000;
 
 export function createBrain(now: number): Brain {
-  return { state: "idle", why: "", until: now + 1, goal: null, pulledAt: { x: 0, z: 0 }, lastPos: { x: 0, z: 0 }, closest: Infinity, lastProgress: now, tactics: [], nextLook: now, nextTactic: now, fled: false, path: [], next: 0, nextPlan: now, aimBest: Infinity, aimAt: now };
+  return { state: "idle", why: "", until: now + 1, goal: null, pulledAt: { x: 0, z: 0 }, lastPos: { x: 0, z: 0 }, closest: Infinity, lastProgress: now, tactics: [], nextLook: now, nextTactic: now, combatAt: now, lastControl: false, heldBy: 0, controlFreeAt: 0, fled: false, path: [], next: 0, nextPlan: now, aimBest: Infinity, aimAt: now };
 }
 
 /** Forgets the way it was following: a new goal, or none. */
@@ -182,6 +182,30 @@ function fleeSpot(world: BrainWorld, self: Entity, foe: Entity): { x: number; y:
 /** A goal on the ground at (x, z), at its own height if it has one (home), else the creature's. */
 const at = (self: Entity, p: { x: number; y?: number; z: number }): Vec3 => ({ x: p.x, y: p.y ?? self.y, z: p.z });
 
+/** The flags crowd control puts on a foe: while it holds any, it is not controlled again. */
+const CONTROLLED = [FLAG.stunned, FLAG.rooted, FLAG.silenced, FLAG.pacified, FLAG.disarmed];
+
+/**
+ * Whether crowd control may be used on a foe now (rules `control`): not while it is held, not for
+ * `control.immunity` seconds after the hold ends, not when it is immune to what holds it.
+ * Keeps `heldBy` and `controlFreeAt` up to date, so it is called every thought.
+ */
+function mayControl(world: BrainWorld, brain: Brain, foe: Entity): boolean {
+  const flags = foe.combat?.flags;
+  const held = CONTROLLED.some((f) => hasFlag(flags, f));
+  if (held) {
+    brain.heldBy = foe.id;
+    return false;
+  }
+  // A hold that has just ended: the foe is left alone for a while.
+  if (brain.heldBy === foe.id) {
+    brain.heldBy = 0;
+    brain.controlFreeAt = world.now + world.creatures.config.control.immunity;
+  }
+  if (world.now < brain.controlFreeAt) return false;
+  return !hasFlag(flags, FLAG.immune);
+}
+
 /** A creature's stats and another's into the scope tactics' `when` and the aggro formula read. */
 function scopeFor(world: BrainWorld, self: Entity, other: Entity | undefined, distance: number): Float64Array {
   const { scope } = world.creatures;
@@ -234,6 +258,10 @@ function face(self: Entity, other: Entity): void {
 /** Into combat: where the pull started, and the group comes too. */
 function startCombat(world: BrainWorld, self: Entity, brain: Brain, pulling = true): void {
   brain.state = "combat";
+  brain.combatAt = world.now;
+  brain.lastControl = false;
+  brain.heldBy = 0;
+  brain.controlFreeAt = 0;
   brain.pulledAt = { x: self.x, z: self.z };
   brain.closest = Infinity;
   brain.lastProgress = world.now;
@@ -452,12 +480,18 @@ export function stepBrain(world: BrainWorld, self: Entity): void {
       if (now >= brain.nextTactic && !casting) {
         brain.nextTactic = now + TACTIC_EVERY;
         const scope = scopeFor(world, self, target, distance);
+        // Crowd control is never the first thing, nor twice in a row (while the kind has anything else to do).
+        const control = mayControl(world, brain, target) && !(brain.lastControl && kind.tactics.some((t) => !t.control));
         for (let i = 0; i < kind.tactics.length; i++) {
           const tactic = kind.tactics[i];
           if ((brain.tactics[i] ?? 0) > now) continue;
+          // The opening delay: nothing goes the moment the fight starts.
+          if (now - brain.combatAt < tactic.after) continue;
+          if (tactic.control && !control) continue;
           if (tactic.when && tactic.when.run(scope) === 0) continue;
           const result = world.skills.cast(self, tactic.skill, tactic.at === "self" ? self.id : target.id);
           if (!result.ok) continue;
+          brain.lastControl = tactic.control;
           brain.tactics[i] = now + tactic.every[0] + world.random(self) * (tactic.every[1] - tactic.every[0]);
           break;
         }

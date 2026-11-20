@@ -16,6 +16,8 @@
   leash: 60,
   social: 12,                      // group aggro reaches group-mates this near the one pulled: a camp spread wider than this is pulled in parts
   stuck: 4,
+  opening: 1.5,                    // seconds into a pull before a tactic is first used (a tactic's `after` overrides it)
+  control: { opening: 5, immunity: 6 },  // crowd control (a tactic with `control: true`): later opening, never twice in a row, this long left alone once a hold ends
   // Classic: about 20 m, a metre more per level the creature is above the player, 5-45 m.
   aggro: { clamp: [{ add: [20, { sub: ["caster.level", "target.level"] }] }, 5, 45] },
   evadeSkill: "evade",

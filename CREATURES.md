@@ -275,9 +275,18 @@ interface Brain {
   gets the same players on its table, with a token amount, and enters combat too.
 - **Tactics** are the brain's use of spells: a list in the species (and its traits), each `{ skill,
   every: [min, max], when: formula }` - used when its cooldown in the brain has passed, the spell is
-  ready, and `when` (a formula of `caster.*` and `target.*`, e.g. `{ lt: ["target.healthPct", 0.3] }`)
+  ready, past its **opening delay**, and `when` (a formula of `caster.*` and `target.*`, e.g. `{ lt: ["target.healthPct", 0.3] }`)
   holds, cast through the same `cast` the player's message uses, at its target or itself. The first
   ready one in the list goes. Auto-attack needs no entry.
+  - **Opening delay** (`after`, seconds into the pull; default rules `opening`, 1.5): no tactic goes the
+    moment the fight starts. It counts from the pull (`brain.combatAt`), so an evade and a new pull
+    start it again.
+  - **Crowd control** is a tactic marked `control: true` (a web, a stun, a root): its default `after` is
+    rules `control.opening` (5 s) - never the first thing - it is not used twice in a row while the kind
+    has any other tactic, not on a foe that is held (stunned, rooted, silenced, pacified, disarmed) or
+    immune, and not for `control.immunity` (6 s) after a hold on that foe ends. The spider's web is
+    `control: true, after: 4`, with no distance condition: it lands on the foe it is chasing or biting.
+    (Roles bundle these numbers per kind: SLICE.md E8, second half.)
 - **Leash.** It evades when it has been drawn more than `leash` (default 60 m) from where the pull
   started (not while fleeing), or its table is empty, or the chase has made no progress - got no
   closer and covered no ground - for `stuck` (4 s): there is no pathfinding, and a creature that
