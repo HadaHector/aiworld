@@ -33,10 +33,10 @@ export function createBoundaryHillEvaluator(seed: number, styles: BoundaryHillSt
 
     const jitter =
       edgeNoise2D(worldX * BOUNDARY_HILL_EDGE_NOISE_FREQUENCY, worldZ * BOUNDARY_HILL_EDGE_NOISE_FREQUENCY) *
-      BOUNDARY_HILL_EDGE_NOISE_AMPLITUDE;
+      (style.edgeNoise ?? BOUNDARY_HILL_EDGE_NOISE_AMPLITUDE);
     // Smooth, symmetric, zero-slope at its own peak (border) and at the width edge - a proper bell,
     // not a pointy tent.
-    const bell = 1 - smoothstep(0, BOUNDARY_HILL_WIDTH, borderGap + jitter);
+    const bell = 1 - smoothstep(0, style.width ?? BOUNDARY_HILL_WIDTH, borderGap + jitter);
     if (bell <= 0) return 0;
 
     // Two separate additive layers, not one noise field tapered by the bell: a guaranteed smooth
@@ -44,7 +44,7 @@ export function createBoundaryHillEvaluator(seed: number, styles: BoundaryHillSt
     // to be doing at that point, and the style's own noise rides on top for surface texture - still
     // scaled by the same bell so it stays localized to the border and fades to 0 at the same edge,
     // rather than leaking its texture out past the intended width.
-    const bump = bell * BOUNDARY_HILL_PEAK_HEIGHT;
+    const bump = bell * (style.peak ?? BOUNDARY_HILL_PEAK_HEIGHT);
     const texture = bell * compiledStyles.get(style.id)!(worldX, worldZ);
     return bump + texture;
   };

@@ -15,3 +15,7 @@ export const BOUNDARY_HILL_EDGE_NOISE_AMPLITUDE = 50 * 4;
 // must not collide with any of those, or the "independent" noise fields below become identical.
 export const BOUNDARY_HILL_EDGE_NOISE_SALT = 611;
 export const BOUNDARY_HILL_STYLE_SALT = 612;
+
+// Where a zone's shore hills part for their bays (areaField.ts) - continues the sequence past
+// TREE_SHADE_SALT (621) in terrain/foliage.
+export const SHORE_BAY_SALT = 622;

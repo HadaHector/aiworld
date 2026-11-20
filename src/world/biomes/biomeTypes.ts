@@ -134,6 +134,8 @@ export interface BiomeDefinition {
   /** A per-biome declared preference. "mountain" generates boundary hills along a qualifying edge
    *  (see cells/areaField.ts); "river"/"cliff"/"wall" remain reserved, unbranched. */
   borderType: BorderType;
+  /** Mountains along this zone's coast (see ShoreHills); unset - the default - raises none. */
+  shoreHills?: ShoreHills;
   spawnWeight: number;
   /** Probability (0-1) any given cell inside an area of this biome becomes a lake cell. Unset/0 = never. */
   lakeChance?: number;
@@ -188,4 +190,35 @@ export interface BoundaryHillStyle {
   id: string;
   name: string;
   heightPipeline: PipelineDef;
+  /** Where the hill is gone, from its crest, in world units. Unset: BOUNDARY_HILL_WIDTH. */
+  width?: number;
+  /** The crest's height above the lerped zone heights. Unset: BOUNDARY_HILL_PEAK_HEIGHT. */
+  peak?: number;
+  /** How far the hill's edge wobbles in and out. Unset: BOUNDARY_HILL_EDGE_NOISE_AMPLITUDE. */
+  edgeNoise?: number;
+}
+
+/**
+ * A ring of hills along the coast, for a zone with no neighbour to border (cells/areaField.ts): the
+ * same bump as a boundary hill, keyed on the distance to the coast instead of to another zone, with
+ * bays where it parts.
+ */
+export interface ShoreHills {
+  /** A borderHills style id - the texture the hills ride on. */
+  style: string;
+  /** How far the land grows out over the open sea for the hills to stand on, so the cells keep all
+   *  the land they had. Not past a river's mouth, nor round water the land closes round. */
+  grow: number;
+  /** How far inland the crest runs from the (grown) coast. */
+  inset: number;
+  /** How far from the crest the hill reaches, to either side. */
+  width: number;
+  /** The crest's height. */
+  peak: number;
+  /** How many bays the ring parts for (0: an unbroken ring), spread round the zone from the seed. */
+  bays: number;
+  /** A bay's width along the coast. */
+  bayWidth: number;
+  /** How far a bay pulls the grown coast back toward the old one (at most `grow`). */
+  bayDepth: number;
 }
