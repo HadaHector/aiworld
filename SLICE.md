@@ -79,6 +79,15 @@ purpose, so the wood has somewhere to be only wood.
 | 8 | **Druid grove** | 2 (fun 4) | A ring of huge old trees round a stone: autumn's quiet, a counterpoint to the fights. Trees are the thing the zone is known by. | The vista, a rare herb or a book, the end of the slice, optional guardian. Needs a new "ancient" tree kind. |
 | 9 | **Roadside bandit camp** | S | The first human fight, before the motte's garrison: tents, a fire, a chest, a lookout, on the road. The `banditCamp` creature camp already exists with no place. | A combat quest, bandit loot, the road made dangerous. Task E7. |
 | 10 | **Watermill with a mill pond** | S-M | The autumn wood is on its FEATURES.md list. Needs the new river and pond water (W10). **The animated-part test**: a turning wheel is FEATURES.md piece 9 ("turning wheels and sails"), built for nothing yet, so the mill shows whether a prop can move (a part that rotates on an axis, driven by the water's flow, still when the wheel is stopped by a quest). | A miller NPC, "the lost shipment" place, a pool to swim in, a vendor of flour and bread. |
+| 11 | **Cave mouth with its surroundings** (a lair's entrance as a feature of its own) | M | The cave is not only a hole: outside it, a place. Small buildings (a hut, a lean-to, a shed or two), props (crates, a cart, a fire, bones, a drying rack, a signpost), and the enemies who live there, so the way in is a small fight and a story before the dark. DUNGEONS.md step 7 ("Around it") covers quest blocks, floors on the map, music, the player's light and daylight through the mouth, but not an entrance yard, so it is new work; the features system (`features/*.json5`, compounds, camps) is the way to build it. Works for any lair entrance, the crypt's churchyard included; the cave version is the new one. | The approach fight, a vendor or a quest giver outside, a reason to go in. |
+
+**Not all of these have to be in the slice** (decided with the user). The eleven are candidates,
+sorted by how much the two hours lean on them. **Core** (the slice is thin without them): 1 the villages,
+2 the logging camp, 5 the churchyard and crypt, 11 a cave mouth with its surroundings, 9 the roadside
+bandit camp, 7 the motte (the second fight and a landmark). **Wanted** (add if time allows): 6 the
+abandoned camp (the mystery chain), 4 the inn, 3 the lodge, 10 the watermill (the water and moving-part
+test). **Optional**: 8 the druid grove. Which features carry the quests, and which two or three are cut,
+is for the user to say: see open question 10. The task list marks each feature task with its tier.
 
 **Cheap fillers, not counted:** wayside shrines (cost 1, no new piece: a cairn with a small heal or a
 set-home) along the roads; a watchtower on a hill (cost 1) if the zone feels short of vistas. **First
@@ -469,3 +478,6 @@ Never cut: the intro chain, the two bosses, the crypt, saving, the soak.
 9. **Which places are the 2-3 lairs?** Decided: small caves or crypts, few rooms, a strong boss, no
    phases. Open: which ones. My guess: the churchyard crypt at the small size, a cave, and the old
    camp's mine or the motte's cellar. This also answers question 3 (the second dungeon): small.
+10. **Which features are in?** Not all of the eleven candidates have to be in the slice. The tiers in
+    section 2 are my guess (core: villages, logging camp, crypt, cave mouth, roadside bandit camp, motte).
+    Which would you move, add or cut? The motte and the watermill are the biggest.
