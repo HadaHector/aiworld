@@ -28,6 +28,9 @@ import {
  * wants "the river at arc fraction t" - the carve, the water query, the ribbon that draws it - reads it
  * through `riverProfileAt`.
  */
+/** Where across its width a river reads the ground for its ceiling, as shares of its reach. */
+const RIVER_BANK_PROBES = [0.35, 0.7, 1];
+
 export interface RiverProfile {
   x: Float64Array;
   z: Float64Array;
@@ -123,8 +126,23 @@ export function buildRiverProfiles(
     });
     joins.push(join);
 
+    // The water stands no higher than the ground anywhere across its width - both banks, not only the
+    // line: a river along a hillside would otherwise hang over the side that falls away.
     const ceiling = new Float64Array(count);
-    for (let i = 0; i < count; i++) ceiling[i] = baseHeight(x[i], z[i]) - RIVER_FREEBOARD;
+    for (let i = 0; i < count; i++) {
+      const a = Math.max(0, i - 1);
+      const b = Math.min(count - 1, i + 1);
+      const tl = Math.hypot(x[b] - x[a], z[b] - z[a]) || 1;
+      const nx = -(z[b] - z[a]) / tl;
+      const nz = (x[b] - x[a]) / tl;
+      const t = i / (count - 1);
+      const across = lerp(RIVER_BED_HALF_WIDTH_MOUTH, RIVER_BED_HALF_WIDTH_SOURCE, t) * (1 + RIVER_EDGE_NOISE_AMPLITUDE_RATIO) + lerp(RIVER_WATER_DEPTH_MOUTH, RIVER_WATER_DEPTH_SOURCE, t) / RIVER_BANK_SLOPE;
+      let low = baseHeight(x[i], z[i]);
+      for (const f of RIVER_BANK_PROBES) {
+        low = Math.min(low, baseHeight(x[i] + nx * across * f, z[i] + nz * across * f), baseHeight(x[i] - nx * across * f, z[i] - nz * across * f));
+      }
+      ceiling[i] = low - RIVER_FREEBOARD;
+    }
 
     const level = new Float64Array(count);
     const fit = (): void => {

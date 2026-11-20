@@ -80,15 +80,15 @@ for (const seed of seeds.length ? seeds : [1338, 7, 4242, 90210]) {
     check(`${tag}: a bridge's deck is over the water`, b.heights[Math.floor(b.heights.length / 2)] > w.surface + 1, `deck ${b.heights[Math.floor(b.heights.length / 2)].toFixed(1)} over ${w.surface.toFixed(1)}`);
   }
   // No road through deep water off a bridge (a ford is shallow: wading, under 0.35 m).
-  let roadWet = 0, fordCrossings = 0;
+  let roadWet = 0, fordCrossings = 0, wetAt = "";
   for (const stretch of world.roads.stretches) for (const p of stretch.points) {
     const w = world.waterAt(p.x, p.z);
     if (w.depth <= 0.05) continue;
     if (world.bridges.some((b) => b.points.some((q) => Math.hypot(q.x - p.x, q.z - p.z) < 6))) continue;
     if (w.depth < 0.35) fordCrossings++;
-    else roadWet++;
+    else { roadWet++; wetAt = `(${p.x.toFixed(0)}, ${p.z.toFixed(0)}) ${w.depth.toFixed(2)} m under ${w.surface.toFixed(1)}`; }
   }
-  check(`${tag}: no road through deep water off a bridge`, roadWet === 0, `${roadWet} points`);
+  check(`${tag}: no road through deep water off a bridge`, roadWet === 0, `${roadWet} points, e.g. ${wetAt}`);
   log(`${tag}: ${fordCrossings} road points wading a ford`);
   log(`${tag}: ${profiles.length} rivers, highest surface ${highest.toFixed(1)} m, steepest fall ${(steepest * 100).toFixed(1)} %, ${fordStations} ford stations, worst ground step ${worstStep.toFixed(2)} m/m, ${world.bridges.length} bridges`);
 

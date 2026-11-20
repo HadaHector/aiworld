@@ -44,6 +44,8 @@ in 53 s (measured in a hidden browser pane, which runs slower than a visible tab
     areas: [4, 4],               // how many zones, a range rolled per seed
     rivers: [1, 1],
     riverLength: [6, 8],         // cells
+    riverTributaries: [0, 0],    // how many of the later rivers start beside an earlier one
+    riverLevels: false,          // rivers at their own level, not sunk below the sea (WATER.md)
   },
   content: {
     packs: ["core"],             // which pack folders load; all of them if left out

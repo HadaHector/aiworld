@@ -8,6 +8,7 @@ export { createChunkBuildPool };
 import type { TerrainSampler } from "./terrain/terrainSampler";
 import type { WaterSample } from "./water";
 import { createOceanPlane } from "./terrain/ocean";
+import { createInlandWater } from "./terrain/riverWater";
 import { createMaterialLibrary, type MaterialLibrary } from "./materials/materialLibrary";
 import { createBushScatter, createRockScatter, createTreeCover, createTreeScatter } from "./foliage/treeScatter";
 import { createTreeField, type TreeField } from "./foliage/treeField";
@@ -329,6 +330,8 @@ export async function createWorld(
 
   // Only needs to reach past the farthest fog - it follows the camera (see ocean.ts).
   const ocean = createOceanPlane(scene, sunLighting, sky, [materialLibrary.terrainMaterial, materialLibrary.floatingMaterial], { size: MAX_DRAW_DISTANCE * 2.5 });
+  // The water above the sea: rivers at their own level, ponds and pools (riverWater.ts).
+  const inlandWater = createInlandWater(scene, sunLighting, sky, data.riverProfiles, () => data.waters.flats, heightAt);
 
   // Tracked so updateAtmosphere can turn a biome's fogStartFraction into an actual distance without
   // main.ts having to know or pass the draw distance itself every frame.
@@ -375,6 +378,7 @@ export async function createWorld(
     const open = 1 - sunLighting.underground;
     precipitation.update(weatherNow.rain * open, weatherNow.snow * open, fallLight);
     ocean.setRain(weatherNow.rain);
+    inlandWater.setRain(weatherNow.rain);
   };
   const updateAtmosphere = (areaWeights: AreaWeight[]) => {
     sky.update(areaWeights, drawDistance, sunLighting.getTimeHours(), sunLighting.direction, weatherNow);
@@ -442,6 +446,7 @@ export async function createWorld(
       chunkManager.dispose();
       buildPool?.dispose();
       buildings.dispose();
+      inlandWater.dispose();
     },
   };
 }

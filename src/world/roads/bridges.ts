@@ -76,11 +76,14 @@ export function planBridges(stretches: RoadStretch[], sampleTerrain: TerrainSamp
       const t = Math.max(0, Math.min(1, (s - lengths[i - 1]) / Math.max(1e-6, lengths[i] - lengths[i - 1])));
       return { x: a.x + (b.x - a.x) * t, z: a.z + (b.z - a.z) * t, h: stretch.heights[i - 1] + (stretch.heights[i] - stretch.heights[i - 1]) * t };
     };
-    // The ground as how high it stands over the water there.
+    // The ground as how high it stands over the water there. Over a river at its own level, the road's
+    // own height too, where it is lower: the road is graded into the ground after this, so a road
+    // dipping into the valley would otherwise be sunk under the water a bank above it kept dry.
     const above = (s: number): number => {
       const p = at(s);
       const sample = sampleTerrain(p.x, p.z);
-      return sample.height - waterLine(sample.waterSurface);
+      const line = waterLine(sample.waterSurface);
+      return sample.waterSurface > WATER_SURFACE ? Math.min(sample.height, p.h) - line : sample.height - line;
     };
     const ground = (s: number): number => {
       const p = at(s);

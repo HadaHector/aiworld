@@ -1,0 +1,14 @@
+// Water at its own level, to look at (WATER.md, *Water at its own level*): one autumn-wood zone with
+// two rivers, the second a tributary, each running at the ground's own level down to the sea.
+{
+  world: {
+    areas: [1, 1],
+    rivers: [2, 2],
+    riverLength: [4, 6],
+    riverTributaries: [1, 1],
+    riverLevels: true,
+  },
+  content: {
+    only: { biomes: ["autumnWood"] },
+  },
+}
