@@ -202,7 +202,7 @@ world: { rivers: [2, 2], riverLength: [4, 6], riverTributaries: [1, 1], riverLev
   bananas by the water, the desert's shore, "no snow under the water", the boulders at the waterline -
   and the foliage scatter's graphs get it too. Rules about altitude (snow lines, treelines, terraces, the
   ice peaks' glacier on the valley floors) stay on `height`. The rule for a new one: about the water,
-  `aboveWater`; about how high the land is, `height`. `scripts/probe/aboveWaterRewire.local.mjs` did the
+  `aboveWater`; about how high the land is, `height`. `scripts/probe/aboveWaterRewire.mjs` did the
   switch (a height read only by masks within 8 m of 0 switched; one read both ways split).
 - **Drawn** (`terrain/riverWater.ts`): a ribbon per river at its stations' levels, stepping down with them,
   as wide as the ground scanned across each station says the water is (1.5 m past it, so the bank draws
