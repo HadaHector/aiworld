@@ -12,6 +12,8 @@ export interface Ambience {
   update: (state: AmbienceState) => void;
   /** 0..1, the player's Effects volume. */
   setVolume: (volume: number) => void;
+  /** Silences it, fading, or lets it be heard again (the dev page's switch). */
+  setMuted: (muted: boolean) => void;
   /** The levels the layers are fading to now - for the dev page and the console. */
   mix: () => AmbienceMix;
   dispose: () => void;
@@ -102,6 +104,8 @@ function impulse(ctx: BaseAudioContext, seconds: number): AudioBuffer {
 
 export function createAmbience(ctx: AudioContext, output: AudioNode): Ambience {
   const volume = ctx.createGain();
+  let level = 1;
+  let muted = false;
   volume.connect(output);
   const gainAt = (node: AudioParam, value: number): void => {
     node.setTargetAtTime(value, ctx.currentTime, FADE / 3);
@@ -525,7 +529,13 @@ export function createAmbience(ctx: AudioContext, output: AudioNode): Ambience {
   return {
     update,
     setVolume(v) {
-      volume.gain.value = v;
+      level = v;
+      volume.gain.setTargetAtTime(muted ? 0 : level, ctx.currentTime, 0.05);
+    },
+    setMuted(m) {
+      if (m === muted) return;
+      muted = m;
+      volume.gain.setTargetAtTime(muted ? 0 : level, ctx.currentTime, 0.4);
     },
     mix: () => target,
     dispose() {

@@ -426,6 +426,7 @@ underwater muffle) at the player's Effects volume.
 - **Checks:** `npm run probe -- scripts/probe/ambience.mjs` prints the levels for the wood by day and
   night, rain, a gale, the river, indoors, a cave and a crypt and checks them, and composes the lair styles.
   Rendered offline in the page the loudness (RMS) is wood 0.023, night 0.024, cave 0.027, crypt 0.046.
+- **Listening:** `fx.html`, the *Ambience* tab: 16 presets (the wood by day, dusk, night, rain, storm, by the river, indoors, a cave, a crypt...) and sliders for every field of the state, with the levels they make shown. Plays on the page's Volume; *Stop all* silences it.
 - **Not done:** the ambience has no volume of its own (it follows Effects); no distinct sea surf; water
   does not tell a river from a pond; no sound for snow, mist or the swamp's frogs; nothing positional (the
   layers are the same everywhere around the player). Listening on real speakers is the user's call.
