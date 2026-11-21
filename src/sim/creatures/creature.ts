@@ -26,6 +26,13 @@ export interface Brain {
   /** When it next looks round for players to aggro, and next thinks of its tactics. */
   nextLook: number;
   nextTactic: number;
+  /** When this pull began (tactics' opening delays count from it), whether the last tactic it used was
+   *  crowd control, and the foe's control it has seen end (`heldBy`: who, 0 none) and the time it
+   *  may control it again. */
+  combatAt: number;
+  lastControl: boolean;
+  heldBy: number;
+  controlFreeAt: number;
   /** Whether it has fled this pull already. */
   fled: boolean;
   /** The way it is following (NAVIGATION.md): waypoints, the last one where the plan was made to,

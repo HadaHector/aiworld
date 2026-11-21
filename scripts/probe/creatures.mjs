@@ -312,6 +312,37 @@ await section("brain", async () => {
   check("a dead creature remembers who killed it", boar.combat.killers.includes(me.id), boar.combat.killers.join());
   t.server.debug.skills.revive(me);
 
+  // Tactics' opening delay and crowd control (rules `opening`, `control`): a spider does not web the
+  // moment the fight starts, not twice in a row, and leaves its foe alone a while once the web is off.
+  {
+    const cfg = t.kinds.config;
+    const spider = S.spawn("mainland", "spider.giant", spot.x + 9, spot.z, 1);
+    const webTactic = spider.creature.kind.tactics.find((k) => k.control);
+    check("the spider's web is crowd control with an opening delay", !!webTactic && webTactic.after >= 3, JSON.stringify(webTactic?.after));
+    check("a plain tactic gets the default opening delay", spider.creature.kind.tactics.some((k) => !k.control && k.after === cfg.opening));
+    const hp = t.rules.health;
+    let rootedAt = -1, firstRoot = -1, endedAt = -1, again = -1, ticks = 0, firstCast = Infinity, pulled = -1;
+    t.client.inbox.length = 0;
+    for (; ticks < 30 * 60; ticks++) {
+      await t.pump(1);
+      me.resources.current[hp] = me.resources.max[hp]; // the player does not die
+      const sec = ticks / 30;
+      if (pulled < 0 && state(spider) === "combat") pulled = sec;
+      const rooted = hasFlag(me.combat.flags, FLAG.rooted);
+      if (rooted && rootedAt < 0 && endedAt < 0) { rootedAt = sec; if (firstRoot < 0) firstRoot = sec; }
+      if (!rooted && rootedAt >= 0 && endedAt < 0) endedAt = sec;
+      if (rooted && endedAt >= 0 && again < 0) again = sec;
+      if (again >= 0) break;
+    }
+    check("the spider pulled", pulled >= 0, String(pulled));
+    check("it does not web the moment the fight starts", firstRoot >= 0 && firstRoot - pulled >= webTactic.after - 0.5, `${(firstRoot - pulled).toFixed(1)} s`);
+    check("it webs, after a delay", firstRoot >= 0, `${firstRoot}`);
+    check("no second web while the first holds, and none for the immunity after it", again >= 0 && again - endedAt >= cfg.control.immunity - 0.5, `ended ${endedAt.toFixed(1)}, again ${again.toFixed(1)}`);
+    t.server.debug.skills.kill(spider);
+    t.server.debug.skills.revive(me);
+    await t.pump(5);
+  }
+
   // Group aggro: hit one of a pack, the pack comes.
   const near = S.points("mainland", 0, 0, 1500).find((p) => !p.camp && p.members.length >= 2);
   check("a group to pull", !!near);
@@ -329,8 +360,8 @@ await section("brain", async () => {
     await t.pump(30);
     const pair = t.creaturesNow().filter((e) => e.creature.point?.key === other.key && !e.combat.dead);
     const aside = pair[pair.length - 1];
-    aside.x = pair[0].x + t.kinds.config.social + 8;
-    aside.z = pair[0].z;
+    // (Through its body, which owns where it stands.)
+    aside.body.teleport(pair[0].x + t.kinds.config.social + 8, pair[0].z);
     t.server.debug.skills.apply(fireball, me, pair[0]);
     await t.pump(70);
     check("...but not one further off than `social`", pair.length >= 2 && state(pair[0]) === "combat" && state(aside) !== "combat", pair.map(state).join());

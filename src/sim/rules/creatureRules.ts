@@ -11,6 +11,12 @@ export interface TacticDef {
   skill: number;
   /** Seconds between uses, rolled each time: the brain's own spacing on top of the skill's cooldown. */
   every: [number, number];
+  /** Seconds into a pull before it is first used (its opening delay). Defaults: the rules'
+   *  `opening`, or `control.opening` for crowd control. */
+  after: number;
+  /** Crowd control: held to the rules' `control` (never the first thing, not twice in a row, not on a
+   *  foe already held, a short immunity after it ends). */
+  control: boolean;
   /** Must not be 0 for it to be used: a formula of `caster.*`, `target.*` (stats, and `healthPct`)
    *  and `distance`. Null: always. */
   when: CompiledFormula | null;
@@ -104,6 +110,10 @@ export interface CreatureConfig {
   /** Group aggro (a pulled creature brings its group-mates) reaches only mates this near it, metres: a
    *  spread-out camp can be pulled a member or two at a time. */
   social: number;
+  /** Tactics' opening delay (seconds into a pull), and the crowd-control rules: its own, later opening
+   *  delay, and the seconds a foe is left alone after its control ends. */
+  opening: number;
+  control: { opening: number; immunity: number };
   /** The aggro radius: a formula of `caster.*` (the creature) and `target.*` (the player). */
   aggro: CompiledFormula;
   /** The skill an evading creature is given (it ends it on arriving home). */
@@ -243,7 +253,7 @@ export function resolveCreatureRules(packs: PackSource[], game: GameRules, seed:
       const chosen: string[] = [];
       for (let k = 0; k < count; k++) chosen.push(candidates.splice(Math.floor(random() * candidates.length), 1)[0]);
       chosen.sort();
-      const kind = makeKind(id, entry.id, variantId, species, variant, vpath, chosen.map((t) => ({ id: t, ...traits.get(t)! })), base.obj, reader, game, biomes, names, balance);
+      const kind = makeKind(id, entry.id, variantId, species, variant, vpath, chosen.map((t) => ({ id: t, ...traits.get(t)! })), base.obj, reader, game, biomes, names, balance, config);
       if (kind) {
         kinds.set(id, kind);
         made.push(kind);
@@ -328,6 +338,7 @@ function makeKind(
   biomes: ReadonlySet<string>,
   names: ReadonlyMap<string, number>,
   balance: BalanceRules | null,
+  config: CreatureConfig,
 ): CreatureKind | null {
   const parts: { obj: RawObject; reader: Reader; path: string }[] = [
     { obj: species, reader, path: "" },
@@ -387,7 +398,7 @@ function makeKind(
 
   const tactics = tacticsRaw.map(({ value, reader: r, path }): TacticDef | null => {
     const raw = r.object(value, path);
-    r.onlyKeys(raw, path, ["skill", "every", "when", "at"]);
+    r.onlyKeys(raw, path, ["skill", "every", "when", "at", "after", "control"]);
     const skillId = r.string(raw, "skill", path);
     const skill = game.skillIndex.get(skillId);
     if (skillId && skill === undefined) r.fail(`${path}.skill`, `no skill "${skillId}"`);
@@ -395,7 +406,9 @@ function makeKind(
     const every: [number, number] = raw.every === undefined ? [0, 0] : typeof raw.every === "number" ? [raw.every, raw.every] : r.range(raw, "every", path, { allowEqual: true });
     const when = raw.when === undefined ? null : compileFormula(raw.when, `${path}.when`, r, names);
     const at = raw.at === undefined ? "target" : r.oneOf(raw, "at", path, ["target", "self"] as const);
-    return skill === undefined ? null : { skill, every, when, at };
+    const control = r.boolean(raw, "control", path, false);
+    const after = r.optionalNumber(raw, "after", path, control ? config.control.opening : config.opening, { min: 0 });
+    return skill === undefined ? null : { skill, every, after, control, when, at };
   });
 
   // Fields the variant may set over the species'.
@@ -452,7 +465,7 @@ function readConfig(entry: Entry | undefined, game: GameRules, names: ReadonlyMa
   const obj = entry ? reader.object(entry.data, "") : {};
   reader.onlyKeys(obj, "", [
     "rosterSize", "campsPerZone", "spacing", "emptyChance", "campChance", "groups", "maxSlope", "safeRadius", "activeRadius", "releaseRadius",
-    "releaseAfter", "corpse", "leash", "stuck", "social", "aggro", "evadeSkill", "levels", "never",
+    "releaseAfter", "corpse", "leash", "stuck", "social", "opening", "control", "aggro", "evadeSkill", "levels", "never",
   ]);
   const range = (key: string, fallback: [number, number]): [number, number] =>
     obj[key] === undefined ? fallback : typeof obj[key] === "number" ? [obj[key] as number, obj[key] as number] : reader.range(obj, key, "", { allowEqual: true });
@@ -462,6 +475,8 @@ function readConfig(entry: Entry | undefined, game: GameRules, names: ReadonlyMa
   reader.onlyKeys(corpse, "corpse", ["time", "emptied"]);
   const levels = obj.levels === undefined ? {} : reader.object(obj.levels, "levels");
   reader.onlyKeys(levels, "levels", ["start", "step", "width", "cap"]);
+  const control = obj.control === undefined ? {} : reader.object(obj.control, "control");
+  reader.onlyKeys(control, "control", ["opening", "immunity"]);
   const evadeId = obj.evadeSkill === undefined ? "evade" : reader.string(obj, "evadeSkill", "");
   const evadeSkill = game.skillIndex.get(evadeId);
   if (evadeSkill === undefined) reader.fail("evadeSkill", `no skill "${evadeId}": what an evading creature is given (core's is \`evade\`)`);
@@ -488,6 +503,8 @@ function readConfig(entry: Entry | undefined, game: GameRules, names: ReadonlyMa
     leash: reader.optionalNumber(obj, "leash", "", 60, { min: 1 }),
     stuck: reader.optionalNumber(obj, "stuck", "", 4, { min: 0.5 }),
     social: reader.optionalNumber(obj, "social", "", 12, { min: 0 }),
+    opening: reader.optionalNumber(obj, "opening", "", 1.5, { min: 0 }),
+    control: { opening: reader.optionalNumber(control, "opening", "control", 5, { min: 0 }), immunity: reader.optionalNumber(control, "immunity", "control", 6, { min: 0 }) },
     aggro: compileFormula(obj.aggro ?? { clamp: [{ add: [20, { sub: ["caster.level", "target.level"] }] }, 5, 45] }, "aggro", reader, names),
     evadeSkill: evadeSkill ?? 0,
     levels: {

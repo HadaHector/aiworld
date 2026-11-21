@@ -10,7 +10,7 @@
   perLevel: { strength: 1.2, agility: 1.8 },
   spells: [{ skill: "venom" }, { skill: "web" }],
   tactics: [
-    { skill: "web", every: [16, 20], when: { gt: ["distance", 4] } },
+    { skill: "web", control: true, after: 4, every: [16, 20] },
     { skill: "venom", every: [10, 14] },
   ],
   speed: { walk: 0.2, run: 0.42 },
