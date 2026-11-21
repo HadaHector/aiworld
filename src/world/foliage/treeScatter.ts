@@ -8,6 +8,7 @@ const RIVER_TREE_CLEARANCE: [number, number] = [0.4, 1.6];
 import { compileOutputs, type CompiledOutputs } from "../terrain/pipeline/pipelineCompiler";
 import type { BiomeDefinition } from "../biomes/biomeTypes";
 import type { AreaWeight } from "../cells/areaField";
+import { withPlantedTrees, type PlantedTree } from "./featureTrees";
 import type { WorldContent } from "../content/worldContent";
 import type { TerrainSample } from "../terrain/terrainSampler";
 import type { PipelineDef } from "../terrain/pipeline/pipelineTypes";
@@ -192,9 +193,9 @@ interface BiomeFoliage {
 
 type TreeContent = Pick<WorldContent, "treeKinds" | "rockKinds" | "oldTrees">;
 
-/** The trees: the zones' `trees` graphs, on the wide lattice. */
-export function createTreeScatter(seed: number, content: TreeContent): TreeScatter {
-  return createScatter(seed, treeLevel(content)).scatter;
+/** The trees: the zones' `trees` graphs, on the wide lattice - and, if any, the trees features plant (featureTrees.ts). */
+export function createTreeScatter(seed: number, content: TreeContent, planted: readonly PlantedTree[] = []): TreeScatter {
+  return withPlantedTrees(createScatter(seed, treeLevel(content)).scatter, planted);
 }
 
 export function createTreeCover(seed: number, content: TreeContent): TreeCover {
@@ -831,7 +832,7 @@ function leanUnder(stone: NonNullable<ScatterLevel["stone"]>, x: number, z: numb
 
 /** The area a tree takes its colours from: one of those with a say where it stands, as likely as
  *  its weight - so across a border the two areas' trees mix rather than meeting at a line. */
-function areaFor(areaWeights: readonly AreaWeight[], roll: number): number | undefined {
+export function areaFor(areaWeights: readonly AreaWeight[], roll: number): number | undefined {
   let left = roll;
   for (const { areaId, weight } of areaWeights) {
     left -= weight;

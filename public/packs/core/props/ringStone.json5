@@ -1,0 +1,16 @@
+// A lesser stone of the grove: the same grey-green granite as the standing stone, a man's height or
+// a little more, uncarved most of the time, moss at its foot. Scattered inside the ring of oaks - the
+// concept's clearing is open grass and leaf, so only a few, as cover and as the grove's age.
+{
+  name: "Ring stone",
+  type: "menhir",
+  menhir: { height: [1.3, 2.3], width: [0.8, 1.1], thickness: [0.5, 0.65], lean: [0, 6], carving: 0.25 },
+  ground: "plumb",
+  variants: 6,
+  parts: {
+    stone: { material: "standingStone", tints: [[1, 1, 1], [0.9, 0.93, 0.9], [1.05, 1.02, 0.95]] },
+    carved: { material: "standingStone", tints: [[1.2, 1.2, 1.1]] },
+    moss: { material: "moss", tints: [[1, 1, 1], [0.9, 1, 0.9]] },
+    fungus: { material: "standingStone", tints: [[1.7, 1.65, 1.45]] },
+  },
+}

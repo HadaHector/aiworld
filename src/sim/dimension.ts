@@ -1,4 +1,5 @@
 import { createWorldCollision, type WorldCollision } from "../world/worldCollision";
+import { plantedTrees } from "../world/foliage/featureTrees";
 import { createTreeScatter } from "../world/foliage/treeScatter";
 import { generateTreeHulls, treeColliders, type TreeHulls } from "../world/foliage/treeColliders";
 import { createPlacedBuildings, modelGroups, type ModelledGroup, type PlacedBuildings } from "../world/buildings/buildingCollision";
@@ -54,7 +55,7 @@ export function createDimension(id: string, { world, treeHulls, buildingModels }
   const hulls = treeHulls ?? generateTreeHulls(content.treeKinds, seed);
   const buildings = createPlacedBuildings(buildingModels ?? modelGroups(world.buildingGroups));
   const collision = createWorldCollision({ colliders: (trees) => treeColliders(hulls, trees) }, COLLISION_CHUNK_SIZE, buildings.cellarCuts);
-  const scatterTrees = createTreeScatter(seed, content);
+  const scatterTrees = createTreeScatter(seed, content, plantedTrees(world.compoundLayouts, content.treeKinds));
   const streamer = createCollisionStreamer({ sampleTerrain: world.sampleTerrain, scatterTrees }, collision, buildings);
   const groundAt = (x: number, z: number, feet: number): number => buildings.floorAt(x, z, feet) ?? world.heightAt(x, z);
   const dimension: Dimension = {

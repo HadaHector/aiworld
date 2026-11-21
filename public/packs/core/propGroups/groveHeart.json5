@@ -1,0 +1,9 @@
+// The grove's middle (the concept's one subject): the standing stone, and before it - toward +z - the
+// offering slab. Set down first in the grove's list, so it takes the yard's middle.
+{
+  name: "Grove heart",
+  members: [
+    { prop: "menhir", at: [0, 0] },
+    { prop: "offeringSlab", at: [0, 3.4], turn: [-8, 8] },
+  ],
+}

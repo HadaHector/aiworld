@@ -1,0 +1,82 @@
+// A druid grove (SLICE.md W5, FEATURES.md "Magical"; concept: assets_work/comfyUI/concepts_slice/
+// a-druid-grove-...-370a, notes in CONCEPTS.md): a ring of huge, ancient, gnarled oaks round a quiet
+// clearing, ONE tall moss-grown standing stone with a spiral carved on it in the middle, an offering
+// slab before it, ferns, mushrooms and leaf litter on the floor, low sun slanting through the
+// golden leaves. No buildings, no fence, no road: it is found, not driven to (a spur can come with the
+// cell plan, W14). Nothing in it is built by a person but the stones.
+//
+// The oaks are not scattered: one `ancientOak` marker prop is set down and plants the ring itself
+// (foliage/featureTrees.ts): 5-6 trees evenly round the middle, just past the yard's rim. The yard inside is open ground about the size of a boss hall (GEOMETRY.md: 800 m2 is a
+// hall, so a little under 1000 m2 here), with the stone at its middle and lesser stones for cover.
+//
+// Sits on a rise in a wood: a grove should look out over the wood, so the grade is gentle to moderate
+// and the wood thick round it. Rare elite (the stone giant, E11) is placed by its creature camp, not here.
+{
+  name: "Druid grove",
+  type: "compound",
+  compound: {
+    site: { grade: [0, 0.2], cover: [0.45, 0.95] },
+    // Radius to the oaks' trunks (the ring stands just outside the yard's rim): 16 m, a clearing of
+    // about 800 m2 inside; trees 6-7 m through at the foot stand round it.
+    yard: { radius: [16, 19] },
+    pads: { slope: 0.5, blend: [3, 14] },
+    arrangement: "ring",
+    buildings: [],
+    props: [
+      // First, so it takes the yard's middle: the standing stone and the offering slab before it.
+      { group: "groveHeart", count: [1, 1], at: "yard" },
+      // The ring: its marker is placed once and plants 5-6 ancient oaks evenly round the middle, their
+      // trunks 4-6 m past the yard's rim (see props/ancientOak.json5, foliage/featureTrees.ts).
+      { prop: "ancientOak", count: [1, 1], at: "yardEdge" },
+      // Lesser stones inside, for cover - and as the grove's age.
+      { prop: "ringStone", count: [3, 5], at: "yard" },
+    ],
+  },
+  // Trees and stones cleared to the ring's edge and a little past, then the wood returns by 14 m:
+  // the oaks stand in the wood's edge, the clearing inside is open.
+  clearing: [2, 14],
+  stumps: 0,
+  // Leaf litter and trodden moss across the clearing, fraying out into the wood's own floor.
+  ground: {
+    material: "leafLitter",
+    weight: {
+      noises: [{ name: "edge", type: "fbm", octaves: 2, frequency: 0.07, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
+      steps: [
+        { output: "gapRaw", op: "input", name: "featureGap" },
+        { output: "edgeRaw", op: "sample", noise: "edge" },
+        { output: "edge", op: "scale", input: "edgeRaw", factor: 3 },
+        { output: "gap", op: "add", a: "gapRaw", b: "edge" },
+        { output: "raw", op: "remap", input: "gap", inMin: 12, inMax: 4, outMin: 0, outMax: 1 },
+        { output: "result", op: "clamp", input: "raw", min: 0, max: 1 },
+      ],
+    },
+  },
+  names: {
+    patterns: [
+      { text: "The {tree} Ring", odds: 3 },
+      { text: "The Old Grove", odds: 2 },
+      { text: "{tree} Hollow", odds: 2 },
+      { text: "The Standing Stone", odds: 1 },
+    ],
+    words: {
+      tree: {
+        any: ["Oak", "Elder", "Hollin"],
+        verdant: ["Oak", "Rowan", "Linden"],
+        shaded: ["Yew", "Oak"],
+      },
+    },
+  },
+  // What the grove can be in a quest (QUESTS.md, *Places*): sacred, old, out of the way - a place for a
+  // rare herb, an offering, a hermit or druid who tends it.
+  quest: {
+    tags: ["sacred", "wild", "remote"],
+    objects: [
+      { name: "Grove Mistletoe", tags: ["herb", "offering"] },
+      { name: "Moon Fern", tags: ["herb"] },
+      { name: "Carved Acorn", tags: ["offering", "evidence"] },
+      { name: "Spiral Rubbing", tags: ["evidence"] },
+    ],
+    people: ["hermit"],
+    text: "the grove at {name}",
+  },
+}

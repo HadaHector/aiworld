@@ -10,6 +10,7 @@ import type { WaterSample } from "./water";
 import { createOceanPlane } from "./terrain/ocean";
 import { createInlandWater } from "./terrain/riverWater";
 import { createMaterialLibrary, type MaterialLibrary } from "./materials/materialLibrary";
+import { plantedTrees } from "./foliage/featureTrees";
 import { createBushScatter, createRockScatter, createTreeCover, createTreeScatter } from "./foliage/treeScatter";
 import { createTreeField, type TreeField } from "./foliage/treeField";
 import { createGrassField, type GrassField } from "./foliage/grassField";
@@ -215,6 +216,8 @@ export async function createWorld(
   };
 
   const { sampleTerrain, worldExtent, areaBounds, areaNames, settlements, features, roads, settlementLayouts, compoundLayouts, areaBiomes, heightAt } = data;
+  // The trees features plant (the druid grove's ring): drawn and collided like the scatter's own.
+  const planted = plantedTrees(compoundLayouts, content.treeKinds);
 
   const materialLibrary = await createMaterialLibrary(scene, seed, content, areaBiomes, sunLighting, (done, total) => {
     onProgress?.({ phase: "Baking material textures", completed: done, total });
@@ -275,7 +278,7 @@ export async function createWorld(
     buildContext: {
       sampleTerrain,
       materialBlender: materialLibrary.blender,
-      scatterTrees: createTreeScatter(seed, content),
+      scatterTrees: createTreeScatter(seed, content, planted),
       scatterBushes: createBushScatter(seed, content, sampleTerrain),
       scatterRocks: createRockScatter(seed, content, sampleTerrain),
       treeCover: createTreeCover(seed, content),
@@ -299,7 +302,7 @@ export async function createWorld(
   function buildMapTile(tx: number, tz: number): Promise<Uint8ClampedArray> {
     if (buildPool) return buildPool.buildMapTile(tx, tz);
     makeTileHere ??= createMapTileMaker(
-      { seed, content, sampleTerrain, materialBlender: materialLibrary.blender, treeCover: createTreeCover(seed, content), scatterTrees: createTreeScatter(seed, content), scatterBushes: createBushScatter(seed, content, sampleTerrain), scatterRocks: createRockScatter(seed, content, sampleTerrain), buildingGroups: () => data.buildingGroups },
+      { seed, content, sampleTerrain, materialBlender: materialLibrary.blender, treeCover: createTreeCover(seed, content), scatterTrees: createTreeScatter(seed, content, planted), scatterBushes: createBushScatter(seed, content, sampleTerrain), scatterRocks: createRockScatter(seed, content, sampleTerrain), buildingGroups: () => data.buildingGroups },
       { ...mapColors, ground: materialLibrary.averageColors },
     );
     const steps = makeTileHere(tx, tz);

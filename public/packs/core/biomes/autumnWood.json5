@@ -23,6 +23,7 @@
     { feature: "abandonedCamp", odds: 0.3 },
     { feature: "huntingLodge", odds: 0.4 },
     { feature: "cemetery", odds: 0.3 },
+    { feature: "druidGrove", odds: 0.3 },
     { feature: "none", odds: 0.8 },
   ],
   // Each area its own lie of the land: a flat lowland wood, rolling wooded hills, or hill country

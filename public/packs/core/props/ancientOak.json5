@@ -1,0 +1,16 @@
+// The grove's ring of ancient oaks (trees/ancientOak.json5, the kind with this prop's own id). This
+// prop is only a marker: a small disc of dark earth, seen by nobody, which the compound places once and
+// whose settings say what to plant - foliage/featureTrees.ts plants `ring` oaks evenly round the
+// compound's middle, each `reach` metres past the yard's rim (a tree 1.0-1.3 times 3.1 m through,
+// flaring to about 6-8 m at the foot: reach is to the trunk's middle, so the crown overhangs the yard).
+{
+  name: "Ancient oak",
+  type: "treeMarker",
+  treeMarker: { radius: [0.6, 0.6], ring: [5, 6], reach: [10, 14], wander: 0.2 },
+  collide: false,
+  ground: "plumb",
+  variants: 1,
+  parts: {
+    earth: { material: "graveEarth", tints: [[0.55, 0.5, 0.45]] },
+  },
+}
