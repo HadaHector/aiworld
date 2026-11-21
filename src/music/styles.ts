@@ -642,6 +642,39 @@ export const SWAMP: Style = {
   mix: { lead: 0.8, pluck: 0.7, pad: 1.05, bass: 1, drums: 0.9, sparkle: 0.6, wail: 0.75 },
 };
 
+/** A crypt: the swamp's dark, slower and sparser - long choir pads, the lead often silent, few drums. */
+export const CRYPT: Style = {
+  ...SWAMP,
+  id: "crypt",
+  name: "Crypt - cold choirs, sparse",
+  bpm: [42, 56],
+  percussionChance: 0.25,
+  leadRestChance: 0.55,
+  droneChance: 0.9,
+  instruments: { ...SWAMP.instruments, pad: "choir", lowDrum: "lowDrum", frameDrum: "" },
+  sparkle: { name: "Drips", chance: 0.4, notes: [1, 2], steps: [4, 6] },
+  wail: { name: "Ghost", chance: 0.65, slide: [3, 5, 7], double: 12 },
+  room: { seconds: 5.2, damping: 0.85 },
+  echo: 0.75,
+  mix: { ...SWAMP.mix, pad: 1.2, drums: 0.6, wail: 0.9 },
+};
+
+/** A lair's boss: the swamp's modes at a march - drums up, strings biting, the climax kept. */
+export const LAIR: Style = {
+  ...SWAMP,
+  id: "lair",
+  name: "Lair - dark and driving",
+  bpm: [88, 108],
+  percussionChance: 1,
+  droneChance: 0.4,
+  leadRestChance: 0.1,
+  instruments: { ...SWAMP.instruments, lead: "violin", pad: "stringsLow", frameDrum: "taiko", lowDrum: "timpani" },
+  leadAlternate: { instrument: "horn", chance: 0.3, shift: 0 },
+  drumRoll: 0.7,
+  percussion: { A: 1, "A'": 2, Ar: 2, B: 2, "B'": 2, D: 2, "Ar'+": 2 },
+  mix: { ...SWAMP.mix, drums: 1.15, lead: 0.95, pad: 0.85 },
+};
+
 // Jigs count in eighths: a beat is a dotted quarter of three eighths, two rows each, so six rows.
 const JIG: MeterRules = {
   beats: 2,
@@ -1384,4 +1417,4 @@ export const HIGHLANDS: Style = {
 /** The main theme: composed note for note (themes/mainTheme.ts), on the epic style's instruments. */
 export const MAIN_THEME: Style = { ...EPIC, id: "mainTheme", name: "Main theme (composed)", score: mainThemeSong };
 
-export const STYLES: Style[] = [MAIN_THEME, FOREST, GLADE, DESERT, SNOW, SWAMP, TAVERN, HOLY, EPIC, JUNGLE, NORDIC, SAVANNA, MEDITERRANEAN, HIGHLANDS];
+export const STYLES: Style[] = [MAIN_THEME, FOREST, GLADE, DESERT, SNOW, SWAMP, CRYPT, LAIR, TAVERN, HOLY, EPIC, JUNGLE, NORDIC, SAVANNA, MEDITERRANEAN, HIGHLANDS];

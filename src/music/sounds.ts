@@ -223,3 +223,7 @@ export const STYLE_SOUNDS: Record<string, Record<string, string>> = {
     violin: "violin/vln03.xi",
   },
 };
+
+// The lairs' styles play on the swamp's sounds; the boss's march borrows the epic's drums.
+STYLE_SOUNDS.crypt = { ...STYLE_SOUNDS.swamp };
+STYLE_SOUNDS.lair = { ...STYLE_SOUNDS.swamp, ...Object.fromEntries(Object.entries(STYLE_SOUNDS.epic ?? {}).filter(([k]) => /drum|taiko|timpani/i.test(k))) };

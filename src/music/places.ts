@@ -38,3 +38,10 @@ export const BUILDING_STYLES: Record<string, string> = {
   chapel: "holy",
   crypt: "swamp",
 };
+
+/** Dungeon style id to style id: inside a cave or a crypt, its own music; the boss's room plays the lair's. */
+export const DUNGEON_STYLES: Record<string, string> = {
+  cave: "swamp",
+  crypt: "crypt",
+};
+export const BOSS_STYLE = "lair";

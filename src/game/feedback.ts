@@ -17,6 +17,8 @@ import { createPropEffects, type PropEffects } from "../world/props/propEffects"
 import { createParticleRenderer, type ParticleRenderer } from "../particles/render";
 import { whenAudio } from "../audio/context";
 import { createSfx, type Sfx, type Vec3 } from "../audio/sfx";
+import { createAmbience, type Ambience } from "../audio/ambience";
+import { WATER_REACH } from "../audio/ambienceMix";
 import { createUnderwaterLook, type UnderwaterLook } from "./underwater";
 import { createCuePlayer, type Bone, type CueContext, type CuePlayer, type UnitTraits } from "../feedback/cues";
 import type { FeedbackRules } from "../feedback/rules";
@@ -56,6 +58,10 @@ export interface GameFeedback {
   feel: Feel;
   /** The sound effects player, once audio has started - for the console. */
   sfx: () => Sfx | null;
+  /** The ambience (wind, rain, water, drips), once audio has started - for the console and the probes. */
+  ambience: () => Ambience | null;
+  /** What the underground the player is in is (a cave or a crypt), or null above ground. */
+  setHollow: (kind: "cave" | "crypt" | null) => void;
   cues: CuePlayer;
   particles: ParticleSystem;
   /** The flames on props (PROP_EFFECTS.md): the world's, and a dungeon's once it is drawn. */
@@ -101,6 +107,9 @@ const DEAD = 1 << FLAG.dead;
 
 /** The page's sound as heard from under water: everything above this goes. */
 const MUFFLED_HZ = 600;
+/** How alive a biome is with birds, 0..1; a biome not listed is 0.6. */
+const LIFE: Record<string, number> = { autumnWood: 1, bluebellWood: 1, cloudForest: 0.9, rainforest: 1, meadow: 0.9, greenAlps: 0.7, desert: 0.15, sandSea: 0.1, saltFlat: 0.1, polarDesert: 0.05, icePeaks: 0.1, frostSteppe: 0.2 };
+const time = (): number => performance.now();
 const BABYLON_FORWARD = new Vector3(0, 0, 1);
 const scratch = new Vector3();
 
@@ -111,6 +120,8 @@ export function createGameFeedback(options: GameFeedbackOptions): GameFeedback {
   const { rules, game, items, kit, mirror } = options;
   const baseUrl = options.baseUrl ?? import.meta.env.BASE_URL;
   let sfx: Sfx | null = null;
+  let ambience: Ambience | null = null;
+  let hollow: "cave" | "crypt" | null = null;
   /** The page's low-pass, closed while the camera is under water. */
   let muffle: BiquadFilterNode | null = null;
   /** Whether the camera is under water now. */
@@ -124,6 +135,8 @@ export function createGameFeedback(options: GameFeedbackOptions): GameFeedback {
     sfx = createSfx(audio.ctx, audio.effects, rules, (sound, file) => `${baseUrl}packs/${sound.file.split("/")[0]}/${file}`);
     sfx.setVolume(volume);
     sfx.prewarm();
+    ambience = createAmbience(audio.ctx, audio.ambient);
+    ambience.setVolume(volume);
     muffle = audio.muffle;
     muffle.frequency.value = underwater ? MUFFLED_HZ : 22000;
   });
@@ -371,6 +384,53 @@ export function createGameFeedback(options: GameFeedbackOptions): GameFeedback {
     }
   };
 
+  // --- the ambience: what surrounds the camera, worked out a few times a second ---
+  const RING = [3, 6, 10, 16, 24, WATER_REACH];
+  let surroundAt = -Infinity;
+  let waterDistance = Infinity;
+  let life = 1;
+  let indoors = false;
+  const surroundings = (eye: { x: number; y: number; z: number }): void => {
+    const world = worldNow;
+    if (!world || time() - surroundAt < 400) return;
+    surroundAt = time();
+    indoors = !!world.buildingAt(eye.x, eye.y, eye.z);
+    const here = world.sampleTerrain(eye.x, eye.z);
+    life = LIFE[here.primaryBiome.id] ?? 0.6;
+    // The nearest water, feeling out along eight spokes.
+    waterDistance = Infinity;
+    if (world.waterAt(eye.x, eye.z).depth > 0.05) {
+      waterDistance = 0;
+      return;
+    }
+    search: for (const r of RING) {
+      for (let k = 0; k < 8; k++) {
+        const a = (k / 8) * Math.PI * 2 + (r % 2) * 0.2;
+        if (world.waterAt(eye.x + Math.cos(a) * r, eye.z + Math.sin(a) * r).depth > 0.05) {
+          waterDistance = r;
+          break search;
+        }
+      }
+    }
+  };
+  const ambient = (eye: { x: number; y: number; z: number } | null): void => {
+    if (!ambience || !worldNow || !eye) return;
+    surroundings(eye);
+    const blend = worldNow.weatherBlend();
+    const share = worldNow.undergroundShare();
+    ambience.update({
+      wind: blend.wind,
+      rain: blend.rain,
+      snow: blend.snow,
+      hour: worldNow.getTimeOfDay(),
+      underground: share,
+      hollow: share > 0 ? hollow : null,
+      indoors,
+      waterDistance,
+      life,
+    });
+  };
+
   const at: Vec3 = { x: 0, y: 0, z: 0 };
   const forward: Vec3 = { x: 0, y: 0, z: 1 };
   const up: Vec3 = { x: 0, y: 1, z: 0 };
@@ -436,6 +496,9 @@ export function createGameFeedback(options: GameFeedbackOptions): GameFeedback {
       underwater = false;
       muffle?.frequency.setTargetAtTime(22000, muffle.context.currentTime, 0.05);
       worldNow = world ?? null;
+      surroundAt = -Infinity;
+      waterDistance = Infinity;
+      indoors = false;
       surfaces = world ? createSurfaceProbe(world, rules) : null;
       if (scene && world) look = createUnderwaterLook(scene, game.water.look);
       if (scene) renderer = createParticleRenderer(scene, particles, rules, undefined, world ? (x, z) => world.sampleTerrain(x, z).height : null);
@@ -458,6 +521,7 @@ export function createGameFeedback(options: GameFeedbackOptions): GameFeedback {
       const shake = feel.update(dt);
       const offset = (camera as ArcRotateCamera | null)?.targetScreenOffset;
       offset?.set(shake.x, shake.y);
+      ambient(eye);
       if (!sfx || !camera) return;
       const p = camera.globalPosition;
       const f = camera.getDirection(BABYLON_FORWARD);
@@ -472,10 +536,15 @@ export function createGameFeedback(options: GameFeedbackOptions): GameFeedback {
     setVolume(v) {
       volume = v;
       sfx?.setVolume(v);
+      ambience?.setVolume(v);
     },
     setShake: (v) => feel.setShake(v),
     feel,
     sfx: () => sfx,
+    ambience: () => ambience,
+    setHollow(kind) {
+      hollow = kind;
+    },
     cues,
     particles,
     flames,
@@ -488,6 +557,8 @@ export function createGameFeedback(options: GameFeedbackOptions): GameFeedback {
       for (const stop of unwatch.splice(0)) stop();
       sfx?.dispose();
       sfx = null;
+      ambience?.dispose();
+      ambience = null;
     },
   };
 }

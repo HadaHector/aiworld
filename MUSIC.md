@@ -393,8 +393,42 @@ These are things the player does for every song, so they change how the same not
   under `public/music/samples` (57 files, 26.7 MB, sources in its `SOURCES.txt`). They are fetched
   the first time a style needs them. Synths render lazily too: an instrument's zones are made the
   first time they are used.
+- **Lairs (P7):** inside a dungeon (`dungeon.where`, from `dungeonPresence`) its own music
+  (`DUNGEON_STYLES`): a cave plays `swamp`, a crypt the new `crypt` style (the swamp's dark at 42-56 bpm,
+  choir pads, the lead often silent, few drums). In the boss's room the `lair` style plays (`BOSS_STYLE`):
+  the swamp's modes at a march (88-108 bpm, violin and horn, taiko and timpani, drum rolls). Both
+  borrow the swamp's sample picks. `npm run probe -- scripts/probe/ambience.mjs` composes them.
+- **Ambience** is not music: see *Ambience* below.
 - **Volume:** a small control in the bottom-right corner. The slider is eased, and clicking ♪
   mutes. It is remembered in `aiworld.music.volume`, and shows what plays or "silence".
+
+## Ambience
+
+The sound the place makes (SLICE.md P7): `src/audio/ambience.ts`, none of it from files. It plays on its
+own `ambient` bus (`GameAudio.ambient`, beside the music and effects, under the same limiter and the
+underwater muffle) at the player's Effects volume.
+
+- **Layers:** wind (brown noise through a band that gusts), dry leaves (bright noise fluttering on the
+  gusts), rain (a pink-noise hiss and a loop of drop ticks), water (three wandering bands and a riffle),
+  birds (one-shots: a "fee-bee" whistle, a trill, a warble, a chirp, plus a distant woodpecker and crow),
+  an owl at night, a cave's room tone and draught, drips through a synthetic stone-room tail, and a
+  crypt's low drone.
+- **Where:** `src/audio/ambienceMix.ts` is the pure part - `AmbienceState` in (wind and rain from the
+  weather blend, the hour, how far underground the light is, the dungeon's kind, indoors, metres to
+  the nearest water, how alive the biome is), layer levels out. `src/game/feedback.ts` fills the state each
+  frame (the weather and the underground share from `world.weatherBlend()` and `world.undergroundShare()`;
+  indoors, the biome and the water search, eight spokes out to 38 m, four times a second).
+  - Birds by day (not in rain, a gale or snow), an owl at night; none indoors or underground.
+  - Rain and wind stop underground (the light's own fade, so they fade out walking into a cave); indoors
+    they are low-passed at 650 Hz and quieter, but rain on a roof stays.
+  - Water is heard from 38 m, full within 4 m.
+  - A cave has drips and room tone; a crypt fewer drips and the drone.
+- **Checks:** `npm run probe -- scripts/probe/ambience.mjs` prints the levels for the wood by day and
+  night, rain, a gale, the river, indoors, a cave and a crypt and checks them, and composes the lair styles.
+  Rendered offline in the page the loudness (RMS) is wood 0.023, night 0.024, cave 0.027, crypt 0.046.
+- **Not done:** the ambience has no volume of its own (it follows Effects); no distinct sea surf; water
+  does not tell a river from a pond; no sound for snow, mist or the swamp's frogs; nothing positional (the
+  layers are the same everywhere around the player). Listening on real speakers is the user's call.
 
 ## Milestones
 

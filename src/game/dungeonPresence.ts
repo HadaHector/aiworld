@@ -18,6 +18,8 @@ export interface DungeonPresence {
   receive: (message: DungeonMessage, onProgress: (phase: string, done: number, total: number) => void) => Promise<void>;
   /** Each frame: the light underground while the player is in it, the day's out of it. */
   update: (x: number, y: number, z: number) => void;
+  /** Where the player is in what is drawn: its style, and whether in the boss's room - for the ambience and the music; null outside it. */
+  readonly where: { style: string; boss: boolean } | null;
   /** What is drawn now, for the console. */
   readonly current: { id: string; layout: DungeonLayout; meshes: DungeonMeshes } | null;
   dispose: () => void;
@@ -49,6 +51,15 @@ export function createDungeonPresence(view: DimensionView, content: DungeonConte
   }
 
   let siteY = 0;
+  let inBoss = false;
+  /** Whether a point is in the boss's own part. */
+  function inBossRoom(layout: DungeonLayout, x: number, y: number, z: number): boolean {
+    const part = layout.parts[layout.boss];
+    if (!part) return false;
+    const { fx, fz } = worldToFrame(layout.frame, x, z);
+    const b = part.box;
+    return fx >= b.min.x && fx <= b.max.x && fz >= b.min.z && fz <= b.max.z && y >= b.min.y - 0.5 && y <= b.max.y + 0.5;
+  }
   return {
     async receive(message, onProgress) {
       if (message.id === "") return drop();
@@ -96,9 +107,13 @@ export function createDungeonPresence(view: DimensionView, content: DungeonConte
     update(x, y, z) {
       if (!current) return;
       const now = inside(current.layout, siteY, x, y, z);
+      inBoss = now && inBossRoom(current.layout, x, y, z);
       if (now === current.inside) return;
       current.inside = now;
       world.setUnderground(now ? current.ambient : null);
+    },
+    get where() {
+      return current?.inside ? { style: current.layout.style, boss: inBoss } : null;
     },
     get current() {
       return current && { id: current.id, layout: current.layout, meshes: current.meshes };
