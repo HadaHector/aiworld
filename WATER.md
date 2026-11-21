@@ -202,7 +202,14 @@ world: { rivers: [2, 2], riverLength: [4, 6], riverTributaries: [1, 1], riverLev
   falls steeply. The ripple pattern lives in the river's own frame (across, along) and runs downstream at
   one speed for the whole river: a speed that varied from vertex to vertex, times the clock, smeared it
   into streaks (the user's catch). At the spring the ribbon runs straight on 4 m past where the ground
-  meets the water, so the ground draws where it starts (the user's call: no rounded cap). Flat bodies are drawn as planes. Stretches at the sea's level are left
+  meets the water, so the ground draws where it starts (the user's call: no rounded cap).
+  Where a river's water stands above the sea over ground below it (its last stretch, its channel cut
+  below the sea's level), the **ocean plane is cut away** under it (`OceanPlane.setHoles`: capsules the
+  ribbon records, up to 64), or the sea showed inside the channel a metre under the river's own surface
+  (the user's catch); a ribbon starting from the sea begins one station earlier, tucked 4 cm under the
+  sea's surface, so the river runs down into it. (A shallow estuary - the bed kept above the sea instead -
+  was tried and dropped: the river turned into a pale sheet. `scripts/probe/riverDepth.local.mjs` prints a
+  river's real depth along its line.) Flat bodies are drawn as planes. Stretches at the sea's level are left
   to the ocean plane. Hidden underground; flat bodies (pools) are not.
 - **Checked**: `scripts/probe/riverLevels.mjs` - one-zone autumn-wood worlds, four seeds: surfaces never
   rise toward the mouth nor go below the sea, the water query finds the river along 90 %+ of it, a
