@@ -23,6 +23,8 @@ const SHORE_OVERLAP = 1.5;
 const SPRING_OVERRUN = 4;
 /** An open edge (no bank) lies this far over the ground it is laid on. */
 const DRAPE_LIFT = 0.05;
+/** A river's ribbon ends this far under the sea's surface where it runs into the sea. */
+const SEA_TUCK = 0.04;
 /** Stations whose surface is no more than this over the sea's are left to the ocean plane. */
 const SEA_COVERS = 0.05;
 /** How fast a river's surface pattern runs downstream, metres a second - one speed for the whole river. */
@@ -140,6 +142,8 @@ void main(void) {
 `;
 
 interface RibbonArrays {
+  /** Where the ocean plane is cut away under a river: capsules, x0, z0, x1, z1, radius each. */
+  holes: number[];
   positions: number[];
   uvs: number[];
   depths: number[];
@@ -161,12 +165,8 @@ function addRiverRibbon(out: RibbonArrays, profile: RiverProfile, heightAt: (x: 
   const count = profile.level.length;
   const step = profile.length / (count - 1);
   let previousRow = -1;
-  for (let i = 0; i < count; i++) {
-    const level = profile.level[i];
-    if (level <= WATER_SURFACE + SEA_COVERS) {
-      previousRow = -1;
-      continue;
-    }
+  let previous: { x: number; z: number; radius: number; seaUnder: boolean } | null = null;
+  const emit = (i: number, level: number): void => {
     const a = Math.max(0, i - 1);
     const b = Math.min(count - 1, i + 1);
     const tx = profile.x[b] - profile.x[a];
@@ -185,6 +185,7 @@ function addRiverRibbon(out: RibbonArrays, profile: RiverProfile, heightAt: (x: 
     const left = leftShore.distance;
     const right = rightShore.distance;
     const row = out.positions.length / 3;
+    let seaUnder = false;
     for (let c = 0; c <= RIBBON_COLUMNS; c++) {
       const d = -left + ((left + right) * c) / RIBBON_COLUMNS;
       const px = x + nx * d;
@@ -195,8 +196,11 @@ function addRiverRibbon(out: RibbonArrays, profile: RiverProfile, heightAt: (x: 
       out.positions.push(px, open ? Math.min(level, Math.max(heightAt(px, pz), WATER_SURFACE) + DRAPE_LIFT) : level, pz);
       out.uvs.push(d, i * step);
       out.flows.push(upX, upZ, FLOW_SPEED, fall);
-      out.depths.push(Math.max(0, level - heightAt(px, pz)));
+      const ground = heightAt(px, pz);
+      out.depths.push(Math.max(0, level - ground));
+      if (ground < WATER_SURFACE && !open) seaUnder = true;
     }
+    const here = { x, z, radius: Math.max(left, right), seaUnder };
     if (previousRow >= 0) {
       for (let c = 0; c < RIBBON_COLUMNS; c++) {
         const p0 = previousRow + c;
@@ -204,8 +208,24 @@ function addRiverRibbon(out: RibbonArrays, profile: RiverProfile, heightAt: (x: 
         // Station i is upstream of i - 1; wound so the face looks up.
         out.indices.push(p0, p0 + 1, p1, p1, p0 + 1, p1 + 1);
       }
+      // Where the river's water stands over ground that is under the sea's surface, the ocean plane is
+      // cut away beneath it: it would otherwise show inside the channel, a second surface under the first.
+      if (previous && (previous.seaUnder || here.seaUnder)) out.holes.push(previous.x, previous.z, x, z, Math.max(previous.radius, here.radius));
     }
     previousRow = row;
+    previous = here;
+  };
+  for (let i = 0; i < count; i++) {
+    const level = profile.level[i];
+    if (level <= WATER_SURFACE + SEA_COVERS) {
+      previousRow = -1;
+      previous = null;
+      continue;
+    }
+    // A run starting from the sea begins with the station before it, tucked just under the sea's surface,
+    // so the river runs down into the sea rather than ending in the air over it.
+    if (previousRow < 0 && i > 0) emit(i - 1, WATER_SURFACE - SEA_TUCK);
+    emit(i, level);
   }
   // The spring: the ribbon runs straight on past the source until it is well under the ground there, so
   // the ground, not the ribbon's square end, draws where the water starts.
@@ -261,6 +281,8 @@ function addFlat(out: RibbonArrays, body: FlatWater, heightAt: (x: number, z: nu
 }
 
 export interface InlandWater {
+  /** Where the ocean plane must not be drawn: under a river's water above the sea (see OceanPlane.setHoles). */
+  readonly oceanHoles: readonly number[];
   /** Builds (again) the flat bodies' planes - after a feature adds one. */
   refreshFlats(): void;
   setRain(amount: number): void;
@@ -309,13 +331,13 @@ export function createInlandWater(
     return mesh;
   };
 
-  const riverArrays: RibbonArrays = { positions: [], uvs: [], depths: [], flows: [], indices: [] };
+  const riverArrays: RibbonArrays = { holes: [], positions: [], uvs: [], depths: [], flows: [], indices: [] };
   for (const profile of rivers) addRiverRibbon(riverArrays, profile, heightAt);
   const riverMesh = meshFrom("riverWater", riverArrays);
   let flatMesh: Mesh | null = null;
   const refreshFlats = (): void => {
     flatMesh?.dispose();
-    const arrays: RibbonArrays = { positions: [], uvs: [], depths: [], flows: [], indices: [] };
+    const arrays: RibbonArrays = { holes: [], positions: [], uvs: [], depths: [], flows: [], indices: [] };
     for (const body of flats()) addFlat(arrays, body, heightAt);
     flatMesh = meshFrom("flatWater", arrays);
   };
@@ -335,6 +357,7 @@ export function createInlandWater(
   });
 
   return {
+    oceanHoles: riverArrays.holes,
     refreshFlats,
     setRain: (amount) => material.setFloat("rain", amount),
     dispose: () => {

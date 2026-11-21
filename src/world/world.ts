@@ -332,6 +332,7 @@ export async function createWorld(
   const ocean = createOceanPlane(scene, sunLighting, sky, [materialLibrary.terrainMaterial, materialLibrary.floatingMaterial], { size: MAX_DRAW_DISTANCE * 2.5 });
   // The water above the sea: rivers at their own level, ponds and pools (riverWater.ts).
   const inlandWater = createInlandWater(scene, sunLighting, sky, data.riverProfiles, () => data.waters.flats, heightAt);
+  ocean.setHoles(inlandWater.oceanHoles);
 
   // Tracked so updateAtmosphere can turn a biome's fogStartFraction into an actual distance without
   // main.ts having to know or pass the draw distance itself every frame.

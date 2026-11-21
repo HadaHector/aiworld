@@ -101,7 +101,7 @@ for (const seed of seeds.length ? seeds : [1338, 7, 4242, 90210]) {
   }
   check(`${tag}: no road through deep water off a bridge`, roadWet === 0, `${roadWet} points, e.g. ${wetAt}`);
   log(`${tag}: ${fordCrossings} road points wading a ford`);
-  log(`${tag}: ${profiles.length} rivers, highest surface ${highest.toFixed(1)} m, steepest fall ${(steepest * 100).toFixed(1)} %, ${fordStations} ford stations, worst ground step ${worstStep.toFixed(2)} m/m, ${world.bridges.length} bridges`);
+  log(`${tag}: ${profiles.length} rivers, highest surface ${highest.toFixed(1)} m, steepest fall ${(steepest * 100).toFixed(1)} %, ${fordStations} shallow (ford or estuary) stations, worst ground step ${worstStep.toFixed(2)} m/m, ${world.bridges.length} bridges`);
 
   check(`${tag}: no levels without the flag`, old.riverProfiles.length === 0);
   check(`${tag}: same rivers without the flag`, old.riverProfiles.length === 0 && profiles.length >= 0);

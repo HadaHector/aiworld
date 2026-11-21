@@ -245,6 +245,8 @@ function buildPass(
     for (let i = count - 2; i >= 0; i--) level[i] = Math.min(level[i], level[i + 1]);
     for (let i = 1; i < count; i++) level[i] = Math.min(level[i], level[i - 1] + maxFall[i] * step);
 
+    for (let i = 0; i < count; i++) reach[i] = halfWidth[i] * (1 + RIVER_EDGE_NOISE_AMPLITUDE_RATIO) + depth[i] / RIVER_BANK_SLOPE + RIVER_REACH_MARGIN;
+
     profiles.push({ x, z, level, depth, halfWidth, reach, length });
 
     // A tributary whose valley lies below its trunk's water where they meet: the trunk falls to it
