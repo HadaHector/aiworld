@@ -1,6 +1,7 @@
 import { mulberry32, deriveSeed } from "../rng";
 import type { WorldShape } from "../content/worldConfig";
 import { RIVER_SOURCE_SALT, RIVER_LENGTH_SALT, RIVER_WALK_SALT } from "./config";
+import { RIVER_TRIBUTARY_SALT } from "../terrain/rivers/riverConfig";
 
 function randomIntInRange(rng: () => number, [min, max]: [number, number]): number {
   return Math.round(min + rng() * (max - min));
@@ -131,11 +132,19 @@ export function generateRivers(params: RiverGenParams): RiverPath[] {
   const riverCount = randomIntInRange(countRng, shape.rivers);
   const lengthRng = mulberry32(deriveSeed(landSeed, RIVER_LENGTH_SALT));
   const walkRng = mulberry32(deriveSeed(landSeed, RIVER_WALK_SALT));
+  // Its own stream, and consulted only when a world asks for tributaries, so a world that asks for
+  // none rolls exactly as it did.
+  const tributaryCount = shape.riverTributaries[1] > 0 ? randomIntInRange(mulberry32(deriveSeed(landSeed, RIVER_TRIBUTARY_SALT)), shape.riverTributaries) : 0;
 
   const paths: RiverPath[] = [];
 
   for (let i = 0; i < riverCount; i++) {
-    const mouths = [...landCells].filter((c) => isMouthCandidate(c, adjacency, landCells, lakeCells, usedRiverCells));
+    let mouths = [...landCells].filter((c) => isMouthCandidate(c, adjacency, landCells, lakeCells, usedRiverCells));
+    // A tributary: one of the later rivers starts beside a river already placed, if a free cell is there.
+    if (i >= 1 && i <= tributaryCount) {
+      const beside = mouths.filter((c) => adjacency[c].some((n) => usedRiverCells.has(n)));
+      if (beside.length > 0) mouths = beside;
+    }
     if (mouths.length === 0) break;
 
     const mouth = mouths[Math.floor(walkRng() * mouths.length)];

@@ -122,3 +122,57 @@ export const RIVER_SIMPLIFY_TOLERANCE = 1.5;
 // must not collide with any of those, or the "independent" noise fields become identical.
 export const RIVER_EDGE_NOISE_SALT = 618;
 export const RIVER_MEANDER_SALT = 619;
+
+// Which of a world's rivers are tributaries (riverGeneration.ts) - the next free salt after 621.
+export const RIVER_TRIBUTARY_SALT = 622;
+// The fords' own roll (riverLevels.ts).
+export const RIVER_FORD_SALT = 623;
+
+// --- Rivers at their own level (riverLevels.ts) ------------------------------------------------
+// With `riverLevels` on, a river no longer sits in a bed sunk below the sea: its water has a surface of
+// its own that runs from the ground it rises on down to the sea (or to the river it joins), and the
+// channel is cut that deep under it.
+
+// How deep the water is under its own surface, mouth to source, metres. Shallower than the legacy bed
+// (-8 .. -3) because the surface follows the land instead of waiting at 0: the bank is cut from the
+// surface down, so a deep channel on a high hill would be a canyon.
+export const RIVER_WATER_DEPTH_MOUTH = 3.5;
+export const RIVER_WATER_DEPTH_SOURCE = 1.5;
+// Where the ground is cut down to the water, the bank stands this far over it at the centreline.
+export const RIVER_FREEBOARD = 0.6;
+// A river narrows and shallows over its last stretch to a spring: this long, to a bed this wide
+// (half of it) and water this deep at the source.
+export const RIVER_SPRING_LENGTH = 220;
+export const RIVER_SPRING_HALF_WIDTH = 2.5;
+export const RIVER_SPRING_DEPTH = 0.6;
+// Boulders gather round a spring (foliage/treeScatter.ts): fading from full density within the first
+// distance to none past the second, metres from the source.
+export const RIVER_SPRING_ROCKS: [number, number] = [6, 18];
+export const RIVER_SPRING_ROCK_DENSITY = 0.8;
+// The least the surface falls per metre of river, so no stretch is dead level.
+export const RIVER_MIN_FALL = 0.003;
+// Past a river's reach the line its waterside layers read "above the water" from falls back toward the
+// sea's level this many metres per metre (TerrainSample.waterLine): far enough out it is the sea's again.
+export const RIVER_WATERLINE_FADE = 0.35;
+// The most the surface falls per metre - under the bank's slope, or a steep stretch's own bank below it
+// would cut under the water above (a steep head becomes a gully cut into the hill instead).
+export const RIVER_MAX_FALL = 0.15;
+// ...and no more than this many metres over the width of its own flat bed (see riverLevels.ts).
+export const RIVER_MAX_UNDERCUT = 0.7;
+// Stations along a river: one every this many metres of arc (the surface, depth and reach are sampled there).
+export const RIVER_STATION_SPACING = 24;
+// Smoothing passes over the surface profile, so it does not step where the ground does.
+export const RIVER_LEVEL_SMOOTHING = 6;
+// A river whose mouth is within this of an earlier river's line is carried on to it (riverField.ts),
+// so a tributary's water meets its trunk's.
+export const RIVER_TRIBUTARY_LINK = 600;
+// A river takes its mouth's level from an earlier river when its mouth is within this of that river's line.
+export const RIVER_JOIN_REACH = 900;
+// Fords: shallow riffles a road can cross without a bridge. How many a river may have, how long each
+// is, how deep the water is there (wading, not swimming) and the shortest river that gets any.
+export const RIVER_FORDS_MAX = 2;
+export const RIVER_FORD_LENGTH = 70;
+export const RIVER_FORD_DEPTH = 0.25;
+export const RIVER_FORD_MIN_LENGTH = 700;
+// The margin added to a river's computed reach (its jitter, a little more) so water at the edge is not cut off.
+export const RIVER_REACH_MARGIN = 3;

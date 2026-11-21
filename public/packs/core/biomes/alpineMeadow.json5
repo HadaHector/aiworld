@@ -245,7 +245,7 @@
             { output: "band", op: "mask", input: "reach", at: 40, off: 62 },
             { output: "lakeFactor", op: "input", name: "lakeFactor" },
             { output: "lake", op: "mask", input: "lakeFactor", at: 0.25, off: 0.02 },
-            { output: "height", op: "input", name: "height" },
+            { output: "height", op: "input", name: "aboveWater" },
             { output: "low", op: "mask", input: "height", at: 0.6, off: 2.6 },
             { output: "landmass", op: "input", name: "landmass" },
             { output: "inland", op: "mask", input: "landmass", at: 0.95, off: 0.7 },

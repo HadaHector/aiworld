@@ -44,6 +44,8 @@ const DISC_REFLECT_RADIUS = 0.035;
 // read as drops pitting the surface, not as more waves.
 const RAIN_RIPPLE_SIZES = [0.35, 0.14];
 const RAIN_RIPPLE_STRENGTH = [0.9, 0.6];
+/** The most holes the ocean plane can have cut in it (OceanPlane.setHoles); more are dropped. */
+const MAX_HOLES = 64;
 
 const VERTEX_SHADER = `#version 300 es
 precision highp float;
@@ -78,6 +80,21 @@ uniform vec3 skyZenith;
 uniform vec3 discColor;
 uniform float time;
 uniform float rain;
+// Where the ocean is not drawn: under a river's own water above the sea (riverWater.ts) - the ribbon's
+// footprint between two of its rows, four corners in order round it, two in each vec4.
+uniform vec4 holeA[${MAX_HOLES}];
+uniform vec4 holeB[${MAX_HOLES}];
+uniform int holeCount;
+
+float side(vec2 p, vec2 a, vec2 b) {
+  return (b.x - a.x) * (p.y - a.y) - (b.y - a.y) * (p.x - a.x);
+}
+bool inTriangle(vec2 p, vec2 a, vec2 b, vec2 c) {
+  float d1 = side(p, a, b);
+  float d2 = side(p, b, c);
+  float d3 = side(p, c, a);
+  return !((d1 < 0.0 || d2 < 0.0 || d3 < 0.0) && (d1 > 0.0 || d2 > 0.0 || d3 > 0.0));
+}
 
 float hash(vec2 p) {
   return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
@@ -114,6 +131,14 @@ vec2 waveGradient(vec2 p, float scale, vec2 drift, float strength) {
 
 void main(void) {
   vec2 p = vWorldPosition.xz;
+  for (int i = 0; i < ${MAX_HOLES}; i++) {
+    if (i >= holeCount) break;
+    vec2 a = holeA[i].xy;
+    vec2 b = holeA[i].zw;
+    vec2 c = holeB[i].xy;
+    vec2 d = holeB[i].zw;
+    if (inTriangle(p, a, b, c) || inTriangle(p, a, c, d)) discard;
+  }
   // Three octaves, each drifting its own direction/speed so the sum never repeats in an obviously
   // periodic way: a slow broad swell, a mid-size chop on top of it, and a fine sparkle-sized ripple
   // for the specular highlight below to catch.
@@ -208,7 +233,7 @@ export function createOceanPlane(scene: Scene, sunLighting: SunLighting, sky: Sk
 
   const material = new ShaderMaterial("oceanMaterial", scene, "ocean", {
     attributes: ["position"],
-    uniforms: ["world", "view", "projection", "skyHorizon", "skyZenith", "discColor", "time", "rain", ...LIT_SHADING_UNIFORMS],
+    uniforms: ["world", "view", "projection", "skyHorizon", "skyZenith", "discColor", "time", "rain", "holeA", "holeB", "holeCount", ...LIT_SHADING_UNIFORMS],
     samplers: LIT_SHADING_SAMPLERS,
   });
   material.backFaceCulling = true;
@@ -218,6 +243,7 @@ export function createOceanPlane(scene: Scene, sunLighting: SunLighting, sky: Sk
   // at all.
   material.alpha = 0.999;
   material.setFloat("rain", 0);
+  material.setInt("holeCount", 0);
   ocean.material = material;
   createLitShading(scene, sunLighting).register(material);
 
@@ -232,17 +258,38 @@ export function createOceanPlane(scene: Scene, sunLighting: SunLighting, sky: Sk
       ocean.position.x = scene.activeCamera.position.x;
       ocean.position.z = scene.activeCamera.position.z;
     }
+    // Underground there is no sea (G1 stopgap): off as soon as the daylight starts to fade, so the
+    // plane never shows through a crypt's or cave's walls. The real drawing switch is in world.ts later.
+    ocean.setEnabled(sunLighting.underground < 0.01);
     material.setFloat("time", time);
     material.setColor3("skyHorizon", sky.horizon);
     material.setColor3("skyZenith", sky.zenith);
     material.setColor3("discColor", sky.discColor);
   });
 
-  return { mesh: ocean, setRain: (amount: number) => material.setFloat("rain", amount) };
+  const setHoles = (holes: readonly number[]): void => {
+    const given = Math.floor(holes.length / 8);
+    const count = Math.min(MAX_HOLES, given);
+    if (given > MAX_HOLES) console.warn(`[water] ${given} holes in the ocean under rivers, only ${MAX_HOLES} are cut`);
+    const a: number[] = [];
+    const b: number[] = [];
+    for (let i = 0; i < MAX_HOLES; i++) {
+      for (let k = 0; k < 4; k++) a.push(i < count ? holes[i * 8 + k] : 0);
+      for (let k = 4; k < 8; k++) b.push(i < count ? holes[i * 8 + k] : 0);
+    }
+    material.setArray4("holeA", a);
+    material.setArray4("holeB", b);
+    material.setInt("holeCount", count);
+  };
+
+  return { mesh: ocean, setRain: (amount: number) => material.setFloat("rain", amount), setHoles };
 }
 
 export interface OceanPlane {
   mesh: Mesh;
   /** How hard it is raining on the water, 0-1 - see the fragment shader's rain ripples. */
   setRain: (amount: number) => void;
+  /** Where it is not drawn: four-cornered pieces (x, z of each corner in order round it) under a river's
+   *  own water above the sea, which would otherwise show the ocean inside the river's channel. */
+  setHoles: (holes: readonly number[]) => void;
 }

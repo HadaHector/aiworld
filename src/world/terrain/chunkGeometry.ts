@@ -1,4 +1,5 @@
 import { computeNormals } from "../mathUtils";
+import { waterLineOf } from "../water";
 import type { TerrainSampler } from "./terrainSampler";
 import { buildVertexContext } from "../materials/materialContext";
 import { heightInSquare, sampleChunkGround } from "./chunkGround";
@@ -424,6 +425,9 @@ export function buildChunkGeometry(request: ChunkBuildRequest, context: ChunkBui
             blendAt,
             surfaceHeight: (row, col, u, v) =>
               heightInSquare((r, c) => paddedPositions[(r * paddedSize + c) * 3 + 1], row + pad, col + pad, u, v),
+            // The highest of the square's corners' water lines: a river's own water, or the sea's.
+            waterLine: (row, col) =>
+              waterLineOf(Math.max(paddedSamples[padded(row, col)].waterSurface, paddedSamples[padded(row + 1, col)].waterSurface, paddedSamples[padded(row, col + 1)].waterSurface, paddedSamples[padded(row + 1, col + 1)].waterSurface)),
           },
           materialBlender.materialDefs,
           grassKinds,

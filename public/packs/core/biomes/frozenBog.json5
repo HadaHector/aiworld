@@ -39,7 +39,7 @@
   trees: {
     noises: [{ name: "group", type: "fbm", octaves: 2, frequency: 0.007, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
     steps: [
-      { output: "height", op: "input", name: "height" },
+      { output: "height", op: "input", name: "aboveWater" },
       { output: "rise", op: "mask", input: "height", at: 0.9, off: 0.35 },
       { output: "groupRaw", op: "sample", noise: "group" },
       { output: "groupRamp", op: "remap", input: "groupRaw", inMin: { range: [-0.5, -0.2] }, inMax: 0.3, outMin: 0, outMax: 1 },
@@ -72,7 +72,7 @@
         weight: {
           noises: [{ name: "which", type: "fbm", octaves: 2, frequency: 0.01, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
           steps: [
-            { output: "height", op: "input", name: "height" },
+            { output: "height", op: "input", name: "aboveWater" },
             { output: "wet", op: "mask", input: "height", at: 0, off: 0.15 },
             { output: "whichRaw", op: "sample", noise: "which" },
             { output: "frozen", op: "mask", input: "whichRaw", at: { param: "frozen", to: [0.1, 0.9] }, off: { param: "frozen", to: [0.2, 1.0] } },
@@ -92,7 +92,7 @@
         weight: {
           noises: [{ name: "patch", type: "fbm", octaves: 3, frequency: 0.03, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
           steps: [
-            { output: "height", op: "input", name: "height" },
+            { output: "height", op: "input", name: "aboveWater" },
             { output: "rise", op: "mask", input: "height", at: 1.0, off: 0.4 },
             { output: "patchRaw", op: "sample", noise: "patch" },
             { output: "patch", op: "mask", input: "patchRaw", at: 0.45, off: 0.1 },

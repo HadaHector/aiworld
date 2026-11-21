@@ -83,7 +83,7 @@ export interface BiomeOutputs {
    * noise feeding both broadleaf and pine is evaluated once per sample, not once per output.
    *
    * Besides noise, the graph can read named values of the ground it is being asked about via
-   * `op: "input"` - "height", "slope", "riverGap", "roadGap", "lakeFactor" and "areaBorderGap" -
+   * `op: "input"` - "height", "aboveWater" (the height above the water - the sea's, or a river's own), "slope", "riverGap", "roadGap", "lakeFactor" and "areaBorderGap" -
    * which is what lets a zone put conifers up its slopes and broadleaf in its valleys, or gather
    * palms at its water.
    */

@@ -57,7 +57,7 @@
     steps: [
       { output: "groupRaw", op: "sample", noise: "group" },
       { output: "group", op: "mask", input: "groupRaw", at: 0.35, off: -0.05 },
-      { output: "height", op: "input", name: "height" },
+      { output: "height", op: "input", name: "aboveWater" },
       // The islands' tops: from some two and a half metres over the water.
       { output: "top", op: "mask", input: "height", at: 3.3, off: 2.5 },
       { output: "low", op: "invert", input: "top" },
@@ -91,7 +91,7 @@
         weight: {
           noises: [{ name: "fray", type: "fbm", octaves: 3, frequency: 0.03, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
           steps: [
-            { output: "height", op: "input", name: "height" },
+            { output: "height", op: "input", name: "aboveWater" },
             { output: "frayRaw", op: "sample", noise: "fray" },
             { output: "fray", op: "scale", input: "frayRaw", factor: 0.6 },
             { output: "reach", op: "add", a: "height", b: "fray" },
@@ -109,7 +109,7 @@
         weight: {
           noises: [{ name: "fray", type: "fbm", octaves: 3, frequency: 0.025, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
           steps: [
-            { output: "height", op: "input", name: "height" },
+            { output: "height", op: "input", name: "aboveWater" },
             { output: "frayRaw", op: "sample", noise: "fray" },
             { output: "fray", op: "scale", input: "frayRaw", factor: 0.9 },
             { output: "reach", op: "add", a: "height", b: "fray" },
@@ -125,7 +125,7 @@
         weight: {
           noises: [{ name: "patch", type: "fbm", octaves: 3, frequency: 0.03, amplitude: 1, persistence: 0.55, lacunarity: 2.0 }],
           steps: [
-            { output: "height", op: "input", name: "height" },
+            { output: "height", op: "input", name: "aboveWater" },
             { output: "above", op: "mask", input: "height", at: 1.6, off: 1.1 },
             { output: "below", op: "mask", input: "height", at: 2.6, off: 3.4 },
             { output: "flank", op: "multiply", a: "above", b: "below" },
@@ -144,7 +144,7 @@
         weight: {
           noises: [{ name: "patch", type: "fbm", octaves: 3, frequency: 0.025, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
           steps: [
-            { output: "height", op: "input", name: "height" },
+            { output: "height", op: "input", name: "aboveWater" },
             { output: "edge", op: "mask", input: "height", at: 0.15, off: 0.5 },
             { output: "patchRaw", op: "sample", noise: "patch" },
             { output: "patch", op: "mask", input: "patchRaw", at: 0.45, off: 0.2 },

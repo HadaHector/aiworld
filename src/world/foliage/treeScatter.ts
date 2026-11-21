@@ -1,5 +1,10 @@
 import { deriveSeed, mulberry32 } from "../rng";
 import { smoothstep } from "../mathUtils";
+import { WATER_SURFACE } from "../water";
+import { RIVER_SPRING_ROCKS, RIVER_SPRING_ROCK_DENSITY } from "../terrain/rivers/riverConfig";
+
+/** Trees fade in from this far over a river's own water (at its own level) to this far: none in it. */
+const RIVER_TREE_CLEARANCE: [number, number] = [0.4, 1.6];
 import { compileOutputs, type CompiledOutputs } from "../terrain/pipeline/pipelineCompiler";
 import type { BiomeDefinition } from "../biomes/biomeTypes";
 import type { AreaWeight } from "../cells/areaField";
@@ -378,6 +383,7 @@ function createScatter(seed: number, level: ScatterLevel): { scatter: TreeScatte
   const perKind = new Float64Array(kindIds.length);
   const context: Record<string, number> = {
     height: 0,
+    aboveWater: 0,
     slope: 0,
     riverGap: 0,
     roadGap: 0,
@@ -475,6 +481,9 @@ function createScatter(seed: number, level: ScatterLevel): { scatter: TreeScatte
     perKind.fill(0);
 
     context.height = ground.height;
+    // How high above the water: the height itself by the sea, above a river's own surface by one at its
+    // own level (TerrainSample.waterLine) - for the zones' waterside plants.
+    context.aboveWater = ground.height - sample.waterLine;
     context.slope = ground.slope;
     context.riverGap = sample.riverGap;
     context.roadGap = sample.roadGap;
@@ -497,6 +506,12 @@ function createScatter(seed: number, level: ScatterLevel): { scatter: TreeScatte
           total += density;
         }
       }
+    }
+    // Boulders gather round a river's spring, whatever the zone's own rocks.
+    if (stone && sample.springGap < RIVER_SPRING_ROCKS[1] && perKind.length > 0) {
+      const extra = RIVER_SPRING_ROCK_DENSITY * (1 - smoothstep(RIVER_SPRING_ROCKS[0], RIVER_SPRING_ROCKS[1], sample.springGap));
+      for (let k = 0; k < perKind.length; k++) perKind[k] += extra / perKind.length;
+      total += extra;
     }
     return total;
   }
@@ -538,6 +553,9 @@ function createScatter(seed: number, level: ScatterLevel): { scatter: TreeScatte
     const road = smoothstep(level.roadClearance, level.roadFade, sample.roadGap) * (uncleared ? 1 : 1 - sample.featureClear) * smoothstep(PAD_TREE_CLEARANCE, PAD_TREE_FADE, sample.padGap);
     if (stone) return ground.height < ROCK_MIN_HEIGHT ? 0 : road;
     if (sample.lakeFactor > TREE_MAX_LAKE_FACTOR) return 0;
+    // Nor in a river at its own level, nor right on its waterline (the sea's shore is the zones' rules').
+    const riverFade = sample.waterSurface > WATER_SURFACE && !wetFeet ? smoothstep(sample.waterSurface + RIVER_TREE_CLEARANCE[0], sample.waterSurface + RIVER_TREE_CLEARANCE[1], ground.height) : 1;
+    if (riverFade <= 0) return 0;
 
     // Zones that do not set rules of their own share the defaults' object, so the usual case is a
     // single rule set that needs no blending at all.
@@ -558,7 +576,7 @@ function createScatter(seed: number, level: ScatterLevel): { scatter: TreeScatte
       weightSum += weight;
     }
     if (first === null) return 0;
-    return (mixed ? blended / weightSum : firstFade) * road;
+    return (mixed ? blended / weightSum : firstFade) * road * riverFade;
   }
 
   /** Every dart in the region that nothing too close to it outranks - too close being `spacing`

@@ -5,12 +5,40 @@ export interface RiverQuery {
   distance: number;
   /** Arc-length position along that river, 0 at its mouth and 1 at its source. */
   taper: number;
+  /** Which river that is - its index in `polylines` - or -1 when none is in reach. */
+  river: number;
 }
 
 export interface RiverField {
   query(x: number, z: number): RiverQuery;
   /** Every centreline, for the debug map and for tests. Mouth first. */
   polylines: ReadonlyArray<ReadonlyArray<CellPoint>>;
+  /** Every segment of every river in reach, each at its own nearest point - for rivers at their own
+   *  level, whose carve is the lowest of every segment's (terrainSampler.ts): the nearest segment's
+   *  alone would step where two stretches of different levels are equally near. */
+  querySegments(x: number, z: number, visit: (distance: number, taper: number, river: number) => void): void;
+}
+
+export interface RiverFieldOptions {
+  /** A river whose mouth lies within this of an earlier river's line is a tributary: its line is
+   *  carried on to the nearest point of that river's, so the two meet. Off (0) by default. */
+  joinWithin?: number;
+}
+
+/** The nearest point on a polyline to (x, z), and how far it is. */
+function nearestOnLine(line: readonly CellPoint[], x: number, z: number): { point: CellPoint; distance: number } {
+  let best = { point: line[0], distance: Infinity };
+  for (let i = 0; i < line.length - 1; i++) {
+    const a = line[i];
+    const dx = line[i + 1].x - a.x;
+    const dz = line[i + 1].z - a.z;
+    const lengthSq = dx * dx + dz * dz;
+    const u = lengthSq > 0 ? Math.min(1, Math.max(0, ((x - a.x) * dx + (z - a.z) * dz) / lengthSq)) : 0;
+    const p = { x: a.x + dx * u, z: a.z + dz * u };
+    const d = Math.hypot(p.x - x, p.z - z);
+    if (d < best.distance) best = { point: p, distance: d };
+  }
+  return best;
 }
 
 interface Segment {
@@ -22,6 +50,7 @@ interface Segment {
   /** Arc-length fractions of this segment's two ends along its own river. */
   t0: number;
   t1: number;
+  river: number;
 }
 
 /**
@@ -56,12 +85,20 @@ function bucketKey(gx: number, gz: number): number {
  * A polyline has neither problem. Distance to it is defined and continuous everywhere, so there is
  * no gate to flip, and the line is connected by construction, so there are no joints to miss.
  */
-export function createRiverField(polylines: CellPoint[][], searchRadius: number): RiverField {
+export function createRiverField(polylines: CellPoint[][], searchRadius: number, options: RiverFieldOptions = {}): RiverField {
   const buckets = new Map<number, Segment[]>();
   const kept: CellPoint[][] = [];
 
-  for (const polyline of polylines) {
+  for (let polyline of polylines) {
     if (polyline.length < 2) continue;
+    if (options.joinWithin && kept.length > 0) {
+      let join: { point: CellPoint; distance: number } | null = null;
+      for (const earlier of kept) {
+        const near = nearestOnLine(earlier, polyline[0].x, polyline[0].z);
+        if (near.distance > 1 && near.distance < options.joinWithin && (!join || near.distance < join.distance)) join = near;
+      }
+      if (join) polyline = [join.point, ...polyline];
+    }
 
     const lengths: number[] = [];
     let total = 0;
@@ -71,6 +108,7 @@ export function createRiverField(polylines: CellPoint[][], searchRadius: number)
       total += length;
     }
     if (total <= 0) continue;
+    const river = kept.length;
     kept.push(polyline);
 
     let travelled = 0;
@@ -87,6 +125,7 @@ export function createRiverField(polylines: CellPoint[][], searchRadius: number)
         lengthSq: dx * dx + dz * dz,
         t0: travelled / total,
         t1: (travelled + lengths[i]) / total,
+        river,
       };
       travelled += lengths[i];
       if (segment.lengthSq <= 0) continue;
@@ -108,12 +147,15 @@ export function createRiverField(polylines: CellPoint[][], searchRadius: number)
 
   const searchRadiusSq = searchRadius * searchRadius;
 
+  const NONE: RiverQuery = { distance: Infinity, taper: 0, river: -1 };
+
   function query(x: number, z: number): RiverQuery {
     const bucket = buckets.get(bucketKey(Math.floor(x / BUCKET_SIZE), Math.floor(z / BUCKET_SIZE)));
-    if (!bucket) return { distance: Infinity, taper: 0 };
+    if (!bucket) return NONE;
 
     let bestDistSq = Infinity;
     let bestTaper = 0;
+    let bestRiver = -1;
     for (const segment of bucket) {
       // Closest point on the segment, clamped to its ends - which is what rounds the outside of a
       // bend and keeps the inside of it sharp, exactly as a real channel cutting a corner does.
@@ -126,12 +168,27 @@ export function createRiverField(polylines: CellPoint[][], searchRadius: number)
       if (distSq < bestDistSq) {
         bestDistSq = distSq;
         bestTaper = segment.t0 + (segment.t1 - segment.t0) * u;
+        bestRiver = segment.river;
       }
     }
 
-    if (bestDistSq > searchRadiusSq) return { distance: Infinity, taper: 0 };
-    return { distance: Math.sqrt(bestDistSq), taper: bestTaper };
+    if (bestDistSq > searchRadiusSq) return NONE;
+    return { distance: Math.sqrt(bestDistSq), taper: bestTaper, river: bestRiver };
   }
 
-  return { query, polylines: kept };
+  function querySegments(x: number, z: number, visit: (distance: number, taper: number, river: number) => void): void {
+    const bucket = buckets.get(bucketKey(Math.floor(x / BUCKET_SIZE), Math.floor(z / BUCKET_SIZE)));
+    if (!bucket) return;
+    for (const segment of bucket) {
+      const px = x - segment.x0;
+      const pz = z - segment.z0;
+      const u = Math.min(1, Math.max(0, (px * segment.dx + pz * segment.dz) / segment.lengthSq));
+      const ox = px - u * segment.dx;
+      const oz = pz - u * segment.dz;
+      const distSq = ox * ox + oz * oz;
+      if (distSq <= searchRadiusSq) visit(Math.sqrt(distSq), segment.t0 + (segment.t1 - segment.t0) * u, segment.river);
+    }
+  }
+
+  return { query, querySegments, polylines: kept };
 }

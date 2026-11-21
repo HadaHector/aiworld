@@ -6,7 +6,7 @@ simulation does not know it is there: a character walks along the bottom, takes 
 splash, and nothing sounds or looks different underwater. This document is the plan, agreed with
 the user before the feature is built.
 
-**Status: done** - see *As built* at the end. The plan above it is as approved.
+**Status: done** - see *As built* at the end; *Water at its own level* (SLICE.md W10, W11) after it. The plan above it is as approved.
 
 ## Decisions
 
@@ -104,7 +104,8 @@ Each step leaves the game working; each ends with a probe or a look in the runni
 
 Currents in rivers, fishing, boats, wet clothes and drying, swim and breath as discipline skills,
 rain and snow on the surface, underwater light shafts and caustics, creature breath and drowning,
-armour weight, water that is not at one level (a mountain lake above the sea).
+armour weight. Water that is not at one level: rivers have it now (*Water at its own level*, below);
+a mountain lake above the sea does not yet.
 
 ## As built
 
@@ -144,3 +145,101 @@ armour weight, water that is not at one level (a mountain lake above the sea).
   the shared low-pass: the music is under it too - it was not listened to). Other dimensions' own
   water level. Nothing keeps a creature that is knocked into water from drowning (it has no
   breath). The bank hop uses the ordinary jump, so a high bank may need the dive-and-rise step.
+
+## Water at its own level (SLICE.md W10, W11, G1 stopgap)
+
+Built 2026-11-20 for the vertical slice. **Off by default**: a world turns it on in its `world` shape, so
+the full game is drawn exactly as before (`scripts/probe/waterHash.local.mjs` hashed heights, water,
+roads, bridges and chunks with their grass and trees of three worlds: identical before and after).
+
+```json5
+world: { rivers: [2, 2], riverLength: [4, 6], riverTributaries: [1, 1], riverLevels: true }
+```
+
+- **The ocean underground (G1 stopgap).** `terrain/ocean.ts` turns the ocean plane off as soon as
+  `sunLighting.underground` starts to rise, and the inland water below does the same. Checked in a
+  cave chamber 7 m under the sea's level: neither drawn. The real drawing switch (G1, `world.ts`) is
+  still to come.
+- **Shape keys** (`content/worldConfig.ts`): `riverLevels` (a boolean) and `riverTributaries` (a range:
+  how many of the later rivers start beside one already placed, `cells/riverGeneration.ts`, its own
+  random stream so a world asking for none rolls as before). With `riverLevels` a river whose mouth is
+  within 600 m of an earlier river's line has its line carried on to it (`cells/riverField.ts`).
+- **Each river's water** (`terrain/rivers/riverLevels.ts`): stations every 24 m along the line, each with
+  a surface level, the depth of water under it and how far from the line the water reaches. The surface
+  starts at the ground at the source and runs down never rising, never above the ground anywhere across
+  the river's width (less 0.6 m of bank), falling at least 0.3 % and smoothed; at the mouth it meets the
+  sea, or its trunk's level. Where a tributary's valley lies below its trunk's water where they meet, the
+  trunk falls to it there (a rapid or a fall) and runs on no higher. Depth 3.5 m at the mouth to 1.5 m at
+  the source, then over the last 220 m it narrows and shallows to a **spring** (a bed 5 m wide, 0.6 m of
+  water), with boulders gathered round it (`TerrainSample.springGap`, the rock scatter). The ceiling also
+  counts the other rivers' valleys (a second pass): where two come close the higher no longer stands
+  over the lower's cut (the user's catch at a source). A river falls at most 15 % a metre, and less the
+  wider it is (no more than 0.7 m over its own flat bed's width): a wide flat bed reaches back up the
+  river and a steep wide river cut under its own water. **Fords**, one or two a river over 700 m long, are 70 m stretches where it is 0.25 m deep.
+- **The carve** (`terrainSampler.ts`, `riverEvaluator.ts`): the bed is the surface less the depth, cut
+  after the coast's blend (cut before it, a bed near the coast was dragged toward the seabed far under
+  its water). Every
+  river segment in reach clips the ground and the lowest result wins - a min of continuous carves is
+  continuous, where the nearest segment's alone stepped up to 18 m where two stretches of different
+  levels were equally near (the inside of a bend, a confluence). Every `TerrainSample` carries
+  `waterSurface`: the nearest segment's level where the point is in its reach, else `WATER_SURFACE`.
+- **The water query** (`water.ts`): `createWaterQuery` answers from `waterSurface` and from the **flat
+  bodies** in `terrain.waters` - `add({ kind: "pond" | "pool", level, polygon, bottom?, ceiling? })`. A
+  pond is water over ground below its level inside its polygon; a pool is a volume (a cave's) found only
+  when `waterAt(x, z, y)` is given a height inside it. `waterLineOf` is the line "is this ground wet" is
+  read against: the sea level, or a river's own surface.
+- **What reads it**: bridges (`roads/bridges.ts`: wet where the ground - or the road's own planned height,
+  which grading sinks into the valley later - is more than 0.3 m under a river's surface, so a road wades a
+  ford and is bridged over deeper water; the deck clears the water it spans), grass (`grassScatter.ts`, via
+  `chunkGeometry.ts`), trees (none in a river's water, fading in from 0.4 to 1.6 m over it), the map tiles
+  and the debug map. Swimming, breath, footsteps, the underwater look and creatures already go through
+  `waterAt`.
+- **Waterside plants and ground** follow a river up the hill: a layer input `aboveWater` (the height less
+  `TerrainSample.waterLine` - the sea's level, 0, or by a river at its own level that river's surface,
+  falling back to the sea's 0.35 m a metre past its reach) for layers that mean "this near the water".
+  By the sea it is the height itself, so nothing changes there (three worlds hash the same). Every
+  biome's waterline rules read it - 42 of them: reed beds, wet stones, duckweed, mud, palms and mangroves,
+  bananas by the water, the desert's shore, "no snow under the water", the boulders at the waterline -
+  and the foliage scatter's graphs get it too. Rules about altitude (snow lines, treelines, terraces, the
+  ice peaks' glacier on the valley floors) stay on `height`. The rule for a new one: about the water,
+  `aboveWater`; about how high the land is, `height`. `scripts/probe/aboveWaterRewire.mjs` did the
+  switch (a height read only by masks within 8 m of 0 switched; one read both ways split).
+- **Drawn** (`terrain/riverWater.ts`): a ribbon per river at its stations' levels, stepping down with them,
+  as wide as the ground scanned across each station says the water is (1.5 m past it, so the bank draws
+  the shore); where no bank holds it (a confluence, the sea) its edge is laid onto the ground rather than
+  left hanging. Its own body colour by the depth of water under each vertex (the ocean leaves colour to
+  the terrain shader, which only knows the sea's level), reflection and glint as the ocean's, foam where it
+  falls steeply. The ripple pattern lives in the river's own frame (across, along) and runs downstream at
+  one speed for the whole river: a speed that varied from vertex to vertex, times the clock, smeared it
+  into streaks (the user's catch). At the spring the ribbon runs straight on 4 m past where the ground
+  meets the water, so the ground draws where it starts (the user's call: no rounded cap).
+  Where a river's water stands above the sea over ground below it (its last stretch, its channel cut
+  below the sea's level), the **ocean plane is cut away** under it (`OceanPlane.setHoles`: the ribbon's own footprint between two rows, which the
+  ribbon records, up to 64), or the sea showed inside the channel a metre under the river's own surface
+  (the user's catch); a ribbon starting from the sea begins one station earlier, tucked 4 cm under the
+  sea's surface, so the river runs down into it. (A shallow estuary - the bed kept above the sea instead -
+  was tried and dropped: the river turned into a pale sheet. `scripts/probe/riverDepth.local.mjs` prints a
+  river's real depth along its line.) Flat bodies are drawn as planes. Stretches at the sea's level are left
+  to the ocean plane. Hidden underground; flat bodies (pools) are not.
+- **Checked**: `scripts/probe/riverLevels.mjs` - one-zone autumn-wood worlds, four seeds: surfaces never
+  rise toward the mouth nor go below the sea, the water query finds the river along 90 %+ of it, a
+  tributary meets its trunk's level, no ground step across a river worse than the legacy world's (worst
+  2.05 m in a metre against 2.9), water under every bridge and its deck above it, no road through water
+  deeper than a ford off a bridge, no water standing over a pit (ground more than 1 m under the river's own
+  bed), no levels without the flag. `water.mjs` and `roadWater.mjs` still
+  pass. In the page (`?play&config=rivers&seed=4242`, `public/configs/rivers.json5`): a river at 22 m
+  over the sea, drawn and on the minimap.
+- **Not done.** Where a river meets the sea there is a visible seam: the two surfaces are different
+  shaders (the ocean draws reflection and glint only, its colour from the terrain's tint; the river its own
+  body colour, its ripples in its own frame). Agreed with the user to leave for later; the way to do it:
+  a per-vertex "to the sea" weight over the last few stations, lerping the river's ripples to the ocean's
+  world-space waves and its body colour to the terrain's tint under the sea, so the two match at the seam.
+  Lakes are still sea-level hollows: a mountain lake needs a lake body at its own level
+  (the flat `pond` is ready for it, and for W13's mill pond), nothing generates one yet. A cave pool needs
+  `sim/playerBody.ts` to pass the body's height to `waterAt` inside a dungeon (it skips water there) and
+  the cave session to add the pool. Fords are rolled, but roads choose their own crossings: in the four
+  probe worlds none crossed at a ford - steering roads to them belongs with W6. The slice's own dimension
+  (W1) has to set the shape keys. The terrain's own water tint and floating sheet still follow the sea's
+  level only (the ribbon's body colour stands in). Frame cost not measured (a few hundred vertices a
+  river). Some seeds give a trunk that is lowered to the sea all along by a tributary joining near its
+  source (seed 1338), a sea-level river like the legacy ones.

@@ -283,7 +283,7 @@ export function createDebugMap(
 
         if (!sample.isLand) {
           color = OCEAN_COLOR;
-        } else if (sample.height < SEA_LEVEL) {
+        } else if (sample.height < Math.max(SEA_LEVEL, sample.waterSurface)) {
           color = LAKE_COLOR;
         } else if (detailEnabled) {
           const worldX = viewport.centerX + (px / SAMPLE_RESOLUTION) * viewport.halfSize * 2 - viewport.halfSize;
@@ -307,6 +307,7 @@ export function createDebugMap(
 
           const context: Record<string, number> = {
             height: sample.height,
+            aboveWater: sample.height - sample.waterLine,
             slope: invLen,
             slopeFacing: dHdz * invLen,
             landmass: sample.landmass,

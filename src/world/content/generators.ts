@@ -110,9 +110,10 @@ const rockDensity: Generator = (params, reader, path) => {
       { output: "footDensity", op: "scale", input: "foot", factor: extra("footOfSlope") },
 
       // The waterline of a river or a lake: ground from just under the water to just over it (the
-      // water is at 0), so a stone there stands half in it - fullest from -0.1 to 0.3, gone by -0.3
-      // and 0.55. Near a river is out to past the waterline of the widest; near a lake, any of it.
-      { output: "height", op: "input", name: "height" },
+      // water is at 0 - the sea's, or a river's own surface where it runs at its own level), so a stone
+      // there stands half in it - fullest from -0.1 to 0.3, gone by -0.3 and 0.55. Near a river is out to
+      // past the waterline of the widest; near a lake, any of it.
+      { output: "height", op: "input", name: "aboveWater" },
       { output: "notDeep", op: "mask", input: "height", at: -0.1, off: -0.3 },
       { output: "notHigh", op: "mask", input: "height", at: 0.3, off: 0.55 },
       { output: "waterline", op: "multiply", a: "notDeep", b: "notHigh" },
@@ -389,7 +390,7 @@ const snowCover: Generator = (params, reader, path) => {
   // None under the water - snow falling on a pool melts into it, or lies on its ice, not its bed -
   // nor at its very edge, which is the water's own layers' to share (a triangle blends only three).
   steps.push(
-    { output: "groundHeight", op: "input", name: "height" },
+    { output: "groundHeight", op: "input", name: "aboveWater" },
     { output: "dry", op: "mask", input: "groundHeight", at: 0.25, off: 0.05 },
     { output: "drySnow", op: "multiply", a: "snow", b: "dry" },
     { output: "result", op: "scale", input: "drySnow", factor: reader.optionalNumber(params, "strength", path, 2, { min: 0 }) },

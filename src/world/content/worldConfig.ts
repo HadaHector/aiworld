@@ -25,6 +25,11 @@ export interface WorldShape {
   /** Whether the biomes' shore hills (BiomeDefinition.shoreHills) rise: a ring of mountains on land
    *  grown out over the sea. Off by default, so a biome can carry them and the full world not change. */
   shoreHills: boolean;
+  /** How many of the rivers (a range, rolled per seed) are born as a tributary of one already placed. */
+  riverTributaries: [number, number];
+  /** Rivers run at their own level - the ground's, falling to the sea - rather than in a bed sunk below
+   *  sea level (WATER.md, *Water at its own level*). Off by default: the world is drawn as it always was. */
+  riverLevels: boolean;
 }
 
 /** Kinds used for their own sake, which a config's `only` may name. Everything else is kept only
@@ -53,6 +58,8 @@ export const DEFAULT_WORLD_SHAPE: WorldShape = {
   riverLength: [8, 10],
   coastWobble: 4,
   shoreHills: false,
+  riverTributaries: [0, 0],
+  riverLevels: false,
 };
 
 /** The config every caller that names none gets: the full game. */
@@ -67,9 +74,9 @@ export function readWorldShape(raw: RawObject, reader: Reader, path: string): Pa
   for (const [old, now] of Object.entries(RENAMED_SHAPE_KEYS)) {
     if (raw[old] !== undefined) reader.fail(`${path}.${old}`, now ? `renamed to "${now}"` : "gone: a world is one landmass, more land is another dimension (see DIMENSIONS.md)");
   }
-  type Plain = "cellsPerArea" | "coastWobble" | "shoreHills";
-  const keys = (Object.keys(DEFAULT_WORLD_SHAPE) as (keyof WorldShape)[]).filter((key) => key !== "cellsPerArea" && key !== "coastWobble" && key !== "shoreHills") as Exclude<keyof WorldShape, Plain>[];
-  reader.onlyKeys(raw, path, [...keys, "cellsPerArea", "coastWobble", "shoreHills", ...Object.keys(RENAMED_SHAPE_KEYS)]);
+  type Plain = "cellsPerArea" | "coastWobble" | "shoreHills" | "riverLevels";
+  const keys = (Object.keys(DEFAULT_WORLD_SHAPE) as (keyof WorldShape)[]).filter((key) => key !== "cellsPerArea" && key !== "coastWobble" && key !== "shoreHills" && key !== "riverLevels") as Exclude<keyof WorldShape, Plain>[];
+  reader.onlyKeys(raw, path, [...keys, "cellsPerArea", "coastWobble", "shoreHills", "riverLevels", ...Object.keys(RENAMED_SHAPE_KEYS)]);
   if (raw.cellsPerArea !== undefined) {
     const n = raw.cellsPerArea;
     if (typeof n !== "number" || !Number.isInteger(n) || n < 1 || n > 60) reader.fail(`${path}.cellsPerArea`, `expected a whole number from 1 to 60, got ${JSON.stringify(n)}`);
@@ -77,11 +84,12 @@ export function readWorldShape(raw: RawObject, reader: Reader, path: string): Pa
   }
   if (raw.coastWobble !== undefined) world.coastWobble = reader.number(raw, "coastWobble", path, { min: 0, max: 8 });
   if (raw.shoreHills !== undefined) world.shoreHills = reader.boolean(raw, "shoreHills", path, false);
+  if (raw.riverLevels !== undefined) world.riverLevels = reader.boolean(raw, "riverLevels", path, false);
   for (const key of keys) {
     if (raw[key] === undefined) continue;
     const range = reader.range(raw, key, path, { allowEqual: true });
-    if (range.some((v) => !Number.isInteger(v) || v < (key === "rivers" ? 0 : 1))) {
-      reader.fail(`${path}.${key}`, `expected whole numbers of at least ${key === "rivers" ? 0 : 1}, got [${range.join(", ")}]`);
+    if (range.some((v) => !Number.isInteger(v) || v < (key === "rivers" || key === "riverTributaries" ? 0 : 1))) {
+      reader.fail(`${path}.${key}`, `expected whole numbers of at least ${key === "rivers" || key === "riverTributaries" ? 0 : 1}, got [${range.join(", ")}]`);
     } else if (key === "areas" && worldExtentFor(range[1], world.cellsPerArea ?? CELLS_PER_AREA) > MAX_WORLD_EXTENT) {
       reader.fail(`${path}.${key}`, `${range[1]} zones make a world ${(worldExtentFor(range[1], world.cellsPerArea ?? CELLS_PER_AREA) / 1000).toFixed(0)} km across, wider than the ${MAX_WORLD_EXTENT / 1000} km limit - more land belongs in another dimension (see DIMENSIONS.md)`);
     }

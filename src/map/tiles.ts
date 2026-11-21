@@ -131,8 +131,9 @@ export function* mapTileSteps(ground: MapGround, tx: number, tz: number, things?
       let r: number;
       let g: number;
       let b: number;
-      if (!sample.isLand || sample.height < SEA_LEVEL) {
-        const t = Math.min(1, (SEA_LEVEL - sample.height) / DEEP);
+      const waterLine = Math.max(SEA_LEVEL, sample.waterSurface);
+      if (!sample.isLand || sample.height < waterLine) {
+        const t = Math.min(1, (waterLine - sample.height) / DEEP);
         r = SHALLOW[0] + (OCEAN[0] - SHALLOW[0]) * t;
         g = SHALLOW[1] + (OCEAN[1] - SHALLOW[1]) * t;
         b = SHALLOW[2] + (OCEAN[2] - SHALLOW[2]) * t;
@@ -149,6 +150,7 @@ export function* mapTileSteps(ground: MapGround, tx: number, tz: number, things?
         const context: Record<string, number> = {
           treeCover: ground.treeCover ? ground.treeCover(x, z, { height: sample.height, surfaceHeight: sample.height, slope: Math.sqrt(Math.max(0, 1 - ny * ny)), sample }) : 0,
           height: sample.height,
+          aboveWater: sample.height - sample.waterLine,
           slope: ny,
           slopeFacing: -nz,
           landmass: sample.landmass,
@@ -188,7 +190,7 @@ export function* mapTileSteps(ground: MapGround, tx: number, tz: number, things?
         g *= shade;
         b *= shade;
       }
-      depth[row * n + col] = Math.max(SEA_LEVEL, sample.height);
+      depth[row * n + col] = Math.max(SEA_LEVEL, sample.waterSurface, sample.height);
       const o = (row * n + col) * 4;
       out[o] = r * 255;
       out[o + 1] = g * 255;

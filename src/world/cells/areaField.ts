@@ -1,7 +1,7 @@
 import { timed } from "../loadTimings";
 import { createVoronoiField, type VoronoiField } from "./voronoiField";
 import { computeCellBounds, generateCellDiagram, type CellPoint } from "./cellGrid";
-import { createRiverField } from "./riverField";
+import { createRiverField, type RiverField } from "./riverField";
 import { createCentrelineShaper } from "./riverCentreline";
 import { createNameGenerator, type NameGenerator } from "../naming/nameGenerator";
 import { planWorld } from "./worldLayout";
@@ -32,7 +32,7 @@ import {
   LAKE_EDGE_NOISE_SALT,
 } from "./config";
 import { BOUNDARY_HILL_WIDTH, BOUNDARY_HILL_EDGE_NOISE_AMPLITUDE, BOUNDARY_HILL_STYLE_SALT, SHORE_BAY_SALT } from "../terrain/boundaryHills/boundaryHillsConfig";
-import { RIVER_QUERY_RADIUS } from "../terrain/rivers/riverConfig";
+import { RIVER_QUERY_RADIUS, RIVER_TRIBUTARY_LINK } from "../terrain/rivers/riverConfig";
 import { rollAreaBiome } from "../content/resolveContent";
 
 export const SEA_LEVEL = 0;
@@ -82,12 +82,15 @@ export interface AreaSample {
   isRiverEdge: boolean;
   riverTaper: number; // 0 at a river's mouth, 1 at its far end - meaningless unless isRiverEdge
   riverGap: number; // distance to use for the river carve envelope - meaningless unless isRiverEdge
+  riverIndex: number; // which river that is (its index in the field's polylines), -1 with none in reach
 }
 
 export type AreaSampler = (worldX: number, worldZ: number) => AreaSample;
 
 export interface AreaWorld {
   sampleArea: AreaSampler;
+  /** The rivers' centrelines, for the terrain sampler to give their water its levels (terrain/rivers/riverLevels.ts). */
+  riverField: RiverField;
   worldExtent: number;
   /** Where each area is, keyed by the id AreaSample reports. Built from the cell sites that make
    *  the area up, so it is the area's own footprint rather than a fixed zoom guess. */
@@ -589,7 +592,7 @@ export function createAreaSampler(seed: number, content: WorldContent): AreaWorl
   }
 
   console.info(`[shaping] Growing the land, zones, lakes and rivers: ${((performance.now() - landStarted) / 1000).toFixed(2)} s`);
-  const riverField = timed("Indexing rivers", () => createRiverField(riverPolylines, RIVER_QUERY_RADIUS));
+  const riverField = timed("Indexing rivers", () => createRiverField(riverPolylines, RIVER_QUERY_RADIUS, { joinWithin: content.world.riverLevels ? RIVER_TRIBUTARY_LINK : 0 }));
   // Where each river would run on past its mouth (the line's first point, on the shore it drains
   // into): its last stretch carried straight on. Grown shore land keeps clear of these, so a river
   // reaches the new coast through a gap in the hills rather than ending against them.
@@ -842,6 +845,7 @@ export function createAreaSampler(seed: number, content: WorldContent): AreaWorl
       isRiverEdge,
       riverTaper,
       riverGap,
+      riverIndex: river.river,
     };
   }
 
@@ -894,6 +898,7 @@ export function createAreaSampler(seed: number, content: WorldContent): AreaWorl
 
   return {
     sampleArea,
+    riverField,
     // The shore hills' land grows past the cells' own reach; whatever is sized by the world's extent
     // (spawns, starts, cave mouths, the map) has to see it.
     worldExtent: layout.worldExtent + 2 * Math.max(0, ...areaBiomes.map((biome) => (shoreHillsOn ? biome.shoreHills?.grow ?? 0 : 0))),

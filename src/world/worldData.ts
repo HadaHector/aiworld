@@ -9,7 +9,7 @@ import type { House } from "./settlements/settlementLayout";
 import type { BuildingGroup, Placed } from "./buildings/buildingCollision";
 import type { WorldContent } from "./content/worldContent";
 
-import { createWaterAt, type WaterSample } from "./water";
+import { createWaterQuery, type WaterSample } from "./water";
 import { caveMouthGroups } from "./dungeons/caveMouths";
 
 /** The world's seed - also what the workbench previews with until told otherwise. */
@@ -47,7 +47,7 @@ export interface WorldData extends ReturnType<typeof createTerrainSampler> {
   content: WorldContent;
   heightAt: (worldX: number, worldZ: number) => number;
   /** The water surface and depth at a point (WATER.md). */
-  waterAt: (worldX: number, worldZ: number) => WaterSample;
+  waterAt: (worldX: number, worldZ: number, y?: number) => WaterSample;
   /** Everything set down with a model, in the groups that come into the collision world together:
    *  each settlement, each compound, and the roads' fences, bridges and signs by cell. */
   buildingGroups: BuildingGroup[];
@@ -157,7 +157,7 @@ export function createWorldData(
     seed,
     content,
     heightAt: (worldX, worldZ) => sampleTerrain(worldX, worldZ).height,
-    waterAt: createWaterAt((worldX, worldZ) => sampleTerrain(worldX, worldZ).height),
+    waterAt: createWaterQuery((worldX, worldZ) => sampleTerrain(worldX, worldZ), terrain.waters),
     buildingGroups,
     labels,
     buildingAt,

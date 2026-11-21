@@ -134,6 +134,8 @@ export interface GrassGround {
   blendAt: (row: number, col: number) => Map<number, number>;
   /** Height of the drawn surface inside grid square (row, col) at (u, v) across it. */
   surfaceHeight: (row: number, col: number, u: number, v: number) => number;
+  /** The water line over grid square (row, col) - see water.ts's waterLineOf; SEA_LEVEL if not given. */
+  waterLine?: (row: number, col: number) => number;
 }
 
 /**
@@ -266,7 +268,7 @@ export function scatterGrass(
 
       const y = surfaceHeight(row, col, u, v);
       const wades = grassKinds[kind].wades;
-      if (y < SEA_LEVEL + (wades === undefined ? GRASS_WATER_CLEARANCE : -wades)) continue;
+      if (y < (ground.waterLine ? ground.waterLine(row, col) : SEA_LEVEL) + (wades === undefined ? GRASS_WATER_CLEARANCE : -wades)) continue;
 
       const channel = (c: number): number =>
         (color[(v00 * kindCount + kind) * 3 + c] * w00 +

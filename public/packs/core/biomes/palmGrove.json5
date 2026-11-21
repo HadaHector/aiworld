@@ -28,7 +28,7 @@
       { output: "groveRaw", op: "sample", noise: "grove" },
       { output: "groveRamp", op: "remap", input: "groveRaw", inMin: { range: [-1.0, -0.6] }, inMax: 0.1, outMin: 0.25, outMax: 1 },
       { output: "grove", op: "clamp", input: "groveRamp", min: 0, max: 1 },
-      { output: "height", op: "input", name: "height" },
+      { output: "height", op: "input", name: "aboveWater" },
       // The waterline: out into the shallows to a couple of metres over the water.
       { output: "notDeep", op: "mask", input: "height", at: -0.4, off: -1.2 },
       { output: "notHigh", op: "mask", input: "height", at: 1.5, off: 2.8 },
@@ -47,7 +47,7 @@
     steps: [
       { output: "bedRaw", op: "sample", noise: "bed" },
       { output: "bed", op: "mask", input: "bedRaw", at: 0.55, off: 0.3 },
-      { output: "height", op: "input", name: "height" },
+      { output: "height", op: "input", name: "aboveWater" },
       { output: "aboveWater", op: "mask", input: "height", at: 2, off: 1 },
       { output: "beds", op: "multiply", a: "bed", b: "aboveWater" },
       { output: "banana", op: "scale", input: "beds", factor: { range: [0.2, 0.5] } },
@@ -74,7 +74,7 @@
         weight: {
           noises: [{ name: "fray", type: "fbm", octaves: 3, frequency: 0.02, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
           steps: [
-            { output: "height", op: "input", name: "height" },
+            { output: "height", op: "input", name: "aboveWater" },
             { output: "frayRaw", op: "sample", noise: "fray" },
             { output: "fray", op: "scale", input: "frayRaw", factor: 1.2 },
             { output: "reach", op: "add", a: "height", b: "fray" },
@@ -102,7 +102,7 @@
         weight: {
           noises: [{ name: "patch", type: "fbm", octaves: 3, frequency: 0.03, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
           steps: [
-            { output: "height", op: "input", name: "height" },
+            { output: "height", op: "input", name: "aboveWater" },
             { output: "wet", op: "mask", input: "height", at: 0.3, off: 1.2 },
             { output: "patchRaw", op: "sample", noise: "patch" },
             { output: "patch", op: "mask", input: "patchRaw", at: 0.2, off: -0.2 },

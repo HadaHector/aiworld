@@ -1,3 +1,4 @@
+import { WATER_SURFACE } from "../world/water";
 import type { WorldContent } from "../world/content/worldContent";
 import type { BiomeDefinition } from "../world/biomes/biomeTypes";
 import { createZoneHeight, type TerrainSample, type TerrainSampler } from "../world/terrain/terrainSampler";
@@ -86,6 +87,9 @@ export function sampleBiomeArea(seed: number, content: WorldContent, biomeId: st
     padGap: Infinity,
     spill: 0,
     spillMaterial: -1,
+    waterSurface: WATER_SURFACE,
+    springGap: Infinity,
+    waterLine: 0,
   });
   const sampleTerrain: TerrainSampler = sampleAt;
 
@@ -134,6 +138,7 @@ export function sampleBiomeArea(seed: number, content: WorldContent, biomeId: st
       const context: Record<string, number> = {
         treeCover: cover[i],
         height: h,
+        aboveWater: h,
         slope: n[1],
         slopeFacing: -n[2],
         landmass: 1,
