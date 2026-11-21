@@ -552,9 +552,9 @@ export interface PitchedRoofSpec {
   thickness: number;
   /** How far its ridges sink in the middle, and its rafters bow between eaves and ridge. */
   sag: { ridge: [number, number]; slope: [number, number] };
-  /** How rotted it is, 0-1, rolled per house (null: sound). Past nothing it holds: its covering
-   *  falls away in patches, here and there a board too, its sag deepens, and from 0.4 up a part of it
-   *  has fallen in - a dip round one place, holed through (see RoofPlan.dip). */
+  /** How rotted it is, 0-1, rolled per house (null: sound): its sag deepens up to threefold and from
+   *  0.4 up one place has fallen in, a smooth dip (see RoofPlan.dip). Missing shingles are the
+   *  material's work (`rottedShingles`), not geometry. */
   rot: [number, number] | null;
   /** The covering on its boards: how thick (of the whole), and how far it reaches past them at the
    *  eaves - and at the verges, where there is no bargeboard. */

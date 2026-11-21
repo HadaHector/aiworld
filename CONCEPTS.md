@@ -158,8 +158,8 @@ Essential to the feel:
 Wrong for our engine (or not taken):
 - **Walls collapsing** and timber frames showing through (the shed's slope in the third image): our walls
   are solid shells; taken as *roof* collapse only (a sunk dip with holes).
-- **Painted per-shingle detail** (curled, bare lathes): built as whole cells 1.5 m across of covering gone,
-  per GEOMETRY.md's exaggeration rule.
+- **Per-shingle detail** (curled, bare lathes): geometry cells of covering gone looked blocky; done in the
+  roof's texture instead (missing shingles sunk to black, moss).
 - **Door hanging on one hinge**: doors are static; left shut.
 - **Bracken and ferns in the foreground**: no planting step for them; left to the biome's own grass and
   the paler yard ground.

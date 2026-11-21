@@ -51,7 +51,9 @@ for (let seed = 1; seed <= 12; seed++) {
   soundTris += tris(sound);
   rottedTris += tris(rotted);
 }
-// Holes take cells of covering and boards out: fewer triangles than a sound roof's.
-check(rottedTris < soundTris && rottedTris > soundTris * 0.5, `rotted roofs are open (${rottedTris} triangles against ${soundTris} sound)`);
+// No geometric holes: the missing shingles are the texture's, so a rotted roof is as many triangles as a sound one.
+check(Math.abs(rottedTris - soundTris) < soundTris * 0.25, `rotted roofs are whole geometry (${rottedTris} triangles against ${soundTris} sound)`);
+for (const id of ["bunkhouseAbandoned", "sawShedAbandoned", "toolShedAbandoned", "cookhouseAbandoned"]) check(def(id).house.parts.roof.material === "rottedShingles", `${id} roof is rottedShingles`);
+check(!!content.buildingMaterials.find((m) => m.id === "rottedShingles"), "the rottedShingles material exists");
 console.log(`abandonedCamp: ${checks - fails}/${checks} checks; ${placed} layouts, ${(props / Math.max(1, placed)).toFixed(1)} props each`);
 process.exit(fails ? 1 : 0);

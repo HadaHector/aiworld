@@ -783,16 +783,15 @@ Saved for their own steps, so this one stays whole (condition has since been don
 **a condition is a set of files a feature names, plus one engine option**, not a number fed into every
 generator. What was built:
 
-- **Roof rot** (`pitchedRoof.ts`): a pitched roof part may carry `rot: [low, high]` (README, *Buildings*).
-  It drops covering cells (a hash of the cell on a grid fixed to the slab, so they are repeatable), a
-  board here and there, deepens the sag up to threefold, and from rot 0.4 sinks one place (a Gaussian dip
-  whose spot is drawn from the roof's own seed, no dip at the eaves) with holes thickest round it. A
-  building's interior ceilings keep under the dip (`roofOver`). Measure passes skip the holes, so a
-  rotted building measures as a sound one and a settlement or compound fits it the same.
-  `rottedShingleRoof`, `rottedShedRoof` are the parts.
+- **Roof rot** (`pitchedRoof.ts`): a pitched roof part may carry `rot: [low, high]` (README, *Buildings*):
+  the sag deepens up to threefold, and from rot 0.4 one place sinks (a smooth Gaussian dip whose spot is
+  drawn from the roof's own seed, none at the eaves; interior ceilings keep under it). `rottedShingleRoof`,
+  `rottedShedRoof` are the parts. **Missing shingles are texture, not geometry** (the first try, cells of
+  covering and boards cut out, read as blocky, "like Minecraft"): `rottedShingles` is a building material
+  with the courses warped off the ruler, shingles missing in patches (sunk to black), grey boards and moss.
 - **Four worn buildings**: `bunkhouseAbandoned`, `sawShedAbandoned`, `cookhouseAbandoned`,
   `toolShedAbandoned` - the logging camp's, with the rotted roofs, no lit windows, no sawdust spill, and
-  greener roof tints and greyer log tints (the moss).
+  the `rottedShingles` roof material and greyer log tints.
 - **Props**: `brokenRailFence` (40% of its rails missing), `coldFire` (grey ash, charred sticks, no light,
   flame or sound), `rottedLogStack`, `rottedFelledLog`, and groups `rottedLogDeck`, `fallenRoof` (crossed
   beams by a wall).
@@ -803,8 +802,8 @@ generator. What was built:
 - **Quest tags**: `abandoned`, `ruin`, `mystery`, `remote`, `wood`; objects *Rusted Axe Head*, *Foreman's
   Tally Book*, *Rotted Boot*, *Moss-grown Pelt* (tags `lost`, `evidence`, `material`); people `hermit`,
   `forester`; text "the abandoned camp at {name}". The chain of four quests (E4 b) is not written.
-- **Check**: `npm run probe -- scripts/probe/abandonedCamp.mjs` (57 checks: wiring, 30 layouts over seeds
-  and variants with both required buildings, rotted roofs open and repeatable). Seen with `npm run shot --
+- **Check**: `npm run probe -- scripts/probe/abandonedCamp.mjs` (wiring, 30 layouts over seeds and variants with both
+  required buildings, rotted roofs repeatable and on the rotted material). Seen with `npm run shot --
   buildings/bunkhouseAbandoned` and `buildings/sawShedAbandoned`; the vale places one in some seeds.
 
 **Not done (the camp's open list).** Walls do not collapse: only roofs rot (GEOMETRY.md section 11 says a

@@ -48,8 +48,7 @@ export interface RoofPlan {
   slopeSag: number;
   /** How far its ridge tiles stand above the slab. */
   ridgeHeight: number;
-  /** How rotted it is, 0-1 (0: sound), and the seed its holes and its fallen-in place are found
-   *  from; `dip` is how far that place has fallen (metres, 0 for none). */
+  /** How rotted it is, 0-1 (0: sound), and the seed its fallen-in place is found from; `dip` is how far that place has fallen (metres, 0 for none). */
   rot: number;
   decaySeed: number;
   dip: number;
@@ -118,7 +117,7 @@ function area(polygon: Point[]): number {
   return Math.abs(sum) / 2;
 }
 
-/** A repeatable 0-1 from a cell and a seed: where a rotted roof is open. */
+/** A repeatable 0-1 from two integers and a seed: where a rotted roof's fallen-in place is. */
 function cellHash(gx: number, gz: number, seed: number): number {
   let h = Math.imul(gx | 0, 374761393) ^ Math.imul(gz | 0, 668265263) ^ Math.imul(seed | 0, 2246822519);
   h = Math.imul(h ^ (h >>> 13), 1274126177);
@@ -335,9 +334,6 @@ interface SlabLook {
   step: number;
   top: Paint;
   underside: Paint;
-  /** For a rotted roof: how open a cell of the slab is, at its middle (plan x, z) and its place on
-   *  the grid - 0 whole, 1 its covering gone, 2 holed through - or null for a sound one. */
-  decay: ((x: number, z: number, gx: number, gz: number) => 0 | 1 | 2) | null;
 }
 
 /**
@@ -396,7 +392,7 @@ function drawSlab(b: ModelBuilder, face: RoofFace, slope: number, sag: Sag, look
     return normalize([-(h(x + e, z) - h(x - e, z)) / (2 * e), 1, -(h(x, z + e) - h(x, z - e)) / (2 * e)]);
   };
   /** A polygon split into cells, each drawn by `draw`. */
-  const cells = (polygon: Point[], draw: (cell: Point[]) => void, wear: 1 | 2 | null = null): void => {
+  const cells = (polygon: Point[], draw: (cell: Point[]) => void): void => {
     // Measured only: the cells fill the polygon, so it reaches as far whole.
     if (b.measure) {
       draw(polygon);
@@ -412,14 +408,7 @@ function drawSlab(b: ModelBuilder, face: RoofFace, slope: number, sag: Sag, look
         cell = clipHalf(cell, (p) => (gx + 1) * step - p[0]);
         cell = clipHalf(cell, (p) => p[1] - gz * step);
         cell = clipHalf(cell, (p) => (gz + 1) * step - p[1]);
-        if (cell.length < 3 || area(cell) <= 1e-6) continue;
-        // A rotted roof: this cell's covering (wear 1), or its boards (2), gone.
-        if (wear && look.decay) {
-          const mx = cell.reduce((sum, p) => sum + p[0], 0) / cell.length;
-          const mz = cell.reduce((sum, p) => sum + p[1], 0) / cell.length;
-          if (look.decay(mx, mz, gx, gz) >= wear) continue;
-        }
-        draw(cell);
+        if (cell.length >= 3 && area(cell) > 1e-6) draw(cell);
       }
     }
   };
@@ -459,7 +448,7 @@ function drawSlab(b: ModelBuilder, face: RoofFace, slope: number, sag: Sag, look
       return [-v[0], -v[1], -v[2]];
     });
     b.surface(cell.map((p) => at(p, 0)), normals, down, look.underside);
-  }, 2);
+  });
   for (const { p, q, open, barge } of edges) {
     if (!open || barge) continue;
     const away = awayFrom(p, q);
@@ -470,7 +459,7 @@ function drawSlab(b: ModelBuilder, face: RoofFace, slope: number, sag: Sag, look
   // The covering, on the boards, reaching past them at the eaves (and verges with no bargeboard).
   const reach = edges.map((edge) => (edge.open && !edge.barge ? look.covering.overhang : 0));
   const cover = pushEdges(face.polygon, reach);
-  cells(cover, (cell) => b.surface(cell.map((p) => at(p, lift)), cell.map(normalAt), flat, look.top), 1);
+  cells(cover, (cell) => b.surface(cell.map((p) => at(p, lift)), cell.map(normalAt), flat, look.top));
   cover.forEach((p, i) => {
     if (reach[i] === 0) return;
     const q = cover[(i + 1) % n];
@@ -622,8 +611,7 @@ export function buildPitchedRoof(spec: PitchedRoofSpec, plan: RoofPlan, input: R
   const Z1 = Math.max(...roofs.map((r) => r.outline.z1));
   const eaveLow = eaves - overhang * slope;
   const top = eaves + (Math.max(...blocks.map((k) => k.c1 - k.c0)) / 2) * slope;
-  // A fallen-in place, in a rotted roof: a dip round a point in the middle of its outline, the
-  // roof's covering and boards gone in and round it.
+  // A fallen-in place, in a rotted roof: a smooth dip round a point in the middle of its outline.
   const dipSeed = plan.decaySeed;
   const dipAt = { x: X0 + (X1 - X0) * (0.3 + 0.4 * cellHash(1, 2, dipSeed)), z: Z0 + (Z1 - Z0) * (0.35 + 0.3 * cellHash(3, 4, dipSeed)) };
   const dipRadius = Math.max(1.4, Math.min(X1 - X0, Z1 - Z0) * 0.28);
@@ -636,19 +624,6 @@ export function buildPitchedRoof(spec: PitchedRoofSpec, plan: RoofPlan, input: R
     // Nothing at the eaves, so the roof still meets its walls.
     return plan.dip > 0 ? base - plan.dip * dipNear(x, z) * Math.sin(Math.PI * u) * Math.sin(Math.PI * v) * Math.min(1, h * 3) : base;
   };
-  const decay: SlabLook["decay"] =
-    plan.rot > 0
-      ? (x, z, gx, gz) => {
-          const reach = plan.dip > 0 ? dipNear(x, z) : 0;
-          const roll1 = cellHash(gx, gz, plan.decaySeed + 1);
-          const roll2 = cellHash(gz, gx, plan.decaySeed ^ 0x5bd1e995);
-          // Patches of covering gone over the roof, thicker round the fallen-in place; a board gone too
-          // in the worst of them.
-          const bare = (input.far ? 0.5 : 1) * (plan.rot * 0.45 + reach * 0.5);
-          if (roll1 >= bare) return 0;
-          return roll2 < plan.rot * 0.3 + reach * 0.6 ? 2 : 1;
-        }
-      : null;
 
   const lift = thickness * Math.sqrt(1 + slope * slope);
   const step = input.far ? Math.max(spec.step * FAR_STEP_SCALE, FAR_STEP_MIN) : spec.step;
@@ -667,7 +642,6 @@ export function buildPitchedRoof(spec: PitchedRoofSpec, plan: RoofPlan, input: R
         step,
         top: paints[spec.parts.covering],
         underside: paints[spec.parts.underside],
-        decay,
       });
     }
     if (!ridgeTiles) return;

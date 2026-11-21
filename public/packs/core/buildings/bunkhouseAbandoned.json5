@@ -60,7 +60,7 @@
       walls: { material: "logWall", tints: [[0.7, 0.7, 0.66], [0.62, 0.62, 0.6], [0.74, 0.72, 0.66]] },
       timber: { material: "roundLog", tints: [[0.7, 0.7, 0.66], [0.62, 0.62, 0.6], [0.74, 0.72, 0.66]] },
       stone: { material: "rubbleStone", tints: [[1, 1, 1]] },
-      roof: { material: "woodShingles", tints: [[0.6, 0.78, 0.5], [0.55, 0.7, 0.48], [0.68, 0.74, 0.58]] },
+      roof: { material: "rottedShingles", tints: [[1, 1, 1], [0.9, 0.92, 0.9]] },
       plinth: { material: "rubbleStone", tints: [[1, 1, 1], [0.9, 0.88, 0.85]] },
       door: { material: "doorBoards", tints: [[0.55, 0.52, 0.48]] },
       glass: { material: "glass", tints: [[1, 1, 1]] },
