@@ -26,6 +26,10 @@ export interface DimensionDef {
   /** Where new characters start (NPCS.md, *The starting site*): fixed points, or rules a generated
    *  settlement is chosen by. Empty: one start at `spawn`. */
   starts: StartDef[];
+  /** How creature levels are set (CREATURES.md, *Zones*): by zone rings from the start (the full
+   *  world), or by cell, each cell's level from its place in order of distance from the start, by the
+   *  balance curve `cellLevel` (SLICE.md B2: one zone, a gradient across it). */
+  creatureLevels: "rings" | "cells";
 }
 
 /** A place in a starting settlement, named because the layout is generated: its square, the gate
@@ -93,7 +97,7 @@ export interface DimensionLink {
 
 /** What a pack set with no `dimensions` folder at all gets: one world with the defaults, so a pack
  *  that only adds biomes still makes one. */
-export const IMPLICIT_DIMENSION: DimensionDef = { id: "main", name: "The World", start: true, spawn: { x: 0, z: 0 }, world: {}, biomes: null, links: [], entities: [], starts: [] };
+export const IMPLICIT_DIMENSION: DimensionDef = { id: "main", name: "The World", start: true, spawn: { x: 0, z: 0 }, world: {}, biomes: null, links: [], entities: [], starts: [], creatureLevels: "rings" };
 
 /** Passed as the dimension to resolve: no dimension's biome list applies, every biome the config
  *  keeps is resolved - what the workbench wants, to preview any of them. */
@@ -138,7 +142,7 @@ function readPoint(reader: Reader, obj: RawObject, key: string, path: string, fa
 /** Reads one `dimensions/<id>.json5`. References to biomes and other dimensions are checked by
  *  `checkDimensions`, once every definition is known. */
 export function readDimension(id: string, obj: RawObject, reader: Reader): DimensionDef {
-  reader.onlyKeys(obj, "", ["name", "start", "spawn", "world", "biomes", "links", "entities", "starts"]);
+  reader.onlyKeys(obj, "", ["name", "start", "spawn", "world", "biomes", "links", "entities", "starts", "creatureLevels"]);
   const name = reader.optionalString(obj, "name", "") ?? id;
   const start = reader.boolean(obj, "start", "", false);
   const spawn = readPoint(reader, obj, "spawn", "", { x: 0, z: 0 });
@@ -170,7 +174,8 @@ export function readDimension(id: string, obj: RawObject, reader: Reader): Dimen
   });
   const starts = reader.optionalArray(obj, "starts", "").map((value, i) => readStart(reader, reader.object(value, `starts[${i}]`), `starts[${i}]`, spawn));
   if (new Set(starts.map((s) => s.id)).size !== starts.length) reader.fail("starts", "two starts share an id");
-  return { id, name, start, spawn, world, biomes, links, entities, starts };
+  const creatureLevels = obj.creatureLevels === undefined ? "rings" : reader.oneOf(obj, "creatureLevels", "", ["rings", "cells"] as const);
+  return { id, name, start, spawn, world, biomes, links, entities, starts, creatureLevels };
 }
 
 /** `only: [...]` or `except: [...]` under `key`, or null when it is left out. */

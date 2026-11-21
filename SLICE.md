@@ -4,7 +4,7 @@ The plan for the next goal: **one starting zone, the autumn wood, finished like 
 single-player session of about two hours, for the user only (no onboarding, no public demo polish), made
 to show the framework off.
 
-**Status: the plan is ready (the user, 2026-11-20). Built so far: W1 and W9 (the vale: `dimensions/autumnVale.json5`, `public/configs/vale.json5`, `cellsPerArea`; see DIMENSIONS.md, *Cells per zone, and the vale*).** Section 8 divides it into
+**Status: the plan is ready (the user, 2026-11-20). Built so far: W1, W9 and B2 (the vale: `dimensions/autumnVale.json5`, `public/configs/vale.json5`, `cellsPerArea`, levels by cell; see DIMENSIONS.md, *Cells per zone, and the vale*, and CREATURES.md, *Zones*).** Section 8 divides it into
 sessions. Last tidied 2026-11-20.
 
 Sizes: **S** under a day for one session, **M** about a day, **L** several days or several
@@ -610,8 +610,8 @@ slots as they free.
 | # | Session | Result | Where it is documented |
 |---|---|---|---|
 | 1 | Balance core (B6) | `rules/balance.json5` (the agreed curves), the resolver `src/sim/rules/balanceRules.ts`, all 13 creature species on roles, loot money and generated item prices from the curves. `npm run probe -- scripts/probe/balance.mjs`: 428/428. | BALANCE.md |
-| 2 | The slice world (W1, W9) | The autumn vale: `dimensions/autumnVale.json5` (one zone, 14 cells), `cellsPerArea` per world shape, `public/configs/vale.json5`, a "The Autumn Vale" menu entry, `scripts/probe/vale.mjs`. **B2 (level resolve) not done**: it was waiting for the balance resolver, which is now on master. | DIMENSIONS.md, CONFIG.md |
-| 3 | Shore hills (W15) | Mountains along a one-zone island's coast, on land grown out over the sea, parting for bays. Off by default; a world turns them on with `coastWobble: 1, shoreHills: true` (**not yet added to the vale's dimension file**, and not yet looked at in the vale). | CONFIG.md |
+| 2 | The slice world (W1, W9) | The autumn vale: `dimensions/autumnVale.json5` (one zone, 14 cells), `cellsPerArea` per world shape, `public/configs/vale.json5`, a "The Autumn Vale" menu entry, `scripts/probe/vale.mjs`. Then (2026-11-21) **B2**: levels by cell (curve `cellLevel`, 1-2 by the village to 9-10 at the far side), and the vale turned on shore hills, `coastWobble: 1`, two rivers at their own level with a tributary. | DIMENSIONS.md, CONFIG.md, CREATURES.md |
+| 3 | Shore hills (W15) | Mountains along a one-zone island's coast, on land grown out over the sea, parting for bays. Off by default; a world turns them on with `coastWobble: 1, shoreHills: true` (now in the vale's dimension file; looked at over 8 seeds with `vale.mjs map=`). | CONFIG.md |
 | 4 | Water (G1 stopgap, W10, W11) | Ocean plane off while underground (the stopgap). Rivers at their own level (opt-in `riverLevels`), tributaries, fords, springs, water drawn above the sea, the ocean cut away under rivers; every biome's waterline rules read `aboveWater`. The real G1 drawing switch is still to do. Known gap: the river-sea seam (WATER.md). | WATER.md |
 | 5 | Creature brain rules (E8, first half) | Tactics' opening delay, crowd-control rules (never first, not twice in a row, immunity after), the spider's web after 4 s. | CREATURES.md |
 

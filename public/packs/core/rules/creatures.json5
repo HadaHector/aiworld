@@ -21,5 +21,5 @@
   // Classic: about 20 m, a metre more per level the creature is above the player, 5-45 m.
   aggro: { clamp: [{ add: [20, { sub: ["caster.level", "target.level"] }] }, 5, 45] },
   evadeSkill: "evade",
-  levels: { start: [1, 4], step: 3, width: 3, cap: 60 },
+  levels: { start: [1, 4], step: 3, width: 3, cap: 60, cellSpread: [0, 1] },  // cellSpread: over a cell's level (balance curve cellLevel), where a dimension sets levels by cell
 }

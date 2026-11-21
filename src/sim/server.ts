@@ -623,7 +623,7 @@ export function createServer(options: ServerOptions): Server {
           site,
           layout,
           zone: data.areaNames.get(site.areaId) ?? "",
-          levels: zone?.levels ?? [1, 3],
+          levels: zone?.levelsAt(site.x, site.z) ?? [1, 3],
           creatures: (zone?.roster ?? []).map((r) => ({ id: r.kind.id, name: r.kind.template.name, levelOffset: r.kind.levelOffset, hostility: r.kind.template.hostility, family: r.kind.family, tags: r.kind.tags })),
           places,
           others,
@@ -1037,7 +1037,7 @@ export function createServer(options: ServerOptions): Server {
     const style = options.dungeons?.styles.get(dungeon.style);
     if (!creatureSystem || !options.creatures || !style?.creatures) return;
     const zone = creatureSystem.zoneAt(dimension, dungeon.site.x, dungeon.site.z);
-    const points = dungeonSpawnPoints(dungeon.id, dungeon.layout, style.creatures, options.creatures, zone);
+    const points = dungeonSpawnPoints(dungeon.id, dungeon.layout, style.creatures, options.creatures, zone, zone?.levelsAt(dungeon.site.x, dungeon.site.z));
     // A cave's floor swells and dips: each on its floor as it is where it stands.
     const floor = dungeon.floorAt;
     if (floor) {

@@ -103,6 +103,8 @@ export interface TerrainWorld {
   worldExtent: number;
   areaBounds: Map<number, AreaBounds>;
   areaNames: Map<number, string>;
+  /** Sites of every land cell that is not a lake (creature levels by cell, SLICE.md B2). */
+  landCellSites: { x: number; z: number }[];
   settlements: SettlementSite[];
   /** Each cell's major feature, other than a settlement - see features/featureSites.ts. */
   features: FeatureSite[];
@@ -488,5 +490,5 @@ export function createTerrainSampler(seed: number, content: WorldContent): Terra
   const caveMouths = timed("Finding cave mouths", () => siteCaveMouths(seed, worldExtent, sampleTerrain, settlements));
   mouthClear = caveMouthClearance(caveMouths);
 
-  return { sampleTerrain, worldExtent, areaBounds, areaNames, settlements, features, roads, settlementLayouts, compoundLayouts, bridges, areaBiomes, areaNeighbours, caveMouths, riverProfiles, waters };
+  return { sampleTerrain, worldExtent, areaBounds, areaNames, landCellSites, settlements, features, roads, settlementLayouts, compoundLayouts, bridges, areaBiomes, areaNeighbours, caveMouths, riverProfiles, waters };
 }

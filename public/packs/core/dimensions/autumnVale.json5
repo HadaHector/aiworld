@@ -4,7 +4,11 @@
 // dimension to travel to (`?dimension=autumnVale`).
 {
   name: "The Autumn Vale",
-  world: { areas: [1, 1], cellsPerArea: 14, rivers: [1, 1], riverLength: [4, 5] },
+  // One small island: a gentle coast wobble, shore hills round it (W15), rivers at their own level
+  // (WATER.md) with a tributary, so most walks meet water.
+  world: { areas: [1, 1], cellsPerArea: 14, rivers: [2, 2], riverLength: [4, 6], riverTributaries: [1, 1], riverLevels: true, coastWobble: 1, shoreHills: true },
+  // Creature levels by cell, rising with distance from the start (SLICE.md B2; balance curve cellLevel).
+  creatureLevels: "cells",
   biomes: { only: ["autumnWood"] },
   // New characters start in the farm village the seed picks (an inn and a chapel by preference), as on
   // the mainland; the zone is the whole world, so no "near the middle" rule.

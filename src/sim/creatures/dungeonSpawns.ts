@@ -18,7 +18,7 @@ const SPREAD = 2;
  * The spawn points of a dungeon laid out as `layout`, its id `id`, in the zone over its mouth.
  * Kinds its style names that the rules do not have are left out (and said once by the caller).
  */
-export function dungeonSpawnPoints(id: string, layout: DungeonLayout, spec: DungeonCreatures, rules: CreatureRules, zone: Zone | undefined): SpawnPoint[] {
+export function dungeonSpawnPoints(id: string, layout: DungeonLayout, spec: DungeonCreatures, rules: CreatureRules, zone: Zone | undefined, levels?: [number, number]): SpawnPoint[] {
   const random = mulberry32(deriveSeed(layout.seed, hashString(`${id}/creatures`)));
   // Its groups' kinds: each named species' variants, or a kind by its own id.
   const groups = spec.groups
@@ -35,7 +35,7 @@ export function dungeonSpawnPoints(id: string, layout: DungeonLayout, spec: Dung
     while (i < left.length - 1 && r >= left[i].weight) r -= left[i++].weight;
     chosen.push(left.splice(i, 1)[0]);
   }
-  const base = zone?.levels ?? ([1, 2] as [number, number]);
+  const base = levels ?? zone?.levels ?? ([1, 2] as [number, number]);
   const depth = graphDistances(layout.parts.length, layout.joins, 0);
   const points: SpawnPoint[] = [];
   /** A kind of one of the chosen groups, for a member here (a variant fitting the zone's biome if any does). */

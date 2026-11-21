@@ -129,6 +129,9 @@ export interface ZoneLevels {
   step: number;
   width: number;
   cap: number;
+  /** In a dimension with levels by cell: a creature's level is its cell's (the balance curve
+   *  `cellLevel`) plus this range. */
+  cellSpread: [number, number];
 }
 
 export interface CreatureRules {
@@ -474,7 +477,7 @@ function readConfig(entry: Entry | undefined, game: GameRules, names: ReadonlyMa
   const corpse = obj.corpse === undefined ? {} : reader.object(obj.corpse, "corpse");
   reader.onlyKeys(corpse, "corpse", ["time", "emptied"]);
   const levels = obj.levels === undefined ? {} : reader.object(obj.levels, "levels");
-  reader.onlyKeys(levels, "levels", ["start", "step", "width", "cap"]);
+  reader.onlyKeys(levels, "levels", ["start", "step", "width", "cap", "cellSpread"]);
   const control = obj.control === undefined ? {} : reader.object(obj.control, "control");
   reader.onlyKeys(control, "control", ["opening", "immunity"]);
   const evadeId = obj.evadeSkill === undefined ? "evade" : reader.string(obj, "evadeSkill", "");
@@ -512,6 +515,7 @@ function readConfig(entry: Entry | undefined, game: GameRules, names: ReadonlyMa
       step: reader.optionalNumber(levels, "step", "levels", 3, { min: 0 }),
       width: reader.optionalNumber(levels, "width", "levels", 3, { min: 0 }),
       cap: reader.optionalNumber(levels, "cap", "levels", 60, { min: 1 }),
+      cellSpread: levels.cellSpread === undefined ? [0, 1] : reader.range(levels, "cellSpread", "levels", { allowEqual: true }),
     },
     never: obj.never === undefined ? [] : reader.stringList(obj, "never", ""),
   };

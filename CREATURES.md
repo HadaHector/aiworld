@@ -137,6 +137,15 @@ A zone is an area of the world (`primaryAreaId` in the terrain sample), with its
   the rules'.
 - A creature's level is drawn evenly from its zone's band at its spawn point, plus its kind's
   offset.
+- **Levels by cell** (SLICE.md B2, built 2026-11-21): a dimension with `creatureLevels: "cells"` (the
+  autumn vale) sets levels inside a zone instead. Its land cells are put in order of distance from the
+  start; a cell's level is the balance curve `cellLevel` (`rules/balance.json5`) read at its place in that
+  order (1 = the start's own cell), and its band is that plus `levels.cellSpread` (`[0, 1]`). A point
+  takes its nearest cell's band (`Zone.levelsAt(x, z)`): spawn points, a dungeon under it (still +1 per
+  `deeper` parts), a settlement's quests, the `where` chat command and debug spawns all read it. The
+  zone's own `levels` is its cells' bands together (the map and the zone list show that). Without the
+  curve, the rings are used and a warning says so. The vale's 14 cells run 1-2 by the village to 9-10 at
+  the far side; a kind's own offset still adds to it (a bear by the village can be 4).
 
 ## Spawn points
 

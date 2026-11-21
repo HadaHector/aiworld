@@ -13,6 +13,9 @@ export interface Zone {
   /** Zone borders between it and the start's zone; -1 for one not reached from there. */
   ring: number;
   levels: [number, number];
+  /** The level band of a creature standing at a point of the zone: the zone's band, or with levels
+   *  by cell (a dimension's `creatureLevels: "cells"`) the band of the cell the point is in. */
+  levelsAt(x: number, z: number): [number, number];
   /** Its kinds and their weights here, strongest first. */
   roster: { kind: CreatureKind; weight: number }[];
   /** Its camps and their weights. */
@@ -44,7 +47,38 @@ export const rollRange = (range: readonly [number, number], random: () => number
  * zone adjacency, level bands from the rings, and rosters rolled from the world's seed and each
  * zone's id. Worked out once when the dimension loads.
  */
-export function createZones(world: WorldData, rules: CreatureRules, spawn: { x: number; z: number }): Zone[] {
+/**
+ * Levels by cell (SLICE.md B2): the land cells in order of distance from the start, each at the
+ * balance curve `cellLevel` read at its place in that order (1 = the start's own cell), with the
+ * creature rules' `cellSpread` on top. Null when the packs have no such curve.
+ */
+export function cellLevels(world: WorldData, rules: CreatureRules, spawn: { x: number; z: number }): { sites: { x: number; z: number; level: number }[]; bandAt(x: number, z: number): [number, number] } | null {
+  const balance = rules.balance;
+  if (!balance || !balance.curveNames.includes("cellLevel")) return null;
+  const cap = rules.config.levels.cap;
+  const [s0, s1] = rules.config.levels.cellSpread;
+  const sites = [...world.landCellSites]
+    .sort((a, b) => Math.hypot(a.x - spawn.x, a.z - spawn.z) - Math.hypot(b.x - spawn.x, b.z - spawn.z))
+    .map((site, rank) => ({ x: site.x, z: site.z, level: Math.min(cap, Math.max(1, Math.round(balance.curve("cellLevel", rank + 1)))) }));
+  if (sites.length === 0) return null;
+  const bandAt = (x: number, z: number): [number, number] => {
+    let best = sites[0];
+    let bestD = Infinity;
+    for (const site of sites) {
+      const d = (site.x - x) ** 2 + (site.z - z) ** 2;
+      if (d < bestD) {
+        bestD = d;
+        best = site;
+      }
+    }
+    return [Math.max(1, best.level + s0), Math.min(cap, Math.max(1, best.level + s1))];
+  };
+  return { sites, bandAt };
+}
+
+export function createZones(world: WorldData, rules: CreatureRules, spawn: { x: number; z: number }, by: "rings" | "cells" = "rings"): Zone[] {
+  const byCell = by === "cells" ? cellLevels(world, rules, spawn) : null;
+  if (by === "cells" && !byCell) console.warn("[creatures] levels by cell need a balance curve `cellLevel` and land cells: zone rings instead");
   const count = world.areaBiomes.length;
   const ring = new Array<number>(count).fill(-1);
   const start = world.sampleTerrain(spawn.x, spawn.z).primaryAreaId;
@@ -78,7 +112,15 @@ export function createZones(world: WorldData, rules: CreatureRules, spawn: { x: 
     const campCandidates = rules.camps.filter((c) => c.habitat.has(biome)).map((camp) => ({ item: camp, weight: camp.habitat.get(biome)! }));
     const camps = drawWeighted(campCandidates, rollRange(rules.config.campsPerZone, random), random).map(({ item, weight }) => ({ camp: item, weight }));
     const r = ring[id] === -1 ? farthest + 1 : ring[id];
-    zones.push({ id, name: world.areaNames.get(id) ?? `zone ${id}`, biome, ring: ring[id], levels: levelBand(rules.config.levels, r), roster, camps });
+    let levels = levelBand(rules.config.levels, r);
+    let levelsAt: Zone["levelsAt"] = () => levels;
+    if (byCell) {
+      // The zone's band is its cells' together (what the map and the chat say); a point's is its cell's.
+      const own = byCell.sites.filter((s) => world.sampleTerrain(s.x, s.z).primaryAreaId === id).map((s) => byCell.bandAt(s.x, s.z));
+      if (own.length > 0) levels = [Math.min(...own.map((b) => b[0])), Math.max(...own.map((b) => b[1]))];
+      levelsAt = (x, z) => byCell.bandAt(x, z);
+    }
+    zones.push({ id, name: world.areaNames.get(id) ?? `zone ${id}`, biome, ring: ring[id], levels, levelsAt, roster, camps });
   }
   return zones;
 }

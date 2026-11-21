@@ -152,7 +152,10 @@ export function createServerCommands(packs: readonly CommandPackDef[] = []): Ret
         zone: dimension.world.areaNames.get(sample.primaryAreaId) ?? "?",
         biome: sample.primaryBiome.name,
       });
-      if (zone) reply("Creatures here are level {low} to {high}.", { low: zone.levels[0], high: zone.levels[1] });
+      if (zone) {
+        const [low, high] = zone.levelsAt(entity.x, entity.z);
+        reply("Creatures here are level {low} to {high}.", { low, high });
+      }
     },
   });
 
