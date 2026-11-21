@@ -1,0 +1,17 @@
+// A felled trunk left where it fell for years: the felled log gone grey and green with moss, its
+// ends pale and split. Lying with a rotted look in an abandoned camp's yard and trail.
+{
+  name: "Rotted Felled Log",
+  type: "felledLog",
+  ground: "slope",
+  felledLog: {
+    length: [5, 10],
+    radius: [0.32, 0.5],
+    taper: [0.55, 0.75],
+    stubs: [1, 4],
+  },
+  parts: {
+    bark: { material: "bark", tints: [[0.6, 0.68, 0.52], [0.52, 0.58, 0.48]] },
+    end: { material: "endGrain", tints: [[0.72, 0.7, 0.66]] },
+  },
+}

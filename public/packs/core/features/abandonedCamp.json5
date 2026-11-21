@@ -1,0 +1,96 @@
+// An abandoned logging camp: the logging camp given up years ago - its roofs rotted and sunk, one place
+// of each fallen in, its logs grey with moss, the fence down in places, the fire ring cold, the
+// yard going green. The wood's quiet mystery (SLICE.md W3). Look from the concept images (CONCEPTS.md,
+// *The abandoned camp*): a long bunkhouse and an open saw shed as the two big shapes, a few smaller
+// things, stumps and rotting log piles in the yard, a dead fire ring in the middle, a half-grown-over
+// path.
+//
+// This is the first of FEATURES.md's *condition* (piece 2), kept small: a condition is the building
+// and the prop files a feature names (`bunkhouseAbandoned`, `rottedLogStack`...), and what the roof
+// code adds to them is `rot` (see `rottedShingleRoof`). It is placed on the same ground as the logging
+// camp, deep in a wood.
+{
+  name: "Abandoned camp",
+  type: "compound",
+  compound: {
+    // The logging camp's ground: gentle, trees all round it - a little more cover wanted, it is in
+    // the wood's deep - and a river near is in its favour.
+    site: { grade: [0, 0.2], cover: [0.55, 0.95], nearWater: 300 },
+    yard: { radius: [18, 24] },
+    pads: { slope: 0.6, blend: [1.5, 10] },
+    arrangement: "ring",
+    // The skid trail is half grown over: shorter, and not always there.
+    trails: [{ to: "clearing", length: [30, 60], chance: 0.6 }],
+    // The bunkhouse and the saw shed stand; the cookhouse and the tool shed, if the roll keeps them.
+    buildings: [
+      { building: "bunkhouseAbandoned", count: [1, 1], required: true },
+      { building: "sawShedAbandoned", count: [1, 1], required: true },
+      { building: "cookhouseAbandoned", count: [1, 1], chance: 0.4 },
+      { building: "toolShedAbandoned", count: [1, 1], chance: 0.5 },
+    ],
+    // The fence is mostly down: no gate on the road (a gap), a wide gap where the trail leaves, and a
+    // number of breaches.
+    boundary: {
+      wall: "brokenRailFence",
+      openings: [
+        { at: "road", gap: [3.5, 4.5] },
+        { at: "trail", gap: [4, 5] },
+        { at: "anywhere", breach: [2.5, 4], count: [1, 3] },
+      ],
+    },
+    props: [
+      // The cold fire, in the yard, where the men sat.
+      { prop: "coldFire", count: [1, 1], at: "yard" },
+      // Decks of logs nobody came back for, a log slipped off one, logs lying about.
+      { group: "rottedLogDeck", count: [1, 2], at: "yard" },
+      { prop: "rottedFelledLog", count: [1, 3], at: "yard" },
+      { prop: "rottedLogStack", count: [1, 2], at: "yardEdge" },
+      // The saw spot, as it was left.
+      { group: "sawSpot", count: [1, 1], at: "yard", chance: 0.7 },
+      // What fell from the roofs, by the buildings.
+      { group: "fallenRoof", count: [1, 2], at: "byBuilding" },
+      // The camp's leavings: a grindstone by the tool shed, stores by a building, a wood corner.
+      { prop: "grindstone", count: [1, 1], at: "byBuilding", building: "toolShedAbandoned", chance: 0.8 },
+      { group: "storePile", count: [0, 1], at: "byBuilding", chance: 0.6 },
+      { group: "woodCorner", count: [1, 1], at: "byBuilding", building: "cookhouseAbandoned", chance: 0.7 },
+      { prop: "rottedFelledLog", count: [1, 3], at: "trail" },
+    ],
+  },
+  // Trees and bushes cleared only out to the yard's edge or a little past it, and the wood coming
+  // back by 40: the felling is growing in again.
+  clearing: [14, 40],
+  // Old stumps through the clearing, nearly all of them.
+  stumps: 0.9,
+  // The yard's ground: trodden earth as the logging camp's, but only half laid - the grass has
+  // come back through it, so the yard reads green with a path - and no sawdust.
+  ground: {
+    material: "track",
+    weight: {
+      noises: [{ name: "yardEdge", type: "fbm", octaves: 2, frequency: 0.08, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
+      steps: [
+        { output: "gapRaw", op: "input", name: "featureGap" },
+        { output: "edgeRaw", op: "sample", noise: "yardEdge" },
+        { output: "edge", op: "scale", input: "edgeRaw", factor: 2 },
+        { output: "gap", op: "add", a: "gapRaw", b: "edge" },
+        { output: "raw", op: "remap", input: "gap", inMin: 8, inMax: 3, outMin: 0, outMax: 0.45 },
+        { output: "result", op: "clamp", input: "raw", min: 0, max: 0.45 },
+      ],
+    },
+  },
+  // On a road, but a road that is hardly one: one link to a settlement, or a dead end, and of little
+  // importance (the road it had was the loggers').
+  road: { importance: 0.5, links: [1, 1], wants: ["settlement"], maxLength: 2500 },
+  // What the abandoned camp can be in a quest (QUESTS.md, *Places*): a place with a story. Tags for
+  // the chain of four (W3's quests, E4 b): `abandoned`, `ruin`, `mystery`; objects to find.
+  quest: {
+    tags: ["abandoned", "ruin", "mystery", "remote", "wood"],
+    objects: [
+      { name: "Rusted Axe Head", tags: ["lost", "evidence"] },
+      { name: "Foreman's Tally Book", tags: ["evidence", "lost"] },
+      { name: "Rotted Boot", tags: ["evidence"] },
+      { name: "Moss-grown Pelt", tags: ["material"] },
+    ],
+    people: ["hermit", "forester"],
+    text: "the abandoned camp at {name}",
+  },
+}

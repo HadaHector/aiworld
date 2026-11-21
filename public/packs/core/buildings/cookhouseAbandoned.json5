@@ -1,0 +1,57 @@
+// An abandoned logging camp's cookhouse, years on: its roof rotted (`rottedShingleRoof`), no lamp, its
+// logs grey.
+{
+  name: "Abandoned Cookhouse",
+  type: "house",
+  house: {
+    tile: [2.8, 3.0],
+    // Four or five bays along the front, three deep.
+    width: [4, 5],
+    depth: [3, 3],
+    plan: {
+      type: "cabin",
+      cabin: {
+        porches: [{ walls: ["front"], chance: 0.7, part: "timberPorch" }],
+      },
+    },
+    storeys: [1, 1],
+    // In whole courses of the log wall (0.6 m), from the model's foot.
+    wallHeight: [4.2, 4.2],
+    plinth: [0.6, 0.6],
+    plinthOutset: 0.4,
+    framing: "logCorners",
+    roof: "rottedShingleRoof",
+    doors: [{ part: "timberDoor", weight: 1 }],
+    wallExtras: [
+      { part: "bigChimney", priority: 2, chance: 1, maxCount: 1, walls: ["side"], storeys: ["ground"] },
+      { part: "timberWindow", priority: 1, chance: 0.35, storeys: ["ground"] },
+    ],
+    // Inside: the mess hall behind the front door, and the kitchen beside it - with, as often as not,
+    // a door of its own out the back.
+    interior: {
+      type: "rooms",
+      rooms: {
+        exits: [1, 2],
+        fakeDoors: 0,
+        grow: 1,
+        rooms: [
+          { room: "messHall", priority: 10, tiles: [6, 6], grow: 1.5, minSide: 2, at: "entrance", oneBlock: true },
+          { room: "campKitchen", priority: 8, tiles: [4, 6], minSide: 2, maxSide: 3, next: "messHall", oneBlock: true },
+        ],
+      },
+    },
+    // Its windows with a lamp behind them at night, this share of them.
+    litWindows: 0,
+    parts: {
+      walls: { material: "logWall", tints: [[0.7, 0.7, 0.66], [0.62, 0.62, 0.6], [0.74, 0.72, 0.66]] },
+      timber: { material: "roundLog", tints: [[0.7, 0.7, 0.66], [0.62, 0.62, 0.6], [0.74, 0.72, 0.66]] },
+      stone: { material: "rubbleStone", tints: [[1, 1, 1]] },
+      roof: { material: "woodShingles", tints: [[0.6, 0.78, 0.5], [0.55, 0.7, 0.48], [0.68, 0.74, 0.58]] },
+      plinth: { material: "rubbleStone", tints: [[1, 1, 1], [0.9, 0.88, 0.85]] },
+      door: { material: "doorBoards", tints: [[0.55, 0.52, 0.48]] },
+      glass: { material: "glass", tints: [[1, 1, 1]] },
+      endGrain: { material: "endGrain", tints: [[1, 1, 1]] },
+      boards: { material: "deckBoards", tints: [[1, 1, 1], [0.9, 0.88, 0.86]] },
+    },
+  },
+}

@@ -18,6 +18,9 @@ export function planLeanToRoof(spec: LeanToRoofSpec, rng: () => number): RoofPla
     ridgeSag: 0,
     slopeSag: 0,
     ridgeHeight: 0,
+    rot: 0,
+    decaySeed: 0,
+    dip: 0,
     mono: true,
   };
 }

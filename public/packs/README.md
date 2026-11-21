@@ -858,7 +858,12 @@ and which of its sides are open; a support where it stands. There are seven so f
   how far its rafters bow (ranges, rolled per house) - nothing at the eaves and at the house's
   outermost ends, so a ridge dips and a hip bows inward; its slabs bend in cells `step` across.
   `parts: { covering, underside, ridge, gable }` paints the covering, the underside and edges, the
-  ridge tiles and the gables' wall.
+  ridge tiles and the gables' wall. `rot: [low, high]` (0-1, rolled per house; none: sound) makes the
+  roof a rotted one - the covering gone in patches (more in the far model's coarser cells), a board
+  gone too here and there so it is open to the sky, the sag deepened (up to threefold), and from 0.4 up
+  one place fallen in (a dip with a hole round it, nothing at the eaves). A sound roof draws nothing
+  extra from the rng. See `core/buildingParts/rottedShingleRoof.json5`; a building names it as its
+  `roof` (`core/buildings/bunkhouseAbandoned.json5`).
 - `terrace`, a floor on top of a storey (see `core/buildingParts/timberBalcony.json5` and
   `stoneTerrace.json5`): an `edge` band round it, `height` deep standing `out` from the walls under it,
   and along its open sides a `parapet` `height` high and `thickness` thick - a solid `wall`, or a

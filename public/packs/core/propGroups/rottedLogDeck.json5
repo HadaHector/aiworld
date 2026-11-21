@@ -1,0 +1,10 @@
+// A deck of logs nobody came back for: two stacks side by side, rotted, a log slipped off and lying
+// before them.
+{
+  name: "Rotted Log Deck",
+  members: [
+    { prop: "rottedLogStack", at: [0, 0], turn: [-8, 8] },
+    { prop: "rottedLogStack", at: [0.3, 2.6], turn: [-12, 12], chance: 0.7 },
+    { prop: "rottedFelledLog", at: [0.8, 5.0], turn: [-25, 25], chance: 0.7 },
+  ],
+}

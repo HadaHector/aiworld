@@ -1,0 +1,17 @@
+// A stack of sawn logs left to rot: the log stack gone green and grey, hollow-ended, its stakes
+// leaning. From the abandoned camp's concept - bark mossed, the ends dark and punky.
+{
+  name: "Rotted Log Stack",
+  type: "logStack",
+  logStack: {
+    length: [3.2, 5.0],
+    radius: [0.24, 0.36],
+    bottom: [2, 4],
+    rows: [1, 3],
+    stakes: 0.4,
+  },
+  parts: {
+    bark: { material: "bark", tints: [[0.62, 0.68, 0.55], [0.55, 0.6, 0.5]] },
+    end: { material: "endGrain", tints: [[0.45, 0.4, 0.34], [0.5, 0.46, 0.4]] },
+  },
+}

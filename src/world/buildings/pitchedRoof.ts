@@ -48,6 +48,11 @@ export interface RoofPlan {
   slopeSag: number;
   /** How far its ridge tiles stand above the slab. */
   ridgeHeight: number;
+  /** How rotted it is, 0-1 (0: sound), and the seed its holes and its fallen-in place are found
+   *  from; `dip` is how far that place has fallen (metres, 0 for none). */
+  rot: number;
+  decaySeed: number;
+  dip: number;
   /** One slope, not two: a lean-to (leanToRoof.ts), high on its blocks' `lean` side. */
   mono?: boolean;
 }
@@ -55,14 +60,30 @@ export interface RoofPlan {
 export function planPitchedRoof(spec: PitchedRoofSpec, rng: () => number): RoofPlan {
   const shape = spec.shapes[Math.floor(rng() * spec.shapes.length) % spec.shapes.length];
   const slope = Math.tan((roll(spec.pitch, rng) * Math.PI) / 180);
+  let ridgeSag = roll(spec.sag.ridge, rng);
+  let slopeSag = roll(spec.sag.slope, rng);
+  // A sound roof draws nothing more from the rng, so a house's other rolls stay as they were.
+  let rot = 0;
+  let decaySeed = 0;
+  let dip = 0;
+  if (spec.rot) {
+    rot = Math.min(1, Math.max(0, roll(spec.rot, rng)));
+    decaySeed = Math.floor(rng() * 0x7fffffff);
+    ridgeSag *= 1 + rot * 2;
+    slopeSag *= 1 + rot * 2;
+    dip = rot >= 0.4 ? (rot - 0.2) * 1.6 : 0;
+  }
   return {
     shape,
     slope,
     overhang: spec.overhang,
     thickness: spec.thickness,
-    ridgeSag: roll(spec.sag.ridge, rng),
-    slopeSag: roll(spec.sag.slope, rng),
+    ridgeSag,
+    slopeSag,
     ridgeHeight: spec.ridgeTiles ? spec.ridgeTiles.height : 0,
+    rot,
+    decaySeed,
+    dip,
   };
 }
 
@@ -95,6 +116,13 @@ function area(polygon: Point[]): number {
     sum += p[0] * q[1] - q[0] * p[1];
   }
   return Math.abs(sum) / 2;
+}
+
+/** A repeatable 0-1 from a cell and a seed: where a rotted roof is open. */
+function cellHash(gx: number, gz: number, seed: number): number {
+  let h = Math.imul(gx | 0, 374761393) ^ Math.imul(gz | 0, 668265263) ^ Math.imul(seed | 0, 2246822519);
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
 }
 
 /** A sloping plane, y = h0 + hx x + hz z. */
@@ -307,6 +335,9 @@ interface SlabLook {
   step: number;
   top: Paint;
   underside: Paint;
+  /** For a rotted roof: how open a cell of the slab is, at its middle (plan x, z) and its place on
+   *  the grid - 0 whole, 1 its covering gone, 2 holed through - or null for a sound one. */
+  decay: ((x: number, z: number, gx: number, gz: number) => 0 | 1 | 2) | null;
 }
 
 /**
@@ -365,7 +396,7 @@ function drawSlab(b: ModelBuilder, face: RoofFace, slope: number, sag: Sag, look
     return normalize([-(h(x + e, z) - h(x - e, z)) / (2 * e), 1, -(h(x, z + e) - h(x, z - e)) / (2 * e)]);
   };
   /** A polygon split into cells, each drawn by `draw`. */
-  const cells = (polygon: Point[], draw: (cell: Point[]) => void): void => {
+  const cells = (polygon: Point[], draw: (cell: Point[]) => void, wear: 1 | 2 | null = null): void => {
     // Measured only: the cells fill the polygon, so it reaches as far whole.
     if (b.measure) {
       draw(polygon);
@@ -381,7 +412,14 @@ function drawSlab(b: ModelBuilder, face: RoofFace, slope: number, sag: Sag, look
         cell = clipHalf(cell, (p) => (gx + 1) * step - p[0]);
         cell = clipHalf(cell, (p) => p[1] - gz * step);
         cell = clipHalf(cell, (p) => (gz + 1) * step - p[1]);
-        if (cell.length >= 3 && area(cell) > 1e-6) draw(cell);
+        if (cell.length < 3 || area(cell) <= 1e-6) continue;
+        // A rotted roof: this cell's covering (wear 1), or its boards (2), gone.
+        if (wear && look.decay) {
+          const mx = cell.reduce((sum, p) => sum + p[0], 0) / cell.length;
+          const mz = cell.reduce((sum, p) => sum + p[1], 0) / cell.length;
+          if (look.decay(mx, mz, gx, gz) >= wear) continue;
+        }
+        draw(cell);
       }
     }
   };
@@ -421,7 +459,7 @@ function drawSlab(b: ModelBuilder, face: RoofFace, slope: number, sag: Sag, look
       return [-v[0], -v[1], -v[2]];
     });
     b.surface(cell.map((p) => at(p, 0)), normals, down, look.underside);
-  });
+  }, 2);
   for (const { p, q, open, barge } of edges) {
     if (!open || barge) continue;
     const away = awayFrom(p, q);
@@ -432,7 +470,7 @@ function drawSlab(b: ModelBuilder, face: RoofFace, slope: number, sag: Sag, look
   // The covering, on the boards, reaching past them at the eaves (and verges with no bargeboard).
   const reach = edges.map((edge) => (edge.open && !edge.barge ? look.covering.overhang : 0));
   const cover = pushEdges(face.polygon, reach);
-  cells(cover, (cell) => b.surface(cell.map((p) => at(p, lift)), cell.map(normalAt), flat, look.top));
+  cells(cover, (cell) => b.surface(cell.map((p) => at(p, lift)), cell.map(normalAt), flat, look.top), 1);
   cover.forEach((p, i) => {
     if (reach[i] === 0) return;
     const q = cover[(i + 1) % n];
@@ -584,12 +622,33 @@ export function buildPitchedRoof(spec: PitchedRoofSpec, plan: RoofPlan, input: R
   const Z1 = Math.max(...roofs.map((r) => r.outline.z1));
   const eaveLow = eaves - overhang * slope;
   const top = eaves + (Math.max(...blocks.map((k) => k.c1 - k.c0)) / 2) * slope;
+  // A fallen-in place, in a rotted roof: a dip round a point in the middle of its outline, the
+  // roof's covering and boards gone in and round it.
+  const dipSeed = plan.decaySeed;
+  const dipAt = { x: X0 + (X1 - X0) * (0.3 + 0.4 * cellHash(1, 2, dipSeed)), z: Z0 + (Z1 - Z0) * (0.35 + 0.3 * cellHash(3, 4, dipSeed)) };
+  const dipRadius = Math.max(1.4, Math.min(X1 - X0, Z1 - Z0) * 0.28);
+  const dipNear = (x: number, z: number): number => Math.exp(-((x - dipAt.x) ** 2 + (z - dipAt.z) ** 2) / (2 * dipRadius * dipRadius));
   const sag: Sag = (x, z, y) => {
     const u = Math.min(1, Math.max(0, (x - X0) / (X1 - X0)));
     const v = Math.min(1, Math.max(0, (z - Z0) / (Z1 - Z0)));
     const h = Math.min(1, Math.max(0, (y - eaveLow) / (top - eaveLow)));
-    return -(plan.ridgeSag * h + plan.slopeSag * Math.sin(Math.PI * h)) * Math.sin(Math.PI * u) * Math.sin(Math.PI * v);
+    const base = -(plan.ridgeSag * h + plan.slopeSag * Math.sin(Math.PI * h)) * Math.sin(Math.PI * u) * Math.sin(Math.PI * v);
+    // Nothing at the eaves, so the roof still meets its walls.
+    return plan.dip > 0 ? base - plan.dip * dipNear(x, z) * Math.sin(Math.PI * u) * Math.sin(Math.PI * v) * Math.min(1, h * 3) : base;
   };
+  const decay: SlabLook["decay"] =
+    plan.rot > 0
+      ? (x, z, gx, gz) => {
+          const reach = plan.dip > 0 ? dipNear(x, z) : 0;
+          const roll1 = cellHash(gx, gz, plan.decaySeed + 1);
+          const roll2 = cellHash(gz, gx, plan.decaySeed ^ 0x5bd1e995);
+          // Patches of covering gone over the roof, thicker round the fallen-in place; a board gone too
+          // in the worst of them.
+          const bare = (input.far ? 0.5 : 1) * (plan.rot * 0.45 + reach * 0.5);
+          if (roll1 >= bare) return 0;
+          return roll2 < plan.rot * 0.3 + reach * 0.6 ? 2 : 1;
+        }
+      : null;
 
   const lift = thickness * Math.sqrt(1 + slope * slope);
   const step = input.far ? Math.max(spec.step * FAR_STEP_SCALE, FAR_STEP_MIN) : spec.step;
@@ -608,6 +667,7 @@ export function buildPitchedRoof(spec: PitchedRoofSpec, plan: RoofPlan, input: R
         step,
         top: paints[spec.parts.covering],
         underside: paints[spec.parts.underside],
+        decay,
       });
     }
     if (!ridgeTiles) return;

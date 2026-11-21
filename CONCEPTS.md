@@ -135,3 +135,39 @@ watermill, cave mouth yard, roadside camp, sheepfold, giant, sheep, bats, cave b
 `python concept.py --file prompts_slice.txt --n 3 --batch 3 --size 1344x768 --out concepts_slice`.
 Icons: 18 new slice icons added to `icons.json` (106 in all), 4 variations each in `v2/icons`; pick in
 `python review.py --out v2`. The tier is a border or tint drawn by the game, so icons are per type and slot.
+
+## The abandoned camp (W3, read from the three images)
+
+`concepts_slice/an-abandoned-logging-camp-in-an-autumn-wood-the-0749/` (3 images, 1344x768). Written down
+before the geometry, as the lodge's were.
+
+Essential to the feel:
+- **The same two shapes as the living camp**: a long log bunkhouse and an open-sided saw shed beside it
+  (in all three images, the shed has a saw hanging in its gloom). Nothing new in kind; everything is
+  *state*.
+- **Roofs are the story**: shingles curled and missing in patches, mossy, the ridge sagging, holes through
+  to the rafters, and in one image a whole slope fallen in on the shed. The walls stay up: log courses,
+  round corner ends, a plank door hanging open on one hinge.
+- **A dead fire ring in the middle of the yard**: a ring of rounded stones, grey ash, a few black sticks.
+  The camp's one clear focal point.
+- **The yard**: grass and bracken through trodden earth, a path half grown over, fallen yellow leaves,
+  old stumps with a rotting log pile on each side of the frame, and a broken rail fence at the edges.
+- **Palette**: grey-brown logs, green-grey mossed roofs, rust bracken, yellow leaves, a cold blue-grey
+  dusk light. Nothing warm: no lit window.
+
+Wrong for our engine (or not taken):
+- **Walls collapsing** and timber frames showing through (the shed's slope in the third image): our walls
+  are solid shells; taken as *roof* collapse only (a sunk dip with holes).
+- **Painted per-shingle detail** (curled, bare lathes): built as whole cells 1.5 m across of covering gone,
+  per GEOMETRY.md's exaggeration rule.
+- **Door hanging on one hinge**: doors are static; left shut.
+- **Bracken and ferns in the foreground**: no planting step for them; left to the biome's own grass and
+  the paler yard ground.
+- **A lean-to outbuilding with fallen rails** (right of the first image): turned into the `fallenRoof`
+  prop group, not a building.
+
+Must have: bunkhouse and saw shed with rotted, holed, sunken roofs; cold fire ring in the yard; log piles
+and stumps rotting; a broken rail fence; yard half green; a half-grown path; no light anywhere.
+Must not: smoke, lit windows, tidy gates, a freshly cut felling, people or beasts in the camp (those come
+with the quests).
+

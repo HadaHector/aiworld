@@ -1,0 +1,13 @@
+// A cold campfire ring. Look, from the abandoned camp's concept: the same ring of fieldstones as the
+// campfire, but the bed inside grey and dead, a few black sticks laid across it, moss on the stones. No
+// light, no flame, no smoke - the fire has been out for years.
+{
+  name: "Cold Fire",
+  type: "campfire",
+  collide: false,
+  parts: {
+    stone: { material: "smoothStone", tints: [[0.6, 0.64, 0.56], [0.55, 0.58, 0.52]] },
+    ash: { material: "smoothStone", tints: [[0.4, 0.4, 0.4]] },
+    logs: { material: "charredWood", tints: [[0.5, 0.5, 0.5], [0.42, 0.42, 0.42]] },
+  },
+}
