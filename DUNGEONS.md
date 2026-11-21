@@ -638,7 +638,7 @@ COLLISION.md and GAMEPLAY.md updated.
 
 `scripts/probe/caves.mjs [count] [style] [size]` (`CONFIG=small` for a fast world) opens lairs with `/dungeon` on a headless server, walks the player to boss, chest and spawn spots over a floor grid, and reports.
 
-Found and fixed: `DimensionDungeons.at` used the parts' boxes +0.5 m, but a cave's floors lie outside them (0.6 m and more), so the body counted as outside the dungeon and was thrown up to the surface (y -21 to 74) - the likely "drop" the caves session saw. Cave parts now get a 4 m margin. Not re-run after the fix.
+Found and fixed: `DimensionDungeons.at` used the parts' boxes +0.5 m, but a cave's floors lie outside them (0.6 m and more), so the body counted as outside the dungeon and was thrown up to the surface (y -21 to 74) - the likely "drop" the caves session saw. Cave parts now get a 4 m margin. Re-run on the `small` world after the fix: no jump, the boss and chest spots are reached (9 of 11 spots; two spawn-spot walks stall mid-cave, cause not found - steering or a creature in the way).
 
 Missing for the cave lair (sizes: S under a day, M about a day):
 - **Chests (M):** `chest` spots exist in parts but nothing spawns them; needs a `dungeonChests` in `src/sim/dungeons.ts`, a hook in `peopleDungeon` (server.ts), a `dungeonChest` entity and loot table (E9), y from `floorAt`.
