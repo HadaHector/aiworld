@@ -53,6 +53,8 @@ export interface GameFeedback {
   update: (camera: Camera | null) => void;
   /** The Effects volume, 0..1. */
   setVolume: (volume: number) => void;
+  /** The Ambience volume, 0..1. */
+  setAmbienceVolume: (volume: number) => void;
   /** The Screen shake setting, 0..1: 0 turns it off. */
   setShake: (scale: number) => void;
   feel: Feel;
@@ -83,6 +85,8 @@ export interface GameFeedbackOptions {
   /** The own player's outfit, which the server does not send back to its own client. */
   ownOutfit: () => string;
   volume: number;
+  /** The Ambience volume to start with. */
+  ambienceVolume: number;
   /** Where the packs are served from. */
   baseUrl?: string;
   /** Where a bone of a unit's body is, when it has one drawn (the player's, entityMeshes'). */
@@ -127,6 +131,7 @@ export function createGameFeedback(options: GameFeedbackOptions): GameFeedback {
   /** Whether the camera is under water now. */
   let underwater = false;
   let volume = options.volume;
+  let ambienceVolume = options.ambienceVolume;
   let disposed = false;
   /** What `watchScreens` started, for `dispose` to stop. */
   const unwatch: (() => void)[] = [];
@@ -136,7 +141,7 @@ export function createGameFeedback(options: GameFeedbackOptions): GameFeedback {
     sfx.setVolume(volume);
     sfx.prewarm();
     ambience = createAmbience(audio.ctx, audio.ambient);
-    ambience.setVolume(volume);
+    ambience.setVolume(ambienceVolume);
     muffle = audio.muffle;
     muffle.frequency.value = underwater ? MUFFLED_HZ : 22000;
   });
@@ -536,6 +541,9 @@ export function createGameFeedback(options: GameFeedbackOptions): GameFeedback {
     setVolume(v) {
       volume = v;
       sfx?.setVolume(v);
+    },
+    setAmbienceVolume(v) {
+      ambienceVolume = v;
       ambience?.setVolume(v);
     },
     setShake: (v) => feel.setShake(v),

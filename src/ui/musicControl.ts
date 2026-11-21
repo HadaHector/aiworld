@@ -6,6 +6,8 @@ export interface MusicControl {
   volume: number;
   /** The effects volume set, 0..1, eased the same way. */
   effects: number;
+  /** The ambience volume set (wind, rain, water, birds), 0..1, eased the same way. */
+  ambience: number;
   /** How much the screen shakes in the player's own fights, 0 (never) to 1. */
   shake: number;
   setStatus: (text: string) => void;
@@ -15,6 +17,7 @@ export interface MusicControl {
 
 const MUSIC_KEY = "aiworld.music.volume";
 const EFFECTS_KEY = "aiworld.effects.volume";
+const AMBIENCE_KEY = "aiworld.ambience.volume";
 const SHAKE_KEY = "aiworld.effects.shake";
 
 /** True under browser automation or with `?mute` in the address: the music starts muted. */
@@ -79,7 +82,7 @@ function volumeSlider(symbol: string, title: string, key: string, fallback: numb
   return { elements: [label, slider], volume: toVolume(percent) };
 }
 
-export function createMusicControl(onVolume: (volume: number) => void, onEffects: (volume: number) => void = () => {}, onShake: (shake: number) => void = () => {}): MusicControl {
+export function createMusicControl(onVolume: (volume: number) => void, onEffects: (volume: number) => void = () => {}, onShake: (shake: number) => void = () => {}, onAmbience: (volume: number) => void = () => {}): MusicControl {
   const container = document.createElement("div");
   container.style.cssText = `
     display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 4px 8px; width: 100%; box-sizing: border-box;
@@ -96,15 +99,19 @@ export function createMusicControl(onVolume: (volume: number) => void, onEffects
     control.effects = v;
     onEffects(v);
   });
+  const ambience = volumeSlider("Ambience", "Ambience", AMBIENCE_KEY, 70, (v) => {
+    control.ambience = v;
+    onAmbience(v);
+  });
   const shake = volumeSlider("Screen shake", "Screen shake", SHAKE_KEY, 100, (v) => {
     control.shake = v;
     onShake(v);
   });
   const blank = (): HTMLElement => document.createElement("span");
-  container.append(...music.elements, status, ...effects.elements, blank(), ...shake.elements, blank());
+  container.append(...music.elements, status, ...effects.elements, blank(), ...ambience.elements, blank(), ...shake.elements, blank());
   document.body.appendChild(container);
 
-  const control: MusicControl = { volume: music.volume, effects: effects.volume, shake: shake.volume, setStatus, element: container };
+  const control: MusicControl = { volume: music.volume, effects: effects.volume, ambience: ambience.volume, shake: shake.volume, setStatus, element: container };
   let lastStatus = "";
   function setStatus(text: string): void {
     if (text === lastStatus) return;

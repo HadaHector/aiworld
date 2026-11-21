@@ -487,6 +487,7 @@ export async function startSession(page: Page, options: SessionOptions): Promise
     target: () => targetId,
     ownOutfit: () => playerLook.outfit,
     volume: musicControl.effects,
+    ambienceVolume: musicControl.ambience,
     bodyPlace: (unit, bone, out) => (unit === playerId ? (view?.character.place(bone, out) ?? false) : (entityMeshes?.place(unit, bone, out) ?? false)),
     feelable: (unit) => (unit === playerId ? (view?.character.feelable() ?? null) : (entityMeshes?.feelable(unit) ?? null)),
     say: (unit, label, colour) => floatingText?.say(unit, label, colour),
