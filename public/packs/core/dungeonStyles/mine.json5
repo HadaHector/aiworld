@@ -1,0 +1,61 @@
+// A mine (SLICE.md E6, third lair): the cave style's rock worked by miners - lanterns and torches burning, barrels, crates, sacks and tool racks left on the floor at the light spots. Same parts, same builder. (Timber supports, rails, carts, picks and ore are props still to author, DUNGEONS.md.)
+// Was: a natural cave: chambers and winding tunnels in the rock, shaped as a whole in a distance field
+// (DUNGEONS.md, *The cave*), roughened by noise and meshed; its joins blend by themselves.
+{
+  name: "Mine",
+  builder: "field",
+  // The rock's roughness: a broad swell, a lumpier middle and a fine grain - biased to open the rock,
+  // so it closes it by at most half their amounts together (0.8 m).
+  noise: [
+    { scale: 0.11, amount: 0.9 },
+    { scale: 0.28, amount: 0.5 },
+    { scale: 0.7, amount: 0.2 },
+  ],
+  // The cell it is sampled and meshed at: coarse - rock reads as rock without small facets.
+  voxel: 1.25,
+  sizes: {
+    lair: { rooms: [3, 5], entry: "seamless" },
+    dungeon: { rooms: [8, 12], entry: "seamless" },
+  },
+  branching: 0.4,
+  boss: { tags: ["boss"] },
+  cover: 8,
+  deepest: 50,
+  parts: { tags: ["cave"] },
+  entrance: { tags: ["entrance"] },
+  caps: { tags: ["cap"] },
+  // What its rock is (DUNGEONS.md, *Materials*): worn stone and settled silt underfoot, bedded limestone up
+  // the walls, flowstone overhead - each laid this many metres a repeat.
+  rock: {
+    floor: { material: "caveFloor", size: 16 },
+    wall: { material: "caveRock", size: 12 },
+    ceiling: { material: "flowstone", size: 10 },
+    // In the floor's dips, the gravel and silt washed down into them - by how deep a dip is.
+    low: { material: "caveGravel", size: 8 },
+  },
+  // How it is lit (DUNGEONS.md, *Light*): at every one of its parts' light spots (a tunnel's one, a
+  // chamber's two to five), crystals grown at the foot of a wall, or a campfire or torch left by
+  // whoever lives here; and a dim cold light everywhere, so its rock is always seen.
+  light: {
+    ambient: [0.26, 0.27, 0.31],
+    fixture: "wallTorch",
+    lit: 1,
+    fixtures: [
+      { prop: "lantern", weight: 3, place: "floor" },
+      { prop: "wallTorch", weight: 2, place: "wall" },
+      { prop: "barrel", weight: 1.5, place: "floor" },
+      { prop: "crate", weight: 1.5, place: "floor" },
+      { prop: "sack", weight: 1, place: "floor" },
+      { prop: "toolRack", weight: 1, place: "floor" },
+    ],
+  },
+  creatures: {
+    groups: [
+      { id: "spiders", kinds: ["spider"] },
+      { id: "robbers", kinds: ["bandit"], weight: 2 },
+    ],
+    pick: 2,
+    deeper: 8,
+    boss: 2,
+  },
+}

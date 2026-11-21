@@ -645,3 +645,9 @@ Missing for the cave lair (sizes: S under a day, M about a day):
 - **Boss (S):** no creature is named at the boss spot in the probe (only spawn points near the player fill); check `dungeonSpawns` boss naming and give it its own loot.
 - **Cave navigation (M):** the dungeon graph's walk lines miss floors that swell or dip up to 3.7 m from the authored height, so `dungeonPath` finds no way to deep chambers; a floor-grid graph (as the probe's `gridWay`) is needed (NAVIGATION.md step 6).
 - **Cave mouth feature (M, W16), step 7 for both lairs (M):** quest blocks, map floors, music, player light, daylight.
+
+### Update (E6 continued)
+
+- **Chests built:** `dungeonChests` (`src/sim/dungeons.ts`) puts a `dungeonChest` entity (`entities/dungeonChest.json5`, loot table `lootTables/dungeonChest.json5`, 30 min respawn) at every part's `chest` spot, on the floor as `floorAt` finds it, keyed `<dungeon id>/c/<part>/<n>` so the delta keeps emptied ones; the server calls it beside the spawn points (`chestsDungeon`). Probe: a `small`-world cave lair has 5 chests standing, a boss spawn point with one named member at the boss spot, 9 of 11 spots walked to. The loot table is a first pass for E9 to replace.
+- **Mine (third lair):** `dungeonStyles/mine.json5`, a variant of the cave style (same parts, builder and creatures, bandits weighted double) whose fixtures are lanterns, torches, barrels, crates, sacks and tool racks at the light spots. Enterable with `/dungeon mine lair`; probe as for the cave. Not yet: timber supports, rails, carts, picks, ore sacks (new props, size M), the mine's own ambience/music, a look at it in `npm run shot`.
+- **Crypt lair:** probe run, see the report; a site in the default world gave a minimal layout (no boss), cause not investigated.

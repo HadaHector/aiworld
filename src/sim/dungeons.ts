@@ -5,7 +5,7 @@
 import type { WorldData } from "../world/worldData";
 import type { CollisionWorld } from "../world/collision/index";
 import type { DungeonContent } from "../world/dungeons/dungeonDefs";
-import { generateLayout, placedPaths, placedShapes, worldToFrame, type DungeonLayout, type DungeonSite } from "../world/dungeons/layout";
+import { generateLayout, placedPaths, placedSpots, placedShapes, worldToFrame, type DungeonLayout, type DungeonSite } from "../world/dungeons/layout";
 import { buildCave, caveColliders } from "../world/dungeons/caveField";
 import type { CaveMouthSite } from "../world/dungeons/caveMouths";
 
@@ -199,4 +199,16 @@ export function dungeonSiteNear(world: WorldData, x: number, z: number, reach = 
     }
   }
   return null;
+}
+
+/** The chests of a dungeon: one at each part's `chest` spot, keyed by the dungeon's id (so the world delta keeps them emptied),
+ *  standing on the floor as it is there. */
+export function dungeonChests(dungeon: PlacedDungeon): { key: string; x: number; y: number; z: number; facing: number }[] {
+  const out: { key: string; x: number; y: number; z: number; facing: number }[] = [];
+  dungeon.layout.parts.forEach((p, i) => {
+    placedSpots(p, "chest").forEach((at, k) => {
+      out.push({ key: `${dungeon.id}/c/${i}/${k}`, x: at.x, y: dungeon.floorAt ? dungeon.floorAt(at.x, at.y, at.z) : at.y, z: at.z, facing: p.yaw });
+    });
+  });
+  return out;
 }

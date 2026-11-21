@@ -1,0 +1,6 @@
+// A chest in a lair (DUNGEONS.md, *What fills it*): at a part's `chest` spot, rolled when first opened, back after a long while.
+{
+  name: "Old Chest",
+  look: { shape: "box", height: 0.6, radius: 0.45, color: [0.34, 0.24, 0.14] },
+  items: { loot: "dungeonChest", container: true, respawn: 1800 },
+}

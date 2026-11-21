@@ -1,0 +1,15 @@
+// A lair's chest: coin, a trinket or two, and a fair chance of gear above common.
+{
+  rolls: [1, 2],
+  pick: [
+    { weight: 30, item: "coinPouch" },
+    { weight: 20, item: "wolfPelt", count: [1, 3] },
+    { weight: 12, template: "sword", rarity: ["uncommon", "rare"] },
+    { weight: 10, template: "chestpiece", rarity: ["uncommon", "rare"] },
+    { weight: 8, template: "boots", rarity: ["uncommon", "rare"] },
+    { weight: 8, template: "helm", rarity: ["uncommon", "rare"] },
+    { weight: 6, template: "bow", rarity: ["uncommon", "rare"] },
+    { weight: 6, template: "staff", rarity: ["uncommon", "rare"] },
+  ],
+  always: [{ money: [60, 240] }],
+}

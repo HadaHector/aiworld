@@ -8,6 +8,7 @@ import { resolveDungeons } from "../../src/world/dungeons/dungeonDefs.ts";
 import { placedSpots, worldToFrame } from "../../src/world/dungeons/layout.ts";
 import { buildDungeonGraph, dungeonPath, walkableStraight } from "../../src/world/nav/dungeonNav.ts";
 import { createWorldData, WORLD_SEED } from "../../src/world/worldData.ts";
+import { dungeonSpawnPoints } from "../../src/sim/creatures/dungeonSpawns.ts";
 import { createServer } from "../../src/sim/server.ts";
 import { createLocalChannel } from "../../src/sim/channel.ts";
 import { PROTOCOL_VERSION } from "../../src/sim/protocol.ts";
@@ -23,6 +24,8 @@ const CONFIG = process.env.CONFIG || undefined;
 const { content, packs } = loadContentFromDisk(CONFIG);
 const rules = loadRulesFromDisk(CONFIG);
 const world = createWorldData(WORLD_SEED, content);
+const creatureRules = loadCreatureRulesFromDisk(CONFIG, rules, WORLD_SEED);
+const dungeons = resolveDungeons(packSourcesFromDisk(readConfigFromDisk(CONFIG)).sources);
 const server = createServer({
   seed: WORLD_SEED, config: CONFIG ?? "default", packs, dimensions: content.dimensions, rules,
   creatures: loadCreatureRulesFromDisk(CONFIG, rules, WORLD_SEED),
@@ -92,7 +95,7 @@ function gridWay(world, floorAt, from, to, limit = 60000) {
   return { way: out, reached: bestD < STEP * 2 + 2.5, nearest: bestD, expanded };
 }
 
-const sites = STYLE === "cave"
+const sites = dungeons.styles.get(STYLE).builder === "field"
   ? world.caveMouths.filter((_, i) => i % Math.max(1, Math.floor(world.caveMouths.length / COUNT)) === 0).slice(0, COUNT).map(caveMouthSite)
   : world.compoundLayouts.flatMap((l) => l.buildings.map((b) => mouthSite(world, b)).filter(Boolean)).slice(0, COUNT);
 const total = { spots: 0, walked: 0, creatures: 0, chests: 0, bosses: 0, parts: 0 };
@@ -113,12 +116,19 @@ for (const [n, site] of sites.entries()) {
   const inside = (e) => dim.dungeons.at(e.x, e.y + 1, e.z) === dungeon;
   const creatures = [...dim.entities.values()].filter((e) => e !== me && e.creature && inside(e));
   const named = creatures.filter((e) => e.name && e.name !== e.template.name);
-  const chests = [...dim.entities.values()].filter((e) => e.template.id === "chest" && inside(e));
+  const chests = [...dim.entities.values()].filter((e) => e.template.id.endsWith("hest") && inside(e));
   total.creatures += creatures.length;
   total.chests += chests.length;
   console.log(`${where}: ${layout.parts.length} parts, ${creatures.length} creatures (${named.length} named), ${chests.length} chests; arrival ${dungeon.arrival.x.toFixed(0)}, ${dungeon.arrival.y.toFixed(1)}, ${dungeon.arrival.z.toFixed(0)}; player at ${me.x.toFixed(0)}, ${me.y.toFixed(1)}, ${me.z.toFixed(0)}`);
   check(`${where}: creatures spawn`, creatures.length > 0);
-  check(`${where}: a boss spawns`, named.length > 0);
+  if (layout.boss < 0) { console.log(`  minimal layout (${layout.failures.slice(0, 3).join(" | ")})`); continue; }
+  {
+    const bp = placedSpots(layout.parts[layout.boss], "boss")[0];
+    const style = dungeons.styles.get(STYLE);
+    const pts = dungeonSpawnPoints(dungeon.id, layout, style.creatures, creatureRules, undefined);
+    const bossPoint = pts.find((q) => Math.hypot(q.x - bp.x, q.z - bp.z) < 1);
+    check(`${where}: a boss spawn point with a named member at the boss spot`, !!bossPoint && bossPoint.members.length === 1 && !!bossPoint.members[0].name, `${pts.length} points`);
+  }
   check(`${where}: chests stand`, chests.length > 0);
   if (process.env.DEBUG) { console.log(creatures.map((e) => `${e.template.id}:${e.name}:L${e.stats ? "" : ""}`).slice(0, 12).join(" ")); console.log(layout.parts.map((p, i) => `${i}:${p.part.id}`).join(" ")); }
   const graph = buildDungeonGraph(layout);
