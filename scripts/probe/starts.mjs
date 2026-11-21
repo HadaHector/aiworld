@@ -4,6 +4,7 @@
 // characters appearing there, with a new character's first home written when it first enters.
 //   npm run probe -- scripts/probe/starts.mjs            (tiny and small over 8 seeds each)
 //   npm run probe -- scripts/probe/starts.mjs full       (and the full world over 3 seeds)
+import { pick } from "./mode.mjs";
 import { loadContentFromDisk, loadRulesFromDisk, loadCreatureRulesFromDisk } from "../diskContent.mjs";
 import { createWorldData } from "../../src/world/worldData.ts";
 import { chooseStarts, startAllows } from "../../src/world/settlements/starts.ts";
@@ -44,7 +45,7 @@ const quiet = (run) => {
   }
 };
 
-const configs = [["tiny", 8], ["small", 8], ...(process.argv.includes("full") ? [["default", 3]] : [])];
+const configs = [["tiny", pick(3, 8)], ["small", pick(3, 8)], ...(process.argv.includes("full") || pick(false, true) ? [["default", 3]] : [])];
 
 for (const [config, seeds] of configs) {
   await section(`${config} starts`, () => {
@@ -127,7 +128,7 @@ await section("server", async () => {
   };
   const pump = async (steps = 1) => {
     for (let i = 0; i < steps; i++) {
-      await new Promise((resolve) => setTimeout(resolve, 0));
+      await new Promise((resolve) => setImmediate(resolve));
       server.step(1 / 30);
       for (const c of clients) {
         for (const m of c.channel.client.receive()) {

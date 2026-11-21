@@ -581,7 +581,7 @@ async function fightOnce() {
   const fighter = createFightClient(fightRules, channel.client);
   const all = [];
   for (let step = 0; step < 60 * 30 + 60; step++) {
-    if (step < 5) await new Promise((resolve) => setTimeout(resolve, 0)); // let the dimension load
+    if (step < 5) await new Promise((resolve) => setImmediate(resolve)); // let the dimension load
     fighter.receive();
     all.push(...fighter.state.events.splice(0));
     fighter.drive(server.tick);

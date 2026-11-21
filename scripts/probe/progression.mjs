@@ -324,7 +324,7 @@ function startServer(...who) {
   });
   const pump = async (steps = 1, dt = 1 / 30) => {
     for (let i = 0; i < steps; i++) {
-      await new Promise((resolve) => setTimeout(resolve, 0));
+      await new Promise((resolve) => setImmediate(resolve));
       server.step(dt);
       for (const c of clients) {
         for (const m of c.channel.client.receive()) {

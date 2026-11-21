@@ -75,7 +75,7 @@ async function play(devCommands) {
   };
   const pump = async (steps = 1) => {
     for (let i = 0; i < steps; i++) {
-      await new Promise((resolve) => setTimeout(resolve, 0));
+      await new Promise((resolve) => setImmediate(resolve));
       server.step(1 / 30);
       for (const p of players)
         for (const m of p.channel.client.receive()) {

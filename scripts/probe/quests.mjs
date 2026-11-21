@@ -4,6 +4,7 @@
 // a saved character logging out half way, and the rewards: XP, money, standing and an item chosen.
 // Then the text: templates filled. Later steps add the generator.
 //   npm run probe -- scripts/probe/quests.mjs
+import { pick } from "./mode.mjs";
 import { loadContentFromDisk, loadCreatureRulesFromDisk, loadItemRulesFromDisk, loadProgressionRulesFromDisk, loadRulesFromDisk } from "../diskContent.mjs";
 import { createWorldData } from "../../src/world/worldData.ts";
 import { createServer } from "../../src/sim/server.ts";
@@ -29,12 +30,14 @@ function check(what, ok, detail = "") {
   }
 }
 async function section(name, run) {
+  const t0 = performance.now();
   try {
     await run();
   } catch (error) {
     failures++;
     console.log(`FAIL ${name} threw:`, error);
   }
+  if (process.env.PROBE_TIMES) console.log(`  [${name}: ${((performance.now() - t0) / 1000).toFixed(1)} s]`);
 }
 const log = console.log;
 const quiet = (run) => {
@@ -77,7 +80,7 @@ await section("the test chain", async () => {
   let id = 0;
   const pump = async (steps = 1, dt = 1 / 30) => {
     for (let i = 0; i < steps; i++) {
-      await new Promise((resolve) => setTimeout(resolve, 0));
+      await new Promise((resolve) => setImmediate(resolve));
       server.step(dt);
       for (const m of channel.client.receive()) {
         if (m.type === "entered") id = m.playerId;
@@ -551,6 +554,8 @@ await section("quest order", () => {
 
 // --- the generator: every settlement's quests, well formed, the same for the same seed ---
 /** A server on a config and seed, with one quick player at the start; its casts made on asking. */
+/** The last world made: the same config and seed again (the determinism and weighting checks) reuses it - a world is the slow part, and the quests are what is under test. */
+let lastWorld = null;
 async function generatedWorld(config, seed, weights = true, tweak = null) {
   const { content, packs } = loadContentFromDisk(config);
   const rules = loadRulesFromDisk(config);
@@ -560,13 +565,14 @@ async function generatedWorld(config, seed, weights = true, tweak = null) {
   const creatures = loadCreatureRulesFromDisk(config, rules, seed);
   const progression = loadProgressionRulesFromDisk(config, rules, seed);
   const items = loadItemRulesFromDisk(config, rules, seed);
-  const worldData = quiet(() => createWorldData(seed, content));
+  if (lastWorld?.key !== `${config}/${seed}`) lastWorld = { key: `${config}/${seed}`, worldData: quiet(() => createWorldData(seed, content)) };
+  const worldData = lastWorld.worldData;
   const server = createServer({ seed, config, packs, dimensions: content.dimensions, rules, creatures, items, progression, loadDimension: () => ({ world: worldData }) });
   const channel = createLocalChannel();
   server.connect(channel.server);
   channel.client.send({ type: "hello", protocol: PROTOCOL_VERSION, name: "Scout", dimension: "" });
   for (let i = 0; i < 6; i++) {
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise((resolve) => setImmediate(resolve));
     server.step(1 / 30);
     for (const m of channel.client.receive()) if (m.type === "transfer") channel.client.send({ type: "arrived" });
   }
@@ -592,7 +598,7 @@ await section("the generator", async () => {
   /** Every quest line's item look, and a quest that delivers something, to try the client's naming on. */
   const itemLines = [];
   let lookSample = null;
-  for (const [config, seeds] of [["tiny", 3], ["small", 3]]) {
+  for (const [config, seeds] of [["tiny", 3], ["small", pick(2, 3)]]) {
     for (let s = 0; s < seeds; s++) {
       const seed = 4000 + s * 911;
       const tag = `${config} seed ${seed}`;
@@ -817,7 +823,7 @@ await section("weighting", async () => {
     return { n: spots.length, distance: spots.reduce((sum, p) => sum + p.distance, 0) / Math.max(1, spots.length), near, distinct, densest };
   };
   const total = { on: { n: 0, d: 0, near: 0, distinct: 0, densest: 0 }, off: { n: 0, d: 0, near: 0, distinct: 0, densest: 0 } };
-  for (const [config, seed] of [["small", 4000], ["small", 4911], ["small", 5822], ["small", 7001], ["small", 8113]]) {
+  for (const [config, seed] of [["small", 4000], ["small", 4911], ["small", 5822], ["small", 7001], ["small", 8113]].slice(0, pick(2, 5))) {
     for (const [name, weights] of [["on", true], ["off", false]]) {
       const m = spread(await generatedWorld(config, seed, weights));
       const t = total[name];
@@ -856,7 +862,7 @@ for (const introSeed of (process.env.INTRO_SEEDS ?? "2,7,8,15").split(",").map(N
   let id = 0;
   const pump = async (steps = 1, dt = 1 / 30) => {
     for (let i = 0; i < steps; i++) {
-      await new Promise((resolve) => setTimeout(resolve, 0));
+      await new Promise((resolve) => setImmediate(resolve));
       server.step(dt);
       for (const m of channel.client.receive()) {
         if (m.type === "entered") id = m.playerId;
