@@ -302,9 +302,28 @@
     fogStart: { range: [0.05, 0.25] },
     fogEnd: { range: [0.5, 0.9] },
   },
+  // Golden hour all day long: a low sun that never climbs high, its light honey-gold even at noon and
+  // deep amber when it sets, over a warm fill (SLICE.md G4).
   light: {
-    sunPeak: 42,
+    sunPeak: 34,
     moonPeak: 40,
-    ambientDay: "#c8b8a0",
+    ambientDay: "#d0b894",
+    sunHorizon: "#ff8438",
+    sunZenith: "#ffd890",
+    sunIntensity: 1.08,
   },
+  // Leaves drifting down through the air about the player: the thickest the layer goes (the wind
+  // stirs it, rain and snow put it out).
+  fallingLeaves: 0.75,
+  // Mostly fair and golden; the odd grey spell, mist in the hollows, a gale that strips the trees.
+  weather: [
+    { weather: "clear", odds: 3 },
+    { weather: "fair", odds: 6 },
+    { weather: "cloudy", odds: 2 },
+    { weather: "overcast", odds: 1.5 },
+    { weather: "mist", odds: 1 },
+    { weather: "drizzle", odds: 0.8 },
+    { weather: "rain", odds: 0.5 },
+    { weather: "gale", odds: 0.7 },
+  ],
 }

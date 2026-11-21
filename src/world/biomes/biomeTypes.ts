@@ -180,6 +180,9 @@ export interface BiomeDefinition {
   /** The weathers this zone can have and how likely each is (see weather/weatherSystem.ts) - the
    *  packs' defaults.json5 list for a biome that names none. Empty: always as written. */
   weather: WeatherChance[];
+  /** How thickly leaves fall through the air here, 0 (none) to 1 (the thickest drift) - an air layer
+   *  round the camera (weather/precipitation.ts), blended across zones like the weather. */
+  fallingLeaves: number;
   /** What this zone's cells roll for their one major feature (a quarry...) and how likely each is -
    *  see features/featureSites.ts. */
   features: FeatureChance[];

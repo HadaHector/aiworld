@@ -377,7 +377,17 @@ export async function createWorld(
     fallLight.g = Math.min(1.1, fallLight.g + sunLighting.color.g * sunLighting.intensity * 0.5);
     fallLight.b = Math.min(1.1, fallLight.b + sunLighting.color.b * sunLighting.intensity * 0.5);
     const open = 1 - sunLighting.underground;
-    precipitation.update(weatherNow.rain * open, weatherNow.snow * open, fallLight);
+    // Leaves: the zones' own fall, blended by weight, thinned out by rain and snow (they stick) and
+    // stirred up by wind - a gale is a drift, a still day a few.
+    let leafy = 0;
+    let leafWeight = 0;
+    for (const w of areaWeights) {
+      leafy += w.biome.fallingLeaves * w.weight;
+      leafWeight += w.weight;
+    }
+    leafy = leafWeight > 0 ? leafy / leafWeight : 0;
+    const leafAmount = leafy * open * Math.max(0, 1 - weatherNow.rain * 1.5 - weatherNow.snow * 2) * Math.min(1, 0.55 + weatherNow.wind * 0.45);
+    precipitation.update(weatherNow.rain * open, weatherNow.snow * open, fallLight, leafAmount);
     ocean.setRain(weatherNow.rain);
     inlandWater.setRain(weatherNow.rain);
   };

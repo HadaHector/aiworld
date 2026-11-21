@@ -241,3 +241,5 @@ split (one cap only). Steps 1-2 alone give the visible result.
   only thing it changes; there are no presets, all effects and extras always run (up to 64 flames). A fire's
   `sound` (fireplace, stove: `sounds/fireCrackle`) plays from the three nearest hearths within 14 m, one voice
   to a hearth. Not persisted between sessions yet. Cost was judged negligible, so no stress measurement was made.
+- Chimney and camp smoke (SLICE.md G4, 2026-11-21): a `smoke` key on a chimney building part lays a model effect on the stack
+  top (lit hearths only); the campfire's `extra` gains `smoke.camp`. No new engine code in the manager.

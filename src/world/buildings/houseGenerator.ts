@@ -840,7 +840,16 @@ export function buildHouse(spec: HouseSpec, rng: () => number, far = false, meas
       if (!extent) continue;
       place(run, level, bay + span / 2, span, extent);
       count++;
-      if (extra.part.chimney) chimneys.push(chimneyAt(run, level, bay, span));
+      if (extra.part.chimney) {
+        chimneys.push(chimneyAt(run, level, bay, span));
+        // Smoke off the stack where a fire burns behind it (a house with no interior: always).
+        const smoke = extra.part.chimney.smoke;
+        if (smoke && !far && !b.measure) {
+          const room = interior ? roomBehind(run, bay, span, level) : null;
+          const lit = !interior || (room !== null && interior.rooms.some((r) => r.id === room && r.type.hearth));
+          if (lit) b.effects.push({ position: wallAt(run, level).at(bay + span / 2, extra.part.chimney.stackDepth * 0.5, extent.top + 0.1), effect: smoke, extra: [], size: 1 });
+        }
+      }
       if (!isDoor(extra.part)) {
         const opening = openingOf(run, level, bay, span, extent);
         if (opening) windows.push(opening);

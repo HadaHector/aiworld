@@ -9,7 +9,7 @@
   collide: false,
   // The light it gives (see LIGHTS.md). A fire in the open: warm and wide.
   light: { color: [1.0, 0.58, 0.28], intensity: 1.6, radius: 12, size: 0.7 },
-  effects: [{ effect: "flame.fire", extra: ["embers"], sound: "fireCrackle", scale: 0.9 }],
+  effects: [{ effect: "flame.fire", extra: ["embers", "smoke.camp"], sound: "fireCrackle", scale: 0.9 }],
   parts: {
     stone: { material: "smoothStone", tints: [[0.72, 0.7, 0.68], [0.65, 0.63, 0.6]] },
     ash: { material: "smoothStone", tints: [[0.28, 0.27, 0.27]] },

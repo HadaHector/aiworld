@@ -20,5 +20,7 @@
     cap: { height: 0.35, reach: 0.12 },
     pots: { count: 3, width: 0.32, height: 0.55 },
     parts: { body: "plinth", cap: "plinth", pots: "roof" },
+    // Smoke off the stack where a hearth burns behind it (SLICE.md G4).
+    smoke: "smoke.chimney",
   },
 }

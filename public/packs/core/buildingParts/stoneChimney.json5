@@ -27,5 +27,7 @@
     pots: { count: 2, width: 0.3, height: 0.55 },
     // What its pieces are painted as - the house's parts.
     parts: { body: "plinth", cap: "plinth", pots: "roof" },
+    // Smoke off the stack where a hearth burns behind it (SLICE.md G4).
+    smoke: "smoke.chimney",
   },
 }

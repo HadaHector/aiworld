@@ -1573,7 +1573,7 @@ function readBuildingPart(id: string, obj: RawObject, reader: Reader): BuildingP
   }
   let chimney: BuildingPartDef["chimney"] = null;
   if (generator === "chimney") {
-    reader.onlyKeys(block, path, ["span", "width", "depth", "shoulder", "stackWidth", "stackDepth", "angle", "rise", "foundation", "cap", "pots", "parts"]);
+    reader.onlyKeys(block, path, ["span", "width", "depth", "shoulder", "stackWidth", "stackDepth", "angle", "rise", "foundation", "cap", "pots", "parts", "smoke"]);
     const span = reader.number(block, "span", path, { min: 1 });
     if (!Number.isInteger(span)) reader.fail(`${path}.span`, "is in whole bays");
     const sub = (key: string, keys: string[]): RawObject => {
@@ -1605,6 +1605,7 @@ function readBuildingPart(id: string, obj: RawObject, reader: Reader): BuildingP
         height: reader.number(pots, "height", `${path}.pots`, { min: 0.05 }),
       },
       parts: { body: role("body", `${path}.parts`, parts), cap: role("cap", `${path}.parts`, parts), pots: role("pots", `${path}.parts`, parts) },
+      smoke: reader.optionalString(block, "smoke", path) ?? null,
     };
   }
   return { id, name: reader.string(obj, "name", ""), generator, framed, chimney, timberFrame, stoneFrame, logs, pitched, leanTo, porch, terrace, support, light: readWindowLight(obj, reader) };
@@ -2677,6 +2678,7 @@ function readBiome(id: string, obj: RawObject, reader: Reader, defaults: Default
     "sky",
     "light",
     "weather",
+    "fallingLeaves",
     "features",
   ]);
 
@@ -2766,6 +2768,7 @@ function readBiome(id: string, obj: RawObject, reader: Reader, defaults: Default
     },
     dayNight: readDayNight(light, reader, defaults),
     weather: obj.weather === undefined ? defaults.weather : readWeatherChances(obj, reader),
+    fallingLeaves: reader.optionalNumber(obj, "fallingLeaves", "", 0, { min: 0, max: 1 }),
     features: obj.features === undefined ? defaults.features : readFeatureChances(obj, reader),
   };
 }

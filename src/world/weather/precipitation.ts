@@ -190,7 +190,7 @@ function wrap(value: number, size: number): number {
 export interface Precipitation {
   /** Sets how hard it rains and snows (0-1 each) and how bright the light is that the drops and
    *  flakes are seen by - every frame. */
-  update: (rain: number, snow: number, light: Color3) => void;
+  update: (rain: number, snow: number, light: Color3, leaves?: number) => void;
   /** Where the splashes land round: the player's feet. */
   setCentre: (x: number, z: number) => void;
   dispose: () => void;
@@ -219,9 +219,11 @@ export function createPrecipitation(scene: Scene, heightAt: (x: number, z: numbe
 
   const layers = [RAIN, SNOW].map((spec) => ({ ...buildLayer(scene, spec), velocity: new Vector3(), travel: new Vector3() }));
   const lit = new Color3();
+  const leaves = buildLeaves(scene);
+  const leafLight = new Color3();
   let lastTime = 0;
 
-  function update(rain: number, snow: number, light: Color3): void {
+  function update(rain: number, snow: number, light: Color3, leafAmount = 0): void {
     const camera = scene.activeCamera;
     if (!camera) return;
     const view = camera.getViewMatrix();
@@ -229,6 +231,7 @@ export function createPrecipitation(scene: Scene, heightAt: (x: number, z: numbe
     const right = new Vector3(view.m[0], view.m[4], view.m[8]);
     const up = new Vector3(view.m[1], view.m[5], view.m[9]);
     splashes.update(rain, time, right, light);
+    updateLeaves(leafAmount, right, up, camera.globalPosition, light);
     // The frame's step, from the same clock the shader sways by (wrapped hourly: a wrap is no step).
     const step = time >= lastTime ? time - lastTime : 0;
     lastTime = time;
@@ -259,7 +262,33 @@ export function createPrecipitation(scene: Scene, heightAt: (x: number, z: numbe
     });
   }
 
+  // The leaves fall slowly and blow with the wind; their place is carried on the CPU as rain's is.
+  let leafTime = 0;
+  function updateLeaves(amount: number, right: Vector3, up: Vector3, eye: Vector3, light: Color3): void {
+    const { mesh, material, travel } = leaves;
+    const step = time >= leafTime ? time - leafTime : 0;
+    leafTime = time;
+    mesh.setEnabled(amount > 0.001);
+    travel.set(
+      wrap(travel.x + WIND.x * LEAVES.drift * step, LEAVES.box[0]),
+      wrap(travel.y - LEAVES.fall * step, LEAVES.box[1]),
+      wrap(travel.z + WIND.y * LEAVES.drift * step, LEAVES.box[2]),
+    );
+    if (amount <= 0.001) return;
+    // Lit by the day, brightened a little so they read against the dark wood.
+    leafLight.set(Math.min(1.2, light.r * 1.1 + 0.08), Math.min(1.2, light.g * 1.1 + 0.08), Math.min(1.2, light.b * 1.1 + 0.08));
+    material.setFloat("time", time);
+    material.setFloat("amount", amount);
+    material.setVector3("travel", travel);
+    material.setVector3("eye", eye);
+    material.setVector3("cameraRight", right);
+    material.setVector3("cameraUp", up);
+    material.setColor3("light", leafLight);
+  }
+
   function dispose(): void {
+    leaves.mesh.dispose();
+    leaves.material.dispose();
     for (const { mesh, material } of layers) {
       mesh.dispose();
       material.dispose();
@@ -411,4 +440,135 @@ function buildLayer(scene: Scene, spec: FallSpec): { spec: FallSpec; mesh: Mesh;
   material.setColor3("color", spec.color);
   mesh.material = material;
   return { spec, mesh, material };
+}
+
+// --- Falling leaves (the autumn wood's air layer) ---------------------------------------------------
+// The same trick as rain and snow - a box of air about the camera, every place worked out in the
+// vertex shader from a random seed and the clock - but each particle is a tumbling leaf: it turns in
+// the plane facing the eye, flips edge-on now and then, sways wide on its way down, and wears one of
+// the wood's colours (crimson, orange, gold, russet), picked from its seed.
+
+const LEAVES = { count: 2600, box: [38, 22, 38] as [number, number, number], fall: 0.85, drift: 2.2, sway: 1.4, size: 0.085 };
+
+const LEAF_VERTEX_SHADER = `
+precision highp float;
+attribute vec3 position;
+attribute vec4 seed;
+uniform mat4 viewProjection;
+uniform vec3 eye;
+uniform vec3 cameraRight;
+uniform vec3 cameraUp;
+uniform float time;
+uniform float amount;
+uniform vec3 travel;
+uniform vec3 box;
+uniform float sway;
+uniform float size;
+uniform vec3 light;
+varying vec2 vCorner;
+varying vec3 vColor;
+varying float vFade;
+
+vec3 leafColour(float h) {
+  vec3 crimson = vec3(0.62, 0.10, 0.05);
+  vec3 orange = vec3(0.86, 0.38, 0.07);
+  vec3 gold = vec3(0.92, 0.68, 0.14);
+  vec3 russet = vec3(0.48, 0.24, 0.08);
+  if (h < 0.25) return crimson;
+  if (h < 0.55) return orange;
+  if (h < 0.85) return gold;
+  return russet;
+}
+
+void main(void) {
+  if (seed.w > amount) {
+    gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
+    return;
+  }
+  float own = fract(seed.x * 91.7 + seed.z * 37.3);
+  vec3 p = seed.xyz * box + travel;
+  // Each leaf swings on its own slow, wide arc as it falls.
+  float phase = seed.w * 61.0 + own * 6.28;
+  p.x += sin(time * (0.5 + own * 0.5) + phase) * sway;
+  p.z += cos(time * (0.4 + own * 0.5) + phase * 1.3) * sway;
+  p.y += sin(time * 1.3 + phase) * 0.15;
+  vec3 origin = eye - box * 0.5;
+  p = origin + mod(p - origin, box);
+
+  // Turned in the view plane, and flipped about its own axis so it narrows to a sliver and back.
+  float spin = time * (0.6 + own * 1.8) * (own > 0.5 ? 1.0 : -1.0) + phase;
+  float flip = 0.25 + 0.75 * abs(cos(time * (0.8 + own) + phase * 2.0));
+  vec2 c = position.xy * vec2(1.0, flip);
+  vec2 turned = vec2(c.x * cos(spin) - c.y * sin(spin), c.x * sin(spin) + c.y * cos(spin));
+  float big = size * (0.7 + own * 0.8);
+  vec3 corner = (cameraRight * turned.x + cameraUp * turned.y) * big;
+
+  vec3 fromEye = abs(p - eye) / (box * 0.5);
+  float edge = max(max(fromEye.x, fromEye.y), fromEye.z);
+  vFade = (1.0 - smoothstep(0.75, 1.0, edge)) * smoothstep(1.2, 3.0, distance(p, eye));
+  // Lit by the day's light, and a little darker on its turned side.
+  vColor = leafColour(fract(seed.y * 53.1 + seed.w * 7.0)) * light * (0.75 + 0.25 * flip);
+  vCorner = position.xy;
+  gl_Position = viewProjection * vec4(p + corner, 1.0);
+}
+`;
+
+const LEAF_FRAGMENT_SHADER = `
+precision highp float;
+varying vec2 vCorner;
+varying vec3 vColor;
+varying float vFade;
+
+void main(void) {
+  // A pointed oval, with a pale midrib.
+  float x = vCorner.x;
+  float y = vCorner.y;
+  float shape = 1.0 - (x * x * 1.6 + pow(abs(y), 1.6));
+  if (shape < 0.0 || vFade < 0.01) discard;
+  float rib = 1.0 - smoothstep(0.0, 0.12, abs(x));
+  vec3 colour = mix(vColor, vColor * 1.35, rib * 0.5);
+  gl_FragColor = vec4(colour, vFade);
+}
+`;
+
+function buildLeaves(scene: Scene): { mesh: Mesh; material: ShaderMaterial; travel: Vector3 } {
+  Effect.ShadersStore["leavesVertexShader"] = LEAF_VERTEX_SHADER;
+  Effect.ShadersStore["leavesFragmentShader"] = LEAF_FRAGMENT_SHADER;
+  const random = mulberry32(0x1ea5);
+  const { count, box } = LEAVES;
+  const positions = new Float32Array(count * 12);
+  const seeds = new Float32Array(count * 16);
+  const indices = new Uint32Array(count * 6);
+  const corners = [-1, -1, 1, -1, 1, 1, -1, 1];
+  for (let i = 0; i < count; i++) {
+    const seed = [random(), random(), random(), (i + random()) / count];
+    for (let c = 0; c < 4; c++) {
+      positions.set([corners[c * 2], corners[c * 2 + 1], 0], i * 12 + c * 3);
+      seeds.set(seed, i * 16 + c * 4);
+    }
+    indices.set([i * 4, i * 4 + 1, i * 4 + 2, i * 4, i * 4 + 2, i * 4 + 3], i * 6);
+  }
+  const mesh = new Mesh("precipitation_leaves", scene);
+  const data = new VertexData();
+  data.positions = positions;
+  data.indices = indices;
+  data.applyToMesh(mesh);
+  mesh.setVerticesData("seed", seeds, false, 4);
+  mesh.alwaysSelectAsActiveMesh = true;
+  mesh.isPickable = false;
+  mesh.receiveShadows = false;
+  mesh.setEnabled(false);
+  const material = new ShaderMaterial("precipitation_leaves", scene, "leaves", {
+    attributes: ["position", "seed"],
+    uniforms: ["viewProjection", "eye", "cameraRight", "cameraUp", "time", "amount", "travel", "box", "sway", "size", "light"],
+    needAlphaBlending: true,
+  });
+  material.backFaceCulling = false;
+  material.disableDepthWrite = true;
+  material.alphaMode = Constants.ALPHA_COMBINE;
+  material.setVector3("box", new Vector3(...box));
+  material.setFloat("sway", LEAVES.sway);
+  material.setFloat("size", LEAVES.size);
+  mesh.material = material;
+  return { mesh, material, travel: new Vector3() };
 }
