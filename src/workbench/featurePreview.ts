@@ -193,6 +193,7 @@ export function buildFeaturePreview(
       spillMaterial: spill ? spill.material : -1,
       waterSurface: WATER_SURFACE,
     springGap: Infinity,
+    waterLine: 0,
     } as TerrainSample;
   };
   if (biome) {

@@ -307,6 +307,7 @@ export function createDebugMap(
 
           const context: Record<string, number> = {
             height: sample.height,
+            aboveWater: sample.height - sample.waterLine,
             slope: invLen,
             slopeFacing: dHdz * invLen,
             landmass: sample.landmass,

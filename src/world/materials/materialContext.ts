@@ -71,6 +71,9 @@ export function buildVertexContext(
       ? treeCover.cover(treeCover.worldX, treeCover.worldZ, { height, surfaceHeight: height, slope: Math.sqrt(Math.max(0, 1 - up * up)), sample })
       : 0,
     height: positions[vertexIndex * 3 + 1],
+    // How high above the water this is: the height itself by the sea (its level is 0), above a river's
+    // own surface by a river at its own level (TerrainSample.waterLine). For waterside layers.
+    aboveWater: positions[vertexIndex * 3 + 1] - sample.waterLine,
     slope: normals[vertexIndex * 3 + 1],
     // Sign is an arbitrary but fixed convention (positive = the slope's normal tilts toward -Z,
     // called "north" here) - there's no in-game compass/sun to anchor it to, only internal

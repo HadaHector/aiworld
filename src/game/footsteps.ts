@@ -41,6 +41,7 @@ export function createSurfaceProbe(world: World, rules: FeedbackRules): SurfaceP
     const reliefCurvature = (h(0, -CURVATURE) + h(0, CURVATURE) + h(CURVATURE, 0) + h(-CURVATURE, 0)) / 4 - sample.height;
     const context: Record<string, number> = {
       height: sample.height,
+      aboveWater: sample.height - sample.waterLine,
       slope: invLen,
       slopeFacing: dHdz * invLen,
       landmass: sample.landmass,

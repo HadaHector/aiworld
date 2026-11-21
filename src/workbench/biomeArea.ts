@@ -89,6 +89,7 @@ export function sampleBiomeArea(seed: number, content: WorldContent, biomeId: st
     spillMaterial: -1,
     waterSurface: WATER_SURFACE,
     springGap: Infinity,
+    waterLine: 0,
   });
   const sampleTerrain: TerrainSampler = sampleAt;
 
@@ -137,6 +138,7 @@ export function sampleBiomeArea(seed: number, content: WorldContent, biomeId: st
       const context: Record<string, number> = {
         treeCover: cover[i],
         height: h,
+        aboveWater: h,
         slope: n[1],
         slopeFacing: -n[2],
         landmass: 1,

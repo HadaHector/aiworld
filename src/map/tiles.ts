@@ -150,6 +150,7 @@ export function* mapTileSteps(ground: MapGround, tx: number, tz: number, things?
         const context: Record<string, number> = {
           treeCover: ground.treeCover ? ground.treeCover(x, z, { height: sample.height, surfaceHeight: sample.height, slope: Math.sqrt(Math.max(0, 1 - ny * ny)), sample }) : 0,
           height: sample.height,
+          aboveWater: sample.height - sample.waterLine,
           slope: ny,
           slopeFacing: -nz,
           landmass: sample.landmass,

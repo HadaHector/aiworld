@@ -151,6 +151,9 @@ export const RIVER_SPRING_ROCKS: [number, number] = [6, 18];
 export const RIVER_SPRING_ROCK_DENSITY = 0.8;
 // The least the surface falls per metre of river, so no stretch is dead level.
 export const RIVER_MIN_FALL = 0.003;
+// Past a river's reach the line its waterside layers read "above the water" from falls back toward the
+// sea's level this many metres per metre (TerrainSample.waterLine): far enough out it is the sea's again.
+export const RIVER_WATERLINE_FADE = 0.35;
 // The most the surface falls per metre - under the bank's slope, or a steep stretch's own bank below it
 // would cut under the water above (a steep head becomes a gully cut into the hill instead).
 export const RIVER_MAX_FALL = 0.15;

@@ -34,7 +34,7 @@ import { compilePipeline, type CompiledPipeline } from "./pipeline/pipelineCompi
 import { createBoundaryHillEvaluator } from "./boundaryHills/boundaryHillsEvaluator";
 import { createRiverEvaluator } from "./rivers/riverEvaluator";
 import { buildRiverProfiles, riverProfileAt, riverSprings, type RiverProfile, type RiverWaterSample } from "./rivers/riverLevels";
-import { RIVER_SPRING_ROCKS } from "./rivers/riverConfig";
+import { RIVER_SPRING_ROCKS, RIVER_WATERLINE_FADE } from "./rivers/riverConfig";
 import { WATER_SURFACE, createFlatWaters, type FlatWaters } from "../water";
 import { RIVER_HILL_SUPPRESSION_INNER, RIVER_HILL_SUPPRESSION_OUTER } from "./rivers/riverConfig";
 
@@ -90,6 +90,10 @@ export interface TerrainSample {
   /** Distance to the nearest river's spring (its source), Infinity past a few tens of metres or with no
    *  rivers at their own level - boulders gather round one (foliage/treeScatter.ts). */
   springGap: number;
+  /** The level "how high above the water" is read from here (the layer input `aboveWater` is the height
+   *  less this): SEA_LEVEL, or by a river at its own level that river's surface, fading back to the sea's
+   *  away from it - so waterside layers (reeds, wet stones) follow a river up a hill. */
+  waterLine: number;
 }
 
 export type TerrainSampler = (worldX: number, worldZ: number) => TerrainSample;
@@ -286,6 +290,7 @@ export function createTerrainSampler(seed: number, content: WorldContent): Terra
     // were worked out from: cut before it, a bed near the coast was pulled down toward the seabed with
     // the land, far under its own water.
     let waterSurface = WATER_SURFACE;
+    let waterLine = SEA_LEVEL;
     const ownLevels = riverProfiles.length > 0;
     const carveOwnLevels = (ground: number): number => {
       let carved = ground;
@@ -297,6 +302,7 @@ export function createTerrainSampler(seed: number, content: WorldContent): Terra
         if (distance < nearest) {
           nearest = distance;
           reached = distance < water.reach ? water.level : -Infinity;
+          waterLine = Math.max(SEA_LEVEL, water.level - RIVER_WATERLINE_FADE * Math.max(0, distance - water.reach));
         }
         carved = Math.min(carved, carveRiver(true, taper, distance, worldX, worldZ, ground, water, noise));
       });
@@ -399,6 +405,7 @@ export function createTerrainSampler(seed: number, content: WorldContent): Terra
       ...spillAt(worldX, worldZ),
       waterSurface,
       springGap: springGapAt(worldX, worldZ),
+      waterLine,
     };
   }
 

@@ -194,6 +194,12 @@ world: { rivers: [2, 2], riverLength: [4, 6], riverTributaries: [1, 1], riverLev
   `chunkGeometry.ts`), trees (none in a river's water, fading in from 0.4 to 1.6 m over it), the map tiles
   and the debug map. Swimming, breath, footsteps, the underwater look and creatures already go through
   `waterAt`.
+- **Waterside plants and ground** follow a river up the hill: a layer input `aboveWater` (the height less
+  `TerrainSample.waterLine` - the sea's level, 0, or by a river at its own level that river's surface,
+  falling back to the sea's 0.35 m a metre past its reach) for layers that mean "this near the water".
+  By the sea it is the height itself, so nothing changes there. The autumn wood's reed beds (the
+  bulrushes, the user's catch) and its wet-stone hollows read it; the other biomes still read `height`
+  and only follow the sea - switch theirs the same way when a river at its own level runs through them.
 - **Drawn** (`terrain/riverWater.ts`): a ribbon per river at its stations' levels, stepping down with them,
   as wide as the ground scanned across each station says the water is (1.5 m past it, so the bank draws
   the shore); where no bank holds it (a confluence, the sea) its edge is laid onto the ground rather than
