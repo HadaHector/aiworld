@@ -161,7 +161,8 @@ export function createSpawnPointField(
     const { x, z } = room;
     const zone = zones[world.sampleTerrain(x, z).primaryAreaId];
     if (!zone || zone.roster.length === 0) return null;
-    const levelFor = (offset: number): number => Math.max(1, rollRange(zone.levels, random) + offset);
+    const band = zone.levelsAt(x, z);
+    const levelFor = (offset: number): number => Math.max(1, rollRange(band, random) + offset);
     const members: SpawnMember[] = [];
     const add = (kind: CreatureKind, level: number, name: string, home: { x: number; z: number }, spread: number, wander: number, respawn: [number, number]): void => {
       members.push({ key: `${key}/${members.length}`, kind, level, name, homeX: home.x, homeZ: home.z, spread, wander, respawn });

@@ -110,15 +110,23 @@ A dimension's `world` also takes `cellsPerArea` (a whole number, 1-60; the defau
 cells (`planWorld`, `worldExtentFor(areas, cellsPerArea)`); a config's `world` may set it too.
 
 The first user is the **autumn vale** (`dimensions/autumnVale.json5`, SLICE.md W1 and W9): one zone of
-the autumn wood only, 14 cells (about 3.5 km2 of land, 1.9 km across), one river, and its own start rule
+the autumn wood only, 14 cells, and its own start rule
 (the farm village with an inn and a chapel; no "near the middle" condition, the zone is the world). It is
 not the start dimension of the full game: the config `public/configs/vale.json5` keeps just it
 (`only.dimensions`), so it is the start there. Reach it with *New world > The Autumn Vale* in the menu,
 `?play&config=vale`, or `?dimension=autumnVale` in the full game. `npm run probe -- scripts/probe/vale.mjs [seeds]`
-checks the shape (one zone, 14 cells, one start, the start on land of its own) over several seeds.
-Left for later sessions: the seed (W2), the shore hills (W15, the island has no mountains yet), the
-authored cell plan (W14: today a cell still rolls its feature, so a seed has 1-2 settlements), and the
-level bands by cell (B2).
+checks the shape (one zone, 14 cells, one start, the start on land of its own, levels rising by cell)
+over several seeds; `map=<folder>` writes a relief PNG of each (sea, water above the sea, the hills, the
+start, settlements and features), the quick way to compare seeds for W2.
+
+Since 2026-11-21 its world also has `coastWobble: 1, shoreHills: true` (a ring of shore hills with a bay
+or two, CONFIG.md), two rivers at their own level with one tributary (`riverLevels`, WATER.md), and
+`creatureLevels: "cells"` (B2, CREATURES.md *Zones*). With the shore hills the island is about 5-6.5 km2
+of dry land, 2.5-3 km across (more than the 3.5 km2 the 14 cells alone suggest: the hills stand on land
+grown out over the sea). Seen over 8 seeds: the hills ring the coast and part for one or two bays, the
+rivers run inland and reach the sea in a bay, every settlement is walkable from the start. Left for
+later: the seed (W2) and the authored cell plan (W14: today a cell still rolls its feature, so a seed has
+1-4 settlements, and the start village is sometimes up in the shore hills).
 
 ### Content per dimension
 

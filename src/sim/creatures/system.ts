@@ -337,7 +337,7 @@ export function createCreatureSystem(rules: GameRules, creatures: CreatureRules,
 
   return {
     load(dimension, definition, starts = []) {
-      const zones = createZones(dimension.world, creatures, starts[0] ?? definition.spawn);
+      const zones = createZones(dimension.world, creatures, starts[0] ?? definition.spawn, definition.creatureLevels);
       const atStarts = starts.flatMap((s) => [s, s.home, ...s.entities]);
       const keepOut = [definition.spawn, ...definition.links.map((l) => l.at), ...definition.entities.map((e) => e.at), ...atStarts];
       const field = createSpawnPointField(dimension.id, dimension.world, creatures, zones, keepOut, (x, z) => dimension.trunks.clear(x, z, ROOM));
@@ -383,7 +383,7 @@ export function createCreatureSystem(rules: GameRules, creatures: CreatureRules,
         const kind = creatures.kinds.get(kindId);
         if (!state || !kind) return undefined;
         const zone = state.zones[state.dimension.world.sampleTerrain(x, z).primaryAreaId];
-        const entity = make(state, kind, Math.max(1, Math.floor(level ?? zone?.levels[0] ?? 1)), x, z, "", null, null);
+        const entity = make(state, kind, Math.max(1, Math.floor(level ?? zone?.levelsAt(x, z)[0] ?? 1)), x, z, "", null, null);
         if (entity) {
           state.loose.add(entity);
           state.looseNear.set(entity, world.time());
