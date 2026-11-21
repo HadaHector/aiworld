@@ -633,3 +633,6 @@ real G1 switch, then the wave 2 sessions (section 8) now that the curves exist.
 - **Q4, level-up points:** automatic, for the slice.
 - **Q11, icons:** one icon per item type for the slice (no per-tier or per-item variety); more icon variety belongs to vertical slice 2.
 - Wave 1 is to be finished before wave 2 starts.
+- **Q3, the third lair (the user, 2026-11-21):** a **mine**, as a variant of the cave style: it needs
+  timber supports, mining props (picks, carts, rails, ore) and lanterns. Not yet planned into a session;
+  it belongs to the dungeon lane after the cave check (E6).
