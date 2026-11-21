@@ -75,6 +75,9 @@ share of its damage its tactics deal.
 - The player does not yet land on the curves: stat points per level (a level gives 15 health today, the
   curve wants about 30), gear, and class skill damage (`heroicStrike`'s formula) are fitted by B7.
 - A level's XP per kill and the quest rewards are still progression's and `quests.json5`'s own numbers.
-- Regeneration and repair are data here only (`resources/health.json5` and `rules/items.json5` still have
-  their own formulas: task I9 and the item rules read `regen` and `repairShare`).
+- Regeneration (I9, built): `resources/health.json5` regenerates 2% of maximum health a second out of combat
+  (spirit no longer adds to it; mana keeps its spirit term) and `rules/combat.json5` `combatTimeout` is 6 s, so
+  regeneration starts 6 s after the last blow. Those are `regen.share` and `regen.delay` written out in the
+  files the sim reads; `scripts/probe/balance.mjs` fails if they drift apart. Repair is still data here only
+  (`rules/items.json5` has its own formula: the item rules read `repairShare`).
 - The bandit, undead and other new kinds of enemies (SLICE.md 3c) are made with roles from the start.

@@ -174,5 +174,12 @@ Phase 1 is in, and the drawing half of phase 2, in the workbench only:
   material's `lit` (glass: `litGlass`), whose `lamp` colour it is drawn in as the daylight fails
   (dusk to dawn, or a dark enough day) - glowing, not lighting anything round it.
 
+Checked in code for the slice (G8, 2026-11-21; the pane was hidden, so no look at the game itself): lamps,
+fireplaces, the campfire and wall torches are props with a `light`, so a camp's or village's fire is baked
+into its own mesh and lights the player through `lightsNear`; lived-in houses have `litWindows`. **Not built:
+phase 6, outdoors** - nothing lights the ground, grass or trees, so a campfire at night lights only the player
+and its own stones, not the clearing round it. That is the one real gap for the camp at night; a look in the
+game (`?play`, evening) is still owed.
+
 Open: indoors the sky's ambient light is as strong as outdoors, everywhere - so a window's light
 hardly shows by day. Not yet: the workbench's own Lights view.
