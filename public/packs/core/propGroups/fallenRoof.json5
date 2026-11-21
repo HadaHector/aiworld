@@ -1,0 +1,10 @@
+// What came down from a roof: two or three rotted beams lying crossed against a wall, a rail or two
+// among them.
+{
+  name: "Fallen Roof",
+  members: [
+    { prop: "rottedFelledLog", at: [0, 0], turn: [-30, 30] },
+    { prop: "rottedFelledLog", at: [1.2, 1.3], turn: [50, 110], chance: 0.8 },
+    { prop: "rottedFelledLog", at: [-0.6, 2.4], turn: [-80, -20], chance: 0.5 },
+  ],
+}

@@ -1066,7 +1066,7 @@ export function buildHouse(spec: HouseSpec, rng: () => number, far = false, meas
         // Under the roof's straight plane by as far as its ridge and rafters sag, so it never dips
         // through the ceiling.
         const h = roofUnderside(group, x, z);
-        if (h !== null) return h - group.plan.ridgeSag - group.plan.slopeSag;
+        if (h !== null) return h - group.plan.ridgeSag - group.plan.slopeSag - group.plan.dip;
       }
       return null;
     };

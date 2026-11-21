@@ -766,7 +766,8 @@ Each step is checked and shown before the next one.
 
 ### Not in this step
 
-Saved for their own steps, so this one stays whole:
+Saved for their own steps, so this one stays whole (condition has since been done, small: see
+*The abandoned camp*, below):
 
 - condition (an abandoned camp);
 - chimney smoke and other effects;
@@ -774,3 +775,41 @@ Saved for their own steps, so this one stays whole:
 - a river log-flume;
 - the saw shed's open side is empty: it wants its work under it - a log on trestles or a saw pit,
   logs waiting and boards sawn, and sawdust spilt over its floor and out in front.
+
+## The abandoned camp (built, SLICE.md W3)
+
+`core/features/abandonedCamp.json5`, a compound like the logging camp, in the autumn wood's list at odds
+0.3 (the vale's cell plan, W14, will place it by hand). The first of *condition* (piece 2), scoped small:
+**a condition is a set of files a feature names, plus one engine option**, not a number fed into every
+generator. What was built:
+
+- **Roof rot** (`pitchedRoof.ts`): a pitched roof part may carry `rot: [low, high]` (README, *Buildings*):
+  the sag deepens up to threefold, and from rot 0.4 one place sinks (a smooth Gaussian dip whose spot is
+  drawn from the roof's own seed, none at the eaves; interior ceilings keep under it). `rottedShingleRoof`,
+  `rottedShedRoof` are the parts. **Missing shingles are texture, not geometry** (the first try, cells of
+  covering and boards cut out, read as blocky, "like Minecraft"): `rottedShingles` is a building material
+  with the courses warped off the ruler, shingles missing in patches (sunk to black), grey boards and moss.
+- **Four worn buildings**: `bunkhouseAbandoned`, `sawShedAbandoned`, `cookhouseAbandoned`,
+  `toolShedAbandoned` - the logging camp's, with the rotted roofs, no lit windows, no sawdust spill, and
+  the `rottedShingles` roof material and greyer log tints.
+- **Props**: `brokenRailFence` (40% of its rails missing), `coldFire` (grey ash, charred sticks, no light,
+  flame or sound), `rottedLogStack`, `rottedFelledLog`, and groups `rottedLogDeck`, `fallenRoof` (crossed
+  beams by a wall).
+- **The feature**: the bunkhouse and the saw shed required, the cookhouse and the tool shed by chance; the
+  boundary a broken rail fence with a gap (not a gate) on the road and several breaches; the clearing
+  small (14 m, back by 40) with old stumps through it (0.9); the yard ground laid only to 0.45, so grass
+  shows through; one link at most to a settlement, of little importance.
+- **Quest tags**: `abandoned`, `ruin`, `mystery`, `remote`, `wood`; objects *Rusted Axe Head*, *Foreman's
+  Tally Book*, *Rotted Boot*, *Moss-grown Pelt* (tags `lost`, `evidence`, `material`); people `hermit`,
+  `forester`; text "the abandoned camp at {name}". The chain of four quests (E4 b) is not written.
+- **Check**: `npm run probe -- scripts/probe/abandonedCamp.mjs` (wiring, 30 layouts over seeds and variants with both
+  required buildings, rotted roofs repeatable and on the rotted material). Seen with `npm run shot --
+  buildings/bunkhouseAbandoned` and `buildings/sawShedAbandoned`; the vale places one in some seeds.
+
+**Not done (the camp's open list).** Walls do not collapse: only roofs rot (GEOMETRY.md section 11 says a
+ruin's walls, where indoors meets outdoors, are a conversation with the owner; a fallen wall bay would be
+the next piece). The interiors are still furnished and the furniture's lamps still glow through the roof
+holes (a `litWindows: 0` building's furniture needs a "no light" switch). Doors are shut as in the lived-in
+camp (doors are static). Bracken and young birch and rowan over the felling are not planted (the clearing
+only shrinks); a "regrowth" ground feature is the next step. The feature has not been walked in the
+game, only laid out and drawn in the workbench.

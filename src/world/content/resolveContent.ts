@@ -1416,7 +1416,7 @@ function readBuildingPart(id: string, obj: RawObject, reader: Reader): BuildingP
   }
   let pitched: BuildingPartDef["pitched"] = null;
   if (generator === "pitched") {
-    reader.onlyKeys(block, path, ["shapes", "pitch", "overhang", "thickness", "covering", "bargeboard", "sag", "step", "ridgeTiles", "parts"]);
+    reader.onlyKeys(block, path, ["shapes", "pitch", "overhang", "thickness", "covering", "bargeboard", "sag", "rot", "step", "ridgeTiles", "parts"]);
     const shapes = reader.stringList(block, "shapes", path).filter((shape): shape is RoofType => {
       if ((ROOF_TYPES as readonly string[]).includes(shape)) return true;
       reader.fail(`${path}.shapes`, `"${shape}" is not a roof shape (known: ${ROOF_TYPES.join(", ")})`);
@@ -1448,6 +1448,7 @@ function readBuildingPart(id: string, obj: RawObject, reader: Reader): BuildingP
       overhang: reader.number(block, "overhang", path, { min: 0 }),
       thickness: reader.number(block, "thickness", path, { min: 0.01 }),
       sag: { ridge: reader.range(sag, "ridge", `${path}.sag`, { allowEqual: true }), slope: reader.range(sag, "slope", `${path}.sag`, { allowEqual: true }) },
+      rot: block.rot === undefined || block.rot === null ? null : reader.range(block, "rot", path, { allowEqual: true }),
       covering: { thickness: reader.number(covering, "thickness", `${path}.covering`, { min: 0.01 }), overhang: reader.number(covering, "overhang", `${path}.covering`, { min: 0 }) },
       bargeboard: bargeboard
         ? { height: reader.number(bargeboard, "height", `${path}.bargeboard`, { min: 0 }), thickness: reader.number(bargeboard, "thickness", `${path}.bargeboard`, { min: 0.01 }) }

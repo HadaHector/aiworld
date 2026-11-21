@@ -1,0 +1,84 @@
+// Wood shingles years unmended: the same courses of split boards as `woodShingles`, but the courses
+// wander (a low warp bends them off the ruler), a share of the shingles are simply gone - a black hole
+// where the boards under them show nothing, sunk deep, the more of them in patches where the roof has
+// let go - and the rest are silver-grey gone green with moss. Missing shingles are done here, in the
+// texture, not in the roof's geometry (a roof of geometric holes read as blocks).
+{
+  name: "Rotted Shingles",
+  size: 6,
+  shine: 0.02,
+  texture: {
+    bumpStrength: 2.5,
+    pipeline: {
+      noises: [
+        { name: "shingles", type: "bricks", tileCycles: [8, 16], stagger: 0.5, amplitude: 1, mode: "edge" },
+        { name: "warpX", type: "fbm", octaves: 2, tileCycles: 4, amplitude: 1, persistence: 0.5, lacunarity: 2 },
+        { name: "warpY", type: "fbm", octaves: 2, tileCycles: 6, amplitude: 1, persistence: 0.5, lacunarity: 2 },
+        { name: "grain", type: "fbm", octaves: 3, tileCycles: 24, amplitude: 1, persistence: 0.55, lacunarity: 2.2, stretch: [1, 10] },
+        { name: "weather", type: "fbm", octaves: 3, tileCycles: 5, amplitude: 1, persistence: 0.55, lacunarity: 2 },
+        // Where the roof has let go: patches, not a sprinkle.
+        { name: "gone", type: "fbm", octaves: 3, tileCycles: 3, amplitude: 1, persistence: 0.5, lacunarity: 2.1 },
+      ],
+      steps: [
+        // The courses bent off the ruler.
+        { output: "wx", op: "sample", noise: "warpX" },
+        { output: "wy", op: "sample", noise: "warpY" },
+        { output: "shiftX", op: "scale", input: "wx", factor: 1.2 },
+        { output: "shiftY", op: "scale", input: "wy", factor: 0.6 },
+        { output: "joint", op: "sample", noise: "shingles", offset: ["shiftX", "shiftY"] },
+        { output: "shingleId", op: "sample", noise: "shingles", mode: "cell", offset: ["shiftX", "shiftY"] },
+        { output: "up", op: "sample", noise: "shingles", mode: "v", offset: ["shiftX", "shiftY"] },
+        { output: "grainRaw", op: "sample", noise: "grain" },
+        { output: "weatherRaw", op: "sample", noise: "weather" },
+        { output: "goneRaw", op: "sample", noise: "gone" },
+
+        // A shingle is gone when its own number plus the patch's pushes it past the line.
+        { output: "patch", op: "scale", input: "goneRaw", factor: 0.7 },
+        { output: "score", op: "add", a: "shingleId", b: "patch" },
+        { output: "missing", op: "mask", input: "score", at: 0.97, off: 0.85 },
+
+        // Each shingle thickest at its lower edge, grain in ridges, the slits sunk - and a gone one
+        // sunk right through.
+        { output: "thickness", op: "invert", input: "up" },
+        { output: "courseHeight", op: "scale", input: "thickness", factor: 0.5 },
+        { output: "grainBump", op: "scale", input: "grainRaw", factor: 0.15 },
+        { output: "slit", op: "mask", input: "joint", at: 0.0, off: 0.03 },
+        { output: "slitDepth", op: "scale", input: "slit", factor: -0.4 },
+        { output: "shaped", op: "add", a: "courseHeight", b: "grainBump" },
+        { output: "heightRaw", op: "add", a: "shaped", b: "slitDepth" },
+        { output: "missingDepth", op: "scale", input: "missing", factor: -1.4 },
+        { output: "height", op: "add", a: "heightRaw", b: "missingDepth" },
+
+        // Silver-grey boards, each its own shade.
+        {
+          output: "tone",
+          op: "colorRamp",
+          input: "shingleId",
+          stops: [
+            { at: 0.0, color: [0.4, 0.37, 0.32] },
+            { at: 0.25, color: [0.5, 0.48, 0.43] },
+            { at: 0.5, color: [0.36, 0.33, 0.28] },
+            { at: 0.75, color: [0.55, 0.53, 0.49] },
+            { at: 1.0, color: [0.33, 0.3, 0.26] },
+          ],
+        },
+        { output: "grainShade", op: "remap", input: "grainRaw", inMin: -1, inMax: 1, outMin: 0.8, outMax: 1.1 },
+        { output: "upShade", op: "remap", input: "up", inMin: 0, inMax: 1, outMin: 1.05, outMax: 0.7 },
+        { output: "shadeA", op: "multiply", a: "grainShade", b: "upShade" },
+        { output: "wood", op: "multiply", a: "tone", b: "shadeA" },
+
+        // Moss over the boards, thick where the weather noise is high.
+        { output: "mossAmount", op: "mask", input: "weatherRaw", at: 0.55, off: 0.0 },
+        { output: "mossTone", op: "color", value: [0.27, 0.34, 0.2] },
+        { output: "mossy", op: "mix", a: "wood", b: "mossTone", t: "mossAmount" },
+
+        { output: "slitColor", op: "color", value: [0.07, 0.06, 0.05] },
+        { output: "slitted", op: "mix", a: "mossy", b: "slitColor", t: "slit" },
+        { output: "black", op: "color", value: [0.012, 0.01, 0.008] },
+        { output: "diffuse", op: "mix", a: "slitted", b: "black", t: "missing" },
+        { output: "roughness", op: "constant", value: 0.92 },
+      ],
+      outputs: { diffuse: "diffuse", roughness: "roughness", height: "height" },
+    },
+  },
+}

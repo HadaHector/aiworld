@@ -48,6 +48,10 @@ export interface RoofPlan {
   slopeSag: number;
   /** How far its ridge tiles stand above the slab. */
   ridgeHeight: number;
+  /** How rotted it is, 0-1 (0: sound), and the seed its fallen-in place is found from; `dip` is how far that place has fallen (metres, 0 for none). */
+  rot: number;
+  decaySeed: number;
+  dip: number;
   /** One slope, not two: a lean-to (leanToRoof.ts), high on its blocks' `lean` side. */
   mono?: boolean;
 }
@@ -55,14 +59,30 @@ export interface RoofPlan {
 export function planPitchedRoof(spec: PitchedRoofSpec, rng: () => number): RoofPlan {
   const shape = spec.shapes[Math.floor(rng() * spec.shapes.length) % spec.shapes.length];
   const slope = Math.tan((roll(spec.pitch, rng) * Math.PI) / 180);
+  let ridgeSag = roll(spec.sag.ridge, rng);
+  let slopeSag = roll(spec.sag.slope, rng);
+  // A sound roof draws nothing more from the rng, so a house's other rolls stay as they were.
+  let rot = 0;
+  let decaySeed = 0;
+  let dip = 0;
+  if (spec.rot) {
+    rot = Math.min(1, Math.max(0, roll(spec.rot, rng)));
+    decaySeed = Math.floor(rng() * 0x7fffffff);
+    ridgeSag *= 1 + rot * 2;
+    slopeSag *= 1 + rot * 2;
+    dip = rot >= 0.4 ? (rot - 0.2) * 1.6 : 0;
+  }
   return {
     shape,
     slope,
     overhang: spec.overhang,
     thickness: spec.thickness,
-    ridgeSag: roll(spec.sag.ridge, rng),
-    slopeSag: roll(spec.sag.slope, rng),
+    ridgeSag,
+    slopeSag,
     ridgeHeight: spec.ridgeTiles ? spec.ridgeTiles.height : 0,
+    rot,
+    decaySeed,
+    dip,
   };
 }
 
@@ -95,6 +115,13 @@ function area(polygon: Point[]): number {
     sum += p[0] * q[1] - q[0] * p[1];
   }
   return Math.abs(sum) / 2;
+}
+
+/** A repeatable 0-1 from two integers and a seed: where a rotted roof's fallen-in place is. */
+function cellHash(gx: number, gz: number, seed: number): number {
+  let h = Math.imul(gx | 0, 374761393) ^ Math.imul(gz | 0, 668265263) ^ Math.imul(seed | 0, 2246822519);
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
 }
 
 /** A sloping plane, y = h0 + hx x + hz z. */
@@ -584,11 +611,18 @@ export function buildPitchedRoof(spec: PitchedRoofSpec, plan: RoofPlan, input: R
   const Z1 = Math.max(...roofs.map((r) => r.outline.z1));
   const eaveLow = eaves - overhang * slope;
   const top = eaves + (Math.max(...blocks.map((k) => k.c1 - k.c0)) / 2) * slope;
+  // A fallen-in place, in a rotted roof: a smooth dip round a point in the middle of its outline.
+  const dipSeed = plan.decaySeed;
+  const dipAt = { x: X0 + (X1 - X0) * (0.3 + 0.4 * cellHash(1, 2, dipSeed)), z: Z0 + (Z1 - Z0) * (0.35 + 0.3 * cellHash(3, 4, dipSeed)) };
+  const dipRadius = Math.max(1.4, Math.min(X1 - X0, Z1 - Z0) * 0.28);
+  const dipNear = (x: number, z: number): number => Math.exp(-((x - dipAt.x) ** 2 + (z - dipAt.z) ** 2) / (2 * dipRadius * dipRadius));
   const sag: Sag = (x, z, y) => {
     const u = Math.min(1, Math.max(0, (x - X0) / (X1 - X0)));
     const v = Math.min(1, Math.max(0, (z - Z0) / (Z1 - Z0)));
     const h = Math.min(1, Math.max(0, (y - eaveLow) / (top - eaveLow)));
-    return -(plan.ridgeSag * h + plan.slopeSag * Math.sin(Math.PI * h)) * Math.sin(Math.PI * u) * Math.sin(Math.PI * v);
+    const base = -(plan.ridgeSag * h + plan.slopeSag * Math.sin(Math.PI * h)) * Math.sin(Math.PI * u) * Math.sin(Math.PI * v);
+    // Nothing at the eaves, so the roof still meets its walls.
+    return plan.dip > 0 ? base - plan.dip * dipNear(x, z) * Math.sin(Math.PI * u) * Math.sin(Math.PI * v) * Math.min(1, h * 3) : base;
   };
 
   const lift = thickness * Math.sqrt(1 + slope * slope);

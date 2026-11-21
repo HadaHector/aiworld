@@ -1,0 +1,30 @@
+// Rotted Shingle Roof: the shingle roof, years unrepaired - the same roof with `rot`, so a building names it to be abandoned.
+// A pitched roof of wooden shingles: steep, light and thin, with a smaller overhang than a clay
+// roof's, a peaked ridge of two boards, bargeboards up its gables - and sagging like an old roof.
+{
+  name: "Rotted Shingle Roof",
+  type: "pitched",
+  pitched: {
+    // The shape at its free ends, one picked per house - and its pitch, in degrees: steep, to
+    // shed the rain off the wood.
+    shapes: ["gable", "hip"],
+    pitch: [35, 45],
+    // It reaches this far past the walls every way, and is this thick.
+    overhang: 0.6,
+    thickness: 0.3,
+    // The shingles on its boards: how thick (of the whole), and how far they reach past the boards
+    // at the eaves - and at the verges, where there is no bargeboard.
+    covering: { thickness: 0.07, overhang: 0.08 },
+    // Boards up the gables' edges, on edge: how far they stand above the shingles, and how thick.
+    bargeboard: { height: 0.16, thickness: 0.06 },
+    // How far its ridges sink in the middle, and its rafters bow (metres, rolled per house).
+    // Rotted (see pitchedRoof.ts): the covering gone in patches and here and there a board, the sag
+    // deepened, and past 0.4 a place fallen in. Rolled per building.
+    rot: [0.55, 0.9],
+    sag: { ridge: [0.15, 0.35], slope: [0.06, 0.12] },
+    step: 1.5,
+    // The ridge: two boards meeting along the top, covering the shingles' ends.
+    ridgeTiles: { width: 0.36, height: 0.1, profile: "peaked" },
+    parts: { covering: "roof", underside: "timber", ridge: "timber", gable: "walls" },
+  },
+}
