@@ -602,3 +602,27 @@ slots as they free.
 | `world.ts`, `terrain/ocean.ts` | the water stopgap and W10, then G1 |
 | `creatures/` and bodies | E11 a, b, c, E12 |
 | materials and baking | G3, G5 looks, G10's shader edits |
+
+## 9. Progress log
+
+### Wave 1, sessions 1-5 (merged to master, 2026-11-21)
+
+| # | Session | Result | Where it is documented |
+|---|---|---|---|
+| 1 | Balance core (B6) | `rules/balance.json5` (the agreed curves), the resolver `src/sim/rules/balanceRules.ts`, all 13 creature species on roles, loot money and generated item prices from the curves. `npm run probe -- scripts/probe/balance.mjs`: 428/428. | BALANCE.md |
+| 2 | The slice world (W1, W9) | The autumn vale: `dimensions/autumnVale.json5` (one zone, 14 cells), `cellsPerArea` per world shape, `public/configs/vale.json5`, a "The Autumn Vale" menu entry, `scripts/probe/vale.mjs`. **B2 (level resolve) not done**: it was waiting for the balance resolver, which is now on master. | DIMENSIONS.md, CONFIG.md |
+| 3 | Shore hills (W15) | Mountains along a one-zone island's coast, on land grown out over the sea, parting for bays. Off by default; a world turns them on with `coastWobble: 1, shoreHills: true` (**not yet added to the vale's dimension file**, and not yet looked at in the vale). | CONFIG.md |
+| 4 | Water (G1 stopgap, W10, W11) | Ocean plane off while underground (the stopgap). Rivers at their own level (opt-in `riverLevels`), tributaries, fords, springs, water drawn above the sea, the ocean cut away under rivers; every biome's waterline rules read `aboveWater`. The real G1 drawing switch is still to do. Known gap: the river-sea seam (WATER.md). | WATER.md |
+| 5 | Creature brain rules (E8, first half) | Tactics' opening delay, crowd-control rules (never first, not twice in a row, immunity after), the spider's web after 4 s. | CREATURES.md |
+
+Merge notes: the merge needed three hand resolutions where sessions touched the same lines
+(`creatureRules.ts` took both the balance and the config parameters; `worldConfig.ts` and `areaField.ts`
+took the vale's `cellsPerArea`, the shore hills' `coastWobble`/`shoreHills` and the water's
+`riverLevels`/`riverTributaries`/`riverField`).
+
+Checks after the merge: balance 428/428, quests 448/448, items 129/129, vale ok, creatures 97/99 (the
+hunting bot's two checks fail on master too), navigation 1506/1507 (one failure: "houses: the wolf goes in
+and up the stairs to the player" - not yet traced, may be from the balance or brain changes).
+
+Next from this wave: B2 (slice world session), add the shore hills settings to the vale and look at it, the
+real G1 switch, then the wave 2 sessions (section 8) now that the curves exist.
