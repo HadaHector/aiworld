@@ -626,3 +626,10 @@ and up the stairs to the player" - not yet traced, may be from the balance or br
 
 Next from this wave: B2 (slice world session), add the shore hills settings to the vale and look at it, the
 real G1 switch, then the wave 2 sessions (section 8) now that the curves exist.
+
+### Answers to section 7 (the user, 2026-11-21)
+
+- **Q2, class order:** warrior, then ranger, mage, priest.
+- **Q4, level-up points:** automatic, for the slice.
+- **Q11, icons:** one icon per item type for the slice (no per-tier or per-item variety); more icon variety belongs to vertical slice 2.
+- Wave 1 is to be finished before wave 2 starts.
