@@ -100,7 +100,9 @@ export function createDimensionDungeons(world: WorldData, collision: CollisionWo
         // where it has a house over it (a mausoleum: the ground under it taken out).
         for (const p of dungeon.layout.parts) {
           const b = p.box;
-          if (fx >= b.min.x - 0.5 && fx <= b.max.x + 0.5 && fz >= b.min.z - 0.5 && fz <= b.max.z + 0.5 && y >= b.min.y - 0.5 && y <= b.max.y + 0.5) {
+          // (A cave's rock swells past its parts' boxes: floors lie up to a few metres outside them.)
+          const m = p.part.field ? 4 : 0.5;
+          if (fx >= b.min.x - m && fx <= b.max.x + m && fz >= b.min.z - m && fz <= b.max.z + m && y >= b.min.y - m && y <= b.max.y + m) {
             // (A mouth's slip too: its ground is cut away, the body stands on the cave's own floor.)
             if (p.role === "entrance" && !p.part.exterior && !p.part.mouth && y > dungeon.site.y - 4) continue;
             return dungeon;
