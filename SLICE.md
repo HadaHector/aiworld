@@ -682,3 +682,15 @@ was not heard on speakers, no sound for snow or mist. Documented in MUSIC.md.
 - **Q3, the third lair (the user, 2026-11-21):** a **mine**, as a variant of the cave style: it needs
   timber supports, mining props (picks, carts, rails, ore) and lanterns. Not yet planned into a session;
   it belongs to the dungeon lane after the cave check (E6).
+
+### Wave 1 finished merging (2026-11-21)
+
+Merged into master: the vale with B2 (creature levels by cell), the abandoned camp (W3), the grove (W5), the
+autumn look (G4), ambience (P7), regeneration and rain/lights checks (I9, G7, G8), the cave check fixes (E6,
+partly: no chests in the cave lair yet, crypt lair untested). Merge conflicts were in docs and `world.ts`
+(rain sheltering and falling leaves both feed `precipitation.update`; kept both). After the merge: typecheck
+clean; balance 431/431, quests 448/448, items 129/129, vale ok, ambience ok; creatures 97/99 (the same two
+hunting-bot failures, old). The dungeons probe did not finish within 250 s. Not seen in the running game:
+the camp, leaves under trees, rain in the inn, lights, ambience on speakers.
+Still to do for wave 1: chests for the cave lair and a crypt test (E6), the mine variant (the third lair),
+the in-game looks above.
