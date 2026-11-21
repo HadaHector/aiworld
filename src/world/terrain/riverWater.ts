@@ -142,7 +142,8 @@ void main(void) {
 `;
 
 interface RibbonArrays {
-  /** Where the ocean plane is cut away under a river: capsules, x0, z0, x1, z1, radius each. */
+  /** Where the ocean plane is cut away under a river: the ribbon's own footprint between two of its rows,
+   *  four corners (x, z) each, in order round it. */
   holes: number[];
   positions: number[];
   uvs: number[];
@@ -165,7 +166,7 @@ function addRiverRibbon(out: RibbonArrays, profile: RiverProfile, heightAt: (x: 
   const count = profile.level.length;
   const step = profile.length / (count - 1);
   let previousRow = -1;
-  let previous: { x: number; z: number; radius: number; seaUnder: boolean } | null = null;
+  let previous: { row: number; seaUnder: boolean } | null = null;
   const emit = (i: number, level: number): void => {
     const a = Math.max(0, i - 1);
     const b = Math.min(count - 1, i + 1);
@@ -200,7 +201,7 @@ function addRiverRibbon(out: RibbonArrays, profile: RiverProfile, heightAt: (x: 
       out.depths.push(Math.max(0, level - ground));
       if (ground < WATER_SURFACE && !open) seaUnder = true;
     }
-    const here = { x, z, radius: Math.max(left, right), seaUnder };
+    const here = { row, seaUnder };
     if (previousRow >= 0) {
       for (let c = 0; c < RIBBON_COLUMNS; c++) {
         const p0 = previousRow + c;
@@ -210,7 +211,10 @@ function addRiverRibbon(out: RibbonArrays, profile: RiverProfile, heightAt: (x: 
       }
       // Where the river's water stands over ground that is under the sea's surface, the ocean plane is
       // cut away beneath it: it would otherwise show inside the channel, a second surface under the first.
-      if (previous && (previous.seaUnder || here.seaUnder)) out.holes.push(previous.x, previous.z, x, z, Math.max(previous.radius, here.radius));
+      if (previous && (previous.seaUnder || here.seaUnder)) {
+        const at = (r: number, c: number): [number, number] => [out.positions[(r + c) * 3], out.positions[(r + c) * 3 + 2]];
+        out.holes.push(...at(previous.row, 0), ...at(previous.row, RIBBON_COLUMNS), ...at(row, RIBBON_COLUMNS), ...at(row, 0));
+      }
     }
     previousRow = row;
     previous = here;

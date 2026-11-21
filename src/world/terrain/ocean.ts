@@ -80,11 +80,21 @@ uniform vec3 skyZenith;
 uniform vec3 discColor;
 uniform float time;
 uniform float rain;
-// Where the ocean is not drawn: under a river's own water above the sea (riverWater.ts) - capsules,
-// the two ends in each vec4 and the radius alongside.
-uniform vec4 holeEnds[${MAX_HOLES}];
-uniform float holeRadius[${MAX_HOLES}];
+// Where the ocean is not drawn: under a river's own water above the sea (riverWater.ts) - the ribbon's
+// footprint between two of its rows, four corners in order round it, two in each vec4.
+uniform vec4 holeA[${MAX_HOLES}];
+uniform vec4 holeB[${MAX_HOLES}];
 uniform int holeCount;
+
+float side(vec2 p, vec2 a, vec2 b) {
+  return (b.x - a.x) * (p.y - a.y) - (b.y - a.y) * (p.x - a.x);
+}
+bool inTriangle(vec2 p, vec2 a, vec2 b, vec2 c) {
+  float d1 = side(p, a, b);
+  float d2 = side(p, b, c);
+  float d3 = side(p, c, a);
+  return !((d1 < 0.0 || d2 < 0.0 || d3 < 0.0) && (d1 > 0.0 || d2 > 0.0 || d3 > 0.0));
+}
 
 float hash(vec2 p) {
   return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
@@ -123,10 +133,11 @@ void main(void) {
   vec2 p = vWorldPosition.xz;
   for (int i = 0; i < ${MAX_HOLES}; i++) {
     if (i >= holeCount) break;
-    vec2 a = holeEnds[i].xy;
-    vec2 ab = holeEnds[i].zw - a;
-    float u = clamp(dot(p - a, ab) / max(dot(ab, ab), 1e-6), 0.0, 1.0);
-    if (length(p - a - ab * u) < holeRadius[i]) discard;
+    vec2 a = holeA[i].xy;
+    vec2 b = holeA[i].zw;
+    vec2 c = holeB[i].xy;
+    vec2 d = holeB[i].zw;
+    if (inTriangle(p, a, b, c) || inTriangle(p, a, c, d)) discard;
   }
   // Three octaves, each drifting its own direction/speed so the sum never repeats in an obviously
   // periodic way: a slow broad swell, a mid-size chop on top of it, and a fine sparkle-sized ripple
@@ -222,7 +233,7 @@ export function createOceanPlane(scene: Scene, sunLighting: SunLighting, sky: Sk
 
   const material = new ShaderMaterial("oceanMaterial", scene, "ocean", {
     attributes: ["position"],
-    uniforms: ["world", "view", "projection", "skyHorizon", "skyZenith", "discColor", "time", "rain", "holeEnds", "holeRadius", "holeCount", ...LIT_SHADING_UNIFORMS],
+    uniforms: ["world", "view", "projection", "skyHorizon", "skyZenith", "discColor", "time", "rain", "holeA", "holeB", "holeCount", ...LIT_SHADING_UNIFORMS],
     samplers: LIT_SHADING_SAMPLERS,
   });
   material.backFaceCulling = true;
@@ -257,21 +268,17 @@ export function createOceanPlane(scene: Scene, sunLighting: SunLighting, sky: Sk
   });
 
   const setHoles = (holes: readonly number[]): void => {
-    const count = Math.min(MAX_HOLES, Math.floor(holes.length / 5));
-    if (holes.length / 5 > MAX_HOLES) console.warn(`[water] ${holes.length / 5} holes in the ocean under rivers, only ${MAX_HOLES} are cut`);
-    const ends: number[] = [];
-    const radii: number[] = [];
+    const given = Math.floor(holes.length / 8);
+    const count = Math.min(MAX_HOLES, given);
+    if (given > MAX_HOLES) console.warn(`[water] ${given} holes in the ocean under rivers, only ${MAX_HOLES} are cut`);
+    const a: number[] = [];
+    const b: number[] = [];
     for (let i = 0; i < MAX_HOLES; i++) {
-      if (i < count) {
-        ends.push(holes[i * 5], holes[i * 5 + 1], holes[i * 5 + 2], holes[i * 5 + 3]);
-        radii.push(holes[i * 5 + 4]);
-      } else {
-        ends.push(0, 0, 0, 0);
-        radii.push(0);
-      }
+      for (let k = 0; k < 4; k++) a.push(i < count ? holes[i * 8 + k] : 0);
+      for (let k = 4; k < 8; k++) b.push(i < count ? holes[i * 8 + k] : 0);
     }
-    material.setArray4("holeEnds", ends);
-    material.setFloats("holeRadius", radii);
+    material.setArray4("holeA", a);
+    material.setArray4("holeB", b);
     material.setInt("holeCount", count);
   };
 
@@ -282,7 +289,7 @@ export interface OceanPlane {
   mesh: Mesh;
   /** How hard it is raining on the water, 0-1 - see the fragment shader's rain ripples. */
   setRain: (amount: number) => void;
-  /** Where it is not drawn: capsules (x0, z0, x1, z1, radius each) under a river's own water above the
-   *  sea, which would otherwise show the ocean inside the river's channel. */
+  /** Where it is not drawn: four-cornered pieces (x, z of each corner in order round it) under a river's
+   *  own water above the sea, which would otherwise show the ocean inside the river's channel. */
   setHoles: (holes: readonly number[]) => void;
 }

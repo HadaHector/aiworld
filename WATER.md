@@ -204,7 +204,7 @@ world: { rivers: [2, 2], riverLength: [4, 6], riverTributaries: [1, 1], riverLev
   into streaks (the user's catch). At the spring the ribbon runs straight on 4 m past where the ground
   meets the water, so the ground draws where it starts (the user's call: no rounded cap).
   Where a river's water stands above the sea over ground below it (its last stretch, its channel cut
-  below the sea's level), the **ocean plane is cut away** under it (`OceanPlane.setHoles`: capsules the
+  below the sea's level), the **ocean plane is cut away** under it (`OceanPlane.setHoles`: the ribbon's own footprint between two rows, which the
   ribbon records, up to 64), or the sea showed inside the channel a metre under the river's own surface
   (the user's catch); a ribbon starting from the sea begins one station earlier, tucked 4 cm under the
   sea's surface, so the river runs down into it. (A shallow estuary - the bed kept above the sea instead -
