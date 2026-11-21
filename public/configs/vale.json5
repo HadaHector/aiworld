@@ -1,0 +1,7 @@
+// The vertical slice's world (SLICE.md): the autumn vale, one zone of the autumn wood. The shape
+// (zones, cells per zone, rivers) is the dimension's own; the config only keeps that dimension.
+{
+  content: {
+    only: { dimensions: ["autumnVale"] },
+  },
+}

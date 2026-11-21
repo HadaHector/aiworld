@@ -1,6 +1,7 @@
 import JSON5 from "json5";
 import { ContentError, Reader, type ContentIssue, type RawObject } from "./contentReader";
 import { MAX_WORLD_EXTENT, worldExtentFor } from "../cells/worldLayout";
+import { CELLS_PER_AREA } from "../cells/config";
 
 /**
  * A world config: how big the world is and which content goes into it (see CONFIG.md). It filters
@@ -12,6 +13,8 @@ import { MAX_WORLD_EXTENT, worldExtentFor } from "../cells/worldLayout";
 export interface WorldShape {
   /** How many zones. */
   areas: [number, number];
+  /** How many cells a zone is made of (a whole number; SLICE.md W9). More cells, a bigger zone. */
+  cellsPerArea: number;
   rivers: [number, number];
   /** Cells a river's path walks. */
   riverLength: [number, number];
@@ -38,6 +41,7 @@ const RENAMED_SHAPE_KEYS: Record<string, string | null> = { continents: null, ar
 /** The full game's world - what a config leaves out of `world` it gets from here. */
 export const DEFAULT_WORLD_SHAPE: WorldShape = {
   areas: [20, 30],
+  cellsPerArea: CELLS_PER_AREA,
   rivers: [3, 5],
   riverLength: [8, 10],
 };
@@ -54,15 +58,20 @@ export function readWorldShape(raw: RawObject, reader: Reader, path: string): Pa
   for (const [old, now] of Object.entries(RENAMED_SHAPE_KEYS)) {
     if (raw[old] !== undefined) reader.fail(`${path}.${old}`, now ? `renamed to "${now}"` : "gone: a world is one landmass, more land is another dimension (see DIMENSIONS.md)");
   }
-  const keys = Object.keys(DEFAULT_WORLD_SHAPE) as (keyof WorldShape)[];
-  reader.onlyKeys(raw, path, [...keys, ...Object.keys(RENAMED_SHAPE_KEYS)]);
+  const keys = Object.keys(DEFAULT_WORLD_SHAPE).filter((k) => k !== "cellsPerArea") as Exclude<keyof WorldShape, "cellsPerArea">[];
+  reader.onlyKeys(raw, path, [...keys, "cellsPerArea", ...Object.keys(RENAMED_SHAPE_KEYS)]);
+  if (raw.cellsPerArea !== undefined) {
+    const n = raw.cellsPerArea;
+    if (typeof n !== "number" || !Number.isInteger(n) || n < 1 || n > 60) reader.fail(`${path}.cellsPerArea`, `expected a whole number from 1 to 60, got ${JSON.stringify(n)}`);
+    else world.cellsPerArea = n;
+  }
   for (const key of keys) {
     if (raw[key] === undefined) continue;
     const range = reader.range(raw, key, path, { allowEqual: true });
     if (range.some((v) => !Number.isInteger(v) || v < (key === "rivers" ? 0 : 1))) {
       reader.fail(`${path}.${key}`, `expected whole numbers of at least ${key === "rivers" ? 0 : 1}, got [${range.join(", ")}]`);
-    } else if (key === "areas" && worldExtentFor(range[1]) > MAX_WORLD_EXTENT) {
-      reader.fail(`${path}.${key}`, `${range[1]} zones make a world ${(worldExtentFor(range[1]) / 1000).toFixed(0)} km across, wider than the ${MAX_WORLD_EXTENT / 1000} km limit - more land belongs in another dimension (see DIMENSIONS.md)`);
+    } else if (key === "areas" && worldExtentFor(range[1], world.cellsPerArea ?? CELLS_PER_AREA) > MAX_WORLD_EXTENT) {
+      reader.fail(`${path}.${key}`, `${range[1]} zones make a world ${(worldExtentFor(range[1], world.cellsPerArea ?? CELLS_PER_AREA) / 1000).toFixed(0)} km across, wider than the ${MAX_WORLD_EXTENT / 1000} km limit - more land belongs in another dimension (see DIMENSIONS.md)`);
     }
     world[key] = range;
   }

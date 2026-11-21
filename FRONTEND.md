@@ -89,7 +89,7 @@ characters and when it was last played. A row's buttons are *Play* (to its chara
 |---|---|
 | Name | Free text, up to 32 characters; *New world* and a number if left empty |
 | Seed | Random to start with, and editable. A number is used as is; any other text is hashed to one (`hashString`), and the number is shown |
-| Size | One per config in `public/configs` plus the full game, with its size and roughly how long it takes to load (CONFIG.md's table): *Full* 29 zones, *Small* 4 zones, *Tiny* 1 zone |
+| Size | One per config in `public/configs` plus the full game, with its size and roughly how long it takes to load (CONFIG.md's table): *Full* 29 zones, *Small* 4 zones, *Tiny* 1 zone, *The Autumn Vale* (the slice: one autumn wood zone of 14 cells) |
 
 The world records the packs and their hashes it was made with. Opening it later with different
 packs shows a warning that lists what changed, with *Play anyway*, as a server's handshake will.

@@ -271,7 +271,7 @@ export function checkDimensions(
   issues: ContentIssue[],
 ): DimensionDef {
   const byId = new Map(kept.map(({ def }) => [def.id, def]));
-  const halfWidth = (def: DimensionDef): number => worldExtentFor(dimensionShape(def, configWorld).areas[1]) / 2;
+  const halfWidth = (def: DimensionDef): number => (() => { const shape = dimensionShape(def, configWorld); return worldExtentFor(shape.areas[1], shape.cellsPerArea); })() / 2;
   const inside = (def: DimensionDef, p: { x: number; z: number }): boolean => Math.max(Math.abs(p.x), Math.abs(p.z)) <= halfWidth(def);
   for (const { file, def } of kept) {
     const list = def.biomes && ("only" in def.biomes ? { key: "only", ids: def.biomes.only } : { key: "except", ids: def.biomes.except });
