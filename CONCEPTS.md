@@ -135,3 +135,38 @@ watermill, cave mouth yard, roadside camp, sheepfold, giant, sheep, bats, cave b
 `python concept.py --file prompts_slice.txt --n 3 --batch 3 --size 1344x768 --out concepts_slice`.
 Icons: 18 new slice icons added to `icons.json` (106 in all), 4 variations each in `v2/icons`; pick in
 `python review.py --out v2`. The tier is a border or tint drawn by the game, so icons are per type and slot.
+
+### The druid grove (W5)
+
+Three images, `concepts_slice/a-druid-grove-...-370a/` (the stone giant's are in `...e4e6/`). The three are one picture
+three times: a clearing seen from low down, huge old oaks left and right with the trunks leaning in, ONE tall standing stone
+in the middle, a leafy grassy floor, low sun in shafts.
+
+**What we took.**
+- **Ring**: not a tidy circle in the images but four or five trunks round an open floor, their limbs arching in over it:
+  five or six ancient oaks evenly round the middle, the clearing between them open (about 900 m2: a boss hall is 800,
+  GEOMETRY.md section 12).
+- **The tree**: a short, enormously thick trunk, near black and deep-furrowed, green with moss and lichen, its foot spread in
+  roots over the ground, limbs flung out wide and crooked, leaves in clumps with sky between (not a solid dome). Our first pass
+  was a green blob; the second (a taller clear trunk, fewer and smaller clumps) reads as an old oak.
+- **The stone**: one, about two men high and one across, a blunt pillar leaning a little, a spiral carved proud on its face,
+  moss at its foot and on its crown, pale bracket fungus on its shoulder.
+- **Floor**: leaf litter and moss over grass; ferns and red-capped and pale mushrooms among the roots and at the stone's foot.
+- **Mood**: no buildings at all; gold-to-orange leaves, a blue-green haze behind the trunks.
+- The giant (a grey-green stone giant carrying a tree trunk, bone necklace, hide kilt) is the grove's rare elite, E11's;
+  nothing of it is in the grove feature.
+
+**What is wrong for the engine.**
+- **Spiral**: the model drew a relief; we have no decals, so it is a ridge of thin beams on the stone's face (a single spiral,
+  the second fainter one dropped). It reads as rings from far off.
+- **Ferns, mushrooms, ivy** are detail of the images: ferns are the wood's own bush kind and grow where the biome says; the
+  toadstools and ivy are left out (a prop or a bush each, later).
+- **Scale**: the stone is about a third of a trunk's height in the images; at that ratio against our oaks it vanished, so it is
+  5.4-6.4 m (GEOMETRY.md's "twice life").
+- **No altar** in the concept. The offering slab before the stone is ours, added so the grove has a place for a quest reward.
+- **Sun shafts** need a light effect we do not have; the clearing is lit by the ordinary sun between the crowns.
+
+**What the build showed.** Trees are the lesson: the scatter cannot place "N trees on a circle", and a compound places props
+only by anchors (the `yardEdge` ones came out at three different radii), so planted trees are a new small piece (FEATURES.md,
+*Druid grove, as built*). Sizes: the first pass, at oak scale, had 160 m wide crowns that hid the whole
+clearing; the final tree is about 40 m across and in the game it still towers over the wood's maples.

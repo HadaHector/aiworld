@@ -1,0 +1,42 @@
+// Moss: a thick, bright cushion - yellow-green and deep green in clumps, a few paler tips. For the
+// grove's standing stones' feet and the slab's top (the concept's moss is its brightest green).
+// Props only; lumps twice life size.
+{
+  name: "Moss",
+  propsOnly: true,
+  size: 2,
+  shine: 0.02,
+  texture: {
+    bumpStrength: 2.2,
+    pipeline: {
+      noises: [
+        { name: "clumps", type: "worley", tileCycles: 10, amplitude: 1, mode: "f1", warp: 0.4, sizeJitter: 0.35 },
+        { name: "mottle", type: "fbm", octaves: 4, tileCycles: 6, amplitude: 1, persistence: 0.55, lacunarity: 2 },
+        { name: "fuzz", type: "fbm", octaves: 3, tileCycles: 60, amplitude: 1, persistence: 0.6, lacunarity: 2 },
+      ],
+      steps: [
+        { output: "clumpRaw", op: "sample", noise: "clumps" },
+        { output: "mottleRaw", op: "sample", noise: "mottle" },
+        { output: "fuzzRaw", op: "sample", noise: "fuzz" },
+        {
+          output: "tone",
+          op: "colorRamp",
+          input: "mottleRaw",
+          stops: [
+            { at: -1, color: [0.12, 0.26, 0.07] },
+            { at: 0, color: [0.22, 0.4, 0.1] },
+            { at: 1, color: [0.42, 0.52, 0.16] },
+          ],
+        },
+        { output: "tipMask", op: "mask", input: "fuzzRaw", at: 0.6, off: 0.2 },
+        { output: "tipTone", op: "color", value: [0.55, 0.62, 0.25] },
+        { output: "diffuse", op: "mix", a: "tone", b: "tipTone", t: "tipMask" },
+        { output: "roughness", op: "constant", value: 0.95 },
+        { output: "clumpBump", op: "scale", input: "clumpRaw", factor: 0.8 },
+        { output: "fuzzBump", op: "scale", input: "fuzzRaw", factor: 0.2 },
+        { output: "height", op: "add", a: "clumpBump", b: "fuzzBump" },
+      ],
+      outputs: { diffuse: "diffuse", roughness: "roughness", height: "height" },
+    },
+  },
+}

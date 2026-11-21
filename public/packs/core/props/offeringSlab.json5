@@ -1,0 +1,14 @@
+// A low offering stone before the standing stone: a flat grey slab on two stub stones, moss over one
+// end. Not in the concept (it shows only the stone), added so the grove has somewhere to leave a
+// reward or a herb for the quest. Table height; walked round, not over.
+{
+  name: "Offering slab",
+  type: "offeringSlab",
+  offeringSlab: { length: [2.4, 2.9], width: [1.4, 1.7], height: [0.8, 1.0] },
+  ground: "level",
+  variants: 2,
+  parts: {
+    stone: { material: "standingStone", tints: [[1, 1, 1], [0.93, 0.95, 0.92]] },
+    moss: { material: "moss", tints: [[1, 1, 1]] },
+  },
+}

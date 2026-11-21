@@ -1,0 +1,20 @@
+// The grove's standing stone (concept: assets_work/comfyUI/concepts_slice/a-druid-grove-...-370a, all
+// three images): ONE tall grey-green stone, a blunt pillar about two men high and a man across, a spiral
+// (two and a half turns) carved proud on its face and a second fainter one below it in the images - we
+// carve one - moss in a thick cushion round its foot and in the hollows, pale shelf fungus on its
+// shoulder, ferns and red-capped toadstools at its feet (those are ground and bushes, not this prop).
+// It leans a little. Sized to read from across the ring against the oaks (20 m and more, in the game): 5.4-6.4 m,
+// slim - the concept's stone is about 1:3.5; at 4-5 m it was lost against their trunks.
+{
+  name: "Standing stone",
+  type: "menhir",
+  menhir: { height: [5.4, 6.4], width: [1.4, 1.7], thickness: [0.75, 0.9], lean: [0, 2.5], carving: 1 },
+  ground: "plumb",
+  variants: 3,
+  parts: {
+    stone: { material: "standingStone", tints: [[1.18, 1.18, 1.12], [1.1, 1.14, 1.1]] },
+    carved: { material: "standingStone", tints: [[1.2, 1.2, 1.1]] },
+    moss: { material: "moss", tints: [[1, 1, 1], [0.9, 1, 0.9]] },
+    fungus: { material: "standingStone", tints: [[1.7, 1.65, 1.45], [1.5, 1.4, 1.2]] },
+  },
+}

@@ -1,0 +1,108 @@
+// An ancient oak, the druid grove's ring tree (SLICE.md W5; concept: assets_work/comfyUI/concepts_slice/
+// a-druid-grove-...-370a): a short, enormously thick trunk twisted on itself, its foot spread in great
+// roots that run out over the ground, and a few huge limbs - crooked, gnarled - flung out nearly level
+// and then up, so that six of them standing in a ring meet overhead. Bark deep-furrowed and near black,
+// green with moss and lichen. Not in any biome's tree graph: it is only ever set down by a feature
+// (the grove's tree markers, see src/world/foliage/featureTrees.ts), never scattered.
+{
+  model: "branching",
+  variants: 5,
+  // The field oak runs 1.5-2.7; these are 6-8 m through at the foot (trunk 2.8 m, flared) and a crown some 40 m across.
+  scale: [1.0, 1.3],
+  trunk: {
+    // Tall and clear: the concept's trunks run bare a long way up before the limbs part.
+    height: 17,
+    radius: 2.8,
+    topRadius: 1.4,
+    lean: 0.1,
+    // Twisted: a slow wander up the trunk, more than the field oak's.
+    wobble: 2.6,
+    flare: 2.2,
+    flareHeight: 3.5,
+    sides: 16,
+    rings: 16,
+  },
+  roots: { count: 7, length: [5, 8], radius: 0.55, drop: 1.8, sides: 8, rings: 5 },
+  branches: {
+    count: [7, 9],
+    from: 0.48,
+    length: [12, 16],
+    radius: 0.7,
+    angle: [50, 78],
+    arc: 0.45,
+    // Gnarled: kinking off its line at every ring (the oak's 0.2).
+    crook: 0.34,
+    sides: 9,
+    rings: 9,
+    twigs: { count: [3, 4], length: [0.35, 0.55], angle: [35, 65], sides: 5, rings: 3 },
+  },
+  // Clumps of leaves out along the limbs and at their tips, not a solid dome: the concept's crowns
+  // are airy, sky and low sun through them.
+  leaves: { size: [10, 13], cards: 3, alongBranch: 2, top: 1, spread: 2.4 },
+  // Furrows up the trunk (ridged crests, only a little taller than wide), cut across into blocky
+  // plates by a stretched worley edge.
+  bark: {
+    tile: 5,
+    texture: {
+      bumpStrength: 3.4,
+      pipeline: {
+        noises: [
+          { name: "furrows", type: "ridged", octaves: 1, tileCycles: 7, stretch: [1, 2.6], amplitude: 1, persistence: 0.5, lacunarity: 2 },
+          { name: "plates", type: "worley", tileCycles: 9, stretch: [1, 1.8], amplitude: 1, mode: "edge", warp: 0.25, sizeJitter: 0.2 },
+          { name: "bend", type: "fbm", octaves: 3, tileCycles: 3, stretch: [1, 2], amplitude: 1, persistence: 0.5, lacunarity: 2 },
+          { name: "grain", type: "fbm", octaves: 3, tileCycles: 50, stretch: [1, 6], amplitude: 1, persistence: 0.5, lacunarity: 2 },
+          { name: "mottle", type: "fbm", octaves: 3, tileCycles: 5, amplitude: 1, persistence: 0.5, lacunarity: 2 },
+          { name: "lichen", type: "fbm", octaves: 3, tileCycles: 8, amplitude: 1, persistence: 0.5, lacunarity: 2 },
+        ],
+        steps: [
+          { output: "bendRaw", op: "sample", noise: "bend" },
+          { output: "bendPx", op: "scale", input: "bendRaw", factor: 40 },
+          { output: "still", op: "constant", value: 0 },
+          // The furrows: 0 in the crease, rising across the ridge between.
+          { output: "furrowCrest", op: "sample", noise: "furrows", offset: ["bendPx", "still"] },
+          { output: "furrowRidge", op: "mask", input: "furrowCrest", at: 0.5, off: 0.95 },
+          // The plates: cut across where the worley cells meet.
+          { output: "plateEdge", op: "sample", noise: "plates", offset: ["bendPx", "still"] },
+          { output: "plateBody", op: "mask", input: "plateEdge", at: 0.14, off: 0.03 },
+          { output: "blocky", op: "multiply", a: "furrowRidge", b: "plateBody" },
+          { output: "body", op: "power", input: "blocky", exponent: 0.6 },
+          { output: "grainRaw", op: "sample", noise: "grain" },
+          { output: "grain", op: "mask", input: "grainRaw", at: 1.2, off: -1.2 },
+          { output: "mottleRaw", op: "sample", noise: "mottle" },
+          { output: "mottle", op: "mask", input: "mottleRaw", at: 1.75, off: -1.75 },
+
+          { output: "bodyHeight", op: "scale", input: "body", factor: 0.88 },
+          { output: "grainHeight", op: "scale", input: "grain", factor: 0.12 },
+          { output: "height", op: "add", a: "bodyHeight", b: "grainHeight" },
+
+          // Near-black in the furrows, grey on the plates' faces.
+          { output: "toneBase", op: "scale", input: "height", factor: 0.8 },
+          { output: "toneMottle", op: "scale", input: "mottle", factor: 0.25 },
+          { output: "tone", op: "add", a: "toneBase", b: "toneMottle" },
+          {
+            output: "wood",
+            op: "colorRamp",
+            input: "tone",
+            stops: [
+              { at: 0.0, color: [0.04, 0.035, 0.03] },
+              { at: 0.3, color: [0.13, 0.11, 0.09] },
+              { at: 0.65, color: [0.3, 0.27, 0.23] },
+              { at: 1.0, color: [0.45, 0.42, 0.37] },
+            ],
+          },
+          // Grey-green lichen on the plates' faces, in patches.
+          { output: "lichenRaw", op: "sample", noise: "lichen" },
+          { output: "lichenPatch", op: "mask", input: "lichenRaw", at: 0.75, off: 0.15 },
+          { output: "lichenHere", op: "multiply", a: "lichenPatch", b: "body" },
+          { output: "lichenTone", op: "color", value: [0.28, 0.4, 0.17] },
+          { output: "diffuse", op: "mix", a: "wood", b: "lichenTone", t: "lichenHere" },
+          { output: "roughness", op: "constant", value: 0.92 },
+        ],
+        outputs: { diffuse: "diffuse", roughness: "roughness", height: "height" },
+      },
+    },
+  },
+  // Denser and darker than the broadleaf's crown.
+  foliage: { builder: "broadleaf", dark: [0.06, 0.16, 0.05], light: [0.32, 0.46, 0.14], leaves: 620, leafLength: 0.05, leafWidth: 0.03 },
+  tint: [[0.8, 0.88, 0.78], [1.1, 1.06, 0.95]],
+}

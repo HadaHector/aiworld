@@ -9,6 +9,7 @@ import { createSpillField, spillMaterials } from "../world/features/spill";
 import type { BiomeDefinition as Biome } from "../world/biomes/biomeTypes";
 import type { RoadLine } from "../world/roads/roadField";
 import type { SettlementGate } from "../world/settlements/gates";
+import { plantedTrees } from "../world/foliage/featureTrees";
 import { createTreeCover, createTreeScatter, type TreeGround, type TreePlacement } from "../world/foliage/treeScatter";
 import { compoundGap, layoutCompound, planCompound, settleProps, settleOnGround, wallStretches, type CompoundLayout } from "../world/features/compound";
 import { compoundPads, createPadField, propPads, type Pad, type PadField } from "../world/settlements/padField";
@@ -236,6 +237,14 @@ export function buildFeaturePreview(
       tree.x -= offset.x;
       tree.z -= offset.z;
       (Math.hypot(tree.x, tree.z) < site.yardReach + full + NEAR_WOOD ? trees : farTrees).push(tree);
+    }
+    // The trees the feature plants itself (its marker props - the druid grove's ring of oaks), which keep the scatter's off their feet.
+    const planted = plantedTrees([layout], content.treeKinds);
+    for (const list of [trees, farTrees]) {
+      for (let i = list.length - 1; i >= 0; i--) if (planted.some((p) => Math.hypot(list[i].x - p.x, list[i].z - p.z) < p.clearance)) list.splice(i, 1);
+    }
+    for (const tree of planted) {
+      trees.push({ x: tree.x, y: heightAt(tree.x, tree.z), z: tree.z, kind: tree.kind, scale: tree.scale, rotation: tree.rotation, tint: tree.tint, area: 0, shade: tree.shadeRoll });
     }
   }
   return { size, heightAt, placed, lines, pads: padList, trees, farTrees, biome, layout, ground: { materialBlender, sampleTerrain: (x, z) => sampleAt(x, z, true) } };

@@ -774,3 +774,40 @@ Saved for their own steps, so this one stays whole:
 - a river log-flume;
 - the saw shed's open side is empty: it wants its work under it - a log on trestles or a saw pit,
   logs waiting and boards sawn, and sawdust spilt over its floor and out in front.
+
+## Druid grove, as built (SLICE.md W5, 2026-11-21)
+
+`features/druidGrove.json5`, a `ring` compound with no buildings, fence or road. Concept and what was taken from it: CONCEPTS.md,
+*The druid grove*. In the autumn wood's list at odds 0.3 (the slice's cell plan, W14, will place it by hand). Siting: grade 0-0.2,
+tree cover 0.45-0.95. Yard radius 16-19 m (an open clearing of about 900 m2), clearing 2 m past the yard's edge, returning by
+14 m, no stumps; ground `leafLitter` across the yard fraying out into the wood's floor. Quest tags `sacred wild remote`, a
+hermit as its person (the first hermit in the wood: he lives in the clearing), four objects (mistletoe, moon fern, a carved
+acorn, a spiral rubbing).
+
+- **The heart**: prop group `groveHeart`, set down first so it takes the yard's middle: the `menhir` (a standing stone 5.4-6.4 m,
+  a spiral ridge carved on its face, moss and bracket fungus) and an `offeringSlab` in front of it (a flat stone on two stub
+  stones, table height: a place to leave a reward). Three to five `ringStone`s (the same generator, 1.3-2.3 m, mostly uncarved)
+  stand about the yard. Generators in `props/generators/stones.ts`; materials `standingStone` and `moss` (props only).
+- **The tree**: `trees/ancientOak.json5`, a branching tree on the oak's pattern: a tall, clear, twisted trunk (17 m, 2.8 m radius,
+  flaring to 6 m), limbs from half-way up, crooked (`crook` 0.34), leaves in airy clumps; scale 1.0-1.3, about 40 m across the
+  crown. In no biome's tree graph: only a feature sets it down.
+- **Planted trees (new piece, `foliage/featureTrees.ts`)**: the scatter cannot place N trees on a circle, and a compound sets props
+  by anchors only. A prop made by the `treeMarker` generator (here `props/ancientOak.json5`) stands for the tree kind **with its
+  own id**, and its settings say what to plant: `ring` (a count, rolled: 5-6), `reach` (metres from the yard's rim to each
+  trunk, 10-14) and `wander` (how far each strays from its even place); `ring` 0 plants one tree where the prop stands. The
+  compound places the marker once like any prop (a disc of dark earth 0.6 m wide, its footprint); `plantedTrees(layouts, kinds)`
+  turns every placed marker into a `PlantedTree`, and `createTreeScatter(seed, content, planted)` wraps the scatter: it adds the
+  tree to the chunk its trunk stands in (area and shade from the chunk's probe, so the biome's autumn tints apply), and keeps the
+  scatter's own trees off its foot. **Every caller of `createTreeScatter` that feeds drawing or collision passes `planted`**:
+  `world.ts` (the chunk manager's context and the map maker), `terrain/chunkBuild.worker.ts`, `sim/dimension.ts` (the collision
+  streamer and trunk field), and the workbench's feature preview (which plants and clears itself). A caller that does not pass it
+  draws no oaks - the trees the server collides with are then not the ones drawn, so a new caller must.
+- **Checks**: `npm run probe -- scripts/probe/grove.mjs` (7-10 groves in 4-8 vale seeds; 5-6 oaks evenly round at 26-31 m; the
+  stone at the middle; the scatter returns the ring and nothing of its own at their feet or in the clearing; the same every
+  time). Looked at in the workbench (`npm run shot -- features/druidGrove`, `props/menhir`, `trees/ancientOak`) and in the game
+  with the odds raised for one run (ring, clearing, stones and the hermit all there, the oaks autumn-coloured).
+- **Not done / to look at**: the floor is plain leaf litter on grass - no ferns, mushrooms or ivy as in the concept; the ring
+  stones bunch on one side of the yard (the compound spreads props by distance from those already down); no road in (a spur from
+  the cell plan, W14, and a marker on the map are left); the giant, the grove's reward and its quest plot (E4 c) belong to their
+  own tasks. A proper `trees:` block in the compound spec (not a marker prop) would be cleaner but means editing `compound.ts`
+  and `featureTypes.ts`, which the abandoned-camp session owns.
