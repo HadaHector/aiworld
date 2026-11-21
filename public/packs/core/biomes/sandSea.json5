@@ -93,6 +93,7 @@
           noises: [{ name: "edge", shared: "sandSeaGreenEdge", type: "fbm", octaves: 3, frequency: 0.004, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
           steps: [
             { output: "height", op: "input", name: "height" },
+            { output: "heightAboveWater", op: "input", name: "aboveWater" },
             { output: "shade", op: "mask", input: "height", at: { param: "shade", to: [8, 14] }, off: { param: "shade", to: [42, 56] } },
             { output: "slope", op: "input", name: "slope" },
             { output: "steep", op: "mask", input: "slope", at: 0.88, off: 0.95 },
@@ -114,7 +115,7 @@
             { output: "lowGround", op: "mask", input: "height", at: 9, off: 22 },
             { output: "gentle", op: "mask", input: "slope", at: 0.985, off: 0.93 },
             { output: "lowGentle", op: "multiply", a: "lowGround", b: "gentle" },
-            { output: "dry", op: "mask", input: "height", at: 1.5, off: -1 },
+            { output: "dry", op: "mask", input: "heightAboveWater", at: 1.5, off: -1 },
             { output: "lowDry", op: "multiply", a: "lowGentle", b: "dry" },
             { output: "green", op: "multiply", a: "water", b: "lowDry" },
             { output: "notGreen", op: "invert", input: "green" },
@@ -156,11 +157,12 @@
             // Low and gentle ground only: the green fills the flats along the water and stops at the
             // foot of the dunes rather than running up their faces.
             { output: "height", op: "input", name: "height" },
+            { output: "heightAboveWater", op: "input", name: "aboveWater" },
             { output: "lowGround", op: "mask", input: "height", at: 9, off: 22 },
             { output: "slope", op: "input", name: "slope" },
             { output: "gentle", op: "mask", input: "slope", at: 0.985, off: 0.93 },
             { output: "lowGentle", op: "multiply", a: "lowGround", b: "gentle" },
-            { output: "dry", op: "mask", input: "height", at: 1.5, off: -1 },
+            { output: "dry", op: "mask", input: "heightAboveWater", at: 1.5, off: -1 },
             { output: "lowDry", op: "multiply", a: "lowGentle", b: "dry" },
             { output: "green", op: "multiply", a: "water", b: "lowDry" },
             { output: "result", op: "scale", input: "green", factor: 2.4 },

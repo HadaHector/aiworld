@@ -49,7 +49,7 @@
       { name: "group", type: "fbm", octaves: 2, frequency: 0.009, amplitude: 1, persistence: 0.5, lacunarity: 2.0 },
     ],
     steps: [
-      { output: "height", op: "input", name: "height" },
+      { output: "height", op: "input", name: "aboveWater" },
       { output: "standRaw", op: "sample", noise: "stand" },
       { output: "standRamp", op: "remap", input: "standRaw", inMin: { range: [-0.7, -0.4] }, inMax: 0.2, outMin: 0.2, outMax: 1 },
       { output: "stand", op: "clamp", input: "standRamp", min: 0, max: 1 },
@@ -71,7 +71,7 @@
   rocks: {
     noises: [{ name: "cluster", type: "fbm", octaves: 2, frequency: 0.03, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
     steps: [
-      { output: "height", op: "input", name: "height" },
+      { output: "height", op: "input", name: "aboveWater" },
       { output: "notDeep", op: "mask", input: "height", at: -0.6, off: -1.1 },
       { output: "notHigh", op: "mask", input: "height", at: 0.6, off: 1.2 },
       { output: "shallows", op: "multiply", a: "notDeep", b: "notHigh" },
@@ -88,7 +88,7 @@
     steps: [
       { output: "bedRaw", op: "sample", noise: "bed" },
       { output: "bed", op: "mask", input: "bedRaw", at: 0.5, off: 0.2 },
-      { output: "height", op: "input", name: "height" },
+      { output: "height", op: "input", name: "aboveWater" },
       { output: "dry", op: "mask", input: "height", at: 1.4, off: 0.8 },
       { output: "beds", op: "multiply", a: "bed", b: "dry" },
       { output: "fern", op: "scale", input: "beds", factor: { range: [0.2, 0.4] } },
@@ -116,7 +116,7 @@
         weight: {
           noises: [{ name: "mat", type: "fbm", octaves: 3, frequency: 0.006, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
           steps: [
-            { output: "height", op: "input", name: "height" },
+            { output: "height", op: "input", name: "aboveWater" },
             // On past the waterline a little - the bank hides it there - so a mat meets the mud.
             { output: "wet", op: "mask", input: "height", at: 0.1, off: 0.3 },
             // Against the banks: the last half metre of depth.
@@ -138,7 +138,7 @@
         weight: {
           noises: [{ name: "fray", type: "fbm", octaves: 3, frequency: 0.04, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
           steps: [
-            { output: "height", op: "input", name: "height" },
+            { output: "height", op: "input", name: "aboveWater" },
             { output: "frayRaw", op: "sample", noise: "fray" },
             { output: "fray", op: "scale", input: "frayRaw", factor: 0.25 },
             { output: "reach", op: "add", a: "height", b: "fray" },
@@ -157,7 +157,7 @@
         weight: {
           noises: [{ name: "patch", type: "fbm", octaves: 3, frequency: 0.03, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
           steps: [
-            { output: "height", op: "input", name: "height" },
+            { output: "height", op: "input", name: "aboveWater" },
             { output: "notDeep", op: "mask", input: "height", at: -0.3, off: -0.7 },
             { output: "notHigh", op: "mask", input: "height", at: 0.5, off: 1.0 },
             { output: "edge", op: "multiply", a: "notDeep", b: "notHigh" },
@@ -175,7 +175,7 @@
         weight: {
           noises: [{ name: "fray", type: "fbm", octaves: 3, frequency: 0.03, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
           steps: [
-            { output: "height", op: "input", name: "height" },
+            { output: "height", op: "input", name: "aboveWater" },
             { output: "frayRaw", op: "sample", noise: "fray" },
             { output: "fray", op: "scale", input: "frayRaw", factor: 0.8 },
             { output: "reach", op: "add", a: "height", b: "fray" },
@@ -191,7 +191,7 @@
         weight: {
           noises: [{ name: "drift", type: "fbm", octaves: 3, frequency: 0.02, amplitude: 1, persistence: 0.5, lacunarity: 2.0 }],
           steps: [
-            { output: "height", op: "input", name: "height" },
+            { output: "height", op: "input", name: "aboveWater" },
             { output: "above", op: "mask", input: "height", at: 0.9, off: 0.4 },
             { output: "driftRaw", op: "sample", noise: "drift" },
             { output: "drift", op: "mask", input: "driftRaw", at: 0.35, off: 0 },

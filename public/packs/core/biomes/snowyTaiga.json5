@@ -123,7 +123,7 @@
             { output: "lake", op: "mask", input: "lakeFactor", at: 0.25, off: 0.02 },
             // And so does any hollow inland where the ground just dips to the waterline and fills - no
             // river, no lake cell, only low ground. Inland only: the coast keeps its sand.
-            { output: "height", op: "input", name: "height" },
+            { output: "height", op: "input", name: "aboveWater" },
             { output: "low", op: "mask", input: "height", at: 0.6, off: 2.6 },
             { output: "landmass", op: "input", name: "landmass" },
             { output: "inland", op: "mask", input: "landmass", at: 0.95, off: 0.7 },

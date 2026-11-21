@@ -383,6 +383,7 @@ function createScatter(seed: number, level: ScatterLevel): { scatter: TreeScatte
   const perKind = new Float64Array(kindIds.length);
   const context: Record<string, number> = {
     height: 0,
+    aboveWater: 0,
     slope: 0,
     riverGap: 0,
     roadGap: 0,
@@ -480,6 +481,9 @@ function createScatter(seed: number, level: ScatterLevel): { scatter: TreeScatte
     perKind.fill(0);
 
     context.height = ground.height;
+    // How high above the water: the height itself by the sea, above a river's own surface by one at its
+    // own level (TerrainSample.waterLine) - for the zones' waterside plants.
+    context.aboveWater = ground.height - sample.waterLine;
     context.slope = ground.slope;
     context.riverGap = sample.riverGap;
     context.roadGap = sample.roadGap;

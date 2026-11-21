@@ -228,7 +228,7 @@
         material: "peat",
         weight: {
           steps: [
-            { output: "height", op: "input", name: "height" },
+            { output: "height", op: "input", name: "aboveWater" },
             { output: "wet", op: "mask", input: "height", at: 0.3, off: 1.6 },
             { output: "curvature", op: "input", name: "reliefCurvature" },
             { output: "hollow", op: "mask", input: "curvature", at: 1.5, off: 0.6 },
