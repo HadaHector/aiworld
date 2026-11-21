@@ -476,6 +476,9 @@ export interface ChimneySpec {
   pots: { count: number; width: number; height: number };
   /** Which of the building's parts the body, the cap and the pots are painted as. */
   parts: { body: HousePart; cap: HousePart; pots: HousePart };
+  /** A looping particle effect (a pack's particles/) smoking off the stack's top - only in a house
+   *  built near, and only where a hearth burns behind the chimney - or none. */
+  smoke: string | null;
 }
 
 /**

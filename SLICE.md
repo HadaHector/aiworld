@@ -628,6 +628,29 @@ and up the stairs to the player" - not yet traced, may be from the balance or br
 Next from this wave: B2 (slice world session), add the shore hills settings to the vale and look at it, the
 real G1 switch, then the wave 2 sessions (section 8) now that the curves exist.
 
+### G4 as built (autumn look, 2026-11-21, branch `claude/slice-autumn-9c8327`)
+
+- **Falling leaves**: a third air layer in `src/world/weather/precipitation.ts`, beside rain and snow (the same trick: a box
+  about the camera, places worked out in the vertex shader from seed and clock, one draw call). 2600 leaves, each a
+  tumbling pointed oval (turns, flips edge-on, sways wide), coloured crimson / orange / gold / russet from its seed, lit by
+  the day's light, blown by the wind. A biome says how thick with `fallingLeaves` (0-1, default 0; autumnWood 0.75); the
+  world blends it by the areas' weights, rain and snow put it out, wind stirs it (`world.ts` `updateWeather`).
+  (Not `src/particles`: the CPU pool is for effects with owners; an ambient layer round the camera is the weather's job.)
+  **Only under trees**: each leaf reads the tree cover of the ground beneath it from a 32 x 32 grid (1.5 m cells) laid about
+  the player, two rows a frame, re-laid when the player strays 4 m (`coverAt` in `createPrecipitation`; world.ts passes
+  `createTreeCover`). Cover 0 in the village squares, 0.5-1 in the wood (checked headless, `scripts/probe/leafCover.local.mjs`);
+  the mask is `smoothstep(0.25, 0.65, cover)`. Cover is a density, not the trees themselves, so a leaf may fall between two trunks.
+- **Chimney smoke**: `smoke` on a chimney part (`stoneChimney`, `bigChimney`) names a looping effect, laid as a model
+  effect on the stack top by `houseGenerator.ts` in near models only, and only where a hearth room is behind the chimney
+  (a house with no interior: always). It runs through the existing flame manager, so it shares its distance slider and cap.
+  New effects `particles/smoke.chimney.json5` (thin pale plume) and `smoke.camp.json5` (the campfire prop's `extra`).
+- **Golden hour and weather**: autumnWood's `light` gets a lower sun (peak 34), honey `sunZenith`, amber `sunHorizon`, a warm
+  fill; and its own weather odds (mostly fair and clear, some cloud, mist, drizzle, a gale). Data only, no shader touched.
+- **Cost**: leaves are 5200 triangles in one vertex-shader draw; the CPU side is five uniform sets a frame. In the vale in the
+  Browser pane (software-rendered, about 35 ms a frame) leaves on versus off was inside the noise (+-3 ms over 120 frames);
+  no GPU measurement was made. Chimney smoke is about 12 live sprites per chimney within the flame distance.
+- Not done: smoke from the logging camp's and the lodge's smokehouse (no chimney part there), wood smoke leaning with the wind.
+
 ### Answers to section 7 (the user, 2026-11-21)
 
 - **Q2, class order:** warrior, then ranger, mage, priest.
