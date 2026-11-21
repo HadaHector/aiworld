@@ -661,6 +661,18 @@ from `dungeon.where`. Touched outside `src/audio` and `src/music`, minimally: `w
 `npm run probe -- scripts/probe/ambience.mjs` 0 failed, and an offline render in `?play`. Not done: rain
 was not heard on speakers, no sound for snow or mist. Documented in MUSIC.md.
 
+### Wave 1, sessions 11 and 12 (small ones, branch `claude/slice-small-8131e0`)
+
+- **I9 regeneration (done):** health 2% of maximum a second out of combat, starting 6 s after the last blow
+  (`resources/health.json5`, `rules/combat.json5` `combatTimeout`), matching `regen` in `rules/balance.json5`;
+  none in combat. `balance.mjs` probe now checks it (431/431). Mana/rage unchanged. Food as the complement is I5's.
+- **G7 rain in buildings (done, not seen in game):** `updateWeather` takes the player's height and fades rain and snow out
+  over a second while `buildingAt` says the player is inside a building's footprint (cellars too), as it already
+  did underground (`world.ts`, `session.ts`). Needs a look in the game with rain forced (`world.weather.force`).
+  Caveat: any building's footprint counts, including a shut one, or the roof.
+- **G8 lights (checked in code only):** props' lights and windows are as LIGHTS.md describes. Gap: no outdoor
+  lights (LIGHTS.md phase 6), so the camp fire lights no ground. Not done: a look at dusk in the game.
+
 ### Answers to section 7 (the user, 2026-11-21)
 
 - **Q2, class order:** warrior, then ranger, mage, priest.

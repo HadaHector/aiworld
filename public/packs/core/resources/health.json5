@@ -3,8 +3,10 @@
   name: "Health",
   max: "maxHealth",
   start: 1,
-  // Per second, out of combat only; in two-second ticks, as in WoW Classic.
-  regen: { outOfCombat: { add: [{ mul: ["maxHealth", 0.02] }, { mul: ["spirit", 0.5] }] }, inCombat: 0 },
+  // Per second, out of combat only; in two-second ticks, as in WoW Classic. The share is rules/balance.json5's
+  // `regen.share` (2% a second, BALANCE.md); the delay after the last blow is combat.json5's `combatTimeout`
+  // (= balance `regen.delay`, 6 s). A balance probe check keeps the three in step.
+  regen: { outOfCombat: { mul: ["maxHealth", 0.02] }, inCombat: 0 },
   interval: 2,
   visible: "all",
 }

@@ -25,5 +25,6 @@
     noCrit: { hit: 1, crit: 0, mitigate: "amount" },
   },
   threat: { damage: 1, heal: 0.5, forgetAfter: 6 },
-  combatTimeout: 5,
+  // Seconds after the last blow before it is out of combat: regeneration starts then (= rules/balance.json5 `regen.delay`).
+  combatTimeout: 6,
 }

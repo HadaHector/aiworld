@@ -671,7 +671,7 @@ export async function startSession(page: Page, options: SessionOptions): Promise
     // Day-night first: it owns the clock, and updateAtmosphere reads that clock's current value
     // (world.ts's updateAtmosphere calls sunLighting.getTimeHours() itself) - calling it after this
     // is what makes that read this frame's time rather than last frame's.
-    world.updateWeather(deltaSeconds, here.areaWeights, focus.x, focus.z);
+    world.updateWeather(deltaSeconds, here.areaWeights, focus.x, focus.z, feet.y);
     world.updateDayNight(deltaSeconds, here.areaWeights);
     world.updateAtmosphere(here.areaWeights);
   }

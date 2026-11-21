@@ -100,7 +100,7 @@ export interface World {
   updateDayNight: (deltaSeconds: number, areaWeights: AreaWeight[]) => void;
   /** Advances every in-range zone's weather and hands the blend to the light and the wind - see
    *  weather/weatherSystem.ts. Every frame, before updateDayNight and updateAtmosphere, which use it. */
-  updateWeather: (deltaSeconds: number, areaWeights: AreaWeight[], playerX?: number, playerZ?: number) => void;
+  updateWeather: (deltaSeconds: number, areaWeights: AreaWeight[], playerX?: number, playerZ?: number, playerY?: number) => void;
   /** The zones' weather: what one area's is now (for the HUD), and picking one by hand to look at. */
   weather: WeatherSystem;
   /** The weather where the player stands now, as the last `updateWeather` blended it - for the ambience (src/audio/ambience.ts). */
@@ -379,7 +379,13 @@ export async function createWorld(
   // The light the rain and snow are seen by: the sky's fill and some of the sun's - so they are
   // bright by day, grey under a dark sky and dim at night.
   const fallLight = new Color3();
-  const updateWeather = (deltaSeconds: number, areaWeights: AreaWeight[], playerX = 0, playerZ = 0) => {
+  // How far under a roof the player is, 0 to 1: the fall fades out over about a second going into a
+  // house and back in coming out, so the doorway is not a hard edge. Cellars and caves have their own
+  // fade (`underground`).
+  let sheltered = 0;
+  const updateWeather = (deltaSeconds: number, areaWeights: AreaWeight[], playerX = 0, playerZ = 0, playerY?: number) => {
+    const roofed = playerY !== undefined && data.buildingAt(playerX, playerY, playerZ) !== undefined;
+    sheltered = Math.min(1, Math.max(0, sheltered + (roofed ? 1 : -1) * deltaSeconds));
     precipitation.setCentre(playerX, playerZ);
     weatherNow = weather.update(deltaSeconds, areaWeights);
     sunLighting.setWeather(weatherNow.sun, weatherNow.ambient);
@@ -388,7 +394,7 @@ export async function createWorld(
     fallLight.r = Math.min(1.1, fallLight.r + sunLighting.color.r * sunLighting.intensity * 0.5);
     fallLight.g = Math.min(1.1, fallLight.g + sunLighting.color.g * sunLighting.intensity * 0.5);
     fallLight.b = Math.min(1.1, fallLight.b + sunLighting.color.b * sunLighting.intensity * 0.5);
-    const open = 1 - sunLighting.underground;
+    const open = (1 - sunLighting.underground) * (1 - sheltered);
     // Leaves: the zones' own fall, blended by weight, thinned out by rain and snow (they stick) and
     // stirred up by wind - a gale is a drift, a still day a few.
     let leafy = 0;

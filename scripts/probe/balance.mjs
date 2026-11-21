@@ -6,6 +6,7 @@
 import { ContentError } from "../../src/world/content/contentReader.ts";
 import { readBalanceRules } from "../../src/sim/rules/balanceRules.ts";
 import { createStatBlock, statValue } from "../../src/sim/stats.ts";
+import { createResourceBlock, stepResourceBlock } from "../../src/sim/resources.ts";
 import { rollLoot } from "../../src/sim/rules/itemRules.ts";
 import { loadCreatureRulesFromDisk, loadItemRulesFromDisk, loadRulesFromDisk, packSourcesFromDisk, readConfigFromDisk } from "../diskContent.mjs";
 
@@ -64,6 +65,20 @@ check("an unknown role throws", (() => { try { balance.baseline("nope", 1); retu
 // --- creatures with a role, spawned the way the spawner does ---
 const game = loadRulesFromDisk();
 const creatures = loadCreatureRulesFromDisk("default", game, 7);
+// --- regeneration (I9): health 2% of maximum a second out of combat, after 6 s; none in combat ---
+check("combat timeout is the regen delay", game.combat.combatTimeout === balance.regen.delay, String(game.combat.combatTimeout));
+{
+  const template = game.templates.get("player");
+  const stats = createStatBlock(game, template);
+  const block = createResourceBlock(game, template, stats, 0);
+  const H = game.resourceIndex.get("health");
+  const max = block.max[H];
+  block.current[H] = 0;
+  stepResourceBlock(block, stats, true, 10);
+  check("no health regen in combat", block.current[H] === 0);
+  stepResourceBlock(block, stats, false, 10);
+  check("out of combat: balance share of maximum a second", near(block.current[H], max * balance.regen.share * 10, 0.001), `${block.current[H]} of ${max}`);
+}
 const items = loadItemRulesFromDisk("default", game, 7);
 check("creature rules carry the balance rules", creatures.balance === balance || creatures.balance !== null);
 const statIndex = (id) => game.statIndex.get(id);
