@@ -126,3 +126,12 @@ Each image ~1 min at n=1. The three are Flux "man + plain background" prompts; t
   look more than any geometry fix did. The tube tool made organic props (antlers, deer) possible in one pass.
 - A mask op's direction is not obvious: a floret mask I gated by a noise never showed (no purple); using the cell
   mask directly worked. Test a material's colours alone first.
+
+## Slice concepts (SLICE.md section 8)
+
+12 subjects, 3 images each at 1344x768, in `assets_work/comfyUI/concepts_slice/<slug>/` (git-ignored). Prompts:
+`assets_work/comfyUI/prompts_slice.txt`, in the feature lane's order: abandoned camp, motte and bailey, grove,
+watermill, cave mouth yard, roadside camp, sheepfold, giant, sheep, bats, cave bear, undead variants. Run with
+`python concept.py --file prompts_slice.txt --n 3 --batch 3 --size 1344x768 --out concepts_slice`.
+Icons: 18 new slice icons added to `icons.json` (106 in all), 4 variations each in `v2/icons`; pick in
+`python review.py --out v2`. The tier is a border or tint drawn by the game, so icons are per type and slot.
