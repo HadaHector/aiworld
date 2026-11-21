@@ -219,7 +219,12 @@ world: { rivers: [2, 2], riverLength: [4, 6], riverTributaries: [1, 1], riverLev
   bed), no levels without the flag. `water.mjs` and `roadWater.mjs` still
   pass. In the page (`?play&config=rivers&seed=4242`, `public/configs/rivers.json5`): a river at 22 m
   over the sea, drawn and on the minimap.
-- **Not done.** Lakes are still sea-level hollows: a mountain lake needs a lake body at its own level
+- **Not done.** Where a river meets the sea there is a visible seam: the two surfaces are different
+  shaders (the ocean draws reflection and glint only, its colour from the terrain's tint; the river its own
+  body colour, its ripples in its own frame). Agreed with the user to leave for later; the way to do it:
+  a per-vertex "to the sea" weight over the last few stations, lerping the river's ripples to the ocean's
+  world-space waves and its body colour to the terrain's tint under the sea, so the two match at the seam.
+  Lakes are still sea-level hollows: a mountain lake needs a lake body at its own level
   (the flat `pond` is ready for it, and for W13's mill pond), nothing generates one yet. A cave pool needs
   `sim/playerBody.ts` to pass the body's height to `waterAt` inside a dungeon (it skips water there) and
   the cave session to add the pool. Fords are rolled, but roads choose their own crossings: in the four
