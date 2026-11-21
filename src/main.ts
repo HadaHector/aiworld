@@ -52,6 +52,7 @@ const musicControl = createMusicControl(
     menuSounds?.setVolume(volume);
   },
   (shake) => session?.feedback.setShake(shake),
+  (volume) => session?.feedback.setAmbienceVolume(volume),
 );
 // The volumes and the shake are options (O), beside the graphics the dimension view adds.
 dock(musicControl.element, hud.options.sound);

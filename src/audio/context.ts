@@ -10,6 +10,8 @@ export interface GameAudio {
   music: AudioNode;
   /** Where the sound effects play into. */
   effects: AudioNode;
+  /** Where the ambience (wind, rain, water, drips) plays into: under the effects, beside the music. */
+  ambient: AudioNode;
   /** Everything heard goes through this low-pass: wide open in air, closed under water (WATER.md). */
   muffle: BiquadFilterNode;
 }
@@ -35,9 +37,11 @@ function make(): GameAudio {
   muffle.connect(ctx.destination);
   const music = ctx.createGain();
   const effects = ctx.createGain();
+  const ambient = ctx.createGain();
   music.connect(limiter);
   effects.connect(limiter);
-  made = { ctx, music, effects, muffle };
+  ambient.connect(limiter);
+  made = { ctx, music, effects, ambient, muffle };
   // Running already, or as soon as the browser allows: then everyone waiting gets it.
   ctx.addEventListener("statechange", started);
   started();

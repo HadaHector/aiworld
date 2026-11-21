@@ -403,7 +403,7 @@ IDs are used in the dependencies. Where two tasks touch the same files they are 
 | **Creatures probe, 3 failures** | `npm run probe -- scripts/probe/creatures.mjs` on master: **90 of 93 pass**. Failing: the bot kills no creature in 90 s (it does not reach a wolf and a boar 124 and 140 m away), the loot check that depends on it, and "no one further off than `social`". **New**: 93 of 93 at 6a588bb, 2f0da06 and a741e7b; the break came with 08a3ce6 (creatures follow into houses), e432ac4 (crypts peopled), 55b6b54 (ranged creatures close in) or a later merge. Not narrowed further. | E1, B3 |
 | **Trainer window** | *Train* opens the progression panel; no trainer's own window. | P2 |
 | **Quest variety** | 3 plots and 23 segments. Playable chain, thin variety. | E4 |
-| **Ambient sound** | No ambience sounds or system; the `ambient` bus exists unused. No rain sound. | P7 |
+| **Ambient sound** | **Built (P7, see MUSIC.md *Ambience*):** wind, leaves, rain, water, birds, owl, cave drips, crypt drone; lair and boss music. Levels checked by probe and offline render, not yet listened to. | P7 |
 | **Inn camera clipping** | Not reproduced; needs a spot from the user. | P1 |
 | **Icons for four items** | Generated, waiting for the pick in `assets_work/comfyUI/review.py`. | I4 |
 | **Cave dungeon** | **Corrected 2026-11-20.** The first draft said not started. A parallel session has since built a `cave` style and about 22 cave parts (`public/packs/core/dungeonParts/cave*.json5`, `dungeonStyles/cave.json5`; commits 97e5697 natural cave from field parts, 80a48ce cave mouths on steep hillsides, 6ec8d43 rougher caves). DUNGEONS.md's *as built* does not say so yet, and the packs have no cave-mouth *feature* (no `features/` entry) and no biome places one. Not checked by me: walking it, its boss, chests, spawns, the seamless entry. | E6, W16 |
@@ -650,6 +650,16 @@ real G1 switch, then the wave 2 sessions (section 8) now that the curves exist.
   Browser pane (software-rendered, about 35 ms a frame) leaves on versus off was inside the noise (+-3 ms over 120 frames);
   no GPU measurement was made. Chimney smoke is about 12 live sprites per chimney within the flame distance.
 - Not done: smoke from the logging camp's and the lodge's smokehouse (no chimney part there), wood smoke leaning with the wind.
+
+### Wave 1, slot 7: ambience and sound (P7)
+
+Ambience on its own bus in `src/audio/ambience.ts` (levels in `ambienceMix.ts`, fed from `feedback.ts`):
+wind and dry leaves, rain, a river or pond within 38 m, birds by day and an owl by night, a cave's drips
+and room tone, a crypt's drone; indoors dulls it. New music styles `crypt` and `lair` (boss room), picked
+from `dungeon.where`. Touched outside `src/audio` and `src/music`, minimally: `world.ts` (two getters),
+`dungeonPresence.ts` (`where`), `session.ts` and `feedback.ts` (the wiring). Checked:
+`npm run probe -- scripts/probe/ambience.mjs` 0 failed, and an offline render in `?play`. Not done: rain
+was not heard on speakers, no sound for snow or mist. Documented in MUSIC.md.
 
 ### Answers to section 7 (the user, 2026-11-21)
 

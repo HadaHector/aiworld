@@ -103,6 +103,10 @@ export interface World {
   updateWeather: (deltaSeconds: number, areaWeights: AreaWeight[], playerX?: number, playerZ?: number) => void;
   /** The zones' weather: what one area's is now (for the HUD), and picking one by hand to look at. */
   weather: WeatherSystem;
+  /** The weather where the player stands now, as the last `updateWeather` blended it - for the ambience (src/audio/ambience.ts). */
+  weatherBlend: () => WeatherBlend;
+  /** How far underground the light is, 0 (out) to 1 (in), as it fades - for the ambience. */
+  undergroundShare: () => number;
   /** Jumps the clock to a given hour (0-24, wrapping) - what the settings-panel time-of-day slider
    *  drives, so previewing the far side of a slow cycle doesn't mean actually waiting for it. */
   setTimeOfDay: (hours: number) => void;
@@ -450,6 +454,8 @@ export async function createWorld(
     updateDayNight: sunLighting.updateDayNight,
     updateWeather,
     weather,
+    weatherBlend: () => weatherNow,
+    undergroundShare: () => sunLighting.underground,
     setTimeOfDay: sunLighting.setTimeHours,
     getTimeOfDay: sunLighting.getTimeHours,
     lightMover: (mesh) => createPlayerLights(scene, mesh, lightsNear, collision.world, sunLighting),

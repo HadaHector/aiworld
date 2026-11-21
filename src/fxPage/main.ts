@@ -6,6 +6,8 @@
 import { ArcRotateCamera, Color3, Color4, DirectionalLight, HemisphericLight, MeshBuilder, Scene, StandardMaterial, Vector3 } from "@babylonjs/core";
 import { whenAudio } from "../audio/context";
 import { createSfx, type Sfx, type Vec3 } from "../audio/sfx";
+import { createAmbience, type Ambience } from "../audio/ambience";
+import { AMBIENCE_PRESETS, createAmbienceTab } from "./ambiencePanel";
 import type { RenderedSound } from "../audio/synth";
 import { createEngine } from "../core/engine";
 import { createCuePlayer, type Bone, type CuePlayer, type UnitTraits } from "../feedback/cues";
@@ -135,7 +137,12 @@ try {
   // No storage: the default.
 }
 let sfx: Sfx | null = null;
+let ambience: Ambience | null = null;
+const ambienceTab = createAmbienceTab();
 whenAudio((audio) => {
+  ambience = createAmbience(audio.ctx, audio.ambient);
+  ambience.setVolume((Number(volume.value) / 100) ** 2);
+  ambience.setMuted(!ambienceTab.playing);
   sfx = createSfx(audio.ctx, audio.effects, rules, (sound, file) => `${import.meta.env.BASE_URL}packs/${sound.file.split("/")[0]}/${file}`);
   sfx.setVolume((Number(volume.value) / 100) ** 2);
   status.textContent = "";
@@ -148,6 +155,7 @@ whenAudio((audio) => {
 });
 volume.addEventListener("input", () => {
   sfx?.setVolume((Number(volume.value) / 100) ** 2);
+  ambience?.setVolume((Number(volume.value) / 100) ** 2);
   try {
     localStorage.setItem(EFFECTS_KEY, volume.value);
   } catch {
@@ -157,6 +165,8 @@ volume.addEventListener("input", () => {
 $("stop").addEventListener("click", () => {
   stopSkill();
   sfx?.stopAll();
+  ambienceTab.stop();
+  if (state.tab === "ambience") renderDetail();
   stopLooping();
   particles.clear();
 });
@@ -218,6 +228,7 @@ engine.runRenderLoop(() => {
     camera.getDirectionToRef(Vector3.Forward(), forward);
     sfx.setListener(camera.globalPosition, forward, { x: 0, y: 1, z: 0 });
   }
+  ambienceTab.frame(ambience);
   scene.render();
 });
 addEventListener("resize", () => engine.resize());
@@ -228,14 +239,14 @@ setInterval(() => {
 }, 100);
 
 // --- the list ------------------------------------------------------------------------------------
-type Tab = "skills" | "sounds" | "cues" | "particles" | "atlas";
-const TABS: Tab[] = ["skills", "sounds", "cues", "particles", "atlas"];
+type Tab = "skills" | "sounds" | "cues" | "particles" | "ambience" | "atlas";
+const TABS: Tab[] = ["skills", "sounds", "cues", "particles", "ambience", "atlas"];
 const state = { tab: (location.hash.match(/tab=(\w+)/)?.[1] as Tab) ?? "skills", selected: decodeURIComponent(location.hash.match(/[#&]id=([^&]+)/)?.[1] ?? ""), filter: "" };
 const remember = (): void => history.replaceState(null, "", `#tab=${state.tab}&id=${encodeURIComponent(state.selected)}`);
 const idsOf = (tab: Tab): string[] =>
   tab === "skills"
     ? game.skills.map((k) => k.id)
-    : tab === "sounds" ? [...rules.sounds.keys()] : tab === "cues" ? [...rules.cues.keys()] : tab === "particles" ? [...rules.effects.keys()] : rules.textures.map((t) => t.id);
+    : tab === "sounds" ? [...rules.sounds.keys()] : tab === "cues" ? [...rules.cues.keys()] : tab === "particles" ? [...rules.effects.keys()] : tab === "ambience" ? Object.keys(AMBIENCE_PRESETS) : rules.textures.map((t) => t.id);
 
 function render(): void {
   list.innerHTML = "";
@@ -280,10 +291,12 @@ function render(): void {
       else if (state.tab === "particles") {
         const e = rules.effects.get(id)!;
         note.textContent = `${e.emitters.length} emitters${e.loop ? " · loop" : ""}`;
-      } else note.textContent = rules.textures.find((t) => t.id === id)!.kind;
+      } else if (state.tab === "ambience") note.textContent = "";
+      else note.textContent = rules.textures.find((t) => t.id === id)!.kind;
       row.append(name, note);
       row.onclick = () => {
         state.selected = id;
+        if (state.tab === "ambience") ambienceTab.pick(id);
         remember();
         render();
         if (state.tab === "skills") playSkill(game.skills[game.skillIndex.get(id)!]);
@@ -449,6 +462,7 @@ function skillDetail(skill: SkillDef | undefined): void {
 function renderDetail(): void {
   detail.innerHTML = "";
   if (state.tab === "atlas") return atlasDetail();
+  if (state.tab === "ambience") return ambienceTab.show(detail);
   if (!state.selected) {
     detail.innerHTML = `<p class="hint">Pick something on the left: a click plays it on the stage - a skill plays whole, with the cues its events call for. Drag on the stage to turn the camera, which is where sounds are heard from; the sliders move the target and slow the particles.</p>`;
     return;

@@ -26,7 +26,7 @@ import { welcomeProblems, type Connection } from "./connection";
 import { createLocalChannel } from "../sim/channel";
 import type { WorldContent } from "../world/content/worldContent";
 import type { GameMusic } from "../music/gameMusic";
-import { BIOME_STYLES, BUILDING_STYLES, DEFAULT_STYLE } from "../music/places";
+import { BIOME_STYLES, BOSS_STYLE, BUILDING_STYLES, DEFAULT_STYLE, DUNGEON_STYLES } from "../music/places";
 import { createBelongingsMirror } from "./belongingsMirror";
 import { gearOfItems } from "./itemGear";
 import { createInventoryScreen, createLootWindow } from "../ui/inventoryScreen";
@@ -487,6 +487,7 @@ export async function startSession(page: Page, options: SessionOptions): Promise
     target: () => targetId,
     ownOutfit: () => playerLook.outfit,
     volume: musicControl.effects,
+    ambienceVolume: musicControl.ambience,
     bodyPlace: (unit, bone, out) => (unit === playerId ? (view?.character.place(bone, out) ?? false) : (entityMeshes?.place(unit, bone, out) ?? false)),
     feelable: (unit) => (unit === playerId ? (view?.character.feelable() ?? null) : (entityMeshes?.feelable(unit) ?? null)),
     say: (unit, label, colour) => floatingText?.say(unit, label, colour),
@@ -654,10 +655,16 @@ export async function startSession(page: Page, options: SessionOptions): Promise
     const feet = spectator.active ? spectator.camera.position : character.mesh.position;
     const building = world.buildingAt(feet.x, feet.y, feet.z);
     const buildingStyle = building && BUILDING_STYLES[building.id];
+    // In a lair (a cave, a crypt) its own music, and the boss's room another; its sound is under ground.
+    const lair = dungeon?.where ?? null;
+    feedback.setHollow(lair && (lair.style === "crypt" ? "crypt" : "cave"));
+    const lairStyle = lair && (lair.boss ? BOSS_STYLE : DUNGEON_STYLES[lair.style]);
     music.update(
-      buildingStyle
-        ? { style: buildingStyle, place: building.key, inside: true }
-        : { style: BIOME_STYLES[here.primaryBiome.id] ?? DEFAULT_STYLE, place: here.primaryAreaId, inside: false },
+      lairStyle
+        ? { style: lairStyle, place: lair.boss ? 1 : 0, inside: true }
+        : buildingStyle
+          ? { style: buildingStyle, place: building.key, inside: true }
+          : { style: BIOME_STYLES[here.primaryBiome.id] ?? DEFAULT_STYLE, place: here.primaryAreaId, inside: false },
     );
     musicControl.setStatus(music.status());
     feedback.update(v.scene.activeCamera);
