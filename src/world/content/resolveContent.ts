@@ -2,7 +2,7 @@ import { VOICE_NAME_TOKENS, type FeatureNaming } from "../naming/nameGenerator";
 import { DEFAULT_PROP_VARIANTS, PROP_LABELS } from "../props/propTypes";
 import JSON5 from "json5";
 import { DEFAULT_CONFIG, ROOT_KINDS, type WorldConfig } from "./worldConfig";
-import type { BiomeDayNight, BiomeDefinition, BorderType, BoundaryHillStyle, TreeTintPart, TreeTintRuleDef } from "../biomes/biomeTypes";
+import type { BiomeDayNight, BiomeDefinition, BorderType, BoundaryHillStyle, ShoreHills, TreeTintPart, TreeTintRuleDef } from "../biomes/biomeTypes";
 import type { MaterialDef, MaterialDetail, MaterialLayer } from "../materials/materialTypes";
 import { FLOWER_SHAPES, type GrassKindDef } from "../foliage/grassConfig";
 import {
@@ -2595,6 +2595,21 @@ function readBoundaryHillStyle(id: string, obj: RawObject, reader: Reader): Boun
   return { id, name: reader.string(obj, "name", ""), heightPipeline: readPipeline(obj.height, reader, "height") };
 }
 
+function readShoreHills(obj: RawObject, reader: Reader): ShoreHills {
+  reader.onlyKeys(obj, "shoreHills", ["style", "grow", "inset", "width", "peak", "bays", "bayWidth", "bayDepth"]);
+  const path = "shoreHills";
+  return {
+    style: reader.string(obj, "style", path),
+    grow: reader.optionalNumber(obj, "grow", path, 0, { min: 0, max: 600 }),
+    inset: reader.number(obj, "inset", path, { min: 0 }),
+    width: reader.number(obj, "width", path, { min: 1 }),
+    peak: reader.number(obj, "peak", path, { min: 0 }),
+    bays: reader.optionalNumber(obj, "bays", path, 0, { min: 0, integer: true }),
+    bayWidth: reader.optionalNumber(obj, "bayWidth", path, 300, { min: 1 }),
+    bayDepth: reader.optionalNumber(obj, "bayDepth", path, 0, { min: 0 }),
+  };
+}
+
 /** Biome fields read before an area has a roll - what picks the biome, and what it is called. */
 const UNROLLED_BIOME_KEYS = ["name", "spawnWeight"] as const;
 
@@ -2649,6 +2664,7 @@ function readBiome(id: string, obj: RawObject, reader: Reader, defaults: Default
     "roadBridge",
     "lakeChance",
     "borderType",
+    "shoreHills",
     "height",
     "relief",
     "trees",
@@ -2714,6 +2730,7 @@ function readBiome(id: string, obj: RawObject, reader: Reader, defaults: Default
       rocks: obj.rocks === undefined ? undefined : readPipeline(obj.rocks, reader, "rocks"),
     },
     borderType: obj.borderType === undefined ? "mountain" : reader.oneOf(obj, "borderType", "", BORDER_TYPES),
+    shoreHills: obj.shoreHills === undefined ? undefined : readShoreHills(reader.object(obj.shoreHills, "shoreHills"), reader),
     spawnWeight: reader.number(obj, "spawnWeight", "", { min: 0 }),
     lakeChance: reader.optionalNumber(obj, "lakeChance", "", 0, { min: 0, max: 1 }),
     baseMaterialId: reader.string(ground, "base", "ground"),

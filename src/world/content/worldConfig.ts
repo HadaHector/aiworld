@@ -18,6 +18,13 @@ export interface WorldShape {
   rivers: [number, number];
   /** Cells a river's path walks. */
   riverLength: [number, number];
+  /** How far the coast wobbles in and out of the cells' own outline, as a share of the coast blend's
+   *  width (COAST_BORDER_WIDTH). 4 suits a continent; a one-zone island wants about 1, or the wobble
+   *  breaks it into an archipelago (SLICE.md W15). */
+  coastWobble: number;
+  /** Whether the biomes' shore hills (BiomeDefinition.shoreHills) rise: a ring of mountains on land
+   *  grown out over the sea. Off by default, so a biome can carry them and the full world not change. */
+  shoreHills: boolean;
 }
 
 /** Kinds used for their own sake, which a config's `only` may name. Everything else is kept only
@@ -44,6 +51,8 @@ export const DEFAULT_WORLD_SHAPE: WorldShape = {
   cellsPerArea: CELLS_PER_AREA,
   rivers: [3, 5],
   riverLength: [8, 10],
+  coastWobble: 4,
+  shoreHills: false,
 };
 
 /** The config every caller that names none gets: the full game. */
@@ -58,13 +67,16 @@ export function readWorldShape(raw: RawObject, reader: Reader, path: string): Pa
   for (const [old, now] of Object.entries(RENAMED_SHAPE_KEYS)) {
     if (raw[old] !== undefined) reader.fail(`${path}.${old}`, now ? `renamed to "${now}"` : "gone: a world is one landmass, more land is another dimension (see DIMENSIONS.md)");
   }
-  const keys = Object.keys(DEFAULT_WORLD_SHAPE).filter((k) => k !== "cellsPerArea") as Exclude<keyof WorldShape, "cellsPerArea">[];
-  reader.onlyKeys(raw, path, [...keys, "cellsPerArea", ...Object.keys(RENAMED_SHAPE_KEYS)]);
+  type Plain = "cellsPerArea" | "coastWobble" | "shoreHills";
+  const keys = (Object.keys(DEFAULT_WORLD_SHAPE) as (keyof WorldShape)[]).filter((key) => key !== "cellsPerArea" && key !== "coastWobble" && key !== "shoreHills") as Exclude<keyof WorldShape, Plain>[];
+  reader.onlyKeys(raw, path, [...keys, "cellsPerArea", "coastWobble", "shoreHills", ...Object.keys(RENAMED_SHAPE_KEYS)]);
   if (raw.cellsPerArea !== undefined) {
     const n = raw.cellsPerArea;
     if (typeof n !== "number" || !Number.isInteger(n) || n < 1 || n > 60) reader.fail(`${path}.cellsPerArea`, `expected a whole number from 1 to 60, got ${JSON.stringify(n)}`);
     else world.cellsPerArea = n;
   }
+  if (raw.coastWobble !== undefined) world.coastWobble = reader.number(raw, "coastWobble", path, { min: 0, max: 8 });
+  if (raw.shoreHills !== undefined) world.shoreHills = reader.boolean(raw, "shoreHills", path, false);
   for (const key of keys) {
     if (raw[key] === undefined) continue;
     const range = reader.range(raw, key, path, { allowEqual: true });

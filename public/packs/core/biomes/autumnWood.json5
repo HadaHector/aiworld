@@ -10,6 +10,10 @@
   spawnWeight: 2,
   lakeChance: 0.04,
   borderType: "mountain",
+  // Mountains along the shore, for a world that asks for them (its `world: { shoreHills: true }`, as
+  // the autumn vale does: one zone alone has no border for boundary hills to rise on). The land
+  // grows out over the sea by `grow` and the hills stand on that, parting for the bays (SLICE.md W15).
+  shoreHills: { style: "jagged-ridge", grow: 300, inset: 120, width: 200, peak: 75, bays: 2, bayWidth: 450, bayDepth: 300 },
   settlement: ["farmVillage", "marketTown"],
   // Woodland: a settlement in some cells, a logging camp deep in the trees in others.
   features: [
