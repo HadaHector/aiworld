@@ -635,6 +635,10 @@ real G1 switch, then the wave 2 sessions (section 8) now that the curves exist.
   the day's light, blown by the wind. A biome says how thick with `fallingLeaves` (0-1, default 0; autumnWood 0.75); the
   world blends it by the areas' weights, rain and snow put it out, wind stirs it (`world.ts` `updateWeather`).
   (Not `src/particles`: the CPU pool is for effects with owners; an ambient layer round the camera is the weather's job.)
+  **Only under trees**: each leaf reads the tree cover of the ground beneath it from a 32 x 32 grid (1.5 m cells) laid about
+  the player, two rows a frame, re-laid when the player strays 4 m (`coverAt` in `createPrecipitation`; world.ts passes
+  `createTreeCover`). Cover 0 in the village squares, 0.5-1 in the wood (checked headless, `scripts/probe/leafCover.local.mjs`);
+  the mask is `smoothstep(0.25, 0.65, cover)`. Cover is a density, not the trees themselves, so a leaf may fall between two trunks.
 - **Chimney smoke**: `smoke` on a chimney part (`stoneChimney`, `bigChimney`) names a looping effect, laid as a model
   effect on the stack top by `houseGenerator.ts` in near models only, and only where a hearth room is behind the chimney
   (a house with no interior: always). It runs through the existing flame manager, so it shares its distance slider and cap.

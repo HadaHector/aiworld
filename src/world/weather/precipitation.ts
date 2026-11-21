@@ -1,4 +1,4 @@
-import { Color3, Constants, Effect, Mesh, ShaderMaterial, Vector2, Vector3, VertexData, type Scene } from "@babylonjs/core";
+import { Color3, Constants, Effect, Mesh, RawTexture, ShaderMaterial, Texture, Vector2, Vector3, VertexData, type Scene } from "@babylonjs/core";
 import { mulberry32 } from "../rng";
 import { WIND } from "../foliage/wind";
 import { lerp } from "../mathUtils";
@@ -203,7 +203,7 @@ export interface Precipitation {
  * outside the screen). Rain falls as streaks along its slant, snow as soft flakes drifting and
  * wandering; both blow with the weather's wind.
  */
-export function createPrecipitation(scene: Scene, heightAt: (x: number, z: number) => number): Precipitation {
+export function createPrecipitation(scene: Scene, heightAt: (x: number, z: number) => number, coverAt: (x: number, z: number) => number = () => 1): Precipitation {
   Effect.ShadersStore["precipitationVertexShader"] = VERTEX_SHADER;
   Effect.ShadersStore["precipitationFragmentShader"] = FRAGMENT_SHADER;
   Effect.ShadersStore["splashVertexShader"] = SPLASH_VERTEX_SHADER;
@@ -264,6 +264,36 @@ export function createPrecipitation(scene: Scene, heightAt: (x: number, z: numbe
 
   // The leaves fall slowly and blow with the wind; their place is carried on the CPU as rain's is.
   let leafTime = 0;
+  // The grid of tree cover the leaves are masked by: laid a couple of rows a frame round the player,
+  // swapped in whole when done, and begun again when the player strays from its middle.
+  const gridCentre = new Vector3(0, 0, COVER_CELLS * COVER_CELL);
+  const building = { x: NaN, z: NaN, row: COVER_CELLS, data: new Uint8Array(COVER_CELLS * COVER_CELLS) };
+  let centreSet = false;
+  function layCover(eye: Vector3): void {
+    if (building.row >= COVER_CELLS && (!centreSet || Math.hypot(eye.x - gridCentre.x, eye.z - gridCentre.z) > COVER_RELAY)) {
+      building.x = Math.round(eye.x / COVER_CELL) * COVER_CELL;
+      building.z = Math.round(eye.z / COVER_CELL) * COVER_CELL;
+      building.row = 0;
+    }
+    if (building.row >= COVER_CELLS) return;
+    // The first laying is done at once, so the leaves never stand in a cleared wood for a moment.
+    const rows = centreSet ? COVER_ROWS_PER_FRAME : COVER_CELLS;
+    for (let n = 0; n < rows && building.row < COVER_CELLS; n++, building.row++) {
+      const z = building.z + (building.row + 0.5 - COVER_CELLS / 2) * COVER_CELL;
+      for (let i = 0; i < COVER_CELLS; i++) {
+        const x = building.x + (i + 0.5 - COVER_CELLS / 2) * COVER_CELL;
+        building.data[building.row * COVER_CELLS + i] = Math.round(Math.max(0, Math.min(1, coverAt(x, z))) * 255);
+      }
+    }
+    if (building.row >= COVER_CELLS) {
+      leaves.coverData.set(building.data);
+      leaves.cover.update(leaves.coverData);
+      gridCentre.set(building.x, building.z, COVER_CELLS * COVER_CELL);
+      leaves.material.setVector3("coverGrid", gridCentre);
+      centreSet = true;
+    }
+  }
+
   function updateLeaves(amount: number, right: Vector3, up: Vector3, eye: Vector3, light: Color3): void {
     const { mesh, material, travel } = leaves;
     const step = time >= leafTime ? time - leafTime : 0;
@@ -275,6 +305,7 @@ export function createPrecipitation(scene: Scene, heightAt: (x: number, z: numbe
       wrap(travel.z + WIND.y * LEAVES.drift * step, LEAVES.box[2]),
     );
     if (amount <= 0.001) return;
+    layCover(eye);
     // Lit by the day, brightened a little so they read against the dark wood.
     leafLight.set(Math.min(1.2, light.r * 1.1 + 0.08), Math.min(1.2, light.g * 1.1 + 0.08), Math.min(1.2, light.b * 1.1 + 0.08));
     material.setFloat("time", time);
@@ -465,6 +496,8 @@ uniform vec3 box;
 uniform float sway;
 uniform float size;
 uniform vec3 light;
+uniform sampler2D coverMap;
+uniform vec3 coverGrid;
 varying vec2 vCorner;
 varying vec3 vColor;
 varying float vFade;
@@ -505,7 +538,10 @@ void main(void) {
 
   vec3 fromEye = abs(p - eye) / (box * 0.5);
   float edge = max(max(fromEye.x, fromEye.y), fromEye.z);
-  vFade = (1.0 - smoothstep(0.75, 1.0, edge)) * smoothstep(1.2, 3.0, distance(p, eye));
+  // Only under trees: the cover (0-1) of the ground beneath it, read from a grid about the player.
+  vec2 gridUv = (p.xz - coverGrid.xy) / coverGrid.z + 0.5;
+  float cover = texture2D(coverMap, clamp(gridUv, 0.0, 1.0)).r;
+  vFade = (1.0 - smoothstep(0.75, 1.0, edge)) * smoothstep(1.2, 3.0, distance(p, eye)) * smoothstep(0.25, 0.65, cover);
   // Lit by the day's light, and a little darker on its turned side.
   vColor = leafColour(fract(seed.y * 53.1 + seed.w * 7.0)) * light * (0.75 + 0.25 * flip);
   vCorner = position.xy;
@@ -531,7 +567,14 @@ void main(void) {
 }
 `;
 
-function buildLeaves(scene: Scene): { mesh: Mesh; material: ShaderMaterial; travel: Vector3 } {
+/** The cover grid under the leaves: cells a side, metres a cell, how far the player may stray from its
+ *  centre before it is laid again, and how many rows are sampled a frame. */
+const COVER_CELLS = 32;
+const COVER_CELL = 1.5;
+const COVER_RELAY = 4;
+const COVER_ROWS_PER_FRAME = 2;
+
+function buildLeaves(scene: Scene): { mesh: Mesh; material: ShaderMaterial; travel: Vector3; cover: RawTexture; coverData: Uint8Array } {
   Effect.ShadersStore["leavesVertexShader"] = LEAF_VERTEX_SHADER;
   Effect.ShadersStore["leavesFragmentShader"] = LEAF_FRAGMENT_SHADER;
   const random = mulberry32(0x1ea5);
@@ -560,7 +603,8 @@ function buildLeaves(scene: Scene): { mesh: Mesh; material: ShaderMaterial; trav
   mesh.setEnabled(false);
   const material = new ShaderMaterial("precipitation_leaves", scene, "leaves", {
     attributes: ["position", "seed"],
-    uniforms: ["viewProjection", "eye", "cameraRight", "cameraUp", "time", "amount", "travel", "box", "sway", "size", "light"],
+    uniforms: ["viewProjection", "eye", "cameraRight", "cameraUp", "time", "amount", "travel", "box", "sway", "size", "light", "coverGrid"],
+    samplers: ["coverMap"],
     needAlphaBlending: true,
   });
   material.backFaceCulling = false;
@@ -569,6 +613,13 @@ function buildLeaves(scene: Scene): { mesh: Mesh; material: ShaderMaterial; trav
   material.setVector3("box", new Vector3(...box));
   material.setFloat("sway", LEAVES.sway);
   material.setFloat("size", LEAVES.size);
+  const coverData = new Uint8Array(COVER_CELLS * COVER_CELLS);
+  const cover = RawTexture.CreateRTexture(coverData, COVER_CELLS, COVER_CELLS, scene, false, false, Texture.BILINEAR_SAMPLINGMODE);
+  cover.name = "leaves_cover";
+  cover.wrapU = Texture.CLAMP_ADDRESSMODE;
+  cover.wrapV = Texture.CLAMP_ADDRESSMODE;
+  material.setTexture("coverMap", cover);
+  material.setVector3("coverGrid", new Vector3(0, 0, COVER_CELLS * COVER_CELL));
   mesh.material = material;
-  return { mesh, material, travel: new Vector3() };
+  return { mesh, material, travel: new Vector3(), cover, coverData };
 }

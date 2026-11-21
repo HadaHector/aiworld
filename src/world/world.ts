@@ -363,7 +363,12 @@ export async function createWorld(
   // does) so this reads the frame's current time rather than the previous frame's.
   const weather = createWeatherSystem(seed, content.weathers);
   let weatherNow: WeatherBlend = NO_WEATHER;
-  const precipitation = createPrecipitation(scene, heightAt);
+  // Where leaves may fall: under trees (the tree cover at the ground, as the chunks read it).
+  const leafCover = createTreeCover(seed, content);
+  const precipitation = createPrecipitation(scene, heightAt, (x, z) => {
+    const sample = sampleTerrain(x, z);
+    return leafCover(x, z, { height: sample.height, surfaceHeight: sample.height, slope: 0, sample });
+  });
   // The light the rain and snow are seen by: the sky's fill and some of the sun's - so they are
   // bright by day, grey under a dark sky and dim at night.
   const fallLight = new Color3();
