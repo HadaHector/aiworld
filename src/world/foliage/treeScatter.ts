@@ -1,6 +1,7 @@
 import { deriveSeed, mulberry32 } from "../rng";
 import { smoothstep } from "../mathUtils";
 import { WATER_SURFACE } from "../water";
+import { RIVER_SPRING_ROCKS, RIVER_SPRING_ROCK_DENSITY } from "../terrain/rivers/riverConfig";
 
 /** Trees fade in from this far over a river's own water (at its own level) to this far: none in it. */
 const RIVER_TREE_CLEARANCE: [number, number] = [0.4, 1.6];
@@ -501,6 +502,12 @@ function createScatter(seed: number, level: ScatterLevel): { scatter: TreeScatte
           total += density;
         }
       }
+    }
+    // Boulders gather round a river's spring, whatever the zone's own rocks.
+    if (stone && sample.springGap < RIVER_SPRING_ROCKS[1] && perKind.length > 0) {
+      const extra = RIVER_SPRING_ROCK_DENSITY * (1 - smoothstep(RIVER_SPRING_ROCKS[0], RIVER_SPRING_ROCKS[1], sample.springGap));
+      for (let k = 0; k < perKind.length; k++) perKind[k] += extra / perKind.length;
+      total += extra;
     }
     return total;
   }

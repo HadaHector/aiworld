@@ -46,6 +46,17 @@ for (const seed of seeds.length ? seeds : [1338, 7, 4242, 90210]) {
     }
     log(`${tag} river ${r}: ${(p.length / 1000).toFixed(2)} km, surface ${p.level[0].toFixed(1)} at the mouth to ${p.level[p.level.length - 1].toFixed(1)} at the source`);
   });
+  // No water standing over a pit: the ground under a river above the sea is its own bed, not something
+  // cut deeper beside it (another river's valley).
+  let pits = 0, pitAt = "";
+  profiles.forEach((p, r) => {
+    for (let i = 0; i < p.level.length; i++) {
+      if (p.level[i] < WATER_SURFACE + 0.5) continue;
+      const h = world.heightAt(p.x[i], p.z[i]);
+      if (h < p.level[i] - p.depth[i] - 1) { pits++; pitAt = `river ${r} station ${i}: ground ${h.toFixed(1)} under water at ${p.level[i].toFixed(1)}`; }
+    }
+  });
+  check(`${tag}: no water over a pit`, pits === 0, `${pits} stations, e.g. ${pitAt}`);
   check(`${tag}: the water query finds the river along it`, stations === 0 || wetStations / stations > 0.9, `${wetStations}/${stations}`);
   if (profiles.length > 1) {
     const [trunk, trib] = profiles;

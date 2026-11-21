@@ -140,8 +140,22 @@ export const RIVER_WATER_DEPTH_MOUTH = 3.5;
 export const RIVER_WATER_DEPTH_SOURCE = 1.5;
 // Where the ground is cut down to the water, the bank stands this far over it at the centreline.
 export const RIVER_FREEBOARD = 0.6;
+// A river narrows and shallows over its last stretch to a spring: this long, to a bed this wide
+// (half of it) and water this deep at the source.
+export const RIVER_SPRING_LENGTH = 220;
+export const RIVER_SPRING_HALF_WIDTH = 2.5;
+export const RIVER_SPRING_DEPTH = 0.6;
+// Boulders gather round a spring (foliage/treeScatter.ts): fading from full density within the first
+// distance to none past the second, metres from the source.
+export const RIVER_SPRING_ROCKS: [number, number] = [6, 18];
+export const RIVER_SPRING_ROCK_DENSITY = 0.8;
 // The least the surface falls per metre of river, so no stretch is dead level.
 export const RIVER_MIN_FALL = 0.003;
+// The most the surface falls per metre - under the bank's slope, or a steep stretch's own bank below it
+// would cut under the water above (a steep head becomes a gully cut into the hill instead).
+export const RIVER_MAX_FALL = 0.15;
+// ...and no more than this many metres over the width of its own flat bed (see riverLevels.ts).
+export const RIVER_MAX_UNDERCUT = 0.7;
 // Stations along a river: one every this many metres of arc (the surface, depth and reach are sampled there).
 export const RIVER_STATION_SPACING = 24;
 // Smoothing passes over the surface profile, so it does not step where the ground does.

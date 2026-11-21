@@ -33,7 +33,8 @@ import { createBaseNoise2D } from "./noise";
 import { compilePipeline, type CompiledPipeline } from "./pipeline/pipelineCompiler";
 import { createBoundaryHillEvaluator } from "./boundaryHills/boundaryHillsEvaluator";
 import { createRiverEvaluator } from "./rivers/riverEvaluator";
-import { buildRiverProfiles, riverProfileAt, type RiverProfile, type RiverWaterSample } from "./rivers/riverLevels";
+import { buildRiverProfiles, riverProfileAt, riverSprings, type RiverProfile, type RiverWaterSample } from "./rivers/riverLevels";
+import { RIVER_SPRING_ROCKS } from "./rivers/riverConfig";
 import { WATER_SURFACE, createFlatWaters, type FlatWaters } from "../water";
 import { RIVER_HILL_SUPPRESSION_INNER, RIVER_HILL_SUPPRESSION_OUTER } from "./rivers/riverConfig";
 
@@ -86,6 +87,9 @@ export interface TerrainSample {
    *  valley (WATER.md, water at its own level), else the sea's, WATER_SURFACE. The point is under water
    *  when its height is below this. */
   waterSurface: number;
+  /** Distance to the nearest river's spring (its source), Infinity past a few tens of metres or with no
+   *  rivers at their own level - boulders gather round one (foliage/treeScatter.ts). */
+  springGap: number;
 }
 
 export type TerrainSampler = (worldX: number, worldZ: number) => TerrainSample;
@@ -211,7 +215,9 @@ export function createTerrainSampler(seed: number, content: WorldContent): Terra
   };
   const riverProfiles: RiverProfile[] = content.world.riverLevels ? timed("Levelling rivers", () => buildRiverProfiles(riverField.polylines, groundBeforeRiver, WATER_SURFACE, seed)) : [];
   const waters = createFlatWaters();
-  const riverWater: RiverWaterSample = { level: 0, depth: 0, reach: 0 };
+  const riverWater: RiverWaterSample = { level: 0, depth: 0, halfWidth: 0, reach: 0 };
+  const springs = riverSprings(riverProfiles);
+  const springReach = RIVER_SPRING_ROCKS[1];
 
   // Bound after the fact, because roads are routed over the terrain as it is before any of them
   // exist and then the terrain is brought to them - survey the land, then build the road. Until
@@ -233,6 +239,16 @@ export function createTerrainSampler(seed: number, content: WorldContent): Terra
   function spillAt(x: number, z: number): { spill: number; spillMaterial: number } {
     const spill = spillField?.at(x, z);
     return spill ? { spill: spill.weight, spillMaterial: spill.material } : NO_SPILL;
+  }
+
+  function springGapAt(x: number, z: number): number {
+    let gap = Infinity;
+    for (const s of springs) {
+      const dx = s.x - x;
+      const dz = s.z - z;
+      if (Math.abs(dx) < springReach && Math.abs(dz) < springReach) gap = Math.min(gap, Math.hypot(dx, dz));
+    }
+    return gap;
   }
 
   function sampleTerrain(worldX: number, worldZ: number): TerrainSample {
@@ -266,10 +282,13 @@ export function createTerrainSampler(seed: number, content: WorldContent): Terra
     // wherever two stretches' levels differ (the inside of a bend, a tributary beside its trunk). The
     // water over the point is the nearest segment's, where the point is in its reach: in a steep
     // stretch the reach of one upstream would otherwise lift the water over the ground.
+    // Rivers at their own level cut the ground after the coast's blend (below), which their levels
+    // were worked out from: cut before it, a bed near the coast was pulled down toward the seabed with
+    // the land, far under its own water.
     let waterSurface = WATER_SURFACE;
-    let landHeightRivered: number;
-    if (riverProfiles.length > 0) {
-      landHeightRivered = landHeightUncarved;
+    const ownLevels = riverProfiles.length > 0;
+    const carveOwnLevels = (ground: number): number => {
+      let carved = ground;
       let reached = -Infinity;
       let nearest = Infinity;
       const noise = carveRiver.edgeNoise(worldX, worldZ);
@@ -279,12 +298,12 @@ export function createTerrainSampler(seed: number, content: WorldContent): Terra
           nearest = distance;
           reached = distance < water.reach ? water.level : -Infinity;
         }
-        landHeightRivered = Math.min(landHeightRivered, carveRiver(true, taper, distance, worldX, worldZ, landHeightUncarved, water, noise));
+        carved = Math.min(carved, carveRiver(true, taper, distance, worldX, worldZ, ground, water, noise));
       });
       if (reached > waterSurface) waterSurface = reached;
-    } else {
-      landHeightRivered = carveRiver(area.isRiverEdge, area.riverTaper, area.riverGap, worldX, worldZ, landHeightUncarved);
-    }
+      return carved;
+    };
+    const landHeightRivered = ownLevels ? landHeightUncarved : carveRiver(area.isRiverEdge, area.riverTaper, area.riverGap, worldX, worldZ, landHeightUncarved);
     const landHeightNatural = lerp(landHeightRivered, LAKE_TARGET_HEIGHT, area.lakeFactor);
     const feature = featureField?.apply(worldX, worldZ, landHeightNatural);
     const landHeight = feature ? feature.height : landHeightNatural;
@@ -295,7 +314,7 @@ export function createTerrainSampler(seed: number, content: WorldContent): Terra
     // (WATER.md, *Roads*). A road over the water is bridged (bridges.ts), which grades nothing.
     const oceanFloorHeight = oceanFloorAt(worldX, worldZ);
     const landBlend = smoothstep(-1, 1, area.landmass);
-    const blendedHeight = lerp(oceanFloorHeight, landHeight, landBlend);
+    const blendedHeight = ownLevels ? carveOwnLevels(lerp(oceanFloorHeight, landHeight, landBlend)) : lerp(oceanFloorHeight, landHeight, landBlend);
     let height = blendedHeight;
     let roadGap = Infinity;
     let roadMiddle = 0;
@@ -379,6 +398,7 @@ export function createTerrainSampler(seed: number, content: WorldContent): Terra
       padGap,
       ...spillAt(worldX, worldZ),
       waterSurface,
+      springGap: springGapAt(worldX, worldZ),
     };
   }
 

@@ -88,6 +88,7 @@ export function sampleBiomeArea(seed: number, content: WorldContent, biomeId: st
     spill: 0,
     spillMaterial: -1,
     waterSurface: WATER_SURFACE,
+    springGap: Infinity,
   });
   const sampleTerrain: TerrainSampler = sampleAt;
 

@@ -170,8 +170,15 @@ world: { rivers: [2, 2], riverLength: [4, 6], riverTributaries: [1, 1], riverLev
   the river's width (less 0.6 m of bank), falling at least 0.3 % and smoothed; at the mouth it meets the
   sea, or its trunk's level. Where a tributary's valley lies below its trunk's water where they meet, the
   trunk falls to it there (a rapid or a fall) and runs on no higher. Depth 3.5 m at the mouth to 1.5 m at
-  the source; **fords**, one or two a river over 700 m long, are 70 m stretches where it is 0.25 m deep.
-- **The carve** (`terrainSampler.ts`, `riverEvaluator.ts`): the bed is the surface less the depth. Every
+  the source, then over the last 220 m it narrows and shallows to a **spring** (a bed 5 m wide, 0.6 m of
+  water), with boulders gathered round it (`TerrainSample.springGap`, the rock scatter). The ceiling also
+  counts the other rivers' valleys (a second pass): where two come close the higher no longer stands
+  over the lower's cut (the user's catch at a source). A river falls at most 15 % a metre, and less the
+  wider it is (no more than 0.7 m over its own flat bed's width): a wide flat bed reaches back up the
+  river and a steep wide river cut under its own water. **Fords**, one or two a river over 700 m long, are 70 m stretches where it is 0.25 m deep.
+- **The carve** (`terrainSampler.ts`, `riverEvaluator.ts`): the bed is the surface less the depth, cut
+  after the coast's blend (cut before it, a bed near the coast was dragged toward the seabed far under
+  its water). Every
   river segment in reach clips the ground and the lowest result wins - a min of continuous carves is
   continuous, where the nearest segment's alone stepped up to 18 m where two stretches of different
   levels were equally near (the inside of a bend, a confluence). Every `TerrainSample` carries
@@ -194,13 +201,15 @@ world: { rivers: [2, 2], riverLength: [4, 6], riverTributaries: [1, 1], riverLev
   the terrain shader, which only knows the sea's level), reflection and glint as the ocean's, foam where it
   falls steeply. The ripple pattern lives in the river's own frame (across, along) and runs downstream at
   one speed for the whole river: a speed that varied from vertex to vertex, times the clock, smeared it
-  into streaks (the user's catch). Flat bodies are drawn as planes. Stretches at the sea's level are left
+  into streaks (the user's catch). At the spring the ribbon runs straight on 4 m past where the ground
+  meets the water, so the ground draws where it starts (the user's call: no rounded cap). Flat bodies are drawn as planes. Stretches at the sea's level are left
   to the ocean plane. Hidden underground; flat bodies (pools) are not.
 - **Checked**: `scripts/probe/riverLevels.mjs` - one-zone autumn-wood worlds, four seeds: surfaces never
   rise toward the mouth nor go below the sea, the water query finds the river along 90 %+ of it, a
   tributary meets its trunk's level, no ground step across a river worse than the legacy world's (worst
   2.05 m in a metre against 2.9), water under every bridge and its deck above it, no road through water
-  deeper than a ford off a bridge, no levels without the flag. `water.mjs` and `roadWater.mjs` still
+  deeper than a ford off a bridge, no water standing over a pit (ground more than 1 m under the river's own
+  bed), no levels without the flag. `water.mjs` and `roadWater.mjs` still
   pass. In the page (`?play&config=rivers&seed=4242`, `public/configs/rivers.json5`): a river at 22 m
   over the sea, drawn and on the minimap.
 - **Not done.** Lakes are still sea-level hollows: a mountain lake needs a lake body at its own level

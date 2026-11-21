@@ -19,6 +19,8 @@ const SHORE_SCAN_STEP = 1;
 /** The ribbon reaches this far past the waterline it found, so the ground, not the ribbon's edge,
  *  draws the shore. */
 const SHORE_OVERLAP = 1.5;
+/** Past a river's source the ribbon runs on this far beyond where the ground meets its water. */
+const SPRING_OVERRUN = 4;
 /** An open edge (no bank) lies this far over the ground it is laid on. */
 const DRAPE_LIFT = 0.05;
 /** Stations whose surface is no more than this over the sea's are left to the ocean plane. */
@@ -204,6 +206,32 @@ function addRiverRibbon(out: RibbonArrays, profile: RiverProfile, heightAt: (x: 
       }
     }
     previousRow = row;
+  }
+  // The spring: the ribbon runs straight on past the source until it is well under the ground there, so
+  // the ground, not the ribbon's square end, draws where the water starts.
+  if (previousRow >= 0 && count >= 2) {
+    const n = count - 1;
+    const ux = profile.x[n] - profile.x[n - 1];
+    const uz = profile.z[n] - profile.z[n - 1];
+    const ul = Math.hypot(ux, uz) || 1;
+    const level = profile.level[n];
+    const ahead = shoreDistance(heightAt, profile.x[n], profile.z[n], ux / ul, uz / ul, level, profile.reach[n]).distance + SPRING_OVERRUN;
+    const cap = out.positions.length / 3;
+    for (let c = 0; c <= RIBBON_COLUMNS; c++) {
+      const k = (previousRow + c) * 3;
+      const forward = ahead;
+      const px = out.positions[k] + (ux / ul) * forward;
+      const pz = out.positions[k + 2] + (uz / ul) * forward;
+      out.positions.push(px, level, pz);
+      out.uvs.push(out.uvs[(previousRow + c) * 2], n * step + forward);
+      out.flows.push(ux / ul, uz / ul, FLOW_SPEED, 0);
+      out.depths.push(0);
+    }
+    for (let c = 0; c < RIBBON_COLUMNS; c++) {
+      const p0 = previousRow + c;
+      const p1 = cap + c;
+      out.indices.push(p0, p0 + 1, p1, p1, p0 + 1, p1 + 1);
+    }
   }
 }
 

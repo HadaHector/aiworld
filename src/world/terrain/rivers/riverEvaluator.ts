@@ -24,7 +24,7 @@ export type RiverEvaluator = (
   worldZ: number,
   landHeight: number,
   /** The river's own water here (riverLevels.ts), or none: the bed is then the legacy one, sunk below the sea. */
-  water?: { level: number; depth: number },
+  water?: { level: number; depth: number; halfWidth?: number },
   /** The edge noise at this point, when the caller carves many segments at one point (edgeNoise). */
   noise?: number,
 ) => number;
@@ -56,7 +56,7 @@ export function createRiverEvaluator(seed: number): RiverEvaluator & { edgeNoise
   const carveRiver: RiverEvaluator = (isRiverEdge, riverTaper, riverGap, worldX, worldZ, landHeight, water, noise) => {
     if (!isRiverEdge) return landHeight;
 
-    const bedHalfWidth = lerp(RIVER_BED_HALF_WIDTH_MOUTH, RIVER_BED_HALF_WIDTH_SOURCE, riverTaper);
+    const bedHalfWidth = water?.halfWidth ?? lerp(RIVER_BED_HALF_WIDTH_MOUTH, RIVER_BED_HALF_WIDTH_SOURCE, riverTaper);
     const bedHeight = water ? water.level - water.depth : lerp(RIVER_BED_HEIGHT_MOUTH, RIVER_BED_HEIGHT_SOURCE, riverTaper);
 
     const jitter = (noise ?? edgeNoise(worldX, worldZ)) * bedHalfWidth * RIVER_EDGE_NOISE_AMPLITUDE_RATIO;
