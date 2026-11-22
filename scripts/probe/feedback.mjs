@@ -144,7 +144,8 @@ await section("particles", () => {
   for (let i = 0; i < 30; i++) system.update(1 / 30, near);
   check("a one-shot is over once its particles are", system.sprites.count === 0 && !sparks.alive && system.effects() === 0);
   // Particles fall under gravity and are shaded by their curves.
-  system.spawn("hit", () => ({ x: 0, y: 5, z: 0 }), { own: true });
+  // Several bursts, the mean of them: a chip's start velocity is random, one burst can go up on average.
+  for (let n = 0; n < 20; n++) system.spawn("hit", () => ({ x: 0, y: 5, z: 0 }), { own: true });
   const chips = () => [...Array(system.meshes.count).keys()];
   const y0 = chips().reduce((sum, i) => sum + system.meshes.y[i], 0) / system.meshes.count;
   for (let i = 0; i < 12; i++) system.update(1 / 30, near);
