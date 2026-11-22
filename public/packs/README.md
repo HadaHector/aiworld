@@ -911,6 +911,14 @@ kind names its own.
 | `headstone` | an upright slab, its top round, gabled or square, an emblem proud on its face, leaning | `width`, `height`, `thickness`, `round`, `gabled`, `emblem` (chances), `emblems`, `lean` (degrees) | `stone` |
 | `gravePost` | a wooden post, an emblem board high on it, now and then a little roof over it | `height`, `board`, `roof` (chance), `emblems`, `lean` | `wood`, `roof`, `emblem` |
 | `tomb` | a stone chest under an overhanging lid (a table tomb), or with `height` 0 the lid alone, flat (a ledger slab) | `length`, `width`, `height`, `lid`, `overhang`, `askew` (chance) | `stone`, `lid` |
+| `timberFrame` | a mine's timber set: two posts, a cap, boards over it, knee braces | `width`, `height`, `thickness` | `timber`, `brace` |
+| `wallShoring` | boards stood against a wall, wales across, raking props (back on z 0) | `width`, `height` | `timber`, `brace` |
+| `railTrack` | sleepers and two iron rails along z, to lay end to end | `length` | `timber`, `iron` |
+| `mineCart` | a cart of boards on four wheels on a stub of track, empty or heaped with ore | `length`, `load` (chance) | `timber`, `iron`, `rock`, `ore` |
+| `minerTools` | a pick and shovel leaning on a wall, or a pick stuck in a rock | `stuck` (chance), `length` | `handle`, `iron`, `rock` |
+| `orePile` | a heap of broken rock with bright ore in it | `radius`, `lumps` | `rock`, `ore` |
+| `oreOutcrop` | a rock mound against a wall with seams of ore across it | `width`, `height`, `seams` | `rock`, `ore` |
+| `windlass` | a shaft's collar and dark hole, two posts, a crank drum, a bucket on its rope | `height` | `timber`, `iron`, `rope`, `hole` |
 | `lychgate` | a churchyard's roofed gateway: four posts, a steep roof, benches under it | `opening`, `depth`, `height`, `pitch`, `bench` (chance) | `posts`, `roof`, `bench` |
 
 A prop's model is a building's kind of model, so it is drawn with the buildings' materials, has a

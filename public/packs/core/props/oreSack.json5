@@ -1,0 +1,10 @@
+// A sack of ore: squat, stiff with the lumps in it.
+{
+  name: "Ore sack",
+  type: "sack",
+  sack: { height: [0.8, 1.0], radius: [0.5, 0.6], lean: [0, 0.1] },
+  parts: {
+    cloth: { material: "cloth", tints: [[0.5, 0.46, 0.4], [0.45, 0.42, 0.38]] },
+    tie: { tints: [[0.35, 0.28, 0.2]] },
+  },
+}

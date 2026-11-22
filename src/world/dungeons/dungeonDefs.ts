@@ -297,6 +297,12 @@ export interface DungeonLight {
   /** Several fixtures instead (a cave's), one rolled by weight at each lit spot: set on the floor at
    *  it, at the foot of the nearest wall, or on that wall (caveFixtures.ts). */
   fixtures?: { prop: string; weight: number; place: "floor" | "foot" | "wall" }[];
+  /** Dressing (a mine's supports, rails, carts, tools, ore): props set at the parts' light spots *besides*
+   *  the lit fixture there, each with `chance` per spot, on a part with `parts` tags if given (none: any).
+   *  `place`: `floor` near the spot, `against` the nearest wall, `span` across the way (the one of its
+   *  `span` group nearest to the way's width), `along` the way (`run` pieces end to end). Lights nothing
+   *  (caveFixtures.ts). */
+  dressing?: { prop: string; chance: number; place: "floor" | "against" | "span" | "along"; parts: string[]; run: number; group: string | null }[];
   /** Candles (a prop, a cluster of them) left on its benches, on its ledger stones and at its tombs'
    *  heads: the share of each such place that has some. */
   candles?: { prop: string; share: number };
@@ -963,7 +969,7 @@ function fieldPaths(field: readonly FieldShape[], sockets: readonly SocketDef[])
 }
 
 function readLight(reader: Reader, raw: RawObject): DungeonLight {
-  reader.onlyKeys(raw, "light", ["ambient", "fixture", "fixtures", "lit", "candles"]);
+  reader.onlyKeys(raw, "light", ["ambient", "fixture", "fixtures", "lit", "candles", "dressing"]);
   const fixtures = raw.fixtures === undefined
     ? undefined
     : reader.array(raw, "fixtures", "light").map((value, i) => {
@@ -972,10 +978,26 @@ function readLight(reader: Reader, raw: RawObject): DungeonLight {
         reader.onlyKeys(f, at, ["prop", "weight", "place"]);
         return { prop: reader.string(f, "prop", at), weight: reader.optionalNumber(f, "weight", at, 1, { min: 0 }), place: reader.oneOf(f, "place", at, ["floor", "foot", "wall"] as const) };
       });
+  const dressing = raw.dressing === undefined
+    ? undefined
+    : reader.array(raw, "dressing", "light").map((value, i) => {
+        const at = `light.dressing[${i}]`;
+        const d = reader.object(value, at);
+        reader.onlyKeys(d, at, ["prop", "chance", "place", "parts", "run", "group"]);
+        return {
+          prop: reader.string(d, "prop", at),
+          chance: reader.optionalNumber(d, "chance", at, 1, { min: 0, max: 1 }),
+          place: reader.oneOf(d, "place", at, ["floor", "against", "span", "along"] as const),
+          parts: d.parts === undefined ? [] : reader.stringList(d, "parts", at),
+          run: reader.optionalNumber(d, "run", at, 1, { min: 1 }),
+          group: reader.optionalString(d, "group", at) ?? null,
+        };
+      });
   const candles = raw.candles === undefined ? undefined : readPropShare(reader, reader.object(raw.candles, "light.candles"), "light.candles", "candles");
   return {
     candles,
     fixtures,
+    dressing,
     ambient: colour(reader, raw.ambient, "light.ambient", [0.02, 0.02, 0.025]),
     fixture: reader.optionalString(raw, "fixture", "light") ?? "wallTorch",
     lit: reader.optionalNumber(raw, "lit", "light", 1, { min: 0, max: 1 }),

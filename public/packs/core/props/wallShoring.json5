@@ -1,0 +1,9 @@
+// Plank-and-prop against a wall: boards stood up the rock, two wales across them, raking props from the floor (DUNGEONS.md, The mine).
+{
+  name: "Wall shoring",
+  type: "wallShoring",
+  parts: {
+    timber: { material: "timber", tints: [[0.7, 0.58, 0.46], [0.62, 0.52, 0.42], [0.55, 0.47, 0.4]] },
+    brace: { material: "timber", tints: [[0.5, 0.42, 0.34], [0.45, 0.38, 0.32]] },
+  },
+}

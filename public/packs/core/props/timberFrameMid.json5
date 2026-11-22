@@ -1,0 +1,10 @@
+// A timber set across a mid way: two posts, a cap, boards over it, knee braces (DUNGEONS.md, The mine).
+{
+  name: "Timber set (mid)",
+  type: "timberFrame",
+  timberFrame: { width: [4.8, 6.2], height: [3.6, 4.0] },
+  parts: {
+    timber: { material: "timber", tints: [[0.7, 0.58, 0.46], [0.62, 0.52, 0.42], [0.55, 0.47, 0.4]] },
+    brace: { material: "timber", tints: [[0.5, 0.42, 0.34], [0.45, 0.38, 0.32]] },
+  },
+}

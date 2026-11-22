@@ -1,4 +1,4 @@
-// A mine (SLICE.md E6, third lair): the cave style's rock worked by miners - lanterns and torches burning, barrels, crates, sacks and tool racks left on the floor at the light spots. Same parts, same builder. (Timber supports, rails, carts, picks and ore are props still to author, DUNGEONS.md.)
+// A mine (SLICE.md E6, third lair): the cave style's rock worked by miners - lanterns and torches burning, barrels, crates, sacks and tool racks left on the floor at the light spots. Same parts, same builder. Its timber supports, rails, carts, picks, ore and windlass are 'light.dressing', set at the same spots (DUNGEONS.md, *The mine*).
 // Was: a natural cave: chambers and winding tunnels in the rock, shaped as a whole in a distance field
 // (DUNGEONS.md, *The cave*), roughened by noise and meshed; its joins blend by themselves.
 {
@@ -47,6 +47,27 @@
       { prop: "crate", weight: 1.5, place: "floor" },
       { prop: "sack", weight: 1, place: "floor" },
       { prop: "toolRack", weight: 1, place: "floor" },
+    ],
+    // What makes it a mine, set about the same spots and lighting nothing (caveFixtures.ts): timber sets
+    // across the ways at intervals (the one of a group that best fits the gap), shoring against the
+    // walls, track laid along them with carts, tools and ore left where the work was.
+    dressing: [
+      { prop: "timberFrameNarrow", group: "sets", place: "span", chance: 0.85, run: 2, parts: ["tunnel"] },
+      { prop: "timberFrameMid", group: "sets", place: "span", chance: 0.85, run: 2, parts: ["tunnel"] },
+      { prop: "timberFrameWide", group: "sets", place: "span", chance: 0.85, run: 2, parts: ["tunnel"] },
+      { prop: "timberFrameNarrow", group: "chamberSets", place: "span", chance: 0.4, run: 1, parts: ["chamber"] },
+      { prop: "timberFrameMid", group: "chamberSets", place: "span", chance: 0.4, run: 1, parts: ["chamber"] },
+      { prop: "timberFrameWide", group: "chamberSets", place: "span", chance: 0.4, run: 1, parts: ["chamber"] },
+      { prop: "wallShoring", place: "against", chance: 0.45 },
+      { prop: "railTrack", place: "along", chance: 0.6, run: 3 },
+      { prop: "mineCart", place: "along", chance: 0.3, run: 1, parts: ["chamber"] },
+      { prop: "oreCart", place: "along", chance: 0.35, run: 1, parts: ["chamber"] },
+      { prop: "pickLeaning", place: "against", chance: 0.4, parts: ["chamber"] },
+      { prop: "pickInRock", place: "floor", chance: 0.35, parts: ["chamber"] },
+      { prop: "oreOutcrop", place: "against", chance: 0.5, parts: ["chamber"] },
+      { prop: "orePile", place: "floor", chance: 0.5 },
+      { prop: "oreSack", place: "floor", chance: 0.4 },
+      { prop: "windlass", place: "floor", chance: 0.2, parts: ["chamber"] },
     ],
   },
   creatures: {

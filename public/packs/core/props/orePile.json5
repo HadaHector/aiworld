@@ -1,0 +1,9 @@
+// A heap of broken ore: dull rock with the bright metal showing in it.
+{
+  name: "Ore pile",
+  type: "orePile",
+  parts: {
+    rock: { material: "roughStone", tints: [[0.55, 0.5, 0.46], [0.5, 0.47, 0.45]] },
+    ore: { tints: [[0.62, 0.42, 0.28], [0.45, 0.6, 0.55], [0.5, 0.52, 0.58]] },
+  },
+}

@@ -4,7 +4,7 @@
 // model, their lights and their flames, in the world.
 import type { BuildingModel, ModelEffect, ModelLight } from "../buildings/buildingTypes";
 import { ModelBuilder } from "../buildings/buildingGeometry";
-import { generateProp } from "../props/propGenerator";
+import { generateProp, measureProp } from "../props/propGenerator";
 import type { PropDef } from "../props/propTypes";
 import { deriveSeed, mulberry32 } from "../rng";
 import type { DungeonStyleDef } from "./dungeonDefs";
@@ -62,6 +62,123 @@ function nearestWall(field: CaveField, x: number, y: number, z: number, start: n
   return best;
 }
 
+/** How far a way's width is looked for either side, and how wide a frame it may span. */
+const SPAN_REACH = 8;
+
+/** The open width through (x, y, z) along an angle: both ways to the rock, and the middle of the gap; null if either side is open past the reach. */
+function gapAlong(field: CaveField, x: number, y: number, z: number, angle: number): { width: number; mid: [number, number] } | null {
+  const dx = Math.sin(angle), dz = Math.cos(angle);
+  const reach = (sign: number): number | null => {
+    for (let t = 0.25; t < SPAN_REACH; t += 0.25) if (field.rock(x + sign * dx * t, y, z + sign * dz * t) > 0) return t;
+    return null;
+  };
+  const a = reach(1), b = reach(-1);
+  if (a === null || b === null) return null;
+  return { width: a + b, mid: [x + dx * (a - b) / 2, z + dz * (a - b) / 2] };
+}
+
+/** Whether a prop's footprint (a square of `r` half-side) round (x, z) stands in open air at the floor. */
+function clearOf(field: CaveField, x: number, floor: number, z: number, r: number): boolean {
+  for (const [ox, oz] of [[0, 0], [r, 0], [-r, 0], [0, r], [0, -r]]) {
+    if (field.rock(x + ox, floor + 0.7, z + oz) > 0 || field.rock(x + ox, floor + 1.8, z + oz) > 0) return false;
+  }
+  return true;
+}
+
+/**
+ * A style's dressing (`light.dressing`): props set about each part's light spots besides the lit
+ * fixture - supports across the way, shoring against its walls, rails along it, carts, tools and ore
+ * on the floor. Their models appended to `b`; they give no light.
+ */
+function dress(b: ModelBuilder, layout: DungeonLayout, style: DungeonStyleDef, field: CaveField, props: (id: string) => PropDef | undefined): number {
+  const entries = (style.light.dressing ?? []).map((d) => ({ ...d, def: props(d.prop) })).filter((d): d is typeof d & { def: PropDef } => !!d.def);
+  let placed = 0;
+  layout.parts.forEach((p, index) => {
+    const random = mulberry32(deriveSeed(layout.seed, index * 6271 + 41));
+    placedSpots(p, "light").forEach((spot, i) => {
+      const floor0 = floorUnder(field, spot.x, spot.y + 2, spot.z);
+      if (floor0 === null) return;
+      // The way's direction here: the narrowest of eight crossings is across it.
+      let across = 0, narrowest = Infinity;
+      for (let k = 0; k < 8; k++) {
+        const g = gapAlong(field, spot.x, floor0 + 1.5, spot.z, (k * Math.PI) / 8);
+        if (g && g.width < narrowest) { narrowest = g.width; across = (k * Math.PI) / 8; }
+      }
+      const taken: [number, number][] = [[spot.x, spot.z]];
+      const seen = new Set<string>();
+      entries.forEach((d, e) => {
+        if (d.parts.length > 0 && !d.parts.some((t) => p.part.tags.includes(t))) return;
+        // A group (spans of several widths) is rolled once, by its first entry.
+        if (d.group) {
+          if (seen.has(d.group)) return;
+          seen.add(d.group);
+        }
+        if (random() >= d.chance) return;
+        const seed = deriveSeed(layout.seed, index * 131 + i * 17 + e);
+        const put = (def: PropDef, x: number, y: number, z: number, fx: number, fz: number, variant: number): void => {
+          b.appendFurniture(generateProp(def, seed, variant), x, y, z, fx, fz);
+          placed++;
+        };
+        const variant = Math.floor(random() * 6);
+        if (d.place === "span") {
+          if (!isFinite(narrowest)) return;
+          // The member of its group that fits the gap best.
+          const members = d.group ? entries.filter((m) => m.group === d.group && (m.parts.length === 0 || m.parts.some((t) => p.part.tags.includes(t)))) : [d];
+          const alongX = Math.cos(across), alongZ = -Math.sin(across);
+          for (let n = 0; n < d.run; n++) {
+            const shift = (n - (d.run - 1) / 2) * 5.5 + (random() - 0.5) * 1.5;
+            const x = spot.x + alongX * shift, z = spot.z + alongZ * shift;
+            const f = floorUnder(field, x, floor0 + 2, z);
+            if (f === null) continue;
+            const g = gapAlong(field, x, f + 1.5, z, across);
+            if (!g) continue;
+            const best = members.reduce((a, m) => (Math.abs(measureProp(m.def, seed, variant).halfWidth * 2 - g.width) < Math.abs(measureProp(a.def, seed, variant).halfWidth * 2 - g.width) ? m : a));
+            // Its feet on the lower of the floor under either post.
+            const lo = Math.min(f, floorUnder(field, g.mid[0] + Math.sin(across) * g.width * 0.45, f + 2, g.mid[1] + Math.cos(across) * g.width * 0.45) ?? f, floorUnder(field, g.mid[0] - Math.sin(across) * g.width * 0.45, f + 2, g.mid[1] - Math.cos(across) * g.width * 0.45) ?? f);
+            put(best.def, g.mid[0], lo - 0.05, g.mid[1], alongX, alongZ, variant);
+          }
+          return;
+        }
+        if (d.place === "along") {
+          const alongX = Math.cos(across), alongZ = -Math.sin(across);
+          const length = measureProp(d.def, seed, variant).halfDepth * 2;
+          const start = (random() - 0.5) * 4;
+          for (let n = 0; n < d.run; n++) {
+            const shift = start + (n - (d.run - 1) / 2) * length;
+            const x = spot.x + alongX * shift, z = spot.z + alongZ * shift;
+            const f = floorUnder(field, x, floor0 + 2, z);
+            if (f === null || !clearOf(field, x, f, z, 1.3)) break;
+            put(d.def, x, f - 0.03, z, alongX, alongZ, variant);
+          }
+          return;
+        }
+        if (d.place === "against") {
+          const wall = nearestWall(field, spot.x, floor0 + 1.2, spot.z, random() * Math.PI * 2);
+          if (!wall) return;
+          const hx = wall.x + wall.out[0] * 0.6, hz = wall.z + wall.out[1] * 0.6;
+          const f = floorUnder(field, hx, floor0 + 2, hz);
+          if (f === null || taken.some(([tx, tz]) => Math.hypot(tx - wall.x, tz - wall.z) < 3)) return;
+          taken.push([wall.x, wall.z]);
+          put(d.def, wall.x - wall.out[0] * 0.15, f - 0.05, wall.z - wall.out[1] * 0.15, wall.out[0], wall.out[1], variant);
+          return;
+        }
+        // On the floor, a few metres from the spot, turned any way.
+        for (let attempt = 0; attempt < 6; attempt++) {
+          const a = random() * Math.PI * 2, r = 2 + random() * 2.5;
+          const x = spot.x + Math.sin(a) * r, z = spot.z + Math.cos(a) * r;
+          const f = floorUnder(field, x, floor0 + 2, z);
+          if (f === null || !clearOf(field, x, f, z, 1.1) || taken.some(([tx, tz]) => Math.hypot(tx - x, tz - z) < 2.6)) continue;
+          taken.push([x, z]);
+          const t = random() * Math.PI * 2;
+          put(d.def, x, f - 0.03, z, Math.sin(t), Math.cos(t), variant);
+          break;
+        }
+      });
+    });
+  });
+  return placed;
+}
+
 /** The fixtures at a cave's light spots: their models together, their lights and flames. */
 export function caveFixtures(layout: DungeonLayout, style: DungeonStyleDef, field: CaveField, props: (id: string) => PropDef | undefined): CaveFixtures {
   const options = (style.light.fixtures ?? [{ prop: style.light.fixture, weight: 1, place: "wall" as const }])
@@ -108,6 +225,7 @@ export function caveFixtures(layout: DungeonLayout, style: DungeonStyleDef, fiel
       });
     });
   }
+  placed += dress(b, layout, style, field, props);
   const model = placed > 0 ? b.finish({ x: 0, z: 0 }) : null;
   return { model, lights: model?.lights ?? [], effects: model?.effects ?? [] };
 }
