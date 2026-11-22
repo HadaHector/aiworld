@@ -694,3 +694,23 @@ hunting-bot failures, old). The dungeons probe did not finish within 250 s. Not 
 the camp, leaves under trees, rain in the inn, lights, ambience on speakers.
 Still to do for wave 1: chests for the cave lair and a crypt test (E6), the mine variant (the third lair),
 the in-game looks above.
+
+### First look at the wave 1 results (the user, 2026-11-22): follow-ups
+
+Not started; to be sized and put into sessions.
+
+- **Shore hills (W15):** fine. Tweak: fewer hills and more shore/beach; the hills' shape a bit harder to traverse.
+- **Water:** good enough for the slice.
+- **Ambience (P7):** works. The user will bring real recordings to make it sound better (needs the user; the
+  loader for recorded files is a later task).
+- **Autumn look (G4):** since the last change (leaves only under trees) **no falling leaves are visible** (bug to
+  fix). Chimney smoke 2x the size. Golden hour is good.
+- **Dungeons (E6):** the **hitch on entering is real, several seconds** (to profile and cut). Chests should be a
+  real prop. The lair can be smaller, 50-70% of the current size. The mine is still mostly plans (timber
+  supports, rails, carts, picks, ore). **Cave entrances can be at bad positions**: needs a round-about (a way
+  to place or move the entrance). Question from the user: are groups of enemies still used in the cave?
+- **Regeneration (I9):** fine. Wanted: a **UI indication of being in battle or not**, e.g. a red glow on the
+  character panel (the one with HP and MP). Rain in buildings is fixed.
+- **Bug:** if the player dies while a cobweb effect is on, the visual effect stays after respawning.
+- **Next step chosen by the user:** look at the failing probes (creatures hunting bot 2, navigation 1, icons 25,
+  saves 2, feedback 1, dungeons 4 in the full run, caves diagnostic).
