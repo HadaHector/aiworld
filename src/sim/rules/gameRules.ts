@@ -92,6 +92,8 @@ export interface EntityLook {
   sex: "male" | "female" | "";
   /** A beast body plan in `beasts/` (BEASTS.md) - for the client alone. "" for none. */
   beast: string;
+  /** A prop in the packs' `props/` the client draws it as (a chest with its lid), the box standing for its click: "" for none. */
+  prop: string;
   /** What its hits and deaths sound and look like (FEEDBACK.md): `weapon`, `armor`, `family`. For
    *  the client alone. */
   feedback: Readonly<Record<string, string>>;
@@ -201,7 +203,7 @@ export const HEALTH = "health";
 export const PLAYER_TEMPLATE = "player";
 
 const ID_PATTERN = /^[A-Za-z0-9_-]+$/;
-const DEFAULT_LOOK: EntityLook = { shape: "capsule", height: 1.8, radius: 0.4, color: [0.7, 0.7, 0.7], race: "", outfit: "", sex: "", beast: "", feedback: {} };
+const DEFAULT_LOOK: EntityLook = { shape: "capsule", height: 1.8, radius: 0.4, color: [0.7, 0.7, 0.7], race: "", outfit: "", sex: "", beast: "", prop: "", feedback: {} };
 
 interface Entry {
   id: string;
@@ -507,7 +509,7 @@ function readTemplate(id: string, obj: RawObject, reader: Reader, { factions, st
   let look = DEFAULT_LOOK;
   if (obj.look !== undefined) {
     const raw = reader.object(obj.look, "look");
-    reader.onlyKeys(raw, "look", ["shape", "height", "radius", "color", "race", "outfit", "sex", "beast", "feedback"]);
+    reader.onlyKeys(raw, "look", ["shape", "height", "radius", "color", "race", "outfit", "sex", "beast", "prop", "feedback"]);
     look = {
       shape: raw.shape === undefined ? "capsule" : reader.oneOf(raw, "shape", "look", ["capsule", "box"] as const),
       height: reader.optionalNumber(raw, "height", "look", DEFAULT_LOOK.height, { min: 0.1 }),
@@ -517,6 +519,7 @@ function readTemplate(id: string, obj: RawObject, reader: Reader, { factions, st
       outfit: reader.optionalString(raw, "outfit", "look") ?? "",
       sex: raw.sex === undefined ? "" : reader.oneOf(raw, "sex", "look", ["male", "female"] as const),
       beast: reader.optionalString(raw, "beast", "look") ?? "",
+      prop: reader.optionalString(raw, "prop", "look") ?? "",
       feedback: stringMap(reader, raw, "feedback", "look"),
     };
   }

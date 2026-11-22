@@ -99,6 +99,37 @@ function judge(sample: Sampler, x: number, z: number): { y: number; ux: number; 
   return { y: floor, ux, uz, score };
 }
 
+/**
+ * Whether a walker could reach a mouth from the open ground (E6, the round-about for bad sites): from
+ * a point in front of its slip's foot, over land (no water) by steps of `APPROACH_STEP` no steeper
+ * than `APPROACH_SLOPE`, the walk reaches `APPROACH_OUT` from the mouth - not shut in by cliffs, a
+ * gully or water. Judged on the finished ground.
+ */
+const APPROACH_STEP = 4;
+const APPROACH_SLOPE = 0.75;
+const APPROACH_OUT = 70;
+function approachable(sample: Sampler, x: number, z: number, ux: number, uz: number): boolean {
+  const key = (i: number, j: number): string => `${i},${j}`;
+  const sx = x - ux * 9, sz = z - uz * 9;
+  const start = sample(sx, sz);
+  if (!start.isLand || start.lakeFactor > 0.01) return false;
+  const seen = new Set([key(0, 0)]);
+  const queue: [number, number, number][] = [[0, 0, start.height]];
+  for (let q = 0; q < queue.length && q < 2500; q++) {
+    const [i, j, h] = queue[q];
+    if (Math.hypot(sx + i * APPROACH_STEP - x, sz + j * APPROACH_STEP - z) >= APPROACH_OUT) return true;
+    for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const k = key(i + di, j + dj);
+      if (seen.has(k)) continue;
+      seen.add(k);
+      const t = sample(sx + (i + di) * APPROACH_STEP, sz + (j + dj) * APPROACH_STEP);
+      if (!t.isLand || t.lakeFactor > 0.01 || Math.abs(t.height - h) / APPROACH_STEP > APPROACH_SLOPE) continue;
+      queue.push([i + di, j + dj, t.height]);
+    }
+  }
+  return false;
+}
+
 /** Every cave mouth in the world: at most one a cell, where a cell rolled one and has the ground. */
 export function siteCaveMouths(seed: number, worldExtent: number, sample: Sampler, settlements: readonly { x: number; z: number }[]): CaveMouthSite[] {
   const c = CAVE_MOUTH;
@@ -108,16 +139,18 @@ export function siteCaveMouths(seed: number, worldExtent: number, sample: Sample
     for (let gz = -n; gz < n; gz++) {
       const random = mulberry32(deriveSeed(seed, 0x6ca7e + (gx + 4096) * 8191 + (gz + 4096)));
       if (random() >= c.odds) continue;
-      let best: (CaveMouthSite & { score: number }) | null = null;
+      const found: (CaveMouthSite & { score: number })[] = [];
       for (let t = 0; t < c.tries; t++) {
         // Inside the cell, a margin off its edges so two never stand close.
         const x = (gx + 0.12 + random() * 0.76) * c.cell, z = (gz + 0.12 + random() * 0.76) * c.cell;
         if (Math.abs(x) > worldExtent * 0.95 || Math.abs(z) > worldExtent * 0.95) continue;
         if (settlements.some((s) => Math.hypot(s.x - x, s.z - z) < c.settlementClear)) continue;
         const j = judge(sample, x, z);
-        if (!j || (best && best.score >= j.score)) continue;
-        best = { id: 0, x, y: j.y, z, facing: (Math.atan2(-j.ux, -j.uz) * 180) / Math.PI, ux: j.ux, uz: j.uz, score: j.score };
+        if (!j) continue;
+        found.push({ id: 0, x, y: j.y, z, facing: (Math.atan2(-j.ux, -j.uz) * 180) / Math.PI, ux: j.ux, uz: j.uz, score: j.score });
       }
+      // The best that a walker can reach; the next best when it cannot, and none if none can.
+      const best = found.sort((a, b) => b.score - a.score).find((m) => approachable(sample, m.x, m.z, m.ux, m.uz)) ?? null;
       if (best) {
         const { score: _score, ...site } = best;
         out.push({ ...site, id: out.length });

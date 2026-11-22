@@ -570,6 +570,7 @@ export async function startSession(page: Page, options: SessionOptions): Promise
       onBody: (meshes) => meshes.forEach((mesh) => world.castShadow(mesh)),
       items: itemRules,
       beasts: beastKit,
+      props: { find: (id) => next.content.props.find((p) => p.id === id), building: next.world.buildingMaterial },
     });
     client.send({ type: "arrived" });
     // The server puts the body in once it has the dimension too - a moment, as its load resolves.
