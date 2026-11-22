@@ -177,9 +177,12 @@ world: { rivers: [2, 2], riverLength: [4, 6], riverTributaries: [1, 1], riverLev
   starts at the ground at the source and runs down never rising, never above the ground anywhere across
   the river's width (less 0.6 m of bank), falling at least 0.3 % and smoothed; at the mouth it meets the
   sea, or its trunk's level. Where a tributary's valley lies below its trunk's water where they meet, the
-  trunk falls to it there (a rapid or a fall) and runs on no higher. Depth 3.5 m at the mouth to 1.5 m at
-  the source, then over the last 220 m it narrows and shallows to a **spring** (a bed 5 m wide, 0.6 m of
-  water), with boulders gathered round it (`TerrainSample.springGap`, the rock scatter). The ceiling also
+  trunk falls to it there (a rapid or a fall) and runs on no higher. Its **width and depth grow with the
+  river above** each station - its own length back to its spring plus every tributary joined above it -
+  as 1 - e^(-length / 2 km), from a **spring** (a bed 5 m wide, 0.6 m of water) toward 60 m and 3.5 m: a
+  0.5 km stream ends about 17 m wide, a trunk with its tributary 40-50 m, and a trunk widens below a join
+  (the user's call: every river used to end 60 m wide, short or long). The spring has boulders gathered
+  round it (`TerrainSample.springGap`, the rock scatter). The ceiling also
   counts the other rivers' valleys (a second pass): where two come close the higher no longer stands
   over the lower's cut (the user's catch at a source). A river falls at most 15 % a metre, and less the
   wider it is (no more than 0.7 m over its own flat bed's width): a wide flat bed reaches back up the

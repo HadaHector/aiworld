@@ -140,9 +140,13 @@ export const RIVER_WATER_DEPTH_MOUTH = 3.5;
 export const RIVER_WATER_DEPTH_SOURCE = 1.5;
 // Where the ground is cut down to the water, the bank stands this far over it at the centreline.
 export const RIVER_FREEBOARD = 0.6;
-// A river narrows and shallows over its last stretch to a spring: this long, to a bed this wide
-// (half of it) and water this deep at the source.
-export const RIVER_SPRING_LENGTH = 220;
+// At its own level a river's bed (half of it) and water grow from a spring's toward the mouth's
+// (RIVER_BED_HALF_WIDTH_MOUTH, RIVER_WATER_DEPTH_MOUTH) with the river above them: 1 - e^(-length /
+// RIVER_WIDTH_LENGTH), length counting its own way back to its spring and every tributary joined above
+// (one within RIVER_JOIN_WIDTH_REACH of its line). A 0.5 km stream reaches a fifth of the way, 2 km two
+// thirds.
+export const RIVER_WIDTH_LENGTH = 2000;
+export const RIVER_JOIN_WIDTH_REACH = 60;
 export const RIVER_SPRING_HALF_WIDTH = 2.5;
 export const RIVER_SPRING_DEPTH = 0.6;
 // Boulders gather round a spring (foliage/treeScatter.ts): fading from full density within the first

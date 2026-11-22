@@ -4,7 +4,6 @@ import type { CellPoint } from "../../cells/cellGrid";
 import {
   RIVER_BANK_SLOPE,
   RIVER_BED_HALF_WIDTH_MOUTH,
-  RIVER_BED_HALF_WIDTH_SOURCE,
   RIVER_EDGE_NOISE_AMPLITUDE_RATIO,
   RIVER_FORDS_MAX,
   RIVER_FORD_DEPTH,
@@ -21,10 +20,10 @@ import {
   RIVER_REACH_MARGIN,
   RIVER_SPRING_DEPTH,
   RIVER_SPRING_HALF_WIDTH,
-  RIVER_SPRING_LENGTH,
+  RIVER_WIDTH_LENGTH,
+  RIVER_JOIN_WIDTH_REACH,
   RIVER_STATION_SPACING,
   RIVER_WATER_DEPTH_MOUTH,
-  RIVER_WATER_DEPTH_SOURCE,
 } from "./riverConfig";
 
 /** Where across its width a river reads the ground for its ceiling, as shares of its reach. */
@@ -174,7 +173,26 @@ function buildPass(
     });
     joins.push(join);
 
-    // Its width and depth: from the mouth's to the source's, then down to a spring over the last stretch.
+    // Its width and depth grow with the river above each station - its own length up to its spring, and
+    // every tributary that has joined above it (as the previous pass found them) - from a spring's toward
+    // the widest a river gets: a short stream stays narrow to its mouth, a trunk widens below a join.
+    const upstream = new Float64Array(count);
+    for (let i = 0; i < count; i++) upstream[i] = (count - 1 - i) * step;
+    if (previous) {
+      previous.forEach((other, k) => {
+        if (k === river) return;
+        let best = RIVER_JOIN_WIDTH_REACH;
+        let at = -1;
+        for (let i = 0; i < count; i++) {
+          const d = Math.hypot(x[i] - other.x[0], z[i] - other.z[0]);
+          if (d < best) {
+            best = d;
+            at = i;
+          }
+        }
+        for (let i = 0; i <= at; i++) upstream[i] += other.length;
+      });
+    }
     const rng = mulberry32(deriveSeed(seed, RIVER_FORD_SALT + river * 31));
     const fords: number[] = [];
     if (length >= RIVER_FORD_MIN_LENGTH) {
@@ -187,11 +205,11 @@ function buildPass(
     const reach = new Float64Array(count);
     for (let i = 0; i < count; i++) {
       const t = i / (count - 1);
-      const spring = smoothstep(0, Math.min(RIVER_SPRING_LENGTH, length * 0.5), (count - 1 - i) * step);
+      const grown = 1 - Math.exp(-upstream[i] / RIVER_WIDTH_LENGTH);
       let ford = 0;
       for (const at of fords) ford = Math.max(ford, 1 - smoothstep(fordHalf * 0.4, fordHalf, Math.abs(t - at)));
-      depth[i] = lerp(lerp(RIVER_SPRING_DEPTH, lerp(RIVER_WATER_DEPTH_MOUTH, RIVER_WATER_DEPTH_SOURCE, t), spring), RIVER_FORD_DEPTH, ford);
-      halfWidth[i] = lerp(RIVER_SPRING_HALF_WIDTH, lerp(RIVER_BED_HALF_WIDTH_MOUTH, RIVER_BED_HALF_WIDTH_SOURCE, t), spring);
+      depth[i] = lerp(lerp(RIVER_SPRING_DEPTH, RIVER_WATER_DEPTH_MOUTH, grown), RIVER_FORD_DEPTH, ford);
+      halfWidth[i] = lerp(RIVER_SPRING_HALF_WIDTH, RIVER_BED_HALF_WIDTH_MOUTH, grown);
       reach[i] = halfWidth[i] * (1 + RIVER_EDGE_NOISE_AMPLITUDE_RATIO) + depth[i] / RIVER_BANK_SLOPE + RIVER_REACH_MARGIN;
     }
 
